@@ -19,9 +19,4 @@ typedef struct target_sigaltstack {
 #define UREG_FP        UREG_I6
 #endif
 
-static inline abi_ulong get_sp_from_cpustate(CPUSPARCState *state)
-{
-    return state->regwptr[UREG_FP];
-}
-
 #endif /* TARGET_SIGNAL_H */

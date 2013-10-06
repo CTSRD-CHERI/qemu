@@ -23,6 +23,7 @@
 
 #undef DEBUG_REMAP
 #ifdef DEBUG_REMAP
+#include <stdio.h>
 #endif /* DEBUG_REMAP */
 
 #include "exec/user/abitypes.h"
@@ -36,6 +37,7 @@ extern enum BSDType bsd_type;
 
 #include "syscall_defs.h"
 #include "target_syscall.h"
+#include "target_os_vmparam.h"
 #include "target_signal.h"
 #include "exec/gdbstub.h"
 
@@ -99,16 +101,17 @@ typedef struct TaskState {
 } __attribute__((aligned(16))) TaskState;
 
 void init_task_state(TaskState *ts);
+void stop_all_tasks(void);
 extern const char *qemu_uname_release;
 extern unsigned long mmap_min_addr;
 
 /* ??? See if we can avoid exposing so much of the loader internals.  */
 /*
  * MAX_ARG_PAGES defines the number of pages allocated for arguments
- * and envelope for the new program. 32 should suffice, this gives
- * a maximum env+arg of 128kB w/4KB pages!
+ * and envelope for the new program. 64 should suffice, this gives
+ * a maximum env+arg of 256kB w/4KB pages!
  */
-#define MAX_ARG_PAGES 32
+#define MAX_ARG_PAGES 64
 
 /*
  * This structure is used to hold the arguments that are
@@ -214,7 +217,13 @@ void mmap_fork_start(void);
 void mmap_fork_end(int child);
 
 /* main.c */
-extern unsigned long x86_stack_size;
+extern unsigned long target_maxtsiz;
+extern unsigned long target_dfldsiz;
+extern unsigned long target_maxdsiz;
+extern unsigned long target_dflssiz;
+extern unsigned long target_maxssiz;
+extern unsigned long target_sgrowsiz;
+extern char qemu_proc_pathname[];
 
 /* user access */
 
