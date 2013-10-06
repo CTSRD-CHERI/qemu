@@ -131,6 +131,7 @@ trace-events-subdirs += scsi
 endif
 ifeq ($(CONFIG_SOFTMMU),y)
 trace-events-subdirs += audio
+trace-events-subdirs += bsd-user
 trace-events-subdirs += chardev
 trace-events-subdirs += hw/9pfs
 trace-events-subdirs += hw/acpi
