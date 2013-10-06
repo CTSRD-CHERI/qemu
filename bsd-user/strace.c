@@ -20,8 +20,11 @@
 #include <sys/select.h>
 #include <sys/syscall.h>
 #include <sys/ioccom.h>
+#include <ctype.h>
 
 #include "qemu.h"
+
+#include "os-strace.h"  /* OS dependent strace print functions */
 
 int do_strace;
 
