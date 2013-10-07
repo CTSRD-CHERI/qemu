@@ -1,0 +1,1 @@
+/* XXX NetBSD stat related helpers */

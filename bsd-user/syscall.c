@@ -43,6 +43,7 @@ static int host_to_target_errno(int err);
 #include "os-time.h"
 #include "os-proc.h"
 #include "os-signal.h"
+#include "os-stat.h"
 
 /* #define DEBUG */
 
@@ -777,6 +778,81 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     case TARGET_FREEBSD_NR_freebsd6_ftruncate: /* undocumented */
         ret = do_bsd_freebsd6_ftruncate(arg1, arg2, arg3);
+        break;
+
+        /*
+         * stat system calls
+         */
+    case TARGET_FREEBSD_NR_stat: /* stat(2) */
+        ret = do_freebsd_stat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_lstat: /* lstat(2) */
+        ret = do_freebsd_lstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fstat: /* fstat(2) */
+        ret = do_freebsd_fstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fstatat: /* fstatat(2) */
+        ret = do_freebsd_fstatat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_nstat: /* undocumented */
+        ret = do_freebsd_nstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_nfstat: /* undocumented */
+        ret = do_freebsd_nfstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_nlstat: /* undocumented */
+        ret = do_freebsd_nlstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_getfh: /* getfh(2) */
+        ret = do_freebsd_getfh(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_lgetfh: /* lgetfh(2) */
+        ret = do_freebsd_lgetfh(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fhopen: /* fhopen(2) */
+        ret = do_freebsd_fhopen(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fhstat: /* fhstat(2) */
+        ret = do_freebsd_fhstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fhstatfs: /* fhstatfs(2) */
+        ret = do_freebsd_fhstatfs(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_statfs: /* statfs(2) */
+        ret = do_freebsd_statfs(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fstatfs: /* fstatfs(2) */
+        ret = do_freebsd_fstatfs(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_getfsstat: /* getfsstat(2) */
+        ret = do_freebsd_getfsstat(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_getdents: /* getdents(2) */
+        ret = do_freebsd_getdents(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_getdirentries: /* getdirentries(2) */
+        ret = do_freebsd_getdirentries(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_fcntl: /* fcntl(2) */
+        ret = do_freebsd_fcntl(arg1, arg2, arg3);
         break;
 
 

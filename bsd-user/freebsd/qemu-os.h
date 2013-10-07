@@ -50,4 +50,12 @@ abi_ulong copy_from_user_fdset_ptr(fd_set *fds, fd_set **fds_ptr,
 abi_long copy_to_user_fdset(abi_ulong target_fds_addr, const fd_set *fds,
         int n);
 
+/* os-stat.c */
+abi_long h2t_freebsd_stat(abi_ulong target_addr, struct stat *host_st);
+abi_long h2t_freebsd_nstat(abi_ulong target_addr, struct stat *host_st);
+abi_long t2h_freebsd_fhandle(fhandle_t *host_fh, abi_ulong target_addr);
+abi_long h2t_freebsd_fhandle(abi_ulong target_addr, fhandle_t *host_fh);
+abi_long h2t_freebsd_statfs(abi_ulong target_addr, struct statfs *host_statfs);
+abi_long target_to_host_fcntl_cmd(int cmd);
+
 #endif /* !_QEMU_OS_H_ */
