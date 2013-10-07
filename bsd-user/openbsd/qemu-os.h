@@ -1,0 +1,1 @@
+/* OpenBSD conversion extern declarations */
