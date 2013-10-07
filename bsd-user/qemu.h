@@ -38,7 +38,7 @@ extern enum BSDType bsd_type;
 #include "syscall_defs.h"
 #include "target_syscall.h"
 #include "target_os_vmparam.h"
-#include "target_signal.h"
+#include "target_os_signal.h"
 #include "exec/gdbstub.h"
 
 #if defined(CONFIG_USE_NPTL)
@@ -71,16 +71,16 @@ struct image_info {
 
 #define MAX_SIGQUEUE_SIZE 1024
 
-struct sigqueue {
-    struct sigqueue *next;
-    //target_siginfo_t info;
+struct qemu_sigqueue {
+    struct qemu_sigqueue *next;
+    target_siginfo_t info;
 };
 
 struct emulated_sigtable {
     int pending; /* true if signal is pending */
-    struct sigqueue *first;
-    struct sigqueue info; /* in order to always have memory for the
-                             first signal, we put it here */
+    struct qemu_sigqueue *first;
+    struct qemu_sigqueue info; /* in order to always have memory for the
+                                  first signal, we put it here */
 };
 
 /* NOTE: we force a big alignment so that the stack stored after is
@@ -94,8 +94,8 @@ typedef struct TaskState {
     struct bsd_binprm *bprm;
 
     struct emulated_sigtable sigtab[TARGET_NSIG];
-    struct sigqueue sigqueue_table[MAX_SIGQUEUE_SIZE]; /* siginfo queue */
-    struct sigqueue *first_free; /* first free siginfo queue entry */
+    struct qemu_sigqueue sigqueue_table[MAX_SIGQUEUE_SIZE]; /* siginfo queue */
+    struct qemu_sigqueue *first_free; /* first free siginfo queue entry */
     int signal_pending; /* non zero if a signal may be pending */
 
     uint8_t stack[0];
@@ -202,12 +202,19 @@ extern int do_strace;
 /* signal.c */
 void process_pending_signals(CPUArchState *cpu_env);
 void signal_init(void);
-//int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info);
-//void host_to_target_siginfo(target_siginfo_t *tinfo, const siginfo_t *info);
-//void target_to_host_siginfo(siginfo_t *info, const target_siginfo_t *tinfo);
-long do_sigreturn(CPUArchState *env);
+int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info);
+void host_to_target_siginfo(target_siginfo_t *tinfo, const siginfo_t *info);
+void target_to_host_siginfo(siginfo_t *info, const target_siginfo_t *tinfo);
+int target_to_host_signal(int sig);
+int host_to_target_signal(int sig);
+void host_to_target_sigset(target_sigset_t *d, const sigset_t *s);
+void target_to_host_sigset(sigset_t *d, const target_sigset_t *s);
+long do_sigreturn(CPUArchState *env, abi_ulong addr);
 long do_rt_sigreturn(CPUArchState *env);
 abi_long do_sigaltstack(abi_ulong uss_addr, abi_ulong uoss_addr, abi_ulong sp);
+int do_sigaction(int sig, const struct target_sigaction *act,
+                struct target_sigaction *oact);
+void QEMU_NORETURN force_sig(int target_sig);
 
 /* mmap.c */
 int target_mprotect(abi_ulong start, abi_ulong len, int prot);
