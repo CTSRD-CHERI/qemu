@@ -1,2 +1,3 @@
 obj-y = main.o bsdload.o elfload.o mmap.o signal.o strace.o syscall.o \
-	        uaccess.o $(HOST_VARIANT_DIR)/os-sys.o $(TARGET_ABI_DIR)/target_arch_cpu.o
+	        uaccess.o $(HOST_VARIANT_DIR)/os-sys.o \
+			$(HOST_VARIANT_DIR)/os-time.o $(TARGET_ABI_DIR)/target_arch_cpu.o

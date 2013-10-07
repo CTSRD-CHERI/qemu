@@ -1,0 +1,1 @@
+/* NetBSD conversion extern declarations */
