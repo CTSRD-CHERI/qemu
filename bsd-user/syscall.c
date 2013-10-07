@@ -2,7 +2,7 @@
  *  BSD syscalls
  *
  *  Copyright (c) 2003 - 2008 Fabrice Bellard
- *  Copyright (c) 2013 Stacey D. Son
+ *  Copyright (c) 2013-14 Stacey D. Son
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -30,12 +30,15 @@
 #include "user/syscall-trace.h"
 
 #define target_to_host_bitmask(x, tbl) (x)
+static int host_to_target_errno(int err);
 
 /* BSD independent syscall shims */
+#include "bsd-proc.h"
 #include "bsd-signal.h"
 
 /* *BSD dependent syscall shims */
 #include "os-time.h"
+#include "os-proc.h"
 #include "os-signal.h"
 
 /* #define DEBUG */
@@ -53,6 +56,12 @@ abi_long get_errno(abi_long ret)
         return -(errno);
     else
         return ret;
+}
+
+static int host_to_target_errno(int err)
+{
+    /* XXX need to translate host errnos here */
+    return err;
 }
 
 int is_error(abi_long ret)
@@ -171,16 +180,294 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         print_freebsd_syscall(num, arg1, arg2, arg3, arg4, arg5, arg6);
 
     switch(num) {
-    case TARGET_FREEBSD_NR_exit:
-#ifdef CONFIG_GPROF
-        _mcleanup();
-#endif
-        gdb_exit(cpu_env, arg1);
-        qemu_plugin_atexit_cb();
-        /* XXX: should free thread stack and CPU env */
-        _exit(arg1);
-        ret = 0; /* avoid warning */
+        /*
+         * process system calls
+         */
+    case TARGET_FREEBSD_NR_fork: /* fork(2) */
+        ret = do_freebsd_fork(cpu_env);
         break;
+
+    case TARGET_FREEBSD_NR_vfork: /* vfork(2) */
+        ret = do_freebsd_vfork(cpu_env);
+        break;
+
+    case TARGET_FREEBSD_NR_rfork: /* rfork(2) */
+        ret = do_freebsd_rfork(cpu_env, arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_pdfork: /* pdfork(2) */
+        ret = do_freebsd_pdfork(cpu_env, arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_execve: /* execve(2) */
+        ret = do_freebsd_execve(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_fexecve: /* fexecve(2) */
+        ret = do_freebsd_fexecve(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_wait4: /* wait4(2) */
+        ret = do_freebsd_wait4(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_wait6: /* wait6(2) */
+        ret = do_freebsd_wait6(arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+    case TARGET_FREEBSD_NR_exit: /* exit(2) */
+        ret = do_bsd_exit(cpu_env, arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_getgroups: /* getgroups(2) */
+        ret = do_bsd_getgroups(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_setgroups: /* setgroups(2) */
+        ret = do_bsd_setgroups(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_umask: /* umask(2) */
+        ret = do_bsd_umask(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_setlogin: /* setlogin(2) */
+        ret = do_bsd_setlogin(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_getlogin: /* getlogin(2) */
+        ret = do_bsd_getlogin(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_getrusage: /* getrusage(2) */
+        ret = do_bsd_getrusage(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_getrlimit: /* getrlimit(2) */
+        ret = do_bsd_getrlimit(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_setrlimit: /* setrlimit(2) */
+        ret = do_bsd_setrlimit(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_getpid: /* getpid(2) */
+        ret = do_bsd_getpid();
+        break;
+
+    case TARGET_FREEBSD_NR_getppid: /* getppid(2) */
+        ret = do_bsd_getppid();
+        break;
+
+    case TARGET_FREEBSD_NR_getuid: /* getuid(2) */
+        ret = do_bsd_getuid();
+        break;
+
+    case TARGET_FREEBSD_NR_geteuid: /* geteuid(2) */
+        ret = do_bsd_geteuid();
+        break;
+
+    case TARGET_FREEBSD_NR_getgid: /* getgid(2) */
+        ret = do_bsd_getgid();
+        break;
+
+    case TARGET_FREEBSD_NR_getegid: /* getegid(2) */
+        ret = do_bsd_getegid();
+        break;
+
+    case TARGET_FREEBSD_NR_setuid: /* setuid(2) */
+        ret = do_bsd_setuid(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_seteuid: /* seteuid(2) */
+        ret = do_bsd_seteuid(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_setgid: /* setgid(2) */
+        ret = do_bsd_setgid(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_setegid: /* setegid(2) */
+        ret = do_bsd_setegid(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_getpgrp: /* getpgrp(2) */
+        ret = do_bsd_getpgrp();
+        break;
+
+    case TARGET_FREEBSD_NR_getpgid: /* getpgid(2) */
+	ret = do_bsd_getpgid(arg1);
+	break;
+
+    case TARGET_FREEBSD_NR_setpgid: /* setpgid(2) */
+	ret = do_bsd_setpgid(arg1, arg2);
+	break;
+
+    case TARGET_FREEBSD_NR_setreuid: /* setreuid(2) */
+        ret = do_bsd_setreuid(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_setregid: /* setregid(2) */
+        ret = do_bsd_setregid(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_getresuid: /* getresuid(2) */
+        ret = do_bsd_getresuid(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_getresgid: /* getresgid(2) */
+        ret = do_bsd_getresgid(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_setresuid: /* setresuid(2) */
+        ret = do_bsd_setresuid(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_setresgid: /* setresgid(2) */
+        ret = do_bsd_setresgid(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_getsid: /* getsid(2) */
+        ret = do_bsd_getsid(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_setsid: /* setsid(2) */
+        ret = do_bsd_setsid();
+        break;
+
+    case TARGET_FREEBSD_NR_issetugid: /* issetugid(2) */
+        ret = do_bsd_issetugid();
+        break;
+
+    case TARGET_FREEBSD_NR_profil: /* profil(2) */
+        ret = do_bsd_profil(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_ktrace: /* ktrace(2) */
+        ret = do_bsd_ktrace(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_setloginclass: /* setloginclass(2) */
+        ret = do_freebsd_setloginclass(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_getloginclass: /* getloginclass(2) */
+        ret = do_freebsd_getloginclass(arg1, arg2);
+        break;
+#if 0
+    case TARGET_FREEBSD_NR_pdwait4: /* pdwait4(2) */
+        ret = do_freebsd_pdwait4(arg1, arg2, arg3, arg4);
+        break;
+#endif
+
+    case TARGET_FREEBSD_NR_pdgetpid: /* pdgetpid(2) */
+        ret = do_freebsd_pdgetpid(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR___setugid: /* undocumented */
+        ret = do_freebsd___setugid(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_jail: /* jail(2) */
+        ret = do_freebsd_jail(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_jail_attach: /* jail_attach(2) */
+        ret = do_freebsd_jail_attach(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_jail_remove: /* jail_remove(2) */
+        ret = do_freebsd_jail_remove(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_jail_get: /* jail_get(2) */
+        ret = do_freebsd_jail_get(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_jail_set: /* jail_set(2) */
+        ret = do_freebsd_jail_set(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_cap_enter: /* cap_enter(2) */
+        ret = do_freebsd_cap_enter();
+        break;
+
+    case TARGET_FREEBSD_NR_cap_new: /* cap_new(2) */
+        ret = do_freebsd_cap_new(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_cap_getrights: /* cap_getrights(2) */
+        ret = do_freebsd_cap_getrights(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_cap_getmode: /* cap_getmode(2) */
+        ret = do_freebsd_cap_getmode(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_cap_rights_limit: /* cap_rights_limit(2) */
+        ret = do_freebsd_cap_rights_limit(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_cap_ioctls_limit: /* cap_ioctls_limit(2) */
+        ret = do_freebsd_cap_ioctls_limit(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_cap_ioctls_get: /* cap_ioctls_get(2) */
+        ret = do_freebsd_cap_ioctls_get(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_cap_fcntls_limit: /* cap_fcntls_limit(2) */
+        ret = do_freebsd_cap_fcntls_limit(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_cap_fcntls_get: /* cap_fcntls_get(2) */
+        ret = do_freebsd_cap_fcntls_get(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_audit: /* audit(2) */
+        ret = do_freebsd_audit(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_auditon: /* auditon(2) */
+        ret = do_freebsd_auditon(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_getaudit: /* getaudit(2) */
+        ret = do_freebsd_getaudit(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_setaudit: /* setaudit(2) */
+        ret = do_freebsd_setaudit(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_getaudit_addr: /* getaudit_addr(2) */
+        ret = do_freebsd_getaudit_addr(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_setaudit_addr: /* setaudit_addr(2) */
+        ret = do_freebsd_setaudit_addr(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_auditctl: /* auditctl(2) */
+        ret = do_freebsd_auditctl(arg1);
+        break;
+    case TARGET_FREEBSD_NR_utrace: /* utrace(2) */
+        ret = do_bsd_utrace(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_ptrace: /* ptrace(2) */
+        ret = do_bsd_ptrace(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_getpriority: /* getpriority(2) */
+        ret = do_bsd_getpriority(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_setpriority: /* setpriority(2) */
+        ret = do_bsd_setpriority(arg1, arg2, arg3);
+        break;
+
+
     case TARGET_FREEBSD_NR_read:
         if (!(p = lock_user(VERIFY_WRITE, arg2, arg3, 0)))
             goto efault;
