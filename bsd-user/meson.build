@@ -11,5 +11,6 @@ bsd_user_ss.add(files(
   abi / 'target_arch_cpu.c',
   targetos / 'os-time.c',
   targetos / 'os-proc.c',
+  targetos / 'os-stat.c',
   targetos / 'os-sys.c',
 ))
