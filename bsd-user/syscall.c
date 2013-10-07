@@ -40,6 +40,7 @@ static int host_to_target_errno(int err);
 #include "bsd-mem.h"
 #include "bsd-proc.h"
 #include "bsd-signal.h"
+#include "bsd-socket.h"
 
 /* *BSD dependent syscall shims */
 #include "os-extattr.h"
@@ -47,6 +48,7 @@ static int host_to_target_errno(int err);
 #include "os-time.h"
 #include "os-proc.h"
 #include "os-signal.h"
+#include "os-socket.h"
 #include "os-stat.h"
 
 /* #define DEBUG */
@@ -1072,6 +1074,109 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     case TARGET_FREEBSD_NR_pdkill: /* pdkill(2) */
         ret = do_freebsd_pdkill(arg1, arg2);
+        break;
+
+        /*
+         * socket related system calls
+         */
+    case TARGET_FREEBSD_NR_accept: /* accept(2) */
+        ret = do_bsd_accept(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_accept4: /* accept4(2) */
+        ret = do_freebsd_accept4(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_bind: /* bind(2) */
+        ret = do_bsd_bind(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_bindat: /* bindat(2) */
+        ret = do_freebsd_bindat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_connect: /* connect(2) */
+        ret = do_bsd_connect(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_connectat: /* connectat(2) */
+        ret = do_freebsd_connectat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_getpeername: /* getpeername(2) */
+        ret = do_bsd_getpeername(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_getsockname: /* getsockname(2) */
+        ret = do_bsd_getsockname(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_getsockopt: /* getsockopt(2) */
+        ret = do_bsd_getsockopt(arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_setsockopt: /* setsockopt(2) */
+        ret = do_bsd_setsockopt(arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_listen: /* listen(2) */
+        ret = get_errno(listen(arg1, arg2));
+        break;
+
+    case TARGET_FREEBSD_NR_recvfrom: /* recvfrom(2) */
+        ret = do_bsd_recvfrom(arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+    case TARGET_FREEBSD_NR_recvmsg: /* recvmsg(2) */
+        ret = do_freebsd_recvmsg(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_sendmsg: /* sendmsg(2) */
+        ret = do_freebsd_sendmsg(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_sendto: /* sendto(2) */
+        ret = do_bsd_sendto(arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+    case TARGET_FREEBSD_NR_socket: /* socket(2) */
+        ret = do_bsd_socket(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_socketpair: /* socketpair(2) */
+        ret = do_bsd_socketpair(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_shutdown: /* shutdown(2) */
+        ret = do_bsd_shutdown(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_setfib: /* setfib(2) */
+        ret = do_freebsd_setfib(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_sctp_peeloff: /* sctp_peeloff(2) */
+        ret = do_freebsd_sctp_peeloff(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_sctp_generic_sendmsg: /* sctp_generic_sendmsg(2) */
+        ret = do_freebsd_sctp_generic_sendmsg(arg1, arg2, arg2, arg4, arg5,
+                arg6, arg7);
+        break;
+
+    case TARGET_FREEBSD_NR_sctp_generic_recvmsg: /* sctp_generic_recvmsg(2) */
+        ret = do_freebsd_sctp_generic_recvmsg(arg1, arg2, arg2, arg4, arg5,
+                arg6, arg7);
+        break;
+
+    case TARGET_FREEBSD_NR_sendfile: /* sendfile(2) */
+        ret = do_freebsd_sendfile(arg1, arg2, arg2, arg4, arg5, arg6, arg7,
+                arg8);
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd4_sendfile: /* freebsd4_sendfile(2) */
+        ret = do_freebsd_freebsd4_sendfile(arg1, arg2, arg2, arg4, arg5,
+                arg6, arg7, arg8);
         break;
 
         /*
