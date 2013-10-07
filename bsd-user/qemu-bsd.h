@@ -32,6 +32,16 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 
+/* bsd-mem.c */
+abi_long target_to_host_ipc_perm(struct ipc_perm *host_ip,
+        abi_ulong target_addr);
+abi_long host_to_target_ipc_perm(abi_ulong target_addr,
+        struct ipc_perm *host_ip);
+abi_long target_to_host_shmid_ds(struct shmid_ds *host_sd,
+        abi_ulong target_addr);
+abi_long host_to_target_shmid_ds(abi_ulong target_addr,
+        struct shmid_ds *host_sd);
+
 /* bsd-proc.c */
 int target_to_host_resource(int code);
 rlim_t target_to_host_rlim(abi_ulong target_rlim);
