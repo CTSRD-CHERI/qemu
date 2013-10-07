@@ -17,13 +17,16 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
-#include "qemu/osdep.h"
-#include "qemu/cutils.h"
-#include "qemu/path.h"
+#include <stdio.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <string.h>
+#include <errno.h>
+#include <time.h>
+#include <sys/types.h>
 #include <sys/syscall.h>
 #include <sys/param.h>
 #include <sys/sysctl.h>
-#include <utime.h>
 
 #include "qemu.h"
 #include "qemu-common.h"
@@ -34,6 +37,7 @@ static int host_to_target_errno(int err);
 
 /* BSD independent syscall shims */
 #include "bsd-file.h"
+#include "bsd-mem.h"
 #include "bsd-proc.h"
 #include "bsd-signal.h"
 
@@ -47,19 +51,18 @@ static int host_to_target_errno(int err);
 
 /* #define DEBUG */
 
-static abi_ulong target_brk;
-static abi_ulong target_original_brk;
-
 /*
  * errno conversion.
  */
 abi_long get_errno(abi_long ret)
 {
-    if (ret == -1)
+
+    if (ret == -1) {
         /* XXX need to translate host -> target errnos here */
         return -(errno);
-    else
+    } else {
         return ret;
+    }
 }
 
 static int host_to_target_errno(int err)
@@ -70,46 +73,8 @@ static int host_to_target_errno(int err)
 
 int is_error(abi_long ret)
 {
+
     return (abi_ulong)ret >= (abi_ulong)(-4096);
-}
-
-void target_set_brk(abi_ulong new_brk)
-{
-    target_original_brk = target_brk = HOST_PAGE_ALIGN(new_brk);
-}
-
-/* do_obreak() must return target errnos. */
-static abi_long do_obreak(abi_ulong new_brk)
-{
-    abi_ulong brk_page;
-    abi_long mapped_addr;
-    int new_alloc_size;
-
-    if (!new_brk)
-        return 0;
-    if (new_brk < target_original_brk)
-        return -TARGET_EINVAL;
-
-    brk_page = HOST_PAGE_ALIGN(target_brk);
-
-    /* If the new brk is less than this, set it and we're done... */
-    if (new_brk < brk_page) {
-        target_brk = new_brk;
-        return 0;
-    }
-
-    /* We need to allocate more memory after the brk... */
-    new_alloc_size = HOST_PAGE_ALIGN(new_brk - brk_page + 1);
-    mapped_addr = get_errno(target_mmap(brk_page, new_alloc_size,
-                                        PROT_READ|PROT_WRITE,
-                                        MAP_ANON|MAP_FIXED|MAP_PRIVATE, -1, 0));
-
-    if (!is_error(mapped_addr))
-        target_brk = new_brk;
-    else
-        return mapped_addr;
-
-    return 0;
 }
 
 /* FIXME
@@ -161,6 +126,13 @@ static abi_long unlock_iovec(struct iovec *vec, abi_ulong target_addr,
     unlock_user (target_vec, target_addr, 0);
 
     return 0;
+}
+
+
+/* stub for arm semihosting support */
+abi_long do_brk(abi_ulong new_brk)
+{
+    return do_obreak(new_brk);
 }
 
 /* do_syscall() should always have a single exit point at the end so
@@ -357,6 +329,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_getloginclass: /* getloginclass(2) */
         ret = do_freebsd_getloginclass(arg1, arg2);
         break;
+
 #if 0
     case TARGET_FREEBSD_NR_pdwait4: /* pdwait4(2) */
         ret = do_freebsd_pdwait4(arg1, arg2, arg3, arg4);
@@ -454,6 +427,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_auditctl: /* auditctl(2) */
         ret = do_freebsd_auditctl(arg1);
         break;
+
     case TARGET_FREEBSD_NR_utrace: /* utrace(2) */
         ret = do_bsd_utrace(arg1, arg2);
         break;
@@ -469,6 +443,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_setpriority: /* setpriority(2) */
         ret = do_bsd_setpriority(arg1, arg2, arg3);
         break;
+
 
 
         /*
@@ -856,19 +831,94 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
 
+        /*
+         * Memory management system calls.
+         */
+    case TARGET_FREEBSD_NR_mmap: /* mmap(2) */
+        ret = do_bsd_mmap(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6, arg7,
+           arg8);
+        break;
 
-    case TARGET_FREEBSD_NR_mmap:
-        ret = get_errno(target_mmap(arg1, arg2, arg3,
-                                    target_to_host_bitmask(arg4, mmap_flags_tbl),
-                                    arg5,
-                                    arg6));
+    case TARGET_FREEBSD_NR_munmap: /* munmap(2) */
+        ret = do_bsd_munmap(arg1, arg2);
         break;
-    case TARGET_FREEBSD_NR_mprotect:
-        ret = get_errno(target_mprotect(arg1, arg2, arg3));
+
+    case TARGET_FREEBSD_NR_mprotect: /* mprotect(2) */
+        ret = do_bsd_mprotect(arg1, arg2, arg3);
         break;
-    case TARGET_FREEBSD_NR_break:
-        ret = do_obreak(arg1);
+
+    case TARGET_FREEBSD_NR_msync: /* msync(2) */
+        ret = do_bsd_msync(arg1, arg2, arg3);
         break;
+
+    case TARGET_FREEBSD_NR_mlock: /* mlock(2) */
+        ret = do_bsd_mlock(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_munlock: /* munlock(2) */
+        ret = do_bsd_munlock(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_mlockall: /* mlockall(2) */
+        ret = do_bsd_mlockall(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_munlockall: /* munlockall(2) */
+        ret = do_bsd_munlockall();
+        break;
+
+    case TARGET_FREEBSD_NR_madvise: /* madvise(2) */
+        ret = do_bsd_madvise(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_minherit: /* minherit(2) */
+        ret = do_bsd_minherit(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_mincore: /* mincore(2) */
+        ret = do_bsd_mincore(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_shm_open: /* shm_open(2) */
+        ret = do_bsd_shm_open(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_shm_unlink: /* shm_unlink(2) */
+        ret = do_bsd_shm_unlink(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_shmget: /* shmget(2) */
+        ret = do_bsd_shmget(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_shmctl: /* shmctl(2) */
+        ret = do_bsd_shmctl(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_shmat: /* shmat(2) */
+        ret = do_bsd_shmat(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_shmdt: /* shmdt(2) */
+        ret = do_bsd_shmdt(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_vadvise:
+        ret = do_bsd_vadvise();
+        break;
+
+    case TARGET_FREEBSD_NR_sbrk:
+        ret = do_bsd_sbrk();
+        break;
+
+    case TARGET_FREEBSD_NR_sstk:
+        ret = do_bsd_sstk();
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd6_mmap: /* undocumented */
+        ret = do_bsd_freebsd6_mmap(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+        break;
+
 
         /*
          * time related system calls.
@@ -1046,6 +1096,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
                     arg8));
         break;
     }
+
 #ifdef DEBUG
     gemu_log(" = %ld\n", ret);
 #endif
@@ -1088,13 +1139,10 @@ abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
     case TARGET_NETBSD_NR_mmap:
-        ret = get_errno(target_mmap(arg1, arg2, arg3,
-                                    target_to_host_bitmask(arg4, mmap_flags_tbl),
-                                    arg5,
-                                    arg6));
+        ret = do_bsd_mmap(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6, 0, 0);
         break;
     case TARGET_NETBSD_NR_mprotect:
-        ret = get_errno(target_mprotect(arg1, arg2, arg3));
+        ret = do_bsd_mprotect(arg1, arg2, arg3);
         break;
 
     case TARGET_NETBSD_NR_syscall:
@@ -1147,13 +1195,10 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
     case TARGET_OPENBSD_NR_mmap:
-        ret = get_errno(target_mmap(arg1, arg2, arg3,
-                                    target_to_host_bitmask(arg4, mmap_flags_tbl),
-                                    arg5,
-                                    arg6));
+        ret = do_bsd_mmap(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6, 0, 0);
         break;
     case TARGET_OPENBSD_NR_mprotect:
-        ret = get_errno(target_mprotect(arg1, arg2, arg3));
+        ret = do_bsd_mprotect(arg1, arg2, arg3);
         break;
 
     case TARGET_OPENBSD_NR_syscall:
