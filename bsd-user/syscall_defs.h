@@ -281,6 +281,11 @@ struct target_freebsd_rusage {
     abi_long    ru_nivcsw;      /* involuntary context switches */
 };
 
+struct target_freebsd__wrusage {
+    struct target_freebsd_rusage wru_self;
+    struct target_freebsd_rusage wru_children;
+};
+
 /*
  * sys/socket.h
  */

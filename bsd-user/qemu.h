@@ -103,6 +103,7 @@ typedef struct TaskState {
 
 void init_task_state(TaskState *ts);
 void stop_all_tasks(void);
+extern const char *interp_prefix;
 extern const char *qemu_uname_release;
 extern unsigned long mmap_min_addr;
 
@@ -241,6 +242,10 @@ extern char qemu_proc_pathname[];
 /* syscall.c */
 abi_long get_errno(abi_long ret);
 int is_error(abi_long ret);
+
+/* os-proc.c */
+abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
+        abi_ulong guest_envp, int do_fexec);
 
 /* os-sys.c */
 abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
