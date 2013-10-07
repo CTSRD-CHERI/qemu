@@ -1,5 +1,6 @@
 bsd_user_ss.add(files(
   'bsd-mem.c',
+  'bsd-socket.c',
   'bsd-proc.c',
   'bsdload.c',
   'elfload.c',
@@ -12,6 +13,7 @@ bsd_user_ss.add(files(
   abi / 'target_arch_cpu.c',
   targetos / 'os-time.c',
   targetos / 'os-proc.c',
+  targetos / 'os-socket.c',
   targetos / 'os-stat.c',
   targetos / 'os-sys.c',
 ))

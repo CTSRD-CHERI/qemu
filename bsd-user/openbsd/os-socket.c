@@ -1,0 +1,1 @@
+/* XXX OpenBSD socket related helpers */

@@ -50,6 +50,12 @@ abi_ulong copy_from_user_fdset_ptr(fd_set *fds, fd_set **fds_ptr,
 abi_long copy_to_user_fdset(abi_ulong target_fds_addr, const fd_set *fds,
         int n);
 
+/* os-socket.c */
+abi_long t2h_freebsd_cmsg(struct msghdr *msgh,
+                struct target_msghdr *target_msgh);
+abi_long h2t_freebsd_cmsg(struct target_msghdr *target_msgh,
+                struct msghdr *msgh);
+
 /* os-stat.c */
 abi_long h2t_freebsd_stat(abi_ulong target_addr, struct stat *host_st);
 abi_long h2t_freebsd_nstat(abi_ulong target_addr, struct stat *host_st);
