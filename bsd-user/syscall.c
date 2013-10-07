@@ -33,10 +33,13 @@
 static int host_to_target_errno(int err);
 
 /* BSD independent syscall shims */
+#include "bsd-file.h"
 #include "bsd-proc.h"
 #include "bsd-signal.h"
 
 /* *BSD dependent syscall shims */
+#include "os-extattr.h"
+#include "os-file.h"
 #include "os-time.h"
 #include "os-proc.h"
 #include "os-signal.h"
@@ -169,7 +172,6 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
 {
     CPUState *cpu = env_cpu(cpu_env);
     abi_long ret;
-    void *p;
 
 #ifdef DEBUG
     gemu_log("freebsd syscall %d\n", num);
@@ -468,38 +470,317 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
 
-    case TARGET_FREEBSD_NR_read:
-        if (!(p = lock_user(VERIFY_WRITE, arg2, arg3, 0)))
-            goto efault;
-        ret = get_errno(read(arg1, p, arg3));
-        unlock_user(p, arg2, ret);
+        /*
+         * File system calls.
+         */
+    case TARGET_FREEBSD_NR_read: /* read(2) */
+        ret = do_bsd_read(arg1, arg2, arg3);
         break;
-    case TARGET_FREEBSD_NR_write:
-        if (!(p = lock_user(VERIFY_READ, arg2, arg3, 1)))
-            goto efault;
-        ret = get_errno(write(arg1, p, arg3));
-        unlock_user(p, arg2, 0);
-        break;
-    case TARGET_FREEBSD_NR_writev:
-        {
-            int count = arg3;
-            struct iovec *vec;
 
-            vec = alloca(count * sizeof(struct iovec));
-            if (lock_iovec(VERIFY_READ, vec, arg2, count, 1) < 0)
-                goto efault;
-            ret = get_errno(writev(arg1, vec, count));
-            unlock_iovec(vec, arg2, count, 0);
-        }
+    case TARGET_FREEBSD_NR_pread: /* pread(2) */
+        ret = do_bsd_pread(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6);
         break;
-    case TARGET_FREEBSD_NR_open:
-        if (!(p = lock_user_string(arg1)))
-            goto efault;
-        ret = get_errno(open(path(p),
-                             target_to_host_bitmask(arg2, fcntl_flags_tbl),
-                             arg3));
-        unlock_user(p, arg1, 0);
+
+    case TARGET_FREEBSD_NR_readv: /* readv(2) */
+        ret = do_bsd_readv(arg1, arg2, arg3);
         break;
+
+    case TARGET_FREEBSD_NR_write: /* write(2) */
+        ret = do_bsd_write(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_pwrite: /* pwrite(2) */
+        ret = do_bsd_pwrite(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+    case TARGET_FREEBSD_NR_writev: /* writev(2) */
+        ret = do_bsd_writev(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_pwritev: /* pwritev(2) */
+        ret = do_bsd_pwritev(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+    case TARGET_FREEBSD_NR_open: /* open(2) */
+        ret = do_bsd_open(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_openat: /* openat(2) */
+        ret = do_bsd_openat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_close: /* close(2) */
+        ret = do_bsd_close(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_fsync: /* fsync(2) */
+        ret = do_bsd_fsync(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_closefrom: /* closefrom(2) */
+        ret = do_bsd_closefrom(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_revoke: /* revoke(2) */
+        ret = do_bsd_revoke(arg1);
+        break;
+
+#ifdef TARGET_FREEBSD_NR_creat
+    case TARGET_FREEBSD_NR_creat: /* creat(2) (obsolete) */
+        ret = do_bsd_creat(arg1);
+        break;
+#endif
+
+    case TARGET_FREEBSD_NR_access: /* access(2) */
+        ret = do_bsd_access(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_eaccess: /* eaccess(2) */
+        ret = do_bsd_eaccess(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_faccessat: /* faccessat(2) */
+        ret = do_bsd_faccessat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_chdir: /* chdir(2) */
+        ret = do_bsd_chdir(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_fchdir: /* fchdir(2) */
+        ret = do_bsd_fchdir(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_rename: /* rename(2) */
+        ret = do_bsd_rename(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_renameat: /* renameat(2) */
+        ret = do_bsd_renameat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_link: /* link(2) */
+        ret = do_bsd_link(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_linkat: /* linkat(2) */
+        ret = do_bsd_linkat(arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_unlink: /* unlink(2) */
+        ret = do_bsd_unlink(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_unlinkat: /* unlinkat(2) */
+        ret = do_bsd_unlinkat(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_mkdir: /* mkdir(2) */
+        ret = do_bsd_mkdir(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_mkdirat: /* mkdirat(2) */
+        ret = do_bsd_mkdirat(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_rmdir: /* rmdir(2) (XXX no rmdirat()?) */
+        ret = do_bsd_rmdir(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR___getcwd: /* undocumented __getcwd() */
+        ret = do_bsd___getcwd(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_dup: /* dup(2) */
+        ret = do_bsd_dup(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_dup2: /* dup2(2) */
+        ret = do_bsd_dup2(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_truncate: /* truncate(2) */
+        ret = do_bsd_truncate(cpu_env, arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_ftruncate: /* ftruncate(2) */
+        ret = do_bsd_ftruncate(cpu_env, arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_acct: /* acct(2) */
+        ret = do_bsd_acct(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_sync: /* sync(2) */
+        ret = do_bsd_sync();
+        break;
+
+    case TARGET_FREEBSD_NR_mount: /* mount(2) */
+        ret = do_bsd_mount(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_unmount: /* unmount(2) */
+        ret = do_bsd_unmount(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_nmount: /* nmount(2) */
+        ret = do_bsd_nmount(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_symlink: /* symlink(2) */
+        ret = do_bsd_symlink(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_symlinkat: /* symlinkat(2) */
+        ret = do_bsd_symlinkat(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_readlink: /* readlink(2) */
+        ret = do_bsd_readlink(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_readlinkat: /* readlinkat(2) */
+        ret = do_bsd_readlinkat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_chmod: /* chmod(2) */
+        ret = do_bsd_chmod(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fchmod: /* fchmod(2) */
+        ret = do_bsd_fchmod(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_lchmod: /* lchmod(2) */
+        ret = do_bsd_lchmod(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fchmodat: /* fchmodat(2) */
+        ret = do_bsd_fchmodat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_mknod: /* mknod(2) */
+        ret = do_bsd_mknod(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_mknodat: /* mknodat(2) */
+        ret = do_bsd_mknodat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_chown: /* chown(2) */
+        ret = do_bsd_chown(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_fchown: /* fchown(2) */
+        ret = do_bsd_fchown(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_lchown: /* lchown(2) */
+        ret = do_bsd_lchown(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_fchownat: /* fchownat(2) */
+        ret = do_bsd_fchownat(arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_chflags: /* chflags(2) */
+        ret = do_bsd_chflags(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_chflagsat: /* chflagsat(2) */
+        ret = do_bsd_chflagsat(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_lchflags: /* lchflags(2) */
+        ret = do_bsd_lchflags(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fchflags: /* fchflags(2) */
+        ret = do_bsd_fchflags(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_chroot: /* chroot(2) */
+        ret = do_bsd_chroot(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_flock: /* flock(2) */
+        ret = do_bsd_flock(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_mkfifo: /* mkfifo(2) */
+        ret = do_bsd_mkfifo(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_mkfifoat: /* mkfifoat(2) */
+        ret = do_bsd_mkfifoat(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_pathconf: /* pathconf(2) */
+        ret = do_bsd_pathconf(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_lpathconf: /* lpathconf(2) */
+        ret = do_bsd_lpathconf(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_fpathconf: /* fpathconf(2) */
+        ret = do_bsd_fpathconf(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_undelete: /* undelete(2) */
+        ret = do_bsd_undelete(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_poll: /* poll(2) */
+        ret = do_bsd_poll(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_openbsd_poll:  /* undocumented openbsd_poll() */
+        ret = do_bsd_openbsd_poll(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_lseek: /* lseek(2) */
+        ret = do_bsd_lseek(cpu_env, arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_pipe: /* pipe(2) */
+        ret = do_bsd_pipe(cpu_env, arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_pipe2: /* pipe2(2) */
+        ret = do_bsd_pipe2(cpu_env, arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_swapon: /* swapon(2) */
+        ret = do_bsd_swapon(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_swapoff: /* swapoff(2) */
+        ret = do_bsd_swapoff(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd6_pread: /* undocumented freebsd6_pread() */
+        ret = do_bsd_freebsd6_pread(arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd6_pwrite: /* undocumented freebsd6_pwrite() */
+        ret = do_bsd_freebsd6_pwrite(arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd6_lseek: /* undocumented freebsd6_lseek() */
+        ret = do_bsd_freebsd6_lseek(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd6_truncate: /* undocumented */
+        ret = do_bsd_freebsd6_truncate(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd6_ftruncate: /* undocumented */
+        ret = do_bsd_freebsd6_ftruncate(arg1, arg2, arg3);
+        break;
+
+
+
     case TARGET_FREEBSD_NR_mmap:
         ret = get_errno(target_mmap(arg1, arg2, arg3,
                                     target_to_host_bitmask(arg4, mmap_flags_tbl),
@@ -689,7 +970,6 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
                     arg8));
         break;
     }
- fail:
 #ifdef DEBUG
     gemu_log(" = %ld\n", ret);
 #endif
@@ -698,9 +978,6 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     record_syscall_return(cpu, num, ret);
     return ret;
- efault:
-    ret = -TARGET_EFAULT;
-    goto fail;
 }
 
 abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
@@ -709,7 +986,6 @@ abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
 {
     CPUState *cpu = env_cpu(cpu_env);
     abi_long ret;
-    void *p;
 
 #ifdef DEBUG
     gemu_log("netbsd syscall %d\n", num);
@@ -722,35 +998,19 @@ abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     switch(num) {
     case TARGET_NETBSD_NR_exit:
-#ifdef CONFIG_GPROF
-        _mcleanup();
-#endif
-        gdb_exit(cpu_env, arg1);
-        qemu_plugin_atexit_cb();
-        /* XXX: should free thread stack and CPU env */
-        _exit(arg1);
-        ret = 0; /* avoid warning */
+        ret = do_bsd_exit(cpu_env, arg1);
         break;
+
     case TARGET_NETBSD_NR_read:
-        if (!(p = lock_user(VERIFY_WRITE, arg2, arg3, 0)))
-            goto efault;
-        ret = get_errno(read(arg1, p, arg3));
-        unlock_user(p, arg2, ret);
+        ret = do_bsd_read(arg1, arg2, arg3);
         break;
     case TARGET_NETBSD_NR_write:
-        if (!(p = lock_user(VERIFY_READ, arg2, arg3, 1)))
-            goto efault;
-        ret = get_errno(write(arg1, p, arg3));
-        unlock_user(p, arg2, 0);
+        ret = do_bsd_write(arg1, arg2, arg3);
         break;
     case TARGET_NETBSD_NR_open:
-        if (!(p = lock_user_string(arg1)))
-            goto efault;
-        ret = get_errno(open(path(p),
-                             target_to_host_bitmask(arg2, fcntl_flags_tbl),
-                             arg3));
-        unlock_user(p, arg1, 0);
+        ret = do_bsd_open(arg1, arg2, arg3);
         break;
+
     case TARGET_NETBSD_NR_mmap:
         ret = get_errno(target_mmap(arg1, arg2, arg3,
                                     target_to_host_bitmask(arg4, mmap_flags_tbl),
@@ -769,7 +1029,6 @@ abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = syscall(num, arg1, arg2, arg3, arg4, arg5, arg6);
         break;
     }
- fail:
 #ifdef DEBUG
     gemu_log(" = %ld\n", ret);
 #endif
@@ -778,9 +1037,6 @@ abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     record_syscall_return(cpu, num, ret);
     return ret;
- efault:
-    ret = -TARGET_EFAULT;
-    goto fail;
 }
 
 abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
@@ -789,7 +1045,6 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
 {
     CPUState *cpu = env_cpu(cpu_env);
     abi_long ret;
-    void *p;
 
 #ifdef DEBUG
     gemu_log("openbsd syscall %d\n", num);
@@ -802,35 +1057,19 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     switch(num) {
     case TARGET_OPENBSD_NR_exit:
-#ifdef CONFIG_GPROF
-        _mcleanup();
-#endif
-        gdb_exit(cpu_env, arg1);
-        qemu_plugin_atexit_cb();
-        /* XXX: should free thread stack and CPU env */
-        _exit(arg1);
-        ret = 0; /* avoid warning */
+        ret = do_bsd_exit(cpu_env, arg1);
         break;
+
     case TARGET_OPENBSD_NR_read:
-        if (!(p = lock_user(VERIFY_WRITE, arg2, arg3, 0)))
-            goto efault;
-        ret = get_errno(read(arg1, p, arg3));
-        unlock_user(p, arg2, ret);
+        ret = do_bsd_read(arg1, arg2, arg3);
         break;
     case TARGET_OPENBSD_NR_write:
-        if (!(p = lock_user(VERIFY_READ, arg2, arg3, 1)))
-            goto efault;
-        ret = get_errno(write(arg1, p, arg3));
-        unlock_user(p, arg2, 0);
+        ret = do_bsd_write(arg1, arg2, arg3);
         break;
     case TARGET_OPENBSD_NR_open:
-        if (!(p = lock_user_string(arg1)))
-            goto efault;
-        ret = get_errno(open(path(p),
-                             target_to_host_bitmask(arg2, fcntl_flags_tbl),
-                             arg3));
-        unlock_user(p, arg1, 0);
+        ret = do_bsd_open(arg1, arg2, arg3);
         break;
+
     case TARGET_OPENBSD_NR_mmap:
         ret = get_errno(target_mmap(arg1, arg2, arg3,
                                     target_to_host_bitmask(arg4, mmap_flags_tbl),
@@ -849,7 +1088,6 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = syscall(num, arg1, arg2, arg3, arg4, arg5, arg6);
         break;
     }
- fail:
 #ifdef DEBUG
     gemu_log(" = %ld\n", ret);
 #endif
@@ -858,9 +1096,6 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     record_syscall_return(cpu, num, ret);
     return ret;
- efault:
-    ret = -TARGET_EFAULT;
-    goto fail;
 }
 
 void syscall_init(void)

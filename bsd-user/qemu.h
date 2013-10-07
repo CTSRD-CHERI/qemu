@@ -450,6 +450,42 @@ static inline void *lock_user_string(abi_ulong guest_addr)
 #define unlock_user_struct(host_ptr, guest_addr, copy)          \
     unlock_user(host_ptr, guest_addr, (copy) ? sizeof(*host_ptr) : 0)
 
+#if TARGET_ABI_BITS == 32
+static inline uint64_t
+target_offset64(uint32_t word0, uint32_t word1)
+{
+#ifdef TARGET_WORDS_BIGENDIAN
+    return ((uint64_t)word0 << 32) | word1;
+#else
+    return ((uint64_t)word1 << 32) | word0;
+#endif
+}
+#else /* TARGET_ABI_BITS != 32 */
+static inline uint64_t
+target_offset64(uint64_t word0, uint64_t word1)
+{
+    return word0;
+}
+#endif /* TARGET_ABI_BITS != 32 */
+
+/* ARM EABI and MIPS expect 64bit types aligned even on pairs of registers */
+#ifdef TARGET_ARM
+static inline int
+regpairs_aligned(void *cpu_env) {
+    return ((((CPUARMState *)cpu_env)->eabi) == 1);
+}
+#elif defined(TARGET_MIPS) && TARGET_ABI_BITS == 32
+static inline int regpairs_aligned(void *cpu_env)
+{
+    return 1;
+}
+#else
+static inline int regpairs_aligned(void *cpu_env)
+{
+    return 0;
+}
+#endif
+
 #if defined(CONFIG_USE_NPTL)
 #include <pthread.h>
 #endif
