@@ -2,6 +2,7 @@
  *  BSD syscalls
  *
  *  Copyright (c) 2003 - 2008 Fabrice Bellard
+ *  Copyright (c) 2013 Stacey D. Son
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,12 +29,17 @@
 #include "qemu-common.h"
 #include "user/syscall-trace.h"
 
-//#define DEBUG
+#define target_to_host_bitmask(x, tbl) (x)
+
+/* #define DEBUG */
 
 static abi_ulong target_brk;
 static abi_ulong target_original_brk;
 
-static inline abi_long get_errno(abi_long ret)
+/*
+ * errno conversion.
+ */
+abi_long get_errno(abi_long ret)
 {
     if (ret == -1)
         /* XXX need to translate host -> target errnos here */
@@ -42,9 +48,7 @@ static inline abi_long get_errno(abi_long ret)
         return ret;
 }
 
-#define target_to_host_bitmask(x, tbl) (x)
-
-static inline int is_error(abi_long ret)
+int is_error(abi_long ret)
 {
     return (abi_ulong)ret >= (abi_ulong)(-4096);
 }
@@ -87,175 +91,6 @@ static abi_long do_obreak(abi_ulong new_brk)
 
     return 0;
 }
-
-#if defined(TARGET_I386)
-static abi_long do_freebsd_sysarch(CPUX86State *env, int op, abi_ulong parms)
-{
-    abi_long ret = 0;
-    abi_ulong val;
-    int idx;
-
-    switch(op) {
-#ifdef TARGET_ABI32
-    case TARGET_FREEBSD_I386_SET_GSBASE:
-    case TARGET_FREEBSD_I386_SET_FSBASE:
-        if (op == TARGET_FREEBSD_I386_SET_GSBASE)
-#else
-    case TARGET_FREEBSD_AMD64_SET_GSBASE:
-    case TARGET_FREEBSD_AMD64_SET_FSBASE:
-        if (op == TARGET_FREEBSD_AMD64_SET_GSBASE)
-#endif
-            idx = R_GS;
-        else
-            idx = R_FS;
-        if (get_user(val, parms, abi_ulong))
-            return -TARGET_EFAULT;
-        cpu_x86_load_seg(env, idx, 0);
-        env->segs[idx].base = val;
-        break;
-#ifdef TARGET_ABI32
-    case TARGET_FREEBSD_I386_GET_GSBASE:
-    case TARGET_FREEBSD_I386_GET_FSBASE:
-        if (op == TARGET_FREEBSD_I386_GET_GSBASE)
-#else
-    case TARGET_FREEBSD_AMD64_GET_GSBASE:
-    case TARGET_FREEBSD_AMD64_GET_FSBASE:
-        if (op == TARGET_FREEBSD_AMD64_GET_GSBASE)
-#endif
-            idx = R_GS;
-        else
-            idx = R_FS;
-        val = env->segs[idx].base;
-        if (put_user(val, parms, abi_ulong))
-            return -TARGET_EFAULT;
-        break;
-    /* XXX handle the others... */
-    default:
-        ret = -TARGET_EINVAL;
-        break;
-    }
-    return ret;
-}
-#endif
-
-#ifdef TARGET_SPARC
-static abi_long do_freebsd_sysarch(void *env, int op, abi_ulong parms)
-{
-    /* XXX handle
-     * TARGET_FREEBSD_SPARC_UTRAP_INSTALL,
-     * TARGET_FREEBSD_SPARC_SIGTRAMP_INSTALL
-     */
-    return -TARGET_EINVAL;
-}
-#endif
-
-#ifdef __FreeBSD__
-/*
- * XXX this uses the undocumented oidfmt interface to find the kind of
- * a requested sysctl, see /sys/kern/kern_sysctl.c:sysctl_sysctl_oidfmt()
- * (this is mostly copied from src/sbin/sysctl/sysctl.c)
- */
-static int
-oidfmt(int *oid, int len, char *fmt, uint32_t *kind)
-{
-    int qoid[CTL_MAXNAME+2];
-    uint8_t buf[BUFSIZ];
-    int i;
-    size_t j;
-
-    qoid[0] = 0;
-    qoid[1] = 4;
-    memcpy(qoid + 2, oid, len * sizeof(int));
-
-    j = sizeof(buf);
-    i = sysctl(qoid, len + 2, buf, &j, 0, 0);
-    if (i)
-        return i;
-
-    if (kind)
-        *kind = *(uint32_t *)buf;
-
-    if (fmt)
-        strcpy(fmt, (char *)(buf + sizeof(uint32_t)));
-    return (0);
-}
-
-/*
- * try and convert sysctl return data for the target.
- * XXX doesn't handle CTLTYPE_OPAQUE and CTLTYPE_STRUCT.
- */
-static int sysctl_oldcvt(void *holdp, size_t holdlen, uint32_t kind)
-{
-    switch (kind & CTLTYPE) {
-    case CTLTYPE_INT:
-    case CTLTYPE_UINT:
-        *(uint32_t *)holdp = tswap32(*(uint32_t *)holdp);
-        break;
-#ifdef TARGET_ABI32
-    case CTLTYPE_LONG:
-    case CTLTYPE_ULONG:
-        *(uint32_t *)holdp = tswap32(*(long *)holdp);
-        break;
-#else
-    case CTLTYPE_LONG:
-        *(uint64_t *)holdp = tswap64(*(long *)holdp);
-    case CTLTYPE_ULONG:
-        *(uint64_t *)holdp = tswap64(*(unsigned long *)holdp);
-        break;
-#endif
-#ifdef CTLTYPE_U64
-    case CTLTYPE_S64:
-    case CTLTYPE_U64:
-#else
-    case CTLTYPE_QUAD:
-#endif
-        *(uint64_t *)holdp = tswap64(*(uint64_t *)holdp);
-        break;
-    case CTLTYPE_STRING:
-        break;
-    default:
-        /* XXX unhandled */
-        return -1;
-    }
-    return 0;
-}
-
-/* XXX this needs to be emulated on non-FreeBSD hosts... */
-static abi_long do_freebsd_sysctl(abi_ulong namep, int32_t namelen, abi_ulong oldp,
-                          abi_ulong oldlenp, abi_ulong newp, abi_ulong newlen)
-{
-    abi_long ret;
-    void *hnamep, *holdp, *hnewp = NULL;
-    size_t holdlen;
-    abi_ulong oldlen = 0;
-    int32_t *snamep = g_malloc(sizeof(int32_t) * namelen), *p, *q, i;
-    uint32_t kind = 0;
-
-    if (oldlenp)
-        get_user_ual(oldlen, oldlenp);
-    if (!(hnamep = lock_user(VERIFY_READ, namep, namelen, 1)))
-        return -TARGET_EFAULT;
-    if (newp && !(hnewp = lock_user(VERIFY_READ, newp, newlen, 1)))
-        return -TARGET_EFAULT;
-    if (!(holdp = lock_user(VERIFY_WRITE, oldp, oldlen, 0)))
-        return -TARGET_EFAULT;
-    holdlen = oldlen;
-    for (p = hnamep, q = snamep, i = 0; i < namelen; p++, i++)
-       *q++ = tswap32(*p);
-    oidfmt(snamep, namelen, NULL, &kind);
-    /* XXX swap hnewp */
-    ret = get_errno(sysctl(snamep, namelen, holdp, &holdlen, hnewp, newlen));
-    if (!ret)
-        sysctl_oldcvt(holdp, holdlen, kind);
-    put_user_ual(holdlen, oldlenp);
-    unlock_user(hnamep, namep, 0);
-    unlock_user(holdp, oldp, holdlen);
-    if (hnewp)
-        unlock_user(hnewp, newp, 0);
-    g_free(snamep);
-    return ret;
-}
-#endif
 
 /* FIXME
  * lock_iovec()/unlock_iovec() have a return code of 0 for success where
@@ -383,20 +218,27 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_break:
         ret = do_obreak(arg1);
         break;
-#ifdef __FreeBSD__
-    case TARGET_FREEBSD_NR___sysctl:
-        ret = do_freebsd_sysctl(arg1, arg2, arg3, arg4, arg5, arg6);
+
+        /*
+         * sys{ctl, arch, call}
+         */
+    case TARGET_FREEBSD_NR___sysctl: /* sysctl(3) */
+        ret = do_freebsd_sysctl(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6);
         break;
-#endif
-    case TARGET_FREEBSD_NR_sysarch:
+
+    case TARGET_FREEBSD_NR_sysarch: /* sysarch(2) */
         ret = do_freebsd_sysarch(cpu_env, arg1, arg2);
         break;
-    case TARGET_FREEBSD_NR_syscall:
-    case TARGET_FREEBSD_NR___syscall:
-        ret = do_freebsd_syscall(cpu_env,arg1 & 0xffff,arg2,arg3,arg4,arg5,arg6,arg7,arg8,0);
+
+    case TARGET_FREEBSD_NR_syscall: /* syscall(2) */
+    case TARGET_FREEBSD_NR___syscall: /* __syscall(2) */
+        ret = do_freebsd_syscall(cpu_env, arg1 & 0xffff, arg2, arg3, arg4,
+                arg5, arg6, arg7, arg8, 0);
         break;
+
     default:
-        ret = get_errno(syscall(num, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8));
+        ret = get_errno(syscall(num, arg1, arg2, arg3, arg4, arg5, arg6, arg7,
+                    arg8));
         break;
     }
  fail:
@@ -470,6 +312,7 @@ abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_NETBSD_NR_mprotect:
         ret = get_errno(target_mprotect(arg1, arg2, arg3));
         break;
+
     case TARGET_NETBSD_NR_syscall:
     case TARGET_NETBSD_NR___syscall:
         ret = do_netbsd_syscall(cpu_env,arg1 & 0xffff,arg2,arg3,arg4,arg5,arg6,0);
@@ -549,6 +392,7 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_OPENBSD_NR_mprotect:
         ret = get_errno(target_mprotect(arg1, arg2, arg3));
         break;
+
     case TARGET_OPENBSD_NR_syscall:
     case TARGET_OPENBSD_NR___syscall:
         ret = do_openbsd_syscall(cpu_env,arg1 & 0xffff,arg2,arg3,arg4,arg5,arg6,0);
