@@ -1,0 +1,1 @@
+/* XXX OpenBSD stat related helpers */
