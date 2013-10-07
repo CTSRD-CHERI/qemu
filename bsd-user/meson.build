@@ -1,4 +1,5 @@
 bsd_user_ss.add(files(
+  'bsd-mem.c',
   'bsd-proc.c',
   'bsdload.c',
   'elfload.c',
