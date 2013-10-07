@@ -7,5 +7,6 @@ bsd_user_ss.add(files(
   'strace.c',
   'syscall.c',
   'uaccess.c',
-  abi + 'target_arch_cpu.c'
+  abi / 'target_arch_cpu.c',
+  targetos / 'os-sys.c',
 ))
