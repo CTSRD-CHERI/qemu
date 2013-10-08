@@ -181,6 +181,16 @@ struct target_freebsd_timespec {
 #endif
 } __packed;
 
+#define TARGET_CPUCLOCK_WHICH_PID   0
+#define TARGET_CPUCLOCK_WHICH_TID   1
+
+/* sys/umtx.h */
+struct target_freebsd__umtx_time {
+    struct target_freebsd_timespec  _timeout;
+    uint32_t    _flags;
+    uint32_t    _clockid;
+};
+
 struct target_freebsd_timeval {
     target_freebsd_time_t       tv_sec; /* seconds */
     target_freebsd_suseconds_t  tv_usec;/* and microseconds */
@@ -638,7 +648,9 @@ typedef struct {
 #define TARGET_UMTX_OP_SEM_WAKE             20
 #define TARGET_UMTX_OP_NWAKE_PRIVATE        21
 #define TARGET_UMTX_OP_MUTEX_WAKE2          22
-#define TARGET_UMTX_OP_MAX                  23
+#define TARGET_UMTX_OP_SEM2_WAIT            23
+#define TARGET_UMTX_OP_SEM2_WAKE            24
+#define TARGET_UMTX_OP_MAX                  25
 
 /* flags for UMTX_OP_CV_WAIT */
 #define TARGET_CVWAIT_CHECK_UNPARKING       0x01

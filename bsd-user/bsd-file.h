@@ -83,7 +83,7 @@ static inline abi_long do_bsd_pread(void *cpu_env, abi_long arg1,
         arg4 = arg5;
         arg5 = arg6;
     }
-    ret = get_errno(pread(arg1, p, arg3, target_offset64(arg4, arg5)));
+    ret = get_errno(pread(arg1, p, arg3, target_arg64(arg4, arg5)));
     unlock_user(p, arg2, ret);
 
     return ret;
@@ -140,7 +140,7 @@ static inline abi_long do_bsd_pwrite(void *cpu_env, abi_long arg1,
         arg4 = arg5;
         arg5 = arg6;
     }
-    ret = get_errno(pwrite(arg1, p, arg3, target_offset64(arg4, arg5)));
+    ret = get_errno(pwrite(arg1, p, arg3, target_arg64(arg4, arg5)));
     unlock_user(p, arg2, 0);
 
     return ret;
@@ -186,7 +186,7 @@ static inline abi_long do_bsd_pwritev(void *cpu_env, abi_long arg1,
         arg4 = arg5;
         arg5 = arg6;
     }
-    ret = get_errno(pwritev(arg1, vec, count, target_offset64(arg4, arg5)));
+    ret = get_errno(pwritev(arg1, vec, count, target_arg64(arg4, arg5)));
     unlock_iovec(vec, arg2, count, 0);
 
     return ret;
@@ -519,7 +519,7 @@ static inline abi_long do_bsd_truncate(void *cpu_env, abi_long arg1,
         arg2 = arg3;
         arg3 = arg4;
     }
-    ret = get_errno(truncate(p, target_offset64(arg2, arg3)));
+    ret = get_errno(truncate(p, target_arg64(arg2, arg3)));
     UNLOCK_PATH(p, arg1);
 
     return ret;
@@ -534,7 +534,7 @@ static inline abi_long do_bsd_ftruncate(void *cpu_env, abi_long arg1,
         arg2 = arg3;
         arg3 = arg4;
     }
-    return get_errno(ftruncate(arg1, target_offset64(arg2, arg3)));
+    return get_errno(ftruncate(arg1, target_arg64(arg2, arg3)));
 }
 
 /* acct(2) */
@@ -997,9 +997,9 @@ static abi_long do_bsd_lseek(void *cpu_env, abi_long arg1, abi_long arg2,
 
     /* 32-bit arch's use two 32 registers for 64 bit return value */
     if (regpairs_aligned(cpu_env) != 0) {
-    	res = lseek(arg1, target_offset64(arg3, arg4), arg5);
+        res = lseek(arg1, target_arg64(arg3, arg4), arg5);
     } else {
-        res = lseek(arg1, target_offset64(arg2, arg3), arg4);
+        res = lseek(arg1, target_arg64(arg2, arg3), arg4);
     }
     if (res == -1) {
         ret = get_errno(res);
