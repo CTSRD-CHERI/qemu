@@ -12,6 +12,7 @@ bsd_user_ss.add(files(
   'syscall.c',
   'uaccess.c',
   abi / 'target_arch_cpu.c',
+  targetos / 'os-extattr.o',
   targetos / 'os-time.c',
   targetos / 'os-proc.c',
   targetos / 'os-socket.c',
