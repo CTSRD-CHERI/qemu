@@ -505,7 +505,7 @@ static inline void *lock_user_string(abi_ulong guest_addr)
 
 #if TARGET_ABI_BITS == 32
 static inline uint64_t
-target_offset64(uint32_t word0, uint32_t word1)
+target_arg64(uint32_t word0, uint32_t word1)
 {
 #ifdef TARGET_WORDS_BIGENDIAN
     return ((uint64_t)word0 << 32) | word1;
@@ -515,7 +515,7 @@ target_offset64(uint32_t word0, uint32_t word1)
 }
 #else /* TARGET_ABI_BITS != 32 */
 static inline uint64_t
-target_offset64(uint64_t word0, uint64_t word1)
+target_arg64(uint64_t word0, uint64_t word1)
 {
     return word0;
 }

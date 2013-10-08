@@ -73,7 +73,7 @@ static inline abi_long do_bsd_mmap(void *cpu_env, abi_long arg1, abi_long arg2,
     }
     return get_errno(target_mmap(arg1, arg2, arg3,
                 target_to_host_bitmask(arg4, mmap_flags_tbl), arg5,
-		target_offset64(arg6, arg7)));
+                target_arg64(arg6, arg7)));
 }
 
 /* munmap(2) */
