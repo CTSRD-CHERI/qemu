@@ -283,15 +283,14 @@ void init_task_state(TaskState *ts)
 
 CPUArchState *cpu_copy(CPUArchState *env)
 {
-    CPUArchState *new_env = cpu_init(cpu_model);
     CPUState *cpu = ENV_GET_CPU(env);
-#if defined(TARGET_HAS_ICE)
+    CPUState *new_cpu = cpu_init(cpu_model);
+    CPUArchState *new_env = new_cpu->env_ptr;
     CPUBreakpoint *bp;
     CPUWatchpoint *wp;
-#endif
 
     /* Reset non arch specific state */
-    cpu_reset(ENV_GET_CPU(new_env));
+    cpu_reset(new_cpu);
 
     memcpy(new_env, env, sizeof(CPUArchState));
 
@@ -300,15 +299,12 @@ CPUArchState *cpu_copy(CPUArchState *env)
        BP_CPU break/watchpoints are handled correctly on clone. */
     QTAILQ_INIT(&cpu->breakpoints);
     QTAILQ_INIT(&cpu->watchpoints);
-#if defined(TARGET_HAS_ICE)
     QTAILQ_FOREACH(bp, &cpu->breakpoints, entry) {
-        cpu_breakpoint_insert(cpu, bp->pc, bp->flags, NULL);
+        cpu_breakpoint_insert(new_cpu, bp->pc, bp->flags, NULL);
     }
     QTAILQ_FOREACH(wp, &cpu->watchpoints, entry) {
-        cpu_watchpoint_insert(cpu, wp->vaddr, (~wp->len) + 1,
-                              wp->flags, NULL);
+        cpu_watchpoint_insert(new_cpu, wp->vaddr, wp->len, wp->flags, NULL);
     }
-#endif
 
     return new_env;
 }
@@ -515,7 +511,7 @@ int main(int argc, char **argv)
     cpu_type = parse_cpu_option(cpu_model);
     cpu = cpu_create(cpu_type);
     env = cpu->env_ptr;
-    TARGET_CPU_RESET(env);
+    TARGET_CPU_RESET(cpu);
     thread_cpu = cpu;
 
     if (getenv("QEMU_STRACE")) {

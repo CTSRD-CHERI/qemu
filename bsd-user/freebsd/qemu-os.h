@@ -64,4 +64,10 @@ abi_long h2t_freebsd_fhandle(abi_ulong target_addr, fhandle_t *host_fh);
 abi_long h2t_freebsd_statfs(abi_ulong target_addr, struct statfs *host_statfs);
 abi_long target_to_host_fcntl_cmd(int cmd);
 
+/* os-thread.c */
+abi_long t2h_freebsd_rtprio(struct rtprio *host_rtp, abi_ulong target_addr);
+abi_long h2t_freebsd_rtprio(abi_ulong target_addr, struct rtprio *host_rtp);
+abi_long do_freebsd_thr_new(CPUArchState *env, abi_ulong target_param_addr,
+        int32_t param_size);
+
 #endif /* !_QEMU_OS_H_ */

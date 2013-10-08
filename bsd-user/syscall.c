@@ -33,7 +33,6 @@
 #include "user/syscall-trace.h"
 
 #define target_to_host_bitmask(x, tbl) (x)
-static int host_to_target_errno(int err);
 
 /* BSD independent syscall shims */
 #include "bsd-file.h"
@@ -50,6 +49,7 @@ static int host_to_target_errno(int err);
 #include "os-signal.h"
 #include "os-socket.h"
 #include "os-stat.h"
+#include "os-thread.h"
 
 /* #define DEBUG */
 
@@ -67,7 +67,7 @@ abi_long get_errno(abi_long ret)
     }
 }
 
-static int host_to_target_errno(int err)
+int host_to_target_errno(int err)
 {
     /* XXX need to translate host errnos here */
     return err;
@@ -1177,6 +1177,73 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_freebsd4_sendfile: /* freebsd4_sendfile(2) */
         ret = do_freebsd_freebsd4_sendfile(arg1, arg2, arg2, arg4, arg5,
                 arg6, arg7, arg8);
+        break;
+
+        /*
+         * thread system calls
+         */
+    case TARGET_FREEBSD_NR_thr_create: /* thr_create(2) */
+        ret = do_freebsd_thr_create(cpu_env, arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_thr_new: /* thr_new(2) */
+        ret = do_freebsd_thr_new(cpu_env, arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_thr_set_name: /* thr_set_name(2) */
+        ret = do_freebsd_thr_set_name(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_thr_self: /* thr_self(2) */
+        ret = do_freebsd_thr_self(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_thr_suspend: /* thr_suspend(2) */
+        ret = do_freebsd_thr_suspend(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_thr_wake: /* thr_wake(2) */
+        ret = do_freebsd_thr_wake(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_thr_kill: /* thr_kill(2) */
+        ret = do_freebsd_thr_kill(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_thr_kill2: /* thr_kill2(2) */
+        ret = do_freebsd_thr_kill2(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_thr_exit: /* thr_exit(2) */
+        ret = do_freebsd_thr_exit(cpu_env, arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_rtprio_thread: /* rtprio_thread(2) */
+        ret = do_freebsd_rtprio_thread(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_getcontext: /* getcontext(2) */
+        ret = do_freebsd_getcontext(cpu_env, arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_setcontext: /* setcontext(2) */
+        ret = do_freebsd_setcontext(cpu_env, arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_swapcontext: /* swapcontext(2) */
+        ret = do_freebsd_swapcontext(cpu_env, arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR__umtx_lock: /* undocumented */
+        ret = do_freebsd__umtx_lock(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR__umtx_unlock: /* undocumented */
+        ret = do_freebsd__umtx_unlock(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR__umtx_op: /* undocumented */
+        ret = do_freebsd__umtx_op(arg1, arg2, arg3, arg4, arg5);
         break;
 
         /*
