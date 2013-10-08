@@ -1,4 +1,5 @@
 bsd_user_ss.add(files(
+  'bsd-ioctl.c',
   'bsd-mem.c',
   'bsd-socket.c',
   'bsd-proc.c',
