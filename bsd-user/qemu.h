@@ -35,6 +35,7 @@ enum BSDType {
 };
 extern enum BSDType bsd_type;
 
+#include "exec/user/thunk.h"
 #include "syscall_defs.h"
 #include "target_syscall.h"
 #include "target_os_vmparam.h"
