@@ -28,7 +28,7 @@
 #  define TARGET_DEFAULT_CPU_MODEL "24f"
 #endif
 
-#define TARGET_CPU_RESET(env)
+#define TARGET_CPU_RESET(cpu)
 
 static inline void target_cpu_init(CPUMIPSState *env,
         struct target_pt_regs *regs)
