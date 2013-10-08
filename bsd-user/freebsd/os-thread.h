@@ -486,6 +486,9 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         break;
 #endif /* UMTX_OP_NWAKE_PRIVATE */
 
+#if defined(__FreeBSD_version) && __FreeBSD_version > 1100000
+    case TARGET_UMTX_OP_SEM2_WAIT:
+#endif
     case TARGET_UMTX_OP_SEM_WAIT:
         if (target_ts != 0) {
             if (t2h_freebsd_timespec(&ts, target_ts)) {
@@ -497,6 +500,9 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         }
         break;
 
+#if defined(__FreeBSD_version) && __FreeBSD_version > 1100000
+    case TARGET_UMTX_OP_SEM2_WAKE: 
+#endif
     case TARGET_UMTX_OP_SEM_WAKE:
         /* Don't need to do access_ok(). */
         ret = freebsd_umtx_sem_wake(obj, val);

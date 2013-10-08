@@ -38,6 +38,7 @@
 #include "bsd-file.h"
 #include "bsd-ioctl.h"
 #include "bsd-mem.h"
+#include "bsd-misc.h"
 #include "bsd-proc.h"
 #include "bsd-signal.h"
 #include "bsd-socket.h"
@@ -46,6 +47,7 @@
 #include "os-extattr.h"
 #include "os-file.h"
 #include "os-time.h"
+#include "os-misc.h"
 #include "os-proc.h"
 #include "os-signal.h"
 #include "os-socket.h"
@@ -963,6 +965,10 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_freebsd_ntp_adjtime(arg1);
         break;
 
+    case TARGET_FREEBSD_NR_clock_getcpuclockid2: /* Not documented. */
+        ret = do_freebsd_clock_getcpuclockid2(arg1, arg2, arg3, arg4);
+        break;
+
     case TARGET_FREEBSD_NR_ntp_gettime: /* ntp_gettime(2) */
         ret = do_freebsd_ntp_gettime(arg1);
         break;
@@ -1381,6 +1387,246 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     case TARGET_FREEBSD_NR___acl_set_link: /* __acl_set_link() */
         ret = do_freebsd__acl_set_link(arg1, arg2, arg3);
+        break;
+
+        /*
+         * SysV Semaphores
+         */
+    case TARGET_FREEBSD_NR_semget: /* semget(2) */
+        ret = do_bsd_semget(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_semop: /* semop(2) */
+        ret = do_bsd_semop(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR___semctl: /* __semctl() undocumented */
+        ret = do_bsd___semctl(arg1, arg2, arg3,
+                (union target_semun)(abi_ulong)arg4);
+        break;
+
+        /*
+         * SysV Messages
+         */
+    case TARGET_FREEBSD_NR_msgctl: /* msgctl(2) */
+        ret = do_bsd_msgctl(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_msgsnd: /* msgsnd(2) */
+        ret = do_bsd_msgsnd(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_msgrcv: /* msgrcv(2) */
+        ret = do_bsd_msgrcv(arg1, arg2, arg3, arg4, arg5);
+        break;
+
+        /*
+         * FreeBSD scheduler control
+         */
+    case TARGET_FREEBSD_NR_sched_setparam: /* sched_setparam(2) */
+        ret = do_freebsd_sched_setparam(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_sched_getparam: /* sched_getparam(2) */
+        ret = do_freebsd_sched_getparam(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_sched_setscheduler: /* sched_setscheduler(2) */
+        ret = do_freebsd_sched_setscheduler(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_sched_getscheduler: /* sched_getscheduler(2) */
+        ret = do_freebsd_sched_getscheduler(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_sched_get_priority_max: /* sched_get_priority_max(2)*/
+		ret = do_bsd_sched_get_priority_max(arg1);
+		break;
+
+    case TARGET_FREEBSD_NR_sched_get_priority_min: /* sched_get_priority_min(2)*/
+		ret = do_bsd_sched_get_priority_min(arg1);
+		break;
+
+    case TARGET_FREEBSD_NR_sched_rr_get_interval: /* sched_rr_get_interval(2) */
+        ret = do_freebsd_sched_rr_get_interval(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_sched_yield: /* sched_yield(2)*/
+		ret = do_bsd_sched_yield();
+		break;
+
+
+        /*
+         * FreeBSD CPU affinity sets management
+         */
+    case TARGET_FREEBSD_NR_cpuset: /* cpuset(2) */
+        ret = do_freebsd_cpuset(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_cpuset_setid: /* cpuset_setid(2) */
+        ret = do_freebsd_cpuset_setid(cpu_env, arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_cpuset_getid: /* cpuset_getid(2) */
+        ret = do_freebsd_cpuset_getid(arg1, arg2, arg3, arg4, arg5);
+        break;
+
+    case TARGET_FREEBSD_NR_cpuset_getaffinity: /* cpuset_getaffinity(2) */
+        ret = do_freebsd_cpuset_getaffinity(arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+    case TARGET_FREEBSD_NR_cpuset_setaffinity: /* cpuset_setaffinity(2) */
+        ret = do_freebsd_cpuset_setaffinity(arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+
+        /*
+         * FreeBSD kernel module
+         */
+    case TARGET_FREEBSD_NR_modfnext: /* modfnext(2) */
+        ret = do_freebsd_modfnext(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_modfind: /* modfind(2) */
+        ret = do_freebsd_modfind(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_kldload: /* kldload(2) */
+        ret = do_freebsd_kldload(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_kldunload: /* kldunload(2) */
+        ret = do_freebsd_kldunload(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_kldunloadf: /* kldunloadf(2) */
+        ret = do_freebsd_kldunloadf(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_kldfind: /* kldfind(2) */
+        ret = do_freebsd_kldfind(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_kldnext: /* kldnext(2) */
+        ret = do_freebsd_kldnext(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_kldstat: /* kldstat(2) */
+        ret = do_freebsd_kldstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_kldfirstmod: /* kldfirstmod(2) */
+        ret = do_freebsd_kldfirstmod(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_kldsym: /* kldsym(2) */
+        ret = do_freebsd_kldsym(arg1, arg2, arg3);
+        break;
+
+        /*
+         * FreeBSD resource controls (undocumented except for rctl(8)
+         * and rctl.conf(5) )
+         */
+    case TARGET_FREEBSD_NR_rctl_get_racct: /* rctl_get_racct() */
+        ret = do_freebsd_rctl_get_racct(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_rctl_get_rules: /* rctl_get_rules() */
+        ret = do_freebsd_rctl_get_rules(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_rctl_add_rule: /* rctl_add_rule() */
+        ret = do_freebsd_rctl_add_rule(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_rctl_remove_rule: /* rctl_remove_rule() */
+        ret = do_freebsd_rctl_remove_rule(arg1, arg2, arg3, arg4);
+        break;
+
+    case TARGET_FREEBSD_NR_rctl_get_limits: /* rctl_get_limits() */
+        ret = do_freebsd_rctl_get_limits(arg1, arg2, arg3, arg4);
+        break;
+
+        /*
+         * FreeBSD Mandatory Access Control
+         */
+    case TARGET_FREEBSD_NR___mac_get_proc: /* __mac_get_proc() */
+        ret = do_freebsd___mac_get_proc(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR___mac_set_proc: /* __mac_set_proc() */
+        ret = do_freebsd___mac_set_proc(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR___mac_get_fd: /* __mac_get_fd() */
+        ret = do_freebsd___mac_get_fd(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR___mac_set_fd: /* __mac_set_fd() */
+        ret = do_freebsd___mac_set_fd(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR___mac_get_file: /* __mac_get_file() */
+        ret = do_freebsd___mac_get_proc(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR___mac_set_file: /* __mac_set_file() */
+        ret = do_freebsd___mac_set_file(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR___mac_get_link: /* __mac_get_link() */
+        ret = do_freebsd___mac_get_link(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR___mac_set_link: /* __mac_set_link() */
+        ret = do_freebsd___mac_set_link(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_mac_syscall: /* mac_syscall() */
+        ret = do_freebsd_mac_syscall(arg1, arg2, arg3);
+        break;
+
+        /*
+         * FreeBSD additional posix support
+         */
+    case TARGET_FREEBSD_NR_posix_fallocate: /* posix_fallocate(2) */
+        ret = do_freebsd_posix_fallocate(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_posix_openpt: /* posix_fallocate(2) */
+        ret = do_freebsd_posix_openpt(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_posix_fadvise: /* posix_fadvise(2) */
+        ret = do_freebsd_posix_fadvise(arg1, arg2, arg3, arg4);
+        break;
+
+        /*
+         * Misc
+         */
+    case TARGET_FREEBSD_NR_quotactl: /* quotactl(2) */
+        ret = do_bsd_quotactl(arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_reboot: /* reboot(2) */
+        ret = do_bsd_reboot(arg1);
+        break;
+
+    case TARGET_FREEBSD_NR_uuidgen: /* uuidgen(2) */
+        ret = do_bsd_uuidgen(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_getdtablesize: /* getdtablesize(2) */
+        ret = do_bsd_getdtablesize();
+        break;
+
+    case TARGET_FREEBSD_NR_kenv: /* kenv(2) */
+        ret = do_freebsd_kenv(arg1, arg2, arg2, arg4);
+        break;
+
+
+    case TARGET_FREEBSD_NR_break:
+        ret = do_obreak(arg1);
         break;
 
     default:
