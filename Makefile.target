@@ -167,11 +167,12 @@ endif #CONFIG_LINUX_USER
 
 ifdef CONFIG_BSD_USER
 
-QEMU_CFLAGS+=-I$(SRC_PATH)/bsd-user -I$(SRC_PATH)/bsd-user/$(TARGET_ABI_DIR) \
-			 -I$(SRC_PATH)/bsd-user/$(HOST_VARIANT_DIR)
-
+QEMU_CFLAGS+=-I$(SRC_PATH)/bsd-user/$(TARGET_ABI_DIR) \
+             -I$(SRC_PATH)/bsd-user/$(HOST_VARIANT_DIR) \
+             -I$(SRC_PATH)/bsd-user \
+             -D_WANT_SEMUN
 obj-y += bsd-user/
-obj-y += gdbstub.o
+obj-y += gdbstub.o thunk.o
 
 endif #CONFIG_BSD_USER
 
