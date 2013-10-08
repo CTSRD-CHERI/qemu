@@ -23,7 +23,7 @@
 
 #define TARGET_DEFAULT_CPU_MODEL "TI UltraSparc II"
 
-#define TARGET_CPU_RESET(env) cpu_reset(ENV_GET_CPU(env))
+#define TARGET_CPU_RESET(cpu) cpu_reset(cpu)
 
 static inline void target_cpu_init(CPUSPARCState *env,
         struct target_pt_regs *regs)

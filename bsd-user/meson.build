@@ -16,4 +16,5 @@ bsd_user_ss.add(files(
   targetos / 'os-socket.c',
   targetos / 'os-stat.c',
   targetos / 'os-sys.c',
+  targetos / 'os-thread.c',
 ))
