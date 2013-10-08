@@ -36,6 +36,7 @@
 
 /* BSD independent syscall shims */
 #include "bsd-file.h"
+#include "bsd-ioctl.h"
 #include "bsd-mem.h"
 #include "bsd-proc.h"
 #include "bsd-signal.h"
@@ -84,16 +85,18 @@ int is_error(abi_long ret)
  * other lock functions have a return code of 0 for failure.
  */
 static abi_long lock_iovec(int type, struct iovec *vec, abi_ulong target_addr,
-                           int count, int copy)
+        int count, int copy)
 {
     struct target_iovec *target_vec;
     abi_ulong base;
     int i;
 
-    target_vec = lock_user(VERIFY_READ, target_addr, count * sizeof(struct target_iovec), 1);
-    if (!target_vec)
+    target_vec = lock_user(VERIFY_READ, target_addr,
+            count * sizeof(struct target_iovec), 1);
+    if (!target_vec) {
         return -TARGET_EFAULT;
-    for(i = 0;i < count; i++) {
+    }
+    for (i = 0; i < count; i++) {
         base = tswapl(target_vec[i].iov_base);
         vec[i].iov_len = tswapl(target_vec[i].iov_len);
         if (vec[i].iov_len != 0) {
@@ -110,16 +113,17 @@ static abi_long lock_iovec(int type, struct iovec *vec, abi_ulong target_addr,
 }
 
 static abi_long unlock_iovec(struct iovec *vec, abi_ulong target_addr,
-                             int count, int copy)
+        int count, int copy)
 {
     struct target_iovec *target_vec;
     abi_ulong base;
     int i;
 
-    target_vec = lock_user(VERIFY_READ, target_addr, count * sizeof(struct target_iovec), 1);
+    target_vec = lock_user(VERIFY_READ, target_addr,
+            count * sizeof(struct target_iovec), 1);
     if (!target_vec)
         return -TARGET_EFAULT;
-    for(i = 0;i < count; i++) {
+    for (i = 0; i < count; i++) {
         if (target_vec[i].iov_base) {
             base = tswapl(target_vec[i].iov_base);
             unlock_user(vec[i].iov_base, base, copy ? vec[i].iov_len : 0);
@@ -1247,6 +1251,13 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
         /*
+         * ioctl(2)
+         */
+    case TARGET_FREEBSD_NR_ioctl: /* ioctl(2) */
+        ret = do_bsd_ioctl(arg1, arg2, arg3);
+        break;
+
+        /*
          * sys{ctl, arch, call}
          */
     case TARGET_FREEBSD_NR___sysctl: /* sysctl(3) */
@@ -1393,4 +1404,6 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
 
 void syscall_init(void)
 {
+
+    init_bsd_ioctl();
 }
