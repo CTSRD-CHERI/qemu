@@ -23,7 +23,7 @@
 
 #define TARGET_DEFAULT_CPU_MODEL "qemu64"
 
-#define TARGET_CPU_RESET(env)
+#define TARGET_CPU_RESET(cpu)
 
 static inline void target_cpu_init(CPUX86State *env,
         struct target_pt_regs *regs)
