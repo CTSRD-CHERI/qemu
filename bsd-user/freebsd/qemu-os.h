@@ -70,4 +70,10 @@ abi_long h2t_freebsd_rtprio(abi_ulong target_addr, struct rtprio *host_rtp);
 abi_long do_freebsd_thr_new(CPUArchState *env, abi_ulong target_param_addr,
         int32_t param_size);
 
+/* os-extattr.c */
+struct acl;
+abi_long t2h_freebsd_acl(struct acl *host_acl, abi_ulong target_addr);
+abi_long h2t_freebsd_acl(abi_ulong target_addr, struct acl *host_acl);
+abi_long t2h_freebsd_acl_type(acl_type_t *host_type, abi_long target_type);
+
 #endif /* !_QEMU_OS_H_ */

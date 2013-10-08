@@ -1,6 +1,6 @@
 obj-y = main.o bsdload.o elfload.o mmap.o signal.o strace.o syscall.o \
 	        uaccess.o bsd-ioctl.o bsd-mem.o bsd-proc.o bsd-socket.o \
-			$(HOST_VARIANT_DIR)/os-proc.o \
+			$(HOST_VARIANT_DIR)/os-extattr.o $(HOST_VARIANT_DIR)/os-proc.o \
 			$(HOST_VARIANT_DIR)/os-socket.o $(HOST_VARIANT_DIR)/os-stat.o \
 			$(HOST_VARIANT_DIR)/os-sys.o $(HOST_VARIANT_DIR)/os-thread.o \
 			$(HOST_VARIANT_DIR)/os-time.o $(TARGET_ABI_DIR)/target_arch_cpu.o
