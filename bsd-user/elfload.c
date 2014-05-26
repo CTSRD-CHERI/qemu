@@ -943,6 +943,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     info->start_data = start_data;
     info->end_data = end_data;
     info->start_stack = bprm->p;
+    info->load_bias = load_bias;
 
     /*
      * Calling set_brk effectively mmaps the pages that we need for the bss
