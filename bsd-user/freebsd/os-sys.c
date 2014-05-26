@@ -752,6 +752,16 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
 
     /* Handle some arch/emulator dependent sysctl()'s here. */
     switch (snamep[0]) {
+#if defined(TARGET_PPC)
+	case CTL_MACHDEP:
+		switch (snamep[1]) {
+		case 1:	/* This should be documented elsewhere. */
+			holdlen = sizeof(abi_ulong);
+			(*(abi_ulong *)holdp) = env->dcache_line_size;
+			ret = 0;
+			goto out;
+		}
+#endif
     case CTL_KERN:
         switch (snamep[1]) {
         case KERN_USRSTACK:

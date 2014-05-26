@@ -49,6 +49,7 @@ extern enum BSDType bsd_type;
  * task_struct fields in the kernel
  */
 struct image_info {
+    abi_ulong load_bias;
     abi_ulong load_addr;
     abi_ulong start_code;
     abi_ulong end_code;
@@ -528,6 +529,11 @@ regpairs_aligned(void *cpu_env) {
     return ((((CPUARMState *)cpu_env)->eabi) == 1);
 }
 #elif defined(TARGET_MIPS) && TARGET_ABI_BITS == 32
+static inline int regpairs_aligned(void *cpu_env)
+{
+    return 1;
+}
+#elif defined(TARGET_PPC) && TARGET_ABI_BITS == 32
 static inline int regpairs_aligned(void *cpu_env)
 {
     return 1;
