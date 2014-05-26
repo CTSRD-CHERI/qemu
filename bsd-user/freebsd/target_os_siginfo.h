@@ -107,4 +107,19 @@ typedef struct target_siginfo {
 #define TARGET_TRAP_BRKPT   (1) /* process beakpoint */
 #define TARGET_TRAP_TRACE   (2) /* process trace trap */
 
+/* SIGBUS si_codes */
+#define TARGET_BUS_ADRALN   (1)
+#define TARGET_BUS_ADRERR   (2)
+#define TARGET_BUS_OBJERR   (3)
+
+/* SIGFPE codes */
+#define TARGET_FPE_INTOVF	(1)	/* Integer overflow.			*/
+#define TARGET_FPE_INTDIV	(2)	/* Integer divide by zero.		*/
+#define TARGET_FPE_FLTDIV	(3)	/* Floating point divide by zero.	*/
+#define TARGET_FPE_FLTOVF	(4)	/* Floating point overflow.		*/
+#define TARGET_FPE_FLTUND	(5)	/* Floating point underflow.		*/
+#define TARGET_FPE_FLTRES	(6)	/* Floating point inexact result.	*/
+#define TARGET_FPE_FLTINV	(7)	/* Invalid floating point operation.	*/
+#define TARGET_FPE_FLTSUB	(8)	/* Subscript out of range.		*/
+
 #endif /* !_TARGET_OS_SIGINFO_H_ */

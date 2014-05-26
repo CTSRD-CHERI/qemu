@@ -126,10 +126,12 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         NEW_AUX_ENT(AT_BASE, (abi_ulong)(interp_load_addr));
         NEW_AUX_ENT(AT_FLAGS, (abi_ulong)0);
         NEW_AUX_ENT(AT_ENTRY, load_bias + exec->e_entry);
+#ifndef TARGET_PPC
         NEW_AUX_ENT(AT_UID, (abi_ulong) getuid());
         NEW_AUX_ENT(AT_EUID, (abi_ulong) geteuid());
         NEW_AUX_ENT(AT_GID, (abi_ulong) getgid());
         NEW_AUX_ENT(AT_EGID, (abi_ulong) getegid());
+#endif
 #ifdef ARCH_DLINFO
         /*
          * ARCH_DLINFO must come last so platform specific code can enforce
