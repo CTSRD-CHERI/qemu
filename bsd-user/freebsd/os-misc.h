@@ -515,8 +515,7 @@ static inline abi_long do_freebsd_posix_fallocate(abi_long fd, abi_ulong offset,
 static inline abi_long do_freebsd_posix_openpt(abi_long flags)
 {
 
-    qemu_log("qemu: Unsupported syscall posix_openpt()\n");
-    return -TARGET_ENOSYS;
+    return get_errno(posix_openpt(flags));
 }
 
 /* posix_fadvise(2) */
