@@ -1629,6 +1629,49 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_obreak(arg1);
         break;
 
+	/*
+	 * Asynchronous I/O
+	 */
+    case  TARGET_FREEBSD_NR_aio_read: /* aio_read(2) */
+	ret = do_freebsd_aio_read(arg1);
+	break;
+
+    case  TARGET_FREEBSD_NR_aio_write: /* aio_write(2) */
+	ret = do_freebsd_aio_write(arg1);
+	break;
+
+    case  TARGET_FREEBSD_NR_aio_suspend: /* aio_suspend(2) */
+	ret = do_freebsd_aio_suspend(arg1, arg2, arg3);
+	break;
+
+    case  TARGET_FREEBSD_NR_aio_cancel: /* aio_cancel(2) */
+	ret = do_freebsd_aio_cancel(arg1, arg2);
+	break;
+
+    case  TARGET_FREEBSD_NR_aio_error: /* aio_error(2) */
+	ret = do_freebsd_aio_error(arg1);
+	break;
+
+    case  TARGET_FREEBSD_NR_oaio_read: /* oaio_read(2) */
+	ret = do_freebsd_oaio_read(arg1);
+	break;
+
+    case  TARGET_FREEBSD_NR_oaio_write: /* oaio_write(2) */
+	ret = do_freebsd_oaio_write(arg1);
+	break;
+
+    case  TARGET_FREEBSD_NR_aio_waitcomplete: /* aio_waitcomplete(2) */
+	ret = do_freebsd_aio_waitcomplete(arg1, arg2);
+	break;
+
+    case  TARGET_FREEBSD_NR_aio_fsync: /* aio_fsync(2) */
+	ret = do_freebsd_aio_fsync(arg1, arg2);
+	break;
+
+    case  TARGET_FREEBSD_NR_aio_mlock: /* aio_mlock(2) */
+	ret = do_freebsd_aio_mlock(arg1);
+	break;
+
     default:
 	gemu_log("qemu: unsupported syscall: %d (calling anyway)\n", num);
         ret = get_errno(syscall(num, arg1, arg2, arg3, arg4, arg5, arg6, arg7,
