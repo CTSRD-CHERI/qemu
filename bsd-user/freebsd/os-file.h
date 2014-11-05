@@ -21,10 +21,88 @@
 #define __FREEBSD_OS_FILE_H_
 
 #include <sys/stat.h>
+#include <aio.h>
 #include <unistd.h>
 
 #include "qemu-os.h"
 
+/*
+ * Asynchronous I/O.
+ */
+
+/* aio_read(2) */
+static abi_long do_freebsd_aio_read(__unused abi_ulong iocb)
+{
+    qemu_log("qemu: Unsupported syscall aio_read()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* aio_write(2) */
+static abi_long do_freebsd_aio_write(__unused abi_ulong iocb)
+{
+    qemu_log("qemu: Unsupported syscall aio_write()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* aio_suspend(2) */
+static abi_long do_freebsd_aio_suspend(__unused abi_ulong iocbs,
+	__unused int niocb, __unused abi_ulong timeout)
+{
+    qemu_log("qemu: Unsupported syscall aio_suspend()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* aio_cancel(2) */
+static abi_long do_freebsd_aio_cancel(__unused int fildes,
+	__unused abi_ulong iocb)
+{
+    qemu_log("qemu: Unsupported syscall aio_cancel()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* aio_error(2) */
+static abi_long do_freebsd_aio_error(__unused abi_ulong iocb)
+{
+    qemu_log("qemu: Unsupported syscall aio_error()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* oaio_read(2) */
+static abi_long do_freebsd_oaio_read(__unused abi_ulong iocb)
+{
+    qemu_log("qemu: Unsupported syscall oaio_read()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* oaio_write(2) */
+static abi_long do_freebsd_oaio_write(__unused abi_ulong iocb)
+{
+    qemu_log("qemu: Unsupported syscall oaio_write()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* aio_waitcomplete(2) */
+static abi_long do_freebsd_aio_waitcomplete(__unused abi_ulong iocbp,
+	__unused abi_ulong timeout)
+{
+    qemu_log("qemu: Unsupported syscall aio_waitcomplete()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* aio_fsync(2) */
+static abi_long do_freebsd_aio_fsync(__unused int op,
+	__unused abi_ulong iocb)
+{
+    qemu_log("qemu: Unsupported syscall aio_fsync()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* aio_mlock(2) */
+static abi_long do_freebsd_aio_mlock(__unused abi_ulong iocb)
+{
+    qemu_log("qemu: Unsupported syscall aio_mlock()\n");
+    return -TARGET_ENOSYS;
+}
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1000000
 /* pipe2(2) */
