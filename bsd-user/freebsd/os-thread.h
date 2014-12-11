@@ -277,7 +277,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         }
         if (target_time != 0) {
 	    ut._clockid = CLOCK_REALTIME;
-	    ut._flags = UMTX_ABSTIME;
+	    ut._flags = 0;
             if (t2h_freebsd_timespec(&ut._timeout, target_time +
 		offsetof(struct target__umtx_time, _timeout))) {
                 return -TARGET_EFAULT;
@@ -300,7 +300,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
 	    ut._clockid = CLOCK_REALTIME;
-	    ut._flags = UMTX_ABSTIME;
+	    ut._flags = 0;
             if (t2h_freebsd_timespec(&ut._timeout, target_time +
 		offsetof(struct target__umtx_time, _timeout))) {
                 return -TARGET_EFAULT;
@@ -415,7 +415,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
 	    ut._clockid = CLOCK_REALTIME;
-	    ut._flags = UMTX_ABSTIME;
+	    ut._flags = 0;
             if (t2h_freebsd_timespec(&ut._timeout, target_time +
 		offsetof(struct target__umtx_time, _timeout))) {
                 return -TARGET_EFAULT;
@@ -434,7 +434,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
 	    ut._clockid = CLOCK_REALTIME;
-	    ut._flags = UMTX_ABSTIME;
+	    ut._flags = 0;
             if (t2h_freebsd_timespec(&ut._timeout, target_time +
 		offsetof(struct target__umtx_time, _timeout))) {
                 return -TARGET_EFAULT;
@@ -455,7 +455,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
     case TARGET_UMTX_OP_RW_RDLOCK:
         if (target_time != 0) {
 	    ut._clockid = CLOCK_REALTIME;
-	    ut._flags = UMTX_ABSTIME;
+	    ut._flags = 0;
             if (t2h_freebsd_timespec(&ut._timeout, target_time +
 		offsetof(struct target__umtx_time, _timeout))) {
                 return -TARGET_EFAULT;
@@ -469,7 +469,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
     case TARGET_UMTX_OP_RW_WRLOCK:
         if (target_time != 0) {
 	    ut._clockid = CLOCK_REALTIME;
-	    ut._flags = UMTX_ABSTIME;
+	    ut._flags = 0;
             if (t2h_freebsd_timespec(&ut._timeout, target_time +
 		offsetof(struct target__umtx_time, _timeout))) {
                 return -TARGET_EFAULT;
@@ -502,7 +502,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
 	    ut._clockid = CLOCK_REALTIME;
-	    ut._flags = UMTX_ABSTIME;
+	    ut._flags = 0;
             if (t2h_freebsd_timespec(&ut._timeout, target_time +
 		offsetof(struct target__umtx_time, _timeout))) {
                 return -TARGET_EFAULT;
@@ -522,7 +522,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
 	    ut._clockid = CLOCK_REALTIME;
-	    ut._flags = UMTX_ABSTIME;
+	    ut._flags = 0;
             if (t2h_freebsd_timespec(&ut._timeout, target_time +
 		offsetof(struct target__umtx_time, _timeout))) {
                 return -TARGET_EFAULT;
