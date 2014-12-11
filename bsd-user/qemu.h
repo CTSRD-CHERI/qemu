@@ -284,6 +284,8 @@ abi_long do_freebsd_sysarch(void *cpu_env, abi_long arg1, abi_long arg2);
 
 /* os-thread.c */
 extern pthread_mutex_t *new_freebsd_thread_lock_ptr;
+extern pthread_mutex_t *freebsd_umtx_wait_lck_ptr;
+extern pthread_mutex_t *freebsd_umtx_sem_lck_ptr;
 void *new_freebsd_thread_start(void *arg);
 abi_long freebsd_lock_umtx(abi_ulong target_addr, abi_long tid,
         size_t utsz, struct _umtx_time *ut);
