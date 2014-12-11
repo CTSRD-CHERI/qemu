@@ -2,7 +2,7 @@
  *  qemu bsd user main
  *
  *  Copyright (c) 2003-2008 Fabrice Bellard
- *  Copyright (c) 2013 Stacey Son
+ *  Copyright (c) 2013-14 Stacey Son
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -124,6 +124,12 @@ void fork_end(int child)
         pthread_cond_init(&exclusive_cond, NULL);
         pthread_cond_init(&exclusive_resume, NULL);
         pthread_mutex_init(&tcg_ctx.tb_ctx.tb_lock, NULL);
+
+	/* Global mutexes from os-thread.c: */
+        pthread_mutex_init(new_freebsd_thread_lock_ptr, NULL);
+        pthread_mutex_init(freebsd_umtx_wait_lck_ptr, NULL);
+        pthread_mutex_init(freebsd_umtx_sem_lck_ptr, NULL);
+
         gdbserver_fork((CPUArchState *)thread_cpu->env_ptr);
     } else {
         pthread_mutex_unlock(&exclusive_lock);
