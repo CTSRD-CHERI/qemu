@@ -128,7 +128,6 @@ void fork_end(int child)
 	/* Global mutexes from os-thread.c: */
         pthread_mutex_init(new_freebsd_thread_lock_ptr, NULL);
         pthread_mutex_init(freebsd_umtx_wait_lck_ptr, NULL);
-        pthread_mutex_init(freebsd_umtx_sem_lck_ptr, NULL);
 
         gdbserver_fork((CPUArchState *)thread_cpu->env_ptr);
     } else {
