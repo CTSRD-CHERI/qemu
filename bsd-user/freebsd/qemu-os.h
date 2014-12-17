@@ -39,6 +39,9 @@ abi_long h2t_freebsd_timeval(struct timeval *tv, abi_ulong target_tv_addr);
 abi_long t2h_freebsd_timespec(struct timespec *ts, abi_ulong target_ts_addr);
 abi_long h2t_freebsd_timespec(abi_ulong target_ts_addr, struct timespec *ts);
 
+abi_long t2h_freebsd_umtx_time(abi_ulong target_ut_addr,
+	abi_ulong target_ut_size, void *host_t, size_t *host_tsz);
+
 abi_long t2h_freebsd_timex(struct timex *host_tx, abi_ulong target_tx_addr);
 
 abi_long h2t_freebsd_ntptimeval(abi_ulong target_ntv_addr,

@@ -1,7 +1,7 @@
 /*
  *  FreeBSD thr emulation support code
  *
- *  Copyright (c) 2013-14 Stacey D. Son
+ *  Copyright (c) 2013-15 Stacey D. Son
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -38,8 +38,8 @@
 // #define DEBUG_UMTX(...) qemu_log(__VA_ARGS__)
 #define DEBUG_UMTX(...)
 
-#define DETECT_DEADLOCK 1
-#define DEADLOCK_TO	100
+#define DETECT_DEADLOCK 0
+#define DEADLOCK_TO	1200
 
 #define NEW_STACK_SIZE  0x40000
 
@@ -90,13 +90,6 @@ static pthread_mutex_t new_thread_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t *new_freebsd_thread_lock_ptr = &new_thread_lock;
 static pthread_mutex_t umtx_wait_lck = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t *freebsd_umtx_wait_lck_ptr = &umtx_wait_lck;
-#if 0
-static pthread_cond_t umtx_wait_cv = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t *freebsd_umtx_wait_cv_ptr = &umtx_wait_cv;
-static abi_ulong umtx_wait_addr;
-#endif
-static pthread_mutex_t umtx_sem_lck = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t *freebsd_umtx_sem_lck_ptr = &umtx_sem_lck;
 
 static void rtp_to_schedparam(const struct rtprio *rtp, int *policy,
         struct sched_param *param)
@@ -125,21 +118,20 @@ void *new_freebsd_thread_start(void *arg)
     new_freebsd_thread_info_t *info = arg;
     CPUArchState *env;
     CPUState *cpu;
-    // TaskState *ts;
     long tid;
 
     env = info->env;
     cpu = ENV_GET_CPU(env);
     thread_cpu = cpu;
 
-    // ts = (TaskState *)env->opaque;
     (void)thr_self(&tid);
     cpu->host_tid = tid;
-    // ts->ts_tid = tid;
 
     /* copy out the child TID */
     if (info->param.child_tid) {
-	put_user_ual(tid, info->param.child_tid);
+        // TaskState *ts = (TaskState *)cpu->opaque;
+        // ts->child_tidptr = info->param.child_tid;
+        put_user_ual(tid, info->param.child_tid);
     }
 
     /* Set arch dependent registers to start thread. */
@@ -186,99 +178,98 @@ static int tcmpset_32(uint32_t *addr, uint32_t a, uint32_t b)
 }
 
 static abi_long _umtx_wait_uint(uint32_t *addr, uint32_t target_val,
-	size_t utsz, struct _umtx_time *ut, const char *where)
+	size_t tsz, void *t, const char *where)
 {
 #if DETECT_DEADLOCK
     abi_long ret;
     long cnt = 0;
 
     /* target_val has already been tswap'ed. */
-    if (ut == NULL) {
-	struct timespec ts;
+    if (t == NULL) {
+        struct timespec ts;
 
-	ts.tv_sec = 1;
-	ts.tv_nsec = 0;
+        ts.tv_sec = 5;
+        ts.tv_nsec = 0;
 
-	do {
-		if (target_val != *addr) {
-				return 0;
-		}
-		ret = get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT, target_val,
-				NULL, &ts));
-		if (ret != -TARGET_ETIMEDOUT) {
-				return ret;
-		}
-		if (cnt++ > DEADLOCK_TO) {
-			fprintf(stderr, "Qemu: Deadlock in %s from %s\n",
-				__func__, where);
-			// return -TARGET_ETIMEDOUT;
-			abort();
-		}
-	} while (1);
+        do {
+            if (target_val != *addr)
+                return 0;
+
+            ret = get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT, target_val, NULL,
+                    &ts));
+
+            if (ret != -TARGET_ETIMEDOUT)
+                return ret;
+            if (cnt++ > DEADLOCK_TO) {
+                fprintf(stderr, "Qemu: Deadlock in %s from %s\n",
+                        __func__, where);
+                abort();
+            }
+        } while (1);
     } else
 #endif
 	return get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT, target_val,
-					(void *)utsz, ut));
+			(void *)tsz, t));
 }
 
 abi_long freebsd_umtx_wait_uint(abi_ulong obj, uint32_t target_val,
-        size_t utsz, struct _umtx_time *ut)
+	size_t tsz, void *t)
 {
     /* target_val has already been tswap'ed. */
 
-    DEBUG_UMTX("<WAIT> %s: _umtx_op(%p, %d, 0x%x, %d, %p)\n",
-            __func__, g2h(obj), UMTX_OP_WAIT_UINT, target_val, (int)utsz, ut);
-    return _umtx_wait_uint(g2h(obj), target_val, utsz, ut, __func__);
+    DEBUG_UMTX("<WAIT> %s: _umtx_op(%p, %d, 0x%x, %d, %p)\n",__func__, g2h(obj),
+            UMTX_OP_WAIT_UINT, target_val, (int)tsz, t);
+
+    return _umtx_wait_uint(g2h(obj), target_val, tsz, t, __func__);
 }
 
 static abi_long _umtx_wait_uint_private(uint32_t *addr, uint32_t target_val,
-        size_t utsz, struct _umtx_time *ut, const char *where)
+        size_t tsz, void *t, const char *where)
 {
 #if DETECT_DEADLOCK
     abi_long ret;
     long cnt = 0;
 
     /* target_val has already been tswap'ed. */
+    if (t == NULL) {
+        struct timespec ts;
 
-    if (ut == NULL) {
-	struct timespec ts;
+        ts.tv_sec = 5;
+        ts.tv_nsec = 0;
 
-	ts.tv_sec = 1;
-	ts.tv_nsec = 0;
+        do {
+            if (target_val != *addr)
+                return 0;
 
-	do {
-		if (target_val != *addr) {
-		    return 0;
-		}
-		ret = get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT_PRIVATE, target_val,
-				NULL, &ts));
-		if (ret != -TARGET_ETIMEDOUT) {
-				return ret;
-		}
-		if (cnt++ > DEADLOCK_TO) {
-			fprintf(stderr, "Qemu: Deadlock in %s from %s\n",
-				__func__, where);
-			// return -TARGET_ETIMEDOUT;
-			abort();
-		}
-	} while (1);
+            ret = get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT_PRIVATE,
+                        target_val, NULL, &ts));
+
+            if (ret != -TARGET_ETIMEDOUT)
+                return ret;
+            if (cnt++ > DEADLOCK_TO) {
+                fprintf(stderr, "Qemu: Deadlock in %s from %s\n", __func__,
+                        where);
+                abort();
+            }
+        } while (1);
     } else
 #endif /* DETECT_DEADLOCK */
 	return get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT_PRIVATE, target_val,
-				(void *)utsz, ut));
+			(void *)tsz, t));
 }
 
 abi_long freebsd_umtx_wait_uint_private(abi_ulong obj, uint32_t target_val,
-        size_t utsz, struct _umtx_time *ut)
+	size_t tsz, void *t)
 {
     DEBUG_UMTX("<WAIT_UINT_PRIVATE> %s: _umtx_op(%p (%u), %d, 0x%x, %d, %p)\n",
-		__func__, g2h(obj), tswap32(*(uint32_t *)g2h(obj)), UMTX_OP_WAIT_UINT_PRIVATE,
-		target_val, (int)utsz, ut);
-    return _umtx_wait_uint_private(g2h(obj), target_val, utsz, ut, __func__);
+		__func__, g2h(obj), tswap32(*(uint32_t *)g2h(obj)),
+        UMTX_OP_WAIT_UINT_PRIVATE, target_val, (int)tsz, t);
+
+    return _umtx_wait_uint_private(g2h(obj), target_val, tsz, t, __func__);
 }
 
-static abi_long _umtx_wait(abi_ulong *addr, abi_ulong target_val,
-        size_t utsz, struct _umtx_time *ut, const char *where)
+static abi_long _umtx_wait(abi_ulong *addr, abi_ulong target_val, size_t tsz,
+        void *t, const char *where)
 {
 #if DETECT_DEADLOCK
     abi_long ret;
@@ -287,44 +278,43 @@ static abi_long _umtx_wait(abi_ulong *addr, abi_ulong target_val,
     /* target_val has already been tswap'ed. */
 
     if (ut == NULL) {
-	struct timespec ts;
+        struct timespec ts;
 
-	ts.tv_sec = 1;
-	ts.tv_nsec = 0;
+        ts.tv_sec = 5;
+        ts.tv_nsec = 0;
 
+        do {
+            if (target_val != *addr)
+                return 0;
 
-	do {
-		if (target_val != *addr) {
-		    return 0;
-		}
 #ifdef TARGET_ABI32
-		ret = get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT, target_val,
-			NULL, &ts));
+            ret = get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT, target_val, NULL,
+                        &ts));
 #else
-		ret = get_errno(_umtx_op(addr, UMTX_OP_WAIT, target_val,
-				NULL, &ts));
+            ret = get_errno(_umtx_op(addr, UMTX_OP_WAIT, target_val, NULL,
+                        &ts));
 #endif
-		if (ret != -TARGET_ETIMEDOUT) {
-		    return ret;
-		}
-		if (cnt++ > DEADLOCK_TO) {
-			fprintf(stderr, "Qemu: Deadlock in %s from %s\n",
-				__func__, where);
-			// return -TARGET_ETIMEDOUT;
-			abort();
-		}
-	} while (1);
+            if (ret != -TARGET_ETIMEDOUT)
+                return ret;
+
+            if (cnt++ > DEADLOCK_TO) {
+                fprintf(stderr, "Qemu: Deadlock in %s from %s\n", __func__,
+                        where);
+                abort();
+            }
+        } while (1);
     } else
 #endif /* DETECT_DEADLOCK */
 #ifdef TARGET_ABI32
-    	return get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT, target_val, (void *)utsz, ut));
+	return get_errno(_umtx_op(addr, UMTX_OP_WAIT_UINT, target_val, (void *)tsz,
+                t));
 #else
-    	return get_errno(_umtx_op(addr, UMTX_OP_WAIT, target_val, (void *)utsz, ut));
+	return get_errno(_umtx_op(addr, UMTX_OP_WAIT, target_val, (void *)tsz, t));
 #endif
 }
 
-abi_long freebsd_umtx_wait(abi_ulong targ_addr, abi_ulong target_id,
-        size_t utsz, struct _umtx_time *ut)
+abi_long freebsd_umtx_wait(abi_ulong targ_addr, abi_ulong target_id, size_t tsz,
+        void *t)
 {
 
     /* target_id has already been tswap'ed. */
@@ -334,9 +324,10 @@ abi_long freebsd_umtx_wait(abi_ulong targ_addr, abi_ulong target_id,
         return -TARGET_EFAULT;
     }
 
-    DEBUG_UMTX("<WAIT> %s: _umtx_op(%p, %d, 0x%llx, %d, %p)\n",
-            __func__, g2h(targ_addr), UMTX_OP_WAIT, (long long)target_id, (int)utsz, ut);
-    return _umtx_wait(g2h(targ_addr), target_id, utsz, ut, __func__);
+    DEBUG_UMTX("<WAIT> %s: _umtx_op(%p, %d, 0x%llx, %d, %d, %p)\n",
+            __func__, g2h(targ_addr), UMTX_OP_WAIT, (long long)target_id,
+            (int)tsz, t);
+    return _umtx_wait(g2h(targ_addr), target_id, tsz, t, __func__);
 }
 
 
@@ -344,7 +335,8 @@ abi_long freebsd_umtx_wake_private(abi_ulong obj, uint32_t val)
 {
 
     DEBUG_UMTX("<WAKE_PRIVATE> %s: _umtx_op(%p (%d), %d, %u, NULL, NULL)\n",
-            __func__, g2h(obj), tswap32(*(uint32_t *)g2h(obj)), UMTX_OP_WAKE_PRIVATE, val);
+            __func__, g2h(obj), tswap32(*(uint32_t *)g2h(obj)),
+            UMTX_OP_WAKE_PRIVATE, val);
     return get_errno(_umtx_op(g2h(obj), UMTX_OP_WAKE_PRIVATE, val, NULL, NULL));
 }
 
@@ -359,12 +351,13 @@ abi_long freebsd_umtx_nwake_private(abi_ulong target_array_addr, uint32_t num)
 
     DEBUG_UMTX("<NWAKE_PRIVATE> %s: _umtx_op(%p, %d, %d, NULL, NULL) Waking: ",
         __func__, g2h(target_array_addr), UMTX_OP_NWAKE_PRIVATE, num);
-    if (!access_ok(VERIFY_READ, target_array_addr, num * sizeof(abi_ulong))) {
+    if (!access_ok(VERIFY_READ, target_array_addr, num * sizeof(abi_ulong)))
         return -TARGET_EFAULT;
-    }
+
     uaddr = (abi_ulong *)g2h(target_array_addr);
     for (i = 0; i < (int32_t)num; i++) {
-	DEBUG_UMTX("%p (%u) ", g2h(tswapal(uaddr[i])), tswap32(*(uint32_t *)g2h(tswapal(uaddr[i]))) );
+        DEBUG_UMTX("%p (%u) ", g2h(tswapal(uaddr[i])),
+                tswap32(*(uint32_t *)g2h(tswapal(uaddr[i]))) );
         ret = get_errno(_umtx_op(g2h(tswapal(uaddr[i])), UMTX_OP_WAKE_PRIVATE,
             INT_MAX, NULL, NULL));
         if (is_error(ret)) {
@@ -416,26 +409,25 @@ abi_long freebsd_umtx_mutex_wake2(abi_ulong target_addr, uint32_t flags)
     }
     __get_user(count, &target_umutex->m_count);
     if (count > 1) {
-	__get_user(owner, &target_umutex->m_owner);
-	while ((owner & TARGET_UMUTEX_CONTESTED) == 0) {
+        __get_user(owner, &target_umutex->m_owner);
+        while ((owner & TARGET_UMUTEX_CONTESTED) == 0) {
             if (tcmpset_32(&target_umutex->m_owner, owner,
-		(owner | TARGET_UMUTEX_CONTESTED))) {
-			break;
-	    }
-	    /* owner has changed */
-	    __get_user(owner, &target_umutex->m_owner);
-	}
+                        (owner | TARGET_UMUTEX_CONTESTED)))
+                break;
+
+            /* owner has changed */
+            __get_user(owner, &target_umutex->m_owner);
+        }
     } else if (count == 1) {
-	__get_user(owner, &target_umutex->m_owner);
-	while ((owner & ~TARGET_UMUTEX_CONTESTED) != 0 &&
-	       (owner & TARGET_UMUTEX_CONTESTED) == 0) {
-	    if (tcmpset_32(&target_umutex->m_owner, owner,
-		(owner | TARGET_UMUTEX_CONTESTED))) {
-			break;
-	    }
-	    /* owner has changed */
-	    __get_user(owner, &target_umutex->m_owner);
-	}
+        __get_user(owner, &target_umutex->m_owner);
+        while ((owner & ~TARGET_UMUTEX_CONTESTED) != 0 &&
+                (owner & TARGET_UMUTEX_CONTESTED) == 0) {
+            if (tcmpset_32(&target_umutex->m_owner, owner,
+                        (owner | TARGET_UMUTEX_CONTESTED)))
+                break;
+            /* owner has changed */
+            __get_user(owner, &target_umutex->m_owner);
+        }
     }
     addr = g2h(&target_umutex->m_count);
     unlock_user(target_umutex, target_addr, 0);
@@ -444,293 +436,228 @@ abi_long freebsd_umtx_mutex_wake2(abi_ulong target_addr, uint32_t flags)
     return get_errno(_umtx_op(addr, UMTX_OP_WAKE_PRIVATE, INT_MAX, NULL, NULL));
 }
 #endif /* UMTX_OP_MUTEX_WAKE2 */
+#endif /* __FreeBSD_version > 900000 */
 
 #if defined(__FreeBSD_version) && __FreeBSD_version > 1100000
-abi_long freebsd_umtx_sem2_wait(abi_ulong obj, size_t utsz,
-	struct _umtx_time *ut)
+abi_long freebsd_umtx_sem2_wait(abi_ulong obj, size_t tsz, void *t)
 {
-    struct target__usem2 *t__usem2;
-    uint32_t count;
-    uint32_t flags; /* either THREAD_SHARE (0 _private) or AUTO_SHARE (1)  */
-    abi_long ret;
-    uint32_t cnt;
-
-    if (!lock_user_struct(VERIFY_WRITE, t__usem2, obj, 0)) {
-        return -TARGET_EFAULT;
-    }
-
-    do{
-	for (;;) {
-	    __get_user(count, &t__usem2->_count);
-	    if (USEM_COUNT(count) != 0) {
-		unlock_user_struct(t__usem2, obj, 1);
-		return 0;
-	    }
-	    if (count == USEM_HAS_WAITERS) {
-		break;
-	    }
-	    if (tcmpset_32(&t__usem2->_count, 0, USEM_HAS_WAITERS)) {
-		break;
-	    }
-	}
-
-	/* Get the flags and increment the sleep count (upper 30 bits in _flags). */
-	__get_user(flags, &t__usem2->_flags);
-	cnt = flags >> 2;
-	if (cnt < 0x40000000)
-	    cnt++;
-    } while (!tcmpset_32(&t__usem2->_flags, flags, ((flags & 0x3) | (cnt << 2)) ) );
-    unlock_user_struct(t__usem2, obj, 1);
-
-    if ((flags & USYNC_PROCESS_SHARED) == 0) {
-	DEBUG_UMTX("<WAIT SEM2> %s: _umtx_op(%p, %d, %d, %p)\n",
-		__func__, &t__usem2->_count, UMTX_OP_WAIT_UINT_PRIVATE,
-		(int)utsz, ut, cnt);
-#if DETECT_DEADLOCK
-        if (ut != NULL) {
-	    ret = _umtx_wait_uint_private(&t__usem2->_count,
-		tswap32(USEM_HAS_WAITERS), utsz, ut, __func__);
-	} else {
-	    struct _umtx_time dut;
-	    size_t dutsz = sizeof(struct _umtx_time);
-
-	    dut._clockid = CLOCK_REALTIME;
-	    dut._flags = 0;
-	    dut._timeout.tv_sec = 30;
-	    dut._timeout.tv_nsec = 0;
-
-	    do {
-		ret = _umtx_wait_uint_private(&t__usem2->_count,
-			tswap32(USEM_HAS_WAITERS), dutsz, &dut, __func__);
-		if (ret == 0) {
-		    break;
-		}
-		if (!lock_user_struct(VERIFY_READ, t__usem2, obj, 1)) {
-		    return -TARGET_EFAULT;
-		}
-		__get_user(count, &t__usem2->_count);
-		unlock_user_struct(t__usem2, obj, 0);
-		if (USEM_COUNT(count) != 0) {
-		    fprintf(stderr,
-			"Qemu: Deadlock Recovery (sem2 wait priv count!=0 ret=%d)\n", (int)ret);
-		    ret = 0;
-		    break;
-		}
-		if ((count & USEM_HAS_WAITERS) == 0) {
-		    fprintf(stderr,
-			"Qemu: Deadlock Recovery (sem2 wait priv !waiters ret=%d)\n", (int)ret);
-		    ret = 0;
-		    break;
-		}
-	   } while(count == USEM_HAS_WAITERS);
-	}
+#if defined(HOST_WORDS_BIGENDIAN) == defined(TARGET_WORDS_BIGENDIAN)
+    return get_errno(_umtx_op(g2h(obj), UMTX_OP_SEM2_WAIT, 0, (void *)tsz, t));
 #else
-	ret = _umtx_wait_uint_private(&t__usem2->_count,
-	    tswap32(USEM_HAS_WAITERS), utsz, ut, __func__);
-#endif /* DETECT_DEADLOCK */
-    } else {
-	DEBUG_UMTX("<WAIT SEM2> %s: _umtx_op(%p, %d, %d, %p)\n",
-		__func__, &t__usem2->_count, UMTX_OP_WAIT_UINT,
-		(int)utsz, ut, cnt);
-#if DETECT_DEADLOCK
-        if (ut != NULL) {
-	    ret = _umtx_wait_uint(&t__usem2->_count,
-		tswap32(USEM_HAS_WAITERS), utsz, ut, __func__);
-	} else {
-	    struct _umtx_time dut;
-	    size_t dutsz = sizeof(struct _umtx_time);
-
-	    dut._clockid = CLOCK_REALTIME;
-	    dut._flags = 0;
-	    dut._timeout.tv_sec = 30;
-	    dut._timeout.tv_nsec = 0;
-
-	    do {
-		ret = _umtx_wait_uint(&t__usem2->_count,
-			tswap32(USEM_HAS_WAITERS), dutsz, &dut, __func__);
-		if (ret == 0)
-		    break;
-		if (!lock_user_struct(VERIFY_READ, t__usem2, obj, 1)) {
-		    return -TARGET_EFAULT;
-		}
-		__get_user(count, &t__usem2->_count);
-		unlock_user_struct(t__usem2, obj, 0);
-		if (USEM_COUNT(count) != 0) {
-		    fprintf(stderr,
-			"Qemu: Deadlock Recovery (sem2 wait count!=0 ret=%d)\n", (int)ret);
-		    ret = 0;
-		    break;
-		}
-		if ((count & USEM_HAS_WAITERS) == 0) {
-		    fprintf(stderr,
-			"Qemu: Deadlock Recovery (sem2 wait !waiters ret=%d)\n", (int)ret);
-		    ret = 0;
-		    break;
-		}
-	   } while(count == USEM_HAS_WAITERS);
-	}
-#else
-	ret = _umtx_wait_uint(&t__usem2->_count,
-		tswap32(USEM_HAS_WAITERS), utsz, ut, __func__);
-#endif /* DETECT_DEADLOCK */
-    }
-
-    if (!lock_user_struct(VERIFY_WRITE, t__usem2, obj, 0)) {
-        pthread_mutex_unlock(&umtx_sem_lck);
-        return -TARGET_EFAULT;
-    }
-
-    /* Decrement the sleep count. */
-    do {
-	__get_user(flags, &t__usem2->_flags);
-	__get_user(count, &t__usem2->_count);
-	cnt = flags >> 2;
-	if (cnt != 0)
-	    cnt--;
-    } while(!tcmpset_32(&t__usem2->_flags, flags, ((flags & 0x3) | (cnt << 2)) ) );
-
-#if 0  /* Let's be pessimistic and force userland to call sem2_wake for now. */
-    /* If no more waiters then turn off the USEM_HAS_WAITERS bit. */
-    if (cnt == 0 && (count & USEM_HAS_WAITERS) != 0) {
-	do {
-	    __get_user(count, &t__usem2->_count);
-	    if ((count & USEM_HAS_WAITERS) == 0)
-		break;
-	} while (!tcmpset_32(&t__usem2->_count, count,
-		(count & ~USEM_HAS_WAITERS) ) );
-    }
-#endif
-    unlock_user_struct(t__usem2, obj, 1);
-
-    return ret;
-}
-
-abi_long freebsd_umtx_sem2_wake(abi_ulong obj, uint32_t val)
-{
     struct target__usem2 *t__usem2;
-    uint32_t flags;
-//    uint32_t cnt;
+    uint32_t count, flags;
+    uint32_t *addr;
     abi_long ret = 0;
 
-    if (!lock_user_struct(VERIFY_WRITE, t__usem2, obj, 0)) {
+    if (!lock_user_struct(VERIFY_WRITE, t__usem2, obj, 0))
         return -TARGET_EFAULT;
-    }
 
-    __get_user(flags, &t__usem2->_flags);
+    /*
+     * Make sure the count field has the has USEM_HAS_WAITERS flag set
+     * so userland will always call freebsd_umtx_sem2_wake().
+     */
+    for (;;) {
+	    __get_user(count, &t__usem2->_count);
 
-#if 0 /* Let's be pessimistic and try to wake up one waiter anyway. */
-    /* Do we have waiters? */
-    cnt = flags >> 2;
-    if (cnt > 0)
-#endif
-        /* Yes, then wake one up. */
-	if ((flags & USYNC_PROCESS_SHARED) == 0) {
-	    DEBUG_UMTX("<WAKE SEM2> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
-		__func__,  &t__usem2->_count, UMTX_OP_WAKE_PRIVATE, 1);
-	    ret = get_errno(_umtx_op(&t__usem2->_count, UMTX_OP_WAKE_PRIVATE,
-		1, NULL, NULL));
-	} else {
-	    DEBUG_UMTX("<WAKE SEM2> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
-		__func__,  &t__usem2->_count, UMTX_OP_WAKE, 1);
-	    ret = get_errno(_umtx_op(&t__usem2->_count, UMTX_OP_WAKE,
-		1,  NULL, NULL));
+	    if (USEM_COUNT(count) != 0) {
+            unlock_user_struct(t__usem2, obj, 1);
+		    return 0;
+        }
+
+	    if ((count & USEM_HAS_WAITERS) != 0)
+			break;
+
+		if (tcmpset_32(&t__usem2->_count, count, (count | USEM_HAS_WAITERS)))
+            break;
 	}
 
-#if 0  /* XXX Done in freebsd_umtx_sem2_wait(). */
-    /* If this was the last sleeping thread then clear USEM_HAS_WAITERS. */
-    // cnt = flags >> 2;
-    if (cnt == 1) {
-	uint32_t count;
-
-	do {
-	    __get_user(count, &t__usem2->_count);
-	    if ((count & USEM_HAS_WAITERS) == 0)
-		break;
-	} while (!tcmpset_32(&t__usem2->_count, count,
-		count & ~USEM_HAS_WAITERS));
-    }
-#endif
+    __get_user(flags, &t__usem2->_flags);
+    addr = &t__usem2->_count;
     unlock_user_struct(t__usem2, obj, 1);
 
+    if ((flags & USYNC_PROCESS_SHARED) == 0) {
+		DEBUG_UMTX("<WAIT SEM2> %s: _umtx_op(%p, %d, %p)\n",
+			__func__, addr, UMTX_OP_WAIT_UINT_PRIVATE,
+			(int)tsz, t);
+
+#if DETECT_DEADLOCK
+		if (ut != NULL) {
+		    ret = _umtx_wait_uint_private(addr, tswap32(USEM_HAS_WAITERS),
+				tsz, t, __func__);
+		} else {
+		    for (;;) {
+				struct timespec ts;
+
+				ts.tv_sec = 120;
+				ts.tv_nsec = 0;
+
+				ret = _umtx_wait_uint_private(addr, tswap32(USEM_HAS_WAITERS),
+					0, (void *)&ts, __func__);
+				if (ret == 0)
+					break;
+				if (ret != -ETIMEDOUT)
+					break;
+				if (!lock_user_struct(VERIFY_READ, t__usem2, obj, 1)) {
+					return -TARGET_EFAULT;
+				}
+				__get_user(count, &t__usem2->_count);
+				unlock_user_struct(t__usem2, obj, 0);
+				if (USEM_COUNT(count) != 0) {
+					fprintf(stderr, "Qemu:(%s) TIMEOUT (count!=0)\n", __func__);
+					ret = 0;
+					break;
+				}
+				if (ret == -ETIMEDOUT) {
+					fprintf(stderr, "Qemu:(%s) TIMEOUT (exiting)\n", __func__);
+					exit(-1);
+				}
+			}
+		}
+#else
+		ret = _umtx_wait_uint_private(addr, tswap32(USEM_HAS_WAITERS),
+			tsz, t, __func__);
+#endif /* DETECT_DEADLOCK */
+    } else {
+		DEBUG_UMTX("<WAIT SEM2> %s: _umtx_op(%p, %d, %p)\n",
+			__func__, addr, UMTX_OP_WAIT_UINT, (int)tsz, t);
+#if DETECT_DEADLOCK
+		if (ut != NULL) {
+		    ret = _umtx_wait_uint(addr, tswap32(USEM_HAS_WAITERS), tsz, t,
+                    __func__);
+		} else {
+		    for (;;) {
+				struct timespec ts;
+
+				ts.tv_sec = 120;
+				ts.tv_nsec = 0;
+
+				ret = _umtx_wait_uint(addr, tswap32(USEM_HAS_WAITERS), 0,
+                        (void *)&ts, __func__);
+				if (ret == 0)
+					break;
+				if (ret != -ETIMEDOUT)
+					break;
+				if (!lock_user_struct(VERIFY_READ, t__usem2, obj, 1))
+				    return -TARGET_EFAULT;
+				__get_user(count, &t__usem2->_count);
+				unlock_user_struct(t__usem2, obj, 0);
+				if (USEM_COUNT(count) != 0) {
+					fprintf(stderr, "Qemu:(%s) TIMEOUT (count!=0)\n", __func__);
+					ret = 0;
+					break;
+				}
+				if (ret == -ETIMEDOUT) {
+					fprintf(stderr, "Qemu:(%s) TIMEOUT (exiting)\n", __func__);
+					exit(-1);
+				}
+			}
+		}
+#else
+		ret = _umtx_wait_uint(addr, tswap32(USEM_HAS_WAITERS), tsz, t,
+                __func__);
+#endif /* DETECT_DEADLOCK */
+    }
     return ret;
+#endif /* defined(HOST_WORDS_BIGENDIAN) == defined(TARGET_WORDS_BIGENDIAN) */
 }
+
+abi_long freebsd_umtx_sem2_wake(abi_ulong obj)
+{
+#if defined(HOST_WORDS_BIGENDIAN) == defined(TARGET_WORDS_BIGENDIAN)
+    return get_errno(_umtx_op(g2h(obj), UMTX_OP_SEM2_WAKE, 0, NULL, NULL));
+#else
+    struct target__usem2 *t__usem2;
+    uint32_t *addr, flags;
+    abi_long ret;
+
+    if (!lock_user_struct(VERIFY_READ, t__usem2, obj, 1))
+        return -TARGET_EFAULT;
+
+    __get_user(flags, &t__usem2->_flags);
+    addr = &t__usem2->_count;
+    unlock_user_struct(t__usem2, obj, 0);
+
+    if ((flags & USYNC_PROCESS_SHARED) == 0) {
+		DEBUG_UMTX("<WAKE SEM2> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
+			__func__,  addr, UMTX_OP_WAKE_PRIVATE, INT_MAX);
+		ret = get_errno(_umtx_op(addr, UMTX_OP_WAKE_PRIVATE, INT_MAX,
+			NULL, NULL));
+    } else {
+		DEBUG_UMTX("<WAKE SEM2> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
+			__func__,  addr, UMTX_OP_WAKE, INT_MAX);
+		ret = get_errno(_umtx_op(addr, UMTX_OP_WAKE, INT_MAX, NULL, NULL));
+    }
+
+    return ret;
+#endif /* defined(HOST_WORDS_BIGENDIAN) == defined(TARGET_WORDS_BIGENDIAN) */
+}
+
 #endif /* ! __FreeBSD_version > 1100000 */
 
-abi_long freebsd_umtx_sem_wait(abi_ulong obj, size_t utsz,
-	struct _umtx_time *ut)
+abi_long freebsd_umtx_sem_wait(abi_ulong obj, size_t tsz, void *t)
 {
-    struct target__usem *t__usem;
-    uint32_t count, cnt, flags;
-    abi_long ret;
+	struct target__usem *t__usem;
+	uint32_t count, flags, *addr;
+	abi_long ret;
 
-    pthread_mutex_lock(&umtx_sem_lck);
-    if (!lock_user_struct(VERIFY_WRITE, t__usem, obj, 0)) {
-        return -TARGET_EFAULT;
-    }
-    __get_user(cnt, &t__usem->_has_waiters);
-    if (cnt < INT_MAX)
-	cnt++;
-    __put_user(cnt, &t__usem->_has_waiters);
-    __get_user(count, &t__usem->_count);
-    unlock_user_struct(t__usem, obj, 1);
-    if (count != 0) {
-        pthread_mutex_unlock(&umtx_sem_lck);
-	return (0);
-    }
+	if (!lock_user_struct(VERIFY_WRITE, t__usem, obj, 0)) {
+		return -TARGET_EFAULT;
+	}
+
+	__get_user(count, &t__usem->_count);
+	if (count != 0) {
+		unlock_user_struct(t__usem, obj, 1);
+		return 0;
+	}
+
+	/*
+	 * Make sure the _has_waiters field is set so userland will always
+	 * call freebsd_umtx_sem_wake().
+	 */
+	__put_user(1, &t__usem->_has_waiters);
+
     __get_user(flags, &t__usem->_flags);
-    pthread_mutex_unlock(&umtx_sem_lck);
+	addr = &t__usem->_count;
+	unlock_user_struct(t__usem, obj, 1);
 
-    if ((flags &  USYNC_PROCESS_SHARED) == 0){
-	DEBUG_UMTX("<WAIT SEM> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
-            __func__,  &t__usem->_count, UMTX_OP_WAKE_PRIVATE, 0);
-	ret = _umtx_wait_uint_private(&t__usem->_count,
-	   0, utsz, ut, __func__);
-    } else {
-	DEBUG_UMTX("<WAIT SEM> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
-            __func__,  &t__usem->_count, UMTX_OP_WAKE, 0);
-	ret = _umtx_wait_uint(&t__usem->_count, 0, utsz, ut, __func__);
-    }
+	if ((flags &  USYNC_PROCESS_SHARED) == 0){
+		DEBUG_UMTX("<WAIT SEM> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
+			__func__,  &t__usem->_count, UMTX_OP_WAKE_PRIVATE, 0);
+		ret = _umtx_wait_uint_private(addr, 0, tsz, t, __func__);
+	} else {
+		DEBUG_UMTX("<WAIT SEM> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
+			__func__,  &t__usem->_count, UMTX_OP_WAKE, 0);
+		ret = _umtx_wait_uint(addr, 0, tsz, t, __func__);
+	}
 
-    pthread_mutex_lock(&umtx_sem_lck);
-    if (!lock_user_struct(VERIFY_WRITE, t__usem, obj, 0)) {
-        return -TARGET_EFAULT;
-    }
-    __get_user(cnt, &t__usem->_has_waiters);
-    if (cnt > 0)
-	cnt--;
-    __put_user(cnt, &t__usem->_has_waiters);
-    unlock_user_struct(t__usem, obj, 1);
-    pthread_mutex_unlock(&umtx_sem_lck);
-
-    return ret;
+	return ret;
 }
 
-abi_long freebsd_umtx_sem_wake(abi_ulong obj, uint32_t val)
+abi_long freebsd_umtx_sem_wake(abi_ulong obj)
 {
-    struct target__usem *t__usem;
-    uint32_t flags;
-    abi_long ret;
+	struct target__usem *t__usem;
+	uint32_t flags, *addr;
+	abi_long ret;
 
-    if (!lock_user_struct(VERIFY_WRITE, t__usem, obj, 0)) {
-        return -TARGET_EFAULT;
-    }
-    __get_user(flags, &t__usem->_flags);
-    if ((flags & USYNC_PROCESS_SHARED) == 0) {
-	DEBUG_UMTX("<WAKE SEM> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
-            __func__,  &t__usem->_count, UMTX_OP_WAKE_PRIVATE, 1);
-	ret = get_errno(_umtx_op(&t__usem->_count, UMTX_OP_WAKE_PRIVATE,
-		1, NULL, NULL));
-    } else {
-	DEBUG_UMTX("<WAKE SEM> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
-            __func__,  &t__usem->_count, UMTX_OP_WAKE, 1);
-	ret = get_errno(_umtx_op(&t__usem->_count, UMTX_OP_WAKE,
-		1,  NULL, NULL));
-    }
-    unlock_user_struct(t__usem, obj, 1);
+	if (!lock_user_struct(VERIFY_WRITE, t__usem, obj, 0)) {
+		return -TARGET_EFAULT;
+	}
+	__get_user(flags, &t__usem->_flags);
+	addr = &t__usem->_count;
+	unlock_user_struct(t__usem, obj, 1);
 
-    return ret;
+	if ((flags & USYNC_PROCESS_SHARED) == 0) {
+		DEBUG_UMTX("<WAKE SEM> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
+			__func__,  &t__usem->_count, UMTX_OP_WAKE_PRIVATE, 1);
+		ret = get_errno(_umtx_op(addr, UMTX_OP_WAKE_PRIVATE, 1, NULL, NULL));
+	} else {
+		DEBUG_UMTX("<WAKE SEM> %s: _umtx_op(%p, %d, %d, NULL, NULL)\n",
+			__func__,  &t__usem->_count, UMTX_OP_WAKE, 1);
+		ret = get_errno(_umtx_op(addr, UMTX_OP_WAKE, 1,  NULL, NULL));
+	}
+
+	return ret;
 }
-#endif /* ! __FreeBSD_version > 900000 */
 
 abi_long t2h_freebsd_rtprio(struct rtprio *host_rtp, abi_ulong target_addr)
 {
@@ -758,8 +685,8 @@ abi_long h2t_freebsd_rtprio(abi_ulong target_addr, struct rtprio *host_rtp)
     return 0;
 }
 
-abi_long freebsd_lock_umtx(abi_ulong target_addr, abi_long id,
-        size_t utsz, struct _umtx_time *ut)
+abi_long freebsd_lock_umtx(abi_ulong target_addr, abi_long id, size_t tsz,
+        void *t)
 {
     abi_long ret;
     abi_long owner;
@@ -810,7 +737,7 @@ abi_long freebsd_lock_umtx(abi_ulong target_addr, abi_long id,
         owner = tswapal(owner);
         DEBUG_UMTX("<WAIT> %s: _umtx_op(%p, %d, 0x%llx, NULL, NULL)\n",
                 __func__, g2h(target_addr), UMTX_OP_WAIT, (long long)owner);
-        ret = _umtx_wait(g2h(target_addr), owner, utsz, ut, __func__);
+        ret = _umtx_wait(g2h(target_addr), owner, tsz, t, __func__);
         if (is_error(ret)) {
             return ret;
         }
@@ -947,34 +874,22 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
             continue;
         }
 
-	__get_user(count, &target_umutex->m_count);
-	count++;
-	__put_user(count, &target_umutex->m_count);
+        __get_user(count, &target_umutex->m_count);
+        count++;
+        __put_user(count, &target_umutex->m_count);
 
         addr = g2h(&target_umutex->m_count);
 
         unlock_user_struct(target_umutex, target_addr, 1);
         pthread_mutex_unlock(&umtx_wait_lck);
 
-        DEBUG_UMTX("<WAIT UMUTEX> %s: _umtx_op(%p, %d, 0x%x, NULL, NULL) count = %d\n",
-                __func__, g2h(target_addr), UMTX_OP_WAIT_UINT,
+        DEBUG_UMTX("<WAIT UMUTEX> %s: _umtx_op(%p, %d, 0x%x, NULL, NULL) "
+                "count = %d\n", __func__, g2h(target_addr), UMTX_OP_WAIT_UINT,
                 tswap32(target_umutex->m_owner), count);
+        ret = _umtx_wait_uint_private(addr, count, 0, (void *)ts, __func__);
 
-	if (ts == NULL) {
-	    ret = _umtx_wait_uint_private(addr, count, 0, NULL, __func__);
-	} else {
-	    struct _umtx_time ut;
-
-	    ut._clockid = CLOCK_REALTIME;
-            ut._flags = 0;
-	    ut._timeout.tv_sec = ts->tv_sec;
-	    ut._timeout.tv_nsec = ts->tv_nsec;
-
-	    ret = _umtx_wait_uint_private(addr, count, sizeof(ut), &ut, __func__);
-	}
-
-	if (ret != 0)
-           break;
+        if (ret != 0)
+            break;
     }
     return ret;
 }
@@ -1028,6 +943,8 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
  * the thread is actually asleep and ready.  This is a global mutex for all
  * condition vars so I am sure performance may be a problem if there are lots
  * of CVs.
+ *
+ * XXXss This needs to be reinitialized in fork_end().
  */
 static struct umutex _cv_mutex = { 0, 0, { 0, 0 }, { 0, 0, 0, 0 } };
 
@@ -1132,8 +1049,8 @@ abi_long freebsd_cv_broadcast(abi_ulong target_ucond_addr)
     return ret;
 }
 
-abi_long freebsd_rw_rdlock(abi_ulong target_addr, long fflag,
-        size_t utsz, struct _umtx_time *ut)
+abi_long freebsd_rw_rdlock(abi_ulong target_addr, long fflag, size_t tsz,
+        void *t)
 {
     struct target_urwlock *target_urwlock;
     uint32_t flags, wrflags;
@@ -1191,12 +1108,13 @@ abi_long freebsd_rw_rdlock(abi_ulong target_addr, long fflag,
                     __func__, &target_urwlock->rw_state,
                     UMTX_OP_WAIT_UINT, tswap32(state),
                     target_urwlock->rw_state);
-	    ret = _umtx_wait_uint(&target_urwlock->rw_state, tswap32(state), utsz, ut, __func__);
+            ret = _umtx_wait_uint(&target_urwlock->rw_state, tswap32(state),
+                    tsz, t, __func__);
             if (is_error(ret)) {
                 return ret;
             }
-            if (!lock_user_struct(VERIFY_WRITE, target_urwlock,
-                        target_addr, 0)) {
+            if (!lock_user_struct(VERIFY_WRITE, target_urwlock, target_addr,
+                        0)) {
                 return -TARGET_EFAULT;
             }
             __get_user(state, &target_urwlock->rw_state);
@@ -1219,8 +1137,8 @@ abi_long freebsd_rw_rdlock(abi_ulong target_addr, long fflag,
     }
 }
 
-abi_long freebsd_rw_wrlock(abi_ulong target_addr, long fflag,
-        size_t utsz, struct _umtx_time *ut)
+abi_long freebsd_rw_wrlock(abi_ulong target_addr, long fflag, size_t tsz,
+        void *t)
 {
     struct target_urwlock *target_urwlock;
     uint32_t blocked_readers, blocked_writers;
@@ -1283,7 +1201,7 @@ abi_long freebsd_rw_wrlock(abi_ulong target_addr, long fflag,
                     UMTX_OP_WAIT_UINT, tswap32(state),
                     target_urwlock->rw_state);
             ret = _umtx_wait_uint(&target_urwlock->rw_state,
-                        tswap32(state), utsz, ut, __func__);
+                        tswap32(state), tsz, t, __func__);
             if (is_error(ret)) {
                 return ret;
             }

@@ -1,7 +1,7 @@
 /*
  *  FreeBSD time related system call helpers
  *
- *  Copyright (c) 2013 Stacey D. Son
+ *  Copyright (c) 2013-15 Stacey D. Son
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,9 @@
 #include <errno.h>
 #include <time.h>
 #include <sys/timex.h>
+#include <sys/types.h>
 #include <sys/select.h>
+#include <sys/umtx.h>
 
 #include "qemu.h"
 #include "qemu-os.h"
@@ -82,6 +84,41 @@ abi_long h2t_freebsd_timespec(abi_ulong target_ts_addr, struct timespec *ts)
     unlock_user_struct(target_ts, target_ts_addr, 1);
 
     return 0;
+}
+
+abi_long t2h_freebsd_umtx_time(abi_ulong target_ut_addr,
+        abi_ulong target_ut_size, void *host_t, size_t *host_tsz)
+{
+
+    if (target_ut_size <= sizeof(struct timespec)) {
+        *host_tsz = 0;
+        return t2h_freebsd_timespec((struct timespec *)host_t, target_ut_addr);
+    }
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1000000
+    else {
+        return -TARGET_EINVAL;
+    }
+#else
+    else {
+        struct target_freebsd__umtx_time *target_ut;
+        struct _umtx_time *ut = (struct _umtx_time *)host_t;
+
+        if (!lock_user_struct(VERIFY_READ, target_ut, target_ut_addr, 0)) {
+            return -TARGET_EFAULT;
+        }
+        if (t2h_freebsd_timespec(&ut->_timeout, target_ut_addr +
+                    offsetof(struct target_freebsd__umtx_time, _timeout))) {
+            return -TARGET_EFAULT;
+        }
+        __get_user(ut->_flags, &target_ut->_flags);
+        __get_user(ut->_clockid, &target_ut->_clockid);
+        unlock_user_struct(target_ut, target_ut_addr, 1);
+
+        *host_tsz = sizeof(struct _umtx_time);
+
+        return 0;
+    }
+#endif /* defined(__FreeBSD_version) && __FreeBSD_version < 1000000 */
 }
 
 abi_long t2h_freebsd_timex(struct timex *host_tx, abi_ulong target_tx_addr)
