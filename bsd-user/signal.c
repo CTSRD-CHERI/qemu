@@ -618,6 +618,8 @@ static inline abi_ulong get_sigframe(struct target_sigaction *ka,
 
 #if defined(TARGET_MIPS) || defined(TARGET_ARM)
     return (sp - frame_size) & ~7;
+#elif defined(TARGET_AARCH64)
+    return (sp - frame_size) & ~15;
 #else
     return sp - frame_size;
 #endif
