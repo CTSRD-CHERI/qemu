@@ -911,6 +911,16 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
             ret = 0;
             goto out;
 
+#if defined(TARGET_AARCH64)
+        case HW_NCPU:           /* XXX AARCH64 is not SMP ready */
+            if (oldlen) {
+                (*(int32_t *)holdp) = 1;
+            }
+            holdlen = sizeof(int32_t);
+            ret = 0;
+            goto out;
+#endif
+
 #if TARGET_ABI_BITS != HOST_LONG_BITS
 	case HW_PHYSMEM:
 	case HW_USERMEM:
