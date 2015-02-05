@@ -25,6 +25,19 @@
 
 #define TARGET_CPU_RESET(cpu) cpu_reset(cpu)
 
+#define UREG_L0     8
+#define UREG_L1     9
+#define UREG_L2     10
+#define UREG_L3     11
+#define UREG_L4     12
+#define UREG_L5     13
+#define UREG_L6     14
+#define UREG_L7     15
+//#define UREG_FP     16
+#define UREG_SP     22
+
+extern abi_ulong target_sparc_utrap_precise[TARGET_UT_MAX];
+
 static inline void target_cpu_init(CPUSPARCState *env,
         struct target_pt_regs *regs)
 {
@@ -41,6 +54,50 @@ static inline void target_cpu_init(CPUSPARCState *env,
     }
 }
 
+/* see sparc64/sparc64/exception.S tl0_utrap() */
+static inline int target_cpu_utrap(CPUSPARCState *env, abi_ulong utrap_addr)
+{
+    trap_state *tsptr = cpu_tsptr(env);
+
+    if (utrap_addr == 0)
+        return 1;
+
+   /*
+    * Pass %fsr in %l4, %tstate in %l5, %tpc in %l6 and %tnpc
+    * in %l7.
+    */
+    env->regwptr[UREG_L4] = env->fsr;
+    env->regwptr[UREG_L5] = tsptr->tstate;
+    env->regwptr[UREG_L6] = tsptr->tpc;
+    env->regwptr[UREG_L7] = tsptr->tnpc;
+
+    /*
+     * Setup %tnpc to return to.
+     */
+    tsptr->tnpc = utrap_addr;
+
+    /*
+     * Setup %wstate for return, clear WSTATE_TRANSITION.
+     * WSTATE_NORMAL_MASK = 1
+     */
+    env->wstate &= 1 /* WSTATE_NORMAL_MASK */;
+
+    /*
+     * Setup %tstate for return, change the saved cwp to point
+     * to the current window instead of the window at the time
+     * of the trap.
+     */
+    tsptr->tstate = cpu_get_cwp64(env);
+
+    /*
+     * Setup %sp.  Userland processes will crash if this is not
+     * setup.  %fp = in_6  CCFSZ = 192
+     */
+    env->regwptr[UREG_SP] = env->regwptr[UREG_FP] - 192 /* CCFSZ */;
+
+    return 0;
+}
+
 
 static inline void target_cpu_loop(CPUSPARCState *env)
 {
@@ -52,6 +109,40 @@ static inline void target_cpu_loop(CPUSPARCState *env)
         trapnr = cpu_sparc_exec(env);
 
         switch (trapnr) {
+        case 0x10:
+            /* T_ILLEGAL_INSTRUCTION see sparc64/sparc64/exception.S */
+            fprintf(stderr, "T_ILLEGAL_INSTRUCTION\n");
+            if (target_cpu_utrap(env, target_sparc_utrap_precise[5]))
+                goto badtrap;
+            break;
+
+        case 0x20:
+            /* T_FP_DISABLED see sparc64/sparc64/exception.S */
+            fprintf(stderr, "T_FP_DISABLED\n");
+            if (target_cpu_utrap(env, target_sparc_utrap_precise[7]))
+                goto badtrap;
+            break;
+        case 0x21:
+            fprintf(stderr, "T_FP_EXCEPTION_IEEE_754\n");
+            /* T_FP_EXCEPTION_IEEE_754 see sparc64/sparc64/exception.S */
+            if (target_cpu_utrap(env, target_sparc_utrap_precise[8]))
+                goto badtrap;
+            break;
+        case 0x22:
+            fprintf(stderr, "T_FP_EXCEPTION_OTHER\n");
+            /* T_FP_EXCEPTION_OTHER see sparc64/sparc64/exception.S */
+            if (target_cpu_utrap(env, target_sparc_utrap_precise[9]))
+                goto badtrap;
+            break;
+
+#if 0
+        case ???:
+            /* T_MEM_ADDRESS_NOT_ALIGNED see sparc64/sparc64/exception.S */
+            if (target_cpu_utrap(env, target_sparc_utrap_precise[15]))
+                goto badtrap;
+            break;
+#endif
+
         /* FreeBSD uses 0x141 for syscalls too */
         case 0x141:
             if (bsd_type != target_freebsd) {
@@ -137,7 +228,7 @@ static inline void target_cpu_loop(CPUSPARCState *env)
                 if (trapnr == TT_DFAULT) {
                     info._sifields._sigfault._addr = env->dmmuregs[4];
                 } else {
-                    info._sifields._sigfault._addr = env->tsptr->tpc;
+                    info._sifields._sigfault._addr = cpu_tsptr(env)->tpc;
                     /* queue_signal(env, info.si_signo, &info); */
                 }
             }
@@ -177,11 +268,9 @@ badtrap:
 static inline void target_cpu_clone_regs(CPUSPARCState *env, target_ulong newsp)
 {
     if (newsp)
-        env->regwptr[22] = newsp;
+        env->regwptr[UREG_SP] = newsp;
     env->regwptr[0] = 0;
-    /* FIXME: Do we also need to clear CF?  */
-    /* XXXXX */
-    printf ("HELPME: %s:%d\n", __FILE__, __LINE__);
+    env->xcc &= ~PSR_CARRY;
 }
 
 static inline void target_cpu_reset(CPUArchState *cpu)
