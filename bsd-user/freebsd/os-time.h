@@ -689,4 +689,66 @@ static inline abi_long do_freebsd_clock_getcpuclockid2(abi_ulong arg1 __unused,
     return -TARGET_ENOSYS;
 }
 #endif /* ! __FreeBSD_version >= 902503 */
+
+#if defined(__FreeBSD_version) && ((__FreeBSD__ == 10 && __FreeBSD_version >= 1003000) || __FreeBSD_version >= 1100056)
+
+static inline abi_long do_freebsd_futimens(abi_ulong arg1,
+        abi_ulong arg2)
+{
+    struct timespec *tvp, tv[2];
+
+    if (arg2 != 0) {
+        if (t2h_freebsd_timespec(&tv[0], arg2) || 
+                t2h_freebsd_timespec(&tv[1], arg2 +
+                        sizeof(struct target_freebsd_timeval))) {
+            return -TARGET_EFAULT;
+        }
+        tvp = tv;
+    } else {
+        tvp = NULL;
+    }
+
+    return get_errno(futimens(arg1, tvp));
+}
+static inline abi_long do_freebsd_utimensat(abi_ulong arg1,
+        abi_ulong arg2, abi_ulong arg3, abi_ulong arg4)
+{
+    abi_long ret = 0;
+    void *p;
+    struct timespec *tvp, tv[2];
+
+    if (arg3 != 0) {
+        if (t2h_freebsd_timespec(&tv[0], arg3) ||
+                t2h_freebsd_timespec(&tv[1], arg3 +
+                        sizeof(struct target_freebsd_timeval))) {
+            return -TARGET_EFAULT;
+        }
+        tvp = tv;
+    } else {
+        tvp = NULL;
+    }
+
+    p = lock_user_string(arg2);
+    if (p == NULL) {
+        return -TARGET_EFAULT;
+    }
+    ret = get_errno(utimensat(arg1, p, tvp,
+	target_to_host_bitmask(arg4, fcntl_flags_tbl)));
+    unlock_user(p, arg2, 0);
+    return ret;
+}
+#else /* ! __FreeBSD_version >= 1100000 */
+static inline abi_long do_freebsd_futimens(abi_ulong arg1,
+        abi_ulong arg2)
+{
+    qemu_log("qemu: Unsupported syscall futimens\n");
+    return -TARGET_ENOSYS;
+}
+static inline abi_long do_freebsd_utimensat(abi_ulong arg1,
+        abi_ulong arg2, abi_ulong arg3, abi_ulong arg4)
+{
+    qemu_log("qemu: Unsupported syscall utimensat()\n");
+    return -TARGET_ENOSYS;
+}
+#endif /* ! __FreeBSD_version >= 1100000 */
 #endif /* __FREEBSD_OS_TIME_H_ */
