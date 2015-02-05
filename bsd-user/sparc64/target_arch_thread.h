@@ -1,7 +1,7 @@
 /*
  *  sparc64 thread support
  *
- *  Copyright (c) 2013 Stacey D. Son
+ *  Copyright (c) 2013-15 Stacey D. Son
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,6 +26,8 @@ static inline void target_thread_set_upcall(CPUSPARCState *regs,
     abi_ulong entry, abi_ulong arg, abi_ulong stack_base, abi_ulong stack_size)
 {
     /* XXX */
+    fprintf(stderr, "incomplete %s: %s:%d\n", __func__, __FILE__, __LINE__);
+    exit(-1);
 }
 
 static inline void target_thread_init(struct target_pt_regs *regs,
