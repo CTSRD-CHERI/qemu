@@ -938,13 +938,17 @@ static inline abi_long do_bsd_undelete(abi_long arg1)
 }
 
 /* poll(2) */
-static abi_long do_bsd_poll(abi_long arg1, abi_long arg2, abi_long arg3)
+static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
+        abi_long arg3)
 {
+    CPUState *cpu = ENV_GET_CPU(env);
+    TaskState *ts = (TaskState *)cpu->opaque;
     abi_long ret;
     nfds_t i, nfds = arg2;
     int timeout = arg3;
     struct pollfd *pfd;
     struct target_pollfd *target_pfd;
+    sigset_t mask, omask;
 
     target_pfd = lock_user(VERIFY_WRITE, arg1,
             sizeof(struct target_pollfd) * nfds, 1);
@@ -955,7 +959,22 @@ static abi_long do_bsd_poll(abi_long arg1, abi_long arg2, abi_long arg3)
     for (i = 0; i < nfds; i++) {
         pfd[i].fd = tswap32(target_pfd[i].fd);
         pfd[i].events = tswap16(target_pfd[i].events);
-    } ret = get_errno(poll(pfd, nfds, timeout));
+    }
+
+    sigfillset(&mask);
+    sigprocmask(SIG_BLOCK, &mask, &omask);
+    if (ts->signal_pending) {
+        sigprocmask(SIG_SETMASK, &omask, NULL);
+        /* We have a signal pending so don't block in poll(). */
+        ret = get_errno(poll(pfd, nfds, 0));
+    } else {
+        struct timespec tspec;
+
+        tspec.tv_sec = timeout / 1000;
+        tspec.tv_nsec = (timeout % 1000) * 1000;
+        ret = get_errno(ppoll(pfd, nfds, &tspec, &omask));
+        sigprocmask(SIG_SETMASK, &omask, NULL);
+    }
     if (!is_error(ret)) {
         for (i = 0; i < nfds; i++) {
             target_pfd[i].revents = tswap16(pfd[i].revents);
