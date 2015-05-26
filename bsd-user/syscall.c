@@ -777,7 +777,11 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
     case TARGET_FREEBSD_NR_poll: /* poll(2) */
-        ret = do_bsd_poll(arg1, arg2, arg3);
+        ret = do_bsd_poll(cpu_env, arg1, arg2, arg3);
+        break;
+
+    case TARGET_FREEBSD_NR_ppoll: /* ppoll(2) */
+        ret = do_freebsd_ppoll(arg1, arg2, arg3, arg4);
         break;
 
     case TARGET_FREEBSD_NR_openbsd_poll:  /* undocumented openbsd_poll() */
@@ -1069,7 +1073,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
     case TARGET_FREEBSD_NR_select: /* select(2) */
-        ret = do_freebsd_select(arg1, arg2, arg3, arg4, arg5);
+        ret = do_freebsd_select(cpu_env, arg1, arg2, arg3, arg4, arg5);
         break;
 
     case TARGET_FREEBSD_NR_pselect: /* pselect(2) */
