@@ -941,14 +941,16 @@ static inline abi_long do_bsd_undelete(abi_long arg1)
 static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
         abi_long arg3)
 {
-    CPUState *cpu = ENV_GET_CPU(env);
-    TaskState *ts = (TaskState *)cpu->opaque;
     abi_long ret;
     nfds_t i, nfds = arg2;
     int timeout = arg3;
     struct pollfd *pfd;
     struct target_pollfd *target_pfd;
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
+    CPUState *cpu = ENV_GET_CPU(env);
+    TaskState *ts = (TaskState *)cpu->opaque;
     sigset_t mask, omask;
+#endif /* !  __FreeBSD_version >= 1100000 */
 
     target_pfd = lock_user(VERIFY_WRITE, arg1,
             sizeof(struct target_pollfd) * nfds, 1);
@@ -961,6 +963,7 @@ static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
         pfd[i].events = tswap16(target_pfd[i].events);
     }
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
     sigfillset(&mask);
     sigprocmask(SIG_BLOCK, &mask, &omask);
     if (ts->signal_pending) {
@@ -975,6 +978,11 @@ static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
         ret = get_errno(ppoll(pfd, nfds, &tspec, &omask));
         sigprocmask(SIG_SETMASK, &omask, NULL);
     }
+#else
+    /* No ppoll() before FreeBSD 11.0 */
+    ret = get_errno(poll(pfd, nfds, timeout));
+#endif /* !  __FreeBSD_version >= 1100000 */
+
     if (!is_error(ret)) {
         for (i = 0; i < nfds; i++) {
             target_pfd[i].revents = tswap16(pfd[i].revents);
