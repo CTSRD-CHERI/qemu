@@ -779,11 +779,11 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_poll: /* poll(2) */
         ret = do_bsd_poll(cpu_env, arg1, arg2, arg3);
         break;
-
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
     case TARGET_FREEBSD_NR_ppoll: /* ppoll(2) */
         ret = do_freebsd_ppoll(arg1, arg2, arg3, arg4);
         break;
-
+#endif /* __FreeBSD_version >= 1100000 */
     case TARGET_FREEBSD_NR_openbsd_poll:  /* undocumented openbsd_poll() */
         ret = do_bsd_openbsd_poll(arg1, arg2, arg3);
         break;
