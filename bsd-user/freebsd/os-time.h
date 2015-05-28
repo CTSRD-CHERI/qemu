@@ -499,6 +499,7 @@ static inline abi_long do_freebsd_pselect(int n, abi_ulong rfd_addr,
     return ret;
 }
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
 /* ppoll(2) */
 static abi_long do_freebsd_ppoll(abi_long arg1, abi_long arg2, abi_ulong arg3,
 		abi_ulong arg4)
@@ -550,6 +551,7 @@ static abi_long do_freebsd_ppoll(abi_long arg1, abi_long arg2, abi_ulong arg3,
 
     return ret;
 }
+#endif /* __FreeBSD_version >= 1100000 */
 
 /* kqueue(2) */
 static inline abi_long do_freebsd_kqueue(void)
