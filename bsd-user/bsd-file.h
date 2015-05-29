@@ -971,11 +971,14 @@ static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
         /* We have a signal pending so don't block in poll(). */
         ret = get_errno(poll(pfd, nfds, 0));
     } else {
-        struct timespec tspec;
+        struct timespec *tsptr = NULL, tspec;
 
-        tspec.tv_sec = timeout / 1000;
-        tspec.tv_nsec = (timeout % 1000) * 1000;
-        ret = get_errno(ppoll(pfd, nfds, &tspec, &omask));
+        if (timeout != INFTIM) {
+            tspec.tv_sec = timeout / 1000;
+            tspec.tv_nsec = (timeout % 1000) * 1000000;
+            tsptr = &tspec;
+        }
+        ret = get_errno(ppoll(pfd, nfds, tsptr, &omask));
         sigprocmask(SIG_SETMASK, &omask, NULL);
     }
 #else
