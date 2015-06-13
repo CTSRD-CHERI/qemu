@@ -222,6 +222,70 @@ static inline abi_long do_bsd_setsockopt(int sockfd, int level, int optname,
         }
         break;
 
+    case IPPROTO_IPV6:
+        switch (optname) {
+        case IPV6_UNICAST_HOPS:     /* int; IP6 hops */
+        case IPV6_MULTICAST_IF:     /* u_int; set/get IP6 multicast i/f  */
+        case IPV6_MULTICAST_HOPS:   /* int; set/get IP6 multicast hops */
+        case IPV6_MULTICAST_LOOP:   /* u_int; set/get IP6 multicast loopback */
+        case IPV6_PORTRANGE:        /* int; range to choose for unspec port */
+        case IPV6_CHECKSUM:         /* int; checksum offset for raw socket */
+        case IPV6_V6ONLY:           /* bool; make AF_INET6 sockets v6 only */
+        case IPV6_RECVPKTINFO:      /* bool; recv if, dst addr */
+        case IPV6_RECVHOPLIMIT:     /* bool; recv hop limit */
+        case IPV6_RECVRTHDR:        /* bool; recv routing header */
+        case IPV6_RECVHOPOPTS:      /* bool; recv hop-by-hop option */
+        case IPV6_RECVDSTOPTS:      /* bool; recv dst option after rthdr */
+        case IPV6_USE_MIN_MTU:      /* bool; send packets at the minimum MTU */
+        case IPV6_RECVPATHMTU:      /* bool; notify an according MTU */
+        case IPV6_HOPLIMIT:         /* int; send hop limit */
+        case IPV6_RECVTCLASS:       /* bool; recv traffic class values */
+        case IPV6_AUTOFLOWLABEL:    /* bool; attach flowlabel automagically */
+        case IPV6_TCLASS:           /* int; send traffic class value */
+        case IPV6_DONTFRAG:         /* bool; disable IPv6 fragmentation */
+        case IPV6_PREFER_TEMPADDR:  /* int; prefer temporary addresses */
+        case IPV6_BINDANY:          /* bool: allow bind to any address */
+        case IPV6_BINDMULTI:        /* bool; allow multibind to same addr/port*/
+        case IPV6_RSS_LISTEN_BUCKET: /* int; set RSS listen bucket */
+        case IPV6_FLOWID:           /* int; flowid of given socket */
+        case IPV6_FLOWTYPE:         /* int; flowtype of given socket */
+        case IPV6_RSSBUCKETID:      /* int; RSS bucket ID of given socket */
+            val = 0;
+            if (optlen >= sizeof(uint32_t)) {
+                if (get_user_u32(val, optval_addr)) {
+                    return -TARGET_EFAULT;
+                }
+            } else if (optlen >= 1) {
+                if (get_user_u8(val, optval_addr)) {
+                    return -TARGET_EFAULT;
+                }
+            }
+            ret = get_errno(setsockopt(sockfd, level, optname, &val,
+                        sizeof(val)));
+            break;
+
+        case IPV6_JOIN_GROUP:   /* ipv6_mreq; join a group membership */
+        case IPV6_LEAVE_GROUP:  /* ipv6_mreq; leave a group membership */
+        case ICMP6_FILTER:      /* icmp6_filter; icmp6 filter */
+        case IPV6_IPSEC_POLICY: /* struct; get/set security policy */
+        case IPV6_FW_ADD:       /* add a firewall rule to chain */
+        case IPV6_FW_DEL:       /* delete a firewall rule from chain */
+        case IPV6_FW_FLUSH:     /* flush firewall rule chain */
+        case IPV6_FW_ZERO:      /* clear single/all firewall counter(s) */
+        case IPV6_FW_GET:       /* get entire firewall rule chain */
+        case IPV6_RTHDRDSTOPTS: /* ip6_dest; send dst option before rthdr */
+        case IPV6_PATHMTU:      /* mtuinfo; get the current path MTU */
+        case IPV6_PKTINFO:      /* in6_pktinfo; send if, src addr */
+        case IPV6_NEXTHOP:      /* sockaddr; next hop addr */
+        case IPV6_HOPOPTS:      /* ip6_hbh; send hop-by-hop option */
+        case IPV6_DSTOPTS:      /* ip6_dest; send dst option befor rthdr */
+        case IPV6_RTHDR:        /* ip6_rthdr; send routing header */
+        case IPV6_MSFILTER:     /* struct __msfilterreq; */
+        default:
+            goto unimplemented;
+        }
+        break;
+
     case TARGET_SOL_SOCKET:
         switch (optname) {
         /* Options with 'int' argument.  */
@@ -510,6 +574,86 @@ int_case:
             }
             break;
 
+        default:
+            goto unimplemented;
+        }
+        break;
+
+    case IPPROTO_IPV6:
+        switch (optname) {
+        case IPV6_UNICAST_HOPS:     /* int; IP6 hops */
+        case IPV6_MULTICAST_IF:     /* u_int; set/get IP6 multicast i/f  */
+        case IPV6_MULTICAST_HOPS:   /* int; set/get IP6 multicast hops */
+        case IPV6_MULTICAST_LOOP:   /* u_int; set/get IP6 multicast loopback */
+        case IPV6_PORTRANGE:        /* int; range to choose for unspec port */
+        case IPV6_CHECKSUM:         /* int; checksum offset for raw socket */
+        case IPV6_V6ONLY:           /* bool; make AF_INET6 sockets v6 only */
+        case IPV6_RECVPKTINFO:      /* bool; recv if, dst addr */
+        case IPV6_RECVHOPLIMIT:     /* bool; recv hop limit */
+        case IPV6_RECVRTHDR:        /* bool; recv routing header */
+        case IPV6_RECVHOPOPTS:      /* bool; recv hop-by-hop option */
+        case IPV6_RECVDSTOPTS:      /* bool; recv dst option after rthdr */
+        case IPV6_USE_MIN_MTU:      /* bool; send packets at the minimum MTU */
+        case IPV6_RECVPATHMTU:      /* bool; notify an according MTU */
+        case IPV6_HOPLIMIT:         /* int; send hop limit */
+        case IPV6_RECVTCLASS:       /* bool; recv traffic class values */
+        case IPV6_AUTOFLOWLABEL:    /* bool; attach flowlabel automagically */
+        case IPV6_TCLASS:           /* int; send traffic class value */
+        case IPV6_DONTFRAG:         /* bool; disable IPv6 fragmentation */
+        case IPV6_PREFER_TEMPADDR:  /* int; prefer temporary addresses */
+        case IPV6_BINDANY:          /* bool: allow bind to any address */
+        case IPV6_BINDMULTI:        /* bool; allow multibind to same addr/port*/
+        case IPV6_RSS_LISTEN_BUCKET: /* int; set RSS listen bucket */
+        case IPV6_FLOWID:           /* int; flowid of given socket */
+        case IPV6_FLOWTYPE:         /* int; flowtype of given socket */
+        case IPV6_RSSBUCKETID:      /* int; RSS bucket ID of given socket */
+            if (get_user_u32(len, optlen)) {
+                return -TARGET_EFAULT;
+            }
+            if (len < 0) {
+                return -TARGET_EINVAL;
+            }
+            lv = sizeof(lv);
+            ret = get_errno(getsockopt(sockfd, level, optname,
+                &val, &lv));
+            if (ret < 0) {
+                return ret;
+            }
+            if (len < sizeof(int) && len > 0 && val >= 0 &&
+                val < 255) {
+                len = 1;
+                if (put_user_u32(len, optlen) ||
+                        put_user_u8(val, optval_addr)) {
+                    return -TARGET_EFAULT;
+                }
+            } else {
+                if (len > sizeof(int)) {
+                    len = sizeof(int);
+                }
+                if (put_user_u32(len, optlen) ||
+                        put_user_u32(val, optval_addr)) {
+                    return -TARGET_EFAULT;
+                }
+            }
+            break;
+
+        case IPV6_JOIN_GROUP:   /* ipv6_mreq; join a group membership */
+        case IPV6_LEAVE_GROUP:  /* ipv6_mreq; leave a group membership */
+        case ICMP6_FILTER:      /* icmp6_filter; icmp6 filter */
+        case IPV6_IPSEC_POLICY: /* struct; get/set security policy */
+        case IPV6_FW_ADD:       /* add a firewall rule to chain */
+        case IPV6_FW_DEL:       /* delete a firewall rule from chain */
+        case IPV6_FW_FLUSH:     /* flush firewall rule chain */
+        case IPV6_FW_ZERO:      /* clear single/all firewall counter(s) */
+        case IPV6_FW_GET:       /* get entire firewall rule chain */
+        case IPV6_RTHDRDSTOPTS: /* ip6_dest; send dst option before rthdr */
+        case IPV6_PATHMTU:      /* mtuinfo; get the current path MTU */
+        case IPV6_PKTINFO:      /* in6_pktinfo; send if, src addr */
+        case IPV6_NEXTHOP:      /* sockaddr; next hop addr */
+        case IPV6_HOPOPTS:      /* ip6_hbh; send hop-by-hop option */
+        case IPV6_DSTOPTS:      /* ip6_dest; send dst option befor rthdr */
+        case IPV6_RTHDR:        /* ip6_rthdr; send routing header */
+        case IPV6_MSFILTER:     /* struct __msfilterreq; */
         default:
             goto unimplemented;
         }
