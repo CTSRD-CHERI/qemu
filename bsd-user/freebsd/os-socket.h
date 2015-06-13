@@ -152,6 +152,7 @@ static inline abi_long do_bsd_setsockopt(int sockfd, int level, int optname,
     abi_long ret;
     int val;
     struct ip_mreqn *ip_mreq;
+    void *p;
 
     switch (level) {
     case IPPROTO_TCP:
@@ -167,6 +168,13 @@ static inline abi_long do_bsd_setsockopt(int sockfd, int level, int optname,
 
     case IPPROTO_IP:
         switch (optname) {
+        case IP_OPTIONS:
+            p = lock_user(VERIFY_READ, optval_addr, optlen, 0);
+            if (p == NULL)
+                return -TARGET_EFAULT;
+            ret = get_errno(setsockopt(sockfd, level, optname, p, optlen));
+            unlock_user(p, optval_addr, 0);
+            break;
         case IP_HDRINCL:/* int; header is included with data */
         case IP_TOS:    /* int; IP type of service and preced. */
         case IP_TTL:    /* int; IP time to live */
@@ -330,6 +338,7 @@ static inline abi_long do_bsd_getsockopt(int sockfd, int level, int optname,
     abi_long ret;
     int len, val;
     socklen_t lv;
+    void *p;
 
     switch (level) {
     case TARGET_SOL_SOCKET:
@@ -439,6 +448,18 @@ int_case:
 
     case IPPROTO_IP:
         switch (optname) {
+        case IP_OPTIONS:
+            if (get_user_u32(len, optlen))
+                return -TARGET_EFAULT;
+            lv = (socklen_t)len;
+            p = lock_user(VERIFY_WRITE, optval_addr, len, 0);
+            if (p == NULL)
+                return -TARGET_EFAULT;
+            ret = get_errno(getsockopt(sockfd, level, optname, p, &lv));
+            unlock_user(p, optval_addr, len);
+            if (put_user_u32(lv, optlen))
+                return -TARGET_EFAULT;
+            break;
         case IP_HDRINCL:
         case IP_TOS:
         case IP_TTL:
