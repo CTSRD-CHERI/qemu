@@ -245,11 +245,21 @@ static inline abi_long do_bsd_setsockopt(int sockfd, int level, int optname,
         case IPV6_DONTFRAG:         /* bool; disable IPv6 fragmentation */
         case IPV6_PREFER_TEMPADDR:  /* int; prefer temporary addresses */
         case IPV6_BINDANY:          /* bool: allow bind to any address */
+#ifdef IPV6_BINDMULTI
         case IPV6_BINDMULTI:        /* bool; allow multibind to same addr/port*/
+#endif /* IPV6_BINDMULTI */
+#ifdef IPV6_RSS_LISTEN_BUCKET
         case IPV6_RSS_LISTEN_BUCKET: /* int; set RSS listen bucket */
+#endif /* IPV6_RSS_LISTEN_BUCKET */
+#ifdef IPV6_FLOWID
         case IPV6_FLOWID:           /* int; flowid of given socket */
+#endif /* IPV6_FLOWID */
+#ifdef IPV6_FLOWTYPE
         case IPV6_FLOWTYPE:         /* int; flowtype of given socket */
+#endif /* IPV6_FLOWTYPE */
+#ifdef IPV6_RSSBUCKETID
         case IPV6_RSSBUCKETID:      /* int; RSS bucket ID of given socket */
+#endif /* IPV6_RSSBUCKETID */
             val = 0;
             if (optlen >= sizeof(uint32_t)) {
                 if (get_user_u32(val, optval_addr)) {
@@ -602,11 +612,21 @@ int_case:
         case IPV6_DONTFRAG:         /* bool; disable IPv6 fragmentation */
         case IPV6_PREFER_TEMPADDR:  /* int; prefer temporary addresses */
         case IPV6_BINDANY:          /* bool: allow bind to any address */
+#ifdef IPV6_BINDMULTI
         case IPV6_BINDMULTI:        /* bool; allow multibind to same addr/port*/
+#endif /* IPV6_BINDMULTI */
+#ifdef IPV6_RSS_LISTEN_BUCKET
         case IPV6_RSS_LISTEN_BUCKET: /* int; set RSS listen bucket */
+#endif /* IPV6_RSS_LISTEN_BUCKET */
+#ifdef IPV6_FLOWID
         case IPV6_FLOWID:           /* int; flowid of given socket */
+#endif /* IPV6_FLOWID */
+#ifdef IPV6_FLOWTYPE
         case IPV6_FLOWTYPE:         /* int; flowtype of given socket */
+#endif /* IPV6_FLOWTYPE */
+#ifdef IPV6_RSSBUCKETID
         case IPV6_RSSBUCKETID:      /* int; RSS bucket ID of given socket */
+#endif /* IPV6_RSSBUCKETID */
             if (get_user_u32(len, optlen)) {
                 return -TARGET_EFAULT;
             }
