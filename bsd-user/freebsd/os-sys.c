@@ -74,14 +74,14 @@ host_to_target_kinfo_proc(struct target_kinfo_proc *tki, struct kinfo_proc *hki)
     __put_user(hki->ki_layout, &tki->ki_layout);
 
     /* Some of these are used as flags (e.g. ki_fd == NULL in procstat). */
-    __put_user((abi_ulong)hki->ki_args, &tki->ki_args);
-    __put_user((abi_ulong)hki->ki_paddr, &tki->ki_paddr);
-    __put_user((abi_ulong)hki->ki_addr, &tki->ki_addr);
-    __put_user((abi_ulong)hki->ki_tracep, &tki->ki_tracep);
-    __put_user((abi_ulong)hki->ki_textvp, &tki->ki_textvp);
-    __put_user((abi_ulong)hki->ki_fd, &tki->ki_fd);
-    __put_user((abi_ulong)hki->ki_vmspace, &tki->ki_vmspace);
-    __put_user((abi_ulong)hki->ki_wchan, &tki->ki_wchan);
+    tki->ki_args = tswapal((abi_ulong)(uintptr_t)hki->ki_args);
+    tki->ki_paddr = tswapal((abi_ulong)(uintptr_t)hki->ki_paddr);
+    tki->ki_addr = tswapal((abi_ulong)(uintptr_t)hki->ki_addr);
+    tki->ki_tracep = tswapal((abi_ulong)(uintptr_t)hki->ki_tracep);
+    tki->ki_textvp = tswapal((abi_ulong)(uintptr_t)hki->ki_textvp);
+    tki->ki_fd = tswapal((abi_ulong)(uintptr_t)hki->ki_fd);
+    tki->ki_vmspace = tswapal((abi_ulong)(uintptr_t)hki->ki_vmspace);
+    tki->ki_wchan = tswapal((abi_ulong)(uintptr_t)hki->ki_wchan);
 
     __put_user(hki->ki_pid, &tki->ki_pid);
     __put_user(hki->ki_ppid, &tki->ki_ppid);

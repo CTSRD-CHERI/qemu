@@ -140,7 +140,7 @@ struct bsd_binprm {
         char **envp;
         char *filename;         /* (Given) Name of binary */
         char *fullpath;         /* Full path of binary */
-        int (*core_dump)(int, const CPUArchState *);
+        int (*core_dump)(int, CPUArchState *);
 };
 
 void do_init_thread(struct target_pt_regs *regs, struct image_info *infop);
