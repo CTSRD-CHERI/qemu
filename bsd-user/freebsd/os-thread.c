@@ -878,7 +878,7 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         count++;
         __put_user(count, &target_umutex->m_count);
 
-        addr = g2h(&target_umutex->m_count);
+        addr = g2h((uintptr_t)&target_umutex->m_count);
 
         unlock_user_struct(target_umutex, target_addr, 1);
         pthread_mutex_unlock(&umtx_wait_lck);
@@ -927,7 +927,7 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
 	count--;
     __put_user(count, &target_umutex->m_count);
 
-    addr = g2h(&target_umutex->m_count);
+    addr = g2h((uintptr_t)&target_umutex->m_count);
 
     unlock_user_struct(target_umutex, target_addr, 1);
     pthread_mutex_unlock(&umtx_wait_lck);
