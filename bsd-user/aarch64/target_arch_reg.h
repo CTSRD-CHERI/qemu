@@ -38,7 +38,7 @@ typedef struct target_fpreg {
 
 #define tswapreg(ptr)   tswapal(ptr)
 
-static inline void target_copy_regs(target_reg_t *regs, const CPUARMState *env)
+static inline void target_copy_regs(target_reg_t *regs, CPUARMState *env)
 {
     int i;
 
@@ -47,7 +47,7 @@ static inline void target_copy_regs(target_reg_t *regs, const CPUARMState *env)
     regs->lr = tswapreg(env->xregs[30]);
     regs->sp = tswapreg(env->xregs[31]);
     regs->elr = tswapreg(env->pc);
-    regs->spsr = tswapreg(pstate_read((CPUARMState *)env));
+    regs->spsr = tswapreg(pstate_read(env));
 }
 
 #undef tswapreg
