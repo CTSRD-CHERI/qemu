@@ -1212,7 +1212,7 @@ static abi_long fill_osreldate(int *osreldatep)
  *
  * sys/kern/imagact_elf.c _elfN(note_prstatus)
  */
-static abi_long fill_prstatus(const CPUArchState *env,
+static abi_long fill_prstatus(CPUArchState *env,
         struct target_prstatus *prstatus, int signr)
 {
     abi_long ret;
