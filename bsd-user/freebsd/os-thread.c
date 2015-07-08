@@ -429,7 +429,7 @@ abi_long freebsd_umtx_mutex_wake2(abi_ulong target_addr, uint32_t flags)
             __get_user(owner, &target_umutex->m_owner);
         }
     }
-    addr = g2h(&target_umutex->m_count);
+    addr = g2h((uintptr_t)&target_umutex->m_count);
     unlock_user(target_umutex, target_addr, 0);
     pthread_mutex_unlock(&umtx_wait_lck);
 
