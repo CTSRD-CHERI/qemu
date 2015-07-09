@@ -46,10 +46,10 @@ struct target_pollfd {
     int16_t revents;    /* returned events */
 };
 
-static abi_long lock_iovec(int type, struct iovec *vec, abi_ulong target_addr,
-        int count, int copy);
-static abi_long unlock_iovec(struct iovec *vec, abi_ulong target_addr,
-        int count, int copy);
+static struct iovec *lock_iovec(int type, abi_ulong target_addr, int count,
+        int copy);
+static void unlock_iovec(struct iovec *vec, abi_ulong target_addr, int count,
+        int copy);
 extern int __getcwd(char *path, size_t len);
 
 /* read(2) */
@@ -93,18 +93,14 @@ static inline abi_long do_bsd_pread(void *cpu_env, abi_long arg1,
 static inline abi_long do_bsd_readv(abi_long arg1, abi_long arg2, abi_long arg3)
 {
     abi_long ret;
-    int count = arg3;
-    struct iovec *vec;
+    struct iovec *vec = lock_iovec(VERIFY_WRITE, arg2, arg3, 0);
 
-    vec = alloca(count * sizeof(struct iovec));
-    if (vec == NULL) {
-        return -TARGET_ENOMEM;
+    if (vec != NULL) {
+        ret = get_errno(readv(arg1, vec, arg3));
+        unlock_iovec(vec, arg2, arg3, 1);
+    } else {
+        ret = -host_to_target_errno(errno);
     }
-    if (lock_iovec(VERIFY_WRITE, vec, arg2, count, 0) < 0) {
-        return -TARGET_EFAULT;
-    }
-    ret = get_errno(readv(arg1, vec, count));
-    unlock_iovec(vec, arg2, count, 1);
 
     return ret;
 }
@@ -151,18 +147,14 @@ static inline abi_long do_bsd_writev(abi_long arg1, abi_long arg2,
         abi_long arg3)
 {
     abi_long ret;
-    int count = arg3;
-    struct iovec *vec;
+    struct iovec *vec = lock_iovec(VERIFY_READ, arg2, arg3, 1);
 
-    vec = alloca(count * sizeof(struct iovec));
-    if (vec == NULL) {
-        return -TARGET_ENOMEM;
+    if (vec != NULL) {
+        ret = get_errno(writev(arg1, vec, arg3));
+        unlock_iovec(vec, arg2, arg3, 0);
+    } else {
+        ret = -host_to_target_errno(errno);
     }
-    if (lock_iovec(VERIFY_READ, vec, arg2, count, 1) < 0) {
-        return -TARGET_EFAULT;
-    }
-    ret = get_errno(writev(arg1, vec, count));
-    unlock_iovec(vec, arg2, count, 0);
 
     return ret;
 }
@@ -172,22 +164,18 @@ static inline abi_long do_bsd_pwritev(void *cpu_env, abi_long arg1,
     abi_long arg2, abi_long arg3, abi_long arg4, abi_long arg5, abi_long arg6)
 {
     abi_long ret;
-    int count = arg3;
-    struct iovec *vec;
+    struct iovec *vec = lock_iovec(VERIFY_READ, arg2, arg3, 1);
 
-    vec = alloca(count * sizeof(struct iovec));
-    if (vec == NULL) {
-        return -TARGET_ENOMEM;
+    if (vec != NULL) {
+        if (regpairs_aligned(cpu_env) != 0) {
+            arg4 = arg5;
+            arg5 = arg6;
+        }
+        ret = get_errno(pwritev(arg1, vec, arg3, target_arg64(arg4, arg5)));
+        unlock_iovec(vec, arg2, arg3, 0);
+    } else {
+        ret = -host_to_target_errno(errno);
     }
-    if (lock_iovec(VERIFY_READ, vec, arg2, count, 1) < 0) {
-        return -TARGET_EFAULT;
-    }
-    if (regpairs_aligned(cpu_env) != 0) {
-        arg4 = arg5;
-        arg5 = arg6;
-    }
-    ret = get_errno(pwritev(arg1, vec, count, target_arg64(arg4, arg5)));
-    unlock_iovec(vec, arg2, count, 0);
 
     return ret;
 }
@@ -213,10 +201,12 @@ static inline abi_long do_bsd_openat(abi_long arg1, abi_long arg2,
     abi_long ret;
     void *p;
 
-    LOCK_PATH(p, arg2);
-    ret = get_errno(openat(arg1, path(p),
+   if (!(p = lock_user_string(arg2)))
+        return -TARGET_EFAULT;
+
+    ret = get_errno(openat(arg1, /* path(p) */ p,
                 target_to_host_bitmask(arg3, fcntl_flags_tbl), arg4));
-    UNLOCK_PATH(p, arg2);
+    unlock_user(p, arg1, 0);
 
     return ret;
 }
@@ -607,14 +597,14 @@ static inline abi_long do_bsd_nmount(abi_long arg1, abi_long count,
         abi_long flags)
 {
     abi_long ret;
-    struct iovec *vec;
+    struct iovec *vec = lock_iovec(VERIFY_READ, arg1, count, 1);
 
-    vec = alloca(count * sizeof(struct iovec));
-    if (lock_iovec(VERIFY_READ, vec, arg1, count, 1) < 0) {
+    if (vec != NULL) {
+        ret = get_errno(nmount(vec, count, flags));
+        unlock_iovec(vec, arg1, count, 0);
+    } else {
         return -TARGET_EFAULT;
     }
-    ret = get_errno(nmount(vec, count, flags));
-    unlock_iovec(vec, arg1, count, 0);
 
     return ret;
 }
