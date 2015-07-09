@@ -65,9 +65,8 @@ static inline abi_long do_freebsd_sendmsg(int fd, abi_ulong target_msg,
     }
 
     count = tswapal(msgp->msg_iovlen);
-    vec = alloca(count * sizeof(struct iovec));
     target_vec = tswapal(msgp->msg_iov);
-    lock_iovec(VERIFY_READ, vec, target_vec, count, 1);
+    vec = lock_iovec(VERIFY_READ, target_vec, count, 1);
     msg.msg_iovlen = count;
     msg.msg_iov = vec;
 
@@ -116,9 +115,8 @@ static inline abi_long do_freebsd_recvmsg(int fd, abi_ulong target_msg,
     msg.msg_flags = tswap32(msgp->msg_flags);
 
     count = tswapal(msgp->msg_iovlen);
-    vec = alloca(count * sizeof(struct iovec));
     target_vec = tswapal(msgp->msg_iov);
-    lock_iovec(VERIFY_WRITE, vec, target_vec, count, 0);
+    vec = lock_iovec(VERIFY_WRITE, target_vec, count, 0);
     msg.msg_iovlen = count;
     msg.msg_iov = vec;
 
