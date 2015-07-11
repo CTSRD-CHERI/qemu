@@ -193,4 +193,60 @@ struct target_ieee80211req {
 
 #define TARGET_SIOCG80211 TARGET_IOWR('i', 235, struct target_ieee80211req)
 
+/* net/if_lagg.h */
+struct target_lacp_opreq {
+    uint16_t        actor_prio;
+    uint8_t         actor_mac[ETHER_ADDR_LEN];
+    uint16_t        actor_key;
+    uint16_t        actor_portprio;
+    uint16_t        actor_portno;
+    uint8_t         actor_state;
+    uint16_t        partner_prio;
+    uint8_t         partner_mac[ETHER_ADDR_LEN];
+    uint16_t        partner_key;
+    uint16_t        partner_portprio;
+    uint16_t        partner_portno;
+    uint8_t         partner_state;
+};
+
+struct target_lagg_reqport {
+    char            rp_ifname[TARGET_IFNAMSIZ];
+    char            rp_portname[TARGET_IFNAMSIZ];
+    u_int32_t       rp_prio;
+    u_int32_t       rp_flags;
+    union {
+        struct target_lacp_opreq rpsc_lacp;
+    } rp_psc;
+};
+#define TARGET_SIOCGLAGGPORT TARGET_IOWR('i', 140, struct target_lagg_reqport)
+
+struct target_lagg_reqall {
+    char            ra_ifname[TARGET_IFNAMSIZ];
+    uint32_t        ra_proto;
+
+    abi_ulong       ra_size;
+    abi_ulong       ra_port;
+    int32_t         ra_ports;
+    union {
+        struct target_lacp_opreq rpsc_lacp;
+    } ra_psc;
+};
+#define TARGET_SIOCGLAGG TARGET_IOWR('i', 143, struct target_lagg_reqall)
+
+struct target_lagg_reqflags {
+    char            rf_ifname[TARGET_IFNAMSIZ];
+    uint32_t        rf_flags;
+};
+#define TARGET_SIOCGLAGGFLAGS TARGET_IOWR('i', 145, struct target_lagg_reqflags)
+
+struct target_lagg_reqopts {
+    char            ro_ifname[IFNAMSIZ];
+    int32_t         ro_opts;
+    uint32_t        ro_count;
+    uint32_t        ro_active;
+    uint32_t        ro_flapping;
+    int32_t         ro_flowid_shift;
+};
+#define TARGET_SIOCGLAGGOPTS TARGET_IOWR('i', 152, struct target_lagg_reqopts)
+
 #endif /* _OS_IOCTL_SOCKIO_H_ */
