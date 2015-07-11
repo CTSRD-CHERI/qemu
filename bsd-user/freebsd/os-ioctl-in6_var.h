@@ -1,7 +1,8 @@
 /*
  *  FreeBSD in6 definitions for ioctl(2) emulation
  *
- *  Copyright (c) 2014 Stacey D. Son
+ *  Copyright (c) 2014-15 Stacey D. Son
+ *  All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by

@@ -40,11 +40,18 @@
 #include <net/if_types.h>
 #include <net/route.h>
 #include <net/if_dl.h>
+#include <net/if_gif.h>
+#include <net/if_gre.h>
 #include <net/if_media.h>
+#include <netpfil/pf/pf.h>
+#include <net/pfvar.h>
+#include <net/if_pfsync.h>
 #include <net/ethernet.h>
-#include <netinet/in.h>
 #include <netinet/icmp6.h>
+#include <netinet/in.h>
+#include <netinet/ip_carp.h>
 #include <netinet6/in6_var.h>
+#include <net80211/ieee80211_ioctl.h>
 
 #include <stdio.h>
 
