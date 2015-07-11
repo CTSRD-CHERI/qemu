@@ -172,6 +172,7 @@ struct target_ifmediareq {
 };
 
 #define TARGET_SIOCGIFMEDIA  TARGET_IOWR('i', 56, struct target_ifmediareq)
+#define TARGET_SIOCGIFXMEDIA  TARGET_IOWR('i', 139, struct target_ifmediareq)
 
 #define TARGET_IFSTATMAX    800
 struct target_ifstat {
