@@ -140,6 +140,34 @@ struct target_in6_ifreq {
 	} ifr_ifru;
 };
 
+/* netinet6/nd6.h */
+struct target_nd_ifinfo {
+        uint32_t linkmtu;
+        uint32_t maxmtu;
+        uint32_t basereachable;
+        uint32_t reachable;
+        uint32_t retrans;
+        uint32_t flags;
+        int32_t  recalctm;
+        uint8_t  chlim;
+        uint8_t  initialized;
+        uint8_t  randomseed0[8];
+        uint8_t  randomseed1[8];
+        uint8_t  randomid[8];
+};
+
+/* netinet6/nd6.h */
+struct target_in6_ndireq {
+    char ifname[TARGET_IFNAMSIZ];
+    struct target_nd_ifinfo ndi;
+};
+
+struct  target_in6_ndifreq {
+    char ifname[IFNAMSIZ];
+    abi_ulong ifindex;
+};
+
+
 #define	TARGET_SIOCGIFDSTADDR_IN6	TARGET_IOWR('i', 34, struct target_in6_ifreq)
 #define	TARGET_SIOCGIFNETMASK_IN6	TARGET_IOWR('i', 37, struct target_in6_ifreq)
 
@@ -157,10 +185,11 @@ struct target_in6_ifreq {
 
 /* NOT YET
 #define	TARGET_SIOCGDRLST_IN6		TARGET_IOWR('i', 74, struct target_in6_drlist)
+*/
 
 #define	TARGET_SIOCGIFINFO_IN6		TARGET_IOWR('i', 108, struct target_in6_ndireq)
 #define	TARGET_SIOCSIFINFO_IN6		TARGET_IOWR('i', 109, struct target_in6_ndireq)
-*/
+
 #define	TARGET_SIOCSNDFLUSH_IN6		TARGET_IOWR('i', 77, struct target_in6_ifreq)
 /* NOT YET
 #define	TARGET_SIOCGNBRINFO_IN6		TARGET_IOWR('i', 78, struct target_in6_nbrinfo)
@@ -173,12 +202,10 @@ struct target_in6_ifreq {
 #define	TARGET_SIOCGIFSTAT_IN6		TARGET_IOWR('i', 83, struct target_in6_ifreq)
 #define	TARGET_SIOCGIFSTAT_ICMP6	TARGET_IOWR('i', 84, struct target_in6_ifreq)
         
-/* NOT YET
 #define	TARGET_SIOCSDEFIFACE_IN6	TARGET_IOWR('i', 85, struct target_in6_ndifreq)
 #define	TARGET_SIOCGDEFIFACE_IN6	TARGET_IOWR('i', 86, struct target_in6_ndifreq)
 
 #define	TARGET_SIOCSIFINFO_FLAGS	TARGET_IOWR('i', 87, struct target_in6_ndireq)
-*/
 
 #define	TARGET_SIOCSSCOPE6		TARGET_IOW('i', 88, struct target_in6_ifreq)
 #define	TARGET_SIOCGSCOPE6		TARGET_IOWR('i', 89, struct target_in6_ifreq)
