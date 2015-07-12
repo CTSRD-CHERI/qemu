@@ -155,7 +155,7 @@ struct target_ifgroupreq {
     uint32_t        ifgr_len;
     union {
         char        ifgru_group[TARGET_IFNAMSIZ];
-        struct target_ifg_req *ifgru_groups;
+	abi_ulong   ifgru_groups;
     } ifgr_ifgru;
 };
 

@@ -53,6 +53,7 @@
 #include <netinet/in.h>
 #include <netinet/ip_carp.h>
 #include <netinet6/in6_var.h>
+#include <netinet6/nd6.h>
 #include <net80211/ieee80211_ioctl.h>
 
 #include <stdio.h>
@@ -332,6 +333,9 @@ static abi_long do_ioctl_unsupported(__unused const IOCTLEntry *ie,
 		__unused uint8_t *buf_temp,  __unused int fd,
 		__unused abi_long cmd, __unused abi_long arg);
 
+static abi_long do_ioctl_in6_ifreq_sockaddr_int(const IOCTLEntry *ie,
+        uint8_t *buf_temp, int fd, abi_long cmd, abi_long arg);
+
 static IOCTLEntry ioctl_entries[] = {
 #define IOC_    0x0000
 #define IOC_R   0x0001
@@ -374,6 +378,49 @@ static abi_long do_ioctl_unsupported(__unused const IOCTLEntry *ie,
 {
 
 	return -TARGET_ENXIO;
+}
+
+static void target_to_host_sockaddr_in6(struct sockaddr_in6 *hsa_in6,
+        struct target_sockaddr_in6 *tsa_in6)
+{
+
+    __get_user(hsa_in6->sin6_len, &tsa_in6->sin6_len);
+    __get_user(hsa_in6->sin6_family, &tsa_in6->sin6_family);
+    __get_user(hsa_in6->sin6_port, &tsa_in6->sin6_port);
+    __get_user(hsa_in6->sin6_flowinfo, &tsa_in6->sin6_flowinfo);
+    memcpy(&hsa_in6->sin6_addr, &tsa_in6->sin6_addr, 16);
+    __get_user(hsa_in6->sin6_scope_id, &tsa_in6->sin6_scope_id);
+}
+
+/*
+ * For ioctl()'s such as SIOCGIFAFLAG_IN6 and SIOCGIFALIFETIME_IN6 that
+ * passes a struct sockaddr_in6 in and gets an int out using
+ * struct in6_ifreq.
+ */
+static abi_long do_ioctl_in6_ifreq_sockaddr_int(const IOCTLEntry *ie,
+        uint8_t *buf_temp, int fd, abi_long cmd, abi_long arg)
+{
+    abi_long ret;
+    struct target_in6_ifreq *tin6ifreq;
+    struct target_sockaddr_in6 *tsa_in6;
+    struct in6_ifreq hin6ifreq;
+    struct sockaddr_in6 *hsa_in6 = &hin6ifreq.ifr_ifru.ifru_addr;
+
+    tin6ifreq = lock_user(VERIFY_WRITE, arg, sizeof (*tin6ifreq), 0);
+    if (tin6ifreq == NULL)
+        return -TARGET_EFAULT;
+    memcpy(hin6ifreq.ifr_name, tin6ifreq->ifr_name, IFNAMSIZ);
+    tsa_in6 = &tin6ifreq->ifr_ifru.ifru_addr;
+    target_to_host_sockaddr_in6(hsa_in6, tsa_in6);
+
+    ret = get_errno(ioctl(fd, ie->host_cmd, &hin6ifreq));
+    if (!is_error(ret)) {
+        put_user_s32(hin6ifreq.ifr_ifru.ifru_flags6,
+                arg + offsetof(struct target_in6_ifreq, ifr_ifru.ifru_flags6));
+    }
+    unlock_user(tin6ifreq, arg, 1);
+
+    return ret;
 }
 
 abi_long do_bsd_ioctl(int fd, abi_long cmd, abi_long arg)
