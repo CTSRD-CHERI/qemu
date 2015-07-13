@@ -304,10 +304,10 @@ abi_long freebsd_umtx_mutex_wake2(abi_ulong obj, uint32_t val);
 #if __FreeBSD_version > 1100000
 abi_long freebsd_umtx_sem2_wait(abi_ulong obj, size_t tsz, void *t);
 abi_long freebsd_umtx_sem2_wake(abi_ulong obj);
-#endif
+#endif /* __FreeBSD_version > 1100000 */
+#endif /* __FreeBSD_version > 900000 */
 abi_long freebsd_umtx_sem_wait(abi_ulong obj, size_t tsz, void *t);
 abi_long freebsd_umtx_sem_wake(abi_ulong obj);
-#endif
 abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         struct timespec *ts, int mode);
 abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id);
