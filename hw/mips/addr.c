@@ -25,7 +25,11 @@
 
 uint64_t cpu_mips_kseg0_to_phys(void *opaque, uint64_t addr)
 {
+#if defined(TARGET_CHERI)
+    return addr & 0xffffffffffll;
+#else
     return addr & 0x1fffffffll;
+#endif
 }
 
 uint64_t cpu_mips_phys_to_kseg0(void *opaque, uint64_t addr)

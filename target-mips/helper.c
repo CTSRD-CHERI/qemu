@@ -121,7 +121,11 @@ static int get_physical_address (CPUMIPSState *env, hwaddr *physical,
 #if defined(TARGET_MIPS64)
     int UX = (env->CP0_Status & (1 << CP0St_UX)) != 0;
     int SX = (env->CP0_Status & (1 << CP0St_SX)) != 0;
+#if defined(TARGET_CHERI)
+    int KX = 1;
+#else
     int KX = (env->CP0_Status & (1 << CP0St_KX)) != 0;
+#endif
 #endif
     int ret = TLBRET_MATCH;
     /* effective address (modified for KVM T&E kernel segments) */
@@ -202,7 +206,11 @@ static int get_physical_address (CPUMIPSState *env, hwaddr *physical,
     } else if (address < (int32_t)KSEG2_BASE) {
         /* kseg1 */
         if (kernel_mode) {
+#if defined(TARGET_CHERI)
+            *physical = address & ~0xFFFFFFFFFF000000ULL;
+#else
             *physical = address - (int32_t)KSEG1_BASE;
+#endif
             *prot = PAGE_READ | PAGE_WRITE;
         } else {
             ret = TLBRET_BADADDR;

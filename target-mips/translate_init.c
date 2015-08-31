@@ -469,7 +469,11 @@ static const mips_def_t mips_defs[] =
 #if defined(TARGET_MIPS64)
     {
         .name = "R4000",
+#if defined(TARGET_CHERI)
+        .CP0_PRid = 0x00008900,
+#else
         .CP0_PRid = 0x00000400,
+#endif
         /* No L2 cache, icache size 8k, dcache size 8k, uncached coherency. */
         .CP0_Config0 = (1 << 17) | (0x1 << 9) | (0x1 << 6) | (0x2 << CP0C0_K0),
         /* Note: Config1 is only used internally, the R4000 has only Config0. */
@@ -482,7 +486,11 @@ static const mips_def_t mips_defs[] =
         /* The R4000 has a full 64bit FPU but doesn't use the fcr0 bits. */
         .CP1_fcr0 = (0x5 << FCR0_PRID) | (0x0 << FCR0_REV),
         .SEGBITS = 40,
+#if defined(TARGET_CHERI)
+        .PABITS = 40,
+#else
         .PABITS = 36,
+#endif
         .insn_flags = CPU_MIPS3,
         .mmu_type = MMU_TYPE_R4000,
     },
