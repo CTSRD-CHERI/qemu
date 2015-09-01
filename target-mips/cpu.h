@@ -165,6 +165,34 @@ typedef struct mips_def_t mips_def_t;
 #define MIPS_DSP_ACC 4
 #define MIPS_KSCRATCH_NUM 6
 
+#if defined(TARGET_CHERI)
+struct cap_register {
+	uint32_t cr_otype;	/* Object Type, 24 bits */
+	uint32_t cr_perms;	/* Permissions Mask + Sealed bit */
+	uint64_t cr_cursor;	/* offset = cursor - base */
+	uint64_t cr_base;	/* Capability base addr */
+	uint64_t cr_length;	/* Capability length */
+};
+typedef struct cap_register cap_register_t;
+
+#define CAP_SEALED              (1 << 0)
+#define CAP_PERM_GLOBAL         (1 << 1)
+#define CAP_PERM_EXECUTE        (1 << 2)
+#define CAP_PERM_LOAD           (1 << 3)
+#define CAP_PERM_STORE          (1 << 4)
+#define CAP_PERM_LOAD_CAP       (1 << 5)
+#define CAP_PERM_STORE_CAP      (1 << 6)
+#define CAP_PERM_STORE_LOCAL    (1 << 7)
+#define CAP_PERM_SEAL           (1 << 8)
+#define CAP_PERM_SET_TYPE       (1 << 9)
+#define CAP_RESERVED            (1 << 10)
+#define CAP_ACCESS_EPCC         (1 << 11)
+#define CAP_ACCESS_KDC          (1 << 12)
+#define CAP_ACCESS_KCC          (1 << 13)
+#define CAP_ACCESS_KR1C         (1 << 14)
+#define CAP_ACCESS_KR2C         (1 << 15)
+#endif /* TARGET_CHERI */
+
 typedef struct TCState TCState;
 struct TCState {
     target_ulong gpr[32];
@@ -212,6 +240,17 @@ struct TCState {
         MSACSR_FS_MASK)
 
     float_status msa_fp_status;
+#if defined(TARGET_CHERI)
+    cap_register_t PCC;
+    cap_register_t C[32];
+#define CP2CAP_RCC  24  /* Return Code Capability */
+#define CP2CAP_IDC  26  /* Invoked Data Capability */
+#define CP2CAP_KR1C 27  /* Reserved Kernel Cap #1 */
+#define CP2CAP_KR2C 28  /* Reserved Kernel Cap #2 */
+#define CP2CAP_KCC  29  /* Kernel Code Capability */
+#define CP2CAP_KDC  30  /* Kernel Data Capability */
+#define CP2CAP_EPCC 31  /* Exception PC Capability */
+#endif /* TARGET_CHERI */
 };
 
 typedef struct CPUMIPSState CPUMIPSState;
