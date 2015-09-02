@@ -1565,6 +1565,73 @@ void helper_mtc0_framemask(CPUMIPSState *env, target_ulong arg1)
     env->CP0_Framemask = arg1; /* XXX */
 }
 
+#if defined(TARGET_CHERI)
+void helper_mtc0_dumpstate(CPUMIPSState *env, target_ulong arg1)
+{
+    cpu_dump_state(CPU(mips_env_get_cpu(env)),
+            (qemu_logfile == NULL) ? stderr : qemu_logfile,
+            fprintf, CPU_DUMP_CODE);
+}
+
+static const char *cheri_cap_reg[] = {
+  "DDC",  "",   "",      "",     "",    "",    "",    "",  /* C00 - C07 */
+     "",  "",   "",      "",     "",    "",    "",    "",  /* C08 - C15 */
+     "",  "",   "",      "",     "",    "",    "",    "",  /* C16 - C23 */
+  "RCC",  "", "IDC", "KR1C", "KR2C", "KCC", "KDC", "EPCC"  /* C24 - C31 */
+};
+
+
+static void cheri_dump_creg(cap_register_t *crp, const char *name,
+	const char *alias, FILE *f, fprintf_function cpu_fprintf)
+{
+    cpu_fprintf(f, "%s: bas=%016x len=%016x cur=%016x\n", name,
+            crp->cr_base, crp->cr_length, crp->cr_cursor);
+    cpu_fprintf(f, "%-4s off=%016x otype=%06x seal=%d "
+		"perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
+            alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
+            (crp->cr_perms & CAP_SEALED) ? 1 : 0,
+            (crp->cr_perms & CAP_PERM_GLOBAL) ? 'G' : '-',
+            (crp->cr_perms & CAP_PERM_EXECUTE) ? 'e' : '-',
+            (crp->cr_perms & CAP_PERM_LOAD) ? 'l' : '-',
+            (crp->cr_perms & CAP_PERM_STORE) ? 's' : '-',
+            (crp->cr_perms & CAP_PERM_LOAD_CAP) ? 'L' : '-',
+            (crp->cr_perms & CAP_PERM_STORE_CAP) ? 'S' : '-',
+            (crp->cr_perms & CAP_PERM_STORE_LOCAL) ? '&' : '-',
+            (crp->cr_perms & CAP_PERM_SEAL) ? '$' : '-',
+            (crp->cr_perms & CAP_PERM_SET_TYPE) ? 'T' : '-',
+            (crp->cr_perms & CAP_RESERVED) ? 'R' : '-',
+            (crp->cr_perms & CAP_ACCESS_EPCC) ? 'e' : '-',
+            (crp->cr_perms & CAP_ACCESS_KDC) ? 'd' : '-',
+            (crp->cr_perms & CAP_ACCESS_KCC) ? 'c' : '-',
+            (crp->cr_perms & CAP_ACCESS_KR1C) ? '1' : '-',
+            (crp->cr_perms & CAP_ACCESS_KR2C) ? '2' : '-');
+}
+
+static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
+        int flags)
+{
+    MIPSCPU *cpu = MIPS_CPU(cs);
+    CPUMIPSState *env = &cpu->env;
+    int i;
+    char name[4];
+
+    cheri_dump_creg(&env->active_tc.PCC, "PCC", "", f, cpu_fprintf);
+    for (i = 0; i < 32; i++) {
+        snprintf(name, sizeof(name), "C%02d", i);
+        cheri_dump_creg(&env->active_tc.C[i], name, cheri_cap_reg[i], f,
+		cpu_fprintf);
+    }
+    cpu_fprintf(f, "\n");
+}
+
+void helper_mtc2_dumpcstate(CPUMIPSState *env, target_ulong arg1)
+{
+    cheri_dump_state(CPU(mips_env_get_cpu(env)),
+            (qemu_logfile == NULL) ? stderr : qemu_logfile,
+            fprintf, CPU_DUMP_CODE);
+}
+#endif /* TARGET_CHERI */
+
 void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
 {
     env->CP0_Debug = (env->CP0_Debug & 0x8C03FC1F) | (arg1 & 0x13300120);
@@ -1572,6 +1639,9 @@ void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
         env->hflags |= MIPS_HFLAG_DM;
     else
         env->hflags &= ~MIPS_HFLAG_DM;
+
+//cpu_loop_exit(CPU(mips_env_get_cpu(env))); /* CHERI: exit simulation */
+//exit(0);
 }
 
 void helper_mttc0_debug(CPUMIPSState *env, target_ulong arg1)

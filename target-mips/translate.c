@@ -6386,7 +6386,9 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         }
        break;
     case 26:
-        /* ignored */
+#if defined(TARGET_CHERI)
+        gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
+#endif
         rn = "ECC";
         break;
     case 27:
@@ -6484,6 +6486,38 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
 cp0_unimplemented:
     LOG_DISAS("mtc0 %s (reg %d sel %d)\n", rn, reg, sel);
 }
+
+#if defined(TARGET_CHERI)
+static void gen_mtc2(DisasContext *ctx, TCGv arg, int reg, int sel)
+{
+    const char *rn = "invalid";
+
+    switch (reg) {
+    case 0:
+        switch (sel) {
+        case 6:
+            gen_helper_mtc2_dumpcstate(cpu_env, arg);
+            rn = "capdump";
+            break;
+        default:
+            goto cp2_unimplemented;
+        }
+    default:
+        goto cp2_unimplemented;
+    }
+    (void)rn; /* avoid a compiler warning */
+    LOG_DISAS("mtc2 %s (reg %d sel %d)\n", rn, reg, sel);
+    /* For simplicity assume that all writes can cause interrupts.  */
+    if (ctx->tb->cflags & CF_USE_ICOUNT) {
+        gen_io_end();
+        ctx->bstate = BS_STOP;
+    }
+    return;
+
+cp2_unimplemented:
+    LOG_DISAS("mtc2 %s (reg %d sel %d)\n", rn, reg, sel);
+}
+#endif /* TARGET_CHERI */
 
 #if defined(TARGET_MIPS64)
 static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
@@ -7628,7 +7662,9 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         }
         break;
     case 26:
-        /* ignored */
+#if defined(TARGET_CHERI)
+        gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
+#endif
         rn = "ECC";
         break;
     case 27:
@@ -8820,6 +8856,35 @@ static void gen_cp1 (DisasContext *ctx, uint32_t opc, int rt, int fs)
  out:
     tcg_temp_free(t0);
 }
+
+#if defined(TARGET_CHERI)
+static void gen_cp2 (DisasContext *ctx, uint32_t opc, int rt, int rd)
+{
+    const char *opn = "cp2 move";
+
+    switch (opc) {
+    case OPC_MTC2:
+        {
+            TCGv t0 = tcg_temp_new();
+
+            gen_load_gpr(t0, rt);
+            gen_mtc2(ctx, t0, rd, ctx->opcode & 0x7);
+            tcg_temp_free(t0);
+        }
+        opn = "mtc2";
+        break;
+    default:
+        MIPS_INVAL(opn);
+        generate_exception (ctx, EXCP_RI);
+        goto out;
+    }
+    (void)opn; /* avoid a compiler warning */
+    MIPS_DEBUG("%s %s %d", opn, regnames[rt], rd);
+
+ out:
+    return;
+}
+#endif /* TARGET_CHERI */
 
 static void gen_movci (DisasContext *ctx, int rd, int rs, int cc, int tf)
 {
@@ -20007,11 +20072,40 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
     case OPC_CP2:
+#if defined(TARGET_CHERI)
+        op1 = MASK_CP2(ctx->opcode);
+
+        switch (op1) {
+        case OPC_MFHC2:
+        case OPC_MTHC2:
+        case OPC_MFC2:
+        case OPC_CFC2:
+        case OPC_MTC2:
+        case OPC_CTC2:
+            // check_cp2_enabled(ctx);
+            gen_cp2(ctx, op1, rt, rd);
+            break;
+#if defined(TARGET_MIPS64)
+        case OPC_DMFC1:
+        case OPC_DMTC1:
+            // check_cp2_enabled(ctx);
+            check_mips_64(ctx);
+            gen_cp2(ctx, op1, rt, rd);
+            break;
+#endif
+        default:
+            check_insn(ctx, INSN_LOONGSON2F);
+            /* Note that these instructions use different fields.  */
+            gen_loongson_multimedia(ctx, sa, rd, rt);
+            break;
+        }
+        break;
+#else /* ! TARGET_CHERI */
         check_insn(ctx, INSN_LOONGSON2F);
         /* Note that these instructions use different fields.  */
         gen_loongson_multimedia(ctx, sa, rd, rt);
         break;
-
+#endif /* ! TARGET_CHERI */
     case OPC_CP3:
         check_insn_opc_removed(ctx, ISA_MIPS32R6);
         if (ctx->CP0_Config1 & (1 << CP0C1_FP)) {

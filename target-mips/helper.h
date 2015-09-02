@@ -155,6 +155,11 @@ DEF_HELPER_2(mtc0_datalo, void, env, tl)
 DEF_HELPER_2(mtc0_taghi, void, env, tl)
 DEF_HELPER_2(mtc0_datahi, void, env, tl)
 
+#if defined(TARGET_CHERI)
+DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
+DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
+#endif
+
 #if defined(TARGET_MIPS64)
 DEF_HELPER_2(dmtc0_entrylo0, void, env, i64)
 DEF_HELPER_2(dmtc0_entrylo1, void, env, i64)
