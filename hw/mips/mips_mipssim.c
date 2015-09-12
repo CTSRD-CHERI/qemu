@@ -170,6 +170,12 @@ mips_mipssim_init(MachineState *machine)
     reset_info->vector = env->active_tc.PC;
     qemu_register_reset(main_cpu_reset, reset_info);
 
+#if defined(CONFIG_CHERI)
+    if (machine->breakpoint)
+        cpu_breakpoint_insert((CPUState *)cpu, machine->breakpoint, BP_GDB,
+                NULL);
+#endif
+
     /* Allocate RAM. */
     memory_region_allocate_system_memory(ram, NULL, "mips_mipssim.ram",
                                          ram_size);

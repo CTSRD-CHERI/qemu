@@ -2978,6 +2978,9 @@ int main(int argc, char **argv, char **envp)
     FILE *vmstate_dump_file = NULL;
     Error *main_loop_err = NULL;
     Error *err = NULL;
+#if defined(CONFIG_CHERI)
+    uint64_t cl_breakpoint = 0L;
+#endif
 
     qemu_init_cpu_loop();
     qemu_mutex_lock_iothread();
@@ -3854,6 +3857,11 @@ int main(int argc, char **argv, char **envp)
                     tcg_tb_size = 0;
                 }
                 break;
+#if defined(CONFIG_CHERI)
+            case QEMU_OPTION_breakpoint:
+                cl_breakpoint = strtoull(optarg, NULL, 0);
+                break;
+#endif /* CONFIG_CHERI */
             case QEMU_OPTION_icount:
                 icount_opts = qemu_opts_parse_noisily(qemu_find_opts("icount"),
                                                       optarg, true);
@@ -4506,6 +4514,9 @@ int main(int argc, char **argv, char **envp)
     current_machine->ram_slots = ram_slots;
     current_machine->boot_order = boot_order;
     current_machine->cpu_model = cpu_model;
+#if defined(CONFIG_CHERI)
+    current_machine->breakpoint = cl_breakpoint;
+#endif
 
     machine_class->init(current_machine);
 

@@ -3269,6 +3269,17 @@ STEXI
 Set TB size.
 ETEXI
 
+#if defined(CONFIG_CHERI)
+DEF("bp", HAS_ARG, QEMU_OPTION_breakpoint, \
+    "-bp <addr>      set breakpoint at <addr>\n", QEMU_ARCH_ALL)
+STEXI
+@item -bp @var{addr}
+@findex -bp
+Set GDB breakpoint at addr.
+ETEXI
+#endif
+
+
 DEF("incoming", HAS_ARG, QEMU_OPTION_incoming, \
     "-incoming tcp:[host]:port[,to=maxport][,ipv4][,ipv6]\n" \
     "-incoming rdma:host:port[,ipv4][,ipv6]\n" \

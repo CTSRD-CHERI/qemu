@@ -5341,6 +5341,7 @@ case "$target_name" in
     TARGET_BASE_ARCH=mips
     echo "TARGET_ABI_MIPSN64=y" >> $config_target_mak
     echo "TARGET_CHERI=y" >> $config_target_mak
+    echo "CONFIG_CHERI=y" >> $config_host_mak
   ;;
   moxie)
   ;;

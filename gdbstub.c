@@ -38,6 +38,7 @@
 #define MAX_PACKET_LENGTH 4096
 
 #include "cpu.h"
+#include "qemu/error-report.h"
 #include "qemu/sockets.h"
 #include "sysemu/kvm.h"
 #include "exec/semihost.h"
@@ -1215,8 +1216,11 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
 
 void gdb_set_stop_cpu(CPUState *cpu)
 {
-    if (!gdbserver_state)
-        exit(0);
+    if (!gdbserver_state) {
+        error_report("No debugger is attached");  /* XXX should drop into
+                                                     monitor? */
+        exit(-1);
+    }
     gdbserver_state->c_cpu = cpu;
     gdbserver_state->g_cpu = cpu;
 }
