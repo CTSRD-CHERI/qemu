@@ -175,22 +175,29 @@ struct cap_register {
 };
 typedef struct cap_register cap_register_t;
 
-#define CAP_SEALED              (1 << 0)
-#define CAP_PERM_GLOBAL         (1 << 1)
-#define CAP_PERM_EXECUTE        (1 << 2)
-#define CAP_PERM_LOAD           (1 << 3)
-#define CAP_PERM_STORE          (1 << 4)
-#define CAP_PERM_LOAD_CAP       (1 << 5)
-#define CAP_PERM_STORE_CAP      (1 << 6)
-#define CAP_PERM_STORE_LOCAL    (1 << 7)
-#define CAP_PERM_SEAL           (1 << 8)
-#define CAP_PERM_SET_TYPE       (1 << 9)
-#define CAP_RESERVED            (1 << 10)
-#define CAP_ACCESS_EPCC         (1 << 11)
-#define CAP_ACCESS_KDC          (1 << 12)
-#define CAP_ACCESS_KCC          (1 << 13)
-#define CAP_ACCESS_KR1C         (1 << 14)
-#define CAP_ACCESS_KR2C         (1 << 15)
+#define CAP_PERM_GLOBAL         (1 << 0)
+#define CAP_PERM_EXECUTE        (1 << 1)
+#define CAP_PERM_LOAD           (1 << 2)
+#define CAP_PERM_STORE          (1 << 3)
+#define CAP_PERM_LOAD_CAP       (1 << 4)
+#define CAP_PERM_STORE_CAP      (1 << 5)
+#define CAP_PERM_STORE_LOCAL    (1 << 6)
+#define CAP_PERM_SEAL           (1 << 7)
+#define CAP_RESERVED1           (1 << 8)
+#define CAP_RESERVED2           (1 << 9)
+#define CAP_ACCESS_EPCC         (1 << 10)
+#define CAP_ACCESS_KDC          (1 << 11)
+#define CAP_ACCESS_KCC          (1 << 12)
+#define CAP_ACCESS_KR1C         (1 << 13)
+#define CAP_ACCESS_KR2C         (1 << 14)
+#define CAP_SEALED              (1 << 31)
+#define CAP_ALL_PERMS           (CAP_PERM_GLOBAL | CAP_PERM_EXECUTE |       \
+                                 CAP_PERM_LOAD | CAP_PERM_STORE |           \
+                                 CAP_PERM_LOAD_CAP | CAP_PERM_STORE_CAP |   \
+                                 CAP_PERM_STORE_LOCAL | CAP_PERM_SEAL |     \
+                                 CAP_ACCESS_EPCC | CAP_ACCESS_KDC |         \
+                                 CAP_ACCESS_KDC | CAP_ACCESS_KCC |          \
+                                 CAP_ACCESS_KR1C | CAP_ACCESS_KR2C)
 #endif /* TARGET_CHERI */
 
 typedef struct TCState TCState;
@@ -242,7 +249,9 @@ struct TCState {
     float_status msa_fp_status;
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
+    uint8_t        PCC_Tag;
     cap_register_t C[32];
+    uint8_t        C_Tag[32];
 #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
 #define CP2CAP_KR1C 27  /* Reserved Kernel Cap #1 */
@@ -622,6 +631,40 @@ struct CPUMIPSState {
     uint32_t CP0_Status_rw_bitmask; /* Read/write bits in CP0_Status */
     uint32_t CP0_TCStatus_rw_bitmask; /* Read/write bits in CP0_TCStatus */
     int insn_flags; /* Supported instruction set */
+
+#if defined(TARGET_CHERI)
+    /*
+     * See section 3.4 of the CHERI Architecture Reference.
+     */
+    uint16_t CP2_CapCause; /* Upper 8 bits exception code; lower reg# */
+#define CP2Ca_NONE          0x00    /* None */
+#define CP2Ca_LENGTH        0x01    /* Length Violation */
+#define CP2Ca_TAG           0x02    /* Tag Violation */
+#define CP2Ca_SEAL          0x03    /* Seal Violation */
+#define CP2Ca_TYPE          0x04    /* Type Violation */
+#define CP2Ca_CALL          0x05    /* Call Trap */
+#define CP2Ca_RETURN        0x06    /* Return Trap */
+#define CP2Ca_UNDERFLOW     0x07    /* Underflow of trusted system stack */
+#define CP2Ca_USRDEFINE     0x08    /* User-defined Permission Violation */
+#define CP2Ca_TLB_STORE     0x09    /* TLB prohibits store capability */
+#define CP2Ca_BOUNDS_REP    0x0A    /* Bounds cannot be represented exactly */
+// 0x0b-0x0f Reserved
+#define CP2Ca_GLOBAL        0x10 /* Global Violation */
+#define CP2Ca_PERM_EXE      0x11 /* Permit_Execute Violation */
+#define CP2Ca_PERM_LD       0x12 /* Permit_Load Violation */
+#define CP2Ca_PERM_ST       0x13 /* Permit_Store Violation */
+#define CP2Ca_PERM_LD_CAP   0x14 /* Permit_Load_Capability Violation */
+#define CP2Ca_PERM_ST_CAP   0x15 /* Permit_Store_Capability Violation */
+#define CP2Ca_PERM_ST_LC_CAP 0x16 /* Permit_Store_Local_Capability Violation */
+#define CP2Ca_PERM_SEAL     0x17 /* Permit_Seal Violation */
+// 0x18-0x19 Reserved
+#define CP2Ca_ACCESS_EPCC   0x1A /* Access_EPCC Violation */
+#define CP2Ca_ACCESS_KDC    0x1B /* Access_KDC Violation */
+#define CP2Ca_ACCESS_KCC    0x1C /* Access_KCC Violation */
+#define CP2Ca_ACCESS_KR1C   0x1D /* Access_KR1C Violation */
+#define CP2Ca_ACCESS_KR2C   0x1E /* Access_KR2C Violation */
+// 0x1f Reserved
+#endif /* TARGET_CHERI */
 
     CPU_COMMON
 
@@ -1086,6 +1129,15 @@ static inline void cpu_mips_store_cause(CPUMIPSState *env, target_ulong val)
         }
     }
 }
-#endif
+
+#if defined(TARGET_CHERI)
+static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
+        uint16_t exc_code)
+{
+
+    env->CP2_CapCause = (exc_code << 8) | (reg_num & 0xff);
+}
+#endif /* TARGET_CHERI */
+#endif /* CONFIG_USER_ONLY */
 
 #endif /* !defined (__MIPS_CPU_H__) */

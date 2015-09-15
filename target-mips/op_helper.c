@@ -1581,13 +1581,16 @@ static const char *cheri_cap_reg[] = {
 };
 
 
-static void cheri_dump_creg(cap_register_t *crp, const char *name,
-	const char *alias, FILE *f, fprintf_function cpu_fprintf)
+static void cheri_dump_creg(uint8_t valid, cap_register_t *crp,
+        const char *name, const char *alias, FILE *f,
+        fprintf_function cpu_fprintf)
 {
-    cpu_fprintf(f, "%s: bas=%016x len=%016x cur=%016x\n", name,
+
+    if (valid) {
+        cpu_fprintf(f, "%s: bas=%016lx len=%016lx cur=%016lx\n", name,
             crp->cr_base, crp->cr_length, crp->cr_cursor);
-    cpu_fprintf(f, "%-4s off=%016x otype=%06x seal=%d "
-		"perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
+        cpu_fprintf(f, "%-4s off=%016lx otype=%06x seal=%d "
+		    "perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
             alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
             (crp->cr_perms & CAP_SEALED) ? 1 : 0,
             (crp->cr_perms & CAP_PERM_GLOBAL) ? 'G' : '-',
@@ -1598,13 +1601,17 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
             (crp->cr_perms & CAP_PERM_STORE_CAP) ? 'S' : '-',
             (crp->cr_perms & CAP_PERM_STORE_LOCAL) ? '&' : '-',
             (crp->cr_perms & CAP_PERM_SEAL) ? '$' : '-',
-            (crp->cr_perms & CAP_PERM_SET_TYPE) ? 'T' : '-',
-            (crp->cr_perms & CAP_RESERVED) ? 'R' : '-',
+            (crp->cr_perms & CAP_RESERVED1) ? 'R' : '-',
+            (crp->cr_perms & CAP_RESERVED2) ? 'R' : '-',
             (crp->cr_perms & CAP_ACCESS_EPCC) ? 'e' : '-',
             (crp->cr_perms & CAP_ACCESS_KDC) ? 'd' : '-',
             (crp->cr_perms & CAP_ACCESS_KCC) ? 'c' : '-',
             (crp->cr_perms & CAP_ACCESS_KR1C) ? '1' : '-',
             (crp->cr_perms & CAP_ACCESS_KR2C) ? '2' : '-');
+    } else {
+        cpu_fprintf(f, "%s: (not valid - tag not set)\n");
+        cpu_fprintf(f, "%-4s\n", alias);
+    }
 }
 
 static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
@@ -1615,11 +1622,12 @@ static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf
     int i;
     char name[4];
 
-    cheri_dump_creg(&env->active_tc.PCC, "PCC", "", f, cpu_fprintf);
+    cheri_dump_creg(env->active_tc.PCC_Tag, &env->active_tc.PCC, "PCC", "", f,
+            cpu_fprintf);
     for (i = 0; i < 32; i++) {
         snprintf(name, sizeof(name), "C%02d", i);
-        cheri_dump_creg(&env->active_tc.C[i], name, cheri_cap_reg[i], f,
-		cpu_fprintf);
+        cheri_dump_creg(env->active_tc.C_Tag[i], &env->active_tc.C[i], name,
+                cheri_cap_reg[i], f, cpu_fprintf);
     }
     cpu_fprintf(f, "\n");
 }
