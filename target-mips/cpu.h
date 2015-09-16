@@ -167,11 +167,12 @@ typedef struct mips_def_t mips_def_t;
 
 #if defined(TARGET_CHERI)
 struct cap_register {
-	uint32_t cr_otype;	/* Object Type, 24 bits */
-	uint32_t cr_perms;	/* Permissions Mask + Sealed bit */
-	uint64_t cr_cursor;	/* offset = cursor - base */
-	uint64_t cr_base;	/* Capability base addr */
-	uint64_t cr_length;	/* Capability length */
+    uint32_t cr_otype;  /* Object Type, 24 bits */
+    uint32_t cr_perms;  /* Permissions Mask + Sealed bit */
+    uint64_t cr_cursor; /* offset = cursor - base */
+    uint64_t cr_base;   /* Capability base addr */
+    uint64_t cr_length; /* Capability length */
+    uint8_t  cr_tag;    /* Tag */
 };
 typedef struct cap_register cap_register_t;
 
@@ -249,9 +250,8 @@ struct TCState {
     float_status msa_fp_status;
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
-    uint8_t        PCC_Tag;
+    cap_register_t EPCC;
     cap_register_t C[32];
-    uint8_t        C_Tag[32];
 #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
 #define CP2CAP_KR1C 27  /* Reserved Kernel Cap #1 */

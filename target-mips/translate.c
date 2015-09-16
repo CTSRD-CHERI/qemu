@@ -1691,6 +1691,42 @@ static void gen_store_fpr64(DisasContext *ctx, TCGv_i64 t, int reg)
     }
 }
 
+#if defined(TARGET_CHERI)
+static inline void generate_ccheck_pc(int64_t pc)
+{
+    TCGv_i64 tpc = tcg_const_i64(pc);
+    gen_helper_ccheck_pc(cpu_env, tpc);
+    tcg_temp_free_i64(tpc);
+}
+
+#define GEN_CAP_CHECK_PC(pc)    generate_ccheck_pc(pc)
+
+static inline void generate_ccheck_store(TCGv addr, int32_t len)
+{
+    TCGv_i32 tlen = tcg_const_i32(len);
+    gen_helper_ccheck_store(cpu_env, addr, tlen);
+    tcg_temp_free_i32(tlen);
+}
+
+#define GEN_CAP_CHECK_STORE(addr, len)  generate_ccheck_store(addr, len)
+
+static inline void generate_ccheck_load(TCGv addr, int32_t len)
+{
+    TCGv_i32 tlen = tcg_const_i32(len);
+    gen_helper_ccheck_load(cpu_env, addr, tlen);
+    tcg_temp_free_i32(tlen);
+}
+
+#define GEN_CAP_CHECK_LOAD(addr, len)  generate_ccheck_load(addr, len)
+
+#else /* ! TARGET_CHERI */
+
+#define GEN_CAP_CHECK_PC(pc)
+#define GEN_CAP_CHECK_STORE(addr, len)
+#define GEN_CAP_CHECK_LOAD(addr, len)
+
+#endif /* ! TARGET_CHERI */
+
 static inline int get_fp_bit (int cc)
 {
     if (cc)
@@ -2122,12 +2158,14 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_LWU:
+        GEN_CAP_CHECK_LOAD(t0, 4);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEUL |
                            ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         opn = "lwu";
         break;
     case OPC_LD:
+        GEN_CAP_CHECK_LOAD(t0, 8);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEQ |
                            ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
@@ -2135,12 +2173,14 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         break;
     case OPC_LLD:
     case R6_OPC_LLD:
+        GEN_CAP_CHECK_LOAD(t0, 8);
         save_cpu_state(ctx, 1);
         op_ld_lld(t0, t0, ctx);
         gen_store_gpr(t0, rt);
         opn = "lld";
         break;
     case OPC_LDL:
+        GEN_CAP_CHECK_LOAD(t0, 8);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -2164,6 +2204,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         opn = "ldl";
         break;
     case OPC_LDR:
+        GEN_CAP_CHECK_LOAD(t0, 8);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -2188,6 +2229,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         opn = "ldr";
         break;
     case OPC_LDPC:
+        GEN_CAP_CHECK_LOAD(t0, 8);
         t1 = tcg_const_tl(pc_relative_pc(ctx));
         gen_op_addr_add(ctx, t0, t0, t1);
         tcg_temp_free(t1);
@@ -2197,6 +2239,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         break;
 #endif
     case OPC_LWPC:
+        GEN_CAP_CHECK_LOAD(t0, 4);
         t1 = tcg_const_tl(pc_relative_pc(ctx));
         gen_op_addr_add(ctx, t0, t0, t1);
         tcg_temp_free(t1);
@@ -2205,34 +2248,40 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         opn = "lwpc";
         break;
     case OPC_LW:
+        GEN_CAP_CHECK_LOAD(t0, 4);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESL |
                            ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         opn = "lw";
         break;
     case OPC_LH:
+        GEN_CAP_CHECK_LOAD(t0, 2);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESW |
                            ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         opn = "lh";
         break;
     case OPC_LHU:
+        GEN_CAP_CHECK_LOAD(t0, 2);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEUW |
                            ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         opn = "lhu";
         break;
     case OPC_LB:
+        GEN_CAP_CHECK_LOAD(t0, 1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_SB);
         gen_store_gpr(t0, rt);
         opn = "lb";
         break;
     case OPC_LBU:
+        GEN_CAP_CHECK_LOAD(t0, 1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_UB);
         gen_store_gpr(t0, rt);
         opn = "lbu";
         break;
     case OPC_LWL:
+        GEN_CAP_CHECK_LOAD(t0, 4);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -2257,6 +2306,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         opn = "lwl";
         break;
     case OPC_LWR:
+        GEN_CAP_CHECK_LOAD(t0, 4);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -2283,6 +2333,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         break;
     case OPC_LL:
     case R6_OPC_LL:
+        GEN_CAP_CHECK_LOAD(t0, 4);
         save_cpu_state(ctx, 1);
         op_ld_ll(t0, t0, ctx);
         gen_store_gpr(t0, rt);
@@ -2307,41 +2358,49 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_SD:
+        GEN_CAP_CHECK_STORE(t0, 8);
         tcg_gen_qemu_st_tl(t1, t0, ctx->mem_idx, MO_TEQ |
                            ctx->default_tcg_memop_mask);
         opn = "sd";
         break;
     case OPC_SDL:
+        GEN_CAP_CHECK_STORE(t0, 8);
         save_cpu_state(ctx, 1);
         gen_helper_0e2i(sdl, t1, t0, ctx->mem_idx);
         opn = "sdl";
         break;
     case OPC_SDR:
+        GEN_CAP_CHECK_STORE(t0, 8);
         save_cpu_state(ctx, 1);
         gen_helper_0e2i(sdr, t1, t0, ctx->mem_idx);
         opn = "sdr";
         break;
 #endif
     case OPC_SW:
+        GEN_CAP_CHECK_STORE(t0, 4);
         tcg_gen_qemu_st_tl(t1, t0, ctx->mem_idx, MO_TEUL |
                            ctx->default_tcg_memop_mask);
         opn = "sw";
         break;
     case OPC_SH:
+        GEN_CAP_CHECK_STORE(t0, 2);
         tcg_gen_qemu_st_tl(t1, t0, ctx->mem_idx, MO_TEUW |
                            ctx->default_tcg_memop_mask);
         opn = "sh";
         break;
     case OPC_SB:
+        GEN_CAP_CHECK_STORE(t0, 1);
         tcg_gen_qemu_st_tl(t1, t0, ctx->mem_idx, MO_8);
         opn = "sb";
         break;
     case OPC_SWL:
+        GEN_CAP_CHECK_STORE(t0, 4);
         save_cpu_state(ctx, 1);
         gen_helper_0e2i(swl, t1, t0, ctx->mem_idx);
         opn = "swl";
         break;
     case OPC_SWR:
+        GEN_CAP_CHECK_STORE(t0, 4);
         save_cpu_state(ctx, 1);
         gen_helper_0e2i(swr, t1, t0, ctx->mem_idx);
         opn = "swr";
@@ -20331,6 +20390,9 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
         if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO))
             gen_io_start();
 
+        /* Generate capabilities check on PC */
+        GEN_CAP_CHECK_PC(ctx.pc);
+
         is_slot = ctx.hflags & MIPS_HFLAG_BMASK;
         if (!(ctx.hflags & MIPS_HFLAG_M16)) {
             ctx.opcode = cpu_ldl_code(env, ctx.pc);
@@ -20811,7 +20873,7 @@ void cpu_state_reset(CPUMIPSState *env)
      * set to zero. length is set to (2^64 - 1). Offset (or cursor)
      * is set to zero (or boot vector address for PCC).
      */
-    env->active_tc.PCC_Tag = 1;
+    env->active_tc.PCC.cr_tag = 1;
     env->active_tc.PCC.cr_perms = CAP_ALL_PERMS;
     env->active_tc.PCC.cr_cursor = (uint64_t)env->active_tc.PC;
     env->active_tc.PCC.cr_base = 0UL;
@@ -20821,7 +20883,7 @@ void cpu_state_reset(CPUMIPSState *env)
         int i;
 
         for (i = 0; i < 32; i++) {
-            env->active_tc.C_Tag[i] = 1;
+            env->active_tc.C[i].cr_tag = 1;
             env->active_tc.C[i].cr_perms = CAP_ALL_PERMS;
             env->active_tc.C[i].cr_cursor = 0UL;
             env->active_tc.C[i].cr_base = 0UL;

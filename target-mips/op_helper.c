@@ -70,6 +70,46 @@ void helper_raise_exception(CPUMIPSState *env, uint32_t exception)
     do_raise_exception(env, exception, 0);
 }
 
+#if defined(TARGET_CHERI)
+/*
+ * See section 4.4 of the CHERI Architecture.
+ */
+static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
+        uint16_t reg)
+{
+    cpu_mips_store_capcause(env, reg, cause);
+    do_raise_exception(env, EXCP_C2E, 0);
+}
+
+static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
+{
+    switch(reg) {
+        case CP2CAP_EPCC:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_EPCC, reg);
+            break;
+        case CP2CAP_KDC:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_KDC, reg);
+            break;
+        case CP2CAP_KCC:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_KCC, reg);
+            break;
+        case CP2CAP_KR1C:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_KR1C, reg);
+            break;
+        case CP2CAP_KR2C:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_KR2C, reg);
+            break;
+        default:
+            break;
+    }
+}
+
+static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause)
+{
+    do_raise_c2_exception(env, cause, 0xff);
+}
+#endif /* TARGET_CHERI */
+
 #if defined(CONFIG_USER_ONLY)
 #define HELPER_LD(name, insn, type)                                     \
 static inline type do_##name(CPUMIPSState *env, target_ulong addr,      \
@@ -1566,6 +1606,84 @@ void helper_mtc0_framemask(CPUMIPSState *env, target_ulong arg1)
 }
 
 #if defined(TARGET_CHERI)
+static inline void check_cap(CPUMIPSState *env, cap_register_t *cr, uint32_t perm,
+        uint64_t addr, uint16_t regnum, uint32_t len)
+{
+    uint16_t cause;
+    /*
+     * See section 3.6 in CHERI Architecture.
+     *
+     * Capability checks (in order of priority):
+     * (1) <ctag> must be set (CP2Ca_TAG Violation).
+     * (2) Seal bit must be unset (CP2Ca_SEAL Violation).
+     * (3) <perm> permission must be set (CP2Ca_PERM_EXE, CP2Ca_PERM_LD,
+     * or CP2Ca_PERM_ST Violation).
+     * (4) <addr> must be within bounds (CP2Ca_LENGTH Violation).
+     */
+    if (!cr->cr_tag) {
+        cause = CP2Ca_TAG;
+        // fprintf(qemu_logfile, "CAP Tag VIOLATION: ");
+        goto do_exception;
+    }
+    if ((cr->cr_perms & (perm | CAP_SEALED)) != perm) {
+        if (cr->cr_perms & CAP_SEALED) {
+            cause = CP2Ca_SEAL;
+            // fprintf(qemu_logfile, "CAP Seal VIOLATION: ");
+            goto do_exception;
+        } else {
+            switch (perm) {
+            case CAP_PERM_EXECUTE:
+                cause = CP2Ca_PERM_EXE;
+                // fprintf(qemu_logfile, "CAP Exe VIOLATION: ");
+                goto do_exception;
+            case CAP_PERM_LOAD:
+                cause = CP2Ca_PERM_LD;
+                // fprintf(qemu_logfile, "CAP LD VIOLATION: ");
+                goto do_exception;
+            case CAP_PERM_STORE:
+                cause = CP2Ca_PERM_ST;
+                // fprintf(qemu_logfile, "CAP ST VIOLATION: ");
+                goto do_exception;
+            default:
+                break;
+            }
+        }
+    }
+    if (addr < cr->cr_base || (addr + len) > (cr->cr_base + cr->cr_length)) {
+        cause = CP2Ca_LENGTH;
+        // fprintf(qemu_logfile, "CAP Len VIOLATION: ");
+        goto do_exception;
+    }
+
+    return;
+
+do_exception:
+    env->CP0_BadVAddr = addr;
+    env->active_tc.EPCC = *cr;
+    do_raise_c2_exception(env, cause, regnum);
+}
+
+void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
+{
+    /* Update the cursor */
+    env->active_tc.PCC.cr_cursor = pc - env->active_tc.PCC.cr_base;
+
+    check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 8);
+    // fprintf(qemu_logfile, "PC:%016lx\n", pc);
+}
+
+void helper_ccheck_store(CPUMIPSState *env, target_ulong addr, uint32_t len)
+{
+    check_cap(env, &env->active_tc.C[0], CAP_PERM_STORE, addr, 0, len);
+    // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
+}
+
+void helper_ccheck_load(CPUMIPSState *env, target_ulong addr, uint32_t len)
+{
+    check_cap(env, &env->active_tc.C[0], CAP_PERM_LOAD, addr, 0, len);
+    // fprintf(qemu_logfile, "LD(%u):%016lx\n", len, addr);
+}
+
 void helper_mtc0_dumpstate(CPUMIPSState *env, target_ulong arg1)
 {
     cpu_dump_state(CPU(mips_env_get_cpu(env)),
@@ -1581,12 +1699,11 @@ static const char *cheri_cap_reg[] = {
 };
 
 
-static void cheri_dump_creg(uint8_t valid, cap_register_t *crp,
-        const char *name, const char *alias, FILE *f,
-        fprintf_function cpu_fprintf)
+static void cheri_dump_creg(cap_register_t *crp, const char *name,
+        const char *alias, FILE *f, fprintf_function cpu_fprintf)
 {
 
-    if (valid) {
+    if (crp->cr_tag) {
         cpu_fprintf(f, "%s: bas=%016lx len=%016lx cur=%016lx\n", name,
             crp->cr_base, crp->cr_length, crp->cr_cursor);
         cpu_fprintf(f, "%-4s off=%016lx otype=%06x seal=%d "
@@ -1622,12 +1739,11 @@ static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf
     int i;
     char name[4];
 
-    cheri_dump_creg(env->active_tc.PCC_Tag, &env->active_tc.PCC, "PCC", "", f,
-            cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.PCC, "PCC", "", f, cpu_fprintf);
     for (i = 0; i < 32; i++) {
         snprintf(name, sizeof(name), "C%02d", i);
-        cheri_dump_creg(env->active_tc.C_Tag[i], &env->active_tc.C[i], name,
-                cheri_cap_reg[i], f, cpu_fprintf);
+        cheri_dump_creg(&env->active_tc.C[i], name, cheri_cap_reg[i], f,
+                cpu_fprintf);
     }
     cpu_fprintf(f, "\n");
 }
