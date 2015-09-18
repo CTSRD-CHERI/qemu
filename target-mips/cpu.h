@@ -169,7 +169,8 @@ typedef struct mips_def_t mips_def_t;
 struct cap_register {
     uint32_t cr_otype;  /* Object Type, 24 bits */
     uint32_t cr_perms;  /* Permissions Mask + Sealed bit */
-    uint64_t cr_cursor; /* offset = cursor - base */
+    //uint64_t cr_cursor; /* offset = cursor - base */
+    uint64_t cr_offset; /* Cappability offset */
     uint64_t cr_base;   /* Capability base addr */
     uint64_t cr_length; /* Capability length */
     uint8_t  cr_tag;    /* Tag */
@@ -180,7 +181,8 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     cp->cr_otype = 0;
     cp->cr_perms = 0;
-    cp->cr_cursor = 0UL;
+    // cp->cr_cursor = 0UL;
+    cp->cr_offset = 0UL;
     cp->cr_base = 0UL;
     cp->cr_length = 0UL;
     cp->cr_tag = 0;

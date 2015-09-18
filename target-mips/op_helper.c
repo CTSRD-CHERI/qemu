@@ -1726,7 +1726,8 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
         *cdp = *cbp;
-        cdp->cr_cursor = rt + cbp->cr_base;
+        // cdp->cr_cursor = rt + cbp->cr_base;
+        cdp->cr_offset = rt;
     }
 }
 
@@ -1782,11 +1783,12 @@ target_ulong helper_cgetoffset(CPUMIPSState *env, uint32_t cb)
      */
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
-        return (target_ulong)0;
     } else {
-        return (target_ulong)(env->active_tc.C[cb].cr_cursor -
-                env->active_tc.C[cb].cr_base);
+        // return (target_ulong)(env->active_tc.C[cb].cr_cursor -
+        //        env->active_tc.C[cb].cr_base);
+        return (target_ulong)env->active_tc.C[cb].cr_offset;
     }
+    return (target_ulong)0;
 }
 
 void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
@@ -1908,12 +1910,13 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (cbp->cr_tag && (cbp->cr_perms & CAP_SEALED) && rt != 0) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
-        uint64_t cb_offset = cbp->cr_cursor - cbp->cr_base;
-        uint64_t cursor = cb_offset + rt + cbp->cr_base;
+        // uint64_t cb_offset = cbp->cr_cursor - cbp->cr_base;
+        // uint64_t cursor = cb_offset + rt + cbp->cr_base;
 
         /* For 128-bit capabilities, must check if representable. */
         *cdp = *cbp;
-        cdp->cr_cursor = cursor;
+        // cdp->cr_cursor = cursor;
+        cdp->cr_offset =  cbp->cr_offset + rt;
     }
 }
 
@@ -1934,6 +1937,8 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = &env->active_tc.C[cd];
     /*
      * CSetLen: Set Length
      */
@@ -1941,15 +1946,15 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception_v(env, cd);
     } else if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
-    } else if (!env->active_tc.C[cb].cr_tag) {
+    } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (env->active_tc.C[cb].cr_perms & CAP_SEALED) {
+    } else if (cbp->cr_perms & CAP_SEALED) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (rt > env->active_tc.C[cb].cr_length) {
+    } else if (rt > cbp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
-       env->active_tc.C[cd] = env->active_tc.C[cb];
-       env->active_tc.C[cd].cr_length = rt;
+        *cdp = *cbp;
+        cdp->cr_length = rt;
     }
 }
 
@@ -1957,6 +1962,8 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = &env->active_tc.C[cd];
     /*
      * CSetOffset: Set cursor to an offset from base
      */
@@ -1964,15 +1971,16 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception_v(env, cd);
     } else if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
-    } else if (env->active_tc.C[cb].cr_tag &&
-            (env->active_tc.C[cb].cr_perms & CAP_SEALED)) {
+    } else if (cbp->cr_tag &&
+            (cbp->cr_perms & CAP_SEALED)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
-        uint64_t rt_cursor = env->active_tc.C[cb].cr_base + rt;
+        // uint64_t rt_cursor = cbp->cr_base + rt;
 
         /* With 128-bit capabilities, must be representable. */
-       env->active_tc.C[cd] = env->active_tc.C[cb];
-       env->active_tc.C[cd].cr_cursor = rt_cursor;
+        *cdp = *cbp;
+        // cdp->cr_cursor = rt_cursor;
+        cdp->cr_offset = rt;
     }
 }
 
@@ -1991,16 +1999,17 @@ target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     } else if (!ctp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, ct);
     } else if (cbp->cr_tag) {
-        /* (cb.base + cb.offset - ct.base) => (cb.cursor - ct.base) */
-        return (target_ulong) cbp->cr_cursor - ctp->cr_base;
+        // return (target_ulong) cbp->cr_cursor - ctp->cr_base;
+        return (target_ulong)(cbp->cr_base + cbp->cr_offset - ctp->cr_base);
     }
     return (target_ulong)0;
 }
 
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
-    /* Update the cursor */
-    env->active_tc.PCC.cr_cursor = pc - env->active_tc.PCC.cr_base;
+    /* Update the offset */
+    // env->active_tc.PCC.cr_cursor = pc - env->active_tc.PCC.cr_base;
+    env->active_tc.PCC.cr_offset = pc;
 
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 8);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
@@ -2039,10 +2048,12 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
 
     if (crp->cr_tag) {
         cpu_fprintf(f, "%s: bas=%016lx len=%016lx cur=%016lx\n", name,
-            crp->cr_base, crp->cr_length, crp->cr_cursor);
+            // crp->cr_base, crp->cr_length, crp->cr_cursor);
+            crp->cr_base, crp->cr_length, (crp->cr_offset + crp->cr_base));
         cpu_fprintf(f, "%-4s off=%016lx otype=%06x seal=%d "
 		    "perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
-            alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
+            // alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
+            alias, crp->cr_offset, crp->cr_otype,
             (crp->cr_perms & CAP_SEALED) ? 1 : 0,
             (crp->cr_perms & CAP_PERM_GLOBAL) ? 'G' : '-',
             (crp->cr_perms & CAP_PERM_EXECUTE) ? 'e' : '-',

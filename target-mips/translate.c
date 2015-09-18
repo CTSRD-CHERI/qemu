@@ -21340,22 +21340,28 @@ void cpu_state_reset(CPUMIPSState *env)
      * set to zero. length is set to (2^64 - 1). Offset (or cursor)
      * is set to zero (or boot vector address for PCC).
      */
-    env->active_tc.PCC.cr_tag = 1;
-    env->active_tc.PCC.cr_perms = CAP_ALL_PERMS;
-    env->active_tc.PCC.cr_cursor = (uint64_t)env->active_tc.PC;
-    env->active_tc.PCC.cr_base = 0UL;
-    env->active_tc.PCC.cr_length = ~0UL;
-    env->active_tc.PCC.cr_otype = 0;
     {
         int i;
+        cap_register_t *crp;
+
+        crp = &env->active_tc.PCC;
+        crp->cr_tag = 1;
+        crp->cr_perms = CAP_ALL_PERMS;
+        // crp->cr_cursor = (uint64_t)env->active_tc.PC;
+        crp->cr_offset = (uint64_t)env->active_tc.PC;
+        crp->cr_base = 0UL;
+        crp->cr_length = ~0UL;
+        crp->cr_otype = 0;
 
         for (i = 0; i < 32; i++) {
-            env->active_tc.C[i].cr_tag = 1;
-            env->active_tc.C[i].cr_perms = CAP_ALL_PERMS;
-            env->active_tc.C[i].cr_cursor = 0UL;
-            env->active_tc.C[i].cr_base = 0UL;
-            env->active_tc.C[i].cr_length = ~0UL;
-            env->active_tc.C[i].cr_otype = 0;
+            crp = &env->active_tc.C[i];
+            crp->cr_tag = 1;
+            crp->cr_perms = CAP_ALL_PERMS;
+            // crp->cr_cursor = 0UL;
+            crp->cr_offset = 0UL;
+            crp->cr_base = 0UL;
+            crp->cr_length = ~0UL;
+            crp->cr_otype = 0;
         }
     }
 #endif /* TARGET_CHERI */
