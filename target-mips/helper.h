@@ -171,6 +171,7 @@ DEF_HELPER_2(cgetperm, tl, env, i32)
 DEF_HELPER_2(cgetsealed, tl, env, i32)
 DEF_HELPER_2(cgettag, tl, env, i32)
 DEF_HELPER_2(cgettype, tl, env, i32)
+DEF_HELPER_2(csetcause, void, env, tl)
 #endif
 
 #if defined(TARGET_MIPS64)

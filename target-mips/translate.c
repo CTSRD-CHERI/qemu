@@ -1872,6 +1872,11 @@ static inline void generate_cgettype(TCGv rd, int32_t cb)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_csetcause(TCGv rd)
+{
+    gen_helper_csetcause(cpu_env, rd);
+}
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -9099,13 +9104,14 @@ static void gen_cp1 (DisasContext *ctx, uint32_t opc, int rt, int fs)
 }
 
 #if defined(TARGET_CHERI)
-static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
+static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
 {
     const char *opn = "cp2inst";
 
     /*
      * r16 = (ctx->opcode >> 16) & 0x1f;
      * r11 = (ctx->opcode >> 11) & 0x1f;
+     * r6  = (ctx->opcode >> 6) & 0x1f;
      */
 
     switch (MASK_CP2(opc)) {
@@ -9167,8 +9173,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
             goto invalid;
 
         case OPC_CSETCAUSE: /* 0x4 */
+            generate_csetcause(cpu_gpr[r6]);
             opn = "csetcause";
-            goto invalid;
+            break;
         case OPC_CCLEARTAG: /* 0x5 */
             opn = "ccleartag";
             goto invalid;
@@ -20533,7 +20540,7 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
 #if defined(TARGET_MIPS64)
         check_mips_64(ctx);
 #endif
-        gen_cp2(ctx, ctx->opcode, rt, rd);
+        gen_cp2(ctx, ctx->opcode, rt, rd, sa);
         break;
 #else /* ! TARGET_CHERI */
         check_insn(ctx, INSN_LOONGSON2F);

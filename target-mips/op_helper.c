@@ -1818,6 +1818,19 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
     }
 }
 
+void helper_csetcause(CPUMIPSState *env, target_ulong rt)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CSetCause: Set the Capability Exception Cause Register
+     */
+    if (!(perms & CAP_ACCESS_EPCC)) {
+        do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_EPCC);
+    } else {
+        env->CP2_CapCause = (uint16_t)(rt & 0xffffUL);
+    }
+}
+
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     /* Update the cursor */
