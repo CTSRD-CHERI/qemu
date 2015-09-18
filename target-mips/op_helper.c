@@ -1844,6 +1844,31 @@ void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+        target_ulong rt)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CIncOffset: Increase Offset
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (cbp->cr_tag && (cbp->cr_perms & CAP_SEALED) && rt != 0) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else {
+        uint64_t cb_offset = cbp->cr_cursor - cbp->cr_base;
+        uint64_t cursor = cb_offset + rt + cbp->cr_base;
+
+        /* For 128-bit capabilities, must check if representable. */
+        *cdp = *cbp;
+        cdp->cr_cursor = cursor;
+    }
+}
+
 void helper_csetcause(CPUMIPSState *env, target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
