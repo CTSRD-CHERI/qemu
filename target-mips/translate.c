@@ -1045,6 +1045,7 @@ enum {
 enum {
     OPC_CANDPERM    = OPC_CMISC | (0x0),
     OPC_CINCBASE    = OPC_CMISC | (0x2),
+    OPC_CSETLEN     = OPC_CMISC | (0x3),
     OPC_CSETCAUSE   = OPC_CMISC | (0x4),
     OPC_CCLEARTAG   = OPC_CMISC | (0x5),
     OPC_MTC2SEL6    = OPC_CMISC | (0x6),
@@ -1875,6 +1876,16 @@ static inline void generate_cgettype(TCGv rd, int32_t cb)
 static inline void generate_csetcause(TCGv rd)
 {
     gen_helper_csetcause(cpu_env, rd);
+}
+
+static inline void generate_csetlen(int32_t cd, int32_t cb, TCGv rd)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tcd = tcg_const_i32(cd);
+
+    gen_helper_csetlen(cpu_env, tcd, tcb, rd);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcb);
 }
 
 static inline void generate_ccheck_pc(int64_t pc)
@@ -9171,7 +9182,10 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         case OPC_CINCBASE: /* 0x2 */
             opn = "cincbase";
             goto invalid;
-
+        case OPC_CSETLEN: /* 0x3 */
+            generate_csetlen(r16, r11, cpu_gpr[r6]);
+            opn = "csetlen";
+            break;
         case OPC_CSETCAUSE: /* 0x4 */
             generate_csetcause(cpu_gpr[r6]);
             opn = "csetcause";
