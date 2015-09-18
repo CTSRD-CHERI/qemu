@@ -1832,6 +1832,13 @@ static inline void generate_cgetsealed(TCGv rd, int32_t cb)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cgettag(TCGv rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    gen_helper_cgettag(rd, cpu_env, tcb);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -9088,8 +9095,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
             opn = "cgetcause";
             goto invalid;
         case OPC_CGETTAG:  /* 0x5 */
+            generate_cgettag(cpu_gpr[r16], r11);
             opn = "cgettag";
-            goto invalid;
+            break;
         case OPC_CGETSEALED: /* 0x6 */
             generate_cgetsealed(cpu_gpr[r16], r11);
             opn = "cgetsealed";

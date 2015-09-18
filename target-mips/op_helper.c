@@ -1711,7 +1711,9 @@ target_ulong helper_cgetperm(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception_v(env, cb);
         return (target_ulong)0;
     } else {
-        return (target_ulong)(perms & ~CAP_SEALED);
+        uint32_t cb_perms = env->active_tc.C[cb].cr_perms;
+
+        return (target_ulong)(cb_perms & ~CAP_SEALED);
     }
 }
 
@@ -1725,7 +1727,23 @@ target_ulong helper_cgetsealed(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception_v(env, cb);
         return (target_ulong)0;
     } else {
-        return (target_ulong)((perms & CAP_SEALED) ? 1 : 0);
+        uint32_t cb_perms = env->active_tc.C[cb].cr_perms;
+
+        return (target_ulong)((cb_perms & CAP_SEALED) ? 1 : 0);
+    }
+}
+
+target_ulong helper_cgettag(CPUMIPSState *env, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CGetTag: Move Tag to a General-Purpose Register
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return (target_ulong)0;
+    } else {
+        return (target_ulong)env->active_tc.C[cb].cr_tag;
     }
 }
 
