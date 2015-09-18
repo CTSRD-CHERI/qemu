@@ -1837,6 +1837,13 @@ static inline void generate_cgetlen(TCGv rd, int32_t cb)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cgetoffset(TCGv rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    gen_helper_cgetoffset(rd, cpu_env, tcb);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_cgetperm(TCGv rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -9223,8 +9230,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
             opn = "csetoffset";
             goto invalid;
         case OPC_CGETOFFSET: /* 0x2 */
+            generate_cgetoffset(cpu_gpr[r16], r11);
             opn = "cgetoffset";
-            goto invalid;
+            break;
         default:
             opn = "coffset";
             goto invalid;
