@@ -164,6 +164,7 @@ DEF_HELPER_3(ccheck_load, void, env, tl, i32)
 
 DEF_HELPER_2(cgetpcc, void, env, i32)
 DEF_HELPER_2(cgetperm, tl, env, i32)
+DEF_HELPER_2(cgetsealed, tl, env, i32)
 #endif
 
 #if defined(TARGET_MIPS64)

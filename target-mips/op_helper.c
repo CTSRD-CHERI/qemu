@@ -1709,9 +1709,23 @@ target_ulong helper_cgetperm(CPUMIPSState *env, uint32_t cb)
      */
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
-        return 0;
+        return (target_ulong)0;
     } else {
-        return (target_ulong)perms;
+        return (target_ulong)(perms & ~CAP_SEALED);
+    }
+}
+
+target_ulong helper_cgetsealed(CPUMIPSState *env, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CGetSealed: Move sealed bit to a General-Purpose Register
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return (target_ulong)0;
+    } else {
+        return (target_ulong)((perms & CAP_SEALED) ? 1 : 0);
     }
 }
 
