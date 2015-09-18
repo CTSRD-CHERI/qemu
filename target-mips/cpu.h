@@ -176,6 +176,18 @@ struct cap_register {
 };
 typedef struct cap_register cap_register_t;
 
+static inline cap_register_t *null_capability(cap_register_t *cp)
+{
+    cp->cr_otype = 0;
+    cp->cr_perms = 0;
+    cp->cr_cursor = 0UL;
+    cp->cr_base = 0UL;
+    cp->cr_length = 0UL;
+    cp->cr_tag = 0;
+
+    return cp;
+}
+
 #define CAP_PERM_GLOBAL         (1 << 0)
 #define CAP_PERM_EXECUTE        (1 << 1)
 #define CAP_PERM_LOAD           (1 << 2)
