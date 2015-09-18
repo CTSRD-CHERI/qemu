@@ -1976,6 +1976,27 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    /*
+     * CToPtr: Capability to Pointer
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else if (!ctp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, ct);
+    } else if (cbp->cr_tag) {
+        /* (cb.base + cb.offset - ct.base) => (cb.cursor - ct.base) */
+        return (target_ulong) cbp->cr_cursor - ctp->cr_base;
+    }
+    return (target_ulong)0;
+}
+
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     /* Update the cursor */

@@ -1938,6 +1938,16 @@ static inline void generate_csetoffset(int32_t cd, int32_t cb, TCGv rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_ctoptr(TCGv rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_ctoptr(rd, cpu_env, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -9297,8 +9307,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         }
         break;
     case OPC_CTOPTR: /* 0x0c */
+        generate_ctoptr(cpu_gpr[r16], r11, r6);
         opn = "ctoptr";
-        goto invalid;
+        break;
     case OPC_COFFSET: /* 0x0d */
         switch(MASK_CAP3(opc)) {
         case OPC_CINCOFFSET: /* 0x0 */
