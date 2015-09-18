@@ -1839,6 +1839,14 @@ static inline void generate_cgettag(TCGv rd, int32_t cb)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cgettype(TCGv rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    gen_helper_cgettype(rd, cpu_env, tcb);
+    tcg_temp_free_i32(tcb);
+}
+
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -9083,8 +9091,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
             opn = "cgetperm";
             break;
         case OPC_CGETTYPE: /* 0x1 */
+            generate_cgettype(cpu_gpr[r16], r11);
             opn = "cgettype";
-            goto invalid;
+            break;
         case OPC_CGETBASE: /* 0x2 */
             opn = "cgetbase";
             goto invalid;
