@@ -1854,6 +1854,29 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+        target_ulong rt)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CSetOffset: Set cursor to an offset from base
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (env->active_tc.C[cb].cr_tag &&
+            (env->active_tc.C[cb].cr_perms & CAP_SEALED)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else {
+        uint64_t rt_cursor = env->active_tc.C[cb].cr_base + rt;
+
+        /* With 128-bit capabilities, must be representable. */
+       env->active_tc.C[cd] = env->active_tc.C[cb];
+       env->active_tc.C[cd].cr_cursor = rt_cursor;
+    }
+}
+
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     /* Update the cursor */

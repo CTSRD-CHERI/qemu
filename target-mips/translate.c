@@ -1878,12 +1878,22 @@ static inline void generate_csetcause(TCGv rd)
     gen_helper_csetcause(cpu_env, rd);
 }
 
-static inline void generate_csetlen(int32_t cd, int32_t cb, TCGv rd)
+static inline void generate_csetlen(int32_t cd, int32_t cb, TCGv rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
 
-    gen_helper_csetlen(cpu_env, tcd, tcb, rd);
+    gen_helper_csetlen(cpu_env, tcd, tcb, rt);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_csetoffset(int32_t cd, int32_t cb, TCGv rt)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tcd = tcg_const_i32(cd);
+
+    gen_helper_csetoffset(cpu_env, tcd, tcb, rt);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
@@ -9248,8 +9258,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "cincoffset";
             goto invalid;
         case OPC_CSETOFFSET: /* 0x1 */
+            generate_csetoffset(r16, r11, cpu_gpr[r6]);
             opn = "csetoffset";
-            goto invalid;
+            break;
         case OPC_CGETOFFSET: /* 0x2 */
             generate_cgetoffset(cpu_gpr[r16], r11);
             opn = "cgetoffset";
