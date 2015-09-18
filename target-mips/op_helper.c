@@ -104,10 +104,12 @@ static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
     }
 }
 
+#if 0
 static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause)
 {
     do_raise_c2_exception(env, cause, 0xff);
 }
+#endif /* 0 */
 #endif /* TARGET_CHERI */
 
 #if defined(CONFIG_USER_ONLY)
@@ -1661,6 +1663,41 @@ do_exception:
     env->CP0_BadVAddr = addr;
     env->active_tc.EPCC = *cr;
     do_raise_c2_exception(env, cause, regnum);
+}
+
+static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
+{
+    /*
+     * Check to see if the capability register is inaccessible.
+     * See Section 4.4 in CHERI Architecture manual.
+     */
+
+    if ((creg == CP2CAP_EPCC && !(perms & CAP_ACCESS_EPCC)) ||
+        (creg == CP2CAP_KDC  && !(perms & CAP_ACCESS_KDC))  ||
+        (creg == CP2CAP_KCC  && !(perms & CAP_ACCESS_KCC))  ||
+        (creg == CP2CAP_KR1C && !(perms & CAP_ACCESS_KR1C)) ||
+        (creg == CP2CAP_KR2C && !(perms & CAP_ACCESS_KR2C))) {
+
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+
+    /*
+     * CGetPCC: Move PCC to capability register
+     * See Chapter 4 in CHERI Architecture manual.
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else {
+        env->active_tc.C[cd] = env->active_tc.PCC;
+        /* Note that the offset(cursor) is updated by ccheck_pcc */
+    }
 }
 
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)

@@ -1811,6 +1811,13 @@ static void gen_store_fpr64(DisasContext *ctx, TCGv_i64 t, int reg)
 }
 
 #if defined(TARGET_CHERI)
+static inline void generate_cgetpcc(int32_t cd)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    gen_helper_cgetpcc(cpu_env, tcd);
+    tcg_temp_free_i32(tcd);
+}
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -9042,6 +9049,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int rt, int rd)
 {
     const char *opn = "cp2inst";
 
+    /*
+     * rt = (ctx->opcode >> 16) & 0x1f;
+     * rd = (ctx->opcode >> 11) & 0x1f;
+     */
+
     switch (MASK_CP2(opc)) {
     case OPC_CGET:  /* 0x00 */
         switch(MASK_CAP3(opc)) {
@@ -9067,8 +9079,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int rt, int rd)
             opn = "cgetsealed";
             goto invalid;
         case OPC_CGETPCC:  /* 0x7 */
+            generate_cgetpcc(rd);
             opn = "cgetpcc";
-            goto invalid;
+            break;
         default:
             opn = "cget";
             goto invalid;

@@ -161,6 +161,8 @@ DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
 DEF_HELPER_2(ccheck_pc, void, env, i64)
 DEF_HELPER_3(ccheck_store, void, env, tl, i32)
 DEF_HELPER_3(ccheck_load, void, env, tl, i32)
+
+DEF_HELPER_2(cgetpcc, void, env, i32)
 #endif
 
 #if defined(TARGET_MIPS64)
