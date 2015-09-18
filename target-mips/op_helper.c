@@ -104,12 +104,10 @@ static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
     }
 }
 
-#if 0
 static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause)
 {
     do_raise_c2_exception(env, cause, 0xff);
 }
-#endif /* 0 */
 #endif /* TARGET_CHERI */
 
 #if defined(CONFIG_USER_ONLY)
@@ -1695,6 +1693,21 @@ target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
         return (target_ulong)0;
     } else {
         return (target_ulong)env->active_tc.C[cb].cr_base;
+    }
+}
+
+target_ulong helper_cgetcause(CPUMIPSState *env)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CGetCause: Move the Capability Exception Cause Register to a
+     * General- Purpose Register
+     */
+    if (!(perms & CAP_ACCESS_EPCC)) {
+        do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_EPCC);
+        return (target_ulong)0;
+    } else {
+        return (target_ulong)env->CP2_CapCause;
     }
 }
 

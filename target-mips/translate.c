@@ -1818,6 +1818,11 @@ static inline void generate_cgetbase(TCGv rd, int32_t cb)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cgetcause(TCGv rd)
+{
+    gen_helper_cgetcause(rd, cpu_env);
+}
+
 static inline void generate_cgetpcc(int32_t cd)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
@@ -9108,8 +9113,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
             opn = "cgetlen";
             goto invalid;
         case OPC_CGETCAUSE: /* 0x4 */
+            generate_cgetcause(cpu_gpr[r16]);
             opn = "cgetcause";
-            goto invalid;
+            break;
         case OPC_CGETTAG:  /* 0x5 */
             generate_cgettag(cpu_gpr[r16], r11);
             opn = "cgettag";
