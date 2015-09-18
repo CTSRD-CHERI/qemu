@@ -1812,6 +1812,16 @@ static void gen_store_fpr64(DisasContext *ctx, TCGv_i64 t, int reg)
 }
 
 #if defined(TARGET_CHERI)
+static inline void generate_candperm(int32_t cd, int32_t cb, TCGv rt)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tcd = tcg_const_i32(cd);
+
+    gen_helper_candperm(cpu_env, tcd, tcb, rt);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_cgetbase(TCGv rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -9207,8 +9217,10 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CMISC: /* 0x04 */
         switch(MASK_CAP3(opc)) {
         case OPC_CANDPERM: /* 0x0 */
+            generate_candperm(r16, r11, cpu_gpr[r6]);
             opn = "candperm";
-            goto invalid;
+            break;
+
         case OPC_CINCBASE: /* 0x2 */
             generate_cincbase(r16, r11, cpu_gpr[r6]);
             opn = "cincbase";

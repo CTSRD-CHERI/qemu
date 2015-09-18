@@ -162,6 +162,7 @@ DEF_HELPER_2(ccheck_pc, void, env, i64)
 DEF_HELPER_3(ccheck_store, void, env, tl, i32)
 DEF_HELPER_3(ccheck_load, void, env, tl, i32)
 
+DEF_HELPER_4(candperm, void, env, i32, i32, tl)
 DEF_HELPER_2(cgetbase, tl, env, i32)
 DEF_HELPER_1(cgetcause, tl, env)
 DEF_HELPER_2(cgetlen, tl, env, i32)

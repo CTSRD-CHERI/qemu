@@ -1682,6 +1682,29 @@ static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
     }
 }
 
+void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+        target_ulong rt)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CAndPerm: Restrict Permissions
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (cbp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else {
+        *cdp = *cbp;
+        cdp->cr_perms = (cbp->cr_perms & (uint32_t)rt) | CAP_SEALED;
+    }
+}
+
 target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
