@@ -1684,6 +1684,20 @@ static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
     }
 }
 
+target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CGetBase: Move Base to a General-Purpose Register
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return (target_ulong)0;
+    } else {
+        return (target_ulong)env->active_tc.C[cb].cr_base;
+    }
+}
+
 void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;

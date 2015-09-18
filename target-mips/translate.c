@@ -1811,6 +1811,13 @@ static void gen_store_fpr64(DisasContext *ctx, TCGv_i64 t, int reg)
 }
 
 #if defined(TARGET_CHERI)
+static inline void generate_cgetbase(TCGv rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    gen_helper_cgetbase(rd, cpu_env, tcb);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_cgetpcc(int32_t cd)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
@@ -1845,7 +1852,6 @@ static inline void generate_cgettype(TCGv rd, int32_t cb)
     gen_helper_cgettype(rd, cpu_env, tcb);
     tcg_temp_free_i32(tcb);
 }
-
 
 static inline void generate_ccheck_pc(int64_t pc)
 {
@@ -9095,8 +9101,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
             opn = "cgettype";
             break;
         case OPC_CGETBASE: /* 0x2 */
+            generate_cgetbase(cpu_gpr[r16], r11);
             opn = "cgetbase";
-            goto invalid;
+            break;
         case OPC_CGETLEN: /* 0x3 */
             opn = "cgetlen";
             goto invalid;
