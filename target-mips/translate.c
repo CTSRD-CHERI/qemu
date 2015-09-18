@@ -1822,6 +1822,16 @@ static inline void generate_candperm(int32_t cd, int32_t cb, TCGv rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_ccleartag(int32_t cd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tcd = tcg_const_i32(cd);
+
+    gen_helper_ccleartag(cpu_env, tcd, tcb);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_cfromptr(int32_t cd, int32_t cb, TCGv rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -9254,8 +9264,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "csetcause";
             break;
         case OPC_CCLEARTAG: /* 0x5 */
+            generate_ccleartag(r16, r11);
             opn = "ccleartag";
-            goto invalid;
+            break;
         case OPC_MTC2SEL6: /* 0x6 */
             {
                 TCGv t0 = tcg_temp_new();

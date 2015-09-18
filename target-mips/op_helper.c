@@ -1705,6 +1705,24 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CClearTag: Clear the tag bit
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else {
+        *cdp = *cbp;
+        cdp->cr_tag = 0;
+    }
+}
+
 void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
