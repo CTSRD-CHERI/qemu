@@ -1700,6 +1700,21 @@ void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
     }
 }
 
+target_ulong helper_cgetperm(CPUMIPSState *env, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CGetPerm: Move Memory Permissions Field to a General-Purpose
+     * Register
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return 0;
+    } else {
+        return (target_ulong)perms;
+    }
+}
+
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     /* Update the cursor */

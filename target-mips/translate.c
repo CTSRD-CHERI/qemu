@@ -1818,6 +1818,13 @@ static inline void generate_cgetpcc(int32_t cd)
     tcg_temp_free_i32(tcd);
 }
 
+static inline void generate_cgetperm(TCGv rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    gen_helper_cgetperm(rd, cpu_env, tcb);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -9045,21 +9052,22 @@ static void gen_cp1 (DisasContext *ctx, uint32_t opc, int rt, int fs)
 }
 
 #if defined(TARGET_CHERI)
-static void gen_cp2 (DisasContext *ctx, uint32_t opc, int rt, int rd)
+static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
 {
     const char *opn = "cp2inst";
 
     /*
-     * rt = (ctx->opcode >> 16) & 0x1f;
-     * rd = (ctx->opcode >> 11) & 0x1f;
+     * r16 = (ctx->opcode >> 16) & 0x1f;
+     * r11 = (ctx->opcode >> 11) & 0x1f;
      */
 
     switch (MASK_CP2(opc)) {
     case OPC_CGET:  /* 0x00 */
         switch(MASK_CAP3(opc)) {
         case OPC_CGETPERM: /* 0x0 */
+            generate_cgetperm(cpu_gpr[r16], r11);
             opn = "cgetperm";
-            goto invalid;
+            break;
         case OPC_CGETTYPE: /* 0x1 */
             opn = "cgettype";
             goto invalid;
@@ -9079,7 +9087,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int rt, int rd)
             opn = "cgetsealed";
             goto invalid;
         case OPC_CGETPCC:  /* 0x7 */
-            generate_cgetpcc(rd);
+            generate_cgetpcc(r11);
             opn = "cgetpcc";
             break;
         default:
@@ -9115,8 +9123,8 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int rt, int rd)
             {
                 TCGv t0 = tcg_temp_new();
 
-                gen_load_gpr(t0, rt);
-                gen_mtc2(ctx, t0, rd, ctx->opcode & 0x7);
+                gen_load_gpr(t0, r16);
+                gen_mtc2(ctx, t0, r11, ctx->opcode & 0x7);
                 tcg_temp_free(t0);
             }
             opn = "mtc2";
@@ -9252,7 +9260,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int rt, int rd)
         goto invalid;
     }
     (void)opn; /* avoid a compiler warning */
-    MIPS_DEBUG("%s %s %d", opn, regnames[rt], rd);
+    MIPS_DEBUG("%s %s %d", opn, regnames[r16], r11);
     return;
 
 invalid:
