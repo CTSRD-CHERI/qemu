@@ -1711,6 +1711,21 @@ target_ulong helper_cgetcause(CPUMIPSState *env)
     }
 }
 
+target_ulong helper_cgetlen(CPUMIPSState *env, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CGetLen: Move Length to a General-Purpose Register
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return (target_ulong)0;
+    } else {
+        /* For 128-bit Capabilities we must check len >= 2^64 */
+        return (target_ulong)env->active_tc.C[cb].cr_length;
+    }
+}
+
 void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;

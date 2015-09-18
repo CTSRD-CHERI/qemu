@@ -1830,6 +1830,13 @@ static inline void generate_cgetpcc(int32_t cd)
     tcg_temp_free_i32(tcd);
 }
 
+static inline void generate_cgetlen(TCGv rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    gen_helper_cgetlen(rd, cpu_env, tcb);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_cgetperm(TCGv rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -9110,8 +9117,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11)
             opn = "cgetbase";
             break;
         case OPC_CGETLEN: /* 0x3 */
+            generate_cgetlen(cpu_gpr[r16], r11);
             opn = "cgetlen";
-            goto invalid;
+            break;
         case OPC_CGETCAUSE: /* 0x4 */
             generate_cgetcause(cpu_gpr[r16]);
             opn = "cgetcause";
