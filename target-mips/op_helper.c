@@ -1818,6 +1818,32 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
     }
 }
 
+void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+        target_ulong rt)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CIncBase: Increase Base
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!cbp->cr_tag && rt != 0) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if ((cbp->cr_perms & CAP_SEALED) && rt != 0) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (rt > cbp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else {
+        *cdp = *cbp;
+        cdp->cr_base = cbp->cr_base + rt;
+        cdp->cr_length = cbp->cr_length - rt;
+    }
+}
+
 void helper_csetcause(CPUMIPSState *env, target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
