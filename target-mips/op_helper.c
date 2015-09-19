@@ -72,11 +72,47 @@ void helper_raise_exception(CPUMIPSState *env, uint32_t exception)
 
 #if defined(TARGET_CHERI)
 /*
+const char *causestr[] = {
+    "None",
+    "Length Violation",
+    "Tag Violation",
+    "Seal Violation",
+    "Type Violation",
+    "Call Trap",
+    "Return Trap",
+    "Underflow of Trusted System Stack",
+    "User-defined Permission Violation",
+    "TLB prohibits Store Capability",
+    "Bounds Cannot Be Represented Exactly",
+    "Reserved 0x0b",
+    "Reserved 0x0c",
+    "Reserved 0x0d",
+    "Reserved 0x0e",
+    "Reserved 0x0f",
+    "Global Violation",
+    "Permit_Execute Violation",
+    "Permit_Load Violation",
+    "Permit_Store Violation",
+    "Permit_Load_Capability Violation",
+    "Permit_Store_Capability Violation",
+    "Permit_Store_Local_Capability Violation",
+    "Permit_Seal Violation",
+    "Access_EPCC Violation",
+    "Access_KDC Violation",
+    "Access_KCC Violation",
+    "Access_KR1C Violation",
+    "Access_KR2C Violation"
+};
+*/
+
+/*
  * See section 4.4 of the CHERI Architecture.
  */
 static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
         uint16_t reg)
 {
+//    fprintf(qemu_logfile, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n",
+//            cause, causestr[cause], reg, env->active_tc.PCC.cr_offset);
     cpu_mips_store_capcause(env, reg, cause);
     do_raise_exception(env, EXCP_C2E, 0);
 }
@@ -1701,7 +1737,7 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
         *cdp = *cbp;
-        cdp->cr_perms = (cbp->cr_perms & (uint32_t)rt) | CAP_SEALED;
+        cdp->cr_perms = (cbp->cr_perms & ((uint32_t)rt & ~CAP_SEALED));
     }
 }
 
@@ -2050,7 +2086,7 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else {
         *cdp = *csp;
         cdp->cr_perms |= CAP_SEALED;
-        cdp->cr_otype = ctp->cr_base + ctp->cr_offset;
+        cdp->cr_otype = (uint32_t)(ctp->cr_base + ctp->cr_offset);
     }
 }
 
