@@ -2026,6 +2026,66 @@ static inline void generate_cunseal(int32_t cd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcd);
 }
 
+static inline void generate_ceq(TCGv rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_ceq(rd, cpu_env, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cne(TCGv rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_cne(rd, cpu_env, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_clt(TCGv rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_clt(rd, cpu_env, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cle(TCGv rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_cle(rd, cpu_env, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cltu(TCGv rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_cltu(rd, cpu_env, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cleu(TCGv rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_cleu(rd, cpu_env, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -9418,23 +9478,29 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CPTRCMP: /* 0x0e */
         switch(MASK_CAP3(opc)) {
         case OPC_CEQ:  /* 0x0 */
+            generate_ceq(cpu_gpr[r16], r11, r6);
             opn = "ceq";
-            goto invalid;
+            break;
         case OPC_CNE:  /* 0x1 */
+            generate_cne(cpu_gpr[r16], r11, r6);
             opn = "cne";
-            goto invalid;
+            break;
         case OPC_CLT:  /* 0x2 */
+            generate_clt(cpu_gpr[r16], r11, r6);
             opn = "clt";
-            goto invalid;
+            break;
         case OPC_CLE:  /* 0x3 */
+            generate_cle(cpu_gpr[r16], r11, r6);
             opn = "cle";
-            goto invalid;
+            break;
         case OPC_CLTU: /* 0x4 */
+            generate_cltu(cpu_gpr[r16], r11, r6);
             opn = "cltu";
-            goto invalid;
+            break;
         case OPC_CLEU: /* 0x5 */
+            generate_cleu(cpu_gpr[r16], r11, r6);
             opn = "cleu";
-            goto invalid;
+            break;
         default:
             opn = "cptrcmp";
             goto invalid;

@@ -187,6 +187,13 @@ DEF_HELPER_4(csetlen, void, env, i32, i32, tl)
 DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 DEF_HELPER_3(ctoptr, tl, env, i32, i32)
 DEF_HELPER_4(cunseal, void, env, i32, i32, i32)
+
+DEF_HELPER_3(ceq, tl, env, i32, i32)
+DEF_HELPER_3(cne, tl, env, i32, i32)
+DEF_HELPER_3(clt, tl, env, i32, i32)
+DEF_HELPER_3(cle, tl, env, i32, i32)
+DEF_HELPER_3(cltu, tl, env, i32, i32)
+DEF_HELPER_3(cleu, tl, env, i32, i32)
 #endif
 
 #if defined(TARGET_MIPS64)

@@ -2250,6 +2250,181 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     }
 }
 
+/*
+ * CPtrCmp Instructions. Capability Pointer Compare.
+ */
+target_ulong helper_ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    gboolean equal = FALSE;
+    /*
+     * CEQ: Capability pointers equal
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else {
+        if (cbp->cr_tag != ctp->cr_tag) {
+            equal = FALSE;
+        } else {
+            uint64_t cursor1 = cbp->cr_base + cbp->cr_offset;
+            uint64_t cursor2 = ctp->cr_base + ctp->cr_offset;
+
+            equal = (cursor1 == cursor2);
+        }
+    }
+    return (target_ulong) equal;
+}
+
+target_ulong helper_cne(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    gboolean equal = FALSE;
+    /*
+     * CNE: Capability pointers not equal
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else {
+        if (cbp->cr_tag != ctp->cr_tag) {
+            equal = FALSE;
+        } else {
+            uint64_t cursor1 = cbp->cr_base + cbp->cr_offset;
+            uint64_t cursor2 = ctp->cr_base + ctp->cr_offset;
+
+            equal = (cursor1 == cursor2);
+        }
+    }
+    return (target_ulong) !equal;
+}
+
+target_ulong helper_clt(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    gboolean signed_less = FALSE;
+    /*
+     * CLT: Capability pointers less than (signed)
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else {
+        if (cbp->cr_tag != ctp->cr_tag) {
+            if (cbp->cr_tag) {
+                signed_less = FALSE;
+            } else {
+                signed_less = TRUE;
+            }
+        } else {
+            int64_t cursor1 = (int64_t)(cbp->cr_base + cbp->cr_offset);
+            int64_t cursor2 = (int64_t)(ctp->cr_base + ctp->cr_offset);
+
+            signed_less = (cursor1 < cursor2);
+        }
+    }
+    return (target_ulong) signed_less;
+}
+
+target_ulong helper_cle(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    gboolean signed_lte = FALSE;
+    /*
+     * CLE: Capability pointers less than equal (signed)
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else {
+        if (cbp->cr_tag != ctp->cr_tag) {
+            if (cbp->cr_tag) {
+                signed_lte = FALSE;
+            } else {
+                signed_lte = TRUE;
+            }
+        } else {
+            int64_t cursor1 = (int64_t)(cbp->cr_base + cbp->cr_offset);
+            int64_t cursor2 = (int64_t)(ctp->cr_base + ctp->cr_offset);
+
+            signed_lte = (cursor1 <= cursor2);
+        }
+    }
+    return (target_ulong) signed_lte;
+}
+
+target_ulong helper_cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    gboolean ltu = FALSE;
+    /*
+     * CLTU: Capability pointers less than (unsigned)
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else {
+        if (cbp->cr_tag != ctp->cr_tag) {
+            if (cbp->cr_tag) {
+                ltu = FALSE;
+            } else {
+                ltu = TRUE;
+            }
+        } else {
+            uint64_t cursor1 = cbp->cr_base + cbp->cr_offset;
+            uint64_t cursor2 = ctp->cr_base + ctp->cr_offset;
+
+            ltu = (cursor1 < cursor2);
+        }
+    }
+    return (target_ulong) ltu;
+}
+
+target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    gboolean leu = FALSE;
+    /*
+     * CLEU: Capability pointers less than equal (unsigned)
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else {
+        if (cbp->cr_tag != ctp->cr_tag) {
+            if (cbp->cr_tag) {
+                leu = FALSE;
+            } else {
+                leu = TRUE;
+            }
+        } else {
+            uint64_t cursor1 = cbp->cr_base + cbp->cr_offset;
+            uint64_t cursor2 = ctp->cr_base + ctp->cr_offset;
+
+            leu = (cursor1 <= cursor2);
+        }
+    }
+    return (target_ulong) leu;
+}
+
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     /* Update the offset */
