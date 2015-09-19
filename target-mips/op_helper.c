@@ -1938,6 +1938,43 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
+        uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *csp = &env->active_tc.C[cs];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    /*
+     * CSeal: Seal a capability
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception_v(env, cs);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else if (!csp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cs);
+    } else if (!ctp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, ct);
+    } else if (csp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cs);
+    } else if (ctp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, ct);
+    } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_SEAL, ct);
+    } else if (ctp->cr_offset >= ctp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
+    } else if ((ctp->cr_base + ctp->cr_offset) > CAP_MAX_OTYPE) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
+    } else {
+        *cdp = *csp;
+        cdp->cr_perms |= CAP_SEALED;
+        cdp->cr_otype = ctp->cr_base + ctp->cr_offset;
+    }
+}
+
 void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
@@ -2051,6 +2088,51 @@ target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         return (target_ulong)(cbp->cr_base + cbp->cr_offset - ctp->cr_base);
     }
     return (target_ulong)0;
+}
+
+void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
+        uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *csp = &env->active_tc.C[cs];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    /*
+     * CUnseal: Unseal a sealed capability
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception_v(env, cs);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception_v(env, ct);
+    } else if (!csp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cs);
+    } else if (!ctp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, ct);
+    } else if (csp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cs);
+    } else if (ctp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, ct);
+    } else if ((ctp->cr_base + ctp->cr_offset) != csp->cr_otype) {
+        do_raise_c2_exception(env, CP2Ca_TYPE, ct);
+    } else if (ctp->cr_perms & CAP_PERM_SEAL) {
+        do_raise_c2_exception(env, CP2Ca_PERM_SEAL, ct);
+    } else if (ctp->cr_offset >= ctp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
+    } else if ((ctp->cr_base + ctp->cr_offset) >= CAP_MAX_OTYPE) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
+    } else {
+        *cdp = *csp;
+        cdp->cr_perms &= ~CAP_SEALED;
+        cdp->cr_otype = 0;
+        if ((csp->cr_perms & CAP_PERM_GLOBAL) &&
+            (ctp->cr_perms & CAP_PERM_GLOBAL)) {
+            cdp->cr_perms |= CAP_PERM_GLOBAL;
+        } else {
+            cdp->cr_perms &= ~CAP_PERM_GLOBAL;
+        }
+    }
 }
 
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)

@@ -190,6 +190,8 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     return cp;
 }
 
+#define CAP_MAX_OTYPE           (0xffffff)
+
 #define CAP_PERM_GLOBAL         (1 << 0)
 #define CAP_PERM_EXECUTE        (1 << 1)
 #define CAP_PERM_LOAD           (1 << 2)

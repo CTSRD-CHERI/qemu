@@ -176,11 +176,13 @@ DEF_HELPER_2(cgettag, tl, env, i32)
 DEF_HELPER_2(cgettype, tl, env, i32)
 DEF_HELPER_4(cincbase, void, env, i32, i32, tl)
 DEF_HELPER_4(cincoffset, void, env, i32, i32, tl)
+DEF_HELPER_4(cseal, void, env, i32, i32, i32)
 DEF_HELPER_4(csetbounds, void, env, i32, i32, tl)
 DEF_HELPER_2(csetcause, void, env, tl)
 DEF_HELPER_4(csetlen, void, env, i32, i32, tl)
 DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 DEF_HELPER_3(ctoptr, tl, env, i32, i32)
+DEF_HELPER_4(cunseal, void, env, i32, i32, i32)
 #endif
 
 #if defined(TARGET_MIPS64)

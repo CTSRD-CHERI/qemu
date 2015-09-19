@@ -1923,6 +1923,18 @@ static inline void generate_cincoffset(int32_t cd, int32_t cb, TCGv rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cseal(int32_t cd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_cseal(cpu_env, tcd, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcd);
+}
+
 static inline void generate_csetbounds(int32_t cd, int32_t cb, TCGv rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -1966,6 +1978,18 @@ static inline void generate_ctoptr(TCGv rd, int32_t cb, int32_t ct)
     gen_helper_ctoptr(rd, cpu_env, tcb, tct);
     tcg_temp_free_i32(tct);
     tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cunseal(int32_t cd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_cunseal(cpu_env, tcd, tcb, tct);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcd);
 }
 
 static inline void generate_ccheck_pc(int64_t pc)
@@ -9250,11 +9274,13 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         opn = "csetbounds";
         break;
     case OPC_CSEAL:  /* 0x02 */
+        generate_cseal(r16, r11, r6);
         opn = "cseal";
-        goto invalid;
+        break;
     case OPC_CUNSEAL: /* 0x03 */
+        generate_cunseal(r16, r11, r6);
         opn = "cunseal";
-        goto invalid;
+        break;
     case OPC_CMISC: /* 0x04 */
         switch(MASK_CAP3(opc)) {
         case OPC_CANDPERM: /* 0x0 */
