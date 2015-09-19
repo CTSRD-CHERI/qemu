@@ -1822,6 +1822,24 @@ static inline void generate_candperm(int32_t cd, int32_t cb, TCGv rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_ccheckperm(int32_t cs, TCGv rt)
+{
+    TCGv_i32 tcs = tcg_const_i32(cs);
+
+    gen_helper_ccheckperm(cpu_env, tcs, rt);
+    tcg_temp_free_i32(tcs);
+}
+
+static inline void generate_cchecktype(int32_t cs, int32_t cb)
+{
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+
+    gen_helper_cchecktype(cpu_env, tcs, tcb);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcs);
+}
+
 static inline void generate_ccleartag(int32_t cd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -9344,11 +9362,13 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CCHECK: /* 0x0b */
         switch(MASK_CAP3(opc)) {
         case OPC_CCHECKPERM: /* 0x0 */
+            generate_ccheckperm(r16, cpu_gpr[r6]);
             opn = "ccheckperm";
-            goto invalid;
+            break;
         case OPC_CCHECKTYPE: /* 0x1 */
+            generate_cchecktype(r16, r11);
             opn = "cchecktype";
-            goto invalid;
+            break;
         default:
             opn = "ccheck";
             goto invalid;

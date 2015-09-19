@@ -1705,6 +1705,47 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *csp = &env->active_tc.C[cs];
+    /*
+     * CCheckPerm: Raise exception if don't have permission
+     */
+    if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception_v(env, cs);
+    } else if (!csp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cs);
+    } else if ((csp->cr_perms & (uint32_t)rt) != (uint32_t)rt) {
+        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
+    }
+}
+
+void helper_cchecktype(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *csp = &env->active_tc.C[cs];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CCheckType: Raise exception if otypes don't match
+     */
+    if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception_v(env, cs);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!csp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cs);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (!(csp->cr_perms & CAP_SEALED)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cs);
+    } else if (!(cbp->cr_perms & CAP_SEALED)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (csp->cr_otype != cbp->cr_otype) {
+        do_raise_c2_exception(env, CP2Ca_TYPE, cs);
+    }
+}
+
 void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
