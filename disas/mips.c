@@ -119,6 +119,8 @@ see <http://www.gnu.org/licenses/>.  */
 #define OP_SH_IMMEDIATE		0
 #define OP_MASK_DELTA		0xffff
 #define OP_SH_DELTA		0
+#define OP_MASK_CDELTA2         0xff
+#define OP_SH_CDELTA2           3
 #define OP_MASK_DELTA_R6        0x1ff
 #define OP_SH_DELTA_R6          7
 #define OP_MASK_FUNCT		0x3f
@@ -4643,6 +4645,13 @@ print_insn_args (const char *d,
         case 'i':
             (*info->fprintf_func) (info->stream, "%s",
                     mips_gpr_names[(l >> OP_SH_GPR) & OP_MASK_GPR]);
+            break;
+
+        case 'O':
+            delta = ((l >> OP_SH_CDELTA2) & OP_MASK_CDELTA2);
+            if (delta > (OP_MASK_CDELTA2 >> 1))
+                delta -= (OP_MASK_CDELTA2 + 1);
+            (*info->fprintf_func) (info->stream, "%d", delta);
             break;
 
 	    default:

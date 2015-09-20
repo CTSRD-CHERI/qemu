@@ -194,6 +194,14 @@ DEF_HELPER_3(clt, tl, env, i32, i32)
 DEF_HELPER_3(cle, tl, env, i32, i32)
 DEF_HELPER_3(cltu, tl, env, i32, i32)
 DEF_HELPER_3(cleu, tl, env, i32, i32)
+
+DEF_HELPER_4(clbu, tl, env, i32, tl, i32)
+DEF_HELPER_4(clhu, tl, env, i32, tl, i32)
+DEF_HELPER_4(clwu, tl, env, i32, tl, i32)
+DEF_HELPER_4(clb, tl, env, i32, tl, i32)
+DEF_HELPER_4(clh, tl, env, i32, tl, i32)
+DEF_HELPER_4(clw, tl, env, i32, tl, i32)
+DEF_HELPER_4(cld, tl, env, i32, tl, i32)
 #endif
 
 #if defined(TARGET_MIPS64)

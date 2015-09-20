@@ -2425,6 +2425,106 @@ target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     return (target_ulong) leu;
 }
 
+/*
+ * Load Via Capability Register
+ */
+static inline int align_of(int size, uint64_t addr)
+{
+
+    switch(size) {
+    case 1:
+        return 0;
+    case 2:
+        return (addr & 0x1);
+    case 4:
+        return (addr & 0x3);
+    case 8:
+        return (addr & 0x8);
+    default:
+        return 1;
+    }
+}
+
+static inline uint64_t do_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+        int32_t offset, int32_t size)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (cbp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
+    } else {
+        uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+        uint64_t addr = cursor + rt + (uint64_t)offset;
+
+        if ((addr + size) > (cbp->cr_base + cbp->cr_length)) {
+            do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+        } else if (addr < cbp->cr_base) {
+            do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+        } else if (align_of(size, addr)) {
+            helper_raise_exception(env, EXCP_AdEL);
+        } else {
+            return addr;
+        }
+    }
+    return 0;
+}
+
+target_ulong helper_clbu(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+        uint32_t offset)
+{
+
+    return do_cload(env, cb, rt, offset, 1);
+}
+
+target_ulong helper_clhu(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+        uint32_t offset)
+{
+
+    return do_cload(env, cb, rt, offset, 2);
+}
+
+target_ulong helper_clwu(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+        uint32_t offset)
+{
+
+    return do_cload(env, cb, rt, offset, 4);
+}
+
+target_ulong helper_clb(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+        uint32_t offset)
+{
+
+    return do_cload(env, cb, rt, offset, 1);
+}
+
+target_ulong helper_clh(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+        uint32_t offset)
+{
+
+    return do_cload(env, cb, rt, offset, 2);
+}
+
+target_ulong helper_clw(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+        uint32_t offset)
+{
+
+    return do_cload(env, cb, rt, offset, 4);
+}
+
+target_ulong helper_cld(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+        uint32_t offset)
+{
+
+    return do_cload(env, cb, rt, offset, 8);
+}
+
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     /* Update the offset */

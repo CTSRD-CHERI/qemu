@@ -135,11 +135,11 @@ enum {
     /* Load Via Capability Register */
     OPC_CLOAD    = (0x32 << 26),
     /* Load Capability Register */
-    OPC_CLOADC      = (0x36 << 26),
+    OPC_CLOADC   = (0x36 << 26),
     /* Store Via Capability Register */
     OPC_CSTORE   = (0x3A << 26),
     /* Store Capability Register */
-    OPC_CSTOREC      = (0x3E << 26),
+    OPC_CSTOREC  = (0x3E << 26),
 #endif /* TARGET_CHERI */
     OPC_BEQZC    = (0x36 << 26),
     OPC_JIC      = (0x36 << 26),
@@ -1093,6 +1093,9 @@ enum {
     OPC_CLLDU       = OPC_CLL | (0xf),
 };
 
+#define MASK_CLDST_OFFSET(opc)   ((opc >> 3) & 0x7f)
+#define MASK_CLDST_OPC(opc)     ((opc) & ((0x3f << 26) | 0x7))
+
 /* Load Via Capability Register */
 enum {
     OPC_CLB         = OPC_CLOAD | (0x0),
@@ -1102,7 +1105,7 @@ enum {
     OPC_CLBU        = OPC_CLOAD | (0x4),
     OPC_CLHU        = OPC_CLOAD | (0x5),
     OPC_CLWU        = OPC_CLOAD | (0x6),
-    OPC_CLDU        = OPC_CLOAD | (0x7),
+
 };
 
 /* Store Via Capability Register */
@@ -2083,6 +2086,153 @@ static inline void generate_cleu(TCGv rd, int32_t cb, int32_t ct)
 
     gen_helper_cleu(rd, cpu_env, tcb, tct);
     tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
+/* Load Via Capability Register */
+static inline int32_t cload_sign_extend(int32_t x)
+{
+    int32_t const mask = 1U << (7 - 1);
+
+    x = x & ((1U << 7) - 1);
+    return (x ^ mask) - mask;
+}
+
+static inline void generate_clbu(DisasContext *ctx, int32_t rd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset));
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    gen_load_gpr(t1, rt);
+    gen_helper_clbu(t0, cpu_env, tcb, t1, toffset);
+    tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_UB);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_clhu(DisasContext *ctx, int32_t rd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset));
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    gen_load_gpr(t1, rt);
+    gen_helper_clhu(t0, cpu_env, tcb, t1, toffset);
+    tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEUW |
+            ctx->default_tcg_memop_mask);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_clwu(DisasContext *ctx, int32_t rd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset));
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    gen_load_gpr(t1, rt);
+    gen_helper_clwu(t0, cpu_env, tcb, t1, toffset);
+    tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEUL |
+            ctx->default_tcg_memop_mask);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_clb(DisasContext *ctx, int32_t rd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset));
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    gen_load_gpr(t1, rt);
+    gen_helper_clb(t0, cpu_env, tcb, t1, toffset);
+    tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_SB);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_clh(DisasContext *ctx, int32_t rd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset));
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    gen_load_gpr(t1, rt);
+    gen_helper_clh(t0, cpu_env, tcb, t1, toffset);
+    tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESW |
+            ctx->default_tcg_memop_mask);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_clw(DisasContext *ctx, int32_t rd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset));
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    gen_load_gpr(t1, rt);
+    gen_helper_clw(t0, cpu_env, tcb, t1, toffset);
+    tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESL |
+            ctx->default_tcg_memop_mask);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cld(DisasContext *ctx, int32_t rd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset));
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    gen_load_gpr(t1, rt);
+    gen_helper_cld(t0, cpu_env, tcb, t1, toffset);
+    tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(toffset);
     tcg_temp_free_i32(tcb);
 }
 
@@ -20724,8 +20874,37 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
 
 #if defined(TARGET_CHERI)
     case OPC_CLOAD:     /* Load Via Capability Register */
-        MIPS_INVAL("cl");
-        generate_exception (ctx, EXCP_RI);
+        {
+            uint32_t opc = ctx->opcode;
+
+            switch(MASK_CLDST_OPC(opc)) {
+            case OPC_CLBU:
+                generate_clbu(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                break;
+            case OPC_CLHU:
+                generate_clhu(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                break;
+            case OPC_CLWU:
+                generate_clwu(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                break;
+            case OPC_CLB:
+                generate_clb(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                break;
+            case OPC_CLH:
+                generate_clh(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                break;
+            case OPC_CLW:
+                generate_clw(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                break;
+            case OPC_CLD:
+                generate_cld(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                break;
+            default:
+                MIPS_INVAL("cl");
+                generate_exception (ctx, EXCP_RI);
+                break;
+            }
+        }
         break;
     case OPC_CLOADC:    /* Load Capability Register */
         MIPS_INVAL("clc");
