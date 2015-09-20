@@ -214,7 +214,8 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
                                  CAP_PERM_STORE_LOCAL | CAP_PERM_SEAL |     \
                                  CAP_ACCESS_EPCC | CAP_ACCESS_KDC |         \
                                  CAP_ACCESS_KDC | CAP_ACCESS_KCC |          \
-                                 CAP_ACCESS_KR1C | CAP_ACCESS_KR2C)
+                                 CAP_ACCESS_KR1C | CAP_ACCESS_KR2C |        \
+                                 CAP_RESERVED1 | CAP_RESERVED2)
 #endif /* TARGET_CHERI */
 
 typedef struct TCState TCState;

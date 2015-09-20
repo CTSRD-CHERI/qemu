@@ -1790,7 +1790,7 @@ void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
         do_raise_c2_exception_v(env, cs);
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
-    } else if ((csp->cr_perms & (uint32_t)rt) != (uint32_t)rt) {
+    } else if (((csp->cr_perms & ~CAP_SEALED) & (uint32_t)rt) != (uint32_t)rt) {
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
     }
 }
@@ -2225,13 +2225,13 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!ctp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, ct);
-    } else if (csp->cr_perms & CAP_SEALED) {
+    } else if (!(csp->cr_perms & CAP_SEALED)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (ctp->cr_perms & CAP_SEALED) {
         do_raise_c2_exception(env, CP2Ca_SEAL, ct);
     } else if ((ctp->cr_base + ctp->cr_offset) != csp->cr_otype) {
         do_raise_c2_exception(env, CP2Ca_TYPE, ct);
-    } else if (ctp->cr_perms & CAP_PERM_SEAL) {
+    } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_SEAL, ct);
     } else if (ctp->cr_offset >= ctp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
