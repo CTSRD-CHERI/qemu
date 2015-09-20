@@ -1825,21 +1825,29 @@ static inline void generate_ccall(int32_t cs, int32_t cb)
     tcg_temp_free_i32(tcs);
 }
 
-static inline void generate_candperm(int32_t cd, int32_t cb, TCGv rt)
+static inline void generate_candperm(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_candperm(cpu_env, tcd, tcb, rt);
+    gen_load_gpr(t0, rt);
+    gen_helper_candperm(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_ccheckperm(int32_t cs, TCGv rt)
+static inline void generate_ccheckperm(int32_t cs, int32_t rt)
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_ccheckperm(cpu_env, tcs, rt);
+    gen_load_gpr(t0, rt);
+    gen_helper_ccheckperm(cpu_env, tcs, t0);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcs);
 }
 
@@ -1863,26 +1871,40 @@ static inline void generate_ccleartag(int32_t cd, int32_t cb)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cfromptr(int32_t cd, int32_t cb, TCGv rt)
+static inline void generate_cfromptr(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_cfromptr(cpu_env, tcd, tcb, rt);
+    gen_load_gpr(t0, rt);
+    gen_helper_cfromptr(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgetbase(TCGv rd, int32_t cb)
+static inline void generate_cgetbase(int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
-    gen_helper_cgetbase(rd, cpu_env, tcb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgetbase(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgetcause(TCGv rd)
+static inline void generate_cgetcause(int32_t rd)
 {
-    gen_helper_cgetcause(rd, cpu_env);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgetcause(t0, cpu_env);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
 }
 
 static inline void generate_cgetpcc(int32_t cd)
@@ -1892,64 +1914,102 @@ static inline void generate_cgetpcc(int32_t cd)
     tcg_temp_free_i32(tcd);
 }
 
-static inline void generate_cgetlen(TCGv rd, int32_t cb)
+static inline void generate_cgetlen(int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
-    gen_helper_cgetlen(rd, cpu_env, tcb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgetlen(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgetoffset(TCGv rd, int32_t cb)
+static inline void generate_cgetoffset(int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
-    gen_helper_cgetoffset(rd, cpu_env, tcb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgetoffset(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgetperm(TCGv rd, int32_t cb)
+static inline void generate_cgetperm(int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
-    gen_helper_cgetperm(rd, cpu_env, tcb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgetperm(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgetsealed(TCGv rd, int32_t cb)
+static inline void generate_cgetsealed(int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
-    gen_helper_cgetsealed(rd, cpu_env, tcb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgetsealed(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgettag(TCGv rd, int32_t cb)
+static inline void generate_cgettag(int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
-    gen_helper_cgettag(rd, cpu_env, tcb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgettag(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgettype(TCGv rd, int32_t cb)
+static inline void generate_cgettype(int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
-    gen_helper_cgettype(rd, cpu_env, tcb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgettype(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cincbase(int32_t cd, int32_t cb, TCGv rt)
+static inline void generate_cincbase(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_cincbase(cpu_env, tcd, tcb, rt);
+    gen_load_gpr(t0, rt);
+    gen_helper_cincbase(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cincoffset(int32_t cd, int32_t cb, TCGv rt)
+static inline void generate_cincoffset(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_cincoffset(cpu_env, tcd, tcb, rt);
+    gen_load_gpr(t0, rt);
+    gen_helper_cincoffset(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
@@ -1972,47 +2032,69 @@ static inline void generate_cseal(int32_t cd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcd);
 }
 
-static inline void generate_csetbounds(int32_t cd, int32_t cb, TCGv rt)
+static inline void generate_csetbounds(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_csetbounds(cpu_env, tcd, tcb, rt);
+    gen_load_gpr(t0, rt);
+    gen_helper_csetbounds(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_csetcause(TCGv rd)
+static inline void generate_csetcause(int32_t rd)
 {
-    gen_helper_csetcause(cpu_env, rd);
+    TCGv t0 = tcg_temp_new();
+
+    gen_load_gpr(t0, rd);
+
+    gen_helper_csetcause(cpu_env, t0);
+
+    tcg_temp_free(t0);
 }
 
-static inline void generate_csetlen(int32_t cd, int32_t cb, TCGv rt)
+static inline void generate_csetlen(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_csetlen(cpu_env, tcd, tcb, rt);
+    gen_load_gpr(t0, rt);
+    gen_helper_csetlen(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_csetoffset(int32_t cd, int32_t cb, TCGv rt)
+static inline void generate_csetoffset(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_csetoffset(cpu_env, tcd, tcb, rt);
+    gen_load_gpr(t0, rt);
+    gen_helper_csetoffset(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_ctoptr(TCGv rd, int32_t cb, int32_t ct)
+static inline void generate_ctoptr(int32_t rd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_ctoptr(rd, cpu_env, tcb, tct);
+    gen_helper_ctoptr(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tct);
     tcg_temp_free_i32(tcb);
 }
@@ -2029,62 +2111,86 @@ static inline void generate_cunseal(int32_t cd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcd);
 }
 
-static inline void generate_ceq(TCGv rd, int32_t cb, int32_t ct)
+static inline void generate_ceq(int32_t rd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_ceq(rd, cpu_env, tcb, tct);
+    gen_helper_ceq(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tct);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cne(TCGv rd, int32_t cb, int32_t ct)
+static inline void generate_cne(int32_t rd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_cne(rd, cpu_env, tcb, tct);
+    gen_helper_cne(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tct);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_clt(TCGv rd, int32_t cb, int32_t ct)
+static inline void generate_clt(int32_t rd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_clt(rd, cpu_env, tcb, tct);
+    gen_helper_clt(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tct);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cle(TCGv rd, int32_t cb, int32_t ct)
+static inline void generate_cle(int32_t rd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_cle(rd, cpu_env, tcb, tct);
+    gen_helper_cle(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tct);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cltu(TCGv rd, int32_t cb, int32_t ct)
+static inline void generate_cltu(int32_t rd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_cltu(rd, cpu_env, tcb, tct);
+    gen_helper_cltu(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tct);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cleu(TCGv rd, int32_t cb, int32_t ct)
+static inline void generate_cleu(int32_t rd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
 
-    gen_helper_cleu(rd, cpu_env, tcb, tct);
+    gen_helper_cleu(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tct);
     tcg_temp_free_i32(tcb);
 }
@@ -9477,31 +9583,31 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CGET:  /* 0x00 */
         switch(MASK_CAP3(opc)) {
         case OPC_CGETPERM: /* 0x0 */
-            generate_cgetperm(cpu_gpr[r16], r11);
+            generate_cgetperm(r16, r11);
             opn = "cgetperm";
             break;
         case OPC_CGETTYPE: /* 0x1 */
-            generate_cgettype(cpu_gpr[r16], r11);
+            generate_cgettype(r16, r11);
             opn = "cgettype";
             break;
         case OPC_CGETBASE: /* 0x2 */
-            generate_cgetbase(cpu_gpr[r16], r11);
+            generate_cgetbase(r16, r11);
             opn = "cgetbase";
             break;
         case OPC_CGETLEN: /* 0x3 */
-            generate_cgetlen(cpu_gpr[r16], r11);
+            generate_cgetlen(r16, r11);
             opn = "cgetlen";
             break;
         case OPC_CGETCAUSE: /* 0x4 */
-            generate_cgetcause(cpu_gpr[r16]);
+            generate_cgetcause(r16);
             opn = "cgetcause";
             break;
         case OPC_CGETTAG:  /* 0x5 */
-            generate_cgettag(cpu_gpr[r16], r11);
+            generate_cgettag(r16, r11);
             opn = "cgettag";
             break;
         case OPC_CGETSEALED: /* 0x6 */
-            generate_cgetsealed(cpu_gpr[r16], r11);
+            generate_cgetsealed(r16, r11);
             opn = "cgetsealed";
             break;
         case OPC_CGETPCC:  /* 0x7 */
@@ -9514,7 +9620,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         }
         break;
     case OPC_CSETBOUNDS: /* 0x01 */
-        generate_csetbounds(r16, r11, cpu_gpr[r6]);
+        generate_csetbounds(r16, r11, r6);
         opn = "csetbounds";
         break;
     case OPC_CSEAL:  /* 0x02 */
@@ -9528,20 +9634,20 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CMISC: /* 0x04 */
         switch(MASK_CAP3(opc)) {
         case OPC_CANDPERM: /* 0x0 */
-            generate_candperm(r16, r11, cpu_gpr[r6]);
+            generate_candperm(r16, r11, r6);
             opn = "candperm";
             break;
 
         case OPC_CINCBASE: /* 0x2 */
-            generate_cincbase(r16, r11, cpu_gpr[r6]);
+            generate_cincbase(r16, r11, r6);
             opn = "cincbase";
             break;
         case OPC_CSETLEN: /* 0x3 */
-            generate_csetlen(r16, r11, cpu_gpr[r6]);
+            generate_csetlen(r16, r11, r6);
             opn = "csetlen";
             break;
         case OPC_CSETCAUSE: /* 0x4 */
-            generate_csetcause(cpu_gpr[r6]);
+            generate_csetcause(r6);
             opn = "csetcause";
             break;
         case OPC_CCLEARTAG: /* 0x5 */
@@ -9559,7 +9665,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "mtc2";
             break;
         case OPC_CFROMPTR: /* 0x7 */
-            generate_cfromptr(r16, r11, cpu_gpr[r6]);
+            generate_cfromptr(r16, r11, r6);
             opn = "cfromptr";
             break;
         default:
@@ -9590,7 +9696,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CCHECK: /* 0x0b */
         switch(MASK_CAP3(opc)) {
         case OPC_CCHECKPERM: /* 0x0 */
-            generate_ccheckperm(r16, cpu_gpr[r6]);
+            generate_ccheckperm(r16, r6);
             opn = "ccheckperm";
             break;
         case OPC_CCHECKTYPE: /* 0x1 */
@@ -9603,21 +9709,21 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         }
         break;
     case OPC_CTOPTR: /* 0x0c */
-        generate_ctoptr(cpu_gpr[r16], r11, r6);
+        generate_ctoptr(r16, r11, r6);
         opn = "ctoptr";
         break;
     case OPC_COFFSET: /* 0x0d */
         switch(MASK_CAP3(opc)) {
         case OPC_CINCOFFSET: /* 0x0 */
-            generate_cincoffset(r16, r11, cpu_gpr[r6]);
+            generate_cincoffset(r16, r11, r6);
             opn = "cincoffset";
             break;
         case OPC_CSETOFFSET: /* 0x1 */
-            generate_csetoffset(r16, r11, cpu_gpr[r6]);
+            generate_csetoffset(r16, r11, r6);
             opn = "csetoffset";
             break;
         case OPC_CGETOFFSET: /* 0x2 */
-            generate_cgetoffset(cpu_gpr[r16], r11);
+            generate_cgetoffset(r16, r11);
             opn = "cgetoffset";
             break;
         default:
@@ -9628,27 +9734,27 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CPTRCMP: /* 0x0e */
         switch(MASK_CAP3(opc)) {
         case OPC_CEQ:  /* 0x0 */
-            generate_ceq(cpu_gpr[r16], r11, r6);
+            generate_ceq(r16, r11, r6);
             opn = "ceq";
             break;
         case OPC_CNE:  /* 0x1 */
-            generate_cne(cpu_gpr[r16], r11, r6);
+            generate_cne(r16, r11, r6);
             opn = "cne";
             break;
         case OPC_CLT:  /* 0x2 */
-            generate_clt(cpu_gpr[r16], r11, r6);
+            generate_clt(r16, r11, r6);
             opn = "clt";
             break;
         case OPC_CLE:  /* 0x3 */
-            generate_cle(cpu_gpr[r16], r11, r6);
+            generate_cle(r16, r11, r6);
             opn = "cle";
             break;
         case OPC_CLTU: /* 0x4 */
-            generate_cltu(cpu_gpr[r16], r11, r6);
+            generate_cltu(r16, r11, r6);
             opn = "cltu";
             break;
         case OPC_CLEU: /* 0x5 */
-            generate_cleu(cpu_gpr[r16], r11, r6);
+            generate_cleu(r16, r11, r6);
             opn = "cleu";
             break;
         default:
