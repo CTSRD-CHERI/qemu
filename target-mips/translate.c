@@ -2111,6 +2111,68 @@ static inline void generate_cunseal(int32_t cd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcd);
 }
 
+static inline int generate_cclearregs(int32_t regset, int32_t mask)
+{
+    int i;
+    TCGv t0;
+    TCGv_i32 tcr0;
+
+    switch(regset) {
+    case 0: /* ClearLO */
+        if (!mask)
+            return 0;
+        t0 = tcg_temp_new();
+        tcg_gen_movi_tl(t0, 0);
+        mask = mask >> 1; /* Skip R0, the zero register */
+        for(i = 1; i < 16; i++) {
+            if (mask & 0x1)
+                gen_store_gpr(t0, i);
+            mask = mask >> 1;
+        }
+        tcg_temp_free(t0);
+        break;
+    case 1: /* ClearHi */
+        if (!mask)
+            return 0;
+        t0 = tcg_temp_new();
+        tcg_gen_movi_tl(t0, 0);
+        for(i = 16; i < 32; i++) {
+            if (mask & 0x1)
+                gen_store_gpr(t0, i);
+            mask = mask >> 1;
+        }
+        tcg_temp_free(t0);
+        break;
+    case 2: /* CClearLO */
+        if (!mask)
+            return 0;
+        for(i = 0; i < 16; i++) {
+            if (mask & 0x1) {
+                tcr0 = tcg_const_i32(i);
+                gen_helper_cclearreg(cpu_env, tcr0);
+                tcg_temp_free_i32(tcr0);
+            }
+            mask = mask >> 1;
+        }
+        break;
+    case 3: /* CClearHi */
+        if (!mask)
+            return 0;
+        for(i = 16; i < 32; i++) {
+            if (mask & 0x1) {
+                tcr0 = tcg_const_i32(i);
+                gen_helper_cclearreg(cpu_env, tcr0);
+                tcg_temp_free_i32(tcr0);
+            }
+            mask = mask >> 1;
+        }
+        break;
+    default:
+        return 1; /* Invalid */
+    }
+    return 0;
+}
+
 static inline void generate_ceq(int32_t rd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -9764,7 +9826,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CCLEARREGS: /* 0x0f */
         opn = "cclearregs";
-        goto invalid;
+        if (generate_cclearregs(r16, opc & 0xffff) != 0)
+            goto invalid;
+        break;
     case OPC_CLL:   /* 0x10 */
         switch(MASK_CAP4(opc)) {
         case OPC_CSCB: /* 0x0 */

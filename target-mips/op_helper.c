@@ -1774,6 +1774,16 @@ void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     }
 }
 
+void helper_cclearreg(CPUMIPSState *env, uint32_t creg)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+
+    if (creg_inaccessible(perms, creg))
+        do_raise_c2_exception_v(env, creg);
+
+    (void)null_capability(&env->active_tc.C[creg]);
+}
+
 void helper_creturn(CPUMIPSState *env)
 {
     do_raise_c2_exception_noreg(env, CP2Ca_RETURN);
