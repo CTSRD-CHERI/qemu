@@ -1642,6 +1642,23 @@ void helper_mtc0_framemask(CPUMIPSState *env, target_ulong arg1)
 }
 
 #if defined(TARGET_CHERI)
+static inline int align_of(int size, uint64_t addr)
+{
+
+    switch(size) {
+    case 1:
+        return 0;
+    case 2:
+        return (addr & 0x1);
+    case 4:
+        return (addr & 0x3);
+    case 8:
+        return (addr & 0x8);
+    default:
+        return 1;
+    }
+}
+
 static inline void check_cap(CPUMIPSState *env, cap_register_t *cr, uint32_t perm,
         uint64_t addr, uint16_t regnum, uint32_t len)
 {
@@ -2103,6 +2120,69 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CJALR: Jump and Link Capability Register
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (cbp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
+        do_raise_c2_exception(env, CP2Ca_GLOBAL, cb);
+    } else if ((cbp->cr_offset + 4) > cbp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (align_of(4, (cbp->cr_base + cbp->cr_offset))) {
+        helper_raise_exception(env, EXCP_AdEL);
+    } else {
+        *cdp = env->active_tc.PCC;
+        cdp->cr_offset += 8;
+        env->active_tc.PCC = *cbp;  // XXX shouldn't happen until the delay slot
+        return cbp->cr_offset;
+    }
+
+    return (target_ulong)0;
+}
+
+target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CJALR: Jump and Link Capability Register
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (cbp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
+        do_raise_c2_exception(env, CP2Ca_GLOBAL, cb);
+    } else if ((cbp->cr_offset + 4) > cbp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (align_of(4, (cbp->cr_base + cbp->cr_offset))) {
+        helper_raise_exception(env, EXCP_AdEL);
+    } else {
+        env->active_tc.PCC = *cbp;  // XXX shouldn't happen until the delay slot
+        return cbp->cr_offset;
+    }
+
+    return (target_ulong)0;
+}
+
 void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         uint32_t ct)
 {
@@ -2478,23 +2558,6 @@ target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 /*
  * Load Via Capability Register
  */
-static inline int align_of(int size, uint64_t addr)
-{
-
-    switch(size) {
-    case 1:
-        return 0;
-    case 2:
-        return (addr & 0x1);
-    case 4:
-        return (addr & 0x3);
-    case 8:
-        return (addr & 0x8);
-    default:
-        return 1;
-    }
-}
-
 static inline uint64_t do_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         int32_t offset, int32_t size)
 {

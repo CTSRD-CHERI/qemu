@@ -1867,6 +1867,30 @@ static inline void generate_cbtu(DisasContext *ctx, int32_t cb, int32_t offset)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cjalr(DisasContext *ctx, int32_t cd, int32_t cb)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+
+    gen_helper_cjalr(btarget, cpu_env, tcd, tcb);
+    /* Set branch and delay slot flags */
+    ctx->hflags |= (MIPS_HFLAG_BR | MIPS_HFLAG_BDS32);
+
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcd);
+}
+
+static inline void generate_cjr(DisasContext *ctx, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+
+    gen_helper_cjr(btarget, cpu_env, tcb);
+    /* Set branch and delay slot flags */
+    ctx->hflags |= (MIPS_HFLAG_BR | MIPS_HFLAG_BDS32);
+
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_ccheckperm(int32_t cs, int32_t rt)
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
@@ -9772,11 +9796,13 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         opn = "creturn";
         break;
     case OPC_CJALR: /* 0x07 */
+        generate_cjalr(ctx, r16, r11);
         opn = "cjalr";
-        goto invalid;
+        break;
     case OPC_CJR: /* 0x08 */
+        generate_cjr(ctx, r11);
         opn = "cjr";
-        goto invalid;
+        break;
     case OPC_CBTU: /* 0x09 */
         opn = "cbtu";
         generate_cbtu(ctx, r16, (int32_t)(ctx->opcode & 0xffff));
