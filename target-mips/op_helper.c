@@ -71,7 +71,6 @@ void helper_raise_exception(CPUMIPSState *env, uint32_t exception)
 }
 
 #if defined(TARGET_CHERI)
-/*
 const char *causestr[] = {
     "None",
     "Length Violation",
@@ -97,13 +96,14 @@ const char *causestr[] = {
     "Permit_Store_Capability Violation",
     "Permit_Store_Local_Capability Violation",
     "Permit_Seal Violation",
+    "Reserved 0x18",
+    "Reserved 0x19",
     "Access_EPCC Violation",
     "Access_KDC Violation",
     "Access_KCC Violation",
     "Access_KR1C Violation",
     "Access_KR2C Violation"
 };
-*/
 
 /*
  * See section 4.4 of the CHERI Architecture.
@@ -111,10 +111,14 @@ const char *causestr[] = {
 static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
         uint16_t reg)
 {
+    uint64_t pc = env->active_tc.PCC.cr_offset;
+
 //    fprintf(qemu_logfile, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n",
-//            cause, causestr[cause], reg, env->active_tc.PCC.cr_offset);
+//            cause, causestr[cause], reg, pc);
     cpu_mips_store_capcause(env, reg, cause);
-    do_raise_exception(env, EXCP_C2E, 0);
+    env->active_tc.PC = pc - 4;
+    env->CP0_BadVAddr = pc;
+    do_raise_exception(env, EXCP_C2E, pc - 4);
 }
 
 static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
