@@ -1839,6 +1839,34 @@ static inline void generate_candperm(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cbts(DisasContext *ctx, int32_t cb, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(offset);
+
+    gen_helper_cbts(bcond, cpu_env, tcb, toffset);
+    ctx->btarget = ctx->pc + 4 * offset + 4;
+    /* Set conditional branch and branch delay slot flags */
+    ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
+
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cbtu(DisasContext *ctx, int32_t cb, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(offset);
+
+    gen_helper_cbtu(bcond, cpu_env, tcb, toffset);
+    ctx->btarget = ctx->pc + 4 * offset + 4;
+    /* Set conditional branch and branch delay slot flags */
+    ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
+
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_ccheckperm(int32_t cs, int32_t rt)
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
@@ -9751,10 +9779,12 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         goto invalid;
     case OPC_CBTU: /* 0x09 */
         opn = "cbtu";
-        goto invalid;
+        generate_cbtu(ctx, r16, (int32_t)(ctx->opcode & 0xffff));
+        break;
     case OPC_CBTS: /* 0x0a */
         opn = "cbts";
-        goto invalid;
+        generate_cbts(ctx, r16, (int32_t)(ctx->opcode & 0xffff));
+        break;
     case OPC_CCHECK: /* 0x0b */
         switch(MASK_CAP3(opc)) {
         case OPC_CCHECKPERM: /* 0x0 */

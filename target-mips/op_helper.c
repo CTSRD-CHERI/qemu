@@ -1741,6 +1741,46 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_cbts(CPUMIPSState *env, uint32_t cb, uint32_t offset)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CBTS: Branch if tag is set
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return (target_ulong)0;
+    } else if (cbp->cr_tag &&
+            ((env->active_tc.PC + 4 * (int64_t)offset + 4) >
+             env->active_tc.PCC.cr_length)) {
+        do_raise_c2_exception_noreg(env, CP2Ca_LENGTH);
+        return (target_ulong)0;
+    } else {
+        return (target_ulong)cbp->cr_tag;
+    }
+}
+
+target_ulong helper_cbtu(CPUMIPSState *env, uint32_t cb, uint32_t offset)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CBTU: Branch if tag is unset
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return (target_ulong)0;
+    } else if (!cbp->cr_tag &&
+            ((env->active_tc.PC + 4 * (int64_t)offset + 4) >
+             env->active_tc.PCC.cr_length)) {
+        do_raise_c2_exception_noreg(env, CP2Ca_LENGTH);
+        return (target_ulong)0;
+    } else {
+        return (target_ulong)!cbp->cr_tag;
+    }
+}
+
 void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
