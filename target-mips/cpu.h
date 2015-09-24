@@ -29,10 +29,17 @@ struct r4k_tlb_t {
     uint_fast16_t V1:1;
     uint_fast16_t D0:1;
     uint_fast16_t D1:1;
+#if defined(TARGET_CHERI)
+    uint_fast16_t L0:1;
+    uint_fast16_t L1:1;
+    uint_fast16_t S0:1;
+    uint_fast16_t S1:1;
+#else
     uint_fast16_t XI0:1;
     uint_fast16_t XI1:1;
     uint_fast16_t RI0:1;
     uint_fast16_t RI1:1;
+#endif /* TARGET_CHERI */
     uint_fast16_t EHINV:1;
     uint64_t PFN[2];
 };
@@ -216,6 +223,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
                                  CAP_ACCESS_KDC | CAP_ACCESS_KCC |          \
                                  CAP_ACCESS_KR1C | CAP_ACCESS_KR2C |        \
                                  CAP_RESERVED1 | CAP_RESERVED2)
+
 #endif /* TARGET_CHERI */
 
 typedef struct TCState TCState;
@@ -347,8 +355,13 @@ struct CPUMIPSState {
     uint64_t CP0_EntryLo0;
     uint64_t CP0_EntryLo1;
 #if defined(TARGET_MIPS64)
+#if defined(TARGET_CHERI)
+# define CP0EnLo_S 63
+# define CP0EnLo_L 62
+#else
 # define CP0EnLo_RI 63
 # define CP0EnLo_XI 62
+#endif /* TARGET_CHERI */
 #else
 # define CP0EnLo_RI 31
 # define CP0EnLo_XI 30

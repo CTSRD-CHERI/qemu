@@ -6118,7 +6118,11 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
 #if defined(TARGET_MIPS64)
                 if (ctx->rxi) {
                     /* Move RI/XI fields to bits 31:30 */
+#if defined(TARGET_CHERI)
+                    tcg_gen_shri_tl(arg, tmp, CP0EnLo_L);
+#else
                     tcg_gen_shri_tl(arg, tmp, CP0EnLo_XI);
+#endif /* TARGET_CHERI */
                     tcg_gen_deposit_tl(tmp, tmp, arg, 30, 2);
                 }
 #endif
@@ -6176,7 +6180,11 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
 #if defined(TARGET_MIPS64)
                 if (ctx->rxi) {
                     /* Move RI/XI fields to bits 31:30 */
+#if defined(TARGET_CHERI)
+                    tcg_gen_shri_tl(arg, tmp, CP0EnLo_L);
+#else
                     tcg_gen_shri_tl(arg, tmp, CP0EnLo_XI);
+#endif /* TARGET_CHERI */
                     tcg_gen_deposit_tl(tmp, tmp, arg, 30, 2);
                 }
 #endif

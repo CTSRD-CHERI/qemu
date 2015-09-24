@@ -1156,7 +1156,11 @@ void helper_mtc0_entrylo0(CPUMIPSState *env, target_ulong arg1)
     /* 1k pages not implemented */
     target_ulong rxi = arg1 & (env->CP0_PageGrain & (3u << CP0PG_XIE));
     env->CP0_EntryLo0 = (arg1 & MTC0_ENTRYLO_MASK(env))
+#if defined(TARGET_CHERI)
+                        | (rxi << (CP0EnLo_L - 30));
+#else
                         | (rxi << (CP0EnLo_XI - 30));
+#endif /* TARGET_CHERI */
 }
 
 #if defined(TARGET_MIPS64)
@@ -1334,7 +1338,11 @@ void helper_mtc0_entrylo1(CPUMIPSState *env, target_ulong arg1)
     /* 1k pages not implemented */
     target_ulong rxi = arg1 & (env->CP0_PageGrain & (3u << CP0PG_XIE));
     env->CP0_EntryLo1 = (arg1 & MTC0_ENTRYLO_MASK(env))
+#if defined(TARGET_CHERI)
+                        | (rxi << (CP0EnLo_L - 30));
+#else
                         | (rxi << (CP0EnLo_XI - 30));
+#endif /* TARGET_CHERI */
 }
 
 #if defined(TARGET_MIPS64)
@@ -3037,14 +3045,24 @@ static void r4k_fill_tlb(CPUMIPSState *env, int idx)
     tlb->V0 = (env->CP0_EntryLo0 & 2) != 0;
     tlb->D0 = (env->CP0_EntryLo0 & 4) != 0;
     tlb->C0 = (env->CP0_EntryLo0 >> 3) & 0x7;
+#if defined(TARGET_CHERI)
+    tlb->L0 = (env->CP0_EntryLo0 >> CP0EnLo_L) & 1;
+    tlb->S0 = (env->CP0_EntryLo0 >> CP0EnLo_S) & 1;
+#else
     tlb->XI0 = (env->CP0_EntryLo0 >> CP0EnLo_XI) & 1;
     tlb->RI0 = (env->CP0_EntryLo0 >> CP0EnLo_RI) & 1;
+#endif /* TARGET_CHERI */
     tlb->PFN[0] = get_tlb_pfn_from_entrylo(env->CP0_EntryLo0) << 12;
     tlb->V1 = (env->CP0_EntryLo1 & 2) != 0;
     tlb->D1 = (env->CP0_EntryLo1 & 4) != 0;
     tlb->C1 = (env->CP0_EntryLo1 >> 3) & 0x7;
+#if defined(TARGET_CHERI)
+    tlb->L1 = (env->CP0_EntryLo0 >> CP0EnLo_L) & 1;
+    tlb->S1 = (env->CP0_EntryLo0 >> CP0EnLo_S) & 1;
+#else
     tlb->XI1 = (env->CP0_EntryLo1 >> CP0EnLo_XI) & 1;
     tlb->RI1 = (env->CP0_EntryLo1 >> CP0EnLo_RI) & 1;
+#endif /* TARGET_CHERI */
     tlb->PFN[1] = get_tlb_pfn_from_entrylo(env->CP0_EntryLo1) << 12;
 }
 
@@ -3197,12 +3215,22 @@ void r4k_helper_tlbr(CPUMIPSState *env)
         env->CP0_EntryHi = tlb->VPN | tlb->ASID;
         env->CP0_PageMask = tlb->PageMask;
         env->CP0_EntryLo0 = tlb->G | (tlb->V0 << 1) | (tlb->D0 << 2) |
+#if defined(TARGET_CHERI)
+                        ((uint64_t)tlb->L0 << CP0EnLo_L) |
+                        ((uint64_t)tlb->S0 << CP0EnLo_S) | (tlb->C0 << 3) |
+#else
                         ((uint64_t)tlb->RI0 << CP0EnLo_RI) |
                         ((uint64_t)tlb->XI0 << CP0EnLo_XI) | (tlb->C0 << 3) |
+#endif /* TARGET_CHERI */
                         get_entrylo_pfn_from_tlb(tlb->PFN[0] >> 12);
         env->CP0_EntryLo1 = tlb->G | (tlb->V1 << 1) | (tlb->D1 << 2) |
+#if defined(TARGET_CHERI)
+                        ((uint64_t)tlb->L1 << CP0EnLo_L) |
+                        ((uint64_t)tlb->S1 << CP0EnLo_S) | (tlb->C0 << 3) |
+#else
                         ((uint64_t)tlb->RI1 << CP0EnLo_RI) |
                         ((uint64_t)tlb->XI1 << CP0EnLo_XI) | (tlb->C1 << 3) |
+#endif /* TARGET_CHERI */
                         get_entrylo_pfn_from_tlb(tlb->PFN[1] >> 12);
     }
 }

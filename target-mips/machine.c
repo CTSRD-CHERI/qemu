@@ -139,10 +139,17 @@ static int get_tlb(QEMUFile *f, void *pv, size_t size)
     v->D0 = (flags >> 1) & 1;
     v->D1 = (flags >> 0) & 1;
     v->EHINV = (flags >> 15) & 1;
+#if defined(TARGET_CHERI)
+    v->S1 = (flags >> 14) & 1;
+    v->S0 = (flags >> 13) & 1;
+    v->L1 = (flags >> 12) & 1;
+    v->L0 = (flags >> 11) & 1;
+#else
     v->RI1 = (flags >> 14) & 1;
     v->RI0 = (flags >> 13) & 1;
     v->XI1 = (flags >> 12) & 1;
     v->XI0 = (flags >> 11) & 1;
+#endif /* TARGET_CHERI */
     qemu_get_be64s(f, &v->PFN[0]);
     qemu_get_be64s(f, &v->PFN[1]);
 
@@ -155,10 +162,17 @@ static void put_tlb(QEMUFile *f, void *pv, size_t size)
 
     uint8_t asid = v->ASID;
     uint16_t flags = ((v->EHINV << 15) |
+#if defined(TARGET_CHERI)
+                      (v->S1 << 14) |
+                      (v->S0 << 13) |
+                      (v->L1 << 12) |
+                      (v->L0 << 11) |
+#else
                       (v->RI1 << 14) |
                       (v->RI0 << 13) |
                       (v->XI1 << 12) |
                       (v->XI0 << 11) |
+#endif /* TARGET_CHERI */
                       (v->G << 10) |
                       (v->C0 << 7) |
                       (v->C1 << 4) |
