@@ -170,10 +170,11 @@ mips_mipssim_init(MachineState *machine)
     reset_info->vector = env->active_tc.PC;
     qemu_register_reset(main_cpu_reset, reset_info);
 
-#if defined(CONFIG_CHERI)
+#ifdef TARGET_CHERI
     if (machine->breakpoint)
         cpu_breakpoint_insert((CPUState *)cpu, machine->breakpoint, BP_GDB,
                 NULL);
+    cheri_tag_init(ram_size);
 #endif
 
     /* Allocate RAM. */

@@ -91,12 +91,14 @@ int r4k_map_address (CPUMIPSState *env, hwaddr *physical, int *prot,
             if (!(n ? tlb->V1 : tlb->V0)) {
                 return TLBRET_INVALID;
             }
+#if !defined(TARGET_CHERI)
             if (rw == MMU_INST_FETCH && (n ? tlb->XI1 : tlb->XI0)) {
                 return TLBRET_XI;
             }
             if (rw == MMU_DATA_LOAD && (n ? tlb->RI1 : tlb->RI0)) {
                 return TLBRET_RI;
             }
+#endif /* TARGET_CHERI */
             if (rw != MMU_DATA_STORE || (n ? tlb->D1 : tlb->D0)) {
                 *physical = tlb->PFN[n] | (address & (mask >> 1));
                 *prot = PAGE_READ;
@@ -838,3 +840,112 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
     }
 }
 #endif
+
+#if defined(TARGET_CHERI)
+/*
+ * Tagged Memory Emulation
+ *
+ * CHERI requires a 1-bit tag for every capability-aligned,
+ * capability-sized word in physical memory.  This allows capabilities
+ * to be safely loaded and stored in meory without loss of integrity.
+ *
+ * For emulation purposes the tag is an one-byte flag.  This makes it
+ * easy to set or unset a tag without the need of locking or atomics.
+ * This requires eight times the memory, however.  To reduce the amount
+ * of memory needed the tag flag array is allocated sparsely, 4K at at
+ * time, and on demand.
+ *
+ * XXX Should consider adding a reference count per tag block so that
+ * blocks can be deallocated when no longer used maybe.
+ */
+
+#define CAP_TAG_SHFT        5           // 5 for 256-bit caps, 4 for 128-bit
+#define CAP_TAGBLK_SHFT     12          // 2^12 or 4096 tags per block
+#define CAP_TAGBLK_MSK      ((1 << CAP_TAGBLK_SHFT) - 1)
+#define CAP_TAGBLK_SZ       (1 << CAP_TAGBLK_SHFT)
+#define CAP_SIZE            ((1 << CAP_TAG_SHIFT) * 8)
+
+uint8_t **cheri_tagmem = NULL;
+uint64_t cheri_ntagblks = 0;
+
+void cheri_tag_init(uint64_t memory_size)
+{
+    // printf("%s: memory_size=0x%lx\n", __func__, memory_size);
+    if (cheri_tagmem != NULL)
+        return;
+
+    cheri_ntagblks = (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT;
+    cheri_tagmem = (uint8_t **)g_malloc0(cheri_ntagblks * sizeof(uint8_t *));
+    if (cheri_tagmem == NULL) {
+        printf("%s: Can't allocated tag memory\n", __func__);
+        exit (-1);
+    }
+}
+
+void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
+{
+    hwaddr paddr;
+    uint64_t tag1, tag2;
+    uint8_t *tagblk1, *tagblk2;
+    int prot;
+
+    if (get_physical_address(env, &paddr, &prot, vaddr, 0, ACCESS_INT) != 0) {
+        printf("%s: Can't get physical address for 0x%016lx\n", __func__,
+                vaddr);
+        return;
+    }
+    // printf("%s: vaddr=0x%lx -> paddr=0x%lx\n", __func__, vaddr, paddr);
+
+    /* Get the tag number for both the start and end of write. */
+    tag1 = paddr >> CAP_TAG_SHFT;
+    tag2 = (paddr + (size - 1)) >> CAP_TAG_SHFT;
+
+    if (tag1 == tag2) {
+        /* The write only invalidates one tag. */
+        tagblk1 = cheri_tagmem[tag1 >> CAP_TAGBLK_SHFT];
+        if (tagblk1 != NULL)
+            tagblk1[tag1 & CAP_TAGBLK_MSK] = 0;
+    } else {
+        /* The write invalidates two tags. */
+        tagblk1 = cheri_tagmem[tag1 >> CAP_TAGBLK_SHFT];
+        tagblk2 = cheri_tagmem[tag2 >> CAP_TAGBLK_SHFT];
+        if (tagblk1 != NULL)
+            tagblk1[tag1 & CAP_TAGBLK_MSK] = 0;
+        if (tagblk2 != NULL)
+            tagblk2[tag2 & CAP_TAGBLK_MSK] = 0;
+    }
+
+    return;
+}
+
+void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr)
+{
+    hwaddr paddr;
+    uint64_t tag;
+    uint8_t *tagblk;
+    int prot;
+
+    if (get_physical_address(env, &paddr, &prot, vaddr, 0, ACCESS_INT) != 0) {
+        printf("%s: Can't get physical address for 0x%016lx\n", __func__,
+                vaddr);
+        return;
+    }
+
+    /* Get the tag number and tag block ptr. */
+    tag = paddr >> CAP_TAG_SHFT;
+    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+
+    if (tagblk == NULL) {
+        /* Allocated a tag block. */
+        tagblk = g_malloc0(CAP_TAGBLK_SZ);
+        if (tagblk == NULL) {
+            printf("%s: Can't allocated tag memory\n", __func__);
+            exit(-1);
+        }
+        cheri_tagmem[tag >> CAP_TAGBLK_SHFT] = tagblk;
+    }
+    tagblk[tag & CAP_TAGBLK_MSK] = 1;
+
+    return;
+}
+#endif /* TARGET_CHERI */

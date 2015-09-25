@@ -2483,11 +2483,21 @@ static inline void generate_ccheck_load(TCGv addr, int32_t len)
 
 #define GEN_CAP_CHECK_LOAD(addr, len)  generate_ccheck_load(addr, len)
 
+static inline void generate_cinvalidate_tag(TCGv addr, int32_t len)
+{
+    TCGv_i32 tlen = tcg_const_i32(len);
+    gen_helper_cinvalidate_tag(cpu_env, addr, tlen);
+    tcg_temp_free_i32(tlen);
+}
+
+#define GEN_CAP_INVADIATE_TAG(addr, len)  generate_cinvalidate_tag(addr, len)
+
 #else /* ! TARGET_CHERI */
 
 #define GEN_CAP_CHECK_PC(pc)
 #define GEN_CAP_CHECK_STORE(addr, len)
 #define GEN_CAP_CHECK_LOAD(addr, len)
+#define GEN_CAP_INVADIATE_TAG(addr, len)
 
 #endif /* ! TARGET_CHERI */
 
@@ -3125,18 +3135,21 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
         GEN_CAP_CHECK_STORE(t0, 8);
         tcg_gen_qemu_st_tl(t1, t0, ctx->mem_idx, MO_TEQ |
                            ctx->default_tcg_memop_mask);
+        GEN_CAP_INVADIATE_TAG(t0, 8);
         opn = "sd";
         break;
     case OPC_SDL:
         GEN_CAP_CHECK_STORE(t0, 8);
         save_cpu_state(ctx, 1);
         gen_helper_0e2i(sdl, t1, t0, ctx->mem_idx);
+        GEN_CAP_INVADIATE_TAG(t0, 8);
         opn = "sdl";
         break;
     case OPC_SDR:
         GEN_CAP_CHECK_STORE(t0, 8);
         save_cpu_state(ctx, 1);
         gen_helper_0e2i(sdr, t1, t0, ctx->mem_idx);
+        GEN_CAP_INVADIATE_TAG(t0, 8);
         opn = "sdr";
         break;
 #endif
@@ -3144,29 +3157,34 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
         GEN_CAP_CHECK_STORE(t0, 4);
         tcg_gen_qemu_st_tl(t1, t0, ctx->mem_idx, MO_TEUL |
                            ctx->default_tcg_memop_mask);
+        GEN_CAP_INVADIATE_TAG(t0, 4);
         opn = "sw";
         break;
     case OPC_SH:
         GEN_CAP_CHECK_STORE(t0, 2);
         tcg_gen_qemu_st_tl(t1, t0, ctx->mem_idx, MO_TEUW |
                            ctx->default_tcg_memop_mask);
+        GEN_CAP_INVADIATE_TAG(t0, 2);
         opn = "sh";
         break;
     case OPC_SB:
         GEN_CAP_CHECK_STORE(t0, 1);
         tcg_gen_qemu_st_tl(t1, t0, ctx->mem_idx, MO_8);
+        GEN_CAP_INVADIATE_TAG(t0, 1);
         opn = "sb";
         break;
     case OPC_SWL:
         GEN_CAP_CHECK_STORE(t0, 4);
         save_cpu_state(ctx, 1);
         gen_helper_0e2i(swl, t1, t0, ctx->mem_idx);
+        GEN_CAP_INVADIATE_TAG(t0, 4);
         opn = "swl";
         break;
     case OPC_SWR:
         GEN_CAP_CHECK_STORE(t0, 4);
         save_cpu_state(ctx, 1);
         gen_helper_0e2i(swr, t1, t0, ctx->mem_idx);
+        GEN_CAP_INVADIATE_TAG(t0, 4);
         opn = "swr";
         break;
     }

@@ -2672,6 +2672,12 @@ void helper_ccheck_load(CPUMIPSState *env, target_ulong addr, uint32_t len)
     // fprintf(qemu_logfile, "LD(%u):%016lx\n", len, addr);
 }
 
+void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len)
+{
+
+    cheri_tag_invalidate(env, addr, len);
+}
+
 void helper_mtc0_dumpstate(CPUMIPSState *env, target_ulong arg1)
 {
     cpu_dump_state(CPU(mips_env_get_cpu(env)),

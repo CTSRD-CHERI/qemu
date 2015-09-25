@@ -1161,6 +1161,11 @@ static inline void cpu_mips_store_cause(CPUMIPSState *env, target_ulong val)
 }
 
 #if defined(TARGET_CHERI)
+
+void cheri_tag_init(uint64_t memory_size);
+void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size);
+void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr);
+
 static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
         uint16_t exc_code)
 {
