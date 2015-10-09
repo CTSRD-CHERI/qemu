@@ -16,12 +16,14 @@
  */
 #include "target_arch.h"
 
+#define TP_OFFSET	0x7008
+
 void target_cpu_set_tls(CPUMIPSState *env, target_ulong newtls)
 {
-    env->active_tc.CP0_UserLocal = newtls;
+    env->active_tc.CP0_UserLocal = newtls + TP_OFFSET;
 }
 
 target_ulong target_cpu_get_tls(CPUMIPSState *env)
 {
-    return (env->active_tc.CP0_UserLocal);
+    return (env->active_tc.CP0_UserLocal - TP_OFFSET);
 }
