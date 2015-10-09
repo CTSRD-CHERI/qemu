@@ -81,6 +81,10 @@ struct target_sigframe {
     uint32_t    __spare__[2];
 };
 
+/* Forward declare due to unfortunate header nesting */
+void target_cpu_set_tls(CPUMIPSState *env, target_ulong newtls);
+target_ulong target_cpu_get_tls(CPUMIPSState *env);
+
 /*
  * Compare to mips/mips/pm_machdep.c sendsig()
  * Assumes that target stack frame memory is locked.
@@ -160,7 +164,7 @@ static inline abi_long get_mcontext(CPUMIPSState *regs, target_mcontext_t *mcp,
     mcp->mc_pc = tswapal(regs->active_tc.PC);
     mcp->mullo = tswapal(regs->active_tc.LO[0]);
     mcp->mulhi = tswapal(regs->active_tc.HI[0]);
-    mcp->mc_tls = tswapal(regs->active_tc.CP0_UserLocal);
+    mcp->mc_tls = tswapal(target_cpu_get_tls(regs));
 
     /* Don't do any of the status and cause registers. */
 
@@ -189,7 +193,7 @@ static inline abi_long set_mcontext(CPUMIPSState *regs, target_mcontext_t *mcp,
     regs->CP0_EPC = tswapal(mcp->mc_pc);
     regs->active_tc.LO[0] = tswapal(mcp->mullo);
     regs->active_tc.HI[0] = tswapal(mcp->mulhi);
-    regs->active_tc.CP0_UserLocal = tswapal(mcp->mc_tls);
+    target_cpu_set_tls(regs, tswapal(mcp->mc_tls));
 
     if (srflag) {
         /* doing sigreturn() */
