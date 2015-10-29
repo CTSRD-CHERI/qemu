@@ -377,6 +377,17 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
     k = &ts->sigtab[sig - 1];
     queue = gdb_queuesig();
     handler = sigact_table[sig - 1]._sa_handler;
+    if (ts->sigsegv_blocked && sig == TARGET_SIGSEGV) {
+        /* Guest has blocked SIGSEGV but we got one anyway. Assume this
+         * is a forced SIGSEGV (ie one the kernel handles via force_sig_info
+         * because it got a real MMU fault). A blocked SIGSEGV in that
+         * situation is treated as if using the default handler. This is
+         * not correct if some other process has randomly sent us a SIGSEGV
+         * via kill(), but that is not easy to distinguish at this point,
+         * so we assume it doesn't happen.
+         */
+        handler = TARGET_SIG_DFL;
+    }
 #ifdef DEBUG_SIGNAL
     fprintf(stderr, "queue_signal: sig=%d handler=0x%lx flags=0x%x\n", sig,
         handler, (uint32_t)sigact_table[sig - 1].sa_flags);
@@ -443,9 +454,12 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
      */
     if ((host_signum == SIGSEGV || host_signum == SIGBUS) &&
             info->si_code < 0x10000) {
+        start_exclusive();
         if (cpu_signal_handler(host_signum, info, puc)) {
+            end_exclusive();
             return;
         }
+        end_exclusive();
     }
 
     /* Get the target signal number. */
