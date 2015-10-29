@@ -61,24 +61,11 @@ static inline abi_long do_bsd_sigprocmask(abi_long arg1, abi_ulong arg2,
     void *p;
     sigset_t set, oldset, *set_ptr;
     int how;
+    CPUState *cpu = thread_cpu;
+    TaskState *ts = (TaskState *)cpu->opaque;
 
     if (arg2) {
-        switch (arg1) {
-        case TARGET_SIG_BLOCK:
-            how = SIG_BLOCK;
-            break;
-
-        case TARGET_SIG_UNBLOCK:
-            how = SIG_UNBLOCK;
-            break;
-
-        case TARGET_SIG_SETMASK:
-            how = SIG_SETMASK;
-            break;
-
-        default:
-            return -TARGET_EFAULT;
-        }
+        bool has_sigsegv;
         p = lock_user(VERIFY_READ, arg2, sizeof(target_sigset_t), 1);
         if (p == NULL) {
             return -TARGET_EFAULT;
@@ -86,6 +73,31 @@ static inline abi_long do_bsd_sigprocmask(abi_long arg1, abi_ulong arg2,
         target_to_host_sigset(&set, p);
         unlock_user(p, arg2, 0);
         set_ptr = &set;
+        has_sigsegv = sigismember(set_ptr, SIGSEGV);
+        sigdelset(set_ptr, SIGSEGV);
+        switch (arg1) {
+        case TARGET_SIG_BLOCK:
+            how = SIG_BLOCK;
+            if (has_sigsegv)
+		    ts->sigsegv_blocked = true;
+            break;
+
+        case TARGET_SIG_UNBLOCK:
+            how = SIG_UNBLOCK;
+            if (has_sigsegv)
+		    ts->sigsegv_blocked = false;
+            break;
+
+        case TARGET_SIG_SETMASK:
+            how = SIG_SETMASK;
+            ts->sigsegv_blocked = has_sigsegv;
+            break;
+
+        default:
+            return -TARGET_EFAULT;
+        }
+
+
     } else {
         how = 0;
         set_ptr = NULL;

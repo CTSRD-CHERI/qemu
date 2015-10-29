@@ -920,6 +920,21 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
             ret = 0;
             goto out;
 #endif
+#if defined(TARGET_ARM)
+	case HW_FLOATINGPT:
+	    if (oldlen) {
+		  if (env->features & ((1ULL << ARM_FEATURE_VFP)|
+		      (1ULL << ARM_FEATURE_VFP3)|
+		      (1ULL << ARM_FEATURE_VFP4)))
+			  *(int32_t *)holdp = 1;
+		  else
+			  *(int32_t *)holdp = 0;
+	    }
+	    holdlen = sizeof(int32_t);
+	    ret = 0;
+	    goto out;
+#endif
+
 
 #if TARGET_ABI_BITS != HOST_LONG_BITS
 	case HW_PHYSMEM:
