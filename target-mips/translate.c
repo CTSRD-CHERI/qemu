@@ -2456,6 +2456,111 @@ static inline void generate_cld(DisasContext *ctx, int32_t rd, int32_t cb,
     tcg_temp_free_i32(tcb);
 }
 
+static inline int32_t clc_sign_extend(int32_t x)
+{
+    int32_t const mask = 1U << (11 - 1);
+
+    x = x & ((1U << 11) - 1);
+    return (x ^ mask) - mask;
+}
+
+static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset));
+    TCGv taddr = tcg_temp_new();
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+    TCGv t2 = tcg_temp_new();
+
+    /* Check the cap registers and compute the address. */
+    gen_load_gpr(t0, rt);
+    gen_helper_clc_addr(taddr, cpu_env, tcd, tcb, t0, toffset);
+
+    /* Fetch the otype and perms from memory */
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
+            MO_TEQ | ctx->default_tcg_memop_mask);
+
+    /* Store in the capability register. */
+    gen_helper_bytes2cap_op(cpu_env, tcd, t0, taddr);
+
+    /* Fetch the cursor, base, and length from memory */
+    tcg_gen_addi_tl(taddr, taddr, 8);
+    /* Fetch cursor in t0 */
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
+            MO_TEQ | ctx->default_tcg_memop_mask);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+    /* Fetch base in t1 */
+    tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
+            MO_TEQ | ctx->default_tcg_memop_mask);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+    /* Fetch length in t2 */
+    tcg_gen_qemu_ld_tl(t2, taddr, ctx->mem_idx,
+            MO_TEQ | ctx->default_tcg_memop_mask);
+
+    /* Store in the capability register. */
+    gen_helper_bytes2cap_cbl(cpu_env, tcd, t0, t1, t2);
+
+    tcg_temp_free(t2);
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free(taddr);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcd);
+}
+
+static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset));
+    TCGv taddr = tcg_temp_new();
+    TCGv t0 = tcg_temp_new();
+
+    /* Check the cap registers and compute the address. */
+    gen_load_gpr(t0, rt);
+    gen_helper_csc_addr(taddr, cpu_env, tcs, tcb, t0, toffset);
+
+    /* Store otype and perms to memory. */
+    gen_helper_cap2bytes_op(t0, cpu_env, tcs);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    /*
+     * Store cursor to memory. Also, set the tag bit.  We
+     * set the tag bit here because the store above would
+     * have faulted the TLB if it didn't have an entry for
+     * this address.  Once we are sure the TLB has an entry
+     * we can set the tab bit.
+     */
+    gen_helper_cap2bytes_cursor(t0, cpu_env, tcs, taddr);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    /* Store base to memory. */
+    gen_helper_cap2bytes_base(t0, cpu_env, tcs);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    /* Store length to memory. */
+    gen_helper_cap2bytes_length(t0, cpu_env, tcs);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    tcg_temp_free(t0);
+    tcg_temp_free(taddr);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcs);
+}
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -21159,16 +21264,14 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
     case OPC_CLOADC:    /* Load Capability Register */
-        MIPS_INVAL("clc");
-        generate_exception (ctx, EXCP_RI);
+        generate_clc(ctx, rs, rt, rd, ctx->opcode & 0x7ff);
         break;
     case OPC_CSTORE:    /* Store Via Capability Register */
         MIPS_INVAL("cs");
         generate_exception (ctx, EXCP_RI);
         break;
     case OPC_CSTOREC:   /* Store Capability Register */
-        MIPS_INVAL("csc");
-        generate_exception (ctx, EXCP_RI);
+        generate_csc(ctx, rs, rt, rd, imm & 0x7ff);
         break;
 #else /* ! TARGET_CHERI */
     /* Compact branches [R6] and COP2 [non-R6] */

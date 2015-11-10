@@ -948,4 +948,27 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr)
 
     return;
 }
+
+int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr)
+{
+    hwaddr paddr;
+    uint64_t tag;
+    uint8_t *tagblk;
+    int prot;
+
+    if (get_physical_address(env, &paddr, &prot, vaddr, 0, ACCESS_INT) != 0) {
+        printf("%s: Can't get physical address for 0x%016lx\n", __func__,
+                vaddr);
+        return 0;
+    }
+
+    /* Get the tag number and tag block ptr. */
+    tag = paddr >> CAP_TAG_SHFT;
+    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+
+    if (tagblk == NULL)
+        return 0;
+    else
+        return tagblk[tag & CAP_TAGBLK_MSK];
+}
 #endif /* TARGET_CHERI */
