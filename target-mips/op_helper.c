@@ -2664,7 +2664,7 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         return (target_ulong)0;
     } else {
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
-        uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int64_t)offset);
+        uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
 
         /* 32 = 256-bit capability */
         if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
@@ -2705,8 +2705,7 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         return (target_ulong)0;
     } else {
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
-        uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int64_t)offset);
-// printf("offset = %ld\n", (int64_t)offset);
+        uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
 
         /* 32 = 256-bit capability */
         if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
