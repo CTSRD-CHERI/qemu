@@ -1728,7 +1728,7 @@ static inline void check_cap(CPUMIPSState *env, cap_register_t *cr, uint32_t per
 
 do_exception:
     env->CP0_BadVAddr = addr;
-    env->active_tc.EPCC = *cr;
+    // env->active_tc.EPCC = *cr;
     do_raise_c2_exception(env, cause, regnum);
 }
 
@@ -2797,16 +2797,26 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 }
 
-void helper_ccheck_store(CPUMIPSState *env, target_ulong addr, uint32_t len)
+target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
-    check_cap(env, &env->active_tc.C[0], CAP_PERM_STORE, addr, 0, len);
+    cap_register_t *ddc = &env->active_tc.C[0];
+    target_ulong addr = offset + ddc->cr_base;
+
     // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
+    check_cap(env, &env->active_tc.C[0], CAP_PERM_STORE, addr, 0, len);
+
+    return (addr);
 }
 
-void helper_ccheck_load(CPUMIPSState *env, target_ulong addr, uint32_t len)
+target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
-    check_cap(env, &env->active_tc.C[0], CAP_PERM_LOAD, addr, 0, len);
+    cap_register_t *ddc = &env->active_tc.C[0];
+    target_ulong addr = offset + ddc->cr_base;
+
     // fprintf(qemu_logfile, "LD(%u):%016lx\n", len, addr);
+    check_cap(env, ddc, CAP_PERM_LOAD, addr, 0, len);
+
+    return (addr);
 }
 
 void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len)
