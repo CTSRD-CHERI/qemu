@@ -2164,7 +2164,7 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
         *cdp = env->active_tc.PCC;
         cdp->cr_offset += 8;
         env->active_tc.PCC = *cbp;  // XXX shouldn't happen until the delay slot
-        return cbp->cr_offset;
+        return cbp->cr_offset + cbp->cr_base;
     }
 
     return (target_ulong)0;
@@ -2193,7 +2193,7 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
         helper_raise_exception(env, EXCP_AdEL);
     } else {
         env->active_tc.PCC = *cbp;  // XXX shouldn't happen until the delay slot
-        return cbp->cr_offset;
+        return cbp->cr_offset + cbp->cr_base;
     }
 
     return (target_ulong)0;
