@@ -477,7 +477,11 @@ static const mips_def_t mips_defs[] =
         /* No L2 cache, icache size 8k, dcache size 8k, uncached coherency. */
         .CP0_Config0 = (1 << 17) | (0x1 << 9) | (0x1 << 6) | (0x2 << CP0C0_K0),
         /* Note: Config1 is only used internally, the R4000 has only Config0. */
+#if defined(TARGET_CHERI)
+        .CP0_Config1 = (1 << CP0C1_FP) | (47 << CP0C1_MMU) | 0x40,
+#else
         .CP0_Config1 = (1 << CP0C1_FP) | (47 << CP0C1_MMU),
+#endif
         .CP0_LLAddr_rw_bitmask = 0xFFFFFFFF,
         .CP0_LLAddr_shift = 4,
         .SYNCI_Step = 16,
