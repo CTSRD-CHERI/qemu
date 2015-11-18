@@ -111,14 +111,14 @@ const char *causestr[] = {
 static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
         uint16_t reg)
 {
-    uint64_t pc = env->active_tc.PCC.cr_offset;
+    uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
 
 //    fprintf(qemu_logfile, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n",
-//            cause, causestr[cause], reg, pc);
+//           cause, causestr[cause], reg, pc);
     cpu_mips_store_capcause(env, reg, cause);
-    env->active_tc.PC = pc - 4;
+    env->active_tc.PC = pc;
     env->CP0_BadVAddr = pc;
-    do_raise_exception(env, EXCP_C2E, pc - 4);
+    do_raise_exception(env, EXCP_C2E, pc);
 }
 
 static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
@@ -1728,7 +1728,7 @@ static inline void check_cap(CPUMIPSState *env, cap_register_t *cr, uint32_t per
 
 do_exception:
     env->CP0_BadVAddr = addr;
-    // env->active_tc.EPCC = *cr;
+    // env->active_tc.C[CP2CAP_EPCC] = *cr;
     do_raise_c2_exception(env, cause, regnum);
 }
 
@@ -1838,7 +1838,7 @@ void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_TYPE, cs);
     } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cs);
-    } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (cbp->cr_perms & CAP_PERM_EXECUTE) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
     } else if (csp->cr_offset >= csp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cs);
@@ -2000,6 +2000,8 @@ target_ulong helper_cgetoffset(CPUMIPSState *env, uint32_t cb)
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
     } else {
+        // fprintf(qemu_logfile, "%s: offset(%d)=%016lx\n",
+        //      __func__, cb, env->active_tc.C[cb].cr_offset);
         // return (target_ulong)(env->active_tc.C[cb].cr_cursor -
         //        env->active_tc.C[cb].cr_base);
         return (target_ulong)env->active_tc.C[cb].cr_offset;
@@ -2791,7 +2793,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     /* Update the offset */
     // env->active_tc.PCC.cr_cursor = pc - env->active_tc.PCC.cr_base;
-    env->active_tc.PCC.cr_offset = pc;
+    env->active_tc.PCC.cr_offset = pc - env->active_tc.PCC.cr_base;
 
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 8);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);

@@ -686,6 +686,12 @@ void mips_cpu_do_interrupt(CPUState *cs)
         goto set_EPC;
     case EXCP_C2E:
         cause = 18;
+#ifdef TARGET_CHERI
+        env->CP0_Status &= ~(1 << CP0St_ERL);
+        if ((env->CP2_CapCause >> 8) == CP2Ca_CALL ||
+                (env->CP2_CapCause >> 8) == CP2Ca_RETURN)
+            offset = 0x280;
+#endif /* TARGET_CHERI */
         goto set_EPC;
     case EXCP_TLBRI:
         cause = 19;
@@ -746,6 +752,13 @@ void mips_cpu_do_interrupt(CPUState *cs)
             env->active_tc.PC = (int32_t)(env->CP0_EBase & ~0x3ff);
         }
         env->active_tc.PC += offset;
+#ifdef TARGET_CHERI
+        env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
+        env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_EPC -
+            env->active_tc.C[CP2CAP_EPCC].cr_base;
+        env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
+        env->active_tc.PCC.cr_offset =  env->active_tc.PC;
+#endif /* TARGET_CHERI */
         set_hflags_for_handler(env);
         env->CP0_Cause = (env->CP0_Cause & ~(0x1f << CP0Ca_EC)) | (cause << CP0Ca_EC);
         break;
