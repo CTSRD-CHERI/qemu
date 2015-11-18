@@ -163,8 +163,6 @@ DEF_HELPER_3(ccheck_store, tl, env, tl, i32)
 DEF_HELPER_3(ccheck_load, tl, env, tl, i32)
 DEF_HELPER_3(cinvalidate_tag, void, env, tl, i32)
 
-DEF_HELPER_3(pcc_compute_br, tl, env, i64, i32)
-
 DEF_HELPER_4(candperm, void, env, i32, i32, tl)
 DEF_HELPER_3(cbts, tl, env, i32, i32)
 DEF_HELPER_3(cbtu, tl, env, i32, i32)

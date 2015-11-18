@@ -2789,13 +2789,6 @@ target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
     return (csp->cr_length);
 }
 
-target_ulong helper_pcc_compute_br(CPUMIPSState *env, uint64_t pc, uint32_t offset)
-{
-   uint64_t base = env->active_tc.PCC.cr_base;
-
-   return (((pc - base) & (int32_t)0xF0000000) | offset) + base;
-}
-
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     /* Update the offset */
