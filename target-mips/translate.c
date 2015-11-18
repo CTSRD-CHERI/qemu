@@ -1101,7 +1101,7 @@ enum {
     OPC_CLBU        = OPC_CLOAD | (0x0),
     OPC_CLHU        = OPC_CLOAD | (0x1),
     OPC_CLWU        = OPC_CLOAD | (0x2),
-
+    OPC_CLDU        = OPC_CLOAD | (0x3),
     OPC_CLB         = OPC_CLOAD | (0x4),
     OPC_CLH         = OPC_CLOAD | (0x5),
     OPC_CLW         = OPC_CLOAD | (0x6),
@@ -21350,6 +21350,9 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
                 break;
             case OPC_CLWU:
                 generate_clwu(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                break;
+            case OPC_CLDU:
+                generate_cld(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
                 break;
             case OPC_CLB:
                 generate_clb(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
