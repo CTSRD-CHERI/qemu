@@ -2666,6 +2666,17 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     tcg_temp_free_i32(tcs);
 }
 
+static inline void generate_pcc_compute_br(TCGv tbt, uint64_t pc, uint32_t offset)
+{
+    TCGv_i64 tpc = tcg_const_i64(pc);
+    TCGv_i32 toffset = tcg_const_i32(offset);
+
+    gen_helper_pcc_compute_br(tbt, cpu_env, tpc, toffset);
+
+    tcg_temp_free_i64(tpc);
+    tcg_temp_free_i32(toffset);
+}
+
 static inline void generate_ccheck_pc(int64_t pc)
 {
     TCGv_i64 tpc = tcg_const_i64(pc);
@@ -5579,7 +5590,17 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
     case OPC_JAL:
     case OPC_JALX:
         /* Jump to immediate */
+
+#ifdef TARGET_CHERI
+        /*
+         * The branch target address is not known since the PCC.base can
+         * change.  Therefore treat this like a JR/JALR and compute the
+         * branch target from the current PCC.base.
+         */
+        generate_pcc_compute_br(btarget, (ctx->pc + insn_bytes), (uint32_t)offset);
+#else
         btgt = ((ctx->pc + insn_bytes) & (int32_t)0xF0000000) | (uint32_t)offset;
+#endif /* ! TARGET_CHERI */
         break;
     case OPC_JR:
     case OPC_JALR:
@@ -5646,16 +5667,26 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
             ctx->pc += 4;
             goto out;
         case OPC_J:
+#ifdef TARGET_CHERI
+            ctx->hflags |= MIPS_HFLAG_BR;
+            MIPS_DEBUG("j");
+#else
             ctx->hflags |= MIPS_HFLAG_B;
             MIPS_DEBUG("j " TARGET_FMT_lx, btgt);
+#endif /* TARGET_CHERI */
             break;
         case OPC_JALX:
             ctx->hflags |= MIPS_HFLAG_BX;
             /* Fallthrough */
         case OPC_JAL:
             blink = 31;
+#ifdef TARGET_CHERI
+            ctx->hflags |= MIPS_HFLAG_BR;
+            MIPS_DEBUG("jal");
+#else
             ctx->hflags |= MIPS_HFLAG_B;
             MIPS_DEBUG("jal " TARGET_FMT_lx, btgt);
+#endif /* TARGET_CHERI */
             break;
         case OPC_JR:
             ctx->hflags |= MIPS_HFLAG_BR;
