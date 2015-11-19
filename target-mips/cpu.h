@@ -635,6 +635,9 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_BC     0x01000 /* Conditional branch                 */
 #define MIPS_HFLAG_BL     0x01800 /* Likely branch                      */
 #define MIPS_HFLAG_BR     0x02000 /* branch to register (can't link TB) */
+#ifdef TARGET_CHERI
+#define MIPS_HFLAG_BRC    0x02800 /* branch to register and load PCC    */
+#endif /* TARGET_CHERI */
     /* Extra flags about the current pending branch.  */
 #define MIPS_HFLAG_BMASK_EXT 0x7C000
 #define MIPS_HFLAG_B16    0x04000 /* branch instruction was 16 bits     */

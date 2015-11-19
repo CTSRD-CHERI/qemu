@@ -2165,7 +2165,8 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     } else {
         *cdp = env->active_tc.PCC;
         cdp->cr_offset += 8;
-        env->active_tc.PCC = *cbp;  // XXX shouldn't happen until the delay slot
+        // The capability register is loaded into PCC during delay slot
+        // Return the branch target address
         return cbp->cr_offset + cbp->cr_base;
     }
 
@@ -2177,7 +2178,7 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
     /*
-     * CJALR: Jump and Link Capability Register
+     * CJR: Jump Capability Register
      */
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
@@ -2194,7 +2195,8 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
     } else if (align_of(4, (cbp->cr_base + cbp->cr_offset))) {
         helper_raise_exception(env, EXCP_AdEL);
     } else {
-        env->active_tc.PCC = *cbp;  // XXX shouldn't happen until the delay slot
+        // The capability register is loaded into PCC during delay slot
+        // Return the branch target address
         return cbp->cr_offset + cbp->cr_base;
     }
 
@@ -3592,6 +3594,10 @@ static inline void exception_return(CPUMIPSState *env)
     } else {
         set_pc(env, env->CP0_EPC);
         env->CP0_Status &= ~(1 << CP0St_EXL);
+#ifdef TARGET_CHERI
+        // qemu_log("%s: PCC <- EPCC\n", __func__);
+        env->active_tc.PCC = env->active_tc.C[CP2CAP_EPCC];
+#endif /* TARGET_CHERI */
     }
     compute_hflags(env);
     debug_post_eret(env);

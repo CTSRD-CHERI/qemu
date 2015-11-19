@@ -1544,6 +1544,9 @@ typedef struct DisasContext {
     uint32_t hflags, saved_hflags;
     int bstate;
     target_ulong btarget;
+#ifdef TARGET_CHERI
+    int btcr;
+#endif /* TARGET_CHERI */
     bool ulri;
     int kscrexist;
     bool rxi;
@@ -1874,7 +1877,9 @@ static inline void generate_cjalr(DisasContext *ctx, int32_t cd, int32_t cb)
 
     gen_helper_cjalr(btarget, cpu_env, tcd, tcb);
     /* Set branch and delay slot flags */
-    ctx->hflags |= (MIPS_HFLAG_BR | MIPS_HFLAG_BDS32);
+    ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
+    /* Save capability register index that is new PCC */
+    ctx->btcr = cb;
 
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tcd);
@@ -1886,7 +1891,9 @@ static inline void generate_cjr(DisasContext *ctx, int32_t cb)
 
     gen_helper_cjr(btarget, cpu_env, tcb);
     /* Set branch and delay slot flags */
-    ctx->hflags |= (MIPS_HFLAG_BR | MIPS_HFLAG_BDS32);
+    ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
+    /* Save capability register index that is new PCC */
+    ctx->btcr = cb;
 
     tcg_temp_free_i32(tcb);
 }
@@ -6311,8 +6318,10 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
 {
     const char *rn = "invalid";
 
+#ifndef TARGET_CHERI
     if (sel != 0)
         check_insn(ctx, ISA_MIPS32);
+#endif
 
     switch (reg) {
     case 0:
@@ -7635,8 +7644,10 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
 {
     const char *rn = "invalid";
 
+#ifndef TARGET_CHERI
     if (sel != 0)
         check_insn(ctx, ISA_MIPS64);
+#endif /* ! TARGET_CHERI */
 
     switch (reg) {
     case 0:
@@ -12408,6 +12419,40 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
             }
             tcg_gen_exit_tb(0);
             break;
+#ifdef TARGET_CHERI
+        case MIPS_HFLAG_BRC:
+            /* unconditional branch to capability register */
+            MIPS_DEBUG("branch to cap register");
+            tcg_gen_mov_tl(cpu_PC, btarget);
+            {
+                TCGv t0 = tcg_temp_new();
+
+                /* Update PCC with capability register */
+                tcg_gen_ld_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 0);
+                tcg_gen_st_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.PCC) + 0);
+                tcg_gen_ld_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 8);
+                tcg_gen_st_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.PCC) + 8);
+                tcg_gen_ld_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 16);
+                tcg_gen_st_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.PCC) + 16);
+                tcg_gen_ld_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 24);
+                tcg_gen_st_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.PCC) + 24);
+                tcg_temp_free(t0);
+            }
+            if (ctx->singlestep_enabled) {
+                save_cpu_state(ctx, 0);
+                gen_helper_0e0i(raise_exception, EXCP_DEBUG);
+            }
+            tcg_gen_exit_tb(0);
+            break;
+#endif /* TARGET_CHERI */
         default:
             fprintf(stderr, "unknown branch 0x%x\n", proc_hflags);
             abort();
