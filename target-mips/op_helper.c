@@ -2663,8 +2663,8 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (cbp->cr_perms & CAP_SEALED) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
         return (target_ulong)0;
     } else {
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
@@ -2691,6 +2691,7 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *csp = &env->active_tc.C[cs];
 
     if (creg_inaccessible(perms, cs)) {
         do_raise_c2_exception_v(env, cs);
@@ -2704,8 +2705,12 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
     } else if (cbp->cr_perms & CAP_SEALED) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        do_raise_c2_exception(env, CP2Ca_PERM_ST, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST_CAP, cb);
+        return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) && csp->cr_tag &&
+            !(csp->cr_perms & CAP_PERM_GLOBAL)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST_LC_CAP, cb);
         return (target_ulong)0;
     } else {
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
