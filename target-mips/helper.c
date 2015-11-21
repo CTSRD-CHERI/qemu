@@ -554,6 +554,18 @@ void mips_cpu_do_interrupt(CPUState *cs)
         env->CP0_Status |= (1 << CP0St_NMI);
  set_error_EPC:
         env->CP0_ErrorEPC = exception_resume_pc(env);
+#ifdef TARGET_CHERI
+        // qemu_log("%s: ErrorEPC <- " TARGET_FMT_lx "\n", __func__,
+        // exception_resume_pc(env));
+        // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
+        env->CP0_ErrorEPC -= env->active_tc.PCC.cr_base;
+        env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
+        env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_ErrorEPC -
+                env->active_tc.C[CP2CAP_EPCC].cr_base;
+        env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
+        env->active_tc.PCC.cr_offset =  env->active_tc.PC -
+                env->active_tc.PCC.cr_base;
+#endif /* TARGET_CHERI */
         env->hflags &= ~MIPS_HFLAG_BMASK;
         env->CP0_Status |= (1 << CP0St_ERL) | (1 << CP0St_BEV);
         if (env->insn_flags & ISA_MIPS3) {
@@ -744,6 +756,18 @@ void mips_cpu_do_interrupt(CPUState *cs)
             }
             env->hflags |= MIPS_HFLAG_CP0;
             env->hflags &= ~(MIPS_HFLAG_KSU);
+#ifdef TARGET_CHERI
+            // qemu_log("%s: EPC <- " TARGET_FMT_lx "\n", __func__,
+            //  exception_resume_pc(env));
+            // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
+            env->CP0_EPC -= env->active_tc.PCC.cr_base;
+            env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
+            env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_EPC -
+                env->active_tc.C[CP2CAP_EPCC].cr_base;
+            env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
+            env->active_tc.PCC.cr_offset =  env->active_tc.PC -
+                env->active_tc.PCC.cr_base;
+#endif /* TARGET_CHERI */
         }
         env->hflags &= ~MIPS_HFLAG_BMASK;
         if (env->CP0_Status & (1 << CP0St_BEV)) {
@@ -752,13 +776,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
             env->active_tc.PC = (int32_t)(env->CP0_EBase & ~0x3ff);
         }
         env->active_tc.PC += offset;
-#ifdef TARGET_CHERI
-        env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
-        env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_EPC -
-            env->active_tc.C[CP2CAP_EPCC].cr_base;
-        env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
-        env->active_tc.PCC.cr_offset =  env->active_tc.PC;
-#endif /* TARGET_CHERI */
         set_hflags_for_handler(env);
         env->CP0_Cause = (env->CP0_Cause & ~(0x1f << CP0Ca_EC)) | (cause << CP0Ca_EC);
         break;

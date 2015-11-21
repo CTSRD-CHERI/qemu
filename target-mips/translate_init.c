@@ -486,7 +486,11 @@ static const mips_def_t mips_defs[] =
         .CP0_LLAddr_shift = 4,
         .SYNCI_Step = 16,
         .CCRes = 2,
+#if defined(TARGET_CHERI)
+        .CP0_Status_rw_bitmask = 0x7678FFFF,
+#else
         .CP0_Status_rw_bitmask = 0x3678FFFF,
+#endif
         /* The R4000 has a full 64bit FPU but doesn't use the fcr0 bits. */
         .CP1_fcr0 = (0x5 << FCR0_PRID) | (0x0 << FCR0_REV),
         .SEGBITS = 40,

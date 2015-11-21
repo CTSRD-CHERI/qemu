@@ -1818,6 +1818,23 @@ static void gen_store_fpr64(DisasContext *ctx, TCGv_i64 t, int reg)
 }
 
 #if defined(TARGET_CHERI)
+/* Verify that the processor is running with CHERI instructions enabled. */
+static inline void check_cop2x(DisasContext *ctx)
+{
+
+    if (unlikely(!(ctx->hflags & MIPS_HFLAG_COP2X))) {
+        generate_exception(ctx, EXCP_RI);
+    }
+}
+
+/*
+static inline bool is_cop2x_enabled(DisasContext *ctx)
+{
+
+    return (likely(ctx->hflags & MIPS_HFLAG_COP2X));
+}
+*/
+
 static inline void generate_ccall(int32_t cs, int32_t cb)
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
@@ -2673,18 +2690,20 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     tcg_temp_free_i32(tcs);
 }
 
-static inline void generate_ccheck_pc(int64_t pc)
+static inline void generate_ccheck_pc(DisasContext *ctx)
 {
-    TCGv_i64 tpc = tcg_const_i64(pc);
+    TCGv_i64 tpc = tcg_const_i64(ctx->pc);
+
     gen_helper_ccheck_pc(cpu_env, tpc);
     tcg_temp_free_i64(tpc);
 }
 
-#define GEN_CAP_CHECK_PC(pc)    generate_ccheck_pc(pc)
+#define GEN_CAP_CHECK_PC(ctx)    generate_ccheck_pc(ctx)
 
 static inline void generate_ccheck_store(TCGv addr, TCGv offset, int32_t len)
 {
     TCGv_i32 tlen = tcg_const_i32(len);
+
     gen_helper_ccheck_store(addr, cpu_env, offset, tlen);
     tcg_temp_free_i32(tlen);
 }
@@ -2695,6 +2714,7 @@ static inline void generate_ccheck_store(TCGv addr, TCGv offset, int32_t len)
 static inline void generate_ccheck_load(TCGv addr, TCGv offset, int32_t len)
 {
     TCGv_i32 tlen = tcg_const_i32(len);
+
     gen_helper_ccheck_load(addr, cpu_env, offset, tlen);
     tcg_temp_free_i32(tlen);
 }
@@ -2705,6 +2725,7 @@ static inline void generate_ccheck_load(TCGv addr, TCGv offset, int32_t len)
 static inline void generate_cinvalidate_tag(TCGv addr, int32_t len)
 {
     TCGv_i32 tlen = tcg_const_i32(len);
+
     gen_helper_cinvalidate_tag(cpu_env, addr, tlen);
     tcg_temp_free_i32(tlen);
 }
@@ -2713,7 +2734,7 @@ static inline void generate_cinvalidate_tag(TCGv addr, int32_t len)
 
 #else /* ! TARGET_CHERI */
 
-#define GEN_CAP_CHECK_PC(pc)
+#define GEN_CAP_CHECK_PC(ctx)
 #define GEN_CAP_CHECK_STORE(addr, offset, len)
 #define GEN_CAP_CHECK_LOAD(addr, offset, len)
 #define GEN_CAP_INVADIATE_TAG(addr, len)
@@ -5588,22 +5609,27 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         /* Jump to immediate */
 
 #ifdef TARGET_CHERI
-        /*
-         * The branch target address is not known since the PCC.base can
-         * change.  Therefore treat this like a JR/JALR and compute the
-         * branch target from the current PCC.base.
-         *
-         * ((ctx->pc + insn_bytes) - PCC.base) >> 28 << 28 | offset +
-         * PCC.base
-         */
-        tcg_gen_movi_i64(t0, ctx->pc + insn_bytes);
-        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
+        // if (is_cop2x_enabled(ctx)) {
+            /*
+             * The branch target address is not known since the PCC.base can
+             * change.  Therefore treat this like a JR/JALR and compute the
+             * branch target from the current PCC.base.
+             *
+             * ((ctx->pc + insn_bytes) - PCC.base) >> 28 << 28 | offset +
+             * PCC.base
+             */
+            tcg_gen_movi_i64(t0, ctx->pc + insn_bytes);
+            tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
                 offsetof(cap_register_t, cr_base));
-        tcg_gen_sub_i64(t0, t0, t1);
-        tcg_gen_shri_i64(t0, t0, 28);
-        tcg_gen_shli_i64(t0, t0, 28);
-        tcg_gen_ori_i64(t0, t0, offset);
-        tcg_gen_add_i64(btarget, t0, t1);
+            tcg_gen_sub_i64(t0, t0, t1);
+            tcg_gen_shri_i64(t0, t0, 28);
+            tcg_gen_shli_i64(t0, t0, 28);
+            tcg_gen_ori_i64(t0, t0, offset);
+            tcg_gen_add_i64(btarget, t0, t1);
+//        } else {
+//            btgt = ((ctx->pc + insn_bytes) & (int32_t)0xF0000000) |
+//                (uint32_t)offset;
+//        }
 #else
         btgt = ((ctx->pc + insn_bytes) & (int32_t)0xF0000000) | (uint32_t)offset;
 #endif /* ! TARGET_CHERI */
@@ -5620,10 +5646,12 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         }
         gen_load_gpr(btarget, rs);
 #ifdef TARGET_CHERI
-        /* Subtract PCC.base from rs */
-        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
+//        if (is_cop2x_enabled(ctx)) {
+            /* Subtract PCC.base from rs */
+            tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
                 offsetof(cap_register_t, cr_base));
-        tcg_gen_sub_i64(btarget, btarget, t1);
+            tcg_gen_sub_i64(btarget, btarget, t1);
+//        }
 #endif /* TARGET_CHERI */
         break;
     default:
@@ -5668,10 +5696,12 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         case OPC_BLTZALL: /* 0 < 0 likely */
             tcg_gen_movi_tl(cpu_gpr[31], ctx->pc + 8);
 #ifdef TARGET_CHERI
-        /* Subtract PCC.base from r31 */
-        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
-                offsetof(cap_register_t, cr_base));
-        tcg_gen_sub_i64(cpu_gpr[31], cpu_gpr[31], t1);
+//            if (is_cop2x_enabled(ctx)) {
+                /* Subtract PCC.base from r31 */
+                tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState,
+                            active_tc.PCC) + offsetof(cap_register_t, cr_base));
+                tcg_gen_sub_i64(cpu_gpr[31], cpu_gpr[31], t1);
+//            }
 #endif /* TARGET_CHERI */
             /* Skip the instruction in the delay slot */
             MIPS_DEBUG("bnever, link and skip");
@@ -5686,8 +5716,13 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
             goto out;
         case OPC_J:
 #ifdef TARGET_CHERI
-            ctx->hflags |= MIPS_HFLAG_BR;
-            MIPS_DEBUG("j");
+//            if (is_cop2x_enabled(ctx)) {
+                ctx->hflags |= MIPS_HFLAG_BR;
+                MIPS_DEBUG("j");
+//            } else {
+//                ctx->hflags |= MIPS_HFLAG_B;
+//                MIPS_DEBUG("j " TARGET_FMT_lx, btgt);
+//            }
 #else
             ctx->hflags |= MIPS_HFLAG_B;
             MIPS_DEBUG("j " TARGET_FMT_lx, btgt);
@@ -5699,8 +5734,13 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         case OPC_JAL:
             blink = 31;
 #ifdef TARGET_CHERI
-            ctx->hflags |= MIPS_HFLAG_BR;
-            MIPS_DEBUG("jal");
+//            if (is_cop2x_enabled(ctx)) {
+                ctx->hflags |= MIPS_HFLAG_BR;
+                MIPS_DEBUG("jal");
+//            } else {
+//                ctx->hflags |= MIPS_HFLAG_B;
+//                MIPS_DEBUG("jal " TARGET_FMT_lx, btgt);
+//            }
 #else
             ctx->hflags |= MIPS_HFLAG_B;
             MIPS_DEBUG("jal " TARGET_FMT_lx, btgt);
@@ -5834,10 +5874,12 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
 
         tcg_gen_movi_tl(cpu_gpr[blink], ctx->pc + post_delay + lowbit);
 #ifdef TARGET_CHERI
-        /* Subtract PCC.base from r[blink] */
-        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
+//        if (is_cop2x_enabled(ctx)) {
+            /* Subtract PCC.base from r[blink] */
+            tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
                 offsetof(cap_register_t, cr_base));
-        tcg_gen_sub_i64(cpu_gpr[blink], cpu_gpr[blink], t1);
+            tcg_gen_sub_i64(cpu_gpr[blink], cpu_gpr[blink], t1);
+//        }
 #endif /* TARGET_CHERI */
     }
 
@@ -9994,34 +10036,42 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CGET:  /* 0x00 */
         switch(MASK_CAP3(opc)) {
         case OPC_CGETPERM: /* 0x0 */
+            check_cop2x(ctx);
             generate_cgetperm(r16, r11);
             opn = "cgetperm";
             break;
         case OPC_CGETTYPE: /* 0x1 */
+            check_cop2x(ctx);
             generate_cgettype(r16, r11);
             opn = "cgettype";
             break;
         case OPC_CGETBASE: /* 0x2 */
+            check_cop2x(ctx);
             generate_cgetbase(r16, r11);
             opn = "cgetbase";
             break;
         case OPC_CGETLEN: /* 0x3 */
+            check_cop2x(ctx);
             generate_cgetlen(r16, r11);
             opn = "cgetlen";
             break;
         case OPC_CGETCAUSE: /* 0x4 */
+            check_cop2x(ctx);
             generate_cgetcause(r16);
             opn = "cgetcause";
             break;
         case OPC_CGETTAG:  /* 0x5 */
+            check_cop2x(ctx);
             generate_cgettag(r16, r11);
             opn = "cgettag";
             break;
         case OPC_CGETSEALED: /* 0x6 */
+            check_cop2x(ctx);
             generate_cgetsealed(r16, r11);
             opn = "cgetsealed";
             break;
         case OPC_CGETPCC:  /* 0x7 */
+            check_cop2x(ctx);
             generate_cgetpcc(r11);
             opn = "cgetpcc";
             break;
@@ -10031,37 +10081,45 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         }
         break;
     case OPC_CSETBOUNDS: /* 0x01 */
+        check_cop2x(ctx);
         generate_csetbounds(r16, r11, r6);
         opn = "csetbounds";
         break;
     case OPC_CSEAL:  /* 0x02 */
+        check_cop2x(ctx);
         generate_cseal(r16, r11, r6);
         opn = "cseal";
         break;
     case OPC_CUNSEAL: /* 0x03 */
+        check_cop2x(ctx);
         generate_cunseal(r16, r11, r6);
         opn = "cunseal";
         break;
     case OPC_CMISC: /* 0x04 */
         switch(MASK_CAP3(opc)) {
         case OPC_CANDPERM: /* 0x0 */
+            check_cop2x(ctx);
             generate_candperm(r16, r11, r6);
             opn = "candperm";
             break;
 
         case OPC_CINCBASE: /* 0x2 */
+            check_cop2x(ctx);
             generate_cincbase(r16, r11, r6);
             opn = "cincbase";
             break;
         case OPC_CSETLEN: /* 0x3 */
+            check_cop2x(ctx);
             generate_csetlen(r16, r11, r6);
             opn = "csetlen";
             break;
         case OPC_CSETCAUSE: /* 0x4 */
+            check_cop2x(ctx);
             generate_csetcause(r6);
             opn = "csetcause";
             break;
         case OPC_CCLEARTAG: /* 0x5 */
+            check_cop2x(ctx);
             generate_ccleartag(r16, r11);
             opn = "ccleartag";
             break;
@@ -10076,6 +10134,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "mtc2";
             break;
         case OPC_CFROMPTR: /* 0x7 */
+            check_cop2x(ctx);
             generate_cfromptr(r16, r11, r6);
             opn = "cfromptr";
             break;
@@ -10085,36 +10144,44 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         }
         break;
     case OPC_CCALL: /* 0x05 */
+        check_cop2x(ctx);
         generate_ccall(r16, r11);
         opn = "ccall";
         break;
     case OPC_CRETURN: /* 0x06 */
+        check_cop2x(ctx);
         generate_creturn();
         opn = "creturn";
         break;
     case OPC_CJALR: /* 0x07 */
+        check_cop2x(ctx);
         generate_cjalr(ctx, r16, r11);
         opn = "cjalr";
         break;
     case OPC_CJR: /* 0x08 */
+        check_cop2x(ctx);
         generate_cjr(ctx, r11);
         opn = "cjr";
         break;
     case OPC_CBTU: /* 0x09 */
         opn = "cbtu";
+        check_cop2x(ctx);
         generate_cbtu(ctx, r16, (int32_t)(ctx->opcode & 0xffff));
         break;
     case OPC_CBTS: /* 0x0a */
         opn = "cbts";
+        check_cop2x(ctx);
         generate_cbts(ctx, r16, (int32_t)(ctx->opcode & 0xffff));
         break;
     case OPC_CCHECK: /* 0x0b */
         switch(MASK_CAP3(opc)) {
         case OPC_CCHECKPERM: /* 0x0 */
+            check_cop2x(ctx);
             generate_ccheckperm(r16, r6);
             opn = "ccheckperm";
             break;
         case OPC_CCHECKTYPE: /* 0x1 */
+            check_cop2x(ctx);
             generate_cchecktype(r16, r11);
             opn = "cchecktype";
             break;
@@ -10124,20 +10191,24 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         }
         break;
     case OPC_CTOPTR: /* 0x0c */
+        check_cop2x(ctx);
         generate_ctoptr(r16, r11, r6);
         opn = "ctoptr";
         break;
     case OPC_COFFSET: /* 0x0d */
         switch(MASK_CAP3(opc)) {
         case OPC_CINCOFFSET: /* 0x0 */
+            check_cop2x(ctx);
             generate_cincoffset(r16, r11, r6);
             opn = "cincoffset";
             break;
         case OPC_CSETOFFSET: /* 0x1 */
+            check_cop2x(ctx);
             generate_csetoffset(r16, r11, r6);
             opn = "csetoffset";
             break;
         case OPC_CGETOFFSET: /* 0x2 */
+            check_cop2x(ctx);
             generate_cgetoffset(r16, r11);
             opn = "cgetoffset";
             break;
@@ -10149,26 +10220,32 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CPTRCMP: /* 0x0e */
         switch(MASK_CAP3(opc)) {
         case OPC_CEQ:  /* 0x0 */
+            check_cop2x(ctx);
             generate_ceq(r16, r11, r6);
             opn = "ceq";
             break;
         case OPC_CNE:  /* 0x1 */
+            check_cop2x(ctx);
             generate_cne(r16, r11, r6);
             opn = "cne";
             break;
         case OPC_CLT:  /* 0x2 */
+            check_cop2x(ctx);
             generate_clt(r16, r11, r6);
             opn = "clt";
             break;
         case OPC_CLE:  /* 0x3 */
+            check_cop2x(ctx);
             generate_cle(r16, r11, r6);
             opn = "cle";
             break;
         case OPC_CLTU: /* 0x4 */
+            check_cop2x(ctx);
             generate_cltu(r16, r11, r6);
             opn = "cltu";
             break;
         case OPC_CLEU: /* 0x5 */
+            check_cop2x(ctx);
             generate_cleu(r16, r11, r6);
             opn = "cleu";
             break;
@@ -10179,6 +10256,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CCLEARREGS: /* 0x0f */
         opn = "cclearregs";
+        check_cop2x(ctx);
         if (generate_cclearregs(r16, opc & 0xffff) != 0)
             goto invalid;
         break;
@@ -21434,6 +21512,8 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         {
             uint32_t opc = ctx->opcode;
 
+            check_cop2x(ctx);
+
             switch(MASK_CLDST_OPC(opc)) {
             case OPC_CLBU:
                 generate_clbu(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
@@ -21467,11 +21547,14 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
     case OPC_CLOADC:    /* Load Capability Register */
+        check_cop2x(ctx);
         generate_clc(ctx, rs, rt, rd, ctx->opcode & 0x7ff);
         break;
     case OPC_CSTORE:    /* Store Via Capability Register */
         {
             uint32_t opc = ctx->opcode;
+
+            check_cop2x(ctx);
 
             switch(MASK_CLDST_OPC(opc)) {
             case OPC_CSB:
@@ -21494,6 +21577,7 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
     case OPC_CSTOREC:   /* Store Capability Register */
+        check_cop2x(ctx);
         generate_csc(ctx, rs, rt, rd, imm & 0x7ff);
         break;
 #else /* ! TARGET_CHERI */
@@ -21767,7 +21851,7 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
             gen_io_start();
 
         /* Generate capabilities check on PC */
-        GEN_CAP_CHECK_PC(ctx.pc);
+        GEN_CAP_CHECK_PC(&ctx);
 
         is_slot = ctx.hflags & MIPS_HFLAG_BMASK;
         if (!(ctx.hflags & MIPS_HFLAG_M16)) {
@@ -22176,7 +22260,13 @@ void cpu_state_reset(CPUMIPSState *env)
     } else {
         env->CP0_EBase |= 0x80000000;
     }
+#ifdef TARGET_CHERI
+    // XXX This may be wrong but it seems that CHERI doesn't
+    // set the ERL status bit on a CPU reset.
+    env->CP0_Status = (1 << CP0St_BEV);
+#else
     env->CP0_Status = (1 << CP0St_BEV) | (1 << CP0St_ERL);
+#endif
     /* vectored interrupts not implemented, timer on int 7,
        no performance counters. */
     env->CP0_IntCtl = 0xe0000000;
@@ -22273,6 +22363,7 @@ void cpu_state_reset(CPUMIPSState *env)
             crp->cr_otype = 0;
         }
     }
+    // env->CP0_Status |= (1 << CP0St_CU2);
 #endif /* TARGET_CHERI */
 }
 

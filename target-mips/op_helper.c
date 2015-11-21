@@ -3588,16 +3588,24 @@ static void set_pc(CPUMIPSState *env, target_ulong error_pc)
 static inline void exception_return(CPUMIPSState *env)
 {
     debug_pre_eret(env);
+#ifdef TARGET_CHERI
+    // qemu_log("%s: PCC <- EPCC\n", __func__);
+    env->active_tc.PCC = env->active_tc.C[CP2CAP_EPCC];
+#endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
+#ifdef TARGET_CHERI
+        set_pc(env, env->CP0_ErrorEPC + env->active_tc.PCC.cr_base);
+#else
         set_pc(env, env->CP0_ErrorEPC);
+#endif /* TARGET_CHERI */
         env->CP0_Status &= ~(1 << CP0St_ERL);
     } else {
-        set_pc(env, env->CP0_EPC);
-        env->CP0_Status &= ~(1 << CP0St_EXL);
 #ifdef TARGET_CHERI
-        // qemu_log("%s: PCC <- EPCC\n", __func__);
-        env->active_tc.PCC = env->active_tc.C[CP2CAP_EPCC];
+        set_pc(env, env->CP0_EPC + env->active_tc.PCC.cr_base);
+#else
+        set_pc(env, env->CP0_EPC);
 #endif /* TARGET_CHERI */
+        env->CP0_Status &= ~(1 << CP0St_EXL);
     }
     compute_hflags(env);
     debug_post_eret(env);

@@ -604,7 +604,11 @@ struct CPUMIPSState {
 #define EXCP_INST_NOTAVAIL 0x2 /* No valid instruction word for BadInstr */
     uint32_t hflags;    /* CPU State */
     /* TMASK defines different execution modes */
+#ifdef TARGET_CHERI
+#define MIPS_HFLAG_TMASK  0xF5807FF
+#else
 #define MIPS_HFLAG_TMASK  0x75807FF
+#endif /* TARGET_CHERI */
 #define MIPS_HFLAG_MODE   0x00007 /* execution modes                    */
     /* The KSU flags must be the lowest bits in hflags. The flag order
        must be the same as defined for CP0 Status. This allows to use
@@ -656,6 +660,9 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_MSA   0x1000000
 #define MIPS_HFLAG_FRE   0x2000000 /* FRE enabled */
 #define MIPS_HFLAG_ELPA  0x4000000
+#ifdef TARGET_CHERI
+#define MIPS_HFLAG_COP2X   0x8000000 /* CHERI/CP2 enabled              */
+#endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
     target_ulong bcond;          /* Branch condition (if needed)       */
 
@@ -982,7 +989,11 @@ static inline void compute_hflags(CPUMIPSState *env)
                      MIPS_HFLAG_F64 | MIPS_HFLAG_FPU | MIPS_HFLAG_KSU |
                      MIPS_HFLAG_AWRAP | MIPS_HFLAG_DSP | MIPS_HFLAG_DSPR2 |
                      MIPS_HFLAG_SBRI | MIPS_HFLAG_MSA | MIPS_HFLAG_FRE |
+#ifdef TARGET_CHERI
+                     MIPS_HFLAG_ELPA | MIPS_HFLAG_COP2X);
+#else
                      MIPS_HFLAG_ELPA);
+#endif /* TARGET_CHERI */
     if (!(env->CP0_Status & (1 << CP0St_EXL)) &&
         !(env->CP0_Status & (1 << CP0St_ERL)) &&
         !(env->hflags & MIPS_HFLAG_DM)) {
@@ -1022,6 +1033,11 @@ static inline void compute_hflags(CPUMIPSState *env)
     if (env->CP0_Status & (1 << CP0St_FR)) {
         env->hflags |= MIPS_HFLAG_F64;
     }
+#ifdef TARGET_CHERI
+    if (env->CP0_Status & (1 << CP0St_CU2)) {
+        env->hflags |= MIPS_HFLAG_COP2X;
+    }
+#endif /* TARGET_CHERI */
     if (((env->hflags & MIPS_HFLAG_KSU) != MIPS_HFLAG_KM) &&
         (env->CP0_Config5 & (1 << CP0C5_SBRI))) {
         env->hflags |= MIPS_HFLAG_SBRI;
