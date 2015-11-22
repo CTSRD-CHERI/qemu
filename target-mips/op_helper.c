@@ -2297,7 +2297,7 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
     } else if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (cbp->cr_perms & CAP_SEALED) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (rt > cbp->cr_length) {
