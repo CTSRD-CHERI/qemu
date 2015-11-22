@@ -121,6 +121,16 @@ static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
     do_raise_exception(env, EXCP_C2E, pc);
 }
 
+static inline void do_raise_c0_exception(CPUMIPSState *env, uint16_t cause,
+        uint64_t badvaddr)
+{
+    uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
+
+    env->active_tc.PC = pc;
+    env->CP0_BadVAddr = badvaddr;
+    do_raise_exception(env, cause, pc);
+}
+
 static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
 {
     switch(reg) {
@@ -2161,7 +2171,7 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     } else if ((cbp->cr_offset + 4) > cbp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(4, (cbp->cr_base + cbp->cr_offset))) {
-        helper_raise_exception(env, EXCP_AdEL);
+        do_raise_c0_exception(env, EXCP_AdEL, (cbp->cr_base + cbp->cr_offset));
     } else {
         *cdp = env->active_tc.PCC;
         cdp->cr_offset += 8;
@@ -2193,7 +2203,7 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
     } else if ((cbp->cr_offset + 4) > cbp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(4, (cbp->cr_base + cbp->cr_offset))) {
-        helper_raise_exception(env, EXCP_AdEL);
+        do_raise_c0_exception(env, EXCP_AdEL, (cbp->cr_base + cbp->cr_offset));
     } else {
         // The capability register is loaded into PCC during delay slot
         // Return the branch target address
@@ -2601,7 +2611,7 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         } else if (align_of(size, addr)) {
-            helper_raise_exception(env, EXCP_AdEL);
+            do_raise_c0_exception(env, EXCP_AdEL, addr);
         } else {
             return addr;
         }
@@ -2635,7 +2645,7 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         } else if (align_of(size, addr)) {
-            helper_raise_exception(env, EXCP_AdEL);
+            do_raise_c0_exception(env, EXCP_AdES, addr);
         } else {
             // Can't do this here.  It might miss in the TLB.
             // cheri_tag_invalidate(env, addr, size);
@@ -2678,7 +2688,7 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
             return (target_ulong)0;
         } else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
-            helper_raise_exception(env, EXCP_AdEL);
+            do_raise_c0_exception(env, EXCP_AdEL, addr);
             return (target_ulong)0;
         }
         return (target_ulong)addr;
@@ -2723,13 +2733,11 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
             return (target_ulong)0;
-        }
-#if 0
-        else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
-            helper_raise_exception(env, EXCP_AdEL);
+        } else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
+            do_raise_c0_exception(env, EXCP_AdES, addr);
             return (target_ulong)0;
         }
-#endif
+
         return (target_ulong)addr;
     }
 }
