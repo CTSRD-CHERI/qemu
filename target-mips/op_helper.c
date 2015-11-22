@@ -2776,8 +2776,10 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
 {
     cap_register_t *csp = &env->active_tc.C[cs];
 
-    /* Set the tag bit */
-    cheri_tag_set(env, vaddr);
+    if (csp->cr_tag)
+        cheri_tag_set(env, vaddr);
+    else
+        cheri_tag_invalidate(env, vaddr, 8);
 
     return (csp->cr_offset + csp->cr_base);
 }
