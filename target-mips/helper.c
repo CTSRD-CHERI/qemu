@@ -560,8 +560,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
         env->CP0_ErrorEPC -= env->active_tc.PCC.cr_base;
         env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
-        env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_ErrorEPC -
-                env->active_tc.C[CP2CAP_EPCC].cr_base;
+        env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_ErrorEPC;
         env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -
                 env->active_tc.PCC.cr_base;
@@ -762,8 +761,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
             // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
             env->CP0_EPC -= env->active_tc.PCC.cr_base;
             env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
-            env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_EPC -
-                env->active_tc.C[CP2CAP_EPCC].cr_base;
+            env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_EPC;
             env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
             env->active_tc.PCC.cr_offset =  env->active_tc.PC -
                 env->active_tc.PCC.cr_base;
