@@ -10312,6 +10312,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     return;
 
 invalid:
+printf("%s: invalid: %s\n", __func__, opn);
     MIPS_INVAL(opn);
     generate_exception (ctx, EXCP_RI);
     return;
@@ -21556,7 +21557,13 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
 
             check_cop2x(ctx);
 
-            switch(MASK_CLDST_OPC(opc)) {
+/*
+ * XXX CHERI seems to be ignoring bit 2 given how 'cscdr' is encoded.
+ *     For now, just ignore bit 2 by masking it.
+ *
+ *          switch(MASK_CLDST_OPC(opc)) {
+ */
+            switch(MASK_CLDST_OPC(opc) & ~0x4) {
             case OPC_CSB:
                 generate_csb(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
                 break;
