@@ -1823,7 +1823,7 @@ static inline void check_cop2x(DisasContext *ctx)
 {
 
     if (unlikely(!(ctx->hflags & MIPS_HFLAG_COP2X))) {
-        generate_exception(ctx, EXCP_RI);
+        generate_exception(ctx, EXCP_CpU);
     }
 }
 
