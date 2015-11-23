@@ -2816,7 +2816,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
     // env->active_tc.PCC.cr_cursor = pc - env->active_tc.PCC.cr_base;
     env->active_tc.PCC.cr_offset = pc - env->active_tc.PCC.cr_base;
 
-    check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 8);
+    check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 4);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 }
 
