@@ -2257,6 +2257,7 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     cap_register_t *cdp = &env->active_tc.C[cd];
     cap_register_t *cbp = &env->active_tc.C[cb];
     uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+    uint64_t cursor_rt = cursor + rt;
     /*
      * CSetBounds: Set Bounds
      */
@@ -2270,7 +2271,10 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (cursor < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if ((cursor + rt) > (cbp->cr_base + cbp->cr_length)) {
+    } else if (cursor_rt < rt) {
+        /* cursor + rt overflowed */
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (cursor_rt > (cbp->cr_base + cbp->cr_length)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         *cdp = *cbp;
