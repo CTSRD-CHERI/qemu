@@ -943,6 +943,10 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
             tagblk2[tag2 & CAP_TAGBLK_MSK] = 0;
     }
 
+    /* Check physical address to see if the linkedflag needs to be reset. */
+    if (paddr == env->lladdr)
+        env->linkedflag = 0;
+
     return;
 }
 
@@ -973,6 +977,10 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr)
         cheri_tagmem[tag >> CAP_TAGBLK_SHFT] = tagblk;
     }
     tagblk[tag & CAP_TAGBLK_MSK] = 1;
+
+    /* Check physical address to see if the linkedflag needs to be reset. */
+    if (paddr == env->lladdr)
+        env->linkedflag = 0;
 
     return;
 }

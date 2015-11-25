@@ -185,6 +185,13 @@ HELPER_LD(lw, ldl, int32_t)
 #if defined(TARGET_MIPS64)
 HELPER_LD(ld, ldq, int64_t)
 #endif
+#ifdef TARGET_CHERI
+HELPER_LD(lbs, ldsb, int8_t)
+HELPER_LD(lbu, ldub, uint8_t)
+HELPER_LD(lhs, ldsw, int16_t)
+HELPER_LD(lhu, lduw, uint16_t)
+HELPER_LD(lwu, ldl, uint32_t)
+#endif /* TARGET_CHERI */
 #undef HELPER_LD
 
 #if defined(CONFIG_USER_ONLY)
@@ -213,6 +220,9 @@ HELPER_ST(sw, stl, uint32_t)
 #if defined(TARGET_MIPS64)
 HELPER_ST(sd, stq, uint64_t)
 #endif
+#ifdef TARGET_CHERI
+HELPER_ST(sh, stw, uint16_t)
+#endif /* TARGET_CHERI */
 #undef HELPER_ST
 
 target_ulong helper_clo (target_ulong arg1)
@@ -411,6 +421,13 @@ HELPER_LD_ATOMIC(ll, lw, 0x3)
 #ifdef TARGET_MIPS64
 HELPER_LD_ATOMIC(lld, ld, 0x7)
 #endif
+#ifdef TARGET_CHERI
+HELPER_LD_ATOMIC(llbs, lbs, 0x0)
+HELPER_LD_ATOMIC(llbu, lbu, 0x0)
+HELPER_LD_ATOMIC(llhs, lhs, 0x1)
+HELPER_LD_ATOMIC(llhu, lhu, 0x1)
+HELPER_LD_ATOMIC(llwu, lwu, 0x3)
+#endif /* TARGET_CHERI */
 #undef HELPER_LD_ATOMIC
 
 #define HELPER_ST_ATOMIC(name, ld_insn, st_insn, almask)                      \
@@ -436,6 +453,10 @@ HELPER_ST_ATOMIC(sc, lw, sw, 0x3)
 #ifdef TARGET_MIPS64
 HELPER_ST_ATOMIC(scd, ld, sd, 0x7)
 #endif
+#ifdef TARGET_CHERI
+HELPER_ST_ATOMIC(scb, lbs, sb, 0x0)
+HELPER_ST_ATOMIC(sch, lhs, sh, 0x1)
+#endif /* TARGET_CHERI */
 #undef HELPER_ST_ATOMIC
 #endif
 
@@ -2624,6 +2645,69 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
 }
 
 /*
+ * Load Linked Via Capability Register
+ */
+target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    uint64_t addr = cbp->cr_base + cbp->cr_offset;
+
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (cbp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
+    } else if ((addr + size) > (cbp->cr_base + cbp->cr_length)) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (addr < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (align_of(size, addr)) {
+        do_raise_c0_exception(env, EXCP_AdEL, addr);
+    } else {
+        env->linkedflag = 1;
+        return addr;
+    }
+    env->linkedflag = 0;
+    return 0;
+}
+
+/*
+ * Store Conditional Via Capability Register
+ */
+target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    uint64_t addr = cbp->cr_base + cbp->cr_offset;
+
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (cbp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST, cb);
+    } else if ((addr + size) > (cbp->cr_base + cbp->cr_length)) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (addr < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (align_of(size, addr)) {
+        do_raise_c0_exception(env, EXCP_AdES, addr);
+    } else {
+        // Can't do this here.  It might miss in the TLB.
+        // cheri_tag_invalidate(env, addr, size);
+        // Also, rd is set by the actual store conditional operation.
+        return addr;
+    }
+    return 0;
+}
+
+/*
  * Store Via Capability Register
  */
 target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
@@ -2699,6 +2783,42 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    uint64_t addr = cbp->cr_base + cbp->cr_offset;
+
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+        return (target_ulong)0;
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return (target_ulong)0;
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+        return (target_ulong)0;
+    } else if (cbp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+        return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
+        return (target_ulong)0;
+    } else if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+        return (target_ulong)0;
+    } else if (addr < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+        return (target_ulong)0;
+    } else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
+         do_raise_c0_exception(env, EXCP_AdEL, addr);
+         return (target_ulong)0;
+    }
+
+    env->lladdr = do_translate_address(env, addr, 0);
+    env->linkedflag = 1;
+    return (target_ulong)addr;
+}
 
 target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset)
@@ -2744,6 +2864,46 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
 
         return (target_ulong)addr;
     }
+}
+
+target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *csp = &env->active_tc.C[cs];
+    uint64_t addr = cbp->cr_base + cbp->cr_offset;
+
+    if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception_v(env, cs);
+        return (target_ulong)0;
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+        return (target_ulong)0;
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+        return (target_ulong)0;
+    } else if (cbp->cr_perms & CAP_SEALED) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+        return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST_CAP, cb);
+        return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) && csp->cr_tag &&
+            !(csp->cr_perms & CAP_PERM_GLOBAL)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST_LC_CAP, cb);
+        return (target_ulong)0;
+    } else if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+        return (target_ulong)0;
+    } else if (addr < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+        return (target_ulong)0;
+    } else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
+        do_raise_c0_exception(env, EXCP_AdES, addr);
+        return (target_ulong)0;
+    }
+
+    return (target_ulong)addr;
 }
 
 void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
@@ -3634,6 +3794,9 @@ void helper_eret(CPUMIPSState *env)
 {
     exception_return(env);
     env->lladdr = 1;
+#ifdef TARGET_CHERI
+    env->linkedflag = 0;
+#endif /* TARGET_CHERI */
 }
 
 void helper_eretnc(CPUMIPSState *env)

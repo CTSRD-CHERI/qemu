@@ -562,6 +562,9 @@ struct CPUMIPSState {
     target_ulong llval;
     target_ulong llnewval;
     target_ulong llreg;
+#ifdef TARGET_CHERI
+    uint64_t linkedflag;
+#endif
     uint64_t CP0_LLAddr_rw_bitmask;
     int CP0_LLAddr_shift;
     target_ulong CP0_WatchLo[8];
