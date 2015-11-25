@@ -1707,6 +1707,9 @@ static inline void save_cpu_state(DisasContext *ctx, int do_save_pc)
         ctx->saved_hflags = ctx->hflags;
         switch (ctx->hflags & MIPS_HFLAG_BMASK_BASE) {
         case MIPS_HFLAG_BR:
+#ifdef TARGET_CHERI
+        case MIPS_HFLAG_BRC:
+#endif
             break;
         case MIPS_HFLAG_BC:
         case MIPS_HFLAG_BL:
@@ -1722,6 +1725,9 @@ static inline void restore_cpu_state(CPUMIPSState *env, DisasContext *ctx)
     ctx->saved_hflags = ctx->hflags;
     switch (ctx->hflags & MIPS_HFLAG_BMASK_BASE) {
     case MIPS_HFLAG_BR:
+#ifdef TARGET_CHERI
+    case MIPS_HFLAG_BRC:
+#endif
         break;
     case MIPS_HFLAG_BC:
     case MIPS_HFLAG_BL:
@@ -1893,6 +1899,7 @@ static inline void generate_cjalr(DisasContext *ctx, int32_t cd, int32_t cb)
     gen_helper_cjalr(btarget, cpu_env, tcd, tcb);
     /* Set branch and delay slot flags */
     ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
+    save_cpu_state(ctx, 0);
     /* Save capability register index that is new PCC */
     ctx->btcr = cb;
 
@@ -1907,6 +1914,7 @@ static inline void generate_cjr(DisasContext *ctx, int32_t cb)
     gen_helper_cjr(btarget, cpu_env, tcb);
     /* Set branch and delay slot flags */
     ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
+    save_cpu_state(ctx, 0);
     /* Save capability register index that is new PCC */
     ctx->btcr = cb;
 
@@ -5935,27 +5943,22 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         /* Jump to immediate */
 
 #ifdef TARGET_CHERI
-        // if (is_cop2x_enabled(ctx)) {
-            /*
-             * The branch target address is not known since the PCC.base can
-             * change.  Therefore treat this like a JR/JALR and compute the
-             * branch target from the current PCC.base.
-             *
-             * ((ctx->pc + insn_bytes) - PCC.base) >> 28 << 28 | offset +
-             * PCC.base
-             */
-            tcg_gen_movi_i64(t0, ctx->pc + insn_bytes);
-            tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
-                offsetof(cap_register_t, cr_base));
-            tcg_gen_sub_i64(t0, t0, t1);
-            tcg_gen_shri_i64(t0, t0, 28);
-            tcg_gen_shli_i64(t0, t0, 28);
-            tcg_gen_ori_i64(t0, t0, offset);
-            tcg_gen_add_i64(btarget, t0, t1);
-//        } else {
-//            btgt = ((ctx->pc + insn_bytes) & (int32_t)0xF0000000) |
-//                (uint32_t)offset;
-//        }
+        /*
+         * The branch target address is not known since the PCC.base can
+         * change.  Therefore treat this like a JR/JALR and compute the
+         * branch target from the current PCC.base.
+         *
+         * ((ctx->pc + insn_bytes) - PCC.base) >> 28 << 28 | offset +
+         * PCC.base
+         */
+        tcg_gen_movi_i64(t0, ctx->pc + insn_bytes);
+        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
+            offsetof(cap_register_t, cr_base));
+        tcg_gen_sub_i64(t0, t0, t1);
+        tcg_gen_shri_i64(t0, t0, 28);
+        tcg_gen_shli_i64(t0, t0, 28);
+        tcg_gen_ori_i64(t0, t0, offset);
+        tcg_gen_add_i64(btarget, t0, t1);
 #else
         btgt = ((ctx->pc + insn_bytes) & (int32_t)0xF0000000) | (uint32_t)offset;
 #endif /* ! TARGET_CHERI */
@@ -6020,12 +6023,10 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         case OPC_BLTZALL: /* 0 < 0 likely */
             tcg_gen_movi_tl(cpu_gpr[31], ctx->pc + 8);
 #ifdef TARGET_CHERI
-//            if (is_cop2x_enabled(ctx)) {
-                /* Subtract PCC.base from r31 */
-                tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState,
-                            active_tc.PCC) + offsetof(cap_register_t, cr_base));
-                tcg_gen_sub_i64(cpu_gpr[31], cpu_gpr[31], t1);
-//            }
+            /* Subtract PCC.base from r31 */
+            tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState,
+                        active_tc.PCC) + offsetof(cap_register_t, cr_base));
+            tcg_gen_sub_i64(cpu_gpr[31], cpu_gpr[31], t1);
 #endif /* TARGET_CHERI */
             /* Skip the instruction in the delay slot */
             MIPS_DEBUG("bnever, link and skip");
@@ -6040,13 +6041,9 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
             goto out;
         case OPC_J:
 #ifdef TARGET_CHERI
-//            if (is_cop2x_enabled(ctx)) {
-                ctx->hflags |= MIPS_HFLAG_BR;
-                MIPS_DEBUG("j");
-//            } else {
-//                ctx->hflags |= MIPS_HFLAG_B;
-//                MIPS_DEBUG("j " TARGET_FMT_lx, btgt);
-//            }
+            ctx->hflags |= MIPS_HFLAG_BR | MIPS_HFLAG_BDS32;
+            MIPS_DEBUG("j");
+            save_cpu_state(ctx, 0);
 #else
             ctx->hflags |= MIPS_HFLAG_B;
             MIPS_DEBUG("j " TARGET_FMT_lx, btgt);
@@ -6058,13 +6055,9 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         case OPC_JAL:
             blink = 31;
 #ifdef TARGET_CHERI
-//            if (is_cop2x_enabled(ctx)) {
-                ctx->hflags |= MIPS_HFLAG_BR;
-                MIPS_DEBUG("jal");
-//            } else {
-//                ctx->hflags |= MIPS_HFLAG_B;
-//                MIPS_DEBUG("jal " TARGET_FMT_lx, btgt);
-//            }
+            ctx->hflags |= MIPS_HFLAG_BR | MIPS_HFLAG_BDS32;
+            MIPS_DEBUG("jal");
+            save_cpu_state(ctx, 0);
 #else
             ctx->hflags |= MIPS_HFLAG_B;
             MIPS_DEBUG("jal " TARGET_FMT_lx, btgt);
@@ -6198,12 +6191,10 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
 
         tcg_gen_movi_tl(cpu_gpr[blink], ctx->pc + post_delay + lowbit);
 #ifdef TARGET_CHERI
-//        if (is_cop2x_enabled(ctx)) {
-            /* Subtract PCC.base from r[blink] */
-            tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
-                offsetof(cap_register_t, cr_base));
-            tcg_gen_sub_i64(cpu_gpr[blink], cpu_gpr[blink], t1);
-//        }
+        /* Subtract PCC.base from r[blink] */
+        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
+            offsetof(cap_register_t, cr_base));
+        tcg_gen_sub_i64(cpu_gpr[blink], cpu_gpr[blink], t1);
 #endif /* TARGET_CHERI */
     }
 
@@ -22736,6 +22727,9 @@ void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb, int pc_pos)
     env->hflags |= gen_opc_hflags[pc_pos];
     switch (env->hflags & MIPS_HFLAG_BMASK_BASE) {
     case MIPS_HFLAG_BR:
+#ifdef TARGET_CHERI
+    case MIPS_HFLAG_BRC:
+#endif
         break;
     case MIPS_HFLAG_BC:
     case MIPS_HFLAG_BL:
