@@ -649,8 +649,8 @@ static inline abi_long do_bsd_symlinkat(abi_long arg1, abi_long arg2,
 }
 
 /* readlink(2) */
-static inline abi_long do_bsd_readlink(abi_long arg1, abi_long arg2,
-        abi_long arg3)
+static inline abi_long do_bsd_readlink(CPUArchState *env, abi_long arg1,
+        abi_long arg2, abi_long arg3)
 {
     abi_long ret;
     void *p1, *p2;
@@ -660,6 +660,14 @@ static inline abi_long do_bsd_readlink(abi_long arg1, abi_long arg2,
     if (!p1 || !p2) {
         ret = -TARGET_EFAULT;
     } else {
+#ifdef __FreeBSD__
+        if (strcmp(p1, "/proc/curproc/file") == 0) {
+            CPUState *cpu = ENV_GET_CPU(env);
+            TaskState *ts = (TaskState *)cpu->opaque;
+            strncpy(p2, ts->bprm->fullpath, arg3);
+            ret = MIN((abi_long)strlen(ts->bprm->fullpath), arg3);
+        } else
+#endif
         ret = get_errno(readlink(path(p1), p2, arg3));
     }
     unlock_user(p2, arg2, ret);
