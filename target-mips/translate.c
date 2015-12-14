@@ -1070,6 +1070,7 @@ enum {
     OPC_CLE         = OPC_CPTRCMP | (0x3),
     OPC_CLTU        = OPC_CPTRCMP | (0x4),
     OPC_CLEU        = OPC_CPTRCMP | (0x5),
+    OPC_CEXEQ       = OPC_CPTRCMP | (0x6),
 };
 
 enum {
@@ -2332,6 +2333,20 @@ static inline void generate_cleu(int32_t rd, int32_t cb, int32_t ct)
     TCGv t0 = tcg_temp_new();
 
     gen_helper_cleu(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cexeq(int32_t rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cexeq(t0, cpu_env, tcb, tct);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free(t0);
@@ -10563,6 +10578,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             check_cop2x(ctx);
             generate_cleu(r16, r11, r6);
             opn = "cleu";
+            break;
+        case OPC_CEXEQ: /* 0x6 */
+            check_cop2x(ctx);
+            generate_cexeq(r16, r11, r6);
+            opn = "cexeq";
             break;
         default:
             opn = "cptrcmp";
