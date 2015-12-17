@@ -28,8 +28,12 @@
 #include "exec/cpu_ldst.h"
 
 enum {
+#ifdef TARGET_CHERI
+    TLBRET_S = -5,
+#else
     TLBRET_XI = -6,
     TLBRET_RI = -5,
+#endif /* TARGET_CHERI */
     TLBRET_DIRTY = -4,
     TLBRET_INVALID = -3,
     TLBRET_NOMATCH = -2,
@@ -91,7 +95,16 @@ int r4k_map_address (CPUMIPSState *env, hwaddr *physical, int *prot,
             if (!(n ? tlb->V1 : tlb->V0)) {
                 return TLBRET_INVALID;
             }
-#if !defined(TARGET_CHERI)
+#if defined(TARGET_CHERI)
+            if (rw == MMU_DATA_CAP_LOAD && (n ? tlb->L1 : tlb->L0)) {
+                env->TLB_L = 1;
+            } else {
+                env->TLB_L = 0;
+            }
+            if (rw == MMU_DATA_CAP_STORE && (n ? tlb->S1 : tlb->S0)) {
+                return TLBRET_S;
+            }
+#else
             if (rw == MMU_INST_FETCH && (n ? tlb->XI1 : tlb->XI0)) {
                 return TLBRET_XI;
             }
@@ -123,7 +136,7 @@ static int get_physical_address (CPUMIPSState *env, hwaddr *physical,
 #if defined(TARGET_MIPS64)
     int UX = (env->CP0_Status & (1 << CP0St_UX)) != 0;
     int SX = (env->CP0_Status & (1 << CP0St_SX)) != 0;
-#if defined(TARGET_CHERI)
+#if 0 /* defined(TARGET_CHERI) */
     int KX = 1;
 #else
     int KX = (env->CP0_Status & (1 << CP0St_KX)) != 0;
@@ -209,7 +222,10 @@ static int get_physical_address (CPUMIPSState *env, hwaddr *physical,
         /* kseg1 */
         if (kernel_mode) {
 #if defined(TARGET_CHERI)
-            *physical = address & ~0xFFFFFFFFFF000000ULL;
+            if (env->insn_flags & ISA_MIPS64R2)
+                *physical = address - (int32_t)KSEG1_BASE;
+            else
+                *physical = address & ~0xFFFFFFFFFF000000ULL;
 #else
             *physical = address - (int32_t)KSEG1_BASE;
 #endif
@@ -237,8 +253,13 @@ static int get_physical_address (CPUMIPSState *env, hwaddr *physical,
 }
 #endif
 
+#ifdef TARGET_CHERI
+static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
+                                int rw, int tlb_error, int reg)
+#else
 static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
                                 int rw, int tlb_error)
+#endif
 {
     CPUState *cs = CPU(mips_env_get_cpu(env));
     int exception = 0, error_code = 0;
@@ -279,6 +300,15 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
         /* TLB match but 'D' bit is cleared */
         exception = EXCP_LTLBL;
         break;
+#ifdef TARGET_CHERI
+    case TLBRET_S:
+        /* TLB capability store bit was set, blocking capability store. */
+        cpu_mips_store_capcause(env, reg, CP2Ca_TLB_STORE);
+        env->active_tc.PC = env->active_tc.PCC.cr_offset +
+            env->active_tc.PCC.cr_base;
+        exception = EXCP_C2E;
+        break;
+#else
     case TLBRET_XI:
         /* Execute-Inhibit Exception */
         if (env->CP0_PageGrain & (1 << CP0PG_IEC)) {
@@ -295,6 +325,7 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
             exception = EXCP_TLBL;
         }
         break;
+#endif /* TARGET_CHERI */
     }
     /* Raise exception */
     env->CP0_BadVAddr = address;
@@ -365,7 +396,11 @@ int mips_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
     } else if (ret < 0)
 #endif
     {
+#ifdef TARGET_CHERI
+        raise_mmu_exception(env, address, rw, ret, 0xff);
+#else
         raise_mmu_exception(env, address, rw, ret);
+#endif /* TARGET_CHERI */
         ret = 1;
     }
 
@@ -385,12 +420,37 @@ hwaddr cpu_mips_translate_address(CPUMIPSState *env, target_ulong address, int r
     ret = get_physical_address(env, &physical, &prot,
                                address, rw, access_type);
     if (ret != TLBRET_MATCH) {
+#ifdef TARGET_CHERI
+        raise_mmu_exception(env, address, rw, ret, 0xff);
+#else
         raise_mmu_exception(env, address, rw, ret);
+#endif /* TARGET_CHERI */
         return -1LL;
     } else {
         return physical;
     }
 }
+
+#ifdef TARGET_CHERI
+static hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address, int rw, int reg)
+{
+    hwaddr physical;
+    int prot;
+    int access_type;
+    int ret = 0;
+
+    /* data access */
+    access_type = ACCESS_INT;
+    ret = get_physical_address(env, &physical, &prot,
+                               address, rw, access_type);
+    if (ret != TLBRET_MATCH) {
+        raise_mmu_exception(env, address, rw, ret, reg);
+        return -1LL;
+    } else {
+        return physical;
+    }
+}
+#endif /* TARGET_CHERI */
 
 static const char * const excp_names[EXCP_LAST + 1] = {
     [EXCP_RESET] = "reset",
@@ -910,18 +970,27 @@ void cheri_tag_init(uint64_t memory_size)
     }
 }
 
+static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
+        int reg)
+{
+    hwaddr paddr;
+
+    paddr = cpu_mips_translate_address_c2(env, vaddr, rw, reg);
+
+    if (paddr == -1LL) {
+        cpu_loop_exit(CPU(mips_env_get_cpu(env)));
+    } else {
+        return paddr;
+    }
+}
+
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
 {
     hwaddr paddr;
     uint64_t tag1, tag2;
     uint8_t *tagblk1, *tagblk2;
-    int prot;
 
-    if (get_physical_address(env, &paddr, &prot, vaddr, 0, ACCESS_INT) != 0) {
-        printf("%s: Can't get physical address for 0x%016lx\n", __func__,
-                vaddr);
-        return;
-    }
+    paddr = v2p_addr(env, vaddr, 0, 0xFF);
     // printf("%s: vaddr=0x%lx -> paddr=0x%lx\n", __func__, vaddr, paddr);
 
     /* Get the tag number for both the start and end of write. */
@@ -950,18 +1019,13 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
     return;
 }
 
-void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr)
+void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
 {
     hwaddr paddr;
     uint64_t tag;
     uint8_t *tagblk;
-    int prot;
 
-    if (get_physical_address(env, &paddr, &prot, vaddr, 0, ACCESS_INT) != 0) {
-        printf("%s: Can't get physical address for 0x%016lx\n", __func__,
-                vaddr);
-        return;
-    }
+    paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
 
     /* Get the tag number and tag block ptr. */
     tag = paddr >> CAP_TAG_SHFT;
@@ -985,18 +1049,18 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr)
     return;
 }
 
-int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr)
+int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
+        hwaddr *ret_paddr)
 {
     hwaddr paddr;
     uint64_t tag;
     uint8_t *tagblk;
-    int prot;
 
-    if (get_physical_address(env, &paddr, &prot, vaddr, 0, ACCESS_INT) != 0) {
-        printf("%s: Can't get physical address for 0x%016lx\n", __func__,
-                vaddr);
-        return 0;
-    }
+
+    paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_LOAD, reg);
+
+    if (ret_paddr)
+        *ret_paddr = paddr;
 
     /* Get the tag number and tag block ptr. */
     tag = paddr >> CAP_TAG_SHFT;

@@ -31,7 +31,11 @@ typedef struct CPUListState {
 typedef enum MMUAccessType {
     MMU_DATA_LOAD  = 0,
     MMU_DATA_STORE = 1,
-    MMU_INST_FETCH = 2
+    MMU_INST_FETCH = 2,
+#ifdef TARGET_CHERI
+    MMU_DATA_CAP_LOAD = 3,
+    MMU_DATA_CAP_STORE = 4,
+#endif /* TARGET_CHERI */
 } MMUAccessType;
 
 #if !defined(CONFIG_USER_ONLY)

@@ -4,6 +4,9 @@
 
 /* mips_addr.c */
 uint64_t cpu_mips_kseg0_to_phys(void *opaque, uint64_t addr);
+#if defined(TARGET_CHERI)
+uint64_t cpu_cheri_kseg0_to_phys(void *opaque, uint64_t addr);
+#endif
 uint64_t cpu_mips_phys_to_kseg0(void *opaque, uint64_t addr);
 uint64_t cpu_mips_kvm_um_phys_to_kseg0(void *opaque, uint64_t addr);
 

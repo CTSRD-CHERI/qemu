@@ -66,7 +66,11 @@ static int64_t load_kernel(void)
     big_endian = 0;
 #endif
 
+#if defined(TARGET_CHERI)
+    kernel_size = load_elf(loaderparams.kernel_filename, cpu_cheri_kseg0_to_phys,
+#else
     kernel_size = load_elf(loaderparams.kernel_filename, cpu_mips_kseg0_to_phys,
+#endif
                            NULL, (uint64_t *)&entry, NULL,
                            (uint64_t *)&kernel_high, big_endian,
                            ELF_MACHINE, 1);

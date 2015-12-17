@@ -564,6 +564,8 @@ struct CPUMIPSState {
     target_ulong llreg;
 #ifdef TARGET_CHERI
     uint64_t linkedflag;
+    int32_t TLB_L;
+    int32_t TLB_S;
 #endif
     uint64_t CP0_LLAddr_rw_bitmask;
     int CP0_LLAddr_shift;
@@ -1186,8 +1188,9 @@ static inline void cpu_mips_store_cause(CPUMIPSState *env, target_ulong val)
 
 void cheri_tag_init(uint64_t memory_size);
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size);
-int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr);
-void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr);
+int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
+        hwaddr *ret_paddr);
+void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg);
 
 static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
         uint16_t exc_code)

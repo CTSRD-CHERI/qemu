@@ -1195,7 +1195,11 @@ void helper_mtc0_entrylo0(CPUMIPSState *env, target_ulong arg1)
 }
 
 #if defined(TARGET_MIPS64)
+#ifdef TARGET_CHERI
+#define DMTC0_ENTRYLO_MASK(env) ((env->PAMask >> 6) | (1ull << CP0EnLo_S) | (1ull << CP0EnLo_L))
+#else
 #define DMTC0_ENTRYLO_MASK(env) (env->PAMask >> 6)
+#endif /* TARGET_CHERI */
 
 void helper_dmtc0_entrylo0(CPUMIPSState *env, uint64_t arg1)
 {
@@ -2781,6 +2785,7 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = &env->active_tc.C[cd];
 
     if (creg_inaccessible(perms, cd)) {
         do_raise_c2_exception_v(env, cd);
@@ -2800,6 +2805,7 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else {
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
         uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
+        uint32_t tag;
 
         /* 32 = 256-bit capability */
         if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
@@ -2812,6 +2818,10 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
             do_raise_c0_exception(env, EXCP_AdEL, addr);
             return (target_ulong)0;
         }
+        tag = cheri_tag_get(env, addr, cd, NULL);
+        if (env->TLB_L)
+            tag = 0;
+        cdp->cr_tag = tag;
         return (target_ulong)addr;
     }
 }
@@ -2820,7 +2830,9 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = &env->active_tc.C[cd];
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
+    uint32_t tag;
 
     if (creg_inaccessible(perms, cd)) {
         do_raise_c2_exception_v(env, cd);
@@ -2848,8 +2860,13 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
          return (target_ulong)0;
     }
 
-    env->lladdr = do_translate_address(env, addr, 0);
+    tag = cheri_tag_get(env, addr, cd, &env->lladdr);
+    if (env->TLB_L)
+        tag = 0;
+    cdp->cr_tag = tag;
+
     env->linkedflag = 1;
+
     return (target_ulong)addr;
 }
 
@@ -2949,12 +2966,6 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
     cdp->cr_perms = (uint32_t)(otype >> 1);
     if (otype & 1ULL)
         cdp->cr_perms |= CAP_SEALED;
-#if 0
-    if (TLB(addr).L)
-        cdp->cr_tag = 0;
-    else
-#endif
-        cdp->cr_tag = cheri_tag_get(env, addr);
 }
 
 target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs)
@@ -2982,7 +2993,7 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
     cap_register_t *csp = &env->active_tc.C[cs];
 
     if (csp->cr_tag)
-        cheri_tag_set(env, vaddr);
+        cheri_tag_set(env, vaddr, cs);
     else
         cheri_tag_invalidate(env, vaddr, 8);
 
@@ -3527,8 +3538,8 @@ static void r4k_fill_tlb(CPUMIPSState *env, int idx)
     tlb->D1 = (env->CP0_EntryLo1 & 4) != 0;
     tlb->C1 = (env->CP0_EntryLo1 >> 3) & 0x7;
 #if defined(TARGET_CHERI)
-    tlb->L1 = (env->CP0_EntryLo0 >> CP0EnLo_L) & 1;
-    tlb->S1 = (env->CP0_EntryLo0 >> CP0EnLo_S) & 1;
+    tlb->L1 = (env->CP0_EntryLo1 >> CP0EnLo_L) & 1;
+    tlb->S1 = (env->CP0_EntryLo1 >> CP0EnLo_S) & 1;
 #else
     tlb->XI1 = (env->CP0_EntryLo1 >> CP0EnLo_XI) & 1;
     tlb->RI1 = (env->CP0_EntryLo1 >> CP0EnLo_RI) & 1;

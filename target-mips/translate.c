@@ -22737,6 +22737,7 @@ void cpu_state_reset(CPUMIPSState *env)
         }
     }
     // env->CP0_Status |= (1 << CP0St_CU2);
+    env->CP0_Status |= (1 << CP0St_KX);
 #endif /* TARGET_CHERI */
 }
 

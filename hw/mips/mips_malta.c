@@ -972,7 +972,8 @@ void mips_malta_init(MachineState *machine)
     /* init CPUs */
     if (cpu_model == NULL) {
 #ifdef TARGET_MIPS64
-        cpu_model = "20Kc";
+        // cpu_model = "20Kc";
+        cpu_model = "5Kf";
 #else
         cpu_model = "24Kf";
 #endif
@@ -1001,6 +1002,13 @@ void mips_malta_init(MachineState *machine)
                 ((unsigned int)ram_size / (1 << 20)));
         exit(1);
     }
+
+#ifdef TARGET_CHERI
+    if (machine->breakpoint)
+        cpu_breakpoint_insert((CPUState *)cpu, machine->breakpoint, BP_GDB,
+                NULL);
+    cheri_tag_init(ram_size);
+#endif /* TARGET_CHERI */
 
     /* register RAM at high address where it is undisturbed by IO */
     memory_region_allocate_system_memory(ram_high, NULL, "mips_malta.ram",
