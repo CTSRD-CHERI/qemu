@@ -104,6 +104,8 @@ const QEMULogItem qemu_log_items[] = {
       "show interrupts/exceptions in short format" },
     { CPU_LOG_EXEC, "exec",
       "show trace before each executed TB (lots of logs)" },
+    { CPU_LOG_INSTR, "instr",
+      "show executed instructions and changed CPU state" },
     { CPU_LOG_TB_CPU, "cpu",
       "show CPU state before block translation" },
     { CPU_LOG_MMU, "mmu",

@@ -1822,6 +1822,32 @@ static void gen_store_fpr64(DisasContext *ctx, TCGv_i64 t, int reg)
     }
 }
 
+static inline void
+generate_dump_pc(target_ulong pc, int isa)
+{
+    TCGv tpc = tcg_const_tl(pc);
+    TCGv_i32 tisa = tcg_const_i32(isa);
+    gen_helper_dump_pc(cpu_env, tpc, tisa);
+    tcg_temp_free(tpc);
+    tcg_temp_free_i32(tisa);
+}
+
+static inline void
+generate_dump_store(int op, TCGv addr, TCGv value)
+{
+    TCGv_i32 top = tcg_const_i32(op);
+    gen_helper_dump_store(cpu_env, top, addr, value);
+    tcg_temp_free_i32(top);
+}
+
+static inline void
+generate_dump_load(int op, TCGv addr, TCGv value)
+{
+    TCGv_i32 top = tcg_const_i32(op);
+    gen_helper_dump_load(cpu_env, top, addr, value);
+    tcg_temp_free_i32(top);
+}
+
 #if defined(TARGET_CHERI)
 /* Verify that the processor is running with CHERI instructions enabled. */
 static inline void check_cop2x(DisasContext *ctx)
@@ -3505,7 +3531,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
                    int rt, int base, int16_t offset)
 {
     const char *opn = "ld";
-    TCGv t0, t1, t2;
+    TCGv t0, t1, t2, t3;
 
     if (rt == 0 && ctx->insn_flags & (INSN_LOONGSON2E | INSN_LOONGSON2F)) {
         /* Loongson CPU uses a load to zero register for prefetch.
@@ -3517,13 +3543,18 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
 
     t0 = tcg_temp_new();
     gen_base_offset_addr(ctx, t0, base, offset);
-
+    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+        t3 = tcg_temp_new();
+        tcg_gen_mov_tl(t3, t0);
+    }
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_LWU:
         GEN_CAP_CHECK_LOAD(t0, t0, 4);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEUL |
                            ctx->default_tcg_memop_mask);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lwu";
         break;
@@ -3531,6 +3562,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         GEN_CAP_CHECK_LOAD(t0, t0, 8);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEQ |
                            ctx->default_tcg_memop_mask);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ld";
         break;
@@ -3539,6 +3572,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         GEN_CAP_CHECK_LOAD(t0, t0, 8);
         save_cpu_state(ctx, 1);
         op_ld_lld(t0, t0, ctx);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lld";
         break;
@@ -3563,6 +3598,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_temp_free(t2);
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ldl";
         break;
@@ -3588,6 +3625,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_temp_free(t2);
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ldr";
         break;
@@ -3597,6 +3636,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         gen_op_addr_add(ctx, t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEQ);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ldpc";
         break;
@@ -3607,6 +3648,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         gen_op_addr_add(ctx, t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESL);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lwpc";
         break;
@@ -3614,6 +3657,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         GEN_CAP_CHECK_LOAD(t0, t0, 4);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESL |
                            ctx->default_tcg_memop_mask);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lw";
         break;
@@ -3621,6 +3666,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         GEN_CAP_CHECK_LOAD(t0, t0, 2);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESW |
                            ctx->default_tcg_memop_mask);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lh";
         break;
@@ -3628,18 +3675,24 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         GEN_CAP_CHECK_LOAD(t0, t0, 2);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEUW |
                            ctx->default_tcg_memop_mask);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lhu";
         break;
     case OPC_LB:
         GEN_CAP_CHECK_LOAD(t0, t0, 1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_SB);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lb";
         break;
     case OPC_LBU:
         GEN_CAP_CHECK_LOAD(t0, t0, 1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_UB);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lbu";
         break;
@@ -3665,6 +3718,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_ext32s_tl(t0, t0);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lwl";
         break;
@@ -3691,6 +3746,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_ext32s_tl(t0, t0);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lwr";
         break;
@@ -3699,6 +3756,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         GEN_CAP_CHECK_LOAD(t0, t0, 4);
         save_cpu_state(ctx, 1);
         op_ld_ll(t0, t0, ctx);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_load(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ll";
         break;
@@ -3706,6 +3765,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
     (void)opn; /* avoid a compiler warning */
     MIPS_DEBUG("%s %s, %d(%s)", opn, regnames[rt], offset, regnames[base]);
     tcg_temp_free(t0);
+    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+        tcg_temp_free(t3);
 }
 
 /* Store */
@@ -3779,6 +3840,8 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
     }
     (void)opn; /* avoid a compiler warning */
     MIPS_DEBUG("%s %s, %d(%s)", opn, regnames[rt], offset, regnames[base]);
+    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+        generate_dump_store(opc, t0, t1);
     tcg_temp_free(t0);
     tcg_temp_free(t1);
 }
@@ -22226,6 +22289,9 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
         /* Generate capabilities check on PC */
         GEN_CAP_CHECK_PC(&ctx);
 
+        if (qemu_loglevel_mask(CPU_LOG_INSTR))
+            generate_dump_pc(ctx.pc, (ctx.hflags & MIPS_HFLAG_M16) == 0 ? 0 :
+                (ctx.insn_flags & ASE_MICROMIPS) ? 1 : 2);
         is_slot = ctx.hflags & MIPS_HFLAG_BMASK;
         if (!(ctx.hflags & MIPS_HFLAG_M16)) {
             ctx.opcode = cpu_ldl_code(env, ctx.pc);

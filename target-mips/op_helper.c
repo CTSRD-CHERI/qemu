@@ -22,6 +22,7 @@
 #include "exec/helper-proto.h"
 #include "exec/cpu_ldst.h"
 #include "sysemu/kvm.h"
+#include "disas/bfd.h"
 
 #ifndef CONFIG_USER_ONLY
 static inline void cpu_mips_tlb_flush (CPUMIPSState *env, int flush_global);
@@ -3547,6 +3548,42 @@ static void r4k_fill_tlb(CPUMIPSState *env, int idx)
     tlb->PFN[1] = get_tlb_pfn_from_entrylo(env->CP0_EntryLo1) << 12;
 }
 
+static void r4k_dump_tlb(CPUMIPSState *env, int idx)
+{
+    r4k_tlb_t *tlb = &env->tlb->mmu.r4k.tlb[idx];
+    unsigned pagemask, hi, lo0, lo1;
+
+    if (tlb->EHINV) {
+        pagemask = 0;
+        hi  = 1 << CP0EnHi_EHINV;
+        lo0 = 0;
+        lo1 = 0;
+    } else {
+        pagemask = tlb->PageMask;
+        hi = tlb->VPN | tlb->ASID;
+        lo0 = tlb->G | (tlb->V0 << 1) | (tlb->D0 << 2) |
+#ifdef TARGET_CHERI
+            ((target_ulong)tlb->S0 << CP0EnLo_S) |
+            ((target_ulong)tlb->L0 << CP0EnLo_L) |
+#else
+            ((target_ulong)tlb->RI0 << CP0EnLo_RI) |
+            ((target_ulong)tlb->XI0 << CP0EnLo_XI) |
+#endif
+            (tlb->C0 << 3) | (tlb->PFN[0] >> 6);
+        lo1 = tlb->G | (tlb->V1 << 1) | (tlb->D1 << 2) |
+#ifdef TARGET_CHERI
+            ((target_ulong)tlb->S1 << CP0EnLo_S) |
+            ((target_ulong)tlb->L1 << CP0EnLo_L) |
+#else
+            ((target_ulong)tlb->RI1 << CP0EnLo_RI) |
+            ((target_ulong)tlb->XI1 << CP0EnLo_XI) |
+#endif
+            (tlb->C1 << 3) | (tlb->PFN[1] >> 6);
+    }
+    fprintf(qemu_logfile, "    Write TLB[%u] = %08x %08x %08x %08x\n",
+            idx, pagemask, hi, lo0, lo1);
+}
+
 void r4k_helper_tlbinv(CPUMIPSState *env)
 {
     int idx;
@@ -3603,6 +3640,8 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
 
     r4k_invalidate_tlb(env, idx, 0);
     r4k_fill_tlb(env, idx);
+    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+        r4k_dump_tlb(env, idx);
 }
 
 void r4k_helper_tlbwr(CPUMIPSState *env)
@@ -3611,6 +3650,8 @@ void r4k_helper_tlbwr(CPUMIPSState *env)
 
     r4k_invalidate_tlb(env, r, 1);
     r4k_fill_tlb(env, r);
+    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+        r4k_dump_tlb(env, r);
 }
 
 void r4k_helper_tlbp(CPUMIPSState *env)
@@ -4001,7 +4042,434 @@ void mips_cpu_unassigned_access(CPUState *cs, hwaddr addr,
         helper_raise_exception(env, EXCP_DBE);
     }
 }
+
+/*
+ * Print changed kernel/user/debug mode.
+ */
+static void dump_changed_mode(CPUMIPSState *env)
+{
+    const char *kernel0, *kernel1, *mode;
+
+#if defined(TARGET_MIPS64)
+    if (env->CP0_Status & (1 << CP0St_KX)) {
+        kernel0 = "Kernel mode (ERL=0, KX=1)";
+        kernel1 = "Kernel mode (ERL=1, KX=1)";
+    } else {
+        kernel0 = "Kernel mode (ERL=0, KX=0)";
+        kernel1 = "Kernel mode (ERL=1, KX=0)";
+    }
+#else
+    kernel0 = "Kernel mode (ERL=0)";
+    kernel1 = "Kernel mode (ERL=1)";
+#endif
+
+    if (env->CP0_Debug & (1 << CP0DB_DM)) {
+        mode = "Debug mode";
+    } else if (env->CP0_Status & (1 << CP0St_ERL)) {
+        mode = kernel1;
+    } else if (env->CP0_Status & (1 << CP0St_EXL)) {
+        mode = kernel0;
+    } else {
+        switch (extract32(env->CP0_Status, CP0St_KSU, 2)) {
+        case 0:  mode = kernel0;           break;
+        case 1:  mode = "Supervisor mode"; break;
+        default: mode = "User mode";       break;
+        }
+    }
+
+   if (mode != env->last_mode) {
+        env->last_mode = mode;
+        fprintf(qemu_logfile, "--- %s\n", mode);
+    }
+}
+
+/*
+ * Names of coprocessor 0 registers.
+ */
+static const char *cop0_name[32*8] = {
+/*0*/   "Index",        "MVPControl",   "MVPConf0",     "MVPConf1",
+        0,              0,              0,              0,
+/*1*/   "Random",       "VPEControl",   "VPEConf0",     "VPEConf1",
+        "YQMask",       "VPESchedule",  "VPEScheFBack", "VPEOpt",
+/*2*/   "EntryLo0",     "TCStatus",     "TCBind",       "TCRestart",
+        "TCHalt",       "TCContext",    "TCSchedule",   "TCScheFBack",
+/*3*/   "EntryLo1",     0,              0,              0,
+        0,              0,              0,              "TCOpt",
+/*4*/   "Context",      "ContextConfig","UserLocal",    "XContextConfig",
+        0,              0,              0,              0,
+/*5*/   "PageMask",     "PageGrain",    "SegCtl0",      "SegCtl1",
+        "SegCtl2",      0,              0,              0,
+/*6*/   "Wired",        "SRSConf0",     "SRSConf1",     "SRSConf2",
+        "SRSConf3",     "SRSConf4",     0,              0,
+/*7*/   "HWREna",       0,              0,              0,
+        0,              0,              0,              0,
+/*8*/   "BadVAddr",     0,              0,              0,
+        0,              0,              0,              0,
+/*9*/   "Count",        0,              0,              0,
+        0,              0,              0,              0,
+/*10*/  "EntryHi",      0,              0,              0,
+        0,              "MSAAccess",    "MSASave",      "MSARequest",
+/*11*/  "Compare",      0,              0,              0,
+        0,              0,              0,              0,
+/*12*/  "Status",       "IntCtl",       "SRSCtl",       "SRSMap",
+        "ViewIPL",      "SRSMap2",      0,              0,
+/*13*/  "Cause",        0,              0,              0,
+        "ViewRIPL",     "NestedExc",    0,              0,
+/*14*/  "EPC",          0,              "NestedEPC",    0,
+        0,              0,              0,              0,
+/*15*/  "PRId",         "EBase",        "CDMMBase",     "CMGCRBase",
+        0,              0,              0,              0,
+/*16*/  "Config",       "Config1",      "Config2",      "Config3",
+        "Config4",      "Config5",      "Config6",      "Config7",
+/*17*/  "LLAddr",       0,              0,              0,
+        0,              0,              0,              0,
+/*18*/  "WatchLo",      "WatchLo1",     "WatchLo2",     "WatchLo3",
+        "WatchLo4",     "WatchLo5",     "WatchLo6",     "WatchLo7",
+/*19*/  "WatchHi",      "WatchHi1",     "WatchHi2",     "WatchHi3",
+        "WatchHi4",     "WatchHi5",     "WatchHi6",     "WatchHi7",
+/*20*/  "XContext",     0,              0,              0,
+        0,              0,              0,              0,
+/*21*/  0,              0,              0,              0,
+        0,              0,              0,              0,
+/*22*/  0,              0,              0,              0,
+        0,              0,              0,              0,
+/*23*/  "Debug",        "TraceControl", "TraceControl2","UserTraceData",
+        "TraceIBPC",    "TraceDBPC",    "Debug2",       0,
+/*24*/  "DEPC",         0,              "TraceControl3","UserTraceData2",
+        0,              0,              0,              0,
+/*25*/  "PerfCnt",      "PerfCnt1",     "PerfCnt2",     "PerfCnt3",
+        "PerfCnt4",     "PerfCnt5",     "PerfCnt6",     "PerfCnt7",
+/*26*/  "ErrCtl",       0,              0,              0,
+        0,              0,              0,              0,
+/*27*/  "CacheErr",     0,              0,              0,
+        0,              0,              0,              0,
+/*28*/  "ITagLo",       "IDataLo",      "DTagLo",       "DDataLo",
+        "L23TagLo",     "L23DataLo",    0,              0,
+/*29*/  "ITagHi",       "IDataHi",      "DTagHi",       0,
+        0,              "L23DataHi",    0,              0,
+/*30*/  "ErrorEPC",     0,              0,              0,
+        0,              0,              0,              0,
+/*31*/  "DESAVE",       0,              "KScratch1",    "KScratch2",
+        "KScratch3",    "KScratch4",    "KScratch5",    "KScratch6",
+};
+
+/*
+ * Print changed values of COP0 registers.
+ */
+static void dump_changed_cop0_reg(CPUMIPSState *env, int idx,
+        target_ulong value)
+{
+    if (value != env->last_cop0[idx]) {
+        env->last_cop0[idx] = value;
+        fprintf(qemu_logfile, "    Write %s = %08x\n",
+            cop0_name[idx], (unsigned) value);
+    }
+}
+
+/*
+ * Print changed values of COP0 registers.
+ */
+static void dump_changed_cop0(CPUMIPSState *env)
+{
+    dump_changed_cop0_reg(env, 0*8 + 0, env->CP0_Index);
+    if (env->CP0_Config3 & (1 << CP0C3_MT)) {
+        dump_changed_cop0_reg(env, 0*8 + 1, env->mvp->CP0_MVPControl);
+        dump_changed_cop0_reg(env, 0*8 + 2, env->mvp->CP0_MVPConf0);
+        dump_changed_cop0_reg(env, 0*8 + 3, env->mvp->CP0_MVPConf1);
+
+        dump_changed_cop0_reg(env, 1*8 + 1, env->CP0_VPEControl);
+        dump_changed_cop0_reg(env, 1*8 + 2, env->CP0_VPEConf0);
+        dump_changed_cop0_reg(env, 1*8 + 3, env->CP0_VPEConf1);
+        dump_changed_cop0_reg(env, 1*8 + 4, env->CP0_YQMask);
+        dump_changed_cop0_reg(env, 1*8 + 5, env->CP0_VPESchedule);
+        dump_changed_cop0_reg(env, 1*8 + 6, env->CP0_VPEScheFBack);
+        dump_changed_cop0_reg(env, 1*8 + 7, env->CP0_VPEOpt);
+    }
+
+    dump_changed_cop0_reg(env, 2*8 + 0, env->CP0_EntryLo0);
+    if (env->CP0_Config3 & (1 << CP0C3_MT)) {
+        dump_changed_cop0_reg(env, 2*8 + 1, env->active_tc.CP0_TCStatus);
+        dump_changed_cop0_reg(env, 2*8 + 2, env->active_tc.CP0_TCBind);
+        dump_changed_cop0_reg(env, 2*8 + 3, env->active_tc.PC);
+        dump_changed_cop0_reg(env, 2*8 + 4, env->active_tc.CP0_TCHalt);
+        dump_changed_cop0_reg(env, 2*8 + 5, env->active_tc.CP0_TCContext);
+        dump_changed_cop0_reg(env, 2*8 + 6, env->active_tc.CP0_TCSchedule);
+        dump_changed_cop0_reg(env, 2*8 + 7, env->active_tc.CP0_TCScheFBack);
+    }
+
+    dump_changed_cop0_reg(env, 3*8 + 0, env->CP0_EntryLo1);
+
+    dump_changed_cop0_reg(env, 4*8 + 0, env->CP0_Context);
+    /* 4/1 not implemented - ContextConfig */
+    dump_changed_cop0_reg(env, 4*8 + 2, env->active_tc.CP0_UserLocal);
+    /* 4/3 not implemented - XContextConfig */
+
+    dump_changed_cop0_reg(env, 5*8 + 0, env->CP0_PageMask);
+    dump_changed_cop0_reg(env, 5*8 + 1, env->CP0_PageGrain);
+
+    dump_changed_cop0_reg(env, 6*8 + 0, env->CP0_Wired);
+    dump_changed_cop0_reg(env, 6*8 + 1, env->CP0_SRSConf0);
+    dump_changed_cop0_reg(env, 6*8 + 2, env->CP0_SRSConf1);
+    dump_changed_cop0_reg(env, 6*8 + 3, env->CP0_SRSConf2);
+    dump_changed_cop0_reg(env, 6*8 + 4, env->CP0_SRSConf3);
+    dump_changed_cop0_reg(env, 6*8 + 5, env->CP0_SRSConf4);
+
+    dump_changed_cop0_reg(env, 7*8 + 0, env->CP0_HWREna);
+
+    dump_changed_cop0_reg(env, 8*8 + 0, env->CP0_BadVAddr);
+    if (env->CP0_Config3 & (1 << CP0C3_BI))
+        dump_changed_cop0_reg(env, 8*8 + 1, env->CP0_BadInstr);
+    if (env->CP0_Config3 & (1 << CP0C3_BP))
+        dump_changed_cop0_reg(env, 8*8 + 1, env->CP0_BadInstrP);
+
+    dump_changed_cop0_reg(env, 10*8 + 0, env->CP0_EntryHi);
+
+    dump_changed_cop0_reg(env, 11*8 + 0, env->CP0_Compare);
+
+    dump_changed_cop0_reg(env, 12*8 + 0, env->CP0_Status);
+    dump_changed_cop0_reg(env, 12*8 + 1, env->CP0_IntCtl);
+    dump_changed_cop0_reg(env, 12*8 + 2, env->CP0_SRSCtl);
+    dump_changed_cop0_reg(env, 12*8 + 3, env->CP0_SRSMap);
+
+    dump_changed_cop0_reg(env, 13*8 + 0, env->CP0_Cause);
+
+    dump_changed_cop0_reg(env, 14*8 + 0, env->CP0_EPC);
+
+    dump_changed_cop0_reg(env, 15*8 + 0, env->CP0_PRid);
+    dump_changed_cop0_reg(env, 15*8 + 1, env->CP0_EBase);
+
+    dump_changed_cop0_reg(env, 16*8 + 0, env->CP0_Config0);
+    dump_changed_cop0_reg(env, 16*8 + 1, env->CP0_Config1);
+    dump_changed_cop0_reg(env, 16*8 + 2, env->CP0_Config2);
+    dump_changed_cop0_reg(env, 16*8 + 3, env->CP0_Config3);
+    dump_changed_cop0_reg(env, 16*8 + 4, env->CP0_Config4);
+    dump_changed_cop0_reg(env, 16*8 + 5, env->CP0_Config5);
+    dump_changed_cop0_reg(env, 16*8 + 6, env->CP0_Config6);
+    dump_changed_cop0_reg(env, 16*8 + 7, env->CP0_Config7);
+
+    dump_changed_cop0_reg(env, 17*8 + 0, env->lladdr >> env->CP0_LLAddr_shift);
+
+    dump_changed_cop0_reg(env, 18*8 + 0, env->CP0_WatchLo[0]);
+    dump_changed_cop0_reg(env, 18*8 + 1, env->CP0_WatchLo[1]);
+    dump_changed_cop0_reg(env, 18*8 + 2, env->CP0_WatchLo[2]);
+    dump_changed_cop0_reg(env, 18*8 + 3, env->CP0_WatchLo[3]);
+    dump_changed_cop0_reg(env, 18*8 + 4, env->CP0_WatchLo[4]);
+    dump_changed_cop0_reg(env, 18*8 + 5, env->CP0_WatchLo[5]);
+    dump_changed_cop0_reg(env, 18*8 + 6, env->CP0_WatchLo[6]);
+    dump_changed_cop0_reg(env, 18*8 + 7, env->CP0_WatchLo[7]);
+
+    dump_changed_cop0_reg(env, 19*8 + 0, env->CP0_WatchHi[0]);
+    dump_changed_cop0_reg(env, 19*8 + 1, env->CP0_WatchHi[1]);
+    dump_changed_cop0_reg(env, 19*8 + 2, env->CP0_WatchHi[2]);
+    dump_changed_cop0_reg(env, 19*8 + 3, env->CP0_WatchHi[3]);
+    dump_changed_cop0_reg(env, 19*8 + 4, env->CP0_WatchHi[4]);
+    dump_changed_cop0_reg(env, 19*8 + 5, env->CP0_WatchHi[5]);
+    dump_changed_cop0_reg(env, 19*8 + 6, env->CP0_WatchHi[6]);
+    dump_changed_cop0_reg(env, 19*8 + 7, env->CP0_WatchHi[7]);
+
+#if defined(TARGET_MIPS64)
+    dump_changed_cop0_reg(env, 20*8 + 0, env->CP0_XContext);
+#endif
+
+    dump_changed_cop0_reg(env, 21*8 + 0, env->CP0_Framemask);
+
+    /* 22/x not defined */
+
+    dump_changed_cop0_reg(env, 23*8 + 0, helper_mfc0_debug(env));
+
+    dump_changed_cop0_reg(env, 24*8 + 0, env->CP0_DEPC);
+
+    dump_changed_cop0_reg(env, 25*8 + 0, env->CP0_Performance0);
+
+    /* 26/0 not implemented - ErrCtl */
+
+    /* 27/0 not implemented - CacheErr */
+
+    dump_changed_cop0_reg(env, 28*8 + 0, env->CP0_TagLo);
+    dump_changed_cop0_reg(env, 28*8 + 1, env->CP0_DataLo);
+
+    dump_changed_cop0_reg(env, 29*8 + 0, env->CP0_TagHi);
+    dump_changed_cop0_reg(env, 29*8 + 1, env->CP0_DataHi);
+
+    dump_changed_cop0_reg(env, 30*8 + 0, env->CP0_ErrorEPC);
+
+    dump_changed_cop0_reg(env, 31*8 + 0, env->CP0_DESAVE);
+    dump_changed_cop0_reg(env, 31*8 + 2, env->CP0_KScratch[0]);
+    dump_changed_cop0_reg(env, 31*8 + 3, env->CP0_KScratch[1]);
+    dump_changed_cop0_reg(env, 31*8 + 4, env->CP0_KScratch[2]);
+    dump_changed_cop0_reg(env, 31*8 + 5, env->CP0_KScratch[3]);
+    dump_changed_cop0_reg(env, 31*8 + 6, env->CP0_KScratch[4]);
+    dump_changed_cop0_reg(env, 31*8 + 7, env->CP0_KScratch[5]);
+}
 #endif /* !CONFIG_USER_ONLY */
+
+/*
+ * Print changed values of GPR, HI/LO and DSPControl registers.
+ */
+static void dump_changed_regs(CPUMIPSState *env)
+{
+    TCState *cur = &env->active_tc;
+    static const char * const gpr_name[] = {
+        "r0", "at", "v0", "v1", "a0", "a1", "a2", "a3",
+        "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
+        "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
+        "t8", "t9", "k0", "k1", "gp", "sp", "s8", "ra",
+    };
+    int i;
+
+    for (i=1; i<32; i++) {
+        if (cur->gpr[i] != env->last_gpr[i]) {
+            env->last_gpr[i] = cur->gpr[i];
+            fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
+                gpr_name[i], cur->gpr[i]);
+        }
+    }
+    for (i=0; i<MIPS_DSP_ACC; i++) {
+        if (cur->LO[i] != env->last_LO[i]) {
+            env->last_LO[i] = cur->LO[i];
+            fprintf(qemu_logfile, "    Write Lo%u = " TARGET_FMT_lx "\n",
+                i, cur->LO[i]);
+        }
+        if (cur->HI[i] != env->last_HI[i]) {
+            env->last_HI[i] = cur->HI[i];
+            fprintf(qemu_logfile, "    Write Hi%u = " TARGET_FMT_lx "\n",
+                i, cur->HI[i]);
+        }
+    }
+}
+
+/*
+ * Print the changed processor state.
+ */
+void mips_dump_changed_state(CPUMIPSState *env)
+{
+    /* Print changed state: GPR, HI/LO, COP0. */
+    dump_changed_regs(env);
+    dump_changed_cop0(env);
+
+    /* Print changed mode: kernel/user/debug */
+    dump_changed_mode(env);
+}
+
+/*
+ * Print the instruction to log file.
+ */
+void helper_dump_pc(CPUMIPSState *env, target_ulong pc, int isa)
+{
+    MIPSCPU *cpu = mips_env_get_cpu(env);
+    CPUState *cs = CPU(cpu);
+
+    /* Print changed state: GPR, HI/LO, COP0. */
+    mips_dump_changed_state(env);
+
+    /* Disassemble and print instruction. */
+    if (isa == 0) {
+        log_target_disas(cs, pc, 4, 0);
+    } else {
+        log_target_disas(cs, pc, 2, 0);
+    }
+}
+
+enum {
+    /* Load and stores */
+    OPC_LDL      = (0x1A << 26),
+    OPC_LDR      = (0x1B << 26),
+    OPC_LB       = (0x20 << 26),
+    OPC_LH       = (0x21 << 26),
+    OPC_LWL      = (0x22 << 26),
+    OPC_LW       = (0x23 << 26),
+    OPC_LWPC     = OPC_LW | 0x5,
+    OPC_LBU      = (0x24 << 26),
+    OPC_LHU      = (0x25 << 26),
+    OPC_LWR      = (0x26 << 26),
+    OPC_LWU      = (0x27 << 26),
+    OPC_SB       = (0x28 << 26),
+    OPC_SH       = (0x29 << 26),
+    OPC_SWL      = (0x2A << 26),
+    OPC_SW       = (0x2B << 26),
+    OPC_SDL      = (0x2C << 26),
+    OPC_SDR      = (0x2D << 26),
+    OPC_SWR      = (0x2E << 26),
+    OPC_LL       = (0x30 << 26),
+    OPC_LLD      = (0x34 << 26),
+    OPC_LD       = (0x37 << 26),
+    OPC_LDPC     = OPC_LD | 0x5,
+    OPC_SC       = (0x38 << 26),
+    OPC_SCD      = (0x3C << 26),
+    OPC_SD       = (0x3F << 26),
+};
+
+/*
+ * Print the memory store to log file.
+ */
+void helper_dump_store(CPUMIPSState *env, int opc, target_ulong addr,
+        target_ulong value)
+{
+    switch (opc) {
+#if defined(TARGET_MIPS64)
+    case OPC_SD:
+    case OPC_SDL:
+    case OPC_SDR:
+        fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = "
+                TARGET_FMT_lx"\n", addr, value);
+        break;
+#endif
+    case OPC_SW:
+    case OPC_SWL:
+    case OPC_SWR:
+        fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %08x\n",
+                addr, (uint32_t) value);
+        break;
+    case OPC_SH:
+        fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %04x\n",
+                addr, (uint16_t) value);
+        break;
+    case OPC_SB:
+        fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %02x\n",
+                addr, (uint8_t) value);
+        break;
+    default:
+        fprintf(qemu_logfile, "    Memory op%u [" TARGET_FMT_lx "] = %08x\n",
+                opc, addr, (uint32_t) value);
+    }
+}
+
+/*
+ * Print the memory load to log file.
+ */
+void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
+        target_ulong value)
+{
+    switch (opc) {
+#if defined(TARGET_MIPS64)
+    case OPC_LD:
+    case OPC_LDL:
+    case OPC_LDR:
+    case OPC_LDPC:
+        fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = "
+                TARGET_FMT_lx "\n", addr, value);
+        break;
+    case OPC_LWU:
+#endif
+    case OPC_LW:
+    case OPC_LWPC:
+    case OPC_LWL:
+    case OPC_LWR:
+        fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %08x\n",
+                addr, (uint32_t) value);
+        break;
+    case OPC_LH:
+    case OPC_LHU:
+        fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %04x\n",
+                addr, (uint16_t) value);
+        break;
+    case OPC_LB:
+    case OPC_LBU:
+        fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %02x\n",
+                addr, (uint8_t) value);
+        break;
+    }
+}
 
 /* Complex FPU operations which may need stack space. */
 

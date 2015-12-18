@@ -396,6 +396,9 @@ int mips_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
     } else if (ret < 0)
 #endif
     {
+        qemu_log_mask(CPU_LOG_INSTR, "%s address=%" VADDR_PRIx
+                " ret %d physical " TARGET_FMT_plx " prot %d\n",
+                __func__, address, ret, physical, prot);
 #ifdef TARGET_CHERI
         raise_mmu_exception(env, address, rw, ret, 0xff);
 #else
@@ -560,6 +563,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  " %s exception\n",
                  __func__, env->active_tc.PC, env->CP0_EPC, name);
     }
+    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+        mips_dump_changed_state(env);
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&
         (env->hflags & MIPS_HFLAG_DM)) {
         cs->exception_index = EXCP_DINT;
@@ -839,6 +844,14 @@ void mips_cpu_do_interrupt(CPUState *cs)
         break;
     default:
         abort();
+    }
+    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+        if (cs->exception_index == EXCP_EXT_INTERRUPT)
+            fprintf (qemu_logfile, "--- Interrupt, vector " TARGET_FMT_lx "\n",
+                    env->active_tc.PC);
+        else
+            fprintf (qemu_logfile, "--- Exception #%u: %s, vector "
+                    TARGET_FMT_lx "\n", cause, name, env->active_tc.PC);
     }
     if (qemu_loglevel_mask(CPU_LOG_INT)
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
