@@ -2964,7 +2964,7 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
 
 
     cdp->cr_otype = (uint32_t)(otype >> 32);
-    cdp->cr_perms = (uint32_t)(otype >> 1);
+    cdp->cr_perms = (uint32_t)(otype >> 1) & ~CAP_SEALED;
     if (otype & 1ULL)
         cdp->cr_perms |= CAP_SEALED;
 }
