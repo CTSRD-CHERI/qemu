@@ -4391,6 +4391,42 @@ enum {
     OPC_SDR      = (0x2D << 26),
     OPC_SWR      = (0x2E << 26),
     OPC_LL       = (0x30 << 26),
+#ifdef TARGET_CHERI
+    OPC_CSCB     = (0x12 << 26) | (0x10 << 21) | (0x0),
+    OPC_CSCH     = (0x12 << 26) | (0x10 << 21) | (0x1),
+    OPC_CSCW     = (0x12 << 26) | (0x10 << 21) | (0x2),
+    OPC_CSCD     = (0x12 << 26) | (0x10 << 21) | (0x3),
+
+    OPC_CSCC     = (0x12 << 26) | (0x10 << 21) | (0x7),
+
+    OPC_CLLB     = (0x12 << 26) | (0x10 << 21) | (0x8),
+    OPC_CLLH     = (0x12 << 26) | (0x10 << 21) | (0x9),
+    OPC_CLLW     = (0x12 << 26) | (0x10 << 21) | (0xa),
+    OPC_CLLD     = (0x12 << 26) | (0x10 << 21) | (0xb),
+    OPC_CLLBU    = (0x12 << 26) | (0x10 << 21) | (0xc),
+    OPC_CLLHU    = (0x12 << 26) | (0x10 << 21) | (0xd),
+    OPC_CLLWU    = (0x12 << 26) | (0x10 << 21) | (0xe),
+
+    OPC_CLLC     = (0x12 << 26) | (0x10 << 21) | (0xf),
+
+    OPC_CLBU     = (0x32 << 26) | (0x0),
+    OPC_CLHU     = (0x32 << 26) | (0x1),
+    OPC_CLWU     = (0x32 << 26) | (0x2),
+    OPC_CLDU     = (0x32 << 26) | (0x3),
+    OPC_CLB      = (0x32 << 26) | (0x4),
+    OPC_CLH      = (0x32 << 26) | (0x5),
+    OPC_CLW      = (0x32 << 26) | (0x6),
+    OPC_CLD      = (0x32 << 26) | (0x7),
+
+    OPC_CLOADC   = (0x36 << 26),
+
+    OPC_CSB      = (0x3A << 26) | (0x0),
+    OPC_CSH      = (0x3A << 26) | (0x1),
+    OPC_CSW      = (0x3A << 26) | (0x2),
+    OPC_CSD      = (0x3A << 26) | (0x3),
+
+    OPC_CSTOREC  = (0x3E << 26),
+#endif /* TARGET_CHERI */
     OPC_LLD      = (0x34 << 26),
     OPC_LD       = (0x37 << 26),
     OPC_LDPC     = OPC_LD | 0x5,
@@ -4410,6 +4446,11 @@ void helper_dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_SD:
     case OPC_SDL:
     case OPC_SDR:
+#ifdef TARGET_CHERI
+    case OPC_CSD:
+    case OPC_CSTOREC:
+    case OPC_CSCD:
+#endif
         fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = "
                 TARGET_FMT_lx"\n", addr, value);
         break;
@@ -4417,14 +4458,26 @@ void helper_dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_SW:
     case OPC_SWL:
     case OPC_SWR:
+#ifdef TARGET_CHERI
+    case OPC_CSW:
+    case OPC_CSCW:
+#endif
         fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %08x\n",
                 addr, (uint32_t) value);
         break;
     case OPC_SH:
+#ifdef TARGET_CHERI
+    case OPC_CSH:
+    case OPC_CSCH:
+#endif
         fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %04x\n",
                 addr, (uint16_t) value);
         break;
     case OPC_SB:
+#ifdef TARGET_CHERI
+    case OPC_CSB:
+    case OPC_CSCB:
+#endif
         fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %02x\n",
                 addr, (uint8_t) value);
         break;
@@ -4446,6 +4499,11 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_LDL:
     case OPC_LDR:
     case OPC_LDPC:
+#ifdef TARGET_CHERI
+    case OPC_CLD:
+    case OPC_CLOADC:
+    case OPC_CLLD:
+#endif
         fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = "
                 TARGET_FMT_lx "\n", addr, value);
         break;
@@ -4455,16 +4513,34 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_LWPC:
     case OPC_LWL:
     case OPC_LWR:
+#ifdef TARGET_CHERI
+    case OPC_CLW:
+    case OPC_CLWU:
+    case OPC_CLLW:
+    case OPC_CLLWU:
+#endif
         fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %08x\n",
                 addr, (uint32_t) value);
         break;
     case OPC_LH:
     case OPC_LHU:
+#ifdef TARGET_CHERI
+    case OPC_CLH:
+    case OPC_CLHU:
+    case OPC_CLLH:
+    case OPC_CLLHU:
+#endif
         fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %04x\n",
                 addr, (uint16_t) value);
         break;
     case OPC_LB:
     case OPC_LBU:
+#ifdef TARGET_CHERI
+    case OPC_CLB:
+    case OPC_CLBU:
+    case OPC_CLLB:
+    case OPC_CLLBU:
+#endif
         fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %02x\n",
                 addr, (uint8_t) value);
         break;
