@@ -727,10 +727,11 @@ struct CPUMIPSState {
      * Used for instruction tracing.
      */
     target_ulong last_gpr[32];
-    target_ulong last_HI[MIPS_DSP_ACC];
-    target_ulong last_LO[MIPS_DSP_ACC];
     target_ulong last_cop0[32*8];
     const char *last_mode;
+#ifdef TARGET_CHERI
+    cap_register_t last_C[32];
+#endif
 };
 
 #include "cpu-qom.h"

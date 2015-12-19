@@ -4324,18 +4324,23 @@ static void dump_changed_regs(CPUMIPSState *env)
                 gpr_name[i], cur->gpr[i]);
         }
     }
-    for (i=0; i<MIPS_DSP_ACC; i++) {
-        if (cur->LO[i] != env->last_LO[i]) {
-            env->last_LO[i] = cur->LO[i];
-            fprintf(qemu_logfile, "    Write Lo%u = " TARGET_FMT_lx "\n",
-                i, cur->LO[i]);
-        }
-        if (cur->HI[i] != env->last_HI[i]) {
-            env->last_HI[i] = cur->HI[i];
-            fprintf(qemu_logfile, "    Write Hi%u = " TARGET_FMT_lx "\n",
-                i, cur->HI[i]);
+#ifdef TARGET_CHERI
+    for (i=0; i<32; i++) {
+        if (memcmp(&cur->C[i], &env->last_C[i], sizeof(cap_register_t))) {
+            cap_register_t *cr = &cur->C[i];
+
+            env->last_C[i] = *cr;
+            fprintf(qemu_logfile, "    Write C%02d|v:%d s:%d p:%08x b:%016lx "
+                    "l:%016lx\n", i, cr->cr_tag,
+                    (cr->cr_perms & CAP_SEALED) ? 1 : 0,
+                    (cr->cr_perms & ~CAP_SEALED), cr->cr_base,
+                    cr->cr_length);
+            fprintf(qemu_logfile, "             |o:%016lx t:%x\n",
+                    cr->cr_offset, cr->cr_otype);
+
         }
     }
+#endif
 }
 
 /*
