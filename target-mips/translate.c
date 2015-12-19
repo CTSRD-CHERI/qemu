@@ -2908,13 +2908,13 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
     tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLOADC, taddr, t0);
+        generate_dump_load(OPC_CLOADC, taddr, t1);
     tcg_gen_addi_tl(taddr, taddr, 8);
     /* Fetch length in t2 */
     tcg_gen_qemu_ld_tl(t2, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLOADC, taddr, t0);
+        generate_dump_load(OPC_CLOADC, taddr, t2);
 
     /* Store in the capability register. */
     gen_helper_bytes2cap_cbl(cpu_env, tcd, t0, t1, t2);
