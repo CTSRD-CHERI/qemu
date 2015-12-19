@@ -551,7 +551,11 @@ static const mips_def_t mips_defs[] =
                        (1 << CP0C1_DS) | (4 << CP0C1_DL) | (1 << CP0C1_DA) |
                        (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP),
         .CP0_Config2 = MIPS_CONFIG2,
+#if defined(TARGET_CHERI)
+        .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI),
+#else
         .CP0_Config3 = MIPS_CONFIG3,
+#endif
         .CP0_LLAddr_rw_bitmask = 0,
         .CP0_LLAddr_shift = 4,
         .SYNCI_Step = 32,
