@@ -2246,6 +2246,7 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     cap_register_t *cdp = &env->active_tc.C[cd];
     cap_register_t *csp = &env->active_tc.C[cs];
     cap_register_t *ctp = &env->active_tc.C[ct];
+    uint64_t ct_base_plus_offset = ctp->cr_base + ctp->cr_offset;
     /*
      * CSeal: Seal a capability
      */
@@ -2267,12 +2268,12 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_PERM_SEAL, ct);
     } else if (ctp->cr_offset >= ctp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if ((ctp->cr_base + ctp->cr_offset) > CAP_MAX_OTYPE) {
+    } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else {
         *cdp = *csp;
         cdp->cr_perms |= CAP_SEALED;
-        cdp->cr_otype = (uint32_t)(ctp->cr_base + ctp->cr_offset);
+        cdp->cr_otype = (uint32_t)ct_base_plus_offset;
     }
 }
 
