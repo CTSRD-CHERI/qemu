@@ -1092,7 +1092,7 @@ enum {
     OPC_CLLC        = OPC_CLL | (0xf),
 };
 
-#define MASK_CLDST_OFFSET(opc)   ((opc >> 3) & 0x7f)
+#define MASK_CLDST_OFFSET(opc)   ((opc >> 3) & 0xff)
 #define MASK_CLDST_OPC(opc)     ((opc) & ((0x3f << 26) | 0x7))
 
 /* Load Via Capability Register */
@@ -2382,9 +2382,9 @@ static inline void generate_cexeq(int32_t rd, int32_t cb, int32_t ct)
 
 static inline int32_t cload_sign_extend(int32_t x)
 {
-    int32_t const mask = 1U << (7 - 1);
+    int32_t const mask = 1U << (8 - 1);
 
-    x = x & ((1U << 7) - 1);
+    x = x & ((1U << 8) - 1);
     return (x ^ mask) - mask;
 }
 
