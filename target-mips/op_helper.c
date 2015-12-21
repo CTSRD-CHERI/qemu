@@ -2787,7 +2787,7 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    // cap_register_t *cdp = &env->active_tc.C[cd];
 
     if (creg_inaccessible(perms, cd)) {
         do_raise_c2_exception_v(env, cd);
@@ -2806,8 +2806,8 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         return (target_ulong)0;
     } else {
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
-        uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
-        uint32_t tag;
+        uint64_t addr = (uint64_t)((cursor + rt) + (int32_t)offset);
+        // uint32_t tag;
 
         /* 32 = 256-bit capability */
         if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
@@ -2820,10 +2820,16 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
             do_raise_c0_exception(env, EXCP_AdEL, addr);
             return (target_ulong)0;
         }
+
+        /*
+         * XXX Don't chance taking the TLB missing in cheri_tag_get().
+         * Do the first load of the capability and then get the tag in
+         * helper_bytes2cap_op() below.
         tag = cheri_tag_get(env, addr, cd, NULL);
         if (env->TLB_L)
             tag = 0;
         cdp->cr_tag = tag;
+        */
         return (target_ulong)addr;
     }
 }
@@ -2832,9 +2838,9 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    // cap_register_t *cdp = &env->active_tc.C[cd];
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
-    uint32_t tag;
+    // uint32_t tag;
 
     if (creg_inaccessible(perms, cd)) {
         do_raise_c2_exception_v(env, cd);
@@ -2862,10 +2868,15 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
          return (target_ulong)0;
     }
 
+    /*
+     * XXX Don't chance taking the TLB missing in cheri_tag_get().
+     * Do the first load of the capability and then get the tag in
+     * helper_bytes2cap_opll() below.
     tag = cheri_tag_get(env, addr, cd, &env->lladdr);
     if (env->TLB_L)
         tag = 0;
     cdp->cr_tag = tag;
+    */
 
     env->linkedflag = 1;
 
@@ -2962,7 +2973,27 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
     cap_register_t *cdp = &env->active_tc.C[cd];
+    uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
 
+    if (env->TLB_L)
+        tag = 0;
+    cdp->cr_tag = tag;
+
+    cdp->cr_otype = (uint32_t)(otype >> 32);
+    cdp->cr_perms = (uint32_t)(otype >> 1) & ~CAP_SEALED;
+    if (otype & 1ULL)
+        cdp->cr_perms |= CAP_SEALED;
+}
+
+void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
+        target_ulong addr)
+{
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    uint32_t tag = cheri_tag_get(env, addr, cd, &env->lladdr);
+
+    if (env->TLB_L)
+        tag = 0;
+    cdp->cr_tag = tag;
 
     cdp->cr_otype = (uint32_t)(otype >> 32);
     cdp->cr_perms = (uint32_t)(otype >> 1) & ~CAP_SEALED;

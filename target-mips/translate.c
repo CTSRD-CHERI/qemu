@@ -2945,7 +2945,7 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
             MO_TEQ | ctx->default_tcg_memop_mask);
 
     /* Store in the capability register. */
-    gen_helper_bytes2cap_op(cpu_env, tcd, t0, taddr);
+    gen_helper_bytes2cap_opll(cpu_env, tcd, t0, taddr);
 
     /* Fetch the cursor, base, and length from memory */
     tcg_gen_addi_tl(taddr, taddr, 8);
