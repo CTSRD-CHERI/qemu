@@ -304,8 +304,10 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
     }
 
     len = TARGET_PAGE_ALIGN(len);
-    if (len == 0)
-        goto the_end;
+    if (len == 0) {
+        errno = EINVAL;
+        goto fail;
+    }
     real_start = start & qemu_host_page_mask;
     host_offset = offset & qemu_host_page_mask;
 
