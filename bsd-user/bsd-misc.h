@@ -175,23 +175,29 @@ static inline abi_long do_bsd___semctl(int semid, int semnum, int target_cmd,
     switch (host_cmd) {
     case GETVAL:
     case SETVAL:
-        arg.val = tswap32(target_su.val);
+        /* In 64 bit cross-endian situations, we will erroneously pick up
+         * the wrong half of the union for the "val" element.  To rectify
+         * this, the entire 8-byte structure is byteswapped, followed by
+         * a swap of the 4 byte val field. In other cases, the data is
+         * already in proper host byte order. */
+        if (sizeof(target_su.val) != (sizeof(target_su.buf))) {
+            target_su.buf = tswapal(target_su.buf);
+            arg.val = tswap32(target_su.val);
+        } else {
+            arg.val = target_su.val;
+        }
         ret = get_errno(semctl(semid, semnum, host_cmd, arg));
-        target_su.val = tswap32(arg.val);
         break;
 
     case GETALL:
     case SETALL:
-        if (get_user_ual(target_addr, (abi_ulong)target_su.array)) {
-            return -TARGET_EFAULT;
-        }
-        err = target_to_host_semarray(semid, &array, target_addr);
+        err = target_to_host_semarray(semid, &array, target_su.array);
         if (is_error(err)) {
             return err;
         }
         arg.array = array;
         ret = get_errno(semctl(semid, semnum, host_cmd, arg));
-        err = host_to_target_semarray(semid, target_addr, &array);
+        err = host_to_target_semarray(semid, target_su.array, &array);
         if (is_error(err)) {
             return err;
         }
@@ -199,16 +205,13 @@ static inline abi_long do_bsd___semctl(int semid, int semnum, int target_cmd,
 
     case IPC_STAT:
     case IPC_SET:
-        if (get_user_ual(target_addr, (abi_ulong)target_su.buf)) {
-            return -TARGET_EFAULT;
-        }
-        err = target_to_host_semid_ds(&dsarg, target_addr);
+        err = target_to_host_semid_ds(&dsarg, target_su.buf);
         if (is_error(err)) {
             return err;
         }
         arg.buf = &dsarg;
         ret = get_errno(semctl(semid, semnum, host_cmd, arg));
-        err = host_to_target_semid_ds(target_addr, &dsarg);
+        err = host_to_target_semid_ds(target_su.buf, &dsarg);
         if (is_error(err)) {
             return err;
         }
