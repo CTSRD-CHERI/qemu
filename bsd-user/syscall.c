@@ -1471,10 +1471,15 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_bsd_semop(arg1, arg2, arg3);
         break;
 
-    case TARGET_FREEBSD_NR___semctl: /* __semctl() undocumented */
+    case TARGET_FREEBSD_NR___semctl: { /* __semctl() undocumented */
+        /* The semun argument to semctl is passed by value, so dereference the
+         * ptr argument. */
+        abi_ulong atptr;
+        get_user_ual(atptr, (abi_ulong)arg4);
         ret = do_bsd___semctl(arg1, arg2, arg3,
-                (union target_semun)(abi_ulong)arg4);
+                (union target_semun)(abi_ulong) atptr);
         break;
+    }
 
         /*
          * SysV Messages
