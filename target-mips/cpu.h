@@ -667,6 +667,7 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_ELPA  0x4000000
 #ifdef TARGET_CHERI
 #define MIPS_HFLAG_COP2X   0x8000000 /* CHERI/CP2 enabled              */
+    int btcr;                    /* cjr/cjalr Cap register target      */
 #endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
     target_ulong bcond;          /* Branch condition (if needed)       */

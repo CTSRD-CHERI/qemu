@@ -1478,6 +1478,9 @@ static TCGv_ptr cpu_env;
 static TCGv cpu_gpr[32], cpu_PC;
 static TCGv cpu_HI[MIPS_DSP_ACC], cpu_LO[MIPS_DSP_ACC];
 static TCGv cpu_dspctrl, btarget, bcond;
+#ifdef TARGET_CHERI
+static TCGv_i32 btcr;
+#endif
 static TCGv_i32 hflags;
 static TCGv_i32 fpu_fcr0, fpu_fcr31;
 static TCGv_i64 fpu_f64[32];
@@ -1543,9 +1546,6 @@ typedef struct DisasContext {
     uint32_t hflags, saved_hflags;
     int bstate;
     target_ulong btarget;
-#ifdef TARGET_CHERI
-    int btcr;
-#endif /* TARGET_CHERI */
     bool ulri;
     int kscrexist;
     bool rxi;
@@ -1556,6 +1556,9 @@ typedef struct DisasContext {
     bool mvh;
     int CP0_LLAddr_shift;
     bool ps;
+#ifdef TARGET_CHERI
+    int btcr;
+#endif /* TARGET_CHERI */
 } DisasContext;
 
 enum {
@@ -1708,10 +1711,12 @@ static inline void save_cpu_state(DisasContext *ctx, int do_save_pc)
         ctx->saved_hflags = ctx->hflags;
         switch (ctx->hflags & MIPS_HFLAG_BMASK_BASE) {
         case MIPS_HFLAG_BR:
+            break;
 #ifdef TARGET_CHERI
         case MIPS_HFLAG_BRC:
-#endif
+            tcg_gen_movi_i32(btcr, ctx->btcr);
             break;
+#endif
         case MIPS_HFLAG_BC:
         case MIPS_HFLAG_BL:
         case MIPS_HFLAG_B:
@@ -1726,10 +1731,12 @@ static inline void restore_cpu_state(CPUMIPSState *env, DisasContext *ctx)
     ctx->saved_hflags = ctx->hflags;
     switch (ctx->hflags & MIPS_HFLAG_BMASK_BASE) {
     case MIPS_HFLAG_BR:
+        break;
 #ifdef TARGET_CHERI
     case MIPS_HFLAG_BRC:
-#endif
+        ctx->btcr = env->btcr;
         break;
+#endif
     case MIPS_HFLAG_BC:
     case MIPS_HFLAG_BL:
     case MIPS_HFLAG_B:
@@ -1926,9 +1933,9 @@ static inline void generate_cjalr(DisasContext *ctx, int32_t cd, int32_t cb)
     gen_helper_cjalr(btarget, cpu_env, tcd, tcb);
     /* Set branch and delay slot flags */
     ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
-    save_cpu_state(ctx, 0);
     /* Save capability register index that is new PCC */
     ctx->btcr = cb;
+    save_cpu_state(ctx, 0);
 
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tcd);
@@ -1941,9 +1948,9 @@ static inline void generate_cjr(DisasContext *ctx, int32_t cb)
     gen_helper_cjr(btarget, cpu_env, tcb);
     /* Set branch and delay slot flags */
     ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
-    save_cpu_state(ctx, 0);
     /* Save capability register index that is new PCC */
     ctx->btcr = cb;
+    save_cpu_state(ctx, 0);
 
     tcg_temp_free_i32(tcb);
 }
@@ -22602,6 +22609,10 @@ void mips_tcg_init(void)
                                  offsetof(CPUMIPSState, btarget), "btarget");
     hflags = tcg_global_mem_new_i32(TCG_AREG0,
                                     offsetof(CPUMIPSState, hflags), "hflags");
+#ifdef TARGET_CHERI
+    btcr = tcg_global_mem_new_i32(TCG_AREG0,
+                                    offsetof(CPUMIPSState, btcr), "btcr");
+#endif
 
     fpu_fcr0 = tcg_global_mem_new_i32(TCG_AREG0,
                                       offsetof(CPUMIPSState, active_fpu.fcr0),
