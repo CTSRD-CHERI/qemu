@@ -723,6 +723,7 @@ struct CPUMIPSState {
     const mips_def_t *cpu_model;
     void *irq[8];
     QEMUTimer *timer; /* Internal timer */
+#ifdef TARGET_CHERI
     /*
      * Processor state after the last instruction.
      * Used for instruction tracing.
@@ -730,9 +731,8 @@ struct CPUMIPSState {
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
     const char *last_mode;
-#ifdef TARGET_CHERI
     cap_register_t last_C[32];
-#endif
+#endif /* TARGET_CHERI */
 };
 
 #include "cpu-qom.h"
@@ -914,7 +914,9 @@ hwaddr cpu_mips_translate_address (CPUMIPSState *env, target_ulong address,
 		                               int rw);
 #endif
 target_ulong exception_resume_pc (CPUMIPSState *env);
+#ifdef TARGET_CHERI
 void mips_dump_changed_state(CPUMIPSState *env);
+#endif /* TARGET_CHERI */
 
 /* op_helper.c */
 extern unsigned int ieee_rm[];

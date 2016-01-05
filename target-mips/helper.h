@@ -155,11 +155,11 @@ DEF_HELPER_2(mtc0_datalo, void, env, tl)
 DEF_HELPER_2(mtc0_taghi, void, env, tl)
 DEF_HELPER_2(mtc0_datahi, void, env, tl)
 
+#if defined(TARGET_CHERI)
 DEF_HELPER_3(dump_pc, void, env, tl, int)
 DEF_HELPER_4(dump_store, void, env, int, tl, tl)
 DEF_HELPER_4(dump_load, void, env, int, tl, tl)
 
-#if defined(TARGET_CHERI)
 DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
 DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
 DEF_HELPER_2(ccheck_pc, void, env, i64)

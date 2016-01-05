@@ -22,7 +22,9 @@
 #include "exec/helper-proto.h"
 #include "exec/cpu_ldst.h"
 #include "sysemu/kvm.h"
+#ifdef TARGET_CHERI
 #include "disas/bfd.h"
+#endif
 
 #ifndef CONFIG_USER_ONLY
 static inline void cpu_mips_tlb_flush (CPUMIPSState *env, int flush_global);
@@ -3582,6 +3584,7 @@ static void r4k_fill_tlb(CPUMIPSState *env, int idx)
     tlb->PFN[1] = get_tlb_pfn_from_entrylo(env->CP0_EntryLo1) << 12;
 }
 
+#ifdef TARGET_CHERI
 static void r4k_dump_tlb(CPUMIPSState *env, int idx)
 {
     r4k_tlb_t *tlb = &env->tlb->mmu.r4k.tlb[idx];
@@ -3596,7 +3599,7 @@ static void r4k_dump_tlb(CPUMIPSState *env, int idx)
         pagemask = tlb->PageMask;
         hi = tlb->VPN | tlb->ASID;
         lo0 = tlb->G | (tlb->V0 << 1) | (tlb->D0 << 2) |
-#ifdef TARGET_CHERI
+#if 1
             ((target_ulong)tlb->S0 << CP0EnLo_S) |
             ((target_ulong)tlb->L0 << CP0EnLo_L) |
 #else
@@ -3605,7 +3608,7 @@ static void r4k_dump_tlb(CPUMIPSState *env, int idx)
 #endif
             (tlb->C0 << 3) | (tlb->PFN[0] >> 6);
         lo1 = tlb->G | (tlb->V1 << 1) | (tlb->D1 << 2) |
-#ifdef TARGET_CHERI
+#if 1
             ((target_ulong)tlb->S1 << CP0EnLo_S) |
             ((target_ulong)tlb->L1 << CP0EnLo_L) |
 #else
@@ -3614,9 +3617,10 @@ static void r4k_dump_tlb(CPUMIPSState *env, int idx)
 #endif
             (tlb->C1 << 3) | (tlb->PFN[1] >> 6);
     }
-    fprintf(qemu_logfile, "    Write TLB[%u] = %08x %08x %08x %08x\n",
+    fprintf(qemu_logfile, "    Write TLB[%u] = pgmsk:%08x hi:%08x lo0:%08x lo1:%08x\n",
             idx, pagemask, hi, lo0, lo1);
 }
+#endif /* TARGET_CHERI */
 
 void r4k_helper_tlbinv(CPUMIPSState *env)
 {
@@ -3674,8 +3678,10 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
 
     r4k_invalidate_tlb(env, idx, 0);
     r4k_fill_tlb(env, idx);
+#ifdef TARGET_CHERI
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
         r4k_dump_tlb(env, idx);
+#endif /* TARGET_CHERI */
 }
 
 void r4k_helper_tlbwr(CPUMIPSState *env)
@@ -3684,8 +3690,10 @@ void r4k_helper_tlbwr(CPUMIPSState *env)
 
     r4k_invalidate_tlb(env, r, 1);
     r4k_fill_tlb(env, r);
+#ifdef TARGET_CHERI
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
         r4k_dump_tlb(env, r);
+#endif /* TARGET_CHERI */
 }
 
 void r4k_helper_tlbp(CPUMIPSState *env)
@@ -4077,6 +4085,7 @@ void mips_cpu_unassigned_access(CPUState *cs, hwaddr addr,
     }
 }
 
+#ifdef TARGET_CHERI
 /*
  * Print changed kernel/user/debug mode.
  */
@@ -4195,8 +4204,8 @@ static void dump_changed_cop0_reg(CPUMIPSState *env, int idx,
 {
     if (value != env->last_cop0[idx]) {
         env->last_cop0[idx] = value;
-        fprintf(qemu_logfile, "    Write %s = %08x\n",
-            cop0_name[idx], (unsigned) value);
+        fprintf(qemu_logfile, "    Write %s = %lx\n",
+            cop0_name[idx], value);
     }
 }
 
@@ -4335,8 +4344,10 @@ static void dump_changed_cop0(CPUMIPSState *env)
     dump_changed_cop0_reg(env, 31*8 + 6, env->CP0_KScratch[4]);
     dump_changed_cop0_reg(env, 31*8 + 7, env->CP0_KScratch[5]);
 }
+#endif /* TARGET_CHERI */
 #endif /* !CONFIG_USER_ONLY */
 
+#ifdef TARGET_CHERI
 /*
  * Print changed values of GPR, HI/LO and DSPControl registers.
  */
@@ -4358,7 +4369,6 @@ static void dump_changed_regs(CPUMIPSState *env)
                 gpr_name[i], cur->gpr[i]);
         }
     }
-#ifdef TARGET_CHERI
     for (i=0; i<32; i++) {
         if (memcmp(&cur->C[i], &env->last_C[i], sizeof(cap_register_t))) {
             cap_register_t *cr = &cur->C[i];
@@ -4374,7 +4384,6 @@ static void dump_changed_regs(CPUMIPSState *env)
 
         }
     }
-#endif
 }
 
 /*
@@ -4430,7 +4439,7 @@ enum {
     OPC_SDR      = (0x2D << 26),
     OPC_SWR      = (0x2E << 26),
     OPC_LL       = (0x30 << 26),
-#ifdef TARGET_CHERI
+
     OPC_CSCB     = (0x12 << 26) | (0x10 << 21) | (0x0),
     OPC_CSCH     = (0x12 << 26) | (0x10 << 21) | (0x1),
     OPC_CSCW     = (0x12 << 26) | (0x10 << 21) | (0x2),
@@ -4465,7 +4474,7 @@ enum {
     OPC_CSD      = (0x3A << 26) | (0x3),
 
     OPC_CSTOREC  = (0x3E << 26),
-#endif /* TARGET_CHERI */
+
     OPC_LLD      = (0x34 << 26),
     OPC_LD       = (0x37 << 26),
     OPC_LDPC     = OPC_LD | 0x5,
@@ -4485,11 +4494,10 @@ void helper_dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_SD:
     case OPC_SDL:
     case OPC_SDR:
-#ifdef TARGET_CHERI
+
     case OPC_CSD:
     case OPC_CSTOREC:
     case OPC_CSCD:
-#endif
         fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = "
                 TARGET_FMT_lx"\n", addr, value);
         break;
@@ -4497,26 +4505,23 @@ void helper_dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_SW:
     case OPC_SWL:
     case OPC_SWR:
-#ifdef TARGET_CHERI
+
     case OPC_CSW:
     case OPC_CSCW:
-#endif
         fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %08x\n",
                 addr, (uint32_t) value);
         break;
     case OPC_SH:
-#ifdef TARGET_CHERI
+
     case OPC_CSH:
     case OPC_CSCH:
-#endif
         fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %04x\n",
                 addr, (uint16_t) value);
         break;
     case OPC_SB:
-#ifdef TARGET_CHERI
+
     case OPC_CSB:
     case OPC_CSCB:
-#endif
         fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %02x\n",
                 addr, (uint8_t) value);
         break;
@@ -4538,11 +4543,10 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_LDL:
     case OPC_LDR:
     case OPC_LDPC:
-#ifdef TARGET_CHERI
+
     case OPC_CLD:
     case OPC_CLOADC:
     case OPC_CLLD:
-#endif
         fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = "
                 TARGET_FMT_lx "\n", addr, value);
         break;
@@ -4552,39 +4556,37 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_LWPC:
     case OPC_LWL:
     case OPC_LWR:
-#ifdef TARGET_CHERI
+
     case OPC_CLW:
     case OPC_CLWU:
     case OPC_CLLW:
     case OPC_CLLWU:
-#endif
         fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %08x\n",
                 addr, (uint32_t) value);
         break;
     case OPC_LH:
     case OPC_LHU:
-#ifdef TARGET_CHERI
+
     case OPC_CLH:
     case OPC_CLHU:
     case OPC_CLLH:
     case OPC_CLLHU:
-#endif
         fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %04x\n",
                 addr, (uint16_t) value);
         break;
     case OPC_LB:
     case OPC_LBU:
-#ifdef TARGET_CHERI
+
     case OPC_CLB:
     case OPC_CLBU:
     case OPC_CLLB:
     case OPC_CLLBU:
-#endif
         fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %02x\n",
                 addr, (uint8_t) value);
         break;
     }
 }
+#endif /* TARGET_CHERI */
 
 /* Complex FPU operations which may need stack space. */
 
