@@ -1831,16 +1831,6 @@ static void gen_store_fpr64(DisasContext *ctx, TCGv_i64 t, int reg)
 
 #if defined(TARGET_CHERI)
 static inline void
-generate_dump_pc(target_ulong pc, int isa)
-{
-    TCGv tpc = tcg_const_tl(pc);
-    TCGv_i32 tisa = tcg_const_i32(isa);
-    gen_helper_dump_pc(cpu_env, tpc, tisa);
-    tcg_temp_free(tpc);
-    tcg_temp_free_i32(tisa);
-}
-
-static inline void
 generate_dump_store(int op, TCGv addr, TCGv value)
 {
     TCGv_i32 top = tcg_const_i32(op);
@@ -3101,8 +3091,12 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
 static inline void generate_ccheck_pc(DisasContext *ctx)
 {
     TCGv_i64 tpc = tcg_const_i64(ctx->pc);
+    TCGv_i32 tisa = tcg_const_i32((ctx->hflags & MIPS_HFLAG_M16) == 0 ? 0 :
+            (ctx->insn_flags & ASE_MICROMIPS) ? 1 : 2);
 
-    gen_helper_ccheck_pc(cpu_env, tpc);
+    gen_helper_ccheck_pc(cpu_env, tpc, tisa);
+
+    tcg_temp_free_i32(tisa);
     tcg_temp_free_i64(tpc);
 }
 
@@ -22373,11 +22367,6 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
         /* Generate capabilities check on PC */
         GEN_CAP_CHECK_PC(&ctx);
 
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_pc(ctx.pc, (ctx.hflags & MIPS_HFLAG_M16) == 0 ? 0 :
-                (ctx.insn_flags & ASE_MICROMIPS) ? 1 : 2);
-#endif /* TARGET_CHERI */
         is_slot = ctx.hflags & MIPS_HFLAG_BMASK;
         if (!(ctx.hflags & MIPS_HFLAG_M16)) {
             ctx.opcode = cpu_ldl_code(env, ctx.pc);

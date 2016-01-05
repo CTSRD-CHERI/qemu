@@ -3051,8 +3051,34 @@ target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
     return (csp->cr_length);
 }
 
-void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
+
+/*
+ * Print the instruction to log file.
+ */
+static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
 {
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        MIPSCPU *cpu = mips_env_get_cpu(env);
+        CPUState *cs = CPU(cpu);
+
+        /* Print changed state: GPR, HI/LO, COP0. */
+        mips_dump_changed_state(env);
+
+        /* Disassemble and print instruction. */
+        if (isa == 0) {
+            log_target_disas(cs, pc, 4, 0);
+        } else {
+            log_target_disas(cs, pc, 2, 0);
+        }
+    }
+}
+
+void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
+{
+
+    /* Do instruction tracing, if enabled. */
+    log_instruction(env, pc, isa);
+
     /* Update the offset */
     // env->active_tc.PCC.cr_cursor = pc - env->active_tc.PCC.cr_base;
     env->active_tc.PCC.cr_offset = pc - env->active_tc.PCC.cr_base;
@@ -4397,25 +4423,6 @@ void mips_dump_changed_state(CPUMIPSState *env)
 
     /* Print changed mode: kernel/user/debug */
     dump_changed_mode(env);
-}
-
-/*
- * Print the instruction to log file.
- */
-void helper_dump_pc(CPUMIPSState *env, target_ulong pc, int isa)
-{
-    MIPSCPU *cpu = mips_env_get_cpu(env);
-    CPUState *cs = CPU(cpu);
-
-    /* Print changed state: GPR, HI/LO, COP0. */
-    mips_dump_changed_state(env);
-
-    /* Disassemble and print instruction. */
-    if (isa == 0) {
-        log_target_disas(cs, pc, 4, 0);
-    } else {
-        log_target_disas(cs, pc, 2, 0);
-    }
 }
 
 enum {
