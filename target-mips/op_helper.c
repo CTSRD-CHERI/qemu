@@ -3109,8 +3109,12 @@ target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t
     return (addr);
 }
 
-void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len)
+void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,
+    uint32_t opc, target_ulong value)
 {
+
+    /* Log write, if enabled. */
+    helper_dump_store(env, opc, addr, value);
 
     cheri_tag_invalidate(env, addr, len);
 }
@@ -4496,6 +4500,10 @@ enum {
 void helper_dump_store(CPUMIPSState *env, int opc, target_ulong addr,
         target_ulong value)
 {
+
+    if (likely(!qemu_loglevel_mask(CPU_LOG_INSTR)))
+        return;
+
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_SD:
