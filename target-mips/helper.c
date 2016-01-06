@@ -397,9 +397,6 @@ int mips_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
 #endif
     {
 #ifdef TARGET_CHERI
-        qemu_log_mask(CPU_LOG_INSTR, "%s address=%" VADDR_PRIx
-                " ret %d physical " TARGET_FMT_plx " prot %d\n",
-                __func__, address, ret, physical, prot);
         raise_mmu_exception(env, address, rw, ret, 0xff);
 #else
         raise_mmu_exception(env, address, rw, ret);
