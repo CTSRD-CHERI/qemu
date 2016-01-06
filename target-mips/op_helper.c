@@ -2973,6 +2973,29 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     return (target_ulong)addr;
 }
 
+/*
+ * Print capibility load from memory to log file.
+ */
+static inline void dump_cap_load_op(uint64_t addr, uint64_t perm_type,
+        uint8_t tag)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx "] = v:%d tps:"
+                TARGET_FMT_lx "\n", addr, tag, perm_type);
+    }
+}
+
+static inline void dump_cap_load_cbl(uint64_t cursor, uint64_t base,
+        uint64_t length)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, "    c:" TARGET_FMT_lx " b:" TARGET_FMT_lx " l:"
+                TARGET_FMT_lx "\n", cursor, base, length);
+    }
+}
+
 void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
@@ -2987,6 +3010,10 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
     cdp->cr_perms = (uint32_t)(otype >> 1) & ~CAP_SEALED;
     if (otype & 1ULL)
         cdp->cr_perms |= CAP_SEALED;
+
+    /* Log memory read, if needed. */
+    dump_cap_load_op(addr, otype, tag);
+
 }
 
 void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
@@ -3003,6 +3030,9 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
     cdp->cr_perms = (uint32_t)(otype >> 1) & ~CAP_SEALED;
     if (otype & 1ULL)
         cdp->cr_perms |= CAP_SEALED;
+
+    /* Log memory read, if needed. */
+    dump_cap_load_op(addr, otype, tag);
 }
 
 target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs)
@@ -3022,6 +3052,9 @@ void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
     cdp->cr_length = length;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
+
+    /* Log memory reads, if needed. */
+    dump_cap_load_cbl(cursor, base, length);
 }
 
 target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
@@ -4552,6 +4585,9 @@ void helper_dump_store(CPUMIPSState *env, int opc, target_ulong addr,
 void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
         target_ulong value)
 {
+    if (likely(!qemu_loglevel_mask(CPU_LOG_INSTR)))
+        return;
+
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_LD:

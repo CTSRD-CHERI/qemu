@@ -1845,6 +1845,7 @@ generate_dump_load(int op, TCGv addr, TCGv value)
     gen_helper_dump_load(cpu_env, top, addr, value);
     tcg_temp_free_i32(top);
 }
+#define GEN_CAP_DUMP_LOAD(op, addr, value)  generate_dump_load(op, addr, value)
 
 /* Verify that the processor is running with CHERI instructions enabled. */
 static inline void check_cop2x(DisasContext *ctx)
@@ -2398,8 +2399,7 @@ static inline void generate_clbu(DisasContext *ctx, int32_t rd, int32_t cb,
     gen_load_gpr(t1, rt);
     gen_helper_cload(t0, cpu_env, tcb, t1, toffset, tlen);
     tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, MO_UB);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLBU, t0, t1);
+    generate_dump_load(OPC_CLBU, t0, t1);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -2422,8 +2422,7 @@ static inline void generate_clhu(DisasContext *ctx, int32_t rd, int32_t cb,
     gen_helper_cload(t0, cpu_env, tcb, t1, toffset, tlen);
     tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, MO_TEUW |
             ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLHU, t0, t1);
+    generate_dump_load(OPC_CLHU, t0, t1);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -2446,8 +2445,7 @@ static inline void generate_clwu(DisasContext *ctx, int32_t rd, int32_t cb,
     gen_helper_cload(t0, cpu_env, tcb, t1, toffset, tlen);
     tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, MO_TEUL |
             ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLWU, t0, t1);
+    generate_dump_load(OPC_CLWU, t0, t1);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -2469,8 +2467,7 @@ static inline void generate_clb(DisasContext *ctx, int32_t rd, int32_t cb,
     gen_load_gpr(t1, rt);
     gen_helper_cload(t0, cpu_env, tcb, t1, toffset, tlen);
     tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, MO_SB);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLB, t0, t1);
+    generate_dump_load(OPC_CLB, t0, t1);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -2493,8 +2490,7 @@ static inline void generate_clh(DisasContext *ctx, int32_t rd, int32_t cb,
     gen_helper_cload(t0, cpu_env, tcb, t1, toffset, tlen);
     tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, MO_TESW |
             ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLH, t0, t1);
+    generate_dump_load(OPC_CLH, t0, t1);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -2517,8 +2513,7 @@ static inline void generate_clw(DisasContext *ctx, int32_t rd, int32_t cb,
     gen_helper_cload(t0, cpu_env, tcb, t1, toffset, tlen);
     tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, MO_TESL |
             ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLW, t0, t1);
+    generate_dump_load(OPC_CLW, t0, t1);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -2541,8 +2536,7 @@ static inline void generate_cld(DisasContext *ctx, int32_t rd, int32_t cb,
     gen_helper_cload(t0, cpu_env, tcb, t1, toffset, tlen);
     tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLD, t0, t1);
+    generate_dump_load(OPC_CLD, t0, t1);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -2903,31 +2897,26 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
     /* Fetch the otype and perms from memory */
     tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLOADC, taddr, t0);
 
     /* Store in the capability register. */
     gen_helper_bytes2cap_op(cpu_env, tcd, t0, taddr);
 
     /* Fetch the cursor, base, and length from memory */
     tcg_gen_addi_tl(taddr, taddr, 8);
+
     /* Fetch cursor in t0 */
     tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLOADC, taddr, t0);
     tcg_gen_addi_tl(taddr, taddr, 8);
+
     /* Fetch base in t1 */
     tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLOADC, taddr, t1);
     tcg_gen_addi_tl(taddr, taddr, 8);
+
     /* Fetch length in t2 */
     tcg_gen_qemu_ld_tl(t2, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        generate_dump_load(OPC_CLOADC, taddr, t2);
 
     /* Store in the capability register. */
     gen_helper_bytes2cap_cbl(cpu_env, tcd, t0, t1, t2);
@@ -2962,14 +2951,17 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
 
     /* Fetch the cursor, base, and length from memory */
     tcg_gen_addi_tl(taddr, taddr, 8);
+
     /* Fetch cursor in t0 */
     tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
     tcg_gen_addi_tl(taddr, taddr, 8);
+
     /* Fetch base in t1 */
     tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
     tcg_gen_addi_tl(taddr, taddr, 8);
+
     /* Fetch length in t2 */
     tcg_gen_qemu_ld_tl(t2, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
@@ -3133,8 +3125,8 @@ static inline void generate_ccheck_load(TCGv addr, TCGv offset, int32_t len)
     tcg_temp_free_i32(tlen);
 }
 
-#define GEN_CAP_CHECK_LOAD(addr, offset, len) \
-    generate_ccheck_load(addr, offset, len)
+#define GEN_CAP_CHECK_LOAD(save, addr, offset, len) \
+    generate_ccheck_load(addr, offset, len); tcg_gen_mov_tl(save, addr)
 
 static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
         TCGv value)
@@ -3154,8 +3146,9 @@ static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
 
 #define GEN_CAP_CHECK_PC(ctx)
 #define GEN_CAP_CHECK_STORE(addr, offset, len)
-#define GEN_CAP_CHECK_LOAD(addr, offset, len)
+#define GEN_CAP_CHECK_LOAD(save, addr, offset, len)
 #define GEN_CAP_INVADIATE_TAG(addr, len, opc, value)
+#define GEN_CAP_DUMP_LOAD(op, addr, value)
 
 #endif /* ! TARGET_CHERI */
 
@@ -3589,6 +3582,8 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
     TCGv t0, t1, t2;
 #ifdef TARGET_CHERI
     TCGv t3;
+
+    t3 = tcg_temp_new();
 #endif /* TARGET_CHERI */
 
     if (rt == 0 && ctx->insn_flags & (INSN_LOONGSON2E | INSN_LOONGSON2F)) {
@@ -3601,50 +3596,35 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
 
     t0 = tcg_temp_new();
     gen_base_offset_addr(ctx, t0, base, offset);
-#ifdef TARGET_CHERI
-    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-        t3 = tcg_temp_new();
-        tcg_gen_mov_tl(t3, t0);
-    }
-#endif /* TARGET_CHERI */
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_LWU:
-        GEN_CAP_CHECK_LOAD(t0, t0, 4);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 4);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEUL |
                            ctx->default_tcg_memop_mask);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lwu";
         break;
     case OPC_LD:
-        GEN_CAP_CHECK_LOAD(t0, t0, 8);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 8);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEQ |
                            ctx->default_tcg_memop_mask);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ld";
         break;
     case OPC_LLD:
     case R6_OPC_LLD:
-        GEN_CAP_CHECK_LOAD(t0, t0, 8);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 8);
         save_cpu_state(ctx, 1);
         op_ld_lld(t0, t0, ctx);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lld";
         break;
     case OPC_LDL:
-        GEN_CAP_CHECK_LOAD(t0, t0, 8);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 8);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -3664,15 +3644,12 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_temp_free(t2);
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ldl";
         break;
     case OPC_LDR:
-        GEN_CAP_CHECK_LOAD(t0, t0, 8);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 8);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -3693,95 +3670,71 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_temp_free(t2);
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ldr";
         break;
     case OPC_LDPC:
-        GEN_CAP_CHECK_LOAD(t0, t0, 8);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 8);
         t1 = tcg_const_tl(pc_relative_pc(ctx));
         gen_op_addr_add(ctx, t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEQ);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ldpc";
         break;
 #endif
     case OPC_LWPC:
-        GEN_CAP_CHECK_LOAD(t0, t0, 4);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 4);
         t1 = tcg_const_tl(pc_relative_pc(ctx));
         gen_op_addr_add(ctx, t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESL);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lwpc";
         break;
     case OPC_LW:
-        GEN_CAP_CHECK_LOAD(t0, t0, 4);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 4);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESL |
                            ctx->default_tcg_memop_mask);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lw";
         break;
     case OPC_LH:
-        GEN_CAP_CHECK_LOAD(t0, t0, 2);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 2);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESW |
                            ctx->default_tcg_memop_mask);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lh";
         break;
     case OPC_LHU:
-        GEN_CAP_CHECK_LOAD(t0, t0, 2);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 2);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TEUW |
                            ctx->default_tcg_memop_mask);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lhu";
         break;
     case OPC_LB:
-        GEN_CAP_CHECK_LOAD(t0, t0, 1);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_SB);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lb";
         break;
     case OPC_LBU:
-        GEN_CAP_CHECK_LOAD(t0, t0, 1);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 1);
         tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_UB);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lbu";
         break;
     case OPC_LWL:
-        GEN_CAP_CHECK_LOAD(t0, t0, 4);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 4);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -3802,15 +3755,12 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_ext32s_tl(t0, t0);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lwl";
         break;
     case OPC_LWR:
-        GEN_CAP_CHECK_LOAD(t0, t0, 4);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 4);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -3832,22 +3782,16 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_ext32s_tl(t0, t0);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "lwr";
         break;
     case OPC_LL:
     case R6_OPC_LL:
-        GEN_CAP_CHECK_LOAD(t0, t0, 4);
+        GEN_CAP_CHECK_LOAD(t3, t0, t0, 4);
         save_cpu_state(ctx, 1);
         op_ld_ll(t0, t0, ctx);
-#ifdef TARGET_CHERI
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            generate_dump_load(opc, t3, t0);
-#endif /* TARGET_CHERI */
+        GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         opn = "ll";
         break;
@@ -3856,8 +3800,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
     MIPS_DEBUG("%s %s, %d(%s)", opn, regnames[rt], offset, regnames[base]);
     tcg_temp_free(t0);
 #ifdef TARGET_CHERI
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        tcg_temp_free(t3);
+    tcg_temp_free(t3);
 #endif /* TARGET_CHERI */
 }
 
