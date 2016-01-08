@@ -1831,14 +1831,6 @@ static void gen_store_fpr64(DisasContext *ctx, TCGv_i64 t, int reg)
 
 #if defined(TARGET_CHERI)
 static inline void
-generate_dump_store(int op, TCGv addr, TCGv value)
-{
-    TCGv_i32 top = tcg_const_i32(op);
-    gen_helper_dump_store(cpu_env, top, addr, value);
-    tcg_temp_free_i32(top);
-}
-
-static inline void
 generate_dump_load(int op, TCGv addr, TCGv value)
 {
     TCGv_i32 top = tcg_const_i32(op);
@@ -2991,10 +2983,9 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     gen_helper_csc_addr(taddr, cpu_env, tcs, tcb, t0, toffset);
 
     /* Store otype and perms to memory. */
-    gen_helper_cap2bytes_op(t0, cpu_env, tcs);
+    gen_helper_cap2bytes_op(t0, cpu_env, tcs, taddr);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
-    generate_dump_store(OPC_CSTOREC, taddr, t0);
 
     /*
      * Store cursor to memory. Also, set the tag bit.  We
@@ -3007,21 +2998,18 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
-    generate_dump_store(OPC_CSTOREC, taddr, t0);
 
     /* Store base to memory. */
     gen_helper_cap2bytes_base(t0, cpu_env, tcs);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
-    generate_dump_store(OPC_CSTOREC, taddr, t0);
 
     /* Store length to memory. */
     gen_helper_cap2bytes_length(t0, cpu_env, tcs);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
-    generate_dump_store(OPC_CSTOREC, taddr, t0);
 
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
@@ -3056,7 +3044,7 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
     TCGv_i32 tcs2 = tcg_const_i32(cs);
 
     /* Store otype and perms to memory. */
-    gen_helper_cap2bytes_op(t0, cpu_env, tcs);
+    gen_helper_cap2bytes_op(t0, cpu_env, tcs, taddr);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
 

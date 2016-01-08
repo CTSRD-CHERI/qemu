@@ -156,7 +156,6 @@ DEF_HELPER_2(mtc0_taghi, void, env, tl)
 DEF_HELPER_2(mtc0_datahi, void, env, tl)
 
 #if defined(TARGET_CHERI)
-DEF_HELPER_4(dump_store, void, env, int, tl, tl)
 DEF_HELPER_4(dump_load, void, env, int, tl, tl)
 
 DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
@@ -228,7 +227,7 @@ DEF_HELPER_5(bytes2cap_cbl, void, env, i32, tl, tl, tl)
 
 DEF_HELPER_5(csc_addr, tl, env, i32, i32, tl, i32)
 DEF_HELPER_3(cscc_addr, tl, env, i32, i32)
-DEF_HELPER_2(cap2bytes_op, tl, env, i32)
+DEF_HELPER_3(cap2bytes_op, tl, env, i32, tl)
 DEF_HELPER_3(cap2bytes_cursor, tl, env, i32, tl)
 DEF_HELPER_2(cap2bytes_base, tl, env, i32)
 DEF_HELPER_2(cap2bytes_length, tl, env, i32)

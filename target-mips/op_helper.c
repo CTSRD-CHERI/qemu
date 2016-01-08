@@ -1692,6 +1692,8 @@ void helper_mtc0_framemask(CPUMIPSState *env, target_ulong arg1)
 }
 
 #if defined(TARGET_CHERI)
+static inline void dump_store(int, target_ulong, target_ulong);
+
 static inline int align_of(int size, uint64_t addr)
 {
 
@@ -2974,7 +2976,7 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 }
 
 /*
- * Print capibility load from memory to log file.
+ * Print capability load from memory to log file.
  */
 static inline void dump_cap_load_op(uint64_t addr, uint64_t perm_type,
         uint8_t tag)
@@ -2993,6 +2995,43 @@ static inline void dump_cap_load_cbl(uint64_t cursor, uint64_t base,
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         fprintf(qemu_logfile, "    c:" TARGET_FMT_lx " b:" TARGET_FMT_lx " l:"
                 TARGET_FMT_lx "\n", cursor, base, length);
+    }
+}
+
+/*
+ * Print capability store to memory to log file.
+ */
+static inline void dump_cap_store_op(uint64_t addr, uint64_t perm_type,
+        uint8_t tag)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx "] = v:%d tps:"
+                TARGET_FMT_lx "\n", addr, tag, perm_type);
+    }
+}
+
+static inline void dump_cap_store_cursor(uint64_t cursor)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, "    c:" TARGET_FMT_lx, cursor);
+    }
+}
+
+static inline void dump_cap_store_base(uint64_t base)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, " b:" TARGET_FMT_lx, base);
+    }
+}
+
+static inline void dump_cap_store_length(uint64_t length)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, " l:" TARGET_FMT_lx "\n", length);
     }
 }
 
@@ -3035,13 +3074,20 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
     dump_cap_load_op(addr, otype, tag);
 }
 
-target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs)
+target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
+        target_ulong vaddr)
 {
     cap_register_t *csp = &env->active_tc.C[cs];
+    target_ulong ret;
 
-    return (((uint64_t)csp->cr_otype << 32) |
+    ret = (((uint64_t)csp->cr_otype << 32) |
         ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 1) |
         ((csp->cr_perms & CAP_SEALED) ? 1UL : 0UL));
+
+    /* Log memory cap write, if needed. */
+    dump_cap_store_op(vaddr, ret, csp->cr_tag);
+
+    return ret;
 }
 
 void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
@@ -3061,18 +3107,26 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
         target_ulong vaddr)
 {
     cap_register_t *csp = &env->active_tc.C[cs];
+    target_ulong ret;
 
     if (csp->cr_tag)
         cheri_tag_set(env, vaddr, cs);
     else
         cheri_tag_invalidate(env, vaddr, 8);
 
-    return (csp->cr_offset + csp->cr_base);
+    ret = csp->cr_offset + csp->cr_base;
+    /* Log memory cap write, if needed. */
+    dump_cap_store_cursor(ret);
+
+    return (ret);
 }
 
 target_ulong helper_cap2bytes_base(CPUMIPSState *env, uint32_t cs)
 {
     cap_register_t *csp = &env->active_tc.C[cs];
+
+    /* Log memory cap write, if needed. */
+    dump_cap_store_base(csp->cr_base);
 
     return (csp->cr_base);
 }
@@ -3080,6 +3134,9 @@ target_ulong helper_cap2bytes_base(CPUMIPSState *env, uint32_t cs)
 target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
 {
     cap_register_t *csp = &env->active_tc.C[cs];
+
+    /* Log memory cap write, if needed. */
+    dump_cap_store_length(csp->cr_length);
 
     return (csp->cr_length);
 }
@@ -3147,7 +3204,7 @@ void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,
 {
 
     /* Log write, if enabled. */
-    helper_dump_store(env, opc, addr, value);
+    dump_store(opc, addr, value);
 
     cheri_tag_invalidate(env, addr, len);
 }
@@ -4530,7 +4587,7 @@ enum {
 /*
  * Print the memory store to log file.
  */
-void helper_dump_store(CPUMIPSState *env, int opc, target_ulong addr,
+static inline void dump_store(int opc, target_ulong addr,
         target_ulong value)
 {
 
