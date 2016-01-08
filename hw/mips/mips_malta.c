@@ -1007,13 +1007,16 @@ void mips_malta_init(MachineState *machine)
     if (machine->breakpoint)
         cpu_breakpoint_insert((CPUState *)cpu, machine->breakpoint, BP_GDB,
                 NULL);
-    cheri_tag_init(ram_size);
 #endif /* TARGET_CHERI */
 
     /* register RAM at high address where it is undisturbed by IO */
     memory_region_allocate_system_memory(ram_high, NULL, "mips_malta.ram",
                                          ram_size);
     memory_region_add_subregion(system_memory, 0x80000000, ram_high);
+
+#ifdef TARGET_CHERI
+    cheri_tag_init(0x80000000 + memory_region_size(ram_high));
+#endif /* TARGET_CHERI */
 
     /* alias for pre IO hole access */
     memory_region_init_alias(ram_low_preio, NULL, "mips_malta_low_preio.ram",
