@@ -68,7 +68,14 @@ bool have_guest_base;
  * This way we will never overlap with our own libraries or binaries or stack
  * or anything else that QEMU maps.
  */
-unsigned long reserved_va = TARGET_RESERVED_VA;
+# ifdef TARGET_MIPS
+/* MIPS only supports 31 bits of virtual address space for user space */
+unsigned long reserved_va = 0x77000000;
+# elif defined(TARGET_PPC64)
+unsigned long reserved_va = 0xfffff000;
+# else
+unsigned long reserved_va = 0xf7000000;
+# endif
 #else
 unsigned long reserved_va;
 #endif
@@ -551,6 +558,10 @@ int main(int argc, char **argv)
 
     target_environ = envlist_to_environ(envlist, NULL);
     envlist_free(envlist);
+
+    if (reserved_va) {
+            mmap_next_start = reserved_va;
+    }
 
     /*
      * Now that page sizes are configured in tcg_exec_init() we can do
