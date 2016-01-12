@@ -4324,7 +4324,7 @@ static void dump_changed_cop0_reg(CPUMIPSState *env, int idx,
 {
     if (value != env->last_cop0[idx]) {
         env->last_cop0[idx] = value;
-        fprintf(qemu_logfile, "    Write %s = %lx\n",
+        fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
             cop0_name[idx], value);
     }
 }
@@ -4494,12 +4494,12 @@ static void dump_changed_regs(CPUMIPSState *env)
             cap_register_t *cr = &cur->C[i];
 
             env->last_C[i] = *cr;
-            fprintf(qemu_logfile, "    Write C%02d|v:%d s:%d p:%08x b:%016lx "
-                    "l:%016lx\n", i, cr->cr_tag,
+            fprintf(qemu_logfile, "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
+                    " l:%016" PRIx64 "\n", i, cr->cr_tag,
                     (cr->cr_perms & CAP_SEALED) ? 1 : 0,
                     (cr->cr_perms & ~CAP_SEALED), cr->cr_base,
                     cr->cr_length);
-            fprintf(qemu_logfile, "             |o:%016lx t:%x\n",
+            fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
                     cr->cr_offset, cr->cr_otype);
 
         }
