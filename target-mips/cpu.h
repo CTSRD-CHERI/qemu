@@ -215,14 +215,16 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_ACCESS_KR1C         (1 << 13)
 #define CAP_ACCESS_KR2C         (1 << 14)
 #define CAP_SEALED              (1 << 31)
-//#define CAP_ALL_PERMS           (CAP_PERM_GLOBAL | CAP_PERM_EXECUTE |       \
-//                                 CAP_PERM_LOAD | CAP_PERM_STORE |           \
-//                                 CAP_PERM_LOAD_CAP | CAP_PERM_STORE_CAP |   \
-//                                 CAP_PERM_STORE_LOCAL | CAP_PERM_SEAL |     \
-//                                 CAP_ACCESS_EPCC | CAP_ACCESS_KDC |         \
-//                                 CAP_ACCESS_KDC | CAP_ACCESS_KCC |          \
-//                                 CAP_ACCESS_KR1C | CAP_ACCESS_KR2C |        \
-//                                 CAP_RESERVED1 | CAP_RESERVED2)
+/*
+#define CAP_ALL_PERMS           (CAP_PERM_GLOBAL | CAP_PERM_EXECUTE |       \
+                                CAP_PERM_LOAD | CAP_PERM_STORE |           \
+                                CAP_PERM_LOAD_CAP | CAP_PERM_STORE_CAP |   \
+                                CAP_PERM_STORE_LOCAL | CAP_PERM_SEAL |     \
+                                CAP_ACCESS_EPCC | CAP_ACCESS_KDC |         \
+                                CAP_ACCESS_KDC | CAP_ACCESS_KCC |          \
+                                CAP_ACCESS_KR1C | CAP_ACCESS_KR2C |        \
+                                CAP_RESERVED1 | CAP_RESERVED2)
+*/
 #define CAP_ALL_PERMS           (0x7fffffff)
 
 #endif /* TARGET_CHERI */
