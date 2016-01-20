@@ -42,6 +42,7 @@ static inline bool qemu_log_enabled(void)
 #define LOG_GUEST_ERROR    (1 << 11)
 #define CPU_LOG_MMU        (1 << 12)
 #define CPU_LOG_INSTR      (1 << 13)
+#define CPU_LOG_CVTRACE    (1 << 14)
 
 /* Returns true if a bit is set in the current loglevel mask
  */

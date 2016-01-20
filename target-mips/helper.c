@@ -561,7 +561,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  __func__, env->active_tc.PC, env->CP0_EPC, name);
     }
 #ifdef TARGET_CHERI
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR) |
+                qemu_loglevel_mask(CPU_LOG_CVTRACE)))
         mips_dump_changed_state(env);
 #endif /* TARGET_CHERI */
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&
@@ -845,13 +846,17 @@ void mips_cpu_do_interrupt(CPUState *cs)
         abort();
     }
 #ifdef TARGET_CHERI
-    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         if (cs->exception_index == EXCP_EXT_INTERRUPT)
             fprintf (qemu_logfile, "--- Interrupt, vector " TARGET_FMT_lx "\n",
                     env->active_tc.PC);
         else
             fprintf (qemu_logfile, "--- Exception #%u: %s, vector "
                     TARGET_FMT_lx "\n", cause, name, env->active_tc.PC);
+    }
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        if (cs->exception_index != EXCP_EXT_INTERRUPT)
+            env->cvtrace.exception = cause;
     }
 #endif /* TARGET_CHERI */
     if (qemu_loglevel_mask(CPU_LOG_INT)
