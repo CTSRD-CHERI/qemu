@@ -4605,22 +4605,22 @@ print_insn_args (const char *d,
 	      }
 
         case 'w':
-            (*info->fprintf_func) (info->stream, "c%d", (l >> OP_SH_RT) &
+            (*info->fprintf_func) (info->stream, "c%ld", (l >> OP_SH_RT) &
                                    OP_MASK_RT);
             break;
 
         case 'b':
-            (*info->fprintf_func) (info->stream, "c%d", (l >> OP_SH_RD) &
+            (*info->fprintf_func) (info->stream, "c%ld", (l >> OP_SH_RD) &
                                     OP_MASK_RD);
             break;
 
         case 'v':
-            (*info->fprintf_func) (info->stream, "c%d", (l >> OP_SH_FD) &
+            (*info->fprintf_func) (info->stream, "c%ld", (l >> OP_SH_FD) &
                                     OP_MASK_FD);
             break;
 
         case 'x':
-            (*info->fprintf_func) (info->stream, "c%d", (l >> OP_SH_RS) &
+            (*info->fprintf_func) (info->stream, "c%ld", (l >> OP_SH_RS) &
                                     OP_MASK_RS);
             break;
 
