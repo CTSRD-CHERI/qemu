@@ -60,6 +60,7 @@
 extern struct bsd_shm_regions bsd_shm_regions[];
 extern abi_ulong bsd_target_brk;
 extern abi_ulong bsd_target_original_brk;
+extern abi_ulong brk_page;
 
 /* mmap(2) */
 static inline abi_long do_bsd_mmap(void *cpu_env, abi_long arg1, abi_long arg2,
@@ -170,42 +171,80 @@ static inline abi_long do_bsd_mincore(abi_ulong target_addr, abi_ulong len,
     return ret;
 }
 
-/* break() XXX this needs some more work. */
+//#define DEBUGF_BRK(message, args...) do { fprintf(stderr, (message), ## args); } while (0)
+#define DEBUGF_BRK(message, args...)
+
+/* do_brk() must return target values and target errnos. */
 static inline abi_long do_obreak(abi_ulong new_brk)
 {
-    abi_ulong brk_page;
     abi_long mapped_addr;
     int new_alloc_size;
 
-    return -TARGET_EINVAL;
+    DEBUGF_BRK("do_brk(" TARGET_ABI_FMT_lx ") -> ", new_brk);
 
     if (!new_brk) {
-        return 0;
+        DEBUGF_BRK(TARGET_ABI_FMT_lx " (!new_brk)\n", bsd_target_brk);
+        return bsd_target_brk;
     }
     if (new_brk < bsd_target_original_brk) {
-        return -TARGET_EINVAL;
+        DEBUGF_BRK(TARGET_ABI_FMT_lx " (new_brk < bsd_target_original_brk)\n",
+                   bsd_target_brk);
+        return bsd_target_brk;
     }
 
-    brk_page = HOST_PAGE_ALIGN(bsd_target_brk);
-
-    /* If the new brk is less than this, set it and we're done... */
-    if (new_brk < brk_page) {
+    /* If the new brk is less than the highest page reserved to the
+     * target heap allocation, set it and we're almost done...  */
+    if (new_brk <= brk_page) {
+        /* Heap contents are initialized to zero, as for anonymous
+         * mapped pages.  */
+        if (new_brk > bsd_target_brk) {
+            memset(g2h(bsd_target_brk), 0, new_brk - bsd_target_brk);
+        }
         bsd_target_brk = new_brk;
-        return 0;
+        DEBUGF_BRK(TARGET_ABI_FMT_lx " (new_brk <= brk_page)\n", bsd_target_brk);
+        return bsd_target_brk;
     }
 
-    /* We need to allocate more memory after the brk... */
-    new_alloc_size = HOST_PAGE_ALIGN(new_brk - brk_page + 1);
+    /* We need to allocate more memory after the brk... Note that
+     * we don't use MAP_FIXED because that will map over the top of
+     * any existing mapping (like the one with the host libc or qemu
+     * itself); instead we treat "mapped but at wrong address" as
+     * a failure and unmap again.
+     */
+    new_alloc_size = HOST_PAGE_ALIGN(new_brk - brk_page);
     mapped_addr = get_errno(target_mmap(brk_page, new_alloc_size,
-                PROT_READ|PROT_WRITE, MAP_ANON|MAP_FIXED|MAP_PRIVATE, -1, 0));
+                                        PROT_READ|PROT_WRITE,
+                                        MAP_ANON|MAP_PRIVATE, 0, 0));
 
-    if (!is_error(mapped_addr)) {
+    if (mapped_addr == brk_page) {
+        /* Heap contents are initialized to zero, as for anonymous
+         * mapped pages.  Technically the new pages are already
+         * initialized to zero since they *are* anonymous mapped
+         * pages, however we have to take care with the contents that
+         * come from the remaining part of the previous page: it may
+         * contains garbage data due to a previous heap usage (grown
+         * then shrunken).  */
+        memset(g2h(bsd_target_brk), 0, brk_page - bsd_target_brk);
+
         bsd_target_brk = new_brk;
-    } else {
-        return mapped_addr;
+        brk_page = HOST_PAGE_ALIGN(bsd_target_brk);
+        DEBUGF_BRK(TARGET_ABI_FMT_lx " (mapped_addr == brk_page)\n",
+            bsd_target_brk);
+        return bsd_target_brk;
+    } else if (mapped_addr != -1) {
+        /* Mapped but at wrong address, meaning there wasn't actually
+         * enough space for this brk.
+         */
+        target_munmap(mapped_addr, new_alloc_size);
+        mapped_addr = -1;
+        DEBUGF_BRK(TARGET_ABI_FMT_lx " (mapped_addr != -1)\n", bsd_target_brk);
+    }
+    else {
+        DEBUGF_BRK(TARGET_ABI_FMT_lx " (otherwise)\n", bsd_target_brk);
     }
 
-    return 0;
+    /* For everything else, return the previous break. */
+    return bsd_target_brk;
 }
 
 /* shm_open(2) */
