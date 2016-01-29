@@ -3204,7 +3204,7 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
             char buffer[sizeof(env->cvtrace)];
 
             buffer[0] = CVT_QEMU_VERSION;
-            strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
+            g_strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
             fwrite(buffer, sizeof(env->cvtrace), 1, qemu_logfile);
         }
 
