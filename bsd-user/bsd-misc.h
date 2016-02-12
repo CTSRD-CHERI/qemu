@@ -30,7 +30,7 @@
 
 /* quotactl(2) */
 static inline abi_long do_bsd_quotactl(abi_ulong path, abi_long cmd,
-        abi_ulong target_addr)
+        __unused abi_ulong target_addr)
 {
 
     qemu_log("qemu: Unsupported syscall quotactl()\n");
@@ -125,7 +125,6 @@ static inline abi_long do_bsd___semctl(int semid, int semnum, int target_cmd,
     int host_cmd;
     abi_long ret = 0;
     abi_long err;
-    abi_ulong target_addr;
 
     switch (target_cmd) {
     case TARGET_GETVAL:
