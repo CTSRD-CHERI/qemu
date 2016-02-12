@@ -142,7 +142,8 @@ static inline abi_long do_freebsd_cpuset_getid(abi_long arg1, abi_ulong arg2,
     cpulevel_t level;
     abi_ulong target_setid;
 
-    target_to_host_cpuset_which(&which, arg1);
+    target_to_host_cpuset_which(&which, arg1)
+	;
     target_to_host_cpuset_level(&level, arg2);
 #if TARGET_ABI_BITS == 32
     id = target_arg64(arg3, arg4);
