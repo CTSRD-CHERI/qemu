@@ -17,16 +17,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
-#include <unistd.h>
-#include <signal.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/time.h>
 #include <sys/resource.h>
+#include "qemu/osdep.h"
 
 #include "qemu.h"
 #include "trace.h"
