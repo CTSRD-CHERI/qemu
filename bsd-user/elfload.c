@@ -16,19 +16,12 @@
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/sysctl.h>
-#include <stdio.h>
-#include <fcntl.h>
+#include "qemu/osdep.h"
 #include <err.h>
-#include <errno.h>
 #include <libgen.h>
-#include <unistd.h>
 #include <sys/mman.h>
-#include <stdlib.h>
-#include <string.h>
+#include <sys/sysctl.h>
+#include <sys/resource.h>
 
 #include "qemu.h"
 #include "qemu/error-report.h"
