@@ -1235,6 +1235,12 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size);
 int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr);
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg);
+#ifdef CHERI_MAGIC128
+int  cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
+        uint64_t *tps, uint64_t *length);
+void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
+        uint8_t tag, uint64_t tps, uint64_t length);
+#endif /* CHERI_MAGIC128 */
 
 static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
         uint16_t exc_code)

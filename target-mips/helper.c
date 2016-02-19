@@ -966,10 +966,32 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
  * blocks can be deallocated when no longer used maybe.
  */
 
+#ifdef CHERI_MAGIC128
+#define CAP_TAG_SHFT        4           // 5 for 256-bit caps, 4 for 128-bit
+#else
 #define CAP_TAG_SHFT        5           // 5 for 256-bit caps, 4 for 128-bit
+#endif
 #define CAP_TAGBLK_SHFT     12          // 2^12 or 4096 tags per block
 #define CAP_TAGBLK_MSK      ((1 << CAP_TAGBLK_SHFT) - 1)
+#ifdef CHERI_MAGIC128
+         /*
+          * With "magic 128-bit" capabilities the object type,
+          * permissions, sealed bit, and length are all stored in tag
+          * memory along with the tag. This makes the tag memory as
+          * large as main memory. Fortunately, for this implementation
+          * tags are not needed everywhere and sparsely allocated.
+          */
+#define CAP_TAGBLK_SZ       ((1 << CAP_TAGBLK_SHFT) * 16)
+#define CAP_TAGBLK_IDX(tag_idx) (((tag_idx) & CAP_TAGBLK_MSK) * 16)
+#if defined(HOST_WORDS_BIGENDIAN)
+#   define CAP_TAG_TPS_SHFT 0
+#else
+#   define CAP_TAG_TPS_SHFT 8
+#endif
+#else /* ! CHERI_MAGIC128 */
 #define CAP_TAGBLK_SZ       (1 << CAP_TAGBLK_SHFT)
+#define CAP_TAGBLK_IDX(tag_idx) ((tag_idx) & CAP_TAGBLK_MSK)
+#endif /* ! CHERI_MAGIC128 */
 #define CAP_SIZE            ((1 << CAP_TAG_SHIFT) * 8)
 
 uint8_t **cheri_tagmem = NULL;
@@ -1020,15 +1042,15 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
         /* The write only invalidates one tag. */
         tagblk1 = cheri_tagmem[tag1 >> CAP_TAGBLK_SHFT];
         if (tagblk1 != NULL)
-            tagblk1[tag1 & CAP_TAGBLK_MSK] = 0;
+            tagblk1[CAP_TAGBLK_IDX(tag1)] = 0;
     } else {
         /* The write invalidates two tags. */
         tagblk1 = cheri_tagmem[tag1 >> CAP_TAGBLK_SHFT];
         tagblk2 = cheri_tagmem[tag2 >> CAP_TAGBLK_SHFT];
         if (tagblk1 != NULL)
-            tagblk1[tag1 & CAP_TAGBLK_MSK] = 0;
+            tagblk1[CAP_TAGBLK_IDX(tag1)] = 0;
         if (tagblk2 != NULL)
-            tagblk2[tag2 & CAP_TAGBLK_MSK] = 0;
+            tagblk2[CAP_TAGBLK_IDX(tag2)] = 0;
     }
 
     /* Check physical address to see if the linkedflag needs to be reset. */
@@ -1059,7 +1081,7 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
         }
         cheri_tagmem[tag >> CAP_TAGBLK_SHFT] = tagblk;
     }
-    tagblk[tag & CAP_TAGBLK_MSK] = 1;
+    tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
     /* Check physical address to see if the linkedflag needs to be reset. */
     if (paddr == env->lladdr)
@@ -1088,6 +1110,68 @@ int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
     if (tagblk == NULL)
         return 0;
     else
-        return tagblk[tag & CAP_TAGBLK_MSK];
+        return tagblk[CAP_TAGBLK_IDX(tag)];
 }
+
+#ifdef CHERI_MAGIC128
+void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
+        uint8_t tagbit, uint64_t tps, uint64_t length)
+{
+    hwaddr paddr;
+    uint64_t tag;
+    uint8_t *tagblk;
+    uint64_t *tagblk64;
+
+    paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
+
+    /* Get the tag number and tag block ptr. */
+    tag = paddr >> CAP_TAG_SHFT;
+    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+
+    if (tagblk == NULL) {
+        /* Allocated a tag block. */
+        tagblk = g_malloc0(CAP_TAGBLK_SZ);
+        if (tagblk == NULL) {
+            printf("%s: Can't allocated tag memory\n", __func__);
+            exit(-1);
+        }
+        cheri_tagmem[tag >> CAP_TAGBLK_SHFT] = tagblk;
+    }
+    tagblk64 = (uint64_t *)&tagblk[CAP_TAGBLK_IDX(tag)];
+    *tagblk64 = (tps << CAP_TAG_TPS_SHFT) | tagbit;
+    tagblk64++;
+    *tagblk64 = length;
+
+
+    /* Check physical address to see if the linkedflag needs to be reset. */
+    if (paddr == env->lladdr)
+        env->linkedflag = 0;
+
+    return;
+}
+
+int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
+        uint64_t *ret_tps, uint64_t *ret_length)
+{
+    hwaddr paddr;
+    uint64_t tag;
+    uint8_t *tagblk;
+
+
+    paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_LOAD, reg);
+
+    /* Get the tag number and tag block ptr. */
+    tag = paddr >> CAP_TAG_SHFT;
+    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+
+    if (tagblk == NULL) {
+        *ret_tps = *ret_length = 0ULL;
+        return 0;
+    } else {
+        *ret_tps = (*(uint64_t *)&tagblk[CAP_TAGBLK_IDX(tag)]) >> CAP_TAG_TPS_SHFT;
+        *ret_length = *(uint64_t *)&tagblk[CAP_TAGBLK_IDX(tag) + 8];
+        return tagblk[CAP_TAGBLK_IDX(tag)];
+    }
+}
+#endif /* CHERI_MAGIC128 */
 #endif /* TARGET_CHERI */
