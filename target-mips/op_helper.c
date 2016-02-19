@@ -1692,6 +1692,13 @@ void helper_mtc0_framemask(CPUMIPSState *env, target_ulong arg1)
 }
 
 #if defined(TARGET_CHERI)
+
+#ifdef CHERI_MAGIC128
+#define CHERI_CAP_SIZE  16
+#else
+#define CHERI_CAP_SIZE  32
+#endif
+
 static inline void dump_store(CPUMIPSState *env, int, target_ulong,
 				target_ulong);
 
@@ -2816,14 +2823,13 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         uint64_t addr = (uint64_t)((cursor + rt) + (int32_t)offset);
         // uint32_t tag;
 
-        /* 32 = 256-bit capability */
-        if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
+        if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
             return (target_ulong)0;
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
             return (target_ulong)0;
-        } else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
+        } else if (align_of(CHERI_CAP_SIZE, addr)) {
             do_raise_c0_exception(env, EXCP_AdEL, addr);
             return (target_ulong)0;
         }
@@ -2864,13 +2870,13 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
         do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
         return (target_ulong)0;
-    } else if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
+    } else if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         return (target_ulong)0;
     } else if (addr < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         return (target_ulong)0;
-    } else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
+    } else if (align_of(CHERI_CAP_SIZE, addr)) {
          do_raise_c0_exception(env, EXCP_AdEL, addr);
          return (target_ulong)0;
     }
@@ -2920,14 +2926,13 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
         uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
 
-        /* 32 = 256-bit capability */
-        if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
+        if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
             return (target_ulong)0;
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
             return (target_ulong)0;
-        } else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
+        } else if (align_of(CHERI_CAP_SIZE, addr)) {
             do_raise_c0_exception(env, EXCP_AdES, addr);
             return (target_ulong)0;
         }
@@ -2962,13 +2967,13 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
             !(csp->cr_perms & CAP_PERM_GLOBAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST_LC_CAP, cb);
         return (target_ulong)0;
-    } else if ((addr + 32) > (cbp->cr_base + cbp->cr_length)) {
+    } else if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         return (target_ulong)0;
     } else if (addr < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         return (target_ulong)0;
-    } else if (align_of(32, addr)) {      /* 32 = 256-bit capability */
+    } else if (align_of(CHERI_CAP_SIZE, addr)) {
         do_raise_c0_exception(env, EXCP_AdES, addr);
         return (target_ulong)0;
     }
