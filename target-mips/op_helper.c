@@ -2981,6 +2981,110 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     return (target_ulong)addr;
 }
 
+#ifdef CHERI_MAGIC128
+/*
+ * Print capability load from memory to log file.
+ */
+static inline void dump_cap_load(uint64_t addr, uint64_t cursor,
+        uint64_t base, uint8_t tag)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx "] = v:%d c:"
+                TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
+    }
+}
+
+/*
+ * Print capability store to memory to log file.
+ */
+static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
+        uint64_t base, uint8_t tag)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx "] = v:%d c:"
+                TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
+    }
+}
+
+void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
+        target_ulong base, target_ulong addr)
+{
+    uint64_t tps, length;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    uint32_t tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
+
+    if (env->TLB_L)
+        tag = 0;
+    cdp->cr_tag = tag;
+
+    cdp->cr_otype = (uint32_t)(tps >> 32);
+    cdp->cr_perms = (uint32_t)(tps >> 1) & ~CAP_SEALED;
+    if (tps & 1ULL)
+        cdp->cr_perms |= CAP_SEALED;
+    cdp->cr_length = length;
+    cdp->cr_base = base;
+    cdp->cr_offset = cursor - base;
+
+    /* Log memory read, if needed. */
+    dump_cap_load(addr, cursor, base, tag);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        env->cvtrace.version = CVT_LD_CAP;
+        env->cvtrace.val1 = tswap64(addr);
+        env->cvtrace.val2 = tswap64(((uint64_t)tag << 63) | tps);
+        env->cvtrace.val3 = tswap64(cursor);
+        env->cvtrace.val4 = tswap64(base);
+        env->cvtrace.val5 = tswap64(length);
+    }
+}
+
+target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
+        target_ulong vaddr)
+{
+    cap_register_t *csp = &env->active_tc.C[cs];
+    target_ulong ret;
+
+    ret = csp->cr_offset + csp->cr_base;
+
+    /* Log memory cap write, if needed. */
+    dump_cap_store(vaddr, ret, csp->cr_base, csp->cr_tag);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        env->cvtrace.version = CVT_ST_CAP;
+        env->cvtrace.val1 = tswap64(vaddr);
+        env->cvtrace.val3 = tswap64(ret);
+    }
+    return ret;
+}
+
+target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
+        target_ulong vaddr)
+{
+    cap_register_t *csp = &env->active_tc.C[cs];
+    target_ulong ret;
+    uint64_t tps, length;
+
+    ret = csp->cr_base;
+
+    tps = (((uint64_t)csp->cr_otype << 32) |
+        ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 1) |
+        ((csp->cr_perms & CAP_SEALED) ? 1UL : 0UL));
+
+    length = csp->cr_length;
+
+    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length);
+
+    /* Log memory cap write, if needed. */
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        env->cvtrace.val2 = tswap64(((uint64_t)csp->cr_tag << 63) | tps);
+        env->cvtrace.val4 = tswap64(ret);
+        env->cvtrace.val5 = tswap64(csp->cr_length);
+    }
+    return ret;
+}
+
+#else /* ! CHERI_MAGIC128 */
+
 /*
  * Print capability load from memory to log file.
  */
@@ -3040,94 +3144,6 @@ static inline void dump_cap_store_length(uint64_t length)
         fprintf(qemu_logfile, " l:" TARGET_FMT_lx "\n", length);
     }
 }
-
-#ifdef CHERI_MAGIC128
-void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
-        target_ulong base, target_ulong addr)
-{
-    uint64_t tps, length;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    uint32_t tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
-
-    if (env->TLB_L)
-        tag = 0;
-    cdp->cr_tag = tag;
-
-    cdp->cr_otype = (uint32_t)(tps >> 32);
-    cdp->cr_perms = (uint32_t)(tps >> 1) & ~CAP_SEALED;
-    if (tps & 1ULL)
-        cdp->cr_perms |= CAP_SEALED;
-    cdp->cr_length = length;
-    cdp->cr_base = base;
-    cdp->cr_offset = cursor - base;
-
-    /* Log memory read, if needed. */
-    dump_cap_load_op(addr, tps, tag);
-    dump_cap_load_cbl(cursor, base, length);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_LD_CAP;
-        env->cvtrace.val1 = tswap64(addr);
-        env->cvtrace.val2 = tswap64(((uint64_t)tag << 63) | tps);
-        env->cvtrace.val3 = tswap64(cursor);
-        env->cvtrace.val4 = tswap64(base);
-        env->cvtrace.val5 = tswap64(length);
-    }
-}
-
-target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
-{
-    cap_register_t *csp = &env->active_tc.C[cs];
-    target_ulong ret;
-    uint64_t tps;
-
-    ret = csp->cr_offset + csp->cr_base;
-
-    tps = (((uint64_t)csp->cr_otype << 32) |
-        ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 1) |
-        ((csp->cr_perms & CAP_SEALED) ? 1UL : 0UL));
-
-
-    /* Log memory cap write, if needed. */
-    dump_cap_store_op(vaddr, tps, csp->cr_tag);
-    dump_cap_store_cursor(ret);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_ST_CAP;
-        env->cvtrace.val1 = tswap64(vaddr);
-        env->cvtrace.val2 = tswap64(((uint64_t)csp->cr_tag << 63) | tps);
-        env->cvtrace.val3 = tswap64(ret);
-    }
-    return ret;
-}
-
-target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
-{
-    cap_register_t *csp = &env->active_tc.C[cs];
-    target_ulong ret;
-    uint64_t tps, length;
-
-    ret = csp->cr_base;
-
-    tps = (((uint64_t)csp->cr_otype << 32) |
-        ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 1) |
-        ((csp->cr_perms & CAP_SEALED) ? 1UL : 0UL));
-
-    length = csp->cr_length;
-
-    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length);
-
-    /* Log memory cap write, if needed. */
-    dump_cap_store_base(ret);
-    dump_cap_store_length(length);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.val4 = tswap64(ret);
-        env->cvtrace.val5 = tswap64(csp->cr_length);
-    }
-    return ret;
-}
-
-#else /* ! CHERI_MAGIC128 */
 
 void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
         target_ulong addr)
