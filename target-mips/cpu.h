@@ -708,7 +708,7 @@ struct CPUMIPSState {
 
 #if defined(TARGET_CHERI)
     /*
-     * See section 3.4 of the CHERI Architecture Reference.
+     * See section 4.4.1 (Table 4.3) of the CHERI Architecture Reference.
      */
     uint16_t CP2_CapCause; /* Upper 8 bits exception code; lower reg# */
 #define CP2Ca_NONE          0x00    /* None */
@@ -721,7 +721,7 @@ struct CPUMIPSState {
 #define CP2Ca_UNDERFLOW     0x07    /* Underflow of trusted system stack */
 #define CP2Ca_USRDEFINE     0x08    /* User-defined Permission Violation */
 #define CP2Ca_TLB_STORE     0x09    /* TLB prohibits store capability */
-#define CP2Ca_BOUNDS_REP    0x0A    /* Bounds cannot be represented exactly */
+#define CP2Ca_INEXACT       0x0A    /* Bounds cannot be represented exactly */
 // 0x0b-0x0f Reserved
 #define CP2Ca_GLOBAL        0x10 /* Global Violation */
 #define CP2Ca_PERM_EXE      0x11 /* Permit_Execute Violation */
@@ -737,7 +737,6 @@ struct CPUMIPSState {
 #define CP2Ca_ACCESS_KCC    0x1C /* Access_KCC Violation */
 #define CP2Ca_ACCESS_KR1C   0x1D /* Access_KR1C Violation */
 #define CP2Ca_ACCESS_KR2C   0x1E /* Access_KR2C Violation */
-#define CP2Ca_INEXACT       0x1F /* XXX Inexact Representation */
 // 0x1f Reserved
 #endif /* TARGET_CHERI */
 
