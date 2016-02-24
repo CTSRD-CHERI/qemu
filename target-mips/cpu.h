@@ -737,6 +737,7 @@ struct CPUMIPSState {
 #define CP2Ca_ACCESS_KCC    0x1C /* Access_KCC Violation */
 #define CP2Ca_ACCESS_KR1C   0x1D /* Access_KR1C Violation */
 #define CP2Ca_ACCESS_KR2C   0x1E /* Access_KR2C Violation */
+#define CP2Ca_INEXACT       0x1F /* XXX Inexact Representation */
 // 0x1f Reserved
 #endif /* TARGET_CHERI */
 
