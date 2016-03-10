@@ -3272,7 +3272,7 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
     if (csp->cr_tag)
         cheri_tag_set(env, vaddr, cs);
     else
-        cheri_tag_invalidate(env, vaddr, 8);
+        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
 
     ret = csp->cr_offset + csp->cr_base;
     /* Log memory cap write, if needed. */
