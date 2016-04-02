@@ -1854,11 +1854,6 @@ target_ulong helper_cbts(CPUMIPSState *env, uint32_t cb, uint32_t offset)
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
         return (target_ulong)0;
-    } else if (cbp->cr_tag &&
-            ((pccp->cr_offset + 4 * (int64_t)offset + 4) >
-             pccp->cr_length)) {
-        do_raise_c2_exception_noreg(env, CP2Ca_LENGTH);
-        return (target_ulong)0;
     } else {
         return (target_ulong)cbp->cr_tag;
     }
@@ -1874,11 +1869,6 @@ target_ulong helper_cbtu(CPUMIPSState *env, uint32_t cb, uint32_t offset)
      */
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception_v(env, cb);
-        return (target_ulong)0;
-    } else if (!cbp->cr_tag &&
-            ((pccp->cr_offset + 4 * (int64_t)offset + 4) >
-             pccp->cr_length)) {
-        do_raise_c2_exception_noreg(env, CP2Ca_LENGTH);
         return (target_ulong)0;
     } else {
         return (target_ulong)!cbp->cr_tag;
