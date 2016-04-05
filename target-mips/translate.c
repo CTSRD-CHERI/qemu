@@ -22415,8 +22415,12 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
 #else
         ctx.mem_idx = ctx.hflags & MIPS_HFLAG_KSU;
 #endif
+#if defined(CHERI_UNALIGNED)
+    ctx.default_tcg_memop_mask = MO_UNALN;
+#else
     ctx.default_tcg_memop_mask = (ctx.insn_flags & ISA_MIPS32R6) ?
                                  MO_UNALN : MO_ALIGN;
+#endif
     num_insns = 0;
     max_insns = tb->cflags & CF_COUNT_MASK;
     if (max_insns == 0)
