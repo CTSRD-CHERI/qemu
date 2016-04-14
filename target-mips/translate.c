@@ -1010,6 +1010,7 @@ enum {
 
 #define MASK_CAP3(op)       (MASK_CP2(op) | ((op) & 0x7))
 #define MASK_CAP4(op)       (MASK_CP2(op) | ((op) & 0xf))
+#define MASK_CAP6(op)       (MASK_CP2(op) | ((op) & 0x3f))
 
 enum {
     OPC_CGET        = OPC_CP2 | (0x00 << 21),
@@ -1032,14 +1033,17 @@ enum {
 };
 
 enum {
-    OPC_CGETPERM    = OPC_CGET | (0x0),
-    OPC_CGETTYPE    = OPC_CGET | (0x1),
-    OPC_CGETBASE    = OPC_CGET | (0x2),
-    OPC_CGETLEN     = OPC_CGET | (0x3),
-    OPC_CGETCAUSE   = OPC_CGET | (0x4),
-    OPC_CGETTAG     = OPC_CGET | (0x5),
-    OPC_CGETSEALED  = OPC_CGET | (0x6),
-    OPC_CGETPCC     = OPC_CGET | (0x7),
+    OPC_CGETPERM        = OPC_CGET | (0x00),
+    OPC_CGETTYPE        = OPC_CGET | (0x01),
+    OPC_CGETBASE        = OPC_CGET | (0x02),
+    OPC_CGETLEN         = OPC_CGET | (0x03),
+    OPC_CGETCAUSE       = OPC_CGET | (0x04),
+    OPC_CGETTAG         = OPC_CGET | (0x05),
+    OPC_CGETSEALED      = OPC_CGET | (0x06),
+    OPC_CGETPCC         = OPC_CGET | (0x07),
+
+    OPC_CSETBOUNDSEXACT = OPC_CGET | (0x09),
+    OPC_CSUB            = OPC_CGET | (0x0a),
 };
 
 enum {
@@ -10595,47 +10599,50 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
 
     switch (MASK_CP2(opc)) {
     case OPC_CGET:  /* 0x00 */
-        switch(MASK_CAP3(opc)) {
-        case OPC_CGETPERM: /* 0x0 */
+        switch(MASK_CAP6(opc)) {
+        case OPC_CGETPERM:          /* 0x00 */
             check_cop2x(ctx);
             generate_cgetperm(r16, r11);
             opn = "cgetperm";
             break;
-        case OPC_CGETTYPE: /* 0x1 */
+        case OPC_CGETTYPE:          /* 0x01 */
             check_cop2x(ctx);
             generate_cgettype(r16, r11);
             opn = "cgettype";
             break;
-        case OPC_CGETBASE: /* 0x2 */
+        case OPC_CGETBASE:          /* 0x02 */
             check_cop2x(ctx);
             generate_cgetbase(r16, r11);
             opn = "cgetbase";
             break;
-        case OPC_CGETLEN: /* 0x3 */
+        case OPC_CGETLEN:           /* 0x03 */
             check_cop2x(ctx);
             generate_cgetlen(r16, r11);
             opn = "cgetlen";
             break;
-        case OPC_CGETCAUSE: /* 0x4 */
+        case OPC_CGETCAUSE:         /* 0x04 */
             check_cop2x(ctx);
             generate_cgetcause(r16);
             opn = "cgetcause";
             break;
-        case OPC_CGETTAG:  /* 0x5 */
+        case OPC_CGETTAG:           /* 0x05 */
             check_cop2x(ctx);
             generate_cgettag(r16, r11);
             opn = "cgettag";
             break;
-        case OPC_CGETSEALED: /* 0x6 */
+        case OPC_CGETSEALED:        /* 0x06 */
             check_cop2x(ctx);
             generate_cgetsealed(r16, r11);
             opn = "cgetsealed";
             break;
-        case OPC_CGETPCC:  /* 0x7 */
+        case OPC_CGETPCC:           /* 0x07 */
             check_cop2x(ctx);
             generate_cgetpcc(r11);
             opn = "cgetpcc";
             break;
+                                    /* 0x08 */
+        case OPC_CSETBOUNDSEXACT:   /* 0x09 */
+        case OPC_CSUB:              /* 0x0a */
         default:
             opn = "cget";
             goto invalid;
