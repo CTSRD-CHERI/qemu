@@ -2345,6 +2345,42 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+        target_ulong rt)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+    uint64_t cursor_rt = cursor + rt;
+    /*
+     * CSetBoundsExact: Set Bounds Exactly
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception_v(env, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception_v(env, cb);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (is_cap_sealed(cbp)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (cursor < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (cursor_rt < rt) {
+        /* cursor + rt overflowed */
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (cursor_rt > (cbp->cr_base + cbp->cr_length)) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (!is_representable(is_cap_sealed(cbp), cursor, rt, 0)) {
+        do_raise_c2_exception(env, CP2Ca_INEXACT, cb);
+    } else {
+        *cdp = *cbp;
+        cdp->cr_base = cursor;
+        cdp->cr_length = rt;
+        cdp->cr_offset = (target_ulong)0;
+    }
+}
+
 void helper_csetcause(CPUMIPSState *env, target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;

@@ -2149,6 +2149,21 @@ static inline void generate_csetbounds(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_csetboundsexact(int32_t cd, int32_t cb, int32_t rt)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
+
+    gen_load_gpr(t0, rt);
+    gen_helper_csetboundsexact(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcb);
+}
+
+
 static inline void generate_csetcause(int32_t rd)
 {
     TCGv t0 = tcg_temp_new();
@@ -10642,6 +10657,10 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
                                     /* 0x08 */
         case OPC_CSETBOUNDSEXACT:   /* 0x09 */
+            check_cop2x(ctx);
+            generate_csetboundsexact(r16, r11, r6);
+            opn = "csetboundsexact";
+            break;
         case OPC_CSUB:              /* 0x0a */
         default:
             opn = "cget";
