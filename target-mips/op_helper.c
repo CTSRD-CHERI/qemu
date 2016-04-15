@@ -2366,9 +2366,6 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (cursor < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (cursor_rt < rt) {
-        /* cursor + rt overflowed */
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (cursor_rt > (cbp->cr_base + cbp->cr_length)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (!is_representable(is_cap_sealed(cbp), cursor, rt, 0)) {
