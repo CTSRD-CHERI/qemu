@@ -543,13 +543,25 @@ static const mips_def_t mips_defs[] =
     },
     {
         .name = "5Kf",
+#if defined(TARGET_CHERI)
+        .CP0_PRid = 0x00008900,
+#else
         .CP0_PRid = 0x00018100,
+#endif
         .CP0_Config0 = MIPS_CONFIG0 | (0x2 << CP0C0_AT) |
                        (MMU_TYPE_R4000 << CP0C0_MT),
+#if defined(TARGET_CHERI)
+        .CP0_Config1 = MIPS_CONFIG1 | (1 << CP0C1_FP) | (31 << CP0C1_MMU) |
+                       (1 << CP0C1_IS) | (4 << CP0C1_IL) | (1 << CP0C1_IA) |
+                       (1 << CP0C1_DS) | (4 << CP0C1_DL) | (1 << CP0C1_DA) |
+                       (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP) |
+                       0x40,
+#else /* ! TARGET_CHERI */
         .CP0_Config1 = MIPS_CONFIG1 | (1 << CP0C1_FP) | (31 << CP0C1_MMU) |
                        (1 << CP0C1_IS) | (4 << CP0C1_IL) | (1 << CP0C1_IA) |
                        (1 << CP0C1_DS) | (4 << CP0C1_DL) | (1 << CP0C1_DA) |
                        (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP),
+#endif /* ! TARGET_CHERI */
         .CP0_Config2 = MIPS_CONFIG2,
 #if defined(TARGET_CHERI)
         .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI),

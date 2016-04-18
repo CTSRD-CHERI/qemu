@@ -1107,9 +1107,18 @@ static inline void compute_hflags(CPUMIPSState *env)
 
     }
     if (env->insn_flags & ISA_MIPS32R2) {
+#ifdef TARGET_CHERI
+        /* COP1X enables CP1X instructions such as MADD.S, and is
+           orthogonal to whether the FPU is in 64-bit mode. In MIPS32,
+           the COP1Xto whether the FPU is in 64-bit mode. In MIPS32, the
+           COP1X instructions are always available when the FPU is
+           enabled. */
+        env->hflags |= MIPS_HFLAG_COP1X;
+#else /* ! TARGET_CHERI */
         if (env->active_fpu.fcr0 & (1 << FCR0_F64)) {
             env->hflags |= MIPS_HFLAG_COP1X;
         }
+#endif /* ! TARGET_CHERI */
     } else if (env->insn_flags & ISA_MIPS32) {
         if (env->hflags & MIPS_HFLAG_64) {
             env->hflags |= MIPS_HFLAG_COP1X;
