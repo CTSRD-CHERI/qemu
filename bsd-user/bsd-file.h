@@ -346,8 +346,8 @@ static inline abi_long do_bsd_renameat(abi_long arg1, abi_long arg2,
     abi_long ret;
     void *p1, *p2;
 
-    LOCK_PATH(p1, arg1);
-    LOCK_PATH(p2, arg2);
+    LOCK_PATH(p1, arg2);
+    LOCK_PATH(p2, arg4);
     if (!p1 || !p2) {
         ret = -TARGET_EFAULT;
     } else {
