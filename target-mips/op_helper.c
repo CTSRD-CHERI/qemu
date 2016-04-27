@@ -134,29 +134,6 @@ static inline void do_raise_c0_exception(CPUMIPSState *env, uint16_t cause,
     do_raise_exception(env, cause, pc);
 }
 
-static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
-{
-    switch(reg) {
-        case CP2CAP_EPCC:
-            do_raise_c2_exception(env, CP2Ca_ACCESS_EPCC, reg);
-            break;
-        case CP2CAP_KDC:
-            do_raise_c2_exception(env, CP2Ca_ACCESS_KDC, reg);
-            break;
-        case CP2CAP_KCC:
-            do_raise_c2_exception(env, CP2Ca_ACCESS_KCC, reg);
-            break;
-        case CP2CAP_KR1C:
-            do_raise_c2_exception(env, CP2Ca_ACCESS_KR1C, reg);
-            break;
-        case CP2CAP_KR2C:
-            do_raise_c2_exception(env, CP2Ca_ACCESS_KR2C, reg);
-            break;
-        default:
-            break;
-    }
-}
-
 static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause)
 {
     do_raise_c2_exception(env, cause, 0xff);
@@ -1827,9 +1804,9 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CAndPerm: Restrict Permissions
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -1849,7 +1826,7 @@ target_ulong helper_cbts(CPUMIPSState *env, uint32_t cb, uint32_t offset)
      * CBTS: Branch if tag is set
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else {
         return (target_ulong)cbp->cr_tag;
@@ -1865,7 +1842,7 @@ target_ulong helper_cbtu(CPUMIPSState *env, uint32_t cb, uint32_t offset)
      * CBTU: Branch if tag is unset
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else {
         return (target_ulong)!cbp->cr_tag;
@@ -1881,9 +1858,9 @@ void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
      * CCall: Call into a new security domain
      */
     if (creg_inaccessible(perms, cs)) {
-        do_raise_c2_exception_v(env, cs);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cs);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!cbp->cr_tag) {
@@ -1910,7 +1887,7 @@ void helper_cclearreg(CPUMIPSState *env, uint32_t creg)
     uint32_t perms = env->active_tc.PCC.cr_perms;
 
     if (creg_inaccessible(perms, creg))
-        do_raise_c2_exception_v(env, creg);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, creg);
 
     (void)null_capability(&env->active_tc.C[creg]);
 }
@@ -1928,7 +1905,7 @@ void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
      * CCheckPerm: Raise exception if don't have permission
      */
     if (creg_inaccessible(perms, cs)) {
-        do_raise_c2_exception_v(env, cs);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cs);
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (((csp->cr_perms & ~CAP_SEALED) & (uint32_t)rt) != (uint32_t)rt) {
@@ -1945,9 +1922,9 @@ void helper_cchecktype(CPUMIPSState *env, uint32_t cs, uint32_t cb)
      * CCheckType: Raise exception if otypes don't match
      */
     if (creg_inaccessible(perms, cs)) {
-        do_raise_c2_exception_v(env, cs);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cs);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!cbp->cr_tag) {
@@ -1970,9 +1947,9 @@ void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
      * CClearTag: Clear the tag bit
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else {
         *cdp = *cbp;
         cdp->cr_tag = 0;
@@ -1989,9 +1966,9 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CFromPtr: Create capability from pointer
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (rt == (target_ulong)0) {
         (void)null_capability(cdp);
     } else if (!cbp->cr_tag) {
@@ -2017,7 +1994,7 @@ target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
      * CGetBase: Move Base to a General-Purpose Register
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else {
         return (target_ulong)env->active_tc.C[cb].cr_base;
@@ -2032,7 +2009,7 @@ target_ulong helper_cgetcause(CPUMIPSState *env)
      * General- Purpose Register
      */
     if (!(perms & CAP_ACCESS_SYS_REGS)) {
-        do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_EPCC);
+        do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYSTEM);
         return (target_ulong)0;
     } else {
         return (target_ulong)env->CP2_CapCause;
@@ -2046,7 +2023,7 @@ target_ulong helper_cgetlen(CPUMIPSState *env, uint32_t cb)
      * CGetLen: Move Length to a General-Purpose Register
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else {
         /* For 128-bit Capabilities we must check len >= 2^64 */
@@ -2061,7 +2038,7 @@ target_ulong helper_cgetoffset(CPUMIPSState *env, uint32_t cb)
      * CGetOffset: Move Offset to a General-Purpose Register
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else {
         // fprintf(qemu_logfile, "%s: offset(%d)=%016lx\n",
         //      __func__, cb, env->active_tc.C[cb].cr_offset);
@@ -2081,7 +2058,7 @@ void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
      * See Chapter 4 in CHERI Architecture manual.
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else {
         env->active_tc.C[cd] = env->active_tc.PCC;
         /* Note that the offset(cursor) is updated by ccheck_pcc */
@@ -2096,7 +2073,7 @@ target_ulong helper_cgetperm(CPUMIPSState *env, uint32_t cb)
      * Register
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else {
         uint32_t cb_perms = env->active_tc.C[cb].cr_perms;
@@ -2112,7 +2089,7 @@ target_ulong helper_cgetsealed(CPUMIPSState *env, uint32_t cb)
      * CGetSealed: Move sealed bit to a General-Purpose Register
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else {
         return (target_ulong)(is_cap_sealed(&env->active_tc.C[cb]) ? 1 : 0);
@@ -2126,7 +2103,7 @@ target_ulong helper_cgettag(CPUMIPSState *env, uint32_t cb)
      * CGetTag: Move Tag to a General-Purpose Register
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else {
         return (target_ulong)env->active_tc.C[cb].cr_tag;
@@ -2140,7 +2117,7 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
      * CGetType: Move Object Type Field to a General-Purpose Register
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else {
         return (target_ulong)env->active_tc.C[cb].cr_otype;
@@ -2157,9 +2134,9 @@ void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CIncBase: Increase Base
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag && rt != 0) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp) && rt != 0) {
@@ -2183,9 +2160,9 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CIncOffset: Increase Offset
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (cbp->cr_tag && is_cap_sealed(cbp) && rt != 0) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
@@ -2211,9 +2188,9 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
      * CJALR: Jump and Link Capability Register
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2245,7 +2222,7 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
      * CJR: Jump Capability Register
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2279,11 +2256,11 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
      * CSeal: Seal a capability
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cs)) {
-        do_raise_c2_exception_v(env, cs);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cs);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!ctp->cr_tag) {
@@ -2320,9 +2297,9 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CSetBounds: Set Bounds
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2354,9 +2331,9 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CSetBoundsExact: Set Bounds Exactly
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2382,7 +2359,7 @@ void helper_csetcause(CPUMIPSState *env, target_ulong rt)
      * CSetCause: Set the Capability Exception Cause Register
      */
     if (!(perms & CAP_ACCESS_SYS_REGS)) {
-        do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_EPCC);
+        do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYSTEM);
     } else {
         env->CP2_CapCause = (uint16_t)(rt & 0xffffUL);
     }
@@ -2398,9 +2375,9 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CSetLen: Set Length
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2423,9 +2400,9 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CSetOffset: Set cursor to an offset from base
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (cbp->cr_tag && is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
@@ -2449,9 +2426,9 @@ target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
      * CToPtr: Capability to Pointer
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else if (!ctp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, ct);
     } else if (cbp->cr_tag) {
@@ -2472,11 +2449,11 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
      * CUnseal: Unseal a sealed capability
      */
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
     } else if (creg_inaccessible(perms, cs)) {
-        do_raise_c2_exception_v(env, cs);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cs);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!ctp->cr_tag) {
@@ -2519,9 +2496,9 @@ target_ulong helper_ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
      * CEQ: Capability pointers equal
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else {
         if (cbp->cr_tag != ctp->cr_tag) {
             equal = FALSE;
@@ -2545,9 +2522,9 @@ target_ulong helper_cne(CPUMIPSState *env, uint32_t cb, uint32_t ct)
      * CNE: Capability pointers not equal
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else {
         if (cbp->cr_tag != ctp->cr_tag) {
             equal = FALSE;
@@ -2571,9 +2548,9 @@ target_ulong helper_clt(CPUMIPSState *env, uint32_t cb, uint32_t ct)
      * CLT: Capability pointers less than (signed)
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else {
         if (cbp->cr_tag != ctp->cr_tag) {
             if (cbp->cr_tag) {
@@ -2601,9 +2578,9 @@ target_ulong helper_cle(CPUMIPSState *env, uint32_t cb, uint32_t ct)
      * CLE: Capability pointers less than equal (signed)
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else {
         if (cbp->cr_tag != ctp->cr_tag) {
             if (cbp->cr_tag) {
@@ -2631,9 +2608,9 @@ target_ulong helper_cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
      * CLTU: Capability pointers less than (unsigned)
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else {
         if (cbp->cr_tag != ctp->cr_tag) {
             if (cbp->cr_tag) {
@@ -2661,9 +2638,9 @@ target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
      * CLEU: Capability pointers less than equal (unsigned)
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else {
         if (cbp->cr_tag != ctp->cr_tag) {
             if (cbp->cr_tag) {
@@ -2691,9 +2668,9 @@ target_ulong helper_cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
      * CEXEQ: Capability pointers equal (all fields)
      */
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (creg_inaccessible(perms, ct)) {
-        do_raise_c2_exception_v(env, ct);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, ct);
     } else {
         if (cbp->cr_tag != ctp->cr_tag) {
             equal = FALSE;
@@ -2724,7 +2701,7 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
     cap_register_t *cbp = &env->active_tc.C[cb];
 
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2758,7 +2735,7 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
 
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2789,7 +2766,7 @@ target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
 
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2821,7 +2798,7 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
     cap_register_t *cbp = &env->active_tc.C[cb];
 
     if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -2855,10 +2832,10 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     // cap_register_t *cdp = &env->active_tc.C[cd];
 
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
         return (target_ulong)0;
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
@@ -2907,10 +2884,10 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     // uint32_t tag;
 
     if (creg_inaccessible(perms, cd)) {
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cd);
         return (target_ulong)0;
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
@@ -2955,10 +2932,10 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
     cap_register_t *csp = &env->active_tc.C[cs];
 
     if (creg_inaccessible(perms, cs)) {
-        do_raise_c2_exception_v(env, cs);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cs);
         return (target_ulong)0;
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
@@ -3000,10 +2977,10 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
 
     if (creg_inaccessible(perms, cs)) {
-        do_raise_c2_exception_v(env, cs);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cs);
         return (target_ulong)0;
     } else if (creg_inaccessible(perms, cb)) {
-        do_raise_c2_exception_v(env, cb);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYSTEM, cb);
         return (target_ulong)0;
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
@@ -3586,11 +3563,7 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
             (crp->cr_perms & CAP_PERM_SEAL) ? '$' : '-',
             (crp->cr_perms & CAP_RESERVED1) ? 'R' : '-',
             (crp->cr_perms & CAP_RESERVED2) ? 'R' : '-',
-            (crp->cr_perms & CAP_ACCESS_EPCC) ? 'e' : '-',
-            (crp->cr_perms & CAP_ACCESS_KDC) ? 'd' : '-',
-            (crp->cr_perms & CAP_ACCESS_KCC) ? 'c' : '-',
-            (crp->cr_perms & CAP_ACCESS_KR1C) ? '1' : '-',
-            (crp->cr_perms & CAP_ACCESS_KR2C) ? '2' : '-');
+            (crp->cr_perms & CAP_ACCESS_SYS_REGS) ? 'r' : '-');
     } else {
         cpu_fprintf(f, "%s: (not valid - tag not set)\n");
         cpu_fprintf(f, "%-4s\n", alias);
