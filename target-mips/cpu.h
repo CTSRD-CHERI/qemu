@@ -207,24 +207,15 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_PERM_STORE_CAP      (1 << 5)
 #define CAP_PERM_STORE_LOCAL    (1 << 6)
 #define CAP_PERM_SEAL           (1 << 7)
-#define CAP_RESERVED1           (1 << 8)
-#define CAP_RESERVED2           (1 << 9)
-#define CAP_ACCESS_EPCC         (1 << 10)
-#define CAP_ACCESS_KDC          (1 << 11)
-#define CAP_ACCESS_KCC          (1 << 12)
-#define CAP_ACCESS_KR1C         (1 << 13)
-#define CAP_ACCESS_KR2C         (1 << 14)
+#define CAP_ACCESS_SYS_REGS     (1 << 8)
+#define CAP_RESERVED1           (1 << 9)
+#define CAP_RESERVED2           (1 << 10)
+#define CAP_RESERVED3           (1 << 11)
+#define CAP_RESERVED4           (1 << 12)
+#define CAP_RESERVED5           (1 << 13)
+#define CAP_RESERVED6           (1 << 14)
+/* 15-18 Software-defined */
 #define CAP_SEALED              (1 << 31)
-/*
-#define CAP_ALL_PERMS           (CAP_PERM_GLOBAL | CAP_PERM_EXECUTE |       \
-                                CAP_PERM_LOAD | CAP_PERM_STORE |           \
-                                CAP_PERM_LOAD_CAP | CAP_PERM_STORE_CAP |   \
-                                CAP_PERM_STORE_LOCAL | CAP_PERM_SEAL |     \
-                                CAP_ACCESS_EPCC | CAP_ACCESS_KDC |         \
-                                CAP_ACCESS_KDC | CAP_ACCESS_KCC |          \
-                                CAP_ACCESS_KR1C | CAP_ACCESS_KR2C |        \
-                                CAP_RESERVED1 | CAP_RESERVED2)
-*/
 #define CAP_ALL_PERMS           (0x7fffffff)
 
 struct cvtrace {
@@ -731,7 +722,8 @@ struct CPUMIPSState {
 #define CP2Ca_PERM_ST_CAP   0x15 /* Permit_Store_Capability Violation */
 #define CP2Ca_PERM_ST_LC_CAP 0x16 /* Permit_Store_Local_Capability Violation */
 #define CP2Ca_PERM_SEAL     0x17 /* Permit_Seal Violation */
-// 0x18-0x19 Reserved
+#define CP2Ca_ACCESS_SYS_REGS 0x18 /* Access System Registers Violation */
+// 0x19 Reserved
 #define CP2Ca_ACCESS_EPCC   0x1A /* Access_EPCC Violation */
 #define CP2Ca_ACCESS_KDC    0x1B /* Access_KDC Violation */
 #define CP2Ca_ACCESS_KCC    0x1C /* Access_KCC Violation */
