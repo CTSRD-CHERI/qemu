@@ -732,8 +732,18 @@ struct CPUMIPSState {
 #define CP2Ca_PERM_ST_CAP   0x15 /* Permit_Store_Capability Violation */
 #define CP2Ca_PERM_ST_LC_CAP 0x16 /* Permit_Store_Local_Capability Violation */
 #define CP2Ca_PERM_SEAL     0x17 /* Permit_Seal Violation */
-#define CP2Ca_ACCESS_SYSTEM 0x18 /* Access System Registers Violation */
+#define CP2Ca_ACCESS_SYS_REGS 0x18 /* Access System Registers Violation */
+#ifdef NOTYET
 // 0x19-0x1f Reserved
+#else
+// 0x19 Reserved
+#define CP2Ca_ACCESS_EPCC   0x1A /* Access_EPCC Violation */
+#define CP2Ca_ACCESS_KDC    0x1B /* Access_KDC Violation */
+#define CP2Ca_ACCESS_KCC    0x1C /* Access_KCC Violation */
+#define CP2Ca_ACCESS_KR1C   0x1D /* Access_KR1C Violation */
+#define CP2Ca_ACCESS_KR2C   0x1E /* Access_KR2C Violation */
+// 0x1f Reserved
+#endif /* NOTYET */
 #endif /* TARGET_CHERI */
 
     CPU_COMMON
