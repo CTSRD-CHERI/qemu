@@ -1011,6 +1011,9 @@ enum {
 #define MASK_CAP3(op)       (MASK_CP2(op) | ((op) & 0x7))
 #define MASK_CAP4(op)       (MASK_CP2(op) | ((op) & 0xf))
 #define MASK_CAP6(op)       (MASK_CP2(op) | ((op) & 0x3f))
+#define MASK_CAP7(op)       (MASK_CP2(op) | ((op) & (0x1f << 6)) |  (0x3f))
+#define MASK_CAP8(op)       (MASK_CP2(op) | ((op) & (0x1f << 11)) | \
+        (0x1f << 6) |  (0x3f))
 
 enum {
     OPC_CGET        = OPC_CP2 | (0x00 << 21),
@@ -1044,7 +1047,38 @@ enum {
 
     OPC_CSETBOUNDSEXACT = OPC_CGET | (0x09),
     OPC_CSUB            = OPC_CGET | (0x0a),
+
+    OPC_C2OPERAND       = OPC_CGET | (0x3f),
 };
+
+
+/* XXX - Version 1.17 ISA encodings (*_NI) to replace above. */
+enum {
+    /* Two Operand Instructions */
+    OPC_CGETPERM_NI     = OPC_C2OPERAND | (0x00 << 6),
+    OPC_CGETTYPE_NI     = OPC_C2OPERAND | (0x01 << 6),
+    OPC_CGETBASE_NI     = OPC_C2OPERAND | (0x02 << 6),
+    OPC_CGETLEN_NI      = OPC_C2OPERAND | (0x03 << 6),
+    OPC_CGETTAG_NI      = OPC_C2OPERAND | (0x04 << 6),
+    OPC_CGETSEALED_NI   = OPC_C2OPERAND | (0x05 << 6),
+    OPC_CGETOFFSET_NI   = OPC_C2OPERAND | (0x06 << 6),
+    OPC_CGETPCCSETOFF_NI = OPC_C2OPERAND | (0x07 << 6),
+    OPC_CCHECKPERM_NI   = OPC_C2OPERAND | (0x08 << 6),
+    OPC_CCHECKTYPE_NI   = OPC_C2OPERAND | (0x09 << 6),
+    OPC_CMOVE_NI        = OPC_C2OPERAND | (0x0a << 6),
+    OPC_CCLEARTAG_NI    = OPC_C2OPERAND | (0x0b << 6),
+    OPC_CJALR_NI        = OPC_C2OPERAND | (0x0c << 6),
+
+    OPC_C1OPERAND       = OPC_C2OPERAND | (0x1f << 6),
+};
+
+enum {
+    OPC_CGETPCC_NI      = OPC_C1OPERAND | (0x00 << 11),
+    OPC_CGETCAUSE_NI    = OPC_C1OPERAND | (0x01 << 11),
+    OPC_CSETCAUSE_NI    = OPC_C1OPERAND | (0x02 << 11),
+    OPC_CJR_NI          = OPC_C1OPERAND | (0x03 << 11),
+};
+/* XXX */
 
 enum {
     OPC_CANDPERM    = OPC_CMISC | (0x0),
@@ -10661,6 +10695,106 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_csetboundsexact(r16, r11, r6);
             opn = "csetboundsexact";
             break;
+        /* Two-operand cap instructions. */
+        case OPC_C2OPERAND:         /* 0x3f */
+            switch(MASK_CAP7(opc)) {
+            case OPC_CGETPERM_NI:   /* 0x00 << 6 */
+                check_cop2x(ctx);
+                generate_cgetperm(r16, r11);
+                opn = "cgetperm";
+                break;
+            case OPC_CGETTYPE_NI:   /* 0x01 << 6 */
+                check_cop2x(ctx);
+                generate_cgettype(r16, r11);
+                opn = "cgettype";
+                break;
+            case OPC_CGETBASE_NI:   /* 0x02 << 6 */
+                check_cop2x(ctx);
+                generate_cgetbase(r16, r11);
+                opn = "cgetbase";
+                break;
+            case OPC_CGETLEN_NI:    /* 0x03 << 6 */
+                check_cop2x(ctx);
+                generate_cgetlen(r16, r11);
+                opn = "cgetlen";
+                break;
+            case OPC_CGETTAG_NI:    /* 0x04 << 6 */
+                check_cop2x(ctx);
+                generate_cgettag(r16, r11);
+                opn = "cgettag";
+                break;
+            case OPC_CGETSEALED_NI: /* 0x05 << 6 */
+                check_cop2x(ctx);
+                generate_cgetsealed(r16, r11);
+                opn = "cgetsealed";
+                break;
+            case OPC_CGETOFFSET_NI: /* 0x06 << 6 */
+                check_cop2x(ctx);
+                generate_cgetoffset(r16, r11);
+                opn = "cgetoffset";
+                break;
+            case OPC_CGETPCCSETOFF_NI: /* 0x07 << 6 */
+                check_cop2x(ctx);
+                generate_cgetpcc(r11);
+                opn = "cgetpccsetoffset";
+                break;
+            case OPC_CCHECKPERM_NI:    /* 0x08 << 6 */
+                check_cop2x(ctx);
+                generate_ccheckperm(r16, r6);
+                opn = "ccheckperm";
+                break;
+            case OPC_CCHECKTYPE_NI:    /* 0x09 << 6 */
+                check_cop2x(ctx);
+                generate_cchecktype(r16, r11);
+                opn = "cchecktype";
+                break;
+            case OPC_CMOVE_NI:      /* 0x0a << 6 */
+                opn = "cmove";
+                goto invalid;
+            case OPC_CCLEARTAG_NI:  /* 0x0b << 6 */
+                check_cop2x(ctx);
+                generate_ccleartag(r16, r11);
+                opn = "ccleartag";
+                break;
+            case OPC_CJALR_NI:      /* 0x0c << 6 */
+                check_cop2x(ctx);
+                generate_cjalr(ctx, r16, r11);
+                opn = "cjalr";
+                break;
+
+            /* One-operand cap instructions. */
+            case OPC_C1OPERAND:     /* 0x1f << 6 */
+                switch(MASK_CAP8(opc)) {
+                case OPC_CGETPCC_NI:    /* 0x00 << 11 */
+                    check_cop2x(ctx);
+                    generate_cgetpcc(r11);
+                    opn = "cgetpcc";
+                    break;
+                case OPC_CGETCAUSE_NI:  /* 0x01 << 11 */
+                    check_cop2x(ctx);
+                    generate_cgetcause(r16);
+                    opn = "cgetcause";
+                    break;
+                case OPC_CSETCAUSE_NI:  /* 0x02 << 11 */
+                    check_cop2x(ctx);
+                    generate_csetcause(r6);
+                    opn = "csetcause";
+                    break;
+                case OPC_CJR_NI:        /* 0x03 << 11 */
+                    check_cop2x(ctx);
+                    generate_cjr(ctx, r11);
+                    opn = "cjr";
+                    break;
+
+                default:
+                    opn = "c1operand";
+                    goto invalid;
+                }
+
+            default:
+                opn = "c2operand";
+                goto invalid;
+            }
         case OPC_CSUB:              /* 0x0a */
         default:
             opn = "cget";
