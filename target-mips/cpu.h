@@ -207,6 +207,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_PERM_STORE_CAP      (1 << 5)
 #define CAP_PERM_STORE_LOCAL    (1 << 6)
 #define CAP_PERM_SEAL           (1 << 7)
+#ifdef NOTYET
 #define CAP_ACCESS_SYS_REGS     (1 << 8)
 #define CAP_RESERVED1           (1 << 9)
 #define CAP_RESERVED2           (1 << 10)
@@ -214,6 +215,15 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_RESERVED4           (1 << 12)
 #define CAP_RESERVED5           (1 << 13)
 #define CAP_RESERVED6           (1 << 14)
+#else
+#define CAP_RESERVED1           (1 << 8)
+#define CAP_RESERVED2           (1 << 9)
+#define CAP_ACCESS_EPCC         (1 << 10)
+#define CAP_ACCESS_KDC          (1 << 11)
+#define CAP_ACCESS_KCC          (1 << 12)
+#define CAP_ACCESS_KR1C         (1 << 13)
+#define CAP_ACCESS_KR2C         (1 << 14)
+#endif /* NOTYET */
 /* 15-18 Software-defined */
 #define CAP_SEALED              (1 << 31)
 #define CAP_ALL_PERMS           (0x7fffffff)

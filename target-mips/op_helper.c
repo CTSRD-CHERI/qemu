@@ -1784,10 +1784,17 @@ static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
      * Check to see if the capability register is inaccessible.
      * See Section 5.4 in CHERI Architecture manual.
      */
-
+#ifdef NOTYET
     if (!(perms & CAP_ACCESS_SYS_REGS) && (creg == CP2CAP_EPCC ||
                 creg == CP2CAP_KDC || creg == CP2CAP_KCC ||
                 creg == CP2CAP_KR1C  || creg == CP2CAP_KR2C)) {
+#else
+    if ((creg == CP2CAP_EPCC && !(perms & CAP_ACCESS_EPCC)) ||
+        (creg == CP2CAP_KDC  && !(perms & CAP_ACCESS_KDC))  ||
+        (creg == CP2CAP_KCC  && !(perms & CAP_ACCESS_KCC))  ||
+        (creg == CP2CAP_KR1C && !(perms & CAP_ACCESS_KR1C)) ||
+        (creg == CP2CAP_KR2C && !(perms & CAP_ACCESS_KR2C))) {
+#endif /* NOTYET */
         return 1;
     } else {
         return 0;
@@ -2008,7 +2015,11 @@ target_ulong helper_cgetcause(CPUMIPSState *env)
      * CGetCause: Move the Capability Exception Cause Register to a
      * General- Purpose Register
      */
+#ifdef NOTYET
     if (!(perms & CAP_ACCESS_SYS_REGS)) {
+#else
+    if (!(perms & CAP_ACCESS_EPCC)) {
+#endif
         do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYSTEM);
         return (target_ulong)0;
     } else {
@@ -2358,7 +2369,11 @@ void helper_csetcause(CPUMIPSState *env, target_ulong rt)
     /*
      * CSetCause: Set the Capability Exception Cause Register
      */
+#ifdef NOTYET
     if (!(perms & CAP_ACCESS_SYS_REGS)) {
+#else
+    if (!(perms & CAP_ACCESS_EPCC)) {
+#endif
         do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYSTEM);
     } else {
         env->CP2_CapCause = (uint16_t)(rt & 0xffffUL);
