@@ -439,6 +439,9 @@ struct mips_opcode
    "+o1" 18 bits immediate/displacement (shift = 0)
    "+o2" 19 bits immediate/displacement (shift = 0)
    "+o3" 11 bits immediate/displacement (shift = 0, CHERI only)
+   "+o4" 11 bits immediate/displacement (shift = 1, CHERI only)
+   "+o5" 11 bits immediate/displacement (shift = 2, CHERI only)
+   "+o6" 11 bits immediate/displacement (shift = 3, CHERI only)
 
    Other:
    "()" parens surrounding optional value
@@ -1301,21 +1304,21 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"ccheckperm", "+w,m",	0x49600000, 0xffe0f83f, 0,			0, I1},
 {"cchecktype", "+w,+b", 0x49600001, 0xffe007ff, 0,			0, I1},
 {"ctoptr",   "t,+b,+v", 0x49800000, 0xffe0003f, 0,			0, I1},
-{"csc",   "+x,d,+o3(+w)",0xf8000000, 0xfc000000, 0,			0, I1},
-{"clc",   "+x,d,+o3(+w)",0xd8000000, 0xfc000000, 0,			0, I1},
+{"csc",   "+x,d,+o7(+w)",0xf8000000, 0xfc000000, 0,			0, I1},
+{"clc",   "+x,d,+o7(+w)",0xd8000000, 0xfc000000, 0,			0, I1},
 {"cscr",  "+x,d(+w)",	0xf8000000, 0xfc0007ff, 0,			0, I1},
 {"clcr",  "+x,d(+w)",	0xd8000000, 0xfc0007ff, 0,			0, I1},
-{"csci",  "+x,+o3(+w)", 0xf8000000, 0xfc00f800, 0,			0, I1},
-{"clci",  "+x,+o3(+w)", 0xd8000000, 0xfc00f800, 0,			0, I1},
+{"csci",  "+x,+o7(+w)", 0xf8000000, 0xfc00f800, 0,			0, I1},
+{"clci",  "+x,+o7(+w)", 0xd8000000, 0xfc00f800, 0,			0, I1},
 
 {"clbu",  "v,d,+O(+w)", 0xc8000000, 0xfc000007, 0,			0, I1},
-{"clhu",  "v,d,+O(+w)", 0xc8000001, 0xfc000007, 0,			0, I1},
-{"clwu",  "v,d,+O(+w)", 0xc8000002, 0xfc000007, 0,			0, I1},
+{"clhu",  "v,d,+P(+w)", 0xc8000001, 0xfc000007, 0,			0, I1},
+{"clwu",  "v,d,+Q(+w)", 0xc8000002, 0xfc000007, 0,			0, I1},
 /* there is no cldu */
-{"cld",   "v,d,+O(+w)", 0xc8000003, 0xfc000007, 0,			0, I1},
+{"cld",   "v,d,+R(+w)", 0xc8000003, 0xfc000007, 0,			0, I1},
 {"clb",   "v,d,+O(+w)", 0xc8000004, 0xfc000007, 0,			0, I1},
-{"clh",   "v,d,+O(+w)", 0xc8000005, 0xfc000007, 0,			0, I1},
-{"clw",   "v,d,+O(+w)", 0xc8000006, 0xfc000007, 0,			0, I1},
+{"clh",   "v,d,+P(+w)", 0xc8000005, 0xfc000007, 0,			0, I1},
+{"clw",   "v,d,+Q(+w)", 0xc8000006, 0xfc000007, 0,			0, I1},
 
 {"clbur", "v,d(+w)",	0xc8000000, 0xfc0007ff, 0,			0, I1},
 {"clhur", "v,d(+w)",	0xc8000001, 0xfc0007ff, 0,			0, I1},
@@ -1327,23 +1330,23 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"clwr",  "v,d(+w)",	0xc8000006, 0xfc0007ff, 0,			0, I1},
 
 {"clbui", "v,+O(+w)",	0xc8000000, 0xfc00f807, 0,			0, I1},
-{"clhui", "v,+O(+w)",	0xc8000001, 0xfc00f807, 0,			0, I1},
-{"clwui", "v,+O(+w)",	0xc8000002, 0xfc00f807, 0,			0, I1},
+{"clhui", "v,+P(+w)",	0xc8000001, 0xfc00f807, 0,			0, I1},
+{"clwui", "v,+Q(+w)",	0xc8000002, 0xfc00f807, 0,			0, I1},
 /* There is no cldui. Call this opcode cldi as sign-extend and zero-extend
  * are the same for double-words
  */
-{"cldi",  "v,+O(+w)",   0xc8000003, 0xfc00f807, 0,			0, I1},
+{"cldi",  "v,+R(+w)",   0xc8000003, 0xfc00f807, 0,			0, I1},
 {"clbi",  "v,+O(+w)",   0xc8000004, 0xfc00f807, 0,			0, I1},
-{"clhi",  "v,+O(+w)",   0xc8000005, 0xfc00f807, 0,			0, I1},
-{"clwi",  "v,+O(+w)",   0xc8000006, 0xfc00f807, 0,			0, I1},
+{"clhi",  "v,+P(+w)",   0xc8000005, 0xfc00f807, 0,			0, I1},
+{"clwi",  "v,+Q(+w)",   0xc8000006, 0xfc00f807, 0,			0, I1},
 
 {"csb",   "v,d,+O(+w)", 0xe8000000, 0xfc000007, 0,			0, I1},
-{"csh",   "v,d,+O(+w)", 0xe8000001, 0xfc000007, 0,			0, I1},
-{"csw",   "v,d,+O(+w)", 0xe8000002, 0xfc000007, 0,			0, I1},
-{"csd",   "v,d,+O(+w)", 0xe8000003, 0xfc000007, 0,			0, I1},
+{"csh",   "v,d,+P(+w)", 0xe8000001, 0xfc000007, 0,			0, I1},
+{"csw",   "v,d,+Q(+w)", 0xe8000002, 0xfc000007, 0,			0, I1},
+{"csd",   "v,d,+R(+w)", 0xe8000003, 0xfc000007, 0,			0, I1},
 {"csbh",  "v,d,+O(+w)", 0xe8000004, 0xfc000007, 0,			0, I1},
-{"cshh",  "v,d,+O(+w)", 0xe8000005, 0xfc000007, 0,			0, I1},
-{"cswh",  "v,d,+O(+w)", 0xe8000006, 0xfc000007, 0,			0, I1},
+{"cshh",  "v,d,+P(+w)", 0xe8000005, 0xfc000007, 0,			0, I1},
+{"cswh",  "v,d,+Q(+w)", 0xe8000006, 0xfc000007, 0,			0, I1},
 /* there is no csdh */
 
 {"csbr",  "v,d(+w)",	0xe8000000, 0xfc0007ff, 0,			0, I1},
@@ -1356,12 +1359,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
 /* there is no csdhr */
 
 {"csbi",  "v,+O(+w)",	0xe8000000, 0xfc00f807, 0,			0, I1},
-{"cshi",  "v,+O(+w)",	0xe8000001, 0xfc00f807, 0,			0, I1},
-{"cswi",  "v,+O(+w)",	0xe8000002, 0xfc00f807, 0,			0, I1},
-{"csdi",  "v,+O(+w)",	0xe8000003, 0xfc00f807, 0,			0, I1},
+{"cshi",  "v,+P(+w)",	0xe8000001, 0xfc00f807, 0,			0, I1},
+{"cswi",  "v,+Q(+w)",	0xe8000002, 0xfc00f807, 0,			0, I1},
+{"csdi",  "v,+R(+w)",	0xe8000003, 0xfc00f807, 0,			0, I1},
 {"csbhi", "v,+O(+w)",	0xe8000004, 0xfc00f807, 0,			0, I1},
-{"cshhi", "v,+O(+w)",	0xe8000005, 0xfc00f807, 0,			0, I1},
-{"cswhi", "v,+O(+w)",	0xe8000006, 0xfc00f807, 0,			0, I1},
+{"cshhi", "v,+P(+w)",	0xe8000005, 0xfc00f807, 0,			0, I1},
+{"cswhi", "v,+Q(+w)",	0xe8000006, 0xfc00f807, 0,			0, I1},
 /* there is no csdhi */
 
 {"cseal",  "+w,+b,+v",	0x48400000, 0xffe0003f, 0,			0, I1},
@@ -4559,12 +4562,44 @@ print_insn_args (const char *d,
                         delta |= ~0x3ffff;
                     }
                     break;
-                case '3':
+                case '3': /* CHERI 11 bit, no shift */
                     d++;
                     delta = ((l >> OP_SH_CDELTA) & OP_MASK_CDELTA);
                     if (delta > (OP_MASK_CDELTA >> 1)) {
                         delta -= (OP_MASK_CDELTA + 1);
                     }
+                    break;
+                case '4': /* CHERI 11 bit, shift 1 */
+                    d++;
+                    delta = ((l >> OP_SH_CDELTA) & OP_MASK_CDELTA);
+                    if (delta > (OP_MASK_CDELTA >> 1)) {
+                        delta -= (OP_MASK_CDELTA + 1);
+                    }
+                    delta = delta << 1;
+                    break;
+                case '5': /* CHERI 11 bit, shift 2 */
+                    d++;
+                    delta = ((l >> OP_SH_CDELTA) & OP_MASK_CDELTA);
+                    if (delta > (OP_MASK_CDELTA >> 1)) {
+                        delta -= (OP_MASK_CDELTA + 1);
+                    }
+                    delta = delta << 2;
+                    break;
+                case '6': /* CHERI 11 bit, shift 3 */
+                    d++;
+                    delta = ((l >> OP_SH_CDELTA) & OP_MASK_CDELTA);
+                    if (delta > (OP_MASK_CDELTA >> 1)) {
+                        delta -= (OP_MASK_CDELTA + 1);
+                    }
+                    delta = delta << 3;
+                    break;
+                case '7': /* CHERI 11 bit, shift 4 */
+                    d++;
+                    delta = ((l >> OP_SH_CDELTA) & OP_MASK_CDELTA);
+                    if (delta > (OP_MASK_CDELTA >> 1)) {
+                        delta -= (OP_MASK_CDELTA + 1);
+                    }
+                    delta = delta << 4;
                     break;
                 default:
                     delta = (l >> OP_SH_DELTA_R6) & OP_MASK_DELTA_R6;
@@ -4670,7 +4705,28 @@ print_insn_args (const char *d,
             delta = ((l >> OP_SH_CDELTA2) & OP_MASK_CDELTA2);
             if (delta > (OP_MASK_CDELTA2 >> 1))
                 delta -= (OP_MASK_CDELTA2 + 1);
-            (*info->fprintf_func) (info->stream, "%d", delta);
+            (*info->fprintf_func) (info->stream, "%d", delta << 0);
+            break;
+
+        case 'P':
+            delta = ((l >> OP_SH_CDELTA2) & OP_MASK_CDELTA2);
+            if (delta > (OP_MASK_CDELTA2 >> 1))
+                delta -= (OP_MASK_CDELTA2 + 1);
+            (*info->fprintf_func) (info->stream, "%d", delta << 1);
+            break;
+
+        case 'Q':
+            delta = ((l >> OP_SH_CDELTA2) & OP_MASK_CDELTA2);
+            if (delta > (OP_MASK_CDELTA2 >> 1))
+                delta -= (OP_MASK_CDELTA2 + 1);
+            (*info->fprintf_func) (info->stream, "%d", delta << 2);
+            break;
+
+        case 'R':
+            delta = ((l >> OP_SH_CDELTA2) & OP_MASK_CDELTA2);
+            if (delta > (OP_MASK_CDELTA2 >> 1))
+                delta -= (OP_MASK_CDELTA2 + 1);
+            (*info->fprintf_func) (info->stream, "%d", delta << 3);
             break;
 
 	    default:
