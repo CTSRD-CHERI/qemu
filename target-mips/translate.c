@@ -2047,7 +2047,19 @@ static inline void generate_cgetcause(int32_t rd)
 static inline void generate_cgetpcc(int32_t cd)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
+
     gen_helper_cgetpcc(cpu_env, tcd);
+    tcg_temp_free_i32(tcd);
+}
+
+static inline void generate_cgetpccsetoffset(int32_t cd, int32_t rs)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
+
+    gen_load_gpr(t0, rs);
+    gen_helper_cgetpccsetoffset(cpu_env, tcd, t0);
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
 }
 
@@ -10735,7 +10747,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 break;
             case OPC_CGETPCCSETOFF_NI: /* 0x07 << 6 */
                 check_cop2x(ctx);
-                generate_cgetpcc(r11);
+                generate_cgetpccsetoffset(r16, r11);
                 opn = "cgetpccsetoffset";
                 break;
             case OPC_CCHECKPERM_NI:    /* 0x08 << 6 */

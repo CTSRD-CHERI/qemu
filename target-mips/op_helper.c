@@ -2173,6 +2173,32 @@ void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
     }
 }
 
+void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
+{
+    cap_register_t *pccp = &env->active_tc.PCC;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    uint32_t perms = pccp->cr_perms;
+    /*
+     * CGetPCCSetOffset: Get PCC with new offset
+     * See Chapter 5 in CHERI Architecture manual.
+     */
+    if (creg_inaccessible(perms, cd)) {
+#ifdef NOTYET
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+#else
+        do_raise_c2_exception_v(env, cd);
+#endif /* NOTYET */
+    } else if (!is_representable(is_cap_sealed(pccp), pccp->cr_base,
+                pccp->cr_length, rs)) {
+        (void)null_capability(cdp);
+        cdp->cr_offset = pccp->cr_base + rs;
+    } else {
+        *cdp = *pccp;
+        cdp->cr_offset = rs;
+        /* Note that the offset(cursor) is updated by ccheck_pcc */
+    }
+}
+
 target_ulong helper_cgetperm(CPUMIPSState *env, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
