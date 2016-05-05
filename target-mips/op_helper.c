@@ -1841,9 +1841,9 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 #endif /* NOTYET */
     } else if (creg_inaccessible(perms, cb)) {
 #ifdef NOTYET
-        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
 #else
-        do_raise_c2_exception_v(env, cd);
+        do_raise_c2_exception_v(env, cb);
 #endif /* NOTYET */
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
