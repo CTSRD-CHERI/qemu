@@ -2942,7 +2942,7 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset));
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
@@ -3008,7 +3008,7 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset));
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
 
@@ -3087,7 +3087,7 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset));
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
@@ -3185,7 +3185,7 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset));
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
 
