@@ -10779,7 +10779,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 switch(MASK_CAP8(opc)) {
                 case OPC_CGETPCC_NI:    /* 0x00 << 11 */
                     check_cop2x(ctx);
-                    generate_cgetpcc(r11);
+                    generate_cgetpcc(r16);
                     opn = "cgetpcc";
                     break;
                 case OPC_CGETCAUSE_NI:  /* 0x01 << 11 */
