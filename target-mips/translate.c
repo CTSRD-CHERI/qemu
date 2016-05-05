@@ -10802,6 +10802,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                     opn = "c1operand";
                     goto invalid;
                 }
+		break;
 
             default:
                 opn = "c2operand";
