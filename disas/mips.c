@@ -1275,10 +1275,32 @@ const struct mips_opcode mips_builtin_opcodes[] =
 /*
  * CHERI Instructions
  *
- * The CHERI CPU instructions as described in section 4.1 of
+ * The CHERI CPU instructions as described in section 5.1 of
  * "Capability Hardware Enhanced RISC Instructions: CHERI
  * Instruction-Set Architecture."
  */
+
+/* New ISA: two-operand instructions */
+{"cgetperm", "t,+b", 	0x4800003f, 0xffe007ff, 0,			0, I1},
+{"cgettype", "t,+b",	0x4800007f, 0xffe007ff, 0,			0, I1},
+{"cgetbase", "t,+b",	0x480000bf, 0xffe007ff, 0,			0, I1},
+{"cgetlen",  "t,+b",	0x480000ff, 0xffe007ff, 0,			0, I1},
+{"cgettag",  "t,+b",	0x4800013f, 0xffe007ff, 0,			0, I1},
+{"cgetsealed", "t,+b",	0x4800017f, 0xffe007ff, 0,			0, I1},
+{"cgetoffset", "t,+b",	0x49a001bf, 0xffe007ff, 0,			0, I1},
+{"cgetpccsetoffset", "+w,d", 0x480001ff, 0xffe007ff, 0,	                0, I1},
+{"ccheckperm", "+w,m",	0x4800023f, 0xffe007ff, 0,			0, I1},
+{"cchecktype", "+w,+b", 0x4800027f, 0xffe007ff, 0,			0, I1},
+{"cmove", "+w,+b",      0x480002bf, 0xffe007ff, 0,                      0, I1},
+{"ccleartag", "+w,+b",	0x480002ff, 0xffe007ff, 0,			0, I1},
+{"cjalr",  "+w,+b",	    0x4800033f, 0xffe007ff, 0,			0, I1},
+
+/* New ISA: one-operand instructions */
+{"cgetpcc", "+w",	    0x480007ff, 0xffe0ffff, 0,			0, I1},
+{"cgetcause", "t",	    0x48000fff, 0xffe0ffff, 0,			0, I1},
+{"csetcause", "t",	    0x480017ff, 0xffe0ffff, 0,			0, I1},
+{"cjr",    "+w",	    0x48001fff, 0xffe0ffff, 0,			0, I1},
+
 {"cgetperm", "t,+b", 	0x48000000, 0xffe007ff, 0,			0, I1},
 {"cgettype", "t,+b",	0x48000001, 0xffe007ff, 0,			0, I1},
 {"cgetbase", "t,+b",	0x48000002, 0xffe007ff, 0,			0, I1},
@@ -1286,7 +1308,8 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cgetcause", "t",	0x48000004, 0xffe0ffff, 0,			0, I1},
 {"cgettag",  "t,+b",	0x48000005, 0xffe007ff, 0,			0, I1},
 {"cgetsealed", "t,+b",	0x48000006, 0xffe007ff, 0,			0, I1},
-{"cgetpcc", "+b",	0x48000007, 0xffff07ff, 0,			0, I1},
+{"csub", "t,+b,+v",	0x4800000a, 0xffe0003f, 0, 			0, I1},
+/* {"cgetpcc", "+b",	0x48000007, 0xffff07ff, 0,			0, I1}, old isa */
 {"cgetoffset", "t,+b",	0x49a00002, 0xffe007ff, 0,			0, I1},
 {"candperm", "+w,+b,m", 0x48800000, 0xffe0003f, 0,			0, I1},
 {"csettype", "+w,+b,m", 0x48800001, 0xffe0003f, 0,			0, I1},
