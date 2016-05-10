@@ -2209,6 +2209,19 @@ static inline void generate_csetboundsexact(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_csub(int32_t rd, int32_t cb, int32_t ct)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_csub(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tct);
+    tcg_temp_free_i32(tcb);
+}
 
 static inline void generate_csetcause(int32_t rd)
 {
@@ -10707,6 +10720,12 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_csetboundsexact(r16, r11, r6);
             opn = "csetboundsexact";
             break;
+        case OPC_CSUB:              /* 0x0a */
+            check_cop2x(ctx);
+            generate_csub(r16, r11, r6);
+            opn = "csub";
+            break;
+
         /* Two-operand cap instructions. */
         case OPC_C2OPERAND:         /* 0x3f */
             switch(MASK_CAP7(opc)) {
@@ -10810,7 +10829,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             }
             break;
 
-        case OPC_CSUB:              /* 0x0a */
         default:
             opn = "cget";
             goto invalid;

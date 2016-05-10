@@ -2558,6 +2558,34 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_csub(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    /*
+     * CSub: Subtract Capabilities
+     */
+    if (creg_inaccessible(perms, cb)) {
+#ifdef NOTYET
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+#else
+        do_raise_c2_exception_v(env, cb);
+#endif /* NOTYET */
+        return (target_ulong)0;
+    } else if (creg_inaccessible(perms, ct)) {
+#ifdef NOTYET
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
+#else
+        do_raise_c2_exception_v(env, ct);
+#endif /* NOTYET */
+        return (target_ulong)0;
+    } else {
+        return (target_ulong)(cbp->cr_base + cbp->cr_offset -
+                ctp->cr_base - ctp->cr_offset);
+    }
+}
+
 void helper_csetcause(CPUMIPSState *env, target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
