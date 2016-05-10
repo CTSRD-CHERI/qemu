@@ -4308,6 +4308,15 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
     if (rt == 0) {
         /* If no destination, treat it as a NOP. */
         MIPS_DEBUG("NOP");
+        if (unlikely(opc == OPC_ORI && rs == 0 &&
+                    !qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+            /* With 'li $0, 0xbeef' turn on instruction trace logging. */
+            if ((uint16_t)imm == 0xbeef)
+                qemu_set_log(qemu_loglevel | CPU_LOG_INSTR);
+            /* With 'li $0, 0xdead' turn off instruction trace logging. */
+            if ((uint16_t)imm == 0xdead)
+                qemu_set_log(qemu_loglevel & ~CPU_LOG_INSTR);
+        }
         return;
     }
     uimm = (uint16_t)imm;
