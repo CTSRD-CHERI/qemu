@@ -212,15 +212,9 @@ DEF_HELPER_5(cload, tl, env, i32, tl, i32, i32)
 DEF_HELPER_5(cstore, tl, env, i32, tl, i32, i32)
 
 DEF_HELPER_3(cloadlinked, tl, env, i32, i32)
-DEF_HELPER_3(llbs, tl, env, tl, int)
-DEF_HELPER_3(llbu, tl, env, tl, int)
-DEF_HELPER_3(llhs, tl, env, tl, int)
-DEF_HELPER_3(llhu, tl, env, tl, int)
-DEF_HELPER_3(llwu, tl, env, tl, int)
 
 DEF_HELPER_3(cstorecond, tl, env, i32, i32)
-DEF_HELPER_4(scb, tl, env, tl, tl, int)
-DEF_HELPER_4(sch, tl, env, tl, tl, int)
+
 
 DEF_HELPER_5(clc_addr, tl, env, i32, i32, tl, i32)
 DEF_HELPER_3(cllc_addr, tl, env, i32, i32)

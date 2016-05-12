@@ -188,13 +188,6 @@ HELPER_LD(lw, ldl, int32_t)
 #if defined(TARGET_MIPS64)
 HELPER_LD(ld, ldq, int64_t)
 #endif
-#ifdef TARGET_CHERI
-HELPER_LD(lbs, ldsb, int8_t)
-HELPER_LD(lbu, ldub, uint8_t)
-HELPER_LD(lhs, ldsw, int16_t)
-HELPER_LD(lhu, lduw, uint16_t)
-HELPER_LD(lwu, ldl, uint32_t)
-#endif /* TARGET_CHERI */
 #undef HELPER_LD
 
 #if defined(CONFIG_USER_ONLY)
@@ -223,9 +216,6 @@ HELPER_ST(sw, stl, uint32_t)
 #if defined(TARGET_MIPS64)
 HELPER_ST(sd, stq, uint64_t)
 #endif
-#ifdef TARGET_CHERI
-HELPER_ST(sh, stw, uint16_t)
-#endif /* TARGET_CHERI */
 #undef HELPER_ST
 
 target_ulong helper_clo (target_ulong arg1)
@@ -424,13 +414,6 @@ HELPER_LD_ATOMIC(ll, lw, 0x3)
 #ifdef TARGET_MIPS64
 HELPER_LD_ATOMIC(lld, ld, 0x7)
 #endif
-#ifdef TARGET_CHERI
-HELPER_LD_ATOMIC(llbs, lbs, 0x0)
-HELPER_LD_ATOMIC(llbu, lbu, 0x0)
-HELPER_LD_ATOMIC(llhs, lhs, 0x1)
-HELPER_LD_ATOMIC(llhu, lhu, 0x1)
-HELPER_LD_ATOMIC(llwu, lwu, 0x3)
-#endif /* TARGET_CHERI */
 #undef HELPER_LD_ATOMIC
 
 #define HELPER_ST_ATOMIC(name, ld_insn, st_insn, almask)                      \
@@ -456,10 +439,6 @@ HELPER_ST_ATOMIC(sc, lw, sw, 0x3)
 #ifdef TARGET_MIPS64
 HELPER_ST_ATOMIC(scd, ld, sd, 0x7)
 #endif
-#ifdef TARGET_CHERI
-HELPER_ST_ATOMIC(scb, lbs, sb, 0x0)
-HELPER_ST_ATOMIC(sch, lhs, sh, 0x1)
-#endif /* TARGET_CHERI */
 #undef HELPER_ST_ATOMIC
 #endif
 
@@ -3069,6 +3048,7 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
     cap_register_t *cbp = &env->active_tc.C[cb];
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
 
+    env->linkedflag = 0;
     if (creg_inaccessible(perms, cb)) {
 #ifdef NOTYET
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
@@ -3091,7 +3071,6 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
         env->linkedflag = 1;
         return addr;
     }
-    env->linkedflag = 0;
     return 0;
 }
 
@@ -3238,6 +3217,7 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
     // uint32_t tag;
 
+    env->linkedflag = 0;
     if (creg_inaccessible(perms, cd)) {
 #ifdef NOTYET
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
@@ -5279,6 +5259,12 @@ static inline void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
 void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
         target_ulong value)
 {
+    if (opc == OPC_CLLD || opc == OPC_CLLWU || opc == OPC_CLLW ||
+        opc == OPC_CLLHU || opc == OPC_CLLH || opc == OPC_CLLBU ||
+        opc == OPC_CLLB) {
+        env->lladdr = do_translate_address(env, addr, 0);
+        env->llval = value;
+    }
     if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR) |
                  qemu_loglevel_mask(CPU_LOG_CVTRACE))))
         return;

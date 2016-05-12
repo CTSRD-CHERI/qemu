@@ -2616,25 +2616,20 @@ static inline void generate_cld(DisasContext *ctx, int32_t rd, int32_t cb,
     tcg_temp_free_i32(tcb);
 }
 
-static inline void op_ld_llbs(TCGv, TCGv, DisasContext *);
-static inline void op_ld_llbu(TCGv, TCGv, DisasContext *);
-static inline void op_ld_llhs(TCGv, TCGv, DisasContext *);
-static inline void op_ld_llhu(TCGv, TCGv, DisasContext *);
-static inline void op_ld_ll(TCGv, TCGv, DisasContext *);
-static inline void op_ld_llwu(TCGv, TCGv, DisasContext *);
-static inline void op_ld_lld(TCGv, TCGv, DisasContext *);
-
 static inline void generate_cllb(DisasContext *ctx, int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
+    TCGv taddr = tcg_temp_new();
     TCGv_i32 tlen = tcg_const_i32(1);
 
-    gen_helper_cloadlinked(t0, cpu_env, tcb, tlen);
-    op_ld_llbu(t0, t0, ctx);
+    gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx, MO_UB);
+    generate_dump_load(OPC_CLLB, taddr, t0);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
+    tcg_temp_free(taddr);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
@@ -2643,13 +2638,16 @@ static inline void generate_cllbu(DisasContext *ctx, int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
+    TCGv taddr = tcg_temp_new();
     TCGv_i32 tlen = tcg_const_i32(1);
 
-    gen_helper_cloadlinked(t0, cpu_env, tcb, tlen);
-    op_ld_llbs(t0, t0, ctx);
+    gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx, MO_SB);
+    generate_dump_load(OPC_CLLBU, taddr, t0);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
+    tcg_temp_free(taddr);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
@@ -2658,13 +2656,17 @@ static inline void generate_cllh(DisasContext *ctx, int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
+    TCGv taddr = tcg_temp_new();
     TCGv_i32 tlen = tcg_const_i32(2);
 
-    gen_helper_cloadlinked(t0, cpu_env, tcb, tlen);
-    op_ld_llhu(t0, t0, ctx);
+    gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx, MO_TEUW |
+        ctx->default_tcg_memop_mask);
+    generate_dump_load(OPC_CLLH, taddr, t0);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
+    tcg_temp_free(taddr);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
@@ -2673,13 +2675,17 @@ static inline void generate_cllhu(DisasContext *ctx, int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
+    TCGv taddr = tcg_temp_new();
     TCGv_i32 tlen = tcg_const_i32(2);
 
-    gen_helper_cloadlinked(t0, cpu_env, tcb, tlen);
-    op_ld_llhs(t0, t0, ctx);
+    gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx, MO_TESW |
+        ctx->default_tcg_memop_mask);
+    generate_dump_load(OPC_CLLHU, taddr, t0);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
+    tcg_temp_free(taddr);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
@@ -2688,13 +2694,17 @@ static inline void generate_cllw(DisasContext *ctx, int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
+    TCGv taddr = tcg_temp_new();
     TCGv_i32 tlen = tcg_const_i32(4);
 
-    gen_helper_cloadlinked(t0, cpu_env, tcb, tlen);
-    op_ld_llwu(t0, t0, ctx);
+    gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx, MO_TEUL |
+        ctx->default_tcg_memop_mask);
+    generate_dump_load(OPC_CLLW, taddr, t0);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
+    tcg_temp_free(taddr);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
@@ -2703,13 +2713,17 @@ static inline void generate_cllwu(DisasContext *ctx, int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
+    TCGv taddr = tcg_temp_new();
     TCGv_i32 tlen = tcg_const_i32(4);
 
-    gen_helper_cloadlinked(t0, cpu_env, tcb, tlen);
-    op_ld_ll(t0, t0, ctx);
+    gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx, MO_TESL |
+        ctx->default_tcg_memop_mask);
+    generate_dump_load(OPC_CLLWU, taddr, t0);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
+    tcg_temp_free(taddr);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
@@ -2718,227 +2732,268 @@ static inline void generate_clld(DisasContext *ctx, int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
+    TCGv taddr = tcg_temp_new();
     TCGv_i32 tlen = tcg_const_i32(8);
 
-    gen_helper_cloadlinked(t0, cpu_env, tcb, tlen);
-    op_ld_lld(t0, t0, ctx);
+    gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+        ctx->default_tcg_memop_mask);
+    generate_dump_load(OPC_CLLD, taddr, t0);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
+    tcg_temp_free(taddr);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
 
-static inline void op_st_scb(TCGv, TCGv, int32_t, DisasContext *);
-static inline void op_st_sch(TCGv, TCGv, int32_t, DisasContext *);
-static inline void op_st_sc(TCGv, TCGv, int32_t, DisasContext *);
-static inline void op_st_scd(TCGv, TCGv, int32_t, DisasContext *);
+static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
+                TCGv value);
+
+static inline void generate_cstorecond(TCGv taddr, int32_t cb, int32_t len)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tlen = tcg_const_i32(len);
+
+    gen_helper_cstorecond(taddr, cpu_env, tcb, tlen);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tlen);
+}
 
 static inline void generate_cscb(DisasContext *ctx, int32_t rs, int32_t cb,
         int32_t rd)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv taddr = tcg_temp_new();
+    const int size = 1;
+    TCGv taddr = tcg_temp_local_new();
     TCGv t0 = tcg_temp_new();
-    TCGv t1 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(1);
-    TCGv_i32 topc = tcg_const_i32(OPC_CSCB);
+    TCGv tlf = tcg_temp_local_new();
+    TCGLabel *l1 = gen_new_label();
 
-    gen_helper_cstorecond(taddr, cpu_env, tcb, tlen);
+    generate_cstorecond(taddr, cb, size);
+
+    /* Get linkedFlag. */
+    tcg_gen_ld_tl(tlf, cpu_env, offsetof(CPUMIPSState, linkedflag));
+
+    /* If linkedFlag is zero then don't store rs, invalidate tag */
+    tcg_gen_brcondi_tl(TCG_COND_EQ, tlf, 0, l1);
+
+    /* Write rs to memory. */
     gen_load_gpr(t0, rs);
-    op_st_scb(t0, taddr, rd, ctx);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_8);
 
-    tcg_gen_ld_tl(t1, cpu_env, offsetof(CPUMIPSState, linkedflag));
-    gen_store_gpr(t1, rd);
+    /* Invalidate tag and log write to memory, if enabled. */
+    generate_cinvalidate_tag(taddr, size, OPC_CSCB, t0);
 
-    gen_helper_cinvalidate_tag(cpu_env, taddr, tlen, topc, t0);
-
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
     tcg_temp_free(taddr);
     tcg_temp_free(t0);
-    tcg_temp_free(t1);
-    tcg_temp_free_i32(tcb);
+
+    gen_set_label(l1);
+    /* Store linkedflag in rd. */
+    gen_store_gpr(tlf, rd);
+    tcg_temp_free(tlf);
 }
 
 static inline void generate_csch(DisasContext *ctx, int32_t rs, int32_t cb,
         int32_t rd)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv taddr = tcg_temp_new();
+    const int size = 2;
+    TCGv taddr = tcg_temp_local_new();
     TCGv t0 = tcg_temp_new();
-    TCGv t1 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(2);
-    TCGv_i32 topc = tcg_const_i32(OPC_CSCH);
+    TCGv tlf = tcg_temp_local_new();
+    TCGLabel *l1 = gen_new_label();
 
-    gen_helper_cstorecond(taddr, cpu_env, tcb, tlen);
+    generate_cstorecond(taddr, cb, size);
+
+    /* Get linkedFlag. */
+    tcg_gen_ld_tl(tlf, cpu_env, offsetof(CPUMIPSState, linkedflag));
+
+    /* If linkedFlag is zero then don't store rs, invalidate tag */
+    tcg_gen_brcondi_tl(TCG_COND_EQ, tlf, 0, l1);
+
+    /* Write rs to memory. */
     gen_load_gpr(t0, rs);
-    op_st_sch(t0, taddr, rd, ctx);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEUW |
+            ctx->default_tcg_memop_mask);
 
-    tcg_gen_ld_tl(t1, cpu_env, offsetof(CPUMIPSState, linkedflag));
-    gen_store_gpr(t1, rd);
+    /* Invalidate tag and log write, if enabled. */
+    generate_cinvalidate_tag(taddr, size, OPC_CSCH, t0);
 
-    gen_helper_cinvalidate_tag(cpu_env, taddr, tlen, topc, t0);
-
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
     tcg_temp_free(taddr);
     tcg_temp_free(t0);
-    tcg_temp_free(t1);
-    tcg_temp_free_i32(tcb);
+
+    gen_set_label(l1);
+    /* Store linkedflag in rd. */
+    gen_store_gpr(tlf, rd);
+    tcg_temp_free(tlf);
 }
 
 static inline void generate_cscw(DisasContext *ctx, int32_t rs, int32_t cb,
         int32_t rd)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv taddr = tcg_temp_new();
+    const int size = 4;
+    TCGv taddr = tcg_temp_local_new();
     TCGv t0 = tcg_temp_new();
-    TCGv t1 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(4);
-    TCGv_i32 topc = tcg_const_i32(OPC_CSCW);
+    TCGv tlf = tcg_temp_local_new();
+    TCGLabel *l1 = gen_new_label();
 
-    gen_helper_cstorecond(taddr, cpu_env, tcb, tlen);
+    generate_cstorecond(taddr, cb, size);
+
+    /* Get linkedFlag. */
+    tcg_gen_ld_tl(tlf, cpu_env, offsetof(CPUMIPSState, linkedflag));
+
+    /* If linkedFlag is zero then don't store rs, invalidate tag */
+    tcg_gen_brcondi_tl(TCG_COND_EQ, tlf, 0, l1);
+
+    /* Write rs to memory. */
     gen_load_gpr(t0, rs);
-    op_st_sc(t0, taddr, rd, ctx);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEUL |
+            ctx->default_tcg_memop_mask);
 
-    tcg_gen_ld_tl(t1, cpu_env, offsetof(CPUMIPSState, linkedflag));
-    gen_store_gpr(t1, rd);
+    /* Invalidate tag and log write, if enabled. */
+    generate_cinvalidate_tag(taddr, size, OPC_CSCW, t0);
 
-    gen_helper_cinvalidate_tag(cpu_env, taddr, tlen, topc, t0);
-
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
     tcg_temp_free(taddr);
     tcg_temp_free(t0);
-    tcg_temp_free(t1);
-    tcg_temp_free_i32(tcb);
+
+    gen_set_label(l1);
+    /* Store linkedflag in rd. */
+    gen_store_gpr(tlf, rd);
+    tcg_temp_free(tlf);
 }
 
 static inline void generate_cscd(DisasContext *ctx, int32_t rs, int32_t cb,
         int32_t rd)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv taddr = tcg_temp_new();
+    const int size = 8;
+    TCGv taddr = tcg_temp_local_new();
     TCGv t0 = tcg_temp_new();
-    TCGv t1 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(8);
-    TCGv_i32 topc = tcg_const_i32(OPC_CSCD);
+    TCGv tlf = tcg_temp_local_new();
+    TCGLabel *l1 = gen_new_label();
 
-    gen_helper_cstorecond(taddr, cpu_env, tcb, tlen);
+    generate_cstorecond(taddr, cb, size);
+
+    /* Get linkedFlag. */
+    tcg_gen_ld_tl(tlf, cpu_env, offsetof(CPUMIPSState, linkedflag));
+
+    /* If linkedFlag is zero then don't store rs, invalidate tag */
+    tcg_gen_brcondi_tl(TCG_COND_EQ, tlf, 0, l1);
+
+    /* Write rs to memory. */
     gen_load_gpr(t0, rs);
-    op_st_scd(t0, taddr, rd, ctx);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
 
-    tcg_gen_ld_tl(t1, cpu_env, offsetof(CPUMIPSState, linkedflag));
-    gen_store_gpr(t1, rd);
+    /* Invalidate tag and log write, if enabled. */
+    generate_cinvalidate_tag(taddr, size, OPC_CSCD, t0);
 
-    gen_helper_cinvalidate_tag(cpu_env, taddr, tlen, topc, t0);
-
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
     tcg_temp_free(taddr);
     tcg_temp_free(t0);
-    tcg_temp_free(t1);
+
+    gen_set_label(l1);
+    /* Store linkedflag in rd. */
+    gen_store_gpr(tlf, rd);
+    tcg_temp_free(tlf);
+}
+
+static inline void generate_cstore(TCGv taddr, TCGv trt, int32_t cb,
+        int32_t offset, const int size)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset) * size);
+    TCGv_i32 tlen = tcg_const_i32(size);
+
+    gen_helper_cstore(taddr, cpu_env, tcb, trt, toffset, tlen);
+
+    tcg_temp_free_i32(tlen);
+    tcg_temp_free_i32(toffset);
     tcg_temp_free_i32(tcb);
 }
 
 static inline void generate_csb(DisasContext *ctx, int32_t rs, int32_t cb,
         int32_t rt, int32_t offset)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset));
+    const int size = 1;
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(1);
-    TCGv_i32 topc = tcg_const_i32(OPC_CSB);
 
     gen_load_gpr(t0, rt);
-    gen_helper_cstore(taddr, cpu_env, tcb, t0, toffset, tlen);
+
+    generate_cstore(taddr, t0, cb, offset, size);
+
     gen_load_gpr(t0, rs);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_8);
-    gen_helper_cinvalidate_tag(cpu_env, taddr, tlen, topc, t0);
 
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
+    /* Invalidate tag and log write, if enabled. */
+    generate_cinvalidate_tag(taddr, size, OPC_CSB, t0);
+
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
-    tcg_temp_free_i32(toffset);
-    tcg_temp_free_i32(tcb);
 }
 
 static inline void generate_csh(DisasContext *ctx, int32_t rs, int32_t cb,
         int32_t rt, int32_t offset)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset) * 2);
+    const int size = 2;
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(2);
-    TCGv_i32 topc = tcg_const_i32(OPC_CSB);
 
     gen_load_gpr(t0, rt);
-    gen_helper_cstore(taddr, cpu_env, tcb, t0, toffset, tlen);
+
+    generate_cstore(taddr, t0, cb, offset, size);
+
     gen_load_gpr(t0, rs);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEUW |
             ctx->default_tcg_memop_mask);
-    gen_helper_cinvalidate_tag(cpu_env, taddr, tlen, topc, t0);
 
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
+    /* Invalidate tag and log write, if enabled. */
+    generate_cinvalidate_tag(taddr, size, OPC_CSH, t0);
+
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
-    tcg_temp_free_i32(toffset);
-    tcg_temp_free_i32(tcb);
 }
 
 static inline void generate_csw(DisasContext *ctx, int32_t rs, int32_t cb,
         int32_t rt, int32_t offset)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset) * 4);
+    const int size = 4;
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(4);
-    TCGv_i32 topc = tcg_const_i32(OPC_CSW);
 
     gen_load_gpr(t0, rt);
-    gen_helper_cstore(taddr, cpu_env, tcb, t0, toffset, tlen);
+
+    generate_cstore(taddr, t0, cb, offset, size);
+
     gen_load_gpr(t0, rs);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEUL |
             ctx->default_tcg_memop_mask);
-    gen_helper_cinvalidate_tag(cpu_env, taddr, tlen, topc, t0);
 
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
+    /* Invalidate tag and log write, if enabled. */
+    generate_cinvalidate_tag(taddr, size, OPC_CSW, t0);
+
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
-    tcg_temp_free_i32(toffset);
-    tcg_temp_free_i32(tcb);
 }
 
 static inline void generate_csd(DisasContext *ctx, int32_t rs, int32_t cb,
         int32_t rt, int32_t offset)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset) * 8);
+    const int size = 8;
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(8);
-    TCGv_i32 topc = tcg_const_i32(OPC_CSD);
 
     gen_load_gpr(t0, rt);
-    gen_helper_cstore(taddr, cpu_env, tcb, t0, toffset, tlen);
+
+    generate_cstore(taddr, t0, cb, offset, size);
+
     gen_load_gpr(t0, rs);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
-    gen_helper_cinvalidate_tag(cpu_env, taddr, tlen, topc, t0);
 
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
+    /* Invalidate tag and log write, if enabled. */
+    generate_cinvalidate_tag(taddr, size, OPC_CSD, t0);
+
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
-    tcg_temp_free_i32(toffset);
-    tcg_temp_free_i32(tcb);
 }
 
 static inline int32_t clc_sign_extend(int32_t x)
@@ -3706,14 +3761,6 @@ OP_LD_ATOMIC(ll,ld32s);
 #if defined(TARGET_MIPS64)
 OP_LD_ATOMIC(lld,ld64);
 #endif
-#ifdef TARGET_CHERI
-OP_LD_ATOMIC(llbs,ld8s);
-OP_LD_ATOMIC(llbu,ld8u);
-OP_LD_ATOMIC(llhs,ld16s);
-OP_LD_ATOMIC(llhu,ld16u);
-//OP_LD_ATOMIC(llws,ld32s);
-OP_LD_ATOMIC(llwu,ld32u);
-#endif /* TARGET_CHERI */
 #undef OP_LD_ATOMIC
 
 #ifdef CONFIG_USER_ONLY
@@ -3754,10 +3801,6 @@ OP_ST_ATOMIC(sc,st32,ld32s,0x3);
 #if defined(TARGET_MIPS64)
 OP_ST_ATOMIC(scd,st64,ld64,0x7);
 #endif
-#ifdef TARGET_CHERI
-OP_ST_ATOMIC(scb,st8,ld8,0x0);
-OP_ST_ATOMIC(sch,st16,ld16,0x1);
-#endif /* TARGET_CHERI */
 #undef OP_ST_ATOMIC
 
 static void gen_base_offset_addr (DisasContext *ctx, TCGv addr,
