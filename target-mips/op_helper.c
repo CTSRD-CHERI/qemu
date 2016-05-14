@@ -3368,6 +3368,20 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     return (target_ulong)addr;
 }
 
+/* Start instruction trace logging. */
+void helper_instr_start(CPUMIPSState *env)
+{
+
+    qemu_set_log(qemu_loglevel | CPU_LOG_INSTR);
+}
+
+/* Stop instruction trace logging. */
+void helper_instr_stop(CPUMIPSState *env)
+{
+
+    qemu_set_log(qemu_loglevel & ~CPU_LOG_INSTR);
+}
+
 #ifdef CHERI_MAGIC128
 /*
  * Print capability load from memory to log file.
