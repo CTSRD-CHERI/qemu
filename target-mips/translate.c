@@ -1875,7 +1875,18 @@ generate_dump_load(int op, TCGv addr, TCGv value)
     gen_helper_dump_load(cpu_env, top, addr, value);
     tcg_temp_free_i32(top);
 }
-#define GEN_CAP_DUMP_LOAD(op, addr, value)  generate_dump_load(op, addr, value)
+#define GEN_CAP_DUMP_LOAD(op, addr, value) \
+    generate_dump_load(op, addr, value)
+
+static inline void
+generate_dump_load32(int op, TCGv addr, TCGv_i32 value)
+{
+    TCGv_i32 top = tcg_const_i32(op);
+    gen_helper_dump_load32(cpu_env, top, addr, value);
+    tcg_temp_free_i32(top);
+}
+#define GEN_CAP_DUMP_LOAD32(op, addr, value) \
+    generate_dump_load32(op, addr, value)
 
 /* Verify that the processor is running with CHERI instructions enabled. */
 static inline void check_cop2x(DisasContext *ctx)
@@ -3407,8 +3418,22 @@ static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
     tcg_temp_free_i32(tlen);
 }
 
+static inline void generate_cinvalidate_tag32(TCGv addr, int32_t len,
+        int32_t opc, TCGv_i32 value)
+{
+    TCGv_i32 tlen = tcg_const_i32(len);
+    TCGv_i32 topc = tcg_const_i32(opc);
+
+    gen_helper_cinvalidate_tag32(cpu_env, addr, tlen, topc, value);
+    tcg_temp_free_i32(topc);
+    tcg_temp_free_i32(tlen);
+}
+
 #define GEN_CAP_INVADIATE_TAG(addr, len, opc, value) \
     generate_cinvalidate_tag(addr, len, opc, value)
+
+#define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value) \
+    generate_cinvalidate_tag32(addr, len, opc, value)
 
 #else /* ! TARGET_CHERI */
 
@@ -3416,7 +3441,9 @@ static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
 #define GEN_CAP_CHECK_STORE(addr, offset, len)
 #define GEN_CAP_CHECK_LOAD(save, addr, offset, len)
 #define GEN_CAP_INVADIATE_TAG(addr, len, opc, value)
+#define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value)
 #define GEN_CAP_DUMP_LOAD(op, addr, value)
+#define GEN_CAP_DUMP_LOAD32(op, addr, value)
 
 #endif /* ! TARGET_CHERI */
 
@@ -4180,6 +4207,9 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
 {
     const char *opn = "flt_ldst";
     TCGv t0 = tcg_temp_new();
+#ifdef TARGET_CHERI
+    TCGv t1 = tcg_temp_new();
+#endif /* TARGET_CHERI */
 
     gen_base_offset_addr(ctx, t0, base, offset);
     /* Don't do NOP if destination is zero: we must perform the actual
@@ -4188,8 +4218,10 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
     case OPC_LWC1:
         {
             TCGv_i32 fp0 = tcg_temp_new_i32();
+            GEN_CAP_CHECK_LOAD(t1, t0, t0, 4);
             tcg_gen_qemu_ld_i32(fp0, t0, ctx->mem_idx, MO_TESL |
                                 ctx->default_tcg_memop_mask);
+            GEN_CAP_DUMP_LOAD32(opc, t1, fp0);
             gen_store_fpr32(ctx, fp0, ft);
             tcg_temp_free_i32(fp0);
         }
@@ -4198,9 +4230,11 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
     case OPC_SWC1:
         {
             TCGv_i32 fp0 = tcg_temp_new_i32();
+            GEN_CAP_CHECK_STORE(t0, t0, 4);
             gen_load_fpr32(ctx, fp0, ft);
             tcg_gen_qemu_st_i32(fp0, t0, ctx->mem_idx, MO_TEUL |
                                 ctx->default_tcg_memop_mask);
+            GEN_CAP_INVADIATE_TAG32(t0, 4, opc, fp0);
             tcg_temp_free_i32(fp0);
         }
         opn = "swc1";
@@ -4208,8 +4242,10 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
     case OPC_LDC1:
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
+            GEN_CAP_CHECK_LOAD(t1, t0, t0, 8);
             tcg_gen_qemu_ld_i64(fp0, t0, ctx->mem_idx, MO_TEQ |
                                 ctx->default_tcg_memop_mask);
+            GEN_CAP_DUMP_LOAD(opc, t1, fp0);
             gen_store_fpr64(ctx, fp0, ft);
             tcg_temp_free_i64(fp0);
         }
@@ -4218,9 +4254,11 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
     case OPC_SDC1:
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
+            GEN_CAP_CHECK_STORE(t0, t0, 8);
             gen_load_fpr64(ctx, fp0, ft);
             tcg_gen_qemu_st_i64(fp0, t0, ctx->mem_idx, MO_TEQ |
                                 ctx->default_tcg_memop_mask);
+            GEN_CAP_INVADIATE_TAG(t0, 8, opc, fp0);
             tcg_temp_free_i64(fp0);
         }
         opn = "sdc1";
@@ -4234,6 +4272,9 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
     MIPS_DEBUG("%s %s, %d(%s)", opn, fregnames[ft], offset, regnames[base]);
  out:
     tcg_temp_free(t0);
+#ifdef TARGET_CHERI
+    tcg_temp_free(t1);
+#endif /* TARGET_CHERI */
 }
 
 static void gen_cop1_ldst(DisasContext *ctx, uint32_t op, int rt,
@@ -12852,6 +12893,9 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
     const char *opn = "extended float load/store";
     int store = 0;
     TCGv t0 = tcg_temp_new();
+#ifdef TARGET_CHERI
+    TCGv t1 = tcg_temp_new();
+#endif /* TARGET_CHERI */
 
     if (base == 0) {
         gen_load_gpr(t0, index);
@@ -12868,8 +12912,10 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
         {
             TCGv_i32 fp0 = tcg_temp_new_i32();
 
+            GEN_CAP_CHECK_LOAD(t1, t0, t0, 4);
             tcg_gen_qemu_ld_tl(t0, t0, ctx->mem_idx, MO_TESL);
             tcg_gen_trunc_tl_i32(fp0, t0);
+            GEN_CAP_DUMP_LOAD32(opc, t1, fp0);
             gen_store_fpr32(ctx, fp0, fd);
             tcg_temp_free_i32(fp0);
         }
@@ -12880,7 +12926,10 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
         check_cp1_registers(ctx, fd);
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
+
+            GEN_CAP_CHECK_LOAD(t1, t0, t0, 8);
             tcg_gen_qemu_ld_i64(fp0, t0, ctx->mem_idx, MO_TEQ);
+            GEN_CAP_DUMP_LOAD(opc, t1, fp0);
             gen_store_fpr64(ctx, fp0, fd);
             tcg_temp_free_i64(fp0);
         }
@@ -12892,7 +12941,9 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
 
+            GEN_CAP_CHECK_LOAD(t1, t0, t0, 8);
             tcg_gen_qemu_ld_i64(fp0, t0, ctx->mem_idx, MO_TEQ);
+            GEN_CAP_DUMP_LOAD(opc, t1, fp0);
             gen_store_fpr64(ctx, fp0, fd);
             tcg_temp_free_i64(fp0);
         }
@@ -12902,8 +12953,11 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
         check_cop1x(ctx);
         {
             TCGv_i32 fp0 = tcg_temp_new_i32();
+
             gen_load_fpr32(ctx, fp0, fs);
+            GEN_CAP_CHECK_STORE(t0, t0, 4);
             tcg_gen_qemu_st_i32(fp0, t0, ctx->mem_idx, MO_TEUL);
+            GEN_CAP_INVADIATE_TAG32(t0, 4, opc, fp0);
             tcg_temp_free_i32(fp0);
         }
         opn = "swxc1";
@@ -12914,8 +12968,11 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
         check_cp1_registers(ctx, fs);
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
+
             gen_load_fpr64(ctx, fp0, fs);
+            GEN_CAP_CHECK_STORE(t0, t0, 8);
             tcg_gen_qemu_st_i64(fp0, t0, ctx->mem_idx, MO_TEQ);
+            GEN_CAP_INVADIATE_TAG(t0, 8, opc, fp0);
             tcg_temp_free_i64(fp0);
         }
         opn = "sdxc1";
@@ -12926,8 +12983,11 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
         tcg_gen_andi_tl(t0, t0, ~0x7);
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
+
             gen_load_fpr64(ctx, fp0, fs);
+            GEN_CAP_CHECK_STORE(t0, t0, 8);
             tcg_gen_qemu_st_i64(fp0, t0, ctx->mem_idx, MO_TEQ);
+            GEN_CAP_INVADIATE_TAG(t0, 8, opc, fp0);
             tcg_temp_free_i64(fp0);
         }
         opn = "suxc1";
@@ -12935,6 +12995,9 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
         break;
     }
     tcg_temp_free(t0);
+#ifdef TARGET_CHERI
+    tcg_temp_free(t1);
+#endif /* TARGET_CHERI */
     (void)opn; (void)store; /* avoid compiler warnings */
     MIPS_DEBUG("%s %s, %s(%s)", opn, fregnames[store ? fs : fd],
                regnames[index], regnames[base]);

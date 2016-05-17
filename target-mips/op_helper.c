@@ -3812,6 +3812,17 @@ void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,
     cheri_tag_invalidate(env, addr, len);
 }
 
+void helper_cinvalidate_tag32(CPUMIPSState *env, target_ulong addr, uint32_t len,
+    uint32_t opc, uint32_t value)
+{
+
+    /* Log write, if enabled. */
+    dump_store(env, opc, addr, (target_ulong)value);
+
+    cheri_tag_invalidate(env, addr, len);
+}
+
+
 static void simple_dump_state(CPUMIPSState *env, FILE *f,
         fprintf_function cpu_fprintf)
 {
@@ -5165,6 +5176,18 @@ enum {
     OPC_SWR      = (0x2E << 26),
     OPC_LL       = (0x30 << 26),
 
+    OPC_LWC1     = (0x31 << 26),
+    OPC_LDC1     = (0x35 << 26),
+    OPC_SWC1     = (0x39 << 26),
+    OPC_SDC1     = (0x3D << 26),
+
+    OPC_LWXC1   = 0x00 | (0x13 << 26),
+    OPC_LDXC1   = 0x01 | (0x13 << 26),
+    OPC_LUXC1   = 0x05 | (0x13 << 26),
+    OPC_SWXC1   = 0x08 | (0x13 << 26),
+    OPC_SDXC1   = 0x09 | (0x13 << 26),
+    OPC_SUXC1   = 0x0D | (0x13 << 26),
+
     OPC_CSCB     = (0x12 << 26) | (0x10 << 21) | (0x0),
     OPC_CSCH     = (0x12 << 26) | (0x10 << 21) | (0x1),
     OPC_CSCW     = (0x12 << 26) | (0x10 << 21) | (0x2),
@@ -5231,6 +5254,10 @@ static inline void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_SDL:
     case OPC_SDR:
 
+    case OPC_SDC1:
+    case OPC_SDXC1:
+    case OPC_SUXC1:
+
     case OPC_CSD:
     case OPC_CSTOREC:
     case OPC_CSCD:
@@ -5241,6 +5268,9 @@ static inline void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_SW:
     case OPC_SWL:
     case OPC_SWR:
+
+    case OPC_SWC1:
+    case OPC_SWXC1:
 
     case OPC_CSW:
     case OPC_CSCW:
@@ -5296,6 +5326,10 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_LDR:
     case OPC_LDPC:
 
+    case OPC_LDC1:
+    case OPC_LDXC1:
+    case OPC_LUXC1:
+
     case OPC_CLD:
     case OPC_CLOADC:
     case OPC_CLLD:
@@ -5308,6 +5342,9 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_LWPC:
     case OPC_LWL:
     case OPC_LWR:
+
+    case OPC_LWC1:
+    case OPC_LWXC1:
 
     case OPC_CLW:
     case OPC_CLWU:
@@ -5337,6 +5374,13 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
                 addr, (uint8_t) value);
         break;
     }
+}
+
+void helper_dump_load32(CPUMIPSState *env, int opc, target_ulong addr,
+        uint32_t value)
+{
+
+    helper_dump_load(env, opc, addr, (target_ulong)value);
 }
 #endif /* TARGET_CHERI */
 

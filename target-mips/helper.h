@@ -157,6 +157,7 @@ DEF_HELPER_2(mtc0_datahi, void, env, tl)
 
 #if defined(TARGET_CHERI)
 DEF_HELPER_4(dump_load, void, env, int, tl, tl)
+DEF_HELPER_4(dump_load32, void, env, int, tl, i32)
 
 DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
 DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
@@ -164,6 +165,7 @@ DEF_HELPER_3(ccheck_pc, void, env, i64, int)
 DEF_HELPER_3(ccheck_store, tl, env, tl, i32)
 DEF_HELPER_3(ccheck_load, tl, env, tl, i32)
 DEF_HELPER_5(cinvalidate_tag, void, env, tl, i32, i32, tl)
+DEF_HELPER_5(cinvalidate_tag32, void, env, tl, i32, i32, i32)
 
 DEF_HELPER_4(candperm, void, env, i32, i32, tl)
 DEF_HELPER_3(cbts, tl, env, i32, i32)
