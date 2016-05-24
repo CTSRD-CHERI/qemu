@@ -3483,7 +3483,7 @@ static inline void dump_cap_load(uint64_t addr, uint64_t pesbt,
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx
-                "] = v:%d c:" TARGET_FMT_lx " b:" TARGET_FMT_lx "\n",
+                "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
                 addr, tag, pesbt, cursor);
     }
 }
@@ -3491,14 +3491,14 @@ static inline void dump_cap_load(uint64_t addr, uint64_t pesbt,
 /*
  * Print capability store to memory to log file.
  */
-static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
-        uint64_t base, uint8_t tag)
+static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
+        uint64_t cursor, uint8_t tag)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx
-                "] = v:%d c:" TARGET_FMT_lx " b:" TARGET_FMT_lx "\n",
-                addr, tag, cursor, base);
+                "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
+                addr, tag, pesbt, cursor);
     }
 }
 
