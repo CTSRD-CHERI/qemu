@@ -966,11 +966,11 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
  * blocks can be deallocated when no longer used maybe.
  */
 
-#ifdef CHERI_MAGIC128
+#if defined(CHERI_MAGIC128) || defined(CHERI_128)
 #define CAP_TAG_SHFT        4           // 5 for 256-bit caps, 4 for 128-bit
-#else
+#else /* !(CHERI_MAGIC128 || CHERI_128) */
 #define CAP_TAG_SHFT        5           // 5 for 256-bit caps, 4 for 128-bit
-#endif
+#endif /* !(CHERI_MAGIC128 || CHERI_128) */
 #define CAP_TAGBLK_SHFT     12          // 2^12 or 4096 tags per block
 #define CAP_TAGBLK_MSK      ((1 << CAP_TAGBLK_SHFT) - 1)
 #ifdef CHERI_MAGIC128
@@ -992,7 +992,6 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
 #define CAP_TAGBLK_SZ       (1 << CAP_TAGBLK_SHFT)
 #define CAP_TAGBLK_IDX(tag_idx) ((tag_idx) & CAP_TAGBLK_MSK)
 #endif /* ! CHERI_MAGIC128 */
-#define CAP_SIZE            ((1 << CAP_TAG_SHIFT) * 8)
 
 uint8_t **cheri_tagmem = NULL;
 uint64_t cheri_ntagblks = 0;

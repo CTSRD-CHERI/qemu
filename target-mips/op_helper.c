@@ -1688,7 +1688,98 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 
     return true;
 }
-#else /* ! 128-bit capabilities */
+#elif CHERI_128
+#define CHERI_CAP_SIZE  16
+
+#define CHERI128_M_SIZE_UNSEALED    20
+#define CHERI128_M_SIZE_SEALED      10
+
+
+static inline bool all_ones(uint64_t offset, uint32_t shift)
+{
+    uint64_t i = offset >> shift;
+    uint32_t e = 64 - shift;
+
+    return i == ((1ull << e) - 1ull);
+}
+
+static inline bool is_zero(uint64_t offset, uint32_t shift)
+{
+    uint64_t i = offset >> shift;
+
+    return i == 0ull;
+}
+
+
+/* Returns the index of the most significant bit set in x */
+static inline uint32_t idx_MSNZ(uint64_t x)
+{
+#ifdef HOST_X86_64
+    uint64_t r;
+
+    /* On x86_64 just use the bsrq instruction. */
+    asm("bsrq %1,%q0" : "+r" (r) : "rm" (x));
+
+    return (uint32_t)r;
+
+#else /* ! HOST_X86_64 */
+
+/* floor(log2(x)) != floor(log2(y)) */
+#define ld_neq(x, y) (((x)^(y)) > ((x)&(y)))
+
+    uint32_t r = ld_neq(x, x & 0x5555555555555555ull)
+        + (ld_neq(x, x & 0x3333333333333333ull) << 1)
+        + (ld_neq(x, x & 0x0f0f0f0f0f0f0f0full) << 2)
+        + (ld_neq(x, x & 0x00ff00ff00ff00ffull) << 3)
+        + (ld_neq(x, x & 0x0000ffff0000ffffull) << 4)
+        + (ld_neq(x, x & 0x00000000ffffffffull) << 5);
+
+#undef ld_neq
+
+    return r;
+#endif /* ! HOST_X86_64 */
+}
+
+/*
+ * e = idxMSNZ( (rlength + (rlength >> 6)) >> 19 )
+ * where (rlength + (rlength >> 6)) needs to be a 65 bit integer
+ */
+static uint32_t compute_e(uint64_t rlength)
+{
+    uint64_t sum = rlength + (rlength >> 6);    /* May overflow */
+
+    if (sum >= rlength) {
+        /* Did not overflow */
+        return idx_MSNZ(sum >> 19);
+    } else {
+        /* overflowed */
+        sum = (sum >> 1) | 0x8000000000000000ull;
+        return idx_MSNZ(sum >> 18);
+    }
+}
+
+static bool
+is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
+{
+    uint32_t m = (sealed) ? CHERI128_M_SIZE_SEALED : CHERI128_M_SIZE_UNSEALED;
+    uint32_t e = compute_e(length);
+    uint32_t shift = m + e;
+    uint64_t b = (base >> e) & ((1 << m) - 1);
+    uint64_t r = (b - (1 << (m - 8))) & ((1 << m) - 1);
+    uint64_t Imid = (offset >> e) & ((1 << (shift - 1)) - 1);
+    uint64_t Amid = ((base + offset) >> e) & ((1 << m) - 1);
+
+    if (shift >= 64) {
+        return true;
+    } else if ( (((offset >> 63) == 0) && (Imid < (r - Amid - 1))) ||
+        (((offset >> 63) == 1) && (Imid >= (r - Amid))) ) {
+        return !(all_ones(offset, shift) || is_zero(offset, shift));
+    } else {
+        return false;
+    }
+}
+
+#else
 #define CHERI_CAP_SIZE  32
 
 static inline bool
@@ -3382,7 +3473,185 @@ void helper_instr_stop(CPUMIPSState *env)
     qemu_set_log(qemu_loglevel & ~CPU_LOG_INSTR);
 }
 
-#ifdef CHERI_MAGIC128
+#ifdef CHERI_128
+/*
+ * Print capability load from memory to log file.
+ */
+static inline void dump_cap_load(uint64_t addr, uint64_t pesbt,
+        uint64_t cursor, uint8_t tag)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx
+                "] = v:%d c:" TARGET_FMT_lx " b:" TARGET_FMT_lx "\n",
+                addr, tag, pesbt, cursor);
+    }
+}
+
+/*
+ * Print capability store to memory to log file.
+ */
+static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
+        uint64_t base, uint8_t tag)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx
+                "] = v:%d c:" TARGET_FMT_lx " b:" TARGET_FMT_lx "\n",
+                addr, tag, cursor, base);
+    }
+}
+
+static inline uint32_t getbits(uint64_t src, uint32_t str, uint32_t sz)
+{
+
+    return (uint32_t)((src >> str) & ((1ull << sz) - 1ull));
+}
+
+/*
+ * Unsealed CHERI-128 memory representation:
+ *  perms: 63-49
+ *  e: 46-41
+ *  S: 40
+ *  B: 39-20
+ *  T: 19-0
+ *
+ * Sealed CHERI-128 memory representation:
+ *  perms: 63-49
+ *  e: 46-41
+ *  S: 40
+ *  B[19:12]: 32
+ *  otype[23:12]:20
+ *  T[19:12]: 12
+ *  otype[11:0]: 0
+ */
+
+/*
+ * Decompress a 128-bit capability.
+ */
+void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
+        target_ulong cursor, target_ulong addr)
+{
+    uint32_t b, t, e, m, shift;
+    uint64_t amid, r;
+    int64_t cb, ct, base;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
+
+    if (env->TLB_L)
+        tag = 0;
+    cdp->cr_tag = tag;
+
+    if ((pesbt & (1ull << 40)) == 0) {
+        /* Unsealed 128-bit Capability */
+        m = CHERI128_M_SIZE_UNSEALED;
+        t = getbits(pesbt, 0, 20);
+        b = getbits(pesbt, 20, 20);
+        e = getbits(pesbt, 41, 6);
+        cdp->cr_perms = getbits(pesbt, 49, 15);
+        cdp->cr_otype = 0ul;
+    } else {
+        /* Sealed 128-bit Capability */
+        m = CHERI128_M_SIZE_SEALED;
+        t = getbits(pesbt, 12, 8) << 12;
+        b = getbits(pesbt, 32, 8) << 12;
+        e = getbits(pesbt, 41, 6);
+        cdp->cr_perms = getbits(pesbt, 49, 15) | CAP_SEALED;
+        cdp->cr_otype = (getbits(pesbt, 20, 12) << 12) | getbits(pesbt, 0, 12);
+    }
+
+    r = (b - (1ull << (m - 8))) & ((1ull << m) - 1ull);
+    amid = (cursor >> e) & ((1ull << m) - 1ull);
+    if (amid < r) {
+        cb = (b < r) ? 0ll : -1ll;
+        ct = (t < r) ? 0ll : -1ll;
+    } else {
+        cb = (b < r) ? 1ll : 0ll;
+        ct = (t < r) ? 1ll : 0ll;
+    }
+
+    shift = m + e;
+    base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + (b << e);
+    cdp->cr_length = (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
+            (t << e)) - base;
+    cdp->cr_offset = cursor - base;
+    cdp->cr_base = base;
+
+    /* Log memory read, if needed. */
+    dump_cap_load(addr, pesbt, cursor, tag);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        env->cvtrace.version = CVT_LD_CAP;
+        env->cvtrace.val1 = tswap64(addr);
+        env->cvtrace.val2 = tswap64(pesbt); /* XXX Tag? */
+        env->cvtrace.val3 = tswap64(cursor);
+        env->cvtrace.val4 = tswap64(base);
+        env->cvtrace.val5 = tswap64(cdp->cr_length);
+    }
+}
+
+/*
+ * Compress a capability to 128 bits.
+ */
+target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
+        target_ulong vaddr)
+{
+    cap_register_t *csp = &env->active_tc.C[cs];
+    target_ulong ret;
+    uint64_t b, t, rlength, base_req;
+    uint32_t e;
+
+    rlength = csp->cr_length;
+    base_req = csp->cr_length;
+    e = compute_e(rlength);
+    b = (base_req >> e) & ((1ull << 20) - 1);
+    t = ((base_req + rlength) >> e) & ((1ull << 20) - 1);
+
+    if (csp->cr_perms & CAP_SEALED) {
+        /* sealed */
+        ret = ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 49) |
+            ((uint64_t)e << 41) | (1ull << 40) |
+            ((b & ~((1ull << 12) - 1)) << 32) |
+            ((uint64_t)(csp->cr_otype & 0xfff000) << (20 - 12)) |
+            ((t & ~((1ull << 12) -1 )) << 12) |
+            (uint64_t)(csp->cr_otype & 0x000fff);
+    } else {
+        /* unsealed */
+        ret = ( ((uint64_t)csp->cr_perms << 49) | ((uint64_t)e << 41) |
+                (b << 20) | t );
+    }
+
+    /* Log memory cap write, if needed. */
+    dump_cap_store(vaddr, ret, csp->cr_offset + csp->cr_base, csp->cr_tag);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        env->cvtrace.version = CVT_ST_CAP;
+        env->cvtrace.val1 = tswap64(vaddr);
+        env->cvtrace.val2 = tswap64(ret);  /* XXX tag bit? */
+        env->cvtrace.val3 = tswap64(csp->cr_offset + csp->cr_base);
+        env->cvtrace.val4 = tswap64(csp->cr_base);
+        env->cvtrace.val5 = tswap64(csp->cr_length);
+    }
+
+    return ret;
+}
+
+target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
+        target_ulong vaddr)
+{
+    cap_register_t *csp = &env->active_tc.C[cs];
+    target_ulong ret;
+
+    ret = csp->cr_offset + csp->cr_base;
+
+    /* Set the tag bit in memory, if set in the register. */
+    if (csp->cr_tag)
+        cheri_tag_set(env, vaddr, cs);
+    else
+        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
+
+    return ret;
+}
+
+#elif defined(CHERI_MAGIC128)
 /*
  * Print capability load from memory to log file.
  */

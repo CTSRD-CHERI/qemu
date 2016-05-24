@@ -3015,7 +3015,150 @@ static inline int32_t clc_sign_extend(int32_t x)
     return (x ^ mask) - mask;
 }
 
-#ifdef CHERI_MAGIC128
+#ifdef CHERI_128
+static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
+    TCGv taddr = tcg_temp_new();
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    /* Check the cap registers and compute the address. */
+    gen_load_gpr(t0, rt);
+    gen_helper_clc_addr(taddr, cpu_env, tcd, tcb, t0, toffset);
+
+    /* Fetch 1st 64-bits in t0 */
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
+            MO_TEQ | ctx->default_tcg_memop_mask);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+
+    /* Fetch 2nd 64-bits in t1 */
+    tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
+            MO_TEQ | ctx->default_tcg_memop_mask);
+    tcg_gen_subi_tl(taddr, taddr, 8);
+
+    /* Store in the capability register. */
+    gen_helper_bytes2cap_128(cpu_env, tcd, t0, t1, taddr);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free(taddr);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcd);
+}
+
+static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv taddr = tcg_temp_new();
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    /* Check the cap registers and compute the address. */
+    gen_helper_cllc_addr(taddr, cpu_env, tcd, tcb);
+
+    /* Fetch 1st 64-bits in t0 */
+    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
+            MO_TEQ | ctx->default_tcg_memop_mask);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+
+    /* Fetch 2nd 64-bits in t1 */
+    tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
+            MO_TEQ | ctx->default_tcg_memop_mask);
+    tcg_gen_subi_tl(taddr, taddr, 8);
+
+    /* Store in the capability register. */
+    gen_helper_bytes2cap_128(cpu_env, tcd, t0, t1, taddr);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free(taddr);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcd);
+}
+
+static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
+        int32_t rt, int32_t offset)
+{
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
+    TCGv taddr = tcg_temp_new();
+    TCGv t0 = tcg_temp_new();
+
+    /* Check the cap registers and compute the address. */
+    gen_load_gpr(t0, rt);
+    gen_helper_csc_addr(taddr, cpu_env, tcs, tcb, t0, toffset);
+
+    /* Store 1st 64-bits in memory. */
+    gen_helper_cap2bytes_128b(t0, cpu_env, tcs, taddr);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    /* Store 2nd 64-bits in memory. */
+    gen_helper_cap2bytes_128c(t0, cpu_env, tcs, taddr);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    tcg_temp_free(t0);
+    tcg_temp_free(taddr);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcs);
+}
+
+static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
+        int32_t rd)
+{
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv taddr = tcg_temp_local_new();
+    TCGv t1 = tcg_temp_local_new();
+    TCGLabel *l1 = gen_new_label();
+
+    /* Check the cap registers and compute the address. */
+    gen_helper_cscc_addr(taddr, cpu_env, tcs, tcb);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcs);
+
+    /* Set the rd based on the linkedflag. */
+    tcg_gen_ld_tl(t1, cpu_env, offsetof(CPUMIPSState, linkedflag));
+    gen_store_gpr(t1, rd);
+
+    /* If linkedflag is zero then don't store capability. */
+    tcg_gen_brcondi_tl(TCG_COND_EQ, t1, 0, l1);
+    tcg_temp_free(t1);
+
+    TCGv t0 = tcg_temp_new();
+    TCGv_i32 tcs2 = tcg_const_i32(cs);
+
+
+    /* Store 1st 64-bits in memory. */
+    gen_helper_cap2bytes_128b(t0, cpu_env, tcs2, taddr);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    /* Store 2nd 64-bits in memory. */
+    gen_helper_cap2bytes_128c(t0, cpu_env, tcs2, taddr);
+    tcg_gen_addi_tl(taddr, taddr, 8);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    tcg_temp_free(t0);
+    tcg_temp_free(taddr);
+    tcg_temp_free_i32(tcs2);
+
+    gen_set_label(l1);
+}
+
+#elif defined(CHERI_MAGIC128)
+
 static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
         int32_t rt, int32_t offset)
 {
@@ -3149,8 +3292,6 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
-
-
 
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
