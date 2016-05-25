@@ -1750,11 +1750,13 @@ static uint32_t compute_e(uint64_t rlength)
 
     if (sum >= rlength) {
         /* Did not overflow */
-        return idx_MSNZ(sum >> 19);
+        // return idx_MSNZ(sum >> 19);
+        return idx_MSNZ(sum >> 20);
     } else {
         /* overflowed */
         sum = (sum >> 1) | 0x8000000000000000ull;
-        return idx_MSNZ(sum >> 18);
+        // return idx_MSNZ(sum >> 18);
+        return idx_MSNZ(sum >> 19);
     }
 }
 
@@ -1764,15 +1766,15 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
     uint32_t m = (sealed) ? CHERI128_M_SIZE_SEALED : CHERI128_M_SIZE_UNSEALED;
     uint32_t e = compute_e(length);
     uint32_t shift = m + e;
-    uint64_t b = (base >> e) & ((1 << m) - 1);
-    uint64_t r = (b - (1 << (m - 8))) & ((1 << m) - 1);
-    uint64_t Imid = (offset >> e) & ((1 << (shift - 1)) - 1);
-    uint64_t Amid = ((base + offset) >> e) & ((1 << m) - 1);
+    uint64_t b = (base >> e) & ((1ull << m) - 1ull);
+    uint64_t r = (b - (1ull << (m - 8))) & ((1ull << m) - 1ull);
+    uint64_t Imid = (offset >> e) & ((1ull << (shift - 1)) - 1ull);
+    uint64_t Amid = ((base + offset) >> e) & ((1ull << m) - 1ull);
 
     if (shift >= 64) {
         return true;
-    } else if ( (((offset >> 63) == 0) && (Imid < (r - Amid - 1))) ||
-        (((offset >> 63) == 1) && (Imid >= (r - Amid))) ) {
+    } else if ( (((offset >> 63) == 0ull) && (Imid < (r - Amid - 1ull))) ||
+        (((offset >> 63) == 1ull) && (Imid >= (r - Amid))) ) {
         return !(all_ones(offset, shift) || is_zero(offset, shift));
     } else {
         return false;
@@ -3502,10 +3504,10 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
     }
 }
 
-static inline uint32_t getbits(uint64_t src, uint32_t str, uint32_t sz)
+static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
 {
 
-    return (uint32_t)((src >> str) & ((1ull << sz) - 1ull));
+    return ((src >> str) & ((1ull << sz) - 1ull));
 }
 
 /*
@@ -3532,9 +3534,9 @@ static inline uint32_t getbits(uint64_t src, uint32_t str, uint32_t sz)
 void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         target_ulong cursor, target_ulong addr)
 {
-    uint32_t b, t, e, m, shift;
-    uint64_t amid, r;
-    int64_t cb, ct, base;
+    uint32_t e, m, shift;
+    uint64_t b, t, base, amid, r;
+    int64_t cb, ct;
     cap_register_t *cdp = &env->active_tc.C[cd];
     uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
 
@@ -3547,21 +3549,25 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         m = CHERI128_M_SIZE_UNSEALED;
         t = getbits(pesbt, 0, 20);
         b = getbits(pesbt, 20, 20);
-        e = getbits(pesbt, 41, 6);
+        e = (uint32_t)getbits(pesbt, 41, 6);
         cdp->cr_perms = getbits(pesbt, 49, 15);
-        cdp->cr_otype = 0ul;
+        cdp->cr_otype = 0;
     } else {
         /* Sealed 128-bit Capability */
         m = CHERI128_M_SIZE_SEALED;
         t = getbits(pesbt, 12, 8) << 12;
         b = getbits(pesbt, 32, 8) << 12;
-        e = getbits(pesbt, 41, 6);
-        cdp->cr_perms = getbits(pesbt, 49, 15) | CAP_SEALED;
-        cdp->cr_otype = (getbits(pesbt, 20, 12) << 12) | getbits(pesbt, 0, 12);
+        e = (uint32_t)getbits(pesbt, 41, 6);
+        cdp->cr_perms = (uint32_t)getbits(pesbt, 49, 15) | CAP_SEALED;
+        cdp->cr_otype = ((uint32_t)getbits(pesbt, 20, 12) << 12) |
+                         (uint32_t)getbits(pesbt, 0, 12);
     }
 
-    r = (b - (1ull << (m - 8))) & ((1ull << m) - 1ull);
-    amid = (cursor >> e) & ((1ull << m) - 1ull);
+    if (b > (1ull << (m - 8)))
+        r = (b - (1ull << (m - 8)));
+    else
+        r = 0ull;
+    amid = (int64_t)((cursor >> e) & ((1ull << m) - 1ull));
     if (amid < r) {
         cb = (b < r) ? 0ll : -1ll;
         ct = (t < r) ? 0ll : -1ll;
@@ -3571,9 +3577,16 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
     }
 
     shift = m + e;
-    base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + (b << e);
-    cdp->cr_length = (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
+    if (shift > 63) {
+        base = b << e;
+        cdp->cr_length = (t << e) - base;
+    } else {
+        base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) +
+            (b << e);
+        cdp->cr_length =
+            (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
             (t << e)) - base;
+    }
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
 
@@ -3601,7 +3614,7 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
     uint32_t e;
 
     rlength = csp->cr_length;
-    base_req = csp->cr_length;
+    base_req = csp->cr_base;
     e = compute_e(rlength);
     b = (base_req >> e) & ((1ull << 20) - 1);
     t = ((base_req + rlength) >> e) & ((1ull << 20) - 1);
