@@ -1750,13 +1750,11 @@ static uint32_t compute_e(uint64_t rlength)
 
     if (sum >= rlength) {
         /* Did not overflow */
-        // return idx_MSNZ(sum >> 19);
-        return idx_MSNZ(sum >> 20);
+        return idx_MSNZ(sum >> 19);
     } else {
         /* overflowed */
         sum = (sum >> 1) | 0x8000000000000000ull;
-        // return idx_MSNZ(sum >> 18);
-        return idx_MSNZ(sum >> 19);
+        return idx_MSNZ(sum >> 18);
     }
 }
 
@@ -3578,8 +3576,30 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
 
     shift = m + e;
     if (shift > 63) {
-        base = b << e;
-        cdp->cr_length = (t << e) - base;
+        /* i.e., (((cursor >> shift) + cb) << shift) = 0 */
+        if (e > 44) {
+            /* Special case when e = 45. */
+
+            /* Will bot overflow when we shift it? */
+            if (b & 0x80000ull) {
+                /* Yes, just make it max uint64_t. */
+                base = 0xffffffffffffffffull;
+            } else {
+                base = b << e;
+            }
+
+            /* Will top overflow when we shift it? */
+            if (t & 0x80000ull) {
+                /* Yes, just make it max uint64_t and calculate length. */
+                cdp->cr_length = 0xffffffffffffffffull - base;
+            } else {
+                cdp->cr_length = (t << e) - base;
+            }
+        } else {
+            /* shift > 63 && e < 45 */
+            base = b << e;
+            cdp->cr_length = (t << e) - base;
+        }
     } else {
         base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) +
             (b << e);
@@ -3616,9 +3636,17 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
     rlength = csp->cr_length;
     base_req = csp->cr_base;
     e = compute_e(rlength);
-    b = (base_req >> e) & ((1ull << 20) - 1);
-    t = ((base_req + rlength) >> e) & ((1ull << 20) - 1);
-
+    if (e > 44) {
+        /*
+         * Special case e = 45. Don't waste the most significant bit
+         * by shifting too much.
+         */
+        b = (base_req >> 44) & ((1ull << 20) - 1);
+        t = ((base_req + rlength) >> 44) & ((1ull << 20) - 1);
+    } else {
+        b = (base_req >> e) & ((1ull << 20) - 1);
+        t = ((base_req + rlength) >> e) & ((1ull << 20) - 1);
+    }
     if (csp->cr_perms & CAP_SEALED) {
         /* sealed */
         ret = ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 49) |
