@@ -226,7 +226,11 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #endif /* NOTYET */
 /* 15-18 Software-defined */
 #define CAP_SEALED              (1 << 31)
+#ifdef CHERI_128
+#define CAP_ALL_PERMS           (0x7fff)
+#else /* ! CHERI_128 */
 #define CAP_ALL_PERMS           (0x7fffffff)
+#endif /* ! CHERI_128 */
 
 struct cvtrace {
     uint8_t version;
