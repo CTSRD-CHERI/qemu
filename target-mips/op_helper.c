@@ -1763,19 +1763,43 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 {
     uint32_t m = (sealed) ? CHERI128_M_SIZE_SEALED : CHERI128_M_SIZE_UNSEALED;
     uint32_t e = compute_e(length);
-    uint32_t shift = m + e;
-    uint64_t b = (base >> e) & ((1ull << m) - 1ull);
-    uint64_t r = (b - (1ull << (m - 8))) & ((1ull << m) - 1ull);
-    uint64_t Imid = (offset >> e) & ((1ull << (shift - 1)) - 1ull);
-    uint64_t Amid = ((base + offset) >> e) & ((1ull << m) - 1ull);
+    uint32_t shift;
+    int64_t b, r, Imid, Amid;
+
+    /* Check for the boundary cases. */
+    switch (e) {
+    case 0:
+        shift = m;
+        b = (int64_t)(base & ((1ull << m) - 1ull));
+        Imid = (int64_t)(offset & ((1ull << (shift - 1)) - 1ull));
+        Amid = (int64_t)((base + offset) & ((1ull << m) - 1ull));
+        break;
+    case 45:
+        shift = m + 44;
+        b = (int64_t)((base >> 44) & ((1ull << m) - 1ull));
+        Imid = (int64_t)((offset >> 44) & ((1ull << (shift - 1)) - 1ull));
+        Amid = (int64_t)(((base + offset) >> 44) & ((1ull << m) - 1ull));
+        break;
+    default:
+        shift = m + e;
+        b = (int64_t)((base >> e) & ((1ull << m) - 1ull));
+        Imid = (int64_t)((offset >> e) & ((1ull << (shift - 1)) - 1ull));
+        Amid = (int64_t)(((base + offset) >> e) & ((1ull << m) - 1ull));
+        break;
+    }
+
+    r = (b <= (1ull << (m - 8))) ? 0 :
+        (b - (1ull << (m - 8))) & ((1ull << m) - 1ull);
 
     if (shift >= 64) {
         return true;
-    } else if ( (((offset >> 63) == 0ull) && (Imid < (r - Amid - 1ull))) ||
-        (((offset >> 63) == 1ull) && (Imid >= (r - Amid))) ) {
-        return !(all_ones(offset, shift) || is_zero(offset, shift));
-    } else {
+    } else if (!all_ones(offset, shift) && !is_zero(offset, shift)) {
         return false;
+    } else if ( (((offset >> 63) == 0ull) && (Imid < (r - Amid - 1ll))) ||
+        (((offset >> 63) == 1ull) && (Imid >= (r - Amid))) ) {
+        return false;
+    } else {
+        return true;
     }
 }
 
