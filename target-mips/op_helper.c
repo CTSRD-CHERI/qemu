@@ -1688,7 +1688,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 
     return true;
 }
-#elif CHERI_128
+#elif defined(CHERI_128)
 #define CHERI_CAP_SIZE  16
 
 #define CHERI128_M_SIZE_UNSEALED    20
