@@ -971,6 +971,7 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
 #else /* !(CHERI_MAGIC128 || CHERI_128) */
 #define CAP_TAG_SHFT        5           // 5 for 256-bit caps, 4 for 128-bit
 #endif /* !(CHERI_MAGIC128 || CHERI_128) */
+#define CAP_SIZE            (1 << CAP_TAG_SHFT)
 #define CAP_TAGBLK_SHFT     12          // 2^12 or 4096 tags per block
 #define CAP_TAGBLK_MSK      ((1 << CAP_TAGBLK_SHFT) - 1)
 #ifdef CHERI_MAGIC128
@@ -1057,6 +1058,24 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
         env->linkedflag = 0;
 
     return;
+}
+
+void cheri_tag_dma_invalidate(uint64_t paddr, uint64_t len)
+{
+    uint64_t tag, addr, endaddr;
+    uint8_t *tagblk;
+
+    endaddr = paddr + len;
+
+    for(addr = paddr; addr < endaddr; addr += CAP_SIZE) {
+        tag = addr >> CAP_TAG_SHFT;
+        tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+
+        if (tagblk != NULL)
+            tagblk[CAP_TAGBLK_IDX(tag)] = 0;
+    }
+
+    /* XXX - linkedflag reset check? */
 }
 
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
@@ -1173,4 +1192,9 @@ int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     }
 }
 #endif /* CHERI_MAGIC128 */
-#endif /* TARGET_CHERI */
+
+#else /* ! TARGET_CHERI */
+
+void cheri_tag_dma_invalidate(uint64_t paddr, uint64_t len) { }
+
+#endif /* ! TARGET_CHERI */

@@ -1251,6 +1251,7 @@ static inline void cpu_mips_store_cause(CPUMIPSState *env, target_ulong val)
 
 void cheri_tag_init(uint64_t memory_size);
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size);
+void cheri_tag_dma_invalidate(uint64_t paddr, uint64_t len);
 int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr);
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg);
