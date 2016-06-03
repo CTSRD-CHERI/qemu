@@ -429,7 +429,9 @@ target_ulong helper_##name(CPUMIPSState *env, target_ulong arg1,              \
     if (do_translate_address(env, arg2, 1) == env->lladdr) {                  \
         tmp = do_##ld_insn(env, arg2, mem_idx);                               \
         if (tmp == env->llval) {                                              \
+            /* XXX _ccheck_store() */                                         \
             do_##st_insn(env, arg2, arg1, mem_idx);                           \
+            /* XXX _cinvalidate_tag() */                                      \
             return 1;                                                         \
         }                                                                     \
     }                                                                         \
@@ -1695,19 +1697,18 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 #define CHERI128_M_SIZE_SEALED      10
 
 
-static inline bool all_ones(uint64_t offset, uint32_t shift)
+static inline bool all_ones(uint64_t offset, uint32_t e)
 {
-    uint64_t i = offset >> shift;
-    uint32_t e = 64 - shift;
+    uint64_t Itop = offset >> (e + CHERI128_M_SIZE_UNSEALED);
 
-    return i == ((1ull << e) - 1ull);
+    return Itop == ((1ull << e) - 1ull);
 }
 
-static inline bool is_zero(uint64_t offset, uint32_t shift)
+static inline bool is_zero(uint64_t offset, uint32_t e)
 {
-    uint64_t i = offset >> shift;
+    uint64_t Itop = offset >> (e + CHERI128_M_SIZE_UNSEALED);
 
-    return i == 0ull;
+    return Itop == 0ull;
 }
 
 
@@ -1758,45 +1759,66 @@ static uint32_t compute_e(uint64_t rlength)
     }
 }
 
+/*
+ * Check to see if a memory region is representable by a compressed
+ * capability. It is representable if:
+ *
+ *   representable = (inRange && inLimits) || (E > 44)
+ *
+ * where:
+ *
+ *   E = compression exponent
+ *
+ *   inRange = -s < i < s  where i is the increment (or offset)
+ *   (In other words, all the bits of i<63, E+20> are the same.)
+ *
+ *   inLimits = (i < 0) ? Imid >= (R - Amid) : (R - Amid - 1)
+ *   where Imid = i<E+19, E>, Amid = a<E+19, E> and R = B - 2^12.
+ */
 static bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 {
-    uint32_t m = (sealed) ? CHERI128_M_SIZE_SEALED : CHERI128_M_SIZE_UNSEALED;
     uint32_t e = compute_e(length);
-    uint32_t shift;
     int64_t b, r, Imid, Amid;
+
+#define MOD_MASK    ((1ull << CHERI128_M_SIZE_UNSEALED) - 1ull)
 
     /* Check for the boundary cases. */
     switch (e) {
     case 0:
-        shift = m;
-        b = (int64_t)(base & ((1ull << m) - 1ull));
-        Imid = (int64_t)(offset & ((1ull << (shift - 1)) - 1ull));
-        Amid = (int64_t)((base + offset) & ((1ull << m) - 1ull));
+        b = (int64_t)(base & MOD_MASK);
+        Imid = (int64_t)(offset & MOD_MASK);
+        Amid = (int64_t)((base + offset) & MOD_MASK);
         break;
     case 45:
-        shift = m + 44;
-        b = (int64_t)((base >> 44) & ((1ull << m) - 1ull));
-        Imid = (int64_t)((offset >> 44) & ((1ull << (shift - 1)) - 1ull));
-        Amid = (int64_t)(((base + offset) >> 44) & ((1ull << m) - 1ull));
+        b = (int64_t)((base >> 44) & MOD_MASK);
+        Imid = (int64_t)((offset >> 44) & MOD_MASK);
+        Amid = (int64_t)(((base + offset) >> 44) & MOD_MASK);
         break;
     default:
-        shift = m + e;
-        b = (int64_t)((base >> e) & ((1ull << m) - 1ull));
-        Imid = (int64_t)((offset >> e) & ((1ull << (shift - 1)) - 1ull));
-        Amid = (int64_t)(((base + offset) >> e) & ((1ull << m) - 1ull));
+        b = (int64_t)((base >> e) & MOD_MASK);
+        Imid = (int64_t)((offset >> e) & MOD_MASK);
+        Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
         break;
     }
 
-    r = (b <= (1ull << (m - 8))) ? 0 :
-        (b - (1ull << (m - 8))) & ((1ull << m) - 1ull);
+    /* If sealed then mask off the lower bits. */
+    if (sealed)
+        b &= ~((1ull << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) -
+                1ull);
 
-    if (shift >= 64) {
+    r = (b <= (1ull << 12)) ? 0 : ((b - (1ull << 12)) & MOD_MASK);
+
+#undef MOD_MASK
+
+    if (e > 44) {
         return true;
-    } else if (!all_ones(offset, shift) && !is_zero(offset, shift)) {
+    } else if (!all_ones(offset, e) && !is_zero(offset, e)) {
+        /* inRange = -s < i < s  failed */
         return false;
     } else if ( (((offset >> 63) == 0ull) && (Imid < (r - Amid - 1ll))) ||
         (((offset >> 63) == 1ull) && (Imid >= (r - Amid))) ) {
+        /* inLimits = (i < 0) ? Imid >= (R - Amid) : (R - Amid - 1) failed */
         return false;
     } else {
         return true;
