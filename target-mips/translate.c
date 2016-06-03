@@ -23412,7 +23412,8 @@ void cpu_state_reset(CPUMIPSState *env)
 
         crp = &env->active_tc.PCC;
         crp->cr_tag = 1;
-        crp->cr_perms = CAP_ALL_PERMS;
+        crp->cr_perms = CAP_PERMS_ALL;
+        crp->cr_uperms = CAP_UPERMS_ALL;
         // crp->cr_cursor = (uint64_t)env->active_tc.PC;
         crp->cr_offset = (uint64_t)env->active_tc.PC;
         crp->cr_base = 0UL;
@@ -23422,7 +23423,8 @@ void cpu_state_reset(CPUMIPSState *env)
         for (i = 0; i < 32; i++) {
             crp = &env->active_tc.C[i];
             crp->cr_tag = 1;
-            crp->cr_perms = CAP_ALL_PERMS;
+            crp->cr_perms = CAP_PERMS_ALL;
+            crp->cr_uperms = CAP_UPERMS_ALL;
             // crp->cr_cursor = 0UL;
             crp->cr_offset = 0UL;
             crp->cr_base = 0UL;

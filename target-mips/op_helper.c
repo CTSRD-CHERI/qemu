@@ -1678,7 +1678,7 @@ static inline bool
 is_cap_sealed(cap_register_t *cp)
 {
 
-    return (cp->cr_perms & CAP_SEALED) ? true : false;
+    return (cp->cr_sealed) ? true : false;
 }
 
 #ifdef CHERI_MAGIC128
@@ -1860,8 +1860,8 @@ static inline int align_of(int size, uint64_t addr)
     }
 }
 
-static inline void check_cap(CPUMIPSState *env, cap_register_t *cr, uint32_t perm,
-        uint64_t addr, uint16_t regnum, uint32_t len)
+static inline void check_cap(CPUMIPSState *env, cap_register_t *cr,
+        uint32_t perm, uint64_t addr, uint16_t regnum, uint32_t len)
 {
     uint16_t cause;
     /*
@@ -1879,7 +1879,7 @@ static inline void check_cap(CPUMIPSState *env, cap_register_t *cr, uint32_t per
         // fprintf(qemu_logfile, "CAP Tag VIOLATION: ");
         goto do_exception;
     }
-    if ((cr->cr_perms & (perm | CAP_SEALED)) != perm) {
+    if ((cr->cr_perms & perm) != perm) {
         if (is_cap_sealed(cr)) {
             cause = CP2Ca_SEAL;
             // fprintf(qemu_logfile, "CAP Seal VIOLATION: ");
@@ -1966,8 +1966,12 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
+        uint32_t rt_perms = (uint32_t)rt & CAP_PERMS_ALL;
+        uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
+
         *cdp = *cbp;
-        cdp->cr_perms = (cbp->cr_perms & ((uint32_t)rt & ~CAP_SEALED));
+        cdp->cr_perms = cbp->cr_perms & rt_perms;
+        cdp->cr_uperms = cbp->cr_uperms & rt_uperms;
     }
 }
 
@@ -2076,6 +2080,8 @@ void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *csp = &env->active_tc.C[cs];
+    uint32_t rt_perms = (uint32_t)rt & CAP_PERMS_ALL;
+    uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     /*
      * CCheckPerm: Raise exception if don't have permission
      */
@@ -2087,7 +2093,11 @@ void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
 #endif /* NOTYET */
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
-    } else if (((csp->cr_perms & ~CAP_SEALED) & (uint32_t)rt) != (uint32_t)rt) {
+    } else if ((csp->cr_perms & rt_perms) != rt_perms) {
+        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
+    } else if ((csp->cr_uperms & rt_uperms) != rt_uperms) {
+        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
+    } else if ((rt & ~(CAP_PERMS_ALL | CAP_PERMS_ALL)) != 0ul) {
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
     }
 }
@@ -2330,9 +2340,12 @@ target_ulong helper_cgetperm(CPUMIPSState *env, uint32_t cb)
 #endif /* NOTYET */
         return (target_ulong)0;
     } else {
-        uint32_t cb_perms = env->active_tc.C[cb].cr_perms;
+        uint64_t perms =  (uint64_t)
+            ((env->active_tc.C[cb].cr_perms & CAP_PERMS_ALL) |
+            ((env->active_tc.C[cb].cr_uperms & CAP_UPERMS_ALL) <<
+             CAP_UPERMS_SHFT));
 
-        return (target_ulong)(cb_perms & ~CAP_SEALED);
+        return (target_ulong)perms;
     }
 }
 
@@ -2586,7 +2599,7 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         *cdp = *csp;
-        cdp->cr_perms |= CAP_SEALED;
+        cdp->cr_sealed = 1;
         cdp->cr_otype = (uint32_t)ct_base_plus_offset;
     }
 }
@@ -2863,7 +2876,7 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else {
         *cdp = *csp;
-        cdp->cr_perms &= ~CAP_SEALED;
+        cdp->cr_sealed = 0;
         cdp->cr_otype = 0;
         if ((csp->cr_perms & CAP_PERM_GLOBAL) &&
             (ctp->cr_perms & CAP_PERM_GLOBAL)) {
@@ -3594,7 +3607,9 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         t = getbits(pesbt, 0, 20);
         b = getbits(pesbt, 20, 20);
         e = (uint32_t)getbits(pesbt, 41, 6);
-        cdp->cr_perms = getbits(pesbt, 49, 15);
+        cdp->cr_perms = getbits(pesbt, 49, 11);
+        cdp->cr_uperms = getbits(pesbt, 60, 4);
+        cdp->cr_sealed = 0;
         cdp->cr_otype = 0;
     } else {
         /* Sealed 128-bit Capability */
@@ -3602,7 +3617,9 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         t = getbits(pesbt, 12, 8) << 12;
         b = getbits(pesbt, 32, 8) << 12;
         e = (uint32_t)getbits(pesbt, 41, 6);
-        cdp->cr_perms = (uint32_t)getbits(pesbt, 49, 15) | CAP_SEALED;
+        cdp->cr_perms = getbits(pesbt, 49, 11);
+        cdp->cr_uperms = getbits(pesbt, 60, 4);
+        cdp->cr_sealed = 1;
         cdp->cr_otype = ((uint32_t)getbits(pesbt, 20, 12) << 12) |
                          (uint32_t)getbits(pesbt, 0, 12);
     }
@@ -3676,7 +3693,7 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
-    uint64_t b, t, rlength, base_req;
+    uint64_t b, t, rlength, base_req, perms;
     uint32_t e;
 
     rlength = csp->cr_length;
@@ -3693,9 +3710,12 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
         b = (base_req >> e) & ((1ull << 20) - 1);
         t = ((base_req + rlength) >> e) & ((1ull << 20) - 1);
     }
-    if (csp->cr_perms & CAP_SEALED) {
+
+    perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << 11) |
+        (csp->cr_perms & CAP_PERMS_ALL));
+    if (csp->cr_sealed) {
         /* sealed */
-        ret = ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 49) |
+        ret = (perms << 49) |
             ((uint64_t)e << 41) | (1ull << 40) |
             ((b & ~((1ull << 12) - 1)) << 32) |
             ((uint64_t)(csp->cr_otype & 0xfff000) << (20 - 12)) |
@@ -3703,8 +3723,8 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
             (uint64_t)(csp->cr_otype & 0x000fff);
     } else {
         /* unsealed */
-        ret = ( ((uint64_t)csp->cr_perms << 49) | ((uint64_t)e << 41) |
-                (b << 20) | t );
+        ret = (perms << 49) | ((uint64_t)e << 41) |
+                (b << 20) | t;
     }
 
     /* Log memory cap write, if needed. */
@@ -3777,9 +3797,11 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
     cdp->cr_tag = tag;
 
     cdp->cr_otype = (uint32_t)(tps >> 32);
-    cdp->cr_perms = (uint32_t)(tps >> 1) & ~CAP_SEALED;
+    cdp->cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
+    cdp->cr_uperms = (uint32_t)(((tps >> 1) >> CAP_UPERMS_SHFT) &
+            CAP_UPERMS_ALL);
     if (tps & 1ULL)
-        cdp->cr_perms |= CAP_SEALED;
+        cdp->cr_sealed = 1;
     cdp->cr_length = length;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
@@ -3819,13 +3841,15 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
-    uint64_t tps, length;
+    uint64_t tps, length, perms;
 
     ret = csp->cr_base;
 
+    perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+        (csp->cr_perms & CAP_PERMS_ALL));
+
     tps = (((uint64_t)csp->cr_otype << 32) |
-        ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 1) |
-        ((csp->cr_perms & CAP_SEALED) ? 1UL : 0UL));
+        (perms << 1) | ((csp->cr_sealed) ? 1UL : 0UL));
 
     length = csp->cr_length;
 
@@ -3907,15 +3931,18 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
 {
     cap_register_t *cdp = &env->active_tc.C[cd];
     uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
+    uint32_t perms;
 
     if (env->TLB_L)
         tag = 0;
     cdp->cr_tag = tag;
 
     cdp->cr_otype = (uint32_t)(otype >> 32);
-    cdp->cr_perms = (uint32_t)(otype >> 1) & ~CAP_SEALED;
+    perms = (uint32_t)(otype >> 1);
+    cdp->cr_perms = perms & CAP_PERMS_ALL;
+    cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype & 1ULL)
-        cdp->cr_perms |= CAP_SEALED;
+        cdp->cr_sealed = 1;
 
     /* Log memory read, if needed. */
     dump_cap_load_op(addr, otype, tag);
@@ -3931,15 +3958,18 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
 {
     cap_register_t *cdp = &env->active_tc.C[cd];
     uint32_t tag = cheri_tag_get(env, addr, cd, &env->lladdr);
+    uint32_t perms;
 
     if (env->TLB_L)
         tag = 0;
     cdp->cr_tag = tag;
 
     cdp->cr_otype = (uint32_t)(otype >> 32);
-    cdp->cr_perms = (uint32_t)(otype >> 1) & ~CAP_SEALED;
+    perms = (uint32_t)(otype >> 1);
+    cdp->cr_perms = perms & CAP_PERMS_ALL;
+    cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype & 1ULL)
-        cdp->cr_perms |= CAP_SEALED;
+        cdp->cr_sealed = 1;
 
     /* Log memory read, if needed. */
     dump_cap_load_op(addr, otype, tag);
@@ -3955,10 +3985,13 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
+    uint64_t perms;
+
+    perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+        (csp->cr_perms & CAP_PERMS_ALL));
 
     ret = (((uint64_t)csp->cr_otype << 32) |
-        ((uint64_t)(csp->cr_perms & ~CAP_SEALED) << 1) |
-        ((csp->cr_perms & CAP_SEALED) ? 1UL : 0UL));
+        (perms << 1) | ((csp->cr_sealed) ? 1UL : 0UL));
 
     /* Log memory cap write, if needed. */
     dump_cap_store_op(vaddr, ret, csp->cr_tag);
@@ -4292,7 +4325,7 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
 		    "perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
             // alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
             alias, crp->cr_offset, crp->cr_otype,
-            (crp->cr_perms & CAP_SEALED) ? 1 : 0,
+            (crp->cr_sealed) ? 1 : 0,
             (crp->cr_perms & CAP_PERM_GLOBAL) ? 'G' : '-',
             (crp->cr_perms & CAP_PERM_EXECUTE) ? 'e' : '-',
             (crp->cr_perms & CAP_PERM_LOAD) ? 'l' : '-',
@@ -4311,14 +4344,16 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
 #else
     /*
     cpu_fprintf(f, "DEBUG %s: v:%d s:%d p:%08x b:%016lx l:%016lx o:%016lx t:%08x\n",
-            name, crp->cr_tag, (crp->cr_perms & CAP_SEALED) ? 1 : 0,
-            (crp->cr_perms & ~CAP_SEALED), crp->cr_base, crp->cr_length,
+            name, crp->cr_tag, (crp->cr_sealed) ? 1 : 0,
+            ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+            (crp->cr_perms & CAP_PERMS_ALL), crp->cr_base, crp->cr_length,
             crp->cr_offset, crp->cr_otype);
     */
 
     cpu_fprintf(f, "DEBUG CAP %s u:%d perms:0x%08x type:0x%06x offset:0x%016lx "
             "base:0x%016lx length:0x%016lx\n", name, is_cap_sealed(crp),
-            (crp->cr_perms & ~CAP_SEALED), crp->cr_otype, crp->cr_offset, crp->cr_base,
+            ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+            (crp->cr_perms & CAP_PERMS_ALL), crp->cr_otype, crp->cr_offset, crp->cr_base,
             crp->cr_length);
 #endif
 }
@@ -5474,8 +5509,9 @@ static void dump_changed_regs(CPUMIPSState *env)
                     env->cvtrace.version = CVT_ST_CAP;
                 env->cvtrace.val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
                     ((uint64_t)cr->cr_otype << 32) |
-                    ((uint64_t)(cr->cr_perms & ~CAP_SEALED) << 1) |
-                    ((uint64_t)(cr->cr_perms & CAP_SEALED) ? 1 : 0));
+                    (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+                    (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
+                    (cr->cr_sealed) ? 1 : 0;
                 env->cvtrace.val3 = tswap64(cr->cr_offset + cr->cr_base);
                 env->cvtrace.val4 = tswap64(cr->cr_base);
                 env->cvtrace.val5 = tswap64(cr->cr_length);
@@ -5483,8 +5519,9 @@ static void dump_changed_regs(CPUMIPSState *env)
                 fprintf(qemu_logfile,
                         "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
                         " l:%016" PRIx64 "\n", i, cr->cr_tag,
-                        (cr->cr_perms & CAP_SEALED) ? 1 : 0,
-                        (cr->cr_perms & ~CAP_SEALED), cr->cr_base,
+                        (cr->cr_sealed) ? 1 : 0,
+                        (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+                        (cr->cr_perms & CAP_PERMS_ALL)), cr->cr_base,
                         cr->cr_length);
                 fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
                         cr->cr_offset, cr->cr_otype);

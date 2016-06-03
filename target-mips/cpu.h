@@ -174,13 +174,15 @@ typedef struct mips_def_t mips_def_t;
 
 #if defined(TARGET_CHERI)
 struct cap_register {
-    uint32_t cr_otype;  /* Object Type, 24 bits */
-    uint32_t cr_perms;  /* Permissions Mask + Sealed bit */
     //uint64_t cr_cursor; /* offset = cursor - base */
     uint64_t cr_offset; /* Cappability offset */
     uint64_t cr_base;   /* Capability base addr */
     uint64_t cr_length; /* Capability length */
+    uint32_t cr_perms;  /* Permissions */
+    uint32_t cr_uperms; /* User Permissions */
+    uint32_t cr_otype;  /* Object Type, 24 bits */
     uint8_t  cr_tag;    /* Tag */
+    uint8_t  cr_sealed; /* Sealed flag */
 };
 typedef struct cap_register cap_register_t;
 
@@ -188,11 +190,13 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     cp->cr_otype = 0;
     cp->cr_perms = 0;
+    cp->cr_uperms = 0;
     // cp->cr_cursor = 0UL;
     cp->cr_offset = 0UL;
     cp->cr_base = 0UL;
     cp->cr_length = 0UL;
     cp->cr_tag = 0;
+    cp->cr_sealed = 0;
 
     return cp;
 }
@@ -225,11 +229,16 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_ACCESS_KR2C         (1 << 14)
 #endif /* NOTYET */
 /* 15-18 Software-defined */
-#define CAP_SEALED              (1 << 31)
 #ifdef CHERI_128
-#define CAP_ALL_PERMS           (0x7fff)
+#define CAP_PERMS_ALL           (0x7fff)     /* [0...14] */
+#define CAP_UPERMS_ALL          (0xf)        /* [15...18] */
+#define CAP_UPERMS_MAX          (3)
+#define CAP_UPERMS_SHFT         (15)
 #else /* ! CHERI_128 */
-#define CAP_ALL_PERMS           (0x7fffffff)
+#define CAP_PERMS_ALL           (0x7fff)     /* [0...14] */
+#define CAP_UPERMS_ALL          (0xffff)     /* [15...30] */
+#define CAP_UPERMS_MAX          (15)
+#define CAP_UPERMS_SHFT         (15)
 #endif /* ! CHERI_128 */
 
 struct cvtrace {
