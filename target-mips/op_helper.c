@@ -1694,7 +1694,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 #define CHERI_CAP_SIZE  16
 
 #define CHERI128_M_SIZE_UNSEALED    20
-#define CHERI128_M_SIZE_SEALED      10
+#define CHERI128_M_SIZE_SEALED       8
 
 
 static inline bool all_ones(uint64_t offset, uint32_t e)
@@ -2158,6 +2158,10 @@ void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     } else {
         *cdp = *cbp;
         cdp->cr_tag = 0;
+#ifdef CHERI_128
+        /* Save E at the moment the tag was invalidated. */
+        cdp->cr_e = compute_e(cdp->cr_length);
+#endif /* CHERI_128 */
     }
 }
 
@@ -3569,20 +3573,23 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
 
 /*
  * Unsealed CHERI-128 memory representation:
- *  perms: 63-49
- *  e: 46-41
- *  S: 40
- *  B: 39-20
- *  T: 19-0
+ *  perms: 63-49    (15 bits)
+ *  unused: 48-47   (2 bits)
+ *  e: 46-41        (6 bits)
+ *  S: 40           (1 bit)
+ *  B: 39-20        (20 bits)
+ *  T: 19-0         (20 bits)
+ *  cursor          (64 bits)
  *
  * Sealed CHERI-128 memory representation:
- *  perms: 63-49
- *  e: 46-41
- *  S: 40
- *  B[19:12]: 32
- *  otype[23:12]:20
- *  T[19:12]: 12
- *  otype[11:0]: 0
+ *  perms: 63-49    (15 bits)
+ *  unused: 48-47   (2 bits)
+ *  e: 46-41        (6 bits)
+ *  S: 40           (1 bits)
+ *  B: 39-32        (8 bits)
+ *  otype.hi: 31-20 (12 bits)
+ *  T: 19-12        (8 bits)
+ *  otype.lo: 11-0  (12 bits)
  */
 
 /*
@@ -3591,7 +3598,7 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
 void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         target_ulong cursor, target_ulong addr)
 {
-    uint32_t e, m, shift;
+    uint32_t e, shift;
     uint64_t b, t, base, amid, r;
     int64_t cb, ct;
     cap_register_t *cdp = &env->active_tc.C[cd];
@@ -3603,32 +3610,34 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
 
     if ((pesbt & (1ull << 40)) == 0) {
         /* Unsealed 128-bit Capability */
-        m = CHERI128_M_SIZE_UNSEALED;
         t = getbits(pesbt, 0, 20);
         b = getbits(pesbt, 20, 20);
+        cdp->cr_sealed = 0;
         e = (uint32_t)getbits(pesbt, 41, 6);
+        cdp->cr_unused = getbits(pesbt, 47, 2);
         cdp->cr_perms = getbits(pesbt, 49, 11);
         cdp->cr_uperms = getbits(pesbt, 60, 4);
-        cdp->cr_sealed = 0;
         cdp->cr_otype = 0;
     } else {
         /* Sealed 128-bit Capability */
-        m = CHERI128_M_SIZE_SEALED;
         t = getbits(pesbt, 12, 8) << 12;
         b = getbits(pesbt, 32, 8) << 12;
-        e = (uint32_t)getbits(pesbt, 41, 6);
-        cdp->cr_perms = getbits(pesbt, 49, 11);
-        cdp->cr_uperms = getbits(pesbt, 60, 4);
-        cdp->cr_sealed = 1;
         cdp->cr_otype = ((uint32_t)getbits(pesbt, 20, 12) << 12) |
                          (uint32_t)getbits(pesbt, 0, 12);
+        cdp->cr_sealed = 1;
+        e = (uint32_t)getbits(pesbt, 41, 6);
+        cdp->cr_unused = getbits(pesbt, 47, 2);
+        cdp->cr_perms = getbits(pesbt, 49, 11);
+        cdp->cr_uperms = getbits(pesbt, 60, 4);
     }
+    cdp->cr_e = (uint8_t)e;
 
-    if (b > (1ull << (m - 8)))
-        r = (b - (1ull << (m - 8)));
+    if (b > 4096ul)
+        r = b - 4096ul;
     else
         r = 0ull;
-    amid = (int64_t)((cursor >> e) & ((1ull << m) - 1ull));
+    amid = (int64_t)((cursor >> e) & ((1ull << CHERI128_M_SIZE_UNSEALED) -
+                1ull));
     if (amid < r) {
         cb = (b < r) ? 0ll : -1ll;
         ct = (t < r) ? 0ll : -1ll;
@@ -3637,7 +3646,7 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         ct = (t < r) ? 1ll : 0ll;
     }
 
-    shift = m + e;
+    shift = e + CHERI128_M_SIZE_UNSEALED;
     if (shift > 63) {
         /* i.e., (((cursor >> shift) + cb) << shift) = 0 */
         if (e > 44) {
@@ -3698,7 +3707,11 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
 
     rlength = csp->cr_length;
     base_req = csp->cr_base;
-    e = compute_e(rlength);
+    if (csp->cr_tag)
+        e = compute_e(rlength);
+    else
+        e = csp->cr_e;
+
     if (e > 44) {
         /*
          * Special case e = 45. Don't waste the most significant bit
@@ -3716,15 +3729,16 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
     if (csp->cr_sealed) {
         /* sealed */
         ret = (perms << 49) |
+            ((uint64_t)csp->cr_unused << 47) |
             ((uint64_t)e << 41) | (1ull << 40) |
-            ((b & ~((1ull << 12) - 1)) << 32) |
+            ((b & ~((1ull << 12) - 1)) << 20) |
             ((uint64_t)(csp->cr_otype & 0xfff000) << (20 - 12)) |
-            ((t & ~((1ull << 12) -1 )) << 12) |
+            (t & ~((1ull << 12) - 1)) |
             (uint64_t)(csp->cr_otype & 0x000fff);
     } else {
         /* unsealed */
-        ret = (perms << 49) | ((uint64_t)e << 41) |
-                (b << 20) | t;
+        ret = (perms << 49) | ((uint64_t)csp->cr_unused << 47) |
+            ((uint64_t)e << 41) | (b << 20) | t;
     }
 
     /* Log memory cap write, if needed. */

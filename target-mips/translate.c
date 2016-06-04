@@ -23419,6 +23419,9 @@ void cpu_state_reset(CPUMIPSState *env)
         crp->cr_base = 0UL;
         crp->cr_length = ~0UL;
         crp->cr_otype = 0;
+        crp->cr_sealed = 0;
+        crp->cr_e = 0;
+        crp->cr_unused = 0;
 
         for (i = 0; i < 32; i++) {
             crp = &env->active_tc.C[i];
@@ -23430,6 +23433,9 @@ void cpu_state_reset(CPUMIPSState *env)
             crp->cr_base = 0UL;
             crp->cr_length = ~0UL;
             crp->cr_otype = 0;
+            crp->cr_sealed = 0;
+            crp->cr_e = 0;
+            crp->cr_unused = 0;
         }
     }
     // env->CP0_Status |= (1 << CP0St_CU2);

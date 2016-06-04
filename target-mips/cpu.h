@@ -183,6 +183,8 @@ struct cap_register {
     uint32_t cr_otype;  /* Object Type, 24 bits */
     uint8_t  cr_tag;    /* Tag */
     uint8_t  cr_sealed; /* Sealed flag */
+    uint8_t  cr_e;	    /* exponent (128-bit capabilities) */
+    uint8_t  cr_unused; /* Unused bits (128-bit capabilities) */
 };
 typedef struct cap_register cap_register_t;
 
@@ -197,6 +199,8 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->cr_length = 0UL;
     cp->cr_tag = 0;
     cp->cr_sealed = 0;
+    cp->cr_unused = 0;
+    cp->cr_e = 0;
 
     return cp;
 }
