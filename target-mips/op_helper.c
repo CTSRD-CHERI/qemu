@@ -1874,7 +1874,7 @@ static inline void check_cap(CPUMIPSState *env, cap_register_t *cr,
 {
     uint16_t cause;
     /*
-     * See section 3.6 in CHERI Architecture.
+     * See section 5.6 in CHERI Architecture.
      *
      * Capability checks (in order of priority):
      * (1) <ctag> must be set (CP2Ca_TAG Violation).
@@ -1888,13 +1888,13 @@ static inline void check_cap(CPUMIPSState *env, cap_register_t *cr,
         // fprintf(qemu_logfile, "CAP Tag VIOLATION: ");
         goto do_exception;
     }
+    if (is_cap_sealed(cr)) {
+        cause = CP2Ca_SEAL;
+        // fprintf(qemu_logfile, "CAP Seal VIOLATION: ");
+        goto do_exception;
+    }
     if ((cr->cr_perms & perm) != perm) {
-        if (is_cap_sealed(cr)) {
-            cause = CP2Ca_SEAL;
-            // fprintf(qemu_logfile, "CAP Seal VIOLATION: ");
-            goto do_exception;
-        } else {
-            switch (perm) {
+        switch (perm) {
             case CAP_PERM_EXECUTE:
                 cause = CP2Ca_PERM_EXE;
                 // fprintf(qemu_logfile, "CAP Exe VIOLATION: ");
@@ -1909,7 +1909,6 @@ static inline void check_cap(CPUMIPSState *env, cap_register_t *cr,
                 goto do_exception;
             default:
                 break;
-            }
         }
     }
     if (addr < cr->cr_base || (addr + len) > (cr->cr_base + cr->cr_length)) {
