@@ -1699,16 +1699,25 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 
 static inline bool all_ones(uint64_t offset, uint32_t e)
 {
-    uint64_t Itop = offset >> (e + CHERI128_M_SIZE_UNSEALED);
+    uint64_t Itop;
+    uint32_t shift = e + CHERI128_M_SIZE_UNSEALED;
 
-    return Itop == ((1ull << e) - 1ull);
+    if (shift >= 63)
+        return false;
+    Itop = offset >> shift;
+    return Itop == (0xfffffffffffffffful >> shift);
 }
 
-static inline bool is_zero(uint64_t offset, uint32_t e)
+static inline bool all_zeroes(uint64_t offset, uint32_t e)
 {
-    uint64_t Itop = offset >> (e + CHERI128_M_SIZE_UNSEALED);
+    uint32_t shift = e + CHERI128_M_SIZE_UNSEALED;
+    uint64_t Itop;
 
-    return Itop == 0ull;
+    if (shift >= 63)
+        Itop = 0ul;
+    else
+        Itop = offset >> shift;
+    return Itop == 0ul;
 }
 
 
@@ -1780,8 +1789,9 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 {
     uint32_t e = compute_e(length);
     int64_t b, r, Imid, Amid;
+    bool inRange, inLimits;
 
-#define MOD_MASK    ((1ull << CHERI128_M_SIZE_UNSEALED) - 1ull)
+#define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
 
     /* Check for the boundary cases. */
     switch (e) {
@@ -1804,25 +1814,24 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 
     /* If sealed then mask off the lower bits. */
     if (sealed)
-        b &= ~((1ull << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) -
-                1ull);
+        b &= ~((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) -
+                1ul);
 
-    r = (b <= (1ull << 12)) ? 0 : ((b - (1ull << 12)) & MOD_MASK);
+    r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
+
+    /* inRange, test if bits are all the same */
+    inRange = all_ones(offset, e) || all_zeroes(offset, e);
+
+    /* inLimits */
+    if ((offset >> 63) == 0ul) {
+        inLimits = ((uint64_t)Imid  < (((uint64_t)(r - Amid - 1l)) & MOD_MASK));
+    } else {
+        inLimits = ((uint64_t)Imid >= (((uint64_t)(r - Amid)) & MOD_MASK));
+    }
 
 #undef MOD_MASK
 
-    if (e > 44) {
-        return true;
-    } else if (!all_ones(offset, e) && !is_zero(offset, e)) {
-        /* inRange = -s < i < s  failed */
-        return false;
-    } else if ( (((offset >> 63) == 0ull) && (Imid < (r - Amid - 1ll))) ||
-        (((offset >> 63) == 1ull) && (Imid >= (r - Amid))) ) {
-        /* inLimits = (i < 0) ? Imid >= (R - Amid) : (R - Amid - 1) failed */
-        return false;
-    } else {
-        return true;
-    }
+    return ((inRange && inLimits) || (e >= 44));
 }
 
 #else
