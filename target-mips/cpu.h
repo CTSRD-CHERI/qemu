@@ -224,7 +224,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_RESERVED5           (1 << 13)
 #define CAP_RESERVED6           (1 << 14)
 #else
-#define CAP_RESERVED1           (1 << 8)
+#define CAP_ACCESS_SYS_REGS     (1 << 8)
 #define CAP_RESERVED2           (1 << 9)
 #define CAP_ACCESS_EPCC         (1 << 10)
 #define CAP_ACCESS_KDC          (1 << 11)
@@ -233,6 +233,8 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_ACCESS_KR2C         (1 << 14)
 #endif /* NOTYET */
 /* 15-18 Software-defined */
+#define CAP_ACCESS_LEGACY_ALL   (1 << 10) | (1 << 11) | (1 << 12) | \
+                                (1 << 13) | (1 << 14)
 #ifdef CHERI_128
 #define CAP_PERMS_ALL           (0x7fff)     /* [0...14] */
 #define CAP_UPERMS_ALL          (0xf)        /* [15...18] */

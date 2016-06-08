@@ -137,6 +137,27 @@ static inline void do_raise_c0_exception(CPUMIPSState *env, uint16_t cause,
 static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
 {
     switch(reg) {
+#ifdef CHERI_128
+        /*
+         * XXX - Temporary
+         * Return only the Access System Registers exception type.
+         */
+        case CP2CAP_EPCC:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, reg);
+            break;
+        case CP2CAP_KDC:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, reg);
+            break;
+        case CP2CAP_KCC:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, reg);
+            break;
+        case CP2CAP_KR1C:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, reg);
+            break;
+        case CP2CAP_KR2C:
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, reg);
+            break;
+#else /* CHERI_128 */
         case CP2CAP_EPCC:
             do_raise_c2_exception(env, CP2Ca_ACCESS_EPCC, reg);
             break;
@@ -152,6 +173,7 @@ static inline void do_raise_c2_exception_v(CPUMIPSState *env, uint16_t reg)
         case CP2CAP_KR2C:
             do_raise_c2_exception(env, CP2Ca_ACCESS_KR2C, reg);
             break;
+#endif /* CHERI_128 */
         default:
             break;
     }
@@ -1979,6 +2001,18 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
         *cdp = *cbp;
         cdp->cr_perms = cbp->cr_perms & rt_perms;
+
+#ifdef CHERI_128
+        /*
+         * XXX - Temporary
+         * If all the legacy access system registers permissions are
+         * cleared then clear the new access system register permission
+         * as well.
+         */
+        if (!(cdp->cr_perms & CAP_ACCESS_LEGACY_ALL))
+            cdp->cr_perms &= ~CAP_ACCESS_SYS_REGS;
+#endif /* CHERI_128 */
+
         cdp->cr_uperms = cbp->cr_uperms & rt_uperms;
     }
 }
@@ -2242,7 +2276,11 @@ target_ulong helper_cgetcause(CPUMIPSState *env)
         do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYS_REGS);
 #else
     if (!(perms & CAP_ACCESS_EPCC)) {
+#ifdef CHERI_128
+        do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYS_REGS);
+#else /* CHERI_128 */
         do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_EPCC);
+#endif /* CHERI_128 */
 #endif
         return (target_ulong)0;
     } else {
@@ -2738,7 +2776,11 @@ void helper_csetcause(CPUMIPSState *env, target_ulong rt)
         do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYS_REGS);
 #else
     if (!(perms & CAP_ACCESS_EPCC)) {
+#ifdef CHERI_128
+        do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYS_REGS);
+#else /* CHERI_128 */
         do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_EPCC);
+#endif /* CHERI_128 */
 #endif
     } else {
         env->CP2_CapCause = (uint16_t)(rt & 0xffffUL);
@@ -3639,6 +3681,14 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         cdp->cr_uperms = getbits(pesbt, 60, 4);
     }
     cdp->cr_e = (uint8_t)e;
+
+    /*
+     * XXX - Temporary.
+     * If the new access system registers permission is set
+     * then also set all the legacy access permissions.
+     */
+    if (cdp->cr_perms & CAP_ACCESS_SYS_REGS)
+        cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
 
     if (b > 4096ul)
         r = b - 4096ul;
