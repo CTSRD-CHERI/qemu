@@ -1848,7 +1848,8 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
     if ((offset >> 63) == 0ul) {
         inLimits = ((uint64_t)Imid  < (((uint64_t)(r - Amid - 1l)) & MOD_MASK));
     } else {
-        inLimits = ((uint64_t)Imid >= (((uint64_t)(r - Amid)) & MOD_MASK));
+        inLimits = ((uint64_t)Imid >= (((uint64_t)(r - Amid)) & MOD_MASK)) &&
+            (r != Amid);
     }
 
 #undef MOD_MASK
