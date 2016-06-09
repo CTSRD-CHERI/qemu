@@ -473,10 +473,10 @@ static inline abi_long do_bsd___getcwd(abi_long arg1, abi_long arg2)
     if (p == NULL) {
         return -TARGET_EFAULT;
     }
-    ret = get_errno(__getcwd(p, arg2));
-    unlock_user(p, arg1, ret);
+    ret = __getcwd(p, arg2);
+    unlock_user(p, arg1, ret == 0 ? strnlen(p, arg2) : 0);
 
-    return ret;
+    return get_errno(ret);
 }
 
 /* dup(2) */
