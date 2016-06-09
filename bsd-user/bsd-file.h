@@ -31,14 +31,34 @@
 
 #define target_to_host_bitmask(x, tbl) (x)
 
-#define LOCK_PATH(p, arg)  do {             \
-    (p) =  lock_user_string(arg);           \
+#define LOCK_PATH(p, arg)                   \
+do {                                        \
+    (p) = lock_user_string(arg);            \
     if ((p) == NULL) {                      \
         return -TARGET_EFAULT;              \
     }                                       \
 } while (0)
 
-#define UNLOCK_PATH(p, arg)   unlock_user((p), (arg), 0)
+#define UNLOCK_PATH(p, arg)     unlock_user(p, arg, 0)
+
+#define LOCK_PATH2(p1, arg1, p2, arg2)      \
+do {                                        \
+    (p1) = lock_user_string(arg1);          \
+    if ((p1) == NULL) {                     \
+        return -TARGET_EFAULT;              \
+    }                                       \
+    (p2) = lock_user_string(arg2);          \
+    if ((p2) == NULL) {                     \
+        unlock_user(p1, arg1, 0);           \
+        return -TARGET_EFAULT;              \
+    }                                       \
+} while (0)
+
+#define UNLOCK_PATH2(p1, arg1, p2, arg2)    \
+do {                                        \
+    unlock_user(p2, arg2, 0);               \
+    unlock_user(p1, arg1, 0);               \
+} while (0)
 
 struct target_pollfd {
     int32_t fd;         /* file descriptor */
@@ -326,15 +346,9 @@ static inline abi_long do_bsd_rename(abi_long arg1, abi_long arg2)
     abi_long ret;
     void *p1, *p2;
 
-    LOCK_PATH(p1, arg1);
-    LOCK_PATH(p2, arg2);
-    if (!p1 || !p2) {
-        ret = -TARGET_EFAULT;
-    } else {
-        ret = get_errno(rename(p1, p2)); /* XXX path(p1), path(p2) */
-    }
-    UNLOCK_PATH(p2, arg2);
-    UNLOCK_PATH(p1, arg1);
+    LOCK_PATH2(p1, arg1, p2, arg2);
+    ret = get_errno(rename(p1, p2)); /* XXX path(p1), path(p2) */
+    UNLOCK_PATH2(p1, arg1, p2, arg2);
 
     return ret;
 }
@@ -346,15 +360,9 @@ static inline abi_long do_bsd_renameat(abi_long arg1, abi_long arg2,
     abi_long ret;
     void *p1, *p2;
 
-    LOCK_PATH(p1, arg2);
-    LOCK_PATH(p2, arg4);
-    if (!p1 || !p2) {
-        ret = -TARGET_EFAULT;
-    } else {
-        ret = get_errno(renameat(arg1, p1, arg3, p2));
-    }
-    UNLOCK_PATH(p2, arg4);
-    UNLOCK_PATH(p1, arg2);
+    LOCK_PATH2(p1, arg2, p2, arg4);
+    ret = get_errno(renameat(arg1, p1, arg3, p2));
+    UNLOCK_PATH2(p1, arg2, p2, arg4);
 
     return ret;
 }
@@ -365,15 +373,9 @@ static inline abi_long do_bsd_link(abi_long arg1, abi_long arg2)
     abi_long ret;
     void *p1, *p2;
 
-    LOCK_PATH(p1, arg1);
-    LOCK_PATH(p2, arg2);
-    if (!p1 || !p2) {
-        ret = -TARGET_EFAULT;
-    } else {
-        ret = get_errno(link(p1, p2)); /* XXX path(p1), path(p2) */
-    }
-    UNLOCK_PATH(p2, arg2);
-    UNLOCK_PATH(p1, arg1);
+    LOCK_PATH2(p1, arg1, p2, arg2);
+    ret = get_errno(link(p1, p2)); /* XXX path(p1), path(p2) */
+    UNLOCK_PATH2(p1, arg1, p2, arg2);
 
     return ret;
 }
@@ -385,15 +387,9 @@ static inline abi_long do_bsd_linkat(abi_long arg1, abi_long arg2,
     abi_long ret;
     void *p1, *p2;
 
-    LOCK_PATH(p1, arg2);
-    LOCK_PATH(p2, arg4);
-    if (!p1 || !p2) {
-        ret = -TARGET_EFAULT;
-    } else {
-        ret = get_errno(linkat(arg1, p1, arg3, p2, arg5));
-    }
-    UNLOCK_PATH(p2, arg4);
-    UNLOCK_PATH(p1, arg2);
+    LOCK_PATH2(p1, arg2, p2, arg4);
+    ret = get_errno(linkat(arg1, p1, arg3, p2, arg5));
+    UNLOCK_PATH2(p1, arg2, p2, arg4);
 
     return ret;
 }
@@ -558,23 +554,17 @@ static inline abi_long do_bsd_mount(abi_long arg1, abi_long arg2, abi_long arg3,
     abi_long ret;
     void *p1, *p2;
 
-    LOCK_PATH(p1, arg1);
-    LOCK_PATH(p2, arg2);
-    if (!p1 || !p2) {
-        ret = -TARGET_EFAULT;
+    LOCK_PATH2(p1, arg1, p2, arg2);
+    /*
+     * XXX arg4 should be locked, but it isn't clear how to do that
+     * since it's it may be not be a NULL-terminated string.
+     */
+    if (arg4 == 0) {
+        ret = get_errno(mount(p1, p2, arg3, NULL)); /* XXX path(p2)? */
     } else {
-        /*
-         * XXX arg4 should be locked, but it isn't clear how to do that
-         * since it's it may be not be a NULL-terminated string.
-         */
-        if (arg4 == 0) {
-            ret = get_errno(mount(p1, p2, arg3, NULL)); /* XXX path(p2)? */
-        } else {
-            ret = get_errno(mount(p1, p2, arg3, g2h(arg4))); /* XXX path(p2)? */
-        }
+        ret = get_errno(mount(p1, p2, arg3, g2h(arg4))); /* XXX path(p2)? */
     }
-    UNLOCK_PATH(p2, arg2);
-    UNLOCK_PATH(p1, arg1);
+    UNLOCK_PATH2(p1, arg1, p2, arg2);
 
     return ret;
 }
@@ -615,15 +605,9 @@ static inline abi_long do_bsd_symlink(abi_long arg1, abi_long arg2)
     abi_long ret;
     void *p1, *p2;
 
-    LOCK_PATH(p1, arg1);
-    LOCK_PATH(p2, arg2);
-    if (!p1 || !p2) {
-        ret = -TARGET_EFAULT;
-    } else {
-        ret = get_errno(symlink(p1, p2)); /* XXX path(p1), path(p2) */
-    }
-    UNLOCK_PATH(p2, arg2);
-    UNLOCK_PATH(p1, arg1);
+    LOCK_PATH2(p1, arg1, p2, arg2);
+    ret = get_errno(symlink(p1, p2)); /* XXX path(p1), path(p2) */
+    UNLOCK_PATH2(p1, arg1, p2, arg2);
 
     return ret;
 }
@@ -635,15 +619,9 @@ static inline abi_long do_bsd_symlinkat(abi_long arg1, abi_long arg2,
     abi_long ret;
     void *p1, *p2;
 
-    LOCK_PATH(p1, arg1);
-    LOCK_PATH(p2, arg3);
-    if (!p1 || !p2) {
-        ret = -TARGET_EFAULT;
-    } else {
-        ret = get_errno(symlinkat(p1, arg2, p2)); /* XXX path(p1), path(p2) */
-    }
-    UNLOCK_PATH(p2, arg3);
-    UNLOCK_PATH(p1, arg1);
+    LOCK_PATH2(p1, arg1, p2, arg3);
+    ret = get_errno(symlinkat(p1, arg2, p2)); /* XXX path(p1), path(p2) */
+    UNLOCK_PATH2(p1, arg1, p2, arg3);
 
     return ret;
 }
