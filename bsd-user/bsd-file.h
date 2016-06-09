@@ -353,8 +353,8 @@ static inline abi_long do_bsd_renameat(abi_long arg1, abi_long arg2,
     } else {
         ret = get_errno(renameat(arg1, p1, arg3, p2));
     }
-    UNLOCK_PATH(p2, arg2);
-    UNLOCK_PATH(p1, arg1);
+    UNLOCK_PATH(p2, arg4);
+    UNLOCK_PATH(p1, arg2);
 
     return ret;
 }
