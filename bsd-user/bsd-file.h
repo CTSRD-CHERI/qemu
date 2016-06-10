@@ -474,7 +474,7 @@ static inline abi_long do_bsd___getcwd(abi_long arg1, abi_long arg2)
         return -TARGET_EFAULT;
     }
     ret = __getcwd(p, arg2);
-    unlock_user(p, arg1, ret == 0 ? strnlen(p, arg2) : 0);
+    unlock_user(p, arg1, ret == 0 ? strlen(p) + 1 : 0);
 
     return get_errno(ret);
 }
