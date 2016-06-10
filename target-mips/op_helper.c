@@ -1846,10 +1846,18 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
     }
 
-    /* If sealed then mask off the lower bits. */
-    if (sealed)
-        b &= ~((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) -
-                1ul);
+    /*
+     * With sealed capabilities we don't have as many bits for the
+     * bounds. For compressed 128 it is only 8-bits for each the
+     * top and bottom (the top 8 bits of these values).  Therefore,
+     * for sealed capabilities we need to check if that changes the
+     * precision.
+     */
+    if (sealed) {
+        if (b &
+           ((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) - 1ul))
+            return (false);
+    }
 
     r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
 
@@ -2695,7 +2703,7 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (!is_representable(true, csp->cr_base, csp->cr_length,
-                csp->cr_offset, csp->cr_offset)) {
+                csp->cr_offset, 0ul)) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         *cdp = *csp;
