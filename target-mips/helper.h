@@ -166,6 +166,9 @@ DEF_HELPER_3(ccheck_store, tl, env, tl, i32)
 DEF_HELPER_3(ccheck_load, tl, env, tl, i32)
 DEF_HELPER_5(cinvalidate_tag, void, env, tl, i32, i32, tl)
 DEF_HELPER_5(cinvalidate_tag32, void, env, tl, i32, i32, i32)
+#if defined(CHERI_128)
+DEF_HELPER_2(ccheck_imprecise, tl, env, tl)
+#endif
 
 DEF_HELPER_4(candperm, void, env, i32, i32, tl)
 DEF_HELPER_3(cbts, tl, env, i32, i32)

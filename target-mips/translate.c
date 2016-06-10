@@ -6540,8 +6540,12 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         gen_load_gpr(btarget, rs);
 #ifdef TARGET_CHERI
         /* Add PCC.base to rs */
+#ifdef CHERI_128
+        gen_helper_ccheck_imprecise(t1, cpu_env, btarget);
+#else /* ! CHERI_128 */
         tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
                 offsetof(cap_register_t, cr_base));
+#endif /* ! CHERI_128 */
         tcg_gen_add_i64(btarget, btarget, t1);
 #endif /* TARGET_CHERI */
         break;

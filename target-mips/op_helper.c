@@ -1704,7 +1704,15 @@ is_cap_sealed(cap_register_t *cp)
 }
 
 #ifdef CHERI_MAGIC128
+
 #define CHERI_CAP_SIZE  16
+
+static inline void int_to_cap(uint64_t x, cap_register_t *cr)
+{
+
+    (void)null_capability(cr);
+    cr->cr_offset = x;
+}
 
 static inline bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
@@ -1860,8 +1868,48 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
     return ((inRange && inLimits) || (e >= 44));
 }
 
+/*
+ * Convert 64-bit integer into a capability that holds the integer in
+ * its offset field.
+ *
+ *       cap.base = 0, cap.tag = false, cap.offset = x
+ *
+ * The contents of other fields of int to cap depends on the capability
+ * compression scheme in use (e.g. 256-bit capabilities or 128-bit
+ * compressed capabilities). In particular, with 128-bit compressed
+ * capabilities, length is not always zero. The length of a capability
+ * created via int to cap is not semantically meaningful, and programs
+ * should not rely on it having any particular value.
+ */
+static inline void int_to_cap(uint64_t x, cap_register_t *cr)
+{
+
+    (void)null_capability(cr);
+    cr->cr_offset = x;
+}
+
+target_ulong helper_ccheck_imprecise(CPUMIPSState *env, target_ulong inc)
+{
+    cap_register_t *pcc = &env->active_tc.PCC;
+
+    if (!is_representable(is_cap_sealed(pcc), pcc->cr_base, pcc->cr_length,
+                pcc->cr_offset, inc)) {
+        int_to_cap(pcc->cr_base + inc, pcc);
+    }
+
+    return (pcc->cr_base);
+}
+
 #else
+
 #define CHERI_CAP_SIZE  32
+
+static inline void int_to_cap(uint64_t x, cap_register_t *cr)
+{
+
+    (void)null_capability(cr);
+    cr->cr_offset = x;
+}
 
 static inline bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
@@ -2242,8 +2290,7 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else {
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base,
                     cbp->cr_length, cbp->cr_offset, rt)) {
-            (void)null_capability(cdp);
-            cdp->cr_offset = cbp->cr_base + rt;
+            int_to_cap(cbp->cr_base + rt, cdp);
         } else {
             *cdp = *cbp;
             cdp->cr_offset = rt;
@@ -2371,8 +2418,7 @@ void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
 #endif /* NOTYET */
     } else if (!is_representable(is_cap_sealed(pccp), pccp->cr_base,
                 pccp->cr_length, pccp->cr_offset, rs)) {
-        (void)null_capability(cdp);
-        cdp->cr_offset = pccp->cr_base + rs;
+        int_to_cap(pccp->cr_base + rs, cdp);
     } else {
         *cdp = *pccp;
         cdp->cr_offset = rs;
@@ -2520,8 +2566,7 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
                     cbp->cr_offset, cb_offset_plus_rt)) {
-            (void)null_capability(cdp);
-            cdp->cr_offset = cb_offset_plus_rt + cbp->cr_base;
+            int_to_cap(cbp->cr_base + cb_offset_plus_rt, cdp);
         } else {
             *cdp = *cbp;
             cdp->cr_offset = cb_offset_plus_rt;
@@ -2851,8 +2896,7 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else {
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
                     cbp->cr_offset, rt)) {
-            (void)null_capability(cdp);
-            cdp->cr_offset = cbp->cr_base + rt;
+            int_to_cap(cbp->cr_base + rt, cdp);
         } else {
             *cdp = *cbp;
             cdp->cr_offset = rt;
@@ -4244,13 +4288,20 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
 
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 {
+    cap_register_t *pcc = &env->active_tc.PCC;
 
     /* Do instruction tracing, if enabled. */
     log_instruction(env, pc, isa);
 
+#ifdef CHERI_128
+    /* Check tag before updating offset. */
+    if (!pcc->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, 0xff);
+    }
+#endif /* CHERI_128 */
+
     /* Update the offset */
-    // env->active_tc.PCC.cr_cursor = pc - env->active_tc.PCC.cr_base;
-    env->active_tc.PCC.cr_offset = pc - env->active_tc.PCC.cr_base;
+    pcc->cr_offset = pc - pcc->cr_base;
 
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 4);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
