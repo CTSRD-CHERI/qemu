@@ -99,7 +99,7 @@ const char *causestr[] = {
     "Permit_Store_Capability Violation",
     "Permit_Store_Local_Capability Violation",
     "Permit_Seal Violation",
-    "Reserved 0x18",
+    "Access_Sys_Reg Violation",
     "Reserved 0x19",
     "Access_EPCC Violation",
     "Access_KDC Violation",
@@ -1707,7 +1707,8 @@ is_cap_sealed(cap_register_t *cp)
 #define CHERI_CAP_SIZE  16
 
 static inline bool
-is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
+is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
+        uint64_t inc)
 {
 
     return true;
@@ -1746,15 +1747,17 @@ static inline bool all_zeroes(uint64_t offset, uint32_t e)
 /* Returns the index of the most significant bit set in x */
 static inline uint32_t idx_MSNZ(uint64_t x)
 {
-#ifdef HOST_X86_64
-    uint64_t r;
-
-    /* On x86_64 just use the bsrq instruction. */
-    asm("bsrq %1,%q0" : "+r" (r) : "rm" (x));
-
-    return (uint32_t)r;
-
-#else /* ! HOST_X86_64 */
+    /*
+     * XXX For HOST_X86_64
+     *
+     * uint64_t r;
+     *
+     * asm("bsrq %1,%q0" : "+r" (r) : "rm" (x));
+     *
+     * return (uint32_t)r;
+     *
+     * XXX This isn't quite right. %q0 needs to be pushed/popped?
+     */
 
 /* floor(log2(x)) != floor(log2(y)) */
 #define ld_neq(x, y) (((x)^(y)) > ((x)&(y)))
@@ -1769,7 +1772,6 @@ static inline uint32_t idx_MSNZ(uint64_t x)
 #undef ld_neq
 
     return r;
-#endif /* ! HOST_X86_64 */
 }
 
 /*
@@ -1779,35 +1781,41 @@ static inline uint32_t idx_MSNZ(uint64_t x)
 static uint32_t compute_e(uint64_t rlength)
 {
     uint64_t sum = rlength + (rlength >> 6);    /* May overflow */
+    uint32_t e;
 
     if (sum >= rlength) {
         /* Did not overflow */
-        return idx_MSNZ(sum >> 19);
+        e = idx_MSNZ(sum >> 19);
     } else {
         /* overflowed */
         sum = (sum >> 1) | 0x8000000000000000ull;
-        return idx_MSNZ(sum >> 18);
+        e = idx_MSNZ(sum >> 18);
     }
+
+    /* Round up to multiple of 4, if needed. */
+    return ((e & 3) ? ((e & ~3) + 4) : e);
 }
 
 /*
  * Check to see if a memory region is representable by a compressed
  * capability. It is representable if:
  *
- *   representable = (inRange && inLimits) || (E > 44)
+ *   representable = (inRange && inLimits) || (E >= 44)
  *
  * where:
  *
- *   E = compression exponent
+ *   E = compression exponent (see compute_e() above)
  *
  *   inRange = -s < i < s  where i is the increment (or offset)
  *   (In other words, all the bits of i<63, E+20> are the same.)
  *
- *   inLimits = (i < 0) ? Imid >= (R - Amid) : (R - Amid - 1)
- *   where Imid = i<E+19, E>, Amid = a<E+19, E> and R = B - 2^12.
+ *   inLimits = (i < 0) ? (Imid >= (R - Amid)) && (R != Amid) : (R - Amid - 1)
+ *   where Imid = i<E+19, E>, Amid = a<E+19, E>, R = B - 2^12 and a =
+ *   base + offset.
  */
 static bool
-is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
+is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
+        uint64_t inc)
 {
     uint32_t e = compute_e(length);
     int64_t b, r, Imid, Amid;
@@ -1816,22 +1824,18 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 #define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
 
     /* Check for the boundary cases. */
-    switch (e) {
-    case 0:
+    if (e == 0) {
         b = (int64_t)(base & MOD_MASK);
-        Imid = (int64_t)(offset & MOD_MASK);
+        Imid = (int64_t)(inc & MOD_MASK);
         Amid = (int64_t)((base + offset) & MOD_MASK);
-        break;
-    case 45:
+    } else if (e > 44) {
         b = (int64_t)((base >> 44) & MOD_MASK);
-        Imid = (int64_t)((offset >> 44) & MOD_MASK);
+        Imid = (int64_t)((inc >> 44) & MOD_MASK);
         Amid = (int64_t)(((base + offset) >> 44) & MOD_MASK);
-        break;
-    default:
+    } else {
         b = (int64_t)((base >> e) & MOD_MASK);
-        Imid = (int64_t)((offset >> e) & MOD_MASK);
+        Imid = (int64_t)((inc >> e) & MOD_MASK);
         Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
-        break;
     }
 
     /* If sealed then mask off the lower bits. */
@@ -1842,16 +1846,15 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
     r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
 
     /* inRange, test if bits are all the same */
-    inRange = all_ones(offset, e) || all_zeroes(offset, e);
+    inRange = all_ones(inc, e) || all_zeroes(inc, e);
 
     /* inLimits */
-    if ((offset >> 63) == 0ul) {
+    if ((inc >> 63) == 0ul) {
         inLimits = ((uint64_t)Imid  < (((uint64_t)(r - Amid - 1l)) & MOD_MASK));
     } else {
         inLimits = ((uint64_t)Imid >= (((uint64_t)(r - Amid)) & MOD_MASK)) &&
             (r != Amid);
     }
-
 #undef MOD_MASK
 
     return ((inRange && inLimits) || (e >= 44));
@@ -1861,7 +1864,8 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
 #define CHERI_CAP_SIZE  32
 
 static inline bool
-is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset)
+is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
+        uint64_t inc)
 {
 
     return true;
@@ -2237,7 +2241,7 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base,
-                    cbp->cr_length, rt)) {
+                    cbp->cr_length, cbp->cr_offset, rt)) {
             (void)null_capability(cdp);
             cdp->cr_offset = cbp->cr_base + rt;
         } else {
@@ -2366,7 +2370,7 @@ void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
         do_raise_c2_exception_v(env, cd);
 #endif /* NOTYET */
     } else if (!is_representable(is_cap_sealed(pccp), pccp->cr_base,
-                pccp->cr_length, rs)) {
+                pccp->cr_length, pccp->cr_offset, rs)) {
         (void)null_capability(cdp);
         cdp->cr_offset = pccp->cr_base + rs;
     } else {
@@ -2515,7 +2519,7 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         uint64_t cb_offset_plus_rt = cbp->cr_offset + rt;
 
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
-                    cb_offset_plus_rt)) {
+                    cbp->cr_offset, cb_offset_plus_rt)) {
             (void)null_capability(cdp);
             cdp->cr_offset = cb_offset_plus_rt + cbp->cr_base;
         } else {
@@ -2646,7 +2650,7 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (!is_representable(true, csp->cr_base, csp->cr_length,
-                csp->cr_offset)) {
+                csp->cr_offset, csp->cr_offset)) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         *cdp = *csp;
@@ -2728,7 +2732,7 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (cursor_rt > (cbp->cr_base + cbp->cr_length)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (!is_representable(is_cap_sealed(cbp), cursor, rt, 0)) {
+    } else if (!is_representable(is_cap_sealed(cbp), cursor, rt, 0, 0)) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cb);
     } else {
         *cdp = *cbp;
@@ -2845,8 +2849,8 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (cbp->cr_tag && is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
-        if (!is_representable(is_cap_sealed(cbp),
-                    cbp->cr_base, cbp->cr_length, rt)) {
+        if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
+                    cbp->cr_offset, rt)) {
             (void)null_capability(cdp);
             cdp->cr_offset = cbp->cr_base + rt;
         } else {
@@ -3705,39 +3709,42 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         ct = (t < r) ? 1ll : 0ll;
     }
 
-    shift = e + CHERI128_M_SIZE_UNSEALED;
-    if (shift > 63) {
+    if (e == 44) {
         /* i.e., (((cursor >> shift) + cb) << shift) = 0 */
-        if (e > 44) {
-            /* Special case when e = 45. */
+        base = b << e;
+        cdp->cr_length = (t << e) - base;
+    } else if (e > 44) {
+        /* Special case when e = 48. */
 
-            /* Will bot overflow when we shift it? */
-            if (b & 0x80000ull) {
-                /* Yes, just make it max uint64_t. */
-                base = 0xffffffffffffffffull;
-            } else {
-                base = b << e;
-            }
-
-            /* Will top overflow when we shift it? */
-            if (t & 0x80000ull) {
-                /* Yes, just make it max uint64_t and calculate length. */
-                cdp->cr_length = 0xffffffffffffffffull - base;
-            } else {
-                cdp->cr_length = (t << e) - base;
-            }
+        /* Will bot overflow when we shift it? */
+        if (b & 0x80000ul) {
+            /* Yes, just make it max uint64_t. */
+            base = 0xfffffffffffffffful;
         } else {
-            /* shift > 63 && e < 45 */
-            base = b << e;
-            cdp->cr_length = (t << e) - base;
+            base = b << 45;
         }
+
+        /* Will top overflow when we shift it? */
+        if (t & 0x80000ull) {
+            /* Yes, just make it max uint64_t and calculate length. */
+            cdp->cr_length = 0xfffffffffffffffful - base;
+        } else {
+            cdp->cr_length = (t << 45) - base;
+        }
+    } else if (e == 0) {
+        shift = CHERI128_M_SIZE_UNSEALED;
+        base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
+        cdp->cr_length =
+            (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) + t) - base;
     } else {
+        shift = e + CHERI128_M_SIZE_UNSEALED;
         base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) +
             (b << e);
         cdp->cr_length =
             (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
             (t << e)) - base;
     }
+
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
 
@@ -3771,17 +3778,24 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
     else
         e = csp->cr_e;
 
-    if (e > 44) {
+#define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
+
+    if (e == 0) {
+        b = base_req & MOD_MASK;
+        t = (base_req + rlength) & MOD_MASK;
+    } else if (e > 44) {
         /*
-         * Special case e = 45. Don't waste the most significant bit
+         * Special case e > 44. Don't waste the most significant bit
          * by shifting too much.
          */
-        b = (base_req >> 44) & ((1ull << 20) - 1);
-        t = ((base_req + rlength) >> 44) & ((1ull << 20) - 1);
+        b = (base_req >> 44) & MOD_MASK;
+        t = ((base_req + rlength) >> 44) & MOD_MASK;
     } else {
-        b = (base_req >> e) & ((1ull << 20) - 1);
-        t = ((base_req + rlength) >> e) & ((1ull << 20) - 1);
+        b = (base_req >> e) & MOD_MASK;
+        t = ((base_req + rlength) >> e) & MOD_MASK;
     }
+
+#undef MOD_MASK
 
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << 11) |
         (csp->cr_perms & CAP_PERMS_ALL));
