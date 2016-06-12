@@ -364,10 +364,8 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
     struct emulated_sigtable *k;
     struct qemu_sigqueue *q, **pq;
     abi_ulong handler;
-    int queue;
 
     k = &ts->sigtab[sig - 1];
-    queue = gdb_queuesig();
     handler = sigact_table[sig - 1]._sa_handler;
     if (ts->sigsegv_blocked && sig == TARGET_SIGSEGV) {
         /* Guest has blocked SIGSEGV but we got one anyway. Assume this
@@ -380,11 +378,8 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
          */
         handler = TARGET_SIG_DFL;
     }
-#ifdef DEBUG_SIGNAL
-    fprintf(stderr, "queue_signal: sig=%d handler=0x%lx flags=0x%x\n", sig,
-        handler, (uint32_t)sigact_table[sig - 1].sa_flags);
-#endif
-    if (!queue && (TARGET_SIG_DFL == handler)) {
+    trace_user_queue_signal(env, sig);
+    if (TARGET_SIG_DFL == handler) {
         if (sig == TARGET_SIGTSTP || sig == TARGET_SIGTTIN ||
             sig == TARGET_SIGTTOU) {
             kill(getpid(), SIGSTOP);
@@ -400,9 +395,9 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
                 return 0; /* The signal was ignored. */
             }
         }
-    } else if (!queue && (TARGET_SIG_IGN == handler)) {
+    } else if (TARGET_SIG_IGN == handler) {
         return 0; /* Ignored signal. */
-    } else if (!queue && (TARGET_SIG_ERR == handler)) {
+    } else if (TARGET_SIG_ERR == handler) {
         force_sig(sig);
     } else {
         pq = &k->first;
