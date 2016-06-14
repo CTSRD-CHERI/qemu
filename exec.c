@@ -742,6 +742,17 @@ static inline bool cpu_watchpoint_address_matches(CPUWatchpoint *wp,
 
 #endif
 
+#ifdef CONFIG_CHERI
+/* Set a breakcount. */
+int cpu_breakcount(CPUState *cpu, uint64_t count)
+{
+
+    cpu->breakcount = count;
+
+    return 0;
+}
+#endif
+
 /* Add a breakpoint.  */
 int cpu_breakpoint_insert(CPUState *cpu, vaddr pc, int flags,
                           CPUBreakpoint **breakpoint)

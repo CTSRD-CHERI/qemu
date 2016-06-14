@@ -4297,9 +4297,18 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
+    CPUState *cs = CPU(mips_env_get_cpu(env));
 
     /* Do instruction tracing, if enabled. */
     log_instruction(env, pc, isa);
+
+    /* Decrement the startup breakcount, if set. */
+    if (unlikely(cs->breakcount)) {
+        cs->breakcount--;
+        if (cs->breakcount == 0UL) {
+            helper_raise_exception(env, EXCP_DEBUG);
+        }
+    }
 
 #ifdef CHERI_128
     /* Check tag before updating offset. */

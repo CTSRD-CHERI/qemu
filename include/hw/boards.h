@@ -152,6 +152,7 @@ struct MachineState {
     AccelState *accelerator;
 #if defined(CONFIG_CHERI)
     uint64_t breakpoint;    /* XXX should really be an array or linked list */
+    uint64_t breakcount;
 #endif
 };
 

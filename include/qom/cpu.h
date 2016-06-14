@@ -273,6 +273,9 @@ struct CPUState {
     uint32_t interrupt_request;
     int singlestep_enabled;
     int64_t icount_extra;
+#ifdef CONFIG_CHERI
+    uint64_t breakcount;
+#endif
     sigjmp_buf jmp_env;
 
     AddressSpace *as;
@@ -679,6 +682,9 @@ void cpu_single_step(CPUState *cpu, int enabled);
 #define BP_WATCHPOINT_HIT_WRITE 0x80
 #define BP_WATCHPOINT_HIT (BP_WATCHPOINT_HIT_READ | BP_WATCHPOINT_HIT_WRITE)
 
+#ifdef CONFIG_CHERI
+int cpu_breakcount(CPUState *cpu, uint64_t count);
+#endif
 int cpu_breakpoint_insert(CPUState *cpu, vaddr pc, int flags,
                           CPUBreakpoint **breakpoint);
 int cpu_breakpoint_remove(CPUState *cpu, vaddr pc, int flags);

@@ -3277,6 +3277,13 @@ STEXI
 @findex -bp
 Set GDB breakpoint at addr.
 ETEXI
+
+DEF("bc", HAS_ARG, QEMU_OPTION_breakcount, \
+    "-bc <count>     set breakpoint at <count> instructions\n", QEMU_ARCH_ALL)
+STEXI
+@item -bc @var{count}
+Set GDB breakpoint in <count> instructions after start.
+ETEXI
 #endif
 
 
