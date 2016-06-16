@@ -2200,7 +2200,7 @@ void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
     } else if ((csp->cr_uperms & rt_uperms) != rt_uperms) {
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
-    } else if ((rt & ~(CAP_PERMS_ALL | CAP_PERMS_ALL)) != 0ul) {
+    } else if ((rt >> CAP_UPERMS_SHFT) != 0UL) {
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
     }
 }
@@ -3851,7 +3851,7 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
 
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << 11) |
         (csp->cr_perms & CAP_PERMS_ALL));
-    if (csp->cr_sealed) {
+    if (is_cap_sealed(csp)) {
         /* sealed */
         ret = (perms << 49) |
             ((uint64_t)csp->cr_unused << 47) |
@@ -3906,8 +3906,8 @@ static inline void dump_cap_load(uint64_t addr, uint64_t cursor,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx "] = v:%d c:"
-                TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
+       fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx "] = v:%d c:"
+               TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
     }
 }
 
@@ -3919,8 +3919,8 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx "] = v:%d c:"
-                TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
+      fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx "] = v:%d c:"
+              TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
     }
 }
 
@@ -3941,6 +3941,8 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
             CAP_UPERMS_ALL);
     if (tps & 1ULL)
         cdp->cr_sealed = 1;
+    else
+        cdp->cr_sealed = 0;
     cdp->cr_length = length;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
@@ -3987,8 +3989,8 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
         (csp->cr_perms & CAP_PERMS_ALL));
 
-    tps = (((uint64_t)csp->cr_otype << 32) |
-        (perms << 1) | ((csp->cr_sealed) ? 1UL : 0UL));
+    tps = ((uint64_t)csp->cr_otype << 32) |
+        (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
 
     length = csp->cr_length;
 
@@ -4013,8 +4015,8 @@ static inline void dump_cap_load_op(uint64_t addr, uint64_t perm_type,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx "] = v:%d tps:"
-                TARGET_FMT_lx "\n", addr, tag, perm_type);
+        fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx
+             "] = v:%d tps:" TARGET_FMT_lx "\n", addr, tag, perm_type);
     }
 }
 
@@ -4036,8 +4038,8 @@ static inline void dump_cap_store_op(uint64_t addr, uint64_t perm_type,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx "] = v:%d tps:"
-                TARGET_FMT_lx "\n", addr, tag, perm_type);
+        fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx
+                "] = v:%d tps:" TARGET_FMT_lx "\n", addr, tag, perm_type);
     }
 }
 
@@ -4082,6 +4084,8 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
     cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype & 1ULL)
         cdp->cr_sealed = 1;
+    else
+        cdp->cr_sealed = 0;
 
     /* Log memory read, if needed. */
     dump_cap_load_op(addr, otype, tag);
@@ -4109,6 +4113,8 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
     cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype & 1ULL)
         cdp->cr_sealed = 1;
+    else
+        cdp->cr_sealed = 0;
 
     /* Log memory read, if needed. */
     dump_cap_load_op(addr, otype, tag);
@@ -4129,8 +4135,8 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
         (csp->cr_perms & CAP_PERMS_ALL));
 
-    ret = (((uint64_t)csp->cr_otype << 32) |
-        (perms << 1) | ((csp->cr_sealed) ? 1UL : 0UL));
+    ret = ((uint64_t)csp->cr_otype << 32) |
+        (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
 
     /* Log memory cap write, if needed. */
     dump_cap_store_op(vaddr, ret, csp->cr_tag);
@@ -4480,7 +4486,7 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
 		    "perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
             // alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
             alias, crp->cr_offset, crp->cr_otype,
-            (crp->cr_sealed) ? 1 : 0,
+            is_cap_sealed(crp) ? 1 : 0,
             (crp->cr_perms & CAP_PERM_GLOBAL) ? 'G' : '-',
             (crp->cr_perms & CAP_PERM_EXECUTE) ? 'e' : '-',
             (crp->cr_perms & CAP_PERM_LOAD) ? 'l' : '-',
@@ -4499,7 +4505,7 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
 #else
     /*
     cpu_fprintf(f, "DEBUG %s: v:%d s:%d p:%08x b:%016lx l:%016lx o:%016lx t:%08x\n",
-            name, crp->cr_tag, (crp->cr_sealed) ? 1 : 0,
+            name, crp->cr_tag, is_cap_sealed(crp) ? 1 : 0,
             ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
             (crp->cr_perms & CAP_PERMS_ALL), crp->cr_base, crp->cr_length,
             crp->cr_offset, crp->cr_otype);
@@ -5666,7 +5672,7 @@ static void dump_changed_regs(CPUMIPSState *env)
                     ((uint64_t)cr->cr_otype << 32) |
                     (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
                     (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
-                    (cr->cr_sealed) ? 1 : 0;
+                    is_cap_sealed(cr) ? 1 : 0;
                 env->cvtrace.val3 = tswap64(cr->cr_offset + cr->cr_base);
                 env->cvtrace.val4 = tswap64(cr->cr_base);
                 env->cvtrace.val5 = tswap64(cr->cr_length);
@@ -5674,7 +5680,7 @@ static void dump_changed_regs(CPUMIPSState *env)
                 fprintf(qemu_logfile,
                         "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
                         " l:%016" PRIx64 "\n", i, cr->cr_tag,
-                        (cr->cr_sealed) ? 1 : 0,
+                        is_cap_sealed(cr) ? 1 : 0,
                         (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
                         (cr->cr_perms & CAP_PERMS_ALL)), cr->cr_base,
                         cr->cr_length);
