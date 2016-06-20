@@ -714,6 +714,9 @@ static inline void sysctl_oidfmt(uint32_t *holdp)
 abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
         abi_ulong oldp, abi_ulong oldlenp, abi_ulong newp, abi_ulong newlen)
 {
+#if TARGET_ABI_BITS != HOST_LONG_BITS
+    const abi_ulong maxmem = -0x100c000;
+#endif
     abi_long ret;
     void *hnamep, *holdp = NULL, *hnewp = NULL;
     size_t holdlen;
@@ -951,10 +954,9 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
 		if (sysctl(mib, 2, &lvalue, &len, NULL, 0) == -1 ) {
 			ret = -1;
 		} else {
-			abi_ulong maxmem = -0x100c000;
 			if (((unsigned long)maxmem) < lvalue)
 			    lvalue = maxmem;
-			    (*(abi_ulong *)holdp) = lvalue;
+			(*(abi_ulong *)holdp) = tswapal((abi_ulong)lvalue);
 		}
 	    }
 	    goto out;
@@ -989,6 +991,11 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
                         ret = -1;
                     } else {
                         if (oldlen) {
+#if TARGET_ABI_BITS != HOST_LONG_BITS
+                            abi_ulong maxpages = maxmem / (abi_ulong)getpagesize();
+                            if (((unsigned long)maxpages) < lvalue)
+                                lvalue = maxpages;
+#endif
                             (*(abi_ulong *)holdp) = tswapal((abi_ulong)lvalue);
                         }
                         holdlen = sizeof(abi_ulong);
