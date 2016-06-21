@@ -548,7 +548,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
     int cause = -1;
     const char *name = "";
 
-    if (qemu_loglevel_mask(CPU_LOG_INT)
+    if ((qemu_loglevel_mask(CPU_LOG_INT) || qemu_loglevel_mask(CPU_LOG_INSTR))
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
         if (cs->exception_index < 0 || cs->exception_index > EXCP_LAST) {
             name = "unknown";
@@ -1140,7 +1140,10 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     uint8_t *tagblk;
     uint64_t *tagblk64;
 
-    paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
+    if (tagbit) {
+        paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
+    else
+        paddr = v2p_addr(env, vaddr, MMU_DATA_STORE, reg);
 
     /* Get the tag number and tag block ptr. */
     tag = paddr >> CAP_TAG_SHFT;
