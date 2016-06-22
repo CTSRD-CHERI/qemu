@@ -1140,7 +1140,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     uint8_t *tagblk;
     uint64_t *tagblk64;
 
-    if (tagbit) {
+    if (tagbit)
         paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
     else
         paddr = v2p_addr(env, vaddr, MMU_DATA_STORE, reg);
