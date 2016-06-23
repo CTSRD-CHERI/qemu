@@ -24,6 +24,7 @@
 #include <signal.h>
 
 #include "cpu.h"
+#include "sysemu/dma.h"
 #include "sysemu/kvm.h"
 #include "exec/cpu_ldst.h"
 
