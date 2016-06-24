@@ -13563,22 +13563,36 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
                 TCGv t0 = tcg_temp_new();
 
                 /* Update PCC with capability register */
+                /* cr_offset */
                 tcg_gen_ld_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 0);
                 tcg_gen_st_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.PCC) + 0);
+
+                /* cr_base */
                 tcg_gen_ld_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 8);
                 tcg_gen_st_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.PCC) + 8);
+
+                /* cr_length */
                 tcg_gen_ld_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 16);
                 tcg_gen_st_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.PCC) + 16);
+
+                /* cr_perms and cr_uperms */
                 tcg_gen_ld_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 24);
                 tcg_gen_st_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.PCC) + 24);
+#ifdef CHERI_128
+                /* cr_pesbt */
+                tcg_gen_ld_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 32);
+                tcg_gen_st_i64(t0, cpu_env,
+                    offsetof(CPUMIPSState, active_tc.PCC) + 32);
+#endif
                 tcg_temp_free(t0);
             }
             if (ctx->singlestep_enabled) {

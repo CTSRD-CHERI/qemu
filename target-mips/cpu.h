@@ -173,19 +173,23 @@ typedef struct mips_def_t mips_def_t;
 #define MIPS_KSCRATCH_NUM 6
 
 #if defined(TARGET_CHERI)
+/*
+ * Please note if this structure is changed then the TCG gen_branch() in
+ * translate.c may need to be changed as well.
+ */
 struct cap_register {
     //uint64_t cr_cursor; /* offset = cursor - base */
     uint64_t cr_offset; /* Cappability offset */
     uint64_t cr_base;   /* Capability base addr */
     uint64_t cr_length; /* Capability length */
+    uint32_t cr_perms;  /* Permissions */
+    uint32_t cr_uperms; /* User Permissions */
 #ifdef CHERI_128
     uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
 #endif
-    uint32_t cr_perms;  /* Permissions */
-    uint32_t cr_uperms; /* User Permissions */
     uint32_t cr_otype;  /* Object Type, 24 bits */
-    uint8_t  cr_tag;    /* Tag */
     uint8_t  cr_sealed; /* Sealed flag */
+    uint8_t  cr_tag;    /* Tag */
 };
 typedef struct cap_register cap_register_t;
 
