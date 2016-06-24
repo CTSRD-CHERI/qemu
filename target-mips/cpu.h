@@ -178,13 +178,14 @@ struct cap_register {
     uint64_t cr_offset; /* Cappability offset */
     uint64_t cr_base;   /* Capability base addr */
     uint64_t cr_length; /* Capability length */
+#ifdef CHERI_128
+    uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
+#endif
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
     uint32_t cr_otype;  /* Object Type, 24 bits */
     uint8_t  cr_tag;    /* Tag */
     uint8_t  cr_sealed; /* Sealed flag */
-    uint8_t  cr_e;	    /* exponent (128-bit capabilities) */
-    uint8_t  cr_unused; /* Unused bits (128-bit capabilities) */
 };
 typedef struct cap_register cap_register_t;
 
@@ -199,8 +200,9 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->cr_length = 0UL;
     cp->cr_tag = 0;
     cp->cr_sealed = 0;
-    cp->cr_unused = 0;
-    cp->cr_e = 0;
+#ifdef CHERI_128
+    cp->cr_pesbt = 0UL;
+#endif
 
     return cp;
 }
@@ -235,7 +237,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 /* 15-18 Software-defined */
 #define CAP_ACCESS_LEGACY_ALL   (1 << 10) | (1 << 11) | (1 << 12) | \
                                 (1 << 13) | (1 << 14)
-#ifdef CHERI_128
+#if defined(CHERI_128) || defined(CHERI_MAGIC128)
 #define CAP_PERMS_ALL           (0x7fff)     /* [0...14] */
 #define CAP_UPERMS_ALL          (0xf)        /* [15...18] */
 #define CAP_UPERMS_MAX          (3)

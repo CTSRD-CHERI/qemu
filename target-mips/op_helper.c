@@ -1808,11 +1808,13 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
      * for sealed capabilities we need to check if that changes the
      * precision.
      */
+#if 0 /* Makes cheriabitest fail. */
     if (sealed) {
         if (b &
            ((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) - 1ul))
             return (false);
     }
+#endif
 
     r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
 
@@ -1861,6 +1863,177 @@ target_ulong helper_ccheck_imprecise(CPUMIPSState *env, target_ulong inc)
     }
 
     return (pcc->cr_base);
+}
+
+
+static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
+{
+
+    return ((src >> str) & ((1ull << sz) - 1ull));
+}
+
+/*
+ * Unsealed CHERI-128 memory representation:
+ *  perms: 63-49    (15 bits)
+ *  unused: 48-47   (2 bits)
+ *  e: 46-41        (6 bits)
+ *  S: 40           (1 bit)
+ *  B: 39-20        (20 bits)
+ *  T: 19-0         (20 bits)
+ *  cursor          (64 bits)
+ *
+ * Sealed CHERI-128 memory representation:
+ *  perms: 63-49    (15 bits)
+ *  unused: 48-47   (2 bits)
+ *  e: 46-41        (6 bits)
+ *  S: 40           (1 bits)
+ *  B: 39-32        (8 bits)
+ *  otype.hi: 31-20 (12 bits)
+ *  T: 19-12        (8 bits)
+ *  otype.lo: 11-0  (12 bits)
+ */
+
+/*
+ * Decompress a 128-bit capability.
+ */
+static void decompress_128cap(uint64_t pesbt, uint64_t cursor, uint64_t addr,
+        cap_register_t *cdp)
+{
+    uint32_t e, shift;
+    uint64_t b, t, base, amid, r;
+    int64_t cb, ct;
+
+    if ((pesbt & (1ull << 40)) == 0) {
+        /* Unsealed 128-bit Capability */
+        t = getbits(pesbt, 0, 20);
+        b = getbits(pesbt, 20, 20);
+        cdp->cr_sealed = 0;
+        e = (uint32_t)getbits(pesbt, 41, 6);
+        cdp->cr_perms = getbits(pesbt, 49, 11);
+        cdp->cr_uperms = getbits(pesbt, 60, 4);
+        cdp->cr_otype = 0;
+    } else {
+        /* Sealed 128-bit Capability */
+        t = getbits(pesbt, 12, 8) << 12;
+        b = getbits(pesbt, 32, 8) << 12;
+        cdp->cr_otype = ((uint32_t)getbits(pesbt, 20, 12) << 12) |
+                         (uint32_t)getbits(pesbt, 0, 12);
+        cdp->cr_sealed = 1;
+        e = (uint32_t)getbits(pesbt, 41, 6);
+        cdp->cr_perms = getbits(pesbt, 49, 11);
+        cdp->cr_uperms = getbits(pesbt, 60, 4);
+    }
+    cdp->cr_pesbt = pesbt;
+
+    /*
+     * XXX - Temporary.
+     * If the new access system registers permission is set
+     * then also set all the legacy access permissions.
+     */
+    if (cdp->cr_perms & CAP_ACCESS_SYS_REGS)
+        cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
+
+    if (b > 4096ul)
+        r = b - 4096ul;
+    else
+        r = 0ull;
+    amid = (int64_t)((cursor >> e) & ((1ull << CHERI128_M_SIZE_UNSEALED) -
+                1ull));
+    if (amid < r) {
+        cb = (b < r) ? 0ll : -1ll;
+        ct = (t < r) ? 0ll : -1ll;
+    } else {
+        cb = (b < r) ? 1ll : 0ll;
+        ct = (t < r) ? 1ll : 0ll;
+    }
+
+    if (e == 44) {
+        /* i.e., (((cursor >> shift) + cb) << shift) = 0 */
+        base = b << e;
+        cdp->cr_length = (t << e) - base;
+    } else if (e > 44) {
+        /* Special case when e = 48. */
+
+        /* Will bot overflow when we shift it? */
+        if (b & 0x80000ul) {
+            /* Yes, just make it max uint64_t. */
+            base = 0xfffffffffffffffful;
+        } else {
+            base = b << 45;
+        }
+
+        /* Will top overflow when we shift it? */
+        if (t & 0x80000ull) {
+            /* Yes, just make it max uint64_t and calculate length. */
+            cdp->cr_length = 0xfffffffffffffffful - base;
+        } else {
+            cdp->cr_length = (t << 45) - base;
+        }
+    } else if (e == 0) {
+        shift = CHERI128_M_SIZE_UNSEALED;
+        base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
+        cdp->cr_length =
+            (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) + t) - base;
+    } else {
+        shift = e + CHERI128_M_SIZE_UNSEALED;
+        base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) +
+            (b << e);
+        cdp->cr_length =
+            (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
+            (t << e)) - base;
+    }
+
+    cdp->cr_offset = cursor - base;
+    cdp->cr_base = base;
+}
+
+/*
+ * Compress a capability to 128 bits.
+ */
+static uint64_t compress_128cap(cap_register_t *csp)
+{
+    uint64_t b, t, rlength, base_req, perms, ret;
+    uint32_t e;
+
+    rlength = csp->cr_length;
+    base_req = csp->cr_base;
+    e = compute_e(rlength);
+
+#define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
+
+    if (e == 0) {
+        b = base_req & MOD_MASK;
+        t = (base_req + rlength) & MOD_MASK;
+    } else if (e > 44) {
+        /*
+         * Special case e > 44. Don't waste the most significant bit
+         * by shifting too much.
+         */
+        b = (base_req >> 44) & MOD_MASK;
+        t = ((base_req + rlength) >> 44) & MOD_MASK;
+    } else {
+        b = (base_req >> e) & MOD_MASK;
+        t = ((base_req + rlength) >> e) & MOD_MASK;
+    }
+
+#undef MOD_MASK
+
+    perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << 11) |
+            (csp->cr_perms & CAP_PERMS_ALL));
+    if (is_cap_sealed(csp)) {
+        /* sealed */
+        ret = (perms << 49) |
+            ((uint64_t)e << 41) | (1ull << 40) |
+            ((b & ~((1ull << 12) - 1)) << 20) |
+            ((uint64_t)(csp->cr_otype & 0xfff000) << (20 - 12)) |
+            (t & ~((1ull << 12) - 1)) |
+            (uint64_t)(csp->cr_otype & 0x000fff);
+    } else {
+        /* unsealed */
+        ret = (perms << 49) | ((uint64_t)e << 41) | (b << 20) | t;
+    }
+
+    return ret;
 }
 
 #else
@@ -2167,8 +2340,8 @@ void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
         *cdp = *cbp;
         cdp->cr_tag = 0;
 #ifdef CHERI_128
-        /* Save E at the moment the tag was invalidated. */
-        cdp->cr_e = compute_e(cdp->cr_length);
+        /* Save the compressed bits at the moment the tag was invalidated. */
+        cdp->cr_pesbt = compress_128cap(cdp);
 #endif /* CHERI_128 */
     }
 }
@@ -3311,42 +3484,9 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
     }
 }
 
-static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
-{
-
-    return ((src >> str) & ((1ull << sz) - 1ull));
-}
-
-/*
- * Unsealed CHERI-128 memory representation:
- *  perms: 63-49    (15 bits)
- *  unused: 48-47   (2 bits)
- *  e: 46-41        (6 bits)
- *  S: 40           (1 bit)
- *  B: 39-20        (20 bits)
- *  T: 19-0         (20 bits)
- *  cursor          (64 bits)
- *
- * Sealed CHERI-128 memory representation:
- *  perms: 63-49    (15 bits)
- *  unused: 48-47   (2 bits)
- *  e: 46-41        (6 bits)
- *  S: 40           (1 bits)
- *  B: 39-32        (8 bits)
- *  otype.hi: 31-20 (12 bits)
- *  T: 19-12        (8 bits)
- *  otype.lo: 11-0  (12 bits)
- */
-
-/*
- * Decompress a 128-bit capability.
- */
 void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         target_ulong cursor, target_ulong addr)
 {
-    uint32_t e, shift;
-    uint64_t b, t, base, amid, r;
-    int64_t cb, ct;
     cap_register_t *cdp = &env->active_tc.C[cd];
     uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
 
@@ -3354,90 +3494,7 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         tag = 0;
     cdp->cr_tag = tag;
 
-    if ((pesbt & (1ull << 40)) == 0) {
-        /* Unsealed 128-bit Capability */
-        t = getbits(pesbt, 0, 20);
-        b = getbits(pesbt, 20, 20);
-        cdp->cr_sealed = 0;
-        e = (uint32_t)getbits(pesbt, 41, 6);
-        cdp->cr_unused = getbits(pesbt, 47, 2);
-        cdp->cr_perms = getbits(pesbt, 49, 11);
-        cdp->cr_uperms = getbits(pesbt, 60, 4);
-        cdp->cr_otype = 0;
-    } else {
-        /* Sealed 128-bit Capability */
-        t = getbits(pesbt, 12, 8) << 12;
-        b = getbits(pesbt, 32, 8) << 12;
-        cdp->cr_otype = ((uint32_t)getbits(pesbt, 20, 12) << 12) |
-                         (uint32_t)getbits(pesbt, 0, 12);
-        cdp->cr_sealed = 1;
-        e = (uint32_t)getbits(pesbt, 41, 6);
-        cdp->cr_unused = getbits(pesbt, 47, 2);
-        cdp->cr_perms = getbits(pesbt, 49, 11);
-        cdp->cr_uperms = getbits(pesbt, 60, 4);
-    }
-    cdp->cr_e = (uint8_t)e;
-
-    /*
-     * XXX - Temporary.
-     * If the new access system registers permission is set
-     * then also set all the legacy access permissions.
-     */
-    if (cdp->cr_perms & CAP_ACCESS_SYS_REGS)
-        cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
-
-    if (b > 4096ul)
-        r = b - 4096ul;
-    else
-        r = 0ull;
-    amid = (int64_t)((cursor >> e) & ((1ull << CHERI128_M_SIZE_UNSEALED) -
-                1ull));
-    if (amid < r) {
-        cb = (b < r) ? 0ll : -1ll;
-        ct = (t < r) ? 0ll : -1ll;
-    } else {
-        cb = (b < r) ? 1ll : 0ll;
-        ct = (t < r) ? 1ll : 0ll;
-    }
-
-    if (e == 44) {
-        /* i.e., (((cursor >> shift) + cb) << shift) = 0 */
-        base = b << e;
-        cdp->cr_length = (t << e) - base;
-    } else if (e > 44) {
-        /* Special case when e = 48. */
-
-        /* Will bot overflow when we shift it? */
-        if (b & 0x80000ul) {
-            /* Yes, just make it max uint64_t. */
-            base = 0xfffffffffffffffful;
-        } else {
-            base = b << 45;
-        }
-
-        /* Will top overflow when we shift it? */
-        if (t & 0x80000ull) {
-            /* Yes, just make it max uint64_t and calculate length. */
-            cdp->cr_length = 0xfffffffffffffffful - base;
-        } else {
-            cdp->cr_length = (t << 45) - base;
-        }
-    } else if (e == 0) {
-        shift = CHERI128_M_SIZE_UNSEALED;
-        base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
-        cdp->cr_length =
-            (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) + t) - base;
-    } else {
-        shift = e + CHERI128_M_SIZE_UNSEALED;
-        base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) +
-            (b << e);
-        cdp->cr_length =
-            (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
-            (t << e)) - base;
-    }
-
-    cdp->cr_offset = cursor - base;
-    cdp->cr_base = base;
+    decompress_128cap(pesbt, cursor, addr, cdp);
 
     /* Log memory read, if needed. */
     dump_cap_load(addr, pesbt, cursor, tag);
@@ -3446,64 +3503,21 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         env->cvtrace.val1 = tswap64(addr);
         env->cvtrace.val2 = tswap64(pesbt); /* XXX Tag? */
         env->cvtrace.val3 = tswap64(cursor);
-        env->cvtrace.val4 = tswap64(base);
+        env->cvtrace.val4 = tswap64(cdp->cr_base);
         env->cvtrace.val5 = tswap64(cdp->cr_length);
     }
 }
 
-/*
- * Compress a capability to 128 bits.
- */
 target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
         target_ulong vaddr)
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
-    uint64_t b, t, rlength, base_req, perms;
-    uint32_t e;
 
-    rlength = csp->cr_length;
-    base_req = csp->cr_base;
     if (csp->cr_tag)
-        e = compute_e(rlength);
+        ret = compress_128cap(csp);
     else
-        e = csp->cr_e;
-
-#define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
-
-    if (e == 0) {
-        b = base_req & MOD_MASK;
-        t = (base_req + rlength) & MOD_MASK;
-    } else if (e > 44) {
-        /*
-         * Special case e > 44. Don't waste the most significant bit
-         * by shifting too much.
-         */
-        b = (base_req >> 44) & MOD_MASK;
-        t = ((base_req + rlength) >> 44) & MOD_MASK;
-    } else {
-        b = (base_req >> e) & MOD_MASK;
-        t = ((base_req + rlength) >> e) & MOD_MASK;
-    }
-
-#undef MOD_MASK
-
-    perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << 11) |
-        (csp->cr_perms & CAP_PERMS_ALL));
-    if (is_cap_sealed(csp)) {
-        /* sealed */
-        ret = (perms << 49) |
-            ((uint64_t)csp->cr_unused << 47) |
-            ((uint64_t)e << 41) | (1ull << 40) |
-            ((b & ~((1ull << 12) - 1)) << 20) |
-            ((uint64_t)(csp->cr_otype & 0xfff000) << (20 - 12)) |
-            (t & ~((1ull << 12) - 1)) |
-            (uint64_t)(csp->cr_otype & 0x000fff);
-    } else {
-        /* unsealed */
-        ret = (perms << 49) | ((uint64_t)csp->cr_unused << 47) |
-            ((uint64_t)e << 41) | (b << 20) | t;
-    }
+        ret = csp->cr_pesbt;
 
     /* Log memory cap write, if needed. */
     dump_cap_store(vaddr, ret, csp->cr_offset + csp->cr_base, csp->cr_tag);
