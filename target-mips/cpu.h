@@ -178,8 +178,8 @@ typedef struct mips_def_t mips_def_t;
  * translate.c may need to be changed as well.
  */
 struct cap_register {
-    //uint64_t cr_cursor; /* offset = cursor - base */
-    uint64_t cr_offset; /* Cappability offset */
+                        /* offset = cursor - base */
+    uint64_t cr_offset; /* Capability offset */
     uint64_t cr_base;   /* Capability base addr */
     uint64_t cr_length; /* Capability length */
     uint32_t cr_perms;  /* Permissions */
