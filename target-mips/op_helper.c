@@ -1808,13 +1808,11 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
      * for sealed capabilities we need to check if that changes the
      * precision.
      */
-#if 0 /* Makes cheriabitest fail. */
     if (sealed) {
         if (b &
            ((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) - 1ul))
             return (false);
     }
-#endif
 
     r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
 
