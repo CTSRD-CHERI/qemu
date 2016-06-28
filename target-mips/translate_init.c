@@ -564,7 +564,8 @@ static const mips_def_t mips_defs[] =
 #endif /* ! TARGET_CHERI */
         .CP0_Config2 = MIPS_CONFIG2,
 #if defined(TARGET_CHERI)
-        .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI),
+        .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI) | (1 << CP0C3_BI) |
+                       (1 << CP0C3_BP),
 #else
         .CP0_Config3 = MIPS_CONFIG3,
 #endif
