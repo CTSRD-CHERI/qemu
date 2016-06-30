@@ -892,11 +892,7 @@ target_ulong helper_mftc0_tcschefback(CPUMIPSState *env)
 
 target_ulong helper_mfc0_count(CPUMIPSState *env)
 {
-#ifdef TARGET_CHERI
-    return env->CP0_Count;
-#else
     return (int32_t)cpu_mips_get_count(env);
-#endif
 }
 
 target_ulong helper_mftc0_entryhi(CPUMIPSState *env)
@@ -3962,9 +3958,6 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 
     /* Do instruction tracing, if enabled. */
     log_instruction(env, pc, isa);
-
-    /* Increment the cycle counter. */
-    env->CP0_Count++;
 
     /* Decrement the startup breakcount, if set. */
     if (unlikely(cs->breakcount)) {
