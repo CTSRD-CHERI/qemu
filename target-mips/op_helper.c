@@ -4162,11 +4162,12 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
             crp->cr_offset, crp->cr_otype);
     */
 
-    cpu_fprintf(f, "DEBUG CAP %s u:%d perms:0x%08x type:0x%06x offset:0x%016lx "
-            "base:0x%016lx length:0x%016lx\n", name, is_cap_sealed(crp),
+    cpu_fprintf(f, "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%06x "
+            "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
+            name, crp->cr_tag, is_cap_sealed(crp),
             ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-            (crp->cr_perms & CAP_PERMS_ALL), crp->cr_otype, crp->cr_offset, crp->cr_base,
-            crp->cr_length);
+            (crp->cr_perms & CAP_PERMS_ALL), crp->cr_otype, crp->cr_offset,
+            crp->cr_base, crp->cr_length);
 #endif
 }
 
