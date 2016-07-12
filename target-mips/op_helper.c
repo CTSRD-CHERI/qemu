@@ -4162,9 +4162,15 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
             crp->cr_offset, crp->cr_otype);
     */
 
+#ifdef OLD_DEBUG_CAP
+    cpu_fprintf(f, "DEBUG CAP %s u:%d perms:0x%08x type:0x%06x "
+            "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
+            name, is_cap_sealed(crp),
+#else
     cpu_fprintf(f, "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%06x "
             "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
             name, crp->cr_tag, is_cap_sealed(crp),
+#endif
             ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
             (crp->cr_perms & CAP_PERMS_ALL), crp->cr_otype, crp->cr_offset,
             crp->cr_base, crp->cr_length);
@@ -5080,7 +5086,7 @@ static const char *cop0_name[32*8] = {
         "SRSConf3",     "SRSConf4",     0,              0,
 /*7*/   "HWREna",       0,              0,              0,
         0,              0,              0,              0,
-/*8*/   "BadVAddr",     0,              0,              0,
+/*8*/   "BadVAddr",     "BadInstr",     "BadInstrP",    0,
         0,              0,              0,              0,
 /*9*/   "Count",        0,              0,              0,
         0,              0,              0,              0,
@@ -5138,8 +5144,13 @@ static void dump_changed_cop0_reg(CPUMIPSState *env, int idx,
 {
     if (value != env->last_cop0[idx]) {
         env->last_cop0[idx] = value;
-        fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
-            cop0_name[idx], value);
+        if (cop0_name[idx])
+            fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
+                    cop0_name[idx], value);
+        else
+            fprintf(qemu_logfile, "    Write (idx=%d) = " TARGET_FMT_lx "\n",
+                    idx, value);
+
     }
 }
 
@@ -5197,7 +5208,7 @@ static void dump_changed_cop0(CPUMIPSState *env)
     if (env->CP0_Config3 & (1 << CP0C3_BI))
         dump_changed_cop0_reg(env, 8*8 + 1, env->CP0_BadInstr);
     if (env->CP0_Config3 & (1 << CP0C3_BP))
-        dump_changed_cop0_reg(env, 8*8 + 1, env->CP0_BadInstrP);
+        dump_changed_cop0_reg(env, 8*8 + 2, env->CP0_BadInstrP);
 
     dump_changed_cop0_reg(env, 10*8 + 0, env->CP0_EntryHi);
 
