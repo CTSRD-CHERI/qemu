@@ -2344,6 +2344,9 @@ int cpu_memory_rw_debug(CPUState *cpu, target_ulong addr,
 
 #else
 
+/* XXX CHERI tag memory emulation needs to be moved to memory.c */
+void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len);
+
 static void invalidate_and_set_dirty(MemoryRegion *mr, hwaddr addr,
                                      hwaddr length)
 {
@@ -2361,6 +2364,9 @@ static void invalidate_and_set_dirty(MemoryRegion *mr, hwaddr addr,
         dirty_log_mask &= ~(1 << DIRTY_MEMORY_CODE);
     }
     cpu_physical_memory_set_dirty_range(addr, length, dirty_log_mask);
+
+    /* Invalidate the CHERI memory tags. */
+    cheri_tag_phys_invalidate(addr, length);
 }
 
 static int memory_access_size(MemoryRegion *mr, unsigned l, hwaddr addr)

@@ -995,7 +995,7 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
 #endif /* ! CHERI_MAGIC128 */
 
 uint8_t **cheri_tagmem = NULL;
-uint64_t cheri_ntagblks = 0;
+uint64_t cheri_ntagblks = 0ul;
 
 void cheri_tag_init(uint64_t memory_size)
 {
@@ -1060,16 +1060,19 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
     return;
 }
 
-void cheri_tag_dma_invalidate(uint64_t paddr, uint64_t len)
+void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len)
 {
-    uint64_t tag, addr, endaddr;
+    uint64_t tag, addr, endaddr, tagmem_idx;
     uint8_t *tagblk;
 
-    endaddr = paddr + len;
+    endaddr = (uint64_t)(paddr + len);
 
-    for(addr = paddr; addr < endaddr; addr += CAP_SIZE) {
+    for(addr = (uint64_t)paddr; addr < endaddr; addr += CAP_SIZE) {
         tag = addr >> CAP_TAG_SHFT;
-        tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+        tagmem_idx = tag >> CAP_TAGBLK_SHFT;
+        if (tagmem_idx > cheri_ntagblks)
+            return;
+        tagblk = cheri_tagmem[tagmem_idx];
 
         if (tagblk != NULL)
             tagblk[CAP_TAGBLK_IDX(tag)] = 0;
@@ -1198,6 +1201,6 @@ int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 
 #else /* ! TARGET_CHERI */
 
-void cheri_tag_dma_invalidate(uint64_t paddr, uint64_t len) { }
+void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len) { }
 
 #endif /* ! TARGET_CHERI */

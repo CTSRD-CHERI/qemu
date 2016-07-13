@@ -84,26 +84,12 @@ static inline bool dma_memory_valid(AddressSpace *as,
                                       dir == DMA_DIRECTION_FROM_DEVICE);
 }
 
-/* XXX CHERI tag memory emulation needs to be moved to memory.c */
-void cheri_tag_dma_invalidate(uint64_t paddr, uint64_t len);
-
 static inline int dma_memory_rw_relaxed(AddressSpace *as, dma_addr_t addr,
                                         void *buf, dma_addr_t len,
                                         DMADirection dir)
 {
-    MemTxResult ret;
-
-    ret = address_space_rw(as, addr, MEMTXATTRS_UNSPECIFIED,
-                                  buf, len, dir == DMA_DIRECTION_FROM_DEVICE);
-
-    /*
-     * If successful and was a write to memory then invalidate
-     * the CHERI memory tag(s).
-     */
-    if (ret == MEMTX_OK && dir == DMA_DIRECTION_FROM_DEVICE)
-        cheri_tag_dma_invalidate(addr, len);
-
-    return (bool)ret;
+    return (bool)address_space_rw(as, addr, MEMTXATTRS_UNSPECIFIED,
+            buf, len, dir == DMA_DIRECTION_FROM_DEVICE);
 }
 
 static inline int dma_memory_read_relaxed(AddressSpace *as, dma_addr_t addr,
