@@ -66,10 +66,17 @@ do { printf("virtio_mmio: " fmt , ## __VA_ARGS__); } while (0)
 #define VIRTIO_MMIO_QUEUENUM 0x38
 #define VIRTIO_MMIO_QUEUEALIGN 0x3c
 #define VIRTIO_MMIO_QUEUEPFN 0x40
+#define VIRTIO_MMIO_QUEUE_READY 0x44
 #define VIRTIO_MMIO_QUEUENOTIFY 0x50
 #define VIRTIO_MMIO_INTERRUPTSTATUS 0x60
 #define VIRTIO_MMIO_INTERRUPTACK 0x64
 #define VIRTIO_MMIO_STATUS 0x70
+#define VIRTIO_MMIO_QUEUE_DESC_LOW 0x80
+#define VIRTIO_MMIO_QUEUE_DESC_HIGH 0x84
+#define VIRTIO_MMIO_QUEUE_AVAIL_LOW 0x90
+#define VIRTIO_MMIO_QUEUE_AVAIL_HIGH 0x94
+#define VIRTIO_MMIO_QUEUE_USED_LOW 0xA0
+#define VIRTIO_MMIO_QUEUE_USED_HIGH 0xA4
 /* Device specific config space starts here */
 #define VIRTIO_MMIO_CONFIG 0x100
 
@@ -90,6 +97,13 @@ typedef struct {
     VirtioBusState bus;
     bool ioeventfd_disabled;
     bool ioeventfd_started;
+    /* Virtio transitional stub. Supports one virtqueue only */
+    uint32_t queue_desc_low;
+    uint32_t queue_desc_high;
+    uint32_t queue_avail_low;
+    uint32_t queue_avail_high;
+    uint32_t queue_used_low;
+    uint32_t queue_used_high;
 } VirtIOMMIOProxy;
 
 static int virtio_mmio_set_host_notifier_internal(VirtIOMMIOProxy *proxy,
@@ -348,6 +362,16 @@ static void virtio_mmio_write(void *opaque, hwaddr offset, uint64_t value,
                                   value << proxy->guest_page_shift);
         }
         break;
+    case VIRTIO_MMIO_QUEUE_READY:
+        assert(vdev->queue_sel == 0);
+        virtio_queue_set_rings(vdev, vdev->queue_sel,
+                       ((uint64_t)proxy->queue_desc_high) << 32 |
+                       proxy->queue_desc_low,
+                       ((uint64_t)proxy->queue_avail_high) << 32 |
+                       proxy->queue_avail_low,
+                       ((uint64_t)proxy->queue_used_high) << 32 |
+                       proxy->queue_used_low);
+        break;
     case VIRTIO_MMIO_QUEUENOTIFY:
         if (value < VIRTIO_QUEUE_MAX) {
             virtio_queue_notify(vdev, value);
@@ -372,6 +396,31 @@ static void virtio_mmio_write(void *opaque, hwaddr offset, uint64_t value,
             virtio_reset(vdev);
         }
         break;
+    case VIRTIO_MMIO_QUEUE_DESC_LOW:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_desc_low = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_DESC_HIGH:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_desc_high = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_AVAIL_LOW:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_avail_low = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_AVAIL_HIGH:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_avail_high = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_USED_LOW:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_used_low = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_USED_HIGH:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_used_high = value;
+        break;
+
     case VIRTIO_MMIO_MAGIC:
     case VIRTIO_MMIO_VERSION:
     case VIRTIO_MMIO_DEVICEID:
