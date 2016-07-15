@@ -914,6 +914,14 @@ static void cpu_request_exit(void *opaque, int irq, int level)
     }
 }
 
+static void create_virtio_devices(qemu_irq *pic)
+{
+    hwaddr base = 0x1e400000;
+    int irq = 4;
+
+    sysbus_create_simple("virtio-mmio", base, pic[irq]);
+}
+
 static
 void mips_malta_init(MachineState *machine)
 {
@@ -1206,6 +1214,9 @@ void mips_malta_init(MachineState *machine)
 
     /* Optional PCI video card */
     pci_vga_init(pci_bus);
+
+    /* Virtio over MMIO */
+    create_virtio_devices(env->irq);
 }
 
 static int mips_malta_sysbus_device_init(SysBusDevice *sysbusdev)
