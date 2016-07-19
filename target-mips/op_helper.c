@@ -2702,7 +2702,27 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     cap_register_t *cdp = &env->active_tc.C[cd];
     cap_register_t *cbp = &env->active_tc.C[cb];
     uint64_t cursor = cbp->cr_base + cbp->cr_offset;
-    uint64_t cursor_rt = cursor + rt;
+    uint64_t cursor_rt;
+#ifdef CHERI_128
+    /*
+     * With compressed capabilities we may need to increase the range of
+     * memory addresses to be wider than requested so it is
+     * representable.
+     */
+    uint32_t e = compute_e(rt);
+    uint64_t new_rt;
+
+    if (e && (rt & ((1 << e) - 1))) {
+        new_rt = ((rt >> e) + 1) << e;
+        if (new_rt < rt) {
+            /* XXX rt wrapped. */
+            do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+        }
+        rt = new_rt;
+    }
+#endif /* CHERI_128 */
+    cursor_rt = cursor + rt;
+
     /*
      * CSetBounds: Set Bounds
      */
@@ -4161,6 +4181,8 @@ static void cheri_dump_creg(cap_register_t *crp, const char *name,
             (crp->cr_perms & CAP_PERMS_ALL), crp->cr_base, crp->cr_length,
             crp->cr_offset, crp->cr_otype);
     */
+
+/* #define OLD_DEBUG_CAP */
 
 #ifdef OLD_DEBUG_CAP
     cpu_fprintf(f, "DEBUG CAP %s u:%d perms:0x%08x type:0x%06x "
