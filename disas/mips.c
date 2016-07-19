@@ -1494,6 +1494,7 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"dalign",  "d,v,t",    0x7c000224, 0xfc00063f, WR_d|RD_s|RD_t,       0, I64R6},
 {"bitswap", "d,w",      0x7c000020, 0xffe007ff, WR_d|RD_t,            0, I32R6},
 {"dbitswap","d,w",      0x7c000024, 0xffe007ff, WR_d|RD_t,            0, I64R6},
+#ifdef COMPACT_BRANCHES
 {"balc",    "+p",       0xe8000000, 0xfc000000, UBD|WR_31,            0, I32R6},
 {"bc",      "+p",       0xc8000000, 0xfc000000, UBD|WR_31,            0, I32R6},
 {"jic",     "t,o",      0xd8000000, 0xffe00000, UBD|RD_t,             0, I32R6},
@@ -1524,6 +1525,7 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"bc1nez",  "T,p",      0x45a00000, 0xffe00000, CBD|RD_T|FP_S|FP_D,   0, I32R6},
 {"bc2eqz",  "E,p",      0x49200000, 0xffe00000, CBD|RD_C2,            0, I32R6},
 {"bc2nez",  "E,p",      0x49a00000, 0xffe00000, CBD|RD_C2,            0, I32R6},
+#endif /* COMPACT_BRANCHES */
 {"cmp.af.s",   "D,S,T", 0x46800000, 0xffe0003f, RD_S|RD_T|WR_D|FP_S,  0, I32R6},
 {"cmp.un.s",   "D,S,T", 0x46800001, 0xffe0003f, RD_S|RD_T|WR_D|FP_S,  0, I32R6},
 {"cmp.eq.s",   "D,S,T", 0x46800002, 0xffe0003f, RD_S|RD_T|WR_D|FP_S,  0, I32R6},
