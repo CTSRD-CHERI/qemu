@@ -1782,6 +1782,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 {
     uint32_t e = compute_e(length);
     int64_t b, r, Imid, Amid;
+    uint64_t t;
     bool inRange, inLimits;
 
 #define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
@@ -1789,14 +1790,17 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
     /* Check for the boundary cases. */
     if (e == 0) {
         b = (int64_t)(base & MOD_MASK);
+        t = (base + length) & MOD_MASK;
         Imid = (int64_t)(inc & MOD_MASK);
         Amid = (int64_t)((base + offset) & MOD_MASK);
     } else if (e > 44) {
         b = (int64_t)((base >> 44) & MOD_MASK);
+        t = ((base + length) >> 44) & MOD_MASK;
         Imid = (int64_t)((inc >> 44) & MOD_MASK);
         Amid = (int64_t)(((base + offset) >> 44) & MOD_MASK);
     } else {
         b = (int64_t)((base >> e) & MOD_MASK);
+        t = ((base + length) >> e) & MOD_MASK;
         Imid = (int64_t)((inc >> e) & MOD_MASK);
         Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
     }
@@ -1807,11 +1811,20 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
      * top and bottom (the top 8 bits of these values).  Therefore,
      * for sealed capabilities we need to check if that changes the
      * precision.
+     *
+     * See CHERI Architecture Section 5.9:
+     *
+     * "Sealed capabilities have more restrictive alignment requirements
+     * due to fewer bits available to represent T and B. The hardware
+     * will raise an exception when sealing an unsealed capability where
+     * the bottom 12 bits of T and B are not zero."
      */
     if (sealed) {
-        if (b &
-           ((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) - 1ul))
+#define SEALED_MASK \
+        ((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) - 1ul)
+        if (e < 44 && ((b & SEALED_MASK) || (t & SEALED_MASK)))
             return (false);
+#undef SEALED_MASK
     }
 
     r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
