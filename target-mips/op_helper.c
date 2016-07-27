@@ -2586,7 +2586,7 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         uint64_t cb_offset_plus_rt = cbp->cr_offset + rt;
 
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
-                    cbp->cr_offset, cb_offset_plus_rt)) {
+                    cbp->cr_offset, rt)) {
             int_to_cap(cbp->cr_base + cb_offset_plus_rt, cdp);
         } else {
             *cdp = *cbp;
