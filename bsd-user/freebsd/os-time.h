@@ -606,6 +606,10 @@ static inline abi_long do_freebsd_kevent(abi_long arg1, abi_ulong arg2,
     }
     ret = get_errno(kevent(arg1, changelist, arg3, eventlist, arg5,
                 arg6 != 0 ? &ts : NULL));
+
+    if (arg5 == 0)
+        return ret;
+
     if (!is_error(ret)) {
         target_eventlist = lock_user(VERIFY_WRITE, arg4,
                 sizeof(struct target_freebsd_kevent) * arg5, 0);
