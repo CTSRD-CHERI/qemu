@@ -1006,7 +1006,7 @@ static void pcap_cleanup(NetClientState *nc)
 }
 
 static NetClientInfo net_pcap_info = {
-    .type = NET_CLIENT_OPTIONS_KIND_PCAP,
+    .type = NET_CLIENT_DRIVER_PCAP,
     .size = sizeof(struct PCAPState),
     .receive = pcap_receive,
 //    .receive_raw = pcap_receive_raw,
@@ -1018,10 +1018,10 @@ static NetClientInfo net_pcap_info = {
  * ... -net pcap,ifname="..."
  */
 
-int net_init_pcap(const NetClientOptions *opts,
-    const char *name, NetClientState *peer, Error **errp)
+int net_init_pcap(const Netdev *netdev, const char *name,
+                  NetClientState *peer, Error **errp)
 {
-    const NetdevPcapOptions *pcap_opts = opts->u.pcap.data;
+    const NetdevPcapOptions *pcap_opts;
     NetClientState *nc;
     struct PCAPState *s;
     const char *ifname;
@@ -1030,6 +1030,9 @@ int net_init_pcap(const NetClientOptions *opts,
     HANDLE h;
 #endif
     int i;
+
+    assert(netdev->type == NET_CLIENT_DRIVER_PCAP);
+    pcap_opts = &netdev->u.pcap;
 
     if (!pcap_opts->has_ifname)
         return -1;
