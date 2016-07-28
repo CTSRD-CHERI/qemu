@@ -944,10 +944,8 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
  * condition vars so I am sure performance may be a problem if there are lots
  * of CVs.
  *
- * XXXss This needs to be reinitialized in fork_end().
- * maps to sys/sys/_umtx.h struct umutex
- *
  */
+
 static struct umutex _cv_mutex;
 
 /*
