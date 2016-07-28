@@ -2898,6 +2898,8 @@ target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *ctp = &env->active_tc.C[ct];
+    uint64_t cb_cursor = cbp->cr_base + cbp->cr_offset;
+    uint64_t ct_top = ctp->cr_base + ctp->cr_length;
     /*
      * CToPtr: Capability to Pointer
      */
@@ -2907,11 +2909,16 @@ target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
     } else if (!ctp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, ct);
-    } else if (cbp->cr_tag) {
-        // return (target_ulong) cbp->cr_cursor - ctp->cr_base;
-        return (target_ulong)(cbp->cr_base + cbp->cr_offset - ctp->cr_base);
+    } else if (!cbp->cr_tag) {
+        return (target_ulong)0;
+    } else if ((cb_cursor < ctp->cr_base) || (cb_cursor > ct_top)) {
+        /* XXX cb can not be wholly represented within ct. */
+        return (target_ulong)0;
+    } else if (ctp->cr_base > cb_cursor) {
+        return (target_ulong)(ctp->cr_base - cb_cursor);
+    } else {
+        return (target_ulong)(cb_cursor - ctp->cr_base);
     }
-    return (target_ulong)0;
 }
 
 void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
