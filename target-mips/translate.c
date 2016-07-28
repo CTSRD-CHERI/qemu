@@ -3576,6 +3576,24 @@ static inline void generate_cinvalidate_tag32(TCGv addr, int32_t len,
 #define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value) \
     generate_cinvalidate_tag32(addr, len, opc, value)
 
+static inline void generate_log_instruction(DisasContext *ctx)
+{
+    TCGv_i64 tpc = tcg_const_i64(ctx->pc);
+    TCGv_i32 tisa = tcg_const_i32((ctx->hflags & MIPS_HFLAG_M16) == 0 ? 0 :
+				  (ctx->insn_flags & ASE_MICROMIPS) ? 1 : 2);
+    gen_helper_log_instruction(cpu_env, tpc, tisa);
+    tcg_temp_free_i32(tisa);
+    tcg_temp_free_i64(tpc);
+}
+
+static inline void generate_log_registers(void)
+{
+    gen_helper_log_registers(cpu_env);
+}
+
+#define GEN_LOG_INSTR(ctx) generate_log_instruction(ctx)
+#define GEN_LOG_REGISTERS generate_log_registers()
+
 #else /* ! TARGET_CHERI */
 
 #define GEN_CAP_CHECK_PC(ctx)
@@ -3585,6 +3603,8 @@ static inline void generate_cinvalidate_tag32(TCGv addr, int32_t len,
 #define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value)
 #define GEN_CAP_DUMP_LOAD(op, addr, value)
 #define GEN_CAP_DUMP_LOAD32(op, addr, value)
+#define GEN_LOG_INSTR(ctx)
+#define GEN_LOG_REGISTERS
 
 #endif /* ! TARGET_CHERI */
 
@@ -4535,9 +4555,11 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
         MIPS_DEBUG("NOP");
 #ifdef TARGET_CHERI
         if (opc == OPC_ORI && rs == 0) {
-            /* Don't mix with CheriVis tracing. */
+#ifndef CHERI_DEFAULT_CVTRACE
+	    /* Don't mix with CheriVis tracing. */
             if (qemu_loglevel_mask(CPU_LOG_CVTRACE))
                 return;
+#endif
 
             /* With 'li $0, 0xbeef' turn on instruction trace logging. */
             if ((uint16_t)imm == 0xbeef)
@@ -22933,6 +22955,7 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
 
         /* Generate capabilities check on PC */
         GEN_CAP_CHECK_PC(&ctx);
+        GEN_LOG_INSTR(&ctx);
 
         is_slot = ctx.hflags & MIPS_HFLAG_BMASK;
         if (!(ctx.hflags & MIPS_HFLAG_M16)) {
@@ -22950,6 +22973,8 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
             ctx.bstate = BS_STOP;
             break;
         }
+
+        GEN_LOG_REGISTERS;
 
         if (ctx.hflags & MIPS_HFLAG_BMASK) {
             if (!(ctx.hflags & (MIPS_HFLAG_BDS16 | MIPS_HFLAG_BDS32 |

@@ -3489,15 +3489,21 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 /* Start instruction trace logging. */
 void helper_instr_start(CPUMIPSState *env)
 {
-
+#ifdef CHERI_DEFAULT_CVTRACE
+    qemu_set_log(qemu_loglevel | CPU_LOG_CVTRACE);
+#else
     qemu_set_log(qemu_loglevel | CPU_LOG_INSTR);
+#endif
 }
 
 /* Stop instruction trace logging. */
 void helper_instr_stop(CPUMIPSState *env)
 {
-
+#ifdef CHERI_DEFAULT_CVTRACE
+    qemu_set_log(qemu_loglevel & ~CPU_LOG_CVTRACE);
+#else
     qemu_set_log(qemu_loglevel & ~CPU_LOG_INSTR);
+#endif
 }
 
 #ifdef CHERI_128
@@ -3922,9 +3928,6 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
         MIPSCPU *cpu = mips_env_get_cpu(env);
         CPUState *cs = CPU(cpu);
 
-        /* Print changed state: GPR, HI/LO, COP0. */
-        mips_dump_changed_state(env);
-
         /* Disassemble and print instruction. */
         if (isa == 0) {
             log_target_disas(cs, pc, 4, 0);
@@ -3949,7 +3952,6 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
             g_strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
             fwrite(buffer, sizeof(env->cvtrace), 1, qemu_logfile);
         }
-
         bzero(&env->cvtrace, sizeof(env->cvtrace));
         env->cvtrace.version = CVT_NO_REG;
         env->cvtrace.pc = tswap64(pc);
@@ -3994,17 +3996,26 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
             }
         }
         env->cvtrace.inst = opcode;  /* XXX need bswapped? */
-        mips_dump_changed_state(env);
     }
+}
+
+void helper_log_instruction(CPUMIPSState *env, uint64_t pc, int isa)
+{
+    log_instruction(env, pc, isa);
+}
+
+void helper_log_registers(CPUMIPSState *env)
+{
+    /* Print changed state: GPR, HI/LO, COP0. */
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE)) |
+        unlikely(qemu_loglevel_mask(CPU_LOG_INSTR)))
+        mips_dump_changed_state(env);
 }
 
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
     CPUState *cs = CPU(mips_env_get_cpu(env));
-
-    /* Do instruction tracing, if enabled. */
-    log_instruction(env, pc, isa);
 
     /* Decrement the startup breakcount, if set. */
     if (unlikely(cs->breakcount)) {
@@ -5372,7 +5383,6 @@ static void dump_changed_regs(CPUMIPSState *env)
     for (i=0; i<32; i++) {
         if (memcmp(&cur->C[i], &env->last_C[i], sizeof(cap_register_t))) {
             cap_register_t *cr = &cur->C[i];
-
             env->last_C[i] = *cr;
             if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
                 if (env->cvtrace.version == CVT_NO_REG ||
