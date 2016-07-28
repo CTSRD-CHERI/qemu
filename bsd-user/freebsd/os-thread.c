@@ -947,19 +947,8 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
  * XXXss This needs to be reinitialized in fork_end().
  * maps to sys/sys/_umtx.h struct umutex
  *
- * svn r300043 changed the layout of this structure but not the size.
- * I chose FreeBSD Version 1100110 as that's the first version bump after
- * the update to sys/sys/_umtx.h in svn r300043.
  */
-#if defined(__FreeBSD_version) && __FreeBSD_version > 1100110
-#if HOST_LONG_BITS == 64
-static struct umutex _cv_mutex = { 0, 0, { 0, 0 }, 0, { 0, 0 } };
-#else
-static struct umutex _cv_mutex = { 0, 0, { 0, 0 }, 0, 0, { 0, 0 } };
-#endif
-#else
-static struct umutex _cv_mutex = { 0, 0, { 0, 0 }, { 0, 0, 0, 0 } };
-#endif
+static struct umutex _cv_mutex;
 
 /*
  * wflags CVWAIT_CHECK_UNPARKING, CVWAIT_ABSTIME, CVWAIT_CLOCKID
