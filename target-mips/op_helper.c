@@ -1682,7 +1682,14 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 #define CHERI128_M_SIZE_UNSEALED    20
 #define CHERI128_M_SIZE_SEALED       8
 
+/*
+ * Define the following to do the is_representable() check by simply
+ * compressing and decompressing the capability and checking to
+ * see if it is the same.
+ */
+#define SIMPLE_REPRESENT_CHECK
 
+#ifndef SIMPLE_REPRESENT_CHECK
 static inline bool all_ones(uint64_t offset, uint32_t e)
 {
     uint64_t Itop;
@@ -1705,7 +1712,7 @@ static inline bool all_zeroes(uint64_t offset, uint32_t e)
         Itop = offset >> shift;
     return Itop == 0ul;
 }
-
+#endif /* ! SIMPLE_REPRESENT_CHECK */
 
 /* Returns the index of the most significant bit set in x */
 static inline uint32_t idx_MSNZ(uint64_t x)
@@ -1759,124 +1766,6 @@ static uint32_t compute_e(uint64_t rlength)
     return ((e & 3) ? ((e & ~3) + 4) : e);
 }
 
-/*
- * Check to see if a memory region is representable by a compressed
- * capability. It is representable if:
- *
- *   representable = (inRange && inLimits) || (E >= 44)
- *
- * where:
- *
- *   E = compression exponent (see compute_e() above)
- *
- *   inRange = -s < i < s  where i is the increment (or offset)
- *   (In other words, all the bits of i<63, E+20> are the same.)
- *
- *   inLimits = (i < 0) ? (Imid >= (R - Amid)) && (R != Amid) : (R - Amid - 1)
- *   where Imid = i<E+19, E>, Amid = a<E+19, E>, R = B - 2^12 and a =
- *   base + offset.
- */
-static bool
-is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
-        uint64_t inc)
-{
-    uint32_t e = compute_e(length);
-    int64_t b, r, Imid, Amid;
-    uint64_t t;
-    bool inRange, inLimits;
-
-#define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
-
-    /* Check for the boundary cases. */
-    if (e == 0) {
-        b = (int64_t)(base & MOD_MASK);
-        t = (base + length) & MOD_MASK;
-        Imid = (int64_t)(inc & MOD_MASK);
-        Amid = (int64_t)((base + offset) & MOD_MASK);
-    } else if (e > 44) {
-        b = (int64_t)((base >> 44) & MOD_MASK);
-        t = ((base + length) >> 44) & MOD_MASK;
-        Imid = (int64_t)((inc >> 44) & MOD_MASK);
-        Amid = (int64_t)(((base + offset) >> 44) & MOD_MASK);
-    } else {
-        b = (int64_t)((base >> e) & MOD_MASK);
-        t = ((base + length) >> e) & MOD_MASK;
-        Imid = (int64_t)((inc >> e) & MOD_MASK);
-        Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
-    }
-
-    /*
-     * With sealed capabilities we don't have as many bits for the
-     * bounds. For compressed 128 it is only 8-bits for each the
-     * top and bottom (the top 8 bits of these values).  Therefore,
-     * for sealed capabilities we need to check if that changes the
-     * precision.
-     *
-     * See CHERI Architecture Section 5.9:
-     *
-     * "Sealed capabilities have more restrictive alignment requirements
-     * due to fewer bits available to represent T and B. The hardware
-     * will raise an exception when sealing an unsealed capability where
-     * the bottom 12 bits of T and B are not zero."
-     */
-    if (sealed) {
-#define SEALED_MASK \
-        ((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) - 1ul)
-        if (e < 44 && ((b & SEALED_MASK) || (t & SEALED_MASK)))
-            return (false);
-#undef SEALED_MASK
-    }
-
-    r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
-
-    /* inRange, test if bits are all the same */
-    inRange = all_ones(inc, e) || all_zeroes(inc, e);
-
-    /* inLimits */
-    if ((inc >> 63) == 0ul) {
-        inLimits = ((uint64_t)Imid  < (((uint64_t)(r - Amid - 1l)) & MOD_MASK));
-    } else {
-        inLimits = ((uint64_t)Imid >= (((uint64_t)(r - Amid)) & MOD_MASK)) &&
-            (r != Amid);
-    }
-#undef MOD_MASK
-
-    return ((inRange && inLimits) || (e >= 44));
-}
-
-/*
- * Convert 64-bit integer into a capability that holds the integer in
- * its offset field.
- *
- *       cap.base = 0, cap.tag = false, cap.offset = x
- *
- * The contents of other fields of int to cap depends on the capability
- * compression scheme in use (e.g. 256-bit capabilities or 128-bit
- * compressed capabilities). In particular, with 128-bit compressed
- * capabilities, length is not always zero. The length of a capability
- * created via int to cap is not semantically meaningful, and programs
- * should not rely on it having any particular value.
- */
-static inline void int_to_cap(uint64_t x, cap_register_t *cr)
-{
-
-    (void)null_capability(cr);
-    cr->cr_offset = x;
-}
-
-target_ulong helper_ccheck_imprecise(CPUMIPSState *env, target_ulong inc)
-{
-    cap_register_t *pcc = &env->active_tc.PCC;
-
-    if (!is_representable(is_cap_sealed(pcc), pcc->cr_base, pcc->cr_length,
-                pcc->cr_offset, inc)) {
-        int_to_cap(pcc->cr_base + inc, pcc);
-    }
-
-    return (pcc->cr_base);
-}
-
-
 static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
 {
 
@@ -1907,7 +1796,7 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
 /*
  * Decompress a 128-bit capability.
  */
-static void decompress_128cap(uint64_t pesbt, uint64_t cursor, uint64_t addr,
+static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cap_register_t *cdp)
 {
     uint32_t e, shift;
@@ -2048,6 +1937,154 @@ static uint64_t compress_128cap(cap_register_t *csp)
     }
 
     return ret;
+}
+
+/*
+ * Check to see if a memory region is representable by a compressed
+ * capability. It is representable if:
+ *
+ *   representable = (inRange && inLimits) || (E >= 44)
+ *
+ * where:
+ *
+ *   E = compression exponent (see compute_e() above)
+ *
+ *   inRange = -s < i < s  where i is the increment (or offset)
+ *   (In other words, all the bits of i<63, E+20> are the same.)
+ *
+ *   inLimits = (i < 0) ? (Imid >= (R - Amid)) && (R != Amid) : (R - Amid - 1)
+ *   where Imid = i<E+19, E>, Amid = a<E+19, E>, R = B - 2^12 and a =
+ *   base + offset.
+ */
+static bool
+is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
+        uint64_t inc)
+{
+#ifdef SIMPLE_REPRESENT_CHECK
+    cap_register_t c;
+    uint64_t pesbt;
+
+    /* Simply compress and uncompress to check. */
+    if (sealed) {
+        c.cr_base = base;
+        c.cr_length = length;
+        c.cr_offset = offset;
+        c.cr_sealed = sealed;
+
+        pesbt = compress_128cap(&c);
+        decompress_128cap(pesbt, base + offset, &c);
+
+        if (c.cr_base != base || c.cr_length != length || c.cr_offset != offset)
+            return false;
+    } else {
+        c.cr_base = base;
+        c.cr_length = length;
+        c.cr_offset = inc;
+        c.cr_sealed = sealed;
+
+        pesbt = compress_128cap(&c);
+        decompress_128cap(pesbt, base + inc, &c);
+
+        if (c.cr_base != base || c.cr_length != length || c.cr_offset != inc)
+            return false;
+    }
+    return true;
+#else /* ! SIMPLE_REPRESENT_CHECK */
+    uint32_t e = compute_e(length);
+    int64_t b, r, Imid, Amid;
+    uint64_t t;
+    bool inRange, inLimits;
+
+#define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
+
+    /* Check for the boundary cases. */
+    if (e == 0) {
+        b = (int64_t)(base & MOD_MASK);
+        t = (base + length) & MOD_MASK;
+        Imid = (int64_t)(inc & MOD_MASK);
+        Amid = (int64_t)((base + offset) & MOD_MASK);
+    } else if (e > 44) {
+        b = (int64_t)((base >> 44) & MOD_MASK);
+        t = ((base + length) >> 44) & MOD_MASK;
+        Imid = (int64_t)((inc >> 44) & MOD_MASK);
+        Amid = (int64_t)(((base + offset) >> 44) & MOD_MASK);
+    } else {
+        b = (int64_t)((base >> e) & MOD_MASK);
+        t = ((base + length) >> e) & MOD_MASK;
+        Imid = (int64_t)((inc >> e) & MOD_MASK);
+        Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
+    }
+
+    /*
+     * With sealed capabilities we don't have as many bits for the
+     * bounds. For compressed 128 it is only 8-bits for each the
+     * top and bottom (the top 8 bits of these values).  Therefore,
+     * for sealed capabilities we need to check if that changes the
+     * precision.
+     *
+     * See CHERI Architecture Section 5.9:
+     *
+     * "Sealed capabilities have more restrictive alignment requirements
+     * due to fewer bits available to represent T and B. The hardware
+     * will raise an exception when sealing an unsealed capability where
+     * the bottom 12 bits of T and B are not zero."
+     */
+    if (sealed) {
+#define SEALED_MASK \
+        ((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) - 1ul)
+        if (e < 44 && ((b & SEALED_MASK) || (t & SEALED_MASK)))
+            return (false);
+#undef SEALED_MASK
+    }
+
+    r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
+
+    /* inRange, test if bits are all the same */
+    inRange = all_ones(inc, e) || all_zeroes(inc, e);
+
+    /* inLimits */
+    if ((inc >> 63) == 0ul) {
+        inLimits = ((uint64_t)Imid  < (((uint64_t)(r - Amid - 1l)) & MOD_MASK));
+    } else {
+        inLimits = ((uint64_t)Imid >= (((uint64_t)(r - Amid)) & MOD_MASK)) &&
+            (r != Amid);
+    }
+#undef MOD_MASK
+
+    return ((inRange && inLimits) || (e >= 44));
+#endif /* ! SIMPLE_REPRESENT_CHECK */
+}
+
+/*
+ * Convert 64-bit integer into a capability that holds the integer in
+ * its offset field.
+ *
+ *       cap.base = 0, cap.tag = false, cap.offset = x
+ *
+ * The contents of other fields of int to cap depends on the capability
+ * compression scheme in use (e.g. 256-bit capabilities or 128-bit
+ * compressed capabilities). In particular, with 128-bit compressed
+ * capabilities, length is not always zero. The length of a capability
+ * created via int to cap is not semantically meaningful, and programs
+ * should not rely on it having any particular value.
+ */
+static inline void int_to_cap(uint64_t x, cap_register_t *cr)
+{
+
+    (void)null_capability(cr);
+    cr->cr_offset = x;
+}
+
+target_ulong helper_ccheck_imprecise(CPUMIPSState *env, target_ulong inc)
+{
+    cap_register_t *pcc = &env->active_tc.PCC;
+
+    if (!is_representable(is_cap_sealed(pcc), pcc->cr_base, pcc->cr_length,
+                pcc->cr_offset, inc)) {
+        int_to_cap(pcc->cr_base + inc, pcc);
+    }
+
+    return (pcc->cr_base);
 }
 
 #else
@@ -2919,6 +2956,8 @@ target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     } else {
         return (target_ulong)(cb_cursor - ctp->cr_base);
     }
+
+    return (target_ulong)0;
 }
 
 void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
@@ -3552,7 +3591,7 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         tag = 0;
     cdp->cr_tag = tag;
 
-    decompress_128cap(pesbt, cursor, addr, cdp);
+    decompress_128cap(pesbt, cursor, cdp);
 
     /* Log memory read, if needed. */
     dump_cap_load(addr, pesbt, cursor, tag);
