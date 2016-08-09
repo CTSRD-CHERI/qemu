@@ -2758,7 +2758,7 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     cap_register_t *cdp = &env->active_tc.C[cd];
     cap_register_t *cbp = &env->active_tc.C[cb];
     uint64_t cursor = cbp->cr_base + cbp->cr_offset;
-    uint64_t cursor_rt, offset = 0ul, base = cursor;
+    uint64_t cursor_rt;
 #ifdef CHERI_128
     /*
      * With compressed capabilities we may need to increase the range of
@@ -2768,23 +2768,15 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint32_t e = compute_e(rt);
     uint64_t new_rt;
 
-    if (e) {
-        if (rt & ((1 << e) - 1)) {
-            /* Adjust the length so it is representable. */
-            new_rt = ((rt >> e) + 1) << e;
-            if (new_rt < rt) {
-                /* XXX rt wrapped. */
-                do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-            }
-            rt = new_rt;
+    if (e && (rt & ((1 << e) - 1))) {
+        new_rt = ((rt >> e) + 1) << e;
+        if (new_rt < rt) {
+            /* XXX rt wrapped. */
+            do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         }
-
-        /* Adjust the base & offset so it is representable. */
-        base = (cursor >> e) << e;
-        offset = cursor - base;
+        rt = new_rt;
     }
 #endif /* CHERI_128 */
-
     cursor_rt = cursor + rt;
 
     /*
@@ -2807,9 +2799,9 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         *cdp = *cbp;
-        cdp->cr_base = base;
+        cdp->cr_base = cursor;
         cdp->cr_length = rt;
-        cdp->cr_offset = offset;
+        cdp->cr_offset = (target_ulong)0;
     }
 }
 
