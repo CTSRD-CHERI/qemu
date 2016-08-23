@@ -5432,7 +5432,7 @@ static void dump_changed_regs(CPUMIPSState *env)
                     ((uint64_t)cr->cr_otype << 32) |
                     (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
                     (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))) << 1) |
-                    is_cap_sealed(cr) ? 1 : 0;
+                    (uint64_t)(is_cap_sealed(cr) ? 1 : 0);
                 env->cvtrace.val3 = tswap64(cr->cr_offset + cr->cr_base);
                 env->cvtrace.val4 = tswap64(cr->cr_base);
                 env->cvtrace.val5 = tswap64(cr->cr_length);
