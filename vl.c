@@ -2719,6 +2719,7 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
     return popt;
 }
 
+#if !GLIB_CHECK_VERSION(2, 44, 0)
 static gpointer malloc_and_trace(gsize n_bytes)
 {
     void *ptr = malloc(n_bytes);
@@ -2738,6 +2739,26 @@ static void free_and_trace(gpointer mem)
     trace_g_free(mem);
     free(mem);
 }
+
+
+static void register_glib_mem_trace_functions(void)
+{
+    GMemVTable mem_trace = {
+        .malloc = malloc_and_trace,
+        .realloc = realloc_and_trace,
+        .free = free_and_trace,
+    };
+
+    g_mem_set_vtable(&mem_trace);
+}
+#else
+static void register_glib_mem_trace_functions(void)
+{
+    /* Newer versions of glib don't support intercepting the
+     * memory allocation functions.
+     */
+}
+#endif
 
 static int machine_set_property(void *opaque,
                                 const char *name, const char *value,
@@ -2966,11 +2987,6 @@ int main(int argc, char **argv, char **envp)
     bool userconfig = true;
     const char *log_mask = NULL;
     const char *log_file = NULL;
-    GMemVTable mem_trace = {
-        .malloc = malloc_and_trace,
-        .realloc = realloc_and_trace,
-        .free = free_and_trace,
-    };
     const char *trace_events = NULL;
     const char *trace_file = NULL;
     ram_addr_t maxram_size;
@@ -2990,7 +3006,7 @@ int main(int argc, char **argv, char **envp)
     error_set_progname(argv[0]);
     qemu_init_exec_dir(argv[0]);
 
-    g_mem_set_vtable(&mem_trace);
+	register_glib_mem_trace_functions();
 
     module_call_init(MODULE_INIT_QOM);
 
