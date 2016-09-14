@@ -1216,7 +1216,7 @@ void mips_malta_init(MachineState *machine)
     pci_vga_init(pci_bus);
 
     /* Virtio over MMIO */
-    create_virtio_devices(env->irq);
+    create_virtio_devices((qemu_irq *)env->irq);
 }
 
 static int mips_malta_sysbus_device_init(SysBusDevice *sysbusdev)

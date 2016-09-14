@@ -239,8 +239,8 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_ACCESS_KR2C         (1 << 14)
 #endif /* NOTYET */
 /* 15-18 Software-defined */
-#define CAP_ACCESS_LEGACY_ALL   (1 << 10) | (1 << 11) | (1 << 12) | \
-                                (1 << 13) | (1 << 14)
+#define CAP_ACCESS_LEGACY_ALL   ((1 << 10) | (1 << 11) | (1 << 12) | \
+                                (1 << 13) | (1 << 14))
 #if defined(CHERI_128) || defined(CHERI_MAGIC128)
 #define CAP_PERMS_ALL           ( 0x7ff)     /* [0...10] */
 #define CAP_PERMS_LEGACY        (CAP_ACCESS_LEGACY_ALL) /* [10...14] */
