@@ -4539,12 +4539,19 @@ int main(int argc, char **argv, char **envp)
     current_machine->ram_slots = ram_slots;
     current_machine->boot_order = boot_order;
     current_machine->cpu_model = cpu_model;
-#if defined(CONFIG_CHERI)
-    current_machine->breakpoint = cl_breakpoint;
-    current_machine->breakcount = cl_breakcount;
-#endif
 
     machine_class->init(current_machine);
+
+#if defined(CONFIG_CHERI)
+    if (cl_breakpoint) {
+        CPUState *cs;
+
+        CPU_FOREACH(cs) {
+            cpu_breakpoint_insert(cs, cl_breakpoint, BP_GDB, NULL);
+        }
+    }
+    current_machine->breakcount = cl_breakcount;
+#endif
 
     realtime_init();
 

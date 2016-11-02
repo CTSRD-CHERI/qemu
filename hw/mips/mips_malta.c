@@ -1011,12 +1011,6 @@ void mips_malta_init(MachineState *machine)
         exit(1);
     }
 
-#ifdef TARGET_CHERI
-    if (machine->breakpoint)
-        cpu_breakpoint_insert((CPUState *)cpu, machine->breakpoint, BP_GDB,
-                NULL);
-#endif /* TARGET_CHERI */
-
     /* register RAM at high address where it is undisturbed by IO */
     memory_region_allocate_system_memory(ram_high, NULL, "mips_malta.ram",
                                          ram_size);
