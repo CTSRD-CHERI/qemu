@@ -26,6 +26,8 @@
 #include "cpu.h"
 #include "sysemu/kvm.h"
 #include "exec/cpu_ldst.h"
+#include "qemu/atomic.h"
+#include "qemu/error-report.h"
 
 enum {
 #ifdef TARGET_CHERI
@@ -1081,6 +1083,28 @@ void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len)
     /* XXX - linkedflag reset check? */
 }
 
+static uint8_t *cheri_tag_new_tagblk(uint64_t tag)
+{
+    uint8_t *tagblk, *old;
+
+    tagblk = g_malloc0(CAP_TAGBLK_SZ);
+    if (tagblk == NULL) {
+        error_report("Can't allocate tag block.");
+        exit(1);
+    }
+
+    /* Possible race here so use atomic compare and swap. */
+    old = atomic_cmpxchg(&cheri_tagmem[tag >> CAP_TAGBLK_SHFT],
+            NULL, tagblk);
+    if (old != NULL) {
+        /* Lost the race, free. */
+        g_free(tagblk);
+        return old;
+    } else {
+        return tagblk;
+    }
+}
+
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
 {
     hwaddr paddr;
@@ -1095,12 +1119,7 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
 
     if (tagblk == NULL) {
         /* Allocated a tag block. */
-        tagblk = g_malloc0(CAP_TAGBLK_SZ);
-        if (tagblk == NULL) {
-            printf("%s: Can't allocated tag memory\n", __func__);
-            exit(-1);
-        }
-        cheri_tagmem[tag >> CAP_TAGBLK_SHFT] = tagblk;
+        tagblk = cheri_tag_new_tagblk(tag);
     }
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
@@ -1154,12 +1173,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 
     if (tagblk == NULL) {
         /* Allocated a tag block. */
-        tagblk = g_malloc0(CAP_TAGBLK_SZ);
-        if (tagblk == NULL) {
-            printf("%s: Can't allocated tag memory\n", __func__);
-            exit(-1);
-        }
-        cheri_tagmem[tag >> CAP_TAGBLK_SHFT] = tagblk;
+        tagblk = cheri_tag_new_tagblk(tag);
     }
     tagblk64 = (uint64_t *)&tagblk[CAP_TAGBLK_IDX(tag)];
     *tagblk64 = (tps << CAP_TAG_TPS_SHFT) | tagbit;
