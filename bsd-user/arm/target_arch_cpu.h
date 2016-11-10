@@ -48,88 +48,6 @@ static inline void target_cpu_init(CPUARMState *env,
     }
 }
 
-static inline int do_strex(CPUARMState *env)
-{
-    uint32_t val;
-    int size;
-    int rc = 1;
-    int segv = 0;
-    uint32_t addr;
-    start_exclusive();
-    addr = env->exclusive_addr;
-    if (addr != env->exclusive_test) {
-        goto fail;
-    }
-    size = env->exclusive_info & 0xf;
-    switch (size) {
-    case 0:
-        segv = get_user_u8(val, addr);
-        break;
-    case 1:
-        segv = get_user_u16(val, addr);
-        break;
-    case 2:
-    case 3:
-        segv = get_user_u32(val, addr);
-        break;
-    default:
-        abort();
-    }
-    if (segv) {
-        env->cp15.far_el[1] = deposit64(env->cp15.far_el[1], 0, 32,
-                                      addr);
-        goto done;
-    }
-    if (val != env->exclusive_val) {
-        goto fail;
-    }
-    if (size == 3) {
-        segv = get_user_u32(val, addr + 4);
-        if (segv) {
-            env->cp15.far_el[1] = deposit64(env->cp15.far_el[1], 0, 32,
-                                          addr + 4);
-            goto done;
-        }
-        if (val != env->exclusive_high) {
-            goto fail;
-        }
-    }
-    val = env->regs[(env->exclusive_info >> 8) & 0xf];
-    switch (size) {
-    case 0:
-        segv = put_user_u8(val, addr);
-        break;
-    case 1:
-        segv = put_user_u16(val, addr);
-        break;
-    case 2:
-    case 3:
-        segv = put_user_u32(val, addr);
-        break;
-    }
-    if (segv) {
-        env->cp15.far_el[1] = deposit64(env->cp15.far_el[1], 0, 32,
-                                      addr);
-        goto done;
-    }
-    if (size == 3) {
-        val = env->regs[(env->exclusive_info >> 12) & 0xf];
-        segv = put_user_u32(val, addr + 4);
-        if (segv) {
-            env->cp15.far_el[1] = deposit64(env->cp15.far_el[1], 0, 32,
-                                          addr + 4);
-            goto done;
-        }
-    }
-    rc = 0;
-fail:
-    env->regs[15] += 4;
-    env->regs[(env->exclusive_info >> 4) & 0xf] = rc;
-done:
-    end_exclusive();
-    return segv;
-}
-
 static inline void target_cpu_loop(CPUARMState *env)
 {
     int trapnr;
@@ -399,13 +317,6 @@ static inline void target_cpu_loop(CPUARMState *env)
                     info.si_code = TARGET_TRAP_BRKPT;
                     queue_signal(env, info.si_signo, &info);
                 }
-            }
-            break;
-        /* XXX case EXCP_KERNEL_TRAP: */
-        case EXCP_STREX:
-            if (do_strex(env)) {
-                addr = (uint32_t)env->cp15.far_el[1];
-                goto do_segv;
             }
             break;
         default:
