@@ -2347,7 +2347,7 @@ void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
     } else if ((csp->cr_uperms & rt_uperms) != rt_uperms) {
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
-    } else if ((rt >> CAP_UPERMS_SHFT) != 0UL) {
+    } else if ((rt >> (16 + CAP_MAX_UPERM)) != 0UL) {
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
     }
 }

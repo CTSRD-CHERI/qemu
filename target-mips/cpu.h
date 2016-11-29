@@ -247,12 +247,14 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_UPERMS_ALL          (0xf)        /* [15...18] */
 #define CAP_UPERMS_SHFT         (15)
 #define CAP_UPERMS_MEM_SHFT     (11)
+#define CAP_MAX_UPERM           (3)
 #else /* ! CHERI_128 */
 #define CAP_PERMS_ALL           (0x7fff)     /* [0...14] */
 #define CAP_PERMS_LEGACY        (0x0)
 #define CAP_UPERMS_ALL          (0xffff)     /* [15...30] */
 #define CAP_UPERMS_SHFT         (15)
 #define CAP_UPERMS_MEM_SHFT     (15)
+#define CAP_MAX_UPERM           (15)
 #endif /* ! CHERI_128 */
 
 struct cvtrace {
