@@ -564,8 +564,10 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #ifdef TARGET_CHERI
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR) |
-                qemu_loglevel_mask(CPU_LOG_CVTRACE)))
+                qemu_loglevel_mask(CPU_LOG_CVTRACE) |
+                qemu_loglevel_mask(CPU_LOG_INSTR_USER_MODE_ONLY))) {
         mips_dump_changed_state(env);
+    }
 #endif /* TARGET_CHERI */
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&
         (env->hflags & MIPS_HFLAG_DM)) {

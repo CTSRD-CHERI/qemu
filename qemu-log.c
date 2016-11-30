@@ -106,6 +106,8 @@ const QEMULogItem qemu_log_items[] = {
       "show trace before each executed TB (lots of logs)" },
     { CPU_LOG_INSTR, "instr",
       "CHERI only: show executed instructions and changed CPU state" },
+    { CPU_LOG_INSTR | CPU_LOG_INSTR_USER_MODE_ONLY, "instr-user-mode",
+      "CHERI only: Like log instr but only logs user-mode instructions" },
     { CPU_LOG_CVTRACE, "cvtrace",
       "CHERI only: write CheriVis trace (can't be used with others)" },
     { CPU_LOG_TB_CPU, "cpu",

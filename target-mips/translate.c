@@ -4589,6 +4589,14 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
             /* With 'li $0, 0xdead' turn off instruction trace logging. */
             if ((uint16_t)imm == 0xdead)
                 gen_helper_instr_stop(cpu_env);
+
+            /* With 'li $0, 0xdeaf' switch to userspace-only instruction trace logging. */
+            if ((uint16_t)imm == 0xdeaf)
+                gen_helper_instr_start_user_mode_only(cpu_env);
+
+            /* With 'li $0, 0xfaed' switch off userspace-only instruction trace logging. */
+            if ((uint16_t)imm == 0xfaed)
+                gen_helper_instr_stop_user_mode_only(cpu_env);
         }
 #endif /* TARGET_CHERI */
         return;

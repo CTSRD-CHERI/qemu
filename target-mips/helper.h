@@ -229,6 +229,8 @@ DEF_HELPER_5(csc_addr, tl, env, i32, i32, tl, i32)
 DEF_HELPER_3(cscc_addr, tl, env, i32, i32)
 
 DEF_HELPER_1(instr_start, void, env)
+DEF_HELPER_1(instr_start_user_mode_only, void, env)
+DEF_HELPER_1(instr_stop_user_mode_only, void, env)
 DEF_HELPER_1(instr_stop, void, env)
 
 #ifdef CHERI_128
