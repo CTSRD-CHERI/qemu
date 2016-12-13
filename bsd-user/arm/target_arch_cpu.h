@@ -57,12 +57,10 @@ static inline void target_cpu_loop(CPUARMState *env)
     CPUState *cs = CPU(arm_env_get_cpu(env));
 
     for (;;) {
-        DEBUG_PRINTF("CPU_LOOPING\n");
         cpu_exec_start(cs);
-        DEBUG_PRINTF("EXECUTING...\n");
-        trapnr = cpu_arm_exec(env);
-        DEBUG_PRINTF("trapnr %d\n", trapnr);
+        trapnr = cpu_exec(cs);
         cpu_exec_end(cs);
+	process_queued_cpu_work(cs);
         switch (trapnr) {
         case EXCP_UDEF:
             {

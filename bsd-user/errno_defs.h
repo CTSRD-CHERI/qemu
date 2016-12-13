@@ -153,4 +153,6 @@
                                                    modifing regs */
 #define TARGET_ERESTART         255             /* Restart syscall */
 
+#define TARGET_ERESTARTSYS     512     /* Restart system call (if SA_RESTART) */
+
 #endif /* !  _ERRNO_DEFS_H_ */
