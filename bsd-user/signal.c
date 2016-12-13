@@ -187,6 +187,21 @@ void target_to_host_sigset(sigset_t *d, const target_sigset_t *s)
     target_to_host_sigset_internal(d, &s1);
 }
 
+int block_signals(void)
+{
+    TaskState *ts = (TaskState *)thread_cpu->opaque;
+    sigset_t set;
+
+    /* It's OK to block everything including SIGSEGV, because we won't
+     * run any further guest code before unblocking signals in
+     * process_pending_signals().
+     */
+    sigfillset(&set);
+    sigprocmask(SIG_SETMASK, &set, 0);
+
+    return atomic_xchg(&ts->signal_pending, 1);
+}
+
 /* Siginfo conversion. */
 static inline void host_to_target_siginfo_noswap(target_siginfo_t *tinfo,
         const siginfo_t *info)
@@ -561,6 +576,11 @@ int do_sigaction(int sig, const struct target_sigaction *act,
             TARGET_SIGSTOP == sig) {
         return -EINVAL;
     }
+
+    if (block_signals()) {
+        return -TARGET_ERESTARTSYS;
+    }
+
     k = &sigact_table[sig - 1];
     if (oact) {
         oact->_sa_handler = tswapal(k->_sa_handler);

@@ -97,22 +97,10 @@ char qemu_proc_pathname[PATH_MAX];  /* full path to exeutable */
 
 /* Helper routines for implementing atomic operations. */
 
-/*
- * To implement exclusive operations we force all cpus to synchronize.
- * We don't require a full sync, only that no cpus are executing guest code.
- * The alternative is to map target atomic ops onto host eqivalents,
- * which requires quite a lot of per host/target work.
- */
-static pthread_mutex_t cpu_list_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t exclusive_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t exclusive_cond = PTHREAD_COND_INITIALIZER;
-static pthread_cond_t exclusive_resume = PTHREAD_COND_INITIALIZER;
-static int pending_cpus;
-
 void fork_start(void)
 {
+    cpu_list_lock();
     qemu_mutex_lock(&tcg_ctx.tb_ctx.tb_lock);
-    pthread_mutex_lock(&exclusive_lock);
     mmap_fork_start();
 }
 
@@ -130,23 +118,18 @@ void fork_end(int child)
                 QTAILQ_REMOVE(&cpus, cpu, node);
             }
         }
-        pending_cpus = 0;
-        pthread_mutex_init(&exclusive_lock, NULL);
-        pthread_mutex_init(&cpu_list_mutex, NULL);
-        pthread_cond_init(&exclusive_cond, NULL);
-        pthread_cond_init(&exclusive_resume, NULL);
         qemu_mutex_init(&tcg_ctx.tb_ctx.tb_lock);
+	qemu_init_cpu_list();
         gdbserver_fork(thread_cpu);
     } else {
-        pthread_mutex_unlock(&exclusive_lock);
         qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
+	cpu_list_unlock();
     }
 
 }
 
 void cpu_loop(CPUArchState *env)
 {
-
     target_cpu_loop(env);
 }
 
@@ -282,8 +265,7 @@ int main(int argc, char **argv)
 
     error_init(argv[0]);
     module_call_init(MODULE_INIT_TRACE);
-    qemu_init_cpu_list();
-    save_proc_pathname(argv[0]);
+    //qemu_init_cpu_list();
     module_call_init(MODULE_INIT_QOM);
 
     if ((envlist = envlist_create()) == NULL) {
