@@ -102,9 +102,10 @@ static inline void target_cpu_loop(CPUMIPSState *env)
     unsigned int syscall_num;
 
     for (;;) {
-        cpu_exec_start(cs);
-        trapnr = cpu_mips_exec(env);
-        cpu_exec_end(cs);
+	cpu_exec_start(cs);
+        trapnr = cpu_exec(cs);
+	cpu_exec_end(cs);
+	process_queued_cpu_work(cs);
         switch (trapnr) {
         case EXCP_SYSCALL: /* syscall exception */
             if (bsd_type == target_freebsd) {
