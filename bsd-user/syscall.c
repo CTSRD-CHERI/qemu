@@ -1128,7 +1128,11 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
     case TARGET_FREEBSD_NR_sigreturn: /* sigreturn(2) */
-        ret = do_bsd_sigreturn(cpu_env, arg1);
+        if (block_signals()) {
+            ret = -TARGET_ERESTARTSYS;
+        } else {
+            ret = do_bsd_sigreturn(cpu_env, arg1);
+        }
         break;
 
     case TARGET_FREEBSD_NR_sigwait: /* sigwait(2) */
