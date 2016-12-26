@@ -71,6 +71,7 @@ static abi_long do_freebsd_thr_exit(CPUArchState *cpu_env, abi_ulong tid_addr)
     object_unref(OBJECT(ENV_GET_CPU(cpu_env)));
     ts = cpu->opaque;
     g_free(ts);
+    rcu_unregister_thread();
     pthread_exit(NULL);
     /* Doesn't return */
     return 0;
