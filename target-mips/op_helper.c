@@ -2587,7 +2587,7 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        return (target_ulong)env->active_tc.C[cb].cr_otype;
+        return (target_ulong)(env->active_tc.C[cb].cr_otype & CAP_MAX_OTYPE);
     }
 }
 
