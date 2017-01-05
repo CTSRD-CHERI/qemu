@@ -4362,14 +4362,18 @@ static void gen_st_cond (DisasContext *ctx, uint32_t opc, int rt,
     case OPC_SCD:
     case R6_OPC_SCD:
         save_cpu_state(ctx, 1);
+        GEN_CAP_CHECK_STORE(t0, t0, 8);
         op_st_scd(t1, t0, rt, ctx);
+        GEN_CAP_INVADIATE_TAG(t0, 8, opc, t1);
         opn = "scd";
         break;
 #endif
     case OPC_SC:
     case R6_OPC_SC:
         save_cpu_state(ctx, 1);
+        GEN_CAP_CHECK_STORE(t0, t0, 4);
         op_st_sc(t1, t0, rt, ctx);
+        GEN_CAP_INVADIATE_TAG32(t0, 4, opc, t1);
         opn = "sc";
         break;
     }

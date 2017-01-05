@@ -406,9 +406,7 @@ target_ulong helper_##name(CPUMIPSState *env, target_ulong arg1,              \
     if (do_translate_address(env, arg2, 1) == env->lladdr) {                  \
         tmp = do_##ld_insn(env, arg2, mem_idx);                               \
         if (tmp == env->llval) {                                              \
-            /* XXX _ccheck_store() */                                         \
             do_##st_insn(env, arg2, arg1, mem_idx);                           \
-            /* XXX _cinvalidate_tag() */                                      \
             return 1;                                                         \
         }                                                                     \
     }                                                                         \
@@ -4081,7 +4079,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
     cap_register_t *ddc = &env->active_tc.C[0];
-    target_ulong addr = offset + ddc->cr_base;
+    target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
 
     // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
     check_cap(env, &env->active_tc.C[0], CAP_PERM_STORE, addr, 0, len);
@@ -4092,7 +4090,7 @@ target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_
 target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
     cap_register_t *ddc = &env->active_tc.C[0];
-    target_ulong addr = offset + ddc->cr_base;
+    target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
 
     // fprintf(qemu_logfile, "LD(%u):%016lx\n", len, addr);
     check_cap(env, ddc, CAP_PERM_LOAD, addr, 0, len);
@@ -5566,6 +5564,7 @@ static inline void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
 
     switch (opc) {
 #if defined(TARGET_MIPS64)
+    case OPC_SCD:
     case OPC_SD:
     case OPC_SDL:
     case OPC_SDR:
@@ -5581,6 +5580,7 @@ static inline void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
                 TARGET_FMT_lx"\n", addr, value);
         break;
 #endif
+    case OPC_SC:
     case OPC_SW:
     case OPC_SWL:
     case OPC_SWR:
@@ -5644,6 +5644,7 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
 
     case OPC_LDC1:
     case OPC_LDXC1:
+    case OPC_LLD:
     case OPC_LUXC1:
 
     case OPC_CLD:
@@ -5654,6 +5655,7 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
         break;
     case OPC_LWU:
 #endif
+    case OPC_LL:
     case OPC_LW:
     case OPC_LWPC:
     case OPC_LWL:
