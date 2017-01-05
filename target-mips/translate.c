@@ -1959,32 +1959,49 @@ static inline void generate_cbtu(DisasContext *ctx, int32_t cb, int32_t offset)
 
 static inline void generate_cjalr(DisasContext *ctx, int32_t cd, int32_t cb)
 {
-    TCGv_i32 tcd = tcg_const_i32(cd);
-    TCGv_i32 tcb = tcg_const_i32(cb);
 
-    gen_helper_cjalr(btarget, cpu_env, tcd, tcb);
-    /* Set branch and delay slot flags */
-    ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
-    /* Save capability register index that is new PCC */
-    ctx->btcr = cb;
-    save_cpu_state(ctx, 0);
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
+#ifdef MIPS_DEBUG_DISAS
+        LOG_DISAS("Branch in delay / forbidden slot at PC 0x"
+                TARGET_FMT_lx "\n", ctx->pc);
+#endif
+        generate_exception(ctx, EXCP_RI);
+    } else {
+        TCGv_i32 tcd = tcg_const_i32(cd);
+        TCGv_i32 tcb = tcg_const_i32(cb);
 
-    tcg_temp_free_i32(tcb);
-    tcg_temp_free_i32(tcd);
+        gen_helper_cjalr(btarget, cpu_env, tcd, tcb);
+        /* Set branch and delay slot flags */
+        ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
+        /* Save capability register index that is new PCC */
+        ctx->btcr = cb;
+        save_cpu_state(ctx, 0);
+
+        tcg_temp_free_i32(tcb);
+        tcg_temp_free_i32(tcd);
+    }
 }
 
 static inline void generate_cjr(DisasContext *ctx, int32_t cb)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
+#ifdef MIPS_DEBUG_DISAS
+        LOG_DISAS("Branch in delay / forbidden slot at PC 0x"
+                TARGET_FMT_lx "\n", ctx->pc);
+#endif
+        generate_exception(ctx, EXCP_RI);
+    } else {
+        TCGv_i32 tcb = tcg_const_i32(cb);
 
-    gen_helper_cjr(btarget, cpu_env, tcb);
-    /* Set branch and delay slot flags */
-    ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
-    /* Save capability register index that is new PCC */
-    ctx->btcr = cb;
-    save_cpu_state(ctx, 0);
+        gen_helper_cjr(btarget, cpu_env, tcb);
+        /* Set branch and delay slot flags */
+        ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
+        /* Save capability register index that is new PCC */
+        ctx->btcr = cb;
+        save_cpu_state(ctx, 0);
 
-    tcg_temp_free_i32(tcb);
+        tcg_temp_free_i32(tcb);
+    }
 }
 
 static inline void generate_ccheckperm(int32_t cs, int32_t rt)
