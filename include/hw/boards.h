@@ -150,9 +150,6 @@ struct MachineState {
     char *initrd_filename;
     const char *cpu_model;
     AccelState *accelerator;
-#if defined(CONFIG_CHERI)
-    uint64_t breakcount;
-#endif
 };
 
 #endif

@@ -175,8 +175,6 @@ mips_mipssim_init(MachineState *machine)
     qemu_register_reset(main_cpu_reset, reset_info);
 
 #ifdef TARGET_CHERI
-    if (machine->breakcount)
-        cpu_breakcount((CPUState *)cpu, machine->breakcount);
     cheri_tag_init(ram_size);
 #endif
 

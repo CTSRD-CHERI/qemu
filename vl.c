@@ -4550,7 +4550,13 @@ int main(int argc, char **argv, char **envp)
             cpu_breakpoint_insert(cs, cl_breakpoint, BP_GDB, NULL);
         }
     }
-    current_machine->breakcount = cl_breakcount;
+    if (cl_breakcount) {
+        CPUState *cs;
+
+        CPU_FOREACH(cs) {
+            cpu_breakcount(cs, cl_breakcount);
+        }
+    }
 #endif
 
     realtime_init();
