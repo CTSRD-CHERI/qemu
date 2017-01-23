@@ -3533,15 +3533,18 @@ void helper_instr_start(CPUMIPSState *env)
     env->trace_explicitly_disabled = false;
     env->tracing_suspended = false;
     uint8_t ASID = env->CP0_EntryHi & 0xFF;
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INSTR_USER_MODE_ONLY,
-        "--- Switching on tracing @ 0x%llx ASID %d\n", (unsigned long long)env->active_tc.PC, ASID);
+    qemu_log_mask(CPU_LOG_INSTR, "--- Switching on tracing @ 0x%llx ASID %d\n",
+        (unsigned long long)env->active_tc.PC, ASID);
     /* Don't turn on tracing if user-mode only is selected and we are in the kernel */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR_USER_MODE_ONLY)) &&
-            env->last_mode && strcmp(env->last_mode, TRACE_MODE_USER) != 0) {
-        qemu_log("--- Delaying tracing request at 0x%llx until next switch to user mode, ASID %d\n",
-                (unsigned long long)env->active_tc.PC, ASID);
+    if (env->user_only_tracing_enabled && !IN_USERSPACE(env)) {
+        qemu_log_mask(CPU_LOG_INSTR, "--- Delaying tracing request at 0x%llx "
+            "until next switch to user mode, ASID %d\n",
+            (unsigned long long)env->active_tc.PC, ASID);
+        env->trace_level_before_suspend = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
         qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
         env->tracing_suspended = true;
+    } else {
+        env->tracing_suspended = false;
     }
 }
 
@@ -3555,35 +3558,39 @@ void helper_instr_stop(CPUMIPSState *env)
     uint8_t ASID = env->CP0_EntryHi & 0xFF;
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INSTR_USER_MODE_ONLY,
         "--- Switching off tracing @ 0x%llx ASID %d\n", (unsigned long long)env->active_tc.PC, ASID);
+    /* Make sure a kernel -> user switch does not turn on tracing */
+    env->trace_level_before_suspend = 0;
+    env->tracing_suspended = false;
 }
 
 /* Set instruction trace logging to user mode only. */
 void helper_instr_start_user_mode_only(CPUMIPSState *env)
 {
-    qemu_set_log(qemu_loglevel | CPU_LOG_INSTR_USER_MODE_ONLY);
     /* store the log level again in case it was changed using the monitor */
-    /* XXXAR: do we need this? */
-    env->previous_instr_log_level = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
+    env->trace_level_before_suspend = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
     /* Also disable tracing if we are not currently in user mode */
     /* XXXAR: should probably have a bool field in env instead of using strcmp */
     if (env->last_mode && strcmp(env->last_mode, TRACE_MODE_USER) != 0) {
         qemu_set_log(qemu_loglevel & ~(CPU_LOG_CVTRACE | CPU_LOG_INSTR));
         env->tracing_suspended = true;
     }
+    env->user_only_tracing_enabled = true;
     uint8_t ASID = env->CP0_EntryHi & 0xFF;
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INSTR_USER_MODE_ONLY,
-        "--- User-mode only tracing enabled at 0x%llx, ASID %d\n", (unsigned long long)env->active_tc.PC, ASID);
+    qemu_log_mask(CPU_LOG_INSTR, "--- User-mode only tracing enabled at 0x%llx, ASID %d\n",
+        (unsigned long long)env->active_tc.PC, ASID);
 }
 
 /* Stop instruction trace logging to user mode only. */
 void helper_instr_stop_user_mode_only(CPUMIPSState *env)
 {
     /* Disable user-mode only and restore the previous tracing level */
-    qemu_set_log((qemu_loglevel | env->previous_instr_log_level) & ~CPU_LOG_INSTR_USER_MODE_ONLY);
+    if (env->tracing_suspended) {
+        qemu_set_log(qemu_loglevel | env->trace_level_before_suspend);
+    }
     uint8_t ASID = env->CP0_EntryHi & 0xFF;
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INSTR_USER_MODE_ONLY,
-        "--- User-mode only tracing disabled at 0x%llx, ASID %d\n", (unsigned long long)env->active_tc.PC, ASID);
+    qemu_log_mask(CPU_LOG_INSTR, "--- User-mode only tracing disabled at 0x%llx, ASID %d\n", (unsigned long long)env->active_tc.PC, ASID);
     env->tracing_suspended = false;
+    env->user_only_tracing_enabled = false;
 }
 
 #ifdef CHERI_128
@@ -4087,9 +4094,8 @@ void helper_log_instruction(CPUMIPSState *env, uint64_t pc, int isa)
 void helper_log_registers(CPUMIPSState *env)
 {
     /* Print changed state: GPR, HI/LO, COP0. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE)) ||
-        unlikely(qemu_loglevel_mask(CPU_LOG_INSTR)) ||
-        unlikely(qemu_loglevel_mask(CPU_LOG_INSTR_USER_MODE_ONLY)))
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR) ||
+        env->user_only_tracing_enabled))
         mips_dump_changed_state(env);
 }
 
@@ -5495,39 +5501,26 @@ static void dump_changed_regs(CPUMIPSState *env)
 
 static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mode)
 {
-    if (!qemu_loglevel_mask(CPU_LOG_INSTR_USER_MODE_ONLY)) {
+    if (!env->user_only_tracing_enabled) {
         return;
     }
     uint8_t ASID = env->CP0_EntryHi & 0xFF;
 
-    if (env->last_mode && strcmp(env->last_mode, TRACE_MODE_USER) == 0) {
+    if (IN_USERSPACE(env)) {
         assert(strcmp(new_mode, TRACE_MODE_USER) != 0);
-        /* TODO: do I really need to store the value here? */
-        env->previous_instr_log_level = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
-        /* If changing from user mode trun off instruction tracing */
-        if (!qemu_loglevel_mask(CPU_LOG_CVTRACE) && !env->tracing_suspended) {
-                fprintf(qemu_logfile, "--- Switching off tracing %s -> %s: 0x%llx ASID %d\n",
-                env->last_mode, new_mode, (unsigned long long)env->active_tc.PC, ASID);
-                // fprintf(qemu_logfile, "--- %s\n", new_mode);
-        }
-        qemu_set_log(qemu_loglevel & ~(CPU_LOG_CVTRACE | CPU_LOG_INSTR));
+        /* When changing from user mode to kernel mode disable tracing */
+        qemu_log_mask(CPU_LOG_INSTR, "--- Switching off tracing %s -> %s: 0x%llx ASID %d\n",
+            env->last_mode, new_mode, (unsigned long long)env->active_tc.PC, ASID);
+        env->trace_level_before_suspend = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
         env->tracing_suspended = true;
+        qemu_set_log(qemu_loglevel & ~(CPU_LOG_CVTRACE | CPU_LOG_INSTR));
     } else if (strcmp(new_mode, TRACE_MODE_USER) == 0) {
-        /* If changing back to user mode restore instruction tracing */
-        assert(!env->last_mode || strcmp(env->last_mode, TRACE_MODE_USER) != 0);
-        /*
-         * If env->trace_explicitly_disabled is set (i.e. li, $0, 0xdead was run),
-         * we don't want to reenable tracing on a kernel -> user mode change
-         */
-        if (env->trace_explicitly_disabled) {
-            return;
-        }
+        /* When changing back to user mode restore instruction tracing */
+        assert(!IN_USERSPACE(env));
         if (env->tracing_suspended) {
-            qemu_set_log(qemu_loglevel | env->previous_instr_log_level);
-            if (!qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-                fprintf(qemu_logfile, "--- Switching on tracing %s -> %s 0x%llx ASID %d\n",
-                    env->last_mode, new_mode, (unsigned long long)env->active_tc.PC, ASID);
-            }
+            qemu_set_log(qemu_loglevel | env->trace_level_before_suspend);
+            qemu_log_mask(CPU_LOG_INSTR, "--- Switching on tracing %s -> %s 0x%llx ASID %d\n",
+                env->last_mode, new_mode, (unsigned long long)env->active_tc.PC, ASID);
             env->tracing_suspended = false;
         }
     }
@@ -5539,6 +5532,7 @@ static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mod
 void mips_dump_changed_state(CPUMIPSState *env)
 {
     const char* new_mode = mips_cpu_get_changed_mode(env);
+    /* Testing pointer equality is fine, it always points to the same constants */
     if (new_mode != env->last_mode) {
         update_tracing_on_mode_change(env, new_mode);
         env->last_mode = new_mode;
