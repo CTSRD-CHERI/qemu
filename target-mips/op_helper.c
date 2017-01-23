@@ -5537,9 +5537,7 @@ void mips_dump_changed_state(CPUMIPSState *env)
     if (new_mode != env->last_mode) {
         update_tracing_on_mode_change(env, new_mode);
         env->last_mode = new_mode;
-        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-            fprintf(qemu_logfile, "--- %s\n", new_mode);
-        }
+        qemu_log_mask(CPU_LOG_INSTR, "--- %s\n", new_mode);
     }
 
     if (qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE)) {
