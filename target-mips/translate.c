@@ -4604,6 +4604,9 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
             if ((uint16_t)imm == 0xfaed)
                 GEN_CHERI_TRACE_HELPER(cpu_env, instr_stop_user_mode_only);
 
+            if ((uint16_t)imm == 0xface)
+                GEN_CHERI_TRACE_HELPER(cpu_env, cheri_debug_message);
+
         }
 #endif /* TARGET_CHERI */
         return;

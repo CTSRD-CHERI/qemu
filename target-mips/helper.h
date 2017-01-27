@@ -232,6 +232,7 @@ DEF_HELPER_2(instr_start, void, env, i64)
 DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
 DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
 DEF_HELPER_2(instr_stop, void, env, i64)
+DEF_HELPER_2(cheri_debug_message, void, env, i64)
 
 #ifdef CHERI_128
 DEF_HELPER_5(bytes2cap_128, void, env, i32, tl, tl, tl)

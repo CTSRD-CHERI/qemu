@@ -3596,6 +3596,95 @@ void helper_instr_stop_user_mode_only(CPUMIPSState *env, target_ulong pc)
     qemu_set_log(qemu_loglevel & ~CPU_LOG_USER_ONLY);
 }
 
+static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_long vaddr) {
+    char ascii_chars[17] = { 0 };
+    target_ulong line_start = vaddr & ~0xf;
+
+    /* print leading empty space to always start with an aligned address */
+    if (line_start != vaddr) {
+        fprintf(f, "    %08lx: ", line_start);
+        for (target_ulong addr = line_start; addr < vaddr; addr++) {
+            if ((addr % 4) == 0) {
+                fprintf(f, "   ");
+            } else {
+                fprintf(f, "  ");
+            }
+            ascii_chars[addr % 16] = ' ';
+        }
+    }
+    ascii_chars[16] = '\0';
+    for (target_ulong addr = vaddr; addr < vaddr + length; addr++) {
+        if ((addr % 16) == 0) {
+            fprintf(f, "    %08lx: ", line_start);
+        }
+        if ((addr % 4) == 0) {
+            fprintf(f, " ");
+        }
+        unsigned char c = (unsigned char)buffer[addr - vaddr];
+        fprintf(f, "%02x", c);
+        ascii_chars[addr % 16] = isprint(c) ? c : '.';
+        if ((addr % 16) == 15) {
+            fprintf(f, "  %s\n", ascii_chars);
+            line_start += 16;
+        }
+    }
+    if (line_start != vaddr + length) {
+        const target_ulong hexdump_end_addr = (vaddr + length) | 0xf;
+        for (target_ulong addr = vaddr + length; addr <= hexdump_end_addr; addr++) {
+            if ((addr % 4) == 0) {
+                fprintf(f, "   ");
+            } else {
+                fprintf(f, "  ");
+            }
+            ascii_chars[addr % 16] = ' ';
+        }
+        fprintf(f, "  %s\n", ascii_chars);
+    }
+}
+
+
+/* Stop instruction trace logging to user mode only. */
+void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
+{
+    uint32_t mode = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
+    if (!mode && env->tracing_suspended) {
+        /* Always print these messages even if user-space only tracing is on */
+        mode = CHERI_DEFAULT_TRACE_FLAG;
+    }
+    if (!mode) {
+        return;
+    }
+    uint8_t buffer[4096];
+    /* Address loaded from a0, length from a1, print mode in a2 */
+    typedef enum _PrintMode {
+        DEBUG_MESSAGE_CSTRING = 0,
+        DEBUG_MESSAGE_HEXDUMP = 1
+    } PrintMode;
+    target_ulong vaddr = env->active_tc.gpr[4];
+    target_ulong length = MIN(sizeof(buffer), env->active_tc.gpr[5]);
+    PrintMode print_mode = (PrintMode)env->active_tc.gpr[6];
+
+    int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
+    if (ret != 0) {
+        /* XXXAR: where to print this error message? stderr?*/
+        fprintf(stderr, "CHERI DEBUG HELPER: Could not %lu bytes at vaddr 0x%lx", length, vaddr);
+    }
+    if (mode & CPU_LOG_INSTR) {
+        qemu_log("DEBUG MESSAGE @ 0x%lx\n", pc);
+        if (print_mode == DEBUG_MESSAGE_CSTRING) {
+            /* XXXAR: Escape newlines, etc.? */
+            qemu_log("    message = \"%s\"\n", buffer);
+        } else if (print_mode == DEBUG_MESSAGE_HEXDUMP) {
+            qemu_log("   Dumping %lu bytes starting at 0x%lx\n", length, vaddr);
+            do_hexdump(qemu_logfile, buffer, length, vaddr);
+        }
+    } else if (mode & CPU_LOG_CVTRACE) {
+        fprintf(stderr, "NOT IMPLEMENTED: CVTRACE debug message nop @ 0x%lx\n", pc);
+    } else {
+        assert(false && "logic error");
+    }
+}
+
 #ifdef CHERI_128
 /*
  * Print capability load from memory to log file.
