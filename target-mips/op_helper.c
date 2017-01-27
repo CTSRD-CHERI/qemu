@@ -3523,24 +3523,18 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     return (target_ulong)addr;
 }
 
+extern int cl_default_trace_format;
+
 /* Start instruction trace logging. */
 void helper_instr_start(CPUMIPSState *env)
 {
-#ifdef CHERI_DEFAULT_CVTRACE
-    qemu_set_log(qemu_loglevel | CPU_LOG_CVTRACE);
-#else
-    qemu_set_log(qemu_loglevel | CPU_LOG_INSTR);
-#endif
+    qemu_set_log(qemu_loglevel | cl_default_trace_format);
 }
 
 /* Stop instruction trace logging. */
 void helper_instr_stop(CPUMIPSState *env)
 {
-#ifdef CHERI_DEFAULT_CVTRACE
-    qemu_set_log(qemu_loglevel & ~CPU_LOG_CVTRACE);
-#else
-    qemu_set_log(qemu_loglevel & ~CPU_LOG_INSTR);
-#endif
+    qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
 }
 
 #ifdef CHERI_128

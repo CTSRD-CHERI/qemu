@@ -186,6 +186,14 @@ uint8_t qemu_extra_params_fw[2];
 
 int icount_align_option;
 
+#ifdef CONFIG_CHERI
+#ifdef CHERI_DEFAULT_CVTRACE
+    int cl_default_trace_format = CPU_LOG_CVTRACE;
+#else
+    int cl_default_trace_format = CPU_LOG_INSTR;
+#endif
+#endif
+
 /* The bytes in qemu_uuid[] are in the order specified by RFC4122, _not_ in the
  * little-endian "wire format" described in the SMBIOS 2.6 specification.
  */
@@ -3877,6 +3885,16 @@ int main(int argc, char **argv, char **envp)
 #if defined(CONFIG_CHERI)
             case QEMU_OPTION_breakpoint:
                 cl_breakpoint = strtoull(optarg, NULL, 0);
+                break;
+            case QEMU_OPTION_cheri_trace_format:
+                if (strcmp(optarg, "text") == 0)
+                    cl_default_trace_format = CPU_LOG_INSTR;
+                else if (strcmp(optarg, "cvtrace") == 0)
+                    cl_default_trace_format = CPU_LOG_CVTRACE;
+                else {
+                    printf("Invalid choice for cheri-trace-format: '%s'\n", optarg);
+                    exit(1);
+                }
                 break;
             case QEMU_OPTION_breakcount:
                 cl_breakcount = strtoull(optarg, NULL, 0);

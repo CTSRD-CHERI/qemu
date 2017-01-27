@@ -3284,6 +3284,13 @@ STEXI
 @item -bc @var{count}
 Set GDB breakpoint in <count> instructions after start.
 ETEXI
+
+DEF("cheri-trace-format", HAS_ARG, QEMU_OPTION_cheri_trace_format, \
+"-cheri-trace-format [text|cvtrace]     Select CHERI trace mode.\n", QEMU_ARCH_ALL)
+STEXI
+@item -cheri-trace-format @var{type}
+Set CHERI trace format to <type> (text or cvtrace)
+ETEXI
 #endif
 
 
