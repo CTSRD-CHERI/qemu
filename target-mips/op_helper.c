@@ -3536,13 +3536,13 @@ extern int cl_default_trace_format;
 /* Start instruction trace logging. */
 void helper_instr_start(CPUMIPSState *env, target_ulong pc)
 {
+    env->trace_explicitly_disabled = false;
     /* Don't turn on tracing if user-mode only is selected and we are in the kernel */
     if (env->user_only_tracing_enabled && !IN_USERSPACE(env)) {
         assert(qemu_loglevel_mask(CPU_LOG_USER_ONLY));
         user_trace_dbg("Delaying tracing request at 0x%lx "
             "until next switch to user mode, ASID %lu\n",
             pc, env->CP0_EntryHi & 0xFF);
-        env->trace_level_before_suspend = cl_default_trace_format;
         env->tracing_suspended = true;
     } else {
         qemu_set_log(qemu_loglevel | cl_default_trace_format);
@@ -3559,20 +3559,24 @@ void helper_instr_stop(CPUMIPSState *env, target_ulong pc)
         pc, env->CP0_EntryHi & 0xFF);
     qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
     /* Make sure a kernel -> user switch does not turn on tracing */
-    env->trace_level_before_suspend = 0;
     env->tracing_suspended = false;
+    /* don't turn on on next kernel -> userspace change */
+    env->trace_explicitly_disabled = true;
 }
 
 /* Set instruction trace logging to user mode only. */
 void helper_instr_start_user_mode_only(CPUMIPSState *env, target_ulong pc)
 {
+    /*
+     * Make sure that qemu_loglevel doesn't get set to zero when we
+     * suspend tracing because otherwise qemu will close the logfile.
+     */
     qemu_set_log(qemu_loglevel | CPU_LOG_USER_ONLY);
     user_trace_dbg("User-mode only tracing enabled at 0x%lx, ASID %lu\n",
         pc, env->CP0_EntryHi & 0xFF);
     env->user_only_tracing_enabled = true;
     /* Disable tracing if we are not currently in user mode */
     if (!IN_USERSPACE(env)) {
-        env->trace_level_before_suspend = qemu_loglevel & cl_default_trace_format;
         qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
         env->tracing_suspended = true;
     } else {
@@ -3584,10 +3588,10 @@ void helper_instr_start_user_mode_only(CPUMIPSState *env, target_ulong pc)
 void helper_instr_stop_user_mode_only(CPUMIPSState *env, target_ulong pc)
 {
     /* Disable user-mode only and restore the previous tracing level */
-    if (env->tracing_suspended) {
-        user_trace_dbg("User-only trace turned off -> Restoring old trace level at 0x%lx, ASID %lu\n",
-            pc, env->CP0_EntryHi & 0xFF);
-        qemu_set_log(qemu_loglevel | env->trace_level_before_suspend);
+    if (env->tracing_suspended && !env->trace_explicitly_disabled) {
+        user_trace_dbg("User-only trace turned off -> Restoring old trace level"
+            " at 0x%lx, ASID %lu\n", pc, env->CP0_EntryHi & 0xFF);
+        qemu_set_log(qemu_loglevel | cl_default_trace_format);
     }
     env->tracing_suspended = false;
     env->user_only_tracing_enabled = false;
@@ -5601,14 +5605,17 @@ static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mod
         /* When changing from user mode to kernel mode disable tracing */
         user_trace_dbg("%s -> %s: 0x%lx ASID %lu -- switching off tracing \n",
             env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
-        env->trace_level_before_suspend = qemu_loglevel & cl_default_trace_format;
         env->tracing_suspended = true;
         qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
     } else if (strcmp(new_mode, TRACE_MODE_USER) == 0) {
         /* When changing back to user mode restore instruction tracing */
         assert(!IN_USERSPACE(env));
-        if (env->tracing_suspended) {
-            qemu_set_log(qemu_loglevel | env->trace_level_before_suspend);
+        if (env->trace_explicitly_disabled) {
+            user_trace_dbg("Not turning on tracing on switch %s -> %s 0x%lx. "
+                "Tracing was explicitly disabled, ASID=%lu\n",
+                env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
+        } else if (env->tracing_suspended) {
+            qemu_set_log(qemu_loglevel | cl_default_trace_format);
             user_trace_dbg("%s -> %s 0x%lx ASID %lu -- switching on tracing\n",
                 env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
             env->tracing_suspended = false;

@@ -801,9 +801,8 @@ struct CPUMIPSState {
     const char *last_mode;
 #define IN_USERSPACE(env) \
     ((env)->last_mode && strcmp((env)->last_mode, TRACE_MODE_USER) == 0)
-    int trace_level_before_suspend;
     bool user_only_tracing_enabled;
-    // bool trace_explicitly_disabled;
+    bool trace_explicitly_disabled;
     bool tracing_suspended;
 #endif /* TARGET_CHERI */
 };
