@@ -3649,7 +3649,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     uint32_t mode = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
     if (!mode && env->tracing_suspended) {
         /* Always print these messages even if user-space only tracing is on */
-        mode = CHERI_DEFAULT_TRACE_FLAG;
+        mode = cl_default_trace_format;
     }
     if (!mode) {
         return;
@@ -5601,9 +5601,9 @@ static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mod
         /* When changing from user mode to kernel mode disable tracing */
         user_trace_dbg("%s -> %s: 0x%lx ASID %lu -- switching off tracing \n",
             env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
-        env->trace_level_before_suspend = qemu_loglevel & CHERI_DEFAULT_TRACE_FLAG;
+        env->trace_level_before_suspend = qemu_loglevel & cl_default_trace_format;
         env->tracing_suspended = true;
-        qemu_set_log(qemu_loglevel & ~CHERI_DEFAULT_TRACE_FLAG);
+        qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
     } else if (strcmp(new_mode, TRACE_MODE_USER) == 0) {
         /* When changing back to user mode restore instruction tracing */
         assert(!IN_USERSPACE(env));
