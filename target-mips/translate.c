@@ -22918,9 +22918,6 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
     int insn_bytes;
     int is_slot;
 
-    if (search_pc && !qemu_loglevel_mask(CPU_LOG_CVTRACE))
-        qemu_log("search pc %d\n", search_pc);
-
     pc_start = tb->pc;
     next_page_start = (pc_start & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
     ctx.pc = pc_start;
