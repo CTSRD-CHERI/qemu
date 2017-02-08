@@ -3537,6 +3537,101 @@ void helper_instr_stop(CPUMIPSState *env)
     qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
 }
 
+/*
+ * Dump cap tag, otype, permissions and seal bit to cvtrace entry
+ */
+static inline void
+cvtrace_dump_cap_perms(cvtrace_t *cvtrace, cap_register_t *cr)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
+            ((uint64_t)(cr->cr_otype & CAP_MAX_OTYPE)<< 32) |
+            ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+              (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))) << 1) |
+            (uint64_t)(is_cap_sealed(cr) ? 1 : 0));
+    }
+}
+
+/*
+ * Dump cap load or store to cvtrace
+ */
+static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
+        uint64_t addr, cap_register_t *cr)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->version = version;
+        cvtrace->val1 = tswap64(addr);
+        cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
+            ((uint64_t)(cr->cr_otype & CAP_MAX_OTYPE)<< 32) |
+            ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+              (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))) << 1) |
+            (uint64_t)(is_cap_sealed(cr) ? 1 : 0));
+    }
+}
+#define cvtrace_dump_cap_load(trace, addr, cr)          \
+    cvtrace_dump_cap_ldst(trace, CVT_LD_CAP, addr, cr)
+#define cvtrace_dump_cap_store(trace, addr, cr)         \
+    cvtrace_dump_cap_ldst(trace, CVT_ST_CAP, addr, cr)
+
+/*
+ * Dump capability cursor, base and length to cvtrace entry
+ */
+static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, cap_register_t *cr)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val3 = tswap64(cr->cr_offset + cr->cr_base);
+        cvtrace->val4 = tswap64(cr->cr_base);
+        cvtrace->val5 = tswap64(cr->cr_length);
+    }
+}
+
+static inline void cvtrace_dump_cap_cursor(cvtrace_t *cvtrace, uint64_t cursor)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val3 = tswap64(cursor);
+    }
+}
+
+static inline void cvtrace_dump_cap_base(cvtrace_t *cvtrace, uint64_t base)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val4 = tswap64(base);
+    }
+}
+
+static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val5 = tswap64(length);
+    }
+}
+
+/*
+ * dump non-capability data to cvtrace entry
+ */
+static inline void cvtrace_dump_gpr_ldst(cvtrace_t *cvtrace, uint8_t version,
+        uint64_t addr, uint64_t value)
+{
+    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
+        cvtrace->version = version;
+        cvtrace->val1 = tswap64(addr);
+        cvtrace->val2 = tswap64(value);
+    }
+}
+#define cvtrace_dump_gpr_load(trace, addr, val)          \
+    cvtrace_dump_gpr_ldst(trace, CVT_LD_GPR, addr, val)
+#define cvtrace_dump_gpr_store(trace, addr, val)         \
+    cvtrace_dump_gpr_ldst(trace, CVT_ST_GPR, addr, val)
+
+static inline void cvtrace_dump_gpr(cvtrace_t *cvtrace, uint64_t value)
+{
+    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
+        if (cvtrace->version == CVT_NO_REG)
+            cvtrace->version = CVT_GPR;
+        cvtrace->val2 = tswap64(value);
+    }
+}
+
 #ifdef CHERI_128
 /*
  * Print capability load from memory to log file.
@@ -3580,14 +3675,8 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
 
     /* Log memory read, if needed. */
     dump_cap_load(addr, pesbt, cursor, tag);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_LD_CAP;
-        env->cvtrace.val1 = tswap64(addr);
-        env->cvtrace.val2 = tswap64(pesbt); /* XXX Tag? */
-        env->cvtrace.val3 = tswap64(cursor);
-        env->cvtrace.val4 = tswap64(cdp->cr_base);
-        env->cvtrace.val5 = tswap64(cdp->cr_length);
-    }
+    cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
+    cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
 }
 
 target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
@@ -3603,14 +3692,8 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
 
     /* Log memory cap write, if needed. */
     dump_cap_store(vaddr, ret, csp->cr_offset + csp->cr_base, csp->cr_tag);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_ST_CAP;
-        env->cvtrace.val1 = tswap64(vaddr);
-        env->cvtrace.val2 = tswap64(ret);  /* XXX tag bit? */
-        env->cvtrace.val3 = tswap64(csp->cr_offset + csp->cr_base);
-        env->cvtrace.val4 = tswap64(csp->cr_base);
-        env->cvtrace.val5 = tswap64(csp->cr_length);
-    }
+    cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
+    cvtrace_dump_cap_cbl(&env->cvtrace, csp);
 
     return ret;
 }
@@ -3684,14 +3767,8 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
 
     /* Log memory read, if needed. */
     dump_cap_load(addr, cursor, base, tag);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_LD_CAP;
-        env->cvtrace.val1 = tswap64(addr);
-        env->cvtrace.val2 = tswap64(((uint64_t)tag << 63) | tps);
-        env->cvtrace.val3 = tswap64(cursor);
-        env->cvtrace.val4 = tswap64(base);
-        env->cvtrace.val5 = tswap64(length);
-    }
+    cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
+    cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
 }
 
 target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
@@ -3704,11 +3781,6 @@ target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
 
     /* Log memory cap write, if needed. */
     dump_cap_store(vaddr, ret, csp->cr_base, csp->cr_tag);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_ST_CAP;
-        env->cvtrace.val1 = tswap64(vaddr);
-        env->cvtrace.val3 = tswap64(ret);
-    }
     return ret;
 }
 
@@ -3732,11 +3804,8 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length);
 
     /* Log memory cap write, if needed. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.val2 = tswap64(((uint64_t)csp->cr_tag << 63) | tps);
-        env->cvtrace.val4 = tswap64(ret);
-        env->cvtrace.val5 = tswap64(csp->cr_length);
-    }
+    cvtrace_dump_cap_store(&env->cvtrace, csp);
+    cvtrace_dump_cap_cbl(&env->cvtrace, csp);
     return ret;
 }
 
@@ -3824,11 +3893,7 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
 
     /* Log memory read, if needed. */
     dump_cap_load_op(addr, otype, tag);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_LD_CAP;
-        env->cvtrace.val1 = tswap64(addr);
-        env->cvtrace.val2 = tswap64(((uint64_t)tag << 63) | otype);
-    }
+    cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
 }
 
 void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
@@ -3853,11 +3918,7 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
 
     /* Log memory read, if needed. */
     dump_cap_load_op(addr, otype, tag);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_LD_CAP;
-        env->cvtrace.val1 = tswap64(addr);
-        env->cvtrace.val2 = tswap64(((uint64_t)tag << 63) | otype);
-    }
+    cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
 }
 
 target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
@@ -3875,11 +3936,7 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
 
     /* Log memory cap write, if needed. */
     dump_cap_store_op(vaddr, ret, csp->cr_tag);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.version = CVT_ST_CAP;
-        env->cvtrace.val1 = tswap64(vaddr);
-        env->cvtrace.val2 = tswap64(((uint64_t)csp->cr_tag << 63) | ret);
-    }
+    cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
 
     return ret;
 }
@@ -3895,11 +3952,7 @@ void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
 
     /* Log memory reads, if needed. */
     dump_cap_load_cbl(cursor, base, length);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.val3 = tswap64(cursor);
-        env->cvtrace.val4 = tswap64(base);
-        env->cvtrace.val5 = tswap64(length);
-    }
+    cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
 }
 
 target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
@@ -3916,9 +3969,7 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
     ret = csp->cr_offset + csp->cr_base;
     /* Log memory cap write, if needed. */
     dump_cap_store_cursor(ret);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.val3 = tswap64(ret);
-    }
+    cvtrace_dump_cap_cursor(&env->cvtrace, ret);
 
     return (ret);
 }
@@ -3929,9 +3980,7 @@ target_ulong helper_cap2bytes_base(CPUMIPSState *env, uint32_t cs)
 
     /* Log memory cap write, if needed. */
     dump_cap_store_base(csp->cr_base);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.val4 = tswap64(csp->cr_base);
-    }
+    cvtrace_dump_cap_base(&env->cvtrace, csp->cr_base);
 
     return (csp->cr_base);
 }
@@ -3942,9 +3991,7 @@ target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
 
     /* Log memory cap write, if needed. */
     dump_cap_store_length(csp->cr_length);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        env->cvtrace.val5 = tswap64(csp->cr_length);
-    }
+    cvtrace_dump_cap_length(&env->cvtrace, csp->cr_length);
 
     return (csp->cr_length);
 }
@@ -5401,11 +5448,8 @@ static void dump_changed_regs(CPUMIPSState *env)
     for (i=1; i<32; i++) {
         if (cur->gpr[i] != env->last_gpr[i]) {
             env->last_gpr[i] = cur->gpr[i];
-            if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-                if (env->cvtrace.version == CVT_NO_REG)
-                    env->cvtrace.version = CVT_GPR;
-                env->cvtrace.val2 = tswap64(cur->gpr[i]);
-            } else {
+            cvtrace_dump_gpr(&env->cvtrace, cur->gpr[i]);
+	    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
                 fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
                         gpr_name[i], cur->gpr[i]);
             }
@@ -5421,15 +5465,10 @@ static void dump_changed_regs(CPUMIPSState *env)
                     env->cvtrace.version = CVT_CAP;
                 if (env->cvtrace.version == CVT_ST_GPR)
                     env->cvtrace.version = CVT_ST_CAP;
-                env->cvtrace.val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
-                    ((uint64_t)cr->cr_otype << 32) |
-                    (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-                    (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))) << 1) |
-                    (uint64_t)(is_cap_sealed(cr) ? 1 : 0);
-                env->cvtrace.val3 = tswap64(cr->cr_offset + cr->cr_base);
-                env->cvtrace.val4 = tswap64(cr->cr_base);
-                env->cvtrace.val5 = tswap64(cr->cr_length);
-            } else {
+                cvtrace_dump_cap_perms(&env->cvtrace, cr);
+                cvtrace_dump_cap_cbl(&env->cvtrace, cr);
+            }
+	    if (qemu_loglevel_mask(CPU_LOG_INSTR)){
                 fprintf(qemu_logfile,
                         "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
                         " l:%016" PRIx64 "\n", i, cr->cr_tag,
@@ -5550,9 +5589,7 @@ static inline void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
                  qemu_loglevel_mask(CPU_LOG_CVTRACE))))
         return;
     if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        env->cvtrace.version = CVT_ST_GPR;
-        env->cvtrace.val1 = tswap64(addr);
-        env->cvtrace.val2 = tswap64(value);
+        cvtrace_dump_gpr_store(&env->cvtrace, addr, value);
         return;
     }
 
@@ -5623,9 +5660,7 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
                  qemu_loglevel_mask(CPU_LOG_CVTRACE))))
         return;
     if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        env->cvtrace.version = CVT_LD_GPR;
-        env->cvtrace.val1 = tswap64(addr);
-        env->cvtrace.val2 = tswap64(value);
+        cvtrace_dump_gpr_load(&env->cvtrace, addr, value);
         return;
     }
 
