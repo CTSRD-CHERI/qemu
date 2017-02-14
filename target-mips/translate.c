@@ -4565,6 +4565,13 @@ static void gen_arith_imm(DisasContext *ctx, uint32_t opc,
     MIPS_DEBUG("%s %s, %s, " TARGET_FMT_lx, opn, regnames[rt], regnames[rs], uimm);
 }
 
+
+#define GEN_CHERI_TRACE_HELPER(env, name) { \
+    TCGv_i64 tpc = tcg_const_i64(ctx->pc); \
+    gen_helper_##name(env, tpc); \
+    tcg_temp_free_i64(tpc); \
+}
+
 /* Logic with immediate operand */
 static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
                           int rt, int rs, int16_t imm)
@@ -4581,14 +4588,25 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
             if (qemu_loglevel_mask(CPU_LOG_CVTRACE))
                 return;
 #endif
-
             /* With 'li $0, 0xbeef' turn on instruction trace logging. */
             if ((uint16_t)imm == 0xbeef)
-                gen_helper_instr_start(cpu_env);
+                GEN_CHERI_TRACE_HELPER(cpu_env, instr_start);
 
             /* With 'li $0, 0xdead' turn off instruction trace logging. */
             if ((uint16_t)imm == 0xdead)
-                gen_helper_instr_stop(cpu_env);
+                GEN_CHERI_TRACE_HELPER(cpu_env, instr_stop);
+
+            /* With 'li $0, 0xdeaf' switch to userspace-only instruction trace logging. */
+            if ((uint16_t)imm == 0xdeaf)
+                GEN_CHERI_TRACE_HELPER(cpu_env, instr_start_user_mode_only);
+
+            /* With 'li $0, 0xfaed' switch off userspace-only instruction trace logging. */
+            if ((uint16_t)imm == 0xfaed)
+                GEN_CHERI_TRACE_HELPER(cpu_env, instr_stop_user_mode_only);
+
+            if ((uint16_t)imm == 0xface)
+                GEN_CHERI_TRACE_HELPER(cpu_env, cheri_debug_message);
+
         }
 #endif /* TARGET_CHERI */
         return;
@@ -22899,9 +22917,6 @@ gen_intermediate_code_internal(MIPSCPU *cpu, TranslationBlock *tb,
     int max_insns;
     int insn_bytes;
     int is_slot;
-
-    if (search_pc && !qemu_loglevel_mask(CPU_LOG_CVTRACE))
-        qemu_log("search pc %d\n", search_pc);
 
     pc_start = tb->pc;
     next_page_start = (pc_start & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;

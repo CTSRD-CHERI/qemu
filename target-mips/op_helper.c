@@ -3525,16 +3525,168 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 
 extern int cl_default_trace_format;
 
+
+#define USER_TRACE_DEBUG 0
+#if USER_TRACE_DEBUG
+#define user_trace_dbg(...) qemu_log("=== " __VA_ARGS__)
+#else
+#define user_trace_dbg(...)
+#endif
+
 /* Start instruction trace logging. */
-void helper_instr_start(CPUMIPSState *env)
+void helper_instr_start(CPUMIPSState *env, target_ulong pc)
 {
-    qemu_set_log(qemu_loglevel | cl_default_trace_format);
+    env->trace_explicitly_disabled = false;
+    /* Don't turn on tracing if user-mode only is selected and we are in the kernel */
+    if (env->user_only_tracing_enabled && !IN_USERSPACE(env)) {
+        assert(qemu_loglevel_mask(CPU_LOG_USER_ONLY));
+        user_trace_dbg("Delaying tracing request at 0x%lx "
+            "until next switch to user mode, ASID %lu\n",
+            pc, env->CP0_EntryHi & 0xFF);
+        env->tracing_suspended = true;
+    } else {
+        qemu_set_log(qemu_loglevel | cl_default_trace_format);
+        user_trace_dbg("Switching on tracing @ 0x%lx ASID %lu\n",
+            pc, env->CP0_EntryHi & 0xFF);
+        env->tracing_suspended = false;
+    }
 }
 
 /* Stop instruction trace logging. */
-void helper_instr_stop(CPUMIPSState *env)
+void helper_instr_stop(CPUMIPSState *env, target_ulong pc)
 {
+    user_trace_dbg("Switching off tracing @ 0x%lx ASID %lu\n",
+        pc, env->CP0_EntryHi & 0xFF);
     qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
+    /* Make sure a kernel -> user switch does not turn on tracing */
+    env->tracing_suspended = false;
+    /* don't turn on on next kernel -> userspace change */
+    env->trace_explicitly_disabled = true;
+}
+
+/* Set instruction trace logging to user mode only. */
+void helper_instr_start_user_mode_only(CPUMIPSState *env, target_ulong pc)
+{
+    /*
+     * Make sure that qemu_loglevel doesn't get set to zero when we
+     * suspend tracing because otherwise qemu will close the logfile.
+     */
+    qemu_set_log(qemu_loglevel | CPU_LOG_USER_ONLY);
+    user_trace_dbg("User-mode only tracing enabled at 0x%lx, ASID %lu\n",
+        pc, env->CP0_EntryHi & 0xFF);
+    env->user_only_tracing_enabled = true;
+    /* Disable tracing if we are not currently in user mode */
+    if (!IN_USERSPACE(env)) {
+        qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
+        env->tracing_suspended = true;
+    } else {
+        env->tracing_suspended = false;
+    }
+}
+
+/* Stop instruction trace logging to user mode only. */
+void helper_instr_stop_user_mode_only(CPUMIPSState *env, target_ulong pc)
+{
+    /* Disable user-mode only and restore the previous tracing level */
+    if (env->tracing_suspended && !env->trace_explicitly_disabled) {
+        user_trace_dbg("User-only trace turned off -> Restoring old trace level"
+            " at 0x%lx, ASID %lu\n", pc, env->CP0_EntryHi & 0xFF);
+        qemu_set_log(qemu_loglevel | cl_default_trace_format);
+    }
+    env->tracing_suspended = false;
+    env->user_only_tracing_enabled = false;
+    user_trace_dbg("User-mode only tracing disabled at 0x%lx, ASID %lu\n",
+        pc, env->CP0_EntryHi & 0xFF);
+    qemu_set_log(qemu_loglevel & ~CPU_LOG_USER_ONLY);
+}
+
+static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_long vaddr) {
+    char ascii_chars[17] = { 0 };
+    target_ulong line_start = vaddr & ~0xf;
+
+    /* print leading empty space to always start with an aligned address */
+    if (line_start != vaddr) {
+        fprintf(f, "    %08lx: ", line_start);
+        for (target_ulong addr = line_start; addr < vaddr; addr++) {
+            if ((addr % 4) == 0) {
+                fprintf(f, "   ");
+            } else {
+                fprintf(f, "  ");
+            }
+            ascii_chars[addr % 16] = ' ';
+        }
+    }
+    ascii_chars[16] = '\0';
+    for (target_ulong addr = vaddr; addr < vaddr + length; addr++) {
+        if ((addr % 16) == 0) {
+            fprintf(f, "    %08lx: ", line_start);
+        }
+        if ((addr % 4) == 0) {
+            fprintf(f, " ");
+        }
+        unsigned char c = (unsigned char)buffer[addr - vaddr];
+        fprintf(f, "%02x", c);
+        ascii_chars[addr % 16] = isprint(c) ? c : '.';
+        if ((addr % 16) == 15) {
+            fprintf(f, "  %s\n", ascii_chars);
+            line_start += 16;
+        }
+    }
+    if (line_start != vaddr + length) {
+        const target_ulong hexdump_end_addr = (vaddr + length) | 0xf;
+        for (target_ulong addr = vaddr + length; addr <= hexdump_end_addr; addr++) {
+            if ((addr % 4) == 0) {
+                fprintf(f, "   ");
+            } else {
+                fprintf(f, "  ");
+            }
+            ascii_chars[addr % 16] = ' ';
+        }
+        fprintf(f, "  %s\n", ascii_chars);
+    }
+}
+
+
+/* Stop instruction trace logging to user mode only. */
+void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
+{
+    uint32_t mode = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
+    if (!mode && env->tracing_suspended) {
+        /* Always print these messages even if user-space only tracing is on */
+        mode = cl_default_trace_format;
+    }
+    if (!mode) {
+        return;
+    }
+    uint8_t buffer[4096];
+    /* Address loaded from a0, length from a1, print mode in a2 */
+    typedef enum _PrintMode {
+        DEBUG_MESSAGE_CSTRING = 0,
+        DEBUG_MESSAGE_HEXDUMP = 1
+    } PrintMode;
+    target_ulong vaddr = env->active_tc.gpr[4];
+    target_ulong length = MIN(sizeof(buffer), env->active_tc.gpr[5]);
+    PrintMode print_mode = (PrintMode)env->active_tc.gpr[6];
+
+    int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
+    if (ret != 0) {
+        /* XXXAR: where to print this error message? stderr?*/
+        fprintf(stderr, "CHERI DEBUG HELPER: Could not %lu bytes at vaddr 0x%lx", length, vaddr);
+    }
+    if (mode & CPU_LOG_INSTR) {
+        qemu_log("DEBUG MESSAGE @ 0x%lx\n", pc);
+        if (print_mode == DEBUG_MESSAGE_CSTRING) {
+            /* XXXAR: Escape newlines, etc.? */
+            qemu_log("    message = \"%s\"\n", buffer);
+        } else if (print_mode == DEBUG_MESSAGE_HEXDUMP) {
+            qemu_log("   Dumping %lu bytes starting at 0x%lx\n", length, vaddr);
+            do_hexdump(qemu_logfile, buffer, length, vaddr);
+        }
+    } else if (mode & CPU_LOG_CVTRACE) {
+        fprintf(stderr, "NOT IMPLEMENTED: CVTRACE debug message nop @ 0x%lx\n", pc);
+    } else {
+        assert(false && "logic error");
+    }
 }
 
 /*
@@ -4085,8 +4237,8 @@ void helper_log_instruction(CPUMIPSState *env, uint64_t pc, int isa)
 void helper_log_registers(CPUMIPSState *env)
 {
     /* Print changed state: GPR, HI/LO, COP0. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE)) |
-        unlikely(qemu_loglevel_mask(CPU_LOG_INSTR)))
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR) ||
+        env->user_only_tracing_enabled))
         mips_dump_changed_state(env);
 }
 
@@ -5164,10 +5316,11 @@ void mips_cpu_unassigned_access(CPUState *cs, hwaddr addr,
 }
 
 #ifdef TARGET_CHERI
+
 /*
  * Print changed kernel/user/debug mode.
  */
-static void dump_changed_mode(CPUMIPSState *env)
+static const char* mips_cpu_get_changed_mode(CPUMIPSState *env)
 {
     const char *kernel0, *kernel1, *mode;
 
@@ -5194,14 +5347,10 @@ static void dump_changed_mode(CPUMIPSState *env)
         switch (extract32(env->CP0_Status, CP0St_KSU, 2)) {
         case 0:  mode = kernel0;           break;
         case 1:  mode = "Supervisor mode"; break;
-        default: mode = "User mode";       break;
+        default: mode = TRACE_MODE_USER;   break;
         }
     }
-
-   if (mode != env->last_mode) {
-        env->last_mode = mode;
-        fprintf(qemu_logfile, "--- %s\n", mode);
-    }
+    return mode;
 }
 
 /*
@@ -5484,20 +5633,56 @@ static void dump_changed_regs(CPUMIPSState *env)
     }
 }
 
+
+static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mode)
+{
+    if (!env->user_only_tracing_enabled) {
+        return;
+    }
+    if (IN_USERSPACE(env)) {
+        assert(strcmp(new_mode, TRACE_MODE_USER) != 0);
+        /* When changing from user mode to kernel mode disable tracing */
+        user_trace_dbg("%s -> %s: 0x%lx ASID %lu -- switching off tracing \n",
+            env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
+        env->tracing_suspended = true;
+        qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
+    } else if (strcmp(new_mode, TRACE_MODE_USER) == 0) {
+        /* When changing back to user mode restore instruction tracing */
+        assert(!IN_USERSPACE(env));
+        if (env->trace_explicitly_disabled) {
+            user_trace_dbg("Not turning on tracing on switch %s -> %s 0x%lx. "
+                "Tracing was explicitly disabled, ASID=%lu\n",
+                env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
+        } else if (env->tracing_suspended) {
+            qemu_set_log(qemu_loglevel | cl_default_trace_format);
+            user_trace_dbg("%s -> %s 0x%lx ASID %lu -- switching on tracing\n",
+                env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
+            env->tracing_suspended = false;
+        }
+    }
+}
+
 /*
  * Print the changed processor state.
  */
 void mips_dump_changed_state(CPUMIPSState *env)
 {
-    /* Print changed state: GPR, Cap. */
-    dump_changed_regs(env);
+    const char* new_mode = mips_cpu_get_changed_mode(env);
+    /* Testing pointer equality is fine, it always points to the same constants */
+    if (new_mode != env->last_mode) {
+        update_tracing_on_mode_change(env, new_mode);
+        env->last_mode = new_mode;
+        qemu_log_mask(CPU_LOG_INSTR, "--- %s\n", new_mode);
+    }
 
-    if (!qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        /* Print change state: HI/LO COP0 */
+    if (qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE)) {
+        /* Print changed state: GPR, Cap. */
+        dump_changed_regs(env);
+    }
+
+    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+        /* Print change state: HI/LO COP0 (not included in CVTRACE) */
         dump_changed_cop0(env);
-
-        /* Print changed mode: kernel/user/debug */
-        dump_changed_mode(env);
     }
 }
 
