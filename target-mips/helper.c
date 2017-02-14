@@ -857,8 +857,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
                     TARGET_FMT_lx "\n", cause, name, env->active_tc.PC);
     }
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        if (cs->exception_index != EXCP_EXT_INTERRUPT)
-            env->cvtrace.exception = cause;
+        env->cvtrace.exception = cause;
     }
 #endif /* TARGET_CHERI */
     if (qemu_loglevel_mask(CPU_LOG_INT)
