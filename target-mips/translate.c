@@ -11207,12 +11207,12 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CBTU: /* 0x09 */
         opn = "cbtu";
         check_cop2x(ctx);
-        generate_cbtu(ctx, r16, (int32_t)(ctx->opcode & 0xffff));
+        generate_cbtu(ctx, r16, (int16_t)(ctx->opcode));
         break;
     case OPC_CBTS: /* 0x0a */
         opn = "cbts";
         check_cop2x(ctx);
-        generate_cbts(ctx, r16, (int32_t)(ctx->opcode & 0xffff));
+        generate_cbts(ctx, r16, (int16_t)(ctx->opcode));
         break;
     case OPC_CCHECK: /* 0x0b */
         switch(MASK_CAP3(opc)) {
