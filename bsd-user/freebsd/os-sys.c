@@ -22,6 +22,9 @@
 #include <sys/mount.h>
 #include <sys/sysctl.h>
 #include <sys/user.h>   /* For struct kinfo_* */
+#include <net/route.h>  /* For rt_msghdr */
+#include <net/if.h>     /* For *_msghdr */
+#include <net/if_dl.h>  /* For sockaddr_dl */
 
 /* Undef all the macros from sys/user.h that conflict with qemu. */
 #undef CPUID_ACPI
@@ -541,6 +544,293 @@ do_sysctl_kern_proc_vmmap(int pid, size_t olen,
     return ret;
 }
 
+/* #define ROUTETABLE_DEBUG */
+#ifdef ROUTETABLE_DEBUG
+
+#define rtprintf(...) printf(__VA_ARGS__)
+
+static void
+hexdump(const char *prefix, const void *sbuf, int len) 
+{
+    const char *buf = sbuf;
+    int i;
+    for (i=0; i<len; i++) {
+        if (i && (i&7)==0)
+            printf(" ");
+        if (i && (i&15)==0)
+            printf("\n");
+        if ((i&15)==0)
+            printf("%s: ", prefix);
+        rtprintf("%02X ", (unsigned char)buf[i]);
+    }
+    rtprintf("\n");
+}
+
+#else
+#define hexdump(...)
+#define rtprintf(...)
+#endif
+
+/* Assign byteswapped value to target, autodetecting size. */
+#define PUT(t,v) switch(sizeof(t)) {   \
+  case 1: t=v; break;                  \
+  case 2: t=tswap16(v); break;         \
+  case 4: t=tswap32(v); break;         \
+  case 8: t=tswap64(v); break;         \
+  default: abort();                    \
+}
+
+/* SA_SIZE macro, adjusted for target word size. */
+#define TARGET_SA_SIZE(sa)                               \
+ ((!(sa) || ((struct sockaddr *)(sa))->sa_len == 0) ?    \
+   sizeof(abi_long)            :                         \
+   1 + ( (((struct sockaddr *)(sa))->sa_len - 1) | (sizeof(abi_long) - 1) ) \
+ )
+
+/* Given a bitmap of sockaddr types, and a pointer to the host buffer,
+   realign the sockaddr's into the target buffer, and byteswap field members
+   as needed.  Return value is the length of the repacked buffer.
+*/
+static int
+host_to_target_copy_sockaddrs(int addrs, char *hbuf, char *tbuf) 
+{
+    int tlen = 0;
+    int i;
+    struct sockaddr *sa;
+
+    rtprintf("copy_sockaddrs: host=%p, target=%p\n", hbuf, tbuf);
+
+    for (i = 0; i < RTAX_MAX; i++) {
+		/* If the bitmap for this sockaddr type is clear, skip it. */
+        if ((addrs & (1 << i)) == 0)
+            continue;
+
+        sa = (struct sockaddr *)hbuf;
+
+        rtprintf("sockaddr, addr=%02X, family=%d, hlen=%d, hsize=%ld, tsize=%ld\n", 
+            (1<<i), sa->sa_family, sa->sa_len, 
+            SA_SIZE(sa), TARGET_SA_SIZE(sa));
+
+        memcpy(tbuf, hbuf, SA_SIZE(sa));
+
+        /* Byteswap fields for address families that require it. */
+        switch (sa->sa_family) {
+        case AF_LINK: {
+            struct sockaddr_dl *dl;
+            dl = (struct sockaddr_dl *)tbuf;
+            PUT(dl->sdl_index, dl->sdl_index);
+            break;
+        }
+            
+        case AF_INET6: {
+            struct sockaddr_in6 *sin6;
+            sin6 = (struct sockaddr_in6 *)tbuf;
+            PUT(sin6->sin6_port, sin6->sin6_port);
+            PUT(sin6->sin6_flowinfo, sin6->sin6_flowinfo);
+            PUT(sin6->sin6_scope_id, sin6->sin6_scope_id);
+            break;
+        }
+
+        }
+
+        hexdump("sh", hbuf, SA_SIZE(sa));
+        hexdump("st", tbuf, TARGET_SA_SIZE(sa));
+
+		/* Increment pointers and counters by the appropriate amounts. */
+        hbuf += SA_SIZE(sa);
+        tbuf += TARGET_SA_SIZE(sa);
+        tlen += TARGET_SA_SIZE(sa);
+    }
+    return tlen;
+}
+
+static abi_long
+do_sysctl_net_routetable_iflistl(int32_t *snamep, size_t namelen, size_t olen,
+        char *tbuf, size_t *tlen)
+{
+    abi_long ret;
+    
+    char *bp, *ep, *tp;
+    struct rt_msghdr *rtm, *trtm;
+    char *buf = NULL;
+    size_t len;
+    
+    /* NET_RT_IFLISTL */
+            
+    /* This sysctl returns a blob composed of a list of *_msghdr structs (of
+     * a few different types and sizes), each followed by a list of
+     * sockaddr_* structs (of a few different types and sizes).  Many
+     * members in each struct will need to be byte-swapped, and
+     * unfortunately, the sockaddr structs are aligned in a MD way, so the
+     * byteswapping can't be done in-place.  We have to rebuild a new
+     * correctly-aligned blob to pass back to the target.
+     */
+
+    rtprintf("in sysctl1, olen=%zd, tlen=%zd, tbuf=%p\n", 
+        olen, *tlen, tbuf);
+
+	/* extend target's requested size by 25% to be on the safe side, even
+       though repacking for a 32-bit target shrinks the blob.  */
+    len = *tlen * 4 / 3; 
+    if (len && tbuf) {
+        buf = g_malloc(len);
+        if (buf == NULL)
+            return -TARGET_ENOMEM;
+        memset(buf, 0, len);
+    }
+
+    rtprintf("in sysctl2, len=%zd, buf=%p\n", 
+        len, buf);
+    ret = get_errno(sysctl(snamep, namelen, buf, &len, NULL, 0));
+    rtprintf("in sysctl3, ret=%ld, len=%zd\n", 
+        ret, len);
+
+	/* If the target was just probing for a good size to use, extend that by
+	   25% too.  */
+    if (olen == 0 || tbuf == NULL) {
+        *tlen = len * 4 / 3;
+        return ret;
+    }
+    
+    if (is_error(ret)) {
+        g_free(buf);
+        return ret;
+    }
+
+    rtprintf("in sysctl4, len=%zd, tlen=%zd, buf=%p, tbuf = %p\n", 
+        len, *tlen, buf, tbuf);
+
+	/* Loop through the blob, picking off routing messages and copying them to
+	   tbuf, swapping struct members as needed. */
+   
+    bp = buf;
+    ep = buf + len;
+    tp = tbuf;
+    while (bp < ep) {
+        int sa_len;
+        int tmsglen;
+        rtm = (struct rt_msghdr *)bp;
+        trtm = (struct rt_msghdr *)tp;
+        
+        rtprintf("before, host=%p, target=%p, msglen=%d\n",
+            bp, tp, rtm->rtm_msglen);
+        hexdump("h", rtm, rtm->rtm_msglen);
+        
+        switch(rtm->rtm_type) {
+        case RTM_IFINFO: {
+            struct if_msghdrl *ifm, *tifm;
+            ifm = (struct if_msghdrl *)bp;
+            tifm = (struct if_msghdrl *)tp;
+
+            rtprintf("interface. index=%d, msglen=%d, len=%d, data_off=%d\n",  
+            ifm->ifm_index, ifm->ifm_msglen, ifm->ifm_len, ifm->ifm_data_off);
+
+            memcpy(tifm, ifm, sizeof(*ifm));
+            /* copy and repack sockaddrs */
+            sa_len = host_to_target_copy_sockaddrs(ifm->ifm_addrs, 
+                IF_MSGHDRL_RTA(ifm), IF_MSGHDRL_RTA(tifm));
+
+            /* byteswap */
+            PUT(tifm->ifm_addrs, ifm->ifm_addrs);
+            PUT(tifm->ifm_flags, ifm->ifm_flags);
+            PUT(tifm->ifm_index, ifm->ifm_index);
+            PUT(tifm->ifm_len, ifm->ifm_len);
+            PUT(tifm->ifm_data_off, ifm->ifm_data_off);
+            PUT(tifm->ifm_data.ifi_datalen, ifm->ifm_data.ifi_datalen);
+            PUT(tifm->ifm_data.ifi_mtu, ifm->ifm_data.ifi_mtu);
+            PUT(tifm->ifm_data.ifi_metric, ifm->ifm_data.ifi_metric);
+            PUT(tifm->ifm_data.ifi_baudrate, ifm->ifm_data.ifi_baudrate);
+            PUT(tifm->ifm_data.ifi_ipackets, ifm->ifm_data.ifi_ipackets);
+            PUT(tifm->ifm_data.ifi_ierrors, ifm->ifm_data.ifi_ierrors);
+            PUT(tifm->ifm_data.ifi_opackets, ifm->ifm_data.ifi_opackets);
+            PUT(tifm->ifm_data.ifi_oerrors, ifm->ifm_data.ifi_oerrors);
+            PUT(tifm->ifm_data.ifi_collisions, ifm->ifm_data.ifi_collisions);
+            PUT(tifm->ifm_data.ifi_ibytes, ifm->ifm_data.ifi_ibytes);
+            PUT(tifm->ifm_data.ifi_obytes, ifm->ifm_data.ifi_obytes);
+            PUT(tifm->ifm_data.ifi_imcasts, ifm->ifm_data.ifi_imcasts);
+            PUT(tifm->ifm_data.ifi_omcasts, ifm->ifm_data.ifi_omcasts);
+            PUT(tifm->ifm_data.ifi_iqdrops, ifm->ifm_data.ifi_iqdrops);
+            PUT(tifm->ifm_data.ifi_oqdrops, ifm->ifm_data.ifi_oqdrops);
+            PUT(tifm->ifm_data.ifi_noproto, ifm->ifm_data.ifi_noproto);
+            PUT(tifm->ifm_data.ifi_hwassist, ifm->ifm_data.ifi_hwassist);
+        
+            /* set target msglen */
+            tmsglen = ifm->ifm_len + sa_len;
+            PUT(tifm->ifm_msglen, tmsglen);
+            break;
+        }
+        case RTM_NEWADDR: {
+            struct ifa_msghdrl *ifam, *tifam;
+            ifam = (struct ifa_msghdrl *)bp;
+            tifam = (struct ifa_msghdrl *)tp;
+
+            rtprintf("address. index=%d, msglen=%d, len=%d, data_off=%d\n", 
+            ifam->ifam_index, ifam->ifam_msglen, ifam->ifam_len, ifam->ifam_data_off);
+
+            memcpy(tifam, ifam, sizeof(*ifam));
+
+            /* copy and repack sockaddrs */
+            sa_len = host_to_target_copy_sockaddrs(ifam->ifam_addrs, IFA_MSGHDRL_RTA(ifam),
+                IFA_MSGHDRL_RTA(tifam));
+            
+            /* byteswap */
+            PUT(tifam->ifam_addrs, ifam->ifam_addrs);
+            PUT(tifam->ifam_flags, ifam->ifam_flags);
+            PUT(tifam->ifam_index, ifam->ifam_index);
+            PUT(tifam->ifam_len, ifam->ifam_len);
+            PUT(tifam->ifam_data_off, ifam->ifam_data_off);
+            PUT(tifam->ifam_metric, ifam->ifam_metric);
+            PUT(tifam->ifam_data.ifi_datalen, ifam->ifam_data.ifi_datalen);
+            PUT(tifam->ifam_data.ifi_mtu, ifam->ifam_data.ifi_mtu);
+            PUT(tifam->ifam_data.ifi_metric, ifam->ifam_data.ifi_metric);
+            PUT(tifam->ifam_data.ifi_baudrate, ifam->ifam_data.ifi_baudrate);
+            PUT(tifam->ifam_data.ifi_ipackets, ifam->ifam_data.ifi_ipackets);
+            PUT(tifam->ifam_data.ifi_ierrors, ifam->ifam_data.ifi_ierrors);
+            PUT(tifam->ifam_data.ifi_opackets, ifam->ifam_data.ifi_opackets);
+            PUT(tifam->ifam_data.ifi_oerrors, ifam->ifam_data.ifi_oerrors);
+            PUT(tifam->ifam_data.ifi_collisions, ifam->ifam_data.ifi_collisions);
+            PUT(tifam->ifam_data.ifi_ibytes, ifam->ifam_data.ifi_ibytes);
+            PUT(tifam->ifam_data.ifi_obytes, ifam->ifam_data.ifi_obytes);
+            PUT(tifam->ifam_data.ifi_imcasts, ifam->ifam_data.ifi_imcasts);
+            PUT(tifam->ifam_data.ifi_omcasts, ifam->ifam_data.ifi_omcasts);
+            PUT(tifam->ifam_data.ifi_iqdrops, ifam->ifam_data.ifi_iqdrops);
+            PUT(tifam->ifam_data.ifi_oqdrops, ifam->ifam_data.ifi_oqdrops);
+            PUT(tifam->ifam_data.ifi_noproto, ifam->ifam_data.ifi_noproto);
+            PUT(tifam->ifam_data.ifi_hwassist, ifam->ifam_data.ifi_hwassist);
+        
+            /* set target msglen */
+            tmsglen = ifam->ifam_len + sa_len;
+            PUT(tifam->ifam_msglen, tmsglen);
+
+            break;
+        }
+            
+        default:
+            /* can't happen, since the kernel only generates RTM_IFINFO and
+               RTM_NEWADDR messages for this sysctl, but if it does, don't
+               copy the message.  */
+            tmsglen = 0; 
+            break;
+        }
+        
+        rtprintf("after, msglen = %d\n", tmsglen);
+        hexdump("t", trtm, tmsglen);
+        
+        bp += rtm->rtm_msglen;
+        tp += tmsglen;
+    }
+    
+    len = tp - tbuf;
+    memcpy(buf, tbuf, len);
+    *tlen = len; 
+    
+    rtprintf("in sysctl, tlen = %zd\n", len);
+    hexdump("z", buf, len);
+    fflush(stdout);
+    
+    return ret;
+}
+
 /*
  * XXX The following should maybe go some place else.  Also, see the note
  * about using "thunk" for sysctl's that pass data using structures.
@@ -1017,6 +1307,16 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
                 break;
             }
         }
+        break;
+        
+    case CTL_NET:
+        if (snamep[1] == PF_ROUTE && snamep[2] == 0 && snamep[3] == 0 &&
+            snamep[4] == NET_RT_IFLISTL && snamep[5] == 0) {
+            ret = do_sysctl_net_routetable_iflistl(snamep, namelen, oldlen, holdp, &holdlen);
+            goto out;
+        }
+        break;
+        
     default:
         break;
     }
