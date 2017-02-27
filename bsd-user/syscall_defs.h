@@ -263,11 +263,8 @@ struct target_freebsd_kevent {
 /*
  *  sys/resource.h
  */
-#if defined(__FreeBSD__) && defined(TARGET_ALPHA)
-#define TARGET_RLIM_INFINITY    0x7fffffffffffffffull
-#elif defined(__FreeBSD__) && (defined(TARGET_MIPS) || \
-        (defined(TARGET_SPARC) && TARGET_ABI_BITS == 32))
-#define TARGET_RLIM_INFINITY    0x7fffffffUL
+#if defined(__FreeBSD__) 
+#define TARGET_RLIM_INFINITY    RLIM_INFINITY
 #else
 #define TARGET_RLIM_INFINITY    ((abi_ulong)-1)
 #endif
