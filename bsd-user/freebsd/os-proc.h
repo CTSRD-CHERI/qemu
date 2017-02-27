@@ -79,9 +79,10 @@ static inline abi_long do_freebsd_wait4(abi_long arg1, abi_ulong target_status,
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1000000
 /* wait6(2) */
-static inline abi_long do_freebsd_wait6(abi_long idtype, abi_long id,
-	abi_ulong target_status, abi_long options, abi_ulong target_wrusage,
-	abi_ulong target_infop)
+static inline abi_long do_freebsd_wait6(void *cpu_env, abi_long idtype, 
+    abi_long id1, abi_long id2,
+    abi_ulong target_status, abi_long options, abi_ulong target_wrusage,
+	abi_ulong target_infop, abi_ulong pad1)
 {
     abi_long ret;
     int status;
@@ -89,10 +90,21 @@ static inline abi_long do_freebsd_wait6(abi_long idtype, abi_long id,
     siginfo_t info;
     void *p;
 
+    if (regpairs_aligned(cpu_env) != 0) {
+		/* printf("shifting args\n"); */
+		/* 64-bit id is aligned, so shift all the arguments over by one */
+		id1 = id2;
+		id2 = target_status;
+		target_status = options;
+		options = target_wrusage;
+		target_wrusage = target_infop;
+		target_infop = pad1;
+    }
+
     if (target_wrusage) {
         wrusage_ptr = &wrusage;
     }
-    ret = get_errno(wait6(idtype, id, &status, options, wrusage_ptr, &info));
+    ret = get_errno(wait6(idtype, target_arg64(id1, id2), &status, options, wrusage_ptr, &info));
     if (target_status != 0) {
         status = host_to_target_waitstatus(status);
         if (put_user_s32(status, target_status) != 0) {
