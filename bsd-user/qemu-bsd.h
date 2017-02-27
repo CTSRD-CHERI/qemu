@@ -44,8 +44,8 @@ abi_long host_to_target_shmid_ds(abi_ulong target_addr,
 
 /* bsd-proc.c */
 int target_to_host_resource(int code);
-rlim_t target_to_host_rlim(abi_ulong target_rlim);
-abi_ulong host_to_target_rlim(rlim_t rlim);
+rlim_t target_to_host_rlim(abi_llong target_rlim);
+abi_llong host_to_target_rlim(rlim_t rlim);
 abi_long host_to_target_rusage(abi_ulong target_addr,
         const struct rusage *rusage);
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1000000

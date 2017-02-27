@@ -76,12 +76,12 @@ int target_to_host_resource(int code)
     }
 }
 
-rlim_t target_to_host_rlim(abi_ulong target_rlim)
+rlim_t target_to_host_rlim(abi_llong target_rlim)
 {
-    abi_ulong target_rlim_swap;
+    abi_llong target_rlim_swap;
     rlim_t result;
 
-    target_rlim_swap = tswapal(target_rlim);
+    target_rlim_swap = tswap64(target_rlim);
     if (target_rlim_swap == TARGET_RLIM_INFINITY) {
         return RLIM_INFINITY;
     }
@@ -94,17 +94,17 @@ rlim_t target_to_host_rlim(abi_ulong target_rlim)
     return result;
 }
 
-abi_ulong host_to_target_rlim(rlim_t rlim)
+abi_llong host_to_target_rlim(rlim_t rlim)
 {
-    abi_ulong target_rlim_swap;
-    abi_ulong result;
+    abi_llong target_rlim_swap;
+    abi_llong result;
 
-    if (rlim == RLIM_INFINITY || rlim != (abi_long)rlim) {
+    if (rlim == RLIM_INFINITY || rlim != (abi_llong)rlim) {
         target_rlim_swap = TARGET_RLIM_INFINITY;
     } else {
         target_rlim_swap = rlim;
     }
-    result = tswapal(target_rlim_swap);
+    result = tswap64(target_rlim_swap);
 
     return result;
 }
