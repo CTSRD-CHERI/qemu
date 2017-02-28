@@ -437,7 +437,7 @@ static inline abi_long do_freebsd_pselect(int n, abi_ulong rfd_addr,
     sigset_t set, *set_ptr;
     struct timespec ts, *ts_ptr;
     void *p;
-    abi_long ret;
+    abi_long ret, error;
 
     ret = copy_from_user_fdset_ptr(&rfds, &rfds_ptr, rfd_addr, n);
     if (is_error(ret)) {
@@ -478,21 +478,21 @@ static inline abi_long do_freebsd_pselect(int n, abi_ulong rfd_addr,
 
     if (!is_error(ret)) {
         if (rfd_addr != 0) {
-            ret = copy_to_user_fdset(rfd_addr, &rfds, n);
-            if (is_error(ret)) {
-                return ret;
+            error = copy_to_user_fdset(rfd_addr, &rfds, n);
+            if (is_error(error)) {
+                return error;
             }
         }
         if (wfd_addr != 0) {
-            ret = copy_to_user_fdset(wfd_addr, &wfds, n);
-            if (is_error(ret)) {
-                return ret;
+            error = copy_to_user_fdset(wfd_addr, &wfds, n);
+            if (is_error(error)) {
+                return error;
             }
         }
         if (efd_addr != 0) {
-            ret = copy_to_user_fdset(efd_addr, &efds, n);
-            if (is_error(ret)) {
-                return ret;
+            error = copy_to_user_fdset(efd_addr, &efds, n);
+            if (is_error(error)) {
+                return error;
             }
         }
     }
