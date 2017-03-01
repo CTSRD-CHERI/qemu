@@ -238,6 +238,15 @@ static inline abi_long do_bsd_close(abi_long arg1)
     return get_errno(close(arg1));
 }
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1100502
+/* fdatasync(2) */
+static inline abi_long do_bsd_fdatasync(abi_long arg1)
+{
+
+    return get_errno(fdatasync(arg1));
+}
+#endif
+
 /* fsync(2) */
 static inline abi_long do_bsd_fsync(abi_long arg1)
 {
