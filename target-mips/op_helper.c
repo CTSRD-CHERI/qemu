@@ -4172,8 +4172,9 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
         MIPSCPU *cpu = mips_env_get_cpu(env);
         CPUState *cs = CPU(cpu);
 
-        /* Write previous instruction trace to log. */
-        if (env->cvtrace.version != 0) {
+        /* if the logfile is empty we need to emit the cvt magic */
+        if (env->cvtrace.version != 0 && ftell(qemu_logfile) != 0) {
+            /* Write previous instruction trace to log. */
             fwrite(&env->cvtrace, sizeof(env->cvtrace), 1, qemu_logfile);
         } else {
             char buffer[sizeof(env->cvtrace)];
