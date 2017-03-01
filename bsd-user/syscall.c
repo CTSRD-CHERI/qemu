@@ -558,6 +558,12 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_bsd_close(arg1);
         break;
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1100502
+    case TARGET_FREEBSD_NR_fdatasync: /* fdatasync(2) */
+        ret = do_bsd_fdatasync(arg1);
+        break;
+#endif
+
     case TARGET_FREEBSD_NR_fsync: /* fsync(2) */
         ret = do_bsd_fsync(arg1);
         break;
