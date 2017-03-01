@@ -4182,6 +4182,7 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
             buffer[0] = CVT_QEMU_VERSION;
             g_strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
             fwrite(buffer, sizeof(env->cvtrace), 1, qemu_logfile);
+            cycles = 0;
         }
         bzero(&env->cvtrace, sizeof(env->cvtrace));
         env->cvtrace.version = CVT_NO_REG;
