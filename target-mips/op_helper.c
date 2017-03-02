@@ -3957,7 +3957,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length);
 
     /* Log memory cap write, if needed. */
-    cvtrace_dump_cap_store(&env->cvtrace, csp);
+    cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
     cvtrace_dump_cap_cbl(&env->cvtrace, csp);
     return ret;
 }
