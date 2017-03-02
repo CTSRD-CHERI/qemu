@@ -3603,11 +3603,12 @@ void helper_instr_stop_user_mode_only(CPUMIPSState *env, target_ulong pc)
 static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_long vaddr) {
     char ascii_chars[17] = { 0 };
     target_ulong line_start = vaddr & ~0xf;
+    target_ulong addr;
 
     /* print leading empty space to always start with an aligned address */
     if (line_start != vaddr) {
         fprintf(f, "    %08lx: ", line_start);
-        for (target_ulong addr = line_start; addr < vaddr; addr++) {
+        for (addr = line_start; addr < vaddr; addr++) {
             if ((addr % 4) == 0) {
                 fprintf(f, "   ");
             } else {
@@ -3617,7 +3618,7 @@ static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_lon
         }
     }
     ascii_chars[16] = '\0';
-    for (target_ulong addr = vaddr; addr < vaddr + length; addr++) {
+    for (addr = vaddr; addr < vaddr + length; addr++) {
         if ((addr % 16) == 0) {
             fprintf(f, "    %08lx: ", line_start);
         }
@@ -3634,7 +3635,7 @@ static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_lon
     }
     if (line_start != vaddr + length) {
         const target_ulong hexdump_end_addr = (vaddr + length) | 0xf;
-        for (target_ulong addr = vaddr + length; addr <= hexdump_end_addr; addr++) {
+        for (addr = vaddr + length; addr <= hexdump_end_addr; addr++) {
             if ((addr % 4) == 0) {
                 fprintf(f, "   ");
             } else {
