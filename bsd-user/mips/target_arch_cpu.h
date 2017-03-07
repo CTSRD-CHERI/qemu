@@ -22,7 +22,7 @@
 
 #include "target_arch.h"
 
-#if defined(TARGET_ABI_MIPSN32)
+#if defined(TARGET_ABI_MIPSN32) || defined(TARGET_ABI_MIPSO32)
 #  define TARGET_DEFAULT_CPU_MODEL "24Kc"
 #else
 #  define TARGET_DEFAULT_CPU_MODEL "24Kf"
