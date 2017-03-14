@@ -3672,7 +3672,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
     if (ret != 0) {
         /* XXXAR: where to print this error message? stderr?*/
-        fprintf(stderr, "CHERI DEBUG HELPER: Could not %lu bytes at vaddr 0x%lx", length, vaddr);
+        fprintf(stderr, "CHERI DEBUG HELPER: Could not read %lu bytes at vaddr 0x%lx\n", length, vaddr);
     }
     if (mode & CPU_LOG_INSTR) {
         qemu_log("DEBUG MESSAGE @ 0x%lx\n", pc);
