@@ -2233,7 +2233,7 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
         *cdp = *cbp;
         cdp->cr_perms = cbp->cr_perms & rt_perms;
-#if 1  /* Still required for some 128-bit cheritests. */
+#ifdef CHERI_128  /* Still required for some 128-bit cheritests. */
         /*
          * XXX - Temporary
          * If all the legacy access system registers permissions are
@@ -2242,7 +2242,7 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
          */
         if (!(cdp->cr_perms & CAP_ACCESS_LEGACY_ALL))
             cdp->cr_perms &= ~CAP_ACCESS_SYS_REGS;
-#endif
+#endif /* CHERI_128 */
         cdp->cr_uperms = cbp->cr_uperms & rt_uperms;
     }
 }
