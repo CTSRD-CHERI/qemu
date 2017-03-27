@@ -464,6 +464,8 @@ static void malta_fpga_write(void *opaque, hwaddr addr,
     case 0x00500:
         if (val == 0x42)
             qemu_system_reset_request ();
+        else if (val == 0x42 + 2)
+            qemu_system_shutdown_request ();
         break;
 
     /* BRKRES Register */
