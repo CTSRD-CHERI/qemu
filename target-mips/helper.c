@@ -1069,7 +1069,8 @@ void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len)
 
     endaddr = (uint64_t)(paddr + len);
 
-    for(addr = (uint64_t)paddr; addr < endaddr; addr += CAP_SIZE) {
+    for(addr = (uint64_t)(paddr & ~CAP_TAGBLK_MSK); addr < endaddr;
+            addr += CAP_SIZE) {
         tag = addr >> CAP_TAG_SHFT;
         tagmem_idx = tag >> CAP_TAGBLK_SHFT;
         if (tagmem_idx > cheri_ntagblks)
