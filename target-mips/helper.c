@@ -974,6 +974,7 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
 #define CAP_TAG_SHFT        5           // 5 for 256-bit caps, 4 for 128-bit
 #endif /* !(CHERI_MAGIC128 || CHERI_128) */
 #define CAP_SIZE            (1 << CAP_TAG_SHFT)
+#define CAP_MASK            ((1 << CAP_TAG_SHFT) - 1)
 #define CAP_TAGBLK_SHFT     12          // 2^12 or 4096 tags per block
 #define CAP_TAGBLK_MSK      ((1 << CAP_TAGBLK_SHFT) - 1)
 #ifdef CHERI_MAGIC128
@@ -1069,7 +1070,7 @@ void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len)
 
     endaddr = (uint64_t)(paddr + len);
 
-    for(addr = (uint64_t)(paddr & ~CAP_TAGBLK_MSK); addr < endaddr;
+    for(addr = (uint64_t)(paddr & ~CAP_MASK); addr < endaddr;
             addr += CAP_SIZE) {
         tag = addr >> CAP_TAG_SHFT;
         tagmem_idx = tag >> CAP_TAGBLK_SHFT;
