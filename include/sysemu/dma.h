@@ -85,7 +85,7 @@ static inline bool dma_memory_valid(AddressSpace *as,
 }
 
 /* XXX CHERI tag memory emulation needs to be moved to memory.c */
-void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len);
+void cheri_tag_phys_invalidate(ram_addr_t paddr, ram_addr_t len);
 
 static inline int dma_memory_rw_relaxed(AddressSpace *as, dma_addr_t addr,
                                         void *buf, dma_addr_t len,

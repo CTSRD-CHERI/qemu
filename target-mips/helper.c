@@ -1028,18 +1028,41 @@ static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
     }
 }
 
+static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr)
+{
+    hwaddr old_addr;
+    hwaddr l;
+    MemoryRegion *mr;
+    CPUState *cs = CPU(mips_env_get_cpu(env));
+
+    old_addr = addr;
+    mr = address_space_translate(cs->as, addr, &addr, &l, false);
+    if (!(memory_region_is_ram(mr) || memory_region_is_romd(mr))) {
+        return -1LL;
+    }
+    return (memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK) + addr;
+}
+
+static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
+        int reg)
+{
+    return p2r_addr(env, v2p_addr(env, vaddr, rw, reg));
+}
+
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
 {
-    hwaddr paddr;
+    ram_addr_t ram_addr;
     uint64_t tag1, tag2;
     uint8_t *tagblk1, *tagblk2;
 
-    paddr = v2p_addr(env, vaddr, 0, 0xFF);
-    // printf("%s: vaddr=0x%lx -> paddr=0x%lx\n", __func__, vaddr, paddr);
+    ram_addr = v2r_addr(env, vaddr, 0, 0xFF);
+    // printf("%s: vaddr=0x%lx -> ram_addr=0x%lx\n", __func__, vaddr, ram_addr);
+    if (ram_addr == -1LL)
+        return;
 
     /* Get the tag number for both the start and end of write. */
-    tag1 = paddr >> CAP_TAG_SHFT;
-    tag2 = (paddr + (size - 1)) >> CAP_TAG_SHFT;
+    tag1 = ram_addr >> CAP_TAG_SHFT;
+    tag2 = (ram_addr + (size - 1)) >> CAP_TAG_SHFT;
 
     if (tag1 == tag2) {
         /* The write only invalidates one tag. */
@@ -1056,21 +1079,21 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
             tagblk2[CAP_TAGBLK_IDX(tag2)] = 0;
     }
 
-    /* Check physical address to see if the linkedflag needs to be reset. */
-    if (paddr == env->lladdr)
+    /* Check RAM address to see if the linkedflag needs to be reset. */
+    if (ram_addr == p2r_addr(env, env->lladdr))
         env->linkedflag = 0;
 
     return;
 }
 
-void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len)
+void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
 {
     uint64_t tag, addr, endaddr, tagmem_idx;
     uint8_t *tagblk;
 
-    endaddr = (uint64_t)(paddr + len);
+    endaddr = (uint64_t)(ram_addr + len);
 
-    for(addr = (uint64_t)(paddr & ~CAP_MASK); addr < endaddr;
+    for(addr = (uint64_t)(ram_addr & ~CAP_MASK); addr < endaddr;
             addr += CAP_SIZE) {
         tag = addr >> CAP_TAG_SHFT;
         tagmem_idx = tag >> CAP_TAGBLK_SHFT;
@@ -1109,14 +1132,16 @@ static uint8_t *cheri_tag_new_tagblk(uint64_t tag)
 
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
 {
-    hwaddr paddr;
+    ram_addr_t ram_addr;
     uint64_t tag;
     uint8_t *tagblk;
 
-    paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
+    ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
+    if (ram_addr == -1LL)
+        return;
 
     /* Get the tag number and tag block ptr. */
-    tag = paddr >> CAP_TAG_SHFT;
+    tag = ram_addr >> CAP_TAG_SHFT;
     tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
 
     if (tagblk == NULL) {
@@ -1125,8 +1150,8 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
     }
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
-    /* Check physical address to see if the linkedflag needs to be reset. */
-    if (paddr == env->lladdr)
+    /* Check RAM address to see if the linkedflag needs to be reset. */
+    if (ram_addr == p2r_addr(env, env->lladdr))
         env->linkedflag = 0;
 
     return;
@@ -1136,6 +1161,7 @@ int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr)
 {
     hwaddr paddr;
+    ram_addr_t ram_addr;
     uint64_t tag;
     uint8_t *tagblk;
 
@@ -1145,8 +1171,12 @@ int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
     if (ret_paddr)
         *ret_paddr = paddr;
 
+    ram_addr = p2r_addr(env, paddr);
+    if (ram_addr == -1LL)
+        return 0;
+
     /* Get the tag number and tag block ptr. */
-    tag = paddr >> CAP_TAG_SHFT;
+    tag = ram_addr >> CAP_TAG_SHFT;
     tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
 
     if (tagblk == NULL)
@@ -1159,18 +1189,21 @@ int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
 void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
         uint8_t tagbit, uint64_t tps, uint64_t length)
 {
-    hwaddr paddr;
+    ram_addr_t ram_addr;
     uint64_t tag;
     uint8_t *tagblk;
     uint64_t *tagblk64;
 
     if (tagbit)
-        paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
+        ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
     else
-        paddr = v2p_addr(env, vaddr, MMU_DATA_STORE, reg);
+        ram_addr = v2r_addr(env, vaddr, MMU_DATA_STORE, reg);
+
+    if (ram_addr == -1LL)
+        return;
 
     /* Get the tag number and tag block ptr. */
-    tag = paddr >> CAP_TAG_SHFT;
+    tag = ram_addr >> CAP_TAG_SHFT;
     tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
 
     if (tagblk == NULL) {
@@ -1183,8 +1216,8 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     *tagblk64 = length;
 
 
-    /* Check physical address to see if the linkedflag needs to be reset. */
-    if (paddr == env->lladdr)
+    /* Check RAM address to see if the linkedflag needs to be reset. */
+    if (ram_addr == p2r_addr(env, env->lladdr))
         env->linkedflag = 0;
 
     return;
@@ -1193,15 +1226,19 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
         uint64_t *ret_tps, uint64_t *ret_length)
 {
-    hwaddr paddr;
+    ram_addr_t ram_addr;
     uint64_t tag;
     uint8_t *tagblk;
 
 
-    paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_LOAD, reg);
+    ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_LOAD, reg);
+    if (ram_addr == -1LL) {
+        *ret_tps = *ret_length = 0ULL;
+        return 0;
+    }
 
     /* Get the tag number and tag block ptr. */
-    tag = paddr >> CAP_TAG_SHFT;
+    tag = ram_addr >> CAP_TAG_SHFT;
     tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
 
     if (tagblk == NULL) {
@@ -1217,6 +1254,6 @@ int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 
 #else /* ! TARGET_CHERI */
 
-void cheri_tag_phys_invalidate(hwaddr paddr, hwaddr len) { }
+void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len) { }
 
 #endif /* ! TARGET_CHERI */
