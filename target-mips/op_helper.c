@@ -3852,10 +3852,19 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
 }
 
 target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
+        uint32_t bdoffset, target_ulong vaddr)
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
+
+    /* Are we in a branch delay slot? */
+    switch(bdoffset) {
+    case 4:
+        env->hflags |= MIPS_HFLAG_BDS32;
+        break;
+    case 2:
+        env->hflags |= MIPS_HFLAG_BDS16;
+    }
 
     ret = csp->cr_offset + csp->cr_base;
 
@@ -3938,11 +3947,20 @@ target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
 }
 
 target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
+        uint32_t bdoffset, target_ulong vaddr)
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
     uint64_t tps, length, perms;
+
+    /* Are we in a branch delay slot? */
+    switch(bdoffset) {
+    case 4:
+        env->hflags |= MIPS_HFLAG_BDS32;
+        break;
+    case 2:
+        env->hflags |= MIPS_HFLAG_BDS16;
+    }
 
     ret = csp->cr_base;
 
@@ -4109,10 +4127,19 @@ void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
 }
 
 target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
+        uint32_t bdoffset, target_ulong vaddr)
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
+
+    /* Are we in a branch delay slot? */
+    switch(bdoffset) {
+    case 4:
+        env->hflags |= MIPS_HFLAG_BDS32;
+        break;
+    case 2:
+        env->hflags |= MIPS_HFLAG_BDS16;
+    }
 
     if (csp->cr_tag)
         cheri_tag_set(env, vaddr, cs);

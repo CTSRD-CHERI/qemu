@@ -3126,6 +3126,7 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
+    TCGv_i32 tbdoffset;
 
     /* Check the cap registers and compute the address. */
     gen_load_gpr(t0, rt);
@@ -3137,7 +3138,15 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
             ctx->default_tcg_memop_mask);
 
     /* Store 2nd 64-bits in memory. */
-    gen_helper_cap2bytes_128c(t0, cpu_env, tcs, taddr);
+    /* Is this instruction in a branch delay slot? */
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
+        tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
+            tcg_const_i32(4);
+    } else {
+        tbdoffset = tcg_const_i32(0);
+    }
+    gen_helper_cap2bytes_128c(t0, cpu_env, tcs, tbdoffset, taddr);
+    tcg_temp_free_i32(tbdoffset);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
@@ -3157,6 +3166,7 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
     TCGv taddr = tcg_temp_local_new();
     TCGv t1 = tcg_temp_local_new();
     TCGLabel *l1 = gen_new_label();
+    TCGv_i32 tbdoffset;
 
     /* Check the cap registers and compute the address. */
     gen_helper_cscc_addr(taddr, cpu_env, tcs, tcb);
@@ -3181,7 +3191,15 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
             ctx->default_tcg_memop_mask);
 
     /* Store 2nd 64-bits in memory. */
-    gen_helper_cap2bytes_128c(t0, cpu_env, tcs2, taddr);
+    /* Is this instruction in a branch delay slot? */
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
+        tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
+            tcg_const_i32(4);
+    } else {
+        tbdoffset = tcg_const_i32(0);
+    }
+    gen_helper_cap2bytes_128c(t0, cpu_env, tcs2, taddr, tbdoffset);
+    tcg_temp_free_i32(tbdoffset);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
@@ -3269,6 +3287,7 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
+    TCGv_i32 tbdoffset;
 
     /* Check the cap registers and compute the address. */
     gen_load_gpr(t0, rt);
@@ -3280,7 +3299,15 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
             ctx->default_tcg_memop_mask);
 
     /* Store 2nd 64-bits in memory. */
-    gen_helper_cap2bytes_m128b(t0, cpu_env, tcs, taddr);
+    /* Is this instruction in a branch delay slot? */
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
+        tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
+            tcg_const_i32(4);
+    } else {
+        tbdoffset = tcg_const_i32(0);
+    }
+    gen_helper_cap2bytes_m128b(t0, cpu_env, tcs, tbdoffset, taddr);
+    tcg_temp_free_i32(tbdoffset);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
@@ -3300,6 +3327,7 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
     TCGv taddr = tcg_temp_local_new();
     TCGv t1 = tcg_temp_local_new();
     TCGLabel *l1 = gen_new_label();
+    TCGv_i32 tbdoffset;
 
     /* Check the cap registers and compute the address. */
     gen_helper_cscc_addr(taddr, cpu_env, tcs, tcb);
@@ -3324,7 +3352,15 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
             ctx->default_tcg_memop_mask);
 
     /* Store 2nd 64-bits in memory. */
-    gen_helper_cap2bytes_m128b(t0, cpu_env, tcs2, taddr);
+    /* Is this instruction in a branch delay slot? */
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
+        tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
+            tcg_const_i32(4);
+    } else {
+        tbdoffset = tcg_const_i32(0);
+    }
+    gen_helper_cap2bytes_m128b(t0, cpu_env, tcs2, tdboffset, taddr);
+    tcg_temp_free_i32(tbdoffset);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
@@ -3444,6 +3480,7 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
+    TCGv_i32 tbdoffset;
 
     /* Check the cap registers and compute the address. */
     gen_load_gpr(t0, rt);
@@ -3461,7 +3498,15 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
      * this address.  Once we are sure the TLB has an entry
      * we can set the tab bit.
      */
-    gen_helper_cap2bytes_cursor(t0, cpu_env, tcs, taddr);
+    /* Is this instruction in a branch delay slot? */
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
+        tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
+            tcg_const_i32(4);
+    } else {
+        tbdoffset = tcg_const_i32(0);
+    }
+    gen_helper_cap2bytes_cursor(t0, cpu_env, tcs, tbdoffset, taddr);
+    tcg_temp_free_i32(tbdoffset);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
@@ -3493,6 +3538,7 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
     TCGv taddr = tcg_temp_local_new();
     TCGv t1 = tcg_temp_local_new();
     TCGLabel *l1 = gen_new_label();
+    TCGv_i32 tbdoffset;
 
     /* Check the cap registers and compute the address. */
     gen_helper_cscc_addr(taddr, cpu_env, tcs, tcb);
@@ -3522,7 +3568,16 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
      * this address.  Once we are sure the TLB has an entry
      * we can set the tab bit.
      */
-    gen_helper_cap2bytes_cursor(t0, cpu_env, tcs, taddr);
+
+    /* Is this instruction in a branch delay slot? */
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
+        tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
+            tcg_const_i32(4);
+    } else {
+        tbdoffset = tcg_const_i32(0);
+    }
+    gen_helper_cap2bytes_cursor(t0, cpu_env, tcs, taddr, tbdoffset);
+    tcg_temp_free_i32(tbdoffset);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
