@@ -2210,17 +2210,9 @@ static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
      * Check to see if the capability register is inaccessible.
      * See Section 5.4 in CHERI Architecture manual.
      */
-#ifdef NOTYET   /* This still causes lots of failures in the cheritests. */
     if (!(perms & CAP_ACCESS_SYS_REGS) && (creg == CP2CAP_EPCC ||
                 creg == CP2CAP_KDC || creg == CP2CAP_KCC ||
                 creg == CP2CAP_KR1C  || creg == CP2CAP_KR2C)) {
-#else
-    if ((creg == CP2CAP_EPCC && !(perms & CAP_ACCESS_EPCC)) ||
-        (creg == CP2CAP_KDC  && !(perms & CAP_ACCESS_KDC))  ||
-        (creg == CP2CAP_KCC  && !(perms & CAP_ACCESS_KCC))  ||
-        (creg == CP2CAP_KR1C && !(perms & CAP_ACCESS_KR1C)) ||
-        (creg == CP2CAP_KR2C && !(perms & CAP_ACCESS_KR2C))) {
-#endif /* NOTYET */
         return 1;
     } else {
         return 0;
