@@ -1674,6 +1674,11 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 
     return true;
 }
+
+static inline void
+became_unrepresentable(CPUMIPSState *env, uint16_t reg)
+{
+}
 #elif defined(CHERI_128)
 #define CHERI_CAP_SIZE  16
 
@@ -2053,6 +2058,15 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 #endif /* ! SIMPLE_REPRESENT_CHECK */
 }
 
+extern bool cheri_c2e_on_unrepresentable;
+
+static inline void
+became_unrepresentable(CPUMIPSState *env, uint16_t reg)
+{
+	if (cheri_c2e_on_unrepresentable)
+		do_raise_c2_exception(env, CP2Ca_TAG, reg);
+}
+
 /*
  * Convert 64-bit integer into a capability that holds the integer in
  * its offset field.
@@ -2102,6 +2116,11 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 {
 
     return true;
+}
+
+static inline void
+became_unrepresentable(CPUMIPSState *env, uint16_t reg)
+{
 }
 #endif /* ! 128-bit capabilities */
 
@@ -2419,6 +2438,7 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else {
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base,
                     cbp->cr_length, cbp->cr_offset, rt)) {
+	    became_unrepresentable(env, cd);
             int_to_cap(cbp->cr_base + rt, cdp);
         } else {
             *cdp = *cbp;
@@ -2518,6 +2538,7 @@ void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
     } else if (!is_representable(is_cap_sealed(pccp), pccp->cr_base,
                 pccp->cr_length, pccp->cr_offset, rs)) {
+	became_unrepresentable(env, cd);
         int_to_cap(pccp->cr_base + rs, cdp);
     } else {
         *cdp = *pccp;
@@ -2635,6 +2656,7 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
                     cbp->cr_offset, cb_offset_plus_rt)) {
+	    became_unrepresentable(env, cd);
             int_to_cap(cbp->cr_base + cb_offset_plus_rt, cdp);
         } else {
             *cdp = *cbp;
@@ -2912,6 +2934,7 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else {
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
                     cbp->cr_offset, rt)) {
+	    became_unrepresentable(env, cd);
             int_to_cap(cbp->cr_base + rt, cdp);
         } else {
             *cdp = *cbp;

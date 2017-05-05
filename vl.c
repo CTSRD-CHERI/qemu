@@ -192,6 +192,7 @@ int icount_align_option;
 #else
     int cl_default_trace_format = CPU_LOG_INSTR;
 #endif
+bool cheri_c2e_on_unrepresentable = false;
 #endif
 
 /* The bytes in qemu_uuid[] are in the order specified by RFC4122, _not_ in the
@@ -3898,6 +3899,9 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_breakcount:
                 cl_breakcount = strtoull(optarg, NULL, 0);
+                break;
+            case QEMU_OPTION_cheri_c2e_on_unrepresentable:
+                cheri_c2e_on_unrepresentable = true;
                 break;
 #endif /* CONFIG_CHERI */
             case QEMU_OPTION_icount:
