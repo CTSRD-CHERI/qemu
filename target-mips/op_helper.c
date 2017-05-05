@@ -2064,7 +2064,7 @@ static inline void
 became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 {
 	if (cheri_c2e_on_unrepresentable)
-		do_raise_c2_exception(env, CP2Ca_TAG, reg);
+		do_raise_c2_exception(env, CP2Ca_INEXACT, reg);
 }
 
 /*
