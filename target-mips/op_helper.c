@@ -3874,6 +3874,7 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
+    uint32_t save_hflags = env->hflags;
 
     /* Are we in a branch delay slot? */
     switch(bdoffset) {
@@ -3882,6 +3883,9 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
         break;
     case 2:
         env->hflags |= MIPS_HFLAG_BDS16;
+        break;
+    default:
+        break;
     }
 
     ret = csp->cr_offset + csp->cr_base;
@@ -3891,6 +3895,8 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
         cheri_tag_set(env, vaddr, cs);
     else
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
+
+    env->hflags = save_hflags;
 
     return ret;
 }
@@ -3970,6 +3976,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
     uint64_t tps, length, perms;
+    uint32_t save_hflags = env->hflags;
 
     /* Are we in a branch delay slot? */
     switch(bdoffset) {
@@ -3978,6 +3985,9 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
         break;
     case 2:
         env->hflags |= MIPS_HFLAG_BDS16;
+        break;
+    default:
+        break;
     }
 
     ret = csp->cr_base;
@@ -3995,6 +4005,9 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     /* Log memory cap write, if needed. */
     cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
     cvtrace_dump_cap_cbl(&env->cvtrace, csp);
+
+    env->hflags = save_hflags;
+
     return ret;
 }
 
@@ -4149,6 +4162,7 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
+    uint32_t save_hflags = env->hflags;
 
     /* Are we in a branch delay slot? */
     switch(bdoffset) {
@@ -4157,6 +4171,9 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
         break;
     case 2:
         env->hflags |= MIPS_HFLAG_BDS16;
+        break;
+    default:
+        break;
     }
 
     if (csp->cr_tag)
@@ -4168,6 +4185,9 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
     /* Log memory cap write, if needed. */
     dump_cap_store_cursor(ret);
     cvtrace_dump_cap_cursor(&env->cvtrace, ret);
+
+
+    env->hflags = save_hflags;
 
     return (ret);
 }
