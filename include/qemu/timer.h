@@ -825,6 +825,11 @@ static inline int64_t get_clock(void)
     return muldiv64(ti.QuadPart, get_ticks_per_sec(), clock_freq);
 }
 
+static inline int64_t get_virtual_clock(void)
+{
+    return get_clock();
+}
+
 #else
 
 extern int use_rt_clock;
@@ -844,6 +849,19 @@ static inline int64_t get_clock(void)
         return get_clock_realtime();
     }
 }
+
+static inline int64_t get_virtual_clock(void)
+{
+#ifdef CLOCK_VIRTUAL
+    struct timespec ts;
+
+    clock_gettime(CLOCK_VIRTUAL, &ts);
+    return ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#else
+    return get_clock();
+#endif
+}
+
 #endif
 
 /* icount */

@@ -211,7 +211,7 @@ static int64_t cpu_get_clock_locked(void)
 
     ticks = timers_state.cpu_clock_offset;
     if (timers_state.cpu_ticks_enabled) {
-        ticks += get_clock();
+        ticks += get_virtual_clock();
     }
 
     return ticks;
