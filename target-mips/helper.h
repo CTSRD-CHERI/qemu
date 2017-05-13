@@ -242,8 +242,8 @@ DEF_HELPER_4(cap2bytes_128c, tl, env, i32, i32, tl)
 #elif defined(CHERI_MAGIC128)
 DEF_HELPER_5(bytes2cap_m128, void, env, i32, tl, tl, tl)
 
-DEF_HELPER_3(cap2bytes_m128b, tl, env, i32, tl)
-DEF_HELPER_4(cap2bytes_m128c, tl, env, i32, i32, tl)
+DEF_HELPER_3(cap2bytes_m128c, tl, env, i32, tl)
+DEF_HELPER_4(cap2bytes_m128b, tl, env, i32, i32, tl)
 #else /* ! CHERI_MAGIC128 */
 DEF_HELPER_4(bytes2cap_op, void, env, i32, tl, tl)
 DEF_HELPER_4(bytes2cap_opll, void, env, i32, tl, tl)
