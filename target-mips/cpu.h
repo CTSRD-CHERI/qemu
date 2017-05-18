@@ -961,6 +961,10 @@ uint32_t cpu_mips_get_random (CPUMIPSState *env);
 uint32_t cpu_mips_get_count (CPUMIPSState *env);
 void cpu_mips_store_count (CPUMIPSState *env, uint32_t value);
 void cpu_mips_store_compare (CPUMIPSState *env, uint32_t value);
+#ifdef TARGET_CHERI
+uint64_t cpu_mips_get_rtc64 (CPUMIPSState *env);
+void cpu_mips_set_rtc64 (CPUMIPSState *env, uint64_t value);
+#endif /* TARGET_CHERI */
 void cpu_mips_start_count(CPUMIPSState *env);
 void cpu_mips_stop_count(CPUMIPSState *env);
 

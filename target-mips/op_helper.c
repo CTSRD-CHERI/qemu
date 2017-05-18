@@ -1431,6 +1431,18 @@ void helper_mtc0_count(CPUMIPSState *env, target_ulong arg1)
     cpu_mips_store_count(env, arg1);
 }
 
+#ifdef TARGET_CHERI
+uint64_t helper_mfc0_rtc64(CPUMIPSState *env)
+{
+    return cpu_mips_get_rtc64(env);
+}
+
+void helper_mtc0_rtc64(CPUMIPSState *env, uint64_t arg1)
+{
+    cpu_mips_set_rtc64(env, arg1);
+}
+#endif /* TARGET_CHERI */
+
 void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
 {
     target_ulong old, val, mask;

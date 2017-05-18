@@ -8956,6 +8956,12 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             rn = "Count";
             break;
         /* 6,7 are implementation dependent */
+        case 6:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_rtc64(arg, cpu_env);
+            rn = "RTC";
+            break;
+#endif
         default:
             goto cp0_unimplemented;
         }
@@ -9551,6 +9557,12 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             rn = "Count";
             break;
         /* 6,7 are implementation dependent */
+#ifdef TARGET_CHERI
+        case 6:
+            gen_helper_mtc0_rtc64(cpu_env, arg);
+            rn = "RTC";
+            break;
+#endif /* TARGET_CHERI */
         default:
             goto cp0_unimplemented;
         }

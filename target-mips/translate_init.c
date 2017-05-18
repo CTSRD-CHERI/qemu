@@ -544,10 +544,11 @@ static const mips_def_t mips_defs[] =
     {
         .name = "5Kf",
 #if defined(TARGET_CHERI)
-        .CP0_PRid = 0x00008900,
-#else
+        /* cpu vendor = 0x0f, cpu impl = 0x04, cpu rev = 0x01 */
+        .CP0_PRid = 0x0f << 16 | 0x04 << 8 | 0x01,
+#else /* ! TARGET_CHERI */
         .CP0_PRid = 0x00018100,
-#endif
+#endif /* ! TARGET_CHERI */
         .CP0_Config0 = MIPS_CONFIG0 | (0x2 << CP0C0_AT) |
                        (MMU_TYPE_R4000 << CP0C0_MT),
 #if defined(TARGET_CHERI)
