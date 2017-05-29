@@ -853,6 +853,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_freebsd_fstatat(arg1, arg2, arg3, arg4);
         break;
 
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1200031
     case TARGET_FREEBSD_NR_nstat: /* undocumented */
         ret = do_freebsd_nstat(arg1, arg2);
         break;
@@ -864,6 +865,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_nlstat: /* undocumented */
         ret = do_freebsd_nlstat(arg1, arg2);
         break;
+#endif
 
     case TARGET_FREEBSD_NR_getfh: /* getfh(2) */
         ret = do_freebsd_getfh(arg1, arg2);
