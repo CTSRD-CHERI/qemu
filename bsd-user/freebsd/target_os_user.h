@@ -213,10 +213,10 @@ struct target_kinfo_file {
 	int32_t		kf_flags;		/* Flags. */
 	int32_t		kf_pad0;		/* Round to 64 bit alignment. */
 	int64_t		kf_offset;		/* Seek location. */
-	int32_t		kf_vnode_type;		/* Vnode type. */
-	int32_t		kf_sock_domain;		/* Socket domain. */
-	int32_t		kf_sock_type;		/* Socket type. */
-	int32_t		kf_sock_protocol;	/* Socket protocol. */
+	int32_t		kf_user_vnode_type;	/* Vnode type. */
+	int32_t		kf_user_sock_domain;	/* Socket domain. */
+	int32_t		kf_user_sock_type;	/* Socket type. */
+	int32_t		kf_user_sock_protocol;	/* Socket protocol. */
 	struct target_sockaddr_storage kf_sa_local;	/* Socket address. */
 	struct target_sockaddr_storage	kf_sa_peer;	/* Peer address. */
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
