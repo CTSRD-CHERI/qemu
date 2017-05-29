@@ -256,10 +256,10 @@ host_to_target_kinfo_file(struct target_kinfo_file *tkif,
     __put_user(hkif->kf_ref_count, &tkif->kf_ref_count);
     __put_user(hkif->kf_flags, &tkif->kf_flags);
     __put_user(hkif->kf_offset, &tkif->kf_offset);
-    __put_user(hkif->kf_vnode_type, &tkif->kf_vnode_type);
-    __put_user(hkif->kf_sock_domain, &tkif->kf_sock_domain);
-    __put_user(hkif->kf_sock_type, &tkif->kf_sock_type);
-    __put_user(hkif->kf_sock_protocol, &tkif->kf_sock_protocol);
+    __put_user(hkif->kf_vnode_type, &tkif->kf_user_vnode_type);
+    __put_user(hkif->kf_sock_domain, &tkif->kf_user_sock_domain);
+    __put_user(hkif->kf_sock_type, &tkif->kf_user_sock_type);
+    __put_user(hkif->kf_sock_protocol, &tkif->kf_user_sock_protocol);
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
     switch(type) {
