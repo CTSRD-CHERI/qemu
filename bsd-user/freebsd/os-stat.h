@@ -28,10 +28,12 @@
 
 #include "qemu-os.h"
 
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1200031
 /* undocumented nstat system calls */
 int nstat(const char *path, struct stat *sb);
 int nlstat(const char *path, struct stat *sb);
 int nfstat(int fd, struct stat *sb);
+#endif
 
 /* stat(2) */
 static inline abi_long do_freebsd_stat(abi_long arg1, abi_long arg2)
@@ -95,6 +97,7 @@ static inline abi_long do_freebsd_fstatat(abi_long arg1, abi_long arg2,
     return ret;
 }
 
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1200031
 /* undocummented nstat(char *path, struct nstat *ub) syscall */
 static abi_long do_freebsd_nstat(abi_long arg1, abi_long arg2)
 {
@@ -139,6 +142,7 @@ static abi_long do_freebsd_nlstat(abi_long arg1, abi_long arg2)
     }
     return ret;
 }
+#endif
 
 /* getfh(2) */
 static abi_long do_freebsd_getfh(abi_long arg1, abi_long arg2)
