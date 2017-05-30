@@ -20,6 +20,9 @@
 #ifndef _QEMU_OS_H_
 #define _QEMU_OS_H_
 
+#define _WANT_FREEBSD11_STAT
+#define _WANT_FREEBSD11_STATFS
+#define _WANT_FREEBSD11_DIRENT
 #include <sys/types.h>
 #include <sys/acl.h>
 #include <sys/mount.h>
@@ -31,6 +34,11 @@
 #include <netinet/in.h>
 
 #include <time.h>
+
+#ifndef BSD_HAVE_INO64
+#define	freebsd11_stat		stat
+#define	freebsd11_statfs	statfs
+#endif
 
 /* os-time.c */
 abi_long t2h_freebsd_timeval(struct timeval *tv, abi_ulong target_tv_addr);
@@ -60,12 +68,21 @@ abi_long h2t_freebsd_cmsg(struct target_msghdr *target_msgh,
                 struct msghdr *msgh);
 
 /* os-stat.c */
-abi_long h2t_freebsd_stat(abi_ulong target_addr, struct stat *host_st);
-abi_long h2t_freebsd_nstat(abi_ulong target_addr, struct stat *host_st);
+abi_long h2t_freebsd11_stat(abi_ulong target_addr,
+        struct freebsd11_stat *host_st);
+abi_long h2t_freebsd11_nstat(abi_ulong target_addr,
+        struct freebsd11_stat *host_st);
 abi_long t2h_freebsd_fhandle(fhandle_t *host_fh, abi_ulong target_addr);
 abi_long h2t_freebsd_fhandle(abi_ulong target_addr, fhandle_t *host_fh);
-abi_long h2t_freebsd_statfs(abi_ulong target_addr, struct statfs *host_statfs);
+abi_long h2t_freebsd11_statfs(abi_ulong target_addr,
+    struct freebsd11_statfs *host_statfs);
 abi_long target_to_host_fcntl_cmd(int cmd);
+#ifdef BSD_HAVE_INO64
+abi_long h2t_freebsd_stat(abi_ulong target_addr,
+        struct stat *host_st);
+abi_long h2t_freebsd_statfs(abi_ulong target_addr,
+    struct statfs *host_statfs);
+#endif
 
 /* os-thread.c */
 abi_long t2h_freebsd_rtprio(struct rtprio *host_rtp, abi_ulong target_addr);

@@ -256,16 +256,35 @@ host_to_target_kinfo_file(struct target_kinfo_file *tkif,
     __put_user(hkif->kf_ref_count, &tkif->kf_ref_count);
     __put_user(hkif->kf_flags, &tkif->kf_flags);
     __put_user(hkif->kf_offset, &tkif->kf_offset);
-    __put_user(hkif->kf_vnode_type, &tkif->kf_user_vnode_type);
-    __put_user(hkif->kf_sock_domain, &tkif->kf_user_sock_domain);
-    __put_user(hkif->kf_sock_type, &tkif->kf_user_sock_type);
-    __put_user(hkif->kf_sock_protocol, &tkif->kf_user_sock_protocol);
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1200031
+    __put_user(hkif->kf_vnode_type, &tkif->kf_vnode_type);
+    __put_user(hkif->kf_sock_domain, &tkif->kf_sock_domain);
+    __put_user(hkif->kf_sock_type, &tkif->kf_sock_type);
+    __put_user(hkif->kf_sock_protocol, &tkif->kf_sock_protocol);
+#endif
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
     switch(type) {
     case KF_TYPE_FIFO:
     case KF_TYPE_SHM:
     case KF_TYPE_VNODE:
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
+        __put_user(hkif->kf_un.kf_file.kf_file_type,
+                &tkif->kf_un.kf_file.kf_file_type);
+        __put_user(hkif->kf_un.kf_file.kf_file_fsid,
+                &tkif->kf_un.kf_file.kf_file_fsid);
+        __put_user(hkif->kf_un.kf_file.kf_file_rdev,
+                &tkif->kf_un.kf_file.kf_file_rdev);
+        __put_user(hkif->kf_un.kf_file.kf_file_fileid,
+                &tkif->kf_un.kf_file.kf_file_fileid);
+        __put_user(hkif->kf_un.kf_file.kf_file_size,
+                &tkif->kf_un.kf_file.kf_file_size);
+        __put_user(hkif->kf_un.kf_file.kf_file_fsid_freebsd11,
+                &tkif->kf_un.kf_file.kf_file_fsid_freebsd11);
+        __put_user(hkif->kf_un.kf_file.kf_file_rdev_freebsd11,
+                &tkif->kf_un.kf_file.kf_file_rdev_freebsd11);
+
+#else
         __put_user(hkif->kf_un.kf_file.kf_file_fileid,
                 &tkif->kf_un.kf_file.kf_file_fileid);
         __put_user(hkif->kf_un.kf_file.kf_file_size,
@@ -274,11 +293,28 @@ host_to_target_kinfo_file(struct target_kinfo_file *tkif,
                 &tkif->kf_un.kf_file.kf_file_fsid);
         __put_user(hkif->kf_un.kf_file.kf_file_rdev,
                 &tkif->kf_un.kf_file.kf_file_rdev);
+#endif
         __put_user(hkif->kf_un.kf_file.kf_file_mode,
                 &tkif->kf_un.kf_file.kf_file_mode);
         break;
 
     case KF_TYPE_SOCKET:
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
+        __put_user(hkif->kf_un.kf_sock.kf_sock_domain0,
+                &tkif->kf_un.kf_sock.kf_sock_domain0);
+        __put_user(hkif->kf_un.kf_sock.kf_sock_type0,
+                &tkif->kf_un.kf_sock.kf_sock_type0);
+        __put_user(hkif->kf_un.kf_sock.kf_sock_protocol0,
+                &tkif->kf_un.kf_sock.kf_sock_protocol0);
+/*  XXX - Implement copy function for sockaddr_storage
+	host_to_target_copy_sockaddr_storage(
+	        &hkif->kf_un.kf_file.kf_sa_local,
+	        &kif->kf_un.kf_file.kf_sa_local);
+	host_to_target_copy_sockaddr_storage(
+	        &hkif->kf_un.kf_file.kf_sa_peer,
+	        &kif->kf_un.kf_file.kf_sa_peer);
+*/
+#endif
         __put_user(hkif->kf_un.kf_sock.kf_sock_pcb,
                 &tkif->kf_un.kf_sock.kf_sock_pcb);
         __put_user(hkif->kf_un.kf_sock.kf_sock_inpcb,
@@ -308,8 +344,15 @@ host_to_target_kinfo_file(struct target_kinfo_file *tkif,
         break;
 
     case KF_TYPE_PTS:
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
+        __put_user(hkif->kf_un.kf_pts.kf_pts_dev_freebsd11,
+                &tkif->kf_un.kf_pts.kf_pts_dev_freebsd11);
         __put_user(hkif->kf_un.kf_pts.kf_pts_dev,
                 &tkif->kf_un.kf_pts.kf_pts_dev);
+#else
+        __put_user(hkif->kf_un.kf_pts.kf_pts_dev,
+                &tkif->kf_un.kf_pts.kf_pts_dev);
+#endif
         break;
 
     case KF_TYPE_PROCDESC:
@@ -336,7 +379,7 @@ host_to_target_kinfo_file(struct target_kinfo_file *tkif,
     __put_user(hkif->kf_cap_rights, &tkif->kf_cap_rights);
 #endif /* *  __FreeBSD_version >= 1000000 */
 #endif /* ! __FreeBSD_version >= 900000 */
-    strncpy(tkif->kf_path, hkif->kf_path, PATH_MAX);
+    strncpy(tkif->kf_path, hkif->kf_path, sizeof(tkif->kf_path));
 }
 
 abi_long
@@ -437,6 +480,9 @@ host_to_target_kinfo_vmentry(struct target_kinfo_vmentry *tkve,
     __put_user(hkve->kve_offset, &tkve->kve_offset);
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
     __put_user(hkve->kve_vn_fileid, &tkve->kve_vn_fileid);
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
+    __put_user(hkve->kve_vn_fsid_freebsd11, &tkve->kve_vn_fsid_freebsd11);
+#endif
     __put_user(hkve->kve_vn_fsid, &tkve->kve_vn_fsid);
 #else /* ! __FreeBSD_version >= 900000 */
     __put_user(hkve->kve_fileid, &tkve->kve_fileid);
@@ -451,11 +497,14 @@ host_to_target_kinfo_vmentry(struct target_kinfo_vmentry *tkve,
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
     __put_user(hkve->kve_vn_type, &tkve->kve_vn_type);
     __put_user(hkve->kve_vn_size, &tkve->kve_vn_size);
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
+    __put_user(hkve->kve_vn_rdev_freebsd11, &tkve->kve_vn_rdev_freebsd11);
+#endif
     __put_user(hkve->kve_vn_rdev, &tkve->kve_vn_rdev);
     __put_user(hkve->kve_vn_mode, &tkve->kve_vn_mode);
     __put_user(hkve->kve_status, &tkve->kve_status);
 #endif /* __FreeBSD_version >= 900000 */
-    strncpy(tkve->kve_path, hkve->kve_path, PATH_MAX);
+    strncpy(tkve->kve_path, hkve->kve_path, sizeof(tkve->kve_path));
 }
 
 abi_long
@@ -836,10 +885,9 @@ do_sysctl_net_routetable_iflistl(int32_t *snamep, size_t namelen, size_t olen,
  * about using "thunk" for sysctl's that pass data using structures.
  */
 /* From sys/mount.h: */
-#define TARGET_MFSNAMELEN	16	/* length of type name including null */
 struct target_xvfsconf {
 	abi_ulong vfc_vfsops;		/* filesystem op vector - not used */
-	char vfc_name[TARGET_MFSNAMELEN];	/* filesystem type name */
+	char vfc_name[16];		/* filesystem type name */
 	int32_t  vfc_typenum;		/* historic fs type number */
 	int32_t  vfc_refcount;		/* number mounted of this type */
 	int32_t  vfc_flags;		/* permanent flags */
@@ -1174,7 +1222,7 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
 		for (i = 0; i < cnt; i++) {
 		    txp[i].vfc_vfsops = 0;
 		    strlcpy(txp[i].vfc_name, xvfsp[i].vfc_name,
-			TARGET_MFSNAMELEN);
+			sizeof(txp[i].vfc_name));
 		    txp[i].vfc_typenum = tswap32(xvfsp[i].vfc_typenum);
 		    txp[i].vfc_refcount = tswap32(xvfsp[i].vfc_refcount);
 		    txp[i].vfc_flags = tswap32(

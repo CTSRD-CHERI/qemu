@@ -416,23 +416,4 @@ static inline abi_long do_bsd_sstk(void)
     return -TARGET_ENOSYS;
 }
 
-/*
- * undocumented freebsd6_mmap(caddr_t addr, size_t len, int prot, int
- * flags, int fd, int pad, off_t pos) system call.
- */
-static inline abi_long do_bsd_freebsd6_mmap(abi_long arg1, abi_long arg2,
-        abi_long arg3, abi_long arg4, abi_long arg5, abi_long arg6,
-        abi_long arg7)
-{
-
-#if TARGET_LONG_BITS == 32
-    qemu_log("qemu: Unsupported syscall freebsd6_mmap()\n");
-    return -TARGET_ENOSYS;
-#else
-    /* XXX the pad argument is ignored */
-    return get_errno(target_mmap(arg1, arg2, arg3,
-                target_to_host_bitmask(arg4, mmap_flags_tbl), arg5, arg7));
-#endif
-}
-
 #endif /* !_BSD_MMAN_H_ */

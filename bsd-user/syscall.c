@@ -17,13 +17,13 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
-#include <stdio.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <string.h>
-#include <errno.h>
-#include <time.h>
-#include <sys/types.h>
+
+#define _WANT_FREEBSD11_STAT
+#define _WANT_FREEBSD11_STATFS
+#define _WANT_FREEBSD11_DIRENT
+#include "qemu/osdep.h"
+#include "qemu/cutils.h"
+#include "qemu/path.h"
 #include <sys/syscall.h>
 #include <sys/param.h>
 #include <sys/sysctl.h>
@@ -710,13 +710,19 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_bsd_fchmodat(arg1, arg2, arg3, arg4);
         break;
 
-    case TARGET_FREEBSD_NR_mknod: /* mknod(2) */
-        ret = do_bsd_mknod(arg1, arg2, arg3);
+    case TARGET_FREEBSD_NR_freebsd11_mknod: /* mknod(2) */
+        ret = do_bsd_freebsd11_mknod(arg1, arg2, arg3);
         break;
 
-    case TARGET_FREEBSD_NR_mknodat: /* mknodat(2) */
-        ret = do_bsd_mknodat(arg1, arg2, arg3, arg4);
+    case TARGET_FREEBSD_NR_freebsd11_mknodat: /* mknodat(2) */
+        ret = do_bsd_freebsd11_mknodat(arg1, arg2, arg3, arg4);
         break;
+
+#ifdef BSD_HAVE_INO64
+    case TARGET_FREEBSD_NR_mknodat: /* mknodat(2) */
+        ret = do_bsd_mknodat(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+#endif
 
     case TARGET_FREEBSD_NR_chown: /* chown(2) */
         ret = do_bsd_chown(arg1, arg2, arg3);
@@ -790,15 +796,12 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_freebsd_ppoll(arg1, arg2, arg3, arg4);
         break;
 #endif /* __FreeBSD_version >= 1100000 */
-    case TARGET_FREEBSD_NR_openbsd_poll:  /* undocumented openbsd_poll() */
-        ret = do_bsd_openbsd_poll(arg1, arg2, arg3);
-        break;
 
     case TARGET_FREEBSD_NR_lseek: /* lseek(2) */
         ret = do_bsd_lseek(cpu_env, arg1, arg2, arg3, arg4, arg5);
         break;
 
-    case TARGET_FREEBSD_NR_pipe: /* pipe(2) */
+    case TARGET_FREEBSD_NR_freebsd10_pipe: /* pipe(2) */
         ret = do_bsd_pipe(cpu_env, arg1);
         break;
 
@@ -814,58 +817,48 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_bsd_swapoff(arg1);
         break;
 
-    case TARGET_FREEBSD_NR_freebsd6_pread: /* undocumented freebsd6_pread() */
-        ret = do_bsd_freebsd6_pread(arg1, arg2, arg3, arg4, arg5);
-        break;
-
-    case TARGET_FREEBSD_NR_freebsd6_pwrite: /* undocumented freebsd6_pwrite() */
-        ret = do_bsd_freebsd6_pwrite(arg1, arg2, arg3, arg4, arg5);
-        break;
-
-    case TARGET_FREEBSD_NR_freebsd6_lseek: /* undocumented freebsd6_lseek() */
-        ret = do_bsd_freebsd6_lseek(arg1, arg2, arg3, arg4);
-        break;
-
-    case TARGET_FREEBSD_NR_freebsd6_truncate: /* undocumented */
-        ret = do_bsd_freebsd6_truncate(arg1, arg2, arg3);
-        break;
-
-    case TARGET_FREEBSD_NR_freebsd6_ftruncate: /* undocumented */
-        ret = do_bsd_freebsd6_ftruncate(arg1, arg2, arg3);
-        break;
-
         /*
          * stat system calls
          */
-    case TARGET_FREEBSD_NR_stat: /* stat(2) */
-        ret = do_freebsd_stat(arg1, arg2);
+    case TARGET_FREEBSD_NR_freebsd11_stat: /* stat(2) */
+        ret = do_freebsd11_stat(arg1, arg2);
         break;
 
-    case TARGET_FREEBSD_NR_lstat: /* lstat(2) */
-        ret = do_freebsd_lstat(arg1, arg2);
+    case TARGET_FREEBSD_NR_freebsd11_lstat: /* lstat(2) */
+        ret = do_freebsd11_lstat(arg1, arg2);
         break;
 
+    case TARGET_FREEBSD_NR_freebsd11_fstat: /* fstat(2) */
+        ret = do_freebsd11_fstat(arg1, arg2);
+        break;
+
+#ifdef BSD_HAVE_INO64
     case TARGET_FREEBSD_NR_fstat: /* fstat(2) */
         ret = do_freebsd_fstat(arg1, arg2);
         break;
+#endif
 
+    case TARGET_FREEBSD_NR_freebsd11_fstatat: /* fstatat(2) */
+        ret = do_freebsd11_fstatat(arg1, arg2, arg3, arg4);
+        break;
+
+#ifdef BSD_HAVE_INO64
     case TARGET_FREEBSD_NR_fstatat: /* fstatat(2) */
         ret = do_freebsd_fstatat(arg1, arg2, arg3, arg4);
         break;
-
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1200031
-    case TARGET_FREEBSD_NR_nstat: /* undocumented */
-        ret = do_freebsd_nstat(arg1, arg2);
-        break;
-
-    case TARGET_FREEBSD_NR_nfstat: /* undocumented */
-        ret = do_freebsd_nfstat(arg1, arg2);
-        break;
-
-    case TARGET_FREEBSD_NR_nlstat: /* undocumented */
-        ret = do_freebsd_nlstat(arg1, arg2);
-        break;
 #endif
+
+    case TARGET_FREEBSD_NR_freebsd11_nstat: /* undocumented */
+        ret = do_freebsd11_nstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd11_nfstat: /* undocumented */
+        ret = do_freebsd11_nfstat(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_freebsd11_nlstat: /* undocumented */
+        ret = do_freebsd11_nlstat(arg1, arg2);
+        break;
 
     case TARGET_FREEBSD_NR_getfh: /* getfh(2) */
         ret = do_freebsd_getfh(arg1, arg2);
@@ -879,34 +872,69 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_freebsd_fhopen(arg1, arg2);
         break;
 
+    case TARGET_FREEBSD_NR_freebsd11_fhstat: /* fhstat(2) */
+        ret = do_freebsd11_fhstat(arg1, arg2);
+        break;
+
+#ifdef BSD_HAVE_INO64
     case TARGET_FREEBSD_NR_fhstat: /* fhstat(2) */
         ret = do_freebsd_fhstat(arg1, arg2);
         break;
+#endif
 
+    case TARGET_FREEBSD_NR_freebsd11_fhstatfs: /* fhstatfs(2) */
+        ret = do_freebsd11_fhstatfs(arg1, arg2);
+        break;
+        
+#ifdef BSD_HAVE_INO64
     case TARGET_FREEBSD_NR_fhstatfs: /* fhstatfs(2) */
         ret = do_freebsd_fhstatfs(arg1, arg2);
         break;
+#endif
 
+    case TARGET_FREEBSD_NR_freebsd11_statfs: /* statfs(2) */
+        ret = do_freebsd11_statfs(arg1, arg2);
+        break;
+
+#ifdef BSD_HAVE_INO64
     case TARGET_FREEBSD_NR_statfs: /* statfs(2) */
         ret = do_freebsd_statfs(arg1, arg2);
         break;
+#endif
 
+    case TARGET_FREEBSD_NR_freebsd11_fstatfs: /* fstatfs(2) */
+        ret = do_freebsd11_fstatfs(arg1, arg2);
+        break;
+
+#ifdef BSD_HAVE_INO64
     case TARGET_FREEBSD_NR_fstatfs: /* fstatfs(2) */
         ret = do_freebsd_fstatfs(arg1, arg2);
         break;
+#endif
 
+    case TARGET_FREEBSD_NR_freebsd11_getfsstat: /* getfsstat(2) */
+        ret = do_freebsd11_getfsstat(arg1, arg2, arg3);
+        break;
+
+#ifdef BSD_HAVE_INO64
     case TARGET_FREEBSD_NR_getfsstat: /* getfsstat(2) */
         ret = do_freebsd_getfsstat(arg1, arg2, arg3);
         break;
+#endif
 
-    case TARGET_FREEBSD_NR_getdents: /* getdents(2) */
-        ret = do_freebsd_getdents(arg1, arg2, arg3);
+    case TARGET_FREEBSD_NR_freebsd11_getdents: /* getdents(2) */
+        ret = do_freebsd11_getdents(arg1, arg2, arg3);
         break;
-
+        
+#ifdef BSD_HAVE_INO64
     case TARGET_FREEBSD_NR_getdirentries: /* getdirentries(2) */
         ret = do_freebsd_getdirentries(arg1, arg2, arg3, arg4);
         break;
+#endif
 
+    case TARGET_FREEBSD_NR_freebsd11_getdirentries: /* getdirentries(2) */
+        ret = do_freebsd11_getdirentries(arg1, arg2, arg3, arg4);
+        break;
     case TARGET_FREEBSD_NR_fcntl: /* fcntl(2) */
         ret = do_freebsd_fcntl(arg1, arg2, arg3);
         break;
@@ -995,11 +1023,6 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_sstk:
         ret = do_bsd_sstk();
         break;
-
-    case TARGET_FREEBSD_NR_freebsd6_mmap: /* undocumented */
-        ret = do_bsd_freebsd6_mmap(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-        break;
-
 
         /*
          * time related system calls.
@@ -1265,11 +1288,6 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_FREEBSD_NR_sendfile: /* sendfile(2) */
         ret = do_freebsd_sendfile(arg1, arg2, arg2, arg4, arg5, arg6, arg7,
                 arg8);
-        break;
-
-    case TARGET_FREEBSD_NR_freebsd4_sendfile: /* freebsd4_sendfile(2) */
-        ret = do_freebsd_freebsd4_sendfile(arg1, arg2, arg2, arg4, arg5,
-                arg6, arg7, arg8);
         break;
 
         /*
@@ -1734,14 +1752,6 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     case  TARGET_FREEBSD_NR_aio_error: /* aio_error(2) */
 	ret = do_freebsd_aio_error(arg1);
-	break;
-
-    case  TARGET_FREEBSD_NR_oaio_read: /* oaio_read(2) */
-	ret = do_freebsd_oaio_read(arg1);
-	break;
-
-    case  TARGET_FREEBSD_NR_oaio_write: /* oaio_write(2) */
-	ret = do_freebsd_oaio_write(arg1);
 	break;
 
     case  TARGET_FREEBSD_NR_aio_waitcomplete: /* aio_waitcomplete(2) */
