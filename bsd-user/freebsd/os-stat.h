@@ -20,6 +20,9 @@
 #ifndef __FREEBSD_STAT_H_
 #define __FREEBSD_STAT_H_
 
+#define _WANT_FREEBSD11_STAT
+#define _WANT_FREEBSD11_STATFS
+#define _WANT_FREEBSD11_DIRENT
 #include <sys/types.h>
 #include <sys/ucred.h>
 #include <sys/mount.h>
@@ -28,45 +31,95 @@
 
 #include "qemu-os.h"
 
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1200031
+#ifndef BSD_HAVE_INO64
+#define freebsd11_dirent	dirent
+
+#define	freebsd11_stat		stat
+#define	freebsd11_lstat		lstat
+#define	freebsd11_fstat		fstat
+#define	freebsd11_fstatat	fstatat
+#define	freebsd11_nstat		nstat
+#define	freebsd11_nfstat	nfstat
+#define	freebsd11_nlstat	nlstat
+#define	freebsd11_fhstat	fhstat
+#define	freebsd11_fhstatfs	fhstatfs
+#define	freebsd11_statfs	statfs
+#define	freebsd11_fstatfs	fstatfs
+#define	freebsd11_getfsstat	getfsstat
+#define	freebsd11_getdents	getdents
+#define	freebsd11_getdirentries	getdirentries
+
 /* undocumented nstat system calls */
 int nstat(const char *path, struct stat *sb);
 int nlstat(const char *path, struct stat *sb);
 int nfstat(int fd, struct stat *sb);
+#else
+int freebsd11_stat(const char *path, struct freebsd11_stat *stat);
+int freebsd11_lstat(const char *path, struct freebsd11_stat *stat);
+int freebsd11_fstat(int fd, struct freebsd11_stat *stat);
+int freebsd11_fstatat(int fd, const char *path, struct freebsd11_stat *stat,
+        int flag);
+int freebsd11_fhstat(const fhandle_t *fhandle, struct freebsd11_stat *stat);
+int freebsd11_getfsstat(struct freebsd11_statfs *buf, long bufsize, int mode);
+int freebsd11_fhstatfs(const fhandle_t *fhandle, struct freebsd11_statfs * buf);
+int freebsd11_statfs(const char *path, struct freebsd11_statfs *buf);
+int freebsd11_fstatfs(int fd, struct freebsd11_statfs *buf);
+
+ssize_t freebsd11_getdirentries(int fd, char *buf, size_t nbytes, off_t *basep);
+ssize_t freebsd11_getdents(int fd, char *buf, size_t nbytes);
+
+/* undocumented nstat system calls */
+int freebsd11_nstat(const char *path, struct freebsd11_stat *sb);
+int freebsd11_nlstat(const char *path, struct freebsd11_stat *sb);
+int freebsd11_nfstat(int fd, struct freebsd11_stat *sb);
 #endif
 
 /* stat(2) */
-static inline abi_long do_freebsd_stat(abi_long arg1, abi_long arg2)
+static inline abi_long do_freebsd11_stat(abi_long arg1, abi_long arg2)
 {
     abi_long ret;
     void *p;
-    struct stat st;
+    struct freebsd11_stat st;
 
     LOCK_PATH(p, arg1);
-    ret = get_errno(stat(path(p), &st));
+    ret = get_errno(freebsd11_stat(path(p), &st));
     UNLOCK_PATH(p, arg1);
     if (!is_error(ret)) {
-        ret = h2t_freebsd_stat(arg2, &st);
+        ret = h2t_freebsd11_stat(arg2, &st);
     }
     return ret;
 }
 
 /* lstat(2) */
-static inline abi_long do_freebsd_lstat(abi_long arg1, abi_long arg2)
+static inline abi_long do_freebsd11_lstat(abi_long arg1, abi_long arg2)
 {
     abi_long ret;
     void *p;
-    struct stat st;
+    struct freebsd11_stat st;
 
     LOCK_PATH(p, arg1);
-    ret = get_errno(lstat(path(p), &st));
+    ret = get_errno(freebsd11_lstat(path(p), &st));
     UNLOCK_PATH(p, arg1);
     if (!is_error(ret)) {
-        ret = h2t_freebsd_stat(arg2, &st);
+        ret = h2t_freebsd11_stat(arg2, &st);
     }
     return ret;
 }
 
+/* fstat(2) */
+static inline abi_long do_freebsd11_fstat(abi_long arg1, abi_long arg2)
+{
+    abi_long ret;
+    struct freebsd11_stat st;
+
+    ret = get_errno(freebsd11_fstat(arg1, &st));
+    if (!is_error(ret))  {
+        ret = h2t_freebsd11_stat(arg2, &st);
+    }
+    return ret;
+}
+
+#ifdef BSD_HAVE_INO64
 /* fstat(2) */
 static inline abi_long do_freebsd_fstat(abi_long arg1, abi_long arg2)
 {
@@ -79,7 +132,26 @@ static inline abi_long do_freebsd_fstat(abi_long arg1, abi_long arg2)
     }
     return ret;
 }
+#endif
 
+/* fstatat(2) */
+static inline abi_long do_freebsd11_fstatat(abi_long arg1, abi_long arg2,
+        abi_long arg3, abi_long arg4)
+{
+    abi_long ret;
+    void *p;
+    struct freebsd11_stat st;
+
+    LOCK_PATH(p, arg2);
+    ret = get_errno(freebsd11_fstatat(arg1, p, &st, arg4));
+    UNLOCK_PATH(p, arg2);
+    if (!is_error(ret) && arg3) {
+        ret = h2t_freebsd11_stat(arg3, &st);
+    }
+    return ret;
+}
+
+#ifdef BSD_HAVE_INO64
 /* fstatat(2) */
 static inline abi_long do_freebsd_fstatat(abi_long arg1, abi_long arg2,
         abi_long arg3, abi_long arg4)
@@ -96,53 +168,52 @@ static inline abi_long do_freebsd_fstatat(abi_long arg1, abi_long arg2,
     }
     return ret;
 }
+#endif
 
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1200031
 /* undocummented nstat(char *path, struct nstat *ub) syscall */
-static abi_long do_freebsd_nstat(abi_long arg1, abi_long arg2)
+static abi_long do_freebsd11_nstat(abi_long arg1, abi_long arg2)
 {
     abi_long ret;
     void *p;
-    struct stat st;
+    struct freebsd11_stat st;
 
     LOCK_PATH(p, arg1);
-    ret = get_errno(nstat(path(p), &st));
+    ret = get_errno(freebsd11_nstat(path(p), &st));
     UNLOCK_PATH(p, arg1);
     if (!is_error(ret)) {
-        ret = h2t_freebsd_nstat(arg2, &st);
+        ret = h2t_freebsd11_nstat(arg2, &st);
     }
     return ret;
 }
 
 /* undocummented nfstat(int fd, struct nstat *sb) syscall */
-static abi_long do_freebsd_nfstat(abi_long arg1, abi_long arg2)
+static abi_long do_freebsd11_nfstat(abi_long arg1, abi_long arg2)
 {
     abi_long ret;
-    struct stat st;
+    struct freebsd11_stat st;
 
-    ret = get_errno(nfstat(arg1, &st));
+    ret = get_errno(freebsd11_nfstat(arg1, &st));
     if (!is_error(ret))  {
-        ret = h2t_freebsd_nstat(arg2, &st);
+        ret = h2t_freebsd11_nstat(arg2, &st);
     }
     return ret;
 }
 
 /* undocummented nlstat(char *path, struct nstat *ub) syscall */
-static abi_long do_freebsd_nlstat(abi_long arg1, abi_long arg2)
+static abi_long do_freebsd11_nlstat(abi_long arg1, abi_long arg2)
 {
     abi_long ret;
     void *p;
-    struct stat st;
+    struct freebsd11_stat st;
 
     LOCK_PATH(p, arg1);
-    ret = get_errno(nlstat(path(p), &st));
+    ret = get_errno(freebsd11_nlstat(path(p), &st));
     UNLOCK_PATH(p, arg1);
     if (!is_error(ret)) {
-        ret = h2t_freebsd_nstat(arg2, &st);
+        ret = h2t_freebsd11_nstat(arg2, &st);
     }
     return ret;
 }
-#endif
 
 /* getfh(2) */
 static abi_long do_freebsd_getfh(abi_long arg1, abi_long arg2)
@@ -191,6 +262,25 @@ static inline abi_long do_freebsd_fhopen(abi_long arg1, abi_long arg2)
 }
 
 /* fhstat(2) */
+static inline abi_long do_freebsd11_fhstat(abi_long arg1, abi_long arg2)
+{
+    abi_long ret;
+    fhandle_t host_fh;
+    struct freebsd11_stat host_sb;
+
+    ret = t2h_freebsd_fhandle(&host_fh, arg1);
+    if (is_error(ret)) {
+        return ret;
+    }
+    ret = get_errno(freebsd11_fhstat(&host_fh, &host_sb));
+    if (is_error(ret)) {
+        return ret;
+    }
+    return h2t_freebsd11_stat(arg2, &host_sb);
+}
+
+#ifdef BSD_HAVE_INO64
+/* fhstat(2) */
 static inline abi_long do_freebsd_fhstat(abi_long arg1, abi_long arg2)
 {
     abi_long ret;
@@ -207,7 +297,28 @@ static inline abi_long do_freebsd_fhstat(abi_long arg1, abi_long arg2)
     }
     return h2t_freebsd_stat(arg2, &host_sb);
 }
+#endif
 
+/* fhstatfs(2) */
+static inline abi_long do_freebsd11_fhstatfs(abi_ulong target_fhp_addr,
+        abi_ulong target_stfs_addr)
+{
+    abi_long ret;
+    fhandle_t host_fh;
+    struct freebsd11_statfs host_stfs;
+
+    ret = t2h_freebsd_fhandle(&host_fh, target_fhp_addr);
+    if (is_error(ret)) {
+        return ret;
+    }
+    ret = get_errno(freebsd11_fhstatfs(&host_fh, &host_stfs));
+    if (is_error(ret)) {
+        return ret;
+    }
+    return h2t_freebsd11_statfs(target_stfs_addr, &host_stfs);
+}
+
+#ifdef BSD_HAVE_INO64
 /* fhstatfs(2) */
 static inline abi_long do_freebsd_fhstatfs(abi_ulong target_fhp_addr,
         abi_ulong target_stfs_addr)
@@ -226,7 +337,26 @@ static inline abi_long do_freebsd_fhstatfs(abi_ulong target_fhp_addr,
     }
     return h2t_freebsd_statfs(target_stfs_addr, &host_stfs);
 }
+#endif
 
+/* statfs(2) */
+static inline abi_long do_freebsd11_statfs(abi_long arg1, abi_long arg2)
+{
+    abi_long ret;
+    void *p;
+    struct freebsd11_statfs host_stfs;
+
+    LOCK_PATH(p, arg1);
+    ret = get_errno(freebsd11_statfs(path(p), &host_stfs));
+    UNLOCK_PATH(p, arg1);
+    if (is_error(ret)) {
+        return ret;
+    }
+
+    return h2t_freebsd11_statfs(arg2, &host_stfs);
+}
+
+#ifdef BSD_HAVE_INO64
 /* statfs(2) */
 static inline abi_long do_freebsd_statfs(abi_long arg1, abi_long arg2)
 {
@@ -243,7 +373,22 @@ static inline abi_long do_freebsd_statfs(abi_long arg1, abi_long arg2)
 
     return h2t_freebsd_statfs(arg2, &host_stfs);
 }
+#endif
 
+/* fstatfs(2) */
+static inline abi_long do_freebsd11_fstatfs(abi_long fd, abi_ulong target_addr)
+{
+    abi_long ret;
+    struct freebsd11_statfs host_stfs;
+
+    ret = get_errno(freebsd11_fstatfs(fd, &host_stfs));
+    if (is_error(ret)) {
+        return ret;
+    }
+
+    return h2t_freebsd11_statfs(target_addr, &host_stfs);
+}
+#ifdef BSD_HAVE_INO64
 /* fstatfs(2) */
 static inline abi_long do_freebsd_fstatfs(abi_long fd, abi_ulong target_addr)
 {
@@ -257,7 +402,47 @@ static inline abi_long do_freebsd_fstatfs(abi_long fd, abi_ulong target_addr)
 
     return h2t_freebsd_statfs(target_addr, &host_stfs);
 }
+#endif
 
+/* getfsstat(2) */
+static inline abi_long do_freebsd11_getfsstat(abi_ulong target_addr,
+        abi_long bufsize, abi_long flags)
+{
+    abi_long ret;
+    struct freebsd11_statfs *host_stfs;
+    int count;
+    long host_bufsize;
+
+    count = bufsize / sizeof(struct target_freebsd11_statfs);
+
+    /* if user buffer is NULL then return number of mounted FS's */
+    if (target_addr == 0 || count == 0) {
+        return get_errno(freebsd11_getfsstat(NULL, 0, flags));
+    }
+
+    /* XXX check count to be reasonable */
+    host_bufsize = sizeof(struct freebsd11_statfs) * count;
+    host_stfs = alloca(host_bufsize);
+    if (!host_stfs) {
+        return -TARGET_EINVAL;
+    }
+
+    ret = count = get_errno(freebsd11_getfsstat(host_stfs, host_bufsize, flags));
+    if (is_error(ret)) {
+        return ret;
+    }
+
+    while (count--) {
+        if (h2t_freebsd11_statfs((target_addr +
+                        (count * sizeof(struct target_freebsd11_statfs))),
+                    &host_stfs[count])) {
+            return -TARGET_EFAULT;
+        }
+    }
+    return ret;
+}
+
+#ifdef BSD_HAVE_INO64
 /* getfsstat(2) */
 static inline abi_long do_freebsd_getfsstat(abi_ulong target_addr,
         abi_long bufsize, abi_long flags)
@@ -267,11 +452,11 @@ static inline abi_long do_freebsd_getfsstat(abi_ulong target_addr,
     int count;
     long host_bufsize;
 
-    count = bufsize / sizeof(struct target_freebsd_statfs);
+    count = bufsize / sizeof(struct target_statfs);
 
     /* if user buffer is NULL then return number of mounted FS's */
     if (target_addr == 0 || count == 0) {
-        return get_errno(getfsstat(NULL, 0, flags));
+        return get_errno(freebsd11_getfsstat(NULL, 0, flags));
     }
 
     /* XXX check count to be reasonable */
@@ -288,28 +473,29 @@ static inline abi_long do_freebsd_getfsstat(abi_ulong target_addr,
 
     while (count--) {
         if (h2t_freebsd_statfs((target_addr +
-                        (count * sizeof(struct target_freebsd_statfs))),
+                        (count * sizeof(struct target_statfs))),
                     &host_stfs[count])) {
             return -TARGET_EFAULT;
         }
     }
     return ret;
 }
+#endif
 
 /* getdents(2) */
-static inline abi_long do_freebsd_getdents(abi_long arg1, abi_ulong arg2,
-        abi_long nbytes)
+static inline abi_long do_freebsd11_getdents(abi_long arg1,
+        abi_ulong arg2, abi_long nbytes)
 {
     abi_long ret;
-    struct dirent *dirp;
+    struct freebsd11_dirent *dirp;
 
     dirp = lock_user(VERIFY_WRITE, arg2, nbytes, 0);
     if (dirp == NULL) {
         return -TARGET_EFAULT;
     }
-    ret = get_errno(getdents(arg1, (char *)dirp, nbytes));
+    ret = get_errno(freebsd11_getdents(arg1, (char *)dirp, nbytes));
     if (!is_error(ret)) {
-        struct dirent *de;
+        struct freebsd11_dirent *de;
         int len = ret;
         int reclen;
 
@@ -328,8 +514,48 @@ static inline abi_long do_freebsd_getdents(abi_long arg1, abi_ulong arg2,
 }
 
 /* getdirecentries(2) */
-static inline abi_long do_freebsd_getdirentries(abi_long arg1, abi_ulong arg2,
-        abi_long nbytes, abi_ulong arg4)
+static inline abi_long do_freebsd11_getdirentries(abi_long arg1,
+        abi_ulong arg2, abi_long nbytes, abi_ulong arg4)
+{
+    abi_long ret;
+    struct freebsd11_dirent *dirp;
+    long basep;
+
+    dirp = lock_user(VERIFY_WRITE, arg2, nbytes, 0);
+    if (dirp == NULL) {
+        return -TARGET_EFAULT;
+    }
+    ret = get_errno(freebsd11_getdirentries(arg1, (char *)dirp, nbytes, &basep));
+    if (!is_error(ret)) {
+        struct freebsd11_dirent *de;
+        int len = ret;
+        int reclen;
+
+        de = dirp;
+        while (len > 0) {
+            reclen = de->d_reclen;
+            if (reclen > len) {
+                return -TARGET_EFAULT;
+            }
+            de->d_reclen = tswap16(reclen);
+            de->d_fileno = tswap32(de->d_fileno);
+            len -= reclen;
+            de = (struct freebsd11_dirent *)((void *)de + reclen);
+        }
+    }
+    unlock_user(dirp, arg2, ret);
+    if (arg4) {
+        if (put_user(basep, arg4, abi_ulong)) {
+            return -TARGET_EFAULT;
+        }
+    }
+    return ret;
+}
+
+#ifdef BSD_HAVE_INO64
+/* getdirecentries(2) */
+static inline abi_long do_freebsd_getdirentries(abi_long arg1,
+        abi_ulong arg2, abi_long nbytes, abi_ulong arg4)
 {
     abi_long ret;
     struct dirent *dirp;
@@ -351,8 +577,10 @@ static inline abi_long do_freebsd_getdirentries(abi_long arg1, abi_ulong arg2,
             if (reclen > len) {
                 return -TARGET_EFAULT;
             }
-            de->d_reclen = tswap16(reclen);
-            de->d_fileno = tswap32(de->d_fileno);
+            de->d_fileno = tswap64(de->d_fileno);
+            de->d_off = tswap64(de->d_off);
+            de->d_reclen = tswap16(de->d_reclen);
+            de->d_namlen = tswap16(de->d_namlen);
             len -= reclen;
             de = (struct dirent *)((void *)de + reclen);
         }
@@ -365,6 +593,7 @@ static inline abi_long do_freebsd_getdirentries(abi_long arg1, abi_ulong arg2,
     }
     return ret;
 }
+#endif
 
 /* fcntl(2) */
 static inline abi_long do_freebsd_fcntl(abi_long arg1, abi_long arg2,

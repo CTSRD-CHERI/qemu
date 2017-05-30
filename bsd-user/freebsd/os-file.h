@@ -20,6 +20,9 @@
 #ifndef __FREEBSD_OS_FILE_H_
 #define __FREEBSD_OS_FILE_H_
 
+#define _WANT_FREEBSD11_STAT
+#define _WANT_FREEBSD11_STATFS
+#define _WANT_FREEBSD11_DIRENT
 #include <sys/stat.h>
 #include <aio.h>
 #include <unistd.h>
@@ -64,20 +67,6 @@ static abi_long do_freebsd_aio_cancel(__unused int fildes,
 static abi_long do_freebsd_aio_error(__unused abi_ulong iocb)
 {
     qemu_log("qemu: Unsupported syscall aio_error()\n");
-    return -TARGET_ENOSYS;
-}
-
-/* oaio_read(2) */
-static abi_long do_freebsd_oaio_read(__unused abi_ulong iocb)
-{
-    qemu_log("qemu: Unsupported syscall oaio_read()\n");
-    return -TARGET_ENOSYS;
-}
-
-/* oaio_write(2) */
-static abi_long do_freebsd_oaio_write(__unused abi_ulong iocb)
-{
-    qemu_log("qemu: Unsupported syscall oaio_write()\n");
     return -TARGET_ENOSYS;
 }
 
