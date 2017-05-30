@@ -17,7 +17,13 @@
 #ifndef QEMU_H
 #define QEMU_H
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
+#define BSD_HAVE_INO64
+#endif
 
+/* needed for fprintf() debug function */
+#include <stdio.h>
+#include "qemu/osdep.h"
 #include "cpu.h"
 #include "exec/cpu_ldst.h"
 

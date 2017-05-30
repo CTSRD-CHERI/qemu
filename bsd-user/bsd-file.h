@@ -60,6 +60,14 @@ do {                                        \
     unlock_user(p1, arg1, 0);               \
 } while (0)
 
+#ifndef BSD_HAVE_INO64
+#define	freebsd11_mknod		mknod
+#define	freebsd11_mknodat	mknodat
+#else
+int freebsd11_mknod(char *path, mode_t mode, uint32_t dev);
+int freebsd11_mknodat(int fd, char *path, mode_t mode, uint32_t dev);
+#endif
+
 struct target_pollfd {
     int32_t fd;         /* file descriptor */
     int16_t events;     /* requested events */
@@ -730,32 +738,54 @@ static inline abi_long do_bsd_fchmodat(abi_long arg1, abi_long arg2,
     return ret;
 }
 
-/* mknod(2) */
-static inline abi_long do_bsd_mknod(abi_long arg1, abi_long arg2, abi_long arg3)
+/* pre-ino64 mknod(2) */
+static inline abi_long do_bsd_freebsd11_mknod(abi_long arg1, abi_long arg2, abi_long arg3)
 {
     abi_long ret;
     void *p;
 
     LOCK_PATH(p, arg1);
-    ret = get_errno(mknod(p, arg2, arg3)); /* XXX path(p)? */
+    ret = get_errno(freebsd11_mknod(p, arg2, arg3)); /* XXX path(p)? */
     UNLOCK_PATH(p, arg1);
 
     return ret;
 }
 
-/* mknodat(2) */
-static inline abi_long do_bsd_mknodat(abi_long arg1, abi_long arg2,
+/* pre-ino64 mknodat(2) */
+static inline abi_long do_bsd_freebsd11_mknodat(abi_long arg1, abi_long arg2,
         abi_long arg3, abi_long arg4)
 {
     abi_long ret;
     void *p;
 
     LOCK_PATH(p, arg2);
-    ret = get_errno(mknodat(arg1, p, arg3, arg4));
+    ret = get_errno(freebsd11_mknodat(arg1, p, arg3, arg4));
     UNLOCK_PATH(p, arg2);
 
     return ret;
 }
+
+#ifdef BSD_HAVE_INO64
+/* post-ino64 mknodat(2) */
+static inline abi_long do_bsd_mknodat(void *cpu_env, abi_long arg1,
+        abi_long arg2, abi_long arg3, abi_long arg4, abi_long arg5,
+        abi_long arg6)
+{
+    abi_long ret;
+    void *p;
+
+    LOCK_PATH(p, arg2);
+       /* 32-bit arch's use two 32 registers for 64 bit return value */
+    if (regpairs_aligned(cpu_env) != 0) {
+        ret = get_errno(mknodat(arg1, p, arg3, target_arg64(arg5, arg6)));
+    } else {
+        ret = get_errno(mknodat(arg1, p, arg3, target_arg64(arg4, arg5)));
+    }
+    UNLOCK_PATH(p, arg2);
+
+    return ret;
+}
+#endif
 
 /* chown(2) */
 static inline abi_long do_bsd_chown(abi_long arg1, abi_long arg2, abi_long arg3)
@@ -991,17 +1021,6 @@ static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
     return ret;
 }
 
-/*
- * undocumented openbsd_poll(struct pollfd *fds, u_int nfds, int
- * timeout) system call.
- */
-static abi_long do_bsd_openbsd_poll(abi_long arg1, abi_long arg2, abi_long arg3)
-{
-
-    qemu_log("qemu: Unsupported syscall openbsd_poll()\n");
-    return -TARGET_ENOSYS;
-}
-
 /* lseek(2) */
 static abi_long do_bsd_lseek(void *cpu_env, abi_long arg1, abi_long arg2,
         abi_long arg3, abi_long arg4, abi_long arg5)
@@ -1081,66 +1100,6 @@ static abi_long do_bsd_swapoff(abi_long arg1)
     UNLOCK_PATH(p, arg1);
 
     return ret;
-}
-
-/*
- * undocumented freebsd6_pread(int fd, void *buf, size_t nbyte, int pad,
- * off_t offset) system call.
- */
-static abi_long do_bsd_freebsd6_pread(abi_long arg1, abi_long arg2,
-        abi_long arg3, abi_long arg4, abi_long arg5)
-{
-
-    qemu_log("qemu: Unsupported syscall freebsd6_pread()\n");
-    return -TARGET_ENOSYS;
-}
-
-/*
- * undocumented freebsd6_pwrite(int fd, void *buf, size_t nbyte, int pad,
- * off_t offset) system call.
- */
-static abi_long do_bsd_freebsd6_pwrite(abi_long arg1, abi_long arg2,
-        abi_long arg3, abi_long arg4, abi_long arg5)
-{
-
-    qemu_log("qemu: Unsupported syscall freebsd6_pwrite()\n");
-    return -TARGET_ENOSYS;
-}
-
-/*
- * undocumented freebsd6_lseek(int fd, int pad, off_t offset, int whence)
- * system call.
- */
-static abi_long do_bsd_freebsd6_lseek(abi_long arg1, abi_long arg2,
-        abi_long arg3, abi_long arg4)
-{
-
-    qemu_log("qemu: Unsupported syscall freebsd6_lseek()\n");
-    return -TARGET_ENOSYS;
-}
-
-/*
- * undocumented freebsd6_truncate(char *path, int pad, off_t offset) system
- * call.
- */
-static abi_long do_bsd_freebsd6_truncate(abi_long arg1, abi_long arg2,
-        abi_long arg3)
-{
-
-    qemu_log("qemu: Unsupported syscall freebsd6_truncate()\n");
-    return -TARGET_ENOSYS;
-}
-
-/*
- * undocumented freebsd6_ftruncate(int fd, int pad, off_t offset) system
- * call.
- */
-static abi_long do_bsd_freebsd6_ftruncate(abi_long arg1, abi_long arg2,
-        abi_long arg3)
-{
-
-    qemu_log("qemu: Unsupported syscall freebsd6_ftruncate()\n");
-    return -TARGET_ENOSYS;
 }
 
 #endif /* !__BSD_FILE_H_ */

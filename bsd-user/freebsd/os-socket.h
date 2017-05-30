@@ -724,16 +724,6 @@ static inline abi_long do_freebsd_sctp_generic_recvmsg(abi_long s,
     return -TARGET_ENOSYS;
 }
 
-/* freebsd4_sendfile(2) */
-static inline abi_long do_freebsd_freebsd4_sendfile(abi_long fd, abi_long s,
-        abi_ulong arg3, abi_ulong arg4, abi_ulong nbytes, abi_ulong target_hdtr,
-        abi_ulong target_sbytes, abi_long flags)
-{
-
-    qemu_log("qemu: Unsupported syscall freebsd4_sendfile()\n");
-    return -TARGET_ENOSYS;
-}
-
 /* sendfile(2) */
 static inline abi_long do_freebsd_sendfile(abi_long fd, abi_long s,
         abi_ulong arg3, abi_ulong arg4, abi_ulong nbytes, abi_ulong target_hdtr,
