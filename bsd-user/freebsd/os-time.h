@@ -392,6 +392,8 @@ static inline abi_long do_freebsd_select(CPUArchState *env, int n,
         /* We have a signal pending so just poll select() and return. */
         tv2.tv_sec = tv2.tv_usec = 0;
         ret = get_errno(select(n, rfds_ptr, wfds_ptr, efds_ptr, &tv2));
+        if (ret == 0)
+            ret = TARGET_EINTR;
 	} else {
         ret = get_errno(pselect(n, rfds_ptr, wfds_ptr, efds_ptr, ts_ptr,
                     &omask));
