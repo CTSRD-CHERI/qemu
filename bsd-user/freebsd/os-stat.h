@@ -55,23 +55,38 @@ int nlstat(const char *path, struct stat *sb);
 int nfstat(int fd, struct stat *sb);
 #else
 int freebsd11_stat(const char *path, struct freebsd11_stat *stat);
+__sym_compat(stat, freebsd11_stat, FBSD_1.0);
 int freebsd11_lstat(const char *path, struct freebsd11_stat *stat);
+__sym_compat(lstat, freebsd11_lstat, FBSD_1.0);
 int freebsd11_fstat(int fd, struct freebsd11_stat *stat);
+__sym_compat(fstat, freebsd11_fstat, FBSD_1.0);
 int freebsd11_fstatat(int fd, const char *path, struct freebsd11_stat *stat,
         int flag);
+__sym_compat(fstatat, freebsd11_fstatat, FBSD_1.1);
+
 int freebsd11_fhstat(const fhandle_t *fhandle, struct freebsd11_stat *stat);
+__sym_compat(fhstat, freebsd11_fhstat, FBSD_1.0);
 int freebsd11_getfsstat(struct freebsd11_statfs *buf, long bufsize, int mode);
+__sym_compat(getfsstat, freebsd11_getfsstat, FBSD_1.0);
 int freebsd11_fhstatfs(const fhandle_t *fhandle, struct freebsd11_statfs * buf);
+__sym_compat(fhstatfs, freebsd11_fhstatfs, FBSD_1.0);
 int freebsd11_statfs(const char *path, struct freebsd11_statfs *buf);
+__sym_compat(statfs, freebsd11_statfs, FBSD_1.0);
 int freebsd11_fstatfs(int fd, struct freebsd11_statfs *buf);
+__sym_compat(fstatfs, freebsd11_fstatfs, FBSD_1.0);
 
 ssize_t freebsd11_getdirentries(int fd, char *buf, size_t nbytes, off_t *basep);
+__sym_compat(getdirentries, freebsd11_getdirentries, FBSD_1.0);
 ssize_t freebsd11_getdents(int fd, char *buf, size_t nbytes);
+__sym_compat(getdents, freebsd11_getdents, FBSD_1.0);
 
 /* undocumented nstat system calls */
 int freebsd11_nstat(const char *path, struct freebsd11_stat *sb);
+__sym_compat(nstat, freebsd11_nstat, FBSD_1.0);
 int freebsd11_nlstat(const char *path, struct freebsd11_stat *sb);
+__sym_compat(nlstat, freebsd11_nlstat, FBSD_1.0);
 int freebsd11_nfstat(int fd, struct freebsd11_stat *sb);
+__sym_compat(nfstat, freebsd11_nfstat, FBSD_1.0);
 #endif
 
 /* stat(2) */

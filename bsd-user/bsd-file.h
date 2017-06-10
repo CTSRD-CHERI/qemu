@@ -65,7 +65,9 @@ do {                                        \
 #define	freebsd11_mknodat	mknodat
 #else
 int freebsd11_mknod(char *path, mode_t mode, uint32_t dev);
+__sym_compat(mknod, freebsd11_mknod, FBSD_1.0);
 int freebsd11_mknodat(int fd, char *path, mode_t mode, uint32_t dev);
+__sym_compat(mknodat, freebsd11_mknodat, FBSD_1.1);
 #endif
 
 struct target_pollfd {
