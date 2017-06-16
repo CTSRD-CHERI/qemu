@@ -13619,6 +13619,26 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd)
         }
         break;
 #endif
+#if defined(TARGET_CHERI)
+    /*
+     * Fake registers to keep libstatcounters from triggering segfaultr
+     */
+    case 4:
+    case 5:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
+    case 10:
+    case 11:
+    case 12:
+    case 13:
+    case 14:
+        save_cpu_state(ctx, 1);
+        gen_helper_rdhwr_statcounters(t0, cpu_env);
+        gen_store_gpr(t0, rt);
+        break;
+#endif
     default:            /* Invalid */
         MIPS_INVAL("rdhwr");
         generate_exception(ctx, EXCP_RI);

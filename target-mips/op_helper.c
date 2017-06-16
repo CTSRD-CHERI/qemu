@@ -5252,6 +5252,12 @@ void helper_deret(CPUMIPSState *env)
 
 target_ulong helper_rdhwr_cpunum(CPUMIPSState *env)
 {
+#if defined(TARGET_CHERI)
+    if (env->doing_statcounters) {
+        env->doing_statcounters = false;
+        return 0xdeadbeef;
+    }
+#endif
     if ((env->hflags & MIPS_HFLAG_CP0) ||
         (env->CP0_HWREna & (1 << 0)))
         return env->CP0_EBase & 0x3ff;
@@ -5263,6 +5269,12 @@ target_ulong helper_rdhwr_cpunum(CPUMIPSState *env)
 
 target_ulong helper_rdhwr_synci_step(CPUMIPSState *env)
 {
+#if defined(TARGET_CHERI)
+    if (env->doing_statcounters) {
+        env->doing_statcounters = false;
+        return 0xdeadbeef;
+    }
+#endif
     if ((env->hflags & MIPS_HFLAG_CP0) ||
         (env->CP0_HWREna & (1 << 1)))
         return env->SYNCI_Step;
@@ -5274,6 +5286,12 @@ target_ulong helper_rdhwr_synci_step(CPUMIPSState *env)
 
 target_ulong helper_rdhwr_cc(CPUMIPSState *env)
 {
+#if defined(TARGET_CHERI)
+    if (env->doing_statcounters) {
+        env->doing_statcounters = false;
+        return 0xdeadbeef;
+    }
+#endif
     if ((env->hflags & MIPS_HFLAG_CP0) ||
         (env->CP0_HWREna & (1 << 2)))
         return env->CP0_Count;
@@ -5293,6 +5311,18 @@ target_ulong helper_rdhwr_ccres(CPUMIPSState *env)
 
     return 0;
 }
+
+#if defined(TARGET_CHERI)
+target_ulong helper_rdhwr_statcounters(CPUMIPSState *env)
+{
+    if (env->doing_statcounters) {
+	env->doing_statcounters = false;
+	return (0xdeadbeef);
+    }
+    env->doing_statcounters = true;
+    return 0xdeadbee0;
+}
+#endif
 
 void helper_pmon(CPUMIPSState *env, int function)
 {
