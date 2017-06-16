@@ -726,6 +726,8 @@ struct CPUMIPSState {
     uint32_t CP0_TCStatus_rw_bitmask; /* Read/write bits in CP0_TCStatus */
     int insn_flags; /* Supported instruction set */
     bool doing_statcounters;
+    target_ulong cheri_gc_lo;
+    target_ulong cheri_gc_hi;
 
 #if defined(TARGET_CHERI)
     /*

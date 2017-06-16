@@ -164,6 +164,8 @@ DEF_HELPER_4(dump_load32, void, env, int, tl, i32)
 
 DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
 DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
+DEF_HELPER_2(mtc2_gc_lo, void, env, tl)
+DEF_HELPER_2(mtc2_gc_hi, void, env, tl)
 DEF_HELPER_3(ccheck_pc, void, env, i64, int)
 DEF_HELPER_3(ccheck_store, tl, env, tl, i32)
 DEF_HELPER_3(ccheck_load, tl, env, tl, i32)
