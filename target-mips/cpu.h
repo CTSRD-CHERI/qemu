@@ -728,6 +728,7 @@ struct CPUMIPSState {
     bool doing_statcounters;
     target_ulong cheri_gc_lo;
     target_ulong cheri_gc_hi;
+    target_ulong cheri_gc_perms;
 
 #if defined(TARGET_CHERI)
     /*

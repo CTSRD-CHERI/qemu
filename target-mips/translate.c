@@ -9287,6 +9287,10 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, cheri_gc_hi));
             rn = "get_gc_hi";
             break;
+        case 4:
+            tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, cheri_gc_perms));
+            rn = "get_gc_perms";
+            break;
         default:
             goto cp0_unimplemented;
         }
@@ -9934,6 +9938,10 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         case 3:
             gen_helper_mtc0_gc_hi(cpu_env, arg);
             rn = "set_gc_hi";
+            break;
+        case 4:
+            gen_helper_mtc0_gc_perms(cpu_env, arg);
+            rn = "set_gc_perms";
             break;
         default:
             goto cp0_unimplemented;

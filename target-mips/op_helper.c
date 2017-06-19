@@ -3903,7 +3903,8 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
     ret = csp->cr_offset + csp->cr_base;
 
     if (env->cheri_gc_hi != 0 &&
-	csp->cr_base >= env->cheri_gc_lo && csp->cr_base < env->cheri_gc_hi) {
+       csp->cr_base >= env->cheri_gc_lo && csp->cr_base < env->cheri_gc_hi &&
+       (csp->cr_perms & env->cheri_gc_perms) == env->cheri_gc_perms) {
 	    cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
 	    goto out;
     }
@@ -4020,7 +4021,8 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     length = csp->cr_length;
 
     if (env->cheri_gc_hi != 0 &&
-	csp->cr_base >= env->cheri_gc_lo && csp->cr_base < env->cheri_gc_hi) {
+       csp->cr_base >= env->cheri_gc_lo && csp->cr_base < env->cheri_gc_hi &&
+       (csp->cr_perms & env->cheri_gc_perms) == env->cheri_gc_perms) {
 	    tps = 0;
     }
 
@@ -4201,7 +4203,8 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
     }
 
     if (env->cheri_gc_hi != 0 &&
-	csp->cr_base >= env->cheri_gc_lo && csp->cr_base < env->cheri_gc_hi) {
+       csp->cr_base >= env->cheri_gc_lo && csp->cr_base < env->cheri_gc_hi &&
+       (csp->cr_perms & env->cheri_gc_perms) == env->cheri_gc_perms) {
 	    cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
 	    goto out;
     }
@@ -4598,6 +4601,11 @@ void helper_mtc0_gc_lo(CPUMIPSState *env, target_ulong arg1)
 void helper_mtc0_gc_hi(CPUMIPSState *env, target_ulong arg1)
 {
     env->cheri_gc_hi = arg1;
+}
+
+void helper_mtc0_gc_perms(CPUMIPSState *env, target_ulong arg1)
+{
+    env->cheri_gc_perms = arg1;
 }
 
 #endif /* TARGET_CHERI */
