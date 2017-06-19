@@ -4590,12 +4590,12 @@ void helper_mtc2_dumpcstate(CPUMIPSState *env, target_ulong arg1)
             fprintf, CPU_DUMP_CODE);
 }
 
-void helper_mtc2_gc_lo(CPUMIPSState *env, target_ulong arg1)
+void helper_mtc0_gc_lo(CPUMIPSState *env, target_ulong arg1)
 {
     env->cheri_gc_lo = arg1;
 }
 
-void helper_mtc2_gc_hi(CPUMIPSState *env, target_ulong arg1)
+void helper_mtc0_gc_hi(CPUMIPSState *env, target_ulong arg1)
 {
     env->cheri_gc_hi = arg1;
 }

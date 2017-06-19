@@ -8683,14 +8683,6 @@ static void gen_mtc2(DisasContext *ctx, TCGv arg, int reg, int sel)
         default:
             goto cp2_unimplemented;
         }
-    case 2:
-        gen_helper_mtc2_gc_lo(cpu_env, arg);
-        rn = "set_gc_lo";
-	break;
-    case 3:
-        gen_helper_mtc2_gc_hi(cpu_env, arg);
-        rn = "set_gc_hi";
-        break;
     default:
         goto cp2_unimplemented;
     }
@@ -9936,11 +9928,11 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             rn = "ErrorEPC";
             break;
         case 2:
-            gen_helper_mtc2_gc_lo(cpu_env, arg);
+            gen_helper_mtc0_gc_lo(cpu_env, arg);
             rn = "set_gc_lo";
             break;
         case 3:
-            gen_helper_mtc2_gc_hi(cpu_env, arg);
+            gen_helper_mtc0_gc_hi(cpu_env, arg);
             rn = "set_gc_hi";
             break;
         default:
