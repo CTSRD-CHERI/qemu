@@ -3995,7 +3995,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
-    uint64_t tps, length, perms;
+    uint64_t tag, tps, length, perms;
     uint32_t save_hflags = env->hflags;
 
     /* Are we in a branch delay slot? */
@@ -4020,13 +4020,14 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
 
     length = csp->cr_length;
 
+    tag = csp->cr_tag;
     if (env->cheri_gc_hi != 0 &&
        csp->cr_base >= env->cheri_gc_lo && csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
        (csp->cr_perms & env->cheri_gc_perms) == csp->cr_perms) {
-	    tps = 0;
+	    tag = 0;
     }
 
-    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length);
+    cheri_tag_set_m128(env, vaddr, cs, tag, tps, length);
 
     /* Log memory cap write, if needed. */
     cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
