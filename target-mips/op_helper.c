@@ -3904,7 +3904,7 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
 
     if (env->cheri_gc_hi != 0 &&
        csp->cr_base >= env->cheri_gc_lo && csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
-       (csp->cr_perms & env->cheri_gc_perms) == env->cheri_gc_perms) {
+       (csp->cr_perms & env->cheri_gc_perms) == csp->cr_perms) {
 	    cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
 	    goto out;
     }
@@ -4022,7 +4022,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
 
     if (env->cheri_gc_hi != 0 &&
        csp->cr_base >= env->cheri_gc_lo && csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
-       (csp->cr_perms & env->cheri_gc_perms) == env->cheri_gc_perms) {
+       (csp->cr_perms & env->cheri_gc_perms) == csp->cr_perms) {
 	    tps = 0;
     }
 
@@ -4204,7 +4204,7 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
 
     if (env->cheri_gc_hi != 0 &&
        csp->cr_base >= env->cheri_gc_lo && csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
-       (csp->cr_perms & env->cheri_gc_perms) == env->cheri_gc_perms) {
+       (csp->cr_perms & env->cheri_gc_perms) == csp->cr_perms) {
 	    cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
 	    goto out;
     }
