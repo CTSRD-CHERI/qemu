@@ -3815,6 +3815,16 @@ static inline void cvtrace_dump_gpr(cvtrace_t *cvtrace, uint64_t value)
     }
 }
 
+static uint64_t tag_with_revoke (CPUMIPSState *env,  cap_register_t *csp) {
+    if (env->cheri_gc_hi != 0 &&
+        csp->cr_base >= env->cheri_gc_lo &&
+        csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
+       (csp->cr_perms & env->cheri_gc_perms) == csp->cr_perms) {
+        return 0;
+    }
+    return csp->cr_tag;
+}
+
 #ifdef CHERI_128
 /*
  * Print capability load from memory to log file.
@@ -3867,14 +3877,15 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
 {
     cap_register_t *csp = &env->active_tc.C[cs];
     target_ulong ret;
+    uint64_t tag = tag_with_revoke(env, csp);
 
-    if (csp->cr_tag)
+    if (tag)
         ret = compress_128cap(csp);
     else
         ret = csp->cr_pesbt;
 
     /* Log memory cap write, if needed. */
-    dump_cap_store(vaddr, ret, csp->cr_offset + csp->cr_base, csp->cr_tag);
+    dump_cap_store(vaddr, ret, csp->cr_offset + csp->cr_base, tag);
     cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
     cvtrace_dump_cap_cbl(&env->cvtrace, csp);
 
@@ -3902,15 +3913,8 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
 
     ret = csp->cr_offset + csp->cr_base;
 
-    if (env->cheri_gc_hi != 0 &&
-       csp->cr_base >= env->cheri_gc_lo && csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
-       (csp->cr_perms & env->cheri_gc_perms) == csp->cr_perms) {
-	    cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
-	    goto out;
-    }
-
     /* Set the tag bit in memory, if set in the register. */
-    if (csp->cr_tag)
+    if (tag_with_revoke(env,csp))
         cheri_tag_set(env, vaddr, cs);
     else
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
@@ -3986,7 +3990,7 @@ target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
     ret = csp->cr_offset + csp->cr_base;
 
     /* Log memory cap write, if needed. */
-    dump_cap_store(vaddr, ret, csp->cr_base, csp->cr_tag);
+    dump_cap_store(vaddr, ret, csp->cr_base, tag_with_revoke(env,csp));
     return ret;
 }
 
@@ -4020,12 +4024,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
 
     length = csp->cr_length;
 
-    tag = csp->cr_tag;
-    if (env->cheri_gc_hi != 0 &&
-       csp->cr_base >= env->cheri_gc_lo && csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
-       (csp->cr_perms & env->cheri_gc_perms) == csp->cr_perms) {
-	    tag = 0;
-    }
+    tag = tag_with_revoke(env, csp);
 
     cheri_tag_set_m128(env, vaddr, cs, tag, tps, length);
 
@@ -4164,7 +4163,7 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
         (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
 
     /* Log memory cap write, if needed. */
-    dump_cap_store_op(vaddr, ret, csp->cr_tag);
+    dump_cap_store_op(vaddr, ret, tag_with_revoke(env, csp));
     cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
 
     return ret;
@@ -4203,19 +4202,11 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
         break;
     }
 
-    if (env->cheri_gc_hi != 0 &&
-       csp->cr_base >= env->cheri_gc_lo && csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
-       (csp->cr_perms & env->cheri_gc_perms) == csp->cr_perms) {
-	    cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
-	    goto out;
-    }
-
-    if (csp->cr_tag)
+    if (tag_with_revoke(env, csp))
         cheri_tag_set(env, vaddr, cs);
     else
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
 
-out:
     ret = csp->cr_offset + csp->cr_base;
     /* Log memory cap write, if needed. */
     dump_cap_store_cursor(ret);
