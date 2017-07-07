@@ -371,8 +371,10 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
                prot & PROT_READ ? 'r' : '-',
                prot & PROT_WRITE ? 'w' : '-',
                prot & PROT_EXEC ? 'x' : '-');
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200035
         if (flags & MAP_GUARD)
             printf("MAP_GUARD ");
+#endif
         if (flags & MAP_FIXED)
             printf("MAP_FIXED ");
         if (flags & MAP_ANONYMOUS)
@@ -463,12 +465,17 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
         /* Note: we prefer to control the mapping address. It is
            especially important if qemu_host_page_size >
            qemu_real_host_page_size */
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200035
 	if (!(flags & MAP_GUARD))
         	p = mmap(g2h(start), host_len, prot,
                  	flags | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
 	else /* MAP_GUARD */
         	p = mmap(g2h(start), host_len, prot,
                  	flags, -1, 0);
+#else
+       	p = mmap(g2h(start), host_len, prot,
+               	flags | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
+#endif
         if (p == MAP_FAILED) {
             goto fail;
 	}
