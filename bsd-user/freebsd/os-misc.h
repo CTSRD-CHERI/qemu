@@ -503,13 +503,33 @@ static inline abi_long do_freebsd_mac_syscall(abi_ulong target_policy,
 /*
  * New posix calls
  */
+
+#if TARGET_ABI_BITS == 32
+static inline uint64_t target_offset64(uint32_t word0, uint32_t word1)
+{
+#ifdef TARGET_WORDS_BIGENDIAN
+    return ((uint64_t)word0 << 32) | word1;
+#else
+    return ((uint64_t)word1 << 32) | word0;
+#endif
+}
+#else /* TARGET_ABI_BITS == 32 */
+static inline uint64_t target_offset64(uint64_t word0, uint64_t word1)
+{
+    return word0;
+}
+#endif /* TARGET_ABI_BITS != 32 */
+
 /* posix_fallocate(2) */
-static inline abi_long do_freebsd_posix_fallocate(abi_long fd, abi_ulong offset,
-        abi_ulong len)
+static inline abi_long do_freebsd_posix_fallocate(abi_long arg1, abi_long arg2, abi_long arg3, abi_long arg4, abi_long arg5, abi_long arg6)
 {
 
-    qemu_log("qemu: Unsupported syscall posix_fallocate()\n");
-    return -TARGET_ENOSYS;
+#if TARGET_ABI_BITS == 32                           
+    return get_errno(posix_fallocate(arg1, target_offset64(arg3, arg4),
+        target_offset64(arg5, arg6)));
+#else
+    return get_errno(posix_fallocate(arg1, arg2, arg3));
+#endif
 }
 
 /* posix_openpt(2) */
