@@ -281,6 +281,11 @@ static inline void target_cpu_loop(CPUX86State *env)
             }
             break;
 #endif
+
+        case EXCP_ATOMIC:
+            cpu_exec_step_atomic(cs);
+            break;
+
         default:
             pc = env->segs[R_CS].base + env->eip;
             fprintf(stderr, "qemu: 0x%08lx: unhandled CPU exception 0x%x - "
