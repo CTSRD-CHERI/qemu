@@ -258,6 +258,10 @@ static inline void target_cpu_loop(CPUSPARCState *env)
             }
             break;
 
+        case EXCP_ATOMIC:
+            cpu_exec_step_atomic(cs);
+            break;
+
         default:
 badtrap:
             printf("Unhandled trap: 0x%x\n", trapnr);

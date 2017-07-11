@@ -537,6 +537,9 @@ static inline void target_cpu_loop(CPUPPCState *env)
                   }
             }
             break;
+        case EXCP_ATOMIC:
+            cpu_exec_step_atomic(cs);
+            break;
         case EXCP_INTERRUPT:
             /* just indicate that signals should be handled asap */
             break;
