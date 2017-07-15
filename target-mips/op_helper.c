@@ -3234,6 +3234,39 @@ target_ulong helper_cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     return (target_ulong) equal;
 }
 
+target_ulong helper_cnexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    gboolean equal = FALSE;
+    /*
+     * CNEXEQ: Not all fields are equal
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
+    } else {
+        if (cbp->cr_tag != ctp->cr_tag) {
+            equal = TRUE;
+        } else if (cbp->cr_base != ctp->cr_base) {
+            equal = TRUE;
+        } else if (cbp->cr_offset != ctp->cr_offset) {
+            equal = TRUE;
+        } else if (cbp->cr_length != ctp->cr_length) {
+            equal = TRUE;
+        } else if (cbp->cr_otype != ctp->cr_otype) {
+            equal = TRUE;
+        } else if (cbp->cr_perms != ctp->cr_perms) {
+            equal = TRUE;
+        } else {
+            equal = FALSE;
+        }
+    }
+    return (target_ulong) equal;
+}
+
 /*
  * Load Via Capability Register
  */
