@@ -2797,7 +2797,7 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
     /* Check the new base (cursor) and adjust if needed. */
     if (e && (cursor & ((1 << e) - 1))) {
-        uint64_t new_cursor = ((cursor >> e) - 1) << e;
+        new_cursor = ((cursor >> e) - 1) << e;
 
         if (new_cursor > cursor) {
             /* cursor adjustment wrapped.  Just set to 0. */
