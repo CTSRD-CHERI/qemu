@@ -576,6 +576,7 @@ int do_sigaction(int sig, const struct target_sigaction *act,
         if (host_sig != SIGSEGV && host_sig != SIGBUS) {
             memset(&act1, 0, sizeof(struct sigaction));
             sigfillset(&act1.sa_mask);
+            act1.sa_flags = SA_SIGINFO;
             if (k->sa_flags & TARGET_SA_RESTART) {
                 act1.sa_flags |= SA_RESTART;
             }
@@ -587,13 +588,11 @@ int do_sigaction(int sig, const struct target_sigaction *act,
                 act1.sa_sigaction = (void *)SIG_IGN;
             } else if (k->_sa_handler == TARGET_SIG_DFL) {
                 if (fatal_signal(sig)) {
-                    act1.sa_flags = SA_SIGINFO;
                     act1.sa_sigaction = host_signal_handler;
                 } else {
                     act1.sa_sigaction = (void *)SIG_DFL;
                 }
             } else {
-                act1.sa_flags = SA_SIGINFO;
                 act1.sa_sigaction = host_signal_handler;
             }
             ret = sigaction(host_sig, &act1, NULL);
