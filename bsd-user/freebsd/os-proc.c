@@ -182,13 +182,13 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         envc++;
     }
 
-    qarg0 = argp =  alloca((argc + 7) * sizeof(void *));
+    qarg0 = argp = g_new0(char *, argc + 7);
     /* save the first agrument for the emulator */
     *argp++ = (char *)getprogname();
     qargp = argp;
     *argp++ = (char *)getprogname();
     qarg1 = argp;
-    envp = alloca((envc + 1) * sizeof(void *));
+    envp = g_new0(char *, envc + 1);
     for (gp = guest_argp, q = argp; gp; gp += sizeof(abi_ulong), q++) {
         if (get_user_ual(addr, gp)) {
             ret = -TARGET_EFAULT;
@@ -360,6 +360,10 @@ execve_end:
         }
         unlock_user(*q, addr, 0);
     }
+
+    g_free(qarg0);
+    g_free(envp);
+
     return ret;
 }
 
