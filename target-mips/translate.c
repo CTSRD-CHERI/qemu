@@ -21239,7 +21239,7 @@ static void gen_msa_branch(CPUMIPSState *env, DisasContext *ctx, uint32_t op1)
 
     check_msa_access(ctx);
 
-    if (ctx->insn_flags & ISA_MIPS32R6 && ctx->hflags & MIPS_HFLAG_BMASK) {
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
         MIPS_DEBUG("CTI in delay / forbidden slot");
         generate_exception(ctx, EXCP_RI);
         return;
