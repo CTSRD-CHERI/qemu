@@ -10590,7 +10590,7 @@ static void gen_compute_branch1(DisasContext *ctx, uint32_t op,
     const char *opn = "cp1 cond branch";
     TCGv_i32 t0 = tcg_temp_new_i32();
 
-    if ((ctx->insn_flags & ISA_MIPS32R6) && (ctx->hflags & MIPS_HFLAG_BMASK)) {
+    if (ctx->hflags & MIPS_HFLAG_BMASK) {
         MIPS_DEBUG("CTI in delay / forbidden slot");
         generate_exception(ctx, EXCP_RI);
         goto out;
