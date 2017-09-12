@@ -100,13 +100,12 @@ char qemu_proc_pathname[PATH_MAX];  /* full path to exeutable */
 void fork_start(void)
 {
     cpu_list_lock();
-    qemu_mutex_lock(&tcg_ctx.tb_ctx.tb_lock);
     mmap_fork_start();
+    qemu_mutex_lock(&tcg_ctx.tb_ctx.tb_lock);
 }
 
 void fork_end(int child)
 {
-    mmap_fork_end(child);
     if (child) {
         CPUState *cpu, *next_cpu;
         /*
@@ -119,10 +118,12 @@ void fork_end(int child)
             }
         }
         qemu_mutex_init(&tcg_ctx.tb_ctx.tb_lock);
+        mmap_fork_end(child);
 	qemu_init_cpu_list();
         gdbserver_fork(thread_cpu);
     } else {
         qemu_mutex_unlock(&tcg_ctx.tb_ctx.tb_lock);
+        mmap_fork_end(child);
 	cpu_list_unlock();
     }
 
