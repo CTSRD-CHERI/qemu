@@ -1048,37 +1048,8 @@ enum {
     OPC_CSETBOUNDSEXACT = OPC_CGET | (0x09),
     OPC_CSUB            = OPC_CGET | (0x0a),
 
-    OPC_C2OPERAND       = OPC_CGET | (0x3f),
+    /* OPC_C2OPERAND       = OPC_CGET | (0x3f), XXXAM redefined */
 };
-
-
-/* XXX - Version 1.17 ISA encodings (*_NI) to replace above. */
-enum {
-    /* Two Operand Instructions */
-    OPC_CGETPERM_NI     = OPC_C2OPERAND | (0x00 << 6),
-    OPC_CGETTYPE_NI     = OPC_C2OPERAND | (0x01 << 6),
-    OPC_CGETBASE_NI     = OPC_C2OPERAND | (0x02 << 6),
-    OPC_CGETLEN_NI      = OPC_C2OPERAND | (0x03 << 6),
-    OPC_CGETTAG_NI      = OPC_C2OPERAND | (0x04 << 6),
-    OPC_CGETSEALED_NI   = OPC_C2OPERAND | (0x05 << 6),
-    OPC_CGETOFFSET_NI   = OPC_C2OPERAND | (0x06 << 6),
-    OPC_CGETPCCSETOFF_NI = OPC_C2OPERAND | (0x07 << 6),
-    OPC_CCHECKPERM_NI   = OPC_C2OPERAND | (0x08 << 6),
-    OPC_CCHECKTYPE_NI   = OPC_C2OPERAND | (0x09 << 6),
-    OPC_CMOVE_NI        = OPC_C2OPERAND | (0x0a << 6),
-    OPC_CCLEARTAG_NI    = OPC_C2OPERAND | (0x0b << 6),
-    OPC_CJALR_NI        = OPC_C2OPERAND | (0x0c << 6),
-
-    OPC_C1OPERAND       = OPC_C2OPERAND | (0x1f << 6),
-};
-
-enum {
-    OPC_CGETPCC_NI      = OPC_C1OPERAND | (0x00 << 11),
-    OPC_CGETCAUSE_NI    = OPC_C1OPERAND | (0x01 << 11),
-    OPC_CSETCAUSE_NI    = OPC_C1OPERAND | (0x02 << 11),
-    OPC_CJR_NI          = OPC_C1OPERAND | (0x03 << 11),
-};
-/* XXX */
 
 enum {
     OPC_CANDPERM    = OPC_CMISC | (0x0),
@@ -1153,6 +1124,83 @@ enum {
     OPC_CSW         = OPC_CSTORE | (0x2),
     OPC_CSD         = OPC_CSTORE | (0x3),
 };
+
+/* XXX - Version 1.17 and 1.22 ISA encodings (*_NI) to replace above. */
+#ifdef CHERI_NEW_ENCODINGS
+enum {
+    /* Common new ISA encoding blocks */
+    /* non-immediate capability instructions */
+    OPC_CAP_NI          = OPC_CP2 | (0x00 << 21),
+    /* 2-operand capability instructions */
+    OPC_C2OPERAND_NI    = OPC_CAP_NI | (0x3f),
+    /* 1-operand capability instructions */
+    OPC_C1OPERAND_NI    = OPC_C2OPERAND_NI | (0x1f << 6),
+};
+
+enum {
+    /* Two Operand Instructions */
+    OPC_CGETPERM_NI     = OPC_C2OPERAND_NI | (0x00 << 6),
+    OPC_CGETTYPE_NI     = OPC_C2OPERAND_NI | (0x01 << 6),
+    OPC_CGETBASE_NI     = OPC_C2OPERAND_NI | (0x02 << 6),
+    OPC_CGETLEN_NI      = OPC_C2OPERAND_NI | (0x03 << 6),
+    OPC_CGETTAG_NI      = OPC_C2OPERAND_NI | (0x04 << 6),
+    OPC_CGETSEALED_NI   = OPC_C2OPERAND_NI | (0x05 << 6),
+    OPC_CGETOFFSET_NI   = OPC_C2OPERAND_NI | (0x06 << 6),
+    OPC_CGETPCCSETOFF_NI = OPC_C2OPERAND_NI | (0x07 << 6),
+    OPC_CCHECKPERM_NI   = OPC_C2OPERAND_NI | (0x08 << 6),
+    OPC_CCHECKTYPE_NI   = OPC_C2OPERAND_NI | (0x09 << 6),
+    OPC_CMOVE_NI        = OPC_C2OPERAND_NI | (0x0a << 6),
+    OPC_CCLEARTAG_NI    = OPC_C2OPERAND_NI | (0x0b << 6),
+    OPC_CJALR_NI        = OPC_C2OPERAND_NI | (0x0c << 6),
+
+    /* OPC_C1OPERAND       = OPC_C2OPERAND_NI | (0x1f << 6), XXX redefined */
+};
+
+enum {
+    /* One operand instructions */
+    OPC_CGETPCC_NI      = OPC_C1OPERAND_NI | (0x00 << 11),
+    OPC_CGETCAUSE_NI    = OPC_C1OPERAND_NI | (0x01 << 11),
+    OPC_CSETCAUSE_NI    = OPC_C1OPERAND_NI | (0x02 << 11),
+    OPC_CJR_NI          = OPC_C1OPERAND_NI | (0x03 << 11),
+};
+
+enum {
+    /* Three operand instructions 1.22 */
+    OPC_CSEAL_NI        = OPC_CAP_NI | (0x0b),
+    OPC_CUNSEAL_NI      = OPC_CAP_NI | (0x0c),
+    OPC_CANDPERM_NI     = OPC_CAP_NI | (0x0d),
+    OPC_CSETOFFSET_NI   = OPC_CAP_NI | (0x0f),
+    OPC_SETBOUNDS_NI    = OPC_CAP_NI | (0x10),
+    OPC_SETBOUNDSEXACT_NI = OPC_CAP_NI | (0x09),
+    OPC_CINCOFFSET_NI   = OPC_CAP_NI | (0x11),
+    OPC_CTOPTR_NI       = OPC_CAP_NI | (0x12),
+    OPC_CFROMPTR_NI     = OPC_CAP_NI | (0x13),
+    /* OPC_CSUB_NI         = OPC_CSUB, XXX unchanged */
+    OPC_CMOVZ_NI        = OPC_CAP_NI | (0x1b),
+    OPC_CMOVN_NI        = OPC_CAP_NI | (0x1c),
+    OPC_CEQ_NI          = OPC_CAP_NI | (0x14),
+    OPC_CNE_NI          = OPC_CAP_NI | (0x15),
+    OPC_CLT_NI          = OPC_CAP_NI | (0x16),
+    OPC_CLE_NI          = OPC_CAP_NI | (0x17),
+    OPC_CLTU_NI         = OPC_CAP_NI | (0x18),
+    OPC_CLEU_NI         = OPC_CAP_NI | (0x19),
+    OPC_CEXEQ_NI        = OPC_CAP_NI | (0x1a),
+};
+
+enum {
+    /* instructions with immediate values 1.22 */
+    OPC_SETBOUNDSIMM_NI   = OPC_CP2 | (0x12 << 21),
+    OPC_CINCOFFSET_IMM_NI = OPC_CP2 | (0x11 << 21),
+    OPC_CBTU_NI           = OPC_CP2 | (0x09 << 21),
+    OPC_CBTS_NI           = OPC_CP2 | (0x0a << 21),
+    /* OPC_CCALL_NI          = OPC_CP2 | (0x05 << 21), OPC_CCALL XXX unchanged */
+    /* special stuff */
+    /* OPC_CCLEARREGS variants unchanged */
+    OPC_CRETURN_NI        = OPC_CP2 | (0x05 << 21 | 0x01),    
+};
+#endif /* CHERI_NEW_ENCODINGS */
+/* XXX */
+
 #endif /* TARGET_CHERI */
 
 
@@ -11109,6 +11157,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
      */
 
     switch (MASK_CP2(opc)) {
+#ifdef CHERI_OLD_ENCODINGS
     case OPC_CGET:  /* 0x00 */
         switch(MASK_CAP6(opc)) {
         case OPC_CGETPERM:          /* 0x00 */
@@ -11162,9 +11211,10 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_csub(r16, r11, r6);
             opn = "csub";
             break;
+#endif /* CHERI_OLD_ENCODINGS */
 
         /* Two-operand cap instructions. */
-        case OPC_C2OPERAND:         /* 0x3f */
+        case OPC_C2OPERAND_NI:         /* 0x3f */
             switch(MASK_CAP7(opc)) {
             case OPC_CGETPERM_NI:   /* 0x00 << 6 */
                 check_cop2x(ctx);
@@ -11231,7 +11281,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 break;
 
             /* One-operand cap instructions. */
-            case OPC_C1OPERAND:     /* 0x1f << 6 */
+            case OPC_C1OPERAND_NI:     /* 0x1f << 6 */
                 switch(MASK_CAP8(opc)) {
                 case OPC_CGETPCC_NI:    /* 0x00 << 11 */
                     check_cop2x(ctx);
