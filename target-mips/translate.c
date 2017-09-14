@@ -1014,6 +1014,7 @@ enum {
 #define MASK_CAP7(op)       (MASK_CP2(op) | ((op) & (0x1f << 6)) |  (0x3f))
 #define MASK_CAP8(op)       (MASK_CP2(op) | ((op) & (0x1f << 11)) | \
         (0x1f << 6) |  (0x3f))
+#define MASK_CCALL_SEL(op)  (MASK_CP2(op) | ((op) & 0x7ff))
 
 enum {
     OPC_CGET        = OPC_CP2 | (0x00 << 21),
@@ -1170,8 +1171,8 @@ enum {
     OPC_CUNSEAL_NI      = OPC_CAP_NI | (0x0c),
     OPC_CANDPERM_NI     = OPC_CAP_NI | (0x0d),
     OPC_CSETOFFSET_NI   = OPC_CAP_NI | (0x0f),
-    OPC_SETBOUNDS_NI    = OPC_CAP_NI | (0x10),
-    OPC_SETBOUNDSEXACT_NI = OPC_CAP_NI | (0x09),
+    OPC_CSETBOUNDS_NI    = OPC_CAP_NI | (0x10),
+    /* OPC_SETBOUNDSEXACT_NI = OPC_CAP_NI | (0x09), XXX unchanged */
     OPC_CINCOFFSET_NI   = OPC_CAP_NI | (0x11),
     OPC_CTOPTR_NI       = OPC_CAP_NI | (0x12),
     OPC_CFROMPTR_NI     = OPC_CAP_NI | (0x13),
@@ -1189,10 +1190,10 @@ enum {
 
 enum {
     /* instructions with immediate values 1.22 */
-    OPC_SETBOUNDSIMM_NI   = OPC_CP2 | (0x12 << 21),
-    OPC_CINCOFFSET_IMM_NI = OPC_CP2 | (0x11 << 21),
-    OPC_CBTU_NI           = OPC_CP2 | (0x09 << 21),
-    OPC_CBTS_NI           = OPC_CP2 | (0x0a << 21),
+    OPC_CSETBOUNDSIMM_NI   = OPC_CP2 | (0x12 << 21),
+    OPC_CINCOFFSETIMM_NI = OPC_CP2 | (0x11 << 21),
+    /* OPC_CBTU_NI           = OPC_CP2 | (0x09 << 21), XXX unchanged */
+    /* OPC_CBTS_NI           = OPC_CP2 | (0x0a << 21), XXX unchanged */
     /* OPC_CCALL_NI          = OPC_CP2 | (0x05 << 21), OPC_CCALL XXX unchanged */
     /* special stuff */
     /* OPC_CCLEARREGS variants unchanged */
@@ -11157,7 +11158,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
      */
 
     switch (MASK_CP2(opc)) {
-#ifdef CHERI_OLD_ENCODINGS
+/* #ifdef CHERI_OLD_ENCODINGS */
     case OPC_CGET:  /* 0x00 */
         switch(MASK_CAP6(opc)) {
         case OPC_CGETPERM:          /* 0x00 */
@@ -11211,8 +11212,97 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_csub(r16, r11, r6);
             opn = "csub";
             break;
-#endif /* CHERI_OLD_ENCODINGS */
+/* #elif defined(CHERI_NEW_ENCODINGS) */
+/*     case OPC_CAP_NI: /\* 0x00 *\/ */
+/*         switch(MASK_CAP6(opc)) { */
+/* #endif /\* CHERI_OLD_ENCODINGS *\/ */
 
+/* #ifdef CHERI_NEW_ENCODINGS */
+        case OPC_CSEAL_NI: /* 0x0b */
+            check_cop2x(ctx);
+            generate_cseal(r16, r11, r6);
+            opn = "cseal";
+            break;
+        case OPC_CUNSEAL_NI: /* 0x0c */
+            check_cop2x(ctx);
+            generate_cunseal(r16, r11, r6);
+            opn = "cunseal";
+            break;
+        case OPC_CANDPERM_NI: /* 0x0d */
+            check_cop2x(ctx);
+            generate_candperm(r16, r11, r6);
+            opn = "candperm";
+            break;
+        case OPC_CSETOFFSET_NI: /* 0x0f */
+            check_cop2x(ctx);
+            generate_csetoffset(r16, r11, r6);
+            opn = "csetoffset";
+            break;
+        case OPC_CSETBOUNDS_NI: /* 0x10 */
+            check_cop2x(ctx);
+            generate_csetbounds(r16, r11, r6);
+            opn = "csetbounds";
+            break;
+        case OPC_CINCOFFSET_NI: /* 0x11 */
+            check_cop2x(ctx);
+            generate_cincoffset(r16, r11, r6);
+            opn = "cincoffset";
+            break;
+        case OPC_CTOPTR_NI: /* 0x12 */
+            check_cop2x(ctx);
+            generate_ctoptr(r16, r11, r6);
+            opn = "ctoptr";
+            break;
+        case OPC_CFROMPTR_NI: /* 0x13 */
+            check_cop2x(ctx);
+            generate_cfromptr(r16, r11, r6);
+            opn = "cfromptr";
+            break;
+        case OPC_CEQ_NI: /* 0x14 */
+            check_cop2x(ctx);
+            generate_ceq(r16, r11, r6);
+            opn = "ceq";
+            break;
+        case OPC_CNE_NI: /* 0x15 */
+            check_cop2x(ctx);
+            generate_cne(r16, r11, r6);
+            opn = "cne";
+            break;
+        case OPC_CLT_NI: /* 0x16 */
+            check_cop2x(ctx);
+            generate_clt(r16, r11, r6);
+            opn = "clt";
+            break;
+        case OPC_CLE_NI: /* 0x17 */
+            check_cop2x(ctx);
+            generate_cle(r16, r11, r6);
+            opn = "cle";
+            break;
+        case OPC_CLTU_NI: /* 0x18 */
+            check_cop2x(ctx);
+            generate_cltu(r16, r11, r6);
+            opn = "cltu";
+            break;
+        case OPC_CLEU_NI: /* 0x19 */
+            check_cop2x(ctx);
+            generate_cleu(r16, r11, r6);
+            opn = "cleu";
+            break;
+        case OPC_CEXEQ_NI: /* 0x1a */
+            check_cop2x(ctx);
+            generate_cexeq(r16, r11, r6);
+            opn = "cexeq";
+            break;
+        case OPC_CMOVZ_NI: /* 0x1b */
+            opn = "cmovz";
+            /* XXXAM should this be treated as cmove? */
+            goto invalid;
+            break;
+        case OPC_CMOVN_NI: /* 0x1c */
+            opn = "cmovn";
+            /* XXXAM should this be treated as cmove? */
+            goto invalid;
+            break;
         /* Two-operand cap instructions. */
         case OPC_C2OPERAND_NI:         /* 0x3f */
             switch(MASK_CAP7(opc)) {
@@ -11315,9 +11405,10 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 goto invalid;
             }
             break;
+/* #endif /\* CHERI_NEW_ENCODINGS *\/ */
 
         default:
-            opn = "cget";
+            opn = "cget"; /* XXXAM not really cget anymore */
             goto invalid;
         }
         break;
@@ -11385,9 +11476,17 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         }
         break;
     case OPC_CCALL: /* 0x05 */
-        check_cop2x(ctx);
-        generate_ccall(r16, r11);
-        opn = "ccall";
+        switch(MASK_CCALL_SEL(opc)) {
+        case OPC_CRETURN_NI:
+            /* creturn is now a special selector in ccall */
+            opn = "creturn";
+            generate_creturn();
+            break;
+        default:
+            check_cop2x(ctx);
+            generate_ccall(r16, r11);
+            opn = "ccall";
+        }
         break;
     case OPC_CRETURN: /* 0x06 */
         check_cop2x(ctx);
@@ -11587,6 +11686,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             goto invalid;
         }
         break;
+    case OPC_CSETBOUNDSIMM_NI: /* 0x11 */
+        break;
+    case OPC_CINCOFFSETIMM_NI: /* 0x12 */
+        break;
+
     default:
         goto invalid;
     }
