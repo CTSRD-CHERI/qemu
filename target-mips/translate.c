@@ -2260,6 +2260,20 @@ static inline void generate_cincoffset(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cincoffset_imm(int32_t cd, int32_t cs, int32_t increment)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv t0 = tcg_temp_new();
+
+    tcg_gen_movi_tl(t0, increment);
+    gen_helper_cincoffset(cpu_env, tcd, tcs, t0);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcs);
+}
+
 static inline void generate_creturn(void)
 {
 
@@ -2300,6 +2314,20 @@ static inline void generate_csetboundsexact(int32_t cd, int32_t cb, int32_t rt)
 
     gen_load_gpr(t0, rt);
     gen_helper_csetboundsexact(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_csetbounds_imm(uint32_t cd, uint32_t cb, uint32_t length)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv t0 = tcg_temp_new();
+
+    tcg_gen_movi_tl(t0, length);
+    gen_helper_csetbounds(cpu_env, tcd, tcb, t0);
 
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
@@ -11657,8 +11685,14 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         }
         break;
     case OPC_CSETBOUNDSIMM_NI: /* 0x11 */
+        check_cop2x(ctx);
+        generate_csetbounds_imm(r16, r11, (opc & 0x3ff));
+        opn = "csetboundsimmediate";
         break;
     case OPC_CINCOFFSETIMM_NI: /* 0x12 */
+        check_cop2x(ctx);
+        generate_cincoffset_imm(r16, r11, (opc & 0x3ff));
+        opn = "cincoffsetimmediate";
         break;
 
     default:
