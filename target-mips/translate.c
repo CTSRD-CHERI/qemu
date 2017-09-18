@@ -1048,8 +1048,6 @@ enum {
 
     OPC_CSETBOUNDSEXACT = OPC_CGET | (0x09),
     OPC_CSUB            = OPC_CGET | (0x0a),
-
-    /* OPC_C2OPERAND       = OPC_CGET | (0x3f), XXXAM redefined */
 };
 
 enum {
@@ -1153,8 +1151,6 @@ enum {
     OPC_CMOVE_NI        = OPC_C2OPERAND_NI | (0x0a << 6),
     OPC_CCLEARTAG_NI    = OPC_C2OPERAND_NI | (0x0b << 6),
     OPC_CJALR_NI        = OPC_C2OPERAND_NI | (0x0c << 6),
-
-    /* OPC_C1OPERAND       = OPC_C2OPERAND_NI | (0x1f << 6), XXX redefined */
 };
 
 enum {
