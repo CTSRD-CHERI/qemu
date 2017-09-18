@@ -2671,6 +2671,28 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_cmovz(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *csp = &env->active_tc.C[cs];
+    /*
+     * CMOVZ: conditionally move capability on zero
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+    } else if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cs);
+    } else if (rs == 0) {
+        *cdp = *csp;
+    }
+}
+
+void helper_cmovn(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
+{
+    helper_cmovz(env, cd, cs, rs == 0);
+}
+
 target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
