@@ -1127,7 +1127,7 @@ enum {
 };
 
 /* XXX - Version 1.17 and 1.22 ISA encodings (*_NI) to replace above. */
-#ifdef CHERI_NEW_ENCODINGS
+//#ifdef CHERI_NEW_ENCODINGS
 enum {
     /* Common new ISA encoding blocks */
     /* non-immediate capability instructions */
@@ -1199,7 +1199,7 @@ enum {
     /* OPC_CCLEARREGS variants unchanged */
     OPC_CRETURN_NI        = OPC_CP2 | (0x05 << 21 | 0x01),    
 };
-#endif /* CHERI_NEW_ENCODINGS */
+// #endif /* CHERI_NEW_ENCODINGS */
 /* XXX */
 
 #endif /* TARGET_CHERI */
@@ -2268,6 +2268,48 @@ static inline void generate_cincoffset_imm(int32_t cd, int32_t cs, int32_t incre
 
     tcg_gen_movi_tl(t0, increment);
     gen_helper_cincoffset(cpu_env, tcd, tcs, t0);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcs);
+}
+
+static inline void generate_cmove(int32_t cd, int32_t cs)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv t0 = tcg_temp_new();
+
+    tcg_gen_movi_tl(t0, 0);
+    gen_helper_cmovz(cpu_env, tcd, tcs, t0);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcs);
+}
+
+static inline void generate_cmovz(int32_t cd, int32_t cs, int32_t rs)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv t0 = tcg_temp_new();
+
+    gen_load_gpr(t0, rs);
+    gen_helper_cmovz(cpu_env, tcd, tcs, t0);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcs);
+}
+
+static inline void generate_cmovn(int32_t cd, int32_t cs, int32_t rs)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv t0 = tcg_temp_new();
+
+    gen_load_gpr(t0, rs);
+    gen_helper_cmovn(cpu_env, tcd, tcs, t0);
 
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
@@ -11322,14 +11364,14 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "cexeq";
             break;
         case OPC_CMOVZ_NI: /* 0x1b */
+            check_cop2x(ctx);
+            generate_cmovz(r16, r11, r6);
             opn = "cmovz";
-            /* XXXAM should this be treated as cmove? */
-            goto invalid;
             break;
         case OPC_CMOVN_NI: /* 0x1c */
+            check_cop2x(ctx);
+            generate_cmovn(r16, r11, r6);
             opn = "cmovn";
-            /* XXXAM should this be treated as cmove? */
-            goto invalid;
             break;
         /* Two-operand cap instructions. */
         case OPC_C2OPERAND_NI:         /* 0x3f */
@@ -11385,8 +11427,10 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 opn = "cchecktype";
                 break;
             case OPC_CMOVE_NI:      /* 0x0a << 6 */
+                check_cop2x(ctx);
+                generate_cmove(r16, r11);
                 opn = "cmove";
-                goto invalid;
+                break;
             case OPC_CCLEARTAG_NI:  /* 0x0b << 6 */
                 check_cop2x(ctx);
                 generate_ccleartag(r16, r11);
