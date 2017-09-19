@@ -2841,6 +2841,35 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     }
 }
 
+void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (is_cap_sealed(cbp)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!is_cap_sealed(ctp)) {
+        int_to_cap(-1, cdp);
+    } else if (ctp->cr_otype < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (ctp->cr_otype >= cbp->cr_base + cbp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else {
+        *cdp = *cbp;
+        cdp->cr_offset = ctp->cr_otype - cbp->cr_base;
+    }
+}
+
 void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
