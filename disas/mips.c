@@ -1319,6 +1319,13 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cltu",       "t,+b,+v",   0x48000018, 0xffe0003f, 0, 0, I1},
 {"cleu",       "t,+b,+v",   0x48000019, 0xffe0003f, 0, 0, I1},
 {"cexeq",      "t,+b,+v",   0x4800001a, 0xffe0003f, 0, 0, I1},
+{"cbuildcap",  "+w,+b,+v",  0x4800001d, 0xffe0003f, 0, 0, I1},
+{"ccopytype",  "+w,+b,+v",  0x4800001e, 0xffe0003f, 0, 0, I1},
+{"ctestsubset","+w,+b,+v",  0x48000020, 0xffe0003f, 0, 0, I1},
+{"cnexeq",     "t,+b,+v",   0x48000021, 0xffe0003f, 0, 0, I1},
+
+{"cbez",      "+w,i",   0x4a200000, 0xffe00000, 0, 0, I1},
+{"cbnz",      "+w,i",   0x4a400000, 0xffe00000, 0, 0, I1},
 
 {"csetboundsimm", "+w,+b,+o3",   0x4a800000, 0xffe00000, 0, 0, I1},
 {"cincoffsetimm", "+w,+b,+o3",   0x4a600000, 0xffe00000, 0, 0, I1},
