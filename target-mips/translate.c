@@ -1198,7 +1198,7 @@ enum {
     OPC_CBNZ_NI          = OPC_CP2 | (0x12 << 21),  /* XXX */
     /* OPC_CCALL_NI          = OPC_CP2 | (0x05 << 21), unchanged OPC_CCALL */
     /* OPC_CCLEARREGS variants unchanged */
-    OPC_CRETURN_NI       = OPC_CP2 | (0x05 << 21 | 0x7ff) /* XXX */
+    OPC_CRETURN_NI       = OPC_CP2 | (0x05 << 21 | 0x7ff)
 };
 // #endif /* CHERI_NEW_ENCODINGS */
 /* XXX */
@@ -11344,6 +11344,30 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_cmovn(r16, r11, r6);
             opn = "cmovn";
             break;
+        case OPC_CBUILDCAP_NI:
+            check_cop2x(ctx);
+            /* generate_cbuildcap(r16, r11, r6); */
+            opn = "cbuildcap";
+            goto invalid;
+            break;
+        case OPC_CCOPYTYPE_NI:
+            check_cop2x(ctx);
+            /* generate_ccopytype(r16, r11, r6); */
+            opn = "ccopytype";
+            goto invalid;
+            break;
+        case OPC_CTESTSUBSET_NI:
+            check_cop2x(ctx);
+            /* generate_ctestsubset(r16, r11, r6); */
+            opn = "ctestsubset";
+            goto invalid;
+            break;
+        case OPC_CNEXEQ_NI:
+            check_cop2x(ctx);
+            /* generate_cnexeq(r16, r11, r6); */
+            opn = "cnexeq";
+            goto invalid;
+            break;
         /* Two-operand cap instructions. */
         case OPC_C2OPERAND_NI:         /* 0x3f */
             switch(MASK_CAP7(opc)) {
@@ -11729,15 +11753,27 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             goto invalid;
         }
         break;
-    case OPC_CSETBOUNDSIMM_NI: /* 0x11 */
+    case OPC_CBEZ_NI: /* 0x11 */
         check_cop2x(ctx);
-        generate_csetbounds_imm(r16, r11, (opc & 0x3ff));
-        opn = "csetboundsimmediate";
+        /* generate_cbez(r16, r11, (opc & 0x3ff)); */
+        opn = "cbez";
+        goto invalid;
         break;
-    case OPC_CINCOFFSETIMM_NI: /* 0x12 */
+    case OPC_CBNZ_NI: /* 0x12 */
+        check_cop2x(ctx);
+        /* generate_cbnz(r16, r11, (opc & 0x3ff)); */
+        opn = "cbnz";
+        goto invalid;
+        break;
+    case OPC_CINCOFFSETIMM_NI: /* 0x13 */
         check_cop2x(ctx);
         generate_cincoffset_imm(r16, r11, (opc & 0x3ff));
         opn = "cincoffsetimmediate";
+        break;
+    case OPC_CSETBOUNDSIMM_NI: /* 0x14 */
+        check_cop2x(ctx);
+        generate_csetbounds_imm(r16, r11, (opc & 0x3ff));
+        opn = "csetboundsimmediate";
         break;
 
     default:
