@@ -1194,7 +1194,7 @@ enum {
     OPC_CINCOFFSETIMM_NI = OPC_CP2 | (0x13 << 21),
     /* OPC_CBTU_NI           = OPC_CP2 | (0x09 << 21), unchanged OPC_CBTU */
     /* OPC_CBTS_NI           = OPC_CP2 | (0x0a << 21), unchanged OPC_CBTS */
-    OPC_CBEZ_NI          = OPC_CP2 | (0x11 << 21),  /* XXX */
+    OPC_CBEZ_NI          = OPC_CP2 | (0x11 << 21),
     OPC_CBNZ_NI          = OPC_CP2 | (0x12 << 21),  /* XXX */
     /* OPC_CCALL_NI          = OPC_CP2 | (0x05 << 21), unchanged OPC_CCALL */
     /* OPC_CCLEARREGS variants unchanged */
@@ -1980,6 +1980,62 @@ static inline void generate_candperm(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cbez(DisasContext *ctx, int32_t cb, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(offset);
+
+    gen_helper_cbez(bcond, cpu_env, tcb, toffset);
+    ctx->btarget = ctx->pc + 4 * offset + 4;
+    /* Set conditional branch and branch delay slot flags */
+    ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
+
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cbnz(DisasContext *ctx, int32_t cb, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(offset);
+
+    gen_helper_cbnz(bcond, cpu_env, tcb, toffset);
+    ctx->btarget = ctx->pc + 4 * offset + 4;
+    /* Set conditional branch and branch delay slot flags */
+    ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
+
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cbts(DisasContext *ctx, int32_t cb, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(offset);
+
+    gen_helper_cbez(bcond, cpu_env, tcb, toffset);
+    ctx->btarget = ctx->pc + 4 * offset + 4;
+    /* Set conditional branch and branch delay slot flags */
+    ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
+
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cbnz(DisasContext *ctx, int32_t cb, int32_t offset)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 toffset = tcg_const_i32(offset);
+
+    gen_helper_cbnz(bcond, cpu_env, tcb, toffset);
+    ctx->btarget = ctx->pc + 4 * offset + 4;
+    /* Set conditional branch and branch delay slot flags */
+    ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
+
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_cbts(DisasContext *ctx, int32_t cb, int32_t offset)
 {
 
@@ -2353,16 +2409,6 @@ static inline void generate_ctestsubset(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(t0);
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tct);
-}
-
-static inline void generate_cbez()
-{
-
-}
-
-static inline void generate_cbnz()
-{
-
 }
 
 static inline void generate_creturn(void)
@@ -11799,15 +11845,13 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CBEZ_NI: /* 0x11 */
         check_cop2x(ctx);
-        /* generate_cbez(r16, r11, (opc & 0x3ff)); */
+        generate_cbez(ctx, r16, (int16_t)opc);
         opn = "cbez";
-        goto invalid;
         break;
     case OPC_CBNZ_NI: /* 0x12 */
         check_cop2x(ctx);
-        /* generate_cbnz(r16, r11, (opc & 0x3ff)); */
+        generate_cbnz(ctx, r16, (int16_t)opc);
         opn = "cbnz";
-        goto invalid;
         break;
     case OPC_CINCOFFSETIMM_NI: /* 0x13 */
         check_cop2x(ctx);

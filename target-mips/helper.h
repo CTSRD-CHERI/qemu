@@ -176,6 +176,8 @@ DEF_HELPER_2(ccheck_imprecise, tl, env, tl)
 #endif
 
 DEF_HELPER_4(candperm, void, env, i32, i32, tl)
+DEF_HELPER_3(cbez, tl, env, i32, i32)
+DEF_HELPER_3(cbnz, tl, env, i32, i32)
 DEF_HELPER_3(cbts, tl, env, i32, i32)
 DEF_HELPER_3(cbtu, tl, env, i32, i32)
 DEF_HELPER_3(ccall, void, env, i32, i32)
