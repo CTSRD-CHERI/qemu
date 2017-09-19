@@ -2799,6 +2799,48 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     }
 }
 
+void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (is_cap_sealed(cbp)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (ctp->cr_base < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (ctp->cr_base + ctp->cr_length > cbp->cr_base + cbp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (ctp->cr_length < 0) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
+    } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
+        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cb);
+    } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
+        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cb);
+    } else {
+        /* XXXAM basic trivial implementation may not handle
+         * ctp capability sealed (maybe).
+         * does not perform renormalization.
+         */
+        *cdp = *cbp;
+        cdp->cr_base = ctp->cr_base;
+        cdp->cr_length = ctp->cr_length;
+        cdp->cr_perms = ctp->cr_perms;
+        cdp->cr_uperms = ctp->cr_uperms;
+        cdp->cr_offset = ctp->cr_offset;
+        cdp->cr_sealed = 0;
+    }
+}
+
 void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
