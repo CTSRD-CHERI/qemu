@@ -2828,8 +2828,7 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cb);
     } else {
         /* XXXAM basic trivial implementation may not handle
-         * ctp capability sealed (maybe).
-         * does not perform renormalization.
+         * compressed capabilities fully, does not perform renormalization.
          */
         *cdp = *cbp;
         cdp->cr_base = ctp->cr_base;
@@ -3383,6 +3382,33 @@ target_ulong helper_cnexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         }
     }
     return (target_ulong) equal;
+}
+
+target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    gboolean is_subset = FALSE;
+    /*
+     * CTestSubset: Test if capability is a subset of another
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
+    } else {
+        if (cbp->cr_tag == ctp->cr_tag &&
+            is_cap_sealed(cbp) == is_cap_sealed(ctp) &&
+            cbp->cr_base <= ctp->cr_base &&
+            cbp->cr_base + cbp->cr_length <= ctp->cr_base + ctp->cr_length &&
+            (ctp->cr_perms & cbp->cr_perms) == ctp->cr_perms &&
+            (ctp->cr_uperms & cbp->cr_uperms) == ctp->cr_uperms) {
+            is_subset = TRUE;
+        }
+        /* else is_subset = FALSE; */
+    }
+    return (target_ulong) is_subset;
 }
 
 /*

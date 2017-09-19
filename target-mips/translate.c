@@ -1183,8 +1183,8 @@ enum {
     OPC_CMOVZ_NI        = OPC_CAP_NI | (0x1b),
     OPC_CMOVN_NI        = OPC_CAP_NI | (0x1c),
     OPC_CBUILDCAP_NI    = OPC_CAP_NI | (0x1d),
-    OPC_CCOPYTYPE_NI    = OPC_CAP_NI | (0x1e), /* XXX */
-    OPC_CTESTSUBSET_NI  = OPC_CAP_NI | (0x20), /* XXX */
+    OPC_CCOPYTYPE_NI    = OPC_CAP_NI | (0x1e),
+    OPC_CTESTSUBSET_NI  = OPC_CAP_NI | (0x20),
     OPC_CNEXEQ_NI       = OPC_CAP_NI | (0x21) /* XXX */
 };
 
@@ -2341,9 +2341,18 @@ static inline void generate_ccopytype(int32_t cd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tct);
 }
 
-static inline void generate_ctestsubset()
+static inline void generate_ctestsubset(int32_t rd, int32_t cb, int32_t ct)
 {
+    TCGv t0 = tcg_temp_new();
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tct = tcg_const_i32(ct);
 
+    gen_helper_ctestsubset(t0, cpu_env, tcb, tct);
+    gen_store_gpr(t0, rd);
+
+    tcg_temp_free_i32(t0);
+    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tct);
 }
 
 static inline void generate_cnexeq()
@@ -11400,9 +11409,8 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CTESTSUBSET_NI:
             check_cop2x(ctx);
-            /* generate_ctestsubset(r16, r11, r6); */
+            generate_ctestsubset(r16, r11, r6);
             opn = "ctestsubset";
-            goto invalid;
             break;
         case OPC_CNEXEQ_NI:
             check_cop2x(ctx);
