@@ -1137,6 +1137,14 @@ enum {
 };
 
 enum {
+    /* One operand instructions */
+    OPC_CGETPCC_NI      = OPC_C1OPERAND_NI | (0x00 << 11),
+    OPC_CGETCAUSE_NI    = OPC_C1OPERAND_NI | (0x01 << 11),
+    OPC_CSETCAUSE_NI    = OPC_C1OPERAND_NI | (0x02 << 11),
+    OPC_CJR_NI          = OPC_C1OPERAND_NI | (0x03 << 11),
+};
+
+enum {
     /* Two Operand Instructions */
     OPC_CGETPERM_NI     = OPC_C2OPERAND_NI | (0x00 << 6),
     OPC_CGETTYPE_NI     = OPC_C2OPERAND_NI | (0x01 << 6),
@@ -1154,27 +1162,17 @@ enum {
 };
 
 enum {
-    /* One operand instructions */
-    OPC_CGETPCC_NI      = OPC_C1OPERAND_NI | (0x00 << 11),
-    OPC_CGETCAUSE_NI    = OPC_C1OPERAND_NI | (0x01 << 11),
-    OPC_CSETCAUSE_NI    = OPC_C1OPERAND_NI | (0x02 << 11),
-    OPC_CJR_NI          = OPC_C1OPERAND_NI | (0x03 << 11),
-};
-
-enum {
     /* Three operand instructions 1.22 */
     OPC_CSEAL_NI        = OPC_CAP_NI | (0x0b),
     OPC_CUNSEAL_NI      = OPC_CAP_NI | (0x0c),
     OPC_CANDPERM_NI     = OPC_CAP_NI | (0x0d),
     OPC_CSETOFFSET_NI   = OPC_CAP_NI | (0x0f),
-    OPC_CSETBOUNDS_NI    = OPC_CAP_NI | (0x10),
-    /* OPC_SETBOUNDSEXACT_NI = OPC_CAP_NI | (0x09), XXX unchanged */
+    OPC_CSETBOUNDS_NI   = OPC_CAP_NI | (0x08),
+    /* OPC_SETBOUNDSEXACT_NI = OPC_CAP_NI | (0x09), unchanged OPC_SETBOUNDSEXACT */
     OPC_CINCOFFSET_NI   = OPC_CAP_NI | (0x11),
     OPC_CTOPTR_NI       = OPC_CAP_NI | (0x12),
     OPC_CFROMPTR_NI     = OPC_CAP_NI | (0x13),
-    /* OPC_CSUB_NI         = OPC_CSUB, XXX unchanged */
-    OPC_CMOVZ_NI        = OPC_CAP_NI | (0x1b),
-    OPC_CMOVN_NI        = OPC_CAP_NI | (0x1c),
+    /* OPC_CSUB_NI      = OPC_CAP_NI | (0x0a), unchanged OPC_CSUB */
     OPC_CEQ_NI          = OPC_CAP_NI | (0x14),
     OPC_CNE_NI          = OPC_CAP_NI | (0x15),
     OPC_CLT_NI          = OPC_CAP_NI | (0x16),
@@ -1182,18 +1180,25 @@ enum {
     OPC_CLTU_NI         = OPC_CAP_NI | (0x18),
     OPC_CLEU_NI         = OPC_CAP_NI | (0x19),
     OPC_CEXEQ_NI        = OPC_CAP_NI | (0x1a),
+    OPC_CMOVZ_NI        = OPC_CAP_NI | (0x1b),
+    OPC_CMOVN_NI        = OPC_CAP_NI | (0x1c),
+    OPC_CBUILDCAP_NI    = OPC_CAP_NI | (0x1d), /* XXX */
+    OPC_CCOPYTYPE_NI    = OPC_CAP_NI | (0x1e), /* XXX */
+    OPC_CTESTSUBSET_NI  = OPC_CAP_NI | (0x20), /* XXX */
+    OPC_CNEXEQ_NI       = OPC_CAP_NI | (0x21) /* XXX */
 };
 
 enum {
     /* instructions with immediate values 1.22 */
-    OPC_CSETBOUNDSIMM_NI   = OPC_CP2 | (0x12 << 21),
-    OPC_CINCOFFSETIMM_NI = OPC_CP2 | (0x11 << 21),
-    /* OPC_CBTU_NI           = OPC_CP2 | (0x09 << 21), XXX unchanged */
-    /* OPC_CBTS_NI           = OPC_CP2 | (0x0a << 21), XXX unchanged */
-    /* OPC_CCALL_NI          = OPC_CP2 | (0x05 << 21), OPC_CCALL XXX unchanged */
-    /* special stuff */
+    OPC_CSETBOUNDSIMM_NI   = OPC_CP2 | (0x14 << 21),
+    OPC_CINCOFFSETIMM_NI = OPC_CP2 | (0x13 << 21),
+    /* OPC_CBTU_NI           = OPC_CP2 | (0x09 << 21), unchanged OPC_CBTU */
+    /* OPC_CBTS_NI           = OPC_CP2 | (0x0a << 21), unchanged OPC_CBTS */
+    OPC_CBEZ_NI          = OPC_CP2 | (0x11 << 21),  /* XXX */
+    OPC_CBNZ_NI          = OPC_CP2 | (0x12 << 21),  /* XXX */
+    /* OPC_CCALL_NI          = OPC_CP2 | (0x05 << 21), unchanged OPC_CCALL */
     /* OPC_CCLEARREGS variants unchanged */
-    OPC_CRETURN_NI        = OPC_CP2 | (0x05 << 21 | 0x01),    
+    OPC_CRETURN_NI       = OPC_CP2 | (0x05 << 21 | 0x7ff) /* XXX */
 };
 // #endif /* CHERI_NEW_ENCODINGS */
 /* XXX */
