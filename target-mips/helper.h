@@ -213,6 +213,7 @@ DEF_HELPER_3(ctoptr, tl, env, i32, i32)
 DEF_HELPER_4(cunseal, void, env, i32, i32, i32)
 DEF_HELPER_4(cmovz, void, env, i32, i32, tl)
 DEF_HELPER_4(cmovn, void, env, i32, i32, tl)
+DEF_HELPER_4(cbuildcap, void, env, i32, i32, i32)
 
 DEF_HELPER_3(ceq, tl, env, i32, i32)
 DEF_HELPER_3(cne, tl, env, i32, i32)
