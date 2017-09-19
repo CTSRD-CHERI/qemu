@@ -1185,7 +1185,7 @@ enum {
     OPC_CBUILDCAP_NI    = OPC_CAP_NI | (0x1d),
     OPC_CCOPYTYPE_NI    = OPC_CAP_NI | (0x1e),
     OPC_CTESTSUBSET_NI  = OPC_CAP_NI | (0x20),
-    OPC_CNEXEQ_NI       = OPC_CAP_NI | (0x21) /* XXX */
+    OPC_CNEXEQ_NI       = OPC_CAP_NI | (0x21),
 };
 
 enum {
@@ -2353,11 +2353,6 @@ static inline void generate_ctestsubset(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(t0);
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tct);
-}
-
-static inline void generate_cnexeq()
-{
-
 }
 
 static inline void generate_cbez()
@@ -11444,9 +11439,8 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CNEXEQ_NI:
             check_cop2x(ctx);
-            /* generate_cnexeq(r16, r11, r6); */
+            generate_cnexeq(r16, r11, r6);
             opn = "cnexeq";
-            goto invalid;
             break;
         /* Two-operand cap instructions. */
         case OPC_C2OPERAND_NI:         /* 0x3f */
