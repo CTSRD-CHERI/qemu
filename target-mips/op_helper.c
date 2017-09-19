@@ -2270,6 +2270,42 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_cbez(CPUMIPSState *env, uint32_t cb, uint32_t offset)
+{
+    cap_register_t *pccp = &env->active_tc.PCC;
+    uint32_t perms = pccp->cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t cnull;
+    /*
+     * CBEZ: Branch if NULL
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+        return (target_ulong)0;
+    } else {
+        (void)null_capability(&cnull);
+        return (target_ulong)(memcmp(cbp, &cnull, sizeof(cap_register_t)) == 0);
+    }
+}
+
+target_ulong helper_cbnz(CPUMIPSState *env, uint32_t cb, uint32_t offset)
+{
+    cap_register_t *pccp = &env->active_tc.PCC;
+    uint32_t perms = pccp->cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t cnull;
+    /*
+     * CBEZ: Branch if not NULL
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+        return (target_ulong)0;
+    } else {
+        (void)null_capability(&cnull);
+        return (target_ulong)(memcmp(cbp, &cnull, sizeof(cap_register_t)) != 0);
+    }
+}
+
 target_ulong helper_cbts(CPUMIPSState *env, uint32_t cb, uint32_t offset)
 {
     cap_register_t *pccp = &env->active_tc.PCC;
