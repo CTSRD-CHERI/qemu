@@ -2858,8 +2858,10 @@ static void invalidate_and_set_dirty(MemoryRegion *mr, hwaddr addr,
     }
     cpu_physical_memory_set_dirty_range(addr, length, dirty_log_mask);
 
+#if defined(TARGET_CHERI)
     /* Invalidate the CHERI memory tags. */
     cheri_tag_phys_invalidate(addr, length);
+#endif
 }
 
 static int memory_access_size(MemoryRegion *mr, unsigned l, hwaddr addr)

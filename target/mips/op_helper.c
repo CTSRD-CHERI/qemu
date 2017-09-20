@@ -19,6 +19,7 @@
 #include "qemu/osdep.h"
 #include "qemu/main-loop.h"
 #include "cpu.h"
+#include "internal.h"
 #include "qemu/host-utils.h"
 #include "exec/helper-proto.h"
 #include "exec/exec-all.h"
@@ -3178,8 +3179,8 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (ctp->cr_base + ctp->cr_length > cbp->cr_base + cbp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (ctp->cr_length < 0) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
+    // } else if (ctp->cr_length < 0) {
+    //    do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cb);
     } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
