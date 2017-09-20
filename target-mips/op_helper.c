@@ -2841,7 +2841,10 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     cap_register_t *cdp = &env->active_tc.C[cd];
     cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *ctp = &env->active_tc.C[ct];
-
+    /*
+     * CBuildCap: create capability from untagged register.
+     * XXXAM: Note this is experimental and may change.
+     */
     if (creg_inaccessible(perms, cd)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
     } else if (creg_inaccessible(perms, cb)) {
@@ -2882,7 +2885,10 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     cap_register_t *cdp = &env->active_tc.C[cd];
     cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *ctp = &env->active_tc.C[ct];
-
+    /*
+     * CCopyType: copy object type from untagged capability.
+     * XXXAM: Note this is experimental and may change.
+     */
     if (creg_inaccessible(perms, cd)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
     } else if (creg_inaccessible(perms, cb)) {

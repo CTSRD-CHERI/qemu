@@ -1124,7 +1124,7 @@ enum {
     OPC_CSD         = OPC_CSTORE | (0x3),
 };
 
-/* XXX - Version 1.17 and 1.22 ISA encodings (*_NI) to replace above. */
+/* Version 1.17 and 1.22 ISA encodings (*_NI) to replace above. */
 enum {
     /* Common new ISA encoding blocks */
     /* non-immediate capability instructions */
@@ -2403,7 +2403,7 @@ static inline void generate_ctestsubset(int32_t rd, int32_t cb, int32_t ct)
     gen_helper_ctestsubset(t0, cpu_env, tcb, tct);
     gen_store_gpr(t0, rd);
 
-    tcg_temp_free_i32(t0);
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tct);
 }
@@ -11320,7 +11320,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
      */
 
     switch (MASK_CP2(opc)) {
-    case OPC_CGET:  /* 0x00 */
+    case OPC_CGET:  /* same as OPC_CAP_NI, 0x00 */
         switch(MASK_CAP6(opc)) {
         case OPC_CGETPERM:          /* 0x00 */
             check_cop2x(ctx);
@@ -11373,7 +11373,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_csub(r16, r11, r6);
             opn = "csub";
             break;
-
         case OPC_CSEAL_NI: /* 0x0b */
             check_cop2x(ctx);
             generate_cseal(r16, r11, r6);
@@ -11585,7 +11584,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
 
         default:
-            opn = "cget"; /* XXXAM not really cget anymore */
+            opn = "cget";
             goto invalid;
         }
         break;
