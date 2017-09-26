@@ -11562,12 +11562,12 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                     break;
                 case OPC_CSETCAUSE_NI:  /* 0x02 << 11 */
                     check_cop2x(ctx);
-                    generate_csetcause(r6);
+                    generate_csetcause(r16);
                     opn = "csetcause";
                     break;
                 case OPC_CJR_NI:        /* 0x03 << 11 */
                     check_cop2x(ctx);
-                    generate_cjr(ctx, r11);
+                    generate_cjr(ctx, r16);
                     opn = "cjr";
                     break;
 
