@@ -21,6 +21,7 @@
 #include "cpu.h"
 #include "kvm_mips.h"
 #include "qemu-common.h"
+#include "exec/gdbstub.h"
 #include "sysemu/kvm.h"
 
 
@@ -102,6 +103,28 @@ static void mips_cpu_realizefn(DeviceState *dev, Error **errp)
     CPUState *cs = CPU(dev);
     MIPSCPUClass *mcc = MIPS_CPU_GET_CLASS(dev);
 
+#ifdef TARGET_MIPS64
+    gdb_register_coprocessor(cs, NULL, NULL, 0, "mips64-cp0.xml", 0);
+    gdb_register_coprocessor(cs, NULL, NULL, 0, "mips64-fpu.xml", 0);
+    gdb_register_coprocessor(cs, mips_gdb_get_sys_reg, mips_gdb_set_sys_reg,
+	1, "mips64-sys.xml", 0);
+#else
+    gdb_register_coprocessor(cs, NULL, NULL, 0, "mips-cp0.xml", 0);
+    gdb_register_coprocessor(cs, NULL, NULL, 0, "mips-fpu.xml", 0);
+    gdb_register_coprocessor(cs, mips_gdb_get_sys_reg, mips_gdb_set_sys_reg,
+	1, "mips-sys.xml", 0);
+#endif
+#if defined(TARGET_CHERI)
+    gdb_register_coprocessor(cs, mips_gdb_get_cheri_reg, 
+	mips_gdb_set_cheri_reg, 35,
+#if defined(CHERI_MAGIC128) || defined(CHERI_128)
+	"mips64-cheri-c128.xml",
+#else
+	"mips64-cheri-c256.xml",
+#endif
+	0);
+#endif
+
     cpu_reset(cs);
     qemu_init_vcpu(cs);
 
@@ -151,7 +174,12 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     cc->vmsd = &vmstate_mips_cpu;
 #endif
 
-    cc->gdb_num_core_regs = 73;
+#if defined(TARGET_MIPS64)
+    cc->gdb_core_xml_file = "mips64-cpu.xml";
+#else
+    cc->gdb_core_xml_file = "mips-cpu.xml";
+#endif
+    cc->gdb_num_core_regs = 72;
     cc->gdb_stop_before_watchpoint = true;
 }
 
