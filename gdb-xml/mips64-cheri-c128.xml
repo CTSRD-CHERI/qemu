@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2007-2016 Free Software Foundation, Inc.
+
+     Copying and distribution of this file, with or without modification,
+     are permitted in any medium without royalty provided the copyright
+     notice and this notice are preserved.  -->
+
+<!DOCTYPE feature SYSTEM "gdb-target.dtd">
+<feature name="org.gnu.gdb.mips.cheri128">
+  <flags id="cap128_perms" size="8">
+    <field name="T" start="0" end="19"/>
+    <field name="B" start="20" end="39"/>
+    <field name="s" start="40" end="40"/>
+    <field name="e" start="41" end="46"/>
+    <field name="G" start="50" end="50"/>
+    <field name="X" start="51" end="51"/>
+    <field name="R" start="52" end="52"/>
+    <field name="W" start="53" end="53"/>
+    <field name="RC" start="54" end="54"/>
+    <field name="WC" start="55" end="55"/>
+    <field name="WLC" start="56" end="56"/>
+    <field name="S" start="57" end="57"/>
+    <field name="SR" start="59" end="59"/>
+    <field name="uP" start="60" end="63"/>
+  </flags>
+  <struct id="cheri_cap128">
+    <field name="attr" type="cap128_perms"/>
+    <field name="cursor" type="uint64"/>
+  </struct>
+
+  <reg name="c0" bitsize="128" type="cheri_cap128"/>
+  <reg name="c1" bitsize="128" type="cheri_cap128"/>
+  <reg name="c2" bitsize="128" type="cheri_cap128"/>
+  <reg name="c3" bitsize="128" type="cheri_cap128"/>
+  <reg name="c4" bitsize="128" type="cheri_cap128"/>
+  <reg name="c5" bitsize="128" type="cheri_cap128"/>
+  <reg name="c6" bitsize="128" type="cheri_cap128"/>
+  <reg name="c7" bitsize="128" type="cheri_cap128"/>
+  <reg name="c8" bitsize="128" type="cheri_cap128"/>
+  <reg name="c9" bitsize="128" type="cheri_cap128"/>
+  <reg name="c10" bitsize="128" type="cheri_cap128"/>
+  <reg name="c11" bitsize="128" type="cheri_cap128"/>
+  <reg name="c12" bitsize="128" type="cheri_cap128"/>
+  <reg name="c13" bitsize="128" type="cheri_cap128"/>
+  <reg name="c14" bitsize="128" type="cheri_cap128"/>
+  <reg name="c15" bitsize="128" type="cheri_cap128"/>
+  <reg name="c16" bitsize="128" type="cheri_cap128"/>
+  <reg name="c17" bitsize="128" type="cheri_cap128"/>
+  <reg name="c18" bitsize="128" type="cheri_cap128"/>
+  <reg name="c19" bitsize="128" type="cheri_cap128"/>
+  <reg name="c20" bitsize="128" type="cheri_cap128"/>
+  <reg name="c21" bitsize="128" type="cheri_cap128"/>
+  <reg name="c22" bitsize="128" type="cheri_cap128"/>
+  <reg name="c23" bitsize="128" type="cheri_cap128"/>
+  <reg name="c24" bitsize="128" type="cheri_cap128"/>
+  <reg name="c25" bitsize="128" type="cheri_cap128"/>
+  <reg name="c26" bitsize="128" type="cheri_cap128"/>
+  <reg name="c27" bitsize="128" type="cheri_cap128"/>
+  <reg name="c28" bitsize="128" type="cheri_cap128"/>
+  <reg name="c29" bitsize="128" type="cheri_cap128"/>
+  <reg name="c30" bitsize="128" type="cheri_cap128"/>
+  <reg name="c31" bitsize="128" type="cheri_cap128"/>
+
+  <reg name="pcc" bitsize="128" type="cheri_cap128"/>
+
+  <flags id="cap_cause" size="8">
+    <field name="reg" start="0" end="7"/>
+    <field name="exccode" start="8" end="15"/>
+  </flags>
+  <reg name="cap_cause" bitsize="64" type="cap_cause"/>
+  <reg name="cap_valid" bitsize="64"/>
+</feature>
