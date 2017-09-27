@@ -78,6 +78,12 @@ static inline MIPSCPU *mips_env_get_cpu(CPUMIPSState *env)
 extern const struct VMStateDescription vmstate_mips_cpu;
 #endif
 
+#ifdef TARGET_CHERI
+int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
+int mips_gdb_set_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
+#endif
+int mips_gdb_get_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
+int mips_gdb_set_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
 void mips_cpu_do_interrupt(CPUState *cpu);
 bool mips_cpu_exec_interrupt(CPUState *cpu, int int_req);
 void mips_cpu_dump_state(CPUState *cpu, FILE *f, fprintf_function cpu_fprintf,
