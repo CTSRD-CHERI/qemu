@@ -1125,7 +1125,6 @@ enum {
 };
 
 /* XXX - Version 1.17 and 1.22 ISA encodings (*_NI) to replace above. */
-//#ifdef CHERI_NEW_ENCODINGS
 enum {
     /* Common new ISA encoding blocks */
     /* non-immediate capability instructions */
@@ -1200,8 +1199,6 @@ enum {
     /* OPC_CCLEARREGS variants unchanged */
     OPC_CRETURN_NI       = OPC_CP2 | (0x05 << 21 | 0x7ff)
 };
-// #endif /* CHERI_NEW_ENCODINGS */
-/* XXX */
 
 #endif /* TARGET_CHERI */
 
@@ -11323,7 +11320,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
      */
 
     switch (MASK_CP2(opc)) {
-/* #ifdef CHERI_OLD_ENCODINGS */
     case OPC_CGET:  /* 0x00 */
         switch(MASK_CAP6(opc)) {
         case OPC_CGETPERM:          /* 0x00 */
@@ -11377,12 +11373,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_csub(r16, r11, r6);
             opn = "csub";
             break;
-/* #elif defined(CHERI_NEW_ENCODINGS) */
-/*     case OPC_CAP_NI: /\* 0x00 *\/ */
-/*         switch(MASK_CAP6(opc)) { */
-/* #endif /\* CHERI_OLD_ENCODINGS *\/ */
 
-/* #ifdef CHERI_NEW_ENCODINGS */
         case OPC_CSEAL_NI: /* 0x0b */
             check_cop2x(ctx);
             generate_cseal(r16, r11, r6);
@@ -11592,7 +11583,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 goto invalid;
             }
             break;
-/* #endif /\* CHERI_NEW_ENCODINGS *\/ */
 
         default:
             opn = "cget"; /* XXXAM not really cget anymore */
