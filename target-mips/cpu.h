@@ -271,7 +271,7 @@ struct cvtrace {
 typedef struct cvtrace cvtrace_t;
 
 /* Version 3 Cheri Stream Trace header info */
-#define CVT_QEMU_VERSION    (0x80 + 3)
+#define CVT_QEMU_VERSION    (0x80U + 3)
 #define CVT_QEMU_MAGIC      "CheriTraceV03"
 #endif /* TARGET_CHERI */
 
