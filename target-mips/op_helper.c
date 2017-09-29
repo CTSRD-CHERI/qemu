@@ -116,8 +116,9 @@ static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
 {
     uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
 
-//    fprintf(qemu_logfile, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n",
-//           cause, causestr[cause], reg, pc);
+    /* fprintf(qemu_logfile, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n", */
+    /*         cause, causestr[cause], reg, pc); */
+    /* printf("C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n", cause, causestr[cause], reg, pc); */
     cpu_mips_store_capcause(env, reg, cause);
     env->active_tc.PC = pc;
     env->CP0_BadVAddr = pc;
@@ -2283,8 +2284,13 @@ target_ulong helper_cbez(CPUMIPSState *env, uint32_t cb, uint32_t offset)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        (void)null_capability(&cnull);
-        return (target_ulong)(memcmp(cbp, &cnull, sizeof(cap_register_t)) == 0);
+        /*
+         * Compare the only semantically meaningful fields of int_to_cap(0)
+         */
+        if (cbp->cr_base == 0 && cbp->cr_tag == 0 && cbp->cr_offset == 0)
+            return (target_ulong)1;
+        else
+            return (target_ulong)0;
     }
 }
 
@@ -2301,8 +2307,13 @@ target_ulong helper_cbnz(CPUMIPSState *env, uint32_t cb, uint32_t offset)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        (void)null_capability(&cnull);
-        return (target_ulong)(memcmp(cbp, &cnull, sizeof(cap_register_t)) != 0);
+        /*
+         * Compare the only semantically meaningful fields of int_to_cap(0)
+         */
+        if (cbp->cr_base == 0 && cbp->cr_tag == 0 && cbp->cr_offset == 0)
+            return (target_ulong)0;
+        else
+            return (target_ulong)1;
     }
 }
 
