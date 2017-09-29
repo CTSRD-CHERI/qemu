@@ -4851,6 +4851,18 @@ target_ulong helper_yield(CPUMIPSState *env, target_ulong arg)
     return env->CP0_YQMask;
 }
 
+#ifdef TARGET_CHERI
+
+void helper_smp_yield(CPUMIPSState *env) {
+        MIPSCPU *cpu = mips_env_get_cpu(env);
+        CPUState *cs = CPU(cpu);
+        cs->exception_index = EXCP_YIELD;
+
+        cpu_loop_exit(cs);
+}
+
+#endif /* TARGET_CHERI */
+
 #ifndef CONFIG_USER_ONLY
 /* TLB management */
 static void cpu_mips_tlb_flush (CPUMIPSState *env, int flush_global)
