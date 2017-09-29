@@ -1953,10 +1953,12 @@ static inline bool is_cop2x_enabled(DisasContext *ctx)
 }
 */
 
-static inline void generate_ccall(int32_t cs, int32_t cb)
+static inline void generate_ccall(int32_t cs, int32_t cb, int32_t selector)
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv_i32 tcb = tcg_const_i32(cb);
+    assert(selector == 0);
+    /* XXXAM selector is unused, TODO */
 
     gen_helper_ccall(cpu_env, tcs, tcb);
     tcg_temp_free_i32(tcb);
@@ -11523,7 +11525,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 break;
             case OPC_CCHECKPERM_NI:    /* 0x08 << 6 */
                 check_cop2x(ctx);
-                generate_ccheckperm(r16, r6);
+                generate_ccheckperm(r16, r11);
                 opn = "ccheckperm";
                 break;
             case OPC_CCHECKTYPE_NI:    /* 0x09 << 6 */
@@ -11660,7 +11662,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         default:
             check_cop2x(ctx);
-            generate_ccall(r16, r11);
+            generate_ccall(r16, r11, (opc & 0x7ff));
             opn = "ccall";
         }
         break;
@@ -11850,7 +11852,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_cllwu(ctx, r16, r11);
             opn = "cllwu";
             break;
-
         case OPC_CLLC: /* 0xf */
             check_cop2x(ctx);
             generate_cllc(ctx, r16, r11);
