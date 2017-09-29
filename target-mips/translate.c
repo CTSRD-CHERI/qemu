@@ -1945,6 +1945,15 @@ static inline void check_cop2x(DisasContext *ctx)
     }
 }
 
+/* generic sign extension helper */
+static inline int32_t sign_extend(int32_t x, int offset)
+{
+    int32_t const mask = 1U << (offset - 1);
+
+    x = x & ((1U << offset) - 1);
+    return (x ^ mask) - mask;
+}
+
 /*
 static inline bool is_cop2x_enabled(DisasContext *ctx)
 {
@@ -2322,7 +2331,7 @@ static inline void generate_cincoffset_imm(int32_t cd, int32_t cs, int32_t incre
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv t0 = tcg_temp_new();
 
-    tcg_gen_movi_tl(t0, increment);
+    tcg_gen_movi_tl(t0, sign_extend(increment, 11));
     gen_helper_cincoffset(cpu_env, tcd, tcs, t0);
 
     tcg_temp_free(t0);
@@ -2456,13 +2465,13 @@ static inline void generate_csetboundsexact(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_csetbounds_imm(uint32_t cd, uint32_t cb, uint32_t length)
+static inline void generate_csetbounds_imm(int32_t cd, int32_t cb, int32_t length)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
 
-    tcg_gen_movi_tl(t0, length);
+    tcg_gen_movi_tl(t0, sign_extend(length, 11));
     gen_helper_csetbounds(cpu_env, tcd, tcb, t0);
 
     tcg_temp_free(t0);
@@ -11875,12 +11884,12 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CINCOFFSETIMM_NI: /* 0x13 */
         check_cop2x(ctx);
-        generate_cincoffset_imm(r16, r11, (opc & 0x3ff));
+        generate_cincoffset_imm(r16, r11, (opc & 0x7ff));
         opn = "cincoffsetimmediate";
         break;
     case OPC_CSETBOUNDSIMM_NI: /* 0x14 */
         check_cop2x(ctx);
-        generate_csetbounds_imm(r16, r11, (opc & 0x3ff));
+        generate_csetbounds_imm(r16, r11, (opc & 0x7ff));
         opn = "csetboundsimmediate";
         break;
 
