@@ -2276,7 +2276,6 @@ target_ulong helper_cbez(CPUMIPSState *env, uint32_t cb, uint32_t offset)
     cap_register_t *pccp = &env->active_tc.PCC;
     uint32_t perms = pccp->cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t cnull;
     /*
      * CBEZ: Branch if NULL
      */
@@ -2299,7 +2298,6 @@ target_ulong helper_cbnz(CPUMIPSState *env, uint32_t cb, uint32_t offset)
     cap_register_t *pccp = &env->active_tc.PCC;
     uint32_t perms = pccp->cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t cnull;
     /*
      * CBEZ: Branch if not NULL
      */
