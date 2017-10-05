@@ -221,7 +221,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 #define CAP_PERM_STORE_CAP      (1 << 5)
 #define CAP_PERM_STORE_LOCAL    (1 << 6)
 #define CAP_PERM_SEAL           (1 << 7)
-#define CAP_RESERVED1           (1 << 8)
+#define CAP_PERM_CCALL          (1 << 8)
 #define CAP_RESERVED2           (1 << 9)
 #define CAP_ACCESS_SYS_REGS     (1 << 10)
 #define CAP_RESERVED3           (1 << 11)
@@ -686,7 +686,7 @@ struct CPUMIPSState {
     /* If translation is interrupted between the branch instruction and
      * the delay slot, record what type of branch it is so that we can
      * resume translation properly.  It might be possible to reduce
-     * this from three bits to two.  */
+     * this from three bits to two. */
 #define MIPS_HFLAG_BMASK_BASE  0x803800
 #define MIPS_HFLAG_B      0x00800 /* Unconditional branch               */
 #define MIPS_HFLAG_BC     0x01000 /* Conditional branch                 */
@@ -694,6 +694,7 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_BR     0x02000 /* branch to register (can't link TB) */
 #ifdef TARGET_CHERI
 #define MIPS_HFLAG_BRC    0x02800 /* branch to register and load PCC    */
+#define MIPS_HFLAG_BRCCALL 0x03000 /* ccall load PCC and IDC */
 #endif /* TARGET_CHERI */
     /* Extra flags about the current pending branch.  */
 #define MIPS_HFLAG_BMASK_EXT 0x7C000
@@ -756,17 +757,9 @@ struct CPUMIPSState {
 #define CP2Ca_PERM_ST_LC_CAP 0x16 /* Permit_Store_Local_Capability Violation */
 #define CP2Ca_PERM_SEAL     0x17 /* Permit_Seal Violation */
 #define CP2Ca_ACCESS_SYS_REGS 0x18 /* Access System Registers Violation */
-#ifdef NOTYET
-// 0x19-0x1f Reserved
-#else
-// 0x19 Reserved
-#define CP2Ca_ACCESS_EPCC   0x1A /* Access_EPCC Violation */
-#define CP2Ca_ACCESS_KDC    0x1B /* Access_KDC Violation */
-#define CP2Ca_ACCESS_KCC    0x1C /* Access_KCC Violation */
-#define CP2Ca_ACCESS_KR1C   0x1D /* Access_KR1C Violation */
-#define CP2Ca_ACCESS_KR2C   0x1E /* Access_KR2C Violation */
-// 0x1f Reserved
-#endif /* NOTYET */
+#define CP2Ca_PERM_CCALL    0x19 /* Permit_CCall Violation */
+#define CP2Ca_ACCESS_CCALL_IDC 0x1a /* Access IDC in a CCall delay slot */
+// 0x1b-0x1f Reserved
 #endif /* TARGET_CHERI */
 
     CPU_COMMON
