@@ -100,7 +100,7 @@ const char *causestr[] = {
     "Permit_Store_Local_Capability Violation",
     "Permit_Seal Violation",
     "Access_Sys_Reg Violation",
-    "Reserved 0x19",
+    "Permit_CCall Violation",
     "Access_EPCC Violation",
     "Access_KDC Violation",
     "Access_KCC Violation",
@@ -2232,6 +2232,15 @@ static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
     }
 }
 
+void helper_check_access_idc(CPUMIPSState *env, uint32_t reg)
+{
+    /*
+     * IDC access in a CCall (selector 1) delay slot
+     */
+    if (reg == CP2CAP_IDC)
+        do_raise_c2_exception(env, CP2Ca_ACCESS_CCALL_IDC, reg);
+}
+
 void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
@@ -2347,11 +2356,12 @@ target_ulong helper_cbtu(CPUMIPSState *env, uint32_t cb, uint32_t offset)
     }
 }
 
-void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, uint32_t selector)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *csp = &env->active_tc.C[cs];
     cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *idc = &env->active_tc.C[CP2CAP_IDC];
     /*
      * CCall: Call into a new security domain
      */
@@ -2376,8 +2386,30 @@ void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     } else if (csp->cr_offset >= csp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cs);
     } else {
-        do_raise_c2_exception(env, CP2Ca_CALL, cs);
+        if (selector == 0) {
+            do_raise_c2_exception(env, CP2Ca_CALL, cs);
+        } else if (!(csp->cr_perms & CAP_PERM_CCALL)){
+            do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cs);
+        } else if (!(cbp->cr_perms & CAP_PERM_CCALL)){
+            do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cb);
+        } else {
+            *idc = *cbp;
+            idc->cr_sealed = 0;
+            idc->cr_otype = 0;
+            return csp->cr_base + csp->cr_offset;
+        }
     }
+    return (target_ulong)0;
+}
+
+void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    (void)ccall_common(env, cs, cb, 0);
+}
+
+target_ulong helper_ccall_notrap(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    return ccall_common(env, cs, cb, 1);
 }
 
 void helper_cclearreg(CPUMIPSState *env, uint32_t creg)
