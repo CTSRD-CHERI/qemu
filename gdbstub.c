@@ -1219,6 +1219,7 @@ void gdb_set_stop_cpu(CPUState *cpu)
     if (!gdbserver_state) {
         error_report("No debugger is attached");  /* XXX should drop into
                                                      monitor? */
+        qemu_log_flush();
         exit(-1);
     }
     gdbserver_state->c_cpu = cpu;
