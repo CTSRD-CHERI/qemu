@@ -14,6 +14,9 @@
 #include <stdio.h>
 #include <errno.h>
 #include <time.h>
+#ifdef __FreeBSD__
+#include <pthread_np.h>
+#endif
 #include <signal.h>
 #include <stdint.h>
 #include <string.h>
@@ -34,7 +37,7 @@ void qemu_thread_naming(bool enable)
 {
     name_threads = enable;
 
-#ifndef CONFIG_THREAD_SETNAME_BYTHREAD
+#if !defined(CONFIG_THREAD_SETNAME_BYTHREAD) && !defined(__FreeBSD__)
     /* This is a debugging option, not fatal */
     if (enable) {
         fprintf(stderr, "qemu: thread naming not supported on this host\n");
@@ -441,7 +444,9 @@ static void __attribute__((constructor)) qemu_thread_atexit_init(void)
  */
 static void qemu_thread_set_name(QemuThread *thread, const char *name)
 {
-#ifdef CONFIG_PTHREAD_SETNAME_NP
+#if defined(__FreeBSD__)
+    pthread_set_name_np(thread->thread, name);
+#elif defined(CONFIG_PTHREAD_SETNAME_NP)
     pthread_setname_np(thread->thread, name);
 #endif
 }
