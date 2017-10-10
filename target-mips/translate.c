@@ -1014,7 +1014,6 @@ enum {
 #define MASK_CAP7(op)       (MASK_CP2(op) | ((op) & (0x1f << 6)) |  (0x3f))
 #define MASK_CAP8(op)       (MASK_CP2(op) | ((op) & (0x1f << 11)) | \
         (0x1f << 6) |  (0x3f))
-#define MASK_CCALL_SEL(op)  (MASK_CP2(op) | ((op) & 0x7ff))
 
 enum {
     OPC_CGET        = OPC_CP2 | (0x00 << 21),
@@ -1200,8 +1199,10 @@ enum {
     OPC_CRETURN_NI       = OPC_CP2 | (0x05 << 21 | 0x7ff)
 };
 
-#define CCALL_SELECTOR_0_MASK (OPC_CCALL & ~0x7ff)
-#define CCALL_SELECTOR_1_MASK (OPC_CCALL | 0x01)
+#define MASK_CCALL_SEL(op)  ((op) & 0x7ff)
+#define CCALL_SELECTOR_0 (0x0)
+#define CCALL_SELECTOR_1 (0x01)
+#define CCALL_SELECTOR_CRETURN (0x7ff)
 
 #endif /* TARGET_CHERI */
 
@@ -11784,17 +11785,17 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CCALL: /* 0x05 */
         switch(MASK_CCALL_SEL(opc)) {
-        case OPC_CRETURN_NI:
-            /* creturn is now a special selector in ccall */
+        case CCALL_SELECTOR_CRETURN: /* 0x7ff */
+            check_cop2x(ctx);
             opn = "creturn";
             generate_creturn();
             break;
-        case CCALL_SELECTOR_0_MASK:
+        case CCALL_SELECTOR_0: /* 0x000 */
             check_cop2x(ctx);
             generate_ccall(r16, r11);
             opn = "ccall";
             break;
-        case CCALL_SELECTOR_1_MASK:
+        case CCALL_SELECTOR_1: /* 0x001 */
             check_cop2x(ctx);
             generate_ccall_notrap(ctx, r16, r11);
             opn = "ccall";
