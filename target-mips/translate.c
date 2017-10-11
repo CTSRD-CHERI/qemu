@@ -1974,7 +1974,7 @@ static inline void generate_check_access_idc(DisasContext *ctx, int32_t cr)
      * check if instruction is in the delay slot of a ccall
      * and access the IDC register.
      */
-    if ((ctx->hflags & MIPS_HFLAG_BMASK) == MIPS_HFLAG_BRCCALL) {
+    if ((ctx->hflags & MIPS_HFLAG_BMASK_BASE) == MIPS_HFLAG_BRCCALL) {
         TCGv_i32 tcr = tcg_const_i32(cr);
         gen_helper_check_access_idc(cpu_env, tcr);
         tcg_temp_free_i32(tcr);
@@ -2651,7 +2651,7 @@ static inline int generate_cclearregs(DisasContext *ctx, int32_t regset, int32_t
     case 3: /* CClearHi */
         if (!mask)
             return 0;
-        if ((ctx->hflags & MIPS_HFLAG_BMASK) == MIPS_HFLAG_BRCCALL &&
+        if ((ctx->hflags & MIPS_HFLAG_BMASK_BASE) == MIPS_HFLAG_BRCCALL &&
             (mask & 1 << (CP2CAP_IDC - 16))) {
             // custom check for idc being accessed in a ccall delay slot
             // XXXAM it may be cleaner to just make an helper that throws the exception.
