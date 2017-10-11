@@ -1442,6 +1442,25 @@ void helper_mtc0_rtc64(CPUMIPSState *env, uint64_t arg1)
 {
     cpu_mips_set_rtc64(env, arg1);
 }
+
+/*
+ * Return the CHERI/BERI CoreID Register:
+ *
+ *  31            16 15            0
+ *  ----------------+---------------
+ * |    MaxCoreID   |    CoreID     |
+ *  ----------------+---------------
+ *
+ * See section 7.3.5 of BERI Hardware reference.
+ */
+target_ulong helper_mfc0_coreid(CPUMIPSState *env)
+{
+    MIPSCPU *cpu = mips_env_get_cpu(env);
+    CPUState *cs = CPU(cpu);
+
+    return (uint32_t)((cs->nr_cores << 16) |
+            (cs->cpu_index & 0xffff));
+}
 #endif /* TARGET_CHERI */
 
 void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
