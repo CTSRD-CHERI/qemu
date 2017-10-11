@@ -159,6 +159,8 @@ DEF_HELPER_2(mtc0_datahi, void, env, tl)
 DEF_HELPER_1(mfc0_rtc64, i64, env)
 DEF_HELPER_2(mtc0_rtc64, void, env, i64)
 
+DEF_HELPER_1(mfc0_coreid, tl, env)
+
 DEF_HELPER_4(dump_load, void, env, int, tl, tl)
 DEF_HELPER_4(dump_load32, void, env, int, tl, i32)
 
