@@ -100,7 +100,7 @@ const char *causestr[] = {
     "Permit_Store_Local_Capability Violation",
     "Permit_Seal Violation",
     "Access_Sys_Reg Violation",
-    "Reserved 0x19",
+    "Permit_CCall Violation",
     "Access_EPCC Violation",
     "Access_KDC Violation",
     "Access_KCC Violation",
@@ -116,8 +116,9 @@ static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
 {
     uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
 
-//    fprintf(qemu_logfile, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n",
-//           cause, causestr[cause], reg, pc);
+    /* fprintf(qemu_logfile, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n", */
+    /*         cause, causestr[cause], reg, pc); */
+    /* printf("C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n", cause, causestr[cause], reg, pc); */
     cpu_mips_store_capcause(env, reg, cause);
     env->active_tc.PC = pc;
     env->CP0_BadVAddr = pc;
@@ -2250,6 +2251,16 @@ static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
     }
 }
 
+void helper_check_access_idc(CPUMIPSState *env, uint32_t reg)
+{
+    /*
+     * IDC access in a CCall (selector 1) delay slot
+     */
+    if (reg == CP2CAP_IDC) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_CCALL_IDC, reg);
+    }
+}
+
 void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
@@ -2289,6 +2300,50 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_cbez(CPUMIPSState *env, uint32_t cb, uint32_t offset)
+{
+    cap_register_t *pccp = &env->active_tc.PCC;
+    uint32_t perms = pccp->cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CBEZ: Branch if NULL
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+        return (target_ulong)0;
+    } else {
+        /*
+         * Compare the only semantically meaningful fields of int_to_cap(0)
+         */
+        if (cbp->cr_base == 0 && cbp->cr_tag == 0 && cbp->cr_offset == 0)
+            return (target_ulong)1;
+        else
+            return (target_ulong)0;
+    }
+}
+
+target_ulong helper_cbnz(CPUMIPSState *env, uint32_t cb, uint32_t offset)
+{
+    cap_register_t *pccp = &env->active_tc.PCC;
+    uint32_t perms = pccp->cr_perms;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    /*
+     * CBEZ: Branch if not NULL
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+        return (target_ulong)0;
+    } else {
+        /*
+         * Compare the only semantically meaningful fields of int_to_cap(0)
+         */
+        if (cbp->cr_base == 0 && cbp->cr_tag == 0 && cbp->cr_offset == 0)
+            return (target_ulong)0;
+        else
+            return (target_ulong)1;
+    }
+}
+
 target_ulong helper_cbts(CPUMIPSState *env, uint32_t cb, uint32_t offset)
 {
     cap_register_t *pccp = &env->active_tc.PCC;
@@ -2321,11 +2376,12 @@ target_ulong helper_cbtu(CPUMIPSState *env, uint32_t cb, uint32_t offset)
     }
 }
 
-void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, uint32_t selector)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *csp = &env->active_tc.C[cs];
     cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *idc = &env->active_tc.C[CP2CAP_IDC];
     /*
      * CCall: Call into a new security domain
      */
@@ -2350,8 +2406,30 @@ void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     } else if (csp->cr_offset >= csp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cs);
     } else {
-        do_raise_c2_exception(env, CP2Ca_CALL, cs);
+        if (selector == 0) {
+            do_raise_c2_exception(env, CP2Ca_CALL, cs);
+        } else if (!(csp->cr_perms & CAP_PERM_CCALL)){
+            do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cs);
+        } else if (!(cbp->cr_perms & CAP_PERM_CCALL)){
+            do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cb);
+        } else {
+            *idc = *cbp;
+            idc->cr_sealed = 0;
+            idc->cr_otype = 0;
+            return csp->cr_base + csp->cr_offset;
+        }
     }
+    return (target_ulong)0;
+}
+
+void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    (void)ccall_common(env, cs, cb, 0);
+}
+
+target_ulong helper_ccall_notrap(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    return ccall_common(env, cs, cb, 1);
 }
 
 void helper_cclearreg(CPUMIPSState *env, uint32_t creg)
@@ -2690,6 +2768,28 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_cmovz(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *csp = &env->active_tc.C[cs];
+    /*
+     * CMOVZ: conditionally move capability on zero
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+    } else if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cs);
+    } else if (rs == 0) {
+        *cdp = *csp;
+    }
+}
+
+void helper_cmovn(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
+{
+    helper_cmovz(env, cd, cs, rs == 0);
+}
+
 target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
@@ -2793,6 +2893,82 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         *cdp = *csp;
         cdp->cr_sealed = 1;
         cdp->cr_otype = (uint32_t)ct_base_plus_offset;
+    }
+}
+
+void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    /*
+     * CBuildCap: create capability from untagged register.
+     * XXXAM: Note this is experimental and may change.
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (is_cap_sealed(cbp)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (ctp->cr_base < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (ctp->cr_base + ctp->cr_length > cbp->cr_base + cbp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (ctp->cr_length < 0) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
+    } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
+        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cb);
+    } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
+        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cb);
+    } else {
+        /* XXXAM basic trivial implementation may not handle
+         * compressed capabilities fully, does not perform renormalization.
+         */
+        *cdp = *cbp;
+        cdp->cr_base = ctp->cr_base;
+        cdp->cr_length = ctp->cr_length;
+        cdp->cr_perms = ctp->cr_perms;
+        cdp->cr_uperms = ctp->cr_uperms;
+        cdp->cr_offset = ctp->cr_offset;
+        cdp->cr_sealed = 0;
+    }
+}
+
+void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *ctp = &env->active_tc.C[ct];
+    /*
+     * CCopyType: copy object type from untagged capability.
+     * XXXAM: Note this is experimental and may change.
+     */
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+    } else if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+    } else if (creg_inaccessible(perms, ct)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (is_cap_sealed(cbp)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!is_cap_sealed(ctp)) {
+        int_to_cap(-1, cdp);
+    } else if (ctp->cr_otype < cbp->cr_base) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (ctp->cr_otype >= cbp->cr_base + cbp->cr_length) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else {
+        *cdp = *cbp;
+        cdp->cr_offset = ctp->cr_otype - cbp->cr_base;
     }
 }
 
@@ -3280,35 +3456,36 @@ target_ulong helper_cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 
 target_ulong helper_cnexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
+    gboolean not_equal = helper_cexeq(env, cb, ct) ? FALSE : TRUE;
+
+    return (target_ulong) not_equal;
+}
+
+target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)
+{
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *ctp = &env->active_tc.C[ct];
-    gboolean equal = FALSE;
+    gboolean is_subset = FALSE;
     /*
-     * CNEXEQ: Not all fields are equal
+     * CTestSubset: Test if capability is a subset of another
      */
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
     } else if (creg_inaccessible(perms, ct)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
     } else {
-        if (cbp->cr_tag != ctp->cr_tag) {
-            equal = TRUE;
-        } else if (cbp->cr_base != ctp->cr_base) {
-            equal = TRUE;
-        } else if (cbp->cr_offset != ctp->cr_offset) {
-            equal = TRUE;
-        } else if (cbp->cr_length != ctp->cr_length) {
-            equal = TRUE;
-        } else if (cbp->cr_otype != ctp->cr_otype) {
-            equal = TRUE;
-        } else if (cbp->cr_perms != ctp->cr_perms) {
-            equal = TRUE;
-        } else {
-            equal = FALSE;
+        if (cbp->cr_tag == ctp->cr_tag &&
+            is_cap_sealed(cbp) == is_cap_sealed(ctp) &&
+            cbp->cr_base <= ctp->cr_base &&
+            cbp->cr_base + cbp->cr_length <= ctp->cr_base + ctp->cr_length &&
+            (ctp->cr_perms & cbp->cr_perms) == ctp->cr_perms &&
+            (ctp->cr_uperms & cbp->cr_uperms) == ctp->cr_uperms) {
+            is_subset = TRUE;
         }
+        /* else is_subset = FALSE; */
     }
-    return (target_ulong) equal;
+    return (target_ulong) is_subset;
 }
 
 /*
@@ -3779,7 +3956,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
     if (ret != 0) {
         /* XXXAR: where to print this error message? stderr?*/
-        fprintf(stderr, "CHERI DEBUG HELPER: Could not read %lu bytes at vaddr 0x%lx\n", length, vaddr);
+        fprintf(stderr, "CHERI DEBUG HELPER: Could not write %lu bytes at vaddr 0x%lx\n", length, vaddr);
     }
     if (mode & CPU_LOG_INSTR) {
         qemu_log("DEBUG MESSAGE @ 0x%lx\n", pc);
@@ -4327,8 +4504,9 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
         MIPSCPU *cpu = mips_env_get_cpu(env);
         CPUState *cs = CPU(cpu);
 
-        /* Write previous instruction trace to log. */
-        if (env->cvtrace.version != 0) {
+        /* if the logfile is empty we need to emit the cvt magic */
+        if (env->cvtrace.version != 0 && ftell(qemu_logfile) != 0) {
+            /* Write previous instruction trace to log. */
             fwrite(&env->cvtrace, sizeof(env->cvtrace), 1, qemu_logfile);
         } else {
             char buffer[sizeof(env->cvtrace)];
@@ -4336,6 +4514,7 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
             buffer[0] = CVT_QEMU_VERSION;
             g_strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
             fwrite(buffer, sizeof(env->cvtrace), 1, qemu_logfile);
+            cycles = 0;
         }
         bzero(&env->cvtrace, sizeof(env->cvtrace));
         env->cvtrace.version = CVT_NO_REG;
