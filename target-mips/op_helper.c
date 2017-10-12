@@ -1451,6 +1451,8 @@ void helper_mtc0_rtc64(CPUMIPSState *env, uint64_t arg1)
  * |    MaxCoreID   |    CoreID     |
  *  ----------------+---------------
  *
+ * Cores are numbered from 0 to MaxCoreID.
+ *
  * See section 7.3.5 of BERI Hardware reference.
  */
 target_ulong helper_mfc0_coreid(CPUMIPSState *env)
@@ -1458,7 +1460,7 @@ target_ulong helper_mfc0_coreid(CPUMIPSState *env)
     MIPSCPU *cpu = mips_env_get_cpu(env);
     CPUState *cs = CPU(cpu);
 
-    return (uint32_t)((cs->nr_cores << 16) |
+    return (uint32_t)(((cs->nr_cores - 1) << 16) |
             (cs->cpu_index & 0xffff));
 }
 #endif /* TARGET_CHERI */
