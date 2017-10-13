@@ -3244,7 +3244,7 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
             cdp->cr_perms &= ~CAP_PERM_GLOBAL;
         }
         cdp->cr_sealed = 0;
-        cdp->cr_otype = 0;
+        cdp->cr_otype = -1;
     }
 }
 
