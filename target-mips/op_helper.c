@@ -2710,7 +2710,9 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        return (target_ulong)(env->active_tc.C[cb].cr_otype & CAP_MAX_OTYPE);
+        if (env->active_tc.C[cb].cr_sealed)
+            return (target_ulong)(env->active_tc.C[cb].cr_otype & CAP_MAX_OTYPE);
+        return (target_ulong)-1;
     }
 }
 
@@ -3244,7 +3246,7 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
             cdp->cr_perms &= ~CAP_PERM_GLOBAL;
         }
         cdp->cr_sealed = 0;
-        cdp->cr_otype = -1;
+        cdp->cr_otype = 0;
     }
 }
 
