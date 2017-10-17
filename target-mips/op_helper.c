@@ -5595,8 +5595,9 @@ target_ulong helper_rdhwr_cc(CPUMIPSState *env)
     }
 #endif
     if ((env->hflags & MIPS_HFLAG_CP0) ||
-        (env->CP0_HWREna & (1 << 2)))
-        return env->CP0_Count;
+        (env->CP0_HWREna & (1 << 2))) {
+        return cpu_mips_get_count(env);
+    }
     else
         helper_raise_exception(env, EXCP_RI);
 

@@ -79,7 +79,6 @@ uint32_t cpu_mips_get_count (CPUMIPSState *env)
             /* The timer has already expired.  */
             cpu_mips_timer_expire(env);
         }
-
         return env->CP0_Count + (uint32_t)(now / TIMER_PERIOD);
     }
 }
