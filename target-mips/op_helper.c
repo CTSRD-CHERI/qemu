@@ -2434,15 +2434,21 @@ target_ulong helper_ccall_notrap(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     return ccall_common(env, cs, cb, 1);
 }
 
-void helper_cclearreg(CPUMIPSState *env, uint32_t creg)
+void helper_cclearreg(CPUMIPSState *env, uint32_t mask)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
 
-    if (creg_inaccessible(perms, creg)) {
-        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, creg);
+    for (int creg = 0; creg < 32; creg++) {
+        if ((mask & (0x1 << creg)) && creg_inaccessible(perms, creg)) {
+            /* raise exception and bail without clearing registers */
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, creg);
+            return;
+        }
     }
-
-    (void)null_capability(&env->active_tc.C[creg]);
+    for (int creg = 0; creg < 32; creg++) {
+        if (mask & (0x1 << creg))
+            (void)null_capability(&env->active_tc.C[creg]);
+    }
 }
 
 void helper_creturn(CPUMIPSState *env)
