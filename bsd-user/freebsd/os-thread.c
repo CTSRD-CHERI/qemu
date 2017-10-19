@@ -1301,6 +1301,24 @@ abi_long freebsd_rw_unlock(abi_ulong target_addr)
     }
 }
 
+#if defined(__FreeBSD_version) && __FreeBSD_version > 1200000
+abi_long
+freebsd_umtx_shm(abi_ulong target_addr, long fflag)
+{
+
+    return get_errno(_umtx_op(NULL, UMTX_OP_SHM, fflag, g2h(target_addr), NULL));
+}
+
+abi_long
+freebsd_umtx_robust_list(abi_ulong target_addr, size_t rbsize)
+{
+
+    gemu_log("_umtx_op(..., UMTX_OP_ROBUST_LISTS. ...)  not yet supported\n");
+    return -TARGET_EOPNOTSUPP;
+}
+
+#endif /* __FreeBSD_version > 1200000 */
+
 abi_long do_freebsd_thr_new(CPUArchState *env,
         abi_ulong target_param_addr, int32_t param_size)
 {

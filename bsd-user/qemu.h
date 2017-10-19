@@ -327,7 +327,10 @@ abi_long freebsd_rw_rdlock(abi_ulong target_addr, long fflag,
 abi_long freebsd_rw_wrlock(abi_ulong target_addr, long fflag,
         size_t tsz, void *t);
 abi_long freebsd_rw_unlock(abi_ulong target_addr);
-
+#if defined(__FreeBSD_version) && __FreeBSD_version > 1200000
+abi_long freebsd_umtx_shm(abi_ulong target_addr, long fflag);
+abi_long freebsd_umtx_robust_list(abi_ulong target_addr, size_t rbsize);
+#endif /* __FreeBSD_version > 1200000 */
 
 /* user access */
 
