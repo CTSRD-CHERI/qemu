@@ -5553,33 +5553,39 @@ void helper_deret(CPUMIPSState *env)
 
 static inline void check_hwrena(CPUMIPSState *env, int reg)
 {
-#if defined(TARGET_CHERI)
-    // FIXME: do we need to check reg here or is it valid for all hwrena values?
-    if (env->doing_statcounters) {
-        env->doing_statcounters = false;
-        return 0xdeadbeef;
-    }
-#endif
     if ((env->hflags & MIPS_HFLAG_CP0) || (env->CP0_HWREna & (1 << reg))) {
         return;
     }
     do_raise_exception(env, EXCP_RI, GETPC());
 }
 
+#if defined(TARGET_CHERI)
+#define CHERI_STATCOUNTERS_WORKAROUND(env)  \
+    if (env->doing_statcounters) {          \
+        env->doing_statcounters = false;    \
+        return 0xdeadbeef;                  \
+    }
+#else
+#define CHERI_STATCOUNTERS_WORKAROUND(env)
+#endif
+
 target_ulong helper_rdhwr_cpunum(CPUMIPSState *env)
 {
+    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 0);
     return env->CP0_EBase & 0x3ff;
 }
 
 target_ulong helper_rdhwr_synci_step(CPUMIPSState *env)
 {
+    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 1);
     return env->SYNCI_Step;
 }
 
 target_ulong helper_rdhwr_cc(CPUMIPSState *env)
 {
+    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 2);
 #ifdef CONFIG_USER_ONLY
     return env->CP0_Count;
@@ -5590,18 +5596,21 @@ target_ulong helper_rdhwr_cc(CPUMIPSState *env)
 
 target_ulong helper_rdhwr_ccres(CPUMIPSState *env)
 {
+    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 3);
     return env->CCRes;
 }
 
 target_ulong helper_rdhwr_performance(CPUMIPSState *env)
 {
+    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 4);
     return env->CP0_Performance0;
 }
 
 target_ulong helper_rdhwr_xnp(CPUMIPSState *env)
 {
+    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 5);
     return (env->CP0_Config5 >> CP0C5_XNP) & 1;
 }
@@ -5610,8 +5619,8 @@ target_ulong helper_rdhwr_xnp(CPUMIPSState *env)
 target_ulong helper_rdhwr_statcounters(CPUMIPSState *env)
 {
     if (env->doing_statcounters) {
-	env->doing_statcounters = false;
-	return (0xdeadbeef);
+        env->doing_statcounters = false;
+        return 0xdeadbeef;
     }
     env->doing_statcounters = true;
     return 0xdeadbee0;
@@ -6242,7 +6251,7 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     if (opc == OPC_CLLD || opc == OPC_CLLWU || opc == OPC_CLLW ||
         opc == OPC_CLLHU || opc == OPC_CLLH || opc == OPC_CLLBU ||
         opc == OPC_CLLB) {
-        env->lladdr = do_translate_address(env, addr, 0);
+        env->lladdr = do_translate_address(env, addr, 0, GETPC());
         env->llval = value;
     }
     if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR) |
