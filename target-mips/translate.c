@@ -11775,8 +11775,8 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     default:
         goto invalid;
     }
+    // FIXME: we can remove opn
     (void)opn; /* avoid a compiler warning */
-    MIPS_DEBUG("%s %s %d", opn, regnames[r16], r11);
     return;
 
 invalid:
@@ -13713,8 +13713,6 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
     /*
      * Fake registers to keep libstatcounters from triggering segfaultr
      */
-    case 4:
-    case 5:
     case 6:
     case 7:
     case 8:
@@ -13812,11 +13810,9 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
             /* unconditional branch to capability register from a ccall.
              * Can fall through since otype and seal are not copied anyway.
              */
-            MIPS_DEBUG("ccall branch");
             /* fallthrough */
         case MIPS_HFLAG_BRC:
             /* unconditional branch to capability register */
-            MIPS_DEBUG("branch to cap register");
 
             /* XXXAM it may make sense to have an helper for the PCC update */
             tcg_gen_mov_tl(cpu_PC, btarget);
