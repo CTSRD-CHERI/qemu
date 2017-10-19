@@ -52,12 +52,6 @@ typedef uint64_t (*helper_function)(tcg_target_ulong, tcg_target_ulong,
                                     tcg_target_ulong);
 #endif
 
-/* Targets which don't use GETPC also don't need tci_tb_ptr
-   which makes them a little faster. */
-#if defined(GETPC)
-uintptr_t tci_tb_ptr;
-#endif
-
 static tcg_target_ulong tci_reg[TCG_TARGET_NB_REGS];
 
 static tcg_target_ulong tci_read_reg(TCGReg index)
@@ -1087,15 +1081,6 @@ uintptr_t tcg_qemu_tb_exec(CPUArchState *env, uint8_t *tb_ptr)
 
             /* QEMU specific operations. */
 
-#if TARGET_LONG_BITS > TCG_TARGET_REG_BITS
-        case INDEX_op_debug_insn_start:
-            TODO();
-            break;
-#else
-        case INDEX_op_debug_insn_start:
-            TODO();
-            break;
-#endif
         case INDEX_op_exit_tb:
             next_tb = *(uint64_t *)tb_ptr;
             goto exit;

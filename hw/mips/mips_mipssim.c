@@ -73,7 +73,7 @@ static int64_t load_kernel(void)
 #endif
                            NULL, (uint64_t *)&entry, NULL,
                            (uint64_t *)&kernel_high, big_endian,
-                           ELF_MACHINE, 1);
+                           EM_MIPS, 1);
     if (kernel_size >= 0) {
         if ((entry & ~0x7fffffffULL) == 0x80000000)
             entry = (int32_t)entry;
@@ -182,7 +182,7 @@ mips_mipssim_init(MachineState *machine)
     memory_region_allocate_system_memory(ram, NULL, "mips_mipssim.ram",
                                          ram_size);
     memory_region_init_ram(bios, NULL, "mips_mipssim.bios", BIOS_SIZE,
-                           &error_abort);
+                           &error_fatal);
     vmstate_register_ram_global(bios);
     memory_region_set_readonly(bios, true);
 
@@ -239,15 +239,10 @@ mips_mipssim_init(MachineState *machine)
         mipsnet_init(0x4200, env->irq[2], &nd_table[0]);
 }
 
-static QEMUMachine mips_mipssim_machine = {
-    .name = "mipssim",
-    .desc = "MIPS MIPSsim platform",
-    .init = mips_mipssim_init,
-};
-
-static void mips_mipssim_machine_init(void)
+static void mips_mipssim_machine_init(MachineClass *mc)
 {
-    qemu_register_machine(&mips_mipssim_machine);
+    mc->desc = "MIPS MIPSsim platform";
+    mc->init = mips_mipssim_init;
 }
 
-machine_init(mips_mipssim_machine_init);
+DEFINE_MACHINE("mipssim", mips_mipssim_machine_init)

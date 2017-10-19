@@ -1618,30 +1618,12 @@ static void disas_openrisc_insn(DisasContext *dc, OpenRISCCPU *cpu)
     }
 }
 
-static void check_breakpoint(OpenRISCCPU *cpu, DisasContext *dc)
+void gen_intermediate_code(CPUOpenRISCState *env, struct TranslationBlock *tb)
 {
-    CPUState *cs = CPU(cpu);
-    CPUBreakpoint *bp;
-
-    if (unlikely(!QTAILQ_EMPTY(&cs->breakpoints))) {
-        QTAILQ_FOREACH(bp, &cs->breakpoints, entry) {
-            if (bp->pc == dc->pc) {
-                tcg_gen_movi_tl(cpu_pc, dc->pc);
-                gen_exception(dc, EXCP_DEBUG);
-                dc->is_jmp = DISAS_UPDATE;
-            }
-        }
-    }
-}
-
-static inline void gen_intermediate_code_internal(OpenRISCCPU *cpu,
-                                                  TranslationBlock *tb,
-                                                  int search_pc)
-{
+    OpenRISCCPU *cpu = openrisc_env_get_cpu(env);
     CPUState *cs = CPU(cpu);
     struct DisasContext ctx, *dc = &ctx;
     uint32_t pc_start;
-    int j, k;
     uint32_t next_page_start;
     int num_insns;
     int max_insns;
@@ -1653,7 +1635,7 @@ static inline void gen_intermediate_code_internal(OpenRISCCPU *cpu,
     dc->ppc = pc_start;
     dc->pc = pc_start;
     dc->flags = cpu->env.cpucfgr;
-    dc->mem_idx = cpu_mmu_index(&cpu->env);
+    dc->mem_idx = cpu_mmu_index(&cpu->env, false);
     dc->synced_flags = dc->tb_flags = tb->flags;
     dc->delayed_branch = !!(dc->tb_flags & D_FLAG);
     dc->singlestep_enabled = cs->singlestep_enabled;
@@ -1663,36 +1645,35 @@ static inline void gen_intermediate_code_internal(OpenRISCCPU *cpu,
     }
 
     next_page_start = (pc_start & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
-    k = -1;
     num_insns = 0;
     max_insns = tb->cflags & CF_COUNT_MASK;
 
     if (max_insns == 0) {
         max_insns = CF_COUNT_MASK;
     }
+    if (max_insns > TCG_MAX_INSNS) {
+        max_insns = TCG_MAX_INSNS;
+    }
 
     gen_tb_start(tb);
 
     do {
-        check_breakpoint(cpu, dc);
-        if (search_pc) {
-            j = tcg_op_buf_count();
-            if (k < j) {
-                k++;
-                while (k < j) {
-                    tcg_ctx.gen_opc_instr_start[k++] = 0;
-                }
-            }
-            tcg_ctx.gen_opc_pc[k] = dc->pc;
-            tcg_ctx.gen_opc_instr_start[k] = 1;
-            tcg_ctx.gen_opc_icount[k] = num_insns;
+        tcg_gen_insn_start(dc->pc);
+        num_insns++;
+
+        if (unlikely(cpu_breakpoint_test(cs, dc->pc, BP_ANY))) {
+            tcg_gen_movi_tl(cpu_pc, dc->pc);
+            gen_exception(dc, EXCP_DEBUG);
+            dc->is_jmp = DISAS_UPDATE;
+            /* The address covered by the breakpoint must be included in
+               [tb->pc, tb->pc + tb->size) in order to for it to be
+               properly cleared -- thus we increment the PC here so that
+               the logic setting tb->size below does the right thing.  */
+            dc->pc += 4;
+            break;
         }
 
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP | CPU_LOG_TB_OP_OPT))) {
-            tcg_gen_debug_insn_start(dc->pc);
-        }
-
-        if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO)) {
+        if (num_insns == max_insns && (tb->cflags & CF_LAST_IO)) {
             gen_io_start();
         }
         dc->ppc = dc->pc - 4;
@@ -1701,7 +1682,6 @@ static inline void gen_intermediate_code_internal(OpenRISCCPU *cpu,
         tcg_gen_movi_tl(cpu_npc, dc->npc);
         disas_openrisc_insn(dc, cpu);
         dc->pc = dc->npc;
-        num_insns++;
         /* delay slot */
         if (dc->delayed_branch) {
             dc->delayed_branch--;
@@ -1756,16 +1736,8 @@ static inline void gen_intermediate_code_internal(OpenRISCCPU *cpu,
 
     gen_tb_end(tb, num_insns);
 
-    if (search_pc) {
-        j = tcg_op_buf_count();
-        k++;
-        while (k <= j) {
-            tcg_ctx.gen_opc_instr_start[k++] = 0;
-        }
-    } else {
-        tb->size = dc->pc - pc_start;
-        tb->icount = num_insns;
-    }
+    tb->size = dc->pc - pc_start;
+    tb->icount = num_insns;
 
 #ifdef DEBUG_DISAS
     if (qemu_loglevel_mask(CPU_LOG_TB_IN_ASM)) {
@@ -1775,17 +1747,6 @@ static inline void gen_intermediate_code_internal(OpenRISCCPU *cpu,
                  dc->pc - pc_start, tcg_op_buf_count());
     }
 #endif
-}
-
-void gen_intermediate_code(CPUOpenRISCState *env, struct TranslationBlock *tb)
-{
-    gen_intermediate_code_internal(openrisc_env_get_cpu(env), tb, 0);
-}
-
-void gen_intermediate_code_pc(CPUOpenRISCState *env,
-                              struct TranslationBlock *tb)
-{
-    gen_intermediate_code_internal(openrisc_env_get_cpu(env), tb, 1);
 }
 
 void openrisc_cpu_dump_state(CPUState *cs, FILE *f,
@@ -1804,7 +1765,7 @@ void openrisc_cpu_dump_state(CPUState *cs, FILE *f,
 }
 
 void restore_state_to_opc(CPUOpenRISCState *env, TranslationBlock *tb,
-                          int pc_pos)
+                          target_ulong *data)
 {
-    env->pc = tcg_ctx.gen_opc_pc[pc_pos];
+    env->pc = data[0];
 }

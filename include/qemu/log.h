@@ -35,19 +35,19 @@ static inline bool qemu_log_enabled(void)
 #define CPU_LOG_INT        (1 << 4)
 #define CPU_LOG_EXEC       (1 << 5)
 #define CPU_LOG_PCALL      (1 << 6)
-#define CPU_LOG_IOPORT     (1 << 7)
 #define CPU_LOG_TB_CPU     (1 << 8)
 #define CPU_LOG_RESET      (1 << 9)
 #define LOG_UNIMP          (1 << 10)
 #define LOG_GUEST_ERROR    (1 << 11)
 #define CPU_LOG_MMU        (1 << 12)
-#define CPU_LOG_INSTR      (1 << 13)
-#define CPU_LOG_CVTRACE    (1 << 14)
+#define CPU_LOG_TB_NOCHAIN (1 << 13)
+#define CPU_LOG_INSTR      (1 << 14)
+#define CPU_LOG_CVTRACE    (1 << 15)
 /*
  * The CPU_LOG_USER_ONLY flag only exists so that temporarily suspending the
  * instruction tracing does not cause QEMU to close and reopen the logfile.
  */
-#define CPU_LOG_USER_ONLY  (1 << 15)
+#define CPU_LOG_USER_ONLY  (1 << 16)
 
 /* Returns true if a bit is set in the current loglevel mask
  */
