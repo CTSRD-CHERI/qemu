@@ -2622,14 +2622,9 @@ static inline int generate_cclearregs(DisasContext *ctx, int32_t regset, int32_t
     case 2: /* CClearLO */
         if (!mask)
             return 0;
-        for(i = 0; i < 16; i++) {
-            if (mask & 0x1) {
-                tcr0 = tcg_const_i32(i);
-                gen_helper_cclearreg(cpu_env, tcr0);
-                tcg_temp_free_i32(tcr0);
-            }
-            mask = mask >> 1;
-        }
+        tcr0 = tcg_const_i32(mask);
+        gen_helper_cclearreg(cpu_env, tcr0);
+        tcg_temp_free_i32(tcr0);
         break;
     case 3: /* CClearHi */
         if (!mask)
@@ -2642,14 +2637,9 @@ static inline int generate_cclearregs(DisasContext *ctx, int32_t regset, int32_t
             gen_helper_check_access_idc(cpu_env, tmp);
             tcg_temp_free_i32(tmp);
         }
-        for(i = 16; i < 32; i++) {
-            if (mask & 0x1) {
-                tcr0 = tcg_const_i32(i);
-                gen_helper_cclearreg(cpu_env, tcr0);
-                tcg_temp_free_i32(tcr0);
-            }
-            mask = mask >> 1;
-        }
+        tcr0 = tcg_const_i32(mask << 16);
+        gen_helper_cclearreg(cpu_env, tcr0);
+        tcg_temp_free_i32(tcr0);
         break;
     default:
         return 1; /* Invalid */
