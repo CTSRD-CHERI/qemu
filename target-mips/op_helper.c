@@ -1763,24 +1763,37 @@ void helper_mtc0_framemask(CPUMIPSState *env, target_ulong arg1)
     env->CP0_Framemask = arg1; /* XXX */
 }
 
-#if defined(TARGET_CHERI)
-
-static inline bool
-is_cap_sealed(cap_register_t *cp)
+void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
 {
+    env->CP0_Debug = (env->CP0_Debug & 0x8C03FC1F) | (arg1 & 0x13300120);
+    if (arg1 & (1 << CP0DB_DM))
+        env->hflags |= MIPS_HFLAG_DM;
+    else
+        env->hflags &= ~MIPS_HFLAG_DM;
 
-    return (cp->cr_sealed) ? true : false;
+//cpu_loop_exit(CPU(mips_env_get_cpu(env))); /* CHERI: exit simulation */
+//exit(0);
 }
 
-#ifdef CHERI_MAGIC128
-
-#define CHERI_CAP_SIZE  16
-
-static inline void int_to_cap(uint64_t x, cap_register_t *cr)
+void helper_mttc0_debug(CPUMIPSState *env, target_ulong arg1)
 {
+    int other_tc = env->CP0_VPEControl & (0xff << CP0VPECo_TargTC);
+    uint32_t val = arg1 & ((1 << CP0DB_SSt) | (1 << CP0DB_Halt));
+    CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
-    (void)null_capability(cr);
-    cr->cr_offset = x;
+    /* XXX: Might be wrong, check with EJTAG spec. */
+    if (other_tc == other->current_tc)
+        other->active_tc.CP0_Debug_tcstatus = val;
+    else
+        other->tcs[other_tc].CP0_Debug_tcstatus = val;
+    other->CP0_Debug = (other->CP0_Debug &
+                     ((1 << CP0DB_SSt) | (1 << CP0DB_Halt))) |
+                     (arg1 & ~((1 << CP0DB_SSt) | (1 << CP0DB_Halt)));
+}
+
+void helper_mtc0_performance0(CPUMIPSState *env, target_ulong arg1)
+{
+    env->CP0_Performance0 = arg1 & 0x000007ff;
 }
 
 void helper_mtc0_errctl(CPUMIPSState *env, target_ulong arg1)
@@ -1808,6 +1821,26 @@ void helper_mtc0_taglo(CPUMIPSState *env, target_ulong arg1)
     } else {
         env->CP0_TagLo = arg1 & 0xFFFFFCF6;
     }
+}
+
+#if defined(TARGET_CHERI)
+
+static inline bool
+is_cap_sealed(cap_register_t *cp)
+{
+
+    return (cp->cr_sealed) ? true : false;
+}
+
+#ifdef CHERI_MAGIC128
+
+#define CHERI_CAP_SIZE  16
+
+static inline void int_to_cap(uint64_t x, cap_register_t *cr)
+{
+
+    (void)null_capability(cr);
+    cr->cr_offset = x;
 }
 
 static inline bool
@@ -4968,43 +5001,7 @@ void helper_mtc2_dumpcstate(CPUMIPSState *env, target_ulong arg1)
 }
 #endif /* TARGET_CHERI */
 
-void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
-{
-    env->CP0_Debug = (env->CP0_Debug & 0x8C03FC1F) | (arg1 & 0x13300120);
-    if (arg1 & (1 << CP0DB_DM))
-        env->hflags |= MIPS_HFLAG_DM;
-    else
-        env->hflags &= ~MIPS_HFLAG_DM;
 
-//cpu_loop_exit(CPU(mips_env_get_cpu(env))); /* CHERI: exit simulation */
-//exit(0);
-}
-
-void helper_mttc0_debug(CPUMIPSState *env, target_ulong arg1)
-{
-    int other_tc = env->CP0_VPEControl & (0xff << CP0VPECo_TargTC);
-    uint32_t val = arg1 & ((1 << CP0DB_SSt) | (1 << CP0DB_Halt));
-    CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
-
-    /* XXX: Might be wrong, check with EJTAG spec. */
-    if (other_tc == other->current_tc)
-        other->active_tc.CP0_Debug_tcstatus = val;
-    else
-        other->tcs[other_tc].CP0_Debug_tcstatus = val;
-    other->CP0_Debug = (other->CP0_Debug &
-                     ((1 << CP0DB_SSt) | (1 << CP0DB_Halt))) |
-                     (arg1 & ~((1 << CP0DB_SSt) | (1 << CP0DB_Halt)));
-}
-
-void helper_mtc0_performance0(CPUMIPSState *env, target_ulong arg1)
-{
-    env->CP0_Performance0 = arg1 & 0x000007ff;
-}
-
-void helper_mtc0_taglo(CPUMIPSState *env, target_ulong arg1)
-{
-    env->CP0_TagLo = arg1 & 0xFFFFFCF6;
-}
 
 void helper_mtc0_datalo(CPUMIPSState *env, target_ulong arg1)
 {
