@@ -4415,6 +4415,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
 
     t0 = tcg_temp_new();
     gen_base_offset_addr(ctx, t0, base, offset);
+
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_LWU:
@@ -5667,7 +5668,7 @@ static void gen_r6_muldiv(DisasContext *ctx, int opc, int rd, int rs, int rt)
         {
             TCGv t2 = tcg_temp_new();
             TCGv t3 = tcg_temp_new();
-            tcg_gen_setcondi_tl(TCG_COND_EQ, t2, t0, ~0UL << 63);
+            tcg_gen_setcondi_tl(TCG_COND_EQ, t2, t0, -1LL << 63);
             tcg_gen_setcondi_tl(TCG_COND_EQ, t3, t1, -1LL);
             tcg_gen_and_tl(t2, t2, t3);
             tcg_gen_setcondi_tl(TCG_COND_EQ, t3, t1, 0);
@@ -5683,7 +5684,7 @@ static void gen_r6_muldiv(DisasContext *ctx, int opc, int rd, int rs, int rt)
         {
             TCGv t2 = tcg_temp_new();
             TCGv t3 = tcg_temp_new();
-            tcg_gen_setcondi_tl(TCG_COND_EQ, t2, t0, ~0UL << 63);
+            tcg_gen_setcondi_tl(TCG_COND_EQ, t2, t0, -1LL << 63);
             tcg_gen_setcondi_tl(TCG_COND_EQ, t3, t1, -1LL);
             tcg_gen_and_tl(t2, t2, t3);
             tcg_gen_setcondi_tl(TCG_COND_EQ, t3, t1, 0);
@@ -5829,7 +5830,7 @@ static void gen_muldiv(DisasContext *ctx, uint32_t opc,
         {
             TCGv t2 = tcg_temp_new();
             TCGv t3 = tcg_temp_new();
-            tcg_gen_setcondi_tl(TCG_COND_EQ, t2, t0, ~0UL << 63);
+            tcg_gen_setcondi_tl(TCG_COND_EQ, t2, t0, -1LL << 63);
             tcg_gen_setcondi_tl(TCG_COND_EQ, t3, t1, -1LL);
             tcg_gen_and_tl(t2, t2, t3);
             tcg_gen_setcondi_tl(TCG_COND_EQ, t3, t1, 0);
@@ -6176,7 +6177,7 @@ static void gen_loongson_integer(DisasContext *ctx, uint32_t opc,
             tcg_gen_movi_tl(cpu_gpr[rd], 0);
             tcg_gen_br(l3);
             gen_set_label(l1);
-            tcg_gen_brcondi_tl(TCG_COND_NE, t0, ~0UL << 63, l2);
+            tcg_gen_brcondi_tl(TCG_COND_NE, t0, -1LL << 63, l2);
             tcg_gen_brcondi_tl(TCG_COND_NE, t1, -1LL, l2);
             tcg_gen_mov_tl(cpu_gpr[rd], t0);
             tcg_gen_br(l3);
@@ -6205,7 +6206,7 @@ static void gen_loongson_integer(DisasContext *ctx, uint32_t opc,
             TCGLabel *l2 = gen_new_label();
             TCGLabel *l3 = gen_new_label();
             tcg_gen_brcondi_tl(TCG_COND_EQ, t1, 0, l1);
-            tcg_gen_brcondi_tl(TCG_COND_NE, t0, ~0UL << 63, l2);
+            tcg_gen_brcondi_tl(TCG_COND_NE, t0, -1LL << 63, l2);
             tcg_gen_brcondi_tl(TCG_COND_NE, t1, -1LL, l2);
             gen_set_label(l1);
             tcg_gen_movi_tl(cpu_gpr[rd], 0);
