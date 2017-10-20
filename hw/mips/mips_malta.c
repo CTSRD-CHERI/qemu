@@ -1248,8 +1248,9 @@ void mips_malta_init(MachineState *machine)
     /* Optional PCI video card */
     pci_vga_init(pci_bus);
 
+    /* XXXAR: this cast is probably wrong */
     /* Virtio over MMIO */
-    create_virtio_devices((qemu_irq *)env->irq);
+    create_virtio_devices((qemu_irq*)&MIPS_CPU(first_cpu)->env.irq);
 }
 
 static int mips_malta_sysbus_device_init(SysBusDevice *sysbusdev)
