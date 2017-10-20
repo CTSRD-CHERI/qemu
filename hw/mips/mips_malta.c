@@ -923,16 +923,6 @@ static void main_cpu_reset(void *opaque)
     }
 }
 
-static void create_virtio_devices(qemu_irq *pic) {
-    hwaddr base = 0x1e400000;
-    int irq = 4;
-
-    sysbus_create_simple(
-            "virtio-mmio",
-            base,
-            pic[irq]);
-}
-
 static void create_cpu_without_cps(const char *cpu_model,
                                    qemu_irq *cbus_irq, qemu_irq *i8259_irq)
 {
@@ -1255,10 +1245,6 @@ void mips_malta_init(MachineState *machine)
 
     /* Optional PCI video card */
     pci_vga_init(pci_bus);
-
-    /* XXXAR: this cast is probably wrong */
-    /* Virtio over MMIO */
-    create_virtio_devices((qemu_irq*)&MIPS_CPU(first_cpu)->env.irq);
 }
 
 static int mips_malta_sysbus_device_init(SysBusDevice *sysbusdev)
