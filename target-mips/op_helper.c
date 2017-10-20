@@ -23,6 +23,7 @@
 #include "exec/cpu_ldst.h"
 #include "sysemu/kvm.h"
 #ifdef TARGET_CHERI
+#include "disas/disas.h"
 #include "disas/bfd.h"
 #endif
 
@@ -4665,9 +4666,9 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
 
         /* Disassemble and print instruction. */
         if (isa == 0) {
-            log_target_disas(cs, pc, 4, 0);
+            target_disas(qemu_logfile, cs, pc, 4, 0);
         } else {
-            log_target_disas(cs, pc, 2, 0);
+            target_disas(qemu_logfile, cs, pc, 2, 0);
         }
     }
 
