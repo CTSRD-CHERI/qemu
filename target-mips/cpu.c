@@ -25,6 +25,7 @@
 #include "qemu-common.h"
 #include "exec/gdbstub.h"
 #include "sysemu/kvm.h"
+#include "exec/exec-all.h"
 
 
 static void mips_cpu_set_pc(CPUState *cs, vaddr value)
