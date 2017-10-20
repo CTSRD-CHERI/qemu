@@ -7,7 +7,6 @@
 
 #define CPUArchState struct CPUMIPSState
 
-#include "config.h"
 #include "qemu-common.h"
 #include "mips-defs.h"
 #include "exec/cpu-defs.h"
@@ -20,25 +19,25 @@ struct r4k_tlb_t {
     target_ulong VPN;
     uint32_t PageMask;
     uint8_t ASID;
-    uint_fast16_t G:1;
-    uint_fast16_t C0:3;
-    uint_fast16_t C1:3;
-    uint_fast16_t V0:1;
-    uint_fast16_t V1:1;
-    uint_fast16_t D0:1;
-    uint_fast16_t D1:1;
+    unsigned int G:1;
+    unsigned int C0:3;
+    unsigned int C1:3;
+    unsigned int V0:1;
+    unsigned int V1:1;
+    unsigned int D0:1;
+    unsigned int D1:1;
 #if defined(TARGET_CHERI)
-    uint_fast16_t L0:1;
-    uint_fast16_t L1:1;
-    uint_fast16_t S0:1;
-    uint_fast16_t S1:1;
+    unsigned int L0:1;
+    unsigned int L1:1;
+    unsigned int S0:1;
+    unsigned int S1:1;
 #else
-    uint_fast16_t XI0:1;
-    uint_fast16_t XI1:1;
-    uint_fast16_t RI0:1;
-    uint_fast16_t RI1:1;
+    unsigned int XI0:1;
+    unsigned int XI1:1;
+    unsigned int RI0:1;
+    unsigned int RI1:1;
 #endif /* TARGET_CHERI */
-    uint_fast16_t EHINV:1;
+    unsigned int EHINV:1;
     uint64_t PFN[2];
 };
 
@@ -107,6 +106,7 @@ struct CPUMIPSFPUContext {
     uint32_t fcr0;
 #define FCR0_FREP 29
 #define FCR0_UFRP 28
+#define FCR0_HAS2008 23
 #define FCR0_F64 22
 #define FCR0_L 21
 #define FCR0_W 20
@@ -118,6 +118,8 @@ struct CPUMIPSFPUContext {
 #define FCR0_REV 0
     /* fcsr */
     uint32_t fcr31;
+#define FCR31_ABS2008 19
+#define FCR31_NAN2008 18
 #define SET_FP_COND(num,env)     do { ((env).fcr31) |= ((num) ? (1 << ((num) + 24)) : (1 << 23)); } while(0)
 #define CLEAR_FP_COND(num,env)   do { ((env).fcr31) &= ~((num) ? (1 << ((num) + 24)) : (1 << 23)); } while(0)
 #define GET_FP_COND(env)         ((((env).fcr31 >> 24) & 0xfe) | (((env).fcr31 >> 23) & 0x1))
@@ -170,6 +172,7 @@ typedef struct mips_def_t mips_def_t;
 #define MIPS_FPU_MAX 1
 #define MIPS_DSP_ACC 4
 #define MIPS_KSCRATCH_NUM 6
+#define MIPS_MAAR_MAX 16 /* Must be an even number. */
 
 #if defined(TARGET_CHERI)
 /*
@@ -359,6 +362,8 @@ struct CPUMIPSState {
 
     int32_t CP0_Index;
     /* CP0_MVP* are per MVP registers. */
+    int32_t CP0_VPControl;
+#define CP0VPCtl_DIS    0
     int32_t CP0_Random;
     int32_t CP0_VPEControl;
 #define CP0VPECo_YSI	21
@@ -413,6 +418,8 @@ struct CPUMIPSState {
 # define CP0EnLo_RI 31
 # define CP0EnLo_XI 30
 #endif
+    int32_t CP0_GlobalNumber;
+#define CP0GN_VPId 0
     target_ulong CP0_Context;
     target_ulong CP0_KScratch[MIPS_KSCRATCH_NUM];
     int32_t CP0_PageMask;
@@ -484,7 +491,7 @@ struct CPUMIPSState {
 #define CP0St_IE    0
     int32_t CP0_IntCtl;
 #define CP0IntCtl_IPTI 29
-#define CP0IntCtl_IPPC1 26
+#define CP0IntCtl_IPPCI 26
 #define CP0IntCtl_VS 5
     int32_t CP0_SRSCtl;
 #define CP0SRSCtl_HSS 26
@@ -515,6 +522,7 @@ struct CPUMIPSState {
     target_ulong CP0_EPC;
     int32_t CP0_PRid;
     int32_t CP0_EBase;
+    target_ulong CP0_CMGCRBase;
     int32_t CP0_Config0;
 #define CP0C0_M    31
 #define CP0C0_K23  28
@@ -557,7 +565,7 @@ struct CPUMIPSState {
     int32_t CP0_Config3;
 #define CP0C3_M    31
 #define CP0C3_BPG  30
-#define CP0C3_CMCGR 29
+#define CP0C3_CMGCR 29
 #define CP0C3_MSAP  28
 #define CP0C3_BP 27
 #define CP0C3_BI 26
@@ -598,13 +606,17 @@ struct CPUMIPSState {
 #define CP0C5_XNP        13
 #define CP0C5_UFE        9
 #define CP0C5_FRE        8
+#define CP0C5_VP         7
 #define CP0C5_SBRI       6
 #define CP0C5_MVH        5
 #define CP0C5_LLB        4
+#define CP0C5_MRP        3
 #define CP0C5_UFR        2
 #define CP0C5_NFExists   0
     int32_t CP0_Config6;
     int32_t CP0_Config7;
+    uint64_t CP0_MAAR[MIPS_MAAR_MAX];
+    int32_t CP0_MAARI;
     /* XXX: Maybe make LLAddr per-TC? */
     uint64_t lladdr;
     target_ulong llval;
@@ -642,6 +654,10 @@ struct CPUMIPSState {
 #define CP0DB_DSS  0
     target_ulong CP0_DEPC;
     int32_t CP0_Performance0;
+    int32_t CP0_ErrCtl;
+#define CP0EC_WST 29
+#define CP0EC_SPR 28
+#define CP0EC_ITC 26
     uint64_t CP0_TagLo;
     int32_t CP0_DataLo;
     int32_t CP0_TagHi;
@@ -658,9 +674,10 @@ struct CPUMIPSState {
     uint32_t hflags;    /* CPU State */
     /* TMASK defines different execution modes */
 #ifdef TARGET_CHERI
+/* XXXAR: these values are the same since the 2.6.0 merge. Remove ifdef? */
 #define MIPS_HFLAG_TMASK  0xF5807FF
 #else
-#define MIPS_HFLAG_TMASK  0x75807FF
+#define MIPS_HFLAG_TMASK  0xF5807FF
 #endif /* TARGET_CHERI */
 #define MIPS_HFLAG_MODE   0x00007 /* execution modes                    */
     /* The KSU flags must be the lowest bits in hflags. The flag order
@@ -714,8 +731,9 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_MSA   0x1000000
 #define MIPS_HFLAG_FRE   0x2000000 /* FRE enabled */
 #define MIPS_HFLAG_ELPA  0x4000000
+#define MIPS_HFLAG_ITC_CACHE  0x8000000 /* CACHE instr. operates on ITC tag */
 #ifdef TARGET_CHERI
-#define MIPS_HFLAG_COP2X   0x8000000 /* CHERI/CP2 enabled              */
+#define MIPS_HFLAG_COP2X   0x10000000 /* CHERI/CP2 enabled              */
     int btcr;                    /* cjr/cjalr Cap register target      */
 #endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
@@ -770,6 +788,7 @@ struct CPUMIPSState {
     const mips_def_t *cpu_model;
     void *irq[8];
     QEMUTimer *timer; /* Internal timer */
+    MemoryRegion *itc_tag; /* ITC Configuration Tags */
 #ifdef TARGET_CHERI
     /*
      * Processor state after the last instruction.
@@ -946,6 +965,7 @@ MIPSCPU *cpu_mips_init(const char *cpu_model);
 int cpu_mips_signal_handler(int host_signum, void *pinfo, void *puc);
 
 #define cpu_init(cpu_model) CPU(cpu_mips_init(cpu_model))
+bool cpu_supports_cps_smp(const char *cpu_model);
 
 /* TODO QOM'ify CPU reset and remove */
 void cpu_state_reset(CPUMIPSState *s);
@@ -1058,6 +1078,26 @@ static inline int mips_vpe_active(CPUMIPSState *env)
     }
 
     return active;
+}
+
+static inline int mips_vp_active(CPUMIPSState *env)
+{
+    CPUState *other_cs = first_cpu;
+
+    /* Check if the VP disabled other VPs (which means the VP is enabled) */
+    if ((env->CP0_VPControl >> CP0VPCtl_DIS) & 1) {
+        return 1;
+    }
+
+    /* Check if the virtual processor is disabled due to a DVP */
+    CPU_FOREACH(other_cs) {
+        MIPSCPU *other_cpu = MIPS_CPU(other_cs);
+        if ((&other_cpu->env != env) &&
+            ((other_cpu->env.CP0_VPControl >> CP0VPCtl_DIS) & 1)) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 #include "exec/exec-all.h"

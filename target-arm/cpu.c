@@ -18,6 +18,8 @@
  * <http://www.gnu.org/licenses/gpl-2.0.html>
  */
 
+#include "qemu/osdep.h"
+#include "qapi/error.h"
 #include "cpu.h"
 #include "internals.h"
 #include "qemu-common.h"
@@ -368,26 +370,13 @@ static void arm_cpu_kvm_set_irq(void *opaque, int irq, int level)
 #endif
 }
 
-static bool arm_cpu_is_big_endian(CPUState *cs)
+static bool arm_cpu_virtio_is_big_endian(CPUState *cs)
 {
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
-    int cur_el;
 
     cpu_synchronize_state(cs);
-
-    /* In 32bit guest endianness is determined by looking at CPSR's E bit */
-    if (!is_a64(env)) {
-        return (env->uncached_cpsr & CPSR_E) ? 1 : 0;
-    }
-
-    cur_el = arm_current_el(env);
-
-    if (cur_el == 0) {
-        return (env->cp15.sctlr_el[1] & SCTLR_E0E) != 0;
-    }
-
-    return (env->cp15.sctlr_el[cur_el] & SCTLR_EE) != 0;
+    return arm_cpu_data_is_big_endian(env);
 }
 
 #endif
@@ -426,7 +415,7 @@ static void arm_disas_set_info(CPUState *cpu, disassemble_info *info)
     } else {
         info->print_insn = print_insn_arm;
     }
-    if (env->bswap_code) {
+    if (bswap_code(arm_sctlr_b(env))) {
 #ifdef TARGET_WORDS_BIGENDIAN
         info->endian = BFD_ENDIAN_LITTLE;
 #else
@@ -542,6 +531,15 @@ static void arm_cpu_post_init(Object *obj)
          */
         qdev_property_add_static(DEVICE(obj), &arm_cpu_has_el3_property,
                                  &error_abort);
+
+#ifndef CONFIG_USER_ONLY
+        object_property_add_link(obj, "secure-memory",
+                                 TYPE_MEMORY_REGION,
+                                 (Object **)&cpu->secure_memory,
+                                 qdev_prop_allow_set_link_before_realize,
+                                 OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                                 &error_abort);
+#endif
     }
 
     if (arm_feature(&cpu->env, ARM_FEATURE_MPU)) {
@@ -640,6 +638,15 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
         cpu->id_aa64pfr0 &= ~0xf000;
     }
 
+    if (!arm_feature(env, ARM_FEATURE_EL2)) {
+        /* Disable the hypervisor feature bits in the processor feature
+         * registers if we don't have EL2. These are id_pfr1[15:12] and
+         * id_aa64pfr0_el1[11:8].
+         */
+        cpu->id_aa64pfr0 &= ~0xf00;
+        cpu->id_pfr1 &= ~0xf000;
+    }
+
     if (!cpu->has_mpu) {
         unset_feature(env, ARM_FEATURE_MPU);
     }
@@ -649,7 +656,7 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
         uint32_t nr = cpu->pmsav7_dregion;
 
         if (nr > 0xff) {
-            error_setg(errp, "PMSAv7 MPU #regions invalid %" PRIu32 "\n", nr);
+            error_setg(errp, "PMSAv7 MPU #regions invalid %" PRIu32, nr);
             return;
         }
 
@@ -664,6 +671,29 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
     arm_cpu_register_gdb_regs_for_features(cpu);
 
     init_cpreg_list(cpu);
+
+#ifndef CONFIG_USER_ONLY
+    if (cpu->has_el3) {
+        cs->num_ases = 2;
+    } else {
+        cs->num_ases = 1;
+    }
+
+    if (cpu->has_el3) {
+        AddressSpace *as;
+
+        if (!cpu->secure_memory) {
+            cpu->secure_memory = cs->memory;
+        }
+        as = address_space_init_shareable(cpu->secure_memory,
+                                          "cpu-secure-memory");
+        cpu_address_space_init(cs, as, ARMASIdx_S);
+    }
+    cpu_address_space_init(cs,
+                           address_space_init_shareable(cs->memory,
+                                                        "cpu-memory"),
+                           ARMASIdx_NS);
+#endif
 
     qemu_init_vcpu(cs);
     cpu_reset(cs);
@@ -1114,6 +1144,8 @@ static void cortex_a15_initfn(Object *obj)
     cpu->id_pfr0 = 0x00001131;
     cpu->id_pfr1 = 0x00011011;
     cpu->id_dfr0 = 0x02010555;
+    cpu->pmceid0 = 0x0000000;
+    cpu->pmceid1 = 0x00000000;
     cpu->id_afr0 = 0x00000000;
     cpu->id_mmfr0 = 0x10201105;
     cpu->id_mmfr1 = 0x20000000;
@@ -1393,6 +1425,17 @@ static int arm_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
 }
 #endif
 
+static gchar *arm_gdb_arch_name(CPUState *cs)
+{
+    ARMCPU *cpu = ARM_CPU(cs);
+    CPUARMState *env = &cpu->env;
+
+    if (arm_feature(env, ARM_FEATURE_IWMMXT)) {
+        return g_strdup("iwmmxt");
+    }
+    return g_strdup("arm");
+}
+
 static void arm_cpu_class_init(ObjectClass *oc, void *data)
 {
     ARMCPUClass *acc = ARM_CPU_CLASS(oc);
@@ -1417,14 +1460,20 @@ static void arm_cpu_class_init(ObjectClass *oc, void *data)
     cc->handle_mmu_fault = arm_cpu_handle_mmu_fault;
 #else
     cc->do_interrupt = arm_cpu_do_interrupt;
-    cc->get_phys_page_debug = arm_cpu_get_phys_page_debug;
+    cc->do_unaligned_access = arm_cpu_do_unaligned_access;
+    cc->get_phys_page_attrs_debug = arm_cpu_get_phys_page_attrs_debug;
+    cc->asidx_from_attrs = arm_asidx_from_attrs;
     cc->vmsd = &vmstate_arm_cpu;
-    cc->virtio_is_big_endian = arm_cpu_is_big_endian;
+    cc->virtio_is_big_endian = arm_cpu_virtio_is_big_endian;
+    cc->write_elf64_note = arm_cpu_write_elf64_note;
+    cc->write_elf32_note = arm_cpu_write_elf32_note;
 #endif
     cc->gdb_num_core_regs = 26;
     cc->gdb_core_xml_file = "arm-core.xml";
+    cc->gdb_arch_name = arm_gdb_arch_name;
     cc->gdb_stop_before_watchpoint = true;
     cc->debug_excp_handler = arm_debug_excp_handler;
+    cc->debug_check_watchpoint = arm_debug_check_watchpoint;
 
     cc->disas_set_info = arm_disas_set_info;
 

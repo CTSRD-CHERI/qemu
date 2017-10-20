@@ -13,6 +13,7 @@
  * GNU GPL, version 2 or (at your option) any later version.
  */
 
+#include "qemu/osdep.h"
 #include "net/net.h"
 #include "net/tap.h"
 #include "net/vhost-user.h"
@@ -21,24 +22,20 @@
 #include "net/vhost_net.h"
 #include "qemu/error-report.h"
 
-#include "config.h"
 
 #ifdef CONFIG_VHOST_NET
 #include <linux/vhost.h>
 #include <sys/socket.h>
 #include <linux/kvm.h>
-#include <fcntl.h>
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <netinet/in.h>
 
-#include <stdio.h>
 
 #include "standard-headers/linux/virtio_ring.h"
 #include "hw/virtio/vhost.h"
 #include "hw/virtio/virtio-bus.h"
-#include "hw/virtio/virtio-access.h"
 
 struct vhost_net {
     struct vhost_dev dev;
@@ -199,27 +196,6 @@ static void vhost_net_set_vq_index(struct vhost_net *net, int vq_index)
     net->dev.vq_index = vq_index;
 }
 
-static int vhost_net_set_vnet_endian(VirtIODevice *dev, NetClientState *peer,
-                                     bool set)
-{
-    int r = 0;
-
-    if (virtio_vdev_has_feature(dev, VIRTIO_F_VERSION_1) ||
-        (virtio_legacy_is_cross_endian(dev) && !virtio_is_big_endian(dev))) {
-        r = qemu_set_vnet_le(peer, set);
-        if (r) {
-            error_report("backend does not support LE vnet headers");
-        }
-    } else if (virtio_legacy_is_cross_endian(dev)) {
-        r = qemu_set_vnet_be(peer, set);
-        if (r) {
-            error_report("backend does not support BE vnet headers");
-        }
-    }
-
-    return r;
-}
-
 static int vhost_net_start_one(struct vhost_net *net,
                                VirtIODevice *dev)
 {
@@ -304,23 +280,28 @@ int vhost_net_start(VirtIODevice *dev, NetClientState *ncs,
 
     if (!k->set_guest_notifiers) {
         error_report("binding does not support guest notifiers");
-        r = -ENOSYS;
-        goto err;
-    }
-
-    r = vhost_net_set_vnet_endian(dev, ncs[0].peer, true);
-    if (r < 0) {
-        goto err;
+        return -ENOSYS;
     }
 
     for (i = 0; i < total_queues; i++) {
-        vhost_net_set_vq_index(get_vhost_net(ncs[i].peer), i * 2);
-    }
+        struct vhost_net *net;
+
+        net = get_vhost_net(ncs[i].peer);
+        vhost_net_set_vq_index(net, i * 2);
+
+        /* Suppress the masking guest notifiers on vhost user
+         * because vhost user doesn't interrupt masking/unmasking
+         * properly.
+         */
+        if (net->nc->info->type == NET_CLIENT_OPTIONS_KIND_VHOST_USER) {
+                dev->use_guest_notifier_mask = false;
+        }
+     }
 
     r = k->set_guest_notifiers(qbus->parent, total_queues * 2, true);
     if (r < 0) {
         error_report("Error binding guest notifier: %d", -r);
-        goto err_endian;
+        goto err;
     }
 
     for (i = 0; i < total_queues; i++) {
@@ -342,8 +323,6 @@ err_start:
         fprintf(stderr, "vhost guest notifier cleanup failed: %d\n", e);
         fflush(stderr);
     }
-err_endian:
-    vhost_net_set_vnet_endian(dev, ncs[0].peer, false);
 err:
     return r;
 }
@@ -366,8 +345,6 @@ void vhost_net_stop(VirtIODevice *dev, NetClientState *ncs,
         fflush(stderr);
     }
     assert(r >= 0);
-
-    assert(vhost_net_set_vnet_endian(dev, ncs[0].peer, false) >= 0);
 }
 
 void vhost_net_cleanup(struct vhost_net *net)

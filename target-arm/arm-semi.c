@@ -18,13 +18,7 @@
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <time.h>
+#include "qemu/osdep.h"
 
 #include "cpu.h"
 #include "exec/semihost.h"
@@ -36,6 +30,7 @@
 #include "qemu-common.h"
 #include "exec/gdbstub.h"
 #include "hw/arm/arm.h"
+#include "qemu/cutils.h"
 #endif
 
 #define TARGET_SYS_OPEN        0x01
