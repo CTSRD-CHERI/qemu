@@ -23513,8 +23513,7 @@ void mips_tcg_init(void)
     hflags = tcg_global_mem_new_i32(cpu_env,
                                     offsetof(CPUMIPSState, hflags), "hflags");
 #ifdef TARGET_CHERI
-    btcr = tcg_global_mem_new_i32(TCG_AREG0,
-                                    offsetof(CPUMIPSState, btcr), "btcr");
+    btcr = tcg_global_mem_new_i32(cpu_env, offsetof(CPUMIPSState, btcr), "btcr");
 #endif
 
     fpu_fcr0 = tcg_global_mem_new_i32(cpu_env,
