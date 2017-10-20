@@ -31,8 +31,6 @@
 
 #define MAX_PACKET_LENGTH 4096
 
-#include "cpu.h"
-#include "qemu/error-report.h"
 #include "qemu/sockets.h"
 #include "sysemu/kvm.h"
 #include "exec/semihost.h"
@@ -304,7 +302,7 @@ typedef struct GDBState {
     int fd;
     int running_state;
 #else
-    CharDriverState *chr;
+    CharBackend chr;
     CharDriverState *mon_chr;
 #endif
     char syscall_buf[256];
@@ -403,7 +401,9 @@ static void put_buffer(GDBState *s, const uint8_t *buf, int len)
         }
     }
 #else
-    qemu_chr_fe_write(s->chr, buf, len);
+    /* XXX this blocks entire thread. Rewrite to use
+     * qemu_chr_fe_write and background I/O callbacks */
+    qemu_chr_fe_write_all(&s->chr, buf, len);
 #endif
 }
 
@@ -1476,6 +1476,9 @@ void gdb_exit(CPUArchState *env, int code)
 {
   GDBState *s;
   char buf[4];
+#ifndef CONFIG_USER_ONLY
+  CharDriverState *chr;
+#endif
 
   s = gdbserver_state;
   if (!s) {
@@ -1486,7 +1489,8 @@ void gdb_exit(CPUArchState *env, int code)
       return;
   }
 #else
-  if (!s->chr) {
+  chr = qemu_chr_fe_get_driver(&s->chr);
+  if (!chr) {
       return;
   }
 #endif
@@ -1495,7 +1499,8 @@ void gdb_exit(CPUArchState *env, int code)
   put_packet(s, buf);
 
 #ifndef CONFIG_USER_ONLY
-  qemu_chr_delete(s->chr);
+  qemu_chr_fe_deinit(&s->chr);
+  qemu_chr_delete(chr);
 #endif
 }
 
@@ -1750,13 +1755,9 @@ int gdbserver_start(const char *device)
             sigaction(SIGINT, &act, NULL);
         }
 #endif
-        chr = qemu_chr_new_noreplay("gdb", device, NULL);
+        chr = qemu_chr_new_noreplay("gdb", device);
         if (!chr)
             return -1;
-
-        qemu_chr_fe_claim_no_fail(chr);
-        qemu_chr_add_handlers(chr, gdb_chr_can_receive, gdb_chr_receive,
-                              gdb_chr_event, NULL);
     }
 
     s = gdbserver_state;
@@ -1771,14 +1772,20 @@ int gdbserver_start(const char *device)
         mon_chr->chr_write = gdb_monitor_write;
         monitor_init(mon_chr, 0);
     } else {
-        if (s->chr)
-            qemu_chr_delete(s->chr);
+        if (qemu_chr_fe_get_driver(&s->chr)) {
+            qemu_chr_delete(qemu_chr_fe_get_driver(&s->chr));
+        }
         mon_chr = s->mon_chr;
         memset(s, 0, sizeof(GDBState));
+        s->mon_chr = mon_chr;
     }
     s->c_cpu = first_cpu;
     s->g_cpu = first_cpu;
-    s->chr = chr;
+    if (chr) {
+        qemu_chr_fe_init(&s->chr, chr, &error_abort);
+        qemu_chr_fe_set_handlers(&s->chr, gdb_chr_can_receive, gdb_chr_receive,
+                                 gdb_chr_event, NULL, NULL, true);
+    }
     s->state = chr ? RS_IDLE : RS_INACTIVE;
     s->mon_chr = mon_chr;
     s->current_syscall_cb = NULL;

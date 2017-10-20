@@ -125,6 +125,13 @@ static void mips_cpu_realizefn(DeviceState *dev, Error **errp)
 {
     CPUState *cs = CPU(dev);
     MIPSCPUClass *mcc = MIPS_CPU_GET_CLASS(dev);
+    Error *local_err = NULL;
+
+    cpu_exec_realizefn(cs, &local_err);
+    if (local_err != NULL) {
+        error_propagate(errp, local_err);
+        return;
+    }
 
 #ifdef TARGET_MIPS64
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips64-cp0.xml", 0);
@@ -161,7 +168,6 @@ static void mips_cpu_initfn(Object *obj)
     CPUMIPSState *env = &cpu->env;
 
     cs->env_ptr = env;
-    cpu_exec_init(cs, &error_abort);
 
     if (tcg_enabled()) {
         mips_tcg_init();
@@ -205,13 +211,6 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
 #endif
     cc->gdb_num_core_regs = 72;
     cc->gdb_stop_before_watchpoint = true;
-
-    /*
-     * Reason: mips_cpu_initfn() calls cpu_exec_init(), which saves
-     * the object in cpus -> dangling pointer after final
-     * object_unref().
-     */
-    dc->cannot_destroy_with_object_finalize_yet = true;
 }
 
 static const TypeInfo mips_cpu_type_info = {
