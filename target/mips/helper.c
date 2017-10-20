@@ -679,7 +679,8 @@ static hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong addr
     /* data access */
     access_type = ACCESS_INT;
     ret = get_physical_address(env, &physical, &prot,
-                               address, rw, access_type);
+                               address, rw, access_type,
+                               cpu_mmu_index(env, false));
     if (ret != TLBRET_MATCH) {
         raise_mmu_exception(env, address, rw, ret, reg);
         return -1LL;

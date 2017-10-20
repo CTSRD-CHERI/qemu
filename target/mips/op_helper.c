@@ -5417,8 +5417,12 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
     int idx;
     target_ulong VPN;
     uint16_t ASID;
-    bool EHINV, G, V0, D0, V1, D1, XI0, XI1, RI0, RI1;
-
+    bool EHINV, G, V0, D0, V1, D1;
+#if defined(TARGET_CHERI)
+    bool S0, S1, L0, L1;
+#else
+    bool XI0, XI1, RI0, RI1;
+#endif
     idx = (env->CP0_Index & ~0x80000000) % env->tlb->nb_tlb;
     tlb = &env->tlb->mmu.r4k.tlb[idx];
     VPN = env->CP0_EntryHi & (TARGET_PAGE_MASK << 1);
@@ -5430,21 +5434,39 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
     G = env->CP0_EntryLo0 & env->CP0_EntryLo1 & 1;
     V0 = (env->CP0_EntryLo0 & 2) != 0;
     D0 = (env->CP0_EntryLo0 & 4) != 0;
+#if defined(TARGET_CHERI)
+    S0 = (env->CP0_EntryLo0 >> CP0EnLo_S) &1;
+    L0 = (env->CP0_EntryLo0 >> CP0EnLo_L) &1;
+#else
     XI0 = (env->CP0_EntryLo0 >> CP0EnLo_XI) &1;
     RI0 = (env->CP0_EntryLo0 >> CP0EnLo_RI) &1;
+#endif
     V1 = (env->CP0_EntryLo1 & 2) != 0;
     D1 = (env->CP0_EntryLo1 & 4) != 0;
+#if defined(TARGET_CHERI)
+    S1 = (env->CP0_EntryLo1 >> CP0EnLo_S) &1;
+    L1 = (env->CP0_EntryLo1 >> CP0EnLo_L) &1;
+#else
     XI1 = (env->CP0_EntryLo1 >> CP0EnLo_XI) &1;
     RI1 = (env->CP0_EntryLo1 >> CP0EnLo_RI) &1;
+#endif
 
     /* Discard cached TLB entries, unless tlbwi is just upgrading access
        permissions on the current entry. */
     if (tlb->VPN != VPN || tlb->ASID != ASID || tlb->G != G ||
         (!tlb->EHINV && EHINV) ||
         (tlb->V0 && !V0) || (tlb->D0 && !D0) ||
+#if defined(TARGET_CHERI)
+        (!tlb->S0 && S0) || (!tlb->L0 && L0) ||
+#else
         (!tlb->XI0 && XI0) || (!tlb->RI0 && RI0) ||
+#endif
         (tlb->V1 && !V1) || (tlb->D1 && !D1) ||
+#if defined(TARGET_CHERI)
+        (!tlb->S1 && S1) || (!tlb->L1 && L1)) {
+#else
         (!tlb->XI1 && XI1) || (!tlb->RI1 && RI1)) {
+#endif
         r4k_mips_tlb_flush_extra(env, env->tlb->nb_tlb);
     }
 
