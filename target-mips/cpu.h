@@ -674,8 +674,7 @@ struct CPUMIPSState {
     uint32_t hflags;    /* CPU State */
     /* TMASK defines different execution modes */
 #ifdef TARGET_CHERI
-/* XXXAR: these values are the same since the 2.6.0 merge. Remove ifdef? */
-#define MIPS_HFLAG_TMASK  0xF5807FF
+#define MIPS_HFLAG_TMASK  0x1F5807FF
 #else
 #define MIPS_HFLAG_TMASK  0xF5807FF
 #endif /* TARGET_CHERI */
