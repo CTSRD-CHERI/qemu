@@ -6161,8 +6161,8 @@ static void dump_changed_cop0(CPUMIPSState *env)
 
     dump_changed_cop0_reg(env, 25*8 + 0, env->CP0_Performance0);
 
-    /* XXXAR: it is since 2.6.0 */
-    /* 26/0 not implemented - ErrCtl */
+    /* 26/0 - ErrCtl */
+    dump_changed_cop0_reg(env, 25*8 + 0, env->CP0_ErrCtl);
 
     /* 27/0 not implemented - CacheErr */
 
