@@ -328,6 +328,14 @@ static int get_physical_address (CPUMIPSState *env, hwaddr *physical,
             ret = TLBRET_BADADDR;
         }
 #endif
+    /*
+     * XXXAR: I am not entirely sure deleting the previous code using  is the correct way to make commit
+     * a78cda6e0212ccb16711d0dd30c2bb3480b36415 (40 bits for CHERI) to work with
+     * the new get_segctl_physical_address added in commit
+     * 480e79aedd322fcfac17052caff21626ea7c78e2. As far as I can see from the
+     * BERI hardware reference we should still be using 0x1FFFFFFF as the mask
+     * for kseg0 and kseg1
+     */
     } else if (address < KSEG1_BASE) {
         /* kseg0 */
         ret = get_segctl_physical_address(env, physical, prot, real_address, rw,
@@ -335,23 +343,6 @@ static int get_physical_address (CPUMIPSState *env, hwaddr *physical,
                                           env->CP0_SegCtl1 >> 16, 0x1FFFFFFF);
     } else if (address < KSEG2_BASE) {
         /* kseg1 */
-#if 0
-/* XXXAR: not quite sure what the correct replacement for this is?
- * maybe the upstream code is already correct? */
-        if (kernel_mode) {
-#if defined(TARGET_CHERI)
-            if (env->insn_flags & ISA_MIPS64R2)
-                *physical = address - (int32_t)KSEG1_BASE;
-            else
-                *physical = address & ~0xFFFFFFFFFF000000ULL;
-#else
-            *physical = address - (int32_t)KSEG1_BASE;
-#endif
-            *prot = PAGE_READ | PAGE_WRITE;
-        } else {
-            ret = TLBRET_BADADDR;
-        }
-#endif
         ret = get_segctl_physical_address(env, physical, prot, real_address, rw,
                                           access_type, mmu_idx,
                                           env->CP0_SegCtl1, 0x1FFFFFFF);
