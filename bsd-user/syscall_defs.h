@@ -429,7 +429,7 @@ static inline struct target_cmsghdr *__target_cmsg_nxthdr(
         /* No more entries.  */
         return (struct target_cmsghdr *)0;
     }
-    return __cmsg;
+    return __ptr;
 }
 
 /*
