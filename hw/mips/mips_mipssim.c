@@ -161,7 +161,7 @@ mips_mipssim_init(MachineState *machine)
 
     /* Init CPUs. */
     if (cpu_model == NULL) {
-#ifdef TARGET_MIPS64
+#if defined(TARGET_MIPS64) || defined(TARGET_CHERI)
         cpu_model = "5Kf";
 #else
         cpu_model = "24Kf";

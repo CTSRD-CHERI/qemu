@@ -978,7 +978,9 @@ static void create_cpu(MaltaState *s, const char *cpu_model,
                        qemu_irq *cbus_irq, qemu_irq *i8259_irq)
 {
     if (cpu_model == NULL) {
-#ifdef TARGET_MIPS64
+#if defined(TARGET_CHERI)
+        cpu_model = "5Kf";
+#elif defined(TARGET_MIPS64)
         cpu_model = "20Kc";
 #else
         cpu_model = "24Kf";
