@@ -2446,13 +2446,29 @@ target_ulong helper_ccall_notrap2(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 
 void helper_cclearreg(CPUMIPSState *env, uint32_t creg)
 {
+    (void)ccall_common(env, cs, cb, 0);
+}
+
+target_ulong helper_ccall_notrap(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    return ccall_common(env, cs, cb, 1);
+}
+
+void helper_cclearreg(CPUMIPSState *env, uint32_t mask)
+{
     uint32_t perms = env->active_tc.PCC.cr_perms;
 
-    if (creg_inaccessible(perms, creg)) {
-        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, creg);
+    for (int creg = 0; creg < 32; creg++) {
+        if ((mask & (0x1 << creg)) && creg_inaccessible(perms, creg)) {
+            /* raise exception and bail without clearing registers */
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, creg);
+            return;
+        }
     }
-
-    (void)null_capability(&env->active_tc.C[creg]);
+    for (int creg = 0; creg < 32; creg++) {
+        if (mask & (0x1 << creg))
+            (void)null_capability(&env->active_tc.C[creg]);
+    }
 }
 
 void helper_creturn(CPUMIPSState *env)
@@ -3654,13 +3670,10 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
-        do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
-        return (target_ulong)0;
     } else {
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
         uint64_t addr = (uint64_t)((cursor + rt) + (int32_t)offset);
-        // uint32_t tag;
+        /* uint32_t tag = cheri_tag_get(env, addr, cd, NULL); */
 
         if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
@@ -4123,19 +4136,29 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
 }
 
 void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
-        target_ulong cursor, target_ulong addr)
+        target_ulong cursor)
 {
+    cap_register_t *cdp = &env->active_tc.C[cd];
+
+    decompress_128cap(pesbt, cursor, cdp);
+}
+
+void helper_bytes2cap_128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
+                             target_ulong cursor, target_ulong addr)
+{
+    /* This could be done in helper_bytes2cap_128 but TCG limits the number
+     * of arguments to 5 so we have to have a separate helper to handle the tag.
+     */
+    cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *cdp = &env->active_tc.C[cd];
     uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
 
-    if (env->TLB_L)
+    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
         tag = 0;
     cdp->cr_tag = tag;
 
-    decompress_128cap(pesbt, cursor, cdp);
-
     /* Log memory read, if needed. */
-    dump_cap_load(addr, pesbt, cursor, tag);
+    dump_cap_load(addr, cdp->cr_pesbt, cursor, tag);
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
     cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
 }
@@ -4221,15 +4244,12 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 }
 
 void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
-        target_ulong base, target_ulong addr)
+                           target_ulong base, target_ulong addr)
 {
     uint64_t tps, length;
     cap_register_t *cdp = &env->active_tc.C[cd];
-    uint32_t tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
-
-    if (env->TLB_L)
-        tag = 0;
-    cdp->cr_tag = tag;
+    /* fetch tps and length */
+    cheri_tag_get_m128(env, addr, cd, &tps, &length);
 
     cdp->cr_otype = (uint32_t)(tps >> 32);
     cdp->cr_perms = (uint32_t)((tps >> 1) & (CAP_PERMS_ALL | CAP_PERMS_LEGACY));
@@ -4242,9 +4262,24 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
     cdp->cr_length = length;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
+}
+
+void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
+                               target_ulong cursor, target_ulong addr)
+{
+    /* unused but needed to fetch the tag */
+    uint64_t tps, length;
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = &env->active_tc.C[cd];
+
+    uint32_t tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
+
+    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
+        tag = 0;
+    cdp->cr_tag = tag;
 
     /* Log memory read, if needed. */
-    dump_cap_load(addr, cursor, base, tag);
+    dump_cap_load(addr, cursor, cdp->cr_base, tag);
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
     cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
 }
@@ -4367,14 +4402,15 @@ static inline void dump_cap_store_length(uint64_t length)
     }
 }
 
-void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
+void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
+    cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *cdp = &env->active_tc.C[cd];
     uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
     uint32_t perms;
 
-    if (env->TLB_L)
+    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
         tag = 0;
     cdp->cr_tag = tag;
 
@@ -4392,14 +4428,15 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cd, target_ulong otype,
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
 }
 
-void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cd, target_ulong otype,
+void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
+    cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *cdp = &env->active_tc.C[cd];
     uint32_t tag = cheri_tag_get(env, addr, cd, &env->lladdr);
     uint32_t perms;
 
-    if (env->TLB_L)
+    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
         tag = 0;
     cdp->cr_tag = tag;
 

@@ -830,11 +830,14 @@ void mips_cpu_do_interrupt(CPUState *cs)
             env->CP0_EPC -= env->active_tc.PCC.cr_base;
             env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
             env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_EPC;
-            env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
-            env->active_tc.PCC.cr_offset =  env->active_tc.PC -
-                env->active_tc.PCC.cr_base;
 #endif /* TARGET_CHERI */
         }
+#ifdef TARGET_CHERI
+        /* always set PCC from KCC even with EXL */
+        env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
+        env->active_tc.PCC.cr_offset =  env->active_tc.PC -
+            env->active_tc.PCC.cr_base;
+#endif /* TARGET_CHERI */
         env->hflags &= ~MIPS_HFLAG_BMASK;
         if (env->CP0_Status & (1 << CP0St_BEV)) {
             env->active_tc.PC = (int32_t)0xBFC00200;
