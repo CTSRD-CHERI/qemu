@@ -2384,6 +2384,9 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
     cap_register_t *csp = &env->active_tc.C[cs];
     cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *idc = &env->active_tc.C[CP2CAP_IDC];
+
+    int untyped = (selector == 2) && !is_cap_sealed(csp);
+
     /*
      * CCall: Call into a new security domain
      */
@@ -2393,31 +2396,33 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
-    } else if (!cbp->cr_tag) {
+    } else if (!untyped && !cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
-    } else if (!is_cap_sealed(csp)) {
+    } else if ((selector != 2) && !is_cap_sealed(csp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
-    } else if (!is_cap_sealed(cbp)) {
+    } else if (!untyped && !is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (csp->cr_otype != cbp->cr_otype) {
+    } else if (!untyped && (csp->cr_otype != cbp->cr_otype)) {
         do_raise_c2_exception(env, CP2Ca_TYPE, cs);
     } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cs);
-    } else if (cbp->cr_perms & CAP_PERM_EXECUTE) {
+    } else if (!untyped && (cbp->cr_perms & CAP_PERM_EXECUTE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
     } else if (csp->cr_offset >= csp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cs);
     } else {
         if (selector == 0) {
             do_raise_c2_exception(env, CP2Ca_CALL, cs);
-        } else if (!(csp->cr_perms & CAP_PERM_CCALL)){
+        } else if (!untyped && !(csp->cr_perms & CAP_PERM_CCALL)){
             do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cs);
-        } else if (!(cbp->cr_perms & CAP_PERM_CCALL)){
+        } else if (!untyped && !(cbp->cr_perms & CAP_PERM_CCALL)){
             do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cb);
         } else {
             *idc = *cbp;
+            if(!untyped) {
             idc->cr_sealed = 0;
             idc->cr_otype = 0;
+            }
             return csp->cr_base + csp->cr_offset;
         }
     }
@@ -2432,6 +2437,11 @@ void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 target_ulong helper_ccall_notrap(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
     return ccall_common(env, cs, cb, 1);
+}
+
+target_ulong helper_ccall_notrap2(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    return ccall_common(env, cs, cb, 2);
 }
 
 void helper_cclearreg(CPUMIPSState *env, uint32_t creg)

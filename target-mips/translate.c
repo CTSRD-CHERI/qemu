@@ -1202,6 +1202,7 @@ enum {
 #define MASK_CCALL_SEL(op)  ((op) & 0x7ff)
 #define CCALL_SELECTOR_0 (0x0)
 #define CCALL_SELECTOR_1 (0x01)
+#define CCALL_SELECTOR_2 (0x02)
 #define CCALL_SELECTOR_CRETURN (0x7ff)
 
 #endif /* TARGET_CHERI */
@@ -1995,7 +1996,7 @@ static inline void generate_ccall(int32_t cs, int32_t cb)
     tcg_temp_free_i32(tcs);
 }
 
-static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t cb)
+static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t cb, int32_t m)
 {
     /*
      * This version of ccall has a delay slot and also can not
@@ -2011,7 +2012,11 @@ static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t 
         TCGv_i32 tcs = tcg_const_i32(cs);
         TCGv_i32 tcb = tcg_const_i32(cb);
 
-        gen_helper_ccall_notrap(btarget, cpu_env, tcs, tcb);
+        if (m == 0)
+            gen_helper_ccall_notrap(btarget, cpu_env, tcs, tcb);
+        else
+            gen_helper_ccall_notrap2(btarget, cpu_env, tcs, tcb);
+
         /* Set ccall branch and delay slot flags */
         ctx->hflags |= (MIPS_HFLAG_BRCCALL | MIPS_HFLAG_BDS32);
         /* Save capability register index that is new PCC */
@@ -11851,7 +11856,12 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case CCALL_SELECTOR_1: /* 0x001 */
             check_cop2x(ctx);
-            generate_ccall_notrap(ctx, r16, r11);
+            generate_ccall_notrap(ctx, r16, r11, 0);
+            opn = "ccall";
+            break;
+        case CCALL_SELECTOR_2: /*0x002 */
+            check_cop2x(ctx);
+            generate_ccall_notrap(ctx, r16, r11, 1);
             opn = "ccall";
             break;
         default:
