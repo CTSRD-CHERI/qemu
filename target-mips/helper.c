@@ -827,9 +827,22 @@ void mips_cpu_do_interrupt(CPUState *cs)
             // qemu_log("%s: EPC <- " TARGET_FMT_lx "\n", __func__,
             //  exception_resume_pc(env));
             // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
-            env->CP0_EPC -= env->active_tc.PCC.cr_base;
-            env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
-            env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_EPC;
+            cap_register_t *pcc = &env->active_tc.PCC;
+            env->CP0_EPC -= pcc->cr_base;
+            /*
+             * Handle special case when PCC is unrepresentable (and has been untagged)
+             * EPC = offending offset
+             * EPCC.offset = offending cursor
+             */
+            if (!is_representable(pcc->cr_sealed, pcc->cr_base, pcc->cr_length,
+                                  pcc->cr_offset, 0)) {
+                nullify_capability(pcc->cr_base + pcc->cr_offset, pcc);
+                env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
+            }
+            else {
+                env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
+                env->active_tc.C[CP2CAP_EPCC].cr_offset = env->CP0_EPC;
+            }
 #endif /* TARGET_CHERI */
         }
 #ifdef TARGET_CHERI

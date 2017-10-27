@@ -1690,18 +1690,32 @@ is_cap_sealed(cap_register_t *cp)
     return (cp->cr_sealed) ? true : false;
 }
 
-#ifdef CHERI_MAGIC128
-
-#define CHERI_CAP_SIZE  16
-
-static inline void int_to_cap(uint64_t x, cap_register_t *cr)
+/*
+ * Convert 64-bit integer into a capability that holds the integer in
+ * its offset field.
+ *
+ *       cap.base = 0, cap.tag = false, cap.offset = x
+ *
+ * The contents of other fields of int to cap depends on the capability
+ * compression scheme in use (e.g. 256-bit capabilities or 128-bit
+ * compressed capabilities). In particular, with 128-bit compressed
+ * capabilities, length is not always zero. The length of a capability
+ * created via int to cap is not semantically meaningful, and programs
+ * should not rely on it having any particular value.
+ */
+static inline void
+int_to_cap(uint64_t x, cap_register_t *cr)
 {
 
     (void)null_capability(cr);
     cr->cr_offset = x;
 }
 
-static inline bool
+#ifdef CHERI_MAGIC128
+
+#define CHERI_CAP_SIZE  16
+
+bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t inc)
 {
@@ -1993,7 +2007,7 @@ static uint64_t compress_128cap(cap_register_t *csp)
  *   where Imid = i<E+19, E>, Amid = a<E+19, E>, R = B - 2^12 and a =
  *   base + offset.
  */
-static bool
+bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t inc)
 {
@@ -2102,33 +2116,19 @@ became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 		do_raise_c2_exception(env, CP2Ca_INEXACT, reg);
 }
 
-/*
- * Convert 64-bit integer into a capability that holds the integer in
- * its offset field.
- *
- *       cap.base = 0, cap.tag = false, cap.offset = x
- *
- * The contents of other fields of int to cap depends on the capability
- * compression scheme in use (e.g. 256-bit capabilities or 128-bit
- * compressed capabilities). In particular, with 128-bit compressed
- * capabilities, length is not always zero. The length of a capability
- * created via int to cap is not semantically meaningful, and programs
- * should not rely on it having any particular value.
- */
-static inline void int_to_cap(uint64_t x, cap_register_t *cr)
-{
-
-    (void)null_capability(cr);
-    cr->cr_offset = x;
-}
-
 target_ulong helper_ccheck_imprecise(CPUMIPSState *env, target_ulong inc)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
 
     if (!is_representable(is_cap_sealed(pcc), pcc->cr_base, pcc->cr_length,
                 pcc->cr_offset, inc)) {
-        int_to_cap(pcc->cr_base + inc, pcc);
+        /*
+         * Clear the tag and set the proper offset here. The capability
+         * will be adjusted when handling the exception to avoid losing
+         * information about the bounds before actually setting EPC.
+         */
+        pcc->cr_tag = 0;
+        pcc->cr_offset = inc;
     }
 
     return (pcc->cr_base);
@@ -2138,14 +2138,7 @@ target_ulong helper_ccheck_imprecise(CPUMIPSState *env, target_ulong inc)
 
 #define CHERI_CAP_SIZE  32
 
-static inline void int_to_cap(uint64_t x, cap_register_t *cr)
-{
-
-    (void)null_capability(cr);
-    cr->cr_offset = x;
-}
-
-static inline bool
+bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t inc)
 {
