@@ -2009,7 +2009,7 @@ static uint64_t compress_128cap(cap_register_t *csp)
  */
 bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
-        uint64_t inc)
+        uint64_t new_offset)
 {
 #ifdef SIMPLE_REPRESENT_CHECK
     cap_register_t c;
@@ -2029,11 +2029,11 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
     } else {
         c.cr_base = base;
         c.cr_length = length;
-        c.cr_offset = inc;
+        c.cr_offset = new_offset;
         c.cr_sealed = sealed;
 
         pesbt = compress_128cap(&c);
-        decompress_128cap(pesbt, base + inc, &c);
+        decompress_128cap(pesbt, base + new_offset, &c);
 
         if (c.cr_base != base || c.cr_length != length || c.cr_offset != inc)
             return false;
@@ -2044,10 +2044,9 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
     int64_t b, r, Imid, Amid;
     uint64_t t;
     bool inRange, inLimits;
+    int64_t inc = new_offset - offset;
 
 #define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
-    /* Note here inc is the new offset, not the increment */
-    inc = inc - offset;
 
     /* Check for the boundary cases. */
     if (e == 0) {
@@ -2074,7 +2073,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
      * for sealed capabilities we need to check if that changes the
      * precision.
      *
-     * See CHERI Architecture Section 5.9:
+     * See CHERI Architecture Section 4.11:
      *
      * "Sealed capabilities have more restrictive alignment requirements
      * due to fewer bits available to represent T and B. The hardware
@@ -2891,7 +2890,7 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (!is_representable(true, csp->cr_base, csp->cr_length,
-                csp->cr_offset, 0ul)) {
+                csp->cr_offset, csp->cr_offset)) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         *cdp = *csp;
