@@ -2858,8 +2858,8 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
     return (target_ulong)0;
 }
 
-void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
-        uint32_t ct)
+static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
+                         uint32_t ct, bool conditional)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cdp = &env->active_tc.C[cd];
@@ -2878,7 +2878,12 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!ctp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_TAG, ct);
+        if (conditional)
+            *cdp = *csp;
+        else
+            do_raise_c2_exception(env, CP2Ca_TAG, ct);
+    } else if (conditional && ctp->cr_base + ctp->cr_offset == -1) {
+        *cdp = *csp;
     } else if (is_cap_sealed(csp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (is_cap_sealed(ctp)) {
@@ -2897,6 +2902,23 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         cdp->cr_sealed = 1;
         cdp->cr_otype = (uint32_t)ct_base_plus_offset;
     }
+}
+
+void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
+        uint32_t ct)
+{
+    /*
+     * CSeal: Seal a capability
+     */
+    cseal_common(env, cd, cs, ct, false);
+}
+
+void helper_ccseal(CPUMIPSState *env, uint32_t cd, uint32_t cs, uint32_t ct)
+{
+    /*
+     * CCSeal: Conditionally seal a capability.
+     */
+    cseal_common(env, cd, cs, ct, true);
 }
 
 void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)

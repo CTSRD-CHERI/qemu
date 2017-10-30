@@ -1182,6 +1182,7 @@ enum {
     OPC_CMOVN_NI        = OPC_CAP_NI | (0x1c),
     OPC_CBUILDCAP_NI    = OPC_CAP_NI | (0x1d),
     OPC_CCOPYTYPE_NI    = OPC_CAP_NI | (0x1e),
+    OPC_CCSEAL_NI       = OPC_CAP_NI | (0x1f),
     OPC_CTESTSUBSET_NI  = OPC_CAP_NI | (0x20),
     OPC_CNEXEQ_NI       = OPC_CAP_NI | (0x21),
 };
@@ -2427,6 +2428,18 @@ static inline void generate_cbuildcap(int32_t cd, int32_t cb, int32_t ct)
     gen_helper_cbuildcap(cpu_env, tcd, tcb, tct);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tct);
+}
+
+static inline void generate_ccseal(int32_t cd, int32_t cs, int32_t ct)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_ccseal(cpu_env, tcd, tcs, tct);    
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcs);
     tcg_temp_free_i32(tct);
 }
 
@@ -11564,7 +11577,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_cmovn(r16, r11, r6);
             opn = "cmovn";
             break;
-        case OPC_CBUILDCAP_NI:
+        case OPC_CBUILDCAP_NI: /* 0x1d */
             check_cop2x(ctx);
             generate_check_access_idc(ctx, r16);
             generate_check_access_idc(ctx, r11);
@@ -11572,7 +11585,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_cbuildcap(r16, r11, r6);
             opn = "cbuildcap";
             break;
-        case OPC_CCOPYTYPE_NI:
+        case OPC_CCOPYTYPE_NI: /* 0x1e */
             check_cop2x(ctx);
             generate_check_access_idc(ctx, r16);
             generate_check_access_idc(ctx, r11);
@@ -11580,14 +11593,20 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_ccopytype(r16, r11, r6);
             opn = "ccopytype";
             break;
-        case OPC_CTESTSUBSET_NI:
+        case OPC_CCSEAL_NI: /* 0x1f */
+            check_cop2x(ctx);
+            generate_check_access_idc(ctx, r16);
+            generate_check_access_idc(ctx, r11);
+            generate_check_access_idc(ctx, r6);
+            generate_ccseal(r16, r11, r6);
+        case OPC_CTESTSUBSET_NI: /* 0x20 */
             check_cop2x(ctx);
             generate_check_access_idc(ctx, r11);
             generate_check_access_idc(ctx, r6);
             generate_ctestsubset(r16, r11, r6);
             opn = "ctestsubset";
             break;
-        case OPC_CNEXEQ_NI:
+        case OPC_CNEXEQ_NI: /* 0x21 */
             check_cop2x(ctx);
             generate_check_access_idc(ctx, r11);
             generate_check_access_idc(ctx, r6);
