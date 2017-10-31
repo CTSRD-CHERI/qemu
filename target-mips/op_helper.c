@@ -1686,7 +1686,6 @@ void helper_mtc0_framemask(CPUMIPSState *env, target_ulong arg1)
 static inline bool
 is_cap_sealed(cap_register_t *cp)
 {
-
     return (cp->cr_sealed) ? true : false;
 }
 
@@ -1719,7 +1718,6 @@ bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t inc)
 {
-
     return true;
 }
 
@@ -1842,7 +1840,13 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
  *  otype.hi: 31-20 (12 bits)
  *  T: 19-12        (8 bits)
  *  otype.lo: 11-0  (12 bits)
+ * 
+ * Note that the exponent and length are stored in memory
+ * XORed with the NULL capability fields, this ensures that
+ * a NULL capability in-memory representation is all zero.
  */
+#define NULL_TOP_XOR_MASK 0xfffff
+#define NULL_EXP_XOR_MASK 0x30
 
 /*
  * Decompress a 128-bit capability.
@@ -1856,10 +1860,10 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
 
     if ((pesbt & (1ull << 40)) == 0) {
         /* Unsealed 128-bit Capability */
-        t = getbits(pesbt, 0, 20);
+        t = getbits(pesbt, 0, 20) ^ NULL_TOP_XOR_MASK;
         b = getbits(pesbt, 20, 20);
         cdp->cr_sealed = 0;
-        e = (uint32_t)getbits(pesbt, 41, 6);
+        e = (uint32_t)getbits(pesbt, 41, 6) ^ NULL_EXP_XOR_MASK;
         cdp->cr_perms = getbits(pesbt, 49, 11);
         cdp->cr_uperms = getbits(pesbt, 60, 4);
         cdp->cr_otype = 0;
@@ -1906,6 +1910,7 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_length = (t << e) - base;
     } else if (e > 44) {
         /* Special case when e = 48. */
+        printf("XXXAM: decompress e > 44 b:%lx t:%lx\n", b, t);
 
         /* Will bot overflow when we shift it? */
         if (b & 0x80000ul) {
@@ -1922,6 +1927,7 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         } else {
             cdp->cr_length = (t << 45) - base;
         }
+        printf("XXXAM: decompress length %lx\n", cdp->cr_length);
     } else if (e == 0) {
         shift = CHERI128_M_SIZE_UNSEALED;
         base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
@@ -1984,6 +1990,10 @@ static uint64_t compress_128cap(cap_register_t *csp)
             (uint64_t)(csp->cr_otype & 0x000fff);
     } else {
         /* unsealed */
+        printf("compress e <- %lx\n", e);
+        e = e ^ NULL_EXP_XOR_MASK;
+        t = t ^ NULL_TOP_XOR_MASK;
+        printf("compress e (xor) <- %lx\n", e);
         ret = (perms << 49) | ((uint64_t)e << 41) | (b << 20) | t;
     }
 
@@ -2141,7 +2151,6 @@ bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t inc)
 {
-
     return true;
 }
 
