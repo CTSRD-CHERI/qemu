@@ -1910,7 +1910,6 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_length = (t << e) - base;
     } else if (e > 44) {
         /* Special case when e = 48. */
-        printf("XXXAM: decompress e > 44 b:%lx t:%lx\n", b, t);
 
         /* Will bot overflow when we shift it? */
         if (b & 0x80000ul) {
@@ -1927,7 +1926,6 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         } else {
             cdp->cr_length = (t << 45) - base;
         }
-        printf("XXXAM: decompress length %lx\n", cdp->cr_length);
     } else if (e == 0) {
         shift = CHERI128_M_SIZE_UNSEALED;
         base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
@@ -1990,10 +1988,8 @@ static uint64_t compress_128cap(cap_register_t *csp)
             (uint64_t)(csp->cr_otype & 0x000fff);
     } else {
         /* unsealed */
-        printf("compress e <- %lx\n", e);
         e = e ^ NULL_EXP_XOR_MASK;
         t = t ^ NULL_TOP_XOR_MASK;
-        printf("compress e (xor) <- %lx\n", e);
         ret = (perms << 49) | ((uint64_t)e << 41) | (b << 20) | t;
     }
 
