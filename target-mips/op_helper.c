@@ -1738,7 +1738,7 @@ became_unrepresentable(CPUMIPSState *env, uint16_t reg)
  * compressing and decompressing the capability and checking to
  * see if it is the same.
  */
-//#define SIMPLE_REPRESENT_CHECK
+#define SIMPLE_REPRESENT_CHECK
 
 #ifndef SIMPLE_REPRESENT_CHECK
 static inline bool all_ones(uint64_t offset, uint32_t e)
@@ -2014,6 +2014,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 #ifdef SIMPLE_REPRESENT_CHECK
     cap_register_t c;
     uint64_t pesbt;
+
     /* Simply compress and uncompress to check. */
     if (sealed) {
         c.cr_base = base;
@@ -2046,8 +2047,6 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
     bool inRange, inLimits;
 
 #define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
-    /* Note here inc is the new offset, not the increment */
-    inc = inc - offset;
 
     /* Check for the boundary cases. */
     if (e == 0) {
