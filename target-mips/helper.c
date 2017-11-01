@@ -834,12 +834,15 @@ void mips_cpu_do_interrupt(CPUState *cs)
              * EPC = offending offset
              * EPCC.offset = offending cursor
              */
+#ifdef CHERI_128
             if (!is_representable(pcc->cr_sealed, pcc->cr_base, pcc->cr_length,
                                   0, pcc->cr_offset)) {
                 nullify_capability(pcc->cr_base + pcc->cr_offset, pcc);
                 env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
             }
-            else {
+            else
+#endif
+            {
                 env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
                 env->active_tc.C[CP2CAP_EPCC].cr_offset = env->CP0_EPC;
             }
