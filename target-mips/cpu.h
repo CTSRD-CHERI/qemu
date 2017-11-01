@@ -220,12 +220,9 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
  */
 static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
 {
-    /* null_capability(cr); */
-    /* cr->cr_offset = x; */
     cr->cr_tag = 0;
     cr->cr_base = 0;
     cr->cr_length = -1;
-    cr->cr_length = 0;
     cr->cr_offset = x;
     return cr;
 }

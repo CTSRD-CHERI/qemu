@@ -1841,11 +1841,10 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
  *  T: 19-12        (8 bits)
  *  otype.lo: 11-0  (12 bits)
  * 
- * Note that the exponent and length are stored in memory
- * XORed with the NULL capability fields, this ensures that
+ * Note that the exponent is stored in memory XORed with
+ * the NULL capability exponent, this ensures that
  * a NULL capability in-memory representation is all zero.
  */
-#define NULL_TOP_XOR_MASK 0xfffff
 #define NULL_EXP_XOR_MASK 0x30
 
 /*
@@ -1860,10 +1859,10 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
 
     if ((pesbt & (1ull << 40)) == 0) {
         /* Unsealed 128-bit Capability */
-        t = getbits(pesbt, 0, 20) ^ NULL_TOP_XOR_MASK;
+        t = getbits(pesbt, 0, 20);
         b = getbits(pesbt, 20, 20);
         cdp->cr_sealed = 0;
-        e = (uint32_t)getbits(pesbt, 41, 6) ^ NULL_EXP_XOR_MASK;
+        e = (uint32_t)getbits(pesbt, 41, 6);
         cdp->cr_perms = getbits(pesbt, 49, 11);
         cdp->cr_uperms = getbits(pesbt, 60, 4);
         cdp->cr_otype = 0;
@@ -1878,6 +1877,7 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_perms = getbits(pesbt, 49, 11);
         cdp->cr_uperms = getbits(pesbt, 60, 4);
     }
+    e = e ^ NULL_EXP_XOR_MASK;
     cdp->cr_pesbt = pesbt;
 
 #if 1 /* Still required for some 128-bit cheritests. */
@@ -1911,6 +1911,12 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
     } else if (e > 44) {
         /* Special case when e = 48. */
 
+        /* In this case the requested length must have been the
+         * size of the address-space.
+         * This is required for proper representation of NULL.
+         */
+        cdp->cr_length = -1UL;
+
         /* Will bot overflow when we shift it? */
         if (b & 0x80000ul) {
             /* Yes, just make it max uint64_t. */
@@ -1919,13 +1925,13 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
             base = b << 45;
         }
 
-        /* Will top overflow when we shift it? */
-        if (t & 0x80000ull) {
-            /* Yes, just make it max uint64_t and calculate length. */
-            cdp->cr_length = 0xfffffffffffffffful - base;
-        } else {
-            cdp->cr_length = (t << 45) - base;
-        }
+        /* /\* Will top overflow when we shift it? *\/ */
+        /* if (t & 0x80000ull) { */
+        /*     /\* Yes, just make it max uint64_t and calculate length. *\/ */
+        /*     cdp->cr_length = 0xfffffffffffffffful - base; */
+        /* } else { */
+        /*     cdp->cr_length = (t << 45) - base; */
+        /* } */
     } else if (e == 0) {
         shift = CHERI128_M_SIZE_UNSEALED;
         base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
@@ -1978,6 +1984,7 @@ static uint64_t compress_128cap(cap_register_t *csp)
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) <<
                 CAP_UPERMS_MEM_SHFT) |
             (csp->cr_perms & CAP_PERMS_ALL));
+    e = e ^ NULL_EXP_XOR_MASK;
     if (is_cap_sealed(csp)) {
         /* sealed */
         ret = (perms << 49) |
@@ -1988,8 +1995,6 @@ static uint64_t compress_128cap(cap_register_t *csp)
             (uint64_t)(csp->cr_otype & 0x000fff);
     } else {
         /* unsealed */
-        e = e ^ NULL_EXP_XOR_MASK;
-        t = t ^ NULL_TOP_XOR_MASK;
         ret = (perms << 49) | ((uint64_t)e << 41) | (b << 20) | t;
     }
 

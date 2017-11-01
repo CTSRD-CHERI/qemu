@@ -835,7 +835,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
              * EPCC.offset = offending cursor
              */
             if (!is_representable(pcc->cr_sealed, pcc->cr_base, pcc->cr_length,
-                                  pcc->cr_offset, pcc->cr_offset)) {
+                                  0, pcc->cr_offset)) {
                 nullify_capability(pcc->cr_base + pcc->cr_offset, pcc);
                 env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
             }
