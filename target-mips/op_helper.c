@@ -2099,7 +2099,8 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 #undef SEALED_MASK
     }
 
-    r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
+    /* r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK); */
+    r = ((b - (1ul << 12)) & MOD_MASK);
 
     /* inRange, test if bits are all the same */
     inRange = all_ones(inc, e) || all_zeroes(inc, e);
