@@ -4130,6 +4130,21 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
     }
 }
 
+
+target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
+        uint32_t cb, target_ulong addr)
+{
+    /* This could be done in helper_bytes2cap_128 but TCG limits the number
+     * of arguments to 5 so we have to have a separate helper to handle the tag.
+     */
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    target_ulong tag = cheri_tag_get(env, addr, cd, NULL);
+
+    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
+        tag = 0;
+    return tag;
+}
+
 void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         target_ulong cursor)
 {
@@ -4138,20 +4153,15 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
     decompress_128cap(pesbt, cursor, cdp);
 }
 
-void helper_bytes2cap_128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
-                             target_ulong cursor, target_ulong addr)
+void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
+        target_ulong tag, target_ulong addr, target_ulong cursor)
 {
     /* This could be done in helper_bytes2cap_128 but TCG limits the number
      * of arguments to 5 so we have to have a separate helper to handle the tag.
      */
-    cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *cdp = &env->active_tc.C[cd];
-    uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
 
-    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
-        tag = 0;
     cdp->cr_tag = tag;
-
     /* Log memory read, if needed. */
     dump_cap_load(addr, cdp->cr_pesbt, cursor, tag);
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);

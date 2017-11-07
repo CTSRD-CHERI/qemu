@@ -3343,6 +3343,7 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
+    TCGv ttag = tcg_temp_new();
 
     /* Check the cap registers and compute the address. */
     gen_load_gpr(t0, rt);
@@ -3359,9 +3360,11 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
     tcg_gen_subi_tl(taddr, taddr, 8);
 
     /* Store in the capability register. */
+    gen_helper_bytes2cap_128_tag_get(ttag, cpu_env, tcd, tcb, taddr);
     gen_helper_bytes2cap_128(cpu_env, tcd, t0, t1);
-    gen_helper_bytes2cap_128_tag(cpu_env, tcb, tcd, t1, taddr);
+    gen_helper_bytes2cap_128_tag_set(cpu_env, tcd, ttag, taddr, t1);
 
+    tcg_temp_free(ttag);
     tcg_temp_free(t1);
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
@@ -3377,6 +3380,7 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
+    TCGv ttag = tcg_temp_new();
 
     /* Check the cap registers and compute the address. */
     gen_helper_cllc_addr(taddr, cpu_env, tcd, tcb);
@@ -3392,9 +3396,11 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
     tcg_gen_subi_tl(taddr, taddr, 8);
 
     /* Store in the capability register. */
+    gen_helper_bytes2cap_128_tag_get(ttag, cpu_env, tcd, tcb, taddr);
     gen_helper_bytes2cap_128(cpu_env, tcd, t0, t1);
-    gen_helper_bytes2cap_128_tag(cpu_env, tcb, tcd, t1, taddr);
+    gen_helper_bytes2cap_128_tag_set(cpu_env, tcd, ttag, taddr, t1);
 
+    tcg_temp_free(ttag);
     tcg_temp_free(t1);
     tcg_temp_free(t0);
     tcg_temp_free(taddr);

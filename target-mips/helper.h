@@ -251,7 +251,8 @@ DEF_HELPER_2(cheri_debug_message, void, env, i64)
 
 #ifdef CHERI_128
 DEF_HELPER_4(bytes2cap_128, void, env, i32, tl, tl)
-DEF_HELPER_5(bytes2cap_128_tag, void, env, i32, i32, tl, tl)
+DEF_HELPER_4(bytes2cap_128_tag_get, tl, env, i32, i32, tl)
+DEF_HELPER_5(bytes2cap_128_tag_set, void, env, i32, tl, tl, tl)
 
 DEF_HELPER_3(cap2bytes_128b, tl, env, i32, tl)
 DEF_HELPER_4(cap2bytes_128c, tl, env, i32, i32, tl)
