@@ -1845,6 +1845,8 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
  * the NULL capability exponent, this ensures that
  * a NULL capability in-memory representation is all zero.
  */
+#define NULL_TOP8_XOR_MASK 0x80000
+#define NULL_TOP20_XOR_MASK 0x80000
 #define NULL_EXP_XOR_MASK 0x30
 
 /*
@@ -1866,6 +1868,7 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_perms = getbits(pesbt, 49, 11);
         cdp->cr_uperms = getbits(pesbt, 60, 4);
         cdp->cr_otype = 0;
+        t = t ^ NULL_TOP20_XOR_MASK;
     } else {
         /* Sealed 128-bit Capability */
         t = getbits(pesbt, 12, 8) << 12;
@@ -1876,6 +1879,7 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         e = (uint32_t)getbits(pesbt, 41, 6);
         cdp->cr_perms = getbits(pesbt, 49, 11);
         cdp->cr_uperms = getbits(pesbt, 60, 4);
+        t = t ^ NULL_TOP8_XOR_MASK;
     }
     e = e ^ NULL_EXP_XOR_MASK;
     cdp->cr_pesbt = pesbt;
@@ -1890,6 +1894,9 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
 #endif
 
+    /* XXXAM: here R is capped again, this was causing troubles in representability
+     * probably should removed here as well.
+     */
     if (b > 4096ul)
         r = b - 4096ul;
     else
@@ -1909,29 +1916,11 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         base = b << e;
         cdp->cr_length = (t << e) - base;
     } else if (e > 44) {
-        /* Special case when e = 48. */
-
-        /* In this case the requested length must have been the
-         * size of the address-space.
-         * This is required for proper representation of NULL.
-         */
-        cdp->cr_length = -1UL;
-
-        /* Will bot overflow when we shift it? */
-        if (b & 0x80000ul) {
-            /* Yes, just make it max uint64_t. */
-            base = 0xfffffffffffffffful;
-        } else {
-            base = b << 45;
-        }
-
-        /* /\* Will top overflow when we shift it? *\/ */
-        /* if (t & 0x80000ull) { */
-        /*     /\* Yes, just make it max uint64_t and calculate length. *\/ */
-        /*     cdp->cr_length = 0xfffffffffffffffful - base; */
-        /* } else { */
-        /*     cdp->cr_length = (t << 45) - base; */
-        /* } */
+        base = b << 45;
+        if (t & 0x80000ul)
+            cdp->cr_length = -1UL - base;
+        else
+            cdp->cr_length = (t << 45) - base;
     } else if (e == 0) {
         shift = CHERI128_M_SIZE_UNSEALED;
         base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
@@ -1945,7 +1934,6 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
             (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
             (t << e)) - base;
     }
-
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
 }
@@ -1963,17 +1951,22 @@ static uint64_t compress_128cap(cap_register_t *csp)
     e = compute_e(rlength);
 
 #define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
-
     if (e == 0) {
         b = base_req & MOD_MASK;
         t = (base_req + rlength) & MOD_MASK;
     } else if (e > 44) {
-        /*
-         * Special case e > 44. Don't waste the most significant bit
-         * by shifting too much.
+        /* CHERI length is a 65 bit value so we can not represent internally
+         * the maximum length of 2^64.
+         * The maximum representable address is treated specially because
+         * we can not distinguish between a length of 2^64 and (2^64 - 1).
          */
-        b = (base_req >> 44) & MOD_MASK;
-        t = ((base_req + rlength) >> 44) & MOD_MASK;
+        b = (base_req >> 45) & MOD_MASK;
+        if (base_req + rlength == -1ULL)
+            /* max address represented as max_addr + 1 */
+            t = 0x80000;
+        else
+            /* just shift and truncate */
+            t = ((base_req + rlength) >> 45) & MOD_MASK;
     } else {
         b = (base_req >> e) & MOD_MASK;
         t = ((base_req + rlength) >> e) & MOD_MASK;
@@ -1987,6 +1980,7 @@ static uint64_t compress_128cap(cap_register_t *csp)
     e = e ^ NULL_EXP_XOR_MASK;
     if (is_cap_sealed(csp)) {
         /* sealed */
+        t = t ^ NULL_TOP8_XOR_MASK;
         ret = (perms << 49) |
             ((uint64_t)e << 41) | (1ull << 40) |
             ((b & ~((1ull << 12) - 1)) << 20) |
@@ -1995,6 +1989,7 @@ static uint64_t compress_128cap(cap_register_t *csp)
             (uint64_t)(csp->cr_otype & 0x000fff);
     } else {
         /* unsealed */
+        t = t ^ NULL_TOP20_XOR_MASK;
         ret = (perms << 49) | ((uint64_t)e << 41) | (b << 20) | t;
     }
 
