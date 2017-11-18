@@ -1371,6 +1371,32 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
 
     ret = get_errno(sysctl(snamep, namelen, holdp, &holdlen, hnewp, newlen));
     if (!ret && (holdp != 0)) {
+
+        /*
+         * In case we are retrieving the argument vectors with kvm_getargv,
+         * remove the interpreter name and the interpreter prefix from the argument vectors
+         */
+        if (snamep[0] == CTL_KERN && snamep[1] == KERN_PROC && snamep[2] == KERN_PROC_ARGS) {
+            int len;
+
+            /* remove the interpreter name (1st arg: /usr/local/bin/qemu-xxx-static) */
+            len = strlen(holdp);
+            memcpy(holdp, holdp + len + 1, holdlen - len - 1);
+            holdlen = holdlen - len - 1;
+
+            /* if the 2nd arg is "-L" remove it and
+             * remove the 3rd arg (interpreter prefix: /usr/gnemul/qemu-xxx)
+             */
+            if (strncmp(holdp, "-L", 2) == 0) {
+                memcpy(holdp, holdp + 3, holdlen - 3);
+                holdlen = holdlen - 3;
+
+                len = strlen(holdp);
+                memcpy(holdp, holdp + len + 1, holdlen - len - 1);
+                holdlen = holdlen - len - 1;
+            }
+        }
+
         if (0 == snamep[0] && (2 == snamep[1] || 3 == snamep[1] ||
                     4 == snamep[1])) {
             switch (snamep[1]) {
