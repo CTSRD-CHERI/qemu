@@ -251,6 +251,19 @@
     '*poll-us':    'uint32'} }
 
 ##
+# @NetdevPcapOptions:
+#
+# Use ifname as a source to capture
+#
+# @ifname: #required to determine which interface to capture
+#
+# Since: 1.2
+##
+{ 'struct': 'NetdevPcapOptions',
+  'data': {
+    '*ifname':     'str' } }
+
+##
 # @NetdevSocketOptions:
 #
 # Socket netdevs are used to establish a network connection to another
@@ -461,7 +474,8 @@
 ##
 { 'enum': 'NetClientDriver',
   'data': [ 'none', 'nic', 'user', 'tap', 'l2tpv3', 'socket', 'vde',
-            'bridge', 'hubport', 'netmap', 'vhost-user', 'vhost-vdpa' ] }
+            'bridge', 'hubport', 'netmap', 'vhost-user', 'vhost-vdpa',
+            'pcap' ] }
 
 ##
 # @Netdev:
@@ -490,7 +504,8 @@
     'hubport':  'NetdevHubPortOptions',
     'netmap':   'NetdevNetmapOptions',
     'vhost-user': 'NetdevVhostUserOptions',
-    'vhost-vdpa': 'NetdevVhostVDPAOptions' } }
+    'vhost-vdpa': 'NetdevVhostVDPAOptions',
+    'pcap':	'NetdevPcapOptions' } }
 
 ##
 # @NetFilterDirection:
