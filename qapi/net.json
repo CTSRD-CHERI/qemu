@@ -262,6 +262,19 @@
     '*poll-us':    'uint32'} }
 
 ##
+# @NetdevPcapOptions:
+#
+# Use ifname as a source to capture
+#
+# @ifname: #required to determine which interface to capture
+#
+# Since: 1.2
+##
+{ 'struct': 'NetdevPcapOptions',
+  'data': {
+    '*ifname':     'str' } }
+
+##
 # @NetdevSocketOptions:
 #
 # Socket netdevs are used to establish a network connection to another
@@ -449,7 +462,7 @@
 ##
 { 'enum': 'NetClientDriver',
   'data': [ 'none', 'nic', 'user', 'tap', 'l2tpv3', 'socket', 'vde',
-            'bridge', 'hubport', 'netmap', 'vhost-user' ] }
+            'bridge', 'hubport', 'netmap', 'vhost-user', 'pcap' ] }
 
 ##
 # @Netdev:
@@ -477,7 +490,8 @@
     'bridge':   'NetdevBridgeOptions',
     'hubport':  'NetdevHubPortOptions',
     'netmap':   'NetdevNetmapOptions',
-    'vhost-user': 'NetdevVhostUserOptions' } }
+    'vhost-user': 'NetdevVhostUserOptions',
+    'pcap':	'NetdevPcapOptions' } }
 
 ##
 # @NetLegacy:
@@ -505,7 +519,11 @@
 ##
 { 'enum': 'NetLegacyOptionsType',
   'data': ['none', 'nic', 'user', 'tap', 'l2tpv3', 'socket', 'vde',
+<<<<<<< HEAD
            'bridge', 'netmap', 'vhost-user'] }
+=======
+           'dump', 'bridge', 'netmap', 'vhost-user', 'pcap'] }
+>>>>>>> bef39ec7ad... Update net.json to support --enable-pcap
 
 ##
 # @NetLegacyOptions:
@@ -526,7 +544,8 @@
     'vde':      'NetdevVdeOptions',
     'bridge':   'NetdevBridgeOptions',
     'netmap':   'NetdevNetmapOptions',
-    'vhost-user': 'NetdevVhostUserOptions' } }
+    'vhost-user': 'NetdevVhostUserOptions',
+    'pcap':	'NetdevPcapOptions' } }
 
 ##
 # @NetFilterDirection:
