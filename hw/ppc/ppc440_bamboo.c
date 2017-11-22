@@ -11,7 +11,7 @@
  *
  */
 
-#include "config.h"
+#include "qemu/osdep.h"
 #include "qemu-common.h"
 #include "net/net.h"
 #include "hw/hw.h"
@@ -193,6 +193,12 @@ static void bamboo_init(MachineState *machine)
     }
     env = &cpu->env;
 
+    if (env->mmu_model != POWERPC_MMU_BOOKE) {
+        fprintf(stderr, "MMU model %i not supported by this machine.\n",
+            env->mmu_model);
+        exit(1);
+    }
+
     qemu_register_reset(main_cpu_reset, cpu);
     ppc_booke_timers_init(cpu, 400000000, 0);
     ppc_dcr_init(env, NULL, NULL);
@@ -256,7 +262,8 @@ static void bamboo_init(MachineState *machine)
                               NULL, NULL);
         if (success < 0) {
             success = load_elf(kernel_filename, NULL, NULL, &elf_entry,
-                               &elf_lowaddr, NULL, 1, ELF_MACHINE, 0);
+                               &elf_lowaddr, NULL, 1, PPC_ELF_MACHINE,
+                               0, 0);
             entry = elf_entry;
             loadaddr = elf_lowaddr;
         }
@@ -288,20 +295,12 @@ static void bamboo_init(MachineState *machine)
             exit(1);
         }
     }
-
-    if (kvm_enabled())
-        kvmppc_init();
 }
 
-static QEMUMachine bamboo_machine = {
-    .name = "bamboo",
-    .desc = "bamboo",
-    .init = bamboo_init,
-};
-
-static void bamboo_machine_init(void)
+static void bamboo_machine_init(MachineClass *mc)
 {
-    qemu_register_machine(&bamboo_machine);
+    mc->desc = "bamboo";
+    mc->init = bamboo_init;
 }
 
-machine_init(bamboo_machine_init);
+DEFINE_MACHINE("bamboo", bamboo_machine_init)

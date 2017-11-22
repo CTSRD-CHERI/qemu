@@ -30,6 +30,7 @@
  * THE SOFTWARE.
  */
 
+#include "qemu/osdep.h"
 #include "qemu-common.h"
 #include "ui/console.h"
 #include "hw/usb.h"
@@ -44,4 +45,9 @@ void hmp_info_usbhost(Monitor *mon, const QDict *qdict)
 USBDevice *usb_host_device_open(USBBus *bus, const char *devname)
 {
     return NULL;
+}
+
+bool usb_host_dev_is_scsi_storage(USBDevice *ud)
+{
+    return false;
 }

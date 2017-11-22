@@ -1,5 +1,5 @@
 #ifndef HW_QXL_H
-#define HW_QXL_H 1
+#define HW_QXL_H
 
 #include "qemu-common.h"
 
@@ -40,6 +40,7 @@ typedef struct PCIQXLDevice {
     uint32_t           cmdlog;
 
     uint32_t           guest_bug;
+    Error              *migration_blocker;
 
     enum qxl_mode      mode;
     uint32_t           cmdflags;
@@ -53,7 +54,8 @@ typedef struct PCIQXLDevice {
 
     struct guest_slots {
         QXLMemSlot     slot;
-        void           *ptr;
+        MemoryRegion   *mr;
+        uint64_t       offset;
         uint64_t       size;
         uint64_t       delta;
         uint32_t       active;
@@ -104,9 +106,9 @@ typedef struct PCIQXLDevice {
 #endif
 
     /* vram pci bar */
-    uint32_t           vram_size;
+    uint64_t           vram_size;
     MemoryRegion       vram_bar;
-    uint32_t           vram32_size;
+    uint64_t           vram32_size;
     MemoryRegion       vram32_bar;
 
     /* io bar */
@@ -117,6 +119,8 @@ typedef struct PCIQXLDevice {
     uint32_t          vram_size_mb;
     uint32_t          vram32_size_mb;
     uint32_t          vgamem_size_mb;
+    uint32_t          xres;
+    uint32_t          yres;
 
     /* qxl_render_update state */
     int                render_update_cookie_num;

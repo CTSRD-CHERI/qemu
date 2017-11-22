@@ -1,9 +1,11 @@
 # -*- Mode: Python -*-
-#
-# QAPI common definitions
 
 ##
-# @ErrorClass
+# = QAPI common definitions
+##
+
+##
+# @QapiErrorClass:
 #
 # QEMU error classes
 #
@@ -11,9 +13,6 @@
 #                class. This should be the default case for most errors
 #
 # @CommandNotFound: the requested command has not been found
-#
-# @DeviceEncrypted: the requested operation can't be fulfilled because the
-#                   selected device is encrypted
 #
 # @DeviceNotActive: a device has failed to be become active
 #
@@ -24,20 +23,21 @@
 #
 # Since: 1.2
 ##
-{ 'enum': 'ErrorClass',
-  'data': [ 'GenericError', 'CommandNotFound', 'DeviceEncrypted',
+{ 'enum': 'QapiErrorClass',
+  # Keep this in sync with ErrorClass in error.h
+  'data': [ 'GenericError', 'CommandNotFound',
             'DeviceNotActive', 'DeviceNotFound', 'KVMMissingCap' ] }
 
 ##
-# @VersionTriple
+# @VersionTriple:
 #
 # A three-part version number.
 #
-# @qemu.major:  The major version number.
+# @major:  The major version number.
 #
-# @qemu.minor:  The minor version number.
+# @minor:  The minor version number.
 #
-# @qemu.micro:  The micro version number.
+# @micro:  The micro version number.
 #
 # Since: 2.4
 ##
@@ -74,6 +74,21 @@
 # Returns:  A @VersionInfo object describing the current version of QEMU.
 #
 # Since: 0.14.0
+#
+# Example:
+#
+# -> { "execute": "query-version" }
+# <- {
+#       "return":{
+#          "qemu":{
+#             "major":0,
+#             "minor":11,
+#             "micro":5
+#          },
+#          "package":""
+#       }
+#    }
+#
 ##
 { 'command': 'query-version', 'returns': 'VersionInfo' }
 
@@ -96,11 +111,28 @@
 # Returns: A list of @CommandInfo for all supported commands
 #
 # Since: 0.14.0
+#
+# Example:
+#
+# -> { "execute": "query-commands" }
+# <- {
+#      "return":[
+#         {
+#            "name":"query-balloon"
+#         },
+#         {
+#            "name":"system_powerdown"
+#         }
+#      ]
+#    }
+#
+# Note: This example has been shortened as the real response is too long.
+#
 ##
 { 'command': 'query-commands', 'returns': ['CommandInfo'] }
 
 ##
-# @OnOffAuto
+# @OnOffAuto:
 #
 # An enumeration of three options: on, off, and auto
 #
@@ -114,3 +146,19 @@
 ##
 { 'enum': 'OnOffAuto',
   'data': [ 'auto', 'on', 'off' ] }
+
+##
+# @OnOffSplit:
+#
+# An enumeration of three values: on, off, and split
+#
+# @on: Enabled
+#
+# @off: Disabled
+#
+# @split: Mixed
+#
+# Since: 2.6
+##
+{ 'enum': 'OnOffSplit',
+  'data': [ 'on', 'off', 'split' ] }

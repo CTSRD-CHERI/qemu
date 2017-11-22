@@ -9,7 +9,9 @@
  * This work is licensed under the terms of the GNU GPL, version 2 or later.
  * See the COPYING file in the top-level directory.
  */
+#include "qemu/osdep.h"
 #include "sysemu/hostmem.h"
+#include "qapi/error.h"
 #include "qom/object_interfaces.h"
 
 #define TYPE_MEMORY_BACKEND_RAM "memory-backend-ram"
@@ -26,7 +28,7 @@ ram_backend_memory_alloc(HostMemoryBackend *backend, Error **errp)
     }
 
     path = object_get_canonical_path_component(OBJECT(backend));
-    memory_region_init_ram(&backend->mr, OBJECT(backend), path,
+    memory_region_init_ram_nomigrate(&backend->mr, OBJECT(backend), path,
                            backend->size, errp);
     g_free(path);
 }

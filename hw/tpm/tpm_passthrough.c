@@ -22,10 +22,8 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>
  */
 
-#include <dirent.h>
-
+#include "qemu/osdep.h"
 #include "qemu-common.h"
-#include "qapi/error.h"
 #include "qemu/error-report.h"
 #include "qemu/sockets.h"
 #include "sysemu/tpm_backend.h"
@@ -85,12 +83,37 @@ static void tpm_passthrough_cancel_cmd(TPMBackend *tb);
 
 static int tpm_passthrough_unix_write(int fd, const uint8_t *buf, uint32_t len)
 {
-    return send_all(fd, buf, len);
+    int ret, remain;
+
+    remain = len;
+    while (remain > 0) {
+        ret = write(fd, buf, remain);
+        if (ret < 0) {
+            if (errno != EINTR && errno != EAGAIN) {
+                return -1;
+            }
+        } else if (ret == 0) {
+            break;
+        } else {
+            buf += ret;
+            remain -= ret;
+        }
+    }
+    return len - remain;
 }
 
 static int tpm_passthrough_unix_read(int fd, uint8_t *buf, uint32_t len)
 {
-    return recv_all(fd, buf, len, true);
+    int ret;
+ reread:
+    ret = read(fd, buf, len);
+    if (ret < 0) {
+        if (errno != EINTR && errno != EAGAIN) {
+            return -1;
+        }
+        goto reread;
+    }
+    return ret;
 }
 
 static uint32_t tpm_passthrough_get_size_from_buffer(const uint8_t *buf)
@@ -142,8 +165,7 @@ static int tpm_passthrough_unix_tx_bufs(TPMPassthruState *tpm_pt,
 
     ret = tpm_passthrough_unix_write(tpm_pt->tpm_fd, in, in_len);
     if (ret != in_len) {
-        if (!tpm_pt->tpm_op_canceled ||
-            (tpm_pt->tpm_op_canceled && errno != ECANCELED)) {
+        if (!tpm_pt->tpm_op_canceled || errno != ECANCELED) {
             error_report("tpm_passthrough: error while transmitting data "
                          "to TPM: %s (%i)",
                          strerror(errno), errno);
@@ -155,8 +177,7 @@ static int tpm_passthrough_unix_tx_bufs(TPMPassthruState *tpm_pt,
 
     ret = tpm_passthrough_unix_read(tpm_pt->tpm_fd, out, out_len);
     if (ret < 0) {
-        if (!tpm_pt->tpm_op_canceled ||
-            (tpm_pt->tpm_op_canceled && errno != ECANCELED)) {
+        if (!tpm_pt->tpm_op_canceled || errno != ECANCELED) {
             error_report("tpm_passthrough: error while reading data from "
                          "TPM: %s (%i)",
                          strerror(errno), errno);

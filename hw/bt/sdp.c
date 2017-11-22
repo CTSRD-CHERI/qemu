@@ -17,7 +17,9 @@
  * with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "qemu/osdep.h"
 #include "qemu-common.h"
+#include "qemu/host-utils.h"
 #include "hw/bt.h"
 
 struct bt_l2cap_sdp_state_s {
@@ -42,7 +44,7 @@ struct bt_l2cap_sdp_state_s {
 
 static ssize_t sdp_datalen(const uint8_t **element, ssize_t *left)
 {
-    size_t len = *(*element) ++ & SDP_DSIZE_MASK;
+    uint32_t len = *(*element) ++ & SDP_DSIZE_MASK;
 
     if (!*left)
         return -1;
@@ -150,12 +152,14 @@ static ssize_t sdp_svc_search(struct bt_l2cap_sdp_state_s *sdp,
         if (seqlen < 3 || len < seqlen)
             return -SDP_INVALID_SYNTAX;
         len -= seqlen;
-
         while (seqlen)
             if (sdp_svc_match(sdp, &req, &seqlen))
                 return -SDP_INVALID_SYNTAX;
-    } else if (sdp_svc_match(sdp, &req, &seqlen))
-        return -SDP_INVALID_SYNTAX;
+    } else {
+        if (sdp_svc_match(sdp, &req, &len)) {
+            return -SDP_INVALID_SYNTAX;
+        }
+    }
 
     if (len < 3)
         return -SDP_INVALID_SYNTAX;
@@ -278,8 +282,11 @@ static ssize_t sdp_attr_get(struct bt_l2cap_sdp_state_s *sdp,
         while (seqlen)
             if (sdp_attr_match(record, &req, &seqlen))
                 return -SDP_INVALID_SYNTAX;
-    } else if (sdp_attr_match(record, &req, &seqlen))
-        return -SDP_INVALID_SYNTAX;
+    } else {
+        if (sdp_attr_match(record, &req, &len)) {
+            return -SDP_INVALID_SYNTAX;
+        }
+    }
 
     if (len < 1)
         return -SDP_INVALID_SYNTAX;
@@ -393,8 +400,11 @@ static ssize_t sdp_svc_search_attr_get(struct bt_l2cap_sdp_state_s *sdp,
         while (seqlen)
             if (sdp_svc_match(sdp, &req, &seqlen))
                 return -SDP_INVALID_SYNTAX;
-    } else if (sdp_svc_match(sdp, &req, &seqlen))
-        return -SDP_INVALID_SYNTAX;
+    } else {
+        if (sdp_svc_match(sdp, &req, &len)) {
+            return -SDP_INVALID_SYNTAX;
+        }
+    }
 
     if (len < 3)
         return -SDP_INVALID_SYNTAX;
@@ -413,8 +423,11 @@ static ssize_t sdp_svc_search_attr_get(struct bt_l2cap_sdp_state_s *sdp,
         while (seqlen)
             if (sdp_svc_attr_match(sdp, &req, &seqlen))
                 return -SDP_INVALID_SYNTAX;
-    } else if (sdp_svc_attr_match(sdp, &req, &seqlen))
-        return -SDP_INVALID_SYNTAX;
+    } else {
+        if (sdp_svc_attr_match(sdp, &req, &len)) {
+            return -SDP_INVALID_SYNTAX;
+        }
+    }
 
     if (len < 1)
         return -SDP_INVALID_SYNTAX;
@@ -567,7 +580,7 @@ static void bt_l2cap_sdp_close_ch(void *opaque)
     int i;
 
     for (i = 0; i < sdp->services; i ++) {
-        g_free(sdp->service_list[i].attribute_list->pair);
+        g_free(sdp->service_list[i].attribute_list[0].pair);
         g_free(sdp->service_list[i].attribute_list);
         g_free(sdp->service_list[i].uuid);
     }
@@ -707,6 +720,8 @@ static void sdp_service_record_build(struct sdp_service_record_s *record,
         len += sdp_attr_max_size(&def->attributes[record->attributes ++].data,
                         &record->uuids);
     }
+
+    assert(len > 0);
     record->uuids = pow2ceil(record->uuids);
     record->attribute_list =
             g_malloc0(record->attributes * sizeof(*record->attribute_list));
@@ -717,12 +732,14 @@ static void sdp_service_record_build(struct sdp_service_record_s *record,
     record->attributes = 0;
     uuid = record->uuid;
     while (def->attributes[record->attributes].data.type) {
+        int attribute_id = def->attributes[record->attributes].id;
         record->attribute_list[record->attributes].pair = data;
+        record->attribute_list[record->attributes].attribute_id = attribute_id;
 
         len = 0;
         data[len ++] = SDP_DTYPE_UINT | SDP_DSIZE_2;
-        data[len ++] = def->attributes[record->attributes].id >> 8;
-        data[len ++] = def->attributes[record->attributes].id & 0xff;
+        data[len ++] = attribute_id >> 8;
+        data[len ++] = attribute_id & 0xff;
         len += sdp_attr_write(data + len,
                         &def->attributes[record->attributes].data, &uuid);
 
@@ -736,10 +753,15 @@ static void sdp_service_record_build(struct sdp_service_record_s *record,
         data += len;
     }
 
-    /* Sort the attribute list by the AttributeID */
+    /* Sort the attribute list by the AttributeID.  The first must be
+     * SDP_ATTR_RECORD_HANDLE so that bt_l2cap_sdp_close_ch can free
+     * the buffer.
+     */
     qsort(record->attribute_list, record->attributes,
                     sizeof(*record->attribute_list),
                     (void *) sdp_attributeid_compare);
+    assert(record->attribute_list[0].pair == data);
+
     /* Sort the searchable UUIDs list for bisection */
     qsort(record->uuid, record->uuids,
                     sizeof(*record->uuid),

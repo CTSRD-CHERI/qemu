@@ -15,6 +15,7 @@
  * GNU General Public License for more details.
  */
 
+#include "qemu/osdep.h"
 #include "hw/hw.h"
 #include "hw/pci/pci.h"
 #include "hw/pci/msix.h"
@@ -42,6 +43,7 @@ struct rocker {
 
     /* switch configuration */
     char *name;                  /* switch name */
+    char *world_name;            /* world name */
     uint32_t fp_ports;           /* front-panel port count */
     NICPeers *fp_ports_peers;
     MACAddr fp_start_macaddr;    /* front-panel port 0 mac addr */
@@ -101,8 +103,7 @@ RockerSwitch *qmp_query_rocker(const char *name, Error **errp)
 
     r = rocker_find(name);
     if (!r) {
-        error_set(errp, ERROR_CLASS_GENERIC_ERROR,
-                  "rocker %s not found", name);
+        error_setg(errp, "rocker %s not found", name);
         return NULL;
     }
 
@@ -122,8 +123,7 @@ RockerPortList *qmp_query_rocker_ports(const char *name, Error **errp)
 
     r = rocker_find(name);
     if (!r) {
-        error_set(errp, ERROR_CLASS_GENERIC_ERROR,
-                  "rocker %s not found", name);
+        error_setg(errp, "rocker %s not found", name);
         return NULL;
     }
 
@@ -234,6 +234,9 @@ static int tx_consume(Rocker *r, DescInfo *info)
         frag_addr = rocker_tlv_get_le64(tlvs[ROCKER_TLV_TX_FRAG_ATTR_ADDR]);
         frag_len = rocker_tlv_get_le16(tlvs[ROCKER_TLV_TX_FRAG_ATTR_LEN]);
 
+        if (iovcnt >= ROCKER_TX_FRAGS_MAX) {
+            goto err_too_many_frags;
+        }
         iov[iovcnt].iov_len = frag_len;
         iov[iovcnt].iov_base = g_malloc(frag_len);
         if (!iov[iovcnt].iov_base) {
@@ -241,15 +244,10 @@ static int tx_consume(Rocker *r, DescInfo *info)
             goto err_no_mem;
         }
 
-        if (pci_dma_read(dev, frag_addr, iov[iovcnt].iov_base,
-                     iov[iovcnt].iov_len)) {
-            err = -ROCKER_ENXIO;
-            goto err_bad_io;
-        }
+        pci_dma_read(dev, frag_addr, iov[iovcnt].iov_base,
+                     iov[iovcnt].iov_len);
 
-        if (++iovcnt > ROCKER_TX_FRAGS_MAX) {
-            goto err_too_many_frags;
-        }
+        iovcnt++;
     }
 
     if (iovcnt) {
@@ -261,13 +259,10 @@ static int tx_consume(Rocker *r, DescInfo *info)
     err = fp_port_eg(r->fp_port[port], iov, iovcnt);
 
 err_too_many_frags:
-err_bad_io:
 err_no_mem:
 err_bad_attr:
     for (i = 0; i < ROCKER_TX_FRAGS_MAX; i++) {
-        if (iov[i].iov_base) {
-            g_free(iov[i].iov_base);
-        }
+        g_free(iov[i].iov_base);
     }
 
     return err;
@@ -403,7 +398,13 @@ static int cmd_set_port_settings(Rocker *r,
 
     if (tlvs[ROCKER_TLV_CMD_PORT_SETTINGS_MODE]) {
         mode = rocker_tlv_get_u8(tlvs[ROCKER_TLV_CMD_PORT_SETTINGS_MODE]);
-        fp_port_set_world(fp_port, r->worlds[mode]);
+        if (mode >= ROCKER_WORLD_TYPE_MAX) {
+            return -ROCKER_EINVAL;
+        }
+        /* We don't support world change. */
+        if (!fp_port_check_world(fp_port, r->worlds[mode])) {
+            return -ROCKER_EINVAL;
+        }
     }
 
     if (tlvs[ROCKER_TLV_CMD_PORT_SETTINGS_LEARNING]) {
@@ -856,7 +857,7 @@ static void rocker_io_writel(void *opaque, hwaddr addr, uint32_t val)
         rocker_msix_irq(r, val);
         break;
     case ROCKER_TEST_DMA_SIZE:
-        r->test_dma_size = val;
+        r->test_dma_size = val & 0xFFFF;
         break;
     case ROCKER_TEST_DMA_ADDR + 4:
         r->test_dma_addr = ((uint64_t)val) << 32 | r->lower32;
@@ -1252,14 +1253,16 @@ static int rocker_msix_init(Rocker *r)
 {
     PCIDevice *dev = PCI_DEVICE(r);
     int err;
+    Error *local_err = NULL;
 
     err = msix_init(dev, ROCKER_MSIX_VEC_COUNT(r->fp_ports),
                     &r->msix_bar,
                     ROCKER_PCI_MSIX_BAR_IDX, ROCKER_PCI_MSIX_TABLE_OFFSET,
                     &r->msix_bar,
                     ROCKER_PCI_MSIX_BAR_IDX, ROCKER_PCI_MSIX_PBA_OFFSET,
-                    0);
+                    0, &local_err);
     if (err) {
+        error_report_err(local_err);
         return err;
     }
 
@@ -1283,6 +1286,18 @@ static void rocker_msix_uninit(Rocker *r)
     rocker_msix_vectors_unuse(r, ROCKER_MSIX_VEC_COUNT(r->fp_ports));
 }
 
+static World *rocker_world_type_by_name(Rocker *r, const char *name)
+{
+    int i;
+
+    for (i = 0; i < ROCKER_WORLD_TYPE_MAX; i++) {
+        if (strcmp(name, world_name(r->worlds[i])) == 0) {
+            return r->worlds[i];
+	}
+    }
+    return NULL;
+}
+
 static int pci_rocker_init(PCIDevice *dev)
 {
     Rocker *r = to_rocker(dev);
@@ -1294,12 +1309,25 @@ static int pci_rocker_init(PCIDevice *dev)
     /* allocate worlds */
 
     r->worlds[ROCKER_WORLD_TYPE_OF_DPA] = of_dpa_world_alloc(r);
-    r->world_dflt = r->worlds[ROCKER_WORLD_TYPE_OF_DPA];
 
     for (i = 0; i < ROCKER_WORLD_TYPE_MAX; i++) {
         if (!r->worlds[i]) {
+            err = -ENOMEM;
             goto err_world_alloc;
         }
+    }
+
+    if (!r->world_name) {
+        r->world_name = g_strdup(world_name(r->worlds[ROCKER_WORLD_TYPE_OF_DPA]));
+    }
+
+    r->world_dflt = rocker_world_type_by_name(r, r->world_name);
+    if (!r->world_dflt) {
+        fprintf(stderr,
+                "rocker: requested world \"%s\" does not exist\n",
+                r->world_name);
+        err = -EINVAL;
+        goto err_world_type_by_name;
     }
 
     /* set up memory-mapped region at BAR0 */
@@ -1364,7 +1392,7 @@ static int pci_rocker_init(PCIDevice *dev)
         r->fp_ports = ROCKER_FP_PORTS_MAX;
     }
 
-    r->rings = g_malloc(sizeof(DescRing *) * rocker_pci_ring_count(r));
+    r->rings = g_new(DescRing *, rocker_pci_ring_count(r));
     if (!r->rings) {
         goto err_rings_alloc;
     }
@@ -1435,6 +1463,7 @@ err_duplicate:
 err_msix_init:
     object_unparent(OBJECT(&r->msix_bar));
     object_unparent(OBJECT(&r->mmio));
+err_world_type_by_name:
 err_world_alloc:
     for (i = 0; i < ROCKER_WORLD_TYPE_MAX; i++) {
         if (r->worlds[i]) {
@@ -1506,6 +1535,7 @@ static void rocker_reset(DeviceState *dev)
 
 static Property rocker_properties[] = {
     DEFINE_PROP_STRING("name", Rocker, name),
+    DEFINE_PROP_STRING("world", Rocker, world_name),
     DEFINE_PROP_MACADDR("fp_start_macaddr", Rocker,
                         fp_start_macaddr),
     DEFINE_PROP_UINT64("switch_id", Rocker,

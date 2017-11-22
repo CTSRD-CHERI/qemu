@@ -18,6 +18,7 @@
  * with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "qemu/osdep.h"
 #include "hw/hw.h"
 #include "hw/i2c/i2c.h"
 #include "qemu/timer.h"
@@ -382,7 +383,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
     }
 }
 
-static void lm_i2c_event(I2CSlave *i2c, enum i2c_event event)
+static int lm_i2c_event(I2CSlave *i2c, enum i2c_event event)
 {
     LM823KbdState *s = LM8323(i2c);
 
@@ -396,6 +397,8 @@ static void lm_i2c_event(I2CSlave *i2c, enum i2c_event event)
     default:
         break;
     }
+
+    return 0;
 }
 
 static int lm_i2c_rx(I2CSlave *i2c)
