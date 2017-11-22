@@ -207,6 +207,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->cr_offset = 0UL;
     cp->cr_base = 0UL;
     cp->cr_length = 0UL;
+    /* cp->cr_length = -1L; */
     cp->cr_tag = 0;
     cp->cr_sealed = 0;
 #ifdef CHERI_128
@@ -215,6 +216,29 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 
     return cp;
 }
+
+/*
+ * Convert capability to its nullified representation when it
+ * becomes unrepresentable.
+ * This clears the tag bit and changes the capability bounds
+ * to make sure that the new cursor is representable, all the
+ * other fields are preserved for debuggability.
+ */
+static inline cap_register_t *
+nullify_capability(uint64_t x, cap_register_t *cr)
+{
+    null_capability(cr);
+    cr->cr_offset = x;
+    /* cr->cr_tag = 0; */
+    /* cr->cr_base = 0; */
+    /* cr->cr_length = -1; */
+    /* cr->cr_length = 0; */
+    /* cr->cr_offset = x; */
+    return cr;
+}
+
+bool is_representable(bool sealed, uint64_t base, uint64_t length,
+                      uint64_t offset, uint64_t inc);
 
 #define CAP_MAX_OTYPE           (0xffffff)
 

@@ -1322,6 +1322,7 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cexeq",      "t,+b,+v",   0x4800001a, 0xffe0003f, 0, 0, I1},
 {"cbuildcap",  "+w,+b,+v",  0x4800001d, 0xffe0003f, 0, 0, I1},
 {"ccopytype",  "+w,+b,+v",  0x4800001e, 0xffe0003f, 0, 0, I1},
+{"ccseal",     "+w,+b,+v",  0x4800001f, 0xffe0003f, 0, 0, I1},
 {"ctestsubset","+w,+b,+v",  0x48000020, 0xffe0003f, 0, 0, I1},
 {"cnexeq",     "t,+b,+v",   0x48000021, 0xffe0003f, 0, 0, I1},
 
@@ -1330,7 +1331,7 @@ const struct mips_opcode mips_builtin_opcodes[] =
 
 {"csetboundsimm", "+w,+b,+o3",   0x4a800000, 0xffe00000, 0, 0, I1},
 {"cincoffsetimm", "+w,+b,+o3",   0x4a600000, 0xffe00000, 0, 0, I1},
-{"creturn", "",               0x48a007ff, 0xffe007ff, 0, 0, I1},
+{"creturn", "",               0x48a007ff, 0xffffffff, 0, 0, I1},
 
 {"cgetperm", "t,+b", 	0x48000000, 0xffe007ff, 0,			0, I1},
 {"cgettype", "t,+b",	0x48000001, 0xffe007ff, 0,			0, I1},
