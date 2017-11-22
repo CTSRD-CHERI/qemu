@@ -202,10 +202,10 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->cr_base = 0UL;
     cp->cr_tag = 0;
     cp->cr_sealed = 0;
-#ifdef CHERI_128
+#if defined(CHERI_128) || defined(CHERI_MAGIC128)
     cp->cr_length = -1L;
     cp->cr_pesbt = 0UL;
-#else /* CHERI_256 || CHERI_MAGIC128 */
+#else /* CHERI_256 */
     cp->cr_length = 0UL;
 #endif
     return cp;
@@ -222,7 +222,11 @@ static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
 {
     cr->cr_tag = 0;
     cr->cr_base = 0;
+#if defined(CHERI_128) || defined(CHERI_MAGIC128)
     cr->cr_length = -1;
+#else /* CHERI_256 */
+    cr->cr_length = 0;
+#endif
     cr->cr_offset = x;
     return cr;
 }

@@ -1894,9 +1894,11 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
 #endif
 
-    /* XXXAM: here R is capped again, this was causing troubles in representability
-     * probably should removed here as well.
+    /* XXXAM preventing r to underflow may be a problem as it caused a bug
+     * in the representability logic but I am not yet able to generate a test
+     * case to break it here.
      */
+    /* r = (b - (1ul << 12)) & ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul); */
     if (b > 4096ul)
         r = b - 4096ul;
     else
