@@ -70,10 +70,7 @@ static inline abi_long do_freebsd_sendmsg(int fd, abi_ulong target_msg,
     msg.msg_iovlen = count;
     msg.msg_iov = vec;
 
-    if (msg.msg_controllen > 0)
-        ret = t2h_freebsd_cmsg(&msg, msgp);
-    else /* no ancillary data */
-        ret = 0;
+    ret = t2h_freebsd_cmsg(&msg, msgp);
     if (!is_error(ret)) {
         ret = get_errno(sendmsg(fd, &msg, flags));
     }
@@ -123,10 +120,7 @@ static inline abi_long do_freebsd_recvmsg(int fd, abi_ulong target_msg,
     ret = get_errno(recvmsg(fd, &msg, flags));
     if (!is_error(ret)) {
         len = ret;
-    if (msg.msg_controllen > 0)
         ret = h2t_freebsd_cmsg(msgp, &msg);
-    else /* no ancillary data */
-        ret = 0;
         if (!is_error(ret)) {
             msgp->msg_namelen = tswap32(msg.msg_namelen);
             if (msg.msg_name != NULL) {
