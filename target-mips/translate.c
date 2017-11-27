@@ -4950,11 +4950,6 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
         MIPS_DEBUG("NOP");
 #ifdef TARGET_CHERI
         if (opc == OPC_ORI && rs == 0) {
-#ifndef CHERI_DEFAULT_CVTRACE
-	    /* Don't mix with CheriVis tracing. */
-            if (qemu_loglevel_mask(CPU_LOG_CVTRACE))
-                return;
-#endif
             /* With 'li $0, 0xbeef' turn on instruction trace logging. */
             if ((uint16_t)imm == 0xbeef)
                 GEN_CHERI_TRACE_HELPER(cpu_env, instr_start);
