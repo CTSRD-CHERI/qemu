@@ -4652,6 +4652,7 @@ void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
 {
     cap_register_t *cdp = &env->active_tc.C[cd];
 
+    length = length ^ -1UL;
     cdp->cr_length = length;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
@@ -4715,7 +4716,7 @@ target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
     dump_cap_store_length(csp->cr_length);
     cvtrace_dump_cap_length(&env->cvtrace, csp->cr_length);
 
-    return (csp->cr_length);
+    return (csp->cr_length ^ -1UL);
 }
 #endif /* ! CHERI_MAGIC128 */
 
