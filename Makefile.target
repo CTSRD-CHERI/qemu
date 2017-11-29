@@ -15,6 +15,20 @@ QEMU_CFLAGS += -I.. -I$(SRC_PATH)/target/$(TARGET_BASE_ARCH) -DNEED_CPU_H
 
 QEMU_CFLAGS+=-I$(SRC_PATH)/include
 
+ifdef CONFIG_CHERI128
+QEMU_CFLAGS+=-DCHERI_128=1
+else
+ifdef CONFIG_CHERI128_MAGIC
+QEMU_CFLAGS+=-DCHERI_MAGIC128=1
+else
+ifdef CONFIG_CHERI256
+ifneq (,$(findstring -DCHERI_,$(QEMU_CFLAGS)))
+$(error "No -DCHERI_ flags should be set when targetting CHERI256")
+endif
+endif
+endif
+endif
+
 ifdef CONFIG_USER_ONLY
 # user emulator name
 QEMU_PROG=qemu-$(TARGET_NAME)
