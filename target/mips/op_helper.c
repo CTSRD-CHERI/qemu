@@ -1909,7 +1909,7 @@ became_unrepresentable(CPUMIPSState *env, uint16_t reg)
  * compressing and decompressing the capability and checking to
  * see if it is the same.
  */
-#define SIMPLE_REPRESENT_CHECK
+//#define SIMPLE_REPRESENT_CHECK
 
 #ifndef SIMPLE_REPRESENT_CHECK
 static inline bool all_ones(uint64_t offset, uint32_t e)
@@ -2217,7 +2217,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         pesbt = compress_128cap(&c);
         decompress_128cap(pesbt, base + new_offset, &c);
 
-        if (c.cr_base != base || c.cr_length != length || c.cr_offset != inc)
+        if (c.cr_base != base || c.cr_length != length || c.cr_offset != new_offset)
             return false;
     }
     return true;
