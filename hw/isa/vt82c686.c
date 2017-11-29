@@ -10,6 +10,7 @@
  * GNU GPL, version 2 or (at your option) any later version.
  */
 
+#include "qemu/osdep.h"
 #include "hw/hw.h"
 #include "hw/i386/pc.h"
 #include "hw/isa/vt82c686.h"
@@ -440,7 +441,10 @@ static void vt82c686b_realize(PCIDevice *d, Error **errp)
     int i;
 
     isa_bus = isa_bus_new(DEVICE(d), get_system_memory(),
-                          pci_address_space_io(d));
+                          pci_address_space_io(d), errp);
+    if (!isa_bus) {
+        return;
+    }
 
     pci_conf = d->config;
     pci_config_set_prog_interface(pci_conf, 0x0);
@@ -490,7 +494,7 @@ static void via_class_init(ObjectClass *klass, void *data)
      * Reason: part of VIA VT82C686 southbridge, needs to be wired up,
      * e.g. by mips_fulong2e_init()
      */
-    dc->cannot_instantiate_with_device_add_yet = true;
+    dc->user_creatable = false;
 }
 
 static const TypeInfo via_info = {

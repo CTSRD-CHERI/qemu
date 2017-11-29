@@ -14,7 +14,8 @@
  * (at your option) any later version.
  */
 
-#include "config.h"
+#include "qemu/osdep.h"
+#include "qapi/error.h"
 #include "qemu-common.h"
 #include "e500.h"
 #include "e500-ccsr.h"
@@ -195,7 +196,7 @@ static int create_devtree_etsec(SysBusDevice *sbdev, PlatformDevtreeData *data)
     return 0;
 }
 
-static int sysbus_device_create_devtree(SysBusDevice *sbdev, void *opaque)
+static void sysbus_device_create_devtree(SysBusDevice *sbdev, void *opaque)
 {
     PlatformDevtreeData *data = opaque;
     bool matched = false;
@@ -210,8 +211,6 @@ static int sysbus_device_create_devtree(SysBusDevice *sbdev, void *opaque)
                      qdev_fw_name(DEVICE(sbdev)));
         exit(1);
     }
-
-    return 0;
 }
 
 static void platform_bus_create_devtree(PPCE500Params *params, void *fdt,
@@ -600,7 +599,7 @@ static int ppce500_prep_device_tree(MachineState *machine,
 }
 
 /* Create -kernel TLB entries for BookE.  */
-static inline hwaddr booke206_page_size_to_tlb(uint64_t size)
+hwaddr booke206_page_size_to_tlb(uint64_t size)
 {
     return 63 - clz64(size >> 10);
 }
@@ -751,8 +750,8 @@ static qemu_irq *ppce500_init_mpic(MachineState *machine, PPCE500Params *params,
             dev = ppce500_init_mpic_kvm(params, irqs, &err);
         }
         if (machine_kernel_irqchip_required(machine) && !dev) {
-            error_report("kernel_irqchip requested but unavailable: %s",
-                         error_get_pretty(err));
+            error_reportf_err(err,
+                              "kernel_irqchip requested but unavailable: ");
             exit(1);
         }
     }
@@ -775,7 +774,7 @@ static qemu_irq *ppce500_init_mpic(MachineState *machine, PPCE500Params *params,
 static void ppce500_power_off(void *opaque, int line, int on)
 {
     if (on) {
-        qemu_system_shutdown_request();
+        qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
     }
 }
 
@@ -827,6 +826,12 @@ void ppce500_init(MachineState *machine, PPCE500Params *params)
         }
         env = &cpu->env;
         cs = CPU(cpu);
+
+        if (env->mmu_model != POWERPC_MMU_BOOKE206) {
+            fprintf(stderr, "MMU model %i not supported by this machine.\n",
+                env->mmu_model);
+            exit(1);
+        }
 
         if (!firstenv) {
             firstenv = env;
@@ -1017,7 +1022,7 @@ void ppce500_init(MachineState *machine, PPCE500Params *params)
     filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
 
     bios_size = load_elf(filename, NULL, NULL, &bios_entry, &loadaddr, NULL,
-                         1, ELF_MACHINE, 0);
+                         1, PPC_ELF_MACHINE, 0, 0);
     if (bios_size < 0) {
         /*
          * Hrm. No ELF image? Try a uImage, maybe someone is giving us an
@@ -1048,33 +1053,20 @@ void ppce500_init(MachineState *machine, PPCE500Params *params)
     boot_info->entry = bios_entry;
     boot_info->dt_base = dt_base;
     boot_info->dt_size = dt_size;
-
-    if (kvm_enabled()) {
-        kvmppc_init();
-    }
 }
 
-static int e500_ccsr_initfn(SysBusDevice *dev)
+static void e500_ccsr_initfn(Object *obj)
 {
-    PPCE500CCSRState *ccsr;
-
-    ccsr = CCSR(dev);
-    memory_region_init(&ccsr->ccsr_space, OBJECT(ccsr), "e500-ccsr",
+    PPCE500CCSRState *ccsr = CCSR(obj);
+    memory_region_init(&ccsr->ccsr_space, obj, "e500-ccsr",
                        MPC8544_CCSRBAR_SIZE);
-    return 0;
-}
-
-static void e500_ccsr_class_init(ObjectClass *klass, void *data)
-{
-    SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
-    k->init = e500_ccsr_initfn;
 }
 
 static const TypeInfo e500_ccsr_info = {
     .name          = TYPE_CCSR,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(PPCE500CCSRState),
-    .class_init    = e500_ccsr_class_init,
+    .instance_init = e500_ccsr_initfn,
 };
 
 static void e500_register_types(void)

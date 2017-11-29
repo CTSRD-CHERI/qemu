@@ -29,9 +29,11 @@
  *                    VA Linux Systems Japan K.K.
  */
 
+#include "qemu/osdep.h"
 #include "hw/pci/pci_bridge.h"
 #include "hw/pci/pci_bus.h"
 #include "qemu/range.h"
+#include "qapi/error.h"
 
 /* PCI bridge subsystem vendor ID helper functions */
 #define PCI_SSVID_SIZEOF        8
@@ -39,10 +41,13 @@
 #define PCI_SSVID_SSID          6
 
 int pci_bridge_ssvid_init(PCIDevice *dev, uint8_t offset,
-                          uint16_t svid, uint16_t ssid)
+                          uint16_t svid, uint16_t ssid,
+                          Error **errp)
 {
     int pos;
-    pos = pci_add_capability(dev, PCI_CAP_ID_SSVID, offset, PCI_SSVID_SIZEOF);
+
+    pos = pci_add_capability(dev, PCI_CAP_ID_SSVID, offset,
+                             PCI_SSVID_SIZEOF, errp);
     if (pos < 0) {
         return pos;
     }
@@ -115,7 +120,7 @@ pcibus_t pci_bridge_get_base(const PCIDevice *bridge, uint8_t type)
     return base;
 }
 
-/* accessor funciton to get bridge filtering limit */
+/* accessor function to get bridge filtering limit */
 pcibus_t pci_bridge_get_limit(const PCIDevice *bridge, uint8_t type)
 {
     pcibus_t limit;
@@ -332,7 +337,7 @@ void pci_bridge_reset(DeviceState *qdev)
 }
 
 /* default qdev initialization function for PCI-to-PCI bridge */
-int pci_bridge_initfn(PCIDevice *dev, const char *typename)
+void pci_bridge_initfn(PCIDevice *dev, const char *typename)
 {
     PCIBus *parent = dev->bus;
     PCIBridge *br = PCI_BRIDGE(dev);
@@ -378,7 +383,6 @@ int pci_bridge_initfn(PCIDevice *dev, const char *typename)
     br->windows = pci_bridge_region_init(br);
     QLIST_INIT(&sec_bus->child);
     QLIST_INSERT_HEAD(&parent->child, sec_bus, sibling);
-    return 0;
 }
 
 /* default qdev clean up function for PCI-to-PCI bridge */

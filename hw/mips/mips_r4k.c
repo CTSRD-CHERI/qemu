@@ -7,6 +7,10 @@
  * All peripherial devices are attached to this "bus" with
  * the standard PC ISA addresses.
 */
+#include "qemu/osdep.h"
+#include "qapi/error.h"
+#include "qemu-common.h"
+#include "cpu.h"
 #include "hw/hw.h"
 #include "hw/mips/mips.h"
 #include "hw/mips/cpudevs.h"
@@ -27,6 +31,7 @@
 #include "sysemu/block-backend.h"
 #include "exec/address-spaces.h"
 #include "sysemu/qtest.h"
+#include "qemu/error-report.h"
 
 #define MAX_IDE_BUS 2
 
@@ -49,9 +54,9 @@ static void mips_qemu_write (void *opaque, hwaddr addr,
                              uint64_t val, unsigned size)
 {
     if ((addr & 0xffff) == 0 && val == 42)
-        qemu_system_reset_request ();
+        qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
     else if ((addr & 0xffff) == 4 && val == 42)
-        qemu_system_shutdown_request ();
+        qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
 }
 
 static uint64_t mips_qemu_read (void *opaque, hwaddr addr,
@@ -87,13 +92,14 @@ static int64_t load_kernel(void)
     kernel_size = load_elf(loaderparams.kernel_filename, cpu_mips_kseg0_to_phys,
                            NULL, (uint64_t *)&entry, NULL,
                            (uint64_t *)&kernel_high, big_endian,
-                           ELF_MACHINE, 1);
+                           EM_MIPS, 1, 0);
     if (kernel_size >= 0) {
         if ((entry & ~0x7fffffffULL) == 0x80000000)
             entry = (int32_t)entry;
     } else {
-        fprintf(stderr, "qemu: could not load kernel '%s'\n",
-                loaderparams.kernel_filename);
+        error_report("qemu: could not load kernel '%s': %s",
+                     loaderparams.kernel_filename,
+                     load_elf_strerror(kernel_size));
         exit(1);
     }
 
@@ -233,8 +239,7 @@ void mips_r4k_init(MachineState *machine)
     if ((bios_size > 0) && (bios_size <= BIOS_SIZE)) {
         bios = g_new(MemoryRegion, 1);
         memory_region_init_ram(bios, NULL, "mips_r4k.bios", BIOS_SIZE,
-                               &error_abort);
-        vmstate_register_ram_global(bios);
+                               &error_fatal);
         memory_region_set_readonly(bios, true);
         memory_region_add_subregion(get_system_memory(), 0x1fc00000, bios);
 
@@ -252,9 +257,7 @@ void mips_r4k_init(MachineState *machine)
         fprintf(stderr, "qemu: Warning, could not load MIPS bios '%s'\n",
 		bios_name);
     }
-    if (filename) {
-        g_free(filename);
-    }
+    g_free(filename);
 
     if (kernel_filename) {
         loaderparams.ram_size = ram_size;
@@ -265,8 +268,8 @@ void mips_r4k_init(MachineState *machine)
     }
 
     /* Init CPU internal devices */
-    cpu_mips_irq_init_cpu(env);
-    cpu_mips_clock_init(env);
+    cpu_mips_irq_init_cpu(cpu);
+    cpu_mips_clock_init(cpu);
 
     /* ISA bus: IO space at 0x14000000, mem space at 0x10000000 */
     memory_region_init_alias(isa_io, NULL, "isa-io",
@@ -274,7 +277,7 @@ void mips_r4k_init(MachineState *machine)
     memory_region_init(isa_mem, NULL, "isa-mem", 0x01000000);
     memory_region_add_subregion(get_system_memory(), 0x14000000, isa_io);
     memory_region_add_subregion(get_system_memory(), 0x10000000, isa_mem);
-    isa_bus = isa_bus_new(NULL, isa_mem, get_system_io());
+    isa_bus = isa_bus_new(NULL, isa_mem, get_system_io(), &error_abort);
 
     /* The PIC is attached to the MIPS CPU INT0 pin */
     i8259 = i8259_init(isa_bus, env->irq[2]);
@@ -284,7 +287,7 @@ void mips_r4k_init(MachineState *machine)
 
     pit = pit_init(isa_bus, 0x40, 0, NULL);
 
-    serial_hds_isa_init(isa_bus, MAX_SERIAL_PORTS);
+    serial_hds_isa_init(isa_bus, 0, MAX_SERIAL_PORTS);
 
     isa_vga_init(isa_bus);
 
@@ -300,15 +303,11 @@ void mips_r4k_init(MachineState *machine)
     isa_create_simple(isa_bus, "i8042");
 }
 
-static QEMUMachine mips_machine = {
-    .name = "mips",
-    .desc = "mips r4k platform",
-    .init = mips_r4k_init,
-};
-
-static void mips_machine_init(void)
+static void mips_machine_init(MachineClass *mc)
 {
-    qemu_register_machine(&mips_machine);
+    mc->desc = "mips r4k platform";
+    mc->init = mips_r4k_init;
+    mc->block_default_type = IF_IDE;
 }
 
-machine_init(mips_machine_init);
+DEFINE_MACHINE("mips", mips_machine_init)

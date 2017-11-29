@@ -6,6 +6,7 @@
  * This work is licensed under the terms of the GNU GPL, version 2 or later.
  * See the COPYING file in the top-level directory.
  */
+#include "qemu/osdep.h"
 #include "qemu-common.h"
 #include "sysemu/watchdog.h"
 #include "hw/i386/ich9.h"
@@ -48,6 +49,7 @@ static inline void tco_timer_reload(TCOIORegs *tr)
 static inline void tco_timer_stop(TCOIORegs *tr)
 {
     tr->expire_time = -1;
+    timer_del(tr->tco_timer);
 }
 
 static void tco_timer_expired(void *opaque)
@@ -73,8 +75,6 @@ static void tco_timer_expired(void *opaque)
 
     if (pm->smi_en & ICH9_PMIO_SMI_EN_TCO_EN) {
         ich9_generate_smi();
-    } else {
-        ich9_generate_nmi();
     }
     tr->tco.rld = tr->tco.tmr;
     tco_timer_reload(tr);

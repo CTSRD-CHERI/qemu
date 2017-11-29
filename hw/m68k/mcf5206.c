@@ -5,6 +5,9 @@
  *
  * This code is licensed under the GPL
  */
+#include "qemu/osdep.h"
+#include "qemu-common.h"
+#include "cpu.h"
 #include "hw/hw.h"
 #include "hw/m68k/mcf.h"
 #include "qemu/timer.h"
@@ -136,7 +139,7 @@ static m5206_timer_state *m5206_timer_init(qemu_irq irq)
 
     s = (m5206_timer_state *)g_malloc0(sizeof(m5206_timer_state));
     bh = qemu_bh_new(m5206_timer_trigger, s);
-    s->timer = ptimer_init(bh);
+    s->timer = ptimer_init(bh, PTIMER_POLICY_DEFAULT);
     s->irq = irq;
     m5206_timer_reset(s);
     return s;

@@ -11,11 +11,13 @@
  *
  */
 
+#include "qemu/osdep.h"
+#include "qapi/error.h"
 #include "qapi/qmp/types.h"
 #include "qapi/qmp/dispatch.h"
 #include "qapi/qmp/json-parser.h"
+#include "qapi/qmp/qjson.h"
 #include "qapi-types.h"
-#include "qapi/error.h"
 #include "qapi/qmp/qerror.h"
 
 static QDict *qmp_dispatch_check_obj(const QObject *request, Error **errp)
@@ -26,13 +28,11 @@ static QDict *qmp_dispatch_check_obj(const QObject *request, Error **errp)
     bool has_exec_key = false;
     QDict *dict = NULL;
 
-    if (qobject_type(request) != QTYPE_QDICT) {
-        error_setg(errp, QERR_QMP_BAD_INPUT_OBJECT,
-                   "request is not a dictionary");
+    dict = qobject_to_qdict(request);
+    if (!dict) {
+        error_setg(errp, "QMP input must be a JSON object");
         return NULL;
     }
-
-    dict = qobject_to_qdict(request);
 
     for (ent = qdict_first(dict); ent;
          ent = qdict_next(dict, ent)) {
@@ -41,26 +41,34 @@ static QDict *qmp_dispatch_check_obj(const QObject *request, Error **errp)
 
         if (!strcmp(arg_name, "execute")) {
             if (qobject_type(arg_obj) != QTYPE_QSTRING) {
-                error_setg(errp, QERR_QMP_BAD_INPUT_OBJECT_MEMBER, "execute",
-                           "string");
+                error_setg(errp,
+                           "QMP input member 'execute' must be a string");
                 return NULL;
             }
             has_exec_key = true;
-        } else if (strcmp(arg_name, "arguments")) {
-            error_setg(errp, QERR_QMP_EXTRA_MEMBER, arg_name);
+        } else if (!strcmp(arg_name, "arguments")) {
+            if (qobject_type(arg_obj) != QTYPE_QDICT) {
+                error_setg(errp,
+                           "QMP input member 'arguments' must be an object");
+                return NULL;
+            }
+        } else {
+            error_setg(errp, "QMP input member '%s' is unexpected",
+                       arg_name);
             return NULL;
         }
     }
 
     if (!has_exec_key) {
-        error_setg(errp, QERR_QMP_BAD_INPUT_OBJECT, "execute");
+        error_setg(errp, "QMP input lacks member 'execute'");
         return NULL;
     }
 
     return dict;
 }
 
-static QObject *do_qmp_dispatch(QObject *request, Error **errp)
+static QObject *do_qmp_dispatch(QmpCommandList *cmds, QObject *request,
+                                Error **errp)
 {
     Error *local_err = NULL;
     const char *command;
@@ -74,7 +82,7 @@ static QObject *do_qmp_dispatch(QObject *request, Error **errp)
     }
 
     command = qdict_get_str(dict, "execute");
-    cmd = qmp_find_command(command);
+    cmd = qmp_find_command(cmds, command);
     if (cmd == NULL) {
         error_set(errp, ERROR_CLASS_COMMAND_NOT_FOUND,
                   "The command %s has not been found", command);
@@ -93,17 +101,13 @@ static QObject *do_qmp_dispatch(QObject *request, Error **errp)
         QINCREF(args);
     }
 
-    switch (cmd->type) {
-    case QCT_NORMAL:
-        cmd->fn(args, &ret, &local_err);
-        if (local_err) {
-            error_propagate(errp, local_err);
-        } else if (cmd->options & QCO_NO_SUCCESS_RESP) {
-            g_assert(!ret);
-        } else if (!ret) {
-            ret = QOBJECT(qdict_new());
-        }
-        break;
+    cmd->fn(args, &ret, &local_err);
+    if (local_err) {
+        error_propagate(errp, local_err);
+    } else if (cmd->options & QCO_NO_SUCCESS_RESP) {
+        g_assert(!ret);
+    } else if (!ret) {
+        ret = QOBJECT(qdict_new());
     }
 
     QDECREF(args);
@@ -114,17 +118,17 @@ static QObject *do_qmp_dispatch(QObject *request, Error **errp)
 QObject *qmp_build_error_object(Error *err)
 {
     return qobject_from_jsonf("{ 'class': %s, 'desc': %s }",
-                              ErrorClass_lookup[error_get_class(err)],
+                              QapiErrorClass_lookup[error_get_class(err)],
                               error_get_pretty(err));
 }
 
-QObject *qmp_dispatch(QObject *request)
+QObject *qmp_dispatch(QmpCommandList *cmds, QObject *request)
 {
     Error *err = NULL;
     QObject *ret;
     QDict *rsp;
 
-    ret = do_qmp_dispatch(request, &err);
+    ret = do_qmp_dispatch(cmds, request, &err);
 
     rsp = qdict_new();
     if (err) {

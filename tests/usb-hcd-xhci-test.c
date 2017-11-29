@@ -7,10 +7,8 @@
  * See the COPYING file in the top-level directory.
  */
 
-#include <glib.h>
-#include <string.h>
-#include "libqtest.h"
 #include "qemu/osdep.h"
+#include "libqtest.h"
 #include "libqos/usb.h"
 
 
@@ -91,7 +89,7 @@ int main(int argc, char **argv)
     qtest_add_func("/xhci/pci/hotplug/usb-uas", test_usb_uas_hotplug);
 
     qtest_start("-device nec-usb-xhci,id=xhci"
-                " -drive id=drive0,if=none,file=/dev/null,format=raw");
+                " -drive id=drive0,if=none,file=null-co://,format=raw");
     ret = g_test_run();
     qtest_end();
 

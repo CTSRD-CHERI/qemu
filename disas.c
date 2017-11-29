@@ -1,9 +1,8 @@
 /* General "disassemble this chunk" code.  Used for debugging. */
-#include "config.h"
+#include "qemu/osdep.h"
 #include "qemu-common.h"
 #include "disas/bfd.h"
 #include "elf.h"
-#include <errno.h>
 
 #include "cpu.h"
 #include "disas/disas.h"
@@ -191,6 +190,7 @@ void target_disas(FILE *out, CPUState *cpu, target_ulong code,
 
     s.cpu = cpu;
     s.info.read_memory_func = target_read_memory;
+    s.info.read_memory_inner_func = NULL;
     s.info.buffer_vma = code;
     s.info.buffer_length = size;
     s.info.print_address_func = generic_print_address;
@@ -214,11 +214,6 @@ void target_disas(FILE *out, CPUState *cpu, target_ulong code,
         s.info.mach = bfd_mach_i386_i386;
     }
     s.info.print_insn = print_insn_i386;
-#elif defined(TARGET_SPARC)
-    s.info.print_insn = print_insn_sparc;
-#ifdef TARGET_SPARC64
-    s.info.mach = bfd_mach_sparc_v9b;
-#endif
 #elif defined(TARGET_PPC)
     if ((flags >> 16) & 1) {
         s.info.endian = BFD_ENDIAN_LITTLE;
@@ -235,29 +230,6 @@ void target_disas(FILE *out, CPUState *cpu, target_ulong code,
     }
     s.info.disassembler_options = (char *)"any";
     s.info.print_insn = print_insn_ppc;
-#elif defined(TARGET_M68K)
-    s.info.print_insn = print_insn_m68k;
-#elif defined(TARGET_MIPS)
-#ifdef TARGET_WORDS_BIGENDIAN
-    s.info.print_insn = print_insn_big_mips;
-#else
-    s.info.print_insn = print_insn_little_mips;
-#endif
-#elif defined(TARGET_SH4)
-    s.info.mach = bfd_mach_sh4;
-    s.info.print_insn = print_insn_sh;
-#elif defined(TARGET_ALPHA)
-    s.info.mach = bfd_mach_alpha_ev6;
-    s.info.print_insn = print_insn_alpha;
-#elif defined(TARGET_S390X)
-    s.info.mach = bfd_mach_s390_64;
-    s.info.print_insn = print_insn_s390;
-#elif defined(TARGET_MOXIE)
-    s.info.mach = bfd_arch_moxie;
-    s.info.print_insn = print_insn_moxie;
-#elif defined(TARGET_LM32)
-    s.info.mach = bfd_mach_lm32;
-    s.info.print_insn = print_insn_lm32;
 #endif
     if (s.info.print_insn == NULL) {
         s.info.print_insn = print_insn_od_target;
@@ -392,16 +364,6 @@ monitor_read_memory (bfd_vma memaddr, bfd_byte *myaddr, int length,
     return 0;
 }
 
-static int GCC_FMT_ATTR(2, 3)
-monitor_fprintf(FILE *stream, const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    monitor_vprintf((Monitor *)stream, fmt, ap);
-    va_end(ap);
-    return 0;
-}
-
 /* Disassembler for the monitor.
    See target_disas for a description of flags. */
 void monitor_disas(Monitor *mon, CPUState *cpu,
@@ -439,13 +401,6 @@ void monitor_disas(Monitor *mon, CPUState *cpu,
         s.info.mach = bfd_mach_i386_i386;
     }
     s.info.print_insn = print_insn_i386;
-#elif defined(TARGET_ALPHA)
-    s.info.print_insn = print_insn_alpha;
-#elif defined(TARGET_SPARC)
-    s.info.print_insn = print_insn_sparc;
-#ifdef TARGET_SPARC64
-    s.info.mach = bfd_mach_sparc_v9b;
-#endif
 #elif defined(TARGET_PPC)
     if (flags & 0xFFFF) {
         /* If we have a precise definition of the instruction set, use it. */
@@ -461,26 +416,6 @@ void monitor_disas(Monitor *mon, CPUState *cpu,
         s.info.endian = BFD_ENDIAN_LITTLE;
     }
     s.info.print_insn = print_insn_ppc;
-#elif defined(TARGET_M68K)
-    s.info.print_insn = print_insn_m68k;
-#elif defined(TARGET_MIPS)
-#ifdef TARGET_WORDS_BIGENDIAN
-    s.info.print_insn = print_insn_big_mips;
-#else
-    s.info.print_insn = print_insn_little_mips;
-#endif
-#elif defined(TARGET_SH4)
-    s.info.mach = bfd_mach_sh4;
-    s.info.print_insn = print_insn_sh;
-#elif defined(TARGET_S390X)
-    s.info.mach = bfd_mach_s390_64;
-    s.info.print_insn = print_insn_s390;
-#elif defined(TARGET_MOXIE)
-    s.info.mach = bfd_arch_moxie;
-    s.info.print_insn = print_insn_moxie;
-#elif defined(TARGET_LM32)
-    s.info.mach = bfd_mach_lm32;
-    s.info.print_insn = print_insn_lm32;
 #endif
     if (!s.info.print_insn) {
         monitor_printf(mon, "0x" TARGET_FMT_lx

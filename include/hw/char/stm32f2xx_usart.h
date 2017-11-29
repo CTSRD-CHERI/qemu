@@ -26,7 +26,7 @@
 #define HW_STM32F2XX_USART_H
 
 #include "hw/sysbus.h"
-#include "sysemu/char.h"
+#include "chardev/char-fe.h"
 #include "hw/hw.h"
 
 #define USART_SR   0x00
@@ -67,7 +67,7 @@ typedef struct {
     uint32_t usart_cr3;
     uint32_t usart_gtpr;
 
-    CharDriverState *chr;
+    CharBackend chr;
     qemu_irq irq;
 } STM32F2XXUsartState;
 #endif /* HW_STM32F2XX_USART_H */

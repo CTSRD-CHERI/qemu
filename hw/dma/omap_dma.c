@@ -17,6 +17,7 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, see <http://www.gnu.org/licenses/>.
  */
+#include "qemu/osdep.h"
 #include "qemu-common.h"
 #include "qemu/timer.h"
 #include "hw/arm/omap.h"
@@ -877,15 +878,17 @@ static int omap_dma_ch_reg_write(struct omap_dma_s *s,
         ch->burst[0] = (value & 0x0180) >> 7;
         ch->pack[0] = (value & 0x0040) >> 6;
         ch->port[0] = (enum omap_dma_port) ((value & 0x003c) >> 2);
-        ch->data_type = 1 << (value & 3);
         if (ch->port[0] >= __omap_dma_port_last)
             printf("%s: invalid DMA port %i\n", __FUNCTION__,
                             ch->port[0]);
         if (ch->port[1] >= __omap_dma_port_last)
             printf("%s: invalid DMA port %i\n", __FUNCTION__,
                             ch->port[1]);
-        if ((value & 3) == 3)
+        ch->data_type = 1 << (value & 3);
+        if ((value & 3) == 3) {
             printf("%s: bad data_type for DMA channel\n", __FUNCTION__);
+            ch->data_type >>= 1;
+        }
         break;
 
     case 0x02:	/* SYS_DMA_CCR_CH0 */
@@ -1626,8 +1629,7 @@ struct soc_dma_s *omap_dma_init(hwaddr base, qemu_irq *irqs,
                 enum omap_dma_model model)
 {
     int num_irqs, memsize, i;
-    struct omap_dma_s *s = (struct omap_dma_s *)
-            g_malloc0(sizeof(struct omap_dma_s));
+    struct omap_dma_s *s = g_new0(struct omap_dma_s, 1);
 
     if (model <= omap_dma_3_1) {
         num_irqs = 6;
@@ -1975,7 +1977,7 @@ static void omap_dma4_write(void *opaque, hwaddr addr,
         ch->endian[1] =(value >> 19) & 1;
         ch->endian_lock[1] =(value >> 18) & 1;
         if (ch->endian[0] != ch->endian[1])
-            fprintf(stderr, "%s: DMA endiannes conversion enable attempt\n",
+            fprintf(stderr, "%s: DMA endianness conversion enable attempt\n",
                             __FUNCTION__);
         ch->write_mode = (value >> 16) & 3;
         ch->burst[1] = (value & 0xc000) >> 14;
@@ -1988,8 +1990,10 @@ static void omap_dma4_write(void *opaque, hwaddr addr,
             fprintf(stderr, "%s: bad MReqAddressTranslate sideband signal\n",
                             __FUNCTION__);
         ch->data_type = 1 << (value & 3);
-        if ((value & 3) == 3)
+        if ((value & 3) == 3) {
             printf("%s: bad data_type for DMA channel\n", __FUNCTION__);
+            ch->data_type >>= 1;
+        }
         break;
 
     case 0x14:	/* DMA4_CEN */
@@ -2061,8 +2065,7 @@ struct soc_dma_s *omap_dma4_init(hwaddr base, qemu_irq *irqs,
                 int chans, omap_clk iclk, omap_clk fclk)
 {
     int i;
-    struct omap_dma_s *s = (struct omap_dma_s *)
-            g_malloc0(sizeof(struct omap_dma_s));
+    struct omap_dma_s *s = g_new0(struct omap_dma_s, 1);
 
     s->model = omap_dma_4;
     s->chans = chans;
