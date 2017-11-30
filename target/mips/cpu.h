@@ -203,17 +203,14 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->cr_otype = 0;
     cp->cr_perms = 0;
     cp->cr_uperms = 0;
-    // cp->cr_cursor = 0UL;
     cp->cr_offset = 0UL;
     cp->cr_base = 0UL;
-    cp->cr_length = 0UL;
-    /* cp->cr_length = -1L; */
     cp->cr_tag = 0;
     cp->cr_sealed = 0;
-#ifdef CHERI_128
+    cp->cr_length = -1L;
+#if defined(CHERI_128)
     cp->cr_pesbt = 0UL;
 #endif
-
     return cp;
 }
 
@@ -224,16 +221,12 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
  * to make sure that the new cursor is representable, all the
  * other fields are preserved for debuggability.
  */
-static inline cap_register_t *
-nullify_capability(uint64_t x, cap_register_t *cr)
+static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
 {
-    null_capability(cr);
+    cr->cr_tag = 0;
+    cr->cr_base = 0;
+    cr->cr_length = -1;
     cr->cr_offset = x;
-    /* cr->cr_tag = 0; */
-    /* cr->cr_base = 0; */
-    /* cr->cr_length = -1; */
-    /* cr->cr_length = 0; */
-    /* cr->cr_offset = x; */
     return cr;
 }
 

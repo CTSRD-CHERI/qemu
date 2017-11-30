@@ -1859,7 +1859,6 @@ void helper_mtc0_taglo(CPUMIPSState *env, target_ulong arg1)
 static inline bool
 is_cap_sealed(cap_register_t *cp)
 {
-
     return (cp->cr_sealed) ? true : false;
 }
 
@@ -1892,7 +1891,6 @@ bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t inc)
 {
-
     return true;
 }
 
@@ -1911,7 +1909,7 @@ became_unrepresentable(CPUMIPSState *env, uint16_t reg)
  * compressing and decompressing the capability and checking to
  * see if it is the same.
  */
-#define SIMPLE_REPRESENT_CHECK
+//#define SIMPLE_REPRESENT_CHECK
 
 #ifndef SIMPLE_REPRESENT_CHECK
 static inline bool all_ones(uint64_t offset, uint32_t e)
@@ -2015,7 +2013,14 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
  *  otype.hi: 31-20 (12 bits)
  *  T: 19-12        (8 bits)
  *  otype.lo: 11-0  (12 bits)
+ * 
+ * Note that the exponent is stored in memory XORed with
+ * the NULL capability exponent, this ensures that
+ * a NULL capability in-memory representation is all zero.
  */
+#define NULL_TOP8_XOR_MASK 0x80000
+#define NULL_TOP20_XOR_MASK 0x80000
+#define NULL_EXP_XOR_MASK 0x30
 
 /*
  * Decompress a 128-bit capability.
@@ -2036,6 +2041,7 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_perms = getbits(pesbt, 49, 11);
         cdp->cr_uperms = getbits(pesbt, 60, 4);
         cdp->cr_otype = 0;
+        t = t ^ NULL_TOP20_XOR_MASK;
     } else {
         /* Sealed 128-bit Capability */
         t = getbits(pesbt, 12, 8) << 12;
@@ -2046,7 +2052,9 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         e = (uint32_t)getbits(pesbt, 41, 6);
         cdp->cr_perms = getbits(pesbt, 49, 11);
         cdp->cr_uperms = getbits(pesbt, 60, 4);
+        t = t ^ NULL_TOP8_XOR_MASK;
     }
+    e = e ^ NULL_EXP_XOR_MASK;
     cdp->cr_pesbt = pesbt;
 
 #if 1 /* Still required for some 128-bit cheritests. */
@@ -2059,6 +2067,11 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
 #endif
 
+    /* XXXAM preventing r to underflow may be a problem as it caused a bug
+     * in the representability logic but I am not yet able to generate a test
+     * case to break it here.
+     */
+    /* r = (b - (1ul << 12)) & ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul); */
     if (b > 4096ul)
         r = b - 4096ul;
     else
@@ -2078,23 +2091,11 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         base = b << e;
         cdp->cr_length = (t << e) - base;
     } else if (e > 44) {
-        /* Special case when e = 48. */
-
-        /* Will bot overflow when we shift it? */
-        if (b & 0x80000ul) {
-            /* Yes, just make it max uint64_t. */
-            base = 0xfffffffffffffffful;
-        } else {
-            base = b << 45;
-        }
-
-        /* Will top overflow when we shift it? */
-        if (t & 0x80000ull) {
-            /* Yes, just make it max uint64_t and calculate length. */
-            cdp->cr_length = 0xfffffffffffffffful - base;
-        } else {
+        base = b << 45;
+        if (t & 0x80000ul)
+            cdp->cr_length = -1UL - base;
+        else
             cdp->cr_length = (t << 45) - base;
-        }
     } else if (e == 0) {
         shift = CHERI128_M_SIZE_UNSEALED;
         base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
@@ -2108,7 +2109,6 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
             (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
             (t << e)) - base;
     }
-
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
 }
@@ -2126,17 +2126,22 @@ static uint64_t compress_128cap(cap_register_t *csp)
     e = compute_e(rlength);
 
 #define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
-
     if (e == 0) {
         b = base_req & MOD_MASK;
         t = (base_req + rlength) & MOD_MASK;
     } else if (e > 44) {
-        /*
-         * Special case e > 44. Don't waste the most significant bit
-         * by shifting too much.
+        /* CHERI length is a 65 bit value so we can not represent internally
+         * the maximum length of 2^64.
+         * The maximum representable address is treated specially because
+         * we can not distinguish between a length of 2^64 and (2^64 - 1).
          */
-        b = (base_req >> 44) & MOD_MASK;
-        t = ((base_req + rlength) >> 44) & MOD_MASK;
+        b = (base_req >> 45) & MOD_MASK;
+        if (base_req + rlength == -1ULL)
+            /* max address represented as max_addr + 1 */
+            t = 0x80000;
+        else
+            /* just shift and truncate */
+            t = ((base_req + rlength) >> 45) & MOD_MASK;
     } else {
         b = (base_req >> e) & MOD_MASK;
         t = ((base_req + rlength) >> e) & MOD_MASK;
@@ -2147,8 +2152,10 @@ static uint64_t compress_128cap(cap_register_t *csp)
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) <<
                 CAP_UPERMS_MEM_SHFT) |
             (csp->cr_perms & CAP_PERMS_ALL));
+    e = e ^ NULL_EXP_XOR_MASK;
     if (is_cap_sealed(csp)) {
         /* sealed */
+        t = t ^ NULL_TOP8_XOR_MASK;
         ret = (perms << 49) |
             ((uint64_t)e << 41) | (1ull << 40) |
             ((b & ~((1ull << 12) - 1)) << 20) |
@@ -2157,6 +2164,7 @@ static uint64_t compress_128cap(cap_register_t *csp)
             (uint64_t)(csp->cr_otype & 0x000fff);
     } else {
         /* unsealed */
+        t = t ^ NULL_TOP20_XOR_MASK;
         ret = (perms << 49) | ((uint64_t)e << 41) | (b << 20) | t;
     }
 
@@ -2182,7 +2190,7 @@ static uint64_t compress_128cap(cap_register_t *csp)
  */
 bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
-        uint64_t inc)
+        uint64_t new_offset)
 {
 #ifdef SIMPLE_REPRESENT_CHECK
     cap_register_t c;
@@ -2203,13 +2211,13 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
     } else {
         c.cr_base = base;
         c.cr_length = length;
-        c.cr_offset = inc;
+        c.cr_offset = new_offset;
         c.cr_sealed = sealed;
 
         pesbt = compress_128cap(&c);
-        decompress_128cap(pesbt, base + inc, &c);
+        decompress_128cap(pesbt, base + new_offset, &c);
 
-        if (c.cr_base != base || c.cr_length != length || c.cr_offset != inc)
+        if (c.cr_base != base || c.cr_length != length || c.cr_offset != new_offset)
             return false;
     }
     return true;
@@ -2218,6 +2226,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
     int64_t b, r, Imid, Amid;
     uint64_t t;
     bool inRange, inLimits;
+    int64_t inc = new_offset - offset;
 
 #define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
 
@@ -2246,7 +2255,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
      * for sealed capabilities we need to check if that changes the
      * precision.
      *
-     * See CHERI Architecture Section 5.9:
+     * See CHERI Architecture Section 4.11:
      *
      * "Sealed capabilities have more restrictive alignment requirements
      * due to fewer bits available to represent T and B. The hardware
@@ -2261,7 +2270,8 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 #undef SEALED_MASK
     }
 
-    r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK);
+    /* r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK); */
+    r = ((b - (1ul << 12)) & MOD_MASK);
 
     /* inRange, test if bits are all the same */
     inRange = all_ones(inc, e) || all_zeroes(inc, e);
@@ -2314,7 +2324,6 @@ bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t inc)
 {
-
     return true;
 }
 
@@ -3031,8 +3040,8 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
     return (target_ulong)0;
 }
 
-void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
-        uint32_t ct)
+static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
+                         uint32_t ct, bool conditional)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     cap_register_t *cdp = &env->active_tc.C[cd];
@@ -3051,7 +3060,12 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else if (!csp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!ctp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_TAG, ct);
+        if (conditional)
+            *cdp = *csp;
+        else
+            do_raise_c2_exception(env, CP2Ca_TAG, ct);
+    } else if (conditional && ctp->cr_base + ctp->cr_offset == -1) {
+        *cdp = *csp;
     } else if (is_cap_sealed(csp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (is_cap_sealed(ctp)) {
@@ -3063,13 +3077,30 @@ void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (!is_representable(true, csp->cr_base, csp->cr_length,
-                csp->cr_offset, 0ul)) {
+                csp->cr_offset, csp->cr_offset)) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         *cdp = *csp;
         cdp->cr_sealed = 1;
         cdp->cr_otype = (uint32_t)ct_base_plus_offset;
     }
+}
+
+void helper_cseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
+        uint32_t ct)
+{
+    /*
+     * CSeal: Seal a capability
+     */
+    cseal_common(env, cd, cs, ct, false);
+}
+
+void helper_ccseal(CPUMIPSState *env, uint32_t cd, uint32_t cs, uint32_t ct)
+{
+    /*
+     * CCSeal: Conditionally seal a capability.
+     */
+    cseal_common(env, cd, cs, ct, true);
 }
 
 void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
@@ -4271,6 +4302,21 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
     }
 }
 
+
+target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
+        uint32_t cb, target_ulong addr)
+{
+    /* This could be done in helper_bytes2cap_128 but TCG limits the number
+     * of arguments to 5 so we have to have a separate helper to handle the tag.
+     */
+    cap_register_t *cbp = &env->active_tc.C[cb];
+    target_ulong tag = cheri_tag_get(env, addr, cd, NULL);
+
+    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
+        tag = 0;
+    return tag;
+}
+
 void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         target_ulong cursor)
 {
@@ -4279,20 +4325,15 @@ void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
     decompress_128cap(pesbt, cursor, cdp);
 }
 
-void helper_bytes2cap_128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
-                             target_ulong cursor, target_ulong addr)
+void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
+        target_ulong tag, target_ulong addr, target_ulong cursor)
 {
     /* This could be done in helper_bytes2cap_128 but TCG limits the number
      * of arguments to 5 so we have to have a separate helper to handle the tag.
      */
-    cap_register_t *cbp = &env->active_tc.C[cb];
     cap_register_t *cdp = &env->active_tc.C[cd];
-    uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
 
-    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
-        tag = 0;
     cdp->cr_tag = tag;
-
     /* Log memory read, if needed. */
     dump_cap_load(addr, cdp->cr_pesbt, cursor, tag);
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
@@ -4611,6 +4652,7 @@ void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
 {
     cap_register_t *cdp = &env->active_tc.C[cd];
 
+    length = length ^ -1UL;
     cdp->cr_length = length;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
@@ -4674,7 +4716,7 @@ target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
     dump_cap_store_length(csp->cr_length);
     cvtrace_dump_cap_length(&env->cvtrace, csp->cr_length);
 
-    return (csp->cr_length);
+    return (csp->cr_length ^ -1UL);
 }
 #endif /* ! CHERI_MAGIC128 */
 

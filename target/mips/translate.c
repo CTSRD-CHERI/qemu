@@ -1205,6 +1205,7 @@ enum {
     OPC_CMOVN_NI        = OPC_CAP_NI | (0x1c),
     OPC_CBUILDCAP_NI    = OPC_CAP_NI | (0x1d),
     OPC_CCOPYTYPE_NI    = OPC_CAP_NI | (0x1e),
+    OPC_CCSEAL_NI       = OPC_CAP_NI | (0x1f),
     OPC_CTESTSUBSET_NI  = OPC_CAP_NI | (0x20),
     OPC_CNEXEQ_NI       = OPC_CAP_NI | (0x21),
 };
@@ -2456,6 +2457,18 @@ static inline void generate_cbuildcap(int32_t cd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tct);
 }
 
+static inline void generate_ccseal(int32_t cd, int32_t cs, int32_t ct)
+{
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv_i32 tct = tcg_const_i32(ct);
+
+    gen_helper_ccseal(cpu_env, tcd, tcs, tct);    
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcs);
+    tcg_temp_free_i32(tct);
+}
+
 static inline void generate_ccopytype(int32_t cd, int32_t cb, int32_t ct)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
@@ -3356,6 +3369,7 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
+    TCGv ttag = tcg_temp_new();
 
     /* Check the cap registers and compute the address. */
     gen_load_gpr(t0, rt);
@@ -3372,9 +3386,11 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
     tcg_gen_subi_tl(taddr, taddr, 8);
 
     /* Store in the capability register. */
+    gen_helper_bytes2cap_128_tag_get(ttag, cpu_env, tcd, tcb, taddr);
     gen_helper_bytes2cap_128(cpu_env, tcd, t0, t1);
-    gen_helper_bytes2cap_128_tag(cpu_env, tcb, tcd, t1, taddr);
+    gen_helper_bytes2cap_128_tag_set(cpu_env, tcd, ttag, taddr, t1);
 
+    tcg_temp_free(ttag);
     tcg_temp_free(t1);
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
@@ -3390,6 +3406,7 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
+    TCGv ttag = tcg_temp_new();
 
     /* Check the cap registers and compute the address. */
     gen_helper_cllc_addr(taddr, cpu_env, tcd, tcb);
@@ -3405,9 +3422,11 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
     tcg_gen_subi_tl(taddr, taddr, 8);
 
     /* Store in the capability register. */
+    gen_helper_bytes2cap_128_tag_get(ttag, cpu_env, tcd, tcb, taddr);
     gen_helper_bytes2cap_128(cpu_env, tcd, t0, t1);
-    gen_helper_bytes2cap_128_tag(cpu_env, tcb, tcd, t1, taddr);
+    gen_helper_bytes2cap_128_tag_set(cpu_env, tcd, ttag, taddr, t1);
 
+    tcg_temp_free(ttag);
     tcg_temp_free(t1);
     tcg_temp_free(t0);
     tcg_temp_free(taddr);
@@ -4959,11 +4978,6 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
         /* If no destination, treat it as a NOP. */
 #ifdef TARGET_CHERI
         if (opc == OPC_ORI && rs == 0) {
-#ifndef CHERI_DEFAULT_CVTRACE
-	    /* Don't mix with CheriVis tracing. */
-            if (qemu_loglevel_mask(CPU_LOG_CVTRACE))
-                return;
-#endif
             /* With 'li $0, 0xbeef' turn on instruction trace logging. */
             if ((uint16_t)imm == 0xbeef)
                 GEN_CHERI_TRACE_HELPER(cpu_env, instr_start);
@@ -11546,7 +11560,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_cmovn(r16, r11, r6);
             opn = "cmovn";
             break;
-        case OPC_CBUILDCAP_NI:
+        case OPC_CBUILDCAP_NI: /* 0x1d */
             check_cop2x(ctx);
             generate_check_access_idc(ctx, r16);
             generate_check_access_idc(ctx, r11);
@@ -11554,7 +11568,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_cbuildcap(r16, r11, r6);
             opn = "cbuildcap";
             break;
-        case OPC_CCOPYTYPE_NI:
+        case OPC_CCOPYTYPE_NI: /* 0x1e */
             check_cop2x(ctx);
             generate_check_access_idc(ctx, r16);
             generate_check_access_idc(ctx, r11);
@@ -11562,14 +11576,20 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_ccopytype(r16, r11, r6);
             opn = "ccopytype";
             break;
-        case OPC_CTESTSUBSET_NI:
+        case OPC_CCSEAL_NI: /* 0x1f */
+            check_cop2x(ctx);
+            generate_check_access_idc(ctx, r16);
+            generate_check_access_idc(ctx, r11);
+            generate_check_access_idc(ctx, r6);
+            generate_ccseal(r16, r11, r6);
+        case OPC_CTESTSUBSET_NI: /* 0x20 */
             check_cop2x(ctx);
             generate_check_access_idc(ctx, r11);
             generate_check_access_idc(ctx, r6);
             generate_ctestsubset(r16, r11, r6);
             opn = "ctestsubset";
             break;
-        case OPC_CNEXEQ_NI:
+        case OPC_CNEXEQ_NI: /* 0x21 */
             check_cop2x(ctx);
             generate_check_access_idc(ctx, r11);
             generate_check_access_idc(ctx, r6);
