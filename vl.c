@@ -1934,6 +1934,15 @@ static void version(void)
 {
     printf("QEMU emulator version " QEMU_VERSION QEMU_PKGVERSION "\n"
            QEMU_COPYRIGHT "\n");
+#ifdef TARGET_CHERI
+#ifdef CHERI_128
+    printf("Compiled for CHERI128\n");
+#elif defined(CHERI_MAGIC128)
+    printf("Compiled for CHERI128 (magic)\n");
+#else
+    printf("Compiled for CHERI256\n");
+#endif
+#endif
 }
 
 static void help(int exitcode)
