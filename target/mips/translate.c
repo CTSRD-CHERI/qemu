@@ -157,6 +157,19 @@ enum {
     OPC_PREF     = (0x33 << 26),
     /* PC-relative address computation / loads */
     OPC_PCREL    = (0x3B << 26),
+
+// XXXAR: experimental CHERI instructions
+#if defined(TARGET_CHERI)
+    // For the new experimental CLC we reuse the JALX (since mode switch to
+    // micromips is not supported) and DAUI (add upper immediate, MIPS64R6 only)
+    OPC_CLOADC_LargeImm = OPC_JALX,
+    // For the new large immediate CStoreC (may not be needed but symmetry is
+    // nice) we use
+    OPC_CSTOREC_LargeImm = OPC_MDMX,
+
+    // why can't this table be ordered by opcode number rather than group?
+    // would make it a lot easier to find conflicting values
+#endif
 };
 
 /* PC-relative address computation / loads  */
@@ -23467,6 +23480,10 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         check_cop2x(ctx);
         generate_clc(ctx, rs, rt, rd, ctx->opcode & 0x7ff);
         break;
+    case OPC_CLOADC_LargeImm: /* Load Capability Register with 16bit immediate */
+        check_cop2x(ctx);
+        generate_clc(ctx, rs, rt, 0, ctx->opcode & 0xffff);
+        break;
     case OPC_CSTORE:    /* Store Via Capability Register */
         {
             uint32_t opc = ctx->opcode;
@@ -23502,6 +23519,10 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
     case OPC_CSTOREC:   /* Store Capability Register */
         check_cop2x(ctx);
         generate_csc(ctx, rs, rt, rd, imm & 0x7ff);
+        break;
+    case OPC_CSTOREC_LargeImm:   /* Store Capability Register with 16-bit immediate */
+        check_cop2x(ctx);
+        generate_csc(ctx, rs, rt, 0, imm & 0xffff);
         break;
 #else /* ! TARGET_CHERI */
     /* Compact branches [R6] and COP2 [non-R6] */
@@ -23649,6 +23670,8 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
 #endif
+
+#if !defined(TARGET_CHERI) /* CHERI reuses these opcodes for experimental instrs */
     case OPC_DAUI: /* OPC_JALX */
         if (ctx->insn_flags & ISA_MIPS32R6) {
 #if defined(TARGET_MIPS64)
@@ -23675,8 +23698,9 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         break;
     case OPC_MSA: /* OPC_MDMX */
         /* MDMX: Not implemented. */
-        gen_msa(env, ctx);
+        gen_msa(env, ctx); /* this does a check_insn(ctx, ASE_MSA); */
         break;
+#endif /* ! TAGET_CHERI */
     case OPC_PCREL:
         check_insn(ctx, ISA_MIPS32R6);
         gen_pcrel(ctx, ctx->opcode, ctx->pc, rs);
