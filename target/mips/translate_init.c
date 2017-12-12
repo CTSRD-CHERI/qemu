@@ -532,7 +532,11 @@ static const mips_def_t mips_defs[] =
         /* The R4000 has a full 64bit FPU but doesn't use the fcr0 bits. */
         .CP1_fcr0 = (0x5 << FCR0_PRID) | (0x0 << FCR0_REV),
         .CP1_fcr31 = 0,
+#if defined(TARGET_CHERI)
+        .CP1_fcr31_rw_bitmask = 0x018FFFFF,
+#else
         .CP1_fcr31_rw_bitmask = 0x0183FFFF,
+#endif
         .SEGBITS = 40,
 #if defined(TARGET_CHERI)
         .PABITS = 40,
@@ -625,7 +629,11 @@ static const mips_def_t mips_defs[] =
         .CP1_fcr0 = (1 << FCR0_D) | (1 << FCR0_S) |
                     (0x81 << FCR0_PRID) | (0x0 << FCR0_REV),
         .CP1_fcr31 = 0,
+#if defined(TARGET_CHERI)
+        .CP1_fcr31_rw_bitmask = 0xFF8FFFFF,
+#else
         .CP1_fcr31_rw_bitmask = 0xFF83FFFF,
+#endif
         .SEGBITS = 42,
         .PABITS = 36,
 #if defined(TARGET_CHERI)
