@@ -1115,9 +1115,15 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_freebsd_kqueue();
         break;
 
+    case TARGET_FREEBSD_NR_freebsd11_kevent: /* kevent(2) */
+        ret = do_freebsd_freebsd11_kevent(arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+#ifdef BSD_HAVE_KEVENT64
     case TARGET_FREEBSD_NR_kevent: /* kevent(2) */
         ret = do_freebsd_kevent(arg1, arg2, arg3, arg4, arg5, arg6);
         break;
+#endif
 
     case TARGET_FREEBSD_NR_setitimer: /* setitimer(2) */
         ret = do_freebsd_setitimer(arg1, arg2, arg3);
