@@ -301,52 +301,113 @@ static inline abi_long do_freebsd_futimesat(abi_long arg1, abi_long arg2,
     return ret;
 }
 
-/*
- * undocumented ktimer_create(clockid_t clock_id,  struct sigevent *evp,
- * int *timerid) syscall
- */
+/* timer_create(2) */
 static inline abi_long do_freebsd_ktimer_create(abi_long arg1, abi_long arg2,
         abi_long arg3)
 {
+    /* args: clockid_t clockid, struct sigevent *sevp, timer_t *timerid */
+    abi_long ret;
 
-    qemu_log("qemu: Unsupported syscall ktimer_create()\n");
-    return -TARGET_ENOSYS;
+    struct sigevent host_sevp = { {0}, }, *phost_sevp = NULL;
+
+    int clkid = arg1;
+    int timer_index = next_free_host_timer();
+
+    if (timer_index < 0) {
+        ret = -TARGET_EAGAIN;
+    } else {
+        timer_t *phtimer = g_posix_timers  + timer_index;
+
+        if (arg2) {
+            phost_sevp = &host_sevp;
+            ret = target_to_host_sigevent(phost_sevp, arg2);
+            if (ret != 0) {
+                return -TARGET_EFAULT;
+            }
+        }
+
+        ret = get_errno(timer_create(clkid, phost_sevp, phtimer));
+        if (ret) {
+            phtimer = NULL;
+        } else {
+            if (put_user(TIMER_MAGIC | timer_index, arg3, target_timer_t)) {
+                ret = -TARGET_EFAULT;
+            }
+        }
+    }
+    return (ret);
 }
 
-/* undocumented ktimer_delete(int timerid) syscall */
+/* timer_delete(2) */
 static inline abi_long do_freebsd_ktimer_delete(abi_long arg1)
 {
+    /* args: timer_t timerid */
+    abi_long ret;
+    target_timer_t timerid = get_timer_id(arg1);
 
-    qemu_log("qemu: Unsupported syscall ktimer_delete()\n");
-    return -TARGET_ENOSYS;
+    if (timerid < 0) {
+        ret = timerid;
+    } else {
+        timer_t htimer = g_posix_timers[timerid];
+        ret = get_errno(timer_delete(htimer));
+        g_posix_timers[timerid] = 0;
+    }
+    return(ret);
 }
 
-/*
- * undocumented ktimer_settime(int timerid, int flags,
- * const struct itimerspec *value, struct itimerspec *ovalue) syscall
- */
+/* timer_settime(2) */
 static inline abi_long do_freebsd_ktimer_settime(abi_long arg1, abi_long arg2,
         abi_long arg3, abi_long arg4)
 {
-
-    qemu_log("qemu: Unsupported syscall ktimer_settime()\n");
-    return -TARGET_ENOSYS;
+    /* args: timer_t timerid, int flags, const struct itimerspec *new_value,
+     * struct itimerspec * old_value */
+    abi_long ret;
+    target_timer_t timerid = get_timer_id(arg1);
+ 
+    if (timerid < 0) {
+        ret = timerid;
+    } else if (arg3 == 0) {
+        ret = -TARGET_EINVAL;
+    } else {
+        timer_t htimer = g_posix_timers[timerid];
+        struct itimerspec hspec_new = {{0},}, hspec_old = {{0},};
+ 
+        if (target_to_host_itimerspec(&hspec_new, arg3)) {
+            return -TARGET_EFAULT;
+        }
+        ret = get_errno(
+                      timer_settime(htimer, arg2, &hspec_new, &hspec_old));
+        if (arg4 && host_to_target_itimerspec(arg4, &hspec_old)) {
+            return -TARGET_EFAULT;
+        }
+    }
+    return (ret);
 }
 
-/*
- * undocumented ktimer_gettime(int timerid, struct itimerspec *value)
- * syscall
- */
+/* timer_gettime(2) */
 static inline abi_long do_freebsd_ktimer_gettime(abi_long arg1, abi_long arg2)
 {
+    /* args: timer_t timerid, struct itimerspec *curr_value */
+    abi_long ret;
+    target_timer_t timerid = get_timer_id(arg1);
 
-    qemu_log("qemu: Unsupported syscall ktimer_gettime()\n");
-    return -TARGET_ENOSYS;
+    if (timerid < 0) {
+        ret = timerid;
+    } else if (!arg2) {
+        ret = -TARGET_EFAULT;
+    } else {
+        timer_t htimer = g_posix_timers[timerid];
+        struct itimerspec hspec;
+        ret = get_errno(timer_gettime(htimer, &hspec));
+
+        if (host_to_target_itimerspec(arg2, &hspec)) {
+            ret = -TARGET_EFAULT;
+        }
+    }
+    return (ret);
 }
 
-/*
- * undocumented ktimer_getoverrun(int timerid) syscall
- */
+/* timer_getoverrun(2) */
 static inline abi_long do_freebsd_ktimer_getoverrun(abi_long arg1)
 {
 
