@@ -4434,7 +4434,7 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
         cdp->cr_sealed = 1;
     else
         cdp->cr_sealed = 0;
-    cdp->cr_length = length;
+    cdp->cr_length = length ^ -1UL;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
 }
@@ -4500,7 +4500,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     tps = ((uint64_t)csp->cr_otype << 32) |
         (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
 
-    length = csp->cr_length;
+    length = csp->cr_length ^ -1UL;
 
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length);
 
