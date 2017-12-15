@@ -40,12 +40,12 @@ struct target_sigaction {
     target_sigset_t sa_mask;
 };
 
-union target_sigval {
+typedef union target_sigval {
     int32_t sival_int;
     abi_ulong sival_ptr;
     int32_t sigval_int;
     abi_ulong sigval_ptr;
-};
+} target_sigval_t;
 
 typedef struct target_siginfo {
     int32_t si_signo;   /* signal number */
@@ -82,6 +82,26 @@ typedef struct target_siginfo {
         } __spare__;
     } _reason;
 } target_siginfo_t;
+
+struct target_sigevent {
+    abi_int sigev_notify;
+    abi_int sigev_signo;
+    target_sigval_t sigev_value;
+    union {
+        abi_int _threadid;
+
+        /* The kernel (and thus QEMU) never looks at these;
+         * they're only used as part of the ABI between a
+         * userspace program and libc.
+         */
+        struct {
+            abi_ulong _function;
+            abi_ulong _attribute;
+        } _sigev_thread;
+        abi_ushort _kevent_flags;
+        abi_long _pad[8];
+    } _sigev_un;
+};
 
 #define target_si_signo     si_signo
 #define target_si_code      si_code
