@@ -227,6 +227,11 @@ struct target_freebsd_ntptimeval {
     int32_t     time_state;
 };
 
+struct target_freebsd_itimerspec {
+    struct target_freebsd_timespec it_interval;
+    struct target_freebsd_timespec it_value;
+};
+
 struct target_freebsd_timex {
     uint32_t    modes;
     abi_long    offset;
@@ -247,6 +252,14 @@ struct target_freebsd_timex {
     abi_long    errcnt;
     abi_long    stbcnt;
 };
+
+typedef int32_t target_timer_t;
+
+/* Maxiumum of 32 active POSIX timers allowed at any one time. */
+static timer_t g_posix_timers[32] = { 0, } ;
+
+#define TIMER_MAGIC 0x0caf0000
+#define TIMER_MAGIC_MASK 0xffff0000
 
 /*
  * sys/event.h

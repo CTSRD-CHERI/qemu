@@ -61,6 +61,13 @@ abi_ulong copy_from_user_fdset_ptr(fd_set *fds, fd_set **fds_ptr,
 abi_long copy_to_user_fdset(abi_ulong target_fds_addr, const fd_set *fds,
         int n);
 
+abi_int next_free_host_timer(void);
+abi_long target_to_host_itimerspec(struct itimerspec *host_itspec,
+        abi_ulong target_addr);
+abi_long host_to_target_itimerspec(abi_ulong target_addr,
+        struct itimerspec *host_its);
+target_timer_t get_timer_id(abi_long arg);
+
 /* os-socket.c */
 abi_long t2h_freebsd_cmsg(struct msghdr *msgh,
                 struct target_msghdr *target_msgh);
