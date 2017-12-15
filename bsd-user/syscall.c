@@ -1083,23 +1083,23 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_freebsd_futimesat(arg1, arg2, arg3);
         break;
 
-    case TARGET_FREEBSD_NR_ktimer_create: /* undocumented */
+    case TARGET_FREEBSD_NR_ktimer_create: /* timer_create(2) */
         ret = do_freebsd_ktimer_create(arg1, arg2, arg3);
         break;
 
-    case TARGET_FREEBSD_NR_ktimer_delete: /* undocumented */
+    case TARGET_FREEBSD_NR_ktimer_delete: /* timer_delete(2) */
         ret = do_freebsd_ktimer_delete(arg1);
         break;
 
-    case TARGET_FREEBSD_NR_ktimer_settime: /* undocumented */
+    case TARGET_FREEBSD_NR_ktimer_settime: /* timer_settime(2) */
         ret = do_freebsd_ktimer_settime(arg1, arg2, arg3, arg4);
         break;
 
-    case TARGET_FREEBSD_NR_ktimer_gettime: /* undocumented */
+    case TARGET_FREEBSD_NR_ktimer_gettime: /* timer_gettime(2) */
         ret = do_freebsd_ktimer_gettime(arg1, arg2);
         break;
 
-    case TARGET_FREEBSD_NR_ktimer_getoverrun: /* undocumented */
+    case TARGET_FREEBSD_NR_ktimer_getoverrun: /* timer_getoverrun(2) */
         ret = do_freebsd_ktimer_getoverrun(arg1);
         break;
 

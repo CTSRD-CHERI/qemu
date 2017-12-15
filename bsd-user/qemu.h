@@ -226,6 +226,7 @@ void signal_init(void);
 int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info);
 void host_to_target_siginfo(target_siginfo_t *tinfo, const siginfo_t *info);
 void target_to_host_siginfo(siginfo_t *info, const target_siginfo_t *tinfo);
+abi_long target_to_host_sigevent(struct sigevent *host_sevp, abi_ulong target_addr);
 int target_to_host_signal(int sig);
 int host_to_target_signal(int sig);
 void host_to_target_sigset(target_sigset_t *d, const sigset_t *s);
