@@ -124,6 +124,7 @@ void *new_freebsd_thread_start(void *arg)
     long tid;
 
     rcu_register_thread();
+    tcg_register_thread();
     env = info->env;
     cpu = ENV_GET_CPU(env);
     thread_cpu = cpu;
