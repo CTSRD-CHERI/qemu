@@ -251,13 +251,32 @@ struct target_freebsd_timex {
 /*
  * sys/event.h
  */
-struct target_freebsd_kevent {
+struct kevent_freebsd11 {
+    __uintptr_t     ident;
+    short           filter;
+    unsigned short  flags;
+    unsigned int    fflags;
+    __intptr_t      data;
+    void            *udata;
+};
+
+struct target_freebsd11_kevent {
     abi_ulong  ident;
     int16_t    filter;
     uint16_t   flags;
     uint32_t   fflags;
     abi_long   data;
     abi_ulong  udata;
+} __packed;
+
+struct target_freebsd_kevent {
+    abi_ulong  ident;
+    int16_t    filter;
+    uint16_t   flags;
+    uint32_t   fflags;
+    int64_t data;
+    abi_ulong  udata;
+    uint64_t  ext[4];
 } __packed;
 
 /*
