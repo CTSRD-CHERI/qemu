@@ -21,6 +21,10 @@
 #define BSD_HAVE_INO64
 #endif
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200033
+#define BSD_HAVE_KEVENT64
+#endif
+
 /* needed for fprintf() debug function */
 #include <stdio.h>
 #include "qemu/osdep.h"
