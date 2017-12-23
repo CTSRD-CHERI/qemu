@@ -443,6 +443,8 @@ struct mips_opcode
    "+o4" 11 bits immediate/displacement (shift = 1, CHERI only)
    "+o5" 11 bits immediate/displacement (shift = 2, CHERI only)
    "+o6" 11 bits immediate/displacement (shift = 3, CHERI only)
+   "+o7" 11 bits immediate/displacement (shift = 4, CHERI only)
+   "+o8" 16 bits immediate/displacement (shift = 4, CHERI only)
 
    Other:
    "()" parens surrounding optional value
@@ -1459,6 +1461,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cllhu", "t,+b",       0x4a00000d, 0xffe007ff, 0,          0, I1},
 {"cllwu", "t,+b",       0x4a00000e, 0xffe007ff, 0,          0, I1},
 {"cllc",  "+w,+b",      0x4a00000f, 0xffe007ff, 0,          0, I1},
+
+
+/* XXXAR: new experimental CHERI loads. Overlaps with daui, etc. */
+{"clcbi",    "+x,+o8(+w)",    0x74000000, 0xfc000000, 0,            0, I1},
+{"cscbi",    "+x,+o8(+w)",    0x78000000, 0xfc000000, 0,            0, I1},
+
 /* End of CHERI instructions */
 
 {"lwpc",    "s,+o2",    0xec080000, 0xfc180000, WR_d,                 0, I32R6},
@@ -4668,6 +4676,14 @@ print_insn_args (const char *d,
                     delta = ((l >> OP_SH_CDELTA) & OP_MASK_CDELTA);
                     if (delta > (OP_MASK_CDELTA >> 1)) {
                         delta -= (OP_MASK_CDELTA + 1);
+                    }
+                    delta = delta << 4;
+                    break;
+                case '8': /* CHERI 16 bit, shift 4 */
+                    d++;
+                    delta = ((l >> OP_SH_DELTA) & OP_MASK_DELTA);
+                    if (delta > (OP_MASK_DELTA >> 1)) {
+                        delta -= (OP_MASK_DELTA + 1);
                     }
                     delta = delta << 4;
                     break;

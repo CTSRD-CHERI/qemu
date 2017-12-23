@@ -157,6 +157,19 @@ enum {
     OPC_PREF     = (0x33 << 26),
     /* PC-relative address computation / loads */
     OPC_PCREL    = (0x3B << 26),
+
+// XXXAR: experimental CHERI instructions
+#if defined(TARGET_CHERI)
+    // For the new experimental CLC we reuse the JALX (since mode switch to
+    // micromips is not supported) and DAUI (add upper immediate, MIPS64R6 only)
+    OPC_CLOADC_LargeImm = OPC_JALX,
+    // For the new large immediate CStoreC (may not be needed but symmetry is
+    // nice) we use
+    OPC_CSTOREC_LargeImm = OPC_MDMX,
+
+    // why can't this table be ordered by opcode number rather than group?
+    // would make it a lot easier to find conflicting values
+#endif
 };
 
 /* PC-relative address computation / loads  */
@@ -3351,21 +3364,22 @@ static inline void generate_csd(DisasContext *ctx, int32_t rs, int32_t cb,
     tcg_temp_free(taddr);
 }
 
-static inline int32_t clc_sign_extend(int32_t x)
+static inline int32_t clc_sign_extend(int32_t x, bool big_imm)
 {
-    int32_t const mask = 1U << (11 - 1);
+    const int32_t bits = big_imm ? 16 : 11;
+    int32_t const mask = 1U << (bits - 1);
 
-    x = x & ((1U << 11) - 1);
+    x = x & ((1U << bits) - 1);
     return (x ^ mask) - mask;
 }
 
 #ifdef CHERI_128
 static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
-        int32_t rt, int32_t offset)
+        int32_t rt, int32_t offset, bool big_imm)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
@@ -3435,11 +3449,11 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
 }
 
 static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
-        int32_t rt, int32_t offset)
+        int32_t rt, int32_t offset, bool big_imm)
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv_i32 tbdoffset;
@@ -3530,11 +3544,11 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
 #elif defined(CHERI_MAGIC128)
 
 static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
-        int32_t rt, int32_t offset)
+        int32_t rt, int32_t offset, bool big_imm)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
@@ -3598,11 +3612,11 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
 }
 
 static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
-        int32_t rt, int32_t offset)
+        int32_t rt, int32_t offset, bool big_imm)
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv_i32 tbdoffset;
@@ -3693,11 +3707,11 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
 #else /* ! CHERI_MAGIC128 */
 
 static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
-        int32_t rt, int32_t offset)
+        int32_t rt, int32_t offset, bool big_imm)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
@@ -3791,11 +3805,11 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
 }
 
 static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
-        int32_t rt, int32_t offset)
+        int32_t rt, int32_t offset, bool big_imm)
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset) * 16);
+    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
     TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
     TCGv_i32 tbdoffset;
@@ -23465,7 +23479,11 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         break;
     case OPC_CLOADC:    /* Load Capability Register */
         check_cop2x(ctx);
-        generate_clc(ctx, rs, rt, rd, ctx->opcode & 0x7ff);
+        generate_clc(ctx, rs, rt, rd, ctx->opcode & 0x7ff, false);
+        break;
+    case OPC_CLOADC_LargeImm: /* Load Capability Register with 16bit immediate */
+        check_cop2x(ctx);
+        generate_clc(ctx, rs, rt, 0, ctx->opcode & 0xffff, true);
         break;
     case OPC_CSTORE:    /* Store Via Capability Register */
         {
@@ -23501,7 +23519,11 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         break;
     case OPC_CSTOREC:   /* Store Capability Register */
         check_cop2x(ctx);
-        generate_csc(ctx, rs, rt, rd, imm & 0x7ff);
+        generate_csc(ctx, rs, rt, rd, imm & 0x7ff, false);
+        break;
+    case OPC_CSTOREC_LargeImm:   /* Store Capability Register with 16-bit immediate */
+        check_cop2x(ctx);
+        generate_csc(ctx, rs, rt, 0, imm & 0xffff, true);
         break;
 #else /* ! TARGET_CHERI */
     /* Compact branches [R6] and COP2 [non-R6] */
@@ -23649,6 +23671,8 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
 #endif
+
+#if !defined(TARGET_CHERI) /* CHERI reuses these opcodes for experimental instrs */
     case OPC_DAUI: /* OPC_JALX */
         if (ctx->insn_flags & ISA_MIPS32R6) {
 #if defined(TARGET_MIPS64)
@@ -23675,8 +23699,9 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         break;
     case OPC_MSA: /* OPC_MDMX */
         /* MDMX: Not implemented. */
-        gen_msa(env, ctx);
+        gen_msa(env, ctx); /* this does a check_insn(ctx, ASE_MSA); */
         break;
+#endif /* ! TAGET_CHERI */
     case OPC_PCREL:
         check_insn(ctx, ISA_MIPS32R6);
         gen_pcrel(ctx, ctx->opcode, ctx->pc, rs);
