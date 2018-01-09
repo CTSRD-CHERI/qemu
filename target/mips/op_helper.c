@@ -4088,14 +4088,14 @@ void helper_instr_stop_user_mode_only(CPUMIPSState *env, target_ulong pc)
     qemu_set_log(qemu_loglevel & ~CPU_LOG_USER_ONLY);
 }
 
-static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_long vaddr) {
+static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vaddr) {
     char ascii_chars[17] = { 0 };
     target_ulong line_start = vaddr & ~0xf;
     target_ulong addr;
 
     /* print leading empty space to always start with an aligned address */
     if (line_start != vaddr) {
-        fprintf(f, "    %08lx: ", line_start);
+        fprintf(f, "    " TARGET_FMT_lx" : ", line_start);
         for (addr = line_start; addr < vaddr; addr++) {
             if ((addr % 4) == 0) {
                 fprintf(f, "   ");
@@ -4108,7 +4108,7 @@ static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_lon
     ascii_chars[16] = '\0';
     for (addr = vaddr; addr < vaddr + length; addr++) {
         if ((addr % 16) == 0) {
-            fprintf(f, "    %08lx: ", line_start);
+            fprintf(f, "    " TARGET_FMT_lx ": ", line_start);
         }
         if ((addr % 4) == 0) {
             fprintf(f, " ");
@@ -4160,19 +4160,22 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
     if (ret != 0) {
         /* XXXAR: where to print this error message? stderr?*/
-        fprintf(stderr, "CHERI DEBUG HELPER: Could not write %lu bytes at vaddr 0x%lx\n", length, vaddr);
+        fprintf(stderr, "CHERI DEBUG HELPER: Could not write " TARGET_FMT_ld
+                " bytes at vaddr 0x" TARGET_FMT_lx "\n", length, vaddr);
     }
     if (mode & CPU_LOG_INSTR) {
-        qemu_log("DEBUG MESSAGE @ 0x%lx\n", pc);
+        qemu_log("DEBUG MESSAGE @ 0x" TARGET_FMT_lx "\n", pc);
         if (print_mode == DEBUG_MESSAGE_CSTRING) {
             /* XXXAR: Escape newlines, etc.? */
             qemu_log("    message = \"%s\"\n", buffer);
         } else if (print_mode == DEBUG_MESSAGE_HEXDUMP) {
-            qemu_log("   Dumping %lu bytes starting at 0x%lx\n", length, vaddr);
+            qemu_log("   Dumping " TARGET_FMT_lu " bytes starting at 0x"
+                     TARGET_FMT_lx "\n", length, vaddr);
             do_hexdump(qemu_logfile, buffer, length, vaddr);
         }
     } else if (mode & CPU_LOG_CVTRACE) {
-        fprintf(stderr, "NOT IMPLEMENTED: CVTRACE debug message nop @ 0x%lx\n", pc);
+        fprintf(stderr, "NOT IMPLEMENTED: CVTRACE debug message nop at 0x"
+                TARGET_FMT_lx "\n", pc);
     } else {
         assert(false && "logic error");
     }
