@@ -21929,7 +21929,8 @@ static void gen_msa_branch(CPUMIPSState *env, DisasContext *ctx, uint32_t op1)
     ctx->hflags |= MIPS_HFLAG_BC;
     ctx->hflags |= MIPS_HFLAG_BDS32;
 }
-
+/* MSA opcode is reused by experimental CHERI instrs */
+#if !defined(TARGET_CHERI)
 static void gen_msa_i8(CPUMIPSState *env, DisasContext *ctx)
 {
 #define MASK_MSA_I8(op)    (MASK_MSA_MINOR(op) | (op & (0x03 << 24)))
@@ -22936,6 +22937,8 @@ static void gen_msa(CPUMIPSState *env, DisasContext *ctx)
     }
 
 }
+
+#endif /* !TARGET_CHERI */
 
 static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
 {
