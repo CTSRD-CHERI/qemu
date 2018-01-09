@@ -4827,7 +4827,6 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
     cap_register_t *pcc = &env->active_tc.PCC;
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
-    // TODO: increment icount?
     /* Decrement the startup breakcount, if set. */
     if (unlikely(cs->breakcount)) {
         cs->breakcount--;
@@ -4835,6 +4834,8 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
             helper_raise_exception(env, EXCP_DEBUG);
         }
     }
+    /* Update statcounters icount */
+    env->statcounters_icount++;
 
 #ifdef CHERI_128
     /* Check tag before updating offset. */
@@ -5838,7 +5839,7 @@ target_ulong helper_rdhwr_xnp(CPUMIPSState *env)
 target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env)
 {
     check_hwrena(env, 4, GETPC());
-    return 0x12345;
+    return env->statcounters_icount;
 }
 
 target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)

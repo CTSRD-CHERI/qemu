@@ -837,6 +837,10 @@ struct CPUMIPSState {
     bool user_only_tracing_enabled;
     bool trace_explicitly_disabled;
     bool tracing_suspended;
+
+    /* BERI Statcounters: */
+    uint64_t statcounters_icount;
+    /* TODO: we could implement the TLB ones as well */
 #endif /* TARGET_CHERI */
 
     /* Fields up to this point are cleared by a CPU reset */
