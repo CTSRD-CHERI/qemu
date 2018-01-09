@@ -2628,7 +2628,8 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
     // qemu_log_mask(CPU_LOG_INSTR, "%s(%#" PRIx64 "): env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
     //     __func__, pc, env->active_tc.PC, env->hflags, env->btarget);
 #endif
-    // TODO: increment icount?
+    /* Update statcounters icount */
+    env->statcounters_icount++;
 
     // branch instructions have already checked the validity of the target,
     // but we still need to check if the next instruction is accessible.

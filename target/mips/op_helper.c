@@ -2969,6 +2969,27 @@ target_ulong helper_rdhwr_xnp(CPUMIPSState *env)
     return (env->CP0_Config5 >> CP0C5_XNP) & 1;
 }
 
+#if defined(TARGET_CHERI)
+target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env)
+{
+    check_hwrena(env, 4, GETPC());
+    return env->statcounters_icount;
+}
+
+target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)
+{
+    // TODO: actually implement this
+    check_hwrena(env, 7, GETPC());
+    return 0;
+}
+
+target_ulong helper_rdhwr_statcounters_ignored(CPUMIPSState *env, uint32_t num)
+{
+    check_hwrena(env, num, GETPC());
+    return 0xdeadbeef;
+}
+#endif
+
 void helper_pmon(CPUMIPSState *env, int function)
 {
     function /= 2;
@@ -5434,27 +5455,6 @@ void helper_cache(CPUMIPSState *env, target_ulong addr, uint32_t op)
     }
 #endif
 }
-
-#ifdef TARGET_CHERI
-target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env)
-{
-    check_hwrena(env, 4, GETPC());
-    return 0x12345;
-}
-
-target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)
-{
-    // TODO: actually implement this
-    check_hwrena(env, 7, GETPC());
-    return 0;
-}
-
-target_ulong helper_rdhwr_statcounters_ignored(CPUMIPSState *env, uint32_t num)
-{
-    check_hwrena(env, num, GETPC());
-    return 0xdeadbeef;
-}
-#endif
 
 /* Reduce the length so that addr + len doesn't cross a page boundary.  */
 static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
