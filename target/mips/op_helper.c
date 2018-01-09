@@ -4233,27 +4233,6 @@ static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, cap_register_t *cr)
     }
 }
 
-static inline void cvtrace_dump_cap_cursor(cvtrace_t *cvtrace, uint64_t cursor)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val3 = tswap64(cursor);
-    }
-}
-
-static inline void cvtrace_dump_cap_base(cvtrace_t *cvtrace, uint64_t base)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val4 = tswap64(base);
-    }
-}
-
-static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val5 = tswap64(length);
-    }
-}
-
 /*
  * dump non-capability data to cvtrace entry
  */
@@ -4667,6 +4646,27 @@ void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
     /* Log memory reads, if needed. */
     dump_cap_load_cbl(cursor, base, length);
     cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+}
+
+static inline void cvtrace_dump_cap_cursor(cvtrace_t *cvtrace, uint64_t cursor)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val3 = tswap64(cursor);
+    }
+}
+
+static inline void cvtrace_dump_cap_base(cvtrace_t *cvtrace, uint64_t base)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val4 = tswap64(base);
+    }
+}
+
+static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val5 = tswap64(length);
+    }
 }
 
 target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
