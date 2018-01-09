@@ -4827,6 +4827,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
     cap_register_t *pcc = &env->active_tc.PCC;
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
+    // TODO: increment icount?
     /* Decrement the startup breakcount, if set. */
     if (unlikely(cs->breakcount)) {
         cs->breakcount--;
@@ -5789,33 +5790,20 @@ static inline void check_hwrena(CPUMIPSState *env, int reg, uintptr_t pc)
     do_raise_exception(env, EXCP_RI, pc);
 }
 
-#if defined(TARGET_CHERI)
-#define CHERI_STATCOUNTERS_WORKAROUND(env)  \
-    if (env->doing_statcounters) {          \
-        env->doing_statcounters = false;    \
-        return 0xdeadbeef;                  \
-    }
-#else
-#define CHERI_STATCOUNTERS_WORKAROUND(env)
-#endif
-
 target_ulong helper_rdhwr_cpunum(CPUMIPSState *env)
 {
-    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 0, GETPC());
     return env->CP0_EBase & 0x3ff;
 }
 
 target_ulong helper_rdhwr_synci_step(CPUMIPSState *env)
 {
-    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 1, GETPC());
     return env->SYNCI_Step;
 }
 
 target_ulong helper_rdhwr_cc(CPUMIPSState *env)
 {
-    CHERI_STATCOUNTERS_WORKAROUND(env)
     int32_t count;
     check_hwrena(env, 2, GETPC());
 #ifdef CONFIG_USER_ONLY
@@ -5830,34 +5818,40 @@ target_ulong helper_rdhwr_cc(CPUMIPSState *env)
 
 target_ulong helper_rdhwr_ccres(CPUMIPSState *env)
 {
-    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 3, GETPC());
     return env->CCRes;
 }
 
 target_ulong helper_rdhwr_performance(CPUMIPSState *env)
 {
-    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 4, GETPC());
     return env->CP0_Performance0;
 }
 
 target_ulong helper_rdhwr_xnp(CPUMIPSState *env)
 {
-    CHERI_STATCOUNTERS_WORKAROUND(env)
     check_hwrena(env, 5, GETPC());
     return (env->CP0_Config5 >> CP0C5_XNP) & 1;
 }
 
 #if defined(TARGET_CHERI)
-target_ulong helper_rdhwr_statcounters(CPUMIPSState *env)
+target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env)
 {
-    if (env->doing_statcounters) {
-        env->doing_statcounters = false;
-        return 0xdeadbeef;
-    }
-    env->doing_statcounters = true;
-    return 0xdeadbee0;
+    check_hwrena(env, 4, GETPC());
+    return 0x12345;
+}
+
+target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)
+{
+    // TODO: actually implement this
+    check_hwrena(env, 7, GETPC());
+    return 0;
+}
+
+target_ulong helper_rdhwr_statcounters_ignored(CPUMIPSState *env, uint32_t num)
+{
+    check_hwrena(env, num, GETPC());
+    return 0xdeadbeef;
 }
 #endif
 

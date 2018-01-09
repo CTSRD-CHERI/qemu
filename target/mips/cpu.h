@@ -801,7 +801,6 @@ struct CPUMIPSState {
     uint32_t CP0_TCStatus_rw_bitmask; /* Read/write bits in CP0_TCStatus */
     int insn_flags; /* Supported instruction set */
 #if defined(TARGET_CHERI)
-    bool doing_statcounters;
     /*
      * See section 4.4.2 (Table 4.3) of the CHERI Architecture Reference.
      */

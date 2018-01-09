@@ -14118,6 +14118,7 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
         gen_helper_rdhwr_ccres(t0, cpu_env);
         gen_store_gpr(t0, rt);
         break;
+#if !defined(TARGET_CHERI)
     case 4:
         check_insn(ctx, ISA_MIPS32R6);
         if (sel != 0) {
@@ -14134,6 +14135,7 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
         gen_helper_rdhwr_xnp(t0, cpu_env);
         gen_store_gpr(t0, rt);
         break;
+#endif
     case 29:
 #if defined(CONFIG_USER_ONLY)
         tcg_gen_ld_tl(t0, cpu_env,
@@ -14155,8 +14157,17 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
     /*
      * Fake registers to keep libstatcounters from triggering segfaultr
      */
-    case 6:
-    case 7:
+    case 4: /* ICOUNT */
+        gen_helper_rdhwr_statcounters_icount(t0, cpu_env);
+        gen_store_gpr(t0, rt);
+        break;
+    case 7: /* RESET */
+        save_cpu_state(ctx, 1);
+        gen_helper_rdhwr_statcounters_reset(t0, cpu_env);
+        gen_store_gpr(t0, rt);
+        break;
+    case 5: /* ITLB MISS */
+    case 6: /* DTLB MISS */
     case 8:
     case 9:
     case 10:
@@ -14164,8 +14175,7 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
     case 12:
     case 13:
     case 14:
-        save_cpu_state(ctx, 1);
-        gen_helper_rdhwr_statcounters(t0, cpu_env);
+        gen_helper_1e0i(rdhwr_statcounters_ignored, t0, rd);
         gen_store_gpr(t0, rt);
         break;
 #endif
@@ -21884,6 +21894,7 @@ static void gen_check_zero_element(TCGv tresult, uint8_t df, uint8_t wt)
     tcg_temp_free_i64(t0);
     tcg_temp_free_i64(t1);
 }
+
 
 static void gen_msa_branch(CPUMIPSState *env, DisasContext *ctx, uint32_t op1)
 {
