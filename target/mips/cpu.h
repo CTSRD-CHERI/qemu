@@ -829,6 +829,14 @@ struct CPUMIPSState {
 #define CP2Ca_PERM_CCALL    0x19 /* Permit_CCall Violation */
 #define CP2Ca_ACCESS_CCALL_IDC 0x1a /* Access IDC in a CCall delay slot */
 // 0x1b-0x1f Reserved
+
+#define TRACE_MODE_USER "User mode"
+    const char *last_mode;
+#define IN_USERSPACE(env) \
+    ((env)->last_mode && strcmp((env)->last_mode, TRACE_MODE_USER) == 0)
+    bool user_only_tracing_enabled;
+    bool trace_explicitly_disabled;
+    bool tracing_suspended;
 #endif /* TARGET_CHERI */
 
     /* Fields up to this point are cleared by a CPU reset */
@@ -856,14 +864,6 @@ struct CPUMIPSState {
     cap_register_t last_C[32];
 
     cvtrace_t cvtrace;
-
-#define TRACE_MODE_USER "User mode"
-    const char *last_mode;
-#define IN_USERSPACE(env) \
-    ((env)->last_mode && strcmp((env)->last_mode, TRACE_MODE_USER) == 0)
-    bool user_only_tracing_enabled;
-    bool trace_explicitly_disabled;
-    bool tracing_suspended;
 #endif /* TARGET_CHERI */
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
