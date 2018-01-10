@@ -283,6 +283,8 @@ dummy := $(call unnest-vars,, \
 
 include $(SRC_PATH)/tests/Makefile.include
 
+SCRIPTS_TO_INSTALL+=$(SRC_PATH)/scripts/symbolize-cheri-trace.py
+
 all: $(DOCS) $(TOOLS) $(HELPERS-y) recurse-all modules
 
 qemu-version.h: FORCE
@@ -615,6 +617,10 @@ ifneq ($(CONFIG_MODULES),)
 endif
 ifneq ($(HELPERS-y),)
 	$(call install-prog,$(HELPERS-y),$(DESTDIR)$(libexecdir))
+endif
+ifneq ($(SCRIPTS_TO_INSTALL),)
+	$(INSTALL_DIR) "$(DESTDIR)$(bindir)"
+	$(INSTALL_PROG) $(SCRIPTS_TO_INSTALL) "$(DESTDIR)$(bindir)"
 endif
 ifneq ($(BLOBS),)
 	set -e; for x in $(BLOBS); do \
