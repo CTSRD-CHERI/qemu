@@ -5096,6 +5096,9 @@ if [ "$guest_agent" != "no" ]; then
   fi
 fi
 
+# Add the CHERI symbolize trace script to tools:
+tools="scripts/symbolize-cheri-trace.py $tools"
+
 # Guest agent Window MSI  package
 
 if test "$guest_agent" != yes; then
