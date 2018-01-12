@@ -6298,6 +6298,37 @@ static void dump_changed_cop0(CPUMIPSState *env)
 #endif /* !CONFIG_USER_ONLY */
 
 #ifdef TARGET_CHERI
+
+static inline void dump_changed_capreg(CPUMIPSState *env,
+        cap_register_t *cr, cap_register_t *old_reg, int index)
+{
+    if (memcmp(cr, old_reg, sizeof(cap_register_t))) {
+        *old_reg = *cr;
+        if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
+            if (env->cvtrace.version == CVT_NO_REG ||
+                env->cvtrace.version == CVT_GPR)
+                env->cvtrace.version = CVT_CAP;
+            if (env->cvtrace.version == CVT_ST_GPR)
+                env->cvtrace.version = CVT_ST_CAP;
+            cvtrace_dump_cap_perms(&env->cvtrace, cr);
+            cvtrace_dump_cap_cbl(&env->cvtrace, cr);
+        }
+        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+            // TODO: allow printing a string instead of C%d
+            fprintf(qemu_logfile,
+                    "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
+                        " l:%016" PRIx64 "\n", index, cr->cr_tag,
+                    is_cap_sealed(cr) ? 1 : 0,
+                    (((cr->cr_uperms & CAP_UPERMS_ALL) <<
+                                                       CAP_UPERMS_MEM_SHFT) |
+                     (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))),
+                    cr->cr_base, cr->cr_length);
+            fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
+                    cr->cr_offset, cr->cr_otype);
+        }
+    }
+}
+
 /*
  * Print changed values of GPR, HI/LO and DSPControl registers.
  */
@@ -6316,39 +6347,17 @@ static void dump_changed_regs(CPUMIPSState *env)
         if (cur->gpr[i] != env->last_gpr[i]) {
             env->last_gpr[i] = cur->gpr[i];
             cvtrace_dump_gpr(&env->cvtrace, cur->gpr[i]);
-	    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+            if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
                 fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
                         gpr_name[i], cur->gpr[i]);
             }
         }
     }
     for (i=0; i<32; i++) {
-        if (memcmp(&cur->C[i], &env->last_C[i], sizeof(cap_register_t))) {
-            cap_register_t *cr = &cur->C[i];
-            env->last_C[i] = *cr;
-            if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-                if (env->cvtrace.version == CVT_NO_REG ||
-                        env->cvtrace.version == CVT_GPR)
-                    env->cvtrace.version = CVT_CAP;
-                if (env->cvtrace.version == CVT_ST_GPR)
-                    env->cvtrace.version = CVT_ST_CAP;
-                cvtrace_dump_cap_perms(&env->cvtrace, cr);
-                cvtrace_dump_cap_cbl(&env->cvtrace, cr);
-            }
-        if (qemu_loglevel_mask(CPU_LOG_INSTR)){
-                fprintf(qemu_logfile,
-                        "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
-                        " l:%016" PRIx64 "\n", i, cr->cr_tag,
-                        is_cap_sealed(cr) ? 1 : 0,
-                        (((cr->cr_uperms & CAP_UPERMS_ALL) <<
-                          CAP_UPERMS_MEM_SHFT) |
-                        (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))),
-                        cr->cr_base, cr->cr_length);
-                fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
-                        cr->cr_offset, cr->cr_otype);
-            }
-        }
+        dump_changed_capreg(env, &cur->C[i], &env->last_C[i], i);
     }
+    dump_changed_capreg(env, &cur->UserTlsCap, &env->last_UserTlsCap, 98);
+    dump_changed_capreg(env, &cur->PrivTlsCap, &env->last_PrivTlsCap, 99);
 }
 
 
