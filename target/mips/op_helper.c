@@ -6352,7 +6352,7 @@ static void dump_changed_cop0(CPUMIPSState *env)
 #ifdef TARGET_CHERI
 
 static inline void dump_changed_capreg(CPUMIPSState *env,
-        cap_register_t *cr, cap_register_t *old_reg, int index)
+        cap_register_t *cr, cap_register_t *old_reg, const char* name)
 {
     if (memcmp(cr, old_reg, sizeof(cap_register_t))) {
         *old_reg = *cr;
@@ -6368,8 +6368,8 @@ static inline void dump_changed_capreg(CPUMIPSState *env,
         if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
             // TODO: allow printing a string instead of C%d
             fprintf(qemu_logfile,
-                    "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
-                        " l:%016" PRIx64 "\n", index, cr->cr_tag,
+                    "    Write %s|v:%d s:%d p:%08x b:%016" PRIx64
+                        " l:%016" PRIx64 "\n", name, cr->cr_tag,
                     is_cap_sealed(cr) ? 1 : 0,
                     (((cr->cr_uperms & CAP_UPERMS_ALL) <<
                                                        CAP_UPERMS_MEM_SHFT) |
@@ -6405,11 +6405,17 @@ static void dump_changed_regs(CPUMIPSState *env)
             }
         }
     }
+    static const char * const capreg_name[] = {
+        "DDC", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
+        "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15",
+        "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23",
+        "C24", "C25", "C26", "KR1C", "KR2C", "KCC", "KDC", "EPCC",
+    };
     for (i=0; i<32; i++) {
-        dump_changed_capreg(env, &cur->C[i], &env->last_C[i], i);
+        dump_changed_capreg(env, &cur->C[i], &env->last_C[i], capreg_name[i]);
     }
-    dump_changed_capreg(env, &cur->UserTlsCap, &env->last_UserTlsCap, 98);
-    dump_changed_capreg(env, &cur->PrivTlsCap, &env->last_PrivTlsCap, 99);
+    dump_changed_capreg(env, &cur->UserTlsCap, &env->last_UserTlsCap, "UserTlsCap");
+    dump_changed_capreg(env, &cur->PrivTlsCap, &env->last_PrivTlsCap, "PrivTlsCap");
 }
 
 
