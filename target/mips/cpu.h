@@ -884,6 +884,8 @@ struct CPUMIPSState {
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
     cap_register_t last_C[32];
+    cap_register_t last_UserTlsCap;
+    cap_register_t last_PrivTlsCap;
 
     cvtrace_t cvtrace;
 #endif /* TARGET_CHERI */
