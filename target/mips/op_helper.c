@@ -3183,6 +3183,82 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     }
 }
 
+
+static inline bool in_kernel_mode(CPUMIPSState *env) {
+    // TODO: what about env->CP0_Debug & (1 << CP0DB_DM)
+    // If ERL or EXL is set we have taken an exception and are in the kernel
+    if ((env->CP0_Status & BIT(CP0St_ERL)) || (env->CP0_Status & BIT(CP0St_EXL))) {
+        return true;
+    }
+    uint32_t ksu = extract32(env->CP0_Status, CP0St_KSU, 2);
+    // KSU = 0 -> kernel, 1 -> supervisor, 2 -> user
+    if (ksu == 0 || ksu == 1) {
+        return true;
+    }
+    return false;
+}
+
+static inline cap_register_t *check_cap_hwr_access(CPUMIPSState *env,
+        enum CP2HWR hwr, bool write) {
+    /* Currently there is no difference for access permissions between read
+     * and write access but that may change in the future */
+    (void)write;
+
+    bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
+    switch (hwr) {
+    case CP2HWR_DDC: /* always accessible */
+        return &env->active_tc.C[CP2CAP_DCC];
+    case CP2HWR_USER_TLS:  /* always accessible */
+        return &env->active_tc.UserTlsCap;
+    case CP2HWR_PRIV_TLS:
+        if (!access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.PrivTlsCap;
+    case CP2HWR_K1RC:
+        if (!in_kernel_mode(env)) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_KR1C];
+    case CP2HWR_K2RC:
+        if (!in_kernel_mode(env)) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_KR2C];
+    case CP2HWR_KCC:
+        if (!in_kernel_mode(env) || !access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_KCC];
+    case CP2HWR_KDC:
+        if (!in_kernel_mode(env) || !access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_KDC];
+    case CP2HWR_EPCC:
+        if (!in_kernel_mode(env) || !access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_EPCC];
+    }
+    /* unknown cap hardware register */
+    do_raise_exception(env, EXCP_RI, GETPC());
+}
+
+void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
+{
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *csp = check_cap_hwr_access(env, hwr, true);
+    *cdp = *csp;
+}
+
+void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
+{
+    cap_register_t *csp = &env->active_tc.C[cs];
+    cap_register_t *cdp = check_cap_hwr_access(env, hwr, true);
+    *cdp = *csp;
+}
+
 void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
@@ -6259,7 +6335,7 @@ static void dump_changed_regs(CPUMIPSState *env)
                 cvtrace_dump_cap_perms(&env->cvtrace, cr);
                 cvtrace_dump_cap_cbl(&env->cvtrace, cr);
             }
-	    if (qemu_loglevel_mask(CPU_LOG_INSTR)){
+        if (qemu_loglevel_mask(CPU_LOG_INSTR)){
                 fprintf(qemu_logfile,
                         "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
                         " l:%016" PRIx64 "\n", i, cr->cr_tag,
