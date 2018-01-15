@@ -28,6 +28,7 @@
  * http://www.kernel.org/doc/Documentation/devicetree/bindings/pci/host-generic-pci.txt
  * http://www.firmware.org/1275/practice/imap/imap0_9d.pdf
  */
+#include "qemu/osdep.h"
 #include "hw/hw.h"
 #include "hw/pci-host/gpex.h"
 
@@ -93,7 +94,7 @@ static void gpex_host_initfn(Object *obj)
 
     object_initialize(root, sizeof(*root), TYPE_GPEX_ROOT_DEVICE);
     object_property_add_child(obj, "gpex_root", OBJECT(root), NULL);
-    qdev_prop_set_uint32(DEVICE(root), "addr", PCI_DEVFN(0, 0));
+    qdev_prop_set_int32(DEVICE(root), "addr", PCI_DEVFN(0, 0));
     qdev_prop_set_bit(DEVICE(root), "multifunction", false);
 }
 
@@ -135,7 +136,7 @@ static void gpex_root_class_init(ObjectClass *klass, void *data)
      * PCI-facing part of the host bridge, not usable without the
      * host-facing part, which can't be device_add'ed, yet.
      */
-    dc->cannot_instantiate_with_device_add_yet = true;
+    dc->user_creatable = false;
 }
 
 static const TypeInfo gpex_root_info = {

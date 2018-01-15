@@ -16,17 +16,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <linux/mman.h>
-#include <linux/unistd.h>
+#include "qemu/osdep.h"
 
 #include "qemu.h"
 #include "qemu-common.h"
@@ -49,6 +39,11 @@ void mmap_unlock(void)
     if (--mmap_lock_count == 0) {
         pthread_mutex_unlock(&mmap_mutex);
     }
+}
+
+bool have_mmap_lock(void)
+{
+    return mmap_lock_count > 0 ? true : false;
 }
 
 /* Grab lock to make sure things are in a consistent state after fork().  */
@@ -186,9 +181,11 @@ static int mmap_frag(abi_ulong real_start,
         if (prot_new != (prot1 | PROT_WRITE))
             mprotect(host_start, qemu_host_page_size, prot_new);
     } else {
-        /* just update the protection */
         if (prot_new != prot1) {
             mprotect(host_start, qemu_host_page_size, prot_new);
+        }
+        if (prot_new & PROT_WRITE) {
+            memset(g2h(start), 0, end - start);
         }
     }
     return 0;
@@ -196,9 +193,6 @@ static int mmap_frag(abi_ulong real_start,
 
 #if HOST_LONG_BITS == 64 && TARGET_ABI_BITS == 64
 # define TASK_UNMAPPED_BASE  (1ul << 38)
-#elif defined(__CYGWIN__)
-/* Cygwin doesn't have a whole lot of address space.  */
-# define TASK_UNMAPPED_BASE  0x18000000
 #else
 # define TASK_UNMAPPED_BASE  0x40000000
 #endif
@@ -432,9 +426,9 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
        may need to truncate file maps at EOF and add extra anonymous pages
        up to the targets page boundary.  */
 
-    if ((qemu_real_host_page_size < TARGET_PAGE_SIZE)
-        && !(flags & MAP_ANONYMOUS)) {
-       struct stat sb;
+    if ((qemu_real_host_page_size < qemu_host_page_size) &&
+        !(flags & MAP_ANONYMOUS)) {
+        struct stat sb;
 
        if (fstat (fd, &sb) == -1)
            goto fail;
@@ -444,9 +438,7 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
            /* If so, truncate the file map at eof aligned with 
               the hosts real pagesize. Additional anonymous maps
               will be created beyond EOF.  */
-           len = (sb.st_size - offset);
-           len += qemu_real_host_page_size - 1;
-           len &= ~(qemu_real_host_page_size - 1);
+           len = REAL_HOST_PAGE_ALIGN(sb.st_size - offset);
        }
     }
 
@@ -514,10 +506,7 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
                 goto fail;
             if (!(prot & PROT_WRITE)) {
                 ret = target_mprotect(start, len, prot);
-                if (ret != 0) {
-                    start = ret;
-                    goto the_end;
-                }
+                assert(ret == 0);
             }
             goto the_end;
         }
@@ -541,7 +530,7 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
         /* handle the end of the mapping */
         if (end < real_end) {
             ret = mmap_frag(real_end - qemu_host_page_size,
-                            real_end - qemu_host_page_size, real_end,
+                            real_end - qemu_host_page_size, end,
                             prot, flags, fd,
                             offset + real_end - qemu_host_page_size - start);
             if (ret == -1)
@@ -692,10 +681,8 @@ abi_long target_mremap(abi_ulong old_addr, abi_ulong old_size,
     mmap_lock();
 
     if (flags & MREMAP_FIXED) {
-        host_addr = (void *) syscall(__NR_mremap, g2h(old_addr),
-                                     old_size, new_size,
-                                     flags,
-                                     g2h(new_addr));
+        host_addr = mremap(g2h(old_addr), old_size, new_size,
+                           flags, g2h(new_addr));
 
         if (reserved_va && host_addr != MAP_FAILED) {
             /* If new and old addresses overlap then the above mremap will
@@ -711,10 +698,8 @@ abi_long target_mremap(abi_ulong old_addr, abi_ulong old_size,
             errno = ENOMEM;
             host_addr = MAP_FAILED;
         } else {
-            host_addr = (void *) syscall(__NR_mremap, g2h(old_addr),
-                                         old_size, new_size,
-                                         flags | MREMAP_FIXED,
-                                         g2h(mmap_start));
+            host_addr = mremap(g2h(old_addr), old_size, new_size,
+                               flags | MREMAP_FIXED, g2h(mmap_start));
             if (reserved_va) {
                 mmap_reserve(old_addr, old_size);
             }

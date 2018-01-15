@@ -1,4 +1,4 @@
-#include <signal.h>
+#include "qemu/osdep.h"
 #include "hw/xen/xen_backend.h"
 #include "xen_domainbuild.h"
 #include "qemu/timer.h"
@@ -53,11 +53,7 @@ int xenstore_domain_init1(const char *kernel, const char *ramdisk,
     char *dom, uuid_string[42], vm[256], path[256];
     int i;
 
-    snprintf(uuid_string, sizeof(uuid_string), UUID_FMT,
-             qemu_uuid[0], qemu_uuid[1], qemu_uuid[2], qemu_uuid[3],
-             qemu_uuid[4], qemu_uuid[5], qemu_uuid[6], qemu_uuid[7],
-             qemu_uuid[8], qemu_uuid[9], qemu_uuid[10], qemu_uuid[11],
-             qemu_uuid[12], qemu_uuid[13], qemu_uuid[14], qemu_uuid[15]);
+    qemu_uuid_unparse(&qemu_uuid, uuid_string);
     dom = xs_get_domain_path(xenstore, xen_domid);
     snprintf(vm,  sizeof(vm),  "/vm/%s", uuid_string);
 
@@ -152,7 +148,7 @@ static void xen_domain_poll(void *opaque)
     return;
 
 quit:
-    qemu_system_shutdown_request();
+    qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
 }
 
 static int xen_domain_watcher(void)
@@ -174,11 +170,14 @@ static int xen_domain_watcher(void)
     for (i = 3; i < n; i++) {
         if (i == fd[0])
             continue;
-        if (i == xc_fd(xen_xc)) {
-            continue;
-        }
         close(i);
     }
+
+    /*
+     * Reopen xc interface, since the original is unsafe after fork
+     * and was closed above.
+     */
+    xen_xc = xc_interface_open(0, 0, 0);
 
     /* ignore term signals */
     signal(SIGINT,  SIG_IGN);
@@ -233,8 +232,8 @@ int xen_domain_build_pv(const char *kernel, const char *ramdisk,
     unsigned long xenstore_mfn = 0, console_mfn = 0;
     int rc;
 
-    memcpy(uuid, qemu_uuid, sizeof(uuid));
-    rc = xc_domain_create(xen_xc, ssidref, uuid, flags, &xen_domid);
+    memcpy(uuid, &qemu_uuid, sizeof(uuid));
+    rc = xen_domain_create(xen_xc, ssidref, uuid, flags, &xen_domid);
     if (rc < 0) {
         fprintf(stderr, "xen: xc_domain_create() failed\n");
         goto err;

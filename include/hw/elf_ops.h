@@ -263,7 +263,8 @@ static int glue(load_elf, SZ)(const char *name, int fd,
                               void *translate_opaque,
                               int must_swab, uint64_t *pentry,
                               uint64_t *lowaddr, uint64_t *highaddr,
-                              int elf_machine, int clear_lsb)
+                              int elf_machine, int clear_lsb, int data_swab,
+                              AddressSpace *as, bool load_rom)
 {
     struct elfhdr ehdr;
     struct elf_phdr *phdr = NULL, *ph;
@@ -280,27 +281,43 @@ static int glue(load_elf, SZ)(const char *name, int fd,
         glue(bswap_ehdr, SZ)(&ehdr);
     }
 
+    if (elf_machine <= EM_NONE) {
+        /* The caller didn't specify an ARCH, we can figure it out */
+        elf_machine = ehdr.e_machine;
+    }
+
     switch (elf_machine) {
         case EM_PPC64:
-            if (EM_PPC64 != ehdr.e_machine)
-                if (EM_PPC != ehdr.e_machine) {
+            if (ehdr.e_machine != EM_PPC64) {
+                if (ehdr.e_machine != EM_PPC) {
                     ret = ELF_LOAD_WRONG_ARCH;
                     goto fail;
                 }
+            }
             break;
         case EM_X86_64:
-            if (EM_X86_64 != ehdr.e_machine)
-                if (EM_386 != ehdr.e_machine) {
+            if (ehdr.e_machine != EM_X86_64) {
+                if (ehdr.e_machine != EM_386) {
                     ret = ELF_LOAD_WRONG_ARCH;
                     goto fail;
                 }
+            }
             break;
         case EM_MICROBLAZE:
-            if (EM_MICROBLAZE != ehdr.e_machine)
-                if (EM_MICROBLAZE_OLD != ehdr.e_machine) {
+            if (ehdr.e_machine != EM_MICROBLAZE) {
+                if (ehdr.e_machine != EM_MICROBLAZE_OLD) {
                     ret = ELF_LOAD_WRONG_ARCH;
                     goto fail;
                 }
+            }
+            break;
+        case EM_MOXIE:
+            if (ehdr.e_machine != EM_MOXIE) {
+                if (ehdr.e_machine != EM_MOXIE_OLD) {
+                    ret = ELF_LOAD_WRONG_ARCH;
+                    goto fail;
+                }
+            }
             break;
         default:
             if (elf_machine != ehdr.e_machine) {
@@ -355,6 +372,26 @@ static int glue(load_elf, SZ)(const char *name, int fd,
                 addr = ph->p_paddr;
             }
 
+            if (data_swab) {
+                int j;
+                for (j = 0; j < file_size; j += (1 << data_swab)) {
+                    uint8_t *dp = data + j;
+                    switch (data_swab) {
+                    case (1):
+                        *(uint16_t *)dp = bswap16(*(uint16_t *)dp);
+                        break;
+                    case (2):
+                        *(uint32_t *)dp = bswap32(*(uint32_t *)dp);
+                        break;
+                    case (3):
+                        *(uint64_t *)dp = bswap64(*(uint64_t *)dp);
+                        break;
+                    default:
+                        g_assert_not_reached();
+                    }
+                }
+            }
+
             /* the entry pointer in the ELF header is a virtual
              * address, if the text segments paddr and vaddr differ
              * we need to adjust the entry */
@@ -366,10 +403,15 @@ static int glue(load_elf, SZ)(const char *name, int fd,
                 *pentry = ehdr.e_entry - ph->p_vaddr + ph->p_paddr;
             }
 
-            snprintf(label, sizeof(label), "phdr #%d: %s", i, name);
+            if (load_rom) {
+                snprintf(label, sizeof(label), "phdr #%d: %s", i, name);
 
-            /* rom_add_elf_program() seize the ownership of 'data' */
-            rom_add_elf_program(label, data, file_size, mem_size, addr);
+                /* rom_add_elf_program() seize the ownership of 'data' */
+                rom_add_elf_program(label, data, file_size, mem_size, addr, as);
+            } else {
+                cpu_physical_memory_write(addr, data, file_size);
+                g_free(data);
+            }
 
             total_size += mem_size;
             if (addr < low)

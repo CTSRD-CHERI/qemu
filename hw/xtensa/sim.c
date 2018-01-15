@@ -25,6 +25,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "qemu/osdep.h"
+#include "qapi/error.h"
+#include "qemu-common.h"
+#include "cpu.h"
 #include "sysemu/sysemu.h"
 #include "hw/boards.h"
 #include "hw/loader.h"
@@ -32,6 +36,25 @@
 #include "exec/memory.h"
 #include "exec/address-spaces.h"
 #include "qemu/error-report.h"
+
+static void xtensa_create_memory_regions(const XtensaMemory *memory,
+                                         const char *name)
+{
+    unsigned i;
+    GString *num_name = g_string_new(NULL);
+
+    for (i = 0; i < memory->num; ++i) {
+        MemoryRegion *m;
+
+        g_string_printf(num_name, "%s%u", name, i);
+        m = g_new(MemoryRegion, 1);
+        memory_region_init_ram(m, NULL, num_name->str,
+                               memory->location[i].size, &error_fatal);
+        memory_region_add_subregion(get_system_memory(),
+                                    memory->location[i].addr, m);
+    }
+    g_string_free(num_name, true);
+}
 
 static uint64_t translate_phys_addr(void *opaque, uint64_t addr)
 {
@@ -51,7 +74,6 @@ static void xtensa_sim_init(MachineState *machine)
 {
     XtensaCPU *cpu = NULL;
     CPUXtensaState *env = NULL;
-    MemoryRegion *ram, *rom;
     ram_addr_t ram_size = machine->ram_size;
     const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = machine->kernel_filename;
@@ -78,25 +100,30 @@ static void xtensa_sim_init(MachineState *machine)
         sim_reset(cpu);
     }
 
-    ram = g_malloc(sizeof(*ram));
-    memory_region_init_ram(ram, NULL, "xtensa.sram", ram_size, &error_abort);
-    vmstate_register_ram_global(ram);
-    memory_region_add_subregion(get_system_memory(), 0, ram);
+    if (env) {
+        XtensaMemory sysram = env->config->sysram;
 
-    rom = g_malloc(sizeof(*rom));
-    memory_region_init_ram(rom, NULL, "xtensa.rom", 0x1000, &error_abort);
-    vmstate_register_ram_global(rom);
-    memory_region_add_subregion(get_system_memory(), 0xfe000000, rom);
+        sysram.location[0].size = ram_size;
+        xtensa_create_memory_regions(&env->config->instrom, "xtensa.instrom");
+        xtensa_create_memory_regions(&env->config->instram, "xtensa.instram");
+        xtensa_create_memory_regions(&env->config->datarom, "xtensa.datarom");
+        xtensa_create_memory_regions(&env->config->dataram, "xtensa.dataram");
+        xtensa_create_memory_regions(&env->config->sysrom, "xtensa.sysrom");
+        xtensa_create_memory_regions(&sysram, "xtensa.sysram");
+    }
 
+    if (serial_hds[0]) {
+        xtensa_sim_open_console(serial_hds[0]);
+    }
     if (kernel_filename) {
         uint64_t elf_entry;
         uint64_t elf_lowaddr;
 #ifdef TARGET_WORDS_BIGENDIAN
         int success = load_elf(kernel_filename, translate_phys_addr, cpu,
-                &elf_entry, &elf_lowaddr, NULL, 1, ELF_MACHINE, 0);
+                &elf_entry, &elf_lowaddr, NULL, 1, EM_XTENSA, 0, 0);
 #else
         int success = load_elf(kernel_filename, translate_phys_addr, cpu,
-                &elf_entry, &elf_lowaddr, NULL, 0, ELF_MACHINE, 0);
+                &elf_entry, &elf_lowaddr, NULL, 0, EM_XTENSA, 0, 0);
 #endif
         if (success > 0) {
             env->pc = elf_entry;
@@ -104,17 +131,13 @@ static void xtensa_sim_init(MachineState *machine)
     }
 }
 
-static QEMUMachine xtensa_sim_machine = {
-    .name = "sim",
-    .desc = "sim machine (" XTENSA_DEFAULT_CPU_MODEL ")",
-    .is_default = true,
-    .init = xtensa_sim_init,
-    .max_cpus = 4,
-};
-
-static void xtensa_sim_machine_init(void)
+static void xtensa_sim_machine_init(MachineClass *mc)
 {
-    qemu_register_machine(&xtensa_sim_machine);
+    mc->desc = "sim machine (" XTENSA_DEFAULT_CPU_MODEL ")";
+    mc->is_default = true;
+    mc->init = xtensa_sim_init;
+    mc->max_cpus = 4;
+    mc->no_serial = 1;
 }
 
-machine_init(xtensa_sim_machine_init);
+DEFINE_MACHINE("sim", xtensa_sim_machine_init)

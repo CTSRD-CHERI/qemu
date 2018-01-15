@@ -35,6 +35,7 @@
  * http://www.ibiblio.org/pub/historic-linux/early-ports/Sparc/NCR/NCR92C990.txt
  */
 
+#include "qemu/osdep.h"
 #include "hw/sysbus.h"
 #include "net/net.h"
 #include "qemu/timer.h"
@@ -92,7 +93,7 @@ static const MemoryRegionOps lance_mem_ops = {
 };
 
 static NetClientInfo net_lance_info = {
-    .type = NET_CLIENT_OPTIONS_KIND_NIC,
+    .type = NET_CLIENT_DRIVER_NIC,
     .size = sizeof(NICState),
     .receive = pcnet_receive,
     .link_status_changed = pcnet_set_link_status,
@@ -164,7 +165,7 @@ static void lance_class_init(ObjectClass *klass, void *data)
     dc->vmsd = &vmstate_lance;
     dc->props = lance_properties;
     /* Reason: pointer property "dma" */
-    dc->cannot_instantiate_with_device_add_yet = true;
+    dc->user_creatable = false;
 }
 
 static const TypeInfo lance_info = {

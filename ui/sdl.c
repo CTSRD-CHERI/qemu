@@ -25,10 +25,12 @@
 /* Avoid compiler warning because macro is redefined in SDL_syswm.h. */
 #undef WIN32_LEAN_AND_MEAN
 
+#include "qemu/osdep.h"
 #include <SDL.h>
 #include <SDL_syswm.h>
 
 #include "qemu-common.h"
+#include "qemu/cutils.h"
 #include "ui/console.h"
 #include "ui/input.h"
 #include "sysemu/sysemu.h"
@@ -60,6 +62,11 @@ static SDL_Cursor *guest_sprite = NULL;
 static SDL_PixelFormat host_format;
 static int scaling_active = 0;
 static Notifier mouse_mode_notifier;
+static int idle_counter;
+
+#define SDL_REFRESH_INTERVAL_BUSY 10
+#define SDL_MAX_IDLE_COUNT (2 * GUI_REFRESH_INTERVAL_DEFAULT \
+                            / SDL_REFRESH_INTERVAL_BUSY + 1)
 
 #if 0
 #define DEBUG_SDL
@@ -226,10 +233,12 @@ static int check_for_evdev(void)
     if (!SDL_GetWMInfo(&info)) {
         return 0;
     }
-    desc = XkbGetKeyboard(info.info.x11.display,
-                          XkbGBN_AllComponentsMask,
-                          XkbUseCoreKbd);
-    if (desc && desc->names) {
+    desc = XkbGetMap(info.info.x11.display,
+                     XkbGBN_AllComponentsMask,
+                     XkbUseCoreKbd);
+    if (desc &&
+        (XkbGetNames(info.info.x11.display,
+                     XkbKeycodesNameMask, desc) == Success)) {
         keycodes = XGetAtomName(info.info.x11.display, desc->names->keycodes);
         if (keycodes == NULL) {
             fprintf(stderr, "could not lookup keycode name\n");
@@ -465,7 +474,7 @@ static void sdl_mouse_mode_change(Notifier *notify, void *data)
 
 static void sdl_send_mouse_event(int dx, int dy, int x, int y, int state)
 {
-    static uint32_t bmap[INPUT_BUTTON_MAX] = {
+    static uint32_t bmap[INPUT_BUTTON__MAX] = {
         [INPUT_BUTTON_LEFT]       = SDL_BUTTON(SDL_BUTTON_LEFT),
         [INPUT_BUTTON_MIDDLE]     = SDL_BUTTON(SDL_BUTTON_MIDDLE),
         [INPUT_BUTTON_RIGHT]      = SDL_BUTTON(SDL_BUTTON_RIGHT),
@@ -481,9 +490,9 @@ static void sdl_send_mouse_event(int dx, int dy, int x, int y, int state)
 
     if (qemu_input_is_absolute()) {
         qemu_input_queue_abs(dcl->con, INPUT_AXIS_X, x,
-                             real_screen->w);
+                             0, real_screen->w);
         qemu_input_queue_abs(dcl->con, INPUT_AXIS_Y, y,
-                             real_screen->h);
+                             0, real_screen->h);
     } else {
         if (guest_cursor) {
             x -= guest_x;
@@ -802,6 +811,7 @@ static void handle_activation(SDL_Event *ev)
 static void sdl_refresh(DisplayChangeListener *dcl)
 {
     SDL_Event ev1, *ev = &ev1;
+    int idle = 1;
 
     if (last_vm_running != runstate_is_running()) {
         last_vm_running = runstate_is_running();
@@ -817,22 +827,26 @@ static void sdl_refresh(DisplayChangeListener *dcl)
             sdl_update(dcl, 0, 0, real_screen->w, real_screen->h);
             break;
         case SDL_KEYDOWN:
+            idle = 0;
             handle_keydown(ev);
             break;
         case SDL_KEYUP:
+            idle = 0;
             handle_keyup(ev);
             break;
         case SDL_QUIT:
             if (!no_quit) {
                 no_shutdown = 0;
-                qemu_system_shutdown_request();
+                qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_UI);
             }
             break;
         case SDL_MOUSEMOTION:
+            idle = 0;
             handle_mousemotion(ev);
             break;
         case SDL_MOUSEBUTTONDOWN:
         case SDL_MOUSEBUTTONUP:
+            idle = 0;
             handle_mousebutton(ev);
             break;
         case SDL_ACTIVEEVENT:
@@ -846,6 +860,18 @@ static void sdl_refresh(DisplayChangeListener *dcl)
         default:
             break;
         }
+    }
+
+    if (idle) {
+        if (idle_counter < SDL_MAX_IDLE_COUNT) {
+            idle_counter++;
+            if (idle_counter >= SDL_MAX_IDLE_COUNT) {
+                dcl->update_interval = GUI_REFRESH_INTERVAL_DEFAULT;
+            }
+        }
+    } else {
+        idle_counter = 0;
+        dcl->update_interval = SDL_REFRESH_INTERVAL_BUSY;
     }
 }
 
@@ -923,6 +949,7 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
     int flags;
     uint8_t data = 0;
     const SDL_VideoInfo *vi;
+    SDL_SysWMinfo info;
     char *filename;
 
 #if defined(__APPLE__)
@@ -985,7 +1012,7 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
         sdl_grab_start();
     }
 
-    dcl = g_malloc0(sizeof(DisplayChangeListener));
+    dcl = g_new0(DisplayChangeListener, 1);
     dcl->ops = &dcl_ops;
     register_displaychangelistener(dcl);
 
@@ -998,6 +1025,30 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
 
     sdl_cursor_hidden = SDL_CreateCursor(&data, &data, 8, 1, 0, 0);
     sdl_cursor_normal = SDL_GetCursor();
+
+    memset(&info, 0, sizeof(info));
+    SDL_VERSION(&info.version);
+    if (SDL_GetWMInfo(&info)) {
+        int i;
+        for (i = 0; ; i++) {
+            /* All consoles share the same window */
+            QemuConsole *con = qemu_console_lookup_by_index(i);
+            if (con) {
+#if defined(SDL_VIDEO_DRIVER_X11)
+                qemu_console_set_window_id(con, info.info.x11.wmwindow);
+#elif defined(SDL_VIDEO_DRIVER_NANOX) || \
+      defined(SDL_VIDEO_DRIVER_WINDIB) || defined(SDL_VIDEO_DRIVER_DDRAW) || \
+      defined(SDL_VIDEO_DRIVER_GAPI) || \
+      defined(SDL_VIDEO_DRIVER_RISCOS)
+                qemu_console_set_window_id(con, (int) (uintptr_t) info.window);
+#else
+                qemu_console_set_window_id(con, info.data);
+#endif
+            } else {
+                break;
+            }
+        }
+    }
 
     atexit(sdl_cleanup);
 }

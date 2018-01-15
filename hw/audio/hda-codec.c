@@ -17,6 +17,7 @@
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "qemu/osdep.h"
 #include "hw/hw.h"
 #include "hw/pci/pci.h"
 #include "intel-hda.h"
@@ -519,7 +520,7 @@ static int hda_audio_init(HDACodecDevice *hda, const struct desc_codec *desc)
     return 0;
 }
 
-static int hda_audio_exit(HDACodecDevice *hda)
+static void hda_audio_exit(HDACodecDevice *hda)
 {
     HDAAudioState *a = HDA_AUDIO(hda);
     HDAAudioStream *st;
@@ -538,7 +539,6 @@ static int hda_audio_exit(HDACodecDevice *hda)
         }
     }
     AUD_remove_card(&a->card);
-    return 0;
 }
 
 static int hda_audio_post_load(void *opaque, int version)

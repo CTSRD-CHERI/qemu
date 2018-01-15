@@ -23,6 +23,10 @@
  * THE SOFTWARE.
  */
 
+#include "qemu/osdep.h"
+#include "qapi/error.h"
+#include "qemu-common.h"
+#include "cpu.h"
 #include "hw/sysbus.h"
 #include "hw/hw.h"
 #include "hw/sh4/sh.h"
@@ -160,7 +164,7 @@ r2d_fpga_write(void *opaque, hwaddr addr, uint64_t value, unsigned int size)
 	break;
     case PA_POWOFF:
         if (value & 1) {
-            qemu_system_shutdown_request();
+            qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
         }
         break;
     case PA_VERREG:
@@ -255,8 +259,7 @@ static void r2d_init(MachineState *machine)
     qemu_register_reset(main_cpu_reset, reset_info);
 
     /* Allocate memory space */
-    memory_region_init_ram(sdram, NULL, "r2d.sdram", SDRAM_SIZE, &error_abort);
-    vmstate_register_ram_global(sdram);
+    memory_region_init_ram(sdram, NULL, "r2d.sdram", SDRAM_SIZE, &error_fatal);
     memory_region_add_subregion(address_space_mem, SDRAM_BASE, sdram);
     /* Register peripherals */
     s = sh7750_init(cpu, address_space_mem);
@@ -273,8 +276,15 @@ static void r2d_init(MachineState *machine)
     sysbus_connect_irq(busdev, 2, irq[PCI_INTC]);
     sysbus_connect_irq(busdev, 3, irq[PCI_INTD]);
 
-    sm501_init(address_space_mem, 0x10000000, SM501_VRAM_SIZE,
-               irq[SM501], serial_hds[2]);
+    dev = qdev_create(NULL, "sysbus-sm501");
+    busdev = SYS_BUS_DEVICE(dev);
+    qdev_prop_set_uint32(dev, "vram-size", SM501_VRAM_SIZE);
+    qdev_prop_set_uint32(dev, "base", 0x10000000);
+    qdev_prop_set_ptr(dev, "chr-state", serial_hds[2]);
+    qdev_init_nofail(dev);
+    sysbus_mmio_map(busdev, 0, 0x10000000);
+    sysbus_mmio_map(busdev, 1, 0x13e00000);
+    sysbus_connect_irq(busdev, 0, irq[SM501]);
 
     /* onboard CF (True IDE mode, Master only). */
     dinfo = drive_get(IF_IDE, 0, 0);
@@ -338,9 +348,9 @@ static void r2d_init(MachineState *machine)
         }
 
         /* initialization which should be done by firmware */
-        boot_params.loader_type = 1;
-        boot_params.initrd_start = INITRD_LOAD_OFFSET;
-        boot_params.initrd_size = initrd_size;
+        boot_params.loader_type = tswap32(1);
+        boot_params.initrd_start = tswap32(INITRD_LOAD_OFFSET);
+        boot_params.initrd_size = tswap32(initrd_size);
     }
 
     if (kernel_cmdline) {
@@ -354,15 +364,11 @@ static void r2d_init(MachineState *machine)
                        SDRAM_BASE + BOOT_PARAMS_OFFSET);
 }
 
-static QEMUMachine r2d_machine = {
-    .name = "r2d",
-    .desc = "r2d-plus board",
-    .init = r2d_init,
-};
-
-static void r2d_machine_init(void)
+static void r2d_machine_init(MachineClass *mc)
 {
-    qemu_register_machine(&r2d_machine);
+    mc->desc = "r2d-plus board";
+    mc->init = r2d_init;
+    mc->block_default_type = IF_IDE;
 }
 
-machine_init(r2d_machine_init);
+DEFINE_MACHINE("r2d", r2d_machine_init)

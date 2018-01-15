@@ -31,8 +31,10 @@
    and the small letter tells about the operand size.  Refer to
    the Intel manual for details.  */
 
-#include <stdlib.h>
+#include "qemu/osdep.h"
 #include "disas/bfd.h"
+#include "qemu/cutils.h"
+
 /* include/opcode/i386.h r1.78 */
 
 /* opcode/i386.h -- Intel 80386 opcode macros
@@ -152,8 +154,6 @@
 
 /* opcodes/i386-dis.c r1.126 */
 #include "qemu-common.h"
-
-#include <setjmp.h>
 
 static int fetch_data2(struct disassemble_info *, bfd_byte *);
 static int fetch_data(struct disassemble_info *, bfd_byte *);
@@ -357,7 +357,7 @@ fetch_data(struct disassemble_info *info, bfd_byte *addr)
 #define Rd { OP_R, d_mode }
 #define Rm { OP_R, m_mode }
 #define Ib { OP_I, b_mode }
-#define sIb { OP_sI, b_mode }	/* sign extened byte */
+#define sIb { OP_sI, b_mode }	/* sign extended byte */
 #define Iv { OP_I, v_mode }
 #define Iq { OP_I, q_mode }
 #define Iv64 { OP_I64, v_mode }
@@ -682,6 +682,7 @@ fetch_data(struct disassemble_info *info, bfd_byte *addr)
 #define PREGRP104 NULL, { { NULL, USE_PREFIX_USER_TABLE }, { NULL, 104 } }
 #define PREGRP105 NULL, { { NULL, USE_PREFIX_USER_TABLE }, { NULL, 105 } }
 #define PREGRP106 NULL, { { NULL, USE_PREFIX_USER_TABLE }, { NULL, 106 } }
+#define PREGRP107 NULL, { { NULL, USE_PREFIX_USER_TABLE }, { NULL, 107 } }
 
 #define X86_64_0  NULL, { { NULL, X86_64_SPECIAL }, { NULL, 0 } }
 #define X86_64_1  NULL, { { NULL, X86_64_SPECIAL }, { NULL, 1 } }
@@ -1247,7 +1248,7 @@ static const struct dis386 dis386_twobyte[] = {
   { "ud2b",		{ XX } },
   { GRP8 },
   { "btcS",		{ Ev, Gv } },
-  { "bsfS",		{ Gv, Ev } },
+  { PREGRP107 },
   { PREGRP36 },
   { "movs{bR|x|bR|x}",	{ Gv, Eb } },
   { "movs{wR|x|wR|x}",	{ Gv, Ew } }, /* yes, there really is movsww ! */
@@ -1431,7 +1432,7 @@ static const unsigned char twobyte_uses_REPZ_prefix[256] = {
   /* 80 */ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 8f */
   /* 90 */ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 9f */
   /* a0 */ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* af */
-  /* b0 */ 0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0, /* bf */
+  /* b0 */ 0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0, /* bf */
   /* c0 */ 0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0, /* cf */
   /* d0 */ 0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0, /* df */
   /* e0 */ 0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0, /* ef */
@@ -2800,6 +2801,13 @@ static const struct dis386 prefix_user_table[][4] = {
     { "shrxS",	{ Gv, Ev, Bv } },
   },
 
+  /* PREGRP107 */
+  {
+    { "bsfS",	{ Gv, Ev } },
+    { "tzcntS",	{ Gv, Ev } },
+    { "bsfS",	{ Gv, Ev } },
+    { "(bad)",	{ XX } },
+  },
 };
 
 static const struct dis386 x86_64_table[][2] = {
@@ -3406,7 +3414,7 @@ static const struct dis386 three_byte_table[][256] = {
   }
 };
 
-#define INTERNAL_DISASSEMBLER_ERROR _("<internal disassembler error>")
+#define INTERNAL_DISASSEMBLER_ERROR "<internal disassembler error>"
 
 static void
 ckprefix (void)
@@ -4035,7 +4043,7 @@ print_insn (bfd_vma pc, disassemble_info *info)
 	    }
 	}
 
-      if (putop (dp->name, sizeflag) == 0)
+      if (dp->name != NULL && putop (dp->name, sizeflag) == 0)
         {
 	  for (i = 0; i < MAX_OPERANDS; ++i)
 	    {

@@ -21,11 +21,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include "qemu/osdep.h"
 #include "hw/hw.h"
 #include "audio.h"
 #include "monitor/monitor.h"
 #include "qemu/timer.h"
 #include "sysemu/sysemu.h"
+#include "qemu/cutils.h"
+#include "sysemu/replay.h"
 
 #define AUDIO_CAP "audio"
 #include "audio_int.h"
@@ -1110,7 +1113,7 @@ static int audio_is_timer_needed (void)
 static void audio_reset_timer (AudioState *s)
 {
     if (audio_is_timer_needed ()) {
-        timer_mod (s->ts,
+        timer_mod_anticipate_ns(s->ts,
             qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + conf.period.ticks);
     }
     else {
@@ -1129,8 +1132,6 @@ static void audio_timer (void *opaque)
  */
 int AUD_write (SWVoiceOut *sw, void *buf, int size)
 {
-    int bytes;
-
     if (!sw) {
         /* XXX: Consider options */
         return size;
@@ -1141,14 +1142,11 @@ int AUD_write (SWVoiceOut *sw, void *buf, int size)
         return 0;
     }
 
-    bytes = sw->hw->pcm_ops->write (sw, buf, size);
-    return bytes;
+    return sw->hw->pcm_ops->write(sw, buf, size);
 }
 
 int AUD_read (SWVoiceIn *sw, void *buf, int size)
 {
-    int bytes;
-
     if (!sw) {
         /* XXX: Consider options */
         return size;
@@ -1159,8 +1157,7 @@ int AUD_read (SWVoiceIn *sw, void *buf, int size)
         return 0;
     }
 
-    bytes = sw->hw->pcm_ops->read (sw, buf, size);
-    return bytes;
+    return sw->hw->pcm_ops->read(sw, buf, size);
 }
 
 int AUD_get_buffer_size_out (SWVoiceOut *sw)
@@ -1391,6 +1388,7 @@ static void audio_run_out (AudioState *s)
 
         prev_rpos = hw->rpos;
         played = hw->pcm_ops->run_out (hw, live);
+        replay_audio_out(&played);
         if (audio_bug (AUDIO_FUNC, hw->rpos >= hw->samples)) {
             dolog ("hw->rpos=%d hw->samples=%d played=%d\n",
                    hw->rpos, hw->samples, played);
@@ -1454,9 +1452,12 @@ static void audio_run_in (AudioState *s)
 
     while ((hw = audio_pcm_hw_find_any_enabled_in (hw))) {
         SWVoiceIn *sw;
-        int captured, min;
+        int captured = 0, min;
 
-        captured = hw->pcm_ops->run_in (hw);
+        if (replay_mode != REPLAY_MODE_PLAY) {
+            captured = hw->pcm_ops->run_in(hw);
+        }
+        replay_audio_in(&captured, hw->conv_buf, &hw->wpos, hw->samples);
 
         min = audio_pcm_hw_find_min_in (hw);
         hw->total_samples_captured += captured - min;
@@ -1743,13 +1744,21 @@ static void audio_vm_change_state_handler (void *opaque, int running,
     audio_reset_timer (s);
 }
 
-static void audio_atexit (void)
+static bool is_cleaning_up;
+
+bool audio_is_cleaning_up(void)
+{
+    return is_cleaning_up;
+}
+
+void audio_cleanup(void)
 {
     AudioState *s = &glob_audio_state;
-    HWVoiceOut *hwo = NULL;
-    HWVoiceIn *hwi = NULL;
+    HWVoiceOut *hwo, *hwon;
+    HWVoiceIn *hwi, *hwin;
 
-    while ((hwo = audio_pcm_hw_find_any_out (hwo))) {
+    is_cleaning_up = true;
+    QLIST_FOREACH_SAFE(hwo, &glob_audio_state.hw_head_out, entries, hwon) {
         SWVoiceCap *sc;
 
         if (hwo->enabled) {
@@ -1765,17 +1774,20 @@ static void audio_atexit (void)
                 cb->ops.destroy (cb->opaque);
             }
         }
+        QLIST_REMOVE(hwo, entries);
     }
 
-    while ((hwi = audio_pcm_hw_find_any_in (hwi))) {
+    QLIST_FOREACH_SAFE(hwi, &glob_audio_state.hw_head_in, entries, hwin) {
         if (hwi->enabled) {
             hwi->pcm_ops->ctl_in (hwi, VOICE_DISABLE);
         }
         hwi->pcm_ops->fini_in (hwi);
+        QLIST_REMOVE(hwi, entries);
     }
 
     if (s->drv) {
         s->drv->fini (s->drv_opaque);
+        s->drv = NULL;
     }
 }
 
@@ -1803,12 +1815,9 @@ static void audio_init (void)
     QLIST_INIT (&s->hw_head_out);
     QLIST_INIT (&s->hw_head_in);
     QLIST_INIT (&s->cap_head);
-    atexit (audio_atexit);
+    atexit(audio_cleanup);
 
     s->ts = timer_new_ns(QEMU_CLOCK_VIRTUAL, audio_timer, s);
-    if (!s->ts) {
-        hw_error("Could not create audio timer\n");
-    }
 
     audio_process_options ("AUDIO", audio_options);
 
@@ -1859,12 +1868,8 @@ static void audio_init (void)
 
     if (!done) {
         done = !audio_driver_init (s, &no_audio_driver);
-        if (!done) {
-            hw_error("Could not initialize audio subsystem\n");
-        }
-        else {
-            dolog ("warning: Using timer based audio emulation\n");
-        }
+        assert(done);
+        dolog("warning: Using timer based audio emulation\n");
     }
 
     if (conf.period.hertz <= 0) {
@@ -1875,8 +1880,7 @@ static void audio_init (void)
         }
         conf.period.ticks = 1;
     } else {
-        conf.period.ticks =
-            muldiv64 (1, get_ticks_per_sec (), conf.period.hertz);
+        conf.period.ticks = NANOSECONDS_PER_SECOND / conf.period.hertz;
     }
 
     e = qemu_add_vm_change_state_handler (audio_vm_change_state_handler, s);
@@ -1978,8 +1982,7 @@ CaptureVoiceOut *AUD_add_capture (
         QLIST_INSERT_HEAD (&s->cap_head, cap, entries);
         QLIST_INSERT_HEAD (&cap->cb_head, cb, entries);
 
-        hw = NULL;
-        while ((hw = audio_pcm_hw_find_any_out (hw))) {
+        QLIST_FOREACH(hw, &glob_audio_state.hw_head_out, entries) {
             audio_attach_capture (hw);
         }
         return cap;
@@ -2025,6 +2028,8 @@ void AUD_del_capture (CaptureVoiceOut *cap, void *cb_opaque)
                     sw = sw1;
                 }
                 QLIST_REMOVE (cap, entries);
+                g_free (cap->hw.mix_buf);
+                g_free (cap->buf);
                 g_free (cap);
             }
             return;

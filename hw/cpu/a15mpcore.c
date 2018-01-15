@@ -18,6 +18,8 @@
  * with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "qemu/osdep.h"
+#include "qapi/error.h"
 #include "hw/cpu/a15mpcore.h"
 #include "sysemu/kvm.h"
 #include "kvm_arm.h"
@@ -52,10 +54,23 @@ static void a15mp_priv_realize(DeviceState *dev, Error **errp)
     SysBusDevice *busdev;
     int i;
     Error *err = NULL;
+    bool has_el3;
+    Object *cpuobj;
 
     gicdev = DEVICE(&s->gic);
     qdev_prop_set_uint32(gicdev, "num-cpu", s->num_cpu);
     qdev_prop_set_uint32(gicdev, "num-irq", s->num_irq);
+
+    if (!kvm_irqchip_in_kernel()) {
+        /* Make the GIC's TZ support match the CPUs. We assume that
+         * either all the CPUs have TZ, or none do.
+         */
+        cpuobj = OBJECT(qemu_get_cpu(0));
+        has_el3 = object_property_find(cpuobj, "has_el3", NULL) &&
+            object_property_get_bool(cpuobj, "has_el3", &error_abort);
+        qdev_prop_set_bit(gicdev, "has-security-extensions", has_el3);
+    }
+
     object_property_set_bool(OBJECT(&s->gic), true, "realized", &err);
     if (err != NULL) {
         error_propagate(errp, err);
@@ -95,7 +110,7 @@ static void a15mp_priv_realize(DeviceState *dev, Error **errp)
     /* Memory map (addresses are offsets from PERIPHBASE):
      *  0x0000-0x0fff -- reserved
      *  0x1000-0x1fff -- GIC Distributor
-     *  0x2000-0x2fff -- GIC CPU interface
+     *  0x2000-0x3fff -- GIC CPU interface
      *  0x4000-0x4fff -- GIC virtual interface control (not modelled)
      *  0x5000-0x5fff -- GIC virtual interface control (not modelled)
      *  0x6000-0x7fff -- GIC virtual CPU interface (not modelled)

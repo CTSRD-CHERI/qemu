@@ -7,10 +7,8 @@
  * See the COPYING file in the top-level directory.
  */
 
-#include <glib.h>
-#include <string.h>
-#include "libqtest.h"
 #include "qemu/osdep.h"
+#include "libqtest.h"
 
 static void test_panic(void)
 {
@@ -29,6 +27,7 @@ static void test_panic(void)
     data = qdict_get_qdict(response, "data");
     g_assert(qdict_haskey(data, "action"));
     g_assert_cmpstr(qdict_get_str(data, "action"), ==, "pause");
+    QDECREF(response);
 }
 
 int main(int argc, char **argv)

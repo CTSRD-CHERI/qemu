@@ -21,6 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include "qemu/osdep.h"
+#include "qapi/error.h"
+#include "qemu-common.h"
+#include "cpu.h"
 #include "hw/sysbus.h"
 #include "qemu/error-report.h"
 #include "qemu/timer.h"
@@ -31,10 +35,11 @@
 #include "sysemu/sysemu.h"
 #include "net/net.h"
 #include "hw/boards.h"
-#include "hw/nvram/openbios_firmware_abi.h"
 #include "hw/scsi/esp.h"
 #include "hw/i386/pc.h"
 #include "hw/isa/isa.h"
+#include "hw/nvram/sun_nvram.h"
+#include "hw/nvram/chrp_nvram.h"
 #include "hw/nvram/fw_cfg.h"
 #include "hw/char/escc.h"
 #include "hw/empty_slot.h"
@@ -42,6 +47,7 @@
 #include "elf.h"
 #include "sysemu/block-backend.h"
 #include "trace.h"
+#include "qemu/cutils.h"
 
 /*
  * Sun4m architecture was used in the following machines:
@@ -95,29 +101,7 @@ struct sun4m_hwdef {
     uint8_t nvram_machine_id;
 };
 
-int DMA_get_channel_mode (int nchan)
-{
-    return 0;
-}
-int DMA_read_memory (int nchan, void *buf, int pos, int size)
-{
-    return 0;
-}
-int DMA_write_memory (int nchan, void *buf, int pos, int size)
-{
-    return 0;
-}
-void DMA_hold_DREQ (int nchan) {}
-void DMA_release_DREQ (int nchan) {}
-void DMA_schedule(int nchan) {}
-
-void DMA_init(int high_page_enable, qemu_irq *cpu_request_exit)
-{
-}
-
-void DMA_register_channel (int nchan,
-                           DMA_transfer_handler transfer_handler,
-                           void *opaque)
+void DMA_init(ISABus *bus, int high_page_enable)
 {
 }
 
@@ -134,39 +118,17 @@ static void nvram_init(Nvram *nvram, uint8_t *macaddr,
                        int nvram_machine_id, const char *arch)
 {
     unsigned int i;
-    uint32_t start, end;
+    int sysp_end;
     uint8_t image[0x1ff0];
-    struct OpenBIOS_nvpart_v1 *part_header;
     NvramClass *k = NVRAM_GET_CLASS(nvram);
 
     memset(image, '\0', sizeof(image));
 
-    start = 0;
+    /* OpenBIOS nvram variables partition */
+    sysp_end = chrp_nvram_create_system_partition(image, 0);
 
-    // OpenBIOS nvram variables
-    // Variable partition
-    part_header = (struct OpenBIOS_nvpart_v1 *)&image[start];
-    part_header->signature = OPENBIOS_PART_SYSTEM;
-    pstrcpy(part_header->name, sizeof(part_header->name), "system");
-
-    end = start + sizeof(struct OpenBIOS_nvpart_v1);
-    for (i = 0; i < nb_prom_envs; i++)
-        end = OpenBIOS_set_var(image, end, prom_envs[i]);
-
-    // End marker
-    image[end++] = '\0';
-
-    end = start + ((end - start + 15) & ~15);
-    OpenBIOS_finish_partition(part_header, end - start);
-
-    // free partition
-    start = end;
-    part_header = (struct OpenBIOS_nvpart_v1 *)&image[start];
-    part_header->signature = OPENBIOS_PART_FREE;
-    pstrcpy(part_header->name, sizeof(part_header->name), "free");
-
-    end = 0x1fd0;
-    OpenBIOS_finish_partition(part_header, end - start);
+    /* Free space partition */
+    chrp_nvram_create_free_partition(&image[sysp_end], 0x1fd0 - sysp_end);
 
     Sun_init_header((struct Sun_nvram *)&image[0x1fd8], macaddr,
                     nvram_machine_id);
@@ -176,23 +138,12 @@ static void nvram_init(Nvram *nvram, uint8_t *macaddr,
     }
 }
 
-static DeviceState *slavio_intctl;
-
-void sun4m_hmp_info_pic(Monitor *mon, const QDict *qdict)
-{
-    if (slavio_intctl)
-        slavio_pic_info(mon, slavio_intctl);
-}
-
-void sun4m_hmp_info_irq(Monitor *mon, const QDict *qdict)
-{
-    if (slavio_intctl)
-        slavio_irq_info(mon, slavio_intctl);
-}
-
 void cpu_check_irqs(CPUSPARCState *env)
 {
     CPUState *cs;
+
+    /* We should be holding the BQL before we mess with IRQs */
+    g_assert(qemu_mutex_iothread_locked());
 
     if (env->pil_in && (env->interrupt_index == 0 ||
                         (env->interrupt_index & ~15) == TT_EXTINT)) {
@@ -300,7 +251,7 @@ static unsigned long sun4m_load_kernel(const char *kernel_filename,
         bswap_needed = 0;
 #endif
         kernel_size = load_elf(kernel_filename, translate_kernel_address, NULL,
-                               NULL, NULL, NULL, 1, ELF_MACHINE, 0);
+                               NULL, NULL, NULL, 1, EM_SPARC, 0, 0);
         if (kernel_size < 0)
             kernel_size = load_aout(kernel_filename, KERNEL_LOAD_ADDR,
                                     RAM_size - KERNEL_LOAD_ADDR, bswap_needed,
@@ -540,7 +491,6 @@ static void tcx_init(hwaddr addr, qemu_irq irq, int vram_size, int width,
     qdev_prop_set_uint16(dev, "width", width);
     qdev_prop_set_uint16(dev, "height", height);
     qdev_prop_set_uint16(dev, "depth", depth);
-    qdev_prop_set_uint64(dev, "prom_addr", addr);
     qdev_init_nofail(dev);
     s = SYS_BUS_DEVICE(dev);
 
@@ -593,7 +543,6 @@ static void cg3_init(hwaddr addr, qemu_irq irq, int vram_size, int width,
     qdev_prop_set_uint16(dev, "width", width);
     qdev_prop_set_uint16(dev, "height", height);
     qdev_prop_set_uint16(dev, "depth", depth);
-    qdev_prop_set_uint64(dev, "prom-addr", addr);
     qdev_init_nofail(dev);
     s = SYS_BUS_DEVICE(dev);
 
@@ -636,30 +585,23 @@ typedef struct IDRegState {
     MemoryRegion mem;
 } IDRegState;
 
-static int idreg_init1(SysBusDevice *dev)
+static void idreg_init1(Object *obj)
 {
-    IDRegState *s = MACIO_ID_REGISTER(dev);
+    IDRegState *s = MACIO_ID_REGISTER(obj);
+    SysBusDevice *dev = SYS_BUS_DEVICE(obj);
 
-    memory_region_init_ram(&s->mem, OBJECT(s),
-                           "sun4m.idreg", sizeof(idreg_data), &error_abort);
+    memory_region_init_ram_nomigrate(&s->mem, obj,
+                           "sun4m.idreg", sizeof(idreg_data), &error_fatal);
     vmstate_register_ram_global(&s->mem);
     memory_region_set_readonly(&s->mem, true);
     sysbus_init_mmio(dev, &s->mem);
-    return 0;
-}
-
-static void idreg_class_init(ObjectClass *klass, void *data)
-{
-    SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
-
-    k->init = idreg_init1;
 }
 
 static const TypeInfo idreg_info = {
     .name          = TYPE_MACIO_ID_REGISTER,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(IDRegState),
-    .class_init    = idreg_class_init,
+    .instance_init = idreg_init1,
 };
 
 #define TYPE_TCX_AFX "tcx_afx"
@@ -684,28 +626,21 @@ static void afx_init(hwaddr addr)
     sysbus_mmio_map(s, 0, addr);
 }
 
-static int afx_init1(SysBusDevice *dev)
+static void afx_init1(Object *obj)
 {
-    AFXState *s = TCX_AFX(dev);
+    AFXState *s = TCX_AFX(obj);
+    SysBusDevice *dev = SYS_BUS_DEVICE(obj);
 
-    memory_region_init_ram(&s->mem, OBJECT(s), "sun4m.afx", 4, &error_abort);
+    memory_region_init_ram_nomigrate(&s->mem, obj, "sun4m.afx", 4, &error_fatal);
     vmstate_register_ram_global(&s->mem);
     sysbus_init_mmio(dev, &s->mem);
-    return 0;
-}
-
-static void afx_class_init(ObjectClass *klass, void *data)
-{
-    SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
-
-    k->init = afx_init1;
 }
 
 static const TypeInfo afx_info = {
     .name          = TYPE_TCX_AFX,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(AFXState),
-    .class_init    = afx_class_init,
+    .instance_init = afx_init1,
 };
 
 #define TYPE_OPENPROM "openprom"
@@ -744,7 +679,7 @@ static void prom_init(hwaddr addr, const char *bios_name)
     filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
     if (filename) {
         ret = load_elf(filename, translate_prom_address, &addr, NULL,
-                       NULL, NULL, 1, ELF_MACHINE, 0);
+                       NULL, NULL, 1, EM_SPARC, 0, 0);
         if (ret < 0 || ret > PROM_SIZE_MAX) {
             ret = load_image_targphys(filename, addr, PROM_SIZE_MAX);
         }
@@ -758,16 +693,16 @@ static void prom_init(hwaddr addr, const char *bios_name)
     }
 }
 
-static int prom_init1(SysBusDevice *dev)
+static void prom_init1(Object *obj)
 {
-    PROMState *s = OPENPROM(dev);
+    PROMState *s = OPENPROM(obj);
+    SysBusDevice *dev = SYS_BUS_DEVICE(obj);
 
-    memory_region_init_ram(&s->prom, OBJECT(s), "sun4m.prom", PROM_SIZE_MAX,
-                           &error_abort);
+    memory_region_init_ram_nomigrate(&s->prom, obj, "sun4m.prom", PROM_SIZE_MAX,
+                           &error_fatal);
     vmstate_register_ram_global(&s->prom);
     memory_region_set_readonly(&s->prom, true);
     sysbus_init_mmio(dev, &s->prom);
-    return 0;
 }
 
 static Property prom_properties[] = {
@@ -777,9 +712,7 @@ static Property prom_properties[] = {
 static void prom_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
-    SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
 
-    k->init = prom_init1;
     dc->props = prom_properties;
 }
 
@@ -788,6 +721,7 @@ static const TypeInfo prom_info = {
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(PROMState),
     .class_init    = prom_class_init,
+    .instance_init = prom_init1,
 };
 
 #define TYPE_SUN4M_MEMORY "memory"
@@ -801,14 +735,14 @@ typedef struct RamDevice {
 } RamDevice;
 
 /* System RAM */
-static int ram_init1(SysBusDevice *dev)
+static void ram_realize(DeviceState *dev, Error **errp)
 {
     RamDevice *d = SUN4M_RAM(dev);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
 
     memory_region_allocate_system_memory(&d->ram, OBJECT(d), "sun4m.ram",
                                          d->size);
-    sysbus_init_mmio(dev, &d->ram);
-    return 0;
+    sysbus_init_mmio(sbd, &d->ram);
 }
 
 static void ram_init(hwaddr addr, ram_addr_t RAM_size,
@@ -844,9 +778,8 @@ static Property ram_properties[] = {
 static void ram_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
-    SysBusDeviceClass *k = SYS_BUS_DEVICE_CLASS(klass);
 
-    k->init = ram_init1;
+    dc->realize = ram_realize;
     dc->props = ram_properties;
 }
 
@@ -890,6 +823,7 @@ static void dummy_fdc_tc(void *opaque, int irq, int level)
 static void sun4m_hw_init(const struct sun4m_hwdef *hwdef,
                           MachineState *machine)
 {
+    DeviceState *slavio_intctl;
     const char *cpu_model = machine->cpu_model;
     unsigned int i;
     void *iommu, *espdma, *ledma, *nvram;
@@ -1017,7 +951,7 @@ static void sun4m_hw_init(const struct sun4m_hwdef *hwdef,
     slavio_timer_init_all(hwdef->counter_base, slavio_irq[19], slavio_cpu_irq, smp_cpus);
 
     slavio_serial_ms_kbd_init(hwdef->ms_kb_base, slavio_irq[14],
-                              display_type == DT_NOGRAPHIC, ESCC_CLOCK, 1);
+                              !machine->enable_graphics, ESCC_CLOCK, 1);
     /* Slavio TTYA (base+4, Linux ttyS0) is the first QEMU serial device
        Slavio TTYB (base+0, Linux ttyS1) is the second QEMU serial device */
     escc_init(hwdef->serial_base, slavio_irq[15], slavio_irq[15],
@@ -1039,11 +973,6 @@ static void sun4m_hw_init(const struct sun4m_hwdef *hwdef,
 
     slavio_misc_init(hwdef->slavio_base, hwdef->aux1_base, hwdef->aux2_base,
                      slavio_irq[30], fdc_tc);
-
-    if (drive_get_max_bus(IF_SCSI) > 0) {
-        fprintf(stderr, "qemu: too many SCSI bus\n");
-        exit(1);
-    }
 
     esp_init(hwdef->esp_base, 2,
              espdma_memory_read, espdma_memory_write,
@@ -1084,6 +1013,7 @@ static void sun4m_hw_init(const struct sun4m_hwdef *hwdef,
                  hwdef->ecc_version);
 
     fw_cfg = fw_cfg_init_mem(CFG_ADDR, CFG_ADDR + 2);
+    fw_cfg_add_i16(fw_cfg, FW_CFG_NB_CPUS, (uint16_t)smp_cpus);
     fw_cfg_add_i16(fw_cfg, FW_CFG_MAX_CPUS, (uint16_t)max_cpus);
     fw_cfg_add_i64(fw_cfg, FW_CFG_RAM_SIZE, (uint64_t)ram_size);
     fw_cfg_add_i16(fw_cfg, FW_CFG_MACHINE_ID, hwdef->machine_id);
@@ -1420,80 +1350,152 @@ static void sbook_init(MachineState *machine)
     sun4m_hw_init(&sun4m_hwdefs[8], machine);
 }
 
-static QEMUMachine ss5_machine = {
-    .name = "SS-5",
-    .desc = "Sun4m platform, SPARCstation 5",
-    .init = ss5_init,
-    .block_default_type = IF_SCSI,
-    .is_default = 1,
-    .default_boot_order = "c",
+static void ss5_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCstation 5";
+    mc->init = ss5_init;
+    mc->block_default_type = IF_SCSI;
+    mc->is_default = 1;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo ss5_type = {
+    .name = MACHINE_TYPE_NAME("SS-5"),
+    .parent = TYPE_MACHINE,
+    .class_init = ss5_class_init,
 };
 
-static QEMUMachine ss10_machine = {
-    .name = "SS-10",
-    .desc = "Sun4m platform, SPARCstation 10",
-    .init = ss10_init,
-    .block_default_type = IF_SCSI,
-    .max_cpus = 4,
-    .default_boot_order = "c",
+static void ss10_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCstation 10";
+    mc->init = ss10_init;
+    mc->block_default_type = IF_SCSI;
+    mc->max_cpus = 4;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo ss10_type = {
+    .name = MACHINE_TYPE_NAME("SS-10"),
+    .parent = TYPE_MACHINE,
+    .class_init = ss10_class_init,
 };
 
-static QEMUMachine ss600mp_machine = {
-    .name = "SS-600MP",
-    .desc = "Sun4m platform, SPARCserver 600MP",
-    .init = ss600mp_init,
-    .block_default_type = IF_SCSI,
-    .max_cpus = 4,
-    .default_boot_order = "c",
+static void ss600mp_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCserver 600MP";
+    mc->init = ss600mp_init;
+    mc->block_default_type = IF_SCSI;
+    mc->max_cpus = 4;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo ss600mp_type = {
+    .name = MACHINE_TYPE_NAME("SS-600MP"),
+    .parent = TYPE_MACHINE,
+    .class_init = ss600mp_class_init,
 };
 
-static QEMUMachine ss20_machine = {
-    .name = "SS-20",
-    .desc = "Sun4m platform, SPARCstation 20",
-    .init = ss20_init,
-    .block_default_type = IF_SCSI,
-    .max_cpus = 4,
-    .default_boot_order = "c",
+static void ss20_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCstation 20";
+    mc->init = ss20_init;
+    mc->block_default_type = IF_SCSI;
+    mc->max_cpus = 4;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo ss20_type = {
+    .name = MACHINE_TYPE_NAME("SS-20"),
+    .parent = TYPE_MACHINE,
+    .class_init = ss20_class_init,
 };
 
-static QEMUMachine voyager_machine = {
-    .name = "Voyager",
-    .desc = "Sun4m platform, SPARCstation Voyager",
-    .init = vger_init,
-    .block_default_type = IF_SCSI,
-    .default_boot_order = "c",
+static void voyager_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCstation Voyager";
+    mc->init = vger_init;
+    mc->block_default_type = IF_SCSI;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo voyager_type = {
+    .name = MACHINE_TYPE_NAME("Voyager"),
+    .parent = TYPE_MACHINE,
+    .class_init = voyager_class_init,
 };
 
-static QEMUMachine ss_lx_machine = {
-    .name = "LX",
-    .desc = "Sun4m platform, SPARCstation LX",
-    .init = ss_lx_init,
-    .block_default_type = IF_SCSI,
-    .default_boot_order = "c",
+static void ss_lx_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCstation LX";
+    mc->init = ss_lx_init;
+    mc->block_default_type = IF_SCSI;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo ss_lx_type = {
+    .name = MACHINE_TYPE_NAME("LX"),
+    .parent = TYPE_MACHINE,
+    .class_init = ss_lx_class_init,
 };
 
-static QEMUMachine ss4_machine = {
-    .name = "SS-4",
-    .desc = "Sun4m platform, SPARCstation 4",
-    .init = ss4_init,
-    .block_default_type = IF_SCSI,
-    .default_boot_order = "c",
+static void ss4_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCstation 4";
+    mc->init = ss4_init;
+    mc->block_default_type = IF_SCSI;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo ss4_type = {
+    .name = MACHINE_TYPE_NAME("SS-4"),
+    .parent = TYPE_MACHINE,
+    .class_init = ss4_class_init,
 };
 
-static QEMUMachine scls_machine = {
-    .name = "SPARCClassic",
-    .desc = "Sun4m platform, SPARCClassic",
-    .init = scls_init,
-    .block_default_type = IF_SCSI,
-    .default_boot_order = "c",
+static void scls_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCClassic";
+    mc->init = scls_init;
+    mc->block_default_type = IF_SCSI;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo scls_type = {
+    .name = MACHINE_TYPE_NAME("SPARCClassic"),
+    .parent = TYPE_MACHINE,
+    .class_init = scls_class_init,
 };
 
-static QEMUMachine sbook_machine = {
-    .name = "SPARCbook",
-    .desc = "Sun4m platform, SPARCbook",
-    .init = sbook_init,
-    .block_default_type = IF_SCSI,
-    .default_boot_order = "c",
+static void sbook_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->desc = "Sun4m platform, SPARCbook";
+    mc->init = sbook_init;
+    mc->block_default_type = IF_SCSI;
+    mc->default_boot_order = "c";
+}
+
+static const TypeInfo sbook_type = {
+    .name = MACHINE_TYPE_NAME("SPARCbook"),
+    .parent = TYPE_MACHINE,
+    .class_init = sbook_class_init,
 };
 
 static void sun4m_register_types(void)
@@ -1502,20 +1504,16 @@ static void sun4m_register_types(void)
     type_register_static(&afx_info);
     type_register_static(&prom_info);
     type_register_static(&ram_info);
-}
 
-static void sun4m_machine_init(void)
-{
-    qemu_register_machine(&ss5_machine);
-    qemu_register_machine(&ss10_machine);
-    qemu_register_machine(&ss600mp_machine);
-    qemu_register_machine(&ss20_machine);
-    qemu_register_machine(&voyager_machine);
-    qemu_register_machine(&ss_lx_machine);
-    qemu_register_machine(&ss4_machine);
-    qemu_register_machine(&scls_machine);
-    qemu_register_machine(&sbook_machine);
+    type_register_static(&ss5_type);
+    type_register_static(&ss10_type);
+    type_register_static(&ss600mp_type);
+    type_register_static(&ss20_type);
+    type_register_static(&voyager_type);
+    type_register_static(&ss_lx_type);
+    type_register_static(&ss4_type);
+    type_register_static(&scls_type);
+    type_register_static(&sbook_type);
 }
 
 type_init(sun4m_register_types)
-machine_init(sun4m_machine_init);

@@ -20,7 +20,8 @@
  * with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "qemu-common.h"
+#include "qemu/osdep.h"
+#include "hw/hw.h"
 #include "hw/irq.h"
 #include "hw/devices.h"
 #include "sysemu/sysemu.h"
@@ -355,7 +356,7 @@ static inline void retu_write(CBusRetu *s, int reg, uint16_t val)
 
     case RETU_REG_WATCHDOG:
         if (val == 0 && (s->cc[0] & 2))
-            qemu_system_shutdown_request();
+            qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
         break;
 
     case RETU_REG_TXCR:

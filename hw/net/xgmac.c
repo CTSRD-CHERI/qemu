@@ -24,8 +24,8 @@
  * THE SOFTWARE.
  */
 
+#include "qemu/osdep.h"
 #include "hw/sysbus.h"
-#include "sysemu/char.h"
 #include "qemu/log.h"
 #include "net/net.h"
 #include "net/checksum.h"
@@ -370,7 +370,7 @@ out:
 }
 
 static NetClientInfo net_xgmac_enet_info = {
-    .type = NET_CLIENT_OPTIONS_KIND_NIC,
+    .type = NET_CLIENT_DRIVER_NIC,
     .size = sizeof(NICState),
     .receive = eth_rx,
 };

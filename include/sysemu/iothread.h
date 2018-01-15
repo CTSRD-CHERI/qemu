@@ -28,6 +28,11 @@ typedef struct {
     QemuCond init_done_cond;    /* is thread initialization done? */
     bool stopping;
     int thread_id;
+
+    /* AioContext poll parameters */
+    int64_t poll_max_ns;
+    int64_t poll_grow;
+    int64_t poll_shrink;
 } IOThread;
 
 #define IOTHREAD(obj) \
@@ -35,5 +40,6 @@ typedef struct {
 
 char *iothread_get_id(IOThread *iothread);
 AioContext *iothread_get_aio_context(IOThread *iothread);
+void iothread_stop_all(void);
 
 #endif /* IOTHREAD_H */

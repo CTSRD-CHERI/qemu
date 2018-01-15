@@ -9,12 +9,16 @@
  * This code is licensed under the GPL v2 or later.
  */
 
+#include "qemu/osdep.h"
+#include "qapi/error.h"
 #include <wchar.h>
 #include <dirent.h>
-#include <unistd.h>
 
-#include <sys/stat.h>
 #include <sys/statvfs.h>
+#ifdef CONFIG_INOTIFY1
+#include <sys/inotify.h>
+#include "qemu/main-loop.h"
+#endif
 
 #include "qemu-common.h"
 #include "qemu/iov.h"
@@ -43,6 +47,9 @@ enum mtp_code {
     CMD_GET_OBJECT_INFO            = 0x1008,
     CMD_GET_OBJECT                 = 0x1009,
     CMD_GET_PARTIAL_OBJECT         = 0x101b,
+    CMD_GET_OBJECT_PROPS_SUPPORTED = 0x9801,
+    CMD_GET_OBJECT_PROP_DESC       = 0x9802,
+    CMD_GET_OBJECT_PROP_VALUE      = 0x9803,
 
     /* response codes */
     RES_OK                         = 0x2001,
@@ -54,14 +61,37 @@ enum mtp_code {
     RES_INCOMPLETE_TRANSFER        = 0x2007,
     RES_INVALID_STORAGE_ID         = 0x2008,
     RES_INVALID_OBJECT_HANDLE      = 0x2009,
+    RES_INVALID_OBJECT_FORMAT_CODE = 0x200b,
     RES_SPEC_BY_FORMAT_UNSUPPORTED = 0x2014,
     RES_INVALID_PARENT_OBJECT      = 0x201a,
     RES_INVALID_PARAMETER          = 0x201d,
     RES_SESSION_ALREADY_OPEN       = 0x201e,
+    RES_INVALID_OBJECT_PROP_CODE   = 0xA801,
 
     /* format codes */
     FMT_UNDEFINED_OBJECT           = 0x3000,
     FMT_ASSOCIATION                = 0x3001,
+
+    /* event codes */
+    EVT_OBJ_ADDED                  = 0x4002,
+    EVT_OBJ_REMOVED                = 0x4003,
+    EVT_OBJ_INFO_CHANGED           = 0x4007,
+
+    /* object properties */
+    PROP_STORAGE_ID                = 0xDC01,
+    PROP_OBJECT_FORMAT             = 0xDC02,
+    PROP_OBJECT_COMPRESSED_SIZE    = 0xDC04,
+    PROP_PARENT_OBJECT             = 0xDC0B,
+    PROP_PERSISTENT_UNIQUE_OBJECT_IDENTIFIER = 0xDC41,
+    PROP_NAME                      = 0xDC44,
+};
+
+enum mtp_data_type {
+    DATA_TYPE_UINT16  = 0x0004,
+    DATA_TYPE_UINT32  = 0x0006,
+    DATA_TYPE_UINT64  = 0x0008,
+    DATA_TYPE_UINT128 = 0x000a,
+    DATA_TYPE_STRING  = 0xffff,
 };
 
 typedef struct {
@@ -84,6 +114,17 @@ enum {
     EP_EVENT,
 };
 
+#ifdef CONFIG_INOTIFY1
+typedef struct MTPMonEntry MTPMonEntry;
+
+struct MTPMonEntry {
+    uint32_t event;
+    uint32_t handle;
+
+    QTAILQ_ENTRY(MTPMonEntry) next;
+};
+#endif
+
 struct MTPControl {
     uint16_t     code;
     uint32_t     trans;
@@ -94,8 +135,8 @@ struct MTPControl {
 struct MTPData {
     uint16_t     code;
     uint32_t     trans;
-    uint32_t     offset;
-    uint32_t     length;
+    uint64_t     offset;
+    uint64_t     length;
     uint32_t     alloc;
     uint8_t      *data;
     bool         first;
@@ -108,9 +149,14 @@ struct MTPObject {
     char         *name;
     char         *path;
     struct stat  stat;
+#ifdef CONFIG_INOTIFY1
+    /* inotify watch cookie */
+    int          watchfd;
+#endif
     MTPObject    *parent;
-    MTPObject    **children;
     uint32_t     nchildren;
+    QLIST_HEAD(, MTPObject) children;
+    QLIST_ENTRY(MTPObject) list;
     bool         have_children;
     QTAILQ_ENTRY(MTPObject) next;
 };
@@ -128,6 +174,11 @@ struct MTPState {
     uint32_t     next_handle;
 
     QTAILQ_HEAD(, MTPObject) objects;
+#ifdef CONFIG_INOTIFY1
+    /* inotify descriptor */
+    int          inotifyfd;
+    QTAILQ_HEAD(events, MTPMonEntry) events;
+#endif
 };
 
 #define TYPE_USB_MTP "usb-mtp"
@@ -183,7 +234,7 @@ static const USBDescIface desc_iface_full = {
         },{
             .bEndpointAddress      = USB_DIR_IN | EP_EVENT,
             .bmAttributes          = USB_ENDPOINT_XFER_INT,
-            .wMaxPacketSize        = 8,
+            .wMaxPacketSize        = 64,
             .bInterval             = 0x0a,
         },
     }
@@ -225,7 +276,7 @@ static const USBDescIface desc_iface_high = {
         },{
             .bEndpointAddress      = USB_DIR_IN | EP_EVENT,
             .bmAttributes          = USB_ENDPOINT_XFER_INT,
-            .wMaxPacketSize        = 8,
+            .wMaxPacketSize        = 64,
             .bInterval             = 0x0a,
         },
     }
@@ -317,15 +368,24 @@ ignore:
 
 static void usb_mtp_object_free(MTPState *s, MTPObject *o)
 {
-    int i;
+    MTPObject *iter;
+
+    if (!o) {
+        return;
+    }
 
     trace_usb_mtp_object_free(s->dev.addr, o->handle, o->path);
 
     QTAILQ_REMOVE(&s->objects, o, next);
-    for (i = 0; i < o->nchildren; i++) {
-        usb_mtp_object_free(s, o->children[i]);
+    if (o->parent) {
+        QLIST_REMOVE(o, list);
+        o->parent->nchildren--;
     }
-    g_free(o->children);
+
+    while (!QLIST_EMPTY(&o->children)) {
+        iter = QLIST_FIRST(&o->children);
+        usb_mtp_object_free(s, iter);
+    }
     g_free(o->name);
     g_free(o->path);
     g_free(o);
@@ -343,6 +403,203 @@ static MTPObject *usb_mtp_object_lookup(MTPState *s, uint32_t handle)
     return NULL;
 }
 
+static MTPObject *usb_mtp_add_child(MTPState *s, MTPObject *o,
+                                    char *name)
+{
+    MTPObject *child =
+        usb_mtp_object_alloc(s, s->next_handle++, o, name);
+
+    if (child) {
+        trace_usb_mtp_add_child(s->dev.addr, child->handle, child->path);
+        QLIST_INSERT_HEAD(&o->children, child, list);
+        o->nchildren++;
+
+        if (child->format == FMT_ASSOCIATION) {
+            QLIST_INIT(&child->children);
+        }
+    }
+
+    return child;
+}
+
+#ifdef CONFIG_INOTIFY1
+static MTPObject *usb_mtp_object_lookup_name(MTPObject *parent,
+                                             char *name, int len)
+{
+    MTPObject *iter;
+
+    QLIST_FOREACH(iter, &parent->children, list) {
+        if (strncmp(iter->name, name, len) == 0) {
+            return iter;
+        }
+    }
+
+    return NULL;
+}
+
+static MTPObject *usb_mtp_object_lookup_wd(MTPState *s, int wd)
+{
+    MTPObject *iter;
+
+    QTAILQ_FOREACH(iter, &s->objects, next) {
+        if (iter->watchfd == wd) {
+            return iter;
+        }
+    }
+
+    return NULL;
+}
+
+static void inotify_watchfn(void *arg)
+{
+    MTPState *s = arg;
+    ssize_t bytes;
+    /* From the man page: atleast one event can be read */
+    int pos;
+    char buf[sizeof(struct inotify_event) + NAME_MAX + 1];
+
+    for (;;) {
+        bytes = read(s->inotifyfd, buf, sizeof(buf));
+        pos = 0;
+
+        if (bytes <= 0) {
+            /* Better luck next time */
+            return;
+        }
+
+        /*
+         * TODO: Ignore initiator initiated events.
+         * For now we are good because the store is RO
+         */
+        while (bytes > 0) {
+            char *p = buf + pos;
+            struct inotify_event *event = (struct inotify_event *)p;
+            int watchfd = 0;
+            uint32_t mask = event->mask & (IN_CREATE | IN_DELETE |
+                                           IN_MODIFY | IN_IGNORED);
+            MTPObject *parent = usb_mtp_object_lookup_wd(s, event->wd);
+            MTPMonEntry *entry = NULL;
+            MTPObject *o;
+
+            pos = pos + sizeof(struct inotify_event) + event->len;
+            bytes = bytes - pos;
+
+            if (!parent) {
+                continue;
+            }
+
+            switch (mask) {
+            case IN_CREATE:
+                if (usb_mtp_object_lookup_name
+                    (parent, event->name, event->len)) {
+                    /* Duplicate create event */
+                    continue;
+                }
+                entry = g_new0(MTPMonEntry, 1);
+                entry->handle = s->next_handle;
+                entry->event = EVT_OBJ_ADDED;
+                o = usb_mtp_add_child(s, parent, event->name);
+                if (!o) {
+                    g_free(entry);
+                    continue;
+                }
+                o->watchfd = watchfd;
+                trace_usb_mtp_inotify_event(s->dev.addr, event->name,
+                                            event->mask, "Obj Added");
+                break;
+
+            case IN_DELETE:
+                /*
+                 * The kernel issues a IN_IGNORED event
+                 * when a dir containing a watchpoint is
+                 * deleted, so we don't have to delete the
+                 * watchpoint
+                 */
+                o = usb_mtp_object_lookup_name(parent, event->name, event->len);
+                if (!o) {
+                    continue;
+                }
+                entry = g_new0(MTPMonEntry, 1);
+                entry->handle = o->handle;
+                entry->event = EVT_OBJ_REMOVED;
+                trace_usb_mtp_inotify_event(s->dev.addr, o->path,
+                                      event->mask, "Obj Deleted");
+                usb_mtp_object_free(s, o);
+                break;
+
+            case IN_MODIFY:
+                o = usb_mtp_object_lookup_name(parent, event->name, event->len);
+                if (!o) {
+                    continue;
+                }
+                entry = g_new0(MTPMonEntry, 1);
+                entry->handle = o->handle;
+                entry->event = EVT_OBJ_INFO_CHANGED;
+                trace_usb_mtp_inotify_event(s->dev.addr, o->path,
+                                      event->mask, "Obj Modified");
+                break;
+
+            case IN_IGNORED:
+                o = usb_mtp_object_lookup_name(parent, event->name, event->len);
+                trace_usb_mtp_inotify_event(s->dev.addr, o->path,
+                                      event->mask, "Obj ignored");
+                break;
+
+            default:
+                fprintf(stderr, "usb-mtp: failed to parse inotify event\n");
+                continue;
+            }
+
+            if (entry) {
+                QTAILQ_INSERT_HEAD(&s->events, entry, next);
+            }
+        }
+    }
+}
+
+static int usb_mtp_inotify_init(MTPState *s)
+{
+    int fd;
+
+    fd = inotify_init1(IN_NONBLOCK);
+    if (fd == -1) {
+        return 1;
+    }
+
+    QTAILQ_INIT(&s->events);
+    s->inotifyfd = fd;
+
+    qemu_set_fd_handler(fd, inotify_watchfn, NULL, s);
+
+    return 0;
+}
+
+static void usb_mtp_inotify_cleanup(MTPState *s)
+{
+    MTPMonEntry *e, *p;
+
+    if (!s->inotifyfd) {
+        return;
+    }
+
+    qemu_set_fd_handler(s->inotifyfd, NULL, NULL, s);
+    close(s->inotifyfd);
+
+    QTAILQ_FOREACH_SAFE(e, &s->events, next, p) {
+        QTAILQ_REMOVE(&s->events, e, next);
+        g_free(e);
+    }
+}
+
+static int usb_mtp_add_watch(int inotifyfd, char *path)
+{
+    uint32_t mask = IN_CREATE | IN_DELETE | IN_MODIFY |
+        IN_ISDIR;
+
+    return inotify_add_watch(inotifyfd, path, mask);
+}
+#endif
+
 static void usb_mtp_object_readdir(MTPState *s, MTPObject *o)
 {
     struct dirent *entry;
@@ -357,16 +614,18 @@ static void usb_mtp_object_readdir(MTPState *s, MTPObject *o)
     if (!dir) {
         return;
     }
+#ifdef CONFIG_INOTIFY1
+    int watchfd = usb_mtp_add_watch(s->inotifyfd, o->path);
+    if (watchfd == -1) {
+        fprintf(stderr, "usb-mtp: failed to add watch for %s\n", o->path);
+    } else {
+        trace_usb_mtp_inotify_event(s->dev.addr, o->path,
+                                    0, "Watch Added");
+        o->watchfd = watchfd;
+    }
+#endif
     while ((entry = readdir(dir)) != NULL) {
-        if ((o->nchildren % 32) == 0) {
-            o->children = g_realloc(o->children,
-                                    (o->nchildren + 32) * sizeof(MTPObject *));
-        }
-        o->children[o->nchildren] =
-            usb_mtp_object_alloc(s, s->next_handle++, o, entry->d_name);
-        if (o->children[o->nchildren] != NULL) {
-            o->nchildren++;
-        }
+        usb_mtp_add_child(s, o, entry->d_name);
     }
     closedir(dir);
 }
@@ -480,7 +739,7 @@ static void usb_mtp_add_wstr(MTPData *data, const wchar_t *str)
 static void usb_mtp_add_str(MTPData *data, const char *str)
 {
     uint32_t len = strlen(str)+1;
-    wchar_t wstr[len];
+    wchar_t *wstr = g_new(wchar_t, len);
     size_t ret;
 
     ret = mbstowcs(wstr, str, len);
@@ -489,6 +748,8 @@ static void usb_mtp_add_str(MTPData *data, const char *str)
     } else {
         usb_mtp_add_wstr(data, wstr);
     }
+
+    g_free(wstr);
 }
 
 static void usb_mtp_add_time(MTPData *data, time_t time)
@@ -537,6 +798,9 @@ static MTPData *usb_mtp_get_device_info(MTPState *s, MTPControl *c)
         CMD_GET_OBJECT_INFO,
         CMD_GET_OBJECT,
         CMD_GET_PARTIAL_OBJECT,
+        CMD_GET_OBJECT_PROPS_SUPPORTED,
+        CMD_GET_OBJECT_PROP_DESC,
+        CMD_GET_OBJECT_PROP_VALUE,
     };
     static const uint16_t fmt[] = {
         FMT_UNDEFINED_OBJECT,
@@ -547,8 +811,8 @@ static MTPData *usb_mtp_get_device_info(MTPState *s, MTPControl *c)
     trace_usb_mtp_op_get_device_info(s->dev.addr);
 
     usb_mtp_add_u16(d, 100);
-    usb_mtp_add_u32(d, 0xffffffff);
-    usb_mtp_add_u16(d, 0x0101);
+    usb_mtp_add_u32(d, 0x00000006);
+    usb_mtp_add_u16(d, 0x0064);
     usb_mtp_add_wstr(d, L"");
     usb_mtp_add_u16(d, 0x0000);
 
@@ -618,13 +882,15 @@ static MTPData *usb_mtp_get_object_handles(MTPState *s, MTPControl *c,
                                            MTPObject *o)
 {
     MTPData *d = usb_mtp_data_alloc(c);
-    uint32_t i, handles[o->nchildren];
+    uint32_t i = 0, handles[o->nchildren];
+    MTPObject *iter;
 
     trace_usb_mtp_op_get_object_handles(s->dev.addr, o->handle, o->path);
 
-    for (i = 0; i < o->nchildren; i++) {
-        handles[i] = o->children[i]->handle;
+    QLIST_FOREACH(iter, &o->children, list) {
+        handles[i++] = iter->handle;
     }
+    assert(i == o->nchildren);
     usb_mtp_add_u32_array(d, o->nchildren, handles);
 
     return d;
@@ -640,7 +906,12 @@ static MTPData *usb_mtp_get_object_info(MTPState *s, MTPControl *c,
     usb_mtp_add_u32(d, QEMU_STORAGE_ID);
     usb_mtp_add_u16(d, o->format);
     usb_mtp_add_u16(d, 0);
-    usb_mtp_add_u32(d, o->stat.st_size);
+
+    if (o->stat.st_size > 0xFFFFFFFF) {
+        usb_mtp_add_u32(d, 0xFFFFFFFF);
+    } else {
+        usb_mtp_add_u32(d, o->stat.st_size);
+    }
 
     usb_mtp_add_u16(d, 0);
     usb_mtp_add_u32(d, 0);
@@ -723,6 +994,122 @@ static MTPData *usb_mtp_get_partial_object(MTPState *s, MTPControl *c,
     return d;
 }
 
+static MTPData *usb_mtp_get_object_props_supported(MTPState *s, MTPControl *c)
+{
+    static const uint16_t props[] = {
+        PROP_STORAGE_ID,
+        PROP_OBJECT_FORMAT,
+        PROP_OBJECT_COMPRESSED_SIZE,
+        PROP_PARENT_OBJECT,
+        PROP_PERSISTENT_UNIQUE_OBJECT_IDENTIFIER,
+        PROP_NAME,
+    };
+    MTPData *d = usb_mtp_data_alloc(c);
+    usb_mtp_add_u16_array(d, ARRAY_SIZE(props), props);
+
+    return d;
+}
+
+static MTPData *usb_mtp_get_object_prop_desc(MTPState *s, MTPControl *c)
+{
+    MTPData *d = usb_mtp_data_alloc(c);
+    switch (c->argv[0]) {
+    case PROP_STORAGE_ID:
+        usb_mtp_add_u16(d, PROP_STORAGE_ID);
+        usb_mtp_add_u16(d, DATA_TYPE_UINT32);
+        usb_mtp_add_u8(d, 0x00);
+        usb_mtp_add_u32(d, 0x00000000);
+        usb_mtp_add_u32(d, 0x00000000);
+        usb_mtp_add_u8(d, 0x00);
+        break;
+    case PROP_OBJECT_FORMAT:
+        usb_mtp_add_u16(d, PROP_OBJECT_FORMAT);
+        usb_mtp_add_u16(d, DATA_TYPE_UINT16);
+        usb_mtp_add_u8(d, 0x00);
+        usb_mtp_add_u16(d, 0x0000);
+        usb_mtp_add_u32(d, 0x00000000);
+        usb_mtp_add_u8(d, 0x00);
+        break;
+    case PROP_OBJECT_COMPRESSED_SIZE:
+        usb_mtp_add_u16(d, PROP_OBJECT_COMPRESSED_SIZE);
+        usb_mtp_add_u16(d, DATA_TYPE_UINT64);
+        usb_mtp_add_u8(d, 0x00);
+        usb_mtp_add_u64(d, 0x0000000000000000);
+        usb_mtp_add_u32(d, 0x00000000);
+        usb_mtp_add_u8(d, 0x00);
+        break;
+    case PROP_PARENT_OBJECT:
+        usb_mtp_add_u16(d, PROP_PARENT_OBJECT);
+        usb_mtp_add_u16(d, DATA_TYPE_UINT32);
+        usb_mtp_add_u8(d, 0x00);
+        usb_mtp_add_u32(d, 0x00000000);
+        usb_mtp_add_u32(d, 0x00000000);
+        usb_mtp_add_u8(d, 0x00);
+        break;
+    case PROP_PERSISTENT_UNIQUE_OBJECT_IDENTIFIER:
+        usb_mtp_add_u16(d, PROP_PERSISTENT_UNIQUE_OBJECT_IDENTIFIER);
+        usb_mtp_add_u16(d, DATA_TYPE_UINT128);
+        usb_mtp_add_u8(d, 0x00);
+        usb_mtp_add_u64(d, 0x0000000000000000);
+        usb_mtp_add_u64(d, 0x0000000000000000);
+        usb_mtp_add_u32(d, 0x00000000);
+        usb_mtp_add_u8(d, 0x00);
+        break;
+    case PROP_NAME:
+        usb_mtp_add_u16(d, PROP_NAME);
+        usb_mtp_add_u16(d, DATA_TYPE_STRING);
+        usb_mtp_add_u8(d, 0x00);
+        usb_mtp_add_u8(d, 0x00);
+        usb_mtp_add_u32(d, 0x00000000);
+        usb_mtp_add_u8(d, 0x00);
+        break;
+    default:
+        usb_mtp_data_free(d);
+        return NULL;
+    }
+
+    return d;
+}
+
+static MTPData *usb_mtp_get_object_prop_value(MTPState *s, MTPControl *c,
+                                              MTPObject *o)
+{
+    MTPData *d = usb_mtp_data_alloc(c);
+    switch (c->argv[1]) {
+    case PROP_STORAGE_ID:
+        usb_mtp_add_u32(d, QEMU_STORAGE_ID);
+        break;
+    case PROP_OBJECT_FORMAT:
+        usb_mtp_add_u16(d, o->format);
+        break;
+    case PROP_OBJECT_COMPRESSED_SIZE:
+        usb_mtp_add_u64(d, o->stat.st_size);
+        break;
+    case PROP_PARENT_OBJECT:
+        if (o->parent == NULL) {
+            usb_mtp_add_u32(d, 0x00000000);
+        } else {
+            usb_mtp_add_u32(d, o->parent->handle);
+        }
+        break;
+    case PROP_PERSISTENT_UNIQUE_OBJECT_IDENTIFIER:
+        /* Should be persistent between sessions,
+         * but using our objedt ID is "good enough"
+         * for now */
+        usb_mtp_add_u64(d, 0x0000000000000000);
+        usb_mtp_add_u64(d, o->handle);
+        break;
+    case PROP_NAME:
+        usb_mtp_add_str(d, o->name);
+        break;
+    default:
+        usb_mtp_data_free(d);
+        return NULL;
+    }
+
+    return d;
+}
+
 static void usb_mtp_command(MTPState *s, MTPControl *c)
 {
     MTPData *data_in = NULL;
@@ -755,11 +1142,19 @@ static void usb_mtp_command(MTPState *s, MTPControl *c)
         trace_usb_mtp_op_open_session(s->dev.addr);
         s->session = c->argv[0];
         usb_mtp_object_alloc(s, s->next_handle++, NULL, s->root);
+#ifdef CONFIG_INOTIFY1
+        if (usb_mtp_inotify_init(s)) {
+            fprintf(stderr, "usb-mtp: file monitoring init failed\n");
+        }
+#endif
         break;
     case CMD_CLOSE_SESSION:
         trace_usb_mtp_op_close_session(s->dev.addr);
         s->session = 0;
         s->next_handle = 0;
+#ifdef CONFIG_INOTIFY1
+        usb_mtp_inotify_cleanup(s);
+#endif
         usb_mtp_object_free(s, QTAILQ_FIRST(&s->objects));
         assert(QTAILQ_EMPTY(&s->objects));
         break;
@@ -862,6 +1257,43 @@ static void usb_mtp_command(MTPState *s, MTPControl *c)
         nres = 1;
         res0 = data_in->length;
         break;
+    case CMD_GET_OBJECT_PROPS_SUPPORTED:
+        if (c->argv[0] != FMT_UNDEFINED_OBJECT &&
+            c->argv[0] != FMT_ASSOCIATION) {
+            usb_mtp_queue_result(s, RES_INVALID_OBJECT_FORMAT_CODE,
+                                 c->trans, 0, 0, 0);
+            return;
+        }
+        data_in = usb_mtp_get_object_props_supported(s, c);
+        break;
+    case CMD_GET_OBJECT_PROP_DESC:
+        if (c->argv[1] != FMT_UNDEFINED_OBJECT &&
+            c->argv[1] != FMT_ASSOCIATION) {
+            usb_mtp_queue_result(s, RES_INVALID_OBJECT_FORMAT_CODE,
+                                 c->trans, 0, 0, 0);
+            return;
+        }
+        data_in = usb_mtp_get_object_prop_desc(s, c);
+        if (data_in == NULL) {
+            usb_mtp_queue_result(s, RES_INVALID_OBJECT_PROP_CODE,
+                                 c->trans, 0, 0, 0);
+            return;
+        }
+        break;
+    case CMD_GET_OBJECT_PROP_VALUE:
+        o = usb_mtp_object_lookup(s, c->argv[0]);
+        if (o == NULL) {
+            usb_mtp_queue_result(s, RES_INVALID_OBJECT_HANDLE,
+                                 c->trans, 0, 0, 0);
+            return;
+        }
+        data_in = usb_mtp_get_object_prop_value(s, c, o);
+        if (data_in == NULL) {
+            usb_mtp_queue_result(s, RES_INVALID_OBJECT_PROP_CODE,
+                                 c->trans, 0, 0, 0);
+            return;
+        }
+        break;
     default:
         trace_usb_mtp_op_unknown(s->dev.addr, c->code);
         usb_mtp_queue_result(s, RES_OPERATION_NOT_SUPPORTED,
@@ -885,6 +1317,10 @@ static void usb_mtp_handle_reset(USBDevice *dev)
 
     trace_usb_mtp_reset(s->dev.addr);
 
+#ifdef CONFIG_INOTIFY1
+    usb_mtp_inotify_cleanup(s);
+#endif
+    usb_mtp_object_free(s, QTAILQ_FIRST(&s->objects));
     s->session = 0;
     usb_mtp_data_free(s->data_in);
     s->data_in = NULL;
@@ -938,10 +1374,15 @@ static void usb_mtp_handle_data(USBDevice *dev, USBPacket *p)
         }
         if (s->data_in !=  NULL) {
             MTPData *d = s->data_in;
-            int dlen = d->length - d->offset;
+            uint64_t dlen = d->length - d->offset;
             if (d->first) {
                 trace_usb_mtp_data_in(s->dev.addr, d->trans, d->length);
-                container.length = cpu_to_le32(d->length + sizeof(container));
+                if (d->length + sizeof(container) > 0xFFFFFFFF) {
+                    container.length = cpu_to_le32(0xFFFFFFFF);
+                } else {
+                    container.length =
+                        cpu_to_le32(d->length + sizeof(container));
+                }
                 container.type   = cpu_to_le16(TYPE_DATA);
                 container.code   = cpu_to_le16(d->code);
                 container.trans  = cpu_to_le32(d->trans);
@@ -1044,6 +1485,31 @@ static void usb_mtp_handle_data(USBDevice *dev, USBPacket *p)
         }
         break;
     case EP_EVENT:
+#ifdef CONFIG_INOTIFY1
+        if (!QTAILQ_EMPTY(&s->events)) {
+            struct MTPMonEntry *e = QTAILQ_LAST(&s->events, events);
+            uint32_t handle;
+            int len = sizeof(container) + sizeof(uint32_t);
+
+            if (p->iov.size < len) {
+                trace_usb_mtp_stall(s->dev.addr,
+                                    "packet too small to send event");
+                p->status = USB_RET_STALL;
+                return;
+            }
+
+            QTAILQ_REMOVE(&s->events, e, next);
+            container.length = cpu_to_le32(len);
+            container.type = cpu_to_le32(TYPE_EVENT);
+            container.code = cpu_to_le16(e->event);
+            container.trans = 0; /* no trans specific events */
+            handle = cpu_to_le32(e->handle);
+            usb_packet_copy(p, &container, sizeof(container));
+            usb_packet_copy(p, &handle, sizeof(uint32_t));
+            g_free(e);
+            return;
+        }
+#endif
         p->status = USB_RET_NAK;
         return;
     default:
@@ -1114,6 +1580,8 @@ static void usb_mtp_class_initfn(ObjectClass *klass, void *data)
     uc->handle_reset   = usb_mtp_handle_reset;
     uc->handle_control = usb_mtp_handle_control;
     uc->handle_data    = usb_mtp_handle_data;
+    set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
+    dc->desc = "USB Media Transfer Protocol device";
     dc->fw_name = "mtp";
     dc->vmsd = &vmstate_usb_mtp;
     dc->props = mtp_properties;

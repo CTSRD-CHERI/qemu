@@ -26,6 +26,7 @@
  */
 
 #include "hw/qdev.h"
+#include "qemu/iov.h"
 #include "qemu/queue.h"
 
 /* Constants related to the USB / PCI interaction */
@@ -134,6 +135,8 @@
 #define USB_REQ_GET_INTERFACE		0x0A
 #define USB_REQ_SET_INTERFACE		0x0B
 #define USB_REQ_SYNCH_FRAME		0x0C
+#define USB_REQ_SET_SEL                 0x30
+#define USB_REQ_SET_ISOCH_DELAY         0x31
 
 #define USB_DEVICE_SELF_POWERED		0
 #define USB_DEVICE_REMOTE_WAKEUP	1
@@ -234,7 +237,7 @@ struct USBDevice {
     uint8_t addr;
     char product_desc[32];
     int auto_attach;
-    int attached;
+    bool attached;
 
     int32_t state;
     uint8_t setup_buf[8];
@@ -286,11 +289,6 @@ typedef struct USBDeviceClass {
      * Called when a packet is canceled.
      */
     void (*cancel_packet)(USBDevice *dev, USBPacket *p);
-
-    /*
-     * Called when device is destroyed.
-     */
-    void (*handle_destroy)(USBDevice *dev);
 
     /*
      * Attach the device
@@ -346,6 +344,7 @@ typedef struct USBDeviceClass {
 
     const char *product_desc;
     const USBDesc *usb_desc;
+    bool attached_settable;
 } USBDeviceClass;
 
 typedef struct USBPortOps {
@@ -469,6 +468,7 @@ void usb_generic_async_ctrl_complete(USBDevice *s, USBPacket *p);
 /* usb-linux.c */
 USBDevice *usb_host_device_open(USBBus *bus, const char *devname);
 void hmp_info_usbhost(Monitor *mon, const QDict *qdict);
+bool usb_host_dev_is_scsi_storage(USBDevice *usbdev);
 
 /* usb ports of the VM */
 

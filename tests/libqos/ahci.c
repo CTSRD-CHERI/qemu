@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-#include <glib.h>
+#include "qemu/osdep.h"
 
 #include "libqtest.h"
 #include "libqos/ahci.h"
@@ -74,7 +74,11 @@ AHCICommandProp ahci_command_properties[] = {
                                  .lba48 = true, .write = true, .ncq = true },
     { .cmd = CMD_READ_MAX,       .lba28 = true },
     { .cmd = CMD_READ_MAX_EXT,   .lba48 = true },
-    { .cmd = CMD_FLUSH_CACHE,    .data = false }
+    { .cmd = CMD_FLUSH_CACHE,    .data = false },
+    { .cmd = CMD_PACKET,         .data = true,  .size = 16,
+                                 .atapi = true, .pio = true },
+    { .cmd = CMD_PACKET_ID,      .data = true,  .pio = true,
+                                 .size = 512,   .read = true }
 };
 
 struct AHCICommand {
@@ -82,6 +86,7 @@ struct AHCICommand {
     uint8_t name;
     uint8_t port;
     uint8_t slot;
+    uint8_t errors;
     uint32_t interrupts;
     uint64_t xbytes;
     uint32_t prd_size;
@@ -90,7 +95,7 @@ struct AHCICommand {
     /* Data to be transferred to the guest */
     AHCICommandHeader header;
     RegH2DFIS fis;
-    void *atapi_cmd;
+    unsigned char *atapi_cmd;
 };
 
 /**
@@ -110,6 +115,11 @@ void ahci_free(AHCIQState *ahci, uint64_t addr)
     qfree(ahci->parent, addr);
 }
 
+bool is_atapi(AHCIQState *ahci, uint8_t port)
+{
+    return ahci_px_rreg(ahci, port, AHCI_PX_SIG) == AHCI_SIGNATURE_CDROM;
+}
+
 /**
  * Locate, verify, and return a handle to the AHCI device.
  */
@@ -119,7 +129,7 @@ QPCIDevice *get_ahci_device(uint32_t *fingerprint)
     uint32_t ahci_fingerprint;
     QPCIBus *pcibus;
 
-    pcibus = qpci_init_pc();
+    pcibus = qpci_init_pc(NULL);
 
     /* Find the AHCI PCI device and verify it's the right one. */
     ahci = qpci_device_find(pcibus, QPCI_DEVFN(0x1F, 0x02));
@@ -201,8 +211,7 @@ void ahci_pci_enable(AHCIQState *ahci)
 void start_ahci_device(AHCIQState *ahci)
 {
     /* Map AHCI's ABAR (BAR5) */
-    ahci->hba_base = qpci_iomap(ahci->dev, 5, &ahci->barsize);
-    g_assert(ahci->hba_base);
+    ahci->hba_bar = qpci_iomap(ahci->dev, 5, &ahci->barsize);
 
     /* turns on pci.cmd.iose, pci.cmd.mse and pci.cmd.bme */
     qpci_device_enable(ahci->dev);
@@ -342,6 +351,7 @@ void ahci_hba_enable(AHCIQState *ahci)
     reg = ahci_rreg(ahci, AHCI_GHC);
     ASSERT_BIT_SET(reg, AHCI_GHC_IE);
 
+    ahci->enabled = true;
     /* TODO: The device should now be idling and waiting for commands.
      * In the future, a small test-case to inspect the Register D2H FIS
      * and clear the initial interrupts might be good. */
@@ -393,12 +403,14 @@ void ahci_port_clear(AHCIQState *ahci, uint8_t port)
 /**
  * Check a port for errors.
  */
-void ahci_port_check_error(AHCIQState *ahci, uint8_t port)
+void ahci_port_check_error(AHCIQState *ahci, uint8_t port,
+                           uint32_t imask, uint8_t emask)
 {
     uint32_t reg;
 
     /* The upper 9 bits of the IS register all indicate errors. */
     reg = ahci_px_rreg(ahci, port, AHCI_PX_IS);
+    reg &= ~imask;
     reg >>= 23;
     g_assert_cmphex(reg, ==, 0);
 
@@ -408,8 +420,13 @@ void ahci_port_check_error(AHCIQState *ahci, uint8_t port)
 
     /* The TFD also has two error sections. */
     reg = ahci_px_rreg(ahci, port, AHCI_PX_TFD);
-    ASSERT_BIT_CLEAR(reg, AHCI_PX_TFD_STS_ERR);
-    ASSERT_BIT_CLEAR(reg, AHCI_PX_TFD_ERR);
+    if (!emask) {
+        ASSERT_BIT_CLEAR(reg, AHCI_PX_TFD_STS_ERR);
+    } else {
+        ASSERT_BIT_SET(reg, AHCI_PX_TFD_STS_ERR);
+    }
+    ASSERT_BIT_CLEAR(reg, AHCI_PX_TFD_ERR & (~emask << 8));
+    ASSERT_BIT_SET(reg, AHCI_PX_TFD_ERR & (emask << 8));
 }
 
 void ahci_port_check_interrupts(AHCIQState *ahci, uint8_t port,
@@ -592,6 +609,83 @@ inline unsigned size_to_prdtl(unsigned bytes, unsigned bytes_per_prd)
     return (bytes + bytes_per_prd - 1) / bytes_per_prd;
 }
 
+const AHCIOpts default_opts = { .size = 0 };
+
+/**
+ * ahci_exec: execute a given command on a specific
+ * AHCI port.
+ *
+ * @ahci: The device to send the command to
+ * @port: The port number of the SATA device we wish
+ *        to have execute this command
+ * @op:   The S/ATA command to execute, or if opts.atapi
+ *        is true, the SCSI command code.
+ * @opts: Optional arguments to modify execution behavior.
+ */
+void ahci_exec(AHCIQState *ahci, uint8_t port,
+               uint8_t op, const AHCIOpts *opts_in)
+{
+    AHCICommand *cmd;
+    int rc;
+    AHCIOpts *opts;
+
+    opts = g_memdup((opts_in == NULL ? &default_opts : opts_in),
+                    sizeof(AHCIOpts));
+
+    /* No guest buffer provided, create one. */
+    if (opts->size && !opts->buffer) {
+        opts->buffer = ahci_alloc(ahci, opts->size);
+        g_assert(opts->buffer);
+        qmemset(opts->buffer, 0x00, opts->size);
+    }
+
+    /* Command creation */
+    if (opts->atapi) {
+        uint16_t bcl = opts->set_bcl ? opts->bcl : ATAPI_SECTOR_SIZE;
+        cmd = ahci_atapi_command_create(op, bcl);
+        if (opts->atapi_dma) {
+            ahci_command_enable_atapi_dma(cmd);
+        }
+    } else {
+        cmd = ahci_command_create(op);
+    }
+    ahci_command_adjust(cmd, opts->lba, opts->buffer,
+                        opts->size, opts->prd_size);
+
+    if (opts->pre_cb) {
+        rc = opts->pre_cb(ahci, cmd, opts);
+        g_assert_cmpint(rc, ==, 0);
+    }
+
+    /* Write command to memory and issue it */
+    ahci_command_commit(ahci, cmd, port);
+    ahci_command_issue_async(ahci, cmd);
+    if (opts->error) {
+        qmp_eventwait("STOP");
+    }
+    if (opts->mid_cb) {
+        rc = opts->mid_cb(ahci, cmd, opts);
+        g_assert_cmpint(rc, ==, 0);
+    }
+    if (opts->error) {
+        qmp_async("{'execute':'cont' }");
+        qmp_eventwait("RESUME");
+    }
+
+    /* Wait for command to complete and verify sanity */
+    ahci_command_wait(ahci, cmd);
+    ahci_command_verify(ahci, cmd);
+    if (opts->post_cb) {
+        rc = opts->post_cb(ahci, cmd, opts);
+        g_assert_cmpint(rc, ==, 0);
+    }
+    ahci_command_free(cmd);
+    if (opts->buffer != opts_in->buffer) {
+        ahci_free(ahci, opts->buffer);
+    }
+    g_free(opts);
+}
+
 /* Issue a command, expecting it to fail and STOP the VM */
 AHCICommand *ahci_guest_io_halt(AHCIQState *ahci, uint8_t port,
                                 uint8_t ide_cmd, uint64_t buffer,
@@ -659,16 +753,16 @@ void ahci_io(AHCIQState *ahci, uint8_t port, uint8_t ide_cmd,
     props = ahci_command_find(ide_cmd);
     g_assert(props);
     ptr = ahci_alloc(ahci, bufsize);
-    g_assert(ptr);
+    g_assert(!bufsize || ptr);
     qmemset(ptr, 0x00, bufsize);
 
-    if (props->write) {
+    if (bufsize && props->write) {
         bufwrite(ptr, buffer, bufsize);
     }
 
     ahci_guest_io(ahci, port, ide_cmd, ptr, bufsize, sector);
 
-    if (props->read) {
+    if (bufsize && props->read) {
         bufread(ptr, buffer, bufsize);
     }
 
@@ -731,6 +825,18 @@ static void command_table_init(AHCICommand *cmd)
     memset(fis->aux, 0x00, ARRAY_SIZE(fis->aux));
 }
 
+void ahci_command_enable_atapi_dma(AHCICommand *cmd)
+{
+    RegH2DFIS *fis = &(cmd->fis);
+    g_assert(cmd->props->atapi);
+    fis->feature_low |= 0x01;
+    cmd->interrupts &= ~AHCI_PX_IS_PSS;
+    cmd->props->dma = true;
+    cmd->props->pio = false;
+    /* BUG: We expect the DMA Setup interrupt for DMA commands */
+    /* cmd->interrupts |= AHCI_PX_IS_DSS; */
+}
+
 AHCICommand *ahci_command_create(uint8_t command_name)
 {
     AHCICommandProp *props = ahci_command_find(command_name);
@@ -742,10 +848,10 @@ AHCICommand *ahci_command_create(uint8_t command_name)
     g_assert(!(props->lba28 && props->lba48));
     g_assert(!(props->read && props->write));
     g_assert(!props->size || props->data);
-    g_assert(!props->ncq || (props->ncq && props->lba48));
+    g_assert(!props->ncq || props->lba48);
 
     /* Defaults and book-keeping */
-    cmd->props = props;
+    cmd->props = g_memdup(props, sizeof(AHCICommandProp));
     cmd->name = command_name;
     cmd->xbytes = props->size;
     cmd->prd_size = 4096;
@@ -767,8 +873,86 @@ AHCICommand *ahci_command_create(uint8_t command_name)
     return cmd;
 }
 
+AHCICommand *ahci_atapi_command_create(uint8_t scsi_cmd, uint16_t bcl)
+{
+    AHCICommand *cmd = ahci_command_create(CMD_PACKET);
+    cmd->atapi_cmd = g_malloc0(16);
+    cmd->atapi_cmd[0] = scsi_cmd;
+    stw_le_p(&cmd->fis.lba_lo[1], bcl);
+    return cmd;
+}
+
+void ahci_atapi_test_ready(AHCIQState *ahci, uint8_t port,
+                           bool ready, uint8_t expected_sense)
+{
+    AHCICommand *cmd = ahci_atapi_command_create(CMD_ATAPI_TEST_UNIT_READY, 0);
+    ahci_command_set_size(cmd, 0);
+    if (!ready) {
+        cmd->interrupts |= AHCI_PX_IS_TFES;
+        cmd->errors |= expected_sense << 4;
+    }
+    ahci_command_commit(ahci, cmd, port);
+    ahci_command_issue(ahci, cmd);
+    ahci_command_verify(ahci, cmd);
+    ahci_command_free(cmd);
+}
+
+static int copy_buffer(AHCIQState *ahci, AHCICommand *cmd,
+                        const AHCIOpts *opts)
+{
+    unsigned char *rx = opts->opaque;
+    bufread(opts->buffer, rx, opts->size);
+    return 0;
+}
+
+void ahci_atapi_get_sense(AHCIQState *ahci, uint8_t port,
+                          uint8_t *sense, uint8_t *asc)
+{
+    unsigned char *rx;
+    AHCIOpts opts = {
+        .size = 18,
+        .atapi = true,
+        .post_cb = copy_buffer,
+    };
+    rx = g_malloc(18);
+    opts.opaque = rx;
+
+    ahci_exec(ahci, port, CMD_ATAPI_REQUEST_SENSE, &opts);
+
+    *sense = rx[2];
+    *asc = rx[12];
+
+    g_free(rx);
+}
+
+void ahci_atapi_eject(AHCIQState *ahci, uint8_t port)
+{
+    AHCICommand *cmd = ahci_atapi_command_create(CMD_ATAPI_START_STOP_UNIT, 0);
+    ahci_command_set_size(cmd, 0);
+
+    cmd->atapi_cmd[4] = 0x02; /* loej = true */
+    ahci_command_commit(ahci, cmd, port);
+    ahci_command_issue(ahci, cmd);
+    ahci_command_verify(ahci, cmd);
+    ahci_command_free(cmd);
+}
+
+void ahci_atapi_load(AHCIQState *ahci, uint8_t port)
+{
+    AHCICommand *cmd = ahci_atapi_command_create(CMD_ATAPI_START_STOP_UNIT, 0);
+    ahci_command_set_size(cmd, 0);
+
+    cmd->atapi_cmd[4] = 0x03; /* loej,start = true */
+    ahci_command_commit(ahci, cmd, port);
+    ahci_command_issue(ahci, cmd);
+    ahci_command_verify(ahci, cmd);
+    ahci_command_free(cmd);
+}
+
 void ahci_command_free(AHCICommand *cmd)
 {
+    g_free(cmd->atapi_cmd);
+    g_free(cmd->props);
     g_free(cmd);
 }
 
@@ -782,10 +966,44 @@ void ahci_command_clr_flags(AHCICommand *cmd, uint16_t cmdh_flags)
     cmd->header.flags &= ~cmdh_flags;
 }
 
+static void ahci_atapi_command_set_offset(AHCICommand *cmd, uint64_t lba)
+{
+    unsigned char *cbd = cmd->atapi_cmd;
+    g_assert(cbd);
+
+    switch (cbd[0]) {
+    case CMD_ATAPI_READ_10:
+    case CMD_ATAPI_READ_CD:
+        g_assert_cmpuint(lba, <=, UINT32_MAX);
+        stl_be_p(&cbd[2], lba);
+        break;
+    case CMD_ATAPI_REQUEST_SENSE:
+    case CMD_ATAPI_TEST_UNIT_READY:
+    case CMD_ATAPI_START_STOP_UNIT:
+        g_assert_cmpuint(lba, ==, 0x00);
+        break;
+    default:
+        /* SCSI doesn't have uniform packet formats,
+         * so you have to add support for it manually. Sorry! */
+        fprintf(stderr, "The Libqos AHCI driver does not support the "
+                "set_offset operation for ATAPI command 0x%02x, "
+                "please add support.\n",
+                cbd[0]);
+        g_assert_not_reached();
+    }
+}
+
 void ahci_command_set_offset(AHCICommand *cmd, uint64_t lba_sect)
 {
     RegH2DFIS *fis = &(cmd->fis);
-    if (cmd->props->lba28) {
+
+    if (cmd->props->atapi) {
+        ahci_atapi_command_set_offset(cmd, lba_sect);
+        return;
+    } else if (!cmd->props->data && !lba_sect) {
+        /* Not meaningful, ignore. */
+        return;
+    } else if (cmd->props->lba28) {
         g_assert_cmphex(lba_sect, <=, 0xFFFFFFF);
     } else if (cmd->props->lba48 || cmd->props->ncq) {
         g_assert_cmphex(lba_sect, <=, 0xFFFFFFFFFFFF);
@@ -811,6 +1029,44 @@ void ahci_command_set_buffer(AHCICommand *cmd, uint64_t buffer)
     cmd->buffer = buffer;
 }
 
+static void ahci_atapi_set_size(AHCICommand *cmd, uint64_t xbytes)
+{
+    unsigned char *cbd = cmd->atapi_cmd;
+    uint64_t nsectors = xbytes / 2048;
+    uint32_t tmp;
+    g_assert(cbd);
+
+    switch (cbd[0]) {
+    case CMD_ATAPI_READ_10:
+        g_assert_cmpuint(nsectors, <=, UINT16_MAX);
+        stw_be_p(&cbd[7], nsectors);
+        break;
+    case CMD_ATAPI_READ_CD:
+        /* 24bit BE store */
+        g_assert_cmpuint(nsectors, <, 1ULL << 24);
+        tmp = nsectors;
+        cbd[6] = (tmp & 0xFF0000) >> 16;
+        cbd[7] = (tmp & 0xFF00) >> 8;
+        cbd[8] = (tmp & 0xFF);
+        break;
+    case CMD_ATAPI_REQUEST_SENSE:
+        g_assert_cmpuint(xbytes, <=, UINT8_MAX);
+        cbd[4] = (uint8_t)xbytes;
+        break;
+    case CMD_ATAPI_TEST_UNIT_READY:
+    case CMD_ATAPI_START_STOP_UNIT:
+        g_assert_cmpuint(xbytes, ==, 0);
+        break;
+    default:
+        /* SCSI doesn't have uniform packet formats,
+         * so you have to add support for it manually. Sorry! */
+        fprintf(stderr, "The Libqos AHCI driver does not support the set_size "
+                "operation for ATAPI command 0x%02x, please add support.\n",
+                cbd[0]);
+        g_assert_not_reached();
+    }
+}
+
 void ahci_command_set_sizes(AHCICommand *cmd, uint64_t xbytes,
                             unsigned prd_size)
 {
@@ -829,6 +1085,8 @@ void ahci_command_set_sizes(AHCICommand *cmd, uint64_t xbytes,
         NCQFIS *nfis = (NCQFIS *)&(cmd->fis);
         nfis->sector_low = sect_count & 0xFF;
         nfis->sector_hi = (sect_count >> 8) & 0xFF;
+    } else if (cmd->props->atapi) {
+        ahci_atapi_set_size(cmd, xbytes);
     } else {
         cmd->fis.count = sect_count;
     }
@@ -877,9 +1135,14 @@ void ahci_command_commit(AHCIQState *ahci, AHCICommand *cmd, uint8_t port)
     g_assert((table_ptr & 0x7F) == 0x00);
     cmd->header.ctba = table_ptr;
 
-    /* Commit the command header and command FIS */
+    /* Commit the command header (part of the Command List Buffer) */
     ahci_set_command_header(ahci, port, cmd->slot, &(cmd->header));
+    /* Now, write the command table (FIS, ACMD, and PRDT) -- FIS first, */
     ahci_write_fis(ahci, cmd);
+    /* Then ATAPI CMD, if needed */
+    if (cmd->props->atapi) {
+        memwrite(table_ptr + 0x40, cmd->atapi_cmd, 16);
+    }
 
     /* Construct and write the PRDs to the command table */
     g_assert_cmphex(prdtl, ==, cmd->header.prdtl);
@@ -944,7 +1207,7 @@ void ahci_command_verify(AHCIQState *ahci, AHCICommand *cmd)
     uint8_t slot = cmd->slot;
     uint8_t port = cmd->port;
 
-    ahci_port_check_error(ahci, port);
+    ahci_port_check_error(ahci, port, cmd->interrupts, cmd->errors);
     ahci_port_check_interrupts(ahci, port, cmd->interrupts);
     ahci_port_check_nonbusy(ahci, port, slot);
     ahci_port_check_cmd_sanity(ahci, cmd);

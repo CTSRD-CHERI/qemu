@@ -3,11 +3,9 @@
 
 #include "qemu/queue.h"
 #include "qemu/option.h"
-#include "qemu/typedefs.h"
 #include "qemu/bitmap.h"
 #include "qom/object.h"
 #include "hw/irq.h"
-#include "qapi/error.h"
 #include "hw/hotplug.h"
 
 enum {
@@ -28,6 +26,7 @@ typedef enum DeviceCategory {
     DEVICE_CATEGORY_DISPLAY,
     DEVICE_CATEGORY_SOUND,
     DEVICE_CATEGORY_MISC,
+    DEVICE_CATEGORY_CPU,
     DEVICE_CATEGORY_MAX
 } DeviceCategory;
 
@@ -104,16 +103,17 @@ typedef struct DeviceClass {
     Property *props;
 
     /*
-     * Shall we hide this device model from -device / device_add?
+     * Can this device be instantiated with -device / device_add?
      * All devices should support instantiation with device_add, and
      * this flag should not exist.  But we're not there, yet.  Some
      * devices fail to instantiate with cryptic error messages.
      * Others instantiate, but don't work.  Exposing users to such
-     * behavior would be cruel; this flag serves to protect them.  It
-     * should never be set without a comment explaining why it is set.
+     * behavior would be cruel; clearing this flag will protect them.
+     * It should never be cleared without a comment explaining why it
+     * is cleared.
      * TODO remove once we're there
      */
-    bool cannot_instantiate_with_device_add_yet;
+    bool user_creatable;
     bool hotpluggable;
 
     /* callbacks */
@@ -213,7 +213,7 @@ typedef struct BusChild {
 struct BusState {
     Object obj;
     DeviceState *parent;
-    const char *name;
+    char *name;
     HotplugHandler *hotplug_handler;
     int max_index;
     bool realized;
@@ -221,16 +221,29 @@ struct BusState {
     QLIST_ENTRY(BusState) sibling;
 };
 
+/**
+ * Property:
+ * @set_default: true if the default value should be set from @defval,
+ *    in which case @info->set_default_value must not be NULL
+ *    (if false then no default value is set by the property system
+ *     and the field retains whatever value it was given by instance_init).
+ * @defval: default value for the property. This is used only if @set_default
+ *     is true.
+ */
 struct Property {
     const char   *name;
-    PropertyInfo *info;
-    int          offset;
+    const PropertyInfo *info;
+    ptrdiff_t    offset;
     uint8_t      bitnr;
-    qtype_code   qtype;
-    int64_t      defval;
+    bool         set_default;
+    union {
+        int64_t i;
+        uint64_t u;
+    } defval;
     int          arrayoffset;
-    PropertyInfo *arrayinfo;
+    const PropertyInfo *arrayinfo;
     int          arrayfieldsize;
+    const char   *link_type;
 };
 
 struct PropertyInfo {
@@ -238,6 +251,8 @@ struct PropertyInfo {
     const char *description;
     const char * const *enum_table;
     int (*print)(DeviceState *dev, Property *prop, char *dest, size_t len);
+    void (*set_default_value)(Object *obj, const Property *prop);
+    void (*create)(Object *obj, Property *prop, Error **errp);
     ObjectPropertyAccessor *get;
     ObjectPropertyAccessor *set;
     ObjectPropertyRelease *release;
@@ -248,6 +263,11 @@ struct PropertyInfo {
  * @user_provided: Set to true if property comes from user-provided config
  * (command-line or config file).
  * @used: Set to true if property was used when initializing a device.
+ * @errp: Error destination, used like first argument of error_setg()
+ *        in case property setting fails later. If @errp is NULL, we
+ *        print warnings instead of ignoring errors silently. For
+ *        hotplugged devices, errp is always ignored and warnings are
+ *        printed instead.
  */
 typedef struct GlobalProperty {
     const char *driver;
@@ -255,7 +275,7 @@ typedef struct GlobalProperty {
     const char *value;
     bool user_provided;
     bool used;
-    QTAILQ_ENTRY(GlobalProperty) next;
+    Error **errp;
 } GlobalProperty;
 
 /*** Board API.  This should go away once we have a machine config file.  ***/
@@ -324,6 +344,7 @@ int qdev_walk_children(DeviceState *dev,
                        void *opaque);
 
 void qdev_reset_all(DeviceState *dev);
+void qdev_reset_all_fn(void *opaque);
 
 /**
  * @qbus_reset_all:
@@ -368,7 +389,8 @@ Object *qdev_get_machine(void);
 /* FIXME: make this a link<> */
 void qdev_set_parent_bus(DeviceState *dev, BusState *bus);
 
-extern int qdev_hotplug;
+extern bool qdev_hotplug;
+extern bool qdev_hot_removed;
 
 char *qdev_get_dev_path(DeviceState *dev);
 

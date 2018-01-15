@@ -19,6 +19,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses/>.  */
 
+#include "qemu/osdep.h"
 #include "disas/bfd.h"
 
 /* mips.h.  Mips opcode list for GDB, the GNU debugger.
@@ -442,6 +443,8 @@ struct mips_opcode
    "+o4" 11 bits immediate/displacement (shift = 1, CHERI only)
    "+o5" 11 bits immediate/displacement (shift = 2, CHERI only)
    "+o6" 11 bits immediate/displacement (shift = 3, CHERI only)
+   "+o7" 11 bits immediate/displacement (shift = 4, CHERI only)
+   "+o8" 16 bits immediate/displacement (shift = 4, CHERI only)
 
    Other:
    "()" parens surrounding optional value
@@ -1321,6 +1324,7 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cexeq",      "t,+b,+v",   0x4800001a, 0xffe0003f, 0, 0, I1},
 {"cbuildcap",  "+w,+b,+v",  0x4800001d, 0xffe0003f, 0, 0, I1},
 {"ccopytype",  "+w,+b,+v",  0x4800001e, 0xffe0003f, 0, 0, I1},
+{"ccseal",     "+w,+b,+v",  0x4800001f, 0xffe0003f, 0, 0, I1},
 {"ctestsubset","+w,+b,+v",  0x48000020, 0xffe0003f, 0, 0, I1},
 {"cnexeq",     "t,+b,+v",   0x48000021, 0xffe0003f, 0, 0, I1},
 
@@ -1329,7 +1333,7 @@ const struct mips_opcode mips_builtin_opcodes[] =
 
 {"csetboundsimm", "+w,+b,+o3",   0x4a800000, 0xffe00000, 0, 0, I1},
 {"cincoffsetimm", "+w,+b,+o3",   0x4a600000, 0xffe00000, 0, 0, I1},
-{"creturn", "",               0x48a007ff, 0xffe007ff, 0, 0, I1},
+{"creturn", "",               0x48a007ff, 0xffffffff, 0, 0, I1},
 
 {"cgetperm", "t,+b", 	0x48000000, 0xffe007ff, 0,			0, I1},
 {"cgettype", "t,+b",	0x48000001, 0xffe007ff, 0,			0, I1},
@@ -1457,6 +1461,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cllhu", "t,+b",       0x4a00000d, 0xffe007ff, 0,          0, I1},
 {"cllwu", "t,+b",       0x4a00000e, 0xffe007ff, 0,          0, I1},
 {"cllc",  "+w,+b",      0x4a00000f, 0xffe007ff, 0,          0, I1},
+
+
+/* XXXAR: new experimental CHERI loads. Overlaps with daui, etc. */
+{"clcbi",    "+x,+o8(+w)",    0x74000000, 0xfc000000, 0,            0, I1},
+{"cscbi",    "+x,+o8(+w)",    0x78000000, 0xfc000000, 0,            0, I1},
+
 /* End of CHERI instructions */
 
 {"lwpc",    "s,+o2",    0xec080000, 0xfc180000, WR_d,                 0, I32R6},
@@ -1601,6 +1611,10 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cmp.sor.d",  "D,S,T", 0x46a00019, 0xffe0003f, RD_S|RD_T|WR_D|FP_D,  0, I32R6},
 {"cmp.sune.d", "D,S,T", 0x46a0001a, 0xffe0003f, RD_S|RD_T|WR_D|FP_D,  0, I32R6},
 {"cmp.sne.d",  "D,S,T", 0x46a0001b, 0xffe0003f, RD_S|RD_T|WR_D|FP_D,  0, I32R6},
+{"dvp",        "",      0x41600024, 0xffffffff, TRAP,                 0, I32R6},
+{"dvp",        "t",     0x41600024, 0xffe0ffff, TRAP|WR_t,            0, I32R6},
+{"evp",        "",      0x41600004, 0xffffffff, TRAP,                 0, I32R6},
+{"evp",        "t",     0x41600004, 0xffe0ffff, TRAP|WR_t,            0, I32R6},
 
 /* MSA */
 {"sll.b",   "+d,+e,+f", 0x7800000d, 0xffe0003f, WR_VD|RD_VS|RD_VT,  0, MSA},
@@ -2617,9 +2631,11 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"hibernate","",        0x42000023, 0xffffffff,	0, 			0,		V1	},
 {"ins",     "t,r,+A,+B", 0x7c000004, 0xfc00003f, WR_t|RD_s,    		0,		I33	},
 {"jr",      "s",	0x00000008, 0xfc1fffff,	UBD|RD_s,		0,		I1	},
+{"jr",      "s",	0x00000009, 0xfc1fffff,	UBD|RD_s,		0,		I32R6	}, /* jalr */
 /* jr.hb is officially MIPS{32,64}R2, but it works on R1 as jr with
    the same hazard barrier effect.  */
 {"jr.hb",   "s",	0x00000408, 0xfc1fffff,	UBD|RD_s,		0,		I32	},
+{"jr.hb",   "s",	0x00000409, 0xfc1fffff,	UBD|RD_s,		0,		I32R6	}, /* jalr.hb */
 {"j",       "s",	0x00000008, 0xfc1fffff,	UBD|RD_s,		0,		I1	}, /* jr */
 /* SVR4 PIC code requires special handling for j, so it must be a
    macro.  */
@@ -4449,7 +4465,7 @@ print_insn_args (const char *d,
 	    case '\0':
 	      /* xgettext:c-format */
 	      (*info->fprintf_func) (info->stream,
-				     _("# internal error, incomplete extension sequence (+)"));
+				     "# internal error, incomplete extension sequence (+)");
 	      return;
 
 	    case 'A':
@@ -4663,6 +4679,14 @@ print_insn_args (const char *d,
                     }
                     delta = delta << 4;
                     break;
+                case '8': /* CHERI 16 bit, shift 4 */
+                    d++;
+                    delta = ((l >> OP_SH_DELTA) & OP_MASK_DELTA);
+                    if (delta > (OP_MASK_DELTA >> 1)) {
+                        delta -= (OP_MASK_DELTA + 1);
+                    }
+                    delta = delta << 4;
+                    break;
                 default:
                     delta = (l >> OP_SH_DELTA_R6) & OP_MASK_DELTA_R6;
                     if (delta & 0x8000) {
@@ -4794,7 +4818,7 @@ print_insn_args (const char *d,
 	    default:
 	      /* xgettext:c-format */
 	      (*info->fprintf_func) (info->stream,
-				     _("# internal error, undefined extension sequence (+%c)"),
+				     "# internal error, undefined extension sequence (+%c)",
 				     *d);
 	      return;
 	    }
@@ -5159,7 +5183,7 @@ print_insn_args (const char *d,
 	default:
 	  /* xgettext:c-format */
 	  (*info->fprintf_func) (info->stream,
-				 _("# internal error, undefined modifier(%c)"),
+				 "# internal error, undefined modifier(%c)",
 				 *d);
 	  return;
 	}
@@ -6023,7 +6047,7 @@ print_mips16_insn_arg (char type,
       /* xgettext:c-format */
       (*info->fprintf_func)
 	(info->stream,
-	 _("# internal disassembler error, unrecognised modifier (%c)"),
+	 "# internal disassembler error, unrecognised modifier (%c)",
 	 type);
       abort ();
     }
@@ -6034,51 +6058,51 @@ print_mips_disassembler_options (FILE *stream)
 {
   unsigned int i;
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
 The following MIPS specific disassembler options are supported for use\n\
-with the -M switch (multiple options should be separated by commas):\n"));
+with the -M switch (multiple options should be separated by commas):\n");
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
   gpr-names=ABI            Print GPR names according to  specified ABI.\n\
-                           Default: based on binary being disassembled.\n"));
+                           Default: based on binary being disassembled.\n");
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
   fpr-names=ABI            Print FPR names according to specified ABI.\n\
-                           Default: numeric.\n"));
+                           Default: numeric.\n");
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
   cp0-names=ARCH           Print CP0 register names according to\n\
                            specified architecture.\n\
-                           Default: based on binary being disassembled.\n"));
+                           Default: based on binary being disassembled.\n");
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
   hwr-names=ARCH           Print HWR names according to specified\n\
 			   architecture.\n\
-                           Default: based on binary being disassembled.\n"));
+                           Default: based on binary being disassembled.\n");
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
   reg-names=ABI            Print GPR and FPR names according to\n\
-                           specified ABI.\n"));
+                           specified ABI.\n");
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
   reg-names=ARCH           Print CP0 register and HWR names according to\n\
-                           specified architecture.\n"));
+                           specified architecture.\n");
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
   For the options above, the following values are supported for \"ABI\":\n\
-   "));
+   ");
   for (i = 0; i < ARRAY_SIZE (mips_abi_choices); i++)
     fprintf (stream, " %s", mips_abi_choices[i].name);
-  fprintf (stream, _("\n"));
+  fprintf (stream, "\n");
 
-  fprintf (stream, _("\n\
+  fprintf (stream, "\n\
   For the options above, The following values are supported for \"ARCH\":\n\
-   "));
+   ");
   for (i = 0; i < ARRAY_SIZE (mips_arch_choices); i++)
     if (*mips_arch_choices[i].name != '\0')
       fprintf (stream, " %s", mips_arch_choices[i].name);
-  fprintf (stream, _("\n"));
+  fprintf (stream, "\n");
 
-  fprintf (stream, _("\n"));
+  fprintf (stream, "\n");
 }
 #endif

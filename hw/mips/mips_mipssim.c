@@ -24,6 +24,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include "qemu/osdep.h"
+#include "qapi/error.h"
+#include "qemu-common.h"
+#include "cpu.h"
 #include "hw/hw.h"
 #include "hw/mips/mips.h"
 #include "hw/mips/cpudevs.h"
@@ -73,13 +77,14 @@ static int64_t load_kernel(void)
 #endif
                            NULL, (uint64_t *)&entry, NULL,
                            (uint64_t *)&kernel_high, big_endian,
-                           ELF_MACHINE, 1);
+                           EM_MIPS, 1, 0);
     if (kernel_size >= 0) {
         if ((entry & ~0x7fffffffULL) == 0x80000000)
             entry = (int32_t)entry;
     } else {
-        fprintf(stderr, "qemu: could not load kernel '%s'\n",
-                loaderparams.kernel_filename);
+        error_report("qemu: could not load kernel '%s': %s",
+                     loaderparams.kernel_filename,
+                     load_elf_strerror(kernel_size));
         exit(1);
     }
 
@@ -156,7 +161,7 @@ mips_mipssim_init(MachineState *machine)
 
     /* Init CPUs. */
     if (cpu_model == NULL) {
-#ifdef TARGET_MIPS64
+#if defined(TARGET_MIPS64) || defined(TARGET_CHERI)
         cpu_model = "5Kf";
 #else
         cpu_model = "24Kf";
@@ -182,8 +187,7 @@ mips_mipssim_init(MachineState *machine)
     memory_region_allocate_system_memory(ram, NULL, "mips_mipssim.ram",
                                          ram_size);
     memory_region_init_ram(bios, NULL, "mips_mipssim.bios", BIOS_SIZE,
-                           &error_abort);
-    vmstate_register_ram_global(bios);
+                           &error_fatal);
     memory_region_set_readonly(bios, true);
 
     memory_region_add_subregion(address_space_mem, 0, ram);
@@ -220,8 +224,8 @@ mips_mipssim_init(MachineState *machine)
     }
 
     /* Init CPU internal devices. */
-    cpu_mips_irq_init_cpu(env);
-    cpu_mips_clock_init(env);
+    cpu_mips_irq_init_cpu(cpu);
+    cpu_mips_clock_init(cpu);
 
     /* Register 64 KB of ISA IO space at 0x1fd00000. */
     memory_region_init_alias(isa, NULL, "isa_mmio",
@@ -239,15 +243,10 @@ mips_mipssim_init(MachineState *machine)
         mipsnet_init(0x4200, env->irq[2], &nd_table[0]);
 }
 
-static QEMUMachine mips_mipssim_machine = {
-    .name = "mipssim",
-    .desc = "MIPS MIPSsim platform",
-    .init = mips_mipssim_init,
-};
-
-static void mips_mipssim_machine_init(void)
+static void mips_mipssim_machine_init(MachineClass *mc)
 {
-    qemu_register_machine(&mips_mipssim_machine);
+    mc->desc = "MIPS MIPSsim platform";
+    mc->init = mips_mipssim_init;
 }
 
-machine_init(mips_mipssim_machine_init);
+DEFINE_MACHINE("mipssim", mips_mipssim_machine_init)

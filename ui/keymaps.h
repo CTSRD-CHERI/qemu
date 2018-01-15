@@ -22,8 +22,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef __QEMU_KEYMAPS_H__
-#define __QEMU_KEYMAPS_H__
+#ifndef QEMU_KEYMAPS_H
+#define QEMU_KEYMAPS_H
 
 #include "qemu-common.h"
 
@@ -59,6 +59,7 @@ typedef struct {
 /* "grey" keys will usually need a 0xe0 prefix */
 #define SCANCODE_GREY   0x80
 #define SCANCODE_EMUL0  0xE0
+#define SCANCODE_EMUL1  0xE1
 /* "up" flag */
 #define SCANCODE_UP     0x80
 
@@ -74,4 +75,4 @@ int keysym2scancode(void *kbd_layout, int keysym);
 int keycode_is_keypad(void *kbd_layout, int keycode);
 int keysym_is_numlock(void *kbd_layout, int keysym);
 
-#endif /* __QEMU_KEYMAPS_H__ */
+#endif /* QEMU_KEYMAPS_H */

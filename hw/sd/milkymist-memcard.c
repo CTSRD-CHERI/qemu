@@ -18,9 +18,10 @@
  *
  *
  * Specification available at:
- *   http://www.milkymist.org/socdoc/memcard.pdf
+ *   http://milkymist.walle.cc/socdoc/memcard.pdf
  */
 
+#include "qemu/osdep.h"
 #include "hw/hw.h"
 #include "hw/sysbus.h"
 #include "sysemu/sysemu.h"
@@ -28,7 +29,7 @@
 #include "qemu/error-report.h"
 #include "sysemu/block-backend.h"
 #include "sysemu/blockdev.h"
-#include "hw/sd.h"
+#include "hw/sd/sd.h"
 
 enum {
     ENABLE_CMD_TX   = (1<<0),
@@ -298,7 +299,7 @@ static void milkymist_memcard_class_init(ObjectClass *klass, void *data)
     dc->reset = milkymist_memcard_reset;
     dc->vmsd = &vmstate_milkymist_memcard;
     /* Reason: init() method uses drive_get_next() */
-    dc->cannot_instantiate_with_device_add_yet = true;
+    dc->user_creatable = false;
 }
 
 static const TypeInfo milkymist_memcard_info = {

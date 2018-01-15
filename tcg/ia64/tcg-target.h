@@ -22,8 +22,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef TCG_TARGET_IA64 
-#define TCG_TARGET_IA64 1
+
+#ifndef IA64_TCG_TARGET_H
+#define IA64_TCG_TARGET_H
 
 #define TCG_TARGET_INSN_UNIT_SIZE 16
 #define TCG_TARGET_TLB_DISPLACEMENT_BITS 21
@@ -139,6 +140,12 @@ typedef enum {
 #define TCG_TARGET_HAS_nand_i32         1
 #define TCG_TARGET_HAS_nand_i64         1
 #define TCG_TARGET_HAS_nor_i32          1
+#define TCG_TARGET_HAS_clz_i32          0
+#define TCG_TARGET_HAS_clz_i64          0
+#define TCG_TARGET_HAS_ctz_i32          0
+#define TCG_TARGET_HAS_ctz_i64          0
+#define TCG_TARGET_HAS_ctpop_i32        0
+#define TCG_TARGET_HAS_ctpop_i64        0
 #define TCG_TARGET_HAS_nor_i64          1
 #define TCG_TARGET_HAS_orc_i32          1
 #define TCG_TARGET_HAS_orc_i64          1
@@ -148,6 +155,10 @@ typedef enum {
 #define TCG_TARGET_HAS_movcond_i64      1
 #define TCG_TARGET_HAS_deposit_i32      1
 #define TCG_TARGET_HAS_deposit_i64      1
+#define TCG_TARGET_HAS_extract_i32      0
+#define TCG_TARGET_HAS_extract_i64      0
+#define TCG_TARGET_HAS_sextract_i32     0
+#define TCG_TARGET_HAS_sextract_i64     0
 #define TCG_TARGET_HAS_add2_i32         0
 #define TCG_TARGET_HAS_add2_i64         0
 #define TCG_TARGET_HAS_sub2_i32         0
@@ -162,6 +173,7 @@ typedef enum {
 #define TCG_TARGET_HAS_mulsh_i64        0
 #define TCG_TARGET_HAS_extrl_i64_i32    0
 #define TCG_TARGET_HAS_extrh_i64_i32    0
+#define TCG_TARGET_HAS_goto_ptr         0
 
 #define TCG_TARGET_deposit_i32_valid(ofs, len) ((len) <= 16)
 #define TCG_TARGET_deposit_i64_valid(ofs, len) ((len) <= 16)

@@ -1,5 +1,5 @@
 /*
- * Virtio 9p
+ * 9p
  *
  * Copyright IBM, Corp. 2010
  *
@@ -10,15 +10,14 @@
  * the COPYING file in the top-level directory.
  *
  */
-#ifndef _FILEOP_H
-#define _FILEOP_H
-#include <sys/types.h>
+
+#ifndef FILE_OP_9P_H
+#define FILE_OP_9P_H
+
 #include <dirent.h>
-#include <sys/time.h>
 #include <utime.h>
-#include <sys/stat.h>
-#include <sys/uio.h>
 #include <sys/vfs.h>
+#include "qemu-fsdev-throttle.h"
 
 #define SM_LOCAL_MODE_BITS    0600
 #define SM_LOCAL_DIR_MODE_BITS    0700
@@ -76,6 +75,9 @@ typedef struct FsDriverEntry {
     char *path;
     int export_flags;
     FileOperations *ops;
+    FsThrottle fst;
+    mode_t fmode;
+    mode_t dmode;
 } FsDriverEntry;
 
 typedef struct FsContext
@@ -85,8 +87,11 @@ typedef struct FsContext
     int export_flags;
     struct xattr_operations **xops;
     struct extended_ops exops;
+    FsThrottle *fst;
     /* fs driver specific data */
     void *private;
+    mode_t fmode;
+    mode_t dmode;
 } FsContext;
 
 typedef struct V9fsPath {
@@ -102,6 +107,7 @@ struct FileOperations
 {
     int (*parse_opts)(QemuOpts *, struct FsDriverEntry *);
     int (*init)(struct FsContext *);
+    void (*cleanup)(struct FsContext *);
     int (*lstat)(FsContext *, V9fsPath *, struct stat *);
     ssize_t (*readlink)(FsContext *, V9fsPath *, char *, size_t);
     int (*chmod)(FsContext *, V9fsPath *, FsCred *);
@@ -121,8 +127,7 @@ struct FileOperations
                  int, FsCred *, V9fsFidOpenState *);
     void (*rewinddir)(FsContext *, V9fsFidOpenState *);
     off_t (*telldir)(FsContext *, V9fsFidOpenState *);
-    int (*readdir_r)(FsContext *, V9fsFidOpenState *,
-                     struct dirent *, struct dirent **);
+    struct dirent * (*readdir)(FsContext *, V9fsFidOpenState *);
     void (*seekdir)(FsContext *, V9fsFidOpenState *, off_t);
     ssize_t (*preadv)(FsContext *, V9fsFidOpenState *,
                       const struct iovec *, int, off_t);

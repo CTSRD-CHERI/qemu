@@ -24,20 +24,10 @@
  *  with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdarg.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
+#include "qemu/osdep.h"
 
 #include "hw/hw.h"
 #include "ui/console.h"
-#include "sysemu/char.h"
 #include "hw/xen/xen_backend.h"
 
 #include <xen/event_channel.h>
@@ -56,7 +46,6 @@
 struct common {
     struct XenDevice  xendev;  /* must be first */
     void              *page;
-    QemuConsole       *con;
 };
 
 struct XenInput {
@@ -71,6 +60,7 @@ struct XenInput {
 
 struct XenFB {
     struct common     c;
+    QemuConsole       *con;
     size_t            fb_len;
     int               row_stride;
     int               depth;
@@ -81,7 +71,6 @@ struct XenFB {
     int               fbpages;
     int               feature_update;
     int               bug_trigger;
-    int               have_console;
     int               do_resize;
 
     struct {
@@ -90,38 +79,41 @@ struct XenFB {
     int               up_count;
     int               up_fullscreen;
 };
+static const GraphicHwOps xenfb_ops;
 
 /* -------------------------------------------------------------------- */
 
 static int common_bind(struct common *c)
 {
-    uint64_t mfn;
+    uint64_t val;
+    xen_pfn_t mfn;
 
-    if (xenstore_read_fe_uint64(&c->xendev, "page-ref", &mfn) == -1)
-	return -1;
-    assert(mfn == (xen_pfn_t)mfn);
+    if (xenstore_read_fe_uint64(&c->xendev, "page-ref", &val) == -1)
+        return -1;
+    mfn = (xen_pfn_t)val;
+    assert(val == mfn);
 
     if (xenstore_read_fe_int(&c->xendev, "event-channel", &c->xendev.remote_port) == -1)
-	return -1;
+        return -1;
 
-    c->page = xc_map_foreign_range(xen_xc, c->xendev.dom,
-				   XC_PAGE_SIZE,
-				   PROT_READ | PROT_WRITE, mfn);
+    c->page = xenforeignmemory_map(xen_fmem, c->xendev.dom,
+                                   PROT_READ | PROT_WRITE, 1, &mfn, NULL);
     if (c->page == NULL)
-	return -1;
+        return -1;
 
     xen_be_bind_evtchn(&c->xendev);
-    xen_be_printf(&c->xendev, 1, "ring mfn %"PRIx64", remote-port %d, local-port %d\n",
-		  mfn, c->xendev.remote_port, c->xendev.local_port);
+    xen_pv_printf(&c->xendev, 1,
+                  "ring mfn %"PRI_xen_pfn", remote-port %d, local-port %d\n",
+                  mfn, c->xendev.remote_port, c->xendev.local_port);
 
     return 0;
 }
 
 static void common_unbind(struct common *c)
 {
-    xen_be_unbind_evtchn(&c->xendev);
+    xen_pv_unbind_evtchn(&c->xendev);
     if (c->page) {
-	munmap(c->page, XC_PAGE_SIZE);
+        xenforeignmemory_unmap(xen_fmem, c->page, 1);
 	c->page = NULL;
     }
 }
@@ -222,7 +214,7 @@ static int xenfb_kbd_event(struct XenInput *xenfb,
     XENKBD_IN_RING_REF(page, prod) = *event;
     xen_wmb();		/* ensure ring contents visible */
     page->in_prod = prod + 1;
-    return xen_be_send_notify(&xenfb->c.xendev);
+    return xen_pv_send_notify(&xenfb->c.xendev);
 }
 
 /* Send a keyboard (or mouse button) event */
@@ -248,9 +240,7 @@ static int xenfb_send_motion(struct XenInput *xenfb,
     event.type = XENKBD_TYPE_MOTION;
     event.motion.rel_x = rel_x;
     event.motion.rel_y = rel_y;
-#if __XEN_LATEST_INTERFACE_VERSION__ >= 0x00030207
     event.motion.rel_z = rel_z;
-#endif
 
     return xenfb_kbd_event(xenfb, &event);
 }
@@ -265,12 +255,7 @@ static int xenfb_send_position(struct XenInput *xenfb,
     event.type = XENKBD_TYPE_POS;
     event.pos.abs_x = abs_x;
     event.pos.abs_y = abs_y;
-#if __XEN_LATEST_INTERFACE_VERSION__ == 0x00030207
-    event.pos.abs_z = z;
-#endif
-#if __XEN_LATEST_INTERFACE_VERSION__ >= 0x00030208
     event.pos.rel_z = z;
-#endif
 
     return xenfb_kbd_event(xenfb, &event);
 }
@@ -321,10 +306,18 @@ static void xenfb_mouse_event(void *opaque,
 			      int dx, int dy, int dz, int button_state)
 {
     struct XenInput *xenfb = opaque;
-    DisplaySurface *surface = qemu_console_surface(xenfb->c.con);
-    int dw = surface_width(surface);
-    int dh = surface_height(surface);
-    int i;
+    QemuConsole *con = qemu_console_lookup_by_index(0);
+    DisplaySurface *surface;
+    int dw, dh, i;
+
+    if (!con) {
+        xen_pv_printf(&xenfb->c.xendev, 0, "No QEMU console available");
+        return;
+    }
+
+    surface = qemu_console_surface(con);
+    dw = surface_width(surface);
+    dh = surface_height(surface);
 
     trace_xenfb_mouse_event(opaque, dx, dy, dz, button_state,
                             xenfb->abs_pointer_wanted);
@@ -358,11 +351,6 @@ static int input_initialise(struct XenDevice *xendev)
 {
     struct XenInput *in = container_of(xendev, struct XenInput, c.xendev);
     int rc;
-
-    if (!in->c.con) {
-        xen_be_printf(xendev, 1, "ds not set (yet)\n");
-        return -1;
-    }
 
     rc = common_bind(&in->c);
     if (rc != 0)
@@ -411,7 +399,7 @@ static void input_event(struct XenDevice *xendev)
     if (page->out_prod == page->out_cons)
 	return;
     page->out_cons = page->out_prod;
-    xen_be_send_notify(&xenfb->c.xendev);
+    xen_pv_send_notify(&xenfb->c.xendev);
 }
 
 /* -------------------------------------------------------------------- */
@@ -486,23 +474,23 @@ static int xenfb_map_fb(struct XenFB *xenfb)
         xenfb->pixels = NULL;
     }
 
-    xenfb->fbpages = (xenfb->fb_len + (XC_PAGE_SIZE - 1)) / XC_PAGE_SIZE;
+    xenfb->fbpages = DIV_ROUND_UP(xenfb->fb_len, XC_PAGE_SIZE);
     n_fbdirs = xenfb->fbpages * mode / 8;
-    n_fbdirs = (n_fbdirs + (XC_PAGE_SIZE - 1)) / XC_PAGE_SIZE;
+    n_fbdirs = DIV_ROUND_UP(n_fbdirs, XC_PAGE_SIZE);
 
     pgmfns = g_malloc0(sizeof(xen_pfn_t) * n_fbdirs);
     fbmfns = g_malloc0(sizeof(xen_pfn_t) * xenfb->fbpages);
 
     xenfb_copy_mfns(mode, n_fbdirs, pgmfns, pd);
-    map = xc_map_foreign_pages(xen_xc, xenfb->c.xendev.dom,
-			       PROT_READ, pgmfns, n_fbdirs);
+    map = xenforeignmemory_map(xen_fmem, xenfb->c.xendev.dom,
+                               PROT_READ, n_fbdirs, pgmfns, NULL);
     if (map == NULL)
 	goto out;
     xenfb_copy_mfns(mode, xenfb->fbpages, fbmfns, map);
-    munmap(map, n_fbdirs * XC_PAGE_SIZE);
+    xenforeignmemory_unmap(xen_fmem, map, n_fbdirs);
 
-    xenfb->pixels = xc_map_foreign_pages(xen_xc, xenfb->c.xendev.dom,
-            PROT_READ, fbmfns, xenfb->fbpages);
+    xenfb->pixels = xenforeignmemory_map(xen_fmem, xenfb->c.xendev.dom,
+            PROT_READ, xenfb->fbpages, fbmfns, NULL);
     if (xenfb->pixels == NULL)
 	goto out;
 
@@ -515,8 +503,8 @@ out:
 }
 
 static int xenfb_configure_fb(struct XenFB *xenfb, size_t fb_len_lim,
-			      int width, int height, int depth,
-			      size_t fb_len, int offset, int row_stride)
+                              int width, int height, int depth,
+                              size_t fb_len, int offset, int row_stride)
 {
     size_t mfn_sz = sizeof(*((struct xenfb_page *)0)->pd);
     size_t pd_len = sizeof(((struct xenfb_page *)0)->pd) / mfn_sz;
@@ -525,40 +513,47 @@ static int xenfb_configure_fb(struct XenFB *xenfb, size_t fb_len_lim,
     int max_width, max_height;
 
     if (fb_len_lim > fb_len_max) {
-	xen_be_printf(&xenfb->c.xendev, 0, "fb size limit %zu exceeds %zu, corrected\n",
-		      fb_len_lim, fb_len_max);
-	fb_len_lim = fb_len_max;
+        xen_pv_printf(&xenfb->c.xendev, 0,
+                      "fb size limit %zu exceeds %zu, corrected\n",
+                      fb_len_lim, fb_len_max);
+        fb_len_lim = fb_len_max;
     }
     if (fb_len_lim && fb_len > fb_len_lim) {
-	xen_be_printf(&xenfb->c.xendev, 0, "frontend fb size %zu limited to %zu\n",
-		      fb_len, fb_len_lim);
-	fb_len = fb_len_lim;
+        xen_pv_printf(&xenfb->c.xendev, 0,
+                      "frontend fb size %zu limited to %zu\n",
+                      fb_len, fb_len_lim);
+        fb_len = fb_len_lim;
     }
     if (depth != 8 && depth != 16 && depth != 24 && depth != 32) {
-	xen_be_printf(&xenfb->c.xendev, 0, "can't handle frontend fb depth %d\n",
-		      depth);
-	return -1;
+        xen_pv_printf(&xenfb->c.xendev, 0,
+                      "can't handle frontend fb depth %d\n",
+                      depth);
+        return -1;
     }
     if (row_stride <= 0 || row_stride > fb_len) {
-	xen_be_printf(&xenfb->c.xendev, 0, "invalid frontend stride %d\n", row_stride);
-	return -1;
+        xen_pv_printf(&xenfb->c.xendev, 0, "invalid frontend stride %d\n",
+                      row_stride);
+        return -1;
     }
     max_width = row_stride / (depth / 8);
     if (width < 0 || width > max_width) {
-	xen_be_printf(&xenfb->c.xendev, 0, "invalid frontend width %d limited to %d\n",
-		      width, max_width);
-	width = max_width;
+        xen_pv_printf(&xenfb->c.xendev, 0,
+                      "invalid frontend width %d limited to %d\n",
+                      width, max_width);
+        width = max_width;
     }
     if (offset < 0 || offset >= fb_len) {
-	xen_be_printf(&xenfb->c.xendev, 0, "invalid frontend offset %d (max %zu)\n",
-		      offset, fb_len - 1);
-	return -1;
+        xen_pv_printf(&xenfb->c.xendev, 0,
+                      "invalid frontend offset %d (max %zu)\n",
+                      offset, fb_len - 1);
+        return -1;
     }
     max_height = (fb_len - offset) / row_stride;
     if (height < 0 || height > max_height) {
-	xen_be_printf(&xenfb->c.xendev, 0, "invalid frontend height %d limited to %d\n",
-		      height, max_height);
-	height = max_height;
+        xen_pv_printf(&xenfb->c.xendev, 0,
+                      "invalid frontend height %d limited to %d\n",
+                      height, max_height);
+        height = max_height;
     }
     xenfb->fb_len = fb_len;
     xenfb->row_stride = row_stride;
@@ -568,8 +563,9 @@ static int xenfb_configure_fb(struct XenFB *xenfb, size_t fb_len_lim,
     xenfb->offset = offset;
     xenfb->up_fullscreen = 1;
     xenfb->do_resize = 1;
-    xen_be_printf(&xenfb->c.xendev, 1, "framebuffer %dx%dx%d offset %d stride %d\n",
-		  width, height, depth, offset, row_stride);
+    xen_pv_printf(&xenfb->c.xendev, 1,
+                  "framebuffer %dx%dx%d offset %d stride %d\n",
+                  width, height, depth, offset, row_stride);
     return 0;
 }
 
@@ -615,7 +611,7 @@ static int xenfb_configure_fb(struct XenFB *xenfb, size_t fb_len_lim,
  */
 static void xenfb_guest_copy(struct XenFB *xenfb, int x, int y, int w, int h)
 {
-    DisplaySurface *surface = qemu_console_surface(xenfb->c.con);
+    DisplaySurface *surface = qemu_console_surface(xenfb->con);
     int line, oops = 0;
     int bpp = surface_bits_per_pixel(surface);
     int linesize = surface_stride(surface);
@@ -646,10 +642,10 @@ static void xenfb_guest_copy(struct XenFB *xenfb, int x, int y, int w, int h)
 	}
     }
     if (oops) /* should not happen */
-        xen_be_printf(&xenfb->c.xendev, 0, "%s: oops: convert %d -> %d bpp?\n",
+        xen_pv_printf(&xenfb->c.xendev, 0, "%s: oops: convert %d -> %d bpp?\n",
                       __FUNCTION__, xenfb->depth, bpp);
 
-    dpy_gfx_update(xenfb->c.con, x, y, w, h);
+    dpy_gfx_update(xenfb->con, x, y, w, h);
 }
 
 #ifdef XENFB_TYPE_REFRESH_PERIOD
@@ -678,7 +674,7 @@ static void xenfb_send_event(struct XenFB *xenfb, union xenfb_in_event *event)
     xen_wmb();                  /* ensure ring contents visible */
     page->in_prod = prod + 1;
 
-    xen_be_send_notify(&xenfb->c.xendev);
+    xen_pv_send_notify(&xenfb->c.xendev);
 }
 
 static void xenfb_send_refresh_period(struct XenFB *xenfb, int period)
@@ -711,9 +707,9 @@ static void xenfb_update(void *opaque)
         return;
 
     if (!xenfb->feature_update) {
-	/* we don't get update notifications, thus use the
-	 * sledge hammer approach ... */
-	xenfb->up_fullscreen = 1;
+        /* we don't get update notifications, thus use the
+         * sledge hammer approach ... */
+        xenfb->up_fullscreen = 1;
     }
 
     /* resize if needed */
@@ -735,8 +731,9 @@ static void xenfb_update(void *opaque)
             surface = qemu_create_displaysurface(xenfb->width, xenfb->height);
             break;
         }
-        dpy_gfx_replace_surface(xenfb->c.con, surface);
-        xen_be_printf(&xenfb->c.xendev, 1, "update: resizing: %dx%d @ %d bpp%s\n",
+        dpy_gfx_replace_surface(xenfb->con, surface);
+        xen_pv_printf(&xenfb->c.xendev, 1,
+                      "update: resizing: %dx%d @ %d bpp%s\n",
                       xenfb->width, xenfb->height, xenfb->depth,
                       is_buffer_shared(surface) ? " (shared)" : "");
         xenfb->up_fullscreen = 1;
@@ -744,18 +741,19 @@ static void xenfb_update(void *opaque)
 
     /* run queued updates */
     if (xenfb->up_fullscreen) {
-	xen_be_printf(&xenfb->c.xendev, 3, "update: fullscreen\n");
-	xenfb_guest_copy(xenfb, 0, 0, xenfb->width, xenfb->height);
+        xen_pv_printf(&xenfb->c.xendev, 3, "update: fullscreen\n");
+        xenfb_guest_copy(xenfb, 0, 0, xenfb->width, xenfb->height);
     } else if (xenfb->up_count) {
-	xen_be_printf(&xenfb->c.xendev, 3, "update: %d rects\n", xenfb->up_count);
-	for (i = 0; i < xenfb->up_count; i++)
-	    xenfb_guest_copy(xenfb,
-			     xenfb->up_rects[i].x,
-			     xenfb->up_rects[i].y,
-			     xenfb->up_rects[i].w,
-			     xenfb->up_rects[i].h);
+        xen_pv_printf(&xenfb->c.xendev, 3, "update: %d rects\n",
+                      xenfb->up_count);
+        for (i = 0; i < xenfb->up_count; i++)
+            xenfb_guest_copy(xenfb,
+                             xenfb->up_rects[i].x,
+                             xenfb->up_rects[i].y,
+                             xenfb->up_rects[i].w,
+                             xenfb->up_rects[i].h);
     } else {
-	xen_be_printf(&xenfb->c.xendev, 3, "update: nothing\n");
+        xen_pv_printf(&xenfb->c.xendev, 3, "update: nothing\n");
     }
     xenfb->up_count = 0;
     xenfb->up_fullscreen = 0;
@@ -784,18 +782,21 @@ static void xenfb_invalidate(void *opaque)
 
 static void xenfb_handle_events(struct XenFB *xenfb)
 {
-    uint32_t prod, cons;
+    uint32_t prod, cons, out_cons;
     struct xenfb_page *page = xenfb->c.page;
 
     prod = page->out_prod;
-    if (prod == page->out_cons)
-	return;
+    out_cons = page->out_cons;
+    if (prod - out_cons > XENFB_OUT_RING_LEN) {
+        return;
+    }
     xen_rmb();		/* ensure we see ring contents up to prod */
-    for (cons = page->out_cons; cons != prod; cons++) {
+    for (cons = out_cons; cons != prod; cons++) {
 	union xenfb_out_event *event = &XENFB_OUT_RING_REF(page, cons);
+        uint8_t type = event->type;
 	int x, y, w, h;
 
-	switch (event->type) {
+	switch (type) {
 	case XENFB_TYPE_UPDATE:
 	    if (xenfb->up_count == UP_QUEUE)
 		xenfb->up_fullscreen = 1;
@@ -806,14 +807,14 @@ static void xenfb_handle_events(struct XenFB *xenfb)
 	    w = MIN(event->update.width, xenfb->width - x);
 	    h = MIN(event->update.height, xenfb->height - y);
 	    if (w < 0 || h < 0) {
-                xen_be_printf(&xenfb->c.xendev, 1, "bogus update ignored\n");
+                xen_pv_printf(&xenfb->c.xendev, 1, "bogus update ignored\n");
 		break;
 	    }
 	    if (x != event->update.x ||
                 y != event->update.y ||
 		w != event->update.width ||
 		h != event->update.height) {
-                xen_be_printf(&xenfb->c.xendev, 1, "bogus update clipped\n");
+                xen_pv_printf(&xenfb->c.xendev, 1, "bogus update clipped\n");
 	    }
 	    if (w == xenfb->width && h > xenfb->height / 2) {
 		/* scroll detector: updated more than 50% of the lines,
@@ -879,23 +880,14 @@ static int fb_initialise(struct XenDevice *xendev)
     if (rc != 0)
 	return rc;
 
-#if 0  /* handled in xen_init_display() for now */
-    if (!fb->have_console) {
-        fb->c.ds = graphic_console_init(xenfb_update,
-                                        xenfb_invalidate,
-                                        NULL,
-                                        NULL,
-                                        fb);
-        fb->have_console = 1;
-    }
-#endif
+    fb->con = graphic_console_init(NULL, 0, &xenfb_ops, fb);
 
     if (xenstore_read_fe_int(xendev, "feature-update", &fb->feature_update) == -1)
 	fb->feature_update = 0;
     if (fb->feature_update)
 	xenstore_write_be_int(xendev, "request-update", 1);
 
-    xen_be_printf(xendev, 1, "feature-update=%d, videoram=%d\n",
+    xen_pv_printf(xendev, 1, "feature-update=%d, videoram=%d\n",
 		  fb->feature_update, videoram);
     return 0;
 }
@@ -909,11 +901,12 @@ static void fb_disconnect(struct XenDevice *xendev)
      *   Replacing the framebuffer with anonymous shared memory
      *   instead.  This releases the guest pages and keeps qemu happy.
      */
+    xenforeignmemory_unmap(xen_fmem, fb->pixels, fb->fbpages);
     fb->pixels = mmap(fb->pixels, fb->fbpages * XC_PAGE_SIZE,
                       PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON,
                       -1, 0);
     if (fb->pixels == MAP_FAILED) {
-        xen_be_printf(xendev, 0,
+        xen_pv_printf(xendev, 0,
                 "Couldn't replace the framebuffer with anonymous memory errno=%d\n",
                 errno);
     }
@@ -934,7 +927,7 @@ static void fb_frontend_changed(struct XenDevice *xendev, const char *node)
     if (fb->bug_trigger == 0 && strcmp(node, "state") == 0 &&
         xendev->fe_state == XenbusStateConnected &&
         xendev->be_state == XenbusStateConnected) {
-        xen_be_printf(xendev, 2, "re-trigger connected (frontend bug)\n");
+        xen_pv_printf(xendev, 2, "re-trigger connected (frontend bug)\n");
         xen_be_set_state(xendev, XenbusStateConnected);
         fb->bug_trigger = 1; /* only once */
     }
@@ -945,7 +938,7 @@ static void fb_event(struct XenDevice *xendev)
     struct XenFB *xenfb = container_of(xendev, struct XenFB, c.xendev);
 
     xenfb_handle_events(xenfb);
-    xen_be_send_notify(&xenfb->c.xendev);
+    xen_pv_send_notify(&xenfb->c.xendev);
 }
 
 /* -------------------------------------------------------------------- */
@@ -973,42 +966,3 @@ static const GraphicHwOps xenfb_ops = {
     .gfx_update  = xenfb_update,
     .update_interval = xenfb_update_interval,
 };
-
-/*
- * FIXME/TODO: Kill this.
- * Temporary needed while DisplayState reorganization is in flight.
- */
-void xen_init_display(int domid)
-{
-    struct XenDevice *xfb, *xin;
-    struct XenFB *fb;
-    struct XenInput *in;
-    int i = 0;
-
-wait_more:
-    i++;
-    main_loop_wait(true);
-    xfb = xen_be_find_xendev("vfb", domid, 0);
-    xin = xen_be_find_xendev("vkbd", domid, 0);
-    if (!xfb || !xin) {
-        if (i < 256) {
-            usleep(10000);
-            goto wait_more;
-        }
-        xen_be_printf(NULL, 1, "displaystate setup failed\n");
-        return;
-    }
-
-    /* vfb */
-    fb = container_of(xfb, struct XenFB, c.xendev);
-    fb->c.con = graphic_console_init(NULL, 0, &xenfb_ops, fb);
-    fb->have_console = 1;
-
-    /* vkbd */
-    in = container_of(xin, struct XenInput, c.xendev);
-    in->c.con = fb->c.con;
-
-    /* retry ->init() */
-    xen_be_check_state(xin);
-    xen_be_check_state(xfb);
-}
