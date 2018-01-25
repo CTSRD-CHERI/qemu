@@ -347,6 +347,9 @@ struct TCState {
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
     cap_register_t C[32];
+    cap_register_t PrivTlsCap;
+    cap_register_t UserTlsCap;
+#define CP2CAP_DCC  0  /* Default Data Capability */
 #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
 #define CP2CAP_KR1C 27  /* Reserved Kernel Cap #1 */
@@ -354,8 +357,22 @@ struct TCState {
 #define CP2CAP_KCC  29  /* Kernel Code Capability */
 #define CP2CAP_KDC  30  /* Kernel Data Capability */
 #define CP2CAP_EPCC 31  /* Exception PC Capability */
+
 #endif /* TARGET_CHERI */
 };
+
+#if defined(TARGET_CHERI)
+enum CP2HWR {
+    CP2HWR_DDC = 0, /* Default Data Capability */
+    CP2HWR_USER_TLS = 1, /* Unprivileged TLS Cap */
+    CP2HWR_PRIV_TLS = 8, /* Privileged TLS Cap */
+    CP2HWR_K1RC = 22, /* Reserved Kernel Cap #1 */
+    CP2HWR_K2RC = 23, /* Reserved Kernel Cap #2 */
+    CP2HWR_KCC = 29, /* Kernel Code Capability */
+    CP2HWR_KDC = 30, /* Kernel Data Capability */
+    CP2HWR_EPCC = 31, /* Exception PC Capability */
+};
+#endif
 
 typedef struct CPUMIPSState CPUMIPSState;
 struct CPUMIPSState {
@@ -862,6 +879,8 @@ struct CPUMIPSState {
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
     cap_register_t last_C[32];
+    cap_register_t last_UserTlsCap;
+    cap_register_t last_PrivTlsCap;
 
     cvtrace_t cvtrace;
 #endif /* TARGET_CHERI */

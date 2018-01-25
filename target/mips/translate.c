@@ -1193,6 +1193,8 @@ enum {
     OPC_CMOVE_NI        = OPC_C2OPERAND_NI | (0x0a << 6),
     OPC_CCLEARTAG_NI    = OPC_C2OPERAND_NI | (0x0b << 6),
     OPC_CJALR_NI        = OPC_C2OPERAND_NI | (0x0c << 6),
+    OPC_CREADHWR_NI     = OPC_C2OPERAND_NI | (0x0d << 6),
+    OPC_CWRITEHWR_NI    = OPC_C2OPERAND_NI | (0x0e << 6),
 };
 
 enum {
@@ -1656,6 +1658,16 @@ static TCGv_i64 msa_wr_d[64];
     gen_helper_##name(cpu_env, arg1, arg2, arg3, helper_tmp);     \
     tcg_temp_free_i32(helper_tmp);                                \
     } while(0)
+
+
+#define gen_helper_2_consti32(name, arg, arg2) do {               \
+    TCGv_i32 helper_tmp = tcg_const_i32(arg);                     \
+    TCGv_i32 helper_tmp2 = tcg_const_i32(arg2);                   \
+    gen_helper_##name(cpu_env, helper_tmp, helper_tmp2);          \
+    tcg_temp_free_i32(helper_tmp);                                \
+    tcg_temp_free_i32(helper_tmp2);                               \
+    } while(0)
+
 
 typedef struct DisasContext {
     struct TranslationBlock *tb;
@@ -2420,9 +2432,8 @@ static inline void generate_cmove(int32_t cd, int32_t cs)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcs = tcg_const_i32(cs);
-    TCGv t0 = tcg_temp_new();
+    TCGv t0 = tcg_const_tl(0);
 
-    tcg_gen_movi_tl(t0, 0);
     gen_helper_cmovz(cpu_env, tcd, tcs, t0);
 
     tcg_temp_free(t0);
@@ -11692,6 +11703,16 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 check_cop2x(ctx);
                 generate_cjalr(ctx, r16, r11);
                 opn = "cjalr";
+                break;
+            case OPC_CREADHWR_NI:   /* 0x0d << 6 */
+                check_cop2x(ctx);
+                gen_helper_2_consti32(creadhwr, r16, r11);
+                opn = "creadhwr";
+                break;
+            case OPC_CWRITEHWR_NI:  /* 0x0e << 6 */
+                check_cop2x(ctx);
+                gen_helper_2_consti32(cwritehwr, r16, r11);
+                opn = "cwritehwr";
                 break;
 
             /* One-operand cap instructions. */
@@ -24347,6 +24368,8 @@ void cpu_state_reset(CPUMIPSState *env)
 #endif
         }
     }
+    null_capability(&env->active_tc.UserTlsCap);
+    null_capability(&env->active_tc.PrivTlsCap);
     // env->CP0_Status |= (1 << CP0St_CU2);
     env->CP0_Status |= (1 << CP0St_KX);
 #endif /* TARGET_CHERI */

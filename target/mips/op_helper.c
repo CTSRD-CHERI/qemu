@@ -3183,6 +3183,82 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     }
 }
 
+
+static inline bool in_kernel_mode(CPUMIPSState *env) {
+    // TODO: what about env->CP0_Debug & (1 << CP0DB_DM)
+    // If ERL or EXL is set we have taken an exception and are in the kernel
+    if ((env->CP0_Status & BIT(CP0St_ERL)) || (env->CP0_Status & BIT(CP0St_EXL))) {
+        return true;
+    }
+    uint32_t ksu = extract32(env->CP0_Status, CP0St_KSU, 2);
+    // KSU = 0 -> kernel, 1 -> supervisor, 2 -> user
+    if (ksu == 0 || ksu == 1) {
+        return true;
+    }
+    return false;
+}
+
+static inline cap_register_t *check_cap_hwr_access(CPUMIPSState *env,
+        enum CP2HWR hwr, bool write) {
+    /* Currently there is no difference for access permissions between read
+     * and write access but that may change in the future */
+    (void)write;
+
+    bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
+    switch (hwr) {
+    case CP2HWR_DDC: /* always accessible */
+        return &env->active_tc.C[CP2CAP_DCC];
+    case CP2HWR_USER_TLS:  /* always accessible */
+        return &env->active_tc.UserTlsCap;
+    case CP2HWR_PRIV_TLS:
+        if (!access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.PrivTlsCap;
+    case CP2HWR_K1RC:
+        if (!in_kernel_mode(env)) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_KR1C];
+    case CP2HWR_K2RC:
+        if (!in_kernel_mode(env)) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_KR2C];
+    case CP2HWR_KCC:
+        if (!in_kernel_mode(env) || !access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_KCC];
+    case CP2HWR_KDC:
+        if (!in_kernel_mode(env) || !access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_KDC];
+    case CP2HWR_EPCC:
+        if (!in_kernel_mode(env) || !access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+        }
+        return &env->active_tc.C[CP2CAP_EPCC];
+    }
+    /* unknown cap hardware register */
+    do_raise_exception(env, EXCP_RI, GETPC());
+}
+
+void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
+{
+    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *csp = check_cap_hwr_access(env, hwr, true);
+    *cdp = *csp;
+}
+
+void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
+{
+    cap_register_t *csp = &env->active_tc.C[cs];
+    cap_register_t *cdp = check_cap_hwr_access(env, hwr, true);
+    *cdp = *csp;
+}
+
 void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
@@ -6222,6 +6298,37 @@ static void dump_changed_cop0(CPUMIPSState *env)
 #endif /* !CONFIG_USER_ONLY */
 
 #ifdef TARGET_CHERI
+
+static inline void dump_changed_capreg(CPUMIPSState *env,
+        cap_register_t *cr, cap_register_t *old_reg, const char* name)
+{
+    if (memcmp(cr, old_reg, sizeof(cap_register_t))) {
+        *old_reg = *cr;
+        if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
+            if (env->cvtrace.version == CVT_NO_REG ||
+                env->cvtrace.version == CVT_GPR)
+                env->cvtrace.version = CVT_CAP;
+            if (env->cvtrace.version == CVT_ST_GPR)
+                env->cvtrace.version = CVT_ST_CAP;
+            cvtrace_dump_cap_perms(&env->cvtrace, cr);
+            cvtrace_dump_cap_cbl(&env->cvtrace, cr);
+        }
+        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+            // TODO: allow printing a string instead of C%d
+            fprintf(qemu_logfile,
+                    "    Write %s|v:%d s:%d p:%08x b:%016" PRIx64
+                        " l:%016" PRIx64 "\n", name, cr->cr_tag,
+                    is_cap_sealed(cr) ? 1 : 0,
+                    (((cr->cr_uperms & CAP_UPERMS_ALL) <<
+                                                       CAP_UPERMS_MEM_SHFT) |
+                     (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))),
+                    cr->cr_base, cr->cr_length);
+            fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
+                    cr->cr_offset, cr->cr_otype);
+        }
+    }
+}
+
 /*
  * Print changed values of GPR, HI/LO and DSPControl registers.
  */
@@ -6240,39 +6347,23 @@ static void dump_changed_regs(CPUMIPSState *env)
         if (cur->gpr[i] != env->last_gpr[i]) {
             env->last_gpr[i] = cur->gpr[i];
             cvtrace_dump_gpr(&env->cvtrace, cur->gpr[i]);
-	    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+            if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
                 fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
                         gpr_name[i], cur->gpr[i]);
             }
         }
     }
+    static const char * const capreg_name[] = {
+        "DDC", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
+        "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15",
+        "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23",
+        "C24", "C25", "C26", "KR1C", "KR2C", "KCC", "KDC", "EPCC",
+    };
     for (i=0; i<32; i++) {
-        if (memcmp(&cur->C[i], &env->last_C[i], sizeof(cap_register_t))) {
-            cap_register_t *cr = &cur->C[i];
-            env->last_C[i] = *cr;
-            if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-                if (env->cvtrace.version == CVT_NO_REG ||
-                        env->cvtrace.version == CVT_GPR)
-                    env->cvtrace.version = CVT_CAP;
-                if (env->cvtrace.version == CVT_ST_GPR)
-                    env->cvtrace.version = CVT_ST_CAP;
-                cvtrace_dump_cap_perms(&env->cvtrace, cr);
-                cvtrace_dump_cap_cbl(&env->cvtrace, cr);
-            }
-	    if (qemu_loglevel_mask(CPU_LOG_INSTR)){
-                fprintf(qemu_logfile,
-                        "    Write C%02d|v:%d s:%d p:%08x b:%016" PRIx64
-                        " l:%016" PRIx64 "\n", i, cr->cr_tag,
-                        is_cap_sealed(cr) ? 1 : 0,
-                        (((cr->cr_uperms & CAP_UPERMS_ALL) <<
-                          CAP_UPERMS_MEM_SHFT) |
-                        (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))),
-                        cr->cr_base, cr->cr_length);
-                fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
-                        cr->cr_offset, cr->cr_otype);
-            }
-        }
+        dump_changed_capreg(env, &cur->C[i], &env->last_C[i], capreg_name[i]);
     }
+    dump_changed_capreg(env, &cur->UserTlsCap, &env->last_UserTlsCap, "UserTlsCap");
+    dump_changed_capreg(env, &cur->PrivTlsCap, &env->last_PrivTlsCap, "PrivTlsCap");
 }
 
 
