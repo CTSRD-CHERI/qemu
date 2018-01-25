@@ -61,7 +61,7 @@ static void cpu_mips_timer_update(CPUMIPSState *env)
 
     now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
     wait = env->CP0_Compare - env->CP0_Count - (uint32_t)(now / TIMER_PERIOD);
-    next = now + (uint64_t)wait * CLOCK_PERIOD;
+    next = now + (uint64_t)wait * TIMER_PERIOD;
     timer_mod(env->timer, next);
 }
 
@@ -88,6 +88,7 @@ uint32_t cpu_mips_get_count (CPUMIPSState *env)
             /* The timer has already expired.  */
             cpu_mips_timer_expire(env);
         }
+
         return env->CP0_Count + (uint32_t)(now / TIMER_PERIOD);
     }
 }
