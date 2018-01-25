@@ -60,7 +60,14 @@ static void cpu_mips_timer_update(CPUMIPSState *env)
     uint32_t wait;
 
     now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-    wait = env->CP0_Compare - env->CP0_Count - (uint32_t)(now / TIMER_PERIOD);
+    if (env->CP0_Compare == UINT32_MAX) {
+        /* FreeBSD writes 0xffff ffff to CP0_Compare in clock_stop
+         * in sys/mips/mips/tick.c. Let's just treat this as the maximum timout
+         */
+         wait = UINT32_MAX;
+    } else {
+        wait = env->CP0_Compare - env->CP0_Count - (uint32_t)(now / TIMER_PERIOD);
+    }
     next = now + (uint64_t)wait * TIMER_PERIOD;
     timer_mod(env->timer, next);
 }
