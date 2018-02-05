@@ -1,3 +1,6 @@
+// import the cheribuildProject() step
+library 'ctsrd-jenkins-scripts'
+
 def archiveQEMU(String target) {
 	return {
 		sh "rm -rf \$WORKSPACE/${target} && mv \$WORKSPACE/tarball/${target} \$WORKSPACE/${target}"
