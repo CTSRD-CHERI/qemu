@@ -5,13 +5,12 @@ def archiveQEMU(String target) {
 	}
 }
   
-node ('linux') {
-  cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
+cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
+      buildStage: "Build Linux", nodeLabel: 'linux'
       extraArgs: '--unified-sdk --without-sdk --install-prefix=/linux',
-      nodeLabel: null, skipTarball: true, afterBuild: archiveQEMU('linux'))
-}
-node ('freebsd') {
-  cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
+      skipTarball: true, afterBuild: archiveQEMU('linux'))
+
+cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
+      buildStage: "Build FreeBSD", nodeLabel: 'freebsd'
       extraArgs: '--unified-sdk --without-sdk --install-prefix=/freebsd',
-      nodeLabel: null, skipTarball: true, afterBuild: archiveQEMU('freebsd'))
-}
+      skipTarball: true, afterBuild: archiveQEMU('freebsd'))
