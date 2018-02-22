@@ -2623,16 +2623,6 @@ target_ulong helper_ccall_notrap2(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     return ccall_common(env, cs, cb, 2);
 }
 
-void helper_cclearreg(CPUMIPSState *env, uint32_t creg)
-{
-    (void)ccall_common(env, cs, cb, 0);
-}
-
-target_ulong helper_ccall_notrap(CPUMIPSState *env, uint32_t cs, uint32_t cb)
-{
-    return ccall_common(env, cs, cb, 1);
-}
-
 void helper_cclearreg(CPUMIPSState *env, uint32_t mask)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
