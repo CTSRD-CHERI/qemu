@@ -69,6 +69,13 @@ typedef struct {
     /* virtio-bus */
     VirtioBusState bus;
     bool format_transport_address;
+    /* Virtio transitional stub. Supports one virtqueue only */
+    uint32_t queue_desc_low;
+    uint32_t queue_desc_high;
+    uint32_t queue_avail_low;
+    uint32_t queue_avail_high;
+    uint32_t queue_used_low;
+    uint32_t queue_used_high;
 } VirtIOMMIOProxy;
 
 static bool virtio_mmio_ioeventfd_enabled(DeviceState *d)
@@ -272,6 +279,16 @@ static void virtio_mmio_write(void *opaque, hwaddr offset, uint64_t value,
                                   value << proxy->guest_page_shift);
         }
         break;
+    case VIRTIO_MMIO_QUEUE_READY:	
+        assert(vdev->queue_sel == 0);
+        virtio_queue_set_rings(vdev, vdev->queue_sel,
+                       ((uint64_t)proxy->queue_desc_high) << 32 |
+                       proxy->queue_desc_low,
+                       ((uint64_t)proxy->queue_avail_high) << 32 |
+                       proxy->queue_avail_low,
+                       ((uint64_t)proxy->queue_used_high) << 32 |
+                       proxy->queue_used_low);
+        break;
     case VIRTIO_MMIO_QUEUE_NOTIFY:
         if (value < VIRTIO_QUEUE_MAX) {
             virtio_queue_notify(vdev, value);
@@ -295,6 +312,30 @@ static void virtio_mmio_write(void *opaque, hwaddr offset, uint64_t value,
         if (vdev->status == 0) {
             virtio_reset(vdev);
         }
+        break;
+    case VIRTIO_MMIO_QUEUE_DESC_LOW:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_desc_low = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_DESC_HIGH:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_desc_high = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_AVAIL_LOW:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_avail_low = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_AVAIL_HIGH:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_avail_high = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_USED_LOW:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_used_low = value;
+        break;
+    case VIRTIO_MMIO_QUEUE_USED_HIGH:
+        assert(vdev->queue_sel == 0);
+        proxy->queue_used_high = value;
         break;
     case VIRTIO_MMIO_MAGIC_VALUE:
     case VIRTIO_MMIO_VERSION:

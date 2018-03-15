@@ -68,6 +68,9 @@
 #define FPGA_ADDRESS  0x1f000000ULL
 #define RESET_ADDRESS 0x1fc00000ULL
 
+#define VIRTIO_MMIO_MMAP_BASE 0x1e400000ULL
+#define VIRTIO_MMIO_IRQ       5
+
 #define FLASH_SIZE    0x400000
 
 #define MAX_IDE_BUS 2
@@ -994,6 +997,16 @@ static void create_cpu(MaltaState *s, const char *cpu_model,
     }
 }
 
+static void create_virtio_devices(void)
+{
+    CPUMIPSState *env;
+    MIPSCPU *cpu;
+
+    cpu = MIPS_CPU(first_cpu);
+    env = &cpu->env;
+    sysbus_create_simple("virtio-mmio", VIRTIO_MMIO_MMAP_BASE, env->irq[VIRTIO_MMIO_IRQ]);
+}
+
 static
 void mips_malta_init(MachineState *machine)
 {
@@ -1249,6 +1262,9 @@ void mips_malta_init(MachineState *machine)
 
     /* Optional PCI video card */
     pci_vga_init(pci_bus);
+
+    /* Virtio over MMIO */
+    create_virtio_devices();
 }
 
 static int mips_malta_sysbus_device_init(SysBusDevice *sysbusdev)
