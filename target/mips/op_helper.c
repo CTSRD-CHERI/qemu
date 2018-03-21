@@ -3815,7 +3815,7 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         } else if (align_of(size, addr)) {
 #if defined(CHERI_UNALIGNED)
             qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte load of "
-                "address 0x" PRIx64 "\n", size, addr);
+                "address 0x%" PRIx64 "\n", size, addr);
 #else
             // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
             // check for alignment already.
@@ -3921,7 +3921,7 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         } else if (align_of(size, addr)) {
 #if defined(CHERI_UNALIGNED)
             qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte store to "
-                "address 0x" PRIx64 "\n", size, addr);
+                "address 0x%" PRIx64 "\n", size, addr);
 #else
             // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
             // check for alignment already.
