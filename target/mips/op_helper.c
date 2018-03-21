@@ -3813,7 +3813,14 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         } else if (align_of(size, addr)) {
+#if defined(CHERI_UNALIGNED)
+            qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte load of "
+                "address 0x" PRIx64 "\n", size, addr);
+#else
+            // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
+            // check for alignment already.
             do_raise_c0_exception(env, EXCP_AdEL, addr);
+#endif
         } else {
             return addr;
         }
@@ -3844,6 +3851,7 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
     } else if (addr < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(size, addr)) {
+        // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdEL, addr);
     } else {
         env->linkedflag = 1;
@@ -3874,6 +3882,7 @@ target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
     } else if (addr < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(size, addr)) {
+        // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdES, addr);
     } else {
         // Can't do this here.  It might miss in the TLB.
@@ -3910,7 +3919,14 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         } else if (align_of(size, addr)) {
+#if defined(CHERI_UNALIGNED)
+            qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte store to "
+                "address 0x" PRIx64 "\n", size, addr);
+#else
+            // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
+            // check for alignment already.
             do_raise_c0_exception(env, EXCP_AdES, addr);
+#endif
         } else {
             // Can't do this here.  It might miss in the TLB.
             // cheri_tag_invalidate(env, addr, size);
