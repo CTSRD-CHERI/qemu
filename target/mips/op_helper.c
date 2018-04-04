@@ -4057,6 +4057,9 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
         return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST, cb);
+        return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST_CAP, cb);
         return (target_ulong)0;
