@@ -4014,7 +4014,11 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
         return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
+        return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
+        // FIXME: this check does not match the pseudocode in the spec
         do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
         return (target_ulong)0;
     } else if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
@@ -4109,6 +4113,9 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
         return (target_ulong)0;
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+        return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST, cb);
         return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST_CAP, cb);
