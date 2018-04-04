@@ -1943,6 +1943,9 @@ static void version(void)
     printf("Compiled for CHERI256\n");
 #endif
 #endif
+#ifdef CHERI_UNALIGNED
+    printf("Built with support for unaligned loads/stores\n");
+#endif
 }
 
 static void help(int exitcode)
