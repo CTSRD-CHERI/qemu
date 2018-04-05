@@ -20,7 +20,6 @@
 #include <sys/select.h>
 #include <sys/syscall.h>
 #include <sys/ioccom.h>
-#include <ctype.h>
 
 #include "qemu.h"
 
@@ -105,6 +104,14 @@ static void print_ioctl(const struct syscallname *name,
             (int)arg2 & 0xFF,
             (int)IOCPARM_LEN(arg2),
             arg3);
+}
+
+static void print_sysarch(const struct syscallname *name, abi_long arg1,
+        abi_long arg2, abi_long arg3, abi_long arg4, abi_long arg5,
+        abi_long arg6)
+{
+    /* This is os dependent. */
+    do_os_print_sysarch(name, arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 /*

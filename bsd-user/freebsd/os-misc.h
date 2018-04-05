@@ -20,6 +20,7 @@
 #define __OS_MISC_H_
 
 #include <sys/cpuset.h>
+#include <sys/random.h>
 #include <sched.h>
 
 /* sched_setparam(2) */
@@ -267,6 +268,26 @@ static inline abi_long do_freebsd_cpuset_setaffinity(cpulevel_t level,
 	}
 
 	return ret;
+}
+
+/* cpuset_getdomain(2) */
+/* cpuset_getdomain(cpulevel_t, cpuwhich_t, id_t, size_t, const cpuset_t *);*/
+static inline abi_long do_freebsd_cpuset_getdomain(cpulevel_t level,
+        cpuwhich_t which, abi_ulong arg3, abi_ulong arg4, abi_ulong arg5,
+        abi_long arg6)
+{
+    qemu_log("qemu: Unsupported syscall cpuset_getdomain()\n");
+    return -TARGET_ENOSYS;
+}
+
+/* cpuset_setdomain(2) */
+/* cpuset_setdomain(cpulevel_t, cpuwhich_t, id_t, size_t, const cpuset_t *);*/
+static inline abi_long do_freebsd_cpuset_setdomain(cpulevel_t level,
+        cpuwhich_t which, abi_ulong arg3, abi_ulong arg4, abi_ulong arg5,
+        abi_long arg6)
+{
+    qemu_log("qemu: Unsupported syscall cpuset_getdomain()\n");
+    return -TARGET_ENOSYS;
 }
 
 
@@ -548,5 +569,22 @@ static inline abi_long do_freebsd_posix_fadvise(abi_long fd, abi_ulong offset,
     return -TARGET_ENOSYS;
 }
 
+#if defined(HAVE_GETRANDOM)
+static inline abi_long do_freebsd_getrandom(void *buf, abi_ulong buflen,
+        abi_ulong flags)
+{
+    abi_long ret;
+    void *p;
+
+    p = lock_user(VERIFY_WRITE, buf, buflen, 0);
+    if (p == NULL) {
+        return -TARGET_EFAULT;
+    }
+    ret = get_errno(getrandom(p, buflen, flags));
+    unlock_user(p, buf, ret);
+
+    return ret;
+}
+#endif
 
 #endif /* ! __OS_MISC_H_ */
