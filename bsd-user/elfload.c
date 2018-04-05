@@ -17,6 +17,7 @@
  */
 
 #include "qemu/osdep.h"
+
 #include <err.h>
 #include <libgen.h>
 #include <sys/mman.h>
@@ -24,8 +25,8 @@
 #include <sys/resource.h>
 
 #include "qemu.h"
-#include "qemu/error-report.h"
 #include "disas/disas.h"
+#include "qemu/path.h"
 
 static abi_ulong target_auxents;   /* Where the AUX entries are in target */
 static size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
@@ -265,9 +266,7 @@ static void padzero(abi_ulong elf_bss, abi_ulong last_bss)
      */
     if (qemu_real_host_page_size < qemu_host_page_size) {
         abi_ulong end_addr, end_addr1;
-
-        end_addr1 = (elf_bss + qemu_real_host_page_size - 1) &
-            ~(qemu_real_host_page_size - 1);
+        end_addr1 = REAL_HOST_PAGE_ALIGN(elf_bss);
         end_addr = HOST_PAGE_ALIGN(elf_bss);
         if (end_addr1 < end_addr) {
             mmap((void *)g2h(end_addr1), end_addr - end_addr1,
@@ -275,6 +274,7 @@ static void padzero(abi_ulong elf_bss, abi_ulong last_bss)
                     MAP_FIXED|MAP_PRIVATE|MAP_ANON, -1, 0);
         }
     }
+
     nbyte = elf_bss & (qemu_host_page_size-1);
     if (nbyte) {
         nbyte = qemu_host_page_size - nbyte;
@@ -627,7 +627,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     abi_ulong start_code, end_code, start_data, end_data;
     abi_ulong reloc_func_desc = 0;
 #ifdef LOW_ELF_STACK
-    abi_ulong elf_stack;
+    abi_ulong elf_stack = ~((abi_ulong)0UL);
 #endif
     char passed_fileno[6];
 
@@ -1010,11 +1010,8 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
                and some applications "depend" upon this behavior.
                Since we do not have the power to recompile these, we
                emulate the SVr4 behavior.  Sigh.  */
-            mapped_addr = target_mmap(0, qemu_host_page_size, PROT_READ |
-                    PROT_EXEC, MAP_FIXED | MAP_PRIVATE, -1, 0);
-	    if (mapped_addr == -1) {
-		    return -1;
-	    }
+            target_mmap(0, qemu_host_page_size, PROT_READ | PROT_EXEC,
+                                      MAP_FIXED | MAP_PRIVATE, -1, 0);
     }
 
     info->entry = elf_entry;
