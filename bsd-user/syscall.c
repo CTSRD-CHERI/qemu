@@ -27,6 +27,7 @@
 #include <sys/syscall.h>
 #include <sys/param.h>
 #include <sys/sysctl.h>
+#include <utime.h>
 
 #include "qemu.h"
 #include "qemu-common.h"
@@ -1587,6 +1588,14 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_freebsd_cpuset_setaffinity(arg1, arg2, arg3, arg4, arg5, arg6);
         break;
 
+    case TARGET_FREEBSD_NR_cpuset_getdomain: /* cpuset_getdomain(2) */
+        ret = do_freebsd_cpuset_getdomain(arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
+    case TARGET_FREEBSD_NR_cpuset_setdomain: /* cpuset_setdomain(2) */
+        ret = do_freebsd_cpuset_setdomain(arg1, arg2, arg3, arg4, arg5, arg6);
+        break;
+
 
         /*
          * FreeBSD kernel module
@@ -1732,10 +1741,15 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_freebsd_kenv(arg1, arg2, arg2, arg4);
         break;
 
-
     case TARGET_FREEBSD_NR_break:
         ret = do_obreak(arg1);
         break;
+
+#if defined(HAVE_GETRANDOM)
+    case TARGET_FREEBSD_NR_getrandom:
+        ret = do_freebsd_getrandom(arg1, arg2, arg3);
+        break;
+#endif
 
 	/*
 	 * Asynchronous I/O

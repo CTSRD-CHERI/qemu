@@ -129,7 +129,6 @@ void *new_freebsd_thread_start(void *arg)
     cpu = ENV_GET_CPU(env);
     thread_cpu = cpu;
     (void)thr_self(&tid);
-    cpu->host_tid = tid;
 
     /* copy out the child TID */
     if (info->param.child_tid) {
