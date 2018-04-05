@@ -2052,6 +2052,19 @@ for flag in $gcc_flags; do
     fi
 done
 
+# test for getrandom syscall
+cat > $TMPC << EOF
+#include <sys/random.h>
+int main(int argc, char *argv[])
+{
+    getrandom(0, 5, 1);
+    return 0;
+}
+EOF
+if compile_prog "-Werror" "" ; then
+    QEMU_CFLAGS="$QEMU_CFLAGS -DHAVE_GETRANDOM"
+fi
+
 if test "$stack_protector" != "no"; then
   cat > $TMPC << EOF
 int main(int argc, char *argv[])
