@@ -5858,7 +5858,14 @@ static inline void exception_return(CPUMIPSState *env)
 {
     debug_pre_eret(env);
 #ifdef TARGET_CHERI
-    // qemu_log("%s: PCC <- EPCC\n", __func__);
+    // qemu_log_mask(CPU_LOG_INSTR, "%s: PCC <- EPCC\n", __func__);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+         // Print the new PCC value for debugging traces (compare to null
+         // so that we always print it)
+         cap_register_t null_cap;
+         null_capability(&null_cap);
+         dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
+    }
     env->active_tc.PCC = env->active_tc.C[CP2CAP_EPCC];
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
@@ -6346,8 +6353,8 @@ static void dump_changed_cop0(CPUMIPSState *env)
 
 #ifdef TARGET_CHERI
 
-static inline void dump_changed_capreg(CPUMIPSState *env,
-        cap_register_t *cr, cap_register_t *old_reg, const char* name)
+void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
+        cap_register_t *old_reg, const char* name)
 {
     if (memcmp(cr, old_reg, sizeof(cap_register_t))) {
         *old_reg = *cr;

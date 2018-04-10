@@ -1132,6 +1132,8 @@ hwaddr cpu_mips_translate_address (CPUMIPSState *env, target_ulong address,
 target_ulong exception_resume_pc (CPUMIPSState *env);
 #ifdef TARGET_CHERI
 void mips_dump_changed_state(CPUMIPSState *env);
+void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
+                         cap_register_t *old_reg, const char* name);
 #endif /* TARGET_CHERI */
 
 /* op_helper.c */

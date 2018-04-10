@@ -1092,6 +1092,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #ifdef TARGET_CHERI
         /* always set PCC from KCC even with EXL */
         env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
+        // FIXME: this still contains the old pre-trap PC offset, shouldn't we
+        // move this down to after env->active_tc.PC has been update?
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -
             env->active_tc.PCC.cr_base;
 #endif /* TARGET_CHERI */
@@ -1124,6 +1126,13 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         env->cvtrace.exception = cause;
+    }
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+         // Print the new PCC value for debugging traces.
+         cap_register_t tmp;
+         // We use a null cap as oldreg so that we always print it.
+         null_capability(&tmp);
+         dump_changed_capreg(env, &env->active_tc.PCC, &tmp, "PCC");
     }
 #endif /* TARGET_CHERI */
     if (qemu_loglevel_mask(CPU_LOG_INT)
