@@ -100,8 +100,8 @@ static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
         "-> 0x%016lx PC=0x%016lx\n", cause, causestr[cause], reg,
          env->active_tc.PCC.cr_base, env->active_tc.PCC.cr_offset, pc,
          env->active_tc.PC); */
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s) "
-       "reg=%d PCC=0x%016" PRIx64 " + 0x%016" PRIx64 " -> 0x" TARGET_FMT_lx
+    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s)"
+       " reg=%d PCC=0x%016" PRIx64 " + 0x%016" PRIx64 " -> 0x" TARGET_FMT_lx
        " PC=0x" TARGET_FMT_lx "\n",
        cause, causestr[cause], reg, env->active_tc.PCC.cr_base,
        env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
@@ -120,7 +120,7 @@ static inline void do_raise_c0_exception(CPUMIPSState *env, uint16_t cause,
          badvaddr, env->active_tc.PCC.cr_base,
          env->active_tc.PCC.cr_offset, pc, env->active_tc.PC); */
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C0 EXCEPTION: cause=%d"
-        "badvaddr=0x%016" PRIx64 " PCC=0x%016" PRIx64 " + 0x%016" PRIx64
+        " badvaddr=0x%016" PRIx64 " PCC=0x%016" PRIx64 " + 0x%016" PRIx64
         " -> 0x" TARGET_FMT_lx " PC=0x" TARGET_FMT_lx "\n",
         cause, badvaddr, env->active_tc.PCC.cr_base,
         env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
@@ -3256,7 +3256,8 @@ static inline cap_register_t *check_cap_hwr_access(CPUMIPSState *env,
         return &env->active_tc.C[CP2CAP_EPCC];
     }
     /* unknown cap hardware register */
-    do_raise_exception(env, EXCP_RI, GETPC());
+    // XXXAR: Must use do_raise_c0_exception and not do_raise_exception here!
+    do_raise_c0_exception(env, EXCP_RI, 0);
 }
 
 void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
