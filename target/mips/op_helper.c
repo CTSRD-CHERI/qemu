@@ -3262,6 +3262,11 @@ static inline cap_register_t *check_cap_hwr_access(CPUMIPSState *env,
 
 void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
 {
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+        return;
+    }
     cap_register_t *cdp = &env->active_tc.C[cd];
     cap_register_t *csp = check_cap_hwr_access(env, hwr, true);
     *cdp = *csp;
@@ -3269,6 +3274,11 @@ void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
 
 void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
 {
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cs);
+        return;
+    }
     cap_register_t *csp = &env->active_tc.C[cs];
     cap_register_t *cdp = check_cap_hwr_access(env, hwr, true);
     *cdp = *csp;
