@@ -91,8 +91,8 @@ const char *causestr[] = {
 /*
  * See section 4.4 of the CHERI Architecture.
  */
-static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
-        uint16_t reg)
+static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
+        uint16_t cause, uint16_t reg)
 {
     uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
 
@@ -111,8 +111,8 @@ static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
     do_raise_exception(env, EXCP_C2E, pc);
 }
 
-static inline void do_raise_c0_exception(CPUMIPSState *env, uint16_t cause,
-        uint64_t badvaddr)
+static inline QEMU_NORETURN void do_raise_c0_exception(CPUMIPSState *env,
+        uint16_t cause, uint64_t badvaddr)
 {
     uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
     /* fprintf(stderr, "C0 EXCEPTION: cause=%d badvaddr=0x%016lx "
@@ -3258,6 +3258,7 @@ static inline cap_register_t *check_cap_hwr_access(CPUMIPSState *env,
     /* unknown cap hardware register */
     // XXXAR: Must use do_raise_c0_exception and not do_raise_exception here!
     do_raise_c0_exception(env, EXCP_RI, 0);
+    return NULL;  // silence warning
 }
 
 void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
