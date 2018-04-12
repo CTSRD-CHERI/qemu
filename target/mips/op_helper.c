@@ -3538,8 +3538,8 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_SEAL, ct);
     } else if ((ctp->cr_base + ctp->cr_offset) != csp->cr_otype) {
         do_raise_c2_exception(env, CP2Ca_TYPE, ct);
-    } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
-        do_raise_c2_exception(env, CP2Ca_PERM_SEAL, ct);
+    } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_UNSEAL, ct);
     } else if (ctp->cr_offset >= ctp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if ((ctp->cr_base + ctp->cr_offset) >= CAP_MAX_OTYPE) {
