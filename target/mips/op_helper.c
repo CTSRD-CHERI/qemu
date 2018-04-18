@@ -3791,12 +3791,11 @@ target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         if (cbp->cr_tag == ctp->cr_tag &&
             is_cap_sealed(cbp) == is_cap_sealed(ctp) &&
             cbp->cr_base <= ctp->cr_base &&
-            cbp->cr_base + cbp->cr_length <= ctp->cr_base + ctp->cr_length &&
+            ctp->cr_base + ctp->cr_length <= cbp->cr_base + cbp->cr_length &&
             (ctp->cr_perms & cbp->cr_perms) == ctp->cr_perms &&
             (ctp->cr_uperms & cbp->cr_uperms) == ctp->cr_uperms) {
             is_subset = TRUE;
         }
-        /* else is_subset = FALSE; */
     }
     return (target_ulong) is_subset;
 }
