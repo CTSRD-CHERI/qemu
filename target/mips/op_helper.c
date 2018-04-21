@@ -4028,10 +4028,6 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
         do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
-        // FIXME: this check does not match the pseudocode in the spec
-        do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
-        return (target_ulong)0;
     } else if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         return (target_ulong)0;
