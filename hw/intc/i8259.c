@@ -247,6 +247,7 @@ static void pic_ioport_write(void *opaque, hwaddr addr64,
             if (val & 0x08) {
                 qemu_log_mask(LOG_UNIMP,
                               "i8259: level sensitive irq not supported\n");
+		return;
             }
         } else if (val & 0x08) {
             if (val & 0x04) {
