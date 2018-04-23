@@ -56,6 +56,11 @@
 #include "net/filter.h"
 #include "qapi/string-output-visitor.h"
 
+#include <sys/ioctl.h>
+#ifdef __FreeBSD__
+#include <net/if.h>
+#endif
+
 /* Net bridge is currently not supported for W32. */
 #if !defined(_WIN32)
 # define CONFIG_NET_BRIDGE
@@ -1185,6 +1190,9 @@ static int (* const net_client_init_fun[NET_CLIENT_DRIVER__MAX])(
 #endif
 #ifdef CONFIG_NET_BRIDGE
         [NET_CLIENT_DRIVER_BRIDGE]    = net_init_bridge,
+#endif
+#ifdef CONFIG_PCAP
+	[NET_CLIENT_DRIVER_PCAP]      = net_init_pcap,
 #endif
         [NET_CLIENT_DRIVER_HUBPORT]   = net_init_hubport,
 #ifdef CONFIG_VHOST_NET_USER
