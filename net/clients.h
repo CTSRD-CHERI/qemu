@@ -46,6 +46,11 @@ int net_init_tap(const Netdev *netdev, const char *name,
 int net_init_bridge(const Netdev *netdev, const char *name,
                     NetClientState *peer, Error **errp);
 
+#ifdef CONFIG_PCAP
+int net_init_pcap(const Netdev *netdev, const char *name,
+                  NetClientState *peer, Error **errp);
+#endif
+
 int net_init_l2tpv3(const Netdev *netdev, const char *name,
                     NetClientState *peer, Error **errp);
 #ifdef CONFIG_VDE

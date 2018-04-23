@@ -312,6 +312,7 @@ static void tap_exit_notify(Notifier *notifier, void *data)
 static void tap_cleanup(NetClientState *nc)
 {
     TAPState *s = DO_UPCAST(TAPState, nc, nc);
+    Error *err = NULL;
 
     if (s->vhost_net) {
         vhost_net_cleanup(s->vhost_net);
@@ -321,12 +322,20 @@ static void tap_cleanup(NetClientState *nc)
 
     qemu_purge_queued_packets(nc);
 
-    tap_exit_notify(&s->exit, NULL);
-    qemu_remove_exit_notifier(&s->exit);
-
     tap_read_poll(s, false);
     tap_write_poll(s, false);
     close(s->fd);
+
+    if (s->down_script[0]) {
+        launch_script(s->down_script, s->down_script_arg, s->fd, &err);
+        if (err) {
+            error_report_err(err);
+        }
+    }
+    tap_exit_notify(&s->exit, NULL);
+    qemu_remove_exit_notifier(&s->exit);
+
+
     s->fd = -1;
 }
 
