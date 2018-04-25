@@ -3,7 +3,8 @@
 
 #include "target_arch_sigtramp.h"
 
-static inline int setup_initial_stack(struct bsd_binprm *bprm, abi_ulong *p)
+static inline int setup_initial_stack(struct bsd_binprm *bprm, abi_ulong *p,
+    abi_ulong *stringp)
 {
     int i;
     abi_ulong stack_base;
@@ -12,6 +13,9 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm, abi_ulong *p)
                   MAX_ARG_PAGES * TARGET_PAGE_SIZE;
     if (p) {
         *p = stack_base;
+    }
+    if (stringp) {
+        *stringp = stack_base;
     }
 
     for (i = 0; i < MAX_ARG_PAGES; i++) {

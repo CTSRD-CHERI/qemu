@@ -44,7 +44,7 @@
  *  "destp" ->    argv, env strings (up to 262144 bytes)
  */
 static inline int setup_initial_stack(struct bsd_binprm *bprm,
-        abi_ulong *ret_addr)
+        abi_ulong *ret_addr, abi_ulong *stringp)
 {
     int i;
     abi_ulong stack_hi_addr;
@@ -88,6 +88,15 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
         errno = EFAULT;
         return -1;
     }
+    /*
+     * Deviate from FreeBSD stack layout: force stack to new page here
+     * so that signal trampoline is not sharing the page with user stack
+     * frames. This is actively harmful in qemu as it marks pages with
+     * code it translated as read-only, which is somewhat problematic
+     * for user trying to use the stack as intended.
+     */
+    p = rounddown(p, TARGET_PAGE_SIZE);
+
     /* Calculate the string space needed */
     stringspace = 0;
     for (i = 0; i < bprm->argc; ++i) {
@@ -100,20 +109,17 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
        errno = ENOMEM;
        return -1;
     }
-
     /* Make room for the argv and envp strings */
-    argvp = roundup(p - TARGET_SPACE_USRSPACE - (TARGET_ARG_MAX - stringspace),
-	sizeof(abi_ulong));
-    p = destp = p - TARGET_SPACE_USRSPACE - TARGET_ARG_MAX;
-
+    destp = rounddown(p - stringspace, sizeof(abi_ulong));
+    p = argvp = destp - (bprm->argc + bprm->envc + 2) * sizeof(abi_ulong);
+    /* Remember the strings pointer */
+    if (stringp)
+        *stringp = destp;
     /*
      * Add argv strings.  Note that the argv[] vectors are added by
      * loader_build_argptr()
      */
     /* XXX need to make room for auxargs */
-    /* argvp = destp - ((bprm->argc + bprm->envc + 2) * sizeof(abi_ulong)); */
-    /* envp = argvp + (bprm->argc + 2) * sizeof(abi_ulong); */
-    envp = argvp + (bprm->argc + 1) * sizeof(abi_ulong);
     ps_strs.ps_argvstr = tswapl(argvp);
     ps_strs.ps_nargvstr = tswap32(bprm->argc);
     for (i = 0; i < bprm->argc; ++i) {
@@ -138,6 +144,7 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
      * Add env strings. Note that the envp[] vectors are added by
      * loader_build_argptr().
      */
+    envp = argvp + sizeof(abi_ulong);
     ps_strs.ps_envstr = tswapl(envp);
     ps_strs.ps_nenvstr = tswap32(bprm->envc);
     for (i = 0; i < bprm->envc; ++i) {
