@@ -3,7 +3,6 @@
 
 #include "target_arch_vmparam.h"
 
-#define TARGET_SPACE_USRSPACE   4096
 #define TARGET_ARG_MAX          262144
 
 /* Compare to sys/exec.h */
