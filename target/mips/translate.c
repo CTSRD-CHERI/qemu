@@ -3568,19 +3568,19 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
     gen_load_gpr(t0, rt);
     gen_helper_clc_addr(taddr, cpu_env, tcd, tcb, t0, toffset);
 
-    /* Fetch 1st 64-bits in t0 */
+    /* Fetch 1st 64-bits in t0 (base) */
     tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
     tcg_gen_addi_tl(taddr, taddr, 8);
 
-    /* Fetch 2nd 64-bits in t1 */
+    /* Fetch 2nd 64-bits in t1 (cursor) */
     tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
     tcg_gen_subi_tl(taddr, taddr, 8);
 
     /* Store in the capability register. */
     gen_helper_bytes2cap_m128(cpu_env, tcd, t0, t1, taddr);
-    gen_helper_bytes2cap_m128_tag(cpu_env, tcb, tcd, t0, taddr);
+    gen_helper_bytes2cap_m128_tag(cpu_env, tcb, tcd, t1, taddr);
 
     tcg_temp_free(t1);
     tcg_temp_free(t0);
@@ -3601,19 +3601,19 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
     /* Check the cap registers and compute the address. */
     gen_helper_cllc_addr(taddr, cpu_env, tcd, tcb);
 
-    /* Fetch 1st 64-bits in t0 */
+    /* Fetch 1st 64-bits in t0 (base) */
     tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
     tcg_gen_addi_tl(taddr, taddr, 8);
 
-    /* Fetch 2nd 64-bits in t1 */
+    /* Fetch 2nd 64-bits in t1 (cursor) */
     tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
             MO_TEQ | ctx->default_tcg_memop_mask);
     tcg_gen_subi_tl(taddr, taddr, 8);
 
     /* Store in the capability register. */
     gen_helper_bytes2cap_m128(cpu_env, tcd, t0, t1, taddr);
-    gen_helper_bytes2cap_m128_tag(cpu_env, tcb, tcd, t0, taddr);
+    gen_helper_bytes2cap_m128_tag(cpu_env, tcb, tcd, t1, taddr);
 
     tcg_temp_free(t1);
     tcg_temp_free(t0);
@@ -3636,12 +3636,7 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     gen_load_gpr(t0, rt);
     gen_helper_csc_addr(taddr, cpu_env, tcs, tcb, t0, toffset);
 
-    /* Store 1st 64-bits in memory. */
-    gen_helper_cap2bytes_m128c(t0, cpu_env, tcs, taddr);
-    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
-            ctx->default_tcg_memop_mask);
-
-    /* Store 2nd 64-bits in memory. */
+    /* Store 1st 64-bits (base) in memory. */
     /* Is this instruction in a branch delay slot? */
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
         tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
@@ -3651,6 +3646,11 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     }
     gen_helper_cap2bytes_m128b(t0, cpu_env, tcs, tbdoffset, taddr);
     tcg_temp_free_i32(tbdoffset);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    /* Store 2nd 64-bits (cursor) in memory. */
+    gen_helper_cap2bytes_m128c(t0, cpu_env, tcs, taddr);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);
@@ -3688,13 +3688,7 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
     TCGv t0 = tcg_temp_new();
     TCGv_i32 tcs2 = tcg_const_i32(cs);
 
-
-    /* Store 1st 64-bits in memory. */
-    gen_helper_cap2bytes_m128c(t0, cpu_env, tcs2, taddr);
-    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
-            ctx->default_tcg_memop_mask);
-
-    /* Store 2nd 64-bits in memory. */
+    /* Store 1st 64-bits in memory (base). */
     /* Is this instruction in a branch delay slot? */
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
         tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
@@ -3704,6 +3698,11 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
     }
     gen_helper_cap2bytes_m128b(t0, cpu_env, tcs2, tbdoffset, taddr);
     tcg_temp_free_i32(tbdoffset);
+    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
+            ctx->default_tcg_memop_mask);
+
+    /* Store 2nd 64-bits in memory (cursor). */
+    gen_helper_cap2bytes_m128c(t0, cpu_env, tcs2, taddr);
     tcg_gen_addi_tl(taddr, taddr, 8);
     tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
             ctx->default_tcg_memop_mask);

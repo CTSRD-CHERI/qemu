@@ -4534,8 +4534,8 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
     }
 }
 
-void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
-                           target_ulong base, target_ulong addr)
+void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
+                           target_ulong cursor, target_ulong addr)
 {
     uint64_t tps, length;
     cap_register_t *cdp = &env->active_tc.C[cd];
