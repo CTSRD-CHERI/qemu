@@ -3789,7 +3789,7 @@ target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
     } else {
         if (cbp->cr_tag == ctp->cr_tag &&
-            is_cap_sealed(cbp) == is_cap_sealed(ctp) &&
+            /* is_cap_sealed(cbp) == is_cap_sealed(ctp) && */
             cbp->cr_base <= ctp->cr_base &&
             ctp->cr_base + ctp->cr_length <= cbp->cr_base + cbp->cr_length &&
             (ctp->cr_perms & cbp->cr_perms) == ctp->cr_perms &&
