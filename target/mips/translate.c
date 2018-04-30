@@ -11713,16 +11713,20 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 break;
             case OPC_CJALR_NI:      /* 0x0c << 6 */
                 check_cop2x(ctx);
+                generate_check_access_idc(ctx, r16);
+                generate_check_access_idc(ctx, r11);
                 generate_cjalr(ctx, r16, r11);
                 opn = "cjalr";
                 break;
             case OPC_CREADHWR_NI:   /* 0x0d << 6 */
                 check_cop2x(ctx);
+                generate_check_access_idc(ctx, r16);
                 gen_helper_2_consti32(creadhwr, r16, r11);
                 opn = "creadhwr";
                 break;
             case OPC_CWRITEHWR_NI:  /* 0x0e << 6 */
                 check_cop2x(ctx);
+                generate_check_access_idc(ctx, r16);
                 gen_helper_2_consti32(cwritehwr, r16, r11);
                 opn = "cwritehwr";
                 break;
