@@ -2749,6 +2749,21 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_cgetaddr(CPUMIPSState *env, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CGetAddr: Move Virtual Address to a General-Purpose Register
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+        return (target_ulong)0;
+    } else {
+        cap_register_t *cbp = &env->active_tc.C[cb];
+        return (target_ulong)(cbp->cr_base + cbp->cr_offset);
+    }
+}
+
 target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;

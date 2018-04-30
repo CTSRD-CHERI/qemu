@@ -1195,6 +1195,7 @@ enum {
     OPC_CJALR_NI        = OPC_C2OPERAND_NI | (0x0c << 6),
     OPC_CREADHWR_NI     = OPC_C2OPERAND_NI | (0x0d << 6),
     OPC_CWRITEHWR_NI    = OPC_C2OPERAND_NI | (0x0e << 6),
+    OPC_CGETADDR_NI     = OPC_C2OPERAND_NI | (0x0f << 6),
 };
 
 enum {
@@ -2279,6 +2280,18 @@ static inline void generate_cgetbase(int32_t rd, int32_t cb)
     TCGv t0 = tcg_temp_new();
 
     gen_helper_cgetbase(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cgetaddr(int32_t rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgetaddr(t0, cpu_env, tcb);
     gen_store_gpr (t0, rd);
 
     tcg_temp_free(t0);
@@ -11712,6 +11725,12 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 check_cop2x(ctx);
                 gen_helper_2_consti32(cwritehwr, r16, r11);
                 opn = "cwritehwr";
+                break;
+            case OPC_CGETADDR_NI:   /* 0x0f << 6 */
+                check_cop2x(ctx);
+                generate_check_access_idc(ctx, r11);
+                generate_cgetaddr(r16, r11);
+                opn = "cgetaddr";
                 break;
 
             /* One-operand cap instructions. */
