@@ -68,9 +68,10 @@
 #define FPGA_ADDRESS  0x1f000000ULL
 #define RESET_ADDRESS 0x1fc00000ULL
 
-#define VIRTIO_MMIO_MMAP_BASE 0x1e400000ULL
+#define VIRTIO_MMIO_MMAP_BASE     0x1e400000ULL
+#define VIRTIO_MMIO_MMAP_NET_BASE 0x1e400200ULL
 #define VIRTIO_MMIO_IRQ       5
-
+#define VIRTIO_MMIO_NET_IRQ   6
 #define FLASH_SIZE    0x400000
 
 #define MAX_IDE_BUS 2
@@ -1004,6 +1005,7 @@ static void create_virtio_devices(void)
 
     cpu = MIPS_CPU(first_cpu);
     env = &cpu->env;
+    sysbus_create_simple("virtio-mmio", VIRTIO_MMIO_MMAP_NET_BASE, env->irq[VIRTIO_MMIO_NET_IRQ]);
     sysbus_create_simple("virtio-mmio", VIRTIO_MMIO_MMAP_BASE, env->irq[VIRTIO_MMIO_IRQ]);
 }
 
