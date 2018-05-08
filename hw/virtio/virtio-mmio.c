@@ -280,7 +280,6 @@ static void virtio_mmio_write(void *opaque, hwaddr offset, uint64_t value,
         }
         break;
     case VIRTIO_MMIO_QUEUE_READY:	
-        assert(vdev->queue_sel == 0);
         virtio_queue_set_rings(vdev, vdev->queue_sel,
                        ((uint64_t)proxy->queue_desc_high) << 32 |
                        proxy->queue_desc_low,
@@ -314,27 +313,21 @@ static void virtio_mmio_write(void *opaque, hwaddr offset, uint64_t value,
         }
         break;
     case VIRTIO_MMIO_QUEUE_DESC_LOW:
-        assert(vdev->queue_sel == 0);
         proxy->queue_desc_low = value;
         break;
     case VIRTIO_MMIO_QUEUE_DESC_HIGH:
-        assert(vdev->queue_sel == 0);
         proxy->queue_desc_high = value;
         break;
     case VIRTIO_MMIO_QUEUE_AVAIL_LOW:
-        assert(vdev->queue_sel == 0);
         proxy->queue_avail_low = value;
         break;
     case VIRTIO_MMIO_QUEUE_AVAIL_HIGH:
-        assert(vdev->queue_sel == 0);
         proxy->queue_avail_high = value;
         break;
     case VIRTIO_MMIO_QUEUE_USED_LOW:
-        assert(vdev->queue_sel == 0);
         proxy->queue_used_low = value;
         break;
     case VIRTIO_MMIO_QUEUE_USED_HIGH:
-        assert(vdev->queue_sel == 0);
         proxy->queue_used_high = value;
         break;
     case VIRTIO_MMIO_MAGIC_VALUE:
