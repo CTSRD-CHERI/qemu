@@ -91,25 +91,39 @@ const char *causestr[] = {
 /*
  * See section 4.4 of the CHERI Architecture.
  */
-static inline void do_raise_c2_exception(CPUMIPSState *env, uint16_t cause,
-        uint16_t reg)
+static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
+        uint16_t cause, uint16_t reg)
 {
     uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
 
-    /* fprintf(qemu_logfile, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n", */
-    /*         cause, causestr[cause], reg, pc); */
-    /* printf("C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx\n", cause, causestr[cause], reg, pc); */
+    /* fprintf(stderr, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx + 0x%016lx "
+        "-> 0x%016lx PC=0x%016lx\n", cause, causestr[cause], reg,
+         env->active_tc.PCC.cr_base, env->active_tc.PCC.cr_offset, pc,
+         env->active_tc.PC); */
+    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s)"
+       " reg=%d PCC=0x%016" PRIx64 " + 0x%016" PRIx64 " -> 0x" TARGET_FMT_lx
+       " PC=0x" TARGET_FMT_lx "\n",
+       cause, causestr[cause], reg, env->active_tc.PCC.cr_base,
+       env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
     cpu_mips_store_capcause(env, reg, cause);
     env->active_tc.PC = pc;
     env->CP0_BadVAddr = pc;
     do_raise_exception(env, EXCP_C2E, pc);
 }
 
-static inline void do_raise_c0_exception(CPUMIPSState *env, uint16_t cause,
-        uint64_t badvaddr)
+static inline QEMU_NORETURN void do_raise_c0_exception(CPUMIPSState *env,
+        uint16_t cause, uint64_t badvaddr)
 {
     uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
-
+    /* fprintf(stderr, "C0 EXCEPTION: cause=%d badvaddr=0x%016lx "
+        "PCC=0x%016lx + 0x%016lx -> 0x%016lx PC=0x%016lx\n", cause,
+         badvaddr, env->active_tc.PCC.cr_base,
+         env->active_tc.PCC.cr_offset, pc, env->active_tc.PC); */
+    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C0 EXCEPTION: cause=%d"
+        " badvaddr=0x%016" PRIx64 " PCC=0x%016" PRIx64 " + 0x%016" PRIx64
+        " -> 0x" TARGET_FMT_lx " PC=0x" TARGET_FMT_lx "\n",
+        cause, badvaddr, env->active_tc.PCC.cr_base,
+        env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
     env->active_tc.PC = pc;
     env->CP0_BadVAddr = badvaddr;
     do_raise_exception(env, cause, pc);
@@ -2745,6 +2759,21 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+target_ulong helper_cgetaddr(CPUMIPSState *env, uint32_t cb)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    /*
+     * CGetAddr: Move Virtual Address to a General-Purpose Register
+     */
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+        return (target_ulong)0;
+    } else {
+        cap_register_t *cbp = &env->active_tc.C[cb];
+        return (target_ulong)(cbp->cr_base + cbp->cr_offset);
+    }
+}
+
 target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
@@ -3252,11 +3281,18 @@ static inline cap_register_t *check_cap_hwr_access(CPUMIPSState *env,
         return &env->active_tc.C[CP2CAP_EPCC];
     }
     /* unknown cap hardware register */
-    do_raise_exception(env, EXCP_RI, GETPC());
+    // XXXAR: Must use do_raise_c0_exception and not do_raise_exception here!
+    do_raise_c0_exception(env, EXCP_RI, 0);
+    return NULL;  // silence warning
 }
 
 void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
 {
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    if (creg_inaccessible(perms, cd)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
+        return;
+    }
     cap_register_t *cdp = &env->active_tc.C[cd];
     cap_register_t *csp = check_cap_hwr_access(env, hwr, true);
     *cdp = *csp;
@@ -3264,6 +3300,11 @@ void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
 
 void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
 {
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    if (creg_inaccessible(perms, cs)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cs);
+        return;
+    }
     cap_register_t *csp = &env->active_tc.C[cs];
     cap_register_t *cdp = check_cap_hwr_access(env, hwr, true);
     *cdp = *csp;
@@ -3523,8 +3564,8 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_SEAL, ct);
     } else if ((ctp->cr_base + ctp->cr_offset) != csp->cr_otype) {
         do_raise_c2_exception(env, CP2Ca_TYPE, ct);
-    } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
-        do_raise_c2_exception(env, CP2Ca_PERM_SEAL, ct);
+    } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_UNSEAL, ct);
     } else if (ctp->cr_offset >= ctp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if ((ctp->cr_base + ctp->cr_offset) >= CAP_MAX_OTYPE) {
@@ -3773,14 +3814,13 @@ target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
     } else {
         if (cbp->cr_tag == ctp->cr_tag &&
-            is_cap_sealed(cbp) == is_cap_sealed(ctp) &&
+            /* is_cap_sealed(cbp) == is_cap_sealed(ctp) && */
             cbp->cr_base <= ctp->cr_base &&
-            cbp->cr_base + cbp->cr_length <= ctp->cr_base + ctp->cr_length &&
+            ctp->cr_base + ctp->cr_length <= cbp->cr_base + cbp->cr_length &&
             (ctp->cr_perms & cbp->cr_perms) == ctp->cr_perms &&
             (ctp->cr_uperms & cbp->cr_uperms) == ctp->cr_uperms) {
             is_subset = TRUE;
         }
-        /* else is_subset = FALSE; */
     }
     return (target_ulong) is_subset;
 }
@@ -3811,7 +3851,15 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         } else if (align_of(size, addr)) {
+#if defined(CHERI_UNALIGNED)
+            qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte load of "
+                "address 0x%" PRIx64 "\n", size, addr);
+            return addr;
+#else
+            // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
+            // check for alignment already.
             do_raise_c0_exception(env, EXCP_AdEL, addr);
+#endif
         } else {
             return addr;
         }
@@ -3842,6 +3890,7 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
     } else if (addr < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(size, addr)) {
+        // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdEL, addr);
     } else {
         env->linkedflag = 1;
@@ -3872,6 +3921,7 @@ target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
     } else if (addr < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(size, addr)) {
+        // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdES, addr);
     } else {
         // Can't do this here.  It might miss in the TLB.
@@ -3908,7 +3958,17 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         } else if (addr < cbp->cr_base) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         } else if (align_of(size, addr)) {
+#if defined(CHERI_UNALIGNED)
+            qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte store to "
+                "address 0x%" PRIx64 "\n", size, addr);
+            // Can't do this here.  It might miss in the TLB.
+            // cheri_tag_invalidate(env, addr, size);
+            return addr;
+#else
+            // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
+            // check for alignment already.
             do_raise_c0_exception(env, EXCP_AdES, addr);
+#endif
         } else {
             // Can't do this here.  It might miss in the TLB.
             // cheri_tag_invalidate(env, addr, size);
@@ -3936,6 +3996,9 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         return (target_ulong)0;
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+        return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
         return (target_ulong)0;
     } else {
         uint64_t cursor = cbp->cr_base + cbp->cr_offset;
@@ -3987,8 +4050,8 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
-        do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
         return (target_ulong)0;
     } else if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
@@ -4035,6 +4098,9 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
         return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST, cb);
+        return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST_CAP, cb);
         return (target_ulong)0;
@@ -4079,6 +4145,9 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
         return (target_ulong)0;
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+        return (target_ulong)0;
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_ST, cb);
         return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST_CAP, cb);
@@ -4502,8 +4571,8 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
     }
 }
 
-void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
-                           target_ulong base, target_ulong addr)
+void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
+                           target_ulong cursor, target_ulong addr)
 {
     uint64_t tps, length;
     cap_register_t *cdp = &env->active_tc.C[cd];
@@ -5863,7 +5932,14 @@ static inline void exception_return(CPUMIPSState *env)
 {
     debug_pre_eret(env);
 #ifdef TARGET_CHERI
-    // qemu_log("%s: PCC <- EPCC\n", __func__);
+    // qemu_log_mask(CPU_LOG_INSTR, "%s: PCC <- EPCC\n", __func__);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+         // Print the new PCC value for debugging traces (compare to null
+         // so that we always print it)
+         cap_register_t null_cap;
+         null_capability(&null_cap);
+         dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
+    }
     env->active_tc.PCC = env->active_tc.C[CP2CAP_EPCC];
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
@@ -6351,8 +6427,8 @@ static void dump_changed_cop0(CPUMIPSState *env)
 
 #ifdef TARGET_CHERI
 
-static inline void dump_changed_capreg(CPUMIPSState *env,
-        cap_register_t *cr, cap_register_t *old_reg, const char* name)
+void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
+        cap_register_t *old_reg, const char* name)
 {
     if (memcmp(cr, old_reg, sizeof(cap_register_t))) {
         *old_reg = *cr;

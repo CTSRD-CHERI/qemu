@@ -244,7 +244,7 @@ bool is_representable(bool sealed, uint64_t base, uint64_t length,
 #define CAP_PERM_STORE_LOCAL    (1 << 6)
 #define CAP_PERM_SEAL           (1 << 7)
 #define CAP_PERM_CCALL          (1 << 8)
-#define CAP_RESERVED2           (1 << 9)
+#define CAP_PERM_UNSEAL         (1 << 9)
 #define CAP_ACCESS_SYS_REGS     (1 << 10)
 #define CAP_RESERVED3           (1 << 11)
 #define CAP_RESERVED4           (1 << 12)
@@ -850,6 +850,7 @@ struct CPUMIPSState {
 #define CP2Ca_ACCESS_SYS_REGS 0x18 /* Access System Registers Violation */
 #define CP2Ca_PERM_CCALL    0x19 /* Permit_CCall Violation */
 #define CP2Ca_ACCESS_CCALL_IDC 0x1a /* Access IDC in a CCall delay slot */
+#define CP2Ca_PERM_UNSEAL   0x1b /* Permit_Unseal violation */
 // 0x1b-0x1f Reserved
 
 #define TRACE_MODE_USER "User mode"
@@ -1137,6 +1138,8 @@ hwaddr cpu_mips_translate_address (CPUMIPSState *env, target_ulong address,
 target_ulong exception_resume_pc (CPUMIPSState *env);
 #ifdef TARGET_CHERI
 void mips_dump_changed_state(CPUMIPSState *env);
+void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
+                         cap_register_t *old_reg, const char* name);
 #endif /* TARGET_CHERI */
 
 /* op_helper.c */
