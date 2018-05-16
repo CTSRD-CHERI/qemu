@@ -8,7 +8,8 @@ import subprocess
 import sys
 
 address_regex = re.compile(b"^(0x[a-f0-9]+):")
-UNKNOWN_ADDRESS = b"??:0\n"
+# UNKNOWN_ADDRESS = b"??:0\n"
+UNKNOWN_ADDRESS = b"?? at ??:0:0\n"
 
 
 def yamon_symbol_name(name: bytes, start_addr: int, addr: int):
@@ -16,16 +17,19 @@ def yamon_symbol_name(name: bytes, start_addr: int, addr: int):
     return b"YAMON " + name + b" + " + offset + b"\n"
 
 
-def symbolize_line(addr2line: subprocess.Popen, line: bytes) -> bytes:
+def symbolize_line(llvm_symbolizer: subprocess.Popen, line: bytes) -> bytes:
     if not line.startswith(b"0x"):
         return line
     match = address_regex.match(line)
     if not match:
         return line
     address = match.group(1)
-    addr2line.stdin.write(address + b"\n")
-    addr2line.stdin.flush()
-    symbol = addr2line.stdout.readline()
+    llvm_symbolizer.stdin.write(address + b"\n")
+    llvm_symbolizer.stdin.flush()
+    symbol = llvm_symbolizer.stdout.readline()
+    second_line = llvm_symbolizer.stdout.readline().strip()
+    if second_line:
+        symbol += b" " + second_line
     # Also symbolize bootloader addresses
     if symbol == UNKNOWN_ADDRESS:
         addrhex = int(address, 16)
@@ -53,9 +57,9 @@ def symbolize_line(addr2line: subprocess.Popen, line: bytes) -> bytes:
 
 
 def default_addr2line():
-    val = os.getenv("ADDR2LINE")
+    val = os.getenv("LLVM_SYMBOLIZER")
     if not val:
-        in_sdk = os.path.join(os.getenv("CHERI_SDK", "/"), "addr2line")
+        in_sdk = os.path.join(os.getenv("CHERI_SDK", "/"), "llvm-symbolizer")
         if os.path.isfile(in_sdk):
             return in_sdk
     if not val:
@@ -65,14 +69,14 @@ def default_addr2line():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--addr2line", metavar="ADDR2LINE", help="Path to addr2line", default=default_addr2line())
+    parser.add_argument("--llvm-symbolizer", metavar="LLVM_SYMBOLIZER", help="Path to llvm-symbolizer", default=default_addr2line())
     parser.add_argument("LOGFILE", help="The LOGFILE to symbolize")
     # TODO: allow multiple (kernel + userspace?)
     parser.add_argument("BINARY", help="The binary to use for symbols to pass to the binary")
     args = parser.parse_args()
 
     with Path(args.LOGFILE).open("rb") as logfile:
-        with subprocess.Popen([args.addr2line, "-e", args.BINARY], stdout=subprocess.PIPE,
-                              stdin=subprocess.PIPE) as addr2line:
+        with subprocess.Popen([args.llvm_symbolizer, "-obj=" + args.BINARY, "-pretty-print", "-demangle"],
+                              stdout=subprocess.PIPE, stdin=subprocess.PIPE) as llvm_symbolizer:
             for line in logfile.readlines():
-                sys.stdout.buffer.write(symbolize_line(addr2line, line))
+                sys.stdout.buffer.write(symbolize_line(llvm_symbolizer, line))
