@@ -3170,13 +3170,16 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         /* XXXAM basic trivial implementation may not handle
          * compressed capabilities fully, does not perform renormalization.
          */
-        *cdp = *cbp;
-        cdp->cr_base = ctp->cr_base;
-        cdp->cr_length = ctp->cr_length;
-        cdp->cr_perms = ctp->cr_perms;
-        cdp->cr_uperms = ctp->cr_uperms;
-        cdp->cr_offset = ctp->cr_offset;
-        cdp->cr_sealed = 0;
+        // Without the temporary cap_register_t we would copy cb into cd
+        // if cdp cd == ct (this was caught by testing cbuildcap $c3, $c1, $c3)
+        cap_register_t tmp = *cbp;
+        tmp.cr_base = ctp->cr_base;
+        tmp.cr_length = ctp->cr_length;
+        tmp.cr_perms = ctp->cr_perms;
+        tmp.cr_uperms = ctp->cr_uperms;
+        tmp.cr_offset = ctp->cr_offset;
+        tmp.cr_sealed = 0;
+        *cdp = tmp;
     }
 }
 
