@@ -27,14 +27,14 @@ def symbolize_line(llvm_symbolizer: subprocess.Popen, line: bytes) -> bytes:
     llvm_symbolizer.stdin.write(address + b"\n")
     llvm_symbolizer.stdin.flush()
     symbol = llvm_symbolizer.stdout.readline()
-    second_line = llvm_symbolizer.stdout.readline()
-    if second_line != b"\n":
-        # Could print an additional line containing (inlined by)
-        assert second_line.startswith(b" (inlined by)"), b"Unexpected llvm-symbolizer output: " + second_line
-        symbol = symbol.strip() + second_line  # ensure the trailing newline is removed from symbol (but not second_line)
-        second_line = llvm_symbolizer.stdout.readline()
+    next_line = llvm_symbolizer.stdout.readline()
+    while next_line != b"\n":
+        # Could print an additional line (or multiple) containing (inlined by)
+        assert next_line.startswith(b" (inlined by)"), b"Unexpected llvm-symbolizer output: " + next_line
+        symbol = symbol + b"\t\t\t\t" + next_line  # ensure the trailing newline is removed from symbol (but not second_line)
+        next_line = llvm_symbolizer.stdout.readline()
     # Now the remaining line must be empty:
-    assert second_line == b"\n", b"Should have been followed by an empyt line but got: " + second_line
+    assert next_line == b"\n", b"Should have been followed by an empyt line but got: " + next_line
     # Also symbolize bootloader addresses
     if symbol == UNKNOWN_ADDRESS:
         addrhex = int(address, 16)
