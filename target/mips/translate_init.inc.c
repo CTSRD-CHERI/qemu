@@ -645,7 +645,7 @@ const mips_def_t mips_defs[] =
         .SEGBITS = 42,
         .PABITS = 36,
 #if defined(TARGET_CHERI)
-        .insn_flags = CPU_MIPS64R2,
+        .insn_flags = CPU_MIPS64R2 | ASE_MT,
 #else
         .insn_flags = CPU_MIPS64,
 #endif
