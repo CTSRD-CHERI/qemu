@@ -363,7 +363,8 @@ struct TCState {
     float_status msa_fp_status;
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
-    cap_register_t C[32];
+#define _CGPR C
+    cap_register_t _CGPR[32];
     cap_register_t PrivTlsCap;
     cap_register_t UserTlsCap;
 #define CP2CAP_DCC  0  /* Default Data Capability */
@@ -377,6 +378,30 @@ struct TCState {
 
 #endif /* TARGET_CHERI */
 };
+
+static inline const cap_register_t*
+get_readonly_capreg(TCState* state, unsigned num) {
+    // TODO: special-case zero
+    return &state->_CGPR[num];
+}
+
+static inline const cap_register_t*
+get_default_data_cap(TCState* state) {
+    // TODO: caphwrs
+    return &state->_CGPR[CP2CAP_DCC];
+}
+
+static inline cap_register_t*
+get_writable_capreg(TCState* state, unsigned num) {
+    // TODO: special-case zero
+    return &state->_CGPR[num];
+}
+
+static inline void
+update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
+    // TODO: special-case zero/31
+    state->_CGPR[num] = *newval;
+}
 
 #if defined(TARGET_CHERI)
 enum CP2HWR {

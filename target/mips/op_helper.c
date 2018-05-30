@@ -1875,7 +1875,7 @@ void helper_mtc0_taglo(CPUMIPSState *env, target_ulong arg1)
 #if defined(TARGET_CHERI)
 
 static inline bool
-is_cap_sealed(cap_register_t *cp)
+is_cap_sealed(const cap_register_t *cp)
 {
     return (cp->cr_sealed) ? true : false;
 }
@@ -2134,7 +2134,7 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
 /*
  * Compress a capability to 128 bits.
  */
-static uint64_t compress_128cap(cap_register_t *csp)
+static uint64_t compress_128cap(const cap_register_t *csp)
 {
     uint64_t b, t, rlength, base_req, perms, ret;
     uint32_t e;
@@ -2375,7 +2375,7 @@ static inline int align_of(int size, uint64_t addr)
     }
 }
 
-static inline void check_cap(CPUMIPSState *env, cap_register_t *cr,
+static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
         uint32_t perm, uint64_t addr, uint16_t regnum, uint32_t len)
 {
     uint16_t cause;
@@ -2460,8 +2460,8 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CAndPerm: Restrict Permissions
      */
@@ -2499,7 +2499,7 @@ target_ulong helper_cbez(CPUMIPSState *env, uint32_t cb, uint32_t offset)
 {
     cap_register_t *pccp = &env->active_tc.PCC;
     uint32_t perms = pccp->cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CBEZ: Branch if NULL
      */
@@ -2521,7 +2521,7 @@ target_ulong helper_cbnz(CPUMIPSState *env, uint32_t cb, uint32_t offset)
 {
     cap_register_t *pccp = &env->active_tc.PCC;
     uint32_t perms = pccp->cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CBEZ: Branch if not NULL
      */
@@ -2543,7 +2543,7 @@ target_ulong helper_cbts(CPUMIPSState *env, uint32_t cb, uint32_t offset)
 {
     cap_register_t *pccp = &env->active_tc.PCC;
     uint32_t perms = pccp->cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CBTS: Branch if tag is set
      */
@@ -2559,7 +2559,7 @@ target_ulong helper_cbtu(CPUMIPSState *env, uint32_t cb, uint32_t offset)
 {
     cap_register_t *pccp = &env->active_tc.PCC;
     uint32_t perms = pccp->cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CBTU: Branch if tag is unset
      */
@@ -2574,9 +2574,8 @@ target_ulong helper_cbtu(CPUMIPSState *env, uint32_t cb, uint32_t offset)
 static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, uint32_t selector)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *csp = &env->active_tc.C[cs];
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *idc = &env->active_tc.C[CP2CAP_IDC];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CCall: Call into a new security domain
      */
@@ -2608,9 +2607,10 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
         } else if (!(cbp->cr_perms & CAP_PERM_CCALL)){
             do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cb);
         } else {
-            *idc = *cbp;
-            idc->cr_sealed = 0;
-            idc->cr_otype = 0;
+            cap_register_t idc = *cbp;
+            idc.cr_sealed = 0;
+            idc.cr_otype = 0;
+            update_capreg(&env->active_tc, CP2CAP_IDC, &idc);
             return csp->cr_base + csp->cr_offset;
         }
     }
@@ -2652,7 +2652,7 @@ void helper_creturn(CPUMIPSState *env)
 void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL | CAP_PERMS_LEGACY);
     uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     /*
@@ -2674,8 +2674,8 @@ void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
 void helper_cchecktype(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *csp = &env->active_tc.C[cs];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CCheckType: Raise exception if otypes don't match
      */
@@ -2699,8 +2699,8 @@ void helper_cchecktype(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CClearTag: Clear the tag bit
      */
@@ -2722,8 +2722,8 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CFromPtr: Create capability from pointer
      */
@@ -2759,7 +2759,7 @@ target_ulong helper_cgetaddr(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        cap_register_t *cbp = &env->active_tc.C[cb];
+        const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
         return (target_ulong)(cbp->cr_base + cbp->cr_offset);
     }
 }
@@ -2774,7 +2774,7 @@ target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        return (target_ulong)env->active_tc.C[cb].cr_base;
+        return (target_ulong)get_readonly_capreg(&env->active_tc, cb)->cr_base;
     }
 }
 
@@ -2804,7 +2804,7 @@ target_ulong helper_cgetlen(CPUMIPSState *env, uint32_t cb)
         return (target_ulong)0;
     } else {
         /* For 128-bit Capabilities we must check len >= 2^64 */
-        return (target_ulong)env->active_tc.C[cb].cr_length;
+        return (target_ulong)get_readonly_capreg(&env->active_tc, cb)->cr_length;
     }
 }
 
@@ -2818,10 +2818,10 @@ target_ulong helper_cgetoffset(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
     } else {
         // fprintf(qemu_logfile, "%s: offset(%d)=%016lx\n",
-        //      __func__, cb, env->active_tc.C[cb].cr_offset);
-        // return (target_ulong)(env->active_tc.C[cb].cr_cursor -
-        //        env->active_tc.C[cb].cr_base);
-        return (target_ulong)env->active_tc.C[cb].cr_offset;
+        //      __func__, cb, get_readonly_capreg(&env->active_tc, cb)->cr_offset);
+        // return (target_ulong)(get_readonly_capreg(&env->active_tc, cb)->cr_cursor -
+        //        get_readonly_capreg(&env->active_tc, cb)->cr_base);
+        return (target_ulong)get_readonly_capreg(&env->active_tc, cb)->cr_offset;
     }
     return (target_ulong)0;
 }
@@ -2837,7 +2837,7 @@ void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
     if (creg_inaccessible(perms, cd)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
     } else {
-        env->active_tc.C[cd] = env->active_tc.PCC;
+        *get_writable_capreg(&env->active_tc, cd) = env->active_tc.PCC;
         /* Note that the offset(cursor) is updated by ccheck_pcc */
     }
 }
@@ -2845,7 +2845,7 @@ void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
 void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
 {
     cap_register_t *pccp = &env->active_tc.PCC;
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
     uint32_t perms = pccp->cr_perms;
     /*
      * CGetPCCSetOffset: Get PCC with new offset
@@ -2876,11 +2876,10 @@ target_ulong helper_cgetperm(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
+        const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
         uint64_t perms =  (uint64_t)
-            ((env->active_tc.C[cb].cr_perms &
-              (CAP_PERMS_ALL | CAP_PERMS_LEGACY)) |
-             ((env->active_tc.C[cb].cr_uperms & CAP_UPERMS_ALL) <<
-              CAP_UPERMS_SHFT));
+            ((cbp->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY)) |
+             ((cbp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT));
 
         return (target_ulong)perms;
     }
@@ -2896,7 +2895,7 @@ target_ulong helper_cgetsealed(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        return (target_ulong)(is_cap_sealed(&env->active_tc.C[cb]) ? 1 : 0);
+        return (target_ulong)(is_cap_sealed(get_readonly_capreg(&env->active_tc, cb)) ? 1 : 0);
     }
 }
 
@@ -2910,7 +2909,7 @@ target_ulong helper_cgettag(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        return (target_ulong)env->active_tc.C[cb].cr_tag;
+        return (target_ulong)get_readonly_capreg(&env->active_tc, cb)->cr_tag;
     }
 }
 
@@ -2924,8 +2923,9 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
         return (target_ulong)0;
     } else {
-        if (env->active_tc.C[cb].cr_sealed)
-            return (target_ulong)(env->active_tc.C[cb].cr_otype & CAP_MAX_OTYPE);
+        const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+        if (cbp->cr_sealed)
+            return (target_ulong)(cbp->cr_otype & CAP_MAX_OTYPE);
         return (target_ulong)-1;
     }
 }
@@ -2934,8 +2934,8 @@ void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CIncBase: Increase Base
      */
@@ -2960,8 +2960,8 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CIncOffset: Increase Offset
      */
@@ -2989,8 +2989,8 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 void helper_cmovz(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *csp = &env->active_tc.C[cs];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     /*
      * CMOVZ: conditionally move capability on zero
      */
@@ -3011,8 +3011,8 @@ void helper_cmovn(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CJALR: Jump and Link Capability Register
      */
@@ -3046,7 +3046,7 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CJR: Jump Capability Register
      */
@@ -3077,9 +3077,9 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
                          uint32_t ct, bool conditional)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *csp = &env->active_tc.C[cs];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     uint64_t ct_base_plus_offset = ctp->cr_base + ctp->cr_offset;
     /*
      * CSeal: Seal a capability
@@ -3139,9 +3139,9 @@ void helper_ccseal(CPUMIPSState *env, uint32_t cd, uint32_t cs, uint32_t ct)
 void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     /*
      * CBuildCap: create capability from untagged register.
      * XXXAM: Note this is experimental and may change.
@@ -3186,9 +3186,9 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
 void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     /*
      * CCopyType: copy object type from untagged capability.
      * XXXAM: Note this is experimental and may change.
@@ -3286,7 +3286,7 @@ void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
         return;
     }
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
     cap_register_t *csp = check_cap_hwr_access(env, hwr, true);
     *cdp = *csp;
 }
@@ -3298,7 +3298,7 @@ void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cs);
         return;
     }
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     cap_register_t *cdp = check_cap_hwr_access(env, hwr, true);
     *cdp = *csp;
 }
@@ -3307,8 +3307,8 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t cursor = cbp->cr_base + cbp->cr_offset;
     uint64_t cursor_rt;
     uint64_t new_offset = 0ul;
@@ -3386,8 +3386,8 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t cursor = cbp->cr_base + cbp->cr_offset;
     uint64_t cursor_rt = cursor + rt;
     /*
@@ -3418,8 +3418,8 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 target_ulong helper_csub(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     /*
      * CSub: Subtract Capabilities
      */
@@ -3452,8 +3452,8 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
     /*
      * CSetLen: Set Length
      */
@@ -3477,8 +3477,8 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
     /*
      * CSetOffset: Set cursor to an offset from base
      */
@@ -3504,8 +3504,8 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     uint64_t cb_cursor = cbp->cr_base + cbp->cr_offset;
     uint64_t ct_top = ctp->cr_base + ctp->cr_length;
     /*
@@ -3535,9 +3535,9 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cdp = &env->active_tc.C[cd];
-    cap_register_t *csp = &env->active_tc.C[cs];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     /*
      * CUnseal: Unseal a sealed capability
      */
@@ -3583,8 +3583,8 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
 target_ulong helper_ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean equal = FALSE;
     /*
      * CEQ: Capability pointers equal
@@ -3609,8 +3609,8 @@ target_ulong helper_ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 target_ulong helper_cne(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean equal = FALSE;
     /*
      * CNE: Capability pointers not equal
@@ -3635,8 +3635,8 @@ target_ulong helper_cne(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 target_ulong helper_clt(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean signed_less = FALSE;
     /*
      * CLT: Capability pointers less than (signed)
@@ -3665,8 +3665,8 @@ target_ulong helper_clt(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 target_ulong helper_cle(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean signed_lte = FALSE;
     /*
      * CLE: Capability pointers less than equal (signed)
@@ -3695,8 +3695,8 @@ target_ulong helper_cle(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 target_ulong helper_cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean ltu = FALSE;
     /*
      * CLTU: Capability pointers less than (unsigned)
@@ -3725,8 +3725,8 @@ target_ulong helper_cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean leu = FALSE;
     /*
      * CLEU: Capability pointers less than equal (unsigned)
@@ -3755,8 +3755,8 @@ target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 target_ulong helper_cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean equal = FALSE;
     /*
      * CEXEQ: Capability pointers equal (all fields)
@@ -3795,8 +3795,8 @@ target_ulong helper_cnexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *ctp = &env->active_tc.C[ct];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean is_subset = FALSE;
     /*
      * CTestSubset: Test if capability is a subset of another
@@ -3825,7 +3825,7 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         uint32_t offset, uint32_t size)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
 
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
@@ -3866,7 +3866,7 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
 target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
 
     env->linkedflag = 0;
@@ -3898,7 +3898,7 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
 target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
 
     if (creg_inaccessible(perms, cb)) {
@@ -3932,7 +3932,7 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         uint32_t offset, uint32_t size)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
 
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
@@ -3975,8 +3975,8 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt, uint32_t offset)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    // cap_register_t *cdp = &env->active_tc.C[cd];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    // cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
 
     if (creg_inaccessible(perms, cd)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
@@ -4025,8 +4025,8 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    // cap_register_t *cdp = &env->active_tc.C[cd];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    // cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
     // uint32_t tag;
 
@@ -4076,8 +4076,8 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
 
     if (creg_inaccessible(perms, cs)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cs);
@@ -4123,8 +4123,8 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
 target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     uint64_t addr = cbp->cr_base + cbp->cr_offset;
 
     if (creg_inaccessible(perms, cs)) {
@@ -4352,7 +4352,7 @@ cvtrace_dump_cap_perms(cvtrace_t *cvtrace, cap_register_t *cr)
  * Dump cap load or store to cvtrace
  */
 static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
-        uint64_t addr, cap_register_t *cr)
+        uint64_t addr, const cap_register_t *cr)
 {
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         cvtrace->version = version;
@@ -4372,7 +4372,7 @@ static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
 /*
  * Dump capability cursor, base and length to cvtrace entry
  */
-static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, cap_register_t *cr)
+static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t *cr)
 {
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         cvtrace->val3 = tswap64(cr->cr_offset + cr->cr_base);
@@ -4443,7 +4443,7 @@ target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
     /* This could be done in helper_bytes2cap_128 but TCG limits the number
      * of arguments to 5 so we have to have a separate helper to handle the tag.
      */
-    cap_register_t *cbp = &env->active_tc.C[cb];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     target_ulong tag = cheri_tag_get(env, addr, cd, NULL);
 
     if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
@@ -4454,7 +4454,7 @@ target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
 void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
         target_ulong cursor)
 {
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
 
     decompress_128cap(pesbt, cursor, cdp);
 }
@@ -4465,7 +4465,7 @@ void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
     /* This could be done in helper_bytes2cap_128 but TCG limits the number
      * of arguments to 5 so we have to have a separate helper to handle the tag.
      */
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
 
     cdp->cr_tag = tag;
     /* Log memory read, if needed. */
@@ -4477,7 +4477,7 @@ void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
 target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
         target_ulong vaddr)
 {
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     target_ulong ret;
 
     if (csp->cr_tag)
@@ -4496,7 +4496,7 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
 target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
         uint32_t bdoffset, target_ulong vaddr)
 {
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     target_ulong ret;
     uint32_t save_hflags = env->hflags;
 
@@ -4556,7 +4556,7 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
                            target_ulong cursor, target_ulong addr)
 {
     uint64_t tps, length;
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
     /* fetch tps and length */
     cheri_tag_get_m128(env, addr, cd, &tps, &length);
 
@@ -4578,8 +4578,8 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
 {
     /* unused but needed to fetch the tag */
     uint64_t tps, length;
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
 
     uint32_t tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
 
@@ -4596,7 +4596,7 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
 target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
         target_ulong vaddr)
 {
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     target_ulong ret;
 
     ret = csp->cr_offset + csp->cr_base;
@@ -4609,7 +4609,7 @@ target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
 target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
         uint32_t bdoffset, target_ulong vaddr)
 {
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     target_ulong ret;
     uint64_t tps, length, perms;
     uint32_t save_hflags = env->hflags;
@@ -4712,8 +4712,8 @@ static inline void dump_cap_store_length(uint64_t length)
 void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
     uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
     uint32_t perms;
 
@@ -4738,8 +4738,8 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
 void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
-    cap_register_t *cbp = &env->active_tc.C[cb];
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
     uint32_t tag = cheri_tag_get(env, addr, cd, &env->lladdr);
     uint32_t perms;
 
@@ -4764,7 +4764,7 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
 target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
         target_ulong vaddr)
 {
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     target_ulong ret;
     uint64_t perms;
 
@@ -4784,7 +4784,7 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
 void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
         target_ulong base, target_ulong length)
 {
-    cap_register_t *cdp = &env->active_tc.C[cd];
+    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
 
     length = length ^ -1UL;
     cdp->cr_length = length;
@@ -4820,7 +4820,7 @@ static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
 target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
         uint32_t bdoffset, target_ulong vaddr)
 {
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     target_ulong ret;
     uint32_t save_hflags = env->hflags;
 
@@ -4854,7 +4854,7 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
 
 target_ulong helper_cap2bytes_base(CPUMIPSState *env, uint32_t cs)
 {
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
 
     /* Log memory cap write, if needed. */
     dump_cap_store_base(csp->cr_base);
@@ -4865,7 +4865,7 @@ target_ulong helper_cap2bytes_base(CPUMIPSState *env, uint32_t cs)
 
 target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
 {
-    cap_register_t *csp = &env->active_tc.C[cs];
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
 
     /* Log memory cap write, if needed. */
     dump_cap_store_length(csp->cr_length);
@@ -5000,18 +5000,18 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 
 target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
-    cap_register_t *ddc = &env->active_tc.C[0];
+    const cap_register_t *ddc = get_default_data_cap(&env->active_tc);
     target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
 
     // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
-    check_cap(env, &env->active_tc.C[0], CAP_PERM_STORE, addr, 0, len);
+    check_cap(env, ddc, CAP_PERM_STORE, addr, 0, len);
 
     return (addr);
 }
 
 target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
-    cap_register_t *ddc = &env->active_tc.C[0];
+    const cap_register_t *ddc = get_default_data_cap(&env->active_tc);
     target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
 
     // fprintf(qemu_logfile, "LD(%u):%016lx\n", len, addr);
@@ -5209,9 +5209,10 @@ static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf
     for (i = 0; i < 32; i++) {
         // snprintf(name, sizeof(name), "C%02d", i);
         snprintf(name, sizeof(name), "REG %02d", i);
-        cheri_dump_creg(&env->active_tc.C[i], name, cheri_cap_reg[i], f,
+        cheri_dump_creg(&env->active_tc._CGPR[i], name, cheri_cap_reg[i], f,
                 cpu_fprintf);
     }
+    // TODO: dump the cap hwregs as well
     cpu_fprintf(f, "\n");
 }
 
@@ -6433,13 +6434,13 @@ static void dump_changed_regs(CPUMIPSState *env)
         }
     }
     static const char * const capreg_name[] = {
-        "DDC", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
+        "C00", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
         "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15",
         "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23",
         "C24", "C25", "C26", "KR1C", "KR2C", "KCC", "KDC", "EPCC",
     };
     for (i=0; i<32; i++) {
-        dump_changed_capreg(env, &cur->C[i], &env->last_C[i], capreg_name[i]);
+        dump_changed_capreg(env, &cur->_CGPR[i], &env->last_C[i], capreg_name[i]);
     }
     dump_changed_capreg(env, &cur->UserTlsCap, &env->last_UserTlsCap, "UserTlsCap");
     dump_changed_capreg(env, &cur->PrivTlsCap, &env->last_PrivTlsCap, "PrivTlsCap");
