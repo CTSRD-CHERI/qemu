@@ -269,6 +269,23 @@ bool is_representable(bool sealed, uint64_t base, uint64_t length,
 #define CAP_MAX_UPERM           (15)
 #endif /* ! CHERI_128 */
 
+
+static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset)
+{
+    crp->cr_tag = 1;
+    crp->cr_perms = CAP_PERMS_ALL | CAP_PERMS_LEGACY;
+    crp->cr_uperms = CAP_UPERMS_ALL;
+    // crp->cr_cursor = 0UL;
+    crp->cr_offset = offset;
+    crp->cr_base = 0UL;
+    crp->cr_length = ~0UL;
+    crp->cr_otype = 0;
+    crp->cr_sealed = 0;
+#ifdef CHERI_128
+    crp->cr_pesbt = 0UL;
+#endif
+}
+
 struct cvtrace {
     uint8_t version;
 #define CVT_GPR     1   /* GPR change (val2) */

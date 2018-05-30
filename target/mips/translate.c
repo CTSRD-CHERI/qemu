@@ -24357,37 +24357,9 @@ void cpu_state_reset(CPUMIPSState *env)
      * is set to zero (or boot vector address for PCC).
      */
     {
-        int i;
-        cap_register_t *crp;
-
-        crp = &env->active_tc.PCC;
-        crp->cr_tag = 1;
-        crp->cr_perms = CAP_PERMS_ALL | CAP_PERMS_LEGACY;
-        crp->cr_uperms = CAP_UPERMS_ALL;
-        // crp->cr_cursor = (uint64_t)env->active_tc.PC;
-        crp->cr_offset = (uint64_t)env->active_tc.PC;
-        crp->cr_base = 0UL;
-        crp->cr_length = ~0UL;
-        crp->cr_otype = 0;
-        crp->cr_sealed = 0;
-#ifdef CHERI_128
-        crp->cr_pesbt = 0UL;
-#endif
-
-        for (i = 0; i < 32; i++) {
-            crp = &env->active_tc.C[i];
-            crp->cr_tag = 1;
-            crp->cr_perms = CAP_PERMS_ALL | CAP_PERMS_LEGACY;
-            crp->cr_uperms = CAP_UPERMS_ALL;
-            // crp->cr_cursor = 0UL;
-            crp->cr_offset = 0UL;
-            crp->cr_base = 0UL;
-            crp->cr_length = ~0UL;
-            crp->cr_otype = 0;
-            crp->cr_sealed = 0;
-#ifdef CHERI_128
-            crp->cr_pesbt = 0UL;
-#endif
+        set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
+        for (int i = 0; i < 32; i++) {
+            set_max_perms_capability(&env->active_tc._CGPR[i], 0);
         }
     }
     null_capability(&env->active_tc.UserTlsCap);
