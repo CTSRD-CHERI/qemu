@@ -363,7 +363,6 @@ struct TCState {
     float_status msa_fp_status;
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
-#define _CGPR C
     cap_register_t _CGPR[32];
     cap_register_t PrivTlsCap;
     cap_register_t UserTlsCap;

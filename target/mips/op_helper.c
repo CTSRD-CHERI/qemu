@@ -2639,8 +2639,9 @@ void helper_cclearreg(CPUMIPSState *env, uint32_t mask)
         }
     }
     for (int creg = 0; creg < 32; creg++) {
+        // FIXME: should 0 be $ddc here?
         if (mask & (0x1 << creg))
-            (void)null_capability(&env->active_tc.C[creg]);
+            (void)null_capability(&env->active_tc._CGPR[creg]);
     }
 }
 
@@ -3230,16 +3231,12 @@ static inline bool in_kernel_mode(CPUMIPSState *env) {
     return false;
 }
 
-static inline cap_register_t *check_cap_hwr_access(CPUMIPSState *env,
-        enum CP2HWR hwr, bool write) {
-    /* Currently there is no difference for access permissions between read
-     * and write access but that may change in the future */
-    (void)write;
-
+static inline cap_register_t *
+check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
     switch (hwr) {
     case CP2HWR_DDC: /* always accessible */
-        return &env->active_tc.C[CP2CAP_DCC];
+        return &env->active_tc._CGPR[CP2CAP_DCC];
     case CP2HWR_USER_TLS:  /* always accessible */
         return &env->active_tc.UserTlsCap;
     case CP2HWR_PRIV_TLS:
@@ -3251,32 +3248,39 @@ static inline cap_register_t *check_cap_hwr_access(CPUMIPSState *env,
         if (!in_kernel_mode(env)) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc.C[CP2CAP_KR1C];
+        return &env->active_tc._CGPR[CP2CAP_KR1C];
     case CP2HWR_K2RC:
         if (!in_kernel_mode(env)) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc.C[CP2CAP_KR2C];
+        return &env->active_tc._CGPR[CP2CAP_KR2C];
     case CP2HWR_KCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc.C[CP2CAP_KCC];
+        return &env->active_tc._CGPR[CP2CAP_KCC];
     case CP2HWR_KDC:
         if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc.C[CP2CAP_KDC];
+        return &env->active_tc._CGPR[CP2CAP_KDC];
     case CP2HWR_EPCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc.C[CP2CAP_EPCC];
+        return &env->active_tc._CGPR[CP2CAP_EPCC];
     }
     /* unknown cap hardware register */
     // XXXAR: Must use do_raise_c0_exception and not do_raise_exception here!
     do_raise_c0_exception(env, EXCP_RI, 0);
     return NULL;  // silence warning
+}
+
+static inline const cap_register_t *
+check_readonly_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
+    // Currently there is no difference for access permissions between read
+    // and write access but that may change in the future
+    return check_writable_cap_hwr_access(env, hwr);
 }
 
 void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
@@ -3286,9 +3290,8 @@ void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
         return;
     }
-    cap_register_t *cdp = get_writable_capreg(&env->active_tc, cd);
-    cap_register_t *csp = check_cap_hwr_access(env, hwr, true);
-    *cdp = *csp;
+    const cap_register_t *csp = check_readonly_cap_hwr_access(env, hwr);
+    update_capreg(&env->active_tc, cd, csp);
 }
 
 void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
@@ -3299,7 +3302,7 @@ void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
         return;
     }
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    cap_register_t *cdp = check_cap_hwr_access(env, hwr, true);
+    cap_register_t *cdp = check_writable_cap_hwr_access(env, hwr);
     *cdp = *csp;
 }
 
@@ -5892,7 +5895,7 @@ static inline void exception_return(CPUMIPSState *env)
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
     }
-    env->active_tc.PCC = env->active_tc.C[CP2CAP_EPCC];
+    env->active_tc.PCC = *get_readonly_capreg(&env->active_tc, CP2CAP_EPCC);
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
 #ifdef TARGET_CHERI

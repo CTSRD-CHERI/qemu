@@ -14341,7 +14341,7 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
 #ifdef CHERI_128
                 /* cr_pesbt */
                 tcg_gen_ld_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc.C[ctx->btcr]) + 32);
+                    offsetof(CPUMIPSState, active_tc._CGPR[ctx->btcr]) + 32);
                 tcg_gen_st_i64(t0, cpu_env,
                     offsetof(CPUMIPSState, active_tc.PCC) + 32);
 #endif
