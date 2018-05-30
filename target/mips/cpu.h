@@ -400,8 +400,9 @@ get_default_data_cap(TCState* state) {
     return &state->_CGPR[CP2CAP_DCC];
 }
 
+// FIXME: remove the last few users of this function
 static inline cap_register_t*
-get_writable_capreg(TCState* state, unsigned num) {
+get_writable_capreg_raw(TCState* state, unsigned num) {
     // TODO: special-case zero
     return &state->_CGPR[num];
 }
