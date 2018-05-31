@@ -24362,8 +24362,15 @@ void cpu_state_reset(CPUMIPSState *env)
             set_max_perms_capability(&env->active_tc._CGPR[i], 0);
         }
     }
-    null_capability(&env->active_tc.UserTlsCap);
-    null_capability(&env->active_tc.PrivTlsCap);
+    null_capability(&env->active_tc.CHWR.UserTlsCap);
+    null_capability(&env->active_tc.CHWR.PrivTlsCap);
+    null_capability(&env->active_tc.CHWR.KR1C);
+    null_capability(&env->active_tc.CHWR.KR2C);
+    // TODO: once we move $ddc:
+    // set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
+    // null_capability(&env->active_tc._CGPR[0]);
+    // set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);
+
     // env->CP0_Status |= (1 << CP0St_CU2);
     env->CP0_Status |= (1 << CP0St_KX);
 #endif /* TARGET_CHERI */

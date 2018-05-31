@@ -3238,22 +3238,22 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
     case CP2HWR_DDC: /* always accessible */
         return &env->active_tc._CGPR[CP2CAP_DCC];
     case CP2HWR_USER_TLS:  /* always accessible */
-        return &env->active_tc.UserTlsCap;
+        return &env->active_tc.CHWR.UserTlsCap;
     case CP2HWR_PRIV_TLS:
         if (!access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc.PrivTlsCap;
+        return &env->active_tc.CHWR.PrivTlsCap;
     case CP2HWR_K1RC:
         if (!in_kernel_mode(env)) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc._CGPR[CP2CAP_KR1C];
+        return &env->active_tc.CHWR.KR1C;
     case CP2HWR_K2RC:
         if (!in_kernel_mode(env)) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc._CGPR[CP2CAP_KR2C];
+        return &env->active_tc.CHWR.KR2C;
     case CP2HWR_KCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
@@ -6445,8 +6445,10 @@ static void dump_changed_regs(CPUMIPSState *env)
     for (i=0; i<32; i++) {
         dump_changed_capreg(env, &cur->_CGPR[i], &env->last_C[i], capreg_name[i]);
     }
-    dump_changed_capreg(env, &cur->UserTlsCap, &env->last_UserTlsCap, "UserTlsCap");
-    dump_changed_capreg(env, &cur->PrivTlsCap, &env->last_PrivTlsCap, "PrivTlsCap");
+    dump_changed_capreg(env, &cur->CHWR.UserTlsCap, &env->last_CHWR.UserTlsCap, "UserTlsCap");
+    dump_changed_capreg(env, &cur->CHWR.PrivTlsCap, &env->last_CHWR.PrivTlsCap, "PrivTlsCap");
+    dump_changed_capreg(env, &cur->CHWR.KR1C, &env->last_CHWR.KR1C, "ChwrKR1C");
+    dump_changed_capreg(env, &cur->CHWR.KR2C, &env->last_CHWR.KR2C, "ChwrKR1C");
 }
 
 

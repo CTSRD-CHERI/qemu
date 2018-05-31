@@ -312,6 +312,17 @@ typedef struct cvtrace cvtrace_t;
 /* Version 3 Cheri Stream Trace header info */
 #define CVT_QEMU_VERSION    (0x80U + 3)
 #define CVT_QEMU_MAGIC      "CheriTraceV03"
+
+struct cheri_cap_hwregs {
+    // TODO: move 0 and 31 out of gpr
+    // cap_register_t DDC;        /* CapHwr 0 */
+    cap_register_t UserTlsCap; /* CapHwr 1 */
+    cap_register_t PrivTlsCap; /* CapHwr 8 */
+    cap_register_t KR1C; /* CapHwr 22 */
+    cap_register_t KR2C; /* CapHwr 23 */
+    // cap_register_t EPCC; /* CapHwr 31 */
+};
+
 #endif /* TARGET_CHERI */
 
 typedef struct TCState TCState;
@@ -364,8 +375,7 @@ struct TCState {
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
     cap_register_t _CGPR[32];
-    cap_register_t PrivTlsCap;
-    cap_register_t UserTlsCap;
+    struct cheri_cap_hwregs CHWR;
 #define CP2CAP_DCC  0  /* Default Data Capability */
 #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
@@ -921,8 +931,7 @@ struct CPUMIPSState {
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
     cap_register_t last_C[32];
-    cap_register_t last_UserTlsCap;
-    cap_register_t last_PrivTlsCap;
+    struct cheri_cap_hwregs last_CHWR;
 
     cvtrace_t cvtrace;
 #endif /* TARGET_CHERI */
