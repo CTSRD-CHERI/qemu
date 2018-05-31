@@ -5218,7 +5218,16 @@ static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf
         cheri_dump_creg(&env->active_tc._CGPR[i], name, cheri_cap_reg[i], f,
                 cpu_fprintf);
     }
-    // TODO: dump the cap hwregs as well
+    // TODO: make this use CHWR.DDC
+    cheri_dump_creg(&env->active_tc._CGPR[CP2CAP_DCC],  "HWREG 00 (DDC)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.UserTlsCap,    "HWREG 01 (CTLSU)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.PrivTlsCap,    "HWREG 08 (CTLSP)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.KR1C,          "HWREG 22 (KR1C)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.KR2C,          "HWREG 23 (KR2C)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc._CGPR[CP2CAP_KCC],  "HWREG 29 (KCC)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc._CGPR[CP2CAP_KDC],  "HWREG 30 (KDC)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc._CGPR[CP2CAP_EPCC], "HWREG 31 (EPCC)", "", f, cpu_fprintf);
+
     cpu_fprintf(f, "\n");
 }
 
