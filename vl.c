@@ -1946,6 +1946,10 @@ static void version(void)
 #ifdef CHERI_UNALIGNED
     printf("Built with support for unaligned loads/stores\n");
 #endif
+#ifdef CHERI_C0_NULL
+    printf("Built with C0 as NULL register\n");
+#endif
+
 }
 
 static void help(int exitcode)

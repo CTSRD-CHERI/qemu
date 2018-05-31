@@ -200,18 +200,17 @@ typedef struct cap_register cap_register_t;
 
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {
-    cp->cr_otype = 0;
-    cp->cr_perms = 0;
-    cp->cr_uperms = 0;
-    cp->cr_offset = 0UL;
-    cp->cr_base = 0UL;
-    cp->cr_tag = 0;
-    cp->cr_sealed = 0;
-    cp->cr_length = -1L;
-#if defined(CHERI_128)
-    cp->cr_pesbt = 0UL;
-#endif
+    memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
+    cp->cr_length = -1L; // But length should be -1
     return cp;
+}
+
+static inline bool is_null_capability(cap_register_t *cp)
+{
+    cap_register_t null;
+    // This also compares padding but it should always be NULL assuming
+    // null_capability() was used
+    return memcmp(null_capability(&null), cp, sizeof(cap_register_t)) == 0;
 }
 
 /*
@@ -314,12 +313,14 @@ typedef struct cvtrace cvtrace_t;
 #define CVT_QEMU_MAGIC      "CheriTraceV03"
 
 struct cheri_cap_hwregs {
-    // TODO: move 0 and 31 out of gpr
-    // cap_register_t DDC;        /* CapHwr 0 */
+#ifdef CHERI_C0_NULL
+    cap_register_t DDC;        /* CapHwr 0 */
+#endif
     cap_register_t UserTlsCap; /* CapHwr 1 */
     cap_register_t PrivTlsCap; /* CapHwr 8 */
     cap_register_t KR1C; /* CapHwr 22 */
     cap_register_t KR2C; /* CapHwr 23 */
+    // TODO: move 31 out of gpr
     // cap_register_t EPCC; /* CapHwr 31 */
 };
 
@@ -376,7 +377,9 @@ struct TCState {
     cap_register_t PCC;
     cap_register_t _CGPR[32];
     struct cheri_cap_hwregs CHWR;
+#ifndef CHERI_C0_NULL
 #define CP2CAP_DCC  0  /* Default Data Capability */
+#endif
 #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
 #define CP2CAP_KR1C 27  /* Reserved Kernel Cap #1 */
@@ -396,19 +399,34 @@ get_readonly_capreg(TCState* state, unsigned num) {
 
 static inline const cap_register_t*
 get_default_data_cap(TCState* state) {
-    // TODO: caphwrs
+#ifdef CHERI_C0_NULL
+    return &state->CHWR.DDC;
+#else
     return &state->_CGPR[CP2CAP_DCC];
+#endif
 }
 
 // FIXME: remove the last few users of this function
 static inline cap_register_t*
 get_writable_capreg_raw(TCState* state, unsigned num) {
+#ifdef CHERI_C0_NULL
+    if (unlikely(num == 0)) {
+        // writing to $c0 is a no-op -> make users of this function write to a dummy
+        static cap_register_t dummy_reg;
+        return &dummy_reg;
+    }
+#endif
     // TODO: special-case zero
     return &state->_CGPR[num];
 }
 
 static inline void
 update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
+#ifdef CHERI_C0_NULL
+    // writing to $c0 is a no-op
+    if (unlikely(num == 0))
+        return;
+#endif
     // TODO: special-case zero/31
     state->_CGPR[num] = *newval;
 }

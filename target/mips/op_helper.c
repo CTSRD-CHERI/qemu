@@ -3242,7 +3242,11 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
     switch (hwr) {
     case CP2HWR_DDC: /* always accessible */
+#ifdef CHERI_C0_NULL
+        return &env->active_tc.CHWR.DDC;
+#else
         return &env->active_tc._CGPR[CP2CAP_DCC];
+#endif
     case CP2HWR_USER_TLS:  /* always accessible */
         return &env->active_tc.CHWR.UserTlsCap;
     case CP2HWR_PRIV_TLS:
@@ -5147,7 +5151,7 @@ static const char *cheri_cap_reg[] = {
 };
 
 
-static void cheri_dump_creg(cap_register_t *crp, const char *name,
+static void cheri_dump_creg(const cap_register_t *crp, const char *name,
         const char *alias, FILE *f, fprintf_function cpu_fprintf)
 {
 
@@ -5218,8 +5222,7 @@ static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf
         cheri_dump_creg(&env->active_tc._CGPR[i], name, cheri_cap_reg[i], f,
                 cpu_fprintf);
     }
-    // TODO: make this use CHWR.DDC
-    cheri_dump_creg(&env->active_tc._CGPR[CP2CAP_DCC],  "HWREG 00 (DDC)", "", f, cpu_fprintf);
+    cheri_dump_creg(get_default_data_cap(&env->active_tc),  "HWREG 00 (DDC)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.UserTlsCap,    "HWREG 01 (CTLSU)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.PrivTlsCap,    "HWREG 08 (CTLSP)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.KR1C,          "HWREG 22 (KR1C)", "", f, cpu_fprintf);
@@ -6457,6 +6460,10 @@ static void dump_changed_regs(CPUMIPSState *env)
     for (i=0; i<32; i++) {
         dump_changed_capreg(env, &cur->_CGPR[i], &env->last_C[i], capreg_name[i]);
     }
+#ifdef CHERI_C0_NULL
+    assert(is_null_capability(&cur->_CGPR[0]) && "C0 was not NULL?");
+    dump_changed_capreg(env, &cur->CHWR.DDC, &env->last_CHWR.DDC, "DDC");
+#endif
     dump_changed_capreg(env, &cur->CHWR.UserTlsCap, &env->last_CHWR.UserTlsCap, "UserTlsCap");
     dump_changed_capreg(env, &cur->CHWR.PrivTlsCap, &env->last_CHWR.PrivTlsCap, "PrivTlsCap");
     dump_changed_capreg(env, &cur->CHWR.KR1C, &env->last_CHWR.KR1C, "ChwrKR1C");
