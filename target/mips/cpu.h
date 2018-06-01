@@ -406,6 +406,22 @@ get_default_data_cap(TCState* state) {
 #endif
 }
 
+/// return a read-only capability register with register number 0 meaning $ddc
+/// This is useful for cl*/cs*/cll*/csc*/cfromptr/cbuildcap since using $ddc as the address
+/// argument there will cause a trap
+/// We also use it for the cb argument to ctoptr/cbuildcap since using a ctoptr
+/// relative to $ddc make sense whereas using it relative to NULL is the same as
+/// just cmove $cN, $cnull
+static inline const cap_register_t*
+get_capreg_0_is_ddc(TCState* state, unsigned num) {
+#ifdef CHERI_C0_NULL
+    if (unlikely(num == 0)) {
+        return get_default_data_cap(state);
+    }
+#endif
+    return &state->_CGPR[num];
+}
+
 // FIXME: remove the last few users of this function
 static inline cap_register_t*
 get_writable_capreg_raw(TCState* state, unsigned num) {
