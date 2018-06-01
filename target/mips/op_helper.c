@@ -2632,6 +2632,7 @@ void helper_cclearreg(CPUMIPSState *env, uint32_t mask)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
 
+    // The creg_inaccessible check must be performed before changing any regs
     for (int creg = 0; creg < 32; creg++) {
         if ((mask & (0x1 << creg)) && creg_inaccessible(perms, creg)) {
             /* raise exception and bail without clearing registers */
@@ -2639,8 +2640,12 @@ void helper_cclearreg(CPUMIPSState *env, uint32_t mask)
             return;
         }
     }
-    for (int creg = 0; creg < 32; creg++) {
-        // FIXME: should 0 be $ddc here?
+    // Register zero means $ddc here since it is useful to clear $ddc on a
+    // sandbox switch whereas clearing $NULL is useless
+    if (mask & 0x1)
+        (void)null_capability(get_writable_default_data_cap(&env->active_tc));
+
+    for (int creg = 1; creg < 32; creg++) {
         if (mask & (0x1 << creg))
             (void)null_capability(&env->active_tc._CGPR[creg]);
     }
@@ -3249,11 +3254,7 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
     switch (hwr) {
     case CP2HWR_DDC: /* always accessible */
-#ifdef CHERI_C0_NULL
-        return &env->active_tc.CHWR.DDC;
-#else
-        return &env->active_tc._CGPR[CP2CAP_DCC];
-#endif
+        return get_writable_default_data_cap(&env->active_tc);
     case CP2HWR_USER_TLS:  /* always accessible */
         return &env->active_tc.CHWR.UserTlsCap;
     case CP2HWR_PRIV_TLS:

@@ -406,6 +406,15 @@ get_default_data_cap(TCState* state) {
 #endif
 }
 
+static inline cap_register_t*
+get_writable_default_data_cap(TCState* state) {
+#ifdef CHERI_C0_NULL
+        return &state->CHWR.DDC;
+#else
+    return &state->_CGPR[CP2CAP_DCC];
+#endif
+}
+
 /// return a read-only capability register with register number 0 meaning $ddc
 /// This is useful for cl*/cs*/cll*/csc*/cfromptr/cbuildcap since using $ddc as the address
 /// argument there will cause a trap
