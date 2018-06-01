@@ -4488,7 +4488,8 @@ target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
     /* This could be done in helper_bytes2cap_128 but TCG limits the number
      * of arguments to 5 so we have to have a separate helper to handle the tag.
      */
-    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    // Since this is used by cl* we need to treat cb == 0 as $ddc
+    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     target_ulong tag = cheri_tag_get(env, addr, cd, NULL);
 
     if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
@@ -4623,7 +4624,8 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
 {
     /* unused but needed to fetch the tag */
     uint64_t tps, length;
-    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    // Since this is used by cl* we need to treat cb == 0 as $ddc
+    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
 
     uint32_t tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
@@ -4757,7 +4759,8 @@ static inline void dump_cap_store_length(uint64_t length)
 void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
-    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    // Since this is used by cl* we need to treat cb == 0 as $ddc
+    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
     uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
     uint32_t perms;
@@ -4783,7 +4786,8 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
 void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
-    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    // Since this is used by cl* we need to treat cb == 0 as $ddc
+    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
     uint32_t tag = cheri_tag_get(env, addr, cd, &env->lladdr);
     uint32_t perms;
