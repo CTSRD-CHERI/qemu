@@ -3526,11 +3526,11 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
-    // CToPtr returns NULL on cbp == NULL so we use reg0 as $ddc. This means we
+    // CToPtr traps on ctp == NULL so we use reg0 as $ddc there. This means we
     // can have a CToPtr relative to $ddc as one instruction instead of two and
     // is required since clang still assumes it can use zero as $ddc in cfromptr/ctoptr
-    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
+    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
+    const cap_register_t *ctp = get_capreg_0_is_ddc(&env->active_tc, ct);
     uint64_t cb_cursor = cbp->cr_base + cbp->cr_offset;
     uint64_t ct_top = ctp->cr_base + ctp->cr_length;
     /*
