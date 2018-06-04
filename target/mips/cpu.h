@@ -391,13 +391,13 @@ struct TCState {
 #endif /* TARGET_CHERI */
 };
 
-static inline const cap_register_t*
+static inline  __attribute__((always_inline)) const cap_register_t*
 get_readonly_capreg(TCState* state, unsigned num) {
     // TODO: special-case zero
     return &state->_CGPR[num];
 }
 
-static inline const cap_register_t*
+static inline  __attribute__((always_inline)) const cap_register_t*
 get_default_data_cap(TCState* state) {
 #ifdef CHERI_C0_NULL
     return &state->CHWR.DDC;
@@ -406,7 +406,7 @@ get_default_data_cap(TCState* state) {
 #endif
 }
 
-static inline cap_register_t*
+static inline  __attribute__((always_inline)) cap_register_t*
 get_writable_default_data_cap(TCState* state) {
 #ifdef CHERI_C0_NULL
         return &state->CHWR.DDC;
@@ -421,7 +421,7 @@ get_writable_default_data_cap(TCState* state) {
 /// We also use it for the cb argument to ctoptr/cbuildcap since using a ctoptr
 /// relative to $ddc make sense whereas using it relative to NULL is the same as
 /// just cmove $cN, $cnull
-static inline const cap_register_t*
+static inline __attribute__((always_inline)) const cap_register_t*
 get_capreg_0_is_ddc(TCState* state, unsigned num) {
 #ifdef CHERI_C0_NULL
     if (unlikely(num == 0)) {
@@ -432,7 +432,7 @@ get_capreg_0_is_ddc(TCState* state, unsigned num) {
 }
 
 // FIXME: remove the last few users of this function
-static inline cap_register_t*
+static inline  __attribute__((always_inline)) cap_register_t*
 get_writable_capreg_raw(TCState* state, unsigned num) {
 #ifdef CHERI_C0_NULL
     if (unlikely(num == 0)) {
