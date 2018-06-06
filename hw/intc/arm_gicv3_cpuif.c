@@ -29,11 +29,7 @@ void gicv3_set_gicv3state(CPUState *cpu, GICv3CPUState *s)
 
 static GICv3CPUState *icc_cs_from_env(CPUARMState *env)
 {
-    /* Given the CPU, find the right GICv3CPUState struct.
-     * Since we registered the CPU interface with the EL change hook as
-     * the opaque pointer, we can just directly get from the CPU to it.
-     */
-    return arm_get_el_change_hook_opaque(arm_env_get_cpu(env));
+    return env->gicv3state;
 }
 
 static bool gicv3_use_ns_bank(CPUARMState *env)
@@ -836,7 +832,7 @@ static uint64_t icc_pmr_read(CPUARMState *env, const ARMCPRegInfo *ri)
         /* NS access and Group 0 is inaccessible to NS: return the
          * NS view of the current priority
          */
-        if (value & 0x80) {
+        if ((value & 0x80) == 0) {
             /* Secure priorities not visible to NS */
             value = 0;
         } else if (value != 0xff) {
@@ -871,7 +867,7 @@ static void icc_pmr_write(CPUARMState *env, const ARMCPRegInfo *ri,
             /* Current PMR in the secure range, don't allow NS to change it */
             return;
         }
-        value = (value >> 1) & 0x80;
+        value = (value >> 1) | 0x80;
     }
     cs->icc_pmr_el1 = value;
     gicv3_cpuif_update(cs);
@@ -1609,7 +1605,7 @@ static uint64_t icc_rpr_read(CPUARMState *env, const ARMCPRegInfo *ri)
     if (arm_feature(env, ARM_FEATURE_EL3) &&
         !arm_is_secure(env) && (env->cp15.scr_el3 & SCR_FIQ)) {
         /* NS GIC access and Group 0 is inaccessible to NS */
-        if (prio & 0x80) {
+        if ((prio & 0x80) == 0) {
             /* NS mustn't see priorities in the Secure half of the range */
             prio = 0;
         } else if (prio != 0xff) {
@@ -2615,9 +2611,7 @@ void gicv3_init_cpuif(GICv3State *s)
          * it might be with code translated by CPU 0 but run by CPU 1, in
          * which case we'd get the wrong value.
          * So instead we define the regs with no ri->opaque info, and
-         * get back to the GICv3CPUState from the ARMCPU by reading back
-         * the opaque pointer from the el_change_hook, which we're going
-         * to need to register anyway.
+         * get back to the GICv3CPUState from the CPUARMState.
          */
         define_arm_cp_regs(cpu, gicv3_cpuif_reginfo);
         if (arm_feature(&cpu->env, ARM_FEATURE_EL2)

@@ -21,16 +21,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include "qemu/osdep.h"
 #include <getopt.h>
 
 #include "qemu-version.h"
 #include "qapi/error.h"
-#include "qapi-visit.h"
+#include "qapi/qapi-visit-block-core.h"
 #include "qapi/qobject-output-visitor.h"
-#include "qapi/qmp/qerror.h"
 #include "qapi/qmp/qjson.h"
-#include "qapi/qmp/qbool.h"
+#include "qapi/qmp/qdict.h"
+#include "qapi/qmp/qstring.h"
 #include "qemu/cutils.h"
 #include "qemu/config-file.h"
 #include "qemu/option.h"
@@ -45,7 +46,7 @@
 #include "crypto/init.h"
 #include "trace/control.h"
 
-#define QEMU_IMG_VERSION "qemu-img version " QEMU_VERSION QEMU_PKGVERSION \
+#define QEMU_IMG_VERSION "qemu-img version " QEMU_FULL_VERSION \
                           "\n" QEMU_COPYRIGHT "\n"
 
 typedef struct img_cmd_t {
@@ -278,7 +279,7 @@ static BlockBackend *img_open_opts(const char *optstr,
         if (qdict_haskey(options, BDRV_OPT_FORCE_SHARE)
             && !qdict_get_bool(options, BDRV_OPT_FORCE_SHARE)) {
             error_report("--force-share/-U conflicts with image options");
-            QDECREF(options);
+            qobject_unref(options);
             return NULL;
         }
         qdict_put_bool(options, BDRV_OPT_FORCE_SHARE, true);
@@ -560,9 +561,9 @@ static void dump_json_image_check(ImageCheck *check, bool quiet)
     str = qobject_to_json_pretty(obj);
     assert(str != NULL);
     qprintf(quiet, "%s\n", qstring_get_str(str));
-    qobject_decref(obj);
+    qobject_unref(obj);
     visit_free(v);
-    QDECREF(str);
+    qobject_unref(str);
 }
 
 static void dump_human_image_check(ImageCheck *check, bool quiet)
@@ -2383,9 +2384,9 @@ static void dump_json_image_info_list(ImageInfoList *list)
     str = qobject_to_json_pretty(obj);
     assert(str != NULL);
     printf("%s\n", qstring_get_str(str));
-    qobject_decref(obj);
+    qobject_unref(obj);
     visit_free(v);
-    QDECREF(str);
+    qobject_unref(str);
 }
 
 static void dump_json_image_info(ImageInfo *info)
@@ -2399,9 +2400,9 @@ static void dump_json_image_info(ImageInfo *info)
     str = qobject_to_json_pretty(obj);
     assert(str != NULL);
     printf("%s\n", qstring_get_str(str));
-    qobject_decref(obj);
+    qobject_unref(obj);
     visit_free(v);
-    QDECREF(str);
+    qobject_unref(str);
 }
 
 static void dump_human_image_info_list(ImageInfoList *list)
@@ -3468,7 +3469,7 @@ static int img_resize(int argc, char **argv)
         }
     }
     if (optind != argc - 1) {
-        error_exit("Expecting one image file name");
+        error_exit("Expecting image file name and size");
     }
     filename = argv[optind++];
 
@@ -3862,6 +3863,7 @@ static int img_bench(int argc, char **argv)
     struct timeval t1, t2;
     int i;
     bool force_share = false;
+    size_t buf_size;
 
     for (;;) {
         static const struct option long_options[] = {
@@ -4050,8 +4052,11 @@ static int img_bench(int argc, char **argv)
         printf("Sending flush every %d requests\n", flush_interval);
     }
 
-    data.buf = blk_blockalign(blk, data.nrreq * data.bufsize);
+    buf_size = data.nrreq * data.bufsize;
+    data.buf = blk_blockalign(blk, buf_size);
     memset(data.buf, pattern, data.nrreq * data.bufsize);
+
+    blk_register_buf(blk, data.buf, buf_size);
 
     data.qiov = g_new(QEMUIOVector, data.nrreq);
     for (i = 0; i < data.nrreq; i++) {
@@ -4073,6 +4078,9 @@ static int img_bench(int argc, char **argv)
            + ((double)(t2.tv_usec - t1.tv_usec) / 1000000));
 
 out:
+    if (data.buf) {
+        blk_unregister_buf(blk, data.buf);
+    }
     qemu_vfree(data.buf);
     blk_unref(blk);
 
@@ -4449,9 +4457,9 @@ static void dump_json_block_measure_info(BlockMeasureInfo *info)
     str = qobject_to_json_pretty(obj);
     assert(str != NULL);
     printf("%s\n", qstring_get_str(str));
-    qobject_decref(obj);
+    qobject_unref(obj);
     visit_free(v);
-    QDECREF(str);
+    qobject_unref(str);
 }
 
 static int img_measure(int argc, char **argv)

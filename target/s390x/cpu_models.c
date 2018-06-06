@@ -20,9 +20,10 @@
 #include "qemu/error-report.h"
 #include "qapi/qmp/qerror.h"
 #include "qapi/qobject-input-visitor.h"
-#include "qapi/qmp/qbool.h"
+#include "qapi/qmp/qdict.h"
 #ifndef CONFIG_USER_ONLY
 #include "sysemu/arch_init.h"
+#include "hw/pci/pci.h"
 #endif
 
 #define CPUDEF_INIT(_type, _gen, _ec_ga, _mha_pow, _hmfai, _name, _desc) \
@@ -452,7 +453,7 @@ static void cpu_model_from_info(S390CPUModel *model, const CpuModelInfo *info,
     Object *obj;
 
     if (info->props) {
-        qdict = qobject_to_qdict(info->props);
+        qdict = qobject_to(QDict, info->props);
         if (!qdict) {
             error_setg(errp, QERR_INVALID_PARAMETER_TYPE, "props", "dict");
             return;
@@ -550,7 +551,7 @@ static void cpu_info_from_model(CpuModelInfo *info, const S390CPUModel *model,
     }
 
     if (!qdict_size(qdict)) {
-        QDECREF(qdict);
+        qobject_unref(qdict);
     } else {
         info->props = QOBJECT(qdict);
         info->has_props = true;
@@ -1271,6 +1272,11 @@ static void register_types(void)
 
     /* init all bitmaps from gnerated data initially */
     s390_init_feat_bitmap(qemu_max_cpu_feat_init, qemu_max_cpu_feat);
+#ifndef CONFIG_USER_ONLY
+    if (!pci_available) {
+        clear_bit(S390_FEAT_ZPCI, qemu_max_cpu_feat);
+    }
+#endif
     for (i = 0; i < ARRAY_SIZE(s390_cpu_defs); i++) {
         s390_init_feat_bitmap(s390_cpu_defs[i].base_init,
                               s390_cpu_defs[i].base_feat);

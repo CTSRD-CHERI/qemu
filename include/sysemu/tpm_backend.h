@@ -15,9 +15,9 @@
 
 #include "qom/object.h"
 #include "qemu-common.h"
-#include "qapi-types.h"
 #include "qemu/option.h"
 #include "sysemu/tpm.h"
+#include "qapi/error.h"
 
 #define TYPE_TPM_BACKEND "tpm-backend"
 #define TPM_BACKEND(obj) \
@@ -45,9 +45,8 @@ struct TPMBackend {
     /*< protected >*/
     TPMIf *tpmif;
     bool opened;
-    GThreadPool *thread_pool;
     bool had_startup_error;
-    QEMUBH *bh;
+    TPMBackendCmd *cmd;
 
     /* <public> */
     char *id;
@@ -85,7 +84,7 @@ struct TPMBackendClass {
 
     TpmTypeOptions *(*get_tpm_options)(TPMBackend *t);
 
-    void (*handle_request)(TPMBackend *s, TPMBackendCmd *cmd);
+    void (*handle_request)(TPMBackend *s, TPMBackendCmd *cmd, Error **errp);
 };
 
 /**
@@ -195,6 +194,15 @@ TPMVersion tpm_backend_get_tpm_version(TPMBackend *s);
  * Returns buffer size.
  */
 size_t tpm_backend_get_buffer_size(TPMBackend *s);
+
+/**
+ * tpm_backend_finish_sync:
+ * @s: the backend to call into
+ *
+ * Finish the pending command synchronously (this will call aio_poll()
+ * on qemu main AIOContext until it ends)
+ */
+void tpm_backend_finish_sync(TPMBackend *s);
 
 /**
  * tpm_backend_query_tpm:

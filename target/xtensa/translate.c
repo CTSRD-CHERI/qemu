@@ -50,7 +50,7 @@
 /* is_jmp field values */
 #define DISAS_UPDATE  DISAS_TARGET_0 /* cpu state was modified dynamically */
 
-typedef struct DisasContext {
+struct DisasContext {
     const XtensaConfig *config;
     TranslationBlock *tb;
     uint32_t pc;
@@ -78,7 +78,7 @@ typedef struct DisasContext {
     uint32_t *raw_arg;
     xtensa_insnbuf insnbuf;
     xtensa_insnbuf slotbuf;
-} DisasContext;
+};
 
 static TCGv_i32 cpu_pc;
 static TCGv_i32 cpu_R[16];
@@ -345,12 +345,14 @@ static void gen_debug_exception(DisasContext *dc, uint32_t cause)
 
 static bool gen_check_privilege(DisasContext *dc)
 {
-    if (dc->cring) {
-        gen_exception_cause(dc, PRIVILEGED_CAUSE);
-        dc->is_jmp = DISAS_UPDATE;
-        return false;
+#ifndef CONFIG_USER_ONLY
+    if (!dc->cring) {
+        return true;
     }
-    return true;
+#endif
+    gen_exception_cause(dc, PRIVILEGED_CAUSE);
+    dc->is_jmp = DISAS_UPDATE;
+    return false;
 }
 
 static bool gen_check_cpenable(DisasContext *dc, unsigned cp)
@@ -498,6 +500,7 @@ static bool gen_check_sr(DisasContext *dc, uint32_t sr, unsigned access)
     return true;
 }
 
+#ifndef CONFIG_USER_ONLY
 static bool gen_rsr_ccount(DisasContext *dc, TCGv_i32 d, uint32_t sr)
 {
     if (tb_cflags(dc->tb) & CF_USE_ICOUNT) {
@@ -519,14 +522,17 @@ static bool gen_rsr_ptevaddr(DisasContext *dc, TCGv_i32 d, uint32_t sr)
     tcg_gen_andi_i32(d, d, 0xfffffffc);
     return false;
 }
+#endif
 
 static bool gen_rsr(DisasContext *dc, TCGv_i32 d, uint32_t sr)
 {
     static bool (* const rsr_handler[256])(DisasContext *dc,
             TCGv_i32 d, uint32_t sr) = {
+#ifndef CONFIG_USER_ONLY
         [CCOUNT] = gen_rsr_ccount,
         [INTSET] = gen_rsr_ccount,
         [PTEVADDR] = gen_rsr_ptevaddr,
+#endif
     };
 
     if (rsr_handler[sr]) {
@@ -582,6 +588,7 @@ static bool gen_wsr_acchi(DisasContext *dc, uint32_t sr, TCGv_i32 s)
     return false;
 }
 
+#ifndef CONFIG_USER_ONLY
 static bool gen_wsr_windowbase(DisasContext *dc, uint32_t sr, TCGv_i32 v)
 {
     gen_helper_wsr_windowbase(cpu_env, v);
@@ -797,6 +804,11 @@ static bool gen_wsr_ccompare(DisasContext *dc, uint32_t sr, TCGv_i32 v)
     }
     return ret;
 }
+#else
+static void gen_check_interrupts(DisasContext *dc)
+{
+}
+#endif
 
 static bool gen_wsr(DisasContext *dc, uint32_t sr, TCGv_i32 s)
 {
@@ -808,6 +820,7 @@ static bool gen_wsr(DisasContext *dc, uint32_t sr, TCGv_i32 s)
         [BR] = gen_wsr_br,
         [LITBASE] = gen_wsr_litbase,
         [ACCHI] = gen_wsr_acchi,
+#ifndef CONFIG_USER_ONLY
         [WINDOW_BASE] = gen_wsr_windowbase,
         [WINDOW_START] = gen_wsr_windowstart,
         [PTEVADDR] = gen_wsr_ptevaddr,
@@ -834,6 +847,7 @@ static bool gen_wsr(DisasContext *dc, uint32_t sr, TCGv_i32 s)
         [CCOMPARE] = gen_wsr_ccompare,
         [CCOMPARE + 1] = gen_wsr_ccompare,
         [CCOMPARE + 2] = gen_wsr_ccompare,
+#endif
     };
 
     if (wsr_handler[sr]) {
@@ -878,6 +892,7 @@ static void gen_load_store_alignment(DisasContext *dc, int shift,
     }
 }
 
+#ifndef CONFIG_USER_ONLY
 static void gen_waiti(DisasContext *dc, uint32_t imm4)
 {
     TCGv_i32 pc = tcg_const_i32(dc->next_pc);
@@ -894,6 +909,7 @@ static void gen_waiti(DisasContext *dc, uint32_t imm4)
     tcg_temp_free(intlevel);
     gen_jumpi_check_loop_end(dc, 0);
 }
+#endif
 
 static bool gen_window_check1(DisasContext *dc, unsigned r1)
 {
@@ -942,7 +958,7 @@ static void disas_xtensa_insn(CPUXtensaState *env, DisasContext *dc)
     unsigned char b[MAX_INSN_LENGTH] = {cpu_ldub_code(env, dc->pc)};
     unsigned len = xtensa_op0_insn_len(dc, b[0]);
     xtensa_format fmt;
-    unsigned slot, slots;
+    int slot, slots;
     unsigned i;
 
     if (len == XTENSA_UNDEFINED) {
@@ -969,7 +985,7 @@ static void disas_xtensa_insn(CPUXtensaState *env, DisasContext *dc)
     slots = xtensa_format_num_slots(isa, fmt);
     for (slot = 0; slot < slots; ++slot) {
         xtensa_opcode opc;
-        unsigned opnd, vopnd, opnds;
+        int opnd, vopnd, opnds;
         uint32_t raw_arg[MAX_OPCODE_ARGS];
         uint32_t arg[MAX_OPCODE_ARGS];
         XtensaOpcodeOps *ops;
@@ -1045,8 +1061,7 @@ void gen_intermediate_code(CPUState *cs, TranslationBlock *tb)
     int insn_count = 0;
     int max_insns = tb_cflags(tb) & CF_COUNT_MASK;
     uint32_t pc_start = tb->pc;
-    uint32_t next_page_start =
-        (pc_start & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
+    uint32_t page_start = pc_start & TARGET_PAGE_MASK;
 
     if (max_insns == 0) {
         max_insns = CF_COUNT_MASK;
@@ -1146,9 +1161,9 @@ void gen_intermediate_code(CPUState *cs, TranslationBlock *tb)
         }
     } while (dc.is_jmp == DISAS_NEXT &&
             insn_count < max_insns &&
-            dc.pc < next_page_start &&
-            dc.pc + xtensa_insn_len(env, &dc) <= next_page_start &&
-            !tcg_op_buf_full());
+            dc.pc - page_start < TARGET_PAGE_SIZE &&
+            dc.pc - page_start + xtensa_insn_len(env, &dc) <= TARGET_PAGE_SIZE
+            && !tcg_op_buf_full());
 done:
     reset_sar_tracker(&dc);
     if (dc.icount) {
@@ -1215,11 +1230,17 @@ void xtensa_cpu_dump_state(CPUState *cs, FILE *f,
                 (i % 4) == 3 ? '\n' : ' ');
     }
 
+    xtensa_sync_phys_from_window(env);
     cpu_fprintf(f, "\n");
 
     for (i = 0; i < env->config->nareg; ++i) {
-        cpu_fprintf(f, "AR%02d=%08x%c", i, env->phys_regs[i],
-                (i % 4) == 3 ? '\n' : ' ');
+        cpu_fprintf(f, "AR%02d=%08x ", i, env->phys_regs[i]);
+        if (i % 4 == 3) {
+            bool ws = (env->sregs[WINDOW_START] & (1 << (i / 4))) != 0;
+            bool cw = env->sregs[WINDOW_BASE] == i / 4;
+
+            cpu_fprintf(f, "%c%c\n", ws ? '<' : ' ', cw ? '=' : ' ');
+        }
     }
 
     if (xtensa_option_enabled(env->config, XTENSA_OPTION_FP_COPROCESSOR)) {
@@ -1590,12 +1611,14 @@ static void translate_icache(DisasContext *dc, const uint32_t arg[],
 {
     if ((!par[0] || gen_check_privilege(dc)) &&
         gen_window_check1(dc, arg[0]) && par[1]) {
+#ifndef CONFIG_USER_ONLY
         TCGv_i32 addr = tcg_temp_new_i32();
 
         tcg_gen_movi_i32(cpu_pc, dc->pc);
         tcg_gen_addi_i32(addr, cpu_R[arg[0]], arg[1]);
         gen_helper_itlb_hit_test(cpu_env, addr);
         tcg_temp_free(addr);
+#endif
     }
 }
 
@@ -1604,12 +1627,14 @@ static void translate_itlb(DisasContext *dc, const uint32_t arg[],
 {
     if (gen_check_privilege(dc) &&
         gen_window_check1(dc, arg[0])) {
+#ifndef CONFIG_USER_ONLY
         TCGv_i32 dtlb = tcg_const_i32(par[0]);
 
         gen_helper_itlb(cpu_env, cpu_R[arg[0]], dtlb);
         /* This could change memory mapping, so exit tb */
         gen_jumpi_check_loop_end(dc, -1);
         tcg_temp_free(dtlb);
+#endif
     }
 }
 
@@ -1658,9 +1683,15 @@ static void translate_ldst(DisasContext *dc, const uint32_t arg[],
             gen_load_store_alignment(dc, par[0] & MO_SIZE, addr, par[1]);
         }
         if (par[2]) {
+            if (par[1]) {
+                tcg_gen_mb(TCG_BAR_STRL | TCG_MO_ALL);
+            }
             tcg_gen_qemu_st_tl(cpu_R[arg[0]], addr, dc->cring, par[0]);
         } else {
             tcg_gen_qemu_ld_tl(cpu_R[arg[0]], addr, dc->cring, par[0]);
+            if (par[1]) {
+                tcg_gen_mb(TCG_BAR_LDAQ | TCG_MO_ALL);
+            }
         }
         tcg_temp_free(addr);
     }
@@ -1817,6 +1848,12 @@ static void translate_mac16(DisasContext *dc, const uint32_t arg[],
     }
 }
 
+static void translate_memw(DisasContext *dc, const uint32_t arg[],
+                           const uint32_t par[])
+{
+    tcg_gen_mb(TCG_BAR_SC | TCG_MO_ALL);
+}
+
 static void translate_minmax(DisasContext *dc, const uint32_t arg[],
                              const uint32_t par[])
 {
@@ -1967,11 +2004,13 @@ static void translate_ptlb(DisasContext *dc, const uint32_t arg[],
 {
     if (gen_check_privilege(dc) &&
         gen_window_check2(dc, arg[0], arg[1])) {
+#ifndef CONFIG_USER_ONLY
         TCGv_i32 dtlb = tcg_const_i32(par[0]);
 
         tcg_gen_movi_i32(cpu_pc, dc->pc);
         gen_helper_ptlb(cpu_R[arg[0]], cpu_env, cpu_R[arg[1]], dtlb);
         tcg_temp_free(dtlb);
+#endif
     }
 }
 
@@ -2155,8 +2194,10 @@ static void translate_rtlb(DisasContext *dc, const uint32_t arg[],
 {
     static void (* const helper[])(TCGv_i32 r, TCGv_env env, TCGv_i32 a1,
                                    TCGv_i32 a2) = {
+#ifndef CONFIG_USER_ONLY
         gen_helper_rtlb0,
         gen_helper_rtlb1,
+#endif
     };
 
     if (gen_check_privilege(dc) &&
@@ -2187,29 +2228,33 @@ static void translate_setb_expstate(DisasContext *dc, const uint32_t arg[],
     tcg_gen_ori_i32(cpu_UR[EXPSTATE], cpu_UR[EXPSTATE], 1u << arg[0]);
 }
 
+#ifdef CONFIG_USER_ONLY
+static void gen_check_atomctl(DisasContext *dc, TCGv_i32 addr)
+{
+}
+#else
+static void gen_check_atomctl(DisasContext *dc, TCGv_i32 addr)
+{
+    TCGv_i32 tpc = tcg_const_i32(dc->pc);
+
+    gen_helper_check_atomctl(cpu_env, tpc, addr);
+    tcg_temp_free(tpc);
+}
+#endif
+
 static void translate_s32c1i(DisasContext *dc, const uint32_t arg[],
                              const uint32_t par[])
 {
     if (gen_window_check2(dc, arg[0], arg[1])) {
-        TCGLabel *label = gen_new_label();
         TCGv_i32 tmp = tcg_temp_local_new_i32();
         TCGv_i32 addr = tcg_temp_local_new_i32();
-        TCGv_i32 tpc;
 
         tcg_gen_mov_i32(tmp, cpu_R[arg[0]]);
         tcg_gen_addi_i32(addr, cpu_R[arg[1]], arg[2]);
         gen_load_store_alignment(dc, 2, addr, true);
-
-        tpc = tcg_const_i32(dc->pc);
-        gen_helper_check_atomctl(cpu_env, tpc, addr);
-        tcg_gen_qemu_ld32u(cpu_R[arg[0]], addr, dc->cring);
-        tcg_gen_brcond_i32(TCG_COND_NE, cpu_R[arg[0]],
-                           cpu_SR[SCOMPARE1], label);
-
-        tcg_gen_qemu_st32(tmp, addr, dc->cring);
-
-        gen_set_label(label);
-        tcg_temp_free(tpc);
+        gen_check_atomctl(dc, addr);
+        tcg_gen_atomic_cmpxchg_i32(cpu_R[arg[0]], addr, cpu_SR[SCOMPARE1],
+                                   tmp, dc->cring, MO_32);
         tcg_temp_free(addr);
         tcg_temp_free(tmp);
     }
@@ -2261,11 +2306,14 @@ static void translate_sext(DisasContext *dc, const uint32_t arg[],
 static void translate_simcall(DisasContext *dc, const uint32_t arg[],
                               const uint32_t par[])
 {
+#ifndef CONFIG_USER_ONLY
     if (semihosting_enabled()) {
         if (gen_check_privilege(dc)) {
             gen_helper_simcall(cpu_env);
         }
-    } else {
+    } else
+#endif
+    {
         qemu_log_mask(LOG_GUEST_ERROR, "SIMCALL but semihosting is disabled\n");
         gen_exception_cause(dc, ILLEGAL_INSTRUCTION_CAUSE);
     }
@@ -2448,7 +2496,9 @@ static void translate_waiti(DisasContext *dc, const uint32_t arg[],
                             const uint32_t par[])
 {
     if (gen_check_privilege(dc)) {
+#ifndef CONFIG_USER_ONLY
         gen_waiti(dc, arg[0]);
+#endif
     }
 }
 
@@ -2457,12 +2507,14 @@ static void translate_wtlb(DisasContext *dc, const uint32_t arg[],
 {
     if (gen_check_privilege(dc) &&
         gen_window_check2(dc, arg[0], arg[1])) {
+#ifndef CONFIG_USER_ONLY
         TCGv_i32 dtlb = tcg_const_i32(par[0]);
 
         gen_helper_wtlb(cpu_env, cpu_R[arg[0]], cpu_R[arg[1]], dtlb);
         /* This could change memory mapping, so exit tb */
         gen_jumpi_check_loop_end(dc, -1);
         tcg_temp_free(dtlb);
+#endif
     }
 }
 
@@ -2822,7 +2874,7 @@ static const XtensaOpcodeOps core_ops[] = {
         .translate = translate_extui,
     }, {
         .name = "extw",
-        .translate = translate_nop,
+        .translate = translate_memw,
     }, {
         .name = "hwwdtlba",
         .translate = translate_ill,
@@ -2939,7 +2991,7 @@ static const XtensaOpcodeOps core_ops[] = {
         .par = (const uint32_t[]){TCG_COND_GEU},
     }, {
         .name = "memw",
-        .translate = translate_nop,
+        .translate = translate_memw,
     }, {
         .name = "min",
         .translate = translate_minmax,

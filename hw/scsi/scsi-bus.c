@@ -2,6 +2,7 @@
 #include "hw/hw.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "qemu/option.h"
 #include "hw/scsi/scsi.h"
 #include "scsi/constants.h"
 #include "hw/qdev.h"
@@ -224,6 +225,7 @@ static void scsi_qdev_unrealize(DeviceState *qdev, Error **errp)
 /* handle legacy '-drive if=scsi,...' cmd line args */
 SCSIDevice *scsi_bus_legacy_add_drive(SCSIBus *bus, BlockBackend *blk,
                                       int unit, bool removable, int bootindex,
+                                      bool share_rw,
                                       const char *serial, Error **errp)
 {
     const char *driver;
@@ -254,6 +256,12 @@ SCSIDevice *scsi_bus_legacy_add_drive(SCSIBus *bus, BlockBackend *blk,
         object_unparent(OBJECT(dev));
         return NULL;
     }
+    object_property_set_bool(OBJECT(dev), share_rw, "share-rw", &err);
+    if (err != NULL) {
+        error_propagate(errp, err);
+        object_unparent(OBJECT(dev));
+        return NULL;
+    }
     object_property_set_bool(OBJECT(dev), true, "realized", &err);
     if (err != NULL) {
         error_propagate(errp, err);
@@ -263,7 +271,7 @@ SCSIDevice *scsi_bus_legacy_add_drive(SCSIBus *bus, BlockBackend *blk,
     return SCSI_DEVICE(dev);
 }
 
-void scsi_bus_legacy_handle_cmdline(SCSIBus *bus, bool deprecated)
+void scsi_bus_legacy_handle_cmdline(SCSIBus *bus)
 {
     Location loc;
     DriveInfo *dinfo;
@@ -276,57 +284,10 @@ void scsi_bus_legacy_handle_cmdline(SCSIBus *bus, bool deprecated)
             continue;
         }
         qemu_opts_loc_restore(dinfo->opts);
-        if (deprecated) {
-            /* Handling -drive not claimed by machine initialization */
-            if (blk_get_attached_dev(blk_by_legacy_dinfo(dinfo))) {
-                continue;       /* claimed */
-            }
-            if (!dinfo->is_default) {
-                warn_report("bus=%d,unit=%d is deprecated with this"
-                            " machine type",
-                            bus->busnr, unit);
-            }
-        }
         scsi_bus_legacy_add_drive(bus, blk_by_legacy_dinfo(dinfo),
-                                  unit, false, -1, NULL, &error_fatal);
+                                  unit, false, -1, false, NULL, &error_fatal);
     }
     loc_pop(&loc);
-}
-
-static bool is_scsi_hba_with_legacy_magic(Object *obj)
-{
-    static const char *magic[] = {
-        "am53c974", "dc390", "esp", "lsi53c810", "lsi53c895a",
-        "megasas", "megasas-gen2", "mptsas1068", "spapr-vscsi",
-        "virtio-scsi-device",
-        NULL
-    };
-    const char *typename = object_get_typename(obj);
-    int i;
-
-    for (i = 0; magic[i]; i++)
-        if (!strcmp(typename, magic[i])) {
-            return true;
-    }
-
-    return false;
-}
-
-static int scsi_legacy_handle_cmdline_cb(Object *obj, void *opaque)
-{
-    SCSIBus *bus = (SCSIBus *)object_dynamic_cast(obj, TYPE_SCSI_BUS);
-
-    if (bus && is_scsi_hba_with_legacy_magic(OBJECT(bus->qbus.parent))) {
-        scsi_bus_legacy_handle_cmdline(bus, true);
-    }
-
-    return 0;
-}
-
-void scsi_legacy_handle_cmdline(void)
-{
-    object_child_foreach_recursive(object_get_root(),
-                                   scsi_legacy_handle_cmdline_cb, NULL);
 }
 
 static int32_t scsi_invalid_field(SCSIRequest *req, uint8_t *buf)
@@ -983,7 +944,7 @@ static int scsi_req_xfer(SCSICommand *cmd, SCSIDevice *dev, uint8_t *buf)
         break;
     case WRITE_SAME_10:
     case WRITE_SAME_16:
-        cmd->xfer = dev->blocksize;
+        cmd->xfer = buf[1] & 1 ? 0 : dev->blocksize;
         break;
     case READ_CAPACITY_10:
         cmd->xfer = 8;

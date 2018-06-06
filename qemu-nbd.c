@@ -22,18 +22,19 @@
 #include <pthread.h>
 
 #include "qapi/error.h"
-#include "qemu-common.h"
 #include "qemu/cutils.h"
 #include "sysemu/block-backend.h"
 #include "block/block_int.h"
 #include "block/nbd.h"
 #include "qemu/main-loop.h"
+#include "qemu/option.h"
 #include "qemu/error-report.h"
 #include "qemu/config-file.h"
 #include "qemu/bswap.h"
 #include "qemu/log.h"
 #include "qemu/systemd.h"
 #include "block/snapshot.h"
+#include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qstring.h"
 #include "qom/object_interfaces.h"
 #include "io/channel-socket.h"
@@ -129,7 +130,7 @@ QEMU_HELP_BOTTOM "\n"
 static void version(const char *name)
 {
     printf(
-"%s " QEMU_VERSION QEMU_PKGVERSION "\n"
+"%s " QEMU_FULL_VERSION "\n"
 "Written by Anthony Liguori.\n"
 "\n"
 QEMU_COPYRIGHT "\n"

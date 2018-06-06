@@ -12,6 +12,7 @@
 
 #include "qemu/osdep.h"
 #include "qapi/error.h"
+#include "qapi/qmp/qnull.h"
 #include "cpu.h"
 #include "qemu/cutils.h"
 #include "hw/ppc/spapr_drc.h"
@@ -304,7 +305,7 @@ static void prop_get_fdt(Object *obj, Visitor *v, const char *name,
 
     if (!drc->fdt) {
         visit_type_null(v, NULL, &null, errp);
-        QDECREF(null);
+        qobject_unref(null);
         return;
     }
 

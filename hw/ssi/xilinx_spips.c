@@ -43,7 +43,7 @@
         fprintf(stderr,  ": %s: ", __func__); \
         fprintf(stderr, ## __VA_ARGS__); \
     } \
-} while (0);
+} while (0)
 
 /* config register */
 #define R_CONFIG            (0x00 / 4)
@@ -210,6 +210,9 @@
 #define SNOOP_NONE 0xEE
 #define SNOOP_STRIPING 0
 
+#define MIN_NUM_BUSSES 1
+#define MAX_NUM_BUSSES 2
+
 static inline int num_effective_busses(XilinxSPIPS *s)
 {
     return (s->regs[R_LQSPI_CFG] & LQSPI_CFG_SEP_BUS &&
@@ -220,7 +223,7 @@ static void xilinx_spips_update_cs(XilinxSPIPS *s, int field)
 {
     int i;
 
-    for (i = 0; i < s->num_cs; i++) {
+    for (i = 0; i < s->num_cs * s->num_busses; i++) {
         bool old_state = s->cs_lines_state[i];
         bool new_state = field & (1 << i);
 
@@ -231,7 +234,7 @@ static void xilinx_spips_update_cs(XilinxSPIPS *s, int field)
         }
         qemu_set_irq(s->cs_lines[i], !new_state);
     }
-    if (!(field & ((1 << s->num_cs) - 1))) {
+    if (!(field & ((1 << (s->num_cs * s->num_busses)) - 1))) {
         s->snoop_state = SNOOP_CHECKING;
         s->cmd_dummies = 0;
         s->link_state = 1;
@@ -245,7 +248,40 @@ static void xlnx_zynqmp_qspips_update_cs_lines(XlnxZynqMPQSPIPS *s)
 {
     if (s->regs[R_GQSPI_GF_SNAPSHOT]) {
         int field = ARRAY_FIELD_EX32(s->regs, GQSPI_GF_SNAPSHOT, CHIP_SELECT);
-        xilinx_spips_update_cs(XILINX_SPIPS(s), field);
+        bool upper_cs_sel = field & (1 << 1);
+        bool lower_cs_sel = field & 1;
+        bool bus0_enabled;
+        bool bus1_enabled;
+        uint8_t buses;
+        int cs = 0;
+
+        buses = ARRAY_FIELD_EX32(s->regs, GQSPI_GF_SNAPSHOT, DATA_BUS_SELECT);
+        bus0_enabled = buses & 1;
+        bus1_enabled = buses & (1 << 1);
+
+        if (bus0_enabled && bus1_enabled) {
+            if (lower_cs_sel) {
+                cs |= 1;
+            }
+            if (upper_cs_sel) {
+                cs |= 1 << 3;
+            }
+        } else if (bus0_enabled) {
+            if (lower_cs_sel) {
+                cs |= 1;
+            }
+            if (upper_cs_sel) {
+                cs |= 1 << 1;
+            }
+        } else if (bus1_enabled) {
+            if (lower_cs_sel) {
+                cs |= 1 << 2;
+            }
+            if (upper_cs_sel) {
+                cs |= 1 << 3;
+            }
+        }
+        xilinx_spips_update_cs(XILINX_SPIPS(s), cs);
     }
 }
 
@@ -257,7 +293,7 @@ static void xilinx_spips_update_cs_lines(XilinxSPIPS *s)
     if (num_effective_busses(s) == 2) {
         /* Single bit chip-select for qspi */
         field &= 0x1;
-        field |= field << 1;
+        field |= field << 3;
     /* Dual stack U-Page */
     } else if (s->regs[R_LQSPI_CFG] & LQSPI_CFG_TWO_MEM &&
                s->regs[R_LQSPI_STS] & LQSPI_CFG_U_PAGE) {
@@ -541,7 +577,7 @@ static int xilinx_spips_num_dummies(XilinxQSPIPS *qs, uint8_t command)
         return 2;
     case QIOR:
     case QIOR_4:
-        return 5;
+        return 4;
     default:
         return -1;
     }
@@ -573,14 +609,15 @@ static void xilinx_spips_flush_txfifo(XilinxSPIPS *s)
     for (;;) {
         int i;
         uint8_t tx = 0;
-        uint8_t tx_rx[num_effective_busses(s)];
+        uint8_t tx_rx[MAX_NUM_BUSSES] = { 0 };
         uint8_t dummy_cycles = 0;
         uint8_t addr_length;
 
         if (fifo8_is_empty(&s->tx_fifo)) {
             xilinx_spips_update_ixr(s);
             return;
-        } else if (s->snoop_state == SNOOP_STRIPING) {
+        } else if (s->snoop_state == SNOOP_STRIPING ||
+                   s->snoop_state == SNOOP_NONE) {
             for (i = 0; i < num_effective_busses(s); ++i) {
                 tx_rx[i] = fifo8_pop(&s->tx_fifo);
             }
@@ -1220,6 +1257,19 @@ static void xilinx_spips_realize(DeviceState *dev, Error **errp)
     int i;
 
     DB_PRINT_L(0, "realized spips\n");
+
+    if (s->num_busses > MAX_NUM_BUSSES) {
+        error_setg(errp,
+                   "requested number of SPI busses %u exceeds maximum %d",
+                   s->num_busses, MAX_NUM_BUSSES);
+        return;
+    }
+    if (s->num_busses < MIN_NUM_BUSSES) {
+        error_setg(errp,
+                   "requested number of SPI busses %u is below minimum %d",
+                   s->num_busses, MIN_NUM_BUSSES);
+        return;
+    }
 
     s->spi = g_new(SSIBus *, s->num_busses);
     for (i = 0; i < s->num_busses; ++i) {

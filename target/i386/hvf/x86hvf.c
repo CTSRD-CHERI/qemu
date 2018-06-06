@@ -29,11 +29,8 @@
 
 #include "hw/i386/apic_internal.h"
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <Hypervisor/hv.h>
 #include <Hypervisor/hv_vmx.h>
-#include <stdint.h>
 
 void hvf_set_segment(struct CPUState *cpu, struct vmx_segment *vmx_seg,
                      SegmentCache *qseg, bool is_tr)
@@ -297,7 +294,6 @@ int hvf_get_registers(CPUState *cpu_state)
     X86CPU *x86cpu = X86_CPU(cpu_state);
     CPUX86State *env = &x86cpu->env;
 
-
     env->regs[R_EAX] = rreg(cpu_state->hvf_fd, HV_X86_RAX);
     env->regs[R_EBX] = rreg(cpu_state->hvf_fd, HV_X86_RBX);
     env->regs[R_ECX] = rreg(cpu_state->hvf_fd, HV_X86_RCX);
@@ -333,6 +329,7 @@ int hvf_get_registers(CPUState *cpu_state)
     env->dr[6] = rreg(cpu_state->hvf_fd, HV_X86_DR6);
     env->dr[7] = rreg(cpu_state->hvf_fd, HV_X86_DR7);
     
+    x86_update_hflags(env);
     return 0;
 }
 

@@ -20,8 +20,8 @@
 #include "qemu/osdep.h"
 #include "qemu-common.h"
 #include "qapi/qmp/qstring.h"
-#include "qapi/qmp/qbool.h"
 #include "qapi/qmp/qdict.h"
+#include "qapi/qmp/qlist.h"
 #include "libqtest.h"
 
 const char common_args[] = "-nodefaults -machine none";
@@ -40,8 +40,8 @@ static QList *qom_list_types(const char *implements, bool abstract)
                " 'arguments': %p }", args);
     g_assert(qdict_haskey(resp, "return"));
     ret = qdict_get_qlist(resp, "return");
-    QINCREF(ret);
-    QDECREF(resp);
+    qobject_ref(ret);
+    qobject_unref(resp);
     return ret;
 }
 
@@ -52,9 +52,9 @@ static QDict *qom_type_index(QList *types)
     QListEntry *e;
 
     QLIST_FOREACH_ENTRY(types, e) {
-        QDict *d = qobject_to_qdict(qlist_entry_obj(e));
+        QDict *d = qobject_to(QDict, qlist_entry_obj(e));
         const char *name = qdict_get_str(d, "name");
-        QINCREF(d);
+        qobject_ref(d);
         qdict_put(index, name, d);
     }
     return index;
@@ -85,7 +85,7 @@ static QDict *type_list_find(QList *types, const char *name)
     QListEntry *e;
 
     QLIST_FOREACH_ENTRY(types, e) {
-        QDict *d = qobject_to_qdict(qlist_entry_obj(e));
+        QDict *d = qobject_to(QDict, qlist_entry_obj(e));
         const char *ename = qdict_get_str(d, "name");
         if (!strcmp(ename, name)) {
             return d;
@@ -108,7 +108,7 @@ static void test_one_device(const char *type)
     resp = qmp("{'execute': 'device-list-properties',"
                " 'arguments': {'typename': %s}}",
                type);
-    QDECREF(resp);
+    qobject_unref(resp);
 
     help = hmp("device_add \"%s,help\"", type);
     g_free(help);
@@ -129,7 +129,7 @@ static void test_device_intro_list(void)
     qtest_start(common_args);
 
     types = device_type_list(true);
-    QDECREF(types);
+    qobject_unref(types);
 
     help = hmp("device_add help");
     g_free(help);
@@ -151,14 +151,14 @@ static void test_qom_list_parents(const char *parent)
     index = qom_type_index(types);
 
     QLIST_FOREACH_ENTRY(types, e) {
-        QDict *d = qobject_to_qdict(qlist_entry_obj(e));
+        QDict *d = qobject_to(QDict, qlist_entry_obj(e));
         const char *name = qdict_get_str(d, "name");
 
         g_assert(qom_has_parent(index, name, parent));
     }
 
-    QDECREF(types);
-    QDECREF(index);
+    qobject_unref(types);
+    qobject_unref(index);
 }
 
 static void test_qom_list_fields(void)
@@ -173,7 +173,7 @@ static void test_qom_list_fields(void)
     non_abstract = qom_list_types(NULL, false);
 
     QLIST_FOREACH_ENTRY(all_types, e) {
-        QDict *d = qobject_to_qdict(qlist_entry_obj(e));
+        QDict *d = qobject_to(QDict, qlist_entry_obj(e));
         const char *name = qdict_get_str(d, "name");
         bool abstract = qdict_haskey(d, "abstract") ?
                         qdict_get_bool(d, "abstract") :
@@ -187,8 +187,8 @@ static void test_qom_list_fields(void)
     test_qom_list_parents("device");
     test_qom_list_parents("sys-bus-device");
 
-    QDECREF(all_types);
-    QDECREF(non_abstract);
+    qobject_unref(all_types);
+    qobject_unref(non_abstract);
     qtest_end();
 }
 
@@ -216,13 +216,13 @@ static void test_device_intro_concrete(void)
     types = device_type_list(false);
 
     QLIST_FOREACH_ENTRY(types, entry) {
-        type = qdict_get_try_str(qobject_to_qdict(qlist_entry_obj(entry)),
-                                "name");
+        type = qdict_get_try_str(qobject_to(QDict, qlist_entry_obj(entry)),
+                                 "name");
         g_assert(type);
         test_one_device(type);
     }
 
-    QDECREF(types);
+    qobject_unref(types);
     qtest_end();
 }
 
@@ -238,7 +238,7 @@ static void test_abstract_interfaces(void)
     index = qom_type_index(all_types);
 
     QLIST_FOREACH_ENTRY(all_types, e) {
-        QDict *d = qobject_to_qdict(qlist_entry_obj(e));
+        QDict *d = qobject_to(QDict, qlist_entry_obj(e));
         const char *name = qdict_get_str(d, "name");
 
         /*
@@ -255,8 +255,8 @@ static void test_abstract_interfaces(void)
         g_assert(qdict_haskey(d, "abstract") && qdict_get_bool(d, "abstract"));
     }
 
-    QDECREF(all_types);
-    QDECREF(index);
+    qobject_unref(all_types);
+    qobject_unref(index);
     qtest_end();
 }
 

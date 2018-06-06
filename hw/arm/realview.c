@@ -20,7 +20,6 @@
 #include "sysemu/sysemu.h"
 #include "hw/boards.h"
 #include "hw/i2c/i2c.h"
-#include "sysemu/block-backend.h"
 #include "exec/address-spaces.h"
 #include "qemu/error-report.h"
 #include "hw/char/pl011.h"
@@ -196,10 +195,10 @@ static void realview_init(MachineState *machine,
     sysbus_create_simple("pl050_keyboard", 0x10006000, pic[20]);
     sysbus_create_simple("pl050_mouse", 0x10007000, pic[21]);
 
-    pl011_create(0x10009000, pic[12], serial_hds[0]);
-    pl011_create(0x1000a000, pic[13], serial_hds[1]);
-    pl011_create(0x1000b000, pic[14], serial_hds[2]);
-    pl011_create(0x1000c000, pic[15], serial_hds[3]);
+    pl011_create(0x10009000, pic[12], serial_hd(0));
+    pl011_create(0x1000a000, pic[13], serial_hd(1));
+    pl011_create(0x1000b000, pic[14], serial_hd(2));
+    pl011_create(0x1000c000, pic[15], serial_hd(3));
 
     /* DMA controller is optional, apparently.  */
     sysbus_create_simple("pl081", 0x10030000, pic[24]);

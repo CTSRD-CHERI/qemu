@@ -30,15 +30,9 @@
 #include "tpm_int.h"
 #include "hw/hw.h"
 #include "qapi/clone-visitor.h"
+#include "qapi/qapi-visit-tpm.h"
 #include "tpm_util.h"
-
-#define DEBUG_TPM 0
-
-#define DPRINTF(fmt, ...) do { \
-    if (DEBUG_TPM) { \
-        fprintf(stderr, fmt, ## __VA_ARGS__); \
-    } \
-} while (0);
+#include "trace.h"
 
 #define TYPE_TPM_PASSTHROUGH "tpm-passthrough"
 #define TPM_PASSTHROUGH(obj) \
@@ -80,14 +74,14 @@ static int tpm_passthrough_unix_read(int fd, uint8_t *buf, uint32_t len)
     }
     return ret;
 }
-static int tpm_passthrough_unix_tx_bufs(TPMPassthruState *tpm_pt,
-                                        const uint8_t *in, uint32_t in_len,
-                                        uint8_t *out, uint32_t out_len,
-                                        bool *selftest_done)
+
+static void tpm_passthrough_unix_tx_bufs(TPMPassthruState *tpm_pt,
+                                         const uint8_t *in, uint32_t in_len,
+                                         uint8_t *out, uint32_t out_len,
+                                         bool *selftest_done, Error **errp)
 {
     ssize_t ret;
     bool is_selftest;
-    const struct tpm_resp_hdr *hdr;
 
     /* FIXME: protect shared variables or use other sync mechanism */
     tpm_pt->tpm_op_canceled = false;
@@ -99,9 +93,8 @@ static int tpm_passthrough_unix_tx_bufs(TPMPassthruState *tpm_pt,
     ret = qemu_write_full(tpm_pt->tpm_fd, in, in_len);
     if (ret != in_len) {
         if (!tpm_pt->tpm_op_canceled || errno != ECANCELED) {
-            error_report("tpm_passthrough: error while transmitting data "
-                         "to TPM: %s (%i)",
-                         strerror(errno), errno);
+            error_setg_errno(errp, errno, "tpm_passthrough: error while "
+                             "transmitting data to TPM");
         }
         goto err_exit;
     }
@@ -111,20 +104,18 @@ static int tpm_passthrough_unix_tx_bufs(TPMPassthruState *tpm_pt,
     ret = tpm_passthrough_unix_read(tpm_pt->tpm_fd, out, out_len);
     if (ret < 0) {
         if (!tpm_pt->tpm_op_canceled || errno != ECANCELED) {
-            error_report("tpm_passthrough: error while reading data from "
-                         "TPM: %s (%i)",
-                         strerror(errno), errno);
+            error_setg_errno(errp, errno, "tpm_passthrough: error while "
+                             "reading data from TPM");
         }
     } else if (ret < sizeof(struct tpm_resp_hdr) ||
-               be32_to_cpu(((struct tpm_resp_hdr *)out)->len) != ret) {
+               tpm_cmd_get_size(out) != ret) {
         ret = -1;
-        error_report("tpm_passthrough: received invalid response "
-                     "packet from TPM");
+        error_setg_errno(errp, errno, "tpm_passthrough: received invalid "
+                     "response packet from TPM");
     }
 
     if (is_selftest && (ret >= sizeof(struct tpm_resp_hdr))) {
-        hdr = (struct tpm_resp_hdr *)out;
-        *selftest_done = (be32_to_cpu(hdr->errcode) == 0);
+        *selftest_done = tpm_cmd_get_errcode(out) == 0;
     }
 
 err_exit:
@@ -133,23 +124,23 @@ err_exit:
     }
 
     tpm_pt->tpm_executing = false;
-
-    return ret;
 }
 
-static void tpm_passthrough_handle_request(TPMBackend *tb, TPMBackendCmd *cmd)
+static void tpm_passthrough_handle_request(TPMBackend *tb, TPMBackendCmd *cmd,
+                                           Error **errp)
 {
     TPMPassthruState *tpm_pt = TPM_PASSTHROUGH(tb);
 
-    DPRINTF("tpm_passthrough: processing command %p\n", cmd);
+    trace_tpm_passthrough_handle_request(cmd);
 
     tpm_passthrough_unix_tx_bufs(tpm_pt, cmd->in, cmd->in_len,
-                                 cmd->out, cmd->out_len, &cmd->selftest_done);
+                                 cmd->out, cmd->out_len, &cmd->selftest_done,
+                                 errp);
 }
 
 static void tpm_passthrough_reset(TPMBackend *tb)
 {
-    DPRINTF("tpm_passthrough: CALL TO TPM_RESET!\n");
+    trace_tpm_passthrough_reset();
 
     tpm_passthrough_cancel_cmd(tb);
 }
@@ -216,7 +207,8 @@ static size_t tpm_passthrough_get_buffer_size(TPMBackend *tb)
  * Unless path or file descriptor set has been provided by user,
  * determine the sysfs cancel file following kernel documentation
  * in Documentation/ABI/stable/sysfs-class-tpm.
- * From /dev/tpm0 create /sys/class/misc/tpm0/device/cancel
+ * From /dev/tpm0 create /sys/class/tpm/tpm0/device/cancel
+ * before 4.0: /sys/class/misc/tpm0/device/cancel
  */
 static int tpm_passthrough_open_sysfs_cancel(TPMPassthruState *tpm_pt)
 {
@@ -227,26 +219,35 @@ static int tpm_passthrough_open_sysfs_cancel(TPMPassthruState *tpm_pt)
     if (tpm_pt->options->cancel_path) {
         fd = qemu_open(tpm_pt->options->cancel_path, O_WRONLY);
         if (fd < 0) {
-            error_report("Could not open TPM cancel path : %s",
+            error_report("tpm_passthrough: Could not open TPM cancel path: %s",
                          strerror(errno));
         }
         return fd;
     }
 
     dev = strrchr(tpm_pt->tpm_dev, '/');
-    if (dev) {
-        dev++;
-        if (snprintf(path, sizeof(path), "/sys/class/misc/%s/device/cancel",
-                     dev) < sizeof(path)) {
-            fd = qemu_open(path, O_WRONLY);
-            if (fd < 0) {
-                error_report("tpm_passthrough: Could not open TPM cancel "
-                             "path %s : %s", path, strerror(errno));
+    if (!dev) {
+        error_report("tpm_passthrough: Bad TPM device path %s",
+                     tpm_pt->tpm_dev);
+        return -1;
+    }
+
+    dev++;
+    if (snprintf(path, sizeof(path), "/sys/class/tpm/%s/device/cancel",
+                 dev) < sizeof(path)) {
+        fd = qemu_open(path, O_WRONLY);
+        if (fd < 0) {
+            if (snprintf(path, sizeof(path), "/sys/class/misc/%s/device/cancel",
+                         dev) < sizeof(path)) {
+                fd = qemu_open(path, O_WRONLY);
             }
         }
+    }
+
+    if (fd < 0) {
+        error_report("tpm_passthrough: Could not guess TPM cancel path");
     } else {
-       error_report("tpm_passthrough: Bad TPM device path %s",
-                    tpm_pt->tpm_dev);
+        tpm_pt->options->cancel_path = g_strdup(path);
     }
 
     return fd;

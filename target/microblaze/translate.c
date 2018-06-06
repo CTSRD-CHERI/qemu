@@ -424,7 +424,7 @@ static inline void msr_write(DisasContext *dc, TCGv v)
     /* PVR bit is not writable.  */
     tcg_gen_andi_tl(t, v, ~MSR_PVR);
     tcg_gen_andi_tl(cpu_SR[SR_MSR], cpu_SR[SR_MSR], MSR_PVR);
-    tcg_gen_or_tl(cpu_SR[SR_MSR], cpu_SR[SR_MSR], v);
+    tcg_gen_or_tl(cpu_SR[SR_MSR], cpu_SR[SR_MSR], t);
     tcg_temp_free(t);
 }
 
@@ -952,7 +952,6 @@ static void dec_load(DisasContext *dc)
                 tcg_gen_sub_tl(low, tcg_const_tl(3), low);
                 tcg_gen_andi_tl(t, t, ~3);
                 tcg_gen_or_tl(t, t, low);
-                tcg_gen_mov_tl(env_imm, t);
                 tcg_temp_free(low);
                 break;
             }
@@ -1104,7 +1103,6 @@ static void dec_store(DisasContext *dc)
                 tcg_gen_sub_tl(low, tcg_const_tl(3), low);
                 tcg_gen_andi_tl(t, t, ~3);
                 tcg_gen_or_tl(t, t, low);
-                tcg_gen_mov_tl(env_imm, t);
                 tcg_temp_free(low);
                 break;
             }
@@ -1412,7 +1410,7 @@ static void dec_fpu(DisasContext *dc)
 
     if ((dc->tb_flags & MSR_EE_FLAG)
           && (dc->cpu->env.pvr.regs[2] & PVR2_ILL_OPCODE_EXC_MASK)
-          && (dc->cpu->cfg.use_fpu != 1)) {
+          && !dc->cpu->cfg.use_fpu) {
         tcg_gen_movi_tl(cpu_SR[SR_ESR], ESR_EC_ILLEGAL_OP);
         t_gen_raise_exception(dc, EXCP_HW_EXCP);
         return;
@@ -1637,7 +1635,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
     uint32_t pc_start;
     struct DisasContext ctx;
     struct DisasContext *dc = &ctx;
-    uint32_t next_page_start, org_flags;
+    uint32_t page_start, org_flags;
     target_ulong npc;
     int num_insns;
     int max_insns;
@@ -1663,7 +1661,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
         cpu_abort(cs, "Microblaze: unaligned PC=%x\n", pc_start);
     }
 
-    next_page_start = (pc_start & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
+    page_start = pc_start & TARGET_PAGE_MASK;
     num_insns = 0;
     max_insns = tb_cflags(tb) & CF_COUNT_MASK;
     if (max_insns == 0) {
@@ -1749,7 +1747,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
     } while (!dc->is_jmp && !dc->cpustate_changed
              && !tcg_op_buf_full()
              && !singlestep
-             && (dc->pc < next_page_start)
+             && (dc->pc - page_start < TARGET_PAGE_SIZE)
              && num_insns < max_insns);
 
     npc = dc->pc;

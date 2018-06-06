@@ -25,6 +25,7 @@
 #include "disas/disas.h"
 #include "exec/exec-all.h"
 #include "tcg-op.h"
+#include "tcg-op-gvec.h"
 #include "qemu/log.h"
 #include "qemu/bitops.h"
 #include "arm_ldst.h"
@@ -74,6 +75,10 @@ static TCGv_i64 cpu_F0d, cpu_F1d;
 static const char *regnames[] =
     { "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
       "r8", "r9", "r10", "r11", "r12", "r13", "r14", "pc" };
+
+/* Function prototypes for gen_ functions calling Neon helpers.  */
+typedef void NeonGenThreeOpEnvFn(TCGv_i32, TCGv_env, TCGv_i32,
+                                 TCGv_i32, TCGv_i32);
 
 /* initialize TCG globals.  */
 void arm_translate_init(void)
@@ -1243,6 +1248,18 @@ static void gen_exception_insn(DisasContext *s, int offset, int excp,
     s->base.is_jmp = DISAS_NORETURN;
 }
 
+static void gen_exception_bkpt_insn(DisasContext *s, int offset, uint32_t syn)
+{
+    TCGv_i32 tcg_syn;
+
+    gen_set_condexec(s);
+    gen_set_pc_im(s, s->pc - offset);
+    tcg_syn = tcg_const_i32(syn);
+    gen_helper_exception_bkpt_insn(cpu_env, tcg_syn);
+    tcg_temp_free_i32(tcg_syn);
+    s->base.is_jmp = DISAS_NORETURN;
+}
+
 /* Force a TB lookup after an instruction that changes the CPU state.  */
 static inline void gen_lookup_tb(DisasContext *s)
 {
@@ -1512,17 +1529,18 @@ static inline void gen_vfp_st(DisasContext *s, int dp, TCGv_i32 addr)
     }
 }
 
-static inline long
-vfp_reg_offset (int dp, int reg)
+static inline long vfp_reg_offset(bool dp, unsigned reg)
 {
-    if (dp)
-        return offsetof(CPUARMState, vfp.regs[reg]);
-    else if (reg & 1) {
-        return offsetof(CPUARMState, vfp.regs[reg >> 1])
-          + offsetof(CPU_DoubleU, l.upper);
+    if (dp) {
+        return offsetof(CPUARMState, vfp.zregs[reg >> 1].d[reg & 1]);
     } else {
-        return offsetof(CPUARMState, vfp.regs[reg >> 1])
-          + offsetof(CPU_DoubleU, l.lower);
+        long ofs = offsetof(CPUARMState, vfp.zregs[reg >> 2].d[(reg >> 1) & 1]);
+        if (reg & 1) {
+            ofs += offsetof(CPU_DoubleU, l.upper);
+        } else {
+            ofs += offsetof(CPU_DoubleU, l.lower);
+        }
+        return ofs;
     }
 }
 
@@ -1557,6 +1575,13 @@ static inline void neon_load_reg64(TCGv_i64 var, int reg)
 static inline void neon_store_reg64(TCGv_i64 var, int reg)
 {
     tcg_gen_st_i64(var, cpu_env, vfp_reg_offset(1, reg));
+}
+
+static TCGv_ptr vfp_reg_ptr(bool dp, int reg)
+{
+    TCGv_ptr ret = tcg_temp_new_ptr();
+    tcg_gen_addi_ptr(ret, cpu_env, vfp_reg_offset(dp, reg));
+    return ret;
 }
 
 #define tcg_gen_ld_f32 tcg_gen_ld_i32
@@ -3135,7 +3160,7 @@ static int handle_vrint(uint32_t insn, uint32_t rd, uint32_t rm, uint32_t dp,
     TCGv_i32 tcg_rmode;
 
     tcg_rmode = tcg_const_i32(arm_rmode_to_sf(rounding));
-    gen_helper_set_rmode(tcg_rmode, tcg_rmode, cpu_env);
+    gen_helper_set_rmode(tcg_rmode, tcg_rmode, fpst);
 
     if (dp) {
         TCGv_i64 tcg_op;
@@ -3159,7 +3184,7 @@ static int handle_vrint(uint32_t insn, uint32_t rd, uint32_t rm, uint32_t dp,
         tcg_temp_free_i32(tcg_res);
     }
 
-    gen_helper_set_rmode(tcg_rmode, tcg_rmode, cpu_env);
+    gen_helper_set_rmode(tcg_rmode, tcg_rmode, fpst);
     tcg_temp_free_i32(tcg_rmode);
 
     tcg_temp_free_ptr(fpst);
@@ -3176,7 +3201,7 @@ static int handle_vcvt(uint32_t insn, uint32_t rd, uint32_t rm, uint32_t dp,
     tcg_shift = tcg_const_i32(0);
 
     tcg_rmode = tcg_const_i32(arm_rmode_to_sf(rounding));
-    gen_helper_set_rmode(tcg_rmode, tcg_rmode, cpu_env);
+    gen_helper_set_rmode(tcg_rmode, tcg_rmode, fpst);
 
     if (dp) {
         TCGv_i64 tcg_double, tcg_res;
@@ -3214,7 +3239,7 @@ static int handle_vcvt(uint32_t insn, uint32_t rd, uint32_t rm, uint32_t dp,
         tcg_temp_free_i32(tcg_single);
     }
 
-    gen_helper_set_rmode(tcg_rmode, tcg_rmode, cpu_env);
+    gen_helper_set_rmode(tcg_rmode, tcg_rmode, fpst);
     tcg_temp_free_i32(tcg_rmode);
 
     tcg_temp_free_i32(tcg_shift);
@@ -3884,13 +3909,13 @@ static int disas_vfp_insn(DisasContext *s, uint32_t insn)
                         TCGv_ptr fpst = get_fpstatus_ptr(0);
                         TCGv_i32 tcg_rmode;
                         tcg_rmode = tcg_const_i32(float_round_to_zero);
-                        gen_helper_set_rmode(tcg_rmode, tcg_rmode, cpu_env);
+                        gen_helper_set_rmode(tcg_rmode, tcg_rmode, fpst);
                         if (dp) {
                             gen_helper_rintd(cpu_F0d, cpu_F0d, fpst);
                         } else {
                             gen_helper_rints(cpu_F0s, cpu_F0s, fpst);
                         }
-                        gen_helper_set_rmode(tcg_rmode, tcg_rmode, cpu_env);
+                        gen_helper_set_rmode(tcg_rmode, tcg_rmode, fpst);
                         tcg_temp_free_i32(tcg_rmode);
                         tcg_temp_free_ptr(fpst);
                         break;
@@ -4523,7 +4548,13 @@ static void gen_rfe(DisasContext *s, TCGv_i32 pc, TCGv_i32 cpsr)
      * appropriately depending on the new Thumb bit, so it must
      * be called after storing the new PC.
      */
+    if (tb_cflags(s->base.tb) & CF_USE_ICOUNT) {
+        gen_io_start();
+    }
     gen_helper_cpsr_write_eret(cpu_env, cpsr);
+    if (tb_cflags(s->base.tb) & CF_USE_ICOUNT) {
+        gen_io_end();
+    }
     tcg_temp_free_i32(cpsr);
     /* Must exit loop to check un-masked IRQs */
     s->base.is_jmp = DISAS_EXIT;
@@ -4680,22 +4711,23 @@ static inline TCGv_i32 neon_get_scalar(int size, int reg)
 
 static int gen_neon_unzip(int rd, int rm, int size, int q)
 {
-    TCGv_i32 tmp, tmp2;
+    TCGv_ptr pd, pm;
+    
     if (!q && size == 2) {
         return 1;
     }
-    tmp = tcg_const_i32(rd);
-    tmp2 = tcg_const_i32(rm);
+    pd = vfp_reg_ptr(true, rd);
+    pm = vfp_reg_ptr(true, rm);
     if (q) {
         switch (size) {
         case 0:
-            gen_helper_neon_qunzip8(cpu_env, tmp, tmp2);
+            gen_helper_neon_qunzip8(pd, pm);
             break;
         case 1:
-            gen_helper_neon_qunzip16(cpu_env, tmp, tmp2);
+            gen_helper_neon_qunzip16(pd, pm);
             break;
         case 2:
-            gen_helper_neon_qunzip32(cpu_env, tmp, tmp2);
+            gen_helper_neon_qunzip32(pd, pm);
             break;
         default:
             abort();
@@ -4703,38 +4735,39 @@ static int gen_neon_unzip(int rd, int rm, int size, int q)
     } else {
         switch (size) {
         case 0:
-            gen_helper_neon_unzip8(cpu_env, tmp, tmp2);
+            gen_helper_neon_unzip8(pd, pm);
             break;
         case 1:
-            gen_helper_neon_unzip16(cpu_env, tmp, tmp2);
+            gen_helper_neon_unzip16(pd, pm);
             break;
         default:
             abort();
         }
     }
-    tcg_temp_free_i32(tmp);
-    tcg_temp_free_i32(tmp2);
+    tcg_temp_free_ptr(pd);
+    tcg_temp_free_ptr(pm);
     return 0;
 }
 
 static int gen_neon_zip(int rd, int rm, int size, int q)
 {
-    TCGv_i32 tmp, tmp2;
+    TCGv_ptr pd, pm;
+
     if (!q && size == 2) {
         return 1;
     }
-    tmp = tcg_const_i32(rd);
-    tmp2 = tcg_const_i32(rm);
+    pd = vfp_reg_ptr(true, rd);
+    pm = vfp_reg_ptr(true, rm);
     if (q) {
         switch (size) {
         case 0:
-            gen_helper_neon_qzip8(cpu_env, tmp, tmp2);
+            gen_helper_neon_qzip8(pd, pm);
             break;
         case 1:
-            gen_helper_neon_qzip16(cpu_env, tmp, tmp2);
+            gen_helper_neon_qzip16(pd, pm);
             break;
         case 2:
-            gen_helper_neon_qzip32(cpu_env, tmp, tmp2);
+            gen_helper_neon_qzip32(pd, pm);
             break;
         default:
             abort();
@@ -4742,17 +4775,17 @@ static int gen_neon_zip(int rd, int rm, int size, int q)
     } else {
         switch (size) {
         case 0:
-            gen_helper_neon_zip8(cpu_env, tmp, tmp2);
+            gen_helper_neon_zip8(pd, pm);
             break;
         case 1:
-            gen_helper_neon_zip16(cpu_env, tmp, tmp2);
+            gen_helper_neon_zip16(pd, pm);
             break;
         default:
             abort();
         }
     }
-    tcg_temp_free_i32(tmp);
-    tcg_temp_free_i32(tmp2);
+    tcg_temp_free_ptr(pd);
+    tcg_temp_free_ptr(pm);
     return 0;
 }
 
@@ -5364,9 +5397,9 @@ static void gen_neon_narrow_op(int op, int u, int size,
 #define NEON_3R_VPMAX 20
 #define NEON_3R_VPMIN 21
 #define NEON_3R_VQDMULH_VQRDMULH 22
-#define NEON_3R_VPADD 23
+#define NEON_3R_VPADD_VQRDMLAH 23
 #define NEON_3R_SHA 24 /* SHA1C,SHA1P,SHA1M,SHA1SU0,SHA256H{2},SHA256SU1 */
-#define NEON_3R_VFM 25 /* VFMA, VFMS : float fused multiply-add */
+#define NEON_3R_VFM_VQRDMLSH 25 /* VFMA, VFMS, VQRDMLSH */
 #define NEON_3R_FLOAT_ARITH 26 /* float VADD, VSUB, VPADD, VABD */
 #define NEON_3R_FLOAT_MULTIPLY 27 /* float VMLA, VMLS, VMUL */
 #define NEON_3R_FLOAT_CMP 28 /* float VCEQ, VCGE, VCGT */
@@ -5398,9 +5431,9 @@ static const uint8_t neon_3r_sizes[] = {
     [NEON_3R_VPMAX] = 0x7,
     [NEON_3R_VPMIN] = 0x7,
     [NEON_3R_VQDMULH_VQRDMULH] = 0x6,
-    [NEON_3R_VPADD] = 0x7,
+    [NEON_3R_VPADD_VQRDMLAH] = 0x7,
     [NEON_3R_SHA] = 0xf, /* size field encodes op type */
-    [NEON_3R_VFM] = 0x5, /* size bit 1 encodes op */
+    [NEON_3R_VFM_VQRDMLSH] = 0x7, /* For VFM, size bit 1 encodes op */
     [NEON_3R_FLOAT_ARITH] = 0x5, /* size bit 1 encodes op */
     [NEON_3R_FLOAT_MULTIPLY] = 0x5, /* size bit 1 encodes op */
     [NEON_3R_FLOAT_CMP] = 0x5, /* size bit 1 encodes op */
@@ -5579,6 +5612,22 @@ static const uint8_t neon_2rm_sizes[] = {
     [NEON_2RM_VCVT_UF] = 0x4,
 };
 
+
+/* Expand v8.1 simd helper.  */
+static int do_v81_helper(DisasContext *s, gen_helper_gvec_3_ptr *fn,
+                         int q, int rd, int rn, int rm)
+{
+    if (arm_dc_feature(s, ARM_FEATURE_V8_RDM)) {
+        int opr_sz = (1 + q) * 8;
+        tcg_gen_gvec_3_ptr(vfp_reg_offset(1, rd),
+                           vfp_reg_offset(1, rn),
+                           vfp_reg_offset(1, rm), cpu_env,
+                           opr_sz, opr_sz, 0, fn);
+        return 0;
+    }
+    return 1;
+}
+
 /* Translate a NEON data processing instruction.  Return nonzero if the
    instruction is invalid.
    We process data in a mixture of 32-bit and 64-bit chunks.
@@ -5597,6 +5646,7 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
     int u;
     uint32_t imm, mask;
     TCGv_i32 tmp, tmp2, tmp3, tmp4, tmp5;
+    TCGv_ptr ptr1, ptr2, ptr3;
     TCGv_i64 tmp64;
 
     /* FIXME: this access check should not take precedence over UNDEF
@@ -5630,12 +5680,13 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
         if (q && ((rd | rn | rm) & 1)) {
             return 1;
         }
-        /*
-         * The SHA-1/SHA-256 3-register instructions require special treatment
-         * here, as their size field is overloaded as an op type selector, and
-         * they all consume their input in a single pass.
-         */
-        if (op == NEON_3R_SHA) {
+        switch (op) {
+        case NEON_3R_SHA:
+            /* The SHA-1/SHA-256 3-register instructions require special
+             * treatment here, as their size field is overloaded as an
+             * op type selector, and they all consume their input in a
+             * single pass.
+             */
             if (!q) {
                 return 1;
             }
@@ -5643,35 +5694,69 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                 if (!arm_dc_feature(s, ARM_FEATURE_V8_SHA1)) {
                     return 1;
                 }
-                tmp = tcg_const_i32(rd);
-                tmp2 = tcg_const_i32(rn);
-                tmp3 = tcg_const_i32(rm);
+                ptr1 = vfp_reg_ptr(true, rd);
+                ptr2 = vfp_reg_ptr(true, rn);
+                ptr3 = vfp_reg_ptr(true, rm);
                 tmp4 = tcg_const_i32(size);
-                gen_helper_crypto_sha1_3reg(cpu_env, tmp, tmp2, tmp3, tmp4);
+                gen_helper_crypto_sha1_3reg(ptr1, ptr2, ptr3, tmp4);
                 tcg_temp_free_i32(tmp4);
             } else { /* SHA-256 */
                 if (!arm_dc_feature(s, ARM_FEATURE_V8_SHA256) || size == 3) {
                     return 1;
                 }
-                tmp = tcg_const_i32(rd);
-                tmp2 = tcg_const_i32(rn);
-                tmp3 = tcg_const_i32(rm);
+                ptr1 = vfp_reg_ptr(true, rd);
+                ptr2 = vfp_reg_ptr(true, rn);
+                ptr3 = vfp_reg_ptr(true, rm);
                 switch (size) {
                 case 0:
-                    gen_helper_crypto_sha256h(cpu_env, tmp, tmp2, tmp3);
+                    gen_helper_crypto_sha256h(ptr1, ptr2, ptr3);
                     break;
                 case 1:
-                    gen_helper_crypto_sha256h2(cpu_env, tmp, tmp2, tmp3);
+                    gen_helper_crypto_sha256h2(ptr1, ptr2, ptr3);
                     break;
                 case 2:
-                    gen_helper_crypto_sha256su1(cpu_env, tmp, tmp2, tmp3);
+                    gen_helper_crypto_sha256su1(ptr1, ptr2, ptr3);
                     break;
                 }
             }
-            tcg_temp_free_i32(tmp);
-            tcg_temp_free_i32(tmp2);
-            tcg_temp_free_i32(tmp3);
+            tcg_temp_free_ptr(ptr1);
+            tcg_temp_free_ptr(ptr2);
+            tcg_temp_free_ptr(ptr3);
             return 0;
+
+        case NEON_3R_VPADD_VQRDMLAH:
+            if (!u) {
+                break;  /* VPADD */
+            }
+            /* VQRDMLAH */
+            switch (size) {
+            case 1:
+                return do_v81_helper(s, gen_helper_gvec_qrdmlah_s16,
+                                     q, rd, rn, rm);
+            case 2:
+                return do_v81_helper(s, gen_helper_gvec_qrdmlah_s32,
+                                     q, rd, rn, rm);
+            }
+            return 1;
+
+        case NEON_3R_VFM_VQRDMLSH:
+            if (!u) {
+                /* VFM, VFMS */
+                if (size == 1) {
+                    return 1;
+                }
+                break;
+            }
+            /* VQRDMLSH */
+            switch (size) {
+            case 1:
+                return do_v81_helper(s, gen_helper_gvec_qrdmlsh_s16,
+                                     q, rd, rn, rm);
+            case 2:
+                return do_v81_helper(s, gen_helper_gvec_qrdmlsh_s32,
+                                     q, rd, rn, rm);
+            }
+            return 1;
         }
         if (size == 3 && op != NEON_3R_LOGIC) {
             /* 64-bit element instructions. */
@@ -5757,11 +5842,7 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                 rm = rtmp;
             }
             break;
-        case NEON_3R_VPADD:
-            if (u) {
-                return 1;
-            }
-            /* Fall through */
+        case NEON_3R_VPADD_VQRDMLAH:
         case NEON_3R_VPMAX:
         case NEON_3R_VPMIN:
             pairwise = 1;
@@ -5795,8 +5876,8 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                 return 1;
             }
             break;
-        case NEON_3R_VFM:
-            if (!arm_dc_feature(s, ARM_FEATURE_VFP4) || u) {
+        case NEON_3R_VFM_VQRDMLSH:
+            if (!arm_dc_feature(s, ARM_FEATURE_VFP4)) {
                 return 1;
             }
             break;
@@ -5993,7 +6074,7 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                 }
             }
             break;
-        case NEON_3R_VPADD:
+        case NEON_3R_VPADD_VQRDMLAH:
             switch (size) {
             case 0: gen_helper_neon_padd_u8(tmp, tmp, tmp2); break;
             case 1: gen_helper_neon_padd_u16(tmp, tmp, tmp2); break;
@@ -6092,7 +6173,7 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
               }
             }
             break;
-        case NEON_3R_VFM:
+        case NEON_3R_VFM_VQRDMLSH:
         {
             /* VFMA, VFMS: fused multiply-add */
             TCGv_ptr fpstatus = get_fpstatus_ptr(1);
@@ -6926,11 +7007,45 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                         }
                         neon_store_reg64(cpu_V0, rd + pass);
                     }
-
-
                     break;
-                default: /* 14 and 15 are RESERVED */
-                    return 1;
+                case 14: /* VQRDMLAH scalar */
+                case 15: /* VQRDMLSH scalar */
+                    {
+                        NeonGenThreeOpEnvFn *fn;
+
+                        if (!arm_dc_feature(s, ARM_FEATURE_V8_RDM)) {
+                            return 1;
+                        }
+                        if (u && ((rd | rn) & 1)) {
+                            return 1;
+                        }
+                        if (op == 14) {
+                            if (size == 1) {
+                                fn = gen_helper_neon_qrdmlah_s16;
+                            } else {
+                                fn = gen_helper_neon_qrdmlah_s32;
+                            }
+                        } else {
+                            if (size == 1) {
+                                fn = gen_helper_neon_qrdmlsh_s16;
+                            } else {
+                                fn = gen_helper_neon_qrdmlsh_s32;
+                            }
+                        }
+
+                        tmp2 = neon_get_scalar(size, rm);
+                        for (pass = 0; pass < (u ? 4 : 2); pass++) {
+                            tmp = neon_load_reg(rn, pass);
+                            tmp3 = neon_load_reg(rd, pass);
+                            fn(tmp, cpu_env, tmp, tmp2, tmp3);
+                            tcg_temp_free_i32(tmp3);
+                            neon_store_reg(rd, pass, tmp);
+                        }
+                        tcg_temp_free_i32(tmp2);
+                    }
+                    break;
+                default:
+                    g_assert_not_reached();
                 }
             }
         } else { /* size == 3 */
@@ -7159,8 +7274,8 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                         || ((rm | rd) & 1)) {
                         return 1;
                     }
-                    tmp = tcg_const_i32(rd);
-                    tmp2 = tcg_const_i32(rm);
+                    ptr1 = vfp_reg_ptr(true, rd);
+                    ptr2 = vfp_reg_ptr(true, rm);
 
                      /* Bit 6 is the lowest opcode bit; it distinguishes between
                       * encryption (AESE/AESMC) and decryption (AESD/AESIMC)
@@ -7168,12 +7283,12 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                     tmp3 = tcg_const_i32(extract32(insn, 6, 1));
 
                     if (op == NEON_2RM_AESE) {
-                        gen_helper_crypto_aese(cpu_env, tmp, tmp2, tmp3);
+                        gen_helper_crypto_aese(ptr1, ptr2, tmp3);
                     } else {
-                        gen_helper_crypto_aesmc(cpu_env, tmp, tmp2, tmp3);
+                        gen_helper_crypto_aesmc(ptr1, ptr2, tmp3);
                     }
-                    tcg_temp_free_i32(tmp);
-                    tcg_temp_free_i32(tmp2);
+                    tcg_temp_free_ptr(ptr1);
+                    tcg_temp_free_ptr(ptr2);
                     tcg_temp_free_i32(tmp3);
                     break;
                 case NEON_2RM_SHA1H:
@@ -7181,13 +7296,13 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                         || ((rm | rd) & 1)) {
                         return 1;
                     }
-                    tmp = tcg_const_i32(rd);
-                    tmp2 = tcg_const_i32(rm);
+                    ptr1 = vfp_reg_ptr(true, rd);
+                    ptr2 = vfp_reg_ptr(true, rm);
 
-                    gen_helper_crypto_sha1h(cpu_env, tmp, tmp2);
+                    gen_helper_crypto_sha1h(ptr1, ptr2);
 
-                    tcg_temp_free_i32(tmp);
-                    tcg_temp_free_i32(tmp2);
+                    tcg_temp_free_ptr(ptr1);
+                    tcg_temp_free_ptr(ptr2);
                     break;
                 case NEON_2RM_SHA1SU1:
                     if ((rm | rd) & 1) {
@@ -7201,15 +7316,15 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                     } else if (!arm_dc_feature(s, ARM_FEATURE_V8_SHA1)) {
                         return 1;
                     }
-                    tmp = tcg_const_i32(rd);
-                    tmp2 = tcg_const_i32(rm);
+                    ptr1 = vfp_reg_ptr(true, rd);
+                    ptr2 = vfp_reg_ptr(true, rm);
                     if (q) {
-                        gen_helper_crypto_sha256su0(cpu_env, tmp, tmp2);
+                        gen_helper_crypto_sha256su0(ptr1, ptr2);
                     } else {
-                        gen_helper_crypto_sha1su1(cpu_env, tmp, tmp2);
+                        gen_helper_crypto_sha1su1(ptr1, ptr2);
                     }
-                    tcg_temp_free_i32(tmp);
-                    tcg_temp_free_i32(tmp2);
+                    tcg_temp_free_ptr(ptr1);
+                    tcg_temp_free_ptr(ptr2);
                     break;
                 default:
                 elementwise:
@@ -7534,9 +7649,9 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                     tcg_gen_movi_i32(tmp, 0);
                 }
                 tmp2 = neon_load_reg(rm, 0);
-                tmp4 = tcg_const_i32(rn);
+                ptr1 = vfp_reg_ptr(true, rn);
                 tmp5 = tcg_const_i32(n);
-                gen_helper_neon_tbl(tmp2, cpu_env, tmp2, tmp, tmp4, tmp5);
+                gen_helper_neon_tbl(tmp2, tmp2, tmp, ptr1, tmp5);
                 tcg_temp_free_i32(tmp);
                 if (insn & (1 << 6)) {
                     tmp = neon_load_reg(rd, 1);
@@ -7545,9 +7660,9 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
                     tcg_gen_movi_i32(tmp, 0);
                 }
                 tmp3 = neon_load_reg(rm, 1);
-                gen_helper_neon_tbl(tmp3, cpu_env, tmp3, tmp, tmp4, tmp5);
+                gen_helper_neon_tbl(tmp3, tmp3, tmp, ptr1, tmp5);
                 tcg_temp_free_i32(tmp5);
-                tcg_temp_free_i32(tmp4);
+                tcg_temp_free_ptr(ptr1);
                 neon_store_reg(rd, 0, tmp2);
                 neon_store_reg(rd, 1, tmp3);
                 tcg_temp_free_i32(tmp);
@@ -7580,6 +7695,123 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
             }
         }
     }
+    return 0;
+}
+
+/* Advanced SIMD three registers of the same length extension.
+ *  31           25    23  22    20   16   12  11   10   9    8        3     0
+ * +---------------+-----+---+-----+----+----+---+----+---+----+---------+----+
+ * | 1 1 1 1 1 1 0 | op1 | D | op2 | Vn | Vd | 1 | o3 | 0 | o4 | N Q M U | Vm |
+ * +---------------+-----+---+-----+----+----+---+----+---+----+---------+----+
+ */
+static int disas_neon_insn_3same_ext(DisasContext *s, uint32_t insn)
+{
+    gen_helper_gvec_3_ptr *fn_gvec_ptr;
+    int rd, rn, rm, rot, size, opr_sz;
+    TCGv_ptr fpst;
+    bool q;
+
+    q = extract32(insn, 6, 1);
+    VFP_DREG_D(rd, insn);
+    VFP_DREG_N(rn, insn);
+    VFP_DREG_M(rm, insn);
+    if ((rd | rn | rm) & q) {
+        return 1;
+    }
+
+    if ((insn & 0xfe200f10) == 0xfc200800) {
+        /* VCMLA -- 1111 110R R.1S .... .... 1000 ...0 .... */
+        size = extract32(insn, 20, 1);
+        rot = extract32(insn, 23, 2);
+        if (!arm_dc_feature(s, ARM_FEATURE_V8_FCMA)
+            || (!size && !arm_dc_feature(s, ARM_FEATURE_V8_FP16))) {
+            return 1;
+        }
+        fn_gvec_ptr = size ? gen_helper_gvec_fcmlas : gen_helper_gvec_fcmlah;
+    } else if ((insn & 0xfea00f10) == 0xfc800800) {
+        /* VCADD -- 1111 110R 1.0S .... .... 1000 ...0 .... */
+        size = extract32(insn, 20, 1);
+        rot = extract32(insn, 24, 1);
+        if (!arm_dc_feature(s, ARM_FEATURE_V8_FCMA)
+            || (!size && !arm_dc_feature(s, ARM_FEATURE_V8_FP16))) {
+            return 1;
+        }
+        fn_gvec_ptr = size ? gen_helper_gvec_fcadds : gen_helper_gvec_fcaddh;
+    } else {
+        return 1;
+    }
+
+    if (s->fp_excp_el) {
+        gen_exception_insn(s, 4, EXCP_UDEF,
+                           syn_fp_access_trap(1, 0xe, false), s->fp_excp_el);
+        return 0;
+    }
+    if (!s->vfp_enabled) {
+        return 1;
+    }
+
+    opr_sz = (1 + q) * 8;
+    fpst = get_fpstatus_ptr(1);
+    tcg_gen_gvec_3_ptr(vfp_reg_offset(1, rd),
+                       vfp_reg_offset(1, rn),
+                       vfp_reg_offset(1, rm), fpst,
+                       opr_sz, opr_sz, rot, fn_gvec_ptr);
+    tcg_temp_free_ptr(fpst);
+    return 0;
+}
+
+/* Advanced SIMD two registers and a scalar extension.
+ *  31             24   23  22   20   16   12  11   10   9    8        3     0
+ * +-----------------+----+---+----+----+----+---+----+---+----+---------+----+
+ * | 1 1 1 1 1 1 1 0 | o1 | D | o2 | Vn | Vd | 1 | o3 | 0 | o4 | N Q M U | Vm |
+ * +-----------------+----+---+----+----+----+---+----+---+----+---------+----+
+ *
+ */
+
+static int disas_neon_insn_2reg_scalar_ext(DisasContext *s, uint32_t insn)
+{
+    int rd, rn, rm, rot, size, opr_sz;
+    TCGv_ptr fpst;
+    bool q;
+
+    q = extract32(insn, 6, 1);
+    VFP_DREG_D(rd, insn);
+    VFP_DREG_N(rn, insn);
+    VFP_DREG_M(rm, insn);
+    if ((rd | rn) & q) {
+        return 1;
+    }
+
+    if ((insn & 0xff000f10) == 0xfe000800) {
+        /* VCMLA (indexed) -- 1111 1110 S.RR .... .... 1000 ...0 .... */
+        rot = extract32(insn, 20, 2);
+        size = extract32(insn, 23, 1);
+        if (!arm_dc_feature(s, ARM_FEATURE_V8_FCMA)
+            || (!size && !arm_dc_feature(s, ARM_FEATURE_V8_FP16))) {
+            return 1;
+        }
+    } else {
+        return 1;
+    }
+
+    if (s->fp_excp_el) {
+        gen_exception_insn(s, 4, EXCP_UDEF,
+                           syn_fp_access_trap(1, 0xe, false), s->fp_excp_el);
+        return 0;
+    }
+    if (!s->vfp_enabled) {
+        return 1;
+    }
+
+    opr_sz = (1 + q) * 8;
+    fpst = get_fpstatus_ptr(1);
+    tcg_gen_gvec_3_ptr(vfp_reg_offset(1, rd),
+                       vfp_reg_offset(1, rn),
+                       vfp_reg_offset(1, rm), fpst,
+                       opr_sz, opr_sz, rot,
+                       size ? gen_helper_gvec_fcmlas_idx
+                       : gen_helper_gvec_fcmlah_idx);
+    tcg_temp_free_ptr(fpst);
     return 0;
 }
 
@@ -8327,6 +8559,18 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
                     }
                 }
             }
+        } else if ((insn & 0x0e000a00) == 0x0c000800
+                   && arm_dc_feature(s, ARM_FEATURE_V8)) {
+            if (disas_neon_insn_3same_ext(s, insn)) {
+                goto illegal_op;
+            }
+            return;
+        } else if ((insn & 0x0f000a00) == 0x0e000800
+                   && arm_dc_feature(s, ARM_FEATURE_V8)) {
+            if (disas_neon_insn_2reg_scalar_ext(s, insn)) {
+                goto illegal_op;
+            }
+            return;
         } else if ((insn & 0x0fe00000) == 0x0c400000) {
             /* Coprocessor double register transfer.  */
             ARCH(5TE);
@@ -8548,9 +8792,7 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
             case 1:
                 /* bkpt */
                 ARCH(5);
-                gen_exception_insn(s, 4, EXCP_BKPT,
-                                   syn_aa32_bkpt(imm16, false),
-                                   default_exception_el(s));
+                gen_exception_bkpt_insn(s, 4, syn_aa32_bkpt(imm16, false));
                 break;
             case 2:
                 /* Hypervisor call (v7) */
@@ -9001,11 +9243,14 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
                             }
                         }
                         tcg_temp_free_i32(addr);
-                    } else {
+                    } else if ((insn & 0x00300f00) == 0) {
+                        /* 0bcccc_0001_0x00_xxxx_xxxx_0000_1001_xxxx
+                        *  - SWP, SWPB
+                        */
+
                         TCGv taddr;
                         TCGMemOp opc = s->be_data;
 
-                        /* SWP instruction */
                         rm = (insn) & 0xf;
 
                         if (insn & (1 << 22)) {
@@ -9023,6 +9268,8 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
                                                 get_mem_index(s), opc);
                         tcg_temp_free(taddr);
                         store_reg(s, rd, tmp);
+                    } else {
+                        goto illegal_op;
                     }
                 }
             } else {
@@ -9602,7 +9849,13 @@ static void disas_arm_insn(DisasContext *s, unsigned int insn)
                 if (exc_return) {
                     /* Restore CPSR from SPSR.  */
                     tmp = load_cpu_field(spsr);
+                    if (tb_cflags(s->base.tb) & CF_USE_ICOUNT) {
+                        gen_io_start();
+                    }
                     gen_helper_cpsr_write_eret(cpu_env, tmp);
+                    if (tb_cflags(s->base.tb) & CF_USE_ICOUNT) {
+                        gen_io_end();
+                    }
                     tcg_temp_free_i32(tmp);
                     /* Must exit loop to check un-masked IRQs */
                     s->base.is_jmp = DISAS_EXIT;
@@ -9677,7 +9930,7 @@ static bool thumb_insn_is_16bit(DisasContext *s, uint32_t insn)
         return false;
     }
 
-    if ((insn >> 11) == 0x1e && (s->pc < s->next_page_start - 3)) {
+    if ((insn >> 11) == 0x1e && s->pc - s->page_start < TARGET_PAGE_SIZE - 3) {
         /* 0b1111_0xxx_xxxx_xxxx : BL/BLX prefix, and the suffix
          * is not on the next page; we merge this into a 32-bit
          * insn.
@@ -9775,9 +10028,8 @@ gen_thumb2_data_op(DisasContext *s, int op, int conds, uint32_t shifter_out,
     return 0;
 }
 
-/* Translate a 32-bit thumb instruction.  Returns nonzero if the instruction
-   is not legal.  */
-static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
+/* Translate a 32-bit thumb instruction. */
+static void disas_thumb2_insn(DisasContext *s, uint32_t insn)
 {
     uint32_t imm, shift, offset;
     uint32_t rd, rn, rm, rs;
@@ -9915,6 +10167,7 @@ static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
                         tcg_temp_free_i32(addr);
                         tcg_temp_free_i32(op);
                         store_reg(s, rd, ttresp);
+                        break;
                     }
                     goto illegal_op;
                 }
@@ -10542,13 +10795,40 @@ static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
         /* Coprocessor.  */
         if (arm_dc_feature(s, ARM_FEATURE_M)) {
             /* We don't currently implement M profile FP support,
-             * so this entire space should give a NOCP fault.
+             * so this entire space should give a NOCP fault, with
+             * the exception of the v8M VLLDM and VLSTM insns, which
+             * must be NOPs in Secure state and UNDEF in Nonsecure state.
              */
+            if (arm_dc_feature(s, ARM_FEATURE_V8) &&
+                (insn & 0xffa00f00) == 0xec200a00) {
+                /* 0b1110_1100_0x1x_xxxx_xxxx_1010_xxxx_xxxx
+                 *  - VLLDM, VLSTM
+                 * We choose to UNDEF if the RAZ bits are non-zero.
+                 */
+                if (!s->v8m_secure || (insn & 0x0040f0ff)) {
+                    goto illegal_op;
+                }
+                /* Just NOP since FP support is not implemented */
+                break;
+            }
+            /* All other insns: NOCP */
             gen_exception_insn(s, 4, EXCP_NOCP, syn_uncategorized(),
                                default_exception_el(s));
             break;
         }
-        if (((insn >> 24) & 3) == 3) {
+        if ((insn & 0xfe000a00) == 0xfc000800
+            && arm_dc_feature(s, ARM_FEATURE_V8)) {
+            /* The Thumb2 and ARM encodings are identical.  */
+            if (disas_neon_insn_3same_ext(s, insn)) {
+                goto illegal_op;
+            }
+        } else if ((insn & 0xff000a00) == 0xfe000800
+                   && arm_dc_feature(s, ARM_FEATURE_V8)) {
+            /* The Thumb2 and ARM encodings are identical.  */
+            if (disas_neon_insn_2reg_scalar_ext(s, insn)) {
+                goto illegal_op;
+            }
+        } else if (((insn >> 24) & 3) == 3) {
             /* Translate into the equivalent ARM encoding.  */
             insn = (insn & 0xe2ffffff) | ((insn & (1 << 28)) >> 4) | (1 << 28);
             if (disas_neon_data_insn(s, insn)) {
@@ -11016,16 +11296,16 @@ static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
                     /* UNPREDICTABLE, unallocated hint or
                      * PLD/PLDW/PLI (literal)
                      */
-                    return 0;
+                    return;
                 }
                 if (op1 & 1) {
-                    return 0; /* PLD/PLDW/PLI or unallocated hint */
+                    return; /* PLD/PLDW/PLI or unallocated hint */
                 }
                 if ((op2 == 0) || ((op2 & 0x3c) == 0x30)) {
-                    return 0; /* PLD/PLDW/PLI or unallocated hint */
+                    return; /* PLD/PLDW/PLI or unallocated hint */
                 }
                 /* UNDEF space, or an UNPREDICTABLE */
-                return 1;
+                goto illegal_op;
             }
         }
         memidx = get_mem_index(s);
@@ -11151,9 +11431,10 @@ static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
     default:
         goto illegal_op;
     }
-    return 0;
+    return;
 illegal_op:
-    return 1;
+    gen_exception_insn(s, 4, EXCP_UDEF, syn_uncategorized(),
+                       default_exception_el(s));
 }
 
 static void disas_thumb_insn(DisasContext *s, uint32_t insn)
@@ -11744,8 +12025,7 @@ static void disas_thumb_insn(DisasContext *s, uint32_t insn)
         {
             int imm8 = extract32(insn, 0, 8);
             ARCH(5);
-            gen_exception_insn(s, 2, EXCP_BKPT, syn_aa32_bkpt(imm8, true),
-                               default_exception_el(s));
+            gen_exception_bkpt_insn(s, 2, syn_aa32_bkpt(imm8, true));
             break;
         }
 
@@ -11963,8 +12243,7 @@ static bool insn_crosses_page(CPUARMState *env, DisasContext *s)
     return !thumb_insn_is_16bit(s, insn);
 }
 
-static int arm_tr_init_disas_context(DisasContextBase *dcbase,
-                                     CPUState *cs, int max_insns)
+static void arm_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
     CPUARMState *env = cs->env_ptr;
@@ -12021,19 +12300,18 @@ static int arm_tr_init_disas_context(DisasContextBase *dcbase,
     dc->is_ldex = false;
     dc->ss_same_el = false; /* Can't be true since EL_d must be AArch64 */
 
-    dc->next_page_start =
-        (dc->base.pc_first & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
+    dc->page_start = dc->base.pc_first & TARGET_PAGE_MASK;
 
     /* If architectural single step active, limit to 1.  */
     if (is_singlestepping(dc)) {
-        max_insns = 1;
+        dc->base.max_insns = 1;
     }
 
     /* ARM is a fixed-length ISA.  Bound the number of insns to execute
        to those left on the page.  */
     if (!dc->thumb) {
-        int bound = (dc->next_page_start - dc->base.pc_first) / 4;
-        max_insns = MIN(max_insns, bound);
+        int bound = -(dc->base.pc_first | TARGET_PAGE_MASK) / 4;
+        dc->base.max_insns = MIN(dc->base.max_insns, bound);
     }
 
     cpu_F0s = tcg_temp_new_i32();
@@ -12044,8 +12322,6 @@ static int arm_tr_init_disas_context(DisasContextBase *dcbase,
     cpu_V1 = cpu_F1d;
     /* FIXME: cpu_M0 can probably be the same as cpu_V0.  */
     cpu_M0 = tcg_temp_new_i64();
-
-    return max_insns;
 }
 
 static void arm_tr_tb_start(DisasContextBase *dcbase, CPUState *cpu)
@@ -12275,10 +12551,7 @@ static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     if (is_16bit) {
         disas_thumb_insn(dc, insn);
     } else {
-        if (disas_thumb2_insn(dc, insn)) {
-            gen_exception_insn(dc, 4, EXCP_UDEF, syn_uncategorized(),
-                               default_exception_el(dc));
-        }
+        disas_thumb2_insn(dc, insn);
     }
 
     /* Advance the Thumb condexec condition.  */
@@ -12307,8 +12580,8 @@ static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
      * but isn't very efficient).
      */
     if (dc->base.is_jmp == DISAS_NEXT
-        && (dc->pc >= dc->next_page_start
-            || (dc->pc >= dc->next_page_start - 3
+        && (dc->pc - dc->page_start >= TARGET_PAGE_SIZE
+            || (dc->pc - dc->page_start >= TARGET_PAGE_SIZE - 3
                 && insn_crosses_page(env, dc)))) {
         dc->base.is_jmp = DISAS_TOO_MANY;
     }
@@ -12565,7 +12838,7 @@ void arm_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
             numvfpregs += 16;
         }
         for (i = 0; i < numvfpregs; i++) {
-            uint64_t v = float64_val(env->vfp.regs[i]);
+            uint64_t v = *aa32_vfp_dreg(env, i);
             cpu_fprintf(f, "s%02d=%08x s%02d=%08x d%02d=%016" PRIx64 "\n",
                         i * 2, (uint32_t)v,
                         i * 2 + 1, (uint32_t)(v >> 32),

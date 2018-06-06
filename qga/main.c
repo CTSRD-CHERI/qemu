@@ -10,6 +10,7 @@
  * This work is licensed under the terms of the GNU GPL, version 2 or later.
  * See the COPYING file in the top-level directory.
  */
+
 #include "qemu/osdep.h"
 #include <getopt.h>
 #include <glib/gstdio.h>
@@ -19,11 +20,14 @@
 #endif
 #include "qapi/qmp/json-streamer.h"
 #include "qapi/qmp/json-parser.h"
+#include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qjson.h"
+#include "qapi/qmp/qstring.h"
 #include "qga/guest-agent-core.h"
 #include "qemu/module.h"
+#include "qga-qapi-commands.h"
 #include "qapi/qmp/qerror.h"
-#include "qapi/qmp/dispatch.h"
+#include "qapi/error.h"
 #include "qga/channel.h"
 #include "qemu/bswap.h"
 #include "qemu/help_option.h"
@@ -214,7 +218,7 @@ static void usage(const char *cmd)
 {
     printf(
 "Usage: %s [-m <method> -p <path>] [<options>]\n"
-"QEMU Guest Agent " QEMU_VERSION QEMU_PKGVERSION "\n"
+"QEMU Guest Agent " QEMU_FULL_VERSION "\n"
 QEMU_COPYRIGHT "\n"
 "\n"
 "  -m, --method      transport method: one of unix-listen, virtio-serial,\n"
@@ -559,7 +563,7 @@ static int send_response(GAState *s, QObject *payload)
         response_qstr = qstring_new();
         qstring_append_chr(response_qstr, QGA_SENTINEL_BYTE);
         qstring_append(response_qstr, qstring_get_str(payload_qstr));
-        QDECREF(payload_qstr);
+        qobject_unref(payload_qstr);
     } else {
         response_qstr = payload_qstr;
     }
@@ -567,7 +571,7 @@ static int send_response(GAState *s, QObject *payload)
     qstring_append_chr(response_qstr, '\n');
     buf = qstring_get_str(response_qstr);
     status = ga_channel_write_all(s->channel, buf, strlen(buf));
-    QDECREF(response_qstr);
+    qobject_unref(response_qstr);
     if (status != G_IO_STATUS_NORMAL) {
         return -EIO;
     }
@@ -588,7 +592,7 @@ static void process_command(GAState *s, QDict *req)
         if (ret < 0) {
             g_warning("error sending response: %s", strerror(-ret));
         }
-        qobject_decref(rsp);
+        qobject_unref(rsp);
     }
 }
 
@@ -603,9 +607,9 @@ static void process_event(JSONMessageParser *parser, GQueue *tokens)
     g_assert(s && parser);
 
     g_debug("process_event: called");
-    qdict = qobject_to_qdict(json_parser_parse_err(tokens, NULL, &err));
+    qdict = qobject_to(QDict, json_parser_parse_err(tokens, NULL, &err));
     if (err || !qdict) {
-        QDECREF(qdict);
+        qobject_unref(qdict);
         qdict = qdict_new();
         if (!err) {
             g_warning("failed to parse event: unknown error");
@@ -622,7 +626,7 @@ static void process_event(JSONMessageParser *parser, GQueue *tokens)
         process_command(s, qdict);
     } else {
         if (!qdict_haskey(qdict, "error")) {
-            QDECREF(qdict);
+            qobject_unref(qdict);
             qdict = qdict_new();
             g_warning("unrecognized payload format");
             error_setg(&err, QERR_UNSUPPORTED);
@@ -635,7 +639,7 @@ static void process_event(JSONMessageParser *parser, GQueue *tokens)
         }
     }
 
-    QDECREF(qdict);
+    qobject_unref(qdict);
 }
 
 /* false return signals GAChannel to close the current client connection */

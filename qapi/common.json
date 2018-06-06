@@ -100,3 +100,52 @@
 { 'alternate': 'StrOrNull',
   'data': { 's': 'str',
             'n': 'null' } }
+
+##
+# @OffAutoPCIBAR:
+#
+# An enumeration of options for specifying a PCI BAR
+#
+# @off: The specified feature is disabled
+#
+# @auto: The PCI BAR for the feature is automatically selected
+#
+# @bar0: PCI BAR0 is used for the feature
+#
+# @bar1: PCI BAR1 is used for the feature
+#
+# @bar2: PCI BAR2 is used for the feature
+#
+# @bar3: PCI BAR3 is used for the feature
+#
+# @bar4: PCI BAR4 is used for the feature
+#
+# @bar5: PCI BAR5 is used for the feature
+#
+# Since: 2.12
+##
+{ 'enum': 'OffAutoPCIBAR',
+  'data': [ 'off', 'auto', 'bar0', 'bar1', 'bar2', 'bar3', 'bar4', 'bar5' ] }
+
+##
+# @SysEmuTarget:
+#
+# The comprehensive enumeration of QEMU system emulation ("softmmu")
+# targets. Run "./configure --help" in the project root directory, and
+# look for the *-softmmu targets near the "--target-list" option. The
+# individual target constants are not documented here, for the time
+# being.
+#
+# Notes: The resulting QMP strings can be appended to the "qemu-system-"
+#        prefix to produce the corresponding QEMU executable name. This
+#        is true even for "qemu-system-x86_64".
+#
+# Since: 2.13
+##
+{ 'enum' : 'SysEmuTarget',
+  'data' : [ 'aarch64', 'alpha', 'arm', 'cris', 'hppa', 'i386', 'lm32',
+             'm68k', 'microblaze', 'microblazeel', 'mips', 'mips64',
+             'mips64el', 'mipsel', 'moxie', 'nios2', 'or1k', 'ppc',
+             'ppc64', 'ppcemb', 'riscv32', 'riscv64', 's390x', 'sh4',
+             'sh4eb', 'sparc', 'sparc64', 'tricore', 'unicore32',
+             'x86_64', 'xtensa', 'xtensaeb' ] }

@@ -11,6 +11,8 @@
 
 #include "qemu/osdep.h"
 #include "libqtest.h"
+#include "qapi/qmp/qdict.h"
+#include "qapi/qmp/qlist.h"
 
 static char *make_cli(const char *generic_cli, const char *test_cli)
 {
@@ -96,7 +98,7 @@ static void test_query_cpus(const void *data)
         QDict *cpu, *props;
         int64_t cpu_idx, node;
 
-        cpu = qobject_to_qdict(e);
+        cpu = qobject_to(QDict, e);
         g_assert(qdict_haskey(cpu, "CPU"));
         g_assert(qdict_haskey(cpu, "props"));
 
@@ -109,10 +111,10 @@ static void test_query_cpus(const void *data)
         } else {
             g_assert_cmpint(node, ==, 1);
         }
-        qobject_decref(e);
+        qobject_unref(e);
     }
 
-    QDECREF(resp);
+    qobject_unref(resp);
     qtest_end();
     g_free(cli);
 }
@@ -138,7 +140,7 @@ static void pc_numa_cpu(const void *data)
         QDict *cpu, *props;
         int64_t socket, core, thread, node;
 
-        cpu = qobject_to_qdict(e);
+        cpu = qobject_to(QDict, e);
         g_assert(qdict_haskey(cpu, "props"));
         props = qdict_get_qdict(cpu, "props");
 
@@ -162,10 +164,10 @@ static void pc_numa_cpu(const void *data)
         } else {
             g_assert(false);
         }
-        qobject_decref(e);
+        qobject_unref(e);
     }
 
-    QDECREF(resp);
+    qobject_unref(resp);
     qtest_end();
     g_free(cli);
 }
@@ -191,7 +193,7 @@ static void spapr_numa_cpu(const void *data)
         QDict *cpu, *props;
         int64_t core, node;
 
-        cpu = qobject_to_qdict(e);
+        cpu = qobject_to(QDict, e);
         g_assert(qdict_haskey(cpu, "props"));
         props = qdict_get_qdict(cpu, "props");
 
@@ -207,10 +209,10 @@ static void spapr_numa_cpu(const void *data)
         } else {
             g_assert(false);
         }
-        qobject_decref(e);
+        qobject_unref(e);
     }
 
-    QDECREF(resp);
+    qobject_unref(resp);
     qtest_end();
     g_free(cli);
 }
@@ -234,7 +236,7 @@ static void aarch64_numa_cpu(const void *data)
         QDict *cpu, *props;
         int64_t thread, node;
 
-        cpu = qobject_to_qdict(e);
+        cpu = qobject_to(QDict, e);
         g_assert(qdict_haskey(cpu, "props"));
         props = qdict_get_qdict(cpu, "props");
 
@@ -250,10 +252,10 @@ static void aarch64_numa_cpu(const void *data)
         } else {
             g_assert(false);
         }
-        qobject_decref(e);
+        qobject_unref(e);
     }
 
-    QDECREF(resp);
+    qobject_unref(resp);
     qtest_end();
     g_free(cli);
 }

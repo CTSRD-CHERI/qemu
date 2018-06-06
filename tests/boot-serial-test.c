@@ -24,6 +24,44 @@ static const uint8_t kernel_mcf5208[] = {
     0x60, 0xfa                              /* bra.s  loop */
 };
 
+static const uint8_t kernel_pls3adsp1800[] = {
+    0xb0, 0x00, 0x84, 0x00,                 /* imm   0x8400 */
+    0x30, 0x60, 0x00, 0x04,                 /* addik r3,r0,4 */
+    0x30, 0x80, 0x00, 0x54,                 /* addik r4,r0,'T' */
+    0xf0, 0x83, 0x00, 0x00,                 /* sbi   r4,r3,0 */
+    0xb8, 0x00, 0xff, 0xfc                  /* bri   -4  loop */
+};
+
+static const uint8_t kernel_plml605[] = {
+    0xe0, 0x83, 0x00, 0xb0,                 /* imm   0x83e0 */
+    0x00, 0x10, 0x60, 0x30,                 /* addik r3,r0,0x1000 */
+    0x54, 0x00, 0x80, 0x30,                 /* addik r4,r0,'T' */
+    0x00, 0x00, 0x83, 0xf0,                 /* sbi   r4,r3,0 */
+    0xfc, 0xff, 0x00, 0xb8                  /* bri   -4  loop */
+};
+
+static const uint8_t bios_moxiesim[] = {
+    0x20, 0x10, 0x00, 0x00, 0x03, 0xf8,     /* ldi.s r1,0x3f8 */
+    0x1b, 0x20, 0x00, 0x00, 0x00, 0x54,     /* ldi.b r2,'T' */
+    0x1e, 0x12,                             /* st.b  r1,r2 */
+    0x1a, 0x00, 0x00, 0x00, 0x10, 0x00      /* jmpa  0x1000 */
+};
+
+static const uint8_t bios_raspi2[] = {
+    0x08, 0x30, 0x9f, 0xe5,                 /* ldr   r3,[pc,#8]    Get base */
+    0x54, 0x20, 0xa0, 0xe3,                 /* mov     r2,#'T' */
+    0x00, 0x20, 0xc3, 0xe5,                 /* strb    r2,[r3] */
+    0xfb, 0xff, 0xff, 0xea,                 /* b       loop */
+    0x00, 0x10, 0x20, 0x3f,                 /* 0x3f201000 = UART0 base addr */
+};
+
+static const uint8_t kernel_aarch64[] = {
+    0x81, 0x0a, 0x80, 0x52,                 /* mov     w1, #0x54 */
+    0x02, 0x20, 0xa1, 0xd2,                 /* mov     x2, #0x9000000 */
+    0x41, 0x00, 0x00, 0x39,                 /* strb    w1, [x2] */
+    0xfd, 0xff, 0xff, 0x17,                 /* b       -12 (loop) */
+};
+
 typedef struct testdef {
     const char *arch;       /* Target architecture */
     const char *machine;    /* Name of the machine */
@@ -37,19 +75,38 @@ typedef struct testdef {
 static testdef_t tests[] = {
     { "alpha", "clipper", "", "PCI:" },
     { "ppc", "ppce500", "", "U-Boot" },
-    { "ppc", "prep", "", "Open Hack'Ware BIOS" },
+    { "ppc", "prep", "-m 96", "Memory size: 96 MB" },
+    { "ppc", "40p", "-boot d", "Booting from device d" },
+    { "ppc", "g3beige", "", "PowerPC,750" },
+    { "ppc", "mac99", "", "PowerPC,G4" },
+    { "ppc", "sam460ex", "-m 256", "DRAM:  256 MiB" },
     { "ppc64", "ppce500", "", "U-Boot" },
-    { "ppc64", "prep", "", "Open Hack'Ware BIOS" },
+    { "ppc64", "prep", "-boot e", "Booting from device e" },
+    { "ppc64", "40p", "-m 192", "Memory size: 192 MB" },
+    { "ppc64", "mac99", "", "PowerPC,970FX" },
     { "ppc64", "pseries", "", "Open Firmware" },
-    { "ppc64", "powernv", "-cpu POWER8", "SkiBoot" },
+    { "ppc64", "powernv", "-cpu POWER8", "OPAL" },
+    { "ppc64", "sam460ex", "-device e1000", "8086  100e" },
     { "i386", "isapc", "-cpu qemu32 -device sga", "SGABIOS" },
     { "i386", "pc", "-device sga", "SGABIOS" },
     { "i386", "q35", "-device sga", "SGABIOS" },
     { "x86_64", "isapc", "-cpu qemu32 -device sga", "SGABIOS" },
     { "x86_64", "q35", "-device sga", "SGABIOS" },
-    { "s390x", "s390-ccw-virtio",
-      "-nodefaults -device sclpconsole,chardev=serial0", "virtio device" },
+    { "sparc", "LX", "", "TMS390S10" },
+    { "sparc", "SS-4", "", "MB86904" },
+    { "sparc", "SS-600MP", "", "TMS390Z55" },
+    { "sparc64", "sun4u", "", "UltraSPARC" },
+    { "s390x", "s390-ccw-virtio", "", "virtio device" },
     { "m68k", "mcf5208evb", "", "TT", sizeof(kernel_mcf5208), kernel_mcf5208 },
+    { "microblaze", "petalogix-s3adsp1800", "", "TT",
+      sizeof(kernel_pls3adsp1800), kernel_pls3adsp1800 },
+    { "microblazeel", "petalogix-ml605", "", "TT",
+      sizeof(kernel_plml605), kernel_plml605 },
+    { "moxie", "moxiesim", "", "TT", sizeof(bios_moxiesim), 0, bios_moxiesim },
+    { "arm", "raspi2", "", "TT", sizeof(bios_raspi2), 0, bios_raspi2 },
+    { "hppa", "hppa", "", "SeaBIOS wants SYSTEM HALT" },
+    { "aarch64", "virt", "-cpu cortex-a57", "TT", sizeof(kernel_aarch64),
+      kernel_aarch64 },
 
     { NULL }
 };
@@ -57,13 +114,13 @@ static testdef_t tests[] = {
 static void check_guest_output(const testdef_t *test, int fd)
 {
     bool output_ok = false;
-    int i, nbr, pos = 0, ccnt;
+    int i, nbr = 0, pos = 0, ccnt;
     char ch;
 
     /* Poll serial output... Wait at most 60 seconds */
     for (i = 0; i < 6000; ++i) {
         ccnt = 0;
-        while ((nbr = read(fd, &ch, 1)) == 1 && ccnt++ < 512) {
+        while (ccnt++ < 512 && (nbr = read(fd, &ch, 1)) == 1) {
             if (ch == test->expect[pos]) {
                 pos += 1;
                 if (test->expect[pos] == '\0') {

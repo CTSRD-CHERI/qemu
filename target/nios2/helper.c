@@ -22,7 +22,6 @@
 
 #include "cpu.h"
 #include "qemu/host-utils.h"
-#include "qapi/error.h"
 #include "exec/exec-all.h"
 #include "exec/log.h"
 #include "exec/helper-proto.h"
@@ -37,7 +36,8 @@ void nios2_cpu_do_interrupt(CPUState *cs)
     env->regs[R_EA] = env->regs[R_PC] + 4;
 }
 
-int nios2_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw, int mmu_idx)
+int nios2_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size,
+                               int rw, int mmu_idx)
 {
     cs->exception_index = 0xaa;
     /* Page 0x1000 is kuser helper */
@@ -232,7 +232,8 @@ static int cpu_nios2_handle_virtual_page(
     return 1;
 }
 
-int nios2_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw, int mmu_idx)
+int nios2_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size,
+                               int rw, int mmu_idx)
 {
     Nios2CPU *cpu = NIOS2_CPU(cs);
     CPUNios2State *env = &cpu->env;

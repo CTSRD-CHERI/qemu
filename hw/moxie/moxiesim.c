@@ -63,8 +63,8 @@ static void load_kernel(MoxieCPU *cpu, LoaderParams *loader_params)
                            0, 0);
 
     if (kernel_size <= 0) {
-        fprintf(stderr, "qemu: could not load kernel '%s'\n",
-                loader_params->kernel_filename);
+        error_report("could not load kernel '%s'",
+                     loader_params->kernel_filename);
         exit(1);
     }
 
@@ -77,9 +77,8 @@ static void load_kernel(MoxieCPU *cpu, LoaderParams *loader_params)
             initrd_offset = (kernel_high + ~TARGET_PAGE_MASK)
               & TARGET_PAGE_MASK;
             if (initrd_offset + initrd_size > loader_params->ram_size) {
-                fprintf(stderr,
-                        "qemu: memory too small for initial ram disk '%s'\n",
-                        loader_params->initrd_filename);
+                error_report("memory too small for initial ram disk '%s'",
+                             loader_params->initrd_filename);
                 exit(1);
             }
             initrd_size = load_image_targphys(loader_params->initrd_filename,
@@ -87,8 +86,8 @@ static void load_kernel(MoxieCPU *cpu, LoaderParams *loader_params)
                                               ram_size);
         }
         if (initrd_size == (target_ulong)-1) {
-            fprintf(stderr, "qemu: could not load initial ram disk '%s'\n",
-                    loader_params->initrd_filename);
+            error_report("could not load initial ram disk '%s'",
+                         loader_params->initrd_filename);
             exit(1);
         }
     }
@@ -142,9 +141,9 @@ static void moxiesim_init(MachineState *machine)
     }
 
     /* A single 16450 sits at offset 0x3f8.  */
-    if (serial_hds[0]) {
+    if (serial_hd(0)) {
         serial_mm_init(address_space_mem, 0x3f8, 0, env->irq[4],
-                       8000000/16, serial_hds[0], DEVICE_LITTLE_ENDIAN);
+                       8000000/16, serial_hd(0), DEVICE_LITTLE_ENDIAN);
     }
 }
 

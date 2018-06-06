@@ -1279,6 +1279,9 @@ static void vga_draw_text(VGACommonState *s, int full_update)
         cx_min = width;
         cx_max = -1;
         for(cx = 0; cx < width; cx++) {
+            if (src + sizeof(uint16_t) > s->vram_ptr + s->vram_size) {
+                break;
+            }
             ch_attr = *(uint16_t *)src;
             if (full_update || ch_attr != *ch_attr_ptr || src == cursor_ptr) {
                 if (cx < cx_min)
@@ -1441,11 +1444,6 @@ static bool vga_scanline_invalidated(VGACommonState *s, int y)
     return s->invalidated_y_table[y >> 5] & (1 << (y & 0x1f));
 }
 
-void vga_sync_dirty_bitmap(VGACommonState *s)
-{
-    memory_region_sync_dirty_bitmap(&s->vram);
-}
-
 void vga_dirty_log_start(VGACommonState *s)
 {
     memory_region_set_log(&s->vram, true, DIRTY_MEMORY_VGA);
@@ -1485,6 +1483,8 @@ static void vga_draw_graphic(VGACommonState *s, int full_update)
 
     region_start = (s->start_addr * 4);
     region_end = region_start + (ram_addr_t)s->line_offset * height;
+    region_end += width * s->get_bpp(s) / 8; /* scanline length */
+    region_end -= s->line_offset;
     if (region_end > s->vbe_size) {
         /* wraps around (can happen with cirrus vbe modes) */
         region_start = 0;
@@ -1635,7 +1635,6 @@ static void vga_draw_graphic(VGACommonState *s, int full_update)
     y1 = 0;
 
     if (!full_update) {
-        vga_sync_dirty_bitmap(s);
         if (s->line_compare < height) {
             /* split screen mode */
             region_start = 0;

@@ -24,11 +24,11 @@
 #include "monitor/monitor.h"
 #include "qapi/clone-visitor.h"
 #include "qapi/error.h"
+#include "qapi/qapi-visit-sockets.h"
 #include "qemu/sockets.h"
 #include "qemu/main-loop.h"
 #include "qapi/qobject-input-visitor.h"
 #include "qapi/qobject-output-visitor.h"
-#include "qapi-visit.h"
 #include "qemu/cutils.h"
 
 #ifndef AI_ADDRCONFIG
@@ -90,6 +90,14 @@ NetworkAddressFamily inet_netfamily(int family)
     }
     return NETWORK_ADDRESS_FAMILY_UNKNOWN;
 }
+
+bool fd_is_socket(int fd)
+{
+    int optval;
+    socklen_t optlen = sizeof(optval);
+    return !qemu_getsockopt(fd, SOL_SOCKET, SO_TYPE, &optval, &optlen);
+}
+
 
 /*
  * Matrix we're trying to apply
@@ -554,6 +562,33 @@ err:
 }
 
 /* compatibility wrapper */
+static int inet_parse_flag(const char *flagname, const char *optstr, bool *val,
+                           Error **errp)
+{
+    char *end;
+    size_t len;
+
+    end = strstr(optstr, ",");
+    if (end) {
+        if (end[1] == ',') { /* Reject 'ipv6=on,,foo' */
+            error_setg(errp, "error parsing '%s' flag '%s'", flagname, optstr);
+            return -1;
+        }
+        len = end - optstr;
+    } else {
+        len = strlen(optstr);
+    }
+    if (len == 0 || (len == 3 && strncmp(optstr, "=on", len) == 0)) {
+        *val = true;
+    } else if (len == 4 && strncmp(optstr, "=off", len) == 0) {
+        *val = false;
+    } else {
+        error_setg(errp, "error parsing '%s' flag '%s'", flagname, optstr);
+        return -1;
+    }
+    return 0;
+}
+
 int inet_parse(InetSocketAddress *addr, const char *str, Error **errp)
 {
     const char *optstr, *h;
@@ -561,6 +596,7 @@ int inet_parse(InetSocketAddress *addr, const char *str, Error **errp)
     char port[33];
     int to;
     int pos;
+    char *begin;
 
     memset(addr, 0, sizeof(*addr));
 
@@ -602,11 +638,19 @@ int inet_parse(InetSocketAddress *addr, const char *str, Error **errp)
         addr->has_to = true;
         addr->to = to;
     }
-    if (strstr(optstr, ",ipv4")) {
-        addr->ipv4 = addr->has_ipv4 = true;
+    begin = strstr(optstr, ",ipv4");
+    if (begin) {
+        if (inet_parse_flag("ipv4", begin + 5, &addr->ipv4, errp) < 0) {
+            return -1;
+        }
+        addr->has_ipv4 = true;
     }
-    if (strstr(optstr, ",ipv6")) {
-        addr->ipv6 = addr->has_ipv6 = true;
+    begin = strstr(optstr, ",ipv6");
+    if (begin) {
+        if (inet_parse_flag("ipv6", begin + 5, &addr->ipv6, errp) < 0) {
+            return -1;
+        }
+        addr->has_ipv6 = true;
     }
     return 0;
 }
@@ -998,6 +1042,30 @@ fail:
     return NULL;
 }
 
+static int socket_get_fd(const char *fdstr, Error **errp)
+{
+    int fd;
+    if (cur_mon) {
+        fd = monitor_get_fd(cur_mon, fdstr, errp);
+        if (fd < 0) {
+            return -1;
+        }
+    } else {
+        if (qemu_strtoi(fdstr, NULL, 10, &fd) < 0) {
+            error_setg_errno(errp, errno,
+                             "Unable to parse FD number %s",
+                             fdstr);
+            return -1;
+        }
+    }
+    if (!fd_is_socket(fd)) {
+        error_setg(errp, "File descriptor '%s' is not a socket", fdstr);
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
 int socket_connect(SocketAddress *addr, Error **errp)
 {
     int fd;
@@ -1012,7 +1080,7 @@ int socket_connect(SocketAddress *addr, Error **errp)
         break;
 
     case SOCKET_ADDRESS_TYPE_FD:
-        fd = monitor_get_fd(cur_mon, addr->u.fd.str, errp);
+        fd = socket_get_fd(addr->u.fd.str, errp);
         break;
 
     case SOCKET_ADDRESS_TYPE_VSOCK:
@@ -1039,7 +1107,7 @@ int socket_listen(SocketAddress *addr, Error **errp)
         break;
 
     case SOCKET_ADDRESS_TYPE_FD:
-        fd = monitor_get_fd(cur_mon, addr->u.fd.str, errp);
+        fd = socket_get_fd(addr->u.fd.str, errp);
         break;
 
     case SOCKET_ADDRESS_TYPE_VSOCK:

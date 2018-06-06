@@ -280,26 +280,45 @@ static void rtas_ibm_change_msi(PowerPCCPU *cpu, sPAPRMachineState *spapr,
     int *config_addr_key;
     Error *err = NULL;
 
-    switch (func) {
-    case RTAS_CHANGE_MSI_FN:
-    case RTAS_CHANGE_FN:
-        ret_intr_type = RTAS_TYPE_MSI;
-        break;
-    case RTAS_CHANGE_MSIX_FN:
-        ret_intr_type = RTAS_TYPE_MSIX;
-        break;
-    default:
-        error_report("rtas_ibm_change_msi(%u) is not implemented", func);
-        rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
-        return;
-    }
-
     /* Fins sPAPRPHBState */
     phb = spapr_pci_find_phb(spapr, buid);
     if (phb) {
         pdev = spapr_pci_find_dev(spapr, buid, config_addr);
     }
     if (!phb || !pdev) {
+        rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
+        return;
+    }
+
+    switch (func) {
+    case RTAS_CHANGE_FN:
+        if (msi_present(pdev)) {
+            ret_intr_type = RTAS_TYPE_MSI;
+        } else if (msix_present(pdev)) {
+            ret_intr_type = RTAS_TYPE_MSIX;
+        } else {
+            rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
+            return;
+        }
+        break;
+    case RTAS_CHANGE_MSI_FN:
+        if (msi_present(pdev)) {
+            ret_intr_type = RTAS_TYPE_MSI;
+        } else {
+            rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
+            return;
+        }
+        break;
+    case RTAS_CHANGE_MSIX_FN:
+        if (msix_present(pdev)) {
+            ret_intr_type = RTAS_TYPE_MSIX;
+        } else {
+            rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
+            return;
+        }
+        break;
+    default:
+        error_report("rtas_ibm_change_msi(%u) is not implemented", func);
         rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
         return;
     }
@@ -505,7 +524,7 @@ static void rtas_ibm_get_config_addr_info2(PowerPCCPU *cpu,
             goto param_error_exit;
         }
 
-        rtas_st(rets, 1, (pci_bus_num(pdev->bus) << 16) + 1);
+        rtas_st(rets, 1, (pci_bus_num(pci_get_bus(pdev)) << 16) + 1);
         break;
     case RTAS_GET_PE_MODE:
         rtas_st(rets, 1, RTAS_PE_MODE_SHARED);
@@ -1286,13 +1305,17 @@ static void spapr_populate_pci_child_dt(PCIDevice *dev, void *fdt, int offset,
     _FDT(fdt_setprop_cell(fdt, offset, "#size-cells",
                           RESOURCE_CELLS_SIZE));
 
-    max_msi = msi_nr_vectors_allocated(dev);
-    if (max_msi) {
-        _FDT(fdt_setprop_cell(fdt, offset, "ibm,req#msi", max_msi));
+    if (msi_present(dev)) {
+        max_msi = msi_nr_vectors_allocated(dev);
+        if (max_msi) {
+            _FDT(fdt_setprop_cell(fdt, offset, "ibm,req#msi", max_msi));
+        }
     }
-    max_msix = dev->msix_entries_nr;
-    if (max_msix) {
-        _FDT(fdt_setprop_cell(fdt, offset, "ibm,req#msi-x", max_msix));
+    if (msix_present(dev)) {
+        max_msix = dev->msix_entries_nr;
+        if (max_msix) {
+            _FDT(fdt_setprop_cell(fdt, offset, "ibm,req#msi-x", max_msix));
+        }
     }
 
     populate_resource_props(dev, &rp);
@@ -1621,10 +1644,10 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     memory_region_add_subregion(get_system_memory(), sphb->io_win_addr,
                                 &sphb->iowindow);
 
-    bus = pci_register_bus(dev, NULL,
-                           pci_spapr_set_irq, pci_spapr_map_irq, sphb,
-                           &sphb->memspace, &sphb->iospace,
-                           PCI_DEVFN(0, 0), PCI_NUM_PINS, TYPE_PCI_BUS);
+    bus = pci_register_root_bus(dev, NULL,
+                                pci_spapr_set_irq, pci_spapr_map_irq, sphb,
+                                &sphb->memspace, &sphb->iospace,
+                                PCI_DEVFN(0, 0), PCI_NUM_PINS, TYPE_PCI_BUS);
     phb->bus = bus;
     qbus_set_hotplug_handler(BUS(phb->bus), DEVICE(sphb), NULL);
 
@@ -1696,9 +1719,9 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     /* DMA setup */
     if (((sphb->page_size_mask & qemu_getrampagesize()) == 0)
         && kvm_enabled()) {
-        error_report("System page size 0x%lx is not enabled in page_size_mask "
-                     "(0x%"PRIx64"). Performance may be slow",
-                     qemu_getrampagesize(), sphb->page_size_mask);
+        warn_report("System page size 0x%lx is not enabled in page_size_mask "
+                    "(0x%"PRIx64"). Performance may be slow",
+                    qemu_getrampagesize(), sphb->page_size_mask);
     }
 
     for (i = 0; i < windows_supported; ++i) {

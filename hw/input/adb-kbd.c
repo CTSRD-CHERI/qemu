@@ -258,6 +258,7 @@ static int adb_kbd_request(ADBDevice *d, uint8_t *obuf,
             case ADB_CMD_CHANGE_ID_AND_ACT:
             case ADB_CMD_CHANGE_ID_AND_ENABLE:
                 d->devaddr = buf[1] & 0xf;
+                trace_adb_kbd_request_change_addr(d->devaddr);
                 break;
             default:
                 d->devaddr = buf[1] & 0xf;
@@ -269,6 +270,9 @@ static int adb_kbd_request(ADBDevice *d, uint8_t *obuf,
                 if (buf[2] == 1 || buf[2] == 2 || buf[2] == 3) {
                     d->handler = buf[2];
                 }
+
+                trace_adb_kbd_request_change_addr_and_handler(d->devaddr,
+                                                              d->handler);
                 break;
             }
         }
@@ -374,8 +378,8 @@ static void adb_kbd_class_init(ObjectClass *oc, void *data)
     ADBDeviceClass *adc = ADB_DEVICE_CLASS(oc);
     ADBKeyboardClass *akc = ADB_KEYBOARD_CLASS(oc);
 
-    akc->parent_realize = dc->realize;
-    dc->realize = adb_kbd_realizefn;
+    device_class_set_parent_realize(dc, adb_kbd_realizefn,
+                                    &akc->parent_realize);
     set_bit(DEVICE_CATEGORY_INPUT, dc->categories);
 
     adc->devreq = adb_kbd_request;

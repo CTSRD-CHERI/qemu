@@ -252,13 +252,17 @@ static inline uint64_t ld_code4(CPUS390XState *env, uint64_t pc)
 
 static int get_mem_index(DisasContext *s)
 {
+    if (!(s->tb->flags & FLAG_MASK_DAT)) {
+        return MMU_REAL_IDX;
+    }
+
     switch (s->tb->flags & FLAG_MASK_ASC) {
     case PSW_ASC_PRIMARY >> FLAG_MASK_PSW_SHIFT:
-        return 0;
+        return MMU_PRIMARY_IDX;
     case PSW_ASC_SECONDARY >> FLAG_MASK_PSW_SHIFT:
-        return 1;
+        return MMU_SECONDARY_IDX;
     case PSW_ASC_HOME >> FLAG_MASK_PSW_SHIFT:
-        return 2;
+        return MMU_HOME_IDX;
     default:
         tcg_abort();
         break;
@@ -4058,7 +4062,6 @@ static ExitStatus op_stidp(DisasContext *s, DisasOps *o)
 {
     check_privileged(s);
     tcg_gen_ld_i64(o->out, cpu_env, offsetof(CPUS390XState, cpuid));
-    tcg_gen_qemu_st_i64(o->out, o->addr1, get_mem_index(s), MO_TEQ | MO_ALIGN);
     return NO_EXIT;
 }
 
@@ -4195,6 +4198,14 @@ static ExitStatus op_stcrw(DisasContext *s, DisasOps *o)
 {
     check_privileged(s);
     gen_helper_stcrw(cpu_env, o->in2);
+    set_cc_static(s);
+    return NO_EXIT;
+}
+
+static ExitStatus op_tpi(DisasContext *s, DisasOps *o)
+{
+    check_privileged(s);
+    gen_helper_tpi(cc_op, cpu_env, o->addr1);
     set_cc_static(s);
     return NO_EXIT;
 }
@@ -4532,7 +4543,7 @@ static ExitStatus op_testblock(DisasContext *s, DisasOps *o)
 
 static ExitStatus op_tprot(DisasContext *s, DisasOps *o)
 {
-    gen_helper_tprot(cc_op, o->addr1, o->in2);
+    gen_helper_tprot(cc_op, cpu_env, o->addr1, o->in2);
     set_cc_static(s);
     return NO_EXIT;
 }
@@ -4776,6 +4787,106 @@ static ExitStatus op_zero2(DisasContext *s, DisasOps *o)
     o->g_out2 = true;
     return NO_EXIT;
 }
+
+#ifndef CONFIG_USER_ONLY
+static ExitStatus op_clp(DisasContext *s, DisasOps *o)
+{
+    TCGv_i32 r2 = tcg_const_i32(get_field(s->fields, r2));
+
+    check_privileged(s);
+    gen_helper_clp(cpu_env, r2);
+    tcg_temp_free_i32(r2);
+    set_cc_static(s);
+    return NO_EXIT;
+}
+
+static ExitStatus op_pcilg(DisasContext *s, DisasOps *o)
+{
+    TCGv_i32 r1 = tcg_const_i32(get_field(s->fields, r1));
+    TCGv_i32 r2 = tcg_const_i32(get_field(s->fields, r2));
+
+    check_privileged(s);
+    gen_helper_pcilg(cpu_env, r1, r2);
+    tcg_temp_free_i32(r1);
+    tcg_temp_free_i32(r2);
+    set_cc_static(s);
+    return NO_EXIT;
+}
+
+static ExitStatus op_pcistg(DisasContext *s, DisasOps *o)
+{
+    TCGv_i32 r1 = tcg_const_i32(get_field(s->fields, r1));
+    TCGv_i32 r2 = tcg_const_i32(get_field(s->fields, r2));
+
+    check_privileged(s);
+    gen_helper_pcistg(cpu_env, r1, r2);
+    tcg_temp_free_i32(r1);
+    tcg_temp_free_i32(r2);
+    set_cc_static(s);
+    return NO_EXIT;
+}
+
+static ExitStatus op_stpcifc(DisasContext *s, DisasOps *o)
+{
+    TCGv_i32 r1 = tcg_const_i32(get_field(s->fields, r1));
+    TCGv_i32 ar = tcg_const_i32(get_field(s->fields, b2));
+
+    check_privileged(s);
+    gen_helper_stpcifc(cpu_env, r1, o->addr1, ar);
+    tcg_temp_free_i32(ar);
+    tcg_temp_free_i32(r1);
+    set_cc_static(s);
+    return NO_EXIT;
+}
+
+static ExitStatus op_sic(DisasContext *s, DisasOps *o)
+{
+    check_privileged(s);
+    gen_helper_sic(cpu_env, o->in1, o->in2);
+    return NO_EXIT;
+}
+
+static ExitStatus op_rpcit(DisasContext *s, DisasOps *o)
+{
+    TCGv_i32 r1 = tcg_const_i32(get_field(s->fields, r1));
+    TCGv_i32 r2 = tcg_const_i32(get_field(s->fields, r2));
+
+    check_privileged(s);
+    gen_helper_rpcit(cpu_env, r1, r2);
+    tcg_temp_free_i32(r1);
+    tcg_temp_free_i32(r2);
+    set_cc_static(s);
+    return NO_EXIT;
+}
+
+static ExitStatus op_pcistb(DisasContext *s, DisasOps *o)
+{
+    TCGv_i32 r1 = tcg_const_i32(get_field(s->fields, r1));
+    TCGv_i32 r3 = tcg_const_i32(get_field(s->fields, r3));
+    TCGv_i32 ar = tcg_const_i32(get_field(s->fields, b2));
+
+    check_privileged(s);
+    gen_helper_pcistb(cpu_env, r1, r3, o->addr1, ar);
+    tcg_temp_free_i32(ar);
+    tcg_temp_free_i32(r1);
+    tcg_temp_free_i32(r3);
+    set_cc_static(s);
+    return NO_EXIT;
+}
+
+static ExitStatus op_mpcifc(DisasContext *s, DisasOps *o)
+{
+    TCGv_i32 r1 = tcg_const_i32(get_field(s->fields, r1));
+    TCGv_i32 ar = tcg_const_i32(get_field(s->fields, b2));
+
+    check_privileged(s);
+    gen_helper_mpcifc(cpu_env, r1, o->addr1, ar);
+    tcg_temp_free_i32(ar);
+    tcg_temp_free_i32(r1);
+    set_cc_static(s);
+    return NO_EXIT;
+}
+#endif
 
 /* ====================================================================== */
 /* The "Cc OUTput" generators.  Given the generated output (and in some cases
@@ -5108,17 +5219,41 @@ static void wout_m1_16(DisasContext *s, DisasFields *f, DisasOps *o)
 }
 #define SPEC_wout_m1_16 0
 
+#ifndef CONFIG_USER_ONLY
+static void wout_m1_16a(DisasContext *s, DisasFields *f, DisasOps *o)
+{
+    tcg_gen_qemu_st_tl(o->out, o->addr1, get_mem_index(s), MO_TEUW | MO_ALIGN);
+}
+#define SPEC_wout_m1_16a 0
+#endif
+
 static void wout_m1_32(DisasContext *s, DisasFields *f, DisasOps *o)
 {
     tcg_gen_qemu_st32(o->out, o->addr1, get_mem_index(s));
 }
 #define SPEC_wout_m1_32 0
 
+#ifndef CONFIG_USER_ONLY
+static void wout_m1_32a(DisasContext *s, DisasFields *f, DisasOps *o)
+{
+    tcg_gen_qemu_st_tl(o->out, o->addr1, get_mem_index(s), MO_TEUL | MO_ALIGN);
+}
+#define SPEC_wout_m1_32a 0
+#endif
+
 static void wout_m1_64(DisasContext *s, DisasFields *f, DisasOps *o)
 {
     tcg_gen_qemu_st64(o->out, o->addr1, get_mem_index(s));
 }
 #define SPEC_wout_m1_64 0
+
+#ifndef CONFIG_USER_ONLY
+static void wout_m1_64a(DisasContext *s, DisasFields *f, DisasOps *o)
+{
+    tcg_gen_qemu_st_i64(o->out, o->addr1, get_mem_index(s), MO_TEQ | MO_ALIGN);
+}
+#define SPEC_wout_m1_64a 0
+#endif
 
 static void wout_m2_32(DisasContext *s, DisasFields *f, DisasOps *o)
 {
@@ -5545,12 +5680,30 @@ static void in2_m2_32u(DisasContext *s, DisasFields *f, DisasOps *o)
 }
 #define SPEC_in2_m2_32u 0
 
+#ifndef CONFIG_USER_ONLY
+static void in2_m2_32ua(DisasContext *s, DisasFields *f, DisasOps *o)
+{
+    in2_a2(s, f, o);
+    tcg_gen_qemu_ld_tl(o->in2, o->in2, get_mem_index(s), MO_TEUL | MO_ALIGN);
+}
+#define SPEC_in2_m2_32ua 0
+#endif
+
 static void in2_m2_64(DisasContext *s, DisasFields *f, DisasOps *o)
 {
     in2_a2(s, f, o);
     tcg_gen_qemu_ld64(o->in2, o->in2, get_mem_index(s));
 }
 #define SPEC_in2_m2_64 0
+
+#ifndef CONFIG_USER_ONLY
+static void in2_m2_64a(DisasContext *s, DisasFields *f, DisasOps *o)
+{
+    in2_a2(s, f, o);
+    tcg_gen_qemu_ld_i64(o->in2, o->in2, get_mem_index(s), MO_TEQ | MO_ALIGN);
+}
+#define SPEC_in2_m2_64a 0
+#endif
 
 static void in2_mri2_16u(DisasContext *s, DisasFields *f, DisasOps *o)
 {
@@ -5708,6 +5861,8 @@ enum DisasInsnEnum {
 #define FAC_MSA4        S390_FEAT_MSA_EXT_4 /* msa-extension-4 facility */
 #define FAC_MSA5        S390_FEAT_MSA_EXT_5 /* msa-extension-5 facility */
 #define FAC_ECT         S390_FEAT_EXTRACT_CPU_TIME
+#define FAC_PCI         S390_FEAT_ZPCI /* z/PCI facility */
+#define FAC_AIS         S390_FEAT_ADAPTER_INT_SUPPRESSION
 
 static const DisasInsn insn_info[] = {
 #include "insn-data.def"
@@ -6008,7 +6163,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
     CPUS390XState *env = cs->env_ptr;
     DisasContext dc;
     target_ulong pc_start;
-    uint64_t next_page_start;
+    uint64_t page_start;
     int num_insns, max_insns;
     ExitStatus status;
     bool do_debug;
@@ -6026,7 +6181,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
     dc.ex_value = tb->cs_base;
     do_debug = dc.singlestep_enabled = cs->singlestep_enabled;
 
-    next_page_start = (pc_start & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
+    page_start = pc_start & TARGET_PAGE_MASK;
 
     num_insns = 0;
     max_insns = tb_cflags(tb) & CF_COUNT_MASK;
@@ -6063,7 +6218,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
         /* If we reach a page boundary, are single stepping,
            or exhaust instruction count, stop generation.  */
         if (status == NO_EXIT
-            && (dc.pc >= next_page_start
+            && (dc.pc - page_start >= TARGET_PAGE_SIZE
                 || tcg_op_buf_full()
                 || num_insns >= max_insns
                 || singlestep

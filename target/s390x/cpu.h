@@ -41,8 +41,6 @@
 
 #include "exec/cpu-all.h"
 
-#include "fpu/softfloat.h"
-
 #define NB_MMU_MODES 4
 #define TARGET_INSN_START_EXTRA_WORDS 1
 
@@ -53,29 +51,12 @@
 
 #define MMU_USER_IDX 0
 
-#define MAX_IO_QUEUE 16
-#define MAX_MCHK_QUEUE 16
-
-#define PSW_MCHK_MASK 0x0004000000000000
-#define PSW_IO_MASK 0x0200000000000000
-
 #define S390_MAX_CPUS 248
 
 typedef struct PSW {
     uint64_t mask;
     uint64_t addr;
 } PSW;
-
-typedef struct IOIntQueue {
-    uint16_t id;
-    uint16_t nr;
-    uint32_t parm;
-    uint32_t word;
-} IOIntQueue;
-
-typedef struct MchkQueue {
-    uint16_t type;
-} MchkQueue;
 
 struct CPUS390XState {
     uint64_t regs[16];     /* GP registers */
@@ -93,6 +74,7 @@ struct CPUS390XState {
 
     uint32_t fpc;          /* floating-point control register */
     uint32_t cc_op;
+    bool bpbc;             /* branch prediction blocking */
 
     float_status fpu_status; /* passed to softfloat lib */
 
@@ -100,6 +82,8 @@ struct CPUS390XState {
     uint64_t retxl;
 
     PSW psw;
+
+    S390CrashReason crash_reason;
 
     uint64_t cc_src;
     uint64_t cc_dst;
@@ -121,15 +105,9 @@ struct CPUS390XState {
 
     uint64_t cregs[16]; /* control registers */
 
-    IOIntQueue io_queue[MAX_IO_QUEUE][8];
-    MchkQueue mchk_queue[MAX_MCHK_QUEUE];
-
     int pending_int;
-    uint32_t service_param;
     uint16_t external_call_addr;
     DECLARE_BITMAP(emergency_signals, S390_MAX_CPUS);
-    int io_index[8];
-    int mchk_index;
 
     uint64_t ckc;
     uint64_t cputm;
@@ -163,12 +141,9 @@ struct CPUS390XState {
      * architectures, there is a difference between a halt and a stop on s390.
      * If all cpus are either stopped (including check stop) or in the disabled
      * wait state, the vm can be shut down.
+     * The acceptable cpu_state values are defined in the CpuInfoS390State
+     * enum.
      */
-#define CPU_STATE_UNINITIALIZED        0x00
-#define CPU_STATE_STOPPED              0x01
-#define CPU_STATE_CHECK_STOP           0x02
-#define CPU_STATE_OPERATING            0x03
-#define CPU_STATE_LOAD                 0x04
     uint8_t cpu_state;
 
     /* currently processed sigp order */
@@ -334,11 +309,12 @@ extern const struct VMStateDescription vmstate_s390_cpu;
 
 #define FLAG_MASK_PSW_SHIFT     31
 #define FLAG_MASK_PER           (PSW_MASK_PER    >> FLAG_MASK_PSW_SHIFT)
+#define FLAG_MASK_DAT           (PSW_MASK_DAT    >> FLAG_MASK_PSW_SHIFT)
 #define FLAG_MASK_PSTATE        (PSW_MASK_PSTATE >> FLAG_MASK_PSW_SHIFT)
 #define FLAG_MASK_ASC           (PSW_MASK_ASC    >> FLAG_MASK_PSW_SHIFT)
 #define FLAG_MASK_64            (PSW_MASK_64     >> FLAG_MASK_PSW_SHIFT)
 #define FLAG_MASK_32            (PSW_MASK_32     >> FLAG_MASK_PSW_SHIFT)
-#define FLAG_MASK_PSW		(FLAG_MASK_PER | FLAG_MASK_PSTATE \
+#define FLAG_MASK_PSW           (FLAG_MASK_PER | FLAG_MASK_DAT | FLAG_MASK_PSTATE \
                                 | FLAG_MASK_ASC | FLAG_MASK_64 | FLAG_MASK_32)
 
 /* Control register 0 bits */
@@ -362,6 +338,10 @@ extern const struct VMStateDescription vmstate_s390_cpu;
 
 static inline int cpu_mmu_index(CPUS390XState *env, bool ifetch)
 {
+    if (!(env->psw.mask & PSW_MASK_DAT)) {
+        return MMU_REAL_IDX;
+    }
+
     switch (env->psw.mask & PSW_MASK_ASC) {
     case PSW_ASC_PRIMARY:
         return MMU_PRIMARY_IDX;
@@ -408,9 +388,6 @@ static inline void cpu_get_tb_cpu_state(CPUS390XState* env, target_ulong *pc,
 #define EXCP_IO  7 /* I/O interrupt */
 #define EXCP_MCHK 8 /* machine check */
 
-#define INTERRUPT_IO                     (1 << 0)
-#define INTERRUPT_MCHK                   (1 << 1)
-#define INTERRUPT_EXT_SERVICE            (1 << 2)
 #define INTERRUPT_EXT_CPU_TIMER          (1 << 3)
 #define INTERRUPT_EXT_CLOCK_COMPARATOR   (1 << 4)
 #define INTERRUPT_EXTERNAL_CALL          (1 << 5)
@@ -451,62 +428,66 @@ static inline void setcc(S390CPU *cpu, uint64_t cc)
 }
 
 /* STSI */
-#define STSI_LEVEL_MASK         0x00000000f0000000ULL
-#define STSI_LEVEL_CURRENT      0x0000000000000000ULL
-#define STSI_LEVEL_1            0x0000000010000000ULL
-#define STSI_LEVEL_2            0x0000000020000000ULL
-#define STSI_LEVEL_3            0x0000000030000000ULL
+#define STSI_R0_FC_MASK         0x00000000f0000000ULL
+#define STSI_R0_FC_CURRENT      0x0000000000000000ULL
+#define STSI_R0_FC_LEVEL_1      0x0000000010000000ULL
+#define STSI_R0_FC_LEVEL_2      0x0000000020000000ULL
+#define STSI_R0_FC_LEVEL_3      0x0000000030000000ULL
 #define STSI_R0_RESERVED_MASK   0x000000000fffff00ULL
 #define STSI_R0_SEL1_MASK       0x00000000000000ffULL
 #define STSI_R1_RESERVED_MASK   0x00000000ffff0000ULL
 #define STSI_R1_SEL2_MASK       0x000000000000ffffULL
 
 /* Basic Machine Configuration */
-struct sysib_111 {
-    uint32_t res1[8];
+typedef struct SysIB_111 {
+    uint8_t  res1[32];
     uint8_t  manuf[16];
     uint8_t  type[4];
     uint8_t  res2[12];
     uint8_t  model[16];
     uint8_t  sequence[16];
     uint8_t  plant[4];
-    uint8_t  res3[156];
-};
+    uint8_t  res3[3996];
+} SysIB_111;
+QEMU_BUILD_BUG_ON(sizeof(SysIB_111) != 4096);
 
 /* Basic Machine CPU */
-struct sysib_121 {
-    uint32_t res1[80];
+typedef struct SysIB_121 {
+    uint8_t  res1[80];
     uint8_t  sequence[16];
     uint8_t  plant[4];
     uint8_t  res2[2];
     uint16_t cpu_addr;
-    uint8_t  res3[152];
-};
+    uint8_t  res3[3992];
+} SysIB_121;
+QEMU_BUILD_BUG_ON(sizeof(SysIB_121) != 4096);
 
 /* Basic Machine CPUs */
-struct sysib_122 {
+typedef struct SysIB_122 {
     uint8_t res1[32];
     uint32_t capability;
     uint16_t total_cpus;
-    uint16_t active_cpus;
+    uint16_t conf_cpus;
     uint16_t standby_cpus;
     uint16_t reserved_cpus;
     uint16_t adjustments[2026];
-};
+} SysIB_122;
+QEMU_BUILD_BUG_ON(sizeof(SysIB_122) != 4096);
 
 /* LPAR CPU */
-struct sysib_221 {
-    uint32_t res1[80];
+typedef struct SysIB_221 {
+    uint8_t  res1[80];
     uint8_t  sequence[16];
     uint8_t  plant[4];
     uint16_t cpu_id;
     uint16_t cpu_addr;
-    uint8_t  res3[152];
-};
+    uint8_t  res3[3992];
+} SysIB_221;
+QEMU_BUILD_BUG_ON(sizeof(SysIB_221) != 4096);
 
 /* LPAR CPUs */
-struct sysib_222 {
-    uint32_t res1[32];
+typedef struct SysIB_222 {
+    uint8_t  res1[32];
     uint16_t lpar_num;
     uint8_t  res2;
     uint8_t  lcpuc;
@@ -519,11 +500,12 @@ struct sysib_222 {
     uint8_t  res3[16];
     uint16_t dedicated_cpus;
     uint16_t shared_cpus;
-    uint8_t  res4[180];
-};
+    uint8_t  res4[4020];
+} SysIB_222;
+QEMU_BUILD_BUG_ON(sizeof(SysIB_222) != 4096);
 
 /* VM CPUs */
-struct sysib_322 {
+typedef struct SysIB_322 {
     uint8_t  res1[31];
     uint8_t  count;
     struct {
@@ -542,42 +524,53 @@ struct sysib_322 {
     } vm[8];
     uint8_t res4[1504];
     uint8_t ext_names[8][256];
-};
+} SysIB_322;
+QEMU_BUILD_BUG_ON(sizeof(SysIB_322) != 4096);
+
+typedef union SysIB {
+    SysIB_111 sysib_111;
+    SysIB_121 sysib_121;
+    SysIB_122 sysib_122;
+    SysIB_221 sysib_221;
+    SysIB_222 sysib_222;
+    SysIB_322 sysib_322;
+} SysIB;
+QEMU_BUILD_BUG_ON(sizeof(SysIB) != 4096);
 
 /* MMU defines */
-#define _ASCE_ORIGIN            ~0xfffULL /* segment table origin             */
-#define _ASCE_SUBSPACE          0x200     /* subspace group control           */
-#define _ASCE_PRIVATE_SPACE     0x100     /* private space control            */
-#define _ASCE_ALT_EVENT         0x80      /* storage alteration event control */
-#define _ASCE_SPACE_SWITCH      0x40      /* space switch event               */
-#define _ASCE_REAL_SPACE        0x20      /* real space control               */
-#define _ASCE_TYPE_MASK         0x0c      /* asce table type mask             */
-#define _ASCE_TYPE_REGION1      0x0c      /* region first table type          */
-#define _ASCE_TYPE_REGION2      0x08      /* region second table type         */
-#define _ASCE_TYPE_REGION3      0x04      /* region third table type          */
-#define _ASCE_TYPE_SEGMENT      0x00      /* segment table type               */
-#define _ASCE_TABLE_LENGTH      0x03      /* region table length              */
+#define ASCE_ORIGIN           (~0xfffULL) /* segment table origin             */
+#define ASCE_SUBSPACE         0x200       /* subspace group control           */
+#define ASCE_PRIVATE_SPACE    0x100       /* private space control            */
+#define ASCE_ALT_EVENT        0x80        /* storage alteration event control */
+#define ASCE_SPACE_SWITCH     0x40        /* space switch event               */
+#define ASCE_REAL_SPACE       0x20        /* real space control               */
+#define ASCE_TYPE_MASK        0x0c        /* asce table type mask             */
+#define ASCE_TYPE_REGION1     0x0c        /* region first table type          */
+#define ASCE_TYPE_REGION2     0x08        /* region second table type         */
+#define ASCE_TYPE_REGION3     0x04        /* region third table type          */
+#define ASCE_TYPE_SEGMENT     0x00        /* segment table type               */
+#define ASCE_TABLE_LENGTH     0x03        /* region table length              */
 
-#define _REGION_ENTRY_ORIGIN    ~0xfffULL /* region/segment table origin      */
-#define _REGION_ENTRY_RO        0x200     /* region/segment protection bit    */
-#define _REGION_ENTRY_TF        0xc0      /* region/segment table offset      */
-#define _REGION_ENTRY_INV       0x20      /* invalid region table entry       */
-#define _REGION_ENTRY_TYPE_MASK 0x0c      /* region/segment table type mask   */
-#define _REGION_ENTRY_TYPE_R1   0x0c      /* region first table type          */
-#define _REGION_ENTRY_TYPE_R2   0x08      /* region second table type         */
-#define _REGION_ENTRY_TYPE_R3   0x04      /* region third table type          */
-#define _REGION_ENTRY_LENGTH    0x03      /* region third length              */
+#define REGION_ENTRY_ORIGIN   (~0xfffULL) /* region/segment table origin    */
+#define REGION_ENTRY_RO       0x200       /* region/segment protection bit  */
+#define REGION_ENTRY_TF       0xc0        /* region/segment table offset    */
+#define REGION_ENTRY_INV      0x20        /* invalid region table entry     */
+#define REGION_ENTRY_TYPE_MASK 0x0c       /* region/segment table type mask */
+#define REGION_ENTRY_TYPE_R1  0x0c        /* region first table type        */
+#define REGION_ENTRY_TYPE_R2  0x08        /* region second table type       */
+#define REGION_ENTRY_TYPE_R3  0x04        /* region third table type        */
+#define REGION_ENTRY_LENGTH   0x03        /* region third length            */
 
-#define _SEGMENT_ENTRY_ORIGIN   ~0x7ffULL /* segment table origin             */
-#define _SEGMENT_ENTRY_FC       0x400     /* format control                   */
-#define _SEGMENT_ENTRY_RO       0x200     /* page protection bit              */
-#define _SEGMENT_ENTRY_INV      0x20      /* invalid segment table entry      */
+#define SEGMENT_ENTRY_ORIGIN  (~0x7ffULL) /* segment table origin        */
+#define SEGMENT_ENTRY_FC      0x400       /* format control              */
+#define SEGMENT_ENTRY_RO      0x200       /* page protection bit         */
+#define SEGMENT_ENTRY_INV     0x20        /* invalid segment table entry */
 
-#define VADDR_PX                0xff000   /* page index bits                  */
+#define VADDR_PX              0xff000     /* page index bits   */
 
-#define _PAGE_RO        0x200            /* HW read-only bit  */
-#define _PAGE_INVALID   0x400            /* HW invalid bit    */
-#define _PAGE_RES0      0x800            /* bit must be zero  */
+#define PAGE_RO               0x200       /* HW read-only bit  */
+#define PAGE_INVALID          0x400       /* HW invalid bit    */
+#define PAGE_RES0             0x800       /* bit must be zero  */
 
 #define SK_C                    (0x1 << 1)
 #define SK_R                    (0x1 << 2)
@@ -627,10 +620,6 @@ struct sysib_322 {
 
 /* SIGP order code mask corresponding to bit positions 56-63 */
 #define SIGP_ORDER_MASK 0x000000ff
-
-/* from s390-virtio-ccw */
-#define MEM_SECTION_SIZE             0x10000000UL
-#define MAX_AVAIL_SLOTS              32
 
 /* machine check interruption code */
 
@@ -703,7 +692,6 @@ int s390_get_clock(uint8_t *tod_high, uint64_t *tod_low);
 int s390_set_clock(uint8_t *tod_high, uint64_t *tod_low);
 void s390_crypto_reset(void);
 bool s390_get_squash_mcss(void);
-int s390_get_memslot_count(void);
 int s390_set_memory_limit(uint64_t new_limit, uint64_t *hw_limit);
 void s390_cmma_reset(void);
 void s390_enable_css_support(S390CPU *cpu);
@@ -717,6 +705,10 @@ static inline unsigned int s390_cpu_set_state(uint8_t cpu_state, S390CPU *cpu)
     return 0;
 }
 #endif /* CONFIG_USER_ONLY */
+static inline uint8_t s390_cpu_get_state(S390CPU *cpu)
+{
+    return cpu->env.cpu_state;
+}
 
 
 /* cpu_models.c */
@@ -727,10 +719,9 @@ void s390_set_qemu_cpu_model(uint16_t type, uint8_t gen, uint8_t ec_ga,
 
 
 /* helper.c */
-#define cpu_init(cpu_model) cpu_generic_init(TYPE_S390_CPU, cpu_model)
-
 #define S390_CPU_TYPE_SUFFIX "-" TYPE_S390_CPU
 #define S390_CPU_TYPE_NAME(name) (name S390_CPU_TYPE_SUFFIX)
+#define CPU_RESOLVING_TYPE TYPE_S390_CPU
 
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero
@@ -751,7 +742,6 @@ void s390_program_interrupt(CPUS390XState *env, uint32_t code, int ilen,
 /* service interrupts are floating therefore we must not pass an cpustate */
 void s390_sclp_extint(uint32_t parm);
 
-
 /* mmu_helper.c */
 int s390_cpu_virt_mem_rw(S390CPU *cpu, vaddr laddr, uint8_t ar, void *hostbuf,
                          int len, bool is_write);
@@ -759,6 +749,8 @@ int s390_cpu_virt_mem_rw(S390CPU *cpu, vaddr laddr, uint8_t ar, void *hostbuf,
         s390_cpu_virt_mem_rw(cpu, laddr, ar, dest, len, false)
 #define s390_cpu_virt_mem_write(cpu, laddr, ar, dest, len)       \
         s390_cpu_virt_mem_rw(cpu, laddr, ar, dest, len, true)
+#define s390_cpu_virt_mem_check_read(cpu, laddr, ar, len)   \
+        s390_cpu_virt_mem_rw(cpu, laddr, ar, NULL, len, false)
 #define s390_cpu_virt_mem_check_write(cpu, laddr, ar, len)   \
         s390_cpu_virt_mem_rw(cpu, laddr, ar, NULL, len, true)
 void s390_cpu_virt_mem_handle_exc(S390CPU *cpu, uintptr_t ra);

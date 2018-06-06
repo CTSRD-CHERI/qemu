@@ -15,7 +15,12 @@
 #include "qemu/cutils.h"
 #include "qapi/error.h"
 #include "qemu-common.h"
-#include "qapi/qmp/types.h"
+#include "qapi/qmp/qbool.h"
+#include "qapi/qmp/qdict.h"
+#include "qapi/qmp/qlist.h"
+#include "qapi/qmp/qnull.h"
+#include "qapi/qmp/qnum.h"
+#include "qapi/qmp/qstring.h"
 #include "qapi/qmp/json-parser.h"
 #include "qapi/qmp/json-lexer.h"
 #include "qapi/qmp/json-streamer.h"
@@ -217,7 +222,7 @@ static QString *qstring_from_escaped_str(JSONParserContext *ctxt,
     return str;
 
 out:
-    QDECREF(str);
+    qobject_unref(str);
     return NULL;
 }
 
@@ -271,7 +276,8 @@ static void parser_context_free(JSONParserContext *ctxt)
  */
 static int parse_pair(JSONParserContext *ctxt, QDict *dict, va_list *ap)
 {
-    QObject *key = NULL, *value;
+    QObject *value;
+    QString *key = NULL;
     JSONToken *peek, *token;
 
     peek = parser_context_peek_token(ctxt);
@@ -280,8 +286,8 @@ static int parse_pair(JSONParserContext *ctxt, QDict *dict, va_list *ap)
         goto out;
     }
 
-    key = parse_value(ctxt, ap);
-    if (!key || qobject_type(key) != QTYPE_QSTRING) {
+    key = qobject_to(QString, parse_value(ctxt, ap));
+    if (!key) {
         parse_error(ctxt, peek, "key is not a string in object");
         goto out;
     }
@@ -303,14 +309,14 @@ static int parse_pair(JSONParserContext *ctxt, QDict *dict, va_list *ap)
         goto out;
     }
 
-    qdict_put_obj(dict, qstring_get_str(qobject_to_qstring(key)), value);
+    qdict_put_obj(dict, qstring_get_str(key), value);
 
-    qobject_decref(key);
+    qobject_unref(key);
 
     return 0;
 
 out:
-    qobject_decref(key);
+    qobject_unref(key);
 
     return -1;
 }
@@ -365,7 +371,7 @@ static QObject *parse_object(JSONParserContext *ctxt, va_list *ap)
     return QOBJECT(dict);
 
 out:
-    QDECREF(dict);
+    qobject_unref(dict);
     return NULL;
 }
 
@@ -429,7 +435,7 @@ static QObject *parse_array(JSONParserContext *ctxt, va_list *ap)
     return QOBJECT(list);
 
 out:
-    QDECREF(list);
+    qobject_unref(list);
     return NULL;
 }
 

@@ -31,7 +31,7 @@ DEF("machine", HAS_ARG, QEMU_OPTION_machine, \
     "-machine [type=]name[,prop[=value][,...]]\n"
     "                selects emulated machine ('-machine help' for list)\n"
     "                property accel=accel1[:accel2[:...]] selects accelerator\n"
-    "                supported accelerators are kvm, xen, hax, hvf or tcg (default: tcg)\n"
+    "                supported accelerators are kvm, xen, hax, hvf, whpx or tcg (default: tcg)\n"
     "                kernel_irqchip=on|off|split controls accelerated irqchip support (default=off)\n"
     "                vmport=on|off|auto controls emulation of vmport (default: auto)\n"
     "                kvm_shadow_mem=size of KVM shadow MMU in bytes\n"
@@ -43,7 +43,8 @@ DEF("machine", HAS_ARG, QEMU_OPTION_machine, \
     "                suppress-vmdesc=on|off disables self-describing migration (default=off)\n"
     "                nvdimm=on|off controls NVDIMM support (default=off)\n"
     "                enforce-config-section=on|off enforce configuration section migration (default=off)\n"
-    "                s390-squash-mcss=on|off (deprecated) controls support for squashing into default css (default=off)\n",
+    "                s390-squash-mcss=on|off (deprecated) controls support for squashing into default css (default=off)\n"
+    "                memory-encryption=@var{} memory encryption object to use (default=none)\n",
     QEMU_ARCH_ALL)
 STEXI
 @item -machine [type=]@var{name}[,prop=@var{value}[,...]]
@@ -66,7 +67,7 @@ Supported machine properties are:
 @table @option
 @item accel=@var{accels1}[:@var{accels2}[:...]]
 This is used to enable an accelerator. Depending on the target architecture,
-kvm, xen, hax, hvf or tcg can be available. By default, tcg is used. If there is
+kvm, xen, hax, hvf, whpx or tcg can be available. By default, tcg is used. If there is
 more than one accelerator specified, the next one is used if the previous one
 fails to initialize.
 @item kernel_irqchip=on|off
@@ -110,6 +111,8 @@ code to send configuration section even if the machine-type sets the
 @option{migration.send-configuration} property to @var{off}.
 NOTE: this parameter is deprecated. Please use @option{-global}
 @option{migration.send-configuration}=@var{on|off} instead.
+@item memory-encryption=@var{}
+Memory encryption object to use. The default is none.
 @end table
 ETEXI
 
@@ -126,13 +129,13 @@ ETEXI
 
 DEF("accel", HAS_ARG, QEMU_OPTION_accel,
     "-accel [accel=]accelerator[,thread=single|multi]\n"
-    "                select accelerator (kvm, xen, hax, hvf or tcg; use 'help' for a list)\n"
+    "                select accelerator (kvm, xen, hax, hvf, whpx or tcg; use 'help' for a list)\n"
     "                thread=single|multi (enable multi-threaded TCG)", QEMU_ARCH_ALL)
 STEXI
 @item -accel @var{name}[,prop=@var{value}[,...]]
 @findex -accel
 This is used to enable an accelerator. Depending on the target architecture,
-kvm, xen, hax, hvf or tcg can be available. By default, tcg is used. If there is
+kvm, xen, hax, hvf, whpx or tcg can be available. By default, tcg is used. If there is
 more than one accelerator specified, the next one is used if the previous one
 fails to initialize.
 @table @option
@@ -169,7 +172,9 @@ ETEXI
 DEF("numa", HAS_ARG, QEMU_OPTION_numa,
     "-numa node[,mem=size][,cpus=firstcpu[-lastcpu]][,nodeid=node]\n"
     "-numa node[,memdev=id][,cpus=firstcpu[-lastcpu]][,nodeid=node]\n"
-    "-numa dist,src=source,dst=destination,val=distance\n", QEMU_ARCH_ALL)
+    "-numa dist,src=source,dst=destination,val=distance\n"
+    "-numa cpu,node-id=node[,socket-id=x][,core-id=y][,thread-id=z]\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -numa node[,mem=@var{size}][,cpus=@var{firstcpu}[-@var{lastcpu}]][,nodeid=@var{node}]
 @itemx -numa node[,memdev=@var{id}][,cpus=@var{firstcpu}[-@var{lastcpu}]][,nodeid=@var{node}]
@@ -460,16 +465,13 @@ modprobe i810_audio clocking=48000
 ETEXI
 
 DEF("balloon", HAS_ARG, QEMU_OPTION_balloon,
-    "-balloon none   disable balloon device\n"
     "-balloon virtio[,addr=str]\n"
-    "                enable virtio balloon device (default)\n", QEMU_ARCH_ALL)
+    "                enable virtio balloon device (deprecated)\n", QEMU_ARCH_ALL)
 STEXI
-@item -balloon none
-@findex -balloon
-Disable balloon device.
 @item -balloon virtio[,addr=@var{addr}]
-Enable virtio balloon device (default), optionally with PCI address
-@var{addr}.
+@findex -balloon
+Enable virtio balloon device, optionally with PCI address @var{addr}. This
+option is deprecated, use @option{--device virtio-balloon} instead.
 ETEXI
 
 DEF("device", HAS_ARG, QEMU_OPTION_device,
@@ -741,8 +743,8 @@ Reference to or definition of the data source block driver node
 
 @item backing
 Reference to or definition of the backing file block device (default is taken
-from the image file). It is allowed to pass an empty string here in order to
-disable the default backing file.
+from the image file). It is allowed to pass @code{null} here in order to disable
+the default backing file.
 
 @item lazy-refcounts
 Whether to enable the lazy refcounts feature (on/off; default is taken from the
@@ -1219,28 +1221,9 @@ Pointer device that uses absolute coordinates (like a touchscreen). This
 means QEMU is able to report the mouse position without having to grab the
 mouse. Also overrides the PS/2 mouse emulation when activated.
 
-@item disk:[format=@var{format}]:@var{file}
-Mass storage device based on file. The optional @var{format} argument
-will be used rather than detecting the format. Can be used to specify
-@code{format=raw} to avoid interpreting an untrusted format header.
-
-@item host:@var{bus}.@var{addr}
-Pass through the host device identified by @var{bus}.@var{addr} (Linux only).
-
-@item host:@var{vendor_id}:@var{product_id}
-Pass through the host device identified by @var{vendor_id}:@var{product_id}
-(Linux only).
-
-@item serial:[vendorid=@var{vendor_id}][,productid=@var{product_id}]:@var{dev}
-Serial converter to host character device @var{dev}, see @code{-serial} for the
-available devices.
-
 @item braille
 Braille device.  This will use BrlAPI to display the braille output on a real
 or fake device.
-
-@item net:@var{options}
-Network adapter that supports CDC ethernet and RNDIS protocols.
 
 @end table
 ETEXI
@@ -1257,7 +1240,7 @@ ETEXI
 
 DEF("display", HAS_ARG, QEMU_OPTION_display,
     "-display sdl[,frame=on|off][,alt_grab=on|off][,ctrl_grab=on|off]\n"
-    "            [,window_close=on|off][,gl=on|off]\n"
+    "            [,window_close=on|off][,gl=on|core|es|off]\n"
     "-display gtk[,grab_on_hover=on|off][,gl=on|off]|\n"
     "-display vnc=<display>[,<optargs>]\n"
     "-display curses\n"
@@ -2015,19 +1998,40 @@ DEF("netdev", HAS_ARG, QEMU_OPTION_netdev,
     "                VALE port (created on the fly) called 'name' ('nmname' is name of the \n"
     "                netmap device, defaults to '/dev/netmap')\n"
 #endif
+#ifdef CONFIG_POSIX
     "-netdev vhost-user,id=str,chardev=dev[,vhostforce=on|off]\n"
     "                configure a vhost-user network, backed by a chardev 'dev'\n"
-    "-netdev hubport,id=str,hubid=n\n"
+#endif
+    "-netdev hubport,id=str,hubid=n[,netdev=nd]\n"
     "                configure a hub port on QEMU VLAN 'n'\n", QEMU_ARCH_ALL)
+DEF("nic", HAS_ARG, QEMU_OPTION_nic,
+    "--nic [tap|bridge|"
+#ifdef CONFIG_SLIRP
+    "user|"
+#endif
+#ifdef __linux__
+    "l2tpv3|"
+#endif
+#ifdef CONFIG_VDE
+    "vde|"
+#endif
+#ifdef CONFIG_NETMAP
+    "netmap|"
+#endif
+#ifdef CONFIG_POSIX
+    "vhost-user|"
+#endif
+    "socket][,option][,...][mac=macaddr]\n"
+    "                initialize an on-board / default host NIC (using MAC address\n"
+    "                macaddr) and connect it to the given host network backend\n"
+    "--nic none      use it alone to have zero network devices (the default is to\n"
+    "                provided a 'user' network connection)\n",
+    QEMU_ARCH_ALL)
 DEF("net", HAS_ARG, QEMU_OPTION_net,
     "-net nic[,vlan=n][,netdev=nd][,macaddr=mac][,model=type][,name=str][,addr=str][,vectors=v]\n"
     "                configure or create an on-board (or machine default) NIC and\n"
     "                connect it either to VLAN 'n' or the netdev 'nd' (for pluggable\n"
     "                NICs please use '-device devtype,netdev=nd' instead)\n"
-    "-net dump[,vlan=n][,file=f][,len=n]\n"
-    "                dump traffic on vlan 'n' to file 'f' (max n bytes per packet)\n"
-    "-net none       use it alone to have zero network devices. If no -net option\n"
-    "                is provided, the default is '-net nic -net user'\n"
     "-net ["
 #ifdef CONFIG_SLIRP
     "user|"
@@ -2044,41 +2048,40 @@ DEF("net", HAS_ARG, QEMU_OPTION_net,
     "                old way to initialize a host network interface\n"
     "                (use the -netdev option if possible instead)\n", QEMU_ARCH_ALL)
 STEXI
-@item -net nic[,vlan=@var{n}][,netdev=@var{nd}][,macaddr=@var{mac}][,model=@var{type}] [,name=@var{name}][,addr=@var{addr}][,vectors=@var{v}]
-@findex -net
-Configure or create an on-board (or machine default) Network Interface Card
-(NIC) and connect it either to VLAN @var{n} (@var{n} = 0 is the default), or
-to the netdev @var{nd}. The NIC is an e1000 by default on the PC
-target. Optionally, the MAC address can be changed to @var{mac}, the
-device address set to @var{addr} (PCI cards only),
-and a @var{name} can be assigned for use in monitor commands.
-Optionally, for PCI cards, you can specify the number @var{v} of MSI-X vectors
-that the card should have; this option currently only affects virtio cards; set
-@var{v} = 0 to disable MSI-X. If no @option{-net} option is specified, a single
-NIC is created.  QEMU can emulate several different models of network card.
-Valid values for @var{type} are
-@code{virtio}, @code{i82551}, @code{i82557b}, @code{i82559er},
-@code{ne2k_pci}, @code{ne2k_isa}, @code{pcnet}, @code{rtl8139},
-@code{e1000}, @code{smc91c111}, @code{lance} and @code{mcf_fec}.
-Not all devices are supported on all targets.  Use @code{-net nic,model=help}
-for a list of available devices for your target.
+@item -nic [tap|bridge|user|l2tpv3|vde|netmap|vhost-user|socket][,...][,mac=macaddr][,model=mn]
+@findex -nic
+This option is a shortcut for configuring both the on-board (default) guest
+NIC hardware and the host network backend in one go. The host backend options
+are the same as with the corresponding @option{-netdev} options below.
+The guest NIC model can be set with @option{model=@var{modelname}}.
+Use @option{model=help} to list the available device types.
+The hardware MAC address can be set with @option{mac=@var{macaddr}}.
+
+The following two example do exactly the same, to show how @option{-nic} can
+be used to shorten the command line length (note that the e1000 is the default
+on i386, so the @option{model=e1000} parameter could even be omitted here, too):
+@example
+qemu-system-i386 -netdev user,id=n1,ipv6=off -device e1000,netdev=n1,mac=52:54:98:76:54:32
+qemu-system-i386 -nic user,ipv6=off,model=e1000,mac=52:54:98:76:54:32
+@end example
+
+@item -nic none
+Indicate that no network devices should be configured. It is used to override
+the default configuration (default NIC with ``user'' host network backend)
+which is activated if no other networking options are provided.
 
 @item -netdev user,id=@var{id}[,@var{option}][,@var{option}][,...]
 @findex -netdev
-@item -net user[,@var{option}][,@var{option}][,...]
-Use the user mode network stack which requires no administrator
+Configure user mode host network backend which requires no administrator
 privilege to run. Valid options are:
 
 @table @option
-@item vlan=@var{n}
-Connect user mode stack to VLAN @var{n} (@var{n} = 0 is the default).
-
 @item id=@var{id}
-@itemx name=@var{name}
 Assign symbolic name for use in monitor commands.
 
-@option{ipv4} and @option{ipv6} specify that either IPv4 or IPv6 must
-be enabled.  If neither is specified both protocols are enabled.
+@item ipv4=on|off and ipv6=on|off
+Specify that either IPv4 or IPv6 must be enabled. If neither is specified
+both protocols are enabled.
 
 @item net=@var{addr}[/@var{mask}]
 Set IP network address the guest will see. Optionally specify the netmask,
@@ -2130,7 +2133,7 @@ can not be resolved.
 
 Example:
 @example
-qemu -net user,dnssearch=mgmt.example.org,dnssearch=example.org [...]
+qemu-system-i386 -nic user,dnssearch=mgmt.example.org,dnssearch=example.org
 @end example
 
 @item tftp=@var{dir}
@@ -2146,7 +2149,8 @@ a guest from a local directory.
 
 Example (using pxelinux):
 @example
-qemu-system-i386 -hda linux.img -boot n -net user,tftp=/path/to/tftp/files,bootfile=/pxelinux.0
+qemu-system-i386 -hda linux.img -boot n -device e1000,netdev=n1 \
+    -netdev user,id=n1,tftp=/path/to/tftp/files,bootfile=/pxelinux.0
 @end example
 
 @item smb=@var{dir}[,smbserver=@var{addr}]
@@ -2165,8 +2169,6 @@ or @file{C:\WINNT\SYSTEM32\DRIVERS\ETC\LMHOSTS} (Windows NT/2000).
 Then @file{@var{dir}} can be accessed in @file{\\smbserver\qemu}.
 
 Note that a SAMBA server must be installed on the host OS.
-QEMU was tested successfully with smbd versions from Red Hat 9,
-Fedora Core 3 and OpenSUSE 11.x.
 
 @item hostfwd=[tcp|udp]:[@var{hostaddr}]:@var{hostport}-[@var{guestaddr}]:@var{guestport}
 Redirect incoming TCP or UDP connections to the host port @var{hostport} to
@@ -2181,7 +2183,7 @@ screen 0, use the following:
 
 @example
 # on the host
-qemu-system-i386 -net user,hostfwd=tcp:127.0.0.1:6001-:6000 [...]
+qemu-system-i386 -nic user,hostfwd=tcp:127.0.0.1:6001-:6000
 # this host xterm should open in the guest X11 server
 xterm -display :1
 @end example
@@ -2191,7 +2193,7 @@ the guest, use the following:
 
 @example
 # on the host
-qemu-system-i386 -net user,hostfwd=tcp::5555-:23 [...]
+qemu-system-i386 -nic user,hostfwd=tcp::5555-:23
 telnet localhost 5555
 @end example
 
@@ -2210,7 +2212,7 @@ lifetime, like in the following example:
 @example
 # open 10.10.1.1:4321 on bootup, connect 10.0.2.100:1234 to it whenever
 # the guest accesses it
-qemu -net user,guestfwd=tcp:10.0.2.100:1234-tcp:10.10.1.1:4321 [...]
+qemu-system-i386 -nic user,guestfwd=tcp:10.0.2.100:1234-tcp:10.10.1.1:4321
 @end example
 
 Or you can execute a command on every TCP connection established by the guest,
@@ -2219,7 +2221,7 @@ so that QEMU behaves similar to an inetd process for that virtual server:
 @example
 # call "netcat 10.10.1.1 4321" on every TCP connection to 10.0.2.100:1234
 # and connect the TCP stream to its stdin/stdout
-qemu -net 'user,guestfwd=tcp:10.0.2.100:1234-cmd:netcat 10.10.1.1 4321'
+qemu-system-i386 -nic  'user,id=n1,guestfwd=tcp:10.0.2.100:1234-cmd:netcat 10.10.1.1 4321'
 @end example
 
 @end table
@@ -2230,8 +2232,7 @@ syntax gives undefined results. Their use for new applications is discouraged
 as they will be removed from future versions.
 
 @item -netdev tap,id=@var{id}[,fd=@var{h}][,ifname=@var{name}][,script=@var{file}][,downscript=@var{dfile}][,br=@var{bridge}][,helper=@var{helper}]
-@itemx -net tap[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}][,ifname=@var{name}][,script=@var{file}][,downscript=@var{dfile}][,br=@var{bridge}][,helper=@var{helper}]
-Connect the host TAP network interface @var{name} to VLAN @var{n}.
+Configure a host TAP network backend with ID @var{id}.
 
 Use the network script @var{file} to configure it and the network script
 @var{dfile} to deconfigure it. If @var{name} is not provided, the OS
@@ -2252,26 +2253,25 @@ Examples:
 
 @example
 #launch a QEMU instance with the default network script
-qemu-system-i386 linux.img -net nic -net tap
+qemu-system-i386 linux.img -nic tap
 @end example
 
 @example
 #launch a QEMU instance with two NICs, each one connected
 #to a TAP device
 qemu-system-i386 linux.img \
-                 -net nic,vlan=0 -net tap,vlan=0,ifname=tap0 \
-                 -net nic,vlan=1 -net tap,vlan=1,ifname=tap1
+        -netdev tap,id=nd0,ifname=tap0 -device e1000,netdev=nd0 \
+        -netdev tap,id=nd1,ifname=tap1 -device rtl8139,netdev=nd1
 @end example
 
 @example
 #launch a QEMU instance with the default network helper to
 #connect a TAP device to bridge br0
-qemu-system-i386 linux.img \
-                 -net nic -net tap,"helper=/path/to/qemu-bridge-helper"
+qemu-system-i386 linux.img -device virtio-net-pci,netdev=n1 \
+        -netdev tap,id=n1,"helper=/path/to/qemu-bridge-helper"
 @end example
 
 @item -netdev bridge,id=@var{id}[,br=@var{bridge}][,helper=@var{helper}]
-@itemx -net bridge[,vlan=@var{n}][,name=@var{name}][,br=@var{bridge}][,helper=@var{helper}]
 Connect a host TAP network interface to a host bridge device.
 
 Use the network helper @var{helper} to configure the TAP interface and
@@ -2284,21 +2284,20 @@ Examples:
 @example
 #launch a QEMU instance with the default network helper to
 #connect a TAP device to bridge br0
-qemu-system-i386 linux.img -net bridge -net nic,model=virtio
+qemu-system-i386 linux.img -netdev bridge,id=n1 -device virtio-net,netdev=n1
 @end example
 
 @example
 #launch a QEMU instance with the default network helper to
 #connect a TAP device to bridge qemubr0
-qemu-system-i386 linux.img -net bridge,br=qemubr0 -net nic,model=virtio
+qemu-system-i386 linux.img -netdev bridge,br=qemubr0,id=n1 -device virtio-net,netdev=n1
 @end example
 
 @item -netdev socket,id=@var{id}[,fd=@var{h}][,listen=[@var{host}]:@var{port}][,connect=@var{host}:@var{port}]
-@itemx -net socket[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}] [,listen=[@var{host}]:@var{port}][,connect=@var{host}:@var{port}]
 
-Connect the VLAN @var{n} to a remote VLAN in another QEMU virtual
-machine using a TCP socket connection. If @option{listen} is
-specified, QEMU waits for incoming connections on @var{port}
+This host network backend can be used to connect the guest's network to
+another QEMU virtual machine using a TCP socket connection. If @option{listen}
+is specified, QEMU waits for incoming connections on @var{port}
 (@var{host} is optional). @option{connect} is used to connect to
 another QEMU instance using the @option{listen} option. @option{fd}=@var{h}
 specifies an already opened TCP socket.
@@ -2307,21 +2306,19 @@ Example:
 @example
 # launch a first QEMU instance
 qemu-system-i386 linux.img \
-                 -net nic,macaddr=52:54:00:12:34:56 \
-                 -net socket,listen=:1234
-# connect the VLAN 0 of this instance to the VLAN 0
-# of the first instance
+                 -device e1000,netdev=n1,mac=52:54:00:12:34:56 \
+                 -netdev socket,id=n1,listen=:1234
+# connect the network of this instance to the network of the first instance
 qemu-system-i386 linux.img \
-                 -net nic,macaddr=52:54:00:12:34:57 \
-                 -net socket,connect=127.0.0.1:1234
+                 -device e1000,netdev=n2,mac=52:54:00:12:34:57 \
+                 -netdev socket,id=n2,connect=127.0.0.1:1234
 @end example
 
 @item -netdev socket,id=@var{id}[,fd=@var{h}][,mcast=@var{maddr}:@var{port}[,localaddr=@var{addr}]]
-@itemx -net socket[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}][,mcast=@var{maddr}:@var{port}[,localaddr=@var{addr}]]
 
-Create a VLAN @var{n} shared with another QEMU virtual
-machines using a UDP multicast socket, effectively making a bus for
-every QEMU with same multicast address @var{maddr} and @var{port}.
+Configure a socket host network backend to share the guest's network traffic
+with another QEMU virtual machines using a UDP multicast socket, effectively
+making a bus for every QEMU with same multicast address @var{maddr} and @var{port}.
 NOTES:
 @enumerate
 @item
@@ -2338,25 +2335,24 @@ Example:
 @example
 # launch one QEMU instance
 qemu-system-i386 linux.img \
-                 -net nic,macaddr=52:54:00:12:34:56 \
-                 -net socket,mcast=230.0.0.1:1234
+                 -device e1000,netdev=n1,mac=52:54:00:12:34:56 \
+                 -netdev socket,id=n1,mcast=230.0.0.1:1234
 # launch another QEMU instance on same "bus"
 qemu-system-i386 linux.img \
-                 -net nic,macaddr=52:54:00:12:34:57 \
-                 -net socket,mcast=230.0.0.1:1234
+                 -device e1000,netdev=n2,mac=52:54:00:12:34:57 \
+                 -netdev socket,id=n2,mcast=230.0.0.1:1234
 # launch yet another QEMU instance on same "bus"
 qemu-system-i386 linux.img \
-                 -net nic,macaddr=52:54:00:12:34:58 \
-                 -net socket,mcast=230.0.0.1:1234
+                 -device e1000,netdev=n3,macaddr=52:54:00:12:34:58 \
+                 -netdev socket,id=n3,mcast=230.0.0.1:1234
 @end example
 
 Example (User Mode Linux compat.):
 @example
-# launch QEMU instance (note mcast address selected
-# is UML's default)
+# launch QEMU instance (note mcast address selected is UML's default)
 qemu-system-i386 linux.img \
-                 -net nic,macaddr=52:54:00:12:34:56 \
-                 -net socket,mcast=239.192.168.1:1102
+                 -device e1000,netdev=n1,mac=52:54:00:12:34:56 \
+                 -netdev socket,id=n1,mcast=239.192.168.1:1102
 # launch UML
 /path/to/linux ubd0=/path/to/root_fs eth0=mcast
 @end example
@@ -2364,14 +2360,13 @@ qemu-system-i386 linux.img \
 Example (send packets from host's 1.2.3.4):
 @example
 qemu-system-i386 linux.img \
-                 -net nic,macaddr=52:54:00:12:34:56 \
-                 -net socket,mcast=239.192.168.1:1102,localaddr=1.2.3.4
+                 -device e1000,netdev=n1,mac=52:54:00:12:34:56 \
+                 -netdev socket,id=n1,mcast=239.192.168.1:1102,localaddr=1.2.3.4
 @end example
 
 @item -netdev l2tpv3,id=@var{id},src=@var{srcaddr},dst=@var{dstaddr}[,srcport=@var{srcport}][,dstport=@var{dstport}],txsession=@var{txsession}[,rxsession=@var{rxsession}][,ipv6][,udp][,cookie64][,counter][,pincounter][,txcookie=@var{txcookie}][,rxcookie=@var{rxcookie}][,offset=@var{offset}]
-@itemx -net l2tpv3[,vlan=@var{n}][,name=@var{name}],src=@var{srcaddr},dst=@var{dstaddr}[,srcport=@var{srcport}][,dstport=@var{dstport}],txsession=@var{txsession}[,rxsession=@var{rxsession}][,ipv6][,udp][,cookie64][,counter][,pincounter][,txcookie=@var{txcookie}][,rxcookie=@var{rxcookie}][,offset=@var{offset}]
-Connect VLAN @var{n} to L2TPv3 pseudowire. L2TPv3 (RFC3391) is a popular
-protocol to transport Ethernet (and other Layer 2) data frames between
+Configure a L2TPv3 pseudowire host network backend. L2TPv3 (RFC3391) is a
+popular protocol to transport Ethernet (and other Layer 2) data frames between
 two systems. It is present in routers, firewalls and the Linux kernel
 (from version 3.3 onwards).
 
@@ -2424,14 +2419,13 @@ brctl addif br-lan vmtunnel0
 # on 4.3.2.1
 # launch QEMU instance - if your network has reorder or is very lossy add ,pincounter
 
-qemu-system-i386 linux.img -net nic -net l2tpv3,src=4.2.3.1,dst=1.2.3.4,udp,srcport=16384,dstport=16384,rxsession=0xffffffff,txsession=0xffffffff,counter
-
+qemu-system-i386 linux.img -device e1000,netdev=n1 \
+    -netdev l2tpv3,id=n1,src=4.2.3.1,dst=1.2.3.4,udp,srcport=16384,dstport=16384,rxsession=0xffffffff,txsession=0xffffffff,counter
 
 @end example
 
 @item -netdev vde,id=@var{id}[,sock=@var{socketpath}][,port=@var{n}][,group=@var{groupname}][,mode=@var{octalmode}]
-@itemx -net vde[,vlan=@var{n}][,name=@var{name}][,sock=@var{socketpath}] [,port=@var{n}][,group=@var{groupname}][,mode=@var{octalmode}]
-Connect VLAN @var{n} to PORT @var{n} of a vde switch running on host and
+Configure VDE backend to connect to PORT @var{n} of a vde switch running on host and
 listening for incoming connections on @var{socketpath}. Use GROUP @var{groupname}
 and MODE @var{octalmode} to change default ownership and permissions for
 communication port. This option is only available if QEMU has been compiled
@@ -2442,16 +2436,8 @@ Example:
 # launch vde switch
 vde_switch -F -sock /tmp/myswitch
 # launch QEMU instance
-qemu-system-i386 linux.img -net nic -net vde,sock=/tmp/myswitch
+qemu-system-i386 linux.img -nic vde,sock=/tmp/myswitch
 @end example
-
-@item -netdev hubport,id=@var{id},hubid=@var{hubid}
-
-Create a hub port on QEMU "vlan" @var{hubid}.
-
-The hubport netdev lets you connect a NIC to a QEMU "vlan" instead of a single
-netdev.  @code{-net} and @code{-device} with parameter @option{vlan} create the
-required hub automatically.
 
 @item -netdev vhost-user,chardev=@var{id}[,vhostforce=on|off][,queues=n]
 
@@ -2471,16 +2457,36 @@ qemu -m 512 -object memory-backend-file,id=mem,size=512M,mem-path=/hugetlbfs,sha
      -device virtio-net-pci,netdev=net0
 @end example
 
-@item -net dump[,vlan=@var{n}][,file=@var{file}][,len=@var{len}]
-Dump network traffic on VLAN @var{n} to file @var{file} (@file{qemu-vlan0.pcap} by default).
-At most @var{len} bytes (64k by default) per packet are stored. The file format is
-libpcap, so it can be analyzed with tools such as tcpdump or Wireshark.
-Note: For devices created with '-netdev', use '-object filter-dump,...' instead.
+@item -netdev hubport,id=@var{id},hubid=@var{hubid}[,netdev=@var{nd}]
 
-@item -net none
-Indicate that no network devices should be configured. It is used to
-override the default configuration (@option{-net nic -net user}) which
-is activated if no @option{-net} options are provided.
+Create a hub port on the emulated hub with ID @var{hubid}.
+
+The hubport netdev lets you connect a NIC to a QEMU emulated hub instead of a
+single netdev. @code{-net} and @code{-device} with the parameter @option{vlan}
+(deprecated), or @code{-nic hubport} can also be used to connect a
+network device or a NIC to a hub. Alternatively, you can also connect the
+hubport to another netdev with ID @var{nd} by using the @option{netdev=@var{nd}}
+option.
+
+@item -net nic[,vlan=@var{n}][,netdev=@var{nd}][,macaddr=@var{mac}][,model=@var{type}] [,name=@var{name}][,addr=@var{addr}][,vectors=@var{v}]
+@findex -net
+Legacy option to configure or create an on-board (or machine default) Network
+Interface Card(NIC) and connect it either to the emulated hub port ("vlan")
+with number @var{n} (@var{n} = 0 is the default), or to the netdev @var{nd}.
+The NIC is an e1000 by default on the PC target. Optionally, the MAC address
+can be changed to @var{mac}, the device address set to @var{addr} (PCI cards
+only), and a @var{name} can be assigned for use in monitor commands.
+Optionally, for PCI cards, you can specify the number @var{v} of MSI-X vectors
+that the card should have; this option currently only affects virtio cards; set
+@var{v} = 0 to disable MSI-X. If no @option{-net} option is specified, a single
+NIC is created.  QEMU can emulate several different models of network card.
+Use @code{-net nic,model=help} for a list of available devices for your target.
+
+@item -net user|tap|bridge|socket|l2tpv3|vde[,...][,vlan=@var{n}][,name=@var{name}]
+Configure a host network backend (with the options corresponding to the same
+@option{-netdev} option) and connect it to the emulated hub ("vlan") with the
+number @var{n} (default is number 0). Use @var{name} to specify the name of the
+hub port.
 ETEXI
 
 STEXI
@@ -2537,7 +2543,7 @@ STEXI
 
 The general form of a character device option is:
 @table @option
-@item -chardev @var{backend} ,id=@var{id} [,mux=on|off] [,@var{options}]
+@item -chardev @var{backend},id=@var{id}[,mux=on|off][,@var{options}]
 @findex -chardev
 Backend is one of:
 @option{null},
@@ -2556,7 +2562,7 @@ Backend is one of:
 @option{tty},
 @option{parallel},
 @option{parport},
-@option{spicevmc}.
+@option{spicevmc},
 @option{spiceport}.
 The specific backend will determine the applicable options.
 
@@ -2620,11 +2626,11 @@ opened.
 The available backends are:
 
 @table @option
-@item -chardev null ,id=@var{id}
+@item -chardev null,id=@var{id}
 A void device. This device will not emit any data, and will drop any data it
 receives. The null backend does not take any options.
 
-@item -chardev socket ,id=@var{id} [@var{TCP options} or @var{unix options}] [,server] [,nowait] [,telnet] [,reconnect=@var{seconds}] [,tls-creds=@var{id}]
+@item -chardev socket,id=@var{id}[,@var{TCP options} or @var{unix options}][,server][,nowait][,telnet][,reconnect=@var{seconds}][,tls-creds=@var{id}]
 
 Create a two-way stream socket, which can be either a TCP or a unix socket. A
 unix socket will be created if @option{path} is specified. Behaviour is
@@ -2651,7 +2657,7 @@ TCP and unix socket options are given below:
 
 @table @option
 
-@item TCP options: port=@var{port} [,host=@var{host}] [,to=@var{to}] [,ipv4] [,ipv6] [,nodelay]
+@item TCP options: port=@var{port}[,host=@var{host}][,to=@var{to}][,ipv4][,ipv6][,nodelay]
 
 @option{host} for a listening socket specifies the local address to be bound.
 For a connecting socket species the remote host to connect to. @option{host} is
@@ -2679,7 +2685,7 @@ required.
 
 @end table
 
-@item -chardev udp ,id=@var{id} [,host=@var{host}] ,port=@var{port} [,localaddr=@var{localaddr}] [,localport=@var{localport}] [,ipv4] [,ipv6]
+@item -chardev udp,id=@var{id}[,host=@var{host}],port=@var{port}[,localaddr=@var{localaddr}][,localport=@var{localport}][,ipv4][,ipv6]
 
 Sends all traffic from the guest to a remote host over UDP.
 
@@ -2698,12 +2704,12 @@ available local port will be used.
 @option{ipv4} and @option{ipv6} specify that either IPv4 or IPv6 must be used.
 If neither is specified the device may use either protocol.
 
-@item -chardev msmouse ,id=@var{id}
+@item -chardev msmouse,id=@var{id}
 
 Forward QEMU's emulated msmouse events to the guest. @option{msmouse} does not
 take any options.
 
-@item -chardev vc ,id=@var{id} [[,width=@var{width}] [,height=@var{height}]] [[,cols=@var{cols}] [,rows=@var{rows}]]
+@item -chardev vc,id=@var{id}[[,width=@var{width}][,height=@var{height}]][[,cols=@var{cols}][,rows=@var{rows}]]
 
 Connect to a QEMU text console. @option{vc} may optionally be given a specific
 size.
@@ -2714,12 +2720,12 @@ the console, in pixels.
 @option{cols} and @option{rows} specify that the console be sized to fit a text
 console with the given dimensions.
 
-@item -chardev ringbuf ,id=@var{id} [,size=@var{size}]
+@item -chardev ringbuf,id=@var{id}[,size=@var{size}]
 
 Create a ring buffer with fixed size @option{size}.
 @var{size} must be a power of two and defaults to @code{64K}.
 
-@item -chardev file ,id=@var{id} ,path=@var{path}
+@item -chardev file,id=@var{id},path=@var{path}
 
 Log all traffic received from the guest to a file.
 
@@ -2727,7 +2733,7 @@ Log all traffic received from the guest to a file.
 created if it does not already exist, and overwritten if it does. @option{path}
 is required.
 
-@item -chardev pipe ,id=@var{id} ,path=@var{path}
+@item -chardev pipe,id=@var{id},path=@var{path}
 
 Create a two-way connection to the guest. The behaviour differs slightly between
 Windows hosts and other hosts:
@@ -2744,14 +2750,14 @@ be present.
 @option{path} forms part of the pipe path as described above. @option{path} is
 required.
 
-@item -chardev console ,id=@var{id}
+@item -chardev console,id=@var{id}
 
 Send traffic from the guest to QEMU's standard output. @option{console} does not
 take any options.
 
 @option{console} is only available on Windows hosts.
 
-@item -chardev serial ,id=@var{id} ,path=@option{path}
+@item -chardev serial,id=@var{id},path=@option{path}
 
 Send traffic from the guest to a serial device on the host.
 
@@ -2760,33 +2766,33 @@ not only serial lines.
 
 @option{path} specifies the name of the serial device to open.
 
-@item -chardev pty ,id=@var{id}
+@item -chardev pty,id=@var{id}
 
 Create a new pseudo-terminal on the host and connect to it. @option{pty} does
 not take any options.
 
 @option{pty} is not available on Windows hosts.
 
-@item -chardev stdio ,id=@var{id} [,signal=on|off]
+@item -chardev stdio,id=@var{id}[,signal=on|off]
 Connect to standard input and standard output of the QEMU process.
 
 @option{signal} controls if signals are enabled on the terminal, that includes
 exiting QEMU with the key sequence @key{Control-c}. This option is enabled by
 default, use @option{signal=off} to disable it.
 
-@item -chardev braille ,id=@var{id}
+@item -chardev braille,id=@var{id}
 
 Connect to a local BrlAPI server. @option{braille} does not take any options.
 
-@item -chardev tty ,id=@var{id} ,path=@var{path}
+@item -chardev tty,id=@var{id},path=@var{path}
 
 @option{tty} is only available on Linux, Sun, FreeBSD, NetBSD, OpenBSD and
 DragonFlyBSD hosts.  It is an alias for @option{serial}.
 
 @option{path} specifies the path to the tty. @option{path} is required.
 
-@item -chardev parallel ,id=@var{id} ,path=@var{path}
-@itemx -chardev parport ,id=@var{id} ,path=@var{path}
+@item -chardev parallel,id=@var{id},path=@var{path}
+@itemx -chardev parport,id=@var{id},path=@var{path}
 
 @option{parallel} is only available on Linux, FreeBSD and DragonFlyBSD hosts.
 
@@ -2795,7 +2801,7 @@ Connect to a local parallel port.
 @option{path} specifies the path to the parallel port device. @option{path} is
 required.
 
-@item -chardev spicevmc ,id=@var{id} ,debug=@var{debug}, name=@var{name}
+@item -chardev spicevmc,id=@var{id},debug=@var{debug},name=@var{name}
 
 @option{spicevmc} is only available when spice support is built in.
 
@@ -2805,7 +2811,7 @@ required.
 
 Connect to a spice virtual machine channel, such as vdiport.
 
-@item -chardev spiceport ,id=@var{id} ,debug=@var{debug}, name=@var{name}
+@item -chardev spiceport,id=@var{id},debug=@var{debug},name=@var{name}
 
 @option{spiceport} is only available when spice support is built in.
 
@@ -2913,7 +2919,7 @@ STEXI
 The general form of a TPM device option is:
 @table @option
 
-@item -tpmdev @var{backend} ,id=@var{id} [,@var{options}]
+@item -tpmdev @var{backend},id=@var{id}[,@var{options}]
 @findex -tpmdev
 
 The specific backend type will determine the applicable options.
@@ -2928,7 +2934,7 @@ The available backends are:
 
 @table @option
 
-@item -tpmdev passthrough, id=@var{id}, path=@var{path}, cancel-path=@var{cancel-path}
+@item -tpmdev passthrough,id=@var{id},path=@var{path},cancel-path=@var{cancel-path}
 
 (Linux-host only) Enable access to the host's TPM using the passthrough
 driver.
@@ -2965,7 +2971,7 @@ To create a passthrough TPM use the following two options:
 Note that the @code{-tpmdev} id is @code{tpm0} and is referenced by
 @code{tpmdev=tpm0} in the device option.
 
-@item -tpmdev emulator, id=@var{id}, chardev=@var{dev}
+@item -tpmdev emulator,id=@var{id},chardev=@var{dev}
 
 (Linux-host only) Enable access to a TPM emulator using Unix domain socket based
 chardev backend.
@@ -3794,7 +3800,8 @@ ETEXI
 
 #ifndef _WIN32
 DEF("runas", HAS_ARG, QEMU_OPTION_runas, \
-    "-runas user     change to user id user just before starting the VM\n",
+    "-runas user     change to user id user just before starting the VM\n" \
+    "                user can be numeric uid:gid instead\n",
     QEMU_ARCH_ALL)
 #endif
 STEXI
@@ -4007,24 +4014,102 @@ property must be set.  These objects are placed in the
 
 @table @option
 
-@item -object memory-backend-file,id=@var{id},size=@var{size},mem-path=@var{dir},share=@var{on|off},discard-data=@var{on|off}
+@item -object memory-backend-file,id=@var{id},size=@var{size},mem-path=@var{dir},share=@var{on|off},discard-data=@var{on|off},merge=@var{on|off},dump=@var{on|off},prealloc=@var{on|off},host-nodes=@var{host-nodes},policy=@var{default|preferred|bind|interleave},align=@var{align}
 
 Creates a memory file backend object, which can be used to back
-the guest RAM with huge pages. The @option{id} parameter is a
-unique ID that will be used to reference this memory region
-when configuring the @option{-numa} argument. The @option{size}
-option provides the size of the memory region, and accepts
-common suffixes, eg @option{500M}. The @option{mem-path} provides
-the path to either a shared memory or huge page filesystem mount.
+the guest RAM with huge pages.
+
+The @option{id} parameter is a unique ID that will be used to reference this
+memory region when configuring the @option{-numa} argument.
+
+The @option{size} option provides the size of the memory region, and accepts
+common suffixes, eg @option{500M}.
+
+The @option{mem-path} provides the path to either a shared memory or huge page
+filesystem mount.
+
 The @option{share} boolean option determines whether the memory
 region is marked as private to QEMU, or shared. The latter allows
 a co-operating external process to access the QEMU memory region.
+
+The @option{share} is also required for pvrdma devices due to
+limitations in the RDMA API provided by Linux.
+
+Setting share=on might affect the ability to configure NUMA
+bindings for the memory backend under some circumstances, see
+Documentation/vm/numa_memory_policy.txt on the Linux kernel
+source tree for additional details.
+
 Setting the @option{discard-data} boolean option to @var{on}
 indicates that file contents can be destroyed when QEMU exits,
 to avoid unnecessarily flushing data to the backing file.  Note
 that @option{discard-data} is only an optimization, and QEMU
 might not discard file contents if it aborts unexpectedly or is
 terminated using SIGKILL.
+
+The @option{merge} boolean option enables memory merge, also known as
+MADV_MERGEABLE, so that Kernel Samepage Merging will consider the pages for
+memory deduplication.
+
+Setting the @option{dump} boolean option to @var{off} excludes the memory from
+core dumps. This feature is also known as MADV_DONTDUMP.
+
+The @option{prealloc} boolean option enables memory preallocation.
+
+The @option{host-nodes} option binds the memory range to a list of NUMA host
+nodes.
+
+The @option{policy} option sets the NUMA policy to one of the following values:
+
+@table @option
+@item @var{default}
+default host policy
+
+@item @var{preferred}
+prefer the given host node list for allocation
+
+@item @var{bind}
+restrict memory allocation to the given host node list
+
+@item @var{interleave}
+interleave memory allocations across the given host node list
+@end table
+
+The @option{align} option specifies the base address alignment when
+QEMU mmap(2) @option{mem-path}, and accepts common suffixes, eg
+@option{2M}. Some backend store specified by @option{mem-path}
+requires an alignment different than the default one used by QEMU, eg
+the device DAX /dev/dax0.0 requires 2M alignment rather than 4K. In
+such cases, users can specify the required alignment via this option.
+
+@item -object memory-backend-ram,id=@var{id},merge=@var{on|off},dump=@var{on|off},share=@var{on|off},prealloc=@var{on|off},size=@var{size},host-nodes=@var{host-nodes},policy=@var{default|preferred|bind|interleave}
+
+Creates a memory backend object, which can be used to back the guest RAM.
+Memory backend objects offer more control than the @option{-m} option that is
+traditionally used to define guest RAM. Please refer to
+@option{memory-backend-file} for a description of the options.
+
+@item -object memory-backend-memfd,id=@var{id},merge=@var{on|off},dump=@var{on|off},prealloc=@var{on|off},size=@var{size},host-nodes=@var{host-nodes},policy=@var{default|preferred|bind|interleave},seal=@var{on|off},hugetlb=@var{on|off},hugetlbsize=@var{size}
+
+Creates an anonymous memory file backend object, which allows QEMU to
+share the memory with an external process (e.g. when using
+vhost-user). The memory is allocated with memfd and optional
+sealing. (Linux only)
+
+The @option{seal} option creates a sealed-file, that will block
+further resizing the memory ('on' by default).
+
+The @option{hugetlb} option specify the file to be created resides in
+the hugetlbfs filesystem (since Linux 4.14).  Used in conjunction with
+the @option{hugetlb} option, the @option{hugetlbsize} option specify
+the hugetlb page size on systems that support multiple hugetlb page
+sizes (it must be a power of 2 value supported by the system).
+
+In some versions of Linux, the @option{hugetlb} option is incompatible
+with the @option{seal} option (requires at least Linux 4.16).
+
+Please refer to @option{memory-backend-file} for a description of the
+other options.
 
 @item -object rng-random,id=@var{id},filename=@var{/dev/random}
 
@@ -4063,7 +4148,7 @@ expensive operation that consumes random pool entropy, so it is
 recommended that a persistent set of parameters be generated
 upfront and saved.
 
-@item -object tls-creds-x509,id=@var{id},endpoint=@var{endpoint},dir=@var{/path/to/cred/dir},verify-peer=@var{on|off},passwordid=@var{id}
+@item -object tls-creds-x509,id=@var{id},endpoint=@var{endpoint},dir=@var{/path/to/cred/dir},priority=@var{priority},verify-peer=@var{on|off},passwordid=@var{id}
 
 Creates a TLS anonymous credentials object, which can be used to provide
 TLS support on network backends. The @option{id} parameter is a unique
@@ -4095,6 +4180,15 @@ contain sensitive private keys, it is possible to use an encrypted
 version by providing the @var{passwordid} parameter. This provides
 the ID of a previously created @code{secret} object containing the
 password for decryption.
+
+The @var{priority} parameter allows to override the global default
+priority used by gnutls. This can be useful if the system administrator
+needs to use a weaker set of crypto priorities for QEMU without
+potentially forcing the weakness onto all applications. Or conversely
+if one wants wants a stronger default for QEMU than for all other
+applications, they can do this through this parameter. Its format is
+a gnutls priority string as described at
+@url{https://gnutls.org/manual/html_node/Priority-Strings.html}.
 
 @item -object filter-buffer,id=@var{id},netdev=@var{netdevid},interval=@var{t}[,queue=@var{all|rx|tx}][,status=@var{on|off}]
 
@@ -4205,6 +4299,27 @@ which specify the queue number of cryptodev backend, the default of
    [...]
 @end example
 
+@item -object cryptodev-vhost-user,id=@var{id},chardev=@var{chardevid}[,queues=@var{queues}]
+
+Creates a vhost-user cryptodev backend, backed by a chardev @var{chardevid}.
+The @var{id} parameter is a unique ID that will be used to reference this
+cryptodev backend from the @option{virtio-crypto} device.
+The chardev should be a unix domain socket backed one. The vhost-user uses
+a specifically defined protocol to pass vhost ioctl replacement messages
+to an application on the other end of the socket.
+The @var{queues} parameter is optional, which specify the queue number
+of cryptodev backend for multiqueue vhost-user, the default of @var{queues} is 1.
+
+@example
+
+ # qemu-system-x86_64 \
+   [...] \
+       -chardev socket,id=chardev0,path=/path/to/socket \
+       -object cryptodev-vhost-user,id=cryptodev0,chardev=chardev0 \
+       -device virtio-crypto-pci,id=crypto0,cryptodev=cryptodev0 \
+   [...]
+@end example
+
 @item -object secret,id=@var{id},data=@var{string},format=@var{raw|base64}[,keyid=@var{secretid},iv=@var{string}]
 @item -object secret,id=@var{id},file=@var{filename},format=@var{raw|base64}[,keyid=@var{secretid},iv=@var{string}]
 
@@ -4282,6 +4397,50 @@ contents of @code{iv.b64} to the second secret
          data=$SECRET,iv=$(<iv.b64)
 @end example
 
+@item -object sev-guest,id=@var{id},cbitpos=@var{cbitpos},reduced-phys-bits=@var{val},[sev-device=@var{string},policy=@var{policy},handle=@var{handle},dh-cert-file=@var{file},session-file=@var{file}]
+
+Create a Secure Encrypted Virtualization (SEV) guest object, which can be used
+to provide the guest memory encryption support on AMD processors.
+
+When memory encryption is enabled, one of the physical address bit (aka the
+C-bit) is utilized to mark if a memory page is protected. The @option{cbitpos}
+is used to provide the C-bit position. The C-bit position is Host family dependent
+hence user must provide this value. On EPYC, the value should be 47.
+
+When memory encryption is enabled, we loose certain bits in physical address space.
+The @option{reduced-phys-bits} is used to provide the number of bits we loose in
+physical address space. Similar to C-bit, the value is Host family dependent.
+On EPYC, the value should be 5.
+
+The @option{sev-device} provides the device file to use for communicating with
+the SEV firmware running inside AMD Secure Processor. The default device is
+'/dev/sev'. If hardware supports memory encryption then /dev/sev devices are
+created by CCP driver.
+
+The @option{policy} provides the guest policy to be enforced by the SEV firmware
+and restrict what configuration and operational commands can be performed on this
+guest by the hypervisor. The policy should be provided by the guest owner and is
+bound to the guest and cannot be changed throughout the lifetime of the guest.
+The default is 0.
+
+If guest @option{policy} allows sharing the key with another SEV guest then
+@option{handle} can be use to provide handle of the guest from which to share
+the key.
+
+The @option{dh-cert-file} and @option{session-file} provides the guest owner's
+Public Diffie-Hillman key defined in SEV spec. The PDH and session parameters
+are used for establishing a cryptographic session with the guest owner to
+negotiate keys used for attestation. The file must be encoded in base64.
+
+e.g to launch a SEV guest
+@example
+ # $QEMU \
+     ......
+     -object sev-guest,id=sev0,cbitpos=47,reduced-phys-bits=5 \
+     -machine ...,memory-encryption=sev0
+     .....
+
+@end example
 @end table
 
 ETEXI

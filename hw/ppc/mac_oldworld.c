@@ -34,16 +34,17 @@
 #include "net/net.h"
 #include "hw/isa/isa.h"
 #include "hw/pci/pci.h"
+#include "hw/pci/pci_host.h"
 #include "hw/boards.h"
 #include "hw/nvram/fw_cfg.h"
 #include "hw/char/escc.h"
+#include "hw/misc/macio/macio.h"
 #include "hw/ide.h"
 #include "hw/loader.h"
 #include "elf.h"
 #include "qemu/error-report.h"
 #include "sysemu/kvm.h"
 #include "kvm_ppc.h"
-#include "sysemu/block-backend.h"
 #include "exec/address-spaces.h"
 #include "qemu/cutils.h"
 
@@ -54,6 +55,8 @@
 #define BUSFREQ 66000000UL
 
 #define NDRV_VGA_FILENAME "qemu_vga.ndrv"
+
+#define GRACKLE_BASE 0xfec00000
 
 static void fw_cfg_boot_set(void *opaque, const char *boot_device,
                             Error **errp)
@@ -84,22 +87,19 @@ static void ppc_heathrow_init(MachineState *machine)
     PowerPCCPU *cpu = NULL;
     CPUPPCState *env = NULL;
     char *filename;
-    qemu_irq *pic, **heathrow_irqs;
     int linux_boot, i;
     MemoryRegion *ram = g_new(MemoryRegion, 1);
     MemoryRegion *bios = g_new(MemoryRegion, 1);
-    MemoryRegion *isa = g_new(MemoryRegion, 1);
     uint32_t kernel_base, initrd_base, cmdline_base = 0;
     int32_t kernel_size, initrd_size;
     PCIBus *pci_bus;
-    PCIDevice *macio;
+    OldWorldMacIOState *macio;
     MACIOIDEState *macio_ide;
-    DeviceState *dev;
+    SysBusDevice *s;
+    DeviceState *dev, *pic_dev;
     BusState *adb_bus;
     int bios_size, ndrv_size;
     uint8_t *ndrv_file;
-    MemoryRegion *pic_mem;
-    MemoryRegion *escc_mem, *escc_bar = g_new(MemoryRegion, 1);
     uint16_t ppc_boot_device;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     void *fw_cfg;
@@ -218,27 +218,21 @@ static void ppc_heathrow_init(MachineState *machine)
 #endif
         }
         if (ppc_boot_device == '\0') {
-            fprintf(stderr, "No valid boot device for G3 Beige machine\n");
+            error_report("No valid boot device for G3 Beige machine");
             exit(1);
         }
     }
 
-    /* Register 2 MB of ISA IO space */
-    memory_region_init_alias(isa, NULL, "isa_mmio",
-                             get_system_io(), 0, 0x00200000);
-    memory_region_add_subregion(sysmem, 0xfe000000, isa);
-
     /* XXX: we register only 1 output pin for heathrow PIC */
-    heathrow_irqs = g_malloc0(smp_cpus * sizeof(qemu_irq *));
-    heathrow_irqs[0] =
-        g_malloc0(smp_cpus * sizeof(qemu_irq) * 1);
+    pic_dev = qdev_create(NULL, TYPE_HEATHROW);
+    qdev_init_nofail(pic_dev);
+
     /* Connect the heathrow PIC outputs to the 6xx bus */
     for (i = 0; i < smp_cpus; i++) {
         switch (PPC_INPUT(env)) {
         case PPC_FLAGS_INPUT_6xx:
-            heathrow_irqs[i] = heathrow_irqs[0] + (i * 1);
-            heathrow_irqs[i][0] =
-                ((qemu_irq *)env->irq_inputs)[PPC6xx_INPUT_INT];
+            qdev_connect_gpio_out(pic_dev, 0,
+                ((qemu_irq *)env->irq_inputs)[PPC6xx_INPUT_INT]);
             break;
         default:
             error_report("Bus model not supported on OldWorld Mac machine");
@@ -258,32 +252,39 @@ static void ppc_heathrow_init(MachineState *machine)
         error_report("Only 6xx bus is supported on heathrow machine");
         exit(1);
     }
-    pic = heathrow_pic_init(&pic_mem, 1, heathrow_irqs);
-    pci_bus = pci_grackle_init(0xfec00000, pic,
-                               get_system_memory(),
-                               get_system_io());
+
+    /* Grackle PCI host bridge */
+    dev = qdev_create(NULL, TYPE_GRACKLE_PCI_HOST_BRIDGE);
+    object_property_set_link(OBJECT(dev), OBJECT(pic_dev), "pic",
+                             &error_abort);
+    qdev_init_nofail(dev);
+    s = SYS_BUS_DEVICE(dev);
+    sysbus_mmio_map(s, 0, GRACKLE_BASE);
+    sysbus_mmio_map(s, 1, GRACKLE_BASE + 0x200000);
+    /* PCI hole */
+    memory_region_add_subregion(get_system_memory(), 0x80000000ULL,
+                                sysbus_mmio_get_region(s, 2));
+    /* Register 2 MB of ISA IO space */
+    memory_region_add_subregion(get_system_memory(), 0xfe000000,
+                                sysbus_mmio_get_region(s, 3));
+
+    pci_bus = PCI_HOST_BRIDGE(dev)->bus;
+
     pci_vga_init(pci_bus);
 
-    escc_mem = escc_init(0, pic[0x0f], pic[0x10], serial_hds[0],
-                               serial_hds[1], ESCC_CLOCK, 4);
-    memory_region_init_alias(escc_bar, NULL, "escc-bar",
-                             escc_mem, 0, memory_region_size(escc_mem));
-
-    for(i = 0; i < nb_nics; i++)
+    for (i = 0; i < nb_nics; i++) {
         pci_nic_init_nofail(&nd_table[i], pci_bus, "ne2k_pci", NULL);
-
+    }
 
     ide_drive_get(hd, ARRAY_SIZE(hd));
 
-    macio = pci_create(pci_bus, -1, TYPE_OLDWORLD_MACIO);
+    /* MacIO */
+    macio = OLDWORLD_MACIO(pci_create(pci_bus, -1, TYPE_OLDWORLD_MACIO));
     dev = DEVICE(macio);
-    qdev_connect_gpio_out(dev, 0, pic[0x12]); /* CUDA */
-    qdev_connect_gpio_out(dev, 1, pic[0x0D]); /* IDE-0 */
-    qdev_connect_gpio_out(dev, 2, pic[0x02]); /* IDE-0 DMA */
-    qdev_connect_gpio_out(dev, 3, pic[0x0E]); /* IDE-1 */
-    qdev_connect_gpio_out(dev, 4, pic[0x03]); /* IDE-1 DMA */
     qdev_prop_set_uint64(dev, "frequency", tbfreq);
-    macio_init(macio, pic_mem, escc_bar);
+    object_property_set_link(OBJECT(macio), OBJECT(pic_dev), "pic",
+                             &error_abort);
+    qdev_init_nofail(dev);
 
     macio_ide = MACIO_IDE(object_resolve_path_component(OBJECT(macio),
                                                         "ide[0]"));

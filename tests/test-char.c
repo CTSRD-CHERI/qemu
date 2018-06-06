@@ -1,15 +1,16 @@
 #include "qemu/osdep.h"
 #include <glib/gstdio.h>
 
-#include "qemu-common.h"
 #include "qemu/config-file.h"
+#include "qemu/option.h"
 #include "qemu/sockets.h"
 #include "chardev/char-fe.h"
 #include "chardev/char-mux.h"
 #include "sysemu/sysemu.h"
 #include "qapi/error.h"
+#include "qapi/qapi-commands-char.h"
+#include "qapi/qmp/qdict.h"
 #include "qom/qom-qobject.h"
-#include "qmp-commands.h"
 
 static bool quit;
 
@@ -165,7 +166,6 @@ static void char_mux_test(void)
     FeHandler h1 = { 0, }, h2 = { 0, };
     CharBackend chr_be1, chr_be2;
 
-    muxes_realized = true; /* done after machine init */
     opts = qemu_opts_create(qemu_find_opts("chardev"), "mux-label",
                             1, &error_abort);
     qemu_opt_set(opts, "backend", "ringbuf", &error_abort);
@@ -301,9 +301,8 @@ static int socket_can_read_hello(void *opaque)
     return 10;
 }
 
-static void char_socket_test(void)
+static void char_socket_test_common(Chardev *chr)
 {
-    Chardev *chr = qemu_chr_new("server", "tcp:127.0.0.1:0,server,nowait");
     Chardev *chr_client;
     QObject *addr;
     QDict *qdict;
@@ -320,10 +319,10 @@ static void char_socket_test(void)
     g_assert(!object_property_get_bool(OBJECT(chr), "connected", &error_abort));
 
     addr = object_property_get_qobject(OBJECT(chr), "addr", &error_abort);
-    qdict = qobject_to_qdict(addr);
+    qdict = qobject_to(QDict, addr);
     port = qdict_get_str(qdict, "port");
     tmp = g_strdup_printf("tcp:127.0.0.1:%s", port);
-    QDECREF(qdict);
+    qobject_unref(qdict);
 
     qemu_chr_fe_init(&be, chr, &error_abort);
     qemu_chr_fe_set_handlers(&be, socket_can_read, socket_read,
@@ -357,6 +356,47 @@ static void char_socket_test(void)
 
     object_unparent(OBJECT(chr));
 }
+
+
+static void char_socket_basic_test(void)
+{
+    Chardev *chr = qemu_chr_new("server", "tcp:127.0.0.1:0,server,nowait");
+
+    char_socket_test_common(chr);
+}
+
+
+static void char_socket_fdpass_test(void)
+{
+    Chardev *chr;
+    char *optstr;
+    QemuOpts *opts;
+    int fd;
+    SocketAddress *addr = g_new0(SocketAddress, 1);
+
+    addr->type = SOCKET_ADDRESS_TYPE_INET;
+    addr->u.inet.host = g_strdup("127.0.0.1");
+    addr->u.inet.port = g_strdup("0");
+
+    fd = socket_listen(addr, &error_abort);
+    g_assert(fd >= 0);
+
+    qapi_free_SocketAddress(addr);
+
+    optstr = g_strdup_printf("socket,id=cdev,fd=%d,server,nowait", fd);
+
+    opts = qemu_opts_parse_noisily(qemu_find_opts("chardev"),
+                                   optstr, true);
+    g_free(optstr);
+    g_assert_nonnull(opts);
+
+    chr = qemu_chr_new_from_opts(opts, &error_abort);
+
+    qemu_opts_del(opts);
+
+    char_socket_test_common(chr);
+}
+
 
 #ifndef _WIN32
 static void char_pipe_test(void)
@@ -774,7 +814,8 @@ int main(int argc, char **argv)
 #ifndef _WIN32
     g_test_add_func("/char/file-fifo", char_file_fifo_test);
 #endif
-    g_test_add_func("/char/socket", char_socket_test);
+    g_test_add_func("/char/socket/basic", char_socket_basic_test);
+    g_test_add_func("/char/socket/fdpass", char_socket_fdpass_test);
     g_test_add_func("/char/udp", char_udp_test);
 #ifdef HAVE_CHARDEV_SERIAL
     g_test_add_func("/char/serial", char_serial_test);

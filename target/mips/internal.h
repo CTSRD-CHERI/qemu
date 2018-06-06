@@ -221,7 +221,7 @@ void cpu_mips_set_rtc64 (CPUMIPSState *env, uint64_t value);
 #endif /* TARGET_CHERI */
 
 /* helper.c */
-int mips_cpu_handle_mmu_fault(CPUState *cpu, vaddr address, int rw,
+int mips_cpu_handle_mmu_fault(CPUState *cpu, vaddr address, int size, int rw,
                               int mmu_idx);
 
 /* op_helper.c */
