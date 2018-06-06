@@ -159,12 +159,16 @@ static inline int get_a32_user_mem_index(DisasContext *s)
         return arm_to_core_mmu_idx(ARMMMUIdx_S1SE0);
     case ARMMMUIdx_MUser:
     case ARMMMUIdx_MPriv:
-    case ARMMMUIdx_MNegPri:
         return arm_to_core_mmu_idx(ARMMMUIdx_MUser);
+    case ARMMMUIdx_MUserNegPri:
+    case ARMMMUIdx_MPrivNegPri:
+        return arm_to_core_mmu_idx(ARMMMUIdx_MUserNegPri);
     case ARMMMUIdx_MSUser:
     case ARMMMUIdx_MSPriv:
-    case ARMMMUIdx_MSNegPri:
         return arm_to_core_mmu_idx(ARMMMUIdx_MSUser);
+    case ARMMMUIdx_MSUserNegPri:
+    case ARMMMUIdx_MSPrivNegPri:
+        return arm_to_core_mmu_idx(ARMMMUIdx_MSUserNegPri);
     case ARMMMUIdx_S2NS:
     default:
         g_assert_not_reached();
@@ -7903,9 +7907,27 @@ static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
         TCGv_i32 tmp2 = tcg_temp_new_i32();
         TCGv_i64 t64 = tcg_temp_new_i64();
 
-        gen_aa32_ld_i64(s, t64, addr, get_mem_index(s), opc);
+        /* For AArch32, architecturally the 32-bit word at the lowest
+         * address is always Rt and the one at addr+4 is Rt2, even if
+         * the CPU is big-endian. That means we don't want to do a
+         * gen_aa32_ld_i64(), which invokes gen_aa32_frob64() as if
+         * for an architecturally 64-bit access, but instead do a
+         * 64-bit access using MO_BE if appropriate and then split
+         * the two halves.
+         * This only makes a difference for BE32 user-mode, where
+         * frob64() must not flip the two halves of the 64-bit data
+         * but this code must treat BE32 user-mode like BE32 system.
+         */
+        TCGv taddr = gen_aa32_addr(s, addr, opc);
+
+        tcg_gen_qemu_ld_i64(t64, taddr, get_mem_index(s), opc);
+        tcg_temp_free(taddr);
         tcg_gen_mov_i64(cpu_exclusive_val, t64);
-        tcg_gen_extr_i64_i32(tmp, tmp2, t64);
+        if (s->be_data == MO_BE) {
+            tcg_gen_extr_i64_i32(tmp2, tmp, t64);
+        } else {
+            tcg_gen_extr_i64_i32(tmp, tmp2, t64);
+        }
         tcg_temp_free_i64(t64);
 
         store_reg(s, rt2, tmp2);
@@ -7954,15 +7976,26 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
         TCGv_i64 n64 = tcg_temp_new_i64();
 
         t2 = load_reg(s, rt2);
-        tcg_gen_concat_i32_i64(n64, t1, t2);
+        /* For AArch32, architecturally the 32-bit word at the lowest
+         * address is always Rt and the one at addr+4 is Rt2, even if
+         * the CPU is big-endian. Since we're going to treat this as a
+         * single 64-bit BE store, we need to put the two halves in the
+         * opposite order for BE to LE, so that they end up in the right
+         * places.
+         * We don't want gen_aa32_frob64() because that does the wrong
+         * thing for BE32 usermode.
+         */
+        if (s->be_data == MO_BE) {
+            tcg_gen_concat_i32_i64(n64, t2, t1);
+        } else {
+            tcg_gen_concat_i32_i64(n64, t1, t2);
+        }
         tcg_temp_free_i32(t2);
-        gen_aa32_frob64(s, n64);
 
         tcg_gen_atomic_cmpxchg_i64(o64, taddr, cpu_exclusive_val, n64,
                                    get_mem_index(s), opc);
         tcg_temp_free_i64(n64);
 
-        gen_aa32_frob64(s, o64);
         tcg_gen_setcond_i64(TCG_COND_NE, o64, o64, cpu_exclusive_val);
         tcg_gen_extrl_i64_i32(t0, o64);
 
@@ -9777,7 +9810,7 @@ static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
         if (insn & (1 << 22)) {
             /* 0b1110_100x_x1xx_xxxx_xxxx_xxxx_xxxx_xxxx
              * - load/store doubleword, load/store exclusive, ldacq/strel,
-             *   table branch.
+             *   table branch, TT.
              */
             if (insn == 0xe97fe97f && arm_dc_feature(s, ARM_FEATURE_M) &&
                 arm_dc_feature(s, ARM_FEATURE_V8)) {
@@ -9854,8 +9887,35 @@ static int disas_thumb2_insn(DisasContext *s, uint32_t insn)
             } else if ((insn & (1 << 23)) == 0) {
                 /* 0b1110_1000_010x_xxxx_xxxx_xxxx_xxxx_xxxx
                  * - load/store exclusive word
+                 * - TT (v8M only)
                  */
                 if (rs == 15) {
+                    if (!(insn & (1 << 20)) &&
+                        arm_dc_feature(s, ARM_FEATURE_M) &&
+                        arm_dc_feature(s, ARM_FEATURE_V8)) {
+                        /* 0b1110_1000_0100_xxxx_1111_xxxx_xxxx_xxxx
+                         *  - TT (v8M only)
+                         */
+                        bool alt = insn & (1 << 7);
+                        TCGv_i32 addr, op, ttresp;
+
+                        if ((insn & 0x3f) || rd == 13 || rd == 15 || rn == 15) {
+                            /* we UNDEF for these UNPREDICTABLE cases */
+                            goto illegal_op;
+                        }
+
+                        if (alt && !s->v8m_secure) {
+                            goto illegal_op;
+                        }
+
+                        addr = load_reg(s, rn);
+                        op = tcg_const_i32(extract32(insn, 6, 2));
+                        ttresp = tcg_temp_new_i32();
+                        gen_helper_v7m_tt(ttresp, cpu_env, addr, op);
+                        tcg_temp_free_i32(addr);
+                        tcg_temp_free_i32(op);
+                        store_reg(s, rd, ttresp);
+                    }
                     goto illegal_op;
                 }
                 addr = tcg_temp_local_new_i32();
@@ -12125,6 +12185,7 @@ static void arm_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     }
 
     insn = arm_ldl_code(env, dc->pc, dc->sctlr_b);
+    dc->insn = insn;
     dc->pc += 4;
     disas_arm_insn(dc, insn);
 
@@ -12200,6 +12261,7 @@ static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
         insn = insn << 16 | insn2;
         dc->pc += 2;
     }
+    dc->insn = insn;
 
     if (dc->condexec_mask && !thumb_insn_is_unconditional(dc, insn)) {
         uint32_t cond = dc->condexec_cond;
@@ -12214,7 +12276,10 @@ static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     if (is_16bit) {
         disas_thumb_insn(dc, insn);
     } else {
-        disas_thumb2_insn(dc, insn);
+        if (disas_thumb2_insn(dc, insn)) {
+            gen_exception_insn(dc, 4, EXCP_UDEF, syn_uncategorized(),
+                               default_exception_el(dc));
+        }
     }
 
     /* Advance the Thumb condexec condition.  */
@@ -12326,12 +12391,18 @@ static void arm_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
             /* nothing more to generate */
             break;
         case DISAS_WFI:
-            gen_helper_wfi(cpu_env);
+        {
+            TCGv_i32 tmp = tcg_const_i32((dc->thumb &&
+                                          !(dc->insn & (1U << 31))) ? 2 : 4);
+
+            gen_helper_wfi(cpu_env, tmp);
+            tcg_temp_free_i32(tmp);
             /* The helper doesn't necessarily throw an exception, but we
              * must go back to the main loop to check for interrupts anyway.
              */
             tcg_gen_exit_tb(0);
             break;
+        }
         case DISAS_WFE:
             gen_helper_wfe(cpu_env);
             break;

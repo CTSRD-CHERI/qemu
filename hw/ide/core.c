@@ -24,17 +24,16 @@
  */
 #include "qemu/osdep.h"
 #include "hw/hw.h"
-#include "hw/i386/pc.h"
 #include "hw/pci/pci.h"
 #include "hw/isa/isa.h"
 #include "qemu/error-report.h"
 #include "qemu/timer.h"
 #include "sysemu/sysemu.h"
+#include "sysemu/blockdev.h"
 #include "sysemu/dma.h"
 #include "hw/block/block.h"
 #include "sysemu/block-backend.h"
 #include "qemu/cutils.h"
-#include "qemu/error-report.h"
 
 #include "hw/ide/internal.h"
 #include "trace.h"
@@ -208,7 +207,9 @@ static void ide_identify(IDEState *s)
     if (dev && dev->conf.discard_granularity) {
         put_le16(p + 169, 1); /* TRIM support */
     }
-    put_le16(p + 217, dev->rotation_rate); /* Nominal media rotation rate */
+    if (dev) {
+        put_le16(p + 217, dev->rotation_rate); /* Nominal media rotation rate */
+    }
 
     ide_identify_size(s);
     s->identify_set = 1;

@@ -31,24 +31,6 @@
 #include "sysemu/sysemu.h"
 #endif
 
-//#define DEBUG_S390
-//#define DEBUG_S390_STDOUT
-
-#ifdef DEBUG_S390
-#ifdef DEBUG_S390_STDOUT
-#define DPRINTF(fmt, ...) \
-    do { fprintf(stderr, fmt, ## __VA_ARGS__); \
-         if (qemu_log_separate()) qemu_log(fmt, ##__VA_ARGS__); } while (0)
-#else
-#define DPRINTF(fmt, ...) \
-    do { qemu_log(fmt, ## __VA_ARGS__); } while (0)
-#endif
-#else
-#define DPRINTF(fmt, ...) \
-    do { } while (0)
-#endif
-
-
 #ifndef CONFIG_USER_ONLY
 void s390x_tod_timer(void *opaque)
 {
@@ -279,7 +261,7 @@ int s390_store_status(S390CPU *cpu, hwaddr addr, bool store_arch)
         sa->ars[i] = cpu_to_be32(cpu->env.aregs[i]);
     }
     for (i = 0; i < 16; ++i) {
-        sa->ars[i] = cpu_to_be64(cpu->env.cregs[i]);
+        sa->crs[i] = cpu_to_be64(cpu->env.cregs[i]);
     }
 
     cpu_physical_memory_unmap(sa, len, 1, len);

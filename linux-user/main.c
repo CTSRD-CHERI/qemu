@@ -35,7 +35,6 @@
 #include "elf.h"
 #include "exec/log.h"
 #include "trace/control.h"
-#include "glib-compat.h"
 
 char *exec_path;
 
@@ -1420,7 +1419,7 @@ void cpu_loop(CPUPPCState *env)
                 info.si_code = TARGET_SEGV_MAPERR;
                 break;
             }
-            info._sifields._sigfault._addr = env->nip;
+            info._sifields._sigfault._addr = env->spr[SPR_DAR];
             queue_signal(env, info.si_signo, QEMU_SI_FAULT, &info);
             break;
         case POWERPC_EXCP_ISI:      /* Instruction storage exception         */
@@ -2680,6 +2679,8 @@ void cpu_loop(CPUSH4State *env)
     target_siginfo_t info;
 
     while (1) {
+        bool arch_interrupt = true;
+
         cpu_exec_start(cs);
         trapnr = cpu_exec(cs);
         cpu_exec_end(cs);
@@ -2711,13 +2712,14 @@ void cpu_loop(CPUSH4State *env)
                 int sig;
 
                 sig = gdb_handlesig(cs, TARGET_SIGTRAP);
-                if (sig)
-                  {
+                if (sig) {
                     info.si_signo = sig;
                     info.si_errno = 0;
                     info.si_code = TARGET_TRAP_BRKPT;
                     queue_signal(env, info.si_signo, QEMU_SI_FAULT, &info);
-                  }
+                } else {
+                    arch_interrupt = false;
+                }
             }
             break;
 	case 0xa0:
@@ -2728,9 +2730,9 @@ void cpu_loop(CPUSH4State *env)
             info._sifields._sigfault._addr = env->tea;
             queue_signal(env, info.si_signo, QEMU_SI_FAULT, &info);
 	    break;
-
         case EXCP_ATOMIC:
             cpu_exec_step_atomic(cs);
+            arch_interrupt = false;
             break;
         default:
             printf ("Unhandled trap: 0x%x\n", trapnr);
@@ -2738,6 +2740,14 @@ void cpu_loop(CPUSH4State *env)
             exit(EXIT_FAILURE);
         }
         process_pending_signals (env);
+
+        /* Most of the traps imply an exception or interrupt, which
+           implies an REI instruction has been executed.  Which means
+           that LDST (aka LOK_ADDR) should be cleared.  But there are
+           a few exceptions for traps internal to QEMU.  */
+        if (arch_interrupt) {
+            env->lock_addr = -1;
+        }
     }
 }
 #endif
@@ -3238,6 +3248,10 @@ void cpu_loop(CPUAlphaState *env)
 #endif /* TARGET_ALPHA */
 
 #ifdef TARGET_S390X
+
+/* s390x masks the fault address it reports in si_addr for SIGSEGV and SIGBUS */
+#define S390X_FAIL_ADDR_MASK -4096LL
+
 void cpu_loop(CPUS390XState *env)
 {
     CPUState *cs = CPU(s390_env_get_cpu(env));
@@ -3294,7 +3308,7 @@ void cpu_loop(CPUS390XState *env)
                 sig = TARGET_SIGSEGV;
                 /* XXX: check env->error_code */
                 n = TARGET_SEGV_MAPERR;
-                addr = env->__excp_addr;
+                addr = env->__excp_addr & S390X_FAIL_ADDR_MASK;
                 goto do_signal;
             case PGM_EXECUTE:
             case PGM_SPECIFICATION:

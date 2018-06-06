@@ -347,7 +347,7 @@ static FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
         .feat_names = {
             "kvmclock", "kvm-nopiodelay", "kvm-mmu", "kvmclock",
             "kvm-asyncpf", "kvm-steal-time", "kvm-pv-eoi", "kvm-pv-unhalt",
-            NULL, NULL, NULL, NULL,
+            NULL, "kvm-pv-tlb-flush", NULL, NULL,
             NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL,
@@ -2220,7 +2220,7 @@ static void x86_cpu_class_check_missing_features(X86CPUClass *xcc,
 
     if (xcc->kvm_required && !kvm_enabled()) {
         strList *new = g_new0(strList, 1);
-        new->value = g_strdup("kvm");;
+        new->value = g_strdup("kvm");
         *missing_feats = new;
         return;
     }
@@ -4109,6 +4109,8 @@ static void x86_disas_set_info(CPUState *cs, disassemble_info *info)
     info->cap_mode = (env->hflags & HF_CS64_MASK ? CS_MODE_64
                       : env->hflags & HF_CS32_MASK ? CS_MODE_32
                       : CS_MODE_16);
+    info->cap_insn_unit = 1;
+    info->cap_insn_split = 8;
 }
 
 static Property x86_cpu_properties[] = {

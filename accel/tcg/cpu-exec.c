@@ -233,6 +233,8 @@ void cpu_exec_step_atomic(CPUState *cpu)
     uint32_t flags;
     uint32_t cflags = 1;
     uint32_t cf_mask = cflags & CF_HASH_MASK;
+    /* volatile because we modify it between setjmp and longjmp */
+    volatile bool in_exclusive_region = false;
 
     if (sigsetjmp(cpu->jmp_env, 0) == 0) {
         tb = tb_lookup__cpu_state(cpu, &pc, &cs_base, &flags, cf_mask);
@@ -251,14 +253,12 @@ void cpu_exec_step_atomic(CPUState *cpu)
 
         /* Since we got here, we know that parallel_cpus must be true.  */
         parallel_cpus = false;
+        in_exclusive_region = true;
         cc->cpu_exec_enter(cpu);
         /* execute the generated code */
         trace_exec_tb(tb, pc);
         cpu_tb_exec(cpu, tb);
         cc->cpu_exec_exit(cpu);
-        parallel_cpus = true;
-
-        end_exclusive();
     } else {
         /* We may have exited due to another problem here, so we need
          * to reset any tb_locks we may have taken but didn't release.
@@ -269,6 +269,15 @@ void cpu_exec_step_atomic(CPUState *cpu)
         tcg_debug_assert(!have_mmap_lock());
 #endif
         tb_lock_reset();
+    }
+
+    if (in_exclusive_region) {
+        /* We might longjump out of either the codegen or the
+         * execution, so must make sure we only end the exclusive
+         * region if we started it.
+         */
+        parallel_cpus = true;
+        end_exclusive();
     }
 }
 
@@ -461,48 +470,51 @@ static inline void cpu_handle_debug_exception(CPUState *cpu)
 
 static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
 {
-    if (cpu->exception_index >= 0) {
-        if (cpu->exception_index >= EXCP_INTERRUPT) {
-            /* exit request from the cpu execution loop */
-            *ret = cpu->exception_index;
-            if (*ret == EXCP_DEBUG) {
-                cpu_handle_debug_exception(cpu);
-            }
-            cpu->exception_index = -1;
-            return true;
-        } else {
-#if defined(CONFIG_USER_ONLY)
-            /* if user mode only, we simulate a fake exception
-               which will be handled outside the cpu execution
-               loop */
-#if defined(TARGET_I386)
-            CPUClass *cc = CPU_GET_CLASS(cpu);
-            cc->do_interrupt(cpu);
-#endif
-            *ret = cpu->exception_index;
-            cpu->exception_index = -1;
-            return true;
-#else
-            if (replay_exception()) {
-                CPUClass *cc = CPU_GET_CLASS(cpu);
-                qemu_mutex_lock_iothread();
-                cc->do_interrupt(cpu);
-                qemu_mutex_unlock_iothread();
-                cpu->exception_index = -1;
-            } else if (!replay_has_interrupt()) {
-                /* give a chance to iothread in replay mode */
-                *ret = EXCP_INTERRUPT;
-                return true;
-            }
-#endif
-        }
+    if (cpu->exception_index < 0) {
 #ifndef CONFIG_USER_ONLY
-    } else if (replay_has_exception()
+        if (replay_has_exception()
                && cpu->icount_decr.u16.low + cpu->icount_extra == 0) {
-        /* try to cause an exception pending in the log */
-        cpu_exec_nocache(cpu, 1, tb_find(cpu, NULL, 0, curr_cflags()), true);
-        *ret = -1;
+            /* try to cause an exception pending in the log */
+            cpu_exec_nocache(cpu, 1, tb_find(cpu, NULL, 0, curr_cflags()), true);
+        }
+#endif
+        if (cpu->exception_index < 0) {
+            return false;
+        }
+    }
+
+    if (cpu->exception_index >= EXCP_INTERRUPT) {
+        /* exit request from the cpu execution loop */
+        *ret = cpu->exception_index;
+        if (*ret == EXCP_DEBUG) {
+            cpu_handle_debug_exception(cpu);
+        }
+        cpu->exception_index = -1;
         return true;
+    } else {
+#if defined(CONFIG_USER_ONLY)
+        /* if user mode only, we simulate a fake exception
+           which will be handled outside the cpu execution
+           loop */
+#if defined(TARGET_I386)
+        CPUClass *cc = CPU_GET_CLASS(cpu);
+        cc->do_interrupt(cpu);
+#endif
+        *ret = cpu->exception_index;
+        cpu->exception_index = -1;
+        return true;
+#else
+        if (replay_exception()) {
+            CPUClass *cc = CPU_GET_CLASS(cpu);
+            qemu_mutex_lock_iothread();
+            cc->do_interrupt(cpu);
+            qemu_mutex_unlock_iothread();
+            cpu->exception_index = -1;
+        } else if (!replay_has_interrupt()) {
+            /* give a chance to iothread in replay mode */
+            *ret = EXCP_INTERRUPT;
+            return true;
+        }
 #endif
     }
 
@@ -513,6 +525,19 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
                                         TranslationBlock **last_tb)
 {
     CPUClass *cc = CPU_GET_CLASS(cpu);
+    int32_t insns_left;
+
+    /* Clear the interrupt flag now since we're processing
+     * cpu->interrupt_request and cpu->exit_request.
+     */
+    insns_left = atomic_read(&cpu->icount_decr.u32);
+    atomic_set(&cpu->icount_decr.u16.high, 0);
+    if (unlikely(insns_left < 0)) {
+        /* Ensure the zeroing of icount_decr comes before the next read
+         * of cpu->exit_request or cpu->interrupt_request.
+         */
+        smp_mb();
+    }
 
     if (unlikely(atomic_read(&cpu->interrupt_request))) {
         int interrupt_request;
@@ -609,17 +634,14 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
 
     *last_tb = NULL;
     insns_left = atomic_read(&cpu->icount_decr.u32);
-    atomic_set(&cpu->icount_decr.u16.high, 0);
     if (insns_left < 0) {
         /* Something asked us to stop executing chained TBs; just
          * continue round the main loop. Whatever requested the exit
          * will also have set something else (eg exit_request or
-         * interrupt_request) which we will handle next time around
-         * the loop.  But we need to ensure the zeroing of icount_decr
-         * comes before the next read of cpu->exit_request
-         * or cpu->interrupt_request.
+         * interrupt_request) which will be handled by
+         * cpu_handle_interrupt.  cpu_handle_interrupt will also
+         * clear cpu->icount_decr.u16.high.
          */
-        smp_mb();
         return;
     }
 

@@ -24,11 +24,10 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "hw/hw.h"
-#include "vga.h"
-#include "ui/console.h"
-#include "hw/i386/pc.h"
+#include "hw/display/vga.h"
 #include "hw/pci/pci.h"
 #include "vga_int.h"
+#include "vga_regs.h"
 #include "ui/pixel_ops.h"
 #include "qemu/timer.h"
 #include "hw/xen/xen.h"
@@ -1666,9 +1665,9 @@ static void vga_draw_graphic(VGACommonState *s, int full_update)
             /* scanline wraps from end of video memory to the start */
             assert(force_shadow);
             update = memory_region_snapshot_get_dirty(&s->vram, snap,
-                                                      page0, 0);
+                                                      page0, s->vbe_size - page0);
             update |= memory_region_snapshot_get_dirty(&s->vram, snap,
-                                                       page1, 0);
+                                                       0, page1);
         } else {
             update = memory_region_snapshot_get_dirty(&s->vram, snap,
                                                       page0, page1 - page0);

@@ -31,7 +31,6 @@
 #include "tcg.h"
 #if defined(CONFIG_USER_ONLY)
 #include "qemu.h"
-#include "exec/exec-all.h"
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 #include <sys/param.h>
 #if __FreeBSD_version >= 700104
@@ -257,7 +256,7 @@ static target_long decode_sleb128(uint8_t **pp)
 /* Encode the data collected about the instructions while compiling TB.
    Place the data at BLOCK, and return the number of bytes consumed.
 
-   The logical table consisits of TARGET_INSN_START_WORDS target_ulong's,
+   The logical table consists of TARGET_INSN_START_WORDS target_ulong's,
    which come from the target's insn_start data, followed by a uintptr_t
    which comes from the host pc of the end of the code implementing the insn.
 
@@ -352,36 +351,42 @@ static int cpu_restore_state_from_tb(CPUState *cpu, TranslationBlock *tb,
     return 0;
 }
 
-bool cpu_restore_state(CPUState *cpu, uintptr_t retaddr)
+bool cpu_restore_state(CPUState *cpu, uintptr_t host_pc)
 {
     TranslationBlock *tb;
     bool r = false;
+    uintptr_t check_offset;
 
-    /* A retaddr of zero is invalid so we really shouldn't have ended
-     * up here. The target code has likely forgotten to check retaddr
-     * != 0 before attempting to restore state. We return early to
-     * avoid blowing up on a recursive tb_lock(). The target must have
-     * previously survived a failed cpu_restore_state because
-     * tb_find_pc(0) would have failed anyway. It still should be
-     * fixed though.
+    /* The host_pc has to be in the region of current code buffer. If
+     * it is not we will not be able to resolve it here. The two cases
+     * where host_pc will not be correct are:
+     *
+     *  - fault during translation (instruction fetch)
+     *  - fault from helper (not using GETPC() macro)
+     *
+     * Either way we need return early to avoid blowing up on a
+     * recursive tb_lock() as we can't resolve it here.
+     *
+     * We are using unsigned arithmetic so if host_pc <
+     * tcg_init_ctx.code_gen_buffer check_offset will wrap to way
+     * above the code_gen_buffer_size
      */
+    check_offset = host_pc - (uintptr_t) tcg_init_ctx.code_gen_buffer;
 
-    if (!retaddr) {
-        return r;
-    }
-
-    tb_lock();
-    tb = tb_find_pc(retaddr);
-    if (tb) {
-        cpu_restore_state_from_tb(cpu, tb, retaddr);
-        if (tb->cflags & CF_NOCACHE) {
-            /* one-shot translation, invalidate it immediately */
-            tb_phys_invalidate(tb, -1);
-            tb_remove(tb);
+    if (check_offset < tcg_init_ctx.code_gen_buffer_size) {
+        tb_lock();
+        tb = tb_find_pc(host_pc);
+        if (tb) {
+            cpu_restore_state_from_tb(cpu, tb, host_pc);
+            if (tb->cflags & CF_NOCACHE) {
+                /* one-shot translation, invalidate it immediately */
+                tb_phys_invalidate(tb, -1);
+                tb_remove(tb);
+            }
+            r = true;
         }
-        r = true;
+        tb_unlock();
     }
-    tb_unlock();
 
     return r;
 }

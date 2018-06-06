@@ -777,7 +777,7 @@ int do_sigaction(int sig, const struct target_sigaction *act,
     if (oact) {
         __put_user(k->_sa_handler, &oact->_sa_handler);
         __put_user(k->sa_flags, &oact->sa_flags);
-#if !defined(TARGET_MIPS)
+#ifdef TARGET_ARCH_HAS_SA_RESTORER
         __put_user(k->sa_restorer, &oact->sa_restorer);
 #endif
         /* Not swapped.  */
@@ -787,7 +787,7 @@ int do_sigaction(int sig, const struct target_sigaction *act,
         /* FIXME: This is not threadsafe.  */
         __get_user(k->_sa_handler, &act->_sa_handler);
         __get_user(k->sa_flags, &act->sa_flags);
-#if !defined(TARGET_MIPS)
+#ifdef TARGET_ARCH_HAS_SA_RESTORER
         __get_user(k->sa_restorer, &act->sa_restorer);
 #endif
         /* To be swapped in target_to_host_sigset.  */
@@ -6530,7 +6530,7 @@ static void setup_rt_frame(int sig, struct target_sigaction *ka,
         haddr = dest;
     }
     env->iaoq_f = haddr;
-    env->iaoq_b = haddr + 4;;
+    env->iaoq_b = haddr + 4;
     return;
 
  give_sigsegv:
