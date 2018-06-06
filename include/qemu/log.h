@@ -44,13 +44,14 @@ static inline bool qemu_log_separate(void)
 #define CPU_LOG_PAGE       (1 << 14)
 /* LOG_TRACE (1 << 15) is defined in log-for-trace.h */
 #define CPU_LOG_TB_OP_IND  (1 << 16)
-#define CPU_LOG_INSTR      (1 << 17)
-#define CPU_LOG_CVTRACE    (1 << 18)
+#define CPU_LOG_TB_FPU     (1 << 17)
+#define CPU_LOG_INSTR      (1 << 18)
+#define CPU_LOG_CVTRACE    (1 << 19)
 /*
  * The CPU_LOG_USER_ONLY flag only exists so that temporarily suspending the
  * instruction tracing does not cause QEMU to close and reopen the logfile.
  */
-#define CPU_LOG_USER_ONLY  (1 << 19)
+#define CPU_LOG_USER_ONLY  (1 << 20)
 
 /* Lock output for a series of related logs.  Since this is not needed
  * for a single qemu_log / qemu_log_mask / qemu_log_mask_and_addr, we
