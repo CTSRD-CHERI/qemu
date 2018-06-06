@@ -173,10 +173,6 @@ static void mips_cpu_initfn(Object *obj)
 
     cs->env_ptr = env;
     env->cpu_model = mcc->cpu_def;
-
-    if (tcg_enabled()) {
-        mips_tcg_init();
-    }
 }
 
 static char *mips_cpu_type_name(const char *cpu_model)
@@ -225,6 +221,9 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     cc->vmsd = &vmstate_mips_cpu;
 #endif
     cc->disas_set_info = mips_cpu_disas_set_info;
+#ifdef CONFIG_TCG
+    cc->tcg_initialize = mips_tcg_init;
+#endif
 
 #if defined(TARGET_MIPS64)
     cc->gdb_core_xml_file = "mips64-cpu.xml";

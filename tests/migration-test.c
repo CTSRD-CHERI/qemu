@@ -1,5 +1,5 @@
 /*
- * QTest testcase for postcopy
+ * QTest testcase for migration
  *
  * Copyright (c) 2016 Red Hat, Inc. and/or its affiliates
  *   based on the vhost-user-test.c that is:
@@ -243,8 +243,6 @@ static QDict *return_or_event(QDict *response)
 /*
  * It's tricky to use qemu's migration event capability with qtest,
  * events suddenly appearing confuse the qmp()/hmp() responses.
- * so wait for a couple of passes to have happened before
- * going postcopy.
  */
 
 static uint64_t get_migration_pass(void)
@@ -353,12 +351,69 @@ static void cleanup(const char *filename)
     g_free(path);
 }
 
+static void migrate_set_downtime(QTestState *who, const char *value)
+{
+    QDict *rsp;
+    gchar *cmd;
+
+    cmd = g_strdup_printf("{ 'execute': 'migrate_set_downtime',"
+                          "'arguments': { 'value': %s } }", value);
+    rsp = qtest_qmp(who, cmd);
+    g_free(cmd);
+    g_assert(qdict_haskey(rsp, "return"));
+    QDECREF(rsp);
+}
+
+static void migrate_set_speed(QTestState *who, const char *value)
+{
+    QDict *rsp;
+    gchar *cmd;
+
+    cmd = g_strdup_printf("{ 'execute': 'migrate_set_speed',"
+                          "'arguments': { 'value': %s } }", value);
+    rsp = qtest_qmp(who, cmd);
+    g_free(cmd);
+    g_assert(qdict_haskey(rsp, "return"));
+    QDECREF(rsp);
+}
+
+static void migrate_set_capability(QTestState *who, const char *capability,
+                                   const char *value)
+{
+    QDict *rsp;
+    gchar *cmd;
+
+    cmd = g_strdup_printf("{ 'execute': 'migrate-set-capabilities',"
+                          "'arguments': { "
+                          "'capabilities': [ { "
+                          "'capability': '%s', 'state': %s } ] } }",
+                          capability, value);
+    rsp = qtest_qmp(who, cmd);
+    g_free(cmd);
+    g_assert(qdict_haskey(rsp, "return"));
+    QDECREF(rsp);
+}
+
+static void migrate(QTestState *who, const char *uri)
+{
+    QDict *rsp;
+    gchar *cmd;
+
+    cmd = g_strdup_printf("{ 'execute': 'migrate',"
+                          "'arguments': { 'uri': '%s' } }",
+                          uri);
+    rsp = qtest_qmp(who, cmd);
+    g_free(cmd);
+    g_assert(qdict_haskey(rsp, "return"));
+    QDECREF(rsp);
+}
+
 static void test_migrate(void)
 {
     char *uri = g_strdup_printf("unix:%s/migsocket", tmpfs);
     QTestState *global = global_qtest, *from, *to;
     unsigned char dest_byte_a, dest_byte_b, dest_byte_c, dest_byte_d;
-    gchar *cmd, *cmd_src, *cmd_dst;
+    gchar *cmd_src, *cmd_dst;
     QDict *rsp;
 
     char *bootpath = g_strdup_printf("%s/bootsect", tmpfs);
@@ -407,52 +462,22 @@ static void test_migrate(void)
     to = qtest_init(cmd_dst);
     g_free(cmd_dst);
 
-    global_qtest = from;
-    rsp = qmp("{ 'execute': 'migrate-set-capabilities',"
-                  "'arguments': { "
-                      "'capabilities': [ {"
-                          "'capability': 'postcopy-ram',"
-                          "'state': true } ] } }");
-    g_assert(qdict_haskey(rsp, "return"));
-    QDECREF(rsp);
-
-    global_qtest = to;
-    rsp = qmp("{ 'execute': 'migrate-set-capabilities',"
-                  "'arguments': { "
-                      "'capabilities': [ {"
-                          "'capability': 'postcopy-ram',"
-                          "'state': true } ] } }");
-    g_assert(qdict_haskey(rsp, "return"));
-    QDECREF(rsp);
+    migrate_set_capability(from, "postcopy-ram", "true");
+    migrate_set_capability(to, "postcopy-ram", "true");
 
     /* We want to pick a speed slow enough that the test completes
      * quickly, but that it doesn't complete precopy even on a slow
      * machine, so also set the downtime.
      */
-    global_qtest = from;
-    rsp = qmp("{ 'execute': 'migrate_set_speed',"
-              "'arguments': { 'value': 100000000 } }");
-    g_assert(qdict_haskey(rsp, "return"));
-    QDECREF(rsp);
-
-    /* 1ms downtime - it should never finish precopy */
-    rsp = qmp("{ 'execute': 'migrate_set_downtime',"
-              "'arguments': { 'value': 0.001 } }");
-    g_assert(qdict_haskey(rsp, "return"));
-    QDECREF(rsp);
-
+    migrate_set_speed(from, "100000000");
+    migrate_set_downtime(from, "0.001");
 
     /* Wait for the first serial output from the source */
     wait_for_serial("src_serial");
 
-    cmd = g_strdup_printf("{ 'execute': 'migrate',"
-                          "'arguments': { 'uri': '%s' } }",
-                          uri);
-    rsp = qmp(cmd);
-    g_free(cmd);
-    g_assert(qdict_haskey(rsp, "return"));
-    QDECREF(rsp);
+    migrate(from, uri);
 
+    global_qtest = from;
     wait_for_migration_pass();
 
     rsp = return_or_event(qmp("{ 'execute': 'migrate-start-postcopy' }"));
@@ -504,7 +529,7 @@ static void test_migrate(void)
 
 int main(int argc, char **argv)
 {
-    char template[] = "/tmp/postcopy-test-XXXXXX";
+    char template[] = "/tmp/migration-test-XXXXXX";
     int ret;
 
     g_test_init(&argc, &argv, NULL);
@@ -521,7 +546,7 @@ int main(int argc, char **argv)
 
     module_call_init(MODULE_INIT_QOM);
 
-    qtest_add_func("/postcopy", test_migrate);
+    qtest_add_func("/migration/postcopy/unix", test_migrate);
 
     ret = g_test_run();
 
