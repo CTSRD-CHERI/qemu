@@ -4936,9 +4936,9 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
 
         /* Disassemble and print instruction. */
         if (isa == 0) {
-            target_disas(qemu_logfile, cs, pc, 4, 0);
+            target_disas(qemu_logfile, cs, pc, 4);
         } else {
-            target_disas(qemu_logfile, cs, pc, 2, 0);
+            target_disas(qemu_logfile, cs, pc, 2);
         }
     }
 
