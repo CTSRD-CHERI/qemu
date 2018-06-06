@@ -186,16 +186,9 @@ typedef enum TCGOpcode {
     NB_OPS,
 } TCGOpcode;
 
-#define tcg_regset_clear(d) (d) = 0
-#define tcg_regset_set(d, s) (d) = (s)
-#define tcg_regset_set32(d, reg, val32) (d) |= (val32) << (reg)
-#define tcg_regset_set_reg(d, r) (d) |= 1L << (r)
-#define tcg_regset_reset_reg(d, r) (d) &= ~(1L << (r))
-#define tcg_regset_test_reg(d, r) (((d) >> (r)) & 1)
-#define tcg_regset_or(d, a, b) (d) = (a) | (b)
-#define tcg_regset_and(d, a, b) (d) = (a) & (b)
-#define tcg_regset_andnot(d, a, b) (d) = (a) & ~(b)
-#define tcg_regset_not(d, a) (d) = ~(a)
+#define tcg_regset_set_reg(d, r)   ((d) |= (TCGRegSet)1 << (r))
+#define tcg_regset_reset_reg(d, r) ((d) &= ~((TCGRegSet)1 << (r)))
+#define tcg_regset_test_reg(d, r)  (((d) >> (r)) & 1)
 
 #ifndef TCG_TARGET_INSN_UNIT_SIZE
 # error "Missing TCG_TARGET_INSN_UNIT_SIZE"
@@ -652,8 +645,8 @@ struct TCGContext {
     /* goto_tb support */
     tcg_insn_unit *code_buf;
     uint16_t *tb_jmp_reset_offset; /* tb->jmp_reset_offset */
-    uint16_t *tb_jmp_insn_offset; /* tb->jmp_insn_offset if USE_DIRECT_JUMP */
-    uintptr_t *tb_jmp_target_addr; /* tb->jmp_target_addr if !USE_DIRECT_JUMP */
+    uintptr_t *tb_jmp_insn_offset; /* tb->jmp_target_arg if direct_jump */
+    uintptr_t *tb_jmp_target_addr; /* tb->jmp_target_arg if !direct_jump */
 
     TCGRegSet reserved_regs;
     intptr_t current_frame_offset;
@@ -702,6 +695,7 @@ struct TCGContext {
     void *code_gen_buffer;
     size_t code_gen_buffer_size;
     void *code_gen_ptr;
+    void *data_gen_ptr;
 
     /* Threshold to flush the translated code buffer.  */
     void *code_gen_highwater;
@@ -712,8 +706,13 @@ struct TCGContext {
     CPUState *cpu;                      /* *_trans */
     TCGv_env tcg_env;                   /* *_exec  */
 
-    /* The TCGBackendData structure is private to tcg-target.inc.c.  */
-    struct TCGBackendData *be;
+    /* These structures are private to tcg-target.inc.c.  */
+#ifdef TCG_TARGET_NEED_LDST_LABELS
+    struct TCGLabelQemuLdst *ldst_labels;
+#endif
+#ifdef TCG_TARGET_NEED_POOL_LABELS
+    struct TCGLabelPoolData *pool_labels;
+#endif
 
     TCGTempSet free_temps[TCG_TYPE_COUNT * 2];
     TCGTemp temps[TCG_MAX_TEMPS]; /* globals first, temps after */
@@ -925,6 +924,8 @@ do {\
 #define tcg_temp_new_ptr() TCGV_NAT_TO_PTR(tcg_temp_new_i64())
 #define tcg_temp_free_ptr(T) tcg_temp_free_i64(TCGV_PTR_TO_NAT(T))
 #endif
+
+bool tcg_op_supported(TCGOpcode op);
 
 void tcg_gen_callN(TCGContext *s, void *func,
                    TCGArg ret, int nargs, TCGArg *args);

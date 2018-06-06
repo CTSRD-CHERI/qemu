@@ -382,7 +382,6 @@ static int ppce500_load_device_tree(MachineState *machine,
        the first node as boot node and be happy */
     for (i = smp_cpus - 1; i >= 0; i--) {
         CPUState *cpu;
-        PowerPCCPU *pcpu;
         char cpu_name[128];
         uint64_t cpu_release_addr = params->spin_base + (i * 0x20);
 
@@ -391,16 +390,13 @@ static int ppce500_load_device_tree(MachineState *machine,
             continue;
         }
         env = cpu->env_ptr;
-        pcpu = POWERPC_CPU(cpu);
 
-        snprintf(cpu_name, sizeof(cpu_name), "/cpus/PowerPC,8544@%x",
-                 ppc_get_vcpu_dt_id(pcpu));
+        snprintf(cpu_name, sizeof(cpu_name), "/cpus/PowerPC,8544@%x", i);
         qemu_fdt_add_subnode(fdt, cpu_name);
         qemu_fdt_setprop_cell(fdt, cpu_name, "clock-frequency", clock_freq);
         qemu_fdt_setprop_cell(fdt, cpu_name, "timebase-frequency", tb_freq);
         qemu_fdt_setprop_string(fdt, cpu_name, "device_type", "cpu");
-        qemu_fdt_setprop_cell(fdt, cpu_name, "reg",
-                              ppc_get_vcpu_dt_id(pcpu));
+        qemu_fdt_setprop_cell(fdt, cpu_name, "reg", i);
         qemu_fdt_setprop_cell(fdt, cpu_name, "d-cache-line-size",
                               env->dcache_line_size);
         qemu_fdt_setprop_cell(fdt, cpu_name, "i-cache-line-size",
@@ -819,11 +815,8 @@ void ppce500_init(MachineState *machine, PPCE500Params *params)
         CPUState *cs;
         qemu_irq *input;
 
-        cpu = cpu_ppc_init(machine->cpu_model);
-        if (cpu == NULL) {
-            fprintf(stderr, "Unable to initialize CPU!\n");
-            exit(1);
-        }
+        cpu = POWERPC_CPU(cpu_generic_init(TYPE_POWERPC_CPU,
+                                           machine->cpu_model));
         env = &cpu->env;
         cs = CPU(cpu);
 

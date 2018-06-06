@@ -327,15 +327,6 @@ $(SOFTMMU_SUBDIR_RULES): config-all-devices.mak
 subdir-%:
 	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C $* V="$(V)" TARGET_DIR="$*/" all,)
 
-subdir-pixman: pixman/Makefile
-	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C pixman V="$(V)" all,)
-
-pixman/Makefile: $(SRC_PATH)/pixman/configure
-	(cd pixman; CFLAGS="$(CFLAGS) -fPIC $(extra_cflags) $(extra_ldflags)" $(SRC_PATH)/pixman/configure $(AUTOCONF_HOST) --disable-gtk --disable-shared --enable-static)
-
-$(SRC_PATH)/pixman/configure:
-	(cd $(SRC_PATH)/pixman; autoreconf -v --install)
-
 DTC_MAKE_ARGS=-I$(SRC_PATH)/dtc VPATH=$(SRC_PATH)/dtc -C dtc V="$(V)" LIBFDT_srcdir=$(SRC_PATH)/dtc/libfdt
 DTC_CFLAGS=$(CFLAGS) $(QEMU_CFLAGS)
 DTC_CPPFLAGS=-I$(BUILD_DIR)/dtc -I$(SRC_PATH)/dtc -I$(SRC_PATH)/dtc/libfdt
@@ -346,7 +337,7 @@ subdir-dtc:dtc/libfdt dtc/tests
 dtc/%:
 	mkdir -p $@
 
-$(SUBDIR_RULES): libqemuutil.a libqemustub.a $(common-obj-y) $(chardev-obj-y) \
+$(SUBDIR_RULES): libqemuutil.a $(common-obj-y) $(chardev-obj-y) \
 	$(qom-obj-y) $(crypto-aes-obj-$(CONFIG_USER_ONLY))
 
 ROMSUBDIR_RULES=$(patsubst %,romsubdir-%, $(ROMS))
@@ -366,12 +357,11 @@ Makefile: $(version-obj-y)
 ######################################################################
 # Build libraries
 
-libqemustub.a: $(stub-obj-y)
-libqemuutil.a: $(util-obj-y) $(trace-obj-y)
+libqemuutil.a: $(util-obj-y) $(trace-obj-y) $(stub-obj-y)
 
 ######################################################################
 
-COMMON_LDADDS = libqemuutil.a libqemustub.a
+COMMON_LDADDS = libqemuutil.a
 
 qemu-img.o: qemu-img-cmds.h
 
@@ -412,9 +402,18 @@ $(SRC_PATH)/qga/qapi-schema.json $(SRC_PATH)/scripts/qapi-commands.py $(qapi-py)
 
 qapi-modules = $(SRC_PATH)/qapi-schema.json $(SRC_PATH)/qapi/common.json \
                $(SRC_PATH)/qapi/block.json $(SRC_PATH)/qapi/block-core.json \
-               $(SRC_PATH)/qapi/event.json $(SRC_PATH)/qapi/introspect.json \
-               $(SRC_PATH)/qapi/crypto.json $(SRC_PATH)/qapi/rocker.json \
-               $(SRC_PATH)/qapi/trace.json
+               $(SRC_PATH)/qapi/char.json \
+               $(SRC_PATH)/qapi/crypto.json \
+               $(SRC_PATH)/qapi/introspect.json \
+               $(SRC_PATH)/qapi/migration.json \
+               $(SRC_PATH)/qapi/net.json \
+               $(SRC_PATH)/qapi/rocker.json \
+               $(SRC_PATH)/qapi/run-state.json \
+               $(SRC_PATH)/qapi/sockets.json \
+               $(SRC_PATH)/qapi/tpm.json \
+               $(SRC_PATH)/qapi/trace.json \
+               $(SRC_PATH)/qapi/transaction.json \
+               $(SRC_PATH)/qapi/ui.json
 
 qapi-types.c qapi-types.h :\
 $(qapi-modules) $(SRC_PATH)/scripts/qapi-types.py $(qapi-py)
@@ -534,7 +533,6 @@ distclean: clean
 	rm -rf $$d || exit 1 ; \
         done
 	rm -Rf .sdk
-	if test -f pixman/config.log; then $(MAKE) -C pixman distclean; fi
 	if test -f dtc/version_gen.h; then $(MAKE) $(DTC_MAKE_ARGS) clean; fi
 
 KEYMAPS=da     en-gb  et  fr     fr-ch  is  lt  modifiers  no  pt-br  sv \

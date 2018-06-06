@@ -104,11 +104,7 @@ static void lm32_evr_init(MachineState *machine)
     if (cpu_model == NULL) {
         cpu_model = "lm32-full";
     }
-    cpu = cpu_lm32_init(cpu_model);
-    if (cpu == NULL) {
-        fprintf(stderr, "qemu: unable to find CPU '%s'\n", cpu_model);
-        exit(1);
-    }
+    cpu = LM32_CPU(cpu_generic_init(TYPE_LM32_CPU, cpu_model));
 
     env = &cpu->env;
     reset_info->cpu = cpu;
@@ -205,11 +201,7 @@ static void lm32_uclinux_init(MachineState *machine)
     if (cpu_model == NULL) {
         cpu_model = "lm32-full";
     }
-    cpu = cpu_lm32_init(cpu_model);
-    if (cpu == NULL) {
-        fprintf(stderr, "qemu: unable to find CPU '%s'\n", cpu_model);
-        exit(1);
-    }
+    cpu = LM32_CPU(cpu_generic_init(TYPE_LM32_CPU, cpu_model));
 
     env = &cpu->env;
     reset_info->cpu = cpu;

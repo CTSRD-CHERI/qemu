@@ -216,8 +216,8 @@ static void generate_eeprom_spd(uint8_t *eeprom, ram_addr_t ram_size)
     }
 
     if (ram_size) {
-        fprintf(stderr, "Warning: SPD cannot represent final %dMB"
-                " of SDRAM\n", (int)ram_size);
+        warn_report("SPD cannot represent final " RAM_ADDR_FMT "MB"
+                    " of SDRAM", ram_size);
     }
 
     /* fill in SPD memory information */
@@ -934,10 +934,6 @@ static void create_cpu_without_cps(const char *cpu_model,
 
     for (i = 0; i < smp_cpus; i++) {
         cpu = cpu_mips_init(cpu_model);
-        if (cpu == NULL) {
-            fprintf(stderr, "Unable to find CPU definition\n");
-            exit(1);
-        }
 
         /* Init internal devices */
         cpu_mips_irq_init_cpu(cpu);

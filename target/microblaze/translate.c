@@ -27,6 +27,7 @@
 #include "microblaze-decode.h"
 #include "exec/cpu_ldst.h"
 #include "exec/helper-gen.h"
+#include "exec/translator.h"
 
 #include "trace-tcg.h"
 #include "exec/log.h"
@@ -45,6 +46,11 @@
 
 #define EXTRACT_FIELD(src, start, end) \
             (((src) >> start) & ((1 << (end - start + 1)) - 1))
+
+/* is_jmp field values */
+#define DISAS_JUMP    DISAS_TARGET_0 /* only pc was modified dynamically */
+#define DISAS_UPDATE  DISAS_TARGET_1 /* cpu state was modified dynamically */
+#define DISAS_TB_JUMP DISAS_TARGET_2 /* only pc was modified statically */
 
 static TCGv env_debug;
 static TCGv_env cpu_env;
@@ -1843,17 +1849,6 @@ void mb_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
             cpu_fprintf(f, "\n");
         }
     cpu_fprintf(f, "\n\n");
-}
-
-MicroBlazeCPU *cpu_mb_init(const char *cpu_model)
-{
-    MicroBlazeCPU *cpu;
-
-    cpu = MICROBLAZE_CPU(object_new(TYPE_MICROBLAZE_CPU));
-
-    object_property_set_bool(OBJECT(cpu), true, "realized", NULL);
-
-    return cpu;
 }
 
 void mb_tcg_init(void)

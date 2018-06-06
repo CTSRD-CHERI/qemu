@@ -246,11 +246,7 @@ static void r2d_init(MachineState *machine)
         cpu_model = "SH7751R";
     }
 
-    cpu = cpu_sh4_init(cpu_model);
-    if (cpu == NULL) {
-        fprintf(stderr, "Unable to find CPU definition\n");
-        exit(1);
-    }
+    cpu = SUPERH_CPU(cpu_generic_init(TYPE_SUPERH_CPU, cpu_model));
     env = &cpu->env;
 
     reset_info = g_malloc0(sizeof(ResetData));

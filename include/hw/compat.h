@@ -1,6 +1,9 @@
 #ifndef HW_COMPAT_H
 #define HW_COMPAT_H
 
+#define HW_COMPAT_2_10 \
+    /* empty */
+
 #define HW_COMPAT_2_9 \
     {\
         .driver   = "pci-bridge",\
@@ -149,10 +152,6 @@
     },{\
         .driver   = "fw_cfg_io",\
         .property = "dma_enabled",\
-        .value    = "off",\
-    },{\
-        .driver   = "vmgenid",\
-        .property = "x-write-pointer-available",\
         .value    = "off",\
     },
 

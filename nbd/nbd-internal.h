@@ -77,21 +77,22 @@
 #define NBD_ESHUTDOWN  108
 
 /* nbd_read_eof
- * Tries to read @size bytes from @ioc. Returns number of bytes actually read.
- * May return a value >= 0 and < size only on EOF, i.e. when iteratively called
- * qio_channel_readv() returns 0. So, there is no need to call nbd_read_eof
- * iteratively.
+ * Tries to read @size bytes from @ioc.
+ * Returns 1 on success
+ *         0 on eof, when no data was read (errp is not set)
+ *         negative errno on failure (errp is set)
  */
-static inline ssize_t nbd_read_eof(QIOChannel *ioc, void *buffer, size_t size,
-                                   Error **errp)
+static inline int nbd_read_eof(QIOChannel *ioc, void *buffer, size_t size,
+                               Error **errp)
 {
-    struct iovec iov = { .iov_base = buffer, .iov_len = size };
-    /* Sockets are kept in blocking mode in the negotiation phase.  After
-     * that, a non-readable socket simply means that another thread stole
-     * our request/reply.  Synchronization is done with recv_coroutine, so
-     * that this is coroutine-safe.
-     */
-    return nbd_rwv(ioc, &iov, 1, size, true, errp);
+    int ret;
+
+    assert(size);
+    ret = qio_channel_read_all_eof(ioc, buffer, size, errp);
+    if (ret < 0) {
+        ret = -EIO;
+    }
+    return ret;
 }
 
 /* nbd_read
@@ -100,14 +101,7 @@ static inline ssize_t nbd_read_eof(QIOChannel *ioc, void *buffer, size_t size,
 static inline int nbd_read(QIOChannel *ioc, void *buffer, size_t size,
                            Error **errp)
 {
-    ssize_t ret = nbd_read_eof(ioc, buffer, size, errp);
-
-    if (ret >= 0 && ret != size) {
-        ret = -EINVAL;
-        error_setg(errp, "End of file");
-    }
-
-    return ret < 0 ? ret : 0;
+    return qio_channel_read_all(ioc, buffer, size, errp) < 0 ? -EIO : 0;
 }
 
 /* nbd_write
@@ -116,13 +110,7 @@ static inline int nbd_read(QIOChannel *ioc, void *buffer, size_t size,
 static inline int nbd_write(QIOChannel *ioc, const void *buffer, size_t size,
                             Error **errp)
 {
-    struct iovec iov = { .iov_base = (void *) buffer, .iov_len = size };
-
-    ssize_t ret = nbd_rwv(ioc, &iov, 1, size, false, errp);
-
-    assert(ret < 0 || ret == size);
-
-    return ret < 0 ? ret : 0;
+    return qio_channel_write_all(ioc, buffer, size, errp) < 0 ? -EIO : 0;
 }
 
 struct NBDTLSHandshakeData {

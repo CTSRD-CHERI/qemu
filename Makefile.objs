@@ -11,7 +11,7 @@ chardev-obj-y = chardev/
 
 block-obj-y += nbd/
 block-obj-y += block.o blockjob.o
-block-obj-y += block/
+block-obj-y += block/ scsi/
 block-obj-y += qemu-io-cmds.o
 block-obj-$(CONFIG_REPLICATION) += replication.o
 
@@ -70,6 +70,8 @@ common-obj-y += backends/
 common-obj-y += chardev/
 
 common-obj-$(CONFIG_SECCOMP) += qemu-seccomp.o
+qemu-seccomp.o-cflags := $(SECCOMP_CFLAGS)
+qemu-seccomp.o-libs := $(SECCOMP_LIBS)
 
 common-obj-$(CONFIG_FDT) += device_tree.o
 
@@ -153,6 +155,7 @@ trace-events-subdirs += hw/acpi
 trace-events-subdirs += hw/arm
 trace-events-subdirs += hw/alpha
 trace-events-subdirs += hw/xen
+trace-events-subdirs += hw/ide
 trace-events-subdirs += ui
 trace-events-subdirs += audio
 trace-events-subdirs += net

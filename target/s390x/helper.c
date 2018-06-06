@@ -21,6 +21,7 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "cpu.h"
+#include "internal.h"
 #include "exec/gdbstub.h"
 #include "qemu/timer.h"
 #include "exec/exec-all.h"
@@ -67,53 +68,12 @@ void s390x_cpu_timer(void *opaque)
 }
 #endif
 
-S390CPU *cpu_s390x_create(const char *cpu_model, Error **errp)
+S390CPU *s390x_new_cpu(const char *typename, uint32_t core_id, Error **errp)
 {
-    static bool features_parsed;
-    char *name, *features;
-    const char *typename;
-    ObjectClass *oc;
-    CPUClass *cc;
-
-    name = g_strdup(cpu_model);
-    features = strchr(name, ',');
-    if (features) {
-        features[0] = 0;
-        features++;
-    }
-
-    oc = cpu_class_by_name(TYPE_S390_CPU, name);
-    if (!oc) {
-        error_setg(errp, "Unknown CPU definition \'%s\'", name);
-        g_free(name);
-        return NULL;
-    }
-    typename = object_class_get_name(oc);
-
-    if (!features_parsed) {
-        features_parsed = true;
-        cc = CPU_CLASS(oc);
-        cc->parse_features(typename, features, errp);
-    }
-    g_free(name);
-
-    if (*errp) {
-        return NULL;
-    }
-    return S390_CPU(CPU(object_new(typename)));
-}
-
-S390CPU *s390x_new_cpu(const char *cpu_model, int64_t id, Error **errp)
-{
-    S390CPU *cpu;
+    S390CPU *cpu = S390_CPU(object_new(typename));
     Error *err = NULL;
 
-    cpu = cpu_s390x_create(cpu_model, &err);
-    if (err != NULL) {
-        goto out;
-    }
-
-    object_property_set_int(OBJECT(cpu), id, "id", &err);
+    object_property_set_int(OBJECT(cpu), core_id, "core-id", &err);
     if (err != NULL) {
         goto out;
     }
@@ -124,20 +84,6 @@ out:
         error_propagate(errp, err);
         object_unref(OBJECT(cpu));
         cpu = NULL;
-    }
-    return cpu;
-}
-
-S390CPU *cpu_s390x_init(const char *cpu_model)
-{
-    Error *err = NULL;
-    S390CPU *cpu;
-    /* Use to track CPU ID for linux-user only */
-    static int64_t next_cpu_id;
-
-    cpu = s390x_new_cpu(cpu_model, next_cpu_id++, &err);
-    if (err) {
-        error_report_err(err);
     }
     return cpu;
 }
@@ -351,4 +297,52 @@ void s390_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
 #endif
 
     cpu_fprintf(f, "\n");
+}
+
+const char *cc_name(enum cc_op cc_op)
+{
+    static const char * const cc_names[] = {
+        [CC_OP_CONST0]    = "CC_OP_CONST0",
+        [CC_OP_CONST1]    = "CC_OP_CONST1",
+        [CC_OP_CONST2]    = "CC_OP_CONST2",
+        [CC_OP_CONST3]    = "CC_OP_CONST3",
+        [CC_OP_DYNAMIC]   = "CC_OP_DYNAMIC",
+        [CC_OP_STATIC]    = "CC_OP_STATIC",
+        [CC_OP_NZ]        = "CC_OP_NZ",
+        [CC_OP_LTGT_32]   = "CC_OP_LTGT_32",
+        [CC_OP_LTGT_64]   = "CC_OP_LTGT_64",
+        [CC_OP_LTUGTU_32] = "CC_OP_LTUGTU_32",
+        [CC_OP_LTUGTU_64] = "CC_OP_LTUGTU_64",
+        [CC_OP_LTGT0_32]  = "CC_OP_LTGT0_32",
+        [CC_OP_LTGT0_64]  = "CC_OP_LTGT0_64",
+        [CC_OP_ADD_64]    = "CC_OP_ADD_64",
+        [CC_OP_ADDU_64]   = "CC_OP_ADDU_64",
+        [CC_OP_ADDC_64]   = "CC_OP_ADDC_64",
+        [CC_OP_SUB_64]    = "CC_OP_SUB_64",
+        [CC_OP_SUBU_64]   = "CC_OP_SUBU_64",
+        [CC_OP_SUBB_64]   = "CC_OP_SUBB_64",
+        [CC_OP_ABS_64]    = "CC_OP_ABS_64",
+        [CC_OP_NABS_64]   = "CC_OP_NABS_64",
+        [CC_OP_ADD_32]    = "CC_OP_ADD_32",
+        [CC_OP_ADDU_32]   = "CC_OP_ADDU_32",
+        [CC_OP_ADDC_32]   = "CC_OP_ADDC_32",
+        [CC_OP_SUB_32]    = "CC_OP_SUB_32",
+        [CC_OP_SUBU_32]   = "CC_OP_SUBU_32",
+        [CC_OP_SUBB_32]   = "CC_OP_SUBB_32",
+        [CC_OP_ABS_32]    = "CC_OP_ABS_32",
+        [CC_OP_NABS_32]   = "CC_OP_NABS_32",
+        [CC_OP_COMP_32]   = "CC_OP_COMP_32",
+        [CC_OP_COMP_64]   = "CC_OP_COMP_64",
+        [CC_OP_TM_32]     = "CC_OP_TM_32",
+        [CC_OP_TM_64]     = "CC_OP_TM_64",
+        [CC_OP_NZ_F32]    = "CC_OP_NZ_F32",
+        [CC_OP_NZ_F64]    = "CC_OP_NZ_F64",
+        [CC_OP_NZ_F128]   = "CC_OP_NZ_F128",
+        [CC_OP_ICM]       = "CC_OP_ICM",
+        [CC_OP_SLA_32]    = "CC_OP_SLA_32",
+        [CC_OP_SLA_64]    = "CC_OP_SLA_64",
+        [CC_OP_FLOGR]     = "CC_OP_FLOGR",
+    };
+
+    return cc_names[cc_op];
 }

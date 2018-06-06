@@ -61,6 +61,16 @@ FIELD(V7M_CONTROL, NPRIV, 0, 1)
 FIELD(V7M_CONTROL, SPSEL, 1, 1)
 FIELD(V7M_CONTROL, FPCA, 2, 1)
 
+/* Bit definitions for v7M exception return payload */
+FIELD(V7M_EXCRET, ES, 0, 1)
+FIELD(V7M_EXCRET, RES0, 1, 1)
+FIELD(V7M_EXCRET, SPSEL, 2, 1)
+FIELD(V7M_EXCRET, MODE, 3, 1)
+FIELD(V7M_EXCRET, FTYPE, 4, 1)
+FIELD(V7M_EXCRET, DCRS, 5, 1)
+FIELD(V7M_EXCRET, S, 6, 1)
+FIELD(V7M_EXCRET, RES1, 7, 25) /* including the must-be-1 prefix */
+
 /*
  * For AArch64, map a given EL to an index in the banked_spsr array.
  * Note that this mapping and the AArch32 mapping defined in bank_number()
@@ -444,20 +454,33 @@ void arm_handle_psci_call(ARMCPU *cpu);
 #endif
 
 /**
+ * arm_clear_exclusive: clear the exclusive monitor
+ * @env: CPU env
+ * Clear the CPU's exclusive monitor, like the guest CLREX instruction.
+ */
+static inline void arm_clear_exclusive(CPUARMState *env)
+{
+    env->exclusive_addr = -1;
+}
+
+/**
  * ARMMMUFaultInfo: Information describing an ARM MMU Fault
  * @s2addr: Address that caused a fault at stage 2
  * @stage2: True if we faulted at stage 2
  * @s1ptw: True if we faulted at stage 2 while doing a stage 1 page-table walk
+ * @ea: True if we should set the EA (external abort type) bit in syndrome
  */
 typedef struct ARMMMUFaultInfo ARMMMUFaultInfo;
 struct ARMMMUFaultInfo {
     target_ulong s2addr;
     bool stage2;
     bool s1ptw;
+    bool ea;
 };
 
 /* Do a page table walk and add page to TLB if possible */
-bool arm_tlb_fill(CPUState *cpu, vaddr address, int rw, int mmu_idx,
+bool arm_tlb_fill(CPUState *cpu, vaddr address,
+                  MMUAccessType access_type, int mmu_idx,
                   uint32_t *fsr, ARMMMUFaultInfo *fi);
 
 /* Return true if the stage 1 translation regime is using LPAE format page
@@ -469,11 +492,47 @@ void arm_cpu_do_unaligned_access(CPUState *cs, vaddr vaddr,
                                  MMUAccessType access_type,
                                  int mmu_idx, uintptr_t retaddr);
 
+/* arm_cpu_do_transaction_failed: handle a memory system error response
+ * (eg "no device/memory present at address") by raising an external abort
+ * exception
+ */
+void arm_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr,
+                                   vaddr addr, unsigned size,
+                                   MMUAccessType access_type,
+                                   int mmu_idx, MemTxAttrs attrs,
+                                   MemTxResult response, uintptr_t retaddr);
+
 /* Call the EL change hook if one has been registered */
 static inline void arm_call_el_change_hook(ARMCPU *cpu)
 {
     if (cpu->el_change_hook) {
         cpu->el_change_hook(cpu, cpu->el_change_hook_opaque);
+    }
+}
+
+/* Return true if this address translation regime is secure */
+static inline bool regime_is_secure(CPUARMState *env, ARMMMUIdx mmu_idx)
+{
+    switch (mmu_idx) {
+    case ARMMMUIdx_S12NSE0:
+    case ARMMMUIdx_S12NSE1:
+    case ARMMMUIdx_S1NSE0:
+    case ARMMMUIdx_S1NSE1:
+    case ARMMMUIdx_S1E2:
+    case ARMMMUIdx_S2NS:
+    case ARMMMUIdx_MPriv:
+    case ARMMMUIdx_MNegPri:
+    case ARMMMUIdx_MUser:
+        return false;
+    case ARMMMUIdx_S1E3:
+    case ARMMMUIdx_S1SE0:
+    case ARMMMUIdx_S1SE1:
+    case ARMMMUIdx_MSPriv:
+    case ARMMMUIdx_MSNegPri:
+    case ARMMMUIdx_MSUser:
+        return true;
+    default:
+        g_assert_not_reached();
     }
 }
 

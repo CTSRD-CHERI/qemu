@@ -86,7 +86,6 @@ M: Richard Henderson <rth@twiddle.net>
 S: Maintained
 F: cpus.c
 F: exec.c
-F: softmmu_template.h
 F: accel/tcg/
 F: include/exec/cpu*.h
 F: include/exec/exec-all.h
@@ -250,6 +249,7 @@ S: Maintained
 F: target/i386/
 F: hw/i386/
 F: disas/i386.c
+T: git git://github.com/ehabkost/qemu.git x86-next
 
 Xtensa
 M: Max Filippov <jcmvbkbc@gmail.com>
@@ -790,6 +790,7 @@ M: Christian Borntraeger <borntraeger@de.ibm.com>
 M: Alexander Graf <agraf@suse.de>
 S: Supported
 F: hw/char/sclp*.[hc]
+F: hw/char/terminal3270.c
 F: hw/s390x/
 F: include/hw/s390x/
 F: pc-bios/s390-ccw/
@@ -858,6 +859,7 @@ S: Supported
 F: hw/core/machine.c
 F: hw/core/null-machine.c
 F: include/hw/boards.h
+T: git git://github.com/ehabkost/qemu.git machine-next
 
 Xtensa Machines
 ---------------
@@ -969,7 +971,9 @@ SCSI
 M: Paolo Bonzini <pbonzini@redhat.com>
 S: Supported
 F: include/hw/scsi/*
+F: include/scsi/*
 F: hw/scsi/*
+F: util/scsi*
 F: tests/virtio-scsi-test.c
 T: git git://github.com/bonzini/qemu.git scsi-next
 
@@ -999,6 +1003,7 @@ F: docs/usb2.txt
 F: docs/usb-storage.txt
 F: include/hw/usb.h
 F: include/hw/usb/
+F: default-configs/usb.mak
 
 USB (serial adapter)
 M: Gerd Hoffmann <kraxel@redhat.com>
@@ -1101,11 +1106,12 @@ F: hw/block/nvme*
 F: tests/nvme-test.c
 
 megasas
-M: Hannes Reinecke <hare@suse.de>
+M: Hannes Reinecke <hare@suse.com>
 L: qemu-block@nongnu.org
 S: Supported
 F: hw/scsi/megasas.c
 F: hw/scsi/mfi.h
+F: tests/megasas-test.c
 
 Network packet abstractions
 M: Dmitry Fleytman <dmitry@daynix.com>
@@ -1129,7 +1135,7 @@ F: tests/rocker/
 F: docs/specs/rocker.txt
 
 NVDIMM
-M: Xiao Guangrong <guangrong.xiao@linux.intel.com>
+M: Xiao Guangrong <xiaoguangrong.eric@gmail.com>
 S: Maintained
 F: hw/acpi/nvdimm.c
 F: hw/mem/nvdimm.c
@@ -1213,6 +1219,13 @@ F: migration/block*
 F: include/block/aio.h
 T: git git://github.com/stefanha/qemu.git block
 
+Block SCSI subsystem
+M: Paolo Bonzini <pbonzini@redhat.com>
+L: qemu-block@nongnu.org
+S: Supported
+F: include/scsi/*
+F: scsi/*
+
 Block Jobs
 M: Jeff Cody <jcody@redhat.com>
 L: qemu-block@nongnu.org
@@ -1231,6 +1244,7 @@ S: Supported
 F: blockdev.c
 F: block/qapi.c
 F: qapi/block*.json
+F: qapi/transaction.json
 T: git git://repo.or.cz/qemu/armbru.git block-next
 
 Dirty Bitmaps
@@ -1253,6 +1267,7 @@ M: Marc-André Lureau <marcandre.lureau@redhat.com>
 S: Maintained
 F: chardev/
 F: include/chardev/
+F: qapi/char.json
 
 Character Devices (Braille)
 M: Samuel Thibault <samuel.thibault@ens-lyon.org>
@@ -1319,12 +1334,14 @@ F: include/ui/spice-display.h
 F: ui/spice-*.c
 F: audio/spiceaudio.c
 F: hw/display/qxl*
+F: qapi/ui.json
 
 Graphics
 M: Gerd Hoffmann <kraxel@redhat.com>
 S: Odd Fixes
 F: ui/
 F: include/ui/
+F: qapi/ui.json
 
 Cocoa graphics
 M: Peter Maydell <peter.maydell@linaro.org>
@@ -1338,6 +1355,7 @@ F: cpus.c
 F: util/main-loop.c
 F: util/qemu-timer.c
 F: vl.c
+F: qapi/run-state.json
 
 Human Monitor (HMP)
 M: Dr. David Alan Gilbert <dgilbert@redhat.com>
@@ -1354,6 +1372,7 @@ S: Maintained
 F: net/
 F: include/net/
 T: git git://github.com/jasowang/qemu.git net
+F: qapi/net.json
 
 Netmap network backend
 M: Luigi Rizzo <rizzo@iet.unipi.it>
@@ -1368,7 +1387,7 @@ M: Eduardo Habkost <ehabkost@redhat.com>
 S: Maintained
 F: numa.c
 F: include/sysemu/numa.h
-T: git git://github.com/ehabkost/qemu.git numa
+T: git git://github.com/ehabkost/qemu.git machine-next
 
 Host Memory Backends
 M: Eduardo Habkost <ehabkost@redhat.com>
@@ -1376,6 +1395,7 @@ M: Igor Mammedov <imammedo@redhat.com>
 S: Maintained
 F: backends/hostmem*.c
 F: include/sysemu/hostmem.h
+T: git git://github.com/ehabkost/qemu.git machine-next
 
 Cryptodev Backends
 M: Gonglei <arei.gonglei@huawei.com>
@@ -1480,6 +1500,14 @@ F: scripts/tracetool/
 F: docs/tracing.txt
 T: git git://github.com/stefanha/qemu.git tracing
 
+TPM
+S: Orphan
+F: tpm.c
+F: hw/tpm/*
+F: include/hw/acpi/tpm.h
+F: include/sysemu/tpm*
+F: qapi/tpm.json
+
 Checkpatch
 S: Odd Fixes
 F: scripts/checkpatch.pl
@@ -1493,6 +1521,7 @@ F: migration/
 F: scripts/vmstate-static-checker.py
 F: tests/vmstate-static-checker-data/
 F: docs/migration.txt
+F: qapi/migration.json
 
 Seccomp
 M: Eduardo Otubo <otubo@redhat.com>
@@ -1535,6 +1564,7 @@ M: Paolo Bonzini <pbonzini@redhat.com>
 S: Maintained
 F: include/qemu/sockets.h
 F: util/qemu-sockets.c
+F: qapi/sockets.json
 
 Throttling infrastructure
 M: Alberto Garcia <berto@igalia.com>
@@ -1561,7 +1591,7 @@ F: include/migration/failover.h
 F: docs/COLO-FT.txt
 
 COLO Proxy
-M: Zhang Chen <zhangchen.fnst@cn.fujitsu.com>
+M: Zhang Chen <zhangckid@gmail.com>
 M: Li Zhijian <lizhijian@cn.fujitsu.com>
 S: Supported
 F: docs/colo-proxy.txt
@@ -1587,8 +1617,7 @@ Overall
 M: Riku Voipio <riku.voipio@iki.fi>
 S: Maintained
 F: thunk.c
-F: user-exec.c
-F: user-exec-stub.c
+F: accel/tcg/user-exec*.c
 
 BSD user
 S: Orphan
@@ -1630,12 +1659,6 @@ L: qemu-devel@nongnu.org
 S: Maintained
 F: tcg/i386/
 F: disas/i386.c
-
-IA64 target
-M: Aurelien Jarno <aurelien@aurel32.net>
-S: Maintained
-F: tcg/ia64/
-F: disas/ia64.c
 
 MIPS target
 M: Aurelien Jarno <aurelien@aurel32.net>

@@ -109,11 +109,7 @@ static void openrisc_sim_init(MachineState *machine)
     }
 
     for (n = 0; n < smp_cpus; n++) {
-        cpu = cpu_openrisc_init(cpu_model);
-        if (cpu == NULL) {
-            fprintf(stderr, "Unable to find CPU definition!\n");
-            exit(1);
-        }
+        cpu = OPENRISC_CPU(cpu_generic_init(TYPE_OPENRISC_CPU, cpu_model));
         qemu_register_reset(main_cpu_reset, cpu);
         main_cpu_reset(cpu);
     }

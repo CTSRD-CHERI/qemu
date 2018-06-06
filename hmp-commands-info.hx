@@ -115,9 +115,10 @@ ETEXI
 #if defined(TARGET_I386)
     {
         .name       = "lapic",
-        .args_type  = "",
-        .params     = "",
-        .help       = "show local apic state",
+        .args_type  = "apic-id:i?",
+        .params     = "[apic-id]",
+        .help       = "show local apic state (apic-id: local apic to read, default is which of current CPU)",
+
         .cmd        = hmp_info_local_apic,
     },
 #endif
@@ -847,6 +848,22 @@ ETEXI
         .params     = "",
         .help       = "Show Virtual Machine Generation ID",
         .cmd = hmp_info_vm_generation_id,
+    },
+
+STEXI
+@item info memory_size_summary
+@findex memory_size_summary
+Display the amount of initially allocated and present hotpluggable (if
+enabled) memory in bytes.
+ETEXI
+
+    {
+        .name       = "memory_size_summary",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the amount of initially allocated and "
+                      "present hotpluggable (if enabled) memory in bytes.",
+        .cmd        = hmp_info_memory_size_summary,
     },
 
 STEXI

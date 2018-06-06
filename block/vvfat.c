@@ -32,6 +32,7 @@
 #include "qapi/qmp/qbool.h"
 #include "qapi/qmp/qstring.h"
 #include "qemu/cutils.h"
+#include "qemu/error-report.h"
 
 #ifndef S_IWGRP
 #define S_IWGRP 0
@@ -449,7 +450,7 @@ static direntry_t *create_long_filename(BDRVVVFATState *s, const char *filename)
         return NULL;
     }
 
-    number_of_entries = (length * 2 + 25) / 26;
+    number_of_entries = DIV_ROUND_UP(length * 2, 26);
 
     for(i=0;i<number_of_entries;i++) {
         entry=array_get_next(&(s->directory));
@@ -1226,8 +1227,7 @@ static int vvfat_open(BlockDriverState *bs, QDict *options, int flags,
 
     switch (s->fat_type) {
     case 32:
-            fprintf(stderr, "Big fat greek warning: FAT32 has not been tested. "
-                "You are welcome to do so!\n");
+        warn_report("FAT32 has not been tested. You are welcome to do so!");
         break;
     case 16:
     case 12:
@@ -2554,7 +2554,7 @@ static int commit_one_file(BDRVVVFATState* s,
                 (size > offset && c >=2 && !fat_eof(s, c)));
 
         ret = vvfat_read(s->bs, cluster2sector(s, c),
-            (uint8_t*)cluster, (rest_size + 0x1ff) / 0x200);
+            (uint8_t*)cluster, DIV_ROUND_UP(rest_size, 0x200));
 
         if (ret < 0) {
             qemu_close(fd);
@@ -3028,7 +3028,8 @@ DLOG(checkpoint());
                         if (memcmp(direntries + k,
                                     array_get(&(s->directory), dir_index + k),
                                     sizeof(direntry_t))) {
-                            fprintf(stderr, "Warning: tried to write to write-protected file\n");
+                            warn_report("tried to write to write-protected "
+                                        "file");
                             return -1;
                         }
                     }

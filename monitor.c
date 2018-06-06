@@ -928,7 +928,7 @@ EventInfoList *qmp_query_events(Error **errp)
     QAPIEvent e;
 
     for (e = 0 ; e < QAPI_EVENT__MAX ; e++) {
-        const char *event_name = QAPIEvent_lookup[e];
+        const char *event_name = QAPIEvent_str(e);
         assert(event_name != NULL);
         info = g_malloc0(sizeof(*info));
         info->value = g_malloc0(sizeof(*info->value));
@@ -1354,7 +1354,7 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
 
     switch(format) {
     case 'o':
-        max_digits = (wsize * 8 + 2) / 3;
+        max_digits = DIV_ROUND_UP(wsize * 8, 3);
         break;
     default:
     case 'x':
@@ -1362,7 +1362,7 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
         break;
     case 'u':
     case 'd':
-        max_digits = (wsize * 8 * 10 + 32) / 33;
+        max_digits = DIV_ROUND_UP(wsize * 8 * 10, 33);
         break;
     case 'c':
         wsize = 1;
@@ -1715,11 +1715,12 @@ static void hmp_info_mtree(Monitor *mon, const QDict *qdict)
 static void hmp_info_numa(Monitor *mon, const QDict *qdict)
 {
     int i;
-    uint64_t *node_mem;
+    NumaNodeMem *node_mem;
     CpuInfoList *cpu_list, *cpu;
 
     cpu_list = qmp_query_cpus(&error_abort);
-    node_mem = g_new0(uint64_t, nb_numa_nodes);
+    node_mem = g_new0(NumaNodeMem, nb_numa_nodes);
+
     query_numa_node_mem(node_mem);
     monitor_printf(mon, "%d nodes\n", nb_numa_nodes);
     for (i = 0; i < nb_numa_nodes; i++) {
@@ -1732,7 +1733,9 @@ static void hmp_info_numa(Monitor *mon, const QDict *qdict)
         }
         monitor_printf(mon, "\n");
         monitor_printf(mon, "node %d size: %" PRId64 " MB\n", i,
-                       node_mem[i] >> 20);
+                       node_mem[i].node_mem >> 20);
+        monitor_printf(mon, "node %d plugged: %" PRId64 " MB\n", i,
+                       node_mem[i].node_plugged_mem >> 20);
     }
     qapi_free_CpuInfoList(cpu_list);
     g_free(node_mem);
@@ -3254,8 +3257,8 @@ void netdev_add_completion(ReadLineState *rs, int nb_args, const char *str)
     }
     len = strlen(str);
     readline_set_completion_index(rs, len);
-    for (i = 0; NetClientDriver_lookup[i]; i++) {
-        add_completion_option(rs, str, NetClientDriver_lookup[i]);
+    for (i = 0; i < NET_CLIENT_DRIVER__MAX; i++) {
+        add_completion_option(rs, str, NetClientDriver_str(i));
     }
 }
 
@@ -3439,8 +3442,8 @@ void sendkey_completion(ReadLineState *rs, int nb_args, const char *str)
     len = strlen(str);
     readline_set_completion_index(rs, len);
     for (i = 0; i < Q_KEY_CODE__MAX; i++) {
-        if (!strncmp(str, QKeyCode_lookup[i], len)) {
-            readline_add_completion(rs, QKeyCode_lookup[i]);
+        if (!strncmp(str, QKeyCode_str(i), len)) {
+            readline_add_completion(rs, QKeyCode_str(i));
         }
     }
 }
@@ -3542,8 +3545,8 @@ void watchdog_action_completion(ReadLineState *rs, int nb_args, const char *str)
         return;
     }
     readline_set_completion_index(rs, strlen(str));
-    for (i = 0; WatchdogExpirationAction_lookup[i]; i++) {
-        add_completion_option(rs, str, WatchdogExpirationAction_lookup[i]);
+    for (i = 0; i < WATCHDOG_EXPIRATION_ACTION__MAX; i++) {
+        add_completion_option(rs, str, WatchdogExpirationAction_str(i));
     }
 }
 
@@ -3557,7 +3560,7 @@ void migrate_set_capability_completion(ReadLineState *rs, int nb_args,
     if (nb_args == 2) {
         int i;
         for (i = 0; i < MIGRATION_CAPABILITY__MAX; i++) {
-            const char *name = MigrationCapability_lookup[i];
+            const char *name = MigrationCapability_str(i);
             if (!strncmp(str, name, len)) {
                 readline_add_completion(rs, name);
             }
@@ -3578,7 +3581,7 @@ void migrate_set_parameter_completion(ReadLineState *rs, int nb_args,
     if (nb_args == 2) {
         int i;
         for (i = 0; i < MIGRATION_PARAMETER__MAX; i++) {
-            const char *name = MigrationParameter_lookup[i];
+            const char *name = MigrationParameter_str(i);
             if (!strncmp(str, name, len)) {
                 readline_add_completion(rs, name);
             }
@@ -3857,7 +3860,7 @@ static void handle_qmp_command(JSONMessageParser *parser, GQueue *tokens)
         qdict = qdict_get_qdict(qobject_to_qdict(rsp), "error");
         if (qdict
             && !g_strcmp0(qdict_get_try_str(qdict, "class"),
-                    QapiErrorClass_lookup[ERROR_CLASS_COMMAND_NOT_FOUND])) {
+                    QapiErrorClass_str(ERROR_CLASS_COMMAND_NOT_FOUND))) {
             /* Provide a more useful error message */
             qdict_del(qdict, "desc");
             qdict_put_str(qdict, "desc", "Expecting capabilities negotiation"

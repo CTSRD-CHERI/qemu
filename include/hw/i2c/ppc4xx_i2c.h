@@ -1,5 +1,7 @@
 /*
- * TCG Backend Data: No backend data
+ * PPC4xx I2C controller emulation
+ *
+ * Copyright (c) 2007 Jocelyn Mayer
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,25 +22,40 @@
  * THE SOFTWARE.
  */
 
-typedef struct TCGBackendData {
-    /* Empty */
-    char dummy;
-} TCGBackendData;
+#ifndef PPC4XX_I2C_H
+#define PPC4XX_I2C_H
 
+#include "qemu/osdep.h"
+#include "qemu-common.h"
+#include "hw/sysbus.h"
+#include "hw/i2c/i2c.h"
 
-/*
- * Initialize TB backend data at the beginning of the TB.
- */
+#define TYPE_PPC4xx_I2C "ppc4xx-i2c"
+#define PPC4xx_I2C(obj) OBJECT_CHECK(PPC4xxI2CState, (obj), TYPE_PPC4xx_I2C)
 
-static inline void tcg_out_tb_init(TCGContext *s)
-{
-}
+typedef struct PPC4xxI2CState {
+    /*< private >*/
+    SysBusDevice parent_obj;
 
-/*
- * Generate TB finalization at the end of block
- */
+    /*< public >*/
+    I2CBus *bus;
+    qemu_irq irq;
+    MemoryRegion iomem;
+    uint8_t mdata;
+    uint8_t lmadr;
+    uint8_t hmadr;
+    uint8_t cntl;
+    uint8_t mdcntl;
+    uint8_t sts;
+    uint8_t extsts;
+    uint8_t sdata;
+    uint8_t lsadr;
+    uint8_t hsadr;
+    uint8_t clkdiv;
+    uint8_t intrmsk;
+    uint8_t xfrcnt;
+    uint8_t xtcntlss;
+    uint8_t directcntl;
+} PPC4xxI2CState;
 
-static inline bool tcg_out_tb_finalize(TCGContext *s)
-{
-    return true;
-}
+#endif /* PPC4XX_I2C_H */

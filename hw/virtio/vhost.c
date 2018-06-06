@@ -70,7 +70,7 @@ static void vhost_dev_sync_region(struct vhost_dev *dev,
     uint64_t end = MIN(mlast, rlast);
     vhost_log_chunk_t *from = log + start / VHOST_LOG_CHUNK;
     vhost_log_chunk_t *to = log + end / VHOST_LOG_CHUNK + 1;
-    uint64_t addr = (start / VHOST_LOG_CHUNK) * VHOST_LOG_CHUNK;
+    uint64_t addr = QEMU_ALIGN_DOWN(start, VHOST_LOG_CHUNK);
 
     if (end < start) {
         return;
@@ -1356,6 +1356,10 @@ void vhost_dev_cleanup(struct vhost_dev *hdev)
     if (hdev->mem) {
         /* those are only safe after successful init */
         memory_listener_unregister(&hdev->memory_listener);
+        for (i = 0; i < hdev->n_mem_sections; ++i) {
+            MemoryRegionSection *section = &hdev->mem_sections[i];
+            memory_region_unref(section->mr);
+        }
         QLIST_REMOVE(hdev, entry);
     }
     if (hdev->migration_blocker) {

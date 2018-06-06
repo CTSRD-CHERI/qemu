@@ -54,7 +54,7 @@ static const char *aspeed_soc_ast2500_typenames[] = {
 static const AspeedSoCInfo aspeed_socs[] = {
     {
         .name         = "ast2400-a0",
-        .cpu_model    = "arm926",
+        .cpu_type     = ARM_CPU_TYPE_NAME("arm926"),
         .silicon_rev  = AST2400_A0_SILICON_REV,
         .sdram_base   = AST2400_SDRAM_BASE,
         .sram_size    = 0x8000,
@@ -65,7 +65,7 @@ static const AspeedSoCInfo aspeed_socs[] = {
         .wdts_num     = 2,
     }, {
         .name         = "ast2400-a1",
-        .cpu_model    = "arm926",
+        .cpu_type     = ARM_CPU_TYPE_NAME("arm926"),
         .silicon_rev  = AST2400_A1_SILICON_REV,
         .sdram_base   = AST2400_SDRAM_BASE,
         .sram_size    = 0x8000,
@@ -76,7 +76,7 @@ static const AspeedSoCInfo aspeed_socs[] = {
         .wdts_num     = 2,
     }, {
         .name         = "ast2400",
-        .cpu_model    = "arm926",
+        .cpu_type     = ARM_CPU_TYPE_NAME("arm926"),
         .silicon_rev  = AST2400_A0_SILICON_REV,
         .sdram_base   = AST2400_SDRAM_BASE,
         .sram_size    = 0x8000,
@@ -87,7 +87,7 @@ static const AspeedSoCInfo aspeed_socs[] = {
         .wdts_num     = 2,
     }, {
         .name         = "ast2500-a1",
-        .cpu_model    = "arm1176",
+        .cpu_type     = ARM_CPU_TYPE_NAME("arm1176"),
         .silicon_rev  = AST2500_A1_SILICON_REV,
         .sdram_base   = AST2500_SDRAM_BASE,
         .sram_size    = 0x9000,
@@ -128,13 +128,10 @@ static void aspeed_soc_init(Object *obj)
 {
     AspeedSoCState *s = ASPEED_SOC(obj);
     AspeedSoCClass *sc = ASPEED_SOC_GET_CLASS(s);
-    char *cpu_typename;
     int i;
 
-    cpu_typename = g_strdup_printf("%s-" TYPE_ARM_CPU, sc->info->cpu_model);
-    object_initialize(&s->cpu, sizeof(s->cpu), cpu_typename);
+    object_initialize(&s->cpu, sizeof(s->cpu), sc->info->cpu_type);
     object_property_add_child(obj, "cpu", OBJECT(&s->cpu), NULL);
-    g_free(cpu_typename);
 
     object_initialize(&s->vic, sizeof(s->vic), TYPE_ASPEED_VIC);
     object_property_add_child(obj, "vic", OBJECT(&s->vic), NULL);
@@ -183,6 +180,8 @@ static void aspeed_soc_init(Object *obj)
         object_initialize(&s->wdt[i], sizeof(s->wdt[i]), TYPE_ASPEED_WDT);
         object_property_add_child(obj, "wdt[*]", OBJECT(&s->wdt[i]), NULL);
         qdev_set_parent_bus(DEVICE(&s->wdt[i]), sysbus_get_default());
+        qdev_prop_set_uint32(DEVICE(&s->wdt[i]), "silicon-rev",
+                                    sc->info->silicon_rev);
     }
 
     object_initialize(&s->ftgmac100, sizeof(s->ftgmac100), TYPE_FTGMAC100);
@@ -338,6 +337,8 @@ static void aspeed_soc_class_init(ObjectClass *oc, void *data)
 
     sc->info = (AspeedSoCInfo *) data;
     dc->realize = aspeed_soc_realize;
+    /* Reason: Uses serial_hds and nd_table in realize() directly */
+    dc->user_creatable = false;
 }
 
 static const TypeInfo aspeed_soc_type_info = {

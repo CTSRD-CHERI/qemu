@@ -520,11 +520,8 @@ static void ppc_prep_init(MachineState *machine)
     if (machine->cpu_model == NULL)
         machine->cpu_model = "602";
     for (i = 0; i < smp_cpus; i++) {
-        cpu = cpu_ppc_init(machine->cpu_model);
-        if (cpu == NULL) {
-            fprintf(stderr, "Unable to find PowerPC CPU definition\n");
-            exit(1);
-        }
+        cpu = POWERPC_CPU(cpu_generic_init(TYPE_POWERPC_CPU,
+                                           machine->cpu_model));
         env = &cpu->env;
 
         if (env->flags & POWERPC_FLAG_RTC_CLK) {
@@ -724,12 +721,7 @@ static void ibm_40p_init(MachineState *machine)
     if (!machine->cpu_model) {
         machine->cpu_model = "604";
     }
-    cpu = cpu_ppc_init(machine->cpu_model);
-    if (!cpu) {
-        error_report("could not initialize CPU '%s'",
-                     machine->cpu_model);
-        exit(1);
-    }
+    cpu = POWERPC_CPU(cpu_generic_init(TYPE_POWERPC_CPU, machine->cpu_model));
     env = &cpu->env;
     if (PPC_INPUT(env) != PPC_FLAGS_INPUT_6xx) {
         error_report("only 6xx bus is supported on this machine");

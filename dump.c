@@ -15,7 +15,6 @@
 #include "qemu/cutils.h"
 #include "elf.h"
 #include "cpu.h"
-#include "exec/cpu-all.h"
 #include "exec/hwaddr.h"
 #include "monitor/monitor.h"
 #include "sysemu/kvm.h"
@@ -1536,6 +1535,12 @@ static void dump_init(DumpState *s, int fd, bool has_format,
     fprintf(stderr, "DUMP: total memory to dump: %lu\n", s->total_size);
 #endif
 
+    /* it does not make sense to dump non-existent memory */
+    if (!s->total_size) {
+        error_setg(errp, "dump: no guest memory to dump");
+        goto cleanup;
+    }
+
     s->start = get_start_block(s);
     if (s->start == -1) {
         error_setg(errp, QERR_INVALID_PARAMETER, "begin");
@@ -1695,10 +1700,8 @@ static void dump_process(DumpState *s, Error **errp)
 
 static void *dump_thread(void *data)
 {
-    Error *err = NULL;
     DumpState *s = (DumpState *)data;
-    dump_process(s, &err);
-    error_free(err);
+    dump_process(s, NULL);
     return NULL;
 }
 

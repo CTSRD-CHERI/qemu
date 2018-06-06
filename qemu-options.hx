@@ -4052,13 +4052,35 @@ Old param mode (ARM only).
 ETEXI
 
 DEF("sandbox", HAS_ARG, QEMU_OPTION_sandbox, \
-    "-sandbox <arg>  Enable seccomp mode 2 system call filter (default 'off').\n",
+    "-sandbox on[,obsolete=allow|deny][,elevateprivileges=allow|deny|children]\n" \
+    "          [,spawn=allow|deny][,resourcecontrol=allow|deny]\n" \
+    "                Enable seccomp mode 2 system call filter (default 'off').\n" \
+    "                use 'obsolete' to allow obsolete system calls that are provided\n" \
+    "                    by the kernel, but typically no longer used by modern\n" \
+    "                    C library implementations.\n" \
+    "                use 'elevateprivileges' to allow or deny QEMU process to elevate\n" \
+    "                    its privileges by blacklisting all set*uid|gid system calls.\n" \
+    "                    The value 'children' will deny set*uid|gid system calls for\n" \
+    "                    main QEMU process but will allow forks and execves to run unprivileged\n" \
+    "                use 'spawn' to avoid QEMU to spawn new threads or processes by\n" \
+    "                     blacklisting *fork and execve\n" \
+    "                use 'resourcecontrol' to disable process affinity and schedular priority\n",
     QEMU_ARCH_ALL)
 STEXI
-@item -sandbox @var{arg}
+@item -sandbox @var{arg}[,obsolete=@var{string}][,elevateprivileges=@var{string}][,spawn=@var{string}][,resourcecontrol=@var{string}]
 @findex -sandbox
 Enable Seccomp mode 2 system call filter. 'on' will enable syscall filtering and 'off' will
 disable it.  The default is 'off'.
+@table @option
+@item obsolete=@var{string}
+Enable Obsolete system calls
+@item elevateprivileges=@var{string}
+Disable set*uid|gid system calls
+@item spawn=@var{string}
+Disable *fork and execve
+@item resourcecontrol=@var{string}
+Disable process affinity and schedular priority
+@end table
 ETEXI
 
 DEF("readconfig", HAS_ARG, QEMU_OPTION_readconfig,
@@ -4195,7 +4217,7 @@ property must be set.  These objects are placed in the
 
 @table @option
 
-@item -object memory-backend-file,id=@var{id},size=@var{size},mem-path=@var{dir},share=@var{on|off}
+@item -object memory-backend-file,id=@var{id},size=@var{size},mem-path=@var{dir},share=@var{on|off},discard-data=@var{on|off}
 
 Creates a memory file backend object, which can be used to back
 the guest RAM with huge pages. The @option{id} parameter is a
@@ -4207,6 +4229,12 @@ the path to either a shared memory or huge page filesystem mount.
 The @option{share} boolean option determines whether the memory
 region is marked as private to QEMU, or shared. The latter allows
 a co-operating external process to access the QEMU memory region.
+Setting the @option{discard-data} boolean option to @var{on}
+indicates that file contents can be destroyed when QEMU exits,
+to avoid unnecessarily flushing data to the backing file.  Note
+that @option{discard-data} is only an optimization, and QEMU
+might not discard file contents if it aborts unexpectedly or is
+terminated using SIGKILL.
 
 @item -object rng-random,id=@var{id},filename=@var{/dev/random}
 

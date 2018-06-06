@@ -56,11 +56,7 @@ static void shix_init(MachineState *machine)
     if (!cpu_model)
         cpu_model = "any";
 
-    cpu = cpu_sh4_init(cpu_model);
-    if (cpu == NULL) {
-        fprintf(stderr, "Unable to find CPU definition\n");
-        exit(1);
-    }
+    cpu = SUPERH_CPU(cpu_generic_init(TYPE_SUPERH_CPU, cpu_model));
 
     /* Allocate memory space */
     memory_region_init_ram(rom, NULL, "shix.rom", 0x4000, &error_fatal);

@@ -194,10 +194,6 @@ void mips_r4k_init(MachineState *machine)
 #endif
     }
     cpu = cpu_mips_init(cpu_model);
-    if (cpu == NULL) {
-        fprintf(stderr, "Unable to find CPU definition\n");
-        exit(1);
-    }
     env = &cpu->env;
 
     reset_info = g_malloc0(sizeof(ResetData));
@@ -253,9 +249,8 @@ void mips_r4k_init(MachineState *machine)
             fprintf(stderr, "qemu: Error registering flash memory.\n");
 	}
     } else if (!qtest_enabled()) {
-	/* not fatal */
-        fprintf(stderr, "qemu: Warning, could not load MIPS bios '%s'\n",
-		bios_name);
+        /* not fatal */
+        warn_report("could not load MIPS bios '%s'", bios_name);
     }
     g_free(filename);
 
