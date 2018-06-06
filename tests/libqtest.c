@@ -103,8 +103,15 @@ static int socket_accept(int sock)
 static void kill_qemu(QTestState *s)
 {
     if (s->qemu_pid != -1) {
+        int wstatus = 0;
+        pid_t pid;
+
         kill(s->qemu_pid, SIGTERM);
-        waitpid(s->qemu_pid, NULL, 0);
+        pid = waitpid(s->qemu_pid, &wstatus, 0);
+
+        if (pid == s->qemu_pid && WIFSIGNALED(wstatus)) {
+            assert(!WCOREDUMP(wstatus));
+        }
     }
 }
 
@@ -1097,4 +1104,11 @@ void qtest_qmp_device_del(const char *id)
 
     qobject_unref(response1);
     qobject_unref(response2);
+}
+
+bool qmp_rsp_is_err(QDict *rsp)
+{
+    QDict *error = qdict_get_qdict(rsp, "error");
+    qobject_unref(rsp);
+    return !!error;
 }

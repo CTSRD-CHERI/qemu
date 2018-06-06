@@ -37,7 +37,8 @@
 #
 ##
 { 'command': 'qmp_capabilities',
-  'data': { '*enable': [ 'QMPCapability' ] } }
+  'data': { '*enable': [ 'QMPCapability' ] },
+  'allow-preconfig': true }
 
 ##
 # @QMPCapability:
@@ -155,7 +156,8 @@
 # Note: This example has been shortened as the real response is too long.
 #
 ##
-{ 'command': 'query-commands', 'returns': ['CommandInfo'] }
+{ 'command': 'query-commands', 'returns': ['CommandInfo'],
+  'allow-preconfig': true }
 
 ##
 # @LostTickPolicy:
@@ -558,11 +560,11 @@
 # @props: properties describing to which node/socket/core/thread
 #         virtual CPU belongs to, provided if supported by board
 #
-# @arch: base architecture of the cpu; deprecated since 2.13.0 in favor
+# @arch: base architecture of the cpu; deprecated since 3.0.0 in favor
 #        of @target
 #
 # @target: the QEMU system emulation target, which determines which
-#          additional fields will be listed (since 2.13)
+#          additional fields will be listed (since 3.0)
 #
 # Since: 2.12
 #
@@ -1243,6 +1245,29 @@
 { 'command': 'cont' }
 
 ##
+# @exit-preconfig:
+#
+# Exit from "preconfig" state
+#
+# This command makes QEMU exit the preconfig state and proceed with
+# VM initialization using configuration data provided on the command line
+# and via the QMP monitor during the preconfig state. The command is only
+# available during the preconfig state (i.e. when the --preconfig command
+# line option was in use).
+#
+# Since 3.0
+#
+# Returns: nothing
+#
+# Example:
+#
+# -> { "execute": "exit-preconfig" }
+# <- { "return": {} }
+#
+##
+{ 'command': 'exit-preconfig', 'allow-preconfig': true }
+
+##
 # @system_wakeup:
 #
 # Wakeup guest from suspend.  Does nothing in case the guest isn't suspended.
@@ -1529,6 +1554,10 @@
 #
 # Returns: a list of ObjectPropertyInfo describing a devices properties
 #
+# Note: objects can create properties at runtime, for example to describe
+# links between different devices and/or objects. These properties
+# are not included in the output of this command.
+#
 # Since: 1.2
 ##
 { 'command': 'device-list-properties',
@@ -1541,6 +1570,10 @@
 # List properties associated with a QOM object.
 #
 # @typename: the type name of an object
+#
+# Note: objects can create properties at runtime, for example to describe
+# links between different devices and/or objects. These properties
+# are not included in the output of this command.
 #
 # Returns: a list of ObjectPropertyInfo describing object properties
 #
@@ -2648,7 +2681,8 @@
 #
 ##
 {'command': 'query-command-line-options', 'data': { '*option': 'str' },
- 'returns': ['CommandLineOptionInfo'] }
+ 'returns': ['CommandLineOptionInfo'],
+ 'allow-preconfig': true }
 
 ##
 # @X86CPURegister32:
@@ -3259,7 +3293,8 @@
 #    ]}
 #
 ##
-{ 'command': 'query-hotpluggable-cpus', 'returns': ['HotpluggableCPU'] }
+{ 'command': 'query-hotpluggable-cpus', 'returns': ['HotpluggableCPU'],
+             'allow-preconfig': true }
 
 ##
 # @GuidInfo:
@@ -3483,3 +3518,17 @@
 ##
 { 'command': 'x-oob-test', 'data' : { 'lock': 'bool' },
   'allow-oob': true }
+
+##
+# @set-numa-node:
+#
+# Runtime equivalent of '-numa' CLI option, available at
+# preconfigure stage to configure numa mapping before initializing
+# machine.
+#
+# Since 3.0
+##
+{ 'command': 'set-numa-node', 'boxed': true,
+  'data': 'NumaOptions',
+  'allow-preconfig': true
+}

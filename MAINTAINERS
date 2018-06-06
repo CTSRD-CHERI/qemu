@@ -447,6 +447,8 @@ F: hw/timer/cmsdk-apb-timer.c
 F: include/hw/timer/cmsdk-apb-timer.h
 F: hw/char/cmsdk-apb-uart.c
 F: include/hw/char/cmsdk-apb-uart.h
+F: hw/misc/tz-ppc.c
+F: include/hw/misc/tz-ppc.h
 
 ARM cores
 M: Peter Maydell <peter.maydell@linaro.org>
@@ -515,8 +517,11 @@ M: Peter Maydell <peter.maydell@linaro.org>
 L: qemu-arm@nongnu.org
 S: Maintained
 F: hw/arm/mps2.c
-F: hw/misc/mps2-scc.c
-F: include/hw/misc/mps2-scc.h
+F: hw/arm/mps2-tz.c
+F: hw/misc/mps2-*.c
+F: include/hw/misc/mps2-*.h
+F: hw/arm/iotkit.c
+F: include/hw/arm/iotkit.h
 
 Musicpal
 M: Jan Kiszka <jan.kiszka@web.de>
@@ -1314,6 +1319,27 @@ S: Maintained
 F: include/hw/misc/unimp.h
 F: hw/misc/unimp.c
 
+Standard VGA
+M: Gerd Hoffmann <kraxel@redhat.com>
+S: Maintained
+F: hw/display/vga*
+F: hw/display/bochs-display.c
+F: include/hw/display/vga.h
+F: include/hw/display/bochs-vbe.h
+
+virtio-gpu
+M: Gerd Hoffmann <kraxel@redhat.com>
+S: Maintained
+F: hw/display/virtio-gpu*
+F: hw/display/virtio-vga.c
+F: include/hw/virtio/virtio-gpu.h
+
+Cirrus VGA
+M: Gerd Hoffmann <kraxel@redhat.com>
+S: Odd Fixes
+W: https://www.kraxel.org/blog/2014/10/qemu-using-cirrus-considered-harmful/
+F: hw/display/cirrus*
+
 Subsystems
 ----------
 Audio
@@ -1369,10 +1395,14 @@ L: qemu-block@nongnu.org
 S: Supported
 F: blockjob.c
 F: include/block/blockjob.h
+F: job.c
+F: job-qmp.c
+F: include/block/job.h
 F: block/backup.c
 F: block/commit.c
 F: block/stream.c
 F: block/mirror.c
+F: qapi/job.json
 T: git git://github.com/codyprime/qemu-kvm-jtc.git block
 
 Block QAPI, monitor, command line
@@ -1782,6 +1812,12 @@ F: net/filter-replay.c
 F: include/sysemu/replay.h
 F: docs/replay.txt
 F: stubs/replay.c
+
+IOVA Tree
+M: Peter Xu <peterx@redhat.com>
+S: Maintained
+F: include/qemu/iova-tree.h
+F: util/iova-tree.c
 
 Usermode Emulation
 ------------------

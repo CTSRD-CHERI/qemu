@@ -6733,7 +6733,7 @@ static inline void gen_goto_tb(DisasContext *ctx, int n, target_ulong dest)
     if (use_goto_tb(ctx, dest)) {
         tcg_gen_goto_tb(n);
         gen_save_pc(dest);
-        tcg_gen_exit_tb((uintptr_t)ctx->base.tb + n);
+        tcg_gen_exit_tb(ctx->base.tb, n);
     } else {
         gen_save_pc(dest);
         if (ctx->base.singlestep_enabled) {
@@ -14349,7 +14349,7 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
                 save_cpu_state(ctx, 0);
                 gen_helper_0e0i(raise_exception, EXCP_DEBUG);
             }
-            tcg_gen_exit_tb(0);
+            tcg_gen_exit_tb(NULL, 0);
             break;
 #endif /* TARGET_CHERI */
         default:
@@ -23926,7 +23926,7 @@ static void mips_tr_tb_stop(DisasContextBase *dcbase, CPUState *cs)
             gen_goto_tb(ctx, 0, ctx->base.pc_next);
             break;
         case DISAS_EXIT:
-            tcg_gen_exit_tb(0);
+            tcg_gen_exit_tb(NULL, 0);
             break;
         case DISAS_NORETURN:
             break;
@@ -24028,8 +24028,9 @@ void mips_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
                 env->CP0_Config2, env->CP0_Config3);
     cpu_fprintf(f, "    Config4 0x%08x Config5 0x%08x\n",
                 env->CP0_Config4, env->CP0_Config5);
-    if (env->hflags & MIPS_HFLAG_FPU)
+    if ((flags & CPU_DUMP_FPU) && (env->hflags & MIPS_HFLAG_FPU)) {
         fpu_dump_state(env, f, cpu_fprintf, flags);
+    }
 }
 
 void mips_tcg_init(void)

@@ -19,7 +19,6 @@
 #include "cpu.h"
 #include "exec/memory.h"
 #include "exec/address-spaces.h"
-#include "exec/ioport.h"
 #include "qapi/visitor.h"
 #include "qemu/bitops.h"
 #include "qemu/error-report.h"
@@ -173,38 +172,38 @@ struct MemoryRegionIoeventfd {
     EventNotifier *e;
 };
 
-static bool memory_region_ioeventfd_before(MemoryRegionIoeventfd a,
-                                           MemoryRegionIoeventfd b)
+static bool memory_region_ioeventfd_before(MemoryRegionIoeventfd *a,
+                                           MemoryRegionIoeventfd *b)
 {
-    if (int128_lt(a.addr.start, b.addr.start)) {
+    if (int128_lt(a->addr.start, b->addr.start)) {
         return true;
-    } else if (int128_gt(a.addr.start, b.addr.start)) {
+    } else if (int128_gt(a->addr.start, b->addr.start)) {
         return false;
-    } else if (int128_lt(a.addr.size, b.addr.size)) {
+    } else if (int128_lt(a->addr.size, b->addr.size)) {
         return true;
-    } else if (int128_gt(a.addr.size, b.addr.size)) {
+    } else if (int128_gt(a->addr.size, b->addr.size)) {
         return false;
-    } else if (a.match_data < b.match_data) {
+    } else if (a->match_data < b->match_data) {
         return true;
-    } else  if (a.match_data > b.match_data) {
+    } else  if (a->match_data > b->match_data) {
         return false;
-    } else if (a.match_data) {
-        if (a.data < b.data) {
+    } else if (a->match_data) {
+        if (a->data < b->data) {
             return true;
-        } else if (a.data > b.data) {
+        } else if (a->data > b->data) {
             return false;
         }
     }
-    if (a.e < b.e) {
+    if (a->e < b->e) {
         return true;
-    } else if (a.e > b.e) {
+    } else if (a->e > b->e) {
         return false;
     }
     return false;
 }
 
-static bool memory_region_ioeventfd_equal(MemoryRegionIoeventfd a,
-                                          MemoryRegionIoeventfd b)
+static bool memory_region_ioeventfd_equal(MemoryRegionIoeventfd *a,
+                                          MemoryRegionIoeventfd *b)
 {
     return !memory_region_ioeventfd_before(a, b)
         && !memory_region_ioeventfd_before(b, a);
@@ -219,8 +218,6 @@ struct FlatRange {
     bool romd_mode;
     bool readonly;
 };
-
-typedef struct AddressSpaceOps AddressSpaceOps;
 
 #define FOR_EACH_FLAT_RANGE(var, view)          \
     for (var = (view)->ranges; var < (view)->ranges + (view)->nr; ++var)
@@ -791,8 +788,8 @@ static void address_space_add_del_ioeventfds(AddressSpace *as,
     while (iold < fds_old_nb || inew < fds_new_nb) {
         if (iold < fds_old_nb
             && (inew == fds_new_nb
-                || memory_region_ioeventfd_before(fds_old[iold],
-                                                  fds_new[inew]))) {
+                || memory_region_ioeventfd_before(&fds_old[iold],
+                                                  &fds_new[inew]))) {
             fd = &fds_old[iold];
             section = (MemoryRegionSection) {
                 .fv = address_space_to_flatview(as),
@@ -804,8 +801,8 @@ static void address_space_add_del_ioeventfds(AddressSpace *as,
             ++iold;
         } else if (inew < fds_new_nb
                    && (iold == fds_old_nb
-                       || memory_region_ioeventfd_before(fds_new[inew],
-                                                         fds_old[iold]))) {
+                       || memory_region_ioeventfd_before(&fds_new[inew],
+                                                         &fds_old[iold]))) {
             fd = &fds_new[inew];
             section = (MemoryRegionSection) {
                 .fv = address_space_to_flatview(as),
@@ -1269,7 +1266,8 @@ static void unassigned_mem_write(void *opaque, hwaddr addr,
 }
 
 static bool unassigned_mem_accepts(void *opaque, hwaddr addr,
-                                   unsigned size, bool is_write)
+                                   unsigned size, bool is_write,
+                                   MemTxAttrs attrs)
 {
     return false;
 }
@@ -1347,7 +1345,8 @@ static const MemoryRegionOps ram_device_mem_ops = {
 bool memory_region_access_valid(MemoryRegion *mr,
                                 hwaddr addr,
                                 unsigned size,
-                                bool is_write)
+                                bool is_write,
+                                MemTxAttrs attrs)
 {
     int access_size_min, access_size_max;
     int access_size, i;
@@ -1373,7 +1372,7 @@ bool memory_region_access_valid(MemoryRegion *mr,
     access_size = MAX(MIN(size, access_size_max), access_size_min);
     for (i = 0; i < size; i += access_size) {
         if (!mr->ops->valid.accepts(mr->opaque, addr + i, access_size,
-                                    is_write)) {
+                                    is_write, attrs)) {
             return false;
         }
     }
@@ -1416,7 +1415,7 @@ MemTxResult memory_region_dispatch_read(MemoryRegion *mr,
 {
     MemTxResult r;
 
-    if (!memory_region_access_valid(mr, addr, size, false)) {
+    if (!memory_region_access_valid(mr, addr, size, false, attrs)) {
         *pval = unassigned_mem_read(mr, addr, size);
         return MEMTX_DECODE_ERROR;
     }
@@ -1443,7 +1442,7 @@ static bool memory_region_dispatch_write_eventfds(MemoryRegion *mr,
         ioeventfd.match_data = mr->ioeventfds[i].match_data;
         ioeventfd.e = mr->ioeventfds[i].e;
 
-        if (memory_region_ioeventfd_equal(ioeventfd, mr->ioeventfds[i])) {
+        if (memory_region_ioeventfd_equal(&ioeventfd, &mr->ioeventfds[i])) {
             event_notifier_set(ioeventfd.e);
             return true;
         }
@@ -1458,7 +1457,7 @@ MemTxResult memory_region_dispatch_write(MemoryRegion *mr,
                                          unsigned size,
                                          MemTxAttrs attrs)
 {
-    if (!memory_region_access_valid(mr, addr, size, true)) {
+    if (!memory_region_access_valid(mr, addr, size, true, attrs)) {
         unassigned_mem_write(mr, addr, data, size);
         return MEMTX_DECODE_ERROR;
     }
@@ -2213,7 +2212,7 @@ void memory_region_add_eventfd(MemoryRegion *mr,
     }
     memory_region_transaction_begin();
     for (i = 0; i < mr->ioeventfd_nb; ++i) {
-        if (memory_region_ioeventfd_before(mrfd, mr->ioeventfds[i])) {
+        if (memory_region_ioeventfd_before(&mrfd, &mr->ioeventfds[i])) {
             break;
         }
     }
@@ -2248,7 +2247,7 @@ void memory_region_del_eventfd(MemoryRegion *mr,
     }
     memory_region_transaction_begin();
     for (i = 0; i < mr->ioeventfd_nb; ++i) {
-        if (memory_region_ioeventfd_equal(mrfd, mr->ioeventfds[i])) {
+        if (memory_region_ioeventfd_equal(&mrfd, &mr->ioeventfds[i])) {
             break;
         }
     }

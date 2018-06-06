@@ -1106,10 +1106,10 @@ static inline void gen_goto_tb(DisasContext *s, int n, uint32_t dest)
     if (use_goto_tb(s, dest)) {
         tcg_gen_goto_tb(n);
         gen_set_pc_im(dest);
-        tcg_gen_exit_tb((uintptr_t)s->tb + n);
+        tcg_gen_exit_tb(s->tb, n);
     } else {
         gen_set_pc_im(dest);
-        tcg_gen_exit_tb(0);
+        tcg_gen_exit_tb(NULL, 0);
     }
 }
 
@@ -2002,7 +2002,7 @@ void gen_intermediate_code(CPUState *cs, TranslationBlock *tb)
         case DISAS_JUMP:
         case DISAS_UPDATE:
             /* indicate that the hash table must be used to find the next TB */
-            tcg_gen_exit_tb(0);
+            tcg_gen_exit_tb(NULL, 0);
             break;
         case DISAS_TB_JUMP:
             /* nothing more to generate */
@@ -2101,7 +2101,9 @@ void uc32_cpu_dump_state(CPUState *cs, FILE *f,
                 psr & (1 << 28) ? 'V' : '-',
                 cpu_mode_names[psr & 0xf]);
 
-    cpu_dump_state_ucf64(env, f, cpu_fprintf, flags);
+    if (flags & CPU_DUMP_FPU) {
+        cpu_dump_state_ucf64(env, f, cpu_fprintf, flags);
+    }
 }
 
 void restore_state_to_opc(CPUUniCore32State *env, TranslationBlock *tb,

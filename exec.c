@@ -104,6 +104,9 @@ static MemoryRegion io_mem_unassigned;
  * (Set during postcopy)
  */
 #define RAM_UF_ZEROPAGE (1 << 3)
+
+/* RAM can be migrated */
+#define RAM_MIGRATABLE (1 << 4)
 #endif
 
 #ifdef TARGET_PAGE_BITS_VARY
@@ -478,6 +481,7 @@ address_space_translate_internal(AddressSpaceDispatch *d, hwaddr addr, hwaddr *x
  * @is_write: whether the translation operation is for write
  * @is_mmio: whether this can be MMIO, set true if it can
  * @target_as: the address space targeted by the IOMMU
+ * @attrs: transaction attributes
  *
  * This function is called from RCU critical section.  It is the common
  * part of flatview_do_translate and address_space_translate_cached.
@@ -488,7 +492,8 @@ static MemoryRegionSection address_space_translate_iommu(IOMMUMemoryRegion *iomm
                                                          hwaddr *page_mask_out,
                                                          bool is_write,
                                                          bool is_mmio,
-                                                         AddressSpace **target_as)
+                                                         AddressSpace **target_as,
+                                                         MemTxAttrs attrs)
 {
     MemoryRegionSection *section;
     hwaddr page_mask = (hwaddr)-1;
@@ -541,6 +546,7 @@ unassigned:
  * @is_write: whether the translation operation is for write
  * @is_mmio: whether this can be MMIO, set true if it can
  * @target_as: the address space targeted by the IOMMU
+ * @attrs: memory transaction attributes
  *
  * This function is called from RCU critical section
  */
@@ -551,7 +557,8 @@ static MemoryRegionSection flatview_do_translate(FlatView *fv,
                                                  hwaddr *page_mask_out,
                                                  bool is_write,
                                                  bool is_mmio,
-                                                 AddressSpace **target_as)
+                                                 AddressSpace **target_as,
+                                                 MemTxAttrs attrs)
 {
     MemoryRegionSection *section;
     IOMMUMemoryRegion *iommu_mr;
@@ -570,7 +577,7 @@ static MemoryRegionSection flatview_do_translate(FlatView *fv,
         return address_space_translate_iommu(iommu_mr, xlat,
                                              plen_out, page_mask_out,
                                              is_write, is_mmio,
-                                             target_as);
+                                             target_as, attrs);
     }
     if (page_mask_out) {
         /* Not behind an IOMMU, use default page size. */
@@ -582,7 +589,7 @@ static MemoryRegionSection flatview_do_translate(FlatView *fv,
 
 /* Called from RCU critical section */
 IOMMUTLBEntry address_space_get_iotlb_entry(AddressSpace *as, hwaddr addr,
-                                            bool is_write)
+                                            bool is_write, MemTxAttrs attrs)
 {
     MemoryRegionSection section;
     hwaddr xlat, page_mask;
@@ -592,7 +599,8 @@ IOMMUTLBEntry address_space_get_iotlb_entry(AddressSpace *as, hwaddr addr,
      * but page mask.
      */
     section = flatview_do_translate(address_space_to_flatview(as), addr, &xlat,
-                                    NULL, &page_mask, is_write, false, &as);
+                                    NULL, &page_mask, is_write, false, &as,
+                                    attrs);
 
     /* Illegal translation */
     if (section.mr == &io_mem_unassigned) {
@@ -618,7 +626,8 @@ iotlb_fail:
 
 /* Called from RCU critical section */
 MemoryRegion *flatview_translate(FlatView *fv, hwaddr addr, hwaddr *xlat,
-                                 hwaddr *plen, bool is_write)
+                                 hwaddr *plen, bool is_write,
+                                 MemTxAttrs attrs)
 {
     MemoryRegion *mr;
     MemoryRegionSection section;
@@ -626,7 +635,7 @@ MemoryRegion *flatview_translate(FlatView *fv, hwaddr addr, hwaddr *xlat,
 
     /* This can be MMIO, so setup MMIO bit. */
     section = flatview_do_translate(fv, addr, xlat, plen, NULL,
-                                    is_write, true, &as);
+                                    is_write, true, &as, attrs);
     mr = section.mr;
 
     if (xen_enabled() && memory_access_is_direct(mr, is_write)) {
@@ -898,7 +907,7 @@ static void breakpoint_invalidate(CPUState *cpu, target_ulong pc)
     if (phys != -1) {
         /* Locks grabbed by tb_invalidate_phys_addr */
         tb_invalidate_phys_addr(cpu->cpu_ases[asidx].as,
-                                phys | (pc & ~TARGET_PAGE_MASK));
+                                phys | (pc & ~TARGET_PAGE_MASK), attrs);
     }
 }
 #endif
@@ -1135,6 +1144,7 @@ void cpu_abort(CPUState *cpu, const char *fmt, ...)
         struct sigaction act;
         sigfillset(&act.sa_mask);
         act.sa_handler = SIG_DFL;
+        act.sa_flags = 0;
         sigaction(SIGABRT, &act, NULL);
     }
 #endif
@@ -1841,6 +1851,21 @@ bool qemu_ram_is_uf_zeroable(RAMBlock *rb)
 void qemu_ram_set_uf_zeroable(RAMBlock *rb)
 {
     rb->flags |= RAM_UF_ZEROPAGE;
+}
+
+bool qemu_ram_is_migratable(RAMBlock *rb)
+{
+    return rb->flags & RAM_MIGRATABLE;
+}
+
+void qemu_ram_set_migratable(RAMBlock *rb)
+{
+    rb->flags |= RAM_MIGRATABLE;
+}
+
+void qemu_ram_unset_migratable(RAMBlock *rb)
+{
+    rb->flags &= ~RAM_MIGRATABLE;
 }
 
 /* Called with iothread lock held.  */
@@ -2550,7 +2575,8 @@ static void notdirty_mem_write(void *opaque, hwaddr ram_addr,
 }
 
 static bool notdirty_mem_accepts(void *opaque, hwaddr addr,
-                                 unsigned size, bool is_write)
+                                 unsigned size, bool is_write,
+                                 MemTxAttrs attrs)
 {
     return is_write;
 }
@@ -2707,7 +2733,7 @@ static MemTxResult flatview_read(FlatView *fv, hwaddr addr,
 static MemTxResult flatview_write(FlatView *fv, hwaddr addr, MemTxAttrs attrs,
                                   const uint8_t *buf, int len);
 static bool flatview_access_valid(FlatView *fv, hwaddr addr, int len,
-                                  bool is_write);
+                                  bool is_write, MemTxAttrs attrs);
 
 static MemTxResult subpage_read(void *opaque, hwaddr addr, uint64_t *data,
                                 unsigned len, MemTxAttrs attrs)
@@ -2773,7 +2799,8 @@ static MemTxResult subpage_write(void *opaque, hwaddr addr,
 }
 
 static bool subpage_accepts(void *opaque, hwaddr addr,
-                            unsigned len, bool is_write)
+                            unsigned len, bool is_write,
+                            MemTxAttrs attrs)
 {
     subpage_t *subpage = opaque;
 #if defined(DEBUG_SUBPAGE)
@@ -2782,7 +2809,7 @@ static bool subpage_accepts(void *opaque, hwaddr addr,
 #endif
 
     return flatview_access_valid(subpage->fv, addr + subpage->base,
-                                 len, is_write);
+                                 len, is_write, attrs);
 }
 
 static const MemoryRegionOps subpage_ops = {
@@ -2856,7 +2883,8 @@ static void readonly_mem_write(void *opaque, hwaddr addr,
 }
 
 static bool readonly_mem_accepts(void *opaque, hwaddr addr,
-                                 unsigned size, bool is_write)
+                                 unsigned size, bool is_write,
+                                 MemTxAttrs attrs)
 {
     return is_write;
 }
@@ -3165,7 +3193,7 @@ static MemTxResult flatview_write_continue(FlatView *fv, hwaddr addr,
         }
 
         l = len;
-        mr = flatview_translate(fv, addr, &addr1, &l, true);
+        mr = flatview_translate(fv, addr, &addr1, &l, true, attrs);
     }
 
     return result;
@@ -3181,7 +3209,7 @@ static MemTxResult flatview_write(FlatView *fv, hwaddr addr, MemTxAttrs attrs,
     MemTxResult result = MEMTX_OK;
 
     l = len;
-    mr = flatview_translate(fv, addr, &addr1, &l, true);
+    mr = flatview_translate(fv, addr, &addr1, &l, true, attrs);
     result = flatview_write_continue(fv, addr, attrs, buf, len,
                                      addr1, l, mr);
 
@@ -3252,7 +3280,7 @@ MemTxResult flatview_read_continue(FlatView *fv, hwaddr addr,
         }
 
         l = len;
-        mr = flatview_translate(fv, addr, &addr1, &l, false);
+        mr = flatview_translate(fv, addr, &addr1, &l, false, attrs);
     }
 
     return result;
@@ -3267,7 +3295,7 @@ static MemTxResult flatview_read(FlatView *fv, hwaddr addr,
     MemoryRegion *mr;
 
     l = len;
-    mr = flatview_translate(fv, addr, &addr1, &l, false);
+    mr = flatview_translate(fv, addr, &addr1, &l, false, attrs);
     return flatview_read_continue(fv, addr, attrs, buf, len,
                                   addr1, l, mr);
 }
@@ -3338,7 +3366,8 @@ static inline void cpu_physical_memory_write_rom_internal(AddressSpace *as,
     rcu_read_lock();
     while (len > 0) {
         l = len;
-        mr = address_space_translate(as, addr, &addr1, &l, true);
+        mr = address_space_translate(as, addr, &addr1, &l, true,
+                                     MEMTXATTRS_UNSPECIFIED);
 
         if (!(memory_region_is_ram(mr) ||
               memory_region_is_romd(mr))) {
@@ -3473,17 +3502,17 @@ static void cpu_notify_map_clients(void)
 }
 
 static bool flatview_access_valid(FlatView *fv, hwaddr addr, int len,
-                                  bool is_write)
+                                  bool is_write, MemTxAttrs attrs)
 {
     MemoryRegion *mr;
     hwaddr l, xlat;
 
     while (len > 0) {
         l = len;
-        mr = flatview_translate(fv, addr, &xlat, &l, is_write);
+        mr = flatview_translate(fv, addr, &xlat, &l, is_write, attrs);
         if (!memory_access_is_direct(mr, is_write)) {
             l = memory_access_size(mr, l, addr);
-            if (!memory_region_access_valid(mr, xlat, l, is_write)) {
+            if (!memory_region_access_valid(mr, xlat, l, is_write, attrs)) {
                 return false;
             }
         }
@@ -3495,23 +3524,24 @@ static bool flatview_access_valid(FlatView *fv, hwaddr addr, int len,
 }
 
 bool address_space_access_valid(AddressSpace *as, hwaddr addr,
-                                int len, bool is_write)
+                                int len, bool is_write,
+                                MemTxAttrs attrs)
 {
     FlatView *fv;
     bool result;
 
     rcu_read_lock();
     fv = address_space_to_flatview(as);
-    result = flatview_access_valid(fv, addr, len, is_write);
+    result = flatview_access_valid(fv, addr, len, is_write, attrs);
     rcu_read_unlock();
     return result;
 }
 
 static hwaddr
 flatview_extend_translation(FlatView *fv, hwaddr addr,
-                                 hwaddr target_len,
-                                 MemoryRegion *mr, hwaddr base, hwaddr len,
-                                 bool is_write)
+                            hwaddr target_len,
+                            MemoryRegion *mr, hwaddr base, hwaddr len,
+                            bool is_write, MemTxAttrs attrs)
 {
     hwaddr done = 0;
     hwaddr xlat;
@@ -3527,7 +3557,7 @@ flatview_extend_translation(FlatView *fv, hwaddr addr,
 
         len = target_len;
         this_mr = flatview_translate(fv, addr, &xlat,
-                                                   &len, is_write);
+                                     &len, is_write, attrs);
         if (this_mr != mr || xlat != base + done) {
             return done;
         }
@@ -3544,7 +3574,8 @@ flatview_extend_translation(FlatView *fv, hwaddr addr,
 void *address_space_map(AddressSpace *as,
                         hwaddr addr,
                         hwaddr *plen,
-                        bool is_write)
+                        bool is_write,
+                        MemTxAttrs attrs)
 {
     hwaddr len = *plen;
     hwaddr l, xlat;
@@ -3559,7 +3590,7 @@ void *address_space_map(AddressSpace *as,
     l = len;
     rcu_read_lock();
     fv = address_space_to_flatview(as);
-    mr = flatview_translate(fv, addr, &xlat, &l, is_write);
+    mr = flatview_translate(fv, addr, &xlat, &l, is_write, attrs);
 
     if (!memory_access_is_direct(mr, is_write)) {
         if (atomic_xchg(&bounce.in_use, true)) {
@@ -3587,7 +3618,7 @@ void *address_space_map(AddressSpace *as,
 
     memory_region_ref(mr);
     *plen = flatview_extend_translation(fv, addr, len, mr, xlat,
-                                             l, is_write);
+                                        l, is_write, attrs);
     ptr = qemu_ram_ptr_length(mr->ram_block, xlat, plen, true);
     rcu_read_unlock();
 
@@ -3631,7 +3662,8 @@ void *cpu_physical_memory_map(hwaddr addr,
                               hwaddr *plen,
                               int is_write)
 {
-    return address_space_map(&address_space_memory, addr, plen, is_write);
+    return address_space_map(&address_space_memory, addr, plen, is_write,
+                             MEMTXATTRS_UNSPECIFIED);
 }
 
 void cpu_physical_memory_unmap(void *buffer, hwaddr len,
@@ -3671,8 +3703,13 @@ int64_t address_space_cache_init(MemoryRegionCache *cache,
     mr = cache->mrs.mr;
     memory_region_ref(mr);
     if (memory_access_is_direct(mr, is_write)) {
+        /* We don't care about the memory attributes here as we're only
+         * doing this if we found actual RAM, which behaves the same
+         * regardless of attributes; so UNSPECIFIED is fine.
+         */
         l = flatview_extend_translation(cache->fv, addr, len, mr,
-                                        cache->xlat, l, is_write);
+                                        cache->xlat, l, is_write,
+                                        MEMTXATTRS_UNSPECIFIED);
         cache->ptr = qemu_ram_ptr_length(mr->ram_block, cache->xlat, &l, true);
     } else {
         cache->ptr = NULL;
@@ -3715,7 +3752,7 @@ void address_space_cache_destroy(MemoryRegionCache *cache)
  */
 static inline MemoryRegion *address_space_translate_cached(
     MemoryRegionCache *cache, hwaddr addr, hwaddr *xlat,
-    hwaddr *plen, bool is_write)
+    hwaddr *plen, bool is_write, MemTxAttrs attrs)
 {
     MemoryRegionSection section;
     MemoryRegion *mr;
@@ -3734,7 +3771,7 @@ static inline MemoryRegion *address_space_translate_cached(
 
     section = address_space_translate_iommu(iommu_mr, xlat, plen,
                                             NULL, is_write, true,
-                                            &target_as);
+                                            &target_as, attrs);
     return section.mr;
 }
 
@@ -3749,7 +3786,8 @@ address_space_read_cached_slow(MemoryRegionCache *cache, hwaddr addr,
     MemoryRegion *mr;
 
     l = len;
-    mr = address_space_translate_cached(cache, addr, &addr1, &l, false);
+    mr = address_space_translate_cached(cache, addr, &addr1, &l, false,
+                                        MEMTXATTRS_UNSPECIFIED);
     flatview_read_continue(cache->fv,
                            addr, MEMTXATTRS_UNSPECIFIED, buf, len,
                            addr1, l, mr);
@@ -3766,7 +3804,8 @@ address_space_write_cached_slow(MemoryRegionCache *cache, hwaddr addr,
     MemoryRegion *mr;
 
     l = len;
-    mr = address_space_translate_cached(cache, addr, &addr1, &l, true);
+    mr = address_space_translate_cached(cache, addr, &addr1, &l, true,
+                                        MEMTXATTRS_UNSPECIFIED);
     flatview_write_continue(cache->fv,
                             addr, MEMTXATTRS_UNSPECIFIED, buf, len,
                             addr1, l, mr);
@@ -3864,7 +3903,8 @@ bool cpu_physical_memory_is_io(hwaddr phys_addr)
 
     rcu_read_lock();
     mr = address_space_translate(&address_space_memory,
-                                 phys_addr, &phys_addr, &l, false);
+                                 phys_addr, &phys_addr, &l, false,
+                                 MEMTXATTRS_UNSPECIFIED);
 
     res = !(memory_region_is_ram(mr) || memory_region_is_romd(mr));
     rcu_read_unlock();
@@ -3878,6 +3918,26 @@ int qemu_ram_foreach_block(RAMBlockIterFunc func, void *opaque)
 
     rcu_read_lock();
     RAMBLOCK_FOREACH(block) {
+        ret = func(block->idstr, block->host, block->offset,
+                   block->used_length, opaque);
+        if (ret) {
+            break;
+        }
+    }
+    rcu_read_unlock();
+    return ret;
+}
+
+int qemu_ram_foreach_migratable_block(RAMBlockIterFunc func, void *opaque)
+{
+    RAMBlock *block;
+    int ret = 0;
+
+    rcu_read_lock();
+    RAMBLOCK_FOREACH(block) {
+        if (!qemu_ram_is_migratable(block)) {
+            continue;
+        }
         ret = func(block->idstr, block->host, block->offset,
                    block->used_length, opaque);
         if (ret) {

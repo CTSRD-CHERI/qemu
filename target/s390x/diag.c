@@ -16,7 +16,6 @@
 #include "cpu.h"
 #include "internal.h"
 #include "exec/address-spaces.h"
-#include "exec/exec-all.h"
 #include "hw/watchdog/wdt_diag288.h"
 #include "sysemu/cpus.h"
 #include "hw/s390x/ipl.h"
@@ -87,7 +86,8 @@ void handle_diag_308(CPUS390XState *env, uint64_t r1, uint64_t r3, uintptr_t ra)
             return;
         }
         if (!address_space_access_valid(&address_space_memory, addr,
-                                        sizeof(IplParameterBlock), false)) {
+                                        sizeof(IplParameterBlock), false,
+                                        MEMTXATTRS_UNSPECIFIED)) {
             s390_program_interrupt(env, PGM_ADDRESSING, ILEN_AUTO, ra);
             return;
         }
@@ -116,7 +116,8 @@ out:
             return;
         }
         if (!address_space_access_valid(&address_space_memory, addr,
-                                        sizeof(IplParameterBlock), true)) {
+                                        sizeof(IplParameterBlock), true,
+                                        MEMTXATTRS_UNSPECIFIED)) {
             s390_program_interrupt(env, PGM_ADDRESSING, ILEN_AUTO, ra);
             return;
         }

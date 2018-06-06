@@ -374,7 +374,7 @@ bool postcopy_ram_supported_by_host(MigrationIncomingState *mis)
     }
 
     /* We don't support postcopy with shared RAM yet */
-    if (qemu_ram_foreach_block(test_ramblock_postcopiable, NULL)) {
+    if (qemu_ram_foreach_migratable_block(test_ramblock_postcopiable, NULL)) {
         goto out;
     }
 
@@ -502,7 +502,7 @@ static int cleanup_range(const char *block_name, void *host_addr,
  */
 int postcopy_ram_incoming_init(MigrationIncomingState *mis, size_t ram_pages)
 {
-    if (qemu_ram_foreach_block(init_range, NULL)) {
+    if (qemu_ram_foreach_migratable_block(init_range, NULL)) {
         return -1;
     }
 
@@ -524,7 +524,7 @@ int postcopy_ram_incoming_cleanup(MigrationIncomingState *mis)
             return -1;
         }
 
-        if (qemu_ram_foreach_block(cleanup_range, mis)) {
+        if (qemu_ram_foreach_migratable_block(cleanup_range, mis)) {
             return -1;
         }
         /* Let the fault thread quit */
@@ -593,7 +593,7 @@ static int nhp_range(const char *block_name, void *host_addr,
  */
 int postcopy_ram_prepare_discard(MigrationIncomingState *mis)
 {
-    if (qemu_ram_foreach_block(nhp_range, mis)) {
+    if (qemu_ram_foreach_migratable_block(nhp_range, mis)) {
         return -1;
     }
 
@@ -604,7 +604,7 @@ int postcopy_ram_prepare_discard(MigrationIncomingState *mis)
 
 /*
  * Mark the given area of RAM as requiring notification to unwritten areas
- * Used as a  callback on qemu_ram_foreach_block.
+ * Used as a  callback on qemu_ram_foreach_migratable_block.
  *   host_addr: Base of area to mark
  *   offset: Offset in the whole ram arena
  *   length: Length of the section
@@ -830,6 +830,17 @@ static void mark_postcopy_blocktime_end(uintptr_t addr)
                                       affected_cpu);
 }
 
+static bool postcopy_pause_fault_thread(MigrationIncomingState *mis)
+{
+    trace_postcopy_pause_fault_thread();
+
+    qemu_sem_wait(&mis->postcopy_pause_sem_fault);
+
+    trace_postcopy_pause_fault_thread_continued();
+
+    return true;
+}
+
 /*
  * Handle faults detected by the USERFAULT markings
  */
@@ -878,6 +889,22 @@ static void *postcopy_ram_fault_thread(void *opaque)
         if (poll_result == -1) {
             error_report("%s: userfault poll: %s", __func__, strerror(errno));
             break;
+        }
+
+        if (!mis->to_src_file) {
+            /*
+             * Possibly someone tells us that the return path is
+             * broken already using the event. We should hold until
+             * the channel is rebuilt.
+             */
+            if (postcopy_pause_fault_thread(mis)) {
+                mis->last_rb = NULL;
+                /* Continue to read the userfaultfd */
+            } else {
+                error_report("%s: paused but don't allow to continue",
+                             __func__);
+                break;
+            }
         }
 
         if (pfd[1].revents) {
@@ -942,18 +969,37 @@ static void *postcopy_ram_fault_thread(void *opaque)
                     (uintptr_t)(msg.arg.pagefault.address),
                                 msg.arg.pagefault.feat.ptid, rb);
 
+retry:
             /*
              * Send the request to the source - we want to request one
              * of our host page sizes (which is >= TPS)
              */
             if (rb != mis->last_rb) {
                 mis->last_rb = rb;
-                migrate_send_rp_req_pages(mis, qemu_ram_get_idstr(rb),
-                                         rb_offset, qemu_ram_pagesize(rb));
+                ret = migrate_send_rp_req_pages(mis,
+                                                qemu_ram_get_idstr(rb),
+                                                rb_offset,
+                                                qemu_ram_pagesize(rb));
             } else {
                 /* Save some space */
-                migrate_send_rp_req_pages(mis, NULL,
-                                         rb_offset, qemu_ram_pagesize(rb));
+                ret = migrate_send_rp_req_pages(mis,
+                                                NULL,
+                                                rb_offset,
+                                                qemu_ram_pagesize(rb));
+            }
+
+            if (ret) {
+                /* May be network failure, try to wait for recovery */
+                if (ret == -EIO && postcopy_pause_fault_thread(mis)) {
+                    /* We got reconnected somehow, try to continue */
+                    mis->last_rb = NULL;
+                    goto retry;
+                } else {
+                    /* This is a unavoidable fault */
+                    error_report("%s: migrate_send_rp_req_pages() get %d",
+                                 __func__, ret);
+                    break;
+                }
             }
         }
 
@@ -1053,7 +1099,7 @@ int postcopy_ram_enable_notify(MigrationIncomingState *mis)
     mis->have_fault_thread = true;
 
     /* Mark so that we get notified of accesses to unwritten areas */
-    if (qemu_ram_foreach_block(ram_block_enable_notify, mis)) {
+    if (qemu_ram_foreach_migratable_block(ram_block_enable_notify, mis)) {
         return -1;
     }
 

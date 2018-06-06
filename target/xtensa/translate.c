@@ -377,9 +377,9 @@ static void gen_jump_slot(DisasContext *dc, TCGv dest, int slot)
     } else {
         if (slot >= 0) {
             tcg_gen_goto_tb(slot);
-            tcg_gen_exit_tb((uintptr_t)dc->tb + slot);
+            tcg_gen_exit_tb(dc->tb, slot);
         } else {
-            tcg_gen_exit_tb(0);
+            tcg_gen_exit_tb(NULL, 0);
         }
     }
     dc->is_jmp = DISAS_UPDATE;
@@ -1243,7 +1243,8 @@ void xtensa_cpu_dump_state(CPUState *cs, FILE *f,
         }
     }
 
-    if (xtensa_option_enabled(env->config, XTENSA_OPTION_FP_COPROCESSOR)) {
+    if ((flags & CPU_DUMP_FPU) &&
+        xtensa_option_enabled(env->config, XTENSA_OPTION_FP_COPROCESSOR)) {
         cpu_fprintf(f, "\n");
 
         for (i = 0; i < 16; ++i) {
@@ -1271,11 +1272,8 @@ XtensaOpcodeOps *
 xtensa_find_opcode_ops(const XtensaOpcodeTranslators *t,
                        const char *name)
 {
-    XtensaOpcodeOps *ops;
-
-    ops = bsearch(name, t->opcode, t->num_opcodes,
-                  sizeof(XtensaOpcodeOps), compare_opcode_ops);
-    return ops;
+    return bsearch(name, t->opcode, t->num_opcodes,
+                   sizeof(XtensaOpcodeOps), compare_opcode_ops);
 }
 
 static void translate_abs(DisasContext *dc, const uint32_t arg[],

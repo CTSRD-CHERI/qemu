@@ -1312,7 +1312,7 @@ static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr)
     MemoryRegion *mr;
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
-    mr = address_space_translate(cs->as, addr, &addr, &l, false);
+    mr = address_space_translate(cs->as, addr, &addr, &l, false, MEMTXATTRS_UNSPECIFIED);
     if (!(memory_region_is_ram(mr) || memory_region_is_romd(mr))) {
         return -1LL;
     }

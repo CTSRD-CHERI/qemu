@@ -76,6 +76,7 @@ struct PCMachineState {
 #define PC_MACHINE_VMPORT           "vmport"
 #define PC_MACHINE_SMM              "smm"
 #define PC_MACHINE_NVDIMM           "nvdimm"
+#define PC_MACHINE_NVDIMM_CAP       "nvdimm-cap"
 #define PC_MACHINE_SMBUS            "smbus"
 #define PC_MACHINE_SATA             "sata"
 #define PC_MACHINE_PIT              "pit"
@@ -295,6 +296,14 @@ void pc_madt_cpu_entry(AcpiDeviceIf *adev, int uid,
 int e820_add_entry(uint64_t, uint64_t, uint32_t);
 int e820_get_num_entries(void);
 bool e820_get_entry(int, uint32_t, uint64_t *, uint64_t *);
+
+#define PC_COMPAT_2_12 \
+    HW_COMPAT_2_12 \
+    {\
+        .driver   = TYPE_X86_CPU,\
+        .property = "legacy-cache",\
+        .value    = "on",\
+    },
 
 #define PC_COMPAT_2_11 \
     HW_COMPAT_2_11 \
