@@ -31,7 +31,7 @@ DEF("machine", HAS_ARG, QEMU_OPTION_machine, \
     "-machine [type=]name[,prop[=value][,...]]\n"
     "                selects emulated machine ('-machine help' for list)\n"
     "                property accel=accel1[:accel2[:...]] selects accelerator\n"
-    "                supported accelerators are kvm, xen, hax or tcg (default: tcg)\n"
+    "                supported accelerators are kvm, xen, hax, hvf or tcg (default: tcg)\n"
     "                kernel_irqchip=on|off|split controls accelerated irqchip support (default=off)\n"
     "                vmport=on|off|auto controls emulation of vmport (default: auto)\n"
     "                kvm_shadow_mem=size of KVM shadow MMU in bytes\n"
@@ -66,7 +66,7 @@ Supported machine properties are:
 @table @option
 @item accel=@var{accels1}[:@var{accels2}[:...]]
 This is used to enable an accelerator. Depending on the target architecture,
-kvm, xen, hax or tcg can be available. By default, tcg is used. If there is
+kvm, xen, hax, hvf or tcg can be available. By default, tcg is used. If there is
 more than one accelerator specified, the next one is used if the previous one
 fails to initialize.
 @item kernel_irqchip=on|off
@@ -126,13 +126,13 @@ ETEXI
 
 DEF("accel", HAS_ARG, QEMU_OPTION_accel,
     "-accel [accel=]accelerator[,thread=single|multi]\n"
-    "                select accelerator (kvm, xen, hax or tcg; use 'help' for a list)\n"
-    "                thread=single|multi (enable multi-threaded TCG)\n", QEMU_ARCH_ALL)
+    "                select accelerator (kvm, xen, hax, hvf or tcg; use 'help' for a list)\n"
+    "                thread=single|multi (enable multi-threaded TCG)", QEMU_ARCH_ALL)
 STEXI
 @item -accel @var{name}[,prop=@var{value}[,...]]
 @findex -accel
 This is used to enable an accelerator. Depending on the target architecture,
-kvm, xen, hax or tcg can be available. By default, tcg is used. If there is
+kvm, xen, hax, hvf or tcg can be available. By default, tcg is used. If there is
 more than one accelerator specified, the next one is used if the previous one
 fails to initialize.
 @table @option
@@ -846,8 +846,8 @@ of available connectors of a given interface type.
 @item media=@var{media}
 This option defines the type of the media: disk or cdrom.
 @item cyls=@var{c},heads=@var{h},secs=@var{s}[,trans=@var{t}]
-These options have the same definition as they have in @option{-hdachs}.
-These parameters are deprecated, use the corresponding parameters
+Force disk physical geometry and the optional BIOS translation (trans=none or
+lba). These parameters are deprecated, use the corresponding parameters
 of @code{-device} instead.
 @item snapshot=@var{snapshot}
 @var{snapshot} is "on" or "off" and controls snapshot mode for the given drive
@@ -1025,21 +1025,6 @@ STEXI
 Write to temporary files instead of disk image files. In this case,
 the raw disk image you use is not written back. You can however force
 the write back by pressing @key{C-a s} (@pxref{disk_images}).
-ETEXI
-
-DEF("hdachs", HAS_ARG, QEMU_OPTION_hdachs, \
-    "-hdachs c,h,s[,t]\n" \
-    "                force hard disk 0 physical geometry and the optional BIOS\n" \
-    "                translation (t=none or lba) (usually QEMU can guess them)\n",
-    QEMU_ARCH_ALL)
-STEXI
-@item -hdachs @var{c},@var{h},@var{s},[,@var{t}]
-@findex -hdachs
-Force hard disk 0 physical geometry (1 <= @var{c} <= 16383, 1 <=
-@var{h} <= 16, 1 <= @var{s} <= 63) and optionally force the BIOS
-translation mode (@var{t}=none, lba or auto). Usually QEMU can guess
-all those parameters. This option is deprecated, please use
-@code{-device ide-hd,cyls=c,heads=h,secs=s,...} instead.
 ETEXI
 
 DEF("fsdev", HAS_ARG, QEMU_OPTION_fsdev,
@@ -2035,9 +2020,10 @@ DEF("netdev", HAS_ARG, QEMU_OPTION_netdev,
     "-netdev hubport,id=str,hubid=n\n"
     "                configure a hub port on QEMU VLAN 'n'\n", QEMU_ARCH_ALL)
 DEF("net", HAS_ARG, QEMU_OPTION_net,
-    "-net nic[,vlan=n][,macaddr=mac][,model=type][,name=str][,addr=str][,vectors=v]\n"
-    "                old way to create a new NIC and connect it to VLAN 'n'\n"
-    "                (use the '-device devtype,netdev=str' option if possible instead)\n"
+    "-net nic[,vlan=n][,netdev=nd][,macaddr=mac][,model=type][,name=str][,addr=str][,vectors=v]\n"
+    "                configure or create an on-board (or machine default) NIC and\n"
+    "                connect it either to VLAN 'n' or the netdev 'nd' (for pluggable\n"
+    "                NICs please use '-device devtype,netdev=nd' instead)\n"
     "-net dump[,vlan=n][,file=f][,len=n]\n"
     "                dump traffic on vlan 'n' to file 'f' (max n bytes per packet)\n"
     "-net none       use it alone to have zero network devices. If no -net option\n"
@@ -2058,10 +2044,11 @@ DEF("net", HAS_ARG, QEMU_OPTION_net,
     "                old way to initialize a host network interface\n"
     "                (use the -netdev option if possible instead)\n", QEMU_ARCH_ALL)
 STEXI
-@item -net nic[,vlan=@var{n}][,macaddr=@var{mac}][,model=@var{type}] [,name=@var{name}][,addr=@var{addr}][,vectors=@var{v}]
+@item -net nic[,vlan=@var{n}][,netdev=@var{nd}][,macaddr=@var{mac}][,model=@var{type}] [,name=@var{name}][,addr=@var{addr}][,vectors=@var{v}]
 @findex -net
-Create a new Network Interface Card and connect it to VLAN @var{n} (@var{n}
-= 0 is the default). The NIC is an e1000 by default on the PC
+Configure or create an on-board (or machine default) Network Interface Card
+(NIC) and connect it either to VLAN @var{n} (@var{n} = 0 is the default), or
+to the netdev @var{nd}. The NIC is an e1000 by default on the PC
 target. Optionally, the MAC address can be changed to @var{mac}, the
 device address set to @var{addr} (PCI cards only),
 and a @var{name} can be assigned for use in monitor commands.
@@ -3961,9 +3948,6 @@ DEF("no-kvm", 0, QEMU_OPTION_no_kvm, "", QEMU_ARCH_I386)
 HXCOMM Deprecated by kvm-pit driver properties
 DEF("no-kvm-pit-reinjection", 0, QEMU_OPTION_no_kvm_pit_reinjection,
     "", QEMU_ARCH_I386)
-
-HXCOMM Deprecated (ignored)
-DEF("no-kvm-pit", 0, QEMU_OPTION_no_kvm_pit, "", QEMU_ARCH_I386)
 
 HXCOMM Deprecated by -machine kernel_irqchip=on|off property
 DEF("no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip, "", QEMU_ARCH_I386)

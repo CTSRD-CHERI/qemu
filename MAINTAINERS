@@ -259,6 +259,7 @@ S: Maintained
 F: target/xtensa/
 F: hw/xtensa/
 F: tests/tcg/xtensa/
+F: disas/xtensa.c
 
 TriCore
 M: Bastian Koppelmann <kbastian@mail.uni-paderborn.de>
@@ -1011,6 +1012,7 @@ T: git git://github.com/jasowang/qemu.git net
 
 SCSI
 M: Paolo Bonzini <pbonzini@redhat.com>
+R: Fam Zheng <famz@redhat.com>
 S: Supported
 F: include/hw/scsi/*
 F: hw/scsi/*
@@ -1082,13 +1084,11 @@ F: include/hw/virtio/
 F: tests/virtio-balloon-test.c
 
 virtio-9p
-M: Aneesh Kumar K.V <aneesh.kumar@linux.vnet.ibm.com>
 M: Greg Kurz <groug@kaod.org>
 S: Supported
 F: hw/9pfs/
 F: fsdev/
 F: tests/virtio-9p-test.c
-T: git git://github.com/kvaneesh/QEMU.git
 T: git git://github.com/gkurz/qemu.git 9p-next
 
 virtio-blk
@@ -1271,6 +1271,7 @@ T: git git://github.com/stefanha/qemu.git block
 
 Block SCSI subsystem
 M: Paolo Bonzini <pbonzini@redhat.com>
+R: Fam Zheng <famz@redhat.com>
 L: qemu-block@nongnu.org
 S: Supported
 F: include/scsi/*
