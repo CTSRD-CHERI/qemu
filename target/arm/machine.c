@@ -242,6 +242,13 @@ static bool s_rnr_vmstate_validate(void *opaque, int version_id)
     return cpu->env.pmsav7.rnr[M_REG_S] < cpu->pmsav7_dregion;
 }
 
+static bool sau_rnr_vmstate_validate(void *opaque, int version_id)
+{
+    ARMCPU *cpu = opaque;
+
+    return cpu->env.sau.rnr < cpu->sau_sregion;
+}
+
 static bool m_security_needed(void *opaque)
 {
     ARMCPU *cpu = opaque;
@@ -276,6 +283,15 @@ static const VMStateDescription vmstate_m_security = {
         VMSTATE_UINT32(env.v7m.ccr[M_REG_S], ARMCPU),
         VMSTATE_UINT32(env.v7m.mmfar[M_REG_S], ARMCPU),
         VMSTATE_UINT32(env.v7m.cfsr[M_REG_S], ARMCPU),
+        VMSTATE_UINT32(env.v7m.sfsr, ARMCPU),
+        VMSTATE_UINT32(env.v7m.sfar, ARMCPU),
+        VMSTATE_VARRAY_UINT32(env.sau.rbar, ARMCPU, sau_sregion, 0,
+                              vmstate_info_uint32, uint32_t),
+        VMSTATE_VARRAY_UINT32(env.sau.rlar, ARMCPU, sau_sregion, 0,
+                              vmstate_info_uint32, uint32_t),
+        VMSTATE_UINT32(env.sau.rnr, ARMCPU),
+        VMSTATE_VALIDATE("SAU_RNR is valid", sau_rnr_vmstate_validate),
+        VMSTATE_UINT32(env.sau.ctrl, ARMCPU),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -394,7 +410,7 @@ static const VMStateInfo vmstate_powered_off = {
     .put = put_power,
 };
 
-static void cpu_pre_save(void *opaque)
+static int cpu_pre_save(void *opaque)
 {
     ARMCPU *cpu = opaque;
 
@@ -415,6 +431,8 @@ static void cpu_pre_save(void *opaque)
            cpu->cpreg_array_len * sizeof(uint64_t));
     memcpy(cpu->cpreg_vmstate_values, cpu->cpreg_values,
            cpu->cpreg_array_len * sizeof(uint64_t));
+
+    return 0;
 }
 
 static int cpu_post_load(void *opaque, int version_id)

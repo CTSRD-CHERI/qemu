@@ -167,6 +167,8 @@
                 "PowerPC 440 EPb")
     POWERPC_DEF("440epx",        CPU_POWERPC_440EPX,                 440EP,
                 "PowerPC 440 EPX")
+    POWERPC_DEF("460exb",        CPU_POWERPC_460EXb,                 460EX,
+                "PowerPC 460 EXb")
 #if defined(TODO_USER_ONLY)
     POWERPC_DEF("440gpb",        CPU_POWERPC_440GPb,                 440GP,
                 "PowerPC 440 GPb")
@@ -754,8 +756,10 @@
     POWERPC_DEF("970_v2.2",      CPU_POWERPC_970_v22,                970,
                 "PowerPC 970 v2.2")
 
-    POWERPC_DEF("power9_v1.0",   CPU_POWERPC_POWER9_BASE,            POWER9,
+    POWERPC_DEF("power9_v1.0",   CPU_POWERPC_POWER9_DD1,             POWER9,
                 "POWER9 v1.0")
+    POWERPC_DEF("power9_v2.0",   CPU_POWERPC_POWER9_DD20,            POWER9,
+                "POWER9 v2.0")
 
     POWERPC_DEF("970fx_v1.0",    CPU_POWERPC_970FX_v10,              970,
                 "PowerPC 970FX v1.0 (G5)")
@@ -786,6 +790,7 @@ PowerPCCPUAlias ppc_cpu_aliases[] = {
     { "x2vp50", "x2vp20" },
 
     { "440ep", "440epb" },
+    { "460ex", "460exb" },
 #if defined(TODO_USER_ONLY)
     { "440gp", "440gpc" },
     { "440gr", "440gra" },
@@ -942,7 +947,7 @@ PowerPCCPUAlias ppc_cpu_aliases[] = {
     { "power8e", "power8e_v2.1" },
     { "power8", "power8_v2.0" },
     { "power8nvl", "power8nvl_v1.0" },
-    { "power9", "power9_v1.0" },
+    { "power9", "power9_v2.0" },
     { "970", "970_v2.2" },
     { "970fx", "970fx_v3.1" },
     { "970mp", "970mp_v1.1" },

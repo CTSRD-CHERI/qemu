@@ -353,8 +353,7 @@ static int spapr_fixup_cpu_dt(void *fdt, sPAPRMachineState *spapr)
 
         cpus_offset = fdt_path_offset(fdt, "/cpus");
         if (cpus_offset < 0) {
-            cpus_offset = fdt_add_subnode(fdt, fdt_path_offset(fdt, "/"),
-                                          "cpus");
+            cpus_offset = fdt_add_subnode(fdt, 0, "cpus");
             if (cpus_offset < 0) {
                 return cpus_offset;
             }
@@ -820,6 +819,13 @@ int spapr_h_cas_compose_response(sPAPRMachineState *spapr,
         return 1;
     }
 
+    if (size < sizeof(hdr) || size > FW_MAX_SIZE) {
+        error_report("SLOF provided an unexpected CAS buffer size "
+                     TARGET_FMT_lu " (min: %zu, max: %u)",
+                     size, sizeof(hdr), FW_MAX_SIZE);
+        exit(EXIT_FAILURE);
+    }
+
     size -= sizeof(hdr);
 
     /* Create skeleton */
@@ -1211,14 +1217,15 @@ static uint64_t spapr_get_patbe(PPCVirtualHypervisor *vhyp)
  */
 static int get_htab_fd(sPAPRMachineState *spapr)
 {
+    Error *local_err = NULL;
+
     if (spapr->htab_fd >= 0) {
         return spapr->htab_fd;
     }
 
-    spapr->htab_fd = kvmppc_get_htab_fd(false);
+    spapr->htab_fd = kvmppc_get_htab_fd(false, 0, &local_err);
     if (spapr->htab_fd < 0) {
-        error_report("Unable to open fd for reading hash table from KVM: %s",
-                     strerror(errno));
+        error_report_err(local_err);
     }
 
     return spapr->htab_fd;
@@ -1237,6 +1244,19 @@ static hwaddr spapr_hpt_mask(PPCVirtualHypervisor *vhyp)
     sPAPRMachineState *spapr = SPAPR_MACHINE(vhyp);
 
     return HTAB_SIZE(spapr) / HASH_PTEG_SIZE_64 - 1;
+}
+
+static target_ulong spapr_encode_hpt_for_kvm_pr(PPCVirtualHypervisor *vhyp)
+{
+    sPAPRMachineState *spapr = SPAPR_MACHINE(vhyp);
+
+    assert(kvm_enabled());
+
+    if (!spapr->htab) {
+        return 0;
+    }
+
+    return (target_ulong)(uintptr_t)spapr->htab | (spapr->htab_shift - 18);
 }
 
 static const ppc_hash_pte64_t *spapr_map_hptes(PPCVirtualHypervisor *vhyp,
@@ -1708,6 +1728,23 @@ static int htab_save_setup(QEMUFile *f, void *opaque)
     return 0;
 }
 
+static void htab_save_chunk(QEMUFile *f, sPAPRMachineState *spapr,
+                            int chunkstart, int n_valid, int n_invalid)
+{
+    qemu_put_be32(f, chunkstart);
+    qemu_put_be16(f, n_valid);
+    qemu_put_be16(f, n_invalid);
+    qemu_put_buffer(f, HPTE(spapr->htab, chunkstart),
+                    HASH_PTE_SIZE_64 * n_valid);
+}
+
+static void htab_save_end_marker(QEMUFile *f)
+{
+    qemu_put_be32(f, 0);
+    qemu_put_be16(f, 0);
+    qemu_put_be16(f, 0);
+}
+
 static void htab_save_first_pass(QEMUFile *f, sPAPRMachineState *spapr,
                                  int64_t max_ns)
 {
@@ -1739,11 +1776,7 @@ static void htab_save_first_pass(QEMUFile *f, sPAPRMachineState *spapr,
         if (index > chunkstart) {
             int n_valid = index - chunkstart;
 
-            qemu_put_be32(f, chunkstart);
-            qemu_put_be16(f, n_valid);
-            qemu_put_be16(f, 0);
-            qemu_put_buffer(f, HPTE(spapr->htab, chunkstart),
-                            HASH_PTE_SIZE_64 * n_valid);
+            htab_save_chunk(f, spapr, chunkstart, n_valid, 0);
 
             if (has_timeout &&
                 (qemu_clock_get_ns(QEMU_CLOCK_REALTIME) - starttime) > max_ns) {
@@ -1805,11 +1838,7 @@ static int htab_save_later_pass(QEMUFile *f, sPAPRMachineState *spapr,
             int n_valid = invalidstart - chunkstart;
             int n_invalid = index - invalidstart;
 
-            qemu_put_be32(f, chunkstart);
-            qemu_put_be16(f, n_valid);
-            qemu_put_be16(f, n_invalid);
-            qemu_put_buffer(f, HPTE(spapr->htab, chunkstart),
-                            HASH_PTE_SIZE_64 * n_valid);
+            htab_save_chunk(f, spapr, chunkstart, n_valid, n_invalid);
             sent += index - chunkstart;
 
             if (!final && (qemu_clock_get_ns(QEMU_CLOCK_REALTIME) - starttime) > max_ns) {
@@ -1872,10 +1901,7 @@ static int htab_save_iterate(QEMUFile *f, void *opaque)
         rc = htab_save_later_pass(f, spapr, MAX_ITERATION_NS);
     }
 
-    /* End marker */
-    qemu_put_be32(f, 0);
-    qemu_put_be16(f, 0);
-    qemu_put_be16(f, 0);
+    htab_save_end_marker(f);
 
     return rc;
 }
@@ -1915,9 +1941,7 @@ static int htab_save_complete(QEMUFile *f, void *opaque)
     }
 
     /* End marker */
-    qemu_put_be32(f, 0);
-    qemu_put_be16(f, 0);
-    qemu_put_be16(f, 0);
+    htab_save_end_marker(f);
 
     return 0;
 }
@@ -1927,6 +1951,7 @@ static int htab_load(QEMUFile *f, void *opaque, int version_id)
     sPAPRMachineState *spapr = opaque;
     uint32_t section_hdr;
     int fd = -1;
+    Error *local_err = NULL;
 
     if (version_id < 1 || version_id > 1) {
         error_report("htab_load() bad version");
@@ -1941,8 +1966,6 @@ static int htab_load(QEMUFile *f, void *opaque, int version_id)
     }
 
     if (section_hdr) {
-        Error *local_err = NULL;
-
         /* First section gives the htab size */
         spapr_reallocate_hpt(spapr, section_hdr, &local_err);
         if (local_err) {
@@ -1955,10 +1978,10 @@ static int htab_load(QEMUFile *f, void *opaque, int version_id)
     if (!spapr->htab) {
         assert(kvm_enabled());
 
-        fd = kvmppc_get_htab_fd(true);
+        fd = kvmppc_get_htab_fd(true, 0, &local_err);
         if (fd < 0) {
-            error_report("Unable to open fd to restore KVM hash table: %s",
-                         strerror(errno));
+            error_report_err(local_err);
+            return fd;
         }
     }
 
@@ -2106,7 +2129,7 @@ static void spapr_init_cpus(sPAPRMachineState *spapr)
 {
     MachineState *machine = MACHINE(spapr);
     MachineClass *mc = MACHINE_GET_CLASS(machine);
-    char *type = spapr_get_cpu_core_type(machine->cpu_model);
+    const char *type = spapr_get_cpu_core_type(machine->cpu_type);
     int smt = kvmppc_smt_threads();
     const CPUArchIdList *possible_cpus;
     int boot_cores_nr = smp_cpus / smp_threads;
@@ -2161,7 +2184,6 @@ static void spapr_init_cpus(sPAPRMachineState *spapr)
             object_property_set_bool(core, true, "realized", &error_fatal);
         }
     }
-    g_free(type);
 }
 
 static void spapr_set_vsmt_mode(sPAPRMachineState *spapr, Error **errp)
@@ -2318,7 +2340,8 @@ static void ppc_spapr_init(MachineState *machine)
     /* Set up Interrupt Controller before we create the VCPUs */
     xics_system_init(machine, XICS_IRQS_SPAPR, &error_fatal);
 
-    /* Set up containers for ibm,client-set-architecture negotiated options */
+    /* Set up containers for ibm,client-architecture-support negotiated options
+     */
     spapr->ov5 = spapr_ovec_new();
     spapr->ov5_cas = spapr_ovec_new();
 
@@ -2345,12 +2368,6 @@ static void ppc_spapr_init(MachineState *machine)
     }
 
     /* init CPUs */
-    if (machine->cpu_model == NULL) {
-        machine->cpu_model = kvm_enabled() ? "host" : smc->tcg_default_cpu;
-    }
-
-    spapr_cpu_parse_features(spapr);
-
     spapr_set_vsmt_mode(spapr, &error_fatal);
 
     spapr_init_cpus(spapr);
@@ -3037,14 +3054,13 @@ void spapr_lmb_release(DeviceState *dev)
         return;
     }
 
-    spapr_pending_dimm_unplugs_remove(spapr, ds);
-
     /*
      * Now that all the LMBs have been removed by the guest, call the
      * pc-dimm unplug handler to cleanup up the pc-dimm device.
      */
     pc_dimm_memory_unplug(dev, &spapr->hotplug_memory, mr);
     object_unparent(OBJECT(dev));
+    spapr_pending_dimm_unplugs_remove(spapr, ds);
 }
 
 static void spapr_memory_unplug_request(HotplugHandler *hotplug_dev,
@@ -3070,6 +3086,19 @@ static void spapr_memory_unplug_request(HotplugHandler *hotplug_dev,
     addr_start = object_property_get_uint(OBJECT(dimm), PC_DIMM_ADDR_PROP,
                                          &local_err);
     if (local_err) {
+        goto out;
+    }
+
+    /*
+     * An existing pending dimm state for this DIMM means that there is an
+     * unplug operation in progress, waiting for the spapr_lmb_release
+     * callback to complete the job (BQL can't cover that far). In this case,
+     * bail out to avoid detaching DRCs that were already released.
+     */
+    if (spapr_pending_dimm_unplugs_find(spapr, dimm)) {
+        error_setg(&local_err,
+                   "Memory unplug already in progress for device %s",
+                   dev->id);
         goto out;
     }
 
@@ -3125,8 +3154,7 @@ void spapr_core_release(DeviceState *dev)
     if (smc->pre_2_10_has_unused_icps) {
         sPAPRCPUCore *sc = SPAPR_CPU_CORE(OBJECT(dev));
         sPAPRCPUCoreClass *scc = SPAPR_CPU_CORE_GET_CLASS(OBJECT(cc));
-        const char *typename = object_class_get_name(scc->cpu_class);
-        size_t size = object_type_get_instance_size(typename);
+        size_t size = object_type_get_instance_size(scc->cpu_type);
         int i;
 
         for (i = 0; i < cc->nr_threads; i++) {
@@ -3222,8 +3250,7 @@ static void spapr_core_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
 
     if (smc->pre_2_10_has_unused_icps) {
         sPAPRCPUCoreClass *scc = SPAPR_CPU_CORE_GET_CLASS(OBJECT(cc));
-        const char *typename = object_class_get_name(scc->cpu_class);
-        size_t size = object_type_get_instance_size(typename);
+        size_t size = object_type_get_instance_size(scc->cpu_type);
         int i;
 
         for (i = 0; i < cc->nr_threads; i++) {
@@ -3243,7 +3270,7 @@ static void spapr_core_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
     MachineClass *mc = MACHINE_GET_CLASS(hotplug_dev);
     Error *local_err = NULL;
     CPUCore *cc = CPU_CORE(dev);
-    char *base_core_type = spapr_get_cpu_core_type(machine->cpu_model);
+    const char *base_core_type = spapr_get_cpu_core_type(machine->cpu_type);
     const char *type = object_get_typename(OBJECT(dev));
     CPUArchId *core_slot;
     int index;
@@ -3289,7 +3316,6 @@ static void spapr_core_pre_plug(HotplugHandler *hotplug_dev, DeviceState *dev,
     numa_cpu_pre_plug(core_slot, dev, &local_err);
 
 out:
-    g_free(base_core_type);
     error_propagate(errp, local_err);
 }
 
@@ -3588,7 +3614,7 @@ static void spapr_machine_class_init(ObjectClass *oc, void *data)
     hc->unplug_request = spapr_machine_device_unplug_request;
 
     smc->dr_lmb_enabled = true;
-    smc->tcg_default_cpu = "POWER8";
+    mc->default_cpu_type = POWERPC_CPU_TYPE_NAME("power8_v2.0");
     mc->has_hotpluggable_cpus = true;
     smc->resize_hpt_default = SPAPR_RESIZE_HPT_ENABLED;
     fwc->get_dev_path = spapr_get_fw_dev_path;
@@ -3600,6 +3626,7 @@ static void spapr_machine_class_init(ObjectClass *oc, void *data)
     vhc->unmap_hptes = spapr_unmap_hptes;
     vhc->store_hpte = spapr_store_hpte;
     vhc->get_patbe = spapr_get_patbe;
+    vhc->encode_hpt_for_kvm_pr = spapr_encode_hpt_for_kvm_pr;
     xic->ics_get = spapr_ics_get;
     xic->ics_resend = spapr_ics_resend;
     xic->icp_get = spapr_icp_get;
@@ -3833,7 +3860,7 @@ static void spapr_machine_2_7_class_options(MachineClass *mc)
     sPAPRMachineClass *smc = SPAPR_MACHINE_CLASS(mc);
 
     spapr_machine_2_8_class_options(mc);
-    smc->tcg_default_cpu = "POWER7";
+    mc->default_cpu_type = POWERPC_CPU_TYPE_NAME("power7_v2.3");
     SET_MACHINE_COMPAT(mc, SPAPR_COMPAT_2_7);
     smc->phb_placement = phb_placement_2_7;
 }

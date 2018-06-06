@@ -92,8 +92,18 @@ static void flush_all_helper(CPUState *src, run_on_cpu_func fn,
     }
 }
 
-/* statistics */
-int tlb_flush_count;
+size_t tlb_flush_count(void)
+{
+    CPUState *cpu;
+    size_t count = 0;
+
+    CPU_FOREACH(cpu) {
+        CPUArchState *env = cpu->env_ptr;
+
+        count += atomic_read(&env->tlb_flush_count);
+    }
+    return count;
+}
 
 /* This is OK because CPU architectures generally permit an
  * implementation to drop entries from the TLB at any time, so
@@ -112,7 +122,8 @@ static void tlb_flush_nocheck(CPUState *cpu)
     }
 
     assert_cpu_is_self(cpu);
-    tlb_debug("(count: %d)\n", tlb_flush_count++);
+    atomic_set(&env->tlb_flush_count, env->tlb_flush_count + 1);
+    tlb_debug("(count: %zu)\n", tlb_flush_count());
 
     tb_lock();
 
@@ -683,6 +694,9 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
         } else {
             tn.addr_write = address;
         }
+        if (prot & PAGE_WRITE_INV) {
+            tn.addr_write |= TLB_INVALID_MASK;
+        }
     }
 
     /* Pairs with flag setting in tlb_reset_dirty_range */
@@ -765,7 +779,7 @@ static uint64_t io_readx(CPUArchState *env, CPUIOTLBEntry *iotlbentry,
 
     cpu->mem_io_vaddr = addr;
 
-    if (mr->global_locking) {
+    if (mr->global_locking && !qemu_mutex_iothread_locked()) {
         qemu_mutex_lock_iothread();
         locked = true;
     }
@@ -800,7 +814,7 @@ static void io_writex(CPUArchState *env, CPUIOTLBEntry *iotlbentry,
     cpu->mem_io_vaddr = addr;
     cpu->mem_io_pc = retaddr;
 
-    if (mr->global_locking) {
+    if (mr->global_locking && !qemu_mutex_iothread_locked()) {
         qemu_mutex_lock_iothread();
         locked = true;
     }
@@ -967,7 +981,7 @@ static void *atomic_mmu_lookup(CPUArchState *env, target_ulong addr,
         if (!VICTIM_TLB_HIT(addr_write, addr)) {
             tlb_fill(ENV_GET_CPU(env), addr, MMU_DATA_STORE, mmu_idx, retaddr);
         }
-        tlb_addr = tlbe->addr_write;
+        tlb_addr = tlbe->addr_write & ~TLB_INVALID_MASK;
     }
 
     /* Check notdirty */

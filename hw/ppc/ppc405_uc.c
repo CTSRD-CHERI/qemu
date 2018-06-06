@@ -105,9 +105,12 @@ ram_addr_t ppc405_set_bootinfo (CPUPPCState *env, ppc4xx_bd_info_t *bd,
 /*****************************************************************************/
 /* Peripheral local bus arbitrer */
 enum {
-    PLB0_BESR = 0x084,
-    PLB0_BEAR = 0x086,
-    PLB0_ACR  = 0x087,
+    PLB3A0_ACR = 0x077,
+    PLB4A0_ACR = 0x081,
+    PLB0_BESR  = 0x084,
+    PLB0_BEAR  = 0x086,
+    PLB0_ACR   = 0x087,
+    PLB4A1_ACR = 0x089,
 };
 
 typedef struct ppc4xx_plb_t ppc4xx_plb_t;
@@ -179,9 +182,12 @@ void ppc4xx_plb_init(CPUPPCState *env)
     ppc4xx_plb_t *plb;
 
     plb = g_malloc0(sizeof(ppc4xx_plb_t));
+    ppc_dcr_register(env, PLB3A0_ACR, plb, &dcr_read_plb, &dcr_write_plb);
+    ppc_dcr_register(env, PLB4A0_ACR, plb, &dcr_read_plb, &dcr_write_plb);
     ppc_dcr_register(env, PLB0_ACR, plb, &dcr_read_plb, &dcr_write_plb);
     ppc_dcr_register(env, PLB0_BEAR, plb, &dcr_read_plb, &dcr_write_plb);
     ppc_dcr_register(env, PLB0_BESR, plb, &dcr_read_plb, &dcr_write_plb);
+    ppc_dcr_register(env, PLB4A1_ACR, plb, &dcr_read_plb, &dcr_write_plb);
     qemu_register_reset(ppc4xx_plb_reset, plb);
 }
 
@@ -1623,7 +1629,8 @@ CPUPPCState *ppc405cr_init(MemoryRegion *address_space_mem,
     qemu_irq *pic, *irqs;
 
     memset(clk_setup, 0, sizeof(clk_setup));
-    cpu = ppc4xx_init("405cr", &clk_setup[PPC405CR_CPU_CLK],
+    cpu = ppc4xx_init(POWERPC_CPU_TYPE_NAME("405crc"),
+                      &clk_setup[PPC405CR_CPU_CLK],
                       &clk_setup[PPC405CR_TMR_CLK], sysclk);
     env = &cpu->env;
     /* Memory mapped devices registers */
@@ -1975,7 +1982,8 @@ CPUPPCState *ppc405ep_init(MemoryRegion *address_space_mem,
 
     memset(clk_setup, 0, sizeof(clk_setup));
     /* init CPUs */
-    cpu = ppc4xx_init("405ep", &clk_setup[PPC405EP_CPU_CLK],
+    cpu = ppc4xx_init(POWERPC_CPU_TYPE_NAME("405ep"),
+                      &clk_setup[PPC405EP_CPU_CLK],
                       &tlb_clk_setup, sysclk);
     env = &cpu->env;
     clk_setup[PPC405EP_CPU_CLK].cb = tlb_clk_setup.cb;

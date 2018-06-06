@@ -61,7 +61,6 @@ static void openrisc_cpu_reset(CPUState *s)
     cpu->env.picsr = 0x00000000;
 
     cpu->env.ttmr = 0x00000000;
-    cpu->env.ttcr = 0x00000000;
 #endif
 }
 
@@ -107,10 +106,6 @@ static ObjectClass *openrisc_cpu_class_by_name(const char *cpu_model)
 {
     ObjectClass *oc;
     char *typename;
-
-    if (cpu_model == NULL) {
-        return NULL;
-    }
 
     typename = g_strdup_printf("%s-" TYPE_OPENRISC_CPU, cpu_model);
     oc = object_class_by_name(typename);

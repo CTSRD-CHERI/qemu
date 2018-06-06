@@ -187,6 +187,13 @@ static void arm_cpu_reset(CPUState *s)
 
         if (arm_feature(env, ARM_FEATURE_M_SECURITY)) {
             env->v7m.secure = true;
+        } else {
+            /* This bit resets to 0 if security is supported, but 1 if
+             * it is not. The bit is not present in v7M, but we set it
+             * here so we can avoid having to make checks on it conditional
+             * on ARM_FEATURE_V8 (we don't let the guest see the bit).
+             */
+            env->v7m.aircr = R_V7M_AIRCR_BFHFNMINS_MASK;
         }
 
         /* In v7M the reset value of this bit is IMPDEF, but ARM recommends
@@ -276,6 +283,18 @@ static void arm_cpu_reset(CPUState *s)
         env->pmsav8.mair0[M_REG_S] = 0;
         env->pmsav8.mair1[M_REG_NS] = 0;
         env->pmsav8.mair1[M_REG_S] = 0;
+    }
+
+    if (arm_feature(env, ARM_FEATURE_M_SECURITY)) {
+        if (cpu->sau_sregion > 0) {
+            memset(env->sau.rbar, 0, sizeof(*env->sau.rbar) * cpu->sau_sregion);
+            memset(env->sau.rlar, 0, sizeof(*env->sau.rlar) * cpu->sau_sregion);
+        }
+        env->sau.rnr = 0;
+        /* SAU_CTRL reset value is IMPDEF; we choose 0, which is what
+         * the Cortex-M33 does.
+         */
+        env->sau.ctrl = 0;
     }
 
     set_flush_to_zero(1, &env->vfp.standard_fp_status);
@@ -454,25 +473,11 @@ print_insn_thumb1(bfd_vma pc, disassemble_info *info)
   return print_insn_arm(pc | 1, info);
 }
 
-static int arm_read_memory_func(bfd_vma memaddr, bfd_byte *b,
-                                int length, struct disassemble_info *info)
-{
-    assert(info->read_memory_inner_func);
-    assert((info->flags & INSN_ARM_BE32) == 0 || length == 2 || length == 4);
-
-    if ((info->flags & INSN_ARM_BE32) != 0 && length == 2) {
-        assert(info->endian == BFD_ENDIAN_LITTLE);
-        return info->read_memory_inner_func(memaddr ^ 2, (bfd_byte *)b, 2,
-                                            info);
-    } else {
-        return info->read_memory_inner_func(memaddr, b, length, info);
-    }
-}
-
 static void arm_disas_set_info(CPUState *cpu, disassemble_info *info)
 {
     ARMCPU *ac = ARM_CPU(cpu);
     CPUARMState *env = &ac->env;
+    bool sctlr_b;
 
     if (is_a64(env)) {
         /* We might not be compiled with the A64 disassembler
@@ -487,21 +492,21 @@ static void arm_disas_set_info(CPUState *cpu, disassemble_info *info)
     } else {
         info->print_insn = print_insn_arm;
     }
-    if (bswap_code(arm_sctlr_b(env))) {
+
+    sctlr_b = arm_sctlr_b(env);
+    if (bswap_code(sctlr_b)) {
 #ifdef TARGET_WORDS_BIGENDIAN
         info->endian = BFD_ENDIAN_LITTLE;
 #else
         info->endian = BFD_ENDIAN_BIG;
 #endif
     }
-    if (info->read_memory_inner_func == NULL) {
-        info->read_memory_inner_func = info->read_memory_func;
-        info->read_memory_func = arm_read_memory_func;
-    }
     info->flags &= ~INSN_ARM_BE32;
-    if (arm_sctlr_b(env)) {
+#ifndef CONFIG_USER_ONLY
+    if (sctlr_b) {
         info->flags |= INSN_ARM_BE32;
     }
+#endif
 }
 
 uint64_t arm_cpu_mp_affinity(int idx, uint8_t clustersz)
@@ -684,6 +689,9 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
     CPUARMState *env = &cpu->env;
     int pagebits;
     Error *local_err = NULL;
+#ifndef CONFIG_USER_ONLY
+    AddressSpace *as;
+#endif
 
     cpu_exec_realizefn(cs, &local_err);
     if (local_err != NULL) {
@@ -863,6 +871,20 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
         }
     }
 
+    if (arm_feature(env, ARM_FEATURE_M_SECURITY)) {
+        uint32_t nr = cpu->sau_sregion;
+
+        if (nr > 0xff) {
+            error_setg(errp, "v8M SAU #regions invalid %" PRIu32, nr);
+            return;
+        }
+
+        if (nr) {
+            env->sau.rbar = g_new0(uint32_t, nr);
+            env->sau.rlar = g_new0(uint32_t, nr);
+        }
+    }
+
     if (arm_feature(env, ARM_FEATURE_EL3)) {
         set_feature(env, ARM_FEATURE_VBAR);
     }
@@ -874,24 +896,21 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
 
 #ifndef CONFIG_USER_ONLY
     if (cpu->has_el3 || arm_feature(env, ARM_FEATURE_M_SECURITY)) {
-        AddressSpace *as;
+        as = g_new0(AddressSpace, 1);
 
         cs->num_ases = 2;
 
         if (!cpu->secure_memory) {
             cpu->secure_memory = cs->memory;
         }
-        as = address_space_init_shareable(cpu->secure_memory,
-                                          "cpu-secure-memory");
+        address_space_init(as, cpu->secure_memory, "cpu-secure-memory");
         cpu_address_space_init(cs, as, ARMASIdx_S);
     } else {
         cs->num_ases = 1;
     }
-
-    cpu_address_space_init(cs,
-                           address_space_init_shareable(cs->memory,
-                                                        "cpu-memory"),
-                           ARMASIdx_NS);
+    as = g_new0(AddressSpace, 1);
+    address_space_init(as, cs->memory, "cpu-memory");
+    cpu_address_space_init(cs, as, ARMASIdx_NS);
 #endif
 
     qemu_init_vcpu(cs);
@@ -905,10 +924,6 @@ static ObjectClass *arm_cpu_class_by_name(const char *cpu_model)
     ObjectClass *oc;
     char *typename;
     char **cpuname;
-
-    if (!cpu_model) {
-        return NULL;
-    }
 
     cpuname = g_strsplit(cpu_model, ",", 1);
     typename = g_strdup_printf(ARM_CPU_TYPE_NAME("%s"), cpuname[0]);
@@ -1134,6 +1149,7 @@ static void cortex_m4_initfn(Object *obj)
     cpu->midr = 0x410fc240; /* r0p0 */
     cpu->pmsav7_dregion = 8;
 }
+
 static void arm_v7m_class_init(ObjectClass *oc, void *data)
 {
     CPUClass *cc = CPU_CLASS(oc);

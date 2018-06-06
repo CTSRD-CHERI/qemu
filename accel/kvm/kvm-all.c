@@ -87,6 +87,7 @@ struct KVMState
 #endif
     int many_ioeventfds;
     int intx_set_mask;
+    bool sync_mmu;
     /* The man page (and posix) say ioctl numbers are signed int, but
      * they're not.  Linux, glibc and *BSD all treat ioctl numbers as
      * unsigned, and treating them as signed here can break things */
@@ -196,26 +197,20 @@ static hwaddr kvm_align_section(MemoryRegionSection *section,
                                 hwaddr *start)
 {
     hwaddr size = int128_get64(section->size);
-    hwaddr delta;
-
-    *start = section->offset_within_address_space;
+    hwaddr delta, aligned;
 
     /* kvm works in page size chunks, but the function may be called
        with sub-page size and unaligned start address. Pad the start
        address to next and truncate size to previous page boundary. */
-    delta = qemu_real_host_page_size - (*start & ~qemu_real_host_page_mask);
-    delta &= ~qemu_real_host_page_mask;
-    *start += delta;
+    aligned = ROUND_UP(section->offset_within_address_space,
+                       qemu_real_host_page_size);
+    delta = aligned - section->offset_within_address_space;
+    *start = aligned;
     if (delta > size) {
         return 0;
     }
-    size -= delta;
-    size &= qemu_real_host_page_mask;
-    if (*start & ~qemu_real_host_page_mask) {
-        return 0;
-    }
 
-    return size;
+    return (size - delta) & qemu_real_host_page_mask;
 }
 
 int kvm_physical_memory_addr_from_host(KVMState *s, void *ram,
@@ -393,8 +388,8 @@ static int kvm_section_update_flags(KVMMemoryListener *kml,
 
     mem = kvm_lookup_matching_slot(kml, start_addr, size);
     if (!mem) {
-        fprintf(stderr, "%s: error finding slot\n", __func__);
-        abort();
+        /* We don't have a slot if we want to trap every access. */
+        return 0;
     }
 
     return kvm_slot_update_flags(kml, mem, section->mr);
@@ -469,8 +464,8 @@ static int kvm_physical_sync_dirty_bitmap(KVMMemoryListener *kml,
     if (size) {
         mem = kvm_lookup_matching_slot(kml, start_addr, size);
         if (!mem) {
-            fprintf(stderr, "%s: error finding slot\n", __func__);
-            abort();
+            /* We don't have a slot if we want to trap every access. */
+            return 0;
         }
 
         /* XXX bad kernel interface alert
@@ -716,13 +711,13 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
         return;
     }
 
+    /* use aligned delta to align the ram address */
     ram = memory_region_get_ram_ptr(mr) + section->offset_within_region +
-          (section->offset_within_address_space - start_addr);
+          (start_addr - section->offset_within_address_space);
 
-    mem = kvm_lookup_matching_slot(kml, start_addr, size);
     if (!add) {
+        mem = kvm_lookup_matching_slot(kml, start_addr, size);
         if (!mem) {
-            g_assert(!memory_region_is_ram(mr) && !writeable && !mr->romd_mode);
             return;
         }
         if (mem->flags & KVM_MEM_LOG_DIRTY_PAGES) {
@@ -733,16 +728,10 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
         mem->memory_size = 0;
         err = kvm_set_user_memory_region(kml, mem);
         if (err) {
-            fprintf(stderr, "%s: error unregistering overlapping slot: %s\n",
+            fprintf(stderr, "%s: error unregistering slot: %s\n",
                     __func__, strerror(-err));
             abort();
         }
-        return;
-    }
-
-    if (mem) {
-        /* update the slot */
-        kvm_slot_update_flags(kml, mem, mr);
         return;
     }
 
@@ -1440,7 +1429,7 @@ static void kvm_irqchip_create(MachineState *machine, KVMState *s)
  */
 static int kvm_recommended_vcpus(KVMState *s)
 {
-    int ret = kvm_check_extension(s, KVM_CAP_NR_VCPUS);
+    int ret = kvm_vm_check_extension(s, KVM_CAP_NR_VCPUS);
     return (ret) ? ret : 4;
 }
 
@@ -1530,26 +1519,6 @@ static int kvm_init(MachineState *ms)
         s->nr_slots = 32;
     }
 
-    /* check the vcpu limits */
-    soft_vcpus_limit = kvm_recommended_vcpus(s);
-    hard_vcpus_limit = kvm_max_vcpus(s);
-
-    while (nc->name) {
-        if (nc->num > soft_vcpus_limit) {
-            warn_report("Number of %s cpus requested (%d) exceeds "
-                        "the recommended cpus supported by KVM (%d)",
-                        nc->name, nc->num, soft_vcpus_limit);
-
-            if (nc->num > hard_vcpus_limit) {
-                fprintf(stderr, "Number of %s cpus requested (%d) exceeds "
-                        "the maximum cpus supported by KVM (%d)\n",
-                        nc->name, nc->num, hard_vcpus_limit);
-                exit(1);
-            }
-        }
-        nc++;
-    }
-
     kvm_type = qemu_opt_get(qemu_get_machine_opts(), "kvm-type");
     if (mc->kvm_type) {
         type = mc->kvm_type(kvm_type);
@@ -1584,6 +1553,27 @@ static int kvm_init(MachineState *ms)
     }
 
     s->vmfd = ret;
+
+    /* check the vcpu limits */
+    soft_vcpus_limit = kvm_recommended_vcpus(s);
+    hard_vcpus_limit = kvm_max_vcpus(s);
+
+    while (nc->name) {
+        if (nc->num > soft_vcpus_limit) {
+            warn_report("Number of %s cpus requested (%d) exceeds "
+                        "the recommended cpus supported by KVM (%d)",
+                        nc->name, nc->num, soft_vcpus_limit);
+
+            if (nc->num > hard_vcpus_limit) {
+                fprintf(stderr, "Number of %s cpus requested (%d) exceeds "
+                        "the maximum cpus supported by KVM (%d)\n",
+                        nc->name, nc->num, hard_vcpus_limit);
+                exit(1);
+            }
+        }
+        nc++;
+    }
+
     missing_cap = kvm_check_extension_list(s, kvm_required_capabilites);
     if (!missing_cap) {
         missing_cap =
@@ -1664,6 +1654,8 @@ static int kvm_init(MachineState *ms)
                              &address_space_io);
 
     s->many_ioeventfds = kvm_check_many_ioeventfds();
+
+    s->sync_mmu = !!kvm_vm_check_extension(kvm_state, KVM_CAP_SYNC_MMU);
 
     return 0;
 
@@ -2131,10 +2123,9 @@ int kvm_device_access(int fd, int group, uint64_t attr,
     return err;
 }
 
-/* Return 1 on success, 0 on failure */
-int kvm_has_sync_mmu(void)
+bool kvm_has_sync_mmu(void)
 {
-    return kvm_check_extension(kvm_state, KVM_CAP_SYNC_MMU);
+    return kvm_state->sync_mmu;
 }
 
 int kvm_has_vcpu_events(void)

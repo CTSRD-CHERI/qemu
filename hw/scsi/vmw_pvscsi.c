@@ -1167,7 +1167,7 @@ pvscsi_reset(DeviceState *dev)
     pvscsi_reset_adapter(s);
 }
 
-static void
+static int
 pvscsi_pre_save(void *opaque)
 {
     PVSCSIState *s = (PVSCSIState *) opaque;
@@ -1176,6 +1176,8 @@ pvscsi_pre_save(void *opaque)
 
     assert(QTAILQ_EMPTY(&s->pending_queue));
     assert(QTAILQ_EMPTY(&s->completion_queue));
+
+    return 0;
 }
 
 static int
@@ -1300,6 +1302,8 @@ static const TypeInfo pvscsi_info = {
     .class_init    = pvscsi_class_init,
     .interfaces = (InterfaceInfo[]) {
         { TYPE_HOTPLUG_HANDLER },
+        { INTERFACE_PCIE_DEVICE },
+        { INTERFACE_CONVENTIONAL_PCI_DEVICE },
         { }
     }
 };

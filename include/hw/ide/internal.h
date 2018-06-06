@@ -333,8 +333,7 @@ struct unreported_events {
 };
 
 enum ide_dma_cmd {
-    IDE_DMA__BEGIN = 0,
-    IDE_DMA_READ = IDE_DMA__BEGIN,
+    IDE_DMA_READ = 0,
     IDE_DMA_WRITE,
     IDE_DMA_TRIM,
     IDE_DMA_ATAPI,
@@ -509,6 +508,14 @@ struct IDEDevice {
     char *serial;
     char *model;
     uint64_t wwn;
+    /*
+     * 0x0000        - rotation rate not reported
+     * 0x0001        - non-rotating medium (SSD)
+     * 0x0002-0x0400 - reserved
+     * 0x0401-0xffe  - rotations per minute
+     * 0xffff        - reserved
+     */
+    uint16_t rotation_rate;
 };
 
 /* These are used for the error_status field of IDEBus */

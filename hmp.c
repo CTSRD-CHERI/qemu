@@ -336,6 +336,12 @@ void hmp_info_migrate_parameters(Monitor *mon, const QDict *qdict)
         monitor_printf(mon, "%s: %s\n",
             MigrationParameter_str(MIGRATION_PARAMETER_BLOCK_INCREMENTAL),
             params->block_incremental ? "on" : "off");
+        monitor_printf(mon, "%s: %" PRId64 "\n",
+            MigrationParameter_str(MIGRATION_PARAMETER_X_MULTIFD_CHANNELS),
+            params->x_multifd_channels);
+        monitor_printf(mon, "%s: %" PRId64 "\n",
+            MigrationParameter_str(MIGRATION_PARAMETER_X_MULTIFD_PAGE_COUNT),
+            params->x_multifd_page_count);
     }
 
     qapi_free_MigrationParameters(params);
@@ -994,6 +1000,7 @@ void hmp_info_tpm(Monitor *mon, const QDict *qdict)
     Error *err = NULL;
     unsigned int c = 0;
     TPMPassthroughOptions *tpo;
+    TPMEmulatorOptions *teo;
 
     info_list = qmp_query_tpm(&err);
     if (err) {
@@ -1022,6 +1029,10 @@ void hmp_info_tpm(Monitor *mon, const QDict *qdict)
                            tpo->has_path ? tpo->path : "",
                            tpo->has_cancel_path ? ",cancel-path=" : "",
                            tpo->has_cancel_path ? tpo->cancel_path : "");
+            break;
+        case TPM_TYPE_OPTIONS_KIND_EMULATOR:
+            teo = ti->options->u.emulator.data;
+            monitor_printf(mon, ",chardev=%s", teo->chardev);
             break;
         case TPM_TYPE_OPTIONS_KIND__MAX:
             break;
@@ -1620,6 +1631,14 @@ void hmp_migrate_set_parameter(Monitor *mon, const QDict *qdict)
     case MIGRATION_PARAMETER_BLOCK_INCREMENTAL:
         p->has_block_incremental = true;
         visit_type_bool(v, param, &p->block_incremental, &err);
+        break;
+    case MIGRATION_PARAMETER_X_MULTIFD_CHANNELS:
+        p->has_x_multifd_channels = true;
+        visit_type_int(v, param, &p->x_multifd_channels, &err);
+        break;
+    case MIGRATION_PARAMETER_X_MULTIFD_PAGE_COUNT:
+        p->has_x_multifd_page_count = true;
+        visit_type_int(v, param, &p->x_multifd_page_count, &err);
         break;
     default:
         assert(0);
@@ -2380,6 +2399,7 @@ void hmp_info_memdev(Monitor *mon, const QDict *qdict)
     monitor_printf(mon, "\n");
 
     qapi_free_MemdevList(memdev_list);
+    hmp_handle_error(mon, &err);
 }
 
 void hmp_info_memory_devices(Monitor *mon, const QDict *qdict)
@@ -2418,6 +2438,7 @@ void hmp_info_memory_devices(Monitor *mon, const QDict *qdict)
     }
 
     qapi_free_MemoryDeviceInfoList(info_list);
+    hmp_handle_error(mon, &err);
 }
 
 void hmp_info_iothreads(Monitor *mon, const QDict *qdict)

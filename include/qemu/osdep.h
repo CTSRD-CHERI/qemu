@@ -205,13 +205,13 @@ extern int daemon(int, int);
 
 /* Round number up to multiple. Requires that d be a power of 2 (see
  * QEMU_ALIGN_UP for a safer but slower version on arbitrary
- * numbers) */
+ * numbers); works even if d is a smaller type than n.  */
 #ifndef ROUND_UP
-#define ROUND_UP(n,d) (((n) + (d) - 1) & -(d))
+#define ROUND_UP(n, d) (((n) + (d) - 1) & -(0 ? (n) : (d)))
 #endif
 
 #ifndef DIV_ROUND_UP
-#define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
+#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
 #endif
 
 /*
@@ -504,6 +504,12 @@ char *qemu_get_pid_name(pid_t pid);
  * or -1 on failure.
  */
 pid_t qemu_fork(Error **errp);
+
+/* Using intptr_t ensures that qemu_*_page_mask is sign-extended even
+ * when intptr_t is 32-bit and we are aligning a long long.
+ */
+extern uintptr_t qemu_real_host_page_size;
+extern intptr_t qemu_real_host_page_mask;
 
 extern int qemu_icache_linesize;
 extern int qemu_dcache_linesize;

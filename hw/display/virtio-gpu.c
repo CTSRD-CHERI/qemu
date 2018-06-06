@@ -1050,9 +1050,7 @@ static int virtio_gpu_save(QEMUFile *f, void *opaque, size_t size,
     }
     qemu_put_be32(f, 0); /* end of list */
 
-    vmstate_save_state(f, &vmstate_virtio_gpu_scanouts, g, NULL);
-
-    return 0;
+    return vmstate_save_state(f, &vmstate_virtio_gpu_scanouts, g, NULL);
 }
 
 static int virtio_gpu_load(QEMUFile *f, void *opaque, size_t size,
@@ -1321,6 +1319,7 @@ static void virtio_gpu_class_init(ObjectClass *klass, void *data)
 
     vdc->reset = virtio_gpu_reset;
 
+    set_bit(DEVICE_CATEGORY_DISPLAY, dc->categories);
     dc->props = virtio_gpu_properties;
     dc->vmsd = &vmstate_virtio_gpu;
     dc->hotpluggable = false;

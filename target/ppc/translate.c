@@ -2181,6 +2181,9 @@ static void gen_srawi(DisasContext *ctx)
     if (sh == 0) {
         tcg_gen_ext32s_tl(dst, src);
         tcg_gen_movi_tl(cpu_ca, 0);
+        if (is_isa300(ctx)) {
+            tcg_gen_movi_tl(cpu_ca32, 0);
+        }
     } else {
         TCGv t0;
         tcg_gen_ext32s_tl(dst, src);
@@ -2190,6 +2193,9 @@ static void gen_srawi(DisasContext *ctx)
         tcg_gen_and_tl(cpu_ca, cpu_ca, t0);
         tcg_temp_free(t0);
         tcg_gen_setcondi_tl(TCG_COND_NE, cpu_ca, cpu_ca, 0);
+        if (is_isa300(ctx)) {
+            tcg_gen_mov_tl(cpu_ca32, cpu_ca);
+        }
         tcg_gen_sari_tl(dst, dst, sh);
     }
     if (unlikely(Rc(ctx->opcode) != 0)) {
@@ -2259,6 +2265,9 @@ static inline void gen_sradi(DisasContext *ctx, int n)
     if (sh == 0) {
         tcg_gen_mov_tl(dst, src);
         tcg_gen_movi_tl(cpu_ca, 0);
+        if (is_isa300(ctx)) {
+            tcg_gen_movi_tl(cpu_ca32, 0);
+        }
     } else {
         TCGv t0;
         tcg_gen_andi_tl(cpu_ca, src, (1ULL << sh) - 1);
@@ -2267,6 +2276,9 @@ static inline void gen_sradi(DisasContext *ctx, int n)
         tcg_gen_and_tl(cpu_ca, cpu_ca, t0);
         tcg_temp_free(t0);
         tcg_gen_setcondi_tl(TCG_COND_NE, cpu_ca, cpu_ca, 0);
+        if (is_isa300(ctx)) {
+            tcg_gen_mov_tl(cpu_ca32, cpu_ca);
+        }
         tcg_gen_sari_tl(dst, src, sh);
     }
     if (unlikely(Rc(ctx->opcode) != 0)) {
@@ -7395,12 +7407,9 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
 #if defined(DEBUG_DISAS)
     if (qemu_loglevel_mask(CPU_LOG_TB_IN_ASM)
         && qemu_log_in_addr_range(pc_start)) {
-        int flags;
-        flags = env->bfd_mach;
-        flags |= ctx.le_mode << 16;
         qemu_log_lock();
         qemu_log("IN: %s\n", lookup_symbol(pc_start));
-        log_target_disas(cs, pc_start, ctx.nip - pc_start, flags);
+        log_target_disas(cs, pc_start, ctx.nip - pc_start, 0);
         qemu_log("\n");
         qemu_log_unlock();
     }

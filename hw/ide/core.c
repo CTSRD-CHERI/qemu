@@ -68,7 +68,7 @@ const char *IDE_DMA_CMD_lookup[IDE_DMA__COUNT] = {
 
 static const char *IDE_DMA_CMD_str(enum ide_dma_cmd enval)
 {
-    if (enval >= IDE_DMA__BEGIN && enval < IDE_DMA__COUNT) {
+    if ((unsigned)enval < IDE_DMA__COUNT) {
         return IDE_DMA_CMD_lookup[enval];
     }
     return "DMA UNKNOWN CMD";
@@ -208,6 +208,7 @@ static void ide_identify(IDEState *s)
     if (dev && dev->conf.discard_granularity) {
         put_le16(p + 169, 1); /* TRIM support */
     }
+    put_le16(p + 217, dev->rotation_rate); /* Nominal media rotation rate */
 
     ide_identify_size(s);
     s->identify_set = 1;
@@ -2752,7 +2753,7 @@ static int ide_drive_pio_post_load(void *opaque, int version_id)
     return 0;
 }
 
-static void ide_drive_pio_pre_save(void *opaque)
+static int ide_drive_pio_pre_save(void *opaque)
 {
     IDEState *s = opaque;
     int idx;
@@ -2768,6 +2769,8 @@ static void ide_drive_pio_pre_save(void *opaque)
     } else {
         s->end_transfer_fn_idx = idx;
     }
+
+    return 0;
 }
 
 static bool ide_drive_pio_state_needed(void *opaque)

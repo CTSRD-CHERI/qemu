@@ -3162,7 +3162,7 @@ static const VMStateDescription vmstate_rtl8139_hotplug_ready ={
     }
 };
 
-static void rtl8139_pre_save(void *opaque)
+static int rtl8139_pre_save(void *opaque)
 {
     RTL8139State* s = opaque;
     int64_t current_time = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
@@ -3170,6 +3170,8 @@ static void rtl8139_pre_save(void *opaque)
     /* for migration to older versions */
     s->TCTR = (current_time - s->TCTR_base) / PCI_PERIOD;
     s->rtl8139_mmio_io_addr_dummy = 0;
+
+    return 0;
 }
 
 static const VMStateDescription vmstate_rtl8139 = {
@@ -3442,6 +3444,10 @@ static const TypeInfo rtl8139_info = {
     .instance_size = sizeof(RTL8139State),
     .class_init    = rtl8139_class_init,
     .instance_init = rtl8139_instance_init,
+    .interfaces = (InterfaceInfo[]) {
+        { INTERFACE_CONVENTIONAL_PCI_DEVICE },
+        { },
+    },
 };
 
 static void rtl8139_register_types(void)

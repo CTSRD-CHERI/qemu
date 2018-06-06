@@ -392,7 +392,7 @@ static void create_cpu_model_list(ObjectClass *klass, void *opaque)
 
     /* strip off the -s390-cpu */
     g_strrstr(name, "-" TYPE_S390_CPU)[0] = 0;
-    info = g_malloc0(sizeof(*info));
+    info = g_new0(CpuDefinitionInfo, 1);
     info->name = name;
     info->has_migration_safe = true;
     info->migration_safe = scc->is_migration_safe;
@@ -412,7 +412,7 @@ static void create_cpu_model_list(ObjectClass *klass, void *opaque)
         object_unref(obj);
     }
 
-    entry = g_malloc0(sizeof(*entry));
+    entry = g_new0(CpuDefinitionInfoList, 1);
     entry->value = info;
     entry->next = *cpu_list;
     *cpu_list = entry;
@@ -574,7 +574,7 @@ CpuModelExpansionInfo *arch_query_cpu_model_expansion(CpuModelExpansionType type
     }
 
     /* convert it back to a static representation */
-    expansion_info = g_malloc0(sizeof(*expansion_info));
+    expansion_info = g_new0(CpuModelExpansionInfo, 1);
     expansion_info->model = g_malloc0(sizeof(*expansion_info->model));
     cpu_info_from_model(expansion_info->model, &s390_model, delta_changes);
     return expansion_info;
@@ -585,7 +585,7 @@ static void list_add_feat(const char *name, void *opaque)
     strList **last = (strList **) opaque;
     strList *entry;
 
-    entry = g_malloc0(sizeof(*entry));
+    entry = g_new0(strList, 1);
     entry->value = g_strdup(name);
     entry->next = *last;
     *last = entry;
@@ -609,7 +609,7 @@ CpuModelCompareInfo *arch_query_cpu_model_comparison(CpuModelInfo *infoa,
     if (*errp) {
         return NULL;
     }
-    compare_info = g_malloc0(sizeof(*compare_info));
+    compare_info = g_new0(CpuModelCompareInfo, 1);
 
     /* check the cpu generation and ga level */
     if (modela.def->gen == modelb.def->gen) {
@@ -713,7 +713,7 @@ CpuModelBaselineInfo *arch_query_cpu_model_baseline(CpuModelInfo *infoa,
     bitmap_and(model.features, model.features, model.def->full_feat,
                S390_FEAT_MAX);
 
-    baseline_info = g_malloc0(sizeof(*baseline_info));
+    baseline_info = g_new0(CpuModelBaselineInfo, 1);
     baseline_info->model = g_malloc0(sizeof(*baseline_info->model));
     cpu_info_from_model(baseline_info->model, &model, true);
     return baseline_info;
@@ -823,8 +823,10 @@ static void add_qemu_cpu_model_features(S390FeatBitmap fbm)
         S390_FEAT_DAT_ENH,
         S390_FEAT_IDTE_SEGMENT,
         S390_FEAT_STFLE,
+        S390_FEAT_SENSE_RUNNING_STATUS,
         S390_FEAT_EXTENDED_IMMEDIATE,
         S390_FEAT_EXTENDED_TRANSLATION_2,
+        S390_FEAT_MSA,
         S390_FEAT_EXTENDED_TRANSLATION_3,
         S390_FEAT_LONG_DISPLACEMENT,
         S390_FEAT_LONG_DISPLACEMENT_FAST,
@@ -841,6 +843,9 @@ static void add_qemu_cpu_model_features(S390FeatBitmap fbm)
         S390_FEAT_STFLE_49,
         S390_FEAT_LOCAL_TLB_CLEARING,
         S390_FEAT_STFLE_53,
+        S390_FEAT_MSA_EXT_5,
+        S390_FEAT_MSA_EXT_3,
+        S390_FEAT_MSA_EXT_4,
     };
     int i;
 
@@ -941,11 +946,13 @@ void s390_realize_cpu_model(CPUState *cs, Error **errp)
 
     apply_cpu_model(cpu->model, errp);
 
+#if !defined(CONFIG_USER_ONLY)
     cpu->env.cpuid = s390_cpuid_from_cpu_model(cpu->model);
     if (tcg_enabled()) {
         /* basic mode, write the cpu address into the first 4 bit of the ID */
         cpu->env.cpuid = deposit64(cpu->env.cpuid, 54, 4, cpu->env.core_id);
     }
+#endif
 }
 
 static void get_feature(Object *obj, Visitor *v, const char *name,
@@ -1207,9 +1214,6 @@ static void s390_qemu_cpu_model_class_init(ObjectClass *oc, void *data)
                                 qemu_hw_version());
 }
 
-#define S390_CPU_TYPE_SUFFIX "-" TYPE_S390_CPU
-#define S390_CPU_TYPE_NAME(name) (name S390_CPU_TYPE_SUFFIX)
-
 /* Generate type name for a cpu model. Caller has to free the string. */
 static char *s390_cpu_type_name(const char *model_name)
 {
@@ -1230,14 +1234,6 @@ ObjectClass *s390_cpu_class_by_name(const char *name)
     oc = object_class_by_name(typename);
     g_free(typename);
     return oc;
-}
-
-const char *s390_default_cpu_model_name(void)
-{
-     if (kvm_enabled()) {
-        return "host";
-     }
-     return "qemu";
 }
 
 static const TypeInfo qemu_s390_cpu_type_info = {
