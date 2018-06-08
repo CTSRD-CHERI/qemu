@@ -4339,9 +4339,8 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
 
     int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
     if (ret != 0) {
-        /* XXXAR: where to print this error message? stderr?*/
-        fprintf(stderr, "CHERI DEBUG HELPER: Could not write " TARGET_FMT_ld
-                " bytes at vaddr 0x" TARGET_FMT_lx "\n", length, vaddr);
+        warn_report("CHERI DEBUG HELPER: Could not write " TARGET_FMT_ld
+                    " bytes at vaddr 0x" TARGET_FMT_lx "\n", length, vaddr);
     }
     if (mode & CPU_LOG_INSTR) {
         qemu_log("DEBUG MESSAGE @ 0x" TARGET_FMT_lx "\n", pc);
@@ -4354,8 +4353,8 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
             do_hexdump(qemu_logfile, buffer, length, vaddr);
         }
     } else if (mode & CPU_LOG_CVTRACE) {
-        fprintf(stderr, "NOT IMPLEMENTED: CVTRACE debug message nop at 0x"
-                TARGET_FMT_lx "\n", pc);
+        warn_report("NOT IMPLEMENTED: CVTRACE debug message nop at 0x"
+                    TARGET_FMT_lx "\n", pc);
     } else {
         assert(false && "logic error");
     }

@@ -1292,7 +1292,7 @@ void cheri_tag_init(uint64_t memory_size)
     cheri_ntagblks = (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT;
     _cheri_tagmem = (uint8_t **)g_malloc0(cheri_ntagblks * sizeof(uint8_t *));
     if (_cheri_tagmem == NULL) {
-        printf("%s: Can't allocated tag memory\n", __func__);
+        error_report("%s: Can't allocated tag memory", __func__);
         exit (-1);
     }
 }
@@ -1315,8 +1315,8 @@ static inline void check_tagmem_writable(CPUMIPSState *env, target_ulong vaddr,
                                          hwaddr paddr, ram_addr_t ram_addr, MemoryRegion *mr)
 {
     if (memory_region_is_rom(mr) || memory_region_is_romd(mr)) {
-        fprintf(stderr, "QEMU ERROR: attempting change clear tag bit on read-only memory:\n");
-        fprintf(stderr, "%s: vaddr=0x%jx -> ram_addr=0x%jx (paddr=0x%jx)\n", __func__,
+        error_report("QEMU ERROR: attempting change clear tag bit on read-only memory:");
+        error_report("%s: vaddr=0x%jx -> ram_addr=0x%jx (paddr=0x%jx)", __func__,
             (uintmax_t)vaddr, (uintmax_t)ram_addr, (uintmax_t)paddr);
         do_raise_c0_exception(env, EXCP_DBE, 0);
     }
