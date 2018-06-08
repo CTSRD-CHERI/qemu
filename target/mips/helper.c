@@ -1311,35 +1311,56 @@ static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
     }
 }
 
-static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr)
+static inline void check_tagmem_writable(CPUMIPSState *env, target_ulong vaddr,
+                                         hwaddr paddr, ram_addr_t ram_addr, MemoryRegion *mr)
+{
+    if (memory_region_is_rom(mr) || memory_region_is_romd(mr)) {
+        fprintf(stderr, "QEMU ERROR: attempting change clear tag bit on read-only memory:\n");
+        fprintf(stderr, "%s: vaddr=0x%jx -> ram_addr=0x%jx (paddr=0x%jx)\n", __func__,
+            (uintmax_t)vaddr, (uintmax_t)ram_addr, (uintmax_t)paddr);
+        do_raise_c0_exception(env, EXCP_DBE, 0);
+    }
+}
+
+static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr, MemoryRegion** mrp)
 {
     hwaddr l;
     MemoryRegion *mr;
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
     mr = address_space_translate(cs->as, addr, &addr, &l, false, MEMTXATTRS_UNSPECIFIED);
+    if (mrp)
+        *mrp = mr;
+
     if (!(memory_region_is_ram(mr) || memory_region_is_romd(mr))) {
         return -1LL;
     }
     return (memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK) + addr;
 }
 
-static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
+static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAccessType rw,
         int reg)
 {
-    return p2r_addr(env, v2p_addr(env, vaddr, rw, reg));
+    MemoryRegion* mr = NULL;
+    hwaddr paddr = v2p_addr(env, vaddr, rw, reg);
+    ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
+    if (rw == MMU_DATA_CAP_STORE || MMU_DATA_STORE)
+        check_tagmem_writable(env, vaddr, paddr, ram_addr, mr);
+    return ram_addr;
 }
 
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
 {
-    ram_addr_t ram_addr;
     uint64_t tag1, tag2;
     uint8_t *tagblk1, *tagblk2;
-
-    ram_addr = v2r_addr(env, vaddr, 0, 0xFF);
-    // printf("%s: vaddr=0x%lx -> ram_addr=0x%lx\n", __func__, vaddr, ram_addr);
+    MemoryRegion* mr = NULL;
+    hwaddr paddr = v2p_addr(env, vaddr, 0, 0xFF);
+    ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
+    // Generate a trap if we try to clear tags in ROM instead of crashing
+    check_tagmem_writable(env, vaddr, paddr, ram_addr, mr);
     if (ram_addr == -1LL)
         return;
+
 
     /* Get the tag number for both the start and end of write. */
     tag1 = ram_addr >> CAP_TAG_SHFT;
@@ -1361,10 +1382,8 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
     }
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr))
+    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
         env->linkedflag = 0;
-
-    return;
 }
 
 void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
@@ -1474,11 +1493,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     uint8_t *tagblk;
     uint64_t *tagblk64;
 
-    if (tagbit)
-        ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
-    else
-        ram_addr = v2r_addr(env, vaddr, MMU_DATA_STORE, reg);
-
+    ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
     if (ram_addr == -1LL)
         return;
 
@@ -1497,7 +1512,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr))
+    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
         env->linkedflag = 0;
 
     return;

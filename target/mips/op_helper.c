@@ -112,24 +112,6 @@ static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
     do_raise_exception(env, EXCP_C2E, pc);
 }
 
-static inline QEMU_NORETURN void do_raise_c0_exception(CPUMIPSState *env,
-        uint16_t cause, uint64_t badvaddr)
-{
-    uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
-    /* fprintf(stderr, "C0 EXCEPTION: cause=%d badvaddr=0x%016lx "
-        "PCC=0x%016lx + 0x%016lx -> 0x%016lx PC=0x%016lx\n", cause,
-         badvaddr, env->active_tc.PCC.cr_base,
-         env->active_tc.PCC.cr_offset, pc, env->active_tc.PC); */
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C0 EXCEPTION: cause=%d"
-        " badvaddr=0x%016" PRIx64 " PCC=0x%016" PRIx64 " + 0x%016" PRIx64
-        " -> 0x" TARGET_FMT_lx " PC=0x" TARGET_FMT_lx "\n",
-        cause, badvaddr, env->active_tc.PCC.cr_base,
-        env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
-    env->active_tc.PC = pc;
-    env->CP0_BadVAddr = badvaddr;
-    do_raise_exception(env, cause, pc);
-}
-
 static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause)
 {
     do_raise_c2_exception(env, cause, 0xff);
