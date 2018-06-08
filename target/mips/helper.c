@@ -1275,18 +1275,23 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
 #define CAP_TAGBLK_IDX(tag_idx) ((tag_idx) & CAP_TAGBLK_MSK)
 #endif /* ! CHERI_MAGIC128 */
 
-uint8_t **cheri_tagmem = NULL;
+uint8_t **_cheri_tagmem = NULL;
 uint64_t cheri_ntagblks = 0ul;
+
+static inline uint8_t* get_cheri_tagmem(size_t index) {
+    assert(index < cheri_ntagblks && "Tag index out of bounds");
+    return _cheri_tagmem[index];
+}
 
 void cheri_tag_init(uint64_t memory_size)
 {
     // printf("%s: memory_size=0x%lx\n", __func__, memory_size);
-    if (cheri_tagmem != NULL)
+    if (_cheri_tagmem != NULL)
         return;
 
     cheri_ntagblks = (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT;
-    cheri_tagmem = (uint8_t **)g_malloc0(cheri_ntagblks * sizeof(uint8_t *));
-    if (cheri_tagmem == NULL) {
+    _cheri_tagmem = (uint8_t **)g_malloc0(cheri_ntagblks * sizeof(uint8_t *));
+    if (_cheri_tagmem == NULL) {
         printf("%s: Can't allocated tag memory\n", __func__);
         exit (-1);
     }
@@ -1342,13 +1347,13 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
 
     if (tag1 == tag2) {
         /* The write only invalidates one tag. */
-        tagblk1 = cheri_tagmem[tag1 >> CAP_TAGBLK_SHFT];
+        tagblk1 = get_cheri_tagmem(tag1 >> CAP_TAGBLK_SHFT);
         if (tagblk1 != NULL)
             tagblk1[CAP_TAGBLK_IDX(tag1)] = 0;
     } else {
         /* The write invalidates two tags. */
-        tagblk1 = cheri_tagmem[tag1 >> CAP_TAGBLK_SHFT];
-        tagblk2 = cheri_tagmem[tag2 >> CAP_TAGBLK_SHFT];
+        tagblk1 = get_cheri_tagmem(tag1 >> CAP_TAGBLK_SHFT);
+        tagblk2 = get_cheri_tagmem(tag2 >> CAP_TAGBLK_SHFT);
         if (tagblk1 != NULL)
             tagblk1[CAP_TAGBLK_IDX(tag1)] = 0;
         if (tagblk2 != NULL)
@@ -1375,7 +1380,7 @@ void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
         tagmem_idx = tag >> CAP_TAGBLK_SHFT;
         if (tagmem_idx > cheri_ntagblks)
             return;
-        tagblk = cheri_tagmem[tagmem_idx];
+        tagblk = get_cheri_tagmem(tagmem_idx);
 
         if (tagblk != NULL)
             tagblk[CAP_TAGBLK_IDX(tag)] = 0;
@@ -1395,7 +1400,8 @@ static uint8_t *cheri_tag_new_tagblk(uint64_t tag)
     }
 
     /* Possible race here so use atomic compare and swap. */
-    old = atomic_cmpxchg(&cheri_tagmem[tag >> CAP_TAGBLK_SHFT],
+    assert((tag >> CAP_TAGBLK_SHFT) < cheri_ntagblks && "Tag index out of range");
+    old = atomic_cmpxchg(&_cheri_tagmem[tag >> CAP_TAGBLK_SHFT],
             NULL, tagblk);
     if (old != NULL) {
         /* Lost the race, free. */
@@ -1418,7 +1424,7 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
 
     /* Get the tag number and tag block ptr. */
     tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 
     if (tagblk == NULL) {
         /* Allocated a tag block. */
@@ -1427,10 +1433,8 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr))
+    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
         env->linkedflag = 0;
-
-    return;
 }
 
 int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
@@ -1447,13 +1451,13 @@ int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
     if (ret_paddr)
         *ret_paddr = paddr;
 
-    ram_addr = p2r_addr(env, paddr);
+    ram_addr = p2r_addr(env, paddr, NULL);
     if (ram_addr == -1LL)
         return 0;
 
     /* Get the tag number and tag block ptr. */
     tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 
     if (tagblk == NULL)
         return 0;
@@ -1480,7 +1484,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 
     /* Get the tag number and tag block ptr. */
     tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 
     if (tagblk == NULL) {
         /* Allocated a tag block. */
@@ -1515,7 +1519,7 @@ int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 
     /* Get the tag number and tag block ptr. */
     tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 
     if (tagblk == NULL) {
         *ret_tps = *ret_length = 0ULL;
