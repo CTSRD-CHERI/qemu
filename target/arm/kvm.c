@@ -20,8 +20,10 @@
 #include "sysemu/kvm.h"
 #include "kvm_arm.h"
 #include "cpu.h"
+#include "trace.h"
 #include "internals.h"
 #include "hw/arm/arm.h"
+#include "hw/pci/pci.h"
 #include "exec/memattrs.h"
 #include "exec/address-spaces.h"
 #include "hw/boards.h"
@@ -32,6 +34,8 @@ const KVMCapabilityInfo kvm_arch_required_capabilities[] = {
 };
 
 static bool cap_has_mp_state;
+
+static ARMHostCPUFeatures arm_host_cpu_features;
 
 int kvm_arm_vcpu_init(CPUState *cs)
 {
@@ -129,43 +133,26 @@ void kvm_arm_destroy_scratch_host_vcpu(int *fdarray)
     }
 }
 
-static void kvm_arm_host_cpu_class_init(ObjectClass *oc, void *data)
+void kvm_arm_set_cpu_features_from_host(ARMCPU *cpu)
 {
-    ARMHostCPUClass *ahcc = ARM_HOST_CPU_CLASS(oc);
-
-    /* All we really need to set up for the 'host' CPU
-     * is the feature bits -- we rely on the fact that the
-     * various ID register values in ARMCPU are only used for
-     * TCG CPUs.
-     */
-    if (!kvm_arm_get_host_cpu_features(ahcc)) {
-        fprintf(stderr, "Failed to retrieve host CPU features!\n");
-        abort();
-    }
-}
-
-static void kvm_arm_host_cpu_initfn(Object *obj)
-{
-    ARMHostCPUClass *ahcc = ARM_HOST_CPU_GET_CLASS(obj);
-    ARMCPU *cpu = ARM_CPU(obj);
     CPUARMState *env = &cpu->env;
 
-    cpu->kvm_target = ahcc->target;
-    cpu->dtb_compatible = ahcc->dtb_compatible;
-    env->features = ahcc->features;
-}
+    if (!arm_host_cpu_features.dtb_compatible) {
+        if (!kvm_enabled() ||
+            !kvm_arm_get_host_cpu_features(&arm_host_cpu_features)) {
+            /* We can't report this error yet, so flag that we need to
+             * in arm_cpu_realizefn().
+             */
+            cpu->kvm_target = QEMU_KVM_ARM_TARGET_NONE;
+            cpu->host_cpu_probe_failed = true;
+            return;
+        }
+    }
 
-static const TypeInfo host_arm_cpu_type_info = {
-    .name = TYPE_ARM_HOST_CPU,
-#ifdef TARGET_AARCH64
-    .parent = TYPE_AARCH64_CPU,
-#else
-    .parent = TYPE_ARM_CPU,
-#endif
-    .instance_init = kvm_arm_host_cpu_initfn,
-    .class_init = kvm_arm_host_cpu_class_init,
-    .class_size = sizeof(ARMHostCPUClass),
-};
+    cpu->kvm_target = arm_host_cpu_features.target;
+    cpu->dtb_compatible = arm_host_cpu_features.dtb_compatible;
+    env->features = arm_host_cpu_features.features;
+}
 
 int kvm_arch_init(MachineState *ms, KVMState *s)
 {
@@ -181,8 +168,6 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
     kvm_halt_in_kernel_allowed = true;
 
     cap_has_mp_state = kvm_check_extension(s, KVM_CAP_MP_STATE);
-
-    type_register_static(&host_arm_cpu_type_info);
 
     return 0;
 }
@@ -266,7 +251,6 @@ static void kvm_arm_machine_init_done(Notifier *notifier, void *data)
 {
     KVMDevice *kd, *tkd;
 
-    memory_listener_unregister(&devlistener);
     QSLIST_FOREACH_SAFE(kd, &kvm_devices_head, entries, tkd) {
         if (kd->kda.addr != -1) {
             kvm_arm_set_device_addr(kd);
@@ -274,6 +258,7 @@ static void kvm_arm_machine_init_done(Notifier *notifier, void *data)
         memory_region_unref(kd->mr);
         g_free(kd);
     }
+    memory_listener_unregister(&devlistener);
 }
 
 static Notifier notify = {
@@ -567,7 +552,11 @@ MemTxAttrs kvm_arch_post_run(CPUState *cs, struct kvm_run *run)
             switched_level &= ~KVM_ARM_DEV_EL1_PTIMER;
         }
 
-        /* XXX PMU IRQ is missing */
+        if (switched_level & KVM_ARM_DEV_PMU) {
+            qemu_set_irq(cpu->pmu_interrupt,
+                         !!(run->s.regs.device_irq_level & KVM_ARM_DEV_PMU));
+            switched_level &= ~KVM_ARM_DEV_PMU;
+        }
 
         if (switched_level) {
             qemu_log_mask(LOG_UNIMP, "%s: unhandled in-kernel device IRQ %x\n",
@@ -662,7 +651,42 @@ int kvm_arm_vgic_probe(void)
 int kvm_arch_fixup_msi_route(struct kvm_irq_routing_entry *route,
                              uint64_t address, uint32_t data, PCIDevice *dev)
 {
-    return 0;
+    AddressSpace *as = pci_device_iommu_address_space(dev);
+    hwaddr xlat, len, doorbell_gpa;
+    MemoryRegionSection mrs;
+    MemoryRegion *mr;
+    int ret = 1;
+
+    if (as == &address_space_memory) {
+        return 0;
+    }
+
+    /* MSI doorbell address is translated by an IOMMU */
+
+    rcu_read_lock();
+    mr = address_space_translate(as, address, &xlat, &len, true,
+                                 MEMTXATTRS_UNSPECIFIED);
+    if (!mr) {
+        goto unlock;
+    }
+    mrs = memory_region_find(mr, xlat, 1);
+    if (!mrs.mr) {
+        goto unlock;
+    }
+
+    doorbell_gpa = mrs.offset_within_address_space;
+    memory_region_unref(mrs.mr);
+
+    route->u.msi.address_lo = doorbell_gpa;
+    route->u.msi.address_hi = doorbell_gpa >> 32;
+
+    trace_kvm_arm_fixup_msi_route(address, doorbell_gpa);
+
+    ret = 0;
+
+unlock:
+    rcu_read_unlock();
+    return ret;
 }
 
 int kvm_arch_add_msi_route_post(struct kvm_irq_routing_entry *route,

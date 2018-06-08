@@ -738,15 +738,15 @@ static void test_hbitmap_meta_one(TestHBitmapData *data, const void *unused)
     }
 }
 
-static void test_hbitmap_serialize_granularity(TestHBitmapData *data,
-                                               const void *unused)
+static void test_hbitmap_serialize_align(TestHBitmapData *data,
+                                         const void *unused)
 {
     int r;
 
     hbitmap_test_init(data, L3 * 2, 3);
     g_assert(hbitmap_is_serializable(data->hb));
 
-    r = hbitmap_serialization_granularity(data->hb);
+    r = hbitmap_serialization_align(data->hb);
     g_assert_cmpint(r, ==, 64 << 3);
 }
 
@@ -813,7 +813,7 @@ static void test_hbitmap_serialize_basic(TestHBitmapData *data,
     size_t buf_size;
     uint8_t *buf;
     uint64_t positions[] = { 0, 1, L1 - 1, L1, L2 - 1, L2, L2 + 1, L3 - 1 };
-    int num_positions = sizeof(positions) / sizeof(positions[0]);
+    int num_positions = ARRAY_SIZE(positions);
 
     hbitmap_test_init(data, L3, 0);
     g_assert(hbitmap_is_serializable(data->hb));
@@ -838,7 +838,7 @@ static void test_hbitmap_serialize_part(TestHBitmapData *data,
     size_t buf_size;
     uint8_t *buf;
     uint64_t positions[] = { 0, 1, L1 - 1, L1, L2 - 1, L2, L2 + 1, L3 - 1 };
-    int num_positions = sizeof(positions) / sizeof(positions[0]);
+    int num_positions = ARRAY_SIZE(positions);
 
     hbitmap_test_init(data, L3, 0);
     buf_size = L2;
@@ -880,7 +880,7 @@ static void test_hbitmap_serialize_zeroes(TestHBitmapData *data,
     int64_t next;
     uint64_t min_l1 = MAX(L1, 64);
     uint64_t positions[] = { 0, min_l1, L2, L3 - min_l1};
-    int num_positions = sizeof(positions) / sizeof(positions[0]);
+    int num_positions = ARRAY_SIZE(positions);
 
     hbitmap_test_init(data, L3, 0);
 
@@ -923,6 +923,61 @@ static void test_hbitmap_iter_and_reset(TestHBitmapData *data,
 
     hbitmap_reset_all(data->hb);
     hbitmap_iter_next(&hbi);
+}
+
+static void test_hbitmap_next_zero_check(TestHBitmapData *data, int64_t start)
+{
+    int64_t ret1 = hbitmap_next_zero(data->hb, start);
+    int64_t ret2 = start;
+    for ( ; ret2 < data->size && hbitmap_get(data->hb, ret2); ret2++) {
+        ;
+    }
+    if (ret2 == data->size) {
+        ret2 = -1;
+    }
+
+    g_assert_cmpint(ret1, ==, ret2);
+}
+
+static void test_hbitmap_next_zero_do(TestHBitmapData *data, int granularity)
+{
+    hbitmap_test_init(data, L3, granularity);
+    test_hbitmap_next_zero_check(data, 0);
+    test_hbitmap_next_zero_check(data, L3 - 1);
+
+    hbitmap_set(data->hb, L2, 1);
+    test_hbitmap_next_zero_check(data, 0);
+    test_hbitmap_next_zero_check(data, L2 - 1);
+    test_hbitmap_next_zero_check(data, L2);
+    test_hbitmap_next_zero_check(data, L2 + 1);
+
+    hbitmap_set(data->hb, L2 + 5, L1);
+    test_hbitmap_next_zero_check(data, 0);
+    test_hbitmap_next_zero_check(data, L2 + 1);
+    test_hbitmap_next_zero_check(data, L2 + 2);
+    test_hbitmap_next_zero_check(data, L2 + 5);
+    test_hbitmap_next_zero_check(data, L2 + L1 - 1);
+    test_hbitmap_next_zero_check(data, L2 + L1);
+
+    hbitmap_set(data->hb, L2 * 2, L3 - L2 * 2);
+    test_hbitmap_next_zero_check(data, L2 * 2 - L1);
+    test_hbitmap_next_zero_check(data, L2 * 2 - 2);
+    test_hbitmap_next_zero_check(data, L2 * 2 - 1);
+    test_hbitmap_next_zero_check(data, L2 * 2);
+    test_hbitmap_next_zero_check(data, L3 - 1);
+
+    hbitmap_set(data->hb, 0, L3);
+    test_hbitmap_next_zero_check(data, 0);
+}
+
+static void test_hbitmap_next_zero_0(TestHBitmapData *data, const void *unused)
+{
+    test_hbitmap_next_zero_do(data, 0);
+}
+
+static void test_hbitmap_next_zero_4(TestHBitmapData *data, const void *unused)
+{
+    test_hbitmap_next_zero_do(data, 4);
 }
 
 int main(int argc, char **argv)
@@ -974,8 +1029,8 @@ int main(int argc, char **argv)
     hbitmap_test_add("/hbitmap/meta/word", test_hbitmap_meta_word);
     hbitmap_test_add("/hbitmap/meta/sector", test_hbitmap_meta_sector);
 
-    hbitmap_test_add("/hbitmap/serialize/granularity",
-                     test_hbitmap_serialize_granularity);
+    hbitmap_test_add("/hbitmap/serialize/align",
+                     test_hbitmap_serialize_align);
     hbitmap_test_add("/hbitmap/serialize/basic",
                      test_hbitmap_serialize_basic);
     hbitmap_test_add("/hbitmap/serialize/part",
@@ -985,6 +1040,12 @@ int main(int argc, char **argv)
 
     hbitmap_test_add("/hbitmap/iter/iter_and_reset",
                      test_hbitmap_iter_and_reset);
+
+    hbitmap_test_add("/hbitmap/next_zero/next_zero_0",
+                     test_hbitmap_next_zero_0);
+    hbitmap_test_add("/hbitmap/next_zero/next_zero_4",
+                     test_hbitmap_next_zero_4);
+
     g_test_run();
 
     return 0;

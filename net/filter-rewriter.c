@@ -11,14 +11,11 @@
 
 #include "qemu/osdep.h"
 #include "trace.h"
-#include "net/colo.h"
+#include "colo.h"
 #include "net/filter.h"
 #include "net/net.h"
 #include "qemu-common.h"
-#include "qapi/error.h"
-#include "qapi/qmp/qerror.h"
 #include "qemu/error-report.h"
-#include "qapi-visit.h"
 #include "qom/object.h"
 #include "qemu/main-loop.h"
 #include "qemu/iov.h"
@@ -99,7 +96,8 @@ static int handle_primary_tcp_pkt(NetFilterState *nf,
             /* handle packets to the secondary from the primary */
             tcp_pkt->th_ack = htonl(ntohl(tcp_pkt->th_ack) + conn->offset);
 
-            net_checksum_calculate((uint8_t *)pkt->data, pkt->size);
+            net_checksum_calculate((uint8_t *)pkt->data + pkt->vnet_hdr_len,
+                                   pkt->size - pkt->vnet_hdr_len);
         }
     }
 
@@ -138,7 +136,8 @@ static int handle_secondary_tcp_pkt(NetFilterState *nf,
             /* handle packets to the primary from the secondary*/
             tcp_pkt->th_seq = htonl(ntohl(tcp_pkt->th_seq) - conn->offset);
 
-            net_checksum_calculate((uint8_t *)pkt->data, pkt->size);
+            net_checksum_calculate((uint8_t *)pkt->data + pkt->vnet_hdr_len,
+                                   pkt->size - pkt->vnet_hdr_len);
         }
     }
 

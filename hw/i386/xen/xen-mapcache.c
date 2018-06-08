@@ -9,11 +9,11 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/error-report.h"
 
 #include <sys/resource.h>
 
 #include "hw/xen/xen_backend.h"
-#include "sysemu/blockdev.h"
 #include "qemu/bitmap.h"
 
 #include <xen/hvm/params.h>
@@ -125,8 +125,8 @@ void xen_map_cache_init(phys_offset_to_gaddr_t f, void *opaque)
         rlimit_as.rlim_cur = rlimit_as.rlim_max;
 
         if (rlimit_as.rlim_max != RLIM_INFINITY) {
-            fprintf(stderr, "Warning: QEMU's maximum size of virtual"
-                    " memory is not infinity.\n");
+            warn_report("QEMU's maximum size of virtual"
+                        " memory is not infinity");
         }
         if (rlimit_as.rlim_max < MCACHE_MAX_SIZE + NON_MCACHE_MEMORY_SIZE) {
             mapcache->max_mcache_size = rlimit_as.rlim_max -
@@ -198,7 +198,7 @@ static void xen_remap_bucket(MapCacheEntry *entry,
          */
         vaddr_base = mmap(vaddr, size, PROT_READ | PROT_WRITE,
                           MAP_ANON | MAP_SHARED, -1, 0);
-        if (vaddr_base == NULL) {
+        if (vaddr_base == MAP_FAILED) {
             perror("mmap");
             exit(-1);
         }
@@ -318,7 +318,7 @@ tryagain:
         mapcache->last_entry = NULL;
 #ifdef XEN_COMPAT_PHYSMAP
         if (!translated && mapcache->phys_offset_to_gaddr) {
-            phys_addr = mapcache->phys_offset_to_gaddr(phys_addr, size, mapcache->opaque);
+            phys_addr = mapcache->phys_offset_to_gaddr(phys_addr, size);
             translated = true;
             goto tryagain;
         }

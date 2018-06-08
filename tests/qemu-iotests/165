@@ -27,7 +27,7 @@ disk = os.path.join(iotests.test_dir, 'disk')
 disk_size = 0x40000000 # 1G
 
 # regions for qemu_io: (start, count) in bytes
-regions1 = ((0,        0x100000),
+regions1 = ((0x0fff00, 0x10000),
             (0x200000, 0x100000))
 
 regions2 = ((0x10000000, 0x20000),
@@ -64,7 +64,7 @@ class TestPersistentDirtyBitmap(iotests.QMPTestCase):
 
     def qmpAddBitmap(self):
         self.vm.qmp('block-dirty-bitmap-add', node='drive0',
-                    name='bitmap0', persistent=True, autoload=True)
+                    name='bitmap0', persistent=True)
 
     def test_persistent(self):
         self.vm = self.mkVm()

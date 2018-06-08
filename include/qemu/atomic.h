@@ -187,7 +187,7 @@
 /* Returns the eventual value, failed or not */
 #define atomic_cmpxchg__nocheck(ptr, old, new)    ({                    \
     typeof_strip_qual(*ptr) _old = (old);                               \
-    __atomic_compare_exchange_n(ptr, &_old, new, false,                 \
+    (void)__atomic_compare_exchange_n(ptr, &_old, new, false,           \
                               __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);      \
     _old;                                                               \
 })
@@ -441,5 +441,13 @@
     smp_mb();                                           \
 } while(0)
 #endif
+
+#define atomic_fetch_inc_nonzero(ptr) ({                                \
+    typeof_strip_qual(*ptr) _oldn = atomic_read(ptr);                   \
+    while (_oldn && atomic_cmpxchg(ptr, _oldn, _oldn + 1) != _oldn) {   \
+        _oldn = atomic_read(ptr);                                       \
+    }                                                                   \
+    _oldn;                                                              \
+})
 
 #endif /* QEMU_ATOMIC_H */

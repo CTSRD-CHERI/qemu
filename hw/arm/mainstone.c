@@ -12,6 +12,7 @@
  * GNU GPL, version 2 or (at your option) any later version.
  */
 #include "qemu/osdep.h"
+#include "qemu/error-report.h"
 #include "qapi/error.h"
 #include "hw/hw.h"
 #include "hw/arm/pxa.h"
@@ -20,10 +21,10 @@
 #include "hw/devices.h"
 #include "hw/boards.h"
 #include "hw/block/flash.h"
-#include "sysemu/block-backend.h"
 #include "hw/sysbus.h"
 #include "exec/address-spaces.h"
 #include "sysemu/qtest.h"
+#include "cpu.h"
 
 /* Device addresses */
 #define MST_FPGA_PHYS	0x08000000
@@ -121,13 +122,10 @@ static void mainstone_common_init(MemoryRegion *address_space_mem,
     int i;
     int be;
     MemoryRegion *rom = g_new(MemoryRegion, 1);
-    const char *cpu_model = machine->cpu_model;
-
-    if (!cpu_model)
-        cpu_model = "pxa270-c5";
 
     /* Setup CPU & memory */
-    mpu = pxa270_init(address_space_mem, mainstone_binfo.ram_size, cpu_model);
+    mpu = pxa270_init(address_space_mem, mainstone_binfo.ram_size,
+                      machine->cpu_type);
     memory_region_init_ram(rom, NULL, "mainstone.rom", MAINSTONE_ROM,
                            &error_fatal);
     memory_region_set_readonly(rom, true);
@@ -145,8 +143,8 @@ static void mainstone_common_init(MemoryRegion *address_space_mem,
             if (qtest_enabled()) {
                 break;
             }
-            fprintf(stderr, "Two flash images must be given with the "
-                    "'pflash' parameter\n");
+            error_report("Two flash images must be given with the "
+                         "'pflash' parameter");
             exit(1);
         }
 
@@ -156,7 +154,7 @@ static void mainstone_common_init(MemoryRegion *address_space_mem,
                                    blk_by_legacy_dinfo(dinfo),
                                    sector_len, MAINSTONE_FLASH / sector_len,
                                    4, 0, 0, 0, 0, be)) {
-            fprintf(stderr, "qemu: Error registering flash memory.\n");
+            error_report("Error registering flash memory");
             exit(1);
         }
     }
@@ -196,6 +194,8 @@ static void mainstone2_machine_init(MachineClass *mc)
 {
     mc->desc = "Mainstone II (PXA27x)";
     mc->init = mainstone_init;
+    mc->ignore_memory_transaction_failures = true;
+    mc->default_cpu_type = ARM_CPU_TYPE_NAME("pxa270-c5");
 }
 
 DEFINE_MACHINE("mainstone", mainstone2_machine_init)

@@ -17,53 +17,8 @@
  */
 
 #include "qemu/osdep.h"
-#include "qapi/error.h"
+#include "trace.h"
 #include "nbd-internal.h"
-
-/* nbd_wr_syncv
- * The function may be called from coroutine or from non-coroutine context.
- * When called from non-coroutine context @ioc must be in blocking mode.
- */
-ssize_t nbd_rwv(QIOChannel *ioc, struct iovec *iov, size_t niov, size_t length,
-                bool do_read, Error **errp)
-{
-    ssize_t done = 0;
-    struct iovec *local_iov = g_new(struct iovec, niov);
-    struct iovec *local_iov_head = local_iov;
-    unsigned int nlocal_iov = niov;
-
-    nlocal_iov = iov_copy(local_iov, nlocal_iov, iov, niov, 0, length);
-
-    while (nlocal_iov > 0) {
-        ssize_t len;
-        if (do_read) {
-            len = qio_channel_readv(ioc, local_iov, nlocal_iov, errp);
-        } else {
-            len = qio_channel_writev(ioc, local_iov, nlocal_iov, errp);
-        }
-        if (len == QIO_CHANNEL_ERR_BLOCK) {
-            /* errp should not be set */
-            assert(qemu_in_coroutine());
-            qio_channel_yield(ioc, do_read ? G_IO_IN : G_IO_OUT);
-            continue;
-        }
-        if (len < 0) {
-            done = -EIO;
-            goto cleanup;
-        }
-
-        if (do_read && len == 0) {
-            break;
-        }
-
-        iov_discard_front(&local_iov, &nlocal_iov, len);
-        done += len;
-    }
-
- cleanup:
-    g_free(local_iov_head);
-    return done;
-}
 
 /* Discard length bytes from channel.  Return -errno on failure and 0 on
  * success */
@@ -120,6 +75,10 @@ const char *nbd_opt_lookup(uint32_t opt)
         return "go";
     case NBD_OPT_STRUCTURED_REPLY:
         return "structured reply";
+    case NBD_OPT_LIST_META_CONTEXT:
+        return "list meta context";
+    case NBD_OPT_SET_META_CONTEXT:
+        return "set meta context";
     default:
         return "<unknown>";
     }
@@ -135,6 +94,8 @@ const char *nbd_rep_lookup(uint32_t rep)
         return "server";
     case NBD_REP_INFO:
         return "info";
+    case NBD_REP_META_CONTEXT:
+        return "meta context";
     case NBD_REP_ERR_UNSUP:
         return "unsupported";
     case NBD_REP_ERR_POLICY:
@@ -189,7 +150,94 @@ const char *nbd_cmd_lookup(uint16_t cmd)
         return "trim";
     case NBD_CMD_WRITE_ZEROES:
         return "write zeroes";
+    case NBD_CMD_BLOCK_STATUS:
+        return "block status";
     default:
         return "<unknown>";
     }
+}
+
+
+const char *nbd_reply_type_lookup(uint16_t type)
+{
+    switch (type) {
+    case NBD_REPLY_TYPE_NONE:
+        return "none";
+    case NBD_REPLY_TYPE_OFFSET_DATA:
+        return "data";
+    case NBD_REPLY_TYPE_OFFSET_HOLE:
+        return "hole";
+    case NBD_REPLY_TYPE_BLOCK_STATUS:
+        return "block status";
+    case NBD_REPLY_TYPE_ERROR:
+        return "generic error";
+    case NBD_REPLY_TYPE_ERROR_OFFSET:
+        return "error at offset";
+    default:
+        if (type & (1 << 15)) {
+            return "<unknown error>";
+        }
+        return "<unknown>";
+    }
+}
+
+
+const char *nbd_err_lookup(int err)
+{
+    switch (err) {
+    case NBD_SUCCESS:
+        return "success";
+    case NBD_EPERM:
+        return "EPERM";
+    case NBD_EIO:
+        return "EIO";
+    case NBD_ENOMEM:
+        return "ENOMEM";
+    case NBD_EINVAL:
+        return "EINVAL";
+    case NBD_ENOSPC:
+        return "ENOSPC";
+    case NBD_EOVERFLOW:
+        return "EOVERFLOW";
+    case NBD_ESHUTDOWN:
+        return "ESHUTDOWN";
+    default:
+        return "<unknown>";
+    }
+}
+
+
+int nbd_errno_to_system_errno(int err)
+{
+    int ret;
+    switch (err) {
+    case NBD_SUCCESS:
+        ret = 0;
+        break;
+    case NBD_EPERM:
+        ret = EPERM;
+        break;
+    case NBD_EIO:
+        ret = EIO;
+        break;
+    case NBD_ENOMEM:
+        ret = ENOMEM;
+        break;
+    case NBD_ENOSPC:
+        ret = ENOSPC;
+        break;
+    case NBD_EOVERFLOW:
+        ret = EOVERFLOW;
+        break;
+    case NBD_ESHUTDOWN:
+        ret = ESHUTDOWN;
+        break;
+    default:
+        trace_nbd_unknown_error(err);
+        /* fallthrough */
+    case NBD_EINVAL:
+        ret = EINVAL;
+        break;
+    }
+    return ret;
 }

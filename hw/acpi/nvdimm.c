@@ -138,6 +138,8 @@ struct NvdimmNfitMemDev {
 } QEMU_PACKED;
 typedef struct NvdimmNfitMemDev NvdimmNfitMemDev;
 
+#define ACPI_NFIT_MEM_NOT_ARMED     (1 << 3)
+
 /*
  * NVDIMM Control Region Structure
  *
@@ -166,6 +168,21 @@ struct NvdimmNfitControlRegion {
     uint8_t reserved2[6];
 } QEMU_PACKED;
 typedef struct NvdimmNfitControlRegion NvdimmNfitControlRegion;
+
+/*
+ * NVDIMM Platform Capabilities Structure
+ *
+ * Defined in section 5.2.25.9 of ACPI 6.2 Errata A, September 2017
+ */
+struct NvdimmNfitPlatformCaps {
+    uint16_t type;
+    uint16_t length;
+    uint8_t highest_cap;
+    uint8_t reserved[3];
+    uint32_t capabilities;
+    uint8_t reserved2[4];
+} QEMU_PACKED;
+typedef struct NvdimmNfitPlatformCaps NvdimmNfitPlatformCaps;
 
 /*
  * Module serial number is a unique number for each device. We use the
@@ -284,6 +301,7 @@ static void
 nvdimm_build_structure_memdev(GArray *structures, DeviceState *dev)
 {
     NvdimmNfitMemDev *nfit_memdev;
+    NVDIMMDevice *nvdimm = NVDIMM(OBJECT(dev));
     uint64_t size = object_property_get_uint(OBJECT(dev), PC_DIMM_SIZE_PROP,
                                              NULL);
     int slot = object_property_get_int(OBJECT(dev), PC_DIMM_SLOT_PROP,
@@ -312,6 +330,10 @@ nvdimm_build_structure_memdev(GArray *structures, DeviceState *dev)
 
     /* Only one interleave for PMEM. */
     nfit_memdev->interleave_ways = cpu_to_le16(1);
+
+    if (nvdimm->unarmed) {
+        nfit_memdev->flags |= cpu_to_le16(ACPI_NFIT_MEM_NOT_ARMED);
+    }
 }
 
 /*
@@ -344,7 +366,23 @@ static void nvdimm_build_structure_dcr(GArray *structures, DeviceState *dev)
                                          JEDEC Annex L Release 3. */);
 }
 
-static GArray *nvdimm_build_device_structure(void)
+/*
+ * ACPI 6.2 Errata A: 5.2.25.9 NVDIMM Platform Capabilities Structure
+ */
+static void
+nvdimm_build_structure_caps(GArray *structures, uint32_t capabilities)
+{
+    NvdimmNfitPlatformCaps *nfit_caps;
+
+    nfit_caps = acpi_data_push(structures, sizeof(*nfit_caps));
+
+    nfit_caps->type = cpu_to_le16(7 /* NVDIMM Platform Capabilities */);
+    nfit_caps->length = cpu_to_le16(sizeof(*nfit_caps));
+    nfit_caps->highest_cap = 31 - clz32(capabilities);
+    nfit_caps->capabilities = cpu_to_le32(capabilities);
+}
+
+static GArray *nvdimm_build_device_structure(AcpiNVDIMMState *state)
 {
     GSList *device_list = nvdimm_get_device_list();
     GArray *structures = g_array_new(false, true /* clear */, 1);
@@ -366,6 +404,10 @@ static GArray *nvdimm_build_device_structure(void)
     }
     g_slist_free(device_list);
 
+    if (state->capabilities) {
+        nvdimm_build_structure_caps(structures, state->capabilities);
+    }
+
     return structures;
 }
 
@@ -374,16 +416,18 @@ static void nvdimm_init_fit_buffer(NvdimmFitBuffer *fit_buf)
     fit_buf->fit = g_array_new(false, true /* clear */, 1);
 }
 
-static void nvdimm_build_fit_buffer(NvdimmFitBuffer *fit_buf)
+static void nvdimm_build_fit_buffer(AcpiNVDIMMState *state)
 {
+    NvdimmFitBuffer *fit_buf = &state->fit_buf;
+
     g_array_free(fit_buf->fit, true);
-    fit_buf->fit = nvdimm_build_device_structure();
+    fit_buf->fit = nvdimm_build_device_structure(state);
     fit_buf->dirty = true;
 }
 
 void nvdimm_plug(AcpiNVDIMMState *state)
 {
-    nvdimm_build_fit_buffer(&state->fit_buf);
+    nvdimm_build_fit_buffer(state);
 }
 
 static void nvdimm_build_nfit(AcpiNVDIMMState *state, GArray *table_offsets,

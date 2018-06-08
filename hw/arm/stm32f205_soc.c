@@ -112,7 +112,7 @@ static void stm32f205_soc_realize(DeviceState *dev_soc, Error **errp)
 
     armv7m = DEVICE(&s->armv7m);
     qdev_prop_set_uint32(armv7m, "num-irq", 96);
-    qdev_prop_set_string(armv7m, "cpu-model", s->cpu_model);
+    qdev_prop_set_string(armv7m, "cpu-type", s->cpu_type);
     object_property_set_link(OBJECT(&s->armv7m), OBJECT(get_system_memory()),
                                      "memory", &error_abort);
     object_property_set_bool(OBJECT(&s->armv7m), true, "realized", &err);
@@ -135,8 +135,7 @@ static void stm32f205_soc_realize(DeviceState *dev_soc, Error **errp)
     /* Attach UART (uses USART registers) and USART controllers */
     for (i = 0; i < STM_NUM_USARTS; i++) {
         dev = DEVICE(&(s->usart[i]));
-        qdev_prop_set_chr(dev, "chardev",
-                          i < MAX_SERIAL_PORTS ? serial_hds[i] : NULL);
+        qdev_prop_set_chr(dev, "chardev", serial_hd(i));
         object_property_set_bool(OBJECT(&s->usart[i]), true, "realized", &err);
         if (err != NULL) {
             error_propagate(errp, err);
@@ -200,7 +199,7 @@ static void stm32f205_soc_realize(DeviceState *dev_soc, Error **errp)
 }
 
 static Property stm32f205_soc_properties[] = {
-    DEFINE_PROP_STRING("cpu-model", STM32F205State, cpu_model),
+    DEFINE_PROP_STRING("cpu-type", STM32F205State, cpu_type),
     DEFINE_PROP_END_OF_LIST(),
 };
 

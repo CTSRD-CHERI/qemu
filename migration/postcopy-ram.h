@@ -14,7 +14,7 @@
 #define QEMU_POSTCOPY_RAM_H
 
 /* Return true if the host supports everything we need to do postcopy-ram */
-bool postcopy_ram_supported_by_host(void);
+bool postcopy_ram_supported_by_host(MigrationIncomingState *mis);
 
 /*
  * Make all of RAM sensitive to accesses to areas that haven't yet been written
@@ -72,14 +72,14 @@ void postcopy_discard_send_finish(MigrationState *ms,
  * returns 0 on success
  */
 int postcopy_place_page(MigrationIncomingState *mis, void *host, void *from,
-                        size_t pagesize);
+                        RAMBlock *rb);
 
 /*
  * Place a zero page at (host) atomically
  * returns 0 on success
  */
 int postcopy_place_page_zero(MigrationIncomingState *mis, void *host,
-                             size_t pagesize);
+                             RAMBlock *rb);
 
 /* The current postcopy state is read/set by postcopy_state_get/set
  * which update it atomically.
@@ -113,5 +113,80 @@ void *postcopy_get_tmp_page(MigrationIncomingState *mis);
 PostcopyState postcopy_state_get(void);
 /* Set the state and return the old state */
 PostcopyState postcopy_state_set(PostcopyState new_state);
+
+void postcopy_fault_thread_notify(MigrationIncomingState *mis);
+
+/*
+ * To be called once at the start before any device initialisation
+ */
+void postcopy_infrastructure_init(void);
+
+/* Add a notifier to a list to be called when checking whether the devices
+ * can support postcopy.
+ * It's data is a *PostcopyNotifyData
+ * It should return 0 if OK, or a negative value on failure.
+ * On failure it must set the data->errp to an error.
+ *
+ */
+enum PostcopyNotifyReason {
+    POSTCOPY_NOTIFY_PROBE = 0,
+    POSTCOPY_NOTIFY_INBOUND_ADVISE,
+    POSTCOPY_NOTIFY_INBOUND_LISTEN,
+    POSTCOPY_NOTIFY_INBOUND_END,
+};
+
+struct PostcopyNotifyData {
+    enum PostcopyNotifyReason reason;
+    Error **errp;
+};
+
+void postcopy_add_notifier(NotifierWithReturn *nn);
+void postcopy_remove_notifier(NotifierWithReturn *n);
+/* Call the notifier list set by postcopy_add_start_notifier */
+int postcopy_notify(enum PostcopyNotifyReason reason, Error **errp);
+
+struct PostCopyFD;
+
+/* ufd is a pointer to the struct uffd_msg *TODO: more Portable! */
+typedef int (*pcfdhandler)(struct PostCopyFD *pcfd, void *ufd);
+/* Notification to wake, either on place or on reception of
+ * a fault on something that's already arrived (race)
+ */
+typedef int (*pcfdwake)(struct PostCopyFD *pcfd, RAMBlock *rb, uint64_t offset);
+
+struct PostCopyFD {
+    int fd;
+    /* Data to pass to handler */
+    void *data;
+    /* Handler to be called whenever we get a poll event */
+    pcfdhandler handler;
+    /* Notification to wake shared client */
+    pcfdwake waker;
+    /* A string to use in error messages */
+    const char *idstr;
+};
+
+/* Register a userfaultfd owned by an external process for
+ * shared memory.
+ */
+void postcopy_register_shared_ufd(struct PostCopyFD *pcfd);
+void postcopy_unregister_shared_ufd(struct PostCopyFD *pcfd);
+/* Call each of the shared 'waker's registerd telling them of
+ * availability of a block.
+ */
+int postcopy_notify_shared_wake(RAMBlock *rb, uint64_t offset);
+/* postcopy_wake_shared: Notify a client ufd that a page is available
+ *
+ * Returns 0 on success
+ *
+ * @pcfd: Structure with fd, handler and name as above
+ * @client_addr: Address in the client program, not QEMU
+ * @rb: The RAMBlock the page is in
+ */
+int postcopy_wake_shared(struct PostCopyFD *pcfd, uint64_t client_addr,
+                         RAMBlock *rb);
+/* Callback from shared fault handlers to ask for a page */
+int postcopy_request_shared_page(struct PostCopyFD *pcfd, RAMBlock *rb,
+                                 uint64_t client_addr, uint64_t offset);
 
 #endif

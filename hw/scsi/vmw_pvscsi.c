@@ -28,7 +28,7 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "hw/scsi/scsi.h"
-#include "block/scsi.h"
+#include "scsi/constants.h"
 #include "hw/pci/msi.h"
 #include "vmw_pvscsi.h"
 #include "trace.h"
@@ -1133,7 +1133,7 @@ pvscsi_realizefn(PCIDevice *pci_dev, Error **errp)
 
     pvscsi_init_msi(s);
 
-    if (pci_is_express(pci_dev) && pci_bus_is_express(pci_dev->bus)) {
+    if (pci_is_express(pci_dev) && pci_bus_is_express(pci_get_bus(pci_dev))) {
         pcie_endpoint_cap_init(pci_dev, PVSCSI_EXP_EP_OFFSET);
     }
 
@@ -1167,7 +1167,7 @@ pvscsi_reset(DeviceState *dev)
     pvscsi_reset_adapter(s);
 }
 
-static void
+static int
 pvscsi_pre_save(void *opaque)
 {
     PVSCSIState *s = (PVSCSIState *) opaque;
@@ -1176,6 +1176,8 @@ pvscsi_pre_save(void *opaque)
 
     assert(QTAILQ_EMPTY(&s->pending_queue));
     assert(QTAILQ_EMPTY(&s->completion_queue));
+
+    return 0;
 }
 
 static int
@@ -1282,8 +1284,8 @@ static void pvscsi_class_init(ObjectClass *klass, void *data)
     k->device_id = PCI_DEVICE_ID_VMWARE_PVSCSI;
     k->class_id = PCI_CLASS_STORAGE_SCSI;
     k->subsystem_id = 0x1000;
-    pvs_k->parent_dc_realize = dc->realize;
-    dc->realize = pvscsi_realize;
+    device_class_set_parent_realize(dc, pvscsi_realize,
+                                    &pvs_k->parent_dc_realize);
     dc->reset = pvscsi_reset;
     dc->vmsd = &vmstate_pvscsi;
     dc->props = pvscsi_properties;
@@ -1300,6 +1302,8 @@ static const TypeInfo pvscsi_info = {
     .class_init    = pvscsi_class_init,
     .interfaces = (InterfaceInfo[]) {
         { TYPE_HOTPLUG_HANDLER },
+        { INTERFACE_PCIE_DEVICE },
+        { INTERFACE_CONVENTIONAL_PCI_DEVICE },
         { }
     }
 };

@@ -15,11 +15,16 @@
 #define QEMU_MIGRATION_H
 
 #include "qemu-common.h"
+#include "qapi/qapi-types-migration.h"
 #include "qemu/thread.h"
-#include "qapi-types.h"
 #include "exec/cpu-common.h"
 #include "qemu/coroutine_int.h"
 #include "hw/qdev.h"
+#include "io/channel.h"
+
+struct PostcopyBlocktimeContext;
+
+#define  MIGRATION_RESUME_ACK_VALUE  (1)
 
 /* State for the incoming migration */
 struct MigrationIncomingState {
@@ -35,6 +40,8 @@ struct MigrationIncomingState {
     bool           have_fault_thread;
     QemuThread     fault_thread;
     QemuSemaphore  fault_thread_sem;
+    /* Set this when we want the fault thread to quit */
+    bool           fault_thread_quit;
 
     bool           have_listen_thread;
     QemuThread     listen_thread;
@@ -42,12 +49,16 @@ struct MigrationIncomingState {
 
     /* For the kernel to send us notifications */
     int       userfault_fd;
-    /* To tell the fault_thread to quit */
-    int       userfault_quit_fd;
+    /* To notify the fault_thread to wake, e.g., when need to quit */
+    int       userfault_event_fd;
     QEMUFile *to_src_file;
     QemuMutex rp_mutex;    /* We send replies from multiple threads */
+    /* RAMBlock of last request sent to source */
+    RAMBlock *last_rb;
     void     *postcopy_tmp_page;
     void     *postcopy_tmp_zero_page;
+    /* PostCopyFD's for external userfaultfds & handlers of shared memory */
+    GArray   *postcopy_remote_fds;
 
     QEMUBH *bh;
 
@@ -58,10 +69,25 @@ struct MigrationIncomingState {
     /* The coroutine we should enter (back) after failover */
     Coroutine *migration_incoming_co;
     QemuSemaphore colo_incoming_sem;
+
+    /*
+     * PostcopyBlocktimeContext to keep information for postcopy
+     * live migration, to calculate vCPU block time
+     * */
+    struct PostcopyBlocktimeContext *blocktime_ctx;
+
+    /* notify PAUSED postcopy incoming migrations to try to continue */
+    bool postcopy_recover_triggered;
+    QemuSemaphore postcopy_pause_sem_dst;
+    QemuSemaphore postcopy_pause_sem_fault;
 };
 
 MigrationIncomingState *migration_incoming_get_current(void);
 void migration_incoming_state_destroy(void);
+/*
+ * Functions to work with blocktime context
+ */
+void fill_destination_postcopy_migration_info(MigrationInfo *info);
 
 #define TYPE_MIGRATION "migration"
 
@@ -88,6 +114,23 @@ struct MigrationState
     QemuThread thread;
     QEMUBH *cleanup_bh;
     QEMUFile *to_dst_file;
+    /*
+     * Protects to_dst_file pointer.  We need to make sure we won't
+     * yield or hang during the critical section, since this lock will
+     * be used in OOB command handler.
+     */
+    QemuMutex qemu_file_lock;
+
+    /* bytes already send at the beggining of current interation */
+    uint64_t iteration_initial_bytes;
+    /* time at the start of current iteration */
+    int64_t iteration_start_time;
+    /*
+     * The final stage happens when the remaining data is smaller than
+     * this threshold; it's calculated from the requested downtime and
+     * measured bandwidth
+     */
+    int64_t threshold_size;
 
     /* params from 'migrate-set-parameters' */
     MigrationParameters parameters;
@@ -99,15 +142,26 @@ struct MigrationState
         QEMUFile     *from_dst_file;
         QemuThread    rp_thread;
         bool          error;
+        QemuSemaphore rp_sem;
     } rp_state;
 
     double mbps;
+    /* Timestamp when recent migration starts (ms) */
+    int64_t start_time;
+    /* Total time used by latest migration (ms) */
     int64_t total_time;
+    /* Timestamp when VM is down (ms) to migrate the last stuff */
+    int64_t downtime_start;
     int64_t downtime;
     int64_t expected_downtime;
     bool enabled_capabilities[MIGRATION_CAPABILITY__MAX];
-    int64_t xbzrle_cache_size;
     int64_t setup_time;
+    /*
+     * Whether guest was running when we enter the completion stage.
+     * If migration is interrupted by any reason, we need to continue
+     * running the guest on source.
+     */
+    bool vm_was_running;
 
     /* Flag set once the migration has been asked to enter postcopy */
     bool start_postcopy;
@@ -120,6 +174,9 @@ struct MigrationState
     /* Flag set once the migration thread called bdrv_inactivate_all */
     bool block_inactive;
 
+    /* Migration is paused due to pause-before-switchover */
+    QemuSemaphore pause_sem;
+
     /* The semaphore is used to notify COLO thread that failover is finished */
     QemuSemaphore colo_exit_sem;
 
@@ -128,8 +185,12 @@ struct MigrationState
     int64_t colo_checkpoint_time;
     QEMUTimer *colo_delay_timer;
 
-    /* The last error that occurred */
+    /* The first error that has occurred.
+       We used the mutex to be able to return the 1st error message */
     Error *error;
+    /* mutex to protect errp */
+    QemuMutex error_mutex;
+
     /* Do we have to clean up -b/-i from old migrate parameters */
     /* This feature is deprecated and will be removed */
     bool must_remove_block_options;
@@ -147,29 +208,52 @@ struct MigrationState
     bool send_configuration;
     /* Whether we send section footer during migration */
     bool send_section_footer;
+
+    /* Needed by postcopy-pause state */
+    QemuSemaphore postcopy_pause_sem;
+    QemuSemaphore postcopy_pause_rp_sem;
+    /*
+     * Whether we abort the migration if decompression errors are
+     * detected at the destination. It is left at false for qemu
+     * older than 3.0, since only newer qemu sends streams that
+     * do not trigger spurious decompression errors.
+     */
+    bool decompress_error_check;
 };
 
 void migrate_set_state(int *state, int old_state, int new_state);
 
 void migration_fd_process_incoming(QEMUFile *f);
+void migration_ioc_process_incoming(QIOChannel *ioc);
+void migration_incoming_process(void);
+
+bool  migration_has_all_channels(void);
 
 uint64_t migrate_max_downtime(void);
 
+void migrate_set_error(MigrationState *s, const Error *error);
 void migrate_fd_error(MigrationState *s, const Error *error);
 
-void migrate_fd_connect(MigrationState *s);
+void migrate_fd_connect(MigrationState *s, Error *error_in);
 
-MigrationState *migrate_init(void);
+void migrate_init(MigrationState *s);
 bool migration_is_blocked(Error **errp);
 /* True if outgoing migration has entered postcopy phase */
 bool migration_in_postcopy(void);
 MigrationState *migrate_get_current(void);
 
+bool migrate_postcopy(void);
+
 bool migrate_release_ram(void);
 bool migrate_postcopy_ram(void);
 bool migrate_zero_blocks(void);
+bool migrate_dirty_bitmaps(void);
 
 bool migrate_auto_converge(void);
+bool migrate_use_multifd(void);
+bool migrate_pause_before_switchover(void);
+int migrate_multifd_channels(void);
+int migrate_multifd_page_count(void);
 
 int migrate_use_xbzrle(void);
 int64_t migrate_xbzrle_cache_size(void);
@@ -184,13 +268,20 @@ int migrate_compress_level(void);
 int migrate_compress_threads(void);
 int migrate_decompress_threads(void);
 bool migrate_use_events(void);
+bool migrate_postcopy_blocktime(void);
 
 /* Sending on the return path - generic and then for each message type */
 void migrate_send_rp_shut(MigrationIncomingState *mis,
                           uint32_t value);
 void migrate_send_rp_pong(MigrationIncomingState *mis,
                           uint32_t value);
-void migrate_send_rp_req_pages(MigrationIncomingState *mis, const char* rbname,
+int migrate_send_rp_req_pages(MigrationIncomingState *mis, const char* rbname,
                               ram_addr_t start, size_t len);
+void migrate_send_rp_recv_bitmap(MigrationIncomingState *mis,
+                                 char *block_name);
+void migrate_send_rp_resume_ack(MigrationIncomingState *mis, uint32_t value);
+
+void dirty_bitmap_mig_before_vm_start(void);
+void init_dirty_bitmap_incoming_migration(void);
 
 #endif

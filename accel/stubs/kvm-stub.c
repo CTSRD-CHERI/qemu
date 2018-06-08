@@ -64,9 +64,9 @@ int kvm_cpu_exec(CPUState *cpu)
     abort();
 }
 
-int kvm_has_sync_mmu(void)
+bool kvm_has_sync_mmu(void)
 {
-    return 0;
+    return false;
 }
 
 int kvm_has_many_ioeventfds(void)
@@ -103,6 +103,16 @@ int kvm_on_sigbus_vcpu(CPUState *cpu, int code, void *addr)
 int kvm_on_sigbus(int code, void *addr)
 {
     return 1;
+}
+
+bool kvm_memcrypt_enabled(void)
+{
+    return false;
+}
+
+int kvm_memcrypt_encrypt_data(uint8_t *ptr, uint64_t len)
+{
+  return 1;
 }
 
 #ifndef CONFIG_USER_ONLY

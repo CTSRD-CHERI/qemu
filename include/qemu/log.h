@@ -1,10 +1,11 @@
 #ifndef QEMU_LOG_H
 #define QEMU_LOG_H
 
+/* A small part of this API is split into its own header */
+#include "qemu/log-for-trace.h"
 
-/* Private global variables, don't use */
+/* Private global variable, don't use */
 extern FILE *qemu_logfile;
-extern int qemu_loglevel;
 
 /* 
  * The new API:
@@ -41,22 +42,16 @@ static inline bool qemu_log_separate(void)
 #define CPU_LOG_MMU        (1 << 12)
 #define CPU_LOG_TB_NOCHAIN (1 << 13)
 #define CPU_LOG_PAGE       (1 << 14)
-#define LOG_TRACE          (1 << 15)
+/* LOG_TRACE (1 << 15) is defined in log-for-trace.h */
 #define CPU_LOG_TB_OP_IND  (1 << 16)
-#define CPU_LOG_INSTR      (1 << 17)
-#define CPU_LOG_CVTRACE    (1 << 18)
+#define CPU_LOG_TB_FPU     (1 << 17)
+#define CPU_LOG_INSTR      (1 << 18)
+#define CPU_LOG_CVTRACE    (1 << 19)
 /*
  * The CPU_LOG_USER_ONLY flag only exists so that temporarily suspending the
  * instruction tracing does not cause QEMU to close and reopen the logfile.
  */
-#define CPU_LOG_USER_ONLY  (1 << 19)
-
-/* Returns true if a bit is set in the current loglevel mask
- */
-static inline bool qemu_loglevel_mask(int mask)
-{
-    return (qemu_loglevel & mask) != 0;
-}
+#define CPU_LOG_USER_ONLY  (1 << 20)
 
 /* Lock output for a series of related logs.  Since this is not needed
  * for a single qemu_log / qemu_log_mask / qemu_log_mask_and_addr, we
@@ -75,10 +70,6 @@ static inline void qemu_log_unlock(void)
 }
 
 /* Logging functions: */
-
-/* main logging function
- */
-int GCC_FMT_ATTR(1, 2) qemu_log(const char *fmt, ...);
 
 /* vfprintf-like logging function
  */

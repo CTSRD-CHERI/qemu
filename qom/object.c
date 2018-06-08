@@ -16,17 +16,17 @@
 #include "qom/object_interfaces.h"
 #include "qemu/cutils.h"
 #include "qapi/visitor.h"
-#include "qapi-visit.h"
 #include "qapi/string-input-visitor.h"
 #include "qapi/string-output-visitor.h"
+#include "qapi/qapi-builtin-visit.h"
 #include "qapi/qmp/qerror.h"
 #include "trace.h"
 
 /* TODO: replace QObject with a simpler visitor to avoid a dependency
  * of the QOM core on QObject?  */
 #include "qom/qom-qobject.h"
-#include "qapi/qmp/qobject.h"
 #include "qapi/qmp/qbool.h"
+#include "qapi/qmp/qnum.h"
 #include "qapi/qmp/qstring.h"
 
 #define MAX_INTERFACES 32
@@ -149,6 +149,15 @@ TypeImpl *type_register(const TypeInfo *info)
 TypeImpl *type_register_static(const TypeInfo *info)
 {
     return type_register(info);
+}
+
+void type_register_static_array(const TypeInfo *infos, int nr_infos)
+{
+    int i;
+
+    for (i = 0; i < nr_infos; i++) {
+        type_register_static(&infos[i]);
+    }
 }
 
 static TypeImpl *type_get_by_name(const char *name)
@@ -882,6 +891,19 @@ GSList *object_class_get_list(const char *implements_type,
     return list;
 }
 
+static gint object_class_cmp(gconstpointer a, gconstpointer b)
+{
+    return strcasecmp(object_class_get_name((ObjectClass *)a),
+                      object_class_get_name((ObjectClass *)b));
+}
+
+GSList *object_class_get_list_sorted(const char *implements_type,
+                                     bool include_abstract)
+{
+    return g_slist_sort(object_class_get_list(implements_type, include_abstract),
+                        object_class_cmp);
+}
+
 void object_ref(Object *obj)
 {
     if (!obj) {
@@ -1028,6 +1050,13 @@ ObjectProperty *object_property_iter_next(ObjectPropertyIterator *iter)
     return val;
 }
 
+void object_class_property_iter_init(ObjectPropertyIterator *iter,
+                                     ObjectClass *klass)
+{
+    g_hash_table_iter_init(&iter->iter, klass->properties);
+    iter->nextclass = klass;
+}
+
 ObjectProperty *object_class_property_find(ObjectClass *klass, const char *name,
                                            Error **errp)
 {
@@ -1100,28 +1129,25 @@ void object_property_set_str(Object *obj, const char *value,
     QString *qstr = qstring_from_str(value);
     object_property_set_qobject(obj, QOBJECT(qstr), name, errp);
 
-    QDECREF(qstr);
+    qobject_unref(qstr);
 }
 
 char *object_property_get_str(Object *obj, const char *name,
                               Error **errp)
 {
     QObject *ret = object_property_get_qobject(obj, name, errp);
-    QString *qstring;
     char *retval;
 
     if (!ret) {
         return NULL;
     }
-    qstring = qobject_to_qstring(ret);
-    if (!qstring) {
+
+    retval = g_strdup(qobject_get_try_str(ret));
+    if (!retval) {
         error_setg(errp, QERR_INVALID_PARAMETER_TYPE, name, "string");
-        retval = NULL;
-    } else {
-        retval = g_strdup(qstring_get_str(qstring));
     }
 
-    qobject_decref(ret);
+    qobject_unref(ret);
     return retval;
 }
 
@@ -1161,7 +1187,7 @@ void object_property_set_bool(Object *obj, bool value,
     QBool *qbool = qbool_from_bool(value);
     object_property_set_qobject(obj, QOBJECT(qbool), name, errp);
 
-    QDECREF(qbool);
+    qobject_unref(qbool);
 }
 
 bool object_property_get_bool(Object *obj, const char *name,
@@ -1174,7 +1200,7 @@ bool object_property_get_bool(Object *obj, const char *name,
     if (!ret) {
         return false;
     }
-    qbool = qobject_to_qbool(ret);
+    qbool = qobject_to(QBool, ret);
     if (!qbool) {
         error_setg(errp, QERR_INVALID_PARAMETER_TYPE, name, "boolean");
         retval = false;
@@ -1182,7 +1208,7 @@ bool object_property_get_bool(Object *obj, const char *name,
         retval = qbool_get_bool(qbool);
     }
 
-    qobject_decref(ret);
+    qobject_unref(ret);
     return retval;
 }
 
@@ -1192,7 +1218,7 @@ void object_property_set_int(Object *obj, int64_t value,
     QNum *qnum = qnum_from_int(value);
     object_property_set_qobject(obj, QOBJECT(qnum), name, errp);
 
-    QDECREF(qnum);
+    qobject_unref(qnum);
 }
 
 int64_t object_property_get_int(Object *obj, const char *name,
@@ -1206,13 +1232,13 @@ int64_t object_property_get_int(Object *obj, const char *name,
         return -1;
     }
 
-    qnum = qobject_to_qnum(ret);
+    qnum = qobject_to(QNum, ret);
     if (!qnum || !qnum_get_try_int(qnum, &retval)) {
         error_setg(errp, QERR_INVALID_PARAMETER_TYPE, name, "int");
         retval = -1;
     }
 
-    qobject_decref(ret);
+    qobject_unref(ret);
     return retval;
 }
 
@@ -1222,7 +1248,7 @@ void object_property_set_uint(Object *obj, uint64_t value,
     QNum *qnum = qnum_from_uint(value);
 
     object_property_set_qobject(obj, QOBJECT(qnum), name, errp);
-    QDECREF(qnum);
+    qobject_unref(qnum);
 }
 
 uint64_t object_property_get_uint(Object *obj, const char *name,
@@ -1235,18 +1261,18 @@ uint64_t object_property_get_uint(Object *obj, const char *name,
     if (!ret) {
         return 0;
     }
-    qnum = qobject_to_qnum(ret);
+    qnum = qobject_to(QNum, ret);
     if (!qnum || !qnum_get_try_uint(qnum, &retval)) {
         error_setg(errp, QERR_INVALID_PARAMETER_TYPE, name, "uint");
         retval = 0;
     }
 
-    qobject_decref(ret);
+    qobject_unref(ret);
     return retval;
 }
 
 typedef struct EnumProperty {
-    const char * const *strings;
+    const QEnumLookup *lookup;
     int (*get)(Object *, Error **);
     void (*set)(Object *, int, Error **);
 } EnumProperty;
@@ -1284,7 +1310,7 @@ int object_property_get_enum(Object *obj, const char *name,
     visit_complete(v, &str);
     visit_free(v);
     v = string_input_visitor_new(str);
-    visit_type_enum(v, name, &ret, enumprop->strings, errp);
+    visit_type_enum(v, name, &ret, enumprop->lookup, errp);
 
     g_free(str);
     visit_free(v);
@@ -1368,6 +1394,17 @@ Object *object_get_root(void)
 Object *object_get_objects_root(void)
 {
     return container_get(object_get_root(), "/objects");
+}
+
+Object *object_get_internal_root(void)
+{
+    static Object *internal_root;
+
+    if (!internal_root) {
+        internal_root = object_new("container");
+    }
+
+    return internal_root;
 }
 
 static void object_get_child_property(Object *obj, Visitor *v,
@@ -1607,8 +1644,9 @@ gchar *object_get_canonical_path_component(Object *obj)
     ObjectProperty *prop = NULL;
     GHashTableIter iter;
 
-    g_assert(obj);
-    g_assert(obj->parent != NULL);
+    if (obj->parent == NULL) {
+        return NULL;
+    }
 
     g_hash_table_iter_init(&iter, obj->parent->properties);
     while (g_hash_table_iter_next(&iter, NULL, (gpointer *)&prop)) {
@@ -1631,25 +1669,29 @@ gchar *object_get_canonical_path(Object *obj)
     Object *root = object_get_root();
     char *newpath, *path = NULL;
 
-    while (obj != root) {
-        char *component = object_get_canonical_path_component(obj);
-
-        if (path) {
-            newpath = g_strdup_printf("%s/%s", component, path);
-            g_free(component);
-            g_free(path);
-            path = newpath;
-        } else {
-            path = component;
-        }
-
-        obj = obj->parent;
+    if (obj == root) {
+        return g_strdup("/");
     }
 
-    newpath = g_strdup_printf("/%s", path ? path : "");
-    g_free(path);
+    do {
+        char *component = object_get_canonical_path_component(obj);
 
-    return newpath;
+        if (!component) {
+            /* A canonical path must be complete, so discard what was
+             * collected so far.
+             */
+            g_free(path);
+            return NULL;
+        }
+
+        newpath = g_strdup_printf("/%s%s", component, path ? path : "");
+        g_free(path);
+        g_free(component);
+        path = newpath;
+        obj = obj->parent;
+    } while (obj != root);
+
+    return path;
 }
 
 Object *object_resolve_path_component(Object *parent, const gchar *part)
@@ -1950,7 +1992,7 @@ static void property_get_enum(Object *obj, Visitor *v, const char *name,
         return;
     }
 
-    visit_type_enum(v, name, &value, prop->strings, errp);
+    visit_type_enum(v, name, &value, prop->lookup, errp);
 }
 
 static void property_set_enum(Object *obj, Visitor *v, const char *name,
@@ -1960,7 +2002,7 @@ static void property_set_enum(Object *obj, Visitor *v, const char *name,
     int value;
     Error *err = NULL;
 
-    visit_type_enum(v, name, &value, prop->strings, &err);
+    visit_type_enum(v, name, &value, prop->lookup, &err);
     if (err) {
         error_propagate(errp, err);
         return;
@@ -1977,7 +2019,7 @@ static void property_release_enum(Object *obj, const char *name,
 
 void object_property_add_enum(Object *obj, const char *name,
                               const char *typename,
-                              const char * const *strings,
+                              const QEnumLookup *lookup,
                               int (*get)(Object *, Error **),
                               void (*set)(Object *, int, Error **),
                               Error **errp)
@@ -1985,7 +2027,7 @@ void object_property_add_enum(Object *obj, const char *name,
     Error *local_err = NULL;
     EnumProperty *prop = g_malloc(sizeof(*prop));
 
-    prop->strings = strings;
+    prop->lookup = lookup;
     prop->get = get;
     prop->set = set;
 
@@ -2002,7 +2044,7 @@ void object_property_add_enum(Object *obj, const char *name,
 
 void object_class_property_add_enum(ObjectClass *klass, const char *name,
                                     const char *typename,
-                                    const char * const *strings,
+                                    const QEnumLookup *lookup,
                                     int (*get)(Object *, Error **),
                                     void (*set)(Object *, int, Error **),
                                     Error **errp)
@@ -2010,7 +2052,7 @@ void object_class_property_add_enum(ObjectClass *klass, const char *name,
     Error *local_err = NULL;
     EnumProperty *prop = g_malloc(sizeof(*prop));
 
-    prop->strings = strings;
+    prop->lookup = lookup;
     prop->get = get;
     prop->set = set;
 

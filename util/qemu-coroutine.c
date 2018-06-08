@@ -104,43 +104,65 @@ static void coroutine_delete(Coroutine *co)
 
 void qemu_aio_coroutine_enter(AioContext *ctx, Coroutine *co)
 {
-    Coroutine *self = qemu_coroutine_self();
-    CoroutineAction ret;
+    QSIMPLEQ_HEAD(, Coroutine) pending = QSIMPLEQ_HEAD_INITIALIZER(pending);
+    Coroutine *from = qemu_coroutine_self();
 
-    trace_qemu_aio_coroutine_enter(ctx, self, co, co->entry_arg);
+    QSIMPLEQ_INSERT_TAIL(&pending, co, co_queue_next);
 
-    if (co->caller) {
-        fprintf(stderr, "Co-routine re-entered recursively\n");
-        abort();
-    }
+    /* Run co and any queued coroutines */
+    while (!QSIMPLEQ_EMPTY(&pending)) {
+        Coroutine *to = QSIMPLEQ_FIRST(&pending);
+        CoroutineAction ret;
 
-    co->caller = self;
-    co->ctx = ctx;
+        /* Cannot rely on the read barrier for to in aio_co_wake(), as there are
+         * callers outside of aio_co_wake() */
+        const char *scheduled = atomic_mb_read(&to->scheduled);
 
-    /* Store co->ctx before anything that stores co.  Matches
-     * barrier in aio_co_wake and qemu_co_mutex_wake.
-     */
-    smp_wmb();
+        QSIMPLEQ_REMOVE_HEAD(&pending, co_queue_next);
 
-    ret = qemu_coroutine_switch(self, co, COROUTINE_ENTER);
+        trace_qemu_aio_coroutine_enter(ctx, from, to, to->entry_arg);
 
-    qemu_co_queue_run_restart(co);
+        /* if the Coroutine has already been scheduled, entering it again will
+         * cause us to enter it twice, potentially even after the coroutine has
+         * been deleted */
+        if (scheduled) {
+            fprintf(stderr,
+                    "%s: Co-routine was already scheduled in '%s'\n",
+                    __func__, scheduled);
+            abort();
+        }
 
-    /* Beware, if ret == COROUTINE_YIELD and qemu_co_queue_run_restart()
-     * has started any other coroutine, "co" might have been reentered
-     * and even freed by now!  So be careful and do not touch it.
-     */
+        if (to->caller) {
+            fprintf(stderr, "Co-routine re-entered recursively\n");
+            abort();
+        }
 
-    switch (ret) {
-    case COROUTINE_YIELD:
-        return;
-    case COROUTINE_TERMINATE:
-        assert(!co->locks_held);
-        trace_qemu_coroutine_terminate(co);
-        coroutine_delete(co);
-        return;
-    default:
-        abort();
+        to->caller = from;
+        to->ctx = ctx;
+
+        /* Store to->ctx before anything that stores to.  Matches
+         * barrier in aio_co_wake and qemu_co_mutex_wake.
+         */
+        smp_wmb();
+
+        ret = qemu_coroutine_switch(from, to, COROUTINE_ENTER);
+
+        /* Queued coroutines are run depth-first; previously pending coroutines
+         * run after those queued more recently.
+         */
+        QSIMPLEQ_PREPEND(&pending, &to->co_queue_wakeup);
+
+        switch (ret) {
+        case COROUTINE_YIELD:
+            break;
+        case COROUTINE_TERMINATE:
+            assert(!to->locks_held);
+            trace_qemu_coroutine_terminate(to);
+            coroutine_delete(to);
+            break;
+        default:
+            abort();
+        }
     }
 }
 

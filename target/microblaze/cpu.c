@@ -28,6 +28,7 @@
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
 #include "exec/exec-all.h"
+#include "fpu/softfloat.h"
 
 static const struct {
     const char *name;
@@ -70,6 +71,9 @@ static const struct {
     {"10.0", 0x24},
     {NULL, 0},
 };
+
+/* If no specific version gets selected, default to the following.  */
+#define DEFAULT_CPU_VERSION "10.0"
 
 static void mb_cpu_set_pc(CPUState *cs, vaddr value)
 {
@@ -124,6 +128,7 @@ static void mb_cpu_reset(CPUState *s)
     env->mmu.c_mmu = 3;
     env->mmu.c_mmu_tlb_access = 3;
     env->mmu.c_mmu_zones = 16;
+    env->mmu.c_addr_mask = MAKE_64BIT_MASK(0, cpu->cfg.addr_size);
 #endif
 }
 
@@ -140,12 +145,19 @@ static void mb_cpu_realizefn(DeviceState *dev, Error **errp)
     MicroBlazeCPU *cpu = MICROBLAZE_CPU(cs);
     CPUMBState *env = &cpu->env;
     uint8_t version_code = 0;
+    const char *version;
     int i = 0;
     Error *local_err = NULL;
 
     cpu_exec_realizefn(cs, &local_err);
     if (local_err != NULL) {
         error_propagate(errp, local_err);
+        return;
+    }
+
+    if (cpu->cfg.addr_size < 32 || cpu->cfg.addr_size > 64) {
+        error_setg(errp, "addr-size %d is out of range (32 - 64)",
+                   cpu->cfg.addr_size);
         return;
     }
 
@@ -161,8 +173,9 @@ static void mb_cpu_realizefn(DeviceState *dev, Error **errp)
                         | PVR2_FPU_EXC_MASK \
                         | 0;
 
-    for (i = 0; mb_cpu_lookup[i].name && cpu->cfg.version; i++) {
-        if (strcmp(mb_cpu_lookup[i].name, cpu->cfg.version) == 0) {
+    version = cpu->cfg.version ? cpu->cfg.version : DEFAULT_CPU_VERSION;
+    for (i = 0; mb_cpu_lookup[i].name && version; i++) {
+        if (strcmp(mb_cpu_lookup[i].name, version) == 0) {
             version_code = mb_cpu_lookup[i].version_id;
             break;
         }
@@ -194,8 +207,10 @@ static void mb_cpu_realizefn(DeviceState *dev, Error **errp)
     env->pvr.regs[5] |= cpu->cfg.dcache_writeback ?
                                         PVR5_DCACHE_WRITEBACK_MASK : 0;
 
-    env->pvr.regs[10] = 0x0c000000; /* Default to spartan 3a dsp family.  */
-    env->pvr.regs[11] = PVR11_USE_MMU | (16 << 17);
+    env->pvr.regs[10] = 0x0c000000 | /* Default to spartan 3a dsp family.  */
+                        (cpu->cfg.addr_size - 32) << PVR10_ASIZE_SHIFT;
+    env->pvr.regs[11] = (cpu->cfg.use_mmu ? PVR11_USE_MMU : 0) |
+                        16 << 17;
 
     mcc->parent_realize(dev, errp);
 }
@@ -205,7 +220,6 @@ static void mb_cpu_initfn(Object *obj)
     CPUState *cs = CPU(obj);
     MicroBlazeCPU *cpu = MICROBLAZE_CPU(obj);
     CPUMBState *env = &cpu->env;
-    static bool tcg_initialized;
 
     cs->env_ptr = env;
 
@@ -215,11 +229,6 @@ static void mb_cpu_initfn(Object *obj)
     /* Inbound IRQ and FIR lines */
     qdev_init_gpio_in(DEVICE(cpu), microblaze_cpu_set_irq, 2);
 #endif
-
-    if (tcg_enabled() && !tcg_initialized) {
-        tcg_initialized = true;
-        mb_tcg_init();
-    }
 }
 
 static const VMStateDescription vmstate_mb_cpu = {
@@ -231,6 +240,14 @@ static Property mb_properties[] = {
     DEFINE_PROP_UINT32("base-vectors", MicroBlazeCPU, cfg.base_vectors, 0),
     DEFINE_PROP_BOOL("use-stack-protection", MicroBlazeCPU, cfg.stackprot,
                      false),
+    /*
+     * This is the C_ADDR_SIZE synth-time configuration option of the
+     * MicroBlaze cores. Supported values range between 32 and 64.
+     *
+     * When set to > 32, 32bit MicroBlaze can emit load/stores
+     * with extended addressing.
+     */
+    DEFINE_PROP_UINT8("addr-size", MicroBlazeCPU, cfg.addr_size, 32),
     /* If use-fpu > 0 - FPU is enabled
      * If use-fpu = 2 - Floating point conversion and square root instructions
      *                  are enabled
@@ -253,18 +270,23 @@ static Property mb_properties[] = {
     DEFINE_PROP_END_OF_LIST(),
 };
 
+static ObjectClass *mb_cpu_class_by_name(const char *cpu_model)
+{
+    return object_class_by_name(TYPE_MICROBLAZE_CPU);
+}
+
 static void mb_cpu_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
     CPUClass *cc = CPU_CLASS(oc);
     MicroBlazeCPUClass *mcc = MICROBLAZE_CPU_CLASS(oc);
 
-    mcc->parent_realize = dc->realize;
-    dc->realize = mb_cpu_realizefn;
-
+    device_class_set_parent_realize(dc, mb_cpu_realizefn,
+                                    &mcc->parent_realize);
     mcc->parent_reset = cc->reset;
     cc->reset = mb_cpu_reset;
 
+    cc->class_by_name = mb_cpu_class_by_name;
     cc->has_work = mb_cpu_has_work;
     cc->do_interrupt = mb_cpu_do_interrupt;
     cc->cpu_exec_interrupt = mb_cpu_exec_interrupt;
@@ -283,6 +305,7 @@ static void mb_cpu_class_init(ObjectClass *oc, void *data)
     cc->gdb_num_core_regs = 32 + 5;
 
     cc->disas_set_info = mb_disas_set_info;
+    cc->tcg_initialize = mb_tcg_init;
 }
 
 static const TypeInfo mb_cpu_type_info = {

@@ -28,7 +28,6 @@
 #include "chardev/char-serial.h"
 #include "qapi/error.h"
 #include "qemu/timer.h"
-#include "exec/address-spaces.h"
 #include "qemu/error-report.h"
 
 //#define DEBUG_SERIAL
@@ -630,10 +629,12 @@ static void serial_event(void *opaque, int event)
         serial_receive_break(s);
 }
 
-static void serial_pre_save(void *opaque)
+static int serial_pre_save(void *opaque)
 {
     SerialState *s = opaque;
     s->fcr_vmstate = s->fcr;
+
+    return 0;
 }
 
 static int serial_pre_load(void *opaque)
@@ -921,11 +922,6 @@ static int serial_be_change(void *opaque)
 
 void serial_realize_core(SerialState *s, Error **errp)
 {
-    if (!qemu_chr_fe_backend_connected(&s->chr)) {
-        error_setg(errp, "Can't create serial device, empty char device");
-        return;
-    }
-
     s->modem_status_poll = timer_new_ns(QEMU_CLOCK_VIRTUAL, (QEMUTimerCB *) serial_update_msl, s);
 
     s->fifo_timeout_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, (QEMUTimerCB *) fifo_timeout_int, s);
@@ -1003,7 +999,7 @@ static void serial_mm_write(void *opaque, hwaddr addr,
                             uint64_t value, unsigned size)
 {
     SerialState *s = opaque;
-    value &= ~0u >> (32 - (size * 8));
+    value &= 255;
     serial_ioport_write(s, addr >> s->it_shift, value, 1);
 }
 
@@ -1012,16 +1008,22 @@ static const MemoryRegionOps serial_mm_ops[3] = {
         .read = serial_mm_read,
         .write = serial_mm_write,
         .endianness = DEVICE_NATIVE_ENDIAN,
+        .valid.max_access_size = 8,
+        .impl.max_access_size = 8,
     },
     [DEVICE_LITTLE_ENDIAN] = {
         .read = serial_mm_read,
         .write = serial_mm_write,
         .endianness = DEVICE_LITTLE_ENDIAN,
+        .valid.max_access_size = 8,
+        .impl.max_access_size = 8,
     },
     [DEVICE_BIG_ENDIAN] = {
         .read = serial_mm_read,
         .write = serial_mm_write,
         .endianness = DEVICE_BIG_ENDIAN,
+        .valid.max_access_size = 8,
+        .impl.max_access_size = 8,
     },
 };
 

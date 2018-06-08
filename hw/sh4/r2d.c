@@ -40,7 +40,6 @@
 #include "hw/loader.h"
 #include "hw/usb.h"
 #include "hw/block/flash.h"
-#include "sysemu/block-backend.h"
 #include "exec/address-spaces.h"
 
 #define FLASH_BASE 0x00000000
@@ -225,7 +224,6 @@ static struct QEMU_PACKED
 
 static void r2d_init(MachineState *machine)
 {
-    const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = machine->kernel_filename;
     const char *kernel_cmdline = machine->kernel_cmdline;
     const char *initrd_filename = machine->initrd_filename;
@@ -242,15 +240,7 @@ static void r2d_init(MachineState *machine)
     MemoryRegion *address_space_mem = get_system_memory();
     PCIBus *pci_bus;
 
-    if (cpu_model == NULL) {
-        cpu_model = "SH7751R";
-    }
-
-    cpu = cpu_sh4_init(cpu_model);
-    if (cpu == NULL) {
-        fprintf(stderr, "Unable to find CPU definition\n");
-        exit(1);
-    }
+    cpu = SUPERH_CPU(cpu_create(machine->cpu_type));
     env = &cpu->env;
 
     reset_info = g_malloc0(sizeof(ResetData));
@@ -280,7 +270,7 @@ static void r2d_init(MachineState *machine)
     busdev = SYS_BUS_DEVICE(dev);
     qdev_prop_set_uint32(dev, "vram-size", SM501_VRAM_SIZE);
     qdev_prop_set_uint32(dev, "base", 0x10000000);
-    qdev_prop_set_ptr(dev, "chr-state", serial_hds[2]);
+    qdev_prop_set_ptr(dev, "chr-state", serial_hd(2));
     qdev_init_nofail(dev);
     sysbus_mmio_map(busdev, 0, 0x10000000);
     sysbus_mmio_map(busdev, 1, 0x13e00000);
@@ -369,6 +359,7 @@ static void r2d_machine_init(MachineClass *mc)
     mc->desc = "r2d-plus board";
     mc->init = r2d_init;
     mc->block_default_type = IF_IDE;
+    mc->default_cpu_type = TYPE_SH7751R_CPU;
 }
 
 DEFINE_MACHINE("r2d", r2d_machine_init)

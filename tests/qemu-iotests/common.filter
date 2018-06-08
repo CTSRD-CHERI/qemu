@@ -32,6 +32,11 @@ _filter_generated_node_ids()
      sed -re 's/\#block[0-9]{3,}/NODE_NAME/'
 }
 
+_filter_qom_path()
+{
+    sed -e 's#\(Attached to: *\) /.*#\1 PATH#'
+}
+
 # replace occurrences of the actual TEST_DIR value with TEST_DIR
 _filter_testdir()
 {
@@ -72,7 +77,6 @@ _filter_qemu()
 {
     sed -e "s#\\(^\\|(qemu) \\)$(basename $QEMU_PROG):#\1QEMU_PROG:#" \
         -e 's#^QEMU [0-9]\+\.[0-9]\+\.[0-9]\+ monitor#QEMU X.Y.Z monitor#' \
-        -e '/main-loop: WARNING: I\/O thread spun for [0-9]\+ iterations/d' \
         -e $'s#\r##' # QEMU monitor uses \r\n line endings
 }
 
@@ -105,12 +109,20 @@ _filter_block_job_len()
     sed -e 's/, "len": [0-9]\+,/, "len": LEN,/g'
 }
 
+# replace actual image size (depends on the host filesystem)
+_filter_actual_image_size()
+{
+    sed -s 's/\("actual-size":\s*\)[0-9]\+/\1SIZE/g'
+}
+
 # replace driver-specific options in the "Formatting..." line
 _filter_img_create()
 {
-    sed -e "s#$IMGPROTO:$TEST_DIR#TEST_DIR#g" \
+    sed -e "s#$REMOTE_TEST_DIR#TEST_DIR#g" \
+        -e "s#$IMGPROTO:$TEST_DIR#TEST_DIR#g" \
         -e "s#$TEST_DIR#TEST_DIR#g" \
         -e "s#$IMGFMT#IMGFMT#g" \
+        -e 's#nbd:127.0.0.1:10810#TEST_DIR/t.IMGFMT#g' \
         -e "s# encryption=off##g" \
         -e "s# cluster_size=[0-9]\\+##g" \
         -e "s# table_size=[0-9]\\+##g" \
@@ -127,12 +139,23 @@ _filter_img_create()
         -e "s# log_size=[0-9]\\+##g" \
         -e "s# refcount_bits=[0-9]\\+##g" \
         -e "s# key-secret=[a-zA-Z0-9]\\+##g" \
-        -e "s# iter-time=[0-9]\\+##g"
+        -e "s# iter-time=[0-9]\\+##g" \
+        -e "s# force_size=\\(on\\|off\\)##g"
 }
 
 _filter_img_info()
 {
-    sed -e "s#$IMGPROTO:$TEST_DIR#TEST_DIR#g" \
+    if [[ "$1" == "--format-specific" ]]; then
+        local format_specific=1
+        shift
+    else
+        local format_specific=0
+    fi
+
+    discard=0
+    regex_json_spec_start='^ *"format-specific": \{'
+    sed -e "s#$REMOTE_TEST_DIR#TEST_DIR#g" \
+        -e "s#$IMGPROTO:$TEST_DIR#TEST_DIR#g" \
         -e "s#$TEST_DIR#TEST_DIR#g" \
         -e "s#$IMGFMT#IMGFMT#g" \
         -e 's#nbd://127.0.0.1:10810$#TEST_DIR/t.IMGFMT#g' \
@@ -150,7 +173,27 @@ _filter_img_info()
         -e "/lazy_refcounts: \\(on\\|off\\)/d" \
         -e "/block_size: [0-9]\\+/d" \
         -e "/block_state_zero: \\(on\\|off\\)/d" \
-        -e "/log_size: [0-9]\\+/d"
+        -e "/log_size: [0-9]\\+/d" \
+        -e "s/iters: [0-9]\\+/iters: 1024/" \
+        -e "s/uuid: [-a-f0-9]\\+/uuid: 00000000-0000-0000-0000-000000000000/" | \
+    while IFS='' read -r line; do
+        if [[ $format_specific == 1 ]]; then
+            discard=0
+        elif [[ $line == "Format specific information:" ]]; then
+            discard=1
+        elif [[ $line =~ $regex_json_spec_start ]]; then
+            discard=2
+            regex_json_spec_end="^${line%%[^ ]*}\\},? *$"
+        fi
+        if [[ $discard == 0 ]]; then
+            echo "$line"
+        elif [[ $discard == 1 && ! $line ]]; then
+            echo
+            discard=0
+        elif [[ $discard == 2 && $line =~ $regex_json_spec_end ]]; then
+            discard=0
+        fi
+    done
 }
 
 # filter out offsets and file names from qemu-img map; good for both
@@ -170,9 +213,9 @@ _filter_nbd()
     #
     # Filter out the TCP port number since this changes between runs.
     sed -e '/nbd\/.*\.c:/d' \
-        -e 's#nbd:\(//\)\?127\.0\.0\.1:[0-9]*#nbd:\1127.0.0.1:PORT#g' \
+        -e 's#127\.0\.0\.1:[0-9]*#127.0.0.1:PORT#g' \
         -e "s#?socket=$TEST_DIR#?socket=TEST_DIR#g" \
-        -e 's#\(exportname=foo\|PORT\): Failed to .*$#\1#'
+        -e 's#\(foo\|PORT/\?\|.sock\): Failed to .*$#\1#'
 }
 
 # make sure this script returns success

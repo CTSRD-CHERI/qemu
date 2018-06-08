@@ -9,9 +9,11 @@
  * This work is licensed under the terms of the GNU LGPL, version 2.1 or later.
  * See the COPYING.LIB file in the top-level directory.
  */
-#include "qemu/osdep.h"
 
+#include "qemu/osdep.h"
 #include "qapi/qmp/qdict.h"
+#include "qapi/qmp/qlist.h"
+#include "qapi/qmp/qnum.h"
 #include "qapi/qmp/qstring.h"
 #include "qapi/error.h"
 #include "qemu-common.h"
@@ -32,7 +34,7 @@ static void qdict_new_test(void)
     g_assert(qdict->base.refcnt == 1);
     g_assert(qobject_type(QOBJECT(qdict)) == QTYPE_QDICT);
 
-    QDECREF(qdict);
+    qobject_unref(qdict);
 }
 
 static void qdict_put_obj_test(void)
@@ -49,10 +51,10 @@ static void qdict_put_obj_test(void)
 
     g_assert(qdict_size(qdict) == 1);
     ent = QLIST_FIRST(&qdict->table[12345 % QDICT_BUCKET_MAX]);
-    qn = qobject_to_qnum(ent->value);
+    qn = qobject_to(QNum, ent->value);
     g_assert_cmpint(qnum_get_int(qn), ==, num);
 
-    QDECREF(qdict);
+    qobject_unref(qdict);
 }
 
 static void qdict_destroy_simple_test(void)
@@ -63,7 +65,7 @@ static void qdict_destroy_simple_test(void)
     qdict_put_int(qdict, "num", 0);
     qdict_put_str(qdict, "str", "foo");
 
-    QDECREF(qdict);
+    qobject_unref(qdict);
 }
 
 static void qdict_get_test(void)
@@ -79,10 +81,10 @@ static void qdict_get_test(void)
     obj = qdict_get(tests_dict, key);
     g_assert(obj != NULL);
 
-    qn = qobject_to_qnum(obj);
+    qn = qobject_to(QNum, obj);
     g_assert_cmpint(qnum_get_int(qn), ==, value);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_get_int_test(void)
@@ -97,7 +99,7 @@ static void qdict_get_int_test(void)
     ret = qdict_get_int(tests_dict, key);
     g_assert(ret == value);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_get_try_int_test(void)
@@ -119,7 +121,7 @@ static void qdict_get_try_int_test(void)
     ret = qdict_get_try_int(tests_dict, "string", -42);
     g_assert_cmpuint(ret, ==, -42);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_get_str_test(void)
@@ -135,7 +137,7 @@ static void qdict_get_str_test(void)
     g_assert(p != NULL);
     g_assert(strcmp(p, str) == 0);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_get_try_str_test(void)
@@ -151,7 +153,7 @@ static void qdict_get_try_str_test(void)
     g_assert(p != NULL);
     g_assert(strcmp(p, str) == 0);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_defaults_test(void)
@@ -172,8 +174,8 @@ static void qdict_defaults_test(void)
     qdict_copy_default(copy, dict, "bar");
     g_assert_cmpstr(qdict_get_str(copy, "bar"), ==, "xyz");
 
-    QDECREF(copy);
-    QDECREF(dict);
+    qobject_unref(copy);
+    qobject_unref(dict);
 }
 
 static void qdict_haskey_not_test(void)
@@ -181,7 +183,7 @@ static void qdict_haskey_not_test(void)
     QDict *tests_dict = qdict_new();
     g_assert(qdict_haskey(tests_dict, "test") == 0);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_haskey_test(void)
@@ -192,7 +194,7 @@ static void qdict_haskey_test(void)
     qdict_put_int(tests_dict, key, 0);
     g_assert(qdict_haskey(tests_dict, key) == 1);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_del_test(void)
@@ -208,15 +210,15 @@ static void qdict_del_test(void)
     g_assert(qdict_size(tests_dict) == 0);
     g_assert(qdict_haskey(tests_dict, key) == 0);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qobject_to_qdict_test(void)
 {
     QDict *tests_dict = qdict_new();
-    g_assert(qobject_to_qdict(QOBJECT(tests_dict)) == tests_dict);
+    g_assert(qobject_to(QDict, QOBJECT(tests_dict)) == tests_dict);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_iterapi_test(void)
@@ -248,7 +250,7 @@ static void qdict_iterapi_test(void)
 
     g_assert(count == qdict_size(tests_dict));
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_flatten_test(void)
@@ -323,7 +325,7 @@ static void qdict_flatten_test(void)
 
     g_assert(qdict_size(dict3) == 8);
 
-    QDECREF(dict3);
+    qobject_unref(dict3);
 }
 
 static void qdict_array_split_test(void)
@@ -379,40 +381,40 @@ static void qdict_array_split_test(void)
 
     qdict_array_split(test_dict, &test_list);
 
-    dict1 = qobject_to_qdict(qlist_pop(test_list));
-    dict2 = qobject_to_qdict(qlist_pop(test_list));
-    int1 = qobject_to_qnum(qlist_pop(test_list));
+    dict1 = qobject_to(QDict, qlist_pop(test_list));
+    dict2 = qobject_to(QDict, qlist_pop(test_list));
+    int1 = qobject_to(QNum, qlist_pop(test_list));
 
     g_assert(dict1);
     g_assert(dict2);
     g_assert(int1);
     g_assert(qlist_empty(test_list));
 
-    QDECREF(test_list);
+    qobject_unref(test_list);
 
     g_assert(qdict_get_int(dict1, "a") == 42);
     g_assert(qdict_get_int(dict1, "b") == 23);
 
     g_assert(qdict_size(dict1) == 2);
 
-    QDECREF(dict1);
+    qobject_unref(dict1);
 
     g_assert(qdict_get_int(dict2, "x") == 0);
 
     g_assert(qdict_size(dict2) == 1);
 
-    QDECREF(dict2);
+    qobject_unref(dict2);
 
     g_assert_cmpint(qnum_get_int(int1), ==, 66);
 
-    QDECREF(int1);
+    qobject_unref(int1);
 
     g_assert(qdict_get_int(test_dict, "4.y") == 1);
     g_assert(qdict_get_int(test_dict, "o.o") == 7);
 
     g_assert(qdict_size(test_dict) == 2);
 
-    QDECREF(test_dict);
+    qobject_unref(test_dict);
 
     /*
      * Test the split of
@@ -448,23 +450,23 @@ static void qdict_array_split_test(void)
 
     qdict_array_split(test_dict, &test_list);
 
-    int1 = qobject_to_qnum(qlist_pop(test_list));
+    int1 = qobject_to(QNum, qlist_pop(test_list));
 
     g_assert(int1);
     g_assert(qlist_empty(test_list));
 
-    QDECREF(test_list);
+    qobject_unref(test_list);
 
     g_assert_cmpint(qnum_get_int(int1), ==, 42);
 
-    QDECREF(int1);
+    qobject_unref(int1);
 
     g_assert(qdict_get_int(test_dict, "1") == 23);
     g_assert(qdict_get_int(test_dict, "1.x") == 84);
 
     g_assert(qdict_size(test_dict) == 2);
 
-    QDECREF(test_dict);
+    qobject_unref(test_dict);
 }
 
 static void qdict_array_entries_test(void)
@@ -491,7 +493,7 @@ static void qdict_array_entries_test(void)
     g_assert_cmpint(qdict_array_entries(dict, "foo."), ==, 3);
     g_assert_cmpint(qdict_array_entries(dict, ""), ==, -EINVAL);
 
-    QDECREF(dict);
+    qobject_unref(dict);
 
     dict = qdict_new();
     qdict_put_int(dict, "1", 0);
@@ -507,7 +509,7 @@ static void qdict_array_entries_test(void)
     qdict_put_int(dict, "2.c", 0);
     g_assert_cmpint(qdict_array_entries(dict, ""), ==, 3);
 
-    QDECREF(dict);
+    qobject_unref(dict);
 }
 
 static void qdict_join_test(void)
@@ -568,11 +570,11 @@ static void qdict_join_test(void)
         }
 
         /* Check the references */
-        g_assert(qdict_get(dict1, "foo")->refcnt == 1);
-        g_assert(qdict_get(dict1, "bar")->refcnt == 1);
+        g_assert(qdict_get(dict1, "foo")->base.refcnt == 1);
+        g_assert(qdict_get(dict1, "bar")->base.refcnt == 1);
 
         if (!overwrite) {
-            g_assert(qdict_get(dict2, "foo")->refcnt == 1);
+            g_assert(qdict_get(dict2, "foo")->base.refcnt == 1);
         }
 
         /* Clean up */
@@ -585,8 +587,8 @@ static void qdict_join_test(void)
     }
     while (overwrite ^= true);
 
-    QDECREF(dict1);
-    QDECREF(dict2);
+    qobject_unref(dict1);
+    qobject_unref(dict2);
 }
 
 static void qdict_crumple_test_recursive(void)
@@ -605,7 +607,7 @@ static void qdict_crumple_test_recursive(void)
     qdict_put_str(src, "vnc.acl..name", "acl0");
     qdict_put_str(src, "vnc.acl.rule..name", "acl0");
 
-    dst = qobject_to_qdict(qdict_crumple(src, &error_abort));
+    dst = qobject_to(QDict, qdict_crumple(src, &error_abort));
     g_assert(dst);
     g_assert_cmpint(qdict_size(dst), ==, 1);
 
@@ -627,26 +629,26 @@ static void qdict_crumple_test_recursive(void)
     g_assert(rules);
     g_assert_cmpint(qlist_size(rules), ==, 2);
 
-    rule = qobject_to_qdict(qlist_pop(rules));
+    rule = qobject_to(QDict, qlist_pop(rules));
     g_assert(rule);
     g_assert_cmpint(qdict_size(rule), ==, 2);
     g_assert_cmpstr("fred", ==, qdict_get_str(rule, "match"));
     g_assert_cmpstr("allow", ==, qdict_get_str(rule, "policy"));
-    QDECREF(rule);
+    qobject_unref(rule);
 
-    rule = qobject_to_qdict(qlist_pop(rules));
+    rule = qobject_to(QDict, qlist_pop(rules));
     g_assert(rule);
     g_assert_cmpint(qdict_size(rule), ==, 2);
     g_assert_cmpstr("bob", ==, qdict_get_str(rule, "match"));
     g_assert_cmpstr("deny", ==, qdict_get_str(rule, "policy"));
-    QDECREF(rule);
+    qobject_unref(rule);
 
     /* With recursive crumpling, we should see all names unescaped */
     g_assert_cmpstr("acl0", ==, qdict_get_str(vnc, "acl.name"));
     g_assert_cmpstr("acl0", ==, qdict_get_str(acl, "rule.name"));
 
-    QDECREF(src);
-    QDECREF(dst);
+    qobject_unref(src);
+    qobject_unref(dst);
 }
 
 static void qdict_crumple_test_empty(void)
@@ -655,12 +657,139 @@ static void qdict_crumple_test_empty(void)
 
     src = qdict_new();
 
-    dst = (QDict *)qdict_crumple(src, &error_abort);
+    dst = qobject_to(QDict, qdict_crumple(src, &error_abort));
 
     g_assert_cmpint(qdict_size(dst), ==, 0);
 
-    QDECREF(src);
-    QDECREF(dst);
+    qobject_unref(src);
+    qobject_unref(dst);
+}
+
+static int qdict_count_entries(QDict *dict)
+{
+    const QDictEntry *e;
+    int count = 0;
+
+    for (e = qdict_first(dict); e; e = qdict_next(dict, e)) {
+        count++;
+    }
+
+    return count;
+}
+
+static void qdict_rename_keys_test(void)
+{
+    QDict *dict = qdict_new();
+    QDict *copy;
+    QDictRenames *renames;
+    Error *local_err = NULL;
+
+    qdict_put_str(dict, "abc", "foo");
+    qdict_put_str(dict, "abcdef", "bar");
+    qdict_put_int(dict, "number", 42);
+    qdict_put_bool(dict, "flag", true);
+    qdict_put_null(dict, "nothing");
+
+    /* Empty rename list */
+    renames = (QDictRenames[]) {
+        { NULL, "this can be anything" }
+    };
+    copy = qdict_clone_shallow(dict);
+    qdict_rename_keys(copy, renames, &error_abort);
+
+    g_assert_cmpstr(qdict_get_str(copy, "abc"), ==, "foo");
+    g_assert_cmpstr(qdict_get_str(copy, "abcdef"), ==, "bar");
+    g_assert_cmpint(qdict_get_int(copy, "number"), ==, 42);
+    g_assert_cmpint(qdict_get_bool(copy, "flag"), ==, true);
+    g_assert(qobject_type(qdict_get(copy, "nothing")) == QTYPE_QNULL);
+    g_assert_cmpint(qdict_count_entries(copy), ==, 5);
+
+    qobject_unref(copy);
+
+    /* Simple rename of all entries */
+    renames = (QDictRenames[]) {
+        { "abc",        "str1" },
+        { "abcdef",     "str2" },
+        { "number",     "int" },
+        { "flag",       "bool" },
+        { "nothing",    "null" },
+        { NULL , NULL }
+    };
+    copy = qdict_clone_shallow(dict);
+    qdict_rename_keys(copy, renames, &error_abort);
+
+    g_assert(!qdict_haskey(copy, "abc"));
+    g_assert(!qdict_haskey(copy, "abcdef"));
+    g_assert(!qdict_haskey(copy, "number"));
+    g_assert(!qdict_haskey(copy, "flag"));
+    g_assert(!qdict_haskey(copy, "nothing"));
+
+    g_assert_cmpstr(qdict_get_str(copy, "str1"), ==, "foo");
+    g_assert_cmpstr(qdict_get_str(copy, "str2"), ==, "bar");
+    g_assert_cmpint(qdict_get_int(copy, "int"), ==, 42);
+    g_assert_cmpint(qdict_get_bool(copy, "bool"), ==, true);
+    g_assert(qobject_type(qdict_get(copy, "null")) == QTYPE_QNULL);
+    g_assert_cmpint(qdict_count_entries(copy), ==, 5);
+
+    qobject_unref(copy);
+
+    /* Renames are processed top to bottom */
+    renames = (QDictRenames[]) {
+        { "abc",        "tmp" },
+        { "abcdef",     "abc" },
+        { "number",     "abcdef" },
+        { "flag",       "number" },
+        { "nothing",    "flag" },
+        { "tmp",        "nothing" },
+        { NULL , NULL }
+    };
+    copy = qdict_clone_shallow(dict);
+    qdict_rename_keys(copy, renames, &error_abort);
+
+    g_assert_cmpstr(qdict_get_str(copy, "nothing"), ==, "foo");
+    g_assert_cmpstr(qdict_get_str(copy, "abc"), ==, "bar");
+    g_assert_cmpint(qdict_get_int(copy, "abcdef"), ==, 42);
+    g_assert_cmpint(qdict_get_bool(copy, "number"), ==, true);
+    g_assert(qobject_type(qdict_get(copy, "flag")) == QTYPE_QNULL);
+    g_assert(!qdict_haskey(copy, "tmp"));
+    g_assert_cmpint(qdict_count_entries(copy), ==, 5);
+
+    qobject_unref(copy);
+
+    /* Conflicting rename */
+    renames = (QDictRenames[]) {
+        { "abcdef",     "abc" },
+        { NULL , NULL }
+    };
+    copy = qdict_clone_shallow(dict);
+    qdict_rename_keys(copy, renames, &local_err);
+
+    g_assert(local_err != NULL);
+    error_free(local_err);
+    local_err = NULL;
+
+    g_assert_cmpstr(qdict_get_str(copy, "abc"), ==, "foo");
+    g_assert_cmpstr(qdict_get_str(copy, "abcdef"), ==, "bar");
+    g_assert_cmpint(qdict_get_int(copy, "number"), ==, 42);
+    g_assert_cmpint(qdict_get_bool(copy, "flag"), ==, true);
+    g_assert(qobject_type(qdict_get(copy, "nothing")) == QTYPE_QNULL);
+    g_assert_cmpint(qdict_count_entries(copy), ==, 5);
+
+    qobject_unref(copy);
+
+    /* Renames in an empty dict */
+    renames = (QDictRenames[]) {
+        { "abcdef",     "abc" },
+        { NULL , NULL }
+    };
+
+    qobject_unref(dict);
+    dict = qdict_new();
+
+    qdict_rename_keys(dict, renames, &error_abort);
+    g_assert(qdict_first(dict) == NULL);
+
+    qobject_unref(dict);
 }
 
 static void qdict_crumple_test_bad_inputs(void)
@@ -677,7 +806,7 @@ static void qdict_crumple_test_bad_inputs(void)
     g_assert(error != NULL);
     error_free(error);
     error = NULL;
-    QDECREF(src);
+    qobject_unref(src);
 
     src = qdict_new();
     /* rule can't be both a list and a dict */
@@ -688,7 +817,7 @@ static void qdict_crumple_test_bad_inputs(void)
     g_assert(error != NULL);
     error_free(error);
     error = NULL;
-    QDECREF(src);
+    qobject_unref(src);
 
     src = qdict_new();
     /* The input should be flat, ie no dicts or lists */
@@ -699,7 +828,7 @@ static void qdict_crumple_test_bad_inputs(void)
     g_assert(error != NULL);
     error_free(error);
     error = NULL;
-    QDECREF(src);
+    qobject_unref(src);
 
     src = qdict_new();
     /* List indexes must not have gaps */
@@ -710,7 +839,7 @@ static void qdict_crumple_test_bad_inputs(void)
     g_assert(error != NULL);
     error_free(error);
     error = NULL;
-    QDECREF(src);
+    qobject_unref(src);
 
     src = qdict_new();
     /* List indexes must be in %zu format */
@@ -721,7 +850,7 @@ static void qdict_crumple_test_bad_inputs(void)
     g_assert(error != NULL);
     error_free(error);
     error = NULL;
-    QDECREF(src);
+    qobject_unref(src);
 }
 
 /*
@@ -742,7 +871,7 @@ static void qdict_put_exists_test(void)
 
     g_assert(qdict_size(tests_dict) == 1);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 static void qdict_get_not_exists_test(void)
@@ -750,7 +879,7 @@ static void qdict_get_not_exists_test(void)
     QDict *tests_dict = qdict_new();
     g_assert(qdict_get(tests_dict, "foo") == NULL);
 
-    QDECREF(tests_dict);
+    qobject_unref(tests_dict);
 }
 
 /*
@@ -822,7 +951,7 @@ static void qdict_stress_test(void)
 
         g_assert(strcmp(str1, str2) == 0);
 
-        QDECREF(value);
+        qobject_unref(value);
     }
 
     // Delete everything
@@ -833,14 +962,14 @@ static void qdict_stress_test(void)
             break;
 
         qdict_del(qdict, key);
-        QDECREF(value);
+        qobject_unref(value);
 
         g_assert(qdict_haskey(qdict, key) == 0);
     }
     fclose(test_file);
 
     g_assert(qdict_size(qdict) == 0);
-    QDECREF(qdict);
+    qobject_unref(qdict);
 }
 
 int main(int argc, char **argv)
@@ -877,6 +1006,8 @@ int main(int argc, char **argv)
                     qdict_crumple_test_empty);
     g_test_add_func("/public/crumple/bad_inputs",
                     qdict_crumple_test_bad_inputs);
+
+    g_test_add_func("/public/rename_keys", qdict_rename_keys_test);
 
     /* The Big one */
     if (g_test_slow()) {

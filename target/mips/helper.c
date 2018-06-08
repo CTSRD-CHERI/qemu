@@ -19,6 +19,7 @@
 #include "qemu/osdep.h"
 
 #include "cpu.h"
+#include "internal.h"
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
 #include "exec/log.h"
@@ -578,7 +579,7 @@ hwaddr mips_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
 }
 #endif
 
-int mips_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
+int mips_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size, int rw,
                               int mmu_idx)
 {
     MIPSCPU *cpu = MIPS_CPU(cs);
@@ -1307,13 +1308,11 @@ static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
 
 static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr)
 {
-    hwaddr old_addr;
     hwaddr l;
     MemoryRegion *mr;
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
-    old_addr = addr;
-    mr = address_space_translate(cs->as, addr, &addr, &l, false);
+    mr = address_space_translate(cs->as, addr, &addr, &l, false, MEMTXATTRS_UNSPECIFIED);
     if (!(memory_region_is_ram(mr) || memory_region_is_romd(mr))) {
         return -1LL;
     }
@@ -1528,10 +1527,6 @@ int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     }
 }
 #endif /* CHERI_MAGIC128 */
-
-#else /* ! TARGET_CHERI */
-
-void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len) { }
 
 #endif /* ! TARGET_CHERI */
 

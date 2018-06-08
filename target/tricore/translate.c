@@ -47,8 +47,6 @@ static TCGv cpu_PSW_V;
 static TCGv cpu_PSW_SV;
 static TCGv cpu_PSW_AV;
 static TCGv cpu_PSW_SAV;
-/* CPU env */
-static TCGv_env cpu_env;
 
 #include "exec/gen-icount.h"
 
@@ -3255,13 +3253,13 @@ static inline void gen_goto_tb(DisasContext *ctx, int n, target_ulong dest)
     if (use_goto_tb(ctx, dest)) {
         tcg_gen_goto_tb(n);
         gen_save_pc(dest);
-        tcg_gen_exit_tb((uintptr_t)ctx->tb + n);
+        tcg_gen_exit_tb(ctx->tb, n);
     } else {
         gen_save_pc(dest);
         if (ctx->singlestep_enabled) {
             /* raise exception debug */
         }
-        tcg_gen_exit_tb(0);
+        tcg_gen_exit_tb(NULL, 0);
     }
 }
 
@@ -3329,7 +3327,7 @@ static void gen_fret(DisasContext *ctx)
     tcg_gen_qemu_ld_tl(cpu_gpr_a[11], cpu_gpr_a[10], ctx->mem_idx, MO_LESL);
     tcg_gen_addi_tl(cpu_gpr_a[10], cpu_gpr_a[10], 4);
     tcg_gen_mov_tl(cpu_PC, temp);
-    tcg_gen_exit_tb(0);
+    tcg_gen_exit_tb(NULL, 0);
     ctx->bstate = BS_BRANCH;
 
     tcg_temp_free(temp);
@@ -3391,9 +3389,17 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc, int r1,
         gen_branch_cond(ctx, TCG_COND_EQ, cpu_gpr_d[r1], cpu_gpr_d[15],
                         offset);
         break;
+    case OPC1_16_SBR_JEQ2:
+        gen_branch_cond(ctx, TCG_COND_EQ, cpu_gpr_d[r1], cpu_gpr_d[15],
+                        offset + 16);
+        break;
     case OPC1_16_SBR_JNE:
         gen_branch_cond(ctx, TCG_COND_NE, cpu_gpr_d[r1], cpu_gpr_d[15],
                         offset);
+        break;
+    case OPC1_16_SBR_JNE2:
+        gen_branch_cond(ctx, TCG_COND_NE, cpu_gpr_d[r1], cpu_gpr_d[15],
+                        offset + 16);
         break;
     case OPC1_16_SBR_JNZ:
         gen_branch_condi(ctx, TCG_COND_NE, cpu_gpr_d[r1], 0, offset);
@@ -3425,12 +3431,12 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc, int r1,
 /* SR-format jumps */
     case OPC1_16_SR_JI:
         tcg_gen_andi_tl(cpu_PC, cpu_gpr_a[r1], 0xfffffffe);
-        tcg_gen_exit_tb(0);
+        tcg_gen_exit_tb(NULL, 0);
         break;
     case OPC2_32_SYS_RET:
     case OPC2_16_SR_RET:
         gen_helper_ret(cpu_env);
-        tcg_gen_exit_tb(0);
+        tcg_gen_exit_tb(NULL, 0);
         break;
 /* B-format */
     case OPC1_32_B_CALLA:
@@ -3933,7 +3939,7 @@ static void decode_sr_system(CPUTriCoreState *env, DisasContext *ctx)
         break;
     case OPC2_16_SR_RFE:
         gen_helper_rfe(cpu_env);
-        tcg_gen_exit_tb(0);
+        tcg_gen_exit_tb(NULL, 0);
         ctx->bstate = BS_BRANCH;
         break;
     case OPC2_16_SR_DEBUG:
@@ -4123,6 +4129,16 @@ static void decode_16Bit_opc(CPUTriCoreState *env, DisasContext *ctx)
         gen_compute_branch(ctx, op1, 0, 0, const16, address);
         break;
 /* SBR-format */
+    case OPC1_16_SBR_JEQ2:
+    case OPC1_16_SBR_JNE2:
+        if (tricore_feature(env, TRICORE_FEATURE_16)) {
+            r1 = MASK_OP_SBR_S2(ctx->opcode);
+            address = MASK_OP_SBR_DISP4(ctx->opcode);
+            gen_compute_branch(ctx, op1, r1, 0, 0, address);
+        } else {
+            generate_trap(ctx, TRAPC_INSN_ERR, TIN2_IOPC);
+        }
+        break;
     case OPC1_16_SBR_JEQ:
     case OPC1_16_SBR_JGEZ:
     case OPC1_16_SBR_JGTZ:
@@ -6258,6 +6274,15 @@ static void decode_rr_accumulator(CPUTriCoreState *env, DisasContext *ctx)
             generate_trap(ctx, TRAPC_INSN_ERR, TIN2_IOPC);
         }
         break;
+    case OPC2_32_RR_MOVS_64:
+        if (tricore_feature(env, TRICORE_FEATURE_16)) {
+            CHECK_REG_PAIR(r3);
+            tcg_gen_mov_tl(cpu_gpr_d[r3], cpu_gpr_d[r2]);
+            tcg_gen_sari_tl(cpu_gpr_d[r3 + 1], cpu_gpr_d[r2], 31);
+        } else {
+            generate_trap(ctx, TRAPC_INSN_ERR, TIN2_IOPC);
+        }
+        break;
     case OPC2_32_RR_NE:
         tcg_gen_setcond_tl(TCG_COND_NE, cpu_gpr_d[r3], cpu_gpr_d[r1],
                            cpu_gpr_d[r2]);
@@ -6553,7 +6578,7 @@ static void decode_rr_idirect(CPUTriCoreState *env, DisasContext *ctx)
     default:
         generate_trap(ctx, TRAPC_INSN_ERR, TIN2_IOPC);
     }
-    tcg_gen_exit_tb(0);
+    tcg_gen_exit_tb(NULL, 0);
     ctx->bstate = BS_BRANCH;
 }
 
@@ -8354,12 +8379,12 @@ static void decode_sys_interrupts(CPUTriCoreState *env, DisasContext *ctx)
         /* raise EXCP_DEBUG */
         break;
     case OPC2_32_SYS_DISABLE:
-        tcg_gen_andi_tl(cpu_ICR, cpu_ICR, ~MASK_ICR_IE);
+        tcg_gen_andi_tl(cpu_ICR, cpu_ICR, ~MASK_ICR_IE_1_3);
         break;
     case OPC2_32_SYS_DSYNC:
         break;
     case OPC2_32_SYS_ENABLE:
-        tcg_gen_ori_tl(cpu_ICR, cpu_ICR, MASK_ICR_IE);
+        tcg_gen_ori_tl(cpu_ICR, cpu_ICR, MASK_ICR_IE_1_3);
         break;
     case OPC2_32_SYS_ISYNC:
         break;
@@ -8373,7 +8398,7 @@ static void decode_sys_interrupts(CPUTriCoreState *env, DisasContext *ctx)
         break;
     case OPC2_32_SYS_RFE:
         gen_helper_rfe(cpu_env);
-        tcg_gen_exit_tb(0);
+        tcg_gen_exit_tb(NULL, 0);
         ctx->bstate = BS_BRANCH;
         break;
     case OPC2_32_SYS_RFM:
@@ -8386,7 +8411,7 @@ static void decode_sys_interrupts(CPUTriCoreState *env, DisasContext *ctx)
             tcg_gen_brcondi_tl(TCG_COND_NE, tmp, 1, l1);
             gen_helper_rfm(cpu_env);
             gen_set_label(l1);
-            tcg_gen_exit_tb(0);
+            tcg_gen_exit_tb(NULL, 0);
             ctx->bstate = BS_BRANCH;
             tcg_temp_free(tmp);
         } else {
@@ -8790,7 +8815,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
     int num_insns, max_insns;
 
     num_insns = 0;
-    max_insns = tb->cflags & CF_COUNT_MASK;
+    max_insns = tb_cflags(tb) & CF_COUNT_MASK;
     if (max_insns == 0) {
         max_insns = CF_COUNT_MASK;
     }
@@ -8820,7 +8845,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
 
         if (num_insns >= max_insns || tcg_op_buf_full()) {
             gen_save_pc(ctx.next_pc);
-            tcg_gen_exit_tb(0);
+            tcg_gen_exit_tb(NULL, 0);
             break;
         }
         ctx.pc = ctx.next_pc;
@@ -8839,7 +8864,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
         && qemu_log_in_addr_range(pc_start)) {
         qemu_log_lock();
         qemu_log("IN: %s\n", lookup_symbol(pc_start));
-        log_target_disas(cs, pc_start, ctx.pc - pc_start, 0);
+        log_target_disas(cs, pc_start, ctx.pc - pc_start);
         qemu_log("\n");
         qemu_log_unlock();
     }
@@ -8880,12 +8905,7 @@ static void tricore_tcg_init_csfr(void)
 void tricore_tcg_init(void)
 {
     int i;
-    static int inited;
-    if (inited) {
-        return;
-    }
-    cpu_env = tcg_global_reg_new_ptr(TCG_AREG0, "env");
-    tcg_ctx.tcg_env = cpu_env;
+
     /* reg init */
     for (i = 0 ; i < 16 ; i++) {
         cpu_gpr_a[i] = tcg_global_mem_new(cpu_env,

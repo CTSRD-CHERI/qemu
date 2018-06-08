@@ -286,7 +286,7 @@ Slirp *slirp_init(int restricted, bool in_enabled, struct in_addr vnetwork,
                   const char *tftp_path, const char *bootfile,
                   struct in_addr vdhcp_start, struct in_addr vnameserver,
                   struct in6_addr vnameserver6, const char **vdnssearch,
-                  void *opaque)
+                  const char *vdomainname, void *opaque)
 {
     Slirp *slirp = g_malloc0(sizeof(Slirp));
 
@@ -317,6 +317,7 @@ Slirp *slirp_init(int restricted, bool in_enabled, struct in_addr vnetwork,
     }
     slirp->tftp_prefix = g_strdup(tftp_path);
     slirp->bootp_filename = g_strdup(bootfile);
+    slirp->vdomainname = g_strdup(vdomainname);
     slirp->vdhcp_startaddr = vdhcp_start;
     slirp->vnameserver_addr = vnameserver;
     slirp->vnameserver_addr6 = vnameserver6;
@@ -349,6 +350,7 @@ void slirp_cleanup(Slirp *slirp)
     g_free(slirp->vdnssearch);
     g_free(slirp->tftp_prefix);
     g_free(slirp->bootp_filename);
+    g_free(slirp->vdomainname);
     g_free(slirp);
 }
 
@@ -676,13 +678,13 @@ void slirp_pollfds_poll(GArray *pollfds, int select_error)
                         /* continue; */
                     } else {
                         ret = sowrite(so);
+                        if (ret > 0) {
+                            /* Call tcp_output in case we need to send a window
+                             * update to the guest, otherwise it will be stuck
+                             * until it sends a window probe. */
+                            tcp_output(sototcpcb(so));
+                        }
                     }
-                    /*
-                     * XXXXX If we wrote something (a lot), there
-                     * could be a need for a window update.
-                     * In the worst case, the remote will send
-                     * a window probe to get things going again
-                     */
                 }
 
                 /*
@@ -1203,11 +1205,13 @@ struct sbuf_tmp {
     uint32_t roff, woff;
 };
 
-static void sbuf_tmp_pre_save(void *opaque)
+static int sbuf_tmp_pre_save(void *opaque)
 {
     struct sbuf_tmp *tmp = opaque;
     tmp->woff = tmp->parent->sb_wptr - tmp->parent->sb_data;
     tmp->roff = tmp->parent->sb_rptr - tmp->parent->sb_data;
+
+    return 0;
 }
 
 static int sbuf_tmp_post_load(void *opaque, int version)
@@ -1303,7 +1307,7 @@ typedef struct SS_FamilyTmpStruct {
 #define SS_FAMILY_MIG_IPV6  10  /* Linux */
 #define SS_FAMILY_MIG_OTHER 0xffff
 
-static void ss_family_pre_save(void *opaque)
+static int ss_family_pre_save(void *opaque)
 {
     SS_FamilyTmpStruct *tss = opaque;
 
@@ -1314,6 +1318,8 @@ static void ss_family_pre_save(void *opaque)
     } else if (tss->parent->ss.ss_family == AF_INET6) {
         tss->portable_family = SS_FAMILY_MIG_IPV6;
     }
+
+    return 0;
 }
 
 static int ss_family_post_load(void *opaque, int version_id)

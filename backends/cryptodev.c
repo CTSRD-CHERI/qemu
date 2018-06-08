@@ -26,8 +26,6 @@
 #include "hw/boards.h"
 #include "qapi/error.h"
 #include "qapi/visitor.h"
-#include "qapi-types.h"
-#include "qapi-visit.h"
 #include "qemu/config-file.h"
 #include "qom/object_interfaces.h"
 #include "hw/virtio/virtio-crypto.h"
@@ -215,7 +213,7 @@ bool cryptodev_backend_is_ready(CryptoDevBackend *backend)
 }
 
 static bool
-cryptodev_backend_can_be_deleted(UserCreatable *uc, Error **errp)
+cryptodev_backend_can_be_deleted(UserCreatable *uc)
 {
     return !cryptodev_backend_is_used(CRYPTODEV_BACKEND(uc));
 }

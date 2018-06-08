@@ -25,25 +25,11 @@
  */
 #include "qemu/osdep.h"
 #include "hw/hw.h"
-#include "ui/console.h"
 #include "hw/pci/pci.h"
 #include "vga_int.h"
 #include "ui/pixel_ops.h"
 #include "qemu/timer.h"
 #include "hw/loader.h"
-
-#define PCI_VGA_IOPORT_OFFSET 0x400
-#define PCI_VGA_IOPORT_SIZE   (0x3e0 - 0x3c0)
-#define PCI_VGA_BOCHS_OFFSET  0x500
-#define PCI_VGA_BOCHS_SIZE    (0x0b * 2)
-#define PCI_VGA_QEXT_OFFSET   0x600
-#define PCI_VGA_QEXT_SIZE     (2 * 4)
-#define PCI_VGA_MMIO_SIZE     0x1000
-
-#define PCI_VGA_QEXT_REG_SIZE         (0 * 4)
-#define PCI_VGA_QEXT_REG_BYTEORDER    (1 * 4)
-#define  PCI_VGA_QEXT_LITTLE_ENDIAN   0x1e1e1e1e
-#define  PCI_VGA_QEXT_BIG_ENDIAN      0xbebebebe
 
 enum vga_pci_flags {
     PCI_VGA_FLAG_ENABLE_MMIO = 1,
@@ -246,7 +232,8 @@ static void pci_std_vga_realize(PCIDevice *dev, Error **errp)
 
     /* mmio bar for vga register access */
     if (d->flags & (1 << PCI_VGA_FLAG_ENABLE_MMIO)) {
-        memory_region_init(&d->mmio, NULL, "vga.mmio", 4096);
+        memory_region_init(&d->mmio, NULL, "vga.mmio",
+                           PCI_VGA_MMIO_SIZE);
 
         if (d->flags & (1 << PCI_VGA_FLAG_ENABLE_QEXT)) {
             qext = true;
@@ -281,7 +268,8 @@ static void pci_secondary_vga_realize(PCIDevice *dev, Error **errp)
     s->con = graphic_console_init(DEVICE(dev), 0, s->hw_ops, s);
 
     /* mmio bar */
-    memory_region_init(&d->mmio, OBJECT(dev), "vga.mmio", 4096);
+    memory_region_init(&d->mmio, OBJECT(dev), "vga.mmio",
+                       PCI_VGA_MMIO_SIZE);
 
     if (d->flags & (1 << PCI_VGA_FLAG_ENABLE_QEXT)) {
         qext = true;
@@ -291,6 +279,14 @@ static void pci_secondary_vga_realize(PCIDevice *dev, Error **errp)
 
     pci_register_bar(&d->dev, 0, PCI_BASE_ADDRESS_MEM_PREFETCH, &s->vram);
     pci_register_bar(&d->dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &d->mmio);
+}
+
+static void pci_secondary_vga_exit(PCIDevice *dev)
+{
+    PCIVGAState *d = PCI_VGA(dev);
+    VGACommonState *s = &d->vga;
+
+    graphic_console_close(s->con);
 }
 
 static void pci_secondary_vga_init(Object *obj)
@@ -338,6 +334,10 @@ static const TypeInfo vga_pci_type_info = {
     .instance_size = sizeof(PCIVGAState),
     .abstract = true,
     .class_init = vga_pci_class_init,
+    .interfaces = (InterfaceInfo[]) {
+        { INTERFACE_CONVENTIONAL_PCI_DEVICE },
+        { },
+    },
 };
 
 static void vga_class_init(ObjectClass *klass, void *data)
@@ -358,6 +358,7 @@ static void secondary_class_init(ObjectClass *klass, void *data)
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
 
     k->realize = pci_secondary_vga_realize;
+    k->exit = pci_secondary_vga_exit;
     k->class_id = PCI_CLASS_DISPLAY_OTHER;
     dc->props = secondary_pci_properties;
     dc->reset = pci_secondary_vga_reset;

@@ -11,8 +11,9 @@
  */
 
 #include "qemu/osdep.h"
-#include "qga/guest-agent-core.h"
-#include "qga-qmp-commands.h"
+#include "guest-agent-core.h"
+#include "qga-qapi-commands.h"
+#include "qapi/error.h"
 #include "qapi/qmp/qerror.h"
 #include "qemu/base64.h"
 #include "qemu/cutils.h"

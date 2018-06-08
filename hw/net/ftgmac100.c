@@ -511,7 +511,6 @@ static uint32_t ftgmac100_rxpoll(FTGMAC100State *s)
 
     uint32_t cnt = 1024 * FTGMAC100_APTC_RXPOLL_CNT(s->aptcr);
     uint32_t speed = (s->maccr & FTGMAC100_MACCR_FAST_MODE) ? 1 : 0;
-    uint32_t period;
 
     if (s->aptcr & FTGMAC100_APTC_RXPOLL_TIME_SEL) {
         cnt <<= 4;
@@ -521,9 +520,7 @@ static uint32_t ftgmac100_rxpoll(FTGMAC100State *s)
         speed = 2;
     }
 
-    period = cnt / div[speed];
-
-    return period;
+    return cnt / div[speed];
 }
 
 static void ftgmac100_reset(DeviceState *d)
@@ -762,7 +759,7 @@ static int ftgmac100_filter(FTGMAC100State *s, const uint8_t *buf, size_t len)
             }
 
             /* TODO: this does not seem to work for ftgmac100 */
-            mcast_idx = compute_mcast_idx(buf);
+            mcast_idx = net_crc32(buf, ETH_ALEN) >> 26;
             if (!(s->math[mcast_idx / 32] & (1 << (mcast_idx % 32)))) {
                 return 0;
             }

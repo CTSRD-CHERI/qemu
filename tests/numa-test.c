@@ -11,25 +11,12 @@
 
 #include "qemu/osdep.h"
 #include "libqtest.h"
+#include "qapi/qmp/qdict.h"
+#include "qapi/qmp/qlist.h"
 
 static char *make_cli(const char *generic_cli, const char *test_cli)
 {
     return g_strdup_printf("%s %s", generic_cli ? generic_cli : "", test_cli);
-}
-
-static char *hmp_info_numa(void)
-{
-    QDict *resp;
-    char *s;
-
-    resp = qmp("{ 'execute': 'human-monitor-command', 'arguments': "
-                      "{ 'command-line': 'info numa '} }");
-    g_assert(resp);
-    g_assert(qdict_haskey(resp, "return"));
-    s = g_strdup(qdict_get_str(resp, "return"));
-    g_assert(s);
-    QDECREF(resp);
-    return s;
 }
 
 static void test_mon_explicit(const void *data)
@@ -42,7 +29,7 @@ static void test_mon_explicit(const void *data)
                    "-numa node,nodeid=1,cpus=4-7 ");
     qtest_start(cli);
 
-    s = hmp_info_numa();
+    s = hmp("info numa");
     g_assert(strstr(s, "node 0 cpus: 0 1 2 3"));
     g_assert(strstr(s, "node 1 cpus: 4 5 6 7"));
     g_free(s);
@@ -59,7 +46,7 @@ static void test_mon_default(const void *data)
     cli = make_cli(data, "-smp 8 -numa node -numa node");
     qtest_start(cli);
 
-    s = hmp_info_numa();
+    s = hmp("info numa");
     g_assert(strstr(s, "node 0 cpus: 0 2 4 6"));
     g_assert(strstr(s, "node 1 cpus: 1 3 5 7"));
     g_free(s);
@@ -78,7 +65,7 @@ static void test_mon_partial(const void *data)
                    "-numa node,nodeid=1,cpus=4-5 ");
     qtest_start(cli);
 
-    s = hmp_info_numa();
+    s = hmp("info numa");
     g_assert(strstr(s, "node 0 cpus: 0 1 2 3 6 7"));
     g_assert(strstr(s, "node 1 cpus: 4 5"));
     g_free(s);
@@ -111,7 +98,7 @@ static void test_query_cpus(const void *data)
         QDict *cpu, *props;
         int64_t cpu_idx, node;
 
-        cpu = qobject_to_qdict(e);
+        cpu = qobject_to(QDict, e);
         g_assert(qdict_haskey(cpu, "CPU"));
         g_assert(qdict_haskey(cpu, "props"));
 
@@ -124,10 +111,10 @@ static void test_query_cpus(const void *data)
         } else {
             g_assert_cmpint(node, ==, 1);
         }
-        qobject_decref(e);
+        qobject_unref(e);
     }
 
-    QDECREF(resp);
+    qobject_unref(resp);
     qtest_end();
     g_free(cli);
 }
@@ -153,7 +140,7 @@ static void pc_numa_cpu(const void *data)
         QDict *cpu, *props;
         int64_t socket, core, thread, node;
 
-        cpu = qobject_to_qdict(e);
+        cpu = qobject_to(QDict, e);
         g_assert(qdict_haskey(cpu, "props"));
         props = qdict_get_qdict(cpu, "props");
 
@@ -177,10 +164,10 @@ static void pc_numa_cpu(const void *data)
         } else {
             g_assert(false);
         }
-        qobject_decref(e);
+        qobject_unref(e);
     }
 
-    QDECREF(resp);
+    qobject_unref(resp);
     qtest_end();
     g_free(cli);
 }
@@ -206,7 +193,7 @@ static void spapr_numa_cpu(const void *data)
         QDict *cpu, *props;
         int64_t core, node;
 
-        cpu = qobject_to_qdict(e);
+        cpu = qobject_to(QDict, e);
         g_assert(qdict_haskey(cpu, "props"));
         props = qdict_get_qdict(cpu, "props");
 
@@ -222,10 +209,10 @@ static void spapr_numa_cpu(const void *data)
         } else {
             g_assert(false);
         }
-        qobject_decref(e);
+        qobject_unref(e);
     }
 
-    QDECREF(resp);
+    qobject_unref(resp);
     qtest_end();
     g_free(cli);
 }
@@ -249,7 +236,7 @@ static void aarch64_numa_cpu(const void *data)
         QDict *cpu, *props;
         int64_t thread, node;
 
-        cpu = qobject_to_qdict(e);
+        cpu = qobject_to(QDict, e);
         g_assert(qdict_haskey(cpu, "props"));
         props = qdict_get_qdict(cpu, "props");
 
@@ -265,12 +252,72 @@ static void aarch64_numa_cpu(const void *data)
         } else {
             g_assert(false);
         }
-        qobject_decref(e);
+        qobject_unref(e);
     }
 
-    QDECREF(resp);
+    qobject_unref(resp);
     qtest_end();
     g_free(cli);
+}
+
+static void pc_dynamic_cpu_cfg(const void *data)
+{
+    QObject *e;
+    QDict *resp;
+    QList *cpus;
+    QTestState *qs;
+
+    qs = qtest_startf("%s %s", data ? (char *)data : "",
+                              "-nodefaults --preconfig -smp 2");
+
+    /* create 2 numa nodes */
+    g_assert(!qmp_rsp_is_err(qtest_qmp(qs, "{ 'execute': 'set-numa-node',"
+        " 'arguments': { 'type': 'node', 'nodeid': 0 } }")));
+    g_assert(!qmp_rsp_is_err(qtest_qmp(qs, "{ 'execute': 'set-numa-node',"
+        " 'arguments': { 'type': 'node', 'nodeid': 1 } }")));
+
+    /* map 2 cpus in non default reverse order
+     * i.e socket1->node0, socket0->node1
+     */
+    g_assert(!qmp_rsp_is_err(qtest_qmp(qs, "{ 'execute': 'set-numa-node',"
+        " 'arguments': { 'type': 'cpu', 'node-id': 0, 'socket-id': 1 } }")));
+    g_assert(!qmp_rsp_is_err(qtest_qmp(qs, "{ 'execute': 'set-numa-node',"
+        " 'arguments': { 'type': 'cpu', 'node-id': 1, 'socket-id': 0 } }")));
+
+    /* let machine initialization to complete and run */
+    g_assert(!qmp_rsp_is_err(qtest_qmp(qs, "{ 'execute': 'exit-preconfig' }")));
+    qtest_qmp_eventwait(qs, "RESUME");
+
+    /* check that CPUs are mapped as expected */
+    resp = qtest_qmp(qs, "{ 'execute': 'query-hotpluggable-cpus'}");
+    g_assert(qdict_haskey(resp, "return"));
+    cpus = qdict_get_qlist(resp, "return");
+    g_assert(cpus);
+    while ((e = qlist_pop(cpus))) {
+        const QDict *cpu, *props;
+        int64_t socket, node;
+
+        cpu = qobject_to(QDict, e);
+        g_assert(qdict_haskey(cpu, "props"));
+        props = qdict_get_qdict(cpu, "props");
+
+        g_assert(qdict_haskey(props, "node-id"));
+        node = qdict_get_int(props, "node-id");
+        g_assert(qdict_haskey(props, "socket-id"));
+        socket = qdict_get_int(props, "socket-id");
+
+        if (socket == 0) {
+            g_assert_cmpint(node, ==, 1);
+        } else if (socket == 1) {
+            g_assert_cmpint(node, ==, 0);
+        } else {
+            g_assert(false);
+        }
+        qobject_unref(e);
+    }
+    qobject_unref(resp);
+
+    qtest_quit(qs);
 }
 
 int main(int argc, char **argv)
@@ -291,6 +338,7 @@ int main(int argc, char **argv)
 
     if (!strcmp(arch, "i386") || !strcmp(arch, "x86_64")) {
         qtest_add_data_func("/numa/pc/cpu/explicit", args, pc_numa_cpu);
+        qtest_add_data_func("/numa/pc/dynamic/cpu", args, pc_dynamic_cpu_cfg);
     }
 
     if (!strcmp(arch, "ppc64")) {

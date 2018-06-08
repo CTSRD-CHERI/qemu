@@ -35,6 +35,10 @@ size_t qemu_fd_getpagesize(int fd)
             return fs.f_bsize;
         }
     }
+#ifdef __sparc__
+    /* SPARC Linux needs greater alignment than the pagesize */
+    return QEMU_VMALLOC_ALIGN;
+#endif
 #endif
 
     return getpagesize();
@@ -46,20 +50,26 @@ size_t qemu_mempath_getpagesize(const char *mem_path)
     struct statfs fs;
     int ret;
 
-    do {
-        ret = statfs(mem_path, &fs);
-    } while (ret != 0 && errno == EINTR);
+    if (mem_path) {
+        do {
+            ret = statfs(mem_path, &fs);
+        } while (ret != 0 && errno == EINTR);
 
-    if (ret != 0) {
-        fprintf(stderr, "Couldn't statfs() memory path: %s\n",
-                strerror(errno));
-        exit(1);
-    }
+        if (ret != 0) {
+            fprintf(stderr, "Couldn't statfs() memory path: %s\n",
+                    strerror(errno));
+            exit(1);
+        }
 
-    if (fs.f_type == HUGETLBFS_MAGIC) {
-        /* It's hugepage, return the huge page size */
-        return fs.f_bsize;
+        if (fs.f_type == HUGETLBFS_MAGIC) {
+            /* It's hugepage, return the huge page size */
+            return fs.f_bsize;
+        }
     }
+#ifdef __sparc__
+    /* SPARC Linux needs greater alignment than the pagesize */
+    return QEMU_VMALLOC_ALIGN;
+#endif
 #endif
 
     return getpagesize();

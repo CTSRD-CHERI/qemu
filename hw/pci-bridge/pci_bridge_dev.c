@@ -174,6 +174,7 @@ static bool pci_device_shpc_present(void *opaque, int version_id)
 
 static const VMStateDescription pci_bridge_dev_vmstate = {
     .name = "pci_bridge",
+    .priority = MIG_PRI_PCI_BUS,
     .fields = (VMStateField[]) {
         VMSTATE_PCI_DEVICE(parent_obj, PCIBridge),
         SHPC_VMSTATE(shpc, PCIDevice, pci_device_shpc_present),
@@ -238,6 +239,7 @@ static const TypeInfo pci_bridge_dev_info = {
     .instance_finalize = pci_bridge_dev_instance_finalize,
     .interfaces = (InterfaceInfo[]) {
         { TYPE_HOTPLUG_HANDLER },
+        { INTERFACE_CONVENTIONAL_PCI_DEVICE },
         { }
     }
 };

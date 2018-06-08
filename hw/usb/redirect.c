@@ -106,10 +106,10 @@ struct USBRedirDevice {
     USBDevice dev;
     /* Properties */
     CharBackend cs;
-    uint8_t debug;
-    char *filter_str;
-    int32_t bootindex;
     bool enable_streams;
+    uint8_t debug;
+    int32_t bootindex;
+    char *filter_str;
     /* Data passed from chardev the fd_read cb to the usbredirparser read cb */
     const uint8_t *read_buf;
     int read_buf_size;
@@ -2111,11 +2111,13 @@ static void usbredir_buffered_bulk_packet(void *priv, uint64_t id,
  * Migration code
  */
 
-static void usbredir_pre_save(void *priv)
+static int usbredir_pre_save(void *priv)
 {
     USBRedirDevice *dev = priv;
 
     usbredir_fill_already_in_flight(dev);
+
+    return 0;
 }
 
 static int usbredir_post_load(void *priv, int version_id)

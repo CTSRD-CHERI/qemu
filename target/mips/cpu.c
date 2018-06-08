@@ -21,6 +21,7 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "cpu.h"
+#include "internal.h"
 #include "kvm_mips.h"
 #include "qemu-common.h"
 #include "exec/gdbstub.h"
@@ -123,6 +124,7 @@ static void mips_cpu_disas_set_info(CPUState *s, disassemble_info *info) {
 static void mips_cpu_realizefn(DeviceState *dev, Error **errp)
 {
     CPUState *cs = CPU(dev);
+    MIPSCPU *cpu = MIPS_CPU(dev);
     MIPSCPUClass *mcc = MIPS_CPU_GET_CLASS(dev);
     Error *local_err = NULL;
 
@@ -154,6 +156,8 @@ static void mips_cpu_realizefn(DeviceState *dev, Error **errp)
 	0);
 #endif
 
+    cpu_mips_realize_env(&cpu->env);
+
     cpu_reset(cs);
     qemu_init_vcpu(cs);
 
@@ -165,12 +169,26 @@ static void mips_cpu_initfn(Object *obj)
     CPUState *cs = CPU(obj);
     MIPSCPU *cpu = MIPS_CPU(obj);
     CPUMIPSState *env = &cpu->env;
+    MIPSCPUClass *mcc = MIPS_CPU_GET_CLASS(obj);
 
     cs->env_ptr = env;
+    env->cpu_model = mcc->cpu_def;
+}
 
-    if (tcg_enabled()) {
-        mips_tcg_init();
-    }
+static char *mips_cpu_type_name(const char *cpu_model)
+{
+    return g_strdup_printf(MIPS_CPU_TYPE_NAME("%s"), cpu_model);
+}
+
+static ObjectClass *mips_cpu_class_by_name(const char *cpu_model)
+{
+    ObjectClass *oc;
+    char *typename;
+
+    typename = mips_cpu_type_name(cpu_model);
+    oc = object_class_by_name(typename);
+    g_free(typename);
+    return oc;
 }
 
 static void mips_cpu_class_init(ObjectClass *c, void *data)
@@ -179,12 +197,12 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     CPUClass *cc = CPU_CLASS(c);
     DeviceClass *dc = DEVICE_CLASS(c);
 
-    mcc->parent_realize = dc->realize;
-    dc->realize = mips_cpu_realizefn;
-
+    device_class_set_parent_realize(dc, mips_cpu_realizefn,
+                                    &mcc->parent_realize);
     mcc->parent_reset = cc->reset;
     cc->reset = mips_cpu_reset;
 
+    cc->class_by_name = mips_cpu_class_by_name;
     cc->has_work = mips_cpu_has_work;
     cc->do_interrupt = mips_cpu_do_interrupt;
     cc->cpu_exec_interrupt = mips_cpu_exec_interrupt;
@@ -202,6 +220,9 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     cc->vmsd = &vmstate_mips_cpu;
 #endif
     cc->disas_set_info = mips_cpu_disas_set_info;
+#ifdef CONFIG_TCG
+    cc->tcg_initialize = mips_tcg_init;
+#endif
 
 #if defined(TARGET_MIPS64)
     cc->gdb_core_xml_file = "mips64-cpu.xml";
@@ -217,14 +238,39 @@ static const TypeInfo mips_cpu_type_info = {
     .parent = TYPE_CPU,
     .instance_size = sizeof(MIPSCPU),
     .instance_init = mips_cpu_initfn,
-    .abstract = false,
+    .abstract = true,
     .class_size = sizeof(MIPSCPUClass),
     .class_init = mips_cpu_class_init,
 };
 
+static void mips_cpu_cpudef_class_init(ObjectClass *oc, void *data)
+{
+    MIPSCPUClass *mcc = MIPS_CPU_CLASS(oc);
+    mcc->cpu_def = data;
+}
+
+static void mips_register_cpudef_type(const struct mips_def_t *def)
+{
+    char *typename = mips_cpu_type_name(def->name);
+    TypeInfo ti = {
+        .name = typename,
+        .parent = TYPE_MIPS_CPU,
+        .class_init = mips_cpu_cpudef_class_init,
+        .class_data = (void *)def,
+    };
+
+    type_register(&ti);
+    g_free(typename);
+}
+
 static void mips_cpu_register_types(void)
 {
+    int i;
+
     type_register_static(&mips_cpu_type_info);
+    for (i = 0; i < mips_defs_number; i++) {
+        mips_register_cpudef_type(&mips_defs[i]);
+    }
 }
 
 type_init(mips_cpu_register_types)

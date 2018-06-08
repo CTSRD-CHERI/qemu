@@ -14,6 +14,7 @@
 #define HW_SPAPR_DRC_H
 
 #include <libfdt.h>
+#include "qapi/qapi-types-run-state.h"
 #include "qom/object.h"
 #include "sysemu/sysemu.h"
 #include "hw/qdev.h"
@@ -257,6 +258,7 @@ int spapr_drc_populate_dt(void *fdt, int fdt_offset, Object *owner,
 void spapr_drc_attach(sPAPRDRConnector *drc, DeviceState *d, void *fdt,
                       int fdt_start_offset, Error **errp);
 void spapr_drc_detach(sPAPRDRConnector *drc);
+bool spapr_drc_needed(void *opaque);
 
 static inline bool spapr_drc_unplug_requested(sPAPRDRConnector *drc)
 {

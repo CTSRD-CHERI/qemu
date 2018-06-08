@@ -18,7 +18,6 @@
 #include "hw/block/flash.h"
 #include "ui/console.h"
 #include "ui/pixel_ops.h"
-#include "sysemu/block-backend.h"
 #include "sysemu/blockdev.h"
 
 #define IRQ_TC6393_NAND		0
@@ -148,7 +147,7 @@ static void tc6393xb_gpio_set(void *opaque, int line, int level)
 //    TC6393xbState *s = opaque;
 
     if (line > TC6393XB_GPIOS) {
-        printf("%s: No GPIO pin %i\n", __FUNCTION__, line);
+        printf("%s: No GPIO pin %i\n", __func__, line);
         return;
     }
 
@@ -172,6 +171,7 @@ static void tc6393xb_gpio_handler_update(TC6393xbState *s)
     int bit;
 
     level = s->gpio_level & s->gpio_dir;
+    level &= MAKE_64BIT_MASK(0, TC6393XB_GPIOS);
 
     for (diff = s->prev_level ^ level; diff; diff ^= 1 << bit) {
         bit = ctz32(diff);

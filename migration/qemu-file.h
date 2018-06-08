@@ -25,6 +25,8 @@
 #ifndef MIGRATION_QEMU_FILE_H
 #define MIGRATION_QEMU_FILE_H
 
+#include <zlib.h>
+
 /* Read a chunk of data from a file at the given position.  The pos argument
  * can be ignored if the file is only be used for streaming.  The number of
  * bytes actually read should be returned.
@@ -132,8 +134,8 @@ bool qemu_file_is_writable(QEMUFile *f);
 
 size_t qemu_peek_buffer(QEMUFile *f, uint8_t **buf, size_t size, size_t offset);
 size_t qemu_get_buffer_in_place(QEMUFile *f, uint8_t **buf, size_t size);
-ssize_t qemu_put_compression_data(QEMUFile *f, const uint8_t *p, size_t size,
-                                  int level);
+ssize_t qemu_put_compression_data(QEMUFile *f, z_stream *stream,
+                                  const uint8_t *p, size_t size);
 int qemu_put_qemu_file(QEMUFile *f_des, QEMUFile *f_src);
 
 /*
@@ -173,5 +175,7 @@ void ram_control_load_hook(QEMUFile *f, uint64_t flags, void *data);
 size_t ram_control_save_page(QEMUFile *f, ram_addr_t block_offset,
                              ram_addr_t offset, size_t size,
                              uint64_t *bytes_sent);
+
+void qemu_put_counted_string(QEMUFile *f, const char *name);
 
 #endif

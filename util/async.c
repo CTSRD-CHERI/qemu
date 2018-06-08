@@ -174,7 +174,7 @@ void qemu_bh_schedule(QEMUBH *bh)
  */
 void qemu_bh_cancel(QEMUBH *bh)
 {
-    bh->scheduled = 0;
+    atomic_mb_set(&bh->scheduled, 0);
 }
 
 /* This func is async.The bottom half will do the delete action at the finial
@@ -298,6 +298,7 @@ aio_ctx_finalize(GSource     *source)
     qemu_rec_mutex_destroy(&ctx->lock);
     qemu_lockcnt_destroy(&ctx->list_lock);
     timerlistgroup_deinit(&ctx->tlg);
+    aio_context_destroy(ctx);
 }
 
 static GSourceFuncs aio_source_funcs = {
@@ -388,6 +389,9 @@ static void co_schedule_bh_cb(void *opaque)
         QSLIST_REMOVE_HEAD(&straight, co_scheduled_next);
         trace_aio_co_schedule_bh_cb(ctx, co);
         aio_context_acquire(ctx);
+
+        /* Protected by write barrier in qemu_aio_coroutine_enter */
+        atomic_set(&co->scheduled, NULL);
         qemu_coroutine_enter(co);
         aio_context_release(ctx);
     }
@@ -438,6 +442,16 @@ fail:
 void aio_co_schedule(AioContext *ctx, Coroutine *co)
 {
     trace_aio_co_schedule(ctx, co);
+    const char *scheduled = atomic_cmpxchg(&co->scheduled, NULL,
+                                           __func__);
+
+    if (scheduled) {
+        fprintf(stderr,
+                "%s: Co-routine was already scheduled in '%s'\n",
+                __func__, scheduled);
+        abort();
+    }
+
     QSLIST_INSERT_HEAD_ATOMIC(&ctx->scheduled_coroutines,
                               co, co_scheduled_next);
     qemu_bh_schedule(ctx->co_schedule_bh);

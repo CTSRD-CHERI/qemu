@@ -27,12 +27,12 @@
 #include "cpu.h"
 #include "hw/hw.h"
 #include "hw/i386/pc.h"
+#include "hw/isa/superio.h"
+#include "hw/dma/i8257.h"
 #include "hw/char/serial.h"
-#include "hw/block/fdc.h"
 #include "net/net.h"
 #include "hw/boards.h"
 #include "hw/i2c/smbus.h"
-#include "sysemu/block-backend.h"
 #include "hw/block/flash.h"
 #include "hw/mips/mips.h"
 #include "hw/mips/cpudevs.h"
@@ -46,11 +46,11 @@
 #include "elf.h"
 #include "hw/timer/mc146818rtc.h"
 #include "hw/timer/i8254.h"
-#include "sysemu/blockdev.h"
 #include "exec/address-spaces.h"
 #include "hw/sysbus.h"             /* SysBusDevice */
 #include "qemu/host-utils.h"
 #include "sysemu/qtest.h"
+#include "qapi/error.h"
 #include "qemu/error-report.h"
 #include "hw/empty_slot.h"
 #include "sysemu/kvm.h"
@@ -216,8 +216,8 @@ static void generate_eeprom_spd(uint8_t *eeprom, ram_addr_t ram_size)
     }
 
     if (ram_size) {
-        fprintf(stderr, "Warning: SPD cannot represent final %dMB"
-                " of SDRAM\n", (int)ram_size);
+        warn_report("SPD cannot represent final " RAM_ADDR_FMT "MB"
+                    " of SDRAM", ram_size);
     }
 
     /* fill in SPD memory information */
@@ -814,7 +814,7 @@ static int64_t load_kernel (void)
                            NULL, (uint64_t *)&kernel_entry, NULL,
                            (uint64_t *)&kernel_high, big_endian, EM_MIPS, 1, 0);
     if (kernel_size < 0) {
-        error_report("qemu: could not load kernel '%s': %s",
+        error_report("could not load kernel '%s': %s",
                      loaderparams.kernel_filename,
                      load_elf_strerror(kernel_size));
         exit(1);
@@ -848,9 +848,8 @@ static int64_t load_kernel (void)
             initrd_offset = (loaderparams.ram_low_size - initrd_size - 131072
                              - ~INITRD_PAGE_MASK) & INITRD_PAGE_MASK;
             if (kernel_high >= initrd_offset) {
-                fprintf(stderr,
-                        "qemu: memory too small for initial ram disk '%s'\n",
-                        loaderparams.initrd_filename);
+                error_report("memory too small for initial ram disk '%s'",
+                             loaderparams.initrd_filename);
                 exit(1);
             }
             initrd_size = load_image_targphys(loaderparams.initrd_filename,
@@ -858,8 +857,8 @@ static int64_t load_kernel (void)
                                               ram_size - initrd_offset);
         }
         if (initrd_size == (target_ulong) -1) {
-            fprintf(stderr, "qemu: could not load initial ram disk '%s'\n",
-                    loaderparams.initrd_filename);
+            error_report("could not load initial ram disk '%s'",
+                         loaderparams.initrd_filename);
             exit(1);
         }
     }
@@ -925,7 +924,7 @@ static void main_cpu_reset(void *opaque)
     }
 }
 
-static void create_cpu_without_cps(const char *cpu_model,
+static void create_cpu_without_cps(const char *cpu_type,
                                    qemu_irq *cbus_irq, qemu_irq *i8259_irq)
 {
     CPUMIPSState *env;
@@ -933,11 +932,7 @@ static void create_cpu_without_cps(const char *cpu_model,
     int i;
 
     for (i = 0; i < smp_cpus; i++) {
-        cpu = cpu_mips_init(cpu_model);
-        if (cpu == NULL) {
-            fprintf(stderr, "Unable to find CPU definition\n");
-            exit(1);
-        }
+        cpu = MIPS_CPU(cpu_create(cpu_type));
 
         /* Init internal devices */
         cpu_mips_irq_init_cpu(cpu);
@@ -951,16 +946,15 @@ static void create_cpu_without_cps(const char *cpu_model,
     *cbus_irq = env->irq[4];
 }
 
-static void create_cps(MaltaState *s, const char *cpu_model,
+static void create_cps(MaltaState *s, const char *cpu_type,
                        qemu_irq *cbus_irq, qemu_irq *i8259_irq)
 {
     Error *err = NULL;
-    s->cps = g_new0(MIPSCPSState, 1);
 
-    object_initialize(s->cps, sizeof(MIPSCPSState), TYPE_MIPS_CPS);
+    s->cps = MIPS_CPS(object_new(TYPE_MIPS_CPS));
     qdev_set_parent_bus(DEVICE(s->cps), sysbus_get_default());
 
-    object_property_set_str(OBJECT(s->cps), cpu_model, "cpu-model", &err);
+    object_property_set_str(OBJECT(s->cps), cpu_type, "cpu-type", &err);
     object_property_set_int(OBJECT(s->cps), smp_cpus, "num-vp", &err);
     object_property_set_bool(OBJECT(s->cps), true, "realized", &err);
     if (err != NULL) {
@@ -974,23 +968,13 @@ static void create_cps(MaltaState *s, const char *cpu_model,
     *cbus_irq = NULL;
 }
 
-static void create_cpu(MaltaState *s, const char *cpu_model,
-                       qemu_irq *cbus_irq, qemu_irq *i8259_irq)
+static void mips_create_cpu(MaltaState *s, const char *cpu_type,
+                            qemu_irq *cbus_irq, qemu_irq *i8259_irq)
 {
-    if (cpu_model == NULL) {
-#if defined(TARGET_CHERI)
-        cpu_model = "5Kf";
-#elif defined(TARGET_MIPS64)
-        cpu_model = "20Kc";
-#else
-        cpu_model = "24Kf";
-#endif
-    }
-
-    if ((smp_cpus > 1) && cpu_supports_cps_smp(cpu_model)) {
-        create_cps(s, cpu_model, cbus_irq, i8259_irq);
+    if ((smp_cpus > 1) && cpu_supports_cps_smp(cpu_type)) {
+        create_cps(s, cpu_type, cbus_irq, i8259_irq);
     } else {
-        create_cpu_without_cps(cpu_model, cbus_irq, i8259_irq);
+        create_cpu_without_cps(cpu_type, cbus_irq, i8259_irq);
     }
 }
 
@@ -1019,10 +1003,8 @@ void mips_malta_init(MachineState *machine)
     qemu_irq cbus_irq, i8259_irq;
     int piix4_devfn;
     I2CBus *smbus;
-    int i;
     DriveInfo *dinfo;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
-    DriveInfo *fd[MAX_FD];
     int fl_idx = 0;
     int fl_sectors = bios_size >> 16;
     int be;
@@ -1037,23 +1019,13 @@ void mips_malta_init(MachineState *machine)
 
     qdev_init_nofail(dev);
 
-    /* Make sure the first 3 serial ports are associated with a device. */
-    for(i = 0; i < 3; i++) {
-        if (!serial_hds[i]) {
-            char label[32];
-            snprintf(label, sizeof(label), "serial%d", i);
-            serial_hds[i] = qemu_chr_new(label, "null");
-        }
-    }
-
     /* create CPU */
-    create_cpu(s, machine->cpu_model, &cbus_irq, &i8259_irq);
+    mips_create_cpu(s, machine->cpu_type, &cbus_irq, &i8259_irq);
 
     /* allocate RAM */
     if (ram_size > (2048u << 20)) {
-        fprintf(stderr,
-                "qemu: Too much memory for this machine: %d MB, maximum 2048 MB\n",
-                ((unsigned int)ram_size / (1 << 20)));
+        error_report("Too much memory for this machine: %dMB, maximum 2048MB",
+                     ((unsigned int)ram_size / (1 << 20)));
         exit(1);
     }
 
@@ -1081,18 +1053,16 @@ void mips_malta_init(MachineState *machine)
         memory_region_add_subregion(system_memory, 512 << 20, ram_low_postio);
     }
 
-    /* generate SPD EEPROM data */
-    generate_eeprom_spd(&smbus_eeprom_buf[0 * 256], ram_size);
-    generate_eeprom_serial(&smbus_eeprom_buf[6 * 256]);
-
 #ifdef TARGET_WORDS_BIGENDIAN
     be = 1;
 #else
     be = 0;
 #endif
+
     /* FPGA */
+
     /* The CBUS UART is attached to the MIPS CPU INT2 pin, ie interrupt 4 */
-    malta_fpga_init(system_memory, FPGA_ADDRESS, cbus_irq, serial_hds[2]);
+    malta_fpga_init(system_memory, FPGA_ADDRESS, cbus_irq, serial_hd(2));
 
     /* Load firmware in flash / BIOS. */
     dinfo = drive_get(IF_PFLASH, 0, fl_idx);
@@ -1227,22 +1197,18 @@ void mips_malta_init(MachineState *machine)
     pci_create_simple(pci_bus, piix4_devfn + 2, "piix4-usb-uhci");
     smbus = piix4_pm_init(pci_bus, piix4_devfn + 3, 0x1100,
                           isa_get_irq(NULL, 9), NULL, 0, NULL);
+    pit = i8254_pit_init(isa_bus, 0x40, 0, NULL);
+    i8257_dma_init(isa_bus, 0);
+    mc146818_rtc_init(isa_bus, 2000, NULL);
+
+    /* generate SPD EEPROM data */
+    generate_eeprom_spd(&smbus_eeprom_buf[0 * 256], ram_size);
+    generate_eeprom_serial(&smbus_eeprom_buf[6 * 256]);
     smbus_eeprom_init(smbus, 8, smbus_eeprom_buf, smbus_eeprom_size);
     g_free(smbus_eeprom_buf);
-    pit = pit_init(isa_bus, 0x40, 0, NULL);
-    DMA_init(isa_bus, 0);
 
-    /* Super I/O */
-    isa_create_simple(isa_bus, "i8042");
-
-    rtc_init(isa_bus, 2000, NULL);
-    serial_hds_isa_init(isa_bus, 0, 2);
-    parallel_hds_isa_init(isa_bus, 1);
-
-    for(i = 0; i < MAX_FD; i++) {
-        fd[i] = drive_get(IF_FLOPPY, 0, i);
-    }
-    fdctrl_init_isa(isa_bus, fd);
+    /* Super I/O: SMS FDC37M817 */
+    isa_create_simple(isa_bus, TYPE_FDC37M81X_SUPERIO);
 
     /* Network card */
     network_init(pci_bus);
@@ -1277,6 +1243,13 @@ static void mips_malta_machine_init(MachineClass *mc)
     mc->block_default_type = IF_IDE;
     mc->max_cpus = 16;
     mc->is_default = 1;
+#if defined(TARGET_CHERI)
+    mc->default_cpu_type = MIPS_CPU_TYPE_NAME("5Kf");
+#elif defined(TARGET_MIPS64)
+    mc->default_cpu_type = MIPS_CPU_TYPE_NAME("20Kc");
+#else
+    mc->default_cpu_type = MIPS_CPU_TYPE_NAME("24Kf");
+#endif
 }
 
 DEFINE_MACHINE("malta", mips_malta_machine_init)

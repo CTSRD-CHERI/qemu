@@ -8,6 +8,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/error-report.h"
 #include "qapi/error.h"
 #include "qemu-common.h"
 #include "cpu.h"
@@ -18,8 +19,8 @@
 #include "hw/i2c/i2c.h"
 #include "hw/ssi/ssi.h"
 #include "chardev/char-fe.h"
-#include "sysemu/block-backend.h"
 #include "sysemu/blockdev.h"
+#include "sysemu/qtest.h"
 #include "qemu/cutils.h"
 
 static struct {
@@ -107,7 +108,7 @@ static uint64_t pxa2xx_pm_read(void *opaque, hwaddr addr,
         return s->pm_regs[addr >> 2];
     default:
     fail:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
     return 0;
@@ -139,7 +140,7 @@ static void pxa2xx_pm_write(void *opaque, hwaddr addr,
             break;
         }
 
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
 }
@@ -180,7 +181,7 @@ static uint64_t pxa2xx_cm_read(void *opaque, hwaddr addr,
         return s->cm_regs[CCCR >> 2] | (3 << 28);
 
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
     return 0;
@@ -205,7 +206,7 @@ static void pxa2xx_cm_write(void *opaque, hwaddr addr,
         break;
 
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
 }
@@ -410,7 +411,7 @@ static uint64_t pxa2xx_mm_read(void *opaque, hwaddr addr,
             return s->mm_regs[addr >> 2];
 
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
     return 0;
@@ -429,7 +430,7 @@ static void pxa2xx_mm_write(void *opaque, hwaddr addr,
         }
 
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
 }
@@ -619,7 +620,7 @@ static uint64_t pxa2xx_ssp_read(void *opaque, hwaddr addr,
         if (!s->enable)
             return 0xffffffff;
         if (s->rx_level < 1) {
-            printf("%s: SSP Rx Underrun\n", __FUNCTION__);
+            printf("%s: SSP Rx Underrun\n", __func__);
             return 0xffffffff;
         }
         s->rx_level --;
@@ -636,7 +637,7 @@ static uint64_t pxa2xx_ssp_read(void *opaque, hwaddr addr,
     case SSACD:
         return s->ssacd;
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
     return 0;
@@ -653,9 +654,9 @@ static void pxa2xx_ssp_write(void *opaque, hwaddr addr,
         s->sscr[0] = value & 0xc7ffffff;
         s->enable = value & SSCR0_SSE;
         if (value & SSCR0_MOD)
-            printf("%s: Attempt to use network mode\n", __FUNCTION__);
+            printf("%s: Attempt to use network mode\n", __func__);
         if (s->enable && SSCR0_DSS(value) < 4)
-            printf("%s: Wrong data size: %i bits\n", __FUNCTION__,
+            printf("%s: Wrong data size: %i bits\n", __func__,
                             SSCR0_DSS(value));
         if (!(value & SSCR0_SSE)) {
             s->sssr = 0;
@@ -668,7 +669,7 @@ static void pxa2xx_ssp_write(void *opaque, hwaddr addr,
     case SSCR1:
         s->sscr[1] = value;
         if (value & (SSCR1_LBM | SSCR1_EFWR))
-            printf("%s: Attempt to use SSP test mode\n", __FUNCTION__);
+            printf("%s: Attempt to use SSP test mode\n", __func__);
         pxa2xx_ssp_fifo_update(s);
         break;
 
@@ -728,7 +729,7 @@ static void pxa2xx_ssp_write(void *opaque, hwaddr addr,
         break;
 
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
 }
@@ -990,7 +991,7 @@ static uint64_t pxa2xx_rtc_read(void *opaque, hwaddr addr,
         else
             return s->last_swcr;
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
     return 0;
@@ -1096,7 +1097,7 @@ static void pxa2xx_rtc_write(void *opaque, hwaddr addr,
         break;
 
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
     }
 }
 
@@ -1143,13 +1144,15 @@ static void pxa2xx_rtc_init(Object *obj)
     sysbus_init_mmio(dev, &s->iomem);
 }
 
-static void pxa2xx_rtc_pre_save(void *opaque)
+static int pxa2xx_rtc_pre_save(void *opaque)
 {
     PXA2xxRTCState *s = (PXA2xxRTCState *) opaque;
 
     pxa2xx_rtc_hzupdate(s);
     pxa2xx_rtc_piupdate(s);
     pxa2xx_rtc_swupdate(s);
+
+    return 0;
 }
 
 static int pxa2xx_rtc_post_load(void *opaque, int version_id)
@@ -1342,7 +1345,7 @@ static uint64_t pxa2xx_i2c_read(void *opaque, hwaddr addr,
             s->ibmr = 0;
         return s->ibmr;
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
     return 0;
@@ -1415,7 +1418,7 @@ static void pxa2xx_i2c_write(void *opaque, hwaddr addr,
         break;
 
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
     }
 }
 
@@ -1616,7 +1619,7 @@ static uint64_t pxa2xx_i2s_read(void *opaque, hwaddr addr,
         }
         return 0;
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
     return 0;
@@ -1639,14 +1642,14 @@ static void pxa2xx_i2s_write(void *opaque, hwaddr addr,
             s->status &= ~(1 << 7);			/* I2SOFF */
         }
         if (value & (1 << 4))				/* EFWR */
-            printf("%s: Attempt to use special function\n", __FUNCTION__);
+            printf("%s: Attempt to use special function\n", __func__);
         s->enable = (value & 9) == 1;			/* ENB && !RST*/
         pxa2xx_i2s_update(s);
         break;
     case SACR1:
         s->control[1] = value & 0x0039;
         if (value & (1 << 5))				/* ENLBF */
-            printf("%s: Attempt to use loopback function\n", __FUNCTION__);
+            printf("%s: Attempt to use loopback function\n", __func__);
         if (value & (1 << 4))				/* DPRL */
             s->fifo_len = 0;
         pxa2xx_i2s_update(s);
@@ -1673,7 +1676,7 @@ static void pxa2xx_i2s_write(void *opaque, hwaddr addr,
         }
         break;
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
     }
 }
 
@@ -1849,7 +1852,7 @@ static uint64_t pxa2xx_fir_read(void *opaque, hwaddr addr,
             pxa2xx_fir_update(s);
             return ret;
         }
-        printf("%s: Rx FIFO underrun.\n", __FUNCTION__);
+        printf("%s: Rx FIFO underrun.\n", __func__);
         break;
     case ICSR0:
         return s->status[0];
@@ -1858,7 +1861,7 @@ static uint64_t pxa2xx_fir_read(void *opaque, hwaddr addr,
     case ICFOR:
         return s->rx_len;
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
         break;
     }
     return 0;
@@ -1910,7 +1913,7 @@ static void pxa2xx_fir_write(void *opaque, hwaddr addr,
     case ICFOR:
         break;
     default:
-        printf("%s: Bad register " REG_FMT "\n", __FUNCTION__, addr);
+        printf("%s: Bad register " REG_FMT "\n", __func__, addr);
     }
 }
 
@@ -2052,25 +2055,19 @@ static void pxa2xx_reset(void *opaque, int line, int level)
 
 /* Initialise a PXA270 integrated chip (ARM based core).  */
 PXA2xxState *pxa270_init(MemoryRegion *address_space,
-                         unsigned int sdram_size, const char *revision)
+                         unsigned int sdram_size, const char *cpu_type)
 {
     PXA2xxState *s;
     int i;
     DriveInfo *dinfo;
     s = g_new0(PXA2xxState, 1);
 
-    if (revision && strncmp(revision, "pxa27", 5)) {
-        fprintf(stderr, "Machine requires a PXA27x processor.\n");
+    if (strncmp(cpu_type, "pxa27", 5)) {
+        error_report("Machine requires a PXA27x processor");
         exit(1);
     }
-    if (!revision)
-        revision = "pxa270";
 
-    s->cpu = cpu_arm_init(revision);
-    if (s->cpu == NULL) {
-        fprintf(stderr, "Unable to find CPU definition\n");
-        exit(1);
-    }
+    s->cpu = ARM_CPU(cpu_create(cpu_type));
     s->reset = qemu_allocate_irq(pxa2xx_reset, s, 0);
 
     /* SDRAM & Internal Memory Storage */
@@ -2098,32 +2095,31 @@ PXA2xxState *pxa270_init(MemoryRegion *address_space,
     s->gpio = pxa2xx_gpio_init(0x40e00000, s->cpu, s->pic, 121);
 
     dinfo = drive_get(IF_SD, 0, 0);
-    if (!dinfo) {
-        fprintf(stderr, "qemu: missing SecureDigital device\n");
-        exit(1);
+    if (!dinfo && !qtest_enabled()) {
+        warn_report("missing SecureDigital device");
     }
     s->mmc = pxa2xx_mmci_init(address_space, 0x41100000,
-                    blk_by_legacy_dinfo(dinfo),
+                    dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
                     qdev_get_gpio_in(s->pic, PXA2XX_PIC_MMC),
                     qdev_get_gpio_in(s->dma, PXA2XX_RX_RQ_MMCI),
                     qdev_get_gpio_in(s->dma, PXA2XX_TX_RQ_MMCI));
 
     for (i = 0; pxa270_serial[i].io_base; i++) {
-        if (serial_hds[i]) {
+        if (serial_hd(i)) {
             serial_mm_init(address_space, pxa270_serial[i].io_base, 2,
                            qdev_get_gpio_in(s->pic, pxa270_serial[i].irqn),
-                           14857000 / 16, serial_hds[i],
+                           14857000 / 16, serial_hd(i),
                            DEVICE_NATIVE_ENDIAN);
         } else {
             break;
         }
     }
-    if (serial_hds[i])
+    if (serial_hd(i))
         s->fir = pxa2xx_fir_init(address_space, 0x40800000,
                         qdev_get_gpio_in(s->pic, PXA2XX_PIC_ICP),
                         qdev_get_gpio_in(s->dma, PXA2XX_RX_RQ_ICP),
                         qdev_get_gpio_in(s->dma, PXA2XX_TX_RQ_ICP),
-                        serial_hds[i]);
+                        serial_hd(i));
 
     s->lcd = pxa2xx_lcdc_init(address_space, 0x44000000,
                     qdev_get_gpio_in(s->pic, PXA2XX_PIC_LCD));
@@ -2196,11 +2192,7 @@ PXA2xxState *pxa255_init(MemoryRegion *address_space, unsigned int sdram_size)
 
     s = g_new0(PXA2xxState, 1);
 
-    s->cpu = cpu_arm_init("pxa255");
-    if (s->cpu == NULL) {
-        fprintf(stderr, "Unable to find CPU definition\n");
-        exit(1);
-    }
+    s->cpu = ARM_CPU(cpu_create(ARM_CPU_TYPE_NAME("pxa255")));
     s->reset = qemu_allocate_irq(pxa2xx_reset, s, 0);
 
     /* SDRAM & Internal Memory Storage */
@@ -2227,32 +2219,31 @@ PXA2xxState *pxa255_init(MemoryRegion *address_space, unsigned int sdram_size)
     s->gpio = pxa2xx_gpio_init(0x40e00000, s->cpu, s->pic, 85);
 
     dinfo = drive_get(IF_SD, 0, 0);
-    if (!dinfo) {
-        fprintf(stderr, "qemu: missing SecureDigital device\n");
-        exit(1);
+    if (!dinfo && !qtest_enabled()) {
+        warn_report("missing SecureDigital device");
     }
     s->mmc = pxa2xx_mmci_init(address_space, 0x41100000,
-                    blk_by_legacy_dinfo(dinfo),
+                    dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
                     qdev_get_gpio_in(s->pic, PXA2XX_PIC_MMC),
                     qdev_get_gpio_in(s->dma, PXA2XX_RX_RQ_MMCI),
                     qdev_get_gpio_in(s->dma, PXA2XX_TX_RQ_MMCI));
 
     for (i = 0; pxa255_serial[i].io_base; i++) {
-        if (serial_hds[i]) {
+        if (serial_hd(i)) {
             serial_mm_init(address_space, pxa255_serial[i].io_base, 2,
                            qdev_get_gpio_in(s->pic, pxa255_serial[i].irqn),
-                           14745600 / 16, serial_hds[i],
+                           14745600 / 16, serial_hd(i),
                            DEVICE_NATIVE_ENDIAN);
         } else {
             break;
         }
     }
-    if (serial_hds[i])
+    if (serial_hd(i))
         s->fir = pxa2xx_fir_init(address_space, 0x40800000,
                         qdev_get_gpio_in(s->pic, PXA2XX_PIC_ICP),
                         qdev_get_gpio_in(s->dma, PXA2XX_RX_RQ_ICP),
                         qdev_get_gpio_in(s->dma, PXA2XX_TX_RQ_ICP),
-                        serial_hds[i]);
+                        serial_hd(i));
 
     s->lcd = pxa2xx_lcdc_init(address_space, 0x44000000,
                     qdev_get_gpio_in(s->pic, PXA2XX_PIC_LCD));

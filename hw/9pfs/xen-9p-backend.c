@@ -15,6 +15,7 @@
 #include "hw/xen/xen_backend.h"
 #include "hw/9pfs/xen-9pfs.h"
 #include "qemu/config-file.h"
+#include "qemu/option.h"
 #include "fsdev/qemu-fsdev.h"
 
 #define VERSIONS "1"
@@ -233,7 +234,7 @@ static void xen_9pfs_push_and_notify(V9fsPDU *pdu)
     qemu_bh_schedule(ring->bh);
 }
 
-static const struct V9fsTransport xen_9p_transport = {
+static const V9fsTransport xen_9p_transport = {
     .pdu_vmarshal = xen_9pfs_pdu_vmarshal,
     .pdu_vunmarshal = xen_9pfs_pdu_vunmarshal,
     .init_in_iov_from_pdu = xen_9pfs_init_in_iov_from_pdu,
@@ -330,14 +331,14 @@ static int xen_9pfs_free(struct XenDevice *xendev)
 
     for (i = 0; i < xen_9pdev->num_rings; i++) {
         if (xen_9pdev->rings[i].data != NULL) {
-            xengnttab_unmap(xen_9pdev->xendev.gnttabdev,
-                    xen_9pdev->rings[i].data,
-                    (1 << xen_9pdev->rings[i].ring_order));
+            xen_be_unmap_grant_refs(&xen_9pdev->xendev,
+                                    xen_9pdev->rings[i].data,
+                                    (1 << xen_9pdev->rings[i].ring_order));
         }
         if (xen_9pdev->rings[i].intf != NULL) {
-            xengnttab_unmap(xen_9pdev->xendev.gnttabdev,
-                    xen_9pdev->rings[i].intf,
-                    1);
+            xen_be_unmap_grant_refs(&xen_9pdev->xendev,
+                                    xen_9pdev->rings[i].intf,
+                                    1);
         }
         if (xen_9pdev->rings[i].bh != NULL) {
             qemu_bh_delete(xen_9pdev->rings[i].bh);
@@ -389,11 +390,10 @@ static int xen_9pfs_connect(struct XenDevice *xendev)
         }
         g_free(str);
 
-        xen_9pdev->rings[i].intf =  xengnttab_map_grant_ref(
-                xen_9pdev->xendev.gnttabdev,
-                xen_9pdev->xendev.dom,
-                xen_9pdev->rings[i].ref,
-                PROT_READ | PROT_WRITE);
+        xen_9pdev->rings[i].intf =
+            xen_be_map_grant_ref(&xen_9pdev->xendev,
+                                 xen_9pdev->rings[i].ref,
+                                 PROT_READ | PROT_WRITE);
         if (!xen_9pdev->rings[i].intf) {
             goto out;
         }
@@ -402,12 +402,11 @@ static int xen_9pfs_connect(struct XenDevice *xendev)
             goto out;
         }
         xen_9pdev->rings[i].ring_order = ring_order;
-        xen_9pdev->rings[i].data = xengnttab_map_domain_grant_refs(
-                xen_9pdev->xendev.gnttabdev,
-                (1 << ring_order),
-                xen_9pdev->xendev.dom,
-                xen_9pdev->rings[i].intf->ref,
-                PROT_READ | PROT_WRITE);
+        xen_9pdev->rings[i].data =
+            xen_be_map_grant_refs(&xen_9pdev->xendev,
+                                  xen_9pdev->rings[i].intf->ref,
+                                  (1 << ring_order),
+                                  PROT_READ | PROT_WRITE);
         if (!xen_9pdev->rings[i].data) {
             goto out;
         }
@@ -446,7 +445,6 @@ static int xen_9pfs_connect(struct XenDevice *xendev)
     xen_9pdev->id = s->fsconf.fsdev_id =
         g_strdup_printf("xen9p%d", xendev->dev);
     xen_9pdev->tag = s->fsconf.tag = xenstore_read_fe_str(xendev, "tag");
-    v9fs_register_transport(s, &xen_9p_transport);
     fsdev = qemu_opts_create(qemu_find_opts("fsdev"),
             s->fsconf.tag,
             1, NULL);
@@ -455,7 +453,7 @@ static int xen_9pfs_connect(struct XenDevice *xendev)
     qemu_opt_set(fsdev, "security_model", xen_9pdev->security_model, NULL);
     qemu_opts_set_id(fsdev, s->fsconf.fsdev_id);
     qemu_fsdev_add(fsdev);
-    v9fs_device_realize_common(s, NULL);
+    v9fs_device_realize_common(s, &xen_9p_transport, NULL);
 
     return 0;
 

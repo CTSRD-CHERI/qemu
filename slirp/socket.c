@@ -60,29 +60,36 @@ socreate(Slirp *slirp)
 }
 
 /*
+ * Remove references to so from the given message queue.
+ */
+static void
+soqfree(struct socket *so, struct quehead *qh)
+{
+    struct mbuf *ifq;
+
+    for (ifq = (struct mbuf *) qh->qh_link;
+             (struct quehead *) ifq != qh;
+             ifq = ifq->ifq_next) {
+        if (ifq->ifq_so == so) {
+            struct mbuf *ifm;
+            ifq->ifq_so = NULL;
+            for (ifm = ifq->ifs_next; ifm != ifq; ifm = ifm->ifs_next) {
+                ifm->ifq_so = NULL;
+            }
+        }
+    }
+}
+
+/*
  * remque and free a socket, clobber cache
  */
 void
 sofree(struct socket *so)
 {
   Slirp *slirp = so->slirp;
-  struct mbuf *ifm;
 
-  for (ifm = (struct mbuf *) slirp->if_fastq.qh_link;
-       (struct quehead *) ifm != &slirp->if_fastq;
-       ifm = ifm->ifq_next) {
-    if (ifm->ifq_so == so) {
-      ifm->ifq_so = NULL;
-    }
-  }
-
-  for (ifm = (struct mbuf *) slirp->if_batchq.qh_link;
-       (struct quehead *) ifm != &slirp->if_batchq;
-       ifm = ifm->ifq_next) {
-    if (ifm->ifq_so == so) {
-      ifm->ifq_so = NULL;
-    }
-  }
+  soqfree(so, &slirp->if_fastq);
+  soqfree(so, &slirp->if_batchq);
 
   if (so->so_emu==EMU_RSH && so->extra) {
 	sofree(so->extra);
@@ -694,10 +701,10 @@ tcp_listen(Slirp *slirp, uint32_t haddr, u_int hport, uint32_t laddr,
 	memset(&addr, 0, addrlen);
 
 	DEBUG_CALL("tcp_listen");
-	DEBUG_ARG("haddr = %x", haddr);
-	DEBUG_ARG("hport = %d", hport);
-	DEBUG_ARG("laddr = %x", laddr);
-	DEBUG_ARG("lport = %d", lport);
+	DEBUG_ARG("haddr = %s", inet_ntoa((struct in_addr){.s_addr = haddr}));
+	DEBUG_ARG("hport = %d", ntohs(hport));
+	DEBUG_ARG("laddr = %s", inet_ntoa((struct in_addr){.s_addr = laddr}));
+	DEBUG_ARG("lport = %d", ntohs(lport));
 	DEBUG_ARG("flags = %x", flags);
 
 	so = socreate(slirp);
@@ -747,6 +754,8 @@ tcp_listen(Slirp *slirp, uint32_t haddr, u_int hport, uint32_t laddr,
 		return NULL;
 	}
 	qemu_setsockopt(s, SOL_SOCKET, SO_OOBINLINE, &opt, sizeof(int));
+	opt = 1;
+	qemu_setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(int));
 
 	getsockname(s,(struct sockaddr *)&addr,&addrlen);
 	so->so_ffamily = AF_INET;

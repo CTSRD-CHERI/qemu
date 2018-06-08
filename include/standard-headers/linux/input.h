@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Copyright (c) 1999-2002 Vojtech Pavlik
  *
@@ -17,10 +18,21 @@
 
 /*
  * The event structure itself
+ * Note that __USE_TIME_BITS64 is defined by libc based on
+ * application's request to use 64 bit time_t.
  */
 
 struct input_event {
+#if (HOST_LONG_BITS != 32 || !defined(__USE_TIME_BITS64)) && !defined(__KERNEL)
 	struct timeval time;
+#define input_event_sec time.tv_sec
+#define input_event_usec time.tv_usec
+#else
+	unsigned long __sec;
+	unsigned long __usec;
+#define input_event_sec  __sec
+#define input_event_usec __usec
+#endif
 	uint16_t type;
 	uint16_t code;
 	int32_t value;

@@ -28,6 +28,7 @@
 #include "exec/exec-all.h"
 #include "tcg.h"
 #include "tcg-op.h"
+#include "tcg-mo.h"
 #include "trace-tcg.h"
 #include "trace/mem.h"
 
@@ -41,117 +42,63 @@ extern TCGv_i32 TCGV_HIGH_link_error(TCGv_i64);
 #define TCGV_HIGH TCGV_HIGH_link_error
 #endif
 
-/* Note that this is optimized for sequential allocation during translate.
-   Up to and including filling in the forward link immediately.  We'll do
-   proper termination of the end of the list after we finish translation.  */
-
-static void tcg_emit_op(TCGContext *ctx, TCGOpcode opc, int args)
+void tcg_gen_op1(TCGOpcode opc, TCGArg a1)
 {
-    int oi = ctx->gen_next_op_idx;
-    int ni = oi + 1;
-    int pi = oi - 1;
-
-    tcg_debug_assert(oi < OPC_BUF_SIZE);
-    ctx->gen_op_buf[0].prev = oi;
-    ctx->gen_next_op_idx = ni;
-
-    ctx->gen_op_buf[oi] = (TCGOp){
-        .opc = opc,
-        .args = args,
-        .prev = pi,
-        .next = ni
-    };
+    TCGOp *op = tcg_emit_op(opc);
+    op->args[0] = a1;
 }
 
-void tcg_gen_op1(TCGContext *ctx, TCGOpcode opc, TCGArg a1)
+void tcg_gen_op2(TCGOpcode opc, TCGArg a1, TCGArg a2)
 {
-    int pi = ctx->gen_next_parm_idx;
-
-    tcg_debug_assert(pi + 1 <= OPPARAM_BUF_SIZE);
-    ctx->gen_next_parm_idx = pi + 1;
-    ctx->gen_opparam_buf[pi] = a1;
-
-    tcg_emit_op(ctx, opc, pi);
+    TCGOp *op = tcg_emit_op(opc);
+    op->args[0] = a1;
+    op->args[1] = a2;
 }
 
-void tcg_gen_op2(TCGContext *ctx, TCGOpcode opc, TCGArg a1, TCGArg a2)
+void tcg_gen_op3(TCGOpcode opc, TCGArg a1, TCGArg a2, TCGArg a3)
 {
-    int pi = ctx->gen_next_parm_idx;
-
-    tcg_debug_assert(pi + 2 <= OPPARAM_BUF_SIZE);
-    ctx->gen_next_parm_idx = pi + 2;
-    ctx->gen_opparam_buf[pi + 0] = a1;
-    ctx->gen_opparam_buf[pi + 1] = a2;
-
-    tcg_emit_op(ctx, opc, pi);
+    TCGOp *op = tcg_emit_op(opc);
+    op->args[0] = a1;
+    op->args[1] = a2;
+    op->args[2] = a3;
 }
 
-void tcg_gen_op3(TCGContext *ctx, TCGOpcode opc, TCGArg a1,
-                 TCGArg a2, TCGArg a3)
+void tcg_gen_op4(TCGOpcode opc, TCGArg a1, TCGArg a2, TCGArg a3, TCGArg a4)
 {
-    int pi = ctx->gen_next_parm_idx;
-
-    tcg_debug_assert(pi + 3 <= OPPARAM_BUF_SIZE);
-    ctx->gen_next_parm_idx = pi + 3;
-    ctx->gen_opparam_buf[pi + 0] = a1;
-    ctx->gen_opparam_buf[pi + 1] = a2;
-    ctx->gen_opparam_buf[pi + 2] = a3;
-
-    tcg_emit_op(ctx, opc, pi);
+    TCGOp *op = tcg_emit_op(opc);
+    op->args[0] = a1;
+    op->args[1] = a2;
+    op->args[2] = a3;
+    op->args[3] = a4;
 }
 
-void tcg_gen_op4(TCGContext *ctx, TCGOpcode opc, TCGArg a1,
-                 TCGArg a2, TCGArg a3, TCGArg a4)
+void tcg_gen_op5(TCGOpcode opc, TCGArg a1, TCGArg a2, TCGArg a3,
+                 TCGArg a4, TCGArg a5)
 {
-    int pi = ctx->gen_next_parm_idx;
-
-    tcg_debug_assert(pi + 4 <= OPPARAM_BUF_SIZE);
-    ctx->gen_next_parm_idx = pi + 4;
-    ctx->gen_opparam_buf[pi + 0] = a1;
-    ctx->gen_opparam_buf[pi + 1] = a2;
-    ctx->gen_opparam_buf[pi + 2] = a3;
-    ctx->gen_opparam_buf[pi + 3] = a4;
-
-    tcg_emit_op(ctx, opc, pi);
+    TCGOp *op = tcg_emit_op(opc);
+    op->args[0] = a1;
+    op->args[1] = a2;
+    op->args[2] = a3;
+    op->args[3] = a4;
+    op->args[4] = a5;
 }
 
-void tcg_gen_op5(TCGContext *ctx, TCGOpcode opc, TCGArg a1,
-                 TCGArg a2, TCGArg a3, TCGArg a4, TCGArg a5)
+void tcg_gen_op6(TCGOpcode opc, TCGArg a1, TCGArg a2, TCGArg a3,
+                 TCGArg a4, TCGArg a5, TCGArg a6)
 {
-    int pi = ctx->gen_next_parm_idx;
-
-    tcg_debug_assert(pi + 5 <= OPPARAM_BUF_SIZE);
-    ctx->gen_next_parm_idx = pi + 5;
-    ctx->gen_opparam_buf[pi + 0] = a1;
-    ctx->gen_opparam_buf[pi + 1] = a2;
-    ctx->gen_opparam_buf[pi + 2] = a3;
-    ctx->gen_opparam_buf[pi + 3] = a4;
-    ctx->gen_opparam_buf[pi + 4] = a5;
-
-    tcg_emit_op(ctx, opc, pi);
-}
-
-void tcg_gen_op6(TCGContext *ctx, TCGOpcode opc, TCGArg a1, TCGArg a2,
-                 TCGArg a3, TCGArg a4, TCGArg a5, TCGArg a6)
-{
-    int pi = ctx->gen_next_parm_idx;
-
-    tcg_debug_assert(pi + 6 <= OPPARAM_BUF_SIZE);
-    ctx->gen_next_parm_idx = pi + 6;
-    ctx->gen_opparam_buf[pi + 0] = a1;
-    ctx->gen_opparam_buf[pi + 1] = a2;
-    ctx->gen_opparam_buf[pi + 2] = a3;
-    ctx->gen_opparam_buf[pi + 3] = a4;
-    ctx->gen_opparam_buf[pi + 4] = a5;
-    ctx->gen_opparam_buf[pi + 5] = a6;
-
-    tcg_emit_op(ctx, opc, pi);
+    TCGOp *op = tcg_emit_op(opc);
+    op->args[0] = a1;
+    op->args[1] = a2;
+    op->args[2] = a3;
+    op->args[3] = a4;
+    op->args[4] = a5;
+    op->args[5] = a6;
 }
 
 void tcg_gen_mb(TCGBar mb_type)
 {
-    if (parallel_cpus) {
-        tcg_gen_op1(&tcg_ctx, INDEX_op_mb, mb_type);
+    if (tcg_ctx->tb_cflags & CF_PARALLEL) {
+        tcg_gen_op1(INDEX_op_mb, mb_type);
     }
 }
 
@@ -193,7 +140,7 @@ void tcg_gen_subi_i32(TCGv_i32 ret, TCGv_i32 arg1, int32_t arg2)
     }
 }
 
-void tcg_gen_andi_i32(TCGv_i32 ret, TCGv_i32 arg1, uint32_t arg2)
+void tcg_gen_andi_i32(TCGv_i32 ret, TCGv_i32 arg1, int32_t arg2)
 {
     TCGv_i32 t0;
     /* Some cases can be optimized here.  */
@@ -201,17 +148,17 @@ void tcg_gen_andi_i32(TCGv_i32 ret, TCGv_i32 arg1, uint32_t arg2)
     case 0:
         tcg_gen_movi_i32(ret, 0);
         return;
-    case 0xffffffffu:
+    case -1:
         tcg_gen_mov_i32(ret, arg1);
         return;
-    case 0xffu:
+    case 0xff:
         /* Don't recurse with tcg_gen_ext8u_i32.  */
         if (TCG_TARGET_HAS_ext8u_i32) {
             tcg_gen_op2_i32(INDEX_op_ext8u_i32, ret, arg1);
             return;
         }
         break;
-    case 0xffffu:
+    case 0xffff:
         if (TCG_TARGET_HAS_ext16u_i32) {
             tcg_gen_op2_i32(INDEX_op_ext16u_i32, ret, arg1);
             return;
@@ -252,9 +199,9 @@ void tcg_gen_xori_i32(TCGv_i32 ret, TCGv_i32 arg1, int32_t arg2)
     }
 }
 
-void tcg_gen_shli_i32(TCGv_i32 ret, TCGv_i32 arg1, unsigned arg2)
+void tcg_gen_shli_i32(TCGv_i32 ret, TCGv_i32 arg1, int32_t arg2)
 {
-    tcg_debug_assert(arg2 < 32);
+    tcg_debug_assert(arg2 >= 0 && arg2 < 32);
     if (arg2 == 0) {
         tcg_gen_mov_i32(ret, arg1);
     } else {
@@ -264,9 +211,9 @@ void tcg_gen_shli_i32(TCGv_i32 ret, TCGv_i32 arg1, unsigned arg2)
     }
 }
 
-void tcg_gen_shri_i32(TCGv_i32 ret, TCGv_i32 arg1, unsigned arg2)
+void tcg_gen_shri_i32(TCGv_i32 ret, TCGv_i32 arg1, int32_t arg2)
 {
-    tcg_debug_assert(arg2 < 32);
+    tcg_debug_assert(arg2 >= 0 && arg2 < 32);
     if (arg2 == 0) {
         tcg_gen_mov_i32(ret, arg1);
     } else {
@@ -276,9 +223,9 @@ void tcg_gen_shri_i32(TCGv_i32 ret, TCGv_i32 arg1, unsigned arg2)
     }
 }
 
-void tcg_gen_sari_i32(TCGv_i32 ret, TCGv_i32 arg1, unsigned arg2)
+void tcg_gen_sari_i32(TCGv_i32 ret, TCGv_i32 arg1, int32_t arg2)
 {
-    tcg_debug_assert(arg2 < 32);
+    tcg_debug_assert(arg2 >= 0 && arg2 < 32);
     if (arg2 == 0) {
         tcg_gen_mov_i32(ret, arg1);
     } else {
@@ -330,9 +277,15 @@ void tcg_gen_setcondi_i32(TCGCond cond, TCGv_i32 ret,
 
 void tcg_gen_muli_i32(TCGv_i32 ret, TCGv_i32 arg1, int32_t arg2)
 {
-    TCGv_i32 t0 = tcg_const_i32(arg2);
-    tcg_gen_mul_i32(ret, arg1, t0);
-    tcg_temp_free_i32(t0);
+    if (arg2 == 0) {
+        tcg_gen_movi_i32(ret, 0);
+    } else if (is_power_of_2(arg2)) {
+        tcg_gen_shli_i32(ret, arg1, ctz32(arg2));
+    } else {
+        TCGv_i32 t0 = tcg_const_i32(arg2);
+        tcg_gen_mul_i32(ret, arg1, t0);
+        tcg_temp_free_i32(t0);
+    }
 }
 
 void tcg_gen_div_i32(TCGv_i32 ret, TCGv_i32 arg1, TCGv_i32 arg2)
@@ -1080,6 +1033,26 @@ void tcg_gen_bswap32_i32(TCGv_i32 ret, TCGv_i32 arg)
     }
 }
 
+void tcg_gen_smin_i32(TCGv_i32 ret, TCGv_i32 a, TCGv_i32 b)
+{
+    tcg_gen_movcond_i32(TCG_COND_LT, ret, a, b, a, b);
+}
+
+void tcg_gen_umin_i32(TCGv_i32 ret, TCGv_i32 a, TCGv_i32 b)
+{
+    tcg_gen_movcond_i32(TCG_COND_LTU, ret, a, b, a, b);
+}
+
+void tcg_gen_smax_i32(TCGv_i32 ret, TCGv_i32 a, TCGv_i32 b)
+{
+    tcg_gen_movcond_i32(TCG_COND_LT, ret, a, b, b, a);
+}
+
+void tcg_gen_umax_i32(TCGv_i32 ret, TCGv_i32 a, TCGv_i32 b)
+{
+    tcg_gen_movcond_i32(TCG_COND_LTU, ret, a, b, b, a);
+}
+
 /* 64-bit ops */
 
 #if TCG_TARGET_REG_BITS == 32
@@ -1254,7 +1227,7 @@ void tcg_gen_subi_i64(TCGv_i64 ret, TCGv_i64 arg1, int64_t arg2)
     }
 }
 
-void tcg_gen_andi_i64(TCGv_i64 ret, TCGv_i64 arg1, uint64_t arg2)
+void tcg_gen_andi_i64(TCGv_i64 ret, TCGv_i64 arg1, int64_t arg2)
 {
     TCGv_i64 t0;
 
@@ -1269,23 +1242,23 @@ void tcg_gen_andi_i64(TCGv_i64 ret, TCGv_i64 arg1, uint64_t arg2)
     case 0:
         tcg_gen_movi_i64(ret, 0);
         return;
-    case 0xffffffffffffffffull:
+    case -1:
         tcg_gen_mov_i64(ret, arg1);
         return;
-    case 0xffull:
+    case 0xff:
         /* Don't recurse with tcg_gen_ext8u_i64.  */
         if (TCG_TARGET_HAS_ext8u_i64) {
             tcg_gen_op2_i64(INDEX_op_ext8u_i64, ret, arg1);
             return;
         }
         break;
-    case 0xffffu:
+    case 0xffff:
         if (TCG_TARGET_HAS_ext16u_i64) {
             tcg_gen_op2_i64(INDEX_op_ext16u_i64, ret, arg1);
             return;
         }
         break;
-    case 0xffffffffull:
+    case 0xffffffffu:
         if (TCG_TARGET_HAS_ext32u_i64) {
             tcg_gen_op2_i64(INDEX_op_ext32u_i64, ret, arg1);
             return;
@@ -1385,9 +1358,9 @@ static inline void tcg_gen_shifti_i64(TCGv_i64 ret, TCGv_i64 arg1,
     }
 }
 
-void tcg_gen_shli_i64(TCGv_i64 ret, TCGv_i64 arg1, unsigned arg2)
+void tcg_gen_shli_i64(TCGv_i64 ret, TCGv_i64 arg1, int64_t arg2)
 {
-    tcg_debug_assert(arg2 < 64);
+    tcg_debug_assert(arg2 >= 0 && arg2 < 64);
     if (TCG_TARGET_REG_BITS == 32) {
         tcg_gen_shifti_i64(ret, arg1, arg2, 0, 0);
     } else if (arg2 == 0) {
@@ -1399,9 +1372,9 @@ void tcg_gen_shli_i64(TCGv_i64 ret, TCGv_i64 arg1, unsigned arg2)
     }
 }
 
-void tcg_gen_shri_i64(TCGv_i64 ret, TCGv_i64 arg1, unsigned arg2)
+void tcg_gen_shri_i64(TCGv_i64 ret, TCGv_i64 arg1, int64_t arg2)
 {
-    tcg_debug_assert(arg2 < 64);
+    tcg_debug_assert(arg2 >= 0 && arg2 < 64);
     if (TCG_TARGET_REG_BITS == 32) {
         tcg_gen_shifti_i64(ret, arg1, arg2, 1, 0);
     } else if (arg2 == 0) {
@@ -1413,9 +1386,9 @@ void tcg_gen_shri_i64(TCGv_i64 ret, TCGv_i64 arg1, unsigned arg2)
     }
 }
 
-void tcg_gen_sari_i64(TCGv_i64 ret, TCGv_i64 arg1, unsigned arg2)
+void tcg_gen_sari_i64(TCGv_i64 ret, TCGv_i64 arg1, int64_t arg2)
 {
-    tcg_debug_assert(arg2 < 64);
+    tcg_debug_assert(arg2 >= 0 && arg2 < 64);
     if (TCG_TARGET_REG_BITS == 32) {
         tcg_gen_shifti_i64(ret, arg1, arg2, 1, 1);
     } else if (arg2 == 0) {
@@ -1483,9 +1456,15 @@ void tcg_gen_setcondi_i64(TCGCond cond, TCGv_i64 ret,
 
 void tcg_gen_muli_i64(TCGv_i64 ret, TCGv_i64 arg1, int64_t arg2)
 {
-    TCGv_i64 t0 = tcg_const_i64(arg2);
-    tcg_gen_mul_i64(ret, arg1, t0);
-    tcg_temp_free_i64(t0);
+    if (arg2 == 0) {
+        tcg_gen_movi_i64(ret, 0);
+    } else if (is_power_of_2(arg2)) {
+        tcg_gen_shli_i64(ret, arg1, ctz64(arg2));
+    } else {
+        TCGv_i64 t0 = tcg_const_i64(arg2);
+        tcg_gen_mul_i64(ret, arg1, t0);
+        tcg_temp_free_i64(t0);
+    }
 }
 
 void tcg_gen_div_i64(TCGv_i64 ret, TCGv_i64 arg1, TCGv_i64 arg2)
@@ -2479,6 +2458,26 @@ void tcg_gen_mulsu2_i64(TCGv_i64 rl, TCGv_i64 rh, TCGv_i64 arg1, TCGv_i64 arg2)
     tcg_temp_free_i64(t2);
 }
 
+void tcg_gen_smin_i64(TCGv_i64 ret, TCGv_i64 a, TCGv_i64 b)
+{
+    tcg_gen_movcond_i64(TCG_COND_LT, ret, a, b, a, b);
+}
+
+void tcg_gen_umin_i64(TCGv_i64 ret, TCGv_i64 a, TCGv_i64 b)
+{
+    tcg_gen_movcond_i64(TCG_COND_LTU, ret, a, b, a, b);
+}
+
+void tcg_gen_smax_i64(TCGv_i64 ret, TCGv_i64 a, TCGv_i64 b)
+{
+    tcg_gen_movcond_i64(TCG_COND_LT, ret, a, b, b, a);
+}
+
+void tcg_gen_umax_i64(TCGv_i64 ret, TCGv_i64 a, TCGv_i64 b)
+{
+    tcg_gen_movcond_i64(TCG_COND_LTU, ret, a, b, b, a);
+}
+
 /* Size changing operations.  */
 
 void tcg_gen_extrl_i64_i32(TCGv_i32 ret, TCGv_i64 arg)
@@ -2486,10 +2485,10 @@ void tcg_gen_extrl_i64_i32(TCGv_i32 ret, TCGv_i64 arg)
     if (TCG_TARGET_REG_BITS == 32) {
         tcg_gen_mov_i32(ret, TCGV_LOW(arg));
     } else if (TCG_TARGET_HAS_extrl_i64_i32) {
-        tcg_gen_op2(&tcg_ctx, INDEX_op_extrl_i64_i32,
-                    GET_TCGV_I32(ret), GET_TCGV_I64(arg));
+        tcg_gen_op2(INDEX_op_extrl_i64_i32,
+                    tcgv_i32_arg(ret), tcgv_i64_arg(arg));
     } else {
-        tcg_gen_mov_i32(ret, MAKE_TCGV_I32(GET_TCGV_I64(arg)));
+        tcg_gen_mov_i32(ret, (TCGv_i32)arg);
     }
 }
 
@@ -2498,12 +2497,12 @@ void tcg_gen_extrh_i64_i32(TCGv_i32 ret, TCGv_i64 arg)
     if (TCG_TARGET_REG_BITS == 32) {
         tcg_gen_mov_i32(ret, TCGV_HIGH(arg));
     } else if (TCG_TARGET_HAS_extrh_i64_i32) {
-        tcg_gen_op2(&tcg_ctx, INDEX_op_extrh_i64_i32,
-                    GET_TCGV_I32(ret), GET_TCGV_I64(arg));
+        tcg_gen_op2(INDEX_op_extrh_i64_i32,
+                    tcgv_i32_arg(ret), tcgv_i64_arg(arg));
     } else {
         TCGv_i64 t = tcg_temp_new_i64();
         tcg_gen_shri_i64(t, arg, 32);
-        tcg_gen_mov_i32(ret, MAKE_TCGV_I32(GET_TCGV_I64(t)));
+        tcg_gen_mov_i32(ret, (TCGv_i32)t);
         tcg_temp_free_i64(t);
     }
 }
@@ -2514,8 +2513,8 @@ void tcg_gen_extu_i32_i64(TCGv_i64 ret, TCGv_i32 arg)
         tcg_gen_mov_i32(TCGV_LOW(ret), arg);
         tcg_gen_movi_i32(TCGV_HIGH(ret), 0);
     } else {
-        tcg_gen_op2(&tcg_ctx, INDEX_op_extu_i32_i64,
-                    GET_TCGV_I64(ret), GET_TCGV_I32(arg));
+        tcg_gen_op2(INDEX_op_extu_i32_i64,
+                    tcgv_i64_arg(ret), tcgv_i32_arg(arg));
     }
 }
 
@@ -2525,8 +2524,8 @@ void tcg_gen_ext_i32_i64(TCGv_i64 ret, TCGv_i32 arg)
         tcg_gen_mov_i32(TCGV_LOW(ret), arg);
         tcg_gen_sari_i32(TCGV_HIGH(ret), TCGV_LOW(ret), 31);
     } else {
-        tcg_gen_op2(&tcg_ctx, INDEX_op_ext_i32_i64,
-                    GET_TCGV_I64(ret), GET_TCGV_I32(arg));
+        tcg_gen_op2(INDEX_op_ext_i32_i64,
+                    tcgv_i64_arg(ret), tcgv_i32_arg(arg));
     }
 }
 
@@ -2575,27 +2574,47 @@ void tcg_gen_extr32_i64(TCGv_i64 lo, TCGv_i64 hi, TCGv_i64 arg)
 
 /* QEMU specific operations.  */
 
+void tcg_gen_exit_tb(TranslationBlock *tb, unsigned idx)
+{
+    uintptr_t val = (uintptr_t)tb + idx;
+
+    if (tb == NULL) {
+        tcg_debug_assert(idx == 0);
+    } else if (idx <= TB_EXIT_IDXMAX) {
+#ifdef CONFIG_DEBUG_TCG
+        /* This is an exit following a goto_tb.  Verify that we have
+           seen this numbered exit before, via tcg_gen_goto_tb.  */
+        tcg_debug_assert(tcg_ctx->goto_tb_issue_mask & (1 << idx));
+#endif
+    } else {
+        /* This is an exit via the exitreq label.  */
+        tcg_debug_assert(idx == TB_EXIT_REQUESTED);
+    }
+
+    tcg_gen_op1i(INDEX_op_exit_tb, val);
+}
+
 void tcg_gen_goto_tb(unsigned idx)
 {
     /* We only support two chained exits.  */
-    tcg_debug_assert(idx <= 1);
+    tcg_debug_assert(idx <= TB_EXIT_IDXMAX);
 #ifdef CONFIG_DEBUG_TCG
     /* Verify that we havn't seen this numbered exit before.  */
-    tcg_debug_assert((tcg_ctx.goto_tb_issue_mask & (1 << idx)) == 0);
-    tcg_ctx.goto_tb_issue_mask |= 1 << idx;
+    tcg_debug_assert((tcg_ctx->goto_tb_issue_mask & (1 << idx)) == 0);
+    tcg_ctx->goto_tb_issue_mask |= 1 << idx;
 #endif
     tcg_gen_op1i(INDEX_op_goto_tb, idx);
 }
 
-void tcg_gen_lookup_and_goto_ptr(TCGv addr)
+void tcg_gen_lookup_and_goto_ptr(void)
 {
     if (TCG_TARGET_HAS_goto_ptr && !qemu_loglevel_mask(CPU_LOG_TB_NOCHAIN)) {
         TCGv_ptr ptr = tcg_temp_new_ptr();
-        gen_helper_lookup_tb_ptr(ptr, tcg_ctx.tcg_env, addr);
-        tcg_gen_op1i(INDEX_op_goto_ptr, GET_TCGV_PTR(ptr));
+        gen_helper_lookup_tb_ptr(ptr, cpu_env);
+        tcg_gen_op1i(INDEX_op_goto_ptr, tcgv_ptr_arg(ptr));
         tcg_temp_free_ptr(ptr);
     } else {
-        tcg_gen_exit_tb(0);
+        tcg_gen_exit_tb(NULL, 0);
     }
 }
 
@@ -2637,7 +2656,7 @@ static void gen_ldst_i32(TCGOpcode opc, TCGv_i32 val, TCGv addr,
     if (TCG_TARGET_REG_BITS == 32) {
         tcg_gen_op4i_i32(opc, val, TCGV_LOW(addr), TCGV_HIGH(addr), oi);
     } else {
-        tcg_gen_op3(&tcg_ctx, opc, GET_TCGV_I32(val), GET_TCGV_I64(addr), oi);
+        tcg_gen_op3(opc, tcgv_i32_arg(val), tcgv_i64_arg(addr), oi);
     }
 #endif
 }
@@ -2650,7 +2669,7 @@ static void gen_ldst_i64(TCGOpcode opc, TCGv_i64 val, TCGv addr,
     if (TCG_TARGET_REG_BITS == 32) {
         tcg_gen_op4i_i32(opc, TCGV_LOW(val), TCGV_HIGH(val), addr, oi);
     } else {
-        tcg_gen_op3(&tcg_ctx, opc, GET_TCGV_I64(val), GET_TCGV_I32(addr), oi);
+        tcg_gen_op3(opc, tcgv_i64_arg(val), tcgv_i32_arg(addr), oi);
     }
 #else
     if (TCG_TARGET_REG_BITS == 32) {
@@ -2662,24 +2681,38 @@ static void gen_ldst_i64(TCGOpcode opc, TCGv_i64 val, TCGv addr,
 #endif
 }
 
+static void tcg_gen_req_mo(TCGBar type)
+{
+#ifdef TCG_GUEST_DEFAULT_MO
+    type &= TCG_GUEST_DEFAULT_MO;
+#endif
+    type &= ~TCG_TARGET_DEFAULT_MO;
+    if (type) {
+        tcg_gen_mb(type | TCG_BAR_SC);
+    }
+}
+
 void tcg_gen_qemu_ld_i32(TCGv_i32 val, TCGv addr, TCGArg idx, TCGMemOp memop)
 {
+    tcg_gen_req_mo(TCG_MO_LD_LD | TCG_MO_ST_LD);
     memop = tcg_canonicalize_memop(memop, 0, 0);
-    trace_guest_mem_before_tcg(tcg_ctx.cpu, tcg_ctx.tcg_env,
+    trace_guest_mem_before_tcg(tcg_ctx->cpu, cpu_env,
                                addr, trace_mem_get_info(memop, 0));
     gen_ldst_i32(INDEX_op_qemu_ld_i32, val, addr, memop, idx);
 }
 
 void tcg_gen_qemu_st_i32(TCGv_i32 val, TCGv addr, TCGArg idx, TCGMemOp memop)
 {
+    tcg_gen_req_mo(TCG_MO_LD_ST | TCG_MO_ST_ST);
     memop = tcg_canonicalize_memop(memop, 0, 1);
-    trace_guest_mem_before_tcg(tcg_ctx.cpu, tcg_ctx.tcg_env,
+    trace_guest_mem_before_tcg(tcg_ctx->cpu, cpu_env,
                                addr, trace_mem_get_info(memop, 1));
     gen_ldst_i32(INDEX_op_qemu_st_i32, val, addr, memop, idx);
 }
 
 void tcg_gen_qemu_ld_i64(TCGv_i64 val, TCGv addr, TCGArg idx, TCGMemOp memop)
 {
+    tcg_gen_req_mo(TCG_MO_LD_LD | TCG_MO_ST_LD);
     if (TCG_TARGET_REG_BITS == 32 && (memop & MO_SIZE) < MO_64) {
         tcg_gen_qemu_ld_i32(TCGV_LOW(val), addr, idx, memop);
         if (memop & MO_SIGN) {
@@ -2691,20 +2724,21 @@ void tcg_gen_qemu_ld_i64(TCGv_i64 val, TCGv addr, TCGArg idx, TCGMemOp memop)
     }
 
     memop = tcg_canonicalize_memop(memop, 1, 0);
-    trace_guest_mem_before_tcg(tcg_ctx.cpu, tcg_ctx.tcg_env,
+    trace_guest_mem_before_tcg(tcg_ctx->cpu, cpu_env,
                                addr, trace_mem_get_info(memop, 0));
     gen_ldst_i64(INDEX_op_qemu_ld_i64, val, addr, memop, idx);
 }
 
 void tcg_gen_qemu_st_i64(TCGv_i64 val, TCGv addr, TCGArg idx, TCGMemOp memop)
 {
+    tcg_gen_req_mo(TCG_MO_LD_ST | TCG_MO_ST_ST);
     if (TCG_TARGET_REG_BITS == 32 && (memop & MO_SIZE) < MO_64) {
         tcg_gen_qemu_st_i32(TCGV_LOW(val), addr, idx, memop);
         return;
     }
 
     memop = tcg_canonicalize_memop(memop, 1, 1);
-    trace_guest_mem_before_tcg(tcg_ctx.cpu, tcg_ctx.tcg_env,
+    trace_guest_mem_before_tcg(tcg_ctx->cpu, cpu_env,
                                addr, trace_mem_get_info(memop, 1));
     gen_ldst_i64(INDEX_op_qemu_st_i64, val, addr, memop, idx);
 }
@@ -2794,7 +2828,7 @@ void tcg_gen_atomic_cmpxchg_i32(TCGv_i32 retv, TCGv addr, TCGv_i32 cmpv,
 {
     memop = tcg_canonicalize_memop(memop, 0, 0);
 
-    if (!parallel_cpus) {
+    if (!(tcg_ctx->tb_cflags & CF_PARALLEL)) {
         TCGv_i32 t1 = tcg_temp_new_i32();
         TCGv_i32 t2 = tcg_temp_new_i32();
 
@@ -2820,11 +2854,11 @@ void tcg_gen_atomic_cmpxchg_i32(TCGv_i32 retv, TCGv addr, TCGv_i32 cmpv,
 #ifdef CONFIG_SOFTMMU
         {
             TCGv_i32 oi = tcg_const_i32(make_memop_idx(memop & ~MO_SIGN, idx));
-            gen(retv, tcg_ctx.tcg_env, addr, cmpv, newv, oi);
+            gen(retv, cpu_env, addr, cmpv, newv, oi);
             tcg_temp_free_i32(oi);
         }
 #else
-        gen(retv, tcg_ctx.tcg_env, addr, cmpv, newv);
+        gen(retv, cpu_env, addr, cmpv, newv);
 #endif
 
         if (memop & MO_SIGN) {
@@ -2838,7 +2872,7 @@ void tcg_gen_atomic_cmpxchg_i64(TCGv_i64 retv, TCGv addr, TCGv_i64 cmpv,
 {
     memop = tcg_canonicalize_memop(memop, 1, 0);
 
-    if (!parallel_cpus) {
+    if (!(tcg_ctx->tb_cflags & CF_PARALLEL)) {
         TCGv_i64 t1 = tcg_temp_new_i64();
         TCGv_i64 t2 = tcg_temp_new_i64();
 
@@ -2865,14 +2899,14 @@ void tcg_gen_atomic_cmpxchg_i64(TCGv_i64 retv, TCGv addr, TCGv_i64 cmpv,
 #ifdef CONFIG_SOFTMMU
         {
             TCGv_i32 oi = tcg_const_i32(make_memop_idx(memop, idx));
-            gen(retv, tcg_ctx.tcg_env, addr, cmpv, newv, oi);
+            gen(retv, cpu_env, addr, cmpv, newv, oi);
             tcg_temp_free_i32(oi);
         }
 #else
-        gen(retv, tcg_ctx.tcg_env, addr, cmpv, newv);
+        gen(retv, cpu_env, addr, cmpv, newv);
 #endif
 #else
-        gen_helper_exit_atomic(tcg_ctx.tcg_env);
+        gen_helper_exit_atomic(cpu_env);
         /* Produce a result, so that we have a well-formed opcode stream
            with respect to uses of the result in the (dead) code following.  */
         tcg_gen_movi_i64(retv, 0);
@@ -2928,11 +2962,11 @@ static void do_atomic_op_i32(TCGv_i32 ret, TCGv addr, TCGv_i32 val,
 #ifdef CONFIG_SOFTMMU
     {
         TCGv_i32 oi = tcg_const_i32(make_memop_idx(memop & ~MO_SIGN, idx));
-        gen(ret, tcg_ctx.tcg_env, addr, val, oi);
+        gen(ret, cpu_env, addr, val, oi);
         tcg_temp_free_i32(oi);
     }
 #else
-    gen(ret, tcg_ctx.tcg_env, addr, val);
+    gen(ret, cpu_env, addr, val);
 #endif
 
     if (memop & MO_SIGN) {
@@ -2973,14 +3007,14 @@ static void do_atomic_op_i64(TCGv_i64 ret, TCGv addr, TCGv_i64 val,
 #ifdef CONFIG_SOFTMMU
         {
             TCGv_i32 oi = tcg_const_i32(make_memop_idx(memop & ~MO_SIGN, idx));
-            gen(ret, tcg_ctx.tcg_env, addr, val, oi);
+            gen(ret, cpu_env, addr, val, oi);
             tcg_temp_free_i32(oi);
         }
 #else
-        gen(ret, tcg_ctx.tcg_env, addr, val);
+        gen(ret, cpu_env, addr, val);
 #endif
 #else
-        gen_helper_exit_atomic(tcg_ctx.tcg_env);
+        gen_helper_exit_atomic(cpu_env);
         /* Produce a result, so that we have a well-formed opcode stream
            with respect to uses of the result in the (dead) code following.  */
         tcg_gen_movi_i64(ret, 0);
@@ -3015,7 +3049,7 @@ static void * const table_##NAME[16] = {                                \
 void tcg_gen_atomic_##NAME##_i32                                        \
     (TCGv_i32 ret, TCGv addr, TCGv_i32 val, TCGArg idx, TCGMemOp memop) \
 {                                                                       \
-    if (parallel_cpus) {                                                \
+    if (tcg_ctx->tb_cflags & CF_PARALLEL) {                             \
         do_atomic_op_i32(ret, addr, val, idx, memop, table_##NAME);     \
     } else {                                                            \
         do_nonatomic_op_i32(ret, addr, val, idx, memop, NEW,            \
@@ -3025,7 +3059,7 @@ void tcg_gen_atomic_##NAME##_i32                                        \
 void tcg_gen_atomic_##NAME##_i64                                        \
     (TCGv_i64 ret, TCGv addr, TCGv_i64 val, TCGArg idx, TCGMemOp memop) \
 {                                                                       \
-    if (parallel_cpus) {                                                \
+    if (tcg_ctx->tb_cflags & CF_PARALLEL) {                             \
         do_atomic_op_i64(ret, addr, val, idx, memop, table_##NAME);     \
     } else {                                                            \
         do_nonatomic_op_i64(ret, addr, val, idx, memop, NEW,            \
@@ -3037,11 +3071,19 @@ GEN_ATOMIC_HELPER(fetch_add, add, 0)
 GEN_ATOMIC_HELPER(fetch_and, and, 0)
 GEN_ATOMIC_HELPER(fetch_or, or, 0)
 GEN_ATOMIC_HELPER(fetch_xor, xor, 0)
+GEN_ATOMIC_HELPER(fetch_smin, smin, 0)
+GEN_ATOMIC_HELPER(fetch_umin, umin, 0)
+GEN_ATOMIC_HELPER(fetch_smax, smax, 0)
+GEN_ATOMIC_HELPER(fetch_umax, umax, 0)
 
 GEN_ATOMIC_HELPER(add_fetch, add, 1)
 GEN_ATOMIC_HELPER(and_fetch, and, 1)
 GEN_ATOMIC_HELPER(or_fetch, or, 1)
 GEN_ATOMIC_HELPER(xor_fetch, xor, 1)
+GEN_ATOMIC_HELPER(smin_fetch, smin, 1)
+GEN_ATOMIC_HELPER(umin_fetch, umin, 1)
+GEN_ATOMIC_HELPER(smax_fetch, smax, 1)
+GEN_ATOMIC_HELPER(umax_fetch, umax, 1)
 
 static void tcg_gen_mov2_i32(TCGv_i32 r, TCGv_i32 a, TCGv_i32 b)
 {

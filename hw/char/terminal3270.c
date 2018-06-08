@@ -30,9 +30,8 @@ typedef struct Terminal3270 {
     uint8_t inv[INPUT_BUFFER_SIZE];
     uint8_t outv[OUTPUT_BUFFER_SIZE];
     int in_len;
-    int out_len;
     bool handshake_done;
-    guint timer_tag;
+    GSource *timer_src;
 } Terminal3270;
 
 #define TYPE_TERMINAL_3270 "x-terminal3270"
@@ -44,6 +43,15 @@ static int terminal_can_read(void *opaque)
     Terminal3270 *t = opaque;
 
     return INPUT_BUFFER_SIZE - t->in_len;
+}
+
+static void terminal_timer_cancel(Terminal3270 *t)
+{
+    if (t->timer_src) {
+        g_source_destroy(t->timer_src);
+        g_source_unref(t->timer_src);
+        t->timer_src = NULL;
+    }
 }
 
 /*
@@ -91,12 +99,9 @@ static void terminal_read(void *opaque, const uint8_t *buf, int size)
 
     assert(size <= (INPUT_BUFFER_SIZE - t->in_len));
 
-    if (t->timer_tag) {
-        g_source_remove(t->timer_tag);
-        t->timer_tag = 0;
-    }
-    t->timer_tag = g_timeout_add_seconds(600, send_timing_mark_cb, t);
-
+    terminal_timer_cancel(t);
+    t->timer_src = qemu_chr_timeout_add_ms(t->chr.chr, 600 * 1000,
+                                           send_timing_mark_cb, t);
     memcpy(&t->inv[t->in_len], buf, size);
     t->in_len += size;
     if (t->in_len < 2) {
@@ -145,12 +150,8 @@ static void chr_event(void *opaque, int event)
 
     /* Ensure the initial status correct, always reset them. */
     t->in_len = 0;
-    t->out_len = 0;
     t->handshake_done = false;
-    if (t->timer_tag) {
-        g_source_remove(t->timer_tag);
-        t->timer_tag = 0;
-    }
+    terminal_timer_cancel(t);
 
     switch (event) {
     case CHR_EVENT_OPENED:
@@ -159,7 +160,8 @@ static void chr_event(void *opaque, int event)
          * char-socket.c. Once qemu receives the terminal-type of the
          * client, mark handshake done and trigger everything rolling again.
          */
-        t->timer_tag = g_timeout_add_seconds(600, send_timing_mark_cb, t);
+        t->timer_src = qemu_chr_timeout_add_ms(t->chr.chr, 600 * 1000,
+                                               send_timing_mark_cb, t);
         break;
     case CHR_EVENT_CLOSED:
         sch->curr_status.scsw.dstat = SCSW_DSTAT_DEVICE_END;
@@ -182,14 +184,18 @@ static void terminal_init(EmulatedCcw3270Device *dev, Error **errp)
                              terminal_read, chr_event, NULL, t, NULL, true);
 }
 
-static int read_payload_3270(EmulatedCcw3270Device *dev, uint32_t cda,
-                             uint16_t count)
+static inline CcwDataStream *get_cds(Terminal3270 *t)
+{
+    return &(CCW_DEVICE(&t->cdev)->sch->cds);
+}
+
+static int read_payload_3270(EmulatedCcw3270Device *dev)
 {
     Terminal3270 *t = TERMINAL_3270(dev);
     int len;
 
-    len = MIN(count, t->in_len);
-    cpu_physical_memory_write(cda, t->inv, len);
+    len = MIN(ccw_dstream_avail(get_cds(t)), t->in_len);
+    ccw_dstream_write_buf(get_cds(t), t->inv, len);
     t->in_len -= len;
 
     return len;
@@ -222,13 +228,14 @@ static int insert_IAC_escape_char(uint8_t *outv, int out_len)
  * Write 3270 outbound to socket.
  * Return the count of 3270 data field if succeeded, zero if failed.
  */
-static int write_payload_3270(EmulatedCcw3270Device *dev, uint8_t cmd,
-                              uint32_t cda, uint16_t count)
+static int write_payload_3270(EmulatedCcw3270Device *dev, uint8_t cmd)
 {
     Terminal3270 *t = TERMINAL_3270(dev);
     int retval = 0;
-
-    assert(count <= (OUTPUT_BUFFER_SIZE - 3) / 2);
+    int count = ccw_dstream_avail(get_cds(t));
+    int bound = (OUTPUT_BUFFER_SIZE - 3) / 2;
+    int len = MIN(count, bound);
+    int out_len = 0;
 
     if (!t->handshake_done) {
         if (!(t->outv[0] == IAC && t->outv[1] != IAC)) {
@@ -243,16 +250,23 @@ static int write_payload_3270(EmulatedCcw3270Device *dev, uint8_t cmd,
         /* We just say we consumed all data if there's no backend. */
         return count;
     }
-    t->outv[0] = cmd;
-    cpu_physical_memory_read(cda, &t->outv[1], count);
-    t->out_len = count + 1;
 
-    t->out_len = insert_IAC_escape_char(t->outv, t->out_len);
-    t->outv[t->out_len++] = IAC;
-    t->outv[t->out_len++] = IAC_EOR;
+    t->outv[out_len++] = cmd;
+    do {
+        ccw_dstream_read_buf(get_cds(t), &t->outv[out_len], len);
+        count = ccw_dstream_avail(get_cds(t));
+        out_len += len;
 
-    retval = qemu_chr_fe_write_all(&t->chr, t->outv, t->out_len);
-    return (retval <= 0) ? 0 : (retval - 3);
+        out_len = insert_IAC_escape_char(t->outv, out_len);
+        if (!count) {
+            t->outv[out_len++] = IAC;
+            t->outv[out_len++] = IAC_EOR;
+        }
+        retval = qemu_chr_fe_write_all(&t->chr, t->outv, out_len);
+        len = MIN(count, bound);
+        out_len = 0;
+    } while (len && retval >= 0);
+    return (retval <= 0) ? 0 : get_cds(t)->count;
 }
 
 static Property terminal_properties[] = {

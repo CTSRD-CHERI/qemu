@@ -19,6 +19,7 @@
 #include "qemu/osdep.h"
 #include "qemu/main-loop.h"
 #include "cpu.h"
+#include "internal.h"
 #include "qemu/host-utils.h"
 #include "exec/helper-proto.h"
 #include "exec/exec-all.h"
@@ -3178,8 +3179,8 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (ctp->cr_base + ctp->cr_length > cbp->cr_base + cbp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (ctp->cr_length < 0) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
+    // } else if (ctp->cr_length < 0) {
+    //    do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
         do_raise_c2_exception(env, CP2Ca_USRDEFINE, cb);
     } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
@@ -4935,9 +4936,9 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
 
         /* Disassemble and print instruction. */
         if (isa == 0) {
-            target_disas(qemu_logfile, cs, pc, 4, 0);
+            target_disas(qemu_logfile, cs, pc, 4);
         } else {
-            target_disas(qemu_logfile, cs, pc, 2, 0);
+            target_disas(qemu_logfile, cs, pc, 2);
         }
     }
 
@@ -6130,12 +6131,12 @@ void mips_cpu_do_unaligned_access(CPUState *cs, vaddr addr,
     do_raise_exception_err(env, excp, error_code, retaddr);
 }
 
-void tlb_fill(CPUState *cs, target_ulong addr, MMUAccessType access_type,
-              int mmu_idx, uintptr_t retaddr)
+void tlb_fill(CPUState *cs, target_ulong addr, int size,
+              MMUAccessType access_type, int mmu_idx, uintptr_t retaddr)
 {
     int ret;
 
-    ret = mips_cpu_handle_mmu_fault(cs, addr, access_type, mmu_idx);
+    ret = mips_cpu_handle_mmu_fault(cs, addr, size, access_type, mmu_idx);
     if (ret) {
         MIPSCPU *cpu = MIPS_CPU(cs);
         CPUMIPSState *env = &cpu->env;
@@ -7001,7 +7002,6 @@ uint64_t helper_float_cvtd_s(CPUMIPSState *env, uint32_t fst0)
     uint64_t fdt2;
 
     fdt2 = float32_to_float64(fst0, &env->active_fpu.fp_status);
-    fdt2 = float64_maybe_silence_nan(fdt2, &env->active_fpu.fp_status);
     update_fcr31(env, GETPC());
     return fdt2;
 }
@@ -7091,7 +7091,6 @@ uint32_t helper_float_cvts_d(CPUMIPSState *env, uint64_t fdt0)
     uint32_t fst2;
 
     fst2 = float64_to_float32(fdt0, &env->active_fpu.fp_status);
-    fst2 = float32_maybe_silence_nan(fst2, &env->active_fpu.fp_status);
     update_fcr31(env, GETPC());
     return fst2;
 }
@@ -8491,10 +8490,10 @@ static inline void ensure_writable_pages(CPUMIPSState *env,
     target_ulong page_addr;
     if (unlikely(MSA_PAGESPAN(addr))) {
         /* first page */
-        probe_write(env, addr, mmu_idx, retaddr);
+        probe_write(env, addr, 0, mmu_idx, retaddr);
         /* second page */
         page_addr = (addr & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
-        probe_write(env, page_addr, mmu_idx, retaddr);
+        probe_write(env, page_addr, 0, mmu_idx, retaddr);
     }
 #endif
 }

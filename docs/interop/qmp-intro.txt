@@ -18,7 +18,7 @@ For detailed information on QMP's usage, please, refer to the following files:
 o qmp-spec.txt      QEMU Machine Protocol current specification
 o qemu-qmp-ref.html QEMU QMP commands and events (auto-generated at build-time)
 
-[1] http://www.json.org
+[1] https://www.json.org
 
 Usage
 -----
@@ -78,9 +78,10 @@ Escape character is '^]'.
     }
 }
 
-Please, refer to the qapi-schema.json file for a complete command reference.
+Please refer to docs/interop/qemu-qmp-ref.* for a complete command
+reference, generated from qapi/qapi-schema.json.
 
 QMP wiki page
 -------------
 
-http://wiki.qemu-project.org/QMP
+https://wiki.qemu.org/QMP

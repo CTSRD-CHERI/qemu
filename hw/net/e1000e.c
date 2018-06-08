@@ -41,7 +41,7 @@
 #include "hw/pci/msi.h"
 #include "hw/pci/msix.h"
 
-#include "hw/net/e1000_regs.h"
+#include "e1000_regs.h"
 
 #include "e1000x_common.h"
 #include "e1000e_core.h"
@@ -523,13 +523,15 @@ static void e1000e_qdev_reset(DeviceState *dev)
     e1000e_core_reset(&s->core);
 }
 
-static void e1000e_pre_save(void *opaque)
+static int e1000e_pre_save(void *opaque)
 {
     E1000EState *s = opaque;
 
     trace_e1000e_cb_pre_save();
 
     e1000e_core_pre_save(&s->core);
+
+    return 0;
 }
 
 static int e1000e_post_load(void *opaque, int version_id)
@@ -554,7 +556,7 @@ static const VMStateDescription e1000e_vmstate_tx = {
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT8(props.sum_needed, struct e1000e_tx),
+        VMSTATE_UINT8(sum_needed, struct e1000e_tx),
         VMSTATE_UINT8(props.ipcss, struct e1000e_tx),
         VMSTATE_UINT8(props.ipcso, struct e1000e_tx),
         VMSTATE_UINT16(props.ipcse, struct e1000e_tx),
@@ -567,7 +569,7 @@ static const VMStateDescription e1000e_vmstate_tx = {
         VMSTATE_INT8(props.ip, struct e1000e_tx),
         VMSTATE_INT8(props.tcp, struct e1000e_tx),
         VMSTATE_BOOL(props.tse, struct e1000e_tx),
-        VMSTATE_BOOL(props.cptse, struct e1000e_tx),
+        VMSTATE_BOOL(cptse, struct e1000e_tx),
         VMSTATE_BOOL(skip_cp, struct e1000e_tx),
         VMSTATE_END_OF_LIST()
     }
@@ -673,7 +675,6 @@ static void e1000e_class_init(ObjectClass *class, void *data)
     c->revision = 0;
     c->romfile = "efi-e1000e.rom";
     c->class_id = PCI_CLASS_NETWORK_ETHERNET;
-    c->is_express = 1;
 
     dc->desc = "Intel 82574L GbE Controller";
     dc->reset = e1000e_qdev_reset;
@@ -708,6 +709,10 @@ static const TypeInfo e1000e_info = {
     .instance_size = sizeof(E1000EState),
     .class_init = e1000e_class_init,
     .instance_init = e1000e_instance_init,
+    .interfaces = (InterfaceInfo[]) {
+        { INTERFACE_PCIE_DEVICE },
+        { }
+    },
 };
 
 static void e1000e_register_types(void)

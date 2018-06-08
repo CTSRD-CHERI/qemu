@@ -12,6 +12,7 @@
 #include "hw/qdev.h"
 #include "hw/cpu/core.h"
 #include "target/ppc/cpu-qom.h"
+#include "target/ppc/cpu.h"
 
 #define TYPE_SPAPR_CPU_CORE "spapr-cpu-core"
 #define SPAPR_CPU_CORE(obj) \
@@ -21,20 +22,23 @@
 #define SPAPR_CPU_CORE_GET_CLASS(obj) \
      OBJECT_GET_CLASS(sPAPRCPUCoreClass, (obj), TYPE_SPAPR_CPU_CORE)
 
+#define SPAPR_CPU_CORE_TYPE_NAME(model) model "-" TYPE_SPAPR_CPU_CORE
+
 typedef struct sPAPRCPUCore {
     /*< private >*/
     CPUCore parent_obj;
 
     /*< public >*/
-    void *threads;
+    PowerPCCPU **threads;
     int node_id;
 } sPAPRCPUCore;
 
 typedef struct sPAPRCPUCoreClass {
     DeviceClass parent_class;
-    ObjectClass *cpu_class;
+    const char *cpu_type;
 } sPAPRCPUCoreClass;
 
-char *spapr_get_cpu_core_type(const char *model);
-void spapr_cpu_core_class_init(ObjectClass *oc, void *data);
+const char *spapr_get_cpu_core_type(const char *cpu_type);
+void spapr_cpu_set_entry_state(PowerPCCPU *cpu, target_ulong nip, target_ulong r3);
+
 #endif

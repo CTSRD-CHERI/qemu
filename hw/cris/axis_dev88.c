@@ -34,7 +34,6 @@
 #include "hw/loader.h"
 #include "elf.h"
 #include "boot.h"
-#include "sysemu/block-backend.h"
 #include "exec/address-spaces.h"
 #include "sysemu/qtest.h"
 #include "sysemu/sysemu.h"
@@ -251,7 +250,6 @@ static
 void axisdev88_init(MachineState *machine)
 {
     ram_addr_t ram_size = machine->ram_size;
-    const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = machine->kernel_filename;
     const char *kernel_cmdline = machine->kernel_cmdline;
     CRISCPU *cpu;
@@ -268,10 +266,7 @@ void axisdev88_init(MachineState *machine)
     MemoryRegion *phys_intmem = g_new(MemoryRegion, 1);
 
     /* init CPUs */
-    if (cpu_model == NULL) {
-        cpu_model = "crisv32";
-    }
-    cpu = cpu_cris_init(cpu_model);
+    cpu = CRIS_CPU(cpu_create(machine->cpu_type));
     env = &cpu->env;
 
     /* allocate RAM */
@@ -341,7 +336,7 @@ void axisdev88_init(MachineState *machine)
     sysbus_create_varargs("etraxfs,timer", 0x3005e000, irq[0x1b], nmi[1], NULL);
 
     for (i = 0; i < 4; i++) {
-        etraxfs_ser_create(0x30026000 + i * 0x2000, irq[0x14 + i], serial_hds[i]);
+        etraxfs_ser_create(0x30026000 + i * 0x2000, irq[0x14 + i], serial_hd(i));
     }
 
     if (kernel_filename) {
@@ -359,6 +354,7 @@ static void axisdev88_machine_init(MachineClass *mc)
     mc->desc = "AXIS devboard 88";
     mc->init = axisdev88_init;
     mc->is_default = 1;
+    mc->default_cpu_type = CRIS_CPU_TYPE_NAME("crisv32");
 }
 
 DEFINE_MACHINE("axis-dev88", axisdev88_machine_init)

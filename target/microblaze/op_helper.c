@@ -24,6 +24,7 @@
 #include "qemu/host-utils.h"
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
+#include "fpu/softfloat.h"
 
 #define D(x)
 
@@ -33,18 +34,15 @@
  * NULL, it means that the function was called in C code (i.e. not
  * from generated code or from helper.c)
  */
-void tlb_fill(CPUState *cs, target_ulong addr, MMUAccessType access_type,
-              int mmu_idx, uintptr_t retaddr)
+void tlb_fill(CPUState *cs, target_ulong addr, int size,
+              MMUAccessType access_type, int mmu_idx, uintptr_t retaddr)
 {
     int ret;
 
-    ret = mb_cpu_handle_mmu_fault(cs, addr, access_type, mmu_idx);
+    ret = mb_cpu_handle_mmu_fault(cs, addr, size, access_type, mmu_idx);
     if (unlikely(ret)) {
-        if (retaddr) {
-            /* now we have a real cpu fault */
-            cpu_restore_state(cs, retaddr);
-        }
-        cpu_loop_exit(cs);
+        /* now we have a real cpu fault */
+        cpu_loop_exit_restore(cs, retaddr);
     }
 }
 #endif
@@ -96,16 +94,17 @@ void helper_debug(CPUMBState *env)
 {
     int i;
 
-    qemu_log("PC=%8.8x\n", env->sregs[SR_PC]);
-    qemu_log("rmsr=%x resr=%x rear=%x debug[%x] imm=%x iflags=%x\n",
+    qemu_log("PC=%" PRIx64 "\n", env->sregs[SR_PC]);
+    qemu_log("rmsr=%" PRIx64 " resr=%" PRIx64 " rear=%" PRIx64 " "
+             "debug[%x] imm=%x iflags=%x\n",
              env->sregs[SR_MSR], env->sregs[SR_ESR], env->sregs[SR_EAR],
              env->debug, env->imm, env->iflags);
-    qemu_log("btaken=%d btarget=%x mode=%s(saved=%s) eip=%d ie=%d\n",
+    qemu_log("btaken=%d btarget=%" PRIx64 " mode=%s(saved=%s) eip=%d ie=%d\n",
              env->btaken, env->btarget,
              (env->sregs[SR_MSR] & MSR_UM) ? "user" : "kernel",
              (env->sregs[SR_MSR] & MSR_UMS) ? "user" : "kernel",
-             (env->sregs[SR_MSR] & MSR_EIP),
-             (env->sregs[SR_MSR] & MSR_IE));
+             (bool)(env->sregs[SR_MSR] & MSR_EIP),
+             (bool)(env->sregs[SR_MSR] & MSR_IE));
     for (i = 0; i < 32; i++) {
         qemu_log("r%2.2d=%8.8x ", i, env->regs[i]);
         if ((i + 1) % 4 == 0)
@@ -441,12 +440,14 @@ uint32_t helper_pcmpbf(uint32_t a, uint32_t b)
     return 0;
 }
 
-void helper_memalign(CPUMBState *env, uint32_t addr, uint32_t dr, uint32_t wr,
+void helper_memalign(CPUMBState *env, target_ulong addr,
+                     uint32_t dr, uint32_t wr,
                      uint32_t mask)
 {
     if (addr & mask) {
             qemu_log_mask(CPU_LOG_INT,
-                          "unaligned access addr=%x mask=%x, wr=%d dr=r%d\n",
+                          "unaligned access addr=" TARGET_FMT_lx
+                          " mask=%x, wr=%d dr=r%d\n",
                           addr, mask, wr, dr);
             env->sregs[SR_EAR] = addr;
             env->sregs[SR_ESR] = ESR_EC_UNALIGNED_DATA | (wr << 10) \
@@ -461,10 +462,11 @@ void helper_memalign(CPUMBState *env, uint32_t addr, uint32_t dr, uint32_t wr,
     }
 }
 
-void helper_stackprot(CPUMBState *env, uint32_t addr)
+void helper_stackprot(CPUMBState *env, target_ulong addr)
 {
     if (addr < env->slr || addr > env->shr) {
-        qemu_log_mask(CPU_LOG_INT, "Stack protector violation at %x %x %x\n",
+        qemu_log_mask(CPU_LOG_INT, "Stack protector violation at "
+                      TARGET_FMT_lx " %x %x\n",
                       addr, env->slr, env->shr);
         env->sregs[SR_EAR] = addr;
         env->sregs[SR_ESR] = ESR_EC_STACKPROT;
@@ -474,14 +476,14 @@ void helper_stackprot(CPUMBState *env, uint32_t addr)
 
 #if !defined(CONFIG_USER_ONLY)
 /* Writes/reads to the MMU's special regs end up here.  */
-uint32_t helper_mmu_read(CPUMBState *env, uint32_t rn)
+uint32_t helper_mmu_read(CPUMBState *env, uint32_t ext, uint32_t rn)
 {
-    return mmu_read(env, rn);
+    return mmu_read(env, ext, rn);
 }
 
-void helper_mmu_write(CPUMBState *env, uint32_t rn, uint32_t v)
+void helper_mmu_write(CPUMBState *env, uint32_t ext, uint32_t rn, uint32_t v)
 {
-    mmu_write(env, rn, v);
+    mmu_write(env, ext, rn, v);
 }
 
 void mb_cpu_unassigned_access(CPUState *cs, hwaddr addr,

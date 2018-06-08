@@ -18,7 +18,6 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
-#include "qemu/typedefs.h"
 #include "qom/object.h"
 #include "hw/fw-path-provider.h"
 #include "hw/qdev-core.h"
@@ -70,6 +69,7 @@ static void vhost_user_scsi_realize(DeviceState *dev, Error **errp)
     VirtIOSCSICommon *vs = VIRTIO_SCSI_COMMON(dev);
     VHostUserSCSI *s = VHOST_USER_SCSI(dev);
     VHostSCSICommon *vsc = VHOST_SCSI_COMMON(s);
+    VhostUserState *user;
     Error *err = NULL;
     int ret;
 
@@ -86,18 +86,29 @@ static void vhost_user_scsi_realize(DeviceState *dev, Error **errp)
         return;
     }
 
+    user = vhost_user_init();
+    if (!user) {
+        error_setg(errp, "vhost-user-scsi: failed to init vhost_user");
+        return;
+    }
+    user->chr = &vs->conf.chardev;
+
     vsc->dev.nvqs = 2 + vs->conf.num_queues;
     vsc->dev.vqs = g_new(struct vhost_virtqueue, vsc->dev.nvqs);
     vsc->dev.vq_index = 0;
     vsc->dev.backend_features = 0;
 
-    ret = vhost_dev_init(&vsc->dev, (void *)&vs->conf.chardev,
+    ret = vhost_dev_init(&vsc->dev, user,
                          VHOST_BACKEND_TYPE_USER, 0);
     if (ret < 0) {
         error_setg(errp, "vhost-user-scsi: vhost initialization failed: %s",
                    strerror(-ret));
+        vhost_user_cleanup(user);
+        g_free(user);
         return;
     }
+
+    s->vhost_user = user;
 
     /* Channel and lun both are 0 for bootable vhost-user-scsi disk */
     vsc->channel = 0;
@@ -118,6 +129,12 @@ static void vhost_user_scsi_unrealize(DeviceState *dev, Error **errp)
     g_free(vsc->dev.vqs);
 
     virtio_scsi_common_unrealize(dev, errp);
+
+    if (s->vhost_user) {
+        vhost_user_cleanup(s->vhost_user);
+        g_free(s->vhost_user);
+        s->vhost_user = NULL;
+    }
 }
 
 static uint64_t vhost_user_scsi_get_features(VirtIODevice *vdev,
@@ -135,6 +152,8 @@ static Property vhost_user_scsi_properties[] = {
     DEFINE_PROP_CHR("chardev", VirtIOSCSICommon, conf.chardev),
     DEFINE_PROP_UINT32("boot_tpgt", VirtIOSCSICommon, conf.boot_tpgt, 0),
     DEFINE_PROP_UINT32("num_queues", VirtIOSCSICommon, conf.num_queues, 1),
+    DEFINE_PROP_UINT32("virtqueue_size", VirtIOSCSICommon, conf.virtqueue_size,
+                       128),
     DEFINE_PROP_UINT32("max_sectors", VirtIOSCSICommon, conf.max_sectors,
                        0xFFFF),
     DEFINE_PROP_UINT32("cmd_per_lun", VirtIOSCSICommon, conf.cmd_per_lun, 128),

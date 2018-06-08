@@ -11,8 +11,10 @@
 
 #include "qemu/osdep.h"
 #include "hw/boards.h"
-#include "qmp-commands.h"
 #include "hw/s390x/storage-keys.h"
+#include "qapi/error.h"
+#include "qapi/qapi-commands-misc.h"
+#include "qapi/qmp/qdict.h"
 #include "qemu/error-report.h"
 #include "sysemu/kvm.h"
 #include "migration/register.h"
@@ -229,10 +231,14 @@ static int qemu_s390_skeys_get(S390SKeysState *ss, uint64_t start_gfn,
 static void qemu_s390_skeys_class_init(ObjectClass *oc, void *data)
 {
     S390SKeysClass *skeyclass = S390_SKEYS_CLASS(oc);
+    DeviceClass *dc = DEVICE_CLASS(oc);
 
     skeyclass->skeys_enabled = qemu_s390_skeys_enabled;
     skeyclass->get_skeys = qemu_s390_skeys_get;
     skeyclass->set_skeys = qemu_s390_skeys_set;
+
+    /* Reason: Internal device (only one skeys device for the whole memory) */
+    dc->user_creatable = false;
 }
 
 static const TypeInfo qemu_s390_skeys_info = {

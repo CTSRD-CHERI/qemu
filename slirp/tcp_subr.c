@@ -148,7 +148,16 @@ tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
 		m->m_data += IF_MAXLINKHDR;
 		*mtod(m, struct tcpiphdr *) = *ti;
 		ti = mtod(m, struct tcpiphdr *);
-		memset(&ti->ti, 0, sizeof(ti->ti));
+		switch (af) {
+		case AF_INET:
+		    ti->ti.ti_i4.ih_x1 = 0;
+		    break;
+		case AF_INET6:
+		    ti->ti.ti_i6.ih_x1 = 0;
+		    break;
+		default:
+		    g_assert_not_reached();
+		}
 		flags = TH_ACK;
 	} else {
 		/*
@@ -407,6 +416,8 @@ int tcp_fconnect(struct socket *so, unsigned short af)
     socket_set_fast_reuse(s);
     opt = 1;
     qemu_setsockopt(s, SOL_SOCKET, SO_OOBINLINE, &opt, sizeof(opt));
+    opt = 1;
+    qemu_setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
 
     addr = so->fhost.ss;
     DEBUG_CALL(" connect()ing")

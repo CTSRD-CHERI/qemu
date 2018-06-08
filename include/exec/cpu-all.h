@@ -159,56 +159,49 @@ extern unsigned long guest_base;
 extern int have_guest_base;
 extern unsigned long reserved_va;
 
-#define GUEST_ADDR_MAX (reserved_va ? reserved_va : \
+#if HOST_LONG_BITS <= TARGET_VIRT_ADDR_SPACE_BITS
+#define GUEST_ADDR_MAX (~0ul)
+#else
+#define GUEST_ADDR_MAX (reserved_va ? reserved_va - 1 : \
                                     (1ul << TARGET_VIRT_ADDR_SPACE_BITS) - 1)
+#endif
 #else
 
 #include "exec/hwaddr.h"
-uint32_t lduw_phys(AddressSpace *as, hwaddr addr);
-uint32_t ldl_phys(AddressSpace *as, hwaddr addr);
-uint64_t ldq_phys(AddressSpace *as, hwaddr addr);
-void stl_phys_notdirty(AddressSpace *as, hwaddr addr, uint32_t val);
-void stw_phys(AddressSpace *as, hwaddr addr, uint32_t val);
-void stl_phys(AddressSpace *as, hwaddr addr, uint32_t val);
-void stq_phys(AddressSpace *as, hwaddr addr, uint64_t val);
 
-uint32_t address_space_lduw(AddressSpace *as, hwaddr addr,
-                            MemTxAttrs attrs, MemTxResult *result);
-uint32_t address_space_ldl(AddressSpace *as, hwaddr addr,
-                            MemTxAttrs attrs, MemTxResult *result);
-uint64_t address_space_ldq(AddressSpace *as, hwaddr addr,
-                            MemTxAttrs attrs, MemTxResult *result);
-void address_space_stl_notdirty(AddressSpace *as, hwaddr addr, uint32_t val,
-                            MemTxAttrs attrs, MemTxResult *result);
-void address_space_stw(AddressSpace *as, hwaddr addr, uint32_t val,
-                            MemTxAttrs attrs, MemTxResult *result);
-void address_space_stl(AddressSpace *as, hwaddr addr, uint32_t val,
-                            MemTxAttrs attrs, MemTxResult *result);
-void address_space_stq(AddressSpace *as, hwaddr addr, uint64_t val,
-                            MemTxAttrs attrs, MemTxResult *result);
+#define SUFFIX
+#define ARG1         as
+#define ARG1_DECL    AddressSpace *as
+#define TARGET_ENDIANNESS
+#include "exec/memory_ldst.inc.h"
 
-uint32_t lduw_phys_cached(MemoryRegionCache *cache, hwaddr addr);
-uint32_t ldl_phys_cached(MemoryRegionCache *cache, hwaddr addr);
-uint64_t ldq_phys_cached(MemoryRegionCache *cache, hwaddr addr);
-void stl_phys_notdirty_cached(MemoryRegionCache *cache, hwaddr addr, uint32_t val);
-void stw_phys_cached(MemoryRegionCache *cache, hwaddr addr, uint32_t val);
-void stl_phys_cached(MemoryRegionCache *cache, hwaddr addr, uint32_t val);
-void stq_phys_cached(MemoryRegionCache *cache, hwaddr addr, uint64_t val);
+#define SUFFIX       _cached_slow
+#define ARG1         cache
+#define ARG1_DECL    MemoryRegionCache *cache
+#define TARGET_ENDIANNESS
+#include "exec/memory_ldst.inc.h"
 
-uint32_t address_space_lduw_cached(MemoryRegionCache *cache, hwaddr addr,
-                            MemTxAttrs attrs, MemTxResult *result);
-uint32_t address_space_ldl_cached(MemoryRegionCache *cache, hwaddr addr,
-                            MemTxAttrs attrs, MemTxResult *result);
-uint64_t address_space_ldq_cached(MemoryRegionCache *cache, hwaddr addr,
-                            MemTxAttrs attrs, MemTxResult *result);
-void address_space_stl_notdirty_cached(MemoryRegionCache *cache, hwaddr addr,
-                            uint32_t val, MemTxAttrs attrs, MemTxResult *result);
-void address_space_stw_cached(MemoryRegionCache *cache, hwaddr addr, uint32_t val,
-                            MemTxAttrs attrs, MemTxResult *result);
-void address_space_stl_cached(MemoryRegionCache *cache, hwaddr addr, uint32_t val,
-                            MemTxAttrs attrs, MemTxResult *result);
-void address_space_stq_cached(MemoryRegionCache *cache, hwaddr addr, uint64_t val,
-                            MemTxAttrs attrs, MemTxResult *result);
+static inline void stl_phys_notdirty(AddressSpace *as, hwaddr addr, uint32_t val)
+{
+    address_space_stl_notdirty(as, addr, val,
+                               MEMTXATTRS_UNSPECIFIED, NULL);
+}
+
+#define SUFFIX
+#define ARG1         as
+#define ARG1_DECL    AddressSpace *as
+#define TARGET_ENDIANNESS
+#include "exec/memory_ldst_phys.inc.h"
+
+/* Inline fast path for direct RAM access.  */
+#define ENDIANNESS
+#include "exec/memory_ldst_cached.inc.h"
+
+#define SUFFIX       _cached
+#define ARG1         cache
+#define ARG1_DECL    MemoryRegionCache *cache
+#define TARGET_ENDIANNESS
+#include "exec/memory_ldst_phys.inc.h"
 #endif
 
 /* page related stuff */
@@ -229,8 +222,6 @@ extern int target_page_bits;
 /* Using intptr_t ensures that qemu_*_page_mask is sign-extended even
  * when intptr_t is 32-bit and we are aligning a long long.
  */
-extern uintptr_t qemu_real_host_page_size;
-extern intptr_t qemu_real_host_page_mask;
 extern uintptr_t qemu_host_page_size;
 extern intptr_t qemu_host_page_mask;
 
@@ -247,6 +238,9 @@ extern intptr_t qemu_host_page_mask;
 /* original state of the write flag (used when tracking self-modifying
    code */
 #define PAGE_WRITE_ORG 0x0010
+/* Invalidate the TLB entry immediately, helpful for s390x
+ * Low-Address-Protection. Used with PAGE_WRITE in tlb_set_page_with_attrs() */
+#define PAGE_WRITE_INV 0x0040
 #if defined(CONFIG_BSD) && defined(CONFIG_USER_ONLY)
 /* FIXME: Code that sets/uses this is broken and needs to go away.  */
 #define PAGE_RESERVED  0x0020

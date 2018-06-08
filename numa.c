@@ -29,15 +29,17 @@
 #include "qemu/bitmap.h"
 #include "qom/cpu.h"
 #include "qemu/error-report.h"
-#include "include/exec/cpu-common.h" /* for RAM_ADDR_FMT */
-#include "qapi-visit.h"
+#include "qapi/error.h"
 #include "qapi/opts-visitor.h"
+#include "qapi/qapi-commands-misc.h"
+#include "qapi/qapi-visit-misc.h"
 #include "hw/boards.h"
 #include "sysemu/hostmem.h"
-#include "qmp-commands.h"
 #include "hw/mem/pc-dimm.h"
+#include "hw/mem/memory-device.h"
 #include "qemu/option.h"
 #include "qemu/config-file.h"
+#include "qemu/cutils.h"
 
 QemuOptsList qemu_numa_opts = {
     .name = "numa",
@@ -54,95 +56,9 @@ int nb_numa_nodes;
 bool have_numa_distance;
 NodeInfo numa_info[MAX_NODES];
 
-void numa_set_mem_node_id(ram_addr_t addr, uint64_t size, uint32_t node)
-{
-    struct numa_addr_range *range;
-
-    /*
-     * Memory-less nodes can come here with 0 size in which case,
-     * there is nothing to do.
-     */
-    if (!size) {
-        return;
-    }
-
-    range = g_malloc0(sizeof(*range));
-    range->mem_start = addr;
-    range->mem_end = addr + size - 1;
-    QLIST_INSERT_HEAD(&numa_info[node].addr, range, entry);
-}
-
-void numa_unset_mem_node_id(ram_addr_t addr, uint64_t size, uint32_t node)
-{
-    struct numa_addr_range *range, *next;
-
-    QLIST_FOREACH_SAFE(range, &numa_info[node].addr, entry, next) {
-        if (addr == range->mem_start && (addr + size - 1) == range->mem_end) {
-            QLIST_REMOVE(range, entry);
-            g_free(range);
-            return;
-        }
-    }
-}
-
-static void numa_set_mem_ranges(void)
-{
-    int i;
-    ram_addr_t mem_start = 0;
-
-    /*
-     * Deduce start address of each node and use it to store
-     * the address range info in numa_info address range list
-     */
-    for (i = 0; i < nb_numa_nodes; i++) {
-        numa_set_mem_node_id(mem_start, numa_info[i].node_mem, i);
-        mem_start += numa_info[i].node_mem;
-    }
-}
-
-/*
- * Check if @addr falls under NUMA @node.
- */
-static bool numa_addr_belongs_to_node(ram_addr_t addr, uint32_t node)
-{
-    struct numa_addr_range *range;
-
-    QLIST_FOREACH(range, &numa_info[node].addr, entry) {
-        if (addr >= range->mem_start && addr <= range->mem_end) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/*
- * Given an address, return the index of the NUMA node to which the
- * address belongs to.
- */
-uint32_t numa_get_node(ram_addr_t addr, Error **errp)
-{
-    uint32_t i;
-
-    /* For non NUMA configurations, check if the addr falls under node 0 */
-    if (!nb_numa_nodes) {
-        if (numa_addr_belongs_to_node(addr, 0)) {
-            return 0;
-        }
-    }
-
-    for (i = 0; i < nb_numa_nodes; i++) {
-        if (numa_addr_belongs_to_node(addr, i)) {
-            return i;
-        }
-    }
-
-    error_setg(errp, "Address 0x" RAM_ADDR_FMT " doesn't belong to any "
-                "NUMA node", addr);
-    return -1;
-}
 
 static void parse_numa_node(MachineState *ms, NumaNodeOptions *node,
-                            QemuOpts *opts, Error **errp)
+                            Error **errp)
 {
     uint16_t nodenr;
     uint16List *cpus = NULL;
@@ -165,7 +81,7 @@ static void parse_numa_node(MachineState *ms, NumaNodeOptions *node,
         return;
     }
 
-    if (!mc->cpu_index_to_instance_props) {
+    if (!mc->cpu_index_to_instance_props || !mc->get_default_cpu_node_id) {
         error_report("NUMA is not supported by this machine-type");
         exit(1);
     }
@@ -199,13 +115,7 @@ static void parse_numa_node(MachineState *ms, NumaNodeOptions *node,
     }
 
     if (node->has_mem) {
-        uint64_t mem_size = node->mem;
-        const char *mem_str = qemu_opt_get(opts, "mem");
-        /* Fix up legacy suffix-less format */
-        if (g_ascii_isdigit(mem_str[strlen(mem_str) - 1])) {
-            mem_size <<= 20;
-        }
-        numa_info[nodenr].node_mem = mem_size;
+        numa_info[nodenr].node_mem = node->mem;
     }
     if (node->has_memdev) {
         Object *o;
@@ -221,6 +131,7 @@ static void parse_numa_node(MachineState *ms, NumaNodeOptions *node,
     }
     numa_info[nodenr].present = true;
     max_numa_nodeid = MAX(max_numa_nodeid, nodenr + 1);
+    nb_numa_nodes++;
 }
 
 static void parse_numa_distance(NumaDistOptions *dist, Error **errp)
@@ -230,9 +141,8 @@ static void parse_numa_distance(NumaDistOptions *dist, Error **errp)
     uint8_t val = dist->val;
 
     if (src >= MAX_NODES || dst >= MAX_NODES) {
-        error_setg(errp,
-                   "Invalid node %d, max possible could be %d",
-                   MAX(src, dst), MAX_NODES);
+        error_setg(errp, "Parameter '%s' expects an integer between 0 and %d",
+                   src >= MAX_NODES ? "src" : "dst", MAX_NODES - 1);
         return;
     }
 
@@ -259,29 +169,17 @@ static void parse_numa_distance(NumaDistOptions *dist, Error **errp)
     have_numa_distance = true;
 }
 
-static int parse_numa(void *opaque, QemuOpts *opts, Error **errp)
+static
+void set_numa_options(MachineState *ms, NumaOptions *object, Error **errp)
 {
-    NumaOptions *object = NULL;
-    MachineState *ms = opaque;
     Error *err = NULL;
-
-    {
-        Visitor *v = opts_visitor_new(opts);
-        visit_type_NumaOptions(v, NULL, &object, &err);
-        visit_free(v);
-    }
-
-    if (err) {
-        goto end;
-    }
 
     switch (object->type) {
     case NUMA_OPTIONS_TYPE_NODE:
-        parse_numa_node(ms, &object->u.node, opts, &err);
+        parse_numa_node(ms, &object->u.node, &err);
         if (err) {
             goto end;
         }
-        nb_numa_nodes++;
         break;
     case NUMA_OPTIONS_TYPE_DIST:
         parse_numa_distance(&object->u.dist, &err);
@@ -307,6 +205,31 @@ static int parse_numa(void *opaque, QemuOpts *opts, Error **errp)
     default:
         abort();
     }
+
+end:
+    error_propagate(errp, err);
+}
+
+int parse_numa(void *opaque, QemuOpts *opts, Error **errp)
+{
+    NumaOptions *object = NULL;
+    MachineState *ms = MACHINE(opaque);
+    Error *err = NULL;
+    Visitor *v = opts_visitor_new(opts);
+
+    visit_type_NumaOptions(v, NULL, &object, &err);
+    visit_free(v);
+    if (err) {
+        goto end;
+    }
+
+    /* Fix up legacy suffix-less format */
+    if ((object->type == NUMA_OPTIONS_TYPE_NODE) && object->u.node.has_mem) {
+        const char *mem_str = qemu_opt_get(opts, "mem");
+        qemu_strtosz_MiB(mem_str, NULL, &object->u.node.mem);
+    }
+
+    set_numa_options(ms, object, &err);
 
 end:
     qapi_free_NumaOptions(object);
@@ -423,13 +346,28 @@ void numa_default_auto_assign_ram(MachineClass *mc, NodeInfo *nodes,
     nodes[i].node_mem = size - usedmem;
 }
 
-void parse_numa_opts(MachineState *ms)
+void numa_complete_configuration(MachineState *ms)
 {
     int i;
     MachineClass *mc = MACHINE_GET_CLASS(ms);
 
-    if (qemu_opts_foreach(qemu_find_opts("numa"), parse_numa, ms, NULL)) {
-        exit(1);
+    /*
+     * If memory hotplug is enabled (slots > 0) but without '-numa'
+     * options explicitly on CLI, guestes will break.
+     *
+     *   Windows: won't enable memory hotplug without SRAT table at all
+     *
+     *   Linux: if QEMU is started with initial memory all below 4Gb
+     *   and no SRAT table present, guest kernel will use nommu DMA ops,
+     *   which breaks 32bit hw drivers when memory is hotplugged and
+     *   guest tries to use it with that drivers.
+     *
+     * Enable NUMA implicitly by adding a new NUMA node automatically.
+     */
+    if (ms->ram_slots > 0 && nb_numa_nodes == 0 &&
+        mc->auto_enable_numa_with_memhp) {
+            NumaNodeOptions node = { };
+            parse_numa_node(ms, &node, NULL);
     }
 
     assert(max_numa_nodeid <= MAX_NODES);
@@ -477,12 +415,6 @@ void parse_numa_opts(MachineState *ms)
             exit(1);
         }
 
-        for (i = 0; i < nb_numa_nodes; i++) {
-            QLIST_INIT(&numa_info[i].addr);
-        }
-
-        numa_set_mem_ranges();
-
         /* QEMU needs at least all unique node pair distances to build
          * the whole NUMA distance table. QEMU treats the distance table
          * as symmetric by default, i.e. distance A->B == distance B->A.
@@ -502,9 +434,25 @@ void parse_numa_opts(MachineState *ms)
             /* Validation succeeded, now fill in any missing distances. */
             complete_init_numa_distance();
         }
-    } else {
-        numa_set_mem_node_id(0, ram_size, 0);
     }
+}
+
+void parse_numa_opts(MachineState *ms)
+{
+    if (qemu_opts_foreach(qemu_find_opts("numa"), parse_numa, ms, NULL)) {
+        exit(1);
+    }
+}
+
+void qmp_set_numa_node(NumaOptions *cmd, Error **errp)
+{
+    if (!runstate_check(RUN_STATE_PRECONFIG)) {
+        error_setg(errp, "The command is permitted only in '%s' state",
+                   RunState_str(RUN_STATE_PRECONFIG));
+         return;
+    }
+
+    set_numa_options(MACHINE(qdev_get_machine()), cmd, errp);
 }
 
 void numa_cpu_pre_plug(const CPUArchId *slot, DeviceState *dev, Error **errp)
@@ -531,17 +479,19 @@ static void allocate_system_memory_nonnuma(MemoryRegion *mr, Object *owner,
     if (mem_path) {
 #ifdef __linux__
         Error *err = NULL;
-        memory_region_init_ram_from_file(mr, owner, name, ram_size, false,
+        memory_region_init_ram_from_file(mr, owner, name, ram_size, 0, false,
                                          mem_path, &err);
         if (err) {
             error_report_err(err);
             if (mem_prealloc) {
                 exit(1);
             }
+            error_report("falling back to regular RAM allocation.");
 
             /* Legacy behavior: if allocation failed, fall back to
              * regular RAM allocation.
              */
+            mem_path = NULL;
             memory_region_init_ram_nomigrate(mr, owner, name, ram_size, &error_fatal);
         }
 #else
@@ -567,7 +517,7 @@ void memory_region_allocate_system_memory(MemoryRegion *mr, Object *owner,
     }
 
     memory_region_init(mr, owner, name, ram_size);
-    for (i = 0; i < MAX_NODES; i++) {
+    for (i = 0; i < nb_numa_nodes; i++) {
         uint64_t size = numa_info[i].node_mem;
         HostMemoryBackend *backend = numa_info[i].node_memdev;
         if (!backend) {
@@ -591,30 +541,43 @@ void memory_region_allocate_system_memory(MemoryRegion *mr, Object *owner,
     }
 }
 
-static void numa_stat_memory_devices(uint64_t node_mem[])
+static void numa_stat_memory_devices(NumaNodeMem node_mem[])
 {
-    MemoryDeviceInfoList *info_list = NULL;
-    MemoryDeviceInfoList **prev = &info_list;
+    MemoryDeviceInfoList *info_list = qmp_memory_device_list();
     MemoryDeviceInfoList *info;
+    PCDIMMDeviceInfo     *pcdimm_info;
 
-    qmp_pc_dimm_device_list(qdev_get_machine(), &prev);
     for (info = info_list; info; info = info->next) {
         MemoryDeviceInfo *value = info->value;
 
         if (value) {
             switch (value->type) {
             case MEMORY_DEVICE_INFO_KIND_DIMM:
-                node_mem[value->u.dimm.data->node] += value->u.dimm.data->size;
+                pcdimm_info = value->u.dimm.data;
                 break;
+
+            case MEMORY_DEVICE_INFO_KIND_NVDIMM:
+                pcdimm_info = value->u.nvdimm.data;
+                break;
+
             default:
+                pcdimm_info = NULL;
                 break;
+            }
+
+            if (pcdimm_info) {
+                node_mem[pcdimm_info->node].node_mem += pcdimm_info->size;
+                if (pcdimm_info->hotpluggable && pcdimm_info->hotplugged) {
+                    node_mem[pcdimm_info->node].node_plugged_mem +=
+                        pcdimm_info->size;
+                }
             }
         }
     }
     qapi_free_MemoryDeviceInfoList(info_list);
 }
 
-void query_numa_node_mem(uint64_t node_mem[])
+void query_numa_node_mem(NumaNodeMem node_mem[])
 {
     int i;
 
@@ -624,7 +587,7 @@ void query_numa_node_mem(uint64_t node_mem[])
 
     numa_stat_memory_devices(node_mem);
     for (i = 0; i < nb_numa_nodes; i++) {
-        node_mem[i] += numa_info[i].node_mem;
+        node_mem[i].node_mem += numa_info[i].node_mem;
     }
 }
 
@@ -638,7 +601,7 @@ static int query_memdev(Object *obj, void *opaque)
 
         m->value = g_malloc0(sizeof(*m->value));
 
-        m->value->id = object_property_get_str(obj, "id", NULL);
+        m->value->id = object_get_canonical_path_component(obj);
         m->value->has_id = !!m->value->id;
 
         m->value->size = object_property_get_uint(obj, "size",

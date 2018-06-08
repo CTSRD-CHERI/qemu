@@ -19,7 +19,6 @@
  */
 
 #include "qemu/osdep.h"
-#include "qapi/error.h"
 #include "crypto/hash.h"
 #include "hashpriv.h"
 
@@ -48,19 +47,16 @@ int qcrypto_hash_bytesv(QCryptoHashAlgorithm alg,
 {
 #ifdef CONFIG_AF_ALG
     int ret;
-
-    ret = qcrypto_hash_afalg_driver.hash_bytesv(alg, iov, niov,
-                                                result, resultlen,
-                                                errp);
-    if (ret == 0) {
-        return ret;
-    }
-
     /*
      * TODO:
      * Maybe we should treat some afalg errors as fatal
      */
-    error_free(*errp);
+    ret = qcrypto_hash_afalg_driver.hash_bytesv(alg, iov, niov,
+                                                result, resultlen,
+                                                NULL);
+    if (ret == 0) {
+        return ret;
+    }
 #endif
 
     return qcrypto_hash_lib_driver.hash_bytesv(alg, iov, niov,
