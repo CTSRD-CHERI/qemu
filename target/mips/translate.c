@@ -24320,26 +24320,30 @@ void cpu_state_reset(CPUMIPSState *env)
     }
 #if defined(TARGET_CHERI)
     /*
-     * See section "3.5 CPU Reset" of Cheri Architecture Manual.
+     * See section "4.5 CPU Reset" of Cheri Architecture Manual.
+     * Only PCC, DDC, and KCC are initialized to capabilities that have
+     * sufficient privilege to run MIPS code at base address 0 unchanged.
+     * All other capability registers are initialized to be the NULL capability.
+     * For PCC,DDC,KCC registers:
      * Tag bits are set.  Seal bit is unset. Base and otype are
      * set to zero. length is set to (2^64 - 1). Offset (or cursor)
      * is set to zero (or boot vector address for PCC).
      */
-    {
-        set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
-        for (int i = 0; i < 32; i++) {
-            set_max_perms_capability(&env->active_tc._CGPR[i], 0);
-        }
+    for (int i = 0; i < 32; i++) {
+        null_capability(&env->active_tc._CGPR[i]);
     }
+    set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
+    // TODO: make DDC and KCC unconditionally only be in the special reg file
+    set_max_perms_capability(get_writable_default_data_cap(&env->active_tc), 0);
+    // FIXME: move this to special regs:
+    set_max_perms_capability(&env->active_tc._CGPR[CP2CAP_KCC], 0);
+    // TODO: should kdc be NULL or full priv?
     null_capability(&env->active_tc.CHWR.UserTlsCap);
     null_capability(&env->active_tc.CHWR.PrivTlsCap);
     null_capability(&env->active_tc.CHWR.KR1C);
     null_capability(&env->active_tc.CHWR.KR2C);
 
-#ifdef CHERI_C0_NULL
-    null_capability(&env->active_tc._CGPR[0]);
-    set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);
-#endif
+
     // TODO: once we move $epcc:
     // set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
 
