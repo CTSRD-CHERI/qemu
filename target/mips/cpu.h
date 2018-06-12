@@ -259,7 +259,7 @@ typedef struct cvtrace cvtrace_t;
 #define CVT_QEMU_MAGIC      "CheriTraceV03"
 
 struct cheri_cap_hwregs {
-#ifdef CHERI_C0_NULL
+#if CHERI_C0_NULL
     cap_register_t DDC;        /* CapHwr 0 */
 #endif
     cap_register_t UserTlsCap; /* CapHwr 1 */
@@ -323,7 +323,7 @@ struct TCState {
     cap_register_t PCC;
     cap_register_t _CGPR[32];
     struct cheri_cap_hwregs CHWR;
-#ifndef CHERI_C0_NULL
+#if CHERI_C0_NULL == 0
 #define CP2CAP_DCC  0  /* Default Data Capability */
 #endif
 #define CP2CAP_RCC  24  /* Return Code Capability */
@@ -346,7 +346,7 @@ get_readonly_capreg(TCState* state, unsigned num) {
 
 static inline  __attribute__((always_inline)) const cap_register_t*
 get_default_data_cap(TCState* state) {
-#ifdef CHERI_C0_NULL
+#if CHERI_C0_NULL
     return &state->CHWR.DDC;
 #else
     return &state->_CGPR[CP2CAP_DCC];
@@ -355,8 +355,8 @@ get_default_data_cap(TCState* state) {
 
 static inline  __attribute__((always_inline)) cap_register_t*
 get_writable_default_data_cap(TCState* state) {
-#ifdef CHERI_C0_NULL
-        return &state->CHWR.DDC;
+#if CHERI_C0_NULL
+    return &state->CHWR.DDC;
 #else
     return &state->_CGPR[CP2CAP_DCC];
 #endif
@@ -370,7 +370,7 @@ get_writable_default_data_cap(TCState* state) {
 /// just cmove $cN, $cnull
 static inline __attribute__((always_inline)) const cap_register_t*
 get_capreg_0_is_ddc(TCState* state, unsigned num) {
-#ifdef CHERI_C0_NULL
+#if CHERI_C0_NULL
     if (unlikely(num == 0)) {
         return get_default_data_cap(state);
     }
@@ -381,7 +381,7 @@ get_capreg_0_is_ddc(TCState* state, unsigned num) {
 // FIXME: remove the last few users of this function
 static inline  __attribute__((always_inline)) cap_register_t*
 get_writable_capreg_raw(TCState* state, unsigned num) {
-#ifdef CHERI_C0_NULL
+#if CHERI_C0_NULL
     if (unlikely(num == 0)) {
         // writing to $c0 is a no-op -> make users of this function write to a dummy
         static cap_register_t dummy_reg;
@@ -394,7 +394,7 @@ get_writable_capreg_raw(TCState* state, unsigned num) {
 
 static inline void
 update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
-#ifdef CHERI_C0_NULL
+#if CHERI_C0_NULL
     // writing to $c0 is a no-op
     if (unlikely(num == 0))
         return;

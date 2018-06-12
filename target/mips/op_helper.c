@@ -6482,8 +6482,8 @@ static void dump_changed_regs(CPUMIPSState *env)
     for (i=0; i<32; i++) {
         dump_changed_capreg(env, &cur->_CGPR[i], &env->last_C[i], capreg_name[i]);
     }
-#ifdef CHERI_C0_NULL
-    // assert(is_null_capability(&cur->_CGPR[0]) && "C0 was not NULL?");
+#if CHERI_C0_NULL
+    // (asserts are on by default) assert(is_null_capability(&cur->_CGPR[0]) && "C0 was not NULL?");
     dump_changed_capreg(env, &cur->CHWR.DDC, &env->last_CHWR.DDC, "DDC");
 #endif
     dump_changed_capreg(env, &cur->CHWR.UserTlsCap, &env->last_CHWR.UserTlsCap, "UserTlsCap");
