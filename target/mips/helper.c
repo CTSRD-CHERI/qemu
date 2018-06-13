@@ -863,8 +863,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
         env->CP0_ErrorEPC -= env->active_tc.PCC.cr_base;
         cap_register_t new_epcc = env->active_tc.PCC;
         new_epcc.cr_offset =  env->CP0_ErrorEPC;
-        env->active_tc.CHWR.EPCC = new_epcc;
-        env->active_tc.PCC = env->active_tc.CHWR.KCC;
+        update_capreg(&env->active_tc, CP2CAP_EPCC, &new_epcc);
+        env->active_tc.PCC = *get_readonly_capreg(&env->active_tc, CP2CAP_KCC);
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -
                 env->active_tc.PCC.cr_base;
 #endif /* TARGET_CHERI */
@@ -1081,20 +1081,20 @@ void mips_cpu_do_interrupt(CPUState *cs)
             if (!is_representable(pcc->cr_sealed, pcc->cr_base, pcc->cr_length,
                                   0, pcc->cr_offset)) {
                 nullify_capability(pcc->cr_base + pcc->cr_offset, pcc);
-                env->active_tc.CHWR.EPCC = *pcc;
+                update_capreg(&env->active_tc, CP2CAP_EPCC, &env->active_tc.PCC);
             }
             else
 #endif
             {
                 cap_register_t new_epcc = env->active_tc.PCC;
                 new_epcc.cr_offset = env->CP0_EPC;
-                env->active_tc.CHWR.EPCC = new_epcc;
+                update_capreg(&env->active_tc, CP2CAP_EPCC, &new_epcc);
             }
 #endif /* TARGET_CHERI */
         }
 #ifdef TARGET_CHERI
         /* always set PCC from KCC even with EXL */
-        env->active_tc.PCC = env->active_tc.CHWR.KCC;
+        env->active_tc.PCC = *get_readonly_capreg(&env->active_tc, CP2CAP_KCC);
         // FIXME: this still contains the old pre-trap PC offset, shouldn't we
         // move this down to after env->active_tc.PC has been update?
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -

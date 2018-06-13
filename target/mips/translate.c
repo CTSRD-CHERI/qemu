@@ -24335,16 +24335,20 @@ void cpu_state_reset(CPUMIPSState *env)
     set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
     // TODO: make DDC and KCC unconditionally only be in the special reg file
     set_max_perms_capability(get_writable_default_data_cap(&env->active_tc), 0);
+    // Note: EPCC also needs to be set to be a full address-space capability
+    // so that a MIPS eret without a prior trap works as expected:
+    set_max_perms_capability(&env->active_tc._CGPR[CP2CAP_EPCC], 0);
+    // FIXME: move this to special regs:
+    set_max_perms_capability(&env->active_tc._CGPR[CP2CAP_KCC], 0);
     // TODO: should kdc be NULL or full priv?
     null_capability(&env->active_tc.CHWR.UserTlsCap);
     null_capability(&env->active_tc.CHWR.PrivTlsCap);
     null_capability(&env->active_tc.CHWR.KR1C);
     null_capability(&env->active_tc.CHWR.KR2C);
-    set_max_perms_capability(&env->active_tc.CHWR.KCC, 0);
-    null_capability(&env->active_tc.CHWR.KDC); // KDC can be NULL
-    // Note: EPCC also needs to be set to be a full address-space capability
-    // so that a MIPS eret without a prior trap works as expected:
-    set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
+
+
+    // TODO: once we move $epcc:
+    // set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
 
     // env->CP0_Status |= (1 << CP0St_CU2);
     env->CP0_Status |= (1 << CP0St_KX);
