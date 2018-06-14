@@ -2418,6 +2418,7 @@ do_exception:
 
 static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
 {
+    // FIXME: remove this check now that we no longer mirror special regs
     /*
      * Check to see if the capability register is inaccessible.
      * See Section 5.4 in CHERI Architecture manual.
@@ -3260,17 +3261,17 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
         if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc._CGPR[CP2CAP_KCC];
+        return &env->active_tc.CHWR.KCC;
     case CP2HWR_KDC:
         if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc._CGPR[CP2CAP_KDC];
+        return &env->active_tc.CHWR.KDC;
     case CP2HWR_EPCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
-        return &env->active_tc._CGPR[CP2CAP_EPCC];
+        return &env->active_tc.CHWR.EPCC;
     }
     /* unknown cap hardware register */
     // XXXAR: Must use do_raise_c0_exception and not do_raise_exception here!
@@ -5244,14 +5245,14 @@ static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf
         cheri_dump_creg(&env->active_tc._CGPR[i], name, cheri_cap_reg[i], f,
                 cpu_fprintf);
     }
-    cheri_dump_creg(get_default_data_cap(&env->active_tc),  "HWREG 00 (DDC)", "", f, cpu_fprintf);
-    cheri_dump_creg(&env->active_tc.CHWR.UserTlsCap,    "HWREG 01 (CTLSU)", "", f, cpu_fprintf);
-    cheri_dump_creg(&env->active_tc.CHWR.PrivTlsCap,    "HWREG 08 (CTLSP)", "", f, cpu_fprintf);
-    cheri_dump_creg(&env->active_tc.CHWR.KR1C,          "HWREG 22 (KR1C)", "", f, cpu_fprintf);
-    cheri_dump_creg(&env->active_tc.CHWR.KR2C,          "HWREG 23 (KR2C)", "", f, cpu_fprintf);
-    cheri_dump_creg(&env->active_tc._CGPR[CP2CAP_KCC],  "HWREG 29 (KCC)", "", f, cpu_fprintf);
-    cheri_dump_creg(&env->active_tc._CGPR[CP2CAP_KDC],  "HWREG 30 (KDC)", "", f, cpu_fprintf);
-    cheri_dump_creg(&env->active_tc._CGPR[CP2CAP_EPCC], "HWREG 31 (EPCC)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.DDC,        "HWREG 00 (DDC)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.UserTlsCap, "HWREG 01 (CTLSU)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.PrivTlsCap, "HWREG 08 (CTLSP)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.KR1C,       "HWREG 22 (KR1C)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.KR2C,       "HWREG 23 (KR2C)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.KCC,        "HWREG 29 (KCC)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.KDC,        "HWREG 30 (KDC)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.EPCC,       "HWREG 31 (EPCC)", "", f, cpu_fprintf);
 
     cpu_fprintf(f, "\n");
 }
@@ -5932,7 +5933,7 @@ static inline void exception_return(CPUMIPSState *env)
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
     }
-    env->active_tc.PCC = *get_readonly_capreg(&env->active_tc, CP2CAP_EPCC);
+    env->active_tc.PCC = env->active_tc.CHWR.EPCC;
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
 #ifdef TARGET_CHERI

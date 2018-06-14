@@ -259,15 +259,14 @@ typedef struct cvtrace cvtrace_t;
 #define CVT_QEMU_MAGIC      "CheriTraceV03"
 
 struct cheri_cap_hwregs {
-#if CHERI_C0_NULL
     cap_register_t DDC;        /* CapHwr 0 */
-#endif
     cap_register_t UserTlsCap; /* CapHwr 1 */
     cap_register_t PrivTlsCap; /* CapHwr 8 */
     cap_register_t KR1C; /* CapHwr 22 */
     cap_register_t KR2C; /* CapHwr 23 */
-    // TODO: move 31 out of gpr
-    // cap_register_t EPCC; /* CapHwr 31 */
+    cap_register_t KCC;  /* CapHwr 29 */
+    cap_register_t KDC;  /* CapHwr 30 */
+    cap_register_t EPCC; /* CapHwr 31 */
 };
 
 #endif /* TARGET_CHERI */
@@ -326,40 +325,51 @@ struct TCState {
 #if CHERI_C0_NULL == 0
 #define CP2CAP_DCC  0  /* Default Data Capability */
 #endif
-#define CP2CAP_RCC  24  /* Return Code Capability */
+// #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
 #define CP2CAP_KR1C 27  /* Reserved Kernel Cap #1 */
 #define CP2CAP_KR2C 28  /* Reserved Kernel Cap #2 */
 #define CP2CAP_KCC  29  /* Kernel Code Capability */
 #define CP2CAP_KDC  30  /* Kernel Data Capability */
 #define CP2CAP_EPCC 31  /* Exception PC Capability */
-
 #endif /* TARGET_CHERI */
 };
 
 #if defined(TARGET_CHERI)
+#if CHERI_C0_NULL == 0
+static inline  __attribute__((always_inline)) cap_register_t*
+get_legacy_mirrored_capreg(TCState* state, unsigned num) {
+    if (unlikely(num == CP2CAP_DCC)) {
+        return get_default_data_cap(state);
+    } else if (unlikely(num == CP2CAP_KCC)) {
+        return &state->CHWR.KCC;
+    } else if (unlikely(num == CP2CAP_KDC)) {
+        return &state->CHWR.KDC;
+    } else if (unlikely(num == CP2CAP_EPCC)) {
+        return &state->CHWR.EPCC;
+    }
+    return &state->_CGPR[num];
+}
+#endif
+
 static inline  __attribute__((always_inline)) const cap_register_t*
 get_readonly_capreg(TCState* state, unsigned num) {
-    // TODO: special-case zero
+#if CHERI_C0_NULL == 0
+    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
+    return get_legacy_mirrored_capreg(state, num);
+#else
     return &state->_CGPR[num];
+#endif
 }
 
 static inline  __attribute__((always_inline)) const cap_register_t*
 get_default_data_cap(TCState* state) {
-#if CHERI_C0_NULL
     return &state->CHWR.DDC;
-#else
-    return &state->_CGPR[CP2CAP_DCC];
-#endif
 }
 
 static inline  __attribute__((always_inline)) cap_register_t*
 get_writable_default_data_cap(TCState* state) {
-#if CHERI_C0_NULL
     return &state->CHWR.DDC;
-#else
-    return &state->_CGPR[CP2CAP_DCC];
-#endif
 }
 
 /// return a read-only capability register with register number 0 meaning $ddc
@@ -370,37 +380,44 @@ get_writable_default_data_cap(TCState* state) {
 /// just cmove $cN, $cnull
 static inline __attribute__((always_inline)) const cap_register_t*
 get_capreg_0_is_ddc(TCState* state, unsigned num) {
-#if CHERI_C0_NULL
+#if CHERI_C0_NULL == 0
+    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
+    return get_legacy_mirrored_capreg(state, num);
+#else
     if (unlikely(num == 0)) {
         return get_default_data_cap(state);
     }
-#endif
     return &state->_CGPR[num];
+#endif
 }
 
 // FIXME: remove the last few users of this function
 static inline  __attribute__((always_inline)) cap_register_t*
 get_writable_capreg_raw(TCState* state, unsigned num) {
-#if CHERI_C0_NULL
+#if CHERI_C0_NULL == 0
+    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
+    return get_legacy_mirrored_capreg(state, num);
+#else
     if (unlikely(num == 0)) {
         // writing to $c0 is a no-op -> make users of this function write to a dummy
         static cap_register_t dummy_reg;
         return &dummy_reg;
     }
-#endif
-    // TODO: special-case zero
     return &state->_CGPR[num];
+#endif
 }
 
 static inline void
 update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
-#if CHERI_C0_NULL
+#if CHERI_C0_NULL == 0
+    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
+    *get_legacy_mirrored_capreg(state, num) = *newval;
+#else
     // writing to $c0 is a no-op
     if (unlikely(num == 0))
         return;
-#endif
-    // TODO: special-case zero/31
     state->_CGPR[num] = *newval;
+#endif
 }
 
 enum CP2HWR {
