@@ -1,6 +1,7 @@
 ifeq ($(call lor,$(CONFIG_VIRTIO_9P),$(CONFIG_XEN)),y)
 common-obj-y  = 9p.o
 common-obj-$(CONFIG_LINUX) += 9p-util-linux.o
+common-obj-$(CONFIG_DARWIN) += 9p-util-darwin.o
 common-obj-y += 9p-local.o 9p-xattr.o
 common-obj-y += 9p-xattr-user.o 9p-posix-acl.o
 common-obj-y += coth.o cofs.o codir.o cofile.o
