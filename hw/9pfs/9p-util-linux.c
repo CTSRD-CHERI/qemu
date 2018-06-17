@@ -57,3 +57,9 @@ int fsetxattrat_nofollow(int dirfd, const char *filename, const char *name,
     g_free(proc_path);
     return ret;
 }
+
+int utimensat_nofollow(int dirfd, const char *filename,
+                       const struct timespec times[2])
+{
+    return utimensat(dirfd, filename, times, AT_SYMLINK_NOFOLLOW);
+}

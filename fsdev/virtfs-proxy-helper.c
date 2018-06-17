@@ -957,8 +957,7 @@ static int process_requests(int sock)
                                      &spec[0].tv_sec, &spec[0].tv_nsec,
                                      &spec[1].tv_sec, &spec[1].tv_nsec);
             if (retval > 0) {
-                retval = utimensat(AT_FDCWD, path.data, spec,
-                                   AT_SYMLINK_NOFOLLOW);
+                retval = utimensat_nofollow(AT_FDCWD, path.data, spec);
                 if (retval < 0) {
                     retval = -errno;
                 }
