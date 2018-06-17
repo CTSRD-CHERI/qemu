@@ -543,7 +543,13 @@ qemu-bridge-helper$(EXESUF): qemu-bridge-helper.o $(COMMON_LDADDS)
 qemu-keymap$(EXESUF): qemu-keymap.o ui/input-keymap.o $(COMMON_LDADDS)
 
 fsdev/virtfs-proxy-helper$(EXESUF): fsdev/virtfs-proxy-helper.o fsdev/9p-marshal.o fsdev/9p-iov-marshal.o $(COMMON_LDADDS)
+ifdef CONFIG_DARWIN
+fsdev/virtfs-proxy-helper$(EXESUF): hw/9pfs/9p-util-darwin.o
+endif
+ifdef CONFIG_LINUX
+fsdev/virtfs-proxy-helper$(EXESUF): hw/9pfs/9p-util-linux.o
 fsdev/virtfs-proxy-helper$(EXESUF): LIBS += -lcap
+endif
 
 scsi/qemu-pr-helper$(EXESUF): scsi/qemu-pr-helper.o scsi/utils.o $(crypto-obj-y) $(io-obj-y) $(qom-obj-y) $(COMMON_LDADDS)
 ifdef CONFIG_MPATH

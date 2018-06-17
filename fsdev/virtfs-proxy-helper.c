@@ -28,6 +28,7 @@
 #include "qemu/statfs.h"
 #include "9p-iov-marshal.h"
 #include "hw/9pfs/9p-proxy.h"
+#include "hw/9pfs/9p-util.h"
 #include "fsdev/9p-iov-marshal.h"
 
 #define PROGNAME "virtfs-proxy-helper"
@@ -459,7 +460,7 @@ static int do_getxattr(int type, struct iovec *iovec, struct iovec *out_iovec)
         v9fs_string_init(&name);
         retval = proxy_unmarshal(iovec, offset, "s", &name);
         if (retval > 0) {
-            retval = lgetxattr(path.data, name.data, xattr.data, size);
+            retval = qemu_lgetxattr(path.data, name.data, xattr.data, size);
             if (retval < 0) {
                 retval = -errno;
             } else {
@@ -469,7 +470,7 @@ static int do_getxattr(int type, struct iovec *iovec, struct iovec *out_iovec)
         v9fs_string_free(&name);
         break;
     case T_LLISTXATTR:
-        retval = llistxattr(path.data, xattr.data, size);
+        retval = qemu_llistxattr(path.data, xattr.data, size);
         if (retval < 0) {
             retval = -errno;
         } else {
@@ -1000,7 +1001,7 @@ static int process_requests(int sock)
             retval = proxy_unmarshal(&in_iovec, PROXY_HDR_SZ, "sssdd", &path,
                                      &name, &value, &size, &flags);
             if (retval > 0) {
-                retval = lsetxattr(path.data,
+                retval = qemu_lsetxattr(path.data,
                                    name.data, value.data, size, flags);
                 if (retval < 0) {
                     retval = -errno;
@@ -1016,7 +1017,7 @@ static int process_requests(int sock)
             retval = proxy_unmarshal(&in_iovec,
                                      PROXY_HDR_SZ, "ss", &path, &name);
             if (retval > 0) {
-                retval = lremovexattr(path.data, name.data);
+                retval = qemu_lremovexattr(path.data, name.data);
                 if (retval < 0) {
                     retval = -errno;
                 }
