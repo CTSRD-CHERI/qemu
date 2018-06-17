@@ -63,3 +63,8 @@ int utimensat_nofollow(int dirfd, const char *filename,
 {
     return utimensat(dirfd, filename, times, AT_SYMLINK_NOFOLLOW);
 }
+
+int qemu_mknodat(int dirfd, const char *filename, mode_t mode, dev_t dev)
+{
+    return mknodat(dirfd, filename, mode, dev);
+}

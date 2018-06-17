@@ -90,4 +90,6 @@ ssize_t fremovexattrat_nofollow(int dirfd, const char *filename,
 int utimensat_nofollow(int dirfd, const char *filename,
                        const struct timespec times[2]);
 
+int qemu_mknodat(int dirfd, const char *filename, mode_t mode, dev_t dev);
+
 #endif
