@@ -506,12 +506,15 @@ static void stat_to_prstat(ProxyStat *pr_stat, struct stat *stat)
     pr_stat->st_size = stat->st_size;
     pr_stat->st_blksize = stat->st_blksize;
     pr_stat->st_blocks = stat->st_blocks;
+#ifdef CONFIG_DARWIN
+    pr_stat->st_atim_nsec = stat->st_atimespec.tv_nsec;
+    pr_stat->st_mtim_nsec = stat->st_mtimespec.tv_nsec;
+    pr_stat->st_ctim_nsec = stat->st_ctimespec.tv_nsec;
+#else
     pr_stat->st_atim_sec = stat->st_atim.tv_sec;
-    pr_stat->st_atim_nsec = stat->st_atim.tv_nsec;
     pr_stat->st_mtim_sec = stat->st_mtim.tv_sec;
-    pr_stat->st_mtim_nsec = stat->st_mtim.tv_nsec;
     pr_stat->st_ctim_sec = stat->st_ctim.tv_sec;
-    pr_stat->st_ctim_nsec = stat->st_ctim.tv_nsec;
+#endif
 }
 
 static void statfs_to_prstatfs(ProxyStatFS *pr_stfs, struct statfs *stfs)
@@ -524,10 +527,15 @@ static void statfs_to_prstatfs(ProxyStatFS *pr_stfs, struct statfs *stfs)
     pr_stfs->f_bavail = stfs->f_bavail;
     pr_stfs->f_files = stfs->f_files;
     pr_stfs->f_ffree = stfs->f_ffree;
+#ifdef CONFIG_DARWIN
+    pr_stfs->f_fsid[0] = stfs->f_fsid.val[0];
+    pr_stfs->f_fsid[1] = stfs->f_fsid.val[1];
+#else
     pr_stfs->f_fsid[0] = stfs->f_fsid.__val[0];
     pr_stfs->f_fsid[1] = stfs->f_fsid.__val[1];
     pr_stfs->f_namelen = stfs->f_namelen;
     pr_stfs->f_frsize = stfs->f_frsize;
+#endif
 }
 
 /*
