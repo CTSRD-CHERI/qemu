@@ -3374,6 +3374,13 @@ out_nofid:
     v9fs_string_free(&name);
 }
 
+#if defined(CONFIG_DARWIN) && !defined(XATTR_SIZE_MAX)
+/* Darwin doesn't seem to define a maximum xattr size in its user
+   user space header, but looking at the kernel source, HFS supports
+   up to INT32_MAX, so use that as the maximum.
+*/
+#define XATTR_SIZE_MAX INT32_MAX
+#endif
 static void coroutine_fn v9fs_xattrcreate(void *opaque)
 {
     int flags, rflags = 0;
