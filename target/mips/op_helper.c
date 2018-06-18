@@ -2060,16 +2060,6 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
     e = e ^ NULL_EXP_XOR_MASK;
     cdp->cr_pesbt = pesbt;
 
-#if 1 /* Still required for some 128-bit cheritests. */
-    /*
-     * XXX - Temporary.
-     * If the new access system registers permission is set
-     * then also set all the legacy access permissions.
-     */
-    if (cdp->cr_perms & CAP_ACCESS_SYS_REGS)
-        cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
-#endif
-
     /* XXXAM preventing r to underflow may be a problem as it caused a bug
      * in the representability logic but I am not yet able to generate a test
      * case to break it here.
@@ -2459,23 +2449,12 @@ void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
-        uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL |
-                CAP_PERMS_LEGACY);
+        uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
         uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) &
             CAP_UPERMS_ALL;
 
         cap_register_t result = *cbp;
         result.cr_perms = cbp->cr_perms & rt_perms;
-#ifdef CHERI_128  /* Still required for some 128-bit cheritests. */
-        /*
-         * XXX - Temporary
-         * If all the legacy access system registers permissions are
-         * cleared then clear the new access system register permission
-         * as well.
-         */
-        if (!(result.cr_perms & CAP_ACCESS_LEGACY_ALL))
-            result.cr_perms &= ~CAP_ACCESS_SYS_REGS;
-#endif /* CHERI_128 */
         result.cr_uperms = cbp->cr_uperms & rt_uperms;
         update_capreg(&env->active_tc, cd, &result);
     }
@@ -2645,7 +2624,7 @@ void helper_ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt)
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL | CAP_PERMS_LEGACY);
+    uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
     uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     /*
      * CCheckPerm: Raise exception if don't have permission
@@ -2879,7 +2858,7 @@ target_ulong helper_cgetperm(CPUMIPSState *env, uint32_t cb)
     } else {
         const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
         uint64_t perms =  (uint64_t)
-            ((cbp->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY)) |
+            ((cbp->cr_perms & CAP_PERMS_ALL) |
              ((cbp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT));
 
         return (target_ulong)perms;
@@ -4372,7 +4351,7 @@ cvtrace_dump_cap_perms(cvtrace_t *cvtrace, cap_register_t *cr)
         cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
             ((uint64_t)(cr->cr_otype & CAP_MAX_OTYPE)<< 32) |
             ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-              (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))) << 1) |
+              (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
             (uint64_t)(is_cap_sealed(cr) ? 1 : 0));
     }
 }
@@ -4389,7 +4368,7 @@ static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
         cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
             ((uint64_t)(cr->cr_otype & CAP_MAX_OTYPE)<< 32) |
             ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-              (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))) << 1) |
+              (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
             (uint64_t)(is_cap_sealed(cr) ? 1 : 0));
     }
 }
@@ -4591,7 +4570,7 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
     cheri_tag_get_m128(env, addr, cd, &tps, &length);
 
     cdp->cr_otype = (uint32_t)(tps >> 32);
-    cdp->cr_perms = (uint32_t)((tps >> 1) & (CAP_PERMS_ALL | CAP_PERMS_LEGACY));
+    cdp->cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
     cdp->cr_uperms = (uint32_t)(((tps >> 1) >> CAP_UPERMS_SHFT) &
             CAP_UPERMS_ALL);
     if (tps & 1ULL)
@@ -4660,7 +4639,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     ret = csp->cr_base;
 
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-        (csp->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY)));
+        (csp->cr_perms & CAP_PERMS_ALL));
 
     tps = ((uint64_t)csp->cr_otype << 32) |
         (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
@@ -5224,7 +5203,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
             name, crp->cr_tag, is_cap_sealed(crp),
 #endif
             ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-            (crp->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY)),
+            (crp->cr_perms & CAP_PERMS_ALL),
             crp->cr_otype, crp->cr_offset, crp->cr_base, crp->cr_length);
 #endif
 }
@@ -6442,7 +6421,7 @@ void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
                     is_cap_sealed(cr) ? 1 : 0,
                     (((cr->cr_uperms & CAP_UPERMS_ALL) <<
                                                        CAP_UPERMS_MEM_SHFT) |
-                     (cr->cr_perms & (CAP_PERMS_ALL | CAP_PERMS_LEGACY))),
+                     (cr->cr_perms & CAP_PERMS_ALL)),
                     cr->cr_base, cr->cr_length);
             fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
                     cr->cr_offset, cr->cr_otype);

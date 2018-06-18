@@ -196,19 +196,15 @@ bool is_representable(bool sealed, uint64_t base, uint64_t length,
 #define CAP_RESERVED5           (1 << 13)
 #define CAP_RESERVED6           (1 << 14)
 /* 15-18 Software-defined */
-#define CAP_ACCESS_LEGACY_ALL   ((1 << 10) | (1 << 11) | (1 << 12) | \
-                                (1 << 13) | (1 << 14))
 #if defined(CHERI_128) || defined(CHERI_MAGIC128)
-#define CAP_PERMS_ALL           ( 0x7ff)     /* [0...10] */
-#define CAP_PERMS_LEGACY        (CAP_ACCESS_LEGACY_ALL) /* [10...14] */
+#define CAP_PERMS_ALL           (0x7ff)     /* [0...10] */
 #define CAP_UPERMS_ALL          (0xf)        /* [15...18] */
 #define CAP_UPERMS_SHFT         (15)
 #define CAP_UPERMS_MEM_SHFT     (11)
 #define CAP_MAX_UPERM           (3)
 #else /* ! CHERI_128 */
-#define CAP_PERMS_ALL           (0x7fff)     /* [0...14] */
-#define CAP_PERMS_LEGACY        (0x0)
-#define CAP_UPERMS_ALL          (0xffff)     /* [15...30] */
+#define CAP_PERMS_ALL           (0x7ff)     /* [0...10] */
+#define CAP_UPERMS_ALL          (0xffff)    /* [15...30] */
 #define CAP_UPERMS_SHFT         (15)
 #define CAP_UPERMS_MEM_SHFT     (15)
 #define CAP_MAX_UPERM           (15)
@@ -218,7 +214,7 @@ bool is_representable(bool sealed, uint64_t base, uint64_t length,
 static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset)
 {
     crp->cr_tag = 1;
-    crp->cr_perms = CAP_PERMS_ALL | CAP_PERMS_LEGACY;
+    crp->cr_perms = CAP_PERMS_ALL;
     crp->cr_uperms = CAP_UPERMS_ALL;
     // crp->cr_cursor = 0UL;
     crp->cr_offset = offset;
