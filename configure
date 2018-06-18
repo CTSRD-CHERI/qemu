@@ -1964,10 +1964,10 @@ if compile_object ; then
     elif strings -a $TMPO | grep -q LiTtLeEnDiAn ; then
         bigendian="no"
     else
-        echo big/little test failed
+        echo "big/little test failed (won't work with -flto=thin)"
     fi
 else
-    echo big/little test failed
+    echo "big/little test failed (failed to compile test binary)"
 fi
 
 ##########################################
