@@ -6457,19 +6457,19 @@ static void dump_changed_regs(CPUMIPSState *env)
         "C00", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
         "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15",
         "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23",
-        "C24", "C25", "C26", "KR1C", "KR2C", "KCC", "KDC", "EPCC",
+        "C24", "C25", "C26", "C27", "C28", "C29", "C30", "C31",
     };
     for (i=0; i<32; i++) {
         dump_changed_capreg(env, &cur->_CGPR[i], &env->last_C[i], capreg_name[i]);
     }
-#if CHERI_C0_NULL
-    // (asserts are on by default) assert(is_null_capability(&cur->_CGPR[0]) && "C0 was not NULL?");
     dump_changed_capreg(env, &cur->CHWR.DDC, &env->last_CHWR.DDC, "DDC");
-#endif
     dump_changed_capreg(env, &cur->CHWR.UserTlsCap, &env->last_CHWR.UserTlsCap, "UserTlsCap");
     dump_changed_capreg(env, &cur->CHWR.PrivTlsCap, &env->last_CHWR.PrivTlsCap, "PrivTlsCap");
     dump_changed_capreg(env, &cur->CHWR.KR1C, &env->last_CHWR.KR1C, "ChwrKR1C");
     dump_changed_capreg(env, &cur->CHWR.KR2C, &env->last_CHWR.KR2C, "ChwrKR1C");
+    dump_changed_capreg(env, &cur->CHWR.KCC, &env->last_CHWR.KCC, "KCC");
+    dump_changed_capreg(env, &cur->CHWR.KDC, &env->last_CHWR.KDC, "KDC");
+    dump_changed_capreg(env, &cur->CHWR.EPCC, &env->last_CHWR.EPCC, "EPCC");
 }
 
 
