@@ -204,6 +204,7 @@ bool is_representable(bool sealed, uint64_t base, uint64_t length,
 #define CAP_MAX_UPERM           (3)
 #else /* ! CHERI_128 */
 #define CAP_PERMS_ALL           (0x7ff)     /* [0...10] */
+#define CAP_HW_PERMS_ALL_MEM    (0x7fff)    /* [0...14] (loaded into cr_perms for untagged values) */
 #define CAP_UPERMS_ALL          (0xffff)    /* [15...30] */
 #define CAP_UPERMS_SHFT         (15)
 #define CAP_UPERMS_MEM_SHFT     (15)

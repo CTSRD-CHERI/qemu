@@ -4734,7 +4734,8 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
 
     cdp->cr_otype = (uint32_t)(otype >> 32);
     perms = (uint32_t)(otype >> 1);
-    cdp->cr_perms = perms & CAP_PERMS_ALL;
+    uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
+    cdp->cr_perms = perms & store_mem_perms;
     cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype & 1ULL)
         cdp->cr_sealed = 1;
@@ -4761,7 +4762,8 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
 
     cdp->cr_otype = (uint32_t)(otype >> 32);
     perms = (uint32_t)(otype >> 1);
-    cdp->cr_perms = perms & CAP_PERMS_ALL;
+    uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
+    cdp->cr_perms = perms & store_mem_perms;
     cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype & 1ULL)
         cdp->cr_sealed = 1;
@@ -4780,8 +4782,12 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
     target_ulong ret;
     uint64_t perms;
 
+    // If the value is tagged we only store the actually available bits otherwise
+    // just store back the raw bits that we originally loaded.
+    uint64_t store_mem_perms = csp->cr_tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
+
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-        (csp->cr_perms & CAP_PERMS_ALL));
+        (csp->cr_perms & store_mem_perms));
 
     ret = ((uint64_t)csp->cr_otype << 32) |
         (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
