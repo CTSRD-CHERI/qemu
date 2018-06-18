@@ -29,6 +29,35 @@
 #include "disas/bfd.h"
 #endif
 
+// These constants are for a cheri concentrate format for 128. They give either 22 bits or 20 bits of precision depending on object size
+// They give 20 bits for types
+// If ENABLE_SEAL_MODE_2 is defined a second sealing bit is used. The second sealing mode allows full precision sealing when offset=0
+
+#define ENABLE_SEAL_MODE_2
+
+
+#define CC_L_IE_OFF 45
+#define CC_L_LH_OFF 44
+#define CC_L_B_OFF  0
+#define CC_L_T_OFF  23
+#define CC_L_S_OFF  46
+
+#define CC_L_OHI_OFF 34
+#define CC_L_OLO_OFF 13
+#define CC_L_TYPES   20
+
+
+#define CC_L_BWIDTH 23
+#define CC_L_SEALED_BWIDTH (CC_L_BWIDTH - (CC_L_TYPES/2))
+#define CC_L_EWIDTH 7
+#define CC_L_LOWWIDTH (CC_L_EWIDTH >> 1)
+#define CC_L_LOWMASK ((1 << CC_L_LOWWIDTH) - 1)
+
+#define CAP_MAX_OTYPE ((1 << CC_L_TYPES) - 1)
+/* Whatever NULL would encode to is this constant. We mask on store/load so this is invisibly keeps null 0 whatever we choose it to be */
+
+#define NULL_XOR_MASK 0x200001000005
+
 /*****************************************************************************/
 /* Exceptions processing helpers */
 
@@ -1919,21 +1948,18 @@ became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 #elif defined(CHERI_128)
 #define CHERI_CAP_SIZE  16
 
-#define CHERI128_M_SIZE_UNSEALED    20
-#define CHERI128_M_SIZE_SEALED       8
-
 /*
  * Define the following to do the is_representable() check by simply
  * compressing and decompressing the capability and checking to
  * see if it is the same.
  */
-//#define SIMPLE_REPRESENT_CHECK
+// #define SIMPLE_REPRESENT_CHECK
 
 #ifndef SIMPLE_REPRESENT_CHECK
-static inline bool all_ones(uint64_t offset, uint32_t e)
+static inline bool all_ones(uint64_t offset, uint32_t e, uint32_t bwidth)
 {
     uint64_t Itop;
-    uint32_t shift = e + CHERI128_M_SIZE_UNSEALED;
+    uint32_t shift = e + bwidth;
 
     if (shift >= 63)
         return false;
@@ -1941,9 +1967,9 @@ static inline bool all_ones(uint64_t offset, uint32_t e)
     return Itop == (0xfffffffffffffffful >> shift);
 }
 
-static inline bool all_zeroes(uint64_t offset, uint32_t e)
+static inline bool all_zeroes(uint64_t offset, uint32_t e, uint32_t bwidth)
 {
-    uint32_t shift = e + CHERI128_M_SIZE_UNSEALED;
+    uint32_t shift = e + bwidth;
     uint64_t Itop;
 
     if (shift >= 63)
@@ -1988,22 +2014,11 @@ static inline uint32_t idx_MSNZ(uint64_t x)
  * e = idxMSNZ( (rlength + (rlength >> 6)) >> 19 )
  * where (rlength + (rlength >> 6)) needs to be a 65 bit integer
  */
-static uint32_t compute_e(uint64_t rlength)
+static uint32_t compute_e(uint64_t rlength, uint32_t bwidth)
 {
-    uint64_t sum = rlength + (rlength >> 6);    /* May overflow */
-    uint32_t e;
+    if(rlength < (1 << (bwidth-1))) return 0;
 
-    if (sum >= rlength) {
-        /* Did not overflow */
-        e = idx_MSNZ(sum >> 19);
-    } else {
-        /* overflowed */
-        sum = (sum >> 1) | 0x8000000000000000ull;
-        e = idx_MSNZ(sum >> 18);
-    }
-
-    /* Round up to multiple of 4, if needed. */
-    return ((e & 3) ? ((e & ~3) + 4) : e);
+    return (idx_MSNZ(rlength) - (bwidth-2));
 }
 
 static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
@@ -2013,32 +2028,37 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
 }
 
 /*
- * Unsealed CHERI-128 memory representation:
- *  perms: 63-49    (15 bits)
- *  unused: 48-47   (2 bits)
- *  e: 46-41        (6 bits)
- *  S: 40           (1 bit)
- *  B: 39-20        (20 bits)
- *  T: 19-0         (20 bits)
- *  cursor          (64 bits)
+ * These formats are from cheri concentrate, but I have added an extra sealing mode in order to allow precise sealing of zero offset objects
+ * Unsealed CC-L:
+ *  perms:    63-49 (15 bits)
+ *  unused:   48    (1 bit)
+ *  S:        47-46 (2 bits) = 0
+ *  IE:       45    (1 bit)
+ *  LH:       44    (1 bit)
+ *  T:        43-23 (21 bit)
+ *  B:        22-0  (23 bits)
  *
- * Sealed CHERI-128 memory representation:
- *  perms: 63-49    (15 bits)
- *  unused: 48-47   (2 bits)
- *  e: 46-41        (6 bits)
- *  S: 40           (1 bits)
- *  B: 39-32        (8 bits)
- *  otype.hi: 31-20 (12 bits)
- *  T: 19-12        (8 bits)
- *  otype.lo: 11-0  (12 bits)
- * 
- * Note that the exponent is stored in memory XORed with
- * the NULL capability exponent, this ensures that
- * a NULL capability in-memory representation is all zero.
+ * Sealed1 CC-L:
+ *  perms:    63-49  (15 bits)
+ *  unused:   48     (1 bit)
+ *  S:        47-46  (2 bits) = 1
+ *  IE:       45     (1 bit)
+ *  LH:       44     (1 bit)
+ *  otype.hi: 43-34  (10 bits)
+ *  T:        33-23  (11 bits)
+ *  otype.lo: 22-13  (10 bits)
+ *  B:        12-0   (13 bits)
+ *
+ * Sealed2 CC-L:
+ *  perms:    63-49 (15 bits)
+ *  unused:   48    (1 bit)
+ *  S:        47-46 (2 bits) = 2
+ *  IE:       45    (1 bit)
+ *  LH:       44    (1 bit)
+ *  T:        43-23 (21 bits)
+ *  otype     22-3  (20 bits)
+ *  B:        2-0   (3 bits) (completely implied by cursor. Keep 3 bits for exponent)
  */
-#define NULL_TOP8_XOR_MASK 0x80000
-#define NULL_TOP20_XOR_MASK 0x80000
-#define NULL_EXP_XOR_MASK 0x30
 
 /*
  * Decompress a 128-bit capability.
@@ -2046,34 +2066,13 @@ static inline uint64_t getbits(uint64_t src, uint32_t str, uint32_t sz)
 static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cap_register_t *cdp)
 {
-    uint32_t e, shift;
-    uint64_t b, t, base, amid, r;
-    int64_t cb, ct;
 
-    if ((pesbt & (1ull << 40)) == 0) {
-        /* Unsealed 128-bit Capability */
-        t = getbits(pesbt, 0, 20);
-        b = getbits(pesbt, 20, 20);
-        cdp->cr_sealed = 0;
-        e = (uint32_t)getbits(pesbt, 41, 6);
-        cdp->cr_perms = getbits(pesbt, 49, 11);
-        cdp->cr_uperms = getbits(pesbt, 60, 4);
-        cdp->cr_otype = 0;
-        t = t ^ NULL_TOP20_XOR_MASK;
-    } else {
-        /* Sealed 128-bit Capability */
-        t = getbits(pesbt, 12, 8) << 12;
-        b = getbits(pesbt, 32, 8) << 12;
-        cdp->cr_otype = ((uint32_t)getbits(pesbt, 20, 12) << 12) |
-                         (uint32_t)getbits(pesbt, 0, 12);
-        cdp->cr_sealed = 1;
-        e = (uint32_t)getbits(pesbt, 41, 6);
-        cdp->cr_perms = getbits(pesbt, 49, 11);
-        cdp->cr_uperms = getbits(pesbt, 60, 4);
-        t = t ^ NULL_TOP8_XOR_MASK;
-    }
-    e = e ^ NULL_EXP_XOR_MASK;
     cdp->cr_pesbt = pesbt;
+
+    pesbt ^= NULL_XOR_MASK;
+
+    cdp->cr_perms = getbits(pesbt, 49, 11);
+    cdp->cr_uperms = getbits(pesbt, 60, 4);
 
 #if 1 /* Still required for some 128-bit cheritests. */
     /*
@@ -2085,108 +2084,165 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
         cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
 #endif
 
-    /* XXXAM preventing r to underflow may be a problem as it caused a bug
-     * in the representability logic but I am not yet able to generate a test
-     * case to break it here.
-     */
-    /* r = (b - (1ul << 12)) & ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul); */
-    if (b > 4096ul)
-        r = b - 4096ul;
-    else
-        r = 0ull;
-    amid = (int64_t)((cursor >> e) & ((1ull << CHERI128_M_SIZE_UNSEALED) -
-                1ull));
-    if (amid < r) {
-        cb = (b < r) ? 0ll : -1ll;
-        ct = (t < r) ? 0ll : -1ll;
+#ifdef ENABLE_SEAL_MODE_2
+    uint8_t seal_mode = (uint8_t)getbits(pesbt, CC_L_S_OFF, 2);
+    if(seal_mode == 3) seal_mode = 2;
+#else
+    uint8_t seal_mode = (uint8_t)getbits(pesbt, CC_L_S_OFF, 1);
+#endif
+
+    cdp->cr_sealed = seal_mode == 0 ? 0 : 1;
+
+    uint32_t BWidth = seal_mode == 1 ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
+    uint32_t BMask = (1 << BWidth) - 1;
+    uint32_t TMask = BMask >> 2;
+
+    uint8_t IE = (uint8_t)getbits(pesbt, CC_L_IE_OFF, 1);
+    uint8_t LH = (uint8_t)getbits(pesbt, CC_L_LH_OFF, 1);
+
+    uint8_t E,L_msb;
+    uint32_t B = getbits(pesbt, CC_L_B_OFF, BWidth);
+    uint32_t T = getbits(pesbt, CC_L_T_OFF, BWidth-2);
+
+    if(IE) {
+        E = ((((LH << CC_L_LOWWIDTH) | (B & CC_L_LOWMASK)) << CC_L_LOWWIDTH) | (T & CC_L_LOWMASK)) + 1; // Offset by 1. We don't need to encode E=0
+        B &= ~CC_L_LOWMASK;
+        T &= ~CC_L_LOWMASK;
+        L_msb = 1;
     } else {
-        cb = (b < r) ? 1ll : 0ll;
-        ct = (t < r) ? 1ll : 0ll;
+        E = 0;
+        L_msb = LH;
     }
 
-    if (e == 44) {
-        /* i.e., (((cursor >> shift) + cb) << shift) = 0 */
-        base = b << e;
-        cdp->cr_length = (t << e) - base;
-    } else if (e > 44) {
-        base = b << 45;
-        if (t & 0x80000ul)
-            cdp->cr_length = -1UL - base;
-        else
-            cdp->cr_length = (t << 45) - base;
-    } else if (e == 0) {
-        shift = CHERI128_M_SIZE_UNSEALED;
-        base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) + b;
-        cdp->cr_length =
-            (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) + t) - base;
-    } else {
-        shift = e + CHERI128_M_SIZE_UNSEALED;
-        base = ((uint64_t)((int64_t)(cursor >> shift) + cb) << shift) +
-            (b << e);
-        cdp->cr_length =
-            (((uint64_t)((int64_t)(cursor >> shift) + ct) << shift) +
-            (t << e)) - base;
+    uint32_t type = 0;
+
+#ifdef ENABLE_SEAL_MODE_2
+    if(seal_mode == 2) {
+        // B is incorrect. Copy bits from cursor to correct
+        type = B >> CC_L_LOWWIDTH;
+        B = (cursor >> E) & BMask;
+        if(IE) B &= ~CC_L_LOWMASK;
+    } else
+#endif
+    if(seal_mode == 1) {
+        type = (getbits(pesbt, CC_L_OHI_OFF, CC_L_TYPES/2) << (CC_L_TYPES/2)) | getbits(pesbt, CC_L_OLO_OFF, CC_L_TYPES/2);
     }
+
+    cdp->cr_otype = type;
+
+    uint8_t L_carry = T < (B & TMask) ? 1 : 0;
+    uint8_t T_infer = ((B >> (BWidth-2)) + L_carry + L_msb) & 0x3;
+
+    T |= ((uint32_t)T_infer) << (BWidth-2);
+
+    uint32_t amid = (cursor >> E) & BMask;
+    uint32_t r = (((B >> (BWidth-3)) - 1) << (BWidth-3)) & BMask;
+
+    int64_t ct,cb;
+
+    if(amid < r) {
+        ct = T < r ? 0LL : -1LL;
+        cb = B < r ? 0LL : -1LL;
+    } else {
+        ct = T < r ? 1LL : 0LL;
+        cb = B < r ? 1LL : 0LL;
+    }
+
+    uint8_t shift = E + BWidth;
+
+    uint64_t top  = ((((cursor >> shift) + (int64_t)ct) << BWidth) | (uint64_t)T) << E;
+    uint64_t base = ((((cursor >> shift) + (int64_t)cb) << BWidth) | (uint64_t)B) << E;
+
+
+    // top/length really should be 65 bits. If we get overflow length is actually max length
+
+    cdp->cr_length = top < T ? (-1ULL) - base : top - base;
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
 }
+
+
 
 /*
  * Compress a capability to 128 bits.
  */
 static uint64_t compress_128cap(cap_register_t *csp)
 {
-    uint64_t b, t, rlength, base_req, perms, ret;
-    uint32_t e;
+    bool is_sealed = is_cap_sealed(csp);
 
-    rlength = csp->cr_length;
-    base_req = csp->cr_base;
-    e = compute_e(rlength);
+#ifdef ENABLE_SEAL_MODE_2
+    uint8_t seal_mode = is_sealed ? (csp->cr_offset == 0 ? 2 : 1) : 0;
+#else
+    uint8_t seal_mode = is_sealed ? 1 : 0;
+#endif
 
-#define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
-    if (e == 0) {
-        b = base_req & MOD_MASK;
-        t = (base_req + rlength) & MOD_MASK;
-    } else if (e > 44) {
-        /* CHERI length is a 65 bit value so we can not represent internally
-         * the maximum length of 2^64.
-         * The maximum representable address is treated specially because
-         * we can not distinguish between a length of 2^64 and (2^64 - 1).
-         */
-        b = (base_req >> 45) & MOD_MASK;
-        if (base_req + rlength == -1ULL)
-            /* max address represented as max_addr + 1 */
-            t = 0x80000;
-        else
-            /* just shift and truncate */
-            t = ((base_req + rlength) >> 45) & MOD_MASK;
+    uint32_t BWidth = seal_mode == 1 ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
+    uint32_t BMask = (1 << BWidth) - 1;
+    uint32_t TMask = BMask >> 2;
+
+    uint64_t base = csp->cr_base;
+    uint64_t top = csp->cr_base + csp->cr_length;
+    uint64_t length = top - base;
+
+    uint8_t IE, LH;
+    uint32_t Te,Be;
+    uint8_t E;
+
+    if(top == -1ULL) {
+        top = 0; // Actually 1 << 64
+        length++;
+
+        // Length of 0 is 1 << 64. 
+        if(length == 0) {
+            E = 64 - BWidth + 2;
+        } else {
+            E = compute_e(length, BWidth);
+        }
+
+        Te = (1ULL << (64-E)) & TMask;
     } else {
-        b = (base_req >> e) & MOD_MASK;
-        t = ((base_req + rlength) >> e) & MOD_MASK;
+        E = compute_e(length, BWidth);
+        Te = (top >> E) & TMask;
     }
 
-#undef MOD_MASK
+    Be = (base >> E) & BMask;
+    IE = E == 0 ? 0 : 1;
 
-    perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) <<
-                CAP_UPERMS_MEM_SHFT) |
-            (csp->cr_perms & CAP_PERMS_ALL));
-    e = e ^ NULL_EXP_XOR_MASK;
-    if (is_cap_sealed(csp)) {
-        /* sealed */
-        t = t ^ NULL_TOP8_XOR_MASK;
-        ret = (perms << 49) |
-            ((uint64_t)e << 41) | (1ull << 40) |
-            ((b & ~((1ull << 12) - 1)) << 20) |
-            ((uint64_t)(csp->cr_otype & 0xfff000) << (20 - 12)) |
-            (t & ~((1ull << 12) - 1)) |
-            (uint64_t)(csp->cr_otype & 0x000fff);
+    if (IE) {
+        E -=1; // Don't need to encode E=0
+        LH = E >> (2 * CC_L_LOWWIDTH);
+        Be |= (E >> CC_L_LOWWIDTH) & CC_L_LOWMASK;
+        Te |= E & CC_L_LOWMASK;
     } else {
-        /* unsealed */
-        t = t ^ NULL_TOP20_XOR_MASK;
-        ret = (perms << 49) | ((uint64_t)e << 41) | (b << 20) | t;
+        LH = (length >> (BWidth-2)) & 1;
     }
 
-    return ret;
+    if (seal_mode == 1) {
+        uint64_t hi = ((uint64_t)csp->cr_otype >> (CC_L_TYPES/2)) & ((1 << (CC_L_TYPES/2))-1);
+        uint64_t lo = (uint64_t)csp->cr_otype & ((1 << (CC_L_TYPES/2))-1);
+        Te |= hi << (CC_L_SEALED_BWIDTH-2);
+        Be |= lo << CC_L_SEALED_BWIDTH;
+    }
+#ifdef ENABLE_SEAL_MODE_2
+    else if(seal_mode == 2) {
+        Be &= CC_L_LOWMASK;
+        Be |= (uint64_t)csp->cr_otype << CC_L_LOWWIDTH;
+    }
+#endif
+
+    assert(seal_mode < 3);
+
+    uint64_t perms = ((uint64_t)csp->cr_uperms << 11) | (uint64_t)csp->cr_perms;
+    uint64_t pesbt = ((((((((((perms << 3) |
+                      (uint64_t)seal_mode) << 1) |
+                      (uint64_t)IE) << 1) |
+                      (uint64_t)LH) << (CC_L_BWIDTH-2)) |
+                      (uint64_t)Te) << CC_L_BWIDTH) |
+                      (uint64_t)Be);
+
+    pesbt ^= NULL_XOR_MASK;
+
+    return pesbt;
 }
 
 /*
@@ -2210,92 +2266,69 @@ bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t new_offset)
 {
-#ifdef SIMPLE_REPRESENT_CHECK
-    cap_register_t c;
-    uint64_t pesbt;
+    // I change the precision going between unsealed->sealed so the fast check doesn't work. Instead just compress/decompress.
+    if(sealed) {
+#ifdef ENABLE_SEAL_MODE_2
+        if(new_offset == 0) return true; // Can always seal offset zero things
+#endif
 
-    /* Simply compress and uncompress to check. */
-    if (sealed) {
-        c.cr_base = base;
-        c.cr_length = length;
-        c.cr_offset = offset;
-        c.cr_sealed = sealed;
+        cap_register_t c;
+        uint64_t pesbt;
 
-        pesbt = compress_128cap(&c);
-        decompress_128cap(pesbt, base + offset, &c);
+        /* Simply compress and uncompress to check. */
 
-        if (c.cr_base != base || c.cr_length != length || c.cr_offset != offset)
-            return false;
-    } else {
+        #define MAGIC_TYPE 0b1011011101
+
         c.cr_base = base;
         c.cr_length = length;
         c.cr_offset = new_offset;
         c.cr_sealed = sealed;
+        c.cr_otype = 0; // important to set as compress assumes this is in bounds
 
         pesbt = compress_128cap(&c);
         decompress_128cap(pesbt, base + new_offset, &c);
 
         if (c.cr_base != base || c.cr_length != length || c.cr_offset != new_offset)
             return false;
+
+        return true;
     }
-    return true;
-#else /* ! SIMPLE_REPRESENT_CHECK */
-    uint32_t e = compute_e(length);
+
+    uint32_t bwidth = CC_L_BWIDTH;
+    uint32_t highest_exp = (64 - bwidth + 2);
+
+    uint32_t e;
+
+    // If top is 0xffff... we assume we meant it to be 1 << 64
+    if(base + length == -1ULL) {
+        length++;
+        if(length == 0) {
+            return true; // maximum length is always representable
+        }
+    }
+
+    e = compute_e(length, bwidth);
+
     int64_t b, r, Imid, Amid;
-    uint64_t t;
     bool inRange, inLimits;
     int64_t inc = new_offset - offset;
 
-#define MOD_MASK    ((1ul << CHERI128_M_SIZE_UNSEALED) - 1ul)
+#define MOD_MASK    ((1ul << bwidth) - 1ul)
+
 
     /* Check for the boundary cases. */
-    if (e == 0) {
-        b = (int64_t)(base & MOD_MASK);
-        t = (base + length) & MOD_MASK;
-        Imid = (int64_t)(inc & MOD_MASK);
-        Amid = (int64_t)((base + offset) & MOD_MASK);
-    } else if (e > 44) {
-        b = (int64_t)((base >> 44) & MOD_MASK);
-        t = ((base + length) >> 44) & MOD_MASK;
-        Imid = (int64_t)((inc >> 44) & MOD_MASK);
-        Amid = (int64_t)(((base + offset) >> 44) & MOD_MASK);
-    } else {
-        b = (int64_t)((base >> e) & MOD_MASK);
-        t = ((base + length) >> e) & MOD_MASK;
-        Imid = (int64_t)((inc >> e) & MOD_MASK);
-        Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
-    }
 
-    /*
-     * With sealed capabilities we don't have as many bits for the
-     * bounds. For compressed 128 it is only 8-bits for each the
-     * top and bottom (the top 8 bits of these values).  Therefore,
-     * for sealed capabilities we need to check if that changes the
-     * precision.
-     *
-     * See CHERI Architecture Section 4.11:
-     *
-     * "Sealed capabilities have more restrictive alignment requirements
-     * due to fewer bits available to represent T and B. The hardware
-     * will raise an exception when sealing an unsealed capability where
-     * the bottom 12 bits of T and B are not zero."
-     */
-    if (sealed) {
-#define SEALED_MASK \
-        ((1ul << (CHERI128_M_SIZE_UNSEALED - CHERI128_M_SIZE_SEALED)) - 1ul)
-        if (e < 44 && ((b & SEALED_MASK) || (t & SEALED_MASK)))
-            return (false);
-#undef SEALED_MASK
-    }
+    b = (int64_t)((base >> e) & MOD_MASK);
+    Imid = (int64_t)((inc >> e) & MOD_MASK);
+    Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
 
-    /* r = (b <= (1ul << 12)) ? 0 : ((b - (1ul << 12)) & MOD_MASK); */
-    r = ((b - (1ul << 12)) & MOD_MASK);
+    r = (((b >> (bwidth-3)) - 1) << (bwidth-3)) & MOD_MASK;
 
     /* inRange, test if bits are all the same */
-    inRange = all_ones(inc, e) || all_zeroes(inc, e);
+    inRange = all_ones(inc, e, bwidth) || all_zeroes(inc, e, bwidth);
 
     /* inLimits */
-    if ((inc >> 63) == 0ul) {
+    if (inc >= 0) {
         inLimits = ((uint64_t)Imid  < (((uint64_t)(r - Amid - 1l)) & MOD_MASK));
     } else {
         inLimits = ((uint64_t)Imid >= (((uint64_t)(r - Amid)) & MOD_MASK)) &&
@@ -2303,8 +2336,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
     }
 #undef MOD_MASK
 
-    return ((inRange && inLimits) || (e >= 44));
-#endif /* ! SIMPLE_REPRESENT_CHECK */
+    return ((inRange && inLimits) || (e >= highest_exp));
 }
 
 extern bool cheri_c2e_on_unrepresentable;
@@ -3325,41 +3357,42 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    uint32_t e = compute_e(rt);
-    uint64_t new_rt, new_cursor;
+    uint64_t req_base = cursor;
+    uint64_t req_top = cursor + rt;
 
-    /* Check the new base (cursor) and adjust if needed. */
-    if (e && (cursor & ((1 << e) - 1))) {
-        new_cursor = ((cursor >> e) - 1) << e;
+    uint32_t BWidth = CC_L_BWIDTH;
 
-        if (new_cursor > cursor) {
-            /* cursor adjustment wrapped.  Just set to 0. */
-            new_cursor = 0ul;
+    uint8_t E;
+
+    uint64_t new_top = req_top;
+
+    if(req_top == -1ULL) {
+        new_top = 0; // actually 1 << 64
+        rt++;
+        if(rt == 0) { // actually 1 << 64
+            E = 64 - BWidth + 2;
+        } else {
+          E = compute_e(rt, BWidth);
         }
-
-        /* Make sure we are still within the bounds of cb. */
-        if (new_cursor >= cbp->cr_base) {
-            /* Adjust the new offset so cursor is still pointing to same
-             * place.
-             */
-            new_offset = cursor - new_cursor;
-            cursor = new_cursor;
-        }
+    } else {
+        E = compute_e(rt, BWidth);
     }
 
-    /* Check the new length (rt) and adjust if needed. */
-    if (e && (rt & ((1 << e) - 1))) {
-        new_rt = ((rt >> e) + 1) << e;
-
-        if (new_rt < rt) {
-            /* New length wrapped, Just set to max. */
-            new_rt = 0xfffffffffffffffful;
-        }
-
-        /* Make sure we are still within the bounds of cb. */
-        if (new_rt <= cbp->cr_length)
-            rt = new_rt;
+    if (E && (((rt >> E) & 0xF) == 0xF)) {
+        new_top = ((new_top >> E) + 1) << E;
+        E ++;
     }
+
+    uint8_t need_zeros = E == 0 ? 0 : E + CC_L_LOWWIDTH;
+
+    cursor = (cursor >> need_zeros) << need_zeros;
+    new_top = ((new_top + ((1 << need_zeros) - 1)) >> need_zeros) << need_zeros;
+
+    if(new_top < req_top) new_top = -1ULL; // overflow happened somewhere
+
+    rt = new_top - cursor;
+    new_offset = req_base - cursor;
+
 #endif /* CHERI_128 */
     cursor_rt = cursor + rt;
 
@@ -3397,6 +3430,18 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     cap_register_t *cbp = &env->active_tc.C[cb];
     uint64_t cursor = cbp->cr_base + cbp->cr_offset;
     uint64_t cursor_rt = cursor + rt;
+
+#ifdef CHERI_128
+    uint32_t bwidth = CC_L_BWIDTH;
+    uint8_t e = compute_e(rt, bwidth);
+    uint8_t need_zeros = e ? e + CC_L_LOWWIDTH : 0;
+    uint64_t mask = (1ULL << need_zeros) - 1;
+
+    bool representable = ((cursor | cursor_rt) & mask) == 0;
+#else
+    bool representable = true;
+#endif
+
     /*
      * CSetBoundsExact: Set Bounds Exactly
      */
@@ -3412,7 +3457,7 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (cursor_rt > (cbp->cr_base + cbp->cr_length)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (!is_representable(is_cap_sealed(cbp), cursor, rt, 0, 0)) {
+    } else if (!representable) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cb);
     } else {
         *cdp = *cbp;
