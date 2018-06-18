@@ -2059,16 +2059,6 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
     cdp->cr_perms = getbits(pesbt, 49, 11);
     cdp->cr_uperms = getbits(pesbt, 60, 4);
 
-#if 1 /* Still required for some 128-bit cheritests. */
-    /*
-     * XXX - Temporary.
-     * If the new access system registers permission is set
-     * then also set all the legacy access permissions.
-     */
-    if (cdp->cr_perms & CAP_ACCESS_SYS_REGS)
-        cdp->cr_perms |= CAP_ACCESS_LEGACY_ALL;
-#endif
-
 #ifdef ENABLE_SEAL_MODE_2
     uint8_t seal_mode = (uint8_t)getbits(pesbt, CC_L_S_OFF, 2);
     if(seal_mode == 3) seal_mode = 2;
@@ -2619,8 +2609,8 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
         } else {
             cap_register_t idc = *cbp;
             if(!untyped) {
-                idc->cr_sealed = 0;
-                idc->cr_otype = 0;
+                idc.cr_sealed = 0;
+                idc.cr_otype = 0;
             }
             update_capreg(&env->active_tc, CP2CAP_IDC, &idc);
             return csp->cr_base + csp->cr_offset;
@@ -4480,7 +4470,7 @@ static inline void cvtrace_dump_gpr(cvtrace_t *cvtrace, uint64_t value)
     }
 }
 
-static uint64_t tag_with_revoke (CPUMIPSState *env,  cap_register_t *csp) {
+static uint64_t tag_with_revoke (CPUMIPSState *env, const cap_register_t *csp) {
     if (env->cheri_gc_hi != 0 &&
         csp->cr_base >= env->cheri_gc_lo &&
         csp->cr_base + csp->cr_length <= env->cheri_gc_hi &&
@@ -4605,7 +4595,6 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
     else
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
 
-out:
     env->hflags = save_hflags;
 
     return ret;

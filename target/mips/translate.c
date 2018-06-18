@@ -5037,8 +5037,8 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
 
             /* With 'li $0, 0xea1d' perform smp yield */
             if ((uint16_t)imm == 0xea1d) {
-                gen_save_pc(ctx->pc+4);
-		gen_helper_smp_yield(cpu_env);
+                gen_save_pc(ctx->base.pc_next + 4);
+                gen_helper_smp_yield(cpu_env);
             }
 
         }
