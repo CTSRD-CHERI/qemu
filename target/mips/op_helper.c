@@ -2628,7 +2628,7 @@ void helper_cclearreg(CPUMIPSState *env, uint32_t mask)
     // Register zero means $ddc here since it is useful to clear $ddc on a
     // sandbox switch whereas clearing $NULL is useless
     if (mask & 0x1)
-        (void)null_capability(get_writable_default_data_cap(&env->active_tc));
+        (void)null_capability(&env->active_tc.CHWR.DDC);
 
     for (int creg = 1; creg < 32; creg++) {
         if (mask & (0x1 << creg))
@@ -3239,7 +3239,7 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
     switch (hwr) {
     case CP2HWR_DDC: /* always accessible */
-        return get_writable_default_data_cap(&env->active_tc);
+        return &env->active_tc.CHWR.DDC;
     case CP2HWR_USER_TLS:  /* always accessible */
         return &env->active_tc.CHWR.UserTlsCap;
     case CP2HWR_PRIV_TLS:
@@ -5033,7 +5033,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 
 target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
-    const cap_register_t *ddc = get_default_data_cap(&env->active_tc);
+    const cap_register_t *ddc = &env->active_tc.CHWR.DDC;
     target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
 
     // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
@@ -5044,7 +5044,7 @@ target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_
 
 target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
-    const cap_register_t *ddc = get_default_data_cap(&env->active_tc);
+    const cap_register_t *ddc = &env->active_tc.CHWR.DDC;
     target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
 
     // fprintf(qemu_logfile, "LD(%u):%016lx\n", len, addr);

@@ -24334,7 +24334,7 @@ void cpu_state_reset(CPUMIPSState *env)
     }
     set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
     // TODO: make DDC and KCC unconditionally only be in the special reg file
-    set_max_perms_capability(get_writable_default_data_cap(&env->active_tc), 0);
+    set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);
     // TODO: should kdc be NULL or full priv?
     null_capability(&env->active_tc.CHWR.UserTlsCap);
     null_capability(&env->active_tc.CHWR.PrivTlsCap);

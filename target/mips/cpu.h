@@ -340,7 +340,7 @@ struct TCState {
 static inline  __attribute__((always_inline)) cap_register_t*
 get_legacy_mirrored_capreg(TCState* state, unsigned num) {
     if (unlikely(num == CP2CAP_DCC)) {
-        return get_default_data_cap(state);
+        return &state->CHWR.DDC;
     } else if (unlikely(num == CP2CAP_KCC)) {
         return &state->CHWR.KCC;
     } else if (unlikely(num == CP2CAP_KDC)) {
@@ -362,16 +362,6 @@ get_readonly_capreg(TCState* state, unsigned num) {
 #endif
 }
 
-static inline  __attribute__((always_inline)) const cap_register_t*
-get_default_data_cap(TCState* state) {
-    return &state->CHWR.DDC;
-}
-
-static inline  __attribute__((always_inline)) cap_register_t*
-get_writable_default_data_cap(TCState* state) {
-    return &state->CHWR.DDC;
-}
-
 /// return a read-only capability register with register number 0 meaning $ddc
 /// This is useful for cl*/cs*/cll*/csc*/cfromptr/cbuildcap since using $ddc as the address
 /// argument there will cause a trap
@@ -385,7 +375,7 @@ get_capreg_0_is_ddc(TCState* state, unsigned num) {
     return get_legacy_mirrored_capreg(state, num);
 #else
     if (unlikely(num == 0)) {
-        return get_default_data_cap(state);
+        return &state->CHWR.DDC;
     }
     return &state->_CGPR[num];
 #endif
