@@ -22,12 +22,15 @@
 #include "hw/sysbus.h"
 #include "monitor/monitor.h"
 #include "monitor/qdev.h"
-#include "qmp-commands.h"
 #include "sysemu/arch_init.h"
+#include "qapi/error.h"
+#include "qapi/qapi-commands-misc.h"
+#include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qerror.h"
 #include "qemu/config-file.h"
 #include "qemu/error-report.h"
 #include "qemu/help_option.h"
+#include "qemu/option.h"
 #include "sysemu/block-backend.h"
 #include "migration/misc.h"
 
@@ -46,7 +49,6 @@ typedef struct QDevAlias
 static const QDevAlias qdev_alias_table[] = {
     { "e1000", "e1000-82540em" },
     { "ich9-ahci", "ahci" },
-    { "kvm-pci-assign", "pci-assign" },
     { "lsi53c895a", "lsi" },
     { "virtio-9p-ccw", "virtio-9p", QEMU_ARCH_S390X },
     { "virtio-9p-pci", "virtio-9p", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
@@ -120,12 +122,6 @@ static void qdev_print_devinfo(DeviceClass *dc)
     error_printf("\n");
 }
 
-static gint devinfo_cmp(gconstpointer a, gconstpointer b)
-{
-    return strcasecmp(object_class_get_name((ObjectClass *)a),
-                      object_class_get_name((ObjectClass *)b));
-}
-
 static void qdev_print_devinfos(bool show_no_user)
 {
     static const char *cat_name[DEVICE_CATEGORY_MAX + 1] = {
@@ -144,8 +140,7 @@ static void qdev_print_devinfos(bool show_no_user)
     int i;
     bool cat_printed;
 
-    list = g_slist_sort(object_class_get_list(TYPE_DEVICE, false),
-                        devinfo_cmp);
+    list = object_class_get_list_sorted(TYPE_DEVICE, false);
 
     for (i = 0; i <= DEVICE_CATEGORY_MAX; i++) {
         cat_printed = false;
@@ -256,8 +251,8 @@ int qdev_device_help(QemuOpts *opts)
 {
     Error *local_err = NULL;
     const char *driver;
-    DevicePropertyInfoList *prop_list;
-    DevicePropertyInfoList *prop;
+    ObjectPropertyInfoList *prop_list;
+    ObjectPropertyInfoList *prop;
 
     driver = qemu_opt_get(opts, "driver");
     if (driver && is_help_option(driver)) {
@@ -293,7 +288,7 @@ int qdev_device_help(QemuOpts *opts)
         }
     }
 
-    qapi_free_DevicePropertyInfoList(prop_list);
+    qapi_free_ObjectPropertyInfoList(prop_list);
     return 1;
 
 error:
@@ -614,28 +609,33 @@ DeviceState *qdev_device_add(QemuOpts *opts, Error **errp)
 
     if (bus) {
         qdev_set_parent_bus(dev, bus);
+    } else if (qdev_hotplug && !qdev_get_machine_hotplug_handler(dev)) {
+        /* No bus, no machine hotplug handler --> device is not hotpluggable */
+        error_setg(&err, "Device '%s' can not be hotplugged on this machine",
+                   driver);
+        goto err_del_dev;
     }
 
     qdev_set_id(dev, qemu_opts_id(opts));
 
     /* set properties */
     if (qemu_opt_foreach(opts, set_property, dev, &err)) {
-        error_propagate(errp, err);
-        object_unparent(OBJECT(dev));
-        object_unref(OBJECT(dev));
-        return NULL;
+        goto err_del_dev;
     }
 
     dev->opts = opts;
     object_property_set_bool(OBJECT(dev), true, "realized", &err);
     if (err != NULL) {
-        error_propagate(errp, err);
         dev->opts = NULL;
-        object_unparent(OBJECT(dev));
-        object_unref(OBJECT(dev));
-        return NULL;
+        goto err_del_dev;
     }
     return dev;
+
+err_del_dev:
+    error_propagate(errp, err);
+    object_unparent(OBJECT(dev));
+    object_unref(OBJECT(dev));
+    return NULL;
 }
 
 

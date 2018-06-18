@@ -392,9 +392,9 @@ static int pick_geometry(FDrive *drv)
             FLOPPY_DPRINTF("User requested floppy drive type '%s', "
                            "but inserted medium appears to be a "
                            "%"PRId64" sector '%s' type\n",
-                           FloppyDriveType_lookup[drv->drive],
+                           FloppyDriveType_str(drv->drive),
                            nb_sectors,
-                           FloppyDriveType_lookup[parse->drive]);
+                           FloppyDriveType_str(parse->drive));
         }
         match = type_match;
     }
@@ -403,7 +403,7 @@ static int pick_geometry(FDrive *drv)
     if (match == -1) {
         error_setg(&error_abort, "No candidate geometries present in table "
                    " for floppy drive type '%s'",
-                   FloppyDriveType_lookup[drv->drive]);
+                   FloppyDriveType_str(drv->drive));
     }
 
     parse = &(fd_formats[match]);
@@ -473,16 +473,13 @@ static void fd_revalidate(FDrive *drv)
 static void fd_change_cb(void *opaque, bool load, Error **errp)
 {
     FDrive *drive = opaque;
-    Error *local_err = NULL;
 
     if (!load) {
         blk_set_perm(drive->blk, 0, BLK_PERM_ALL, &error_abort);
     } else {
-        blkconf_apply_backend_options(drive->conf,
-                                      blk_is_read_only(drive->blk), false,
-                                      &local_err);
-        if (local_err) {
-            error_propagate(errp, local_err);
+        if (!blkconf_apply_backend_options(drive->conf,
+                                           blk_is_read_only(drive->blk), false,
+                                           errp)) {
             return;
         }
     }
@@ -517,12 +514,11 @@ static Property floppy_drive_properties[] = {
     DEFINE_PROP_END_OF_LIST(),
 };
 
-static int floppy_drive_init(DeviceState *qdev)
+static void floppy_drive_realize(DeviceState *qdev, Error **errp)
 {
     FloppyDrive *dev = FLOPPY_DRIVE(qdev);
     FloppyBus *bus = FLOPPY_BUS(qdev->parent_bus);
     FDrive *drive;
-    Error *local_err = NULL;
     int ret;
 
     if (dev->unit == -1) {
@@ -535,15 +531,15 @@ static int floppy_drive_init(DeviceState *qdev)
     }
 
     if (dev->unit >= MAX_FD) {
-        error_report("Can't create floppy unit %d, bus supports only %d units",
-                     dev->unit, MAX_FD);
-        return -1;
+        error_setg(errp, "Can't create floppy unit %d, bus supports "
+                   "only %d units", dev->unit, MAX_FD);
+        return;
     }
 
     drive = get_drv(bus->fdc, dev->unit);
     if (drive->blk) {
-        error_report("Floppy unit %d is in use", dev->unit);
-        return -1;
+        error_setg(errp, "Floppy unit %d is in use", dev->unit);
+        return;
     }
 
     if (!dev->conf.blk) {
@@ -557,8 +553,9 @@ static int floppy_drive_init(DeviceState *qdev)
     if (dev->conf.logical_block_size != 512 ||
         dev->conf.physical_block_size != 512)
     {
-        error_report("Physical and logical block size must be 512 for floppy");
-        return -1;
+        error_setg(errp, "Physical and logical block size must "
+                   "be 512 for floppy");
+        return;
     }
 
     /* rerror/werror aren't supported by fdc and therefore not even registered
@@ -567,23 +564,22 @@ static int floppy_drive_init(DeviceState *qdev)
     dev->conf.rerror = BLOCKDEV_ON_ERROR_AUTO;
     dev->conf.werror = BLOCKDEV_ON_ERROR_AUTO;
 
-    blkconf_apply_backend_options(&dev->conf, blk_is_read_only(dev->conf.blk),
-                                  false, &local_err);
-    if (local_err) {
-        error_report_err(local_err);
-        return -1;
+    if (!blkconf_apply_backend_options(&dev->conf,
+                                       blk_is_read_only(dev->conf.blk),
+                                       false, errp)) {
+        return;
     }
 
     /* 'enospc' is the default for -drive, 'report' is what blk_new() gives us
      * for empty drives. */
     if (blk_get_on_error(dev->conf.blk, 0) != BLOCKDEV_ON_ERROR_ENOSPC &&
         blk_get_on_error(dev->conf.blk, 0) != BLOCKDEV_ON_ERROR_REPORT) {
-        error_report("fdc doesn't support drive option werror");
-        return -1;
+        error_setg(errp, "fdc doesn't support drive option werror");
+        return;
     }
     if (blk_get_on_error(dev->conf.blk, 1) != BLOCKDEV_ON_ERROR_REPORT) {
-        error_report("fdc doesn't support drive option rerror");
-        return -1;
+        error_setg(errp, "fdc doesn't support drive option rerror");
+        return;
     }
 
     drive->conf = &dev->conf;
@@ -599,14 +595,12 @@ static int floppy_drive_init(DeviceState *qdev)
     dev->type = drive->drive;
 
     fd_revalidate(drive);
-
-    return 0;
 }
 
 static void floppy_drive_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *k = DEVICE_CLASS(klass);
-    k->init = floppy_drive_init;
+    k->realize = floppy_drive_realize;
     set_bit(DEVICE_CATEGORY_STORAGE, k->categories);
     k->bus_type = TYPE_FLOPPY_BUS;
     k->props = floppy_drive_properties;
@@ -1102,11 +1096,13 @@ static int reconstruct_phase(FDCtrl *fdctrl)
     }
 }
 
-static void fdc_pre_save(void *opaque)
+static int fdc_pre_save(void *opaque)
 {
     FDCtrl *s = opaque;
 
     s->dor_vmstate = s->dor | GET_CUR_DRV(s);
+
+    return 0;
 }
 
 static int fdc_pre_load(void *opaque)
@@ -2699,7 +2695,10 @@ static void isabus_fdc_realize(DeviceState *dev, Error **errp)
     fdctrl->dma_chann = isa->dma;
     if (fdctrl->dma_chann != -1) {
         fdctrl->dma = isa_get_dma(isa_bus_from_device(isadev), isa->dma);
-        assert(fdctrl->dma);
+        if (!fdctrl->dma) {
+            error_setg(errp, "ISA controller does not support DMA");
+            return;
+        }
     }
 
     qdev_set_legacy_instance_id(dev, isa->iobase, 2);

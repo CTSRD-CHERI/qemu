@@ -30,14 +30,23 @@
 #define QEMU_MIGRATION_RAM_H
 
 #include "qemu-common.h"
+#include "qapi/qapi-types-migration.h"
 #include "exec/cpu-common.h"
+#include "io/channel.h"
 
 extern MigrationStats ram_counters;
 extern XBZRLECacheStats xbzrle_counters;
 
-int64_t xbzrle_cache_resize(int64_t new_size);
+int xbzrle_cache_resize(int64_t new_size, Error **errp);
 uint64_t ram_bytes_remaining(void);
 uint64_t ram_bytes_total(void);
+
+int multifd_save_setup(void);
+int multifd_save_cleanup(Error **errp);
+int multifd_load_setup(void);
+int multifd_load_cleanup(Error **errp);
+bool multifd_recv_all_channels_created(void);
+void multifd_recv_new_channel(QIOChannel *ioc);
 
 uint64_t ram_pagesize_summary(void);
 int ram_save_queue_pages(const char *rbname, ram_addr_t start, ram_addr_t len);
@@ -52,4 +61,13 @@ int ram_discard_range(const char *block_name, uint64_t start, size_t length);
 int ram_postcopy_incoming_init(MigrationIncomingState *mis);
 
 void ram_handle_compressed(void *host, uint8_t ch, uint64_t size);
+
+int ramblock_recv_bitmap_test(RAMBlock *rb, void *host_addr);
+bool ramblock_recv_bitmap_test_byte_offset(RAMBlock *rb, uint64_t byte_offset);
+void ramblock_recv_bitmap_set(RAMBlock *rb, void *host_addr);
+void ramblock_recv_bitmap_set_range(RAMBlock *rb, void *host_addr, size_t nr);
+int64_t ramblock_recv_bitmap_send(QEMUFile *file,
+                                  const char *block_name);
+int ram_dirty_bitmap_reload(MigrationState *s, RAMBlock *rb);
+
 #endif

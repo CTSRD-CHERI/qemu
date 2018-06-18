@@ -1,8 +1,7 @@
 #ifndef QEMU_CHAR_H
 #define QEMU_CHAR_H
 
-#include "qemu-common.h"
-#include "qemu/option.h"
+#include "qapi/qapi-types-char.h"
 #include "qemu/main-loop.h"
 #include "qemu/bitmap.h"
 #include "qom/object.h"
@@ -55,6 +54,7 @@ struct Chardev {
     int logfd;
     int be_open;
     GSource *gsource;
+    GMainContext *gcontext;
     DECLARE_BITMAP(features, QEMU_CHAR_FEATURE_LAST);
 };
 
@@ -169,6 +169,16 @@ void qemu_chr_be_write(Chardev *s, uint8_t *buf, int len);
 void qemu_chr_be_write_impl(Chardev *s, uint8_t *buf, int len);
 
 /**
+ * @qemu_chr_be_update_read_handlers:
+ *
+ * Invoked when frontend read handlers are setup
+ *
+ * @context the gcontext that will be used to attach the watch sources
+ */
+void qemu_chr_be_update_read_handlers(Chardev *s,
+                                      GMainContext *context);
+
+/**
  * @qemu_chr_be_event:
  *
  * Send an event from the back end to the front end.
@@ -227,7 +237,7 @@ typedef struct ChardevClass {
     int (*chr_write)(Chardev *s, const uint8_t *buf, int len);
     int (*chr_sync_read)(Chardev *s, const uint8_t *buf, int len);
     GSource *(*chr_add_watch)(Chardev *s, GIOCondition cond);
-    void (*chr_update_read_handler)(Chardev *s, GMainContext *context);
+    void (*chr_update_read_handler)(Chardev *s);
     int (*chr_ioctl)(Chardev *s, int cmd, void *arg);
     int (*get_msgfds)(Chardev *s, int* fds, int num);
     int (*set_msgfds)(Chardev *s, int *fds, int num);
@@ -237,12 +247,18 @@ typedef struct ChardevClass {
     void (*chr_accept_input)(Chardev *chr);
     void (*chr_set_echo)(Chardev *chr, bool echo);
     void (*chr_set_fe_open)(Chardev *chr, int fe_open);
+    void (*chr_be_event)(Chardev *s, int event);
+    /* Return 0 if succeeded, 1 if failed */
+    int (*chr_machine_done)(Chardev *chr);
 } ChardevClass;
 
 Chardev *qemu_chardev_new(const char *id, const char *typename,
                           ChardevBackend *backend, Error **errp);
 
 extern int term_escape_char;
+
+GSource *qemu_chr_timeout_add_ms(Chardev *chr, guint ms,
+                                 GSourceFunc func, void *private);
 
 /* console.c */
 void qemu_chr_parse_vc(QemuOpts *opts, ChardevBackend *backend, Error **errp);

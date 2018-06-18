@@ -46,7 +46,6 @@ typedef enum MPS2FPGAType {
 typedef struct {
     MachineClass parent;
     MPS2FPGAType fpga_type;
-    const char *cpu_model;
     uint32_t scc_id;
 } MPS2MachineClass;
 
@@ -107,14 +106,12 @@ static void mps2_common_init(MachineState *machine)
     MPS2MachineState *mms = MPS2_MACHINE(machine);
     MPS2MachineClass *mmc = MPS2_MACHINE_GET_CLASS(machine);
     MemoryRegion *system_memory = get_system_memory();
+    MachineClass *mc = MACHINE_GET_CLASS(machine);
     DeviceState *armv7m, *sccdev;
 
-    if (!machine->cpu_model) {
-        machine->cpu_model = mmc->cpu_model;
-    }
-
-    if (strcmp(machine->cpu_model, mmc->cpu_model) != 0) {
-        error_report("This board can only be used with CPU %s", mmc->cpu_model);
+    if (strcmp(machine->cpu_type, mc->default_cpu_type) != 0) {
+        error_report("This board can only be used with CPU %s",
+                     mc->default_cpu_type);
         exit(1);
     }
 
@@ -188,7 +185,7 @@ static void mps2_common_init(MachineState *machine)
     default:
         g_assert_not_reached();
     }
-    qdev_prop_set_string(armv7m, "cpu-model", machine->cpu_model);
+    qdev_prop_set_string(armv7m, "cpu-type", machine->cpu_type);
     object_property_set_link(OBJECT(&mms->armv7m), OBJECT(system_memory),
                              "memory", &error_abort);
     object_property_set_bool(OBJECT(&mms->armv7m), true, "realized",
@@ -233,7 +230,6 @@ static void mps2_common_init(MachineState *machine)
             static const hwaddr uartbase[] = {0x40004000, 0x40005000,
                                               0x40006000, 0x40007000,
                                               0x40009000};
-            Chardev *uartchr = i < MAX_SERIAL_PORTS ? serial_hds[i] : NULL;
             /* RX irq number; TX irq is always one greater */
             static const int uartirq[] = {0, 2, 4, 18, 20};
             qemu_irq txovrint = NULL, rxovrint = NULL;
@@ -248,7 +244,7 @@ static void mps2_common_init(MachineState *machine)
                                   qdev_get_gpio_in(armv7m, uartirq[i]),
                                   txovrint, rxovrint,
                                   NULL,
-                                  uartchr, SYSCLK_FRQ);
+                                  serial_hd(i), SYSCLK_FRQ);
         }
         break;
     }
@@ -273,7 +269,6 @@ static void mps2_common_init(MachineState *machine)
             static const hwaddr uartbase[] = {0x40004000, 0x40005000,
                                               0x4002c000, 0x4002d000,
                                               0x4002e000};
-            Chardev *uartchr = i < MAX_SERIAL_PORTS ? serial_hds[i] : NULL;
             Object *txrx_orgate;
             DeviceState *txrx_orgate_dev;
 
@@ -287,10 +282,10 @@ static void mps2_common_init(MachineState *machine)
             cmsdk_apb_uart_create(uartbase[i],
                                   qdev_get_gpio_in(txrx_orgate_dev, 0),
                                   qdev_get_gpio_in(txrx_orgate_dev, 1),
-                                  qdev_get_gpio_in(orgate_dev, 0),
-                                  qdev_get_gpio_in(orgate_dev, 1),
+                                  qdev_get_gpio_in(orgate_dev, i * 2),
+                                  qdev_get_gpio_in(orgate_dev, i * 2 + 1),
                                   NULL,
-                                  uartchr, SYSCLK_FRQ);
+                                  serial_hd(i), SYSCLK_FRQ);
         }
         break;
     }
@@ -339,7 +334,7 @@ static void mps2_an385_class_init(ObjectClass *oc, void *data)
 
     mc->desc = "ARM MPS2 with AN385 FPGA image for Cortex-M3";
     mmc->fpga_type = FPGA_AN385;
-    mmc->cpu_model = "cortex-m3";
+    mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-m3");
     mmc->scc_id = 0x41040000 | (385 << 4);
 }
 
@@ -350,7 +345,7 @@ static void mps2_an511_class_init(ObjectClass *oc, void *data)
 
     mc->desc = "ARM MPS2 with AN511 DesignStart FPGA image for Cortex-M3";
     mmc->fpga_type = FPGA_AN511;
-    mmc->cpu_model = "cortex-m3";
+    mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-m3");
     mmc->scc_id = 0x4104000 | (511 << 4);
 }
 

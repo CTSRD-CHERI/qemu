@@ -12,9 +12,11 @@
 
 #include "qemu/osdep.h"
 #include <windows.h>
-#include "qga/guest-agent-core.h"
-#include "qga/vss-win32.h"
-#include "qga/vss-win32/requester.h"
+#include "qapi/error.h"
+#include "qemu/error-report.h"
+#include "guest-agent-core.h"
+#include "vss-win32.h"
+#include "vss-win32/requester.h"
 
 #define QGA_VSS_DLL "qga-vss.dll"
 
@@ -61,7 +63,7 @@ static bool vss_check_os_version(void)
             return false;
         }
         if (wow64) {
-            fprintf(stderr, "Warning: Running under WOW64\n");
+            warn_report("Running under WOW64");
         }
 #endif
         return !wow64;

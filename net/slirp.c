@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include "qemu/osdep.h"
 #include "net/slirp.h"
 
@@ -41,6 +42,7 @@
 #include "sysemu/sysemu.h"
 #include "qemu/cutils.h"
 #include "qapi/error.h"
+#include "qapi/qmp/qdict.h"
 
 static int get_str_sep(char *buf, int buf_size, const char **pp, int sep)
 {
@@ -155,7 +157,8 @@ static int net_slirp_init(NetClientState *peer, const char *model,
                           const char *bootfile, const char *vdhcp_start,
                           const char *vnameserver, const char *vnameserver6,
                           const char *smb_export, const char *vsmbserver,
-                          const char **dnssearch, Error **errp)
+                          const char **dnssearch, const char *vdomainname,
+                          Error **errp)
 {
     /* default settings according to historic slirp */
     struct in_addr net  = { .s_addr = htonl(0x0a000200) }; /* 10.0.2.0 */
@@ -357,6 +360,11 @@ static int net_slirp_init(NetClientState *peer, const char *model,
         ip6_dns.s6_addr[15] |= 3;
     }
 
+    if (vdomainname && !*vdomainname) {
+        error_setg(errp, "'domainname' parameter cannot be empty");
+        return -1;
+    }
+
 
     nc = qemu_new_net_client(&net_slirp_info, peer, model, name);
 
@@ -369,7 +377,7 @@ static int net_slirp_init(NetClientState *peer, const char *model,
     s->slirp = slirp_init(restricted, ipv4, net, mask, host,
                           ipv6, ip6_prefix, vprefix6_len, ip6_host,
                           vhostname, tftp_export, bootfile, dhcp,
-                          dns, ip6_dns, dnssearch, s);
+                          dns, ip6_dns, dnssearch, vdomainname, s);
     QTAILQ_INSERT_TAIL(&slirp_stacks, s, entry);
 
     for (config = slirp_configs; config; config = config->next) {
@@ -405,16 +413,23 @@ error:
     return -1;
 }
 
-static SlirpState *slirp_lookup(Monitor *mon, const char *vlan,
-                                const char *stack)
+static SlirpState *slirp_lookup(Monitor *mon, const char *hub_id,
+                                const char *name)
 {
-
-    if (vlan) {
+    if (name) {
         NetClientState *nc;
-        nc = net_hub_find_client_by_name(strtol(vlan, NULL, 0), stack);
-        if (!nc) {
-            monitor_printf(mon, "unrecognized (vlan-id, stackname) pair\n");
-            return NULL;
+        if (hub_id) {
+            nc = net_hub_find_client_by_name(strtol(hub_id, NULL, 0), name);
+            if (!nc) {
+                monitor_printf(mon, "unrecognized (hub-id, stackname) pair\n");
+                return NULL;
+            }
+        } else {
+            nc = qemu_find_netdev(name);
+            if (!nc) {
+                monitor_printf(mon, "unrecognized netdev id '%s'\n", name);
+                return NULL;
+            }
         }
         if (strcmp(nc->model, "user")) {
             monitor_printf(mon, "invalid device specified\n");
@@ -443,9 +458,12 @@ void hmp_hostfwd_remove(Monitor *mon, const QDict *qdict)
     const char *arg2 = qdict_get_try_str(qdict, "arg2");
     const char *arg3 = qdict_get_try_str(qdict, "arg3");
 
-    if (arg2) {
+    if (arg3) {
         s = slirp_lookup(mon, arg1, arg2);
         src_str = arg3;
+    } else if (arg2) {
+        s = slirp_lookup(mon, NULL, arg1);
+        src_str = arg2;
     } else {
         s = slirp_lookup(mon, NULL, NULL);
         src_str = arg1;
@@ -474,7 +492,9 @@ void hmp_hostfwd_remove(Monitor *mon, const QDict *qdict)
         goto fail_syntax;
     }
 
-    host_port = atoi(p);
+    if (qemu_strtoi(p, NULL, 10, &host_port)) {
+        goto fail_syntax;
+    }
 
     err = slirp_remove_hostfwd(s->slirp, is_udp, host_addr, host_port);
 
@@ -496,9 +516,11 @@ static int slirp_hostfwd(SlirpState *s, const char *redir_str,
     char buf[256];
     int is_udp;
     char *end;
+    const char *fail_reason = "Unknown reason";
 
     p = redir_str;
     if (!p || get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+        fail_reason = "No : separators";
         goto fail_syntax;
     }
     if (!strcmp(buf, "tcp") || buf[0] == '\0') {
@@ -506,35 +528,43 @@ static int slirp_hostfwd(SlirpState *s, const char *redir_str,
     } else if (!strcmp(buf, "udp")) {
         is_udp = 1;
     } else {
+        fail_reason = "Bad protocol name";
         goto fail_syntax;
     }
 
     if (!legacy_format) {
         if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+            fail_reason = "Missing : separator";
             goto fail_syntax;
         }
         if (buf[0] != '\0' && !inet_aton(buf, &host_addr)) {
+            fail_reason = "Bad host address";
             goto fail_syntax;
         }
     }
 
     if (get_str_sep(buf, sizeof(buf), &p, legacy_format ? ':' : '-') < 0) {
+        fail_reason = "Bad host port separator";
         goto fail_syntax;
     }
     host_port = strtol(buf, &end, 0);
     if (*end != '\0' || host_port < 0 || host_port > 65535) {
+        fail_reason = "Bad host port";
         goto fail_syntax;
     }
 
     if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+        fail_reason = "Missing guest address";
         goto fail_syntax;
     }
     if (buf[0] != '\0' && !inet_aton(buf, &guest_addr)) {
+        fail_reason = "Bad guest address";
         goto fail_syntax;
     }
 
     guest_port = strtol(p, &end, 0);
     if (*end != '\0' || guest_port < 1 || guest_port > 65535) {
+        fail_reason = "Bad guest port";
         goto fail_syntax;
     }
 
@@ -547,7 +577,8 @@ static int slirp_hostfwd(SlirpState *s, const char *redir_str,
     return 0;
 
  fail_syntax:
-    error_setg(errp, "Invalid host forwarding rule '%s'", redir_str);
+    error_setg(errp, "Invalid host forwarding rule '%s' (%s)", redir_str,
+               fail_reason);
     return -1;
 }
 
@@ -559,9 +590,12 @@ void hmp_hostfwd_add(Monitor *mon, const QDict *qdict)
     const char *arg2 = qdict_get_try_str(qdict, "arg2");
     const char *arg3 = qdict_get_try_str(qdict, "arg3");
 
-    if (arg2) {
+    if (arg3) {
         s = slirp_lookup(mon, arg1, arg2);
         redir_str = arg3;
+    } else if (arg2) {
+        s = slirp_lookup(mon, NULL, arg1);
+        redir_str = arg2;
     } else {
         s = slirp_lookup(mon, NULL, NULL);
         redir_str = arg1;
@@ -844,9 +878,9 @@ void hmp_info_usernet(Monitor *mon, const QDict *qdict)
 
     QTAILQ_FOREACH(s, &slirp_stacks, entry) {
         int id;
-        bool got_vlan_id = net_hub_id_for_client(&s->nc, &id) == 0;
-        monitor_printf(mon, "VLAN %d (%s):\n",
-                       got_vlan_id ? id : -1,
+        bool got_hub_id = net_hub_id_for_client(&s->nc, &id) == 0;
+        monitor_printf(mon, "Hub %d (%s):\n",
+                       got_hub_id ? id : -1,
                        s->nc.name);
         slirp_connection_info(s->slirp, mon);
     }
@@ -932,7 +966,7 @@ int net_init_slirp(const Netdev *netdev, const char *name,
                          user->ipv6_host, user->hostname, user->tftp,
                          user->bootfile, user->dhcpstart,
                          user->dns, user->ipv6_dns, user->smb,
-                         user->smbserver, dnssearch, errp);
+                         user->smbserver, dnssearch, user->domainname, errp);
 
     while (slirp_configs) {
         config = slirp_configs;
@@ -945,37 +979,3 @@ int net_init_slirp(const Netdev *netdev, const char *name,
 
     return ret;
 }
-
-int net_slirp_parse_legacy(QemuOptsList *opts_list, const char *optarg, int *ret)
-{
-    if (strcmp(opts_list->name, "net") != 0 ||
-        strncmp(optarg, "channel,", strlen("channel,")) != 0) {
-        return 0;
-    }
-
-    error_report("The '-net channel' option is deprecated. "
-                 "Please use '-netdev user,guestfwd=...' instead.");
-
-    /* handle legacy -net channel,port:chr */
-    optarg += strlen("channel,");
-
-    if (QTAILQ_EMPTY(&slirp_stacks)) {
-        struct slirp_config_str *config;
-
-        config = g_malloc(sizeof(*config));
-        pstrcpy(config->str, sizeof(config->str), optarg);
-        config->flags = SLIRP_CFG_LEGACY;
-        config->next = slirp_configs;
-        slirp_configs = config;
-        *ret = 0;
-    } else {
-        Error *err = NULL;
-        *ret = slirp_guestfwd(QTAILQ_FIRST(&slirp_stacks), optarg, 1, &err);
-        if (*ret < 0) {
-            error_report_err(err);
-        }
-    }
-
-    return 1;
-}
-

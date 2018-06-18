@@ -1,6 +1,43 @@
 #ifndef HW_COMPAT_H
 #define HW_COMPAT_H
 
+#define HW_COMPAT_2_12 \
+    {\
+        .driver   = "migration",\
+        .property = "decompress-error-check",\
+        .value    = "off",\
+    },
+
+#define HW_COMPAT_2_11 \
+    {\
+        .driver   = "hpet",\
+        .property = "hpet-offset-saved",\
+        .value    = "false",\
+    },{\
+        .driver   = "virtio-blk-pci",\
+        .property = "vectors",\
+        .value    = "2",\
+    },{\
+        .driver   = "vhost-user-blk-pci",\
+        .property = "vectors",\
+        .value    = "2",\
+    },{\
+        .driver   = "e1000",\
+        .property = "migrate_tso_props",\
+        .value    = "off",\
+    },
+
+#define HW_COMPAT_2_10 \
+    {\
+        .driver   = "virtio-mouse-device",\
+        .property = "wheel-axis",\
+        .value    = "false",\
+    },{\
+        .driver   = "virtio-tablet-device",\
+        .property = "wheel-axis",\
+        .value    = "false",\
+    },
+
 #define HW_COMPAT_2_9 \
     {\
         .driver   = "pci-bridge",\
@@ -149,10 +186,6 @@
     },{\
         .driver   = "fw_cfg_io",\
         .property = "dma_enabled",\
-        .value    = "off",\
-    },{\
-        .driver   = "vmgenid",\
-        .property = "x-write-pointer-available",\
         .value    = "off",\
     },
 

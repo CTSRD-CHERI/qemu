@@ -159,16 +159,16 @@ bool hbitmap_get(const HBitmap *hb, uint64_t item);
 bool hbitmap_is_serializable(const HBitmap *hb);
 
 /**
- * hbitmap_serialization_granularity:
+ * hbitmap_serialization_align:
  * @hb: HBitmap to operate on.
  *
- * Granularity of serialization chunks, used by other serialization functions.
- * For every chunk:
+ * Required alignment of serialization chunks, used by other serialization
+ * functions. For every chunk:
  * 1. Chunk start should be aligned to this granularity.
  * 2. Chunk size should be aligned too, except for last chunk (for which
  *      start + count == hb->size)
  */
-uint64_t hbitmap_serialization_granularity(const HBitmap *hb);
+uint64_t hbitmap_serialization_align(const HBitmap *hb);
 
 /**
  * hbitmap_serialization_size:
@@ -291,6 +291,14 @@ void hbitmap_iter_init(HBitmapIter *hbi, const HBitmap *hb, uint64_t first);
  * Internal function used by hbitmap_iter_next and hbitmap_iter_next_word.
  */
 unsigned long hbitmap_iter_skip_words(HBitmapIter *hbi);
+
+/* hbitmap_next_zero:
+ * @hb: The HBitmap to operate on
+ * @start: The bit to start from.
+ *
+ * Find next not dirty bit.
+ */
+int64_t hbitmap_next_zero(const HBitmap *hb, uint64_t start);
 
 /* hbitmap_create_meta:
  * Create a "meta" hbitmap to track dirtiness of the bits in this HBitmap.

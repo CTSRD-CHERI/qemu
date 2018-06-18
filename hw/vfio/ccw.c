@@ -6,22 +6,23 @@
  *            Xiao Feng Ren <renxiaof@linux.vnet.ibm.com>
  *            Pierre Morel <pmorel@linux.vnet.ibm.com>
  *
- * This work is licensed under the terms of the GNU GPL, version 2 or(at
- * your option) any version. See the COPYING file in the top-level
+ * This work is licensed under the terms of the GNU GPL, version 2 or (at
+ * your option) any later version. See the COPYING file in the top-level
  * directory.
  */
 
+#include "qemu/osdep.h"
 #include <linux/vfio.h>
 #include <linux/vfio_ccw.h>
 #include <sys/ioctl.h>
 
-#include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "hw/sysbus.h"
 #include "hw/vfio/vfio.h"
 #include "hw/vfio/vfio-common.h"
 #include "hw/s390x/s390-ccw.h"
 #include "hw/s390x/ccw-device.h"
+#include "exec/address-spaces.h"
 #include "qemu/error-report.h"
 
 #define TYPE_VFIO_CCW "vfio-ccw"
@@ -47,9 +48,9 @@ struct VFIODeviceOps vfio_ccw_ops = {
     .vfio_compute_needs_reset = vfio_ccw_compute_needs_reset,
 };
 
-static int vfio_ccw_handle_request(ORB *orb, SCSW *scsw, void *data)
+static IOInstEnding vfio_ccw_handle_request(SubchDev *sch)
 {
-    S390CCWDevice *cdev = data;
+    S390CCWDevice *cdev = sch->driver_data;
     VFIOCCWDevice *vcdev = DO_UPCAST(VFIOCCWDevice, cdev, cdev);
     struct ccw_io_region *region = vcdev->io_region;
     int ret;
@@ -60,8 +61,8 @@ static int vfio_ccw_handle_request(ORB *orb, SCSW *scsw, void *data)
 
     memset(region, 0, sizeof(*region));
 
-    memcpy(region->orb_area, orb, sizeof(ORB));
-    memcpy(region->scsw_area, scsw, sizeof(SCSW));
+    memcpy(region->orb_area, &sch->orb, sizeof(ORB));
+    memcpy(region->scsw_area, &sch->curr_status.scsw, sizeof(SCSW));
 
 again:
     ret = pwrite(vcdev->vdev.fd, region,
@@ -71,10 +72,24 @@ again:
             goto again;
         }
         error_report("vfio-ccw: wirte I/O region failed with errno=%d", errno);
-        return -errno;
+        ret = -errno;
+    } else {
+        ret = region->ret_code;
     }
-
-    return region->ret_code;
+    switch (ret) {
+    case 0:
+        return IOINST_CC_EXPECTED;
+    case -EBUSY:
+        return IOINST_CC_BUSY;
+    case -ENODEV:
+    case -EACCES:
+        return IOINST_CC_NOT_OPERATIONAL;
+    case -EFAULT:
+    default:
+        sch_gen_unit_exception(sch);
+        css_inject_io_interrupt(sch);
+        return IOINST_CC_EXPECTED;
+    }
 }
 
 static void vfio_ccw_reset(DeviceState *dev)
@@ -278,10 +293,41 @@ static void vfio_ccw_put_region(VFIOCCWDevice *vcdev)
     g_free(vcdev->io_region);
 }
 
-static void vfio_put_device(VFIOCCWDevice *vcdev)
+static void vfio_ccw_put_device(VFIOCCWDevice *vcdev)
 {
     g_free(vcdev->vdev.name);
     vfio_put_base_device(&vcdev->vdev);
+}
+
+static void vfio_ccw_get_device(VFIOGroup *group, VFIOCCWDevice *vcdev,
+                                Error **errp)
+{
+    char *name = g_strdup_printf("%x.%x.%04x", vcdev->cdev.hostid.cssid,
+                                 vcdev->cdev.hostid.ssid,
+                                 vcdev->cdev.hostid.devid);
+    VFIODevice *vbasedev;
+
+    QLIST_FOREACH(vbasedev, &group->device_list, next) {
+        if (strcmp(vbasedev->name, name) == 0) {
+            error_setg(errp, "vfio: subchannel %s has already been attached",
+                       name);
+            goto out_err;
+        }
+    }
+
+    if (vfio_get_device(group, vcdev->cdev.mdevid, &vcdev->vdev, errp)) {
+        goto out_err;
+    }
+
+    vcdev->vdev.ops = &vfio_ccw_ops;
+    vcdev->vdev.type = VFIO_DEVICE_TYPE_CCW;
+    vcdev->vdev.name = name;
+    vcdev->vdev.dev = &vcdev->cdev.parent_obj.parent_obj;
+
+    return;
+
+out_err:
+    g_free(name);
 }
 
 static VFIOGroup *vfio_ccw_get_group(S390CCWDevice *cdev, Error **errp)
@@ -313,7 +359,6 @@ static VFIOGroup *vfio_ccw_get_group(S390CCWDevice *cdev, Error **errp)
 
 static void vfio_ccw_realize(DeviceState *dev, Error **errp)
 {
-    VFIODevice *vbasedev;
     VFIOGroup *group;
     CcwDevice *ccw_dev = DO_UPCAST(CcwDevice, parent_obj, dev);
     S390CCWDevice *cdev = DO_UPCAST(S390CCWDevice, parent_obj, ccw_dev);
@@ -334,20 +379,8 @@ static void vfio_ccw_realize(DeviceState *dev, Error **errp)
         goto out_group_err;
     }
 
-    vcdev->vdev.ops = &vfio_ccw_ops;
-    vcdev->vdev.type = VFIO_DEVICE_TYPE_CCW;
-    vcdev->vdev.name = g_strdup_printf("%x.%x.%04x", cdev->hostid.cssid,
-                                       cdev->hostid.ssid, cdev->hostid.devid);
-    vcdev->vdev.dev = dev;
-    QLIST_FOREACH(vbasedev, &group->device_list, next) {
-        if (strcmp(vbasedev->name, vcdev->vdev.name) == 0) {
-            error_setg(&err, "vfio: subchannel %s has already been attached",
-                       vcdev->vdev.name);
-            goto out_device_err;
-        }
-    }
-
-    if (vfio_get_device(group, cdev->mdevid, &vcdev->vdev, &err)) {
+    vfio_ccw_get_device(group, vcdev, &err);
+    if (err) {
         goto out_device_err;
     }
 
@@ -366,7 +399,7 @@ static void vfio_ccw_realize(DeviceState *dev, Error **errp)
 out_notifier_err:
     vfio_ccw_put_region(vcdev);
 out_region_err:
-    vfio_put_device(vcdev);
+    vfio_ccw_put_device(vcdev);
 out_device_err:
     vfio_put_group(group);
 out_group_err:
@@ -387,7 +420,7 @@ static void vfio_ccw_unrealize(DeviceState *dev, Error **errp)
 
     vfio_ccw_unregister_io_notifier(vcdev);
     vfio_ccw_put_region(vcdev);
-    vfio_put_device(vcdev);
+    vfio_ccw_put_device(vcdev);
     vfio_put_group(group);
 
     if (cdc->unrealize) {
@@ -413,6 +446,7 @@ static void vfio_ccw_class_init(ObjectClass *klass, void *data)
     dc->props = vfio_ccw_properties;
     dc->vmsd = &vfio_ccw_vmstate;
     dc->desc = "VFIO-based subchannel assignment";
+    set_bit(DEVICE_CATEGORY_MISC, dc->categories);
     dc->realize = vfio_ccw_realize;
     dc->unrealize = vfio_ccw_unrealize;
     dc->reset = vfio_ccw_reset;

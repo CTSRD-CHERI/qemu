@@ -403,7 +403,7 @@ static uint8_t menelaus_read(void *opaque, uint8_t addr)
 
     default:
 #ifdef VERBOSE
-        printf("%s: unknown register %02x\n", __FUNCTION__, addr);
+        printf("%s: unknown register %02x\n", __func__, addr);
 #endif
         break;
     }
@@ -615,7 +615,7 @@ static void menelaus_write(void *opaque, uint8_t addr, uint8_t value)
         rtc_badness:
         default:
             fprintf(stderr, "%s: bad RTC_UPDATE value %02x\n",
-                            __FUNCTION__, value);
+                            __func__, value);
             s->status |= 1 << 10;				/* RTCERR */
             menelaus_update(s);
         }
@@ -708,7 +708,7 @@ static void menelaus_write(void *opaque, uint8_t addr, uint8_t value)
 
     default:
 #ifdef VERBOSE
-        printf("%s: unknown register %02x\n", __FUNCTION__, addr);
+        printf("%s: unknown register %02x\n", __func__, addr);
 #endif
     }
 }
@@ -791,11 +791,13 @@ static const VMStateDescription vmstate_menelaus_tm = {
     }
 };
 
-static void menelaus_pre_save(void *opaque)
+static int menelaus_pre_save(void *opaque)
 {
     MenelausState *s = opaque;
     /* Should be <= 1000 */
     s->rtc_next_vmstate =  s->rtc.next - qemu_clock_get_ms(rtc_clock);
+
+    return 0;
 }
 
 static int menelaus_post_load(void *opaque, int version_id)
@@ -851,10 +853,9 @@ static const VMStateDescription vmstate_menelaus = {
     }
 };
 
-static int twl92230_init(I2CSlave *i2c)
+static void twl92230_realize(DeviceState *dev, Error **errp)
 {
-    DeviceState *dev = DEVICE(i2c);
-    MenelausState *s = TWL92230(i2c);
+    MenelausState *s = TWL92230(dev);
 
     s->rtc.hz_tm = timer_new_ms(rtc_clock, menelaus_rtc_hz, s);
     /* Three output pins plus one interrupt pin.  */
@@ -863,9 +864,7 @@ static int twl92230_init(I2CSlave *i2c)
     /* Three input pins plus one power-button pin.  */
     qdev_init_gpio_in(dev, menelaus_gpio_set, 4);
 
-    menelaus_reset(i2c);
-
-    return 0;
+    menelaus_reset(I2C_SLAVE(dev));
 }
 
 static void twl92230_class_init(ObjectClass *klass, void *data)
@@ -873,7 +872,7 @@ static void twl92230_class_init(ObjectClass *klass, void *data)
     DeviceClass *dc = DEVICE_CLASS(klass);
     I2CSlaveClass *sc = I2C_SLAVE_CLASS(klass);
 
-    sc->init = twl92230_init;
+    dc->realize = twl92230_realize;
     sc->event = menelaus_event;
     sc->recv = menelaus_rx;
     sc->send = menelaus_tx;

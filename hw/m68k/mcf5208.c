@@ -6,6 +6,7 @@
  * This code is licensed under the GPL
  */
 #include "qemu/osdep.h"
+#include "qemu/error-report.h"
 #include "qapi/error.h"
 #include "qemu-common.h"
 #include "cpu.h"
@@ -183,7 +184,7 @@ static void mcf5208_sys_init(MemoryRegion *address_space, qemu_irq *pic)
     memory_region_add_subregion(address_space, 0xfc0a8000, iomem);
     /* Timers.  */
     for (i = 0; i < 2; i++) {
-        s = (m5208_timer_state *)g_malloc0(sizeof(m5208_timer_state));
+        s = g_new0(m5208_timer_state, 1);
         bh = qemu_bh_new(m5208_timer_trigger, s);
         s->timer = ptimer_init(bh, PTIMER_POLICY_DEFAULT);
         memory_region_init_io(&s->iomem, NULL, &m5208_timer_ops, s,
@@ -217,7 +218,6 @@ static void mcf_fec_init(MemoryRegion *sysmem, NICInfo *nd, hwaddr base,
 static void mcf5208evb_init(MachineState *machine)
 {
     ram_addr_t ram_size = machine->ram_size;
-    const char *cpu_model = machine->cpu_model;
     const char *kernel_filename = machine->kernel_filename;
     M68kCPU *cpu;
     CPUM68KState *env;
@@ -229,14 +229,7 @@ static void mcf5208evb_init(MachineState *machine)
     MemoryRegion *ram = g_new(MemoryRegion, 1);
     MemoryRegion *sram = g_new(MemoryRegion, 1);
 
-    if (!cpu_model) {
-        cpu_model = "m5208";
-    }
-    cpu = cpu_m68k_init(cpu_model);
-    if (!cpu) {
-        fprintf(stderr, "Unable to find m68k CPU definition\n");
-        exit(1);
-    }
+    cpu = M68K_CPU(cpu_create(machine->cpu_type));
     env = &cpu->env;
 
     /* Initialize CPU registers.  */
@@ -254,14 +247,14 @@ static void mcf5208evb_init(MachineState *machine)
     /* Internal peripherals.  */
     pic = mcf_intc_init(address_space_mem, 0xfc048000, cpu);
 
-    mcf_uart_mm_init(0xfc060000, pic[26], serial_hds[0]);
-    mcf_uart_mm_init(0xfc064000, pic[27], serial_hds[1]);
-    mcf_uart_mm_init(0xfc068000, pic[28], serial_hds[2]);
+    mcf_uart_mm_init(0xfc060000, pic[26], serial_hd(0));
+    mcf_uart_mm_init(0xfc064000, pic[27], serial_hd(1));
+    mcf_uart_mm_init(0xfc068000, pic[28], serial_hd(2));
 
     mcf5208_sys_init(address_space_mem, pic);
 
     if (nb_nics > 1) {
-        fprintf(stderr, "Too many NICs\n");
+        error_report("Too many NICs");
         exit(1);
     }
     if (nd_table[0].used) {
@@ -296,7 +289,7 @@ static void mcf5208evb_init(MachineState *machine)
         if (qtest_enabled()) {
             return;
         }
-        fprintf(stderr, "Kernel image must be specified\n");
+        error_report("Kernel image must be specified");
         exit(1);
     }
 
@@ -313,7 +306,7 @@ static void mcf5208evb_init(MachineState *machine)
         entry = 0x40000000;
     }
     if (kernel_size < 0) {
-        fprintf(stderr, "qemu: could not load kernel '%s'\n", kernel_filename);
+        error_report("Could not load kernel '%s'", kernel_filename);
         exit(1);
     }
 
@@ -322,9 +315,10 @@ static void mcf5208evb_init(MachineState *machine)
 
 static void mcf5208evb_machine_init(MachineClass *mc)
 {
-    mc->desc = "MCF5206EVB";
+    mc->desc = "MCF5208EVB";
     mc->init = mcf5208evb_init;
     mc->is_default = 1;
+    mc->default_cpu_type = M68K_CPU_TYPE_NAME("m5208");
 }
 
 DEFINE_MACHINE("mcf5208evb", mcf5208evb_machine_init)

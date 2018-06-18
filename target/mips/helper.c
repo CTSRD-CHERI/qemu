@@ -19,6 +19,7 @@
 #include "qemu/osdep.h"
 
 #include "cpu.h"
+#include "internal.h"
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
 #include "exec/log.h"
@@ -578,7 +579,7 @@ hwaddr mips_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
 }
 #endif
 
-int mips_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int rw,
+int mips_cpu_handle_mmu_fault(CPUState *cs, vaddr address, int size, int rw,
                               int mmu_idx)
 {
     MIPSCPU *cpu = MIPS_CPU(cs);
@@ -860,9 +861,10 @@ void mips_cpu_do_interrupt(CPUState *cs)
         // exception_resume_pc(env));
         // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
         env->CP0_ErrorEPC -= env->active_tc.PCC.cr_base;
-        env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
-        env->active_tc.C[CP2CAP_EPCC].cr_offset =  env->CP0_ErrorEPC;
-        env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
+        cap_register_t new_epcc = env->active_tc.PCC;
+        new_epcc.cr_offset =  env->CP0_ErrorEPC;
+        env->active_tc.CHWR.EPCC = new_epcc;
+        env->active_tc.PCC = env->active_tc.CHWR.KCC;
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -
                 env->active_tc.PCC.cr_base;
 #endif /* TARGET_CHERI */
@@ -1079,19 +1081,20 @@ void mips_cpu_do_interrupt(CPUState *cs)
             if (!is_representable(pcc->cr_sealed, pcc->cr_base, pcc->cr_length,
                                   0, pcc->cr_offset)) {
                 nullify_capability(pcc->cr_base + pcc->cr_offset, pcc);
-                env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
+                env->active_tc.CHWR.EPCC = *pcc;
             }
             else
 #endif
             {
-                env->active_tc.C[CP2CAP_EPCC] = env->active_tc.PCC;
-                env->active_tc.C[CP2CAP_EPCC].cr_offset = env->CP0_EPC;
+                cap_register_t new_epcc = env->active_tc.PCC;
+                new_epcc.cr_offset = env->CP0_EPC;
+                env->active_tc.CHWR.EPCC = new_epcc;
             }
 #endif /* TARGET_CHERI */
         }
 #ifdef TARGET_CHERI
         /* always set PCC from KCC even with EXL */
-        env->active_tc.PCC = env->active_tc.C[CP2CAP_KCC];
+        env->active_tc.PCC = env->active_tc.CHWR.KCC;
         // FIXME: this still contains the old pre-trap PC offset, shouldn't we
         // move this down to after env->active_tc.PC has been update?
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -
@@ -1272,19 +1275,24 @@ void r4k_invalidate_tlb (CPUMIPSState *env, int idx, int use_extra)
 #define CAP_TAGBLK_IDX(tag_idx) ((tag_idx) & CAP_TAGBLK_MSK)
 #endif /* ! CHERI_MAGIC128 */
 
-uint8_t **cheri_tagmem = NULL;
+uint8_t **_cheri_tagmem = NULL;
 uint64_t cheri_ntagblks = 0ul;
+
+static inline uint8_t* get_cheri_tagmem(size_t index) {
+    assert(index < cheri_ntagblks && "Tag index out of bounds");
+    return _cheri_tagmem[index];
+}
 
 void cheri_tag_init(uint64_t memory_size)
 {
     // printf("%s: memory_size=0x%lx\n", __func__, memory_size);
-    if (cheri_tagmem != NULL)
+    if (_cheri_tagmem != NULL)
         return;
 
     cheri_ntagblks = (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT;
-    cheri_tagmem = (uint8_t **)g_malloc0(cheri_ntagblks * sizeof(uint8_t *));
-    if (cheri_tagmem == NULL) {
-        printf("%s: Can't allocated tag memory\n", __func__);
+    _cheri_tagmem = (uint8_t **)g_malloc0(cheri_ntagblks * sizeof(uint8_t *));
+    if (_cheri_tagmem == NULL) {
+        error_report("%s: Can't allocated tag memory", __func__);
         exit (-1);
     }
 }
@@ -1303,37 +1311,56 @@ static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
     }
 }
 
-static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr)
+static inline void check_tagmem_writable(CPUMIPSState *env, target_ulong vaddr,
+                                         hwaddr paddr, ram_addr_t ram_addr, MemoryRegion *mr)
 {
-    hwaddr old_addr;
+    if (memory_region_is_rom(mr) || memory_region_is_romd(mr)) {
+        error_report("QEMU ERROR: attempting change clear tag bit on read-only memory:");
+        error_report("%s: vaddr=0x%jx -> ram_addr=0x%jx (paddr=0x%jx)", __func__,
+            (uintmax_t)vaddr, (uintmax_t)ram_addr, (uintmax_t)paddr);
+        do_raise_c0_exception(env, EXCP_DBE, 0);
+    }
+}
+
+static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr, MemoryRegion** mrp)
+{
     hwaddr l;
     MemoryRegion *mr;
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
-    old_addr = addr;
-    mr = address_space_translate(cs->as, addr, &addr, &l, false);
+    mr = address_space_translate(cs->as, addr, &addr, &l, false, MEMTXATTRS_UNSPECIFIED);
+    if (mrp)
+        *mrp = mr;
+
     if (!(memory_region_is_ram(mr) || memory_region_is_romd(mr))) {
         return -1LL;
     }
     return (memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK) + addr;
 }
 
-static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
+static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAccessType rw,
         int reg)
 {
-    return p2r_addr(env, v2p_addr(env, vaddr, rw, reg));
+    MemoryRegion* mr = NULL;
+    hwaddr paddr = v2p_addr(env, vaddr, rw, reg);
+    ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
+    if (rw == MMU_DATA_CAP_STORE || MMU_DATA_STORE)
+        check_tagmem_writable(env, vaddr, paddr, ram_addr, mr);
+    return ram_addr;
 }
 
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
 {
-    ram_addr_t ram_addr;
     uint64_t tag1, tag2;
     uint8_t *tagblk1, *tagblk2;
-
-    ram_addr = v2r_addr(env, vaddr, 0, 0xFF);
-    // printf("%s: vaddr=0x%lx -> ram_addr=0x%lx\n", __func__, vaddr, ram_addr);
+    MemoryRegion* mr = NULL;
+    hwaddr paddr = v2p_addr(env, vaddr, 0, 0xFF);
+    ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
+    // Generate a trap if we try to clear tags in ROM instead of crashing
+    check_tagmem_writable(env, vaddr, paddr, ram_addr, mr);
     if (ram_addr == -1LL)
         return;
+
 
     /* Get the tag number for both the start and end of write. */
     tag1 = ram_addr >> CAP_TAG_SHFT;
@@ -1341,13 +1368,13 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
 
     if (tag1 == tag2) {
         /* The write only invalidates one tag. */
-        tagblk1 = cheri_tagmem[tag1 >> CAP_TAGBLK_SHFT];
+        tagblk1 = get_cheri_tagmem(tag1 >> CAP_TAGBLK_SHFT);
         if (tagblk1 != NULL)
             tagblk1[CAP_TAGBLK_IDX(tag1)] = 0;
     } else {
         /* The write invalidates two tags. */
-        tagblk1 = cheri_tagmem[tag1 >> CAP_TAGBLK_SHFT];
-        tagblk2 = cheri_tagmem[tag2 >> CAP_TAGBLK_SHFT];
+        tagblk1 = get_cheri_tagmem(tag1 >> CAP_TAGBLK_SHFT);
+        tagblk2 = get_cheri_tagmem(tag2 >> CAP_TAGBLK_SHFT);
         if (tagblk1 != NULL)
             tagblk1[CAP_TAGBLK_IDX(tag1)] = 0;
         if (tagblk2 != NULL)
@@ -1355,10 +1382,8 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size)
     }
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr))
+    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
         env->linkedflag = 0;
-
-    return;
 }
 
 void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
@@ -1374,7 +1399,7 @@ void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
         tagmem_idx = tag >> CAP_TAGBLK_SHFT;
         if (tagmem_idx > cheri_ntagblks)
             return;
-        tagblk = cheri_tagmem[tagmem_idx];
+        tagblk = get_cheri_tagmem(tagmem_idx);
 
         if (tagblk != NULL)
             tagblk[CAP_TAGBLK_IDX(tag)] = 0;
@@ -1394,7 +1419,8 @@ static uint8_t *cheri_tag_new_tagblk(uint64_t tag)
     }
 
     /* Possible race here so use atomic compare and swap. */
-    old = atomic_cmpxchg(&cheri_tagmem[tag >> CAP_TAGBLK_SHFT],
+    assert((tag >> CAP_TAGBLK_SHFT) < cheri_ntagblks && "Tag index out of range");
+    old = atomic_cmpxchg(&_cheri_tagmem[tag >> CAP_TAGBLK_SHFT],
             NULL, tagblk);
     if (old != NULL) {
         /* Lost the race, free. */
@@ -1417,7 +1443,7 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
 
     /* Get the tag number and tag block ptr. */
     tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 
     if (tagblk == NULL) {
         /* Allocated a tag block. */
@@ -1426,10 +1452,8 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg)
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr))
+    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
         env->linkedflag = 0;
-
-    return;
 }
 
 int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
@@ -1446,13 +1470,13 @@ int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
     if (ret_paddr)
         *ret_paddr = paddr;
 
-    ram_addr = p2r_addr(env, paddr);
+    ram_addr = p2r_addr(env, paddr, NULL);
     if (ram_addr == -1LL)
         return 0;
 
     /* Get the tag number and tag block ptr. */
     tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 
     if (tagblk == NULL)
         return 0;
@@ -1469,17 +1493,13 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     uint8_t *tagblk;
     uint64_t *tagblk64;
 
-    if (tagbit)
-        ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
-    else
-        ram_addr = v2r_addr(env, vaddr, MMU_DATA_STORE, reg);
-
+    ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
     if (ram_addr == -1LL)
         return;
 
     /* Get the tag number and tag block ptr. */
     tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 
     if (tagblk == NULL) {
         /* Allocated a tag block. */
@@ -1492,7 +1512,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr))
+    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
         env->linkedflag = 0;
 
     return;
@@ -1514,7 +1534,7 @@ int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 
     /* Get the tag number and tag block ptr. */
     tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = cheri_tagmem[tag >> CAP_TAGBLK_SHFT];
+    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 
     if (tagblk == NULL) {
         *ret_tps = *ret_length = 0ULL;
@@ -1526,10 +1546,6 @@ int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     }
 }
 #endif /* CHERI_MAGIC128 */
-
-#else /* ! TARGET_CHERI */
-
-void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len) { }
 
 #endif /* ! TARGET_CHERI */
 

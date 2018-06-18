@@ -7,9 +7,13 @@
  * This work is licensed under the terms of the GNU GPL, version 2 or later.
  * See the COPYING file in the top-level directory.
  */
+
 #include "qemu/osdep.h"
 #include <getopt.h>
 #include <libgen.h>
+#ifndef _WIN32
+#include <termios.h>
+#endif
 
 #include "qapi/error.h"
 #include "qemu-io.h"
@@ -20,7 +24,7 @@
 #include "qemu/readline.h"
 #include "qemu/log.h"
 #include "qapi/qmp/qstring.h"
-#include "qapi/qmp/qbool.h"
+#include "qapi/qmp/qdict.h"
 #include "qom/object_interfaces.h"
 #include "sysemu/block-backend.h"
 #include "block/block_int.h"
@@ -40,6 +44,26 @@ static char **cmdline;
 static bool imageOpts;
 
 static ReadLineState *readline_state;
+
+static int ttyEOF;
+
+static int get_eof_char(void)
+{
+#ifdef _WIN32
+    return 0x4; /* Ctrl-D */
+#else
+    struct termios tty;
+    if (tcgetattr(STDIN_FILENO, &tty) != 0) {
+        if (errno == ENOTTY) {
+            return 0x0; /* just expect read() == 0 */
+        } else {
+            return 0x4; /* Ctrl-D */
+        }
+    }
+
+    return tty.c_cc[VEOF];
+#endif
+}
 
 static int close_f(BlockBackend *blk, int argc, char **argv)
 {
@@ -62,7 +86,7 @@ static int openfile(char *name, int flags, bool writethrough, bool force_share,
 
     if (qemuio_blk) {
         error_report("file open already, try 'help close'");
-        QDECREF(opts);
+        qobject_unref(opts);
         return 1;
     }
 
@@ -71,12 +95,12 @@ static int openfile(char *name, int flags, bool writethrough, bool force_share,
             opts = qdict_new();
         }
         if (qdict_haskey(opts, BDRV_OPT_FORCE_SHARE)
-            && !qdict_get_bool(opts, BDRV_OPT_FORCE_SHARE)) {
+            && strcmp(qdict_get_str(opts, BDRV_OPT_FORCE_SHARE), "on")) {
             error_report("-U conflicts with image options");
-            QDECREF(opts);
+            qobject_unref(opts);
             return 1;
         }
-        qdict_put_bool(opts, BDRV_OPT_FORCE_SHARE, true);
+        qdict_put_str(opts, BDRV_OPT_FORCE_SHARE, "on");
     }
     qemuio_blk = blk_new_open(name, NULL, opts, flags, &local_err);
     if (!qemuio_blk) {
@@ -102,6 +126,7 @@ static void open_help(void)
 " Opens a file for subsequent use by all of the other qemu-io commands.\n"
 " -r, -- open file read-only\n"
 " -s, -- use snapshot file\n"
+" -C, -- use copy-on-read\n"
 " -n, -- disable host cache, short for -t none\n"
 " -U, -- force shared permissions\n"
 " -k, -- use kernel AIO implementation (on Linux only)\n"
@@ -120,7 +145,7 @@ static const cmdinfo_t open_cmd = {
     .argmin     = 1,
     .argmax     = -1,
     .flags      = CMD_NOFILE_OK,
-    .args       = "[-rsnkU] [-t cache] [-d discard] [-o options] [path]",
+    .args       = "[-rsCnkU] [-t cache] [-d discard] [-o options] [path]",
     .oneline    = "open the file specified by path",
     .help       = open_help,
 };
@@ -145,7 +170,7 @@ static int open_f(BlockBackend *blk, int argc, char **argv)
     QDict *opts;
     bool force_share = false;
 
-    while ((c = getopt(argc, argv, "snro:kt:d:U")) != -1) {
+    while ((c = getopt(argc, argv, "snCro:kt:d:U")) != -1) {
         switch (c) {
         case 's':
             flags |= BDRV_O_SNAPSHOT;
@@ -153,6 +178,9 @@ static int open_f(BlockBackend *blk, int argc, char **argv)
         case 'n':
             flags |= BDRV_O_NOCACHE;
             writethrough = false;
+            break;
+        case 'C':
+            flags |= BDRV_O_COPY_ON_READ;
             break;
         case 'r':
             readonly = 1;
@@ -215,7 +243,7 @@ static int open_f(BlockBackend *blk, int argc, char **argv)
     } else if (optind == argc) {
         openfile(NULL, flags, writethrough, force_share, opts);
     } else {
-        QDECREF(opts);
+        qobject_unref(opts);
         qemuio_command_usage(&open_cmd);
     }
     return 0;
@@ -251,6 +279,7 @@ static void usage(const char *name)
 "  -r, --read-only      export read-only\n"
 "  -s, --snapshot       use snapshot file\n"
 "  -n, --nocache        disable host cache, short for -t none\n"
+"  -C, --copy-on-read   enable copy-on-read\n"
 "  -m, --misalign       misalign allocations for O_DIRECT\n"
 "  -k, --native-aio     use kernel AIO implementation (on Linux only)\n"
 "  -t, --cache=MODE     use the given cache mode for the image\n"
@@ -317,7 +346,8 @@ static char *fetchline_readline(void)
     readline_start(readline_state, get_prompt(), 0, readline_func, &line);
     while (!line) {
         int ch = getchar();
-        if (ch == EOF) {
+        if (ttyEOF != 0x0 && ch == ttyEOF) {
+            printf("\n");
             break;
         }
         readline_handle_byte(readline_state, ch);
@@ -439,7 +469,7 @@ static QemuOptsList file_opts = {
 int main(int argc, char **argv)
 {
     int readonly = 0;
-    const char *sopt = "hVc:d:f:rsnmkt:T:U";
+    const char *sopt = "hVc:d:f:rsnCmkt:T:U";
     const struct option lopt[] = {
         { "help", no_argument, NULL, 'h' },
         { "version", no_argument, NULL, 'V' },
@@ -448,6 +478,7 @@ int main(int argc, char **argv)
         { "read-only", no_argument, NULL, 'r' },
         { "snapshot", no_argument, NULL, 's' },
         { "nocache", no_argument, NULL, 'n' },
+        { "copy-on-read", no_argument, NULL, 'C' },
         { "misalign", no_argument, NULL, 'm' },
         { "native-aio", no_argument, NULL, 'k' },
         { "discard", required_argument, NULL, 'd' },
@@ -473,7 +504,7 @@ int main(int argc, char **argv)
 #endif
 
     module_call_init(MODULE_INIT_TRACE);
-    progname = basename(argv[0]);
+    progname = g_path_get_basename(argv[0]);
     qemu_init_exec_dir(argv[0]);
 
     qcrypto_init(&error_fatal);
@@ -491,6 +522,9 @@ int main(int argc, char **argv)
         case 'n':
             flags |= BDRV_O_NOCACHE;
             writethrough = false;
+            break;
+        case 'C':
+            flags |= BDRV_O_COPY_ON_READ;
             break;
         case 'd':
             if (bdrv_parse_discard_flags(optarg, &flags) < 0) {
@@ -524,7 +558,7 @@ int main(int argc, char **argv)
             trace_file = trace_opt_parse(optarg);
             break;
         case 'V':
-            printf("%s version " QEMU_VERSION QEMU_PKGVERSION "\n"
+            printf("%s version " QEMU_FULL_VERSION "\n"
                    QEMU_COPYRIGHT "\n", progname);
             exit(0);
         case 'h':
@@ -583,6 +617,7 @@ int main(int argc, char **argv)
     qemuio_add_command(&close_cmd);
 
     if (isatty(STDIN_FILENO)) {
+        ttyEOF = get_eof_char();
         readline_state = readline_init(readline_printf_func,
                                        readline_flush_func,
                                        NULL,

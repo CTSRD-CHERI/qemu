@@ -56,7 +56,6 @@ enum {
 
 static TCGv cpu_pc;
 static TCGv cpu_gregs[16];
-static TCGv_env cpu_env;
 static TCGv cc_a, cc_b;
 
 #include "exec/gen-icount.h"
@@ -94,7 +93,6 @@ void moxie_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
 void moxie_translate_init(void)
 {
     int i;
-    static int done_init;
     static const char * const gregnames[16] = {
         "$fp", "$sp", "$r0", "$r1",
         "$r2", "$r3", "$r4", "$r5",
@@ -102,11 +100,6 @@ void moxie_translate_init(void)
         "$r10", "$r11", "$r12", "$r13"
     };
 
-    if (done_init) {
-        return;
-    }
-    cpu_env = tcg_global_reg_new_ptr(TCG_AREG0, "env");
-    tcg_ctx.tcg_env = cpu_env;
     cpu_pc = tcg_global_mem_new_i32(cpu_env,
                                     offsetof(CPUMoxieState, pc), "$pc");
     for (i = 0; i < 16; i++)
@@ -118,8 +111,6 @@ void moxie_translate_init(void)
                                   offsetof(CPUMoxieState, cc_a), "cc_a");
     cc_b = tcg_global_mem_new_i32(cpu_env,
                                   offsetof(CPUMoxieState, cc_b), "cc_b");
-
-    done_init = 1;
 }
 
 static inline bool use_goto_tb(DisasContext *ctx, target_ulong dest)
@@ -141,13 +132,13 @@ static inline void gen_goto_tb(CPUMoxieState *env, DisasContext *ctx,
     if (use_goto_tb(ctx, dest)) {
         tcg_gen_goto_tb(n);
         tcg_gen_movi_i32(cpu_pc, dest);
-        tcg_gen_exit_tb((uintptr_t)ctx->tb + n);
+        tcg_gen_exit_tb(ctx->tb, n);
     } else {
         tcg_gen_movi_i32(cpu_pc, dest);
         if (ctx->singlestep_enabled) {
             gen_helper_debug(cpu_env);
         }
-        tcg_gen_exit_tb(0);
+        tcg_gen_exit_tb(NULL, 0);
     }
 }
 
@@ -337,7 +328,7 @@ static int decode_opc(MoxieCPU *cpu, DisasContext *ctx)
                 tcg_temp_free_i32(t1);
 
                 /* Jump... */
-                tcg_gen_exit_tb(0);
+                tcg_gen_exit_tb(NULL, 0);
 
                 ctx->bstate = BS_BRANCH;
             }
@@ -481,14 +472,14 @@ static int decode_opc(MoxieCPU *cpu, DisasContext *ctx)
                 tcg_gen_mov_i32(cpu_pc, REG(fnreg));
                 tcg_temp_free_i32(t1);
                 tcg_temp_free_i32(t2);
-                tcg_gen_exit_tb(0);
+                tcg_gen_exit_tb(NULL, 0);
                 ctx->bstate = BS_BRANCH;
             }
             break;
         case 0x1a: /* jmpa */
             {
                 tcg_gen_movi_i32(cpu_pc, cpu_ldl_code(env, ctx->pc+2));
-                tcg_gen_exit_tb(0);
+                tcg_gen_exit_tb(NULL, 0);
                 ctx->bstate = BS_BRANCH;
                 length = 6;
             }
@@ -593,7 +584,7 @@ static int decode_opc(MoxieCPU *cpu, DisasContext *ctx)
             {
                 int reg = (opcode >> 4) & 0xf;
                 tcg_gen_mov_i32(cpu_pc, REG(reg));
-                tcg_gen_exit_tb(0);
+                tcg_gen_exit_tb(NULL, 0);
                 ctx->bstate = BS_BRANCH;
             }
             break;
@@ -838,7 +829,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
     ctx.singlestep_enabled = 0;
     ctx.bstate = BS_NONE;
     num_insns = 0;
-    max_insns = tb->cflags & CF_COUNT_MASK;
+    max_insns = tb_cflags(tb) & CF_COUNT_MASK;
     if (max_insns == 0) {
         max_insns = CF_COUNT_MASK;
     }
@@ -887,7 +878,7 @@ void gen_intermediate_code(CPUState *cs, struct TranslationBlock *tb)
             gen_goto_tb(env, &ctx, 0, ctx.pc);
             break;
         case BS_EXCP:
-            tcg_gen_exit_tb(0);
+            tcg_gen_exit_tb(NULL, 0);
             break;
         case BS_BRANCH:
         default:

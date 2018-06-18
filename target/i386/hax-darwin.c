@@ -11,13 +11,9 @@
  */
 
 /* HAX module interface - darwin version */
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
+#include "qemu/osdep.h"
 #include <sys/ioctl.h>
 
-#include "qemu/osdep.h"
 #include "target/i386/hax-i386.h"
 
 hax_fd hax_mod_open(void)
@@ -32,21 +28,36 @@ hax_fd hax_mod_open(void)
     return fd;
 }
 
-int hax_populate_ram(uint64_t va, uint32_t size)
+int hax_populate_ram(uint64_t va, uint64_t size)
 {
     int ret;
-    struct hax_alloc_ram_info info;
 
     if (!hax_global.vm || !hax_global.vm->fd) {
         fprintf(stderr, "Allocate memory before vm create?\n");
         return -EINVAL;
     }
 
-    info.size = size;
-    info.va = va;
-    ret = ioctl(hax_global.vm->fd, HAX_VM_IOCTL_ALLOC_RAM, &info);
+    if (hax_global.supports_64bit_ramblock) {
+        struct hax_ramblock_info ramblock = {
+            .start_va = va,
+            .size = size,
+            .reserved = 0
+        };
+
+        ret = ioctl(hax_global.vm->fd, HAX_VM_IOCTL_ADD_RAMBLOCK, &ramblock);
+    } else {
+        struct hax_alloc_ram_info info = {
+            .size = (uint32_t)size,
+            .pad = 0,
+            .va = va
+        };
+
+        ret = ioctl(hax_global.vm->fd, HAX_VM_IOCTL_ALLOC_RAM, &info);
+    }
     if (ret < 0) {
-        fprintf(stderr, "Failed to allocate %x memory\n", size);
+        fprintf(stderr, "Failed to register RAM block: ret=%d, va=0x%" PRIx64
+                ", size=0x%" PRIx64 ", method=%s\n", ret, va, size,
+                hax_global.supports_64bit_ramblock ? "new" : "legacy");
         return ret;
     }
     return 0;
@@ -246,10 +257,7 @@ int hax_host_setup_vcpu_channel(struct hax_vcpu_state *vcpu)
 
 int hax_vcpu_run(struct hax_vcpu_state *vcpu)
 {
-    int ret;
-
-    ret = ioctl(vcpu->fd, HAX_VCPU_IOCTL_RUN, NULL);
-    return ret;
+    return ioctl(vcpu->fd, HAX_VCPU_IOCTL_RUN, NULL);
 }
 
 int hax_sync_fpu(CPUArchState *env, struct fx_layout *fl, int set)
@@ -304,13 +312,12 @@ int hax_sync_vcpu_state(CPUArchState *env, struct vcpu_state_t *state, int set)
 
 int hax_inject_interrupt(CPUArchState *env, int vector)
 {
-    int ret, fd;
+    int fd;
 
     fd = hax_vcpu_get_fd(env);
     if (fd <= 0) {
         return -1;
     }
 
-    ret = ioctl(fd, HAX_VCPU_IOCTL_INTERRUPT, &vector);
-    return ret;
+    return ioctl(fd, HAX_VCPU_IOCTL_INTERRUPT, &vector);
 }

@@ -22,16 +22,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include "qemu/osdep.h"
 #include <dirent.h>
 #include "qapi/error.h"
 #include "block/block_int.h"
 #include "qemu/module.h"
+#include "qemu/option.h"
 #include "qemu/bswap.h"
 #include "migration/blocker.h"
-#include "qapi/qmp/qbool.h"
+#include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qstring.h"
 #include "qemu/cutils.h"
+#include "qemu/error-report.h"
 
 #ifndef S_IWGRP
 #define S_IWGRP 0
@@ -55,15 +58,6 @@
 #define DLOG(a) a
 
 static void checkpoint(void);
-
-#ifdef __MINGW32__
-void nonono(const char* file, int line, const char* msg) {
-    fprintf(stderr, "Nonono! %s:%d %s\n", file, line, msg);
-    exit(-5);
-}
-#undef assert
-#define assert(a) do {if (!(a)) nonono(__FILE__, __LINE__, #a);}while(0)
-#endif
 
 #else
 
@@ -449,7 +443,7 @@ static direntry_t *create_long_filename(BDRVVVFATState *s, const char *filename)
         return NULL;
     }
 
-    number_of_entries = (length * 2 + 25) / 26;
+    number_of_entries = DIV_ROUND_UP(length * 2, 26);
 
     for(i=0;i<number_of_entries;i++) {
         entry=array_get_next(&(s->directory));
@@ -1226,8 +1220,7 @@ static int vvfat_open(BlockDriverState *bs, QDict *options, int flags,
 
     switch (s->fat_type) {
     case 32:
-            fprintf(stderr, "Big fat greek warning: FAT32 has not been tested. "
-                "You are welcome to do so!\n");
+        warn_report("FAT32 has not been tested. You are welcome to do so!");
         break;
     case 16:
     case 12:
@@ -1268,7 +1261,11 @@ static int vvfat_open(BlockDriverState *bs, QDict *options, int flags,
                        "Unable to set VVFAT to 'rw' when drive is read-only");
             goto fail;
         }
-    } else  {
+    } else  if (!bdrv_is_read_only(bs)) {
+        error_report("Opening non-rw vvfat images without an explicit "
+                     "read-only=on option is deprecated. Future versions "
+                     "will refuse to open the image instead of "
+                     "automatically marking the image read-only.");
         /* read only is the default for safety */
         ret = bdrv_set_read_only(bs, true, &local_err);
         if (ret < 0) {
@@ -2554,7 +2551,7 @@ static int commit_one_file(BDRVVVFATState* s,
                 (size > offset && c >=2 && !fat_eof(s, c)));
 
         ret = vvfat_read(s->bs, cluster2sector(s, c),
-            (uint8_t*)cluster, (rest_size + 0x1ff) / 0x200);
+            (uint8_t*)cluster, DIV_ROUND_UP(rest_size, 0x200));
 
         if (ret < 0) {
             qemu_close(fd);
@@ -2952,7 +2949,7 @@ static int do_commit(BDRVVVFATState* s)
         return ret;
     }
 
-    if (s->qcow->bs->drv->bdrv_make_empty) {
+    if (s->qcow->bs->drv && s->qcow->bs->drv->bdrv_make_empty) {
         s->qcow->bs->drv->bdrv_make_empty(s->qcow->bs);
     }
 
@@ -3028,7 +3025,8 @@ DLOG(checkpoint());
                         if (memcmp(direntries + k,
                                     array_get(&(s->directory), dir_index + k),
                                     sizeof(direntry_t))) {
-                            fprintf(stderr, "Warning: tried to write to write-protected file\n");
+                            warn_report("tried to write to write-protected "
+                                        "file");
                             return -1;
                         }
                     }
@@ -3090,15 +3088,13 @@ vvfat_co_pwritev(BlockDriverState *bs, uint64_t offset, uint64_t bytes,
     return ret;
 }
 
-static int64_t coroutine_fn vvfat_co_get_block_status(BlockDriverState *bs,
-        int64_t sector_num, int nb_sectors, int *n, BlockDriverState **file)
+static int coroutine_fn vvfat_co_block_status(BlockDriverState *bs,
+                                              bool want_zero, int64_t offset,
+                                              int64_t bytes, int64_t *n,
+                                              int64_t *map,
+                                              BlockDriverState **file)
 {
-    *n = bs->total_sectors - sector_num;
-    if (*n > nb_sectors) {
-        *n = nb_sectors;
-    } else if (*n < 0) {
-        return 0;
-    }
+    *n = bytes;
     return BDRV_BLOCK_DATA;
 }
 
@@ -3133,7 +3129,7 @@ static void vvfat_qcow_options(int *child_flags, QDict *child_options,
                                int parent_flags, QDict *parent_options)
 {
     qdict_set_default_str(child_options, BDRV_OPT_READ_ONLY, "off");
-    *child_flags = BDRV_O_NO_FLUSH;
+    qdict_set_default_str(child_options, BDRV_OPT_CACHE_NO_FLUSH, "on");
 }
 
 static const BdrvChildRole child_vvfat_qcow = {
@@ -3183,7 +3179,7 @@ static int enable_write_target(BlockDriverState *bs, Error **errp)
     qdict_put_str(options, "write-target.driver", "qcow");
     s->qcow = bdrv_open_child(s->qcow_filename, options, "write-target", bs,
                               &child_vvfat_qcow, false, errp);
-    QDECREF(options);
+    qobject_unref(options);
     if (!s->qcow) {
         ret = -EINVAL;
         goto err;
@@ -3210,6 +3206,7 @@ err:
 
 static void vvfat_child_perm(BlockDriverState *bs, BdrvChild *c,
                              const BdrvChildRole *role,
+                             BlockReopenQueue *reopen_queue,
                              uint64_t perm, uint64_t shared,
                              uint64_t *nperm, uint64_t *nshared)
 {
@@ -3258,7 +3255,7 @@ static BlockDriver bdrv_vvfat = {
 
     .bdrv_co_preadv         = vvfat_co_preadv,
     .bdrv_co_pwritev        = vvfat_co_pwritev,
-    .bdrv_co_get_block_status = vvfat_co_get_block_status,
+    .bdrv_co_block_status   = vvfat_co_block_status,
 };
 
 static void bdrv_vvfat_init(void)
@@ -3269,24 +3266,11 @@ static void bdrv_vvfat_init(void)
 block_init(bdrv_vvfat_init);
 
 #ifdef DEBUG
-static void checkpoint(void) {
+static void checkpoint(void)
+{
     assert(((mapping_t*)array_get(&(vvv->mapping), 0))->end == 2);
     check1(vvv);
     check2(vvv);
     assert(!vvv->current_mapping || vvv->current_fd || (vvv->current_mapping->mode & MODE_DIRECTORY));
-#if 0
-    if (((direntry_t*)vvv->directory.pointer)[1].attributes != 0xf)
-        fprintf(stderr, "Nonono!\n");
-    mapping_t* mapping;
-    direntry_t* direntry;
-    assert(vvv->mapping.size >= vvv->mapping.item_size * vvv->mapping.next);
-    assert(vvv->directory.size >= vvv->directory.item_size * vvv->directory.next);
-    if (vvv->mapping.next<47)
-        return;
-    assert((mapping = array_get(&(vvv->mapping), 47)));
-    assert(mapping->dir_index < vvv->directory.next);
-    direntry = array_get(&(vvv->directory), mapping->dir_index);
-    assert(!memcmp(direntry->name, "USB     H  ", 11) || direntry->name[0]==0);
-#endif
 }
 #endif

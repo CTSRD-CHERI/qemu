@@ -22,7 +22,6 @@
 #ifdef NEED_CPU_H
 # ifdef CONFIG_KVM
 #  include <linux/kvm.h>
-#  include <linux/kvm_para.h>
 #  define CONFIG_KVM_IS_POSSIBLE
 # endif
 #else
@@ -207,7 +206,7 @@ extern KVMState *kvm_state;
 /* external API */
 
 bool kvm_has_free_slot(MachineState *ms);
-int kvm_has_sync_mmu(void);
+bool kvm_has_sync_mmu(void);
 int kvm_has_vcpu_events(void);
 int kvm_has_robust_singlestep(void);
 int kvm_has_debugregs(void);
@@ -231,6 +230,23 @@ int kvm_destroy_vcpu(CPUState *cpu);
  */
 bool kvm_arm_supports_user_irq(void);
 
+/**
+ * kvm_memcrypt_enabled - return boolean indicating whether memory encryption
+ *                        is enabled
+ * Returns: 1 memory encryption is enabled
+ *          0 memory encryption is disabled
+ */
+bool kvm_memcrypt_enabled(void);
+
+/**
+ * kvm_memcrypt_encrypt_data: encrypt the memory range
+ *
+ * Return: 1 failed to encrypt the range
+ *         0 succesfully encrypted memory region
+ */
+int kvm_memcrypt_encrypt_data(uint8_t *ptr, uint64_t len);
+
+
 #ifdef NEED_CPU_H
 #include "cpu.h"
 
@@ -248,7 +264,7 @@ int kvm_on_sigbus(int code, void *addr);
 
 /* interface with exec.c */
 
-void phys_mem_set_alloc(void *(*alloc)(size_t, uint64_t *align));
+void phys_mem_set_alloc(void *(*alloc)(size_t, uint64_t *align, bool shared));
 
 /* internal API */
 

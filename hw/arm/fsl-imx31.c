@@ -106,19 +106,7 @@ static void fsl_imx31_realize(DeviceState *dev, Error **errp)
             { FSL_IMX31_UART2_ADDR, FSL_IMX31_UART2_IRQ },
         };
 
-        if (i < MAX_SERIAL_PORTS) {
-            Chardev *chr;
-
-            chr = serial_hds[i];
-
-            if (!chr) {
-                char label[20];
-                snprintf(label, sizeof(label), "imx31.uart%d", i);
-                chr = qemu_chr_new(label, "null");
-            }
-
-            qdev_prop_set_chr(DEVICE(&s->uart[i]), "chardev", chr);
-        }
+        qdev_prop_set_chr(DEVICE(&s->uart[i]), "chardev", serial_hd(i));
 
         object_property_set_bool(OBJECT(&s->uart[i]), true, "realized", &err);
         if (err) {
@@ -260,8 +248,12 @@ static void fsl_imx31_class_init(ObjectClass *oc, void *data)
     DeviceClass *dc = DEVICE_CLASS(oc);
 
     dc->realize = fsl_imx31_realize;
-
     dc->desc = "i.MX31 SOC";
+    /*
+     * Reason: uses serial_hds in realize and the kzm board does not
+     * support multiple CPUs
+     */
+    dc->user_creatable = false;
 }
 
 static const TypeInfo fsl_imx31_type_info = {

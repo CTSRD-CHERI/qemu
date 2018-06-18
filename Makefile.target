@@ -11,9 +11,9 @@ $(call set-vpath, $(SRC_PATH):$(BUILD_DIR))
 ifdef CONFIG_LINUX
 QEMU_CFLAGS += -I../linux-headers
 endif
-QEMU_CFLAGS += -I.. -I$(SRC_PATH)/target/$(TARGET_BASE_ARCH) -DNEED_CPU_H
+QEMU_CFLAGS += -iquote .. -iquote $(SRC_PATH)/target/$(TARGET_BASE_ARCH) -DNEED_CPU_H
 
-QEMU_CFLAGS+=-I$(SRC_PATH)/include
+QEMU_CFLAGS+=-iquote $(SRC_PATH)/include
 
 ifdef CONFIG_CHERI128
 QEMU_CFLAGS+=-DCHERI_128=1
@@ -24,7 +24,7 @@ else
 ifdef CONFIG_CHERI256
 _CHERI_DEFINES=$(filter -DCHERI_%,$(QEMU_CFLAGS))
 # $(info "CHERI defines: $(_CHERI_DEFINES)")
-ALLOWED_CHERI_DEFINES=-DCHERI_UNALIGNED
+ALLOWED_CHERI_DEFINES=-DCHERI_UNALIGNED -DCHERI_C0_NULL -DCHERI_C0_NULL=0 -DCHERI_C0_NULL=1
 _CHERI_DEFINES:=$(filter-out $(ALLOWED_CHERI_DEFINES),$(_CHERI_DEFINES))
 # $(info "Filtered defines: $(_CHERI_DEFINES)")
 ifneq (,$(_CHERI_DEFINES))
@@ -41,7 +41,7 @@ QEMU_PROG_BUILD = $(QEMU_PROG)
 else
 # system emulator name
 QEMU_PROG=qemu-system-$(TARGET_NAME)$(EXESUF)
-ifneq (,$(findstring -mwindows,$(libs_softmmu)))
+ifneq (,$(findstring -mwindows,$(SDL_LIBS)))
 # Terminate program name with a 'w' because the linker builds a windows executable.
 QEMU_PROGW=qemu-system-$(TARGET_NAME)w$(EXESUF)
 $(QEMU_PROG): $(QEMU_PROGW)
@@ -112,21 +112,14 @@ all: $(PROGS) stap
 # cpu emulator library
 obj-y += exec.o
 obj-y += accel/
-obj-$(CONFIG_TCG) += tcg/tcg.o tcg/tcg-op.o tcg/optimize.o
-obj-$(CONFIG_TCG) += tcg/tcg-common.o tcg/tcg-runtime.o
+obj-$(CONFIG_TCG) += tcg/tcg.o tcg/tcg-op.o tcg/tcg-op-vec.o tcg/tcg-op-gvec.o
+obj-$(CONFIG_TCG) += tcg/tcg-common.o tcg/optimize.o
 obj-$(CONFIG_TCG_INTERPRETER) += tcg/tci.o
 obj-$(CONFIG_TCG_INTERPRETER) += disas/tci.o
-obj-y += fpu/softfloat.o
+obj-$(CONFIG_TCG) += fpu/softfloat.o
 obj-y += target/$(TARGET_BASE_ARCH)/
 obj-y += disas.o
 obj-$(call notempty,$(TARGET_XML_FILES)) += gdbstub-xml.o
-obj-$(call lnot,$(CONFIG_HAX)) += hax-stub.o
-
-obj-$(CONFIG_LIBDECNUMBER) += libdecnumber/decContext.o
-obj-$(CONFIG_LIBDECNUMBER) += libdecnumber/decNumber.o
-obj-$(CONFIG_LIBDECNUMBER) += libdecnumber/dpd/decimal32.o
-obj-$(CONFIG_LIBDECNUMBER) += libdecnumber/dpd/decimal64.o
-obj-$(CONFIG_LIBDECNUMBER) += libdecnumber/dpd/decimal128.o
 
 #########################################################
 # Linux user emulator target
@@ -138,7 +131,7 @@ QEMU_CFLAGS+=-I$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR) \
              -I$(SRC_PATH)/linux-user
 
 obj-y += linux-user/
-obj-y += gdbstub.o thunk.o user-exec.o user-exec-stub.o
+obj-y += gdbstub.o thunk.o
 
 endif #CONFIG_LINUX_USER
 
@@ -151,7 +144,7 @@ QEMU_CFLAGS+=-I$(SRC_PATH)/bsd-user -I$(SRC_PATH)/bsd-user/$(TARGET_ABI_DIR) \
 			 -I$(SRC_PATH)/bsd-user/$(HOST_VARIANT_DIR)
 
 obj-y += bsd-user/
-obj-y += gdbstub.o user-exec.o user-exec-stub.o
+obj-y += gdbstub.o
 
 endif #CONFIG_BSD_USER
 
@@ -212,7 +205,7 @@ all-obj-$(CONFIG_SOFTMMU) += $(io-obj-y)
 
 $(QEMU_PROG_BUILD): config-devices.mak
 
-COMMON_LDADDS = ../libqemuutil.a ../libqemustub.a
+COMMON_LDADDS = ../libqemuutil.a
 
 # build either PROG or PROGW
 $(QEMU_PROG_BUILD): $(all-obj-y) $(COMMON_LDADDS)

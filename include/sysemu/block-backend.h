@@ -70,24 +70,10 @@ typedef struct BlockDevOps {
 
 /* This struct is embedded in (the private) BlockBackend struct and contains
  * fields that must be public. This is in particular for QLIST_ENTRY() and
- * friends so that BlockBackends can be kept in lists outside block-backend.c */
+ * friends so that BlockBackends can be kept in lists outside block-backend.c
+ * */
 typedef struct BlockBackendPublic {
-    /* throttled_reqs_lock protects the CoQueues for throttled requests.  */
-    CoMutex      throttled_reqs_lock;
-    CoQueue      throttled_reqs[2];
-
-    /* Nonzero if the I/O limits are currently being ignored; generally
-     * it is zero.  Accessed with atomic operations.
-     */
-    unsigned int io_limits_disabled;
-
-    /* The following fields are protected by the ThrottleGroup lock.
-     * See the ThrottleGroup documentation for details.
-     * throttle_state tells us if I/O limits are configured. */
-    ThrottleState *throttle_state;
-    ThrottleTimers throttle_timers;
-    unsigned       pending_reqs[2];
-    QLIST_ENTRY(BlockBackendPublic) round_robin;
+    ThrottleGroupMember throttle_group_member;
 } BlockBackendPublic;
 
 BlockBackend *blk_new(uint64_t perm, uint64_t shared_perm);
@@ -242,5 +228,12 @@ void blk_io_limits_disable(BlockBackend *blk);
 void blk_io_limits_enable(BlockBackend *blk, const char *group);
 void blk_io_limits_update_group(BlockBackend *blk, const char *group);
 void blk_set_force_allow_inactivate(BlockBackend *blk);
+
+void blk_register_buf(BlockBackend *blk, void *host, size_t size);
+void blk_unregister_buf(BlockBackend *blk, void *host);
+
+int coroutine_fn blk_co_copy_range(BlockBackend *blk_in, int64_t off_in,
+                                   BlockBackend *blk_out, int64_t off_out,
+                                   int bytes, BdrvRequestFlags flags);
 
 #endif

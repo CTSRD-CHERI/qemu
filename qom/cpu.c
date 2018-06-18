@@ -29,12 +29,13 @@
 #include "exec/cpu-common.h"
 #include "qemu/error-report.h"
 #include "sysemu/sysemu.h"
+#include "hw/boards.h"
 #include "hw/qdev-properties.h"
 #include "trace-root.h"
 
 CPUInterruptHandler cpu_interrupt_handler;
 
-bool cpu_exists(int64_t id)
+CPUState *cpu_by_arch_id(int64_t id)
 {
     CPUState *cpu;
 
@@ -42,50 +43,27 @@ bool cpu_exists(int64_t id)
         CPUClass *cc = CPU_GET_CLASS(cpu);
 
         if (cc->get_arch_id(cpu) == id) {
-            return true;
+            return cpu;
         }
     }
-    return false;
+    return NULL;
 }
 
-CPUState *cpu_generic_init(const char *typename, const char *cpu_model)
+bool cpu_exists(int64_t id)
 {
-    char *str, *name, *featurestr;
-    CPUState *cpu = NULL;
-    ObjectClass *oc;
-    CPUClass *cc;
+    return !!cpu_by_arch_id(id);
+}
+
+CPUState *cpu_create(const char *typename)
+{
     Error *err = NULL;
-
-    str = g_strdup(cpu_model);
-    name = strtok(str, ",");
-
-    oc = cpu_class_by_name(typename, name);
-    if (oc == NULL) {
-        g_free(str);
-        return NULL;
-    }
-
-    cc = CPU_CLASS(oc);
-    featurestr = strtok(NULL, ",");
-    /* TODO: all callers of cpu_generic_init() need to be converted to
-     * call parse_features() only once, before calling cpu_generic_init().
-     */
-    cc->parse_features(object_class_get_name(oc), featurestr, &err);
-    g_free(str);
-    if (err != NULL) {
-        goto out;
-    }
-
-    cpu = CPU(object_new(object_class_get_name(oc)));
+    CPUState *cpu = CPU(object_new(typename));
     object_property_set_bool(OBJECT(cpu), true, "realized", &err);
-
-out:
     if (err != NULL) {
         error_report_err(err);
         object_unref(OBJECT(cpu));
-        return NULL;
+        exit(EXIT_FAILURE);
     }
-
     return cpu;
 }
 
@@ -292,6 +270,7 @@ static void cpu_common_reset(CPUState *cpu)
     cpu->can_do_io = 1;
     cpu->exception_index = -1;
     cpu->crash_occurred = false;
+    cpu->cflags_next_tb = -1;
 
     if (tcg_enabled()) {
         cpu_tb_jmp_cache_clear(cpu);
@@ -309,33 +288,21 @@ ObjectClass *cpu_class_by_name(const char *typename, const char *cpu_model)
 {
     CPUClass *cc = CPU_CLASS(object_class_by_name(typename));
 
+    assert(cpu_model && cc->class_by_name);
     return cc->class_by_name(cpu_model);
-}
-
-static ObjectClass *cpu_common_class_by_name(const char *cpu_model)
-{
-    return NULL;
 }
 
 static void cpu_common_parse_features(const char *typename, char *features,
                                       Error **errp)
 {
-    char *featurestr; /* Single "key=value" string being parsed */
     char *val;
     static bool cpu_globals_initialized;
+    /* Single "key=value" string being parsed */
+    char *featurestr = features ? strtok(features, ",") : NULL;
 
-    /* TODO: all callers of ->parse_features() need to be changed to
-     * call it only once, so we can remove this check (or change it
-     * to assert(!cpu_globals_initialized).
-     * Current callers of ->parse_features() are:
-     * - cpu_generic_init()
-     */
-    if (cpu_globals_initialized) {
-        return;
-    }
+    /* should be called only once, catch invalid users */
+    assert(!cpu_globals_initialized);
     cpu_globals_initialized = true;
-
-    featurestr = features ? strtok(features, ",") : NULL;
 
     while (featurestr) {
         val = strchr(featurestr, '=');
@@ -360,6 +327,21 @@ static void cpu_common_parse_features(const char *typename, char *features,
 static void cpu_common_realizefn(DeviceState *dev, Error **errp)
 {
     CPUState *cpu = CPU(dev);
+    Object *machine = qdev_get_machine();
+
+    /* qdev_get_machine() can return something that's not TYPE_MACHINE
+     * if this is one of the user-only emulators; in that case there's
+     * no need to check the ignore_memory_transaction_failures board flag.
+     */
+    if (object_dynamic_cast(machine, TYPE_MACHINE)) {
+        ObjectClass *oc = object_get_class(machine);
+        MachineClass *mc = MACHINE_CLASS(oc);
+
+        if (mc) {
+            cpu->ignore_memory_transaction_failures =
+                mc->ignore_memory_transaction_failures;
+        }
+    }
 
     if (dev->hotplugged) {
         cpu_synchronize_post_init(cpu);
@@ -427,7 +409,6 @@ static void cpu_class_init(ObjectClass *klass, void *data)
     DeviceClass *dc = DEVICE_CLASS(klass);
     CPUClass *k = CPU_CLASS(klass);
 
-    k->class_by_name = cpu_common_class_by_name;
     k->parse_features = cpu_common_parse_features;
     k->reset = cpu_common_reset;
     k->get_arch_id = cpu_common_get_arch_id;

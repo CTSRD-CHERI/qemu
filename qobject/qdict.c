@@ -14,8 +14,9 @@
 #include "qapi/qmp/qnum.h"
 #include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qbool.h"
+#include "qapi/qmp/qlist.h"
+#include "qapi/qmp/qnull.h"
 #include "qapi/qmp/qstring.h"
-#include "qapi/qmp/qobject.h"
 #include "qapi/error.h"
 #include "qemu/queue.h"
 #include "qemu-common.h"
@@ -34,17 +35,6 @@ QDict *qdict_new(void)
     qobject_init(QOBJECT(qdict), QTYPE_QDICT);
 
     return qdict;
-}
-
-/**
- * qobject_to_qdict(): Convert a QObject into a QDict
- */
-QDict *qobject_to_qdict(const QObject *obj)
-{
-    if (!obj || qobject_type(obj) != QTYPE_QDICT) {
-        return NULL;
-    }
-    return container_of(obj, QDict, base);
 }
 
 /**
@@ -133,7 +123,7 @@ void qdict_put_obj(QDict *qdict, const char *key, QObject *value)
     entry = qdict_find(qdict, key, bucket);
     if (entry) {
         /* replace key's value */
-        qobject_decref(entry->value);
+        qobject_unref(entry->value);
         entry->value = value;
     } else {
         /* allocate a new entry */
@@ -141,6 +131,26 @@ void qdict_put_obj(QDict *qdict, const char *key, QObject *value)
         QLIST_INSERT_HEAD(&qdict->table[bucket], entry, next);
         qdict->size++;
     }
+}
+
+void qdict_put_int(QDict *qdict, const char *key, int64_t value)
+{
+    qdict_put(qdict, key, qnum_from_int(value));
+}
+
+void qdict_put_bool(QDict *qdict, const char *key, bool value)
+{
+    qdict_put(qdict, key, qbool_from_bool(value));
+}
+
+void qdict_put_str(QDict *qdict, const char *key, const char *value)
+{
+    qdict_put(qdict, key, qstring_from_str(value));
+}
+
+void qdict_put_null(QDict *qdict, const char *key)
+{
+    qdict_put(qdict, key, qnull());
 }
 
 /**
@@ -185,7 +195,7 @@ size_t qdict_size(const QDict *qdict)
  */
 double qdict_get_double(const QDict *qdict, const char *key)
 {
-    return qnum_get_double(qobject_to_qnum(qdict_get(qdict, key)));
+    return qnum_get_double(qobject_to(QNum, qdict_get(qdict, key)));
 }
 
 /**
@@ -198,7 +208,7 @@ double qdict_get_double(const QDict *qdict, const char *key)
  */
 int64_t qdict_get_int(const QDict *qdict, const char *key)
 {
-    return qnum_get_int(qobject_to_qnum(qdict_get(qdict, key)));
+    return qnum_get_int(qobject_to(QNum, qdict_get(qdict, key)));
 }
 
 /**
@@ -211,7 +221,7 @@ int64_t qdict_get_int(const QDict *qdict, const char *key)
  */
 bool qdict_get_bool(const QDict *qdict, const char *key)
 {
-    return qbool_get_bool(qobject_to_qbool(qdict_get(qdict, key)));
+    return qbool_get_bool(qobject_to(QBool, qdict_get(qdict, key)));
 }
 
 /**
@@ -219,7 +229,7 @@ bool qdict_get_bool(const QDict *qdict, const char *key)
  */
 QList *qdict_get_qlist(const QDict *qdict, const char *key)
 {
-    return qobject_to_qlist(qdict_get(qdict, key));
+    return qobject_to(QList, qdict_get(qdict, key));
 }
 
 /**
@@ -227,7 +237,7 @@ QList *qdict_get_qlist(const QDict *qdict, const char *key)
  */
 QDict *qdict_get_qdict(const QDict *qdict, const char *key)
 {
-    return qobject_to_qdict(qdict_get(qdict, key));
+    return qobject_to(QDict, qdict_get(qdict, key));
 }
 
 /**
@@ -241,7 +251,7 @@ QDict *qdict_get_qdict(const QDict *qdict, const char *key)
  */
 const char *qdict_get_str(const QDict *qdict, const char *key)
 {
-    return qstring_get_str(qobject_to_qstring(qdict_get(qdict, key)));
+    return qstring_get_str(qobject_to(QString, qdict_get(qdict, key)));
 }
 
 /**
@@ -254,7 +264,7 @@ const char *qdict_get_str(const QDict *qdict, const char *key)
 int64_t qdict_get_try_int(const QDict *qdict, const char *key,
                           int64_t def_value)
 {
-    QNum *qnum = qobject_to_qnum(qdict_get(qdict, key));
+    QNum *qnum = qobject_to(QNum, qdict_get(qdict, key));
     int64_t val;
 
     if (!qnum || !qnum_get_try_int(qnum, &val)) {
@@ -273,7 +283,7 @@ int64_t qdict_get_try_int(const QDict *qdict, const char *key,
  */
 bool qdict_get_try_bool(const QDict *qdict, const char *key, bool def_value)
 {
-    QBool *qbool = qobject_to_qbool(qdict_get(qdict, key));
+    QBool *qbool = qobject_to(QBool, qdict_get(qdict, key));
 
     return qbool ? qbool_get_bool(qbool) : def_value;
 }
@@ -288,7 +298,7 @@ bool qdict_get_try_bool(const QDict *qdict, const char *key, bool def_value)
  */
 const char *qdict_get_try_str(const QDict *qdict, const char *key)
 {
-    QString *qstr = qobject_to_qstring(qdict_get(qdict, key));
+    QString *qstr = qobject_to(QString, qdict_get(qdict, key));
 
     return qstr ? qstring_get_str(qstr) : NULL;
 }
@@ -363,8 +373,7 @@ QDict *qdict_clone_shallow(const QDict *src)
 
     for (i = 0; i < QDICT_BUCKET_MAX; i++) {
         QLIST_FOREACH(entry, &src->table[i], next) {
-            qobject_incref(entry->value);
-            qdict_put_obj(dest, entry->key, entry->value);
+            qdict_put_obj(dest, entry->key, qobject_ref(entry->value));
         }
     }
 
@@ -380,7 +389,7 @@ static void qentry_destroy(QDictEntry *e)
     assert(e->key != NULL);
     assert(e->value != NULL);
 
-    qobject_decref(e->value);
+    qobject_unref(e->value);
     g_free(e->key);
     g_free(e);
 }
@@ -403,6 +412,35 @@ void qdict_del(QDict *qdict, const char *key)
 }
 
 /**
+ * qdict_is_equal(): Test whether the two QDicts are equal
+ *
+ * Here, equality means whether they contain the same keys and whether
+ * the respective values are in turn equal (i.e. invoking
+ * qobject_is_equal() on them yields true).
+ */
+bool qdict_is_equal(const QObject *x, const QObject *y)
+{
+    const QDict *dict_x = qobject_to(QDict, x);
+    const QDict *dict_y = qobject_to(QDict, y);
+    const QDictEntry *e;
+
+    if (qdict_size(dict_x) != qdict_size(dict_y)) {
+        return false;
+    }
+
+    for (e = qdict_first(dict_x); e; e = qdict_next(dict_x, e)) {
+        const QObject *obj_x = qdict_entry_value(e);
+        const QObject *obj_y = qdict_get(dict_y, qdict_entry_key(e));
+
+        if (!qobject_is_equal(obj_x, obj_y)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * qdict_destroy_obj(): Free all the memory allocated by a QDict
  */
 void qdict_destroy_obj(QObject *obj)
@@ -411,7 +449,7 @@ void qdict_destroy_obj(QObject *obj)
     QDict *qdict;
 
     assert(obj != NULL);
-    qdict = qobject_to_qdict(obj);
+    qdict = qobject_to(QDict, obj);
 
     for (i = 0; i < QDICT_BUCKET_MAX; i++) {
         QDictEntry *entry = QLIST_FIRST(&qdict->table[i]);
@@ -441,8 +479,7 @@ void qdict_copy_default(QDict *dst, QDict *src, const char *key)
 
     val = qdict_get(src, key);
     if (val) {
-        qobject_incref(val);
-        qdict_put_obj(dst, key, val);
+        qdict_put_obj(dst, key, qobject_ref(val));
     }
 }
 
@@ -482,13 +519,12 @@ static void qdict_flatten_qlist(QList *qlist, QDict *target, const char *prefix)
         new_key = g_strdup_printf("%s.%i", prefix, i);
 
         if (qobject_type(value) == QTYPE_QDICT) {
-            qdict_flatten_qdict(qobject_to_qdict(value), target, new_key);
+            qdict_flatten_qdict(qobject_to(QDict, value), target, new_key);
         } else if (qobject_type(value) == QTYPE_QLIST) {
-            qdict_flatten_qlist(qobject_to_qlist(value), target, new_key);
+            qdict_flatten_qlist(qobject_to(QList, value), target, new_key);
         } else {
             /* All other types are moved to the target unchanged. */
-            qobject_incref(value);
-            qdict_put_obj(target, new_key, value);
+            qdict_put_obj(target, new_key, qobject_ref(value));
         }
 
         g_free(new_key);
@@ -518,17 +554,16 @@ static void qdict_flatten_qdict(QDict *qdict, QDict *target, const char *prefix)
         if (qobject_type(value) == QTYPE_QDICT) {
             /* Entries of QDicts are processed recursively, the QDict object
              * itself disappears. */
-            qdict_flatten_qdict(qobject_to_qdict(value), target,
+            qdict_flatten_qdict(qobject_to(QDict, value), target,
                                 new_key ? new_key : entry->key);
             delete = true;
         } else if (qobject_type(value) == QTYPE_QLIST) {
-            qdict_flatten_qlist(qobject_to_qlist(value), target,
+            qdict_flatten_qlist(qobject_to(QList, value), target,
                                 new_key ? new_key : entry->key);
             delete = true;
         } else if (prefix) {
             /* All other objects are moved to the target unchanged. */
-            qobject_incref(value);
-            qdict_put_obj(target, new_key, value);
+            qdict_put_obj(target, new_key, qobject_ref(value));
             delete = true;
         }
 
@@ -571,8 +606,7 @@ void qdict_extract_subqdict(QDict *src, QDict **dst, const char *start)
     while (entry != NULL) {
         next = qdict_next(src, entry);
         if (strstart(entry->key, start, &p)) {
-            qobject_incref(entry->value);
-            qdict_put_obj(*dst, p, entry->value);
+            qdict_put_obj(*dst, p, qobject_ref(entry->value));
             qdict_del(src, entry->key);
         }
         entry = next;
@@ -645,7 +679,7 @@ void qdict_array_split(QDict *src, QList **dst)
             qdict_extract_subqdict(src, &subqdict, prefix);
             assert(qdict_size(subqdict) > 0);
         } else {
-            qobject_incref(subqobj);
+            qobject_ref(subqobj);
             qdict_del(src, indexstr);
         }
 
@@ -843,26 +877,26 @@ QObject *qdict_crumple(const QDict *src, Error **errp)
 
         child = qdict_get(two_level, prefix);
         if (suffix) {
-            if (child) {
-                if (qobject_type(child) != QTYPE_QDICT) {
+            QDict *child_dict = qobject_to(QDict, child);
+            if (!child_dict) {
+                if (child) {
                     error_setg(errp, "Key %s prefix is already set as a scalar",
                                prefix);
                     goto error;
                 }
-            } else {
-                child = QOBJECT(qdict_new());
-                qdict_put_obj(two_level, prefix, child);
+
+                child_dict = qdict_new();
+                qdict_put_obj(two_level, prefix, QOBJECT(child_dict));
             }
-            qobject_incref(ent->value);
-            qdict_put_obj(qobject_to_qdict(child), suffix, ent->value);
+
+            qdict_put_obj(child_dict, suffix, qobject_ref(ent->value));
         } else {
             if (child) {
                 error_setg(errp, "Key %s prefix is already set as a dict",
                            prefix);
                 goto error;
             }
-            qobject_incref(ent->value);
-            qdict_put_obj(two_level, prefix, ent->value);
+            qdict_put_obj(two_level, prefix, qobject_ref(ent->value));
         }
 
         g_free(prefix);
@@ -874,20 +908,19 @@ QObject *qdict_crumple(const QDict *src, Error **errp)
     multi_level = qdict_new();
     for (ent = qdict_first(two_level); ent != NULL;
          ent = qdict_next(two_level, ent)) {
-
-        if (qobject_type(ent->value) == QTYPE_QDICT) {
-            child = qdict_crumple(qobject_to_qdict(ent->value), errp);
+        QDict *dict = qobject_to(QDict, ent->value);
+        if (dict) {
+            child = qdict_crumple(dict, errp);
             if (!child) {
                 goto error;
             }
 
             qdict_put_obj(multi_level, ent->key, child);
         } else {
-            qobject_incref(ent->value);
-            qdict_put_obj(multi_level, ent->key, ent->value);
+            qdict_put_obj(multi_level, ent->key, qobject_ref(ent->value));
         }
     }
-    QDECREF(two_level);
+    qobject_unref(two_level);
     two_level = NULL;
 
     /* Step 3: detect if we need to turn our dict into list */
@@ -910,10 +943,9 @@ QObject *qdict_crumple(const QDict *src, Error **errp)
                 goto error;
             }
 
-            qobject_incref(child);
-            qlist_append_obj(qobject_to_qlist(dst), child);
+            qlist_append_obj(qobject_to(QList, dst), qobject_ref(child));
         }
-        QDECREF(multi_level);
+        qobject_unref(multi_level);
         multi_level = NULL;
     } else {
         dst = QOBJECT(multi_level);
@@ -923,9 +955,9 @@ QObject *qdict_crumple(const QDict *src, Error **errp)
 
  error:
     g_free(prefix);
-    QDECREF(multi_level);
-    QDECREF(two_level);
-    qobject_decref(dst);
+    qobject_unref(multi_level);
+    qobject_unref(two_level);
+    qobject_unref(dst);
     return NULL;
 }
 
@@ -1014,11 +1046,43 @@ void qdict_join(QDict *dest, QDict *src, bool overwrite)
         next = qdict_next(src, entry);
 
         if (overwrite || !qdict_haskey(dest, entry->key)) {
-            qobject_incref(entry->value);
-            qdict_put_obj(dest, entry->key, entry->value);
+            qdict_put_obj(dest, entry->key, qobject_ref(entry->value));
             qdict_del(src, entry->key);
         }
 
         entry = next;
     }
+}
+
+/**
+ * qdict_rename_keys(): Rename keys in qdict according to the replacements
+ * specified in the array renames. The array must be terminated by an entry
+ * with from = NULL.
+ *
+ * The renames are performed individually in the order of the array, so entries
+ * may be renamed multiple times and may or may not conflict depending on the
+ * order of the renames array.
+ *
+ * Returns true for success, false in error cases.
+ */
+bool qdict_rename_keys(QDict *qdict, const QDictRenames *renames, Error **errp)
+{
+    QObject *qobj;
+
+    while (renames->from) {
+        if (qdict_haskey(qdict, renames->from)) {
+            if (qdict_haskey(qdict, renames->to)) {
+                error_setg(errp, "'%s' and its alias '%s' can't be used at the "
+                           "same time", renames->to, renames->from);
+                return false;
+            }
+
+            qobj = qdict_get(qdict, renames->from);
+            qdict_put_obj(qdict, renames->to, qobject_ref(qobj));
+            qdict_del(qdict, renames->from);
+        }
+
+        renames++;
+    }
+    return true;
 }

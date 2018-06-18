@@ -3,11 +3,11 @@
 expression Obj, Key, E;
 @@
 (
-- qobject_incref(QOBJECT(E));
-+ QINCREF(E);
+- qobject_ref(QOBJECT(E));
++ qobject_ref(E);
 |
-- qobject_decref(QOBJECT(E));
-+ QDECREF(E);
+- qobject_unref(QOBJECT(E));
++ qobject_unref(E);
 |
 - qdict_put_obj(Obj, Key, QOBJECT(E));
 + qdict_put(Obj, Key, E);
@@ -20,6 +20,9 @@ expression Obj, Key, E;
 |
 - qdict_put(Obj, Key, qstring_from_str(E));
 + qdict_put_str(Obj, Key, E);
+|
+- qdict_put(Obj, Key, qnull());
++ qdict_put_null(Obj, Key);
 )
 
 // Use QList macros where they make sense
@@ -38,4 +41,7 @@ expression Obj, E;
 |
 - qlist_append(Obj, qstring_from_str(E));
 + qlist_append_str(Obj, E);
+|
+- qlist_append(Obj, qnull());
++ qlist_append_null(Obj);
 )

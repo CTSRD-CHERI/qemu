@@ -296,7 +296,7 @@ static uint32_t tusb_async_readb(void *opaque, hwaddr addr)
     }
 
     printf("%s: unknown register at %03x\n",
-                    __FUNCTION__, (int) (addr & 0xfff));
+                    __func__, (int) (addr & 0xfff));
     return 0;
 }
 
@@ -313,7 +313,7 @@ static uint32_t tusb_async_readh(void *opaque, hwaddr addr)
     }
 
     printf("%s: unknown register at %03x\n",
-                    __FUNCTION__, (int) (addr & 0xfff));
+                    __func__, (int) (addr & 0xfff));
     return 0;
 }
 
@@ -436,7 +436,7 @@ static uint32_t tusb_async_readw(void *opaque, hwaddr addr)
         return 0x54059adf;
     }
 
-    printf("%s: unknown register at %03x\n", __FUNCTION__, offset);
+    printf("%s: unknown register at %03x\n", __func__, offset);
     return 0;
 }
 
@@ -456,7 +456,7 @@ static void tusb_async_writeb(void *opaque, hwaddr addr,
 
     default:
         printf("%s: unknown register at %03x\n",
-                        __FUNCTION__, (int) (addr & 0xfff));
+                        __func__, (int) (addr & 0xfff));
         return;
     }
 }
@@ -477,7 +477,7 @@ static void tusb_async_writeh(void *opaque, hwaddr addr,
 
     default:
         printf("%s: unknown register at %03x\n",
-                        __FUNCTION__, (int) (addr & 0xfff));
+                        __func__, (int) (addr & 0xfff));
         return;
     }
 }
@@ -505,7 +505,7 @@ static void tusb_async_writew(void *opaque, hwaddr addr,
         s->dev_config = value;
         s->host_mode = (value & TUSB_DEV_CONF_USB_HOST_MODE);
         if (value & TUSB_DEV_CONF_PROD_TEST_MODE)
-            hw_error("%s: Product Test mode not allowed\n", __FUNCTION__);
+            hw_error("%s: Product Test mode not allowed\n", __func__);
         break;
 
     case TUSB_PHY_OTG_CTRL_ENABLE:
@@ -636,16 +636,48 @@ static void tusb_async_writew(void *opaque, hwaddr addr,
         break;
 
     default:
-        printf("%s: unknown register at %03x\n", __FUNCTION__, offset);
+        printf("%s: unknown register at %03x\n", __func__, offset);
         return;
     }
 }
 
+static uint64_t tusb_async_readfn(void *opaque, hwaddr addr, unsigned size)
+{
+    switch (size) {
+    case 1:
+        return tusb_async_readb(opaque, addr);
+    case 2:
+        return tusb_async_readh(opaque, addr);
+    case 4:
+        return tusb_async_readw(opaque, addr);
+    default:
+        g_assert_not_reached();
+    }
+}
+
+static void tusb_async_writefn(void *opaque, hwaddr addr,
+                               uint64_t value, unsigned size)
+{
+    switch (size) {
+    case 1:
+        tusb_async_writeb(opaque, addr, value);
+        break;
+    case 2:
+        tusb_async_writeh(opaque, addr, value);
+        break;
+    case 4:
+        tusb_async_writew(opaque, addr, value);
+        break;
+    default:
+        g_assert_not_reached();
+    }
+}
+
 static const MemoryRegionOps tusb_async_ops = {
-    .old_mmio = {
-        .read = { tusb_async_readb, tusb_async_readh, tusb_async_readw, },
-        .write =  { tusb_async_writeb, tusb_async_writeh, tusb_async_writew, },
-    },
+    .read = tusb_async_readfn,
+    .write = tusb_async_writefn,
+    .valid.min_access_size = 1,
+    .valid.max_access_size = 4,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 

@@ -18,6 +18,9 @@ static int cpu_load_old(QEMUFile *f, void *opaque, int version_id)
     unsigned int i, j;
     target_ulong sdr1;
     uint32_t fpscr;
+#if defined(TARGET_PPC64)
+    int32_t slb_nr;
+#endif
     target_ulong xer;
 
     for (i = 0; i < 32; i++)
@@ -49,7 +52,7 @@ static int cpu_load_old(QEMUFile *f, void *opaque, int version_id)
     qemu_get_sbe32s(f, &env->access_type);
 #if defined(TARGET_PPC64)
     qemu_get_betls(f, &env->spr[SPR_ASR]);
-    qemu_get_sbe32s(f, &env->slb_nr);
+    qemu_get_sbe32s(f, &slb_nr);
 #endif
     qemu_get_betls(f, &sdr1);
     for (i = 0; i < 32; i++)
@@ -146,7 +149,16 @@ static bool cpu_pre_2_8_migration(void *opaque, int version_id)
     return cpu->pre_2_8_migration;
 }
 
-static void cpu_pre_save(void *opaque)
+#if defined(TARGET_PPC64)
+static bool cpu_pre_3_0_migration(void *opaque, int version_id)
+{
+    PowerPCCPU *cpu = opaque;
+
+    return cpu->pre_3_0_migration;
+}
+#endif
+
+static int cpu_pre_save(void *opaque)
 {
     PowerPCCPU *cpu = opaque;
     CPUPPCState *env = &cpu->env;
@@ -190,11 +202,31 @@ static void cpu_pre_save(void *opaque)
 
     /* Hacks for migration compatibility between 2.6, 2.7 & 2.8 */
     if (cpu->pre_2_8_migration) {
-        cpu->mig_msr_mask = env->msr_mask;
+        /* Mask out bits that got added to msr_mask since the versions
+         * which stupidly included it in the migration stream. */
+        target_ulong metamask = 0
+#if defined(TARGET_PPC64)
+            | (1ULL << MSR_TS0)
+            | (1ULL << MSR_TS1)
+#endif
+            ;
+        cpu->mig_msr_mask = env->msr_mask & ~metamask;
         cpu->mig_insns_flags = env->insns_flags & insns_compat_mask;
+        /* CPU models supported by old machines all have PPC_MEM_TLBIE,
+         * so we set it unconditionally to allow backward migration from
+         * a POWER9 host to a POWER8 host.
+         */
+        cpu->mig_insns_flags |= PPC_MEM_TLBIE;
         cpu->mig_insns_flags2 = env->insns_flags2 & insns_compat_mask2;
         cpu->mig_nb_BATs = env->nb_BATs;
     }
+    if (cpu->pre_3_0_migration) {
+        if (cpu->hash64_opts) {
+            cpu->mig_slb_nr = cpu->hash64_opts->slb_size;
+        }
+    }
+
+    return 0;
 }
 
 /*
@@ -235,9 +267,11 @@ static int cpu_post_load(void *opaque, int version_id)
 
 #if defined(TARGET_PPC64)
     if (cpu->compat_pvr) {
+        uint32_t compat_pvr = cpu->compat_pvr;
         Error *local_err = NULL;
 
-        ppc_set_compat(cpu, cpu->compat_pvr, &local_err);
+        cpu->compat_pvr = 0;
+        ppc_set_compat(cpu, compat_pvr, &local_err);
         if (local_err) {
             error_report_err(local_err);
             return -1;
@@ -296,9 +330,9 @@ static int cpu_post_load(void *opaque, int version_id)
         ppc_store_sdr1(env, env->spr[SPR_SDR1]);
     }
 
-    /* Invalidate all msr bits except MSR_TGPR/MSR_HVB before restoring */
+    /* Invalidate all supported msr bits except MSR_TGPR/MSR_HVB before restoring */
     msr = env->msr;
-    env->msr ^= ~((1ULL << MSR_TGPR) | MSR_HVB);
+    env->msr ^= env->msr_mask & ~((1ULL << MSR_TGPR) | MSR_HVB);
     ppc_store_msr(env, msr);
 
     hreg_compute_mem_idx(env);
@@ -466,7 +500,7 @@ static int slb_post_load(void *opaque, int version_id)
 
     /* We've pulled in the raw esid and vsid values from the migration
      * stream, but we need to recompute the page size pointers */
-    for (i = 0; i < env->slb_nr; i++) {
+    for (i = 0; i < cpu->hash64_opts->slb_size; i++) {
         if (ppc_store_slb(cpu, i, env->slb[i].esid, env->slb[i].vsid) < 0) {
             /* Migration source had bad values in its SLB */
             return -1;
@@ -483,7 +517,7 @@ static const VMStateDescription vmstate_slb = {
     .needed = slb_needed,
     .post_load = slb_post_load,
     .fields = (VMStateField[]) {
-        VMSTATE_INT32_EQUAL(env.slb_nr, PowerPCCPU, NULL),
+        VMSTATE_INT32_TEST(mig_slb_nr, PowerPCCPU, cpu_pre_3_0_migration),
         VMSTATE_SLB_ARRAY(env.slb, PowerPCCPU, MAX_SLB_ENTRIES),
         VMSTATE_END_OF_LIST()
     }

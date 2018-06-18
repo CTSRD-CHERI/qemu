@@ -14,6 +14,7 @@
 #include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qstring.h"
 #include "qemu/cutils.h"
+#include "qemu/option.h"
 
 typedef struct {
     BdrvChild *test_file;
@@ -139,6 +140,9 @@ static int blkverify_open(BlockDriverState *bs, QDict *options, int flags,
         error_propagate(errp, local_err);
         goto fail;
     }
+
+    bs->supported_write_flags = BDRV_REQ_WRITE_UNCHANGED;
+    bs->supported_zero_flags = BDRV_REQ_WRITE_UNCHANGED;
 
     ret = 0;
 fail:
@@ -290,10 +294,10 @@ static void blkverify_refresh_filename(BlockDriverState *bs, QDict *options)
         QDict *opts = qdict_new();
         qdict_put_str(opts, "driver", "blkverify");
 
-        QINCREF(bs->file->bs->full_open_options);
-        qdict_put(opts, "raw", bs->file->bs->full_open_options);
-        QINCREF(s->test_file->bs->full_open_options);
-        qdict_put(opts, "test", s->test_file->bs->full_open_options);
+        qdict_put(opts, "raw",
+                  qobject_ref(bs->file->bs->full_open_options));
+        qdict_put(opts, "test",
+                  qobject_ref(s->test_file->bs->full_open_options));
 
         bs->full_open_options = opts;
     }

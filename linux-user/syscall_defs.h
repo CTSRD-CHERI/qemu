@@ -69,9 +69,10 @@
 
 #if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SH4) \
     || defined(TARGET_M68K) || defined(TARGET_CRIS) \
-    || defined(TARGET_UNICORE32) || defined(TARGET_S390X) \
+    || defined(TARGET_S390X) \
     || defined(TARGET_OPENRISC) || defined(TARGET_TILEGX) \
-    || defined(TARGET_NIOS2)
+    || defined(TARGET_NIOS2) || defined(TARGET_RISCV) \
+    || defined(TARGET_XTENSA)
 
 #define TARGET_IOC_SIZEBITS	14
 #define TARGET_IOC_DIRBITS	2
@@ -303,9 +304,9 @@ struct target_cmsghdr {
                                __target_cmsg_nxthdr(mhdr, cmsg, cmsg_start)
 #define TARGET_CMSG_ALIGN(len) (((len) + sizeof (abi_long) - 1) \
                                & (size_t) ~(sizeof (abi_long) - 1))
-#define TARGET_CMSG_SPACE(len) (TARGET_CMSG_ALIGN (len) \
-                               + TARGET_CMSG_ALIGN (sizeof (struct target_cmsghdr)))
-#define TARGET_CMSG_LEN(len)   (TARGET_CMSG_ALIGN (sizeof (struct target_cmsghdr)) + (len))
+#define TARGET_CMSG_SPACE(len) (sizeof(struct target_cmsghdr) + \
+                                TARGET_CMSG_ALIGN(len))
+#define TARGET_CMSG_LEN(len) (sizeof(struct target_cmsghdr) + (len))
 
 static __inline__ struct target_cmsghdr *
 __target_cmsg_nxthdr(struct target_msghdr *__mhdr,
@@ -351,19 +352,6 @@ struct  target_rusage {
 typedef struct {
         int     val[2];
 } kernel_fsid_t;
-
-struct kernel_statfs {
-	int f_type;
-	int f_bsize;
-	int f_blocks;
-	int f_bfree;
-	int f_bavail;
-	int f_files;
-	int f_ffree;
-        kernel_fsid_t f_fsid;
-	int f_namelen;
-	int f_spare[6];
-};
 
 struct target_dirent {
         abi_long        d_ino;
@@ -430,262 +418,10 @@ struct target_sigaction;
 int do_sigaction(int sig, const struct target_sigaction *act,
                  struct target_sigaction *oact);
 
-#if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SPARC) \
-    || defined(TARGET_PPC) || defined(TARGET_MIPS) || defined(TARGET_SH4) \
-    || defined(TARGET_M68K) || defined(TARGET_ALPHA) || defined(TARGET_CRIS) \
-    || defined(TARGET_MICROBLAZE) || defined(TARGET_UNICORE32) \
-    || defined(TARGET_S390X) || defined(TARGET_OPENRISC) \
-    || defined(TARGET_TILEGX) || defined(TARGET_HPPA) || defined(TARGET_NIOS2)
+#include "target_signal.h"
 
-#if defined(TARGET_SPARC)
-#define TARGET_SA_NOCLDSTOP    8u
-#define TARGET_SA_NOCLDWAIT    0x100u
-#define TARGET_SA_SIGINFO      0x200u
-#define TARGET_SA_ONSTACK      1u
-#define TARGET_SA_RESTART      2u
-#define TARGET_SA_NODEFER      0x20u
-#define TARGET_SA_RESETHAND    4u
-#elif defined(TARGET_MIPS)
-#define TARGET_SA_NOCLDSTOP	0x00000001
-#define TARGET_SA_NOCLDWAIT	0x00010000
-#define TARGET_SA_SIGINFO	0x00000008
-#define TARGET_SA_ONSTACK	0x08000000
-#define TARGET_SA_NODEFER	0x40000000
-#define TARGET_SA_RESTART	0x10000000
-#define TARGET_SA_RESETHAND	0x80000000
-#if !defined(TARGET_ABI_MIPSN32) && !defined(TARGET_ABI_MIPSN64)
-#define TARGET_SA_RESTORER	0x04000000	/* Only for O32 */
-#endif
-#elif defined(TARGET_OPENRISC)
-#define TARGET_SA_NOCLDSTOP    0x00000001
-#define TARGET_SA_NOCLDWAIT    0x00000002
-#define TARGET_SA_SIGINFO      0x00000004
-#define TARGET_SA_ONSTACK      0x08000000
-#define TARGET_SA_RESTART      0x10000000
-#define TARGET_SA_NODEFER      0x40000000
-#define TARGET_SA_RESETHAND    0x80000000
-#elif defined(TARGET_ALPHA)
-#define TARGET_SA_ONSTACK	0x00000001
-#define TARGET_SA_RESTART	0x00000002
-#define TARGET_SA_NOCLDSTOP	0x00000004
-#define TARGET_SA_NODEFER	0x00000008
-#define TARGET_SA_RESETHAND	0x00000010
-#define TARGET_SA_NOCLDWAIT	0x00000020 /* not supported yet */
-#define TARGET_SA_SIGINFO	0x00000040
-#else
-#define TARGET_SA_NOCLDSTOP	0x00000001
-#define TARGET_SA_NOCLDWAIT	0x00000002 /* not supported yet */
-#define TARGET_SA_SIGINFO	0x00000004
-#define TARGET_SA_ONSTACK	0x08000000
-#define TARGET_SA_RESTART	0x10000000
-#define TARGET_SA_NODEFER	0x40000000
-#define TARGET_SA_RESETHAND	0x80000000
-#define TARGET_SA_RESTORER	0x04000000
-#endif
-
-#if defined(TARGET_ALPHA)
-
-#define TARGET_SIGHUP            1
-#define TARGET_SIGINT            2
-#define TARGET_SIGQUIT           3
-#define TARGET_SIGILL            4
-#define TARGET_SIGTRAP           5
-#define TARGET_SIGABRT           6
-#define TARGET_SIGSTKFLT         7 /* actually SIGEMT */
-#define TARGET_SIGFPE            8
-#define TARGET_SIGKILL           9
-#define TARGET_SIGBUS           10
-#define TARGET_SIGSEGV          11
-#define TARGET_SIGSYS           12
-#define TARGET_SIGPIPE          13
-#define TARGET_SIGALRM          14
-#define TARGET_SIGTERM          15
-#define TARGET_SIGURG           16
-#define TARGET_SIGSTOP          17
-#define TARGET_SIGTSTP          18
-#define TARGET_SIGCONT          19
-#define TARGET_SIGCHLD          20
-#define TARGET_SIGTTIN          21
-#define TARGET_SIGTTOU          22
-#define TARGET_SIGIO            23
-#define TARGET_SIGXCPU          24
-#define TARGET_SIGXFSZ          25
-#define TARGET_SIGVTALRM        26
-#define TARGET_SIGPROF          27
-#define TARGET_SIGWINCH         28
-#define TARGET_SIGPWR           29 /* actually SIGINFO */
-#define TARGET_SIGUSR1          30
-#define TARGET_SIGUSR2          31
-#define TARGET_SIGRTMIN         32
-
-#define TARGET_SIG_BLOCK         1
-#define TARGET_SIG_UNBLOCK       2
-#define TARGET_SIG_SETMASK       3
-
-#elif defined(TARGET_SPARC)
-
-#define TARGET_SIGHUP		 1
-#define TARGET_SIGINT		 2
-#define TARGET_SIGQUIT		 3
-#define TARGET_SIGILL		 4
-#define TARGET_SIGTRAP		 5
-#define TARGET_SIGABRT		 6
-#define TARGET_SIGIOT		 6
-#define TARGET_SIGSTKFLT	 7 /* actually EMT */
-#define TARGET_SIGFPE		 8
-#define TARGET_SIGKILL		 9
-#define TARGET_SIGBUS		10
-#define TARGET_SIGSEGV		11
-#define TARGET_SIGSYS		12
-#define TARGET_SIGPIPE		13
-#define TARGET_SIGALRM		14
-#define TARGET_SIGTERM		15
-#define TARGET_SIGURG		16
-#define TARGET_SIGSTOP		17
-#define TARGET_SIGTSTP		18
-#define TARGET_SIGCONT		19
-#define TARGET_SIGCHLD		20
-#define TARGET_SIGTTIN		21
-#define TARGET_SIGTTOU		22
-#define TARGET_SIGIO		23
-#define TARGET_SIGXCPU		24
-#define TARGET_SIGXFSZ		25
-#define TARGET_SIGVTALRM	26
-#define TARGET_SIGPROF		27
-#define TARGET_SIGWINCH	        28
-#define TARGET_SIGPWR		29
-#define TARGET_SIGUSR1		30
-#define TARGET_SIGUSR2		31
-#define TARGET_SIGRTMIN         32
-
-#define TARGET_SIG_BLOCK          0x01 /* for blocking signals */
-#define TARGET_SIG_UNBLOCK        0x02 /* for unblocking signals */
-#define TARGET_SIG_SETMASK        0x04 /* for setting the signal mask */
-
-#elif defined(TARGET_MIPS)
-
-#define TARGET_SIGHUP		 1	/* Hangup (POSIX).  */
-#define TARGET_SIGINT		 2	/* Interrupt (ANSI).  */
-#define TARGET_SIGQUIT		 3	/* Quit (POSIX).  */
-#define TARGET_SIGILL		 4	/* Illegal instruction (ANSI).  */
-#define TARGET_SIGTRAP		 5	/* Trace trap (POSIX).  */
-#define TARGET_SIGIOT		 6	/* IOT trap (4.2 BSD).  */
-#define TARGET_SIGABRT		 TARGET_SIGIOT	/* Abort (ANSI).  */
-#define TARGET_SIGEMT		 7
-#define TARGET_SIGSTKFLT	 7 /* XXX: incorrect */
-#define TARGET_SIGFPE		 8	/* Floating-point exception (ANSI).  */
-#define TARGET_SIGKILL		 9	/* Kill, unblockable (POSIX).  */
-#define TARGET_SIGBUS		10	/* BUS error (4.2 BSD).  */
-#define TARGET_SIGSEGV		11	/* Segmentation violation (ANSI).  */
-#define TARGET_SIGSYS		12
-#define TARGET_SIGPIPE		13	/* Broken pipe (POSIX).  */
-#define TARGET_SIGALRM		14	/* Alarm clock (POSIX).  */
-#define TARGET_SIGTERM		15	/* Termination (ANSI).  */
-#define TARGET_SIGUSR1		16	/* User-defined signal 1 (POSIX).  */
-#define TARGET_SIGUSR2		17	/* User-defined signal 2 (POSIX).  */
-#define TARGET_SIGCHLD		18	/* Child status has changed (POSIX).  */
-#define TARGET_SIGCLD		TARGET_SIGCHLD	/* Same as TARGET_SIGCHLD (System V).  */
-#define TARGET_SIGPWR		19	/* Power failure restart (System V).  */
-#define TARGET_SIGWINCH	20	/* Window size change (4.3 BSD, Sun).  */
-#define TARGET_SIGURG		21	/* Urgent condition on socket (4.2 BSD).  */
-#define TARGET_SIGIO		22	/* I/O now possible (4.2 BSD).  */
-#define TARGET_SIGPOLL		TARGET_SIGIO	/* Pollable event occurred (System V).  */
-#define TARGET_SIGSTOP		23	/* Stop, unblockable (POSIX).  */
-#define TARGET_SIGTSTP		24	/* Keyboard stop (POSIX).  */
-#define TARGET_SIGCONT		25	/* Continue (POSIX).  */
-#define TARGET_SIGTTIN		26	/* Background read from tty (POSIX).  */
-#define TARGET_SIGTTOU		27	/* Background write to tty (POSIX).  */
-#define TARGET_SIGVTALRM	28	/* Virtual alarm clock (4.2 BSD).  */
-#define TARGET_SIGPROF		29	/* Profiling alarm clock (4.2 BSD).  */
-#define TARGET_SIGXCPU		30	/* CPU limit exceeded (4.2 BSD).  */
-#define TARGET_SIGXFSZ		31	/* File size limit exceeded (4.2 BSD).  */
-#define TARGET_SIGRTMIN         32
-
-#define TARGET_SIG_BLOCK	1	/* for blocking signals */
-#define TARGET_SIG_UNBLOCK	2	/* for unblocking signals */
-#define TARGET_SIG_SETMASK	3	/* for setting the signal mask */
-
-#elif defined(TARGET_HPPA)
-
-#define TARGET_SIGHUP           1
-#define TARGET_SIGINT           2
-#define TARGET_SIGQUIT          3
-#define TARGET_SIGILL           4
-#define TARGET_SIGTRAP          5
-#define TARGET_SIGABRT          6
-#define TARGET_SIGIOT           6
-#define TARGET_SIGSTKFLT        7
-#define TARGET_SIGFPE           8
-#define TARGET_SIGKILL          9
-#define TARGET_SIGBUS          10
-#define TARGET_SIGSEGV         11
-#define TARGET_SIGXCPU         12
-#define TARGET_SIGPIPE         13
-#define TARGET_SIGALRM         14
-#define TARGET_SIGTERM         15
-#define TARGET_SIGUSR1         16
-#define TARGET_SIGUSR2         17
-#define TARGET_SIGCHLD         18
-#define TARGET_SIGPWR          19
-#define TARGET_SIGVTALRM       20
-#define TARGET_SIGPROF         21
-#define TARGET_SIGIO           22
-#define TARGET_SIGPOLL         TARGET_SIGIO
-#define TARGET_SIGWINCH        23
-#define TARGET_SIGSTOP         24
-#define TARGET_SIGTSTP         25
-#define TARGET_SIGCONT         26
-#define TARGET_SIGTTIN         27
-#define TARGET_SIGTTOU         28
-#define TARGET_SIGURG          29
-#define TARGET_SIGXFSZ         30
-#define TARGET_SIGSYS          31
-
-#define TARGET_SIG_BLOCK       0
-#define TARGET_SIG_UNBLOCK     1
-#define TARGET_SIG_SETMASK     2
-
-#else
-
-/* OpenRISC Using the general signals */
-#define TARGET_SIGHUP		 1
-#define TARGET_SIGINT		 2
-#define TARGET_SIGQUIT		 3
-#define TARGET_SIGILL		 4
-#define TARGET_SIGTRAP		 5
-#define TARGET_SIGABRT		 6
-#define TARGET_SIGIOT		 6
-#define TARGET_SIGBUS		 7
-#define TARGET_SIGFPE		 8
-#define TARGET_SIGKILL		 9
-#define TARGET_SIGUSR1		10
-#define TARGET_SIGSEGV		11
-#define TARGET_SIGUSR2		12
-#define TARGET_SIGPIPE		13
-#define TARGET_SIGALRM		14
-#define TARGET_SIGTERM		15
-#define TARGET_SIGSTKFLT	16
-#define TARGET_SIGCHLD		17
-#define TARGET_SIGCONT		18
-#define TARGET_SIGSTOP		19
-#define TARGET_SIGTSTP		20
-#define TARGET_SIGTTIN		21
-#define TARGET_SIGTTOU		22
-#define TARGET_SIGURG		23
-#define TARGET_SIGXCPU		24
-#define TARGET_SIGXFSZ		25
-#define TARGET_SIGVTALRM	26
-#define TARGET_SIGPROF		27
-#define TARGET_SIGWINCH	        28
-#define TARGET_SIGIO		29
-#define TARGET_SIGPWR		30
-#define TARGET_SIGSYS		31
-#define TARGET_SIGRTMIN         32
-
-#define TARGET_SIG_BLOCK          0    /* for blocking signals */
-#define TARGET_SIG_UNBLOCK        1    /* for unblocking signals */
-#define TARGET_SIG_SETMASK        2    /* for setting the signal mask */
-
+#ifdef TARGET_SA_RESTORER
+#define TARGET_ARCH_HAS_SA_RESTORER 1
 #endif
 
 #if defined(TARGET_ALPHA)
@@ -718,20 +454,31 @@ struct target_sigaction {
 	abi_ulong	_sa_handler;
 #endif
 	target_sigset_t	sa_mask;
+#ifdef TARGET_ARCH_HAS_SA_RESTORER
+        /* ??? This is always present, but ignored unless O32.  */
+        abi_ulong sa_restorer;
+#endif
 };
 #else
 struct target_old_sigaction {
         abi_ulong _sa_handler;
         abi_ulong sa_mask;
         abi_ulong sa_flags;
+#ifdef TARGET_ARCH_HAS_SA_RESTORER
         abi_ulong sa_restorer;
+#endif
 };
 
 struct target_sigaction {
         abi_ulong _sa_handler;
         abi_ulong sa_flags;
+#ifdef TARGET_ARCH_HAS_SA_RESTORER
         abi_ulong sa_restorer;
+#endif
         target_sigset_t sa_mask;
+#ifdef TARGET_ARCH_HAS_KA_RESTORER
+        abi_ulong ka_restorer;
+#endif
 };
 #endif
 
@@ -911,8 +658,6 @@ typedef struct target_siginfo {
 #define TARGET_TRAP_BRANCH      (3)     /* process taken branch trap */
 #define TARGET_TRAP_HWBKPT      (4)     /* hardware breakpoint/watchpoint */
 
-#endif /* defined(TARGET_I386) || defined(TARGET_ARM) */
-
 struct target_rlimit {
         abi_ulong   rlim_cur;
         abi_ulong   rlim_max;
@@ -1060,6 +805,13 @@ struct target_pollfd {
 
 #define TARGET_SIOCGIWNAME     0x8B01          /* get name == wireless protocol */
 
+/* From <linux/random.h> */
+
+#define TARGET_RNDGETENTCNT    TARGET_IOR('R', 0x00, int)
+#define TARGET_RNDADDTOENTCNT  TARGET_IOW('R', 0x01, int)
+#define TARGET_RNDZAPENTCNT    TARGET_IO('R', 0x04)
+#define TARGET_RNDCLEARPOOL    TARGET_IO('R', 0x06)
+
 /* From <linux/fs.h> */
 
 #define TARGET_BLKROSET   TARGET_IO(0x12,93) /* set device read-only (0 = read-write) */
@@ -1101,8 +853,8 @@ struct target_pollfd {
 /* Note that the ioctl numbers claim type "long" but the actual type
  * used by the kernel is "int".
  */
-#define TARGET_FS_IOC_GETFLAGS TARGET_IOR('f', 1, long)
-#define TARGET_FS_IOC_SETFLAGS TARGET_IOW('f', 2, long)
+#define TARGET_FS_IOC_GETFLAGS TARGET_IOR('f', 1, abi_long)
+#define TARGET_FS_IOC_SETFLAGS TARGET_IOW('f', 2, abi_long)
 
 #define TARGET_FS_IOC_FIEMAP TARGET_IOWR('f',11,struct fiemap)
 
@@ -1308,7 +1060,11 @@ struct target_winsize {
 /* Common */
 #define TARGET_MAP_SHARED	0x01		/* Share changes */
 #define TARGET_MAP_PRIVATE	0x02		/* Changes are private */
-#define TARGET_MAP_TYPE		0x0f		/* Mask for type of mapping */
+#if defined(TARGET_HPPA)
+#define TARGET_MAP_TYPE         0x03		/* Mask for type of mapping */
+#else
+#define TARGET_MAP_TYPE         0x0f		/* Mask for type of mapping */
+#endif
 
 /* Target specific */
 #if defined(TARGET_MIPS)
@@ -1321,6 +1077,8 @@ struct target_winsize {
 #define TARGET_MAP_NORESERVE	0x0400		/* don't check for reservations */
 #define TARGET_MAP_POPULATE	0x10000		/* populate (prefault) pagetables */
 #define TARGET_MAP_NONBLOCK	0x20000		/* do not block on IO */
+#define TARGET_MAP_STACK        0x40000         /* ignored */
+#define TARGET_MAP_HUGETLB      0x80000         /* create a huge page mapping */
 #elif defined(TARGET_PPC)
 #define TARGET_MAP_FIXED	0x10		/* Interpret addr exactly */
 #define TARGET_MAP_ANONYMOUS	0x20		/* don't use a file */
@@ -1331,6 +1089,8 @@ struct target_winsize {
 #define TARGET_MAP_NORESERVE	0x0040		/* don't check for reservations */
 #define TARGET_MAP_POPULATE	0x8000		/* populate (prefault) pagetables */
 #define TARGET_MAP_NONBLOCK	0x10000		/* do not block on IO */
+#define TARGET_MAP_STACK        0x20000         /* ignored */
+#define TARGET_MAP_HUGETLB      0x40000         /* create a huge page mapping */
 #elif defined(TARGET_ALPHA)
 #define TARGET_MAP_ANONYMOUS	0x10		/* don't use a file */
 #define TARGET_MAP_FIXED	0x100		/* Interpret addr exactly */
@@ -1341,6 +1101,8 @@ struct target_winsize {
 #define TARGET_MAP_NORESERVE	0x10000		/* no check for reservations */
 #define TARGET_MAP_POPULATE	0x20000		/* pop (prefault) pagetables */
 #define TARGET_MAP_NONBLOCK	0x40000		/* do not block on IO */
+#define TARGET_MAP_STACK        0x80000         /* ignored */
+#define TARGET_MAP_HUGETLB      0x100000        /* create a huge page mapping */
 #elif defined(TARGET_HPPA)
 #define TARGET_MAP_ANONYMOUS	0x10		/* don't use a file */
 #define TARGET_MAP_FIXED	0x04		/* Interpret addr exactly */
@@ -1351,6 +1113,20 @@ struct target_winsize {
 #define TARGET_MAP_NORESERVE	0x04000		/* no check for reservations */
 #define TARGET_MAP_POPULATE	0x10000		/* pop (prefault) pagetables */
 #define TARGET_MAP_NONBLOCK	0x20000		/* do not block on IO */
+#define TARGET_MAP_STACK        0x40000         /* ignored */
+#define TARGET_MAP_HUGETLB      0x80000         /* create a huge page mapping */
+#elif defined(TARGET_XTENSA)
+#define TARGET_MAP_FIXED	0x10		/* Interpret addr exactly */
+#define TARGET_MAP_ANONYMOUS	0x0800		/* don't use a file */
+#define TARGET_MAP_GROWSDOWN	0x1000		/* stack-like segment */
+#define TARGET_MAP_DENYWRITE	0x2000		/* ETXTBSY */
+#define TARGET_MAP_EXECUTABLE	0x4000		/* mark it as an executable */
+#define TARGET_MAP_LOCKED	0x8000		/* pages are locked */
+#define TARGET_MAP_NORESERVE	0x0400		/* don't check for reservations */
+#define TARGET_MAP_POPULATE	0x10000		/* populate (prefault) pagetables */
+#define TARGET_MAP_NONBLOCK	0x20000		/* do not block on IO */
+#define TARGET_MAP_STACK	0x40000
+#define TARGET_MAP_HUGETLB  0x80000         /* create a huge page mapping */
 #else
 #define TARGET_MAP_FIXED	0x10		/* Interpret addr exactly */
 #define TARGET_MAP_ANONYMOUS	0x20		/* don't use a file */
@@ -1361,12 +1137,14 @@ struct target_winsize {
 #define TARGET_MAP_NORESERVE	0x4000		/* don't check for reservations */
 #define TARGET_MAP_POPULATE	0x8000		/* populate (prefault) pagetables */
 #define TARGET_MAP_NONBLOCK	0x10000		/* do not block on IO */
+#define TARGET_MAP_STACK        0x20000         /* ignored */
+#define TARGET_MAP_HUGETLB      0x40000         /* create a huge page mapping */
 #define TARGET_MAP_UNINITIALIZED 0x4000000	/* for anonymous mmap, memory could be uninitialized */
 #endif
 
 #if (defined(TARGET_I386) && defined(TARGET_ABI32)) \
     || (defined(TARGET_ARM) && defined(TARGET_ABI32)) \
-    || defined(TARGET_CRIS) || defined(TARGET_UNICORE32)
+    || defined(TARGET_CRIS)
 struct target_stat {
 	unsigned short st_dev;
 	unsigned short __pad1;
@@ -2050,8 +1828,53 @@ struct target_stat {
     abi_ulong  target_st_ctime_nsec;
     unsigned int __unused[2];
 };
+#elif defined(TARGET_XTENSA)
+struct target_stat {
+    abi_ulong       st_dev;
+    abi_ulong       st_ino;
+    unsigned int    st_mode;
+    unsigned int    st_nlink;
+    unsigned int    st_uid;
+    unsigned int    st_gid;
+    abi_ulong       st_rdev;
+    abi_long        st_size;
+    abi_ulong       st_blksize;
+    abi_ulong       st_blocks;
+    abi_ulong       target_st_atime;
+    abi_ulong       target_st_atime_nsec;
+    abi_ulong       target_st_mtime;
+    abi_ulong       target_st_mtime_nsec;
+    abi_ulong       target_st_ctime;
+    abi_ulong       target_st_ctime_nsec;
+    abi_ulong       __unused4;
+    abi_ulong       __unused5;
+};
+
+#define TARGET_HAS_STRUCT_STAT64
+struct target_stat64  {
+    uint64_t st_dev;            /* Device */
+    uint64_t st_ino;            /* File serial number */
+    unsigned int  st_mode;      /* File mode. */
+    unsigned int  st_nlink;     /* Link count. */
+    unsigned int  st_uid;       /* User ID of the file's owner. */
+    unsigned int  st_gid;       /* Group ID of the file's group. */
+    uint64_t st_rdev;           /* Device number, if device. */
+    int64_t st_size;            /* Size of file, in bytes. */
+    abi_ulong st_blksize;       /* Optimal block size for I/O. */
+    abi_ulong __unused2;
+    uint64_t st_blocks;         /* Number 512-byte blocks allocated. */
+    abi_ulong target_st_atime;  /* Time of last access. */
+    abi_ulong target_st_atime_nsec;
+    abi_ulong target_st_mtime;  /* Time of last modification. */
+    abi_ulong target_st_mtime_nsec;
+    abi_ulong target_st_ctime;  /* Time of last status change. */
+    abi_ulong target_st_ctime_nsec;
+    abi_ulong __unused4;
+    abi_ulong __unused5;
+};
+
 #elif defined(TARGET_OPENRISC) || defined(TARGET_TILEGX) || \
-      defined(TARGET_NIOS2)
+      defined(TARGET_NIOS2) || defined(TARGET_RISCV)
 
 /* These are the asm-generic versions of the stat and stat64 structures */
 
@@ -2078,6 +1901,7 @@ struct target_stat {
     unsigned int __unused5;
 };
 
+#if !defined(TARGET_RISCV64)
 #define TARGET_HAS_STRUCT_STAT64
 struct target_stat64 {
     uint64_t st_dev;
@@ -2101,6 +1925,7 @@ struct target_stat64 {
     unsigned int __unused4;
     unsigned int __unused5;
 };
+#endif
 
 #elif defined(TARGET_HPPA)
 
@@ -2181,7 +2006,8 @@ struct target_statfs {
 	/* Linux specials */
 	target_fsid_t		f_fsid;
 	int32_t			f_namelen;
-	int32_t			f_spare[6];
+	int32_t			f_flags;
+	int32_t			f_spare[5];
 };
 #else
 struct target_statfs {
@@ -2197,7 +2023,8 @@ struct target_statfs {
 	/* Linux specials */
 	target_fsid_t		f_fsid;
 	abi_long		f_namelen;
-	abi_long		f_spare[6];
+	abi_long		f_flags;
+	abi_long		f_spare[5];
 };
 #endif
 
@@ -2213,11 +2040,12 @@ struct target_statfs64 {
 	uint64_t	f_bavail;
 	target_fsid_t	f_fsid;
 	uint32_t	f_namelen;
-	uint32_t	f_spare[6];
+	uint32_t	f_flags;
+	uint32_t	f_spare[5];
 };
 #elif (defined(TARGET_PPC64) || defined(TARGET_X86_64) || \
-       defined(TARGET_SPARC64) || defined(TARGET_AARCH64)) && \
-       !defined(TARGET_ABI32)
+       defined(TARGET_SPARC64) || defined(TARGET_AARCH64) || \
+       defined(TARGET_RISCV)) && !defined(TARGET_ABI32)
 struct target_statfs {
 	abi_long f_type;
 	abi_long f_bsize;
@@ -2229,7 +2057,8 @@ struct target_statfs {
 	target_fsid_t f_fsid;
 	abi_long f_namelen;
 	abi_long f_frsize;
-	abi_long f_spare[5];
+	abi_long f_flags;
+	abi_long f_spare[4];
 };
 
 struct target_statfs64 {
@@ -2243,7 +2072,8 @@ struct target_statfs64 {
 	target_fsid_t f_fsid;
 	abi_long f_namelen;
 	abi_long f_frsize;
-	abi_long f_spare[5];
+	abi_long f_flags;
+	abi_long f_spare[4];
 };
 #elif defined(TARGET_S390X)
 struct target_statfs {
@@ -2257,7 +2087,9 @@ struct target_statfs {
     kernel_fsid_t f_fsid;
     int32_t  f_namelen;
     int32_t  f_frsize;
-    int32_t  f_spare[5];
+    int32_t  f_flags;
+    int32_t  f_spare[4];
+
 };
 
 struct target_statfs64 {
@@ -2271,7 +2103,8 @@ struct target_statfs64 {
     kernel_fsid_t f_fsid;
     int32_t  f_namelen;
     int32_t  f_frsize;
-    int32_t  f_spare[5];
+    int32_t  f_flags;
+    int32_t  f_spare[4];
 };
 #else
 struct target_statfs {
@@ -2285,7 +2118,8 @@ struct target_statfs {
 	target_fsid_t f_fsid;
 	uint32_t f_namelen;
 	uint32_t f_frsize;
-	uint32_t f_spare[5];
+	uint32_t f_flags;
+	uint32_t f_spare[4];
 };
 
 struct target_statfs64 {
@@ -2299,83 +2133,9 @@ struct target_statfs64 {
 	target_fsid_t f_fsid;
         uint32_t f_namelen;
 	uint32_t f_frsize;
-	uint32_t f_spare[5];
+	uint32_t f_flags;
+	uint32_t f_spare[4];
 };
-#endif
-
-
-#define TARGET_F_DUPFD         0       /* dup */
-#define TARGET_F_GETFD         1       /* get close_on_exec */
-#define TARGET_F_SETFD         2       /* set/clear close_on_exec */
-#define TARGET_F_GETFL         3       /* get file->f_flags */
-#define TARGET_F_SETFL         4       /* set file->f_flags */
-
-#if defined(TARGET_ALPHA)
-#define TARGET_F_GETLK         7
-#define TARGET_F_SETLK         8
-#define TARGET_F_SETLKW        9
-#define TARGET_F_SETOWN        5       /*  for sockets. */
-#define TARGET_F_GETOWN        6       /*  for sockets. */
-
-#define TARGET_F_RDLCK         1
-#define TARGET_F_WRLCK         2
-#define TARGET_F_UNLCK         8
-#define TARGET_F_EXLCK         16
-#define TARGET_F_SHLCK         32
-#elif defined(TARGET_MIPS)
-#define TARGET_F_GETLK         14
-#define TARGET_F_SETLK         6
-#define TARGET_F_SETLKW        7
-#define TARGET_F_SETOWN        24       /*  for sockets. */
-#define TARGET_F_GETOWN        23       /*  for sockets. */
-#elif defined(TARGET_HPPA)
-#define TARGET_F_GETLK         5
-#define TARGET_F_SETLK         6
-#define TARGET_F_SETLKW        7
-#define TARGET_F_GETOWN        11       /*  for sockets. */
-#define TARGET_F_SETOWN        12       /*  for sockets. */
-#else
-#define TARGET_F_GETLK         5
-#define TARGET_F_SETLK         6
-#define TARGET_F_SETLKW        7
-#define TARGET_F_SETOWN        8       /*  for sockets. */
-#define TARGET_F_GETOWN        9       /*  for sockets. */
-#endif
-#define TARGET_F_SETOWN_EX     15
-#define TARGET_F_GETOWN_EX     16
-
-#ifndef TARGET_F_RDLCK
-#define TARGET_F_RDLCK         0
-#define TARGET_F_WRLCK         1
-#define TARGET_F_UNLCK         2
-#endif
-
-#ifndef TARGET_F_EXLCK
-#define TARGET_F_EXLCK         4
-#define TARGET_F_SHLCK         8
-#endif
-
-
-#if defined(TARGET_HPPA)
-#define TARGET_F_SETSIG        13      /*  for sockets. */
-#define TARGET_F_GETSIG        14      /*  for sockets. */
-#else
-#define TARGET_F_SETSIG        10      /*  for sockets. */
-#define TARGET_F_GETSIG        11      /*  for sockets. */
-#endif
-
-#if defined(TARGET_MIPS)
-#define TARGET_F_GETLK64       33      /*  using 'struct flock64' */
-#define TARGET_F_SETLK64       34
-#define TARGET_F_SETLKW64      35
-#elif defined(TARGET_HPPA)
-#define TARGET_F_GETLK64       8       /*  using 'struct flock64' */
-#define TARGET_F_SETLK64       9
-#define TARGET_F_SETLKW64      10
-#else
-#define TARGET_F_GETLK64       12      /*  using 'struct flock64' */
-#define TARGET_F_SETLK64       13
-#define TARGET_F_SETLKW64      14
 #endif
 
 #define TARGET_F_LINUX_SPECIFIC_BASE 1024
@@ -2386,182 +2146,7 @@ struct target_statfs64 {
 #define TARGET_F_GETPIPE_SZ (TARGET_F_LINUX_SPECIFIC_BASE + 8)
 #define TARGET_F_NOTIFY  (TARGET_F_LINUX_SPECIFIC_BASE+2)
 
-#if defined(TARGET_ALPHA)
-#define TARGET_O_NONBLOCK           04
-#define TARGET_O_APPEND            010
-#define TARGET_O_CREAT           01000 /* not fcntl */
-#define TARGET_O_TRUNC           02000 /* not fcntl */
-#define TARGET_O_EXCL            04000 /* not fcntl */
-#define TARGET_O_NOCTTY         010000 /* not fcntl */
-#define TARGET_O_DSYNC          040000
-#define TARGET_O_LARGEFILE           0 /* not necessary, always 64-bit */
-#define TARGET_O_DIRECTORY     0100000 /* must be a directory */
-#define TARGET_O_NOFOLLOW      0200000 /* don't follow links */
-#define TARGET_O_DIRECT       02000000 /* direct disk access hint */
-#define TARGET_O_NOATIME      04000000
-#define TARGET_O_CLOEXEC     010000000
-#define TARGET___O_SYNC      020000000
-#define TARGET_O_PATH        040000000
-#elif defined(TARGET_HPPA)
-#define TARGET_O_NONBLOCK    000200004 /* HPUX has separate NDELAY & NONBLOCK */
-#define TARGET_O_APPEND      000000010
-#define TARGET_O_CREAT       000000400 /* not fcntl */
-#define TARGET_O_EXCL        000002000 /* not fcntl */
-#define TARGET_O_NOCTTY      000400000 /* not fcntl */
-#define TARGET_O_DSYNC       001000000
-#define TARGET_O_LARGEFILE   000004000
-#define TARGET_O_DIRECTORY   000010000 /* must be a directory */
-#define TARGET_O_NOFOLLOW    000000200 /* don't follow links */
-#define TARGET_O_NOATIME     004000000
-#define TARGET_O_CLOEXEC     010000000
-#define TARGET___O_SYNC      000100000
-#define TARGET_O_PATH        020000000
-#elif defined(TARGET_ARM) || defined(TARGET_M68K)
-#define TARGET_O_DIRECTORY      040000 /* must be a directory */
-#define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
-#define TARGET_O_DIRECT        0200000 /* direct disk access hint */
-#define TARGET_O_LARGEFILE     0400000
-#elif defined(TARGET_MIPS)
-#define TARGET_O_APPEND         0x0008
-#define TARGET_O_DSYNC          0x0010
-#define TARGET_O_NONBLOCK       0x0080
-#define TARGET_O_CREAT          0x0100  /* not fcntl */
-#define TARGET_O_TRUNC          0x0200  /* not fcntl */
-#define TARGET_O_EXCL           0x0400  /* not fcntl */
-#define TARGET_O_NOCTTY         0x0800  /* not fcntl */
-#define TARGET_FASYNC           0x1000  /* fcntl, for BSD compatibility */
-#define TARGET_O_LARGEFILE      0x2000  /* allow large file opens */
-#define TARGET___O_SYNC         0x4000
-#define TARGET_O_DIRECT         0x8000  /* direct disk access hint */
-#elif defined (TARGET_PPC)
-#define TARGET_O_DIRECTORY      040000 /* must be a directory */
-#define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
-#define TARGET_O_LARGEFILE     0200000
-#define TARGET_O_DIRECT        0400000 /* direct disk access hint */
-#elif defined (TARGET_SPARC)
-#define TARGET_O_APPEND         0x0008
-#define TARGET_FASYNC           0x0040  /* fcntl, for BSD compatibility */
-#define TARGET_O_CREAT          0x0200  /* not fcntl */
-#define TARGET_O_TRUNC          0x0400  /* not fcntl */
-#define TARGET_O_EXCL           0x0800  /* not fcntl */
-#define TARGET_O_DSYNC          0x2000
-#define TARGET_O_NONBLOCK       0x4000
-# ifdef TARGET_SPARC64
-#  define TARGET_O_NDELAY       0x0004
-# else
-#  define TARGET_O_NDELAY       (0x0004 | TARGET_O_NONBLOCK)
-# endif
-#define TARGET_O_NOCTTY         0x8000  /* not fcntl */
-#define TARGET_O_LARGEFILE     0x40000
-#define TARGET_O_DIRECT       0x100000  /* direct disk access hint */
-#define TARGET_O_NOATIME      0x200000
-#define TARGET_O_CLOEXEC      0x400000
-#define TARGET___O_SYNC       0x800000
-#define TARGET_O_PATH        0x1000000
-#endif
-
-/* <asm-generic/fcntl.h> values follow.  */
-#define TARGET_O_ACCMODE          0003
-#define TARGET_O_RDONLY             00
-#define TARGET_O_WRONLY             01
-#define TARGET_O_RDWR               02
-#ifndef TARGET_O_CREAT
-#define TARGET_O_CREAT            0100 /* not fcntl */
-#endif
-#ifndef TARGET_O_EXCL
-#define TARGET_O_EXCL             0200 /* not fcntl */
-#endif
-#ifndef TARGET_O_NOCTTY
-#define TARGET_O_NOCTTY           0400 /* not fcntl */
-#endif
-#ifndef TARGET_O_TRUNC
-#define TARGET_O_TRUNC           01000 /* not fcntl */
-#endif
-#ifndef TARGET_O_APPEND
-#define TARGET_O_APPEND          02000
-#endif
-#ifndef TARGET_O_NONBLOCK
-#define TARGET_O_NONBLOCK        04000
-#endif
-#ifndef TARGET_O_DSYNC
-#define TARGET_O_DSYNC          010000
-#endif
-#ifndef TARGET_FASYNC
-#define TARGET_FASYNC           020000 /* fcntl, for BSD compatibility */
-#endif
-#ifndef TARGET_O_DIRECT
-#define TARGET_O_DIRECT         040000 /* direct disk access hint */
-#endif
-#ifndef TARGET_O_LARGEFILE
-#define TARGET_O_LARGEFILE     0100000
-#endif
-#ifndef TARGET_O_DIRECTORY
-#define TARGET_O_DIRECTORY     0200000 /* must be a directory */
-#endif
-#ifndef TARGET_O_NOFOLLOW
-#define TARGET_O_NOFOLLOW      0400000 /* don't follow links */
-#endif
-#ifndef TARGET_O_NOATIME
-#define TARGET_O_NOATIME      01000000
-#endif
-#ifndef TARGET_O_CLOEXEC
-#define TARGET_O_CLOEXEC      02000000
-#endif
-#ifndef TARGET___O_SYNC
-#define TARGET___O_SYNC       04000000
-#endif
-#ifndef TARGET_O_PATH
-#define TARGET_O_PATH        010000000
-#endif
-#ifndef TARGET_O_NDELAY
-#define TARGET_O_NDELAY  TARGET_O_NONBLOCK
-#endif
-#ifndef TARGET_O_SYNC
-#define TARGET_O_SYNC    (TARGET___O_SYNC | TARGET_O_DSYNC)
-#endif
-
-struct target_flock {
-    short l_type;
-    short l_whence;
-    abi_long l_start;
-    abi_long l_len;
-#if defined(TARGET_MIPS)
-    abi_long l_sysid;
-#endif
-    int l_pid;
-#if defined(TARGET_MIPS)
-    abi_long pad[4];
-#endif
-};
-
-struct target_flock64 {
-    short  l_type;
-    short  l_whence;
-#if defined(TARGET_PPC) || defined(TARGET_X86_64) || defined(TARGET_MIPS) \
-    || defined(TARGET_SPARC) || defined(TARGET_HPPA) \
-    || defined(TARGET_MICROBLAZE) || defined(TARGET_TILEGX)
-    int __pad;
-#endif
-    abi_llong l_start;
-    abi_llong l_len;
-    int  l_pid;
-} QEMU_PACKED;
-
-#ifdef TARGET_ARM
-struct target_eabi_flock64 {
-    short  l_type;
-    short  l_whence;
-    int __pad;
-    abi_llong l_start;
-    abi_llong l_len;
-    int  l_pid;
-} QEMU_PACKED;
-#endif
-
-struct target_f_owner_ex {
-        int type;	/* Owner type of ID.  */
-        int pid;	/* ID of owner.  */
-};
+#include "target_fcntl.h"
 
 /* soundcard defines */
 /* XXX: convert them all to arch independent entries */
@@ -2706,9 +2291,34 @@ struct target_f_owner_ex {
 #define TARGET_VFAT_IOCTL_READDIR_BOTH    TARGET_IORU('r', 1)
 #define TARGET_VFAT_IOCTL_READDIR_SHORT   TARGET_IORU('r', 2)
 
-#define TARGET_MTIOCTOP        TARGET_IOW('m', 1, struct mtop)
-#define TARGET_MTIOCGET        TARGET_IOR('m', 2, struct mtget)
-#define TARGET_MTIOCPOS        TARGET_IOR('m', 3, struct mtpos)
+struct target_mtop {
+    abi_short mt_op;
+    abi_int mt_count;
+};
+
+#if defined(TARGET_SPARC) || defined(TARGET_MIPS)
+typedef abi_long target_kernel_daddr_t;
+#else
+typedef abi_int target_kernel_daddr_t;
+#endif
+
+struct target_mtget {
+    abi_long mt_type;
+    abi_long mt_resid;
+    abi_long mt_dsreg;
+    abi_long mt_gstat;
+    abi_long mt_erreg;
+    target_kernel_daddr_t mt_fileno;
+    target_kernel_daddr_t mt_blkno;
+};
+
+struct target_mtpos {
+    abi_long mt_blkno;
+};
+
+#define TARGET_MTIOCTOP        TARGET_IOW('m', 1, struct target_mtop)
+#define TARGET_MTIOCGET        TARGET_IOR('m', 2, struct target_mtget)
+#define TARGET_MTIOCPOS        TARGET_IOR('m', 3, struct target_mtpos)
 
 struct target_sysinfo {
     abi_long uptime;                /* Seconds since boot */
