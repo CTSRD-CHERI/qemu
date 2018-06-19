@@ -2108,8 +2108,10 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
 
     uint8_t shift = E + BWidth;
 
-    uint64_t top  = ((((cursor >> shift) + (int64_t)ct) << BWidth) | (uint64_t)T) << E;
-    uint64_t base = ((((cursor >> shift) + (int64_t)cb) << BWidth) | (uint64_t)B) << E;
+    uint64_t cursor_top = shift >= 64 ? 0 : cursor >> shift;
+
+    uint64_t top  = (((cursor_top + (int64_t)ct) << BWidth) | (uint64_t)T) << E;
+    uint64_t base = (((cursor_top + (int64_t)cb) << BWidth) | (uint64_t)B) << E;
 
 
     // top/length really should be 65 bits. If we get overflow length is actually max length
