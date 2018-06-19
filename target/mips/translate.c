@@ -23824,9 +23824,9 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
 
     /* Generate capabilities check on PC */
+    GEN_LOG_REGISTERS;
     GEN_CAP_CHECK_PC(ctx);
     GEN_LOG_INSTR(ctx);
-    GEN_LOG_REGISTERS;
 
     tcg_gen_insn_start(ctx->base.pc_next, ctx->hflags & MIPS_HFLAG_BMASK,
                        ctx->btarget);
