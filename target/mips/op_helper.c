@@ -2072,6 +2072,7 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
 
     if(IE) {
         E = ((((LH << CC_L_LOWWIDTH) | (B & CC_L_LOWMASK)) << CC_L_LOWWIDTH) | (T & CC_L_LOWMASK)) + 1; // Offset by 1. We don't need to encode E=0
+        E = MIN(64 - BWidth + 2, E);
         B &= ~CC_L_LOWMASK;
         T &= ~CC_L_LOWMASK;
         L_msb = 1;
