@@ -178,8 +178,6 @@ static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
 bool is_representable(bool sealed, uint64_t base, uint64_t length,
                       uint64_t offset, uint64_t inc);
 
-#define CAP_MAX_OTYPE           (0xffffff)
-
 #define CAP_PERM_GLOBAL         (1 << 0)
 #define CAP_PERM_EXECUTE        (1 << 1)
 #define CAP_PERM_LOAD           (1 << 2)
