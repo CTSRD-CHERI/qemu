@@ -40,9 +40,9 @@
 #define CC_L_T_OFF  23
 #define CC_L_S_OFF  46
 
-#define CC_L_OHI_OFF 34
-#define CC_L_OLO_OFF 13
-#define CC_L_TYPES   20
+#define CC_L_OHI_OFF 32
+#define CC_L_OLO_OFF 11
+#define CC_L_TYPES   24
 
 
 #define CC_L_BWIDTH 23
