@@ -3334,7 +3334,7 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint8_t need_zeros = E == 0 ? 0 : E + CC_L_LOWWIDTH;
 
     cursor = (cursor >> need_zeros) << need_zeros;
-    new_top = ((new_top + ((1 << need_zeros) - 1)) >> need_zeros) << need_zeros;
+    new_top = ((new_top + ((UINT64_C(1) << need_zeros) - 1)) >> need_zeros) << need_zeros;
 
     if(new_top < req_top) new_top = -1ULL; // overflow happened somewhere
 
