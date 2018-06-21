@@ -26,6 +26,7 @@
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
 #include "sysemu/kvm.h"
+#include "sysemu/sysemu.h"
 #ifdef TARGET_CHERI
 #include "disas/disas.h"
 #include "disas/bfd.h"
@@ -1989,8 +1990,8 @@ void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
     else
         env->hflags &= ~MIPS_HFLAG_DM;
 
-//cpu_loop_exit(CPU(mips_env_get_cpu(env))); /* CHERI: exit simulation */
-//exit(0);
+    qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
+    cpu_loop_exit_noexc(ENV_GET_CPU(env));
 }
 
 void helper_mttc0_debug(CPUMIPSState *env, target_ulong arg1)
