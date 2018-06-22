@@ -170,9 +170,15 @@ static int glue(load_symbols, SZ)(struct elfhdr *ehdr, int fd, int must_swab,
         }
         i++;
     }
-    syms = g_realloc(syms, nsyms * sizeof(*syms));
-
-    qsort(syms, nsyms, sizeof(*syms), glue(symcmp, SZ));
+    // Avoid ASAN error that qsort() argument 1 must be non-null
+    if (nsyms > 0) {
+        syms = g_realloc(syms, nsyms * sizeof(*syms));
+        assert(syms != NULL);
+        qsort(syms, nsyms, sizeof(*syms), glue(symcmp, SZ));
+    } else {
+        syms = NULL;
+        fprintf(stderr, "Warning: could not find any function symbols in ELF file\n");
+    }
     for (i = 0; i < nsyms - 1; i++) {
         if (syms[i].st_size == 0) {
             syms[i].st_size = syms[i + 1].st_value - syms[i].st_value;
