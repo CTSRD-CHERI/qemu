@@ -2396,6 +2396,8 @@ static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
                 break;
         }
     }
+    // fprintf(stderr, "addr=%zx, len=%zd, cr_base=%zx, cr_len=%zd\n",
+    //     (size_t)addr, (size_t)len, (size_t)cr->cr_base, (size_t)cr->cr_length);
     if (addr < cr->cr_base || (addr + len) > (cr->cr_base + cr->cr_length)) {
         cause = CP2Ca_LENGTH;
         // fprintf(qemu_logfile, "CAP Len VIOLATION: ");
@@ -5031,6 +5033,46 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 4);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
+}
+
+target_ulong helper_ccheck_store_right(CPUMIPSState *env, target_ulong offset, uint32_t len)
+{
+#ifndef TARGET_WORDS_BIGENDIAN
+#error "This check is only valid for big endian targets, for little endian the load/store left instructions need to be checked"
+#endif
+    // For swr/sdr we store all bytes if offset & 3/7 == 0 we store only first byte, if all low bits are set we store the full amount
+    uint32_t low_bits = (uint32_t)offset & (len - 1);
+    uint32_t stored_bytes = low_bits + 1;
+    // From spec:
+    //if BigEndianMem = 1 then
+    //  pAddr <- pAddr(PSIZE-1)..3 || 000 (for ldr), 00 for lwr
+    //endif
+    // clear the low bits in offset to perform the length check
+    target_ulong write_offset = offset & ~((target_ulong)len - 1);
+    // fprintf(stderr, "%s: len=%d, offset=%zd, write_offset=%zd: will touch %d bytes\n",
+    //    __func__, len, (size_t)offset, (size_t)write_offset, stored_bytes);
+    // return the actual address by adding the low bits (this is expected by translate.c
+    return helper_ccheck_store(env, write_offset, stored_bytes) + low_bits;
+}
+
+target_ulong helper_ccheck_load_right(CPUMIPSState *env, target_ulong offset, uint32_t len)
+{
+#ifndef TARGET_WORDS_BIGENDIAN
+#error "This check is only valid for big endian targets, for little endian the load/store left instructions need to be checked"
+#endif
+    // For lwr/ldr we load all bytes if offset & 3/7 == 0 we load only the first byte, if all low bits are set we load the full amount
+    uint32_t low_bits = (uint32_t)offset & (len - 1);
+    uint32_t loaded_bytes = low_bits + 1;
+    // From spec:
+    //if BigEndianMem = 1 then
+    //  pAddr <- pAddr(PSIZE-1)..3 || 000 (for ldr), 00 for lwr
+    //endif
+    // clear the low bits in offset to perform the length check
+    target_ulong read_offset = offset & ~((target_ulong)len - 1);
+    // fprintf(stderr, "%s: len=%d, offset=%zd, read_offset=%zd: will touch %d bytes\n",
+    //      __func__, len, (size_t)offset, (size_t)read_offset, loaded_bytes);
+    // return the actual address by adding the low bits (this is expected by translate.c
+    return helper_ccheck_load(env, read_offset, loaded_bytes) + low_bits;
 }
 
 target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len)

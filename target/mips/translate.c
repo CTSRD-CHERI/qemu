@@ -3971,11 +3971,19 @@ static inline void generate_ccheck_pc(DisasContext *ctx)
 static inline void generate_ccheck_store(TCGv addr, TCGv offset, int32_t len)
 {
     TCGv_i32 tlen = tcg_const_i32(len);
-
     gen_helper_ccheck_store(addr, cpu_env, offset, tlen);
     tcg_temp_free_i32(tlen);
 }
 
+static inline void generate_ccheck_store_right(TCGv addr, TCGv offset, int32_t len)
+{
+    TCGv_i32 tlen = tcg_const_i32(len);
+    gen_helper_ccheck_store_right(addr, cpu_env, offset, tlen);
+    tcg_temp_free_i32(tlen);
+}
+
+#define GEN_CAP_CHECK_STORE_RIGHT(addr, offset, len) \
+    generate_ccheck_store_right(addr, offset, len)
 #define GEN_CAP_CHECK_STORE(addr, offset, len) \
     generate_ccheck_store(addr, offset, len)
 
@@ -3986,7 +3994,15 @@ static inline void generate_ccheck_load(TCGv addr, TCGv offset, int32_t len)
     gen_helper_ccheck_load(addr, cpu_env, offset, tlen);
     tcg_temp_free_i32(tlen);
 }
+static inline void generate_ccheck_load_right(TCGv addr, TCGv offset, int32_t len)
+{
+    TCGv_i32 tlen = tcg_const_i32(len);
 
+    gen_helper_ccheck_load_right(addr, cpu_env, offset, tlen);
+    tcg_temp_free_i32(tlen);
+}
+#define GEN_CAP_CHECK_LOAD_RIGHT(save, addr, offset, len) \
+    generate_ccheck_load_right(addr, offset, len); tcg_gen_mov_tl(save, addr)
 #define GEN_CAP_CHECK_LOAD(save, addr, offset, len) \
     generate_ccheck_load(addr, offset, len); tcg_gen_mov_tl(save, addr)
 
@@ -4545,7 +4561,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         gen_store_gpr(t0, rt);
         break;
     case OPC_LDR:
-        GEN_CAP_CHECK_LOAD(t3, t0, t0, 8);
+        GEN_CAP_CHECK_LOAD_RIGHT(t3, t0, t0, 8);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -4668,7 +4684,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_LWR:
-        GEN_CAP_CHECK_LOAD(t3, t0, t0, 4);
+        GEN_CAP_CHECK_LOAD_RIGHT(t3, t0, t0, 4);
         t1 = tcg_temp_new();
         /* Do a byte access to possibly trigger a page
            fault with the unaligned address.  */
@@ -4734,7 +4750,7 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
         GEN_CAP_INVADIATE_TAG(t0, 8, opc, t1);
         break;
     case OPC_SDR:
-        GEN_CAP_CHECK_STORE(t0, t0, 8);
+        GEN_CAP_CHECK_STORE_RIGHT(t0, t0, 8);
         gen_helper_0e2i(sdr, t1, t0, mem_idx);
         GEN_CAP_INVADIATE_TAG(t0, 8, opc, t1);
         break;
@@ -4777,7 +4793,7 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_SWR:
-        GEN_CAP_CHECK_STORE(t0, t0, 4);
+        GEN_CAP_CHECK_STORE_RIGHT(t0, t0, 4);
         gen_helper_0e2i(swr, t1, t0, mem_idx);
         GEN_CAP_INVADIATE_TAG(t0, 4, opc, t1);
         break;
