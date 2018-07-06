@@ -191,6 +191,13 @@ static ObjectClass *mips_cpu_class_by_name(const char *cpu_model)
     return oc;
 }
 
+#if defined(TARGET_CHERI)
+static void dump_stats_on_exit(void)
+{
+    cheri_cpu_dump_statistics(NULL, stderr, fprintf, 0);
+}
+#endif
+
 static void mips_cpu_class_init(ObjectClass *c, void *data)
 {
     MIPSCPUClass *mcc = MIPS_CPU_CLASS(c);
@@ -231,6 +238,13 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
 #endif
     cc->gdb_num_core_regs = 72;
     cc->gdb_stop_before_watchpoint = true;
+#if defined(TARGET_CHERI)
+    cc->dump_statistics = cheri_cpu_dump_statistics;
+    atexit(dump_stats_on_exit);
+#if defined(DO_CHERI_STATISTICS)
+#endif
+#endif
+
 }
 
 static const TypeInfo mips_cpu_type_info = {

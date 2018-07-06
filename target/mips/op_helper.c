@@ -142,6 +142,111 @@ static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause
 {
     do_raise_c2_exception(env, cause, 0xff);
 }
+
+#define DEFINE_CHERI_STAT(op) \
+    static uint64_t stat_num_##op = 0; \
+    static uint64_t stat_num_##op##_out_of_bounds[10]; \
+    static uint64_t stat_num_##op##_out_of_bounds_unrep = 0;
+
+DEFINE_CHERI_STAT(cincoffset)
+DEFINE_CHERI_STAT(csetoffset)
+DEFINE_CHERI_STAT(cgetpccsetoffset)
+DEFINE_CHERI_STAT(cfromptr)
+
+static inline uint64_t _howmuch_out_of_bounds(cap_register_t* cr, const char* name)
+{
+    if (!cr->cr_tag)
+        return 0;  // We don't care about arithmetic on untagged things
+
+    if (cr->cr_offset == cr->cr_length) {
+        // This case is very common so we should not print a message here
+        return 1;
+    } else if (cr->cr_offset > cr->cr_length) {
+        uint64_t howmuch = cr->cr_offset - cr->cr_length + 1;
+#if 0
+        if (howmuch > 100) {
+            fprintf(stderr, "Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
+                    " p:%08x b:%016" PRIx64 " l:%" PRId64 "o: %" PRId64 "\r\n",
+                    howmuch, name, cr->cr_tag, cr->cr_sealed ? 1 : 0,
+                    (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
+                    cr->cr_base, cr->cr_length, (int64_t)cr->cr_offset);
+            fflush(stderr);
+        }
+#endif
+        return howmuch;
+    }
+    return 0;
+}
+
+static inline int out_of_bounds_stat_index(uint64_t howmuch) {
+    if (howmuch <= 1)
+        return 0;
+    if (howmuch <= 10)
+        return 1;
+    if (howmuch <= 100)
+        return 2;
+    if (howmuch <= 1000)
+        return 3;
+    if (howmuch <= 10 * 1000)
+        return 4;
+    if (howmuch <= 100 * 1000)
+        return 5;
+    if (howmuch <= 1000 * 1000)
+        return 6;
+    if (howmuch <= 10 * 1000 * 1000)
+        return 7;
+    if (howmuch <= 100 * 1000 * 1000)
+        return 8;
+    return 9;  // more than 1000 * 1000 * 1000
+}
+
+#define check_out_of_bounds_stat(op, capreg) do { \
+    uint64_t howmuch = _howmuch_out_of_bounds(capreg, #op); \
+    if (howmuch > 0) { \
+        stat_num_##op##_out_of_bounds[out_of_bounds_stat_index(howmuch)]++; \
+    } \
+} while (0)
+
+// TODO: count how far it was out of bounds for this stat
+#define became_unrepresentable(env, reg, operation) do { \
+    /* unrepresentable implies more than one out of bounds: */ \
+    stat_num_##operation##_out_of_bounds_unrep++; \
+    _became_unrepresentable(env, reg); \
+} while (0)
+
+
+static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
+                                     const char* name, uint64_t total,
+                                     uint64_t (*out_of_bounds)[10],
+                                     uint64_t unrepresentable)
+{
+    cpu_fprintf(f, "Number of %ss: %" PRIu64 "\n", name, total);
+    uint64_t total_out_of_bounds = (*out_of_bounds)[0];
+    cpu_fprintf(f, "  Out of bounds by one %" PRIu64 "\n", out_of_bounds[0]);
+    for (int i = 1; i < 10; i++) {
+        cpu_fprintf(f, "  Out of bounds by up to 1%0*d: %" PRIu64 "\n", i, 0, out_of_bounds[i]);
+        total_out_of_bounds += (*out_of_bounds)[i];
+    }
+    cpu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", name, unrepresentable);
+    total_out_of_bounds += unrepresentable; // TODO: count how far it was out of bounds for this stat
+
+    cpu_fprintf(f, "Total out of bounds %ss: %" PRIu64 " (%f%%)\n", name, total_out_of_bounds,
+                (double)(100 * total_out_of_bounds) / (double)total);
+
+}
+
+void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
+                              fprintf_function cpu_fprintf, int flags)
+{
+    // cpu_fprintf(f, "CPUSTATS DISABLED, RECOMPILE WITH -DDO_CHERI_STATISTICS\n");
+#define DUMP_CHERI_STAT(name, printname) \
+    dump_out_of_bounds_stats(f, cpu_fprintf, printname, stat_num_##name, &stat_num_##name##_out_of_bounds, stat_num_##name##_out_of_bounds_unrep);
+
+    DUMP_CHERI_STAT(cincoffset, "CIncOffset");
+    DUMP_CHERI_STAT(csetoffset, "CSetOffset");
+    DUMP_CHERI_STAT(cgetpccsetoffset, "CGetPCCSetOffset");
+    DUMP_CHERI_STAT(cfromptr, "CFromPtr");
+}
 #endif /* TARGET_CHERI */
 
 #if defined(CONFIG_USER_ONLY)
@@ -1923,7 +2028,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 }
 
 static inline void
-became_unrepresentable(CPUMIPSState *env, uint16_t reg)
+_became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 {
 }
 #elif defined(CHERI_128)
@@ -2289,7 +2394,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 extern bool cheri_c2e_on_unrepresentable;
 
 static inline void
-became_unrepresentable(CPUMIPSState *env, uint16_t reg)
+_became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 {
 	if (cheri_c2e_on_unrepresentable)
 		do_raise_c2_exception(env, CP2Ca_INEXACT, reg);
@@ -2325,7 +2430,7 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 }
 
 static inline void
-became_unrepresentable(CPUMIPSState *env, uint16_t reg)
+_became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 {
 }
 #endif /* ! 128-bit capabilities */
@@ -2698,6 +2803,7 @@ void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
+    stat_num_cfromptr++;
     uint32_t perms = env->active_tc.PCC.cr_perms;
     // CFromPtr traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space (and for backwards compat with old binaries).
@@ -2721,7 +2827,7 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else {
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base,
                     cbp->cr_length, cbp->cr_offset, rt)) {
-            became_unrepresentable(env, cd);
+            became_unrepresentable(env, cd, cfromptr);
             cap_register_t result;
             update_capreg(&env->active_tc, cd,
                 int_to_cap(cbp->cr_base + rt, &result));
@@ -2729,6 +2835,7 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
             cap_register_t result = *cbp;
             result.cr_offset = rt;
             update_capreg(&env->active_tc, cd, &result);
+            check_out_of_bounds_stat(cfromptr, &result);
         }
     }
 }
@@ -2828,6 +2935,7 @@ void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
 
 void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
 {
+    stat_num_cgetpccsetoffset++;
     cap_register_t *pccp = &env->active_tc.PCC;
     uint32_t perms = pccp->cr_perms;
     /*
@@ -2839,7 +2947,7 @@ void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
     } else if (!is_representable(is_cap_sealed(pccp), pccp->cr_base,
                 pccp->cr_length, pccp->cr_offset, rs)) {
         if (pccp->cr_tag)
-            became_unrepresentable(env, cd);
+            became_unrepresentable(env, cd, cgetpccsetoffset);
         cap_register_t result;
         update_capreg(&env->active_tc, cd,
             int_to_cap(pccp->cr_base + rs, &result));
@@ -2847,6 +2955,7 @@ void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
         cap_register_t result = *pccp;
         result.cr_offset = rs;
         update_capreg(&env->active_tc, cd, &result);
+        check_out_of_bounds_stat(cgetpccsetoffset, &result);
         /* Note that the offset(cursor) is updated by ccheck_pcc */
     }
 }
@@ -2945,6 +3054,7 @@ void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
+    stat_num_cincoffset++;
     uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
@@ -2960,8 +3070,9 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         uint64_t cb_offset_plus_rt = cbp->cr_offset + rt;
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
                     cbp->cr_offset, cb_offset_plus_rt)) {
-            if (cbp->cr_tag)
-                became_unrepresentable(env, cd);
+            if (cbp->cr_tag) {
+                became_unrepresentable(env, cd, cincoffset);
+            }
             cap_register_t result;
             int_to_cap(cbp->cr_base + cb_offset_plus_rt, &result);
             update_capreg(&env->active_tc, cd, &result);
@@ -2969,6 +3080,7 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
             cap_register_t result = *cbp;
             result.cr_offset = cb_offset_plus_rt;
             update_capreg(&env->active_tc, cd, &result);
+            check_out_of_bounds_stat(cincoffset, &result);
         }
     }
 }
@@ -3480,6 +3592,7 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
+    stat_num_csetoffset++;
     uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
@@ -3495,13 +3608,14 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
                     cbp->cr_offset, rt)) {
             if (cbp->cr_tag)
-                became_unrepresentable(env, cd);
+                became_unrepresentable(env, cd, csetoffset);
             cap_register_t result;
             update_capreg(&env->active_tc, cd, int_to_cap(cbp->cr_base + rt, &result));
         } else {
             cap_register_t result = *cbp;
             result.cr_offset = rt;
             update_capreg(&env->active_tc, cd, &result);
+            check_out_of_bounds_stat(csetoffset, &result);
         }
     }
 }

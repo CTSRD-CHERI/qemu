@@ -1098,6 +1098,8 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size);
 int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr);
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg);
+void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
+                               fprintf_function cpu_fprintf, int flags);
 #ifdef CHERI_MAGIC128
 int  cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
         uint64_t *tps, uint64_t *length);
