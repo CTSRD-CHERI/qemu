@@ -199,7 +199,7 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
         return 7;
     if (howmuch <= 100 * 1000 * 1000)
         return 8;
-    return 9;  // more than 1000 * 1000 * 1000
+    return 9;  // more than 100 * 1000 * 1000
 }
 
 #define check_out_of_bounds_stat(op, capreg) do { \
@@ -221,13 +221,16 @@ static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
                                      uint64_t* out_of_bounds,
                                      uint64_t unrepresentable)
 {
+
     cpu_fprintf(f, "Number of %ss: %" PRIu64 "\n", name, total);
     uint64_t total_out_of_bounds = out_of_bounds[0];
     cpu_fprintf(f, "  Out of bounds by one:              %" PRIu64 "\n", out_of_bounds[0]);
-    for (int i = 1; i < 10; i++) {
+    for (int i = 1; i < 9; i++) {
         cpu_fprintf(f, "  Out of bounds by up to 1%0*d:%*s%" PRIu64 "\n", i, 0, 10 - i, "", out_of_bounds[i]);
         total_out_of_bounds += out_of_bounds[i];
     }
+    cpu_fprintf(f, "  Out of bounds by over   100000000: %" PRIu64 "\n", out_of_bounds[9]);
+    total_out_of_bounds += out_of_bounds[9];
     cpu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", unrepresentable);
     total_out_of_bounds += unrepresentable; // TODO: count how far it was out of bounds for this stat
 
