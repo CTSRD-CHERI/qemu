@@ -1642,12 +1642,14 @@ void helper_mtc0_status(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mttc0_status(CPUMIPSState *env, target_ulong arg1)
 {
+    qemu_mutex_lock_iothread();
     int other_tc = env->CP0_VPEControl & (0xff << CP0VPECo_TargTC);
     uint32_t mask = env->CP0_Status_rw_bitmask & ~0xf1000018;
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
     other->CP0_Status = (other->CP0_Status & ~mask) | (arg1 & mask);
     sync_c0_status(env, other, other_tc);
+    qemu_mutex_unlock_iothread();
 }
 
 void helper_mtc0_intctl(CPUMIPSState *env, target_ulong arg1)
@@ -1670,10 +1672,12 @@ void helper_mtc0_cause(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mttc0_cause(CPUMIPSState *env, target_ulong arg1)
 {
+    qemu_mutex_lock_iothread();
     int other_tc = env->CP0_VPEControl & (0xff << CP0VPECo_TargTC);
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
     cpu_mips_store_cause(other, arg1);
+    qemu_mutex_unlock_iothread();
 }
 
 target_ulong helper_mftc0_epc(CPUMIPSState *env)
@@ -2125,8 +2129,10 @@ static void decompress_128cap(uint64_t pesbt, uint64_t cursor,
 
     uint8_t shift = E + BWidth;
 
-    uint64_t top  = ((((cursor >> shift) + (int64_t)ct) << BWidth) | (uint64_t)T) << E;
-    uint64_t base = ((((cursor >> shift) + (int64_t)cb) << BWidth) | (uint64_t)B) << E;
+    uint64_t cursor_top = shift >= 64 ? 0 : cursor >> shift;
+
+    uint64_t top  = ((((cursor_top) + (int64_t)ct) << BWidth) | (uint64_t)T) << E;
+    uint64_t base = ((((cursor_top) + (int64_t)cb) << BWidth) | (uint64_t)B) << E;
 
 
     // top/length really should be 65 bits. If we get overflow length is actually max length
@@ -5493,6 +5499,7 @@ target_ulong helper_dvpe(CPUMIPSState *env)
 
 target_ulong helper_evpe(CPUMIPSState *env)
 {
+    qemu_mutex_lock_iothread();
     CPUState *other_cs = first_cpu;
     target_ulong prev = env->mvp->CP0_MVPControl;
 
@@ -5507,6 +5514,7 @@ target_ulong helper_evpe(CPUMIPSState *env)
             mips_vpe_wake(other_cpu); /* And wake it up.  */
         }
     }
+    qemu_mutex_unlock_iothread();
     return prev;
 }
 #endif /* !CONFIG_USER_ONLY */

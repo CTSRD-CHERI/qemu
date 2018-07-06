@@ -465,6 +465,7 @@ const mips_def_t mips_defs[] =
 #else
         .CP0_Config1 = (1 << CP0C1_FP) | (47 << CP0C1_MMU),
 #endif
+        .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_MT),
         .CP0_LLAddr_rw_bitmask = 0xFFFFFFFF,
         .CP0_LLAddr_shift = 4,
         .SYNCI_Step = 16,
@@ -488,7 +489,7 @@ const mips_def_t mips_defs[] =
 #else
         .PABITS = 36,
 #endif
-        .insn_flags = CPU_MIPS3,
+        .insn_flags = CPU_MIPS3 | CPU_MIPS64R2 | ASE_MT,
         .mmu_type = MMU_TYPE_R4000,
     },
     {
@@ -557,7 +558,7 @@ const mips_def_t mips_defs[] =
         .CP0_Config2 = MIPS_CONFIG2,
 #if defined(TARGET_CHERI)
         .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI) | (1 << CP0C3_BI) |
-                       (1 << CP0C3_BP),
+                       (1 << CP0C3_BP) | (1 << CP0C3_MT) ,
 #else
         .CP0_Config3 = MIPS_CONFIG3,
 #endif
@@ -582,7 +583,7 @@ const mips_def_t mips_defs[] =
         .SEGBITS = 42,
         .PABITS = 36,
 #if defined(TARGET_CHERI)
-        .insn_flags = CPU_MIPS64R2,
+        .insn_flags = CPU_MIPS64R2 | ASE_MT,
 #else
         .insn_flags = CPU_MIPS64,
 #endif
