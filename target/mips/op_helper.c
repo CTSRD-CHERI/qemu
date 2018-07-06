@@ -143,6 +143,8 @@ static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause
     do_raise_c2_exception(env, cause, 0xff);
 }
 
+#ifdef DO_CHERI_STATISTICS
+
 #define DEFINE_CHERI_STAT(op) \
     static uint64_t stat_num_##op = 0; \
     static uint64_t stat_num_##op##_out_of_bounds[10]; \
@@ -214,7 +216,6 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
     _became_unrepresentable(env, reg); \
 } while (0)
 
-
 static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
                                      const char* name, uint64_t total,
                                      uint64_t (*out_of_bounds)[10],
@@ -235,10 +236,20 @@ static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
 
 }
 
+#else /* !defined(DO_CHERI_STATISTICS) */
+
+// Don't collect any statistics by default (it slows down QEMU)
+#define check_out_of_bounds_stat(op, capreg) do { } while (0)
+#define became_unrepresentable(env, reg, operation) _became_unrepresentable(env, reg)
+
+#endif /* DO_CHERI_STATISTICS */
+
 void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
                               fprintf_function cpu_fprintf, int flags)
 {
-    // cpu_fprintf(f, "CPUSTATS DISABLED, RECOMPILE WITH -DDO_CHERI_STATISTICS\n");
+#ifndef DO_CHERI_STATISTICS
+    cpu_fprintf(f, "CPUSTATS DISABLED, RECOMPILE WITH -DDO_CHERI_STATISTICS\n");
+#else
 #define DUMP_CHERI_STAT(name, printname) \
     dump_out_of_bounds_stats(f, cpu_fprintf, printname, stat_num_##name, &stat_num_##name##_out_of_bounds, stat_num_##name##_out_of_bounds_unrep);
 
@@ -246,6 +257,8 @@ void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
     DUMP_CHERI_STAT(csetoffset, "CSetOffset");
     DUMP_CHERI_STAT(cgetpccsetoffset, "CGetPCCSetOffset");
     DUMP_CHERI_STAT(cfromptr, "CFromPtr");
+#undef DUMP_CHERI_STAT
+#endif
 }
 #endif /* TARGET_CHERI */
 
@@ -2803,7 +2816,9 @@ void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
+#ifdef DO_CHERI_STATISTICS
     stat_num_cfromptr++;
+#endif
     uint32_t perms = env->active_tc.PCC.cr_perms;
     // CFromPtr traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space (and for backwards compat with old binaries).
@@ -2935,7 +2950,9 @@ void helper_cgetpcc(CPUMIPSState *env, uint32_t cd)
 
 void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
 {
+#ifdef DO_CHERI_STATISTICS
     stat_num_cgetpccsetoffset++;
+#endif
     cap_register_t *pccp = &env->active_tc.PCC;
     uint32_t perms = pccp->cr_perms;
     /*
@@ -3054,7 +3071,9 @@ void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
+#ifdef DO_CHERI_STATISTICS
     stat_num_cincoffset++;
+#endif
     uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
@@ -3592,7 +3611,9 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
+#ifdef DO_CHERI_STATISTICS
     stat_num_csetoffset++;
+#endif
     uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*

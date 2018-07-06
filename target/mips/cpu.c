@@ -191,7 +191,7 @@ static ObjectClass *mips_cpu_class_by_name(const char *cpu_model)
     return oc;
 }
 
-#if defined(TARGET_CHERI)
+#if defined(TARGET_CHERI) && defined(DO_CHERI_STATISTICS)
 static void dump_stats_on_exit(void)
 {
     cheri_cpu_dump_statistics(NULL, stderr, fprintf, 0);
@@ -240,8 +240,8 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     cc->gdb_stop_before_watchpoint = true;
 #if defined(TARGET_CHERI)
     cc->dump_statistics = cheri_cpu_dump_statistics;
-    atexit(dump_stats_on_exit);
 #if defined(DO_CHERI_STATISTICS)
+    atexit(dump_stats_on_exit);
 #endif
 #endif
 
