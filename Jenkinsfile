@@ -15,5 +15,6 @@ cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
 
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
       buildStage: "Build FreeBSD", nodeLabel: 'freebsd', noIncrementalBuild: true,
-      extraArgs: '--unified-sdk --without-sdk --install-prefix=/usr',
+      // LTO currently needs a new FreeBSD version than the one running on the slaves
+      extraArgs: '--unified-sdk --without-sdk --install-prefix=/usr --qemu/no-use-lto',
       skipTarball: true, afterBuild: archiveQEMU('freebsd'))
