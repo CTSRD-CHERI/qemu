@@ -218,21 +218,24 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
 
 static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
                                      const char* name, uint64_t total,
-                                     uint64_t (*out_of_bounds)[10],
+                                     uint64_t* out_of_bounds,
                                      uint64_t unrepresentable)
 {
     cpu_fprintf(f, "Number of %ss: %" PRIu64 "\n", name, total);
-    uint64_t total_out_of_bounds = (*out_of_bounds)[0];
-    cpu_fprintf(f, "  Out of bounds by one %" PRIu64 "\n", out_of_bounds[0]);
+    uint64_t total_out_of_bounds = out_of_bounds[0];
+    cpu_fprintf(f, "  Out of bounds by one:              %" PRIu64 "\n", out_of_bounds[0]);
     for (int i = 1; i < 10; i++) {
-        cpu_fprintf(f, "  Out of bounds by up to 1%0*d: %" PRIu64 "\n", i, 0, out_of_bounds[i]);
-        total_out_of_bounds += (*out_of_bounds)[i];
+        cpu_fprintf(f, "  Out of bounds by up to 1%0*d:%*s%" PRIu64 "\n", i, 0, 10 - i, "", out_of_bounds[i]);
+        total_out_of_bounds += out_of_bounds[i];
     }
-    cpu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", name, unrepresentable);
+    cpu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", unrepresentable);
     total_out_of_bounds += unrepresentable; // TODO: count how far it was out of bounds for this stat
 
     cpu_fprintf(f, "Total out of bounds %ss: %" PRIu64 " (%f%%)\n", name, total_out_of_bounds,
                 (double)(100 * total_out_of_bounds) / (double)total);
+    cpu_fprintf(f, "Total out of bounds %ss by more than one: %" PRIu64 " (%f%%)\n",
+                name, total_out_of_bounds - out_of_bounds[0],
+                (double)(100 * (total_out_of_bounds - out_of_bounds[0])) / (double)total);
 
 }
 
@@ -251,7 +254,7 @@ void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
     cpu_fprintf(f, "CPUSTATS DISABLED, RECOMPILE WITH -DDO_CHERI_STATISTICS\n");
 #else
 #define DUMP_CHERI_STAT(name, printname) \
-    dump_out_of_bounds_stats(f, cpu_fprintf, printname, stat_num_##name, &stat_num_##name##_out_of_bounds, stat_num_##name##_out_of_bounds_unrep);
+    dump_out_of_bounds_stats(f, cpu_fprintf, printname, stat_num_##name, stat_num_##name##_out_of_bounds, stat_num_##name##_out_of_bounds_unrep);
 
     DUMP_CHERI_STAT(cincoffset, "CIncOffset");
     DUMP_CHERI_STAT(csetoffset, "CSetOffset");
