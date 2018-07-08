@@ -169,16 +169,11 @@ static inline uint64_t _howmuch_out_of_bounds(cap_register_t* cr, const char* na
         uint64_t howmuch = cr->cr_offset - cr->cr_length + 1;
         if ((int64_t)cr->cr_offset < (int64_t)cr->cr_length)
             howmuch = llabs((int64_t)cr->cr_offset);
-#if 0
-        if (howmuch > 100) {
-            fprintf(stderr, "Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
-                    " p:%08x b:%016" PRIx64 " l:%" PRId64 "o: %" PRId64 "\r\n",
-                    howmuch, name, cr->cr_tag, cr->cr_sealed ? 1 : 0,
-                    (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
-                    cr->cr_base, cr->cr_length, (int64_t)cr->cr_offset);
-            fflush(stderr);
-        }
-#endif
+        qemu_log_mask(CPU_LOG_INSTR, "BOUNDS: Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
+                      " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64 "\r\n",
+                      howmuch, name, cr->cr_tag, cr->cr_sealed ? 1 : 0,
+                      (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
+                      cr->cr_base, cr->cr_length, (int64_t)cr->cr_offset);
         return howmuch;
     }
     return 0;
@@ -217,6 +212,7 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
 #define became_unrepresentable(env, reg, operation) do { \
     /* unrepresentable implies more than one out of bounds: */ \
     stat_num_##operation##_out_of_bounds_unrep++; \
+    qemu_log_mask(CPU_LOG_INSTR, "BOUNDS: Unrepresentable capability created using %s\n", #operation); \
     _became_unrepresentable(env, reg); \
 } while (0)
 
