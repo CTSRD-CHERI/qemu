@@ -160,11 +160,15 @@ static inline uint64_t _howmuch_out_of_bounds(cap_register_t* cr, const char* na
     if (!cr->cr_tag)
         return 0;  // We don't care about arithmetic on untagged things
 
+    // FIXME: unsigned cr_offset is quite annoying, we should use cr_cursor
     if (cr->cr_offset == cr->cr_length) {
         // This case is very common so we should not print a message here
         return 1;
     } else if (cr->cr_offset > cr->cr_length) {
+        // handle negative offsets:
         uint64_t howmuch = cr->cr_offset - cr->cr_length + 1;
+        if ((int64_t)cr->cr_offset < (int64_t)cr->cr_length)
+            howmuch = llabs((int64_t)cr->cr_offset);
 #if 0
         if (howmuch > 100) {
             fprintf(stderr, "Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
