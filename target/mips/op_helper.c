@@ -250,7 +250,7 @@ static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
     assert(bounds_buckets[0].howmuch == 1);
     // All the others are invalid:
     for (int i = 1; i < ARRAY_SIZE(bounds_buckets); i++) {
-        cpu_fprintf(f, "  Out of bounds by up to %s: %" PRIu64 "\n", bounds_buckets[i].name, before_bounds[i]);
+        cpu_fprintf(f, "  Out of bounds by up to %s: %" PRIu64 "\n", bounds_buckets[i].name, after_bounds[i]);
         total_out_of_bounds += after_bounds[i];
     }
     cpu_fprintf(f, "  Out of bounds by over  %s: %" PRIu64 "\n",
@@ -264,7 +264,7 @@ static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
         total_out_of_bounds += before_bounds[i];
     }
     cpu_fprintf(f, "  Before bounds by over  -%s: %" PRIu64 "\n",
-        bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, after_bounds[ARRAY_SIZE(bounds_buckets)]);
+        bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, before_bounds[ARRAY_SIZE(bounds_buckets)]);
     total_out_of_bounds += before_bounds[ARRAY_SIZE(bounds_buckets)];
 
 
