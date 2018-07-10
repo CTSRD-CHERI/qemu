@@ -145,9 +145,30 @@ static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause
 
 #ifdef DO_CHERI_STATISTICS
 
+struct bounds_bucket {
+    uint64_t howmuch;
+    const char* name;
+};
+struct bounds_bucket bounds_buckets[] = {
+    {1, "1  "}, // 1
+    {2, "2  "}, // 2
+    {4, "4  "}, // 3
+    {8, "8  "}, // 4
+    {16, "16 "},
+    {32, "32 "},
+    {64, "64 "},
+    {256, "256"},
+    {1024, "1K "},
+    {4096, "4K "},
+    {64 * 1024, "64K"},
+    {1024 * 1024, "1M "},
+    {64 * 1024 * 1024, "64M"},
+};
+
 #define DEFINE_CHERI_STAT(op) \
     static uint64_t stat_num_##op = 0; \
-    static uint64_t stat_num_##op##_out_of_bounds[10]; \
+    static uint64_t stat_num_##op##_after_bounds[ARRAY_SIZE(bounds_buckets) + 1]; \
+    static uint64_t stat_num_##op##_before_bounds[ARRAY_SIZE(bounds_buckets) + 1]; \
     static uint64_t stat_num_##op##_out_of_bounds_unrep = 0;
 
 DEFINE_CHERI_STAT(cincoffset)
@@ -155,7 +176,7 @@ DEFINE_CHERI_STAT(csetoffset)
 DEFINE_CHERI_STAT(cgetpccsetoffset)
 DEFINE_CHERI_STAT(cfromptr)
 
-static inline uint64_t _howmuch_out_of_bounds(cap_register_t* cr, const char* name)
+static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, cap_register_t* cr, const char* name)
 {
     if (!cr->cr_tag)
         return 0;  // We don't care about arithmetic on untagged things
@@ -166,45 +187,43 @@ static inline uint64_t _howmuch_out_of_bounds(cap_register_t* cr, const char* na
         return 1;
     } else if (cr->cr_offset > cr->cr_length) {
         // handle negative offsets:
-        uint64_t howmuch = cr->cr_offset - cr->cr_length + 1;
+        uint64_t howmuch;
         if ((int64_t)cr->cr_offset < (int64_t)cr->cr_length)
-            howmuch = llabs((int64_t)cr->cr_offset);
+            howmuch = (int64_t)cr->cr_offset;
+        else
+            howmuch = cr->cr_offset - cr->cr_length + 1;
         qemu_log_mask(CPU_LOG_INSTR, "BOUNDS: Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
-                      " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64 "\r\n",
+                      " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64 " pc=%016" PRIx64"\n",
                       howmuch, name, cr->cr_tag, cr->cr_sealed ? 1 : 0,
                       (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
-                      cr->cr_base, cr->cr_length, (int64_t)cr->cr_offset);
+                      cr->cr_base, cr->cr_length, (int64_t)cr->cr_offset,
+                      env->active_tc.PCC.cr_base + env->active_tc.PCC.cr_offset);
+        info_report("BOUNDS: Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
+                      " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64 " pc=%016" PRIx64"\r\n",
+                      howmuch, name, cr->cr_tag, cr->cr_sealed ? 1 : 0,
+                      (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
+                      cr->cr_base, cr->cr_length, (int64_t)cr->cr_offset,
+                      env->active_tc.PCC.cr_base + env->active_tc.PCC.cr_offset);
         return howmuch;
     }
     return 0;
 }
 
 static inline int out_of_bounds_stat_index(uint64_t howmuch) {
-    if (howmuch <= 1)
-        return 0;
-    if (howmuch <= 10)
-        return 1;
-    if (howmuch <= 100)
-        return 2;
-    if (howmuch <= 1000)
-        return 3;
-    if (howmuch <= 10 * 1000)
-        return 4;
-    if (howmuch <= 100 * 1000)
-        return 5;
-    if (howmuch <= 1000 * 1000)
-        return 6;
-    if (howmuch <= 10 * 1000 * 1000)
-        return 7;
-    if (howmuch <= 100 * 1000 * 1000)
-        return 8;
-    return 9;  // more than 100 * 1000 * 1000
+
+    for (int i = 0; i < ARRAY_SIZE(bounds_buckets); i++) {
+        if (howmuch <= bounds_buckets[i].howmuch)
+            return i;
+    }
+    return ARRAY_SIZE(bounds_buckets); // more than 64MB
 }
 
-#define check_out_of_bounds_stat(op, capreg) do { \
-    uint64_t howmuch = _howmuch_out_of_bounds(capreg, #op); \
+#define check_out_of_bounds_stat(env, op, capreg) do { \
+    int64_t howmuch = _howmuch_out_of_bounds(env, capreg, #op); \
     if (howmuch > 0) { \
-        stat_num_##op##_out_of_bounds[out_of_bounds_stat_index(howmuch)]++; \
+        stat_num_##op##_after_bounds[out_of_bounds_stat_index(howmuch)]++; \
+    } else if (howmuch < 0) { \
+        stat_num_##op##_before_bounds[out_of_bounds_stat_index(llabs(howmuch))]++; \
     } \
 } while (0)
 
@@ -212,34 +231,52 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
 #define became_unrepresentable(env, reg, operation) do { \
     /* unrepresentable implies more than one out of bounds: */ \
     stat_num_##operation##_out_of_bounds_unrep++; \
-    qemu_log_mask(CPU_LOG_INSTR, "BOUNDS: Unrepresentable capability created using %s\n", #operation); \
+    qemu_log_mask(CPU_LOG_INSTR, "BOUNDS: Unrepresentable capability created using %s, pc=%016" PRIx64 "\n", \
+        #operation, env->active_tc.PCC.cr_base + env->active_tc.PCC.cr_offset); \
     _became_unrepresentable(env, reg); \
 } while (0)
 
 static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
                                      const char* name, uint64_t total,
-                                     uint64_t* out_of_bounds,
+                                     uint64_t* after_bounds,
+                                     uint64_t* before_bounds,
                                      uint64_t unrepresentable)
 {
 
     cpu_fprintf(f, "Number of %ss: %" PRIu64 "\n", name, total);
-    uint64_t total_out_of_bounds = out_of_bounds[0];
-    cpu_fprintf(f, "  Out of bounds by one:              %" PRIu64 "\n", out_of_bounds[0]);
-    for (int i = 1; i < 9; i++) {
-        cpu_fprintf(f, "  Out of bounds by up to 1%0*d:%*s%" PRIu64 "\n", i, 0, 10 - i, "", out_of_bounds[i]);
-        total_out_of_bounds += out_of_bounds[i];
+    uint64_t total_out_of_bounds = after_bounds[0];
+    // one past the end is fine according to ISO C
+    cpu_fprintf(f, "  One past the end:           %" PRIu64 "\n", after_bounds[0]);
+    assert(bounds_buckets[0].howmuch == 1);
+    // All the others are invalid:
+    for (int i = 1; i < ARRAY_SIZE(bounds_buckets); i++) {
+        cpu_fprintf(f, "  Out of bounds by up to %s: %" PRIu64 "\n", bounds_buckets[i].name, before_bounds[i]);
+        total_out_of_bounds += after_bounds[i];
     }
-    cpu_fprintf(f, "  Out of bounds by over   100000000: %" PRIu64 "\n", out_of_bounds[9]);
-    total_out_of_bounds += out_of_bounds[9];
+    cpu_fprintf(f, "  Out of bounds by over  %s: %" PRIu64 "\n",
+        bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, after_bounds[ARRAY_SIZE(bounds_buckets)]);
+    total_out_of_bounds += after_bounds[ARRAY_SIZE(bounds_buckets)];
+
+
+    // One before the start is invalid though:
+    for (int i = 0; i < ARRAY_SIZE(bounds_buckets); i++) {
+        cpu_fprintf(f, "  Before bounds by up to -%s: %" PRIu64 "\n", bounds_buckets[i].name, before_bounds[i]);
+        total_out_of_bounds += before_bounds[i];
+    }
+    cpu_fprintf(f, "  Before bounds by over  -%s: %" PRIu64 "\n",
+        bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, after_bounds[ARRAY_SIZE(bounds_buckets)]);
+    total_out_of_bounds += before_bounds[ARRAY_SIZE(bounds_buckets)];
+
+
+    // unrepresentable, i.e. massively out of bounds:
     cpu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", unrepresentable);
     total_out_of_bounds += unrepresentable; // TODO: count how far it was out of bounds for this stat
 
     cpu_fprintf(f, "Total out of bounds %ss: %" PRIu64 " (%f%%)\n", name, total_out_of_bounds,
                 (double)(100 * total_out_of_bounds) / (double)total);
-    cpu_fprintf(f, "Total out of bounds %ss by more than one: %" PRIu64 " (%f%%)\n",
-                name, total_out_of_bounds - out_of_bounds[0],
-                (double)(100 * (total_out_of_bounds - out_of_bounds[0])) / (double)total);
-
+    cpu_fprintf(f, "Total out of bounds %ss (excluding one past the end): %" PRIu64 " (%f%%)\n",
+                name, total_out_of_bounds - after_bounds[0],
+                (double)(100 * (total_out_of_bounds - after_bounds[0])) / (double)total);
 }
 
 #else /* !defined(DO_CHERI_STATISTICS) */
@@ -257,7 +294,9 @@ void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
     cpu_fprintf(f, "CPUSTATS DISABLED, RECOMPILE WITH -DDO_CHERI_STATISTICS\n");
 #else
 #define DUMP_CHERI_STAT(name, printname) \
-    dump_out_of_bounds_stats(f, cpu_fprintf, printname, stat_num_##name, stat_num_##name##_out_of_bounds, stat_num_##name##_out_of_bounds_unrep);
+    dump_out_of_bounds_stats(f, cpu_fprintf, printname, stat_num_##name, \
+        stat_num_##name##_after_bounds, stat_num_##name##_before_bounds, \
+        stat_num_##name##_out_of_bounds_unrep);
 
     DUMP_CHERI_STAT(cincoffset, "CIncOffset");
     DUMP_CHERI_STAT(csetoffset, "CSetOffset");
@@ -2856,7 +2895,7 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
             cap_register_t result = *cbp;
             result.cr_offset = rt;
             update_capreg(&env->active_tc, cd, &result);
-            check_out_of_bounds_stat(cfromptr, &result);
+            check_out_of_bounds_stat(env, cfromptr, &result);
         }
     }
 }
@@ -2978,7 +3017,7 @@ void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
         cap_register_t result = *pccp;
         result.cr_offset = rs;
         update_capreg(&env->active_tc, cd, &result);
-        check_out_of_bounds_stat(cgetpccsetoffset, &result);
+        check_out_of_bounds_stat(env, cgetpccsetoffset, &result);
         /* Note that the offset(cursor) is updated by ccheck_pcc */
     }
 }
@@ -3105,7 +3144,7 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
             cap_register_t result = *cbp;
             result.cr_offset = cb_offset_plus_rt;
             update_capreg(&env->active_tc, cd, &result);
-            check_out_of_bounds_stat(cincoffset, &result);
+            check_out_of_bounds_stat(env, cincoffset, &result);
         }
     }
 }
@@ -3642,7 +3681,7 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
             cap_register_t result = *cbp;
             result.cr_offset = rt;
             update_capreg(&env->active_tc, cd, &result);
-            check_out_of_bounds_stat(csetoffset, &result);
+            check_out_of_bounds_stat(env, csetoffset, &result);
         }
     }
 }
