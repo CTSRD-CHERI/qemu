@@ -279,7 +279,7 @@ static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
 #else /* !defined(DO_CHERI_STATISTICS) */
 
 // Don't collect any statistics by default (it slows down QEMU)
-#define check_out_of_bounds_stat(op, capreg) do { } while (0)
+#define check_out_of_bounds_stat(env, op, capreg) do { } while (0)
 #define became_unrepresentable(env, reg, operation) _became_unrepresentable(env, reg)
 
 #endif /* DO_CHERI_STATISTICS */
