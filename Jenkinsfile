@@ -10,11 +10,11 @@ def archiveQEMU(String target) {
   
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
       buildStage: "Build Linux", nodeLabel: 'linux', noIncrementalBuild: true,
-      extraArgs: '--unified-sdk --without-sdk --install-prefix=/usr --qemu/statistics',
+      extraArgs: '--unified-sdk --without-sdk --install-prefix=/usr',
       skipTarball: true, afterBuild: archiveQEMU('linux'))
 
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
       buildStage: "Build FreeBSD", nodeLabel: 'freebsd', noIncrementalBuild: true,
       // LTO currently needs a new FreeBSD version than the one running on the slaves
-      extraArgs: '--unified-sdk --without-sdk --install-prefix=/usr --qemu/no-use-lto --qemu/statistics',
+      extraArgs: '--unified-sdk --without-sdk --install-prefix=/usr --qemu/no-use-lto',
       skipTarball: true, afterBuild: archiveQEMU('freebsd'))
