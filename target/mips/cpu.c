@@ -194,7 +194,10 @@ static ObjectClass *mips_cpu_class_by_name(const char *cpu_model)
 #if defined(TARGET_CHERI) && defined(DO_CHERI_STATISTICS)
 static void dump_stats_on_exit(void)
 {
-    cheri_cpu_dump_statistics(NULL, stderr, fprintf, 0);
+    if (qemu_log_enabled() && qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS))
+        cheri_cpu_dump_statistics(NULL, qemu_logfile, fprintf, 0);
+    else
+        cheri_cpu_dump_statistics(NULL, stderr, fprintf, 0);
 }
 #endif
 
