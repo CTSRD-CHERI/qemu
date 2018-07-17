@@ -1998,6 +1998,12 @@ static inline void check_cop2x(DisasContext *ctx)
     if (unlikely(!(ctx->hflags & MIPS_HFLAG_COP2X))) {
         generate_exception_err(ctx, EXCP_CpU, 2);
     }
+    // Pretty much every CHERI instruction can throw an exception so we need to
+    // save the hflags if we are in a branch. If we don't do this we mess up
+    // state on trap (e.g. the BDELAY flag will not be set in CP0_Cause)
+    // It also causes BadInstrP to not be updated (and we depend on that in CheriBSD)
+    if (unlikely(ctx->hflags & MIPS_HFLAG_BMASK))
+        save_cpu_state(ctx, 0);
 }
 
 /* generic sign extension helper */
