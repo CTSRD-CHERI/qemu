@@ -1990,8 +1990,11 @@ void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
     else
         env->hflags &= ~MIPS_HFLAG_DM;
 
-    qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
-    cpu_loop_exit_noexc(ENV_GET_CPU(env));
+    qemu_system_powerdown_request();
+    // FIXME: this jumps back to the beginning
+    // qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
+    // cpu_loop_exit_noexc(ENV_GET_CPU(env));
+    // exit(0);
 }
 
 void helper_mttc0_debug(CPUMIPSState *env, target_ulong arg1)
