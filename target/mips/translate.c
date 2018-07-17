@@ -6826,7 +6826,9 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         break;
     case OPC_J:
     case OPC_JAL:
+#ifndef TARGET_CHERI
     case OPC_JALX:
+#endif
         /* Jump to immediate */
 
 #ifdef TARGET_CHERI
