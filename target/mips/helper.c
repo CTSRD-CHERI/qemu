@@ -773,7 +773,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #if !defined(CONFIG_USER_ONLY)
     MIPSCPU *cpu = MIPS_CPU(cs);
     CPUMIPSState *env = &cpu->env;
-    bool update_badinstr = 0;
+    bool update_badinstr = !(env->error_code & EXCP_INST_NOTAVAIL);
     target_ulong offset;
     int cause = -1;
     const char *name = "";
@@ -1008,6 +1008,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         goto set_EPC;
     case EXCP_C2E:
         cause = 18;
+        update_badinstr = !(env->error_code & EXCP_INST_NOTAVAIL);
 #ifdef TARGET_CHERI
         env->CP0_Status &= ~(1 << CP0St_ERL);
         if ((env->CP2_CapCause >> 8) == CP2Ca_CALL ||
