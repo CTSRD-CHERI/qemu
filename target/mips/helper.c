@@ -773,7 +773,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #if !defined(CONFIG_USER_ONLY)
     MIPSCPU *cpu = MIPS_CPU(cs);
     CPUMIPSState *env = &cpu->env;
-    bool update_badinstr = !(env->error_code & EXCP_INST_NOTAVAIL);
+    bool update_badinstr = 0;
     target_ulong offset;
     int cause = -1;
     const char *name = "";
