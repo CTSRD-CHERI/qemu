@@ -454,7 +454,7 @@ static inline void QEMU_NORETURN do_raise_exception(CPUMIPSState *env,
                                                     uint32_t exception,
                                                     uintptr_t pc)
 {
-    do_raise_exception_err(env, exception, 0, pc);
+    do_raise_exception_err(env, exception, env->error_code, pc);
 }
 
 #ifdef TARGET_CHERI

@@ -967,6 +967,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         update_badinstr = 1;
         goto set_EPC;
     case EXCP_IBE:
+        update_badinstr = 0;
         cause = 6;
         goto set_EPC;
     case EXCP_DBE:

@@ -2472,6 +2472,7 @@ target_ulong helper_ccheck_imprecise(CPUMIPSState *env, target_ulong inc)
          */
         pcc->cr_tag = 0;
         pcc->cr_offset = inc;
+        env->error_code |= EXCP_INST_NOTAVAIL;
     }
 
     return (pcc->cr_base);
@@ -2519,7 +2520,7 @@ static inline int align_of(int size, uint64_t addr)
 }
 
 static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
-        uint32_t perm, uint64_t addr, uint16_t regnum, uint32_t len)
+        uint32_t perm, uint64_t addr, uint16_t regnum, uint32_t len, bool instavail)
 {
     uint16_t cause;
     /*
@@ -2573,6 +2574,8 @@ static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
 do_exception:
     env->CP0_BadVAddr = addr;
     // env->active_tc.C[CP2CAP_EPCC] = *cr;
+    if (!instavail)
+        env->error_code |= EXCP_INST_NOTAVAIL;
     do_raise_c2_exception(env, cause, regnum);
 }
 
@@ -5205,6 +5208,8 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 #ifdef CHERI_128
     /* Check tag before updating offset. */
     if (!pcc->cr_tag) {
+        // don't attempt to fill in BadInst (this causes an infinite looP)
+        env->error_code |= EXCP_INST_NOTAVAIL;
         do_raise_c2_exception(env, CP2Ca_TAG, 0xff);
     }
 #endif /* CHERI_128 */
@@ -5212,7 +5217,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
     /* Update the offset */
     pcc->cr_offset = pc - pcc->cr_base;
 
-    check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 4);
+    check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 4, /*instavail=*/false);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 }
 
@@ -5262,7 +5267,7 @@ target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_
     target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
 
     // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
-    check_cap(env, ddc, CAP_PERM_STORE, addr, 0, len);
+    check_cap(env, ddc, CAP_PERM_STORE, addr, 0, len, /*instavail=*/true);
 
     return (addr);
 }
@@ -5273,7 +5278,7 @@ target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t
     target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
 
     // fprintf(qemu_logfile, "LD(%u):%016lx\n", len, addr);
-    check_cap(env, ddc, CAP_PERM_LOAD, addr, 0, len);
+    check_cap(env, ddc, CAP_PERM_LOAD, addr, 0, len, /*instavail=*/true);
 
     return (addr);
 }
