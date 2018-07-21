@@ -2579,9 +2579,9 @@ do_exception:
     do_raise_c2_exception(env, cause, regnum);
 }
 
-static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
+static inline bool creg_inaccessible(uint32_t perms, uint32_t creg)
 {
-    // FIXME: remove this check now that we no longer mirror special regs
+#ifdef LEGACY_PROTECTED_CAP_GPRS
     /*
      * Check to see if the capability register is inaccessible.
      * See Section 5.4 in CHERI Architecture manual.
@@ -2589,10 +2589,13 @@ static inline int creg_inaccessible(uint32_t perms, uint32_t creg)
     if (!(perms & CAP_ACCESS_SYS_REGS) && (creg == CP2CAP_EPCC ||
                 creg == CP2CAP_KDC || creg == CP2CAP_KCC ||
                 creg == CP2CAP_KR1C  || creg == CP2CAP_KR2C)) {
-        return 1;
+        return true;
     } else {
-        return 0;
+        return false;
     }
+#else
+    return false;
+#endif
 }
 
 void helper_check_access_idc(CPUMIPSState *env, uint32_t reg)
