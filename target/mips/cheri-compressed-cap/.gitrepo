@@ -1,0 +1,11 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = ctsrd:cheri-compressed-cap
+	branch = master
+	commit = 0428fe1684b0f325a1c1ee4c7615433cc862e337
+	parent = e25ac0ecd13bbd4b0b1b22421ecbe8742c18ae21
+	cmdver = 0.3.1
