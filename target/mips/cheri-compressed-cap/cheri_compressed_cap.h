@@ -78,7 +78,11 @@ typedef struct cap_register cap_register_t;
 
 /* Whatever NULL would encode to is this constant. We mask on store/load so this
  * is invisibly keeps null 0 whatever we choose it to be */
-#define NULL_XOR_MASK 0x200001000005
+#define CC128_NULL_XOR_MASK 0x200001000005
+
+
+/* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
+#ifndef CHERI_COMPRESSED_CONSTANTS_ONLY
 
 /* Returns the index of the most significant bit set in x */
 static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
@@ -162,7 +166,7 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
 
     cdp->cr_pesbt = pesbt;
 
-    pesbt ^= NULL_XOR_MASK;
+    pesbt ^= CC128_NULL_XOR_MASK;
 
     cdp->cr_perms = cc128_getbits(pesbt, 49, 11);
     cdp->cr_uperms = cc128_getbits(pesbt, 60, 4);
@@ -302,7 +306,7 @@ static inline uint64_t compress_128cap(const cap_register_t* csp) {
           << CC_L_BWIDTH) |
          (uint64_t)Be);
 
-    pesbt ^= NULL_XOR_MASK;
+    pesbt ^= CC128_NULL_XOR_MASK;
 
     return pesbt;
 }
@@ -425,4 +429,5 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, uint64_t l
     return ((inRange && inLimits) || (e >= highest_exp));
 }
 
+#endif /* CHERI_COMPRESSED_CONSTANTS_ONLY */
 #endif /* CHERI_COMPRESSED_CAP_H */
