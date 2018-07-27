@@ -97,7 +97,15 @@ static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
      *
      * XXX This isn't quite right. %q0 needs to be pushed/popped?
      */
-#if !defined(__has_builtin) || !__has_builtin(__builtin_clzll)
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_clzll)
+#define HAVE___BUILTIN_CLZ
+#endif
+#elif defined(__GNUC__)
+#define HAVE___BUILTIN_CLZ
+#endif
+
+#ifndef HAVE___BUILTIN_CLZ
 /* floor(log2(x)) != floor(log2(y)) */
 #warning "__builtin_clzll not supported using slower path"
 #define ld_neq(x, y) (((x) ^ (y)) > ((x) & (y)))
@@ -121,7 +129,7 @@ static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
  * where (rlength + (rlength >> 6)) needs to be a 65 bit integer
  */
 static inline uint32_t cc128_compute_e(uint64_t rlength, uint32_t bwidth) {
-    if (rlength < (1 << (bwidth - 1)))
+    if (rlength < (1u << (bwidth - 1)))
         return 0;
 
     return (cc128_idx_MSNZ(rlength) - (bwidth - 2));
