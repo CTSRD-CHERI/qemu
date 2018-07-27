@@ -33,6 +33,7 @@
 #ifndef CHERI_COMPRESSED_CAP_H
 #define CHERI_COMPRESSED_CAP_H
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/param.h> /* for MIN() */
@@ -80,7 +81,6 @@ typedef struct cap_register cap_register_t;
  * is invisibly keeps null 0 whatever we choose it to be */
 #define CC128_NULL_XOR_MASK 0x200001000005
 
-
 /* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
 #ifndef CHERI_COMPRESSED_CONSTANTS_ONLY
 
@@ -97,8 +97,9 @@ static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
      *
      * XXX This isn't quite right. %q0 needs to be pushed/popped?
      */
-
+#if !defined(__has_builtin) || !__has_builtin(__builtin_clzll)
 /* floor(log2(x)) != floor(log2(y)) */
+#warning "__builtin_clzll not supported using slower path"
 #define ld_neq(x, y) (((x) ^ (y)) > ((x) & (y)))
 
     uint32_t r = ld_neq(x, x & 0x5555555555555555ull) + (ld_neq(x, x & 0x3333333333333333ull) << 1) +
@@ -106,7 +107,12 @@ static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
                  (ld_neq(x, x & 0x0000ffff0000ffffull) << 4) + (ld_neq(x, x & 0x00000000ffffffffull) << 5);
 
 #undef ld_neq
-
+#else
+    assert(x != 0);
+    uint32_t r = 63 - __builtin_clzll(x);
+    // printf("%s: %016llx = %d (__builtin_clzll(x) = %d, 63 - clz = %d)\n", __func__, x, r, __builtin_clzll(x), 63 -
+    // __builtin_clzll(x));
+#endif
     return r;
 }
 
