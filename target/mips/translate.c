@@ -2023,19 +2023,6 @@ static inline bool is_cop2x_enabled(DisasContext *ctx)
 }
 */
 
-static inline void generate_check_access_idc(DisasContext *ctx, int32_t cr)
-{
-    /*
-     * check if instruction is in the delay slot of a ccall
-     * and access the IDC register.
-     */
-    if ((ctx->hflags & MIPS_HFLAG_BMASK_BASE) == MIPS_HFLAG_BRCCALL) {
-        TCGv_i32 tcr = tcg_const_i32(cr);
-        gen_helper_check_access_idc(cpu_env, tcr);
-        tcg_temp_free_i32(tcr);
-    }
-}
-
 static inline void generate_ccall(int32_t cs, int32_t cb)
 {
     /*
@@ -2068,7 +2055,7 @@ static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t 
 
         gen_helper_ccall_notrap(btarget, cpu_env, tcs, tcb);
         /* Set ccall branch and delay slot flags */
-        ctx->hflags |= (MIPS_HFLAG_BRCCALL | MIPS_HFLAG_BDS32);
+        ctx->hflags |= (MIPS_HFLAG_BRCCALL);
         /* Save capability register index that is new PCC */
         ctx->btcr = cs;
         save_cpu_state(ctx, 0);
@@ -2717,7 +2704,6 @@ static inline int generate_cclearregs(DisasContext *ctx, int32_t regset, int32_t
             // custom check for idc being accessed in a ccall delay slot
             // XXXAM it may be cleaner to just make an helper that throws the exception.
             TCGv_i32 tmp = tcg_const_i32(CP2CAP_IDC);
-            gen_helper_check_access_idc(cpu_env, tmp);
             tcg_temp_free_i32(tmp);
         }
         tcr0 = tcg_const_i32(mask << 16);
@@ -11442,25 +11428,21 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         switch(MASK_CAP6(opc)) {
         case OPC_CGETPERM:          /* 0x00 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cgetperm(r16, r11);
             opn = "cgetperm";
             break;
         case OPC_CGETTYPE:          /* 0x01 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cgettype(r16, r11);
             opn = "cgettype";
             break;
         case OPC_CGETBASE:          /* 0x02 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cgetbase(r16, r11);
             opn = "cgetbase";
             break;
         case OPC_CGETLEN:           /* 0x03 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cgetlen(r16, r11);
             opn = "cgetlen";
             break;
@@ -11471,191 +11453,135 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CGETTAG:           /* 0x05 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cgettag(r16, r11);
             opn = "cgettag";
             break;
         case OPC_CGETSEALED:        /* 0x06 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cgetsealed(r16, r11);
             opn = "cgetsealed";
             break;
         case OPC_CGETPCC:           /* 0x07 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cgetpcc(r11);
             opn = "cgetpcc";
             break;
                                     /* 0x08 */
         case OPC_CSETBOUNDSEXACT:   /* 0x09 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_csetboundsexact(r16, r11, r6);
             opn = "csetboundsexact";
             break;
         case OPC_CSUB:              /* 0x0a */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_csub(r16, r11, r6);
             opn = "csub";
             break;
         case OPC_CSEAL_NI: /* 0x0b */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cseal(r16, r11, r6);
             opn = "cseal";
             break;
         case OPC_CUNSEAL_NI: /* 0x0c */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cunseal(r16, r11, r6);
             opn = "cunseal";
             break;
         case OPC_CANDPERM_NI: /* 0x0d */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_candperm(r16, r11, r6);
             opn = "candperm";
             break;
         case OPC_CSETOFFSET_NI: /* 0x0f */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_csetoffset(r16, r11, r6);
             opn = "csetoffset";
             break;
         case OPC_CSETBOUNDS_NI: /* 0x10 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_csetbounds(r16, r11, r6);
             opn = "csetbounds";
             break;
         case OPC_CINCOFFSET_NI: /* 0x11 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cincoffset(r16, r11, r6);
             opn = "cincoffset";
             break;
         case OPC_CTOPTR_NI: /* 0x12 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_ctoptr(r16, r11, r6);
             opn = "ctoptr";
             break;
         case OPC_CFROMPTR_NI: /* 0x13 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cfromptr(r16, r11, r6);
             opn = "cfromptr";
             break;
         case OPC_CEQ_NI: /* 0x14 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_ceq(r16, r11, r6);
             opn = "ceq";
             break;
         case OPC_CNE_NI: /* 0x15 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cne(r16, r11, r6);
             opn = "cne";
             break;
         case OPC_CLT_NI: /* 0x16 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_clt(r16, r11, r6);
             opn = "clt";
             break;
         case OPC_CLE_NI: /* 0x17 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cle(r16, r11, r6);
             opn = "cle";
             break;
         case OPC_CLTU_NI: /* 0x18 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cltu(r16, r11, r6);
             opn = "cltu";
             break;
         case OPC_CLEU_NI: /* 0x19 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cleu(r16, r11, r6);
             opn = "cleu";
             break;
         case OPC_CEXEQ_NI: /* 0x1a */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cexeq(r16, r11, r6);
             opn = "cexeq";
             break;
         case OPC_CMOVZ_NI: /* 0x1b */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cmovz(r16, r11, r6);
             opn = "cmovz";
             break;
         case OPC_CMOVN_NI: /* 0x1c */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cmovn(r16, r11, r6);
             opn = "cmovn";
             break;
         case OPC_CBUILDCAP_NI: /* 0x1d */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cbuildcap(r16, r11, r6);
             opn = "cbuildcap";
             break;
         case OPC_CCOPYTYPE_NI: /* 0x1e */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_ccopytype(r16, r11, r6);
             opn = "ccopytype";
             break;
         case OPC_CCSEAL_NI: /* 0x1f */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_ccseal(r16, r11, r6);
         case OPC_CTESTSUBSET_NI: /* 0x20 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_ctestsubset(r16, r11, r6);
             opn = "ctestsubset";
             break;
         case OPC_CNEXEQ_NI: /* 0x21 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cnexeq(r16, r11, r6);
             opn = "cnexeq";
             break;
@@ -11664,101 +11590,81 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             switch(MASK_CAP7(opc)) {
             case OPC_CGETPERM_NI:   /* 0x00 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r11);
                 generate_cgetperm(r16, r11);
                 opn = "cgetperm";
                 break;
             case OPC_CGETTYPE_NI:   /* 0x01 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r11);
                 generate_cgettype(r16, r11);
                 opn = "cgettype";
                 break;
             case OPC_CGETBASE_NI:   /* 0x02 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r11);
                 generate_cgetbase(r16, r11);
                 opn = "cgetbase";
                 break;
             case OPC_CGETLEN_NI:    /* 0x03 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r11);
                 generate_cgetlen(r16, r11);
                 opn = "cgetlen";
                 break;
             case OPC_CGETTAG_NI:    /* 0x04 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r11);
                 generate_cgettag(r16, r11);
                 opn = "cgettag";
                 break;
             case OPC_CGETSEALED_NI: /* 0x05 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r11);
                 generate_cgetsealed(r16, r11);
                 opn = "cgetsealed";
                 break;
             case OPC_CGETOFFSET_NI: /* 0x06 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r11);
                 generate_cgetoffset(r16, r11);
                 opn = "cgetoffset";
                 break;
             case OPC_CGETPCCSETOFF_NI: /* 0x07 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r16);
                 generate_cgetpccsetoffset(r16, r11);
                 opn = "cgetpccsetoffset";
                 break;
             case OPC_CCHECKPERM_NI:    /* 0x08 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r16);
                 generate_ccheckperm(r16, r11);
                 opn = "ccheckperm";
                 break;
             case OPC_CCHECKTYPE_NI:    /* 0x09 << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r16);
-                generate_check_access_idc(ctx, r11);
                 generate_cchecktype(r16, r11);
                 opn = "cchecktype";
                 break;
             case OPC_CMOVE_NI:      /* 0x0a << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r16);
-                generate_check_access_idc(ctx, r11);
                 generate_cmove(r16, r11);
                 opn = "cmove";
                 break;
             case OPC_CCLEARTAG_NI:  /* 0x0b << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r16);
-                generate_check_access_idc(ctx, r11);
                 generate_ccleartag(r16, r11);
                 opn = "ccleartag";
                 break;
             case OPC_CJALR_NI:      /* 0x0c << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r16);
-                generate_check_access_idc(ctx, r11);
                 generate_cjalr(ctx, r16, r11);
                 opn = "cjalr";
                 break;
             case OPC_CREADHWR_NI:   /* 0x0d << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r16);
                 gen_helper_2_consti32(creadhwr, r16, r11);
                 opn = "creadhwr";
                 break;
             case OPC_CWRITEHWR_NI:  /* 0x0e << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r16);
                 gen_helper_2_consti32(cwritehwr, r16, r11);
                 opn = "cwritehwr";
                 break;
             case OPC_CGETADDR_NI:   /* 0x0f << 6 */
                 check_cop2x(ctx);
-                generate_check_access_idc(ctx, r11);
                 generate_cgetaddr(r16, r11);
                 opn = "cgetaddr";
                 break;
@@ -11768,7 +11674,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 switch(MASK_CAP8(opc)) {
                 case OPC_CGETPCC_NI:    /* 0x00 << 11 */
                     check_cop2x(ctx);
-                    generate_check_access_idc(ctx, r16);
                     generate_cgetpcc(r16);
                     opn = "cgetpcc";
                     break;
@@ -11807,24 +11712,16 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CSETBOUNDS: /* 0x01 */
         check_cop2x(ctx);
-        generate_check_access_idc(ctx, r16);
-        generate_check_access_idc(ctx, r11);
         generate_csetbounds(r16, r11, r6);
         opn = "csetbounds";
         break;
     case OPC_CSEAL:  /* 0x02 */
         check_cop2x(ctx);
-        generate_check_access_idc(ctx, r16);
-        generate_check_access_idc(ctx, r11);
-        generate_check_access_idc(ctx, r6);
         generate_cseal(r16, r11, r6);
         opn = "cseal";
         break;
     case OPC_CUNSEAL: /* 0x03 */
         check_cop2x(ctx);
-        generate_check_access_idc(ctx, r16);
-        generate_check_access_idc(ctx, r11);
-        generate_check_access_idc(ctx, r6);
         generate_cunseal(r16, r11, r6);
         opn = "cunseal";
         break;
@@ -11832,23 +11729,17 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         switch(MASK_CAP3(opc)) {
         case OPC_CANDPERM: /* 0x0 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_candperm(r16, r11, r6);
             opn = "candperm";
             break;
 
         case OPC_CINCBASE: /* 0x2 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cincbase(r16, r11, r6);
             opn = "cincbase";
             break;
         case OPC_CSETLEN: /* 0x3 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_csetlen(r16, r11, r6);
             opn = "csetlen";
             break;
@@ -11859,8 +11750,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CCLEARTAG: /* 0x5 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_ccleartag(r16, r11);
             opn = "ccleartag";
             break;
@@ -11876,8 +11765,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CFROMPTR: /* 0x7 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cfromptr(r16, r11, r6);
             opn = "cfromptr";
             break;
@@ -11937,14 +11824,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         switch(MASK_CAP3(opc)) {
         case OPC_CCHECKPERM: /* 0x0 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
             generate_ccheckperm(r16, r6);
             opn = "ccheckperm";
             break;
         case OPC_CCHECKTYPE: /* 0x1 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cchecktype(r16, r11);
             opn = "cchecktype";
             break;
@@ -11955,8 +11839,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CTOPTR: /* 0x0c */
         check_cop2x(ctx);
-        generate_check_access_idc(ctx, r11);
-        generate_check_access_idc(ctx, r6);
         generate_ctoptr(r16, r11, r6);
         opn = "ctoptr";
         break;
@@ -11964,22 +11846,16 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         switch(MASK_CAP3(opc)) {
         case OPC_CINCOFFSET: /* 0x0 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cincoffset(r16, r11, r6);
             opn = "cincoffset";
             break;
         case OPC_CSETOFFSET: /* 0x1 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_csetoffset(r16, r11, r6);
             opn = "csetoffset";
             break;
         case OPC_CGETOFFSET: /* 0x2 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cgetoffset(r16, r11);
             opn = "cgetoffset";
             break;
@@ -11992,57 +11868,41 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         switch(MASK_CAP3(opc)) {
         case OPC_CEQ:  /* 0x0 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_ceq(r16, r11, r6);
             opn = "ceq";
             break;
         case OPC_CNE:  /* 0x1 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cne(r16, r11, r6);
             opn = "cne";
             break;
         case OPC_CLT:  /* 0x2 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_clt(r16, r11, r6);
             opn = "clt";
             break;
         case OPC_CLE:  /* 0x3 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cle(r16, r11, r6);
             opn = "cle";
             break;
         case OPC_CLTU: /* 0x4 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cltu(r16, r11, r6);
             opn = "cltu";
             break;
         case OPC_CLEU: /* 0x5 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cleu(r16, r11, r6);
             opn = "cleu";
             break;
         case OPC_CEXEQ: /* 0x6 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cexeq(r16, r11, r6);
             opn = "cexeq";
             break;
         case OPC_CNEXEQ: /* 0x7 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
-            generate_check_access_idc(ctx, r6);
             generate_cnexeq(r16, r11, r6);
             opn = "cnexeq";
             break;
@@ -12060,88 +11920,72 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CLL:   /* 0x10 */
         /*
          * check_cop2x(ctx);
-         * generate_check_access_idc(ctx, r11);
          */
         switch(MASK_CAP4(opc)) {
         case OPC_CSCB: /* 0x0 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cscb(ctx, r16, r11, r6);
             opn = "cscb";
             break;
         case OPC_CSCH: /* 0x1 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_csch(ctx, r16, r11, r6);
             opn = "csch";
             break;
         case OPC_CSCW: /* 0x2 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cscw(ctx, r16, r11, r6);
             opn = "cscw";
             break;
         case OPC_CSCD: /* 0x3 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cscd(ctx, r16, r11, r6);
             opn = "cscd";
             break;
 
         case OPC_CSCC: /* 0x7 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cscc(ctx, r16, r11, r6);
             opn = "cscc";
             break;
 
         case OPC_CLLB: /* 0x8 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cllb(ctx, r16, r11);
             opn = "cllb";
             break;
         case OPC_CLLH: /* 0x9 */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cllh(ctx, r16, r11);
             opn = "cllh";
             break;
         case OPC_CLLW: /* 0xa */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cllw(ctx, r16, r11);
             opn = "cllw";
             break;
         case OPC_CLLD: /* 0xb */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_clld(ctx, r16, r11);
             opn = "clld";
             break;
         case OPC_CLLBU: /* 0xc */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cllbu(ctx, r16, r11);
             opn = "cllbu";
             break;
         case OPC_CLLHU: /* 0xd */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cllhu(ctx, r16, r11);
             opn = "cllhu";
             break;
         case OPC_CLLWU: /* 0xe */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r11);
             generate_cllwu(ctx, r16, r11);
             opn = "cllwu";
             break;
         case OPC_CLLC: /* 0xf */
             check_cop2x(ctx);
-            generate_check_access_idc(ctx, r16);
-            generate_check_access_idc(ctx, r11);
             generate_cllc(ctx, r16, r11);
             opn = "cllc";
             break;
@@ -12163,15 +12007,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CINCOFFSETIMM_NI: /* 0x13 */
         check_cop2x(ctx);
-        generate_check_access_idc(ctx, r16);
-        generate_check_access_idc(ctx, r11);
         generate_cincoffset_imm(r16, r11, (opc & 0x7ff));
         opn = "cincoffsetimmediate";
         break;
     case OPC_CSETBOUNDSIMM_NI: /* 0x14 */
         check_cop2x(ctx);
-        generate_check_access_idc(ctx, r16);
-        generate_check_access_idc(ctx, r11);
         generate_csetbounds_imm(r16, r11, (opc & 0x7ff));
         opn = "csetboundsimmediate";
         break;

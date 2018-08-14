@@ -2234,16 +2234,6 @@ static inline bool creg_inaccessible(uint32_t perms, uint32_t creg)
 #endif
 }
 
-void helper_check_access_idc(CPUMIPSState *env, uint32_t reg)
-{
-    /*
-     * IDC access in a CCall (selector 1) delay slot
-     */
-    if (reg == CP2CAP_IDC) {
-        do_raise_c2_exception(env, CP2Ca_ACCESS_CCALL_IDC, reg);
-    }
-}
-
 void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
