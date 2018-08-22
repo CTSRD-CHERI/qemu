@@ -1098,6 +1098,8 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size,
                           uintptr_t pc);
 int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr, uintptr_t pc);
+int  cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
+        hwaddr *ret_paddr, uintptr_t pc);
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg,
         uintptr_t pc);
 void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,

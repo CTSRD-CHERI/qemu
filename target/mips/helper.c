@@ -1478,52 +1478,88 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg, uintptr_t pc)
         env->linkedflag = 0;
 }
 
-int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
-        hwaddr *ret_paddr, uintptr_t pc)
+static uint8_t *
+cheri_tag_get_block(CPUMIPSState *env, target_ulong vaddr, MMUAccessType at,
+    int reg, int xshift, uintptr_t pc,
+    hwaddr *ret_paddr, ram_addr_t *ret_ram_addr, uint64_t *ret_tag)
 {
     hwaddr paddr;
     ram_addr_t ram_addr;
     uint64_t tag;
-    uint8_t *tagblk;
 
-
-    paddr = v2p_addr(env, vaddr, MMU_DATA_CAP_LOAD, reg, pc);
+    paddr = v2p_addr(env, vaddr, at, reg, pc);
 
     if (ret_paddr)
         *ret_paddr = paddr;
 
     ram_addr = p2r_addr(env, paddr, NULL);
     if (ram_addr == -1LL)
-        return 0;
+        return NULL;
+
+    if (ret_ram_addr)
+        *ret_ram_addr = ram_addr;
 
     /* Get the tag number and tag block ptr. */
-    tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
+    tag = (ram_addr >> (CAP_TAG_SHFT + xshift)) << xshift;
+    if (ret_tag)
+        *ret_tag = tag;
 
+    return get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
+}
+
+int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
+        hwaddr *ret_paddr, uintptr_t pc)
+{
+    uint64_t tag;
+    uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
+                                          0, pc, ret_paddr, NULL, &tag);
     if (tagblk == NULL)
         return 0;
     else
         return tagblk[CAP_TAGBLK_IDX(tag)];
 }
 
+/* QEMU currently tells the kernel that there are no caches installed
+ * (xref target/mips/translate_init.inc.c MIPS_CONFIG1 definition)
+ * so we're kind of free to make up a line size here.  For simplicity,
+ * we pretend that our cache lines always contain 8 capabilities.
+ */
+#define CAP_TAG_GET_MANY_SHFT    3
+int cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
+        hwaddr *ret_paddr, uintptr_t pc)
+{
+    uint64_t tag;
+    uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
+                                          CAP_TAG_GET_MANY_SHFT, pc, ret_paddr,
+                                          NULL, &tag);
+    if (tagblk == NULL)
+        return 0;
+    else {
+#define TAG_BYTE_TO_BIT(ix) (tagblk[CAP_TAGBLK_IDX(tag+ix)] ? (1 << ix) : 0)
+        return TAG_BYTE_TO_BIT(0)
+             | TAG_BYTE_TO_BIT(1)
+             | TAG_BYTE_TO_BIT(2)
+             | TAG_BYTE_TO_BIT(3)
+             | TAG_BYTE_TO_BIT(4)
+             | TAG_BYTE_TO_BIT(5)
+             | TAG_BYTE_TO_BIT(6)
+             | TAG_BYTE_TO_BIT(7);
+#undef TAG_BYTE_TO_BIT
+    }
+}
+
 #ifdef CHERI_MAGIC128
 void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
         uint8_t tagbit, uint64_t tps, uint64_t length, uintptr_t pc)
 {
-    ram_addr_t ram_addr;
     uint64_t tag;
-    uint8_t *tagblk;
     uint64_t *tagblk64;
+    ram_addr_t ram_addr;
 
     // If the data is untagged we shouldn't get a tlb fault
-   ram_addr = v2r_addr(env, vaddr, tagbit ? MMU_DATA_CAP_STORE : MMU_DATA_STORE, reg, pc);
-    if (ram_addr == -1LL)
-        return;
-
-    /* Get the tag number and tag block ptr. */
-    tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
-
+    uint8_t *tagblk = cheri_tag_get_block(env, vaddr,
+					  tagbit ? MMU_DATA_CAP_STORE : MMU_DATA_STORE,
+					  reg, 0, pc, NULL, &ram_addr, &tag);
     if (tagblk == NULL) {
         /* Allocated a tag block. */
         tagblk = cheri_tag_new_tagblk(tag);
@@ -1544,20 +1580,9 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
         uint64_t *ret_tps, uint64_t *ret_length, uintptr_t pc)
 {
-    ram_addr_t ram_addr;
     uint64_t tag;
-    uint8_t *tagblk;
-
-
-    ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_LOAD, reg, pc);
-    if (ram_addr == -1LL) {
-        *ret_tps = *ret_length = 0ULL;
-        return 0;
-    }
-
-    /* Get the tag number and tag block ptr. */
-    tag = ram_addr >> CAP_TAG_SHFT;
-    tagblk = get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
+    uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
+                                          0, pc, NULL, NULL, &tag);
 
     if (tagblk == NULL) {
         *ret_tps = *ret_length = 0ULL;
