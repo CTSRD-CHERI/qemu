@@ -2150,6 +2150,10 @@ static inline int align_of(int size, uint64_t addr)
         return (addr & 0xf);
     case 32:
         return (addr & 0x1f);
+    case 64:
+        return (addr & 0x3f);
+	case 128:
+        return (addr & 0x7f);
     default:
         return 1;
     }
@@ -2558,6 +2562,27 @@ target_ulong helper_cgetaddr(CPUMIPSState *env, uint32_t cb)
         const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
         return (target_ulong)(cbp->cr_base + cbp->cr_offset);
     }
+}
+
+target_ulong helper_cloadtags(CPUMIPSState *env, uint32_t cb, uint64_t cbcursor)
+{
+    uint32_t perms = env->active_tc.PCC.cr_perms;
+    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
+
+    if (creg_inaccessible(perms, cb)) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
+    } else if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (is_cap_sealed(cbp)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
+	} else {
+    	return (target_ulong)cheri_tag_get_many(env, cbcursor, cb, NULL, GETPC());
+	}
+	return 0;
 }
 
 target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
@@ -6460,6 +6485,8 @@ enum {
     OPC_CLLWU    = (0x12 << 26) | (0x10 << 21) | (0xe),
 
     OPC_CLLC     = (0x12 << 26) | (0x10 << 21) | (0xf),
+
+    OPC_CLOADTAGS = (0x12 << 26) | (0x00 << 21) | (0x3f) | (0x1e << 6),
 
     OPC_CLBU     = (0x32 << 26) | (0x0),
     OPC_CLHU     = (0x32 << 26) | (0x1),

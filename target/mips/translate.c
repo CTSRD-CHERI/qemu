@@ -1198,6 +1198,8 @@ enum {
     OPC_CREADHWR_NI     = OPC_C2OPERAND_NI | (0x0d << 6),
     OPC_CWRITEHWR_NI    = OPC_C2OPERAND_NI | (0x0e << 6),
     OPC_CGETADDR_NI     = OPC_C2OPERAND_NI | (0x0f << 6),
+
+    OPC_CLOADTAGS_NI    = OPC_C2OPERAND_NI | (0x1e << 6),
 };
 
 enum {
@@ -2286,6 +2288,32 @@ static inline void generate_cgetaddr(int32_t rd, int32_t cb)
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
+
+static inline void generate_cloadtags(int32_t rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv tcbc  = tcg_temp_new();
+    TCGv ttags = tcg_temp_new();
+    TCGv tc0 = tcg_const_i64(0);
+    TCGv_i32 toffset = tcg_const_i32(0);
+    TCGv_i32 tlen = tcg_const_i32(128); // XXX cache line width
+
+    gen_helper_cload(tcbc, cpu_env, tcb, tc0, toffset, tlen);
+    tcg_temp_free_i32(tlen);
+    tcg_temp_free_i32(toffset);
+    tcg_temp_free(tc0);
+
+    tcg_gen_mb(TCG_MO_LD_LD | TCG_MO_ST_LD | TCG_BAR_SC);
+
+    gen_helper_cloadtags(ttags, cpu_env, tcb, tcbc);
+    generate_dump_load(OPC_CLOADTAGS_NI, tcbc, ttags);
+    gen_store_gpr (ttags, rd);
+
+    tcg_temp_free(tcbc);
+    tcg_temp_free(ttags);
+    tcg_temp_free_i32(tcb);
+}
+
 
 static inline void generate_cgetcause(int32_t rd)
 {
@@ -11663,6 +11691,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 check_cop2x(ctx);
                 generate_cgetaddr(r16, r11);
                 opn = "cgetaddr";
+                break;
+            case OPC_CLOADTAGS_NI:   /* 0x1e << 6 */
+                check_cop2x(ctx);
+                generate_cloadtags(r16, r11);
+                opn = "cloadtags";
                 break;
 
             /* One-operand cap instructions. */

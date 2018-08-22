@@ -228,6 +228,8 @@ DEF_HELPER_4(ccopytype, void, env, i32, i32, i32)
 DEF_HELPER_3(creadhwr, void, env, i32, i32)
 DEF_HELPER_3(cwritehwr, void, env, i32, i32)
 
+DEF_HELPER_3(cloadtags, tl, env, i32, i64)
+
 DEF_HELPER_3(ceq, tl, env, i32, i32)
 DEF_HELPER_3(cne, tl, env, i32, i32)
 DEF_HELPER_3(clt, tl, env, i32, i32)
