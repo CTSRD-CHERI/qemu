@@ -81,6 +81,28 @@ typedef struct cap_register cap_register_t;
  * is invisibly keeps null 0 whatever we choose it to be */
 #define CC128_NULL_XOR_MASK 0x200001000005
 
+#define CC128_PERM_GLOBAL          (1 << 0)
+#define CC128_PERM_EXECUTE         (1 << 1)
+#define CC128_PERM_LOAD            (1 << 2)
+#define CC128_PERM_STORE           (1 << 3)
+#define CC128_PERM_LOAD_CAP        (1 << 4)
+#define CC128_PERM_STORE_CAP       (1 << 5)
+#define CC128_PERM_STORE_LOCAL     (1 << 6)
+#define CC128_PERM_SEAL            (1 << 7)
+#define CC128_PERM_CCALL           (1 << 8)
+#define CC128_PERM_UNSEAL          (1 << 9)
+#define CC128_PERM_ACCESS_SYS_REGS (1 << 10)
+#define CC128_PERM_RESERVED3       (1 << 11)
+#define CC128_PERM_RESERVED4       (1 << 12)
+#define CC128_PERM_RESERVED5       (1 << 13)
+#define CC128_PERM_RESERVED6       (1 << 14)
+
+#define CC128_PERMS_ALL            (0x7ff)     /* [0...10] */
+#define CC128_UPERMS_ALL           (0xf)       /* [15...18] */
+#define CC128_UPERMS_SHFT          (15)
+#define CC128_UPERMS_MEM_SHFT      (11)
+#define CC128_MAX_UPERM            (3)
+
 /* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
 #ifndef CHERI_COMPRESSED_CONSTANTS_ONLY
 
