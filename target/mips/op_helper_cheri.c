@@ -2024,7 +2024,6 @@ void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
     }
 }
 
-
 void dump_changed_cop2(CPUMIPSState *env, TCState *cur) {
     static const char * const capreg_name[] = {
         "C00", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
@@ -2032,6 +2031,7 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur) {
         "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23",
         "C24", "C25", "C26", "C27", "C28", "C29", "C30", "C31",
     };
+
     for (int i=0; i<32; i++) {
         dump_changed_capreg(env, &cur->_CGPR[i], &env->last_C[i], capreg_name[i]);
     }
@@ -2042,8 +2042,17 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur) {
     dump_changed_capreg(env, &cur->CHWR.KR2C, &env->last_CHWR.KR2C, "ChwrKR1C");
     dump_changed_capreg(env, &cur->CHWR.KCC, &env->last_CHWR.KCC, "KCC");
     dump_changed_capreg(env, &cur->CHWR.KDC, &env->last_CHWR.KDC, "KDC");
-    cap_register_t architectural_epcc = cgetepcc(env); // The value of EPCC (with offset set to what getepcc would do)
-    dump_changed_capreg(env, &architectural_epcc, &env->last_CHWR.EPCC, "EPCC");
+    /*
+     * The binary trace format only allows a single register to be changed by
+     * an instruction so if there is an exception where another register
+     * was also changed, do not overwrite that value with EPCC, otherwise
+     * the original result of the instruction is lost.
+     */
+    if (!qemu_loglevel_mask(CPU_LOG_CVTRACE) || env->cvtrace.exception == 31) {
+        // The value of EPCC (with offset set to what getepcc would do)
+        cap_register_t architectural_epcc = cgetepcc(env);
+        dump_changed_capreg(env, &architectural_epcc, &env->last_CHWR.EPCC, "EPCC");
+    }
     dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget, "CapBranchTarget");
 }
 
