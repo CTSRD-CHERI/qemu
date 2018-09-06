@@ -2234,6 +2234,18 @@ static inline bool creg_inaccessible(uint32_t perms, uint32_t creg)
 #endif
 }
 
+static inline target_ulong
+clear_tag_if_no_loadcap(CPUMIPSState *env, target_ulong tag, const cap_register_t* cbp) {
+    if (tag && (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
+        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+            qemu_log("Clearing tag bit due to missing %s",
+                     env->TLB_L ? "TLB_L" : "CAP_PERM_LOAD_CAP");
+        }
+        return 0;
+    }
+    return tag;
+}
+
 void helper_candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
@@ -4286,9 +4298,7 @@ target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     target_ulong tag = cheri_tag_get(env, addr, cd, NULL);
-
-    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
-        tag = 0;
+    tag = clear_tag_if_no_loadcap(env, tag, cbp);
     return tag;
 }
 
@@ -4423,10 +4433,8 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
 
-    uint32_t tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
-
-    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
-        tag = 0;
+    target_ulong tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
+    tag = clear_tag_if_no_loadcap(env, tag, cbp);
     cdp->cr_tag = tag;
 
     /* Log memory read, if needed. */
@@ -4557,11 +4565,10 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-    uint32_t tag = cheri_tag_get(env, addr, cd, NULL);
+    target_ulong tag = cheri_tag_get(env, addr, cd, NULL);
+    tag = clear_tag_if_no_loadcap(env, tag, cbp);
     uint32_t perms;
 
-    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
-        tag = 0;
     cdp->cr_tag = tag;
 
     cdp->cr_otype = (uint32_t)(otype >> 32);
@@ -4585,11 +4592,9 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-    uint32_t tag = cheri_tag_get(env, addr, cd, &env->lladdr);
+    target_ulong tag = cheri_tag_get(env, addr, cd, &env->lladdr);
+    tag = clear_tag_if_no_loadcap(env, tag, cbp);
     uint32_t perms;
-
-    if (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))
-        tag = 0;
     cdp->cr_tag = tag;
 
     cdp->cr_otype = (uint32_t)(otype >> 32);
