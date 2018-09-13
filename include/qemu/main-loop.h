@@ -236,7 +236,8 @@ AioContext *iohandler_get_aio_context(void);
  *
  * @pid: The pid that QEMU should observe.
  */
-int qemu_add_child_watch(pid_t pid);
+typedef void ChildTerminationHandler(int status, void *opaque);
+int qemu_add_child_watch(pid_t pid, ChildTerminationHandler *callback, void* opaque);
 #endif
 
 /**

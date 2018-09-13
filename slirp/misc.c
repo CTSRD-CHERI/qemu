@@ -37,6 +37,12 @@ remque(void *a)
   element->qh_rlink = NULL;
 }
 
+int slirp_child_exit_handler(int status, void *arg)
+{
+    struct ex_list *ex = (struct ex_list *)arg;
+    warn_report("Child process '%s' exited with status %d", ex->ex_exec, status);
+}
+
 int add_exec(struct ex_list **ex_ptr, int do_pty, char *exec,
              struct in_addr addr, int port)
 {
@@ -56,6 +62,7 @@ int add_exec(struct ex_list **ex_ptr, int do_pty, char *exec,
 	(*ex_ptr)->ex_pty = do_pty;
 	(*ex_ptr)->ex_exec = (do_pty == 3) ? exec : g_strdup(exec);
 	(*ex_ptr)->ex_next = tmp_ptr;
+	(*ex_ptr)->callback = &slirp_child_exit_handler;
 	return 0;
 }
 
@@ -83,7 +90,8 @@ fork_exec(struct socket *so, const char *ex, int do_pty)
  * do_ptr = 2   Fork/exec using pty
  */
 int
-fork_exec(struct socket *so, const char *ex, int do_pty)
+fork_exec(struct socket *so, const char *ex, int do_pty,
+          ChildTerminationHandler* callback, void* opaque)
 {
 	int s;
 	struct sockaddr_in addr;
@@ -120,6 +128,7 @@ fork_exec(struct socket *so, const char *ex, int do_pty)
 		}
 	}
 
+	info_report("executing %s", ex);
 	pid = fork();
 	switch(pid) {
 	 case -1:
@@ -177,7 +186,8 @@ fork_exec(struct socket *so, const char *ex, int do_pty)
 		exit(1);
 
 	 default:
-		qemu_add_child_watch(pid);
+		qemu_add_child_watch(pid, callback, opaque);
+
                 /*
                  * XXX this could block us...
                  * XXX Should set a timer here, and if accept() doesn't
