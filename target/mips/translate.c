@@ -7822,14 +7822,12 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             break;
         case 1:
             CP0_CHECK(ctx->bi);
-            // XXXAR: Don't sign extend here!
-            tcg_gen_ld32u_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_BadInstr));
+            gen_mfc0_load32(arg, offsetof(CPUMIPSState, CP0_BadInstr));
             rn = "BadInstr";
             break;
         case 2:
             CP0_CHECK(ctx->bp);
-            // XXXAR: Don't sign extend here!
-            tcg_gen_ld32u_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_BadInstrP));
+            gen_mfc0_load32(arg, offsetof(CPUMIPSState, CP0_BadInstrP));
             rn = "BadInstrP";
             break;
         default:
@@ -9233,14 +9231,12 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             break;
         case 1:
             CP0_CHECK(ctx->bi);
-            // XXXAR: Don't sign extend here!
-            tcg_gen_ld32u_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_BadInstr));
+            gen_mfc0_load32(arg, offsetof(CPUMIPSState, CP0_BadInstr));
             rn = "BadInstr";
             break;
         case 2:
             CP0_CHECK(ctx->bp);
-            // XXXAR: Don't sign extend here!
-            tcg_gen_ld32u_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_BadInstrP));
+            gen_mfc0_load32(arg, offsetof(CPUMIPSState, CP0_BadInstrP));
             rn = "BadInstrP";
             break;
         default:
