@@ -1094,17 +1094,19 @@ static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
 #if defined(TARGET_CHERI)
 void cheri_tag_phys_invalidate(ram_addr_t paddr, ram_addr_t len);
 void cheri_tag_init(uint64_t memory_size);
-void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size);
+void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size,
+                          uintptr_t pc);
 int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
-        hwaddr *ret_paddr);
-void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg);
+        hwaddr *ret_paddr, uintptr_t pc);
+void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg,
+        uintptr_t pc);
 void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
                                fprintf_function cpu_fprintf, int flags);
 #ifdef CHERI_MAGIC128
 int  cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint64_t *tps, uint64_t *length);
+        uint64_t *tps, uint64_t *length, uintptr_t pc);
 void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint8_t tag, uint64_t tps, uint64_t length);
+        uint8_t tag, uint64_t tps, uint64_t length, uintptr_t pc);
 #endif /* CHERI_MAGIC128 */
 #endif /* TARGET_CHERI */
 
