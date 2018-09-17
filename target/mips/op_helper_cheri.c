@@ -2109,7 +2109,7 @@ target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
      */
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    target_ulong tag = cheri_tag_get(env, addr, cd, NULL);
+    target_ulong tag = cheri_tag_get(env, addr, cd, NULL, GETPC());
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
     return tag;
 }
@@ -2183,9 +2183,9 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
 
     /* Set the tag bit in memory, if set in the register. */
     if (csp->cr_tag)
-        cheri_tag_set(env, vaddr, cs);
+        cheri_tag_set(env, vaddr, cs, GETPC());
     else
-        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
+        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, GETPC());
 
     env->hflags = save_hflags;
 
@@ -2227,7 +2227,7 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
     uint64_t tps, length;
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
     /* fetch tps and length */
-    cheri_tag_get_m128(env, addr, cd, &tps, &length);
+    cheri_tag_get_m128(env, addr, cd, &tps, &length, GETPC());
 
     cdp->cr_otype = (uint32_t)(tps >> 32);
     cdp->cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
@@ -2251,7 +2251,7 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
 
-    target_ulong tag = cheri_tag_get_m128(env, addr, cd, &tps, &length);
+    target_ulong tag = cheri_tag_get_m128(env, addr, cd, &tps, &length, GETPC());
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
     cdp->cr_tag = tag;
 
@@ -2308,7 +2308,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
 
     length = csp->cr_length ^ -1UL;
 
-    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length);
+    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, GETPC());
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
@@ -2392,7 +2392,7 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-    target_ulong tag = cheri_tag_get(env, addr, cd, NULL);
+    target_ulong tag = cheri_tag_get(env, addr, cd, NULL, GETPC());
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
     uint32_t perms;
 
@@ -2421,7 +2421,7 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-    target_ulong tag = cheri_tag_get(env, addr, cd, &env->lladdr);
+    target_ulong tag = cheri_tag_get(env, addr, cd, &env->lladdr, GETPC());
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
     uint32_t perms;
     cdp->cr_tag = tag;
@@ -2529,9 +2529,9 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
     }
 
     if (csp->cr_tag)
-        cheri_tag_set(env, vaddr, cs);
+        cheri_tag_set(env, vaddr, cs, GETPC());
     else
-        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
+        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, GETPC());
 
     ret = csp->cr_offset + csp->cr_base;
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -2693,7 +2693,7 @@ void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,
     dump_store(env, opc, addr, value);
 #endif
 
-    cheri_tag_invalidate(env, addr, len);
+    cheri_tag_invalidate(env, addr, len, GETPC());
 }
 
 void helper_cinvalidate_tag32(CPUMIPSState *env, target_ulong addr, uint32_t len,
@@ -2704,7 +2704,7 @@ void helper_cinvalidate_tag32(CPUMIPSState *env, target_ulong addr, uint32_t len
     dump_store(env, opc, addr, (target_ulong)value);
 #endif
 
-    cheri_tag_invalidate(env, addr, len);
+    cheri_tag_invalidate(env, addr, len, GETPC());
 }
 
 
