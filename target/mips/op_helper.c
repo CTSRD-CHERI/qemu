@@ -2390,6 +2390,9 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
             idc.cr_sealed = 0;
             idc.cr_otype = 0;
             update_capreg(&env->active_tc, CP2CAP_IDC, &idc);
+            // The capability register is loaded into PCC during delay slot
+            env->active_tc.CapBranchTarget = *csp;
+            // Return the branch target address
             return csp->cr_base + csp->cr_offset;
         }
     }
@@ -2843,6 +2846,7 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
         result.cr_offset += 8;
         update_capreg(&env->active_tc, cd, &result);
         // The capability register is loaded into PCC during delay slot
+        env->active_tc.CapBranchTarget = *cbp;
         // Return the branch target address
         return cbp->cr_offset + cbp->cr_base;
     }
@@ -2873,6 +2877,7 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
         do_raise_c0_exception(env, EXCP_AdEL, (cbp->cr_base + cbp->cr_offset));
     } else {
         // The capability register is loaded into PCC during delay slot
+        env->active_tc.CapBranchTarget = *cbp;
         // Return the branch target address
         return cbp->cr_offset + cbp->cr_base;
     }
@@ -6355,6 +6360,7 @@ static void dump_changed_regs(CPUMIPSState *env)
     dump_changed_capreg(env, &cur->CHWR.KCC, &env->last_CHWR.KCC, "KCC");
     dump_changed_capreg(env, &cur->CHWR.KDC, &env->last_CHWR.KDC, "KDC");
     dump_changed_capreg(env, &cur->CHWR.EPCC, &env->last_CHWR.EPCC, "EPCC");
+    dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget, "CapBranchTarget");
 }
 
 

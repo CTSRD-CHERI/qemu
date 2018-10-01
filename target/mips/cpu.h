@@ -315,6 +315,7 @@ struct TCState {
     float_status msa_fp_status;
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
+    cap_register_t CapBranchTarget; /* Target of the next cjr/cjalr/ccall */
     cap_register_t _CGPR[32];
     struct cheri_cap_hwregs CHWR;
 #if CHERI_C0_NULL == 0
@@ -850,7 +851,7 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_ERL   0x10000000 /* error level flag */
 #ifdef TARGET_CHERI
 #define MIPS_HFLAG_COP2X   0x20000000 /* CHERI/CP2 enabled              */
-    int btcr;                    /* cjr/cjalr Cap register target      */
+    // int btcr;                    /* cjr/cjalr Cap register target      */
 #endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
     target_ulong bcond;          /* Branch condition (if needed)       */
@@ -923,6 +924,7 @@ struct CPUMIPSState {
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
     cap_register_t last_C[32];
+    cap_register_t last_CapBranchTarget;
     struct cheri_cap_hwregs last_CHWR;
 
     cvtrace_t cvtrace;

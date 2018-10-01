@@ -1610,7 +1610,7 @@ static TCGv cpu_gpr[32], cpu_PC;
 static TCGv cpu_HI[MIPS_DSP_ACC], cpu_LO[MIPS_DSP_ACC];
 static TCGv cpu_dspctrl, btarget, bcond;
 #ifdef TARGET_CHERI
-static TCGv_i32 btcr;
+// static TCGv_i32 btcr;
 #endif
 static TCGv_i32 hflags;
 static TCGv_i32 fpu_fcr0, fpu_fcr31;
@@ -1701,7 +1701,7 @@ typedef struct DisasContext {
     bool nan2008;
     bool abs2008;
 #ifdef TARGET_CHERI
-    int btcr;
+    // int btcr;
 #endif /* TARGET_CHERI */
 } DisasContext;
 
@@ -1852,7 +1852,7 @@ static inline void save_cpu_state(DisasContext *ctx, int do_save_pc)
 #ifdef TARGET_CHERI
         case MIPS_HFLAG_BRCCALL:
         case MIPS_HFLAG_BRC:
-            tcg_gen_movi_i32(btcr, ctx->btcr);
+            // tcg_gen_movi_i32(btcr, ctx->btcr);
             break;
 #endif
         case MIPS_HFLAG_BC:
@@ -1873,7 +1873,7 @@ static inline void restore_cpu_state(CPUMIPSState *env, DisasContext *ctx)
 #ifdef TARGET_CHERI
     case MIPS_HFLAG_BRCCALL:
     case MIPS_HFLAG_BRC:
-        ctx->btcr = env->btcr;
+        // ctx->btcr = env->btcr;
         break;
 #endif
     case MIPS_HFLAG_BC:
@@ -2057,7 +2057,7 @@ static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t 
         /* Set ccall branch and delay slot flags */
         ctx->hflags |= (MIPS_HFLAG_BRCCALL);
         /* Save capability register index that is new PCC */
-        ctx->btcr = cs;
+        // ctx->btcr = cs;
         save_cpu_state(ctx, 0);
 
         tcg_temp_free_i32(tcb);
@@ -2187,7 +2187,7 @@ static inline void generate_cjalr(DisasContext *ctx, int32_t cd, int32_t cb)
         /* Set branch and delay slot flags */
         ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
         /* Save capability register index that is new PCC */
-        ctx->btcr = cb;
+        // ctx->btcr = cb;
         save_cpu_state(ctx, 0);
 
         tcg_temp_free_i32(tcb);
@@ -2210,7 +2210,7 @@ static inline void generate_cjr(DisasContext *ctx, int32_t cb)
         /* Set branch and delay slot flags */
         ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
         /* Save capability register index that is new PCC */
-        ctx->btcr = cb;
+        // ctx->btcr = cb;
         save_cpu_state(ctx, 0);
 
         tcg_temp_free_i32(tcb);
@@ -14104,6 +14104,36 @@ static inline void clear_branch_hflags(DisasContext *ctx)
     }
 }
 
+static void _gen_copy_cap_register_impl(size_t dst_offset, size_t src_offset) {
+    TCGv t0 = tcg_temp_new();
+
+    /* cr_offset */
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + 0);
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + 0);
+
+    /* cr_base */
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + 8);
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + 8);
+
+    /* cr_length */
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + 16);
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + 16);
+
+    /* cr_perms and cr_uperms */
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + 24);
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + 24);
+#ifdef CHERI_128
+    /* cr_pesbt */
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + 32);
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + 32);
+#endif
+    tcg_temp_free(t0);
+}
+
+#define gen_copy_cap_register(dest, src) \
+    _gen_copy_cap_register_impl(offsetof(CPUMIPSState, active_tc.dest), \
+        offsetof(CPUMIPSState, active_tc.src))
+
 static void gen_branch(DisasContext *ctx, int insn_bytes)
 {
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
@@ -14171,44 +14201,10 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
         case MIPS_HFLAG_BRC:
             /* unconditional branch to capability register */
 
-            /* XXXAM it may make sense to have an helper for the PCC update */
             tcg_gen_mov_tl(cpu_PC, btarget);
-            {
-                TCGv t0 = tcg_temp_new();
+            /* Update PCC with capability register */
+            gen_copy_cap_register(PCC, CapBranchTarget);
 
-                /* Update PCC with capability register */
-                /* cr_offset */
-                tcg_gen_ld_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc._CGPR[ctx->btcr]) + 0);
-                tcg_gen_st_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc.PCC) + 0);
-
-                /* cr_base */
-                tcg_gen_ld_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc._CGPR[ctx->btcr]) + 8);
-                tcg_gen_st_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc.PCC) + 8);
-
-                /* cr_length */
-                tcg_gen_ld_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc._CGPR[ctx->btcr]) + 16);
-                tcg_gen_st_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc.PCC) + 16);
-
-                /* cr_perms and cr_uperms */
-                tcg_gen_ld_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc._CGPR[ctx->btcr]) + 24);
-                tcg_gen_st_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc.PCC) + 24);
-#ifdef CHERI_128
-                /* cr_pesbt */
-                tcg_gen_ld_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc._CGPR[ctx->btcr]) + 32);
-                tcg_gen_st_i64(t0, cpu_env,
-                    offsetof(CPUMIPSState, active_tc.PCC) + 32);
-#endif
-                tcg_temp_free(t0);
-            }
             if (ctx->base.singlestep_enabled) {
                 save_cpu_state(ctx, 0);
                 gen_helper_0e0i(raise_exception, EXCP_DEBUG);
@@ -23939,7 +23935,7 @@ void mips_tcg_init(void)
     hflags = tcg_global_mem_new_i32(cpu_env,
                                     offsetof(CPUMIPSState, hflags), "hflags");
 #ifdef TARGET_CHERI
-    btcr = tcg_global_mem_new_i32(cpu_env, offsetof(CPUMIPSState, btcr), "btcr");
+    // btcr = tcg_global_mem_new_i32(cpu_env, offsetof(CPUMIPSState, btcr), "btcr");
 #endif
 
     fpu_fcr0 = tcg_global_mem_new_i32(cpu_env,
@@ -24209,6 +24205,9 @@ void cpu_state_reset(CPUMIPSState *env)
     // Note: EPCC also needs to be set to be a full address-space capability
     // so that a MIPS eret without a prior trap works as expected:
     set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
+
+    // Fake capability register to allow cjr branch delay slots to work
+    null_capability(&env->active_tc.CapBranchTarget);
 
     // env->CP0_Status |= (1 << CP0St_CU2);
     env->CP0_Status |= (1 << CP0St_KX);
