@@ -14117,24 +14117,24 @@ static void _gen_copy_cap_register_impl(size_t dst_offset, size_t src_offset) {
     TCGv t0 = tcg_temp_new();
 
     /* cr_offset */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + 0);
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + 0);
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_offset));
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_offset));
 
     /* cr_base */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + 8);
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + 8);
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_base));
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_base));
 
     /* cr_length */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + 16);
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + 16);
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_length));
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_length));
 
-    /* cr_perms and cr_uperms */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + 24);
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + 24);
+    /* cr_perms and cr_uperms (load both together in one i64 load/store) */
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_perms));
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_perms));
 #ifdef CHERI_128
     /* cr_pesbt */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + 32);
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + 32);
+    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_pesbt));
+    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_pesbt));
 #endif
     tcg_temp_free(t0);
 }
