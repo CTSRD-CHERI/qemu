@@ -4821,7 +4821,7 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
     }
 }
 
-void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
+void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
 
@@ -4869,8 +4869,10 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 
     // Finally, log the instruction that will be executed next
-    if (unlikely(should_log_instr))
+    if (unlikely(should_log_instr)) {
+        int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
         log_instruction(env, pc, isa);
+    }
 }
 
 target_ulong helper_ccheck_store_right(CPUMIPSState *env, target_ulong offset, uint32_t len)

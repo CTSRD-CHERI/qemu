@@ -3949,12 +3949,7 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
 static inline void generate_ccheck_pc(DisasContext *ctx)
 {
     TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
-    TCGv_i32 tisa = tcg_const_i32((ctx->hflags & MIPS_HFLAG_M16) == 0 ? 0 :
-            (ctx->insn_flags & ASE_MICROMIPS) ? 1 : 2);
-
-    gen_helper_ccheck_pc(cpu_env, tpc, tisa);
-
-    tcg_temp_free_i32(tisa);
+    gen_helper_ccheck_pc(cpu_env, tpc);
     tcg_temp_free_i64(tpc);
 }
 
