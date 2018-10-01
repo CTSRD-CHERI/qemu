@@ -4826,17 +4826,16 @@ void helper_log_instruction(CPUMIPSState *env, uint64_t pc, int isa)
     log_instruction(env, pc, isa);
 }
 
-void helper_log_registers(CPUMIPSState *env)
-{
-    /* Print changed state: GPR, HI/LO, COP0. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR) ||
-        env->user_only_tracing_enabled))
-        mips_dump_changed_state(env);
-}
-
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
+
+    /* Print changed state before advancing to the next instruction: GPR, HI/LO, COP0. */
+    const bool should_log_instr =
+        qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR) || env->user_only_tracing_enabled;
+    if (unlikely(should_log_instr))
+        mips_dump_changed_state(env);
+
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
 #if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)

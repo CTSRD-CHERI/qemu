@@ -4036,13 +4036,8 @@ static inline void generate_log_instruction(DisasContext *ctx)
     tcg_temp_free_i64(tpc);
 }
 
-static inline void generate_log_registers(void)
-{
-    gen_helper_log_registers(cpu_env);
-}
-
+// FIXME: inline this into ccheck_pc
 #define GEN_LOG_INSTR(ctx) generate_log_instruction(ctx)
-#define GEN_LOG_REGISTERS generate_log_registers()
 
 #else /* ! TARGET_CHERI */
 
@@ -4054,7 +4049,6 @@ static inline void generate_log_registers(void)
 #define GEN_CAP_DUMP_LOAD(op, addr, value)
 #define GEN_CAP_DUMP_LOAD32(op, addr, value)
 #define GEN_LOG_INSTR(ctx)
-#define GEN_LOG_REGISTERS
 
 #endif /* ! TARGET_CHERI */
 
@@ -23694,8 +23688,7 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
 
-    /* Generate capabilities check on PC */
-    GEN_LOG_REGISTERS;
+    /* Generate capabilities check on PC (and possibly log registers + instrs) */
     GEN_CAP_CHECK_PC(ctx);
     GEN_LOG_INSTR(ctx);
 
