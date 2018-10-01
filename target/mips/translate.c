@@ -6925,11 +6925,11 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
             save_cpu_state(ctx, 0);
 #else
             ctx->hflags |= MIPS_HFLAG_B;
+#endif /* TARGET_CHERI */
             break;
         case OPC_JALX:
             ctx->hflags |= MIPS_HFLAG_BX;
             /* Fallthrough */
-#endif /* TARGET_CHERI */
         case OPC_JAL:
             blink = 31;
 #ifdef TARGET_CHERI
