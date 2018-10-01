@@ -105,11 +105,6 @@ static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
         uint16_t cause, uint16_t reg)
 {
     uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
-
-    /* fprintf(stderr, "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=0x%016lx + 0x%016lx "
-        "-> 0x%016lx PC=0x%016lx\n", cause, causestr[cause], reg,
-         env->active_tc.PCC.cr_base, env->active_tc.PCC.cr_offset, pc,
-         env->active_tc.PC); */
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s)"
        " reg=%d PCC=0x%016" PRIx64 " + 0x%016" PRIx64 " -> 0x" TARGET_FMT_lx
        " PC=0x" TARGET_FMT_lx "\n",
@@ -2093,25 +2088,6 @@ _became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 {
 	if (cheri_c2e_on_unrepresentable)
 		do_raise_c2_exception(env, CP2Ca_INEXACT, reg);
-}
-
-target_ulong helper_ccheck_imprecise(CPUMIPSState *env, target_ulong inc)
-{
-    cap_register_t *pcc = &env->active_tc.PCC;
-
-    if (!is_representable(is_cap_sealed(pcc), pcc->cr_base, pcc->cr_length,
-                pcc->cr_offset, inc)) {
-        /*
-         * Clear the tag and set the proper offset here. The capability
-         * will be adjusted when handling the exception to avoid losing
-         * information about the bounds before actually setting EPC.
-         */
-        pcc->cr_tag = 0;
-        pcc->cr_offset = inc;
-        env->error_code |= EXCP_INST_NOTAVAIL;
-    }
-
-    return (pcc->cr_base);
 }
 
 #else
@@ -4821,6 +4797,14 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
     }
 }
 
+void helper_ccheck_btarget(CPUMIPSState *env)
+{
+    // Check whether the branch target is within $pcc and if not raise an exception
+    qemu_log_mask(CPU_LOG_INSTR, "%s: env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
+        __func__, env->active_tc.PC, env->hflags, env->btarget);
+    check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false);
+}
+
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
@@ -4843,6 +4827,9 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
         qemu_log_close();
         exit(1);
     }
+
+    qemu_log_mask(CPU_LOG_INSTR, "%s(%#" PRIx64 "): env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
+        __func__, pc, env->active_tc.PC, env->hflags, env->btarget);
 #endif
     // TODO: increment icount?
     /* Decrement the startup breakcount, if set. */
@@ -4853,19 +4840,12 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
         }
     }
 
-#ifdef CHERI_128
-    /* Check tag before updating offset. */
-    if (!pcc->cr_tag) {
-        // don't attempt to fill in BadInst (this causes an infinite looP)
-        env->error_code |= EXCP_INST_NOTAVAIL;
-        do_raise_c2_exception(env, CP2Ca_TAG, 0xff);
-    }
-#endif /* CHERI_128 */
-
-    /* Update the offset */
-    pcc->cr_offset = pc - pcc->cr_base;
-
-    check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 4, /*instavail=*/false);
+    /* Update the offset after checking that the new PCC is valid */
+    cap_register_t new_pcc = *pcc;
+    new_pcc.cr_offset = pc - new_pcc.cr_base;
+    check_cap(env, &new_pcc, CAP_PERM_EXECUTE, pc, 0xff, 4, /*instavail=*/false);
+    // now that we know that the branch target is in range we can update pcc->offset
+    pcc->cr_offset = new_pcc.cr_offset;
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 
     // Finally, log the instruction that will be executed next
