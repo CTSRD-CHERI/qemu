@@ -8952,6 +8952,7 @@ cp0_unimplemented:
 static void gen_mtc2(DisasContext *ctx, TCGv arg, int reg, int sel)
 {
     const char *rn = "invalid";
+    check_cop2x(ctx);
 
     switch (reg) {
     case 0:
