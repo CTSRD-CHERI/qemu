@@ -37,7 +37,7 @@ remque(void *a)
   element->qh_rlink = NULL;
 }
 
-int slirp_child_exit_handler(int status, void *arg)
+static void slirp_child_exit_handler(int status, void *arg)
 {
     struct ex_list *ex = (struct ex_list *)arg;
     warn_report("Child process '%s' exited with status %d", ex->ex_exec, status);
