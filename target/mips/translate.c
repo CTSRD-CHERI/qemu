@@ -8256,6 +8256,15 @@ cp0_unimplemented:
     gen_mfc0_unimplemented(ctx, arg);
 }
 
+static void gen_mtc0_epc(TCGv new_epc)
+{
+    tcg_gen_st_tl(new_epc, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#ifdef TARGET_CHERI
+    // ensure that EPCC.offset and CP0_EPCC are always in sync
+    tcg_gen_st_tl(new_epc, cpu_env, offsetof(CPUMIPSState, active_tc.CHWR.EPCC.cr_offset));
+#endif
+}
+
 static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
 {
     const char *rn = "invalid";
@@ -8607,7 +8616,7 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
-            tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+            gen_mtc0_epc(arg);
             rn = "EPC";
             break;
         default:
@@ -10015,7 +10024,7 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
-            tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+            gen_mtc0_epc(arg);
             rn = "EPC";
             break;
         default:
