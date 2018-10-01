@@ -4835,6 +4835,15 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
     cap_register_t *pcc = &env->active_tc.PCC;
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
+#if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)
+    if (env->active_tc.CHWR.EPCC.cr_offset != env->CP0_EPC) {
+        error_report("CP0_EPC (0x" TARGET_FMT_lx ") and EPCC.offset (0x"
+            TARGET_FMT_lx ") are not in sync", env->CP0_EPC, env->active_tc.CHWR.EPCC.cr_offset);
+        qemu_log_flush();
+        qemu_log_close();
+        exit(1);
+    }
+#endif
     // TODO: increment icount?
     /* Decrement the startup breakcount, if set. */
     if (unlikely(cs->breakcount)) {
