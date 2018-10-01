@@ -4026,19 +4026,6 @@ static inline void generate_cinvalidate_tag32(TCGv addr, int32_t len,
 #define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value) \
     generate_cinvalidate_tag32(addr, len, opc, value)
 
-static inline void generate_log_instruction(DisasContext *ctx)
-{
-    TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
-    TCGv_i32 tisa = tcg_const_i32((ctx->hflags & MIPS_HFLAG_M16) == 0 ? 0 :
-				  (ctx->insn_flags & ASE_MICROMIPS) ? 1 : 2);
-    gen_helper_log_instruction(cpu_env, tpc, tisa);
-    tcg_temp_free_i32(tisa);
-    tcg_temp_free_i64(tpc);
-}
-
-// FIXME: inline this into ccheck_pc
-#define GEN_LOG_INSTR(ctx) generate_log_instruction(ctx)
-
 #else /* ! TARGET_CHERI */
 
 #define GEN_CAP_CHECK_PC(ctx)
@@ -4048,7 +4035,6 @@ static inline void generate_log_instruction(DisasContext *ctx)
 #define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value)
 #define GEN_CAP_DUMP_LOAD(op, addr, value)
 #define GEN_CAP_DUMP_LOAD32(op, addr, value)
-#define GEN_LOG_INSTR(ctx)
 
 #endif /* ! TARGET_CHERI */
 
@@ -23690,7 +23676,6 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
 
     /* Generate capabilities check on PC (and possibly log registers + instrs) */
     GEN_CAP_CHECK_PC(ctx);
-    GEN_LOG_INSTR(ctx);
 
     tcg_gen_insn_start(ctx->base.pc_next, ctx->hflags & MIPS_HFLAG_BMASK,
                        ctx->btarget);

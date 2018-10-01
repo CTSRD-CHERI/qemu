@@ -4821,11 +4821,6 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
     }
 }
 
-void helper_log_instruction(CPUMIPSState *env, uint64_t pc, int isa)
-{
-    log_instruction(env, pc, isa);
-}
-
 void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
@@ -4872,6 +4867,10 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
 
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, pc, 0xff, 4, /*instavail=*/false);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
+
+    // Finally, log the instruction that will be executed next
+    if (unlikely(should_log_instr))
+        log_instruction(env, pc, isa);
 }
 
 target_ulong helper_ccheck_store_right(CPUMIPSState *env, target_ulong offset, uint32_t len)
