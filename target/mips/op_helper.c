@@ -3118,6 +3118,10 @@ void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     cap_register_t *cdp = check_writable_cap_hwr_access(env, hwr);
     *cdp = *csp;
+    if (hwr == CP2HWR_EPCC) {
+        // Also update CP0_EPC when we change EPCC
+        env->CP0_EPC = cdp->cr_offset;
+    }
 }
 
 void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
@@ -4840,6 +4844,8 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc, int isa)
         error_report("CP0_EPC (0x" TARGET_FMT_lx ") and EPCC.offset (0x"
             TARGET_FMT_lx ") are not in sync", env->CP0_EPC, env->active_tc.CHWR.EPCC.cr_offset);
         qemu_log_flush();
+        if (qemu_logfile)
+            fsync(fileno(qemu_logfile));
         qemu_log_close();
         exit(1);
     }
