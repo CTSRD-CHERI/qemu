@@ -2079,6 +2079,16 @@ static inline void generate_candperm(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void gen_ccheck_conditional_branch(target_ulong btgt) {
+    tcg_debug_assert(btgt != -1 && "btgt should have been set!");
+    TCGLabel *skip_btarget_check = gen_new_label();
+    // skip the check if bcond == 0
+    tcg_gen_brcondi_tl(TCG_COND_EQ, bcond, 0, skip_btarget_check);
+    tcg_gen_movi_tl(btarget, btgt);  // save btarget so that the helper can read it:
+    gen_helper_ccheck_btarget(cpu_env);
+    gen_set_label(skip_btarget_check); // skip helper call
+}
+
 typedef void (cheri_branch_helper)(TCGv, TCGv_ptr, TCGv_i32, TCGv_i32);
 static inline void gen_compute_cheri_branch(DisasContext *ctx, int32_t cb,
                                          int32_t offset, cheri_branch_helper* gen_func)
@@ -2099,12 +2109,8 @@ static inline void gen_compute_cheri_branch(DisasContext *ctx, int32_t cb,
         ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
 
         // Check that the branch isn't out-of-bounds of PCC before executing the delay slot
-        TCGLabel *skip_btarget_check = gen_new_label();
-        // skip the check if bcond == 0
-        tcg_gen_brcondi_tl(TCG_COND_EQ, bcond, 0, skip_btarget_check);
-        tcg_gen_movi_tl(btarget, ctx->btarget);  // save btarget so that the helper can read it:
-        gen_helper_ccheck_btarget(cpu_env);
-        gen_set_label(skip_btarget_check); // skip helper call
+        // Check that the conditional branch target is in range (but only if the branch is taken)
+        gen_ccheck_conditional_branch(ctx->btarget);
 
         tcg_temp_free_i32(toffset);
         tcg_temp_free_i32(tcb);
@@ -6984,15 +6990,9 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
 
 #ifdef TARGET_CHERI
     if (bcond_compute) {
-        // Check that the conditional branch target is in range (but only if the
-        // branch is taken)
-        tcg_debug_assert(btgt != -1 && "btgt should have been set!");
-        TCGLabel *skip_btarget_check = gen_new_label();
-        // skip the check if bcond == 0
-        tcg_gen_brcondi_tl(TCG_COND_EQ, bcond, 0, skip_btarget_check);
-        tcg_gen_movi_tl(btarget, btgt);  // save btarget so that the helper can read it:
-        GEN_CCHECK_BTARGET(cpu_env);
-        gen_set_label(skip_btarget_check); // skip helper call
+        // Check that the conditional branch target is in range (but only if the branch is taken)
+        gen_ccheck_conditional_branch(btgt);
+        SET_BTARGET_CHECKED(true);
     } else if (!btarget_checked) {
         // If the unconditional branch target has not been checked yet
         // (i.e. not JALR/JR/JAL/J) move btgt to the environment and invoke the
@@ -10932,7 +10932,6 @@ static void gen_cp0 (CPUMIPSState *env, DisasContext *ctx, uint32_t opc, int rt,
 static void gen_compute_branch1(DisasContext *ctx, uint32_t op,
                                 int32_t cc, int32_t offset)
 {
-#warning CP1 branches are not bounds checked
     target_ulong btarget;
     TCGv_i32 t0 = tcg_temp_new_i32();
 
@@ -11030,6 +11029,11 @@ static void gen_compute_branch1(DisasContext *ctx, uint32_t op,
         generate_exception_end(ctx, EXCP_RI);
         goto out;
     }
+#ifdef TARGET_CHERI
+    // Check that the conditional branch target is in range (but only if the branch is taken)
+    gen_ccheck_conditional_branch(btarget);
+#endif
+
     ctx->btarget = btarget;
     ctx->hflags |= MIPS_HFLAG_BDS32;
  out:
@@ -11042,7 +11046,6 @@ static void gen_compute_branch1_r6(DisasContext *ctx, uint32_t op,
                                    int delayslot_size)
 {
     target_ulong btarget;
-#warning gen_compute_branch1_r6 is not bounds checked
     TCGv_i64 t0 = tcg_temp_new_i64();
 
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
@@ -11076,6 +11079,10 @@ static void gen_compute_branch1_r6(DisasContext *ctx, uint32_t op,
 
     tcg_gen_trunc_i64_tl(bcond, t0);
 
+#ifdef TARGET_CHERI
+    // Check that the conditional branch target is in range (but only if the branch is taken)
+    gen_ccheck_conditional_branch(btarget);
+#endif
     ctx->btarget = btarget;
 
     switch (delayslot_size) {
