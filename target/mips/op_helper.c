@@ -3106,9 +3106,9 @@ void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
     if (hwr == CP2HWR_EPCC) {
         // Also update CP0_EPC/CP0_ErrorEPC when we change EPCC
         if (should_use_error_epc(env))
-            env->CP0_EPC = cdp->cr_offset;
-        else
             env->CP0_ErrorEPC = cdp->cr_offset;
+        else
+            env->CP0_EPC = cdp->cr_offset;
         // restore the fake EPCC.offset constant
         cdp->cr_offset = CP2CAP_EPCC_FAKE_OFFSET_VALUE;
     }
