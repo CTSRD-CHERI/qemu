@@ -328,6 +328,7 @@ struct TCState {
 #define CP2CAP_KCC  29  /* Kernel Code Capability */
 #define CP2CAP_KDC  30  /* Kernel Data Capability */
 #define CP2CAP_EPCC 31  /* Exception PC Capability */
+#define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
 #endif /* TARGET_CHERI */
 };
 
@@ -1092,6 +1093,13 @@ static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
     *flags = env->hflags & (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK |
                             MIPS_HFLAG_HWRENA_ULR);
 }
+
+static inline bool should_use_error_epc(CPUMIPSState *env)
+{
+    // If ERL is set, eret and exceptions use ErrorEPC instead of EPC
+    return env->CP0_Status & (1 << CP0St_ERL);
+}
+
 
 #if defined(TARGET_CHERI)
 void cheri_tag_phys_invalidate(ram_addr_t paddr, ram_addr_t len);

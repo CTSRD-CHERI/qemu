@@ -3003,7 +3003,6 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     }
 }
 
-
 static inline bool in_kernel_mode(CPUMIPSState *env) {
     // TODO: what about env->CP0_Debug & (1 << CP0DB_DM)
     // If ERL or EXL is set we have taken an exception and are in the kernel
@@ -3077,8 +3076,15 @@ void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cd);
         return;
     }
-    const cap_register_t *csp = check_readonly_cap_hwr_access(env, hwr);
-    update_capreg(&env->active_tc, cd, csp);
+    cap_register_t result = *check_readonly_cap_hwr_access(env, hwr);
+    if (hwr == CP2HWR_EPCC) {
+        // Read epcc.offset from CP0_EPC/CP0_ErrorEPC
+        if (should_use_error_epc(env))
+            result.cr_offset = env->CP0_ErrorEPC;
+        else
+            result.cr_offset = env->CP0_EPC;
+    }
+    update_capreg(&env->active_tc, cd, &result);
 }
 
 void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
@@ -3092,8 +3098,11 @@ void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
     cap_register_t *cdp = check_writable_cap_hwr_access(env, hwr);
     *cdp = *csp;
     if (hwr == CP2HWR_EPCC) {
-        // Also update CP0_EPC when we change EPCC
-        env->CP0_EPC = cdp->cr_offset;
+        // Also update CP0_EPC/CP0_ErrorEPC when we change EPCC
+        if (should_use_error_epc(env))
+            env->CP0_EPC = cdp->cr_offset;
+        else
+            env->CP0_ErrorEPC = cdp->cr_offset;
     }
 }
 
@@ -4815,9 +4824,10 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
 #if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)
-    if (env->active_tc.CHWR.EPCC.cr_offset != env->CP0_EPC) {
-        error_report("%s: CP0_EPC (0x" TARGET_FMT_lx ") and EPCC.offset (0x"
-            TARGET_FMT_lx ") are not in sync", __func__, env->CP0_EPC, env->active_tc.CHWR.EPCC.cr_offset);
+    if (env->active_tc.CHWR.EPCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE) {
+        error_report("%s: EPCC offset field was changed even though it shouldn't exist: "
+                     "(0x" TARGET_FMT_lx ") instead of 0x" TARGET_FMT_lx "\n",
+                      __func__, env->active_tc.CHWR.EPCC.cr_offset, CP2CAP_EPCC_FAKE_OFFSET_VALUE);
         qemu_log_flush();
         qemu_log_close();
         exit(1);
@@ -5737,7 +5747,7 @@ static void debug_pre_eret(CPUMIPSState *env)
     if (qemu_loglevel_mask(CPU_LOG_EXEC | CPU_LOG_INSTR)) {
         qemu_log("ERET: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
                 env->active_tc.PC, env->CP0_EPC);
-        if (env->CP0_Status & (1 << CP0St_ERL))
+        if (should_use_error_epc(env))
             qemu_log(" ErrorEPC " TARGET_FMT_lx, env->CP0_ErrorEPC);
         if (env->hflags & MIPS_HFLAG_DM)
             qemu_log(" DEPC " TARGET_FMT_lx, env->CP0_DEPC);
@@ -5752,7 +5762,7 @@ static void debug_post_eret(CPUMIPSState *env)
     if (qemu_loglevel_mask(CPU_LOG_EXEC | CPU_LOG_INSTR)) {
         qemu_log("  =>  PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
                 env->active_tc.PC, env->CP0_EPC);
-        if (env->CP0_Status & (1 << CP0St_ERL))
+        if (should_use_error_epc(env))
             qemu_log(" ErrorEPC " TARGET_FMT_lx, env->CP0_ErrorEPC);
         if (env->hflags & MIPS_HFLAG_DM)
             qemu_log(" DEPC " TARGET_FMT_lx, env->CP0_DEPC);
@@ -5792,14 +5802,7 @@ static inline void exception_return(CPUMIPSState *env)
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
     }
-#if defined(TARGET_CHERI) && (defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS))
-    if (env->active_tc.CHWR.EPCC.cr_offset != env->CP0_EPC) {
-        error_report("%s:%d: CP0_EPC (0x" TARGET_FMT_lx ") and EPCC.offset (0x"
-            TARGET_FMT_lx ") are not in sync", __func__, __LINE__, env->CP0_EPC, env->active_tc.CHWR.EPCC.cr_offset);
-        qemu_log_flush();
-        exit(1);
-    }
-#endif
+    tcg_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
     env->active_tc.PCC = env->active_tc.CHWR.EPCC;
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
