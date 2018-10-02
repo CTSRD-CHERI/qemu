@@ -14214,7 +14214,6 @@ static void gen_compute_compact_branch(DisasContext *ctx, uint32_t opc,
                                        int rs, int rt, int32_t offset)
 {
     int bcond_compute = 0;
-#warning gen_compute_compact_branch is not bounds checked
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
     int m16_lowbit = (ctx->hflags & MIPS_HFLAG_M16) != 0;
@@ -14310,7 +14309,11 @@ static void gen_compute_compact_branch(DisasContext *ctx, uint32_t opc,
             generate_exception_end(ctx, EXCP_RI);
             goto out;
         }
-
+#ifdef TARGET_CHERI
+        // bounds check for unconditional branch:
+        tcg_gen_movi_tl(btarget, ctx->btarget);  // save btarget so that the helper can read it:
+        gen_helper_ccheck_btarget(cpu_env);
+#endif
         /* Generating branch here as compact branches don't have delay slot */
         gen_branch(ctx, 4);
     } else {
@@ -14433,6 +14436,10 @@ static void gen_compute_compact_branch(DisasContext *ctx, uint32_t opc,
             generate_exception_end(ctx, EXCP_RI);
             goto out;
         }
+#ifdef TARGET_CHERI
+        // bounds check against $pcc for conditional branch
+        gen_ccheck_conditional_branch(ctx->btarget);
+#endif
 
         /* Generating branch here as compact branches don't have delay slot */
         gen_goto_tb(ctx, 1, ctx->btarget);
