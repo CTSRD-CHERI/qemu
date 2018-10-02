@@ -24225,7 +24225,7 @@ void cpu_state_reset(CPUMIPSState *env)
     null_capability(&env->active_tc.CHWR.KDC); // KDC can be NULL
     // Note: EPCC also needs to be set to be a full address-space capability
     // so that a MIPS eret without a prior trap works as expected:
-    set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
+    set_max_perms_capability(&env->active_tc.CHWR.EPCC, CP2CAP_EPCC_FAKE_OFFSET_VALUE);
 
     // Fake capability register to allow cjr branch delay slots to work
     null_capability(&env->active_tc.CapBranchTarget);
