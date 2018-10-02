@@ -3088,7 +3088,14 @@ void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
     if (hwr == CP2HWR_EPCC) {
         // Read epcc.offset from CP0_EPC/CP0_ErrorEPC
         tcg_debug_assert(result.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
-        result.cr_offset = cgetepcc_compute_offset(env);
+        uint64_t new_offset = cgetepcc_compute_offset(env);
+        // Untag the resulting capability if the epcc value is not representable
+        if (!is_representable(result.cr_sealed, result.cr_base, result.cr_length,
+                              0, new_offset)) {
+            nullify_capability(result.cr_base + new_offset, &result);
+        } else {
+            result.cr_offset = new_offset;
+        }
     }
     update_capreg(&env->active_tc, cd, &result);
 }
