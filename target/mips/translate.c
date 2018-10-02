@@ -6739,12 +6739,25 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
 
+#if defined(TARGET_CHERI)
+    bool btarget_checked = false;
+    // Some debug assertions to ensure all branch cases are bounds checked
+#define SET_BTARGET_CHECKED(value) \
+    do { tcg_debug_assert(!btarget_checked); btarget_checked = value; } while (false)
+#define GEN_CCHECK_BTARGET(cpu_env) \
+    do { SET_BTARGET_CHECKED(true); gen_helper_ccheck_btarget(cpu_env); } while (false)
+#else
+#define GEN_CCHECK_BTARGET(cpu_env)
+#define SET_BTARGET_CHECKED(value)
+#endif // defined(TARGET_CHERI)
+
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
 #ifdef MIPS_DEBUG_DISAS
         LOG_DISAS("Branch in delay / forbidden slot at PC 0x"
                   TARGET_FMT_lx "\n", ctx->base.pc_next);
 #endif
         generate_exception_end(ctx, EXCP_RI);
+        SET_BTARGET_CHECKED(true); // exception raised -> no need to check
         goto out;
     }
 
@@ -6815,6 +6828,7 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         tcg_gen_shli_i64(t0, t0, 28);
         tcg_gen_ori_i64(t0, t0, offset);
         tcg_gen_add_i64(btarget, t0, t1);
+        GEN_CCHECK_BTARGET(cpu_env);
 #else
         btgt = ((ctx->base.pc_next + insn_bytes) & (int32_t)0xF0000000) |
             (uint32_t)offset;
@@ -6828,6 +6842,7 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
                others are reserved. */
             MIPS_INVAL("jump hint");
             generate_exception_end(ctx, EXCP_RI);
+            SET_BTARGET_CHECKED(true); // exception raised -> no need to check
             goto out;
         }
         gen_load_gpr(btarget, rs);
@@ -6836,12 +6851,13 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
                 offsetof(cap_register_t, cr_base));
         tcg_gen_add_i64(btarget, btarget, t1);
-        gen_helper_ccheck_btarget(cpu_env);
+        GEN_CCHECK_BTARGET(cpu_env);
 #endif /* TARGET_CHERI */
         break;
     default:
         MIPS_INVAL("branch/jump");
         generate_exception_end(ctx, EXCP_RI);
+        SET_BTARGET_CHECKED(true); // exception raised -> no need to check
         goto out;
     }
     if (bcond_compute == 0) {
@@ -6866,6 +6882,7 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         case OPC_BGTZ:    /* 0 > 0           */
         case OPC_BLTZ:    /* 0 < 0           */
             /* Treat as NOP. */
+            SET_BTARGET_CHECKED(true); // not taken -> no need to check
             goto out;
         case OPC_BLTZAL:  /* 0 < 0           */
             /* Handle as an unconditional branch to get correct delay
@@ -6884,12 +6901,14 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
 #endif /* TARGET_CHERI */
             /* Skip the instruction in the delay slot */
             ctx->base.pc_next += 4;
+            SET_BTARGET_CHECKED(true); // not taken -> no need to check
             goto out;
         case OPC_BNEL:    /* rx != rx likely */
         case OPC_BGTZL:   /* 0 > 0 likely */
         case OPC_BLTZL:   /* 0 < 0 likely */
             /* Skip the instruction in the delay slot */
             ctx->base.pc_next += 4;
+            SET_BTARGET_CHECKED(true); // not taken -> no need to check
             goto out;
         case OPC_J:
 #ifdef TARGET_CHERI
@@ -6923,6 +6942,7 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         default:
             MIPS_INVAL("branch/jump");
             generate_exception_end(ctx, EXCP_RI);
+            SET_BTARGET_CHECKED(true); // exception raised -> no need to check
             goto out;
         }
     } else {
@@ -6994,11 +7014,33 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         default:
             MIPS_INVAL("conditional branch/jump");
             generate_exception_end(ctx, EXCP_RI);
+            SET_BTARGET_CHECKED(true); // not taken -> no need to check
             goto out;
         }
     }
 
     ctx->btarget = btgt;
+
+#ifdef TARGET_CHERI
+    if (bcond_compute) {
+        // Check that the conditional branch target is in range (but only if the
+        // branch is taken)
+        tcg_debug_assert(btgt != -1 && "btgt should have been set!");
+        TCGLabel *skip_btarget_check = gen_new_label();
+        // skip the check if bcond == 0
+        tcg_gen_brcondi_tl(TCG_COND_EQ, bcond, 0, skip_btarget_check);
+        tcg_gen_movi_tl(btarget, btgt);  // save btarget so that the helper can read it:
+        GEN_CCHECK_BTARGET(cpu_env);
+        gen_set_label(skip_btarget_check); // skip helper call
+    } else if (!btarget_checked) {
+        // If the unconditional branch target has not been checked yet
+        // (i.e. not JALR/JR/JAL/J) move btgt to the environment and invoke the
+        // bounds checking helper now
+        tcg_debug_assert(btgt != -1 && "btgt should have been set!");
+        tcg_gen_movi_tl(btarget, btgt);  // save btarget so that the helper can read it:
+        GEN_CCHECK_BTARGET(cpu_env);
+    }
+#endif
 
     switch (delayslot_size) {
     case 2:
@@ -7028,6 +7070,10 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
         ctx->hflags |= MIPS_HFLAG_B16;
     tcg_temp_free(t0);
     tcg_temp_free(t1);
+#ifdef TARGET_CHERI
+    tcg_debug_assert(btarget_checked);
+#endif
+
 }
 
 /* special3 bitfield operations */
@@ -10934,6 +10980,7 @@ static void gen_cp0 (CPUMIPSState *env, DisasContext *ctx, uint32_t opc, int rt,
 static void gen_compute_branch1(DisasContext *ctx, uint32_t op,
                                 int32_t cc, int32_t offset)
 {
+#warning CP1 branches are not bounds checked
     target_ulong btarget;
     TCGv_i32 t0 = tcg_temp_new_i32();
 
@@ -11043,6 +11090,7 @@ static void gen_compute_branch1_r6(DisasContext *ctx, uint32_t op,
                                    int delayslot_size)
 {
     target_ulong btarget;
+#warning gen_compute_branch1_r6 is not bounds checked
     TCGv_i64 t0 = tcg_temp_new_i64();
 
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
@@ -14207,6 +14255,7 @@ static void gen_compute_compact_branch(DisasContext *ctx, uint32_t opc,
                                        int rs, int rt, int32_t offset)
 {
     int bcond_compute = 0;
+#warning gen_compute_compact_branch is not bounds checked
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
     int m16_lowbit = (ctx->hflags & MIPS_HFLAG_M16) != 0;
