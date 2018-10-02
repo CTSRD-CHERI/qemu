@@ -4860,12 +4860,12 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
         }
     }
 
-    /* Update the offset after checking that the new PCC is valid */
-    cap_register_t new_pcc = *pcc;
-    new_pcc.cr_offset = pc - new_pcc.cr_base;
-    check_cap(env, &new_pcc, CAP_PERM_EXECUTE, pc, 0xff, 4, /*instavail=*/false);
-    // now that we know that the branch target is in range we can update pcc->offset
-    pcc->cr_offset = new_pcc.cr_offset;
+    // branch instructions have already checked the validity of the target,
+    // but we still need to check if the next instruction is accessible.
+    // In order to ensure that EPC is set correctly we must set the offset
+    // before checking the bounds.
+    pcc->cr_offset = pc - pcc->cr_base;
+    check_cap(env, pcc, CAP_PERM_EXECUTE, pc, 0xff, 4, /*instavail=*/false);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 
     // Finally, log the instruction that will be executed next
