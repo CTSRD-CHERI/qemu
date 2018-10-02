@@ -862,7 +862,17 @@ void mips_cpu_do_interrupt(CPUState *cs)
         // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
         env->CP0_ErrorEPC -= env->active_tc.PCC.cr_base;
         cap_register_t new_epcc = env->active_tc.PCC;
-        new_epcc.cr_offset =  env->CP0_ErrorEPC;
+        // Note: we don't set the offset to ErrorEPC (and therefore EPCC is not
+        // the PC that trapped in order to pretend that EPCC.offset == EPC.
+        // This is consistent with the spec but not very intuitive.
+        // It might be better to just set it to whatever the PCC was on trap
+        // (even for NMI, etc.) so that the trap handler can load code around
+        // the faulting instrution easily. The other possibility would be to
+        // have it always be zero and require software to either add EPC or ErrorEPC
+        // in order to get the faulting PC (I think this would require CheriBSD changes).
+#if 0
+        new_epcc.cr_offset = env->CP0_ErrorEPC;
+#endif
         env->active_tc.CHWR.EPCC = new_epcc;
         env->active_tc.PCC = env->active_tc.CHWR.KCC;
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -
@@ -1147,6 +1157,13 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  __func__, env->active_tc.PC, env->CP0_EPC, cause,
                  env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
                  env->CP0_DEPC);
+#ifdef TARGET_CHERI
+        qemu_log("ErrorEPC " TARGET_FMT_lx "\n", env->CP0_ErrorEPC);
+        cap_register_t tmp;
+        // We use a null cap as oldreg so that we always print it.
+        null_capability(&tmp);
+        dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &tmp, "EPCC");
+#endif
     }
 #endif
     cs->exception_index = EXCP_NONE;

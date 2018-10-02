@@ -4819,11 +4819,9 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 
 #if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)
     if (env->active_tc.CHWR.EPCC.cr_offset != env->CP0_EPC) {
-        error_report("CP0_EPC (0x" TARGET_FMT_lx ") and EPCC.offset (0x"
-            TARGET_FMT_lx ") are not in sync", env->CP0_EPC, env->active_tc.CHWR.EPCC.cr_offset);
+        error_report("%s: CP0_EPC (0x" TARGET_FMT_lx ") and EPCC.offset (0x"
+            TARGET_FMT_lx ") are not in sync", __func__, env->CP0_EPC, env->active_tc.CHWR.EPCC.cr_offset);
         qemu_log_flush();
-        if (qemu_logfile)
-            fsync(fileno(qemu_logfile));
         qemu_log_close();
         exit(1);
     }
@@ -5739,7 +5737,7 @@ target_ulong helper_ei(CPUMIPSState *env)
 
 static void debug_pre_eret(CPUMIPSState *env)
 {
-    if (qemu_loglevel_mask(CPU_LOG_EXEC)) {
+    if (qemu_loglevel_mask(CPU_LOG_EXEC | CPU_LOG_INSTR)) {
         qemu_log("ERET: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
                 env->active_tc.PC, env->CP0_EPC);
         if (env->CP0_Status & (1 << CP0St_ERL))
@@ -5754,7 +5752,7 @@ static void debug_post_eret(CPUMIPSState *env)
 {
     MIPSCPU *cpu = mips_env_get_cpu(env);
 
-    if (qemu_loglevel_mask(CPU_LOG_EXEC)) {
+    if (qemu_loglevel_mask(CPU_LOG_EXEC | CPU_LOG_INSTR)) {
         qemu_log("  =>  PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
                 env->active_tc.PC, env->CP0_EPC);
         if (env->CP0_Status & (1 << CP0St_ERL))
@@ -5797,6 +5795,14 @@ static inline void exception_return(CPUMIPSState *env)
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
     }
+#if defined(TARGET_CHERI) && (defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS))
+    if (env->active_tc.CHWR.EPCC.cr_offset != env->CP0_EPC) {
+        error_report("%s:%d: CP0_EPC (0x" TARGET_FMT_lx ") and EPCC.offset (0x"
+            TARGET_FMT_lx ") are not in sync", __func__, __LINE__, env->CP0_EPC, env->active_tc.CHWR.EPCC.cr_offset);
+        qemu_log_flush();
+        exit(1);
+    }
+#endif
     env->active_tc.PCC = env->active_tc.CHWR.EPCC;
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
