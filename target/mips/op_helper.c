@@ -4800,8 +4800,8 @@ static inline void log_instruction(CPUMIPSState *env, target_ulong pc, int isa)
 void helper_ccheck_btarget(CPUMIPSState *env)
 {
     // Check whether the branch target is within $pcc and if not raise an exception
-    qemu_log_mask(CPU_LOG_INSTR, "%s: env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
-        __func__, env->active_tc.PC, env->hflags, env->btarget);
+    // qemu_log_mask(CPU_LOG_INSTR, "%s: env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
+    //    __func__, env->active_tc.PC, env->hflags, env->btarget);
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false);
 }
 
@@ -4828,8 +4828,8 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
         exit(1);
     }
 
-    qemu_log_mask(CPU_LOG_INSTR, "%s(%#" PRIx64 "): env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
-        __func__, pc, env->active_tc.PC, env->hflags, env->btarget);
+    // qemu_log_mask(CPU_LOG_INSTR, "%s(%#" PRIx64 "): env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
+    //     __func__, pc, env->active_tc.PC, env->hflags, env->btarget);
 #endif
     // TODO: increment icount?
     /* Decrement the startup breakcount, if set. */
