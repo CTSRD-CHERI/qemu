@@ -1969,14 +1969,10 @@ void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
 
     qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
     qemu_system_powerdown_request();
-    // FIXME: this jumps back to the beginning
-    // cpu_loop_exit_noexc(ENV_GET_CPU(env));
-    // exit(0);
     // The shutdown request will only be handled once we exit the current
-    // translation block so raise an exceptions
-    // Don't use EXCP_SRESET, etc since they can cause EPC/ErrorEPC to be out of sync
-    do_raise_exception_err(env, EXCP_HALTED, EXCP_INST_NOTAVAIL, 0);
-
+    // translation block so we need to stop the CPU and then exit the current TB
+    cpu_stop_current();
+    cpu_loop_exit_noexc(ENV_GET_CPU(env));
 }
 
 void helper_mttc0_debug(CPUMIPSState *env, target_ulong arg1)
