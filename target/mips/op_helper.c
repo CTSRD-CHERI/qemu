@@ -1974,7 +1974,8 @@ void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
     // exit(0);
     // The shutdown request will only be handled once we exit the current
     // translation block so raise an exceptions
-    do_raise_exception_err(env, EXCP_SRESET, EXCP_INST_NOTAVAIL, 0);
+    // Don't use EXCP_SRESET, etc since they can cause EPC/ErrorEPC to be out of sync
+    do_raise_exception_err(env, EXCP_HALTED, EXCP_INST_NOTAVAIL, 0);
 
 }
 
