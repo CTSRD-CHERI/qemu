@@ -2098,6 +2098,14 @@ static inline void gen_compute_cheri_branch(DisasContext *ctx, int32_t cb,
         /* Set conditional branch and branch delay slot flags */
         ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
 
+        // Check that the branch isn't out-of-bounds of PCC before executing the delay slot
+        TCGLabel *skip_btarget_check = gen_new_label();
+        // skip the check if bcond == 0
+        tcg_gen_brcondi_tl(TCG_COND_EQ, bcond, 0, skip_btarget_check);
+        tcg_gen_movi_tl(btarget, ctx->btarget);  // save btarget so that the helper can read it:
+        gen_helper_ccheck_btarget(cpu_env);
+        gen_set_label(skip_btarget_check); // skip helper call
+
         tcg_temp_free_i32(toffset);
         tcg_temp_free_i32(tcb);
     }
