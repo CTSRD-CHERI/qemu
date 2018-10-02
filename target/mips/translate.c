@@ -2079,7 +2079,9 @@ static inline void generate_candperm(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cbez(DisasContext *ctx, int32_t cb, int32_t offset)
+typedef void (cheri_branch_helper)(TCGv, TCGv_ptr, TCGv_i32, TCGv_i32);
+static inline void gen_compute_cheri_branch(DisasContext *ctx, int32_t cb,
+                                         int32_t offset, cheri_branch_helper* gen_func)
 {
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
 #ifdef MIPS_DEBUG_DISAS
@@ -2091,7 +2093,7 @@ static inline void generate_cbez(DisasContext *ctx, int32_t cb, int32_t offset)
         TCGv_i32 tcb = tcg_const_i32(cb);
         TCGv_i32 toffset = tcg_const_i32(offset);
 
-        gen_helper_cbez(bcond, cpu_env, tcb, toffset);
+        gen_func(bcond, cpu_env, tcb, toffset);
         ctx->btarget = ctx->base.pc_next + 4 * offset + 4;
         /* Set conditional branch and branch delay slot flags */
         ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
@@ -2099,75 +2101,26 @@ static inline void generate_cbez(DisasContext *ctx, int32_t cb, int32_t offset)
         tcg_temp_free_i32(toffset);
         tcg_temp_free_i32(tcb);
     }
+}
+
+static inline void generate_cbez(DisasContext *ctx, int32_t cb, int32_t offset)
+{
+    gen_compute_cheri_branch(ctx, cb, offset, &gen_helper_cbez);
 }
 
 static inline void generate_cbnz(DisasContext *ctx, int32_t cb, int32_t offset)
 {
-    if (ctx->hflags & MIPS_HFLAG_BMASK) {
-#ifdef MIPS_DEBUG_DISAS
-        LOG_DISAS("Branch in delay / forbidden slot at PC 0x"
-                TARGET_FMT_lx "\n", ctx->base.pc_next);
-#endif
-        generate_exception(ctx, EXCP_RI);
-    } else {
-        TCGv_i32 tcb = tcg_const_i32(cb);
-        TCGv_i32 toffset = tcg_const_i32(offset);
-
-        gen_helper_cbnz(bcond, cpu_env, tcb, toffset);
-        ctx->btarget = ctx->base.pc_next + 4 * offset + 4;
-        /* Set conditional branch and branch delay slot flags */
-        ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
-
-        tcg_temp_free_i32(toffset);
-        tcg_temp_free_i32(tcb);
-    }
+    gen_compute_cheri_branch(ctx, cb, offset, &gen_helper_cbnz);
 }
 
 static inline void generate_cbts(DisasContext *ctx, int32_t cb, int32_t offset)
 {
-
-    if (ctx->hflags & MIPS_HFLAG_BMASK) {
-#ifdef MIPS_DEBUG_DISAS
-        LOG_DISAS("Branch in delay / forbidden slot at PC 0x"
-                TARGET_FMT_lx "\n", ctx->base.pc_next);
-#endif
-        generate_exception(ctx, EXCP_RI);
-    } else {
-        TCGv_i32 tcb = tcg_const_i32(cb);
-        TCGv_i32 toffset = tcg_const_i32(offset);
-
-        gen_helper_cbts(bcond, cpu_env, tcb, toffset);
-        ctx->btarget = ctx->base.pc_next + 4 * offset + 4;
-        /* Set conditional branch and branch delay slot flags */
-        ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
-
-        tcg_temp_free_i32(toffset);
-        tcg_temp_free_i32(tcb);
-    }
+    gen_compute_cheri_branch(ctx, cb, offset, &gen_helper_cbts);
 }
 
 static inline void generate_cbtu(DisasContext *ctx, int32_t cb, int32_t offset)
 {
-
-
-    if (ctx->hflags & MIPS_HFLAG_BMASK) {
-#ifdef MIPS_DEBUG_DISAS
-        LOG_DISAS("Branch in delay / forbidden slot at PC 0x"
-                TARGET_FMT_lx "\n", ctx->base.pc_next);
-#endif
-        generate_exception(ctx, EXCP_RI);
-    } else {
-        TCGv_i32 tcb = tcg_const_i32(cb);
-        TCGv_i32 toffset = tcg_const_i32(offset);
-
-        gen_helper_cbtu(bcond, cpu_env, tcb, toffset);
-        ctx->btarget = ctx->base.pc_next + 4 * offset + 4;
-        /* Set conditional branch and branch delay slot flags */
-        ctx->hflags |= (MIPS_HFLAG_BC | MIPS_HFLAG_BDS32);
-
-        tcg_temp_free_i32(toffset);
-        tcg_temp_free_i32(tcb);
-    }
+    gen_compute_cheri_branch(ctx, cb, offset, &gen_helper_cbtu);
 }
 
 static inline void generate_cjalr(DisasContext *ctx, int32_t cd, int32_t cb)
