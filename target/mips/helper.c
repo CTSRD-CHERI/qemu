@@ -1085,7 +1085,9 @@ void mips_cpu_do_interrupt(CPUState *cs)
             if (!is_representable(pcc->cr_sealed, pcc->cr_base, pcc->cr_length,
                                   0, pcc->cr_offset)) {
                 // TODO: can this still happen now that we take the trap on branch rather than at the target?
-                tcg_debug_assert(false && "unrepresentable pcc is not handled correctly");
+                qemu_log_flush();
+                sleep(1);
+                assert(false && "unrepresentable pcc is not handled correctly");
                 nullify_capability(pcc->cr_base + pcc->cr_offset, pcc);
                 env->active_tc.CHWR.EPCC = *pcc;
             }

@@ -5793,6 +5793,10 @@ static void debug_post_eret(CPUMIPSState *env)
 static void set_pc(CPUMIPSState *env, target_ulong error_pc)
 {
     env->active_tc.PC = error_pc & ~(target_ulong)1;
+#ifdef TARGET_CHERI
+    env->active_tc.PC += env->active_tc.PCC.cr_base;
+    env->active_tc.PCC.cr_offset = error_pc;
+#endif
     if (error_pc & 1) {
         env->hflags |= MIPS_HFLAG_M16;
     } else {
@@ -5811,25 +5815,21 @@ static inline void exception_return(CPUMIPSState *env)
          cap_register_t null_cap;
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
+         null_capability(&null_cap);
+         dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &null_cap, "EPCC");
     }
     tcg_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
     env->active_tc.PCC = env->active_tc.CHWR.EPCC;
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
-#ifdef TARGET_CHERI
-        set_pc(env, env->CP0_ErrorEPC + env->active_tc.PCC.cr_base);
-#else
         set_pc(env, env->CP0_ErrorEPC);
-#endif /* TARGET_CHERI */
         env->CP0_Status &= ~(1 << CP0St_ERL);
     } else {
-#ifdef TARGET_CHERI
-        set_pc(env, env->CP0_EPC + env->active_tc.PCC.cr_base);
-#else
         set_pc(env, env->CP0_EPC);
-#endif /* TARGET_CHERI */
         env->CP0_Status &= ~(1 << CP0St_EXL);
     }
+    // set_pc() should have set a sensible offset
+    tcg_debug_assert(env->active_tc.PCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE);
     compute_hflags(env);
     debug_post_eret(env);
 }
