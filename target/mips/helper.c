@@ -1360,7 +1360,7 @@ static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAcce
     MemoryRegion* mr = NULL;
     hwaddr paddr = v2p_addr(env, vaddr, rw, reg);
     ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
-    if (rw == MMU_DATA_CAP_STORE || MMU_DATA_STORE)
+    if (rw == MMU_DATA_CAP_STORE || rw == MMU_DATA_STORE)
         check_tagmem_writable(env, vaddr, paddr, ram_addr, mr);
     return ram_addr;
 }
