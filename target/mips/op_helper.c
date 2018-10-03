@@ -3069,12 +3069,29 @@ check_readonly_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
     return check_writable_cap_hwr_access(env, hwr);
 }
 
-static inline uint64_t cgetepcc_compute_offset(CPUMIPSState *env)
+// Add the offset of EPCC to either EPC or ErrorEPC depedning on the value of
+// Status.ERL (this determines which one of the registers will be used by eret)
+static inline void apply_epcc_offset(CPUMIPSState *env, cap_register_t* result)
 {
-    if (should_use_error_epc(env))
-        return env->CP0_ErrorEPC;
-    else
-        return env->CP0_EPC;
+    tcg_debug_assert(result != &env->active_tc.CHWR.EPCC && "should use a copy of EPCC");
+    tcg_debug_assert(result->cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
+    uint64_t new_offset = should_use_error_epc(env) ? env->CP0_ErrorEPC : env->CP0_EPC;
+    // Untag the resulting capability if the epcc value is not representable
+    if (!is_representable(result->cr_sealed, result->cr_base, result->cr_length,
+                          0, new_offset)) {
+        nullify_capability(result->cr_base + new_offset, result);
+    } else {
+        result->cr_offset = new_offset;
+    }
+    tcg_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE && "should not have modified EPCC");
+}
+
+// return EPCC with the offset set to the correct value (as used by cgetepcc)
+static inline cap_register_t cgetepcc(CPUMIPSState *env)
+{
+    cap_register_t result = env->active_tc.CHWR.EPCC;
+    apply_epcc_offset(env, &result);
+    return result;
 }
 
 void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
@@ -3087,15 +3104,7 @@ void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
     cap_register_t result = *check_readonly_cap_hwr_access(env, hwr);
     if (hwr == CP2HWR_EPCC) {
         // Read epcc.offset from CP0_EPC/CP0_ErrorEPC
-        tcg_debug_assert(result.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
-        uint64_t new_offset = cgetepcc_compute_offset(env);
-        // Untag the resulting capability if the epcc value is not representable
-        if (!is_representable(result.cr_sealed, result.cr_base, result.cr_length,
-                              0, new_offset)) {
-            nullify_capability(result.cr_base + new_offset, &result);
-        } else {
-            result.cr_offset = new_offset;
-        }
+        apply_epcc_offset(env, &result);
     }
     update_capreg(&env->active_tc, cd, &result);
 }
@@ -4841,7 +4850,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 #if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)
     if (env->active_tc.CHWR.EPCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE) {
         error_report("%s: EPCC offset field was changed even though it shouldn't exist: "
-                     "(0x" TARGET_FMT_lx ") instead of 0x" TARGET_FMT_lx "\n",
+                     "(0x" TARGET_FMT_lx ") instead of 0x%lx\n",
                       __func__, env->active_tc.CHWR.EPCC.cr_offset, CP2CAP_EPCC_FAKE_OFFSET_VALUE);
         qemu_log_flush();
         qemu_log_close();
@@ -5136,9 +5145,9 @@ static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf
     cheri_dump_creg(&env->active_tc.CHWR.KR2C,       "HWREG 23 (KR2C)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.KCC,        "HWREG 29 (KCC)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.KDC,        "HWREG 30 (KDC)", "", f, cpu_fprintf);
-    cap_register_t architectural_epcc = env->active_tc.CHWR.EPCC; // The value of EPCC (with offset set to what getepcc would do)
-    architectural_epcc.cr_offset = cgetepcc_compute_offset(env);
-    cheri_dump_creg(&architectural_epcc,       "HWREG 31 (EPCC)", "", f, cpu_fprintf);
+    // Finally dump value of EPCC (with offset set to what getepcc would do)
+    cap_register_t architectural_epcc = cgetepcc(env);
+    cheri_dump_creg(&architectural_epcc,             "HWREG 31 (EPCC)", "", f, cpu_fprintf);
 
     cpu_fprintf(f, "\n");
 }
@@ -6377,8 +6386,7 @@ static void dump_changed_regs(CPUMIPSState *env)
     dump_changed_capreg(env, &cur->CHWR.KR2C, &env->last_CHWR.KR2C, "ChwrKR1C");
     dump_changed_capreg(env, &cur->CHWR.KCC, &env->last_CHWR.KCC, "KCC");
     dump_changed_capreg(env, &cur->CHWR.KDC, &env->last_CHWR.KDC, "KDC");
-    cap_register_t architectural_epcc = cur->CHWR.EPCC; // The value of EPCC (with offset set to what getepcc would do)
-    architectural_epcc.cr_offset = cgetepcc_compute_offset(env);
+    cap_register_t architectural_epcc = cgetepcc(env); // The value of EPCC (with offset set to what getepcc would do)
     dump_changed_capreg(env, &architectural_epcc, &env->last_CHWR.EPCC, "EPCC");
     dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget, "CapBranchTarget");
 }
