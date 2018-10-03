@@ -1509,7 +1509,9 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     uint8_t *tagblk;
     uint64_t *tagblk64;
 
-    ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg);
+    // If the data is untagged we shouldn't get a tlb fault
+   ram_addr = v2r_addr(env, vaddr, tagbit ? MMU_DATA_CAP_STORE : MMU_DATA_STORE, reg);
+
     if (ram_addr == -1LL)
         return;
 
