@@ -76,6 +76,8 @@ DEF_HELPER_2(mfc0_watchlo, tl, env, i32)
 DEF_HELPER_2(mfc0_watchhi, tl, env, i32)
 DEF_HELPER_1(mfc0_debug, tl, env)
 DEF_HELPER_1(mftc0_debug, tl, env)
+/* Break after n cycles have been executed */
+DEF_HELPER_1(check_breakcount, void, env)
 #ifdef TARGET_MIPS64
 DEF_HELPER_1(dmfc0_tcrestart, tl, env)
 DEF_HELPER_1(dmfc0_tchalt, tl, env)

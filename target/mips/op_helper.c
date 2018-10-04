@@ -63,6 +63,19 @@ static void raise_exception(CPUMIPSState *env, uint32_t exception)
     do_raise_exception(env, exception, 0);
 }
 
+void helper_check_breakcount(struct CPUMIPSState* env)
+{
+    CPUState *cs = CPU(mips_env_get_cpu(env));
+    /* Decrement the startup breakcount, if set. */
+    if (unlikely(cs->breakcount)) {
+        cs->breakcount--;
+        if (cs->breakcount == 0UL) {
+            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT | CPU_LOG_EXEC, "Reached breakcount!\n");
+            helper_raise_exception(env, EXCP_DEBUG);
+        }
+    }
+}
+
 #if defined(TARGET_CHERI)
 const char *causestr[] = {
     "None",
@@ -4845,8 +4858,6 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
     if (unlikely(should_log_instr))
         mips_dump_changed_state(env);
 
-    CPUState *cs = CPU(mips_env_get_cpu(env));
-
 #if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)
     if (env->active_tc.CHWR.EPCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE) {
         error_report("%s: EPCC offset field was changed even though it shouldn't exist: "
@@ -4861,13 +4872,6 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
     //     __func__, pc, env->active_tc.PC, env->hflags, env->btarget);
 #endif
     // TODO: increment icount?
-    /* Decrement the startup breakcount, if set. */
-    if (unlikely(cs->breakcount)) {
-        cs->breakcount--;
-        if (cs->breakcount == 0UL) {
-            helper_raise_exception(env, EXCP_DEBUG);
-        }
-    }
 
     // branch instructions have already checked the validity of the target,
     // but we still need to check if the next instruction is accessible.

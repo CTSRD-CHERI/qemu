@@ -23686,6 +23686,11 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
 
+    /* If QEMU was started with -bc option insert a check for breakcount */
+    if (unlikely(cs->breakcount)) {
+        gen_helper_check_breakcount(cpu_env);
+    }
+
     /* Generate capabilities check on PC (and possibly log registers + instrs) */
     GEN_CAP_CHECK_PC(ctx);
 

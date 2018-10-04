@@ -357,9 +357,7 @@ struct CPUState {
     int singlestep_enabled;
     int64_t icount_budget;
     int64_t icount_extra;
-#ifdef CONFIG_CHERI
     uint64_t breakcount;
-#endif
     sigjmp_buf jmp_env;
 
     QemuMutex work_mutex;
