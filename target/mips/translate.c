@@ -8819,10 +8819,9 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         }
        break;
     case 26:
-#if defined(TARGET_CHERI)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
         rn = "ECC";
-#else
+#if !defined(TARGET_CHERI)
         switch (sel) {
         case 0:
             gen_helper_mtc0_errctl(cpu_env, arg);
@@ -10214,10 +10213,9 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         }
         break;
     case 26:
-#if defined(TARGET_CHERI)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
         rn = "ECC";
-#else
+#if !defined(TARGET_CHERI)
         switch (sel) {
         case 0:
             gen_helper_mtc0_errctl(cpu_env, arg);
