@@ -3993,6 +3993,8 @@ static inline void generate_cinvalidate_tag32(TCGv addr, int32_t len,
 #define GEN_CAP_CHECK_PC(ctx)
 #define GEN_CAP_CHECK_STORE(addr, offset, len)
 #define GEN_CAP_CHECK_LOAD(save, addr, offset, len)
+#define GEN_CAP_CHECK_STORE_RIGHT(addr, offset, len)
+#define GEN_CAP_CHECK_LOAD_RIGHT(save, addr, offset, len)
 #define GEN_CAP_INVADIATE_TAG(addr, len, opc, value)
 #define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value)
 #define GEN_CAP_DUMP_LOAD(op, addr, value)
@@ -14094,6 +14096,7 @@ static inline void clear_branch_hflags(DisasContext *ctx)
     }
 }
 
+#ifdef TARGET_CHERI
 static void _gen_copy_cap_register_impl(size_t dst_offset, size_t src_offset) {
     TCGv t0 = tcg_temp_new();
 
@@ -14123,6 +14126,8 @@ static void _gen_copy_cap_register_impl(size_t dst_offset, size_t src_offset) {
 #define gen_copy_cap_register(dest, src) \
     _gen_copy_cap_register_impl(offsetof(CPUMIPSState, active_tc.dest), \
         offsetof(CPUMIPSState, active_tc.src))
+
+#endif
 
 static void gen_branch(DisasContext *ctx, int insn_bytes)
 {

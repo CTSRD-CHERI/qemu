@@ -5844,8 +5844,7 @@ static inline void exception_return(CPUMIPSState *env)
         set_pc(env, env->CP0_EPC);
         env->CP0_Status &= ~(1 << CP0St_EXL);
     }
-    // set_pc() should have set a sensible offset
-    tcg_debug_assert(env->active_tc.PCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE);
+    cheri_debug_assert(env->active_tc.PCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE);
     compute_hflags(env);
     debug_post_eret(env);
 }

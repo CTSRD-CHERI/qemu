@@ -1163,7 +1163,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #endif
     cs->exception_index = EXCP_NONE;
-    tcg_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
+    cheri_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
 }
 
 bool mips_cpu_exec_interrupt(CPUState *cs, int interrupt_request)

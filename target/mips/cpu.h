@@ -124,6 +124,9 @@ typedef struct mips_def_t mips_def_t;
 #define MIPS_MAAR_MAX 16 /* Must be an even number. */
 
 #if defined(TARGET_CHERI)
+
+#define cheri_debug_assert(cond) tcg_debug_assert(cond)
+
 /*
  * Please note if this structure is changed then the TCG gen_branch() in
  * translate.c may need to be changed as well.
@@ -263,6 +266,10 @@ struct cheri_cap_hwregs {
     cap_register_t KDC;  /* CapHwr 30 */
     cap_register_t EPCC; /* CapHwr 31 */
 };
+
+#else /* !TARGET_CHERI */
+
+#define cheri_debug_assert(cond)
 
 #endif /* TARGET_CHERI */
 
