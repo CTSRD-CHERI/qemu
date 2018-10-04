@@ -1244,7 +1244,7 @@ static void mips_malta_machine_init(MachineClass *mc)
     mc->max_cpus = 16;
     mc->is_default = 1;
 #if defined(TARGET_CHERI)
-    mc->default_cpu_type = MIPS_CPU_TYPE_NAME("5Kf");
+    mc->default_cpu_type = MIPS_CPU_TYPE_NAME("BERI");
 #elif defined(TARGET_MIPS64)
     mc->default_cpu_type = MIPS_CPU_TYPE_NAME("20Kc");
 #else

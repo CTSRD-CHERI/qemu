@@ -450,15 +450,16 @@ const mips_def_t mips_defs[] =
         .mmu_type = MMU_TYPE_R4000,
     },
 #if defined(TARGET_MIPS64)
-    {
-        .name = "R4000",
-#if defined(TARGET_CHERI)
 // 8 byte counter for CPU revision. Bump this every time there is major incompatible change
 // so that we can print a warning when booting CheriBSD with a too old QEMU
 #define CHERI_PROCESSOR_REVISION_COUNTER 0x2
 // Revision 1: initial QEMU-specific processor ID (around ISA v5 or v6)
 // Revision 2: ISA v7 (including CNULL and special-purpose CHERI registers)
 #define CHERI_PROCESSOR_ID  0x0f << 16 | 0x04 << 8 | CHERI_PROCESSOR_REVISION_COUNTER
+
+    {
+        .name = "R4000",
+#if defined(TARGET_CHERI)
         .CP0_PRid = CHERI_PROCESSOR_ID,
 #else
         .CP0_PRid = 0x00000400,
@@ -592,6 +593,35 @@ const mips_def_t mips_defs[] =
 #else
         .insn_flags = CPU_MIPS64,
 #endif
+        .mmu_type = MMU_TYPE_R4000,
+    },
+    {
+        .name = "BERI",
+        /* cpu vendor = 0x0f, cpu impl = 0x04, cpu rev = 0x01 */
+        .CP0_PRid = CHERI_PROCESSOR_ID,
+        .CP0_Config0 = MIPS_CONFIG0 | (0x2 << CP0C0_AT) |
+                       (MMU_TYPE_R4000 << CP0C0_MT),
+        .CP0_Config1 = MIPS_CONFIG1 | (1 << CP0C1_FP) | (31 << CP0C1_MMU) |
+                       (1 << CP0C1_IS) | (4 << CP0C1_IL) | (1 << CP0C1_IA) |
+                       (1 << CP0C1_DS) | (4 << CP0C1_DL) | (1 << CP0C1_DA) |
+                       (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP) |
+                       0x40,
+        .CP0_Config2 = MIPS_CONFIG2,
+        .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI) | (1 << CP0C3_BI) |
+                       (1 << CP0C3_BP),
+        .CP0_LLAddr_rw_bitmask = 0,
+        .CP0_LLAddr_shift = 4,
+        .SYNCI_Step = 32,
+        .CCRes = 2,
+        .CP0_Status_rw_bitmask = 0x76F8FFFF,
+        /* The 5Kf has F64 / L / W but doesn't use the fcr0 bits. */
+        .CP1_fcr0 = (1 << FCR0_D) | (1 << FCR0_S) |
+                    (0x81 << FCR0_PRID) | (0x0 << FCR0_REV),
+        .CP1_fcr31 = 0,
+        .CP1_fcr31_rw_bitmask = 0xFF8FFFFF,
+        .SEGBITS = 42,
+        .PABITS = 36,
+        .insn_flags = CPU_MIPS64R2,
         .mmu_type = MMU_TYPE_R4000,
     },
     {
