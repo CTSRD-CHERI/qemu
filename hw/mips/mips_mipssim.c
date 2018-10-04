@@ -70,7 +70,7 @@ static int64_t load_kernel(void)
     big_endian = 0;
 #endif
 
-#if defined(TARGET_CHERI) || defined(TARGET_MIPS64)
+#if defined(TARGET_MIPS64)
     kernel_size = load_elf(loaderparams.kernel_filename, cpu_cheri_kseg0_to_phys,
 #else
     kernel_size = load_elf(loaderparams.kernel_filename, cpu_mips_kseg0_to_phys,
