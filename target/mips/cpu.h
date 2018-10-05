@@ -1107,6 +1107,12 @@ static inline bool should_use_error_epc(CPUMIPSState *env)
     return env->CP0_Status & (1 << CP0St_ERL);
 }
 
+#ifdef TARGET_CHERI
+#define is_beri_or_cheri(env)  true
+#else
+#define is_beri_or_cheri(env) (strcmp(env->cpu_model->name, "BERI") == 0)
+#endif
+
 
 #if defined(TARGET_CHERI)
 void cheri_tag_phys_invalidate(ram_addr_t paddr, ram_addr_t len);

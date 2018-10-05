@@ -9245,11 +9245,10 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             break;
         /* 6,7 are implementation dependent */
         case 6:
-#ifdef TARGET_CHERI
+            // QEMU-CHERI extension:
             gen_helper_mfc0_rtc64(arg, cpu_env);
             rn = "RTC";
             break;
-#endif
         default:
             goto cp0_unimplemented;
         }
@@ -9337,7 +9336,6 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_CMGCRBase));
             rn = "CMGCRBase";
             break;
-#ifdef TARGET_CHERI
         case 6:
             /*
              * See section 7.3.5 Core Identification (CPO Register 15,
@@ -9354,7 +9352,6 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             tcg_gen_movi_tl(arg, 0); /* currently unimplemented */
             rn = "ThreadID";
             break;
-#endif /* TARGET_CHERI */
         default:
             goto cp0_unimplemented;
         }
@@ -9908,12 +9905,10 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
             rn = "Count";
             break;
         /* 6,7 are implementation dependent */
-#ifdef TARGET_CHERI
         case 6:
             gen_helper_mtc0_rtc64(cpu_env, arg);
             rn = "RTC";
             break;
-#endif /* TARGET_CHERI */
         default:
             goto cp0_unimplemented;
         }

@@ -216,10 +216,8 @@ void cpu_mips_store_compare(CPUMIPSState *env, uint32_t value);
 void cpu_mips_start_count(CPUMIPSState *env);
 void cpu_mips_stop_count(CPUMIPSState *env);
 
-#ifdef TARGET_CHERI
 uint64_t cpu_mips_get_rtc64 (CPUMIPSState *env);
 void cpu_mips_set_rtc64 (CPUMIPSState *env, uint64_t value);
-#endif /* TARGET_CHERI */
 
 /* helper.c */
 int mips_cpu_handle_mmu_fault(CPUState *cpu, vaddr address, int size, int rw,

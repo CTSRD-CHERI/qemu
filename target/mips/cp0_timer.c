@@ -173,7 +173,6 @@ void cpu_mips_clock_init (MIPSCPU *cpu)
     }
 }
 
-#ifdef TARGET_CHERI
 static int64_t rtc_clock_adj = 0l;
 
 uint64_t cpu_mips_get_rtc64 (CPUMIPSState *env)
@@ -188,4 +187,3 @@ void cpu_mips_set_rtc64 (CPUMIPSState *env, uint64_t time)
 
     rtc_clock_adj = time - qemu_clock_get_ns(QEMU_CLOCK_HOST);
 }
-#endif /* TARGET_CHERI */

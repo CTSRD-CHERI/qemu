@@ -1644,16 +1644,9 @@ void helper_mtc0_hwrena(CPUMIPSState *env, target_ulong arg1)
 {
     uint32_t mask = 0x0000000F;
 #define STATCOUNTERS_HWRENA_MASK 0x7FF0
-#if defined(TARGET_CHERI)
-    /* Statcounters uses registers 4-14 */
-    mask |= STATCOUNTERS_HWRENA_MASK;
-#else
-    // TODO: should statcounters only be available for CPU model BERI?
-    if (strcmp(env->cpu_model->name, "BERI") == 0) {
+    if (is_beri_or_cheri(env)) {
         mask |= STATCOUNTERS_HWRENA_MASK;
     }
-#endif
-
     if ((env->CP0_Config1 & (1 << CP0C1_PC)) &&
         (env->insn_flags & ISA_MIPS32R6)) {
         mask |= (1 << 4);
@@ -1681,14 +1674,23 @@ void helper_mtc0_count(CPUMIPSState *env, target_ulong arg1)
     qemu_mutex_unlock_iothread();
 }
 
-#ifdef TARGET_CHERI
 uint64_t helper_mfc0_rtc64(CPUMIPSState *env)
 {
+    if (!is_beri_or_cheri(env)) {
+        qemu_log_mask(CPU_LOG_INSTR, "Error: Attempted to use BERI RTC64"
+                      " register for non-BERI CPU %s\n", env->cpu_model->name);
+        do_raise_exception(env, EXCP_RI, GETPC());
+    }
     return cpu_mips_get_rtc64(env);
 }
 
 void helper_mtc0_rtc64(CPUMIPSState *env, uint64_t arg1)
 {
+    if (!is_beri_or_cheri(env)) {
+        qemu_log_mask(CPU_LOG_INSTR, "Error: Attempted to use BERI RTC64"
+                      " register for non-BERI CPU %s\n", env->cpu_model->name);
+        do_raise_exception(env, EXCP_RI, GETPC());
+    }
     cpu_mips_set_rtc64(env, arg1);
 }
 
@@ -1706,13 +1708,17 @@ void helper_mtc0_rtc64(CPUMIPSState *env, uint64_t arg1)
  */
 target_ulong helper_mfc0_coreid(CPUMIPSState *env)
 {
+    if (!is_beri_or_cheri(env)) {
+        qemu_log_mask(CPU_LOG_INSTR, "Error: Attempted to use BERI CoreID"
+                      " register for non-BERI CPU %s\n", env->cpu_model->name);
+        do_raise_exception(env, EXCP_RI, GETPC());
+    }
     MIPSCPU *cpu = mips_env_get_cpu(env);
     CPUState *cs = CPU(cpu);
 
     return (uint32_t)(((cs->nr_cores - 1) << 16) |
             (cs->cpu_index & 0xffff));
 }
-#endif /* TARGET_CHERI */
 
 void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
 {
