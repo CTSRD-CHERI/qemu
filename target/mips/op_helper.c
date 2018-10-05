@@ -1643,9 +1643,15 @@ void helper_mtc0_srsconf4(CPUMIPSState *env, target_ulong arg1)
 void helper_mtc0_hwrena(CPUMIPSState *env, target_ulong arg1)
 {
     uint32_t mask = 0x0000000F;
+#define STATCOUNTERS_HWRENA_MASK 0x7FF0
 #if defined(TARGET_CHERI)
     /* Statcounters uses registers 4-14 */
-    mask |= 0x7FF0;
+    mask |= STATCOUNTERS_HWRENA_MASK;
+#else
+    // TODO: should statcounters only be available for CPU model BERI?
+    if (strcmp(env->cpu_model->name, "BERI") == 0) {
+        mask |= STATCOUNTERS_HWRENA_MASK;
+    }
 #endif
 
     if ((env->CP0_Config1 & (1 << CP0C1_PC)) &&
