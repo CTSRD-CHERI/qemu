@@ -1084,6 +1084,9 @@ target_ulong exception_resume_pc (CPUMIPSState *env);
 void mips_dump_changed_state(CPUMIPSState *env);
 void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
                          cap_register_t *old_reg, const char* name);
+void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
+                target_ulong value);
+void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */
 
 static inline void restore_snan_bit_mode(CPUMIPSState *env)
