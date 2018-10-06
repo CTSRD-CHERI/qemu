@@ -612,6 +612,11 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
             update_capreg(&env->active_tc, CP2CAP_IDC, &idc);
             // The capability register is loaded into PCC during delay slot
             env->active_tc.CapBranchTarget = *csp;
+            // XXXAR: clearing these fields is not strictly needed since they
+            // aren't copied from the CapBranchTarget to $pcc but it does make
+            // the LOG_INSTR output less confusing.
+            env->active_tc.CapBranchTarget.cr_sealed = 0;
+            env->active_tc.CapBranchTarget.cr_otype = 0;
             // Return the branch target address
             return csp->cr_base + csp->cr_offset;
         }
