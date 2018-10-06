@@ -2059,13 +2059,14 @@ static void gen_mtc2(DisasContext *ctx, TCGv arg, int reg, int sel)
         case 6:
             gen_helper_mtc2_dumpcstate(cpu_env, arg);
             rn = "capdump";
-            break;
+            goto out;
         default:
             goto cp2_unimplemented;
         }
     default:
         goto cp2_unimplemented;
     }
+out:
     (void)rn; /* avoid a compiler warning */
     LOG_DISAS("mtc2 %s (reg %d sel %d)\n", rn, reg, sel);
     /* For simplicity assume that all writes can cause interrupts.  */
