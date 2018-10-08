@@ -332,9 +332,6 @@ struct TCState {
     cap_register_t CapBranchTarget; /* Target of the next cjr/cjalr/ccall */
     cap_register_t _CGPR[32];
     struct cheri_cap_hwregs CHWR;
-#if CHERI_C0_NULL == 0
-#define CP2CAP_DCC  0  /* Default Data Capability */
-#endif
 // #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
 #define CP2CAP_KR1C 27  /* Reserved Kernel Cap #1 */
@@ -347,30 +344,9 @@ struct TCState {
 };
 
 #if defined(TARGET_CHERI)
-#if CHERI_C0_NULL == 0
-static inline  __attribute__((always_inline)) cap_register_t*
-get_legacy_mirrored_capreg(TCState* state, unsigned num) {
-    if (unlikely(num == CP2CAP_DCC)) {
-        return &state->CHWR.DDC;
-    } else if (unlikely(num == CP2CAP_KCC)) {
-        return &state->CHWR.KCC;
-    } else if (unlikely(num == CP2CAP_KDC)) {
-        return &state->CHWR.KDC;
-    } else if (unlikely(num == CP2CAP_EPCC)) {
-        return &state->CHWR.EPCC;
-    }
-    return &state->_CGPR[num];
-}
-#endif
-
 static inline  __attribute__((always_inline)) const cap_register_t*
 get_readonly_capreg(TCState* state, unsigned num) {
-#if CHERI_C0_NULL == 0
-    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
-    return get_legacy_mirrored_capreg(state, num);
-#else
     return &state->_CGPR[num];
-#endif
 }
 
 /// return a read-only capability register with register number 0 meaning $ddc
@@ -381,44 +357,29 @@ get_readonly_capreg(TCState* state, unsigned num) {
 /// just cmove $cN, $cnull
 static inline __attribute__((always_inline)) const cap_register_t*
 get_capreg_0_is_ddc(TCState* state, unsigned num) {
-#if CHERI_C0_NULL == 0
-    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
-    return get_legacy_mirrored_capreg(state, num);
-#else
     if (unlikely(num == 0)) {
         return &state->CHWR.DDC;
     }
     return &state->_CGPR[num];
-#endif
 }
 
 // FIXME: remove the last few users of this function
 static inline  __attribute__((always_inline)) cap_register_t*
 get_writable_capreg_raw(TCState* state, unsigned num) {
-#if CHERI_C0_NULL == 0
-    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
-    return get_legacy_mirrored_capreg(state, num);
-#else
     if (unlikely(num == 0)) {
-        // writing to $c0 is a no-op -> make users of this function write to a dummy
+        // writing to $c0/$cnull is a no-op -> make users of this function write to a dummy
         static cap_register_t dummy_reg;
         return &dummy_reg;
     }
     return &state->_CGPR[num];
-#endif
 }
 
 static inline void
 update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
-#if CHERI_C0_NULL == 0
-    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
-    *get_legacy_mirrored_capreg(state, num) = *newval;
-#else
-    // writing to $c0 is a no-op
+    // writing to $c0/$cnull is a no-op
     if (unlikely(num == 0))
         return;
     state->_CGPR[num] = *newval;
-#endif
 }
 
 enum CP2HWR {

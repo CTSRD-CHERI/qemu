@@ -1878,9 +1878,7 @@ static void version(void)
 #else
     printf("Compiled for CHERI256\n");
 #endif
-#if CHERI_C0_NULL
     printf("Built with C0 as NULL register\n");
-#endif
 #endif  // TARGET_CHERI
 #if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
     printf("Built with MIPS instruction logging enabled\n");

@@ -22,16 +22,6 @@
 #endif
 #endif
 
-#if defined(TARGET_CHERI)
-// In order to test the old C0 == DDC behaviour this change be changed to set
-// #define CHERI_C0_NULL 0 (but it will probably not work much longer)
-#if !defined(CHERI_C0_NULL) || CHERI_C0_NULL != 0
-#undef CHERI_C0_NULL
-#define CHERI_C0_NULL 1
-#endif
-
-#endif // defined(TARGET_CHERI)
-
 /* Masks used to mark instructions to indicate which ISA level they
    were introduced in. */
 #define		ISA_MIPS1	0x00000001
