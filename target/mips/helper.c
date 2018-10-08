@@ -768,6 +768,10 @@ static inline void set_badinstr_registers(CPUMIPSState *env)
 }
 #endif
 
+#ifdef CONFIG_MIPS_LOG_INSTR
+extern void helper_dump_changed_state(CPUMIPSState *env);
+#endif
+
 void mips_cpu_do_interrupt(CPUState *cs)
 {
 #if !defined(CONFIG_USER_ONLY)
@@ -793,7 +797,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE)
         || env->user_only_tracing_enabled)) {
-        mips_dump_changed_state(env);
+        helper_dump_changed_state(env);
     }
 #endif /* CONFIG_MIPS_LOG_INSTR */
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&

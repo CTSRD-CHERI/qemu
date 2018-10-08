@@ -25,6 +25,9 @@
 #include "exec/helper-proto.h"
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
+#ifdef CONFIG_MIPS_LOG_INSTR
+#include "exec/log.h"
+#endif
 #include "sysemu/kvm.h"
 #include "sysemu/sysemu.h"
 
@@ -78,9 +81,9 @@ void helper_log_instruction(CPUMIPSState *env, target_ulong pc)
 
         /* Disassemble and print instruction. */
         if (isa == 0) {
-            target_disas(qemu_logfile, cs, pc, 4);
+            log_target_disas(cs, pc, 4);
         } else {
-            target_disas(qemu_logfile, cs, pc, 2);
+            log_target_disas(cs, pc, 2);
         }
     }
 
@@ -3376,7 +3379,7 @@ static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mod
 /*
  * Print the changed processor state.
  */
-void mips_dump_changed_state(CPUMIPSState *env)
+void helper_dump_changed_state(CPUMIPSState *env)
 {
     const char* new_mode = mips_cpu_get_changed_mode(env);
     /* Testing pointer equality is fine, it always points to the same constants */

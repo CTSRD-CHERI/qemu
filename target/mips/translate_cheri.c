@@ -1989,7 +1989,7 @@ static inline void generate_ccheck_pc(DisasContext *ctx)
     tcg_temp_free_i64(tpc);
 }
 
-#define GEN_CAP_CHECK_PC(ctx)    generate_ccheck_pc(ctx)
+#define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx)    generate_ccheck_pc(ctx)
 
 static inline void generate_ccheck_store(TCGv addr, TCGv offset, int32_t len)
 {
@@ -2091,7 +2091,20 @@ cp2_unimplemented:
 
 #else /* ! TARGET_CHERI */
 
-#define GEN_CAP_CHECK_PC(ctx)
+#ifdef CONFIG_MIPS_LOG_INSTR
+#define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx) generate_dump_state_and_log_instr(ctx)
+static inline void generate_dump_state_and_log_instr(DisasContext *ctx)
+{
+    gen_helper_dump_changed_state(cpu_env);
+    TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
+    gen_helper_log_instruction(cpu_env, tpc);
+    tcg_temp_free_i64(tpc);
+
+}
+#else
+/* Do nothing */
+#define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx)
+#endif
 #define GEN_CAP_CHECK_STORE(addr, offset, len)
 #define GEN_CAP_CHECK_LOAD(save, addr, offset, len)
 #define GEN_CAP_CHECK_STORE_RIGHT(addr, offset, len)

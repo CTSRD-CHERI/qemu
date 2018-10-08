@@ -169,8 +169,10 @@ DEF_HELPER_1(mfc0_rtc64, i64, env)
 DEF_HELPER_2(mtc0_rtc64, void, env, i64)
 // BERI extension:
 DEF_HELPER_1(mfc0_coreid, tl, env)
+
 #ifdef CONFIG_MIPS_LOG_INSTR
-DEF_HELPER_2(log_instr, void, env, i64)
+DEF_HELPER_1(dump_changed_state, void, env)
+DEF_HELPER_2(log_instruction, void, env, i64)
 DEF_HELPER_4(dump_load, void, env, int, tl, tl)
 DEF_HELPER_4(dump_load32, void, env, int, tl, i32)
 DEF_HELPER_2(instr_start, void, env, i64)

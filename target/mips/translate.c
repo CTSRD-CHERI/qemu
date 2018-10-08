@@ -2402,11 +2402,11 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
                    int rt, int base, int16_t offset)
 {
     TCGv t0, t1, t2;
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     TCGv t3;
 
     t3 = tcg_temp_new();
-#endif /* TARGET_CHERI */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR) */
     int mem_idx = ctx->mem_idx;
 
     if (rt == 0 && ctx->insn_flags & (INSN_LOONGSON2E | INSN_LOONGSON2F)) {
@@ -2627,9 +2627,9 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         break;
     }
     tcg_temp_free(t0);
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     tcg_temp_free(t3);
-#endif /* TARGET_CHERI */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR) */
 }
 
 /* Store */
@@ -2754,9 +2754,9 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
                           int base, int16_t offset)
 {
     TCGv t0 = tcg_temp_new();
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     TCGv t1 = tcg_temp_new();
-#endif /* TARGET_CHERI */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR) */
 
     gen_base_offset_addr(ctx, t0, base, offset);
     /* Don't do NOP if destination is zero: we must perform the actual
@@ -2813,9 +2813,9 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
     }
  out:
     tcg_temp_free(t0);
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     tcg_temp_free(t1);
-#endif /* TARGET_CHERI */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR) */
 }
 
 static void gen_cop1_ldst(DisasContext *ctx, uint32_t op, int rt,
@@ -10929,9 +10929,9 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
                            int fd, int fs, int base, int index)
 {
     TCGv t0 = tcg_temp_new();
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     TCGv t1 = tcg_temp_new();
-#endif /* TARGET_CHERI */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR) */
 
     if (base == 0) {
         gen_load_gpr(t0, index);
@@ -11022,9 +11022,9 @@ static void gen_flt3_ldst (DisasContext *ctx, uint32_t opc,
         break;
     }
     tcg_temp_free(t0);
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     tcg_temp_free(t1);
-#endif /* TARGET_CHERI */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR) */
 }
 
 static void gen_flt3_arith (DisasContext *ctx, uint32_t opc,
@@ -20999,7 +20999,7 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
     }
 
     /* Generate capabilities check on PC (and possibly log registers + instrs) */
-    GEN_CAP_CHECK_PC(ctx);
+    GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx);
 
     tcg_gen_insn_start(ctx->base.pc_next, ctx->hflags & MIPS_HFLAG_BMASK,
                        ctx->btarget);

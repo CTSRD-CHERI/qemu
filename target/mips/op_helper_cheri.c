@@ -2909,7 +2909,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
     const bool should_log_instr =
         qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR) || env->user_only_tracing_enabled;
     if (unlikely(should_log_instr))
-        mips_dump_changed_state(env);
+        helper_dump_changed_state(env);
 #endif
 
 #if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)

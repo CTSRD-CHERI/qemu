@@ -123,6 +123,36 @@ typedef struct mips_def_t mips_def_t;
 #define MIPS_KSCRATCH_NUM 6
 #define MIPS_MAAR_MAX 16 /* Must be an even number. */
 
+
+#ifdef CONFIG_MIPS_LOG_INSTR
+struct cvtrace {
+    uint8_t version;
+#define CVT_GPR     1   /* GPR change (val2) */
+#define CVT_LD_GPR  2   /* Load into GPR (val2) from address (val1) */
+#define CVT_ST_GPR  3   /* Store from GPR (val2) to address (val1) */
+#define CVT_NO_REG  4   /* No register is changed. */
+#define CVT_CAP     11  /* Cap change (val2,val3,val4,val5) */
+#define CVT_LD_CAP  12  /* Load Cap (val2,val3,val4,val5) from addr (val1) */
+#define CVT_ST_CAP  13  /* Store Cap (val2,val3,val4,val5) to addr (val1) */
+    uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
+    uint16_t cycles;    /* Currently not used. */
+    uint32_t inst;      /* Encoded instruction. */
+    uint64_t pc;        /* PC value of instruction. */
+    uint64_t val1;      /* val1 is used for memory address. */
+    uint64_t val2;      /* val2, val3, val4, val5 are used for reg content. */
+    uint64_t val3;
+    uint64_t val4;
+    uint64_t val5;
+    uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
+    uint8_t asid;       /* Address Space ID (i.e. CP0_TCStatus & 0xff) */
+} __attribute__((packed));
+typedef struct cvtrace cvtrace_t;
+
+/* Version 3 Cheri Stream Trace header info */
+#define CVT_QEMU_VERSION    (0x80U + 3)
+#define CVT_QEMU_MAGIC      "CheriTraceV03"
+#endif // CONFIG_MIPS_LOG_INSTR
+
 #if defined(TARGET_CHERI)
 
 #define cheri_debug_assert(cond) tcg_debug_assert(cond)
@@ -232,33 +262,6 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
     crp->cr_pesbt = 0UL;
 #endif
 }
-
-struct cvtrace {
-    uint8_t version;
-#define CVT_GPR     1   /* GPR change (val2) */
-#define CVT_LD_GPR  2   /* Load into GPR (val2) from address (val1) */
-#define CVT_ST_GPR  3   /* Store from GPR (val2) to address (val1) */
-#define CVT_NO_REG  4   /* No register is changed. */
-#define CVT_CAP     11  /* Cap change (val2,val3,val4,val5) */
-#define CVT_LD_CAP  12  /* Load Cap (val2,val3,val4,val5) from addr (val1) */
-#define CVT_ST_CAP  13  /* Store Cap (val2,val3,val4,val5) to addr (val1) */
-    uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
-    uint16_t cycles;    /* Currently not used. */
-    uint32_t inst;      /* Encoded instruction. */
-    uint64_t pc;        /* PC value of instruction. */
-    uint64_t val1;      /* val1 is used for memory address. */
-    uint64_t val2;      /* val2, val3, val4, val5 are used for reg content. */
-    uint64_t val3;
-    uint64_t val4;
-    uint64_t val5;
-    uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
-    uint8_t asid;       /* Address Space ID (i.e. CP0_TCStatus & 0xff) */
-} __attribute__((packed));
-typedef struct cvtrace cvtrace_t;
-
-/* Version 3 Cheri Stream Trace header info */
-#define CVT_QEMU_VERSION    (0x80U + 3)
-#define CVT_QEMU_MAGIC      "CheriTraceV03"
 
 struct cheri_cap_hwregs {
     cap_register_t DDC;        /* CapHwr 0 */
@@ -938,12 +941,14 @@ struct CPUMIPSState {
      */
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
+#ifdef TARGET_CHERI
     cap_register_t last_C[32];
     cap_register_t last_CapBranchTarget;
     struct cheri_cap_hwregs last_CHWR;
+#endif // TARGET_CHERI
 
     cvtrace_t cvtrace;
-#endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
 
@@ -1089,7 +1094,6 @@ void cpu_mips_soft_irq(CPUMIPSState *env, int irq, int level);
 target_ulong exception_resume_pc (CPUMIPSState *env);
 #ifdef CONFIG_MIPS_LOG_INSTR
 #ifdef TARGET_CHERI
-void mips_dump_changed_state(CPUMIPSState *env);
 void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
                          cap_register_t *old_reg, const char* name);
 void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
