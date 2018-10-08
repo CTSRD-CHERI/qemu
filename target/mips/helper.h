@@ -169,10 +169,18 @@ DEF_HELPER_1(mfc0_rtc64, i64, env)
 DEF_HELPER_2(mtc0_rtc64, void, env, i64)
 // BERI extension:
 DEF_HELPER_1(mfc0_coreid, tl, env)
-#if defined(TARGET_CHERI)
+#ifdef CONFIG_MIPS_LOG_INSTR
+DEF_HELPER_2(log_instr, void, env, i64)
 DEF_HELPER_4(dump_load, void, env, int, tl, tl)
 DEF_HELPER_4(dump_load32, void, env, int, tl, i32)
+DEF_HELPER_2(instr_start, void, env, i64)
+DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
+DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
+DEF_HELPER_2(instr_stop, void, env, i64)
+DEF_HELPER_2(cheri_debug_message, void, env, i64)
+#endif
 
+#if defined(TARGET_CHERI)
 DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
 DEF_HELPER_1(ccheck_btarget, void, env)
 DEF_HELPER_2(ccheck_pc, void, env, i64)
@@ -251,12 +259,6 @@ DEF_HELPER_5(clc_addr, tl, env, i32, i32, tl, i32)
 DEF_HELPER_3(cllc_addr, tl, env, i32, i32)
 DEF_HELPER_5(csc_addr, tl, env, i32, i32, tl, i32)
 DEF_HELPER_3(cscc_addr, tl, env, i32, i32)
-
-DEF_HELPER_2(instr_start, void, env, i64)
-DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
-DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
-DEF_HELPER_2(instr_stop, void, env, i64)
-DEF_HELPER_2(cheri_debug_message, void, env, i64)
 
 #ifdef CHERI_128
 DEF_HELPER_4(bytes2cap_128, void, env, i32, tl, tl)

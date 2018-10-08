@@ -904,6 +904,9 @@ struct CPUMIPSState {
 #define CP2Ca_PERM_UNSEAL   0x1b /* Permit_Unseal violation */
 // 0x1b-0x1f Reserved
 
+#endif /* TARGET_CHERI */
+
+#ifdef CONFIG_MIPS_LOG_INSTR
 #define TRACE_MODE_USER "User mode"
     const char *last_mode;
 #define IN_USERSPACE(env) \
@@ -911,7 +914,7 @@ struct CPUMIPSState {
     bool user_only_tracing_enabled;
     bool trace_explicitly_disabled;
     bool tracing_suspended;
-#endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
 
     /* Fields up to this point are cleared by a CPU reset */
     struct {} end_reset_fields;
@@ -928,7 +931,7 @@ struct CPUMIPSState {
     void *irq[8];
     QEMUTimer *timer; /* Internal timer */
     MemoryRegion *itc_tag; /* ITC Configuration Tags */
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
     /*
      * Processor state after the last instruction.
      * Used for instruction tracing.
@@ -1084,6 +1087,7 @@ void cpu_mips_soft_irq(CPUMIPSState *env, int irq, int level);
 
 /* helper.c */
 target_ulong exception_resume_pc (CPUMIPSState *env);
+#ifdef CONFIG_MIPS_LOG_INSTR
 #ifdef TARGET_CHERI
 void mips_dump_changed_state(CPUMIPSState *env);
 void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
@@ -1092,6 +1096,7 @@ void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
                 target_ulong value);
 void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
 
 static inline void restore_snan_bit_mode(CPUMIPSState *env)
 {

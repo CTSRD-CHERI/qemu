@@ -65,6 +65,91 @@ void helper_check_breakcount(struct CPUMIPSState* env)
     }
 }
 
+#ifdef CONFIG_MIPS_LOG_INSTR
+/*
+ * Print the instruction to log file.
+ */
+void helper_log_instruction(CPUMIPSState *env, target_ulong pc)
+{
+    int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        MIPSCPU *cpu = mips_env_get_cpu(env);
+        CPUState *cs = CPU(cpu);
+
+        /* Disassemble and print instruction. */
+        if (isa == 0) {
+            target_disas(qemu_logfile, cs, pc, 4);
+        } else {
+            target_disas(qemu_logfile, cs, pc, 2);
+        }
+    }
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        static uint16_t cycles = 0;  /* XXX */
+        uint32_t opcode;
+        MIPSCPU *cpu = mips_env_get_cpu(env);
+        CPUState *cs = CPU(cpu);
+
+        /* if the logfile is empty we need to emit the cvt magic */
+        if (env->cvtrace.version != 0 && ftell(qemu_logfile) != 0) {
+            /* Write previous instruction trace to log. */
+            fwrite(&env->cvtrace, sizeof(env->cvtrace), 1, qemu_logfile);
+        } else {
+            char buffer[sizeof(env->cvtrace)];
+
+            buffer[0] = CVT_QEMU_VERSION;
+            g_strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
+            fwrite(buffer, sizeof(env->cvtrace), 1, qemu_logfile);
+            cycles = 0;
+        }
+        bzero(&env->cvtrace, sizeof(env->cvtrace));
+        env->cvtrace.version = CVT_NO_REG;
+        env->cvtrace.pc = tswap64(pc);
+        env->cvtrace.cycles = tswap16(cycles++);
+        env->cvtrace.thread = (uint8_t)cs->cpu_index;
+        env->cvtrace.asid = (uint8_t)(env->active_tc.CP0_TCStatus & 0xff);
+        env->cvtrace.exception = 31;
+
+        /* Fetch opcode. */
+        if (isa == 0) {
+            /* mips32/mips64 instruction. */
+            opcode = cpu_ldl_code(env, pc);
+        } else {
+            /* micromips or mips16. */
+            opcode = cpu_lduw_code(env, pc);
+            if (isa == 1) {
+                /* micromips */
+                switch (opcode >> 10) {
+                case 0x01: case 0x02: case 0x03: case 0x09:
+                case 0x0a: case 0x0b:
+                case 0x11: case 0x12: case 0x13: case 0x19:
+                case 0x1a: case 0x1b:
+                case 0x20: case 0x21: case 0x22: case 0x23:
+                case 0x28: case 0x29: case 0x2a: case 0x2b:
+                case 0x30: case 0x31: case 0x32: case 0x33:
+                case 0x38: case 0x39: case 0x3a: case 0x3b:
+                    break;
+                default:
+                    opcode <<= 16;
+                    opcode |= cpu_lduw_code(env, pc + 2);
+                    break;
+                }
+            } else {
+                /* mips16 */
+                switch (opcode >> 11) {
+                case 0x03:
+                case 0x1e:
+                    opcode <<= 16;
+                    opcode |= cpu_lduw_code(env, pc + 2);
+                    break;
+                }
+            }
+        }
+        env->cvtrace.inst = opcode;  /* XXX need bswapped? */
+    }
+}
+#endif
+
 #if defined(CONFIG_USER_ONLY)
 #define HELPER_LD(name, insn, type)                                     \
 static inline type do_##name(CPUMIPSState *env, target_ulong addr,      \
@@ -1819,7 +1904,7 @@ void helper_mtc0_taglo(CPUMIPSState *env, target_ulong arg1)
 }
 
 
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
 
 extern int cl_default_trace_format;
 
@@ -2000,7 +2085,7 @@ static inline void cvtrace_dump_gpr(cvtrace_t *cvtrace, uint64_t value)
     }
 }
 
-#endif // TARGET_CHERI
+#endif // CONFIG_MIPS_LOG_INSTR
 
 static void simple_dump_state(CPUMIPSState *env, FILE *f,
         fprintf_function cpu_fprintf)
@@ -2759,6 +2844,7 @@ static inline void exception_return(CPUMIPSState *env)
     debug_pre_eret(env);
 #ifdef TARGET_CHERI
     // qemu_log_mask(CPU_LOG_INSTR, "%s: PCC <- EPCC\n", __func__);
+#ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
          // Print the new PCC value for debugging traces (compare to null
          // so that we always print it)
@@ -2768,6 +2854,7 @@ static inline void exception_return(CPUMIPSState *env)
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &null_cap, "EPCC");
     }
+#endif // CONFIG_MIPS_LOG_INSTR
     tcg_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
     env->active_tc.PCC = env->active_tc.CHWR.EPCC;
 #endif /* TARGET_CHERI */
@@ -2961,7 +3048,7 @@ void mips_cpu_unassigned_access(CPUState *cs, hwaddr addr,
     }
 }
 
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
 
 /*
  * Print changed kernel/user/debug mode.
@@ -3226,7 +3313,7 @@ static void dump_changed_cop0(CPUMIPSState *env)
 #endif /* TARGET_CHERI */
 #endif /* !CONFIG_USER_ONLY */
 
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
 
 /*
  * Print changed values of GPR, HI/LO and DSPControl registers.
@@ -3555,7 +3642,7 @@ void helper_dump_load32(CPUMIPSState *env, int opc, target_ulong addr,
 
     helper_dump_load(env, opc, addr, (target_ulong)value);
 }
-#endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
 
 /* Complex FPU operations which may need stack space. */
 

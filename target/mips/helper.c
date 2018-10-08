@@ -790,12 +790,12 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  " %s exception\n",
                  __func__, env->active_tc.PC, env->CP0_EPC, name);
     }
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE)
         || env->user_only_tracing_enabled)) {
         mips_dump_changed_state(env);
     }
-#endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&
         (env->hflags & MIPS_HFLAG_DM)) {
         cs->exception_index = EXCP_DINT;
@@ -1126,7 +1126,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
     default:
         abort();
     }
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         if (cs->exception_index == EXCP_EXT_INTERRUPT)
             fprintf (qemu_logfile, "--- Interrupt, vector " TARGET_FMT_lx "\n",
@@ -1138,6 +1138,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         env->cvtrace.exception = cause;
     }
+#ifdef TARGET_CHERI
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
          // Print the new PCC value for debugging traces.
          cap_register_t tmp;
@@ -1146,6 +1147,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
          dump_changed_capreg(env, &env->active_tc.PCC, &tmp, "PCC");
     }
 #endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
     if (qemu_loglevel_mask(CPU_LOG_INT)
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
         qemu_log("%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
@@ -1153,7 +1155,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  __func__, env->active_tc.PC, env->CP0_EPC, cause,
                  env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
                  env->CP0_DEPC);
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) && defined(CONFIG_MIPS_LOG_INSTR)
         qemu_log("ErrorEPC " TARGET_FMT_lx "\n", env->CP0_ErrorEPC);
         cap_register_t tmp;
         // We use a null cap as oldreg so that we always print it.

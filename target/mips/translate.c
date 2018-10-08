@@ -2931,7 +2931,7 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
 
     if (rt == 0) {
         /* If no destination, treat it as a NOP. */
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
         if (opc == OPC_ORI && rs == 0) {
             /* With 'li $0, 0xbeef' turn on instruction trace logging. */
             if ((uint16_t)imm == 0xbeef)
@@ -2953,7 +2953,7 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
                 GEN_CHERI_TRACE_HELPER(cpu_env, cheri_debug_message);
 
         }
-#endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
         return;
     }
     uimm = (uint16_t)imm;

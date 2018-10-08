@@ -31,7 +31,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#if defined(TARGET_CHERI)
+#if defined(CONFIG_MIPS_LOG_INSTR)
 static inline void
 generate_dump_load(int op, TCGv addr, TCGv value)
 {
@@ -52,6 +52,14 @@ generate_dump_load32(int op, TCGv addr, TCGv_i32 value)
 #define GEN_CAP_DUMP_LOAD32(op, addr, value) \
     generate_dump_load32(op, addr, value)
 
+#else
+#define GEN_CAP_DUMP_LOAD(op, addr, value)
+#define GEN_CAP_DUMP_LOAD32(op, addr, value)
+#define generate_dump_load(op, addr, value)
+#define generate_dump_load32(op, addr, value)
+#endif // CONFIG_MIPS_LOG_INSTR
+
+#if defined(TARGET_CHERI)
 /* Verify that the processor is running with CHERI instructions enabled. */
 static inline void check_cop2x(DisasContext *ctx)
 {
@@ -2090,9 +2098,6 @@ cp2_unimplemented:
 #define GEN_CAP_CHECK_LOAD_RIGHT(save, addr, offset, len)
 #define GEN_CAP_INVADIATE_TAG(addr, len, opc, value)
 #define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value)
-#define GEN_CAP_DUMP_LOAD(op, addr, value)
-#define GEN_CAP_DUMP_LOAD32(op, addr, value)
-
 #endif /* ! TARGET_CHERI */
 
 

@@ -352,7 +352,9 @@ _became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 }
 #endif /* ! 128-bit capabilities */
 
+#ifdef CONFIG_MIPS_LOG_INSTR
 void dump_store(CPUMIPSState *env, int, target_ulong, target_ulong);
+#endif
 
 static inline int align_of(int size, uint64_t addr)
 {
@@ -2282,6 +2284,7 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     return (target_ulong)addr;
 }
 
+#ifdef CONFIG_MIPS_LOG_INSTR
 /*
  * Dump cap tag, otype, permissions and seal bit to cvtrace entry
  */
@@ -2383,7 +2386,11 @@ static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
 #define cvtrace_dump_cap_store(trace, addr, cr)         \
     cvtrace_dump_cap_ldst(trace, CVT_ST_CAP, addr, cr)
 
+#endif // CONFIG_MIPS_LOG_INSTR
+
 #ifdef CHERI_128
+
+#ifdef CONFIG_MIPS_LOG_INSTR
 /*
  * Print capability load from memory to log file.
  */
@@ -2411,6 +2418,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
                 addr, tag, pesbt, cursor);
     }
 }
+#endif // CONFIG_MIPS_LOG_INSTR
 
 
 target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
@@ -2443,10 +2451,12 @@ void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
 
     cdp->cr_tag = tag;
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     dump_cap_load(addr, cdp->cr_pesbt, cursor, tag);
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
     cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+#endif
 }
 
 target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
@@ -2460,10 +2470,12 @@ target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
     else
         ret = csp->cr_pesbt;
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     dump_cap_store(vaddr, ret, csp->cr_offset + csp->cr_base, csp->cr_tag);
     cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
     cvtrace_dump_cap_cbl(&env->cvtrace, csp);
+#endif
 
     return ret;
 }
@@ -2501,6 +2513,7 @@ target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
 }
 
 #elif defined(CHERI_MAGIC128)
+#ifdef CONFIG_MIPS_LOG_INSTR
 /*
  * Print capability load from memory to log file.
  */
@@ -2526,6 +2539,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
               TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
     }
 }
+#endif // CONFIG_MIPS_LOG_INSTR
 
 void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
                            target_ulong cursor, target_ulong addr)
@@ -2561,10 +2575,12 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
     cdp->cr_tag = tag;
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     dump_cap_load(addr, cursor, cdp->cr_base, tag);
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
     cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+#endif
 }
 
 target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
@@ -2576,7 +2592,9 @@ target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
     ret = csp->cr_offset + csp->cr_base;
 
     /* Log memory cap write, if needed. */
+#ifdef CONFIG_MIPS_LOG_INSTR
     dump_cap_store(vaddr, ret, csp->cr_base, csp->cr_tag);
+#endif
     return ret;
 }
 
@@ -2612,9 +2630,11 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
 
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length);
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
     cvtrace_dump_cap_cbl(&env->cvtrace, csp);
+#endif
 
     env->hflags = save_hflags;
 
@@ -2623,6 +2643,7 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
 
 #else /* ! CHERI_MAGIC128 */
 
+#ifdef CONFIG_MIPS_LOG_INSTR
 /*
  * Print capability load from memory to log file.
  */
@@ -2683,6 +2704,8 @@ static inline void dump_cap_store_length(uint64_t length)
     }
 }
 
+#endif // CONFIG_MIPS_LOG_INSTR
+
 void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
         target_ulong addr)
 {
@@ -2705,9 +2728,11 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
     else
         cdp->cr_sealed = 0;
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     dump_cap_load_op(addr, otype, tag);
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
+#endif
 }
 
 void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
@@ -2731,9 +2756,11 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
     else
         cdp->cr_sealed = 0;
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     dump_cap_load_op(addr, otype, tag);
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
+#endif
 }
 
 target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
@@ -2753,9 +2780,11 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
     ret = ((uint64_t)csp->cr_otype << 32) |
         (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     dump_cap_store_op(vaddr, ret, csp->cr_tag);
     cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
+#endif
 
     return ret;
 }
@@ -2770,11 +2799,14 @@ void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory reads, if needed. */
     dump_cap_load_cbl(cursor, base, length);
     cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+#endif
 }
 
+#ifdef CONFIG_MIPS_LOG_INSTR
 static inline void cvtrace_dump_cap_cursor(cvtrace_t *cvtrace, uint64_t cursor)
 {
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
@@ -2795,6 +2827,7 @@ static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
         cvtrace->val5 = tswap64(length);
     }
 }
+#endif // CONFIG_MIPS_LOG_INSTR
 
 target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
         uint32_t bdoffset, target_ulong vaddr)
@@ -2821,10 +2854,11 @@ target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE);
 
     ret = csp->cr_offset + csp->cr_base;
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     dump_cap_store_cursor(ret);
     cvtrace_dump_cap_cursor(&env->cvtrace, ret);
-
+#endif
 
     env->hflags = save_hflags;
 
@@ -2835,9 +2869,11 @@ target_ulong helper_cap2bytes_base(CPUMIPSState *env, uint32_t cs)
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     dump_cap_store_base(csp->cr_base);
     cvtrace_dump_cap_base(&env->cvtrace, csp->cr_base);
+#endif
 
     return (csp->cr_base);
 }
@@ -2846,96 +2882,15 @@ target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     dump_cap_store_length(csp->cr_length);
     cvtrace_dump_cap_length(&env->cvtrace, csp->cr_length);
+#endif
 
     return (csp->cr_length ^ -1UL);
 }
 #endif /* ! CHERI_MAGIC128 */
-
-/*
- * Print the instruction to log file.
- */
-void helper_log_instruction(CPUMIPSState *env, target_ulong pc)
-{
-    int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        MIPSCPU *cpu = mips_env_get_cpu(env);
-        CPUState *cs = CPU(cpu);
-
-        /* Disassemble and print instruction. */
-        if (isa == 0) {
-            target_disas(qemu_logfile, cs, pc, 4);
-        } else {
-            target_disas(qemu_logfile, cs, pc, 2);
-        }
-    }
-
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        static uint16_t cycles = 0;  /* XXX */
-        uint32_t opcode;
-        MIPSCPU *cpu = mips_env_get_cpu(env);
-        CPUState *cs = CPU(cpu);
-
-        /* if the logfile is empty we need to emit the cvt magic */
-        if (env->cvtrace.version != 0 && ftell(qemu_logfile) != 0) {
-            /* Write previous instruction trace to log. */
-            fwrite(&env->cvtrace, sizeof(env->cvtrace), 1, qemu_logfile);
-        } else {
-            char buffer[sizeof(env->cvtrace)];
-
-            buffer[0] = CVT_QEMU_VERSION;
-            g_strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
-            fwrite(buffer, sizeof(env->cvtrace), 1, qemu_logfile);
-            cycles = 0;
-        }
-        bzero(&env->cvtrace, sizeof(env->cvtrace));
-        env->cvtrace.version = CVT_NO_REG;
-        env->cvtrace.pc = tswap64(pc);
-        env->cvtrace.cycles = tswap16(cycles++);
-        env->cvtrace.thread = (uint8_t)cs->cpu_index;
-        env->cvtrace.asid = (uint8_t)(env->active_tc.CP0_TCStatus & 0xff);
-        env->cvtrace.exception = 31;
-
-        /* Fetch opcode. */
-        if (isa == 0) {
-            /* mips32/mips64 instruction. */
-            opcode = cpu_ldl_code(env, pc);
-        } else {
-            /* micromips or mips16. */
-            opcode = cpu_lduw_code(env, pc);
-            if (isa == 1) {
-                /* micromips */
-                switch (opcode >> 10) {
-                case 0x01: case 0x02: case 0x03: case 0x09:
-                case 0x0a: case 0x0b:
-                case 0x11: case 0x12: case 0x13: case 0x19:
-                case 0x1a: case 0x1b:
-                case 0x20: case 0x21: case 0x22: case 0x23:
-                case 0x28: case 0x29: case 0x2a: case 0x2b:
-                case 0x30: case 0x31: case 0x32: case 0x33:
-                case 0x38: case 0x39: case 0x3a: case 0x3b:
-                    break;
-                default:
-                    opcode <<= 16;
-                    opcode |= cpu_lduw_code(env, pc + 2);
-                    break;
-                }
-            } else {
-                /* mips16 */
-                switch (opcode >> 11) {
-                case 0x03:
-                case 0x1e:
-                    opcode <<= 16;
-                    opcode |= cpu_lduw_code(env, pc + 2);
-                    break;
-                }
-            }
-        }
-        env->cvtrace.inst = opcode;  /* XXX need bswapped? */
-    }
-}
 
 void helper_ccheck_btarget(CPUMIPSState *env)
 {
@@ -2949,11 +2904,13 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Print changed state before advancing to the next instruction: GPR, HI/LO, COP0. */
     const bool should_log_instr =
         qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR) || env->user_only_tracing_enabled;
     if (unlikely(should_log_instr))
         mips_dump_changed_state(env);
+#endif
 
 #if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)
     if (env->active_tc.CHWR.EPCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE) {
@@ -2978,10 +2935,12 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
     check_cap(env, pcc, CAP_PERM_EXECUTE, pc, 0xff, 4, /*instavail=*/false);
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 
+#ifdef CONFIG_MIPS_LOG_INSTR
     // Finally, log the instruction that will be executed next
     if (unlikely(should_log_instr)) {
         helper_log_instruction(env, pc);
     }
+#endif
 }
 
 target_ulong helper_ccheck_store_right(CPUMIPSState *env, target_ulong offset, uint32_t len)
@@ -3049,9 +3008,10 @@ target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t
 void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,
     uint32_t opc, target_ulong value)
 {
-
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log write, if enabled. */
     dump_store(env, opc, addr, value);
+#endif
 
     cheri_tag_invalidate(env, addr, len);
 }
@@ -3059,9 +3019,10 @@ void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,
 void helper_cinvalidate_tag32(CPUMIPSState *env, target_ulong addr, uint32_t len,
     uint32_t opc, uint32_t value)
 {
-
+#ifdef CONFIG_MIPS_LOG_INSTR
     /* Log write, if enabled. */
     dump_store(env, opc, addr, (target_ulong)value);
+#endif
 
     cheri_tag_invalidate(env, addr, len);
 }
