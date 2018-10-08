@@ -543,7 +543,7 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
     } else if (csp->cr_offset >= csp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cs);
     } else {
-        if (selector == 0) {
+        if (selector == CCALL_SELECTOR_0) {
             do_raise_c2_exception(env, CP2Ca_CALL, cs);
         } else if (!(csp->cr_perms & CAP_PERM_CCALL)){
             do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cs);
@@ -570,12 +570,12 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
 
 void helper_ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
-    (void)ccall_common(env, cs, cb, 0);
+    (void)ccall_common(env, cs, cb, CCALL_SELECTOR_0);
 }
 
 target_ulong helper_ccall_notrap(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
-    return ccall_common(env, cs, cb, 1);
+    return ccall_common(env, cs, cb, CCALL_SELECTOR_1);
 }
 
 void helper_cclearreg(CPUMIPSState *env, uint32_t mask)

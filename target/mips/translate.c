@@ -1241,11 +1241,6 @@ enum {
     OPC_CRETURN_NI       = OPC_CP2 | (0x05 << 21 | 0x7ff)
 };
 
-#define MASK_CCALL_SEL(op)  ((op) & 0x7ff)
-#define CCALL_SELECTOR_0 (0x0)
-#define CCALL_SELECTOR_1 (0x01)
-#define CCALL_SELECTOR_CRETURN (0x7ff)
-
 #endif /* TARGET_CHERI */
 
 

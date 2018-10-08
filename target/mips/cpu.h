@@ -863,6 +863,11 @@ struct CPUMIPSState {
 #define CP2Ca_PERM_UNSEAL   0x1b /* Permit_Unseal violation */
 // 0x1b-0x1f Reserved
 
+#define MASK_CCALL_SEL(op)  ((op) & 0x7ff)
+#define CCALL_SELECTOR_0 (0x0)
+#define CCALL_SELECTOR_1 (0x01)
+#define CCALL_SELECTOR_CRETURN (0x7ff)
+
 #endif /* TARGET_CHERI */
 
 #ifdef CONFIG_MIPS_LOG_INSTR

@@ -123,10 +123,8 @@ static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t 
         TCGv_i32 tcb = tcg_const_i32(cb);
 
         gen_helper_ccall_notrap(btarget, cpu_env, tcs, tcb);
-        /* Set ccall branch and delay slot flags */
+        /* Set ccall branch flags */
         ctx->hflags |= (MIPS_HFLAG_BRCCALL);
-        /* Save capability register index that is new PCC */
-        // ctx->btcr = cs;
         save_cpu_state(ctx, 0);
 
         tcg_temp_free_i32(tcb);
