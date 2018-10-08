@@ -154,7 +154,7 @@ static inline uint64_t cap_get_cursor(const cap_register_t* c) {
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
-    cp->cr_length = -1L; // But length should be -1
+    cp->cr_length = ~UINT64_C(0); // But length should be -1
     return cp;
 }
 
