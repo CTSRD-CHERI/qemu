@@ -784,7 +784,7 @@ target_ulong helper_cgetaddr(CPUMIPSState *env, uint32_t cb)
         return (target_ulong)0;
     } else {
         const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-        return (target_ulong)(cbp->cr_base + cbp->cr_offset);
+        return (target_ulong)cap_get_cursor(cbp);
     }
 }
 
@@ -1064,8 +1064,8 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_GLOBAL, cb);
     } else if ((cbp->cr_offset + 4) > cbp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (align_of(4, (cbp->cr_base + cbp->cr_offset))) {
-        do_raise_c0_exception(env, EXCP_AdEL, (cbp->cr_base + cbp->cr_offset));
+    } else if (align_of(4, cap_get_cursor(cbp))) {
+        do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
     } else {
         cap_register_t result = env->active_tc.PCC;
         result.cr_offset += 8;
@@ -1098,8 +1098,8 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_GLOBAL, cb);
     } else if ((cbp->cr_offset + 4) > cbp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (align_of(4, (cbp->cr_base + cbp->cr_offset))) {
-        do_raise_c0_exception(env, EXCP_AdEL, (cbp->cr_base + cbp->cr_offset));
+    } else if (align_of(4, cap_get_cursor(cbp))) {
+        do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
     } else {
         // The capability register is loaded into PCC during delay slot
         env->active_tc.CapBranchTarget = *cbp;
@@ -1116,7 +1116,7 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
-    uint64_t ct_base_plus_offset = ctp->cr_base + ctp->cr_offset;
+    uint64_t ct_base_plus_offset = cap_get_cursor(ctp);
     /*
      * CSeal: Seal a capability
      */
@@ -1133,7 +1133,7 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
             update_capreg(&env->active_tc, cd, csp);
         else
             do_raise_c2_exception(env, CP2Ca_TAG, ct);
-    } else if (conditional && ctp->cr_base + ctp->cr_offset == -1) {
+    } else if (conditional && cap_get_cursor(ctp) == -1) {
         update_capreg(&env->active_tc, cd, csp);
     } else if (is_cap_sealed(csp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
@@ -1387,7 +1387,7 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-    uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+    uint64_t cursor = cap_get_cursor(cbp);
     uint64_t cursor_rt;
     uint64_t new_offset = 0ul;
 #ifdef CHERI_128
@@ -1467,7 +1467,7 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-    uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+    uint64_t cursor = cap_get_cursor(cbp);
     uint64_t cursor_rt = cursor + rt;
 
 #ifdef CHERI_128
@@ -1522,8 +1522,7 @@ target_ulong helper_csub(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, ct);
         return (target_ulong)0;
     } else {
-        return (target_ulong)(cbp->cr_base + cbp->cr_offset -
-                ctp->cr_base - ctp->cr_offset);
+        return (target_ulong)(cap_get_cursor(cbp) - cap_get_cursor(ctp));
     }
 }
 
@@ -1606,7 +1605,7 @@ target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     // is required since clang still assumes it can use zero as $ddc in cfromptr/ctoptr
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_capreg_0_is_ddc(&env->active_tc, ct);
-    uint64_t cb_cursor = cbp->cr_base + cbp->cr_offset;
+    uint64_t cb_cursor = cap_get_cursor(cbp);
     uint64_t ct_top = ctp->cr_base + ctp->cr_length;
     /*
      * CToPtr: Capability to Pointer
@@ -1654,13 +1653,13 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (is_cap_sealed(ctp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, ct);
-    } else if ((ctp->cr_base + ctp->cr_offset) != csp->cr_otype) {
+    } else if (cap_get_cursor(ctp) != csp->cr_otype) {
         do_raise_c2_exception(env, CP2Ca_TYPE, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_UNSEAL, ct);
     } else if (ctp->cr_offset >= ctp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if ((ctp->cr_base + ctp->cr_offset) >= CAP_MAX_OTYPE) {
+    } else if (cap_get_cursor(ctp) >= CAP_MAX_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else {
         cap_register_t result = *csp;
@@ -1696,8 +1695,8 @@ target_ulong helper_ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         if (cbp->cr_tag != ctp->cr_tag) {
             equal = FALSE;
         } else {
-            uint64_t cursor1 = cbp->cr_base + cbp->cr_offset;
-            uint64_t cursor2 = ctp->cr_base + ctp->cr_offset;
+            uint64_t cursor1 = cap_get_cursor(cbp);
+            uint64_t cursor2 = cap_get_cursor(ctp);
 
             equal = (cursor1 == cursor2);
         }
@@ -1722,8 +1721,8 @@ target_ulong helper_cne(CPUMIPSState *env, uint32_t cb, uint32_t ct)
         if (cbp->cr_tag != ctp->cr_tag) {
             equal = FALSE;
         } else {
-            uint64_t cursor1 = cbp->cr_base + cbp->cr_offset;
-            uint64_t cursor2 = ctp->cr_base + ctp->cr_offset;
+            uint64_t cursor1 = cap_get_cursor(cbp);
+            uint64_t cursor2 = cap_get_cursor(ctp);
 
             equal = (cursor1 == cursor2);
         }
@@ -1752,8 +1751,8 @@ target_ulong helper_clt(CPUMIPSState *env, uint32_t cb, uint32_t ct)
                 signed_less = TRUE;
             }
         } else {
-            int64_t cursor1 = (int64_t)(cbp->cr_base + cbp->cr_offset);
-            int64_t cursor2 = (int64_t)(ctp->cr_base + ctp->cr_offset);
+            int64_t cursor1 = (int64_t)cap_get_cursor(cbp);
+            int64_t cursor2 = (int64_t)cap_get_cursor(ctp);
 
             signed_less = (cursor1 < cursor2);
         }
@@ -1782,8 +1781,8 @@ target_ulong helper_cle(CPUMIPSState *env, uint32_t cb, uint32_t ct)
                 signed_lte = TRUE;
             }
         } else {
-            int64_t cursor1 = (int64_t)(cbp->cr_base + cbp->cr_offset);
-            int64_t cursor2 = (int64_t)(ctp->cr_base + ctp->cr_offset);
+            int64_t cursor1 = (int64_t)cap_get_cursor(cbp);
+            int64_t cursor2 = (int64_t)cap_get_cursor(ctp);
 
             signed_lte = (cursor1 <= cursor2);
         }
@@ -1812,8 +1811,8 @@ target_ulong helper_cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
                 ltu = TRUE;
             }
         } else {
-            uint64_t cursor1 = cbp->cr_base + cbp->cr_offset;
-            uint64_t cursor2 = ctp->cr_base + ctp->cr_offset;
+            uint64_t cursor1 = cap_get_cursor(cbp);
+            uint64_t cursor2 = cap_get_cursor(ctp);
 
             ltu = (cursor1 < cursor2);
         }
@@ -1842,8 +1841,8 @@ target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
                 leu = TRUE;
             }
         } else {
-            uint64_t cursor1 = cbp->cr_base + cbp->cr_offset;
-            uint64_t cursor2 = ctp->cr_base + ctp->cr_offset;
+            uint64_t cursor1 = cap_get_cursor(cbp);
+            uint64_t cursor2 = cap_get_cursor(ctp);
 
             leu = (cursor1 <= cursor2);
         }
@@ -1938,7 +1937,7 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
         do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
     } else {
-        uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+        uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = cursor + rt + (int32_t)offset;
 
         if ((addr + size) > (cbp->cr_base + cbp->cr_length)) {
@@ -1972,7 +1971,7 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
     // space and increase code density since loading relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    uint64_t addr = cbp->cr_base + cbp->cr_offset;
+    uint64_t addr = cap_get_cursor(cbp);
 
     env->linkedflag = 0;
     if (creg_inaccessible(perms, cb)) {
@@ -2007,7 +2006,7 @@ target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
     // space and increase code density since storing relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    uint64_t addr = cbp->cr_base + cbp->cr_offset;
+    uint64_t addr = cap_get_cursor(cbp);
 
     if (creg_inaccessible(perms, cb)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cb);
@@ -2054,7 +2053,7 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
     } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST, cb);
     } else {
-        uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+        uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = cursor + rt + (int32_t)offset;
 
         if ((addr + size) > (cbp->cr_base + cbp->cr_length)) {
@@ -2107,7 +2106,7 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
         return (target_ulong)0;
     } else {
-        uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+        uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = (uint64_t)((cursor + rt) + (int32_t)offset);
         /* uint32_t tag = cheri_tag_get(env, addr, cd, NULL); */
 
@@ -2142,7 +2141,7 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     // space and increase code density since loading relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    uint64_t addr = cbp->cr_base + cbp->cr_offset;
+    uint64_t addr = cap_get_cursor(cbp);
 
     env->linkedflag = 0;
     if (creg_inaccessible(perms, cd)) {
@@ -2219,7 +2218,7 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_PERM_ST_LC_CAP, cb);
         return (target_ulong)0;
     } else {
-        uint64_t cursor = cbp->cr_base + cbp->cr_offset;
+        uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
 
         if ((addr + CHERI_CAP_SIZE) > (cbp->cr_base + cbp->cr_length)) {
@@ -2245,7 +2244,7 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    uint64_t addr = cbp->cr_base + cbp->cr_offset;
+    uint64_t addr = cap_get_cursor(cbp);
 
     if (creg_inaccessible(perms, cs)) {
         do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, cs);
