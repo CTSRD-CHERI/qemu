@@ -431,7 +431,6 @@ static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
 
 do_exception:
     env->CP0_BadVAddr = addr;
-    // env->active_tc.C[CP2CAP_EPCC] = *cr;
     if (!instavail)
         env->error_code |= EXCP_INST_NOTAVAIL;
     do_raise_c2_exception(env, cause, regnum);
@@ -439,21 +438,7 @@ do_exception:
 
 static inline bool creg_inaccessible(uint32_t perms, uint32_t creg)
 {
-#ifdef LEGACY_PROTECTED_CAP_GPRS
-    /*
-     * Check to see if the capability register is inaccessible.
-     * See Section 5.4 in CHERI Architecture manual.
-     */
-    if (!(perms & CAP_ACCESS_SYS_REGS) && (creg == CP2CAP_EPCC ||
-                creg == CP2CAP_KDC || creg == CP2CAP_KCC ||
-                creg == CP2CAP_KR1C  || creg == CP2CAP_KR2C)) {
-        return true;
-    } else {
-        return false;
-    }
-#else
     return false;
-#endif
 }
 
 static inline target_ulong
