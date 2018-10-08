@@ -601,11 +601,14 @@ const mips_def_t mips_defs[] =
         .CP0_PRid = CHERI_PROCESSOR_ID,
         .CP0_Config0 = MIPS_CONFIG0 | (0x2 << CP0C0_AT) |
                        (MMU_TYPE_R4000 << CP0C0_MT),
-        .CP0_Config1 = MIPS_CONFIG1 | (1 << CP0C1_FP) | (31 << CP0C1_MMU) |
+        .CP0_Config1 = MIPS_CONFIG1 |
+#if defined(TARGET_CHERI)
+                       (1 << CP0C1_C2) |
+#endif /* ! TARGET_CHERI */
+                       (1 << CP0C1_FP) | (31 << CP0C1_MMU) |
                        (1 << CP0C1_IS) | (4 << CP0C1_IL) | (1 << CP0C1_IA) |
                        (1 << CP0C1_DS) | (4 << CP0C1_DL) | (1 << CP0C1_DA) |
-                       (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP) |
-                       0x40,
+                       (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP),
         .CP0_Config2 = MIPS_CONFIG2,
         .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI) | (1 << CP0C3_BI) |
                        (1 << CP0C3_BP),
@@ -614,9 +617,9 @@ const mips_def_t mips_defs[] =
         .SYNCI_Step = 32,
         .CCRes = 2,
 #if defined(TARGET_CHERI)
-        .CP0_Status_rw_bitmask = 0x7678FFFF,
+        .CP0_Status_rw_bitmask = 0x76F8FFFF,
 #else
-        .CP0_Status_rw_bitmask = 0x3678FFFF,
+        .CP0_Status_rw_bitmask = 0x36F8FFFF,
 #endif
         /* The 5Kf has F64 / L / W but doesn't use the fcr0 bits. */
         .CP1_fcr0 = (1 << FCR0_D) | (1 << FCR0_S) |

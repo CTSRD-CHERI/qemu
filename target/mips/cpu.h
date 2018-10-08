@@ -1093,11 +1093,11 @@ void cpu_mips_soft_irq(CPUMIPSState *env, int irq, int level);
 /* helper.c */
 target_ulong exception_resume_pc (CPUMIPSState *env);
 #ifdef CONFIG_MIPS_LOG_INSTR
+void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
+                target_ulong value);
 #ifdef TARGET_CHERI
 void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
                          cap_register_t *old_reg, const char* name);
-void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
-                target_ulong value);
 void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */
 #endif /* CONFIG_MIPS_LOG_INSTR */
