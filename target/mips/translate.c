@@ -21523,8 +21523,11 @@ void cpu_state_reset(CPUMIPSState *env)
     null_capability(&env->active_tc.CapBranchTarget);
 
     // env->CP0_Status |= (1 << CP0St_CU2);
-    env->CP0_Status |= (1 << CP0St_KX);
 #endif /* TARGET_CHERI */
+    if (is_beri_or_cheri(env)) {
+        // enable KX bit on startup
+        env->CP0_Status |= (1 << CP0St_KX);
+    }
 }
 
 void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb,
