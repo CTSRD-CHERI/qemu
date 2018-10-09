@@ -830,7 +830,6 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
 void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CIncBase: Increase Base
@@ -855,7 +854,6 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 #ifdef DO_CHERI_STATISTICS
     stat_num_cincoffset++;
 #endif
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CIncOffset: Increase Offset
@@ -883,7 +881,6 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
 void helper_cmovz(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     /*
      * CMOVZ: conditionally move capability on zero
@@ -900,7 +897,6 @@ void helper_cmovn(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 
 target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CJALR: Jump and Link Capability Register
@@ -932,7 +928,6 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 
 target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CJR: Jump Capability Register
@@ -962,7 +957,6 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
 static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
                          uint32_t ct, bool conditional)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     uint64_t ct_base_plus_offset = cap_get_cursor(ctp);
@@ -1018,7 +1012,6 @@ void helper_ccseal(CPUMIPSState *env, uint32_t cd, uint32_t cs, uint32_t ct)
 
 void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CBuildCap traps on cbp == NULL so we use reg0 as $ddc. This saves encoding
     // space and also means a cbuildcap relative to $ddc can be one instr instead
     // of two.
@@ -1061,7 +1054,6 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
 
 void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     /*
@@ -1206,7 +1198,6 @@ void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
 void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t cursor = cap_get_cursor(cbp);
     uint64_t cursor_rt;
@@ -1282,7 +1273,6 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t cursor = cap_get_cursor(cbp);
     uint64_t cursor_rt = cursor + rt;
@@ -1346,7 +1336,6 @@ void helper_csetcause(CPUMIPSState *env, target_ulong rt)
 void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CSetLen: Set Length
@@ -1370,7 +1359,6 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 #ifdef DO_CHERI_STATISTICS
     stat_num_csetoffset++;
 #endif
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CSetOffset: Set cursor to an offset from base
@@ -1395,7 +1383,6 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
 target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CToPtr traps on ctp == NULL so we use reg0 as $ddc there. This means we
     // can have a CToPtr relative to $ddc as one instruction instead of two and
     // is required since clang still assumes it can use zero as $ddc in cfromptr/ctoptr
@@ -1425,7 +1412,6 @@ target_ulong helper_ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     /*
@@ -1466,7 +1452,6 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
  */
 target_ulong helper_ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean equal = FALSE;
@@ -1488,7 +1473,6 @@ target_ulong helper_ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 
 target_ulong helper_cne(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean equal = FALSE;
@@ -1510,7 +1494,6 @@ target_ulong helper_cne(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 
 target_ulong helper_clt(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean signed_less = FALSE;
@@ -1536,7 +1519,6 @@ target_ulong helper_clt(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 
 target_ulong helper_cle(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean signed_lte = FALSE;
@@ -1562,7 +1544,6 @@ target_ulong helper_cle(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 
 target_ulong helper_cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean ltu = FALSE;
@@ -1588,7 +1569,6 @@ target_ulong helper_cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 
 target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean leu = FALSE;
@@ -1614,7 +1594,6 @@ target_ulong helper_cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 
 target_ulong helper_cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean equal = FALSE;
@@ -1650,7 +1629,6 @@ target_ulong helper_cnexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 
 target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
     gboolean is_subset = FALSE;
@@ -1676,7 +1654,6 @@ target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         uint32_t offset, uint32_t size)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CL[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since loading relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
@@ -1718,7 +1695,6 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
  */
 target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CLL[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since loading relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
@@ -1751,7 +1727,6 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
  */
 target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CSC[BHWD] traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since storing relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
@@ -1786,7 +1761,6 @@ target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
 target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         uint32_t offset, uint32_t size)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CS[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since storing relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
@@ -1830,7 +1804,6 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
 target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt, uint32_t offset)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CLC traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since loading relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
@@ -1876,7 +1849,6 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
 target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CLLC traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since loading relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
@@ -1922,7 +1894,6 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CSC traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since storing relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
@@ -1966,7 +1937,6 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
 
 target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     // CSCC traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since storing relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
