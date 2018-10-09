@@ -301,6 +301,16 @@ int_to_cap(uint64_t x, cap_register_t *cr)
     return cr;
 }
 
+static void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix,
+                         const char* name) {
+    fprintf(f, "%s%s|v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64 "\n",
+            prefix, name, cr->cr_tag, is_cap_sealed(cr) ? 1 : 0,
+            (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
+            cr->cr_base, cr->cr_length);
+    fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
+            cr->cr_offset, cr->cr_otype);
+}
+
 #ifdef CHERI_MAGIC128
 
 #define CHERI_CAP_SIZE  16
@@ -2037,17 +2047,7 @@ void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
             cvtrace_dump_cap_cbl(&env->cvtrace, cr);
         }
         if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-            // TODO: allow printing a string instead of C%d
-            fprintf(qemu_logfile,
-                    "    Write %s|v:%d s:%d p:%08x b:%016" PRIx64
-                        " l:%016" PRIx64 "\n", name, cr->cr_tag,
-                    is_cap_sealed(cr) ? 1 : 0,
-                    (((cr->cr_uperms & CAP_UPERMS_ALL) <<
-                                                       CAP_UPERMS_MEM_SHFT) |
-                     (cr->cr_perms & CAP_PERMS_ALL)),
-                    cr->cr_base, cr->cr_length);
-            fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
-                    cr->cr_offset, cr->cr_otype);
+            print_capreg(qemu_logfile, cr, "    Write ", name);
         }
     }
 }
