@@ -256,6 +256,8 @@ const QEMULogItem qemu_log_items[] = {
       "show trace before each executed TB (lots of logs)" },
     { CPU_LOG_INSTR, "instr",
       "CHERI only: show executed instructions and changed CPU state" },
+    { CPU_LOG_GUEST_DEBUG_MSG, "guest_debug",
+      "CHERI only: Print guest debug messages" },
     { CPU_LOG_CHERI_BOUNDS, "bounds",
       "CHERI only: Log out-of-bounds capability creation" },
     { CPU_LOG_CVTRACE, "cvtrace",

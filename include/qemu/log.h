@@ -53,6 +53,7 @@ static inline bool qemu_log_separate(void)
  */
 #define CPU_LOG_USER_ONLY  (1 << 20)
 #define CPU_LOG_CHERI_BOUNDS (1 << 21)
+#define CPU_LOG_GUEST_DEBUG_MSG (1 << 22)
 
 /* Lock output for a series of related logs.  Since this is not needed
  * for a single qemu_log / qemu_log_mask / qemu_log_mask_and_addr, we
