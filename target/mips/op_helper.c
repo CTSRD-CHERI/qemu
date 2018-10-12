@@ -2042,32 +2042,51 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
         /* Always print these messages even if user-space only tracing is on */
         mode = cl_default_trace_format;
     }
-    if (!mode) {
+
+    if (!mode && qemu_loglevel_mask(CPU_LOG_GUEST_DEBUG_MSG))
+        mode = CPU_LOG_INSTR;
+
+    if (!mode)
         return;
-    }
+
     uint8_t buffer[4096];
     /* Address loaded from a0, length from a1, print mode in a2 */
     typedef enum _PrintMode {
         DEBUG_MESSAGE_CSTRING = 0,
-        DEBUG_MESSAGE_HEXDUMP = 1
+        DEBUG_MESSAGE_HEXDUMP = 1,
+        DEBUG_MESSAGE_PTR = 2,
+        DEBUG_MESSAGE_DECIMAL= 3
     } PrintMode;
     target_ulong vaddr = env->active_tc.gpr[4];
     target_ulong length = MIN(sizeof(buffer), env->active_tc.gpr[5]);
     PrintMode print_mode = (PrintMode)env->active_tc.gpr[6];
 
+    // For ptr + decimal mode we only need
+    if (print_mode == DEBUG_MESSAGE_PTR) {
+        if (mode & CPU_LOG_INSTR) {
+            qemu_log("   ptr = 0x" TARGET_FMT_lx "\r\n", vaddr);
+        }
+        return;
+    } else if (print_mode == DEBUG_MESSAGE_DECIMAL) {
+        if (mode & CPU_LOG_INSTR) {
+            qemu_log("   value = " TARGET_FMT_ld "\r\n", vaddr);
+        }
+        return;
+    }
+    // Otherwise we meed to fetch the memory referenced by vaddr+length
     int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
     if (ret != 0) {
         warn_report("CHERI DEBUG HELPER: Could not write " TARGET_FMT_ld
-                    " bytes at vaddr 0x" TARGET_FMT_lx "\n", length, vaddr);
+                    " bytes at vaddr 0x" TARGET_FMT_lx "\r\n", length, vaddr);
     }
-    if (mode & CPU_LOG_INSTR) {
-        qemu_log("DEBUG MESSAGE @ 0x" TARGET_FMT_lx "\n", pc);
+    if ((mode & CPU_LOG_INSTR) || qemu_logfile) {
+        qemu_log("DEBUG MESSAGE @ 0x" TARGET_FMT_lx "\r\n", pc);
         if (print_mode == DEBUG_MESSAGE_CSTRING) {
             /* XXXAR: Escape newlines, etc.? */
             qemu_log("    message = \"%s\"\n", buffer);
         } else if (print_mode == DEBUG_MESSAGE_HEXDUMP) {
             qemu_log("   Dumping " TARGET_FMT_lu " bytes starting at 0x"
-                     TARGET_FMT_lx "\n", length, vaddr);
+                     TARGET_FMT_lx "\r\n", length, vaddr);
             do_hexdump(qemu_logfile, buffer, length, vaddr);
         }
     } else if (mode & CPU_LOG_CVTRACE) {
