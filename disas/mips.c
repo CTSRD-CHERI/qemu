@@ -4294,6 +4294,10 @@ set_default_mips_dis_options (struct disassemble_info *info)
       mips_cp0sel_names = chosen_arch->cp0sel_names;
       mips_cp0sel_names_len = chosen_arch->cp0sel_names_len;
       mips_hwr_names = chosen_arch->hwr_names;
+      // XXXAR: print sensible n64 register names for TARGET_CHERI
+      if (chosen_arch->isa & ISA_MIPS64) {
+        mips_gpr_names = mips_gpr_names_newabi;
+      }
     }
 #endif
 }

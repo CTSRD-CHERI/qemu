@@ -119,6 +119,12 @@ static void mips_cpu_disas_set_info(CPUState *s, disassemble_info *info) {
 #else
     info->print_insn = print_insn_little_mips;
 #endif
+
+#ifdef TARGET_MIPS64
+    // See disas/mips.c
+#define bfd_mach_mipsisa64r2           65
+    info->mach = bfd_mach_mipsisa64r2;
+#endif
 }
 
 static void mips_cpu_realizefn(DeviceState *dev, Error **errp)

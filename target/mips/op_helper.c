@@ -3343,12 +3343,26 @@ static void dump_changed_cop0(CPUMIPSState *env)
 static void dump_changed_regs(CPUMIPSState *env)
 {
     TCState *cur = &env->active_tc;
-    static const char * const gpr_name[] = {
-        "r0", "at", "v0", "v1", "a0", "a1", "a2", "a3",
-        "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
-        "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
-        "t8", "t9", "k0", "k1", "gp", "sp", "s8", "ra",
+
+#ifndef TARGET_MIPS64
+    static const char * const gpr_name[32] =
+    {
+      "zero", "at",   "v0",   "v1",   "a0",   "a1",   "a2",   "a3",
+      "t0",   "t1",   "t2",   "t3",   "t4",   "t5",   "t6",   "t7",
+      "s0",   "s1",   "s2",   "s3",   "s4",   "s5",   "s6",   "s7",
+      "t8",   "t9",   "k0",   "k1",   "gp",   "sp",   "s8",   "ra"
     };
+#else
+    // Use n64 register names
+    static const char * const gpr_name[32] =
+    {
+      "zero", "at",   "v0",   "v1",   "a0",   "a1",   "a2",   "a3",
+      "a4",   "a5",   "a6",   "a7",   "t0",   "t1",   "t2",   "t3",
+      "s0",   "s1",   "s2",   "s3",   "s4",   "s5",   "s6",   "s7",
+      "t8",   "t9",   "k0",   "k1",   "gp",   "sp",   "s8",   "ra"
+    };
+#endif
+
     int i;
 
     for (i=1; i<32; i++) {
