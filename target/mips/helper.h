@@ -182,6 +182,8 @@ DEF_HELPER_2(instr_stop, void, env, i64)
 DEF_HELPER_2(cheri_debug_message, void, env, i64)
 #endif
 
+DEF_HELPER_2(magic_library_function, void, env, tl)
+
 #if defined(TARGET_CHERI)
 DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
 DEF_HELPER_1(ccheck_btarget, void, env)

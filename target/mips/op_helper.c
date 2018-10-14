@@ -5449,3 +5449,101 @@ target_ulong helper_rdhwr_statcounters_ignored(CPUMIPSState *env, uint32_t num)
     return 0xdeadbeef;
 }
 #endif
+
+/* Reduce the length so that addr + len doesn't cross a page boundary.  */
+static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
+{
+#ifndef CONFIG_USER_ONLY
+    target_ulong low_bits = (addr & ~TARGET_PAGE_MASK);
+    if (low_bits + len - 1 >= TARGET_PAGE_SIZE) {
+        return TARGET_PAGE_SIZE - low_bits;
+    }
+#endif
+    return len;
+}
+
+
+#define MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG UINT64_C(0xbadc0de)
+
+static void do_magic_memset(CPUMIPSState *env, uint64_t ra)
+{
+    // See target/s390x/mem_helper.c
+    int mmu_idx = cpu_mmu_index(env, false);
+    target_ulong dest = env->active_tc.gpr[4];      // $a0 = dest
+    uint8_t value = (uint8_t)env->active_tc.gpr[5]; // $a1 = c
+    target_ulong len = env->active_tc.gpr[6];       // $a2 = len
+
+    target_ulong original_dest = dest;
+    if ((env->active_tc.gpr[3] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG) {
+        // This is a partial write -> $a0 is not the real dest.
+        // The original dest was stored in $v0 by the previous call
+        original_dest = env->active_tc.gpr[2];
+    } else {
+        // Not a partial write -> $v0 should be zero otherwise this is a usage error!
+        if (env->active_tc.gpr[2] != 0) {
+            qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call memset library function "
+                          "with non-zero value in $v0 (0x" TARGET_FMT_lx
+                          ") and continuation flag not set in $v1 (0x" TARGET_FMT_lx
+                          ")!\n", env->active_tc.gpr[2], env->active_tc.gpr[3]);
+            do_raise_exception(env, EXCP_RI, GETPC());
+        }
+    }
+
+    while (len > 0) {
+        void *p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
+        if (p) {
+            /* Access to the whole page in write mode granted.  */
+            target_ulong l_adj = adj_len_to_page(len, dest);
+            memset(p, value, l_adj);
+            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG, "%s: Set "
+                          TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
+                          __func__, l_adj, value, dest);
+            dest += l_adj;
+            len -= l_adj;
+        } else {
+            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG,
+                          "%s: TLB miss attempting to set " TARGET_FMT_ld
+                          " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
+                          __func__, len, value, dest);
+            // update the arguments before taking the tlb fault:
+            env->active_tc.gpr[4] = dest;
+            env->active_tc.gpr[5] = value;
+            env->active_tc.gpr[6] = len;
+            // Indicate partial write by setting $v1 to -$v1
+            env->active_tc.gpr[3] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
+            // and save the original dst in $v0 so that we end up with the correct return value
+            env->active_tc.gpr[2] = original_dest;
+
+            /* We failed to get access to the whole page. The next write
+               access will likely fill the QEMU TLB for the next iteration.  */
+            cpu_stb_data_ra(env, dest, value, ra); // noreturn (since it is handled by software tlb miss handler)
+            dest++;
+            len--;
+        }
+    }
+    env->active_tc.gpr[2] = original_dest;
+}
+
+#define MAGIC_HELPER_DONE_FLAG 0xDEC0DED
+
+// Magic library function calls:
+void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "--- Calling magic library function 0x" TARGET_FMT_lx "\n", which);
+    // High bits can be used by function to indicate continuation after TLB miss
+    switch (which & UINT32_MAX) {
+    case 1:
+        do_magic_memset(env, GETPC());
+        break;
+    case MAGIC_HELPER_DONE_FLAG:
+        qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call library function "
+                                     "with success flag set in $v1!\n");
+        do_raise_exception(env, EXCP_RI, GETPC());
+    default:
+        qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call invalid library function "
+                          TARGET_FMT_lx "\n", which);
+        do_raise_exception(env, EXCP_RI, GETPC());
+    }
+    // Indicate success by setting $v1 to 0xaffe
+    env->active_tc.gpr[3] = MAGIC_HELPER_DONE_FLAG;
+}
