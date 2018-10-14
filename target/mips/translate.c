@@ -2960,8 +2960,10 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
              * $v1 = 6 -> purecap memmmove/memmove_c(dst=$c3, src=$c4, len=$a0)
              * TODO: strlen? str{l,n}cpy?
              */
-            if ((uint16_t)imm == 0xC0DE)
+            if ((uint16_t)imm == 0xC0DE) {
+                save_cpu_state(ctx, 1);
                 gen_helper_magic_library_function(cpu_env, cpu_gpr[3]);
+            }
 
         }
 #endif /* CONFIG_MIPS_LOG_INSTR */

@@ -1104,6 +1104,7 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg,
         uintptr_t pc);
 void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
                                fprintf_function cpu_fprintf, int flags);
+void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const char* name);
 #ifdef CHERI_MAGIC128
 int  cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
         uint64_t *tps, uint64_t *length, uintptr_t pc);

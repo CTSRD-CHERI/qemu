@@ -2015,7 +2015,7 @@ static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulo
         fprintf(f, "%02x", c);
         ascii_chars[addr % 16] = isprint(c) ? c : '.';
         if ((addr % 16) == 15) {
-            fprintf(f, "  %s\n", ascii_chars);
+            fprintf(f, "  %s\r\n", ascii_chars);
             line_start += 16;
         }
     }
@@ -2029,7 +2029,7 @@ static void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulo
             }
             ascii_chars[addr % 16] = ' ';
         }
-        fprintf(f, "  %s\n", ascii_chars);
+        fprintf(f, "  %s\r\n", ascii_chars);
     }
 }
 
@@ -5464,64 +5464,120 @@ static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 
 
 #define MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG UINT64_C(0xbadc0de)
+#define MIPS_REGNUM_V0 2
+#define MIPS_REGNUM_V1 3
+#define MIPS_REGNUM_A0 4
+#define MIPS_REGNUM_A1 5
+#define MIPS_REGNUM_A2 6
 
-static void do_magic_memset(CPUMIPSState *env, uint64_t ra)
+static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
 {
-    // See target/s390x/mem_helper.c
+    // See target/s390x/mem_helper.c and arm/helper.c HELPER(dc_zva)
     int mmu_idx = cpu_mmu_index(env, false);
-    target_ulong dest = env->active_tc.gpr[4];      // $a0 = dest
-    uint8_t value = (uint8_t)env->active_tc.gpr[5]; // $a1 = c
-    target_ulong len = env->active_tc.gpr[6];       // $a2 = len
+    TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
 
+    target_ulong dest = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
+    uint8_t value = (uint8_t)env->active_tc.gpr[MIPS_REGNUM_A1]; // $a1 = c
+    target_ulong len = env->active_tc.gpr[MIPS_REGNUM_A2];       // $a2 = len
+    // fprintf(stderr, "--- %s: Setting " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\r\n", __func__, len, value, dest);
     target_ulong original_dest = dest;
-    if ((env->active_tc.gpr[3] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG) {
+    if ((env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG) {
         // This is a partial write -> $a0 is not the real dest.
         // The original dest was stored in $v0 by the previous call
-        original_dest = env->active_tc.gpr[2];
+        original_dest = env->active_tc.gpr[MIPS_REGNUM_V0];
+        // fprintf(stderr, "--- %s: Got continuation for write access at " TARGET_FMT_plx "\r\n", __func__, original_dest);
     } else {
         // Not a partial write -> $v0 should be zero otherwise this is a usage error!
         if (env->active_tc.gpr[2] != 0) {
             qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call memset library function "
                           "with non-zero value in $v0 (0x" TARGET_FMT_lx
                           ") and continuation flag not set in $v1 (0x" TARGET_FMT_lx
-                          ")!\n", env->active_tc.gpr[2], env->active_tc.gpr[3]);
+                          ")!\n", env->active_tc.gpr[MIPS_REGNUM_V0], env->active_tc.gpr[MIPS_REGNUM_V1]);
             do_raise_exception(env, EXCP_RI, GETPC());
         }
     }
-
-    while (len > 0) {
-        void *p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
-        if (p) {
-            /* Access to the whole page in write mode granted.  */
-            target_ulong l_adj = adj_len_to_page(len, dest);
-            memset(p, value, l_adj);
-            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG, "%s: Set "
-                          TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
-                          __func__, l_adj, value, dest);
-            dest += l_adj;
-            len -= l_adj;
-        } else {
-            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG,
-                          "%s: TLB miss attempting to set " TARGET_FMT_ld
-                          " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
-                          __func__, len, value, dest);
-            // update the arguments before taking the tlb fault:
-            env->active_tc.gpr[4] = dest;
-            env->active_tc.gpr[5] = value;
-            env->active_tc.gpr[6] = len;
-            // Indicate partial write by setting $v1 to -$v1
-            env->active_tc.gpr[3] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
-            // and save the original dst in $v0 so that we end up with the correct return value
-            env->active_tc.gpr[2] = original_dest;
-
-            /* We failed to get access to the whole page. The next write
-               access will likely fill the QEMU TLB for the next iteration.  */
-            cpu_stb_data_ra(env, dest, value, ra); // noreturn (since it is handled by software tlb miss handler)
-            dest++;
-            len--;
-        }
+    if (original_dest >= 0xC000000000000000ULL) {
+#if 0
+        fprintf(stderr, "--- Handling addresses > 0xc.... with memset helper is broken for some reason!\r\n"
+                        "    Falling back to MIPS code for " TARGET_FMT_plx " bytes at " TARGET_FMT_plx "\r\n", len, dest);
+#endif
+        return false;
     }
-    env->active_tc.gpr[2] = original_dest;
+    if (len == 0) {
+        return false;
+    }
+    while (len > 0) {
+        // probing for write access:
+        // fprintf(stderr, "Probing for write access at " TARGET_FMT_plx "\r\n", dest);
+        // fflush(stderr);
+        // update the arguments in case probe_write_access takes the tlb fault:
+        env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
+        env->active_tc.gpr[MIPS_REGNUM_A1] = value;
+        env->active_tc.gpr[MIPS_REGNUM_A2] = len;
+        // Indicate partial write by setting $v1 to -$v1
+        env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
+        // and save the original dst in $v0 so that we end up with the correct return value
+        env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest;
+        // Now possibly take a TLB miss:
+        // probe_write(env, dest, 1, mmu_idx, ra); // might trap
+        // hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
+        helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // might trap
+        void *p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
+        if (!p) {
+            // fprintf(stderr, "Translated " TARGET_FMT_plx " to host: %p\r\n", dest, p);
+            hwaddr lladdr = cpu_mips_translate_address(env, dest, MMU_DATA_STORE);
+            // probe_write(env, dest, 1, mmu_idx, ra); // might trap
+            // hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
+            helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // might trap
+            if (lladdr == -1LL) {
+                fprintf(stderr, "Failed to probe again for for write access at " TARGET_FMT_plx " -> got hwaddr %#" HWADDR_PRIx "\r\n", dest, lladdr);
+                assert(false && "This should not happen!");
+                // helper_ret_stb_mmu(env, dest, value, oi, ra); // should cause a tlb miss error
+                probe_write(env, dest, 1, mmu_idx, ra);
+                assert(false && "This should not return!");
+            }
+            // fprintf(stderr, "Probing for write access at " TARGET_FMT_plx " -> got hwaddr %#" HWADDR_PRIx "\r\n", dest, guest_addr);
+            helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // should succeeed now!
+            p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
+        }
+        assert(((uint8_t*)p)[0] == 0xff && "helper_ret_stb_mmu should have changed this byte!");
+        // fprintf(stderr, "Translated " TARGET_FMT_plx " to host: %p\r\n", dest, p);
+        if (!p) {
+            // Could happend with device memory -> should use slow path?
+            fprintf(stderr, "ERROR: could not translate " TARGET_FMT_plx " to host even after probe_write()!\r\n", dest);
+            abort();
+#if 0
+            // FIXME: need to update register arguments
+            for (target_ulong i = 0; i < len; i++) {
+                helper_ret_stb_mmu(env, dest + i, value, oi, ra);
+            }
+#endif
+        }
+        /* Access to the whole page in write mode granted.  */
+        target_ulong l_adj = adj_len_to_page(len, dest);
+        if (l_adj != len) {
+            // fprintf(stderr, "%s: Limited len to " TARGET_FMT_ld " bytes (from " TARGET_FMT_ld ") at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, len, dest, p);
+        }
+        assert(l_adj != 0);
+        assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
+
+        memset(p, value, l_adj);
+        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG, "%s: Set "
+                      TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
+                      __func__, l_adj, value, dest);
+        // fprintf(stderr, "%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, value, dest, p);
+        dest += l_adj;
+        len -= l_adj;
+    }
+    if (len != 0) {
+        fprintf(stderr, "ERROR: did not memset all bytes at " TARGET_FMT_plx ". Remainig len = " TARGET_FMT_plx "\r\n", dest, len);
+        abort();
+    }
+    env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest;
+    // also update a0 and a2 to match what the kernel memset does:
+    env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
+    env->active_tc.gpr[MIPS_REGNUM_A2] = len;
+    return true;
 }
 
 #define MAGIC_HELPER_DONE_FLAG 0xDEC0DED
@@ -5533,7 +5589,57 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
     // High bits can be used by function to indicate continuation after TLB miss
     switch (which & UINT32_MAX) {
     case 1:
-        do_magic_memset(env, GETPC());
+        if (!do_magic_memset(env, GETPC()))
+            return;
+        // otherwise update $v1 to indicate success
+        break;
+    case 0xf0:
+    case 0xf1:
+    {
+#if 0
+        uint8_t buffer[TARGET_PAGE_SIZE];
+        // to match memset/memcpy calling convention (use a0 and a2)
+        target_ulong src = env->active_tc.gpr[MIPS_REGNUM_A0];
+        target_ulong real_len = env->active_tc.gpr[MIPS_REGNUM_A2];
+        fprintf(stderr, "--- Memory dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
+                lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), real_len, src);
+        while (real_len > 0) {
+            target_ulong len = adj_len_to_page(real_len, src);
+            real_len -= len;
+            if (len != env->active_tc.gpr[MIPS_REGNUM_A2]) {
+                fprintf(stderr, "--- partial dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
+                        lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
+            }
+            if (cpu_memory_rw_debug(ENV_GET_CPU(env), src, buffer, len, false) == 0) {
+                bool have_nonzero = false;
+                for (int i = 0; i < len; i++)
+                    if (buffer[i] != 0)
+                        have_nonzero = true;
+                if (have_nonzero)
+                    do_hexdump(stderr, buffer, len, src);
+                else
+                    fprintf(stderr, "   -- all zeroes\r\n");
+            } else {
+                fprintf(stderr, "--- Memory dump at %s(%s): Could not fetch" TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
+                        lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
+
+            }
+        }
+#endif
+    }
+    case 0xfe:
+    case 0xff:
+#if 0
+        // dump argument and return registers:
+        fprintf(stderr, "%s(%s): argument+return registers: \r\n"
+                        "\tv0 = 0x" TARGET_FMT_lx "\tv1 = 0x" TARGET_FMT_lx "\r\n"
+                        "\ta0 = 0x" TARGET_FMT_lx "\ta1 = 0x" TARGET_FMT_lx "\r\n"
+                        "\ta2 = 0x" TARGET_FMT_lx "\ta3 = 0x" TARGET_FMT_lx "\r\n",
+                        lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xfe ? "entry" : "exit"),
+                        env->active_tc.gpr[2], env->active_tc.gpr[3],
+                        env->active_tc.gpr[4], env->active_tc.gpr[5],
+                        env->active_tc.gpr[6], env->active_tc.gpr[7]);
+#endif
         break;
     case MAGIC_HELPER_DONE_FLAG:
         qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call library function "
@@ -5545,5 +5651,5 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
         do_raise_exception(env, EXCP_RI, GETPC());
     }
     // Indicate success by setting $v1 to 0xaffe
-    env->active_tc.gpr[3] = MAGIC_HELPER_DONE_FLAG;
+    env->active_tc.gpr[MIPS_REGNUM_V1] = MAGIC_HELPER_DONE_FLAG;
 }

@@ -301,8 +301,7 @@ int_to_cap(uint64_t x, cap_register_t *cr)
     return cr;
 }
 
-static void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix,
-                         const char* name) {
+void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const char* name) {
     fprintf(f, "%s%s|v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64 "\n",
             prefix, name, cr->cr_tag, is_cap_sealed(cr) ? 1 : 0,
             (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
