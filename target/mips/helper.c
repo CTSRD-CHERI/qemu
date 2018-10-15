@@ -1373,20 +1373,12 @@ static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAcce
 
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, uintptr_t pc)
 {
-    if (size > CHERI_CAP_SIZE) {
-        // Handle large writes (such as from magic memset)
-        int32_t remaining_bytes = size;
-        for (int32_t i = 0; i < size; i++) {
-            int32_t to_clear = MIN(remaining_bytes, CHERI_CAP_SIZE);
-            cheri_tag_invalidate(env, vaddr + i, to_clear, pc);
-            remaining_bytes -= to_clear;
-        }
-        assert(remaining_bytes == 0);
-        return; // all tag bits cleared
+    // This must not cross a page boundary since we are only translating once!
+    assert(size > 0);
+    if(((vaddr & TARGET_PAGE_MASK) != ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
+        error_report("FATAL: %s: " TARGET_FMT_lx "+ %d crosses a page boundary", __func__, vaddr, size);
+        exit(1);
     }
-    assert(size <= CHERI_CAP_SIZE && "This case only handles writes up to CAP_SIZE");
-    uint64_t tag1, tag2;
-    uint8_t *tagblk1, *tagblk2;
     MemoryRegion* mr = NULL;
     hwaddr paddr = v2p_addr(env, vaddr, 0, 0xFF, pc);
     ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
@@ -1395,28 +1387,10 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
     if (ram_addr == -1LL)
         return;
 
-
-    /* Get the tag number for both the start and end of write. */
-    tag1 = ram_addr >> CAP_TAG_SHFT;
-    tag2 = (ram_addr + (size - 1)) >> CAP_TAG_SHFT;
-
-    if (tag1 == tag2) {
-        /* The write only invalidates one tag. */
-        tagblk1 = get_cheri_tagmem(tag1 >> CAP_TAGBLK_SHFT);
-        if (tagblk1 != NULL)
-            tagblk1[CAP_TAGBLK_IDX(tag1)] = 0;
-    } else {
-        /* The write invalidates two tags. */
-        tagblk1 = get_cheri_tagmem(tag1 >> CAP_TAGBLK_SHFT);
-        tagblk2 = get_cheri_tagmem(tag2 >> CAP_TAGBLK_SHFT);
-        if (tagblk1 != NULL)
-            tagblk1[CAP_TAGBLK_IDX(tag1)] = 0;
-        if (tagblk2 != NULL)
-            tagblk2[CAP_TAGBLK_IDX(tag2)] = 0;
-    }
+    cheri_tag_phys_invalidate(ram_addr, size);
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
+    if (paddr == env->lladdr)
         env->linkedflag = 0;
 }
 
