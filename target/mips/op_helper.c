@@ -5470,9 +5470,14 @@ static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 #define MIPS_REGNUM_A1 5
 #define MIPS_REGNUM_A2 6
 
-#define MAGIC_MEMSET_STATS 0
+#define MAGIC_MEMSET_STATS 1
 #if MAGIC_MEMSET_STATS != 0
 static volatile uint64_t bytes_memset_with_magic_nop = 0;
+static bool memset_stats_dump_registered = false;
+static void dump_memset_stats_on_exit() {
+    warn_report("Bytes memset with magic nop: %" PRId64 " (%f MB)\r",
+                bytes_memset_with_magic_nop, bytes_memset_with_magic_nop / (1024.0 * 1024.0));
+}
 #endif
 
 
@@ -5480,11 +5485,14 @@ static inline void
 store_byte_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint8_t val,
                          TCGMemOpIdx oi, uintptr_t retaddr)
 {
+#ifdef TARGET_CHERI
+    // check $ddc before performing the store
+    check_ddc(env, CAP_PERM_STORE, vaddr, 1, /*instavail=*/true);
+#endif
     helper_ret_stb_mmu(env, vaddr, val, oi, retaddr);
 #ifdef TARGET_CHERI
     // If we returned (i.e. write was successful) we also need to invalidate the
     // tags bit to ensure we are consistent with sb
-    // FIXME: check against $ddc
     cheri_tag_invalidate(env, vaddr, 1);
 #endif
 
@@ -5577,6 +5585,12 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             // Do one store byte to update MMU flags (not sure this is necessary)
             assert(dest + len == original_dest + original_len && "continuation broken?");
             store_byte_and_clear_tag(env, dest, value, oi, ra);
+
+#ifdef TARGET_CHERI
+            // check $ddc before performing the store (it's fine if we don't clear some of the bytes
+            // since this could also happen for a memset implementation that clears backwards).
+            check_ddc(env, CAP_PERM_STORE, dest, l_adj, /*instavail=*/true);
+#endif
             memset(hostaddr, value, l_adj);
 #ifdef TARGET_CHERI
             // We also need to invalidate the tags bits written by the memset
@@ -5635,8 +5649,11 @@ success:
     env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
     env->active_tc.gpr[MIPS_REGNUM_A2] = len;
 #if MAGIC_MEMSET_STATS != 0
+    if (!memset_stats_dump_registered) {
+        atexit(dump_memset_stats_on_exit);
+        memset_stats_dump_registered = true;
+    }
     bytes_memset_with_magic_nop += original_len;
-    warn_report("Bytes memset with magic nop so far: %lld\r", bytes_memset_with_magic_nop);
 #endif
     return true;
 }

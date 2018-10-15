@@ -2679,26 +2679,25 @@ target_ulong helper_ccheck_load_right(CPUMIPSState *env, target_ulong offset, ui
     return helper_ccheck_load(env, read_offset, loaded_bytes) + low_bits;
 }
 
-target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len)
+target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t ddc_offset, uint32_t len, bool instavail)
 {
     const cap_register_t *ddc = &env->active_tc.CHWR.DDC;
-    target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
-
+    target_ulong addr = ddc_offset + cap_get_cursor(ddc);
     // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
-    check_cap(env, ddc, CAP_PERM_STORE, addr, 0, len, /*instavail=*/true);
+    // FIXME: should regnum be 32 instead?
+    check_cap(env, ddc, CAP_PERM_STORE, addr, /*regnum=*/0, len, instavail);
+    return addr;
+}
 
-    return (addr);
+
+target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len)
+{
+    return check_ddc(env, CAP_PERM_STORE, offset, len, /*instavail=*/true);
 }
 
 target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
-    const cap_register_t *ddc = &env->active_tc.CHWR.DDC;
-    target_ulong addr = offset + ddc->cr_offset + ddc->cr_base;
-
-    // fprintf(qemu_logfile, "LD(%u):%016lx\n", len, addr);
-    check_cap(env, ddc, CAP_PERM_LOAD, addr, 0, len, /*instavail=*/true);
-
-    return (addr);
+    return check_ddc(env, CAP_PERM_LOAD, offset, len, /*instavail=*/true);
 }
 
 void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,
