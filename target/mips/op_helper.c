@@ -5470,6 +5470,11 @@ static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 #define MIPS_REGNUM_A1 5
 #define MIPS_REGNUM_A2 6
 
+#define MAGIC_MEMSET_STATS 0
+#if MAGIC_MEMSET_STATS != 0
+static volatile uint64_t bytes_memset_with_magic_nop = 0;
+#endif
+
 static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
 {
     // See target/s390x/mem_helper.c and arm/helper.c HELPER(dc_zva)
@@ -5477,18 +5482,25 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
     // TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
     MEMOP_IDX(DF_BYTE);
 
-    target_ulong original_dest = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
+    const target_ulong original_dest = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
     uint8_t value = (uint8_t)env->active_tc.gpr[MIPS_REGNUM_A1]; // $a1 = c
-    target_ulong len = env->active_tc.gpr[MIPS_REGNUM_A2];       // $a2 = len
+    const target_ulong original_len = env->active_tc.gpr[MIPS_REGNUM_A2];       // $a2 = len
     // fprintf(stderr, "--- %s: Setting " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\r\n", __func__, len, value, dest);
     target_ulong dest = original_dest;
+    target_ulong len = original_len;
     const bool is_continuation = (env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG;
     if (is_continuation) {
         // This is a partial write -> $a0 is the original dest argument.
         // The updated dest (after the partial write) was stored in $v0 by the previous call
         dest = env->active_tc.gpr[MIPS_REGNUM_V0];
-        fprintf(stderr, "--- %s: Got continuation for 0x" TARGET_FMT_lx " byte access at " TARGET_FMT_plx
-                        " -- current dest = " TARGET_FMT_plx "\r\n", __func__, len, original_dest, dest);
+        assert(dest >= original_dest);
+        target_ulong already_written = dest - original_dest;
+        len -= already_written; // update the remaining length
+#if 0
+        fprintf(stderr, "--- %s: Got continuation for 0x" TARGET_FMT_lx " byte access at 0x" TARGET_FMT_plx
+                        " -- current dest = 0x" TARGET_FMT_plx " -- current len = 0x" TARGET_FMT_lx "\r\n",
+                        __func__, original_len, original_dest, dest, len);
+#endif
     } else {
         // Not a partial write -> $v0 should be zero otherwise this is a usage error!
         if (env->active_tc.gpr[MIPS_REGNUM_V0] != 0) {
@@ -5499,36 +5511,20 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             do_raise_exception(env, EXCP_RI, GETPC());
         }
     }
+    assert(dest + len == original_dest + original_len && "continuation broken?");
     const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
-    if (original_dest >= 0xC000000000000000ULL) {
-#if 0
-        fprintf(stderr, "--- Handling addresses > 0xc.... with memset helper is broken for some reason!\r\n"
-                        "    Falling back to MIPS code for " TARGET_FMT_plx " bytes at " TARGET_FMT_plx "\r\n", len, dest);
-#endif
-        // return false;
-        // slow path (since for some reason the tlb stuff below breaks for these addresses
-        target_ulong end = original_dest + len;
-        while (dest < end) {
-            // update $v0 to point to the updated dest in case probe_write_access takes a tlb fault:
-            env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
-            // and mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
-            env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
-            helper_ret_stb_mmu(env, dest, value, oi, ra); // might trap
-            if (unlikely(log_instr)) {
-                dump_store(env, OPC_SB, dest, value);
-            }
-            dest++;
-        }
-        env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest;
-        // also update a0 and a2 to match what the kernel memset does:
-        env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
-        env->active_tc.gpr[MIPS_REGNUM_A2] = len;
-        return true;
-    }
     if (len == 0) {
+        return true; // nothing to do
+    }
+
+    if (dest >= 0xC000000000000000ULL && !is_continuation) {
+        // FIXME: I have no idea why this is breaking (I can't reproduce it baremetal...)
+        // warn_report("Skipping magic memset for address " TARGET_FMT_plx " since it causes CheriBSD to crash...\r", dest);
         return false;
     }
+
     while (len > 0) {
+        assert(dest + len == original_dest + original_len && "continuation broken?");
         // probing for write access:
         // fprintf(stderr, "Probing for write access at " TARGET_FMT_plx "\r\n", dest);
         // fflush(stderr);
@@ -5537,82 +5533,97 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         // and mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
         env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
 
-        // Now possibly take a TLB miss:
-        // probe_write(env, dest, 1, mmu_idx, ra); // might trap
-        hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
-        helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // might trap
-        if (unlikely(log_instr)) {
-            dump_store(env, OPC_SB, dest, 0xff);
-        }
-        void *p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
-        if (is_continuation)
-            assert(p && "SHOULD GET A TLB hit after continuation!");
-        if (!p) {
-            fprintf(stderr, "-- failed to translate " TARGET_FMT_plx " to host: %p\r\n", dest, p);
-            hwaddr lladdr = cpu_mips_translate_address(env, dest, MMU_DATA_STORE);
-            // probe_write(env, dest, 1, mmu_idx, ra); // might trap
-            // hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
-            helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // might trap
+        // If the host address is not in the tlb after the second write we are writing
+        // to something strange so just fall back to the slowpath
+        void* hostaddr = NULL;
+        for (int try = 0; try < 2; try++) {
+            hostaddr = tlb_vaddr_to_host(env, dest, 1, mmu_idx);
+            if (hostaddr)
+                break;
+            if (try) {
+                warn_report("%s: Failed to find address " TARGET_FMT_plx "in TLB on second attempt! I/O memory?", __func__, dest);
+            }
+            /* OK, try a store and see if we can populate the tlb. This
+             * might cause an exception if the memory isn't writable,
+             * in which case we will longjmp out of here. We must for
+             * this purpose use the actual register value passed to us
+             * so that we get the fault address right.
+             */
+            helper_ret_stb_mmu(env, dest, 0xff, oi, ra);
+            if (try) {
+                warn_report("%s: helper_ret_stb_mmu returned after second attempt to store to " TARGET_FMT_plx, __func__, dest);
+            }
             if (unlikely(log_instr)) {
                 dump_store(env, OPC_SB, dest, 0xff);
             }
-            if (lladdr == -1LL) {
-                fprintf(stderr, "Failed to probe again for for write access at " TARGET_FMT_plx " -> got hwaddr %#" HWADDR_PRIx "\r\n", dest, lladdr);
-                assert(false && "This should not happen!");
-                // helper_ret_stb_mmu(env, dest, value, oi, ra); // should cause a tlb miss error
-                probe_write(env, dest, 1, mmu_idx, ra);
-                assert(false && "This should not return!");
-            }
-            // fprintf(stderr, "Probing for write access at " TARGET_FMT_plx " -> got hwaddr %#" HWADDR_PRIx "\r\n", dest, guest_addr);
-            helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // should succeeed now!
-            if (unlikely(log_instr)) {
-                dump_store(env, OPC_SB, dest, 0xff);
-            }
-            p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
         }
-        // helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // should not trap!
-        assert(((uint8_t*)p)[0] == 0xff && "helper_ret_stb_mmu should have changed this byte!");
-        // fprintf(stderr, "Translated " TARGET_FMT_plx " to host: %p\r\n", dest, p);
-        if (!p) {
-            // Could happend with device memory -> should use slow path?
-            fprintf(stderr, "ERROR: could not translate " TARGET_FMT_plx " to host even after probe_write()!\r\n", dest);
-            abort();
-#if 0
-            // FIXME: need to update register arguments
-            for (target_ulong i = 0; i < len; i++) {
-                helper_ret_stb_mmu(env, dest + i, value, oi, ra);
-            }
-#endif
-        }
-        /* Access to the whole page in write mode granted.  */
-        target_ulong l_adj = adj_len_to_page(len, dest);
-        if (l_adj != len) {
-            // fprintf(stderr, "%s: Limited len to " TARGET_FMT_ld " bytes (from " TARGET_FMT_ld ") at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, len, dest, p);
-        }
-        assert(l_adj != 0);
-        assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
+        if (hostaddr) {
+            /* If it's all in the TLB it's fair game for just writing to;
+             * we know we don't need to update dirty status, etc.
+             */
+            target_ulong l_adj = adj_len_to_page(len, dest);
+            assert(l_adj != 0);
+            assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
 
-        memset(p, value, l_adj);
-        if (unlikely(log_instr)) {
-            // TODO: dump as a single big block?
-            for (target_ulong i = 0; i < l_adj; i++)
-                dump_store(env, OPC_SB, dest + i, value);
+            // Do one store byte to update MMU flags (not sure this is necessary)
+            assert(dest + len == original_dest + original_len && "continuation broken?");
+            helper_ret_stb_mmu(env, dest, value, oi, ra);
+            memset(hostaddr, value, l_adj);
+
+            if (unlikely(log_instr)) {
+                // TODO: dump as a single big block?
+                for (target_ulong i = 0; i < l_adj; i++)
+                    dump_store(env, OPC_SB, dest + i, value);
+            }
+            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG, "%s: Set "
+                          TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
+                          __func__, l_adj, value, dest);
+            // fprintf(stderr, "%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, value, dest, hostaddr);
+            dest += l_adj;
+            len -= l_adj;
+        } else {
+            /* Slow path (probably attempt to do this to an I/O device or
+             * similar, or clearing of a block of code we have translations
+             * cached for). Just do a series of byte writes as the architecture
+             * demands. It's not worth trying to use a cpu_physical_memory_map(),
+             * memset(), unmap() sequence here because:
+             *  + we'd need to account for the blocksize being larger than a page
+             *  + the direct-RAM access case is almost always going to be dealt
+             *    with in the fastpath code above, so there's no speed benefit
+             *  + we would have to deal with the map returning NULL because the
+             *    bounce buffer was in use
+             */
+            warn_report("Falling back to memset slowpath for address " TARGET_FMT_plx ". I/O memory?", dest);
+            target_ulong end = original_dest + original_len;
+            // in case we fault mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
+            env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[MIPS_REGNUM_V1];
+            while (dest < end) {
+                assert(dest + len == original_dest + original_len && "continuation broken?");
+                // update $v0 to point to the updated dest in case probe_write_access takes a tlb fault:
+                env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
+                helper_ret_stb_mmu(env, dest, value, oi, ra); // might trap
+                if (unlikely(log_instr)) {
+                    dump_store(env, OPC_SB, dest, value);
+                }
+                dest++;
+                len--;
+            }
         }
-        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG, "%s: Set "
-                      TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
-                      __func__, l_adj, value, dest);
-        // fprintf(stderr, "%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, value, dest, p);
-        dest += l_adj;
-        len -= l_adj;
     }
+    assert(dest + len == original_dest + original_len && "continuation broken?");
     if (len != 0) {
-        fprintf(stderr, "ERROR: did not memset all bytes at " TARGET_FMT_plx ". Remainig len = " TARGET_FMT_plx "\r\n", dest, len);
+        error_report("ERROR: %s: did not memset all bytes at " TARGET_FMT_plx
+                     ". Remainig len = " TARGET_FMT_plx "\r\n", __func__, dest, len);
         abort();
     }
-    env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest;
-    // also update a0 and a2 to match what the kernel memset does:
+    env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest; // return value of memset is the src argument
+    // also update a0 and a2 to match what the kernel memset does (a0 -> buf end, a2 -> 0):
     env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
     env->active_tc.gpr[MIPS_REGNUM_A2] = len;
+#if MAGIC_MEMSET_STATS != 0
+    bytes_memset_with_magic_nop += original_len;
+    warn_report("Bytes memset with magic nop so far: %lld\r", bytes_memset_with_magic_nop);
+#endif
     return true;
 }
 
