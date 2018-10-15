@@ -5522,6 +5522,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         // probe_write(env, dest, 1, mmu_idx, ra); // might trap
         // hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
         helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // might trap
+        if (unlikely(log_instr)) {
+            dump_store(env, OPC_SB, dest, 0xff);
+        }
         void *p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
         if (!p) {
             // fprintf(stderr, "Translated " TARGET_FMT_plx " to host: %p\r\n", dest, p);
@@ -5529,6 +5532,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             // probe_write(env, dest, 1, mmu_idx, ra); // might trap
             // hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
             helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // might trap
+            if (unlikely(log_instr)) {
+                dump_store(env, OPC_SB, dest, 0xff);
+            }
             if (lladdr == -1LL) {
                 fprintf(stderr, "Failed to probe again for for write access at " TARGET_FMT_plx " -> got hwaddr %#" HWADDR_PRIx "\r\n", dest, lladdr);
                 assert(false && "This should not happen!");
@@ -5538,6 +5544,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             }
             // fprintf(stderr, "Probing for write access at " TARGET_FMT_plx " -> got hwaddr %#" HWADDR_PRIx "\r\n", dest, guest_addr);
             helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // should succeeed now!
+            if (unlikely(log_instr)) {
+                dump_store(env, OPC_SB, dest, 0xff);
+            }
             p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
         }
         assert(((uint8_t*)p)[0] == 0xff && "helper_ret_stb_mmu should have changed this byte!");
@@ -5562,6 +5571,11 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
 
         memset(p, value, l_adj);
+        if (unlikely(log_instr)) {
+            // TODO: dump as a single big block?
+            for (target_ulong i = 0; i < l_adj; i++)
+                dump_store(env, OPC_SB, dest + i, value);
+        }
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG, "%s: Set "
                       TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
                       __func__, l_adj, value, dest);
