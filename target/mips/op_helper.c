@@ -5474,21 +5474,24 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
 {
     // See target/s390x/mem_helper.c and arm/helper.c HELPER(dc_zva)
     int mmu_idx = cpu_mmu_index(env, false);
-    TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
+    // TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
+    MEMOP_IDX(DF_BYTE);
 
-    target_ulong dest = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
+    target_ulong original_dest = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
     uint8_t value = (uint8_t)env->active_tc.gpr[MIPS_REGNUM_A1]; // $a1 = c
     target_ulong len = env->active_tc.gpr[MIPS_REGNUM_A2];       // $a2 = len
     // fprintf(stderr, "--- %s: Setting " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\r\n", __func__, len, value, dest);
-    target_ulong original_dest = dest;
-    if ((env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG) {
-        // This is a partial write -> $a0 is not the real dest.
-        // The original dest was stored in $v0 by the previous call
-        original_dest = env->active_tc.gpr[MIPS_REGNUM_V0];
-        // fprintf(stderr, "--- %s: Got continuation for write access at " TARGET_FMT_plx "\r\n", __func__, original_dest);
+    target_ulong dest = original_dest;
+    const bool is_continuation = (env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG;
+    if (is_continuation) {
+        // This is a partial write -> $a0 is the original dest argument.
+        // The updated dest (after the partial write) was stored in $v0 by the previous call
+        dest = env->active_tc.gpr[MIPS_REGNUM_V0];
+        fprintf(stderr, "--- %s: Got continuation for 0x" TARGET_FMT_lx " byte access at " TARGET_FMT_plx
+                        " -- current dest = " TARGET_FMT_plx "\r\n", __func__, len, original_dest, dest);
     } else {
         // Not a partial write -> $v0 should be zero otherwise this is a usage error!
-        if (env->active_tc.gpr[2] != 0) {
+        if (env->active_tc.gpr[MIPS_REGNUM_V0] != 0) {
             qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call memset library function "
                           "with non-zero value in $v0 (0x" TARGET_FMT_lx
                           ") and continuation flag not set in $v1 (0x" TARGET_FMT_lx
@@ -5496,12 +5499,31 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             do_raise_exception(env, EXCP_RI, GETPC());
         }
     }
+    const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     if (original_dest >= 0xC000000000000000ULL) {
 #if 0
         fprintf(stderr, "--- Handling addresses > 0xc.... with memset helper is broken for some reason!\r\n"
                         "    Falling back to MIPS code for " TARGET_FMT_plx " bytes at " TARGET_FMT_plx "\r\n", len, dest);
 #endif
-        return false;
+        // return false;
+        // slow path (since for some reason the tlb stuff below breaks for these addresses
+        target_ulong end = original_dest + len;
+        while (dest < end) {
+            // update $v0 to point to the updated dest in case probe_write_access takes a tlb fault:
+            env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
+            // and mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
+            env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
+            helper_ret_stb_mmu(env, dest, value, oi, ra); // might trap
+            if (unlikely(log_instr)) {
+                dump_store(env, OPC_SB, dest, value);
+            }
+            dest++;
+        }
+        env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest;
+        // also update a0 and a2 to match what the kernel memset does:
+        env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
+        env->active_tc.gpr[MIPS_REGNUM_A2] = len;
+        return true;
     }
     if (len == 0) {
         return false;
@@ -5510,24 +5532,23 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         // probing for write access:
         // fprintf(stderr, "Probing for write access at " TARGET_FMT_plx "\r\n", dest);
         // fflush(stderr);
-        // update the arguments in case probe_write_access takes the tlb fault:
-        env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
-        env->active_tc.gpr[MIPS_REGNUM_A1] = value;
-        env->active_tc.gpr[MIPS_REGNUM_A2] = len;
-        // Indicate partial write by setting $v1 to -$v1
+        // update $v0 to point to the updated dest in case probe_write_access takes a tlb fault:
+        env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
+        // and mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
         env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
-        // and save the original dst in $v0 so that we end up with the correct return value
-        env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest;
+
         // Now possibly take a TLB miss:
         // probe_write(env, dest, 1, mmu_idx, ra); // might trap
-        // hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
+        hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
         helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // might trap
         if (unlikely(log_instr)) {
             dump_store(env, OPC_SB, dest, 0xff);
         }
         void *p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
+        if (is_continuation)
+            assert(p && "SHOULD GET A TLB hit after continuation!");
         if (!p) {
-            // fprintf(stderr, "Translated " TARGET_FMT_plx " to host: %p\r\n", dest, p);
+            fprintf(stderr, "-- failed to translate " TARGET_FMT_plx " to host: %p\r\n", dest, p);
             hwaddr lladdr = cpu_mips_translate_address(env, dest, MMU_DATA_STORE);
             // probe_write(env, dest, 1, mmu_idx, ra); // might trap
             // hwaddr guest_addr = do_translate_address(env, dest, MMU_DATA_STORE, ra); // might trap!
@@ -5549,6 +5570,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             }
             p = tlb_vaddr_to_host(env, dest, MMU_DATA_STORE, mmu_idx);
         }
+        // helper_ret_stb_mmu(env, dest, 0xff, oi, ra); // should not trap!
         assert(((uint8_t*)p)[0] == 0xff && "helper_ret_stb_mmu should have changed this byte!");
         // fprintf(stderr, "Translated " TARGET_FMT_plx " to host: %p\r\n", dest, p);
         if (!p) {
