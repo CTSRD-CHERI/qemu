@@ -5529,13 +5529,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
     assert(dest + len == original_dest + original_len && "continuation broken?");
     const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     if (len == 0) {
-        return true; // nothing to do
-    }
-
-    if (dest >= 0xC000000000000000ULL && !is_continuation) {
-        // FIXME: I have no idea why this is breaking (I can't reproduce it baremetal...)
-        // warn_report("Skipping magic memset for address " TARGET_FMT_plx " since it causes CheriBSD to crash...\r", dest);
-        return false;
+        goto success; // nothing to do
     }
 
     while (len > 0) {
@@ -5635,6 +5629,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
                      ". Remainig len = " TARGET_FMT_plx "\r\n", __func__, dest, len);
         abort();
     }
+success:
     env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest; // return value of memset is the src argument
     // also update a0 and a2 to match what the kernel memset does (a0 -> buf end, a2 -> 0):
     env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
