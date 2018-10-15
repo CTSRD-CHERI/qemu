@@ -5475,6 +5475,21 @@ static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 static volatile uint64_t bytes_memset_with_magic_nop = 0;
 #endif
 
+
+static inline void
+store_byte_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint8_t val,
+                         TCGMemOpIdx oi, uintptr_t retaddr)
+{
+    helper_ret_stb_mmu(env, vaddr, val, oi, retaddr);
+#ifdef TARGET_CHERI
+    // If we returned (i.e. write was successful) we also need to invalidate the
+    // tags bit to ensure we are consistent with sb
+    // FIXME: check against $ddc
+    cheri_tag_invalidate(env, vaddr, 1);
+#endif
+
+}
+
 static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
 {
     // See target/s390x/mem_helper.c and arm/helper.c HELPER(dc_zva)
@@ -5549,7 +5564,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
              * this purpose use the actual register value passed to us
              * so that we get the fault address right.
              */
-            helper_ret_stb_mmu(env, dest, 0xff, oi, ra);
+            store_byte_and_clear_tag(env, dest, 0xff, oi, ra);
             if (try) {
                 warn_report("%s: helper_ret_stb_mmu returned after second attempt to store to " TARGET_FMT_plx, __func__, dest);
             }
@@ -5567,9 +5582,12 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
 
             // Do one store byte to update MMU flags (not sure this is necessary)
             assert(dest + len == original_dest + original_len && "continuation broken?");
-            helper_ret_stb_mmu(env, dest, value, oi, ra);
+            store_byte_and_clear_tag(env, dest, value, oi, ra);
             memset(hostaddr, value, l_adj);
-
+#ifdef TARGET_CHERI
+            // We also need to invalidate the tags bits written by the memset
+            cheri_tag_invalidate(env, dest, l_adj);
+#endif
             if (unlikely(log_instr)) {
                 // TODO: dump as a single big block?
                 for (target_ulong i = 0; i < l_adj; i++)
@@ -5601,7 +5619,8 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
                 assert(dest + len == original_dest + original_len && "continuation broken?");
                 // update $v0 to point to the updated dest in case probe_write_access takes a tlb fault:
                 env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
-                helper_ret_stb_mmu(env, dest, value, oi, ra); // might trap
+                store_byte_and_clear_tag(env, dest, value, oi, ra); // might trap
+
                 if (unlikely(log_instr)) {
                     dump_store(env, OPC_SB, dest, value);
                 }
