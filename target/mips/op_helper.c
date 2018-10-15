@@ -5493,7 +5493,7 @@ store_byte_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint8_t val,
 #ifdef TARGET_CHERI
     // If we returned (i.e. write was successful) we also need to invalidate the
     // tags bit to ensure we are consistent with sb
-    cheri_tag_invalidate(env, vaddr, 1);
+    cheri_tag_invalidate(env, vaddr, 1, retaddr);
 #endif
 
 }
@@ -5594,7 +5594,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             memset(hostaddr, value, l_adj);
 #ifdef TARGET_CHERI
             // We also need to invalidate the tags bits written by the memset
-            cheri_tag_invalidate(env, dest, l_adj);
+            cheri_tag_invalidate(env, dest, l_adj, ra);
 #endif
             if (unlikely(log_instr)) {
                 // TODO: dump as a single big block?

@@ -1378,7 +1378,7 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
         int32_t remaining_bytes = size;
         for (int32_t i = 0; i < size; i++) {
             int32_t to_clear = MIN(remaining_bytes, CHERI_CAP_SIZE);
-            cheri_tag_invalidate(env, vaddr + i, to_clear);
+            cheri_tag_invalidate(env, vaddr + i, to_clear, pc);
             remaining_bytes -= to_clear;
         }
         assert(remaining_bytes == 0);
