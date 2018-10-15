@@ -1390,7 +1390,7 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
     cheri_tag_phys_invalidate(ram_addr, size);
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (paddr == env->lladdr)
+    if (env->lladdr > paddr && env->lladdr < paddr + size)
         env->linkedflag = 0;
 }
 
