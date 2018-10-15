@@ -3484,6 +3484,8 @@ enum {
 
     OPC_CLLC     = (0x12 << 26) | (0x10 << 21) | (0xf),
 
+    OPC_CLOADTAGS = (0x12 << 26) | (0x00 << 21) | (0x3f) | (0x1e << 6),
+
     OPC_CLBU     = (0x32 << 26) | (0x0),
     OPC_CLHU     = (0x32 << 26) | (0x1),
     OPC_CLWU     = (0x32 << 26) | (0x2),
