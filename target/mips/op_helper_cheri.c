@@ -312,8 +312,6 @@ void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const c
 
 #ifdef CHERI_MAGIC128
 
-#define CHERI_CAP_SIZE  16
-
 bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
         uint64_t inc)
@@ -326,7 +324,6 @@ _became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 {
 }
 #elif defined(CHERI_128)
-#define CHERI_CAP_SIZE  16
 
 bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
@@ -345,8 +342,6 @@ _became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 }
 
 #else
-
-#define CHERI_CAP_SIZE  32
 
 bool
 is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,

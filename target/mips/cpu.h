@@ -155,6 +155,15 @@ typedef struct cvtrace cvtrace_t;
 
 #if defined(TARGET_CHERI)
 
+#if defined(CHERI_MAGIC128)
+#define CHERI_CAP_SIZE  16
+#elif defined(CHERI_128)
+#define CHERI_CAP_SIZE  16
+#else
+#define CHERI_CAP_SIZE  32
+#endif
+
+
 #define cheri_debug_assert(cond) tcg_debug_assert(cond)
 
 /*

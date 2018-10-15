@@ -1373,6 +1373,18 @@ static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAcce
 
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, uintptr_t pc)
 {
+    if (size > CHERI_CAP_SIZE) {
+        // Handle large writes (such as from magic memset)
+        int32_t remaining_bytes = size;
+        for (int32_t i = 0; i < size; i++) {
+            int32_t to_clear = MIN(remaining_bytes, CHERI_CAP_SIZE);
+            cheri_tag_invalidate(env, vaddr + i, to_clear);
+            remaining_bytes -= to_clear;
+        }
+        assert(remaining_bytes == 0);
+        return; // all tag bits cleared
+    }
+    assert(size <= CHERI_CAP_SIZE && "This case only handles writes up to CAP_SIZE");
     uint64_t tag1, tag2;
     uint8_t *tagblk1, *tagblk2;
     MemoryRegion* mr = NULL;
