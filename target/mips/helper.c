@@ -1376,7 +1376,19 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
     // This must not cross a page boundary since we are only translating once!
     assert(size > 0);
     if(((vaddr & TARGET_PAGE_MASK) != ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
-        error_report("FATAL: %s: " TARGET_FMT_lx "+ %d crosses a page boundary", __func__, vaddr, size);
+        int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
+        /* Disassemble and print instruction. */
+        error_report("FATAL: %s: " TARGET_FMT_lx "+%d crosses a page boundary\r", __func__, vaddr, size);
+        char buffer[256];
+        FILE* f = fmemopen(buffer, sizeof(buffer), "w");
+        assert(f);
+        fprintf(f, "Probably caused by guest instruction: ");
+        target_disas(f, CPU(mips_env_get_cpu(env)),
+                     cap_get_cursor(&env->active_tc.PCC), isa == 0 ? 4 : 2);
+        fprintf(f, "\r");
+        fclose(f);
+        buffer[sizeof(buffer) - 1] = '\0';
+        error_report("%s", buffer);
         exit(1);
     }
     MemoryRegion* mr = NULL;
