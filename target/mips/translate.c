@@ -2650,12 +2650,12 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
     case OPC_SDL:
         GEN_CAP_CHECK_STORE(t0, t0, 8);
         gen_helper_0e2i(sdl, t1, t0, mem_idx);
-        GEN_CAP_INVADIATE_TAG(t0, 8, opc, t1);
+        GEN_CAP_INVADIATE_TAG_LEFT_RIGHT(t0, 8, opc, t1);
         break;
     case OPC_SDR:
         GEN_CAP_CHECK_STORE_RIGHT(t0, t0, 8);
         gen_helper_0e2i(sdr, t1, t0, mem_idx);
-        GEN_CAP_INVADIATE_TAG(t0, 8, opc, t1);
+        GEN_CAP_INVADIATE_TAG_LEFT_RIGHT(t0, 8, opc, t1);
         break;
 #endif
     case OPC_SWE:
@@ -2690,7 +2690,7 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
     case OPC_SWL:
         GEN_CAP_CHECK_STORE(t0, t0, 4);
         gen_helper_0e2i(swl, t1, t0, mem_idx);
-        GEN_CAP_INVADIATE_TAG(t0, 4, opc, t1);
+        GEN_CAP_INVADIATE_TAG_LEFT_RIGHT(t0, 4, opc, t1);
         break;
     case OPC_SWRE:
         mem_idx = MIPS_HFLAG_UM;
@@ -2698,7 +2698,7 @@ static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
     case OPC_SWR:
         GEN_CAP_CHECK_STORE_RIGHT(t0, t0, 4);
         gen_helper_0e2i(swr, t1, t0, mem_idx);
-        GEN_CAP_INVADIATE_TAG(t0, 4, opc, t1);
+        GEN_CAP_INVADIATE_TAG_LEFT_RIGHT(t0, 4, opc, t1);
         break;
     }
     tcg_temp_free(t0);

@@ -2630,7 +2630,7 @@ target_ulong helper_ccheck_store_right(CPUMIPSState *env, target_ulong offset, u
 #ifndef TARGET_WORDS_BIGENDIAN
 #error "This check is only valid for big endian targets, for little endian the load/store left instructions need to be checked"
 #endif
-    // For swr/sdr we store all bytes if offset & 3/7 == 0 we store only first byte, if all low bits are set we store the full amount
+    // For swr/sdr if offset & 3/7 == 0 we store only first byte, if all low bits are set we store the full amount
     uint32_t low_bits = (uint32_t)offset & (len - 1);
     uint32_t stored_bytes = low_bits + 1;
     // From spec:
@@ -2644,6 +2644,7 @@ target_ulong helper_ccheck_store_right(CPUMIPSState *env, target_ulong offset, u
     // return the actual address by adding the low bits (this is expected by translate.c
     return helper_ccheck_store(env, write_offset, stored_bytes) + low_bits;
 }
+
 
 target_ulong helper_ccheck_load_right(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
@@ -2684,6 +2685,17 @@ target_ulong helper_ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_
 target_ulong helper_ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t len)
 {
     return check_ddc(env, CAP_PERM_LOAD, offset, len, /*instavail=*/true);
+}
+
+void helper_cinvalidate_tag_left_right(CPUMIPSState *env, target_ulong addr, uint32_t len,
+    uint32_t opc, target_ulong value)
+{
+#ifdef CONFIG_MIPS_LOG_INSTR
+    /* Log write, if enabled */
+    dump_store(env, opc, addr, value);
+#endif
+    // swr/sdr/swl/sdl will never invalidate more than one capability
+    cheri_tag_invalidate(env, addr, 1, GETPC());
 }
 
 void helper_cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,

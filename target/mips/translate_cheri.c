@@ -2075,11 +2075,24 @@ static inline void generate_cinvalidate_tag32(TCGv addr, int32_t len,
     tcg_temp_free_i32(tlen);
 }
 
+static inline void generate_cinvalidate_tag_left_right(TCGv addr, int32_t len, int32_t opc, TCGv value)
+{
+    TCGv_i32 tlen = tcg_const_i32(len);
+    TCGv_i32 topc = tcg_const_i32(opc);
+
+    gen_helper_cinvalidate_tag_left_right(cpu_env, addr, tlen, topc, value);
+    tcg_temp_free_i32(topc);
+    tcg_temp_free_i32(tlen);
+}
+
 #define GEN_CAP_INVADIATE_TAG(addr, len, opc, value) \
     generate_cinvalidate_tag(addr, len, opc, value)
 
 #define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value) \
     generate_cinvalidate_tag32(addr, len, opc, value)
+
+#define GEN_CAP_INVADIATE_TAG_LEFT_RIGHT(addr, len, opc, value) \
+    generate_cinvalidate_tag_left_right(addr, len, opc, value)
 
 static void gen_mtc2(DisasContext *ctx, TCGv arg, int reg, int sel)
 {
@@ -2135,6 +2148,7 @@ static inline void generate_dump_state_and_log_instr(DisasContext *ctx)
 #define GEN_CAP_CHECK_LOAD_RIGHT(save, addr, offset, len)
 #define GEN_CAP_INVADIATE_TAG(addr, len, opc, value)
 #define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value)
+#define GEN_CAP_INVADIATE_TAG_LEFT_RIGHT(addr, len, opc, value)
 #endif /* ! TARGET_CHERI */
 
 
