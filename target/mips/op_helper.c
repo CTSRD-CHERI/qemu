@@ -3548,8 +3548,8 @@ void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
 #if defined(TARGET_MIPS64)
     case OPC_SCD:
     case OPC_SD:
-    case OPC_SDL:
-    case OPC_SDR:
+    case OPC_SDL: // FIXME: value printed is not correct for sdl!
+    case OPC_SDR: // FIXME: value printed is not correct for sdr!
 
     case OPC_SDC1:
     case OPC_SDXC1:
@@ -3564,8 +3564,8 @@ void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
 #endif
     case OPC_SC:
     case OPC_SW:
-    case OPC_SWL:
-    case OPC_SWR:
+    case OPC_SWL: // FIXME: value printed is not correct for swl!
+    case OPC_SWR: // FIXME: value printed is not correct for swr!
 
     case OPC_SWC1:
     case OPC_SWXC1:
