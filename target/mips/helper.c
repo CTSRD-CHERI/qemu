@@ -1409,8 +1409,13 @@ void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
             return;
         tagblk = get_cheri_tagmem(tagmem_idx);
 
-        if (tagblk != NULL)
+        if (tagblk != NULL) {
+            if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+                qemu_log("    Cap Tag Write [%" HWADDR_PRIx "] %d -> 0\n", addr,
+                         tagblk[CAP_TAGBLK_IDX(tag)]);
+            }
             tagblk[CAP_TAGBLK_IDX(tag)] = 0;
+        }
     }
 
     /* XXX - linkedflag reset check? */
@@ -1456,6 +1461,10 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg, uintptr_t pc)
     if (tagblk == NULL) {
         /* Allocated a tag block. */
         tagblk = cheri_tag_new_tagblk(tag);
+    }
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        qemu_log("    Cap Tag Write [%" HWADDR_PRIx "] %d -> 0\n", ram_addr,
+                 tagblk[CAP_TAGBLK_IDX(tag)]);
     }
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
