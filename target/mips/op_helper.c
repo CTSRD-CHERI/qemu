@@ -5472,11 +5472,21 @@ static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 
 #define MAGIC_MEMSET_STATS 1
 #if MAGIC_MEMSET_STATS != 0
-static volatile uint64_t bytes_memset_with_magic_nop = 0;
+static volatile uint64_t magic_memset_kernel_zero_bytes = 0;
+static volatile uint64_t magic_memset_kernel_nonzero_bytes = 0;
+static volatile uint64_t magic_memset_user_zero_bytes = 0;
+static volatile uint64_t magic_memset_user_nonzero_bytes = 0;
 static bool memset_stats_dump_registered = false;
+
+static inline void print_bytes_and_megabytes(const char* msg, uint64_t bytes) {
+    warn_report("%s: %" PRId64 " (%f MB)\r", msg, bytes, bytes / (1024.0 * 1024.0));
+}
+
 static void dump_memset_stats_on_exit() {
-    warn_report("Bytes memset with magic nop: %" PRId64 " (%f MB)\r",
-                bytes_memset_with_magic_nop, bytes_memset_with_magic_nop / (1024.0 * 1024.0));
+    print_bytes_and_megabytes("memset (zero)    with magic nop in kernel mode", magic_memset_kernel_zero_bytes);
+    print_bytes_and_megabytes("memset (nonzero) with magic nop in kernel mode", magic_memset_kernel_nonzero_bytes);
+    print_bytes_and_megabytes("memset (zero)    with magic nop in user mode", magic_memset_user_zero_bytes);
+    print_bytes_and_megabytes("memset (nonzero) with magic nop in user mode", magic_memset_user_nonzero_bytes);
 }
 #endif
 
@@ -5653,7 +5663,17 @@ success:
         atexit(dump_memset_stats_on_exit);
         memset_stats_dump_registered = true;
     }
-    bytes_memset_with_magic_nop += original_len;
+    if (in_kernel_mode(env)) {
+        if (value == 0)
+            magic_memset_kernel_zero_bytes += original_len;
+        else
+            magic_memset_kernel_nonzero_bytes += original_len;
+    } else {
+        if (value == 0)
+            magic_memset_user_zero_bytes += original_len;
+        else
+            magic_memset_user_nonzero_bytes += original_len;
+    }
 #endif
     return true;
 }

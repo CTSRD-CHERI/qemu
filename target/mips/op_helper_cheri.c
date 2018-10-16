@@ -1094,20 +1094,6 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     }
 }
 
-static inline bool in_kernel_mode(CPUMIPSState *env) {
-    // TODO: what about env->CP0_Debug & (1 << CP0DB_DM)
-    // If ERL or EXL is set we have taken an exception and are in the kernel
-    if ((env->CP0_Status & BIT(CP0St_ERL)) || (env->CP0_Status & BIT(CP0St_EXL))) {
-        return true;
-    }
-    uint32_t ksu = extract32(env->CP0_Status, CP0St_KSU, 2);
-    // KSU = 0 -> kernel, 1 -> supervisor, 2 -> user
-    if (ksu == 0 || ksu == 1) {
-        return true;
-    }
-    return false;
-}
-
 static inline cap_register_t *
 check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;

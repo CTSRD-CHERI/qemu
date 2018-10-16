@@ -1093,6 +1093,20 @@ static inline bool should_use_error_epc(CPUMIPSState *env)
     return env->CP0_Status & (1 << CP0St_ERL);
 }
 
+static inline bool in_kernel_mode(CPUMIPSState *env) {
+    // TODO: what about env->CP0_Debug & (1 << CP0DB_DM)
+    // If ERL or EXL is set we have taken an exception and are in the kernel
+    if ((env->CP0_Status & BIT(CP0St_ERL)) || (env->CP0_Status & BIT(CP0St_EXL))) {
+        return true;
+    }
+    uint32_t ksu = extract32(env->CP0_Status, CP0St_KSU, 2);
+    // KSU = 0 -> kernel, 1 -> supervisor, 2 -> user
+    if (ksu == 0 || ksu == 1) {
+        return true;
+    }
+    return false;
+}
+
 #ifdef TARGET_CHERI
 #define is_beri_or_cheri(env)  true
 #else
