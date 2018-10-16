@@ -5662,7 +5662,6 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
     const target_ulong original_dest = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
     uint8_t value = (uint8_t)env->active_tc.gpr[MIPS_REGNUM_A1]; // $a1 = c
     const target_ulong original_len = env->active_tc.gpr[MIPS_REGNUM_A2];       // $a2 = len
-    // fprintf(stderr, "--- %s: Setting " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\r\n", __func__, len, value, dest);
     target_ulong dest = original_dest;
     target_ulong len = original_len;
     const bool is_continuation = (env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG;
@@ -5670,7 +5669,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         // This is a partial write -> $a0 is the original dest argument.
         // The updated dest (after the partial write) was stored in $v0 by the previous call
         dest = env->active_tc.gpr[MIPS_REGNUM_V0];
-        assert(dest >= original_dest);
+        tcg_debug_assert(dest >= original_dest);
         target_ulong already_written = dest - original_dest;
         len -= already_written; // update the remaining length
 #if 0
@@ -5681,14 +5680,14 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
     } else {
         // Not a partial write -> $v0 should be zero otherwise this is a usage error!
         if (env->active_tc.gpr[MIPS_REGNUM_V0] != 0) {
-            qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call memset library function "
-                          "with non-zero value in $v0 (0x" TARGET_FMT_lx
-                          ") and continuation flag not set in $v1 (0x" TARGET_FMT_lx
-                          ")!\n", env->active_tc.gpr[MIPS_REGNUM_V0], env->active_tc.gpr[MIPS_REGNUM_V1]);
+            error_report("ERROR: Attempted to call memset library function "
+                         "with non-zero value in $v0 (0x" TARGET_FMT_lx
+                         ") and continuation flag not set in $v1 (0x" TARGET_FMT_lx
+                         ")!\n", env->active_tc.gpr[MIPS_REGNUM_V0], env->active_tc.gpr[MIPS_REGNUM_V1]);
             do_raise_exception(env, EXCP_RI, GETPC());
         }
     }
-    assert(dest + len == original_dest + original_len && "continuation broken?");
+    tcg_debug_assert(dest + len == original_dest + original_len && "continuation broken?");
     const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     if (len == 0) {
         goto success; // nothing to do
@@ -5712,7 +5711,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             if (hostaddr)
                 break;
             if (try) {
-                warn_report("%s: Failed to find address " TARGET_FMT_plx "in TLB on second attempt! I/O memory?", __func__, dest);
+                warn_report("%s: Failed to find address " TARGET_FMT_plx " in QEMU TLB on second attempt! I/O memory?", __func__, dest);
             }
             /* OK, try a store and see if we can populate the tlb. This
              * might cause an exception if the memory isn't writable,
@@ -5721,9 +5720,6 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
              * so that we get the fault address right.
              */
             store_byte_and_clear_tag(env, dest, 0xff, oi, ra);
-            if (try) {
-                warn_report("%s: helper_ret_stb_mmu returned after second attempt to store to " TARGET_FMT_plx, __func__, dest);
-            }
             if (unlikely(log_instr)) {
                 dump_store(env, OPC_SB, dest, 0xff);
             }
@@ -5733,11 +5729,11 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
              * we know we don't need to update dirty status, etc.
              */
             target_ulong l_adj = adj_len_to_page(len, dest);
-            assert(l_adj != 0);
-            assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
+            tcg_debug_assert(l_adj != 0);
+            tcg_debug_assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
 
             // Do one store byte to update MMU flags (not sure this is necessary)
-            assert(dest + len == original_dest + original_len && "continuation broken?");
+            tcg_debug_assert(dest + len == original_dest + original_len && "continuation broken?");
             store_byte_and_clear_tag(env, dest, value, oi, ra);
 
 #ifdef TARGET_CHERI
@@ -5754,10 +5750,10 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
                 // TODO: dump as a single big block?
                 for (target_ulong i = 0; i < l_adj; i++)
                     dump_store(env, OPC_SB, dest + i, value);
-            }
-            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_GUEST_DEBUG_MSG, "%s: Set "
-                          TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
+
+                qemu_log("%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
                           __func__, l_adj, value, dest);
+            }
             // fprintf(stderr, "%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, value, dest, hostaddr);
             dest += l_adj;
             len -= l_adj;
@@ -5778,7 +5774,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             // in case we fault mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
             env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[MIPS_REGNUM_V1];
             while (dest < end) {
-                assert(dest + len == original_dest + original_len && "continuation broken?");
+                tcg_debug_assert(dest + len == original_dest + original_len && "continuation broken?");
                 // update $v0 to point to the updated dest in case probe_write_access takes a tlb fault:
                 env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
                 store_byte_and_clear_tag(env, dest, value, oi, ra); // might trap
@@ -5791,12 +5787,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             }
         }
     }
-    assert(dest + len == original_dest + original_len && "continuation broken?");
-    if (len != 0) {
-        error_report("ERROR: %s: did not memset all bytes at " TARGET_FMT_plx
-                     ". Remainig len = " TARGET_FMT_plx "\r\n", __func__, dest, len);
-        abort();
-    }
+    tcg_debug_assert(len == 0);
 success:
     env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest; // return value of memset is the src argument
     // also update a0 and a2 to match what the kernel memset does (a0 -> buf end, a2 -> 0):
