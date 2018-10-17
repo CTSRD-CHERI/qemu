@@ -5596,20 +5596,26 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
 
     const target_ulong dest_past_end = original_dest + original_len;
     const target_ulong src_past_end = original_src + original_len;
+#if 0 // FIXME: for some reason this causes errors
     const bool dest_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     const bool src_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     // If neither src nor dest buffer cross a page boundary we can just do an address_space_read+write
     // Fast case: less than a page and neither of the buffers crosses a page boundary
     CPUState *cs = CPU(mips_env_get_cpu(env));
-
     if (dest_same_page && src_same_page) {
+        tcg_debug_assert(already_written == 0);
         tcg_debug_assert(len <= TARGET_PAGE_SIZE);
         // The translation operation might trap and longjump out!
         hwaddr src_paddr = do_translate_address(env, original_src, MMU_DATA_LOAD, ra);
         hwaddr dest_paddr = do_translate_address(env, original_dest, MMU_DATA_STORE, ra);
-
+#ifdef TARGET_CHERI
+        if (dest_paddr <= env->lladdr && dest_paddr + len > env->lladdr) {
+            // reset the linked flag if we touch the address with this write
+            env->linkedflag = 0;
+        }
+#endif
         // Do a single load+store to update the MMU flags
-        uint8_t first_value = helper_ret_ldub_mmu(env, original_src, oi, ra);
+        // uint8_t first_value = helper_ret_ldub_mmu(env, original_src, oi, ra);
         // Note: address_space_write will also clear the tag bits!
         MemTxResult result = MEMTX_ERROR;
         uint8_t buffer[TARGET_PAGE_SIZE];
@@ -5619,8 +5625,11 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
                         ". Unmapped memory? Error code was %d\r", (int)len, src_paddr, result);
             // same ignored error would happen with normal loads/stores -> just continue
         }
+        fprintf(stderr, "Used fast path to read %d bytes\r\n", (int)len);
+        // do_hexdump(stderr, buffer, len, original_src);
+        // fprintf(stderr, "\r");
         // also write one byte to the target buffer to ensure that the flags are updated
-        store_byte_and_clear_tag(env, original_dest, first_value, oi, ra); // might trap
+        // store_byte_and_clear_tag(env, original_dest, first_value, oi, ra); // might trap
         result = address_space_write(cs->as, dest_paddr, MEMTXATTRS_UNSPECIFIED, buffer, len);
         if (unlikely(log_instr)) {
             for (int i = 0; i < len; i++) {
@@ -5633,8 +5642,24 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
                         ". Unmapped memory? Error code was %d\r", (int)len, dest_paddr, result);
             // same ignored error would happen with normal loads/stores -> just continue
         }
+        uint8_t buffer_after[TARGET_PAGE_SIZE];
+        if (cpu_memory_rw_debug(ENV_GET_CPU(env), original_dest, buffer_after, len, false) == 0) {
+            // fprintf(stderr, "-- memcpy buffer after fast path store of %d bytes\r\n", (int)len);
+            // do_hexdump(stderr, buffer, len, original_src);
+            // fprintf(stderr, "\r");
+        }
+        if (memcmp(buffer, buffer_after, len) != 0) {
+            error_report("MEMCPY WRONG!!!");
+            abort();
+        }
+#ifdef TARGET_CHERI
+        cheri_tag_invalidate(env, original_dest, len, ra);
+#endif
+        already_written += len;
+        env->active_tc.gpr[MIPS_REGNUM_V0] = already_written;
         goto success;
     }
+#endif
 
     const bool has_overlap = MAX(original_dest, original_src) >= MAX(dest_past_end, src_past_end);
     if (has_overlap) {
@@ -5647,16 +5672,6 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     if (copy_backwards) {
         target_ulong current_dest_cursor = original_dest + len - 1;
         target_ulong current_src_cursor = original_src + len - 1;
-        // FIXME: todo: fast path copying a page at a time using
-        // address_space_read + address_space_write (if equally aligned or no page overlap)
-        // TODO: we can also use a fast write if neither of them cross a page boundary and are on different pages
-        if ((current_src_cursor & ~TARGET_PAGE_MASK) == (current_dest_cursor & ~TARGET_PAGE_MASK)) {
-            // fast path if page alignment of both cursors is the same
-            // NOTE: address_space_read+write will invalidate tags so we don't need to do it here
-            // cpu_physical_memory_read()
-            // cpu_physical_memory_write()
-            warn_report("Memcpy with same page alignment (size=" TARGET_FMT_ld " \r", original_len);
-        }
         /* Slow path (probably attempt to do this to an I/O device or
          * similar, or clearing of a block of code we have translations
          * cached for). Just do a series of byte writes as the architecture
@@ -5688,16 +5703,6 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         // copy forwards
         target_ulong current_dest_cursor = original_dest + already_written;
         target_ulong current_src_cursor = original_src + already_written;
-        // FIXME: todo: fast path copying a page at a time using
-        // address_space_read + address_space_write (if equally aligned or no page overlap)
-        // TODO: we can also use a fast write if neither of them cross a page boundary and are on different pages
-        if ((current_src_cursor & ~TARGET_PAGE_MASK) == (current_dest_cursor & ~TARGET_PAGE_MASK)) {
-            // fast path if page alignment of both cursors is the same
-            // NOTE: address_space_read+write will invalidate tags so we don't need to do it here
-            // cpu_physical_memory_read()
-            // cpu_physical_memory_write()
-            warn_report("Memcpy with same page alignment (size=" TARGET_FMT_ld " \r", original_len);
-        }
         /* Slow path (probably attempt to do this to an I/O device or
          * similar, or clearing of a block of code we have translations
          * cached for). Just do a series of byte writes as the architecture
@@ -5726,12 +5731,12 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
             env->active_tc.gpr[MIPS_REGNUM_V0] = already_written;
         }
     }
+success:
     if (already_written != original_len) {
         error_report("ERROR: %s: did not memmove all bytes to " TARGET_FMT_plx
                      ". Remainig len = " TARGET_FMT_plx "\r\n", __func__, original_dest, len);
         abort();
     }
-success:
     env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest_ddc_offset; // return value of memcpy is the dest argument
     return true;
 }
@@ -5852,6 +5857,12 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         } else {
             // First try address_space_write and if that fails fall back to bytewise setting
             hwaddr paddr = do_translate_address(env, dest, MMU_DATA_STORE, ra);
+#ifdef TARGET_CHERI
+            if (paddr <= env->lladdr && paddr + l_adj > env->lladdr) {
+                // reset the linked flag if we touch the address with this write
+                env->linkedflag = 0;
+            }
+#endif
             // Note: address_space_write will also clear the tag bits!
             MemTxResult result = MEMTX_ERROR;
             if (value == 0) {
@@ -5866,6 +5877,14 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             if (result == MEMTX_OK) {
                 dest += l_adj;
                 len -= l_adj;
+                if (unlikely(log_instr)) {
+                    // TODO: dump as a single big block?
+                    for (target_ulong i = 0; i < l_adj; i++)
+                        dump_store(env, OPC_SB, dest + i, value);
+
+                    qemu_log("%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
+                              __func__, l_adj, value, dest);
+                }
                 continue; // try again with next page
             } else {
                 warn_report("address_space_write failed with error %d for %"HWADDR_PRIx "\r", result, paddr);
