@@ -5470,36 +5470,64 @@ static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 #define MIPS_REGNUM_A1 5
 #define MIPS_REGNUM_A2 6
 
+#ifdef CONFIG_DEBUG_TCG
 #define MAGIC_MEMSET_STATS 1
+#else
+#define MAGIC_MEMSET_STATS 0
+#endif
+
 #if MAGIC_MEMSET_STATS != 0
 static bool memset_stats_dump_registered = false;
 
-static volatile uint64_t magic_memset_kernel_zero_bytes = 0;
-static volatile uint64_t magic_memset_kernel_nonzero_bytes = 0;
-static volatile uint64_t magic_memset_user_zero_bytes = 0;
-static volatile uint64_t magic_memset_user_nonzero_bytes = 0;
+struct nop_stats {
+    uint64_t kernel_mode_bytes;
+    uint64_t kernel_mode_count;
+    uint64_t user_mode_bytes;
+    uint64_t user_mode_count;
+};
 
+static struct nop_stats magic_memset_zero_bytes;
+static struct nop_stats magic_memset_nonzero_bytes;
+static struct nop_stats magic_memmove_bytes;
 
-static volatile uint64_t bytes_memmove_with_magic_nop = 0;
-static volatile uint64_t bytes_memcpy_with_magic_nop = 0;
-static volatile uint64_t bytes_bcopy_with_magic_nop = 0;
+static struct nop_stats magic_memcpy_bytes;
+static struct nop_stats magic_memmove_bytes;
+static struct nop_stats magic_bcopy_bytes;
 
-static inline void print_bytes_and_megabytes(const char* msg, uint64_t bytes) {
-    warn_report("%s: %" PRId64 " (%f MB)\r", msg, bytes, bytes / (1024.0 * 1024.0));
+static struct nop_stats magic_memmove_slowpath;
+
+static inline void print_nop_stats(const char* msg, struct nop_stats* stats) {
+    warn_report("%s in kernel mode: %" PRId64 " (%f MB) in %" PRId64 " calls\r", msg,
+                stats->kernel_mode_bytes, stats->kernel_mode_bytes / (1024.0 * 1024.0), stats->kernel_mode_count);
+    warn_report("%s in user   mode: %" PRId64 " (%f MB) in %" PRId64 " calls\r", msg,
+                stats->user_mode_bytes, stats->user_mode_bytes / (1024.0 * 1024.0), stats->user_mode_count);
 }
 
 static void dump_memset_stats_on_exit() {
-    print_bytes_and_megabytes("memset (zero)    with magic nop in kernel mode", magic_memset_kernel_zero_bytes);
-    print_bytes_and_megabytes("memset (nonzero) with magic nop in kernel mode", magic_memset_kernel_nonzero_bytes);
-    print_bytes_and_megabytes("memset (zero)    with magic nop in user mode", magic_memset_user_zero_bytes);
-    print_bytes_and_megabytes("memset (nonzero) with magic nop in user mode", magic_memset_user_nonzero_bytes);
-
-
-    print_bytes_and_megabytes("memmove with magic nop", bytes_memmove_with_magic_nop);
-    print_bytes_and_megabytes("memcpy with magic nop", bytes_memcpy_with_magic_nop);
-    print_bytes_and_megabytes("bcopy with magic nop", bytes_bcopy_with_magic_nop);
-
+    print_nop_stats("memset (zero)    with magic nop", &magic_memset_zero_bytes);
+    print_nop_stats("memset (nonzero) with magic nop", &magic_memset_nonzero_bytes);
+    print_nop_stats("memcpy with magic nop", &magic_memcpy_bytes);
+    print_nop_stats("memmove with magic nop", &magic_memmove_bytes);
+    print_nop_stats("bcopy with magic nop", &magic_bcopy_bytes);
+    print_nop_stats("memmove/memcpy/bcopy slowpath", &magic_memmove_slowpath);
 }
+
+static inline void collect_magic_nop_stats(CPUMIPSState *env, struct nop_stats* stats, target_ulong bytes) {
+    if (!memset_stats_dump_registered) {
+        // TODO: move this to CPU_init
+        atexit(dump_memset_stats_on_exit);
+        memset_stats_dump_registered = true;
+    }
+    if (in_kernel_mode(env)) {
+        stats->kernel_mode_bytes += bytes;
+        stats->kernel_mode_count++;
+    } else {
+        stats->user_mode_bytes += bytes;
+        stats->user_mode_count++;
+    }
+}
+#else
+#define collect_magic_nop_stats(env, stats, bytes)
 #endif
 
 
@@ -5570,11 +5598,10 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         // TODO: we can also use a fast write if neither of them cross a page boundary and are on different pages
         if ((current_src_cursor & ~TARGET_PAGE_MASK) == (current_dest_cursor & ~TARGET_PAGE_MASK)) {
             // fast path if page alignment of both cursors is the same
-            char buffer[TARGET_PAGE_SIZE];
             // NOTE: address_space_read+write will invalidate tags so we don't need to do it here
             // cpu_physical_memory_read()
             // cpu_physical_memory_write()
-            warn_report("Memcpy with same page alignment\r");
+            warn_report("Memcpy with same page alignment (size=" TARGET_FMT_ld " \r", original_len);
         }
         /* Slow path (probably attempt to do this to an I/O device or
          * similar, or clearing of a block of code we have translations
@@ -5587,6 +5614,8 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
          *  + we would have to deal with the map returning NULL because the
          *    bounce buffer was in use
          */
+        tcg_debug_assert(original_len - already_written == len);
+        collect_magic_nop_stats(env, &magic_memmove_slowpath, len);
         while (already_written < original_len) {
             uint8_t value = helper_ret_ldub_mmu(env, current_src_cursor, oi, ra);
             if (unlikely(log_instr)) {
@@ -5610,11 +5639,10 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         // TODO: we can also use a fast write if neither of them cross a page boundary and are on different pages
         if ((current_src_cursor & ~TARGET_PAGE_MASK) == (current_dest_cursor & ~TARGET_PAGE_MASK)) {
             // fast path if page alignment of both cursors is the same
-            char buffer[TARGET_PAGE_SIZE];
             // NOTE: address_space_read+write will invalidate tags so we don't need to do it here
             // cpu_physical_memory_read()
             // cpu_physical_memory_write()
-            warn_report("Memcpy with same page alignment\r");
+            warn_report("Memcpy with same page alignment (size=" TARGET_FMT_ld " \r", original_len);
         }
         /* Slow path (probably attempt to do this to an I/O device or
          * similar, or clearing of a block of code we have translations
@@ -5627,6 +5655,8 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
          *  + we would have to deal with the map returning NULL because the
          *    bounce buffer was in use
          */
+        tcg_debug_assert(original_len - already_written == len);
+        collect_magic_nop_stats(env, &magic_memmove_slowpath, len);
         while (already_written < original_len) {
             uint8_t value = helper_ret_ldub_mmu(env, current_src_cursor, oi, ra);
             if (unlikely(log_instr)) {
@@ -5652,9 +5682,12 @@ success:
     return true;
 }
 
+static uint8_t ZEROARRAY[TARGET_PAGE_SIZE];
 
 static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
 {
+    // TODO: just use address_space_write?
+
     // See target/s390x/mem_helper.c and arm/helper.c HELPER(dc_zva)
     int mmu_idx = cpu_mmu_index(env, false);
     TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
@@ -5769,7 +5802,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
              *  + we would have to deal with the map returning NULL because the
              *    bounce buffer was in use
              */
-            warn_report("Falling back to memset slowpath for address " TARGET_FMT_plx ". I/O memory?", dest);
+            warn_report("%s: Falling back to memset slowpath for address " TARGET_FMT_plx
+                        " (phys addr=%" HWADDR_PRIx", len=0x" TARGET_FMT_lx ")! I/O memory or QEMU TLB bug?\r",
+                        __func__, dest, mips_cpu_get_phys_page_debug(CPU(mips_env_get_cpu(env)), dest), len);
             target_ulong end = original_dest + original_len;
             // in case we fault mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
             env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[MIPS_REGNUM_V1];
@@ -5778,7 +5813,6 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
                 // update $v0 to point to the updated dest in case probe_write_access takes a tlb fault:
                 env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
                 store_byte_and_clear_tag(env, dest, value, oi, ra); // might trap
-
                 if (unlikely(log_instr)) {
                     dump_store(env, OPC_SB, dest, value);
                 }
@@ -5794,21 +5828,7 @@ success:
     env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
     env->active_tc.gpr[MIPS_REGNUM_A2] = len;
 #if MAGIC_MEMSET_STATS != 0
-    if (!memset_stats_dump_registered) {
-        atexit(dump_memset_stats_on_exit);
-        memset_stats_dump_registered = true;
-    }
-    if (in_kernel_mode(env)) {
-        if (value == 0)
-            magic_memset_kernel_zero_bytes += original_len;
-        else
-            magic_memset_kernel_nonzero_bytes += original_len;
-    } else {
-        if (value == 0)
-            magic_memset_user_zero_bytes += original_len;
-        else
-            magic_memset_user_nonzero_bytes += original_len;
-    }
+    collect_magic_nop_stats(env, value == 0 ? &magic_memset_zero_bytes : &magic_memset_nonzero_bytes, original_len);
 #endif
     return true;
 }
@@ -5843,20 +5863,20 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
     case MAGIC_NOP_MEMCPY:
         if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A0, MIPS_REGNUM_A1))
             return;
-        bytes_memcpy_with_magic_nop += env->active_tc.gpr[MIPS_REGNUM_A2];
-        return;
+        collect_magic_nop_stats(env, &magic_memcpy_bytes, env->active_tc.gpr[MIPS_REGNUM_A2]);
+        break;
 
     case MAGIC_NOP_MEMMOVE:
         if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A0, MIPS_REGNUM_A1))
             return;
-        bytes_memmove_with_magic_nop += env->active_tc.gpr[MIPS_REGNUM_A2];
+        collect_magic_nop_stats(env, &magic_memmove_bytes, env->active_tc.gpr[MIPS_REGNUM_A2]);
         break;
 
     case MAGIC_NOP_BCOPY: // src + dest arguments swapped
         if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A1, MIPS_REGNUM_A0))
             return;
-        bytes_bcopy_with_magic_nop += env->active_tc.gpr[MIPS_REGNUM_A2];
-        return;
+        collect_magic_nop_stats(env, &magic_bcopy_bytes, env->active_tc.gpr[MIPS_REGNUM_A2]);
+        break;
 
     case 0xf0:
     case 0xf1:
