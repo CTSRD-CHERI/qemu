@@ -5469,6 +5469,7 @@ static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 #define MIPS_REGNUM_A0 4
 #define MIPS_REGNUM_A1 5
 #define MIPS_REGNUM_A2 6
+#define MIPS_REGNUM_A3 7
 
 #ifdef CONFIG_DEBUG_TCG
 #define MAGIC_MEMSET_STATS 1
@@ -5938,29 +5939,27 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
         // otherwise update $v1 to indicate success
         break;
 
-
     case MAGIC_NOP_MEMCPY:
         if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A0, MIPS_REGNUM_A1))
-            return;
+            goto error;
         collect_magic_nop_stats(env, &magic_memcpy_bytes, env->active_tc.gpr[MIPS_REGNUM_A2]);
         break;
 
     case MAGIC_NOP_MEMMOVE:
         if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A0, MIPS_REGNUM_A1))
-            return;
+            goto error;
         collect_magic_nop_stats(env, &magic_memmove_bytes, env->active_tc.gpr[MIPS_REGNUM_A2]);
         break;
 
     case MAGIC_NOP_BCOPY: // src + dest arguments swapped
         if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A1, MIPS_REGNUM_A0))
-            return;
+            goto error;
         collect_magic_nop_stats(env, &magic_bcopy_bytes, env->active_tc.gpr[MIPS_REGNUM_A2]);
         break;
 
     case 0xf0:
     case 0xf1:
     {
-#if 0
         uint8_t buffer[TARGET_PAGE_SIZE];
         // to match memset/memcpy calling convention (use a0 and a2)
         target_ulong src = env->active_tc.gpr[MIPS_REGNUM_A0];
@@ -5986,24 +5985,20 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
             } else {
                 fprintf(stderr, "--- Memory dump at %s(%s): Could not fetch" TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
                         lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
-
             }
         }
-#endif
     }
     case 0xfe:
     case 0xff:
-#if 0
         // dump argument and return registers:
-        fprintf(stderr, "%s(%s): argument+return registers: \r\n"
-                        "\tv0 = 0x" TARGET_FMT_lx "\tv1 = 0x" TARGET_FMT_lx "\r\n"
-                        "\ta0 = 0x" TARGET_FMT_lx "\ta1 = 0x" TARGET_FMT_lx "\r\n"
-                        "\ta2 = 0x" TARGET_FMT_lx "\ta3 = 0x" TARGET_FMT_lx "\r\n",
-                        lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xfe ? "entry" : "exit"),
-                        env->active_tc.gpr[2], env->active_tc.gpr[3],
-                        env->active_tc.gpr[4], env->active_tc.gpr[5],
-                        env->active_tc.gpr[6], env->active_tc.gpr[7]);
-#endif
+        warn_report("%s(%s): argument+return registers: \r\n"
+                    "\tv0 = 0x" TARGET_FMT_lx "\tv1 = 0x" TARGET_FMT_lx "\r\n"
+                    "\ta0 = 0x" TARGET_FMT_lx "\ta1 = 0x" TARGET_FMT_lx "\r\n"
+                    "\ta2 = 0x" TARGET_FMT_lx "\ta3 = 0x" TARGET_FMT_lx "\r\n",
+                    lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xfe ? "entry" : "exit"),
+                    env->active_tc.gpr[2], env->active_tc.gpr[3],
+                    env->active_tc.gpr[4], env->active_tc.gpr[5],
+                    env->active_tc.gpr[6], env->active_tc.gpr[7]);
         break;
     case MAGIC_HELPER_DONE_FLAG:
         qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call library function "
@@ -6012,8 +6007,18 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
     default:
         qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call invalid library function "
                           TARGET_FMT_lx "\n", which);
-        return; // treat it as a NOP
+        goto error;
     }
     // Indicate success by setting $v1 to 0xaffe
     env->active_tc.gpr[MIPS_REGNUM_V1] = MAGIC_HELPER_DONE_FLAG;
+    return;
+error:
+    warn_report("%s: magic nop %d failed: \r\n"
+                    "\tv0 = 0x" TARGET_FMT_lx "\tv1 = 0x" TARGET_FMT_lx "\r\n"
+                    "\ta0 = 0x" TARGET_FMT_lx "\ta1 = 0x" TARGET_FMT_lx "\r\n"
+                    "\ta2 = 0x" TARGET_FMT_lx "\ta3 = 0x" TARGET_FMT_lx "\r\n",
+                    __func__, (int)(which & UINT32_MAX),
+                    env->active_tc.gpr[MIPS_REGNUM_V0], env->active_tc.gpr[MIPS_REGNUM_V1],
+                    env->active_tc.gpr[MIPS_REGNUM_A0], env->active_tc.gpr[MIPS_REGNUM_A1],
+                    env->active_tc.gpr[MIPS_REGNUM_A2], env->active_tc.gpr[MIPS_REGNUM_A3]);
 }
