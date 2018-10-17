@@ -5913,7 +5913,7 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
     default:
         qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call invalid library function "
                           TARGET_FMT_lx "\n", which);
-        do_raise_exception(env, EXCP_RI, GETPC());
+        return; // treat it as a NOP
     }
     // Indicate success by setting $v1 to 0xaffe
     env->active_tc.gpr[MIPS_REGNUM_V1] = MAGIC_HELPER_DONE_FLAG;
