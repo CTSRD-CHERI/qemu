@@ -5777,7 +5777,13 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             memset(hostaddr, value, l_adj);
 #ifdef TARGET_CHERI
             // We also need to invalidate the tags bits written by the memset
-            cheri_tag_invalidate(env, dest, l_adj, ra);
+            // qemu_ram_addr_from_host is faster than using the v2r routines in cheri_tag_invalidate
+            ram_addr_t ram_addr = qemu_ram_addr_from_host(hostaddr);
+            if (ram_addr != RAM_ADDR_INVALID) {
+                cheri_tag_phys_invalidate(ram_addr, l_adj);
+            } else {
+                cheri_tag_invalidate(env, dest, l_adj, ra);
+            }
 #endif
             if (unlikely(log_instr)) {
                 // TODO: dump as a single big block?
