@@ -1475,7 +1475,7 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg, uintptr_t pc)
         tagblk = cheri_tag_new_tagblk(tag);
     }
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        qemu_log("    Cap Tag Write [%" HWADDR_PRIx "] %d -> 0\n", ram_addr,
+        qemu_log("    Cap Tag Write [" RAM_ADDR_FMT "] %d -> 0\n", ram_addr,
                  tagblk[CAP_TAGBLK_IDX(tag)]);
     }
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
