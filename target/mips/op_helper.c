@@ -5782,6 +5782,8 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         goto success; // nothing to do
     }
 
+    CPUState *cs = CPU(mips_env_get_cpu(env));
+
     while (len > 0) {
         assert(dest + len == original_dest + original_len && "continuation broken?");
         // probing for write access:
@@ -5791,17 +5793,17 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
         // and mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
         env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
-
         // If the host address is not in the tlb after the second write we are writing
         // to something strange so just fall back to the slowpath
+        target_ulong l_adj = adj_len_to_page(len, dest);
+        tcg_debug_assert(l_adj != 0);
+        tcg_debug_assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
         void* hostaddr = NULL;
+#if 0
         for (int try = 0; try < 2; try++) {
             hostaddr = tlb_vaddr_to_host(env, dest, 1, mmu_idx);
             if (hostaddr)
                 break;
-            if (try) {
-                warn_report("%s: Failed to find address " TARGET_FMT_plx " in QEMU TLB on second attempt! I/O memory?", __func__, dest);
-            }
             /* OK, try a store and see if we can populate the tlb. This
              * might cause an exception if the memory isn't writable,
              * in which case we will longjmp out of here. We must for
@@ -5812,24 +5814,18 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             if (unlikely(log_instr)) {
                 dump_store(env, OPC_SB, dest, 0xff);
             }
+            // This should definitely fill the host TLB. If not we are probably writing to I/O memory
+            // FIXME: tlb_vaddr_to_host() also returns null if the notdirty flag is set (not sure if that's a bug
+            probe_write(env, dest, 1, mmu_idx, ra);
         }
+#endif
         if (hostaddr) {
             /* If it's all in the TLB it's fair game for just writing to;
              * we know we don't need to update dirty status, etc.
              */
-            target_ulong l_adj = adj_len_to_page(len, dest);
-            tcg_debug_assert(l_adj != 0);
-            tcg_debug_assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
-
-            // Do one store byte to update MMU flags (not sure this is necessary)
             tcg_debug_assert(dest + len == original_dest + original_len && "continuation broken?");
+            // Do one store byte to update MMU flags (not sure this is necessary)
             store_byte_and_clear_tag(env, dest, value, oi, ra);
-
-#ifdef TARGET_CHERI
-            // check $ddc before performing the store (it's fine if we don't clear some of the bytes
-            // since this could also happen for a memset implementation that clears backwards).
-            check_ddc(env, CAP_PERM_STORE, dest, l_adj, /*instavail=*/true);
-#endif
             memset(hostaddr, value, l_adj);
 #ifdef TARGET_CHERI
             // We also need to invalidate the tags bits written by the memset
@@ -5853,6 +5849,27 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             dest += l_adj;
             len -= l_adj;
         } else {
+            // First try address_space_write and if that fails fall back to bytewise setting
+            hwaddr paddr = do_translate_address(env, dest, MMU_DATA_STORE, ra);
+            // Note: address_space_write will also clear the tag bits!
+            MemTxResult result = MEMTX_ERROR;
+            if (value == 0) {
+                 result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, ZEROARRAY, l_adj);
+            } else {
+                // create a buffer filled with the correct value and use that for the write
+                uint8_t setbuffer[TARGET_PAGE_SIZE];
+                tcg_debug_assert(l_adj <= sizeof(setbuffer));
+                memset(setbuffer, value, l_adj);
+                result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, setbuffer, l_adj);
+            }
+            if (result == MEMTX_OK) {
+                dest += l_adj;
+                len -= l_adj;
+                continue; // try again with next page
+            } else {
+                warn_report("address_space_write failed with error %d for %"HWADDR_PRIx "\r", result, paddr);
+                // fall back to bytewise copy slow path
+            }
             /* Slow path (probably attempt to do this to an I/O device or
              * similar, or clearing of a block of code we have translations
              * cached for). Just do a series of byte writes as the architecture
