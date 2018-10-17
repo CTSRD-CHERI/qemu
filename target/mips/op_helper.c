@@ -5593,6 +5593,55 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     // Mark this as a continuation in $v1 (so that we continue sensibly if we get a tlb miss and longjump out)
     env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
 
+    const target_ulong dest_past_end = original_dest + original_len;
+    const target_ulong src_past_end = original_src + original_len;
+    const bool dest_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
+    const bool src_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
+    // If neither src nor dest buffer cross a page boundary we can just do an address_space_read+write
+    // Fast case: less than a page and neither of the buffers crosses a page boundary
+    CPUState *cs = CPU(mips_env_get_cpu(env));
+
+    if (dest_same_page && src_same_page) {
+        tcg_debug_assert(len <= TARGET_PAGE_SIZE);
+        // The translation operation might trap and longjump out!
+        hwaddr src_paddr = do_translate_address(env, original_src, MMU_DATA_LOAD, ra);
+        hwaddr dest_paddr = do_translate_address(env, original_dest, MMU_DATA_STORE, ra);
+
+        // Do a single load+store to update the MMU flags
+        uint8_t first_value = helper_ret_ldub_mmu(env, original_src, oi, ra);
+        // Note: address_space_write will also clear the tag bits!
+        MemTxResult result = MEMTX_ERROR;
+        uint8_t buffer[TARGET_PAGE_SIZE];
+        result = address_space_read(cs->as, src_paddr, MEMTXATTRS_UNSPECIFIED, buffer, len);
+        if (result != MEMTX_OK) {
+            warn_report("magic memmove: error reading %d bytes from paddr %"HWADDR_PRIx
+                        ". Unmapped memory? Error code was %d\r", (int)len, src_paddr, result);
+            // same ignored error would happen with normal loads/stores -> just continue
+        }
+        // also write one byte to the target buffer to ensure that the flags are updated
+        store_byte_and_clear_tag(env, original_dest, first_value, oi, ra); // might trap
+        result = address_space_write(cs->as, dest_paddr, MEMTXATTRS_UNSPECIFIED, buffer, len);
+        if (unlikely(log_instr)) {
+            for (int i = 0; i < len; i++) {
+                helper_dump_load(env, OPC_LBU, original_src + i, buffer[i]);
+                dump_store(env, OPC_SB, original_dest + i, buffer[i]);
+            }
+        }
+        if (result != MEMTX_OK) {
+            warn_report("magic memmove: error writing %d bytes to paddr %"HWADDR_PRIx
+                        ". Unmapped memory? Error code was %d\r", (int)len, dest_paddr, result);
+            // same ignored error would happen with normal loads/stores -> just continue
+        }
+        goto success;
+    }
+
+    const bool has_overlap = MAX(original_dest, original_src) >= MAX(dest_past_end, src_past_end);
+    if (has_overlap) {
+        warn_report("Found multipage magic memmove with overlap: dst=" TARGET_FMT_plx " src=" TARGET_FMT_plx
+                    " len=0x" TARGET_FMT_lx "\r", original_dest, original_src, original_len);
+        // slow path: byte copies
+    }
+
     const bool copy_backwards = original_src < original_dest;
     if (copy_backwards) {
         target_ulong current_dest_cursor = original_dest + len - 1;
