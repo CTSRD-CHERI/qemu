@@ -2958,6 +2958,7 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
              * $v1 = 4 -> purecap memcpy/memcpy_c(dst=$c3, src=$c4, len=$a0)
              * $v1 = 5 -> memmove(dst=$a0, src=$a1, len=$a2)
              * $v1 = 6 -> purecap memmmove/memmove_c(dst=$c3, src=$c4, len=$a0)
+             * $v1 = 7 -> bcopy(src=$a0, dst=$a1, len=$a2)
              * TODO: strlen? str{l,n}cpy?
              */
             if ((uint16_t)imm == 0xC0DE) {

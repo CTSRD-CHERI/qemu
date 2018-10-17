@@ -5472,11 +5472,17 @@ static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 
 #define MAGIC_MEMSET_STATS 1
 #if MAGIC_MEMSET_STATS != 0
+static bool memset_stats_dump_registered = false;
+
 static volatile uint64_t magic_memset_kernel_zero_bytes = 0;
 static volatile uint64_t magic_memset_kernel_nonzero_bytes = 0;
 static volatile uint64_t magic_memset_user_zero_bytes = 0;
 static volatile uint64_t magic_memset_user_nonzero_bytes = 0;
-static bool memset_stats_dump_registered = false;
+
+
+static volatile uint64_t bytes_memmove_with_magic_nop = 0;
+static volatile uint64_t bytes_memcpy_with_magic_nop = 0;
+static volatile uint64_t bytes_bcopy_with_magic_nop = 0;
 
 static inline void print_bytes_and_megabytes(const char* msg, uint64_t bytes) {
     warn_report("%s: %" PRId64 " (%f MB)\r", msg, bytes, bytes / (1024.0 * 1024.0));
@@ -5487,6 +5493,12 @@ static void dump_memset_stats_on_exit() {
     print_bytes_and_megabytes("memset (nonzero) with magic nop in kernel mode", magic_memset_kernel_nonzero_bytes);
     print_bytes_and_megabytes("memset (zero)    with magic nop in user mode", magic_memset_user_zero_bytes);
     print_bytes_and_megabytes("memset (nonzero) with magic nop in user mode", magic_memset_user_nonzero_bytes);
+
+
+    print_bytes_and_megabytes("memmove with magic nop", bytes_memmove_with_magic_nop);
+    print_bytes_and_megabytes("memcpy with magic nop", bytes_memcpy_with_magic_nop);
+    print_bytes_and_megabytes("bcopy with magic nop", bytes_bcopy_with_magic_nop);
+
 }
 #endif
 
@@ -5508,12 +5520,144 @@ store_byte_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint8_t val,
 
 }
 
+
+static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, int src_regnum)
+{
+    tcg_debug_assert(dest_regnum != src_regnum);
+    const target_ulong original_dest = env->active_tc.gpr[dest_regnum]; // $a0 = dest
+    const target_ulong original_src = env->active_tc.gpr[src_regnum];  // $a1 = src
+    const target_ulong original_len = env->active_tc.gpr[MIPS_REGNUM_A2];  // $a2 = len
+    int mmu_idx = cpu_mmu_index(env, false);
+    TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
+    target_ulong len = original_len;
+    target_ulong already_written = 0;
+    const bool is_continuation = (env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG;
+    if (is_continuation) {
+        // This is a partial write -> $a0 is the original dest argument.
+        // The updated dest (after the partial write) was stored in $v0 by the previous call
+        already_written = env->active_tc.gpr[MIPS_REGNUM_V0];
+        tcg_debug_assert(already_written < len);
+        len -= already_written; // update the remaining length
+#if 0
+        fprintf(stderr, "--- %s: Got continuation for 0x" TARGET_FMT_lx " byte access at 0x" TARGET_FMT_plx
+                        " -- current dest = 0x" TARGET_FMT_plx " -- current len = 0x" TARGET_FMT_lx "\r\n",
+                        __func__, original_len, original_dest, dest, len);
+#endif
+    } else {
+        // Not a partial write -> $v0 should be zero otherwise this is a usage error!
+        if (env->active_tc.gpr[MIPS_REGNUM_V0] != 0) {
+            error_report("ERROR: Attempted to call memset library function "
+                          "with non-zero value in $v0 (0x" TARGET_FMT_lx
+                          ") and continuation flag not set in $v1 (0x" TARGET_FMT_lx
+                          ")!\n", env->active_tc.gpr[MIPS_REGNUM_V0], env->active_tc.gpr[MIPS_REGNUM_V1]);
+            do_raise_exception(env, EXCP_RI, GETPC());
+        }
+    }
+    const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
+    if (len == 0 || original_src == original_dest) {
+        goto success; // nothing to do
+    }
+
+    // Mark this as a continuation in $v1 (so that we continue sensibly if we get a tlb miss and longjump out)
+    env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
+
+    const bool copy_backwards = original_src < original_dest;
+    if (copy_backwards) {
+        target_ulong current_dest_cursor = original_dest + len - 1;
+        target_ulong current_src_cursor = original_src + len - 1;
+        // FIXME: todo: fast path copying a page at a time using
+        // address_space_read + address_space_write (if equally aligned or no page overlap)
+        // TODO: we can also use a fast write if neither of them cross a page boundary and are on different pages
+        if ((current_src_cursor & ~TARGET_PAGE_MASK) == (current_dest_cursor & ~TARGET_PAGE_MASK)) {
+            // fast path if page alignment of both cursors is the same
+            char buffer[TARGET_PAGE_SIZE];
+            // NOTE: address_space_read+write will invalidate tags so we don't need to do it here
+            // cpu_physical_memory_read()
+            // cpu_physical_memory_write()
+            warn_report("Memcpy with same page alignment\r");
+        }
+        /* Slow path (probably attempt to do this to an I/O device or
+         * similar, or clearing of a block of code we have translations
+         * cached for). Just do a series of byte writes as the architecture
+         * demands. It's not worth trying to use a cpu_physical_memory_map(),
+         * memset(), unmap() sequence here because:
+         *  + we'd need to account for the blocksize being larger than a page
+         *  + the direct-RAM access case is almost always going to be dealt
+         *    with in the fastpath code above, so there's no speed benefit
+         *  + we would have to deal with the map returning NULL because the
+         *    bounce buffer was in use
+         */
+        while (already_written < original_len) {
+            uint8_t value = helper_ret_ldub_mmu(env, current_src_cursor, oi, ra);
+            if (unlikely(log_instr)) {
+                dump_store(env, OPC_LBU, current_src_cursor, value);
+            }
+            store_byte_and_clear_tag(env, current_dest_cursor, value, oi, ra); // might trap
+            if (unlikely(log_instr)) {
+                dump_store(env, OPC_LBU, current_dest_cursor, value);
+            }
+            current_dest_cursor--;
+            current_src_cursor--;
+            already_written++;
+            env->active_tc.gpr[MIPS_REGNUM_V0] = already_written;
+        }
+    } else {
+        // copy forwards
+        target_ulong current_dest_cursor = original_dest + already_written;
+        target_ulong current_src_cursor = original_src + already_written;
+        // FIXME: todo: fast path copying a page at a time using
+        // address_space_read + address_space_write (if equally aligned or no page overlap)
+        // TODO: we can also use a fast write if neither of them cross a page boundary and are on different pages
+        if ((current_src_cursor & ~TARGET_PAGE_MASK) == (current_dest_cursor & ~TARGET_PAGE_MASK)) {
+            // fast path if page alignment of both cursors is the same
+            char buffer[TARGET_PAGE_SIZE];
+            // NOTE: address_space_read+write will invalidate tags so we don't need to do it here
+            // cpu_physical_memory_read()
+            // cpu_physical_memory_write()
+            warn_report("Memcpy with same page alignment\r");
+        }
+        /* Slow path (probably attempt to do this to an I/O device or
+         * similar, or clearing of a block of code we have translations
+         * cached for). Just do a series of byte writes as the architecture
+         * demands. It's not worth trying to use a cpu_physical_memory_map(),
+         * memset(), unmap() sequence here because:
+         *  + we'd need to account for the blocksize being larger than a page
+         *  + the direct-RAM access case is almost always going to be dealt
+         *    with in the fastpath code above, so there's no speed benefit
+         *  + we would have to deal with the map returning NULL because the
+         *    bounce buffer was in use
+         */
+        while (already_written < original_len) {
+            uint8_t value = helper_ret_ldub_mmu(env, current_src_cursor, oi, ra);
+            if (unlikely(log_instr)) {
+                dump_store(env, OPC_LBU, current_src_cursor, value);
+            }
+            store_byte_and_clear_tag(env, current_dest_cursor, value, oi, ra); // might trap
+            if (unlikely(log_instr)) {
+                dump_store(env, OPC_LBU, current_dest_cursor, value);
+            }
+            current_dest_cursor++;
+            current_src_cursor++;
+            already_written++;
+            env->active_tc.gpr[MIPS_REGNUM_V0] = already_written;
+        }
+    }
+    if (already_written != original_len) {
+        error_report("ERROR: %s: did not memmove all bytes to " TARGET_FMT_plx
+                     ". Remainig len = " TARGET_FMT_plx "\r\n", __func__, original_dest, len);
+        abort();
+    }
+success:
+    env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest; // return value of memcpy is the dest argument
+    return true;
+}
+
+
 static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
 {
     // See target/s390x/mem_helper.c and arm/helper.c HELPER(dc_zva)
     int mmu_idx = cpu_mmu_index(env, false);
-    // TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
-    MEMOP_IDX(DF_BYTE);
+    TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
 
     const target_ulong original_dest = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
     uint8_t value = (uint8_t)env->active_tc.gpr[MIPS_REGNUM_A1]; // $a1 = c
@@ -5680,17 +5824,49 @@ success:
 
 #define MAGIC_HELPER_DONE_FLAG 0xDEC0DED
 
+enum {
+    MAGIC_NOP_MEMSET = 1,
+    MAGIC_NOP_MEMSET_C = 2,
+    MAGIC_NOP_MEMCPY = 3,
+    MAGIC_NOP_MEMCPY_C = 4,
+    MAGIC_NOP_MEMMOVE = 5,
+    MAGIC_NOP_MEMMOVE_C = 6,
+    MAGIC_NOP_BCOPY = 7,
+};
+
+
+
 // Magic library function calls:
 void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
 {
     qemu_log_mask(CPU_LOG_INSTR, "--- Calling magic library function 0x" TARGET_FMT_lx "\n", which);
     // High bits can be used by function to indicate continuation after TLB miss
     switch (which & UINT32_MAX) {
-    case 1:
+    case MAGIC_NOP_MEMSET:
         if (!do_magic_memset(env, GETPC()))
             return;
         // otherwise update $v1 to indicate success
         break;
+
+
+    case MAGIC_NOP_MEMCPY:
+        if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A0, MIPS_REGNUM_A1))
+            return;
+        bytes_memcpy_with_magic_nop += env->active_tc.gpr[MIPS_REGNUM_A2];
+        return;
+
+    case MAGIC_NOP_MEMMOVE:
+        if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A0, MIPS_REGNUM_A1))
+            return;
+        bytes_memmove_with_magic_nop += env->active_tc.gpr[MIPS_REGNUM_A2];
+        break;
+
+    case MAGIC_NOP_BCOPY: // src + dest arguments swapped
+        if (!do_magic_memmove(env, GETPC(), MIPS_REGNUM_A1, MIPS_REGNUM_A0))
+            return;
+        bytes_bcopy_with_magic_nop += env->active_tc.gpr[MIPS_REGNUM_A2];
+        return;
+
     case 0xf0:
     case 0xf1:
     {
