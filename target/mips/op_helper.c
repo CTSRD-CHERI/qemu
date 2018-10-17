@@ -5535,25 +5535,25 @@ static inline void
 store_byte_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint8_t val,
                          TCGMemOpIdx oi, uintptr_t retaddr)
 {
-#ifdef TARGET_CHERI
-    // check $ddc before performing the store
-    check_ddc(env, CAP_PERM_STORE, vaddr, 1, /*instavail=*/true);
-#endif
     helper_ret_stb_mmu(env, vaddr, val, oi, retaddr);
 #ifdef TARGET_CHERI
     // If we returned (i.e. write was successful) we also need to invalidate the
     // tags bit to ensure we are consistent with sb
     cheri_tag_invalidate(env, vaddr, 1, retaddr);
 #endif
-
 }
 
+#ifdef TARGET_CHERI
+#define CHECK_AND_ADD_DDC(env, perms, ptr, len) check_ddc(env, perms, ptr, len, /*instavail=*/true);
+#else
+#define CHECK_AND_ADD_DDC(env, perms, ptr, len) ptr
+#endif
 
 static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, int src_regnum)
 {
     tcg_debug_assert(dest_regnum != src_regnum);
-    const target_ulong original_dest = env->active_tc.gpr[dest_regnum]; // $a0 = dest
-    const target_ulong original_src = env->active_tc.gpr[src_regnum];  // $a1 = src
+    const target_ulong original_dest_ddc_offset = env->active_tc.gpr[dest_regnum]; // $a0 = dest
+    const target_ulong original_src_ddc_offset = env->active_tc.gpr[src_regnum];  // $a1 = src
     const target_ulong original_len = env->active_tc.gpr[MIPS_REGNUM_A2];  // $a2 = len
     int mmu_idx = cpu_mmu_index(env, false);
     TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
@@ -5582,9 +5582,13 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         }
     }
     const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
-    if (len == 0 || original_src == original_dest) {
+    if (len == 0 || original_src_ddc_offset == original_dest_ddc_offset) {
         goto success; // nothing to do
     }
+    // Check capability bounds for the whole copy
+    // If it is going to fail we don't bother doing a partial copy!
+    const target_ulong original_src = CHECK_AND_ADD_DDC(env, CAP_PERM_LOAD, original_src_ddc_offset, original_len);
+    const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len);
 
     // Mark this as a continuation in $v1 (so that we continue sensibly if we get a tlb miss and longjump out)
     env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
@@ -5678,7 +5682,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         abort();
     }
 success:
-    env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest; // return value of memcpy is the dest argument
+    env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest_ddc_offset; // return value of memcpy is the dest argument
     return true;
 }
 
@@ -5692,18 +5696,18 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
     int mmu_idx = cpu_mmu_index(env, false);
     TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
 
-    const target_ulong original_dest = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
+    const target_ulong original_dest_ddc_offset = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
     uint8_t value = (uint8_t)env->active_tc.gpr[MIPS_REGNUM_A1]; // $a1 = c
     const target_ulong original_len = env->active_tc.gpr[MIPS_REGNUM_A2];       // $a2 = len
-    target_ulong dest = original_dest;
+    target_ulong dest = original_dest_ddc_offset;
     target_ulong len = original_len;
     const bool is_continuation = (env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG;
     if (is_continuation) {
         // This is a partial write -> $a0 is the original dest argument.
         // The updated dest (after the partial write) was stored in $v0 by the previous call
         dest = env->active_tc.gpr[MIPS_REGNUM_V0];
-        tcg_debug_assert(dest >= original_dest);
-        target_ulong already_written = dest - original_dest;
+        tcg_debug_assert(dest >= original_dest_ddc_offset);
+        target_ulong already_written = dest - original_dest_ddc_offset;
         len -= already_written; // update the remaining length
 #if 0
         fprintf(stderr, "--- %s: Got continuation for 0x" TARGET_FMT_lx " byte access at 0x" TARGET_FMT_plx
@@ -5720,6 +5724,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             do_raise_exception(env, EXCP_RI, GETPC());
         }
     }
+    dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, dest, len);
+    const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len);
+
     tcg_debug_assert(dest + len == original_dest + original_len && "continuation broken?");
     const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     if (len == 0) {
@@ -5829,7 +5836,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
     }
     tcg_debug_assert(len == 0);
 success:
-    env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest; // return value of memset is the src argument
+    env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest_ddc_offset; // return value of memset is the src argument
     // also update a0 and a2 to match what the kernel memset does (a0 -> buf end, a2 -> 0):
     env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
     env->active_tc.gpr[MIPS_REGNUM_A2] = len;
