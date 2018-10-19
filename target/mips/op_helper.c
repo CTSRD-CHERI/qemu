@@ -5642,19 +5642,6 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
                         ". Unmapped memory? Error code was %d\r", (int)len, dest_paddr, result);
             // same ignored error would happen with normal loads/stores -> just continue
         }
-        uint8_t buffer_after[TARGET_PAGE_SIZE];
-        if (cpu_memory_rw_debug(ENV_GET_CPU(env), original_dest, buffer_after, len, false) == 0) {
-            // fprintf(stderr, "-- memcpy buffer after fast path store of %d bytes\r\n", (int)len);
-            // do_hexdump(stderr, buffer, len, original_src);
-            // fprintf(stderr, "\r");
-        }
-        if (memcmp(buffer, buffer_after, len) != 0) {
-            error_report("MEMCPY WRONG!!!");
-            abort();
-        }
-#ifdef TARGET_CHERI
-        cheri_tag_invalidate(env, original_dest, len, ra);
-#endif
         already_written += len;
         env->active_tc.gpr[MIPS_REGNUM_V0] = already_written;
         goto success;
@@ -5688,11 +5675,11 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         while (already_written < original_len) {
             uint8_t value = helper_ret_ldub_mmu(env, current_src_cursor, oi, ra);
             if (unlikely(log_instr)) {
-                dump_store(env, OPC_LBU, current_src_cursor, value);
+                helper_dump_load(env, OPC_LBU, current_src_cursor, value);
             }
             store_byte_and_clear_tag(env, current_dest_cursor, value, oi, ra); // might trap
             if (unlikely(log_instr)) {
-                dump_store(env, OPC_LBU, current_dest_cursor, value);
+                dump_store(env, OPC_SB, current_dest_cursor, value);
             }
             current_dest_cursor--;
             current_src_cursor--;
@@ -5719,11 +5706,11 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         while (already_written < original_len) {
             uint8_t value = helper_ret_ldub_mmu(env, current_src_cursor, oi, ra);
             if (unlikely(log_instr)) {
-                dump_store(env, OPC_LBU, current_src_cursor, value);
+                helper_dump_load(env, OPC_LBU, current_src_cursor, value);
             }
             store_byte_and_clear_tag(env, current_dest_cursor, value, oi, ra); // might trap
             if (unlikely(log_instr)) {
-                dump_store(env, OPC_LBU, current_dest_cursor, value);
+                dump_store(env, OPC_SB, current_dest_cursor, value);
             }
             current_dest_cursor++;
             current_src_cursor++;
