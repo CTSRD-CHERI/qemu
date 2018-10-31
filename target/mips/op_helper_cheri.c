@@ -2672,7 +2672,7 @@ target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t ddc_offset, ui
     target_ulong addr = ddc_offset + cap_get_cursor(ddc);
     // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
     // FIXME: should regnum be 32 instead?
-    check_cap(env, ddc, CAP_PERM_STORE, addr, /*regnum=*/0, len, instavail);
+    check_cap(env, ddc, perm, addr, /*regnum=*/0, len, instavail);
     return addr;
 }
 
