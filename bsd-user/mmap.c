@@ -25,6 +25,13 @@
 #include "translate-all.h"
 
 //#define DEBUG_MMAP
+#ifndef	MAP_ALIGNMENT_MASK
+#define	MAP_ALIGNMENT_MASK	0
+#endif
+#ifndef	MAP_ALIGNMENT_SHIFT
+/* Nop */
+#define	MAP_ALIGNMENT_SHIFT	0
+#endif
 
 static pthread_mutex_t mmap_mutex = PTHREAD_MUTEX_INITIALIZER;
 static __thread int mmap_lock_count;
@@ -204,7 +211,7 @@ unsigned long last_brk;
 
 /* Subroutine of mmap_find_vma, used when we have pre-allocated a chunk
    of guest address space.  */
-static abi_ulong mmap_find_vma_reserved(abi_ulong start, abi_ulong size)
+static abi_ulong mmap_find_vma_reserved(abi_ulong start, abi_ulong size, abi_ulong alignment)
 {
     abi_ulong addr;
     abi_ulong end_addr;
@@ -236,7 +243,7 @@ static abi_ulong mmap_find_vma_reserved(abi_ulong start, abi_ulong size)
         if (prot) {
             end_addr = addr;
         }
-        if (addr + size == end_addr) {
+        if (addr + size + alignment <= end_addr) {
             break;
         }
         addr -= qemu_host_page_size;
@@ -245,7 +252,9 @@ static abi_ulong mmap_find_vma_reserved(abi_ulong start, abi_ulong size)
     if (start == mmap_next_start) {
         mmap_next_start = addr;
     }
-
+    /* addr is sufficiently low to align it up */
+    if (alignment != 0)
+        addr = (addr + alignment) & ~(alignment - 1);
     return addr;
 }
 
@@ -255,10 +264,11 @@ static abi_ulong mmap_find_vma_reserved(abi_ulong start, abi_ulong size)
  * It must be called with mmap_lock() held.
  * Return -1 if error.
  */
-abi_ulong mmap_find_vma(abi_ulong start, abi_ulong size)
+static abi_ulong mmap_find_vma_aligned(abi_ulong start, abi_ulong size, abi_ulong alignment)
 {
     void *ptr, *prev;
     abi_ulong addr;
+    int flags;
     int wrapped, repeat;
 
     /* If 'start' == 0, then a default start address is used. */
@@ -271,12 +281,20 @@ abi_ulong mmap_find_vma(abi_ulong start, abi_ulong size)
     size = HOST_PAGE_ALIGN(size);
 
     if (reserved_va) {
-        return mmap_find_vma_reserved(start, size);
+        return mmap_find_vma_reserved(start, size,
+            (alignment != 0 ? 1 << alignment : 0));
     }
 
     addr = start;
     wrapped = repeat = 0;
     prev = 0;
+    flags = MAP_ANONYMOUS|MAP_PRIVATE;
+#ifdef MAP_ALIGNED
+    if (alignment != 0)
+		flags |= MAP_ALIGNED(alignment);
+#else
+    /* XXX TODO */
+#endif
 
     for (;; prev = ptr) {
         /*
@@ -287,7 +305,7 @@ abi_ulong mmap_find_vma(abi_ulong start, abi_ulong size)
          *  - shmat() with SHM_REMAP flag
          */
         ptr = mmap(g2h(addr), size, PROT_NONE,
-                   MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+                   flags, -1, 0);
 
         /* ENOMEM, if host address space has no memory */
         if (ptr == MAP_FAILED) {
@@ -359,11 +377,16 @@ abi_ulong mmap_find_vma(abi_ulong start, abi_ulong size)
     }
 }
 
+abi_ulong mmap_find_vma(abi_ulong start, abi_ulong size)
+{
+    return mmap_find_vma_aligned(start, size, 0);
+}
+
 /* NOTE: all the constants are the HOST ones */
 abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
                      int flags, int fd, off_t offset)
 {
-    abi_ulong ret, end, real_start, real_end, retaddr, host_offset, host_len;
+    abi_ulong addr, ret, end, real_start, real_end, retaddr, host_offset, host_len;
 
     mmap_lock();
 #ifdef DEBUG_MMAP
@@ -374,6 +397,8 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
                prot & PROT_READ ? 'r' : '-',
                prot & PROT_WRITE ? 'w' : '-',
                prot & PROT_EXEC ? 'x' : '-');
+        if (flags & MAP_ALIGNMENT_MASK)
+            printf ("MAP_ALIGNED(%u) ", (flags & MAP_ALIGNMENT_MASK) >> MAP_ALIGNMENT_SHIFT);
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1200035
         if (flags & MAP_GUARD)
             printf("MAP_GUARD ");
@@ -382,6 +407,10 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
             printf("MAP_FIXED ");
         if (flags & MAP_ANONYMOUS)
             printf("MAP_ANON ");
+#ifdef MAP_EXCL
+        if (flags & MAP_EXCL)
+            printf("MAP_EXCL ");
+#endif
 	if (flags & MAP_PRIVATE)
 	    printf("MAP_PRIVATE ");
 	if (flags & MAP_SHARED)
@@ -436,7 +465,11 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
     if (!(flags & MAP_FIXED)) {
         host_len = len + offset - host_offset;
         host_len = HOST_PAGE_ALIGN(host_len);
-        start = mmap_find_vma(real_start, host_len);
+        if ((flags & MAP_ALIGNMENT_MASK) != 0)
+            start = mmap_find_vma_aligned(real_start, host_len,
+                (flags & MAP_ALIGNMENT_MASK) >> MAP_ALIGNMENT_SHIFT);
+        else
+            start = mmap_find_vma(real_start, host_len);
         if (start == (abi_ulong)-1) {
             errno = ENOMEM;
             goto fail;
@@ -538,6 +571,15 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
             }
             goto the_end;
         }
+#ifdef MAP_EXCL
+        /* Reject the mapping if any page within the range is mapped */
+        if (flags & MAP_EXCL) {
+            for (addr = start; addr < end; addr++) {
+                if (page_get_flags(addr) != 0)
+                    goto fail;
+            }
+        }
+#endif
 
         /* handle the start of the mapping */
         if (start > real_start) {
