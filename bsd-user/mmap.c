@@ -222,7 +222,7 @@ static abi_ulong mmap_find_vma_reserved(abi_ulong start, abi_ulong size, abi_ulo
         return (abi_ulong)-1;
     }
 
-    size = HOST_PAGE_ALIGN(size);
+    size = HOST_PAGE_ALIGN(size) + alignment;
     end_addr = start + size;
     if (end_addr > reserved_va) {
         end_addr = reserved_va;
@@ -243,7 +243,7 @@ static abi_ulong mmap_find_vma_reserved(abi_ulong start, abi_ulong size, abi_ulo
         if (prot) {
             end_addr = addr;
         }
-        if (addr + size + alignment <= end_addr) {
+        if (end_addr - addr >= size) {
             break;
         }
         addr -= qemu_host_page_size;
