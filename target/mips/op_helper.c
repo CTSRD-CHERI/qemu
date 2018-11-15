@@ -5544,6 +5544,18 @@ store_byte_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint8_t val,
 #endif
 }
 
+static inline void
+store_u32_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint32_t val,
+                         TCGMemOpIdx oi, uintptr_t retaddr)
+{
+    helper_ret_stw_mmu(env, vaddr, val, oi, retaddr);
+#ifdef TARGET_CHERI
+    // If we returned (i.e. write was successful) we also need to invalidate the
+    // tags bit to ensure we are consistent with sb
+    cheri_tag_invalidate(env, vaddr, 4, retaddr);
+#endif
+}
+
 #ifdef TARGET_CHERI
 #define CHECK_AND_ADD_DDC(env, perms, ptr, len) check_ddc(env, perms, ptr, len, /*instavail=*/true);
 #else
@@ -5730,7 +5742,21 @@ success:
 
 static uint8_t ZEROARRAY[TARGET_PAGE_SIZE];
 
-static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
+static void do_memset_pattern_hostaddr(void* hostaddr, uint64_t value, uint64_t nitems, unsigned pattern_length, uint64_t ra) {
+    if (pattern_length == 1) {
+        memset(hostaddr, value, nitems);
+    } else if (pattern_length == 4) {
+        uint32_t* ptr = hostaddr;
+        for (target_ulong i = 0; i < nitems; i++) {
+            *ptr = (uint32_t)value;
+            ptr++;
+        }
+    } else {
+        assert(false && "unsupported memset pattern length");
+    }
+}
+
+static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
 {
     // TODO: just use address_space_write?
 
@@ -5739,10 +5765,11 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
     TCGMemOpIdx oi = make_memop_idx(MO_UB, mmu_idx);
 
     const target_ulong original_dest_ddc_offset = env->active_tc.gpr[MIPS_REGNUM_A0];      // $a0 = dest
-    uint8_t value = (uint8_t)env->active_tc.gpr[MIPS_REGNUM_A1]; // $a1 = c
-    const target_ulong original_len = env->active_tc.gpr[MIPS_REGNUM_A2];       // $a2 = len
+    uint64_t value = env->active_tc.gpr[MIPS_REGNUM_A1]; // $a1 = c
+    const target_ulong original_len_nitems = env->active_tc.gpr[MIPS_REGNUM_A2];       // $a2 = len
+    const target_ulong original_len_bytes = original_len_nitems * pattern_length;
     target_ulong dest = original_dest_ddc_offset;
-    target_ulong len = original_len;
+    target_ulong len_nitems = original_len_nitems;
     const bool is_continuation = (env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG;
     if (is_continuation) {
         // This is a partial write -> $a0 is the original dest argument.
@@ -5750,11 +5777,12 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         dest = env->active_tc.gpr[MIPS_REGNUM_V0];
         tcg_debug_assert(dest >= original_dest_ddc_offset);
         target_ulong already_written = dest - original_dest_ddc_offset;
-        len -= already_written; // update the remaining length
+        len_nitems -= already_written / pattern_length; // update the remaining length
+        assert((already_written % pattern_length) == 0);
 #if 0
         fprintf(stderr, "--- %s: Got continuation for 0x" TARGET_FMT_lx " byte access at 0x" TARGET_FMT_plx
                         " -- current dest = 0x" TARGET_FMT_plx " -- current len = 0x" TARGET_FMT_lx "\r\n",
-                        __func__, original_len, original_dest, dest, len);
+                        __func__, original_len, original_dest, dest, len_nitems);
 #endif
     } else {
         // Not a partial write -> $v0 should be zero otherwise this is a usage error!
@@ -5763,22 +5791,23 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
                          "with non-zero value in $v0 (0x" TARGET_FMT_lx
                          ") and continuation flag not set in $v1 (0x" TARGET_FMT_lx
                          ")!\n", env->active_tc.gpr[MIPS_REGNUM_V0], env->active_tc.gpr[MIPS_REGNUM_V1]);
-            do_raise_exception(env, EXCP_RI, GETPC());
+            do_raise_exception(env, EXCP_RI, ra);
         }
     }
-    dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, dest, len);
-    const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len);
+    dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, dest, len_nitems * pattern_length);
+    const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len_nitems);
 
-    tcg_debug_assert(dest + len == original_dest + original_len && "continuation broken?");
+    tcg_debug_assert(dest + (len_nitems * pattern_length) == original_dest + original_len_bytes && "continuation broken?");
     const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
-    if (len == 0) {
+    if (len_nitems == 0) {
         goto success; // nothing to do
     }
 
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
-    while (len > 0) {
-        assert(dest + len == original_dest + original_len && "continuation broken?");
+    while (len_nitems > 0) {
+        const target_ulong total_len_nbytes = len_nitems * pattern_length;
+        assert(dest + total_len_nbytes == original_dest + original_len_bytes && "continuation broken?");
         // probing for write access:
         // fprintf(stderr, "Probing for write access at " TARGET_FMT_plx "\r\n", dest);
         // fflush(stderr);
@@ -5788,9 +5817,13 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
         env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
         // If the host address is not in the tlb after the second write we are writing
         // to something strange so just fall back to the slowpath
-        target_ulong l_adj = adj_len_to_page(len, dest);
-        tcg_debug_assert(l_adj != 0);
-        tcg_debug_assert(((dest + l_adj - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
+        target_ulong l_adj_bytes = adj_len_to_page(total_len_nbytes, dest);
+        target_ulong l_adj_nitems = l_adj_bytes;
+        if (unlikely(pattern_length != 1)) {
+            l_adj_nitems = l_adj_bytes / pattern_length;
+        }
+        tcg_debug_assert(l_adj_nitems != 0);
+        tcg_debug_assert(((dest + l_adj_bytes - 1) & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK) && "should not cross a page boundary!");
         void* hostaddr = NULL;
 #if 0
         for (int try = 0; try < 2; try++) {
@@ -5816,36 +5849,42 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             /* If it's all in the TLB it's fair game for just writing to;
              * we know we don't need to update dirty status, etc.
              */
-            tcg_debug_assert(dest + len == original_dest + original_len && "continuation broken?");
+            tcg_debug_assert(dest + total_len_nbytes == original_dest + original_len_bytes && "continuation broken?");
             // Do one store byte to update MMU flags (not sure this is necessary)
             store_byte_and_clear_tag(env, dest, value, oi, ra);
-            memset(hostaddr, value, l_adj);
+            do_memset_pattern_hostaddr(hostaddr, value, l_adj_nitems, pattern_length, ra);
 #ifdef TARGET_CHERI
             // We also need to invalidate the tags bits written by the memset
             // qemu_ram_addr_from_host is faster than using the v2r routines in cheri_tag_invalidate
             ram_addr_t ram_addr = qemu_ram_addr_from_host(hostaddr);
             if (ram_addr != RAM_ADDR_INVALID) {
-                cheri_tag_phys_invalidate(ram_addr, l_adj);
+                cheri_tag_phys_invalidate(ram_addr, l_adj_bytes);
             } else {
-                cheri_tag_invalidate(env, dest, l_adj, ra);
+                cheri_tag_invalidate(env, dest, l_adj_bytes, ra);
             }
 #endif
             if (unlikely(log_instr)) {
                 // TODO: dump as a single big block?
-                for (target_ulong i = 0; i < l_adj; i++)
-                    dump_store(env, OPC_SB, dest + i, value);
+                for (target_ulong i = 0; i < l_adj_nitems; i++) {
+                    if (pattern_length == 1)
+                        dump_store(env, OPC_SB, dest + i, value);
+                    else if (pattern_length == 4)
+                        dump_store(env, OPC_SW, dest + (i * pattern_length), value);
+                    else
+                        assert(false && "invalid pattern length");
+                }
 
-                qemu_log("%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
-                          __func__, l_adj, value, dest);
+                    qemu_log("%s: Set " TARGET_FMT_ld " %d-byte items to 0x%" PRIx64 " at 0x" TARGET_FMT_plx "\n",
+                          __func__, l_adj_nitems, pattern_length, value, dest);
             }
             // fprintf(stderr, "%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, value, dest, hostaddr);
-            dest += l_adj;
-            len -= l_adj;
+            dest += l_adj_bytes;
+            len_nitems -= l_adj_nitems;
         } else {
             // First try address_space_write and if that fails fall back to bytewise setting
             hwaddr paddr = do_translate_address(env, dest, MMU_DATA_STORE, ra);
 #ifdef TARGET_CHERI
-            if (paddr <= env->lladdr && paddr + l_adj > env->lladdr) {
+            if (paddr <= env->lladdr && paddr + l_adj_bytes > env->lladdr) {
                 // reset the linked flag if we touch the address with this write
                 env->linkedflag = 0;
             }
@@ -5853,24 +5892,29 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
             // Note: address_space_write will also clear the tag bits!
             MemTxResult result = MEMTX_ERROR;
             if (value == 0) {
-                 result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, ZEROARRAY, l_adj);
+                 result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, ZEROARRAY, l_adj_bytes);
             } else {
                 // create a buffer filled with the correct value and use that for the write
                 uint8_t setbuffer[TARGET_PAGE_SIZE];
-                tcg_debug_assert(l_adj <= sizeof(setbuffer));
-                memset(setbuffer, value, l_adj);
-                result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, setbuffer, l_adj);
+                tcg_debug_assert(l_adj_bytes <= sizeof(setbuffer));
+                do_memset_pattern_hostaddr(setbuffer, value, l_adj_nitems, pattern_length, ra);
+                result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, setbuffer, l_adj_bytes);
             }
             if (result == MEMTX_OK) {
-                dest += l_adj;
-                len -= l_adj;
+                dest += l_adj_bytes;
+                len_nitems -= l_adj_nitems;
                 if (unlikely(log_instr)) {
                     // TODO: dump as a single big block?
-                    for (target_ulong i = 0; i < l_adj; i++)
-                        dump_store(env, OPC_SB, dest + i, value);
-
-                    qemu_log("%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "\n",
-                              __func__, l_adj, value, dest);
+                    for (target_ulong i = 0; i < l_adj_nitems; i++) {
+                        if (pattern_length == 1)
+                            dump_store(env, OPC_SB, dest + i, value);
+                        else if (pattern_length == 4)
+                            dump_store(env, OPC_SW, dest + (i * pattern_length), value);
+                        else
+                            assert(false && "invalid pattern length");
+                    }
+                    qemu_log("%s: Set " TARGET_FMT_ld " %d-byte items to 0x%" PRIx64 " at 0x" TARGET_FMT_plx "\n",
+                            __func__, l_adj_nitems, pattern_length, value, dest);
                 }
                 continue; // try again with next page
             } else {
@@ -5889,30 +5933,43 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra)
              *    bounce buffer was in use
              */
             warn_report("%s: Falling back to memset slowpath for address " TARGET_FMT_plx
-                        " (phys addr=%" HWADDR_PRIx", len=0x" TARGET_FMT_lx ")! I/O memory or QEMU TLB bug?\r",
-                        __func__, dest, mips_cpu_get_phys_page_debug(CPU(mips_env_get_cpu(env)), dest), len);
-            target_ulong end = original_dest + original_len;
+                        " (phys addr=%" HWADDR_PRIx", len_nitems=0x" TARGET_FMT_lx ")! I/O memory or QEMU TLB bug?\r",
+                        __func__, dest, mips_cpu_get_phys_page_debug(CPU(mips_env_get_cpu(env)), dest), len_nitems);
+            target_ulong end = original_dest + original_len_bytes;
+            tcg_debug_assert(((end - dest) % pattern_length) == 0);
             // in case we fault mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
             env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[MIPS_REGNUM_V1];
             while (dest < end) {
-                tcg_debug_assert(dest + len == original_dest + original_len && "continuation broken?");
+                tcg_debug_assert(dest + (len_nitems * pattern_length) == original_dest + original_len_bytes && "continuation broken?");
                 // update $v0 to point to the updated dest in case probe_write_access takes a tlb fault:
                 env->active_tc.gpr[MIPS_REGNUM_V0] = dest;
-                store_byte_and_clear_tag(env, dest, value, oi, ra); // might trap
+                if (pattern_length == 1) {
+                    store_byte_and_clear_tag(env, dest, value, oi, ra); // might trap
+                } else if (pattern_length == 4) {
+                    store_u32_and_clear_tag(env, dest, value, oi, ra); // might trap
+                } else {
+                    assert(false && "invalid pattern length");
+                }
                 if (unlikely(log_instr)) {
+                    if (pattern_length == 1)
+                        dump_store(env, OPC_SB, dest, value);
+                    else if (pattern_length == 4)
+                        dump_store(env, OPC_SW, dest, value);
+                    else
+                        assert(false && "invalid pattern length");
                     dump_store(env, OPC_SB, dest, value);
                 }
-                dest++;
-                len--;
+                dest += pattern_length;
+                len_nitems--;
             }
         }
     }
-    tcg_debug_assert(len == 0);
+    tcg_debug_assert(len_nitems == 0);
 success:
     env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest_ddc_offset; // return value of memset is the src argument
     // also update a0 and a2 to match what the kernel memset does (a0 -> buf end, a2 -> 0):
     env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
-    env->active_tc.gpr[MIPS_REGNUM_A2] = len;
+    env->active_tc.gpr[MIPS_REGNUM_A2] = len_nitems;
 #if MAGIC_MEMSET_STATS != 0
     collect_magic_nop_stats(env, value == 0 ? &magic_memset_zero_bytes : &magic_memset_nonzero_bytes, original_len);
 #endif
@@ -5929,6 +5986,7 @@ enum {
     MAGIC_NOP_MEMMOVE = 5,
     MAGIC_NOP_MEMMOVE_C = 6,
     MAGIC_NOP_BCOPY = 7,
+    MAGIC_NOP_U32_MEMSET = 8,
 };
 
 
@@ -5940,7 +5998,13 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
     // High bits can be used by function to indicate continuation after TLB miss
     switch (which & UINT32_MAX) {
     case MAGIC_NOP_MEMSET:
-        if (!do_magic_memset(env, GETPC()))
+        if (!do_magic_memset(env, GETPC(), /*pattern_size=*/1))
+            return;
+        // otherwise update $v1 to indicate success
+        break;
+
+    case MAGIC_NOP_U32_MEMSET:
+        if (!do_magic_memset(env, GETPC(), /*pattern_size=*/4))
             return;
         // otherwise update $v1 to indicate success
         break;
