@@ -5747,8 +5747,9 @@ static void do_memset_pattern_hostaddr(void* hostaddr, uint64_t value, uint64_t 
         memset(hostaddr, value, nitems);
     } else if (pattern_length == 4) {
         uint32_t* ptr = hostaddr;
+        uint32_t target_value = tswap32((uint32_t)value);
         for (target_ulong i = 0; i < nitems; i++) {
-            *ptr = (uint32_t)value;
+            *ptr = target_value;
             ptr++;
         }
     } else {
