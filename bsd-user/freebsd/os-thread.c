@@ -278,7 +278,7 @@ static abi_long _umtx_wait(abi_ulong *addr, abi_ulong target_val, size_t tsz,
 
     /* target_val has already been tswap'ed. */
 
-    if (ut == NULL) {
+    if (t == NULL) {
         struct timespec ts;
 
         ts.tv_sec = 5;
@@ -482,7 +482,7 @@ abi_long freebsd_umtx_sem2_wait(abi_ulong obj, size_t tsz, void *t)
 			(int)tsz, t);
 
 #if DETECT_DEADLOCK
-		if (ut != NULL) {
+		if (t != NULL) {
 		    ret = _umtx_wait_uint_private(addr, tswap32(USEM_HAS_WAITERS),
 				tsz, t, __func__);
 		} else {
@@ -522,7 +522,7 @@ abi_long freebsd_umtx_sem2_wait(abi_ulong obj, size_t tsz, void *t)
 		DEBUG_UMTX("<WAIT SEM2> %s: _umtx_op(%p, %d, %p)\n",
 			__func__, addr, UMTX_OP_WAIT_UINT, (int)tsz, t);
 #if DETECT_DEADLOCK
-		if (ut != NULL) {
+		if (t != NULL) {
 		    ret = _umtx_wait_uint(addr, tswap32(USEM_HAS_WAITERS), tsz, t,
                     __func__);
 		} else {
