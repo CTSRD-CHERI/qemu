@@ -653,7 +653,7 @@ static void slirp_smb_cleanup(SlirpState *s)
     }
 }
 
-static int slirp_smb(SlirpState* s, const char *exported_dir,
+static int slirp_smb(SlirpState* s, const char *exported_dir_unparsed,
                      struct in_addr vserver_addr, Error **errp)
 {
     char *smb_conf;
@@ -670,12 +670,6 @@ static int slirp_smb(SlirpState* s, const char *exported_dir,
     if (access(CONFIG_SMBD_COMMAND, F_OK)) {
         error_setg(errp, "Could not find '%s', please install it",
                    CONFIG_SMBD_COMMAND);
-        return -1;
-    }
-
-    if (access(exported_dir, R_OK | X_OK)) {
-        error_setg(errp, "Error accessing shared directory '%s': %s",
-                   exported_dir, strerror(errno));
         return -1;
     }
 
@@ -712,23 +706,53 @@ static int slirp_smb(SlirpState* s, const char *exported_dir,
             "load printers = no\n"
             "printing = bsd\n"
             "disable spoolss = yes\n"
-            "usershare max shares = 0\n"
-            "[qemu]\n"
+            "usershare max shares = 0\n",
+            s->smb_dir,
+            s->smb_dir,
+            s->smb_dir,
+            s->smb_dir,
+            s->smb_dir,
+            s->smb_dir,
+            s->smb_dir,
+            s->smb_dir);
+
+    GStrv exported_dirs = g_strsplit_set(exported_dir_unparsed, ":", -1);
+    for (guint i = 0; exported_dirs[i] != NULL; i++) {
+        char exported_dir[PATH_MAX];
+        g_strlcpy(exported_dir, exported_dirs[i], sizeof(exported_dir));
+        /* treat @ro at the end of the path as a read-only a possible @ro suffix */
+        gboolean readonly = g_str_has_suffix(exported_dir, "@ro");
+        if (readonly) {
+            exported_dir[strlen(exported_dir) - 3] = '\0';
+        }
+        // printf("Checking smb dir %s (%s)\r\n", exported_dir, readonly ? "ro" : "rw");
+        if (access(exported_dir, R_OK | X_OK)) {
+            error_setg(errp, "Error accessing shared directory '%s': %s",
+                       exported_dir, strerror(errno));
+            g_free(smb_conf);
+            g_strfreev(exported_dirs);
+            return -1;
+        }
+        // printf("Adding smb dir %s to exports (%s)\r\n", exported_dir, readonly ? "ro" : "rw");
+
+        /* The first exported dir can be accessed using //10.0.2.4/qemu and //10.0.2.4/qemu1 */
+        if (i == 0) {
+            fprintf(f, "[qemu]\n"
+                "path=%s\n"
+                "read only=%s\n"
+                "guest ok=yes\n"
+                "force user=%s\n",
+                exported_dir, readonly ? "yes" : "no", passwd->pw_name);
+        }
+        fprintf(f, "[qemu%d]\n"
             "path=%s\n"
-            "read only=no\n"
+            "read only=%s\n"
             "guest ok=yes\n"
             "force user=%s\n",
-            s->smb_dir,
-            s->smb_dir,
-            s->smb_dir,
-            s->smb_dir,
-            s->smb_dir,
-            s->smb_dir,
-            s->smb_dir,
-            s->smb_dir,
-            exported_dir,
-            passwd->pw_name
-            );
+            i + 1, exported_dir, readonly ? "yes" : "no", passwd->pw_name);
+    }
+
+    g_strfreev(exported_dirs);
     fclose(f);
 
     smb_cmdline = g_strdup_printf("%s -l %s -s %s",
@@ -738,8 +762,8 @@ static int slirp_smb(SlirpState* s, const char *exported_dir,
     if (slirp_add_exec(s->slirp, 0, smb_cmdline, &vserver_addr, 139) < 0 ||
         slirp_add_exec(s->slirp, 0, smb_cmdline, &vserver_addr, 445) < 0) {
         slirp_smb_cleanup(s);
-        g_free(smb_cmdline);
         error_setg(errp, "Conflicting/invalid smbserver address");
+        g_free(smb_cmdline);
         return -1;
     }
     g_free(smb_cmdline);
