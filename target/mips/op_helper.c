@@ -5972,7 +5972,7 @@ success:
     env->active_tc.gpr[MIPS_REGNUM_A0] = dest;
     env->active_tc.gpr[MIPS_REGNUM_A2] = len_nitems;
 #if MAGIC_MEMSET_STATS != 0
-    collect_magic_nop_stats(env, value == 0 ? &magic_memset_zero_bytes : &magic_memset_nonzero_bytes, original_len);
+    collect_magic_nop_stats(env, value == 0 ? &magic_memset_zero_bytes : &magic_memset_nonzero_bytes, original_len_bytes);
 #endif
     return true;
 }
