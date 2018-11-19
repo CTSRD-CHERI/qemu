@@ -68,6 +68,70 @@
 #include "target_os_vmparam.h"
 #include "target_os_user.h"
 
+#ifdef TARGET_ARM
+/* For reading target arch */
+#include <libelf.h>
+#include <gelf.h>
+
+static int
+get_target_arch(TaskState *ts, char **machine_arch)
+{
+    int fd, rv;
+    const char *buf, *end;
+    Elf *ep;
+    Elf_Data *dp;
+    Elf_Note *note;
+    Elf_Scn *scnp;
+    GElf_Shdr shdr;
+
+    ep = NULL;
+    rv = 1;
+    fd = open(ts->bprm->fullpath, O_RDONLY);
+    if (fd < 0)
+        return (1);
+
+    if (elf_version(EV_CURRENT) == EV_NONE)
+        goto out;
+
+    ep = elf_begin(fd, ELF_C_READ, NULL);
+    if (ep == NULL)
+        goto out;
+
+    scnp = elf_getscn(ep, 0);
+    if (scnp == NULL)
+        goto out;
+    do {
+        if (gelf_getshdr(scnp, &shdr) != &shdr)
+            continue;
+        if (shdr.sh_type != SHT_NOTE)
+            continue;
+        if ((dp = elf_getdata(scnp, NULL)) == NULL)
+            continue;
+
+        buf = dp->d_buf;
+        end = buf + dp->d_size;
+        while (buf < end) {
+            if (buf + sizeof(*note) > end)
+                break;
+            note = (Elf_Note *)(uintptr_t) buf;
+            if (note->n_type == NT_FREEBSD_ARCH_TAG) {
+                buf += sizeof(*note) + roundup2(note->n_namesz, 4);
+                *machine_arch = strdup(buf);
+                rv = 0;
+                goto out;
+            }
+            buf += sizeof(*note) + roundup2(note->n_namesz, 4) +
+              roundup2(note->n_descsz, 4);
+        }
+    } while ((scnp = elf_nextscn(ep, scnp)) != NULL);
+out:
+    if (ep != NULL)
+        elf_end(ep);
+    close(fd);
+    return (rv);
+}
+#endif
+
 static void
 host_to_target_kinfo_proc(struct target_kinfo_proc *tki, struct kinfo_proc *hki)
 {
@@ -1246,12 +1310,34 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
             goto out;
 
         case HW_MACHINE_ARCH:
+		{
+#ifdef	TARGET_ARM
+        /*
+         * For ARM, we'll try to grab the MACHINE_ARCH from the ELF that we are
+		 * currently emulating. It should have a .note containing the
+		 * MACHINE_ARCH that this binary has been compiled for, so we'll assume
+		 * this is right and otherwise matches the jail/environment we're
+		 * operating out of.
+         *
+         * If we can't find the expected ARCH tag, fallback to armv6 as a
+         * sensible default.
+         */
+        char *machine_arch;
+        if (get_target_arch(ts, &machine_arch) == 0) {
+            holdlen = strlen(machine_arch);
+            if (holdp)
+                strlcpy(holdp, machine_arch, oldlen);
+            free(machine_arch);
+            ret = 0;
+            goto out;
+        }
+#endif
 	    holdlen = sizeof(TARGET_HW_MACHINE_ARCH);
 	    if (holdp)
 		strlcpy(holdp, TARGET_HW_MACHINE_ARCH, oldlen);
             ret = 0;
             goto out;
-
+		}
 #if defined(TARGET_AARCH64)
         case HW_NCPU:           /* XXX AARCH64 is not SMP ready */
             if (oldlen) {
