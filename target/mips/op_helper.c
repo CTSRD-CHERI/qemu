@@ -5776,7 +5776,15 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
         // This is a partial write -> $a0 is the original dest argument.
         // The updated dest (after the partial write) was stored in $v0 by the previous call
         dest = env->active_tc.gpr[MIPS_REGNUM_V0];
-        tcg_debug_assert(dest >= original_dest_ddc_offset);
+        if (dest < original_dest_ddc_offset || dest >= original_dest_ddc_offset + original_len_bytes) {
+            error_report("ERROR: Attempted to call memset library function "
+                         "with invalid dest in $v0 (0x" TARGET_FMT_lx
+                         ") and continuation flag set. orig dest = 0x" TARGET_FMT_lx
+                         " and orig bytes = 0x" TARGET_FMT_lx "!\n",
+                         env->active_tc.gpr[MIPS_REGNUM_V0], env->active_tc.gpr[MIPS_REGNUM_A0],
+                         env->active_tc.gpr[MIPS_REGNUM_A2]);
+            do_raise_exception(env, EXCP_RI, ra);
+        }
         target_ulong already_written = dest - original_dest_ddc_offset;
         len_nitems -= already_written / pattern_length; // update the remaining length
         assert((already_written % pattern_length) == 0);
