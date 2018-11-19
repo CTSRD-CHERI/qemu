@@ -240,10 +240,10 @@ static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
     total_out_of_bounds += unrepresentable; // TODO: count how far it was out of bounds for this stat
 
     cpu_fprintf(f, "Total out of bounds %ss: %" PRIu64 " (%f%%)\n", name, total_out_of_bounds,
-                (double)(100 * total_out_of_bounds) / (double)total);
+                total == 0 ? 0.0 : ((double)(100 * total_out_of_bounds) / (double)total));
     cpu_fprintf(f, "Total out of bounds %ss (excluding one past the end): %" PRIu64 " (%f%%)\n",
                 name, total_out_of_bounds - after_bounds[0],
-                (double)(100 * (total_out_of_bounds - after_bounds[0])) / (double)total);
+                total == 0 ? 0.0 : ((double)(100 * (total_out_of_bounds - after_bounds[0])) / (double)total));
 }
 
 #else /* !defined(DO_CHERI_STATISTICS) */
