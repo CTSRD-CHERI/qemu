@@ -632,7 +632,8 @@ static inline void generate_csetbounds_imm(int32_t cd, int32_t cb, int32_t lengt
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
 
-    tcg_gen_movi_tl(t0, sign_extend(length, 11));
+    tcg_debug_assert(length >= 0 && "CSetBoundsImm decoding broken (should be unsigned)?");
+    tcg_gen_movi_tl(t0, length);
     gen_helper_csetbounds(cpu_env, tcd, tcb, t0);
 
     tcg_temp_free(t0);
