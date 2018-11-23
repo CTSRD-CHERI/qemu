@@ -76,6 +76,8 @@ DEF_HELPER_2(mfc0_watchlo, tl, env, i32)
 DEF_HELPER_2(mfc0_watchhi, tl, env, i32)
 DEF_HELPER_1(mfc0_debug, tl, env)
 DEF_HELPER_1(mftc0_debug, tl, env)
+/* Break after n cycles have been executed */
+DEF_HELPER_1(check_breakcount, void, env)
 #ifdef TARGET_MIPS64
 DEF_HELPER_1(dmfc0_tcrestart, tl, env)
 DEF_HELPER_1(dmfc0_tchalt, tl, env)
@@ -159,31 +161,40 @@ DEF_HELPER_2(mtc0_datalo, void, env, tl)
 DEF_HELPER_2(mtc0_taghi, void, env, tl)
 DEF_HELPER_2(mtc0_datahi, void, env, tl)
 
-#if defined(TARGET_CHERI)
+// Dump MIPS register state
+DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
+
+// QEMU-CHERI extension:
 DEF_HELPER_1(mfc0_rtc64, i64, env)
 DEF_HELPER_2(mtc0_rtc64, void, env, i64)
-
+// BERI extension:
 DEF_HELPER_1(mfc0_coreid, tl, env)
 
+#ifdef CONFIG_MIPS_LOG_INSTR
+DEF_HELPER_1(dump_changed_state, void, env)
+DEF_HELPER_2(log_instruction, void, env, i64)
 DEF_HELPER_4(dump_load, void, env, int, tl, tl)
 DEF_HELPER_4(dump_load32, void, env, int, tl, i32)
-
-DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
-DEF_HELPER_2(mtc0_gc_lo, void, env, tl)
-DEF_HELPER_2(mtc0_gc_hi, void, env, tl)
-DEF_HELPER_2(mtc0_gc_perms, void, env, tl)
-DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
-DEF_HELPER_3(ccheck_pc, void, env, i64, int)
-DEF_HELPER_3(ccheck_store, tl, env, tl, i32)
-DEF_HELPER_3(ccheck_load, tl, env, tl, i32)
-DEF_HELPER_3(log_instruction, void, env, i64, int)
-DEF_HELPER_1(log_registers, void, env)
-DEF_HELPER_5(cinvalidate_tag, void, env, tl, i32, i32, tl)
-DEF_HELPER_5(cinvalidate_tag32, void, env, tl, i32, i32, i32)
-#if defined(CHERI_128)
-DEF_HELPER_2(ccheck_imprecise, tl, env, tl)
+DEF_HELPER_2(instr_start, void, env, i64)
+DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
+DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
+DEF_HELPER_2(instr_stop, void, env, i64)
+DEF_HELPER_2(cheri_debug_message, void, env, i64)
 #endif
-DEF_HELPER_2(check_access_idc, void, env, i32)
+
+DEF_HELPER_2(magic_library_function, void, env, tl)
+
+#if defined(TARGET_CHERI)
+DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
+DEF_HELPER_1(ccheck_btarget, void, env)
+DEF_HELPER_2(ccheck_pc, void, env, i64)
+DEF_HELPER_3(ccheck_store, tl, env, tl, i32)
+DEF_HELPER_3(ccheck_store_right, tl, env, tl, i32)
+DEF_HELPER_3(ccheck_load, tl, env, tl, i32)
+DEF_HELPER_3(ccheck_load_right, tl, env, tl, i32)
+DEF_HELPER_5(cinvalidate_tag, void, env, tl, i32, i32, tl)
+DEF_HELPER_5(cinvalidate_tag_left_right, void, env, tl, i32, i32, tl)
+DEF_HELPER_5(cinvalidate_tag32, void, env, tl, i32, i32, i32)
 DEF_HELPER_4(candperm, void, env, i32, i32, tl)
 DEF_HELPER_3(cbez, tl, env, i32, i32)
 DEF_HELPER_3(cbnz, tl, env, i32, i32)
@@ -231,6 +242,8 @@ DEF_HELPER_4(ccopytype, void, env, i32, i32, i32)
 DEF_HELPER_3(creadhwr, void, env, i32, i32)
 DEF_HELPER_3(cwritehwr, void, env, i32, i32)
 
+DEF_HELPER_3(cloadtags, tl, env, i32, i64)
+
 DEF_HELPER_3(ceq, tl, env, i32, i32)
 DEF_HELPER_3(cne, tl, env, i32, i32)
 DEF_HELPER_3(clt, tl, env, i32, i32)
@@ -254,12 +267,6 @@ DEF_HELPER_5(clc_addr, tl, env, i32, i32, tl, i32)
 DEF_HELPER_3(cllc_addr, tl, env, i32, i32)
 DEF_HELPER_5(csc_addr, tl, env, i32, i32, tl, i32)
 DEF_HELPER_3(cscc_addr, tl, env, i32, i32)
-
-DEF_HELPER_2(instr_start, void, env, i64)
-DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
-DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
-DEF_HELPER_2(instr_stop, void, env, i64)
-DEF_HELPER_2(cheri_debug_message, void, env, i64)
 
 #ifdef CHERI_128
 DEF_HELPER_4(bytes2cap_128, void, env, i32, tl, tl)

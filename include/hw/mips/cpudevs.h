@@ -1,3 +1,4 @@
+
 #ifndef HW_MIPS_CPUDEVS_H
 #define HW_MIPS_CPUDEVS_H
 
@@ -7,7 +8,7 @@
 
 /* addr.c */
 uint64_t cpu_mips_kseg0_to_phys(void *opaque, uint64_t addr);
-#if defined(TARGET_CHERI)
+#if defined(TARGET_MIPS64)
 uint64_t cpu_cheri_kseg0_to_phys(void *opaque, uint64_t addr);
 #endif
 uint64_t cpu_mips_phys_to_kseg0(void *opaque, uint64_t addr);

@@ -185,14 +185,16 @@ uint8_t qemu_extra_params_fw[2];
 
 int icount_align_option;
 
-#ifdef CONFIG_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
 #ifdef CHERI_DEFAULT_CVTRACE
     int cl_default_trace_format = CPU_LOG_CVTRACE;
 #else
     int cl_default_trace_format = CPU_LOG_INSTR;
 #endif
+#endif /* CONFIG_MIPS_LOG_INSTR */
+#ifdef CONFIG_CHERI
 bool cheri_c2e_on_unrepresentable = false;
-#endif /* CONFIG_CHERI */
+#endif
 
 /* The bytes in qemu_uuid are in the order specified by RFC4122, _not_ in the
  * little-endian "wire format" described in the SMBIOS 2.6 specification.
@@ -1865,6 +1867,9 @@ static void version(void)
 {
     printf("QEMU emulator version " QEMU_FULL_VERSION "\n"
            QEMU_COPYRIGHT "\n");
+#ifdef CHERI_UNALIGNED
+    printf("Built with support for unaligned loads/stores\n");
+#endif
 #ifdef TARGET_CHERI
 #ifdef CHERI_128
     printf("Compiled for CHERI128\n");
@@ -1873,14 +1878,11 @@ static void version(void)
 #else
     printf("Compiled for CHERI256\n");
 #endif
-#endif
-#ifdef CHERI_UNALIGNED
-    printf("Built with support for unaligned loads/stores\n");
-#endif
-#if CHERI_C0_NULL
     printf("Built with C0 as NULL register\n");
+#endif  // TARGET_CHERI
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+    printf("Built with MIPS instruction logging enabled\n");
 #endif
-
 }
 
 static void help(int exitcode)
@@ -3789,10 +3791,13 @@ int main(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-#if defined(CONFIG_CHERI)
             case QEMU_OPTION_breakpoint:
                 cl_breakpoint = strtoull(optarg, NULL, 0);
                 break;
+            case QEMU_OPTION_breakcount:
+                cl_breakcount = strtoull(optarg, NULL, 0);
+                break;
+#if defined(CONFIG_MIPS_LOG_INSTR)
             case QEMU_OPTION_cheri_trace_format:
                 if (strcmp(optarg, "text") == 0)
                     cl_default_trace_format = CPU_LOG_INSTR;
@@ -3803,9 +3808,8 @@ int main(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-            case QEMU_OPTION_breakcount:
-                cl_breakcount = strtoull(optarg, NULL, 0);
-                break;
+#endif /* CONFIG_MIPS_LOG_INSTR */
+#ifdef CONFIG_CHERI
             case QEMU_OPTION_cheri_c2e_on_unrepresentable:
                 cheri_c2e_on_unrepresentable = true;
                 break;

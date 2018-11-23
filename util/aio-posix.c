@@ -454,7 +454,7 @@ void aio_dispatch(AioContext *ctx)
 static __thread GPollFD *pollfds;
 static __thread AioHandler **nodes;
 static __thread unsigned npfd, nalloc;
-static __thread Notifier pollfds_cleanup_notifier;
+// static __thread Notifier pollfds_cleanup_notifier;
 
 static void pollfds_cleanup(Notifier *n, void *unused)
 {
@@ -468,8 +468,10 @@ static void add_pollfd(AioHandler *node)
 {
     if (npfd == nalloc) {
         if (nalloc == 0) {
-            pollfds_cleanup_notifier.notify = pollfds_cleanup;
-            qemu_thread_atexit_add(&pollfds_cleanup_notifier);
+            // FIXME: to avoid asan errors leak the notifier instead:
+            Notifier* pollfds_cleanup_notifier = calloc(1, sizeof(Notifier));
+            pollfds_cleanup_notifier->notify = pollfds_cleanup;
+            qemu_thread_atexit_add(pollfds_cleanup_notifier);
             nalloc = 8;
         } else {
             g_assert(nalloc <= INT_MAX);
@@ -607,6 +609,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
 
         if (!aio_epoll_enabled(ctx)) {
             QLIST_FOREACH_RCU(node, &ctx->aio_handlers, node) {
+                // FIXME: this causes an asan error
                 if (!node->deleted && node->pfd.events
                     && aio_node_check(ctx, node->is_external)) {
                     add_pollfd(node);

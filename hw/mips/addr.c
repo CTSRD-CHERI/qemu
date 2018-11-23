@@ -26,7 +26,7 @@
 
 static int mips_um_ksegs;
 
-#if defined(TARGET_CHERI)
+#if defined(TARGET_MIPS64)
 uint64_t cpu_cheri_kseg0_to_phys(void *opaque, uint64_t addr)
 {
     return addr & 0xffffffffffll;

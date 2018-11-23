@@ -70,7 +70,7 @@ static int64_t load_kernel(void)
     big_endian = 0;
 #endif
 
-#if defined(TARGET_CHERI)
+#if defined(TARGET_MIPS64)
     kernel_size = load_elf(loaderparams.kernel_filename, cpu_cheri_kseg0_to_phys,
 #else
     kernel_size = load_elf(loaderparams.kernel_filename, cpu_mips_kseg0_to_phys,
@@ -234,7 +234,9 @@ static void mips_mipssim_machine_init(MachineClass *mc)
 {
     mc->desc = "MIPS MIPSsim platform";
     mc->init = mips_mipssim_init;
-#if defined(TARGET_MIPS64) || defined(TARGET_CHERI)
+#if defined(TARGET_CHERI)
+    mc->default_cpu_type = MIPS_CPU_TYPE_NAME("BERI");
+#elif defined(TARGET_MIPS64)
     mc->default_cpu_type = MIPS_CPU_TYPE_NAME("5Kf");
 #else
     mc->default_cpu_type = MIPS_CPU_TYPE_NAME("24Kf");

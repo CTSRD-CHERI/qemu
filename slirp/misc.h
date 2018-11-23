@@ -8,11 +8,14 @@
 #ifndef MISC_H
 #define MISC_H
 
+#include "qemu/main-loop.h"
+
 struct ex_list {
 	int ex_pty;			/* Do we want a pty? */
 	struct in_addr ex_addr;		/* Server address */
 	int ex_fport;                   /* Port to telnet to */
 	const char *ex_exec;            /* Command line of what to exec */
+	ChildTerminationHandler* callback; /* Called on child process exit */
 	struct ex_list *ex_next;
 };
 
@@ -53,6 +56,7 @@ struct slirp_quehead {
 void slirp_insque(void *, void *);
 void slirp_remque(void *);
 int add_exec(struct ex_list **, int, char *, struct in_addr, int);
-int fork_exec(struct socket *so, const char *ex, int do_pty);
+int fork_exec(struct socket *so, const char *ex, int do_pty,
+              ChildTerminationHandler *callback, void *opaque);
 
 #endif

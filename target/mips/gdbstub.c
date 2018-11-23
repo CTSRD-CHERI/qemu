@@ -159,12 +159,12 @@ static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
 {
 #ifdef CHERI_128
     stq_p(mem_buf, cap->cr_pesbt);
-    stq_p(mem_buf + 8, cap->cr_base + cap->cr_offset);
+    stq_p(mem_buf + 8, cap_get_cursor(cap));
     return 16;
 #elif defined(CHERI_MAGIC128)
     /* XXX: Would need to generate pesbt. */
     stq_p(mem_buf, 0);
-    stq_p(mem_buf + 8, cap->cr_base + cap->cr_offset);
+    stq_p(mem_buf + 8, cap_get_cursor(cap));
     return 16;
 #else
     target_ulong ret;
@@ -177,7 +177,7 @@ static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
         (perms << 1) | (cap->cr_sealed ? 1UL : 0UL);
 	
     stq_p(mem_buf, ret);
-    stq_p(mem_buf + 8, cap->cr_base + cap->cr_offset);
+    stq_p(mem_buf + 8, cap_get_cursor(cap));
     stq_p(mem_buf + 16, cap->cr_base);
     stq_p(mem_buf + 24, cap->cr_length);
     return 32;

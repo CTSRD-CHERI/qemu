@@ -74,11 +74,13 @@ void event_notifier_set_handler(EventNotifier *e,
                            handler, NULL);
 }
 
-/* reaping of zombies.  right now we're not passing the status to
-   anyone, but it would be possible to add a callback.  */
+/* reaping of zombies. On termination the callback function is called with
+ * the waitpid() status result and the argument that was passed in.  */
 #ifndef _WIN32
 typedef struct ChildProcessRecord {
     int pid;
+    ChildTerminationHandler *callback;
+    void *opaque;
     QLIST_ENTRY(ChildProcessRecord) next;
 } ChildProcessRecord;
 
@@ -97,7 +99,10 @@ static void sigchld_bh_handler(void *opaque)
     ChildProcessRecord *rec, *next;
 
     QLIST_FOREACH_SAFE(rec, &child_watches, next, next) {
-        if (waitpid(rec->pid, NULL, WNOHANG) == rec->pid) {
+        int status = 0;
+        if (waitpid(rec->pid, &status, WNOHANG) == rec->pid) {
+            if (rec->callback)
+                rec->callback(status, rec->opaque);
             QLIST_REMOVE(rec, next);
             g_free(rec);
         }
@@ -115,7 +120,7 @@ static void qemu_init_child_watch(void)
     sigaction(SIGCHLD, &act, NULL);
 }
 
-int qemu_add_child_watch(pid_t pid)
+int qemu_add_child_watch(pid_t pid, ChildTerminationHandler *callback, void* opaque)
 {
     ChildProcessRecord *rec;
 
@@ -130,6 +135,8 @@ int qemu_add_child_watch(pid_t pid)
     }
     rec = g_malloc0(sizeof(ChildProcessRecord));
     rec->pid = pid;
+    rec->callback = callback;
+    rec->opaque = opaque;
     QLIST_INSERT_HEAD(&child_watches, rec, next);
     return 0;
 }

@@ -437,14 +437,15 @@ struct mips_opcode
    R6 immediates/displacements :
    (adding suffix to 'o' to avoid adding new characters)
    "+o"  9 bits immediate/displacement (shift = 7)
-   "+o1" 18 bits immediate/displacement (shift = 0)
-   "+o2" 19 bits immediate/displacement (shift = 0)
-   "+o3" 11 bits immediate/displacement (shift = 0, CHERI only)
-   "+o4" 11 bits immediate/displacement (shift = 1, CHERI only)
-   "+o5" 11 bits immediate/displacement (shift = 2, CHERI only)
-   "+o6" 11 bits immediate/displacement (shift = 3, CHERI only)
-   "+o7" 11 bits immediate/displacement (shift = 4, CHERI only)
-   "+o8" 16 bits immediate/displacement (shift = 4, CHERI only)
+   "+o1" 18 bits signed immediate/displacement (shift = 0)
+   "+o2" 19 bits signed immediate/displacement (shift = 0)
+   "+o3" 11 bits signed immediate/displacement (shift = 0, CHERI only)
+   "+o4" 11 bits signed immediate/displacement (shift = 1, CHERI only)
+   "+o5" 11 bits signed immediate/displacement (shift = 2, CHERI only)
+   "+o6" 11 bits signed immediate/displacement (shift = 3, CHERI only)
+   "+o7" 11 bits signed immediate/displacement (shift = 4, CHERI only)
+   "+o8" 16 bits signed immediate/displacement (shift = 4, CHERI only)
+   "+o9" 11 bits unsigned immediate/displacement (shift = 0, CHERI only)
 
    Other:
    "()" parens surrounding optional value
@@ -1296,7 +1297,9 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cchecktype", "+w,+b", 0x4800027f, 0xffe007ff, 0,			0, I1},
 {"cmove", "+w,+b",      0x480002bf, 0xffe007ff, 0,                      0, I1},
 {"ccleartag", "+w,+b",	0x480002ff, 0xffe007ff, 0,			0, I1},
-{"cjalr",  "+w,+b",	    0x4800033f, 0xffe007ff, 0,			0, I1},
+{"cjalr",  "+w,+b",	0x4800033f, 0xffe007ff, 0,			0, I1},
+{"cgetaddr", "t,+b",	0x480003ff, 0xffe007ff, 0,			0, I1},
+{"cloadtags", "t,+b", 0x480007bf, 0xffe007ff, 0,			0, I1},
 
 /* New ISA: one-operand instructions */
 {"cgetpcc", "+w",	    0x480007ff, 0xffe0ffff, 0,			0, I1},
@@ -1331,7 +1334,7 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cbez",      "+w,i",   0x4a200000, 0xffe00000, 0, 0, I1},
 {"cbnz",      "+w,i",   0x4a400000, 0xffe00000, 0, 0, I1},
 
-{"csetboundsimm", "+w,+b,+o3",   0x4a800000, 0xffe00000, 0, 0, I1},
+{"csetboundsimm", "+w,+b,+o9",   0x4a800000, 0xffe00000, 0, 0, I1},
 {"cincoffsetimm", "+w,+b,+o3",   0x4a600000, 0xffe00000, 0, 0, I1},
 {"creturn", "",               0x48a007ff, 0xffffffff, 0, 0, I1},
 
@@ -4293,6 +4296,10 @@ set_default_mips_dis_options (struct disassemble_info *info)
       mips_cp0sel_names = chosen_arch->cp0sel_names;
       mips_cp0sel_names_len = chosen_arch->cp0sel_names_len;
       mips_hwr_names = chosen_arch->hwr_names;
+      // XXXAR: print sensible n64 register names for TARGET_CHERI
+      if (chosen_arch->isa & ISA_MIPS64) {
+        mips_gpr_names = mips_gpr_names_newabi;
+      }
     }
 #endif
 }
@@ -4688,6 +4695,10 @@ print_insn_args (const char *d,
                         delta -= (OP_MASK_DELTA + 1);
                     }
                     delta = delta << 4;
+                    break;
+                case '9': /* CHERI 11 bit unsigned, shift 0 */
+                    d++;
+                    delta = ((l >> OP_SH_CDELTA) & OP_MASK_CDELTA);
                     break;
                 default:
                     delta = (l >> OP_SH_DELTA_R6) & OP_MASK_DELTA_R6;

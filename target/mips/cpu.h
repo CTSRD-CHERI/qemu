@@ -123,7 +123,49 @@ typedef struct mips_def_t mips_def_t;
 #define MIPS_KSCRATCH_NUM 6
 #define MIPS_MAAR_MAX 16 /* Must be an even number. */
 
+
+#ifdef CONFIG_MIPS_LOG_INSTR
+struct cvtrace {
+    uint8_t version;
+#define CVT_GPR     1   /* GPR change (val2) */
+#define CVT_LD_GPR  2   /* Load into GPR (val2) from address (val1) */
+#define CVT_ST_GPR  3   /* Store from GPR (val2) to address (val1) */
+#define CVT_NO_REG  4   /* No register is changed. */
+#define CVT_CAP     11  /* Cap change (val2,val3,val4,val5) */
+#define CVT_LD_CAP  12  /* Load Cap (val2,val3,val4,val5) from addr (val1) */
+#define CVT_ST_CAP  13  /* Store Cap (val2,val3,val4,val5) to addr (val1) */
+    uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
+    uint16_t cycles;    /* Currently not used. */
+    uint32_t inst;      /* Encoded instruction. */
+    uint64_t pc;        /* PC value of instruction. */
+    uint64_t val1;      /* val1 is used for memory address. */
+    uint64_t val2;      /* val2, val3, val4, val5 are used for reg content. */
+    uint64_t val3;
+    uint64_t val4;
+    uint64_t val5;
+    uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
+    uint8_t asid;       /* Address Space ID (i.e. CP0_TCStatus & 0xff) */
+} __attribute__((packed));
+typedef struct cvtrace cvtrace_t;
+
+/* Version 3 Cheri Stream Trace header info */
+#define CVT_QEMU_VERSION    (0x80U + 3)
+#define CVT_QEMU_MAGIC      "CheriTraceV03"
+#endif // CONFIG_MIPS_LOG_INSTR
+
 #if defined(TARGET_CHERI)
+
+#if defined(CHERI_MAGIC128)
+#define CHERI_CAP_SIZE  16
+#elif defined(CHERI_128)
+#define CHERI_CAP_SIZE  16
+#else
+#define CHERI_CAP_SIZE  32
+#endif
+
+
+#define cheri_debug_assert(cond) tcg_debug_assert(cond)
+
 /*
  * Please note if this structure is changed then the TCG gen_branch() in
  * translate.c may need to be changed as well.
@@ -144,10 +186,14 @@ struct cap_register {
 };
 typedef struct cap_register cap_register_t;
 
+static inline uint64_t cap_get_cursor(const cap_register_t* c) {
+    return c->cr_base + c->cr_offset;
+}
+
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
-    cp->cr_length = -1L; // But length should be -1
+    cp->cr_length = ~UINT64_C(0); // But length should be -1
     return cp;
 }
 
@@ -226,33 +272,6 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
 #endif
 }
 
-struct cvtrace {
-    uint8_t version;
-#define CVT_GPR     1   /* GPR change (val2) */
-#define CVT_LD_GPR  2   /* Load into GPR (val2) from address (val1) */
-#define CVT_ST_GPR  3   /* Store from GPR (val2) to address (val1) */
-#define CVT_NO_REG  4   /* No register is changed. */
-#define CVT_CAP     11  /* Cap change (val2,val3,val4,val5) */
-#define CVT_LD_CAP  12  /* Load Cap (val2,val3,val4,val5) from addr (val1) */
-#define CVT_ST_CAP  13  /* Store Cap (val2,val3,val4,val5) to addr (val1) */
-    uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
-    uint16_t cycles;    /* Currently not used. */
-    uint32_t inst;      /* Encoded instruction. */
-    uint64_t pc;        /* PC value of instruction. */
-    uint64_t val1;      /* val1 is used for memory address. */
-    uint64_t val2;      /* val2, val3, val4, val5 are used for reg content. */
-    uint64_t val3;
-    uint64_t val4;
-    uint64_t val5;
-    uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
-    uint8_t asid;       /* Address Space ID (i.e. CP0_TCStatus & 0xff) */
-} __attribute__((packed));
-typedef struct cvtrace cvtrace_t;
-
-/* Version 3 Cheri Stream Trace header info */
-#define CVT_QEMU_VERSION    (0x80U + 3)
-#define CVT_QEMU_MAGIC      "CheriTraceV03"
-
 struct cheri_cap_hwregs {
     cap_register_t DDC;        /* CapHwr 0 */
     cap_register_t UserTlsCap; /* CapHwr 1 */
@@ -263,6 +282,10 @@ struct cheri_cap_hwregs {
     cap_register_t KDC;  /* CapHwr 30 */
     cap_register_t EPCC; /* CapHwr 31 */
 };
+
+#else /* !TARGET_CHERI */
+
+#define cheri_debug_assert(cond)
 
 #endif /* TARGET_CHERI */
 
@@ -315,46 +338,19 @@ struct TCState {
     float_status msa_fp_status;
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
+    cap_register_t CapBranchTarget; /* Target of the next cjr/cjalr/ccall */
     cap_register_t _CGPR[32];
     struct cheri_cap_hwregs CHWR;
-#if CHERI_C0_NULL == 0
-#define CP2CAP_DCC  0  /* Default Data Capability */
-#endif
 // #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
-#define CP2CAP_KR1C 27  /* Reserved Kernel Cap #1 */
-#define CP2CAP_KR2C 28  /* Reserved Kernel Cap #2 */
-#define CP2CAP_KCC  29  /* Kernel Code Capability */
-#define CP2CAP_KDC  30  /* Kernel Data Capability */
-#define CP2CAP_EPCC 31  /* Exception PC Capability */
+#define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
 #endif /* TARGET_CHERI */
 };
 
 #if defined(TARGET_CHERI)
-#if CHERI_C0_NULL == 0
-static inline  __attribute__((always_inline)) cap_register_t*
-get_legacy_mirrored_capreg(TCState* state, unsigned num) {
-    if (unlikely(num == CP2CAP_DCC)) {
-        return &state->CHWR.DDC;
-    } else if (unlikely(num == CP2CAP_KCC)) {
-        return &state->CHWR.KCC;
-    } else if (unlikely(num == CP2CAP_KDC)) {
-        return &state->CHWR.KDC;
-    } else if (unlikely(num == CP2CAP_EPCC)) {
-        return &state->CHWR.EPCC;
-    }
-    return &state->_CGPR[num];
-}
-#endif
-
 static inline  __attribute__((always_inline)) const cap_register_t*
 get_readonly_capreg(TCState* state, unsigned num) {
-#if CHERI_C0_NULL == 0
-    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
-    return get_legacy_mirrored_capreg(state, num);
-#else
     return &state->_CGPR[num];
-#endif
 }
 
 /// return a read-only capability register with register number 0 meaning $ddc
@@ -365,44 +361,29 @@ get_readonly_capreg(TCState* state, unsigned num) {
 /// just cmove $cN, $cnull
 static inline __attribute__((always_inline)) const cap_register_t*
 get_capreg_0_is_ddc(TCState* state, unsigned num) {
-#if CHERI_C0_NULL == 0
-    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
-    return get_legacy_mirrored_capreg(state, num);
-#else
     if (unlikely(num == 0)) {
         return &state->CHWR.DDC;
     }
     return &state->_CGPR[num];
-#endif
 }
 
 // FIXME: remove the last few users of this function
 static inline  __attribute__((always_inline)) cap_register_t*
 get_writable_capreg_raw(TCState* state, unsigned num) {
-#if CHERI_C0_NULL == 0
-    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
-    return get_legacy_mirrored_capreg(state, num);
-#else
     if (unlikely(num == 0)) {
-        // writing to $c0 is a no-op -> make users of this function write to a dummy
+        // writing to $c0/$cnull is a no-op -> make users of this function write to a dummy
         static cap_register_t dummy_reg;
         return &dummy_reg;
     }
     return &state->_CGPR[num];
-#endif
 }
 
 static inline void
 update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
-#if CHERI_C0_NULL == 0
-    // legacy case: return DDC for 0, and mirror KCC,KDC,EPCC into GPR
-    *get_legacy_mirrored_capreg(state, num) = *newval;
-#else
-    // writing to $c0 is a no-op
+    // writing to $c0/$cnull is a no-op
     if (unlikely(num == 0))
         return;
     state->_CGPR[num] = *newval;
-#endif
 }
 
 enum CP2HWR {
@@ -825,7 +806,7 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_BL     0x01800 /* Likely branch                      */
 #define MIPS_HFLAG_BR     0x02000 /* branch to register (can't link TB) */
 #ifdef TARGET_CHERI
-#define MIPS_HFLAG_BRC    0x02800 /* branch to register and load PCC    */
+#define MIPS_HFLAG_BRC     0x02800 /* branch to register and load PCC    */
 #define MIPS_HFLAG_BRCCALL 0x03000 /* ccall load PCC and IDC */
 #endif /* TARGET_CHERI */
     /* Extra flags about the current pending branch.  */
@@ -850,7 +831,7 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_ERL   0x10000000 /* error level flag */
 #ifdef TARGET_CHERI
 #define MIPS_HFLAG_COP2X   0x20000000 /* CHERI/CP2 enabled              */
-    int btcr;                    /* cjr/cjalr Cap register target      */
+    // int btcr;                    /* cjr/cjalr Cap register target      */
 #endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
     target_ulong bcond;          /* Branch condition (if needed)       */
@@ -896,6 +877,15 @@ struct CPUMIPSState {
 #define CP2Ca_PERM_UNSEAL   0x1b /* Permit_Unseal violation */
 // 0x1b-0x1f Reserved
 
+#define MASK_CCALL_SEL(op)  ((op) & 0x7ff)
+#define CCALL_SELECTOR_0 (0x0)
+#define CCALL_SELECTOR_1 (0x01)
+#define CCALL_SELECTOR_2 (0x02)
+#define CCALL_SELECTOR_CRETURN (0x7ff)
+
+#endif /* TARGET_CHERI */
+
+#ifdef CONFIG_MIPS_LOG_INSTR
 #define TRACE_MODE_USER "User mode"
     const char *last_mode;
 #define IN_USERSPACE(env) \
@@ -903,7 +893,7 @@ struct CPUMIPSState {
     bool user_only_tracing_enabled;
     bool trace_explicitly_disabled;
     bool tracing_suspended;
-#endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
 
     /* Fields up to this point are cleared by a CPU reset */
     struct {} end_reset_fields;
@@ -920,18 +910,21 @@ struct CPUMIPSState {
     void *irq[8];
     QEMUTimer *timer; /* Internal timer */
     MemoryRegion *itc_tag; /* ITC Configuration Tags */
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
     /*
      * Processor state after the last instruction.
      * Used for instruction tracing.
      */
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
+#ifdef TARGET_CHERI
     cap_register_t last_C[32];
+    cap_register_t last_CapBranchTarget;
     struct cheri_cap_hwregs last_CHWR;
+#endif // TARGET_CHERI
 
     cvtrace_t cvtrace;
-#endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
 
@@ -1075,11 +1068,15 @@ void cpu_mips_soft_irq(CPUMIPSState *env, int irq, int level);
 
 /* helper.c */
 target_ulong exception_resume_pc (CPUMIPSState *env);
+#ifdef CONFIG_MIPS_LOG_INSTR
+void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
+                target_ulong value);
 #ifdef TARGET_CHERI
-void mips_dump_changed_state(CPUMIPSState *env);
 void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
                          cap_register_t *old_reg, const char* name);
+void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */
+#endif /* CONFIG_MIPS_LOG_INSTR */
 
 static inline void restore_snan_bit_mode(CPUMIPSState *env)
 {
@@ -1096,18 +1093,53 @@ static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
                             MIPS_HFLAG_HWRENA_ULR);
 }
 
+static inline bool should_use_error_epc(CPUMIPSState *env)
+{
+    // If ERL is set, eret and exceptions use ErrorEPC instead of EPC
+    return env->CP0_Status & (1 << CP0St_ERL);
+}
+
+static inline bool in_kernel_mode(CPUMIPSState *env) {
+    // TODO: what about env->CP0_Debug & (1 << CP0DB_DM)
+    // If ERL or EXL is set we have taken an exception and are in the kernel
+    if ((env->CP0_Status & BIT(CP0St_ERL)) || (env->CP0_Status & BIT(CP0St_EXL))) {
+        return true;
+    }
+    uint32_t ksu = extract32(env->CP0_Status, CP0St_KSU, 2);
+    // KSU = 0 -> kernel, 1 -> supervisor, 2 -> user
+    if (ksu == 0 || ksu == 1) {
+        return true;
+    }
+    return false;
+}
+
+#ifdef TARGET_CHERI
+#define is_beri_or_cheri(env)  true
+#else
+#define is_beri_or_cheri(env) (strcmp(env->cpu_model->name, "BERI") == 0)
+#endif
+
+
 #if defined(TARGET_CHERI)
 void cheri_tag_phys_invalidate(ram_addr_t paddr, ram_addr_t len);
 void cheri_tag_init(uint64_t memory_size);
-void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size);
+void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size,
+                          uintptr_t pc);
 int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
-        hwaddr *ret_paddr);
-void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg);
+        hwaddr *ret_paddr, uintptr_t pc);
+int  cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
+        hwaddr *ret_paddr, uintptr_t pc);
+void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg,
+        uintptr_t pc);
+void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
+                               fprintf_function cpu_fprintf, int flags);
+void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const char* name);
+target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, bool instavail);
 #ifdef CHERI_MAGIC128
 int  cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint64_t *tps, uint64_t *length);
+        uint64_t *tps, uint64_t *length, uintptr_t pc);
 void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint8_t tag, uint64_t tps, uint64_t length);
+        uint8_t tag, uint64_t tps, uint64_t length, uintptr_t pc);
 #endif /* CHERI_MAGIC128 */
 #endif /* TARGET_CHERI */
 

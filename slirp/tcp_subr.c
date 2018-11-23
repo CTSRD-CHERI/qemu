@@ -973,7 +973,7 @@ int tcp_ctl(struct socket *so)
                 }
                 do_pty = ex_ptr->ex_pty;
                 DEBUG_MISC((dfd, " executing %s\n", ex_ptr->ex_exec));
-                return fork_exec(so, ex_ptr->ex_exec, do_pty);
+                return fork_exec(so, ex_ptr->ex_exec, do_pty, ex_ptr->callback, ex_ptr);
             }
         }
     }

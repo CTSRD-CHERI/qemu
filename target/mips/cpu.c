@@ -119,6 +119,12 @@ static void mips_cpu_disas_set_info(CPUState *s, disassemble_info *info) {
 #else
     info->print_insn = print_insn_little_mips;
 #endif
+
+#ifdef TARGET_MIPS64
+    // See disas/mips.c
+#define bfd_mach_mipsisa64r2           65
+    info->mach = bfd_mach_mipsisa64r2;
+#endif
 }
 
 static void mips_cpu_realizefn(DeviceState *dev, Error **errp)
@@ -191,6 +197,16 @@ static ObjectClass *mips_cpu_class_by_name(const char *cpu_model)
     return oc;
 }
 
+#if defined(TARGET_CHERI) && defined(DO_CHERI_STATISTICS)
+static void dump_stats_on_exit(void)
+{
+    if (qemu_log_enabled() && qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS))
+        cheri_cpu_dump_statistics(NULL, qemu_logfile, fprintf, 0);
+    else
+        cheri_cpu_dump_statistics(NULL, stderr, fprintf, 0);
+}
+#endif
+
 static void mips_cpu_class_init(ObjectClass *c, void *data)
 {
     MIPSCPUClass *mcc = MIPS_CPU_CLASS(c);
@@ -231,6 +247,13 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
 #endif
     cc->gdb_num_core_regs = 72;
     cc->gdb_stop_before_watchpoint = true;
+#if defined(TARGET_CHERI)
+    cc->dump_statistics = cheri_cpu_dump_statistics;
+#if defined(DO_CHERI_STATISTICS)
+    atexit(dump_stats_on_exit);
+#endif
+#endif
+
 }
 
 static const TypeInfo mips_cpu_type_info = {
