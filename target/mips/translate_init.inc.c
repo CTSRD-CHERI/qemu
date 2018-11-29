@@ -452,9 +452,17 @@ const mips_def_t mips_defs[] =
 #if defined(TARGET_MIPS64)
 // 8 byte counter for CPU revision. Bump this every time there is major incompatible change
 // so that we can print a warning when booting CheriBSD with a too old QEMU
-#define CHERI_PROCESSOR_REVISION_COUNTER 0x2
+#define CHERI_PROCESSOR_REVISION_COUNTER 0x3
 // Revision 1: initial QEMU-specific processor ID (around ISA v5 or v6)
 // Revision 2: ISA v7 (including CNULL and special-purpose CHERI registers)
+// Revision 3: ISA v7 + bugfixes + CCall without delay slot
+//    - No more delay slot in $pcc
+//    - Target $pcc permissions + range are now checked on jump rater than at
+//      the target which avoids unrepresentable $pcc
+//    - Clang now emits csetboundsimmediate with > 1024 and previous versions of
+//      QEMU would interpret that as a signed number, cast it to uint64_t and
+//      give a length violation. This avoids surprising crashes at runtime
+//    - Tons of branch-delay slot bugs
 #define CHERI_PROCESSOR_ID  0x0f << 16 | 0x04 << 8 | CHERI_PROCESSOR_REVISION_COUNTER
 
     {
