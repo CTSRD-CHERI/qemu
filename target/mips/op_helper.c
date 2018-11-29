@@ -3384,7 +3384,13 @@ static void dump_changed_regs(CPUMIPSState *env)
 static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mode)
 {
     if (!env->user_only_tracing_enabled) {
-        return;
+            // Handle cases where QEMU was started with -d user-instr
+        if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
+            env->user_only_tracing_enabled = true;
+            env->tracing_suspended = true;
+        } else {
+            return;
+        }
     }
     if (IN_USERSPACE(env)) {
         assert(strcmp(new_mode, TRACE_MODE_USER) != 0);

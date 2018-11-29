@@ -254,6 +254,8 @@ const QEMULogItem qemu_log_items[] = {
       "show interrupts/exceptions in short format" },
     { CPU_LOG_EXEC, "exec",
       "show trace before each executed TB (lots of logs)" },
+    { CPU_LOG_USER_ONLY, "user-instr",
+      "CHERI only: like 'instr' but only for userspace instructions" },
     { CPU_LOG_INSTR, "instr",
       "CHERI only: show executed instructions and changed CPU state" },
     { CPU_LOG_GUEST_DEBUG_MSG, "guest_debug",

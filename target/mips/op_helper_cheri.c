@@ -2589,7 +2589,7 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Print changed state before advancing to the next instruction: GPR, HI/LO, COP0. */
     const bool should_log_instr =
-        qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR) || env->user_only_tracing_enabled;
+        qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR | CPU_LOG_USER_ONLY) || env->user_only_tracing_enabled;
     if (unlikely(should_log_instr))
         helper_dump_changed_state(env);
 #endif
