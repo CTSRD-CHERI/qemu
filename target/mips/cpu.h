@@ -720,8 +720,13 @@ struct CPUMIPSState {
     target_ulong llreg;
 #ifdef TARGET_CHERI
     uint64_t linkedflag;
-    int32_t TLB_L;
-    int32_t TLB_S;
+    /*
+     * Mark these as volatile. If this is removed
+     * the inlined function that strips the tag on
+     * TLB_L set behaves erratically.
+     */
+    volatile int32_t TLB_L;
+    volatile int32_t TLB_S;
 #endif
     uint64_t CP0_LLAddr_rw_bitmask;
     int CP0_LLAddr_shift;
