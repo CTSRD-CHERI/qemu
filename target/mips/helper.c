@@ -199,6 +199,9 @@ static int get_seg_physical_address(CPUMIPSState *env, hwaddr *physical,
         /* The segment is unmapped */
         *physical = physical_base | (real_address & segmask);
         *prot = PAGE_READ | PAGE_WRITE;
+#ifdef TARGET_CHERI
+        env->TLB_L = 0;
+#endif
         return TLBRET_MATCH;
     }
 }
