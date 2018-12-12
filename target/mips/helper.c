@@ -1378,9 +1378,24 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
 {
     // This must not cross a page boundary since we are only translating once!
     assert(size > 0);
-    if(((vaddr & TARGET_PAGE_MASK) != ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
+    if (((vaddr & TARGET_PAGE_MASK) != ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
+#ifdef CHERI_UNALIGNED
+        // this can happen with unaligned stores
+        if (size == 2 || size == 4 || size == 8) {
+            warn_report("Got unaligned load in %d-byte store across page boundary at 0x" TARGET_FMT_lx "\r\n", size, vaddr);
+            size_t remaining_in_page = TARGET_PAGE_SIZE - (vaddr & ~TARGET_PAGE_MASK);
+            assert(remaining_in_page < (size_t)size);
+            // invalidate tags for both pages (two lookups required!)
+            cheri_tag_invalidate(env, vaddr, remaining_in_page, pc);
+            cheri_tag_invalidate(env, vaddr + remaining_in_page, size - remaining_in_page, pc);
+            return;
+        }
+#endif
+
+
         int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
         /* Disassemble and print instruction. */
+        qemu_log_flush();
         error_report("FATAL: %s: " TARGET_FMT_lx "+%d crosses a page boundary\r", __func__, vaddr, size);
         char buffer[256];
         FILE* f = fmemopen(buffer, sizeof(buffer), "w");
