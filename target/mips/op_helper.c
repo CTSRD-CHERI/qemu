@@ -5581,7 +5581,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     const bool is_continuation = (env->active_tc.gpr[MIPS_REGNUM_V1] >> 32) == MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG;
     if (is_continuation) {
         // This is a partial write -> $a0 is the original dest argument.
-        // The updated dest (after the partial write) was stored in $v0 by the previous call
+        // The already written bytes (from the partial write) was stored in $v0 by the previous call
         already_written = env->active_tc.gpr[MIPS_REGNUM_V0];
         tcg_debug_assert(already_written < len);
         len -= already_written; // update the remaining length
@@ -5601,7 +5601,11 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         }
     }
     const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
-    if (len == 0 || original_src_ddc_offset == original_dest_ddc_offset) {
+    if (len == 0) {
+        goto success; // nothing to do
+    }
+    if (original_src_ddc_offset == original_dest_ddc_offset) {
+        already_written = original_len;
         goto success; // nothing to do
     }
     // Check capability bounds for the whole copy
@@ -5737,9 +5741,16 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         }
     }
 success:
-    if (already_written != original_len) {
-        error_report("ERROR: %s: did not memmove all bytes to " TARGET_FMT_plx
-                     ". Remainig len = " TARGET_FMT_plx "\r\n", __func__, original_dest, len);
+    if (unlikely(already_written != original_len)) {
+        error_report("ERROR: %s: failed to memmove all bytes to " TARGET_FMT_plx " (" TARGET_FMT_plx " with $ddc added).\r\n"
+                     "Remainig len = " TARGET_FMT_plx ", full len = " TARGET_FMT_plx ".\r\n"
+                     "Source address = " TARGET_FMT_plx " (" TARGET_FMT_plx " with $ddc added)\r\n",
+                     __func__, original_dest_ddc_offset, original_dest, len, original_len, original_src_ddc_offset, original_src);
+        error_report("$a0: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A0]);
+        error_report("$a1: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A1]);
+        error_report("$a2: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A2]);
+        error_report("$v0: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_V0]);
+        error_report("$v1: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_V1]);
         abort();
     }
     env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest_ddc_offset; // return value of memcpy is the dest argument
