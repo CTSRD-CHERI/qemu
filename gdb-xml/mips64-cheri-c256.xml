@@ -61,7 +61,15 @@
   <reg name="c30" bitsize="256" type="cheri_cap256"/>
   <reg name="c31" bitsize="256" type="cheri_cap256"/>
 
+  <reg name="ddc" bitsize="256" type="cheri_cap256"/>
   <reg name="pcc" bitsize="256" type="cheri_cap256"/>
+  <reg name="UserTls" bitsize="256" type="cheri_cap256"/>
+  <reg name="PrivTls" bitsize="256" type="cheri_cap256"/>
+  <reg name="kr1c" bitsize="256" type="cheri_cap256"/>
+  <reg name="kr2c" bitsize="256" type="cheri_cap256"/>
+  <reg name="kcc" bitsize="256" type="cheri_cap256"/>
+  <reg name="kdc" bitsize="256" type="cheri_cap256"/>
+  <reg name="epcc" bitsize="256" type="cheri_cap256"/>
 
   <flags id="cap_cause" size="8">
     <field name="reg" start="0" end="7"/>

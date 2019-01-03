@@ -190,15 +190,33 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 	return gdb_get_capreg(mem_buf, &env->active_tc._CGPR[n]);
     switch (n) {
     case 32:
-	return gdb_get_capreg(mem_buf, &env->active_tc.PCC);
+        return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.DDC);
     case 33:
+	return gdb_get_capreg(mem_buf, &env->active_tc.PCC);
+    case 34: 
+        return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.UserTlsCap);
+    case 35:
+        return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.PrivTlsCap);
+    case 36:
+        return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.KR1C);
+    case 37:
+        return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.KR2C);
+    case 38:
+        return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.KCC);
+    case 39:
+        return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.KDC);
+    case 40:
+	return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.EPCC);
+    case 41:
 	return gdb_get_regl(mem_buf, env->CP2_CapCause);
-    case 34: {
+    case 42: {
 	uint64_t cap_valid;
 	int i;
 
 	cap_valid = 0;
-	for (i = 0; i < 32; i++) {
+        if (env->active_tc.CHWR.DDC.cr_tag)
+            cap_valid |= 1;
+	for (i = 1; i < 32; i++) {
 	    if (env->active_tc._CGPR[i].cr_tag)
 		cap_valid |= ((uint64_t)1 << i);
 	}
@@ -214,13 +232,13 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 int mips_gdb_set_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 {
     /* All CHERI registers are read-only currently.  */
-    if (n < 33)
+    if (n < 41)
 #if defined(CHERI_128) || defined(CHERI_MAGIC128)
 	return 16;
 #else
         return 32;
 #endif
-    if (n == 33 || n == 34)
+    if (n == 41 || n == 42)
 	return 8;
 
     return 0;
