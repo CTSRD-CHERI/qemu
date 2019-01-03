@@ -144,22 +144,22 @@ static void mips_cpu_realizefn(DeviceState *dev, Error **errp)
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips64-cp0.xml", 0);
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips64-fpu.xml", 0);
     gdb_register_coprocessor(cs, mips_gdb_get_sys_reg, mips_gdb_set_sys_reg,
-	1, "mips64-sys.xml", 0);
+        1, "mips64-sys.xml", 0);
 #else
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips-cp0.xml", 0);
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips-fpu.xml", 0);
     gdb_register_coprocessor(cs, mips_gdb_get_sys_reg, mips_gdb_set_sys_reg,
-	1, "mips-sys.xml", 0);
+        1, "mips-sys.xml", 0);
 #endif
 #if defined(TARGET_CHERI)
     gdb_register_coprocessor(cs, mips_gdb_get_cheri_reg,
-	mips_gdb_set_cheri_reg, 43,
+        mips_gdb_set_cheri_reg, 43,
 #if defined(CHERI_MAGIC128) || defined(CHERI_128)
-	"mips64-cheri-c128.xml",
+        "mips64-cheri-c128.xml",
 #else
-	"mips64-cheri-c256.xml",
+        "mips64-cheri-c256.xml",
 #endif
-	0);
+        0);
 #endif
 
     cpu_mips_realize_env(&cpu->env);
