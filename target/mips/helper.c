@@ -1092,10 +1092,17 @@ void mips_cpu_do_interrupt(CPUState *cs)
             if (!is_representable(pcc->cr_sealed, pcc->cr_base, pcc->cr_length,
                                   0, pcc->cr_offset)) {
                 // TODO: can this still happen now that we take the trap on branch rather than at the target?
-                qemu_log_flush();
-                sleep(1);
-                assert(false && "unrepresentable pcc is not handled correctly");
+                // XXXAR: apparently it can. Better to print an error an continue
+                error_report("Unrepresetable EPPC: v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64 "\r\n",
+                             pcc->cr_tag, pcc->cr_sealed ? 1 : 0,
+                             (((pcc->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (pcc->cr_perms & CAP_PERMS_ALL)),
+                             pcc->cr_base, pcc->cr_length);
+                error_report("             |o:%016" PRIx64 " t:%x\n", pcc->cr_offset, pcc->cr_otype);
+                // qemu_log_flush();
+                // sleep(1);
+                // assert(false && "unrepresentable pcc is not handled correctly");
                 nullify_capability(pcc->cr_base + pcc->cr_offset, pcc);
+                pcc->cr_offset = CP2CAP_EPCC_FAKE_OFFSET_VALUE;
                 env->active_tc.CHWR.EPCC = *pcc;
             }
             else
