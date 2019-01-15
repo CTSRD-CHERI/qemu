@@ -186,6 +186,17 @@ struct cap_register {
 };
 typedef struct cap_register cap_register_t;
 
+#define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
+#define PRINT_CAP_ARGS_L1(cr) cr->cr_tag, cr->cr_sealed ? 1 : 0, \
+            (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)), \
+            cap_get_base(cr), cap_get_length(cr)
+#define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
+#define PRINT_CAP_ARGS_L2(cr) cr->cr_offset, cr->cr_otype
+
+
+#define PRINT_CAP_FMTSTR PRINT_CAP_FMTSTR_L1 " " PRINT_CAP_FMTSTR_L2
+#define PRINT_CAP_ARGS(cr) PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr)
+
 static inline uint64_t cap_get_cursor(const cap_register_t* c) {
     return c->cr_base + c->cr_offset;
 }
@@ -212,7 +223,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     return cp;
 }
 
-static inline bool is_null_capability(cap_register_t *cp)
+static inline bool is_null_capability(const cap_register_t *cp)
 {
     cap_register_t null;
     // This also compares padding but it should always be NULL assuming

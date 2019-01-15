@@ -302,12 +302,9 @@ int_to_cap(uint64_t x, cap_register_t *cr)
 }
 
 void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const char* name) {
-    fprintf(f, "%s%s|v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64 "\n",
-            prefix, name, cr->cr_tag, is_cap_sealed(cr) ? 1 : 0,
-            (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
-            cr->cr_base, cr->cr_length);
-    fprintf(qemu_logfile, "             |o:%016" PRIx64 " t:%x\n",
-            cr->cr_offset, cr->cr_otype);
+    fprintf(f, "%s%s|" PRINT_CAP_FMTSTR_L1 "\n",
+            prefix, name, PRINT_CAP_ARGS_L1(cr));
+    fprintf(qemu_logfile, "             |" PRINT_CAP_FMTSTR_L2 "\n", PRINT_CAP_ARGS_L2(cr));
 }
 
 #ifdef CHERI_MAGIC128
@@ -1316,10 +1313,30 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+//static inline bool cap_bounds_are_subset(const cap_register_t *first, const cap_register_t *second) {
+//    return cap_get_base(first) <= cap_get_base(second) && cap_get_top(second) <= cap_get_top(first);
+//}
+
 target_ulong helper_csub(CPUMIPSState *env, uint32_t cb, uint32_t ct)
 {
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
+
+#if 0
+    // This is very noisy, but may be interesting for C-compatibility analysis
+
+    // If the capabilities are not subsets (i.e. at least one tagged and derived from different caps,
+    // emit a warning to see how many subtractions are being performed that are invalid in ISO C
+    if (cbp->cr_tag != ctp->cr_tag ||
+        (cbp->cr_tag && !cap_bounds_are_subset(cbp, ctp) && !cap_bounds_are_subset(ctp, cbp))) {
+        // Don't warn about subtracting NULL:
+        if (!is_null_capability(ctp)) {
+            warn_report("Subtraction between two capabilities that are not subsets: \r\n"
+                    "\tLHS: " PRINT_CAP_FMTSTR "\r\n\tRHS: " PRINT_CAP_FMTSTR "\r",
+                    PRINT_CAP_ARGS(cbp), PRINT_CAP_ARGS(ctp));
+        }
+    }
+#endif
     /*
      * CSub: Subtract Capabilities
      */
