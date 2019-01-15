@@ -466,7 +466,7 @@ static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
 static inline QEMU_NORETURN void do_raise_c0_exception(CPUMIPSState *env,
         uint16_t cause, uint64_t badvaddr)
 {
-    uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
+    uint64_t pc = cap_get_cursor(&env->active_tc.PCC);
     /* fprintf(stderr, "C0 EXCEPTION: cause=%d badvaddr=0x%016lx "
         "PCC=0x%016lx + 0x%016lx -> 0x%016lx PC=0x%016lx\n", cause,
          badvaddr, env->active_tc.PCC.cr_base,

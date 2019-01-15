@@ -525,8 +525,7 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
     case TLBRET_S:
         /* TLB capability store bit was set, blocking capability store. */
         cpu_mips_store_capcause(env, reg, CP2Ca_TLB_STORE);
-        env->active_tc.PC = env->active_tc.PCC.cr_offset +
-            env->active_tc.PCC.cr_base;
+        env->active_tc.PC = cap_get_cursor(&env->active_tc.PCC);
         exception = EXCP_C2E;
         break;
 #else
@@ -1098,10 +1097,10 @@ void mips_cpu_do_interrupt(CPUState *cs)
                              (((pcc->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (pcc->cr_perms & CAP_PERMS_ALL)),
                              pcc->cr_base, pcc->cr_length);
                 error_report("             |o:%016" PRIx64 " t:%x\n", pcc->cr_offset, pcc->cr_otype);
-                // qemu_log_flush();
+                qemu_log_flush();
                 // sleep(1);
                 // assert(false && "unrepresentable pcc is not handled correctly");
-                nullify_capability(pcc->cr_base + pcc->cr_offset, pcc);
+                nullify_capability(cap_get_cursor(pcc), pcc);
                 pcc->cr_offset = CP2CAP_EPCC_FAKE_OFFSET_VALUE;
                 env->active_tc.CHWR.EPCC = *pcc;
             }

@@ -96,7 +96,7 @@ const char *causestr[] = {
 static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
         uint16_t cause, uint16_t reg)
 {
-    uint64_t pc = env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base;
+    uint64_t pc = cap_get_cursor(&env->active_tc.PCC);
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s)"
        " reg=%d PCC=0x%016" PRIx64 " + 0x%016" PRIx64 " -> 0x" TARGET_FMT_lx
        " PC=0x" TARGET_FMT_lx "\n",
@@ -168,7 +168,7 @@ static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, cap_register_t* 
                       howmuch, name, cr->cr_tag, cr->cr_sealed ? 1 : 0,
                       (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
                       cr->cr_base, cr->cr_length, (int64_t)cr->cr_offset,
-                      env->active_tc.PCC.cr_base + env->active_tc.PCC.cr_offset,
+                      cap_get_cursor(&env->active_tc.PCC),
                       (unsigned)(env->CP0_EntryHi & 0xFF));
         return howmuch;
     }
@@ -199,7 +199,7 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
     stat_num_##operation##_out_of_bounds_unrep++; \
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS, \
          "BOUNDS: Unrepresentable capability created using %s, pc=%016" PRIx64 " ASID=%u\n", \
-        #operation, env->active_tc.PCC.cr_base + env->active_tc.PCC.cr_offset, (unsigned)(env->CP0_EntryHi & 0xFF)); \
+        #operation, cap_get_cursor(&env->active_tc.PCC), (unsigned)(env->CP0_EntryHi & 0xFF)); \
     _became_unrepresentable(env, reg); \
 } while (0)
 
@@ -574,7 +574,7 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
             env->active_tc.CapBranchTarget.cr_sealed = 0;
             env->active_tc.CapBranchTarget.cr_otype = 0;
             // Return the branch target address
-            return csp->cr_base + csp->cr_offset;
+            return cap_get_cursor(csp);
         }
     }
     return (target_ulong)0;
@@ -940,7 +940,7 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
         // The capability register is loaded into PCC during delay slot
         env->active_tc.CapBranchTarget = *cbp;
         // Return the branch target address
-        return cbp->cr_offset + cbp->cr_base;
+        return cap_get_cursor(cbp);
     }
 
     return (target_ulong)0;
@@ -968,7 +968,7 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
         // The capability register is loaded into PCC during delay slot
         env->active_tc.CapBranchTarget = *cbp;
         // Return the branch target address
-        return cbp->cr_offset + cbp->cr_base;
+        return cap_get_cursor(cbp);
     }
 
     return (target_ulong)0;
@@ -2275,7 +2275,7 @@ target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     target_ulong ret;
 
-    ret = csp->cr_offset + csp->cr_base;
+    ret = cap_get_cursor(csp);
 
     /* Log memory cap write, if needed. */
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -2741,7 +2741,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
     if (crp->cr_tag) {
         cpu_fprintf(f, "%s: bas=%016lx len=%016lx cur=%016lx\n", name,
             // crp->cr_base, crp->cr_length, crp->cr_cursor);
-            crp->cr_base, crp->cr_length, (crp->cr_offset + crp->cr_base));
+            crp->cr_base, crp->cr_length, cap_get_cursor(crp));
         cpu_fprintf(f, "%-4s off=%016lx otype=%06x seal=%d "
 		    "perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
             // alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
