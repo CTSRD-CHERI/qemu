@@ -333,10 +333,14 @@ is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
 }
 
 extern bool cheri_c2e_on_unrepresentable;
+extern bool cheri_debugger_on_unrepresentable;
 
 static inline void
 _became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 {
+    if (cheri_debugger_on_unrepresentable)
+        helper_raise_exception_debug(env);
+
 	if (cheri_c2e_on_unrepresentable)
 		do_raise_c2_exception(env, CP2Ca_INEXACT, reg);
 }

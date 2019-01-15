@@ -194,6 +194,7 @@ int icount_align_option;
 #endif /* CONFIG_MIPS_LOG_INSTR */
 #ifdef CONFIG_CHERI
 bool cheri_c2e_on_unrepresentable = false;
+bool cheri_debugger_on_unrepresentable = false;
 #endif
 
 /* The bytes in qemu_uuid are in the order specified by RFC4122, _not_ in the
@@ -3812,6 +3813,9 @@ int main(int argc, char **argv, char **envp)
 #ifdef CONFIG_CHERI
             case QEMU_OPTION_cheri_c2e_on_unrepresentable:
                 cheri_c2e_on_unrepresentable = true;
+                break;
+            case QEMU_OPTION_cheri_debugger_on_unrepresentable:
+                cheri_debugger_on_unrepresentable = true;
                 break;
 #endif /* CONFIG_CHERI */
             case QEMU_OPTION_icount:
