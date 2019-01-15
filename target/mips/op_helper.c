@@ -63,7 +63,7 @@ void helper_check_breakcount(struct CPUMIPSState* env)
         cs->breakcount--;
         if (cs->breakcount == 0UL) {
             qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT | CPU_LOG_EXEC, "Reached breakcount!\n");
-            helper_raise_exception(env, EXCP_DEBUG);
+            helper_raise_exception_debug(env);
         }
     }
 }
