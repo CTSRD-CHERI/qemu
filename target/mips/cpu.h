@@ -190,6 +190,21 @@ static inline uint64_t cap_get_cursor(const cap_register_t* c) {
     return c->cr_base + c->cr_offset;
 }
 
+// Getters to allow future changes to the cap_register_t struct layout:
+static inline uint64_t cap_get_base(const cap_register_t* c) {
+    return c->cr_base;
+}
+static inline uint64_t cap_get_offset(const cap_register_t* c) {
+    return c->cr_offset;
+}
+static inline uint64_t cap_get_length(const cap_register_t* c) {
+    return c->cr_length;
+}
+// The top of the capability (exclusive -- i.e., one past the end)
+static inline uint64_t cap_get_top(const cap_register_t* c) {
+    return c->cr_base + c->cr_length;
+}
+
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
