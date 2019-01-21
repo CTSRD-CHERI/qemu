@@ -2796,13 +2796,14 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
             "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
             name, is_cap_sealed(crp),
 #else
-    cpu_fprintf(f, "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%06x "
+    cpu_fprintf(f, "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%016" PRIx64 " "
             "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
             name, crp->cr_tag, is_cap_sealed(crp),
 #endif
             ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
             (crp->cr_perms & CAP_PERMS_ALL),
-            crp->cr_otype, crp->cr_offset, crp->cr_base, crp->cr_length);
+            (uint64_t)(is_cap_sealed(crp) ? crp->cr_otype : UINT64_MAX), /* testsuite wants -1 for unsealed */
+            crp->cr_offset, crp->cr_base, crp->cr_length);
 #endif
 }
 
