@@ -103,6 +103,17 @@ typedef struct cap_register cap_register_t;
 #define CC128_UPERMS_MEM_SHFT      (11)
 #define CC128_MAX_UPERM            (3)
 
+/* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
+#define CC256_PERMS_COUNT          (11)
+#define CC256_UPERMS_COUNT         (20)
+#define CC256_PERMS_MEM_SHFT       (1)  /* sealed bit comes first */
+#define CC256_UPERMS_MEM_SHFT      (CC256_PERMS_MEM_SHFT + CC256_PERMS_COUNT)
+#define CC256_PERMS_ALL_BITS       ((1 << CC256_PERMS_COUNT) - 1) /* 11 bits */
+#define CC256_UPERMS_ALL_BITS      ((1 << CC256_UPERMS_COUNT) - 1) /* 20 bits */
+#define CC256_MAX_UPERM            (19)
+#define CC256_OTYPE_ALL_BITS       ((1 << 24) - 1)
+#define CC256_OTYPE_MEM_SHFT       (32)
+
 /* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
 #ifndef CHERI_COMPRESSED_CONSTANTS_ONLY
 
@@ -160,6 +171,7 @@ static inline uint32_t cc128_compute_e(uint64_t rlength, uint32_t bwidth) {
 static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
     return ((src >> str) & ((1ull << sz) - 1ull));
 }
+
 
 /*
  * These formats are from cheri concentrate, but I have added an extra sealing
@@ -463,6 +475,37 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, uint64_t l
 #undef MOD_MASK
 
     return ((inRange && inLimits) || (e >= highest_exp));
+}
+
+
+/* Also support decoding of the raw 256-bit capabilities */
+typedef union _inmemory_chericap256 {
+    uint8_t bytes[32];
+    uint32_t u32s[8];
+    uint64_t u64s[4];
+} inmemory_chericap256;
+
+static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* cdp) {
+    /* See CHERI ISA: Figure 3.1: 256-bit memory representation of a capability */
+    cdp->cr_sealed = mem.u64s[0] & 1;
+    cdp->cr_perms = (mem.u64s[0] >> CC256_PERMS_MEM_SHFT) & CC256_PERMS_ALL_BITS;
+    cdp->cr_uperms = (mem.u64s[0] >> CC256_UPERMS_MEM_SHFT) & CC256_UPERMS_ALL_BITS;
+    cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) & CC256_OTYPE_ALL_BITS;
+    cdp->cr_base = mem.u64s[2];
+    /* Length is xor'ed with -1 to ensure that NULL is all zeroes in memory */
+    cdp->cr_length = mem.u64s[3] ^ 0xffffffffffffffff;
+    /* TODO: should just have a cr_cursor instead... But that's not the way QEMU works */
+    cdp->cr_offset = mem.u64s[1] - cdp->cr_base;
+}
+
+static inline void compress_256cap(inmemory_chericap256* buffer, const cap_register_t* csp) {
+    buffer->u64s[0] = csp->cr_sealed |
+        ((csp->cr_perms & CC256_PERMS_ALL_BITS) << CC256_PERMS_MEM_SHFT) |
+        ((csp->cr_uperms & CC256_UPERMS_ALL_BITS) << CC256_UPERMS_MEM_SHFT) |
+        ((uint64_t)(csp->cr_otype & CC256_OTYPE_ALL_BITS) << CC256_OTYPE_MEM_SHFT);
+    buffer->u64s[1] = csp->cr_base + csp->cr_offset;
+    buffer->u64s[2] = csp->cr_base;
+    buffer->u64s[3] = csp->cr_length ^ 0xffffffffffffffff;
 }
 
 #endif /* CHERI_COMPRESSED_CONSTANTS_ONLY */
