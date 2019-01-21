@@ -92,19 +92,19 @@ typedef struct cap_register cap_register_t;
 #define CC128_PERM_CCALL           (1 << 8)
 #define CC128_PERM_UNSEAL          (1 << 9)
 #define CC128_PERM_ACCESS_SYS_REGS (1 << 10)
-#define CC128_PERM_RESERVED3       (1 << 11)
+#define CC128_PERM_SETCID          (1 << 11)
 #define CC128_PERM_RESERVED4       (1 << 12)
 #define CC128_PERM_RESERVED5       (1 << 13)
 #define CC128_PERM_RESERVED6       (1 << 14)
 
-#define CC128_PERMS_ALL            (0x7ff)     /* [0...10] */
+#define CC128_PERMS_ALL            (0xfff)     /* [0...11] */
 #define CC128_UPERMS_ALL           (0xf)       /* [15...18] */
 #define CC128_UPERMS_SHFT          (15)
 #define CC128_UPERMS_MEM_SHFT      (11)
 #define CC128_MAX_UPERM            (3)
 
 /* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
-#define CC256_PERMS_COUNT          (11)
+#define CC256_PERMS_COUNT          (12)
 #define CC256_UPERMS_COUNT         (20)
 #define CC256_PERMS_MEM_SHFT       (1)  /* sealed bit comes first */
 #define CC256_UPERMS_MEM_SHFT      (CC256_PERMS_MEM_SHFT + CC256_PERMS_COUNT)
