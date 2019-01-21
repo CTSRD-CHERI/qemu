@@ -841,7 +841,7 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     if (cbp->cr_sealed)
         return (target_ulong)(cbp->cr_otype & CAP_MAX_OTYPE);
-    return (target_ulong)-1;
+    return (target_ulong)(target_long)-1;
 }
 
 void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
