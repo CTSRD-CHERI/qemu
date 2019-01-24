@@ -2848,12 +2848,16 @@ static void debug_post_eret(CPUMIPSState *env)
 }
 
 #ifdef TARGET_CHERI
-static void set_pc(CPUMIPSState *env, cap_register_t* error_pcc)
+static void set_pc(CPUMIPSState *env, cap_register_t* error_pcc, int regnum)
 #else
 static void set_pc(CPUMIPSState *env, target_ulong error_pc)
 #endif
 {
 #ifdef TARGET_CHERI
+    // eret with sealed EPCC must not modify the new PCC e.g. by incrementing
+    // the offset or similar -> raise seal violation
+    if (error_pcc->cr_sealed)
+        do_raise_c2_exception(env, CP2Ca_SEAL, regnum);
     env->active_tc.PCC = *error_pcc;
     target_ulong error_pc = cap_get_cursor(error_pcc);
 #endif
@@ -2879,19 +2883,21 @@ static inline void exception_return(CPUMIPSState *env)
          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &null_cap, "EPCC");
+         null_capability(&null_cap);
+         dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &null_cap, "ErrorEPCC");
     }
 #endif // CONFIG_MIPS_LOG_INSTR
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
 #ifdef TARGET_CHERI
-        set_pc(env, &env->active_tc.CHWR.ErrorEPCC);
+        set_pc(env, &env->active_tc.CHWR.ErrorEPCC, CP2HWR_ErrorEPCC);
 #else
         set_pc(env, env->CP0_ErrorEPC);
 #endif
         env->CP0_Status &= ~(1 << CP0St_ERL);
     } else {
 #ifdef TARGET_CHERI
-        set_pc(env, &env->active_tc.CHWR.EPCC);
+        set_pc(env, &env->active_tc.CHWR.EPCC, CP2HWR_EPCC);
 #else
         set_pc(env, env->CP0_EPC);
 #endif
