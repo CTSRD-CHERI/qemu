@@ -302,7 +302,7 @@ static inline void set_epc_or_error_epc(CPUMIPSState *env, cap_register_t* epc_o
 {
     // Setting EPC should clear EPCC.tag if EPCC is sealed or becomes unrepresentable.
     // This will cause exception on instruction fetch following subsequent eret
-    if (epc_or_error_epc->cr_sealed) {
+    if (cap_is_sealed(epc_or_error_epc)) {
         error_report("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
         qemu_log("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
         abort();

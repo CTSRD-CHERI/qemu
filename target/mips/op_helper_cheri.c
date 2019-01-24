@@ -142,7 +142,7 @@ static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, cap_register_t* 
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS,
                       "BOUNDS: Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
                       " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64 " pc=%016" PRIx64 " ASID=%u\n",
-                      howmuch, name, cr->cr_tag, cr->cr_sealed ? 1 : 0,
+                      howmuch, name, cr->cr_tag, cap_is_sealed(cr),
                       (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
                       cr->cr_base, cr->cr_length, (int64_t)cr->cr_offset,
                       cap_get_cursor(&env->active_tc.PCC),
@@ -253,7 +253,7 @@ void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
 static inline bool
 is_cap_sealed(const cap_register_t *cp)
 {
-    return (cp->cr_sealed) ? true : false;
+    return cap_is_sealed(cp);
 }
 
 /*

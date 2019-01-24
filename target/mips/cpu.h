@@ -205,15 +205,29 @@ static inline uint64_t cap_get_cursor(const cap_register_t* c) {
 static inline uint64_t cap_get_base(const cap_register_t* c) {
     return c->cr_base;
 }
+
 static inline uint64_t cap_get_offset(const cap_register_t* c) {
     return c->cr_offset;
 }
+
 static inline uint64_t cap_get_length(const cap_register_t* c) {
     return c->cr_length;
 }
+
 // The top of the capability (exclusive -- i.e., one past the end)
 static inline uint64_t cap_get_top(const cap_register_t* c) {
     return c->cr_base + c->cr_length;
+}
+
+static inline bool cap_is_sealed(const cap_register_t* c) {
+    // TODO: use the otype instead
+    if (c->cr_sealed) {
+        assert(c->cr_otype != CAP_INREG_OTYPE_UNSEALED);
+        return true;
+    } else {
+        assert(c->cr_otype == CAP_INREG_OTYPE_UNSEALED);
+        return false;
+    }
 }
 
 static inline cap_register_t *null_capability(cap_register_t *cp)
