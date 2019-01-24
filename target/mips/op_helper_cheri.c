@@ -56,7 +56,7 @@
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
 
 
-const char *causestr[] = {
+const char *cp2_fault_causestr[] = {
     "None",
     "Length Violation",
     "Tag Violation",
@@ -89,29 +89,6 @@ const char *causestr[] = {
     "Access_KR1C Violation",
     "Access_KR2C Violation"
 };
-
-/*
- * See section 4.4 of the CHERI Architecture.
- */
-static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
-        uint16_t cause, uint16_t reg)
-{
-    uint64_t pc = cap_get_cursor(&env->active_tc.PCC);
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s)"
-       " reg=%d PCC=0x%016" PRIx64 " + 0x%016" PRIx64 " -> 0x" TARGET_FMT_lx
-       " PC=0x" TARGET_FMT_lx "\n",
-       cause, causestr[cause], reg, env->active_tc.PCC.cr_base,
-       env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
-    cpu_mips_store_capcause(env, reg, cause);
-    env->active_tc.PC = pc;
-    env->CP0_BadVAddr = pc;
-    do_raise_exception(env, EXCP_C2E, pc);
-}
-
-static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause)
-{
-    do_raise_c2_exception(env, cause, 0xff);
-}
 
 #ifdef DO_CHERI_STATISTICS
 
