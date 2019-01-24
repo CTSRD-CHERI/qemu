@@ -21392,6 +21392,42 @@ void cpu_state_reset(CPUMIPSState *env)
     env->msair = env->cpu_model->MSAIR;
     env->insn_flags = env->cpu_model->insn_flags;
 
+#if defined(TARGET_CHERI)
+    /*
+     * See section "4.5 CPU Reset" of Cheri Architecture Manual.
+     * Only PCC, DDC, and KCC are initialized to capabilities that have
+     * sufficient privilege to run MIPS code at base address 0 unchanged.
+     * All other capability registers are initialized to be the NULL capability.
+     * For PCC,DDC,KCC registers:
+     * Tag bits are set.  Seal bit is unset. Base and otype are
+     * set to zero. length is set to (2^64 - 1). Offset (or cursor)
+     * is set to zero (or boot vector address for PCC).
+     */
+    for (int i = 0; i < 32; i++) {
+        null_capability(&env->active_tc._CGPR[i]);
+    }
+    set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
+    // TODO: make DDC and KCC unconditionally only be in the special reg file
+    set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);
+    // TODO: should kdc be NULL or full priv?
+    null_capability(&env->active_tc.CHWR.UserTlsCap);
+    null_capability(&env->active_tc.CHWR.PrivTlsCap);
+    null_capability(&env->active_tc.CHWR.KR1C);
+    null_capability(&env->active_tc.CHWR.KR2C);
+    set_max_perms_capability(&env->active_tc.CHWR.KCC, 0);
+    null_capability(&env->active_tc.CHWR.KDC); // KDC can be NULL
+    // Note: EPCC also needs to be set to be a full address-space capability
+    // so that a MIPS eret without a prior trap works as expected:
+    set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
+    // Same for ErrorEPCC since it is needed if Status.ERL is set
+    set_max_perms_capability(&env->active_tc.CHWR.ErrorEPCC, 0);
+
+    // Fake capability register to allow cjr branch delay slots to work
+    null_capability(&env->active_tc.CapBranchTarget);
+
+    // env->CP0_Status |= (1 << CP0St_CU2);
+#endif /* TARGET_CHERI */
+
 #if defined(CONFIG_USER_ONLY)
     env->CP0_Status = (MIPS_HFLAG_UM << CP0St_KSU);
 # ifdef TARGET_MIPS64
@@ -21536,41 +21572,6 @@ void cpu_state_reset(CPUMIPSState *env)
         /* UHI interface can be used to obtain argc and argv */
         env->active_tc.gpr[4] = -1;
     }
-#if defined(TARGET_CHERI)
-    /*
-     * See section "4.5 CPU Reset" of Cheri Architecture Manual.
-     * Only PCC, DDC, and KCC are initialized to capabilities that have
-     * sufficient privilege to run MIPS code at base address 0 unchanged.
-     * All other capability registers are initialized to be the NULL capability.
-     * For PCC,DDC,KCC registers:
-     * Tag bits are set.  Seal bit is unset. Base and otype are
-     * set to zero. length is set to (2^64 - 1). Offset (or cursor)
-     * is set to zero (or boot vector address for PCC).
-     */
-    for (int i = 0; i < 32; i++) {
-        null_capability(&env->active_tc._CGPR[i]);
-    }
-    set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
-    // TODO: make DDC and KCC unconditionally only be in the special reg file
-    set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);
-    // TODO: should kdc be NULL or full priv?
-    null_capability(&env->active_tc.CHWR.UserTlsCap);
-    null_capability(&env->active_tc.CHWR.PrivTlsCap);
-    null_capability(&env->active_tc.CHWR.KR1C);
-    null_capability(&env->active_tc.CHWR.KR2C);
-    set_max_perms_capability(&env->active_tc.CHWR.KCC, 0);
-    null_capability(&env->active_tc.CHWR.KDC); // KDC can be NULL
-    // Note: EPCC also needs to be set to be a full address-space capability
-    // so that a MIPS eret without a prior trap works as expected:
-    set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
-    // Same for ErrorEPCC since it is needed if Status.ERL is set
-    set_max_perms_capability(&env->active_tc.CHWR.ErrorEPCC, 0);
-
-    // Fake capability register to allow cjr branch delay slots to work
-    null_capability(&env->active_tc.CapBranchTarget);
-
-    // env->CP0_Status |= (1 << CP0St_CU2);
-#endif /* TARGET_CHERI */
     if (is_beri_or_cheri(env)) {
         // enable KX bit on startup
         env->CP0_Status |= (1 << CP0St_KX);
