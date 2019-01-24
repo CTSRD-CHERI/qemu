@@ -27,6 +27,7 @@
 #include "exec/gdbstub.h"
 #include "sysemu/kvm.h"
 #include "exec/exec-all.h"
+#include "qemu/error-report.h"
 
 
 static void mips_cpu_set_pc(CPUState *cs, vaddr value)
@@ -294,6 +295,41 @@ static void mips_cpu_register_types(void)
     for (i = 0; i < mips_defs_number; i++) {
         mips_register_cpudef_type(&mips_defs[i]);
     }
+}
+
+#ifdef TARGET_CHERI
+static inline void set_epc_or_error_epc(CPUMIPSState *env, cap_register_t* epc_or_error_epc, target_ulong new_offset)
+{
+    // Setting EPC should clear EPCC.tag if EPCC is sealed or becomes unrepresentable.
+    // This will cause exception on instruction fetch following subsequent eret
+    if (epc_or_error_epc->cr_sealed) {
+        error_report("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
+        nullify_capability(cap_get_cursor(epc_or_error_epc), epc_or_error_epc);
+    } else if (!is_representable(epc_or_error_epc->cr_sealed, epc_or_error_epc->cr_base, epc_or_error_epc->cr_length, 0, new_offset)) {
+        error_report("Attempting to set unrepresentable offset(0x" TARGET_FMT_lx
+                    ") on EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", new_offset, PRINT_CAP_ARGS(epc_or_error_epc));
+        nullify_capability(cap_get_cursor(epc_or_error_epc), epc_or_error_epc);
+    } else {
+        epc_or_error_epc->cr_offset = new_offset;
+    }
+}
+#endif
+
+void set_CP0_EPC(CPUMIPSState *env, target_ulong arg)
+{
+#ifdef TARGET_CHERI
+    set_epc_or_error_epc(env, &env->active_tc.CHWR.EPCC, arg);
+#else
+    env->CP0_EPC = arg;
+#endif
+}
+void set_CP0_ErrorEPC(CPUMIPSState *env, target_ulong arg)
+{
+#ifdef TARGET_CHERI
+    set_epc_or_error_epc(env, &env->active_tc.CHWR.ErrorEPCC, arg);
+#else
+    env->CP0_ErrorEPC = arg;
+#endif
 }
 
 type_init(mips_cpu_register_types)

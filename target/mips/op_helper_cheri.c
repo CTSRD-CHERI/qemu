@@ -1095,8 +1095,11 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     }
 }
 
+#define CP2HWR_BASE_INDEX 0
+// TODO: start at 32: #define CP2HWR_BASE_NUM 32
+
 static inline cap_register_t *
-check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
+check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong pc) {
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
     switch (hwr) {
     case CP2HWR_DDC: /* always accessible */
@@ -1105,97 +1108,100 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
         return &env->active_tc.CHWR.UserTlsCap;
     case CP2HWR_PRIV_TLS:
         if (!access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
         }
         return &env->active_tc.CHWR.PrivTlsCap;
     case CP2HWR_K1RC:
         if (!in_kernel_mode(env)) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
         }
         return &env->active_tc.CHWR.KR1C;
     case CP2HWR_K2RC:
         if (!in_kernel_mode(env)) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
         }
         return &env->active_tc.CHWR.KR2C;
+    case CP2HWR_ErrorEPCC:
+#if 0
+        if (!in_kernel_mode(env) || !access_sysregs) {
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
+        }
+
+        return &env->active_tc.CHWR.ErrorEPCC;
+#else
+        break;
+#endif
     case CP2HWR_KCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
         }
         return &env->active_tc.CHWR.KCC;
     case CP2HWR_KDC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
         }
         return &env->active_tc.CHWR.KDC;
     case CP2HWR_EPCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
         }
         return &env->active_tc.CHWR.EPCC;
     }
     /* unknown cap hardware register */
-    // XXXAR: Must use do_raise_c0_exception and not do_raise_exception here!
-    do_raise_c0_exception(env, EXCP_RI, 0);
+    do_raise_exception(env, EXCP_RI, pc);
     return NULL;  // silence warning
 }
 
 static inline const cap_register_t *
-check_readonly_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr) {
+check_readonly_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong pc) {
     // Currently there is no difference for access permissions between read
     // and write access but that may change in the future
-    return check_writable_cap_hwr_access(env, hwr);
+    return check_writable_cap_hwr_access(env, hwr, pc);
 }
 
-// Add the offset of EPCC to either EPC or ErrorEPC depedning on the value of
-// Status.ERL (this determines which one of the registers will be used by eret)
-static inline void apply_epcc_offset(CPUMIPSState *env, cap_register_t* result)
+target_ulong helper_mfc0_epc(CPUMIPSState *env)
 {
-    tcg_debug_assert(result != &env->active_tc.CHWR.EPCC && "should use a copy of EPCC");
-    tcg_debug_assert(result->cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
-    uint64_t new_offset = should_use_error_epc(env) ? env->CP0_ErrorEPC : env->CP0_EPC;
-    // Untag the resulting capability if the epcc value is not representable
-    if (!is_representable(result->cr_sealed, result->cr_base, result->cr_length,
-                          0, new_offset)) {
-        nullify_capability(result->cr_base + new_offset, result);
-    } else {
-        result->cr_offset = new_offset;
+    return get_CP0_EPC(env);
+}
+
+target_ulong helper_mfc0_error_epc(CPUMIPSState *env)
+{
+    return get_CP0_ErrorEPC(env);
+}
+
+void helper_mtc0_epc(CPUMIPSState *env, target_ulong arg)
+{
+    // Check that we can write to EPCC (should always be true since we would have got a trap when not in kernel mode)
+    if (!in_kernel_mode(env)) {
+        do_raise_exception(env, EXCP_RI, GETPC());
+    } else if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + CP2HWR_EPCC);
     }
-    tcg_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE && "should not have modified EPCC");
+    set_CP0_EPC(env, arg);
 }
 
-// return EPCC with the offset set to the correct value (as used by cgetepcc)
-static inline cap_register_t cgetepcc(CPUMIPSState *env)
+void helper_mtc0_error_epc(CPUMIPSState *env, target_ulong arg)
 {
-    cap_register_t result = env->active_tc.CHWR.EPCC;
-    apply_epcc_offset(env, &result);
-    return result;
+    // Check that we can write to ErrorEPCC (should always be true since we would have got a trap when not in kernel mode)
+    if (!in_kernel_mode(env)) {
+        do_raise_exception(env, EXCP_RI, GETPC());
+    } else if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + CP2HWR_ErrorEPCC);
+    }
+    set_CP0_ErrorEPC(env, arg);
 }
 
 void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
 {
-    cap_register_t result = *check_readonly_cap_hwr_access(env, hwr);
-    if (hwr == CP2HWR_EPCC) {
-        // Read epcc.offset from CP0_EPC/CP0_ErrorEPC
-        apply_epcc_offset(env, &result);
-    }
+    cap_register_t result = *check_readonly_cap_hwr_access(env, hwr, GETPC());
     update_capreg(&env->active_tc, cd, &result);
 }
 
 void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    cap_register_t *cdp = check_writable_cap_hwr_access(env, hwr);
+    cap_register_t *cdp = check_writable_cap_hwr_access(env, hwr, GETPC());
     *cdp = *csp;
-    if (hwr == CP2HWR_EPCC) {
-        // Also update CP0_EPC/CP0_ErrorEPC when we change EPCC
-        if (should_use_error_epc(env))
-            env->CP0_ErrorEPC = cdp->cr_offset;
-        else
-            env->CP0_EPC = cdp->cr_offset;
-        // restore the fake EPCC.offset constant
-        cdp->cr_offset = CP2CAP_EPCC_FAKE_OFFSET_VALUE;
-    }
 }
 
 void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
@@ -2061,10 +2067,10 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur) {
     dump_changed_capreg(env, &cur->CHWR.PrivTlsCap, &env->last_CHWR.PrivTlsCap, "PrivTlsCap");
     dump_changed_capreg(env, &cur->CHWR.KR1C, &env->last_CHWR.KR1C, "ChwrKR1C");
     dump_changed_capreg(env, &cur->CHWR.KR2C, &env->last_CHWR.KR2C, "ChwrKR1C");
+    dump_changed_capreg(env, &cur->CHWR.ErrorEPCC, &env->last_CHWR.ErrorEPCC, "ErrorEPCC");
     dump_changed_capreg(env, &cur->CHWR.KCC, &env->last_CHWR.KCC, "KCC");
     dump_changed_capreg(env, &cur->CHWR.KDC, &env->last_CHWR.KDC, "KDC");
-    cap_register_t architectural_epcc = cgetepcc(env); // The value of EPCC (with offset set to what getepcc would do)
-    dump_changed_capreg(env, &architectural_epcc, &env->last_CHWR.EPCC, "EPCC");
+    dump_changed_capreg(env, &cur->CHWR.EPCC, &env->last_CHWR.EPCC, "EPCC");
     dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget, "CapBranchTarget");
 }
 
@@ -2828,11 +2834,10 @@ static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf
     cheri_dump_creg(&env->active_tc.CHWR.PrivTlsCap, "HWREG 08 (CTLSP)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.KR1C,       "HWREG 22 (KR1C)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.KR2C,       "HWREG 23 (KR2C)", "", f, cpu_fprintf);
+    // TODO: dump this once we have a number: cheri_dump_creg(&env->active_tc.CHWR.ErrorEPCC,  "HWREG 28 (ErrorEPC)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.KCC,        "HWREG 29 (KCC)", "", f, cpu_fprintf);
     cheri_dump_creg(&env->active_tc.CHWR.KDC,        "HWREG 30 (KDC)", "", f, cpu_fprintf);
-    // Finally dump value of EPCC (with offset set to what getepcc would do)
-    cap_register_t architectural_epcc = cgetepcc(env);
-    cheri_dump_creg(&architectural_epcc,             "HWREG 31 (EPCC)", "", f, cpu_fprintf);
+    cheri_dump_creg(&env->active_tc.CHWR.EPCC,       "HWREG 31 (EPCC)", "", f, cpu_fprintf);
 
     cpu_fprintf(f, "\n");
 }

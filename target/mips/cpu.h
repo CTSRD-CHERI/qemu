@@ -304,6 +304,7 @@ struct cheri_cap_hwregs {
     cap_register_t PrivTlsCap; /* CapHwr 8 */
     cap_register_t KR1C; /* CapHwr 22 */
     cap_register_t KR2C; /* CapHwr 23 */
+    cap_register_t ErrorEPCC; /* CapHwr 28 */
     cap_register_t KCC;  /* CapHwr 29 */
     cap_register_t KDC;  /* CapHwr 30 */
     cap_register_t EPCC; /* CapHwr 31 */
@@ -369,7 +370,7 @@ struct TCState {
     struct cheri_cap_hwregs CHWR;
 // #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
-#define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
+// #define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
 #endif /* TARGET_CHERI */
 };
 
@@ -418,6 +419,7 @@ enum CP2HWR {
     CP2HWR_PRIV_TLS = 8, /* Privileged TLS Cap */
     CP2HWR_K1RC = 22, /* Reserved Kernel Cap #1 */
     CP2HWR_K2RC = 23, /* Reserved Kernel Cap #2 */
+    CP2HWR_ErrorEPCC = 28, /* Error Exception PC Capability */
     CP2HWR_KCC = 29, /* Kernel Code Capability */
     CP2HWR_KDC = 30, /* Kernel Data Capability */
     CP2HWR_EPCC = 31, /* Exception PC Capability */
@@ -637,7 +639,9 @@ struct CPUMIPSState {
 #define CP0Ca_IP    8
 #define CP0Ca_IP_mask 0x0000FF00
 #define CP0Ca_EC    2
+#if !defined(TARGET_CHERI)
     target_ulong CP0_EPC;
+#endif
     int32_t CP0_PRid;
     target_ulong CP0_EBase;
     target_ulong CP0_EBaseWG_rw_bitmask;
@@ -785,7 +789,9 @@ struct CPUMIPSState {
     int32_t CP0_DataLo;
     int32_t CP0_TagHi;
     int32_t CP0_DataHi;
+#if !defined(TARGET_CHERI)
     target_ulong CP0_ErrorEPC;
+#endif
     int32_t CP0_DESAVE;
     /* We waste some space so we can handle shadow registers like TCs. */
     TCState tcs[MIPS_SHADOW_SET_MAX];
@@ -1122,6 +1128,27 @@ static inline bool should_use_error_epc(CPUMIPSState *env)
     // If ERL is set, eret and exceptions use ErrorEPC instead of EPC
     return env->CP0_Status & (1 << CP0St_ERL);
 }
+
+static inline target_ulong get_CP0_EPC(CPUMIPSState *env)
+{
+#ifdef TARGET_CHERI
+    return cap_get_offset(&env->active_tc.CHWR.EPCC);
+#else
+    return env->CP0_EPC;
+#endif
+}
+
+static inline target_ulong get_CP0_ErrorEPC(CPUMIPSState *env)
+{
+#ifdef TARGET_CHERI
+    return cap_get_offset(&env->active_tc.CHWR.ErrorEPCC);
+#else
+    return env->CP0_ErrorEPC;
+#endif
+}
+
+void set_CP0_EPC(CPUMIPSState *env, target_ulong value);
+void set_CP0_ErrorEPC(CPUMIPSState *env, target_ulong value);
 
 static inline bool in_kernel_mode(CPUMIPSState *env) {
     // TODO: what about env->CP0_Debug & (1 << CP0DB_DM)

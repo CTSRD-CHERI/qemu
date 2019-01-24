@@ -737,7 +737,9 @@ target_ulong exception_resume_pc (CPUMIPSState *env)
            the jump.  */
         bad_pc -= (env->hflags & MIPS_HFLAG_B16 ? 2 : 4);
     }
-
+#ifdef TARGET_CHERI
+    bad_pc -= cap_get_base(&env->active_tc.PCC);
+#endif
     return bad_pc;
 }
 
@@ -793,8 +795,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         }
 
         qemu_log("%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
-                 " %s exception\n",
-                 __func__, env->active_tc.PC, env->CP0_EPC, name);
+                 " %s exception\n", __func__, env->active_tc.PC, get_CP0_EPC(env), name);
     }
 #ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
@@ -861,21 +862,22 @@ void mips_cpu_do_interrupt(CPUState *cs)
     case EXCP_NMI:
         env->CP0_Status |= (1 << CP0St_NMI);
  set_error_EPC:
-        env->CP0_ErrorEPC = exception_resume_pc(env);
 #ifdef TARGET_CHERI
         // qemu_log("%s: ErrorEPC <- " TARGET_FMT_lx "\n", __func__,
         // exception_resume_pc(env));
         // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
-        env->CP0_ErrorEPC -= env->active_tc.PCC.cr_base;
-        cap_register_t new_epcc = env->active_tc.PCC;
-        // Note: we don't set the EPCC offset here since cgetepcc will need
-        // to add either EPC or ErrorEPC depending on the value of the ERL bit.
-        new_epcc.cr_offset = CP2CAP_EPCC_FAKE_OFFSET_VALUE;
-        env->active_tc.CHWR.EPCC = new_epcc;
+        /*
+            * Handle special case when PCC is unrepresentable (and has been untagged)
+            * EPC = offending offset
+            * EPCC.offset = offending cursor
+            */
+        assert(!env->active_tc.CHWR.ErrorEPCC.cr_sealed && "Cannot handle sealed PCC in set_error_EPC (should be checked before)");
+        env->active_tc.CHWR.ErrorEPCC = env->active_tc.PCC;
         env->active_tc.PCC = env->active_tc.CHWR.KCC;
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -
                 env->active_tc.PCC.cr_base;
 #endif /* TARGET_CHERI */
+        set_CP0_ErrorEPC(env, exception_resume_pc(env));
         env->hflags &= ~MIPS_HFLAG_BMASK;
         env->CP0_Status |= (1 << CP0St_ERL) | (1 << CP0St_BEV);
         if (env->insn_flags & ISA_MIPS3) {
@@ -1057,7 +1059,19 @@ void mips_cpu_do_interrupt(CPUState *cs)
         offset = 0x100;
  set_EPC:
         if (!(env->CP0_Status & (1 << CP0St_EXL))) {
-            env->CP0_EPC = exception_resume_pc(env);
+#ifdef TARGET_CHERI
+            // qemu_log("%s: EPC <- " TARGET_FMT_lx "\n", __func__,
+            //  exception_resume_pc(env));
+            // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
+            /*
+             * Handle special case when PCC is unrepresentable (and has been untagged)
+             * EPC = offending offset
+             * EPCC.offset = offending cursor
+             */
+            env->active_tc.CHWR.EPCC = env->active_tc.PCC;
+            assert(!env->active_tc.CHWR.EPCC.cr_sealed && "Cannot handle sealed PCC in set_EPC (should be checked before)");
+#endif /* TARGET_CHERI */
+            set_CP0_EPC(env, exception_resume_pc(env));
             if (update_badinstr) {
                 set_badinstr_registers(env);
             }
@@ -1076,42 +1090,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
             }
             env->hflags |= MIPS_HFLAG_CP0;
             env->hflags &= ~(MIPS_HFLAG_KSU);
-#ifdef TARGET_CHERI
-            // qemu_log("%s: EPC <- " TARGET_FMT_lx "\n", __func__,
-            //  exception_resume_pc(env));
-            // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
-            cap_register_t *pcc = &env->active_tc.PCC;
-            env->CP0_EPC -= pcc->cr_base;
-            /*
-             * Handle special case when PCC is unrepresentable (and has been untagged)
-             * EPC = offending offset
-             * EPCC.offset = offending cursor
-             */
-#ifdef CHERI_128
-            if (!is_representable(pcc->cr_sealed, pcc->cr_base, pcc->cr_length,
-                                  0, pcc->cr_offset)) {
-                // TODO: can this still happen now that we take the trap on branch rather than at the target?
-                // XXXAR: apparently it can. Better to print an error an continue
-                error_report("Unrepresetable EPPC: v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64 "\r\n",
-                             pcc->cr_tag, pcc->cr_sealed ? 1 : 0,
-                             (((pcc->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (pcc->cr_perms & CAP_PERMS_ALL)),
-                             pcc->cr_base, pcc->cr_length);
-                error_report("             |o:%016" PRIx64 " t:%x\n", pcc->cr_offset, pcc->cr_otype);
-                qemu_log_flush();
-                // sleep(1);
-                // assert(false && "unrepresentable pcc is not handled correctly");
-                nullify_capability(cap_get_cursor(pcc), pcc);
-                pcc->cr_offset = CP2CAP_EPCC_FAKE_OFFSET_VALUE;
-                env->active_tc.CHWR.EPCC = *pcc;
-            }
-            else
-#endif
-            {
-                cap_register_t new_epcc = env->active_tc.PCC;
-                new_epcc.cr_offset = CP2CAP_EPCC_FAKE_OFFSET_VALUE;
-                env->active_tc.CHWR.EPCC = new_epcc;
-            }
-#endif /* TARGET_CHERI */
         }
 #ifdef TARGET_CHERI
         /* always set PCC from KCC even with EXL */
@@ -1165,20 +1143,21 @@ void mips_cpu_do_interrupt(CPUState *cs)
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
         qemu_log("%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
                  "    S %08x C %08x A " TARGET_FMT_lx " D " TARGET_FMT_lx "\n",
-                 __func__, env->active_tc.PC, env->CP0_EPC, cause,
+                 __func__, env->active_tc.PC, get_CP0_EPC(env), cause,
                  env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
                  env->CP0_DEPC);
 #if defined(TARGET_CHERI) && defined(CONFIG_MIPS_LOG_INSTR)
-        qemu_log("ErrorEPC " TARGET_FMT_lx "\n", env->CP0_ErrorEPC);
+        qemu_log("ErrorEPC " TARGET_FMT_lx "\n", get_CP0_ErrorEPC(env));
         cap_register_t tmp;
         // We use a null cap as oldreg so that we always print it.
         null_capability(&tmp);
         dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &tmp, "EPCC");
+        null_capability(&tmp);
+        dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &tmp, "ErrorEPCC");
 #endif
     }
 #endif
     cs->exception_index = EXCP_NONE;
-    cheri_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
 }
 
 bool mips_cpu_exec_interrupt(CPUState *cs, int interrupt_request)

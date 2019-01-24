@@ -5884,7 +5884,11 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_epc(arg, cpu_env);
+#else
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#endif
             tcg_gen_ext32s_tl(arg, arg);
             rn = "EPC";
             break;
@@ -6186,7 +6190,11 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 30:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_error_epc(arg, cpu_env);
+#else
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_ErrorEPC));
+#endif
             tcg_gen_ext32s_tl(arg, arg);
             rn = "ErrorEPC";
             break;
@@ -6574,7 +6582,11 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mtc0_epc(cpu_env, arg);
+#else
             tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#endif
             rn = "EPC";
             break;
         default:
@@ -6871,7 +6883,11 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 30:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mtc0_error_epc(cpu_env, arg);
+#else
             tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_ErrorEPC));
+#endif
             rn = "ErrorEPC";
             break;
         default:
@@ -7264,7 +7280,11 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_epc(arg, cpu_env);
+#else
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#endif
             rn = "EPC";
             break;
         default:
@@ -7553,7 +7573,11 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 30:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_error_epc(arg, cpu_env);
+#else
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_ErrorEPC));
+#endif
             rn = "ErrorEPC";
             break;
         default:
@@ -7944,7 +7968,11 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mtc0_epc(cpu_env, arg);
+#else
             tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#endif
             rn = "EPC";
             break;
         default:
@@ -8228,7 +8256,11 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 30:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mtc0_error_epc(cpu_env, arg);
+#else
             tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_ErrorEPC));
+#endif
             rn = "ErrorEPC";
             break;
         default:
@@ -21207,7 +21239,7 @@ void mips_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
     }
 
     cpu_fprintf(f, "CP0 Status  0x%08x Cause   0x%08x EPC    0x" TARGET_FMT_lx "\n",
-                env->CP0_Status, env->CP0_Cause, env->CP0_EPC);
+                env->CP0_Status, env->CP0_Cause, get_CP0_EPC(env));
     cpu_fprintf(f, "    Config0 0x%08x Config1 0x%08x LLAddr 0x%016"
                 PRIx64 "\n",
                 env->CP0_Config0, env->CP0_Config1, env->lladdr);
@@ -21390,10 +21422,9 @@ void cpu_state_reset(CPUMIPSState *env)
     if (env->hflags & MIPS_HFLAG_BMASK) {
         /* If the exception was raised from a delay slot,
            come back to the jump.  */
-        env->CP0_ErrorEPC = (env->active_tc.PC
-                             - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4));
+        set_CP0_ErrorEPC(env, env->active_tc.PC - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4));
     } else {
-        env->CP0_ErrorEPC = env->active_tc.PC;
+        set_CP0_ErrorEPC(env, env->active_tc.PC);
     }
     env->active_tc.PC = env->exception_base;
     env->CP0_Random = env->tlb->nb_tlb - 1;
@@ -21531,7 +21562,7 @@ void cpu_state_reset(CPUMIPSState *env)
     null_capability(&env->active_tc.CHWR.KDC); // KDC can be NULL
     // Note: EPCC also needs to be set to be a full address-space capability
     // so that a MIPS eret without a prior trap works as expected:
-    set_max_perms_capability(&env->active_tc.CHWR.EPCC, CP2CAP_EPCC_FAKE_OFFSET_VALUE);
+    set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
 
     // Fake capability register to allow cjr branch delay slots to work
     null_capability(&env->active_tc.CapBranchTarget);
