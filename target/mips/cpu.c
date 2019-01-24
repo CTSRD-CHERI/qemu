@@ -304,6 +304,8 @@ static inline void set_epc_or_error_epc(CPUMIPSState *env, cap_register_t* epc_o
     // This will cause exception on instruction fetch following subsequent eret
     if (epc_or_error_epc->cr_sealed) {
         error_report("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
+        qemu_log("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
+        abort();
         nullify_capability(cap_get_cursor(epc_or_error_epc), epc_or_error_epc);
     } else if (!is_representable(epc_or_error_epc->cr_sealed, epc_or_error_epc->cr_base, epc_or_error_epc->cr_length, 0, new_offset)) {
         error_report("Attempting to set unrepresentable offset(0x" TARGET_FMT_lx

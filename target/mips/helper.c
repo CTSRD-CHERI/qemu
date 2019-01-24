@@ -866,18 +866,24 @@ void mips_cpu_do_interrupt(CPUState *cs)
         // qemu_log("%s: ErrorEPC <- " TARGET_FMT_lx "\n", __func__,
         // exception_resume_pc(env));
         // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
-        /*
-            * Handle special case when PCC is unrepresentable (and has been untagged)
-            * EPC = offending offset
-            * EPCC.offset = offending cursor
-            */
-        assert(!env->active_tc.CHWR.ErrorEPCC.cr_sealed && "Cannot handle sealed PCC in set_error_EPC (should be checked before)");
-        env->active_tc.CHWR.ErrorEPCC = env->active_tc.PCC;
+
+        // eret with sealed EPCC must not modify the new EPCC e.g. by incrementing
+        // the offset or similar -> The next ifetch will raise a trap again.
+        // We do this here instead of on eret to avoid an exception on eret
+        // since that could break the exception handler if someone else can modify EPCC.
+        if (!env->active_tc.CHWR.ErrorEPCC.cr_sealed) {
+            env->active_tc.CHWR.ErrorEPCC = env->active_tc.PCC;
+            // Handle special case when PCC is unrepresentable (and has been untagged)
+            // EPC = offending offset
+            // EPCC.offset = offending cursor
+            set_CP0_ErrorEPC(env, exception_resume_pc(env));
+        }
         env->active_tc.PCC = env->active_tc.CHWR.KCC;
         env->active_tc.PCC.cr_offset =  env->active_tc.PC -
                 env->active_tc.PCC.cr_base;
-#endif /* TARGET_CHERI */
+#else
         set_CP0_ErrorEPC(env, exception_resume_pc(env));
+#endif /* TARGET_CHERI */
         env->hflags &= ~MIPS_HFLAG_BMASK;
         env->CP0_Status |= (1 << CP0St_ERL) | (1 << CP0St_BEV);
         if (env->insn_flags & ISA_MIPS3) {
@@ -1063,15 +1069,21 @@ void mips_cpu_do_interrupt(CPUState *cs)
             // qemu_log("%s: EPC <- " TARGET_FMT_lx "\n", __func__,
             //  exception_resume_pc(env));
             // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
-            /*
-             * Handle special case when PCC is unrepresentable (and has been untagged)
-             * EPC = offending offset
-             * EPCC.offset = offending cursor
-             */
-            env->active_tc.CHWR.EPCC = env->active_tc.PCC;
-            assert(!env->active_tc.CHWR.EPCC.cr_sealed && "Cannot handle sealed PCC in set_EPC (should be checked before)");
-#endif /* TARGET_CHERI */
+
+            // eret with sealed EPCC must not modify the new EPCC e.g. by incrementing
+            // the offset or similar -> The next ifetch will raise a trap again.
+            // We do this here instead of on eret to avoid an exception on eret
+            // since that could break the exception handler if someone else can modify EPCC.
+            if (!env->active_tc.CHWR.EPCC.cr_sealed) {
+                env->active_tc.CHWR.EPCC = env->active_tc.PCC;
+                // Handle special case when PCC is unrepresentable (and has been untagged)
+                // EPC = offending offset
+                // EPCC.offset = offending cursor
+                set_CP0_EPC(env, exception_resume_pc(env));
+            }
+#else
             set_CP0_EPC(env, exception_resume_pc(env));
+#endif /* TARGET_CHERI */
             if (update_badinstr) {
                 set_badinstr_registers(env);
             }
