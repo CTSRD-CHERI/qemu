@@ -2597,19 +2597,6 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
         helper_dump_changed_state(env);
 #endif
 
-#if defined(CONFIG_DEBUG_TCG) || defined(ENABLE_CHERI_SANITIY_CHECKS)
-    if (env->active_tc.CHWR.EPCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE) {
-        error_report("%s: EPCC offset field was changed even though it shouldn't exist: "
-                     "(0x" TARGET_FMT_lx ") instead of 0x%lx\n",
-                      __func__, env->active_tc.CHWR.EPCC.cr_offset, CP2CAP_EPCC_FAKE_OFFSET_VALUE);
-        qemu_log_flush();
-        qemu_log_close();
-        exit(1);
-    }
-
-    // qemu_log_mask(CPU_LOG_INSTR, "%s(%#" PRIx64 "): env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
-    //     __func__, pc, env->active_tc.PC, env->hflags, env->btarget);
-#endif
     /* Update statcounters icount */
     env->statcounters_icount++;
 
