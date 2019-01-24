@@ -229,38 +229,44 @@ static inline uint64_t cap_get_top(const cap_register_t* c) {
     return c->cr_base + c->cr_length;
 }
 
-#define CAP_INREG_OTYPE_UNSEALED ((uint32_t)-1)
-#define CAP_INREG_OTYPE_SENTRY ((uint32_t)-2)
-
 static inline uint64_t cap_get_otype(const cap_register_t* c) {
-    assert(c->cr_sealed || c->cr_otype == CAP_INREG_OTYPE_UNSEALED);
-    return (uint64_t)(int32_t)c->cr_otype; // sign extend
+    uint64_t result = c->cr_otype;
+    if (result > CAP_MAX_REPRESENTABLE_OTYPE) {
+        // raw bits loaded from memory
+        assert(!c->cr_tag && "Capabilities with otype > max cannot be tagged!");
+        return result;
+    }
+    assert((!c->cr_tag || c->cr_sealed) || c->cr_otype == CAP_OTYPE_UNSEALED);
+    // "sign" extend to a 64-bit number by subtracting the maximum: 2^24-1 -> 2^64-1
+    return result < CAP_MAX_SEALED_OTYPE ? result : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 }
 
 static inline bool cap_is_sealed(const cap_register_t* c) {
     // TODO: use the otype instead
     if (c->cr_sealed) {
-        assert(c->cr_otype != CAP_INREG_OTYPE_UNSEALED);
+        assert(c->cr_otype != CAP_OTYPE_UNSEALED);
         return true;
     } else {
-        assert(c->cr_otype == CAP_INREG_OTYPE_UNSEALED);
+        assert(!c->cr_tag || c->cr_otype >= CAP_OTYPE_UNSEALED);
         return false;
     }
 }
 
 static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
+    assert(c->cr_tag);
     assert(!cap_is_sealed(c));
-    assert(c->cr_sealed && c->cr_otype != CAP_INREG_OTYPE_UNSEALED);
+    assert(!c->cr_sealed && c->cr_otype == CAP_OTYPE_UNSEALED);
     assert(type <= CAP_MAX_SEALED_OTYPE);
-    _Static_assert(CAP_MAX_SEALED_OTYPE < CAP_INREG_OTYPE_UNSEALED, "");
+    _Static_assert(CAP_MAX_SEALED_OTYPE < CAP_OTYPE_UNSEALED, "");
     c->cr_otype = type;
     c->cr_sealed = true;
 }
 
 static inline void cap_set_unsealed(cap_register_t* c) {
+    assert(c->cr_tag);
     assert(cap_is_sealed(c));
-    assert(c->cr_sealed && c->cr_otype != CAP_INREG_OTYPE_UNSEALED);
-    c->cr_otype = CAP_INREG_OTYPE_UNSEALED;
+    assert(c->cr_sealed && c->cr_otype != CAP_OTYPE_UNSEALED);
+    c->cr_otype = CAP_OTYPE_UNSEALED;
     c->cr_sealed = false;
 }
 
@@ -268,7 +274,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
     cp->cr_length = ~UINT64_C(0); // But length should be -1
-    cp->cr_otype = CAP_INREG_OTYPE_UNSEALED; // and otype should be unsealed
+    cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
     return cp;
 }
 
@@ -289,6 +295,7 @@ static inline bool is_null_capability(const cap_register_t *cp)
  */
 static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
 {
+    assert(!cr->cr_sealed);
     cr->cr_tag = 0;
     cr->cr_base = 0;
     cr->cr_length = -1;
@@ -340,7 +347,7 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
     crp->cr_offset = offset;
     crp->cr_base = 0UL;
     crp->cr_length = ~0UL;
-    crp->cr_otype = CAP_INREG_OTYPE_UNSEALED;
+    crp->cr_otype = CAP_OTYPE_UNSEALED;
     crp->cr_sealed = 0;
 #ifdef CHERI_128
     crp->cr_pesbt = 0UL;

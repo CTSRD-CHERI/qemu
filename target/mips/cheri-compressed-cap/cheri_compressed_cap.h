@@ -77,10 +77,15 @@ typedef struct cap_register cap_register_t;
 #define CC_L_LOWMASK ((1 << CC_L_LOWWIDTH) - 1)
 
 #define CAP_MAX_REPRESENTABLE_OTYPE ((1 << CC_L_TYPES) - 1)
-// Rerserve the top two otypes for unsealed and sentry
-#define CAP_UNSEALED_OTYPE (CAP_MAX_REPRESENTABLE_OTYPE - 0)
-#define CAP_SENTRY_OTYPE (CAP_MAX_REPRESENTABLE_OTYPE - 1)
-#define CAP_MAX_SEALED_OTYPE (CAP_MAX_REPRESENTABLE_OTYPE - 2)
+// Rerserve the top four otypes for various special capabilities
+#define CAP_FIRST_SPECIAL_OTYPE_SIGN_EXTENDED ((uint64_t)-1)
+#define CAP_OTYPE_UNSEALED (CAP_MAX_REPRESENTABLE_OTYPE - 0)
+#define CAP_OTYPE_RESERVED1 (CAP_MAX_REPRESENTABLE_OTYPE - 1)
+#define CAP_OTYPE_RESERVED2 (CAP_MAX_REPRESENTABLE_OTYPE - 2)
+#define CAP_OTYPE_RESERVED3 (CAP_MAX_REPRESENTABLE_OTYPE - 3)
+#define CAP_LAST_SPECIAL_OTYPE CAP_OTYPE_RESERVED3
+#define CAP_LAST_SPECIAL_OTYPE_SIGN_EXTENDED ((uint64_t)-3)
+#define CAP_MAX_SEALED_OTYPE (CAP_LAST_SPECIAL_OTYPE - 1)
 
 /* Whatever NULL would encode to is this constant. We mask on store/load so this
  * is invisibly keeps null 0 whatever we choose it to be */
@@ -105,7 +110,7 @@ typedef struct cap_register cap_register_t;
 #define CC128_PERMS_ALL            (0xfff)     /* [0...11] */
 #define CC128_UPERMS_ALL           (0xf)       /* [15...18] */
 #define CC128_UPERMS_SHFT          (15)
-#define CC128_UPERMS_MEM_SHFT      (11)
+#define CC128_UPERMS_MEM_SHFT      (12)
 #define CC128_MAX_UPERM            (3)
 
 /* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
@@ -221,7 +226,7 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
 
     pesbt ^= CC128_NULL_XOR_MASK;
 
-    cdp->cr_perms = cc128_getbits(pesbt, 49, 11);
+    cdp->cr_perms = cc128_getbits(pesbt, 48, 12);
     cdp->cr_uperms = cc128_getbits(pesbt, 60, 4);
 
     uint8_t seal_mode = (uint8_t)cc128_getbits(pesbt, CC_L_S_OFF, 1);
@@ -251,7 +256,7 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
         L_msb = LH;
     }
 
-    uint32_t type = 0;
+    uint32_t type = CAP_OTYPE_UNSEALED;
 
     if (seal_mode == 1) {
         type = (cc128_getbits(pesbt, CC_L_OHI_OFF, CC_L_TYPES / 2) << (CC_L_TYPES / 2)) |
@@ -352,9 +357,9 @@ static inline uint64_t compress_128cap(const cap_register_t* csp) {
     }
     // assert(seal_mode < 3);
 
-    uint64_t perms = ((uint64_t)csp->cr_uperms << 11) | (uint64_t)csp->cr_perms;
+    uint64_t perms = ((uint64_t)csp->cr_uperms << CC128_UPERMS_MEM_SHFT) | (uint64_t)csp->cr_perms;
     uint64_t pesbt =
-        ((((((((((perms << 3) | (uint64_t)seal_mode) << 1) | (uint64_t)IE) << 1) | (uint64_t)LH) << (CC_L_BWIDTH - 2)) |
+        ((((((((((perms << 2) | (uint64_t)seal_mode) << 1) | (uint64_t)IE) << 1) | (uint64_t)LH) << (CC_L_BWIDTH - 2)) |
            (uint64_t)Te)
           << CC_L_BWIDTH) |
          (uint64_t)Be);
@@ -428,7 +433,7 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, uint64_t l
         c.cr_length = length;
         c.cr_offset = new_offset;
         c.cr_sealed = sealed;
-        c.cr_otype = 0; // important to set as compress assumes this is in bounds
+        c.cr_otype = CAP_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
 
         pesbt = compress_128cap(&c);
         decompress_128cap(pesbt, base + new_offset, &c);
@@ -495,7 +500,7 @@ static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* c
     cdp->cr_sealed = mem.u64s[0] & 1;
     cdp->cr_perms = (mem.u64s[0] >> CC256_PERMS_MEM_SHFT) & CC256_PERMS_ALL_BITS;
     cdp->cr_uperms = (mem.u64s[0] >> CC256_UPERMS_MEM_SHFT) & CC256_UPERMS_ALL_BITS;
-    cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) & CC256_OTYPE_ALL_BITS;
+    cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) ^ CC256_OTYPE_ALL_BITS;
     cdp->cr_base = mem.u64s[2];
     /* Length is xor'ed with -1 to ensure that NULL is all zeroes in memory */
     cdp->cr_length = mem.u64s[3] ^ 0xffffffffffffffff;
@@ -507,7 +512,7 @@ static inline void compress_256cap(inmemory_chericap256* buffer, const cap_regis
     buffer->u64s[0] = csp->cr_sealed |
         ((csp->cr_perms & CC256_PERMS_ALL_BITS) << CC256_PERMS_MEM_SHFT) |
         ((csp->cr_uperms & CC256_UPERMS_ALL_BITS) << CC256_UPERMS_MEM_SHFT) |
-        ((uint64_t)(csp->cr_otype & CC256_OTYPE_ALL_BITS) << CC256_OTYPE_MEM_SHFT);
+        ((uint64_t)(csp->cr_otype ^ CC256_OTYPE_ALL_BITS) << CC256_OTYPE_MEM_SHFT);
     buffer->u64s[1] = csp->cr_base + csp->cr_offset;
     buffer->u64s[2] = csp->cr_base;
     buffer->u64s[3] = csp->cr_length ^ 0xffffffffffffffff;

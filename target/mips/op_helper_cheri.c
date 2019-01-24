@@ -806,9 +806,17 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
      * CGetType: Move Object Type Field to a General-Purpose Register
      */
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-    target_ulong otype = cap_get_otype(cbp);
+    const target_ulong otype = cap_get_otype(cbp);
     // otype must either be unsealed type or within range
-    assert(!cap_is_sealed(cbp) || otype <= CAP_MAX_SEALED_OTYPE);
+    if (cbp->cr_otype > CAP_MAX_REPRESENTABLE_OTYPE) {
+        // For untagged values mask of all bits greater than
+        if (!cbp->cr_tag)
+            return otype & CAP_MAX_REPRESENTABLE_OTYPE;
+        else {
+            assert(otype <= CAP_FIRST_SPECIAL_OTYPE_SIGN_EXTENDED);
+            assert(otype >= CAP_LAST_SPECIAL_OTYPE_SIGN_EXTENDED);
+        }
+    }
     return otype;
 }
 
@@ -1032,7 +1040,7 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         result.cr_uperms = ctp->cr_uperms;
         result.cr_offset = ctp->cr_offset;
         result.cr_sealed = 0;
-        result.cr_otype = CAP_INREG_OTYPE_UNSEALED;
+        result.cr_otype = CAP_OTYPE_UNSEALED;
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -2393,7 +2401,7 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
 
     cdp->cr_tag = tag;
 
-    cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_UNSEALED_OTYPE;  // XOR with unsealed otype so that NULL is zero in memory
+    cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_OTYPE_UNSEALED;  // XOR with unsealed otype so that NULL is zero in memory
     perms = (uint32_t)(otype >> 1);
     uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
     cdp->cr_perms = perms & store_mem_perms;
@@ -2421,7 +2429,7 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
     uint32_t perms;
     cdp->cr_tag = tag;
 
-    cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_UNSEALED_OTYPE;  // XOR with unsealed otype so that NULL is zero in memory
+    cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_OTYPE_UNSEALED;  // XOR with unsealed otype so that NULL is zero in memory
     perms = (uint32_t)(otype >> 1);
     uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
     cdp->cr_perms = perms & store_mem_perms;
@@ -2453,7 +2461,7 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
         (csp->cr_perms & store_mem_perms));
 
     // XOR with unsealed otype so that NULL is zero in memory
-    uint64_t inmemory_otype = ((uint64_t)(csp->cr_otype ^ CAP_UNSEALED_OTYPE)) << 32;
+    uint64_t inmemory_otype = ((uint64_t)(csp->cr_otype ^ CAP_OTYPE_UNSEALED)) << 32;
     ret = inmemory_otype | (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
