@@ -413,17 +413,21 @@ update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
     state->_CGPR[num] = *newval;
 }
 
+#define CP2HWR_BASE_INDEX 0
+// TODO: start at 32: #define CP2HWR_BASE_NUM 32
+
 enum CP2HWR {
-    CP2HWR_DDC = 0, /* Default Data Capability */
-    CP2HWR_USER_TLS = 1, /* Unprivileged TLS Cap */
-    CP2HWR_PRIV_TLS = 8, /* Privileged TLS Cap */
-    CP2HWR_K1RC = 22, /* Reserved Kernel Cap #1 */
-    CP2HWR_K2RC = 23, /* Reserved Kernel Cap #2 */
-    CP2HWR_ErrorEPCC = 28, /* Error Exception PC Capability */
-    CP2HWR_KCC = 29, /* Kernel Code Capability */
-    CP2HWR_KDC = 30, /* Kernel Data Capability */
-    CP2HWR_EPCC = 31, /* Exception PC Capability */
+    CP2HWR_DDC = CP2HWR_BASE_INDEX + 0, /* Default Data Capability */
+    CP2HWR_USER_TLS = CP2HWR_BASE_INDEX + 1, /* Unprivileged TLS Cap */
+    CP2HWR_PRIV_TLS = CP2HWR_BASE_INDEX + 8, /* Privileged TLS Cap */
+    CP2HWR_K1RC = CP2HWR_BASE_INDEX + 22, /* Reserved Kernel Cap #1 */
+    CP2HWR_K2RC = CP2HWR_BASE_INDEX + 23, /* Reserved Kernel Cap #2 */
+    CP2HWR_ErrorEPCC = CP2HWR_BASE_INDEX + 28, /* Error Exception PC Capability */
+    CP2HWR_KCC = CP2HWR_BASE_INDEX + 29, /* Kernel Code Capability */
+    CP2HWR_KDC = CP2HWR_BASE_INDEX + 30, /* Kernel Data Capability */
+    CP2HWR_EPCC = CP2HWR_BASE_INDEX + 31, /* Exception PC Capability */
 };
+
 #endif
 
 typedef struct CPUMIPSState CPUMIPSState;

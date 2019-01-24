@@ -1095,11 +1095,10 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     }
 }
 
-#define CP2HWR_BASE_INDEX 0
-// TODO: start at 32: #define CP2HWR_BASE_NUM 32
-
 static inline cap_register_t *
 check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong pc) {
+    cheri_debug_assert((int)hwr >= (int)CP2HWR_BASE_INDEX);
+    cheri_debug_assert((int)hwr < (int)(CP2HWR_BASE_INDEX + 32));
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
     switch (hwr) {
     case CP2HWR_DDC: /* always accessible */
@@ -1108,23 +1107,23 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong p
         return &env->active_tc.CHWR.UserTlsCap;
     case CP2HWR_PRIV_TLS:
         if (!access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
         return &env->active_tc.CHWR.PrivTlsCap;
     case CP2HWR_K1RC:
         if (!in_kernel_mode(env)) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
         return &env->active_tc.CHWR.KR1C;
     case CP2HWR_K2RC:
         if (!in_kernel_mode(env)) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
         return &env->active_tc.CHWR.KR2C;
     case CP2HWR_ErrorEPCC:
 #if 0
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
 
         return &env->active_tc.CHWR.ErrorEPCC;
@@ -1133,17 +1132,17 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong p
 #endif
     case CP2HWR_KCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
         return &env->active_tc.CHWR.KCC;
     case CP2HWR_KDC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
         return &env->active_tc.CHWR.KDC;
     case CP2HWR_EPCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + hwr);
+            do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
         return &env->active_tc.CHWR.EPCC;
     }
@@ -1175,7 +1174,7 @@ void helper_mtc0_epc(CPUMIPSState *env, target_ulong arg)
     if (!in_kernel_mode(env)) {
         do_raise_exception(env, EXCP_RI, GETPC());
     } else if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
-        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + CP2HWR_EPCC);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_EPCC);
     }
     set_CP0_EPC(env, arg);
 }
@@ -1186,21 +1185,21 @@ void helper_mtc0_error_epc(CPUMIPSState *env, target_ulong arg)
     if (!in_kernel_mode(env)) {
         do_raise_exception(env, EXCP_RI, GETPC());
     } else if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
-        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_BASE_INDEX + CP2HWR_ErrorEPCC);
+        do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, CP2HWR_ErrorEPCC);
     }
     set_CP0_ErrorEPC(env, arg);
 }
 
 void helper_creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr)
 {
-    cap_register_t result = *check_readonly_cap_hwr_access(env, hwr, GETPC());
+    cap_register_t result = *check_readonly_cap_hwr_access(env, CP2HWR_BASE_INDEX + hwr, GETPC());
     update_capreg(&env->active_tc, cd, &result);
 }
 
 void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    cap_register_t *cdp = check_writable_cap_hwr_access(env, hwr, GETPC());
+    cap_register_t *cdp = check_writable_cap_hwr_access(env, CP2HWR_BASE_INDEX + hwr, GETPC());
     *cdp = *csp;
 }
 
