@@ -21563,6 +21563,8 @@ void cpu_state_reset(CPUMIPSState *env)
     // Note: EPCC also needs to be set to be a full address-space capability
     // so that a MIPS eret without a prior trap works as expected:
     set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
+    // Same for ErrorEPCC since it is needed if Status.ERL is set
+    set_max_perms_capability(&env->active_tc.CHWR.ErrorEPCC, 0);
 
     // Fake capability register to allow cjr branch delay slots to work
     null_capability(&env->active_tc.CapBranchTarget);
