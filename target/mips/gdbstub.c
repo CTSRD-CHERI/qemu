@@ -173,7 +173,7 @@ static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
     perms = (uint64_t)(((cap->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
         (cap->cr_perms & CAP_PERMS_ALL));
 
-    ret = ((uint64_t)cap->cr_otype << 32) |
+    ret = ((uint64_t)(cap->cr_otype ^ CAP_UNSEALED_OTYPE) << 32) |
         (perms << 1) | (cap_is_sealed(cap) ? 1UL : 0UL);
 
     stq_p(mem_buf, ret);

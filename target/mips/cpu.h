@@ -184,10 +184,20 @@ struct cap_register {
     uint8_t  cr_sealed; /* Sealed flag */
     uint8_t  cr_tag;    /* Tag */
 };
+
 typedef struct cap_register cap_register_t;
+#ifdef TARGET_CHERI
+/* Don't define the functions for CHERI256 (but we need CAP_MAX_OTYPE) */
+#ifndef CHERI_128
+#define CHERI_COMPRESSED_CONSTANTS_ONLY
+#endif
+/* Don't let cheri_compressed_cap define cap_register_t */
+#define HAVE_CAP_REGISTER_T
+#include "cheri-compressed-cap/cheri_compressed_cap.h"
+#endif
 
 #define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
-#define PRINT_CAP_ARGS_L1(cr) cr->cr_tag, cr->cr_sealed ? 1 : 0, \
+#define PRINT_CAP_ARGS_L1(cr) cr->cr_tag, cap_is_sealed(cr), \
             (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)), \
             cap_get_base(cr), cap_get_length(cr)
 #define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
@@ -219,6 +229,14 @@ static inline uint64_t cap_get_top(const cap_register_t* c) {
     return c->cr_base + c->cr_length;
 }
 
+#define CAP_INREG_OTYPE_UNSEALED ((uint32_t)-1)
+#define CAP_INREG_OTYPE_SENTRY ((uint32_t)-2)
+
+static inline uint64_t cap_get_otype(const cap_register_t* c) {
+    assert(c->cr_sealed || c->cr_otype == CAP_INREG_OTYPE_UNSEALED);
+    return (uint64_t)(int32_t)c->cr_otype; // sign extend
+}
+
 static inline bool cap_is_sealed(const cap_register_t* c) {
     // TODO: use the otype instead
     if (c->cr_sealed) {
@@ -230,10 +248,27 @@ static inline bool cap_is_sealed(const cap_register_t* c) {
     }
 }
 
+static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
+    assert(!cap_is_sealed(c));
+    assert(c->cr_sealed && c->cr_otype != CAP_INREG_OTYPE_UNSEALED);
+    assert(type <= CAP_MAX_SEALED_OTYPE);
+    _Static_assert(CAP_MAX_SEALED_OTYPE < CAP_INREG_OTYPE_UNSEALED, "");
+    c->cr_otype = type;
+    c->cr_sealed = true;
+}
+
+static inline void cap_set_unsealed(cap_register_t* c) {
+    assert(cap_is_sealed(c));
+    assert(c->cr_sealed && c->cr_otype != CAP_INREG_OTYPE_UNSEALED);
+    c->cr_otype = CAP_INREG_OTYPE_UNSEALED;
+    c->cr_sealed = false;
+}
+
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
     cp->cr_length = ~UINT64_C(0); // But length should be -1
+    cp->cr_otype = CAP_INREG_OTYPE_UNSEALED; // and otype should be unsealed
     return cp;
 }
 
@@ -305,7 +340,7 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
     crp->cr_offset = offset;
     crp->cr_base = 0UL;
     crp->cr_length = ~0UL;
-    crp->cr_otype = 0;
+    crp->cr_otype = CAP_INREG_OTYPE_UNSEALED;
     crp->cr_sealed = 0;
 #ifdef CHERI_128
     crp->cr_pesbt = 0UL;

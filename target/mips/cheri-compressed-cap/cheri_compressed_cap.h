@@ -75,7 +75,12 @@ typedef struct cap_register cap_register_t;
 #define CC_L_EWIDTH 7
 #define CC_L_LOWWIDTH (CC_L_EWIDTH >> 1)
 #define CC_L_LOWMASK ((1 << CC_L_LOWWIDTH) - 1)
-#define CAP_MAX_OTYPE ((1 << CC_L_TYPES) - 1)
+
+#define CAP_MAX_REPRESENTABLE_OTYPE ((1 << CC_L_TYPES) - 1)
+// Rerserve the top two otypes for unsealed and sentry
+#define CAP_UNSEALED_OTYPE (CAP_MAX_REPRESENTABLE_OTYPE - 0)
+#define CAP_SENTRY_OTYPE (CAP_MAX_REPRESENTABLE_OTYPE - 1)
+#define CAP_MAX_SEALED_OTYPE (CAP_MAX_REPRESENTABLE_OTYPE - 2)
 
 /* Whatever NULL would encode to is this constant. We mask on store/load so this
  * is invisibly keeps null 0 whatever we choose it to be */

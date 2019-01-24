@@ -47,14 +47,6 @@
 
 #include "disas/disas.h"
 #include "disas/bfd.h"
-/* Don't define the functions for CHERI256 (but we need CAP_MAX_OTYPE) */
-#ifndef CHERI_128
-#define CHERI_COMPRESSED_CONSTANTS_ONLY
-#endif
-/* Don't let cheri_compressed_cap define cap_register_t */
-#define HAVE_CAP_REGISTER_T
-#include "cheri-compressed-cap/cheri_compressed_cap.h"
-
 
 const char *cp2_fault_causestr[] = {
     "None",
@@ -520,7 +512,7 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (!is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (csp->cr_otype != cbp->cr_otype) {
+    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_TYPE, cs);
     } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cs);
@@ -537,16 +529,14 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
             do_raise_c2_exception(env, CP2Ca_PERM_CCALL, cb);
         } else {
             cap_register_t idc = *cbp;
-            idc.cr_sealed = 0;
-            idc.cr_otype = 0;
+            cap_set_unsealed(&idc);
             update_capreg(&env->active_tc, CP2CAP_IDC, &idc);
             // The capability register is loaded into PCC during delay slot
             env->active_tc.CapBranchTarget = *csp;
             // XXXAR: clearing these fields is not strictly needed since they
             // aren't copied from the CapBranchTarget to $pcc but it does make
             // the LOG_INSTR output less confusing.
-            env->active_tc.CapBranchTarget.cr_sealed = 0;
-            env->active_tc.CapBranchTarget.cr_otype = 0;
+            cap_set_unsealed(&env->active_tc.CapBranchTarget);
             // Return the branch target address
             return cap_get_cursor(csp);
         }
@@ -616,7 +606,7 @@ void helper_cchecktype(CPUMIPSState *env, uint32_t cs, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (!is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (csp->cr_otype != cbp->cr_otype) {
+    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_TYPE, cs);
     }
 }
@@ -816,9 +806,10 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
      * CGetType: Move Object Type Field to a General-Purpose Register
      */
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-    if (cbp->cr_sealed)
-        return (target_ulong)(cbp->cr_otype & CAP_MAX_OTYPE);
-    return (target_ulong)(target_long)-1;
+    target_ulong otype = cap_get_otype(cbp);
+    // otype must either be unsealed type or within range
+    assert(!cap_is_sealed(cbp) || otype <= CAP_MAX_SEALED_OTYPE);
+    return otype;
 }
 
 void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
@@ -974,15 +965,14 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_PERM_SEAL, ct);
     } else if (ctp->cr_offset >= ctp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_OTYPE) {
+    } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (!is_representable(true, csp->cr_base, csp->cr_length,
                 csp->cr_offset, csp->cr_offset)) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         cap_register_t result = *csp;
-        result.cr_sealed = 1;
-        result.cr_otype = (uint32_t)ct_base_plus_offset;
+        cap_set_sealed(&result, (uint32_t)ct_base_plus_offset);
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -1042,6 +1032,7 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         result.cr_uperms = ctp->cr_uperms;
         result.cr_offset = ctp->cr_offset;
         result.cr_sealed = 0;
+        result.cr_otype = CAP_INREG_OTYPE_UNSEALED;
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -1061,7 +1052,7 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
     } else if (!is_cap_sealed(ctp)) {
         cap_register_t result;
         update_capreg(&env->active_tc, cd, int_to_cap(-1, &result));
-    } else if (ctp->cr_otype < cbp->cr_base) {
+    } else if (ctp->cr_otype < cap_get_base(cbp)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (ctp->cr_otype >= cap_get_top(cbp)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
@@ -1436,7 +1427,7 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_PERM_UNSEAL, ct);
     } else if (ctp->cr_offset >= ctp->cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if (cap_get_cursor(ctp) >= CAP_MAX_OTYPE) {
+    } else if (cap_get_cursor(ctp) >= CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else {
         cap_register_t result = *csp;
@@ -1446,8 +1437,7 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         } else {
             result.cr_perms &= ~CAP_PERM_GLOBAL;
         }
-        result.cr_sealed = 0;
-        result.cr_otype = 0;
+        cap_set_unsealed(&result);
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -1614,7 +1604,7 @@ target_ulong helper_cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
             equal = FALSE;
         } else if (cbp->cr_length != ctp->cr_length) {
             equal = FALSE;
-        } else if (cbp->cr_otype != ctp->cr_otype) {
+        } else if (cbp->cr_otype != ctp->cr_otype || cbp->cr_sealed != ctp->cr_sealed) { // TODO: remove cr_sealed field
             equal = FALSE;
         } else if (cbp->cr_perms != ctp->cr_perms) {
             equal = FALSE;
@@ -1988,7 +1978,7 @@ cvtrace_dump_cap_perms(cvtrace_t *cvtrace, cap_register_t *cr)
 {
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
-            ((uint64_t)(cr->cr_otype & CAP_MAX_OTYPE)<< 32) |
+            ((uint64_t)(cr->cr_otype & CAP_MAX_REPRESENTABLE_OTYPE)<< 32) |
             ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
               (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
             (uint64_t)(is_cap_sealed(cr) ? 1 : 0));
@@ -2060,7 +2050,7 @@ static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
         cvtrace->version = version;
         cvtrace->val1 = tswap64(addr);
         cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
-            ((uint64_t)(cr->cr_otype & CAP_MAX_OTYPE)<< 32) |
+            ((uint64_t)(cr->cr_otype & CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
             ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
               (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
             (uint64_t)(is_cap_sealed(cr) ? 1 : 0));
@@ -2403,7 +2393,7 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
 
     cdp->cr_tag = tag;
 
-    cdp->cr_otype = (uint32_t)(otype >> 32);
+    cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_UNSEALED_OTYPE;  // XOR with unsealed otype so that NULL is zero in memory
     perms = (uint32_t)(otype >> 1);
     uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
     cdp->cr_perms = perms & store_mem_perms;
@@ -2431,7 +2421,7 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
     uint32_t perms;
     cdp->cr_tag = tag;
 
-    cdp->cr_otype = (uint32_t)(otype >> 32);
+    cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_UNSEALED_OTYPE;  // XOR with unsealed otype so that NULL is zero in memory
     perms = (uint32_t)(otype >> 1);
     uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
     cdp->cr_perms = perms & store_mem_perms;
@@ -2462,8 +2452,9 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
         (csp->cr_perms & store_mem_perms));
 
-    ret = ((uint64_t)csp->cr_otype << 32) |
-        (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
+    // XOR with unsealed otype so that NULL is zero in memory
+    uint64_t inmemory_otype = ((uint64_t)(csp->cr_otype ^ CAP_UNSEALED_OTYPE)) << 32;
+    ret = inmemory_otype | (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
@@ -2771,7 +2762,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
 #endif
             ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
             (crp->cr_perms & CAP_PERMS_ALL),
-            (uint64_t)(is_cap_sealed(crp) ? crp->cr_otype : UINT64_MAX), /* testsuite wants -1 for unsealed */
+            (uint64_t)cap_get_otype(crp), /* testsuite wants -1 for unsealed */
             crp->cr_offset, crp->cr_base, crp->cr_length);
 #endif
 }
