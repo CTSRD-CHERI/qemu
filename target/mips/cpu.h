@@ -244,7 +244,7 @@ static inline uint64_t cap_get_otype(const cap_register_t* c) {
 static inline bool cap_is_sealed(const cap_register_t* c) {
     // TODO: use the otype instead
     if (c->cr_sealed) {
-        assert(c->cr_otype != CAP_OTYPE_UNSEALED);
+        assert(!c->cr_tag || c->cr_otype != CAP_OTYPE_UNSEALED);
         return true;
     } else {
         assert(!c->cr_tag || c->cr_otype >= CAP_OTYPE_UNSEALED);
