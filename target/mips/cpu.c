@@ -154,7 +154,7 @@ static void mips_cpu_realizefn(DeviceState *dev, Error **errp)
 #endif
 #if defined(TARGET_CHERI)
     gdb_register_coprocessor(cs, mips_gdb_get_cheri_reg,
-        mips_gdb_set_cheri_reg, 43,
+        mips_gdb_set_cheri_reg, 44,
 #if defined(CHERI_MAGIC128) || defined(CHERI_128)
         "mips64-cheri-c128.xml",
 #else

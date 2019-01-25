@@ -208,8 +208,10 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
     case 40:
         return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.EPCC);
     case 41:
+        return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.ErrorEPCC);
+    case 42:
         return gdb_get_regl(mem_buf, env->CP2_CapCause);
-    case 42: {
+    case 43: {
         uint64_t cap_valid;
         int i;
 
@@ -238,7 +240,7 @@ int mips_gdb_set_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 #else
         return 32;
 #endif
-    if (n == 41 || n == 42)
+    if (n == 42 || n == 43)
         return 8;
 
     return 0;
