@@ -75,6 +75,8 @@ enum CPUMIPSMSADataFormat {
 };
 
 #ifdef TARGET_CHERI
+#include "cheri_utils.h"
+
 int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
 int mips_gdb_set_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
 #endif
@@ -508,5 +510,26 @@ static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause
 
 
 #endif /* TARGET_CHERI */
+
+static inline target_ulong get_CP0_EPC(CPUMIPSState *env)
+{
+#ifdef TARGET_CHERI
+    return cap_get_offset(&env->active_tc.CHWR.EPCC);
+#else
+    return env->CP0_EPC;
+#endif
+}
+
+static inline target_ulong get_CP0_ErrorEPC(CPUMIPSState *env)
+{
+#ifdef TARGET_CHERI
+    return cap_get_offset(&env->active_tc.CHWR.ErrorEPCC);
+#else
+    return env->CP0_ErrorEPC;
+#endif
+}
+
+void set_CP0_EPC(CPUMIPSState *env, target_ulong value);
+void set_CP0_ErrorEPC(CPUMIPSState *env, target_ulong value);
 
 #endif
