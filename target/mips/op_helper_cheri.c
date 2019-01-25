@@ -1894,7 +1894,7 @@ target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     return (target_ulong)addr;
 }
 
-target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
+static inline target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset)
 {
     // CSC traps on cbp == NULL so we use reg0 as $ddc to save encoding
@@ -1938,7 +1938,7 @@ target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
     }
 }
 
-target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+static inline target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
     // CSCC traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since storing relative to $ddc is common
@@ -1975,6 +1975,29 @@ target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb)
     }
 
     return (target_ulong)addr;
+}
+
+static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs, target_ulong vaddr, target_ulong retpc);
+
+target_ulong helper_cscc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    target_ulong retpc = GETPC();
+    target_ulong vaddr = helper_cscc_addr(env, cs, cb);
+    /* If linkedflag is zero then don't store capability. */
+    if (!env->linkedflag)
+        return 0;
+    store_cap_to_memory(env, cs, vaddr, retpc);
+    return 1;
+}
+
+void helper_csc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb,
+        target_ulong rt, uint32_t offset)
+{
+    target_ulong retpc = GETPC();
+    target_ulong vaddr = helper_csc_addr(env, cs, cb, rt, offset);
+    // helper_csc_addr should check for alignment
+    cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
+    store_cap_to_memory(env, cs, vaddr, retpc);
 }
 
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -2142,57 +2165,41 @@ void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
 #endif
 }
 
-target_ulong helper_cap2bytes_128b(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
+static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
+    target_ulong vaddr, target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    target_ulong ret;
+    uint64_t cursor = cap_get_cursor(csp);
 
+    uint64_t pesbt;
     if (csp->cr_tag)
-        ret = compress_128cap(csp);
+        pesbt = compress_128cap(csp);
     else
-        ret = csp->cr_pesbt;
+        pesbt = csp->cr_pesbt;
 
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory cap write, if needed. */
-    dump_cap_store(vaddr, ret, csp->cr_offset + csp->cr_base, csp->cr_tag);
-    cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
-    cvtrace_dump_cap_cbl(&env->cvtrace, csp);
-#endif
-
-    return ret;
-}
-
-target_ulong helper_cap2bytes_128c(CPUMIPSState *env, uint32_t cs,
-        uint32_t bdoffset, target_ulong vaddr)
-{
-    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    target_ulong ret;
-    uint32_t save_hflags = env->hflags;
-
-    /* Are we in a branch delay slot? */
-    switch(bdoffset) {
-    case 4:
-        env->hflags |= MIPS_HFLAG_BDS32;
-        break;
-    case 2:
-        env->hflags |= MIPS_HFLAG_BDS16;
-        break;
-    default:
-        break;
-    }
-
-    ret = csp->cr_offset + csp->cr_base;
-
+    /* Store pesbt to memory (might trap on store) */
+    cpu_stq_data_ra(env, vaddr, pesbt, retpc);
+    /*
+     * We can set the tag bit now because we know we won't get a tlb fault
+     * after the first store (capabilities must be on the same page).
+     */
     /* Set the tag bit in memory, if set in the register. */
     if (csp->cr_tag)
         cheri_tag_set(env, vaddr, cs, GETPC());
     else
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, GETPC());
+    /* Finally, store the cursor */
+    cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
 
-    env->hflags = save_hflags;
-
-    return ret;
+#ifdef CONFIG_MIPS_LOG_INSTR
+    /* Log memory cap write, if needed. */
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        /* Log memory cap write, if needed. */
+        dump_cap_store(vaddr, pesbt, csp->cr_offset + csp->cr_base, csp->cr_tag);
+        cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
+        cvtrace_dump_cap_cbl(&env->cvtrace, csp);
+    }
+#endif
 }
 
 #elif defined(CHERI_MAGIC128)
@@ -2266,63 +2273,39 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
 #endif
 }
 
-target_ulong helper_cap2bytes_m128c(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
+static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
+    target_ulong vaddr, target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    target_ulong ret;
-
-    ret = cap_get_cursor(csp);
-
-    /* Log memory cap write, if needed. */
-#ifdef CONFIG_MIPS_LOG_INSTR
-    dump_cap_store(vaddr, ret, csp->cr_base, csp->cr_tag);
-#endif
-    return ret;
-}
-
-target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
-        uint32_t bdoffset, target_ulong vaddr)
-{
-    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    target_ulong ret;
-    uint64_t tps, length, perms;
-    uint32_t save_hflags = env->hflags;
-
-    /* Are we in a branch delay slot? */
-    switch(bdoffset) {
-    case 4:
-        env->hflags |= MIPS_HFLAG_BDS32;
-        break;
-    case 2:
-        env->hflags |= MIPS_HFLAG_BDS16;
-        break;
-    default:
-        break;
-    }
-
-    ret = csp->cr_base;
-
-    perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+    uint64_t base = cap_get_base(csp);
+    uint64_t cursor = cap_get_cursor(csp);
+    /* Store base to memory (might trap on store) */
+    cpu_stq_data_ra(env, vaddr, base, retpc); /* store the base first */
+    cpu_stq_data_ra(env, vaddr + 8, cursor, retpc); /* next cursor */
+    /*
+     * We can set the tag bit now because we know we won't get a tlb fault
+     * after the first store (capabilities must be on the same page).
+     */
+    uint64_t perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
         (csp->cr_perms & CAP_PERMS_ALL));
 
     bool sbit = csp->cr_tag ? is_cap_sealed(csp) : csp->_sbit_for_memory;
-    tps = ((uint64_t)(csp->cr_otype ^ CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
+    uint64_t tps = ((uint64_t)(csp->cr_otype ^ CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
         (perms << 1) | (sbit ? 1UL : 0UL);
 
-    length = csp->cr_length ^ -1UL;
-
+    uint64_t length = csp->cr_length ^ -1UL;
+    /* Store the remaining "magic" data with the tags */
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, GETPC());
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
-    cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
-    cvtrace_dump_cap_cbl(&env->cvtrace, csp);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        /* Log memory cap write, if needed. */
+        cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
+        cvtrace_dump_cap_cbl(&env->cvtrace, csp);
+        dump_cap_store(vaddr, cursor, csp->cr_base, csp->cr_tag);
+    }
 #endif
-
-    env->hflags = save_hflags;
-
-    return ret;
 }
 
 #else /* ! CHERI_MAGIC128 */
@@ -2466,21 +2449,6 @@ static inline uint64_t cap2bytes_get_otype_and_perms(const cap_register_t *csp)
     return ret;
 }
 
-target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
-{
-    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    target_ulong ret = cap2bytes_get_otype_and_perms(csp);
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory cap write, if needed. */
-    dump_cap_store_op(vaddr, ret, csp->cr_tag);
-    cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
-#endif
-
-    return ret;
-}
-
 void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
         target_ulong base, target_ulong length)
 {
@@ -2521,70 +2489,6 @@ static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-target_ulong helper_cap2bytes_cursor(CPUMIPSState *env, uint32_t cs,
-        uint32_t bdoffset, target_ulong vaddr)
-{
-    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    target_ulong ret;
-    uint32_t save_hflags = env->hflags;
-
-    /* Are we in a branch delay slot? */
-    switch(bdoffset) {
-    case 4:
-        env->hflags |= MIPS_HFLAG_BDS32;
-        break;
-    case 2:
-        env->hflags |= MIPS_HFLAG_BDS16;
-        break;
-    default:
-        break;
-    }
-
-    if (csp->cr_tag)
-        cheri_tag_set(env, vaddr, cs, GETPC());
-    else
-        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, GETPC());
-
-    ret = csp->cr_offset + csp->cr_base;
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory cap write, if needed. */
-    dump_cap_store_cursor(ret);
-    cvtrace_dump_cap_cursor(&env->cvtrace, ret);
-#endif
-
-    env->hflags = save_hflags;
-
-    return (ret);
-}
-
-target_ulong helper_cap2bytes_base(CPUMIPSState *env, uint32_t cs)
-{
-    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory cap write, if needed. */
-    dump_cap_store_base(csp->cr_base);
-    cvtrace_dump_cap_base(&env->cvtrace, csp->cr_base);
-#endif
-
-    return (csp->cr_base);
-}
-
-target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
-{
-    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory cap write, if needed. */
-    dump_cap_store_length(csp->cr_length);
-    cvtrace_dump_cap_length(&env->cvtrace, csp->cr_length);
-#endif
-
-    return (csp->cr_length ^ -1UL);
-}
-
-#if !defined(CHERI_128) && !defined(CHERI_MAGIC128)
-
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     target_ulong vaddr, target_ulong retpc)
 {
@@ -2624,28 +2528,6 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     }
 #endif
 }
-
-target_ulong helper_cscc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb)
-{
-    target_ulong retpc = GETPC();
-    target_ulong vaddr = helper_cscc_addr(env, cs, cb);
-    /* If linkedflag is zero then don't store capability. */
-    if (!env->linkedflag)
-        return 0;
-    store_cap_to_memory(env, cs, vaddr, retpc);
-    return 1;
-}
-
-void helper_csc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb,
-        target_ulong rt, uint32_t offset)
-{
-    target_ulong retpc = GETPC();
-    target_ulong vaddr = helper_csc_addr(env, cs, cb, rt, offset);
-    // helper_csc_addr should check for alignment
-    cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
-    store_cap_to_memory(env, cs, vaddr, retpc);
-}
-#endif
 
 #endif /* ! CHERI_MAGIC128 */
 
