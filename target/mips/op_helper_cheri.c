@@ -2625,6 +2625,17 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
 #endif
 }
 
+target_ulong helper_cscc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb)
+{
+    target_ulong retpc = GETPC();
+    target_ulong vaddr = helper_cscc_addr(env, cs, cb);
+    /* If linkedflag is zero then don't store capability. */
+    if (!env->linkedflag)
+        return 0;
+    store_cap_to_memory(env, cs, vaddr, retpc);
+    return 1;
+}
+
 void helper_csc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset)
 {

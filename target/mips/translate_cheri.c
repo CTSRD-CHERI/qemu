@@ -1898,71 +1898,15 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv taddr = tcg_temp_local_new();
-    TCGv t1 = tcg_temp_local_new();
-    TCGLabel *l1 = gen_new_label();
-    TCGv_i32 tbdoffset;
+    TCGv t0 = tcg_temp_local_new();
 
     /* Check the cap registers and compute the address. */
-    gen_helper_cscc_addr(taddr, cpu_env, tcs, tcb);
+    gen_helper_cscc_without_tcg(t0, cpu_env, tcs, tcb);
+    gen_store_gpr(t0, rd);
+
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tcs);
-
-    /* Set the rd based on the linkedflag. */
-    tcg_gen_ld_tl(t1, cpu_env, offsetof(CPUMIPSState, linkedflag));
-    gen_store_gpr(t1, rd);
-
-    /* If linkedflag is zero then don't store capability. */
-    tcg_gen_brcondi_tl(TCG_COND_EQ, t1, 0, l1);
-    tcg_temp_free(t1);
-
-    TCGv t0 = tcg_temp_new();
-    TCGv_i32 tcs2 = tcg_const_i32(cs);
-
-    /* Store otype and perms to memory. */
-    gen_helper_cap2bytes_op(t0, cpu_env, tcs, taddr);
-    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
-            ctx->default_tcg_memop_mask);
-
-    /*
-     * Store cursor to memory. Also, set the tag bit.  We
-     * set the tag bit here because the store above would
-     * have faulted the TLB if it didn't have an entry for
-     * this address.  Once we are sure the TLB has an entry
-     * we can set the tab bit.
-     */
-
-    /* Is this instruction in a branch delay slot? */
-    if (ctx->hflags & MIPS_HFLAG_BMASK) {
-        tbdoffset = (ctx->hflags & MIPS_HFLAG_BDS16) ? tcg_const_i32(2) :
-            tcg_const_i32(4);
-    } else {
-        tbdoffset = tcg_const_i32(0);
-    }
-    gen_helper_cap2bytes_cursor(t0, cpu_env, tcs, tbdoffset, taddr);
-    tcg_temp_free_i32(tbdoffset);
-    tcg_gen_addi_tl(taddr, taddr, 8);
-    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
-            ctx->default_tcg_memop_mask);
-
-    /* Store base to memory. */
-    gen_helper_cap2bytes_base(t0, cpu_env, tcs);
-    tcg_gen_addi_tl(taddr, taddr, 8);
-    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
-            ctx->default_tcg_memop_mask);
-
-    /* Store length to memory. */
-    gen_helper_cap2bytes_length(t0, cpu_env, tcs);
-    tcg_gen_addi_tl(taddr, taddr, 8);
-    tcg_gen_qemu_st_tl(t0, taddr, ctx->mem_idx, MO_TEQ |
-            ctx->default_tcg_memop_mask);
-
-
     tcg_temp_free(t0);
-    tcg_temp_free(taddr);
-    tcg_temp_free_i32(tcs2);
-
-    gen_set_label(l1);
 }
 #endif /* ! CHERI_MAGIC128 */
 
