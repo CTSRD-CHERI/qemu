@@ -302,12 +302,12 @@ static inline void set_epc_or_error_epc(CPUMIPSState *env, cap_register_t* epc_o
 {
     // Setting EPC should clear EPCC.tag if EPCC is sealed or becomes unrepresentable.
     // This will cause exception on instruction fetch following subsequent eret
-    if (cap_is_sealed(epc_or_error_epc)) {
+    if (!cap_is_unsealed(epc_or_error_epc)) {
         error_report("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
         qemu_log("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
         abort();
         nullify_capability(cap_get_cursor(epc_or_error_epc), epc_or_error_epc);
-    } else if (!is_representable(epc_or_error_epc->cr_sealed, epc_or_error_epc->cr_base, epc_or_error_epc->cr_length, 0, new_offset)) {
+    } else if (!is_representable(cap_is_sealed_with_type(epc_or_error_epc), epc_or_error_epc->cr_base, epc_or_error_epc->cr_length, 0, new_offset)) {
         error_report("Attempting to set unrepresentable offset(0x" TARGET_FMT_lx
                     ") on EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", new_offset, PRINT_CAP_ARGS(epc_or_error_epc));
         nullify_capability(cap_get_cursor(epc_or_error_epc), epc_or_error_epc);

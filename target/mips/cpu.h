@@ -181,8 +181,10 @@ struct cap_register {
     uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
 #endif
     uint32_t cr_otype;  /* Object Type, 24 bits */
-    uint8_t  cr_sealed; /* Sealed flag */
     uint8_t  cr_tag;    /* Tag */
+#ifndef CHERI_128
+    bool _sbit_for_memory;
+#endif
 };
 
 typedef struct cap_register cap_register_t;
@@ -197,7 +199,7 @@ typedef struct cap_register cap_register_t;
 #endif
 
 #define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
-#define PRINT_CAP_ARGS_L1(cr) cr->cr_tag, cap_is_sealed(cr), \
+#define PRINT_CAP_ARGS_L1(cr) cr->cr_tag, cap_is_sealed_with_type(cr), \
             (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)), \
             cap_get_base(cr), cap_get_length(cr)
 #define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
@@ -236,38 +238,60 @@ static inline uint64_t cap_get_otype(const cap_register_t* c) {
         assert(!c->cr_tag && "Capabilities with otype > max cannot be tagged!");
         return result;
     }
-    assert((!c->cr_tag || c->cr_sealed) || c->cr_otype == CAP_OTYPE_UNSEALED);
     // "sign" extend to a 64-bit number by subtracting the maximum: 2^24-1 -> 2^64-1
     return result < CAP_MAX_SEALED_OTYPE ? result : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 }
 
-static inline bool cap_is_sealed(const cap_register_t* c) {
-    // TODO: use the otype instead
-    if (c->cr_sealed) {
-        assert(!c->cr_tag || c->cr_otype != CAP_OTYPE_UNSEALED);
-        return true;
-    } else {
-        assert(!c->cr_tag || c->cr_otype >= CAP_OTYPE_UNSEALED);
-        return false;
+static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
+    // TODO: how should we treat the other reserved types? as sealed?
+    // TODO: what about untagged capabilities with out-of-range otypes?
+#ifndef CHERI_128
+    if (c->cr_tag) {
+        if (c->_sbit_for_memory)
+            assert(c->cr_otype <= CAP_MAX_SEALED_OTYPE);
+        else
+            assert(c->cr_otype == CAP_OTYPE_UNSEALED);
     }
+#endif
+    return c->cr_otype <= CAP_MAX_SEALED_OTYPE;
+}
+
+static inline bool cap_is_unsealed(const cap_register_t* c) {
+    // TODO: how should we treat the other reserved types? as sealed?
+    // TODO: what about untagged capabilities with out-of-range otypes?
+    _Static_assert(CAP_MAX_REPRESENTABLE_OTYPE == CAP_OTYPE_UNSEALED, "");
+#ifndef CHERI_128
+    if (c->cr_tag) {
+        if (c->_sbit_for_memory)
+            assert(c->cr_otype <= CAP_MAX_SEALED_OTYPE);
+        else
+            assert(c->cr_otype == CAP_OTYPE_UNSEALED);
+    }
+#endif
+    return c->cr_otype >= CAP_OTYPE_UNSEALED;
 }
 
 static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
     assert(c->cr_tag);
-    assert(!cap_is_sealed(c));
-    assert(!c->cr_sealed && c->cr_otype == CAP_OTYPE_UNSEALED);
+    assert(c->cr_otype == CAP_OTYPE_UNSEALED && "should not use this on caps with reserved otypes");
     assert(type <= CAP_MAX_SEALED_OTYPE);
     _Static_assert(CAP_MAX_SEALED_OTYPE < CAP_OTYPE_UNSEALED, "");
     c->cr_otype = type;
-    c->cr_sealed = true;
+#ifndef CHERI_128
+    assert(c->_sbit_for_memory == false);
+    c->_sbit_for_memory = true;
+#endif
 }
 
 static inline void cap_set_unsealed(cap_register_t* c) {
     assert(c->cr_tag);
-    assert(cap_is_sealed(c));
-    assert(c->cr_sealed && c->cr_otype != CAP_OTYPE_UNSEALED);
+    assert(cap_is_sealed_with_type(c));
+    assert(c->cr_otype <= CAP_MAX_SEALED_OTYPE && "should not use this to unsealed reserved types");
     c->cr_otype = CAP_OTYPE_UNSEALED;
-    c->cr_sealed = false;
+#ifndef CHERI_128
+    assert(c->_sbit_for_memory == true);
+    c->_sbit_for_memory = false;
+#endif
 }
 
 static inline cap_register_t *null_capability(cap_register_t *cp)
@@ -295,7 +319,10 @@ static inline bool is_null_capability(const cap_register_t *cp)
  */
 static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
 {
-    assert(!cr->cr_sealed);
+    assert(cap_is_unsealed(cr));
+#ifndef CHERI_128
+    assert(cr->_sbit_for_memory == false);
+#endif
     cr->cr_tag = 0;
     cr->cr_base = 0;
     cr->cr_length = -1;
@@ -348,9 +375,10 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
     crp->cr_base = 0UL;
     crp->cr_length = ~0UL;
     crp->cr_otype = CAP_OTYPE_UNSEALED;
-    crp->cr_sealed = 0;
 #ifdef CHERI_128
     crp->cr_pesbt = 0UL;
+#else
+    crp->_sbit_for_memory = false;
 #endif
 }
 

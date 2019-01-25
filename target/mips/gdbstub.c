@@ -174,7 +174,7 @@ static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
         (cap->cr_perms & CAP_PERMS_ALL));
 
     ret = ((uint64_t)(cap->cr_otype ^ CAP_OTYPE_UNSEALED) << 32) |
-        (perms << 1) | (cap_is_sealed(cap) ? 1UL : 0UL);
+        (perms << 1) | (cap_is_sealed_with_type(cap) ? 1UL : 0UL);
 
     stq_p(mem_buf, ret);
     stq_p(mem_buf + 8, cap_get_cursor(cap));

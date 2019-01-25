@@ -245,7 +245,8 @@ void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
 static inline bool
 is_cap_sealed(const cap_register_t *cp)
 {
-    return cap_is_sealed(cp);
+    // TODO: remove this function and update all callers to use the correct function
+    return cap_is_sealed_with_type(cp);
 }
 
 /*
@@ -1039,7 +1040,6 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         result.cr_perms = ctp->cr_perms;
         result.cr_uperms = ctp->cr_uperms;
         result.cr_offset = ctp->cr_offset;
-        result.cr_sealed = 0;
         result.cr_otype = CAP_OTYPE_UNSEALED;
         update_capreg(&env->active_tc, cd, &result);
     }
@@ -1612,7 +1612,7 @@ target_ulong helper_cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
             equal = FALSE;
         } else if (cbp->cr_length != ctp->cr_length) {
             equal = FALSE;
-        } else if (cbp->cr_otype != ctp->cr_otype || cbp->cr_sealed != ctp->cr_sealed) { // TODO: remove cr_sealed field
+        } else if (cbp->cr_otype != ctp->cr_otype) {
             equal = FALSE;
         } else if (cbp->cr_perms != ctp->cr_perms) {
             equal = FALSE;
@@ -2232,14 +2232,14 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
     /* fetch tps and length */
     cheri_tag_get_m128(env, addr, cd, &tps, &length, GETPC());
 
-    cdp->cr_otype = (uint32_t)(tps >> 32);
+    cdp->cr_otype = (uint32_t)(tps >> 32) ^ CAP_MAX_REPRESENTABLE_OTYPE;
     cdp->cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
     cdp->cr_uperms = (uint32_t)(((tps >> 1) >> CAP_UPERMS_SHFT) &
             CAP_UPERMS_ALL);
     if (tps & 1ULL)
-        cdp->cr_sealed = 1;
+        cdp->_sbit_for_memory = 1;
     else
-        cdp->cr_sealed = 0;
+        cdp->_sbit_for_memory = 0;
     cdp->cr_length = length ^ -1UL;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
@@ -2306,8 +2306,9 @@ target_ulong helper_cap2bytes_m128b(CPUMIPSState *env, uint32_t cs,
     perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
         (csp->cr_perms & CAP_PERMS_ALL));
 
-    tps = ((uint64_t)csp->cr_otype << 32) |
-        (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
+    bool sbit = csp->cr_tag ? is_cap_sealed(csp) : csp->_sbit_for_memory;
+    tps = ((uint64_t)(csp->cr_otype ^ CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
+        (perms << 1) | (sbit ? 1UL : 0UL);
 
     length = csp->cr_length ^ -1UL;
 
@@ -2407,9 +2408,9 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
     cdp->cr_perms = perms & store_mem_perms;
     cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype & 1ULL)
-        cdp->cr_sealed = 1;
+        cdp->_sbit_for_memory = 1;
     else
-        cdp->cr_sealed = 0;
+        cdp->_sbit_for_memory = 0;
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
@@ -2435,9 +2436,9 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
     cdp->cr_perms = perms & store_mem_perms;
     cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype & 1ULL)
-        cdp->cr_sealed = 1;
+        cdp->_sbit_for_memory = 1;
     else
-        cdp->cr_sealed = 0;
+        cdp->_sbit_for_memory = 0;
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
@@ -2462,7 +2463,8 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
 
     // XOR with unsealed otype so that NULL is zero in memory
     uint64_t inmemory_otype = ((uint64_t)(csp->cr_otype ^ CAP_OTYPE_UNSEALED)) << 32;
-    ret = inmemory_otype | (perms << 1) | (is_cap_sealed(csp) ? 1UL : 0UL);
+    bool sbit = csp->cr_tag ? is_cap_sealed(csp) : csp->_sbit_for_memory;
+    ret = inmemory_otype | (perms << 1) | (sbit ? 1UL : 0UL);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */

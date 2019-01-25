@@ -50,8 +50,8 @@ struct cap_register {
     uint32_t cr_uperms; /* User Permissions */
     uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
     uint32_t cr_otype;  /* Object Type, 24 bits */
-    uint8_t cr_sealed;  /* Sealed flag */
     uint8_t cr_tag;     /* Tag */
+    uint8_t _sbit_for_memory; /* sealed flag */
 };
 typedef struct cap_register cap_register_t;
 
@@ -231,8 +231,6 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
 
     uint8_t seal_mode = (uint8_t)cc128_getbits(pesbt, CC_L_S_OFF, 1);
 
-    cdp->cr_sealed = seal_mode == 0 ? 0 : 1;
-
     uint32_t BWidth = seal_mode == 1 ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
     uint32_t BMask = (1 << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
@@ -258,6 +256,10 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
 
     uint32_t type = CAP_OTYPE_UNSEALED;
 
+    if (seal_mode == 0) {
+        // TODO: remove extra bit for unsealed caps and always store otype
+        type = CAP_OTYPE_UNSEALED;
+    }
     if (seal_mode == 1) {
         type = (cc128_getbits(pesbt, CC_L_OHI_OFF, CC_L_TYPES / 2) << (CC_L_TYPES / 2)) |
                cc128_getbits(pesbt, CC_L_OLO_OFF, CC_L_TYPES / 2);
@@ -298,7 +300,7 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
     cdp->cr_base = base;
 }
 
-static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return (cp->cr_sealed) ? true : false; }
+static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr_otype <= CAP_MAX_SEALED_OTYPE; }
 
 /*
  * Compress a capability to 128 bits.
@@ -432,8 +434,7 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, uint64_t l
         c.cr_base = base;
         c.cr_length = length;
         c.cr_offset = new_offset;
-        c.cr_sealed = sealed;
-        c.cr_otype = CAP_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
+        c.cr_otype = sealed ? 0 : CAP_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
 
         pesbt = compress_128cap(&c);
         decompress_128cap(pesbt, base + new_offset, &c);
@@ -497,7 +498,9 @@ typedef union _inmemory_chericap256 {
 
 static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* cdp) {
     /* See CHERI ISA: Figure 3.1: 256-bit memory representation of a capability */
-    cdp->cr_sealed = mem.u64s[0] & 1;
+#ifndef CHERI_128
+    cdp->_sbit_for_memory = mem.u64s[0] & 1;
+#endif
     cdp->cr_perms = (mem.u64s[0] >> CC256_PERMS_MEM_SHFT) & CC256_PERMS_ALL_BITS;
     cdp->cr_uperms = (mem.u64s[0] >> CC256_UPERMS_MEM_SHFT) & CC256_UPERMS_ALL_BITS;
     cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) ^ CC256_OTYPE_ALL_BITS;
@@ -509,7 +512,10 @@ static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* c
 }
 
 static inline void compress_256cap(inmemory_chericap256* buffer, const cap_register_t* csp) {
-    buffer->u64s[0] = csp->cr_sealed |
+    buffer->u64s[0] =
+#ifndef CHERI_128
+        csp->_sbit_for_memory |
+#endif
         ((csp->cr_perms & CC256_PERMS_ALL_BITS) << CC256_PERMS_MEM_SHFT) |
         ((csp->cr_uperms & CC256_UPERMS_ALL_BITS) << CC256_UPERMS_MEM_SHFT) |
         ((uint64_t)(csp->cr_otype ^ CC256_OTYPE_ALL_BITS) << CC256_OTYPE_MEM_SHFT);

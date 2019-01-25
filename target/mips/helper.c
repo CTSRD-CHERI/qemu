@@ -871,7 +871,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         // the offset or similar -> The next ifetch will raise a trap again.
         // We do this here instead of on eret to avoid an exception on eret
         // since that could break the exception handler if someone else can modify ErrorEPCC.
-        if (!cap_is_sealed(&env->active_tc.CHWR.ErrorEPCC)) {
+        if (cap_is_unsealed(&env->active_tc.CHWR.ErrorEPCC)) {
             env->active_tc.CHWR.ErrorEPCC = env->active_tc.PCC;
             // Handle special case when PCC is unrepresentable (and has been untagged)
             // EPC = offending offset
@@ -1074,7 +1074,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
             // the offset or similar -> The next ifetch will raise a trap again.
             // We do this here instead of on eret to avoid an exception on eret
             // since that could break the exception handler if someone else can modify EPCC.
-            if (!cap_is_sealed(&env->active_tc.CHWR.EPCC)) {
+            if (cap_is_unsealed(&env->active_tc.CHWR.EPCC)) {
                 env->active_tc.CHWR.EPCC = env->active_tc.PCC;
                 // Handle special case when PCC is unrepresentable (and has been untagged)
                 // EPC = offending offset
