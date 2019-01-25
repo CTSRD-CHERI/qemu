@@ -2447,11 +2447,9 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
 #endif
 }
 
-target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
-        target_ulong vaddr)
+static inline uint64_t cap2bytes_get_otype_and_perms(const cap_register_t *csp)
 {
-    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    target_ulong ret;
+    uint64_t ret;
     uint64_t perms;
 
     // If the value is tagged we only store the actually available bits otherwise
@@ -2465,6 +2463,14 @@ target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
     uint64_t inmemory_otype = ((uint64_t)(csp->cr_otype ^ CAP_OTYPE_UNSEALED)) << 32;
     bool sbit = csp->cr_tag ? is_cap_sealed(csp) : csp->_sbit_for_memory;
     ret = inmemory_otype | (perms << 1) | (sbit ? 1UL : 0UL);
+    return ret;
+}
+
+target_ulong helper_cap2bytes_op(CPUMIPSState *env, uint32_t cs,
+        target_ulong vaddr)
+{
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    target_ulong ret = cap2bytes_get_otype_and_perms(csp);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
@@ -2576,6 +2582,60 @@ target_ulong helper_cap2bytes_length(CPUMIPSState *env, uint32_t cs)
 
     return (csp->cr_length ^ -1UL);
 }
+
+#if !defined(CHERI_128) && !defined(CHERI_MAGIC128)
+
+static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
+    target_ulong vaddr, target_ulong retpc)
+{
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    /* Store otype and perms to memory (might trap on store) */
+    uint64_t otype_and_perms = cap2bytes_get_otype_and_perms(csp);
+    cpu_stq_data_ra(env, vaddr + 0, otype_and_perms, retpc);
+    /*
+     * Store cursor to memory. Also, set the tag bit.  We
+     * set the tag bit here because the store above would
+     * have faulted the TLB if it didn't have an entry for
+     * this address.  Once we are sure the TLB has an entry
+     * we can set the tag bit.
+     */
+    if (csp->cr_tag)
+        cheri_tag_set(env, vaddr, cs, retpc);
+    else
+        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
+
+    uint64_t cursor = cap_get_cursor(csp);
+    cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
+    uint64_t base = cap_get_base(csp);
+    cpu_stq_data_ra(env, vaddr + 16, base, retpc);
+    uint64_t length = cap_get_length(csp) ^ -1ULL;
+    cpu_stq_data_ra(env, vaddr + 24, length, retpc);
+#ifdef CONFIG_MIPS_LOG_INSTR
+    /* Log memory cap write, if needed. */
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        dump_cap_store_op(vaddr, otype_and_perms, csp->cr_tag);
+        cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
+        dump_cap_store_cursor(cursor);
+        cvtrace_dump_cap_cursor(&env->cvtrace, cursor);
+        dump_cap_store_base(csp->cr_base);
+        cvtrace_dump_cap_base(&env->cvtrace, csp->cr_base);
+        dump_cap_store_length(csp->cr_length);
+        cvtrace_dump_cap_length(&env->cvtrace, csp->cr_length);
+    }
+#endif
+}
+
+void helper_csc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb,
+        target_ulong rt, uint32_t offset)
+{
+    target_ulong retpc = GETPC();
+    target_ulong vaddr = helper_csc_addr(env, cs, cb, rt, offset);
+    // helper_csc_addr should check for alignment
+    cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
+    store_cap_to_memory(env, cs, vaddr, retpc);
+}
+#endif
+
 #endif /* ! CHERI_MAGIC128 */
 
 void helper_ccheck_btarget(CPUMIPSState *env)

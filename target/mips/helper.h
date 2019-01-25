@@ -265,6 +265,9 @@ DEF_HELPER_3(cstorecond, tl, env, i32, i32)
 DEF_HELPER_5(clc_addr, tl, env, i32, i32, tl, i32)
 DEF_HELPER_3(cllc_addr, tl, env, i32, i32)
 DEF_HELPER_5(csc_addr, tl, env, i32, i32, tl, i32)
+#if !defined(CHERI_128) && !defined(CHERI_MAGIC128)
+DEF_HELPER_5(csc_without_tcg, void, env, i32, i32, tl, i32)
+#endif
 DEF_HELPER_3(cscc_addr, tl, env, i32, i32)
 
 #ifdef CHERI_128
