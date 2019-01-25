@@ -234,7 +234,7 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 int mips_gdb_set_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 {
     /* All CHERI registers are read-only currently.  */
-    if (n < 41)
+    if (n < 42)
 #if defined(CHERI_128) || defined(CHERI_MAGIC128)
         return 16;
 #else
