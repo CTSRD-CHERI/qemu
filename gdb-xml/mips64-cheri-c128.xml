@@ -77,7 +77,7 @@
   <reg name="kcc" bitsize="128" type="cheri_cap128"/>
   <reg name="kdc" bitsize="128" type="cheri_cap128"/>
   <reg name="epcc" bitsize="128" type="cheri_cap128"/>
-  <reg name="errorepcc" bitsize="256" type="cheri_cap128"/>
+  <reg name="errorepcc" bitsize="128" type="cheri_cap128"/>
 
   <flags id="cap_cause" size="8">
     <field name="reg" start="0" end="7"/>
