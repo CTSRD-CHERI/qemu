@@ -11412,7 +11412,6 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
         gen_store_gpr(t0, rt);
         break;
     case 7: /* RESET */
-        save_cpu_state(ctx, 1);
         gen_helper_rdhwr_statcounters_reset(t0, cpu_env);
         gen_store_gpr(t0, rt);
         break;
@@ -11424,10 +11423,13 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
         gen_helper_rdhwr_statcounters_dtlb_miss(t0, cpu_env);
         gen_store_gpr(t0, rt);
         break;
+    case 11:
+        gen_helper_1e0i(rdhwr_statcounters_memory, t0, sel);
+        gen_store_gpr(t0, rt);
+        break;
     case 8:
     case 9:
     case 10:
-    case 11:
     case 12:
     case 13:
     case 14:
@@ -19061,7 +19063,12 @@ static void decode_opc_special3(CPUMIPSState *env, DisasContext *ctx)
         break;
 #endif
     case OPC_RDHWR:
+#ifdef TARGET_CHERI
+        // For CHERI/BERI statcounters we need a 4 bit selector instead of 3
+        gen_rdhwr(ctx, rt, rd, extract32(ctx->opcode, 6, 4));
+#else
         gen_rdhwr(ctx, rt, rd, extract32(ctx->opcode, 6, 3));
+#endif
         break;
     case OPC_FORK:
         check_insn(ctx, ASE_MT);

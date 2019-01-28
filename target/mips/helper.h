@@ -506,6 +506,7 @@ DEF_HELPER_1(rdhwr_statcounters_icount, tl, env)
 DEF_HELPER_1(rdhwr_statcounters_reset, tl, env)
 DEF_HELPER_1(rdhwr_statcounters_itlb_miss, tl, env)
 DEF_HELPER_1(rdhwr_statcounters_dtlb_miss, tl, env)
+DEF_HELPER_2(rdhwr_statcounters_memory, tl, env, i32)
 DEF_HELPER_2(rdhwr_statcounters_ignored, tl, env, i32)
 #endif
 DEF_HELPER_1(rdhwr_performance, tl, env)

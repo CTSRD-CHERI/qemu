@@ -3009,6 +3009,19 @@ target_ulong helper_rdhwr_statcounters_dtlb_miss(CPUMIPSState *env)
     return env->statcounters_dtlb_miss;
 }
 
+target_ulong helper_rdhwr_statcounters_memory(CPUMIPSState *env, uint32_t sel)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s(%d)\n", __func__, sel);
+    check_hwrena(env, 11, GETPC());
+    switch (sel) {
+    case 8: return env->statcounters_cap_read;
+    case 9: return env->statcounters_cap_write;
+    case 10: return env->statcounters_cap_read_tagged;
+    case 11: return env->statcounters_cap_write_tagged;
+    default: return 0xdeadbeef;
+    }
+}
+
 target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)
 {
     // TODO: actually implement this

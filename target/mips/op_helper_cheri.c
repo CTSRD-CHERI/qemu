@@ -2184,10 +2184,13 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
      * after the first store (capabilities must be on the same page).
      */
     /* Set the tag bit in memory, if set in the register. */
-    if (csp->cr_tag)
+    env->statcounters_cap_write++;
+    if (csp->cr_tag) {
+        env->statcounters_cap_write_tagged++;
         cheri_tag_set(env, vaddr, cs, GETPC());
-    else
+    } else {
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, GETPC());
+    }
     /* Finally, store the cursor */
     cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
 
@@ -2296,6 +2299,10 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     uint64_t length = csp->cr_length ^ -1UL;
     /* Store the remaining "magic" data with the tags */
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, GETPC());
+    env->statcounters_cap_write++;
+    if (csp->cr_tag) {
+        env->statcounters_cap_write_tagged++;
+    }
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
@@ -2503,10 +2510,13 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
      * this address.  Once we are sure the TLB has an entry
      * we can set the tag bit.
      */
-    if (csp->cr_tag)
+    env->statcounters_cap_write++;
+    if (csp->cr_tag) {
+        env->statcounters_cap_write_tagged++;
         cheri_tag_set(env, vaddr, cs, retpc);
-    else
+    } else {
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
+    }
 
     uint64_t cursor = cap_get_cursor(csp);
     cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);

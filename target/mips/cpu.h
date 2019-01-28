@@ -803,6 +803,10 @@ struct CPUMIPSState {
     uint64_t statcounters_icount;
     uint64_t statcounters_itlb_miss;
     uint64_t statcounters_dtlb_miss;
+    uint64_t statcounters_cap_read;
+    uint64_t statcounters_cap_read_tagged;
+    uint64_t statcounters_cap_write;
+    uint64_t statcounters_cap_write_tagged;
     /* TODO: we could implement the TLB ones as well */
 
     /*
