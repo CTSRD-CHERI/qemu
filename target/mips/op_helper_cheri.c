@@ -2157,6 +2157,9 @@ void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
 
     cdp->cr_tag = tag;
+    env->statcounters_cap_read++;
+    if (tag)
+        env->statcounters_cap_read_tagged++;
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     dump_cap_load(addr, cdp->cr_pesbt, cursor, tag);
@@ -2267,6 +2270,9 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
     target_ulong tag = cheri_tag_get_m128(env, addr, cd, &tps, &length, GETPC());
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
     cdp->cr_tag = tag;
+    env->statcounters_cap_read++;
+    if (tag)
+        env->statcounters_cap_read_tagged++;
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
@@ -2391,6 +2397,9 @@ void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulo
     uint32_t perms;
 
     cdp->cr_tag = tag;
+    env->statcounters_cap_read++;
+    if (tag)
+        env->statcounters_cap_read_tagged++;
 
     cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_OTYPE_UNSEALED;  // XOR with unsealed otype so that NULL is zero in memory
     perms = (uint32_t)(otype >> 1);
@@ -2419,6 +2428,9 @@ void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_u
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
     uint32_t perms;
     cdp->cr_tag = tag;
+    env->statcounters_cap_read++;
+    if (tag)
+        env->statcounters_cap_read_tagged++;
 
     cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_OTYPE_UNSEALED;  // XOR with unsealed otype so that NULL is zero in memory
     perms = (uint32_t)(otype >> 1);
