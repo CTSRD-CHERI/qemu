@@ -1248,7 +1248,7 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint64_t req_base = cursor;
     uint64_t req_top = cursor + rt;
 
-    uint32_t BWidth = CC_L_BWIDTH;
+    uint32_t BWidth = CC128_BOT_WIDTH;
 
     uint8_t E;
 
@@ -1271,7 +1271,7 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         E ++;
     }
 
-    uint8_t need_zeros = E == 0 ? 0 : E + CC_L_LOWWIDTH;
+    uint8_t need_zeros = E == 0 ? 0 : E + CC128_EXP_LOW_WIDTH;
 
     cursor = (cursor >> need_zeros) << need_zeros;
     new_top = ((new_top + ((UINT64_C(1) << need_zeros) - 1)) >> need_zeros) << need_zeros;
@@ -1315,9 +1315,9 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint64_t cursor_rt = cursor + rt;
 
 #ifdef CHERI_128
-    uint32_t bwidth = CC_L_BWIDTH;
+    uint32_t bwidth = CC128_BOT_WIDTH;
     uint8_t e = cc128_compute_e(rt, bwidth);
-    uint8_t need_zeros = e ? e + CC_L_LOWWIDTH : 0;
+    uint8_t need_zeros = e ? e + CC128_EXP_LOW_WIDTH : 0;
     uint64_t mask = (1ULL << need_zeros) - 1;
 
     bool representable = ((cursor | cursor_rt) & mask) == 0;
