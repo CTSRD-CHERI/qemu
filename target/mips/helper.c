@@ -1578,7 +1578,7 @@ int cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
 
 #ifdef CHERI_MAGIC128
 void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint8_t tagbit, uint64_t tps, uint64_t length, uintptr_t pc)
+        uint8_t tagbit, uint64_t tps, uint64_t length, hwaddr *ret_paddr, uintptr_t pc)
 {
     uint64_t tag;
     uint64_t *tagblk64;
@@ -1587,7 +1587,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     // If the data is untagged we shouldn't get a tlb fault
     uint8_t *tagblk = cheri_tag_get_block(env, vaddr,
 					  tagbit ? MMU_DATA_CAP_STORE : MMU_DATA_STORE,
-					  reg, 0, pc, NULL, &ram_addr, &tag);
+					  reg, 0, pc, ret_paddr, &ram_addr, &tag);
     if (tagblk == NULL) {
         /* Allocated a tag block. */
         tagblk = cheri_tag_new_tagblk(tag);
@@ -1606,11 +1606,11 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 }
 
 int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint64_t *ret_tps, uint64_t *ret_length, uintptr_t pc)
+        uint64_t *ret_tps, uint64_t *ret_length, hwaddr *ret_paddr, uintptr_t pc)
 {
     uint64_t tag;
     uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
-                                          0, pc, NULL, NULL, &tag);
+                                          0, pc, ret_paddr, NULL, &tag);
 
     if (tagblk == NULL) {
         *ret_tps = *ret_length = 0ULL;

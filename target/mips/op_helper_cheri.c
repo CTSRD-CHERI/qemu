@@ -1804,7 +1804,7 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
     return 0;
 }
 
-target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+static target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt, uint32_t offset)
 {
     // CLC traps on cbp == NULL so we use reg0 as $ddc to save encoding
@@ -1850,7 +1850,7 @@ target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
-target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
+static target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
 {
     // CLLC traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since loading relative to $ddc is common
@@ -2146,52 +2146,34 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-
-target_ulong helper_bytes2cap_128_tag_get(CPUMIPSState *env, uint32_t cd,
-        uint32_t cb, target_ulong addr)
+static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+                                 target_ulong vaddr, target_ulong retpc, bool linked)
 {
-    /* This could be done in helper_bytes2cap_128 but TCG limits the number
-     * of arguments to 5 so we have to have a separate helper to handle the tag.
-     */
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    target_ulong tag = cheri_tag_get(env, addr, cd, NULL, GETPC());
-    tag = clear_tag_if_no_loadcap(env, tag, cbp);
-    return tag;
-}
 
-void helper_bytes2cap_128(CPUMIPSState *env, uint32_t cd, target_ulong pesbt,
-        target_ulong cursor)
-{
+    // TODO: do one physical translation and then use that to speed up tag read
+    // and use address_space_read to read the full 16 byte buffer
+    /* Load otype and perms from memory (might trap on load) */
+    uint64_t pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc);
+    uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-
     decompress_128cap(pesbt, cursor, cdp);
-}
 
-void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
-        target_ulong tag, target_ulong addr, target_ulong cursor)
-{
-    /* This could be done in helper_bytes2cap_128 but TCG limits the number
-     * of arguments to 5 so we have to have a separate helper to handle the tag.
-     */
-    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-
+    target_ulong tag = cheri_tag_get(env, vaddr, cb, linked ? &env->lladdr : NULL, retpc);
+    tag = clear_tag_if_no_loadcap(env, tag, cbp);
     cdp->cr_tag = tag;
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
-    dump_cap_load(addr, cdp->cr_pesbt, cursor, tag);
-    cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
-    cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        dump_cap_load(vaddr, cdp->cr_pesbt, cursor, tag);
+        cvtrace_dump_cap_load(&env->cvtrace, vaddr, cdp);
+        cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+    }
 #endif
-}
-
-static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
-                                 target_ulong vaddr, target_ulong retpc, bool linked)
-{
-    assert(false && "Need to implement this");
 }
 
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
@@ -2263,14 +2245,21 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
-                           target_ulong cursor, target_ulong addr)
+static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+                                 target_ulong vaddr, target_ulong retpc, bool linked)
 {
-    uint64_t tps, length;
-    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-    /* fetch tps and length */
-    cheri_tag_get_m128(env, addr, cd, &tps, &length, GETPC());
+    // Since this is used by cl* we need to treat cb == 0 as $ddc
+    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
 
+    // TODO: do one physical translation and then use that to speed up tag read
+    // and use address_space_read to read the full 16 byte buffer
+    /* Load base and cursor from memory (might trap on load) */
+    uint64_t base = cpu_ldq_data_ra(env, vaddr + 0, retpc);
+    uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
+    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
+
+    uint64_t tps, length;
+    target_ulong tag = cheri_tag_get_m128(env, vaddr, cd, &tps, &length, linked ? &env->lladdr : NULL, retpc);
     cdp->cr_otype = (uint32_t)(tps >> 32) ^ CAP_MAX_REPRESENTABLE_OTYPE;
     cdp->cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
     cdp->cr_uperms = (uint32_t)(((tps >> 1) >> CAP_UPERMS_SHFT) &
@@ -2282,36 +2271,19 @@ void helper_bytes2cap_m128(CPUMIPSState *env, uint32_t cd, target_ulong base,
     cdp->cr_length = length ^ -1UL;
     cdp->cr_base = base;
     cdp->cr_offset = cursor - base;
-}
-
-void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
-                               target_ulong cursor, target_ulong addr)
-{
-    /* unused but needed to fetch the tag */
-    uint64_t tps, length;
-    // Since this is used by cl* we need to treat cb == 0 as $ddc
-    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-
-    target_ulong tag = cheri_tag_get_m128(env, addr, cd, &tps, &length, GETPC());
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
     cdp->cr_tag = tag;
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
-
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
-    dump_cap_load(addr, cursor, cdp->cr_base, tag);
-    cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
-    cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        dump_cap_load(vaddr, cursor, cdp->cr_base, tag);
+        cvtrace_dump_cap_load(&env->cvtrace, vaddr, cdp);
+        cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+    }
 #endif
-}
-
-static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
-                                 target_ulong vaddr, target_ulong retpc, bool linked)
-{
-    assert(false && "Need to implement this");
 }
 
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
@@ -2336,7 +2308,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
 
     uint64_t length = csp->cr_length ^ -1UL;
     /* Store the remaining "magic" data with the tags */
-    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, GETPC());
+    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, NULL, retpc);
     env->statcounters_cap_write++;
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;

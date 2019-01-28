@@ -261,25 +261,10 @@ DEF_HELPER_3(cloadlinked, tl, env, i32, i32)
 
 DEF_HELPER_3(cstorecond, tl, env, i32, i32)
 
-
-DEF_HELPER_5(clc_addr, tl, env, i32, i32, tl, i32)
-DEF_HELPER_3(cllc_addr, tl, env, i32, i32)
 DEF_HELPER_3(cscc_without_tcg, tl, env, i32, i32)
 DEF_HELPER_5(csc_without_tcg, void, env, i32, i32, tl, i32)
 DEF_HELPER_5(clc_without_tcg, void, env, i32, i32, tl, i32)
 DEF_HELPER_3(cllc_without_tcg, void, env, i32, i32)
-
-#ifdef CHERI_128
-DEF_HELPER_4(bytes2cap_128, void, env, i32, tl, tl)
-DEF_HELPER_4(bytes2cap_128_tag_get, tl, env, i32, i32, tl)
-DEF_HELPER_5(bytes2cap_128_tag_set, void, env, i32, tl, tl, tl)
-
-#elif defined(CHERI_MAGIC128)
-DEF_HELPER_5(bytes2cap_m128, void, env, i32, tl, tl, tl)
-DEF_HELPER_5(bytes2cap_m128_tag, void, env, i32, i32, tl, tl)
-
-#endif /* CHERI_MAGIC128 */
-
 #endif
 
 #if defined(TARGET_MIPS64)
