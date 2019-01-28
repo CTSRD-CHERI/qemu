@@ -1978,6 +1978,7 @@ static inline target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint
 }
 
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs, target_ulong vaddr, target_ulong retpc);
+static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong vaddr, target_ulong retpc, bool linked);
 
 target_ulong helper_cscc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb)
 {
@@ -1998,6 +1999,25 @@ void helper_csc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb,
     // helper_csc_addr should check for alignment
     cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
     store_cap_to_memory(env, cs, vaddr, retpc);
+}
+
+void helper_clc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+        target_ulong rt, uint32_t offset)
+{
+    target_ulong retpc = GETPC();
+    target_ulong vaddr = helper_clc_addr(env, cd, cb, rt, offset);
+    // helper_clc_addr should check for alignment
+    cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
+    load_cap_from_memory(env, cd, cb, vaddr, retpc, /*linked=*/false);
+}
+
+void helper_cllc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t cb)
+{
+    target_ulong retpc = GETPC();
+    target_ulong vaddr = helper_cllc_addr(env, cd, cb);
+    // helper_cllc_addr should check for alignment
+    cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
+    load_cap_from_memory(env, cd, cb, vaddr, retpc, /*linked=*/true);
 }
 
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -2168,6 +2188,12 @@ void helper_bytes2cap_128_tag_set(CPUMIPSState *env, uint32_t cd,
 #endif
 }
 
+static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+                                 target_ulong vaddr, target_ulong retpc, bool linked)
+{
+    assert(false && "Need to implement this");
+}
+
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     target_ulong vaddr, target_ulong retpc)
 {
@@ -2190,9 +2216,9 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     env->statcounters_cap_write++;
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;
-        cheri_tag_set(env, vaddr, cs, GETPC());
+        cheri_tag_set(env, vaddr, cs, retpc);
     } else {
-        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, GETPC());
+        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
     }
     /* Finally, store the cursor */
     cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
@@ -2280,6 +2306,12 @@ void helper_bytes2cap_m128_tag(CPUMIPSState *env, uint32_t cb, uint32_t cd,
     cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
     cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
 #endif
+}
+
+static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+                                 target_ulong vaddr, target_ulong retpc, bool linked)
+{
+    assert(false && "Need to implement this");
 }
 
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
@@ -2386,66 +2418,50 @@ static inline void dump_cap_store_length(uint64_t length)
 
 #endif // CONFIG_MIPS_LOG_INSTR
 
-void helper_bytes2cap_op(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
-        target_ulong addr)
+static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+                                 target_ulong vaddr, target_ulong retpc, bool linked)
 {
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
     cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-    target_ulong tag = cheri_tag_get(env, addr, cd, NULL, GETPC());
-    tag = clear_tag_if_no_loadcap(env, tag, cbp);
-    uint32_t perms;
 
+    // TODO: do one physical translation and then use that to speed up tag read
+    /* Load otype and perms from memory (might trap on load) */
+    uint64_t otype_and_perms = cpu_ldq_data_ra(env, vaddr + 0, retpc);
+    uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
+    uint64_t base = cpu_ldq_data_ra(env, vaddr + 16, retpc);
+    uint64_t length = cpu_ldq_data_ra(env, vaddr + 24, retpc);
+
+    target_ulong tag = cheri_tag_get(env, vaddr, cd, linked ? &env->lladdr : NULL, retpc);
+    tag = clear_tag_if_no_loadcap(env, tag, cbp);
     cdp->cr_tag = tag;
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
 
-    cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_OTYPE_UNSEALED;  // XOR with unsealed otype so that NULL is zero in memory
-    perms = (uint32_t)(otype >> 1);
+    // XOR with unsealed otype so that NULL is zero in memory
+    cdp->cr_otype = (uint32_t)(otype_and_perms >> 32) ^ CAP_OTYPE_UNSEALED;
+    uint32_t perms = (uint32_t)(otype_and_perms >> 1);
     uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
     cdp->cr_perms = perms & store_mem_perms;
     cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
-    if (otype & 1ULL)
+    if (otype_and_perms & 1ULL)
         cdp->_sbit_for_memory = 1;
     else
         cdp->_sbit_for_memory = 0;
 
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory read, if needed. */
-    dump_cap_load_op(addr, otype, tag);
-    cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
-#endif
-}
-
-void helper_bytes2cap_opll(CPUMIPSState *env, uint32_t cb, uint32_t cd, target_ulong otype,
-        target_ulong addr)
-{
-    // Since this is used by cl* we need to treat cb == 0 as $ddc
-    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-    target_ulong tag = cheri_tag_get(env, addr, cd, &env->lladdr, GETPC());
-    tag = clear_tag_if_no_loadcap(env, tag, cbp);
-    uint32_t perms;
-    cdp->cr_tag = tag;
-    env->statcounters_cap_read++;
-    if (tag)
-        env->statcounters_cap_read_tagged++;
-
-    cdp->cr_otype = (uint32_t)(otype >> 32) ^ CAP_OTYPE_UNSEALED;  // XOR with unsealed otype so that NULL is zero in memory
-    perms = (uint32_t)(otype >> 1);
-    uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
-    cdp->cr_perms = perms & store_mem_perms;
-    cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
-    if (otype & 1ULL)
-        cdp->_sbit_for_memory = 1;
-    else
-        cdp->_sbit_for_memory = 0;
+    cdp->cr_length = length ^ -1UL; // XOR with -1 so that NULL is zero in memory
+    cdp->cr_base = base;
+    cdp->cr_offset = cursor - base;
 
 #ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory read, if needed. */
-    dump_cap_load_op(addr, otype, tag);
-    cvtrace_dump_cap_load(&env->cvtrace, addr, cdp);
+    /* Log memory reads, if needed. */
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        dump_cap_load_op(vaddr, otype_and_perms, tag);
+        cvtrace_dump_cap_load(&env->cvtrace, vaddr, cdp);
+        dump_cap_load_cbl(cursor, base, length);
+        cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+    }
 #endif
 }
 
@@ -2466,23 +2482,6 @@ static inline uint64_t cap2bytes_get_otype_and_perms(const cap_register_t *csp)
     bool sbit = csp->cr_tag ? is_cap_sealed(csp) : csp->_sbit_for_memory;
     ret = inmemory_otype | (perms << 1) | (sbit ? 1UL : 0UL);
     return ret;
-}
-
-void helper_bytes2cap_cbl(CPUMIPSState *env, uint32_t cd, target_ulong cursor,
-        target_ulong base, target_ulong length)
-{
-    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-
-    length = length ^ -1UL;
-    cdp->cr_length = length;
-    cdp->cr_base = base;
-    cdp->cr_offset = cursor - base;
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory reads, if needed. */
-    dump_cap_load_cbl(cursor, base, length);
-    cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
-#endif
 }
 
 #ifdef CONFIG_MIPS_LOG_INSTR

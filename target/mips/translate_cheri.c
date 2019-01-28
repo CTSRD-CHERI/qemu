@@ -1599,46 +1599,10 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
-    TCGv taddr = tcg_temp_new();
     TCGv t0 = tcg_temp_new();
-    TCGv t1 = tcg_temp_new();
-    TCGv t2 = tcg_temp_new();
-
-    /* Check the cap registers and compute the address. */
     gen_load_gpr(t0, rt);
-    gen_helper_clc_addr(taddr, cpu_env, tcd, tcb, t0, toffset);
-
-    /* Fetch the otype and perms from memory */
-    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
-            MO_TEQ | ctx->default_tcg_memop_mask);
-
-    /* Store in the capability register. */
-    gen_helper_bytes2cap_op(cpu_env, tcb, tcd, t0, taddr);
-
-    /* Fetch the cursor, base, and length from memory */
-    tcg_gen_addi_tl(taddr, taddr, 8);
-
-    /* Fetch cursor in t0 */
-    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
-            MO_TEQ | ctx->default_tcg_memop_mask);
-    tcg_gen_addi_tl(taddr, taddr, 8);
-
-    /* Fetch base in t1 */
-    tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
-            MO_TEQ | ctx->default_tcg_memop_mask);
-    tcg_gen_addi_tl(taddr, taddr, 8);
-
-    /* Fetch length in t2 */
-    tcg_gen_qemu_ld_tl(t2, taddr, ctx->mem_idx,
-            MO_TEQ | ctx->default_tcg_memop_mask);
-
-    /* Store in the capability register. */
-    gen_helper_bytes2cap_cbl(cpu_env, tcd, t0, t1, t2);
-
-    tcg_temp_free(t2);
-    tcg_temp_free(t1);
+    gen_helper_clc_without_tcg(cpu_env, tcd, tcb, t0, toffset);
     tcg_temp_free(t0);
-    tcg_temp_free(taddr);
     tcg_temp_free_i32(toffset);
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tcd);
@@ -1648,45 +1612,7 @@ static inline void generate_cllc(DisasContext *ctx, int32_t cd, int32_t cb)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv taddr = tcg_temp_new();
-    TCGv t0 = tcg_temp_new();
-    TCGv t1 = tcg_temp_new();
-    TCGv t2 = tcg_temp_new();
-
-    /* Check the cap registers and compute the address. */
-    gen_helper_cllc_addr(taddr, cpu_env, tcd, tcb);
-
-    /* Fetch the otype and perms from memory */
-    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
-            MO_TEQ | ctx->default_tcg_memop_mask);
-
-    /* Store in the capability register. */
-    gen_helper_bytes2cap_opll(cpu_env, tcb, tcd, t0, taddr);
-
-    /* Fetch the cursor, base, and length from memory */
-    tcg_gen_addi_tl(taddr, taddr, 8);
-
-    /* Fetch cursor in t0 */
-    tcg_gen_qemu_ld_tl(t0, taddr, ctx->mem_idx,
-            MO_TEQ | ctx->default_tcg_memop_mask);
-    tcg_gen_addi_tl(taddr, taddr, 8);
-
-    /* Fetch base in t1 */
-    tcg_gen_qemu_ld_tl(t1, taddr, ctx->mem_idx,
-            MO_TEQ | ctx->default_tcg_memop_mask);
-    tcg_gen_addi_tl(taddr, taddr, 8);
-
-    /* Fetch length in t2 */
-    tcg_gen_qemu_ld_tl(t2, taddr, ctx->mem_idx,
-            MO_TEQ | ctx->default_tcg_memop_mask);
-
-    /* Store in the capability register. */
-    gen_helper_bytes2cap_cbl(cpu_env, tcd, t0, t1, t2);
-
-    tcg_temp_free(t2);
-    tcg_temp_free(t1);
-    tcg_temp_free(t0);
-    tcg_temp_free(taddr);
+    gen_helper_cllc_without_tcg(cpu_env, tcd, tcb);
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tcd);
 }
