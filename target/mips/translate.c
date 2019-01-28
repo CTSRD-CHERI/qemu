@@ -11417,7 +11417,13 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
         gen_store_gpr(t0, rt);
         break;
     case 5: /* ITLB MISS */
+        gen_helper_rdhwr_statcounters_itlb_miss(t0, cpu_env);
+        gen_store_gpr(t0, rt);
+        break;
     case 6: /* DTLB MISS */
+        gen_helper_rdhwr_statcounters_dtlb_miss(t0, cpu_env);
+        gen_store_gpr(t0, rt);
+        break;
     case 8:
     case 9:
     case 10:

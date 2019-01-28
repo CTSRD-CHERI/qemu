@@ -2990,19 +2990,36 @@ target_ulong helper_rdhwr_xnp(CPUMIPSState *env)
 #if defined(TARGET_CHERI)
 target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env)
 {
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
     check_hwrena(env, 4, GETPC());
     return env->statcounters_icount;
+}
+
+target_ulong helper_rdhwr_statcounters_itlb_miss(CPUMIPSState *env)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    check_hwrena(env, 5, GETPC());
+    return env->statcounters_itlb_miss;
+}
+
+target_ulong helper_rdhwr_statcounters_dtlb_miss(CPUMIPSState *env)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    check_hwrena(env, 6, GETPC());
+    return env->statcounters_dtlb_miss;
 }
 
 target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)
 {
     // TODO: actually implement this
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
     check_hwrena(env, 7, GETPC());
     return 0;
 }
 
 target_ulong helper_rdhwr_statcounters_ignored(CPUMIPSState *env, uint32_t num)
 {
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
     check_hwrena(env, num, GETPC());
     return 0xdeadbeef;
 }

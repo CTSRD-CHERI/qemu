@@ -801,6 +801,8 @@ struct CPUMIPSState {
 #if defined(TARGET_CHERI)
     /* BERI Statcounters (CHERI only for now): */
     uint64_t statcounters_icount;
+    uint64_t statcounters_itlb_miss;
+    uint64_t statcounters_dtlb_miss;
     /* TODO: we could implement the TLB ones as well */
 
     /*

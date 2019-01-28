@@ -563,6 +563,12 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
 #endif
     cs->exception_index = exception;
     env->error_code = error_code;
+#ifdef TARGET_CHERI
+    if (rw == MMU_INST_FETCH)
+        env->statcounters_itlb_miss++;
+    else
+        env->statcounters_dtlb_miss++;
+#endif
 }
 
 #if !defined(CONFIG_USER_ONLY)
