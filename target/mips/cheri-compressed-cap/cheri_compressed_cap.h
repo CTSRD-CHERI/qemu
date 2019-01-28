@@ -76,11 +76,11 @@ typedef struct cap_register cap_register_t;
 #define CC_L_LOWWIDTH (CC_L_EWIDTH >> 1)
 #define CC_L_LOWMASK ((1 << CC_L_LOWWIDTH) - 1)
 
-#define CAP_MAX_REPRESENTABLE_OTYPE ((1 << CC_L_TYPES) - 1)
+#define CAP_MAX_REPRESENTABLE_OTYPE ((1u << CC_L_TYPES) - 1)
 // Rerserve the top four otypes for various special capabilities
 #define CAP_FIRST_SPECIAL_OTYPE_SIGN_EXTENDED ((uint64_t)-1)
 #define CAP_OTYPE_UNSEALED (CAP_MAX_REPRESENTABLE_OTYPE - 0)
-#define CAP_OTYPE_RESERVED1 (CAP_MAX_REPRESENTABLE_OTYPE - 1)
+#define CAP_OTYPE_SENTRY (CAP_MAX_REPRESENTABLE_OTYPE - 1)
 #define CAP_OTYPE_RESERVED2 (CAP_MAX_REPRESENTABLE_OTYPE - 2)
 #define CAP_OTYPE_RESERVED3 (CAP_MAX_REPRESENTABLE_OTYPE - 3)
 #define CAP_LAST_SPECIAL_OTYPE CAP_OTYPE_RESERVED3
@@ -123,6 +123,11 @@ typedef struct cap_register cap_register_t;
 #define CC256_MAX_UPERM            (19)
 #define CC256_OTYPE_ALL_BITS       ((1 << 24) - 1)
 #define CC256_OTYPE_MEM_SHFT       (32)
+
+
+#define CC_SEAL_MODE_UNSEALED 0
+#define CC_SEAL_MODE_SEALED 1
+#define CC_SEAL_MODE_SENTRY 3
 
 /* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
 #ifndef CHERI_COMPRESSED_CONSTANTS_ONLY
@@ -182,12 +187,10 @@ static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
     return ((src >> str) & ((1ull << sz) - 1ull));
 }
 
-
 /*
  * These formats are from cheri concentrate, but I have added an extra sealing
  * mode in order to allow precise sealing of zero offset objects Unsealed CC-L:
- *  perms:    63-49 (15 bits)
- *  unused:   48    (1 bit)
+ *  perms:    63-48 (16 bits)
  *  S:        47-46 (2 bits) = 0
  *  IE:       45    (1 bit)
  *  LH:       44    (1 bit)
@@ -204,6 +207,14 @@ static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
  *  T:        33-23  (11 bits)
  *  otype.lo: 22-13  (10 bits)
  *  B:        12-0   (13 bits)
+ *
+ *  Call-only "sentry" capability
+ *  perms:    63-48 (16 bits)
+ *  S:        47-46 (2 bits) = 3
+ *  IE:       45    (1 bit)
+ *  LH:       44    (1 bit)
+ *  T:        43-23 (21 bit)
+ *  B:        22-0  (23 bits)
  *
  * Sealed2 CC-L:
  *  perms:    63-49 (15 bits)
@@ -229,9 +240,9 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
     cdp->cr_perms = cc128_getbits(pesbt, 48, 12);
     cdp->cr_uperms = cc128_getbits(pesbt, 60, 4);
 
-    uint8_t seal_mode = (uint8_t)cc128_getbits(pesbt, CC_L_S_OFF, 1);
+    uint8_t seal_mode = (uint8_t)cc128_getbits(pesbt, CC_L_S_OFF, 2);
 
-    uint32_t BWidth = seal_mode == 1 ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
+    uint32_t BWidth = seal_mode == CC_SEAL_MODE_SEALED ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
     uint32_t BMask = (1 << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
 
@@ -256,13 +267,14 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
 
     uint32_t type = CAP_OTYPE_UNSEALED;
 
-    if (seal_mode == 0) {
+    if (seal_mode == CC_SEAL_MODE_UNSEALED) {
         // TODO: remove extra bit for unsealed caps and always store otype
         type = CAP_OTYPE_UNSEALED;
-    }
-    if (seal_mode == 1) {
+    } else if (seal_mode == CC_SEAL_MODE_SEALED) {
         type = (cc128_getbits(pesbt, CC_L_OHI_OFF, CC_L_TYPES / 2) << (CC_L_TYPES / 2)) |
                cc128_getbits(pesbt, CC_L_OLO_OFF, CC_L_TYPES / 2);
+    } else if (seal_mode == CC_SEAL_MODE_SENTRY) {
+        type = CAP_OTYPE_SENTRY;
     }
 
     cdp->cr_otype = type;
@@ -306,11 +318,11 @@ static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr
  * Compress a capability to 128 bits.
  */
 static inline uint64_t compress_128cap(const cap_register_t* csp) {
-    bool is_sealed = cc128_is_cap_sealed(csp);
+    int seal_mode = csp->cr_otype <= CAP_MAX_SEALED_OTYPE ? CC_SEAL_MODE_SEALED : CC_SEAL_MODE_UNSEALED;
+    if (csp->cr_otype == CAP_OTYPE_SENTRY)
+        seal_mode = CC_SEAL_MODE_SENTRY;
 
-    uint8_t seal_mode = is_sealed ? 1 : 0;
-
-    uint32_t BWidth = seal_mode == 1 ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
+    uint32_t BWidth = seal_mode == CC_SEAL_MODE_SEALED ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
     uint32_t BMask = (1 << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
 
@@ -351,13 +363,13 @@ static inline uint64_t compress_128cap(const cap_register_t* csp) {
         LH = (length >> (BWidth - 2)) & 1;
     }
 
-    if (seal_mode == 1) {
+    if (seal_mode == CC_SEAL_MODE_SEALED) {
         uint64_t hi = ((uint64_t)csp->cr_otype >> (CC_L_TYPES / 2)) & ((1 << (CC_L_TYPES / 2)) - 1);
         uint64_t lo = (uint64_t)csp->cr_otype & ((1 << (CC_L_TYPES / 2)) - 1);
         Te |= hi << (CC_L_SEALED_BWIDTH - 2);
         Be |= lo << CC_L_SEALED_BWIDTH;
     }
-    // assert(seal_mode < 3);
+    // assert(seal_mode <= 3);
 
     uint64_t perms = ((uint64_t)csp->cr_uperms << CC128_UPERMS_MEM_SHFT) | (uint64_t)csp->cr_perms;
     uint64_t pesbt =

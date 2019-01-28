@@ -163,9 +163,6 @@ typedef struct cvtrace cvtrace_t;
 #define CHERI_CAP_SIZE  32
 #endif
 
-
-#define cheri_debug_assert(cond) tcg_debug_assert(cond)
-
 /*
  * Please note if this structure is changed then the TCG gen_branch() in
  * translate.c may need to be changed as well.

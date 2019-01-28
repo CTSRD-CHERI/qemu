@@ -32,7 +32,10 @@
 
 #pragma once
 
+
 #ifdef TARGET_CHERI
+#include "tcg/tcg.h"  // for tcg_debug_assert()
+#define cheri_debug_assert(cond) tcg_debug_assert(cond)
 
 /* Don't define the functions for CHERI256 (but we need CAP_MAX_OTYPE) */
 #ifndef CHERI_128
@@ -92,9 +95,9 @@ static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
 #ifndef CHERI_128
     if (c->cr_tag) {
         if (c->_sbit_for_memory)
-            assert(c->cr_otype <= CAP_MAX_SEALED_OTYPE);
+            cheri_debug_assert(c->cr_otype <= CAP_MAX_SEALED_OTYPE);
         else
-            assert(c->cr_otype == CAP_OTYPE_UNSEALED);
+            cheri_debug_assert(c->cr_otype == CAP_OTYPE_UNSEALED);
     }
 #endif
     return c->cr_otype <= CAP_MAX_SEALED_OTYPE;
@@ -107,9 +110,9 @@ static inline bool cap_is_unsealed(const cap_register_t* c) {
 #ifndef CHERI_128
     if (c->cr_tag) {
         if (c->_sbit_for_memory)
-            assert(c->cr_otype <= CAP_MAX_SEALED_OTYPE);
+            cheri_debug_assert(c->cr_otype <= CAP_MAX_SEALED_OTYPE);
         else
-            assert(c->cr_otype == CAP_OTYPE_UNSEALED);
+            cheri_debug_assert(c->cr_otype == CAP_OTYPE_UNSEALED || c->cr_otype == CAP_OTYPE_SENTRY);
     }
 #endif
     return c->cr_otype >= CAP_OTYPE_UNSEALED;
@@ -137,6 +140,21 @@ static inline void cap_set_unsealed(cap_register_t* c) {
     c->_sbit_for_memory = false;
 #endif
 }
+
+static inline bool cap_is_sealed_entry(const cap_register_t* c) {
+    return c->cr_otype == CAP_OTYPE_SENTRY;
+}
+
+static inline void cap_unseal_entry(cap_register_t* c) {
+    assert(c->cr_tag && cap_is_sealed_entry(c) && "Should only be used with sentry capabilities");
+    c->cr_otype = CAP_OTYPE_UNSEALED;
+}
+
+static inline void cap_make_sealed_entry(cap_register_t* c) {
+    assert(c->cr_tag && cap_is_unsealed(c) && "Should only be used with unsealed capabilities");
+    c->cr_otype = CAP_OTYPE_SENTRY;
+}
+
 
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {

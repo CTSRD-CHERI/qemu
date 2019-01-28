@@ -1912,6 +1912,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 generate_cgetaddr(r16, r11);
                 opn = "cgetaddr";
                 break;
+            case OPC_CSEALENTRY_NI:   /* 0x1d << 6 */
+                check_cop2x(ctx);
+                gen_helper_2_consti32(csealentry, r16, r11);
+                opn = "csealcode";
+                break;
             case OPC_CLOADTAGS_NI:   /* 0x1e << 6 */
                 check_cop2x(ctx);
                 generate_cloadtags(r16, r11);

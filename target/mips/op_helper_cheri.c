@@ -246,7 +246,7 @@ static inline bool
 is_cap_sealed(const cap_register_t *cp)
 {
     // TODO: remove this function and update all callers to use the correct function
-    return cap_is_sealed_with_type(cp);
+    return cap_is_sealed_with_type(cp) || cap_is_sealed_entry(cp);
 }
 
 /*
@@ -509,9 +509,9 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
-    } else if (!is_cap_sealed(csp)) {
+    } else if (!cap_is_sealed_with_type(csp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
-    } else if (!is_cap_sealed(cbp)) {
+    } else if (!cap_is_sealed_with_type(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_TYPE, cs);
@@ -649,7 +649,7 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
-        if (!is_representable(is_cap_sealed(cbp), cbp->cr_base,
+        if (!is_representable(cap_is_sealed_with_type(cbp), cbp->cr_base,
                     cbp->cr_length, cbp->cr_offset, rt)) {
             became_unrepresentable(env, cd, cfromptr);
             cap_register_t result;
@@ -755,7 +755,7 @@ void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
      * CGetPCCSetOffset: Get PCC with new offset
      * See Chapter 5 in CHERI Architecture manual.
      */
-    if (!is_representable(is_cap_sealed(pccp), pccp->cr_base,
+    if (!is_representable(cap_is_sealed_with_type(pccp), pccp->cr_base,
                 pccp->cr_length, pccp->cr_offset, rs)) {
         if (pccp->cr_tag)
             became_unrepresentable(env, cd, cgetpccsetoffset);
@@ -790,7 +790,10 @@ target_ulong helper_cgetsealed(CPUMIPSState *env, uint32_t cb)
     /*
      * CGetSealed: Move sealed bit to a General-Purpose Register
      */
-    return (target_ulong)(is_cap_sealed(get_readonly_capreg(&env->active_tc, cb)) ? 1 : 0);
+    const cap_register_t* cbp = get_readonly_capreg(&env->active_tc, cb);
+    if (cap_is_sealed_with_type(cbp) || cap_is_sealed_entry(cbp))
+        return (target_ulong)1;
+    return (target_ulong)0;
 }
 
 target_ulong helper_cgettag(CPUMIPSState *env, uint32_t cb)
@@ -856,7 +859,7 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
         uint64_t cb_offset_plus_rt = cbp->cr_offset + rt;
-        if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
+        if (!is_representable(cap_is_sealed_with_type(cbp), cbp->cr_base, cbp->cr_length,
                     cbp->cr_offset, cb_offset_plus_rt)) {
             if (cbp->cr_tag) {
                 became_unrepresentable(env, cd, cincoffset);
@@ -897,7 +900,8 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
      */
     if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
-    } else if (is_cap_sealed(cbp)) {
+    } else if (cap_is_sealed_with_type(cbp)) {
+        // Note: "sentry" caps can be called using cjalr
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
@@ -908,15 +912,23 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     } else if (align_of(4, cap_get_cursor(cbp))) {
         do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
     } else {
+        cheri_debug_assert(cap_is_unsealed(cbp) || cap_is_sealed_entry(cbp));
         cap_register_t result = env->active_tc.PCC;
+        // can never create an unrepresentable capability since PCC must be in bounds
         result.cr_offset += 8;
-        update_capreg(&env->active_tc, cd, &result);
         // The capability register is loaded into PCC during delay slot
         env->active_tc.CapBranchTarget = *cbp;
-        // Return the branch target address
+        if (cap_is_sealed_entry(cbp)) {
+            // If we are calling a "sentry" cap, remove the sealed flag
+            cap_unseal_entry(&env->active_tc.CapBranchTarget);
+            // When calling a sentry capability the return capability is
+            // turned into a sentry, too.
+            cap_make_sealed_entry(&result);
+        }
+        update_capreg(&env->active_tc, cd, &result);
+         // Return the branch target address
         return cap_get_cursor(cbp);
     }
-
     return (target_ulong)0;
 }
 
@@ -928,7 +940,8 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
      */
     if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
-    } else if (is_cap_sealed(cbp)) {
+    } else if (cap_is_sealed_with_type(cbp)) {
+        // Note: "sentry" caps can be called using cjalr
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
@@ -939,8 +952,12 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
     } else if (align_of(4, cap_get_cursor(cbp))) {
         do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
     } else {
+        cheri_debug_assert(cap_is_unsealed(cbp) || cap_is_sealed_entry(cbp));
         // The capability register is loaded into PCC during delay slot
         env->active_tc.CapBranchTarget = *cbp;
+        // If we are calling a "sentry" cap, remove the sealed flag
+        if (cap_is_sealed_entry(cbp))
+            cap_unseal_entry(&env->active_tc.CapBranchTarget);
         // Return the branch target address
         return cap_get_cursor(cbp);
     }
@@ -1003,6 +1020,28 @@ void helper_ccseal(CPUMIPSState *env, uint32_t cd, uint32_t cs, uint32_t ct)
     cseal_common(env, cd, cs, ct, true);
 }
 
+void helper_csealentry(CPUMIPSState *env, uint32_t cd, uint32_t cs)
+{
+    /*
+     * CSealEntry: Seal a code capability so it is only callable with cjr/cjalr
+     * (all other permissions are ignored so it can't be used for loads, etc)
+     */
+    const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    if (!csp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cs);
+    } else if (!cap_is_unsealed(csp)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cs);
+    } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
+        // Capability must be executable otherwise csealentry doesn't make sense
+        do_raise_c2_exception(env, CP2Ca_PERM_EXE, cs);
+    } else {
+        cap_register_t result = *csp;
+        // capability can now only be used in cjr/cjalr
+        cap_make_sealed_entry(&result);
+        update_capreg(&env->active_tc, cd, &result);
+    }
+}
+
 void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
 {
     // CBuildCap traps on cbp == NULL so we use reg0 as $ddc. This saves encoding
@@ -1040,7 +1079,10 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         result.cr_perms = ctp->cr_perms;
         result.cr_uperms = ctp->cr_uperms;
         result.cr_offset = ctp->cr_offset;
-        result.cr_otype = CAP_OTYPE_UNSEALED;
+        if (cap_is_sealed_entry(ctp))
+            cap_make_sealed_entry(&result);
+        else
+            result.cr_otype = CAP_OTYPE_UNSEALED;
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -1057,7 +1099,7 @@ void helper_ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (!is_cap_sealed(ctp)) {
+    } else if (!cap_is_sealed_with_type(ctp)) {
         cap_register_t result;
         update_capreg(&env->active_tc, cd, int_to_cap(-1, &result));
     } else if (ctp->cr_otype < cap_get_base(cbp)) {
@@ -1370,7 +1412,7 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     if (cbp->cr_tag && is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
-        if (!is_representable(is_cap_sealed(cbp), cbp->cr_base, cbp->cr_length,
+        if (!is_representable(cap_is_sealed_with_type(cbp), cbp->cr_base, cbp->cr_length,
                     cbp->cr_offset, rt)) {
             if (cbp->cr_tag)
                 became_unrepresentable(env, cd, csetoffset);
@@ -1425,7 +1467,7 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_TAG, cs);
     } else if (!ctp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, ct);
-    } else if (!is_cap_sealed(csp)) {
+    } else if (!cap_is_sealed_with_type(csp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (is_cap_sealed(ctp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, ct);
