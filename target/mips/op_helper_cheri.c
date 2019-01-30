@@ -2133,9 +2133,7 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur) {
      * the original result of the instruction is lost.
      */
     if (!qemu_loglevel_mask(CPU_LOG_CVTRACE) || env->cvtrace.exception == 31) {
-        // The value of EPCC (with offset set to what getepcc would do)
-        cap_register_t architectural_epcc = cgetepcc(env);
-        dump_changed_capreg(env, &architectural_epcc, &env->last_CHWR.EPCC, "EPCC");
+        dump_changed_capreg(env, &cur->CHWR.EPCC, &env->last_CHWR.EPCC, "EPCC");
     }
 }
 
