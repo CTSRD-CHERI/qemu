@@ -2032,6 +2032,7 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur) {
         "C24", "C25", "C26", "C27", "C28", "C29", "C30", "C31",
     };
 
+    dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget, "CapBranchTarget");
     for (int i=0; i<32; i++) {
         dump_changed_capreg(env, &cur->_CGPR[i], &env->last_C[i], capreg_name[i]);
     }
@@ -2053,7 +2054,6 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur) {
         cap_register_t architectural_epcc = cgetepcc(env);
         dump_changed_capreg(env, &architectural_epcc, &env->last_CHWR.EPCC, "EPCC");
     }
-    dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget, "CapBranchTarget");
 }
 
 /*
