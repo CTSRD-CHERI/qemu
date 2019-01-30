@@ -288,7 +288,10 @@ const VMStateDescription vmstate_mips_cpu = {
         VMSTATE_INT32(env.CP0_SRSCtl, MIPSCPU),
         VMSTATE_INT32(env.CP0_SRSMap, MIPSCPU),
         VMSTATE_INT32(env.CP0_Cause, MIPSCPU),
+#ifndef TARGET_CHERI
+        // FIXME: would be nice to print for CHERI but needs direct field access
         VMSTATE_UINTTL(env.CP0_EPC, MIPSCPU),
+#endif
         VMSTATE_INT32(env.CP0_PRid, MIPSCPU),
         VMSTATE_UINTTL(env.CP0_EBase, MIPSCPU),
         VMSTATE_INT32(env.CP0_Config0, MIPSCPU),
@@ -311,7 +314,10 @@ const VMStateDescription vmstate_mips_cpu = {
         VMSTATE_INT32(env.CP0_DataLo, MIPSCPU),
         VMSTATE_INT32(env.CP0_TagHi, MIPSCPU),
         VMSTATE_INT32(env.CP0_DataHi, MIPSCPU),
+#ifndef TARGET_CHERI
+        // FIXME: would be nice to print for CHERI but needs direct field access
         VMSTATE_UINTTL(env.CP0_ErrorEPC, MIPSCPU),
+#endif
         VMSTATE_INT32(env.CP0_DESAVE, MIPSCPU),
         VMSTATE_UINTTL_ARRAY(env.CP0_KScratch, MIPSCPU, MIPS_KSCRATCH_NUM),
 

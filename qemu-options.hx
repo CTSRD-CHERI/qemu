@@ -3729,11 +3729,19 @@ Set CHERI trace format to <type> (text or cvtrace)
 ETEXI
 
 DEF("cheri-c2e-on-unrepresentable", 0, QEMU_OPTION_cheri_c2e_on_unrepresentable, \
-    "-cheri-c2e-on-unrepresentable     Generate C2E exception when capability becomes unrepresentable\n", QEMU_ARCH_ALL)
+    "-cheri-c2e-on-unrepresentable     Generate C2E exception when a capability becomes unrepresentable\n", QEMU_ARCH_ALL)
 STEXI
 @item -cheri-c2e-on-unrepresentable
 @findex -cheri-c2e-on-unrepresentable
 Generate C2E exception when capability becomes unrepresentable.
+ETEXI
+
+DEF("cheri-debugger-on-unrepresentable", 0, QEMU_OPTION_cheri_debugger_on_unrepresentable, \
+    "-cheri-debugger-on-unrepresentable     Create debug exception when a capability becomes unrepresentable\n", QEMU_ARCH_ALL)
+STEXI
+@item -cheri-debugger-on-unrepresentable
+@findex -cheri-debugger-on-unrepresentable
+Generate debugger exception when capability becomes unrepresentable.
 ETEXI
 
 

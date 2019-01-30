@@ -63,7 +63,7 @@ void helper_check_breakcount(struct CPUMIPSState* env)
         cs->breakcount--;
         if (cs->breakcount == 0UL) {
             qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT | CPU_LOG_EXEC, "Reached breakcount!\n");
-            helper_raise_exception(env, EXCP_DEBUG);
+            helper_raise_exception_debug(env);
         }
     }
 }
@@ -1698,7 +1698,7 @@ target_ulong helper_mftc0_epc(CPUMIPSState *env)
     int other_tc = env->CP0_VPEControl & (0xff << CP0VPECo_TargTC);
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
-    return other->CP0_EPC;
+    return get_CP0_EPC(other);
 }
 
 target_ulong helper_mftc0_ebase(CPUMIPSState *env)
@@ -2814,9 +2814,9 @@ static void debug_pre_eret(CPUMIPSState *env)
 {
     if (qemu_loglevel_mask(CPU_LOG_EXEC | CPU_LOG_INSTR)) {
         qemu_log("ERET: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
-                env->active_tc.PC, env->CP0_EPC);
+                env->active_tc.PC, get_CP0_EPC(env));
         if (should_use_error_epc(env))
-            qemu_log(" ErrorEPC " TARGET_FMT_lx, env->CP0_ErrorEPC);
+            qemu_log(" ErrorEPC " TARGET_FMT_lx, get_CP0_ErrorEPC(env));
         if (env->hflags & MIPS_HFLAG_DM)
             qemu_log(" DEPC " TARGET_FMT_lx, env->CP0_DEPC);
         qemu_log("\n");
@@ -2829,9 +2829,9 @@ static void debug_post_eret(CPUMIPSState *env)
 
     if (qemu_loglevel_mask(CPU_LOG_EXEC | CPU_LOG_INSTR)) {
         qemu_log("  =>  PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
-                env->active_tc.PC, env->CP0_EPC);
+                env->active_tc.PC, get_CP0_EPC(env));
         if (should_use_error_epc(env))
-            qemu_log(" ErrorEPC " TARGET_FMT_lx, env->CP0_ErrorEPC);
+            qemu_log(" ErrorEPC " TARGET_FMT_lx, get_CP0_ErrorEPC(env));
         if (env->hflags & MIPS_HFLAG_DM)
             qemu_log(" DEPC " TARGET_FMT_lx, env->CP0_DEPC);
         switch (cpu_mmu_index(env, false)) {
@@ -2848,13 +2848,17 @@ static void debug_post_eret(CPUMIPSState *env)
     }
 }
 
-static void set_pc(CPUMIPSState *env, target_ulong error_pc)
-{
-    env->active_tc.PC = error_pc & ~(target_ulong)1;
 #ifdef TARGET_CHERI
-    env->active_tc.PC += env->active_tc.PCC.cr_base;
-    env->active_tc.PCC.cr_offset = error_pc;
+static void set_pc(CPUMIPSState *env, cap_register_t* error_pcc)
+#else
+static void set_pc(CPUMIPSState *env, target_ulong error_pc)
 #endif
+{
+#ifdef TARGET_CHERI
+    env->active_tc.PCC = *error_pcc;
+    target_ulong error_pc = cap_get_cursor(error_pcc);
+#endif
+    env->active_tc.PC = error_pc & ~(target_ulong)1;
     if (error_pc & 1) {
         env->hflags |= MIPS_HFLAG_M16;
     } else {
@@ -2876,19 +2880,26 @@ static inline void exception_return(CPUMIPSState *env)
          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &null_cap, "EPCC");
+         null_capability(&null_cap);
+         dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &null_cap, "ErrorEPCC");
     }
 #endif // CONFIG_MIPS_LOG_INSTR
-    tcg_debug_assert(env->active_tc.CHWR.EPCC.cr_offset == CP2CAP_EPCC_FAKE_OFFSET_VALUE);
-    env->active_tc.PCC = env->active_tc.CHWR.EPCC;
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
+#ifdef TARGET_CHERI
+        set_pc(env, &env->active_tc.CHWR.ErrorEPCC);
+#else
         set_pc(env, env->CP0_ErrorEPC);
+#endif
         env->CP0_Status &= ~(1 << CP0St_ERL);
     } else {
+#ifdef TARGET_CHERI
+        set_pc(env, &env->active_tc.CHWR.EPCC);
+#else
         set_pc(env, env->CP0_EPC);
+#endif
         env->CP0_Status &= ~(1 << CP0St_EXL);
     }
-    cheri_debug_assert(env->active_tc.PCC.cr_offset != CP2CAP_EPCC_FAKE_OFFSET_VALUE);
     compute_hflags(env);
     debug_post_eret(env);
 }
@@ -2904,17 +2915,24 @@ void helper_eret(CPUMIPSState *env)
 
 void helper_eretnc(CPUMIPSState *env)
 {
+#ifdef TARGET_CHERI
+    do_raise_exception(env, EXCP_RI, GETPC()); /* This does not unset linkedflag? */
+#endif
     exception_return(env);
 }
 
 void helper_deret(CPUMIPSState *env)
 {
+#ifdef TARGET_CHERI
+    do_raise_exception(env, EXCP_RI, GETPC()); /* This ignores EPCC */
+#else
     debug_pre_eret(env);
     set_pc(env, env->CP0_DEPC);
 
     env->hflags &= ~MIPS_HFLAG_DM;
     compute_hflags(env);
     debug_post_eret(env);
+#endif
 }
 #endif /* !CONFIG_USER_ONLY */
 
@@ -2969,6 +2987,57 @@ target_ulong helper_rdhwr_xnp(CPUMIPSState *env)
     check_hwrena(env, 5, GETPC());
     return (env->CP0_Config5 >> CP0C5_XNP) & 1;
 }
+
+#if defined(TARGET_CHERI)
+target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    check_hwrena(env, 4, GETPC());
+    return env->statcounters_icount;
+}
+
+target_ulong helper_rdhwr_statcounters_itlb_miss(CPUMIPSState *env)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    check_hwrena(env, 5, GETPC());
+    return env->statcounters_itlb_miss;
+}
+
+target_ulong helper_rdhwr_statcounters_dtlb_miss(CPUMIPSState *env)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    check_hwrena(env, 6, GETPC());
+    return env->statcounters_dtlb_miss;
+}
+
+target_ulong helper_rdhwr_statcounters_memory(CPUMIPSState *env, uint32_t sel)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s(%d)\n", __func__, sel);
+    check_hwrena(env, 11, GETPC());
+    switch (sel) {
+    case 8: return env->statcounters_cap_read;
+    case 9: return env->statcounters_cap_write;
+    case 10: return env->statcounters_cap_read_tagged;
+    case 11: return env->statcounters_cap_write_tagged;
+    default: return 0xdeadbeef;
+    }
+}
+
+target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)
+{
+    // TODO: actually implement this
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    check_hwrena(env, 7, GETPC());
+    return 0;
+}
+
+target_ulong helper_rdhwr_statcounters_ignored(CPUMIPSState *env, uint32_t num)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    check_hwrena(env, num, GETPC());
+    return 0xdeadbeef;
+}
+#endif
 
 void helper_pmon(CPUMIPSState *env, int function)
 {
@@ -3264,7 +3333,7 @@ static void dump_changed_cop0(CPUMIPSState *env)
 
     dump_changed_cop0_reg(env, 13*8 + 0, env->CP0_Cause);
 
-    dump_changed_cop0_reg(env, 14*8 + 0, env->CP0_EPC);
+    dump_changed_cop0_reg(env, 14*8 + 0, get_CP0_EPC(env));
 
     dump_changed_cop0_reg(env, 15*8 + 0, env->CP0_PRid);
     dump_changed_cop0_reg(env, 15*8 + 1, env->CP0_EBase);
@@ -3323,7 +3392,7 @@ static void dump_changed_cop0(CPUMIPSState *env)
     dump_changed_cop0_reg(env, 29*8 + 0, env->CP0_TagHi);
     dump_changed_cop0_reg(env, 29*8 + 1, env->CP0_DataHi);
 
-    dump_changed_cop0_reg(env, 30*8 + 0, env->CP0_ErrorEPC);
+    dump_changed_cop0_reg(env, 30*8 + 0, get_CP0_ErrorEPC(env));
 
     dump_changed_cop0_reg(env, 31*8 + 0, env->CP0_DESAVE);
     dump_changed_cop0_reg(env, 31*8 + 2, env->CP0_KScratch[0]);
@@ -5435,27 +5504,6 @@ void helper_cache(CPUMIPSState *env, target_ulong addr, uint32_t op)
     }
 #endif
 }
-
-#ifdef TARGET_CHERI
-target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env)
-{
-    check_hwrena(env, 4, GETPC());
-    return 0x12345;
-}
-
-target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)
-{
-    // TODO: actually implement this
-    check_hwrena(env, 7, GETPC());
-    return 0;
-}
-
-target_ulong helper_rdhwr_statcounters_ignored(CPUMIPSState *env, uint32_t num)
-{
-    check_hwrena(env, num, GETPC());
-    return 0xdeadbeef;
-}
-#endif
 
 /* Reduce the length so that addr + len doesn't cross a page boundary.  */
 static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)

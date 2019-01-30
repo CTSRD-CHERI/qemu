@@ -240,7 +240,7 @@ DEF_HELPER_4(ccopytype, void, env, i32, i32, i32)
 
 DEF_HELPER_3(creadhwr, void, env, i32, i32)
 DEF_HELPER_3(cwritehwr, void, env, i32, i32)
-
+DEF_HELPER_3(csealentry, void, env, i32, i32)
 DEF_HELPER_3(cloadtags, tl, env, i32, i64)
 
 DEF_HELPER_3(ceq, tl, env, i32, i32)
@@ -261,36 +261,10 @@ DEF_HELPER_3(cloadlinked, tl, env, i32, i32)
 
 DEF_HELPER_3(cstorecond, tl, env, i32, i32)
 
-
-DEF_HELPER_5(clc_addr, tl, env, i32, i32, tl, i32)
-DEF_HELPER_3(cllc_addr, tl, env, i32, i32)
-DEF_HELPER_5(csc_addr, tl, env, i32, i32, tl, i32)
-DEF_HELPER_3(cscc_addr, tl, env, i32, i32)
-
-#ifdef CHERI_128
-DEF_HELPER_4(bytes2cap_128, void, env, i32, tl, tl)
-DEF_HELPER_4(bytes2cap_128_tag_get, tl, env, i32, i32, tl)
-DEF_HELPER_5(bytes2cap_128_tag_set, void, env, i32, tl, tl, tl)
-
-DEF_HELPER_3(cap2bytes_128b, tl, env, i32, tl)
-DEF_HELPER_4(cap2bytes_128c, tl, env, i32, i32, tl)
-#elif defined(CHERI_MAGIC128)
-DEF_HELPER_5(bytes2cap_m128, void, env, i32, tl, tl, tl)
-DEF_HELPER_5(bytes2cap_m128_tag, void, env, i32, i32, tl, tl)
-
-DEF_HELPER_3(cap2bytes_m128c, tl, env, i32, tl)
-DEF_HELPER_4(cap2bytes_m128b, tl, env, i32, i32, tl)
-#else /* ! CHERI_MAGIC128 */
-DEF_HELPER_5(bytes2cap_op, void, env, i32, i32, tl, tl)
-DEF_HELPER_5(bytes2cap_opll, void, env, i32, i32, tl, tl)
-DEF_HELPER_5(bytes2cap_cbl, void, env, i32, tl, tl, tl)
-
-DEF_HELPER_3(cap2bytes_op, tl, env, i32, tl)
-DEF_HELPER_4(cap2bytes_cursor, tl, env, i32, i32, tl)
-DEF_HELPER_2(cap2bytes_base, tl, env, i32)
-DEF_HELPER_2(cap2bytes_length, tl, env, i32)
-#endif /* CHERI_MAGIC128 */
-
+DEF_HELPER_3(cscc_without_tcg, tl, env, i32, i32)
+DEF_HELPER_5(csc_without_tcg, void, env, i32, i32, tl, i32)
+DEF_HELPER_5(clc_without_tcg, void, env, i32, i32, tl, i32)
+DEF_HELPER_3(cllc_without_tcg, void, env, i32, i32)
 #endif
 
 #if defined(TARGET_MIPS64)
@@ -496,6 +470,15 @@ DEF_HELPER_1(ei, tl, env)
 DEF_HELPER_1(eret, void, env)
 DEF_HELPER_1(eretnc, void, env)
 DEF_HELPER_1(deret, void, env)
+
+#if defined(TARGET_CHERI)
+/* cannot access EPC directly since it is the offset of EPCC */
+DEF_HELPER_1(mfc0_epc, tl, env)
+DEF_HELPER_2(mtc0_epc, void, env, tl)
+DEF_HELPER_1(mfc0_error_epc, tl, env)
+DEF_HELPER_2(mtc0_error_epc, void, env, tl)
+#endif
+
 #endif /* !CONFIG_USER_ONLY */
 DEF_HELPER_1(rdhwr_cpunum, tl, env)
 DEF_HELPER_1(rdhwr_synci_step, tl, env)
@@ -504,6 +487,9 @@ DEF_HELPER_1(rdhwr_ccres, tl, env)
 #if defined(TARGET_CHERI)
 DEF_HELPER_1(rdhwr_statcounters_icount, tl, env)
 DEF_HELPER_1(rdhwr_statcounters_reset, tl, env)
+DEF_HELPER_1(rdhwr_statcounters_itlb_miss, tl, env)
+DEF_HELPER_1(rdhwr_statcounters_dtlb_miss, tl, env)
+DEF_HELPER_2(rdhwr_statcounters_memory, tl, env, i32)
 DEF_HELPER_2(rdhwr_statcounters_ignored, tl, env, i32)
 #endif
 DEF_HELPER_1(rdhwr_performance, tl, env)

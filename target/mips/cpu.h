@@ -163,9 +163,6 @@ typedef struct cvtrace cvtrace_t;
 #define CHERI_CAP_SIZE  32
 #endif
 
-
-#define cheri_debug_assert(cond) tcg_debug_assert(cond)
-
 /*
  * Please note if this structure is changed then the TCG gen_branch() in
  * translate.c may need to be changed as well.
@@ -181,48 +178,12 @@ struct cap_register {
     uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
 #endif
     uint32_t cr_otype;  /* Object Type, 24 bits */
-    uint8_t  cr_sealed; /* Sealed flag */
     uint8_t  cr_tag;    /* Tag */
+#ifndef CHERI_128
+    bool _sbit_for_memory;
+#endif
 };
 typedef struct cap_register cap_register_t;
-
-static inline uint64_t cap_get_cursor(const cap_register_t* c) {
-    return c->cr_base + c->cr_offset;
-}
-
-static inline cap_register_t *null_capability(cap_register_t *cp)
-{
-    memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
-    cp->cr_length = ~UINT64_C(0); // But length should be -1
-    return cp;
-}
-
-static inline bool is_null_capability(cap_register_t *cp)
-{
-    cap_register_t null;
-    // This also compares padding but it should always be NULL assuming
-    // null_capability() was used
-    return memcmp(null_capability(&null), cp, sizeof(cap_register_t)) == 0;
-}
-
-/*
- * Convert capability to its nullified representation when it
- * becomes unrepresentable.
- * This clears the tag bit and changes the capability bounds
- * to make sure that the new cursor is representable, all the
- * other fields are preserved for debuggability.
- */
-static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
-{
-    cr->cr_tag = 0;
-    cr->cr_base = 0;
-    cr->cr_length = -1;
-    cr->cr_offset = x;
-    return cr;
-}
-
-bool is_representable(bool sealed, uint64_t base, uint64_t length,
-                      uint64_t offset, uint64_t inc);
 
 #define CAP_PERM_GLOBAL         (1 << 0)
 #define CAP_PERM_EXECUTE        (1 << 1)
@@ -235,19 +196,19 @@ bool is_representable(bool sealed, uint64_t base, uint64_t length,
 #define CAP_PERM_CCALL          (1 << 8)
 #define CAP_PERM_UNSEAL         (1 << 9)
 #define CAP_ACCESS_SYS_REGS     (1 << 10)
-#define CAP_RESERVED3           (1 << 11)
+#define CAP_PERM_SETCID         (1 << 11)
 #define CAP_RESERVED4           (1 << 12)
 #define CAP_RESERVED5           (1 << 13)
 #define CAP_RESERVED6           (1 << 14)
 /* 15-18 Software-defined */
 #if defined(CHERI_128) || defined(CHERI_MAGIC128)
-#define CAP_PERMS_ALL           (0x7ff)     /* [0...10] */
+#define CAP_PERMS_ALL           (0xfff)      /* [0...11] */
 #define CAP_UPERMS_ALL          (0xf)        /* [15...18] */
 #define CAP_UPERMS_SHFT         (15)
 #define CAP_UPERMS_MEM_SHFT     (11)
 #define CAP_MAX_UPERM           (3)
 #else /* ! CHERI_128 */
-#define CAP_PERMS_ALL           (0x7ff)     /* [0...10] */
+#define CAP_PERMS_ALL           (0xfff)     /* [0...11] */
 #define CAP_HW_PERMS_ALL_MEM    (0x7fff)    /* [0...14] (loaded into cr_perms for untagged values) */
 #define CAP_UPERMS_ALL          (0xffff)    /* [15...30] */
 #define CAP_UPERMS_SHFT         (15)
@@ -255,29 +216,13 @@ bool is_representable(bool sealed, uint64_t base, uint64_t length,
 #define CAP_MAX_UPERM           (15)
 #endif /* ! CHERI_128 */
 
-
-static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset)
-{
-    crp->cr_tag = 1;
-    crp->cr_perms = CAP_PERMS_ALL;
-    crp->cr_uperms = CAP_UPERMS_ALL;
-    // crp->cr_cursor = 0UL;
-    crp->cr_offset = offset;
-    crp->cr_base = 0UL;
-    crp->cr_length = ~0UL;
-    crp->cr_otype = 0;
-    crp->cr_sealed = 0;
-#ifdef CHERI_128
-    crp->cr_pesbt = 0UL;
-#endif
-}
-
 struct cheri_cap_hwregs {
     cap_register_t DDC;        /* CapHwr 0 */
     cap_register_t UserTlsCap; /* CapHwr 1 */
     cap_register_t PrivTlsCap; /* CapHwr 8 */
     cap_register_t KR1C; /* CapHwr 22 */
     cap_register_t KR2C; /* CapHwr 23 */
+    cap_register_t ErrorEPCC; /* CapHwr 28 */
     cap_register_t KCC;  /* CapHwr 29 */
     cap_register_t KDC;  /* CapHwr 30 */
     cap_register_t EPCC; /* CapHwr 31 */
@@ -343,7 +288,7 @@ struct TCState {
     struct cheri_cap_hwregs CHWR;
 // #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
-#define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
+// #define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
 #endif /* TARGET_CHERI */
 };
 
@@ -386,16 +331,21 @@ update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
     state->_CGPR[num] = *newval;
 }
 
+#define CP2HWR_BASE_INDEX 0
+// TODO: start at 32: #define CP2HWR_BASE_NUM 32
+
 enum CP2HWR {
-    CP2HWR_DDC = 0, /* Default Data Capability */
-    CP2HWR_USER_TLS = 1, /* Unprivileged TLS Cap */
-    CP2HWR_PRIV_TLS = 8, /* Privileged TLS Cap */
-    CP2HWR_K1RC = 22, /* Reserved Kernel Cap #1 */
-    CP2HWR_K2RC = 23, /* Reserved Kernel Cap #2 */
-    CP2HWR_KCC = 29, /* Kernel Code Capability */
-    CP2HWR_KDC = 30, /* Kernel Data Capability */
-    CP2HWR_EPCC = 31, /* Exception PC Capability */
+    CP2HWR_DDC = CP2HWR_BASE_INDEX + 0, /* Default Data Capability */
+    CP2HWR_USER_TLS = CP2HWR_BASE_INDEX + 1, /* Unprivileged TLS Cap */
+    CP2HWR_PRIV_TLS = CP2HWR_BASE_INDEX + 8, /* Privileged TLS Cap */
+    CP2HWR_K1RC = CP2HWR_BASE_INDEX + 22, /* Reserved Kernel Cap #1 */
+    CP2HWR_K2RC = CP2HWR_BASE_INDEX + 23, /* Reserved Kernel Cap #2 */
+    CP2HWR_ErrorEPCC = CP2HWR_BASE_INDEX + 28, /* Error Exception PC Capability */
+    CP2HWR_KCC = CP2HWR_BASE_INDEX + 29, /* Kernel Code Capability */
+    CP2HWR_KDC = CP2HWR_BASE_INDEX + 30, /* Kernel Data Capability */
+    CP2HWR_EPCC = CP2HWR_BASE_INDEX + 31, /* Exception PC Capability */
 };
+
 #endif
 
 typedef struct CPUMIPSState CPUMIPSState;
@@ -611,7 +561,9 @@ struct CPUMIPSState {
 #define CP0Ca_IP    8
 #define CP0Ca_IP_mask 0x0000FF00
 #define CP0Ca_EC    2
+#if !defined(TARGET_CHERI)
     target_ulong CP0_EPC;
+#endif
     int32_t CP0_PRid;
     target_ulong CP0_EBase;
     target_ulong CP0_EBaseWG_rw_bitmask;
@@ -759,7 +711,9 @@ struct CPUMIPSState {
     int32_t CP0_DataLo;
     int32_t CP0_TagHi;
     int32_t CP0_DataHi;
+#if !defined(TARGET_CHERI)
     target_ulong CP0_ErrorEPC;
+#endif
     int32_t CP0_DESAVE;
     /* We waste some space so we can handle shadow registers like TCs. */
     TCState tcs[MIPS_SHADOW_SET_MAX];
@@ -842,6 +796,16 @@ struct CPUMIPSState {
     uint32_t CP0_TCStatus_rw_bitmask; /* Read/write bits in CP0_TCStatus */
     int insn_flags; /* Supported instruction set */
 #if defined(TARGET_CHERI)
+    /* BERI Statcounters (CHERI only for now): */
+    uint64_t statcounters_icount;
+    uint64_t statcounters_itlb_miss;
+    uint64_t statcounters_dtlb_miss;
+    uint64_t statcounters_cap_read;
+    uint64_t statcounters_cap_read_tagged;
+    uint64_t statcounters_cap_write;
+    uint64_t statcounters_cap_write_tagged;
+    /* TODO: we could implement the TLB ones as well */
+
     /*
      * See section 4.4.2 (Table 4.3) of the CHERI Architecture Reference.
      */
@@ -1131,9 +1095,9 @@ void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const c
 target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, bool instavail);
 #ifdef CHERI_MAGIC128
 int  cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint64_t *tps, uint64_t *length, uintptr_t pc);
+        uint64_t *tps, uint64_t *length, hwaddr *ret_paddr, uintptr_t pc);
 void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint8_t tag, uint64_t tps, uint64_t length, uintptr_t pc);
+        uint8_t tag, uint64_t tps, uint64_t length, hwaddr *ret_paddr, uintptr_t pc);
 #endif /* CHERI_MAGIC128 */
 #endif /* TARGET_CHERI */
 

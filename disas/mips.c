@@ -1297,9 +1297,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cchecktype", "+w,+b", 0x4800027f, 0xffe007ff, 0,			0, I1},
 {"cmove", "+w,+b",      0x480002bf, 0xffe007ff, 0,                      0, I1},
 {"ccleartag", "+w,+b",	0x480002ff, 0xffe007ff, 0,			0, I1},
-{"cjalr",  "+w,+b",	0x4800033f, 0xffe007ff, 0,			0, I1},
+{"cjalr", "+w,+b",	0x4800033f, 0xffe007ff, 0,			0, I1},
+{"creadhwr", "+w,G",	0x4800037f, 0xffe007ff, 0,			0, I1},
+{"cwritehwr", "+w,G",	0x480003bf, 0xffe007ff, 0,			0, I1},
 {"cgetaddr", "t,+b",	0x480003ff, 0xffe007ff, 0,			0, I1},
-{"cloadtags", "t,+b", 0x480007bf, 0xffe007ff, 0,			0, I1},
+{"cloadtags", "t,+b",	0x480007bf, 0xffe007ff, 0,			0, I1},
+{"csealentry", "+w,+b",	0x4800077f, 0xffe007ff, 0,			0, I1},
 
 /* New ISA: one-operand instructions */
 {"cgetpcc", "+w",	    0x480007ff, 0xffe0ffff, 0,			0, I1},
@@ -1464,9 +1467,6 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cllhu", "t,+b",       0x4a00000d, 0xffe007ff, 0,          0, I1},
 {"cllwu", "t,+b",       0x4a00000e, 0xffe007ff, 0,          0, I1},
 {"cllc",  "+w,+b",      0x4a00000f, 0xffe007ff, 0,          0, I1},
-
-{"creadhwr", "+w,G",   0x4800037f, 0xffe007ff, 0,			0, I1},
-{"cwritehwr", "+w,G",  0x480003bf, 0xffe007ff, 0,			0, I1},
 
 /* XXXAR: new experimental CHERI loads. Overlaps with daui, etc. */
 {"clcbi",    "+x,+o8(+w)",    0x74000000, 0xfc000000, 0,            0, I1},

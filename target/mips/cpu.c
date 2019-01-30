@@ -27,6 +27,7 @@
 #include "exec/gdbstub.h"
 #include "sysemu/kvm.h"
 #include "exec/exec-all.h"
+#include "qemu/error-report.h"
 
 
 static void mips_cpu_set_pc(CPUState *cs, vaddr value)
@@ -144,22 +145,22 @@ static void mips_cpu_realizefn(DeviceState *dev, Error **errp)
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips64-cp0.xml", 0);
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips64-fpu.xml", 0);
     gdb_register_coprocessor(cs, mips_gdb_get_sys_reg, mips_gdb_set_sys_reg,
-	1, "mips64-sys.xml", 0);
+        1, "mips64-sys.xml", 0);
 #else
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips-cp0.xml", 0);
     gdb_register_coprocessor(cs, NULL, NULL, 0, "mips-fpu.xml", 0);
     gdb_register_coprocessor(cs, mips_gdb_get_sys_reg, mips_gdb_set_sys_reg,
-	1, "mips-sys.xml", 0);
+        1, "mips-sys.xml", 0);
 #endif
 #if defined(TARGET_CHERI)
-    gdb_register_coprocessor(cs, mips_gdb_get_cheri_reg, 
-	mips_gdb_set_cheri_reg, 35,
+    gdb_register_coprocessor(cs, mips_gdb_get_cheri_reg,
+        mips_gdb_set_cheri_reg, 44,
 #if defined(CHERI_MAGIC128) || defined(CHERI_128)
-	"mips64-cheri-c128.xml",
+        "mips64-cheri-c128.xml",
 #else
-	"mips64-cheri-c256.xml",
+        "mips64-cheri-c256.xml",
 #endif
-	0);
+        0);
 #endif
 
     cpu_mips_realize_env(&cpu->env);
@@ -294,6 +295,43 @@ static void mips_cpu_register_types(void)
     for (i = 0; i < mips_defs_number; i++) {
         mips_register_cpudef_type(&mips_defs[i]);
     }
+}
+
+#ifdef TARGET_CHERI
+static inline void set_epc_or_error_epc(CPUMIPSState *env, cap_register_t* epc_or_error_epc, target_ulong new_offset)
+{
+    // Setting EPC should clear EPCC.tag if EPCC is sealed or becomes unrepresentable.
+    // This will cause exception on instruction fetch following subsequent eret
+    if (!cap_is_unsealed(epc_or_error_epc)) {
+        error_report("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
+        qemu_log("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
+        abort();
+        nullify_capability(cap_get_cursor(epc_or_error_epc), epc_or_error_epc);
+    } else if (!is_representable(cap_is_sealed_with_type(epc_or_error_epc), epc_or_error_epc->cr_base, epc_or_error_epc->cr_length, 0, new_offset)) {
+        error_report("Attempting to set unrepresentable offset(0x" TARGET_FMT_lx
+                    ") on EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", new_offset, PRINT_CAP_ARGS(epc_or_error_epc));
+        nullify_capability(cap_get_cursor(epc_or_error_epc), epc_or_error_epc);
+    } else {
+        epc_or_error_epc->cr_offset = new_offset;
+    }
+}
+#endif
+
+void set_CP0_EPC(CPUMIPSState *env, target_ulong arg)
+{
+#ifdef TARGET_CHERI
+    set_epc_or_error_epc(env, &env->active_tc.CHWR.EPCC, arg);
+#else
+    env->CP0_EPC = arg;
+#endif
+}
+void set_CP0_ErrorEPC(CPUMIPSState *env, target_ulong arg)
+{
+#ifdef TARGET_CHERI
+    set_epc_or_error_epc(env, &env->active_tc.CHWR.ErrorEPCC, arg);
+#else
+    env->CP0_ErrorEPC = arg;
+#endif
 }
 
 type_init(mips_cpu_register_types)

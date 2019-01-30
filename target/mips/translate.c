@@ -1198,7 +1198,7 @@ enum {
     OPC_CREADHWR_NI     = OPC_C2OPERAND_NI | (0x0d << 6),
     OPC_CWRITEHWR_NI    = OPC_C2OPERAND_NI | (0x0e << 6),
     OPC_CGETADDR_NI     = OPC_C2OPERAND_NI | (0x0f << 6),
-
+    OPC_CSEALENTRY_NI   = OPC_C2OPERAND_NI | (0x1d << 6),
     OPC_CLOADTAGS_NI    = OPC_C2OPERAND_NI | (0x1e << 6),
 };
 
@@ -5884,7 +5884,11 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_epc(arg, cpu_env);
+#else
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#endif
             tcg_gen_ext32s_tl(arg, arg);
             rn = "EPC";
             break;
@@ -6186,7 +6190,11 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 30:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_error_epc(arg, cpu_env);
+#else
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_ErrorEPC));
+#endif
             tcg_gen_ext32s_tl(arg, arg);
             rn = "ErrorEPC";
             break;
@@ -6574,7 +6582,11 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mtc0_epc(cpu_env, arg);
+#else
             tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#endif
             rn = "EPC";
             break;
         default:
@@ -6871,7 +6883,11 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 30:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mtc0_error_epc(cpu_env, arg);
+#else
             tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_ErrorEPC));
+#endif
             rn = "ErrorEPC";
             break;
         default:
@@ -7264,7 +7280,11 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_epc(arg, cpu_env);
+#else
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#endif
             rn = "EPC";
             break;
         default:
@@ -7553,7 +7573,11 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 30:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mfc0_error_epc(arg, cpu_env);
+#else
             tcg_gen_ld_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_ErrorEPC));
+#endif
             rn = "ErrorEPC";
             break;
         default:
@@ -7944,7 +7968,11 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 14:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mtc0_epc(cpu_env, arg);
+#else
             tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_EPC));
+#endif
             rn = "EPC";
             break;
         default:
@@ -8228,7 +8256,11 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 30:
         switch (sel) {
         case 0:
+#ifdef TARGET_CHERI
+            gen_helper_mtc0_error_epc(cpu_env, arg);
+#else
             tcg_gen_st_tl(arg, cpu_env, offsetof(CPUMIPSState, CP0_ErrorEPC));
+#endif
             rn = "ErrorEPC";
             break;
         default:
@@ -11380,16 +11412,24 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
         gen_store_gpr(t0, rt);
         break;
     case 7: /* RESET */
-        save_cpu_state(ctx, 1);
         gen_helper_rdhwr_statcounters_reset(t0, cpu_env);
         gen_store_gpr(t0, rt);
         break;
     case 5: /* ITLB MISS */
+        gen_helper_rdhwr_statcounters_itlb_miss(t0, cpu_env);
+        gen_store_gpr(t0, rt);
+        break;
     case 6: /* DTLB MISS */
+        gen_helper_rdhwr_statcounters_dtlb_miss(t0, cpu_env);
+        gen_store_gpr(t0, rt);
+        break;
+    case 11:
+        gen_helper_1e0i(rdhwr_statcounters_memory, t0, sel);
+        gen_store_gpr(t0, rt);
+        break;
     case 8:
     case 9:
     case 10:
-    case 11:
     case 12:
     case 13:
     case 14:
@@ -19023,7 +19063,12 @@ static void decode_opc_special3(CPUMIPSState *env, DisasContext *ctx)
         break;
 #endif
     case OPC_RDHWR:
+#ifdef TARGET_CHERI
+        // For CHERI/BERI statcounters we need a 4 bit selector instead of 3
+        gen_rdhwr(ctx, rt, rd, extract32(ctx->opcode, 6, 4));
+#else
         gen_rdhwr(ctx, rt, rd, extract32(ctx->opcode, 6, 3));
+#endif
         break;
     case OPC_FORK:
         check_insn(ctx, ASE_MT);
@@ -21207,7 +21252,7 @@ void mips_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
     }
 
     cpu_fprintf(f, "CP0 Status  0x%08x Cause   0x%08x EPC    0x" TARGET_FMT_lx "\n",
-                env->CP0_Status, env->CP0_Cause, env->CP0_EPC);
+                env->CP0_Status, env->CP0_Cause, get_CP0_EPC(env));
     cpu_fprintf(f, "    Config0 0x%08x Config1 0x%08x LLAddr 0x%016"
                 PRIx64 "\n",
                 env->CP0_Config0, env->CP0_Config1, env->lladdr);
@@ -21360,6 +21405,42 @@ void cpu_state_reset(CPUMIPSState *env)
     env->msair = env->cpu_model->MSAIR;
     env->insn_flags = env->cpu_model->insn_flags;
 
+#if defined(TARGET_CHERI)
+    /*
+     * See section "4.5 CPU Reset" of Cheri Architecture Manual.
+     * Only PCC, DDC, and KCC are initialized to capabilities that have
+     * sufficient privilege to run MIPS code at base address 0 unchanged.
+     * All other capability registers are initialized to be the NULL capability.
+     * For PCC,DDC,KCC registers:
+     * Tag bits are set.  Seal bit is unset. Base and otype are
+     * set to zero. length is set to (2^64 - 1). Offset (or cursor)
+     * is set to zero (or boot vector address for PCC).
+     */
+    for (int i = 0; i < 32; i++) {
+        null_capability(&env->active_tc._CGPR[i]);
+    }
+    set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
+    // TODO: make DDC and KCC unconditionally only be in the special reg file
+    set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);
+    // TODO: should kdc be NULL or full priv?
+    null_capability(&env->active_tc.CHWR.UserTlsCap);
+    null_capability(&env->active_tc.CHWR.PrivTlsCap);
+    null_capability(&env->active_tc.CHWR.KR1C);
+    null_capability(&env->active_tc.CHWR.KR2C);
+    set_max_perms_capability(&env->active_tc.CHWR.KCC, 0);
+    null_capability(&env->active_tc.CHWR.KDC); // KDC can be NULL
+    // Note: EPCC also needs to be set to be a full address-space capability
+    // so that a MIPS eret without a prior trap works as expected:
+    set_max_perms_capability(&env->active_tc.CHWR.EPCC, 0);
+    // Same for ErrorEPCC since it is needed if Status.ERL is set
+    set_max_perms_capability(&env->active_tc.CHWR.ErrorEPCC, 0);
+
+    // Fake capability register to allow cjr branch delay slots to work
+    null_capability(&env->active_tc.CapBranchTarget);
+
+    // env->CP0_Status |= (1 << CP0St_CU2);
+#endif /* TARGET_CHERI */
+
 #if defined(CONFIG_USER_ONLY)
     env->CP0_Status = (MIPS_HFLAG_UM << CP0St_KSU);
 # ifdef TARGET_MIPS64
@@ -21390,10 +21471,9 @@ void cpu_state_reset(CPUMIPSState *env)
     if (env->hflags & MIPS_HFLAG_BMASK) {
         /* If the exception was raised from a delay slot,
            come back to the jump.  */
-        env->CP0_ErrorEPC = (env->active_tc.PC
-                             - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4));
+        set_CP0_ErrorEPC(env, env->active_tc.PC - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4));
     } else {
-        env->CP0_ErrorEPC = env->active_tc.PC;
+        set_CP0_ErrorEPC(env, env->active_tc.PC);
     }
     env->active_tc.PC = env->exception_base;
     env->CP0_Random = env->tlb->nb_tlb - 1;
@@ -21505,39 +21585,6 @@ void cpu_state_reset(CPUMIPSState *env)
         /* UHI interface can be used to obtain argc and argv */
         env->active_tc.gpr[4] = -1;
     }
-#if defined(TARGET_CHERI)
-    /*
-     * See section "4.5 CPU Reset" of Cheri Architecture Manual.
-     * Only PCC, DDC, and KCC are initialized to capabilities that have
-     * sufficient privilege to run MIPS code at base address 0 unchanged.
-     * All other capability registers are initialized to be the NULL capability.
-     * For PCC,DDC,KCC registers:
-     * Tag bits are set.  Seal bit is unset. Base and otype are
-     * set to zero. length is set to (2^64 - 1). Offset (or cursor)
-     * is set to zero (or boot vector address for PCC).
-     */
-    for (int i = 0; i < 32; i++) {
-        null_capability(&env->active_tc._CGPR[i]);
-    }
-    set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
-    // TODO: make DDC and KCC unconditionally only be in the special reg file
-    set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);
-    // TODO: should kdc be NULL or full priv?
-    null_capability(&env->active_tc.CHWR.UserTlsCap);
-    null_capability(&env->active_tc.CHWR.PrivTlsCap);
-    null_capability(&env->active_tc.CHWR.KR1C);
-    null_capability(&env->active_tc.CHWR.KR2C);
-    set_max_perms_capability(&env->active_tc.CHWR.KCC, 0);
-    null_capability(&env->active_tc.CHWR.KDC); // KDC can be NULL
-    // Note: EPCC also needs to be set to be a full address-space capability
-    // so that a MIPS eret without a prior trap works as expected:
-    set_max_perms_capability(&env->active_tc.CHWR.EPCC, CP2CAP_EPCC_FAKE_OFFSET_VALUE);
-
-    // Fake capability register to allow cjr branch delay slots to work
-    null_capability(&env->active_tc.CapBranchTarget);
-
-    // env->CP0_Status |= (1 << CP0St_CU2);
-#endif /* TARGET_CHERI */
     if (is_beri_or_cheri(env)) {
         // enable KX bit on startup
         env->CP0_Status |= (1 << CP0St_KX);

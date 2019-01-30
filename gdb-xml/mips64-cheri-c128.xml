@@ -5,6 +5,11 @@
      are permitted in any medium without royalty provided the copyright
      notice and this notice are preserved.  -->
 
+<!-- 63 62 61 60 59 58 57 56 55 54 53 52 51 50 49 48 ...
+     14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
+     [ sw def'd] R   U CC  S WL WC RC  W  R  X  G
+-->
+
 <!DOCTYPE feature SYSTEM "gdb-target.dtd">
 <feature name="org.gnu.gdb.mips.cheri128">
   <flags id="cap128_perms" size="8">
@@ -12,15 +17,17 @@
     <field name="B" start="20" end="39"/>
     <field name="s" start="40" end="40"/>
     <field name="e" start="41" end="46"/>
-    <field name="G" start="50" end="50"/>
-    <field name="X" start="51" end="51"/>
-    <field name="R" start="52" end="52"/>
-    <field name="W" start="53" end="53"/>
-    <field name="RC" start="54" end="54"/>
-    <field name="WC" start="55" end="55"/>
-    <field name="WLC" start="56" end="56"/>
-    <field name="S" start="57" end="57"/>
-    <field name="SR" start="59" end="59"/>
+    <field name="G" start="49" end="49"/>
+    <field name="X" start="50" end="50"/>
+    <field name="R" start="51" end="51"/>
+    <field name="W" start="52" end="52"/>
+    <field name="RC" start="53" end="53"/>
+    <field name="WC" start="54" end="54"/>
+    <field name="WLC" start="55" end="55"/>
+    <field name="S" start="56" end="56"/>
+    <field name="CC" start="57" end="57"/>
+    <field name="U" start="58" end="58"/>
+    <field name="R" start="59" end="59"/>
     <field name="uP" start="60" end="63"/>
   </flags>
   <struct id="cheri_cap128">
@@ -61,7 +68,16 @@
   <reg name="c30" bitsize="128" type="cheri_cap128"/>
   <reg name="c31" bitsize="128" type="cheri_cap128"/>
 
+  <reg name="ddc" bitsize="128" type="cheri_cap128"/>
   <reg name="pcc" bitsize="128" type="cheri_cap128"/>
+  <reg name="UserTls" bitsize="128" type="cheri_cap128"/>
+  <reg name="PrivTls" bitsize="128" type="cheri_cap128"/>
+  <reg name="kr1c" bitsize="128" type="cheri_cap128"/>
+  <reg name="kr2c" bitsize="128" type="cheri_cap128"/>
+  <reg name="kcc" bitsize="128" type="cheri_cap128"/>
+  <reg name="kdc" bitsize="128" type="cheri_cap128"/>
+  <reg name="epcc" bitsize="128" type="cheri_cap128"/>
+  <reg name="errorepcc" bitsize="128" type="cheri_cap128"/>
 
   <flags id="cap_cause" size="8">
     <field name="reg" start="0" end="7"/>
