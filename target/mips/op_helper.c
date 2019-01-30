@@ -2064,12 +2064,12 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     // For ptr + decimal mode we only need
     if (print_mode == DEBUG_MESSAGE_PTR) {
         if (mode & CPU_LOG_INSTR) {
-            qemu_log("   ptr = 0x" TARGET_FMT_lx "\r\n", vaddr);
+            qemu_log_mask(CPU_LOG_INSTR, "   ptr = 0x" TARGET_FMT_lx "\r\n", vaddr);
         }
         return;
     } else if (print_mode == DEBUG_MESSAGE_DECIMAL) {
         if (mode & CPU_LOG_INSTR) {
-            qemu_log("   value = " TARGET_FMT_ld "\r\n", vaddr);
+            qemu_log_mask(CPU_LOG_INSTR, "   value = " TARGET_FMT_ld "\r\n", vaddr);
         }
         return;
     }
@@ -2080,12 +2080,13 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
                     " bytes at vaddr 0x" TARGET_FMT_lx "\r\n", length, vaddr);
     }
     if ((mode & CPU_LOG_INSTR) || qemu_logfile) {
-        qemu_log("DEBUG MESSAGE @ 0x" TARGET_FMT_lx "\r\n", pc);
+        qemu_log_mask(CPU_LOG_INSTR, "DEBUG MESSAGE @ 0x" TARGET_FMT_lx "\r\n", pc);
         if (print_mode == DEBUG_MESSAGE_CSTRING) {
             /* XXXAR: Escape newlines, etc.? */
-            qemu_log("    message = \"%s\"\n", buffer);
+            qemu_log_mask(CPU_LOG_INSTR, "    message = \"%s\"\n", buffer);
         } else if (print_mode == DEBUG_MESSAGE_HEXDUMP) {
-            qemu_log("   Dumping " TARGET_FMT_lu " bytes starting at 0x"
+            qemu_log_mask(CPU_LOG_INSTR, "   Dumping " TARGET_FMT_lu
+                     " bytes starting at 0x"
                      TARGET_FMT_lx "\r\n", length, vaddr);
             do_hexdump(qemu_logfile, buffer, length, vaddr);
         }
@@ -5899,9 +5900,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                     else
                         assert(false && "invalid pattern length");
                 }
-
-                    qemu_log("%s: Set " TARGET_FMT_ld " %d-byte items to 0x%" PRIx64 " at 0x" TARGET_FMT_plx "\n",
-                          __func__, l_adj_nitems, pattern_length, value, dest);
+                qemu_log_mask(CPU_LOG_INSTR, "%s: Set " TARGET_FMT_ld
+                    " %d-byte items to 0x%" PRIx64 " at 0x" TARGET_FMT_plx "\n",
+                    __func__, l_adj_nitems, pattern_length, value, dest);
             }
             // fprintf(stderr, "%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, value, dest, hostaddr);
             dest += l_adj_bytes;
@@ -5939,8 +5940,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                         else
                             assert(false && "invalid pattern length");
                     }
-                    qemu_log("%s: Set " TARGET_FMT_ld " %d-byte items to 0x%" PRIx64 " at 0x" TARGET_FMT_plx "\n",
-                            __func__, l_adj_nitems, pattern_length, value, dest);
+                    qemu_log_mask(CPU_LOG_INSTR, "%s: Set " TARGET_FMT_ld
+                        " %d-byte items to 0x%" PRIx64 " at 0x" TARGET_FMT_plx "\n",
+                        __func__, l_adj_nitems, pattern_length, value, dest);
                 }
                 continue; // try again with next page
             } else {
@@ -5958,8 +5960,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
              *  + we would have to deal with the map returning NULL because the
              *    bounce buffer was in use
              */
-            warn_report("%s: Falling back to memset slowpath for address " TARGET_FMT_plx
-                        " (phys addr=%" HWADDR_PRIx", len_nitems=0x" TARGET_FMT_lx ")! I/O memory or QEMU TLB bug?\r",
+            warn_report("%s: Falling back to memset slowpath for address "
+                        TARGET_FMT_plx " (phys addr=%" HWADDR_PRIx", len_nitems=0x"
+                        TARGET_FMT_lx ")! I/O memory or QEMU TLB bug?\r",
                         __func__, dest, mips_cpu_get_phys_page_debug(CPU(mips_env_get_cpu(env)), dest), len_nitems);
             target_ulong end = original_dest + original_len_bytes;
             tcg_debug_assert(((end - dest) % pattern_length) == 0);
