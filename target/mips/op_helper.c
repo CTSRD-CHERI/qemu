@@ -2745,20 +2745,22 @@ void r4k_helper_tlbr(CPUMIPSState *env)
         env->CP0_EntryLo0 = tlb->G | (tlb->V0 << 1) | (tlb->D0 << 2) |
 #if defined(TARGET_CHERI)
                         ((uint64_t)tlb->L0 << CP0EnLo_L) |
-                        ((uint64_t)tlb->S0 << CP0EnLo_S) | (tlb->C0 << 3) |
+                        ((uint64_t)tlb->S0 << CP0EnLo_S) |
 #else
                         ((uint64_t)tlb->RI0 << CP0EnLo_RI) |
-                        ((uint64_t)tlb->XI0 << CP0EnLo_XI) | (tlb->C0 << 3) |
+                        ((uint64_t)tlb->XI0 << CP0EnLo_XI) |
 #endif /* TARGET_CHERI */
+                        (tlb->C0 << 3) |
                         get_entrylo_pfn_from_tlb(tlb->PFN[0] >> 12);
         env->CP0_EntryLo1 = tlb->G | (tlb->V1 << 1) | (tlb->D1 << 2) |
 #if defined(TARGET_CHERI)
                         ((uint64_t)tlb->L1 << CP0EnLo_L) |
-                        ((uint64_t)tlb->S1 << CP0EnLo_S) | (tlb->C0 << 3) |
+                        ((uint64_t)tlb->S1 << CP0EnLo_S) |
 #else
                         ((uint64_t)tlb->RI1 << CP0EnLo_RI) |
-                        ((uint64_t)tlb->XI1 << CP0EnLo_XI) | (tlb->C1 << 3) |
+                        ((uint64_t)tlb->XI1 << CP0EnLo_XI) |
 #endif /* TARGET_CHERI */
+                        (tlb->C1 << 3) |
                         get_entrylo_pfn_from_tlb(tlb->PFN[1] >> 12);
     }
 }
