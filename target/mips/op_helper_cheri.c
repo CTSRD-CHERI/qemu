@@ -2623,6 +2623,10 @@ void helper_ccheck_pc(CPUMIPSState *env, uint64_t pc)
 
     /* Update statcounters icount */
     env->statcounters_icount++;
+    if (in_kernel_mode(env))
+        env->statcounters_icount_kernel++;
+    else
+        env->statcounters_icount_user++;
 
     // branch instructions have already checked the validity of the target,
     // but we still need to check if the next instruction is accessible.

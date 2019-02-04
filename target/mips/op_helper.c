@@ -3017,6 +3017,8 @@ target_ulong helper_rdhwr_statcounters_memory(CPUMIPSState *env, uint32_t sel)
     qemu_log_mask(CPU_LOG_INSTR, "%s(%d)\n", __func__, sel);
     check_hwrena(env, 11, GETPC());
     switch (sel) {
+    case 2: return env->statcounters_icount_user;
+    case 4: return env->statcounters_icount_kernel;
     case 8: return env->statcounters_cap_read;
     case 9: return env->statcounters_cap_write;
     case 10: return env->statcounters_cap_read_tagged;
