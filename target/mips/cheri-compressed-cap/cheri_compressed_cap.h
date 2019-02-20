@@ -206,8 +206,8 @@ _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 #define CC256_UPERMS_COUNT         (20)
 #define CC256_PERMS_MEM_SHFT       (1)  /* sealed bit comes first */
 #define CC256_UPERMS_MEM_SHFT      (CC256_PERMS_MEM_SHFT + CC256_PERMS_COUNT)
-#define CC256_PERMS_ALL_BITS       ((1 << CC256_PERMS_COUNT) - 1) /* 11 bits */
-#define CC256_UPERMS_ALL_BITS      ((1 << CC256_UPERMS_COUNT) - 1) /* 20 bits */
+#define CC256_PERMS_ALL_BITS       ((1 << CC256_PERMS_COUNT) - 1) /* 12 bits */
+#define CC256_UPERMS_ALL_BITS      ((1 << CC256_UPERMS_COUNT) - 1) /* 19 bits */
 #define CC256_MAX_UPERM            (19)
 #define CC256_OTYPE_ALL_BITS       ((1 << 24) - 1)
 #define CC256_OTYPE_MEM_SHFT       (32)
@@ -708,7 +708,7 @@ static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* c
     cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) ^ CC256_OTYPE_ALL_BITS;
     cdp->cr_base = mem.u64s[2];
     /* Length is xor'ed with -1 to ensure that NULL is all zeroes in memory */
-    cdp->cr_length = mem.u64s[3] ^ 0xffffffffffffffff;
+    cdp->cr_length = mem.u64s[3] ^ UINT64_C(~0);
     /* TODO: should just have a cr_cursor instead... But that's not the way QEMU works */
     cdp->cr_offset = mem.u64s[1] - cdp->cr_base;
 }
