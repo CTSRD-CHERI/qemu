@@ -312,17 +312,6 @@ get_capreg_0_is_ddc(TCState* state, unsigned num) {
     return &state->_CGPR[num];
 }
 
-// FIXME: remove the last few users of this function
-static inline  __attribute__((always_inline)) cap_register_t*
-get_writable_capreg_raw(TCState* state, unsigned num) {
-    if (unlikely(num == 0)) {
-        // writing to $c0/$cnull is a no-op -> make users of this function write to a dummy
-        static cap_register_t dummy_reg;
-        return &dummy_reg;
-    }
-    return &state->_CGPR[num];
-}
-
 static inline void
 update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
     // writing to $c0/$cnull is a no-op

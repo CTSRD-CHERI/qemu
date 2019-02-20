@@ -2195,6 +2195,8 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
                                  target_ulong vaddr, target_ulong retpc, bool linked)
 {
+    cap_register_t ncd;
+
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
 
@@ -2203,23 +2205,25 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     /* Load otype and perms from memory (might trap on load) */
     uint64_t pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc);
     uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
-    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
-    decompress_128cap(pesbt, cursor, cdp);
 
     target_ulong tag = cheri_tag_get(env, vaddr, cb, linked ? &env->lladdr : NULL, retpc);
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
-    cdp->cr_tag = tag;
+    decompress_128cap(pesbt, cursor, &ncd);
+    ncd.cr_tag = tag;
+
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        dump_cap_load(vaddr, cdp->cr_pesbt, cursor, tag);
-        cvtrace_dump_cap_load(&env->cvtrace, vaddr, cdp);
-        cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+        dump_cap_load(vaddr, ncd.cr_pesbt, cursor, tag);
+        cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
+        cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
 #endif
+
+    update_capreg(&env->active_tc, cd, &ncd);
 }
 
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
@@ -2294,6 +2298,8 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
                                  target_ulong vaddr, target_ulong retpc, bool linked)
 {
+    cap_register_t ncd;
+
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
 
@@ -2302,34 +2308,37 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     /* Load base and cursor from memory (might trap on load) */
     uint64_t base = cpu_ldq_data_ra(env, vaddr + 0, retpc);
     uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
-    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
 
     uint64_t tps, length;
     target_ulong tag = cheri_tag_get_m128(env, vaddr, cd, &tps, &length, linked ? &env->lladdr : NULL, retpc);
-    cdp->cr_otype = (uint32_t)(tps >> 32) ^ CAP_MAX_REPRESENTABLE_OTYPE;
-    cdp->cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
-    cdp->cr_uperms = (uint32_t)(((tps >> 1) >> CAP_UPERMS_SHFT) &
+    tag = clear_tag_if_no_loadcap(env, tag, cbp);
+
+    ncd.cr_otype = (uint32_t)(tps >> 32) ^ CAP_MAX_REPRESENTABLE_OTYPE;
+    ncd.cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
+    ncd.cr_uperms = (uint32_t)(((tps >> 1) >> CAP_UPERMS_SHFT) &
             CAP_UPERMS_ALL);
     if (tps & 1ULL)
-        cdp->_sbit_for_memory = 1;
+        ncd._sbit_for_memory = 1;
     else
-        cdp->_sbit_for_memory = 0;
-    cdp->cr_length = length ^ -1UL;
-    cdp->cr_base = base;
-    cdp->cr_offset = cursor - base;
-    tag = clear_tag_if_no_loadcap(env, tag, cbp);
-    cdp->cr_tag = tag;
+        ncd._sbit_for_memory = 0;
+    ncd.cr_length = length ^ -1UL;
+    ncd.cr_base = base;
+    ncd.cr_offset = cursor - base;
+    ncd.cr_tag = tag;
+
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        dump_cap_load(vaddr, cursor, cdp->cr_base, tag);
-        cvtrace_dump_cap_load(&env->cvtrace, vaddr, cdp);
-        cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+        dump_cap_load(vaddr, cursor, ncd.cr_base, tag);
+        cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
+        cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
 #endif
+
+    update_capreg(&env->active_tc, cd, &ncd);
 }
 
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
@@ -2439,9 +2448,10 @@ static inline void dump_cap_store_length(uint64_t length)
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
                                  target_ulong vaddr, target_ulong retpc, bool linked)
 {
+    cap_register_t ncd;
+
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    cap_register_t *cdp = get_writable_capreg_raw(&env->active_tc, cd);
 
     // TODO: do one physical translation and then use that to speed up tag read
     /* Load otype and perms from memory (might trap on load) */
@@ -2452,35 +2462,37 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
     target_ulong tag = cheri_tag_get(env, vaddr, cd, linked ? &env->lladdr : NULL, retpc);
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
-    cdp->cr_tag = tag;
+    ncd.cr_tag = tag;
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
 
     // XOR with unsealed otype so that NULL is zero in memory
-    cdp->cr_otype = (uint32_t)(otype_and_perms >> 32) ^ CAP_OTYPE_UNSEALED;
+    ncd.cr_otype = (uint32_t)(otype_and_perms >> 32) ^ CAP_OTYPE_UNSEALED;
     uint32_t perms = (uint32_t)(otype_and_perms >> 1);
     uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
-    cdp->cr_perms = perms & store_mem_perms;
-    cdp->cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
+    ncd.cr_perms = perms & store_mem_perms;
+    ncd.cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     if (otype_and_perms & 1ULL)
-        cdp->_sbit_for_memory = 1;
+        ncd._sbit_for_memory = 1;
     else
-        cdp->_sbit_for_memory = 0;
+        ncd._sbit_for_memory = 0;
 
-    cdp->cr_length = length ^ -1UL; // XOR with -1 so that NULL is zero in memory
-    cdp->cr_base = base;
-    cdp->cr_offset = cursor - base;
+    ncd.cr_length = length ^ -1UL; // XOR with -1 so that NULL is zero in memory
+    ncd.cr_base = base;
+    ncd.cr_offset = cursor - base;
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory reads, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         dump_cap_load_op(vaddr, otype_and_perms, tag);
-        cvtrace_dump_cap_load(&env->cvtrace, vaddr, cdp);
+        cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
         dump_cap_load_cbl(cursor, base, length);
-        cvtrace_dump_cap_cbl(&env->cvtrace, cdp);
+        cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
 #endif
+
+    update_capreg(&env->active_tc, cd, &ncd);
 }
 
 static inline uint64_t cap2bytes_get_otype_and_perms(const cap_register_t *csp)
