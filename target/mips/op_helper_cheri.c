@@ -876,6 +876,19 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
+void helper_csetaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong target_addr) {
+    target_ulong cursor = helper_cgetaddr(env, cb);
+    target_ulong diff = target_addr - cursor;
+    helper_cincoffset(env, cd, cb, diff);
+}
+
+void helper_candaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt) {
+    target_ulong cursor = helper_cgetaddr(env, cb);
+    target_ulong target_addr = cursor & rt;
+    target_ulong diff = target_addr - cursor;
+    helper_cincoffset(env, cd, cb, diff);
+}
+
 void helper_cmovz(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
@@ -1666,6 +1679,12 @@ target_ulong helper_cnexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     gboolean not_equal = helper_cexeq(env, cb, ct) ? FALSE : TRUE;
 
     return (target_ulong) not_equal;
+}
+
+target_ulong helper_cgetandaddr(CPUMIPSState *env, uint32_t cb, target_ulong rt)
+{
+    target_ulong addr = helper_cgetaddr(env, cb);
+    return addr & rt;
 }
 
 target_ulong helper_ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct)

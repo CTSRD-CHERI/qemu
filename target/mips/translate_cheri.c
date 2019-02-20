@@ -612,6 +612,49 @@ static inline void generate_csetbounds(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_candaddr(int32_t cd, int32_t cb, int32_t rt)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
+
+    gen_load_gpr(t0, rt);
+    gen_helper_candaddr(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_csetaddr(int32_t cd, int32_t cb, int32_t rt)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv_i32 tcd = tcg_const_i32(cd);
+    TCGv t0 = tcg_temp_new();
+
+    gen_load_gpr(t0, rt);
+    gen_helper_csetaddr(cpu_env, tcd, tcb, t0);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcd);
+    tcg_temp_free_i32(tcb);
+}
+
+static inline void generate_cgetandaddr(int32_t rd, int32_t cb, int32_t rt)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+
+    gen_load_gpr(t0, rt);
+    gen_helper_cgetandaddr(t1, cpu_env, tcb, t0);
+    gen_store_gpr(t1, rd);
+
+    tcg_temp_free(t1);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_csetboundsexact(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -1828,6 +1871,21 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             check_cop2x(ctx);
             generate_cnexeq(r16, r11, r6);
             opn = "cnexeq";
+            break;
+        case OPC_CSETADDR_NI: /* 0x21 */
+            check_cop2x(ctx);
+            generate_csetaddr(r16, r11, r6);
+            opn = "csetaddr";
+            break;
+        case OPC_CGETANDADDR_NI: /* 0x21 */
+            check_cop2x(ctx);
+            generate_cgetandaddr(r16, r11, r6);
+            opn = "cgetaddrmasked";
+            break;
+        case OPC_CANDADDR_NI: /* 0x21 */
+            check_cop2x(ctx);
+            generate_candaddr(r16, r11, r6);
+            opn = "candaddr";
             break;
         /* Two-operand cap instructions. */
         case OPC_C2OPERAND_NI:         /* 0x3f */

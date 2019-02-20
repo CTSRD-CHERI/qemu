@@ -1333,6 +1333,9 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"ccseal",     "+w,+b,+v",  0x4800001f, 0xffe0003f, 0, 0, I1},
 {"ctestsubset","+w,+b,+v",  0x48000020, 0xffe0003f, 0, 0, I1},
 {"cnexeq",     "t,+b,+v",   0x48000021, 0xffe0003f, 0, 0, I1},
+{"csetaddr",   "+w,+b,m",   0x48000022, 0xffe0003f, 0, 0, I1},
+{"cgetandaddr", "t,+b,m",   0x48000023, 0xffe0003f, 0, 0, I1},
+{"candaddr",   "+w,+b,m",   0x48000024, 0xffe0003f, 0, 0, I1},
 
 {"cbez",      "+w,i",   0x4a200000, 0xffe00000, 0, 0, I1},
 {"cbnz",      "+w,i",   0x4a400000, 0xffe00000, 0, 0, I1},

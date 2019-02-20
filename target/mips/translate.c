@@ -1228,6 +1228,9 @@ enum {
     OPC_CCSEAL_NI       = OPC_CAP_NI | (0x1f),
     OPC_CTESTSUBSET_NI  = OPC_CAP_NI | (0x20),
     OPC_CNEXEQ_NI       = OPC_CAP_NI | (0x21),
+    OPC_CSETADDR_NI     = OPC_CAP_NI | (0x22),
+    OPC_CGETANDADDR_NI  = OPC_CAP_NI | (0x23),
+    OPC_CANDADDR_NI     = OPC_CAP_NI | (0x24),
 };
 
 enum {
