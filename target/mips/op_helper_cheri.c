@@ -685,10 +685,12 @@ target_ulong helper_cloadtags(CPUMIPSState *env, uint32_t cb, uint64_t cbcursor)
         do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
         do_raise_c2_exception(env, CP2Ca_PERM_LD_CAP, cb);
-	} else {
-    	return (target_ulong)cheri_tag_get_many(env, cbcursor, cb, NULL, GETPC());
-	}
-	return 0;
+    } else if ((cbcursor & (8 * CHERI_CAP_SIZE - 1)) != 0) {
+        do_raise_c0_exception(env, EXCP_AdEL, cbcursor);
+    } else {
+       return (target_ulong)cheri_tag_get_many(env, cbcursor, cb, NULL, GETPC());
+    }
+    return 0;
 }
 
 target_ulong helper_cgetbase(CPUMIPSState *env, uint32_t cb)
