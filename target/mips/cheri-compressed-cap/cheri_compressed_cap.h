@@ -45,7 +45,7 @@ struct cap_register {
     /* offset = cursor - base */
     uint64_t cr_offset; /* Capability offset */
     uint64_t cr_base;   /* Capability base addr */
-    uint64_t cr_length; /* Capability length */
+    unsigned __int128 cr_length; /* Capability length */
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
     uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
@@ -461,14 +461,23 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     uint8_t shift = E + BWidth;
 
     uint64_t cursor_top = shift >= 64 ? 0 : cursor >> shift;
-
-    uint64_t top = (((cursor_top + (int64_t)ct) << BWidth) | (uint64_t)T) << E;
+    // Top is 65 bits -> use __int128 which is quite efficient (seems better than
+    // a separate boolean flag unless you spend a lot of time optimizing that).
+    unsigned __int128 top = (unsigned __int128)(((cursor_top + (int64_t)ct) << BWidth) | (uint64_t)T) << E;
     uint64_t base = (((cursor_top + (int64_t)cb) << BWidth) | (uint64_t)B) << E;
 
-    // top/length really should be 65 bits. If we get overflow length is
-    // actually max length
+    // Pretend that top is a 65 bit integer
 
-    cdp->cr_length = top < T ? (-1ULL) - base : top - base;
+    top &= ((unsigned __int128)1 << 65) - 1; // pretend that top is 65 bits
+    const uint64_t top_high = (top >> 64);
+    assert(top_high <= 1); // should be at most 1 bit over
+
+    // TODO: should really store top and not length!
+    cdp->cr_length = top - base;
+    if (top < base) {
+        // This can happen for invalid capabilities with arbitrary bit patterns
+        assert((signed __int128)cdp->cr_length < 0); // must be negative
+    }
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
 }
