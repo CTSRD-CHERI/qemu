@@ -358,13 +358,8 @@ static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
  * exponent)
  */
 
-/*
- * Decompress a 128-bit capability.
- */
-static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
+static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
 
-    cdp->cr_pesbt = pesbt;
-    pesbt ^= CC128_NULL_XOR_MASK;
 
 #ifdef CC128_OLD_FORMAT
     cdp->cr_perms = cc128_getbits(pesbt, 48, 12);
@@ -476,6 +471,15 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
     cdp->cr_length = top < T ? (-1ULL) - base : top - base;
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
+}
+
+/*
+ * Decompress a 128-bit capability.
+ */
+static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
+
+    cdp->cr_pesbt = pesbt;
+    decompress_128cap_already_xored(pesbt ^ CC128_NULL_XOR_MASK, cursor, cdp);
 }
 
 static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr_otype <= CAP_MAX_SEALED_OTYPE; }
