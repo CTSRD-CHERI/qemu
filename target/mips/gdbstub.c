@@ -170,19 +170,12 @@ static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
     stq_p(mem_buf + 8, cap_get_cursor(cap));
     return 16;
 #else
-    target_ulong ret;
-    uint64_t perms;
-
-    perms = (uint64_t)(((cap->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-        (cap->cr_perms & CAP_PERMS_ALL));
-
-    ret = ((uint64_t)(cap->cr_otype ^ CAP_OTYPE_UNSEALED) << 32) |
-        (perms << 1) | (cap_is_sealed_with_type(cap) ? 1UL : 0UL);
-
-    stq_p(mem_buf, ret);
-    stq_p(mem_buf + 8, cap_get_cursor(cap));
-    stq_p(mem_buf + 16, cap->cr_base);
-    stq_p(mem_buf + 24, cap->cr_length);
+    inmemory_chericap256 memory_representation;
+    compress_256cap(&memory_representation, cap);
+    stq_p(mem_buf, memory_representation.u64s[0]);
+    stq_p(mem_buf + 8, memory_representation.u64s[1]);
+    stq_p(mem_buf + 16, memory_representation.u64s[2]);
+    stq_p(mem_buf + 24, memory_representation.u64s[3]);
     return 32;
 #endif
 }
