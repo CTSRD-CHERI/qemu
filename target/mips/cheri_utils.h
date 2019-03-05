@@ -89,6 +89,15 @@ static inline uint64_t cap_get_otype(const cap_register_t* c) {
     return result < CAP_MAX_SEALED_OTYPE ? result : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 }
 
+// Check if num_bytes bytes at addr can be read using capability c
+static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, uint64_t num_bytes) {
+    cheri_debug_assert(num_bytes <= CHERI_CAP_SIZE); // should be used for clc or smaller
+    if (addr < cap_get_base(c) || (addr + num_bytes) > cap_get_top(c)) {
+        return false;
+    }
+    return true;
+}
+
 static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
     // TODO: how should we treat the other reserved types? as sealed?
     // TODO: what about untagged capabilities with out-of-range otypes?

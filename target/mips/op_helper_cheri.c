@@ -519,7 +519,8 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cs);
     } else if (cbp->cr_perms & CAP_PERM_EXECUTE) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
-    } else if (csp->cr_offset >= csp->cr_length) {
+    } else if (!cap_is_in_bounds(csp, cap_get_cursor(csp), 1)) {
+        // TODO: check for at least one instruction worth of data? Like cjr/cjalr?
         do_raise_c2_exception(env, CP2Ca_LENGTH, cs);
     } else {
         if (selector == CCALL_SELECTOR_0) {
@@ -922,7 +923,7 @@ target_ulong helper_cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
         do_raise_c2_exception(env, CP2Ca_GLOBAL, cb);
-    } else if ((cbp->cr_offset + 4) > cbp->cr_length) {
+    } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(4, cap_get_cursor(cbp))) {
         do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
@@ -962,7 +963,7 @@ target_ulong helper_cjr(CPUMIPSState *env, uint32_t cb)
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
         do_raise_c2_exception(env, CP2Ca_GLOBAL, cb);
-    } else if ((cbp->cr_offset + 4) > cbp->cr_length) {
+    } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(4, cap_get_cursor(cbp))) {
         do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
@@ -1004,7 +1005,8 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_SEAL, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_SEAL, ct);
-    } else if (ctp->cr_offset >= ctp->cr_length) {
+    } else if (!cap_is_in_bounds(ctp, ct_base_plus_offset, /*num_bytes=*/1)) {
+        // Must be within bounds -> num_bytes=1
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
@@ -1486,7 +1488,8 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_TYPE, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_UNSEAL, ct);
-    } else if (ctp->cr_offset >= ctp->cr_length) {
+    } else if (!cap_is_in_bounds(ctp, ct_cursor, /*num_bytes=1*/1)) {
+        // Must be within bounds and not one past end (i.e. not equal to top -> num_bytes=1)
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (cap_get_cursor(ctp) >= CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
@@ -1884,11 +1887,7 @@ static target_ulong helper_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = (uint64_t)((cursor + rt) + (int32_t)offset);
         /* uint32_t tag = cheri_tag_get(env, addr, cd, NULL); */
-
-        if ((addr + CHERI_CAP_SIZE) > cap_get_top(cbp)) {
-            do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-            return (target_ulong)0;
-        } else if (addr < cbp->cr_base) {
+        if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
             return (target_ulong)0;
         } else if (align_of(CHERI_CAP_SIZE, addr)) {
