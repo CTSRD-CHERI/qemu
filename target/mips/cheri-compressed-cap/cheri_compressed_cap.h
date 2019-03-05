@@ -156,7 +156,7 @@ let null_cap : Capability = struct {
 }
  */
 enum {
-    CC128_RESET_EXP = 51, // actually 52 but that is implied by the IE flag
+    CC128_RESET_EXP = 52, // bit 12 in top is set -> shift by 52 to get 1 << 64
     // For a NULL capability we use the internal exponent and need bit 12 in top set
     // to get to 2^65
     CC128_RESET_TOP = 1u << (12 - CC128_FIELD_EXPONENT_HIGH_PART_SIZE),
@@ -174,7 +174,7 @@ enum {
 // Whatever NULL would encode to is this constant. We mask on store/load so this
 // invisibly keeps null 0 whatever we choose it to be.
 // #define CC128_NULL_XOR_MASK 0x1ffff8000000
-#define CC128_NULL_XOR_MASK 0x00001ffffc018003
+#define CC128_NULL_XOR_MASK 0x00001ffffc018004
 _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 
 #endif
