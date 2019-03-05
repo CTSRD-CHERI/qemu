@@ -282,15 +282,15 @@ static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
      */
 #if defined(__has_builtin)
 #if __has_builtin(__builtin_clzll)
-#define HAVE___BUILTIN_CLZ
+#define CAP_HAVE_BUILTIN_CLZ
 #endif
 #elif defined(__GNUC__)
 #define HAVE___BUILTIN_CLZ
 #endif
 
-#ifndef HAVE___BUILTIN_CLZ
+#ifndef CAP_HAVE_BUILTIN_CLZ
 /* floor(log2(x)) != floor(log2(y)) */
-#warning "__builtin_clzll not supported using slower path"
+#warning "__builtin_clzll not supported, using slower path"
 #define ld_neq(x, y) (((x) ^ (y)) > ((x) & (y)))
 
     uint32_t r = ld_neq(x, x & 0x5555555555555555ull) + (ld_neq(x, x & 0x3333333333333333ull) << 1) +
