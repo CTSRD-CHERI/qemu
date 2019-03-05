@@ -40,7 +40,7 @@ static void test_compressed_null_cap_is_zero() {
         // compressing this result should give 0 again
         cap_register_t decompressed;
         memset(&decompressed, 'b', sizeof(decompressed));
-        decompress_256cap(buffer, &decompressed);
+        decompress_256cap(buffer, &decompressed, false);
         CHECK_FIELD(decompressed, base, 0);
         CHECK_FIELD(decompressed, offset, 0);
         CHECK_FIELD(decompressed, uperms, 0);
@@ -69,7 +69,7 @@ static void test_decompress_zero_is_null_cap() {
     inmemory_chericap256 buffer;
     memset(&buffer.bytes, 0, sizeof(buffer));
     memset(&result, 'a', sizeof(result));
-    decompress_256cap(buffer, &result);
+    decompress_256cap(buffer, &result, false);
     fprintf(stderr, "Decompressed 256-bit NULL cap:\n");
     dump_cap_fields(result);
     fprintf(stderr, "\n");

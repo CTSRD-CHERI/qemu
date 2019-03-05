@@ -1444,6 +1444,7 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
+    const uint64_t ct_cursor = cap_get_cursor(ctp);
     /*
      * CUnseal: Unseal a sealed capability
      */
@@ -1455,14 +1456,16 @@ void helper_cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (is_cap_sealed(ctp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, ct);
-    } else if (cap_get_cursor(ctp) != csp->cr_otype) {
+    } else if (ct_cursor != csp->cr_otype) {
         do_raise_c2_exception(env, CP2Ca_TYPE, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_UNSEAL, ct);
     } else if (!cap_is_in_bounds(ctp, ct_cursor, /*num_bytes=1*/1)) {
         // Must be within bounds and not one past end (i.e. not equal to top -> num_bytes=1)
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if (cap_get_cursor(ctp) >= CAP_MAX_SEALED_OTYPE) {
+    } else if (ct_cursor >= CAP_MAX_SEALED_OTYPE) {
+        // This should never happen due to the ct_cursor != csp->cr_otype check
+        // above that should never succeed for
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else {
         cap_register_t result = *csp;

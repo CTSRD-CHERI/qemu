@@ -86,16 +86,17 @@ typedef struct cap_register cap_register_t;
 
 
 /* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
-#define CC256_PERMS_COUNT          (12)
-#define CC256_UPERMS_COUNT         (20)
-#define CC256_PERMS_MEM_SHFT       (1)  /* sealed bit comes first */
-#define CC256_UPERMS_MEM_SHFT      (CC256_PERMS_MEM_SHFT + CC256_PERMS_COUNT)
-#define CC256_PERMS_ALL_BITS       ((1 << CC256_PERMS_COUNT) - 1) /* 12 bits */
-#define CC256_UPERMS_ALL_BITS      ((1 << CC256_UPERMS_COUNT) - 1) /* 19 bits */
-#define CC256_MAX_UPERM            (19)
-#define CC256_OTYPE_ALL_BITS       ((1 << 24) - 1)
-#define CC256_OTYPE_MEM_SHFT       (32)
-#define CC256_OTYPE_BITS           (24)
+#define CC256_HWPERMS_COUNT           (12)
+#define CC256_HWPERMS_RESERVED_COUNT  (3)
+#define CC256_UPERMS_COUNT            (16)
+#define CC256_PERMS_MEM_SHFT          (1)  /* sealed bit comes first */
+#define CC256_UPERMS_MEM_SHFT         (CC256_PERMS_MEM_SHFT + CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT)
+#define CC256_PERMS_ALL_BITS          ((1 << CC256_HWPERMS_COUNT) - 1) /* 12 bits */
+#define CC256_PERMS_ALL_BITS_UNTAGGED ((1 << (CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT)) - 1) /* 15 bits */
+#define CC256_UPERMS_ALL_BITS         ((1 << CC256_UPERMS_COUNT) - 1) /* 19 bits */
+#define CC256_OTYPE_ALL_BITS          ((1 << 24) - 1)
+#define CC256_OTYPE_MEM_SHFT          (32)
+#define CC256_OTYPE_BITS              (24)
 #define CC256_NULL_LENGTH ((unsigned __int128)UINT64_MAX)
 
 
@@ -276,7 +277,14 @@ _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 
 
 /* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
-#ifndef CHERI_COMPRESSED_CONSTANTS_ONLY
+#ifndef CC128_DEFINE_FUNCTIONS
+#define CC128_DEFINE_FUNCTIONS 1
+#endif
+#ifndef CC256_DEFINE_FUNCTIONS
+#define CC256_DEFINE_FUNCTIONS 1
+#endif
+
+#if CC128_DEFINE_FUNCTIONS != 0
 
 /* Returns the index of the most significant bit set in x */
 static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
@@ -720,7 +728,10 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, uint64_t l
     return ((inRange && inLimits) || (e >= highest_exp));
 }
 
+#endif /* CC128_DEFINE_FUNCTIONS != 0 */
 
+
+#if CC256_DEFINE_FUNCTIONS != 0
 /* Also support decoding of the raw 256-bit capabilities */
 typedef union _inmemory_chericap256 {
     uint8_t bytes[32];
@@ -728,34 +739,42 @@ typedef union _inmemory_chericap256 {
     uint64_t u64s[4];
 } inmemory_chericap256;
 
-static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* cdp) {
+static inline bool cc256_is_cap_sealed(const cap_register_t* cp) {
+    return cp->cr_otype <= CC256_MAX_SEALED_OTYPE;
+}
+
+
+static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* cdp, bool tagged) {
     /* See CHERI ISA: Figure 3.1: 256-bit memory representation of a capability */
-#ifndef CHERI_128
     cdp->_sbit_for_memory = mem.u64s[0] & 1;
-#endif
-    cdp->cr_perms = (mem.u64s[0] >> CC256_PERMS_MEM_SHFT) & CC256_PERMS_ALL_BITS;
+    uint64_t hwperms_mask = tagged ? CC256_PERMS_ALL_BITS: CC256_PERMS_ALL_BITS_UNTAGGED;
+    cdp->cr_perms = (mem.u64s[0] >> CC256_PERMS_MEM_SHFT) & hwperms_mask;
     cdp->cr_uperms = (mem.u64s[0] >> CC256_UPERMS_MEM_SHFT) & CC256_UPERMS_ALL_BITS;
-    cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) ^ CC256_OTYPE_ALL_BITS;
+    cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) ^ CC256_OTYPE_UNSEALED;
     cdp->cr_base = mem.u64s[2];
     /* Length is xor'ed with -1 to ensure that NULL is all zeroes in memory */
     cdp->_cr_length = mem.u64s[3] ^ CC256_NULL_LENGTH;
     /* TODO: should just have a cr_cursor instead... But that's not the way QEMU works */
     cdp->cr_offset = mem.u64s[1] - cdp->cr_base;
+    cdp->cr_tag = tagged;
 }
 
 static inline void compress_256cap(inmemory_chericap256* buffer, const cap_register_t* csp) {
+
+    bool sealed_bit = csp->cr_tag ? cc256_is_cap_sealed(csp) : csp->_sbit_for_memory;
+    // When writing an untagged value, just write back the bits that were loaded (including the reserved HWPERMS)
+    uint64_t hwperms_mask = csp->cr_tag ? CC256_PERMS_ALL_BITS: CC256_PERMS_ALL_BITS_UNTAGGED;
     buffer->u64s[0] =
-#ifndef CHERI_128
-        csp->_sbit_for_memory |
-#endif
-        ((csp->cr_perms & CC256_PERMS_ALL_BITS) << CC256_PERMS_MEM_SHFT) |
+        sealed_bit |
+        ((csp->cr_perms & hwperms_mask) << CC256_PERMS_MEM_SHFT) |
         ((csp->cr_uperms & CC256_UPERMS_ALL_BITS) << CC256_UPERMS_MEM_SHFT) |
-        ((uint64_t)(csp->cr_otype ^ CC256_OTYPE_ALL_BITS) << CC256_OTYPE_MEM_SHFT);
+        ((uint64_t)(csp->cr_otype ^ CC256_OTYPE_UNSEALED) << CC256_OTYPE_MEM_SHFT);
     buffer->u64s[1] = csp->cr_base + csp->cr_offset;
     buffer->u64s[2] = csp->cr_base;
     uint64_t length64 = csp->_cr_length > UINT64_MAX ? UINT64_MAX : (uint64_t)csp->_cr_length;
     buffer->u64s[3] = length64 ^ CC256_NULL_LENGTH;
 }
 
-#endif /* CHERI_COMPRESSED_CONSTANTS_ONLY */
+#endif /* CC256_DEFINE_FUNCTIONS != 0 */
+
 #endif /* CHERI_COMPRESSED_CAP_H */
