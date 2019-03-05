@@ -2449,63 +2449,32 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
     // TODO: do one physical translation and then use that to speed up tag read
     /* Load otype and perms from memory (might trap on load) */
-    uint64_t otype_and_perms = cpu_ldq_data_ra(env, vaddr + 0, retpc);
-    uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
-    uint64_t base = cpu_ldq_data_ra(env, vaddr + 16, retpc);
-    uint64_t length = cpu_ldq_data_ra(env, vaddr + 24, retpc);
+    inmemory_chericap256 mem_buffer;
+    mem_buffer.u64s[0] = cpu_ldq_data_ra(env, vaddr + 0, retpc); /* perms+otype */
+    mem_buffer.u64s[1] = cpu_ldq_data_ra(env, vaddr + 8, retpc); /* cursor */
+    mem_buffer.u64s[2] = cpu_ldq_data_ra(env, vaddr + 16, retpc); /* base */
+    mem_buffer.u64s[3] = cpu_ldq_data_ra(env, vaddr + 24, retpc); /* length */
 
     target_ulong tag = cheri_tag_get(env, vaddr, cd, linked ? &env->lladdr : NULL, retpc);
     tag = clear_tag_if_no_loadcap(env, tag, cbp);
-    ncd.cr_tag = tag;
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
 
-    // XOR with unsealed otype so that NULL is zero in memory
-    ncd.cr_otype = (uint32_t)(otype_and_perms >> 32) ^ CAP_OTYPE_UNSEALED;
-    uint32_t perms = (uint32_t)(otype_and_perms >> 1);
-    uint64_t store_mem_perms = tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
-    ncd.cr_perms = perms & store_mem_perms;
-    ncd.cr_uperms = (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
-    if (otype_and_perms & 1ULL)
-        ncd._sbit_for_memory = 1;
-    else
-        ncd._sbit_for_memory = 0;
-
-    ncd.cr_length = length ^ -1UL; // XOR with -1 so that NULL is zero in memory
-    ncd.cr_base = base;
-    ncd.cr_offset = cursor - base;
+    // XOR with -1 so that NULL is zero in memory, etc.
+    decompress_256cap(mem_buffer, &ncd, tag);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory reads, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        dump_cap_load_op(vaddr, otype_and_perms, tag);
+        dump_cap_load_op(vaddr, mem_buffer.u64s[0], tag);
         cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
-        dump_cap_load_cbl(cursor, base, length);
+        dump_cap_load_cbl(cap_get_cursor(&ncd), cap_get_base(&ncd), cap_get_length(&ncd));
         cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
 #endif
 
     update_capreg(&env->active_tc, cd, &ncd);
-}
-
-static inline uint64_t cap2bytes_get_otype_and_perms(const cap_register_t *csp)
-{
-    uint64_t ret;
-    uint64_t perms;
-
-    // If the value is tagged we only store the actually available bits otherwise
-    // just store back the raw bits that we originally loaded.
-    uint64_t store_mem_perms = csp->cr_tag ? CAP_PERMS_ALL : CAP_HW_PERMS_ALL_MEM;
-
-    perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-        (csp->cr_perms & store_mem_perms));
-
-    // XOR with unsealed otype so that NULL is zero in memory
-    uint64_t inmemory_otype = ((uint64_t)(csp->cr_otype ^ CAP_OTYPE_UNSEALED)) << 32;
-    bool sbit = csp->cr_tag ? is_cap_sealed(csp) : csp->_sbit_for_memory;
-    ret = inmemory_otype | (perms << 1) | (sbit ? 1UL : 0UL);
-    return ret;
 }
 
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -2535,9 +2504,11 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     target_ulong vaddr, target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    inmemory_chericap256 mem_buffer;
+    compress_256cap(&mem_buffer, csp);
+
     /* Store otype and perms to memory (might trap on store) */
-    uint64_t otype_and_perms = cap2bytes_get_otype_and_perms(csp);
-    cpu_stq_data_ra(env, vaddr + 0, otype_and_perms, retpc);
+    cpu_stq_data_ra(env, vaddr + 0, mem_buffer.u64s[0], retpc);
     /*
      * Store cursor to memory. Also, set the tag bit.  We
      * set the tag bit here because the store above would
@@ -2553,23 +2524,21 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
     }
 
-    uint64_t cursor = cap_get_cursor(csp);
-    cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
-    uint64_t base = cap_get_base(csp);
-    cpu_stq_data_ra(env, vaddr + 16, base, retpc);
-    uint64_t length = cap_get_length(csp) ^ -1ULL;
-    cpu_stq_data_ra(env, vaddr + 24, length, retpc);
+    cpu_stq_data_ra(env, vaddr + 8, mem_buffer.u64s[1], retpc);
+    cpu_stq_data_ra(env, vaddr + 16, mem_buffer.u64s[2], retpc);
+    cpu_stq_data_ra(env, vaddr + 24, mem_buffer.u64s[3], retpc);
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        uint64_t otype_and_perms = mem_buffer.u64s[0];
         dump_cap_store_op(vaddr, otype_and_perms, csp->cr_tag);
         cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
-        dump_cap_store_cursor(cursor);
-        cvtrace_dump_cap_cursor(&env->cvtrace, cursor);
+        dump_cap_store_cursor(cap_get_cursor(csp));
+        cvtrace_dump_cap_cursor(&env->cvtrace, cap_get_cursor(csp));
         dump_cap_store_base(csp->cr_base);
-        cvtrace_dump_cap_base(&env->cvtrace, csp->cr_base);
-        dump_cap_store_length(csp->cr_length);
-        cvtrace_dump_cap_length(&env->cvtrace, csp->cr_length);
+        cvtrace_dump_cap_base(&env->cvtrace, cap_get_base(csp));
+        dump_cap_store_length(cap_get_length(csp));
+        cvtrace_dump_cap_length(&env->cvtrace, cap_get_length(csp));
     }
 #endif
 }
