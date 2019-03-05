@@ -419,8 +419,9 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     if (IE) {
         E = CC128_EXTRACT_FIELD(pesbt, EXPONENT_LOW_PART) |
             (CC128_EXTRACT_FIELD(pesbt, EXPONENT_HIGH_PART) << CC128_FIELD_EXPONENT_LOW_PART_SIZE);
-        E += 1; // Offset by 1. We don't need to encode E=0
-        E = MIN(64 - BWidth + 2, E);
+        // Do not offset by 1! We also need to encode E=0 even with IE
+        // Also allow nonsense values over 64 - BWidth + 2: this is expected by sail-generated tests
+        // E = MIN(64 - BWidth + 2, E);
         B = CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_BOTTOM) << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
         T = CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_TOP) << CC128_FIELD_EXPONENT_HIGH_PART_SIZE;
         L_msb = 1;
@@ -432,7 +433,6 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     }
     cdp->cr_otype = CC128_EXTRACT_FIELD(pesbt, OTYPE);
 #endif
-
 
     /*
         Reconstruct top two bits of T given T = B + len and:
