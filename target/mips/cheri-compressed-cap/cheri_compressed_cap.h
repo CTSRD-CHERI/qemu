@@ -45,7 +45,7 @@ struct cap_register {
     /* offset = cursor - base */
     uint64_t cr_offset; /* Capability offset */
     uint64_t cr_base;   /* Capability base addr */
-    unsigned __int128 cr_length; /* Capability length */
+    unsigned __int128 _cr_length; /* Capability length */
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
     uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
@@ -179,6 +179,8 @@ _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 
 #endif
 
+#define CAP_MAX_ADDRESS_PLUS_ONE ((unsigned __int128)1u << 64)
+
 #define CC128_PERM_GLOBAL          (1 << 0)
 #define CC128_PERM_EXECUTE         (1 << 1)
 #define CC128_PERM_LOAD            (1 << 2)
@@ -200,6 +202,9 @@ _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 #define CC128_UPERMS_SHFT          (15)
 #define CC128_UPERMS_MEM_SHFT      (12)
 #define CC128_MAX_UPERM            (3)
+#define CC128_NULL_TOP_VALUE CAP_MAX_ADDRESS_PLUS_ONE
+#define CC128_NULL_LENGTH CAP_MAX_ADDRESS_PLUS_ONE
+
 
 /* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
 #define CC256_PERMS_COUNT          (12)
@@ -212,6 +217,7 @@ _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 #define CC256_OTYPE_ALL_BITS       ((1 << 24) - 1)
 #define CC256_OTYPE_MEM_SHFT       (32)
 #define CC256_OTYPE_BITS           (24)
+#define CC256_NULL_LENGTH ((unsigned __int128)UINT64_MAX)
 
 
 
@@ -258,7 +264,6 @@ enum CC_OTypes {
 #define CAP_LAST_SPECIAL_OTYPE_SIGN_EXTENDED ((uint64_t)-3)
 #define CAP_MAX_SEALED_OTYPE (CAP_LAST_SPECIAL_OTYPE - 1u)
 
-
 /* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
 #ifndef CHERI_COMPRESSED_CONSTANTS_ONLY
 
@@ -295,7 +300,7 @@ static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
 #undef ld_neq
 #else
     assert(x != 0);
-    uint32_t r = 63u - __builtin_clzll(x);
+    uint32_t r = 63u - (uint32_t)__builtin_clzll(x);
     // printf("%s: %016llx = %d (__builtin_clzll(x) = %d, 63 - clz = %d)\n", __func__, x, r, __builtin_clzll(x), 63 -
     // __builtin_clzll(x));
 #endif
@@ -417,21 +422,21 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     uint32_t T;
 
     if (IE) {
-        E = CC128_EXTRACT_FIELD(pesbt, EXPONENT_LOW_PART) |
-            (CC128_EXTRACT_FIELD(pesbt, EXPONENT_HIGH_PART) << CC128_FIELD_EXPONENT_LOW_PART_SIZE);
+        E = (uint8_t)(CC128_EXTRACT_FIELD(pesbt, EXPONENT_LOW_PART) |
+            (CC128_EXTRACT_FIELD(pesbt, EXPONENT_HIGH_PART) << CC128_FIELD_EXPONENT_LOW_PART_SIZE));
         // Do not offset by 1! We also need to encode E=0 even with IE
         // Also allow nonsense values over 64 - BWidth + 2: this is expected by sail-generated tests
         // E = MIN(64 - BWidth + 2, E);
-        B = CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_BOTTOM) << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
-        T = CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_TOP) << CC128_FIELD_EXPONENT_HIGH_PART_SIZE;
+        B = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_BOTTOM) << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        T = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_TOP) << CC128_FIELD_EXPONENT_HIGH_PART_SIZE;
         L_msb = 1;
     } else {
         E = 0;
         L_msb = 0;
-        B = CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_BOTTOM);
-        T = CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_TOP);
+        B = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_BOTTOM);
+        T = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_TOP);
     }
-    cdp->cr_otype = CC128_EXTRACT_FIELD(pesbt, OTYPE);
+    cdp->cr_otype = (uint32_t)CC128_EXTRACT_FIELD(pesbt, OTYPE);
 #endif
 
     /*
@@ -458,13 +463,13 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
         cb = B < r ? INT64_C(1) : INT64_C(0);
     }
 
-    uint8_t shift = E + BWidth;
+    uint8_t shift = (uint8_t)(E + BWidth);
 
     uint64_t cursor_top = shift >= 64 ? 0 : cursor >> shift;
     // Top is 65 bits -> use __int128 which is quite efficient (seems better than
     // a separate boolean flag unless you spend a lot of time optimizing that).
-    unsigned __int128 top = (unsigned __int128)(((cursor_top + (int64_t)ct) << BWidth) | (uint64_t)T) << E;
-    uint64_t base = (((cursor_top + (int64_t)cb) << BWidth) | (uint64_t)B) << E;
+    unsigned __int128 top = (unsigned __int128)(((cursor_top + (uint64_t)(int64_t)ct) << BWidth) | (uint64_t)T) << E;
+    uint64_t base = (((cursor_top + (uint64_t)(int64_t)cb) << BWidth) | (uint64_t)B) << E;
 
     // Pretend that top is a 65 bit integer
 
@@ -473,10 +478,10 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     assert(top_high <= 1); // should be at most 1 bit over
 
     // TODO: should really store top and not length!
-    cdp->cr_length = top - base;
+    cdp->_cr_length = top - base;
     if (top < base) {
         // This can happen for invalid capabilities with arbitrary bit patterns
-        assert((signed __int128)cdp->cr_length < 0); // must be negative
+        assert((signed __int128)cdp->_cr_length < 0); // must be negative
     }
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
@@ -507,31 +512,32 @@ static inline uint64_t compress_128cap(const cap_register_t* csp) {
 #else
     uint32_t BWidth = CC128_BOT_WIDTH;
 #endif
-    uint32_t BMask = (1 << BWidth) - 1;
+    uint32_t BMask = (1u << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
 
     uint64_t base = csp->cr_base;
-    uint64_t top = csp->cr_base + csp->cr_length;
-    uint64_t length = top - base;
+    unsigned __int128 top = csp->cr_base + csp->_cr_length;
+    uint64_t length64 = (uint64_t)csp->_cr_length;
 
     bool IE;
     uint32_t Te, Be;
     uint8_t E;
 
-    if (top == UINT64_C(~0)) {
-        top = 0; // Actually 1 << 64
-        length++;
+    if (top > UINT64_MAX) {
+        top = CAP_MAX_ADDRESS_PLUS_ONE; // Actually 1 << 64
+        length64++;
 
         // Length of 0 is 1 << 64.
-        if (length == 0) {
-            E = 64 - BWidth + 2;
+        if (length64 == 0) {
+            assert(csp->_cr_length > UINT64_MAX); // should really be > 1 << 64
+            E = (uint8_t)(64 - BWidth + 2);
         } else {
-            E = cc128_compute_e(length, BWidth);
+            E = (uint8_t)cc128_compute_e(length64, BWidth);
         }
 
         Te = (1ULL << (64 - E)) & TMask;
     } else {
-        E = cc128_compute_e(length, BWidth);
+        E = (uint8_t)cc128_compute_e(length64, BWidth);
         Te = (top >> E) & TMask;
     }
 
@@ -546,7 +552,7 @@ static inline uint64_t compress_128cap(const cap_register_t* csp) {
         Be |= (E >> CC_L_LOWWIDTH) & CC_L_LOWMASK;
         Te |= E & CC_L_LOWMASK;
     } else {
-        LH = (length >> (BWidth - 2)) & 1;
+        LH = (length64 >> (BWidth - 2)) & 1;
     }
     if (seal_mode == CC_SEAL_MODE_SEALED) {
         uint64_t hi = ((uint64_t)csp->cr_otype >> (CC_L_TYPES / 2)) & ((1 << (CC_L_TYPES / 2)) - 1);
@@ -563,7 +569,6 @@ static inline uint64_t compress_128cap(const cap_register_t* csp) {
          (uint64_t)Be);
 #else
     if (IE) {
-        E -= 1; // Don't need to encode E=0
         // Split E between T and B
         Te |= (E >> CC128_FIELD_EXPONENT_LOW_PART_SIZE) & CC128_FIELD_EXPONENT_HIGH_PART_MAX_VALUE;
         Be |= E & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE;
@@ -646,18 +651,20 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, uint64_t l
 #define MAGIC_TYPE 0b1011011101
 
         c.cr_base = base;
-        c.cr_length = length;
+        c._cr_length = length;
         c.cr_offset = new_offset;
         c.cr_otype = sealed ? 0 : CAP_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
 
         pesbt = compress_128cap(&c);
         decompress_128cap(pesbt, base + new_offset, &c);
 
-        if (c.cr_base != base || c.cr_length != length || c.cr_offset != new_offset)
+        if (c.cr_base != base || c._cr_length != length || c.cr_offset != new_offset)
             return false;
 
         return true;
     }
+#else
+    (void)sealed; // no longer used since otype is always present
 #endif // CC128_OLD_FORMAT
 
     uint32_t bwidth = CC128_BOT_WIDTH;
@@ -677,20 +684,20 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, uint64_t l
 
     int64_t b, r, Imid, Amid;
     bool inRange, inLimits;
-    int64_t inc = new_offset - offset;
+    int64_t inc = (int64_t)(new_offset - offset);
 
 #define MOD_MASK ((UINT64_C(1) << bwidth) - UINT64_C(1))
 
     /* Check for the boundary cases. */
 
     b = (int64_t)((base >> e) & MOD_MASK);
-    Imid = (int64_t)((inc >> e) & MOD_MASK);
+    Imid = (int64_t)((uint64_t)(inc >> e) & MOD_MASK);
     Amid = (int64_t)(((base + offset) >> e) & MOD_MASK);
 
-    r = (((b >> (bwidth - 3)) - 1) << (bwidth - 3)) & MOD_MASK;
+    r = (int64_t)(((uint64_t)((b >> (bwidth - 3)) - 1) << (bwidth - 3)) & MOD_MASK);
 
     /* inRange, test if bits are all the same */
-    inRange = cc128_all_ones(inc, e, bwidth) || cc128_all_zeroes(inc, e, bwidth);
+    inRange = cc128_all_ones((uint64_t)inc, e, bwidth) || cc128_all_zeroes((uint64_t)inc, e, bwidth);
 
     /* inLimits */
     if (inc >= 0) {
@@ -721,7 +728,7 @@ static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* c
     cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) ^ CC256_OTYPE_ALL_BITS;
     cdp->cr_base = mem.u64s[2];
     /* Length is xor'ed with -1 to ensure that NULL is all zeroes in memory */
-    cdp->cr_length = mem.u64s[3] ^ UINT64_C(~0);
+    cdp->_cr_length = mem.u64s[3] ^ CC256_NULL_LENGTH;
     /* TODO: should just have a cr_cursor instead... But that's not the way QEMU works */
     cdp->cr_offset = mem.u64s[1] - cdp->cr_base;
 }
@@ -736,7 +743,8 @@ static inline void compress_256cap(inmemory_chericap256* buffer, const cap_regis
         ((uint64_t)(csp->cr_otype ^ CC256_OTYPE_ALL_BITS) << CC256_OTYPE_MEM_SHFT);
     buffer->u64s[1] = csp->cr_base + csp->cr_offset;
     buffer->u64s[2] = csp->cr_base;
-    buffer->u64s[3] = csp->cr_length ^ 0xffffffffffffffff;
+    uint64_t length64 = csp->_cr_length > UINT64_MAX ? UINT64_MAX : (uint64_t)csp->_cr_length;
+    buffer->u64s[3] = length64 ^ CC256_NULL_LENGTH;
 }
 
 #endif /* CHERI_COMPRESSED_CONSTANTS_ONLY */

@@ -7,6 +7,12 @@
 
 static bool failed = false;
 
+std::basic_ostream<char, std::char_traits<char>>& operator<<(std::basic_ostream<char, std::char_traits<char>>& __out, unsigned __int128 i);
+
+std::basic_ostream<char, std::char_traits<char>>& operator<<(std::basic_ostream<char, std::char_traits<char>>& __out, unsigned __int128 i) {
+    return __out << "{" << (uint64_t)(i >> 64) << "," << (uint64_t)(i) << "}";
+}
+
 template <typename T> static void check(T expected, T actual, const char* msg) {
     if (expected == actual)
         return;
@@ -14,13 +20,14 @@ template <typename T> static void check(T expected, T actual, const char* msg) {
     failed = true;
 }
 
-#define __STRINGIFY(x) #x
-#define _STRINGIFY(x) __STRINGIFY(x)
-#define STRINGIFY(x) _STRINGIFY(x)
+#define DO_STRINGIFY2(x) #x
+#define DO_STRINGIFY1(x) DO_STRINGIFY2(x)
+#define STRINGIFY(x) DO_STRINGIFY1(x)
 
-#define CHECK_FIELD(cap, field, expected) check((uint64_t)expected, (uint64_t)cap.cr_##field, "Line " STRINGIFY(__LINE__) ": " #field " is wrong")
+#define CHECK_FIELD_RAW(value, expected) check(expected, value, "Line " STRINGIFY(__LINE__) ": " #value " is wrong")
+#define CHECK_FIELD(cap, field, expected) CHECK_FIELD_RAW((uint64_t)cap.cr_##field, (uint64_t)expected)
 
-static cap_register_t decompress_representable(uint64_t pesbt, uint64_t cursor) {
+__attribute__((used)) static cap_register_t decompress_representable(uint64_t pesbt, uint64_t cursor) {
     cap_register_t result;
     printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt, cursor);
     decompress_128cap(pesbt, cursor, &result);
@@ -28,7 +35,7 @@ static cap_register_t decompress_representable(uint64_t pesbt, uint64_t cursor) 
     printf("User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
     printf("Base:        0x%" PRIx64 "\n", result.cr_base);
     printf("Offset:      0x%" PRIx64 "\n", result.cr_offset);
-    printf("Length:      0x%" PRIx64 "\n", result.cr_length);
+    printf("Length:      0x%" PRIx64 "%016" PRIx64 "\n", (uint64_t)(result._cr_length >> 64), (uint64_t)result._cr_length);
     printf("Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
     printf("OType:      0x%" PRIx32 "\n", result.cr_otype);
     printf("\n");
@@ -44,7 +51,7 @@ static void test_compressed_null_cap_is_zero() {
         cap_register_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
         null_cap.cr_otype = CC128_OTYPE_UNSEALED;
-        null_cap.cr_length = UINT64_C(~0);
+        null_cap._cr_length = CC128_NULL_LENGTH;
         auto pesbt = compress_128cap(&null_cap);
         check(pesbt, (uint64_t)0, "compressing NULL should result in zero pesbt");
         cap_register_t decompressed;
@@ -55,7 +62,7 @@ static void test_compressed_null_cap_is_zero() {
         CHECK_FIELD(decompressed, uperms, 0);
         CHECK_FIELD(decompressed, perms, 0);
         CHECK_FIELD(decompressed, pesbt, 0); // loaded pesbt xored with mask
-        CHECK_FIELD(decompressed, length, UINT64_C(~0));
+        CHECK_FIELD_RAW(decompressed._cr_length, CC128_NULL_LENGTH);
         CHECK_FIELD(decompressed, otype, CC128_OTYPE_UNSEALED);
     }
     {
@@ -63,7 +70,7 @@ static void test_compressed_null_cap_is_zero() {
         cap_register_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
         null_cap.cr_otype = CC256_OTYPE_UNSEALED;
-        null_cap.cr_length = UINT64_C(~0);
+        null_cap._cr_length = CC256_NULL_LENGTH;
         inmemory_chericap256 buffer;
         compress_256cap(&buffer, &null_cap);
         check(buffer.u64s[0], (uint64_t)0, "compressing NULL should result in zero[0]");
@@ -79,9 +86,8 @@ static void test_compressed_null_cap_is_zero() {
         CHECK_FIELD(decompressed, offset, 0);
         CHECK_FIELD(decompressed, uperms, 0);
         CHECK_FIELD(decompressed, perms, 0);
-        CHECK_FIELD(decompressed, length, UINT64_C(~0));
+        CHECK_FIELD_RAW(decompressed._cr_length, CC256_NULL_LENGTH);
         CHECK_FIELD(decompressed, otype, CC256_OTYPE_UNSEALED);
-
     }
 }
 
@@ -94,9 +100,8 @@ static void test_decompress_zero_is_null_cap() {
     CHECK_FIELD(result, uperms, 0);
     CHECK_FIELD(result, perms, 0);
     CHECK_FIELD(result, pesbt, 0); // loaded pesbt xored with mask
-    CHECK_FIELD(result, length, UINT64_C(~0));
+    CHECK_FIELD_RAW(result._cr_length, CC128_NULL_LENGTH);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
-
 
     // Same for CHERI256
     inmemory_chericap256 buffer;
@@ -107,7 +112,7 @@ static void test_decompress_zero_is_null_cap() {
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0);
     CHECK_FIELD(result, perms, 0);
-    CHECK_FIELD(result, length, UINT64_C(~0));
+    CHECK_FIELD_RAW(result._cr_length, CC256_NULL_LENGTH);
     CHECK_FIELD(result, otype, CC256_OTYPE_UNSEALED);
 }
 
@@ -118,7 +123,7 @@ static void test1() {
     CHECK_FIELD(result, offset, 0x9000000040001650);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xfae);
-    CHECK_FIELD(result, length, UINT64_MAX);
+    CHECK_FIELD_RAW(result._cr_length, CAP_MAX_ADDRESS_PLUS_ONE);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -128,7 +133,7 @@ static void test2() {
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffa);
-    CHECK_FIELD(result, length, 6);
+    CHECK_FIELD_RAW(result._cr_length, 6);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -138,7 +143,7 @@ static void test3() {
     CHECK_FIELD(result, offset, 0x266);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffa);
-    CHECK_FIELD(result, length, 0x400);
+    CHECK_FIELD_RAW(result._cr_length, 0x400);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -155,6 +160,7 @@ static void test4() {
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffe);
     CHECK_FIELD(result, length, 0x130000000);
+    CHECK_FIELD_RAW(result._cr_length, 0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -169,12 +175,13 @@ static void test5() {
     CHECK_FIELD(result, offset, 0xff0);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffe);
-    CHECK_FIELD(result, length, 0x130000000);
+    CHECK_FIELD_RAW(result._cr_length, 0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 #endif
 
 int main() {
+    fprintf(stderr, "NULL PESBT= %016" PRIx64 "\n", (uint64_t)CC128_NULL_PESBT);
     test_compressed_null_cap_is_zero();
     test_decompress_zero_is_null_cap();
 #ifdef CC128_OLD_FORMAT
