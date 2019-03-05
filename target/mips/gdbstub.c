@@ -157,8 +157,11 @@ int mips_gdb_set_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 #if defined(TARGET_CHERI)
 static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
 {
-#ifdef CHERI_128
-    stq_p(mem_buf, cap->cr_pesbt);
+#if defined(CHERI_128)
+    // If the capability has a valid tag bit we must recompress since the
+    // pesbt value might not match the current value (csetbounds could have
+    // changed the bounds).
+    stq_p(mem_buf, cap->cr_tag ? compress_128cap(cap) : cap->cr_pesbt);
     stq_p(mem_buf + 8, cap_get_cursor(cap));
     return 16;
 #elif defined(CHERI_MAGIC128)
