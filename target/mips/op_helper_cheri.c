@@ -696,8 +696,11 @@ target_ulong helper_cgetlen(CPUMIPSState *env, uint32_t cb)
     /*
      * CGetLen: Move Length to a General-Purpose Register
      */
-    /* For 128-bit Capabilities we must check len >= 2^64 */
-    return (target_ulong)get_readonly_capreg(&env->active_tc, cb)->cr_length;
+    /*
+     * For 128-bit Capabilities we must check len >= 2^64:
+     * cap_get_length() converts 1 << 64 to UINT64_MAX)
+     */
+    return (target_ulong)cap_get_length(get_readonly_capreg(&env->active_tc, cb));
 }
 
 target_ulong helper_cgetoffset(CPUMIPSState *env, uint32_t cb)
@@ -803,6 +806,7 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
 void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
+    // TODO: remove this?
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CIncBase: Increase Base
@@ -811,12 +815,12 @@ void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp) && rt != 0) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (rt > cbp->cr_length) {
+    } else if (rt > cbp->_cr_length) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         cap_register_t result = *cbp;
         result.cr_base = cbp->cr_base + rt;
-        result.cr_length = cbp->cr_length - rt;
+        result._cr_length = cbp->_cr_length - rt;
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -1064,7 +1068,7 @@ void helper_cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct)
         // if cdp cd == ct (this was caught by testing cbuildcap $c3, $c1, $c3)
         cap_register_t result = *cbp;
         result.cr_base = ctp->cr_base;
-        result.cr_length = ctp->cr_length;
+        result._cr_length = ctp->_cr_length;
         result.cr_perms = ctp->cr_perms;
         result.cr_uperms = ctp->cr_uperms;
         result.cr_offset = ctp->cr_offset;
@@ -1275,7 +1279,7 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else {
         cap_register_t result = *cbp;
         result.cr_base = cursor;
-        result.cr_length = rt;
+        result._cr_length = rt;
         result.cr_offset = new_offset;
         update_capreg(&env->active_tc, cd, &result);
     }
@@ -1315,7 +1319,7 @@ void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else {
         cap_register_t result = *cbp;
         result.cr_base = cursor;
-        result.cr_length = rt;
+        result._cr_length = rt;
         result.cr_offset = (target_ulong)0;
         update_capreg(&env->active_tc, cd, &result);
     }
@@ -1367,6 +1371,7 @@ void helper_csetcause(CPUMIPSState *env, target_ulong rt)
 void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
+    // TODO: GC these instructions
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CSetLen: Set Length
@@ -1375,11 +1380,11 @@ void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (rt > cbp->cr_length) {
+    } else if (rt > cap_get_length(cbp)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         cap_register_t result = *cbp;
-        result.cr_length = rt;
+        result._cr_length = rt;
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -1640,7 +1645,7 @@ target_ulong helper_cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct)
             equal = FALSE;
         } else if (cbp->cr_offset != ctp->cr_offset) {
             equal = FALSE;
-        } else if (cbp->cr_length != ctp->cr_length) {
+        } else if (cbp->_cr_length != ctp->_cr_length) {
             equal = FALSE;
         } else if (cbp->cr_otype != ctp->cr_otype) {
             equal = FALSE;
@@ -2076,7 +2081,7 @@ static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         cvtrace->val3 = tswap64(cr->cr_offset + cr->cr_base);
         cvtrace->val4 = tswap64(cr->cr_base);
-        cvtrace->val5 = tswap64(cr->cr_length);
+        cvtrace->val5 = tswap64(cap_get_length(cr)); // write UINT64_MAX for 1 << 64
     }
 }
 
@@ -2315,7 +2320,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         ncd._sbit_for_memory = 1;
     else
         ncd._sbit_for_memory = 0;
-    ncd.cr_length = length ^ -1UL;
+    ncd._cr_length = length ^ CAP_MAX_LENGTH;
     ncd.cr_base = base;
     ncd.cr_offset = cursor - base;
     ncd.cr_tag = tag;
@@ -2355,7 +2360,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     uint64_t tps = ((uint64_t)(csp->cr_otype ^ CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
         (perms << 1) | (sbit ? 1UL : 0UL);
 
-    uint64_t length = csp->cr_length ^ -1UL;
+    uint64_t length = csp->_cr_length ^ CAP_MAX_LENGTH;
     /* Store the remaining "magic" data with the tags */
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, NULL, retpc);
     env->statcounters_cap_write++;
@@ -2744,7 +2749,8 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
             ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
             (crp->cr_perms & CAP_PERMS_ALL),
             (uint64_t)cap_get_otype(crp), /* testsuite wants -1 for unsealed */
-            crp->cr_offset, crp->cr_base, crp->cr_length);
+            crp->cr_offset, crp->cr_base,
+            cap_get_length(crp) /* testsuite expects UINT64_MAX for 1 << 64) */);
 #endif
 }
 

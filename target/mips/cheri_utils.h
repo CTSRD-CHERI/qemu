@@ -38,8 +38,14 @@
 #define cheri_debug_assert(cond) tcg_debug_assert(cond)
 
 /* Don't define the functions for CHERI256 (but we need CAP_MAX_OTYPE) */
-#ifndef CHERI_128
-#define CHERI_COMPRESSED_CONSTANTS_ONLY
+#ifdef CHERI_128
+// Don't use _sbit_for_memory in cheri256 cap_register_t
+#define CC256_DEFINE_FUNCTIONS 0
+#define CAP_MAX_LENGTH CC128_NULL_LENGTH
+#else
+// Don't use cr_pesbt in cheri256 cap_register_t
+#define CC128_DEFINE_FUNCTIONS 0
+#define CAP_MAX_LENGTH CC256_NULL_LENGTH
 #endif
 /* Don't let cheri_compressed_cap define cap_register_t */
 #define HAVE_CAP_REGISTER_T
@@ -70,12 +76,15 @@ static inline uint64_t cap_get_offset(const cap_register_t* c) {
 }
 
 static inline uint64_t cap_get_length(const cap_register_t* c) {
-    return c->cr_length;
+    // TODO: should handle last byte of address space properly
+    return c->_cr_length > UINT64_MAX ? UINT64_MAX : (uint64_t)c->_cr_length;
 }
 
 // The top of the capability (exclusive -- i.e., one past the end)
 static inline uint64_t cap_get_top(const cap_register_t* c) {
-    return c->cr_base + c->cr_length;
+    // TODO: should handle last byte of address space properly
+    unsigned __int128 top = c->cr_base + c->_cr_length;
+    return top > UINT64_MAX ? UINT64_MAX : (uint64_t)top;
 }
 
 static inline uint64_t cap_get_otype(const cap_register_t* c) {
@@ -168,7 +177,8 @@ static inline void cap_make_sealed_entry(cap_register_t* c) {
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
-    cp->cr_length = ~UINT64_C(0); // But length should be -1
+    // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
+    cp->_cr_length = CAP_MAX_LENGTH;
     cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
     return cp;
 }
@@ -196,7 +206,7 @@ static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
 #endif
     cr->cr_tag = 0;
     cr->cr_base = 0;
-    cr->cr_length = -1;
+    cr->_cr_length = CAP_MAX_LENGTH;
     cr->cr_offset = x;
     return cr;
 }
@@ -209,7 +219,8 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
     // crp->cr_cursor = 0UL;
     crp->cr_offset = offset;
     crp->cr_base = 0UL;
-    crp->cr_length = ~0UL;
+    // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
+    crp->_cr_length = CAP_MAX_LENGTH;
     crp->cr_otype = CAP_OTYPE_UNSEALED;
 #ifdef CHERI_128
     crp->cr_pesbt = 0UL;

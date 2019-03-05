@@ -11463,27 +11463,12 @@ static inline void clear_branch_hflags(DisasContext *ctx)
 #ifdef TARGET_CHERI
 static void _gen_copy_cap_register_impl(size_t dst_offset, size_t src_offset) {
     TCGv t0 = tcg_temp_new();
+    _Static_assert(sizeof(cap_register_t) % 8 == 0, "Must be divisible by 8");
+    for (size_t i = 0; i < sizeof(cap_register_t); i += 8) {
+        tcg_gen_ld_i64(t0, cpu_env, src_offset + i);
+        tcg_gen_st_i64(t0, cpu_env, dst_offset + i);
+    }
 
-    /* cr_offset */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_offset));
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_offset));
-
-    /* cr_base */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_base));
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_base));
-
-    /* cr_length */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_length));
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_length));
-
-    /* cr_perms and cr_uperms (load both together in one i64 load/store) */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_perms));
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_perms));
-#ifdef CHERI_128
-    /* cr_pesbt */
-    tcg_gen_ld_i64(t0, cpu_env, src_offset + offsetof(cap_register_t, cr_pesbt));
-    tcg_gen_st_i64(t0, cpu_env, dst_offset + offsetof(cap_register_t, cr_pesbt));
-#endif
     tcg_temp_free(t0);
 }
 
