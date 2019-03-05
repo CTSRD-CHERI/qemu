@@ -218,8 +218,33 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
 #endif
 }
 
-bool is_representable(bool sealed, uint64_t base, uint64_t length,
-                      uint64_t offset, uint64_t inc);
+#if defined(CHERI_128) && !defined(CHERI_MAGIC128)
+static inline bool
+is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
+        uint64_t new_offset)
+{
+    return cc128_is_representable(sealed, base, length, offset, new_offset);
+}
+
+static inline bool
+is_representable_cap(const cap_register_t* cap, uint64_t new_offset)
+{
+    return is_representable(cap_is_sealed_with_type(cap), cap_get_base(cap), cap_get_length(cap), cap_get_offset(cap), new_offset);
+}
+#else
+static inline bool
+is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
+        uint64_t new_offset)
+{
+    return true;
+}
+
+static inline bool
+is_representable_cap(const cap_register_t* cap, uint64_t new_offset)
+{
+    return true;
+}
+#endif
 
 #endif /* TARGET_CHERI */
 

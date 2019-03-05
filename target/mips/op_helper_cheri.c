@@ -277,27 +277,7 @@ void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const c
     fprintf(qemu_logfile, "             |" PRINT_CAP_FMTSTR_L2 "\n", PRINT_CAP_ARGS_L2(cr));
 }
 
-#ifdef CHERI_MAGIC128
-
-bool
-is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
-        uint64_t inc)
-{
-    return true;
-}
-
-static inline void
-_became_unrepresentable(CPUMIPSState *env, uint16_t reg)
-{
-}
-#elif defined(CHERI_128)
-
-bool
-is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
-        uint64_t new_offset)
-{
-    return cc128_is_representable(sealed, base, length, offset, new_offset);
-}
+#if defined(CHERI_128) && !defined(CHERI_MAGIC128)
 
 extern bool cheri_c2e_on_unrepresentable;
 extern bool cheri_debugger_on_unrepresentable;
@@ -314,17 +294,12 @@ _became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 
 #else
 
-bool
-is_representable(bool sealed, uint64_t base, uint64_t length, uint64_t offset,
-        uint64_t inc)
-{
-    return true;
-}
-
 static inline void
 _became_unrepresentable(CPUMIPSState *env, uint16_t reg)
 {
+    assert(false && "THIS SHOULD NOT BE CALLED");
 }
+
 #endif /* ! 128-bit capabilities */
 
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -650,8 +625,7 @@ void helper_cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
-        if (!is_representable(cap_is_sealed_with_type(cbp), cbp->cr_base,
-                    cbp->cr_length, cbp->cr_offset, rt)) {
+        if (!is_representable_cap(cbp, rt)) {
             became_unrepresentable(env, cd, cfromptr);
             cap_register_t result;
             update_capreg(&env->active_tc, cd,
@@ -758,8 +732,7 @@ void helper_cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs)
      * CGetPCCSetOffset: Get PCC with new offset
      * See Chapter 5 in CHERI Architecture manual.
      */
-    if (!is_representable(cap_is_sealed_with_type(pccp), pccp->cr_base,
-                pccp->cr_length, pccp->cr_offset, rs)) {
+    if (!is_representable_cap(pccp, rs)) {
         if (pccp->cr_tag)
             became_unrepresentable(env, cd, cgetpccsetoffset);
         cap_register_t result;
@@ -862,8 +835,7 @@ void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
         uint64_t cb_offset_plus_rt = cbp->cr_offset + rt;
-        if (!is_representable(cap_is_sealed_with_type(cbp), cbp->cr_base, cbp->cr_length,
-                    cbp->cr_offset, cb_offset_plus_rt)) {
+        if (!is_representable_cap(cbp, cb_offset_plus_rt)) {
             if (cbp->cr_tag) {
                 became_unrepresentable(env, cd, cincoffset);
             }
@@ -1010,8 +982,8 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if (!is_representable(true, csp->cr_base, csp->cr_length,
-                csp->cr_offset, csp->cr_offset)) {
+    } else if (!is_representable(true, cap_get_base(csp), cap_get_length(csp),
+                cap_get_offset(csp), cap_get_offset(csp))) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         cap_register_t result = *csp;
@@ -1425,8 +1397,7 @@ void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     if (cbp->cr_tag && is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
-        if (!is_representable(cap_is_sealed_with_type(cbp), cbp->cr_base, cbp->cr_length,
-                    cbp->cr_offset, rt)) {
+        if (!is_representable_cap(cbp, rt)) {
             if (cbp->cr_tag)
                 became_unrepresentable(env, cd, csetoffset);
             cap_register_t result;
