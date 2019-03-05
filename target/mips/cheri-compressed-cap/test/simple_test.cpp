@@ -54,6 +54,9 @@ static void test_decompress_zero_is_null_cap() {
     cap_register_t result;
     memset(&result, 'a', sizeof(result));
     decompress_128cap(0, 0, &result);
+    fprintf(stderr, "Decompressed 128-bit NULL cap:\n");
+    dump_cap_fields(result);
+    fprintf(stderr, "\n");
     CHECK_FIELD(result, base, 0);
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0);
@@ -67,6 +70,9 @@ static void test_decompress_zero_is_null_cap() {
     memset(&buffer.bytes, 0, sizeof(buffer));
     memset(&result, 'a', sizeof(result));
     decompress_256cap(buffer, &result);
+    fprintf(stderr, "Decompressed 256-bit NULL cap:\n");
+    dump_cap_fields(result);
+    fprintf(stderr, "\n");
     CHECK_FIELD(result, base, 0);
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0);
@@ -150,5 +156,7 @@ int main() {
     test4();
     test5();
 #endif
+    if (!failed)
+        printf("\nAll tests passed!\n");
     return failed ? 1 : 0;
 }

@@ -58,6 +58,47 @@ typedef struct cap_register cap_register_t;
 #endif
 
 
+#define CAP_MAX_ADDRESS_PLUS_ONE ((unsigned __int128)1u << 64)
+
+#define CC128_PERM_GLOBAL          (1 << 0)
+#define CC128_PERM_EXECUTE         (1 << 1)
+#define CC128_PERM_LOAD            (1 << 2)
+#define CC128_PERM_STORE           (1 << 3)
+#define CC128_PERM_LOAD_CAP        (1 << 4)
+#define CC128_PERM_STORE_CAP       (1 << 5)
+#define CC128_PERM_STORE_LOCAL     (1 << 6)
+#define CC128_PERM_SEAL            (1 << 7)
+#define CC128_PERM_CCALL           (1 << 8)
+#define CC128_PERM_UNSEAL          (1 << 9)
+#define CC128_PERM_ACCESS_SYS_REGS (1 << 10)
+#define CC128_PERM_SETCID          (1 << 11)
+#define CC128_PERM_RESERVED4       (1 << 12)
+#define CC128_PERM_RESERVED5       (1 << 13)
+#define CC128_PERM_RESERVED6       (1 << 14)
+
+#define CC128_PERMS_ALL            (0xfff)     /* [0...11] */
+#define CC128_UPERMS_ALL           (0xf)       /* [15...18] */
+#define CC128_UPERMS_SHFT          (15)
+#define CC128_UPERMS_MEM_SHFT      (12)
+#define CC128_MAX_UPERM            (3)
+#define CC128_NULL_TOP_VALUE CAP_MAX_ADDRESS_PLUS_ONE
+#define CC128_NULL_LENGTH CAP_MAX_ADDRESS_PLUS_ONE
+
+
+/* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
+#define CC256_PERMS_COUNT          (12)
+#define CC256_UPERMS_COUNT         (20)
+#define CC256_PERMS_MEM_SHFT       (1)  /* sealed bit comes first */
+#define CC256_UPERMS_MEM_SHFT      (CC256_PERMS_MEM_SHFT + CC256_PERMS_COUNT)
+#define CC256_PERMS_ALL_BITS       ((1 << CC256_PERMS_COUNT) - 1) /* 12 bits */
+#define CC256_UPERMS_ALL_BITS      ((1 << CC256_UPERMS_COUNT) - 1) /* 19 bits */
+#define CC256_MAX_UPERM            (19)
+#define CC256_OTYPE_ALL_BITS       ((1 << 24) - 1)
+#define CC256_OTYPE_MEM_SHFT       (32)
+#define CC256_OTYPE_BITS           (24)
+#define CC256_NULL_LENGTH ((unsigned __int128)UINT64_MAX)
+
+
 #ifdef CC128_OLD_FORMAT
 // These constants are for a cheri concentrate format for 128. They give either
 // 22 bits or 20 bits of precision depending on object size They give 20 bits
@@ -128,99 +169,7 @@ enum {
 #define CC128_OTYPE_BITS CC128_FIELD_OTYPE_SIZE
 #define CC128_BOT_WIDTH CC128_FIELD_BOTTOM_ENCODED_SIZE
 #define CC128_EXP_LOW_WIDTH CC128_FIELD_EXPONENT_LOW_PART_SIZE
-
-/* From sail:
-let null_cap : Capability = struct {
-  tag                    = false,
-  uperms                 = zeros(),
-  permit_set_CID         = false,
-  access_system_regs     = false,
-  permit_unseal          = false,
-  permit_ccall           = false,
-  permit_seal            = false,
-  permit_store_local_cap = false,
-  permit_store_cap       = false,
-  permit_load_cap        = false,
-  permit_store           = false,
-  permit_load            = false,
-  permit_execute         = false,
-  global                 = false,
-  reserved               = zeros(),
-  internal_e             = true,
-  E                      = resetE,
-  sealed                 = false,
-  B                      = zeros(),
-  T                      = resetT,
-  otype                  = ones(),
-  address                = zeros()
-}
- */
-enum {
-    CC128_RESET_EXP = 52, // bit 12 in top is set -> shift by 52 to get 1 << 64
-    // For a NULL capability we use the internal exponent and need bit 12 in top set
-    // to get to 2^65
-    CC128_RESET_TOP = 1u << (12 - CC128_FIELD_EXPONENT_HIGH_PART_SIZE),
-    CC128_NULL_PESBT =
-        CC128_ENCODE_FIELD(0, UPERMS) |
-        CC128_ENCODE_FIELD(0, HWPERMS) |
-        CC128_ENCODE_FIELD(0, RESERVED) |
-        CC128_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
-        CC128_ENCODE_FIELD(UINT64_C(~0), OTYPE) |
-        CC128_ENCODE_FIELD(CC128_RESET_TOP, EXP_NONZERO_TOP) |
-        CC128_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
-        CC128_ENCODE_FIELD(CC128_RESET_EXP >> CC128_FIELD_EXPONENT_LOW_PART_SIZE, EXPONENT_HIGH_PART) |
-        CC128_ENCODE_FIELD(CC128_RESET_EXP & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE, EXPONENT_LOW_PART)
-};
-// Whatever NULL would encode to is this constant. We mask on store/load so this
-// invisibly keeps null 0 whatever we choose it to be.
-// #define CC128_NULL_XOR_MASK 0x1ffff8000000
-#define CC128_NULL_XOR_MASK 0x00001ffffc018004
-_Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
-
 #endif
-
-#define CAP_MAX_ADDRESS_PLUS_ONE ((unsigned __int128)1u << 64)
-
-#define CC128_PERM_GLOBAL          (1 << 0)
-#define CC128_PERM_EXECUTE         (1 << 1)
-#define CC128_PERM_LOAD            (1 << 2)
-#define CC128_PERM_STORE           (1 << 3)
-#define CC128_PERM_LOAD_CAP        (1 << 4)
-#define CC128_PERM_STORE_CAP       (1 << 5)
-#define CC128_PERM_STORE_LOCAL     (1 << 6)
-#define CC128_PERM_SEAL            (1 << 7)
-#define CC128_PERM_CCALL           (1 << 8)
-#define CC128_PERM_UNSEAL          (1 << 9)
-#define CC128_PERM_ACCESS_SYS_REGS (1 << 10)
-#define CC128_PERM_SETCID          (1 << 11)
-#define CC128_PERM_RESERVED4       (1 << 12)
-#define CC128_PERM_RESERVED5       (1 << 13)
-#define CC128_PERM_RESERVED6       (1 << 14)
-
-#define CC128_PERMS_ALL            (0xfff)     /* [0...11] */
-#define CC128_UPERMS_ALL           (0xf)       /* [15...18] */
-#define CC128_UPERMS_SHFT          (15)
-#define CC128_UPERMS_MEM_SHFT      (12)
-#define CC128_MAX_UPERM            (3)
-#define CC128_NULL_TOP_VALUE CAP_MAX_ADDRESS_PLUS_ONE
-#define CC128_NULL_LENGTH CAP_MAX_ADDRESS_PLUS_ONE
-
-
-/* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
-#define CC256_PERMS_COUNT          (12)
-#define CC256_UPERMS_COUNT         (20)
-#define CC256_PERMS_MEM_SHFT       (1)  /* sealed bit comes first */
-#define CC256_UPERMS_MEM_SHFT      (CC256_PERMS_MEM_SHFT + CC256_PERMS_COUNT)
-#define CC256_PERMS_ALL_BITS       ((1 << CC256_PERMS_COUNT) - 1) /* 12 bits */
-#define CC256_UPERMS_ALL_BITS      ((1 << CC256_UPERMS_COUNT) - 1) /* 19 bits */
-#define CC256_MAX_UPERM            (19)
-#define CC256_OTYPE_ALL_BITS       ((1 << 24) - 1)
-#define CC256_OTYPE_MEM_SHFT       (32)
-#define CC256_OTYPE_BITS           (24)
-#define CC256_NULL_LENGTH ((unsigned __int128)UINT64_MAX)
-
-
-
 
 
 #define CC_SPECIAL_OTYPE(name, subtract) \
@@ -263,6 +212,68 @@ enum CC_OTypes {
 #define CAP_LAST_SPECIAL_OTYPE CAP_OTYPE_RESERVED3
 #define CAP_LAST_SPECIAL_OTYPE_SIGN_EXTENDED ((uint64_t)-3)
 #define CAP_MAX_SEALED_OTYPE (CAP_LAST_SPECIAL_OTYPE - 1u)
+
+#ifndef CC128_OLD_FORMAT
+/* From sail:
+let null_cap : Capability = struct {
+  tag                    = false,
+  uperms                 = zeros(),
+  permit_set_CID         = false,
+  access_system_regs     = false,
+  permit_unseal          = false,
+  permit_ccall           = false,
+  permit_seal            = false,
+  permit_store_local_cap = false,
+  permit_store_cap       = false,
+  permit_load_cap        = false,
+  permit_store           = false,
+  permit_load            = false,
+  permit_execute         = false,
+  global                 = false,
+  reserved               = zeros(),
+  internal_e             = true,
+  E                      = resetE,
+  sealed                 = false,
+  B                      = zeros(),
+  T                      = resetT,
+  otype                  = ones(),
+  address                = zeros()
+}
+ */
+enum {
+    CC128_RESET_EXP = 52, // bit 12 in top is set -> shift by 52 to get 1 << 64
+    // For a NULL capability we use the internal exponent and need bit 12 in top set
+    // to get to 2^65
+    CC128_RESET_TOP = 1u << (12 - CC128_FIELD_EXPONENT_HIGH_PART_SIZE),
+    CC128_NULL_PESBT =
+        CC128_ENCODE_FIELD(0, UPERMS) |
+        CC128_ENCODE_FIELD(0, HWPERMS) |
+        CC128_ENCODE_FIELD(0, RESERVED) |
+        CC128_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
+        CC128_ENCODE_FIELD(CC128_OTYPE_UNSEALED, OTYPE) |
+        CC128_ENCODE_FIELD(CC128_RESET_TOP, EXP_NONZERO_TOP) |
+        CC128_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
+        CC128_ENCODE_FIELD(CC128_RESET_EXP >> CC128_FIELD_EXPONENT_LOW_PART_SIZE, EXPONENT_HIGH_PART) |
+        CC128_ENCODE_FIELD(CC128_RESET_EXP & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE, EXPONENT_LOW_PART)
+};
+// Whatever NULL would encode to is this constant. We mask on store/load so this
+// invisibly keeps null 0 whatever we choose it to be.
+// #define CC128_NULL_XOR_MASK 0x1ffff8000000
+#define CC128_NULL_XOR_MASK 0x00001ffffc018004
+
+#ifdef __cplusplus
+template<size_t a, size_t b>
+static constexpr bool check_same() {
+    static_assert(a == b, "");
+    return true;
+}
+static_assert(check_same<CC128_NULL_XOR_MASK, CC128_NULL_PESBT>(), "");
+#else
+_Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
+#endif
+
+#endif /* CC128_OLD_FORMAT */
+
 
 /* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
 #ifndef CHERI_COMPRESSED_CONSTANTS_ONLY
@@ -496,7 +507,7 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
     decompress_128cap_already_xored(pesbt ^ CC128_NULL_XOR_MASK, cursor, cdp);
 }
 
-static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr_otype <= CAP_MAX_SEALED_OTYPE; }
+static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr_otype <= CC128_MAX_SEALED_OTYPE; }
 
 /*
  * Compress a capability to 128 bits.
@@ -516,29 +527,28 @@ static inline uint64_t compress_128cap(const cap_register_t* csp) {
     uint32_t TMask = BMask >> 2;
 
     uint64_t base = csp->cr_base;
-    unsigned __int128 top = csp->cr_base + csp->_cr_length;
-    uint64_t length64 = (uint64_t)csp->_cr_length;
+    const unsigned __int128 top = csp->cr_base + csp->_cr_length;
+    const uint64_t length64 = (uint64_t)csp->_cr_length;
+    const uint64_t top64 = (uint64_t)top;
+    const bool length65 = (csp->_cr_length >> 64) & 1;
 
     bool IE;
     uint32_t Te, Be;
     uint8_t E;
 
     if (top > UINT64_MAX) {
-        top = CAP_MAX_ADDRESS_PLUS_ONE; // Actually 1 << 64
-        length64++;
-
-        // Length of 0 is 1 << 64.
-        if (length64 == 0) {
+        // Length of 1 << 64.
+        if (length65) {
             assert(csp->_cr_length > UINT64_MAX); // should really be > 1 << 64
             E = (uint8_t)(64 - BWidth + 2);
         } else {
             E = (uint8_t)cc128_compute_e(length64, BWidth);
         }
 
-        Te = (1ULL << (64 - E)) & TMask;
+        Te = (UINT8_C(1) << (64 - E)) & TMask;
     } else {
         E = (uint8_t)cc128_compute_e(length64, BWidth);
-        Te = (top >> E) & TMask;
+        Te = (top64 >> E) & TMask;
     }
 
     Be = (base >> E) & BMask;

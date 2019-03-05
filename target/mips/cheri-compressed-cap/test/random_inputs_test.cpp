@@ -35,15 +35,8 @@ static bool test_one_entry(const test_input& ti) {
     success = success && check(ti.top.bit65, top_bit65, "Wrong top bit 65");
     if (!success) {
         fprintf(stderr, "Decompressed raw pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", ti.input.pesbt, ti.input.cursor);
-        fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.cr_perms); // TODO: decode perms
-        fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
-        fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result.cr_base);
-        fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result.cr_offset);
-        fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 "\n", (uint64_t)(result._cr_length >> 64), (uint64_t)result._cr_length);
-        fprintf(stderr, "top:         0x%" PRIx64 "%016" PRIx64 "\n", (uint64_t)(top_full >> 64), (uint64_t)top_full);
-        fprintf(stderr, "Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
-        fprintf(stderr, "OType:      0x%" PRIx32 "\n", result.cr_otype);
-        fprintf(stderr, "\n");
+        dump_cap_fields(result);
+
     }
     return success;
 }
@@ -55,5 +48,7 @@ int main() {
             continue;
         }
     }
+    if (!failed)
+        printf("\nAll tests passed!\n");
     return failed ? 1 : 0;
 }
