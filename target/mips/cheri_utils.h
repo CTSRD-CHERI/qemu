@@ -191,22 +191,34 @@ static inline bool is_null_capability(const cap_register_t *cp)
     return memcmp(null_capability(&null), cp, sizeof(cap_register_t)) == 0;
 }
 
-/*
- * Convert capability to its nullified representation when it
- * becomes unrepresentable.
- * This clears the tag bit and changes the capability bounds
- * to make sure that the new cursor is representable, all the
- * other fields are preserved for debuggability.
- */
-static inline cap_register_t *nullify_capability(uint64_t x, cap_register_t *cr)
+// Clear the tag bit and update the cursor:
+static inline cap_register_t *nullify_epcc(uint64_t x, cap_register_t *cr)
 {
-    assert(cap_is_unsealed(cr));
-#ifndef CHERI_128
-    cr->_sbit_for_memory = false;
-#endif
     cr->cr_tag = 0;
     cr->cr_base = 0;
     cr->_cr_length = CAP_MAX_LENGTH;
+    cr->cr_offset = x;
+    return cr;
+}
+
+/*
+ * Convert 64-bit integer into a capability that holds the integer in
+ * its offset field.
+ *
+ *       cap.base = 0, cap.tag = false, cap.offset = x
+ *
+ * The contents of other fields of int to cap depends on the capability
+ * compression scheme in use (e.g. 256-bit capabilities or 128-bit
+ * compressed capabilities). In particular, with 128-bit compressed
+ * capabilities, length is not always zero. The length of a capability
+ * created via int to cap is not semantically meaningful, and programs
+ * should not rely on it having any particular value.
+ */
+static inline const cap_register_t*
+int_to_cap(uint64_t x, cap_register_t *cr)
+{
+
+    (void)null_capability(cr);
     cr->cr_offset = x;
     return cr;
 }
