@@ -18,6 +18,11 @@ template <typename T> static bool check(T expected, T actual, const std::string&
     return false;
 }
 
+template <class T, std::size_t N>
+constexpr inline size_t array_lengthof(T (&)[N]) {
+  return N;
+}
+
 static const char* otype_suffix(uint32_t otype) {
     switch(otype) {
     case CC128_OTYPE_UNSEALED: return " (CC128_OTYPE_UNSEALED)";

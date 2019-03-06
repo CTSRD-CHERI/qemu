@@ -13,11 +13,6 @@ static_assert(CC128_FIELD_OTYPE_START == 27, "");
 static_assert(CC128_FIELD_OTYPE_SIZE == 18, "");
 static_assert(CC128_FIELD_OTYPE_LAST == 44, "");
 
-template <class T, std::size_t N>
-constexpr inline size_t array_lengthof(T (&)[N]) {
-  return N;
-}
-
 static bool check_fields_match(const cap_register_t& result, const test_input& ti, const std::string& prefix) {
         uint64_t top64 = (uint64_t)(result.cr_base + result._cr_length);
         unsigned __int128 top_full = result.cr_base + result._cr_length;
@@ -75,6 +70,17 @@ static bool test_one_entry(const test_input& ti) {
     }
     return success;
 }
+
+// bad test from cheritest:
+//     Write C24|v:1 s:0 p:00007ffd b:900000000000efe0 l:0000000000001000
+//             |o:0000000000000fa0 t:3ffff
+// -> 0x9000000040000a14:  csc	c24,zero,48(c11)
+//    Cap Tag Write [ff70] 0 -> 1
+//    Cap Memory Write [900000000000ff70] = v:1 PESBT:fffd000007f9afe4 Cursor:900000000000ff80
+// ->
+//    Cap Memory Read [900000000000ff70] = v:1 PESBT:fffd000007f9afe4 Cursor:900000000000ff80
+//    Write C24|v:1 s:0 p:00007ffd b:900000000000efe0 l:0000000000000000
+//             |o:0000000000000fa0 t:3ffff
 
 int main() {
     int failure_count = 0;

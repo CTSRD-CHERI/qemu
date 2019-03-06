@@ -41,6 +41,38 @@
 
 #include "cheri_compressed_cap.h"
 
+static const char* otype_suffix(uint32_t otype) {
+    switch(otype) {
+    case CC128_OTYPE_UNSEALED: return " (CC128_OTYPE_UNSEALED)";
+    case CC128_OTYPE_SENTRY: return " (CC128_OTYPE_SENTRY)";
+    case CC128_OTYPE_RESERVED2: return " (CC128_OTYPE_RESERVED2)";
+    case CC128_OTYPE_RESERVED3: return " (CC128_OTYPE_RESERVED3)";
+
+    case CC256_OTYPE_UNSEALED: return " (CC256_OTYPE_UNSEALED)";
+    case CC256_OTYPE_SENTRY: return " (CC256_OTYPE_SENTRY)";
+    case CC256_OTYPE_RESERVED2: return " (CC256_OTYPE_RESERVED2)";
+    case CC256_OTYPE_RESERVED3: return " (CC256_OTYPE_RESERVED3)";
+    default: return "";
+    }
+}
+
+static void dump_cap_fields(const cap_register_t* result) {
+    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result->cr_perms); // TODO: decode perms
+    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result->cr_uperms);
+    fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result->cr_base);
+    fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result->cr_offset);
+    fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n",
+            (uint64_t)(result->_cr_length >> 64), (uint64_t)result->_cr_length,
+            result->_cr_length > UINT64_MAX ? " (greater than UINT64_MAX)": "");
+    unsigned __int128 top_full = result->cr_base + result->_cr_length;
+    fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n",
+            (uint64_t)(top_full >> 64), (uint64_t)top_full,
+            top_full > UINT64_MAX ? " (greater than UINT64_MAX)": "");
+    fprintf(stderr, "Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
+    fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result->cr_otype, otype_suffix(result->cr_otype));
+    fprintf(stderr, "\n");
+}
+
 int main(int argc, char** argv) {
     if (argc < 3) {
         fprintf(stderr, "Usage: %s PESBT CURSOR\n", argv[0]);
@@ -60,14 +92,6 @@ int main(int argc, char** argv) {
     memset(&result, 0, sizeof(result));
     printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt, cursor);
     decompress_128cap(pesbt, cursor, &result);
-    printf("Permissions: 0x%" PRIx32 "\n", result.cr_perms); // TODO: decode perms
-    printf("User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
-    printf("Base:        0x%" PRIx64 "\n", result.cr_base);
-    printf("Offset:      0x%" PRIx64 "\n", result.cr_offset);
-    printf("Length:      0x%" PRIx64 "\n", result.cr_length);
-    printf("Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
-    if (cc128_is_cap_sealed(&result)) {
-        printf("OType:      0x%" PRIx32 "\n", result.cr_otype);
-    }
+    dump_cap_fields(&result);
     return EXIT_SUCCESS;
 }
