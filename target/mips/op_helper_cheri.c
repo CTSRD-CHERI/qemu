@@ -1202,16 +1202,16 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * representable.
      */
     uint64_t req_base = cursor;
-    uint64_t req_top = cursor + rt;
+    unsigned __int128 req_top = cursor + rt;
 
     uint32_t BWidth = CC128_BOT_WIDTH;
 
     uint8_t E;
 
-    uint64_t new_top = req_top;
+    uint64_t new_top64 = req_top;
 
-    if(req_top == -1ULL) {
-        new_top = 0; // actually 1 << 64
+    if (req_top > UINT64_MAX) {
+        new_top64 = 0; // actually 1 << 64
         rt++;
         if(rt == 0) { // actually 1 << 64
             E = 64 - BWidth + 2;
@@ -1223,18 +1223,18 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 
     if (E && (((rt >> E) & 0xF) == 0xF)) {
-        new_top = ((new_top >> E) + 1) << E;
+        new_top64 = ((new_top64 >> E) + 1) << E;
         E ++;
     }
 
     uint8_t need_zeros = E == 0 ? 0 : E + CC128_EXP_LOW_WIDTH;
 
     cursor = (cursor >> need_zeros) << need_zeros;
-    new_top = ((new_top + ((UINT64_C(1) << need_zeros) - 1)) >> need_zeros) << need_zeros;
+    new_top64 = ((new_top64 + ((UINT64_C(1) << need_zeros) - 1)) >> need_zeros) << need_zeros;
 
-    if(new_top < req_top) new_top = -1ULL; // overflow happened somewhere
+    if (new_top64 < req_top) new_top64 = UINT64_MAX; // overflow happened somewhere
 
-    rt = new_top - cursor;
+    rt = new_top64 - cursor;
     new_offset = req_base - cursor;
 
 #endif /* CHERI_128 */
