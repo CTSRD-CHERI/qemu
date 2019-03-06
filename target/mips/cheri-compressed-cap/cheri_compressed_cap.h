@@ -383,8 +383,6 @@ static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
  */
 
 static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
-
-
 #ifdef CC128_OLD_FORMAT
     cdp->cr_perms = cc128_getbits(pesbt, 48, 12);
     cdp->cr_uperms = cc128_getbits(pesbt, 60, 4);
@@ -504,13 +502,15 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     }
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
+    // TODO: add a bool tagged parameter and return false for invalid capabilities
+    //  and also only store pesbt for untagged values
+    cdp->cr_pesbt = pesbt; // save pebst (reserved bits) for untagged values
 }
 
 /*
  * Decompress a 128-bit capability.
  */
 static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
-
     cdp->cr_pesbt = pesbt;
     decompress_128cap_already_xored(pesbt ^ CC128_NULL_XOR_MASK, cursor, cdp);
 }
@@ -520,7 +520,7 @@ static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr
 /*
  * Compress a capability to 128 bits.
  */
-static inline uint64_t compress_128cap(const cap_register_t* csp) {
+static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
 #ifdef CC128_OLD_FORMAT
     int seal_mode = csp->cr_otype <= CAP_MAX_SEALED_OTYPE ? CC_SEAL_MODE_SEALED : CC_SEAL_MODE_UNSEALED;
     if (csp->cr_otype == CAP_OTYPE_SENTRY)
@@ -600,11 +600,13 @@ static inline uint64_t compress_128cap(const cap_register_t* csp) {
         CC128_ENCODE_FIELD(Be, BOTTOM_ENCODED);
     // For untagged values we add the initially loaded reserved bits in the reserved field:
     if (!csp->cr_tag)
-        pesbt |= CC128_EXTRACT_FIELD(csp->cr_pesbt, RESERVED);
+        pesbt |= CC128_ENCODE_FIELD(CC128_EXTRACT_FIELD(csp->cr_pesbt, RESERVED), RESERVED);
 #endif
-    pesbt ^= CC128_NULL_XOR_MASK;
-
     return pesbt;
+}
+
+static inline uint64_t compress_128cap(const cap_register_t* csp) {
+    return compress_128cap_without_xor(csp) ^ CC128_NULL_XOR_MASK;
 }
 
 /*
@@ -727,6 +729,52 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, uint64_t l
 
     return ((inRange && inLimits) || (e >= highest_exp));
 }
+
+#if 0
+static bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top) {
+    assert(cap->cr_tag && "Cannot be used on untagged capabilities");
+    /*
+     * With compressed capabilities we may need to increase the range of
+     * memory addresses to be wider than requested so it is
+     * representable.
+     */
+    uint64_t cursor = cap->cr_base + cap->cr_offset;
+    assert(req_base == cursor && "CSetbounds should set base to current cursor");
+    unsigned __int128 orig_length65 = cap->_cr_length;
+    unsigned __int128 req_length65 = req_top - cursor;
+    assert((orig_length65 >> 64) <= 1 && "Length cannot be bigger than 1 << 64")
+    assert((req_top >> 64) <= 1 && "New top cannot be bigger than 1 << 64")
+    assert(req_length65 <= orig_length65 && "Cannot grow capabilities");
+    assert(cap->cr_offset <= orig_length65 && "Cannot grow capabilities");
+
+    uint32_t BWidth = CC128_BOT_WIDTH;
+
+    uint8_t E;
+
+    uint64_t new_top = req_top;
+
+    if(req_length65 > UINT64_MAX) {
+        E = 65 - BWidth;
+    } else {
+        E = cc128_compute_e(rt, BWidth);
+    }
+
+    if (E && (((rt >> E) & 0xF) == 0xF)) {
+        new_top = ((new_top >> E) + 1) << E;
+        E ++;
+    }
+
+    uint8_t need_zeros = E == 0 ? 0 : E + CC128_EXP_LOW_WIDTH;
+
+    cursor = (cursor >> need_zeros) << need_zeros;
+    new_top = ((new_top + ((UINT64_C(1) << need_zeros) - 1)) >> need_zeros) << need_zeros;
+
+    if(new_top < req_top) new_top = -1ULL; // overflow happened somewhere
+
+    rt = new_top - cursor;
+    new_offset = req_base - cursor;
+}
+#endif
 
 #endif /* CC128_DEFINE_FUNCTIONS != 0 */
 

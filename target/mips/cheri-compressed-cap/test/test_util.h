@@ -1,5 +1,6 @@
 #include <ostream>
 #include <iostream>
+#include <string>
 
 std::basic_ostream<char, std::char_traits<char>>& operator<<(std::basic_ostream<char, std::char_traits<char>>& __out, unsigned __int128 i);
 
@@ -9,7 +10,7 @@ std::basic_ostream<char, std::char_traits<char>>& operator<<(std::basic_ostream<
 
 static bool failed = false;
 
-template <typename T> static bool check(T expected, T actual, const char* msg) {
+template <typename T> static bool check(T expected, T actual, const std::string& msg) {
     if (expected == actual)
         return true;
     std::cerr << "ERROR: " << msg << ": 0x" << std::hex << actual << " != 0x" << expected << "\n";
