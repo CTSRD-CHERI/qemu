@@ -48,7 +48,7 @@ struct cap_register {
     unsigned __int128 _cr_length; /* Capability length */
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
-    uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
+    uint64_t cr_pesbt_xored_for_mem;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
     uint32_t cr_otype;  /* Object Type, 24 bits */
     uint8_t cr_tag;     /* Tag */
     uint8_t _sbit_for_memory; /* sealed flag */
@@ -276,7 +276,7 @@ _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 #endif /* CC128_OLD_FORMAT */
 
 
-/* Avoid pulling in code that uses cr_pesbt when building QEMU256 */
+/* Avoid pulling in code that uses cr_pesbt_xored_for_mem when building QEMU256 */
 #ifndef CC128_DEFINE_FUNCTIONS
 #define CC128_DEFINE_FUNCTIONS 1
 #endif
@@ -502,16 +502,15 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     }
     cdp->cr_offset = cursor - base;
     cdp->cr_base = base;
-    // TODO: add a bool tagged parameter and return false for invalid capabilities
-    //  and also only store pesbt for untagged values
-    cdp->cr_pesbt = pesbt; // save pebst (reserved bits) for untagged values
 }
 
 /*
  * Decompress a 128-bit capability.
  */
 static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
-    cdp->cr_pesbt = pesbt;
+    // TODO: add a bool tagged parameter and return false for invalid capabilities
+    //  and also only store pesbt for untagged values
+    cdp->cr_pesbt_xored_for_mem = pesbt;
     decompress_128cap_already_xored(pesbt ^ CC128_NULL_XOR_MASK, cursor, cdp);
 }
 
@@ -600,7 +599,7 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
         CC128_ENCODE_FIELD(Be, BOTTOM_ENCODED);
     // For untagged values we add the initially loaded reserved bits in the reserved field:
     if (!csp->cr_tag)
-        pesbt |= CC128_ENCODE_FIELD(CC128_EXTRACT_FIELD(csp->cr_pesbt, RESERVED), RESERVED);
+        pesbt |= CC128_ENCODE_FIELD(CC128_EXTRACT_FIELD(csp->cr_pesbt_xored_for_mem ^ CC128_NULL_XOR_MASK, RESERVED), RESERVED);
 #endif
     return pesbt;
 }

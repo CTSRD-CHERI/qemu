@@ -43,7 +43,7 @@
 #define CC256_DEFINE_FUNCTIONS 0
 #define CAP_MAX_LENGTH CC128_NULL_LENGTH
 #else
-// Don't use cr_pesbt in cheri256 cap_register_t
+// Don't use cr_pesbt_xored_for_mem in cheri256 cap_register_t
 #define CC128_DEFINE_FUNCTIONS 0
 #define CAP_MAX_LENGTH CC256_NULL_LENGTH
 #endif
@@ -53,7 +53,7 @@
 
 #define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
 #define PRINT_CAP_ARGS_L1(cr) cr->cr_tag, cap_is_sealed_with_type(cr), \
-            (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_MEM_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)), \
+            (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)), \
             cap_get_base(cr), cap_get_length(cr)
 #define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
 #define PRINT_CAP_ARGS_L2(cr) cr->cr_offset, cr->cr_otype
@@ -235,7 +235,7 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
     crp->_cr_length = CAP_MAX_LENGTH;
     crp->cr_otype = CAP_OTYPE_UNSEALED;
 #ifdef CHERI_128
-    crp->cr_pesbt = 0UL;
+    crp->cr_pesbt_xored_for_mem = 0UL;
 #else
     crp->_sbit_for_memory = false;
 #endif

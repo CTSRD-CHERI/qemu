@@ -176,7 +176,7 @@ struct cap_register {
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
 #ifdef CHERI_128
-    uint64_t cr_pesbt;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
+    uint64_t cr_pesbt_xored_for_mem;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
 #endif
     uint32_t cr_otype;  /* Object Type, 24 bits */
     uint8_t  cr_tag;    /* Tag */

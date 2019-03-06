@@ -576,7 +576,7 @@ void helper_ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb)
     result.cr_tag = 0;
 #ifdef CHERI_128
     /* Save the compressed bits at the moment the tag was invalidated. */
-    result.cr_pesbt = compress_128cap(&result);
+    result.cr_pesbt_xored_for_mem = compress_128cap(&result);
 #endif /* CHERI_128 */
     update_capreg(&env->active_tc, cd, &result);
 }
@@ -2194,7 +2194,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        dump_cap_load(vaddr, ncd.cr_pesbt, cursor, tag);
+        dump_cap_load(vaddr, ncd.cr_pesbt_xored_for_mem, cursor, tag);
         cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
         cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
@@ -2213,7 +2213,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     if (csp->cr_tag)
         pesbt = compress_128cap(csp);
     else
-        pesbt = csp->cr_pesbt;
+        pesbt = csp->cr_pesbt_xored_for_mem;
 
     /* Store pesbt to memory (might trap on store) */
     cpu_stq_data_ra(env, vaddr, pesbt, retpc);
