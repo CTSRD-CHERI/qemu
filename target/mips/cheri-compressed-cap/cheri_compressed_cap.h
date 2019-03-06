@@ -529,6 +529,7 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     uint32_t BWidth = seal_mode == CC_SEAL_MODE_SEALED ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
 #else
     uint32_t BWidth = CC128_BOT_WIDTH;
+    _Static_assert(CC128_BOT_WIDTH == 14, "This code assumes 14-bit bot");
 #endif
     uint32_t BMask = (1u << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
@@ -559,7 +560,14 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     }
 
     Be = (base >> E) & BMask;
+#ifdef CC128_OLD_FORMAT
     IE = E != 0;
+#else
+    // from sail: need IE if length bit 12 is set: let ie = (e != 0) | length[12];
+    // 0x1000 (bwidth - 2 bit set) is the first value that cannot be encoded
+    // without the internal exponent:
+    IE = E != 0 || cc128_getbits(length64, 12, 1);
+#endif
 
 
 #ifdef CC128_OLD_FORMAT
@@ -794,7 +802,7 @@ static inline bool cc256_is_cap_sealed(const cap_register_t* cp) {
 static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* cdp, bool tagged) {
     /* See CHERI ISA: Figure 3.1: 256-bit memory representation of a capability */
     cdp->_sbit_for_memory = mem.u64s[0] & 1;
-    uint64_t hwperms_mask = tagged ? CC256_PERMS_ALL_BITS: CC256_PERMS_ALL_BITS_UNTAGGED;
+    uint32_t hwperms_mask = tagged ? CC256_PERMS_ALL_BITS: CC256_PERMS_ALL_BITS_UNTAGGED;
     cdp->cr_perms = (mem.u64s[0] >> CC256_PERMS_MEM_SHFT) & hwperms_mask;
     cdp->cr_uperms = (mem.u64s[0] >> CC256_UPERMS_MEM_SHFT) & CC256_UPERMS_ALL_BITS;
     cdp->cr_otype = (mem.u64s[0] >> CC256_OTYPE_MEM_SHFT) ^ CC256_OTYPE_UNSEALED;

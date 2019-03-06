@@ -20,7 +20,7 @@ static void test_compressed_null_cap_is_zero() {
         CHECK_FIELD(decompressed, offset, 0);
         CHECK_FIELD(decompressed, uperms, 0);
         CHECK_FIELD(decompressed, perms, 0);
-        CHECK_FIELD(decompressed, pesbt, 0); // loaded pesbt xored with mask
+        CHECK_FIELD(decompressed, pesbt_xored_for_mem, 0); // loaded pesbt xored with mask
         CHECK_FIELD_RAW(decompressed._cr_length, CC128_NULL_LENGTH);
         CHECK_FIELD(decompressed, otype, CC128_OTYPE_UNSEALED);
     }
@@ -61,7 +61,7 @@ static void test_decompress_zero_is_null_cap() {
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0);
     CHECK_FIELD(result, perms, 0);
-    CHECK_FIELD(result, pesbt, 0); // loaded pesbt xored with mask
+    CHECK_FIELD(result, pesbt_xored_for_mem, 0); // loaded pesbt xored with mask
     CHECK_FIELD_RAW(result._cr_length, CC128_NULL_LENGTH);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 
@@ -143,6 +143,53 @@ static void test5() {
     CHECK_FIELD_RAW(result._cr_length, 0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
+
+#else
+
+static void test_new_format_regression1() {
+// sample input from cheritest:
+// bad test from cheritest:
+//     Write C24|v:1 s:0 p:00007ffd b:900000000000efe0 l:0000000000001000
+//             |o:0000000000000fa0 t:3ffff
+// -> 0x9000000040000a14:  csc	c24,zero,48(c11)
+//    Cap Tag Write [ff70] 0 -> 1
+//    Cap Memory Write [900000000000ff70] = v:1 PESBT:fffd000007f9afe4 Cursor:900000000000ff80
+// This should have resulted in a different PESBT (with IE bit set)
+// And it caused the following wrong capability to be loaded again (length is now 0:)
+// ->
+//    Cap Memory Read [900000000000ff70] = v:1 PESBT:fffd000007f9afe4 Cursor:900000000000ff80
+//    Write C24|v:1 s:0 p:00007ffd b:900000000000efe0 l:0000000000000000
+//             |o:0000000000000fa0 t:3ffff
+
+    cap_register_t original;
+    memset(&original, 0, sizeof(original));
+    original.cr_tag = 1;
+    original.cr_base = 0x900000000000efe0;
+    original._cr_length = 0x1000;
+    original.cr_offset = 0xfa0;
+    original.cr_otype = CC128_OTYPE_UNSEALED;
+    original.cr_perms = CC128_PERMS_ALL & ~2u;
+    original.cr_uperms = CC128_UPERMS_ALL;
+    dump_cap_fields(original);
+    uint64_t pesbt_for_mem = compress_128cap(&original);
+    fprintf(stderr, "Resulting PESBT= 0x%016" PRIx64 "\n", pesbt_for_mem);
+    const uint64_t orig_cursor = original.cr_base + original.cr_offset;
+    check(UINT64_C(0x900000000000ff80), orig_cursor, "Compressing cursor wrong?");
+    cap_register_t decompressed;
+    memset(&decompressed, 0, sizeof(decompressed));
+    decompress_128cap(pesbt_for_mem, orig_cursor, &decompressed);
+    dump_cap_fields(decompressed);
+    CHECK_FIELD(decompressed, base, original.cr_base);
+    CHECK_FIELD(decompressed, offset, original.cr_offset);
+    CHECK_FIELD(decompressed, uperms, original.cr_uperms);
+    CHECK_FIELD(decompressed, perms, original.cr_perms);
+    CHECK_FIELD_RAW(decompressed._cr_length, original._cr_length);
+    CHECK_FIELD(decompressed, otype, CC128_OTYPE_UNSEALED);
+
+    check(UINT64_C(0xfffd000003f9afe4), pesbt_for_mem, "Compressed pesbt wrong?");
+    check(UINT64_C(0xfffd000003f9afe4), compress_128cap(&decompressed), "Recompressed pesbt wrong?");
+
+}
 #endif
 
 int main() {
@@ -155,6 +202,8 @@ int main() {
     test3();
     test4();
     test5();
+#else
+    test_new_format_regression1();
 #endif
     if (!failed)
         printf("\nAll tests passed!\n");
