@@ -650,6 +650,24 @@ static inline bool cc128_all_zeroes(uint64_t offset, uint32_t e, uint32_t bwidth
 
 static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __int128 length, uint64_t offset, uint64_t new_offset);
 
+/// Check that a capability is representable by compressing and recompressing
+static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
+    uint64_t pesbt = compress_128cap(cap);
+    cap_register_t decompressed_cap;
+    decompress_128cap(pesbt, cap->cr_base + cap->cr_offset, &decompressed_cap);
+    // These fields must not change:
+    assert(decompressed_cap.cr_otype == cap->cr_otype);
+    assert(decompressed_cap.cr_uperms == cap->cr_uperms);
+    assert(decompressed_cap.cr_perms == cap->cr_perms);
+    // If any of these fields changed then the capability is not representable:
+    if (decompressed_cap.cr_base != cap->cr_base ||
+        decompressed_cap._cr_length != cap->_cr_length ||
+        decompressed_cap.cr_offset != cap->cr_offset) {
+        return false;
+    }
+    return true;
+}
+
 /*
  * Check to see if a memory region is representable by a compressed
  * capability. It is representable if:
@@ -682,32 +700,13 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, unsigned _
 #else
     if (slow_representable_check) {
 #endif // CC128_OLD_FORMAT
-
-
         cap_register_t c;
-        uint64_t pesbt;
-
         /* Simply compress and uncompress to check. */
-
-#define MAGIC_TYPE 0b1011011101
-
         c.cr_base = base;
         c._cr_length = length;
         c.cr_offset = new_offset;
         c.cr_otype = sealed ? 42 : CAP_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
-
-        pesbt = compress_128cap(&c);
-        decompress_128cap(pesbt, base + new_offset, &c);
-        // fprintf(stderr, "%s: sealed=%d, Base 0x%" PRIx64 " Len 0x%" PRIx64 "%016" PRIx64 " Offset 0x%" PRIx64 " New Offset 0x%" PRIx64 "",
-        //         __func__, sealed, base, (uint64_t)(length >> 64), (uint64_t)length, offset, new_offset);
-        // fprintf(stderr, "\n\t - decompressed: sealed=%d, Base 0x%" PRIx64 " Len 0x%" PRIx64 "%016" PRIx64 " Offset 0x%" PRIx64,
-        //        cc128_is_cap_sealed(&c), c.cr_base, (uint64_t)(c._cr_length >> 64), (uint64_t)c._cr_length, c.cr_offset);
-        if (c.cr_base != base || c._cr_length != length || c.cr_offset != new_offset) {
-            // fprintf(stderr, " -> false\r\n");
-            return false;
-        }
-        // fprintf(stderr, " -> true\r\n");
-        return true;
+        return cc128_is_representable_cap_exact(&c);
     } else {
         return fast_cc128_is_representable(sealed, base, length, offset, new_offset);
     }

@@ -1187,58 +1187,11 @@ void helper_cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr)
     *cdp = *csp;
 }
 
-void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
-        target_ulong rt)
-{
+static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
+                         uint32_t cb, target_ulong length) {
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t cursor = cap_get_cursor(cbp);
-    uint64_t cursor_rt;
-    uint64_t new_offset = 0ul;
-#ifdef CHERI_128
-    /*
-     * With compressed capabilities we may need to increase the range of
-     * memory addresses to be wider than requested so it is
-     * representable.
-     */
-    uint64_t req_base = cursor;
-    unsigned __int128 req_top = cursor + rt;
-
-    uint32_t BWidth = CC128_BOT_WIDTH;
-
-    uint8_t E;
-
-    uint64_t new_top64 = req_top;
-
-    if (req_top > UINT64_MAX) {
-        new_top64 = 0; // actually 1 << 64
-        rt++;
-        if(rt == 0) { // actually 1 << 64
-            E = 64 - BWidth + 2;
-        } else {
-          E = cc128_compute_e(rt, BWidth);
-        }
-    } else {
-        E = cc128_compute_e(rt, BWidth);
-    }
-
-    if (E && (((rt >> E) & 0xF) == 0xF)) {
-        new_top64 = ((new_top64 >> E) + 1) << E;
-        E ++;
-    }
-
-    uint8_t need_zeros = E == 0 ? 0 : E + CC128_EXP_LOW_WIDTH;
-
-    cursor = (cursor >> need_zeros) << need_zeros;
-    new_top64 = ((new_top64 + ((UINT64_C(1) << need_zeros) - 1)) >> need_zeros) << need_zeros;
-
-    if (new_top64 < req_top) new_top64 = UINT64_MAX; // overflow happened somewhere
-
-    rt = new_top64 - cursor;
-    new_offset = req_base - cursor;
-
-#endif /* CHERI_128 */
-    cursor_rt = cursor + rt;
-
+    unsigned __int128 new_top = (unsigned __int128)cursor + length; // 65 bits
     /*
      * CSetBounds: Set Bounds
      */
@@ -1248,58 +1201,49 @@ void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (cursor < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (cursor_rt < rt) {
+    } else if (new_top > UINT64_MAX) {
         /* cursor + rt overflowed */
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (cursor_rt > cap_get_top(cbp)) {
+    } else if (new_top > cap_get_top(cbp)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         cap_register_t result = *cbp;
+#ifdef CHERI_128
+        /*
+         * With compressed capabilities we may need to increase the range of
+         * memory addresses to be wider than requested so it is
+         * representable.
+         */
+        const bool exact = cc128_setbounds(&result, cursor, new_top);
+        if (must_be_exact && !exact) {
+            do_raise_c2_exception(env, CP2Ca_INEXACT, cb);
+            return;
+        }
+        assert(cc128_is_representable_cap_exact(&result) && "CSetBounds have created a representable capability");
+#else
+        (void)must_be_exact;
+        /* Capabilities are precise -> can just set the values here */
         result.cr_base = cursor;
-        result._cr_length = rt;
-        result.cr_offset = new_offset;
+        result._cr_length = length;
+        result.cr_offset = 0;
+#endif
+        assert(result.cr_base >= cbp->cr_base && "CSetBounds broke monotonicity (base)");
+        assert(result._cr_length <= cbp->_cr_length && "CSetBounds broke monotonicity (length)");
+        assert(cap_get_top(&result) <= cap_get_top(cbp) && "CSetBounds broke monotonicity (top)");
         update_capreg(&env->active_tc, cd, &result);
     }
+}
+
+void helper_csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+        target_ulong rt)
+{
+    do_setbounds(false, env, cd, cb, rt);
 }
 
 void helper_csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
-    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-    uint64_t cursor = cap_get_cursor(cbp);
-    uint64_t cursor_rt = cursor + rt;
-
-#ifdef CHERI_128
-    uint32_t bwidth = CC128_BOT_WIDTH;
-    uint8_t e = cc128_compute_e(rt, bwidth);
-    uint8_t need_zeros = e ? e + CC128_EXP_LOW_WIDTH : 0;
-    uint64_t mask = (1ULL << need_zeros) - 1;
-
-    bool representable = ((cursor | cursor_rt) & mask) == 0;
-#else
-    bool representable = true;
-#endif
-
-    /*
-     * CSetBoundsExact: Set Bounds Exactly
-     */
-    if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_TAG, cb);
-    } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (cursor < cbp->cr_base) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (cursor_rt > cap_get_top(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (!representable) {
-        do_raise_c2_exception(env, CP2Ca_INEXACT, cb);
-    } else {
-        cap_register_t result = *cbp;
-        result.cr_base = cursor;
-        result._cr_length = rt;
-        result.cr_offset = (target_ulong)0;
-        update_capreg(&env->active_tc, cd, &result);
-    }
+    do_setbounds(true, env, cd, cb, rt);
 }
 
 //static inline bool cap_bounds_are_subset(const cap_register_t *first, const cap_register_t *second) {
