@@ -421,8 +421,8 @@ static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
 
 static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
 #ifdef CC128_OLD_FORMAT
-    cdp->cr_perms = cc128_getbits(pesbt, 48, 12);
-    cdp->cr_uperms = cc128_getbits(pesbt, 60, 4);
+    cdp->cr_perms = (uint32_t)cc128_getbits(pesbt, 48, 12);
+    cdp->cr_uperms = (uint32_t)cc128_getbits(pesbt, 60, 4);
 
     uint8_t seal_mode = (uint8_t)cc128_getbits(pesbt, CC_L_S_OFF, 2);
 
@@ -434,8 +434,8 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     uint8_t LH = (uint8_t)cc128_getbits(pesbt, CC_L_LH_OFF, 1);
 
     uint8_t E, L_msb;
-    uint32_t B = cc128_getbits(pesbt, CC_L_B_OFF, BWidth);
-    uint32_t T = cc128_getbits(pesbt, CC_L_T_OFF, BWidth - 2);
+    uint32_t B = (uint32_t)cc128_getbits(pesbt, CC_L_B_OFF, BWidth);
+    uint32_t T = (uint32_t)cc128_getbits(pesbt, CC_L_T_OFF, BWidth - 2);
 
     if (IE) {
         // Note: Do not offset by 1. We alsot need to encode E=0 with IE for setbounds!
@@ -455,8 +455,8 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
         // TODO: remove extra bit for unsealed caps and always store otype
         type = CAP_OTYPE_UNSEALED;
     } else if (seal_mode == CC_SEAL_MODE_SEALED) {
-        type = (cc128_getbits(pesbt, CC_L_OHI_OFF, CC_L_TYPES / 2) << (CC_L_TYPES / 2)) |
-               cc128_getbits(pesbt, CC_L_OLO_OFF, CC_L_TYPES / 2);
+        type = (uint32_t)(cc128_getbits(pesbt, CC_L_OHI_OFF, CC_L_TYPES / 2) << (CC_L_TYPES / 2)) |
+               (uint32_t)cc128_getbits(pesbt, CC_L_OLO_OFF, CC_L_TYPES / 2);
     } else if (seal_mode == CC_SEAL_MODE_SENTRY) {
         type = CAP_OTYPE_SENTRY;
     }
@@ -843,7 +843,7 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
     if (req_length65 > UINT64_MAX) {
         E = 65 - BWidth;
     } else {
-        E = cc128_compute_e(req_length64, BWidth);
+        E = (uint8_t)cc128_compute_e(req_length64, BWidth);
     }
     //  // Use use internal exponent if e is non-zero or if e is zero but
     //  // but the implied bit of length is not zero (denormal vs. normal case)
