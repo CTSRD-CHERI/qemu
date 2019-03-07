@@ -438,8 +438,8 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     uint32_t T = cc128_getbits(pesbt, CC_L_T_OFF, BWidth - 2);
 
     if (IE) {
-        E = ((((LH << CC_L_LOWWIDTH) | (B & CC_L_LOWMASK)) << CC_L_LOWWIDTH) | (T & CC_L_LOWMASK)) +
-            1; // Offset by 1. We don't need to encode E=0
+        // Note: Do not offset by 1. We alsot need to encode E=0 with IE for setbounds!
+        E = ((((LH << CC_L_LOWWIDTH) | (B & CC_L_LOWMASK)) << CC_L_LOWWIDTH) | (T & CC_L_LOWMASK));
         E = MIN(64 - BWidth + 2, E);
         B &= ~CC_L_LOWMASK;
         T &= ~CC_L_LOWMASK;
@@ -564,9 +564,12 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
 
     uint8_t LH;
     uint32_t BWidth = seal_mode == CC_SEAL_MODE_SEALED ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
+    _Static_assert(CC128_BOT_WIDTH == 23, "This code assumes 14-bit bot");
+    _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "This code assumes 14-bit bot");
 #else
     uint32_t BWidth = CC128_BOT_WIDTH;
     _Static_assert(CC128_BOT_WIDTH == 14, "This code assumes 14-bit bot");
+    _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "This code assumes 14-bit bot");
 #endif
     uint32_t BMask = (1u << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
@@ -597,19 +600,15 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     }
 
     Be = (base >> E) & BMask;
-#ifdef CC128_OLD_FORMAT
-    IE = E != 0;
-#else
     // from sail: need IE if length bit 12 is set: let ie = (e != 0) | length[12];
     // 0x1000 (bwidth - 2 bit set) is the first value that cannot be encoded
     // without the internal exponent:
-    IE = E != 0 || cc128_getbits(length64, 12, 1);
-#endif
+    // Note: 12 = BWidth - 2  / BWidth with internal exponent plus one
+    IE = E != 0 || cc128_getbits(length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
 
 
 #ifdef CC128_OLD_FORMAT
     if (IE) {
-        E -= 1; // Don't need to encode E=0
         LH = E >> (2 * CC_L_LOWWIDTH);
         Be |= (E >> CC_L_LOWWIDTH) & CC_L_LOWMASK;
         Te |= E & CC_L_LOWMASK;
@@ -927,11 +926,7 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
         //    Tbits = T_ie @ 0b000;
         const uint64_t Bbits = bot_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
         const uint64_t Tbits = top_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
-#ifdef CC128_OLD_FORMAT
-        const uint8_t newE = E + (incE ? 1 : 0) - 1; // old format implciitly adds one for IE
-#else
         const uint8_t newE = E + (incE ? 1 : 0);
-#endif
 
         //  };
         //  let exact = not(lostSignificantBase | lostSignificantTop);

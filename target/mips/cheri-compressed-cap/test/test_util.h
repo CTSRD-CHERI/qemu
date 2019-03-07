@@ -5,8 +5,9 @@
 std::ostream& operator<<(std::ostream& os, unsigned __int128 value);
 
 std::ostream& operator<<(std::ostream& os, unsigned __int128 value) {
-    os << "{" << (uint64_t)(value >> 64) << "," << (uint64_t)(value) << "}";
-    return os;
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "{0x%" PRIx64 " %016" PRIx64 "}", (uint64_t)(value >> 64), (uint64_t)(value));
+    return os << buffer;
 }
 
 static const char* otype_suffix(uint32_t otype) {
@@ -121,3 +122,11 @@ inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, unsigne
 
 #define CHECK_FIELD_RAW(value, expected) CHECK(value == expected)
 #define CHECK_FIELD(cap, field, expected) CHECK((uint64_t)expected == (uint64_t)cap.cr_##field)
+
+enum {
+#ifdef CC128_OLD_FORMAT
+    TESTING_OLD_FORMAT = 1
+#else
+    TESTING_OLD_FORMAT = 0
+#endif
+};
