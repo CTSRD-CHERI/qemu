@@ -32,7 +32,7 @@
 #include "cheri_compressed_cap.h"
 
 // Just check that everything compiles
-int test(void) {
+uint64_t test(void) {
     uint64_t pesbt = 0x1234567;
     uint64_t cursor = 0x98765431;
     cap_register_t result;

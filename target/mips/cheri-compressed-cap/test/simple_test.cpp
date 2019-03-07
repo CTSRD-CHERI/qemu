@@ -15,6 +15,9 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         null_cap.cr_otype = CC128_OTYPE_UNSEALED;
         null_cap._cr_length = CC128_NULL_LENGTH;
         auto pesbt = compress_128cap(&null_cap);
+        auto pesbt_without_xor = compress_128cap_without_xor(&null_cap);
+        fprintf(stderr, "NULL ENCODED: 0x%llx\n", (long long)pesbt_without_xor);
+        CHECK(pesbt_without_xor == CC128_NULL_XOR_MASK);
         check(pesbt, (uint64_t)0, "compressing NULL should result in zero pesbt");
         cap_register_t decompressed;
         memset(&decompressed, 'b', sizeof(decompressed));
@@ -85,8 +88,38 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
 }
 
 #ifdef CC128_OLD_FORMAT
+#define OLD_XOR_MASK 0x200001000005
+
+static uint64_t convert_old_to_new_pesbt(uint64_t old_pesbt_for_mem) {
+    // Now that exponent = 0 is encoded we need to increment it here
+    uint64_t decoded_pesbt = old_pesbt_for_mem ^ OLD_XOR_MASK;
+    bool internal = CC128_EXTRACT_FIELD(decoded_pesbt, INTERNAL_EXPONENT);
+    if (!internal)
+        return decoded_pesbt;
+    auto expLow = CC128_EXTRACT_FIELD(decoded_pesbt, EXPONENT_LOW_PART);
+    auto expHigh = CC128_EXTRACT_FIELD(decoded_pesbt, EXPONENT_HIGH_PART);
+    auto lh = CC128_EXTRACT_FIELD(decoded_pesbt, LH);
+    if (expLow == 7) {
+        if (expHigh == 7) {
+            lh = 1;
+        } else {
+            expHigh++;
+        }
+    } else {
+        expLow++;
+    }
+    auto clearMask = ~(CC128_ENCODE_FIELD(UINT64_MAX, EXPONENT_LOW_PART) |
+                       CC128_ENCODE_FIELD(UINT64_MAX, EXPONENT_HIGH_PART) |
+                       CC128_ENCODE_FIELD(UINT64_MAX, LH));
+    uint64_t result = decoded_pesbt & clearMask;
+    result = result | CC128_ENCODE_FIELD(expLow, EXPONENT_LOW_PART) |
+                       CC128_ENCODE_FIELD(expHigh, EXPONENT_HIGH_PART) |
+                       CC128_ENCODE_FIELD(lh, LH);
+    return result;
+}
+
 TEST_CASE("Old format test 1", "[old]") {
-    auto result = decompress_representable(0xffae000000000000, 0x9000000040001650);
+    auto result = decompress_representable(convert_old_to_new_pesbt(0xffae000000000000), 0x9000000040001650);
     CHECK_FIELD(result, base, 0);
     CHECK_FIELD(result, offset, 0x9000000040001650);
     CHECK_FIELD(result, uperms, 0xf);
@@ -96,7 +129,7 @@ TEST_CASE("Old format test 1", "[old]") {
 }
 
 TEST_CASE("Old format test 2", "[old]") {
-    auto result = decompress_representable(0xfffa200b1f001633, 0x9000000040001636);
+    auto result = decompress_representable(convert_old_to_new_pesbt(0xfffa200b1f001633), 0x9000000040001636);
     CHECK_FIELD(result, base, 0x9000000040001636);
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0xf);
@@ -106,7 +139,7 @@ TEST_CASE("Old format test 2", "[old]") {
 }
 
 TEST_CASE("Old format test 3", "[old]") {
-    auto result = decompress_representable(0xfffa201a19003035, 0x9000000040003296);
+    auto result = decompress_representable(convert_old_to_new_pesbt(0xfffa201a19003035), 0x9000000040003296);
     CHECK_FIELD(result, base, 0x9000000040003030);
     CHECK_FIELD(result, offset, 0x266);
     CHECK_FIELD(result, uperms, 0xf);
@@ -122,7 +155,7 @@ TEST_CASE("Old format test 4", "[old]") {
     //             |o:0000000000001010 t:0
     // 0x9000000040000f70:  csc        c2,a1,0(c18)
     //    Cap Memory Write [9000000040001030] = v:1 PESBT:fffe030000000004 Cursor:0000000000001010
-    auto result = decompress_representable(0xfffe030000000004, 0x1010);
+    auto result = decompress_representable(convert_old_to_new_pesbt(0xfffe030000000004), 0x1010);
     CHECK_FIELD(result, base, 0);
     CHECK_FIELD(result, offset, 0x1010);
     CHECK_FIELD(result, uperms, 0xf);
@@ -137,7 +170,7 @@ TEST_CASE("Old format test 5", "[old]") {
     //             |o:0000000000000ff0 t:0
     // 0x9000000040000f8c:  csc        c2,a1,64(c18)
     //    Cap Memory Write [9000000040001070] = v:1 PESBT:fffe030000000004 Cursor:0000000000000ff0
-    auto result = decompress_representable(0xfffe030000000004, 0xff0);
+    auto result = decompress_representable(convert_old_to_new_pesbt(0xfffe030000000004), 0xff0);
     CHECK_FIELD(result, base, 0);
     CHECK_FIELD(result, offset, 0xff0);
     CHECK_FIELD(result, uperms, 0xf);

@@ -4,11 +4,20 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 14)
 
 add_compile_options(-pedantic -Wall -Wextra -Weverything -Wno-old-style-cast -Wno-c++98-compat-pedantic -Wno-c++98-c++11-compat-binary-literal -Wno-c11-extensions -Wno-padded)
-add_library(cheri_compressed_cap cheri_compressed_cap.c cheri_compressed_cap.h)
+add_library(cheri_compressed_cap14 cheri_compressed_cap.c cheri_compressed_cap.h)
+add_library(cheri_compressed_cap23 cheri_compressed_cap.c cheri_compressed_cap.h)
+target_compile_definitions(cheri_compressed_cap23 PRIVATE -DCC128_OLD_FORMAT)
+
+
 
 add_executable(decompress_c128_cap decompress_c128_cap.c)
+add_executable(decompress_c128_cap23 decompress_c128_cap.c)
+target_compile_definitions(decompress_c128_cap23 PRIVATE -DCC128_OLD_FORMAT)
+add_executable(decompress_c128_cap14 decompress_c128_cap.c)
 include(GNUInstallDirs)
 install(TARGETS decompress_c128_cap RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS decompress_c128_cap23 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS decompress_c128_cap14 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 enable_testing()
 add_executable(simple_test test/simple_test.cpp)

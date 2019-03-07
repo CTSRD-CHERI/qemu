@@ -90,15 +90,15 @@ static void dump_cap_fields(const cap_register_t& result) {
     fprintf(stderr, "\n");
 }
 
-__attribute__((used)) static cap_register_t decompress_representable(uint64_t pesbt, uint64_t cursor) {
+__attribute__((used)) static cap_register_t decompress_representable(uint64_t pesbt_already_xored, uint64_t cursor) {
     cap_register_t result;
-    printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt, cursor);
-    decompress_128cap(pesbt, cursor, &result);
+    printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt_already_xored, cursor);
+    decompress_128cap_already_xored(pesbt_already_xored, cursor, &result);
     dump_cap_fields(result);
     // Check that the result is the same again when compressed
-    uint64_t new_pesbt = compress_128cap(&result);
-    check(pesbt, new_pesbt, "recompressing resulted in different pesbt");
-    check(cursor, result.cr_base + result.cr_offset, "recompressing resulted in different cursor");
+    uint64_t new_pesbt_already_xored = compress_128cap_without_xor(&result);
+    CHECK(pesbt_already_xored == new_pesbt_already_xored);
+    CHECK(cursor  == result.cr_base + result.cr_offset);
     return result;
 }
 

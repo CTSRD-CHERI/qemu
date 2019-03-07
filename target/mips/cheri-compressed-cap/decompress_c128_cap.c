@@ -47,7 +47,9 @@ static const char* otype_suffix(uint32_t otype) {
     case CC128_OTYPE_SENTRY: return " (CC128_OTYPE_SENTRY)";
     case CC128_OTYPE_RESERVED2: return " (CC128_OTYPE_RESERVED2)";
     case CC128_OTYPE_RESERVED3: return " (CC128_OTYPE_RESERVED3)";
-
+    default: break;
+    }
+    switch(otype) {
     case CC256_OTYPE_UNSEALED: return " (CC256_OTYPE_UNSEALED)";
     case CC256_OTYPE_SENTRY: return " (CC256_OTYPE_SENTRY)";
     case CC256_OTYPE_RESERVED2: return " (CC256_OTYPE_RESERVED2)";
@@ -74,6 +76,8 @@ static void dump_cap_fields(const cap_register_t* result) {
 }
 
 int main(int argc, char** argv) {
+    fprintf(stderr, "CC128_NULL_XOR_MASK=0x%llx\n", (long long)CC128_NULL_XOR_MASK);
+    fprintf(stderr, "CC128_NULL_PESBT   =0x%llx\n", (long long)CC128_NULL_PESBT);
     if (argc < 3) {
         fprintf(stderr, "Usage: %s PESBT CURSOR\n", argv[0]);
         return EXIT_FAILURE;

@@ -146,9 +146,6 @@ typedef struct cap_register cap_register_t;
 #define CC128_BOT_WIDTH CC_L_BWIDTH
 #define CC128_BOT_INTERNAL_EXP_WIDTH CC128_BOT_WIDTH - CC_L_LOWWIDTH
 #define CC128_EXP_LOW_WIDTH CC_L_LOWWIDTH
-/* Whatever NULL would encode to is this constant. We mask on store/load so this
- * is invisibly keeps null 0 whatever we choose it to be */
-#define CC128_NULL_XOR_MASK 0x200001000005
 
 /*
  * These formats are from cheri concentrate, but I have added an extra sealing
@@ -338,7 +335,27 @@ enum {
 // Whatever NULL would encode to is this constant. We mask on store/load so this
 // invisibly keeps null 0 whatever we choose it to be.
 // #define CC128_NULL_XOR_MASK 0x1ffff8000000
-#define CC128_NULL_XOR_MASK 0x00001ffffc018004
+#define CC128_NULL_XOR_MASK UINT64_C(0x00001ffffc018004)
+#else
+enum {
+    CC128_RESET_EXP = 43, // bit 22 in top is implicitly set -> shift by 52 to get 1 << 64
+    // For a NULL capability we use the internal exponent and need bit 12 in top set
+    // to get to 2^65
+    CC128_RESET_TOP = 1u << (12 - CC128_FIELD_EXPONENT_HIGH_PART_SIZE),
+    CC128_NULL_PESBT =
+        CC128_ENCODE_FIELD(0, UPERMS) |
+        CC128_ENCODE_FIELD(0, HWPERMS) |
+        CC128_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
+        CC128_ENCODE_FIELD(0, LH) |
+        CC128_ENCODE_FIELD(0, EXP_NONZERO_TOP) |
+        CC128_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
+        CC128_ENCODE_FIELD(CC128_RESET_EXP >> CC128_FIELD_EXPONENT_LOW_PART_SIZE, EXPONENT_HIGH_PART) |
+        CC128_ENCODE_FIELD(CC128_RESET_EXP & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE, EXPONENT_LOW_PART)
+};
+/* Whatever NULL would encode to is this constant. We mask on store/load so this
+ * is invisibly keeps null 0 whatever we choose it to be */
+#define CC128_NULL_XOR_MASK UINT64_C(0x200001800005)
+#endif /* CC128_OLD_FORMAT */
 
 #ifdef __cplusplus
 template<size_t a, size_t b>
@@ -350,9 +367,6 @@ static_assert(check_same<CC128_NULL_XOR_MASK, CC128_NULL_PESBT>(), "");
 #else
 _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 #endif
-
-#endif /* CC128_OLD_FORMAT */
-
 
 /* Avoid pulling in code that uses cr_pesbt_xored_for_mem when building QEMU256 */
 #ifndef CC128_DEFINE_FUNCTIONS
@@ -469,7 +483,7 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     uint32_t BMask = (1u << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
 
-    bool IE = (bool)CC128_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT);
+    bool IE = (bool)(uint32_t)CC128_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT);
 
     uint8_t E, L_msb;
     uint32_t B;
