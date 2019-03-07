@@ -100,6 +100,21 @@ typedef struct cap_register cap_register_t;
 #define CC256_OTYPE_BITS              (24)
 #define CC256_NULL_LENGTH ((unsigned __int128)UINT64_MAX)
 
+// Offsets based on capBitsToCapability() from cheri_prelude_128.sail
+// (Note: we subtract 64 since we only access the high 64 bits when (de)compressing)
+#define CC128_FIELD(name, last, start) \
+    CC128_FIELD_ ## name ## _START = (start - 64), \
+    CC128_FIELD_ ## name ## _LAST = (last - 64), \
+    CC128_FIELD_ ## name ## _SIZE = CC128_FIELD_ ## name ## _LAST - CC128_FIELD_ ## name ## _START + 1, \
+    CC128_FIELD_ ## name ## _MASK0 = (UINT64_C(1) << CC128_FIELD_ ## name ## _SIZE) - 1, \
+    CC128_FIELD_ ## name ## _MASK64 = (uint64_t)CC128_FIELD_ ## name ## _MASK0 << CC128_FIELD_ ## name ## _START, \
+    CC128_FIELD_ ## name ## _MAX_VALUE = CC128_FIELD_ ## name ## _MASK0
+
+#define CC128_ENCODE_FIELD(value, name) \
+    ((uint64_t)((value) & CC128_FIELD_ ## name ## _MAX_VALUE) << CC128_FIELD_ ## name ## _START)
+
+#define CC128_EXTRACT_FIELD(value, name) \
+    cc128_getbits((value), CC128_FIELD_ ## name ## _START, CC128_FIELD_ ## name ## _SIZE)
 
 #ifdef CC128_OLD_FORMAT
 // These constants are for a cheri concentrate format for 128. They give either
@@ -128,22 +143,71 @@ typedef struct cap_register cap_register_t;
 #define CC_SEAL_MODE_SENTRY 3
 
 #define CC128_BOT_WIDTH CC_L_BWIDTH
+#define CC128_BOT_INTERNAL_EXP_WIDTH CC128_BOT_WIDTH - CC_L_LOWWIDTH
 #define CC128_EXP_LOW_WIDTH CC_L_LOWWIDTH
 /* Whatever NULL would encode to is this constant. We mask on store/load so this
  * is invisibly keeps null 0 whatever we choose it to be */
 #define CC128_NULL_XOR_MASK 0x200001000005
+
+/*
+ * These formats are from cheri concentrate, but I have added an extra sealing
+ * mode in order to allow precise sealing of zero offset objects Unsealed CC-L:
+ *  perms:    63-48 (16 bits)
+ *  S:        47-46 (2 bits) = 0
+ *  IE:       45    (1 bit)
+ *  LH:       44    (1 bit)
+ *  T:        43-23 (21 bit)
+ *  B:        22-0  (23 bits)
+ *
+ * Sealed1 CC-L:
+ *  perms:    63-49  (15 bits)
+ *  unused:   48     (1 bit)
+ *  S:        47-46  (2 bits) = 1
+ *  IE:       45     (1 bit)
+ *  LH:       44     (1 bit)
+ *  otype.hi: 43-34  (10 bits)
+ *  T:        33-23  (11 bits)
+ *  otype.lo: 22-13  (10 bits)
+ *  B:        12-0   (13 bits)
+ *
+ *  Call-only "sentry" capability
+ *  perms:    63-48 (16 bits)
+ *  S:        47-46 (2 bits) = 3
+ *  IE:       45    (1 bit)
+ *  LH:       44    (1 bit)
+ *  T:        43-23 (21 bit)
+ *  B:        22-0  (23 bits)
+ *
+ * Sealed2 CC-L:
+ *  perms:    63-49 (15 bits)
+ *  unused:   48    (1 bit)
+ *  S:        47-46 (2 bits) = 2
+ *  IE:       45    (1 bit)
+ *  LH:       44    (1 bit)
+ *  T:        43-23 (21 bits)
+ *  otype     22-3  (20 bits)
+ *  B:        2-0   (3 bits) (completely implied by cursor. Keep 3 bits for
+ * exponent)
+ */
+enum {
+    CC128_FIELD(UPERMS, 127, 124),
+    CC128_FIELD(HWPERMS, 123, 112),
+    CC128_FIELD(SEALED_MODE, 111, 110),
+    CC128_FIELD(INTERNAL_EXPONENT, 109, 109),
+    CC128_FIELD(LH, 108, 108),
+    CC128_FIELD(TOP_ENCODED, 107, 89),
+    CC128_FIELD(BOTTOM_ENCODED, 86, 64),
+
+    // Top/bottom offsets depending in INTERNAL_EXPONENT flag:
+    CC128_FIELD(EXP_ZERO_TOP, 107, 89),
+    CC128_FIELD(EXP_NONZERO_TOP, 107, 92),
+    CC128_FIELD(EXP_ZERO_BOTTOM, 86, 64),
+    CC128_FIELD(EXP_NONZERO_BOTTOM, 86, 67),
+    CC128_FIELD(EXPONENT_HIGH_PART, 91, 89),
+    CC128_FIELD(EXPONENT_LOW_PART, 66, 64),
+};
+
 #else
-
-// Offsets based on capBitsToCapability() from cheri_prelude_128.sail
-// (Note: we subtract 64 since we only access the high 64 bits when (de)compressing)
-#define CC128_FIELD(name, last, start) \
-    CC128_FIELD_ ## name ## _START = (start - 64), \
-    CC128_FIELD_ ## name ## _LAST = (last - 64), \
-    CC128_FIELD_ ## name ## _SIZE = CC128_FIELD_ ## name ## _LAST - CC128_FIELD_ ## name ## _START + 1, \
-    CC128_FIELD_ ## name ## _MASK0 = (UINT64_C(1) << CC128_FIELD_ ## name ## _SIZE) - 1, \
-    CC128_FIELD_ ## name ## _MASK64 = (uint64_t)CC128_FIELD_ ## name ## _MASK0 << CC128_FIELD_ ## name ## _START, \
-    CC128_FIELD_ ## name ## _MAX_VALUE = CC128_FIELD_ ## name ## _MASK0
-
 enum {
     CC128_FIELD(UPERMS, 127, 124),
     CC128_FIELD(HWPERMS, 123, 112),
@@ -161,12 +225,6 @@ enum {
     CC128_FIELD(EXPONENT_HIGH_PART, 80, 78),
     CC128_FIELD(EXPONENT_LOW_PART, 66, 64),
 };
-
-#define CC128_ENCODE_FIELD(value, name) \
-    ((uint64_t)((value) & CC128_FIELD_ ## name ## _MAX_VALUE) << CC128_FIELD_ ## name ## _START)
-
-#define CC128_EXTRACT_FIELD(value, name) \
-    cc128_getbits((value), CC128_FIELD_ ## name ## _START, CC128_FIELD_ ## name ## _SIZE)
 
 #define CC128_OTYPE_BITS CC128_FIELD_OTYPE_SIZE
 #define CC128_BOT_WIDTH CC128_FIELD_EXP_ZERO_BOTTOM_SIZE
@@ -342,47 +400,6 @@ static inline uint32_t cc128_compute_e(uint64_t rlength, uint32_t bwidth) {
 static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
     return ((src >> str) & ((UINT64_C(1) << sz) - UINT64_C(1)));
 }
-
-/*
- * These formats are from cheri concentrate, but I have added an extra sealing
- * mode in order to allow precise sealing of zero offset objects Unsealed CC-L:
- *  perms:    63-48 (16 bits)
- *  S:        47-46 (2 bits) = 0
- *  IE:       45    (1 bit)
- *  LH:       44    (1 bit)
- *  T:        43-23 (21 bit)
- *  B:        22-0  (23 bits)
- *
- * Sealed1 CC-L:
- *  perms:    63-49  (15 bits)
- *  unused:   48     (1 bit)
- *  S:        47-46  (2 bits) = 1
- *  IE:       45     (1 bit)
- *  LH:       44     (1 bit)
- *  otype.hi: 43-34  (10 bits)
- *  T:        33-23  (11 bits)
- *  otype.lo: 22-13  (10 bits)
- *  B:        12-0   (13 bits)
- *
- *  Call-only "sentry" capability
- *  perms:    63-48 (16 bits)
- *  S:        47-46 (2 bits) = 3
- *  IE:       45    (1 bit)
- *  LH:       44    (1 bit)
- *  T:        43-23 (21 bit)
- *  B:        22-0  (23 bits)
- *
- * Sealed2 CC-L:
- *  perms:    63-49 (15 bits)
- *  unused:   48    (1 bit)
- *  S:        47-46 (2 bits) = 2
- *  IE:       45    (1 bit)
- *  LH:       44    (1 bit)
- *  T:        43-23 (21 bits)
- *  otype     22-3  (20 bits)
- *  B:        2-0   (3 bits) (completely implied by cursor. Keep 3 bits for
- * exponent)
- */
 
 static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
 #ifdef CC128_OLD_FORMAT
@@ -798,6 +815,10 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
     _Static_assert(CC128_BOT_WIDTH == 14, "");
     _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "");
     _Static_assert(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
+#else
+    _Static_assert(CC128_BOT_WIDTH == 23, "");
+    _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "");
+    _Static_assert(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
 #endif
     const uint32_t BWidth = CC128_BOT_WIDTH;
     uint8_t E;
@@ -900,7 +921,11 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
         const uint64_t pesbt =
             CC128_ENCODE_FIELD(0, UPERMS) |
             CC128_ENCODE_FIELD(0, HWPERMS) |
+#ifdef CC128_OLD_FORMAT
+            CC128_ENCODE_FIELD(CC_SEAL_MODE_UNSEALED, SEALED_MODE) |
+#else
             CC128_ENCODE_FIELD(CC128_OTYPE_UNSEALED, OTYPE) |
+#endif
             CC128_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
             CC128_ENCODE_FIELD(Te, TOP_ENCODED) |
             CC128_ENCODE_FIELD(Be, BOTTOM_ENCODED);
