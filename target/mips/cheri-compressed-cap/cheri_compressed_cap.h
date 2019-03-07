@@ -968,7 +968,7 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
     }
     assert(new_top >= new_base);
     cap->cr_base = new_base;
-    cap->cr_offset = 0;
+    cap->cr_offset = cursor - new_base; // ensure that the address is correct
     cap->_cr_length = new_top - new_base;
     // TODO: update pesbt?
     //  let newCap = {cap with address=base, E=to_bits(6, if incE then e + 1 else e), B=Bbits, T=Tbits, internal_e=ie};
