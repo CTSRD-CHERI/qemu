@@ -7,7 +7,7 @@
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
 #include "test_util.h"
 
-#include "inputs.cpp"
+#include "decode_inputs.cpp"
 
 
 static_assert(CC128_FIELD_OTYPE_START == 27, "");

@@ -53,6 +53,21 @@ struct cap_register {
     uint32_t cr_otype;  /* Object Type, 24 bits */
     uint8_t cr_tag;     /* Tag */
     uint8_t _sbit_for_memory; /* sealed flag */
+#ifdef __cplusplus
+    inline uint64_t base() const {
+       return cr_base;
+    }
+    inline uint64_t address() const {
+       return cr_base + cr_offset;
+    }
+    inline unsigned __int128 top() const {
+       return cr_base + _cr_length;
+    }
+    inline uint64_t top64() const {
+        const unsigned __int128 t = top();
+        return t > UINT64_MAX ? UINT64_MAX : (uint64_t)t;
+    }
+#endif
 };
 typedef struct cap_register cap_register_t;
 

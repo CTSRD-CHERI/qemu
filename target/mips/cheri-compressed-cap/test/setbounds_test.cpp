@@ -22,19 +22,37 @@ struct setbounds_regressions {
     {0x0010D700C6318A88, 0x383264C38950ADB7, 0x00000D5EBA967A84, 0x0000000002FFFFCE},
 };
 
-static cap_register_t check_bounds_exact(const cap_register_t& initial_cap, unsigned __int128 requested_length, bool should_be_exact) {
+static inline void check_csetbounds_invariants(const cap_register_t& initial_cap, const cap_register_t& with_bounds, bool was_exact) {
+    CAPTURE(initial_cap, with_bounds, was_exact);
+
+}
+
+static cap_register_t do_csetbounds(const cap_register_t& initial_cap, unsigned __int128 requested_top, bool* was_exact) {
     CAPTURE(initial_cap);
     cap_register_t with_bounds = initial_cap;
-    unsigned __int128 req_top = initial_cap.cr_base + initial_cap.cr_offset + (unsigned __int128)requested_length;
-    CAPTURE(req_top);
-    bool exact = cc128_setbounds(&with_bounds, initial_cap.cr_offset, req_top);
+    uint64_t requested_base = initial_cap.address();
+    CAPTURE(initial_cap, requested_top, requested_base);
+    bool exact = cc128_setbounds(&with_bounds, requested_base, requested_top);
     CAPTURE(with_bounds, exact);
-    CHECK(exact == should_be_exact);
+    check_csetbounds_invariants(initial_cap, with_bounds, exact);
     // Address should be the same!
-    CHECK(with_bounds.cr_offset + with_bounds.cr_base == initial_cap.cr_offset + initial_cap.cr_base);
-    CHECK(with_bounds.cr_base >= initial_cap.cr_base); // monotonicity broken
-    CHECK(with_bounds._cr_length <= initial_cap._cr_length); // monotonicity broken
+    REQUIRE(with_bounds.address() == initial_cap.address());
+    if (exact) {
+        REQUIRE(with_bounds.cr_base == requested_base);
+        REQUIRE(with_bounds.top() == requested_top);
+    }
+    REQUIRE(with_bounds.cr_base >= initial_cap.cr_base); // monotonicity broken
+    REQUIRE(with_bounds._cr_length <= initial_cap._cr_length); // monotonicity broken
+    if (was_exact)
+        *was_exact = exact;
+    return with_bounds;
+}
 
+static cap_register_t check_bounds_exact(const cap_register_t& initial_cap, unsigned __int128 requested_length, bool should_be_exact) {
+    unsigned __int128 req_top = initial_cap.cr_base + initial_cap.cr_offset + (unsigned __int128)requested_length;
+    bool exact = false;
+    cap_register_t with_bounds = do_csetbounds(initial_cap, req_top, &exact);
+    CHECK(exact == should_be_exact);
     return with_bounds;
 }
 
@@ -96,9 +114,30 @@ TEST_CASE("Cheritest regression case", "[regression]") {
     CHECK(with_bounds.cr_offset + with_bounds.cr_base == cap.cr_offset + cap.cr_base);
 }
 
+#ifndef CC128_OLD_FORMAT
 
+#include "setbounds_inputs.cpp"
 
 TEST_CASE("setbounds test cases from sail", "[bounds]") {
-    for (size_t i = 0; i < array_lengthof(regression_inputs); i++) {
+    for (size_t index = 0; index < array_lengthof(setbounds_inputs); index++) {
+        CAPTURE(index);
+        const setbounds_input& input = setbounds_inputs[index];
+        auto first_input = make_max_perms_cap(0, input.base1, CC128_MAX_LENGTH);
+        REQUIRE(first_input.address() == input.base1);
+        REQUIRE(first_input.base() == 0);
+        REQUIRE(first_input.top() == CC128_MAX_LENGTH);
+        const cap_register_t first_bounds = do_csetbounds(first_input, input.top1, nullptr);
+        CHECK(first_bounds.base() == input.sail_cc_base1);
+        CHECK(first_bounds.top() == input.sail_cc_top1);
+
+        // Check the second csetbounds:
+        cap_register_t second_input = first_bounds;
+        second_input.cr_offset += input.base2 - second_input.address();
+        REQUIRE(second_input.address() == input.base2);
+        const cap_register_t second_bounds = do_csetbounds(second_input, input.top2, nullptr);
+        CHECK(second_bounds.base() == input.sail_cc_base2);
+        CHECK(second_bounds.top() == input.sail_cc_top2);
     }
 }
+
+#endif
