@@ -701,6 +701,7 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, unsigned _
     if (slow_representable_check) {
 #endif // CC128_OLD_FORMAT
         cap_register_t c;
+        memset(&c, 0, sizeof(c));
         /* Simply compress and uncompress to check. */
         c.cr_base = base;
         c._cr_length = length;
@@ -766,7 +767,7 @@ static inline uint64_t cc128_truncate64(uint64_t value, size_t bits) {
     return value & ((UINT64_C(1) << bits) - 1);
 }
 
-static bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top) {
+static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top) {
     assert(cap->cr_tag && "Cannot be used on untagged capabilities");
     assert(!cc128_is_cap_sealed(cap) && "Cannot be used on sealed capabilities");
     assert(req_base <= req_top && "Cannot grow capabilities");
