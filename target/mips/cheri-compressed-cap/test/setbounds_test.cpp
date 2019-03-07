@@ -49,10 +49,34 @@ TEST_CASE("regression from cheritest", "[bounds]") {
     CHECK(!cc128_is_representable(false, initial.cr_offset, requested_length, 0, 0));
     cap_register_t with_bounds = initial;
     cc128_setbounds(&with_bounds, initial.cr_offset, initial.cr_offset + requested_length);
+    CAPTURE(with_bounds);
     CHECK(with_bounds.cr_base == 0xFFFFFFFFFF000000);
     CHECK(with_bounds.cr_offset == 0x0000000000000000);
     CHECK(with_bounds._cr_length == 0x00000000001000000);
+}
+
+TEST_CASE("Old format setbounds regression with new format", "[old]") {
+    // 0x9000000040000fdc:  cincoffsetimm	c3,c1,7
+    //    Write C03|v:1 s:0 p:00078fff b:0000000000000000 l:ffffffffffffffff
+    //             |o:0000000000000007 t:ffffff
+    // 0x9000000040000fe0:  lui	a0,0x1000
+    //    Write a0 = 0000000010000000
+    // 0x9000000040000fe4:  csetbounds	c3,c3,a0
+    //  -> crash
+    auto cap = make_max_perms_cap(0, 7, CC128_MAX_LENGTH);
+    CAPTURE(cap);
+    cap_register_t with_bounds = cap;
+    uint64_t requested_length = 0x0000000010000000;
+    auto req_top = cap.cr_base + cap.cr_offset + requested_length;
+    CAPTURE(req_top);
+    bool exact = cc128_setbounds(&with_bounds, cap.cr_offset, req_top);
     CAPTURE(with_bounds);
+    CHECK(!exact);
+    CAPTURE(with_bounds);
+    CHECK(with_bounds.cr_base == 0x0000000000000000);
+    CHECK(with_bounds.cr_offset == 0x0000000000000007);
+    CHECK(with_bounds._cr_length == 0x00000000010080000);
+    CHECK(with_bounds.cr_offset + with_bounds.cr_base == cap.cr_offset + cap.cr_base);
 }
 
 TEST_CASE("setbounds test cases from sail", "[bounds]") {

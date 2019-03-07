@@ -36,6 +36,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/param.h> /* for MIN() */
 
 // QEMU already provides cap_register_t but if used in other programs
@@ -195,18 +196,33 @@ enum {
     CC128_FIELD(SEALED_MODE, 111, 110),
     CC128_FIELD(INTERNAL_EXPONENT, 109, 109),
     CC128_FIELD(LH, 108, 108),
-    CC128_FIELD(TOP_ENCODED, 107, 89),
+    CC128_FIELD(TOP_ENCODED, 107, 87),
     CC128_FIELD(BOTTOM_ENCODED, 86, 64),
 
-    // Top/bottom offsets depending in INTERNAL_EXPONENT flag:
-    CC128_FIELD(EXP_ZERO_TOP, 107, 89),
-    CC128_FIELD(EXP_NONZERO_TOP, 107, 92),
+    // Top/bottom offsets depending on INTERNAL_EXPONENT flag:
+    // Without internal exponent:
+    CC128_FIELD(EXP_ZERO_TOP, 107, 87),
     CC128_FIELD(EXP_ZERO_BOTTOM, 86, 64),
+    // With internal exponent:
+    CC128_FIELD(EXP_NONZERO_TOP, 107, 90),
+    CC128_FIELD(EXPONENT_LOW_PART, 89, 87),
     CC128_FIELD(EXP_NONZERO_BOTTOM, 86, 67),
-    CC128_FIELD(EXPONENT_HIGH_PART, 91, 89),
-    CC128_FIELD(EXPONENT_LOW_PART, 66, 64),
+    CC128_FIELD(EXPONENT_HIGH_PART, 66, 64),
 };
-
+_Static_assert(CC128_FIELD_INTERNAL_EXPONENT_START == CC_L_IE_OFF, "");
+_Static_assert(CC128_FIELD_LH_START == CC_L_LH_OFF, "");
+_Static_assert(CC128_FIELD_EXP_ZERO_BOTTOM_START == CC_L_B_OFF, "");
+_Static_assert(CC128_FIELD_BOTTOM_ENCODED_START == CC_L_B_OFF, "");
+_Static_assert(CC128_FIELD_EXP_ZERO_TOP_START == CC_L_T_OFF, "");
+_Static_assert(CC128_FIELD_TOP_ENCODED_START == CC_L_T_OFF, "");
+_Static_assert(CC128_FIELD_SEALED_MODE_START == CC_L_S_OFF, "");
+_Static_assert(CC128_FIELD_BOTTOM_ENCODED_SIZE == CC_L_BWIDTH, "");
+_Static_assert(CC128_FIELD_TOP_ENCODED_SIZE == CC_L_BWIDTH - 2, "");
+_Static_assert(CC128_FIELD_EXP_ZERO_BOTTOM_SIZE == CC_L_BWIDTH, "");
+_Static_assert(CC128_FIELD_EXP_ZERO_TOP_SIZE == CC_L_BWIDTH - 2, "");
+_Static_assert(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_EXPONENT_LOW_PART_SIZE + CC128_FIELD_LH_SIZE== CC_L_EWIDTH, "");
+_Static_assert(CC128_FIELD_EXPONENT_LOW_PART_SIZE == CC_L_LOWWIDTH, "");
+_Static_assert(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_LH_SIZE == CC_L_EWIDTH - CC_L_LOWWIDTH, "");
 #else
 enum {
     CC128_FIELD(UPERMS, 127, 124),
@@ -218,11 +234,13 @@ enum {
     CC128_FIELD(BOTTOM_ENCODED, 77, 64),
 
     // Top/bottom offsets depending in INTERNAL_EXPONENT flag:
+    // Without internal exponent:
     CC128_FIELD(EXP_ZERO_TOP, 89, 78),
-    CC128_FIELD(EXP_NONZERO_TOP, 89, 81),
     CC128_FIELD(EXP_ZERO_BOTTOM, 77, 64),
-    CC128_FIELD(EXP_NONZERO_BOTTOM, 77, 67),
+    // With internal exponent:
+    CC128_FIELD(EXP_NONZERO_TOP, 89, 81),
     CC128_FIELD(EXPONENT_HIGH_PART, 80, 78),
+    CC128_FIELD(EXP_NONZERO_BOTTOM, 77, 67),
     CC128_FIELD(EXPONENT_LOW_PART, 66, 64),
 };
 
@@ -723,7 +741,7 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, unsigned _
         c.cr_base = base;
         c._cr_length = length;
         c.cr_offset = new_offset;
-        c.cr_otype = sealed ? 42 : CAP_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
+        c.cr_otype = sealed ? 42 : CC128_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
         return cc128_is_representable_cap_exact(&c);
     } else {
         return fast_cc128_is_representable(sealed, base, length, offset, new_offset);
@@ -793,7 +811,7 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    uint64_t cursor = cap->cr_base + cap->cr_offset;
+    const uint64_t cursor = cap->cr_base + cap->cr_offset;
     assert(req_base == cursor && "CSetbounds should set base to current cursor");
     unsigned __int128 orig_length65 = cap->_cr_length;
     unsigned __int128 req_length65 = req_top - cursor;
@@ -875,7 +893,7 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
         //      T_ie = T_ie + 1;
         //    };
         if (lostSignificantTop) {
-            top_ie = top_ie + 1;
+            top_ie = cc128_truncate64(top_ie + 1, CC128_BOT_INTERNAL_EXP_WIDTH);
         }
         //    /* Has the length overflowed? We chose e so that the top two bits of len would be 0b01,
         //       but either because of incrementing T or losing bits of base it might have grown. */
@@ -892,7 +910,7 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
         //      let incT : range(0,1) = if lostSignificantTop then 1 else 0;
         //      T_ie = truncate(top >> (e + 4), 11) + incT;
         //    };
-        const uint64_t len_ie = cc128_truncate64(top_ie - bot_ie, 11);
+        const uint64_t len_ie = cc128_truncate64(top_ie - bot_ie, CC128_BOT_INTERNAL_EXP_WIDTH);
         if (cc128_getbits(len_ie, CC128_BOT_INTERNAL_EXP_WIDTH - 1, 1)) {
             incE = true;
             lostSignificantBase = lostSignificantBase || cc128_getbits(bot_ie, 0, 1);
@@ -907,22 +925,36 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
         //
         //    Bbits = B_ie @ 0b000;
         //    Tbits = T_ie @ 0b000;
-        const uint64_t Bbits = bot_ie << CC128_EXP_LOW_WIDTH;
-        const uint64_t Tbits = top_ie << CC128_EXP_LOW_WIDTH;
+        const uint64_t Bbits = bot_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        const uint64_t Tbits = top_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+#ifdef CC128_OLD_FORMAT
+        const uint8_t newE = E + (incE ? 1 : 0) - 1; // old format implciitly adds one for IE
+#else
         const uint8_t newE = E + (incE ? 1 : 0);
+#endif
+
         //  };
         //  let exact = not(lostSignificantBase | lostSignificantTop);
         exact = !lostSignificantBase && !lostSignificantTop;
 
         // TODO: find a faster way to compute top and bot:
         // Split E between T and B
-        const uint64_t Te = Tbits | cc128_getbits(newE >> CC128_FIELD_EXPONENT_LOW_PART_SIZE , 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE);
-        const uint64_t Be = Bbits | cc128_getbits(newE, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE);
+        const uint64_t expHighBits = cc128_getbits(newE >> CC128_FIELD_EXPONENT_LOW_PART_SIZE , 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE);
+        const uint64_t expLowBits = cc128_getbits(newE, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE);
+#ifdef CC128_OLD_FORMAT
+        // The old format places the low bits of exponent in top instead of in bottom
+        const uint64_t Te = Tbits | expLowBits;
+        const uint64_t Be = Bbits | expHighBits;
+#else
+        const uint64_t Te = Tbits | expHighBits;
+        const uint64_t Be = Bbits | expLowBits;
+#endif
         const uint64_t pesbt =
             CC128_ENCODE_FIELD(0, UPERMS) |
             CC128_ENCODE_FIELD(0, HWPERMS) |
 #ifdef CC128_OLD_FORMAT
             CC128_ENCODE_FIELD(CC_SEAL_MODE_UNSEALED, SEALED_MODE) |
+            CC128_ENCODE_FIELD(newE >> (2 * CC_L_LOWWIDTH), LH) |
 #else
             CC128_ENCODE_FIELD(CC128_OTYPE_UNSEALED, OTYPE) |
 #endif
