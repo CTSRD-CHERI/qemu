@@ -964,8 +964,7 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if (!is_representable(true, cap_get_base(csp), cap_get_length(csp),
-                cap_get_offset(csp), cap_get_offset(csp))) {
+    } else if (!is_representable_cap_when_sealed(csp, cap_get_offset(csp))) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         cap_register_t result = *csp;
