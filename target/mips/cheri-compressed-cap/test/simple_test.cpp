@@ -2,10 +2,13 @@
 #include <cinttypes>
 #include <cstdint>
 #include <cstdlib>
+#include <unistd.h>
 #include <cstring>
+
+#define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
 #include "test_util.h"
 
-static void test_compressed_null_cap_is_zero() {
+TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
     {
         cap_register_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
@@ -50,7 +53,7 @@ static void test_compressed_null_cap_is_zero() {
     }
 }
 
-static void test_decompress_zero_is_null_cap() {
+TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     cap_register_t result;
     memset(&result, 'a', sizeof(result));
     decompress_128cap(0, 0, &result);
@@ -82,38 +85,38 @@ static void test_decompress_zero_is_null_cap() {
 }
 
 #ifdef CC128_OLD_FORMAT
-static void test1() {
+TEST_CASE("Old format test 1", "[old]") {
     auto result = decompress_representable(0xffae000000000000, 0x9000000040001650);
     CHECK_FIELD(result, base, 0);
     CHECK_FIELD(result, offset, 0x9000000040001650);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xfae);
-    CHECK_FIELD_RAW(result._cr_length, CAP_MAX_ADDRESS_PLUS_ONE);
+    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)CAP_MAX_ADDRESS_PLUS_ONE);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
-static void test2() {
+TEST_CASE("Old format test 2", "[old]") {
     auto result = decompress_representable(0xfffa200b1f001633, 0x9000000040001636);
     CHECK_FIELD(result, base, 0x9000000040001636);
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffa);
-    CHECK_FIELD_RAW(result._cr_length, 6);
+    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)6);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
-static void test3() {
+TEST_CASE("Old format test 3", "[old]") {
     auto result = decompress_representable(0xfffa201a19003035, 0x9000000040003296);
     CHECK_FIELD(result, base, 0x9000000040003030);
     CHECK_FIELD(result, offset, 0x266);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffa);
-    CHECK_FIELD_RAW(result._cr_length, 0x400);
+    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)0x400);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
 // 4 and 5 are from test_cp2_cincoffset_rep_underflow.log
-static void test4() {
+TEST_CASE("Old format test 4", "[old]") {
     // 0x9000000040000f6c:  cincoffset c2,c1,t4
     //    Write C02|v:1 s:0 p:00007fff b:0000000000000000 l:0000000130000000
     //             |o:0000000000001010 t:0
@@ -124,12 +127,11 @@ static void test4() {
     CHECK_FIELD(result, offset, 0x1010);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffe);
-    CHECK_FIELD(result, length, 0x130000000);
-    CHECK_FIELD_RAW(result._cr_length, 0x130000000);
+    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
-static void test5() {
+TEST_CASE("Old format test 5", "[old]") {
     // 0x9000000040000f88:  cincoffset c2,c1,t4
     //    Write C02|v:1 s:0 p:00007fff b:0000000000000000 l:0000000130000000
     //             |o:0000000000000ff0 t:0
@@ -140,13 +142,12 @@ static void test5() {
     CHECK_FIELD(result, offset, 0xff0);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffe);
-    CHECK_FIELD_RAW(result._cr_length, 0x130000000);
+    CHECK_FIELD_RAW(result._cr_length, (unsigned __int128)0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
 #else
-
-static void test_new_format_regression1() {
+TEST_CASE("New format max length regression", "[new]") {
 // sample input from cheritest:
 // bad test from cheritest:
 //     Write C24|v:1 s:0 p:00007ffd b:900000000000efe0 l:0000000000001000
@@ -186,26 +187,51 @@ static void test_new_format_regression1() {
     CHECK_FIELD_RAW(decompressed._cr_length, original._cr_length);
     CHECK_FIELD(decompressed, otype, CC128_OTYPE_UNSEALED);
 
-    check(UINT64_C(0xfffd000003f9afe4), pesbt_for_mem, "Compressed pesbt wrong?");
-    check(UINT64_C(0xfffd000003f9afe4), compress_128cap(&decompressed), "Recompressed pesbt wrong?");
+    CHECK(UINT64_C(0xfffd000003f9afe4) == pesbt_for_mem);
+    CHECK(UINT64_C(0xfffd000003f9afe4) == compress_128cap(&decompressed));
 
 }
 #endif
 
-int main() {
-    fprintf(stderr, "NULL PESBT= %016" PRIx64 "\n", (uint64_t)CC128_NULL_PESBT);
-    test_compressed_null_cap_is_zero();
-    test_decompress_zero_is_null_cap();
-#ifdef CC128_OLD_FORMAT
-    test1();
-    test2();
-    test3();
-    test4();
-    test5();
-#else
-    test_new_format_regression1();
-#endif
-    if (!failed)
-        printf("\nAll tests passed!\n");
-    return failed ? 1 : 0;
+static void check_representable(uint64_t base, unsigned __int128 length, bool should_work, const std::string& ctx) {
+    // INFO("Checking representability for " << ctx);
+    // INFO("Base = " << base);
+    // INFO("Length = " << length);
+    // INFO("Expected to work = " << should_work);
+    CAPTURE(base, length, should_work, ctx);
+    cap_register_t cap;
+    memset(&cap, 0, sizeof(cap));
+    cap.cr_base = base;
+    cap._cr_length = length;
+    cap.cr_tag = true;
+    cap.cr_otype = CC128_OTYPE_UNSEALED;
+    uint64_t compressed = compress_128cap(&cap);
+    cap_register_t decompressed;
+    memset(&decompressed, 0, sizeof(decompressed));
+
+    bool unsealed_representable = cc128_is_representable(false, base, length, 0, 0);
+    decompress_128cap(compressed, cap.cr_base + cap.cr_offset, &decompressed);
+    bool unsealed_roundtrip = cap.cr_base == decompressed.cr_base && cap._cr_length == decompressed._cr_length && cap.cr_offset == decompressed.cr_offset;
+    CHECK(unsealed_representable == should_work);
+    CHECK(unsealed_roundtrip == unsealed_representable);
+    // TODO: CHECK(fast_representable == unsealed_representable);
+
+    bool sealed_representable = cc128_is_representable(true, base, length, 0, 0);
+    cap.cr_offset = 42;
+    decompress_128cap(compressed, cap.cr_base + cap.cr_offset, &decompressed);
+    bool sealed_roundtrip = cap.cr_base == decompressed.cr_base && cap._cr_length == decompressed._cr_length && cap.cr_offset == decompressed.cr_offset;
+    CHECK(sealed_representable == should_work);
+    CHECK(sealed_roundtrip == unsealed_representable);
+    // fprintf(stderr, "Base 0x%" PRIx64 " Len 0x%" PRIx64 "%016" PRIx64 ": roundtrip: sealed=%d, unsealed=%d -- Fast: sealed=%d, unsealed=%d\n",
+    //        base, (uint64_t)(length >> 64), (uint64_t)length, sealed_roundtrip, unsealed_roundtrip, sealed_representable, unsealed_representable);
 }
+
+TEST_CASE("Check max size cap represetable", "[representable]") {
+    // 0000000d b:0000000000000000 l:ffffffffffffffff |o:0000000000000000 t:ffffff
+    check_representable(0, CAP_MAX_ADDRESS_PLUS_ONE, true, "1 << 64 length");
+    check_representable(0, 0, true, "zero length");
+    check_representable(0, UINT64_MAX, false, "UINT64_MAX length");
+
+    check_representable(0xffffffffff000000, 0x00000000000ffffff, false, "lenght with too many bits");
+}
+

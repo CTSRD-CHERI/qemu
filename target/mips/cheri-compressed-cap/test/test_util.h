@@ -2,18 +2,21 @@
 #include <iostream>
 #include <string>
 
-std::basic_ostream<char, std::char_traits<char>>& operator<<(std::basic_ostream<char, std::char_traits<char>>& __out, unsigned __int128 i);
+std::ostream& operator<<( std::ostream& os, unsigned __int128 value);
 
-std::basic_ostream<char, std::char_traits<char>>& operator<<(std::basic_ostream<char, std::char_traits<char>>& __out, unsigned __int128 i) {
-    return __out << "{" << (uint64_t)(i >> 64) << "," << (uint64_t)(i) << "}";
+std::ostream& operator<<( std::ostream& os, unsigned __int128 value) {
+    os << "{" << (uint64_t)(value >> 64) << "," << (uint64_t)(value) << "}";
+    return os;
 }
+
+#include "catch.hpp"
 
 static bool failed = false;
 
 template <typename T> static bool check(T expected, T actual, const std::string& msg) {
     if (expected == actual)
         return true;
-    std::cerr << "ERROR: " << msg << ": 0x" << std::hex << actual << " != 0x" << expected << "\n";
+    std::cerr << "ERROR: " << msg << ": expected 0x" << std::hex << expected << " != 0x" << actual << "\n";
     failed = true;
     return false;
 }
@@ -24,12 +27,16 @@ constexpr inline size_t array_lengthof(T (&)[N]) {
 }
 
 static const char* otype_suffix(uint32_t otype) {
+    // Two separate switches since if the number of otype bits is the same
+    // we cannot have both of the case statements in one switch
     switch(otype) {
     case CC128_OTYPE_UNSEALED: return " (CC128_OTYPE_UNSEALED)";
     case CC128_OTYPE_SENTRY: return " (CC128_OTYPE_SENTRY)";
     case CC128_OTYPE_RESERVED2: return " (CC128_OTYPE_RESERVED2)";
     case CC128_OTYPE_RESERVED3: return " (CC128_OTYPE_RESERVED3)";
-
+    default: break;
+    }
+    switch(otype) {
     case CC256_OTYPE_UNSEALED: return " (CC256_OTYPE_UNSEALED)";
     case CC256_OTYPE_SENTRY: return " (CC256_OTYPE_SENTRY)";
     case CC256_OTYPE_RESERVED2: return " (CC256_OTYPE_RESERVED2)";
@@ -71,5 +78,5 @@ __attribute__((used)) static cap_register_t decompress_representable(uint64_t pe
 #define DO_STRINGIFY1(x) DO_STRINGIFY2(x)
 #define STRINGIFY(x) DO_STRINGIFY1(x)
 
-#define CHECK_FIELD_RAW(value, expected) check(expected, value, "Line " STRINGIFY(__LINE__) ": " #value " is wrong")
-#define CHECK_FIELD(cap, field, expected) CHECK_FIELD_RAW((uint64_t)cap.cr_##field, (uint64_t)expected)
+#define CHECK_FIELD_RAW(value, expected) CHECK(value == expected)
+#define CHECK_FIELD(cap, field, expected) CHECK((uint64_t)expected == (uint64_t)cap.cr_##field)
