@@ -9,4 +9,4 @@
 	commit = 12c4bf268cf89bac1a51e5b7825b3204ad71c27d
 	parent = 25d1195b0a3460203c22190fe9a6c35295dc110c
 	cmdver = 0.4.0
-	method = merge
+	method = rebase
