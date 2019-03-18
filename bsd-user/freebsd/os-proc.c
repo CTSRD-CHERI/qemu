@@ -182,7 +182,7 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         envc++;
     }
 
-    qarg0 = argp = g_new0(char *, argc + 7);
+    qarg0 = argp = g_new0(char *, argc + 9);
     /* save the first agrument for the emulator */
     *argp++ = (char *)getprogname();
     qargp = argp;
@@ -249,6 +249,11 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
              */
             if (get_filename_from_fd(getpid(), (int)path_or_fd, execpath,
                         sizeof(execpath)) != NULL) {
+                memmove(qarg1 + 2, qarg1, (qargend-qarg1) * sizeof(*qarg1));
+		qarg1[1] = qarg1[0];
+		qarg1[0] = (char *)"-0";
+		qarg1 += 2;
+		qargend += 2;
                 *qarg1 = execpath;
 #ifndef DONT_INHERIT_INTERP_PREFIX
                 memmove(qarg1 + 2, qarg1, (qargend-qarg1) * sizeof(*qarg1));
@@ -311,6 +316,11 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         if (fd > 0 && is_target_elf_binary(fd) == 1) {
             close(fd);
             /* execve() as a target binary using emulator. */
+            memmove(qarg1 + 2, qarg1, (qargend-qarg1) * sizeof(*qarg1));
+            qarg1[1] = qarg1[0];
+            qarg1[0] = (char *)"-0";
+            qarg1 += 2;
+	    qargend += 2;
             *qarg1 = (char *)p;
 #ifndef DONT_INHERIT_INTERP_PREFIX
             memmove(qarg1 + 2, qarg1, (qargend-qarg1) * sizeof(*qarg1));
