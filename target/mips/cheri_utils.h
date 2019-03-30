@@ -116,7 +116,7 @@ static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
         if (c->_sbit_for_memory)
             cheri_debug_assert(c->cr_otype <= CAP_MAX_SEALED_OTYPE);
         else
-            cheri_debug_assert(c->cr_otype == CAP_OTYPE_UNSEALED);
+            cheri_debug_assert(c->cr_otype == CAP_OTYPE_UNSEALED || c->cr_otype == CAP_OTYPE_SENTRY);
     }
 #endif
     return c->cr_otype <= CAP_MAX_SEALED_OTYPE;

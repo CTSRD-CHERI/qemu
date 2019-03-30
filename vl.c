@@ -196,6 +196,9 @@ int icount_align_option;
 bool cheri_c2e_on_unrepresentable = false;
 bool cheri_debugger_on_unrepresentable = false;
 #endif
+#ifdef CHERI_128
+#include "target/mips/cheri_utils.h"
+#endif
 
 /* The bytes in qemu_uuid are in the order specified by RFC4122, _not_ in the
  * little-endian "wire format" described in the SMBIOS 2.6 specification.
@@ -1874,6 +1877,7 @@ static void version(void)
 #ifdef TARGET_CHERI
 #ifdef CHERI_128
     printf("Compiled for CHERI128\n");
+    printf("CHERI-CC base width is %d\n", CC128_BOT_WIDTH);
 #elif defined(CHERI_MAGIC128)
     printf("Compiled for CHERI128 (magic)\n");
 #else
