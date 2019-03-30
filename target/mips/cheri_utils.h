@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include "qemu/error-report.h"
 
 #ifdef TARGET_CHERI
 #include "tcg/tcg.h"  // for tcg_debug_assert()
@@ -99,15 +100,6 @@ static inline uint64_t cap_get_otype(const cap_register_t* c) {
     return result < CAP_MAX_SEALED_OTYPE ? result : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 }
 
-// Check if num_bytes bytes at addr can be read using capability c
-static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, uint64_t num_bytes) {
-    cheri_debug_assert(num_bytes <= CHERI_CAP_SIZE); // should be used for clc or smaller
-    if (addr < cap_get_base(c) || (addr + num_bytes) > cap_get_top(c)) {
-        return false;
-    }
-    return true;
-}
-
 static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
     // TODO: how should we treat the other reserved types? as sealed?
     // TODO: what about untagged capabilities with out-of-range otypes?
@@ -120,6 +112,26 @@ static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
     }
 #endif
     return c->cr_otype <= CAP_MAX_SEALED_OTYPE;
+}
+
+// Check if num_bytes bytes at addr can be read using capability c
+static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, uint64_t num_bytes) {
+    cheri_debug_assert(num_bytes <= CHERI_CAP_SIZE); // should be used for clc or smaller
+    if (addr < cap_get_base(c)) {
+        return false;
+    }
+    // Use __builtin_add_overflow to avoid wrapping around the end of the addres space
+    uint64_t access_end_addr = 0;
+    if (__builtin_add_overflow(addr, num_bytes, &access_end_addr)) {
+        warn_report("Found capability access that wraps around: 0x%" PRIx64
+                    " + %" PRId64 ". Authorizing cap: " PRINT_CAP_FMTSTR,
+                    addr, num_bytes, PRINT_CAP_ARGS(c));
+        return false;
+    }
+    if (access_end_addr > cap_get_top(c)) {
+        return false;
+    }
+    return true;
 }
 
 static inline bool cap_is_unsealed(const cap_register_t* c) {

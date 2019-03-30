@@ -353,7 +353,7 @@ static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
     }
     // fprintf(stderr, "addr=%zx, len=%zd, cr_base=%zx, cr_len=%zd\n",
     //     (size_t)addr, (size_t)len, (size_t)cr->cr_base, (size_t)cr->cr_length);
-    if (addr < cr->cr_base || (addr + len) > cap_get_top(cr)) {
+    if (!cap_is_in_bounds(cr, addr, len)) {
         cause = CP2Ca_LENGTH;
         // fprintf(qemu_logfile, "CAP Len VIOLATION: ");
         goto do_exception;
@@ -1634,9 +1634,7 @@ target_ulong helper_cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = cursor + rt + (int32_t)offset;
 
-        if ((addr + size) > cap_get_top(cbp)) {
-            do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-        } else if (addr < cbp->cr_base) {
+        if (!cap_is_in_bounds(cbp, addr, size)) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         } else if (align_of(size, addr)) {
 #if defined(CHERI_UNALIGNED)
@@ -1673,9 +1671,7 @@ target_ulong helper_cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size)
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
         do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
-    } else if ((addr + size) > cap_get_top(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (addr < cbp->cr_base) {
+    } else if (!cap_is_in_bounds(cbp, addr, size)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(size, addr)) {
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
@@ -1704,9 +1700,7 @@ target_ulong helper_cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size)
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST, cb);
-    } else if ((addr + size) > cap_get_top(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (addr < cbp->cr_base) {
+    } else if (!cap_is_in_bounds(cbp, addr, size)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (align_of(size, addr)) {
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
@@ -1741,9 +1735,7 @@ target_ulong helper_cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
         uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = cursor + rt + (int32_t)offset;
 
-        if ((addr + size) > cap_get_top(cbp)) {
-            do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-        } else if (addr < cbp->cr_base) {
+        if (!cap_is_in_bounds(cbp, addr, size)) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         } else if (align_of(size, addr)) {
 #if defined(CHERI_UNALIGNED)
@@ -1826,10 +1818,7 @@ static target_ulong helper_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
         do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
         return (target_ulong)0;
-    } else if ((addr + CHERI_CAP_SIZE) > cap_get_top(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-        return (target_ulong)0;
-    } else if (addr < cbp->cr_base) {
+    } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         return (target_ulong)0;
     } else if (align_of(CHERI_CAP_SIZE, addr)) {
@@ -1881,10 +1870,7 @@ static inline target_ulong helper_csc_addr(CPUMIPSState *env, uint32_t cs, uint3
         uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
 
-        if ((addr + CHERI_CAP_SIZE) > cap_get_top(cbp)) {
-            do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-            return (target_ulong)0;
-        } else if (addr < cbp->cr_base) {
+        if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
             do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
             return (target_ulong)0;
         } else if (align_of(CHERI_CAP_SIZE, addr)) {
@@ -1921,10 +1907,7 @@ static inline target_ulong helper_cscc_addr(CPUMIPSState *env, uint32_t cs, uint
             !(csp->cr_perms & CAP_PERM_GLOBAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST_LC_CAP, cb);
         return (target_ulong)0;
-    } else if ((addr + CHERI_CAP_SIZE) > cap_get_top(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-        return (target_ulong)0;
-    } else if (addr < cbp->cr_base) {
+    } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
         return (target_ulong)0;
     } else if (align_of(CHERI_CAP_SIZE, addr)) {
