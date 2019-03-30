@@ -622,7 +622,7 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
             E = (uint8_t)cc128_compute_e(length64, BWidth);
         }
 
-        Te = (UINT8_C(1) << (64 - E)) & TMask;
+        Te = (UINT64_C(1) << (64 - E)) & TMask;
     } else {
         E = (uint8_t)cc128_compute_e(length64, BWidth);
         Te = (top64 >> E) & TMask;
