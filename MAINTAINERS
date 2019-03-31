@@ -1813,7 +1813,8 @@ F: qom/cpu.c
 F: include/qom/cpu.h
 
 Device Tree
-M: Alexander Graf <agraf@suse.de>
+M: Alistair Francis <alistair.francis@wdc.com>
+R: David Gibson <david@gibson.dropbear.id.au>
 S: Maintained
 F: device_tree.c
 F: include/sysemu/device_tree.h
@@ -2178,7 +2179,7 @@ F: include/migration/failover.h
 F: docs/COLO-FT.txt
 
 COLO Proxy
-M: Zhang Chen <zhangckid@gmail.com>
+M: Zhang Chen <chen.zhang@intel.com>
 M: Li Zhijian <lizhijian@cn.fujitsu.com>
 S: Supported
 F: docs/colo-proxy.txt
