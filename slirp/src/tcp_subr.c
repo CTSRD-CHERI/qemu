@@ -974,8 +974,8 @@ int tcp_ctl(struct socket *so)
                     so->guestfwd = ex_ptr;
                     return 1;
                 }
-                DEBUG_MISC(" executing %s", ex_ptr->ex_exec, ex_ptr->callback);
-                return fork_exec(so, ex_ptr->ex_exec);
+                DEBUG_MISC(" executing %s", ex_ptr->ex_exec);
+                return fork_exec(so, ex_ptr->ex_exec, ex_ptr->exit_callback);
             }
         }
     }

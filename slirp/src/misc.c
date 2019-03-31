@@ -29,7 +29,7 @@ remque(void *a)
 static void slirp_child_exit_handler(GPid pid, gint status, gpointer user_data)
 {
     const char *ex = (const char *)user_data;
-    info_report("Child process %d ('%s') exited with status %d\n", (int)pid, ex, status);
+    fprintf(stderr, "Child process %d ('%s') exited with status %d\r\n", (int)pid, ex, status);
 }
 
 /* TODO: IPv6 */
@@ -202,7 +202,7 @@ fork_exec(struct socket *so, const char *ex, GChildWatchFunc callback)
     if (slirp_socketpair_with_oob(sp) < 0) {
         return 0;
     }
-    info_report("executing %s\r", ex);
+    printf("executing %s\r\n", ex);
 
     argv = g_strsplit(ex, " ", -1);
     GPid pid;
@@ -224,7 +224,7 @@ fork_exec(struct socket *so, const char *ex, GChildWatchFunc callback)
         return 0;
     }
     // XXXAR: we want an exit message to debug smb dying early errors
-    g_child_watch_add(pid, callback, ex);
+    g_child_watch_add(pid, callback, (void*)ex);
 
 
     so->s = sp[0];

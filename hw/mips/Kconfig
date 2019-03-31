@@ -4,6 +4,16 @@ config R4K
 config MALTA
     bool
 
+
+config CHERI128
+    bool
+
+config CHERI256
+    bool
+
+config CHERI128_MAGIC
+    bool
+
 config MIPSSIM
     bool
 

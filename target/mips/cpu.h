@@ -235,29 +235,6 @@ struct cheri_cap_hwregs {
 #endif /* TARGET_CHERI */
 
 
-typedef struct CPUMIPSState CPUMIPSState;
-struct CPUMIPSState {
-    TCState active_tc;
-    CPUMIPSFPUContext active_fpu;
-
-    uint32_t current_tc;
-    uint32_t current_fpu;
-
-    uint32_t SEGBITS;
-    uint32_t PABITS;
-#if defined(TARGET_MIPS64)
-# define PABITS_BASE 36
-#else
-# define PABITS_BASE 32
-#endif
-    target_ulong SEGMask;
-    uint64_t PAMask;
-#define PAMASK_BASE ((1ULL << PABITS_BASE) - 1)
-
-    int32_t msair;
-#define MSAIR_ProcID    8
-#define MSAIR_Rev       0
-
 /*
  *     Summary of CP0 registers
  *     ========================

@@ -500,7 +500,6 @@ static void *qemu_thread_start(void *args)
 # endif
     }
 #endif
-    }
     g_free(qemu_thread_args->name);
     g_free(qemu_thread_args);
     pthread_cleanup_push(qemu_thread_atexit_notify, NULL);

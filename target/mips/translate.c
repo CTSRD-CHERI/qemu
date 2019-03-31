@@ -7651,7 +7651,7 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
              * Select 6 of the BERI Hardware Reference.
              */
             gen_helper_mfc0_coreid(arg, cpu_env);
-            rn = "CoreID";
+            register_name = "CoreID";
             break;
         case 7:
             /*
@@ -7659,7 +7659,7 @@ static void gen_mfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
              * Select 7 of the BERI Hardware Reference.
              */
             tcg_gen_movi_tl(arg, 0); /* currently unimplemented */
-            rn = "ThreadID";
+            register_name = "ThreadID";
             break;
 #endif /* TARGET_CHERI */
         default:
@@ -9067,7 +9067,7 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         case 6:
             // QEMU-CHERI extension:
             gen_helper_mfc0_rtc64(arg, cpu_env);
-            rn = "RTC";
+            register_name = "RTC";
             break;
 #endif
         default:
@@ -9167,7 +9167,7 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
              * Select 6 of the BERI Hardware Reference.
              */
             gen_helper_mfc0_coreid(arg, cpu_env);
-            rn = "CoreID";
+            register_name = "CoreID";
             break;
         case 7:
             /*
@@ -9175,7 +9175,7 @@ static void gen_dmfc0(DisasContext *ctx, TCGv arg, int reg, int sel)
              * Select 7 of the BERI Hardware Reference.
              */
             tcg_gen_movi_tl(arg, 0); /* currently unimplemented */
-            rn = "ThreadID";
+            register_name = "ThreadID";
             break;
         default:
             goto cp0_unimplemented;
@@ -17534,13 +17534,13 @@ static void decode_micromips32_opc(CPUMIPSState *env, DisasContext *ctx)
             gen_st(ctx, mips32_op, rt, rs, offset);
             break;
         case SC:
-            gen_st_cond(ctx, rt, rs, offset, MO_TESL, false);
+            gen_st_cond(ctx, rt, rs, offset, MO_TESL, false, OPC_SC);
             break;
 #if defined(TARGET_MIPS64)
         case SCD:
             check_insn(ctx, ISA_MIPS3);
             check_mips_64(ctx);
-            gen_st_cond(ctx, rt, rs, offset, MO_TEQ, false);
+            gen_st_cond(ctx, rt, rs, offset, MO_TEQ, false, OPC_SCD);
             break;
 #endif
         case LD_EVA:
@@ -17621,7 +17621,7 @@ static void decode_micromips32_opc(CPUMIPSState *env, DisasContext *ctx)
                 mips32_op = OPC_SHE;
                 goto do_st_lr;
             case SCE:
-                gen_st_cond(ctx, rt, rs, offset, MO_TESL, true);
+                gen_st_cond(ctx, rt, rs, offset, MO_TESL, true, OPC_SCE);
                 break;
             case SWE:
                 mips32_op = OPC_SWE;
@@ -22228,7 +22228,7 @@ static int decode_nanomips_32_48_opc(CPUMIPSState *env, DisasContext *ctx)
                 case NM_P_SC:
                     switch (ctx->opcode & 0x03) {
                     case NM_SC:
-                        gen_st_cond(ctx, rt, rs, s, MO_TESL, false);
+                        gen_st_cond(ctx, rt, rs, s, MO_TESL, false, OPC_SC);
                         break;
                     case NM_SCWP:
                         check_xnp(ctx);
@@ -22331,7 +22331,7 @@ static int decode_nanomips_32_48_opc(CPUMIPSState *env, DisasContext *ctx)
                         check_xnp(ctx);
                         check_eva(ctx);
                         check_cp0_enabled(ctx);
-                        gen_st_cond(ctx, rt, rs, s, MO_TESL, true);
+                        gen_st_cond(ctx, rt, rs, s, MO_TESL, true, OPC_SCE);
                         break;
                     case NM_SCWPE:
                         check_xnp(ctx);
@@ -27391,7 +27391,7 @@ static void decode_opc_special3_r6(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
     case R6_OPC_SC:
-        gen_st_cond(ctx, rt, rs, imm, MO_TESL, false);
+        gen_st_cond(ctx, rt, rs, imm, MO_TESL, false, R6_OPC_SC);
         break;
     case R6_OPC_LL:
         gen_ld(ctx, op1, rt, rs, imm);
@@ -27418,7 +27418,7 @@ static void decode_opc_special3_r6(CPUMIPSState *env, DisasContext *ctx)
         break;
 #if defined(TARGET_MIPS64)
     case R6_OPC_SCD:
-        gen_st_cond(ctx, rt, rs, imm, MO_TEQ, false);
+        gen_st_cond(ctx, rt, rs, imm, MO_TEQ, false, R6_OPC_SCD);
         break;
     case R6_OPC_LLD:
         gen_ld(ctx, op1, rt, rs, imm);
@@ -28279,7 +28279,7 @@ static void decode_opc_special3(CPUMIPSState *env, DisasContext *ctx)
             return;
         case OPC_SCE:
             check_cp0_enabled(ctx);
-            gen_st_cond(ctx, rt, rs, imm, MO_TESL, true);
+            gen_st_cond(ctx, rt, rs, imm, MO_TESL, true, OPC_SCE);
             return;
         case OPC_CACHEE:
             check_cp0_enabled(ctx);
@@ -29885,7 +29885,7 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         if (ctx->insn_flags & INSN_R5900) {
             check_insn_opc_user_only(ctx, INSN_R5900);
         }
-        gen_st_cond(ctx, rt, rs, imm, MO_TESL, false);
+        gen_st_cond(ctx, rt, rs, imm, MO_TESL, false, OPC_SC);
         break;
     case OPC_CACHE:
         check_insn_opc_removed(ctx, ISA_MIPS32R6);
@@ -30281,7 +30281,7 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
             check_insn_opc_user_only(ctx, INSN_R5900);
         }
         check_mips_64(ctx);
-        gen_st_cond(ctx, rt, rs, imm, MO_TEQ, false);
+        gen_st_cond(ctx, rt, rs, imm, MO_TEQ, false, OPC_SCD);
         break;
     case OPC_BNVC: /* OPC_BNEZALC, OPC_BNEC, OPC_DADDI */
         if (ctx->insn_flags & ISA_MIPS32R6) {
