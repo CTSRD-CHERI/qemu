@@ -17,6 +17,9 @@
 #ifndef LIBQTEST_H
 #define LIBQTEST_H
 
+#include "qapi/qmp/qobject.h"
+#include "qapi/qmp/qdict.h"
+
 typedef struct QTestState QTestState;
 
 extern QTestState *global_qtest;
@@ -55,14 +58,23 @@ QTestState *qtest_init(const char *extra_args);
 
 /**
  * qtest_init_without_qmp_handshake:
- * @use_oob: true to have the server advertise OOB support
  * @extra_args: other arguments to pass to QEMU.  CAUTION: these
  * arguments are subject to word splitting and shell evaluation.
  *
  * Returns: #QTestState instance.
  */
-QTestState *qtest_init_without_qmp_handshake(bool use_oob,
-                                             const char *extra_args);
+QTestState *qtest_init_without_qmp_handshake(const char *extra_args);
+
+/**
+ * qtest_init_with_serial:
+ * @extra_args: other arguments to pass to QEMU.  CAUTION: these
+ * arguments are subject to word splitting and shell evaluation.
+ * @sock_fd: pointer to store the socket file descriptor for
+ * connection with serial.
+ *
+ * Returns: #QTestState instance.
+ */
+QTestState *qtest_init_with_serial(const char *extra_args, int *sock_fd);
 
 /**
  * qtest_quit:
@@ -231,6 +243,19 @@ void qtest_irq_intercept_in(QTestState *s, const char *string);
  * whose path is specified by @string.
  */
 void qtest_irq_intercept_out(QTestState *s, const char *string);
+
+/**
+ * qtest_set_irq_in:
+ * @s: QTestState instance to operate on.
+ * @string: QOM path of a device
+ * @name: IRQ name
+ * @irq: IRQ number
+ * @level: IRQ level
+ *
+ * Force given device/irq GPIO-in pin to the given level.
+ */
+void qtest_set_irq_in(QTestState *s, const char *string, const char *name,
+                      int irq, int level);
 
 /**
  * qtest_outb:
@@ -576,6 +601,9 @@ static inline QTestState *qtest_start(const char *args)
  */
 static inline void qtest_end(void)
 {
+    if (!global_qtest) {
+        return;
+    }
     qtest_quit(global_qtest);
     global_qtest = NULL;
 }
@@ -1012,5 +1040,13 @@ bool qmp_rsp_is_err(QDict *rsp);
  * Assert the response has the given error class and discard @rsp.
  */
 void qmp_assert_error_class(QDict *rsp, const char *class);
+
+/**
+ * qtest_probe_child:
+ * @s: QTestState instance to operate on.
+ *
+ * Returns: true if the child is still alive.
+ */
+bool qtest_probe_child(QTestState *s);
 
 #endif

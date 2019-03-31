@@ -31,8 +31,8 @@
 #include "sysemu/replay.h"
 #include "hw/timer/mc146818rtc.h"
 #include "qapi/error.h"
-#include "qapi/qapi-commands-misc.h"
-#include "qapi/qapi-events-misc.h"
+#include "qapi/qapi-commands-target.h"
+#include "qapi/qapi-events-target.h"
 #include "qapi/visitor.h"
 #include "exec/address-spaces.h"
 
@@ -455,7 +455,7 @@ static void rtc_update_timer(void *opaque)
     if (qemu_clock_get_ns(rtc_clock) >= s->next_alarm_time) {
         irqs |= REG_C_AF;
         if (s->cmos_data[RTC_REG_B] & REG_B_AIE) {
-            qemu_system_wakeup_request(QEMU_WAKEUP_REASON_RTC);
+            qemu_system_wakeup_request(QEMU_WAKEUP_REASON_RTC, NULL);
         }
     }
 

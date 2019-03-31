@@ -75,6 +75,8 @@ enum {
     QEMU_IFLA_BR_MCAST_STATS_ENABLED,
     QEMU_IFLA_BR_MCAST_IGMP_VERSION,
     QEMU_IFLA_BR_MCAST_MLD_VERSION,
+    QEMU_IFLA_BR_VLAN_STATS_PER_PORT,
+    QEMU_IFLA_BR_MULTI_BOOLOPT,
     QEMU___IFLA_BR_MAX,
 };
 
@@ -129,6 +131,8 @@ enum {
     QEMU_IFLA_CARRIER_UP_COUNT,
     QEMU_IFLA_CARRIER_DOWN_COUNT,
     QEMU_IFLA_NEW_IFINDEX,
+    QEMU_IFLA_MIN_MTU,
+    QEMU_IFLA_MAX_MTU,
     QEMU___IFLA_MAX
 };
 
@@ -166,6 +170,8 @@ enum {
     QEMU_IFLA_BRPORT_BCAST_FLOOD,
     QEMU_IFLA_BRPORT_GROUP_FWD_MASK,
     QEMU_IFLA_BRPORT_NEIGH_SUPPRESS,
+    QEMU_IFLA_BRPORT_ISOLATED,
+    QEMU_IFLA_BRPORT_BACKUP_PORT,
     QEMU___IFLA_BRPORT_MAX
 };
 
@@ -434,6 +440,7 @@ static abi_long host_to_target_data_bridge_nlattr(struct nlattr *nlattr,
     case QEMU_IFLA_BR_MCAST_STATS_ENABLED:
     case QEMU_IFLA_BR_MCAST_IGMP_VERSION:
     case QEMU_IFLA_BR_MCAST_MLD_VERSION:
+    case QEMU_IFLA_BR_VLAN_STATS_PER_PORT:
         break;
     /* uint16_t */
     case QEMU_IFLA_BR_PRIORITY:
@@ -510,6 +517,7 @@ static abi_long host_to_target_slave_data_bridge_nlattr(struct nlattr *nlattr,
     case QEMU_IFLA_BRPORT_VLAN_TUNNEL:
     case QEMU_IFLA_BRPORT_BCAST_FLOOD:
     case QEMU_IFLA_BRPORT_NEIGH_SUPPRESS:
+    case QEMU_IFLA_BRPORT_ISOLATED:
         break;
     /* uint16_t */
     case QEMU_IFLA_BRPORT_PRIORITY:
@@ -523,6 +531,7 @@ static abi_long host_to_target_slave_data_bridge_nlattr(struct nlattr *nlattr,
         break;
     /* uin32_t */
     case QEMU_IFLA_BRPORT_COST:
+    case QEMU_IFLA_BRPORT_BACKUP_PORT:
         u32 = NLA_DATA(nlattr);
         *u32 = tswap32(*u32);
         break;
@@ -536,6 +545,12 @@ static abi_long host_to_target_slave_data_bridge_nlattr(struct nlattr *nlattr,
     /* ifla_bridge_id: uint8_t[] */
     case QEMU_IFLA_BRPORT_ROOT_ID:
     case QEMU_IFLA_BRPORT_BRIDGE_ID:
+        break;
+    /* br_boolopt_multi { uint32_t, uint32_t } */
+    case QEMU_IFLA_BR_MULTI_BOOLOPT:
+        u32 = NLA_DATA(nlattr);
+        u32[0] = tswap32(u32[0]); /* optval */
+        u32[1] = tswap32(u32[1]); /* optmask */
         break;
     default:
         gemu_log("Unknown QEMU_IFLA_BRPORT type %d\n", nlattr->nla_type);
@@ -787,6 +802,8 @@ static abi_long host_to_target_data_link_rtattr(struct rtattr *rtattr)
     case QEMU_IFLA_GSO_MAX_SIZE:
     case QEMU_IFLA_CARRIER_UP_COUNT:
     case QEMU_IFLA_CARRIER_DOWN_COUNT:
+    case QEMU_IFLA_MIN_MTU:
+    case QEMU_IFLA_MAX_MTU:
         u32 = RTA_DATA(rtattr);
         *u32 = tswap32(*u32);
         break;

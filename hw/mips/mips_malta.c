@@ -33,7 +33,7 @@
 #include "hw/char/serial.h"
 #include "net/net.h"
 #include "hw/boards.h"
-#include "hw/i2c/smbus.h"
+#include "hw/i2c/smbus_eeprom.h"
 #include "hw/block/flash.h"
 #include "hw/mips/mips.h"
 #include "hw/mips/cpudevs.h"
@@ -57,8 +57,6 @@
 #include "sysemu/kvm.h"
 #include "exec/semihost.h"
 #include "hw/mips/cps.h"
-
-//#define DEBUG_BOARD_INIT
 
 #define ENVP_ADDR		0x80002000l
 #define ENVP_NB_ENTRIES	 	16
@@ -570,7 +568,7 @@ static MaltaFPGAState *malta_fpga_init(MemoryRegion *address_space,
     memory_region_add_subregion(address_space, base, &s->iomem_lo);
     memory_region_add_subregion(address_space, base + 0xa00, &s->iomem_hi);
 
-    chr = qemu_chr_new("fpga", "vc:320x200");
+    chr = qemu_chr_new("fpga", "vc:320x200", NULL);
     qemu_chr_fe_init(&s->display, chr, NULL);
     qemu_chr_fe_set_handlers(&s->display, NULL, NULL,
                              malta_fgpa_display_event, NULL, s, NULL, true);
@@ -1012,8 +1010,9 @@ static int64_t load_kernel (void)
     big_endian = 0;
 #endif
 
-    kernel_size = load_elf(loaderparams.kernel_filename, cpu_mips_kseg0_to_phys,
-                           NULL, (uint64_t *)&kernel_entry, NULL,
+    kernel_size = load_elf(loaderparams.kernel_filename, NULL,
+                           cpu_mips_kseg0_to_phys, NULL,
+                           (uint64_t *)&kernel_entry, NULL,
                            (uint64_t *)&kernel_high, big_endian, EM_MIPS, 1, 0);
     if (kernel_size < 0) {
         error_report("could not load kernel '%s': %s",
@@ -1190,13 +1189,12 @@ void mips_malta_init(MachineState *machine)
     const char *kernel_cmdline = machine->kernel_cmdline;
     const char *initrd_filename = machine->initrd_filename;
     char *filename;
-    pflash_t *fl;
+    PFlashCFI01 *fl;
     MemoryRegion *system_memory = get_system_memory();
     MemoryRegion *ram_high = g_new(MemoryRegion, 1);
     MemoryRegion *ram_low_preio = g_new(MemoryRegion, 1);
     MemoryRegion *ram_low_postio;
     MemoryRegion *bios, *bios_copy = g_new(MemoryRegion, 1);
-    target_long bios_size = FLASH_SIZE;
     const size_t smbus_eeprom_size = 8 * 256;
     uint8_t *smbus_eeprom_buf = g_malloc0(smbus_eeprom_size);
     int64_t kernel_entry, bootloader_run_addr;
@@ -1209,7 +1207,6 @@ void mips_malta_init(MachineState *machine)
     DriveInfo *dinfo;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     int fl_idx = 0;
-    int fl_sectors = bios_size >> 16;
     int be;
 
     DeviceState *dev = qdev_create(NULL, TYPE_MIPS_MALTA);
@@ -1270,18 +1267,10 @@ void mips_malta_init(MachineState *machine)
 
     /* Load firmware in flash / BIOS. */
     dinfo = drive_get(IF_PFLASH, 0, fl_idx);
-#ifdef DEBUG_BOARD_INIT
-    if (dinfo) {
-        printf("Register parallel flash %d size " TARGET_FMT_lx " at "
-               "addr %08llx '%s' %x\n",
-               fl_idx, bios_size, FLASH_ADDRESS,
-               blk_name(dinfo->bdrv), fl_sectors);
-    }
-#endif
-    fl = pflash_cfi01_register(FLASH_ADDRESS, NULL, "mips_malta.bios",
-                               BIOS_SIZE,
+    fl = pflash_cfi01_register(FLASH_ADDRESS, "mips_malta.bios",
+                               FLASH_SIZE,
                                dinfo ? blk_by_legacy_dinfo(dinfo) : NULL,
-                               65536, fl_sectors,
+                               65536,
                                4, 0x0000, 0x0000, 0x0000, 0x0000, be);
     bios = pflash_cfi01_get_memory(fl);
     fl_idx++;
@@ -1317,6 +1306,7 @@ void mips_malta_init(MachineState *machine)
                              bootloader_run_addr, kernel_entry);
         }
     } else {
+        target_long bios_size = FLASH_SIZE;
         /* The flash region isn't executable from a KVM guest */
         if (kvm_enabled()) {
             error_report("KVM enabled but no -kernel argument was specified. "

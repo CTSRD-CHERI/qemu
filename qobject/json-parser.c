@@ -208,11 +208,13 @@ static QString *parse_string(JSONParserContext *ctxt, JSONToken *token)
             }
             break;
         case '%':
-            if (ctxt->ap && ptr[1] != '%') {
-                parse_error(ctxt, token, "can't interpolate into string");
-                goto out;
+            if (ctxt->ap) {
+                if (ptr[1] != '%') {
+                    parse_error(ctxt, token, "can't interpolate into string");
+                    goto out;
+                }
+                ptr++;
             }
-            ptr++;
             /* fall through */
         default:
             cp = mod_utf8_codepoint(ptr, 6, &end);
@@ -285,6 +287,11 @@ static int parse_pair(JSONParserContext *ctxt, QDict *dict)
     value = parse_value(ctxt);
     if (value == NULL) {
         parse_error(ctxt, token, "Missing value in dict");
+        goto out;
+    }
+
+    if (qdict_haskey(dict, qstring_get_str(key))) {
+        parse_error(ctxt, token, "duplicate key");
         goto out;
     }
 

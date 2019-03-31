@@ -18,14 +18,11 @@
 #include "qemu/error-report.h"
 #include "qemu/option.h"
 
-static QTAILQ_HEAD(FsDriverEntry_head, FsDriverListEntry) fsdriver_entries =
+static QTAILQ_HEAD(, FsDriverListEntry) fsdriver_entries =
     QTAILQ_HEAD_INITIALIZER(fsdriver_entries);
 
 static FsDriverTable FsDrivers[] = {
     { .name = "local", .ops = &local_ops},
-#ifdef CONFIG_OPEN_BY_HANDLE
-    { .name = "handle", .ops = &handle_ops},
-#endif
     { .name = "synth", .ops = &synth_ops},
     { .name = "proxy", .ops = &proxy_ops},
 };

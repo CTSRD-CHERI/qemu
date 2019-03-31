@@ -416,14 +416,244 @@ The default is @code{en-us}.
 ETEXI
 
 
+HXCOMM Deprecated by -audiodev
 DEF("audio-help", 0, QEMU_OPTION_audio_help,
-    "-audio-help     print list of audio drivers and their options\n",
+    "-audio-help     show -audiodev equivalent of the currently specified audio settings\n",
     QEMU_ARCH_ALL)
 STEXI
 @item -audio-help
 @findex -audio-help
-Will show the audio subsystem help: list of drivers, tunable
-parameters.
+Will show the -audiodev equivalent of the currently specified
+(deprecated) environment variables.
+ETEXI
+
+DEF("audiodev", HAS_ARG, QEMU_OPTION_audiodev,
+    "-audiodev [driver=]driver,id=id[,prop[=value][,...]]\n"
+    "                specifies the audio backend to use\n"
+    "                id= identifier of the backend\n"
+    "                timer-period= timer period in microseconds\n"
+    "                in|out.fixed-settings= use fixed settings for host audio\n"
+    "                in|out.frequency= frequency to use with fixed settings\n"
+    "                in|out.channels= number of channels to use with fixed settings\n"
+    "                in|out.format= sample format to use with fixed settings\n"
+    "                valid values: s8, s16, s32, u8, u16, u32\n"
+    "                in|out.voices= number of voices to use\n"
+    "                in|out.buffer-len= length of buffer in microseconds\n"
+    "-audiodev none,id=id,[,prop[=value][,...]]\n"
+    "                dummy driver that discards all output\n"
+#ifdef CONFIG_AUDIO_ALSA
+    "-audiodev alsa,id=id[,prop[=value][,...]]\n"
+    "                in|out.dev= name of the audio device to use\n"
+    "                in|out.period-len= length of period in microseconds\n"
+    "                in|out.try-poll= attempt to use poll mode\n"
+    "                threshold= threshold (in microseconds) when playback starts\n"
+#endif
+#ifdef CONFIG_AUDIO_COREAUDIO
+    "-audiodev coreaudio,id=id[,prop[=value][,...]]\n"
+    "                in|out.buffer-count= number of buffers\n"
+#endif
+#ifdef CONFIG_AUDIO_DSOUND
+    "-audiodev dsound,id=id[,prop[=value][,...]]\n"
+    "                latency= add extra latency to playback in microseconds\n"
+#endif
+#ifdef CONFIG_AUDIO_OSS
+    "-audiodev oss,id=id[,prop[=value][,...]]\n"
+    "                in|out.dev= path of the audio device to use\n"
+    "                in|out.buffer-count= number of buffers\n"
+    "                in|out.try-poll= attempt to use poll mode\n"
+    "                try-mmap= try using memory mapped access\n"
+    "                exclusive= open device in exclusive mode\n"
+    "                dsp-policy= set timing policy (0..10), -1 to use fragment mode\n"
+#endif
+#ifdef CONFIG_AUDIO_PA
+    "-audiodev pa,id=id[,prop[=value][,...]]\n"
+    "                server= PulseAudio server address\n"
+    "                in|out.name= source/sink device name\n"
+#endif
+#ifdef CONFIG_AUDIO_SDL
+    "-audiodev sdl,id=id[,prop[=value][,...]]\n"
+#endif
+#ifdef CONFIG_SPICE
+    "-audiodev spice,id=id[,prop[=value][,...]]\n"
+#endif
+    "-audiodev wav,id=id[,prop[=value][,...]]\n"
+    "                path= path of wav file to record\n",
+    QEMU_ARCH_ALL)
+STEXI
+@item -audiodev [driver=]@var{driver},id=@var{id}[,@var{prop}[=@var{value}][,...]]
+@findex -audiodev
+Adds a new audio backend @var{driver} identified by @var{id}.  There are
+global and driver specific properties.  Some values can be set
+differently for input and output, they're marked with @code{in|out.}.
+You can set the input's property with @code{in.@var{prop}} and the
+output's property with @code{out.@var{prop}}. For example:
+@example
+-audiodev alsa,id=example,in.frequency=44110,out.frequency=8000
+-audiodev alsa,id=example,out.channels=1 # leaves in.channels unspecified
+@end example
+
+Valid global options are:
+
+@table @option
+@item id=@var{identifier}
+Identifies the audio backend.
+
+@item timer-period=@var{period}
+Sets the timer @var{period} used by the audio subsystem in microseconds.
+Default is 10000 (10 ms).
+
+@item in|out.fixed-settings=on|off
+Use fixed settings for host audio.  When off, it will change based on
+how the guest opens the sound card.  In this case you must not specify
+@var{frequency}, @var{channels} or @var{format}.  Default is on.
+
+@item in|out.frequency=@var{frequency}
+Specify the @var{frequency} to use when using @var{fixed-settings}.
+Default is 44100Hz.
+
+@item in|out.channels=@var{channels}
+Specify the number of @var{channels} to use when using
+@var{fixed-settings}. Default is 2 (stereo).
+
+@item in|out.format=@var{format}
+Specify the sample @var{format} to use when using @var{fixed-settings}.
+Valid values are: @code{s8}, @code{s16}, @code{s32}, @code{u8},
+@code{u16}, @code{u32}. Default is @code{s16}.
+
+@item in|out.voices=@var{voices}
+Specify the number of @var{voices} to use.  Default is 1.
+
+@item in|out.buffer=@var{usecs}
+Sets the size of the buffer in microseconds.
+
+@end table
+
+@item -audiodev none,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates a dummy backend that discards all outputs.  This backend has no
+backend specific properties.
+
+@item -audiodev alsa,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates backend using the ALSA.  This backend is only available on
+Linux.
+
+ALSA specific options are:
+
+@table @option
+
+@item in|out.dev=@var{device}
+Specify the ALSA @var{device} to use for input and/or output.  Default
+is @code{default}.
+
+@item in|out.period-len=@var{usecs}
+Sets the period length in microseconds.
+
+@item in|out.try-poll=on|off
+Attempt to use poll mode with the device.  Default is on.
+
+@item threshold=@var{threshold}
+Threshold (in microseconds) when playback starts.  Default is 0.
+
+@end table
+
+@item -audiodev coreaudio,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates a backend using Apple's Core Audio.  This backend is only
+available on Mac OS and only supports playback.
+
+Core Audio specific options are:
+
+@table @option
+
+@item in|out.buffer-count=@var{count}
+Sets the @var{count} of the buffers.
+
+@end table
+
+@item -audiodev dsound,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates a backend using Microsoft's DirectSound.  This backend is only
+available on Windows and only supports playback.
+
+DirectSound specific options are:
+
+@table @option
+
+@item latency=@var{usecs}
+Add extra @var{usecs} microseconds latency to playback.  Default is
+10000 (10 ms).
+
+@end table
+
+@item -audiodev oss,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates a backend using OSS.  This backend is available on most
+Unix-like systems.
+
+OSS specific options are:
+
+@table @option
+
+@item in|out.dev=@var{device}
+Specify the file name of the OSS @var{device} to use.  Default is
+@code{/dev/dsp}.
+
+@item in|out.buffer-count=@var{count}
+Sets the @var{count} of the buffers.
+
+@item in|out.try-poll=on|of
+Attempt to use poll mode with the device.  Default is on.
+
+@item try-mmap=on|off
+Try using memory mapped device access.  Default is off.
+
+@item exclusive=on|off
+Open the device in exclusive mode (vmix won't work in this case).
+Default is off.
+
+@item dsp-policy=@var{policy}
+Sets the timing policy (between 0 and 10, where smaller number means
+smaller latency but higher CPU usage).  Use -1 to use buffer sizes
+specified by @code{buffer} and @code{buffer-count}.  This option is
+ignored if you do not have OSS 4. Default is 5.
+
+@end table
+
+@item -audiodev pa,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates a backend using PulseAudio.  This backend is available on most
+systems.
+
+PulseAudio specific options are:
+
+@table @option
+
+@item server=@var{server}
+Sets the PulseAudio @var{server} to connect to.
+
+@item in|out.name=@var{sink}
+Use the specified source/sink for recording/playback.
+
+@end table
+
+@item -audiodev sdl,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates a backend using SDL.  This backend is available on most systems,
+but you should use your platform's native backend if possible.  This
+backend has no backend specific properties.
+
+@item -audiodev spice,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates a backend that sends audio through SPICE.  This backend requires
+@code{-spice} and automatically selected in that case, so usually you
+can ignore this option.  This backend has no backend specific
+properties.
+
+@item -audiodev wav,id=@var{id}[,@var{prop}[=@var{value}][,...]]
+Creates a backend that writes audio to a WAV file.
+
+Backend specific options are:
+
+@table @option
+
+@item path=@var{path}
+Write recorded audio into the specified file.  Default is
+@code{qemu.wav}.
+
+@end table
 ETEXI
 
 DEF("soundhw", HAS_ARG, QEMU_OPTION_soundhw,
@@ -538,8 +768,8 @@ ETEXI
 DEF("name", HAS_ARG, QEMU_OPTION_name,
     "-name string1[,process=string2][,debug-threads=on|off]\n"
     "                set the name of the guest\n"
-    "                string1 sets the window title and string2 the process name (on Linux)\n"
-    "                When debug-threads is enabled, individual threads are given a separate name (on Linux)\n"
+    "                string1 sets the window title and string2 the process name\n"
+    "                When debug-threads is enabled, individual threads are given a separate name\n"
     "                NOTE: The thread names are for debugging and not a stable API.\n",
     QEMU_ARCH_ALL)
 STEXI
@@ -1019,7 +1249,7 @@ Define a new file system device. Valid options are:
 @table @option
 @item @var{fsdriver}
 This option specifies the fs driver backend to use.
-Currently "local", "handle" and "proxy" file system drivers are supported.
+Currently "local" and "proxy" file system drivers are supported.
 @item id=@var{id}
 Specifies identifier for this device
 @item path=@var{path}
@@ -1037,7 +1267,7 @@ hidden .virtfs_metadata directory. Directories exported by this security model c
 interact with other unix tools. "none" security model is same as
 passthrough except the sever won't report failures if it fails to
 set file attributes like ownership. Security model is mandatory
-only for local fsdriver. Other fsdrivers (like handle, proxy) don't take
+only for local fsdriver. Other fsdrivers (like proxy) don't take
 security model as a parameter.
 @item writeout=@var{writeout}
 This is an optional argument. The only supported value is "immediate".
@@ -1088,7 +1318,7 @@ The general form of a Virtual File system pass-through options are:
 @table @option
 @item @var{fsdriver}
 This option specifies the fs driver backend to use.
-Currently "local", "handle" and "proxy" file system drivers are supported.
+Currently "local" and "proxy" file system drivers are supported.
 @item id=@var{id}
 Specifies identifier for this device
 @item path=@var{path}
@@ -1106,7 +1336,7 @@ hidden .virtfs_metadata directory. Directories exported by this security model c
 interact with other unix tools. "none" security model is same as
 passthrough except the sever won't report failures if it fails to
 set file attributes like ownership. Security model is mandatory only
-for local fsdriver. Other fsdrivers (like handle, proxy) don't take security
+for local fsdriver. Other fsdrivers (like proxy) don't take security
 model as a parameter.
 @item writeout=@var{writeout}
 This is an optional argument. The only supported value is "immediate".
@@ -1211,11 +1441,12 @@ STEXI
 ETEXI
 
 DEF("display", HAS_ARG, QEMU_OPTION_display,
+    "-display spice-app[,gl=on|off]\n"
     "-display sdl[,frame=on|off][,alt_grab=on|off][,ctrl_grab=on|off]\n"
     "            [,window_close=on|off][,gl=on|core|es|off]\n"
     "-display gtk[,grab_on_hover=on|off][,gl=on|off]|\n"
     "-display vnc=<display>[,<optargs>]\n"
-    "-display curses\n"
+    "-display curses[,charset=<encoding>]\n"
     "-display none\n"
     "-display egl-headless[,rendernode=<file>]"
     "                select display type\n"
@@ -1247,6 +1478,9 @@ support a text mode, QEMU can display this output using a
 curses/ncurses interface. Nothing is displayed when the graphics
 device is in graphical mode or if the graphics device does not support
 a text mode. Generally only the VGA device models support text mode.
+The font charset used by the guest can be specified with the
+@code{charset} option, for example @code{charset=CP850} for IBM CP850
+encoding. The default is @code{CP437}.
 @item none
 Do not display video output. The guest will still see an emulated
 graphics card, but its output will not be displayed to the QEMU
@@ -1262,6 +1496,10 @@ Start a VNC server on display <arg>
 @item egl-headless
 Offload all OpenGL operations to a local DRI device. For any graphical display,
 this display needs to be paired with either VNC or SPICE displays.
+@item spice-app
+Start QEMU as a Spice server and launch the default Spice client
+application. The Spice server will redirect the serial consoles and
+QEMU monitors. (Since 4.0)
 @end table
 ETEXI
 
@@ -1292,17 +1530,6 @@ output such as guest graphics, guest console, and the QEMU monitor in a
 window. With this option, QEMU can display the VGA output when in text
 mode using a curses/ncurses interface. Nothing is displayed in graphical
 mode.
-ETEXI
-
-DEF("no-frame", 0, QEMU_OPTION_no_frame,
-    "-no-frame       open SDL window without a frame and window decorations\n",
-    QEMU_ARCH_ALL)
-STEXI
-@item -no-frame
-@findex -no-frame
-Do not use decorations for SDL windows and start them using the whole
-available screen space. This makes the using QEMU in a dedicated desktop
-workspace more convenient.
 ETEXI
 
 DEF("alt-grab", 0, QEMU_OPTION_alt_grab,
@@ -1630,6 +1857,14 @@ will cause the VNC server socket to enable the VeNCrypt auth
 mechanism.  The credentials should have been previously created
 using the @option{-object tls-creds} argument.
 
+@item tls-authz=@var{ID}
+
+Provides the ID of the QAuthZ authorization object against which
+the client's x509 distinguished name will validated. This object is
+only resolved at time of use, so can be deleted and recreated on the
+fly while the VNC server is active. If missing, it will default
+to denying access.
+
 @item sasl
 
 Require that the client use SASL to authenticate with the VNC server.
@@ -1645,18 +1880,25 @@ ensures a data encryption preventing compromise of authentication
 credentials. See the @ref{vnc_security} section for details on using
 SASL authentication.
 
+@item sasl-authz=@var{ID}
+
+Provides the ID of the QAuthZ authorization object against which
+the client's SASL username will validated. This object is
+only resolved at time of use, so can be deleted and recreated on the
+fly while the VNC server is active. If missing, it will default
+to denying access.
+
 @item acl
 
-Turn on access control lists for checking of the x509 client certificate
-and SASL party. For x509 certs, the ACL check is made against the
-certificate's distinguished name. This is something that looks like
-@code{C=GB,O=ACME,L=Boston,CN=bob}. For SASL party, the ACL check is
-made against the username, which depending on the SASL plugin, may
-include a realm component, eg @code{bob} or @code{bob@@EXAMPLE.COM}.
-When the @option{acl} flag is set, the initial access list will be
-empty, with a @code{deny} policy. Thus no one will be allowed to
-use the VNC server until the ACLs have been loaded. This can be
-achieved using the @code{acl} monitor command.
+Legacy method for enabling authorization of clients against the
+x509 distinguished name and SASL username. It results in the creation
+of two @code{authz-list} objects with IDs of @code{vnc.username} and
+@code{vnc.x509dname}. The rules for these objects must be configured
+with the HMP ACL commands.
+
+This option is deprecated and should no longer be used. The new
+@option{sasl-authz} and @option{tls-authz} options are a
+replacement.
 
 @item lossy
 
@@ -2419,7 +2661,7 @@ DEF("chardev", HAS_ARG, QEMU_OPTION_chardev,
     "-chardev null,id=id[,mux=on|off][,logfile=PATH][,logappend=on|off]\n"
     "-chardev socket,id=id[,host=host],port=port[,to=to][,ipv4][,ipv6][,nodelay][,reconnect=seconds]\n"
     "         [,server][,nowait][,telnet][,websocket][,reconnect=seconds][,mux=on|off]\n"
-    "         [,logfile=PATH][,logappend=on|off][,tls-creds=ID] (tcp)\n"
+    "         [,logfile=PATH][,logappend=on|off][,tls-creds=ID][,tls-authz=ID] (tcp)\n"
     "-chardev socket,id=id,path=path[,server][,nowait][,telnet][,websocket][,reconnect=seconds]\n"
     "         [,mux=on|off][,logfile=PATH][,logappend=on|off] (unix)\n"
     "-chardev udp,id=id[,host=host],port=port[,localaddr=localaddr]\n"
@@ -2548,7 +2790,7 @@ The available backends are:
 A void device. This device will not emit any data, and will drop any data it
 receives. The null backend does not take any options.
 
-@item -chardev socket,id=@var{id}[,@var{TCP options} or @var{unix options}][,server][,nowait][,telnet][,websocket][,reconnect=@var{seconds}][,tls-creds=@var{id}]
+@item -chardev socket,id=@var{id}[,@var{TCP options} or @var{unix options}][,server][,nowait][,telnet][,websocket][,reconnect=@var{seconds}][,tls-creds=@var{id}][,tls-authz=@var{id}]
 
 Create a two-way stream socket, which can be either a TCP or a unix socket. A
 unix socket will be created if @option{path} is specified. Behaviour is
@@ -2573,6 +2815,12 @@ to reconnect.  Zero disables reconnecting, and is the default.
 and specifies the id of the TLS credentials to use for the handshake. The
 credentials must be previously created with the @option{-object tls-creds}
 argument.
+
+@option{tls-auth} provides the ID of the QAuthZ authorization object against
+which the client's x509 distinguished name will be validated. This object is
+only resolved at time of use, so can be deleted and recreated on the fly
+while the chardev server is active. If missing, it will default to denying
+access.
 
 TCP and unix socket options are given below:
 
@@ -3381,26 +3629,11 @@ Enable KVM full virtualization support. This option is only available
 if KVM support is enabled when compiling.
 ETEXI
 
-DEF("enable-hax", 0, QEMU_OPTION_enable_hax, \
-    "-enable-hax     enable HAX virtualization support\n", QEMU_ARCH_I386)
-STEXI
-@item -enable-hax
-@findex -enable-hax
-Enable HAX (Hardware-based Acceleration eXecution) support. This option
-is only available if HAX support is enabled when compiling. HAX is only
-applicable to MAC and Windows platform, and thus does not conflict with
-KVM. This option is deprecated, use @option{-accel hax} instead.
-ETEXI
-
 DEF("xen-domid", HAS_ARG, QEMU_OPTION_xen_domid,
     "-xen-domid id   specify xen guest domain id\n", QEMU_ARCH_ALL)
-DEF("xen-create", 0, QEMU_OPTION_xen_create,
-    "-xen-create     create domain using xen hypercalls, bypassing xend\n"
-    "                warning: should not be used when xend is in use\n",
-    QEMU_ARCH_ALL)
 DEF("xen-attach", 0, QEMU_OPTION_xen_attach,
     "-xen-attach     attach to existing xen domain\n"
-    "                xend will use this when starting QEMU\n",
+    "                libxl will use this when starting QEMU\n",
     QEMU_ARCH_ALL)
 DEF("xen-domid-restrict", 0, QEMU_OPTION_xen_domid_restrict,
     "-xen-domid-restrict     restrict set of available xen operations\n"
@@ -3411,14 +3644,10 @@ STEXI
 @item -xen-domid @var{id}
 @findex -xen-domid
 Specify xen guest domain @var{id} (XEN only).
-@item -xen-create
-@findex -xen-create
-Create domain using xen hypercalls, bypassing xend.
-Warning: should not be used when xend is in use (XEN only).
 @item -xen-attach
 @findex -xen-attach
 Attach to existing xen domain.
-xend will use this when starting QEMU (XEN only).
+libxl will use this when starting QEMU (XEN only).
 @findex -xen-domid-restrict
 Restrict set of available xen operations to specified domain id (XEN only).
 ETEXI
@@ -3473,9 +3702,6 @@ STEXI
 Load the contents of @var{file} as an option ROM.
 This option is useful to load things like EtherBoot.
 ETEXI
-
-HXCOMM Silently ignored for compatibility
-DEF("clock", HAS_ARG, QEMU_OPTION_clock, "", QEMU_ARCH_ALL)
 
 DEF("rtc", HAS_ARG, QEMU_OPTION_rtc, \
     "-rtc [base=utc|localtime|<datetime>][,clock=host|rt|vm][,driftfix=none|slew]\n" \
@@ -3633,16 +3859,6 @@ character to Control-t.
 @item -echr 0x14
 @itemx -echr 20
 @end table
-ETEXI
-
-DEF("virtioconsole", HAS_ARG, QEMU_OPTION_virtiocon, \
-    "-virtioconsole c\n" \
-    "                set virtio console\n", QEMU_ARCH_ALL)
-STEXI
-@item -virtioconsole @var{c}
-@findex -virtioconsole
-Set virtio console.
-This option is deprecated, please use @option{-device virtconsole} instead.
 ETEXI
 
 DEF("show-cursor", 0, QEMU_OPTION_show_cursor, \
@@ -4446,6 +4662,111 @@ e.g to launch a SEV guest
      .....
 
 @end example
+
+
+@item -object authz-simple,id=@var{id},identity=@var{string}
+
+Create an authorization object that will control access to network services.
+
+The @option{identity} parameter is identifies the user and its format
+depends on the network service that authorization object is associated
+with. For authorizing based on TLS x509 certificates, the identity must
+be the x509 distinguished name. Note that care must be taken to escape
+any commas in the distinguished name.
+
+An example authorization object to validate a x509 distinguished name
+would look like:
+@example
+ # $QEMU \
+     ...
+     -object 'authz-simple,id=auth0,identity=CN=laptop.example.com,,O=Example Org,,L=London,,ST=London,,C=GB' \
+     ...
+@end example
+
+Note the use of quotes due to the x509 distinguished name containing
+whitespace, and escaping of ','.
+
+@item -object authz-listfile,id=@var{id},filename=@var{path},refresh=@var{yes|no}
+
+Create an authorization object that will control access to network services.
+
+The @option{filename} parameter is the fully qualified path to a file
+containing the access control list rules in JSON format.
+
+An example set of rules that match against SASL usernames might look
+like:
+
+@example
+  @{
+    "rules": [
+       @{ "match": "fred", "policy": "allow", "format": "exact" @},
+       @{ "match": "bob", "policy": "allow", "format": "exact" @},
+       @{ "match": "danb", "policy": "deny", "format": "glob" @},
+       @{ "match": "dan*", "policy": "allow", "format": "exact" @},
+    ],
+    "policy": "deny"
+  @}
+@end example
+
+When checking access the object will iterate over all the rules and
+the first rule to match will have its @option{policy} value returned
+as the result. If no rules match, then the default @option{policy}
+value is returned.
+
+The rules can either be an exact string match, or they can use the
+simple UNIX glob pattern matching to allow wildcards to be used.
+
+If @option{refresh} is set to true the file will be monitored
+and automatically reloaded whenever its content changes.
+
+As with the @code{authz-simple} object, the format of the identity
+strings being matched depends on the network service, but is usually
+a TLS x509 distinguished name, or a SASL username.
+
+An example authorization object to validate a SASL username
+would look like:
+@example
+ # $QEMU \
+     ...
+     -object authz-simple,id=auth0,filename=/etc/qemu/vnc-sasl.acl,refresh=yes
+     ...
+@end example
+
+@item -object authz-pam,id=@var{id},service=@var{string}
+
+Create an authorization object that will control access to network services.
+
+The @option{service} parameter provides the name of a PAM service to use
+for authorization. It requires that a file @code{/etc/pam.d/@var{service}}
+exist to provide the configuration for the @code{account} subsystem.
+
+An example authorization object to validate a TLS x509 distinguished
+name would look like:
+
+@example
+ # $QEMU \
+     ...
+     -object authz-pam,id=auth0,service=qemu-vnc
+     ...
+@end example
+
+There would then be a corresponding config file for PAM at
+@code{/etc/pam.d/qemu-vnc} that contains:
+
+@example
+account requisite  pam_listfile.so item=user sense=allow \
+           file=/etc/qemu/vnc.allow
+@end example
+
+Finally the @code{/etc/qemu/vnc.allow} file would contain
+the list of x509 distingished names that are permitted
+access
+
+@example
+CN=laptop.example.com,O=Example Home,L=London,ST=London,C=GB
+@end example
+
+
 @end table
 
 ETEXI

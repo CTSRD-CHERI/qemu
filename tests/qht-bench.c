@@ -9,7 +9,7 @@
 #include "qemu/atomic.h"
 #include "qemu/qht.h"
 #include "qemu/rcu.h"
-#include "exec/tb-hash-xx.h"
+#include "qemu/xxhash.h"
 
 struct thread_stats {
     size_t rd;
@@ -72,6 +72,7 @@ static const char commands_string[] =
     " -n = number of threads\n"
     "\n"
     " -o = offset at which keys start\n"
+    " -p = precompute hashes\n"
     "\n"
     " -g = set -s,-k,-K,-l,-r to the same value\n"
     " -s = initial size hint\n"
@@ -104,7 +105,7 @@ static bool is_equal(const void *ap, const void *bp)
 
 static uint32_t h(unsigned long v)
 {
-    return tb_hash_func7(v, 0, 0, 0, 0);
+    return qemu_xxhash2(v);
 }
 
 static uint32_t hval(unsigned long v)
@@ -397,16 +398,14 @@ static void pr_stats(void)
 
 static void run_test(void)
 {
-    unsigned int remaining;
     int i;
 
     while (atomic_read(&n_ready_threads) != n_rw_threads + n_rz_threads) {
         cpu_relax();
     }
+
     atomic_set(&test_start, true);
-    do {
-        remaining = sleep(duration);
-    } while (remaining);
+    g_usleep(duration * G_USEC_PER_SEC);
     atomic_set(&test_stop, true);
 
     for (i = 0; i < n_rw_threads; i++) {

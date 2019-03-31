@@ -51,7 +51,8 @@
 #include "sysemu/balloon.h"
 #include "qemu/timer.h"
 #include "sysemu/hw_accel.h"
-#include "qemu/acl.h"
+#include "authz/list.h"
+#include "qapi/util.h"
 #include "sysemu/tpm.h"
 #include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qerror.h"
@@ -75,7 +76,7 @@
 #include "qemu/thread.h"
 #include "block/qapi.h"
 #include "qapi/qapi-commands.h"
-#include "qapi/qapi-events.h"
+#include "qapi/qapi-emit-events.h"
 #include "qapi/error.h"
 #include "qapi/qmp-event.h"
 #include "qapi/qapi-introspect.h"
@@ -249,8 +250,6 @@ QEMUBH *qmp_dispatcher_bh;
 struct QMPRequest {
     /* Owner of the request */
     Monitor *mon;
-    /* "id" field of the request */
-    QObject *id;
     /*
      * Request object to be handled or Error to be reported
      * (exactly one of them is non-null)
@@ -263,14 +262,15 @@ typedef struct QMPRequest QMPRequest;
 /* QMP checker flags */
 #define QMP_ACCEPT_UNKNOWNS 1
 
-/* Protects mon_list, monitor_qapi_event_state.  */
+/* Protects mon_list, monitor_qapi_event_state, monitor_destroyed.  */
 static QemuMutex monitor_lock;
 static GHashTable *monitor_qapi_event_state;
-static QTAILQ_HEAD(mon_list, Monitor) mon_list;
+static QTAILQ_HEAD(, Monitor) mon_list;
+static bool monitor_destroyed;
 
 /* Protects mon_fdsets */
 static QemuMutex mon_fdsets_lock;
-static QLIST_HEAD(mon_fdsets, MonFdset) mon_fdsets;
+static QLIST_HEAD(, MonFdset) mon_fdsets;
 
 static int mon_refcount;
 
@@ -351,7 +351,6 @@ int monitor_read_password(Monitor *mon, ReadLineFunc *readline_func,
 
 static void qmp_request_free(QMPRequest *req)
 {
-    qobject_unref(req->id);
     qobject_unref(req->req);
     error_free(req->err);
     g_free(req);
@@ -589,8 +588,7 @@ monitor_qapi_event_queue_no_reenter(QAPIEvent event, QDict *qdict)
     qemu_mutex_unlock(&monitor_lock);
 }
 
-static void
-monitor_qapi_event_queue(QAPIEvent event, QDict *qdict)
+void qapi_event_emit(QAPIEvent event, QDict *qdict)
 {
     /*
      * monitor_qapi_event_queue_no_reenter() is not reentrant: it
@@ -703,7 +701,6 @@ static void monitor_qapi_event_init(void)
 {
     monitor_qapi_event_state = g_hash_table_new(qapi_event_throttle_hash,
                                                 qapi_event_throttle_equal);
-    qmp_event_set_func_emit(monitor_qapi_event_queue);
 }
 
 static void handle_hmp_command(Monitor *mon, const char *cmdline);
@@ -1100,6 +1097,11 @@ CommandInfoList *qmp_query_commands(Error **errp)
 
 EventInfoList *qmp_query_events(Error **errp)
 {
+    /*
+     * TODO This deprecated command is the only user of
+     * QAPIEvent_str() and QAPIEvent_lookup[].  When the command goes,
+     * they should go, too.
+     */
     EventInfoList *info, *ev_list = NULL;
     QAPIEvent e;
 
@@ -1132,50 +1134,6 @@ static void qmp_query_qmp_schema(QDict *qdict, QObject **ret_data,
     *ret_data = qobject_from_qlit(&qmp_schema_qlit);
 }
 
-/*
- * We used to define commands in qmp-commands.hx in addition to the
- * QAPI schema.  This permitted defining some of them only in certain
- * configurations.  query-commands has always reflected that (good,
- * because it lets QMP clients figure out what's actually available),
- * while query-qmp-schema never did (not so good).  This function is a
- * hack to keep the configuration-specific commands defined exactly as
- * before, even though qmp-commands.hx is gone.
- *
- * FIXME Educate the QAPI schema on configuration-specific commands,
- * and drop this hack.
- */
-static void qmp_unregister_commands_hack(void)
-{
-#ifndef CONFIG_REPLICATION
-    qmp_unregister_command(&qmp_commands, "xen-set-replication");
-    qmp_unregister_command(&qmp_commands, "query-xen-replication-status");
-    qmp_unregister_command(&qmp_commands, "xen-colo-do-checkpoint");
-#endif
-#ifndef TARGET_I386
-    qmp_unregister_command(&qmp_commands, "rtc-reset-reinjection");
-    qmp_unregister_command(&qmp_commands, "query-sev");
-    qmp_unregister_command(&qmp_commands, "query-sev-launch-measure");
-    qmp_unregister_command(&qmp_commands, "query-sev-capabilities");
-#endif
-#ifndef TARGET_S390X
-    qmp_unregister_command(&qmp_commands, "dump-skeys");
-#endif
-#ifndef TARGET_ARM
-    qmp_unregister_command(&qmp_commands, "query-gic-capabilities");
-#endif
-#if !defined(TARGET_S390X) && !defined(TARGET_I386)
-    qmp_unregister_command(&qmp_commands, "query-cpu-model-expansion");
-#endif
-#if !defined(TARGET_S390X)
-    qmp_unregister_command(&qmp_commands, "query-cpu-model-baseline");
-    qmp_unregister_command(&qmp_commands, "query-cpu-model-comparison");
-#endif
-#if !defined(TARGET_PPC) && !defined(TARGET_ARM) && !defined(TARGET_I386) \
-    && !defined(TARGET_S390X)
-    qmp_unregister_command(&qmp_commands, "query-cpu-definitions");
-#endif
-}
-
 static void monitor_init_qmp_commands(void)
 {
     /*
@@ -1193,8 +1151,6 @@ static void monitor_init_qmp_commands(void)
                          QCO_NO_OPTIONS);
     qmp_register_command(&qmp_commands, "netdev_add", qmp_netdev_add,
                          QCO_NO_OPTIONS);
-
-    qmp_unregister_commands_hack();
 
     QTAILQ_INIT(&qmp_cap_negotiation_commands);
     qmp_register_command(&qmp_cap_negotiation_commands, "qmp_capabilities",
@@ -1609,7 +1565,13 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
         if (l > line_size)
             l = line_size;
         if (is_physical) {
-            cpu_physical_memory_read(addr, buf, l);
+            AddressSpace *as = cs ? cs->as : &address_space_memory;
+            MemTxResult r = address_space_read(as, addr,
+                                               MEMTXATTRS_UNSPECIFIED, buf, l);
+            if (r != MEMTX_OK) {
+                monitor_printf(mon, " Cannot access memory\n");
+                break;
+            }
         } else {
             if (cpu_memory_rw_debug(cs, addr, buf, l, 0) < 0) {
                 monitor_printf(mon, " Cannot access memory\n");
@@ -2057,62 +2019,116 @@ static void hmp_wavcapture(Monitor *mon, const QDict *qdict)
     QLIST_INSERT_HEAD (&capture_head, s, entries);
 }
 
-static qemu_acl *find_acl(Monitor *mon, const char *name)
+static QAuthZList *find_auth(Monitor *mon, const char *name)
 {
-    qemu_acl *acl = qemu_acl_find(name);
+    Object *obj;
+    Object *container;
 
-    if (!acl) {
+    container = object_get_objects_root();
+    obj = object_resolve_path_component(container, name);
+    if (!obj) {
         monitor_printf(mon, "acl: unknown list '%s'\n", name);
+        return NULL;
     }
-    return acl;
+
+    return QAUTHZ_LIST(obj);
+}
+
+static bool warn_acl;
+static void hmp_warn_acl(void)
+{
+    if (warn_acl) {
+        return;
+    }
+    error_report("The acl_show, acl_reset, acl_policy, acl_add, acl_remove "
+                 "commands are deprecated with no replacement. Authorization "
+                 "for VNC should be performed using the pluggable QAuthZ "
+                 "objects");
+    warn_acl = true;
 }
 
 static void hmp_acl_show(Monitor *mon, const QDict *qdict)
 {
     const char *aclname = qdict_get_str(qdict, "aclname");
-    qemu_acl *acl = find_acl(mon, aclname);
-    qemu_acl_entry *entry;
-    int i = 0;
+    QAuthZList *auth = find_auth(mon, aclname);
+    QAuthZListRuleList *rules;
+    size_t i = 0;
 
-    if (acl) {
-        monitor_printf(mon, "policy: %s\n",
-                       acl->defaultDeny ? "deny" : "allow");
-        QTAILQ_FOREACH(entry, &acl->entries, next) {
-            i++;
-            monitor_printf(mon, "%d: %s %s\n", i,
-                           entry->deny ? "deny" : "allow", entry->match);
-        }
+    hmp_warn_acl();
+
+    if (!auth) {
+        return;
+    }
+
+    monitor_printf(mon, "policy: %s\n",
+                   QAuthZListPolicy_str(auth->policy));
+
+    rules = auth->rules;
+    while (rules) {
+        QAuthZListRule *rule = rules->value;
+        i++;
+        monitor_printf(mon, "%zu: %s %s\n", i,
+                       QAuthZListPolicy_str(rule->policy),
+                       rule->match);
+        rules = rules->next;
     }
 }
 
 static void hmp_acl_reset(Monitor *mon, const QDict *qdict)
 {
     const char *aclname = qdict_get_str(qdict, "aclname");
-    qemu_acl *acl = find_acl(mon, aclname);
+    QAuthZList *auth = find_auth(mon, aclname);
 
-    if (acl) {
-        qemu_acl_reset(acl);
-        monitor_printf(mon, "acl: removed all rules\n");
+    hmp_warn_acl();
+
+    if (!auth) {
+        return;
     }
+
+    auth->policy = QAUTHZ_LIST_POLICY_DENY;
+    qapi_free_QAuthZListRuleList(auth->rules);
+    auth->rules = NULL;
+    monitor_printf(mon, "acl: removed all rules\n");
 }
 
 static void hmp_acl_policy(Monitor *mon, const QDict *qdict)
 {
     const char *aclname = qdict_get_str(qdict, "aclname");
     const char *policy = qdict_get_str(qdict, "policy");
-    qemu_acl *acl = find_acl(mon, aclname);
+    QAuthZList *auth = find_auth(mon, aclname);
+    int val;
+    Error *err = NULL;
 
-    if (acl) {
-        if (strcmp(policy, "allow") == 0) {
-            acl->defaultDeny = 0;
+    hmp_warn_acl();
+
+    if (!auth) {
+        return;
+    }
+
+    val = qapi_enum_parse(&QAuthZListPolicy_lookup,
+                          policy,
+                          QAUTHZ_LIST_POLICY_DENY,
+                          &err);
+    if (err) {
+        error_free(err);
+        monitor_printf(mon, "acl: unknown policy '%s', "
+                       "expected 'deny' or 'allow'\n", policy);
+    } else {
+        auth->policy = val;
+        if (auth->policy == QAUTHZ_LIST_POLICY_ALLOW) {
             monitor_printf(mon, "acl: policy set to 'allow'\n");
-        } else if (strcmp(policy, "deny") == 0) {
-            acl->defaultDeny = 1;
-            monitor_printf(mon, "acl: policy set to 'deny'\n");
         } else {
-            monitor_printf(mon, "acl: unknown policy '%s', "
-                           "expected 'deny' or 'allow'\n", policy);
+            monitor_printf(mon, "acl: policy set to 'deny'\n");
         }
+    }
+}
+
+static QAuthZListFormat hmp_acl_get_format(const char *match)
+{
+    if (strchr(match, '*')) {
+        return QAUTHZ_LIST_FORMAT_GLOB;
+    } else {
+        return QAUTHZ_LIST_FORMAT_EXACT;
     }
 }
 
@@ -2120,30 +2136,52 @@ static void hmp_acl_add(Monitor *mon, const QDict *qdict)
 {
     const char *aclname = qdict_get_str(qdict, "aclname");
     const char *match = qdict_get_str(qdict, "match");
-    const char *policy = qdict_get_str(qdict, "policy");
+    const char *policystr = qdict_get_str(qdict, "policy");
     int has_index = qdict_haskey(qdict, "index");
     int index = qdict_get_try_int(qdict, "index", -1);
-    qemu_acl *acl = find_acl(mon, aclname);
-    int deny, ret;
+    QAuthZList *auth = find_auth(mon, aclname);
+    Error *err = NULL;
+    QAuthZListPolicy policy;
+    QAuthZListFormat format;
+    size_t i = 0;
 
-    if (acl) {
-        if (strcmp(policy, "allow") == 0) {
-            deny = 0;
-        } else if (strcmp(policy, "deny") == 0) {
-            deny = 1;
-        } else {
-            monitor_printf(mon, "acl: unknown policy '%s', "
-                           "expected 'deny' or 'allow'\n", policy);
-            return;
-        }
-        if (has_index)
-            ret = qemu_acl_insert(acl, deny, match, index);
-        else
-            ret = qemu_acl_append(acl, deny, match);
-        if (ret < 0)
-            monitor_printf(mon, "acl: unable to add acl entry\n");
-        else
-            monitor_printf(mon, "acl: added rule at position %d\n", ret);
+    hmp_warn_acl();
+
+    if (!auth) {
+        return;
+    }
+
+    policy = qapi_enum_parse(&QAuthZListPolicy_lookup,
+                             policystr,
+                             QAUTHZ_LIST_POLICY_DENY,
+                             &err);
+    if (err) {
+        error_free(err);
+        monitor_printf(mon, "acl: unknown policy '%s', "
+                       "expected 'deny' or 'allow'\n", policystr);
+        return;
+    }
+
+    format = hmp_acl_get_format(match);
+
+    if (has_index && index == 0) {
+        monitor_printf(mon, "acl: unable to add acl entry\n");
+        return;
+    }
+
+    if (has_index) {
+        i = qauthz_list_insert_rule(auth, match, policy,
+                                    format, index - 1, &err);
+    } else {
+        i = qauthz_list_append_rule(auth, match, policy,
+                                    format, &err);
+    }
+    if (err) {
+        monitor_printf(mon, "acl: unable to add rule: %s",
+                       error_get_pretty(err));
+        error_free(err);
+    } else {
+        monitor_printf(mon, "acl: added rule at position %zu\n", i + 1);
     }
 }
 
@@ -2151,15 +2189,20 @@ static void hmp_acl_remove(Monitor *mon, const QDict *qdict)
 {
     const char *aclname = qdict_get_str(qdict, "aclname");
     const char *match = qdict_get_str(qdict, "match");
-    qemu_acl *acl = find_acl(mon, aclname);
-    int ret;
+    QAuthZList *auth = find_auth(mon, aclname);
+    ssize_t i = 0;
 
-    if (acl) {
-        ret = qemu_acl_remove(acl, match);
-        if (ret < 0)
-            monitor_printf(mon, "acl: no matching acl entry\n");
-        else
-            monitor_printf(mon, "acl: removed rule at position %d\n", ret);
+    hmp_warn_acl();
+
+    if (!auth) {
+        return;
+    }
+
+    i = qauthz_list_delete_rule(auth, match);
+    if (i >= 0) {
+        monitor_printf(mon, "acl: removed rule at position %zu\n", i + 1);
+    } else {
+        monitor_printf(mon, "acl: no matching acl entry\n");
     }
 }
 
@@ -3236,7 +3279,7 @@ static QDict *monitor_parse_arguments(Monitor *mon,
             {
                 int ret;
                 uint64_t val;
-                char *end;
+                const char *end;
 
                 while (qemu_isspace(*p)) {
                     p++;
@@ -4067,18 +4110,14 @@ static int monitor_can_read(void *opaque)
  * Null @rsp can only happen for commands with QCO_NO_SUCCESS_RESP.
  * Nothing is emitted then.
  */
-static void monitor_qmp_respond(Monitor *mon, QDict *rsp, QObject *id)
+static void monitor_qmp_respond(Monitor *mon, QDict *rsp)
 {
     if (rsp) {
-        if (id) {
-            qdict_put_obj(rsp, "id", qobject_ref(id));
-        }
-
         qmp_send_response(mon, rsp);
     }
 }
 
-static void monitor_qmp_dispatch(Monitor *mon, QObject *req, QObject *id)
+static void monitor_qmp_dispatch(Monitor *mon, QObject *req)
 {
     Monitor *old_mon;
     QDict *rsp;
@@ -4103,7 +4142,7 @@ static void monitor_qmp_dispatch(Monitor *mon, QObject *req, QObject *id)
         }
     }
 
-    monitor_qmp_respond(mon, rsp, id);
+    monitor_qmp_respond(mon, rsp);
     qobject_unref(rsp);
 }
 
@@ -4114,8 +4153,12 @@ static void monitor_qmp_dispatch(Monitor *mon, QObject *req, QObject *id)
  * processing commands only on a very busy monitor.  To achieve that,
  * when we process one request on a specific monitor, we put that
  * monitor to the end of mon_list queue.
+ *
+ * Note: if the function returned with non-NULL, then the caller will
+ * be with mon->qmp.qmp_queue_lock held, and the caller is responsible
+ * to release it.
  */
-static QMPRequest *monitor_qmp_requests_pop_any(void)
+static QMPRequest *monitor_qmp_requests_pop_any_with_lock(void)
 {
     QMPRequest *req_obj = NULL;
     Monitor *mon;
@@ -4125,10 +4168,11 @@ static QMPRequest *monitor_qmp_requests_pop_any(void)
     QTAILQ_FOREACH(mon, &mon_list, entry) {
         qemu_mutex_lock(&mon->qmp.qmp_queue_lock);
         req_obj = g_queue_pop_head(mon->qmp.qmp_requests);
-        qemu_mutex_unlock(&mon->qmp.qmp_queue_lock);
         if (req_obj) {
+            /* With the lock of corresponding queue held */
             break;
         }
+        qemu_mutex_unlock(&mon->qmp.qmp_queue_lock);
     }
 
     if (req_obj) {
@@ -4147,38 +4191,42 @@ static QMPRequest *monitor_qmp_requests_pop_any(void)
 
 static void monitor_qmp_bh_dispatcher(void *data)
 {
-    QMPRequest *req_obj = monitor_qmp_requests_pop_any();
+    QMPRequest *req_obj = monitor_qmp_requests_pop_any_with_lock();
     QDict *rsp;
     bool need_resume;
+    Monitor *mon;
 
     if (!req_obj) {
         return;
     }
 
+    mon = req_obj->mon;
     /*  qmp_oob_enabled() might change after "qmp_capabilities" */
-    need_resume = !qmp_oob_enabled(req_obj->mon);
+    need_resume = !qmp_oob_enabled(mon) ||
+        mon->qmp.qmp_requests->length == QMP_REQ_QUEUE_LEN_MAX - 1;
+    qemu_mutex_unlock(&mon->qmp.qmp_queue_lock);
     if (req_obj->req) {
-        trace_monitor_qmp_cmd_in_band(qobject_get_try_str(req_obj->id) ?: "");
-        monitor_qmp_dispatch(req_obj->mon, req_obj->req, req_obj->id);
+        QDict *qdict = qobject_to(QDict, req_obj->req);
+        QObject *id = qdict ? qdict_get(qdict, "id") : NULL;
+        trace_monitor_qmp_cmd_in_band(qobject_get_try_str(id) ?: "");
+        monitor_qmp_dispatch(mon, req_obj->req);
     } else {
         assert(req_obj->err);
         rsp = qmp_error_response(req_obj->err);
         req_obj->err = NULL;
-        monitor_qmp_respond(req_obj->mon, rsp, NULL);
+        monitor_qmp_respond(mon, rsp);
         qobject_unref(rsp);
     }
 
     if (need_resume) {
         /* Pairs with the monitor_suspend() in handle_qmp_command() */
-        monitor_resume(req_obj->mon);
+        monitor_resume(mon);
     }
     qmp_request_free(req_obj);
 
     /* Reschedule instead of looping so the main loop stays responsive */
     qemu_bh_schedule(qmp_dispatcher_bh);
 }
-
-#define  QMP_REQ_QUEUE_LEN_MAX  (8)
 
 static void handle_qmp_command(void *opaque, QObject *req, Error *err)
 {
@@ -4191,8 +4239,7 @@ static void handle_qmp_command(void *opaque, QObject *req, Error *err)
 
     qdict = qobject_to(QDict, req);
     if (qdict) {
-        id = qobject_ref(qdict_get(qdict, "id"));
-        qdict_del(qdict, "id");
+        id = qdict_get(qdict, "id");
     } /* else will fail qmp_dispatch() */
 
     if (req && trace_event_get_state_backends(TRACE_HANDLE_QMP_COMMAND)) {
@@ -4203,17 +4250,14 @@ static void handle_qmp_command(void *opaque, QObject *req, Error *err)
 
     if (qdict && qmp_is_oob(qdict)) {
         /* OOB commands are executed immediately */
-        trace_monitor_qmp_cmd_out_of_band(qobject_get_try_str(id)
-                                          ?: "");
-        monitor_qmp_dispatch(mon, req, id);
+        trace_monitor_qmp_cmd_out_of_band(qobject_get_try_str(id) ?: "");
+        monitor_qmp_dispatch(mon, req);
         qobject_unref(req);
-        qobject_unref(id);
         return;
     }
 
     req_obj = g_new0(QMPRequest, 1);
     req_obj->mon = mon;
-    req_obj->id = id;
     req_obj->req = req;
     req_obj->err = err;
 
@@ -4221,35 +4265,22 @@ static void handle_qmp_command(void *opaque, QObject *req, Error *err)
     qemu_mutex_lock(&mon->qmp.qmp_queue_lock);
 
     /*
-     * If OOB is not enabled on the current monitor, we'll emulate the
-     * old behavior that we won't process the current monitor any more
-     * until it has responded.  This helps make sure that as long as
-     * OOB is not enabled, the server will never drop any command.
+     * Suspend the monitor when we can't queue more requests after
+     * this one.  Dequeuing in monitor_qmp_bh_dispatcher() will resume
+     * it.  Note that when OOB is disabled, we queue at most one
+     * command, for backward compatibility.
      */
-    if (!qmp_oob_enabled(mon)) {
+    if (!qmp_oob_enabled(mon) ||
+        mon->qmp.qmp_requests->length == QMP_REQ_QUEUE_LEN_MAX - 1) {
         monitor_suspend(mon);
-    } else {
-        /* Drop the request if queue is full. */
-        if (mon->qmp.qmp_requests->length >= QMP_REQ_QUEUE_LEN_MAX) {
-            qemu_mutex_unlock(&mon->qmp.qmp_queue_lock);
-            /*
-             * FIXME @id's scope is just @mon, and broadcasting it is
-             * wrong.  If another monitor's client has a command with
-             * the same ID in flight, the event will incorrectly claim
-             * that command was dropped.
-             */
-            qapi_event_send_command_dropped(id,
-                                            COMMAND_DROP_REASON_QUEUE_FULL);
-            qmp_request_free(req_obj);
-            return;
-        }
     }
 
     /*
      * Put the request to the end of queue so that requests will be
-     * handled in time order.  Ownership for req_obj, req, id,
+     * handled in time order.  Ownership for req_obj, req,
      * etc. will be delivered to the handler side.
      */
+    assert(mon->qmp.qmp_requests->length < QMP_REQ_QUEUE_LEN_MAX);
     g_queue_push_tail(mon->qmp.qmp_requests, req_obj);
     qemu_mutex_unlock(&mon->qmp.qmp_queue_lock);
 
@@ -4302,7 +4333,7 @@ int monitor_suspend(Monitor *mon)
 
     atomic_inc(&mon->suspend_cnt);
 
-    if (monitor_is_qmp(mon) && mon->use_io_thread) {
+    if (mon->use_io_thread) {
         /*
          * Kick I/O thread to make sure this takes effect.  It'll be
          * evaluated again in prepare() of the watch object.
@@ -4314,6 +4345,13 @@ int monitor_suspend(Monitor *mon)
     return 0;
 }
 
+static void monitor_accept_input(void *opaque)
+{
+    Monitor *mon = opaque;
+
+    qemu_chr_fe_accept_input(&mon->chr);
+}
+
 void monitor_resume(Monitor *mon)
 {
     if (monitor_is_hmp_non_interactive(mon)) {
@@ -4321,20 +4359,22 @@ void monitor_resume(Monitor *mon)
     }
 
     if (atomic_dec_fetch(&mon->suspend_cnt) == 0) {
-        if (monitor_is_qmp(mon)) {
-            /*
-             * For QMP monitors that are running in the I/O thread,
-             * let's kick the thread in case it's sleeping.
-             */
-            if (mon->use_io_thread) {
-                aio_notify(iothread_get_aio_context(mon_iothread));
-            }
+        AioContext *ctx;
+
+        if (mon->use_io_thread) {
+            ctx = iothread_get_aio_context(mon_iothread);
         } else {
+            ctx = qemu_get_aio_context();
+        }
+
+        if (!monitor_is_qmp(mon)) {
             assert(mon->rs);
             readline_show_prompt(mon->rs);
         }
-        qemu_chr_fe_accept_input(&mon->chr);
+
+        aio_bh_schedule_oneshot(ctx, monitor_accept_input, mon);
     }
+
     trace_monitor_suspend(mon, -1);
 }
 
@@ -4458,16 +4498,6 @@ static void sortcmdlist(void)
     qsort((void *)info_cmds, array_num, elem_size, compare_mon_cmd);
 }
 
-static GMainContext *monitor_get_io_context(void)
-{
-    return iothread_get_g_main_context(mon_iothread);
-}
-
-static AioContext *monitor_get_aio_context(void)
-{
-    return iothread_get_aio_context(mon_iothread);
-}
-
 static void monitor_iothread_init(void)
 {
     mon_iothread = iothread_create("mon_iothread", &error_abort);
@@ -4544,8 +4574,21 @@ void error_vprintf_unless_qmp(const char *fmt, va_list ap)
 static void monitor_list_append(Monitor *mon)
 {
     qemu_mutex_lock(&monitor_lock);
-    QTAILQ_INSERT_HEAD(&mon_list, mon, entry);
+    /*
+     * This prevents inserting new monitors during monitor_cleanup().
+     * A cleaner solution would involve the main thread telling other
+     * threads to terminate, waiting for their termination.
+     */
+    if (!monitor_destroyed) {
+        QTAILQ_INSERT_HEAD(&mon_list, mon, entry);
+        mon = NULL;
+    }
     qemu_mutex_unlock(&monitor_lock);
+
+    if (mon) {
+        monitor_data_destroy(mon);
+        g_free(mon);
+    }
 }
 
 static void monitor_qmp_setup_handlers_bh(void *opaque)
@@ -4554,7 +4597,7 @@ static void monitor_qmp_setup_handlers_bh(void *opaque)
     GMainContext *context;
 
     assert(mon->use_io_thread);
-    context = monitor_get_io_context();
+    context = iothread_get_g_main_context(mon_iothread);
     assert(context);
     qemu_chr_fe_set_handlers(&mon->chr, monitor_can_read, monitor_qmp_read,
                              monitor_qmp_event, NULL, mon, context, true);
@@ -4565,21 +4608,12 @@ void monitor_init(Chardev *chr, int flags)
 {
     Monitor *mon = g_malloc(sizeof(*mon));
     bool use_readline = flags & MONITOR_USE_READLINE;
-    bool use_oob = flags & MONITOR_USE_OOB;
 
-    if (use_oob) {
-        if (CHARDEV_IS_MUX(chr)) {
-            error_report("Monitor out-of-band is not supported with "
-                         "MUX typed chardev backend");
-            exit(1);
-        }
-        if (use_readline) {
-            error_report("Monitor out-of-band is only supported by QMP");
-            exit(1);
-        }
-    }
-
-    monitor_data_init(mon, false, use_oob);
+    /* Note: we run QMP monitor in I/O thread when @chr supports that */
+    monitor_data_init(mon, false,
+                      (flags & MONITOR_USE_CONTROL)
+                      && qemu_chr_has_feature(chr,
+                                              QEMU_CHAR_FEATURE_GCONTEXT));
 
     qemu_chr_fe_init(&mon->chr, chr, &error_abort);
     mon->flags = flags;
@@ -4606,7 +4640,7 @@ void monitor_init(Chardev *chr, int flags)
              * since chardev might be running in the monitor I/O
              * thread.  Schedule a bottom half.
              */
-            aio_bh_schedule_oneshot(monitor_get_aio_context(),
+            aio_bh_schedule_oneshot(iothread_get_aio_context(mon_iothread),
                                     monitor_qmp_setup_handlers_bh, mon);
             /* The bottom half will add @mon to @mon_list */
             return;
@@ -4625,8 +4659,6 @@ void monitor_init(Chardev *chr, int flags)
 
 void monitor_cleanup(void)
 {
-    Monitor *mon, *next;
-
     /*
      * We need to explicitly stop the I/O thread (but not destroy it),
      * clean up the monitor resources, then destroy the I/O thread since
@@ -4639,10 +4671,15 @@ void monitor_cleanup(void)
 
     /* Flush output buffers and destroy monitors */
     qemu_mutex_lock(&monitor_lock);
-    QTAILQ_FOREACH_SAFE(mon, &mon_list, entry, next) {
+    monitor_destroyed = true;
+    while (!QTAILQ_EMPTY(&mon_list)) {
+        Monitor *mon = QTAILQ_FIRST(&mon_list);
         QTAILQ_REMOVE(&mon_list, mon, entry);
+        /* Permit QAPI event emission from character frontend release */
+        qemu_mutex_unlock(&monitor_lock);
         monitor_flush(mon);
         monitor_data_destroy(mon);
+        qemu_mutex_lock(&monitor_lock);
         g_free(mon);
     }
     qemu_mutex_unlock(&monitor_lock);
@@ -4670,53 +4707,10 @@ QemuOptsList qemu_mon_opts = {
         },{
             .name = "pretty",
             .type = QEMU_OPT_BOOL,
-        },{
-            .name = "x-oob",
-            .type = QEMU_OPT_BOOL,
         },
         { /* end of list */ }
     },
 };
-
-#ifndef TARGET_I386
-void qmp_rtc_reset_reinjection(Error **errp)
-{
-    error_setg(errp, QERR_FEATURE_DISABLED, "rtc-reset-reinjection");
-}
-
-SevInfo *qmp_query_sev(Error **errp)
-{
-    error_setg(errp, QERR_FEATURE_DISABLED, "query-sev");
-    return NULL;
-}
-
-SevLaunchMeasureInfo *qmp_query_sev_launch_measure(Error **errp)
-{
-    error_setg(errp, QERR_FEATURE_DISABLED, "query-sev-launch-measure");
-    return NULL;
-}
-
-SevCapability *qmp_query_sev_capabilities(Error **errp)
-{
-    error_setg(errp, QERR_FEATURE_DISABLED, "query-sev-capabilities");
-    return NULL;
-}
-#endif
-
-#ifndef TARGET_S390X
-void qmp_dump_skeys(const char *filename, Error **errp)
-{
-    error_setg(errp, QERR_FEATURE_DISABLED, "dump-skeys");
-}
-#endif
-
-#ifndef TARGET_ARM
-GICCapabilityList *qmp_query_gic_capabilities(Error **errp)
-{
-    error_setg(errp, QERR_FEATURE_DISABLED, "query-gic-capabilities");
-    return NULL;
-}
-#endif
 
 HotpluggableCPUList *qmp_query_hotpluggable_cpus(Error **errp)
 {

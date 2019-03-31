@@ -47,6 +47,9 @@ typedef enum {
     QEMU_CHAR_FEATURE_FD_PASS,
     /* Whether replay or record mode is enabled */
     QEMU_CHAR_FEATURE_REPLAY,
+    /* Whether the gcontext can be changed after calling
+     * qemu_chr_be_update_read_handlers() */
+    QEMU_CHAR_FEATURE_GCONTEXT,
 
     QEMU_CHAR_FEATURE_LAST,
 } ChardevFeature;
@@ -70,6 +73,7 @@ struct Chardev {
 /**
  * qemu_chr_new_from_opts:
  * @opts: see qemu-config.c for a list of valid options
+ * @context: the #GMainContext to be used at initialization time
  *
  * Create a new character backend from a QemuOpts list.
  *
@@ -78,6 +82,7 @@ struct Chardev {
  *                            or left untouched in case of help option
  */
 Chardev *qemu_chr_new_from_opts(QemuOpts *opts,
+                                GMainContext *context,
                                 Error **errp);
 
 /**
@@ -103,25 +108,29 @@ ChardevBackend *qemu_chr_parse_opts(QemuOpts *opts,
  * qemu_chr_new:
  * @label: the name of the backend
  * @filename: the URI
+ * @context: the #GMainContext to be used at initialization time
  *
  * Create a new character backend from a URI.
  * Do not implicitly initialize a monitor if the chardev is muxed.
  *
  * Returns: a new character backend
  */
-Chardev *qemu_chr_new(const char *label, const char *filename);
+Chardev *qemu_chr_new(const char *label, const char *filename,
+                      GMainContext *context);
 
 /**
  * qemu_chr_new_mux_mon:
  * @label: the name of the backend
  * @filename: the URI
+ * @context: the #GMainContext to be used at initialization time
  *
  * Create a new character backend from a URI.
  * Implicitly initialize a monitor if the chardev is muxed.
  *
  * Returns: a new character backend
  */
-Chardev *qemu_chr_new_mux_mon(const char *label, const char *filename);
+Chardev *qemu_chr_new_mux_mon(const char *label, const char *filename,
+                              GMainContext *context);
 
 /**
 * qemu_chr_change:
@@ -143,6 +152,7 @@ void qemu_chr_cleanup(void);
  * @label: the name of the backend
  * @filename: the URI
  * @permit_mux_mon: if chardev is muxed, initialize a monitor
+ * @context: the #GMainContext to be used at initialization time
  *
  * Create a new character backend from a URI.
  * Character device communications are not written
@@ -151,7 +161,7 @@ void qemu_chr_cleanup(void);
  * Returns: a new character backend
  */
 Chardev *qemu_chr_new_noreplay(const char *label, const char *filename,
-                               bool permit_mux_mon);
+                               bool permit_mux_mon, GMainContext *context);
 
 /**
  * qemu_chr_be_can_write:
@@ -269,7 +279,8 @@ typedef struct ChardevClass {
 } ChardevClass;
 
 Chardev *qemu_chardev_new(const char *id, const char *typename,
-                          ChardevBackend *backend, Error **errp);
+                          ChardevBackend *backend, GMainContext *context,
+                          Error **errp);
 
 extern int term_escape_char;
 

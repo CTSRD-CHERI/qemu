@@ -11,6 +11,8 @@
 #include "exec/cpu-defs.h"
 #include "fpu/softfloat.h"
 
+#define TCG_GUEST_DEFAULT_MO (0)
+
 struct CPUMIPSState;
 
 typedef struct CPUMIPSTLBContext CPUMIPSTLBContext;
@@ -123,7 +125,6 @@ typedef struct mips_def_t mips_def_t;
 #define MIPS_KSCRATCH_NUM 6
 #define MIPS_MAAR_MAX 16 /* Must be an even number. */
 
-
 #ifdef CONFIG_MIPS_LOG_INSTR
 struct cvtrace {
     uint8_t version;
@@ -233,120 +234,6 @@ struct cheri_cap_hwregs {
 
 #endif /* TARGET_CHERI */
 
-typedef struct TCState TCState;
-struct TCState {
-    target_ulong gpr[32];
-    target_ulong PC;
-    target_ulong HI[MIPS_DSP_ACC];
-    target_ulong LO[MIPS_DSP_ACC];
-    target_ulong ACX[MIPS_DSP_ACC];
-    target_ulong DSPControl;
-    int32_t CP0_TCStatus;
-#define CP0TCSt_TCU3	31
-#define CP0TCSt_TCU2	30
-#define CP0TCSt_TCU1	29
-#define CP0TCSt_TCU0	28
-#define CP0TCSt_TMX	27
-#define CP0TCSt_RNST	23
-#define CP0TCSt_TDS	21
-#define CP0TCSt_DT	20
-#define CP0TCSt_DA	15
-#define CP0TCSt_A	13
-#define CP0TCSt_TKSU	11
-#define CP0TCSt_IXMT	10
-#define CP0TCSt_TASID	0
-    int32_t CP0_TCBind;
-#define CP0TCBd_CurTC	21
-#define CP0TCBd_TBE	17
-#define CP0TCBd_CurVPE	0
-    target_ulong CP0_TCHalt;
-    target_ulong CP0_TCContext;
-    target_ulong CP0_TCSchedule;
-    target_ulong CP0_TCScheFBack;
-    int32_t CP0_Debug_tcstatus;
-    target_ulong CP0_UserLocal;
-
-    int32_t msacsr;
-
-#define MSACSR_FS       24
-#define MSACSR_FS_MASK  (1 << MSACSR_FS)
-#define MSACSR_NX       18
-#define MSACSR_NX_MASK  (1 << MSACSR_NX)
-#define MSACSR_CEF      2
-#define MSACSR_CEF_MASK (0xffff << MSACSR_CEF)
-#define MSACSR_RM       0
-#define MSACSR_RM_MASK  (0x3 << MSACSR_RM)
-#define MSACSR_MASK     (MSACSR_RM_MASK | MSACSR_CEF_MASK | MSACSR_NX_MASK | \
-        MSACSR_FS_MASK)
-
-    float_status msa_fp_status;
-
-
-#if defined(TARGET_CHERI)
-    cap_register_t PCC;
-    cap_register_t CapBranchTarget; /* Target of the next cjr/cjalr/ccall */
-    cap_register_t _CGPR[32];
-    struct cheri_cap_hwregs CHWR;
-// #define CP2CAP_RCC  24  /* Return Code Capability */
-#define CP2CAP_IDC  26  /* Invoked Data Capability */
-// #define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
-#endif /* TARGET_CHERI */
-
-#define NUMBER_OF_MXU_REGISTERS 16
-    target_ulong mxu_gpr[NUMBER_OF_MXU_REGISTERS - 1];
-    target_ulong mxu_cr;
-#define MXU_CR_LC       31
-#define MXU_CR_RC       30
-#define MXU_CR_BIAS     2
-#define MXU_CR_RD_EN    1
-#define MXU_CR_MXU_EN   0
-
-};
-
-#if defined(TARGET_CHERI)
-static inline  __attribute__((always_inline)) const cap_register_t*
-get_readonly_capreg(TCState* state, unsigned num) {
-    return &state->_CGPR[num];
-}
-
-/// return a read-only capability register with register number 0 meaning $ddc
-/// This is useful for cl*/cs*/cll*/csc*/cfromptr/cbuildcap since using $ddc as the address
-/// argument there will cause a trap
-/// We also use it for the cb argument to ctoptr/cbuildcap since using a ctoptr
-/// relative to $ddc make sense whereas using it relative to NULL is the same as
-/// just cmove $cN, $cnull
-static inline __attribute__((always_inline)) const cap_register_t*
-get_capreg_0_is_ddc(TCState* state, unsigned num) {
-    if (unlikely(num == 0)) {
-        return &state->CHWR.DDC;
-    }
-    return &state->_CGPR[num];
-}
-
-static inline void
-update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
-    // writing to $c0/$cnull is a no-op
-    if (unlikely(num == 0))
-        return;
-    state->_CGPR[num] = *newval;
-}
-
-#define CP2HWR_BASE_INDEX 0
-// TODO: start at 32: #define CP2HWR_BASE_NUM 32
-
-enum CP2HWR {
-    CP2HWR_DDC = CP2HWR_BASE_INDEX + 0, /* Default Data Capability */
-    CP2HWR_USER_TLS = CP2HWR_BASE_INDEX + 1, /* Unprivileged TLS Cap */
-    CP2HWR_PRIV_TLS = CP2HWR_BASE_INDEX + 8, /* Privileged TLS Cap */
-    CP2HWR_K1RC = CP2HWR_BASE_INDEX + 22, /* Reserved Kernel Cap #1 */
-    CP2HWR_K2RC = CP2HWR_BASE_INDEX + 23, /* Reserved Kernel Cap #2 */
-    CP2HWR_ErrorEPCC = CP2HWR_BASE_INDEX + 28, /* Error Exception PC Capability */
-    CP2HWR_KCC = CP2HWR_BASE_INDEX + 29, /* Kernel Code Capability */
-    CP2HWR_KDC = CP2HWR_BASE_INDEX + 30, /* Kernel Data Capability */
-    CP2HWR_EPCC = CP2HWR_BASE_INDEX + 31, /* Exception PC Capability */
-};
-
-#endif
 
 typedef struct CPUMIPSState CPUMIPSState;
 struct CPUMIPSState {
@@ -411,8 +298,8 @@ struct CPUMIPSState {
  * 3   BadInstrX
  * 4                                       GuestCtl1         GuestCtl0Ext
  * 5                                       GuestCtl2
- * 6                                       GuestCtl3
- * 7
+ * 6                     SAARI             GuestCtl3
+ * 7                     SAAR
  *
  *
  *     Register 12       Register 13       Register 14       Register 15
@@ -480,6 +367,297 @@ struct CPUMIPSState {
  * 7   TagLo             TagHi                               KScratch<n>
  *
  */
+#define CP0_REGISTER_00     0
+#define CP0_REGISTER_01     1
+#define CP0_REGISTER_02     2
+#define CP0_REGISTER_03     3
+#define CP0_REGISTER_04     4
+#define CP0_REGISTER_05     5
+#define CP0_REGISTER_06     6
+#define CP0_REGISTER_07     7
+#define CP0_REGISTER_08     8
+#define CP0_REGISTER_09     9
+#define CP0_REGISTER_10    10
+#define CP0_REGISTER_11    11
+#define CP0_REGISTER_12    12
+#define CP0_REGISTER_13    13
+#define CP0_REGISTER_14    14
+#define CP0_REGISTER_15    15
+#define CP0_REGISTER_16    16
+#define CP0_REGISTER_17    17
+#define CP0_REGISTER_18    18
+#define CP0_REGISTER_19    19
+#define CP0_REGISTER_20    20
+#define CP0_REGISTER_21    21
+#define CP0_REGISTER_22    22
+#define CP0_REGISTER_23    23
+#define CP0_REGISTER_24    24
+#define CP0_REGISTER_25    25
+#define CP0_REGISTER_26    26
+#define CP0_REGISTER_27    27
+#define CP0_REGISTER_28    28
+#define CP0_REGISTER_29    29
+#define CP0_REGISTER_30    30
+#define CP0_REGISTER_31    31
+
+
+/* CP0 Register 00 */
+#define CP0_REG00__INDEX           0
+#define CP0_REG00__VPCONTROL       4
+/* CP0 Register 01 */
+/* CP0 Register 02 */
+#define CP0_REG02__ENTRYLO0        0
+/* CP0 Register 03 */
+#define CP0_REG03__ENTRYLO1        0
+#define CP0_REG03__GLOBALNUM       1
+/* CP0 Register 04 */
+#define CP0_REG04__CONTEXT         0
+#define CP0_REG04__USERLOCAL       2
+#define CP0_REG04__DBGCONTEXTID    4
+#define CP0_REG00__MMID            5
+/* CP0 Register 05 */
+#define CP0_REG05__PAGEMASK        0
+#define CP0_REG05__PAGEGRAIN       1
+/* CP0 Register 06 */
+#define CP0_REG06__WIRED           0
+/* CP0 Register 07 */
+#define CP0_REG07__HWRENA          0
+/* CP0 Register 08 */
+#define CP0_REG08__BADVADDR        0
+#define CP0_REG08__BADINSTR        1
+#define CP0_REG08__BADINSTRP       2
+/* CP0 Register 09 */
+#define CP0_REG09__COUNT           0
+#define CP0_REG09__SAARI           6
+#define CP0_REG09__SAAR            7
+/* CP0 Register 10 */
+#define CP0_REG10__ENTRYHI         0
+#define CP0_REG10__GUESTCTL1       4
+#define CP0_REG10__GUESTCTL2       5
+/* CP0 Register 11 */
+#define CP0_REG11__COMPARE         0
+#define CP0_REG11__GUESTCTL0EXT    4
+/* CP0 Register 12 */
+#define CP0_REG12__STATUS          0
+#define CP0_REG12__INTCTL          1
+#define CP0_REG12__SRSCTL          2
+#define CP0_REG12__GUESTCTL0       6
+#define CP0_REG12__GTOFFSET        7
+/* CP0 Register 13 */
+#define CP0_REG13__CAUSE           0
+/* CP0 Register 14 */
+#define CP0_REG14__EPC             0
+/* CP0 Register 15 */
+#define CP0_REG15__PRID            0
+#define CP0_REG15__EBASE           1
+#define CP0_REG15__CDMMBASE        2
+#define CP0_REG15__CMGCRBASE       3
+/* CP0 Register 16 */
+#define CP0_REG16__CONFIG          0
+#define CP0_REG16__CONFIG1         1
+#define CP0_REG16__CONFIG2         2
+#define CP0_REG16__CONFIG3         3
+#define CP0_REG16__CONFIG4         4
+#define CP0_REG16__CONFIG5         5
+#define CP0_REG00__CONFIG7         7
+/* CP0 Register 17 */
+#define CP0_REG17__LLADDR          0
+#define CP0_REG17__MAAR            1
+#define CP0_REG17__MAARI           2
+/* CP0 Register 18 */
+#define CP0_REG18__WATCHLO0        0
+#define CP0_REG18__WATCHLO1        1
+#define CP0_REG18__WATCHLO2        2
+#define CP0_REG18__WATCHLO3        3
+/* CP0 Register 19 */
+#define CP0_REG19__WATCHHI0        0
+#define CP0_REG19__WATCHHI1        1
+#define CP0_REG19__WATCHHI2        2
+#define CP0_REG19__WATCHHI3        3
+/* CP0 Register 20 */
+#define CP0_REG20__XCONTEXT        0
+/* CP0 Register 21 */
+/* CP0 Register 22 */
+/* CP0 Register 23 */
+#define CP0_REG23__DEBUG           0
+/* CP0 Register 24 */
+#define CP0_REG24__DEPC            0
+/* CP0 Register 25 */
+#define CP0_REG25__PERFCTL0        0
+#define CP0_REG25__PERFCNT0        1
+#define CP0_REG25__PERFCTL1        2
+#define CP0_REG25__PERFCNT1        3
+#define CP0_REG25__PERFCTL2        4
+#define CP0_REG25__PERFCNT2        5
+#define CP0_REG25__PERFCTL3        6
+#define CP0_REG25__PERFCNT3        7
+/* CP0 Register 26 */
+#define CP0_REG00__ERRCTL          0
+/* CP0 Register 27 */
+#define CP0_REG27__CACHERR         0
+/* CP0 Register 28 */
+#define CP0_REG28__ITAGLO          0
+#define CP0_REG28__IDATALO         1
+#define CP0_REG28__DTAGLO          2
+#define CP0_REG28__DDATALO         3
+/* CP0 Register 29 */
+#define CP0_REG29__IDATAHI         1
+#define CP0_REG29__DDATAHI         3
+/* CP0 Register 30 */
+#define CP0_REG30__ERROREPC        0
+/* CP0 Register 31 */
+#define CP0_REG31__DESAVE          0
+#define CP0_REG31__KSCRATCH1       2
+#define CP0_REG31__KSCRATCH2       3
+#define CP0_REG31__KSCRATCH3       4
+#define CP0_REG31__KSCRATCH4       5
+#define CP0_REG31__KSCRATCH5       6
+#define CP0_REG31__KSCRATCH6       7
+
+
+typedef struct TCState TCState;
+struct TCState {
+    target_ulong gpr[32];
+    target_ulong PC;
+    target_ulong HI[MIPS_DSP_ACC];
+    target_ulong LO[MIPS_DSP_ACC];
+    target_ulong ACX[MIPS_DSP_ACC];
+    target_ulong DSPControl;
+
+#if defined(TARGET_CHERI)
+    cap_register_t PCC;
+    cap_register_t CapBranchTarget; /* Target of the next cjr/cjalr/ccall */
+    cap_register_t _CGPR[32];
+    struct cheri_cap_hwregs CHWR;
+// #define CP2CAP_RCC  24  /* Return Code Capability */
+#define CP2CAP_IDC  26  /* Invoked Data Capability */
+// #define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
+#endif /* TARGET_CHERI */
+
+    int32_t CP0_TCStatus;
+#define CP0TCSt_TCU3    31
+#define CP0TCSt_TCU2    30
+#define CP0TCSt_TCU1    29
+#define CP0TCSt_TCU0    28
+#define CP0TCSt_TMX     27
+#define CP0TCSt_RNST    23
+#define CP0TCSt_TDS     21
+#define CP0TCSt_DT      20
+#define CP0TCSt_DA      15
+#define CP0TCSt_A       13
+#define CP0TCSt_TKSU    11
+#define CP0TCSt_IXMT    10
+#define CP0TCSt_TASID   0
+    int32_t CP0_TCBind;
+#define CP0TCBd_CurTC   21
+#define CP0TCBd_TBE     17
+#define CP0TCBd_CurVPE  0
+    target_ulong CP0_TCHalt;
+    target_ulong CP0_TCContext;
+    target_ulong CP0_TCSchedule;
+    target_ulong CP0_TCScheFBack;
+    int32_t CP0_Debug_tcstatus;
+    target_ulong CP0_UserLocal;
+
+    int32_t msacsr;
+
+#define MSACSR_FS       24
+#define MSACSR_FS_MASK  (1 << MSACSR_FS)
+#define MSACSR_NX       18
+#define MSACSR_NX_MASK  (1 << MSACSR_NX)
+#define MSACSR_CEF      2
+#define MSACSR_CEF_MASK (0xffff << MSACSR_CEF)
+#define MSACSR_RM       0
+#define MSACSR_RM_MASK  (0x3 << MSACSR_RM)
+#define MSACSR_MASK     (MSACSR_RM_MASK | MSACSR_CEF_MASK | MSACSR_NX_MASK | \
+        MSACSR_FS_MASK)
+
+    float_status msa_fp_status;
+
+    /* Upper 64-bit MMRs (multimedia registers); the lower 64-bit are GPRs */
+    uint64_t mmr[32];
+
+#define NUMBER_OF_MXU_REGISTERS 16
+    target_ulong mxu_gpr[NUMBER_OF_MXU_REGISTERS - 1];
+    target_ulong mxu_cr;
+#define MXU_CR_LC       31
+#define MXU_CR_RC       30
+#define MXU_CR_BIAS     2
+#define MXU_CR_RD_EN    1
+#define MXU_CR_MXU_EN   0
+
+};
+
+
+#if defined(TARGET_CHERI)
+static inline  __attribute__((always_inline)) const cap_register_t*
+get_readonly_capreg(TCState* state, unsigned num) {
+    return &state->_CGPR[num];
+}
+
+/// return a read-only capability register with register number 0 meaning $ddc
+/// This is useful for cl*/cs*/cll*/csc*/cfromptr/cbuildcap since using $ddc as the address
+/// argument there will cause a trap
+/// We also use it for the cb argument to ctoptr/cbuildcap since using a ctoptr
+/// relative to $ddc make sense whereas using it relative to NULL is the same as
+/// just cmove $cN, $cnull
+static inline __attribute__((always_inline)) const cap_register_t*
+get_capreg_0_is_ddc(TCState* state, unsigned num) {
+    if (unlikely(num == 0)) {
+        return &state->CHWR.DDC;
+    }
+    return &state->_CGPR[num];
+}
+
+static inline void
+update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
+    // writing to $c0/$cnull is a no-op
+    if (unlikely(num == 0))
+        return;
+    state->_CGPR[num] = *newval;
+}
+
+#define CP2HWR_BASE_INDEX 0
+// TODO: start at 32: #define CP2HWR_BASE_NUM 32
+
+enum CP2HWR {
+    CP2HWR_DDC = CP2HWR_BASE_INDEX + 0, /* Default Data Capability */
+    CP2HWR_USER_TLS = CP2HWR_BASE_INDEX + 1, /* Unprivileged TLS Cap */
+    CP2HWR_PRIV_TLS = CP2HWR_BASE_INDEX + 8, /* Privileged TLS Cap */
+    CP2HWR_K1RC = CP2HWR_BASE_INDEX + 22, /* Reserved Kernel Cap #1 */
+    CP2HWR_K2RC = CP2HWR_BASE_INDEX + 23, /* Reserved Kernel Cap #2 */
+    CP2HWR_ErrorEPCC = CP2HWR_BASE_INDEX + 28, /* Error Exception PC Capability */
+    CP2HWR_KCC = CP2HWR_BASE_INDEX + 29, /* Kernel Code Capability */
+    CP2HWR_KDC = CP2HWR_BASE_INDEX + 30, /* Kernel Data Capability */
+    CP2HWR_EPCC = CP2HWR_BASE_INDEX + 31, /* Exception PC Capability */
+};
+
+#endif
+
+struct MIPSITUState;
+typedef struct CPUMIPSState CPUMIPSState;
+struct CPUMIPSState {
+    TCState active_tc;
+    CPUMIPSFPUContext active_fpu;
+
+    uint32_t current_tc;
+    uint32_t current_fpu;
+
+    uint32_t SEGBITS;
+    uint32_t PABITS;
+#if defined(TARGET_MIPS64)
+# define PABITS_BASE 36
+#else
+# define PABITS_BASE 32
+#endif
+    target_ulong SEGMask;
+    uint64_t PAMask;
+#define PAMASK_BASE ((1ULL << PABITS_BASE) - 1)
+
+    int32_t msair;
+#define MSAIR_ProcID    8
+#define MSAIR_Rev       0
+
 /*
  * CP0 Register 0
  */
@@ -557,6 +735,7 @@ struct CPUMIPSState {
  */
     target_ulong CP0_Context;
     target_ulong CP0_KScratch[MIPS_KSCRATCH_NUM];
+    int32_t CP0_MemoryMapID;
 /*
  * CP0 Register 5
  */
@@ -682,6 +861,12 @@ struct CPUMIPSState {
  * CP0 Register 9
  */
     int32_t CP0_Count;
+    uint32_t CP0_SAARI;
+#define CP0SAARI_TARGET 0    /*  5..0  */
+    uint64_t CP0_SAAR[2];
+#define CP0SAAR_BASE    12   /* 43..12 */
+#define CP0SAAR_SIZE    1    /*  5..1  */
+#define CP0SAAR_EN      0
 /*
  * CP0 Register 10
  */
@@ -881,20 +1066,19 @@ struct CPUMIPSState {
 #define CP0C5_NFExists     0
     int32_t CP0_Config6;
     int32_t CP0_Config7;
+    uint64_t CP0_LLAddr;
     uint64_t CP0_MAAR[MIPS_MAAR_MAX];
     int32_t CP0_MAARI;
     /* XXX: Maybe make LLAddr per-TC? */
 /*
  * CP0 Register 17
  */
-    uint64_t lladdr;
+    target_ulong lladdr; /* LL virtual address compared against SC */
     target_ulong llval;
-    target_ulong llnewval;
     uint64_t llval_wp;
     uint32_t llnewval_wp;
-    target_ulong llreg;
 #ifdef TARGET_CHERI
-    uint64_t linkedflag;
+    uint64_t linkedflag; // TODO: remove this!
     int32_t TLB_L;
     int32_t TLB_S;
 #endif
@@ -1054,6 +1238,7 @@ struct CPUMIPSState {
     uint32_t CP0_Status_rw_bitmask; /* Read/write bits in CP0_Status */
     uint32_t CP0_TCStatus_rw_bitmask; /* Read/write bits in CP0_TCStatus */
     uint64_t insn_flags; /* Supported instruction set */
+    int saarp;
 
 
 
@@ -1131,6 +1316,7 @@ struct CPUMIPSState {
     const mips_def_t *cpu_model;
     void *irq[8];
     QEMUTimer *timer; /* Internal timer */
+    struct MIPSITUState *itu;
     MemoryRegion *itc_tag; /* ITC Configuration Tags */
 #ifdef CONFIG_MIPS_LOG_INSTR
     /*
@@ -1264,8 +1450,6 @@ enum {
 
     EXCP_LAST = EXCP_TLBRI,
 };
-/* Dummy exception for conditional stores.  */
-#define EXCP_SC 0x100
 
 /*
  * This is an internally generated WAKE request line.
@@ -1282,11 +1466,14 @@ int cpu_mips_signal_handler(int host_signum, void *pinfo, void *puc);
 #define CPU_RESOLVING_TYPE TYPE_MIPS_CPU
 
 bool cpu_supports_cps_smp(const char *cpu_type);
-bool cpu_supports_isa(const char *cpu_type, unsigned int isa);
+bool cpu_supports_isa(const char *cpu_type, uint64_t isa);
 void cpu_set_exception_base(int vp_index, target_ulong address);
 
 /* mips_int.c */
 void cpu_mips_soft_irq(CPUMIPSState *env, int irq, int level);
+
+/* mips_itu.c */
+void itc_reconfigure(struct MIPSITUState *tag);
 
 /* helper.c */
 target_ulong exception_resume_pc (CPUMIPSState *env);

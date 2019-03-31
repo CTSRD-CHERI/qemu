@@ -348,7 +348,7 @@ static int qemu_vfio_init_pci(QEMUVFIOState *s, const char *device,
         goto fail;
     }
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < ARRAY_SIZE(s->bar_region_info); i++) {
         ret = qemu_vfio_pci_init_bar(s, i, errp);
         if (ret) {
             goto fail;
@@ -391,10 +391,10 @@ static void qemu_vfio_ram_block_removed(RAMBlockNotifier *n,
     }
 }
 
-static int qemu_vfio_init_ramblock(const char *block_name, void *host_addr,
-                                   ram_addr_t offset, ram_addr_t length,
-                                   void *opaque)
+static int qemu_vfio_init_ramblock(RAMBlock *rb, void *opaque)
 {
+    void *host_addr = qemu_ram_get_host_addr(rb);
+    ram_addr_t length = qemu_ram_get_used_length(rb);
     int ret;
     QEMUVFIOState *s = opaque;
 

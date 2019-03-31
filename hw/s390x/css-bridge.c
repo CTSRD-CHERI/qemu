@@ -51,7 +51,7 @@ static void ccw_device_unplug(HotplugHandler *hotplug_dev,
 
     css_generate_sch_crws(sch->cssid, sch->ssid, sch->schid, 1, 0);
 
-    object_unparent(OBJECT(dev));
+    object_property_set_bool(OBJECT(dev), false, "realized", NULL);
 }
 
 static void virtual_css_bus_reset(BusState *qbus)
@@ -108,7 +108,7 @@ VirtualCssBus *virtual_css_bus_init(void)
     cbus = VIRTUAL_CSS_BUS(bus);
 
     /* Enable hotplugging */
-    qbus_set_hotplug_handler(bus, dev, &error_abort);
+    qbus_set_hotplug_handler(bus, OBJECT(dev), &error_abort);
 
     css_register_io_adapters(CSS_IO_ADAPTER_VIRTIO, true, false,
                              0, &error_abort);

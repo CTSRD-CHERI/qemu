@@ -69,12 +69,13 @@ static int64_t load_kernel(void)
     big_endian = 0;
 #endif
 
+    kernel_size = load_elf(loaderparams.kernel_filename, NULL,
 #if defined(TARGET_MIPS64)
-    kernel_size = load_elf(loaderparams.kernel_filename, cpu_cheri_kseg0_to_phys,
+                           cpu_cheri_kseg0_to_phys, NULL,
 #else
-    kernel_size = load_elf(loaderparams.kernel_filename, cpu_mips_kseg0_to_phys,
+                           cpu_mips_kseg0_to_phys, NULL,
 #endif
-                           NULL, (uint64_t *)&entry, NULL,
+                           (uint64_t *)&entry, NULL,
                            (uint64_t *)&kernel_high, big_endian,
                            EM_MIPS, 1, 0);
     if (kernel_size >= 0) {

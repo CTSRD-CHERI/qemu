@@ -204,12 +204,7 @@ static void test_drv_cb_common(enum drain_type drain_type, bool recursive)
     BlockAIOCB *acb;
     int aio_ret;
 
-    QEMUIOVector qiov;
-    struct iovec iov = {
-        .iov_base = NULL,
-        .iov_len = 0,
-    };
-    qemu_iovec_init_external(&qiov, &iov, 1);
+    QEMUIOVector qiov = QEMU_IOVEC_INIT_BUF(qiov, NULL, 0);
 
     blk = blk_new(BLK_PERM_ALL, BLK_PERM_ALL);
     bs = bdrv_new_open_driver(&bdrv_test, "test-node", BDRV_O_RDWR,
@@ -670,12 +665,7 @@ static void test_iothread_common(enum drain_type drain_type, int drain_thread)
     AioContext *ctx_a = iothread_get_aio_context(a);
     AioContext *ctx_b = iothread_get_aio_context(b);
 
-    QEMUIOVector qiov;
-    struct iovec iov = {
-        .iov_base = NULL,
-        .iov_len = 0,
-    };
-    qemu_iovec_init_external(&qiov, &iov, 1);
+    QEMUIOVector qiov = QEMU_IOVEC_INIT_BUF(qiov, NULL, 0);
 
     /* bdrv_drain_all() may only be called from the main loop thread */
     if (drain_type == BDRV_DRAIN_ALL && drain_thread != 0) {
@@ -1148,13 +1138,7 @@ static void coroutine_fn test_co_delete_by_drain(void *opaque)
     BlockDriverState *bs = blk_bs(blk);
     BDRVTestTopState *tts = bs->opaque;
     void *buffer = g_malloc(65536);
-    QEMUIOVector qiov;
-    struct iovec iov = {
-        .iov_base = buffer,
-        .iov_len  = 65536,
-    };
-
-    qemu_iovec_init_external(&qiov, &iov, 1);
+    QEMUIOVector qiov = QEMU_IOVEC_INIT_BUF(qiov, buffer, 65536);
 
     /* Pretend some internal write operation from parent to child.
      * Important: We have to read from the child, not from the parent!
@@ -1365,12 +1349,7 @@ static void test_detach_indirect(bool by_parent_cb)
     BdrvChild *child_a, *child_b;
     BlockAIOCB *acb;
 
-    QEMUIOVector qiov;
-    struct iovec iov = {
-        .iov_base = NULL,
-        .iov_len = 0,
-    };
-    qemu_iovec_init_external(&qiov, &iov, 1);
+    QEMUIOVector qiov = QEMU_IOVEC_INIT_BUF(qiov, NULL, 0);
 
     if (!by_parent_cb) {
         detach_by_driver_cb_role = child_file;
@@ -1522,6 +1501,36 @@ static void test_append_to_drained(void)
     blk_unref(blk);
 }
 
+static void test_set_aio_context(void)
+{
+    BlockDriverState *bs;
+    IOThread *a = iothread_new();
+    IOThread *b = iothread_new();
+    AioContext *ctx_a = iothread_get_aio_context(a);
+    AioContext *ctx_b = iothread_get_aio_context(b);
+
+    bs = bdrv_new_open_driver(&bdrv_test, "test-node", BDRV_O_RDWR,
+                              &error_abort);
+
+    bdrv_drained_begin(bs);
+    bdrv_set_aio_context(bs, ctx_a);
+
+    aio_context_acquire(ctx_a);
+    bdrv_drained_end(bs);
+
+    bdrv_drained_begin(bs);
+    bdrv_set_aio_context(bs, ctx_b);
+    aio_context_release(ctx_a);
+    aio_context_acquire(ctx_b);
+    bdrv_set_aio_context(bs, qemu_get_aio_context());
+    aio_context_release(ctx_b);
+    bdrv_drained_end(bs);
+
+    bdrv_unref(bs);
+    iothread_join(a);
+    iothread_join(b);
+}
+
 int main(int argc, char **argv)
 {
     int ret;
@@ -1602,6 +1611,8 @@ int main(int argc, char **argv)
     g_test_add_func("/bdrv-drain/detach/driver_cb", test_detach_by_driver_cb);
 
     g_test_add_func("/bdrv-drain/attach/drain", test_append_to_drained);
+
+    g_test_add_func("/bdrv-drain/set_aio_context", test_set_aio_context);
 
     ret = g_test_run();
     qemu_event_destroy(&done_event);

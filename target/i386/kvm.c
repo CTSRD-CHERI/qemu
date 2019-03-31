@@ -389,6 +389,15 @@ uint32_t kvm_arch_get_supported_cpuid(KVMState *s, uint32_t function,
         if (host_tsx_blacklisted()) {
             ret &= ~(CPUID_7_0_EBX_RTM | CPUID_7_0_EBX_HLE);
         }
+    } else if (function == 7 && index == 0 && reg == R_EDX) {
+        /*
+         * Linux v4.17-v4.20 incorrectly return ARCH_CAPABILITIES on SVM hosts.
+         * We can detect the bug by checking if MSR_IA32_ARCH_CAPABILITIES is
+         * returned by KVM_GET_MSR_INDEX_LIST.
+         */
+        if (!has_msr_arch_capabs) {
+            ret &= ~CPUID_7_0_EDX_ARCH_CAPABILITIES;
+        }
     } else if (function == 0x80000001 && reg == R_ECX) {
         /*
          * It's safe to enable TOPOEXT even if it's not returned by
@@ -798,6 +807,48 @@ static int hyperv_handle_properties(CPUState *cs)
         }
         env->features[FEAT_HYPERV_EAX] |= HV_SYNTIMERS_AVAILABLE;
     }
+    if (cpu->hyperv_relaxed_timing) {
+        env->features[FEAT_HV_RECOMM_EAX] |= HV_RELAXED_TIMING_RECOMMENDED;
+    }
+    if (cpu->hyperv_vapic) {
+        env->features[FEAT_HV_RECOMM_EAX] |= HV_APIC_ACCESS_RECOMMENDED;
+    }
+    if (cpu->hyperv_tlbflush) {
+        if (kvm_check_extension(cs->kvm_state,
+                                KVM_CAP_HYPERV_TLBFLUSH) <= 0) {
+            fprintf(stderr, "Hyper-V TLB flush support "
+                    "(requested by 'hv-tlbflush' cpu flag) "
+                    " is not supported by kernel\n");
+            return -ENOSYS;
+        }
+        env->features[FEAT_HV_RECOMM_EAX] |= HV_REMOTE_TLB_FLUSH_RECOMMENDED;
+        env->features[FEAT_HV_RECOMM_EAX] |= HV_EX_PROCESSOR_MASKS_RECOMMENDED;
+    }
+    if (cpu->hyperv_ipi) {
+        if (kvm_check_extension(cs->kvm_state,
+                                KVM_CAP_HYPERV_SEND_IPI) <= 0) {
+            fprintf(stderr, "Hyper-V IPI send support "
+                    "(requested by 'hv-ipi' cpu flag) "
+                    " is not supported by kernel\n");
+            return -ENOSYS;
+        }
+        env->features[FEAT_HV_RECOMM_EAX] |= HV_CLUSTER_IPI_RECOMMENDED;
+        env->features[FEAT_HV_RECOMM_EAX] |= HV_EX_PROCESSOR_MASKS_RECOMMENDED;
+    }
+    if (cpu->hyperv_evmcs) {
+        uint16_t evmcs_version;
+
+        if (kvm_vcpu_enable_cap(cs, KVM_CAP_HYPERV_ENLIGHTENED_VMCS, 0,
+                                (uintptr_t)&evmcs_version)) {
+            fprintf(stderr, "Hyper-V Enlightened VMCS "
+                    "(requested by 'hv-evmcs' cpu flag) "
+                    "is not supported by kernel\n");
+            return -ENOSYS;
+        }
+        env->features[FEAT_HV_RECOMM_EAX] |= HV_ENLIGHTENED_VMCS_RECOMMENDED;
+        env->features[FEAT_HV_NESTED_EAX] = evmcs_version;
+    }
+
     return 0;
 }
 
@@ -864,14 +915,21 @@ int kvm_arch_init_vcpu(CPUState *cs)
     struct {
         struct kvm_cpuid2 cpuid;
         struct kvm_cpuid_entry2 entries[KVM_MAX_CPUID_ENTRIES];
-    } QEMU_PACKED cpuid_data;
+    } cpuid_data;
+    /*
+     * The kernel defines these structs with padding fields so there
+     * should be no extra padding in our cpuid_data struct.
+     */
+    QEMU_BUILD_BUG_ON(sizeof(cpuid_data) !=
+                      sizeof(struct kvm_cpuid2) +
+                      sizeof(struct kvm_cpuid_entry2) * KVM_MAX_CPUID_ENTRIES);
+
     X86CPU *cpu = X86_CPU(cs);
     CPUX86State *env = &cpu->env;
     uint32_t limit, i, j, cpuid_i;
     uint32_t unused;
     struct kvm_cpuid_entry2 *c;
     uint32_t signature[3];
-    uint16_t evmcs_version;
     int kvm_base = KVM_CPUID_SIGNATURE;
     int r;
     Error *local_err = NULL;
@@ -946,44 +1004,8 @@ int kvm_arch_init_vcpu(CPUState *cs)
 
         c = &cpuid_data.entries[cpuid_i++];
         c->function = HV_CPUID_ENLIGHTMENT_INFO;
-        if (cpu->hyperv_relaxed_timing) {
-            c->eax |= HV_RELAXED_TIMING_RECOMMENDED;
-        }
-        if (cpu->hyperv_vapic) {
-            c->eax |= HV_APIC_ACCESS_RECOMMENDED;
-        }
-        if (cpu->hyperv_tlbflush) {
-            if (kvm_check_extension(cs->kvm_state,
-                                    KVM_CAP_HYPERV_TLBFLUSH) <= 0) {
-                fprintf(stderr, "Hyper-V TLB flush support "
-                        "(requested by 'hv-tlbflush' cpu flag) "
-                        " is not supported by kernel\n");
-                return -ENOSYS;
-            }
-            c->eax |= HV_REMOTE_TLB_FLUSH_RECOMMENDED;
-            c->eax |= HV_EX_PROCESSOR_MASKS_RECOMMENDED;
-        }
-        if (cpu->hyperv_ipi) {
-            if (kvm_check_extension(cs->kvm_state,
-                                    KVM_CAP_HYPERV_SEND_IPI) <= 0) {
-                fprintf(stderr, "Hyper-V IPI send support "
-                        "(requested by 'hv-ipi' cpu flag) "
-                        " is not supported by kernel\n");
-                return -ENOSYS;
-            }
-            c->eax |= HV_CLUSTER_IPI_RECOMMENDED;
-            c->eax |= HV_EX_PROCESSOR_MASKS_RECOMMENDED;
-        }
-        if (cpu->hyperv_evmcs) {
-            if (kvm_vcpu_enable_cap(cs, KVM_CAP_HYPERV_ENLIGHTENED_VMCS, 0,
-                                    (uintptr_t)&evmcs_version)) {
-                fprintf(stderr, "Hyper-V Enlightened VMCS "
-                        "(requested by 'hv-evmcs' cpu flag) "
-                        "is not supported by kernel\n");
-                return -ENOSYS;
-            }
-            c->eax |= HV_ENLIGHTENED_VMCS_RECOMMENDED;
-        }
+
+        c->eax = env->features[FEAT_HV_RECOMM_EAX];
         c->ebx = cpu->hyperv_spinlock_attempts;
 
         c = &cpuid_data.entries[cpuid_i++];
@@ -1007,7 +1029,7 @@ int kvm_arch_init_vcpu(CPUState *cs)
 
             c = &cpuid_data.entries[cpuid_i++];
             c->function = HV_CPUID_NESTED_FEATURES;
-            c->eax = evmcs_version;
+            c->eax = env->features[FEAT_HV_NESTED_EAX];
         }
     }
 
@@ -3881,7 +3903,7 @@ static QLIST_HEAD(, MSIRouteEntry) msi_route_list = \
 static void kvm_update_msi_routes_all(void *private, bool global,
                                       uint32_t index, uint32_t mask)
 {
-    int cnt = 0;
+    int cnt = 0, vector;
     MSIRouteEntry *entry;
     MSIMessage msg;
     PCIDevice *dev;
@@ -3889,11 +3911,19 @@ static void kvm_update_msi_routes_all(void *private, bool global,
     /* TODO: explicit route update */
     QLIST_FOREACH(entry, &msi_route_list, list) {
         cnt++;
+        vector = entry->vector;
         dev = entry->dev;
-        if (!msix_enabled(dev) && !msi_enabled(dev)) {
+        if (msix_enabled(dev) && !msix_is_masked(dev, vector)) {
+            msg = msix_get_message(dev, vector);
+        } else if (msi_enabled(dev) && !msi_is_masked(dev, vector)) {
+            msg = msi_get_message(dev, vector);
+        } else {
+            /*
+             * Either MSI/MSIX is disabled for the device, or the
+             * specific message was masked out.  Skip this one.
+             */
             continue;
         }
-        msg = pci_get_msi_message(dev, entry->vector);
         kvm_irqchip_update_msi_route(kvm_state, entry->virq, msg, dev);
     }
     kvm_irqchip_commit_routes(kvm_state);

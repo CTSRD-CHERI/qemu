@@ -1897,15 +1897,10 @@ static int vfio_setup_pcie_cap(VFIOPCIDevice *vdev, int pos, uint8_t size,
                                    PCI_EXP_TYPE_ENDPOINT << 4,
                                    PCI_EXP_FLAGS_TYPE);
             vfio_add_emulated_long(vdev, pos + PCI_EXP_LNKCAP,
-                                   PCI_EXP_LNK_MLW_1 | PCI_EXP_LNK_LS_25, ~0);
+                           QEMU_PCI_EXP_LNKCAP_MLW(QEMU_PCI_EXP_LNK_X1) |
+                           QEMU_PCI_EXP_LNKCAP_MLS(QEMU_PCI_EXP_LNK_2_5GT), ~0);
             vfio_add_emulated_word(vdev, pos + PCI_EXP_LNKCTL, 0, ~0);
         }
-
-        /* Mark the Link Status bits as emulated to allow virtual negotiation */
-        vfio_add_emulated_word(vdev, pos + PCI_EXP_LNKSTA,
-                               pci_get_word(vdev->pdev.config + pos +
-                                            PCI_EXP_LNKSTA),
-                               PCI_EXP_LNKCAP_MLW | PCI_EXP_LNKCAP_SLS);
     }
 
     /*
@@ -2586,7 +2581,7 @@ static void vfio_populate_device(VFIOPCIDevice *vdev, Error **errp)
     ret = ioctl(vdev->vbasedev.fd, VFIO_DEVICE_GET_IRQ_INFO, &irq_info);
     if (ret) {
         /* This can fail for an old kernel or legacy PCI dev */
-        trace_vfio_populate_device_get_irq_info_failure();
+        trace_vfio_populate_device_get_irq_info_failure(strerror(errno));
     } else if (irq_info.count == 1) {
         vdev->pci_aer = true;
     } else {
@@ -3073,6 +3068,16 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         error_setg(errp, "ramfb=on requires display=on");
         goto out_teardown;
     }
+    if (vdev->display_xres || vdev->display_yres) {
+        if (vdev->dpy == NULL) {
+            error_setg(errp, "xres and yres properties require display=on");
+            goto out_teardown;
+        }
+        if (vdev->dpy->edid_regs == NULL) {
+            error_setg(errp, "xres and yres properties need edid support");
+            goto out_teardown;
+        }
+    }
 
     vfio_register_err_notifier(vdev);
     vfio_register_req_notifier(vdev);
@@ -3187,6 +3192,8 @@ static Property vfio_pci_dev_properties[] = {
     DEFINE_PROP_STRING("sysfsdev", VFIOPCIDevice, vbasedev.sysfsdev),
     DEFINE_PROP_ON_OFF_AUTO("display", VFIOPCIDevice,
                             display, ON_OFF_AUTO_OFF),
+    DEFINE_PROP_UINT32("xres", VFIOPCIDevice, display_xres, 0),
+    DEFINE_PROP_UINT32("yres", VFIOPCIDevice, display_yres, 0),
     DEFINE_PROP_UINT32("x-intx-mmap-timeout-ms", VFIOPCIDevice,
                        intx.mmap_timeout, 1100),
     DEFINE_PROP_BIT("x-vga", VFIOPCIDevice, features,

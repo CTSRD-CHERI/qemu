@@ -1342,7 +1342,7 @@ void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUPPCState *env)
         dump_slb(f, cpu_fprintf, ppc_env_get_cpu(env));
         break;
     case POWERPC_MMU_3_00:
-        if (ppc64_radix_guest(ppc_env_get_cpu(env))) {
+        if (ppc64_v3_radix(ppc_env_get_cpu(env))) {
             /* TODO - Unsupported */
         } else {
             dump_slb(f, cpu_fprintf, ppc_env_get_cpu(env));
@@ -1415,10 +1415,6 @@ static int get_physical_address_wtlb(
     bool real_mode = (access_type == ACCESS_CODE && msr_ir == 0)
         || (access_type != ACCESS_CODE && msr_dr == 0);
 
-#if 0
-    qemu_log("%s\n", __func__);
-#endif
-
     switch (env->mmu_model) {
     case POWERPC_MMU_SOFT_6xx:
     case POWERPC_MMU_SOFT_74xx:
@@ -1468,10 +1464,6 @@ static int get_physical_address_wtlb(
         cpu_abort(CPU(cpu), "Unknown or invalid MMU model\n");
         return -1;
     }
-#if 0
-    qemu_log("%s address " TARGET_FMT_lx " => %d " TARGET_FMT_plx "\n",
-             __func__, eaddr, ret, ctx->raddr);
-#endif
 
     return ret;
 }
@@ -1497,12 +1489,7 @@ hwaddr ppc_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
     case POWERPC_MMU_2_07:
         return ppc_hash64_get_phys_page_debug(cpu, addr);
     case POWERPC_MMU_3_00:
-        if (ppc64_radix_guest(ppc_env_get_cpu(env))) {
-            return ppc_radix64_get_phys_page_debug(cpu, addr);
-        } else {
-            return ppc_hash64_get_phys_page_debug(cpu, addr);
-        }
-        break;
+        return ppc64_v3_get_phys_page_debug(cpu, addr);
 #endif
 
     case POWERPC_MMU_32B:
@@ -1805,10 +1792,6 @@ static int cpu_ppc_handle_mmu_fault(CPUPPCState *env, target_ulong address,
                 break;
             }
         }
-#if 0
-        printf("%s: set exception to %d %02x\n", __func__,
-               cs->exception, env->error_code);
-#endif
         ret = 1;
     }
 

@@ -452,15 +452,15 @@ static inline hwaddr do_translate_address(CPUMIPSState *env,
                                                       target_ulong address,
                                                       int rw, uintptr_t retaddr)
 {
-    hwaddr lladdr;
+    hwaddr paddr;
     CPUState *cs = CPU(mips_env_get_cpu(env));
 
-    lladdr = cpu_mips_translate_address(env, address, rw);
+    paddr = cpu_mips_translate_address(env, address, rw);
 
-    if (lladdr == -1LL) {
+    if (paddr == -1LL) {
         cpu_loop_exit_restore(cs, retaddr);
     } else {
-        return lladdr;
+        return paddr;
     }
 }
 
@@ -473,7 +473,8 @@ target_ulong helper_##name(CPUMIPSState *env, target_ulong arg, int mem_idx)  \
         }                                                                     \
         do_raise_exception(env, EXCP_AdEL, GETPC());                          \
     }                                                                         \
-    env->lladdr = do_translate_address(env, arg, 0, GETPC());                 \
+    env->CP0_LLAddr = do_translate_address(env, arg, 0, GETPC());             \
+    env->lladdr = arg;                                                        \
     env->llval = do_##insn(env, arg, mem_idx, GETPC());                       \
     return env->llval;                                                        \
 }
@@ -482,33 +483,6 @@ HELPER_LD_ATOMIC(ll, lw, 0x3)
 HELPER_LD_ATOMIC(lld, ld, 0x7)
 #endif
 #undef HELPER_LD_ATOMIC
-
-#define HELPER_ST_ATOMIC(name, ld_insn, st_insn, almask)                      \
-target_ulong helper_##name(CPUMIPSState *env, target_ulong arg1,              \
-                           target_ulong arg2, int mem_idx)                    \
-{                                                                             \
-    target_long tmp;                                                          \
-                                                                              \
-    if (arg2 & almask) {                                                      \
-        if (!(env->hflags & MIPS_HFLAG_DM)) {                                 \
-            env->CP0_BadVAddr = arg2;                                         \
-        }                                                                     \
-        do_raise_exception(env, EXCP_AdES, GETPC());                          \
-    }                                                                         \
-    if (do_translate_address(env, arg2, 1, GETPC()) == env->lladdr) {         \
-        tmp = do_##ld_insn(env, arg2, mem_idx, GETPC());                      \
-        if (tmp == env->llval) {                                              \
-            do_##st_insn(env, arg2, arg1, mem_idx, GETPC());                  \
-            return 1;                                                         \
-        }                                                                     \
-    }                                                                         \
-    return 0;                                                                 \
-}
-HELPER_ST_ATOMIC(sc, lw, sw, 0x3)
-#ifdef TARGET_MIPS64
-HELPER_ST_ATOMIC(scd, ld, sd, 0x7)
-#endif
-#undef HELPER_ST_ATOMIC
 #endif
 
 #ifdef TARGET_WORDS_BIGENDIAN
@@ -768,7 +742,9 @@ static inline void mips_vpe_wake(MIPSCPU *c)
     /* Don't set ->halted = 0 directly, let it be done via cpu_has_work
        because there might be other conditions that state that c should
        be sleeping.  */
+    qemu_mutex_lock_iothread();
     cpu_interrupt(CPU(c), CPU_INTERRUPT_WAKE);
+    qemu_mutex_unlock_iothread();
 }
 
 static inline void mips_vpe_sleep(MIPSCPU *cpu)
@@ -1034,11 +1010,23 @@ target_ulong helper_mftc0_tcschefback(CPUMIPSState *env)
 
 target_ulong helper_mfc0_count(CPUMIPSState *env)
 {
-    int32_t count;
-    qemu_mutex_lock_iothread();
-    count = (int32_t) cpu_mips_get_count(env);
-    qemu_mutex_unlock_iothread();
-    return count;
+    return (int32_t)cpu_mips_get_count(env);
+}
+
+target_ulong helper_mfc0_saar(CPUMIPSState *env)
+{
+    if ((env->CP0_SAARI & 0x3f) < 2) {
+        return (int32_t) env->CP0_SAAR[env->CP0_SAARI & 0x3f];
+    }
+    return 0;
+}
+
+target_ulong helper_mfhc0_saar(CPUMIPSState *env)
+{
+    if ((env->CP0_SAARI & 0x3f) < 2) {
+        return env->CP0_SAAR[env->CP0_SAARI & 0x3f] >> 32;
+    }
+    return 0;
 }
 
 target_ulong helper_mftc0_entryhi(CPUMIPSState *env)
@@ -1074,7 +1062,7 @@ target_ulong helper_mftc0_status(CPUMIPSState *env)
 
 target_ulong helper_mfc0_lladdr(CPUMIPSState *env)
 {
-    return (int32_t)(env->lladdr >> env->CP0_LLAddr_shift);
+    return (int32_t)(env->CP0_LLAddr >> env->CP0_LLAddr_shift);
 }
 
 target_ulong helper_mfc0_maar(CPUMIPSState *env)
@@ -1150,7 +1138,7 @@ target_ulong helper_dmfc0_tcschefback(CPUMIPSState *env)
 
 target_ulong helper_dmfc0_lladdr(CPUMIPSState *env)
 {
-    return env->lladdr >> env->CP0_LLAddr_shift;
+    return env->CP0_LLAddr >> env->CP0_LLAddr_shift;
 }
 
 target_ulong helper_dmfc0_maar(CPUMIPSState *env)
@@ -1161,6 +1149,14 @@ target_ulong helper_dmfc0_maar(CPUMIPSState *env)
 target_ulong helper_dmfc0_watchlo(CPUMIPSState *env, uint32_t sel)
 {
     return env->CP0_WatchLo[sel];
+}
+
+target_ulong helper_dmfc0_saar(CPUMIPSState *env)
+{
+    if ((env->CP0_SAARI & 0x3f) < 2) {
+        return env->CP0_SAAR[env->CP0_SAARI & 0x3f];
+    }
+    return 0;
 }
 #endif /* TARGET_MIPS64 */
 
@@ -1386,7 +1382,8 @@ void helper_mtc0_tcrestart(CPUMIPSState *env, target_ulong arg1)
 {
     env->active_tc.PC = arg1;
     env->active_tc.CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
-    env->lladdr = 0ULL;
+    env->CP0_LLAddr = 0;
+    env->lladdr = 0;
     /* MIPS16 not implemented. */
 }
 
@@ -1398,12 +1395,14 @@ void helper_mttc0_tcrestart(CPUMIPSState *env, target_ulong arg1)
     if (other_tc == other->current_tc) {
         other->active_tc.PC = arg1;
         other->active_tc.CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
-        other->lladdr = 0ULL;
+        other->CP0_LLAddr = 0;
+        other->lladdr = 0;
         /* MIPS16 not implemented. */
     } else {
         other->tcs[other_tc].PC = arg1;
         other->tcs[other_tc].CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
-        other->lladdr = 0ULL;
+        other->CP0_LLAddr = 0;
+        other->lladdr = 0;
         /* MIPS16 not implemented. */
     }
 }
@@ -1711,9 +1710,7 @@ void helper_mtc0_hwrena(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mtc0_count(CPUMIPSState *env, target_ulong arg1)
 {
-    qemu_mutex_lock_iothread();
     cpu_mips_store_count(env, arg1);
-    qemu_mutex_unlock_iothread();
 }
 
 uint64_t helper_mfc0_rtc64(CPUMIPSState *env)
@@ -1762,6 +1759,46 @@ target_ulong helper_mfc0_coreid(CPUMIPSState *env)
             (cs->cpu_index & 0xffff));
 }
 
+void helper_mtc0_saari(CPUMIPSState *env, target_ulong arg1)
+{
+    uint32_t target = arg1 & 0x3f;
+    if (target <= 1) {
+        env->CP0_SAARI = target;
+    }
+}
+
+void helper_mtc0_saar(CPUMIPSState *env, target_ulong arg1)
+{
+    uint32_t target = env->CP0_SAARI & 0x3f;
+    if (target < 2) {
+        env->CP0_SAAR[target] = arg1 & 0x00000ffffffff03fULL;
+        switch (target) {
+        case 0:
+            if (env->itu) {
+                itc_reconfigure(env->itu);
+            }
+            break;
+        }
+    }
+}
+
+void helper_mthc0_saar(CPUMIPSState *env, target_ulong arg1)
+{
+    uint32_t target = env->CP0_SAARI & 0x3f;
+    if (target < 2) {
+        env->CP0_SAAR[target] =
+            (((uint64_t) arg1 << 32) & 0x00000fff00000000ULL) |
+            (env->CP0_SAAR[target] & 0x00000000ffffffffULL);
+        switch (target) {
+        case 0:
+            if (env->itu) {
+                itc_reconfigure(env->itu);
+            }
+            break;
+        }
+    }
+}
+
 void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
 {
     target_ulong old, val, mask;
@@ -1808,9 +1845,7 @@ void helper_mttc0_entryhi(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mtc0_compare(CPUMIPSState *env, target_ulong arg1)
 {
-    qemu_mutex_lock_iothread();
     cpu_mips_store_compare(env, arg1);
-    qemu_mutex_unlock_iothread();
 }
 
 void helper_mtc0_status(CPUMIPSState *env, target_ulong arg1)
@@ -1864,9 +1899,7 @@ void helper_mtc0_srsctl(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mtc0_cause(CPUMIPSState *env, target_ulong arg1)
 {
-    qemu_mutex_lock_iothread();
     cpu_mips_store_cause(env, arg1);
-    qemu_mutex_unlock_iothread();
 }
 
 void helper_mttc0_cause(CPUMIPSState *env, target_ulong arg1)
@@ -1968,7 +2001,7 @@ void helper_mtc0_lladdr(CPUMIPSState *env, target_ulong arg1)
 {
     target_long mask = env->CP0_LLAddr_rw_bitmask;
     arg1 = arg1 << env->CP0_LLAddr_shift;
-    env->lladdr = (env->lladdr & ~mask) | (arg1 & mask);
+    env->CP0_LLAddr = (env->CP0_LLAddr & ~mask) | (arg1 & mask);
 }
 
 #define MTC0_MAAR_MASK(env) \
@@ -3093,6 +3126,7 @@ static inline void exception_return(CPUMIPSState *env)
 void helper_eret(CPUMIPSState *env)
 {
     exception_return(env);
+    env->CP0_LLAddr = 1;
     env->lladdr = 1;
 #ifdef TARGET_CHERI
     env->linkedflag = 0;
@@ -3146,16 +3180,12 @@ target_ulong helper_rdhwr_synci_step(CPUMIPSState *env)
 
 target_ulong helper_rdhwr_cc(CPUMIPSState *env)
 {
-    int32_t count;
     check_hwrena(env, 2, GETPC());
 #ifdef CONFIG_USER_ONLY
-    count = env->CP0_Count;
+    return env->CP0_Count;
 #else
-    qemu_mutex_lock_iothread();
-    count = (int32_t)cpu_mips_get_count(env);
-    qemu_mutex_unlock_iothread();
+    return (int32_t)cpu_mips_get_count(env);
 #endif
-    return count;
 }
 
 target_ulong helper_rdhwr_ccres(CPUMIPSState *env)

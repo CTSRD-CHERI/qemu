@@ -8,8 +8,8 @@
 #ifndef PE_H
 #define PE_H
 
-#include <stdint.h>
 
+#ifndef _WIN32
 typedef struct IMAGE_DOS_HEADER {
     uint16_t  e_magic;      /* 0x00: MZ Header signature */
     uint16_t  e_cblp;       /* 0x02: Bytes on last page of file */
@@ -88,8 +88,6 @@ typedef struct IMAGE_NT_HEADERS64 {
   IMAGE_OPTIONAL_HEADER64 OptionalHeader;
 } __attribute__ ((packed)) IMAGE_NT_HEADERS64;
 
-#define IMAGE_FILE_DEBUG_DIRECTORY  6
-
 typedef struct IMAGE_DEBUG_DIRECTORY {
   uint32_t Characteristics;
   uint32_t TimeDateStamp;
@@ -102,6 +100,9 @@ typedef struct IMAGE_DEBUG_DIRECTORY {
 } __attribute__ ((packed)) IMAGE_DEBUG_DIRECTORY;
 
 #define IMAGE_DEBUG_TYPE_CODEVIEW   2
+#endif
+
+#define IMAGE_FILE_DEBUG_DIRECTORY  6
 
 typedef struct guid_t {
     uint32_t a;

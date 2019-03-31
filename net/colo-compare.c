@@ -30,6 +30,7 @@
 #include "net/colo-compare.h"
 #include "migration/colo.h"
 #include "migration/migration.h"
+#include "util.h"
 
 #define TYPE_COLO_COMPARE "colo-compare"
 #define COLO_COMPARE(obj) \
@@ -129,19 +130,19 @@ static int compare_chr_send(CompareState *s,
 
 static gint seq_sorter(Packet *a, Packet *b, gpointer data)
 {
-    struct tcphdr *atcp, *btcp;
+    struct tcp_hdr *atcp, *btcp;
 
-    atcp = (struct tcphdr *)(a->transport_header);
-    btcp = (struct tcphdr *)(b->transport_header);
+    atcp = (struct tcp_hdr *)(a->transport_header);
+    btcp = (struct tcp_hdr *)(b->transport_header);
     return ntohl(atcp->th_seq) - ntohl(btcp->th_seq);
 }
 
 static void fill_pkt_tcp_info(void *data, uint32_t *max_ack)
 {
     Packet *pkt = data;
-    struct tcphdr *tcphd;
+    struct tcp_hdr *tcphd;
 
-    tcphd = (struct tcphdr *)pkt->transport_header;
+    tcphd = (struct tcp_hdr *)pkt->transport_header;
 
     pkt->tcp_seq = ntohl(tcphd->th_seq);
     pkt->tcp_ack = ntohl(tcphd->th_ack);
@@ -285,14 +286,6 @@ static bool colo_mark_tcp_pkt(Packet *ppkt, Packet *spkt,
 {
     *mark = 0;
 
-    if (ppkt->tcp_seq == spkt->tcp_seq && ppkt->seq_end == spkt->seq_end) {
-        if (colo_compare_packet_payload(ppkt, spkt,
-                                        ppkt->header_size, spkt->header_size,
-                                        ppkt->payload_size)) {
-            *mark = COLO_COMPARE_FREE_SECONDARY | COLO_COMPARE_FREE_PRIMARY;
-            return true;
-        }
-    }
     if (ppkt->tcp_seq == spkt->tcp_seq && ppkt->seq_end == spkt->seq_end) {
         if (colo_compare_packet_payload(ppkt, spkt,
                                         ppkt->header_size, spkt->header_size,
@@ -953,6 +946,12 @@ static int find_and_check_chardev(Chardev **chr,
 
     if (!qemu_chr_has_feature(*chr, QEMU_CHAR_FEATURE_RECONNECTABLE)) {
         error_setg(errp, "chardev \"%s\" is not reconnectable",
+                   chr_name);
+        return 1;
+    }
+
+    if (!qemu_chr_has_feature(*chr, QEMU_CHAR_FEATURE_GCONTEXT)) {
+        error_setg(errp, "chardev \"%s\" cannot switch context",
                    chr_name);
         return 1;
     }

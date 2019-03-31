@@ -34,12 +34,11 @@ static int cor_open(BlockDriverState *bs, QDict *options, int flags,
     }
 
     bs->supported_write_flags = BDRV_REQ_WRITE_UNCHANGED |
-                                (BDRV_REQ_FUA &
-                                    bs->file->bs->supported_write_flags);
+        (BDRV_REQ_FUA & bs->file->bs->supported_write_flags);
 
     bs->supported_zero_flags = BDRV_REQ_WRITE_UNCHANGED |
-                               ((BDRV_REQ_FUA | BDRV_REQ_MAY_UNMAP) &
-                                    bs->file->bs->supported_zero_flags);
+        ((BDRV_REQ_FUA | BDRV_REQ_MAY_UNMAP | BDRV_REQ_NO_FALLBACK) &
+            bs->file->bs->supported_zero_flags);
 
     return 0;
 }
@@ -134,7 +133,7 @@ static bool cor_recurse_is_first_non_filter(BlockDriverState *bs,
 }
 
 
-BlockDriver bdrv_copy_on_read = {
+static BlockDriver bdrv_copy_on_read = {
     .format_name                        = "copy-on-read",
 
     .bdrv_open                          = cor_open,

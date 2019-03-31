@@ -563,7 +563,7 @@ static ssize_t filter_receive_iov(NetClientState *nc,
             }
         }
     } else {
-        QTAILQ_FOREACH_REVERSE(nf, &nc->filters, NetFilterHead, next) {
+        QTAILQ_FOREACH_REVERSE(nf, &nc->filters, next) {
             ret = qemu_netfilter_receive(nf, direction, sender, flags, iov,
                                          iovcnt, sent_cb);
             if (ret) {
@@ -668,9 +668,9 @@ ssize_t qemu_send_packet_async(NetClientState *sender,
                                              buf, size, sent_cb);
 }
 
-void qemu_send_packet(NetClientState *nc, const uint8_t *buf, int size)
+ssize_t qemu_send_packet(NetClientState *nc, const uint8_t *buf, int size)
 {
-    qemu_send_packet_async(nc, buf, size, NULL);
+    return qemu_send_packet_async(nc, buf, size, NULL);
 }
 
 ssize_t qemu_send_packet_raw(NetClientState *nc, const uint8_t *buf, int size)
@@ -961,7 +961,7 @@ static int (* const net_client_init_fun[NET_CLIENT_DRIVER__MAX])(
         [NET_CLIENT_DRIVER_BRIDGE]    = net_init_bridge,
 #endif
         [NET_CLIENT_DRIVER_HUBPORT]   = net_init_hubport,
-#ifdef CONFIG_VHOST_NET_USED
+#ifdef CONFIG_VHOST_NET_USER
         [NET_CLIENT_DRIVER_VHOST_USER] = net_init_vhost_user,
 #endif
 #ifdef CONFIG_L2TPV3

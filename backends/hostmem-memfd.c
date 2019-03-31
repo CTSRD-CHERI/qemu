@@ -53,7 +53,7 @@ memfd_backend_memory_alloc(HostMemoryBackend *backend, Error **errp)
         return;
     }
 
-    name = object_get_canonical_path(OBJECT(backend));
+    name = host_memory_backend_get_name(backend);
     memory_region_init_ram_from_fd(&backend->mr, OBJECT(backend),
                                    name, backend->size,
                                    backend->share, fd, errp);
@@ -154,15 +154,13 @@ memfd_backend_class_init(ObjectClass *oc, void *data)
                                               "Huge pages size (ex: 2M, 1G)",
                                               &error_abort);
     }
-    if (qemu_memfd_check(MFD_ALLOW_SEALING)) {
-        object_class_property_add_bool(oc, "seal",
-                                       memfd_backend_get_seal,
-                                       memfd_backend_set_seal,
-                                       &error_abort);
-        object_class_property_set_description(oc, "seal",
-                                              "Seal growing & shrinking",
-                                              &error_abort);
-    }
+    object_class_property_add_bool(oc, "seal",
+                                   memfd_backend_get_seal,
+                                   memfd_backend_set_seal,
+                                   &error_abort);
+    object_class_property_set_description(oc, "seal",
+                                          "Seal growing & shrinking",
+                                          &error_abort);
 }
 
 static const TypeInfo memfd_backend_info = {
@@ -175,7 +173,7 @@ static const TypeInfo memfd_backend_info = {
 
 static void register_types(void)
 {
-    if (qemu_memfd_check(0)) {
+    if (qemu_memfd_check(MFD_ALLOW_SEALING)) {
         type_register_static(&memfd_backend_info);
     }
 }

@@ -122,9 +122,10 @@ static void apic_sync_vapic(APICCommonState *s, int sync_type)
         }
         vapic_state.irr = vector & 0xff;
 
-        cpu_physical_memory_write_rom(&address_space_memory,
-                                      s->vapic_paddr + start,
-                                      ((void *)&vapic_state) + start, length);
+        address_space_write_rom(&address_space_memory,
+                                s->vapic_paddr + start,
+                                MEMTXATTRS_UNSPECIFIED,
+                                ((void *)&vapic_state) + start, length);
     }
 }
 
@@ -441,7 +442,7 @@ static int apic_find_dest(uint8_t dest)
 
     for (i = 0; i < MAX_APICS; i++) {
         apic = local_apics[i];
-	if (apic && apic->id == dest)
+        if (apic && apic->id == dest)
             return i;
         if (!apic)
             break;

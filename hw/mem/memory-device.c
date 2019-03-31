@@ -85,7 +85,8 @@ static void memory_device_check_addable(MachineState *ms, uint64_t size,
 
     /* will we exceed the total amount of memory specified */
     memory_device_used_region_size(OBJECT(ms), &used_region_size);
-    if (used_region_size + size > ms->maxram_size - ms->ram_size) {
+    if (used_region_size + size < used_region_size ||
+        used_region_size + size > ms->maxram_size - ms->ram_size) {
         error_setg(errp, "not enough space, currently 0x%" PRIx64
                    " in use of total space for memory devices 0x" RAM_ADDR_FMT,
                    used_region_size, ms->maxram_size - ms->ram_size);
@@ -99,9 +100,8 @@ static uint64_t memory_device_get_free_addr(MachineState *ms,
                                             uint64_t align, uint64_t size,
                                             Error **errp)
 {
-    uint64_t address_space_start, address_space_end;
     GSList *list = NULL, *item;
-    uint64_t new_addr = 0;
+    Range as, new = range_empty;
 
     if (!ms->device_memory) {
         error_setg(errp, "memory devices (e.g. for memory hotplug) are not "
@@ -114,13 +114,11 @@ static uint64_t memory_device_get_free_addr(MachineState *ms,
                          "enabled, please specify the maxmem option");
         return 0;
     }
-    address_space_start = ms->device_memory->base;
-    address_space_end = address_space_start +
-                        memory_region_size(&ms->device_memory->mr);
-    g_assert(address_space_end >= address_space_start);
+    range_init_nofail(&as, ms->device_memory->base,
+                      memory_region_size(&ms->device_memory->mr));
 
-    /* address_space_start indicates the maximum alignment we expect */
-    if (QEMU_ALIGN_UP(address_space_start, align) != address_space_start) {
+    /* start of address space indicates the maximum alignment we expect */
+    if (!QEMU_IS_ALIGNED(range_lob(&as), align)) {
         error_setg(errp, "the alignment (0x%" PRIx64 ") is not supported",
                    align);
         return 0;
@@ -131,33 +129,31 @@ static uint64_t memory_device_get_free_addr(MachineState *ms,
         return 0;
     }
 
-    if (hint && QEMU_ALIGN_UP(*hint, align) != *hint) {
+    if (hint && !QEMU_IS_ALIGNED(*hint, align)) {
         error_setg(errp, "address must be aligned to 0x%" PRIx64 " bytes",
                    align);
         return 0;
     }
 
-    if (QEMU_ALIGN_UP(size, align) != size) {
+    if (!QEMU_IS_ALIGNED(size, align)) {
         error_setg(errp, "backend memory size must be multiple of 0x%"
                    PRIx64, align);
         return 0;
     }
 
     if (hint) {
-        new_addr = *hint;
-        if (new_addr < address_space_start) {
+        if (range_init(&new, *hint, size) || !range_contains_range(&as, &new)) {
             error_setg(errp, "can't add memory device [0x%" PRIx64 ":0x%" PRIx64
-                       "] before 0x%" PRIx64, new_addr, size,
-                       address_space_start);
-            return 0;
-        } else if ((new_addr + size) > address_space_end) {
-            error_setg(errp, "can't add memory device [0x%" PRIx64 ":0x%" PRIx64
-                       "] beyond 0x%" PRIx64, new_addr, size,
-                       address_space_end);
+                       "], usable range for memory devices [0x%" PRIx64 ":0x%"
+                       PRIx64 "]", *hint, size, range_lob(&as),
+                       range_size(&as));
             return 0;
         }
     } else {
-        new_addr = address_space_start;
+        if (range_init(&new, range_lob(&as), size)) {
+            error_setg(errp, "can't add memory device, device too big");
+            return 0;
+        }
     }
 
     /* find address range that will fit new memory device */
@@ -165,30 +161,36 @@ static uint64_t memory_device_get_free_addr(MachineState *ms,
     for (item = list; item; item = g_slist_next(item)) {
         const MemoryDeviceState *md = item->data;
         const MemoryDeviceClass *mdc = MEMORY_DEVICE_GET_CLASS(OBJECT(md));
-        uint64_t md_size, md_addr;
+        uint64_t next_addr;
+        Range tmp;
 
-        md_addr = mdc->get_addr(md);
-        md_size = memory_device_get_region_size(md, &error_abort);
+        range_init_nofail(&tmp, mdc->get_addr(md),
+                          memory_device_get_region_size(md, &error_abort));
 
-        if (ranges_overlap(md_addr, md_size, new_addr, size)) {
+        if (range_overlaps_range(&tmp, &new)) {
             if (hint) {
                 const DeviceState *d = DEVICE(md);
                 error_setg(errp, "address range conflicts with memory device"
                            " id='%s'", d->id ? d->id : "(unnamed)");
                 goto out;
             }
-            new_addr = QEMU_ALIGN_UP(md_addr + md_size, align);
+
+            next_addr = QEMU_ALIGN_UP(range_upb(&tmp) + 1, align);
+            if (!next_addr || range_init(&new, next_addr, range_size(&new))) {
+                range_make_empty(&new);
+                break;
+            }
         }
     }
 
-    if (new_addr + size > address_space_end) {
+    if (!range_contains_range(&as, &new)) {
         error_setg(errp, "could not find position in guest address space for "
                    "memory device - memory fragmented due to alignments");
         goto out;
     }
 out:
     g_slist_free(list);
-    return new_addr;
+    return range_lob(&new);
 }
 
 MemoryDeviceInfoList *qmp_memory_device_list(void)

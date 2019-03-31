@@ -53,7 +53,6 @@
 #include "hw/ppc/mac.h"
 #include "hw/input/adb.h"
 #include "hw/ppc/mac_dbdma.h"
-#include "hw/timer/m48t59.h"
 #include "hw/pci/pci.h"
 #include "net/net.h"
 #include "sysemu/sysemu.h"
@@ -115,7 +114,7 @@ static void ppc_core99_init(MachineState *machine)
     PowerPCCPU *cpu = NULL;
     CPUPPCState *env = NULL;
     char *filename;
-    qemu_irq **openpic_irqs;
+    IrqLines *openpic_irqs;
     int linux_boot, i, j, k;
     MemoryRegion *ram = g_new(MemoryRegion, 1), *bios = g_new(MemoryRegion, 1);
     hwaddr kernel_base, initrd_base, cmdline_base = 0;
@@ -127,8 +126,7 @@ static void ppc_core99_init(MachineState *machine)
     MACIOIDEState *macio_ide;
     BusState *adb_bus;
     MacIONVRAMState *nvr;
-    int bios_size, ndrv_size;
-    uint8_t *ndrv_file;
+    int bios_size;
     int ppc_boot_device;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     void *fw_cfg;
@@ -166,7 +164,7 @@ static void ppc_core99_init(MachineState *machine)
 
     /* Load OpenBIOS (ELF) */
     if (filename) {
-        bios_size = load_elf(filename, NULL, NULL, NULL,
+        bios_size = load_elf(filename, NULL, NULL, NULL, NULL,
                              NULL, NULL, 1, PPC_ELF_MACHINE, 0, 0);
 
         g_free(filename);
@@ -189,7 +187,8 @@ static void ppc_core99_init(MachineState *machine)
 #endif
         kernel_base = KERNEL_LOAD_ADDR;
 
-        kernel_size = load_elf(kernel_filename, translate_kernel_address, NULL,
+        kernel_size = load_elf(kernel_filename, NULL,
+                               translate_kernel_address, NULL,
                                NULL, &lowaddr, NULL, 1, PPC_ELF_MACHINE,
                                0, 0);
         if (kernel_size < 0)
@@ -249,41 +248,37 @@ static void ppc_core99_init(MachineState *machine)
     memory_region_add_subregion(get_system_memory(), 0xf8000000,
                                 sysbus_mmio_get_region(s, 0));
 
-    openpic_irqs = g_malloc0(smp_cpus * sizeof(qemu_irq *));
-    openpic_irqs[0] =
-        g_malloc0(smp_cpus * sizeof(qemu_irq) * OPENPIC_OUTPUT_NB);
+    openpic_irqs = g_new0(IrqLines, smp_cpus);
     for (i = 0; i < smp_cpus; i++) {
         /* Mac99 IRQ connection between OpenPIC outputs pins
          * and PowerPC input pins
          */
         switch (PPC_INPUT(env)) {
         case PPC_FLAGS_INPUT_6xx:
-            openpic_irqs[i] = openpic_irqs[0] + (i * OPENPIC_OUTPUT_NB);
-            openpic_irqs[i][OPENPIC_OUTPUT_INT] =
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_INT] =
                 ((qemu_irq *)env->irq_inputs)[PPC6xx_INPUT_INT];
-            openpic_irqs[i][OPENPIC_OUTPUT_CINT] =
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_CINT] =
                 ((qemu_irq *)env->irq_inputs)[PPC6xx_INPUT_INT];
-            openpic_irqs[i][OPENPIC_OUTPUT_MCK] =
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_MCK] =
                 ((qemu_irq *)env->irq_inputs)[PPC6xx_INPUT_MCP];
             /* Not connected ? */
-            openpic_irqs[i][OPENPIC_OUTPUT_DEBUG] = NULL;
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_DEBUG] = NULL;
             /* Check this */
-            openpic_irqs[i][OPENPIC_OUTPUT_RESET] =
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_RESET] =
                 ((qemu_irq *)env->irq_inputs)[PPC6xx_INPUT_HRESET];
             break;
 #if defined(TARGET_PPC64)
         case PPC_FLAGS_INPUT_970:
-            openpic_irqs[i] = openpic_irqs[0] + (i * OPENPIC_OUTPUT_NB);
-            openpic_irqs[i][OPENPIC_OUTPUT_INT] =
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_INT] =
                 ((qemu_irq *)env->irq_inputs)[PPC970_INPUT_INT];
-            openpic_irqs[i][OPENPIC_OUTPUT_CINT] =
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_CINT] =
                 ((qemu_irq *)env->irq_inputs)[PPC970_INPUT_INT];
-            openpic_irqs[i][OPENPIC_OUTPUT_MCK] =
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_MCK] =
                 ((qemu_irq *)env->irq_inputs)[PPC970_INPUT_MCP];
             /* Not connected ? */
-            openpic_irqs[i][OPENPIC_OUTPUT_DEBUG] = NULL;
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_DEBUG] = NULL;
             /* Check this */
-            openpic_irqs[i][OPENPIC_OUTPUT_RESET] =
+            openpic_irqs[i].irq[OPENPIC_OUTPUT_RESET] =
                 ((qemu_irq *)env->irq_inputs)[PPC970_INPUT_HRESET];
             break;
 #endif /* defined(TARGET_PPC64) */
@@ -300,7 +295,7 @@ static void ppc_core99_init(MachineState *machine)
     k = 0;
     for (i = 0; i < smp_cpus; i++) {
         for (j = 0; j < OPENPIC_OUTPUT_NB; j++) {
-            sysbus_connect_irq(s, k++, openpic_irqs[i][j]);
+            sysbus_connect_irq(s, k++, openpic_irqs[i].irq[j]);
         }
     }
     g_free(openpic_irqs);
@@ -437,7 +432,7 @@ static void ppc_core99_init(MachineState *machine)
     }
 
     for (i = 0; i < nb_nics; i++) {
-        pci_nic_init_nofail(&nd_table[i], pci_bus, "ne2k_pci", NULL);
+        pci_nic_init_nofail(&nd_table[i], pci_bus, "sungem", NULL);
     }
 
     /* The NewWorld NVRAM is not located in the MacIO device */
@@ -510,11 +505,10 @@ static void ppc_core99_init(MachineState *machine)
     /* MacOS NDRV VGA driver */
     filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, NDRV_VGA_FILENAME);
     if (filename) {
-        ndrv_size = get_image_size(filename);
-        if (ndrv_size != -1) {
-            ndrv_file = g_malloc(ndrv_size);
-            ndrv_size = load_image(filename, ndrv_file);
+        gchar *ndrv_file;
+        gsize ndrv_size;
 
+        if (g_file_get_contents(filename, &ndrv_file, &ndrv_size, NULL)) {
             fw_cfg_add_file(fw_cfg, "ndrv/qemu_vga.ndrv", ndrv_file, ndrv_size);
         }
         g_free(filename);
@@ -553,11 +547,11 @@ static char *core99_fw_dev_path(FWPathProvider *p, BusState *bus,
             return g_strdup("cdrom");
         }
 
-        return g_strdup("hd");
+        return g_strdup("disk");
     }
 
     if (!strcmp(object_get_typename(OBJECT(dev)), "ide-hd")) {
-        return g_strdup("hd");
+        return g_strdup("disk");
     }
 
     if (!strcmp(object_get_typename(OBJECT(dev)), "ide-cd")) {
@@ -570,8 +564,7 @@ static char *core99_fw_dev_path(FWPathProvider *p, BusState *bus,
 
     return NULL;
 }
-
-static int core99_kvm_type(const char *arg)
+static int core99_kvm_type(MachineState *machine, const char *arg)
 {
     /* Always force PR KVM */
     return 2;

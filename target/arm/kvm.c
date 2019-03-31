@@ -18,6 +18,7 @@
 #include "qemu/error-report.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/kvm.h"
+#include "sysemu/kvm_int.h"
 #include "kvm_arm.h"
 #include "cpu.h"
 #include "trace.h"
@@ -162,6 +163,15 @@ void kvm_arm_set_cpu_features_from_host(ARMCPU *cpu)
     env->features = arm_host_cpu_features.features;
 }
 
+int kvm_arm_get_max_vm_ipa_size(MachineState *ms)
+{
+    KVMState *s = KVM_STATE(ms->accelerator);
+    int ret;
+
+    ret = kvm_check_extension(s, KVM_CAP_ARM_VM_IPA_SIZE);
+    return ret > 0 ? ret : 40;
+}
+
 int kvm_arch_init(MachineState *ms, KVMState *s)
 {
     /* For ARM interrupt delivery is always asynchronous,
@@ -206,7 +216,7 @@ typedef struct KVMDevice {
     int dev_fd;
 } KVMDevice;
 
-static QSLIST_HEAD(kvm_devices_head, KVMDevice) kvm_devices_head;
+static QSLIST_HEAD(, KVMDevice) kvm_devices_head;
 
 static void kvm_arm_devlistener_add(MemoryListener *listener,
                                     MemoryRegionSection *section)

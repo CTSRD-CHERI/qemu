@@ -696,7 +696,7 @@ static void virtio_serial_save_device(VirtIODevice *vdev, QEMUFile *f)
         qemu_put_byte(f, port->guest_connected);
         qemu_put_byte(f, port->host_connected);
 
-	elem_popped = 0;
+        elem_popped = 0;
         if (port->elem) {
             elem_popped = 1;
         }
@@ -1052,7 +1052,7 @@ static void virtio_serial_device_realize(DeviceState *dev, Error **errp)
     /* Spawn a new virtio-serial bus on which the ports will ride as devices */
     qbus_create_inplace(&vser->bus, sizeof(vser->bus), TYPE_VIRTIO_SERIAL_BUS,
                         dev, vdev->bus_name);
-    qbus_set_hotplug_handler(BUS(&vser->bus), DEVICE(vser), errp);
+    qbus_set_hotplug_handler(BUS(&vser->bus), OBJECT(vser), errp);
     vser->bus.vser = vser;
     QTAILQ_INIT(&vser->ports);
 

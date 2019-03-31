@@ -646,7 +646,7 @@ void virtqueue_get_avail_bytes(VirtQueue *vq, unsigned int *in_bytes,
         vring_desc_read(vdev, &desc, desc_cache, i);
 
         if (desc.flags & VRING_DESC_F_INDIRECT) {
-            if (desc.len % sizeof(VRingDesc)) {
+            if (!desc.len || (desc.len % sizeof(VRingDesc))) {
                 virtio_error(vdev, "Invalid size for indirect buffer table");
                 goto err;
             }
@@ -796,13 +796,13 @@ static void virtqueue_undo_map_desc(unsigned int out_num, unsigned int in_num,
 }
 
 static void virtqueue_map_iovec(VirtIODevice *vdev, struct iovec *sg,
-                                hwaddr *addr, unsigned int *num_sg,
+                                hwaddr *addr, unsigned int num_sg,
                                 int is_write)
 {
     unsigned int i;
     hwaddr len;
 
-    for (i = 0; i < *num_sg; i++) {
+    for (i = 0; i < num_sg; i++) {
         len = sg[i].iov_len;
         sg[i].iov_base = dma_memory_map(vdev->dma_as,
                                         addr[i], &len, is_write ?
@@ -821,8 +821,8 @@ static void virtqueue_map_iovec(VirtIODevice *vdev, struct iovec *sg,
 
 void virtqueue_map(VirtIODevice *vdev, VirtQueueElement *elem)
 {
-    virtqueue_map_iovec(vdev, elem->in_sg, elem->in_addr, &elem->in_num, 1);
-    virtqueue_map_iovec(vdev, elem->out_sg, elem->out_addr, &elem->out_num, 0);
+    virtqueue_map_iovec(vdev, elem->in_sg, elem->in_addr, elem->in_num, 1);
+    virtqueue_map_iovec(vdev, elem->out_sg, elem->out_addr, elem->out_num, 0);
 }
 
 static void *virtqueue_alloc_element(size_t sz, unsigned out_num, unsigned in_num)
@@ -902,7 +902,7 @@ void *virtqueue_pop(VirtQueue *vq, size_t sz)
     desc_cache = &caches->desc;
     vring_desc_read(vdev, &desc, desc_cache, i);
     if (desc.flags & VRING_DESC_F_INDIRECT) {
-        if (desc.len % sizeof(VRingDesc)) {
+        if (!desc.len || (desc.len % sizeof(VRingDesc))) {
             virtio_error(vdev, "Invalid size for indirect buffer table");
             goto done;
         }
@@ -2034,6 +2034,21 @@ int virtio_set_features(VirtIODevice *vdev, uint64_t val)
         }
     }
     return ret;
+}
+
+size_t virtio_feature_get_config_size(VirtIOFeature *feature_sizes,
+                                      uint64_t host_features)
+{
+    size_t config_size = 0;
+    int i;
+
+    for (i = 0; feature_sizes[i].flags != 0; i++) {
+        if (host_features & feature_sizes[i].flags) {
+            config_size = MAX(feature_sizes[i].end, config_size);
+        }
+    }
+
+    return config_size;
 }
 
 int virtio_load(VirtIODevice *vdev, QEMUFile *f, int version_id)

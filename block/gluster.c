@@ -20,6 +20,10 @@
 #include "qemu/option.h"
 #include "qemu/cutils.h"
 
+#ifdef CONFIG_GLUSTERFS_FTRUNCATE_HAS_STAT
+# define glfs_ftruncate(fd, offset) glfs_ftruncate(fd, offset, NULL, NULL)
+#endif
+
 #define GLUSTER_OPT_FILENAME        "filename"
 #define GLUSTER_OPT_VOLUME          "volume"
 #define GLUSTER_OPT_PATH            "path"
@@ -72,7 +76,7 @@ typedef struct ListElement {
     GlfsPreopened saved;
 } ListElement;
 
-static QLIST_HEAD(glfs_list, ListElement) glfs_list;
+static QLIST_HEAD(, ListElement) glfs_list;
 
 static QemuOptsList qemu_gluster_create_opts = {
     .name = "qemu-gluster-create-opts",
@@ -725,7 +729,11 @@ static struct glfs *qemu_gluster_init(BlockdevOptionsGluster *gconf,
 /*
  * AIO callback routine called from GlusterFS thread.
  */
-static void gluster_finish_aiocb(struct glfs_fd *fd, ssize_t ret, void *arg)
+static void gluster_finish_aiocb(struct glfs_fd *fd, ssize_t ret,
+#ifdef CONFIG_GLUSTERFS_IOCB_HAS_STAT
+                                 struct glfs_stat *pre, struct glfs_stat *post,
+#endif
+                                 void *arg)
 {
     GlusterAIOCB *acb = (GlusterAIOCB *)arg;
 
@@ -1495,6 +1503,21 @@ static int coroutine_fn qemu_gluster_co_block_status(BlockDriverState *bs,
 }
 
 
+static const char *const gluster_strong_open_opts[] = {
+    GLUSTER_OPT_VOLUME,
+    GLUSTER_OPT_PATH,
+    GLUSTER_OPT_TYPE,
+    GLUSTER_OPT_SERVER_PATTERN,
+    GLUSTER_OPT_HOST,
+    GLUSTER_OPT_PORT,
+    GLUSTER_OPT_TO,
+    GLUSTER_OPT_IPV4,
+    GLUSTER_OPT_IPV6,
+    GLUSTER_OPT_SOCKET,
+
+    NULL
+};
+
 static BlockDriver bdrv_gluster = {
     .format_name                  = "gluster",
     .protocol_name                = "gluster",
@@ -1522,6 +1545,7 @@ static BlockDriver bdrv_gluster = {
 #endif
     .bdrv_co_block_status         = qemu_gluster_co_block_status,
     .create_opts                  = &qemu_gluster_create_opts,
+    .strong_runtime_opts          = gluster_strong_open_opts,
 };
 
 static BlockDriver bdrv_gluster_tcp = {
@@ -1551,6 +1575,7 @@ static BlockDriver bdrv_gluster_tcp = {
 #endif
     .bdrv_co_block_status         = qemu_gluster_co_block_status,
     .create_opts                  = &qemu_gluster_create_opts,
+    .strong_runtime_opts          = gluster_strong_open_opts,
 };
 
 static BlockDriver bdrv_gluster_unix = {
@@ -1580,6 +1605,7 @@ static BlockDriver bdrv_gluster_unix = {
 #endif
     .bdrv_co_block_status         = qemu_gluster_co_block_status,
     .create_opts                  = &qemu_gluster_create_opts,
+    .strong_runtime_opts          = gluster_strong_open_opts,
 };
 
 /* rdma is deprecated (actually never supported for volfile fetch).
@@ -1615,6 +1641,7 @@ static BlockDriver bdrv_gluster_rdma = {
 #endif
     .bdrv_co_block_status         = qemu_gluster_co_block_status,
     .create_opts                  = &qemu_gluster_create_opts,
+    .strong_runtime_opts          = gluster_strong_open_opts,
 };
 
 static void bdrv_gluster_init(void)

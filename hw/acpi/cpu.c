@@ -126,6 +126,7 @@ static void cpu_hotplug_wr(void *opaque, hwaddr addr, uint64_t data,
             dev = DEVICE(cdev->cpu);
             hotplug_ctrl = qdev_get_hotplug_handler(dev);
             hotplug_handler_unplug(hotplug_ctrl, dev, NULL);
+            object_unparent(OBJECT(dev));
         }
         break;
     case ACPI_CPU_CMD_OFFSET_WR:
@@ -508,7 +509,7 @@ void build_cpus_aml(Aml *table, MachineState *machine, CPUHotplugFeatures opts,
             GArray *madt_buf = g_array_new(0, 1, 1);
             int arch_id = arch_ids->cpus[i].arch_id;
 
-            if (opts.apci_1_compatible && arch_id < 255) {
+            if (opts.acpi_1_compatible && arch_id < 255) {
                 dev = aml_processor(i, 0, 0, CPU_NAME_FMT, i);
             } else {
                 dev = aml_device(CPU_NAME_FMT, i);

@@ -92,8 +92,9 @@ static int64_t load_kernel(void)
 #else
     big_endian = 0;
 #endif
-    kernel_size = load_elf(loaderparams.kernel_filename, cpu_mips_kseg0_to_phys,
-                           NULL, (uint64_t *)&entry, NULL,
+    kernel_size = load_elf(loaderparams.kernel_filename, NULL,
+                           cpu_mips_kseg0_to_phys, NULL,
+                           (uint64_t *)&entry, NULL,
                            (uint64_t *)&kernel_high, big_endian,
                            EM_MIPS, 1, 0);
     if (kernel_size >= 0) {
@@ -234,12 +235,11 @@ void mips_r4k_init(MachineState *machine)
         load_image_targphys(filename, 0x1fc00000, BIOS_SIZE);
     } else if ((dinfo = drive_get(IF_PFLASH, 0, 0)) != NULL) {
         uint32_t mips_rom = 0x00400000;
-        if (!pflash_cfi01_register(0x1fc00000, NULL, "mips_r4k.bios", mips_rom,
+        if (!pflash_cfi01_register(0x1fc00000, "mips_r4k.bios", mips_rom,
                                    blk_by_legacy_dinfo(dinfo),
-                                   sector_len, mips_rom / sector_len,
-                                   4, 0, 0, 0, 0, be)) {
+                                   sector_len, 4, 0, 0, 0, 0, be)) {
             fprintf(stderr, "qemu: Error registering flash memory.\n");
-	}
+        }
     } else if (!qtest_enabled()) {
         /* not fatal */
         warn_report("could not load MIPS bios '%s'", bios_name);
@@ -285,7 +285,7 @@ void mips_r4k_init(MachineState *machine)
     for(i = 0; i < MAX_IDE_BUS; i++)
         isa_ide_init(isa_bus, ide_iobase[i], ide_iobase2[i], ide_irq[i],
                      hd[MAX_IDE_DEVS * i],
-		     hd[MAX_IDE_DEVS * i + 1]);
+                     hd[MAX_IDE_DEVS * i + 1]);
 
     isa_create_simple(isa_bus, TYPE_I8042);
 }

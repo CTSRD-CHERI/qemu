@@ -6,29 +6,25 @@
  * Authors:
  *  Anthony Liguori   <aliguori@us.ibm.com>
  *
- * This work is licensed under the terms of the GNU GPL, version 2 or later.
- * See the COPYING file in the top-level directory.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- * Portions from gtk-vnc:
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <http://www.gnu.org/licenses/>.
+ *
+ * Portions from gtk-vnc (originally licensed under the LGPL v2+):
  *
  * GTK VNC Widget
  *
  * Copyright (C) 2006  Anthony Liguori <anthony@codemonkey.ws>
  * Copyright (C) 2009-2010 Daniel P. Berrange <dan@berrange.com>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.0 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #define GETTEXT_PACKAGE "qemu"
@@ -122,17 +118,6 @@
 
 #define HOTKEY_MODIFIERS        (GDK_CONTROL_MASK | GDK_MOD1_MASK)
 
-static const int modifier_keycode[] = {
-    Q_KEY_CODE_SHIFT,
-    Q_KEY_CODE_SHIFT_R,
-    Q_KEY_CODE_CTRL,
-    Q_KEY_CODE_CTRL_R,
-    Q_KEY_CODE_ALT,
-    Q_KEY_CODE_ALT_R,
-    Q_KEY_CODE_META_L,
-    Q_KEY_CODE_META_R,
-};
-
 static const guint16 *keycode_map;
 static size_t keycode_maplen;
 
@@ -187,7 +172,6 @@ struct GtkDisplayState {
 
     bool external_pause_update;
 
-    bool modifier_pressed[ARRAY_SIZE(modifier_keycode)];
     bool ignore_keys;
 
     DisplayOptions *opts;
@@ -426,20 +410,12 @@ static void gd_update_full_redraw(VirtualConsole *vc)
 static void gtk_release_modifiers(GtkDisplayState *s)
 {
     VirtualConsole *vc = gd_vc_find_current(s);
-    int i, qcode;
 
     if (vc->type != GD_VC_GFX ||
         !qemu_console_is_graphic(vc->gfx.dcl.con)) {
         return;
     }
-    for (i = 0; i < ARRAY_SIZE(modifier_keycode); i++) {
-        qcode = modifier_keycode[i];
-        if (!s->modifier_pressed[i]) {
-            continue;
-        }
-        qemu_input_event_send_key_qcode(vc->gfx.dcl.con, qcode, false);
-        s->modifier_pressed[i] = false;
-    }
+    qkbd_state_lift_all_keys(vc->gfx.kbd);
 }
 
 static void gd_widget_reparent(GtkWidget *from, GtkWidget *to,
@@ -1004,7 +980,9 @@ static gboolean gd_scroll_event(GtkWidget *widget, GdkEventScroll *scroll,
                                          &delta_x, &delta_y)) {
             return TRUE;
         }
-        if (delta_y > 0) {
+        if (delta_y == 0) {
+            return TRUE;
+        } else if (delta_y > 0) {
             btn = INPUT_BUTTON_WHEEL_DOWN;
         } else {
             btn = INPUT_BUTTON_WHEEL_UP;
@@ -1113,7 +1091,6 @@ static gboolean gd_key_event(GtkWidget *widget, GdkEventKey *key, void *opaque)
     VirtualConsole *vc = opaque;
     GtkDisplayState *s = vc->s;
     int qcode;
-    int i;
 
     if (s->ignore_keys) {
         s->ignore_keys = (key->type == GDK_KEY_PRESS);
@@ -1134,8 +1111,8 @@ static gboolean gd_key_event(GtkWidget *widget, GdkEventKey *key, void *opaque)
         || key->hardware_keycode == VK_PAUSE
 #endif
         ) {
-        qemu_input_event_send_key_qcode(vc->gfx.dcl.con, Q_KEY_CODE_PAUSE,
-                                        key->type == GDK_KEY_PRESS);
+        qkbd_state_key_event(vc->gfx.kbd, Q_KEY_CODE_PAUSE,
+                             key->type == GDK_KEY_PRESS);
         return TRUE;
     }
 
@@ -1144,14 +1121,8 @@ static gboolean gd_key_event(GtkWidget *widget, GdkEventKey *key, void *opaque)
     trace_gd_key_event(vc->label, key->hardware_keycode, qcode,
                        (key->type == GDK_KEY_PRESS) ? "down" : "up");
 
-    for (i = 0; i < ARRAY_SIZE(modifier_keycode); i++) {
-        if (qcode == modifier_keycode[i]) {
-            s->modifier_pressed[i] = (key->type == GDK_KEY_PRESS);
-        }
-    }
-
-    qemu_input_event_send_key_qcode(vc->gfx.dcl.con, qcode,
-                                    key->type == GDK_KEY_PRESS);
+    qkbd_state_key_event(vc->gfx.kbd, qcode,
+                         key->type == GDK_KEY_PRESS);
 
     return TRUE;
 }
@@ -2043,6 +2014,7 @@ static GSList *gd_vc_gfx_init(GtkDisplayState *s, VirtualConsole *vc,
                           GDK_ENTER_NOTIFY_MASK |
                           GDK_LEAVE_NOTIFY_MASK |
                           GDK_SCROLL_MASK |
+                          GDK_SMOOTH_SCROLL_MASK |
                           GDK_KEY_PRESS_MASK);
     gtk_widget_set_can_focus(vc->gfx.drawing_area, TRUE);
 
@@ -2052,6 +2024,7 @@ static GSList *gd_vc_gfx_init(GtkDisplayState *s, VirtualConsole *vc,
     gtk_notebook_append_page(GTK_NOTEBOOK(s->notebook),
                              vc->tab_item, gtk_label_new(vc->label));
 
+    vc->gfx.kbd = qkbd_state_init(con);
     vc->gfx.dcl.con = con;
     register_displaychangelistener(&vc->gfx.dcl);
 
@@ -2214,8 +2187,8 @@ static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
     VirtualConsole *vc;
 
     GtkDisplayState *s = g_malloc0(sizeof(*s));
-    char *filename;
     GdkDisplay *window_display;
+    GtkIconTheme *theme;
 
     if (!gtkinit) {
         fprintf(stderr, "gtk initialization failed\n");
@@ -2223,6 +2196,10 @@ static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
     }
     assert(opts->type == DISPLAY_TYPE_GTK);
     s->opts = opts;
+
+    theme = gtk_icon_theme_get_default();
+    gtk_icon_theme_prepend_search_path(theme, CONFIG_QEMU_ICONDIR);
+    g_set_prgname("qemu");
 
     s->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     s->vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -2248,17 +2225,7 @@ static void gtk_display_init(DisplayState *ds, DisplayOptions *opts)
     qemu_add_mouse_mode_change_notifier(&s->mouse_mode_notifier);
     qemu_add_vm_change_state_handler(gd_change_runstate, s);
 
-    filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, "qemu_logo_no_text.svg");
-    if (filename) {
-        GError *error = NULL;
-        GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(filename, &error);
-        if (pixbuf) {
-            gtk_window_set_icon(GTK_WINDOW(s->window), pixbuf);
-        } else {
-            g_error_free(error);
-        }
-        g_free(filename);
-    }
+    gtk_window_set_icon_name(GTK_WINDOW(s->window), "qemu");
 
     gd_create_menus(s);
 
