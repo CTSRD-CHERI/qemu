@@ -50,16 +50,17 @@
 #           the last job in a transaction.
 #
 # @pending: The job has finished its work, but has finalization steps that it
-#           needs to make prior to completing. These changes may require
-#           manual intervention by the management process if manual was set
-#           to true. These changes may still fail.
+#           needs to make prior to completing. These changes will require
+#           manual intervention via @job-finalize if auto-finalize was set to
+#           false. These pending changes may still fail.
 #
 # @aborting: The job is in the process of being aborted, and will finish with
 #            an error. The job will afterwards report that it is @concluded.
 #            This status may not be visible to the management process.
 #
-# @concluded: The job has finished all work. If manual was set to true, the job
-#             will remain in the query list until it is dismissed.
+# @concluded: The job has finished all work. If auto-dismiss was set to false,
+#             the job will remain in the query list until it is dismissed via
+#             @job-dismiss.
 #
 # @null: The job is in the process of being dismantled. This state should not
 #        ever be visible externally.
@@ -75,19 +76,19 @@
 #
 # Represents command verbs that can be applied to a job.
 #
-# @cancel: see @block-job-cancel
+# @cancel: see @job-cancel
 #
-# @pause: see @block-job-pause
+# @pause: see @job-pause
 #
-# @resume: see @block-job-resume
+# @resume: see @job-resume
 #
 # @set-speed: see @block-job-set-speed
 #
-# @complete: see @block-job-complete
+# @complete: see @job-complete
 #
-# @dismiss: see @block-job-dismiss
+# @dismiss: see @job-dismiss
 #
-# @finalize: see @block-job-finalize
+# @finalize: see @job-finalize
 #
 # Since: 2.12
 ##
@@ -103,7 +104,7 @@
 # @id: The job identifier
 # @status: The new job status
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'event': 'JOB_STATUS_CHANGE',
   'data': { 'id': 'str',
@@ -125,7 +126,7 @@
 #
 # @id: The job identifier.
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'command': 'job-pause', 'data': { 'id': 'str' } }
 
@@ -139,7 +140,7 @@
 #
 # @id : The job identifier.
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'command': 'job-resume', 'data': { 'id': 'str' } }
 
@@ -158,7 +159,7 @@
 #
 # @id: The job identifier.
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'command': 'job-cancel', 'data': { 'id': 'str' } }
 
@@ -170,7 +171,7 @@
 #
 # @id: The job identifier.
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'command': 'job-complete', 'data': { 'id': 'str' } }
 
@@ -186,7 +187,7 @@
 #
 # @id: The job identifier.
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'command': 'job-dismiss', 'data': { 'id': 'str' } }
 
@@ -204,7 +205,7 @@
 # @id: The identifier of any job in the transaction, or of a job that is not
 #      part of any transaction.
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'command': 'job-finalize', 'data': { 'id': 'str' } }
 
@@ -236,7 +237,7 @@
 #                       the reason for the job failure. It should not be parsed
 #                       by applications.
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'struct': 'JobInfo',
   'data': { 'id': 'str', 'type': 'JobType', 'status': 'JobStatus',
@@ -250,6 +251,6 @@
 #
 # Returns: a list with a @JobInfo for each active job
 #
-# Since: 2.13
+# Since: 3.0
 ##
 { 'command': 'query-jobs', 'returns': ['JobInfo'] }

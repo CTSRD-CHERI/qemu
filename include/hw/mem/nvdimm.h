@@ -74,7 +74,7 @@ struct NVDIMMDevice {
      * it's the PMEM region in NVDIMM device, which is presented to
      * guest via ACPI NFIT and _FIT method if NVDIMM hotplug is supported.
      */
-    MemoryRegion nvdimm_mr;
+    MemoryRegion *nvdimm_mr;
 
     /*
      * The 'on' value results in the unarmed flag set in ACPI NFIT,
@@ -138,7 +138,8 @@ struct AcpiNVDIMMState {
     /*
      * Platform capabilities, section 5.2.25.9 of ACPI 6.2 Errata A
      */
-    int32_t capabilities;
+    int32_t persistence;
+    char    *persistence_string;
 };
 typedef struct AcpiNVDIMMState AcpiNVDIMMState;
 

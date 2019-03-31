@@ -12,6 +12,18 @@
 
 static QmpCommandList qmp_commands;
 
+#if defined(TEST_IF_STRUCT) && defined(TEST_IF_CMD)
+UserDefThree *qmp_TestIfCmd(TestIfStruct *foo, Error **errp)
+{
+    return NULL;
+}
+#endif
+
+UserDefThree *qmp_TestCmdReturnDefThree(Error **errp)
+{
+    return NULL;
+}
+
 void qmp_user_def_cmd(Error **errp)
 {
 }
@@ -98,13 +110,13 @@ __org_qemu_x_Union1 *qmp___org_qemu_x_command(__org_qemu_x_EnumList *a,
 static void test_dispatch_cmd(void)
 {
     QDict *req = qdict_new();
-    QObject *resp;
+    QDict *resp;
 
     qdict_put_str(req, "execute", "user_def_cmd");
 
-    resp = qmp_dispatch(&qmp_commands, QOBJECT(req));
+    resp = qmp_dispatch(&qmp_commands, QOBJECT(req), false);
     assert(resp != NULL);
-    assert(!qdict_haskey(qobject_to(QDict, resp), "error"));
+    assert(!qdict_haskey(resp, "error"));
 
     qobject_unref(resp);
     qobject_unref(req);
@@ -115,13 +127,13 @@ static void test_dispatch_cmd_failure(void)
 {
     QDict *req = qdict_new();
     QDict *args = qdict_new();
-    QObject *resp;
+    QDict *resp;
 
     qdict_put_str(req, "execute", "user_def_cmd2");
 
-    resp = qmp_dispatch(&qmp_commands, QOBJECT(req));
+    resp = qmp_dispatch(&qmp_commands, QOBJECT(req), false);
     assert(resp != NULL);
-    assert(qdict_haskey(qobject_to(QDict, resp), "error"));
+    assert(qdict_haskey(resp, "error"));
 
     qobject_unref(resp);
     qobject_unref(req);
@@ -133,9 +145,9 @@ static void test_dispatch_cmd_failure(void)
 
     qdict_put_str(req, "execute", "user_def_cmd");
 
-    resp = qmp_dispatch(&qmp_commands, QOBJECT(req));
+    resp = qmp_dispatch(&qmp_commands, QOBJECT(req), false);
     assert(resp != NULL);
-    assert(qdict_haskey(qobject_to(QDict, resp), "error"));
+    assert(qdict_haskey(resp, "error"));
 
     qobject_unref(resp);
     qobject_unref(req);
@@ -143,18 +155,15 @@ static void test_dispatch_cmd_failure(void)
 
 static QObject *test_qmp_dispatch(QDict *req)
 {
-    QObject *resp_obj;
     QDict *resp;
     QObject *ret;
 
-    resp_obj = qmp_dispatch(&qmp_commands, QOBJECT(req));
-    assert(resp_obj);
-    resp = qobject_to(QDict, resp_obj);
+    resp = qmp_dispatch(&qmp_commands, QOBJECT(req), false);
     assert(resp && !qdict_haskey(resp, "error"));
     ret = qdict_get(resp, "return");
     assert(ret);
     qobject_ref(ret);
-    qobject_unref(resp_obj);
+    qobject_unref(resp);
     return ret;
 }
 

@@ -76,7 +76,7 @@ struct PCMachineState {
 #define PC_MACHINE_VMPORT           "vmport"
 #define PC_MACHINE_SMM              "smm"
 #define PC_MACHINE_NVDIMM           "nvdimm"
-#define PC_MACHINE_NVDIMM_CAP       "nvdimm-cap"
+#define PC_MACHINE_NVDIMM_PERSIST   "nvdimm-persistence"
 #define PC_MACHINE_SMBUS            "smbus"
 #define PC_MACHINE_SATA             "sata"
 #define PC_MACHINE_PIT              "pit"
@@ -153,9 +153,6 @@ int pic_read_irq(DeviceState *d);
 int pic_get_output(DeviceState *d);
 
 /* ioapic.c */
-
-void kvm_ioapic_dump_state(Monitor *mon, const QDict *qdict);
-void ioapic_dump_state(Monitor *mon, const QDict *qdict);
 
 /* Global System Interrupts */
 
@@ -303,11 +300,27 @@ bool e820_get_entry(int, uint32_t, uint64_t *, uint64_t *);
         .driver   = TYPE_X86_CPU,\
         .property = "legacy-cache",\
         .value    = "on",\
+    },{\
+        .driver   = TYPE_X86_CPU,\
+        .property = "topoext",\
+        .value    = "off",\
+    },{\
+        .driver   = "EPYC-" TYPE_X86_CPU,\
+        .property = "xlevel",\
+        .value    = stringify(0x8000000a),\
+    },{\
+        .driver   = "EPYC-IBPB-" TYPE_X86_CPU,\
+        .property = "xlevel",\
+        .value    = stringify(0x8000000a),\
     },
 
 #define PC_COMPAT_2_11 \
     HW_COMPAT_2_11 \
     {\
+        .driver   = TYPE_X86_CPU,\
+        .property = "x-migrate-smi-count",\
+        .value    = "off",\
+    },{\
         .driver   = "Skylake-Server" "-" TYPE_X86_CPU,\
         .property = "clflushopt",\
         .value    = "off",\

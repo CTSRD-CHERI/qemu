@@ -85,6 +85,7 @@ static bool has_msr_hv_hypercall;
 static bool has_msr_hv_crash;
 static bool has_msr_hv_reset;
 static bool has_msr_hv_vpindex;
+static bool hv_vpindex_settable;
 static bool has_msr_hv_runtime;
 static bool has_msr_hv_synic;
 static bool has_msr_hv_stimer;
@@ -160,6 +161,11 @@ bool kvm_enable_x2apic(void)
              kvm_x2apic_api_set_flags(KVM_X2APIC_API_USE_32BIT_IDS |
                                       KVM_X2APIC_API_DISABLE_BROADCAST_QUIRK),
              has_x2apic_api);
+}
+
+bool kvm_hv_vpindex_settable(void)
+{
+    return hv_vpindex_settable;
 }
 
 static int kvm_get_tsc(CPUState *cs)
@@ -366,12 +372,28 @@ uint32_t kvm_arch_get_supported_cpuid(KVMState *s, uint32_t function,
         if (!kvm_irqchip_in_kernel()) {
             ret &= ~CPUID_EXT_X2APIC;
         }
+
+        if (enable_cpu_pm) {
+            int disable_exits = kvm_check_extension(s,
+                                                    KVM_CAP_X86_DISABLE_EXITS);
+
+            if (disable_exits & KVM_X86_DISABLE_EXITS_MWAIT) {
+                ret |= CPUID_EXT_MONITOR;
+            }
+        }
     } else if (function == 6 && reg == R_EAX) {
         ret |= CPUID_6_EAX_ARAT; /* safe to allow because of emulated APIC */
     } else if (function == 7 && index == 0 && reg == R_EBX) {
         if (host_tsx_blacklisted()) {
             ret &= ~(CPUID_7_0_EBX_RTM | CPUID_7_0_EBX_HLE);
         }
+    } else if (function == 0x80000001 && reg == R_ECX) {
+        /*
+         * It's safe to enable TOPOEXT even if it's not returned by
+         * GET_SUPPORTED_CPUID.  Unconditionally enabling TOPOEXT here allows
+         * us to keep CPU models including TOPOEXT runnable on older kernels.
+         */
+        ret |= CPUID_EXT3_TOPOEXT;
     } else if (function == 0x80000001 && reg == R_EDX) {
         /* On Intel, kvm returns cpuid according to the Intel spec,
          * so add missing bits according to the AMD spec:
@@ -585,7 +607,8 @@ static bool hyperv_enabled(X86CPU *cpu)
             cpu->hyperv_runtime ||
             cpu->hyperv_synic ||
             cpu->hyperv_stimer ||
-            cpu->hyperv_reenlightenment);
+            cpu->hyperv_reenlightenment ||
+            cpu->hyperv_tlbflush);
 }
 
 static int kvm_arch_set_tsc_khz(CPUState *cs)
@@ -728,6 +751,37 @@ static int hyperv_handle_properties(CPUState *cs)
     return 0;
 }
 
+static int hyperv_init_vcpu(X86CPU *cpu)
+{
+    if (cpu->hyperv_vpindex && !hv_vpindex_settable) {
+        /*
+         * the kernel doesn't support setting vp_index; assert that its value
+         * is in sync
+         */
+        int ret;
+        struct {
+            struct kvm_msrs info;
+            struct kvm_msr_entry entries[1];
+        } msr_data = {
+            .info.nmsrs = 1,
+            .entries[0].index = HV_X64_MSR_VP_INDEX,
+        };
+
+        ret = kvm_vcpu_ioctl(CPU(cpu), KVM_GET_MSRS, &msr_data);
+        if (ret < 0) {
+            return ret;
+        }
+        assert(ret == 1);
+
+        if (msr_data.entries[0].data != hyperv_vp_index(cpu)) {
+            error_report("kernel's vp_index != QEMU's vp_index");
+            return -ENXIO;
+        }
+    }
+
+    return 0;
+}
+
 static Error *invtsc_mig_blocker;
 
 #define KVM_MAX_CPUID_ENTRIES  100
@@ -823,6 +877,18 @@ int kvm_arch_init_vcpu(CPUState *cs)
         if (cpu->hyperv_vapic) {
             c->eax |= HV_APIC_ACCESS_RECOMMENDED;
         }
+        if (cpu->hyperv_tlbflush) {
+            if (kvm_check_extension(cs->kvm_state,
+                                    KVM_CAP_HYPERV_TLBFLUSH) <= 0) {
+                fprintf(stderr, "Hyper-V TLB flush support "
+                        "(requested by 'hv-tlbflush' cpu flag) "
+                        " is not supported by kernel\n");
+                return -ENOSYS;
+            }
+            c->eax |= HV_REMOTE_TLB_FLUSH_RECOMMENDED;
+            c->eax |= HV_EX_PROCESSOR_MASKS_RECOMMENDED;
+        }
+
         c->ebx = cpu->hyperv_spinlock_attempts;
 
         c = &cpuid_data.entries[cpuid_i++];
@@ -979,9 +1045,32 @@ int kvm_arch_init_vcpu(CPUState *cs)
         }
         c = &cpuid_data.entries[cpuid_i++];
 
-        c->function = i;
-        c->flags = 0;
-        cpu_x86_cpuid(env, i, 0, &c->eax, &c->ebx, &c->ecx, &c->edx);
+        switch (i) {
+        case 0x8000001d:
+            /* Query for all AMD cache information leaves */
+            for (j = 0; ; j++) {
+                c->function = i;
+                c->flags = KVM_CPUID_FLAG_SIGNIFCANT_INDEX;
+                c->index = j;
+                cpu_x86_cpuid(env, i, j, &c->eax, &c->ebx, &c->ecx, &c->edx);
+
+                if (c->eax == 0) {
+                    break;
+                }
+                if (cpuid_i == KVM_MAX_CPUID_ENTRIES) {
+                    fprintf(stderr, "cpuid_data is full, no space for "
+                            "cpuid(eax:0x%x,ecx:0x%x)\n", i, j);
+                    abort();
+                }
+                c = &cpuid_data.entries[cpuid_i++];
+            }
+            break;
+        default:
+            c->function = i;
+            c->flags = 0;
+            cpu_x86_cpuid(env, i, 0, &c->eax, &c->ebx, &c->ecx, &c->edx);
+            break;
+        }
     }
 
     /* Call Centaur's CPUID instructions they are supported. */
@@ -1106,6 +1195,11 @@ int kvm_arch_init_vcpu(CPUState *cs)
 
     if (!(env->features[FEAT_8000_0001_EDX] & CPUID_EXT2_RDTSCP)) {
         has_msr_tsc_aux = false;
+    }
+
+    r = hyperv_init_vcpu(cpu);
+    if (r) {
+        goto fail;
     }
 
     return 0;
@@ -1299,6 +1393,8 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
     has_pit_state2 = kvm_check_extension(s, KVM_CAP_PIT_STATE2);
 #endif
 
+    hv_vpindex_settable = kvm_check_extension(s, KVM_CAP_HYPERV_VP_INDEX);
+
     ret = kvm_get_supported_msrs(s);
     if (ret < 0) {
         return ret;
@@ -1357,6 +1453,29 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
         smram_machine_done.notify = register_smram_listener;
         qemu_add_machine_init_done_notifier(&smram_machine_done);
     }
+
+    if (enable_cpu_pm) {
+        int disable_exits = kvm_check_extension(s, KVM_CAP_X86_DISABLE_EXITS);
+        int ret;
+
+/* Work around for kernel header with a typo. TODO: fix header and drop. */
+#if defined(KVM_X86_DISABLE_EXITS_HTL) && !defined(KVM_X86_DISABLE_EXITS_HLT)
+#define KVM_X86_DISABLE_EXITS_HLT KVM_X86_DISABLE_EXITS_HTL
+#endif
+        if (disable_exits) {
+            disable_exits &= (KVM_X86_DISABLE_EXITS_MWAIT |
+                              KVM_X86_DISABLE_EXITS_HLT |
+                              KVM_X86_DISABLE_EXITS_PAUSE);
+        }
+
+        ret = kvm_vm_enable_cap(s, KVM_CAP_X86_DISABLE_EXITS, 0,
+                                disable_exits);
+        if (ret < 0) {
+            error_report("kvm: guest stopping CPU not supported: %s",
+                         strerror(-ret));
+        }
+    }
+
     return 0;
 }
 
@@ -1503,7 +1622,7 @@ static int kvm_put_fpu(X86CPU *cpu)
 #define XSAVE_PKRU        672
 
 #define XSAVE_BYTE_OFFSET(word_offset) \
-    ((word_offset) * sizeof(((struct kvm_xsave *)0)->region[0]))
+    ((word_offset) * sizeof_field(struct kvm_xsave, region[0]))
 
 #define ASSERT_OFFSET(word_offset, field) \
     QEMU_BUILD_BUG_ON(XSAVE_BYTE_OFFSET(word_offset) != \
@@ -1824,6 +1943,9 @@ static int kvm_put_msrs(X86CPU *cpu, int level)
         }
         if (has_msr_hv_runtime) {
             kvm_msr_entry_add(cpu, HV_X64_MSR_VP_RUNTIME, env->msr_hv_runtime);
+        }
+        if (cpu->hyperv_vpindex && hv_vpindex_settable) {
+            kvm_msr_entry_add(cpu, HV_X64_MSR_VP_INDEX, hyperv_vp_index(cpu));
         }
         if (cpu->hyperv_synic) {
             int j;

@@ -8,6 +8,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "block/qdict.h"
 #include "qapi/qmp/qbool.h"
 #include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qlist.h"
@@ -153,7 +154,7 @@ static void qobject_is_equal_string_test(void)
     str_case = qstring_from_str("Foo");
 
     /* Should yield "foo" */
-    str_built = qstring_from_substr("form", 0, 1);
+    str_built = qstring_from_substr("form", 0, 2);
     qstring_append_chr(str_built, 'o');
 
     check_unequal(str_base, str_whitespace_0, str_whitespace_1,

@@ -2371,7 +2371,7 @@ OP_ST_ATOMIC(scd,st64,ld64,0x7);
 #undef OP_ST_ATOMIC
 
 static void gen_base_offset_addr (DisasContext *ctx, TCGv addr,
-                                  int base, int16_t offset)
+                                  int base, int offset)
 {
     if (base == 0) {
         tcg_gen_movi_tl(addr, offset);
@@ -2399,7 +2399,7 @@ static target_ulong pc_relative_pc (DisasContext *ctx)
 
 /* Load */
 static void gen_ld(DisasContext *ctx, uint32_t opc,
-                   int rt, int base, int16_t offset)
+                   int rt, int base, int offset)
 {
     TCGv t0, t1, t2;
 #if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
@@ -2634,7 +2634,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
 
 /* Store */
 static void gen_st (DisasContext *ctx, uint32_t opc, int rt,
-                    int base, int16_t offset)
+                    int base, int offset)
 {
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
@@ -2751,14 +2751,12 @@ static void gen_st_cond (DisasContext *ctx, uint32_t opc, int rt,
 
 /* Load and store */
 static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
-                          int base, int16_t offset)
+                          TCGv t0)
 {
-    TCGv t0 = tcg_temp_new();
 #if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     TCGv t1 = tcg_temp_new();
 #endif /* defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR) */
 
-    gen_base_offset_addr(ctx, t0, base, offset);
     /* Don't do NOP if destination is zero: we must perform the actual
        memory access. */
     switch (opc) {
@@ -2809,10 +2807,8 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
     default:
         MIPS_INVAL("flt_ldst");
         generate_exception_end(ctx, EXCP_RI);
-        goto out;
+        break;
     }
- out:
-    tcg_temp_free(t0);
 #if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     tcg_temp_free(t1);
 #endif /* defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR) */
@@ -2821,6 +2817,8 @@ static void gen_flt_ldst (DisasContext *ctx, uint32_t opc, int ft,
 static void gen_cop1_ldst(DisasContext *ctx, uint32_t op, int rt,
                           int rs, int16_t imm)
 {
+    TCGv t0 = tcg_temp_new();
+
     if (ctx->CP0_Config1 & (1 << CP0C1_FP)) {
         check_cp1_enabled(ctx);
         switch (op) {
@@ -2829,16 +2827,18 @@ static void gen_cop1_ldst(DisasContext *ctx, uint32_t op, int rt,
             check_insn(ctx, ISA_MIPS2);
             /* Fallthrough */
         default:
-            gen_flt_ldst(ctx, op, rt, rs, imm);
+            gen_base_offset_addr(ctx, t0, rs, imm);
+            gen_flt_ldst(ctx, op, rt, t0);
         }
     } else {
         generate_exception_err(ctx, EXCP_CpU, 1);
     }
+    tcg_temp_free(t0);
 }
 
 /* Arithmetic with immediate operand */
 static void gen_arith_imm(DisasContext *ctx, uint32_t opc,
-                          int rt, int rs, int16_t imm)
+                          int rt, int rs, int imm)
 {
     target_ulong uimm = (target_long)imm; /* Sign extend to 32/64 bits */
 
@@ -21557,6 +21557,11 @@ void cpu_state_reset(CPUMIPSState *env)
         (env->active_fpu.fcr0 & (1 << FCR0_F64))) {
         /* Status.FR = 0 mode in 64-bit FPU not allowed in R6 */
         env->CP0_Status |= (1 << CP0St_FR);
+    }
+
+    if (env->CP0_Config3 & (1 << CP0C3_ISA)) {
+        /*  microMIPS on reset when Config3.ISA == {1, 3} */
+        env->hflags |= MIPS_HFLAG_M16;
     }
 
     /* MSA */

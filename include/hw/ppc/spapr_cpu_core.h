@@ -31,6 +31,7 @@ typedef struct sPAPRCPUCore {
     /*< public >*/
     PowerPCCPU **threads;
     int node_id;
+    bool pre_3_0_migration; /* older machine don't know about sPAPRCPUState */
 } sPAPRCPUCore;
 
 typedef struct sPAPRCPUCoreClass {
@@ -40,5 +41,16 @@ typedef struct sPAPRCPUCoreClass {
 
 const char *spapr_get_cpu_core_type(const char *cpu_type);
 void spapr_cpu_set_entry_state(PowerPCCPU *cpu, target_ulong nip, target_ulong r3);
+
+typedef struct sPAPRCPUState {
+    uint64_t vpa_addr;
+    uint64_t slb_shadow_addr, slb_shadow_size;
+    uint64_t dtl_addr, dtl_size;
+} sPAPRCPUState;
+
+static inline sPAPRCPUState *spapr_cpu_state(PowerPCCPU *cpu)
+{
+    return (sPAPRCPUState *)cpu->machine_data;
+}
 
 #endif

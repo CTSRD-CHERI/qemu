@@ -89,16 +89,6 @@
 { 'command': 'netdev_del', 'data': {'id': 'str'} }
 
 ##
-# @NetdevNoneOptions:
-#
-# Use it alone to have zero network devices.
-#
-# Since: 1.2
-##
-{ 'struct': 'NetdevNoneOptions',
-  'data': { } }
-
-##
 # @NetLegacyNicOptions:
 #
 # Create a new Network Interface Card.
@@ -161,7 +151,7 @@
 #             to the guest
 #
 # @domainname: guest-visible domain name of the virtual nameserver
-#              (since 2.12)
+#              (since 3.0)
 #
 # @ipv6-prefix: IPv6 network prefix (default is fec0::) (since
 #               2.6). The network prefix is given in the usual
@@ -477,7 +467,6 @@
   'base': { 'id': 'str', 'type': 'NetClientDriver' },
   'discriminator': 'type',
   'data': {
-    'none':     'NetdevNoneOptions',
     'nic':      'NetLegacyNicOptions',
     'user':     'NetdevUserOptions',
     'tap':      'NetdevTapOptions',
@@ -530,7 +519,6 @@
   'base': { 'type': 'NetLegacyOptionsType' },
   'discriminator': 'type',
   'data': {
-    'none':     'NetdevNoneOptions',
     'nic':      'NetLegacyNicOptions',
     'user':     'NetdevUserOptions',
     'tap':      'NetdevTapOptions',

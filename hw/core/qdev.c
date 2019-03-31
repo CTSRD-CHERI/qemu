@@ -409,7 +409,7 @@ void qdev_init_gpio_out_named(DeviceState *dev, qemu_irq *pins,
         object_property_add_link(OBJECT(dev), propname, TYPE_IRQ,
                                  (Object **)&pins[i],
                                  object_property_allow_set_link,
-                                 OBJ_PROP_LINK_UNREF_ON_RELEASE,
+                                 OBJ_PROP_LINK_STRONG,
                                  &error_abort);
         g_free(propname);
     }
@@ -867,6 +867,10 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
             device_reset(dev);
         }
         dev->pending_deleted_event = false;
+
+        if (hotplug_ctrl) {
+            hotplug_handler_post_plug(hotplug_ctrl, dev);
+        }
     } else if (!value && dev->realized) {
         Error **local_errp = NULL;
         QLIST_FOREACH(bus, &dev->child_bus, sibling) {

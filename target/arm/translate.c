@@ -1100,7 +1100,14 @@ static inline TCGv gen_aa32_addr(DisasContext *s, TCGv_i32 a32, TCGMemOp op)
 static void gen_aa32_ld_i32(DisasContext *s, TCGv_i32 val, TCGv_i32 a32,
                             int index, TCGMemOp opc)
 {
-    TCGv addr = gen_aa32_addr(s, a32, opc);
+    TCGv addr;
+
+    if (arm_dc_feature(s, ARM_FEATURE_M) &&
+        !arm_dc_feature(s, ARM_FEATURE_M_MAIN)) {
+        opc |= MO_ALIGN;
+    }
+
+    addr = gen_aa32_addr(s, a32, opc);
     tcg_gen_qemu_ld_i32(val, addr, index, opc);
     tcg_temp_free(addr);
 }
@@ -1108,7 +1115,14 @@ static void gen_aa32_ld_i32(DisasContext *s, TCGv_i32 val, TCGv_i32 a32,
 static void gen_aa32_st_i32(DisasContext *s, TCGv_i32 val, TCGv_i32 a32,
                             int index, TCGMemOp opc)
 {
-    TCGv addr = gen_aa32_addr(s, a32, opc);
+    TCGv addr;
+
+    if (arm_dc_feature(s, ARM_FEATURE_M) &&
+        !arm_dc_feature(s, ARM_FEATURE_M_MAIN)) {
+        opc |= MO_ALIGN;
+    }
+
+    addr = gen_aa32_addr(s, a32, opc);
     tcg_gen_qemu_st_i32(val, addr, index, opc);
     tcg_temp_free(addr);
 }
@@ -7748,9 +7762,10 @@ static int disas_neon_data_insn(DisasContext *s, uint32_t insn)
  */
 static int disas_neon_insn_3same_ext(DisasContext *s, uint32_t insn)
 {
-    gen_helper_gvec_3_ptr *fn_gvec_ptr;
-    int rd, rn, rm, rot, size, opr_sz;
-    TCGv_ptr fpst;
+    gen_helper_gvec_3 *fn_gvec = NULL;
+    gen_helper_gvec_3_ptr *fn_gvec_ptr = NULL;
+    int rd, rn, rm, opr_sz;
+    int data = 0;
     bool q;
 
     q = extract32(insn, 6, 1);
@@ -7763,8 +7778,8 @@ static int disas_neon_insn_3same_ext(DisasContext *s, uint32_t insn)
 
     if ((insn & 0xfe200f10) == 0xfc200800) {
         /* VCMLA -- 1111 110R R.1S .... .... 1000 ...0 .... */
-        size = extract32(insn, 20, 1);
-        rot = extract32(insn, 23, 2);
+        int size = extract32(insn, 20, 1);
+        data = extract32(insn, 23, 2); /* rot */
         if (!arm_dc_feature(s, ARM_FEATURE_V8_FCMA)
             || (!size && !arm_dc_feature(s, ARM_FEATURE_V8_FP16))) {
             return 1;
@@ -7772,13 +7787,20 @@ static int disas_neon_insn_3same_ext(DisasContext *s, uint32_t insn)
         fn_gvec_ptr = size ? gen_helper_gvec_fcmlas : gen_helper_gvec_fcmlah;
     } else if ((insn & 0xfea00f10) == 0xfc800800) {
         /* VCADD -- 1111 110R 1.0S .... .... 1000 ...0 .... */
-        size = extract32(insn, 20, 1);
-        rot = extract32(insn, 24, 1);
+        int size = extract32(insn, 20, 1);
+        data = extract32(insn, 24, 1); /* rot */
         if (!arm_dc_feature(s, ARM_FEATURE_V8_FCMA)
             || (!size && !arm_dc_feature(s, ARM_FEATURE_V8_FP16))) {
             return 1;
         }
         fn_gvec_ptr = size ? gen_helper_gvec_fcadds : gen_helper_gvec_fcaddh;
+    } else if ((insn & 0xfeb00f00) == 0xfc200d00) {
+        /* V[US]DOT -- 1111 1100 0.10 .... .... 1101 .Q.U .... */
+        bool u = extract32(insn, 4, 1);
+        if (!arm_dc_feature(s, ARM_FEATURE_V8_DOTPROD)) {
+            return 1;
+        }
+        fn_gvec = u ? gen_helper_gvec_udot_b : gen_helper_gvec_sdot_b;
     } else {
         return 1;
     }
@@ -7793,12 +7815,19 @@ static int disas_neon_insn_3same_ext(DisasContext *s, uint32_t insn)
     }
 
     opr_sz = (1 + q) * 8;
-    fpst = get_fpstatus_ptr(1);
-    tcg_gen_gvec_3_ptr(vfp_reg_offset(1, rd),
-                       vfp_reg_offset(1, rn),
-                       vfp_reg_offset(1, rm), fpst,
-                       opr_sz, opr_sz, rot, fn_gvec_ptr);
-    tcg_temp_free_ptr(fpst);
+    if (fn_gvec_ptr) {
+        TCGv_ptr fpst = get_fpstatus_ptr(1);
+        tcg_gen_gvec_3_ptr(vfp_reg_offset(1, rd),
+                           vfp_reg_offset(1, rn),
+                           vfp_reg_offset(1, rm), fpst,
+                           opr_sz, opr_sz, data, fn_gvec_ptr);
+        tcg_temp_free_ptr(fpst);
+    } else {
+        tcg_gen_gvec_3_ool(vfp_reg_offset(1, rd),
+                           vfp_reg_offset(1, rn),
+                           vfp_reg_offset(1, rm),
+                           opr_sz, opr_sz, data, fn_gvec);
+    }
     return 0;
 }
 
@@ -7812,26 +7841,52 @@ static int disas_neon_insn_3same_ext(DisasContext *s, uint32_t insn)
 
 static int disas_neon_insn_2reg_scalar_ext(DisasContext *s, uint32_t insn)
 {
-    int rd, rn, rm, rot, size, opr_sz;
-    TCGv_ptr fpst;
+    gen_helper_gvec_3 *fn_gvec = NULL;
+    gen_helper_gvec_3_ptr *fn_gvec_ptr = NULL;
+    int rd, rn, rm, opr_sz, data;
     bool q;
 
     q = extract32(insn, 6, 1);
     VFP_DREG_D(rd, insn);
     VFP_DREG_N(rn, insn);
-    VFP_DREG_M(rm, insn);
     if ((rd | rn) & q) {
         return 1;
     }
 
     if ((insn & 0xff000f10) == 0xfe000800) {
         /* VCMLA (indexed) -- 1111 1110 S.RR .... .... 1000 ...0 .... */
-        rot = extract32(insn, 20, 2);
-        size = extract32(insn, 23, 1);
-        if (!arm_dc_feature(s, ARM_FEATURE_V8_FCMA)
-            || (!size && !arm_dc_feature(s, ARM_FEATURE_V8_FP16))) {
+        int rot = extract32(insn, 20, 2);
+        int size = extract32(insn, 23, 1);
+        int index;
+
+        if (!arm_dc_feature(s, ARM_FEATURE_V8_FCMA)) {
             return 1;
         }
+        if (size == 0) {
+            if (!arm_dc_feature(s, ARM_FEATURE_V8_FP16)) {
+                return 1;
+            }
+            /* For fp16, rm is just Vm, and index is M.  */
+            rm = extract32(insn, 0, 4);
+            index = extract32(insn, 5, 1);
+        } else {
+            /* For fp32, rm is the usual M:Vm, and index is 0.  */
+            VFP_DREG_M(rm, insn);
+            index = 0;
+        }
+        data = (index << 2) | rot;
+        fn_gvec_ptr = (size ? gen_helper_gvec_fcmlas_idx
+                       : gen_helper_gvec_fcmlah_idx);
+    } else if ((insn & 0xffb00f00) == 0xfe200d00) {
+        /* V[US]DOT -- 1111 1110 0.10 .... .... 1101 .Q.U .... */
+        int u = extract32(insn, 4, 1);
+        if (!arm_dc_feature(s, ARM_FEATURE_V8_DOTPROD)) {
+            return 1;
+        }
+        fn_gvec = u ? gen_helper_gvec_udot_idx_b : gen_helper_gvec_sdot_idx_b;
+        /* rm is just Vm, and index is M.  */
+        data = extract32(insn, 5, 1); /* index */
+        rm = extract32(insn, 0, 4);
     } else {
         return 1;
     }
@@ -7846,14 +7901,19 @@ static int disas_neon_insn_2reg_scalar_ext(DisasContext *s, uint32_t insn)
     }
 
     opr_sz = (1 + q) * 8;
-    fpst = get_fpstatus_ptr(1);
-    tcg_gen_gvec_3_ptr(vfp_reg_offset(1, rd),
-                       vfp_reg_offset(1, rn),
-                       vfp_reg_offset(1, rm), fpst,
-                       opr_sz, opr_sz, rot,
-                       size ? gen_helper_gvec_fcmlas_idx
-                       : gen_helper_gvec_fcmlah_idx);
-    tcg_temp_free_ptr(fpst);
+    if (fn_gvec_ptr) {
+        TCGv_ptr fpst = get_fpstatus_ptr(1);
+        tcg_gen_gvec_3_ptr(vfp_reg_offset(1, rd),
+                           vfp_reg_offset(1, rn),
+                           vfp_reg_offset(1, rm), fpst,
+                           opr_sz, opr_sz, data, fn_gvec_ptr);
+        tcg_temp_free_ptr(fpst);
+    } else {
+        tcg_gen_gvec_3_ool(vfp_reg_offset(1, rd),
+                           vfp_reg_offset(1, rn),
+                           vfp_reg_offset(1, rm),
+                           opr_sz, opr_sz, data, fn_gvec);
+    }
     return 0;
 }
 
@@ -9965,7 +10025,8 @@ static bool thumb_insn_is_16bit(DisasContext *s, uint32_t insn)
      * end up actually treating this as two 16-bit insns, though,
      * if it's half of a bl/blx pair that might span a page boundary.
      */
-    if (arm_dc_feature(s, ARM_FEATURE_THUMB2)) {
+    if (arm_dc_feature(s, ARM_FEATURE_THUMB2) ||
+        arm_dc_feature(s, ARM_FEATURE_M)) {
         /* Thumb2 cores (including all M profile ones) always treat
          * 32-bit insns as 32-bit.
          */
@@ -10085,10 +10146,38 @@ static void disas_thumb2_insn(DisasContext *s, uint32_t insn)
     int conds;
     int logic_cc;
 
-    /* The only 32 bit insn that's allowed for Thumb1 is the combined
-     * BL/BLX prefix and suffix.
+    /*
+     * ARMv6-M supports a limited subset of Thumb2 instructions.
+     * Other Thumb1 architectures allow only 32-bit
+     * combined BL/BLX prefix and suffix.
      */
-    if ((insn & 0xf800e800) != 0xf000e800) {
+    if (arm_dc_feature(s, ARM_FEATURE_M) &&
+        !arm_dc_feature(s, ARM_FEATURE_V7)) {
+        int i;
+        bool found = false;
+        static const uint32_t armv6m_insn[] = {0xf3808000 /* msr */,
+                                               0xf3b08040 /* dsb */,
+                                               0xf3b08050 /* dmb */,
+                                               0xf3b08060 /* isb */,
+                                               0xf3e08000 /* mrs */,
+                                               0xf000d000 /* bl */};
+        static const uint32_t armv6m_mask[] = {0xffe0d000,
+                                               0xfff0d0f0,
+                                               0xfff0d0f0,
+                                               0xfff0d0f0,
+                                               0xffe0d000,
+                                               0xf800d000};
+
+        for (i = 0; i < ARRAY_SIZE(armv6m_insn); i++) {
+            if ((insn & armv6m_mask[i]) == armv6m_insn[i]) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            goto illegal_op;
+        }
+    } else if ((insn & 0xf800e800) != 0xf000e800)  {
         ARCH(6T2);
     }
 
@@ -11009,7 +11098,10 @@ static void disas_thumb2_insn(DisasContext *s, uint32_t insn)
                         }
                         break;
                     case 3: /* Special control operations.  */
-                        ARCH(7);
+                        if (!arm_dc_feature(s, ARM_FEATURE_V7) &&
+                            !arm_dc_feature(s, ARM_FEATURE_M)) {
+                            goto illegal_op;
+                        }
                         op = (insn >> 4) & 0xf;
                         switch (op) {
                         case 2: /* clrex */

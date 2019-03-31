@@ -906,11 +906,6 @@ static inline abi_long get_errno(abi_long ret)
         return ret;
 }
 
-static inline int is_error(abi_long ret)
-{
-    return (abi_ulong)ret >= (abi_ulong)(-4096);
-}
-
 const char *target_strerror(int err)
 {
     if (err == TARGET_ERESTARTSYS) {
@@ -2527,6 +2522,8 @@ static abi_long host_to_target_data_link_rtattr(struct rtattr *rtattr)
     case QEMU_IFLA_NUM_VF:
     case QEMU_IFLA_GSO_MAX_SEGS:
     case QEMU_IFLA_GSO_MAX_SIZE:
+    case QEMU_IFLA_CARRIER_UP_COUNT:
+    case QEMU_IFLA_CARRIER_DOWN_COUNT:
         u32 = RTA_DATA(rtattr);
         *u32 = tswap32(*u32);
         break;
@@ -3022,6 +3019,8 @@ static abi_long do_setsockopt(int sockfd, int level, int optname,
         case IPV6_V6ONLY:
         case IPV6_RECVPKTINFO:
         case IPV6_UNICAST_HOPS:
+        case IPV6_MULTICAST_HOPS:
+        case IPV6_MULTICAST_LOOP:
         case IPV6_RECVERR:
         case IPV6_RECVHOPLIMIT:
         case IPV6_2292HOPLIMIT:
@@ -3844,6 +3843,8 @@ static abi_long do_sendrecvmsg_locked(int fd, struct target_msghdr *msgp,
     }
     msg.msg_controllen = 2 * tswapal(msgp->msg_controllen);
     msg.msg_control = alloca(msg.msg_controllen);
+    memset(msg.msg_control, 0, msg.msg_controllen);
+
     msg.msg_flags = tswap32(msgp->msg_flags);
 
     count = tswapal(msgp->msg_iovlen);
@@ -6546,63 +6547,97 @@ static int do_fork(CPUArchState *env, unsigned int flags, abi_ulong newsp,
 /* warning : doesn't handle linux specific flags... */
 static int target_to_host_fcntl_cmd(int cmd)
 {
+    int ret;
+
     switch(cmd) {
-	case TARGET_F_DUPFD:
-	case TARGET_F_GETFD:
-	case TARGET_F_SETFD:
-	case TARGET_F_GETFL:
-	case TARGET_F_SETFL:
-            return cmd;
-        case TARGET_F_GETLK:
-            return F_GETLK64;
-        case TARGET_F_SETLK:
-            return F_SETLK64;
-        case TARGET_F_SETLKW:
-            return F_SETLKW64;
-	case TARGET_F_GETOWN:
-	    return F_GETOWN;
-	case TARGET_F_SETOWN:
-	    return F_SETOWN;
-	case TARGET_F_GETSIG:
-	    return F_GETSIG;
-	case TARGET_F_SETSIG:
-	    return F_SETSIG;
+    case TARGET_F_DUPFD:
+    case TARGET_F_GETFD:
+    case TARGET_F_SETFD:
+    case TARGET_F_GETFL:
+    case TARGET_F_SETFL:
+        ret = cmd;
+        break;
+    case TARGET_F_GETLK:
+        ret = F_GETLK64;
+        break;
+    case TARGET_F_SETLK:
+        ret = F_SETLK64;
+        break;
+    case TARGET_F_SETLKW:
+        ret = F_SETLKW64;
+        break;
+    case TARGET_F_GETOWN:
+        ret = F_GETOWN;
+        break;
+    case TARGET_F_SETOWN:
+        ret = F_SETOWN;
+        break;
+    case TARGET_F_GETSIG:
+        ret = F_GETSIG;
+        break;
+    case TARGET_F_SETSIG:
+        ret = F_SETSIG;
+        break;
 #if TARGET_ABI_BITS == 32
-        case TARGET_F_GETLK64:
-	    return F_GETLK64;
-	case TARGET_F_SETLK64:
-	    return F_SETLK64;
-	case TARGET_F_SETLKW64:
-	    return F_SETLKW64;
+    case TARGET_F_GETLK64:
+        ret = F_GETLK64;
+        break;
+    case TARGET_F_SETLK64:
+        ret = F_SETLK64;
+        break;
+    case TARGET_F_SETLKW64:
+        ret = F_SETLKW64;
+        break;
 #endif
-        case TARGET_F_SETLEASE:
-            return F_SETLEASE;
-        case TARGET_F_GETLEASE:
-            return F_GETLEASE;
+    case TARGET_F_SETLEASE:
+        ret = F_SETLEASE;
+        break;
+    case TARGET_F_GETLEASE:
+        ret = F_GETLEASE;
+        break;
 #ifdef F_DUPFD_CLOEXEC
-        case TARGET_F_DUPFD_CLOEXEC:
-            return F_DUPFD_CLOEXEC;
+    case TARGET_F_DUPFD_CLOEXEC:
+        ret = F_DUPFD_CLOEXEC;
+        break;
 #endif
-        case TARGET_F_NOTIFY:
-            return F_NOTIFY;
+    case TARGET_F_NOTIFY:
+        ret = F_NOTIFY;
+        break;
 #ifdef F_GETOWN_EX
-	case TARGET_F_GETOWN_EX:
-	    return F_GETOWN_EX;
+    case TARGET_F_GETOWN_EX:
+        ret = F_GETOWN_EX;
+        break;
 #endif
 #ifdef F_SETOWN_EX
-	case TARGET_F_SETOWN_EX:
-	    return F_SETOWN_EX;
+    case TARGET_F_SETOWN_EX:
+        ret = F_SETOWN_EX;
+        break;
 #endif
 #ifdef F_SETPIPE_SZ
-        case TARGET_F_SETPIPE_SZ:
-            return F_SETPIPE_SZ;
-        case TARGET_F_GETPIPE_SZ:
-            return F_GETPIPE_SZ;
+    case TARGET_F_SETPIPE_SZ:
+        ret = F_SETPIPE_SZ;
+        break;
+    case TARGET_F_GETPIPE_SZ:
+        ret = F_GETPIPE_SZ;
+        break;
 #endif
-	default:
-            return -TARGET_EINVAL;
+    default:
+        ret = -TARGET_EINVAL;
+        break;
     }
-    return -TARGET_EINVAL;
+
+#if defined(__powerpc64__)
+    /* On PPC64, glibc headers has the F_*LK* defined to 12, 13 and 14 and
+     * is not supported by kernel. The glibc fcntl call actually adjusts
+     * them to 5, 6 and 7 before making the syscall(). Since we make the
+     * syscall directly, adjust to what is supported by the kernel.
+     */
+    if (ret >= F_GETLK64 && ret <= F_SETLKW64) {
+        ret -= F_GETLK64 - 5;
+    }
+#endif
+
+    return ret;
 }
 
 #define FLOCK_TRANSTBL \
@@ -8023,10 +8058,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         }
 
         cpu_list_unlock();
-#ifdef TARGET_GPROF
-        _mcleanup();
-#endif
-        gdb_exit(cpu_env, arg1);
+        preexit_cleanup(cpu_env, arg1);
         _exit(arg1);
         ret = 0; /* avoid warning */
         break;
@@ -10132,10 +10164,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 #ifdef __NR_exit_group
         /* new thread calls */
     case TARGET_NR_exit_group:
-#ifdef TARGET_GPROF
-        _mcleanup();
-#endif
-        gdb_exit(cpu_env, arg1);
+        preexit_cleanup(cpu_env, arg1);
         ret = get_errno(exit_group(arg1));
         break;
 #endif
@@ -11737,7 +11766,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
             if (ret) {
                 break;
             }
-            ret = get_errno(fcntl(arg1, cmd, &fl));
+            ret = get_errno(safe_fcntl(arg1, cmd, &fl));
             if (ret == 0) {
                 ret = copyto(arg3, &fl);
             }
@@ -12761,10 +12790,16 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         ret = get_errno(kcmp(arg1, arg2, arg3, arg4, arg5));
         break;
 #endif
+#ifdef TARGET_NR_swapcontext
+    case TARGET_NR_swapcontext:
+        /* PowerPC specific.  */
+        ret = do_swapcontext(cpu_env, arg1, arg2, arg3);
+        break;
+#endif
 
     default:
     unimplemented:
-        gemu_log("qemu: Unsupported syscall: %d\n", num);
+        qemu_log_mask(LOG_UNIMP, "Unsupported syscall: %d\n", num);
 #if defined(TARGET_NR_setxattr) || defined(TARGET_NR_get_thread_area) || defined(TARGET_NR_getdomainname) || defined(TARGET_NR_set_robust_list)
     unimplemented_nowarn:
 #endif

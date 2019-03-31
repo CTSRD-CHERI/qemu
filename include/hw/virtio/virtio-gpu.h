@@ -22,11 +22,6 @@
 
 #include "standard-headers/linux/virtio_gpu.h"
 
-/* Not yet(?) defined in standard-headers, remove when possible */
-#ifndef VIRTIO_GPU_CAPSET_VIRGL2
-#define VIRTIO_GPU_CAPSET_VIRGL2 2
-#endif
-
 #define TYPE_VIRTIO_GPU "virtio-gpu-device"
 #define VIRTIO_GPU(obj)                                        \
         OBJECT_CHECK(VirtIOGPU, (obj), TYPE_VIRTIO_GPU)
@@ -130,6 +125,7 @@ typedef struct VirtIOGPU {
         uint32_t bytes_3d;
     } stats;
 
+    void (*disable_scanout)(struct VirtIOGPU *g, int scanout_id);
     Error *migration_blocker;
 } VirtIOGPU;
 

@@ -77,20 +77,14 @@ const char *get_opt_value(const char *p, char **value)
 
     *value = NULL;
     while (1) {
-        offset = strchr(p, ',');
-        if (!offset) {
-            offset = p + strlen(p);
-        }
-
+        offset = qemu_strchrnul(p, ',');
         length = offset - p;
         if (*offset != '\0' && *(offset + 1) == ',') {
             length++;
         }
-        if (value) {
-            *value = g_renew(char, *value, capacity + length + 1);
-            strncpy(*value + capacity, p, length);
-            (*value)[capacity + length] = '\0';
-        }
+        *value = g_renew(char, *value, capacity + length + 1);
+        strncpy(*value + capacity, p, length);
+        (*value)[capacity + length] = '\0';
         capacity += length;
         if (*offset == '\0' ||
             *(offset + 1) != ',') {
@@ -220,7 +214,6 @@ void qemu_opts_print_help(QemuOptsList *list)
 
     assert(list);
     desc = list->desc;
-    printf("Supported options:\n");
     while (desc && desc->name) {
         printf("%-16s %s\n", desc->name,
                desc->help ? desc->help : "No description available");

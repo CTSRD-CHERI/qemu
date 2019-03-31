@@ -44,6 +44,10 @@ typedef enum ShutdownCause {
                                      turns that into a shutdown */
     SHUTDOWN_CAUSE_GUEST_PANIC,   /* Guest panicked, and command line turns
                                      that into a shutdown */
+    SHUTDOWN_CAUSE_SUBSYSTEM_RESET,/* Partial guest reset that does not trigger
+                                      QMP events and ignores --no-reboot. This
+                                      is useful for sanitize hypercalls on s390
+                                      that are used during kexec/kdump/boot */
     SHUTDOWN_CAUSE__MAX,
 } ShutdownCause;
 
@@ -128,6 +132,7 @@ extern bool boot_strict;
 extern uint8_t *boot_splash_filedata;
 extern size_t boot_splash_filedata_size;
 extern bool enable_mlock;
+extern bool enable_cpu_pm;
 extern uint8_t qemu_extra_params_fw[2];
 extern QEMUClockType rtc_clock;
 extern const char *mem_path;

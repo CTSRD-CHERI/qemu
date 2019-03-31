@@ -24,6 +24,7 @@
 #include "qemu/option.h"
 #include "qemu/sockets.h"
 #include "block/block_int.h"
+#include "block/qdict.h"
 #include "sysemu/block-backend.h"
 #include "qemu/bitops.h"
 #include "qemu/cutils.h"
@@ -538,27 +539,17 @@ static void sd_aio_setup(SheepdogAIOCB *acb, BDRVSheepdogState *s,
 static SocketAddress *sd_server_config(QDict *options, Error **errp)
 {
     QDict *server = NULL;
-    QObject *crumpled_server = NULL;
     Visitor *iv = NULL;
     SocketAddress *saddr = NULL;
     Error *local_err = NULL;
 
     qdict_extract_subqdict(options, &server, "server.");
 
-    crumpled_server = qdict_crumple(server, errp);
-    if (!crumpled_server) {
+    iv = qobject_input_visitor_new_flat_confused(server, errp);
+    if (!iv) {
         goto done;
     }
 
-    /*
-     * FIXME .numeric, .to, .ipv4 or .ipv6 don't work with -drive
-     * server.type=inet.  .to doesn't matter, it's ignored anyway.
-     * That's because when @options come from -blockdev or
-     * blockdev_add, members are typed according to the QAPI schema,
-     * but when they come from -drive, they're all QString.  The
-     * visitor expects the former.
-     */
-    iv = qobject_input_visitor_new(crumpled_server);
     visit_type_SocketAddress(iv, NULL, &saddr, &local_err);
     if (local_err) {
         error_propagate(errp, local_err);
@@ -567,7 +558,6 @@ static SocketAddress *sd_server_config(QDict *options, Error **errp)
 
 done:
     visit_free(iv);
-    qobject_unref(crumpled_server);
     qobject_unref(server);
     return saddr;
 }
@@ -2180,7 +2170,6 @@ static int coroutine_fn sd_co_create_opts(const char *filename, QemuOpts *opts,
 {
     BlockdevCreateOptions *create_options = NULL;
     QDict *qdict, *location_qdict;
-    QObject *crumpled;
     Visitor *v;
     char *redundancy;
     Error *local_err = NULL;
@@ -2216,16 +2205,14 @@ static int coroutine_fn sd_co_create_opts(const char *filename, QemuOpts *opts,
     }
 
     /* Get the QAPI object */
-    crumpled = qdict_crumple(qdict, errp);
-    if (crumpled == NULL) {
+    v = qobject_input_visitor_new_flat_confused(qdict, errp);
+    if (!v) {
         ret = -EINVAL;
         goto fail;
     }
 
-    v = qobject_input_visitor_new_keyval(crumpled);
     visit_type_BlockdevCreateOptions(v, NULL, &create_options, &local_err);
     visit_free(v);
-    qobject_unref(crumpled);
 
     if (local_err) {
         error_propagate(errp, local_err);
@@ -2305,8 +2292,8 @@ static int64_t sd_getlength(BlockDriverState *bs)
     return s->inode.vdi_size;
 }
 
-static int sd_truncate(BlockDriverState *bs, int64_t offset,
-                       PreallocMode prealloc, Error **errp)
+static int coroutine_fn sd_co_truncate(BlockDriverState *bs, int64_t offset,
+                                       PreallocMode prealloc, Error **errp)
 {
     BDRVSheepdogState *s = bs->opaque;
     int ret, fd;
@@ -2622,7 +2609,7 @@ static coroutine_fn int sd_co_writev(BlockDriverState *bs, int64_t sector_num,
 
     assert(!flags);
     if (offset > s->inode.vdi_size) {
-        ret = sd_truncate(bs, offset, PREALLOC_MODE_OFF, NULL);
+        ret = sd_co_truncate(bs, offset, PREALLOC_MODE_OFF, NULL);
         if (ret < 0) {
             return ret;
         }
@@ -3244,7 +3231,7 @@ static BlockDriver bdrv_sheepdog = {
     .bdrv_has_zero_init           = bdrv_has_zero_init_1,
     .bdrv_getlength               = sd_getlength,
     .bdrv_get_allocated_file_size = sd_get_allocated_file_size,
-    .bdrv_truncate                = sd_truncate,
+    .bdrv_co_truncate             = sd_co_truncate,
 
     .bdrv_co_readv                = sd_co_readv,
     .bdrv_co_writev               = sd_co_writev,
@@ -3281,7 +3268,7 @@ static BlockDriver bdrv_sheepdog_tcp = {
     .bdrv_has_zero_init           = bdrv_has_zero_init_1,
     .bdrv_getlength               = sd_getlength,
     .bdrv_get_allocated_file_size = sd_get_allocated_file_size,
-    .bdrv_truncate                = sd_truncate,
+    .bdrv_co_truncate             = sd_co_truncate,
 
     .bdrv_co_readv                = sd_co_readv,
     .bdrv_co_writev               = sd_co_writev,
@@ -3318,7 +3305,7 @@ static BlockDriver bdrv_sheepdog_unix = {
     .bdrv_has_zero_init           = bdrv_has_zero_init_1,
     .bdrv_getlength               = sd_getlength,
     .bdrv_get_allocated_file_size = sd_get_allocated_file_size,
-    .bdrv_truncate                = sd_truncate,
+    .bdrv_co_truncate             = sd_co_truncate,
 
     .bdrv_co_readv                = sd_co_readv,
     .bdrv_co_writev               = sd_co_writev,

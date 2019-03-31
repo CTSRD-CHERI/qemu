@@ -248,107 +248,25 @@ static int kvm_booke206_tlb_init(PowerPCCPU *cpu)
 
 
 #if defined(TARGET_PPC64)
-static void kvm_get_fallback_smmu_info(PowerPCCPU *cpu,
-                                       struct kvm_ppc_smmu_info *info)
+static void kvm_get_smmu_info(struct kvm_ppc_smmu_info *info, Error **errp)
 {
-    CPUPPCState *env = &cpu->env;
-    CPUState *cs = CPU(cpu);
-
-    memset(info, 0, sizeof(*info));
-
-    /* We don't have the new KVM_PPC_GET_SMMU_INFO ioctl, so
-     * need to "guess" what the supported page sizes are.
-     *
-     * For that to work we make a few assumptions:
-     *
-     * - Check whether we are running "PR" KVM which only supports 4K
-     *   and 16M pages, but supports them regardless of the backing
-     *   store characteritics. We also don't support 1T segments.
-     *
-     *   This is safe as if HV KVM ever supports that capability or PR
-     *   KVM grows supports for more page/segment sizes, those versions
-     *   will have implemented KVM_CAP_PPC_GET_SMMU_INFO and thus we
-     *   will not hit this fallback
-     *
-     * - Else we are running HV KVM. This means we only support page
-     *   sizes that fit in the backing store. Additionally we only
-     *   advertize 64K pages if the processor is ARCH 2.06 and we assume
-     *   P7 encodings for the SLB and hash table. Here too, we assume
-     *   support for any newer processor will mean a kernel that
-     *   implements KVM_CAP_PPC_GET_SMMU_INFO and thus doesn't hit
-     *   this fallback.
-     */
-    if (kvmppc_is_pr(cs->kvm_state)) {
-        /* No flags */
-        info->flags = 0;
-        info->slb_size = 64;
-
-        /* Standard 4k base page size segment */
-        info->sps[0].page_shift = 12;
-        info->sps[0].slb_enc = 0;
-        info->sps[0].enc[0].page_shift = 12;
-        info->sps[0].enc[0].pte_enc = 0;
-
-        /* Standard 16M large page size segment */
-        info->sps[1].page_shift = 24;
-        info->sps[1].slb_enc = SLB_VSID_L;
-        info->sps[1].enc[0].page_shift = 24;
-        info->sps[1].enc[0].pte_enc = 0;
-    } else {
-        int i = 0;
-
-        /* HV KVM has backing store size restrictions */
-        info->flags = KVM_PPC_PAGE_SIZES_REAL;
-
-        if (ppc_hash64_has(cpu, PPC_HASH64_1TSEG)) {
-            info->flags |= KVM_PPC_1T_SEGMENTS;
-        }
-
-        if (env->mmu_model == POWERPC_MMU_2_06 ||
-            env->mmu_model == POWERPC_MMU_2_07) {
-            info->slb_size = 32;
-        } else {
-            info->slb_size = 64;
-        }
-
-        /* Standard 4k base page size segment */
-        info->sps[i].page_shift = 12;
-        info->sps[i].slb_enc = 0;
-        info->sps[i].enc[0].page_shift = 12;
-        info->sps[i].enc[0].pte_enc = 0;
-        i++;
-
-        /* 64K on MMU 2.06 and later */
-        if (env->mmu_model == POWERPC_MMU_2_06 ||
-            env->mmu_model == POWERPC_MMU_2_07) {
-            info->sps[i].page_shift = 16;
-            info->sps[i].slb_enc = 0x110;
-            info->sps[i].enc[0].page_shift = 16;
-            info->sps[i].enc[0].pte_enc = 1;
-            i++;
-        }
-
-        /* Standard 16M large page size segment */
-        info->sps[i].page_shift = 24;
-        info->sps[i].slb_enc = SLB_VSID_L;
-        info->sps[i].enc[0].page_shift = 24;
-        info->sps[i].enc[0].pte_enc = 0;
-    }
-}
-
-static void kvm_get_smmu_info(PowerPCCPU *cpu, struct kvm_ppc_smmu_info *info)
-{
-    CPUState *cs = CPU(cpu);
     int ret;
 
-    if (kvm_check_extension(cs->kvm_state, KVM_CAP_PPC_GET_SMMU_INFO)) {
-        ret = kvm_vm_ioctl(cs->kvm_state, KVM_PPC_GET_SMMU_INFO, info);
-        if (ret == 0) {
-            return;
-        }
+    assert(kvm_state != NULL);
+
+    if (!kvm_check_extension(kvm_state, KVM_CAP_PPC_GET_SMMU_INFO)) {
+        error_setg(errp, "KVM doesn't expose the MMU features it supports");
+        error_append_hint(errp, "Consider switching to a newer KVM\n");
+        return;
     }
 
-    kvm_get_fallback_smmu_info(cpu, info);
+    ret = kvm_vm_ioctl(kvm_state, KVM_PPC_GET_SMMU_INFO, info);
+    if (ret == 0) {
+        return;
+    }
+
+    error_setg_errno(errp, -ret,
+                     "KVM failed to provide the MMU features it supports");
 }
 
 struct ppc_radix_page_info *kvm_get_radix_page_info(void)
@@ -406,107 +324,110 @@ target_ulong kvmppc_configure_v3_mmu(PowerPCCPU *cpu,
     }
 }
 
-static bool kvm_valid_page_size(uint32_t flags, long rampgsize, uint32_t shift)
-{
-    if (!(flags & KVM_PPC_PAGE_SIZES_REAL)) {
-        return true;
-    }
-
-    return (1ul << shift) <= rampgsize;
-}
-
-static long max_cpu_page_size;
-
-static void kvm_fixup_page_sizes(PowerPCCPU *cpu)
+bool kvmppc_hpt_needs_host_contiguous_pages(void)
 {
     static struct kvm_ppc_smmu_info smmu_info;
-    static bool has_smmu_info;
-    CPUPPCState *env = &cpu->env;
-    int iq, ik, jq, jk;
 
-    /* We only handle page sizes for 64-bit server guests for now */
-    if (!(env->mmu_model & POWERPC_MMU_64)) {
+    if (!kvm_enabled()) {
+        return false;
+    }
+
+    kvm_get_smmu_info(&smmu_info, &error_fatal);
+    return !!(smmu_info.flags & KVM_PPC_PAGE_SIZES_REAL);
+}
+
+void kvm_check_mmu(PowerPCCPU *cpu, Error **errp)
+{
+    struct kvm_ppc_smmu_info smmu_info;
+    int iq, ik, jq, jk;
+    Error *local_err = NULL;
+
+    /* For now, we only have anything to check on hash64 MMUs */
+    if (!cpu->hash64_opts || !kvm_enabled()) {
         return;
     }
 
-    /* Collect MMU info from kernel if not already */
-    if (!has_smmu_info) {
-        kvm_get_smmu_info(cpu, &smmu_info);
-        has_smmu_info = true;
+    kvm_get_smmu_info(&smmu_info, &local_err);
+    if (local_err) {
+        error_propagate(errp, local_err);
+        return;
     }
 
-    if (!max_cpu_page_size) {
-        max_cpu_page_size = qemu_getrampagesize();
+    if (ppc_hash64_has(cpu, PPC_HASH64_1TSEG)
+        && !(smmu_info.flags & KVM_PPC_1T_SEGMENTS)) {
+        error_setg(errp,
+                   "KVM does not support 1TiB segments which guest expects");
+        return;
     }
 
-    /* Convert to QEMU form */
-    memset(cpu->hash64_opts->sps, 0, sizeof(*cpu->hash64_opts->sps));
-
-    /* If we have HV KVM, we need to forbid CI large pages if our
-     * host page size is smaller than 64K.
-     */
-    if (smmu_info.flags & KVM_PPC_PAGE_SIZES_REAL) {
-        if (getpagesize() >= 0x10000) {
-            cpu->hash64_opts->flags |= PPC_HASH64_CI_LARGEPAGE;
-        } else {
-            cpu->hash64_opts->flags &= ~PPC_HASH64_CI_LARGEPAGE;
-        }
+    if (smmu_info.slb_size < cpu->hash64_opts->slb_size) {
+        error_setg(errp, "KVM only supports %u SLB entries, but guest needs %u",
+                   smmu_info.slb_size, cpu->hash64_opts->slb_size);
+        return;
     }
 
     /*
-     * XXX This loop should be an entry wide AND of the capabilities that
-     *     the selected CPU has with the capabilities that KVM supports.
+     * Verify that every pagesize supported by the cpu model is
+     * supported by KVM with the same encodings
      */
-    for (ik = iq = 0; ik < KVM_PPC_PAGE_SIZES_MAX_SZ; ik++) {
+    for (iq = 0; iq < ARRAY_SIZE(cpu->hash64_opts->sps); iq++) {
         PPCHash64SegmentPageSizes *qsps = &cpu->hash64_opts->sps[iq];
-        struct kvm_ppc_one_seg_page_size *ksps = &smmu_info.sps[ik];
+        struct kvm_ppc_one_seg_page_size *ksps;
 
-        if (!kvm_valid_page_size(smmu_info.flags, max_cpu_page_size,
-                                 ksps->page_shift)) {
-            continue;
-        }
-        qsps->page_shift = ksps->page_shift;
-        qsps->slb_enc = ksps->slb_enc;
-        for (jk = jq = 0; jk < KVM_PPC_PAGE_SIZES_MAX_SZ; jk++) {
-            if (!kvm_valid_page_size(smmu_info.flags, max_cpu_page_size,
-                                     ksps->enc[jk].page_shift)) {
-                continue;
-            }
-            qsps->enc[jq].page_shift = ksps->enc[jk].page_shift;
-            qsps->enc[jq].pte_enc = ksps->enc[jk].pte_enc;
-            if (++jq >= PPC_PAGE_SIZES_MAX_SZ) {
+        for (ik = 0; ik < ARRAY_SIZE(smmu_info.sps); ik++) {
+            if (qsps->page_shift == smmu_info.sps[ik].page_shift) {
                 break;
             }
         }
-        if (++iq >= PPC_PAGE_SIZES_MAX_SZ) {
-            break;
+        if (ik >= ARRAY_SIZE(smmu_info.sps)) {
+            error_setg(errp, "KVM doesn't support for base page shift %u",
+                       qsps->page_shift);
+            return;
+        }
+
+        ksps = &smmu_info.sps[ik];
+        if (ksps->slb_enc != qsps->slb_enc) {
+            error_setg(errp,
+"KVM uses SLB encoding 0x%x for page shift %u, but guest expects 0x%x",
+                       ksps->slb_enc, ksps->page_shift, qsps->slb_enc);
+            return;
+        }
+
+        for (jq = 0; jq < ARRAY_SIZE(qsps->enc); jq++) {
+            for (jk = 0; jk < ARRAY_SIZE(ksps->enc); jk++) {
+                if (qsps->enc[jq].page_shift == ksps->enc[jk].page_shift) {
+                    break;
+                }
+            }
+
+            if (jk >= ARRAY_SIZE(ksps->enc)) {
+                error_setg(errp, "KVM doesn't support page shift %u/%u",
+                           qsps->enc[jq].page_shift, qsps->page_shift);
+                return;
+            }
+            if (qsps->enc[jq].pte_enc != ksps->enc[jk].pte_enc) {
+                error_setg(errp,
+"KVM uses PTE encoding 0x%x for page shift %u/%u, but guest expects 0x%x",
+                           ksps->enc[jk].pte_enc, qsps->enc[jq].page_shift,
+                           qsps->page_shift, qsps->enc[jq].pte_enc);
+                return;
+            }
         }
     }
-    cpu->hash64_opts->slb_size = smmu_info.slb_size;
-    if (!(smmu_info.flags & KVM_PPC_1T_SEGMENTS)) {
-        cpu->hash64_opts->flags &= ~PPC_HASH64_1TSEG;
+
+    if (ppc_hash64_has(cpu, PPC_HASH64_CI_LARGEPAGE)) {
+        /* Mostly what guest pagesizes we can use are related to the
+         * host pages used to map guest RAM, which is handled in the
+         * platform code. Cache-Inhibited largepages (64k) however are
+         * used for I/O, so if they're mapped to the host at all it
+         * will be a normal mapping, not a special hugepage one used
+         * for RAM. */
+        if (getpagesize() < 0x10000) {
+            error_setg(errp,
+                       "KVM can't supply 64kiB CI pages, which guest expects");
+        }
     }
 }
-
-bool kvmppc_is_mem_backend_page_size_ok(const char *obj_path)
-{
-    Object *mem_obj = object_resolve_path(obj_path, NULL);
-    long pagesize = host_memory_backend_pagesize(MEMORY_BACKEND(mem_obj));
-
-    return pagesize >= max_cpu_page_size;
-}
-
-#else /* defined (TARGET_PPC64) */
-
-static inline void kvm_fixup_page_sizes(PowerPCCPU *cpu)
-{
-}
-
-bool kvmppc_is_mem_backend_page_size_ok(const char *obj_path)
-{
-    return true;
-}
-
 #endif /* !defined (TARGET_PPC64) */
 
 unsigned long kvm_arch_vcpu_id(CPUState *cpu)
@@ -551,9 +472,6 @@ int kvm_arch_init_vcpu(CPUState *cs)
     PowerPCCPU *cpu = POWERPC_CPU(cs);
     CPUPPCState *cenv = &cpu->env;
     int ret;
-
-    /* Gather server mmu info from KVM and update the CPU state */
-    kvm_fixup_page_sizes(cpu);
 
     /* Synchronize sregs with kvm */
     ret = kvm_arch_sync_sregs(cpu);
@@ -829,22 +747,22 @@ static int kvm_get_fp(CPUState *cs)
 static int kvm_get_vpa(CPUState *cs)
 {
     PowerPCCPU *cpu = POWERPC_CPU(cs);
-    CPUPPCState *env = &cpu->env;
+    sPAPRCPUState *spapr_cpu = spapr_cpu_state(cpu);
     struct kvm_one_reg reg;
     int ret;
 
     reg.id = KVM_REG_PPC_VPA_ADDR;
-    reg.addr = (uintptr_t)&env->vpa_addr;
+    reg.addr = (uintptr_t)&spapr_cpu->vpa_addr;
     ret = kvm_vcpu_ioctl(cs, KVM_GET_ONE_REG, &reg);
     if (ret < 0) {
         DPRINTF("Unable to get VPA address from KVM: %s\n", strerror(errno));
         return ret;
     }
 
-    assert((uintptr_t)&env->slb_shadow_size
-           == ((uintptr_t)&env->slb_shadow_addr + 8));
+    assert((uintptr_t)&spapr_cpu->slb_shadow_size
+           == ((uintptr_t)&spapr_cpu->slb_shadow_addr + 8));
     reg.id = KVM_REG_PPC_VPA_SLB;
-    reg.addr = (uintptr_t)&env->slb_shadow_addr;
+    reg.addr = (uintptr_t)&spapr_cpu->slb_shadow_addr;
     ret = kvm_vcpu_ioctl(cs, KVM_GET_ONE_REG, &reg);
     if (ret < 0) {
         DPRINTF("Unable to get SLB shadow state from KVM: %s\n",
@@ -852,9 +770,10 @@ static int kvm_get_vpa(CPUState *cs)
         return ret;
     }
 
-    assert((uintptr_t)&env->dtl_size == ((uintptr_t)&env->dtl_addr + 8));
+    assert((uintptr_t)&spapr_cpu->dtl_size
+           == ((uintptr_t)&spapr_cpu->dtl_addr + 8));
     reg.id = KVM_REG_PPC_VPA_DTL;
-    reg.addr = (uintptr_t)&env->dtl_addr;
+    reg.addr = (uintptr_t)&spapr_cpu->dtl_addr;
     ret = kvm_vcpu_ioctl(cs, KVM_GET_ONE_REG, &reg);
     if (ret < 0) {
         DPRINTF("Unable to get dispatch trace log state from KVM: %s\n",
@@ -868,7 +787,7 @@ static int kvm_get_vpa(CPUState *cs)
 static int kvm_put_vpa(CPUState *cs)
 {
     PowerPCCPU *cpu = POWERPC_CPU(cs);
-    CPUPPCState *env = &cpu->env;
+    sPAPRCPUState *spapr_cpu = spapr_cpu_state(cpu);
     struct kvm_one_reg reg;
     int ret;
 
@@ -876,11 +795,12 @@ static int kvm_put_vpa(CPUState *cs)
      * registered.  That means when restoring state, if a VPA *is*
      * registered, we need to set that up first.  If not, we need to
      * deregister the others before deregistering the master VPA */
-    assert(env->vpa_addr || !(env->slb_shadow_addr || env->dtl_addr));
+    assert(spapr_cpu->vpa_addr
+           || !(spapr_cpu->slb_shadow_addr || spapr_cpu->dtl_addr));
 
-    if (env->vpa_addr) {
+    if (spapr_cpu->vpa_addr) {
         reg.id = KVM_REG_PPC_VPA_ADDR;
-        reg.addr = (uintptr_t)&env->vpa_addr;
+        reg.addr = (uintptr_t)&spapr_cpu->vpa_addr;
         ret = kvm_vcpu_ioctl(cs, KVM_SET_ONE_REG, &reg);
         if (ret < 0) {
             DPRINTF("Unable to set VPA address to KVM: %s\n", strerror(errno));
@@ -888,19 +808,20 @@ static int kvm_put_vpa(CPUState *cs)
         }
     }
 
-    assert((uintptr_t)&env->slb_shadow_size
-           == ((uintptr_t)&env->slb_shadow_addr + 8));
+    assert((uintptr_t)&spapr_cpu->slb_shadow_size
+           == ((uintptr_t)&spapr_cpu->slb_shadow_addr + 8));
     reg.id = KVM_REG_PPC_VPA_SLB;
-    reg.addr = (uintptr_t)&env->slb_shadow_addr;
+    reg.addr = (uintptr_t)&spapr_cpu->slb_shadow_addr;
     ret = kvm_vcpu_ioctl(cs, KVM_SET_ONE_REG, &reg);
     if (ret < 0) {
         DPRINTF("Unable to set SLB shadow state to KVM: %s\n", strerror(errno));
         return ret;
     }
 
-    assert((uintptr_t)&env->dtl_size == ((uintptr_t)&env->dtl_addr + 8));
+    assert((uintptr_t)&spapr_cpu->dtl_size
+           == ((uintptr_t)&spapr_cpu->dtl_addr + 8));
     reg.id = KVM_REG_PPC_VPA_DTL;
-    reg.addr = (uintptr_t)&env->dtl_addr;
+    reg.addr = (uintptr_t)&spapr_cpu->dtl_addr;
     ret = kvm_vcpu_ioctl(cs, KVM_SET_ONE_REG, &reg);
     if (ret < 0) {
         DPRINTF("Unable to set dispatch trace log state to KVM: %s\n",
@@ -908,9 +829,9 @@ static int kvm_put_vpa(CPUState *cs)
         return ret;
     }
 
-    if (!env->vpa_addr) {
+    if (!spapr_cpu->vpa_addr) {
         reg.id = KVM_REG_PPC_VPA_ADDR;
-        reg.addr = (uintptr_t)&env->vpa_addr;
+        reg.addr = (uintptr_t)&spapr_cpu->vpa_addr;
         ret = kvm_vcpu_ioctl(cs, KVM_SET_ONE_REG, &reg);
         if (ret < 0) {
             DPRINTF("Unable to set VPA address to KVM: %s\n", strerror(errno));
@@ -2169,7 +2090,7 @@ uint64_t kvmppc_rma_size(uint64_t current_size, unsigned int hash_shift)
 
     /* Find the largest hardware supported page size that's less than
      * or equal to the (logical) backing page size of guest RAM */
-    kvm_get_smmu_info(POWERPC_CPU(first_cpu), &info);
+    kvm_get_smmu_info(&info, &error_fatal);
     rampagesize = qemu_getrampagesize();
     best_page_shift = 0;
 
@@ -2412,6 +2333,58 @@ bool kvmppc_has_cap_mmu_hash_v3(void)
     return cap_mmu_hash_v3;
 }
 
+static bool kvmppc_power8_host(void)
+{
+    bool ret = false;
+#ifdef TARGET_PPC64
+    {
+        uint32_t base_pvr = CPU_POWERPC_POWER_SERVER_MASK & mfpvr();
+        ret = (base_pvr == CPU_POWERPC_POWER8E_BASE) ||
+              (base_pvr == CPU_POWERPC_POWER8NVL_BASE) ||
+              (base_pvr == CPU_POWERPC_POWER8_BASE);
+    }
+#endif /* TARGET_PPC64 */
+    return ret;
+}
+
+static int parse_cap_ppc_safe_cache(struct kvm_ppc_cpu_char c)
+{
+    bool l1d_thread_priv_req = !kvmppc_power8_host();
+
+    if (~c.behaviour & c.behaviour_mask & H_CPU_BEHAV_L1D_FLUSH_PR) {
+        return 2;
+    } else if ((!l1d_thread_priv_req ||
+                c.character & c.character_mask & H_CPU_CHAR_L1D_THREAD_PRIV) &&
+               (c.character & c.character_mask
+                & (H_CPU_CHAR_L1D_FLUSH_ORI30 | H_CPU_CHAR_L1D_FLUSH_TRIG2))) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static int parse_cap_ppc_safe_bounds_check(struct kvm_ppc_cpu_char c)
+{
+    if (~c.behaviour & c.behaviour_mask & H_CPU_BEHAV_BNDS_CHK_SPEC_BAR) {
+        return 2;
+    } else if (c.character & c.character_mask & H_CPU_CHAR_SPEC_BAR_ORI31) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static int parse_cap_ppc_safe_indirect_branch(struct kvm_ppc_cpu_char c)
+{
+    if (c.character & c.character_mask & H_CPU_CHAR_CACHE_COUNT_DIS) {
+        return  SPAPR_CAP_FIXED_CCD;
+    } else if (c.character & c.character_mask & H_CPU_CHAR_BCCTRL_SERIALISED) {
+        return SPAPR_CAP_FIXED_IBS;
+    }
+
+    return 0;
+}
+
 static void kvmppc_get_cpu_characteristics(KVMState *s)
 {
     struct kvm_ppc_cpu_char c;
@@ -2430,26 +2403,10 @@ static void kvmppc_get_cpu_characteristics(KVMState *s)
     if (ret < 0) {
         return;
     }
-    /* Parse and set cap_ppc_safe_cache */
-    if (~c.behaviour & c.behaviour_mask & H_CPU_BEHAV_L1D_FLUSH_PR) {
-        cap_ppc_safe_cache = 2;
-    } else if ((c.character & c.character_mask & H_CPU_CHAR_L1D_THREAD_PRIV) &&
-               (c.character & c.character_mask
-                & (H_CPU_CHAR_L1D_FLUSH_ORI30 | H_CPU_CHAR_L1D_FLUSH_TRIG2))) {
-        cap_ppc_safe_cache = 1;
-    }
-    /* Parse and set cap_ppc_safe_bounds_check */
-    if (~c.behaviour & c.behaviour_mask & H_CPU_BEHAV_BNDS_CHK_SPEC_BAR) {
-        cap_ppc_safe_bounds_check = 2;
-    } else if (c.character & c.character_mask & H_CPU_CHAR_SPEC_BAR_ORI31) {
-        cap_ppc_safe_bounds_check = 1;
-    }
-    /* Parse and set cap_ppc_safe_indirect_branch */
-    if (c.character & c.character_mask & H_CPU_CHAR_CACHE_COUNT_DIS) {
-        cap_ppc_safe_indirect_branch = SPAPR_CAP_FIXED_CCD;
-    } else if (c.character & c.character_mask & H_CPU_CHAR_BCCTRL_SERIALISED) {
-        cap_ppc_safe_indirect_branch = SPAPR_CAP_FIXED_IBS;
-    }
+
+    cap_ppc_safe_cache = parse_cap_ppc_safe_cache(c);
+    cap_ppc_safe_bounds_check = parse_cap_ppc_safe_bounds_check(c);
+    cap_ppc_safe_indirect_branch = parse_cap_ppc_safe_indirect_branch(c);
 }
 
 int kvmppc_get_cap_safe_cache(void)

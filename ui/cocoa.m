@@ -637,6 +637,7 @@ QemuCocoaView *cocoaView;
     int buttons = 0;
     int keycode = 0;
     bool mouse_event = false;
+    static bool switched_to_fullscreen = false;
     NSPoint p = [event locationInWindow];
 
     switch ([event type]) {
@@ -681,7 +682,11 @@ QemuCocoaView *cocoaView;
                     keycode == Q_KEY_CODE_NUM_LOCK) {
                     [self toggleStatefulModifier:keycode];
                 } else if (qemu_console_is_graphic(NULL)) {
-                  [self toggleModifier:keycode];
+                    if (switched_to_fullscreen) {
+                        switched_to_fullscreen = false;
+                    } else {
+                        [self toggleModifier:keycode];
+                    }
                 }
             }
 
@@ -691,6 +696,13 @@ QemuCocoaView *cocoaView;
 
             // forward command key combos to the host UI unless the mouse is grabbed
             if (!isMouseGrabbed && ([event modifierFlags] & NSEventModifierFlagCommand)) {
+                /*
+                 * Prevent the command key from being stuck down in the guest
+                 * when using Command-F to switch to full screen mode.
+                 */
+                if (keycode == Q_KEY_CODE_F) {
+                    switched_to_fullscreen = true;
+                }
                 [NSApp sendEvent:event];
                 return;
             }
@@ -802,14 +814,20 @@ QemuCocoaView *cocoaView;
              * This is in-line with standard Mac OS X UI behaviour.
              */
 
+            /*
+             * When deltaY is zero, it means that this scrolling event was
+             * either horizontal, or so fine that it only appears in
+             * scrollingDeltaY. So we drop the event.
+             */
+            if ([event deltaY] != 0) {
             /* Determine if this is a scroll up or scroll down event */
-            buttons = ([event scrollingDeltaY] > 0) ?
-                INPUT_BUTTON_WHEEL_UP : INPUT_BUTTON_WHEEL_DOWN;
-            qemu_input_queue_btn(dcl->con, buttons, true);
-            qemu_input_event_sync();
-            qemu_input_queue_btn(dcl->con, buttons, false);
-            qemu_input_event_sync();
-
+                buttons = ([event deltaY] > 0) ?
+                    INPUT_BUTTON_WHEEL_UP : INPUT_BUTTON_WHEEL_DOWN;
+                qemu_input_queue_btn(dcl->con, buttons, true);
+                qemu_input_event_sync();
+                qemu_input_queue_btn(dcl->con, buttons, false);
+                qemu_input_event_sync();
+            }
             /*
              * Since deltaY also reports scroll wheel events we prevent mouse
              * movement code from executing.

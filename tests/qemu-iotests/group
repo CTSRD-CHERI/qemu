@@ -157,6 +157,7 @@
 148 rw auto quick
 149 rw auto sudo
 150 rw auto quick
+151 rw auto
 152 rw auto quick
 153 rw auto quick
 154 rw auto backing quick
@@ -215,5 +216,12 @@
 214 rw auto
 215 rw auto quick
 216 rw auto quick
+217 rw auto quick
 218 rw auto quick
 219 rw auto
+221 rw auto quick
+222 rw auto quick
+223 rw auto quick
+225 rw auto quick
+226 auto quick
+227 auto quick

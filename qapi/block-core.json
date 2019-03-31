@@ -52,8 +52,7 @@
 { 'union': 'ImageInfoSpecificQCow2Encryption',
   'base': 'ImageInfoSpecificQCow2EncryptionBase',
   'discriminator': 'format',
-  'data': { 'aes': 'QCryptoBlockInfoQCow',
-            'luks': 'QCryptoBlockInfoLUKS' } }
+  'data': { 'luks': 'QCryptoBlockInfoLUKS' } }
 
 ##
 # @ImageInfoSpecificQCow2:
@@ -867,6 +866,9 @@
 #
 # @node-name: The node name of the device. (Since 2.3)
 #
+# @qdev: The qdev ID, or if no ID is assigned, the QOM path of the block
+#        device. (since 3.0)
+#
 # @stats:  A @BlockDeviceStats for the device.
 #
 # @parent: This describes the file block device if it has one.
@@ -880,7 +882,7 @@
 # Since: 0.14.0
 ##
 { 'struct': 'BlockStats',
-  'data': {'*device': 'str', '*node-name': 'str',
+  'data': {'*device': 'str', '*qdev': 'str', '*node-name': 'str',
            'stats': 'BlockDeviceStats',
            '*parent': 'BlockStats',
            '*backing': 'BlockStats'} }
@@ -942,7 +944,8 @@
 #                "idle_time_ns":2953431879,
 #                "account_invalid":true,
 #                "account_failed":false
-#             }
+#             },
+#             "qdev": "/machine/unattached/device[23]"
 #          },
 #          {
 #             "device":"ide1-cd0",
@@ -960,7 +963,8 @@
 #                "wr_merged":0,
 #                "account_invalid":false,
 #                "account_failed":false
-#             }
+#             },
+#             "qdev": "/machine/unattached/device[24]"
 #          },
 #          {
 #             "device":"floppy0",
@@ -978,7 +982,8 @@
 #                "wr_merged":0,
 #                "account_invalid":false,
 #                "account_failed":false
-#             }
+#             },
+#             "qdev": "/machine/unattached/device[16]"
 #          },
 #          {
 #             "device":"sd0",
@@ -1049,6 +1054,24 @@
 ##
 { 'enum': 'MirrorSyncMode',
   'data': ['top', 'full', 'none', 'incremental'] }
+
+##
+# @MirrorCopyMode:
+#
+# An enumeration whose values tell the mirror block job when to
+# trigger writes to the target.
+#
+# @background: copy data in background only.
+#
+# @write-blocking: when data is written to the source, write it
+#                  (synchronously) to the target as well.  In
+#                  addition, data is copied in background just like in
+#                  @background mode.
+#
+# Since: 3.0
+##
+{ 'enum': 'MirrorCopyMode',
+  'data': ['background', 'write-blocking'] }
 
 ##
 # @BlockJobInfo:
@@ -1692,6 +1715,9 @@
 #         written. Both will result in identical contents.
 #         Default is true. (Since 2.4)
 #
+# @copy-mode: when to copy data to the destination; defaults to 'background'
+#             (Since: 3.0)
+#
 # Since: 1.3
 ##
 { 'struct': 'DriveMirror',
@@ -1701,7 +1727,7 @@
             '*speed': 'int', '*granularity': 'uint32',
             '*buf-size': 'int', '*on-source-error': 'BlockdevOnError',
             '*on-target-error': 'BlockdevOnError',
-            '*unmap': 'bool' } }
+            '*unmap': 'bool', '*copy-mode': 'MirrorCopyMode' } }
 
 ##
 # @BlockDirtyBitmap:
@@ -1734,11 +1760,29 @@
 #            Currently, all dirty tracking bitmaps are loaded from Qcow2 on
 #            open.
 #
+# @x-disabled: the bitmap is created in the disabled state, which means that
+#              it will not track drive changes. The bitmap may be enabled with
+#              x-block-dirty-bitmap-enable. Default is false. (Since: 3.0)
+#
 # Since: 2.4
 ##
 { 'struct': 'BlockDirtyBitmapAdd',
   'data': { 'node': 'str', 'name': 'str', '*granularity': 'uint32',
-            '*persistent': 'bool', '*autoload': 'bool' } }
+            '*persistent': 'bool', '*autoload': 'bool', '*x-disabled': 'bool' } }
+
+##
+# @BlockDirtyBitmapMerge:
+#
+# @node: name of device/node which the bitmap is tracking
+#
+# @dst_name: name of the destination dirty bitmap
+#
+# @src_name: name of the source dirty bitmap
+#
+# Since: 3.0
+##
+{ 'struct': 'BlockDirtyBitmapMerge',
+  'data': { 'node': 'str', 'dst_name': 'str', 'src_name': 'str' } }
 
 ##
 # @block-dirty-bitmap-add:
@@ -1807,6 +1851,72 @@
 ##
 { 'command': 'block-dirty-bitmap-clear',
   'data': 'BlockDirtyBitmap' }
+
+##
+# @x-block-dirty-bitmap-enable:
+#
+# Enables a dirty bitmap so that it will begin tracking disk changes.
+#
+# Returns: nothing on success
+#          If @node is not a valid block device, DeviceNotFound
+#          If @name is not found, GenericError with an explanation
+#
+# Since: 3.0
+#
+# Example:
+#
+# -> { "execute": "x-block-dirty-bitmap-enable",
+#      "arguments": { "node": "drive0", "name": "bitmap0" } }
+# <- { "return": {} }
+#
+##
+  { 'command': 'x-block-dirty-bitmap-enable',
+    'data': 'BlockDirtyBitmap' }
+
+##
+# @x-block-dirty-bitmap-disable:
+#
+# Disables a dirty bitmap so that it will stop tracking disk changes.
+#
+# Returns: nothing on success
+#          If @node is not a valid block device, DeviceNotFound
+#          If @name is not found, GenericError with an explanation
+#
+# Since: 3.0
+#
+# Example:
+#
+# -> { "execute": "x-block-dirty-bitmap-disable",
+#      "arguments": { "node": "drive0", "name": "bitmap0" } }
+# <- { "return": {} }
+#
+##
+    { 'command': 'x-block-dirty-bitmap-disable',
+      'data': 'BlockDirtyBitmap' }
+
+##
+# @x-block-dirty-bitmap-merge:
+#
+# Merge @src_name dirty bitmap to @dst_name dirty bitmap. @src_name dirty
+# bitmap is unchanged. On error, @dst_name is unchanged.
+#
+# Returns: nothing on success
+#          If @node is not a valid block device, DeviceNotFound
+#          If @dst_name or @src_name is not found, GenericError
+#          If bitmaps has different sizes or granularities, GenericError
+#
+# Since: 3.0
+#
+# Example:
+#
+# -> { "execute": "x-block-dirty-bitmap-merge",
+#      "arguments": { "node": "drive0", "dst_name": "bitmap0",
+#                     "src_name": "bitmap1" } }
+# <- { "return": {} }
+#
+##
+      { 'command': 'x-block-dirty-bitmap-merge',
+        'data': 'BlockDirtyBitmapMerge' }
 
 ##
 # @BlockDirtyBitmapSha256:
@@ -1880,6 +1990,9 @@
 #                    above @device. If this option is not given, a node name is
 #                    autogenerated. (Since: 2.9)
 #
+# @copy-mode: when to copy data to the destination; defaults to 'background'
+#             (Since: 3.0)
+#
 # Returns: nothing on success.
 #
 # Since: 2.6
@@ -1900,7 +2013,8 @@
             '*speed': 'int', '*granularity': 'uint32',
             '*buf-size': 'int', '*on-source-error': 'BlockdevOnError',
             '*on-target-error': 'BlockdevOnError',
-            '*filter-node-name': 'str' } }
+            '*filter-node-name': 'str',
+            '*copy-mode': 'MirrorCopyMode' } }
 
 ##
 # @block_set_io_throttle:
@@ -2425,16 +2539,17 @@
 # @throttle: Since 2.11
 # @nvme: Since 2.12
 # @copy-on-read: Since 3.0
+# @blklogwrites: Since 3.0
 #
 # Since: 2.9
 ##
 { 'enum': 'BlockdevDriver',
-  'data': [ 'blkdebug', 'blkverify', 'bochs', 'cloop', 'copy-on-read',
-            'dmg', 'file', 'ftp', 'ftps', 'gluster', 'host_cdrom',
-            'host_device', 'http', 'https', 'iscsi', 'luks', 'nbd', 'nfs',
-            'null-aio', 'null-co', 'nvme', 'parallels', 'qcow', 'qcow2', 'qed',
-            'quorum', 'raw', 'rbd', 'replication', 'sheepdog', 'ssh',
-            'throttle', 'vdi', 'vhdx', 'vmdk', 'vpc', 'vvfat', 'vxhs' ] }
+  'data': [ 'blkdebug', 'blklogwrites', 'blkverify', 'bochs', 'cloop',
+            'copy-on-read', 'dmg', 'file', 'ftp', 'ftps', 'gluster',
+            'host_cdrom', 'host_device', 'http', 'https', 'iscsi', 'luks',
+            'nbd', 'nfs', 'null-aio', 'null-co', 'nvme', 'parallels', 'qcow',
+            'qcow2', 'qed', 'quorum', 'raw', 'rbd', 'replication', 'sheepdog',
+            'ssh', 'throttle', 'vdi', 'vhdx', 'vmdk', 'vpc', 'vvfat', 'vxhs' ] }
 
 ##
 # @BlockdevOptionsFile:
@@ -2587,18 +2702,21 @@
 # @template: Specifies a template mode which can be adjusted using the other
 #            flags, defaults to 'cached'
 #
+# @bitmap-directory: since 3.0
+#
 # Since: 2.9
 ##
 { 'struct': 'Qcow2OverlapCheckFlags',
-  'data': { '*template':       'Qcow2OverlapCheckMode',
-            '*main-header':    'bool',
-            '*active-l1':      'bool',
-            '*active-l2':      'bool',
-            '*refcount-table': 'bool',
-            '*refcount-block': 'bool',
-            '*snapshot-table': 'bool',
-            '*inactive-l1':    'bool',
-            '*inactive-l2':    'bool' } }
+  'data': { '*template':         'Qcow2OverlapCheckMode',
+            '*main-header':      'bool',
+            '*active-l1':        'bool',
+            '*active-l2':        'bool',
+            '*refcount-table':   'bool',
+            '*refcount-block':   'bool',
+            '*snapshot-table':   'bool',
+            '*inactive-l1':      'bool',
+            '*inactive-l2':      'bool',
+            '*bitmap-directory': 'bool' } }
 
 ##
 # @Qcow2OverlapChecks:
@@ -2769,16 +2887,6 @@
             'hash': 'str' }}
 
 ##
-# @SshHostKeyDummy:
-#
-# For those union branches that don't need additional fields.
-#
-# Since: 2.12
-##
-{ 'struct': 'SshHostKeyDummy',
-  'data': {} }
-
-##
 # @SshHostKeyCheck:
 #
 # Since: 2.12
@@ -2786,9 +2894,7 @@
 { 'union': 'SshHostKeyCheck',
   'base': { 'mode': 'SshHostKeyCheckMode' },
   'discriminator': 'mode',
-  'data': { 'none': 'SshHostKeyDummy',
-            'hash': 'SshHostKeyHash',
-            'known_hosts': 'SshHostKeyDummy' } }
+  'data': { 'hash': 'SshHostKeyHash' } }
 
 ##
 # @BlockdevOptionsSsh:
@@ -2949,6 +3055,32 @@
             '*set-state': ['BlkdebugSetStateOptions'] } }
 
 ##
+# @BlockdevOptionsBlklogwrites:
+#
+# Driver specific block device options for blklogwrites.
+#
+# @file:            block device
+#
+# @log:             block device used to log writes to @file
+#
+# @log-sector-size: sector size used in logging writes to @file, determines
+#                   granularity of offsets and sizes of writes (default: 512)
+#
+# @log-append:      append to an existing log (default: false)
+#
+# @log-super-update-interval: interval of write requests after which the log
+#                             super block is updated to disk (default: 4096)
+#
+# Since: 3.0
+##
+{ 'struct': 'BlockdevOptionsBlklogwrites',
+  'data': { 'file': 'BlockdevRef',
+            'log': 'BlockdevRef',
+            '*log-sector-size': 'uint32',
+            '*log-append': 'bool',
+            '*log-super-update-interval': 'uint64' } }
+
+##
 # @BlockdevOptionsBlkverify:
 #
 # Driver specific block device options for blkverify.
@@ -3094,6 +3226,14 @@
 
 
 ##
+# @RbdAuthMode:
+#
+# Since: 3.0
+##
+{ 'enum': 'RbdAuthMode',
+  'data': [ 'cephx', 'none' ] }
+
+##
 # @BlockdevOptionsRbd:
 #
 # @pool:               Ceph pool name.
@@ -3108,6 +3248,15 @@
 #
 # @user:               Ceph id name.
 #
+# @auth-client-required: Acceptable authentication modes.
+#                      This maps to Ceph configuration option
+#                      "auth_client_required".  (Since 3.0)
+#
+# @key-secret:         ID of a QCryptoSecret object providing a key
+#                      for cephx authentication.
+#                      This maps to Ceph configuration option
+#                      "key".  (Since 3.0)
+#
 # @server:             Monitor host address and port.  This maps
 #                      to the "mon_host" Ceph option.
 #
@@ -3119,6 +3268,8 @@
             '*conf': 'str',
             '*snapshot': 'str',
             '*user': 'str',
+            '*auth-client-required': ['RbdAuthMode'],
+            '*key-secret': 'str',
             '*server': ['InetSocketAddressBase'] } }
 
 ##
@@ -3356,12 +3507,17 @@
 #
 # @tls-creds:   TLS credentials ID
 #
+# @x-dirty-bitmap: A "qemu:dirty-bitmap:NAME" string to query in place of
+#                  traditional "base:allocation" block status (see
+#                  NBD_OPT_LIST_META_CONTEXT in the NBD protocol) (since 3.0)
+#
 # Since: 2.9
 ##
 { 'struct': 'BlockdevOptionsNbd',
   'data': { 'server': 'SocketAddress',
             '*export': 'str',
-            '*tls-creds': 'str' } }
+            '*tls-creds': 'str',
+            '*x-dirty-bitmap': 'str' } }
 
 ##
 # @BlockdevOptionsRaw:
@@ -3443,6 +3599,7 @@
   'discriminator': 'driver',
   'data': {
       'blkdebug':   'BlockdevOptionsBlkdebug',
+      'blklogwrites':'BlockdevOptionsBlklogwrites',
       'blkverify':  'BlockdevOptionsBlkverify',
       'bochs':      'BlockdevOptionsGenericFormat',
       'cloop':      'BlockdevOptionsGenericFormat',
@@ -3948,15 +4105,6 @@
             '*force-size':          'bool' } }
 
 ##
-# @BlockdevCreateNotSupported:
-#
-# This is used for all drivers that don't support creating images.
-#
-# Since: 2.12
-##
-{ 'struct': 'BlockdevCreateNotSupported', 'data': {}}
-
-##
 # @BlockdevCreateOptions:
 #
 # Options for creating an image format on a given node.
@@ -3970,44 +4118,20 @@
       'driver':         'BlockdevDriver' },
   'discriminator': 'driver',
   'data': {
-      'blkdebug':       'BlockdevCreateNotSupported',
-      'blkverify':      'BlockdevCreateNotSupported',
-      'bochs':          'BlockdevCreateNotSupported',
-      'cloop':          'BlockdevCreateNotSupported',
-      'copy-on-read':   'BlockdevCreateNotSupported',
-      'dmg':            'BlockdevCreateNotSupported',
       'file':           'BlockdevCreateOptionsFile',
-      'ftp':            'BlockdevCreateNotSupported',
-      'ftps':           'BlockdevCreateNotSupported',
       'gluster':        'BlockdevCreateOptionsGluster',
-      'host_cdrom':     'BlockdevCreateNotSupported',
-      'host_device':    'BlockdevCreateNotSupported',
-      'http':           'BlockdevCreateNotSupported',
-      'https':          'BlockdevCreateNotSupported',
-      'iscsi':          'BlockdevCreateNotSupported',
       'luks':           'BlockdevCreateOptionsLUKS',
-      'nbd':            'BlockdevCreateNotSupported',
       'nfs':            'BlockdevCreateOptionsNfs',
-      'null-aio':       'BlockdevCreateNotSupported',
-      'null-co':        'BlockdevCreateNotSupported',
-      'nvme':           'BlockdevCreateNotSupported',
       'parallels':      'BlockdevCreateOptionsParallels',
       'qcow':           'BlockdevCreateOptionsQcow',
       'qcow2':          'BlockdevCreateOptionsQcow2',
       'qed':            'BlockdevCreateOptionsQed',
-      'quorum':         'BlockdevCreateNotSupported',
-      'raw':            'BlockdevCreateNotSupported',
       'rbd':            'BlockdevCreateOptionsRbd',
-      'replication':    'BlockdevCreateNotSupported',
       'sheepdog':       'BlockdevCreateOptionsSheepdog',
       'ssh':            'BlockdevCreateOptionsSsh',
-      'throttle':       'BlockdevCreateNotSupported',
       'vdi':            'BlockdevCreateOptionsVdi',
       'vhdx':           'BlockdevCreateOptionsVhdx',
-      'vmdk':           'BlockdevCreateNotSupported',
-      'vpc':            'BlockdevCreateOptionsVpc',
-      'vvfat':          'BlockdevCreateNotSupported',
-      'vxhs':           'BlockdevCreateNotSupported'
+      'vpc':            'BlockdevCreateOptionsVpc'
   } }
 
 ##

@@ -28,6 +28,7 @@
 
 #include "qemu/osdep.h"
 #include "nbd-client.h"
+#include "block/qdict.h"
 #include "qapi/error.h"
 #include "qemu/uri.h"
 #include "block/block_int.h"
@@ -108,7 +109,7 @@ static int nbd_parse_uri(const char *filename, QDict *options)
         /* strip braces from literal IPv6 address */
         if (uri->server[0] == '[') {
             host = qstring_from_substr(uri->server, 1,
-                                       strlen(uri->server) - 2);
+                                       strlen(uri->server) - 1);
         } else {
             host = qstring_from_str(uri->server);
         }
@@ -262,7 +263,6 @@ static SocketAddress *nbd_config(BDRVNBDState *s, QDict *options,
 {
     SocketAddress *saddr = NULL;
     QDict *addr = NULL;
-    QObject *crumpled_addr = NULL;
     Visitor *iv = NULL;
     Error *local_err = NULL;
 
@@ -272,20 +272,11 @@ static SocketAddress *nbd_config(BDRVNBDState *s, QDict *options,
         goto done;
     }
 
-    crumpled_addr = qdict_crumple(addr, errp);
-    if (!crumpled_addr) {
+    iv = qobject_input_visitor_new_flat_confused(addr, errp);
+    if (!iv) {
         goto done;
     }
 
-    /*
-     * FIXME .numeric, .to, .ipv4 or .ipv6 don't work with -drive
-     * server.type=inet.  .to doesn't matter, it's ignored anyway.
-     * That's because when @options come from -blockdev or
-     * blockdev_add, members are typed according to the QAPI schema,
-     * but when they come from -drive, they're all QString.  The
-     * visitor expects the former.
-     */
-    iv = qobject_input_visitor_new(crumpled_addr);
     visit_type_SocketAddress(iv, NULL, &saddr, &local_err);
     if (local_err) {
         error_propagate(errp, local_err);
@@ -294,7 +285,6 @@ static SocketAddress *nbd_config(BDRVNBDState *s, QDict *options,
 
 done:
     qobject_unref(addr);
-    qobject_unref(crumpled_addr);
     visit_free(iv);
     return saddr;
 }
@@ -388,6 +378,12 @@ static QemuOptsList nbd_runtime_opts = {
             .type = QEMU_OPT_STRING,
             .help = "ID of the TLS credentials to use",
         },
+        {
+            .name = "x-dirty-bitmap",
+            .type = QEMU_OPT_STRING,
+            .help = "experimental: expose named dirty bitmap in place of "
+                    "block status",
+        },
         { /* end of list */ }
     },
 };
@@ -448,8 +444,8 @@ static int nbd_open(BlockDriverState *bs, QDict *options, int flags,
     }
 
     /* NBD handshake */
-    ret = nbd_client_init(bs, sioc, s->export,
-                          tlscreds, hostname, errp);
+    ret = nbd_client_init(bs, sioc, s->export, tlscreds, hostname,
+                          qemu_opt_get(opts, "x-dirty-bitmap"), errp);
  error:
     if (sioc) {
         object_unref(OBJECT(sioc));

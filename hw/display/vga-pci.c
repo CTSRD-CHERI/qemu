@@ -192,22 +192,23 @@ static const MemoryRegionOps pci_vga_qext_ops = {
 };
 
 void pci_std_vga_mmio_region_init(VGACommonState *s,
+                                  Object *owner,
                                   MemoryRegion *parent,
                                   MemoryRegion *subs,
                                   bool qext)
 {
-    memory_region_init_io(&subs[0], NULL, &pci_vga_ioport_ops, s,
+    memory_region_init_io(&subs[0], owner, &pci_vga_ioport_ops, s,
                           "vga ioports remapped", PCI_VGA_IOPORT_SIZE);
     memory_region_add_subregion(parent, PCI_VGA_IOPORT_OFFSET,
                                 &subs[0]);
 
-    memory_region_init_io(&subs[1], NULL, &pci_vga_bochs_ops, s,
+    memory_region_init_io(&subs[1], owner, &pci_vga_bochs_ops, s,
                           "bochs dispi interface", PCI_VGA_BOCHS_SIZE);
     memory_region_add_subregion(parent, PCI_VGA_BOCHS_OFFSET,
                                 &subs[1]);
 
     if (qext) {
-        memory_region_init_io(&subs[2], NULL, &pci_vga_qext_ops, s,
+        memory_region_init_io(&subs[2], owner, &pci_vga_qext_ops, s,
                               "qemu extended regs", PCI_VGA_QEXT_SIZE);
         memory_region_add_subregion(parent, PCI_VGA_QEXT_OFFSET,
                                     &subs[2]);
@@ -221,7 +222,7 @@ static void pci_std_vga_realize(PCIDevice *dev, Error **errp)
     bool qext = false;
 
     /* vga + console init */
-    vga_common_init(s, OBJECT(dev), true);
+    vga_common_init(s, OBJECT(dev));
     vga_init(s, OBJECT(dev), pci_address_space(dev), pci_address_space_io(dev),
              true);
 
@@ -239,7 +240,7 @@ static void pci_std_vga_realize(PCIDevice *dev, Error **errp)
             qext = true;
             pci_set_byte(&d->dev.config[PCI_REVISION_ID], 2);
         }
-        pci_std_vga_mmio_region_init(s, &d->mmio, d->mrs, qext);
+        pci_std_vga_mmio_region_init(s, OBJECT(dev), &d->mmio, d->mrs, qext);
 
         pci_register_bar(&d->dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &d->mmio);
     }
@@ -264,7 +265,7 @@ static void pci_secondary_vga_realize(PCIDevice *dev, Error **errp)
     bool qext = false;
 
     /* vga + console init */
-    vga_common_init(s, OBJECT(dev), false);
+    vga_common_init(s, OBJECT(dev));
     s->con = graphic_console_init(DEVICE(dev), 0, s->hw_ops, s);
 
     /* mmio bar */
@@ -275,7 +276,7 @@ static void pci_secondary_vga_realize(PCIDevice *dev, Error **errp)
         qext = true;
         pci_set_byte(&d->dev.config[PCI_REVISION_ID], 2);
     }
-    pci_std_vga_mmio_region_init(s, &d->mmio, d->mrs, qext);
+    pci_std_vga_mmio_region_init(s, OBJECT(dev), &d->mmio, d->mrs, qext);
 
     pci_register_bar(&d->dev, 0, PCI_BASE_ADDRESS_MEM_PREFETCH, &s->vram);
     pci_register_bar(&d->dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &d->mmio);
@@ -307,6 +308,7 @@ static Property vga_pci_properties[] = {
     DEFINE_PROP_BIT("mmio", PCIVGAState, flags, PCI_VGA_FLAG_ENABLE_MMIO, true),
     DEFINE_PROP_BIT("qemu-extended-regs",
                     PCIVGAState, flags, PCI_VGA_FLAG_ENABLE_QEXT, true),
+    DEFINE_PROP_BOOL("global-vmstate", PCIVGAState, vga.global_vmstate, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 

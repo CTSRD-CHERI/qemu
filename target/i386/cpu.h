@@ -211,6 +211,7 @@ typedef enum X86Seg {
 #define HF2_VINTR_SHIFT          3 /* value of V_INTR_MASKING bit */
 #define HF2_SMM_INSIDE_NMI_SHIFT 4 /* CPU serving SMI nested inside NMI */
 #define HF2_MPX_PR_SHIFT         5 /* BNDCFGx.BNDPRESERVE */
+#define HF2_NPT_SHIFT            6 /* Nested Paging enabled */
 
 #define HF2_GIF_MASK            (1 << HF2_GIF_SHIFT)
 #define HF2_HIF_MASK            (1 << HF2_HIF_SHIFT)
@@ -218,6 +219,7 @@ typedef enum X86Seg {
 #define HF2_VINTR_MASK          (1 << HF2_VINTR_SHIFT)
 #define HF2_SMM_INSIDE_NMI_MASK (1 << HF2_SMM_INSIDE_NMI_SHIFT)
 #define HF2_MPX_PR_MASK         (1 << HF2_MPX_PR_SHIFT)
+#define HF2_NPT_MASK            (1 << HF2_NPT_SHIFT)
 
 #define CR0_PE_SHIFT 0
 #define CR0_MP_SHIFT 1
@@ -1048,8 +1050,8 @@ typedef enum TPRAccess {
 /* Cache information data structures: */
 
 enum CacheType {
-    DCACHE,
-    ICACHE,
+    DATA_CACHE,
+    INSTRUCTION_CACHE,
     UNIFIED_CACHE
 };
 
@@ -1098,10 +1100,10 @@ typedef struct CPUCacheInfo {
 
 
 typedef struct CPUCaches {
-        CPUCacheInfo l1d_cache;
-        CPUCacheInfo l1i_cache;
-        CPUCacheInfo l2_cache;
-        CPUCacheInfo l3_cache;
+        CPUCacheInfo *l1d_cache;
+        CPUCacheInfo *l1i_cache;
+        CPUCacheInfo *l2_cache;
+        CPUCacheInfo *l3_cache;
 } CPUCaches;
 
 typedef struct CPUX86State {
@@ -1265,11 +1267,15 @@ typedef struct CPUX86State {
     uint16_t intercept_dr_read;
     uint16_t intercept_dr_write;
     uint32_t intercept_exceptions;
+    uint64_t nested_cr3;
+    uint32_t nested_pg_mode;
     uint8_t v_tpr;
 
     /* KVM states, automatically cleared on reset */
     uint8_t nmi_injected;
     uint8_t nmi_pending;
+
+    uintptr_t retaddr;
 
     /* Fields up to this point are cleared by a CPU reset */
     struct {} end_reset_fields;
@@ -1293,7 +1299,11 @@ typedef struct CPUX86State {
     /* Features that were explicitly enabled/disabled */
     FeatureWordArray user_features;
     uint32_t cpuid_model[12];
-    CPUCaches *cache_info;
+    /* Cache information for CPUID.  When legacy-cache=on, the cache data
+     * on each CPUID leaf will be different, because we keep compatibility
+     * with old QEMU versions.
+     */
+    CPUCaches cache_info_cpuid2, cache_info_cpuid4, cache_info_amd;
 
     /* MTRRs */
     uint64_t mtrr_fixed[11];
@@ -1363,11 +1373,13 @@ struct X86CPU {
     bool hyperv_stimer;
     bool hyperv_frequencies;
     bool hyperv_reenlightenment;
+    bool hyperv_tlbflush;
     bool check_cpuid;
     bool enforce_cpuid;
     bool expose_kvm;
     bool expose_tcg;
     bool migratable;
+    bool migrate_smi_count;
     bool max_features; /* Enable all supported features automatically */
     uint32_t apic_id;
 
@@ -1377,6 +1389,15 @@ struct X86CPU {
 
     /* if true the CPUID code directly forward host cache leaves to the guest */
     bool cache_info_passthrough;
+
+    /* if true the CPUID code directly forwards
+     * host monitor/mwait leaves to the guest */
+    struct {
+        uint32_t eax;
+        uint32_t ebx;
+        uint32_t ecx;
+        uint32_t edx;
+    } mwait;
 
     /* Features that were filtered out because of missing host capabilities */
     uint32_t filtered_features[FEATURE_WORDS];
@@ -1836,8 +1857,8 @@ void helper_lock_init(void);
 /* svm_helper.c */
 void cpu_svm_check_intercept_param(CPUX86State *env1, uint32_t type,
                                    uint64_t param, uintptr_t retaddr);
-void cpu_vmexit(CPUX86State *nenv, uint32_t exit_code, uint64_t exit_info_1,
-                uintptr_t retaddr);
+void QEMU_NORETURN cpu_vmexit(CPUX86State *nenv, uint32_t exit_code,
+                              uint64_t exit_info_1, uintptr_t retaddr);
 void do_vmexit(CPUX86State *env, uint32_t exit_code, uint64_t exit_info_1);
 
 /* seg_helper.c */
