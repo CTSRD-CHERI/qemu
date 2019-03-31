@@ -27339,16 +27339,17 @@ static void decode_mmi(CPUMIPSState *env, DisasContext *ctx)
     }
 }
 
+#if !defined(TARGET_CHERI)
 static void gen_mmi_lq(CPUMIPSState *env, DisasContext *ctx)
 {
     generate_exception_end(ctx, EXCP_RI);    /* TODO: MMI_OPC_LQ */
 }
+#endif
 
 static void gen_mmi_sq(DisasContext *ctx, int base, int rt, int offset)
 {
     generate_exception_end(ctx, EXCP_RI);    /* TODO: MMI_OPC_SQ */
 }
-
 /*
  * The TX79-specific instruction Store Quadword
  *
