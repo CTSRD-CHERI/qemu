@@ -471,6 +471,7 @@ static inline void QEMU_NORETURN do_raise_exception(CPUMIPSState *env,
                                                     uint32_t exception,
                                                     uintptr_t pc)
 {
+    /* NOTE: pc is a HOST program counter (from GETPC()) and not a MIPS guest pc */
     do_raise_exception_err(env, exception, env->error_code & EXCP_INST_NOTAVAIL, pc);
 }
 
@@ -482,20 +483,18 @@ static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
     env->CP2_CapCause = (exc_code << 8) | (reg_num & 0xff);
 }
 
-static inline QEMU_NORETURN void do_raise_c0_exception(CPUMIPSState *env,
-        uint16_t cause, uint64_t badvaddr)
+static inline QEMU_NORETURN void do_raise_c0_exception_impl(CPUMIPSState *env,
+        uint16_t cause, uint64_t badvaddr, uintptr_t pc)
 {
-    uint64_t pc = cap_get_cursor(&env->active_tc.PCC);
     /* fprintf(stderr, "C0 EXCEPTION: cause=%d badvaddr=0x%016lx "
         "PCC=0x%016lx + 0x%016lx -> 0x%016lx PC=0x%016lx\n", cause,
          badvaddr, env->active_tc.PCC.cr_base,
          env->active_tc.PCC.cr_offset, pc, env->active_tc.PC); */
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C0 EXCEPTION: cause=%d"
-        " badvaddr=0x%016" PRIx64 " PCC=0x%016" PRIx64 " + 0x%016" PRIx64
-        " -> 0x" TARGET_FMT_lx " PC=0x" TARGET_FMT_lx "\n",
-        cause, badvaddr, env->active_tc.PCC.cr_base,
-        env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
-    env->active_tc.PC = pc;
+        " badvaddr=0x%016" PRIx64 " PCC=" PRINT_CAP_FMTSTR
+        " -> Host PC=0x%jx active_tc.PC=0x" TARGET_FMT_lx "\n",
+        cause, badvaddr, PRINT_CAP_ARGS(&env->active_tc.PCC), (uintmax_t)pc, env->active_tc.PC);
+    // env->active_tc.PC = pc;
     env->CP0_BadVAddr = badvaddr;
     do_raise_exception(env, cause, pc);
 }
@@ -507,15 +506,19 @@ extern const char *cp2_fault_causestr[];
 
 void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int flags);
 
-static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
-        uint16_t cause, uint16_t reg)
+#define GET_HOST_RETPC() const uintptr_t _host_return_address = GETPC()
+#define do_raise_c2_exception(env, cause, reg) \
+  do_raise_c2_exception_impl(env, cause, reg, _host_return_address)
+#define do_raise_c0_exception(env, cause, reg) \
+  do_raise_c0_exception_impl(env, cause, reg, _host_return_address)
+
+static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
+        uint16_t cause, uint16_t reg, uintptr_t pc)
 {
-    uint64_t pc = cap_get_cursor(&env->active_tc.PCC);
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s)"
-       " reg=%d PCC=0x%016" PRIx64 " + 0x%016" PRIx64 " -> 0x" TARGET_FMT_lx
-       " PC=0x" TARGET_FMT_lx "\n",
-       cause, cp2_fault_causestr[cause], reg, env->active_tc.PCC.cr_base,
-       env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
+       " reg=%d PCC=" PRINT_CAP_FMTSTR " -> host PC: 0x%jx active_tc.PC=0x" TARGET_FMT_plx "\n",
+       cause, cp2_fault_causestr[cause], reg, PRINT_CAP_ARGS(&env->active_tc.PCC),
+      (uintmax_t)pc, env->active_tc.PC);
 #ifdef DEBUG_KERNEL_CP2_VIOLATION
     if (in_kernel_mode(env)) {
         // Print some debug information for CheriBSD kernel crashes
@@ -533,14 +536,14 @@ static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
     }
 #endif
     cpu_mips_store_capcause(env, reg, cause);
-    env->active_tc.PC = pc;
+    // env->active_tc.PC = pc;
     env->CP0_BadVAddr = pc;
     do_raise_exception(env, EXCP_C2E, pc);
 }
 
-static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause)
+static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause, uintptr_t pc)
 {
-    do_raise_c2_exception(env, cause, 0xff);
+    do_raise_c2_exception_impl(env, cause, 0xff, pc);
 }
 
 

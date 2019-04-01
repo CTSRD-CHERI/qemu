@@ -5837,9 +5837,9 @@ store_u32_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint32_t val,
 }
 
 #ifdef TARGET_CHERI
-#define CHECK_AND_ADD_DDC(env, perms, ptr, len) check_ddc(env, perms, ptr, len, /*instavail=*/true);
+#define CHECK_AND_ADD_DDC(env, perms, ptr, len, retpc) check_ddc(env, perms, ptr, len, /*instavail=*/true, retpc);
 #else
-#define CHECK_AND_ADD_DDC(env, perms, ptr, len) ptr
+#define CHECK_AND_ADD_DDC(env, perms, ptr, len, retpc) ptr
 #endif
 
 static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, int src_regnum)
@@ -5884,8 +5884,8 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     }
     // Check capability bounds for the whole copy
     // If it is going to fail we don't bother doing a partial copy!
-    const target_ulong original_src = CHECK_AND_ADD_DDC(env, CAP_PERM_LOAD, original_src_ddc_offset, original_len);
-    const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len);
+    const target_ulong original_src = CHECK_AND_ADD_DDC(env, CAP_PERM_LOAD, original_src_ddc_offset, original_len, ra);
+    const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len, ra);
 
     // Mark this as a continuation in $v1 (so that we continue sensibly if we get a tlb miss and longjump out)
     env->active_tc.gpr[MIPS_REGNUM_V1] = (MAGIC_LIBCALL_HELPER_CONTINUATION_FLAG << 32) | env->active_tc.gpr[3];
@@ -6094,8 +6094,8 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             do_raise_exception(env, EXCP_RI, ra);
         }
     }
-    dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, dest, len_nitems * pattern_length);
-    const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len_nitems);
+    dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, dest, len_nitems * pattern_length, ra);
+    const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len_nitems, ra);
 
     tcg_debug_assert(dest + (len_nitems * pattern_length) == original_dest + original_len_bytes && "continuation broken?");
     const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);

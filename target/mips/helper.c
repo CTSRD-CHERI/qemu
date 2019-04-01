@@ -1720,13 +1720,13 @@ static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
 }
 
 static inline void check_tagmem_writable(CPUMIPSState *env, target_ulong vaddr,
-                                         hwaddr paddr, ram_addr_t ram_addr, MemoryRegion *mr)
+                                         hwaddr paddr, ram_addr_t ram_addr, MemoryRegion *mr, uintptr_t pc)
 {
     if (memory_region_is_rom(mr) || memory_region_is_romd(mr)) {
         error_report("QEMU ERROR: attempting change clear tag bit on read-only memory:");
         error_report("%s: vaddr=0x%jx -> ram_addr=0x%jx (paddr=0x%jx)", __func__,
             (uintmax_t)vaddr, (uintmax_t)ram_addr, (uintmax_t)paddr);
-        do_raise_c0_exception(env, EXCP_DBE, 0);
+        do_raise_c0_exception_impl(env, EXCP_DBE, 0, pc);
     }
 }
 
@@ -1753,7 +1753,7 @@ static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAcce
     hwaddr paddr = v2p_addr(env, vaddr, rw, reg, pc);
     ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
     if (rw == MMU_DATA_CAP_STORE || rw == MMU_DATA_STORE)
-        check_tagmem_writable(env, vaddr, paddr, ram_addr, mr);
+        check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
     return ram_addr;
 }
 
@@ -1796,7 +1796,7 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
     hwaddr paddr = v2p_addr(env, vaddr, 0, 0xFF, pc);
     ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
     // Generate a trap if we try to clear tags in ROM instead of crashing
-    check_tagmem_writable(env, vaddr, paddr, ram_addr, mr);
+    check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
     if (ram_addr == -1LL)
         return;
 
