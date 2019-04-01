@@ -1872,17 +1872,17 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_cnexeq(r16, r11, r6);
             opn = "cnexeq";
             break;
-        case OPC_CSETADDR_NI: /* 0x21 */
+        case OPC_CSETADDR_NI: /* 0x22 */
             check_cop2x(ctx);
             generate_csetaddr(r16, r11, r6);
             opn = "csetaddr";
             break;
-        case OPC_CGETANDADDR_NI: /* 0x21 */
+        case OPC_CGETANDADDR_NI: /* 0x23 */
             check_cop2x(ctx);
             generate_cgetandaddr(r16, r11, r6);
             opn = "cgetaddrmasked";
             break;
-        case OPC_CANDADDR_NI: /* 0x21 */
+        case OPC_CANDADDR_NI: /* 0x24 */
             check_cop2x(ctx);
             generate_candaddr(r16, r11, r6);
             opn = "candaddr";

@@ -505,6 +505,8 @@ static inline QEMU_NORETURN void do_raise_c0_exception(CPUMIPSState *env,
  */
 extern const char *cp2_fault_causestr[];
 
+void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int flags);
+
 static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
         uint16_t cause, uint16_t reg)
 {
@@ -514,6 +516,22 @@ static inline QEMU_NORETURN void do_raise_c2_exception(CPUMIPSState *env,
        " PC=0x" TARGET_FMT_lx "\n",
        cause, cp2_fault_causestr[cause], reg, env->active_tc.PCC.cr_base,
        env->active_tc.PCC.cr_offset, pc, env->active_tc.PC);
+#ifdef DEBUG_KERNEL_CP2_VIOLATION
+    if (in_kernel_mode(env)) {
+        // Print some debug information for CheriBSD kernel crashes
+        error_report("C2 EXCEPTION: cause=%d(%s) reg=%d\r", cause, cp2_fault_causestr[cause], reg);
+        if (reg < 32) {
+            const cap_register_t* cr = get_readonly_capreg(&env->active_tc, reg);
+            error_report("Caused by: "PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(cr));
+        }
+        char buf[4096];
+        FILE* buf_file = fmemopen(buf, sizeof(buf), "w");
+        cheri_dump_state(CPU(mips_env_get_cpu(env)), buf_file, fprintf, CPU_DUMP_CODE);
+        error_report("%s\r\n", buf);
+        sleep(1); // to flush the write buffer
+        fclose(buf_file);
+    }
+#endif
     cpu_mips_store_capcause(env, reg, cause);
     env->active_tc.PC = pc;
     env->CP0_BadVAddr = pc;

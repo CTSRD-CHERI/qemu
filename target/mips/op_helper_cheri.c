@@ -2658,8 +2658,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
 #endif
 }
 
-static void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
-        int flags)
+void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int flags)
 {
     MIPSCPU *cpu = MIPS_CPU(cs);
     CPUMIPSState *env = &cpu->env;
