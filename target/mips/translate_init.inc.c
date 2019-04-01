@@ -521,7 +521,11 @@ const mips_def_t mips_defs[] =
         .CP0_Config1 = (1 << CP0C1_FP) | (47 << CP0C1_MMU),
 #endif
         .CP0_LLAddr_rw_bitmask = 0xFFFFFFFF,
+#if defined(TARGET_CHERI)
+        .CP0_LLAddr_shift = 0,
+#else
         .CP0_LLAddr_shift = 4,
+#endif
         .SYNCI_Step = 16,
         .CCRes = 2,
 #if defined(TARGET_CHERI)
@@ -617,7 +621,11 @@ const mips_def_t mips_defs[] =
         .CP0_Config3 = MIPS_CONFIG3,
 #endif
         .CP0_LLAddr_rw_bitmask = 0,
+#if defined(TARGET_CHERI)
+        .CP0_LLAddr_shift = 0,
+#else
         .CP0_LLAddr_shift = 4,
+#endif
         .SYNCI_Step = 32,
         .CCRes = 2,
 #if defined(TARGET_CHERI)
@@ -661,7 +669,7 @@ const mips_def_t mips_defs[] =
         .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI) | (1 << CP0C3_BI) |
                        (1 << CP0C3_BP),
         .CP0_LLAddr_rw_bitmask = 0,
-        .CP0_LLAddr_shift = 4,
+        .CP0_LLAddr_shift = 0,
         .SYNCI_Step = 32,
         .CCRes = 2,
 #if defined(TARGET_CHERI)
