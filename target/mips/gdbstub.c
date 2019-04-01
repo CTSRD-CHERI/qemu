@@ -59,6 +59,7 @@ int mips_cpu_gdb_read_register(CPUState *cs, uint8_t *mem_buf, int n)
     case 36:
         return gdb_get_regl(mem_buf, (int32_t)env->CP0_Cause);
     case 37:
+        // FIXME: should this be vaddr or offset for CHERI?
         return gdb_get_regl(mem_buf, env->active_tc.PC |
                                      !!(env->hflags & MIPS_HFLAG_M16));
     }
@@ -120,6 +121,7 @@ int mips_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
 #endif
         break;
     case 37:
+        // FIXME: should this be vaddr or offset for CHERI
         env->active_tc.PC = tmp & ~(target_ulong)1;
         if (tmp & 1) {
             env->hflags |= MIPS_HFLAG_M16;
