@@ -3959,9 +3959,11 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     addr = tcg_temp_new();
     /* compare the address against that of the preceeding LL */
     gen_base_offset_addr(ctx, addr, base, offset);
+#ifdef TARGET_CHERI
     size_t memop_size = tcg_mo & MO_64 ? 8 : 4;
     tcg_debug_assert(((tcg_mo & MO_64) || (tcg_mo & MO_32)) && "Only 64 and 32 bit supported");
     GEN_CAP_CHECK_STORE(addr, addr, memop_size);
+#endif
 
     tcg_gen_brcond_tl(TCG_COND_EQ, addr, cpu_lladdr, l1);
     tcg_temp_free(addr);
@@ -3973,7 +3975,6 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     /* generate cmpxchg */
     val = tcg_temp_new();
     gen_load_gpr(val, rt);
-    GEN_CAP_CHECK_STORE(t0, t0, 8);
     tcg_gen_atomic_cmpxchg_tl(t0, cpu_lladdr, cpu_llval, val,
                               eva ? MIPS_HFLAG_UM : ctx->mem_idx, tcg_mo);
     // Print opc for CHERI logging
@@ -3987,7 +3988,8 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     default:
         tcg_debug_assert(false && "Unhandled opcode");
     }
-    GEN_CAP_INVADIATE_TAG(addr, memop_size, opc, t0);
+    // FIXME: a failed SC should not clear the tag bit!
+    GEN_CAP_INVADIATE_TAG(addr, memop_size, opc, val);
 
     tcg_gen_setcond_tl(TCG_COND_EQ, t0, t0, cpu_llval);
     gen_store_gpr(t0, rt);
