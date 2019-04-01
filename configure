@@ -7459,7 +7459,7 @@ case "$target_name" in
     eval "target_compiler_cflags=\$cross_cc_cflags_${target_name}"
   ;;
   aarch64|aarch64_be)
->    TARGET_ARCH=aarch64
+    TARGET_ARCH=aarch64
     TARGET_BASE_ARCH=arm
     bflt="yes"
     mttcg="yes"
@@ -7515,6 +7515,7 @@ case "$target_name" in
   cheri|cheri256|cheri128|cheri128magic)
     TARGET_ARCH=mips64
     TARGET_BASE_ARCH=mips
+    target_compiler=$cross_cc_mips64
     echo "TARGET_ABI_MIPSN64=y" >> $config_target_mak
     echo "TARGET_CHERI=y" >> $config_target_mak
     echo "CONFIG_CHERI=y" >> $config_host_mak

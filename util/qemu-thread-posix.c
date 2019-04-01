@@ -16,10 +16,6 @@
 #include "qemu/notify.h"
 #include "qemu-thread-common.h"
 
-#if defined(__has_include) && __has_include(<pthread_np.h>)
-#include <pthread_np.h>
-#endif
-
 static bool name_threads;
 
 void qemu_thread_naming(bool enable)

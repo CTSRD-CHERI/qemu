@@ -935,8 +935,8 @@ static int slirp_smb(SlirpState* s, const char *exported_dir_unparsed,
     if (slirp_add_exec(s->slirp, smb_cmdline, &vserver_addr, 139) < 0 ||
         slirp_add_exec(s->slirp, smb_cmdline, &vserver_addr, 445) < 0) {
         slirp_smb_cleanup(s);
-        error_setg(errp, "Conflicting/invalid smbserver address");
         g_free(smb_cmdline);
+        error_setg(errp, "Conflicting/invalid smbserver address");
         return -1;
     }
     g_free(smb_cmdline);
