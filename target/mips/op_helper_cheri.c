@@ -784,23 +784,7 @@ target_ulong helper_cgettype(CPUMIPSState *env, uint32_t cb)
 void helper_cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
-    // TODO: remove this?
-    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-    /*
-     * CIncBase: Increase Base
-     */
-    if (!cbp->cr_tag && rt != 0) {
-        do_raise_c2_exception(env, CP2Ca_TAG, cb);
-    } else if (is_cap_sealed(cbp) && rt != 0) {
-        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (rt > cbp->_cr_length) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else {
-        cap_register_t result = *cbp;
-        result.cr_base = cbp->cr_base + rt;
-        result._cr_length = cbp->_cr_length - rt;
-        update_capreg(&env->active_tc, cd, &result);
-    }
+    do_raise_exception(env, EXCP_RI, GETPC());
 }
 
 void helper_cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
@@ -1292,22 +1276,7 @@ void helper_csetcause(CPUMIPSState *env, target_ulong rt)
 void helper_csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt)
 {
-    // TODO: GC these instructions
-    const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-    /*
-     * CSetLen: Set Length
-     */
-    if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_TAG, cb);
-    } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (rt > cap_get_length(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else {
-        cap_register_t result = *cbp;
-        result._cr_length = rt;
-        update_capreg(&env->active_tc, cd, &result);
-    }
+    do_raise_exception(env, EXCP_RI, GETPC());
 }
 
 void helper_csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
