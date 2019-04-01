@@ -54,11 +54,11 @@
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
 
 #define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
-#define PRINT_CAP_ARGS_L1(cr) cr->cr_tag, cap_is_sealed_with_type(cr), \
-            (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)), \
+#define PRINT_CAP_ARGS_L1(cr) (cr)->cr_tag, cap_is_sealed_with_type(cr), \
+            ((((cr)->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | ((cr)->cr_perms & CAP_PERMS_ALL)), \
             cap_get_base(cr), cap_get_length(cr)
 #define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
-#define PRINT_CAP_ARGS_L2(cr) cr->cr_offset, cr->cr_otype
+#define PRINT_CAP_ARGS_L2(cr) cap_get_offset(cr), (cr)->cr_otype
 
 
 #define PRINT_CAP_FMTSTR PRINT_CAP_FMTSTR_L1 " " PRINT_CAP_FMTSTR_L2
