@@ -3960,8 +3960,8 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     /* compare the address against that of the preceeding LL */
     gen_base_offset_addr(ctx, addr, base, offset);
 #ifdef TARGET_CHERI
-    size_t memop_size = tcg_mo & MO_64 ? 8 : 4;
-    tcg_debug_assert(((tcg_mo & MO_64) || (tcg_mo & MO_32)) && "Only 64 and 32 bit supported");
+    size_t memop_size = 1 << (tcg_mo & MO_SIZE);
+    tcg_debug_assert((memop_size == 8 || memop_size == 4)  && "Only 64 and 32 bit supported");
     GEN_CAP_CHECK_STORE(addr, addr, memop_size);
 #endif
 
