@@ -30822,7 +30822,7 @@ void cpu_state_reset(CPUMIPSState *env)
     for (int i = 0; i < 32; i++) {
         null_capability(&env->active_tc._CGPR[i]);
     }
-    set_max_perms_capability(&env->active_tc.PCC, env->active_tc.PCC.cr_offset);
+    set_max_perms_capability(&env->active_tc.PCC, env->exception_base);
     // TODO: make DDC and KCC unconditionally only be in the special reg file
     set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);
     // TODO: should kdc be NULL or full priv?
@@ -31015,6 +31015,9 @@ void cpu_state_reset(CPUMIPSState *env)
         // enable KX bit on startup
         env->CP0_Status |= (1 << CP0St_KX);
     }
+#ifdef TARGET_CHERI
+    assert(env->active_tc.PC == cap_get_cursor(&env->active_tc.PCC));
+#endif
 }
 
 void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb,
