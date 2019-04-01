@@ -3,7 +3,18 @@ Qemu-CHERI
 
 CHERI ISA support for Qemu.
 
-Building and Installing qemu-system-cheri
+
+Building and Installing qemu-system-cheri (recommended)
+-----------------------------------------
+The recommended way of building QEMU uses cheribuild (http://github.com/CTSRD-CHERI/cheribuild).
+To build and install QEMU you can run `cheribuild.py qemu`.
+By default this will install to `$HOME/cheri/output/sdk/bin/qemu-system-cheri128`.
+For information on how to customize install and build directory paths please read the [cheribuild README](http://github.com/CTSRD-CHERI/cheribuild)
+
+
+
+
+Building and Installing qemu-system-cheri (manually)
 -----------------------------------------
 
 These notes are based on using a Mac OS X for the host system. Most
