@@ -2001,8 +2001,10 @@ static void version(void)
     printf("CHERI-CC base width is %d\n", CC128_BOT_WIDTH);
 #elif defined(CHERI_MAGIC128)
     printf("Compiled for CHERI128 (magic)\n");
-#else
+#elif defined(CHERI_256)
     printf("Compiled for CHERI256\n");
+#else
+#error "INVALID CHERI target"
 #endif
     printf("Built with C0 as NULL register\n");
 #endif  // TARGET_CHERI

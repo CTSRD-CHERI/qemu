@@ -18,13 +18,17 @@ QEMU_CFLAGS += -iquote .. -iquote $(SRC_PATH)/target/$(TARGET_BASE_ARCH) -DNEED_
 
 QEMU_CFLAGS+=-iquote $(SRC_PATH)/include
 
-ifdef CONFIG_CHERI128
+$(info CONFIG_CHERI128=$(CONFIG_CHERI128))
+$(info CONFIG_CHERI128_MAGIC=$(CONFIG_CHERI128_MAGIC))
+$(info CONFIG_CHERI256=$(CONFIG_CHERI256))
+$(info CONFIG_CHERI=$(CONFIG_CHERI))
+ifeq ($(CONFIG_CHERI128),y)
 QEMU_CFLAGS+=-DCHERI_128=1
 else
-ifdef CONFIG_CHERI128_MAGIC
+ifeq ($(CONFIG_CHERI128_MAGIC),y)
 QEMU_CFLAGS+=-DCHERI_MAGIC128=1
 else
-ifdef CONFIG_CHERI256
+ifeq ($(CONFIG_CHERI256),y)
 _CHERI_DEFINES=$(filter -DCHERI_%,$(QEMU_CFLAGS))
 # $(info "CHERI defines: $(_CHERI_DEFINES)")
 ALLOWED_CHERI_DEFINES=-DCHERI_UNALIGNED
@@ -33,6 +37,7 @@ _CHERI_DEFINES:=$(filter-out $(ALLOWED_CHERI_DEFINES),$(_CHERI_DEFINES))
 ifneq (,$(_CHERI_DEFINES))
 $(error "No -DCHERI_ flags (other than $(ALLOWED_CHERI_DEFINES)) should be set when targetting CHERI256")
 endif
+QEMU_CFLAGS+=-DCHERI_256=1
 endif
 endif
 endif
@@ -186,6 +191,10 @@ obj-y += hw/$(TARGET_BASE_ARCH)/
 endif
 
 GENERATED_FILES += hmp-commands.h hmp-commands-info.h
+
+# To print the CHERI information we have to build vl.c per-target
+obj-y += vl.o
+vl.o-cflags := $(GPROF_CFLAGS) $(SDL_CFLAGS) $(QEMU_CFLAGS)
 
 endif # CONFIG_SOFTMMU
 
