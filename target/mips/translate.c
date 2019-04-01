@@ -3989,7 +3989,7 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
         tcg_debug_assert(false && "Unhandled opcode");
     }
     // FIXME: a failed SC should not clear the tag bit!
-    GEN_CAP_INVADIATE_TAG(addr, memop_size, opc, val);
+    GEN_CAP_INVADIATE_TAG(cpu_lladdr, memop_size, opc, val);
 
     tcg_gen_setcond_tl(TCG_COND_EQ, t0, t0, cpu_llval);
     gen_store_gpr(t0, rt);
