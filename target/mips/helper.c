@@ -1107,9 +1107,7 @@ target_ulong exception_resume_pc (CPUMIPSState *env)
            the jump.  */
         bad_pc -= (env->hflags & MIPS_HFLAG_B16 ? 2 : 4);
     }
-#ifdef TARGET_CHERI
-    bad_pc -= cap_get_base(&env->active_tc.PCC);
-#endif
+
     return bad_pc;
 }
 
@@ -1181,7 +1179,13 @@ void mips_cpu_do_interrupt(CPUState *cs)
         }
 
         qemu_log("%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
-                 " %s exception\n", __func__, env->active_tc.PC, get_CP0_EPC(env), name);
+                 " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x\n", __func__, env->active_tc.PC, get_CP0_EPC(env),
+                 name, env->hflags & MIPS_HFLAG_BMASK);
+#ifdef TARGET_CHERI
+        qemu_log("\tPCC=" PRINT_CAP_FMTSTR " KCC= " PRINT_CAP_FMTSTR "EPCC=" PRINT_CAP_FMTSTR "\n",
+                 PRINT_CAP_ARGS(&env->active_tc.PCC), PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
+                 PRINT_CAP_ARGS(&env->active_tc.CHWR.EPCC));
+#endif
     }
 #ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
@@ -1264,9 +1268,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
             // EPCC.offset = offending cursor
             set_CP0_ErrorEPC(env, exception_resume_pc(env));
         }
-        env->active_tc.PCC = env->active_tc.CHWR.KCC;
-        env->active_tc.PCC.cr_offset =  env->active_tc.PC -
-                env->active_tc.PCC.cr_base;
 #else
         set_CP0_ErrorEPC(env, exception_resume_pc(env));
 #endif /* TARGET_CHERI */
@@ -1413,6 +1414,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         cause = 18;
         update_badinstr = !(env->error_code & EXCP_INST_NOTAVAIL);
 #ifdef TARGET_CHERI
+        // FIXME: why do we always clear ERL?
         env->CP0_Status &= ~(1 << CP0St_ERL);
         if ((env->CP2_CapCause >> 8) == CP2Ca_CALL ||
                 (env->CP2_CapCause >> 8) == CP2Ca_RETURN)
@@ -1489,14 +1491,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
             env->hflags |= MIPS_HFLAG_CP0;
             env->hflags &= ~(MIPS_HFLAG_KSU);
         }
-#ifdef TARGET_CHERI
-        /* always set PCC from KCC even with EXL */
-        env->active_tc.PCC = env->active_tc.CHWR.KCC;
-        // FIXME: this still contains the old pre-trap PC offset, shouldn't we
-        // move this down to after env->active_tc.PC has been update?
-        env->active_tc.PCC.cr_offset =  env->active_tc.PC -
-            env->active_tc.PCC.cr_base;
-#endif /* TARGET_CHERI */
         env->hflags &= ~MIPS_HFLAG_BMASK;
         if (env->CP0_Status & (1 << CP0St_BEV)) {
             env->active_tc.PC = env->exception_base + 0x200;
@@ -1515,6 +1509,14 @@ void mips_cpu_do_interrupt(CPUState *cs)
     default:
         abort();
     }
+
+#ifdef TARGET_CHERI
+        /* always set PCC from KCC even with EXL */
+        env->active_tc.PCC = env->active_tc.CHWR.KCC;
+        env->active_tc.PCC.cr_offset =  env->active_tc.PC -
+            env->active_tc.PCC.cr_base;
+#endif /* TARGET_CHERI */
+
 #ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         if (cs->exception_index == EXCP_EXT_INTERRUPT)
@@ -1556,6 +1558,9 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #endif
     cs->exception_index = EXCP_NONE;
+#ifdef TARGET_CHERI
+    assert(cap_get_cursor(&env->active_tc.PCC) == env->active_tc.PC);
+#endif
 }
 
 bool mips_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
