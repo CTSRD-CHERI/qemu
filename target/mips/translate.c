@@ -30430,11 +30430,10 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
         gen_helper_check_breakcount(cpu_env);
     }
 
-    /* Generate capabilities check on PC (and possibly log registers + instrs) */
-    GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx);
-
     tcg_gen_insn_start(ctx->base.pc_next, ctx->hflags & MIPS_HFLAG_BMASK,
                        ctx->btarget);
+    /* Generate capabilities check on PC (and possibly log registers + instrs) */
+    GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx);
 }
 
 static bool mips_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cs,

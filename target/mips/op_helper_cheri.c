@@ -2456,7 +2456,7 @@ void CHERI_HELPER_IMPL(ccheck_btarget)(CPUMIPSState *env)
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false, GETPC());
 }
 
-void CHERI_HELPER_IMPL(ccheck_pc)(CPUMIPSState *env, uint64_t pc)
+void CHERI_HELPER_IMPL(ccheck_pc)(CPUMIPSState *env, uint64_t next_pc)
 {
     cap_register_t *pcc = &env->active_tc.PCC;
 
@@ -2479,14 +2479,14 @@ void CHERI_HELPER_IMPL(ccheck_pc)(CPUMIPSState *env, uint64_t pc)
     // but we still need to check if the next instruction is accessible.
     // In order to ensure that EPC is set correctly we must set the offset
     // before checking the bounds.
-    pcc->cr_offset = pc - pcc->cr_base;
-    check_cap(env, pcc, CAP_PERM_EXECUTE, pc, 0xff, 4, /*instavail=*/false, GETPC());
+    pcc->cr_offset = next_pc - pcc->cr_base;
+    check_cap(env, pcc, CAP_PERM_EXECUTE, next_pc, 0xff, 4, /*instavail=*/false, GETPC());
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     // Finally, log the instruction that will be executed next
     if (unlikely(should_log_instr)) {
-        helper_log_instruction(env, pc);
+        helper_log_instruction(env, next_pc);
     }
 #endif
 }
