@@ -227,6 +227,11 @@ endif
 
 COMMON_LDADDS = ../libqemuutil.a
 
+# ensure that we rebuild QEMU if the internal slirp library was rebuilt
+ifeq ($(CONFIG_SLIRP),y)
+COMMON_LDADDS+=../slirp/libslirp.a
+endif
+
 # build either PROG or PROGW
 $(QEMU_PROG_BUILD): $(all-obj-y) $(COMMON_LDADDS)
 	$(call LINK, $(filter-out %.mak, $^))

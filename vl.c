@@ -4449,6 +4449,10 @@ int main(int argc, char **argv, char **envp)
         qemu_opts_set(net, NULL, "type", "nic", &error_abort);
 #ifdef CONFIG_SLIRP
         qemu_opts_set(net, NULL, "type", "user", &error_abort);
+#else
+#ifdef CONFIG_CHERI
+#error "CONFIG_CHERI needs SLIRP support to be useful."
+#endif
 #endif
     }
 
