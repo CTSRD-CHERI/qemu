@@ -890,6 +890,7 @@ static int slirp_smb(SlirpState* s, const char *exported_dir_unparsed,
             s->smb_dir);
 
     GStrv exported_dirs = g_strsplit_set(exported_dir_unparsed, ":", -1);
+    // printf("Checking smb argument '%s'\r\n", exported_dir_unparsed);
     for (guint i = 0; exported_dirs[i] != NULL; i++) {
         char exported_dir[PATH_MAX];
         g_strlcpy(exported_dir, exported_dirs[i], sizeof(exported_dir));
@@ -898,36 +899,59 @@ static int slirp_smb(SlirpState* s, const char *exported_dir_unparsed,
         if (readonly) {
             exported_dir[strlen(exported_dir) - 3] = '\0';
         }
+        // Having a fixed name for the share is very useful for scripts (e.g. to
+        // mount the rootfs in cheribsd we can always export it as "//10.0.2.4/rootfs"
+        // Use some characters that are unlikely to be valid in a path to
+        // separate the dir from the target share name.
+        // TODO: is there a better sequence I can use that doesn't need shell quoting?
+#define SMB_SHARE_NAME_SEPARATOR "<<<"
+        gchar* share_name = g_strrstr(exported_dir, SMB_SHARE_NAME_SEPARATOR);
+        gboolean invalid_share = false;
+        if (share_name) {
+            *share_name = '\0'; // remove from exported_dir
+            share_name += strlen(SMB_SHARE_NAME_SEPARATOR);
+            // Some basic sanity checks on the share name:
+            if (strlen(share_name) < 1 || !g_str_is_ascii(share_name) ||
+                strstr(share_name, "/") || strstr(share_name, "\\") ||
+                strstr(share_name, "[") || strstr(share_name, "]") ||
+                /* Also block [general] since it is used for global options */
+                strcmp(share_name, "general") == 0) {
+                error_setg(errp, "Invalid SMB share name '%s' for access to shared directory '%s'",
+                          share_name, exported_dir);
+                invalid_share = true;
+            }
+        }
+        // printf("Found share name %s for path (%s)\r\n", share_name, exported_dir);
         // printf("Checking smb dir %s (%s)\r\n", exported_dir, readonly ? "ro" : "rw");
         if (access(exported_dir, R_OK | X_OK)) {
             error_setg(errp, "Error accessing shared directory '%s': %s",
                        exported_dir, strerror(errno));
+            invalid_share = true;
+        }
+        if (invalid_share) {
             g_free(smb_conf);
             g_strfreev(exported_dirs);
             return -1;
         }
         // printf("Adding smb dir %s to exports (%s)\r\n", exported_dir, readonly ? "ro" : "rw");
 
+#define QEMU_SMB_SHARE_OPTIONS "path=%s\nread only=%s\nguest ok=yes\nforce user=%s\n"
+
         /* The first exported dir can be accessed using //10.0.2.4/qemu and //10.0.2.4/qemu1 */
         if (i == 0) {
-            fprintf(f, "[qemu]\n"
-                "path=%s\n"
-                "read only=%s\n"
-                "guest ok=yes\n"
-                "force user=%s\n",
-                exported_dir, readonly ? "yes" : "no", passwd->pw_name);
+            fprintf(f, "[qemu]\n" QEMU_SMB_SHARE_OPTIONS,
+                    exported_dir, readonly ? "yes" : "no", passwd->pw_name);
         }
-        fprintf(f, "[qemu%d]\n"
-            "path=%s\n"
-            "read only=%s\n"
-            "guest ok=yes\n"
-            "force user=%s\n",
-            i + 1, exported_dir, readonly ? "yes" : "no", passwd->pw_name);
-    }
+        if (share_name) {
+            fprintf(f, "[%s]\n" QEMU_SMB_SHARE_OPTIONS,
+                    share_name, exported_dir, readonly ? "yes" : "no", passwd->pw_name);
+        }
+        fprintf(f, "[qemu%d]\n" QEMU_SMB_SHARE_OPTIONS,
+                i + 1, exported_dir, readonly ? "yes" : "no", passwd->pw_name);
 
+    }
     g_strfreev(exported_dirs);
     fclose(f);
-
     smb_cmdline = g_strdup_printf("%s -l %s -s %s",
              CONFIG_SMBD_COMMAND, s->smb_dir, smb_conf);
     g_free(smb_conf);
