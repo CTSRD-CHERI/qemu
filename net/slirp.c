@@ -879,6 +879,9 @@ static int slirp_smb(SlirpState* s, const char *exported_dir_unparsed,
             "load printers = no\n"
             "printing = bsd\n"
             "disable spoolss = yes\n"
+            "case sensitive = yes\n"
+            // "debug level = 10\n"
+            // "debug pid = true\n"
             "usershare max shares = 0\n",
             s->smb_dir,
             s->smb_dir,
