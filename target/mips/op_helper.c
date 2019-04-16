@@ -2293,7 +2293,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     // Otherwise we meed to fetch the memory referenced by vaddr+length
     int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
     if (ret != 0) {
-        warn_report("CHERI DEBUG HELPER: Could not write " TARGET_FMT_ld
+        warn_report("CHERI DEBUG HELPER: Could not read " TARGET_FMT_ld
                     " bytes at vaddr 0x" TARGET_FMT_lx "\r\n", length, vaddr);
     }
     if ((mode & CPU_LOG_INSTR) || qemu_logfile) {
