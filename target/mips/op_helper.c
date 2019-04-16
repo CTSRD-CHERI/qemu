@@ -2291,7 +2291,8 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
         return;
     }
     // Otherwise we meed to fetch the memory referenced by vaddr+length
-    int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, sizeof(buffer), false);
+    // NB: length has already been capped at sizeof(buffer)
+    int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, length, false);
     if (ret != 0) {
         warn_report("CHERI DEBUG HELPER: Could not read " TARGET_FMT_ld
                     " bytes at vaddr 0x" TARGET_FMT_lx "\r\n", length, vaddr);
