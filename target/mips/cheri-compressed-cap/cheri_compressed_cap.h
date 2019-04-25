@@ -437,7 +437,7 @@ static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
  * e = idxMSNZ( (rlength + (rlength >> 6)) >> 19 )
  * where (rlength + (rlength >> 6)) needs to be a 65 bit integer
  */
-static inline uint32_t cc128_compute_e(uint64_t rlength, uint32_t bwidth) {
+static inline uint32_t _cc128_compute_e(uint64_t rlength, uint32_t bwidth) {
     if (rlength < (1u << (bwidth - 1)))
         return 0;
 
@@ -619,12 +619,12 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
             assert(csp->_cr_length > UINT64_MAX); // should really be > 1 << 64
             E = (uint8_t)(64 - BWidth + 2);
         } else {
-            E = (uint8_t)cc128_compute_e(length64, BWidth);
+            E = (uint8_t)_cc128_compute_e(length64, BWidth);
         }
 
         Te = (UINT64_C(1) << (64 - E)) & TMask;
     } else {
-        E = (uint8_t)cc128_compute_e(length64, BWidth);
+        E = (uint8_t)_cc128_compute_e(length64, BWidth);
         Te = (top64 >> E) & TMask;
     }
 
@@ -739,7 +739,7 @@ static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
  *
  * where:
  *
- *   E = compression exponent (see cc128_compute_e() above)
+ *   E = compression exponent (see _cc128_compute_e() above)
  *
  *   inRange = -s < i < s  where i is the increment (or offset)
  *   (In other words, all the bits of i<63, E+20> are the same.)
@@ -776,13 +776,20 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, unsigned _
     }
 }
 
+static inline uint32_t cc128_get_exponent(unsigned __int128 length) {
+    const uint32_t bwidth = CC128_BOT_WIDTH;
+    if(length > UINT64_MAX) {
+        return 65 - bwidth;
+    } else {
+        return _cc128_compute_e((uint64_t)length, bwidth);
+    }
+}
+
 static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __int128 length, uint64_t offset,
                                         uint64_t new_offset) {
     (void)sealed;
     uint32_t bwidth = CC128_BOT_WIDTH;
     uint32_t highest_exp = (64 - bwidth + 2);
-
-    uint32_t e;
 
     unsigned __int128 top = base + length;
     // If top is 0xffff... we assume we meant it to be 1 << 64
@@ -793,11 +800,8 @@ static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __i
         return true; // length 0 is always representable
     }
 
-    if(length > UINT64_MAX) {
-        e = 65 - bwidth;
-    } else {
-        e = cc128_compute_e((uint64_t)length, bwidth);
-    }
+    uint32_t e = cc128_get_exponent(length);
+
     int64_t b, r, Imid, Amid;
     bool inRange, inLimits;
     int64_t inc = (int64_t)(new_offset - offset);
@@ -866,16 +870,10 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
     _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "");
     _Static_assert(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
 #endif
-    const uint32_t BWidth = CC128_BOT_WIDTH;
-    uint8_t E;
+    uint8_t E = (uint8_t)cc128_get_exponent(req_length65);
     const uint64_t req_length64 = (uint64_t)req_length65;
-    if (req_length65 > UINT64_MAX) {
-        E = 65 - BWidth;
-    } else {
-        E = (uint8_t)cc128_compute_e(req_length64, BWidth);
-    }
-    //  // Use use internal exponent if e is non-zero or if e is zero but
-    //  // but the implied bit of length is not zero (denormal vs. normal case)
+    // Use internal exponent if e is non-zero or if e is zero but
+    // but the implied bit of length is not zero (denormal vs. normal case)
     //  let ie = (e != 0) | length[12];
     //
     const bool InternalExponent = E != 0 || cc128_getbits(req_length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
