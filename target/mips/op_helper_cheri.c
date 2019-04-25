@@ -1222,7 +1222,7 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
             do_raise_c2_exception(env, CP2Ca_INEXACT, cb);
             return;
         }
-        assert(cc128_is_representable_cap_exact(&result) && "CSetBounds have created a representable capability");
+        assert(cc128_is_representable_cap_exact(&result) && "CSetBounds must creat a representable capability");
 #else
         (void)must_be_exact;
         /* Capabilities are precise -> can just set the values here */
@@ -1247,6 +1247,43 @@ void CHERI_HELPER_IMPL(csetboundsexact)(CPUMIPSState *env, uint32_t cd, uint32_t
         target_ulong rt)
 {
     do_setbounds(true, env, cd, cb, rt, GETPC());
+}
+
+target_ulong CHERI_HELPER_IMPL(crap)(CPUMIPSState *env, target_ulong len)
+{
+    // CRoundArchitecturalPrecision rt, rs:
+    // rt is set to the smallest value greater or equal to rs that can be used
+    // by CSetBoundsExact without trapping (assuming a suitably aligned base).
+
+#ifdef CHERI_128
+    // In QEMU we do this by performing a csetbounds on a maximum permissions
+    // capability and returning the resulting length
+    cap_register_t tmpcap;
+    set_max_perms_capability(&tmpcap, 0);
+    cc128_setbounds(&tmpcap, 0, len);
+    return cap_get_length(&tmpcap);
+#else
+    // For MAGIC128 and 256 everything is representable -> we can return len
+    return len;
+#endif
+}
+
+target_ulong CHERI_HELPER_IMPL(cram)(CPUMIPSState *env, target_ulong len)
+{
+    // CRepresentableAlignmentMask rt, rs:
+    // rt is set to a mask that can be used to align down addresses to a value
+    // that is sufficiently aligned to set precise bounds for the nearest
+    // representable length of rs (as obtained by CRoundArchitecturalPrecision).
+
+#ifdef CHERI_128
+    // The mask used to align down is all ones followed by (required exponent
+    // for compressed representation) zeroes
+    uint32_t e = cc128_get_exponent(len);
+    return UINT64_MAX << e;
+#else
+    // For MAGIC128 and 256 everything is representable -> we can return all ones
+    return UINT64_MAX;
+#endif
 }
 
 //static inline bool cap_bounds_are_subset(const cap_register_t *first, const cap_register_t *second) {

@@ -1219,6 +1219,8 @@ enum {
     OPC_CREADHWR_NI     = OPC_C2OPERAND_NI | (0x0d << 6),
     OPC_CWRITEHWR_NI    = OPC_C2OPERAND_NI | (0x0e << 6),
     OPC_CGETADDR_NI     = OPC_C2OPERAND_NI | (0x0f << 6),
+    OPC_CRAP_NI         = OPC_C2OPERAND_NI | (0x10 << 6),
+    OPC_CRAM_NI         = OPC_C2OPERAND_NI | (0x11 << 6),
     OPC_CSEALENTRY_NI   = OPC_C2OPERAND_NI | (0x1d << 6),
     OPC_CLOADTAGS_NI    = OPC_C2OPERAND_NI | (0x1e << 6),
 };

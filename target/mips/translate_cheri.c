@@ -1970,6 +1970,32 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 generate_cgetaddr(r16, r11);
                 opn = "cgetaddr";
                 break;
+            case OPC_CRAP_NI:   /* 0x10 << 6 */
+            {
+                check_cop2x(ctx);
+                TCGv t0 = tcg_temp_new();
+                TCGv t1 = tcg_temp_new();
+                gen_load_gpr(t0, r11);
+                gen_helper_crap(t1, cpu_env, t0);
+                gen_store_gpr (t1, r16);
+                tcg_temp_free(t1);
+                tcg_temp_free(t0);
+                opn = "CRoundArchitecturalPrecision";
+                break;
+            }
+            case OPC_CRAM_NI:   /* 0x11 << 6 */
+            {
+                check_cop2x(ctx);
+                TCGv t0 = tcg_temp_new();
+                TCGv t1 = tcg_temp_new();
+                gen_load_gpr(t0, r11);
+                gen_helper_cram(t1, cpu_env, t0);
+                gen_store_gpr (t0, r16);
+                tcg_temp_free(t1);
+                tcg_temp_free(t0);
+                opn = "CRepresentableAlignmentMask";
+                break;
+            }
             case OPC_CSEALENTRY_NI:   /* 0x1d << 6 */
                 check_cop2x(ctx);
                 gen_helper_2_consti32(csealentry, r16, r11);
