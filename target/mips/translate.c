@@ -13367,11 +13367,7 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
      * Fake registers to keep libstatcounters from triggering segfaultr
      */
     case 4: /* ICOUNT */
-        gen_helper_rdhwr_statcounters_icount(t0, cpu_env);
-        gen_store_gpr(t0, rt);
-        break;
-    case 7: /* RESET */
-        gen_helper_rdhwr_statcounters_reset(t0, cpu_env);
+        gen_helper_1e0i(rdhwr_statcounters_icount, t0, sel);
         gen_store_gpr(t0, rt);
         break;
     case 5: /* ITLB MISS */
@@ -13380,6 +13376,10 @@ static void gen_rdhwr(DisasContext *ctx, int rt, int rd, int sel)
         break;
     case 6: /* DTLB MISS */
         gen_helper_rdhwr_statcounters_dtlb_miss(t0, cpu_env);
+        gen_store_gpr(t0, rt);
+        break;
+    case 7: /* RESET */
+        gen_helper_rdhwr_statcounters_reset(t0, cpu_env);
         gen_store_gpr(t0, rt);
         break;
     case 11:

@@ -1230,6 +1230,9 @@ struct CPUMIPSState {
     uint64_t statcounters_cap_read_tagged;
     uint64_t statcounters_cap_write;
     uint64_t statcounters_cap_write_tagged;
+
+    uint64_t statcounters_imprecise_setbounds;
+    uint64_t statcounters_unrepresentable_caps;
     /* TODO: we could implement the TLB ones as well */
 
     /*

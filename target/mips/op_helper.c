@@ -3209,11 +3209,18 @@ target_ulong helper_rdhwr_xnp(CPUMIPSState *env)
 }
 
 #if defined(TARGET_CHERI)
-target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env)
+target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env, uint32_t sel)
 {
     qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
     check_hwrena(env, 4, GETPC());
-    return env->statcounters_icount;
+    switch (sel) {
+    case 0: return env->statcounters_icount;
+    case 1: return env->statcounters_icount_user;
+    case 2: return env->statcounters_icount_kernel;
+    case 3: return env->statcounters_imprecise_setbounds;
+    case 4: return env->statcounters_unrepresentable_caps;
+    default: return 0xdeadbeef;
+    }
 }
 
 target_ulong helper_rdhwr_statcounters_itlb_miss(CPUMIPSState *env)

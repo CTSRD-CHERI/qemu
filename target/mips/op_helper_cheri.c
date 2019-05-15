@@ -268,11 +268,13 @@ extern bool cheri_debugger_on_unrepresentable;
 static inline void
 _became_unrepresentable(CPUMIPSState *env, uint16_t reg, uintptr_t retpc)
 {
+    env->statcounters_unrepresentable_caps++;
+
     if (cheri_debugger_on_unrepresentable)
         helper_raise_exception_debug(env);
 
-	if (cheri_c2e_on_unrepresentable)
-		do_raise_c2_exception_impl(env, CP2Ca_INEXACT, reg, retpc);
+    if (cheri_c2e_on_unrepresentable)
+        do_raise_c2_exception_impl(env, CP2Ca_INEXACT, reg, retpc);
 }
 
 #else
@@ -1218,6 +1220,8 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
          * representable.
          */
         const bool exact = cc128_setbounds(&result, cursor, new_top);
+        if (!exact)
+            env->statcounters_imprecise_setbounds++;
         if (must_be_exact && !exact) {
             do_raise_c2_exception(env, CP2Ca_INEXACT, cb);
             return;
