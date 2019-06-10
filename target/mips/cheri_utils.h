@@ -43,7 +43,7 @@
 // Don't use _sbit_for_memory in cheri256 cap_register_t
 #define CC256_DEFINE_FUNCTIONS 0
 #define CAP_MAX_LENGTH CC128_NULL_LENGTH
-#define CC128_OLD_FORMAT  // keep using the 23-bit format for now
+#undef CC128_OLD_FORMAT // don't use the old format
 #else
 // Don't use cr_pesbt_xored_for_mem in cheri256 cap_register_t
 #define CC128_DEFINE_FUNCTIONS 0
