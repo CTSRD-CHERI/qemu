@@ -1197,6 +1197,7 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t cursor = cap_get_cursor(cbp);
     unsigned __int128 new_top = (unsigned __int128)cursor + length; // 65 bits
+    unsigned __int128 current_top = (unsigned __int128)cursor + cap_get_length(cbp); // 65 bits
     /*
      * CSetBounds: Set Bounds
      */
@@ -1207,9 +1208,9 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
     } else if (cursor < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (new_top > UINT64_MAX) {
-        /* cursor + rt overflowed */
+        /* We don't allow setbounds to create full address space caps */
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (new_top > cap_get_top(cbp)) {
+    } else if (new_top > current_top) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         cap_register_t result = *cbp;
@@ -1278,12 +1279,21 @@ target_ulong CHERI_HELPER_IMPL(cram)(CPUMIPSState *env, target_ulong len)
     // rt is set to a mask that can be used to align down addresses to a value
     // that is sufficiently aligned to set precise bounds for the nearest
     // representable length of rs (as obtained by CRoundArchitecturalPrecision).
-
 #ifdef CHERI_128
     // The mask used to align down is all ones followed by (required exponent
     // for compressed representation) zeroes
     uint32_t e = cc128_get_exponent(len);
-    return UINT64_MAX << e;
+    qemu_log("len = " TARGET_FMT_lx ", e = %d\n", len, e);
+    if (e != 0) {
+        // increment e by the width difference between internal and zero exponent (+3)
+        e += (CC128_BOT_WIDTH - CC128_BOT_INTERNAL_EXP_WIDTH);
+    }
+    target_ulong result = UINT64_MAX << e;
+    target_ulong rounded_len = helper_crap(env, len);
+    qemu_log("cram(" TARGET_FMT_lx "/" TARGET_FMT_lx ") result = " TARGET_FMT_lx ", e=%d\n", len, rounded_len, result, e);
+    target_ulong rounded_with_cram = (len + ~result) & result;
+    qemu_log("rounded_with_cram = " TARGET_FMT_lx "\n", rounded_with_cram);
+    return result;
 #else
     // For MAGIC128 and 256 everything is representable -> we can return all ones
     return UINT64_MAX;
