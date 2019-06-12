@@ -533,6 +533,46 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
 
     T |= ((uint32_t)T_infer) << (BWidth - 2);
 
+
+#pragma message("FIXME: update this with sail code (currently slightly wrong)")
+#if 0
+function getCapBounds(c) : Capability -> (uint64, CapLen) =
+  let E = unsigned(c.E) in
+  let a : bits(64) = c.address in
+  /* Extract bits we need to make the top correction and calculate representable limit */
+  let a3 = truncate(a >> (E + 11), 3) in
+  let B3 = truncateLSB(c.B, 3) in
+  let T3 = truncateLSB(c.T, 3) in
+  let R3 = B3 - 0b001 in /* wraps */
+  /* Do address, base and top lie in the R aligned region above the one containing R? */
+  let aHi = if a3 <_u R3 then 1 else 0 in
+  let bHi = if B3 <_u R3 then 1 else 0 in
+  let tHi = if T3 <_u R3 then 1 else 0 in
+  /* Compute region corrections for top and base relative to a */
+  let correction_base = bHi - aHi in
+  let correction_top  = tHi - aHi in
+  let a_top = (a >> (E + 14)) in
+  let e_zeros = zeros(E) in {
+    base : bits(65) = truncate((a_top + correction_base) @ c.B @ e_zeros, 65);
+    top  : bits(65) = truncate((a_top + correction_top)  @ c.T @ e_zeros, 65);
+    if (base[64] == bitone) then {
+      /* If base[64] is set this indicates under or overflow i.e. a has
+         wrapped around the address space and been corrected. In this case
+         we need to correct top[64] because top is not quite modulo 2**64 due
+         to having max top == 2**64 in one particular case: */
+       top[64] = if (aHi == 1) & (tHi == 1) then bitone else bitzero;
+    };
+    /* The following is apparently equivalent to above and used by hw. */
+    /*
+    let base2 : bits(2) = bitzero @ base[63];
+    let top2  : bits(2) = top[64..63];
+    if (E < (unsigned(resetE) - 1)) & (unsigned(top2 - base2) > 1) then {
+      top[64] = ~(top[64]);
+    };
+    */
+    (unsigned(base[63..0]), unsigned(top))
+  }
+#endif
     uint32_t amid = (cursor >> E) & BMask;
     uint32_t r = (((B >> (BWidth - 3)) - 1) << (BWidth - 3)) & BMask;
 
@@ -554,7 +594,13 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     unsigned __int128 top = (unsigned __int128)(((cursor_top + (uint64_t)(int64_t)ct) << BWidth) | (uint64_t)T) << E;
     uint64_t base = (((cursor_top + (uint64_t)(int64_t)cb) << BWidth) | (uint64_t)B) << E;
 
-    // Pretend that top is a 65 bit integer
+    // FIXME: I'm not sure why this is needed for some cases
+    // otherwise base = ffffffffffffeff8 len = 0x1000 breaks
+#pragma message("FIXME: remove this hack after updating to latest sail code")
+    if (top < base && (base & (UINT64_C(1) << 63))) {
+        // Implicit top bit
+        top |= ((unsigned __int128)1u) << 64;
+    }
 
     top &= ((unsigned __int128)1 << 65) - 1; // pretend that top is 65 bits
     const uint64_t top_high = (top >> 64);
@@ -778,7 +824,7 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, unsigned _
 
 static inline uint32_t cc128_get_exponent(unsigned __int128 length) {
     const uint32_t bwidth = CC128_BOT_WIDTH;
-    if(length > UINT64_MAX) {
+    if (length > UINT64_MAX) {
         return 65 - bwidth;
     } else {
         return _cc128_compute_e((uint64_t)length, bwidth);
@@ -834,7 +880,8 @@ static inline uint64_t cc128_truncate64(uint64_t value, size_t bits) {
     return value & ((UINT64_C(1) << bits) - 1);
 }
 
-static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top) {
+/* @return whether the operation was able to set precise bounds precise or not */
+static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top, uint64_t* alignment_mask) {
     assert(cap->cr_tag && "Cannot be used on untagged capabilities");
     assert(!cc128_is_cap_sealed(cap) && "Cannot be used on sealed capabilities");
     assert(req_base <= req_top && "Cannot grow capabilities");
@@ -891,6 +938,8 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
         exact = true;
         new_top = req_top;
         new_base = req_base;
+        if (alignment_mask)
+          *alignment_mask = UINT64_MAX; // no adjustment to base required
     } else {
         //  if ie then {
         //    /* the internal exponent case is trickier */
@@ -900,6 +949,10 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
         //    T_ie = truncate(top >> (e + 3), 11);
         //
         uint64_t bot_ie = cc128_truncate64(req_base >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
+        if (alignment_mask) {
+            *alignment_mask = UINT64_MAX << (E + CC128_EXP_LOW_WIDTH);
+            *alignment_mask = UINT64_MAX << (E + CC128_EXP_LOW_WIDTH);
+        }
         uint64_t top_ie = cc128_truncate64((uint64_t)req_top >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
         //    /* Find out whether we have lost significant bits of base and top using a
         //       mask of bits that we will lose (including 3 extra for exp). */
@@ -942,6 +995,10 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
             lostSignificantBase = lostSignificantBase || cc128_getbits(bot_ie, 0, 1);
             lostSignificantTop = lostSignificantTop || cc128_getbits(top_ie, 0, 1);
             bot_ie = cc128_truncate64(req_base >> (E + CC128_EXP_LOW_WIDTH + 1), CC128_BOT_INTERNAL_EXP_WIDTH);
+            // If we had to adjust bot_ie (shift by one more) also update alignment_mask
+            if (alignment_mask) {
+                *alignment_mask = UINT64_MAX << (E + CC128_EXP_LOW_WIDTH + 1);
+            }
             const bool incT = lostSignificantTop;
             top_ie = cc128_truncate64((uint64_t)(req_top >> (E + CC128_EXP_LOW_WIDTH + 1)), CC128_BOT_INTERNAL_EXP_WIDTH);
             if (incT) {
@@ -996,6 +1053,40 @@ static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsig
     //  let newCap = {cap with address=base, E=to_bits(6, if incE then e + 1 else e), B=Bbits, T=Tbits, internal_e=ie};
     //  (exact, newCap)
     return exact;
+}
+
+/* @return whether the operation was able to set precise bounds precise or not */
+static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top) {
+  return cc128_setbounds_impl(cap, req_base, req_top, NULL);
+}
+
+/* @return the mask that needs to be applied to base in order to get a precisely representable capability */
+static inline uint64_t cc128_get_alignment_mask(uint64_t req_length) {
+  if (req_length == 0) {
+    // With a lenght of zero we know it is precise so we can just return an
+    // all ones mask.
+    // This avoids undefined behaviour when counting most significant bit later.
+    return UINT64_MAX;
+  }
+  // To compute the mask we set bounds on a maximum permissions capability and
+  // return the mask that was used to adjust the length
+  cap_register_t tmpcap;
+  memset(&tmpcap, 0, sizeof(tmpcap));
+  tmpcap.cr_tag = 1;
+  tmpcap.cr_base = 0;
+  tmpcap._cr_length = CC128_MAX_LENGTH;
+  tmpcap.cr_otype = CC128_OTYPE_UNSEALED;
+  uint64_t mask = 0;
+  // Ensure that the base always needs rounding down by making it all ones until
+  // one bit before the most significant bit in length
+  // uint64_t req_base = UINT64_MAX & ~(UINT64_C(1) << cc128_idx_MSNZ(req_length));
+  uint64_t req_base = UINT64_MAX - req_length;
+  tmpcap.cr_offset = req_base;
+  cc128_setbounds_impl(&tmpcap, req_base, req_base + req_length, &mask);
+  // base should have been rounded down using this mask:
+  assert((req_base & mask) == tmpcap.cr_base);
+  return mask;
+
 }
 
 #endif /* CC128_DEFINE_FUNCTIONS != 0 */
