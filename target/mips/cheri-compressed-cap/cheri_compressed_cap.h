@@ -862,15 +862,6 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, unsigned _
     }
 }
 
-static inline uint32_t cc128_get_exponent(unsigned __int128 length) {
-    const uint32_t bwidth = CC128_BOT_WIDTH;
-    if (length > UINT64_MAX) {
-        return 65 - bwidth;
-    } else {
-        return _cc128_compute_e((uint64_t)length, bwidth);
-    }
-}
-
 static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __int128 length, uint64_t offset,
                                         uint64_t new_offset) {
     (void)sealed;
