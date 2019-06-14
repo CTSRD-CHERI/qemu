@@ -161,6 +161,7 @@ typedef struct cap_register cap_register_t;
 #define CC128_BOT_WIDTH CC_L_BWIDTH
 #define CC128_BOT_INTERNAL_EXP_WIDTH CC128_BOT_WIDTH - CC_L_LOWWIDTH
 #define CC128_EXP_LOW_WIDTH CC_L_LOWWIDTH
+#define CC128_MANTISSA_WIDTH 23
 
 /*
  * These formats are from cheri concentrate, but I have added an extra sealing
@@ -260,7 +261,13 @@ enum {
 #define CC128_BOT_WIDTH CC128_FIELD_EXP_ZERO_BOTTOM_SIZE
 #define CC128_BOT_INTERNAL_EXP_WIDTH CC128_FIELD_EXP_NONZERO_BOTTOM_SIZE
 #define CC128_EXP_LOW_WIDTH CC128_FIELD_EXPONENT_LOW_PART_SIZE
+/* These should match the definitions in sail! */
+#define CC128_MANTISSA_WIDTH 14
 #endif
+#define CC128_CAP_SIZE 16
+#define CC128_CAP_BITS 128
+#define CC128_CAP_ADDR_WIDTH 64
+#define CC128_CAP_LEN_WIDTH 65
 
 
 #define CC_SPECIAL_OTYPE(name, subtract) \
@@ -378,10 +385,13 @@ static constexpr bool check_same() {
     static_assert(a == b, "");
     return true;
 }
-static_assert(check_same<CC128_NULL_XOR_MASK, CC128_NULL_PESBT>(), "");
+#define STATIC_ASSERT_SAME(a, b) static_assert(check_same<a, b>(), "")
 #else
-_Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
+#define STATIC_ASSERT_SAME(a, b) _Static_assert(a == b, "")
 #endif
+STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, CC128_NULL_PESBT);
+STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_BOT_WIDTH);
+STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
 /* Avoid pulling in code that uses cr_pesbt_xored_for_mem when building QEMU256 */
 #ifndef CC128_DEFINE_FUNCTIONS
