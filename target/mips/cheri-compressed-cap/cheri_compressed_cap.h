@@ -395,34 +395,21 @@ _Static_assert(CC128_NULL_XOR_MASK == CC128_NULL_PESBT, "");
 
 /* Returns the index of the most significant bit set in x */
 static inline uint32_t cc128_idx_MSNZ(uint64_t x) {
-    /*
-     * XXX For HOST_X86_64
-     *
-     * uint64_t r;
-     *
-     * asm("bsrq %1,%q0" : "+r" (r) : "rm" (x));
-     *
-     * return (uint32_t)r;
-     *
-     * XXX This isn't quite right. %q0 needs to be pushed/popped?
-     */
 #if defined(__has_builtin)
 #if __has_builtin(__builtin_clzll)
 #define CAP_HAVE_BUILTIN_CLZ
 #endif
 #elif defined(__GNUC__)
-#define HAVE___BUILTIN_CLZ
+#define CAP_HAVE_BUILTIN_CLZ
 #endif
 
 #ifndef CAP_HAVE_BUILTIN_CLZ
 /* floor(log2(x)) != floor(log2(y)) */
 #warning "__builtin_clzll not supported, using slower path"
 #define ld_neq(x, y) (((x) ^ (y)) > ((x) & (y)))
-
     uint32_t r = ld_neq(x, x & 0x5555555555555555ull) + (ld_neq(x, x & 0x3333333333333333ull) << 1) +
                  (ld_neq(x, x & 0x0f0f0f0f0f0f0f0full) << 2) + (ld_neq(x, x & 0x00ff00ff00ff00ffull) << 3) +
                  (ld_neq(x, x & 0x0000ffff0000ffffull) << 4) + (ld_neq(x, x & 0x00000000ffffffffull) << 5);
-
 #undef ld_neq
 #else
     assert(x != 0);
