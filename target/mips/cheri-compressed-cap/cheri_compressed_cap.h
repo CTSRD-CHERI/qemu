@@ -801,9 +801,9 @@ static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __i
 
 /// Check that a capability is representable by compressing and recompressing
 static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
-    uint64_t pesbt = compress_128cap(cap);
+    uint64_t pesbt = compress_128cap_without_xor(cap);
     cap_register_t decompressed_cap;
-    decompress_128cap(pesbt, cap->cr_base + cap->cr_offset, &decompressed_cap);
+    decompress_128cap_already_xored(pesbt, cap->cr_base + cap->cr_offset, &decompressed_cap);
     // These fields must not change:
     assert(decompressed_cap.cr_otype == cap->cr_otype);
     assert(decompressed_cap.cr_uperms == cap->cr_uperms);
