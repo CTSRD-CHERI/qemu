@@ -349,6 +349,7 @@ enum {
     CC128_RESET_EXP = 52, // bit 12 in top is set -> shift by 52 to get 1 << 64
     // For a NULL capability we use the internal exponent and need bit 12 in top set
     // to get to 2^65
+    // let resetT = 0b01 @ 0x000 /* bit 12 set */
     CC128_RESET_TOP = 1u << (12 - CC128_FIELD_EXPONENT_HIGH_PART_SIZE),
     CC128_NULL_PESBT =
         CC128_ENCODE_FIELD(0, UPERMS) |
@@ -446,6 +447,15 @@ static inline uint32_t _cc128_compute_e(uint64_t rlength, uint32_t bwidth) {
         return 0;
 
     return (cc128_idx_MSNZ(rlength) - (bwidth - 2));
+}
+
+static inline uint32_t cc128_get_exponent(unsigned __int128 length) {
+    const uint32_t bwidth = CC128_BOT_WIDTH;
+    if (length > UINT64_MAX) {
+        return 65 - (bwidth - 1);
+    } else {
+        return _cc128_compute_e((uint64_t)length, bwidth);
+    }
 }
 
 static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
@@ -554,8 +564,8 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
         3) carry out of B[20..0] + len[20..0] that is implied if T[20..0] < B[20..0]
     */
     uint8_t L_carry = T < (B & TMask) ? 1 : 0;
-    uint8_t T_infer = ((B >> (BWidth - 2)) + L_carry + L_msb) & 0x3;
-
+    uint64_t BTop2 = cc128_getbits(B, CC128_MANTISSA_WIDTH - 2, 2);
+    uint8_t T_infer = (BTop2 + L_carry + L_msb) & 0x3;
     T |= ((uint32_t)T_infer) << (BWidth - 2);
     E = MIN(CC128_MAX_EXPONENT, E);
 
@@ -563,24 +573,30 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     // let a3 = truncate(a >> (E + 11), 3) in
     // let B3 = truncateLSB(c.B, 3) in
     // let T3 = truncateLSB(c.T, 3) in
+#if 0
     unsigned a3 = (unsigned)cc128_truncate64(cursor >> (E + CC128_MANTISSA_WIDTH - 3), 3);
     unsigned B3 = (unsigned)cc128_truncateLSB_generic(CC128_MANTISSA_WIDTH)(B, 3);
     unsigned T3 = (unsigned)cc128_truncateLSB_generic(CC128_MANTISSA_WIDTH)(T, 3);
+#else
+    unsigned a3 = (unsigned)cc128_getbits(cursor, E + CC128_MANTISSA_WIDTH - 3, 3);
+    unsigned B3 = (unsigned)cc128_getbits(B, CC128_MANTISSA_WIDTH - 3, 3);
+    unsigned T3 = (unsigned)cc128_getbits(T, CC128_MANTISSA_WIDTH - 3, 3);
+#endif
     // let R3 = B3 - 0b001 in /* wraps */
     unsigned R3 = (unsigned)cc128_truncate64(B3 - 1, 3); //B3 == 0 ? 7 : B3 - 1;
     /* Do address, base and top lie in the R aligned region above the one containing R? */
     // let aHi = if a3 <_u R3 then 1 else 0 in
     // let bHi = if B3 <_u R3 then 1 else 0 in
     // let tHi = if T3 <_u R3 then 1 else 0 in
-    bool aHi = a3 < R3;
-    bool bHi = B3 < R3;
-    bool tHi = T3 < R3;
+    int aHi = a3 < R3 ? 1 : 0;
+    int bHi = B3 < R3 ? 1 : 0;
+    int tHi = T3 < R3 ? 1 : 0;
 
     /* Compute region corrections for top and base relative to a */
     // let correction_base = bHi - aHi in
     // let correction_top  = tHi - aHi in
-    bool correction_base = bHi != aHi;
-    bool correction_top = tHi != aHi;
+    int correction_base = bHi - aHi;
+    int correction_top = tHi - aHi;
     // let a_top = (a >> (E + mantissa_width)) in {
     // let a_top = (a >> (E + 14)) in
     // Note: shifting by 64 is a no-op and causes wrong results!
@@ -588,14 +604,14 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     uint64_t a_top = a_top_shift >= CC128_CAP_ADDR_WIDTH ? 0 :  cursor >> a_top_shift;
 
     // base : CapLenBits = truncate((a_top + correction_base) @ c.B @ zeros(E), cap_len_width);
-    unsigned __int128 base = a_top + correction_base;
+    unsigned __int128 base = (uint64_t)((int64_t)a_top + correction_base);
     base <<= CC128_MANTISSA_WIDTH;
     base |= B;
     base <<= E;
     base &= ((unsigned __int128)1 << CC128_CAP_LEN_WIDTH) - 1;
     assert((uint64_t)(base >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
     // top  : truncate((a_top + correction_top)  @ c.T @ zeros(E), cap_len_width);
-    unsigned __int128 top = a_top + correction_top;
+    unsigned __int128 top = (uint64_t)((int64_t)a_top + correction_top);
     top <<= CC128_MANTISSA_WIDTH;
     top |= T;
     top <<= E;
