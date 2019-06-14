@@ -267,8 +267,9 @@ enum {
 #define CC128_CAP_SIZE 16
 #define CC128_CAP_BITS 128
 #define CC128_CAP_ADDR_WIDTH 64
+#define CC128_CAP_ADDR_MAX UINT64_MAX
 #define CC128_CAP_LEN_WIDTH 65
-
+#define CC128_MAX_EXPONENT 52
 
 #define CC_SPECIAL_OTYPE(name, subtract) \
     CAP_ ## name = (CAP_MAX_REPRESENTABLE_OTYPE - subtract ## u), \
@@ -445,6 +446,27 @@ static inline uint64_t cc128_getbits(uint64_t src, uint32_t str, uint32_t sz) {
     return ((src >> str) & ((UINT64_C(1) << sz) - UINT64_C(1)));
 }
 
+// truncates `value`, keeping only the _least_ significant `n` bits.
+static inline uint64_t cc128_truncate64(uint64_t value, size_t n) {
+    return value & ((UINT64_C(1) << n) - 1);
+}
+
+// truncates `value`, keeping only the _most_ significant `n` bits.
+#define TRUNCATE_LSB_FUNC(type_width) \
+static inline uint64_t cc128_truncateLSB##type_width(uint64_t value, size_t n) { \
+    _Static_assert(type_width <= 64, ""); \
+    return value >> (type_width - n);\
+}
+
+TRUNCATE_LSB_FUNC(14)
+TRUNCATE_LSB_FUNC(23)
+// TRUNCATE_LSB_FUNC(64)
+
+#define	CC128_CONCAT1(x,y)	x ## y
+#define	CC128_CONCAT(x,y)	CC128_CONCAT1(x,y)
+// FIXME: only one level of expansion works here?
+#define cc128_truncateLSB_generic(type_width) CC128_CONCAT(cc128_truncateLSB, type_width)
+
 static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
 #ifdef CC128_OLD_FORMAT
     cdp->cr_perms = (uint32_t)cc128_getbits(pesbt, 48, 12);
@@ -529,36 +551,69 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     uint8_t T_infer = ((B >> (BWidth - 2)) + L_carry + L_msb) & 0x3;
 
     T |= ((uint32_t)T_infer) << (BWidth - 2);
+    E = MIN(CC128_MAX_EXPONENT, E);
 
+    /* Extract bits we need to make the top correction and calculate representable limit */
+    // let a3 = truncate(a >> (E + 11), 3) in
+    // let B3 = truncateLSB(c.B, 3) in
+    // let T3 = truncateLSB(c.T, 3) in
+    unsigned a3 = (unsigned)cc128_truncate64(cursor >> (E + CC128_MANTISSA_WIDTH - 3), 3);
+    unsigned B3 = (unsigned)cc128_truncateLSB_generic(CC128_MANTISSA_WIDTH)(B, 3);
+    unsigned T3 = (unsigned)cc128_truncateLSB_generic(CC128_MANTISSA_WIDTH)(T, 3);
+    // let R3 = B3 - 0b001 in /* wraps */
+    unsigned R3 = (unsigned)cc128_truncate64(B3 - 1, 3); //B3 == 0 ? 7 : B3 - 1;
+    /* Do address, base and top lie in the R aligned region above the one containing R? */
+    // let aHi = if a3 <_u R3 then 1 else 0 in
+    // let bHi = if B3 <_u R3 then 1 else 0 in
+    // let tHi = if T3 <_u R3 then 1 else 0 in
+    bool aHi = a3 < R3;
+    bool bHi = B3 < R3;
+    bool tHi = T3 < R3;
 
-#pragma message("FIXME: update this with sail code (currently slightly wrong)")
-#if 0
-function getCapBounds(c) : Capability -> (uint64, CapLen) =
-  let E = unsigned(c.E) in
-  let a : bits(64) = c.address in
-  /* Extract bits we need to make the top correction and calculate representable limit */
-  let a3 = truncate(a >> (E + 11), 3) in
-  let B3 = truncateLSB(c.B, 3) in
-  let T3 = truncateLSB(c.T, 3) in
-  let R3 = B3 - 0b001 in /* wraps */
-  /* Do address, base and top lie in the R aligned region above the one containing R? */
-  let aHi = if a3 <_u R3 then 1 else 0 in
-  let bHi = if B3 <_u R3 then 1 else 0 in
-  let tHi = if T3 <_u R3 then 1 else 0 in
-  /* Compute region corrections for top and base relative to a */
-  let correction_base = bHi - aHi in
-  let correction_top  = tHi - aHi in
-  let a_top = (a >> (E + 14)) in
-  let e_zeros = zeros(E) in {
-    base : bits(65) = truncate((a_top + correction_base) @ c.B @ e_zeros, 65);
-    top  : bits(65) = truncate((a_top + correction_top)  @ c.T @ e_zeros, 65);
-    if (base[64] == bitone) then {
-      /* If base[64] is set this indicates under or overflow i.e. a has
-         wrapped around the address space and been corrected. In this case
-         we need to correct top[64] because top is not quite modulo 2**64 due
-         to having max top == 2**64 in one particular case: */
-       top[64] = if (aHi == 1) & (tHi == 1) then bitone else bitzero;
-    };
+    /* Compute region corrections for top and base relative to a */
+    // let correction_base = bHi - aHi in
+    // let correction_top  = tHi - aHi in
+    bool correction_base = bHi != aHi;
+    bool correction_top = tHi != aHi;
+    // let a_top = (a >> (E + mantissa_width)) in {
+    // let a_top = (a >> (E + 14)) in
+    // Note: shifting by 64 is a no-op and causes wrong results!
+    const unsigned a_top_shift = E + CC128_MANTISSA_WIDTH;
+    uint64_t a_top = a_top_shift >= CC128_CAP_ADDR_WIDTH ? 0 :  cursor >> a_top_shift;
+
+    // base : CapLenBits = truncate((a_top + correction_base) @ c.B @ zeros(E), cap_len_width);
+    unsigned __int128 base = a_top + correction_base;
+    base <<= CC128_MANTISSA_WIDTH;
+    base |= B;
+    base <<= E;
+    base &= ((unsigned __int128)1 << CC128_CAP_LEN_WIDTH) - 1;
+    assert((uint64_t)(base >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
+    // top  : truncate((a_top + correction_top)  @ c.T @ zeros(E), cap_len_width);
+    unsigned __int128 top = a_top + correction_top;
+    top <<= CC128_MANTISSA_WIDTH;
+    top |= T;
+    top <<= E;
+    top &= ((unsigned __int128)1 << CC128_CAP_LEN_WIDTH) - 1;
+    assert((uint64_t)(top >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
+
+    // if (base[cap_addr_width] == bitone) then {
+    bool base_high = (base >> CC128_CAP_ADDR_WIDTH);
+    if (base_high) {
+          /* If base[64] is set this indicates under or overflow i.e. a has
+           * wrapped around the address space and been corrected. In this case
+           * we need to correct top[64] because top is not quite modulo 2**64 due
+           * to having max top == 2**64 in one particular case:
+           */
+        // top[cap_addr_width] = if (aHi == 1) & (tHi == 1) then bitone else bitzero;
+        if (aHi && tHi) {
+            top |= ((unsigned __int128)1 << 64);
+        } else {
+            top &= UINT64_MAX; // clear top bit
+        }
+        base = (uint64_t)base; // strip the high bit
+    }
+    assert(base <= CC128_CAP_ADDR_MAX);
+
     /* The following is apparently equivalent to above and used by hw. */
     /*
     let base2 : bits(2) = bitzero @ base[63];
@@ -567,41 +622,7 @@ function getCapBounds(c) : Capability -> (uint64, CapLen) =
       top[64] = ~(top[64]);
     };
     */
-    (unsigned(base[63..0]), unsigned(top))
-  }
-#endif
-    uint32_t amid = (cursor >> E) & BMask;
-    uint32_t r = (((B >> (BWidth - 3)) - 1) << (BWidth - 3)) & BMask;
-
-    int64_t ct, cb;
-
-    if (amid < r) {
-        ct = T < r ? INT64_C(0) : INT64_C(-1);
-        cb = B < r ? INT64_C(0) : INT64_C(-1);
-    } else {
-        ct = T < r ? INT64_C(1) : INT64_C(0);
-        cb = B < r ? INT64_C(1) : INT64_C(0);
-    }
-
-    uint8_t shift = (uint8_t)(E + BWidth);
-
-    uint64_t cursor_top = shift >= 64 ? 0 : cursor >> shift;
-    // Top is 65 bits -> use __int128 which is quite efficient (seems better than
-    // a separate boolean flag unless you spend a lot of time optimizing that).
-    unsigned __int128 top = (unsigned __int128)(((cursor_top + (uint64_t)(int64_t)ct) << BWidth) | (uint64_t)T) << E;
-    uint64_t base = (((cursor_top + (uint64_t)(int64_t)cb) << BWidth) | (uint64_t)B) << E;
-
-    // FIXME: I'm not sure why this is needed for some cases
-    // otherwise base = ffffffffffffeff8 len = 0x1000 breaks
-#pragma message("FIXME: remove this hack after updating to latest sail code")
-    if (top < base && (base & (UINT64_C(1) << 63))) {
-        // Implicit top bit
-        top |= ((unsigned __int128)1u) << 64;
-    }
-
-    top &= ((unsigned __int128)1 << 65) - 1; // pretend that top is 65 bits
-    const uint64_t top_high = (top >> 64);
-    assert(top_high <= 1); // should be at most 1 bit over
+    assert((uint64_t)(top >> 64) <= 1); // should be at most 1 bit over
 
     // TODO: should really store top and not length!
     cdp->_cr_length = top - base;
@@ -609,8 +630,8 @@ function getCapBounds(c) : Capability -> (uint64, CapLen) =
         // This can happen for invalid capabilities with arbitrary bit patterns
         assert((signed __int128)cdp->_cr_length < 0); // must be negative
     }
-    cdp->cr_offset = cursor - base;
-    cdp->cr_base = base;
+    cdp->cr_offset = cursor - (uint64_t)base;
+    cdp->cr_base = (uint64_t)base;
 }
 
 /*
@@ -873,10 +894,6 @@ static bool fast_cc128_is_representable(bool sealed, uint64_t base, unsigned __i
     return ((inRange && inLimits) || (e >= highest_exp));
 }
 
-static inline uint64_t cc128_truncate64(uint64_t value, size_t bits) {
-    return value & ((UINT64_C(1) << bits) - 1);
-}
-
 /* @return whether the operation was able to set precise bounds precise or not */
 static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top, uint64_t* alignment_mask) {
     assert(cap->cr_tag && "Cannot be used on untagged capabilities");
@@ -1054,7 +1071,7 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
 
 /* @return whether the operation was able to set precise bounds precise or not */
 static inline bool cc128_setbounds(cap_register_t* cap, uint64_t req_base, unsigned __int128 req_top) {
-  return cc128_setbounds_impl(cap, req_base, req_top, NULL);
+    return cc128_setbounds_impl(cap, req_base, req_top, NULL);
 }
 
 /* @return the mask that needs to be applied to base in order to get a precisely representable capability */

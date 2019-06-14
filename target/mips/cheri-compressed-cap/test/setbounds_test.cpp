@@ -23,7 +23,7 @@ struct setbounds_regressions {
 };
 
 static inline void check_csetbounds_invariants(const cap_register_t& initial_cap, const cap_register_t& with_bounds,
-                                               bool was_exact, uint64_t requested_base, uint64_t requested_top) {
+                                               bool was_exact, uint64_t requested_base, unsigned __int128 requested_top) {
     CAPTURE(initial_cap, with_bounds, was_exact);
     // Address should be the same!
     REQUIRE(with_bounds.address() == initial_cap.address());
@@ -126,7 +126,7 @@ TEST_CASE("Cheritest regression case", "[regression]") {
 
 static inline unsigned __int128 round_up_with_cram_mask(unsigned __int128 value, unsigned __int128 round_down_mask) {
     // mask has all ones in the top
-    REQUIRE(cc128_idx_MSNZ(round_down_mask) == 63);
+    REQUIRE(cc128_idx_MSNZ((uint64_t)round_down_mask) == 63);
     // Round up using by adding ~mask to go over boundary and then round down with & mask
     return (value + ~round_down_mask) & (round_down_mask);
 }
@@ -134,7 +134,7 @@ static inline unsigned __int128 round_up_with_cram_mask(unsigned __int128 value,
 static inline void check_cram_matches_setbounds(unsigned __int128 req_top, const cap_register_t& cap_to_bound,
                                                 const cap_register_t& setbounds_result) {
     // Check that rounding with cram is equivalent to setbounds rounding:
-    uint64_t cram_value = cc128_get_alignment_mask(req_top - cap_to_bound.address());
+    uint64_t cram_value = cc128_get_alignment_mask((uint64_t)(req_top - cap_to_bound.address()));
     CAPTURE(cram_value);
     CAPTURE(cap_to_bound);
     CAPTURE(setbounds_result);

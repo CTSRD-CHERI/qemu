@@ -65,7 +65,7 @@ std::ostream& operator<<(std::ostream& os, const cap_register_t& value) {
 
 static bool failed = false;
 
-template <typename T> static bool check(T expected, T actual, const std::string& msg) {
+template <typename T> static inline bool check(T expected, T actual, const std::string& msg) {
     if (expected == actual)
         return true;
     std::cerr << "ERROR: " << msg << ": expected 0x" << std::hex << expected << " != 0x" << actual << "\n";
