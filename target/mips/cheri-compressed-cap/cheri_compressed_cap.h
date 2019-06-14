@@ -987,7 +987,6 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
         uint64_t bot_ie = cc128_truncate64(req_base >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
         if (alignment_mask) {
             *alignment_mask = UINT64_MAX << (E + CC128_EXP_LOW_WIDTH);
-            *alignment_mask = UINT64_MAX << (E + CC128_EXP_LOW_WIDTH);
         }
         uint64_t top_ie = cc128_truncate64((uint64_t)req_top >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
         //    /* Find out whether we have lost significant bits of base and top using a
