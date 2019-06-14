@@ -3,6 +3,9 @@ project(cheri_compressed_cap C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 14)
 
+add_compile_options(-fsanitize=undefined)
+add_link_options(-fsanitize=undefined)
+
 add_compile_options(-pedantic -Wall -Wextra -Weverything -Wno-old-style-cast -Wno-c++98-compat-pedantic -Wno-c++98-c++11-compat-binary-literal -Wno-c11-extensions -Wno-padded)
 add_library(cheri_compressed_cap14 cheri_compressed_cap.c cheri_compressed_cap.h)
 add_library(cheri_compressed_cap23 cheri_compressed_cap.c cheri_compressed_cap.h)
