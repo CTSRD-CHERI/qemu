@@ -73,6 +73,12 @@ typedef struct cap_register cap_register_t;
 
 #endif
 
+#ifdef __cplusplus
+/* Some versions of GCC dont't like _Static_assert() in C++ mode */
+#define CC128_STATIC_ASSERT(cond, msg) static_assert(cond, msg)
+#else
+#define CC128_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
+#endif
 
 #define CAP_MAX_ADDRESS_PLUS_ONE ((unsigned __int128)1u << 64)
 
@@ -222,20 +228,20 @@ enum {
     CC128_FIELD(EXP_NONZERO_BOTTOM, 86, 67),
     CC128_FIELD(EXPONENT_HIGH_PART, 66, 64),
 };
-_Static_assert(CC128_FIELD_INTERNAL_EXPONENT_START == CC_L_IE_OFF, "");
-_Static_assert(CC128_FIELD_LH_START == CC_L_LH_OFF, "");
-_Static_assert(CC128_FIELD_EXP_ZERO_BOTTOM_START == CC_L_B_OFF, "");
-_Static_assert(CC128_FIELD_BOTTOM_ENCODED_START == CC_L_B_OFF, "");
-_Static_assert(CC128_FIELD_EXP_ZERO_TOP_START == CC_L_T_OFF, "");
-_Static_assert(CC128_FIELD_TOP_ENCODED_START == CC_L_T_OFF, "");
-_Static_assert(CC128_FIELD_SEALED_MODE_START == CC_L_S_OFF, "");
-_Static_assert(CC128_FIELD_BOTTOM_ENCODED_SIZE == CC_L_BWIDTH, "");
-_Static_assert(CC128_FIELD_TOP_ENCODED_SIZE == CC_L_BWIDTH - 2, "");
-_Static_assert(CC128_FIELD_EXP_ZERO_BOTTOM_SIZE == CC_L_BWIDTH, "");
-_Static_assert(CC128_FIELD_EXP_ZERO_TOP_SIZE == CC_L_BWIDTH - 2, "");
-_Static_assert(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_EXPONENT_LOW_PART_SIZE + CC128_FIELD_LH_SIZE== CC_L_EWIDTH, "");
-_Static_assert(CC128_FIELD_EXPONENT_LOW_PART_SIZE == CC_L_LOWWIDTH, "");
-_Static_assert(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_LH_SIZE == CC_L_EWIDTH - CC_L_LOWWIDTH, "");
+CC128_STATIC_ASSERT(CC128_FIELD_INTERNAL_EXPONENT_START == CC_L_IE_OFF, "");
+CC128_STATIC_ASSERT(CC128_FIELD_LH_START == CC_L_LH_OFF, "");
+CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_BOTTOM_START == CC_L_B_OFF, "");
+CC128_STATIC_ASSERT(CC128_FIELD_BOTTOM_ENCODED_START == CC_L_B_OFF, "");
+CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_TOP_START == CC_L_T_OFF, "");
+CC128_STATIC_ASSERT(CC128_FIELD_TOP_ENCODED_START == CC_L_T_OFF, "");
+CC128_STATIC_ASSERT(CC128_FIELD_SEALED_MODE_START == CC_L_S_OFF, "");
+CC128_STATIC_ASSERT(CC128_FIELD_BOTTOM_ENCODED_SIZE == CC_L_BWIDTH, "");
+CC128_STATIC_ASSERT(CC128_FIELD_TOP_ENCODED_SIZE == CC_L_BWIDTH - 2, "");
+CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_BOTTOM_SIZE == CC_L_BWIDTH, "");
+CC128_STATIC_ASSERT(CC128_FIELD_EXP_ZERO_TOP_SIZE == CC_L_BWIDTH - 2, "");
+CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_EXPONENT_LOW_PART_SIZE + CC128_FIELD_LH_SIZE== CC_L_EWIDTH, "");
+CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_LOW_PART_SIZE == CC_L_LOWWIDTH, "");
+CC128_STATIC_ASSERT(CC128_FIELD_EXPONENT_HIGH_PART_SIZE + CC128_FIELD_LH_SIZE == CC_L_EWIDTH - CC_L_LOWWIDTH, "");
 #else
 enum {
     CC128_FIELD(UPERMS, 127, 124),
@@ -657,12 +663,12 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
 
     uint8_t LH;
     uint32_t BWidth = seal_mode == CC_SEAL_MODE_SEALED ? CC_L_SEALED_BWIDTH : CC_L_BWIDTH;
-    _Static_assert(CC128_BOT_WIDTH == 23, "This code assumes 14-bit bot");
-    _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "This code assumes 14-bit bot");
+    CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 23, "This code assumes 14-bit bot");
+    CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "This code assumes 14-bit bot");
 #else
     uint32_t BWidth = CC128_BOT_WIDTH;
-    _Static_assert(CC128_BOT_WIDTH == 14, "This code assumes 14-bit bot");
-    _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "This code assumes 14-bit bot");
+    CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 14, "This code assumes 14-bit bot");
+    CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "This code assumes 14-bit bot");
 #endif
     uint32_t BMask = (1u << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
@@ -923,13 +929,13 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
     //  let e = 52 - CountLeadingZeros(length[64..13]);
 #ifndef CC128_OLD_FORMAT
     // To check that the symbolic constants match sail:
-    _Static_assert(CC128_BOT_WIDTH == 14, "");
-    _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "");
-    _Static_assert(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
+    CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 14, "");
+    CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "");
+    CC128_STATIC_ASSERT(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
 #else
-    _Static_assert(CC128_BOT_WIDTH == 23, "");
-    _Static_assert(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "");
-    _Static_assert(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
+    CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 23, "");
+    CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 20, "");
+    CC128_STATIC_ASSERT(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
 #endif
     uint8_t E = (uint8_t)cc128_get_exponent(req_length65);
     const uint64_t req_length64 = (uint64_t)req_length65;
