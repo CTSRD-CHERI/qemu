@@ -38,6 +38,7 @@ static inline void check_csetbounds_invariants(const cap_register_t& initial_cap
     }
     REQUIRE(with_bounds.base() >= initial_cap.base()); // monotonicity broken
     REQUIRE(with_bounds.top() <= initial_cap.top());   // monotonicity broken
+    REQUIRE(cc128_is_representable_cap_exact(&with_bounds)); // result of csetbounds must be representable
 }
 
 static cap_register_t do_csetbounds(const cap_register_t& initial_cap, unsigned __int128 requested_top, bool* was_exact) {
