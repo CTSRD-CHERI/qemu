@@ -124,6 +124,24 @@ TEST_CASE("Cheritest regression case", "[regression]") {
 
 #include "setbounds_inputs.cpp"
 
+static inline unsigned __int128 round_up_with_cram_mask(unsigned __int128 value, unsigned __int128 round_down_mask) {
+    // mask has all ones in the top
+    REQUIRE(cc128_idx_MSNZ(round_down_mask) == 63);
+    // Round up using by adding ~mask to go over boundary and then round down with & mask
+    return (value + ~round_down_mask) & (round_down_mask);
+}
+
+static inline void check_cram_matches_setbounds(unsigned __int128 req_top, const cap_register_t& cap_to_bound,
+                                                const cap_register_t& setbounds_result) {
+    // Check that rounding with cram is equivalent to setbounds rounding:
+    uint64_t cram_value = cc128_get_alignment_mask(req_top - cap_to_bound.address());
+    CAPTURE(cram_value);
+    CAPTURE(cap_to_bound);
+    CAPTURE(setbounds_result);
+    CHECK((cap_to_bound.address() & cram_value) == setbounds_result.base());
+    CHECK(round_up_with_cram_mask(req_top, cram_value) == setbounds_result.top());
+}
+
 TEST_CASE("setbounds test cases from sail", "[bounds]") {
     for (size_t index = 0; index < array_lengthof(setbounds_inputs); index++) {
         CAPTURE(index);
@@ -136,6 +154,8 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         const cap_register_t first_bounds = do_csetbounds(first_input, input.top1, &first_exact);
         CHECK(first_bounds.base() == input.sail_cc_base1);
         CHECK(first_bounds.top() == input.sail_cc_top1);
+        // Check CRAP/CRAM:
+        check_cram_matches_setbounds(input.top1, first_input, first_bounds);
 
         // Check that calling setbounds with the same target top yields the same result
         bool first_again_exact = false;
@@ -144,7 +164,8 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         CHECK(first_bounds.base() == first_bounds_again.base());
         CHECK(first_bounds.top() == first_bounds_again.top());
         CHECK(first_bounds.address() == first_bounds_again.address());
-
+        // Check CRAM still works:
+        check_cram_matches_setbounds(input.top1, first_bounds, first_bounds_again);
 
         // Check the second csetbounds:
         cap_register_t second_input = first_bounds;
@@ -154,6 +175,8 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         const cap_register_t second_bounds = do_csetbounds(second_input, input.top2, &second_exact);
         CHECK(second_bounds.base() == input.sail_cc_base2);
         CHECK(second_bounds.top() == input.sail_cc_top2);
+        // Check CRAP/CRAM:
+        check_cram_matches_setbounds(input.top2, second_input, second_bounds);
 
         // Check that calling setbounds with the same target top yields the same result
         bool second_again_exact = false;
@@ -162,6 +185,7 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         CHECK(second_bounds.base() == second_bounds_again.base());
         CHECK(second_bounds.top() == second_bounds_again.top());
         CHECK(second_bounds.address() == second_bounds_again.address());
+        check_cram_matches_setbounds(input.top2, second_bounds, second_bounds_again);
     }
 }
 
