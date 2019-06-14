@@ -70,7 +70,7 @@ static void dump_cap_fields(const cap_register_t* result) {
     fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n",
             (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)": "");
-    fprintf(stderr, "Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
+    fprintf(stderr, "Sealed:      %d\n", cc128_is_cap_sealed(result) ? 1 : 0);
     fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result->cr_otype, otype_suffix(result->cr_otype));
     fprintf(stderr, "\n");
 }
