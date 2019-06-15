@@ -691,38 +691,25 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
 
     uint64_t base = csp->cr_base;
     const unsigned __int128 top = csp->cr_base + csp->_cr_length;
-    const uint64_t length64 = (uint64_t)csp->_cr_length;
-    const uint64_t top64 = (uint64_t)top;
-    const bool length65 = (csp->_cr_length >> 64) & 1;
+    const unsigned __int128 length = csp->_cr_length;
 
-    bool IE;
-    uint32_t Te, Be;
-    uint8_t E;
-
+    uint8_t E = (uint8_t)cc128_get_exponent(length);
+    const uint64_t length64 = (uint64_t)length;
+    // from sail: need IE if length bit 12 is set: let ie = (e != 0) | length[12];
+    // 0x1000 (bwidth - 2 bit set) is the first value that cannot be encoded
+    // without the internal exponent:
+    // Note: 12 = BWidth - 2  / BWidth with internal exponent plus one
+    bool IE = E != 0 || cc128_getbits(length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
+    uint64_t Be;
+    uint64_t Te;
+#ifdef CC128_OLD_FORMAT
     if (top > UINT64_MAX) {
-        // Length of 1 << 64.
-        if (length65) {
-            assert(csp->_cr_length > UINT64_MAX); // should really be > 1 << 64
-            E = (uint8_t)(64 - BWidth + 2);
-        } else {
-            E = (uint8_t)_cc128_compute_e(length64, BWidth);
-        }
-
         Te = (UINT64_C(1) << (64 - E)) & TMask;
     } else {
         E = (uint8_t)_cc128_compute_e(length64, BWidth);
         Te = (top64 >> E) & TMask;
     }
-
     Be = (base >> E) & BMask;
-    // from sail: need IE if length bit 12 is set: let ie = (e != 0) | length[12];
-    // 0x1000 (bwidth - 2 bit set) is the first value that cannot be encoded
-    // without the internal exponent:
-    // Note: 12 = BWidth - 2  / BWidth with internal exponent plus one
-    IE = E != 0 || cc128_getbits(length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
-
-
-#ifdef CC128_OLD_FORMAT
     if (IE) {
         LH = E >> (2 * CC_L_LOWWIDTH);
         Be |= (E >> CC_L_LOWWIDTH) & CC_L_LOWMASK;
@@ -744,10 +731,73 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
           << CC_L_BWIDTH) |
          (uint64_t)Be);
 #else
-    if (IE) {
+    if (!IE) {
+        // precisely representable -> just extract the bits
+        assert(top <= UINT64_MAX); // must be 64 bits
+        Be = cc128_truncate64(base, CC128_FIELD_BOTTOM_ENCODED_SIZE);
+        Te = cc128_truncate64((uint64_t)top, CC128_FIELD_TOP_ENCODED_SIZE);
+    } else {
+        uint64_t bot_ie = cc128_truncate64(base >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
+        uint64_t top_ie = cc128_truncate64((uint64_t)top >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
+        //    /* Find out whether we have lost significant bits of base and top using a
+        //       mask of bits that we will lose (including 3 extra for exp). */
+        //    maskLo : bits(65) = zero_extend(replicate_bits(0b1, e + 3));
+        //    z65    : bits(65) = zeros();
+        //    lostSignificantBase = (base65 & maskLo) != z65;
+        //    lostSignificantTop = (top & maskLo) != z65;
+        // TODO: stop using unsigned __int128 and just handle bit65 set specially?
+        const unsigned __int128 maskLo = (((unsigned __int128)1u) << (E + CC128_EXP_LOW_WIDTH)) - 1;
+        const unsigned __int128 zero65 = 0;
+        bool lostSignificantBase = (base & maskLo) != zero65;
+        bool lostSignificantTop = (top & maskLo) != zero65;
+        //    if lostSignificantTop then {
+        //      /* we must increment T to make sure it is still above top even with lost bits.
+        //         It might wrap around but if that makes B<T then decoding will compensate. */
+        //      T_ie = T_ie + 1;
+        //    };
+        if (lostSignificantTop) {
+            top_ie = cc128_truncate64(top_ie + 1, CC128_BOT_INTERNAL_EXP_WIDTH);
+        }
+        //    /* Has the length overflowed? We chose e so that the top two bits of len would be 0b01,
+        //       but either because of incrementing T or losing bits of base it might have grown. */
+        //    len_ie = T_ie - B_ie;
+        //    if len_ie[10] then {
+        //      /* length overflow -- increment E by one and then recalculate
+        //         T, B etc accordingly */
+        //      incE = true;
+        //
+        //      lostSignificantBase = lostSignificantBase | B_ie[0];
+        //      lostSignificantTop  = lostSignificantTop | T_ie[0];
+        //
+        //      B_ie = truncate(base >> (e + 4), 11);
+        //      let incT : range(0,1) = if lostSignificantTop then 1 else 0;
+        //      T_ie = truncate(top >> (e + 4), 11) + incT;
+        //    };
+        const uint64_t len_ie = cc128_truncate64(top_ie - bot_ie, CC128_BOT_INTERNAL_EXP_WIDTH);
+        bool incE = false;
+        if (cc128_getbits(len_ie, CC128_BOT_INTERNAL_EXP_WIDTH - 1, 1)) {
+            incE = true;
+            lostSignificantBase = lostSignificantBase || cc128_getbits(bot_ie, 0, 1);
+            lostSignificantTop = lostSignificantTop || cc128_getbits(top_ie, 0, 1);
+            bot_ie = cc128_truncate64(base >> (E + CC128_EXP_LOW_WIDTH + 1), CC128_BOT_INTERNAL_EXP_WIDTH);
+            const bool incT = lostSignificantTop;
+            top_ie = cc128_truncate64((uint64_t)(top >> (E + CC128_EXP_LOW_WIDTH + 1)), CC128_BOT_INTERNAL_EXP_WIDTH);
+            if (incT) {
+                top_ie = cc128_truncate64(top_ie + 1, CC128_BOT_INTERNAL_EXP_WIDTH);
+            }
+        }
+        //    Bbits = B_ie @ 0b000;
+        //    Tbits = T_ie @ 0b000;
+        Be = bot_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        Te = top_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        const uint8_t newE = E + (incE ? 1 : 0);
         // Split E between T and B
-        Te |= (E >> CC128_FIELD_EXPONENT_LOW_PART_SIZE) & CC128_FIELD_EXPONENT_HIGH_PART_MAX_VALUE;
-        Be |= E & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE;
+        const uint64_t expHighBits = cc128_getbits(newE >> CC128_FIELD_EXPONENT_LOW_PART_SIZE , 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE);
+        const uint64_t expLowBits = cc128_getbits(newE, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE);
+        assert(cc128_getbits(Te, 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE) == 0);
+        assert(cc128_getbits(Be, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE) == 0);
+        Te |= expHighBits;
+        Be |= expLowBits;
     }
     uint64_t pesbt =
         CC128_ENCODE_FIELD(csp->cr_uperms, UPERMS) |
