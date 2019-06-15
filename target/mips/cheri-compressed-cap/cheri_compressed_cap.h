@@ -329,6 +329,10 @@ enum CC_OTypes {
 #define CAP_LAST_SPECIAL_OTYPE_SIGN_EXTENDED ((uint64_t)-3)
 #define CAP_MAX_SEALED_OTYPE (CAP_LAST_SPECIAL_OTYPE - 1u)
 
+
+/* Silence ISO C restricts enumerator values to range of 'int' */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 #ifndef CC128_OLD_FORMAT
 /* From sail:
 let null_cap : Capability = struct {
@@ -397,6 +401,8 @@ enum {
  * is invisibly keeps null 0 whatever we choose it to be */
 #define CC128_NULL_XOR_MASK UINT64_C(0x200001800005)
 #endif /* CC128_OLD_FORMAT */
+#pragma GCC diagnostic pop
+
 
 #ifdef __cplusplus
 template<size_t a, size_t b>
