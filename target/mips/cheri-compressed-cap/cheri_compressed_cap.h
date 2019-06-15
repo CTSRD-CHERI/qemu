@@ -686,9 +686,6 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 14, "This code assumes 14-bit bot");
     CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "This code assumes 14-bit bot");
 #endif
-    uint32_t BMask = (1u << BWidth) - 1;
-    uint32_t TMask = BMask >> 2;
-
     uint64_t base = csp->cr_base;
     const unsigned __int128 top = csp->cr_base + csp->_cr_length;
     const unsigned __int128 length = csp->_cr_length;
@@ -703,6 +700,8 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     uint64_t Be;
     uint64_t Te;
 #ifdef CC128_OLD_FORMAT
+    uint32_t BMask = (1u << BWidth) - 1;
+    uint32_t TMask = BMask >> 2;
     if (top > UINT64_MAX) {
         Te = (UINT64_C(1) << (64 - E)) & TMask;
     } else {
