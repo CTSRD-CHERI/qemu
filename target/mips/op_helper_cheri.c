@@ -1197,7 +1197,6 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     uint64_t cursor = cap_get_cursor(cbp);
     unsigned __int128 new_top = (unsigned __int128)cursor + length; // 65 bits
-    unsigned __int128 current_top = (unsigned __int128)cursor + cap_get_length(cbp); // 65 bits
     /*
      * CSetBounds: Set Bounds
      */
@@ -1208,9 +1207,11 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
     } else if (cursor < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else if (new_top > UINT64_MAX) {
+        // TODO: special case for cheri128 full address space caps!
         /* We don't allow setbounds to create full address space caps */
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (new_top > current_top) {
+    } else if (new_top > cap_get_top(cbp)) {
+        tcg_debug_assert(((unsigned __int128)cap_get_base(cbp) + cap_get_length(cbp)) <= UINT64_MAX && "csetbounds top currently limited to UINT64_MAX"); // 65 bits
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         cap_register_t result = *cbp;
