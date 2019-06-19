@@ -758,7 +758,7 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
         Te = cc128_truncate64((uint64_t)top, CC128_FIELD_TOP_ENCODED_SIZE);
     } else {
         uint64_t bot_ie = cc128_truncate64(base >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
-        uint64_t top_ie = cc128_truncate64((uint64_t)top >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
+        uint64_t top_ie = cc128_truncate64((uint64_t)(top >> (E + CC128_EXP_LOW_WIDTH)), CC128_BOT_INTERNAL_EXP_WIDTH);
         //    /* Find out whether we have lost significant bits of base and top using a
         //       mask of bits that we will lose (including 3 extra for exp). */
         //    maskLo : bits(65) = zero_extend(replicate_bits(0b1, e + 3));
@@ -808,16 +808,14 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
         }
         //    Bbits = B_ie @ 0b000;
         //    Tbits = T_ie @ 0b000;
-        Be = bot_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
-        Te = top_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        const uint64_t Bbits = bot_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        const uint64_t Tbits = top_ie << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
         const uint8_t newE = E + (incE ? 1 : 0);
         // Split E between T and B
         const uint64_t expHighBits = cc128_getbits(newE >> CC128_FIELD_EXPONENT_LOW_PART_SIZE , 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE);
         const uint64_t expLowBits = cc128_getbits(newE, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE);
-        assert(cc128_getbits(Te, 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE) == 0);
-        assert(cc128_getbits(Be, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE) == 0);
-        Te |= expHighBits;
-        Be |= expLowBits;
+        Te = Tbits | expHighBits;
+        Be = Bbits | expLowBits;
     }
     uint64_t pesbt =
         CC128_ENCODE_FIELD(csp->cr_uperms, UPERMS) |
@@ -1049,7 +1047,7 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
         if (alignment_mask) {
             *alignment_mask = UINT64_MAX << (E + CC128_EXP_LOW_WIDTH);
         }
-        uint64_t top_ie = cc128_truncate64((uint64_t)req_top >> (E + CC128_EXP_LOW_WIDTH), CC128_BOT_INTERNAL_EXP_WIDTH);
+        uint64_t top_ie = cc128_truncate64((uint64_t)(req_top >> (E + CC128_EXP_LOW_WIDTH)), CC128_BOT_INTERNAL_EXP_WIDTH);
         //    /* Find out whether we have lost significant bits of base and top using a
         //       mask of bits that we will lose (including 3 extra for exp). */
         //    maskLo : bits(65) = zero_extend(replicate_bits(0b1, e + 3));
