@@ -1047,7 +1047,7 @@ void CHERI_HELPER_IMPL(cbuildcap)(CPUMIPSState *env, uint32_t cd, uint32_t cb, u
         // if cdp cd == ct (this was caught by testing cbuildcap $c3, $c1, $c3)
         cap_register_t result = *cbp;
         result.cr_base = ctp->cr_base;
-        result._cr_length = ctp->_cr_length;
+        result._cr_top = ctp->_cr_top;
         result.cr_perms = ctp->cr_perms;
         result.cr_uperms = ctp->cr_uperms;
         result.cr_offset = ctp->cr_offset;
@@ -1233,12 +1233,12 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
         (void)must_be_exact;
         /* Capabilities are precise -> can just set the values here */
         result.cr_base = cursor;
-        result._cr_length = length;
+        result._cr_top = new_top;
         result.cr_offset = 0;
 #endif
         assert(result.cr_base >= cbp->cr_base && "CSetBounds broke monotonicity (base)");
-        assert(result._cr_length <= cbp->_cr_length && "CSetBounds broke monotonicity (length)");
-        assert(cap_get_top(&result) <= cap_get_top(cbp) && "CSetBounds broke monotonicity (top)");
+        assert(cap_get_length65(&result) <= cap_get_length65(cbp) && "CSetBounds broke monotonicity (length)");
+        assert(cap_get_top65(&result) <= cap_get_top65(cbp) && "CSetBounds broke monotonicity (top)");
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -1608,7 +1608,7 @@ target_ulong CHERI_HELPER_IMPL(cexeq)(CPUMIPSState *env, uint32_t cb, uint32_t c
             equal = FALSE;
         } else if (cbp->cr_offset != ctp->cr_offset) {
             equal = FALSE;
-        } else if (cbp->_cr_length != ctp->_cr_length) {
+        } else if (cbp->_cr_top != ctp->_cr_top) {
             equal = FALSE;
         } else if (cbp->cr_otype != ctp->cr_otype) {
             equal = FALSE;
@@ -2270,7 +2270,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         ncd._sbit_for_memory = 1;
     else
         ncd._sbit_for_memory = 0;
-    ncd._cr_length = length ^ CAP_MAX_LENGTH;
+    ncd._cr_top = base + (length ^ CAP_MAX_LENGTH);
     ncd.cr_base = base;
     ncd.cr_offset = cursor - base;
     ncd.cr_tag = tag;
@@ -2310,7 +2310,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     uint64_t tps = ((uint64_t)(csp->cr_otype ^ CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
         (perms << 1) | (sbit ? 1UL : 0UL);
 
-    uint64_t length = csp->_cr_length ^ CAP_MAX_LENGTH;
+    uint64_t length = cap_get_length(csp) ^ CAP_MAX_LENGTH;
     /* Store the remaining "magic" data with the tags */
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, NULL, retpc);
     env->statcounters_cap_write++;

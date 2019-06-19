@@ -88,7 +88,7 @@ TEST_CASE("regression from cheritest", "[bounds]") {
     cap_register_t with_bounds = check_bounds_exact(initial, 0xffffff, false);
     CHECK(with_bounds.cr_base == 0xFFFFFFFFFF000000);
     CHECK(with_bounds.cr_offset == 0x0000000000000000);
-    CHECK(with_bounds._cr_length == 0x00000000001000000);
+    CHECK(with_bounds.length() == 0x00000000001000000);
 }
 
 TEST_CASE("Old format setbounds regression with new format", "[old]") {
@@ -106,7 +106,7 @@ TEST_CASE("Old format setbounds regression with new format", "[old]") {
     CHECK(with_bounds.cr_offset == 0x0000000000000007);
     // Higher precision in old format -> more exact bounds
     uint64_t expected_length = TESTING_OLD_FORMAT ? 0x0000000010000400 : 0x00000000010080000;
-    CHECK(with_bounds._cr_length == expected_length);
+    CHECK(with_bounds.length() == expected_length);
 }
 
 TEST_CASE("Cheritest regression case", "[regression]") {
@@ -119,7 +119,7 @@ TEST_CASE("Cheritest regression case", "[regression]") {
     cap_register_t with_bounds = check_bounds_exact(cap, 0x300000, true);
     CHECK(with_bounds.cr_base == 0x160600000);
     CHECK(with_bounds.cr_offset == 0);
-    CHECK(with_bounds._cr_length == 0x300000);
+    CHECK(with_bounds.length() == 0x300000);
     CHECK(with_bounds.cr_offset + with_bounds.cr_base == cap.cr_offset + cap.cr_base);
 }
 

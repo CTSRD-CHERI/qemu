@@ -13,7 +13,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         cap_register_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
         null_cap.cr_otype = CC128_OTYPE_UNSEALED;
-        null_cap._cr_length = CC128_NULL_LENGTH;
+        null_cap._cr_top = CC128_NULL_TOP;
         auto pesbt = compress_128cap(&null_cap);
         auto pesbt_without_xor = compress_128cap_without_xor(&null_cap);
         fprintf(stderr, "NULL ENCODED: 0x%llx\n", (long long)pesbt_without_xor);
@@ -27,7 +27,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         CHECK_FIELD(decompressed, uperms, 0);
         CHECK_FIELD(decompressed, perms, 0);
         CHECK_FIELD(decompressed, pesbt_xored_for_mem, 0); // loaded pesbt xored with mask
-        CHECK_FIELD_RAW(decompressed._cr_length, CC128_NULL_LENGTH);
+        CHECK_FIELD_RAW(decompressed.length(), CC128_NULL_LENGTH);
         CHECK_FIELD(decompressed, otype, CC128_OTYPE_UNSEALED);
     }
     {
@@ -35,7 +35,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         cap_register_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
         null_cap.cr_otype = CC256_OTYPE_UNSEALED;
-        null_cap._cr_length = CC256_NULL_LENGTH;
+        null_cap._cr_top = CC256_NULL_TOP;
         inmemory_chericap256 buffer;
         compress_256cap(&buffer, &null_cap);
         check(buffer.u64s[0], (uint64_t)0, "compressing NULL should result in zero[0]");
@@ -51,7 +51,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         CHECK_FIELD(decompressed, offset, 0);
         CHECK_FIELD(decompressed, uperms, 0);
         CHECK_FIELD(decompressed, perms, 0);
-        CHECK_FIELD_RAW(decompressed._cr_length, CC256_NULL_LENGTH);
+        CHECK_FIELD_RAW(decompressed.length(), CC256_NULL_LENGTH);
         CHECK_FIELD(decompressed, otype, CC256_OTYPE_UNSEALED);
     }
 }
@@ -68,7 +68,7 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     CHECK_FIELD(result, uperms, 0);
     CHECK_FIELD(result, perms, 0);
     CHECK_FIELD(result, pesbt_xored_for_mem, 0); // loaded pesbt xored with mask
-    CHECK_FIELD_RAW(result._cr_length, CC128_NULL_LENGTH);
+    CHECK_FIELD_RAW(result.length(), CC128_NULL_LENGTH);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 
     // Same for CHERI256
@@ -83,7 +83,7 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0);
     CHECK_FIELD(result, perms, 0);
-    CHECK_FIELD_RAW(result._cr_length, CC256_NULL_LENGTH);
+    CHECK_FIELD_RAW(result.length(), CC256_NULL_LENGTH);
     CHECK_FIELD(result, otype, CC256_OTYPE_UNSEALED);
 }
 
@@ -124,7 +124,7 @@ TEST_CASE("Old format test 1", "[old]") {
     CHECK_FIELD(result, offset, 0x9000000040001650);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xfae);
-    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)CAP_MAX_ADDRESS_PLUS_ONE);
+    CHECK_FIELD_RAW(result.length(), (cc128_length_t)CAP_MAX_ADDRESS_PLUS_ONE);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -134,7 +134,7 @@ TEST_CASE("Old format test 2", "[old]") {
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffa);
-    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)6);
+    CHECK_FIELD_RAW(result.length(), (cc128_length_t)6);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -144,7 +144,7 @@ TEST_CASE("Old format test 3", "[old]") {
     CHECK_FIELD(result, offset, 0x266);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffa);
-    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)0x400);
+    CHECK_FIELD_RAW(result.length(), (cc128_length_t)0x400);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -160,7 +160,7 @@ TEST_CASE("Old format test 4", "[old]") {
     CHECK_FIELD(result, offset, 0x1010);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffe);
-    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)0x130000000);
+    CHECK_FIELD_RAW(result.length(), (cc128_length_t)0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -175,7 +175,7 @@ TEST_CASE("Old format test 5", "[old]") {
     CHECK_FIELD(result, offset, 0xff0);
     CHECK_FIELD(result, uperms, 0xf);
     CHECK_FIELD(result, perms, 0xffe);
-    CHECK_FIELD_RAW(result._cr_length, (cc128_length_t)0x130000000);
+    CHECK_FIELD_RAW(result.length(), (cc128_length_t)0x130000000);
     CHECK_FIELD(result, otype, CC128_OTYPE_UNSEALED);
 }
 
@@ -198,7 +198,7 @@ TEST_CASE("Old format setbounds regression", "[old]") {
     CHECK(!exact);
     CHECK(with_bounds.cr_base == 0x0000000000000000);
     CHECK(with_bounds.cr_offset == 0x0000000000000007);
-    CHECK(with_bounds._cr_length == 0x00000000010000400);
+    CHECK(with_bounds.length() == 0x00000000010000400);
 }
 
 #else
@@ -221,7 +221,7 @@ TEST_CASE("New format max length regression", "[new]") {
     memset(&original, 0, sizeof(original));
     original.cr_tag = 1;
     original.cr_base = 0x900000000000efe0;
-    original._cr_length = 0x1000;
+    original._cr_top =  original.cr_base + 0x1000;
     original.cr_offset = 0xfa0;
     original.cr_otype = CC128_OTYPE_UNSEALED;
     original.cr_perms = CC128_PERMS_ALL & ~2u;
@@ -239,7 +239,7 @@ TEST_CASE("New format max length regression", "[new]") {
     CHECK_FIELD(decompressed, offset, original.cr_offset);
     CHECK_FIELD(decompressed, uperms, original.cr_uperms);
     CHECK_FIELD(decompressed, perms, original.cr_perms);
-    CHECK_FIELD_RAW(decompressed._cr_length, original._cr_length);
+    CHECK_FIELD_RAW(decompressed.length(), original.length());
     CHECK_FIELD(decompressed, otype, CC128_OTYPE_UNSEALED);
 
     CHECK(UINT64_C(0xfffd000003f9afe4) == pesbt_for_mem);
@@ -258,7 +258,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     memset(&cap, 0, sizeof(cap));
     cap.cr_base = base;
     cap.cr_offset = offset;
-    cap._cr_length = length;
+    cap._cr_top = base + length;
     cap.cr_tag = true;
     cap.cr_otype = CC128_OTYPE_UNSEALED;
     uint64_t compressed = compress_128cap(&cap);
@@ -268,7 +268,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     decompress_128cap(compressed, cap.cr_base + cap.cr_offset, &decompressed);
     CAPTURE(cap);
     CAPTURE(decompressed);
-    bool unsealed_roundtrip = cap.cr_base == decompressed.cr_base && cap._cr_length == decompressed._cr_length && cap.cr_offset == decompressed.cr_offset;
+    bool unsealed_roundtrip = cap.cr_base == decompressed.cr_base && cap.length() == decompressed.length() && cap.cr_offset == decompressed.cr_offset;
     bool unsealed_representable = cc128_is_representable(false, base, length, 0, cap.cr_offset);
     CHECK(unsealed_representable == should_work);
     CHECK(unsealed_roundtrip == unsealed_representable);
@@ -276,7 +276,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
 
     bool sealed_representable = cc128_is_representable(true, base, length, 0, cap.cr_offset);
     decompress_128cap(compressed, cap.cr_base + cap.cr_offset, &decompressed);
-    bool sealed_roundtrip = cap.cr_base == decompressed.cr_base && cap._cr_length == decompressed._cr_length && cap.cr_offset == decompressed.cr_offset;
+    bool sealed_roundtrip = cap.cr_base == decompressed.cr_base && cap.length() == decompressed.length() && cap.cr_offset == decompressed.cr_offset;
     CHECK(sealed_representable == should_work);
     CHECK(sealed_roundtrip == unsealed_representable);
     // fprintf(stderr, "Base 0x%" PRIx64 " Len 0x%" PRIx64 "%016" PRIx64 ": roundtrip: sealed=%d, unsealed=%d -- Fast: sealed=%d, unsealed=%d\n",

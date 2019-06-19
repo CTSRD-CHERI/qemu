@@ -43,11 +43,13 @@
 // Don't use _sbit_for_memory in cheri256 cap_register_t
 #define CC256_DEFINE_FUNCTIONS 0
 #define CAP_MAX_LENGTH CC128_NULL_LENGTH
+#define CAP_MAX_TOP CC128_NULL_TOP
 #undef CC128_OLD_FORMAT // don't use the old format
 #else
 // Don't use cr_pesbt_xored_for_mem in cheri256 cap_register_t
 #define CC128_DEFINE_FUNCTIONS 0
 #define CAP_MAX_LENGTH CC256_NULL_LENGTH
+#define CAP_MAX_TOP CC256_NULL_TOP
 #endif
 /* Don't let cheri_compressed_cap define cap_register_t */
 #define HAVE_CAP_REGISTER_T
@@ -79,14 +81,24 @@ static inline uint64_t cap_get_offset(const cap_register_t* c) {
 
 static inline uint64_t cap_get_length(const cap_register_t* c) {
     // TODO: should handle last byte of address space properly
-    return c->_cr_length > UINT64_MAX ? UINT64_MAX : (uint64_t)c->_cr_length;
+    unsigned __int128 length = c->_cr_top - c->cr_base;
+    return length > UINT64_MAX ? UINT64_MAX : (uint64_t)length;
 }
 
 // The top of the capability (exclusive -- i.e., one past the end)
 static inline uint64_t cap_get_top(const cap_register_t* c) {
     // TODO: should handle last byte of address space properly
-    unsigned __int128 top = c->cr_base + c->_cr_length;
+    unsigned __int128 top = c->_cr_top;
     return top > UINT64_MAX ? UINT64_MAX : (uint64_t)top;
+}
+
+static inline unsigned __int128 cap_get_length65(const cap_register_t* c) {
+    return c->_cr_top - c->cr_base;
+}
+
+static inline unsigned __int128 cap_get_top65(const cap_register_t* c) {
+    // TODO: should handle last byte of address space properly
+    return c->_cr_top;
 }
 
 static inline uint64_t cap_get_otype(const cap_register_t* c) {
@@ -190,7 +202,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
     // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
-    cp->_cr_length = CAP_MAX_LENGTH;
+    cp->_cr_top = CAP_MAX_TOP;
     cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
     return cp;
 }
@@ -208,7 +220,7 @@ static inline cap_register_t *nullify_epcc(uint64_t x, cap_register_t *cr)
 {
     cr->cr_tag = 0;
     cr->cr_base = 0;
-    cr->_cr_length = CAP_MAX_LENGTH;
+    cr->_cr_top = CAP_MAX_TOP;
     cr->cr_offset = x;
     return cr;
 }
@@ -244,7 +256,7 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
     crp->cr_offset = offset;
     crp->cr_base = 0UL;
     // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
-    crp->_cr_length = CAP_MAX_LENGTH;
+    crp->_cr_top = CAP_MAX_TOP;
     crp->cr_otype = CAP_OTYPE_UNSEALED;
 #ifdef CHERI_128
     crp->cr_pesbt_xored_for_mem = 0UL;
@@ -258,14 +270,14 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
 static inline bool
 is_representable_cap(const cap_register_t* cap, uint64_t new_offset)
 {
-    return cc128_is_representable(cap_is_sealed_with_type(cap), cap_get_base(cap), cap->_cr_length, cap_get_offset(cap), new_offset);
+    return cc128_is_representable(cap_is_sealed_with_type(cap), cap_get_base(cap), cap_get_length65(cap), cap_get_offset(cap), new_offset);
 }
 
 static inline bool
 is_representable_cap_when_sealed(const cap_register_t* cap, uint64_t new_offset)
 {
     assert(cap_is_unsealed(cap));
-    return cc128_is_representable(true, cap_get_base(cap), cap->_cr_length, cap_get_offset(cap), new_offset);
+    return cc128_is_representable(true, cap_get_base(cap), cap_get_length65(cap), cap_get_offset(cap), new_offset);
 }
 
 #else

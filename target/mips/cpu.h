@@ -173,7 +173,7 @@ struct cap_register {
     uint64_t cr_offset; /* Capability offset */
     uint64_t cr_base;   /* Capability base addr */
     /* Length is actually 65 bits (TODO: should store top instead) */
-    unsigned __int128 _cr_length; /* Capability length */
+    unsigned __int128 _cr_top; /* Capability top */
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
 #ifdef CHERI_128

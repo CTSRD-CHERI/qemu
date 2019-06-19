@@ -43,7 +43,7 @@ std::ostream& operator<<(std::ostream& os, const cap_register_t& value);
 
 std::ostream& operator<<(std::ostream& os, const cap_register_t& value) {
     char buffer[4096];
-    cc128_length_t top_full = value.cr_base + value._cr_length;
+    cc128_length_t top_full = value._cr_top;
     snprintf(buffer, sizeof(buffer),
              "\tPermissions: 0x%" PRIx32 "\n"
              "\tUser Perms:  0x%" PRIx32 "\n"
@@ -53,8 +53,8 @@ std::ostream& operator<<(std::ostream& os, const cap_register_t& value) {
              "\tTop:         0x%" PRIx64 "%016" PRIx64 " %s\n"
              "\tSealed:      %d\n"
              "\tOType:       0x%" PRIx32 "%s\n",
-             value.cr_perms, value.cr_uperms, value.cr_base, value.cr_offset, (uint64_t)(value._cr_length >> 64),
-             (uint64_t)value._cr_length, value._cr_length > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
+             value.cr_perms, value.cr_uperms, value.cr_base, value.cr_offset, (uint64_t)(value.length() >> 64),
+             (uint64_t)value.length(), value.length() > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
              (uint64_t)(top_full >> 64), (uint64_t)top_full, top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
              (int)cc128_is_cap_sealed(&value), value.cr_otype, otype_suffix(value.cr_otype));
     os << "{\n" << buffer << "}";
@@ -80,9 +80,9 @@ static void dump_cap_fields(const cap_register_t& result) {
     fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
     fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result.cr_base);
     fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result.cr_offset);
-    fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(result._cr_length >> 64),
-            (uint64_t)result._cr_length, result._cr_length > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    cc128_length_t top_full = result.cr_base + result._cr_length;
+    fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(result.length() >> 64),
+            (uint64_t)result.length() , result.length()  > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
+    cc128_length_t top_full = result.top();
     fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
     fprintf(stderr, "Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
@@ -107,7 +107,7 @@ inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_l
     memset(&creg, 0, sizeof(creg));
     creg.cr_base = base;
     creg.cr_offset = offset;
-    creg._cr_length = length;
+    creg._cr_top = base + length;
     creg.cr_perms = CC128_PERMS_ALL;
     creg.cr_uperms = CC128_UPERMS_ALL;
     creg.cr_otype = CC128_OTYPE_UNSEALED;
