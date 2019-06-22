@@ -1222,7 +1222,7 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
             do_raise_c2_exception(env, CP2Ca_INEXACT, cb);
             return;
         }
-        assert(cc128_is_representable_cap_exact(&result) && "CSetBounds must creat a representable capability");
+        assert(cc128_is_representable_cap_exact(&result) && "CSetBounds must create a representable capability");
 #else
         (void)must_be_exact;
         /* Capabilities are precise -> can just set the values here */
