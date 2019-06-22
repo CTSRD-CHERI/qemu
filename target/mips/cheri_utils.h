@@ -215,16 +215,6 @@ static inline bool is_null_capability(const cap_register_t *cp)
     return memcmp(null_capability(&null), cp, sizeof(cap_register_t)) == 0;
 }
 
-// Clear the tag bit and update the cursor:
-static inline cap_register_t *nullify_epcc(uint64_t x, cap_register_t *cr)
-{
-    cr->cr_tag = 0;
-    cr->cr_base = 0;
-    cr->_cr_top = CAP_MAX_TOP;
-    cr->cr_offset = x;
-    return cr;
-}
-
 /*
  * Convert 64-bit integer into a capability that holds the integer in
  * its offset field.
@@ -244,6 +234,38 @@ int_to_cap(uint64_t x, cap_register_t *cr)
 
     (void)null_capability(cr);
     cr->cr_offset = x;
+    return cr;
+}
+
+/**
+ * Clear the tag bit of a capability that became unrepresenable and update
+ * the cursor to point to @p addr.
+ * Only clearing the tag bit instead of updating the offset to be semantically
+ * valid improves timing on the FPGA and with the shift towards address-based
+ * interpretation it becomes less useful to retain the offset value.
+ *
+ * Previous behaviour was to use int_to_cap instead
+ *
+ */
+static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_register_t *cr)
+{
+#ifndef OLD_UNREPRESENTABLE_BEHAVIOUR
+    // Clear the tag and assert that the address is already correct:
+    cheri_debug_assert(cap_get_cursor(cr) == addr);
+    cr->cr_tag = false;
+#ifdef CHERI_128
+    // re-compute the compressed representation to ensure we have the same
+    // resulting values for offset/base/top as the hardware:
+    // TODO: this could go away if we used a cap_register_t representation
+    // more like the hardware and sail.
+    uint64_t pesbt_for_mem = compress_128cap(cr);
+    decompress_128cap(pesbt_for_mem, addr, cr);
+#endif
+#else
+#warning "Using old unrepresentable behaviour"
+    // Old behaviour: use int_to_cap()
+    int_to_cap(addr, cr);
+#endif
     return cr;
 }
 

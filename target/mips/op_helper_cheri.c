@@ -613,17 +613,15 @@ void CHERI_HELPER_IMPL(cfromptr)(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
+        cap_register_t result = *cbp;
+        result.cr_offset = rt;
         if (!is_representable_cap(cbp, rt)) {
             became_unrepresentable(env, cd, cfromptr, _host_return_address);
-            cap_register_t result;
-            update_capreg(&env->active_tc, cd,
-                int_to_cap(cbp->cr_base + rt, &result));
+            cap_mark_unrepresentable(cbp->cr_base + rt, &result);
         } else {
-            cap_register_t result = *cbp;
-            result.cr_offset = rt;
-            update_capreg(&env->active_tc, cd, &result);
             check_out_of_bounds_stat(env, cfromptr, &result);
         }
+        update_capreg(&env->active_tc, cd, &result);
     }
 }
 
@@ -725,19 +723,17 @@ void CHERI_HELPER_IMPL(cgetpccsetoffset)(CPUMIPSState *env, uint32_t cd, target_
      * CGetPCCSetOffset: Get PCC with new offset
      * See Chapter 5 in CHERI Architecture manual.
      */
+    cap_register_t result = *pccp;
+    result.cr_offset = rs;
     if (!is_representable_cap(pccp, rs)) {
         if (pccp->cr_tag)
             became_unrepresentable(env, cd, cgetpccsetoffset, _host_return_address);
-        cap_register_t result;
-        update_capreg(&env->active_tc, cd,
-            int_to_cap(pccp->cr_base + rs, &result));
+        cap_mark_unrepresentable(pccp->cr_base + rs, &result);
     } else {
-        cap_register_t result = *pccp;
-        result.cr_offset = rs;
-        update_capreg(&env->active_tc, cd, &result);
         check_out_of_bounds_stat(env, cgetpccsetoffset, &result);
         /* Note that the offset(cursor) is updated by ccheck_pcc */
     }
+    update_capreg(&env->active_tc, cd, &result);
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetperm)(CPUMIPSState *env, uint32_t cb)
@@ -811,19 +807,17 @@ static void cincoffset_impl(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_
         do_raise_c2_exception_impl(env, CP2Ca_SEAL, cb, retpc);
     } else {
         uint64_t cb_offset_plus_rt = cbp->cr_offset + rt;
+        cap_register_t result = *cbp;
+        result.cr_offset = cb_offset_plus_rt;
         if (!is_representable_cap(cbp, cb_offset_plus_rt)) {
             if (cbp->cr_tag) {
                 became_unrepresentable(env, cd, cincoffset, retpc);
             }
-            cap_register_t result;
-            int_to_cap(cbp->cr_base + cb_offset_plus_rt, &result);
-            update_capreg(&env->active_tc, cd, &result);
+            cap_mark_unrepresentable(cbp->cr_base + cb_offset_plus_rt, &result);
         } else {
-            cap_register_t result = *cbp;
-            result.cr_offset = cb_offset_plus_rt;
-            update_capreg(&env->active_tc, cd, &result);
             check_out_of_bounds_stat(env, cincoffset, &result);
         }
+        update_capreg(&env->active_tc, cd, &result);
     }
 }
 
@@ -1363,17 +1357,16 @@ void CHERI_HELPER_IMPL(csetoffset)(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     if (cbp->cr_tag && is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
+        cap_register_t result = *cbp;
+        result.cr_offset = rt;
         if (!is_representable_cap(cbp, rt)) {
             if (cbp->cr_tag)
                 became_unrepresentable(env, cd, csetoffset, _host_return_address);
-            cap_register_t result;
-            update_capreg(&env->active_tc, cd, int_to_cap(cbp->cr_base + rt, &result));
+            cap_mark_unrepresentable(cbp->cr_base + rt, &result);
         } else {
-            cap_register_t result = *cbp;
-            result.cr_offset = rt;
-            update_capreg(&env->active_tc, cd, &result);
             check_out_of_bounds_stat(env, csetoffset, &result);
         }
+        update_capreg(&env->active_tc, cd, &result);
     }
 }
 
