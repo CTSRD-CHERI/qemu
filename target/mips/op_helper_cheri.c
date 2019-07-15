@@ -2173,20 +2173,20 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     uint64_t cursor = cap_get_cursor(csp);
-
     uint64_t pesbt;
     if (csp->cr_tag)
         pesbt = compress_128cap(csp);
     else
         pesbt = csp->cr_pesbt_xored_for_mem;
 
-    /* Store pesbt to memory (might trap on store) */
-    cpu_stq_data_ra(env, vaddr, pesbt, retpc);
     /*
-     * We can set the tag bit now because we know we won't get a tlb fault
-     * after the first store (capabilities must be on the same page).
+     * Touching the tags will take both the data write TLB fault and
+     * capability write TLB fault before updating anything.  Thereafter, the
+     * data stores will not take additional faults, so there is no risk of
+     * accidentally tagging a shorn data write.  This, like the rest of the
+     * tag logic, is not multi-TCG-thread safe.
      */
-    /* Set the tag bit in memory, if set in the register. */
+
     env->statcounters_cap_write++;
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;
@@ -2194,7 +2194,8 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     } else {
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
     }
-    /* Finally, store the cursor */
+
+    cpu_stq_data_ra(env, vaddr, pesbt, retpc);
     cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -2289,13 +2290,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     uint64_t base = cap_get_base(csp);
     uint64_t cursor = cap_get_cursor(csp);
-    /* Store base to memory (might trap on store) */
-    cpu_stq_data_ra(env, vaddr, base, retpc); /* store the base first */
-    cpu_stq_data_ra(env, vaddr + 8, cursor, retpc); /* next cursor */
-    /*
-     * We can set the tag bit now because we know we won't get a tlb fault
-     * after the first store (capabilities must be on the same page).
-     */
+
     uint64_t perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
         (csp->cr_perms & CAP_PERMS_ALL));
 
@@ -2304,12 +2299,24 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
         (perms << 1) | (sbit ? 1UL : 0UL);
 
     uint64_t length = cap_get_length(csp) ^ CAP_MAX_LENGTH;
-    /* Store the remaining "magic" data with the tags */
+
+    /*
+     * Touching the tags will take both the data write TLB fault and
+     * capability write TLB fault before updating anything.  Thereafter, the
+     * data stores will not take additional faults, so there is no risk of
+     * accidentally tagging a shorn data write.  This, like the rest of the
+     * tag logic, is not multi-TCG-thread safe.
+     */
+
+    /* Store the "magic" data with the tags */
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, NULL, retpc);
     env->statcounters_cap_write++;
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;
     }
+
+    cpu_stq_data_ra(env, vaddr, base, retpc);
+    cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
@@ -2455,15 +2462,14 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     inmemory_chericap256 mem_buffer;
     compress_256cap(&mem_buffer, csp);
 
-    /* Store otype and perms to memory (might trap on store) */
-    cpu_stq_data_ra(env, vaddr + 0, mem_buffer.u64s[0], retpc);
     /*
-     * Store cursor to memory. Also, set the tag bit.  We
-     * set the tag bit here because the store above would
-     * have faulted the TLB if it didn't have an entry for
-     * this address.  Once we are sure the TLB has an entry
-     * we can set the tag bit.
+     * Touching the tags will take both the data write TLB fault and
+     * capability write TLB fault before updating anything.  Thereafter, the
+     * data stores will not take additional faults, so there is no risk of
+     * accidentally tagging a shorn data write.  This, like the rest of the
+     * tag logic, is not multi-TCG-thread safe.
      */
+
     env->statcounters_cap_write++;
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;
@@ -2472,9 +2478,11 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
     }
 
+    cpu_stq_data_ra(env, vaddr + 0, mem_buffer.u64s[0], retpc);
     cpu_stq_data_ra(env, vaddr + 8, mem_buffer.u64s[1], retpc);
     cpu_stq_data_ra(env, vaddr + 16, mem_buffer.u64s[2], retpc);
     cpu_stq_data_ra(env, vaddr + 24, mem_buffer.u64s[3], retpc);
+
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {

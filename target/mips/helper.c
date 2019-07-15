@@ -102,8 +102,20 @@ int r4k_map_address (CPUMIPSState *env, hwaddr *physical, int *prot,
             } else {
                 env->TLB_L = 0;
             }
-            if (rw == MMU_DATA_CAP_STORE && (n ? tlb->S1 : tlb->S0)) {
-                return TLBRET_S;
+            if (rw == MMU_DATA_CAP_STORE) {
+                /*
+                 * If we're trying to do a cap-store, first check for the
+                 * dirty/store-permitted bit before looking at the the
+                 * store-capability inhibit.
+                 */
+                if (!(n ? tlb->D1 : tlb->D0)) {
+                    *physical = tlb->PFN[n] | (address & (mask >> 1));
+                    *prot = PAGE_READ;
+                    return TLBRET_MATCH;
+                }
+                if (n ? tlb->S1 : tlb->S0) {
+                    return TLBRET_S;
+                }
             }
 #else
             if (rw == MMU_INST_FETCH && (n ? tlb->XI1 : tlb->XI0)) {
@@ -113,7 +125,13 @@ int r4k_map_address (CPUMIPSState *env, hwaddr *physical, int *prot,
                 return TLBRET_RI;
             }
 #endif /* TARGET_CHERI */
-            if (rw != MMU_DATA_STORE || (n ? tlb->D1 : tlb->D0)) {
+
+            if (( (rw != MMU_DATA_STORE)
+#if defined(TARGET_CHERI)
+                  && (rw != MMU_DATA_CAP_STORE)
+#endif
+                ) || (n ? tlb->D1 : tlb->D0)) {
+
                 *physical = tlb->PFN[n] | (address & (mask >> 1));
                 *prot = PAGE_READ;
                 if (n ? tlb->D1 : tlb->D0)
@@ -1867,6 +1885,18 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg, uintptr_t pc)
     ram_addr_t ram_addr;
     uint64_t tag;
     uint8_t *tagblk;
+
+    /*
+     * This attempt to resolve a virtual address may cause both a data store
+     * TLB fault (entry missing or D bit clear) and a capability store TLB
+     * fault (SC bit set).  v2r_addr bypasses the generic QEMU TCG soft-TLB
+     * (env->tlb_table and friends) but will populate the MIPS-specific TLB
+     * (env->tlb->mmu.r4k.tlb).  Therefore, while a data store to vaddr
+     * after a tag has been set might miss in the QEMU TCG soft-TLB, it
+     * won't miss in the MIPS model and therefore won't raise a processor
+     * exception (and will populate the QEMU TCG soft-TLB for subsequent
+     * data stores).
+     */
 
     ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg, pc);
     if (ram_addr == -1LL)
