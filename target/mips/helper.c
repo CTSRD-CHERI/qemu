@@ -1182,7 +1182,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x\n", __func__, env->active_tc.PC, get_CP0_EPC(env),
                  name, env->hflags & MIPS_HFLAG_BMASK);
 #ifdef TARGET_CHERI
-        qemu_log("\tPCC=" PRINT_CAP_FMTSTR " KCC= " PRINT_CAP_FMTSTR "EPCC=" PRINT_CAP_FMTSTR "\n",
+        qemu_log("\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
                  PRINT_CAP_ARGS(&env->active_tc.PCC), PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
                  PRINT_CAP_ARGS(&env->active_tc.CHWR.EPCC));
 #endif
