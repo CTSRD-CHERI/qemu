@@ -1815,8 +1815,15 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
         error_report("%s", buffer);
         exit(1);
     }
+
+    /*
+     * When resolving this address in the TLB, treat it like a data store
+     * (MMU_DATA_STORE) rather than a capability store (MMU_DATA_CAP_STORE),
+     * so that we don't require that the SC inhibit be clear.
+     */
+
     MemoryRegion* mr = NULL;
-    hwaddr paddr = v2p_addr(env, vaddr, 0, 0xFF, pc);
+    hwaddr paddr = v2p_addr(env, vaddr, MMU_DATA_STORE, 0xFF, pc);
     ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
     // Generate a trap if we try to clear tags in ROM instead of crashing
     check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
