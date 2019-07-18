@@ -1248,10 +1248,14 @@ abi_long freebsd_rw_unlock(abi_ulong target_addr)
         for (;;) {
             if (!tcmpset_32(&target_urwlock->rw_state, state,
                 state & ~TARGET_URWLOCK_WRITE_OWNER)) {
+                /*
+                 * Update the state here because we want to make sure that
+                 * another thread didn't unste the flag from underneath us.
+                 * If they did, we throw EPERM as the kernel does.
+                 */
                 __get_user(state, &target_urwlock->rw_state);
                 if (!(state & TARGET_URWLOCK_WRITE_OWNER)) {
-                    unlock_user_struct(target_urwlock,
-                        target_addr, 1);
+                    unlock_user_struct(target_urwlock, target_addr, 1);
                     return -TARGET_EPERM;
                 }
             } else {
@@ -1262,10 +1266,16 @@ abi_long freebsd_rw_unlock(abi_ulong target_addr)
         /* decrement reader count */
         for (;;) {
             if (!tcmpset_32(&target_urwlock->rw_state, state, (state  - 1))) {
+                /*
+                 * Just as in the branch above; we update the state here because
+                 * we want to make sure the reader count didn't hit 0 while we
+                 * are still trying to decrement this. The kernel also returns
+                 * EPERM here.
+                 */
+                __get_user(state, &target_urwlock->rw_state);
                 if (TARGET_URWLOCK_READER_COUNT(state) == 0) {
-                    unlock_user_struct(target_urwlock,
-                        target_addr, 1);
-                        return -TARGET_EPERM;
+                    unlock_user_struct(target_urwlock, target_addr, 1);
+                    return -TARGET_EPERM;
                  }
             } else {
                 break;
