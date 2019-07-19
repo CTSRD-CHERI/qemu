@@ -109,9 +109,7 @@ int r4k_map_address (CPUMIPSState *env, hwaddr *physical, int *prot,
                  * store-capability inhibit.
                  */
                 if (!(n ? tlb->D1 : tlb->D0)) {
-                    *physical = tlb->PFN[n] | (address & (mask >> 1));
-                    *prot = PAGE_READ;
-                    return TLBRET_MATCH;
+                    return TLBRET_DIRTY;
                 }
                 if (n ? tlb->S1 : tlb->S0) {
                     return TLBRET_S;
