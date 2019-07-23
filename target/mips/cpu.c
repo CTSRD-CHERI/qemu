@@ -216,9 +216,10 @@ static void dump_cpu_ips_on_exit(void) {
         CPUMIPSState *env = cpu->env_ptr;
         double duration_s = (get_clock() - start_ns) / 1000000000.0;
         uint64_t inst_total = env->statcounters_icount_kernel + env->statcounters_icount_user;
-        info_report("CPU%d executed instructions: %jd (%jd user, %jd kernel) in %fs IPS: %f\r\n", cpu->cpu_index,
+        info_report("CPU%d executed instructions: %jd (%jd user, %jd kernel) in %.2fs KIPS: %.2f\r\n", cpu->cpu_index,
                     (uintmax_t)inst_total, (uintmax_t)env->statcounters_icount_user,
-                    (uintmax_t)env->statcounters_icount_kernel, duration_s, (double)inst_total / duration_s);
+                    (uintmax_t)env->statcounters_icount_kernel, duration_s,
+                    (double)(inst_total / duration_s) / 1000.0);
     }
 }
 #if defined(DO_CHERI_STATISTICS)
