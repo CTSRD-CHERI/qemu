@@ -207,7 +207,21 @@ static ObjectClass *mips_cpu_class_by_name(const char *cpu_model)
     return oc;
 }
 
-#if defined(TARGET_CHERI) && defined(DO_CHERI_STATISTICS)
+#if defined(TARGET_CHERI)
+static uint64_t start_ns = 0;
+static void dump_cpu_ips_on_exit(void) {
+    assert(start_ns != 0);
+    CPUState *cpu;
+    CPU_FOREACH(cpu) {
+        CPUMIPSState *env = cpu->env_ptr;
+        double duration_s = (get_clock() - start_ns) / 1000000000.0;
+        uint64_t inst_total = env->statcounters_icount_kernel + env->statcounters_icount_user;
+        info_report("CPU%d executed instructions: %jd (%jd user, %jd kernel) in %fs IPS: %f\r\n", cpu->cpu_index,
+                    (uintmax_t)inst_total, (uintmax_t)env->statcounters_icount_user,
+                    (uintmax_t)env->statcounters_icount_kernel, duration_s, (double)inst_total / duration_s);
+    }
+}
+#if defined(DO_CHERI_STATISTICS)
 static void dump_stats_on_exit(void)
 {
     if (qemu_log_enabled() && qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS))
@@ -215,6 +229,7 @@ static void dump_stats_on_exit(void)
     else
         cheri_cpu_dump_statistics(NULL, stderr, fprintf, 0);
 }
+#endif
 #endif
 
 static void mips_cpu_class_init(ObjectClass *c, void *data)
@@ -259,6 +274,8 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     cc->gdb_stop_before_watchpoint = true;
 #if defined(TARGET_CHERI)
     cc->dump_statistics = cheri_cpu_dump_statistics;
+    start_ns = get_clock();
+    atexit(dump_cpu_ips_on_exit);
 #if defined(DO_CHERI_STATISTICS)
     atexit(dump_stats_on_exit);
 #endif
