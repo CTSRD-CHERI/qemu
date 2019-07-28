@@ -280,7 +280,7 @@ struct target_freebsd11_kevent {
     uint32_t   fflags;
     abi_long   data;
     abi_ulong  udata;
-} __packed;
+};
 
 struct target_freebsd_kevent {
     abi_ulong  ident;
@@ -290,7 +290,7 @@ struct target_freebsd_kevent {
     int64_t data;
     abi_ulong  udata;
     uint64_t  ext[4];
-} __packed;
+};
 
 /*
  *  sys/resource.h
