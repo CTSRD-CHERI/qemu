@@ -125,8 +125,13 @@ abi_long target_to_host_semid_ds(struct semid_ds *host_sd,
     /* sem_base is not used by kernel for IPC_STAT/IPC_SET */
     /* host_sd->sem_base  = g2h(target_sd->sem_base); */
     host_sd->sem_nsems = tswap16(target_sd->sem_nsems);
-    host_sd->sem_otime = tswapal(target_sd->sem_otime);
-    host_sd->sem_ctime = tswapal(target_sd->sem_ctime);
+#if defined(TARGET_I386)
+    host_sd->sem_otime = tswap32(target_sd->sem_otime);
+    host_sd->sem_ctime = tswap32(target_sd->sem_ctime);
+#else
+    host_sd->sem_otime = tswap64(target_sd->sem_otime);
+    host_sd->sem_ctime = tswap64(target_sd->sem_ctime);
+#endif
     unlock_user_struct(target_sd, target_addr, 0);
     return 0;
 }
@@ -173,9 +178,15 @@ abi_long target_to_host_msqid_ds(struct msqid_ds *host_md,
     host_md->msg_qbytes = tswapal(target_md->msg_qbytes);
     host_md->msg_lspid = tswapal(target_md->msg_lspid);
     host_md->msg_lrpid = tswapal(target_md->msg_lrpid);
-    host_md->msg_stime = tswapal(target_md->msg_stime);
-    host_md->msg_rtime = tswapal(target_md->msg_rtime);
-    host_md->msg_ctime = tswapal(target_md->msg_ctime);
+#if defined(TARGET_I386)
+    host_md->msg_stime = tswap32(target_md->msg_stime);
+    host_md->msg_rtime = tswap32(target_md->msg_rtime);
+    host_md->msg_ctime = tswap32(target_md->msg_ctime);
+#else
+    host_md->msg_stime = tswap64(target_md->msg_stime);
+    host_md->msg_rtime = tswap64(target_md->msg_rtime);
+    host_md->msg_ctime = tswap64(target_md->msg_ctime);
+#endif
     unlock_user_struct(target_md, target_addr, 0);
 
     return 0;
@@ -200,9 +211,15 @@ abi_long host_to_target_msqid_ds(abi_ulong target_addr,
     target_md->msg_qbytes = tswapal(host_md->msg_qbytes);
     target_md->msg_lspid = tswapal(host_md->msg_lspid);
     target_md->msg_lrpid = tswapal(host_md->msg_lrpid);
-    target_md->msg_stime = tswapal(host_md->msg_stime);
-    target_md->msg_rtime = tswapal(host_md->msg_rtime);
-    target_md->msg_ctime = tswapal(host_md->msg_ctime);
+#if defined(TARGET_I386)
+    target_md->msg_stime = tswap32(host_md->msg_stime);
+    target_md->msg_rtime = tswap32(host_md->msg_rtime);
+    target_md->msg_ctime = tswap32(host_md->msg_ctime);
+#else
+    target_md->msg_stime = tswap64(host_md->msg_stime);
+    target_md->msg_rtime = tswap64(host_md->msg_rtime);
+    target_md->msg_ctime = tswap64(host_md->msg_ctime);
+#endif
     unlock_user_struct(target_md, target_addr, 1);
 
     return 0;
