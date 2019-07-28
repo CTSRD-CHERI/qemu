@@ -1251,11 +1251,11 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
     case TARGET_FREEBSD_NR_recvmsg: /* recvmsg(2) */
-        ret = do_freebsd_recvmsg(arg1, arg2, arg3);
+        ret = do_sendrecvmsg(arg1, arg2, arg3, 0);
         break;
 
     case TARGET_FREEBSD_NR_sendmsg: /* sendmsg(2) */
-        ret = do_freebsd_sendmsg(arg1, arg2, arg3);
+        ret = do_sendrecvmsg(arg1, arg2, arg3, 1);
         break;
 
     case TARGET_FREEBSD_NR_sendto: /* sendto(2) */
