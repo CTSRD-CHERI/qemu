@@ -416,14 +416,17 @@ struct target_freebsd__wrusage {
 #define CMSG_ALIGN(len) (((len)+sizeof(long)-1) & ~(sizeof(long)-1))
 #endif
 
+/*
+ * sys/socket.h
+ */
 struct target_msghdr {
-    abi_long    msg_name;       /* So cket name */
+    abi_long    msg_name;       /* Socket name */
     int32_t     msg_namelen;    /* Length of name */
     abi_long    msg_iov;        /* Data blocks */
-    abi_long    msg_iovlen;     /* Number of blocks */
+    int32_t     msg_iovlen;     /* Number of blocks */
     abi_long    msg_control;    /* Per protocol magic
                                    (eg BSD file descriptor passing) */
-    abi_long    msg_controllen; /* Length of cmsg list */
+    int32_t     msg_controllen; /* Length of cmsg list */
     int32_t     msg_flags;      /* flags on received message */
 };
 
@@ -438,31 +441,31 @@ struct target_in_addr {
 };
 
 struct target_cmsghdr {
-    abi_long    cmsg_len;
+    uint32_t    cmsg_len;
     int32_t     cmsg_level;
     int32_t     cmsg_type;
 };
 
-#define TARGET_CMSG_DATA(cmsg)  \
-    ((unsigned char *)((struct target_cmsghdr *) (cmsg) + 1))
-#define TARGET_CMSG_NXTHDR(mhdr, cmsg) __target_cmsg_nxthdr(mhdr, cmsg)
+#define TARGET_CMSG_DATA(cmsg) ((unsigned char *)((struct target_cmsghdr *) (cmsg) + 1))
+#define TARGET_CMSG_NXTHDR(mhdr, cmsg, cmsg_start) \
+                               __target_cmsg_nxthdr(mhdr, cmsg, cmsg_start)
 #define TARGET_CMSG_ALIGN(len) (((len) + sizeof(abi_long) - 1) \
-    & (size_t) ~(sizeof(abi_long) - 1))
-#define TARGET_CMSG_SPACE(len) (TARGET_CMSG_ALIGN(len) \
-    + TARGET_CMSG_ALIGN(sizeof(struct target_cmsghdr)))
-#define TARGET_CMSG_LEN(len)  \
-    (TARGET_CMSG_ALIGN(sizeof(struct target_cmsghdr)) + (len))
+                               & (size_t) ~(sizeof(abi_long) - 1))
+#define TARGET_CMSG_SPACE(len) (sizeof(struct target_cmsghdr) + \
+                                TARGET_CMSG_ALIGN(len))
+#define TARGET_CMSG_LEN(len) (sizeof(struct target_cmsghdr) + (len))
 
-static inline struct target_cmsghdr *__target_cmsg_nxthdr(
-        struct target_msghdr *__mhdr, struct target_cmsghdr *__cmsg)
+static inline struct target_cmsghdr *
+__target_cmsg_nxthdr(struct target_msghdr *__mhdr,
+                     struct target_cmsghdr *__cmsg,
+                     struct target_cmsghdr *__cmsg_start)
 {
     struct target_cmsghdr *__ptr;
 
-    __ptr = (struct target_cmsghdr *)((unsigned char *) __cmsg +
-        TARGET_CMSG_ALIGN(tswapal(__cmsg->cmsg_len)));
-    if ((unsigned long)((char *)(__ptr+1) -
-        (char *)(size_t)tswapal(__mhdr->msg_control)) >
-        tswapal(__mhdr->msg_controllen)) {
+    __ptr = (struct target_cmsghdr *)((unsigned char *) __cmsg
+                                      + TARGET_CMSG_ALIGN(tswap32(__cmsg->cmsg_len)));
+    if ((unsigned long)((char *)(__ptr+1) - (char *)__cmsg_start)
+        > tswap32(__mhdr->msg_controllen)) {
         /* No more entries.  */
         return (struct target_cmsghdr *)0;
     }

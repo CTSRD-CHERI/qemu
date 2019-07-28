@@ -56,7 +56,7 @@ static inline abi_long do_bsd_connect(int sockfd, abi_ulong target_addr,
     if ((int)addrlen < 0) {
         return -TARGET_EINVAL;
     }
-    addr = alloca(addrlen);
+    addr = alloca(addrlen+1);
 
     ret = target_to_host_sockaddr(addr, target_addr, addrlen);
 
