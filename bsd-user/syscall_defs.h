@@ -26,6 +26,27 @@
 #include "netbsd/syscall_nr.h"
 #include "openbsd/syscall_nr.h"
 
+/*
+ * machine/_types.h
+ * or x86/_types.h
+ */
+
+/*
+ * time_t seems to be very inconsistly defined for the different *BSD's...
+ *
+ * FreeBSD uses a 64bits time_t except on i386
+ * so we have to add a special case here.
+ *
+ * On NetBSD time_t is always defined as an int64_t.  On OpenBSD time_t
+ * is always defined as an int.
+ *
+ */
+#if (!defined(TARGET_I386))
+typedef int64_t target_freebsd_time_t;
+#else
+typedef int32_t target_freebsd_time_t;
+#endif
+
 struct target_iovec {
     abi_long iov_base;   /* Starting address */
     abi_long iov_len;   /* Number of bytes */
@@ -77,8 +98,8 @@ struct target_semid_ds {
     struct target_ipc_perm sem_perm; /* operation permission struct */
     abi_ulong   sem_base;   /* pointer to first semaphore in set */
     uint16_t    sem_nsems;  /* number of sems in set */
-    abi_ulong   sem_otime;  /* last operation time */
-    abi_ulong   sem_ctime;  /* times measured in secs */
+    target_freebsd_time_t   sem_otime;  /* last operation time */
+    target_freebsd_time_t   sem_ctime;  /* times measured in secs */
 };
 
 /*
@@ -90,9 +111,9 @@ struct target_shmid_ds {
     int32_t     shm_lpid;   /* process ID of last shared memory op */
     int32_t     shm_cpid;   /* process ID of creator */
     int32_t     shm_nattch; /* number of current attaches */
-    abi_ulong   shm_atime;  /* time of last shmat() */
-    abi_ulong   shm_dtime;  /* time of last shmdt() */
-    abi_ulong   shm_ctime;  /* time of last change by shmctl() */
+    target_freebsd_time_t shm_atime;  /* time of last shmat() */
+    target_freebsd_time_t shm_dtime;  /* time of last shmdt() */
+    target_freebsd_time_t shm_ctime;  /* time of last change by shmctl() */
 };
 
 #define N_BSD_SHM_REGIONS   32
@@ -113,9 +134,9 @@ struct target_msqid_ds {
     abi_ulong   msg_qbytes; /* max # of bytes on the queue */
     int32_t     msg_lspid;  /* pid of last msgsnd() */
     int32_t     msg_lrpid;  /* pid of last msgrcv() */
-    abi_ulong   msg_stime;  /* time of last msgsnd() */
-    abi_ulong   msg_rtime;  /* time of last msgrcv() */
-    abi_ulong   msg_ctime;  /* time of last msgctl() */
+    target_freebsd_time_t   msg_stime;  /* time of last msgsnd() */
+    target_freebsd_time_t   msg_rtime;  /* time of last msgrcv() */
+    target_freebsd_time_t   msg_ctime;  /* time of last msgctl() */
 };
 
 struct target_msgbuf {
@@ -172,22 +193,6 @@ struct target_sched_param {
  * sys/time.h
  * sys/timex.h
  */
-
-/*
- * time_t seems to be very inconsistly defined for the different *BSD's...
- *
- * FreeBSD/{arm, mips} uses a 64bits time_t, even in 32bits mode,
- * so we have to add a special case here.
- *
- * On NetBSD time_t is always defined as an int64_t.  On OpenBSD time_t
- * is always defined as an int.
- *
- */
-#if (defined(TARGET_ARM) || defined(TARGET_MIPS))
-typedef int64_t target_freebsd_time_t;
-#else
-typedef abi_long target_freebsd_time_t;
-#endif
 
 typedef abi_long target_freebsd_suseconds_t;
 
