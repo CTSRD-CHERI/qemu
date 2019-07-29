@@ -64,8 +64,7 @@ abi_long get_errno(abi_long ret)
 {
 
     if (ret == -1) {
-        /* XXX need to translate host -> target errnos here */
-        return -(errno);
+        return -(host_to_target_errno(errno));
     } else {
         return ret;
     }
