@@ -46,8 +46,8 @@ abi_long t2h_freebsd_cmsg(struct msghdr *msgh,
         void *data = CMSG_DATA(cmsg);
         void *target_data = TARGET_CMSG_DATA(target_cmsg);
 
-        int len = tswap32(target_cmsg->cmsg_len)
-            - sizeof(struct target_cmsghdr);
+        int len = (unsigned char *)(target_cmsg) + tswap32(target_cmsg->cmsg_len) -
+		    (unsigned char *)target_data;
 
         space += CMSG_SPACE(len);
         if (space > msgh->msg_controllen) {
@@ -85,7 +85,7 @@ abi_long t2h_freebsd_cmsg(struct msghdr *msgh,
                &&  cmsg->cmsg_type == SCM_CREDS) {
             printf("XXX %s SCM_CREDS\n", __FUNCTION__);
         } else {
-            gemu_log("Unsupported ancillary data: %d/%d\n",
+            gemu_log("t2h Unsupported ancillary data: %d/%d\n",
                                         cmsg->cmsg_level, cmsg->cmsg_type);
             memcpy(data, target_data, len);
         }
@@ -123,7 +123,9 @@ abi_long h2t_freebsd_cmsg(struct target_msghdr *target_msgh,
         void *data = CMSG_DATA(cmsg);
         void *target_data = TARGET_CMSG_DATA(target_cmsg);
 
-        int len = cmsg->cmsg_len - sizeof(struct cmsghdr);
+        int len = (unsigned char *)(cmsg) + cmsg->cmsg_len -
+		    (unsigned char *)data;
+
         int tgt_len, tgt_space;
 
         /* We never copy a half-header but may copy half-data;
@@ -222,7 +224,7 @@ abi_long h2t_freebsd_cmsg(struct target_msghdr *target_msgh,
             break; // switch (cmsg->cmsg_type)
         default:
         unimplemented:
-            gemu_log("Unsupported ancillary data: %d/%d\n",
+            gemu_log("h2t Unsupported ancillary data: %d/%d\n",
                                         cmsg->cmsg_level, cmsg->cmsg_type);
             memcpy(target_data, data, MIN(len, tgt_len));
             if (tgt_len > len) {
@@ -230,7 +232,7 @@ abi_long h2t_freebsd_cmsg(struct target_msghdr *target_msgh,
             }
         }
 
-       target_cmsg->cmsg_len = tswapal(TARGET_CMSG_LEN(tgt_len));
+        target_cmsg->cmsg_len = tswap32(TARGET_CMSG_LEN(tgt_len));
         tgt_space = TARGET_CMSG_SPACE(tgt_len);
         if (msg_controllen < tgt_space) {
             tgt_space = msg_controllen;
