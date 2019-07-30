@@ -231,12 +231,10 @@ static inline abi_long do_bsd_openat(abi_long arg1, abi_long arg2,
     abi_long ret;
     void *p;
 
-   if (!(p = lock_user_string(arg2)))
-        return -TARGET_EFAULT;
-
-    ret = get_errno(openat(arg1, /* path(p) */ p,
+    LOCK_PATH(p, arg2);
+    ret = get_errno(openat(arg1, path(p),
                 target_to_host_bitmask(arg3, fcntl_flags_tbl), arg4));
-    unlock_user(p, arg1, 0);
+    UNLOCK_PATH(p, arg2);
 
     return ret;
 }
