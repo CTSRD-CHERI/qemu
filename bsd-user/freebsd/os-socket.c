@@ -81,9 +81,15 @@ abi_long t2h_freebsd_cmsg(struct msghdr *msgh,
             for (i = 0; i < numfds; i++) {
                 __get_user(fd[i], target_fd + i);
             }
-        } else if (cmsg->cmsg_level == SOL_SOCKET
-               &&  cmsg->cmsg_type == SCM_CREDS) {
-            printf("XXX %s SCM_CREDS\n", __FUNCTION__);
+        } else if ((cmsg->cmsg_level == TARGET_SOL_SOCKET) &&
+            (cmsg->cmsg_type == SCM_TIMESTAMP) &&
+            (len == sizeof(struct timeval)))  {
+            /* copy struct timeval to host */
+            struct timeval *tv = (struct timeval *)data;
+            struct target_freebsd_timeval *target_tv =
+                (struct target_freebsd_timeval *)target_data;
+            __get_user(tv->tv_sec, &target_tv->tv_sec);
+            __get_user(tv->tv_usec, &target_tv->tv_usec);
         } else {
             gemu_log("t2h Unsupported ancillary data: %d/%d\n",
                                         cmsg->cmsg_level, cmsg->cmsg_type);
@@ -153,7 +159,7 @@ abi_long h2t_freebsd_cmsg(struct target_msghdr *target_msgh,
         switch (cmsg->cmsg_level) {
         case SOL_SOCKET:
             switch (cmsg->cmsg_type) {
-            case SO_TIMESTAMP:
+            case SCM_TIMESTAMP:
                 tgt_len = sizeof(struct target_freebsd_timeval);
                 break;
             default:
@@ -202,20 +208,6 @@ abi_long h2t_freebsd_cmsg(struct target_msghdr *target_msgh,
                 /* copy struct timeval to target */
                 __put_user(tv->tv_sec, &target_tv->tv_sec);
                 __put_user(tv->tv_usec, &target_tv->tv_usec);
-                break;
-            }
-            case SCM_CREDS:
-            {
-                printf("XXX %s SCM_CREDS\n", __FUNCTION__);
-#if 0
-                struct ucred *cred = (struct ucred *)data;
-                struct target_ucred *target_cred =
-                    (struct target_ucred *)target_data;
-
-                __put_user(cred->pid, &target_cred->pid);
-                __put_user(cred->uid, &target_cred->uid);
-                __put_user(cred->gid, &target_cred->gid);
-#endif
                 break;
             }
             default:
