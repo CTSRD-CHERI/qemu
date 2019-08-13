@@ -6,7 +6,7 @@
 [subrepo]
 	remote = ctsrd:cheri-compressed-cap
 	branch = master
-	commit = 3cbd22099bbde239dc65119091880343212faf1e
+	commit = 6f5e9c759df80740e5502911391bc9e96953481b
 	parent = 9b560aa342058b93dff728ceebeb927433388dfc
 	cmdver = 0.4.0
 	method = rebase

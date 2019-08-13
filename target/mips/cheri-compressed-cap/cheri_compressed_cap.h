@@ -717,7 +717,7 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
     // 0x1000 (bwidth - 2 bit set) is the first value that cannot be encoded
     // without the internal exponent:
     // Note: 12 = BWidth - 2  / BWidth with internal exponent plus one
-    bool IE = E != 0 || cc128_getbits(length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
+    bool IE = (E != 0) || cc128_getbits(length64, CC128_BOT_INTERNAL_EXP_WIDTH + 1, 1);
     uint64_t Be;
     uint64_t Te;
 #ifdef CC128_OLD_FORMAT
@@ -753,7 +753,7 @@ static inline uint64_t compress_128cap_without_xor(const cap_register_t* csp) {
 #else
     if (!IE) {
         // precisely representable -> just extract the bits
-        assert(top <= UINT64_MAX); // must be 64 bits
+        assert(top <= CAP_MAX_ADDRESS_PLUS_ONE); // must be 64 bits
         Be = cc128_truncate64(base, CC128_FIELD_BOTTOM_ENCODED_SIZE);
         Te = cc128_truncate64((uint64_t)top, CC128_FIELD_TOP_ENCODED_SIZE);
     } else {
