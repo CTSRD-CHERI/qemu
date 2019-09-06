@@ -519,11 +519,7 @@
 ##
 { 'enum': 'NetLegacyOptionsType',
   'data': ['none', 'nic', 'user', 'tap', 'l2tpv3', 'socket', 'vde',
-<<<<<<< HEAD
-           'bridge', 'netmap', 'vhost-user'] }
-=======
-           'dump', 'bridge', 'netmap', 'vhost-user', 'pcap'] }
->>>>>>> bef39ec7ad... Update net.json to support --enable-pcap
+           'bridge', 'netmap', 'vhost-user', 'pcap'] }
 
 ##
 # @NetLegacyOptions:
