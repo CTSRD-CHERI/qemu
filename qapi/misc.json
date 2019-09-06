@@ -701,21 +701,7 @@
 #
 # Returns: A @DumpStatus object showing the dump status.
 #
-# @helper: #optional command to execute to configure bridge
-#
-# Since 1.2
-##
-{ 'struct': 'NetdevBridgeOptions',
-  'data': {
-    '*br':     'str',
-    '*helper': 'str' } }
-
-{ 'struct': 'NetdevPcapOptions',
-  'data': {
-    '*ifname':     'str' } }
-
-##
-# @NetdevHubPortOptions
+# Since: 2.6
 #
 # Example:
 #
