@@ -210,8 +210,9 @@ void init_task_state(TaskState *ts)
 
 CPUArchState *cpu_copy(CPUArchState *env)
 {
+    const char *cpu_type = parse_cpu_model(cpu_model);
     CPUState *cpu = ENV_GET_CPU(env);
-    CPUState *new_cpu = cpu_create(cpu_model);
+    CPUState *new_cpu = cpu_create(cpu_type);
     CPUArchState *new_env = new_cpu->env_ptr;
     CPUBreakpoint *bp;
     CPUWatchpoint *wp;
@@ -248,7 +249,6 @@ void gemu_log(const char *fmt, ...)
 int main(int argc, char **argv)
 {
     const char *filename;
-    const char *cpu_model;
     const char *cpu_type;
     const char *log_file = NULL;
     const char *log_mask = NULL;
