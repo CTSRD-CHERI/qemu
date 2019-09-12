@@ -112,11 +112,15 @@ void fork_end(int child)
             }
         }
         mmap_fork_end(child);
+        /* qemu_init_cpu_list() takes care of reinitializing the
+         * exclusive state, so we don't need to end_exclusive() here.
+         */
 	qemu_init_cpu_list();
         gdbserver_fork(thread_cpu);
     } else {
         mmap_fork_end(child);
 	cpu_list_unlock();
+        end_exclusive();
     }
 
 }
