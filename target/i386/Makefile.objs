@@ -17,6 +17,8 @@ obj-$(CONFIG_HAX) += hax-all.o hax-mem.o hax-posix.o
 endif
 obj-$(CONFIG_HVF) += hvf/
 obj-$(CONFIG_WHPX) += whpx-all.o
+else
+obj-$(call lnot,$(CONFIG_KVM)) += kvm-stub.o
 endif
 obj-$(CONFIG_SEV) += sev.o
 obj-$(call lnot,$(CONFIG_SEV)) += sev-stub.o
