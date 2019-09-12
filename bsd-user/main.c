@@ -93,9 +93,9 @@ char qemu_proc_pathname[PATH_MAX];  /* full path to exeutable */
 
 void fork_start(void)
 {
+    start_exclusive();
     cpu_list_lock();
     mmap_fork_start();
-    qemu_mutex_lock(&tb_ctx.tb_lock);
 }
 
 void fork_end(int child)
@@ -111,12 +111,10 @@ void fork_end(int child)
                 QTAILQ_REMOVE(&cpus, cpu, node);
             }
         }
-        qemu_mutex_init(&tb_ctx.tb_lock);
         mmap_fork_end(child);
 	qemu_init_cpu_list();
         gdbserver_fork(thread_cpu);
     } else {
-        qemu_mutex_unlock(&tb_ctx.tb_lock);
         mmap_fork_end(child);
 	cpu_list_unlock();
     }
