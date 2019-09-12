@@ -36,6 +36,7 @@
 #include "qemu-os.h"
 #include "target_arch_cpu.h"
 #include "target_arch_thread.h"
+#include "exec/exec-all.h"
 
 // #define DEBUG_UMTX(...)   fprintf(stderr, __VA_ARGS__)
 // #define DEBUG_UMTX(...) qemu_log(__VA_ARGS__)
