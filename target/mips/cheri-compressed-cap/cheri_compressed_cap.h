@@ -1215,7 +1215,7 @@ static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* c
     cdp->cr_base = mem.u64s[2];
     /* Length is xor'ed with -1 to ensure that NULL is all zeroes in memory */
     uint64_t length = mem.u64s[3] ^ CC256_NULL_LENGTH;
-    cdp->_cr_top = cdp->cr_base + length;
+    cdp->_cr_top = (cc128_length_t)cdp->cr_base + (cc128_length_t)length;
     /* TODO: should just have a cr_cursor instead... But that's not the way QEMU works */
     cdp->cr_offset = mem.u64s[1] - cdp->cr_base;
     cdp->cr_tag = tagged;
