@@ -1249,12 +1249,7 @@ void CHERI_HELPER_IMPL(csetboundsexact)(CPUMIPSState *env, uint32_t cd, uint32_t
     do_setbounds(true, env, cd, cb, rt, GETPC());
 }
 
-target_ulong CHERI_HELPER_IMPL(crap)(CPUMIPSState *env, target_ulong len)
-{
-    // CRoundArchitecturalPrecision rt, rs:
-    // rt is set to the smallest value greater or equal to rs that can be used
-    // by CSetBoundsExact without trapping (assuming a suitably aligned base).
-
+static target_ulong crap_impl(target_ulong len) {
 #ifdef CHERI_128
     // In QEMU we do this by performing a csetbounds on a maximum permissions
     // capability and returning the resulting length
@@ -1263,9 +1258,17 @@ target_ulong CHERI_HELPER_IMPL(crap)(CPUMIPSState *env, target_ulong len)
     cc128_setbounds(&tmpcap, 0, len);
     return cap_get_length(&tmpcap);
 #else
-    // For MAGIC128 and 256 everything is representable -> we can return len
-    return len;
+  // For MAGIC128 and 256 everything is representable -> we can return len
+  return len;
 #endif
+}
+
+target_ulong CHERI_HELPER_IMPL(crap)(CPUMIPSState *env, target_ulong len)
+{
+    // CRoundArchitecturalPrecision rt, rs:
+    // rt is set to the smallest value greater or equal to rs that can be used
+    // by CSetBoundsExact without trapping (assuming a suitably aligned base).
+    return crap_impl(len);
 }
 
 target_ulong CHERI_HELPER_IMPL(cram)(CPUMIPSState *env, target_ulong len)
@@ -1278,7 +1281,7 @@ target_ulong CHERI_HELPER_IMPL(cram)(CPUMIPSState *env, target_ulong len)
     // The mask used to align down is all ones followed by (required exponent
     // for compressed representation) zeroes
     target_ulong result = cc128_get_alignment_mask(len);
-    target_ulong rounded_with_crap = helper_crap(env, len);
+    target_ulong rounded_with_crap = crap_impl(len);
     target_ulong rounded_with_cram = (len + ~result) & result;
     qemu_log_mask(CPU_LOG_INSTR, "cram(" TARGET_FMT_lx ") rounded=" TARGET_FMT_lx " rounded with mask=" TARGET_FMT_lx
                   " mask result=" TARGET_FMT_lx "\n", len, rounded_with_crap, rounded_with_cram, result);

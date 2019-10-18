@@ -5778,7 +5778,6 @@ struct nop_stats {
 
 static struct nop_stats magic_memset_zero_bytes;
 static struct nop_stats magic_memset_nonzero_bytes;
-static struct nop_stats magic_memmove_bytes;
 
 static struct nop_stats magic_memcpy_bytes;
 static struct nop_stats magic_memmove_bytes;
@@ -5793,7 +5792,7 @@ static inline void print_nop_stats(const char* msg, struct nop_stats* stats) {
                 stats->user_mode_bytes, stats->user_mode_bytes / (1024.0 * 1024.0), stats->user_mode_count);
 }
 
-static void dump_memset_stats_on_exit() {
+static void dump_memset_stats_on_exit(void) {
     print_nop_stats("memset (zero)    with magic nop", &magic_memset_zero_bytes);
     print_nop_stats("memset (nonzero) with magic nop", &magic_memset_nonzero_bytes);
     print_nop_stats("memcpy with magic nop", &magic_memcpy_bytes);
