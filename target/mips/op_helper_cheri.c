@@ -1099,12 +1099,12 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong _
         }
         return &env->active_tc.CHWR.PrivTlsCap;
     case CP2HWR_K1RC:
-        if (!in_kernel_mode(env)) {
+        if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
         return &env->active_tc.CHWR.KR1C;
     case CP2HWR_K2RC:
-        if (!in_kernel_mode(env)) {
+        if (!in_kernel_mode(env) || !access_sysregs) {
             do_raise_c2_exception(env, CP2Ca_ACCESS_SYS_REGS, hwr);
         }
         return &env->active_tc.CHWR.KR2C;
