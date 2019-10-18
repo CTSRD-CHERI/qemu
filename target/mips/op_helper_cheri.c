@@ -1454,142 +1454,69 @@ target_ulong CHERI_HELPER_IMPL(ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
-    gboolean equal = FALSE;
     /*
-     * CEQ: Capability pointers equal
+     * CEQ: Capability pointers equal (compares only the cursor)
      */
-{
-        if (cbp->cr_tag != ctp->cr_tag) {
-            equal = FALSE;
-        } else {
-            uint64_t cursor1 = cap_get_cursor(cbp);
-            uint64_t cursor2 = cap_get_cursor(ctp);
-
-            equal = (cursor1 == cursor2);
-        }
-    }
-    return (target_ulong) equal;
+    return (target_ulong)(cap_get_cursor(cbp) == cap_get_cursor(ctp));
 }
 
 target_ulong CHERI_HELPER_IMPL(cne(CPUMIPSState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
-    gboolean equal = FALSE;
     /*
-     * CNE: Capability pointers not equal
+     * CNE: Capability pointers not equal (compares only the cursor)
      */
-{
-        if (cbp->cr_tag != ctp->cr_tag) {
-            equal = FALSE;
-        } else {
-            uint64_t cursor1 = cap_get_cursor(cbp);
-            uint64_t cursor2 = cap_get_cursor(ctp);
+  return (target_ulong)(cap_get_cursor(cbp) != cap_get_cursor(ctp));
 
-            equal = (cursor1 == cursor2);
-        }
-    }
-    return (target_ulong) !equal;
 }
 
 target_ulong CHERI_HELPER_IMPL(clt(CPUMIPSState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
-    gboolean signed_less = FALSE;
     /*
      * CLT: Capability pointers less than (signed)
      */
-{
-        if (cbp->cr_tag != ctp->cr_tag) {
-            if (cbp->cr_tag) {
-                signed_less = FALSE;
-            } else {
-                signed_less = TRUE;
-            }
-        } else {
-            int64_t cursor1 = (int64_t)cap_get_cursor(cbp);
-            int64_t cursor2 = (int64_t)cap_get_cursor(ctp);
-
-            signed_less = (cursor1 < cursor2);
-        }
-    }
-    return (target_ulong) signed_less;
+    int64_t cursor1_signed = (int64_t)cap_get_cursor(cbp);
+    int64_t cursor2_signed = (int64_t)cap_get_cursor(ctp);
+    return (target_ulong)(cursor1_signed < cursor2_signed);
 }
 
 target_ulong CHERI_HELPER_IMPL(cle(CPUMIPSState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
-    gboolean signed_lte = FALSE;
     /*
      * CLE: Capability pointers less than equal (signed)
      */
-{
-        if (cbp->cr_tag != ctp->cr_tag) {
-            if (cbp->cr_tag) {
-                signed_lte = FALSE;
-            } else {
-                signed_lte = TRUE;
-            }
-        } else {
-            int64_t cursor1 = (int64_t)cap_get_cursor(cbp);
-            int64_t cursor2 = (int64_t)cap_get_cursor(ctp);
-
-            signed_lte = (cursor1 <= cursor2);
-        }
-    }
-    return (target_ulong) signed_lte;
+    int64_t cursor1_signed = (int64_t)cap_get_cursor(cbp);
+    int64_t cursor2_signed = (int64_t)cap_get_cursor(ctp);
+    return (target_ulong)(cursor1_signed <= cursor2_signed);
 }
 
 target_ulong CHERI_HELPER_IMPL(cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
-    gboolean ltu = FALSE;
     /*
      * CLTU: Capability pointers less than (unsigned)
      */
-{
-        if (cbp->cr_tag != ctp->cr_tag) {
-            if (cbp->cr_tag) {
-                ltu = FALSE;
-            } else {
-                ltu = TRUE;
-            }
-        } else {
-            uint64_t cursor1 = cap_get_cursor(cbp);
-            uint64_t cursor2 = cap_get_cursor(ctp);
-
-            ltu = (cursor1 < cursor2);
-        }
-    }
-    return (target_ulong) ltu;
+    uint64_t cursor1_unsigned = cap_get_cursor(cbp);
+    uint64_t cursor2_unsigned = cap_get_cursor(ctp);
+    return (target_ulong)(cursor1_unsigned < cursor2_unsigned);
 }
 
 target_ulong CHERI_HELPER_IMPL(cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     const cap_register_t *ctp = get_readonly_capreg(&env->active_tc, ct);
-    gboolean leu = FALSE;
     /*
      * CLEU: Capability pointers less than equal (unsigned)
      */
-{
-        if (cbp->cr_tag != ctp->cr_tag) {
-            if (cbp->cr_tag) {
-                leu = FALSE;
-            } else {
-                leu = TRUE;
-            }
-        } else {
-            uint64_t cursor1 = cap_get_cursor(cbp);
-            uint64_t cursor2 = cap_get_cursor(ctp);
-
-            leu = (cursor1 <= cursor2);
-        }
-    }
-    return (target_ulong) leu;
+    uint64_t cursor1_unsigned = cap_get_cursor(cbp);
+    uint64_t cursor2_unsigned = cap_get_cursor(ctp);
+    return (target_ulong)(cursor1_unsigned <= cursor2_unsigned);
 }
 
 static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *ctp) {
