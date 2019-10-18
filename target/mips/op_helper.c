@@ -2298,10 +2298,11 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
                     " bytes at vaddr 0x" TARGET_FMT_lx "\r\n", length, vaddr);
     }
     if ((mode & CPU_LOG_INSTR) || qemu_logfile) {
-        qemu_log_mask(CPU_LOG_INSTR, "DEBUG MESSAGE @ 0x" TARGET_FMT_lx "\r\n", pc);
+        qemu_log_mask(CPU_LOG_INSTR, "DEBUG MESSAGE @ 0x" TARGET_FMT_lx " addr=0x"
+            TARGET_FMT_lx " len=" TARGET_FMT_ld "\r\n", pc, vaddr, length);
         if (print_mode == DEBUG_MESSAGE_CSTRING) {
             /* XXXAR: Escape newlines, etc.? */
-            qemu_log_mask(CPU_LOG_INSTR, "    message = \"%s\"\n", buffer);
+            qemu_log_mask(CPU_LOG_INSTR, "    message = \"%*.*s\"\n", (int)length, (int)length, buffer);
         } else if (print_mode == DEBUG_MESSAGE_HEXDUMP) {
             qemu_log_mask(CPU_LOG_INSTR, "   Dumping " TARGET_FMT_lu
                      " bytes starting at 0x"
