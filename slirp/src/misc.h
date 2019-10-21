@@ -14,7 +14,6 @@ struct gfwd_list {
 	struct in_addr ex_addr;		/* Server address */
 	int ex_fport;                   /* Port to telnet to */
 	char *ex_exec;                  /* Command line of what to exec */
-	GChildWatchFunc exit_callback; /* Called on child process exit */
 	struct gfwd_list *ex_next;
 };
 
@@ -53,7 +52,7 @@ struct slirp_quehead {
 
 void slirp_insque(void *, void *);
 void slirp_remque(void *);
-int fork_exec(struct socket *so, const char *ex, GChildWatchFunc callback);
+int fork_exec(struct socket *so, const char *ex);
 
 struct gfwd_list *
 add_guestfwd(struct gfwd_list **ex_ptr,

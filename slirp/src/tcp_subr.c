@@ -975,7 +975,7 @@ int tcp_ctl(struct socket *so)
                     return 1;
                 }
                 DEBUG_MISC(" executing %s", ex_ptr->ex_exec);
-                return fork_exec(so, ex_ptr->ex_exec, ex_ptr->exit_callback);
+                return fork_exec(so, ex_ptr->ex_exec);
             }
         }
     }

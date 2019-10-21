@@ -26,12 +26,6 @@ remque(void *a)
   element->qh_rlink = NULL;
 }
 
-static void slirp_child_exit_handler(GPid pid, gint status, gpointer user_data)
-{
-    const char *ex = (const char *)user_data;
-    fprintf(stderr, "Child process %d ('%s') exited with status %d\r\n", (int)pid, ex, status);
-}
-
 /* TODO: IPv6 */
 struct gfwd_list *
 add_guestfwd(struct gfwd_list **ex_ptr,
@@ -45,7 +39,6 @@ add_guestfwd(struct gfwd_list **ex_ptr,
     f->ex_fport = port;
     f->ex_addr = addr;
     f->ex_next = *ex_ptr;
-    f->exit_callback = &slirp_child_exit_handler;
     *ex_ptr = f;
 
     return f;
@@ -189,7 +182,7 @@ g_spawn_async_with_fds_slirp(const gchar *working_directory,
 #pragma GCC diagnostic pop
 
 int
-fork_exec(struct socket *so, const char *ex, GChildWatchFunc callback)
+fork_exec(struct socket *so, const char *ex)
 {
     GError *err = NULL;
     char **argv;
@@ -202,16 +195,14 @@ fork_exec(struct socket *so, const char *ex, GChildWatchFunc callback)
     if (slirp_socketpair_with_oob(sp) < 0) {
         return 0;
     }
-    printf("executing %s\r\n", ex);
 
     argv = g_strsplit(ex, " ", -1);
-    GPid pid;
     g_spawn_async_with_fds(NULL /* cwd */,
                            argv,
                            NULL /* env */,
-                           G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
+                           G_SPAWN_SEARCH_PATH,
                            fork_exec_child_setup, NULL /* data */,
-                           &pid /* child_pid */,
+                           NULL /* child_pid */,
                            sp[1], sp[1], sp[1],
                            &err);
     g_strfreev(argv);
@@ -223,9 +214,6 @@ fork_exec(struct socket *so, const char *ex, GChildWatchFunc callback)
         closesocket(sp[1]);
         return 0;
     }
-    // XXXAR: we want an exit message to debug smb dying early errors
-    g_child_watch_add(pid, callback, (void*)ex);
-
 
     so->s = sp[0];
     closesocket(sp[1]);
