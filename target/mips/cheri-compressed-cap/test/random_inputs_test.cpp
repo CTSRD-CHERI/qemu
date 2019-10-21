@@ -24,8 +24,8 @@ static bool check_fields_match(const cap_register_t& result, const test_input& t
 
         bool success = true;
         CAPTURE(prefix);
-        CHECK_AND_SAVE_SUCCESS(ti.address == result.cr_base + result.cr_offset);
-        CHECK_AND_SAVE_SUCCESS(ti.bot == result.cr_base);
+        CHECK_AND_SAVE_SUCCESS(ti.address == result.address());
+        CHECK_AND_SAVE_SUCCESS(ti.bot == result.base());
         CHECK_AND_SAVE_SUCCESS(ti.otype == result.cr_otype);
         CHECK_AND_SAVE_SUCCESS(ti.permissions == result.cr_perms + (result.cr_uperms << 15));
         CHECK_AND_SAVE_SUCCESS(ti.top.u64 == top64);
@@ -59,7 +59,7 @@ static bool test_one_entry(const test_input& ti) {
     // Now try recompressing and compare pesbt (for valid capabilities)
     cc128_length_t top_full = result.top();
     // Also don't attempt to recompress massively out-of-bounds caps since that might not work:
-    if (top_full >= result.cr_base && top_full <= CAP_MAX_ADDRESS_PLUS_ONE && result.cr_offset <= result.length()) {
+    if (top_full >= result.cr_base && top_full <= CAP_MAX_ADDRESS_PLUS_ONE && result.address() <= result.length()) {
         uint64_t recompressed_pesbt = compress_128cap_without_xor(&result);
         CAPTURE(recompressed_pesbt);
         if (ti.input.pesbt != recompressed_pesbt) {

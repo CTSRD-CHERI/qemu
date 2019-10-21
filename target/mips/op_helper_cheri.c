@@ -129,23 +129,24 @@ static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, cap_register_t* 
     if (!cr->cr_tag)
         return 0;  // We don't care about arithmetic on untagged things
 
-    // FIXME: unsigned cr_offset is quite annoying, we should use cr_cursor
-    if (cr->cr_offset == cap_get_length(cr)) {
+    const cap_offset_t offset = cap_get_offset(cr);
+    const uint64_t addr = cap_get_cursor(cr);
+    if (addr == cap_get_top65(cr)) {
         // This case is very common so we should not print a message here
         return 1;
-    } else if (cr->cr_offset > cap_get_length(cr)) {
+    } else if (offset < 0 || offset > cap_get_length(cr)) {
         // handle negative offsets:
         int64_t howmuch;
-        if ((int64_t)cr->cr_offset < (int64_t)cap_get_length(cr))
-            howmuch = (int64_t)cr->cr_offset;
+        if (offset < 0)
+            howmuch = (int64_t)offset;
         else
-            howmuch = cr->cr_offset - cap_get_length(cr) + 1;
+            howmuch = offset - cap_get_length(cr) + 1;
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS,
                       "BOUNDS: Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
                       " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64 " pc=%016" PRIx64 " ASID=%u\n",
-                      howmuch, name, cr->cr_tag, cap_is_sealed(cr),
+                      howmuch, name, cr->cr_tag, !cap_is_unsealed(cr),
                       (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
-                      cr->cr_base, cap_get_length(cr), (int64_t)cr->cr_offset,
+                      cr->cr_base, cap_get_length(cr), (int64_t)offset,
                       cap_get_cursor(&env->active_tc.PCC),
                       (unsigned)(env->CP0_EntryHi & 0xFF));
         return howmuch;
@@ -420,7 +421,7 @@ target_ulong CHERI_HELPER_IMPL(cbez(CPUMIPSState *env, uint32_t cb, uint32_t off
     /*
      * Compare the only semantically meaningful fields of int_to_cap(0)
      */
-    if (cbp->cr_base == 0 && cbp->cr_tag == 0 && cbp->cr_offset == 0)
+    if (cap_get_base(cbp) == 0 && cbp->cr_tag == 0 && cap_get_cursor(cbp) == 0)
         return (target_ulong)1;
     else
         return (target_ulong)0;
@@ -435,7 +436,7 @@ target_ulong CHERI_HELPER_IMPL(cbnz(CPUMIPSState *env, uint32_t cb, uint32_t off
     /*
      * Compare the only semantically meaningful fields of int_to_cap(0)
      */
-    if (cbp->cr_base == 0 && cbp->cr_tag == 0 && cbp->cr_offset == 0)
+    if (cap_get_base(cbp) == 0 && cbp->cr_tag == 0 && cap_get_cursor(cbp) == 0)
         return (target_ulong)0;
     else
         return (target_ulong)1;
@@ -614,11 +615,12 @@ void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
         cap_register_t result = *cbp;
-        result.cr_offset = rt;
-        if (!is_representable_cap(cbp, rt)) {
+        uint64_t new_addr = cbp->cr_base + rt;
+        if (!is_representable_cap_with_addr(cbp, new_addr)) {
             became_unrepresentable(env, cd, cfromptr, _host_return_address);
-            cap_mark_unrepresentable(cbp->cr_base + rt, &result);
+            cap_mark_unrepresentable(new_addr, &result);
         } else {
+            result._cr_cursor = new_addr;
             check_out_of_bounds_stat(env, cfromptr, &result);
         }
         update_capreg(&env->active_tc, cd, &result);
@@ -696,11 +698,7 @@ target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUMIPSState *env, uint32_t cb))
     /*
      * CGetOffset: Move Offset to a General-Purpose Register
      */
-    // fprintf(qemu_logfile, "%s: offset(%d)=%016lx\n",
-    //      __func__, cb, get_readonly_capreg(&env->active_tc, cb)->cr_offset);
-    // return (target_ulong)(get_readonly_capreg(&env->active_tc, cb)->cr_cursor -
-    //        get_readonly_capreg(&env->active_tc, cb)->cr_base);
-    return (target_ulong)get_readonly_capreg(&env->active_tc, cb)->cr_offset;
+    return (target_ulong)cap_get_offset(get_readonly_capreg(&env->active_tc, cb));
 }
 
 void CHERI_HELPER_IMPL(cgetpcc(CPUMIPSState *env, uint32_t cd))
@@ -725,12 +723,13 @@ void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_u
      * See Chapter 5 in CHERI Architecture manual.
      */
     cap_register_t result = *pccp;
-    result.cr_offset = rs;
-    if (!is_representable_cap(pccp, rs)) {
+    uint64_t new_addr = rs + cap_get_base(pccp);
+    if (!is_representable_cap_with_addr(pccp, new_addr)) {
         if (pccp->cr_tag)
             became_unrepresentable(env, cd, cgetpccsetoffset, _host_return_address);
-        cap_mark_unrepresentable(pccp->cr_base + rs, &result);
+        cap_mark_unrepresentable(new_addr, &result);
     } else {
+        result._cr_cursor = new_addr;
         check_out_of_bounds_stat(env, cgetpccsetoffset, &result);
         /* Note that the offset(cursor) is updated by ccheck_pcc */
     }
@@ -807,15 +806,15 @@ static void cincoffset_impl(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_
     if (cbp->cr_tag && is_cap_sealed(cbp) && rt != 0) {
         do_raise_c2_exception_impl(env, CP2Ca_SEAL, cb, retpc);
     } else {
-        uint64_t cb_offset_plus_rt = cbp->cr_offset + rt;
+        uint64_t new_addr = cap_get_cursor(cbp) + rt;
         cap_register_t result = *cbp;
-        result.cr_offset = cb_offset_plus_rt;
-        if (!is_representable_cap(cbp, cb_offset_plus_rt)) {
+        if (unlikely(!is_representable_cap_with_addr(cbp, new_addr))) {
             if (cbp->cr_tag) {
                 became_unrepresentable(env, cd, cincoffset, retpc);
             }
-            cap_mark_unrepresentable(cbp->cr_base + cb_offset_plus_rt, &result);
+            cap_mark_unrepresentable(new_addr, &result);
         } else {
+            result._cr_cursor = new_addr;
             check_out_of_bounds_stat(env, cincoffset, &result);
         }
         update_capreg(&env->active_tc, cd, &result);
@@ -881,7 +880,7 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb
         cheri_debug_assert(cap_is_unsealed(cbp) || cap_is_sealed_entry(cbp));
         cap_register_t result = env->active_tc.PCC;
         // can never create an unrepresentable capability since PCC must be in bounds
-        result.cr_offset += 8;
+        result._cr_cursor += 8;
         // The capability register is loaded into PCC during delay slot
         env->active_tc.CapBranchTarget = *cbp;
         if (cap_is_sealed_entry(cbp)) {
@@ -961,7 +960,7 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_SEALED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if (!is_representable_cap_when_sealed(csp, cap_get_offset(csp))) {
+    } else if (!is_representable_cap_when_sealed_with_addr(csp, cap_get_cursor(csp))) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
     } else {
         cap_register_t result = *csp;
@@ -1047,7 +1046,7 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, ui
         result._cr_top = ctp->_cr_top;
         result.cr_perms = ctp->cr_perms;
         result.cr_uperms = ctp->cr_uperms;
-        result.cr_offset = ctp->cr_offset;
+        result._cr_cursor = ctp->_cr_cursor;
         if (cap_is_sealed_entry(ctp))
             cap_make_sealed_entry(&result);
         else
@@ -1078,7 +1077,7 @@ void CHERI_HELPER_IMPL(ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, ui
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         cap_register_t result = *cbp;
-        result.cr_offset = ctp->cr_otype - cbp->cr_base;
+        result._cr_cursor = ctp->cr_otype;
         update_capreg(&env->active_tc, cd, &result);
     }
 }
@@ -1231,7 +1230,7 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
         /* Capabilities are precise -> can just set the values here */
         result.cr_base = cursor;
         result._cr_top = new_top;
-        result.cr_offset = 0;
+        result._cr_cursor = cursor;
 #endif
         assert(result.cr_base >= cbp->cr_base && "CSetBounds broke monotonicity (base)");
         assert(cap_get_length65(&result) <= cap_get_length65(cbp) && "CSetBounds broke monotonicity (length)");
@@ -1364,12 +1363,13 @@ void CHERI_HELPER_IMPL(csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else {
         cap_register_t result = *cbp;
-        result.cr_offset = rt;
-        if (!is_representable_cap(cbp, rt)) {
+        const uint64_t new_addr = cap_get_base(cbp) + rt;
+        if (!is_representable_cap_with_addr(cbp, new_addr)) {
             if (cbp->cr_tag)
                 became_unrepresentable(env, cd, csetoffset, _host_return_address);
-            cap_mark_unrepresentable(cbp->cr_base + rt, &result);
+            cap_mark_unrepresentable(new_addr, &result);
         } else {
+            result._cr_cursor = new_addr;
             check_out_of_bounds_stat(env, csetoffset, &result);
         }
         update_capreg(&env->active_tc, cd, &result);
@@ -1597,7 +1597,7 @@ static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *c
     return false;
   } else if (cbp->cr_base != ctp->cr_base) {
     return false;
-  } else if (cbp->cr_offset != ctp->cr_offset) {
+  } else if (cbp->_cr_cursor != ctp->_cr_cursor) {
     return false;
   } else if (cbp->_cr_top != ctp->_cr_top) {
     return false;
@@ -2024,7 +2024,7 @@ cvtrace_dump_cap_perms(cvtrace_t *cvtrace, cap_register_t *cr)
 static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t *cr)
 {
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val3 = tswap64(cr->cr_offset + cr->cr_base);
+        cvtrace->val3 = tswap64(cr->_cr_cursor);
         cvtrace->val4 = tswap64(cr->cr_base);
         cvtrace->val5 = tswap64(cap_get_length(cr)); // write UINT64_MAX for 1 << 64
     }
@@ -2204,7 +2204,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         /* Log memory cap write, if needed. */
-        dump_cap_store(vaddr, pesbt, csp->cr_offset + csp->cr_base, csp->cr_tag);
+        dump_cap_store(vaddr, pesbt, cap_get_cursor(csp), csp->cr_tag);
         cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
         cvtrace_dump_cap_cbl(&env->cvtrace, csp);
     }
@@ -2268,7 +2268,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         ncd._sbit_for_memory = 0;
     ncd._cr_top = base + (length ^ CAP_MAX_LENGTH);
     ncd.cr_base = base;
-    ncd.cr_offset = cursor - base;
+    ncd._cr_cursor = cursor;
     ncd.cr_tag = tag;
 
     env->statcounters_cap_read++;
@@ -2534,7 +2534,7 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUMIPSState *env, uint64_t next_pc))
     // but we still need to check if the next instruction is accessible.
     // In order to ensure that EPC is set correctly we must set the offset
     // before checking the bounds.
-    pcc->cr_offset = next_pc - pcc->cr_base;
+    pcc->_cr_cursor = next_pc;
     check_cap(env, pcc, CAP_PERM_EXECUTE, next_pc, 0xff, 4, /*instavail=*/false, GETPC());
     // fprintf(qemu_logfile, "PC:%016lx\n", pc);
 
@@ -2661,7 +2661,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
         cpu_fprintf(f, "%-4s off=%016lx otype=%06x seal=%d "
 		    "perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
             // alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
-            alias, crp->cr_offset, crp->cr_otype,
+            alias, (uint64_t)cap_get_offset(crp), crp->cr_otype,
             is_cap_sealed(crp) ? 1 : 0,
             (crp->cr_perms & CAP_PERM_GLOBAL) ? 'G' : '-',
             (crp->cr_perms & CAP_PERM_EXECUTE) ? 'e' : '-',
@@ -2701,7 +2701,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
             ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
             (crp->cr_perms & CAP_PERMS_ALL),
             (uint64_t)cap_get_otype(crp), /* testsuite wants -1 for unsealed */
-            crp->cr_offset, crp->cr_base,
+            (uint64_t)cap_get_offset(crp), cap_get_base(crp),
             cap_get_length(crp) /* testsuite expects UINT64_MAX for 1 << 64) */);
 #endif
 }

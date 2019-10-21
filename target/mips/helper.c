@@ -1508,8 +1508,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #ifdef TARGET_CHERI
         /* always set PCC from KCC even with EXL */
         env->active_tc.PCC = env->active_tc.CHWR.KCC;
-        env->active_tc.PCC.cr_offset =  env->active_tc.PC -
-            env->active_tc.PCC.cr_base;
+        env->active_tc.PCC._cr_cursor =  env->active_tc.PC;
 #endif /* TARGET_CHERI */
 
 #ifdef CONFIG_MIPS_LOG_INSTR

@@ -191,13 +191,13 @@ TEST_CASE("Old format setbounds regression", "[old]") {
     CAPTURE(cap);
     cap_register_t with_bounds = cap;
     uint64_t requested_length = 0x0000000010000000;
-    auto req_top = cap.cr_base + cap.cr_offset + requested_length;
+    auto req_top = (cc128_length_t)cap.address() + requested_length;
     CAPTURE(req_top);
-    bool exact = cc128_setbounds(&with_bounds, cap.cr_offset, req_top);
+    bool exact = cc128_setbounds(&with_bounds, cap.offset(), req_top);
     CAPTURE(with_bounds);
     CHECK(!exact);
     CHECK(with_bounds.cr_base == 0x0000000000000000);
-    CHECK(with_bounds.cr_offset == 0x0000000000000007);
+    CHECK(with_bounds.offset() == 0x0000000000000007);
     CHECK(with_bounds.length() == 0x00000000010000400);
 }
 
@@ -222,21 +222,21 @@ TEST_CASE("New format max length regression", "[new]") {
     original.cr_tag = 1;
     original.cr_base = 0x900000000000efe0;
     original._cr_top =  original.cr_base + 0x1000;
-    original.cr_offset = 0xfa0;
+    original.offset() = 0xfa0;
     original.cr_otype = CC128_OTYPE_UNSEALED;
     original.cr_perms = CC128_PERMS_ALL & ~2u;
     original.cr_uperms = CC128_UPERMS_ALL;
     dump_cap_fields(original);
     uint64_t pesbt_for_mem = compress_128cap(&original);
     fprintf(stderr, "Resulting PESBT= 0x%016" PRIx64 "\n", pesbt_for_mem);
-    const uint64_t orig_cursor = original.cr_base + original.cr_offset;
+    const uint64_t orig_cursor = original.cr_base + original.offset();
     check(UINT64_C(0x900000000000ff80), orig_cursor, "Compressing cursor wrong?");
     cap_register_t decompressed;
     memset(&decompressed, 0, sizeof(decompressed));
     decompress_128cap(pesbt_for_mem, orig_cursor, &decompressed);
     dump_cap_fields(decompressed);
     CHECK_FIELD(decompressed, base, original.cr_base);
-    CHECK_FIELD(decompressed, offset, original.cr_offset);
+    CHECK_FIELD(decompressed, offset, original.offset());
     CHECK_FIELD(decompressed, uperms, original.cr_uperms);
     CHECK_FIELD(decompressed, perms, original.cr_perms);
     CHECK_FIELD_RAW(decompressed.length(), original.length());
@@ -257,7 +257,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     cap_register_t cap;
     memset(&cap, 0, sizeof(cap));
     cap.cr_base = base;
-    cap.cr_offset = offset;
+    cap.offset() = offset;
     cap._cr_top = base + length;
     cap.cr_tag = true;
     cap.cr_otype = CC128_OTYPE_UNSEALED;
@@ -265,18 +265,18 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     cap_register_t decompressed;
     memset(&decompressed, 0, sizeof(decompressed));
 
-    decompress_128cap(compressed, cap.cr_base + cap.cr_offset, &decompressed);
+    decompress_128cap(compressed, cap.cr_base + cap.offset(), &decompressed);
     CAPTURE(cap);
     CAPTURE(decompressed);
-    bool unsealed_roundtrip = cap.cr_base == decompressed.cr_base && cap.length() == decompressed.length() && cap.cr_offset == decompressed.cr_offset;
-    bool unsealed_representable = cc128_is_representable(false, base, length, 0, cap.cr_offset);
+    bool unsealed_roundtrip = cap.cr_base == decompressed.cr_base && cap.length() == decompressed.length() && cap.offset() == decompressed.offset();
+    bool unsealed_representable = cc128_is_representable(false, base, length, 0, cap.offset());
     CHECK(unsealed_representable == should_work);
     CHECK(unsealed_roundtrip == unsealed_representable);
     // TODO: CHECK(fast_representable == unsealed_representable);
 
-    bool sealed_representable = cc128_is_representable(true, base, length, 0, cap.cr_offset);
-    decompress_128cap(compressed, cap.cr_base + cap.cr_offset, &decompressed);
-    bool sealed_roundtrip = cap.cr_base == decompressed.cr_base && cap.length() == decompressed.length() && cap.cr_offset == decompressed.cr_offset;
+    bool sealed_representable = cc128_is_representable(true, base, length, 0, cap.offset());
+    decompress_128cap(compressed, cap.cr_base + cap.offset(), &decompressed);
+    bool sealed_roundtrip = cap.cr_base == decompressed.cr_base && cap.length() == decompressed.length() && cap.offset() == decompressed.offset();
     CHECK(sealed_representable == should_work);
     CHECK(sealed_roundtrip == unsealed_representable);
     // fprintf(stderr, "Base 0x%" PRIx64 " Len 0x%" PRIx64 "%016" PRIx64 ": roundtrip: sealed=%d, unsealed=%d -- Fast: sealed=%d, unsealed=%d\n",

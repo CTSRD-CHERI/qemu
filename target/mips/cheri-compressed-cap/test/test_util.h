@@ -53,7 +53,7 @@ std::ostream& operator<<(std::ostream& os, const cap_register_t& value) {
              "\tTop:         0x%" PRIx64 "%016" PRIx64 " %s\n"
              "\tSealed:      %d\n"
              "\tOType:       0x%" PRIx32 "%s\n",
-             value.cr_perms, value.cr_uperms, value.cr_base, value.cr_offset, (uint64_t)(value.length() >> 64),
+             value.cr_perms, value.cr_uperms, value.cr_base, (uint64_t)value.offset(), (uint64_t)(value.length() >> 64),
              (uint64_t)value.length(), value.length() > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
              (uint64_t)(top_full >> 64), (uint64_t)top_full, top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
              (int)cc128_is_cap_sealed(&value), value.cr_otype, otype_suffix(value.cr_otype));
@@ -79,7 +79,8 @@ static void dump_cap_fields(const cap_register_t& result) {
     fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.cr_perms); // TODO: decode perms
     fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
     fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result.cr_base);
-    fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result.cr_offset);
+    fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", (uint64_t)result.offset());
+    fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", result.address());
     fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(result.length() >> 64),
             (uint64_t)result.length() , result.length()  > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
     cc128_length_t top_full = result.top();
@@ -98,7 +99,7 @@ __attribute__((used)) static cap_register_t decompress_representable(uint64_t pe
     // Check that the result is the same again when compressed
     uint64_t new_pesbt_already_xored = compress_128cap_without_xor(&result);
     CHECK(pesbt_already_xored == new_pesbt_already_xored);
-    CHECK(cursor  == result.cr_base + result.cr_offset);
+    CHECK(cursor  == result.address());
     return result;
 }
 
@@ -106,7 +107,7 @@ inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_l
     cap_register_t creg;
     memset(&creg, 0, sizeof(creg));
     creg.cr_base = base;
-    creg.cr_offset = offset;
+    creg._cr_cursor = base + offset;
     creg._cr_top = base + length;
     creg.cr_perms = CC128_PERMS_ALL;
     creg.cr_uperms = CC128_UPERMS_ALL;

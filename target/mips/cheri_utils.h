@@ -60,14 +60,14 @@
             ((((cr)->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | ((cr)->cr_perms & CAP_PERMS_ALL)), \
             cap_get_base(cr), cap_get_length(cr)
 #define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
-#define PRINT_CAP_ARGS_L2(cr) cap_get_offset(cr), (cr)->cr_otype
+#define PRINT_CAP_ARGS_L2(cr) (uint64_t)cap_get_offset(cr), (cr)->cr_otype
 
 
 #define PRINT_CAP_FMTSTR PRINT_CAP_FMTSTR_L1 " " PRINT_CAP_FMTSTR_L2
 #define PRINT_CAP_ARGS(cr) PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr)
 
 static inline uint64_t cap_get_cursor(const cap_register_t* c) {
-    return c->cr_base + c->cr_offset;
+    return c->_cr_cursor;
 }
 
 // Getters to allow future changes to the cap_register_t struct layout:
@@ -75,8 +75,8 @@ static inline uint64_t cap_get_base(const cap_register_t* c) {
     return c->cr_base;
 }
 
-static inline uint64_t cap_get_offset(const cap_register_t* c) {
-    return c->cr_offset;
+static inline cap_offset_t cap_get_offset(const cap_register_t* c) {
+    return (cap_offset_t)c->_cr_cursor - (cap_offset_t)c->cr_base;
 }
 
 static inline uint64_t cap_get_length(const cap_register_t* c) {
@@ -233,7 +233,7 @@ int_to_cap(uint64_t x, cap_register_t *cr)
 {
 
     (void)null_capability(cr);
-    cr->cr_offset = x;
+    cr->_cr_cursor = x;
     return cr;
 }
 
@@ -269,14 +269,14 @@ static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_regist
     return cr;
 }
 
-static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset)
+static inline void set_max_perms_capability(cap_register_t *crp, uint64_t cursor)
 {
     crp->cr_tag = 1;
     crp->cr_perms = CAP_PERMS_ALL;
     crp->cr_uperms = CAP_UPERMS_ALL;
     // crp->cr_cursor = 0UL;
-    crp->cr_offset = offset;
     crp->cr_base = 0UL;
+    crp->_cr_cursor = cursor;
     // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
     crp->_cr_top = CAP_MAX_TOP;
     crp->cr_otype = CAP_OTYPE_UNSEALED;
@@ -290,27 +290,27 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
 #if defined(CHERI_128) && !defined(CHERI_MAGIC128)
 
 static inline bool
-is_representable_cap(const cap_register_t* cap, int64_t new_offset)
+is_representable_cap_with_addr(const cap_register_t* cap, uint64_t new_addr)
 {
-    return cc128_is_representable_with_offset(cap, new_offset);
+    return cc128_is_representable_with_addr(cap, new_addr);
 }
 
 static inline bool
-is_representable_cap_when_sealed(const cap_register_t* cap, int64_t new_offset)
+is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t new_addr)
 {
     cheri_debug_assert(cap_is_unsealed(cap));
-    return cc128_is_representable(true, cap_get_base(cap), cap_get_length65(cap), cap_get_offset(cap), new_offset);
+    return cc128_is_representable_new_addr(true, cap_get_base(cap), cap_get_length65(cap), cap_get_cursor(cap), new_addr);
 }
 
 #else
 static inline bool
-is_representable_cap(const cap_register_t* cap, uint64_t new_offset)
+is_representable_cap_with_addr(const cap_register_t* cap, uint64_t new_offset)
 {
     return true;
 }
 
 static inline bool
-is_representable_cap_when_sealed(const cap_register_t* cap, uint64_t new_offset)
+is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t new_offset)
 {
     return true;
 }

@@ -486,10 +486,6 @@ static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
 static inline QEMU_NORETURN void do_raise_c0_exception_impl(CPUMIPSState *env,
         uint16_t cause, uint64_t badvaddr, uintptr_t pc)
 {
-    /* fprintf(stderr, "C0 EXCEPTION: cause=%d badvaddr=0x%016lx "
-        "PCC=0x%016lx + 0x%016lx -> 0x%016lx PC=0x%016lx\n", cause,
-         badvaddr, env->active_tc.PCC.cr_base,
-         env->active_tc.PCC.cr_offset, pc, env->active_tc.PC); */
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C0 EXCEPTION: cause=%d"
         " badvaddr=0x%016" PRIx64 " PCC=" PRINT_CAP_FMTSTR
         " -> Host PC=0x%jx active_tc.PC=0x" TARGET_FMT_lx "\n",
@@ -552,7 +548,7 @@ static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause
 static inline target_ulong get_CP0_EPC(CPUMIPSState *env)
 {
 #ifdef TARGET_CHERI
-    return cap_get_offset(&env->active_tc.CHWR.EPCC);
+    return (uint64_t)cap_get_offset(&env->active_tc.CHWR.EPCC);
 #else
     return env->CP0_EPC;
 #endif
@@ -561,7 +557,7 @@ static inline target_ulong get_CP0_EPC(CPUMIPSState *env)
 static inline target_ulong get_CP0_ErrorEPC(CPUMIPSState *env)
 {
 #ifdef TARGET_CHERI
-    return cap_get_offset(&env->active_tc.CHWR.ErrorEPCC);
+    return (uint64_t)cap_get_offset(&env->active_tc.CHWR.ErrorEPCC);
 #else
     return env->CP0_ErrorEPC;
 #endif

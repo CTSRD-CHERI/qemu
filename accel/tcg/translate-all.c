@@ -2163,8 +2163,8 @@ void cpu_io_recompile(CPUState *cpu, uintptr_t retaddr)
         && env->active_tc.PC != tb->pc) {
         env->active_tc.PC -= (env->hflags & MIPS_HFLAG_B16 ? 2 : 4);
 #ifdef TARGET_CHERI
-        env->active_tc.PCC.cr_offset -= (env->hflags & MIPS_HFLAG_B16 ? 2 : 4);
-        assert(env->active_tc.PCC.cr_offset + env->active_tc.PCC.cr_base == env->active_tc.PC);
+        env->active_tc.PCC._cr_cursor -= (env->hflags & MIPS_HFLAG_B16 ? 2 : 4);
+        assert(env->active_tc.PCC._cr_cursor == env->active_tc.PC);
 #endif
         cpu->icount_decr.u16.low++;
         env->hflags &= ~MIPS_HFLAG_BMASK;

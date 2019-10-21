@@ -58,7 +58,7 @@ static cap_register_t do_csetbounds(const cap_register_t& initial_cap, cc128_len
 }
 
 static cap_register_t check_bounds_exact(const cap_register_t& initial_cap, cc128_length_t requested_length, bool should_be_exact) {
-    cc128_length_t req_top = initial_cap.cr_base + initial_cap.cr_offset + (cc128_length_t)requested_length;
+    cc128_length_t req_top = initial_cap.address() + (cc128_length_t)requested_length;
     bool exact = false;
     cap_register_t with_bounds = do_csetbounds(initial_cap, req_top, &exact);
     CHECK(exact == should_be_exact);
@@ -87,7 +87,7 @@ TEST_CASE("regression from cheritest", "[bounds]") {
     cap_register_t initial = make_max_perms_cap(0, 0xFFFFFFFFFF000000, CC128_MAX_LENGTH);
     cap_register_t with_bounds = check_bounds_exact(initial, 0xffffff, false);
     CHECK(with_bounds.cr_base == 0xFFFFFFFFFF000000);
-    CHECK(with_bounds.cr_offset == 0x0000000000000000);
+    CHECK(with_bounds.offset() == 0x0000000000000000);
     CHECK(with_bounds.length() == 0x00000000001000000);
 }
 
@@ -103,7 +103,7 @@ TEST_CASE("Old format setbounds regression with new format", "[old]") {
     uint64_t requested_length = 0x0000000010000000;
     cap_register_t with_bounds = check_bounds_exact(cap, requested_length, false);
     CHECK(with_bounds.cr_base == 0x0000000000000000);
-    CHECK(with_bounds.cr_offset == 0x0000000000000007);
+    CHECK(with_bounds.offset() == 0x0000000000000007);
     // Higher precision in old format -> more exact bounds
     uint64_t expected_length = TESTING_OLD_FORMAT ? 0x0000000010000400 : 0x00000000010080000;
     CHECK(with_bounds.length() == expected_length);
@@ -118,9 +118,9 @@ TEST_CASE("Cheritest regression case", "[regression]") {
     auto cap = make_max_perms_cap(0, 0x160600000, CC128_MAX_LENGTH);
     cap_register_t with_bounds = check_bounds_exact(cap, 0x300000, true);
     CHECK(with_bounds.cr_base == 0x160600000);
-    CHECK(with_bounds.cr_offset == 0);
+    CHECK(with_bounds.offset() == 0);
     CHECK(with_bounds.length() == 0x300000);
-    CHECK(with_bounds.cr_offset + with_bounds.cr_base == cap.cr_offset + cap.cr_base);
+    CHECK(with_bounds.address() == cap.address());
 }
 
 #ifndef CC128_OLD_FORMAT
@@ -172,7 +172,7 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
 
         // Check the second csetbounds:
         cap_register_t second_input = first_bounds;
-        second_input.cr_offset += input.base2 - second_input.address();
+        second_input._cr_cursor += input.base2 - second_input.address();
         REQUIRE(second_input.address() == input.base2);
         bool second_exact = false;
         const cap_register_t second_bounds = do_csetbounds(second_input, input.top2, &second_exact);

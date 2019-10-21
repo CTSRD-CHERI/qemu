@@ -164,16 +164,20 @@ typedef struct cvtrace cvtrace_t;
 #define CHERI_CAP_SIZE  32
 #endif
 
+
+typedef signed __int128 cap_offset_t;
+typedef unsigned __int128 cap_length_t;
+
 /*
  * Please note if this structure is changed then the TCG gen_branch() in
  * translate.c may need to be changed as well.
  */
 struct cap_register {
                         /* offset = cursor - base */
-    int64_t cr_offset; /* Capability offset */
+    uint64_t _cr_cursor; /* Capability offset */
     uint64_t cr_base;   /* Capability base addr */
     /* Length is actually 65 bits (TODO: should store top instead) */
-    unsigned __int128 _cr_top; /* Capability top */
+    cap_length_t _cr_top; /* Capability top */
     uint32_t cr_perms;  /* Permissions */
     uint32_t cr_uperms; /* User Permissions */
 #ifdef CHERI_128
