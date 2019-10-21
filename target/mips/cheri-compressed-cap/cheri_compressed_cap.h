@@ -40,7 +40,11 @@
 #include <sys/param.h> /* for MIN() */
 
 #ifndef cc128_debug_assert
+#ifdef cheri_debug_assert
+#define cc128_debug_assert(cond) cheri_debug_assert(cond)
+#else
 #define cc128_debug_assert(cond) assert(cond)
+#endif
 #endif
 
 /* Use __uint128 to represent 65 bit length */
