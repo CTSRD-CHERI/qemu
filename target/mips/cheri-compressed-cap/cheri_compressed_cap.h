@@ -47,7 +47,7 @@ __extension__ typedef unsigned __int128 cc128_length_t;
 #ifndef HAVE_CAP_REGISTER_T
 struct cap_register {
     /* offset = cursor - base */
-    uint64_t cr_offset; /* Capability offset */
+    int64_t cr_offset; /* Capability offset */
     uint64_t cr_base;   /* Capability base addr */
     cc128_length_t _cr_top; /* Capability top */
     uint32_t cr_perms;  /* Permissions */
@@ -865,7 +865,7 @@ static inline bool cc128_all_zeroes(uint64_t offset, uint32_t e, uint32_t bwidth
 }
 #endif /* ! SIMPLE_REPRESENT_CHECK */
 
-static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset, uint64_t new_offset);
+static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, int64_t offset, int64_t new_offset);
 
 /// Check that a capability is representable by compressing and recompressing
 static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
@@ -902,8 +902,13 @@ static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
  *   where Imid = i<E+19, E>, Amid = a<E+19, E>, R = B - 2^12 and a =
  *   base + offset.
  */
-static inline bool cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset,
-                                          uint64_t new_offset) {
+static inline bool cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, int64_t offset,
+                                          int64_t new_offset) {
+    // in-bounds capabilities are always representable
+    if (__builtin_expect(new_offset >= 0 && new_offset < length, true)) {
+        return true;
+    }
+
 #if defined(CC128_USE_FAST_REP_CHECK)
     const bool slow_representable_check = false;
 #else
@@ -930,8 +935,28 @@ static inline bool cc128_is_representable(bool sealed, uint64_t base, cc128_leng
     }
 }
 
-static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, uint64_t offset,
-                                        uint64_t new_offset) {
+static inline bool cc128_is_representable_with_offset(const cap_register_t* cap, int64_t new_offset) {
+    // in-bounds capabilities are always representable
+    const cc128_length_t length = cap->_cr_top - cap->cr_base;
+    if (__builtin_expect(new_offset >= 0 && new_offset < length, true)) {
+        return true;
+    }
+    return cc128_is_representable(cc128_is_cap_sealed(cap), cap->cr_base, length, cap->cr_offset, new_offset);
+}
+
+static inline bool cc128_is_representable_with_addr(const cap_register_t* cap, uint64_t new_addr) {
+    // in-bounds capabilities are always representable
+    const cc128_length_t length = cap->_cr_top - cap->cr_base;
+    if (__builtin_expect(new_addr < length, true)) {
+        return true;
+    }
+    return cc128_is_representable(cc128_is_cap_sealed(cap), cap->cr_base, length, cap->cr_offset, new_addr - cap->cr_base);
+}
+
+
+
+static bool fast_cc128_is_representable(bool sealed, uint64_t base, cc128_length_t length, int64_t offset,
+                                        int64_t new_offset) {
     (void)sealed;
     uint32_t bwidth = CC128_BOT_WIDTH;
     uint32_t highest_exp = (64 - bwidth + 2);

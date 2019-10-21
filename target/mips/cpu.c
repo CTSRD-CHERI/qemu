@@ -330,7 +330,7 @@ static inline void set_epc_or_error_epc(CPUMIPSState *env, cap_register_t* epc_o
 
     // Setting EPC should clear EPCC.tag if EPCC is sealed or becomes unrepresentable.
     // This will cause exception on instruction fetch following subsequent eret
-    target_ulong new_offset = new_cursor - cap_get_base(epc_or_error_epc);
+    target_long new_offset = new_cursor - cap_get_base(epc_or_error_epc);
     epc_or_error_epc->cr_offset = new_offset;
     if (!cap_is_unsealed(epc_or_error_epc)) {
         error_report("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));

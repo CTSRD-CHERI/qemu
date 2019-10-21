@@ -290,15 +290,15 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t offset
 #if defined(CHERI_128) && !defined(CHERI_MAGIC128)
 
 static inline bool
-is_representable_cap(const cap_register_t* cap, uint64_t new_offset)
+is_representable_cap(const cap_register_t* cap, int64_t new_offset)
 {
-    return cc128_is_representable(cap_is_sealed_with_type(cap), cap_get_base(cap), cap_get_length65(cap), cap_get_offset(cap), new_offset);
+    return cc128_is_representable_with_offset(cap, new_offset);
 }
 
 static inline bool
-is_representable_cap_when_sealed(const cap_register_t* cap, uint64_t new_offset)
+is_representable_cap_when_sealed(const cap_register_t* cap, int64_t new_offset)
 {
-    assert(cap_is_unsealed(cap));
+    cheri_debug_assert(cap_is_unsealed(cap));
     return cc128_is_representable(true, cap_get_base(cap), cap_get_length65(cap), cap_get_offset(cap), new_offset);
 }
 
