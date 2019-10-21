@@ -1113,59 +1113,33 @@ static inline void sysctl_oidfmt(uint32_t *holdp)
     holdp[0] = tswap32(holdp[0]);
 }
 
-abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
-        abi_ulong oldp, abi_ulong oldlenp, abi_ulong newp, abi_ulong newlen)
+static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
+        int32_t namelen, void *holdp, size_t *holdlenp, void *hnewp,
+        size_t newlen)
 {
+    uint32_t kind = 0;
 #if TARGET_ABI_BITS != HOST_LONG_BITS
     const abi_ulong maxmem = -0x100c000;
 #endif
     abi_long ret;
-    void *hnamep, *holdp = NULL, *hnewp = NULL;
-    size_t holdlen;
-    abi_ulong oldlen = 0;
-    int32_t *snamep = g_malloc(sizeof(int32_t) * namelen), *p, *q, i;
-    uint32_t kind = 0;
+    size_t holdlen, oldlen;
     CPUState *cpu = ENV_GET_CPU(env);
     TaskState *ts = (TaskState *)cpu->opaque;
 
-    if (oldlenp) {
-        if (get_user_ual(oldlen, oldlenp)) {
-            return -TARGET_EFAULT;
-        }
-    }
-    hnamep = lock_user(VERIFY_READ, namep, namelen, 1);
-    if (hnamep == NULL) {
-        return -TARGET_EFAULT;
-    }
-    if (newp) {
-        hnewp = lock_user(VERIFY_READ, newp, newlen, 1);
-        if (hnewp == NULL) {
-            return -TARGET_EFAULT;
-        }
-    }
-    if (oldp) {
-        holdp = lock_user(VERIFY_WRITE, oldp, oldlen, 0);
-        if (holdp == NULL) {
-            return -TARGET_EFAULT;
-        }
-    }
-    holdlen = oldlen;
-    for (p = hnamep, q = snamep, i = 0; i < namelen; p++, i++) {
-        *q++ = tswap32(*p);
-    }
+    holdlen = oldlen = *holdlenp;
     oidfmt(snamep, namelen, NULL, &kind);
 
     /* Handle some arch/emulator dependent sysctl()'s here. */
     switch (snamep[0]) {
 #if defined(TARGET_PPC)
-	case CTL_MACHDEP:
-		switch (snamep[1]) {
-		case 1:	/* This should be documented elsewhere. */
-			holdlen = sizeof(abi_ulong);
-			(*(abi_ulong *)holdp) = env->dcache_line_size;
-			ret = 0;
-			goto out;
-		}
+    case CTL_MACHDEP:
+        switch (snamep[1]) {
+        case 1:    /* This should be documented elsewhere. */
+            holdlen = sizeof(abi_ulong);
+            (*(abi_ulong *)holdp) = env->dcache_line_size;
+            ret = 0;
+            goto out;
+        }
 #endif
     case CTL_KERN:
         switch (snamep[1]) {
@@ -1246,78 +1220,78 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
         break;
 
     case CTL_VFS:
-	{
-	    static int oid_vfs_conflist;
+    {
+        static int oid_vfs_conflist;
 
-	    if (!oid_vfs_conflist) {
-	        int real_oid[CTL_MAXNAME+2];
-		size_t len = sizeof(real_oid) / sizeof(int);
+        if (!oid_vfs_conflist) {
+            int real_oid[CTL_MAXNAME+2];
+        size_t len = sizeof(real_oid) / sizeof(int);
 
-		if (sysctlnametomib("vfs.conflist", real_oid, &len) >= 0)
-		    oid_vfs_conflist = real_oid[1];
-	    }
+        if (sysctlnametomib("vfs.conflist", real_oid, &len) >= 0)
+            oid_vfs_conflist = real_oid[1];
+        }
 
-	    if (oid_vfs_conflist && snamep[1] == oid_vfs_conflist) {
-		struct xvfsconf *xvfsp;
-		struct target_xvfsconf *txp;
-		int cnt, i;
+        if (oid_vfs_conflist && snamep[1] == oid_vfs_conflist) {
+        struct xvfsconf *xvfsp;
+        struct target_xvfsconf *txp;
+        int cnt, i;
 
-		if (sysctlbyname("vfs.conflist", NULL, &holdlen, NULL, 0) < 0) {
-		    ret = -1;
-		    goto out;
-		}
-		if (!holdp) {
-		    ret = 0;
-		    goto out;
-		}
-		xvfsp = (struct xvfsconf *)g_malloc(holdlen);
-		if (xvfsp == NULL) {
-		    ret = -TARGET_ENOMEM;
-		    goto out;
-		}
-		if (sysctlbyname("vfs.conflist", xvfsp, &holdlen, NULL, 0) < 0){
-		    g_free(xvfsp);
-		    ret = -1;
-		    goto out;
-		}
-		cnt = holdlen / sizeof(struct xvfsconf);
-		holdlen = cnt * sizeof(struct target_xvfsconf);
-		txp = (struct target_xvfsconf *)holdp;
-		for (i = 0; i < cnt; i++) {
-		    txp[i].vfc_vfsops = 0;
-		    strlcpy(txp[i].vfc_name, xvfsp[i].vfc_name,
-			sizeof(txp[i].vfc_name));
-		    txp[i].vfc_typenum = tswap32(xvfsp[i].vfc_typenum);
-		    txp[i].vfc_refcount = tswap32(xvfsp[i].vfc_refcount);
-		    txp[i].vfc_flags = tswap32(
-			host_to_target_vfc_flags(xvfsp[i].vfc_flags));
-		    txp[i].vfc_next = 0;
-	        }
-		g_free(xvfsp);
-		ret = 0;
-		goto out;
-	    }
-	}
-	break;
+        if (sysctlbyname("vfs.conflist", NULL, &holdlen, NULL, 0) < 0) {
+            ret = -1;
+            goto out;
+        }
+        if (!holdp) {
+            ret = 0;
+            goto out;
+        }
+        xvfsp = (struct xvfsconf *)g_malloc(holdlen);
+        if (xvfsp == NULL) {
+            ret = -TARGET_ENOMEM;
+            goto out;
+        }
+        if (sysctlbyname("vfs.conflist", xvfsp, &holdlen, NULL, 0) < 0){
+            g_free(xvfsp);
+            ret = -1;
+            goto out;
+        }
+        cnt = holdlen / sizeof(struct xvfsconf);
+        holdlen = cnt * sizeof(struct target_xvfsconf);
+        txp = (struct target_xvfsconf *)holdp;
+        for (i = 0; i < cnt; i++) {
+            txp[i].vfc_vfsops = 0;
+            strlcpy(txp[i].vfc_name, xvfsp[i].vfc_name,
+            sizeof(txp[i].vfc_name));
+            txp[i].vfc_typenum = tswap32(xvfsp[i].vfc_typenum);
+            txp[i].vfc_refcount = tswap32(xvfsp[i].vfc_refcount);
+            txp[i].vfc_flags = tswap32(
+            host_to_target_vfc_flags(xvfsp[i].vfc_flags));
+            txp[i].vfc_next = 0;
+            }
+        g_free(xvfsp);
+        ret = 0;
+        goto out;
+        }
+    }
+    break;
 
     case CTL_HW:
         switch (snamep[1]) {
         case HW_MACHINE:
-	    holdlen = sizeof(TARGET_HW_MACHINE);
-	    if (holdp)
-		strlcpy(holdp, TARGET_HW_MACHINE, oldlen);
+        holdlen = sizeof(TARGET_HW_MACHINE);
+        if (holdp)
+        strlcpy(holdp, TARGET_HW_MACHINE, oldlen);
             ret = 0;
             goto out;
 
         case HW_MACHINE_ARCH:
-		{
+        {
 #ifdef	TARGET_ARM
         /*
          * For ARM, we'll try to grab the MACHINE_ARCH from the ELF that we are
-		 * currently emulating. It should have a .note containing the
-		 * MACHINE_ARCH that this binary has been compiled for, so we'll assume
-		 * this is right and otherwise matches the jail/environment we're
-		 * operating out of.
+         * currently emulating. It should have a .note containing the
+         * MACHINE_ARCH that this binary has been compiled for, so we'll assume
+         * this is right and otherwise matches the jail/environment we're
+         * operating out of.
          *
          * If we can't find the expected ARCH tag, fallback to armv6 as a
          * sensible default.
@@ -1332,12 +1306,12 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
             goto out;
         }
 #endif
-	    holdlen = sizeof(TARGET_HW_MACHINE_ARCH);
-	    if (holdp)
-		strlcpy(holdp, TARGET_HW_MACHINE_ARCH, oldlen);
+        holdlen = sizeof(TARGET_HW_MACHINE_ARCH);
+        if (holdp)
+        strlcpy(holdp, TARGET_HW_MACHINE_ARCH, oldlen);
             ret = 0;
             goto out;
-		}
+        }
 #if defined(TARGET_AARCH64)
         case HW_NCPU:           /* XXX AARCH64 is not SMP ready */
             if (oldlen) {
@@ -1348,42 +1322,42 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
             goto out;
 #endif
 #if defined(TARGET_ARM)
-	case HW_FLOATINGPT:
-	    if (oldlen) {
-		  if (env->features & ((1ULL << ARM_FEATURE_VFP)|
-		      (1ULL << ARM_FEATURE_VFP3)|
-		      (1ULL << ARM_FEATURE_VFP4)))
-			  *(int32_t *)holdp = 1;
-		  else
-			  *(int32_t *)holdp = 0;
-	    }
-	    holdlen = sizeof(int32_t);
-	    ret = 0;
-	    goto out;
+    case HW_FLOATINGPT:
+        if (oldlen) {
+          if (env->features & ((1ULL << ARM_FEATURE_VFP)|
+              (1ULL << ARM_FEATURE_VFP3)|
+              (1ULL << ARM_FEATURE_VFP4)))
+              *(int32_t *)holdp = 1;
+          else
+              *(int32_t *)holdp = 0;
+        }
+        holdlen = sizeof(int32_t);
+        ret = 0;
+        goto out;
 #endif
 
 
 #if TARGET_ABI_BITS != HOST_LONG_BITS
-	case HW_PHYSMEM:
-	case HW_USERMEM:
-	case HW_REALMEM:
-	    holdlen = sizeof(abi_ulong);
-	    ret = 0;
+    case HW_PHYSMEM:
+    case HW_USERMEM:
+    case HW_REALMEM:
+        holdlen = sizeof(abi_ulong);
+        ret = 0;
 
-	    if (oldlen) {
-	    	int mib[2] = {snamep[0], snamep[1]};
-		unsigned long lvalue;
-		size_t len = sizeof(lvalue);
+        if (oldlen) {
+            int mib[2] = {snamep[0], snamep[1]};
+        unsigned long lvalue;
+        size_t len = sizeof(lvalue);
 
-		if (sysctl(mib, 2, &lvalue, &len, NULL, 0) == -1 ) {
-			ret = -1;
-		} else {
-			if (((unsigned long)maxmem) < lvalue)
-			    lvalue = maxmem;
-			(*(abi_ulong *)holdp) = tswapal((abi_ulong)lvalue);
-		}
-	    }
-	    goto out;
+        if (sysctl(mib, 2, &lvalue, &len, NULL, 0) == -1 ) {
+            ret = -1;
+        } else {
+            if (((unsigned long)maxmem) < lvalue)
+                lvalue = maxmem;
+            (*(abi_ulong *)holdp) = tswapal((abi_ulong)lvalue);
+        }
+        }
+        goto out;
 #endif
 
         default:
@@ -1510,6 +1484,106 @@ abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
 #endif
 
 out:
+    *holdlenp = holdlen;
+    return ret;
+}
+
+/*
+ * This syscall was created to make sysctlbyname(3) more efficient.
+ * Unfortunately, because we have to fake some sysctls, we can't do that.
+ */
+abi_long do_freebsd_sysctlbyname(CPUArchState *env, abi_ulong namep,
+        int32_t namelen, abi_ulong oldp, abi_ulong oldlenp, abi_ulong newp,
+        abi_ulong newlen)
+{
+    abi_long ret;
+    void *holdp = NULL, *hnewp = NULL;
+    char *snamep;
+    int oid[CTL_MAXNAME+2];
+    size_t holdlen, oidplen;
+    abi_ulong oldlen = 0;
+
+    if (oldlenp) {
+        if (get_user_ual(oldlen, oldlenp)) {
+            return -TARGET_EFAULT;
+        }
+    }
+    snamep = lock_user_string(namep);
+    if (snamep == NULL) {
+        return -TARGET_EFAULT;
+    }
+    if (newp) {
+        hnewp = lock_user(VERIFY_READ, newp, newlen, 1);
+        if (hnewp == NULL) {
+            return -TARGET_EFAULT;
+        }
+    }
+    if (oldp) {
+        holdp = lock_user(VERIFY_WRITE, oldp, oldlen, 0);
+        if (holdp == NULL) {
+            return -TARGET_EFAULT;
+        }
+    }
+    holdlen = oldlen;
+
+    oidplen = sizeof(oid) / sizeof(int);
+    if (sysctlnametomib(snamep, oid, &oidplen) != 0) {
+        return -TARGET_EINVAL;
+    }
+
+    ret = do_freebsd_sysctl_oid(env, oid, oidplen, holdp, &holdlen, hnewp,
+        newlen);
+
+    if (oldlenp) {
+        put_user_ual(holdlen, oldlenp);
+    }
+    unlock_user(snamep, namep, 0);
+    unlock_user(holdp, oldp, holdlen);
+    if (hnewp) {
+        unlock_user(hnewp, newp, 0);
+    }
+
+    return (ret);
+}
+
+abi_long do_freebsd_sysctl(CPUArchState *env, abi_ulong namep, int32_t namelen,
+        abi_ulong oldp, abi_ulong oldlenp, abi_ulong newp, abi_ulong newlen)
+{
+    abi_long ret;
+    void *hnamep, *holdp = NULL, *hnewp = NULL;
+    size_t holdlen;
+    abi_ulong oldlen = 0;
+    int32_t *snamep = g_malloc(sizeof(int32_t) * namelen), *p, *q, i;
+
+    if (oldlenp) {
+        if (get_user_ual(oldlen, oldlenp)) {
+            return -TARGET_EFAULT;
+        }
+    }
+    hnamep = lock_user(VERIFY_READ, namep, namelen, 1);
+    if (hnamep == NULL) {
+        return -TARGET_EFAULT;
+    }
+    if (newp) {
+        hnewp = lock_user(VERIFY_READ, newp, newlen, 1);
+        if (hnewp == NULL) {
+            return -TARGET_EFAULT;
+        }
+    }
+    if (oldp) {
+        holdp = lock_user(VERIFY_WRITE, oldp, oldlen, 0);
+        if (holdp == NULL) {
+            return -TARGET_EFAULT;
+        }
+    }
+    holdlen = oldlen;
+    for (p = hnamep, q = snamep, i = 0; i < namelen; p++, i++) {
+        *q++ = tswap32(*p);
+    }
+
+    ret = do_freebsd_sysctl_oid(env, snamep, namelen, holdp, &holdlen, hnewp,
+        newlen);
+
     if (oldlenp) {
         put_user_ual(holdlen, oldlenp);
     }
