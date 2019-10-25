@@ -796,7 +796,7 @@ abi_long freebsd_umtx_mutex_wake(abi_ulong obj, abi_long val)
 }
 
 abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
-        struct timespec *ts, int mode)
+        void *ts, size_t tsz, int mode)
 {
     uint32_t owner, flags, count, *addr;
     int ret = 0;
@@ -885,13 +885,20 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         unlock_user_struct(target_umutex, target_addr, 1);
         pthread_mutex_unlock(&umtx_wait_lck);
 
-        DEBUG_UMTX("<WAIT UMUTEX> %s: _umtx_op(%p, %d, 0x%x, NULL, NULL) "
-                "count = %d\n", __func__, g2h(target_addr), UMTX_OP_WAIT_UINT,
-                tswap32(target_umutex->m_owner), count);
-        ret = _umtx_wait_uint_private(addr, count, 0, (void *)ts, __func__);
-
-        if (ret != 0)
+        DEBUG_UMTX("<WAIT UMUTEX> %s: _umtx_op(%p, %d, 0x%x, %d, %jx) "
+                "count = %d\n", __func__, g2h(target_addr), UMTX_OP_WAIT_PRIVATE,
+                tswap32(target_umutex->m_owner), tsz, (uintmax_t)ts, count);
+       ret = _umtx_wait_uint_private(addr, count, tsz, (void *)ts, __func__);
+       if (ret != 0) {
+           /*
+            * Decrease count if we failed.  This one will not have a
+            * matching wake to account for it.
+            */
+            __get_user(count, &target_umutex->m_count);
+            count--;
+            __put_user(count, &target_umutex->m_count);
             break;
+        }
     }
     return ret;
 }
@@ -1003,7 +1010,7 @@ abi_long freebsd_cv_wait(abi_ulong target_ucond_addr,
         unlock_user_struct(target_ucond, target_ucond_addr, 1);
 	return ret;
     }
-    ret = freebsd_lock_umutex(target_umtx_addr, tid, NULL, TARGET_UMUTEX_TRY);
+    ret = freebsd_lock_umutex(target_umtx_addr, tid, NULL, 0, TARGET_UMUTEX_TRY);
     _umtx_op(&_cv_mutex, UMTX_OP_MUTEX_UNLOCK, 0, NULL, NULL);
     unlock_user_struct(target_ucond, target_ucond_addr, 1);
 
