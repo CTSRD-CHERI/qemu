@@ -322,7 +322,7 @@ abi_long freebsd_umtx_sem2_wake(abi_ulong obj);
 abi_long freebsd_umtx_sem_wait(abi_ulong obj, size_t tsz, void *t);
 abi_long freebsd_umtx_sem_wake(abi_ulong obj);
 abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
-        struct timespec *ts, int mode);
+        void *ts, size_t tsz, int mode);
 abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id);
 abi_long freebsd_cv_wait(abi_ulong target_ucond_addr,
                 abi_ulong target_umtx_addr, struct timespec *ts, int wflags);

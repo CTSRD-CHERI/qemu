@@ -320,12 +320,12 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
             return ret;
         }
         if (target_time != 0) {
-            if (t2h_freebsd_timespec(&ts, target_time)) {
-                return -TARGET_EFAULT;
-            }
-            ret = freebsd_lock_umutex(obj, tid, &ts, 0);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            if (is_error(ret))
+                return ret;
+            ret = freebsd_lock_umutex(obj, tid, &ut, utsz, 0);
         } else {
-            ret = freebsd_lock_umutex(obj, tid, NULL, 0);
+            ret = freebsd_lock_umutex(obj, tid, NULL, 0, 0);
         }
         break;
 
@@ -342,7 +342,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         if (is_error(ret)) {
             return ret;
         }
-        ret = freebsd_lock_umutex(obj, tid, NULL, TARGET_UMUTEX_TRY);
+        ret = freebsd_lock_umutex(obj, tid, NULL, 0, TARGET_UMUTEX_TRY);
         break;
 
     case TARGET_UMTX_OP_MUTEX_WAIT:
@@ -351,12 +351,12 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
             return ret;
         }
         if (target_time != 0) {
-            if (t2h_freebsd_timespec(&ts, target_time)) {
-                return -TARGET_EFAULT;
-            }
-            ret = freebsd_lock_umutex(obj, tid, &ts, TARGET_UMUTEX_WAIT);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            if (is_error(ret))
+                return ret;
+            ret = freebsd_lock_umutex(obj, tid, &ut, utsz, TARGET_UMUTEX_WAIT);
         } else {
-            ret = freebsd_lock_umutex(obj, tid, NULL, TARGET_UMUTEX_WAIT);
+            ret = freebsd_lock_umutex(obj, tid, NULL, 0, TARGET_UMUTEX_WAIT);
         }
         break;
 
