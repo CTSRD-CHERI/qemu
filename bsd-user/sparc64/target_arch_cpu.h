@@ -244,16 +244,12 @@ static inline void target_cpu_loop(CPUSPARCState *env)
 
         case EXCP_DEBUG:
             {
-                int sig;
 
-                sig = gdb_handlesig(cs, TARGET_SIGTRAP);
 #if 0
-                if (sig) {
-                    info.si_signo = sig;
-                    info.si_errno = 0;
-                    info.si_code = TARGET_TRAP_BRKPT;
-                    /* queue_signal(env, info.si_signo, &info); */
-                }
+                info.si_signo = TARGET_SIGTRAP;
+                info.si_errno = 0;
+                info.si_code = TARGET_TRAP_BRKPT;
+                /* queue_signal(env, info.si_signo, &info); */
 #endif
             }
             break;

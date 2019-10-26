@@ -47,7 +47,7 @@ static inline void target_cpu_init(CPUARMState *env,
 static inline void target_cpu_loop(CPUARMState *env)
 {
     CPUState *cs = CPU(arm_env_get_cpu(env));
-    int trapnr, sig;
+    int trapnr;
     target_siginfo_t info;
     uint64_t code, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8;
     uint32_t pstate;
@@ -142,13 +142,10 @@ static inline void target_cpu_loop(CPUARMState *env)
 
 	case EXCP_DEBUG:
         case EXCP_BKPT:
-            sig = gdb_handlesig(cs, TARGET_SIGTRAP);
-            if (sig) {
-                info.si_signo = sig;
-                info.si_errno = 0;
-                info.si_code = TARGET_TRAP_BRKPT;
-                queue_signal(env, info.si_signo, &info);
-            }
+            info.si_signo = TARGET_SIGTRAP;
+            info.si_errno = 0;
+            info.si_code = TARGET_TRAP_BRKPT;
+            queue_signal(env, info.si_signo, &info);
             break;
 
         case EXCP_ATOMIC:
