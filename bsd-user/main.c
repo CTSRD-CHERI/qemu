@@ -256,7 +256,7 @@ int main(int argc, char **argv)
     struct target_pt_regs regs1, *regs = &regs1;
     struct image_info info1, *info = &info1;
     struct bsd_binprm bprm;
-    TaskState ts1, *ts = &ts1;
+    TaskState *ts;
     CPUArchState *env;
     CPUState *cpu;
     int optind;
@@ -523,11 +523,11 @@ int main(int argc, char **argv)
     tcg_region_init();
 
     /* build Task State */
-    memset(ts, 0, sizeof(TaskState));
+    ts = g_new0(TaskState, 1);
     init_task_state(ts);
     ts->info = info;
-    cpu->opaque = ts;
     ts->bprm = &bprm;
+    cpu->opaque = ts;
 
     target_cpu_init(env, regs);
 
