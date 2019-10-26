@@ -54,79 +54,6 @@ static inline void target_cpu_init(CPUPPCState *env,
     env->nip = regs->nip;
 }
 
-static int do_store_exclusive(CPUPPCState *env)
-{
-    target_ulong addr;
-    target_ulong page_addr;
-    target_ulong val, val2 __attribute__((unused));
-    int flags;
-    int segv = 0;
-
-    addr = env->reserve_ea;
-    page_addr = addr & TARGET_PAGE_MASK;
-    start_exclusive();
-    mmap_lock();
-    flags = page_get_flags(page_addr);
-    if ((flags & PAGE_READ) == 0) {
-        segv = 1;
-    } else {
-        int reg = env->reserve_info & 0x1f;
-        int size = (env->reserve_info >> 5) & 0xf;
-        int stored = 0;
-
-        if (addr == env->reserve_addr) {
-            switch (size) {
-            case 1: segv = get_user_u8(val, addr); break;
-            case 2: segv = get_user_u16(val, addr); break;
-            case 4: segv = get_user_u32(val, addr); break;
-#if defined(TARGET_PPC64)
-            case 8: segv = get_user_u64(val, addr); break;
-            case 16: {
-                segv = get_user_u64(val, addr);
-                if (!segv) {
-                    segv = get_user_u64(val2, addr + 8);
-                }
-                break;
-            }
-#endif
-            default: abort();
-            }
-            if (!segv && val == env->reserve_val) {
-                val = env->gpr[reg];
-                switch (size) {
-                case 1: segv = put_user_u8(val, addr); break;
-                case 2: segv = put_user_u16(val, addr); break;
-                case 4: segv = put_user_u32(val, addr); break;
-#if defined(TARGET_PPC64)
-                case 8: segv = put_user_u64(val, addr); break;
-                case 16: {
-                    if (val2 == env->reserve_val2) {
-                        segv = put_user_u64(val, addr);
-                        if (!segv) {
-                            segv = put_user_u64(val2, addr + 8);
-                        }
-                    }
-                    break;
-                }
-#endif
-                default: abort();
-                }
-                if (!segv) {
-                    stored = 1;
-                }
-            }
-        }
-        env->crf[0] = (stored << 1) | xer_so;
-        env->reserve_addr = (target_ulong)-1;
-    }
-    if (!segv) {
-        env->nip += 4;
-    }
-    mmap_unlock();
-    end_exclusive();
-    return segv;
-}
-
 static inline void target_cpu_loop(CPUPPCState *env)
 {
     CPUState *cs = CPU(ppc_env_get_cpu(env));
@@ -135,11 +62,14 @@ static inline void target_cpu_loop(CPUPPCState *env)
     target_ulong ret;
 
     for(;;) {
+        bool arch_interrupt;
+
         cpu_exec_start(cs);
         trapnr = cpu_exec(cs);
         cpu_exec_end(cs);
 	process_queued_cpu_work(cs);
 
+        arch_interrupt = true;
         switch(trapnr) {
         case POWERPC_EXCP_NONE:
             /* Just go on */
@@ -515,15 +445,6 @@ static inline void target_cpu_loop(CPUPPCState *env)
             }
             env->gpr[3] = ret;
             break;
-        case POWERPC_EXCP_STCX:
-            if (do_store_exclusive(env)) {
-                info.si_signo = TARGET_SIGSEGV;
-                info.si_errno = 0;
-                info.si_code = TARGET_SEGV_MAPERR;
-				info.si_addr = env->nip;
-                queue_signal(env, info.si_signo, &info);
-            }
-            break;
         case EXCP_DEBUG:
             {
                 int sig;
@@ -534,11 +455,14 @@ static inline void target_cpu_loop(CPUPPCState *env)
                     info.si_errno = 0;
                     info.si_code = TARGET_TRAP_BRKPT;
                     queue_signal(env, info.si_signo, &info);
+                  } else {
+                    arch_interrupt = false;
                   }
             }
             break;
         case EXCP_ATOMIC:
             cpu_exec_step_atomic(cs);
+            arch_interrupt = false;
             break;
         case EXCP_INTERRUPT:
             /* just indicate that signals should be handled asap */
@@ -548,6 +472,15 @@ static inline void target_cpu_loop(CPUPPCState *env)
             break;
         }
         process_pending_signals(env);
+
+        /* Most of the traps imply a transition through kernel mode,
+         * which implies an REI instruction has been executed.  Which
+         * means that RX and LOCK_ADDR should be cleared.  But there
+         * are a few exceptions for traps internal to QEMU.
+         */
+        if (arch_interrupt) {
+            env->reserve_addr = -1;
+        }
     }
 }
 
