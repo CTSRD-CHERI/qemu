@@ -302,8 +302,10 @@ static inline abi_long do_freebsd_rfork(void *cpu_env, abi_long flags)
      * entirely for now is ok, the only consumer at the moment is posix_spawn
      * and it will fall back to classic vfork(2) if we return EINVAL.
      */
+#ifdef RFSPAWN
     if ((flags & RFSPAWN) != 0)
         return -TARGET_EINVAL;
+#endif
     fork_start();
     ret = rfork(flags);
     if (ret == 0) {
