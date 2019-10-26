@@ -52,6 +52,7 @@ bool ras_thread_set = false;
 #endif
 int singlestep;
 static const char *cpu_model;
+static const char *cpu_type;
 unsigned long mmap_min_addr;
 unsigned long guest_base;
 bool have_guest_base;
@@ -212,7 +213,6 @@ void init_task_state(TaskState *ts)
 
 CPUArchState *cpu_copy(CPUArchState *env)
 {
-    const char *cpu_type = parse_cpu_model(cpu_model);
     CPUState *cpu = ENV_GET_CPU(env);
     CPUState *new_cpu = cpu_create(cpu_type);
     CPUArchState *new_env = new_cpu->env_ptr;
@@ -251,7 +251,6 @@ void gemu_log(const char *fmt, ...)
 int main(int argc, char **argv)
 {
     const char *filename;
-    const char *cpu_type;
     const char *log_file = NULL;
     const char *log_mask = NULL;
     struct target_pt_regs regs1, *regs = &regs1;
@@ -435,6 +434,8 @@ int main(int argc, char **argv)
     if (cpu_model == NULL) {
         cpu_model = TARGET_DEFAULT_CPU_MODEL;
     }
+
+    cpu_type = parse_cpu_model(cpu_model);
 
     /* init tcg before creating CPUs and to get qemu_host_page_size */
     tcg_exec_init(0, false);
