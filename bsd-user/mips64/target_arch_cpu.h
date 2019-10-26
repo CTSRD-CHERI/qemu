@@ -198,15 +198,11 @@ static inline void target_cpu_loop(CPUMIPSState *env)
 
         case EXCP_DEBUG: /* cpu stopped after a breakpoint */
             {
-                int sig;
 
-                sig = gdb_handlesig(cs, TARGET_SIGTRAP);
-                if (sig) {
-                    info.target_si_signo = sig;
-                    info.target_si_errno = 0;
-                    info.target_si_code = TARGET_TRAP_BRKPT;
-                    queue_signal(env, info.target_si_signo, &info);
-                }
+                info.target_si_signo = TARGET_SIGTRAP;
+                info.target_si_errno = 0;
+                info.target_si_code = TARGET_TRAP_BRKPT;
+                queue_signal(env, info.target_si_signo, &info);
             }
             break;
 
