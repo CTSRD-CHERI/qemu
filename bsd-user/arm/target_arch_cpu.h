@@ -306,15 +306,11 @@ static inline void target_cpu_loop(CPUARMState *env)
             break;
         case EXCP_DEBUG:
             {
-                int sig;
 
-                sig = gdb_handlesig(cs, TARGET_SIGTRAP);
-                if (sig) {
-                    info.si_signo = sig;
-                    info.si_errno = 0;
-                    info.si_code = TARGET_TRAP_BRKPT;
-                    queue_signal(env, info.si_signo, &info);
-                }
+                info.si_signo = TARGET_SIGTRAP;
+                info.si_errno = 0;
+                info.si_code = TARGET_TRAP_BRKPT;
+                queue_signal(env, info.si_signo, &info);
             }
             break;
         case EXCP_ATOMIC:

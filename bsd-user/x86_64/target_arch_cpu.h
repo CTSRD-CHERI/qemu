@@ -284,15 +284,11 @@ static inline void target_cpu_loop(CPUX86State *env)
 #if 0
         case EXCP_DEBUG:
             {
-                int sig;
 
-                sig = gdb_handlesig(env, TARGET_SIGTRAP);
-                if (sig) {
-                    info.si_signo = sig;
-                    info.si_errno = 0;
-                    info.si_code = TARGET_TRAP_BRKPT;
-                    queue_signal(env, info.si_signo, &info);
-                }
+                info.si_signo = TARGET_SIGTRAP;
+                info.si_errno = 0;
+                info.si_code = TARGET_TRAP_BRKPT;
+                queue_signal(env, info.si_signo, &info);
             }
             break;
 #endif
