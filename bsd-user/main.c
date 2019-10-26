@@ -443,7 +443,7 @@ int main(int argc, char **argv)
     cpu_type = parse_cpu_option(cpu_model);
     cpu = cpu_create(cpu_type);
     env = cpu->env_ptr;
-    TARGET_CPU_RESET(cpu);
+    cpu_reset(cpu);
     thread_cpu = cpu;
 
     if (getenv("QEMU_STRACE")) {
