@@ -1230,6 +1230,13 @@ void arm_cpu_post_init(Object *obj)
     }
 
     if (arm_feature(&cpu->env, ARM_FEATURE_EL3)) {
+#ifdef CONFIG_BSD_USER
+        /* XXX FREEBSD TODO: We need to figure out which part of this gives us
+		 * heartburn.  Any binary execution leads to a quick segfault in the
+		 * guest binary if we don't disable it here.
+		 */
+        unset_feature(&cpu->env, ARM_FEATURE_EL3);
+#else
         /* Add the has_el3 state CPU property only if EL3 is allowed.  This will
          * prevent "has_el3" from existing on CPUs which cannot support EL3.
          */
@@ -1242,6 +1249,7 @@ void arm_cpu_post_init(Object *obj)
                                  qdev_prop_allow_set_link_before_realize,
                                  OBJ_PROP_LINK_STRONG,
                                  &error_abort);
+#endif
 #endif
     }
 
