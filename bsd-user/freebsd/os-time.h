@@ -696,11 +696,11 @@ static inline abi_long do_freebsd_freebsd11_kevent(abi_long arg1, abi_ulong arg2
             __put_user(eventlist[i].data, &target_eventlist[i].data);
             /* __put_user(eventlist[i].udata, &target_eventlist[i].udata);*/
 #if TARGET_ABI_BITS == 32
-            tswap32s((uint32_t *)&eventlist[i].data);
-            target_eventlist[i].data = (uintptr_t)eventlist[i].data;
+            tswap32s((uint32_t *)&eventlist[i].udata);
+            target_eventlist[i].udata = (uintptr_t)eventlist[i].udata;
 #else
-            tswap64s((uint64_t *)&eventlist[i].data);
-            target_eventlist[i].data = (uintptr_t)eventlist[i].data;
+            tswap64s((uint64_t *)&eventlist[i].udata);
+            target_eventlist[i].udata = (uintptr_t)eventlist[i].udata;
 #endif
         }
         unlock_user(target_eventlist, arg4,
@@ -778,11 +778,11 @@ static inline abi_long do_freebsd_kevent(abi_long arg1, abi_ulong arg2,
             __put_user(eventlist[i].data, &target_eventlist[i].data);
             /* __put_user(eventlist[i].udata, &target_eventlist[i].udata);*/
 #if TARGET_ABI_BITS == 32
-            tswap32s((uint32_t *)&eventlist[i].data);
-            target_eventlist[i].data = (uintptr_t)eventlist[i].data;
+            tswap32s((uint32_t *)&eventlist[i].udata);
+            target_eventlist[i].udata = (uintptr_t)eventlist[i].udata;
 #else
-            tswap64s((uint64_t *)&eventlist[i].data);
-            target_eventlist[i].data = (uintptr_t)eventlist[i].data;
+            tswap64s((uint64_t *)&eventlist[i].udata);
+            target_eventlist[i].udata = (uintptr_t)eventlist[i].udata;
 #endif
             __put_user(eventlist[i].ext[0], &target_eventlist[i].ext[0]);
             __put_user(eventlist[i].ext[1], &target_eventlist[i].ext[1]);
