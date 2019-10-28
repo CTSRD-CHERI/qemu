@@ -83,7 +83,7 @@ abi_long t2h_freebsd_cmsg(struct msghdr *msgh,
             }
         } else if ((cmsg->cmsg_level == TARGET_SOL_SOCKET) &&
             (cmsg->cmsg_type == SCM_TIMESTAMP) &&
-            (len == sizeof(struct timeval)))  {
+            (len == sizeof(struct target_freebsd_timeval)))  {
             /* copy struct timeval to host */
             struct timeval *tv = (struct timeval *)data;
             struct target_freebsd_timeval *target_tv =
