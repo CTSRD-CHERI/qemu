@@ -59,7 +59,7 @@ static abi_long do_freebsd_thr_exit(CPUArchState *cpu_env, abi_ulong tid_addr)
      */
     cpu_list_lock();
     /* Remove the CPU from the list. */
-    QTAILQ_REMOVE(&cpus, cpu, node);
+    QTAILQ_REMOVE_RCU(&cpus, cpu, node);
     cpu_list_unlock();
     if (tid_addr) {
         /* Signal target userland that it can free the stack. */
