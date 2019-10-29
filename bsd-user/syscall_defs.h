@@ -706,6 +706,10 @@ struct target_freebsd_flock {
     int32_t l_sysid;
 } QEMU_PACKED;
 
+/* sys/unistd.h */
+/* user: vfork(2) semantics, clear signals */
+#define	TARGET_RFSPAWN		(1U<<31)
+
 /*
  * FreeBSD thread and user mutex support.
  */
