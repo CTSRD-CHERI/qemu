@@ -109,7 +109,7 @@ void fork_end(int child)
          */
         CPU_FOREACH_SAFE(cpu, next_cpu) {
             if (cpu != thread_cpu) {
-                QTAILQ_REMOVE(&cpus, cpu, node);
+                QTAILQ_REMOVE_RCU(&cpus, cpu, node);
             }
         }
         mmap_fork_end(child);
