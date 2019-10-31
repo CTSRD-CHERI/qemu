@@ -1162,7 +1162,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
     case TARGET_FREEBSD_NR_sigsuspend: /* sigsuspend(2) */
-        ret = do_bsd_sigsuspend(arg1, arg2);
+        ret = do_bsd_sigsuspend(cpu_env, arg1, arg2);
         break;
 
     case TARGET_FREEBSD_NR_sigreturn: /* sigreturn(2) */
