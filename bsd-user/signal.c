@@ -123,6 +123,25 @@ static inline void target_sigemptyset(target_sigset_t *set)
     memset(set, 0, sizeof(*set));
 }
 
+#if !defined(__FreeBSD__) || !defined(__FreeBSD_version) || \
+    __FreeBSD_version < 1400000
+#include <signal.h>
+
+int
+sigorset(sigset_t *dest, const sigset_t *left, const sigset_t *right)
+{
+    int i;
+
+    sigemptyset(dest);
+    for (i = 1; i < NSIG; ++i) {
+        if (sigismember(left, i) || sigismember(right, i))
+            sigaddset(dest, i);
+    }
+
+    return (0);
+}
+#endif
+
 static inline void target_sigaddset(target_sigset_t *set, int signum)
 {
 
@@ -201,6 +220,7 @@ static inline void host_to_target_siginfo_noswap(target_siginfo_t *tinfo,
     tinfo->si_code = info->si_code;
     tinfo->si_pid = info->si_pid;
     tinfo->si_uid = info->si_uid;
+    tinfo->si_status = info->si_status;
     tinfo->si_addr = (abi_ulong)(unsigned long)info->si_addr;
     /* si_value is opaque to kernel */
     tinfo->si_value.sival_ptr =
@@ -231,6 +251,7 @@ static void tswap_siginfo(target_siginfo_t *tinfo, const target_siginfo_t *info)
     tinfo->si_code = tswap32(info->si_code);
     tinfo->si_pid = tswap32(info->si_pid);
     tinfo->si_uid = tswap32(info->si_uid);
+    tinfo->si_status = tswap32(info->si_status);
     tinfo->si_addr = tswapal(info->si_addr);
     /* Unswapped, because we passed it through mostly untouched.  si_value is
      * opaque to the kernel, so we didn't bother with potentially wasting cycles
@@ -257,6 +278,21 @@ void host_to_target_siginfo(target_siginfo_t *tinfo, const siginfo_t *info)
 
     host_to_target_siginfo_noswap(tinfo, info);
     tswap_siginfo(tinfo, tinfo);
+}
+
+int block_signals(void)
+{
+    TaskState *ts = (TaskState *)thread_cpu->opaque;
+    sigset_t set;
+
+    /* It's OK to block everything including SIGSEGV, because we won't
+     * run any further guest code before unblocking signals in
+     * process_pending_signals().
+     */
+    sigfillset(&set);
+    sigprocmask(SIG_SETMASK, &set, 0);
+
+    return atomic_xchg(&ts->signal_pending, 1);
 }
 
 abi_long target_to_host_sigevent(struct sigevent *host_sevp,
@@ -394,11 +430,10 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
     TaskState *ts = cpu->opaque;
     struct emulated_sigtable *k;
     struct qemu_sigqueue *q, **pq;
-    abi_ulong handler;
 
     k = &ts->sigtab[sig - 1];
-    handler = sigact_table[sig - 1]._sa_handler;
-    if (ts->sigsegv_blocked && sig == TARGET_SIGSEGV) {
+    trace_user_queue_signal(env, sig);
+    if (sig == TARGET_SIGSEGV && sigismember(&ts->signal_mask, SIGSEGV)) {
         /* Guest has blocked SIGSEGV but we got one anyway. Assume this
          * is a forced SIGSEGV (ie one the kernel handles via force_sig_info
          * because it got a real MMU fault). A blocked SIGSEGV in that
@@ -407,57 +442,35 @@ int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
          * via kill(), but that is not easy to distinguish at this point,
          * so we assume it doesn't happen.
          */
-        handler = TARGET_SIG_DFL;
-    }
-    trace_user_queue_signal(env, sig);
-    if (TARGET_SIG_DFL == handler) {
-        if (sig == TARGET_SIGTSTP || sig == TARGET_SIGTTIN ||
-            sig == TARGET_SIGTTOU) {
-            kill(getpid(), SIGSTOP);
-            return 0;
-        } else {
-            if (sig != TARGET_SIGCHLD &&
-                sig != TARGET_SIGURG &&
-                sig != TARGET_SIGWINCH &&
-                sig != TARGET_SIGINFO &&
-                sig != TARGET_SIGCONT) {
-                force_sig(sig);
-            } else {
-                return 0; /* The signal was ignored. */
-            }
-        }
-    } else if (TARGET_SIG_IGN == handler) {
-        return 0; /* Ignored signal. */
-    } else if (TARGET_SIG_ERR == handler) {
         force_sig(sig);
-    } else {
-        pq = &k->first;
-
-        /*
-         * FreeBSD signals are always queued.
-         * Linux only queues real time signals.
-         * XXX this code is not thread safe.
-         */
-        if (!k->pending) {
-            /* first signal */
-            q = &k->info;
-        } else {
-            q = alloc_sigqueue(env);
-            if (!q) {
-                return -EAGAIN;
-            }
-            while (*pq != NULL) {
-                pq = &(*pq)->next;
-            }
-        }
-        *pq = q;
-        q->info = *info;
-        q->next = NULL;
-        k->pending = 1;
-        /* Signal that a new signal is pending. */
-        ts->signal_pending = 1;
-        return 1; /* Indicates that the signal was queued. */
     }
+
+    pq = &k->first;
+
+    /*
+     * FreeBSD signals are always queued.
+     * Linux only queues real time signals.
+     * XXX this code is not thread safe.
+     */
+    if (!k->pending) {
+        /* first signal */
+        q = &k->info;
+    } else {
+        q = alloc_sigqueue(env);
+        if (!q) {
+            return -EAGAIN;
+        }
+        while (*pq != NULL) {
+            pq = &(*pq)->next;
+        }
+    }
+    *pq = q;
+    q->info = *info;
+    q->next = NULL;
+    k->pending = 1;
+    /* Signal that a new signal is pending. */
+    ts->signal_pending = 1;
+    return 1;
 }
 
 static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
@@ -465,6 +478,7 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
     CPUArchState *env = thread_cpu->env_ptr;
     int sig;
     target_siginfo_t tinfo;
+    ucontext_t *uc = puc;
 
     /*
      * The CPU emulator uses some host signal to detect exceptions so
@@ -484,7 +498,26 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
     }
     trace_user_host_signal(env, host_signum, sig);
     host_to_target_siginfo_noswap(&tinfo, info);
+
     if (queue_signal(env, sig, &tinfo) == 1) {
+        /* Block host signals until target signal handler entered. We
+         * can't block SIGSEGV or SIGBUS while we're executing guest
+         * code in case the guest code provokes one in the window between
+         * now and it getting out to the main loop. Signals will be
+         * unblocked again in process_pending_signals().
+         *
+         * WARNING: we cannot use sigfillset() here because the uc_sigmask
+         * field is a kernel sigset_t, which is much smaller than the
+         * libc sigset_t which sigfillset() operates on. Using sigfillset()
+         * would write 0xff bytes off the end of the structure and trash
+         * data on the struct.
+         * We can't use sizeof(uc->uc_sigmask) either, because the libc
+         * headers define the struct field with the wrong (too large) type.
+         */
+        sigfillset(&uc->uc_sigmask);
+        sigdelset(&uc->uc_sigmask, SIGSEGV);
+        sigdelset(&uc->uc_sigmask, SIGBUS);
+
         /* Interrupt the virtual CPU as soon as possible. */
         cpu_exit(thread_cpu);
     }
@@ -743,6 +776,7 @@ static int reset_signal_mask(target_ucontext_t *ucontext)
     int i;
     sigset_t blocked;
     target_sigset_t target_set;
+    TaskState *ts = (TaskState *)thread_cpu->opaque;
 
     for (i = 0; i < TARGET_NSIG_WORDS; i++)
         if (__get_user(target_set.__bits[i],
@@ -750,7 +784,8 @@ static int reset_signal_mask(target_ucontext_t *ucontext)
             return -TARGET_EFAULT;
         }
     target_to_host_sigset_internal(&blocked, &target_set);
-    sigprocmask(SIG_SETMASK, &blocked, NULL);
+    ts->signal_mask = blocked;
+    sigprocmask(SIG_SETMASK, &ts->signal_mask, NULL);
 
     return 0;
 }
@@ -794,6 +829,7 @@ badframe:
 
 void signal_init(void)
 {
+    TaskState *ts = (TaskState *)thread_cpu->opaque;
     struct sigaction act;
     struct sigaction oact;
     int i, j;
@@ -809,6 +845,9 @@ void signal_init(void)
         j = host_to_target_signal_table[i];
         target_to_host_signal_table[j] = i;
     }
+
+    /* Set the signal mask from the host mask. */
+    sigprocmask(0, 0, &ts->signal_mask);
 
     /*
      * Set all host signal handlers. ALL signals are blocked during the
@@ -842,36 +881,19 @@ void signal_init(void)
     }
 }
 
-void process_pending_signals(CPUArchState *cpu_env)
+static void handle_pending_signal(CPUArchState *cpu_env, int sig,
+                                  struct emulated_sigtable *k)
 {
     CPUState *cpu = ENV_GET_CPU(cpu_env);
-    int sig, code;
-    abi_ulong handler;
-    sigset_t set, old_set;
-    target_sigset_t target_old_set;
-    target_siginfo_t tinfo;
-    struct emulated_sigtable *k;
-    struct target_sigaction *sa;
-    struct qemu_sigqueue *q;
     TaskState *ts = cpu->opaque;
+    struct qemu_sigqueue *q;
+    struct target_sigaction *sa;
+    int code;
+    sigset_t set;
+    abi_ulong handler;
+    target_siginfo_t tinfo;
+    target_sigset_t target_old_set;
 
-    if (!ts->signal_pending) {
-        return;
-    }
-
-    /* FIXME: This is not threadsafe.  */
-    k  = ts->sigtab;
-    for (sig = 1; sig <= TARGET_NSIG; sig++) {
-        if (k->pending) {
-            goto handle_signal;
-        }
-        k++;
-    }
-    /* If no signal is pending then just return. */
-    ts->signal_pending = 0;
-    return;
-
-handle_signal:
     trace_user_handle_signal(cpu_env, sig);
 
     /* Dequeue signal. */
@@ -909,6 +931,8 @@ handle_signal:
         force_sig(sig);
     } else {
         /* compute the blocked signals during the handler execution */
+        sigset_t *blocked_set;
+
         target_to_host_sigset(&set, &sa->sa_mask);
         /*
          * SA_NODEFER indicates that the current signal should not be
@@ -918,14 +942,16 @@ handle_signal:
             sigaddset(&set, target_to_host_signal(sig));
         }
 
-        /* block signals in the handler */
-        sigprocmask(SIG_BLOCK, &set, &old_set);
-
         /*
          * Save the previous blocked signal state to restore it at the
          * end of the signal execution (see do_sigreturn).
          */
-        host_to_target_sigset_internal(&target_old_set, &old_set);
+        host_to_target_sigset_internal(&target_old_set, &ts->signal_mask);
+
+        blocked_set = ts->in_sigsuspend ?
+            &ts->sigsuspend_mask : &ts->signal_mask;
+        sigorset(&ts->signal_mask, blocked_set, &set);
+        ts->in_sigsuspend = false;
 
 #if 0  /* not yet */
 #if defined(TARGET_I386) && !defined(TARGET_X86_64)
@@ -954,4 +980,38 @@ handle_signal:
     if (q != &k->info) {
         free_sigqueue(cpu_env, q);
     }
+}
+
+void process_pending_signals(CPUArchState *cpu_env)
+{
+    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    int sig;
+    sigset_t set;
+    struct emulated_sigtable *k;
+    TaskState *ts = cpu->opaque;
+
+    while (atomic_read(&ts->signal_pending)) {
+        /* FIXME: This is not threadsafe. */
+
+        sigfillset(&set);
+        sigprocmask(SIG_SETMASK, &set, 0);
+
+        k = ts->sigtab;
+        for (sig = 1; sig <= TARGET_NSIG; sig++, k++) {
+            if (k->pending) {
+                handle_pending_signal(cpu_env, sig, k);
+            }
+        }
+
+        /* unblock signals and check one more time. Unblocking signals may cause
+         * us to take anothe rhost signal, which will set signal_pending again.
+         */
+        atomic_set(&ts->signal_pending, 0);
+        ts->in_sigsuspend = false;
+        set = ts->signal_mask;
+        sigdelset(&set, SIGSEGV);
+        sigdelset(&set, SIGBUS);
+        sigprocmask(SIG_SETMASK, &set, 0);
+    }
+    ts->in_sigsuspend = false;
 }

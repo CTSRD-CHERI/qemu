@@ -17,6 +17,13 @@
 #ifndef QEMU_H
 #define QEMU_H
 
+#include <sys/param.h>
+
+#if !defined(__FreeBSD__) || !defined(__FreeBSD_version) || \
+    __FreeBSD_version < 1400000
+int sigorset(sigset_t *dest, const sigset_t *left, const sigset_t *right);
+#endif
+
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
 #define BSD_HAVE_INO64
 #endif
@@ -116,7 +123,9 @@ typedef struct TaskState {
     struct qemu_sigqueue sigqueue_table[MAX_SIGQUEUE_SIZE]; /* siginfo queue */
     struct qemu_sigqueue *first_free; /* first free siginfo queue entry */
     int signal_pending; /* non zero if a signal may be pending */
-    bool sigsegv_blocked; /* SIGSEGV blocked by guest */
+    bool in_sigsuspend;
+    sigset_t signal_mask;
+    sigset_t sigsuspend_mask;
 
     uint8_t stack[];
 } __attribute__((aligned(16))) TaskState;
@@ -236,6 +245,25 @@ abi_long do_sigaltstack(abi_ulong uss_addr, abi_ulong uoss_addr, abi_ulong sp);
 int do_sigaction(int sig, const struct target_sigaction *act,
                 struct target_sigaction *oact);
 void QEMU_NORETURN force_sig(int target_sig);
+/**
+ * block_signals: block all signals while handling this guest syscall
+ *
+ * Block all signals, and arrange that the signal mask is returned to
+ * its correct value for the guest before we resume execution of guest code.
+ * If this function returns non-zero, then the caller should immediately
+ * return -TARGET_ERESTARTSYS to the main loop, which will take the pending
+ * signal and restart execution of the syscall.
+ * If block_signals() returns zero, then the caller can continue with
+ * emulation of the system call knowing that no signals can be taken
+ * (and therefore that no race conditions will result).
+ * This should only be called once, because if it is called a second time
+ * it will always return non-zero. (Think of it like a mutex that can't
+ * be recursively locked.)
+ * Signals will be unblocked again by process_pending_signals().
+ *
+ * Return value: non-zero if there was a pending signal, zero if not.
+ */
+int block_signals(void); /* Returns non zero if signal pending */
 
 /* mmap.c */
 int target_mprotect(abi_ulong start, abi_ulong len, int prot);
