@@ -1399,6 +1399,7 @@ abi_long do_freebsd_thr_new(CPUArchState *env,
     new_cpu->opaque = ts;
     ts->bprm = parent_ts->bprm;
     ts->info = parent_ts->info;
+    ts->signal_mask = parent_ts->signal_mask;
 
     target_cpu_set_tls(new_env, info.param.tls_base);
 

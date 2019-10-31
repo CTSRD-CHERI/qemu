@@ -64,8 +64,15 @@ static inline abi_long do_bsd_sigprocmask(abi_long arg1, abi_ulong arg2,
     CPUState *cpu = thread_cpu;
     TaskState *ts = (TaskState *)cpu->opaque;
 
+    ret = 0;
+    oldset = ts->signal_mask;
     if (arg2) {
-        bool has_sigsegv;
+        int i;
+
+        if (block_signals()) {
+            return -TARGET_ERESTART;
+        }
+
         p = lock_user(VERIFY_READ, arg2, sizeof(target_sigset_t), 1);
         if (p == NULL) {
             return -TARGET_EFAULT;
@@ -73,36 +80,35 @@ static inline abi_long do_bsd_sigprocmask(abi_long arg1, abi_ulong arg2,
         target_to_host_sigset(&set, p);
         unlock_user(p, arg2, 0);
         set_ptr = &set;
-        has_sigsegv = sigismember(set_ptr, SIGSEGV);
-        sigdelset(set_ptr, SIGSEGV);
         switch (arg1) {
         case TARGET_SIG_BLOCK:
             how = SIG_BLOCK;
-            if (has_sigsegv)
-		    ts->sigsegv_blocked = true;
+            sigorset(&ts->signal_mask, &ts->signal_mask, set_ptr);
             break;
 
         case TARGET_SIG_UNBLOCK:
             how = SIG_UNBLOCK;
-            if (has_sigsegv)
-		    ts->sigsegv_blocked = false;
+            for (i = 1; i <= NSIG; ++i) {
+                if (sigismember(set_ptr, i)) {
+                    sigdelset(&ts->signal_mask, i);
+                }
+            }
             break;
 
         case TARGET_SIG_SETMASK:
             how = SIG_SETMASK;
-            ts->sigsegv_blocked = has_sigsegv;
+            ts->signal_mask = set;
             break;
 
         default:
             return -TARGET_EFAULT;
         }
 
-
-    } else {
-        how = 0;
-        set_ptr = NULL;
+        /* Silently ignore attempts to change blocking status of KILL or STOP */
+        sigdelset(&ts->signal_mask, SIGKILL);
+        sigdelset(&ts->signal_mask, SIGSTOP);
+        ret = get_errno(sigprocmask(how, &ts->signal_mask, NULL));
     }
-    ret = get_errno(sigprocmask(how, set_ptr, &oldset));
     if (!is_error(ret) && arg3) {
         p = lock_user(VERIFY_WRITE, arg3, sizeof(target_sigset_t), 0);
         if (p == NULL) {
@@ -134,19 +140,28 @@ static inline abi_long do_bsd_sigpending(abi_long arg1)
 }
 
 /* sigsuspend(2) */
-static inline abi_long do_bsd_sigsuspend(abi_long arg1, abi_long arg2)
+static inline abi_long do_bsd_sigsuspend(void *cpu_env, abi_long arg1,
+        abi_long arg2)
 {
+    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    TaskState *ts = cpu->opaque;
     void *p;
-    sigset_t set;
+    abi_long ret;
 
     p = lock_user(VERIFY_READ, arg1, sizeof(target_sigset_t), 1);
     if (p == NULL) {
         return -TARGET_EFAULT;
     }
-    target_to_host_sigset(&set, p);
+    target_to_host_sigset(&ts->sigsuspend_mask, p);
     unlock_user(p, arg1, 0);
 
-    return get_errno(sigsuspend(&set));
+    ret = get_errno(sigsuspend(&ts->sigsuspend_mask));
+    /* XXX Trivially true until safe_syscall */
+    if (ret != -TARGET_ERESTART) {
+        ts->in_sigsuspend = true;
+    }
+
+    return ret;
 }
 
 /* sigreturn(2) */
