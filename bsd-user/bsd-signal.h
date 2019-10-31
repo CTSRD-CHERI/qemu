@@ -214,8 +214,11 @@ static inline abi_long do_bsd_sigqueue(abi_long arg1, abi_long arg2,
         abi_ulong arg3)
 {
     union sigval value;
+    target_sigval_t *tvalue = (target_sigval_t *)&arg3;
+    abi_ulong sival_ptr;
 
-    value.sival_ptr = (void *)(uintptr_t)arg3;
+    __get_user(sival_ptr, &tvalue->sival_ptr);
+    value.sival_ptr = (void *)(uintptr_t)sival_ptr;
     return get_errno(sigqueue(arg1, target_to_host_signal(arg2), value));
 }
 
