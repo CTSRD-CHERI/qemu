@@ -110,7 +110,7 @@ int host_to_target_signal(int sig)
 int target_to_host_signal(int sig)
 {
 
-    if (sig >= TARGET_NSIG) {
+    if (sig < 0 || sig >= TARGET_NSIG) {
         return sig;
     }
 
