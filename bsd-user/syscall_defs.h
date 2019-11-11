@@ -446,10 +446,20 @@ struct target_cmsghdr {
     int32_t     cmsg_type;
 };
 
+/*
+ * mips32 is the exception to the general rule of long-alignment; it
+ * unconditionally uses 64-bit alignment instead.
+ */
+#if defined(TARGET_MIPS) && TARGET_ABI_BITS == 32
+#define TARGET_ALIGNBYTES   (sizeof(abi_llong) - 1)
+#else
+#define TARGET_ALIGNBYTES   (sizeof(abi_long) - 1)
+#endif
+
 #define TARGET_CMSG_NXTHDR(mhdr, cmsg, cmsg_start) \
                                __target_cmsg_nxthdr(mhdr, cmsg, cmsg_start)
-#define TARGET_CMSG_ALIGN(len) (((len) + sizeof(abi_long) - 1) \
-                               & (size_t) ~(sizeof(abi_long) - 1))
+#define TARGET_CMSG_ALIGN(len) (((len) + TARGET_ALIGNBYTES) \
+                               & (size_t) ~TARGET_ALIGNBYTES)
 #define TARGET_CMSG_DATA(cmsg) ((unsigned char *)(cmsg) + TARGET_CMSG_ALIGN(sizeof(struct target_cmsghdr)))
 #define TARGET_CMSG_SPACE(len) (TARGET_CMSG_ALIGN(sizeof(struct target_cmsghdr)) + \
                                 TARGET_CMSG_ALIGN(len))
