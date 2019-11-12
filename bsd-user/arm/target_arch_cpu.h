@@ -218,10 +218,10 @@ static inline void target_cpu_loop(CPUARMState *env)
                          */
                         break;
                     }
-                    /*
-                     * XXX Need to handle ERESTART. Backup the PC by
-                     * 1 instruction.
-                     */
+                    if (-TARGET_ERESTART == ret) {
+                        env->regs[15] -= env->thumb ? 2 : 4;
+                        break;
+                    }
                     if ((unsigned int)ret >= (unsigned int)(-515)) {
                         ret = -ret;
                         cpsr_write(env, CPSR_C, CPSR_C, CPSRWriteByInstr);
