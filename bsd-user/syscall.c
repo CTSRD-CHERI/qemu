@@ -21,6 +21,7 @@
 #define _WANT_FREEBSD11_STAT
 #define _WANT_FREEBSD11_STATFS
 #define _WANT_FREEBSD11_DIRENT
+#define _WANT_KERNEL_ERRNO
 #include "qemu/osdep.h"
 #include "qemu/cutils.h"
 #include "qemu/path.h"
@@ -56,6 +57,52 @@
 #include "os-thread.h"
 
 /* #define DEBUG */
+/* Used in os-thread */
+safe_syscall1(int, thr_suspend, struct timespec *, timeout);
+safe_syscall5(int, _umtx_op, void *, obj, int, op, unsigned long, val, void *,
+    uaddr, void *, uaddr2);
+
+/* used in os-time */
+safe_syscall2(int, nanosleep, const struct timespec *, rqtp, struct timespec *,
+    rmtp);
+
+/* used in os-proc */
+safe_syscall4(pid_t, wait4, pid_t, wpid, int *, status, int, options,
+    struct rusage *, rusage);
+safe_syscall6(pid_t, wait6, idtype_t, idtype, id_t, id, int *, status, int,
+    options, struct __wrusage *, wrusage, siginfo_t *, infop);
+
+/* I/O */
+safe_syscall3(int, open, const char *, path, int, flags, mode_t, mode);
+safe_syscall4(int, openat, int, fd, const char *, path, int, flags, mode_t,
+    mode);
+
+safe_syscall3(ssize_t, read, int, fd, void *, buf, size_t, nbytes);
+safe_syscall4(ssize_t, pread, int, fd, void *, buf, size_t, nbytes, off_t,
+    offset);
+safe_syscall3(ssize_t, readv, int, fd, const struct iovec *, iov, int, iovcnt);
+safe_syscall4(ssize_t, preadv, int, fd, const struct iovec *, iov, int, iovcnt,
+    off_t, offset);
+
+safe_syscall3(ssize_t, write, int, fd, void *, buf, size_t, nbytes);
+safe_syscall4(ssize_t, pwrite, int, fd, void *, buf, size_t, nbytes, off_t,
+    offset);
+safe_syscall3(ssize_t, writev, int, fd, const struct iovec *, iov, int, iovcnt);
+safe_syscall4(ssize_t, pwritev, int, fd, const struct iovec *, iov, int, iovcnt,
+    off_t, offset);
+
+safe_syscall5(int, select, int, nfds, fd_set *, readfs, fd_set *, writefds,
+    fd_set *, exceptfds, struct timeval *, timeout);
+safe_syscall6(int, pselect, int, nfds, fd_set * restrict, readfs,
+    fd_set * restrict, writefds, fd_set * restrict, exceptfds,
+    const struct timeval *, timeout, const sigset_t * restrict, newsigmask);
+
+safe_syscall6(ssize_t, recvfrom, int, fd, void *, buf, size_t, len, int, flags,
+    struct sockaddr * restrict, from, socklen_t * restrict, fromlen);
+safe_syscall6(ssize_t, sendto, int, fd, const void *, buf, size_t, len, int,
+    flags, const struct sockaddr *, to, socklen_t, tolen);
+safe_syscall3(ssize_t, recvmsg, int, s, struct msghdr *, msg, int, flags);
+safe_syscall3(ssize_t, sendmsg, int, s, const struct msghdr *, msg, int, flags);
 
 /*
  * errno conversion.
@@ -65,7 +112,7 @@ abi_long get_errno(abi_long ret)
 
     if (ret == -1) {
         /* XXX need to translate host -> target errnos here */
-        return -(errno);
+        return -host_to_target_errno(errno);
     } else {
         return ret;
     }

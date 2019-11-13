@@ -635,7 +635,7 @@ static inline abi_long do_freebsd_fcntl(abi_long arg1, abi_long arg2,
         __get_user(fl.l_pid, &target_fl->l_pid);
         __get_user(fl.l_sysid, &target_fl->l_sysid);
         unlock_user_struct(target_fl, arg3, 0);
-        ret = get_errno(fcntl(arg1, host_cmd, &fl));
+        ret = get_errno(safe_fcntl(arg1, host_cmd, &fl));
         if (!is_error(ret)) {
             if (!lock_user_struct(VERIFY_WRITE, target_fl, arg3, 0)) {
                 return -TARGET_EFAULT;
@@ -662,7 +662,7 @@ static inline abi_long do_freebsd_fcntl(abi_long arg1, abi_long arg2,
         __get_user(fl.l_pid, &target_fl->l_pid);
         __get_user(fl.l_sysid, &target_fl->l_sysid);
         unlock_user_struct(target_fl, arg3, 0);
-        ret = get_errno(fcntl(arg1, host_cmd, &fl));
+        ret = get_errno(safe_fcntl(arg1, host_cmd, &fl));
         break;
 
     case TARGET_F_DUPFD:
@@ -676,7 +676,7 @@ static inline abi_long do_freebsd_fcntl(abi_long arg1, abi_long arg2,
     case TARGET_F_READAHEAD:
     case TARGET_F_RDAHEAD:
     default:
-        ret = get_errno(fcntl(arg1, host_cmd, arg3));
+        ret = get_errno(safe_fcntl(arg1, host_cmd, arg3));
         break;
     }
     return ret;

@@ -26,6 +26,9 @@
 #include "qemu.h"
 #include "qemu-os.h"
 
+int safe_thr_suspend(struct timespec *timeout);
+int safe__umtx_op(void *, int, unsigned long, void *, void *);
+
 static abi_long do_freebsd_thr_create(CPUArchState *env, abi_ulong target_ctx,
         abi_ulong target_id, int flags)
 {
@@ -98,9 +101,9 @@ static abi_long do_freebsd_thr_suspend(abi_ulong target_ts)
         if (t2h_freebsd_timespec(&ts, target_ts)) {
             return -TARGET_EFAULT;
         }
-        ret = thr_suspend(&ts);
+        ret = get_errno(safe_thr_suspend(&ts));
     } else {
-        ret = thr_suspend(NULL);
+        ret = get_errno(safe_thr_suspend(NULL));
     }
     return ret;
 }
@@ -254,20 +257,14 @@ static inline abi_long do_freebsd__umtx_unlock(abi_ulong target_addr)
     return freebsd_unlock_umtx(target_addr, tid);
 }
 
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1000000
-#define	UT_SIZE		sizeof(struct timespec)
-#else
-#define	UT_SIZE		sizeof(struct _umtx_time)
-#endif
-
 /* undocumented _umtx_op(void *obj, int op, u_long val, void *uaddr,
                            void *target_time); */
 static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         abi_ulong uaddr, abi_ulong target_time)
 {
     abi_long ret;
+    struct _umtx_time ut;
     struct timespec ts;
-    void *ut;
     size_t utsz;
     long tid;
 
@@ -278,11 +275,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
             return ret;
         }
         if (target_time != 0) {
-            ut = alloca(UT_SIZE);
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_lock_umtx(obj, tid, utsz, ut);
+            ret = freebsd_lock_umtx(obj, tid, utsz, &ut);
         } else {
             ret = freebsd_lock_umtx(obj, tid, 0, NULL);
         }
@@ -299,11 +295,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
     case TARGET_UMTX_OP_WAIT:
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ut = alloca(UT_SIZE);
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_umtx_wait(obj, tswapal(val), utsz, ut);
+            ret = freebsd_umtx_wait(obj, tswapal(val), utsz, &ut);
         } else {
             ret = freebsd_umtx_wait(obj, tswapal(val), 0, NULL);
         }
@@ -412,12 +407,11 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         }
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ut = alloca(UT_SIZE);
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
             if (is_error(ret))
                 return ret;
             ret = freebsd_umtx_wait_uint(obj, tswap32((uint32_t)val),
-                    utsz, ut);
+                    utsz, &ut);
         } else {
             ret = freebsd_umtx_wait_uint(obj, tswap32((uint32_t)val), 0, NULL);
         }
@@ -429,12 +423,11 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         }
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ut = alloca(UT_SIZE);
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
             if (is_error(ret))
                 return ret;
             ret = freebsd_umtx_wait_uint_private(obj, tswap32((uint32_t)val),
-                    utsz, ut);
+                    utsz, &ut);
         } else {
             ret = freebsd_umtx_wait_uint_private(obj, tswap32((uint32_t)val),
                     0, NULL);
@@ -448,11 +441,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
 
     case TARGET_UMTX_OP_RW_RDLOCK:
         if (target_time != 0) {
-            ut = alloca(UT_SIZE);
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_rw_rdlock(obj, val, utsz, ut);
+            ret = freebsd_rw_rdlock(obj, val, utsz, &ut);
         } else {
             ret = freebsd_rw_rdlock(obj, val, 0, NULL);
         }
@@ -460,11 +452,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
 
     case TARGET_UMTX_OP_RW_WRLOCK:
         if (target_time != 0) {
-            ut = alloca(UT_SIZE);
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_rw_wrlock(obj, val, utsz, ut);
+            ret = freebsd_rw_wrlock(obj, val, utsz, &ut);
         } else {
             ret = freebsd_rw_wrlock(obj, val, 0, NULL);
         }
@@ -491,11 +482,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
     case TARGET_UMTX_OP_SEM2_WAIT:
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ut = alloca(UT_SIZE);
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_umtx_sem2_wait(obj, utsz, ut);
+            ret = freebsd_umtx_sem2_wait(obj, utsz, &ut);
         } else {
             ret = freebsd_umtx_sem2_wait(obj, 0, NULL);
         }
@@ -509,11 +499,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
     case TARGET_UMTX_OP_SEM_WAIT:
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ut = alloca(UT_SIZE);
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_umtx_sem_wait(obj, utsz, ut);
+            ret = freebsd_umtx_sem_wait(obj, utsz, &ut);
         } else {
             ret = freebsd_umtx_sem_wait(obj, 0, NULL);
         }

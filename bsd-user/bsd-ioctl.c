@@ -415,7 +415,7 @@ static abi_long do_ioctl_in6_ifreq_sockaddr_int(const IOCTLEntry *ie,
     tsa_in6 = &tin6ifreq->ifr_ifru.ifru_addr;
     target_to_host_sockaddr_in6(hsa_in6, tsa_in6);
 
-    ret = get_errno(ioctl(fd, ie->host_cmd, &hin6ifreq));
+    ret = get_errno(safe_ioctl(fd, ie->host_cmd, &hin6ifreq));
     if (!is_error(ret)) {
         put_user_s32(hin6ifreq.ifr_ifru.ifru_flags6,
                 arg + offsetof(struct target_in6_ifreq, ifr_ifru.ifru_flags6));
@@ -457,13 +457,13 @@ abi_long do_bsd_ioctl(int fd, abi_long cmd, abi_long arg)
     switch (arg_type[0]) {
     case TYPE_NULL:
         /* no argument */
-        ret = get_errno(ioctl(fd, ie->host_cmd));
+        ret = get_errno(safe_ioctl(fd, ie->host_cmd));
         break;
 
     case TYPE_PTRVOID:
     case TYPE_INT:
         /* int argument */
-        ret = get_errno(ioctl(fd, ie->host_cmd, arg));
+        ret = get_errno(safe_ioctl(fd, ie->host_cmd, arg));
         break;
 
     case TYPE_PTR:
@@ -471,7 +471,7 @@ abi_long do_bsd_ioctl(int fd, abi_long cmd, abi_long arg)
         target_size = thunk_type_size(arg_type, 0);
         switch (ie->access) {
         case IOC_R:
-            ret = get_errno(ioctl(fd, ie->host_cmd, buf_temp));
+            ret = get_errno(safe_ioctl(fd, ie->host_cmd, buf_temp));
             if (!is_error(ret)) {
                 argptr = lock_user(VERIFY_WRITE, arg,
                     target_size, 0);
@@ -491,7 +491,7 @@ abi_long do_bsd_ioctl(int fd, abi_long cmd, abi_long arg)
             }
             thunk_convert(buf_temp, argptr, arg_type, THUNK_HOST);
             unlock_user(argptr, arg, 0);
-            ret = get_errno(ioctl(fd, ie->host_cmd, buf_temp));
+            ret = get_errno(safe_ioctl(fd, ie->host_cmd, buf_temp));
             break;
 
         case IOC_RW:
@@ -503,7 +503,7 @@ abi_long do_bsd_ioctl(int fd, abi_long cmd, abi_long arg)
             }
             thunk_convert(buf_temp, argptr, arg_type, THUNK_HOST);
             unlock_user(argptr, arg, 0);
-            ret = get_errno(ioctl(fd, ie->host_cmd, buf_temp));
+            ret = get_errno(safe_ioctl(fd, ie->host_cmd, buf_temp));
             if (!is_error(ret)) {
                 argptr = lock_user(VERIFY_WRITE, arg, target_size, 0);
                 if (!argptr) {

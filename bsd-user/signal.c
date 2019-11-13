@@ -158,6 +158,13 @@ static inline int target_sigismember(const target_sigset_t *set, int signum)
     return (set->__bits[signum / TARGET_NSIG_BPW] & mask) != 0;
 }
 
+#ifndef HAVE_SAFE_SYSCALL
+static inline void rewind_if_in_safe_syscall(void *puc)
+{
+    /* Default version: never rewind */
+}
+#endif
+
 static void host_to_target_sigset_internal(target_sigset_t *d,
         const sigset_t *s)
 {
@@ -497,6 +504,9 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
         return;
     }
     trace_user_host_signal(env, host_signum, sig);
+
+    rewind_if_in_safe_syscall(puc);
+
     host_to_target_siginfo_noswap(&tinfo, info);
 
     if (queue_signal(env, sig, &tinfo) == 1) {
