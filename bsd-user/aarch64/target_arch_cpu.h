@@ -109,7 +109,7 @@ static inline void target_cpu_loop(CPUARMState *env)
                 env->xregs[0] = ret;
             } else if (ret == -TARGET_ERESTART) {
                 env->pc -= 4;
-                env->xregs[0] = -ret;
+                break;
             } else if (ret != -TARGET_EJUSTRETURN) {
                 pstate |= PSTATE_C;
                 env->xregs[0] = -ret;
