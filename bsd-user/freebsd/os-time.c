@@ -89,25 +89,21 @@ abi_long h2t_freebsd_timespec(abi_ulong target_ts_addr, struct timespec *ts)
 abi_long t2h_freebsd_umtx_time(abi_ulong target_ut_addr,
         abi_ulong target_ut_size, void *host_t, size_t *host_tsz)
 {
+    abi_long ret;
 
-    if (target_ut_size <= sizeof(struct timespec)) {
-        *host_tsz = 0;
-        return t2h_freebsd_timespec((struct timespec *)host_t, target_ut_addr);
-    }
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1000000
-    else {
-        return -TARGET_EINVAL;
-    }
-#else
-    else {
+    if (target_ut_size <= sizeof(struct target_freebsd_timespec)) {
+        ret = t2h_freebsd_timespec((struct timespec *)host_t, target_ut_addr);
+        if (ret == 0)
+            *host_tsz = sizeof(struct timespec);
+        return ret;
+    } else {
         struct target_freebsd__umtx_time *target_ut;
         struct _umtx_time *ut = (struct _umtx_time *)host_t;
 
         if (!lock_user_struct(VERIFY_READ, target_ut, target_ut_addr, 0)) {
             return -TARGET_EFAULT;
         }
-        if (t2h_freebsd_timespec(&ut->_timeout, target_ut_addr +
-                    offsetof(struct target_freebsd__umtx_time, _timeout))) {
+        if (t2h_freebsd_timespec(&ut->_timeout, &target_ut->_timeout)) {
             return -TARGET_EFAULT;
         }
         __get_user(ut->_flags, &target_ut->_flags);
@@ -118,7 +114,6 @@ abi_long t2h_freebsd_umtx_time(abi_ulong target_ut_addr,
 
         return 0;
     }
-#endif /* defined(__FreeBSD_version) && __FreeBSD_version < 1000000 */
 }
 
 abi_long t2h_freebsd_timex(struct timex *host_tx, abi_ulong target_tx_addr)
