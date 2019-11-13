@@ -142,6 +142,7 @@ ifdef CONFIG_BSD_USER
 
 QEMU_CFLAGS+=-I$(SRC_PATH)/bsd-user/$(TARGET_ABI_DIR) \
              -I$(SRC_PATH)/bsd-user/$(HOST_VARIANT_DIR) \
+             -I$(SRC_PATH)/bsd-user/host/$(ARCH) \
              -I$(SRC_PATH)/bsd-user \
              -D_WANT_SEMUN
 obj-y += bsd-user/
