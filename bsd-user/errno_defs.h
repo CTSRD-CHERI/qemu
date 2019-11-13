@@ -152,5 +152,6 @@
 #define TARGET_EJUSTRETURN      254             /* Just return without
                                                    modifing regs */
 #define TARGET_ERESTART         255             /* Restart syscall */
+#define TARGET_ERESTARTSYS      TARGET_ERESTART /* Linux compat */
 
 #endif /* !  _ERRNO_DEFS_H_ */

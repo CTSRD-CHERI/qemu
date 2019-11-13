@@ -34,6 +34,10 @@
 
 #include "target_arch_cpu.h"
 
+pid_t safe_wait4(pid_t wpid, int *status, int options, struct rusage *rusage);
+pid_t safe_wait6(idtype_t idtype, id_t id, int *status, int options,
+    struct __wrusage *wrusage, siginfo_t *infop);
+
 extern int __setugid(int flag);
 extern int pdwait4(int fd, int *status, int options, struct rusage *rusage);
 
@@ -64,7 +68,7 @@ static inline abi_long do_freebsd_wait4(abi_long arg1, abi_ulong target_status,
     if (target_rusage) {
         rusage_ptr = &rusage;
     }
-    ret = get_errno(wait4(arg1, &status, arg3, rusage_ptr));
+    ret = get_errno(safe_wait4(arg1, &status, arg3, rusage_ptr));
     if (target_status != 0) {
         status = host_to_target_waitstatus(status);
         if (put_user_s32(status, target_status) != 0) {
@@ -104,7 +108,7 @@ static inline abi_long do_freebsd_wait6(void *cpu_env, abi_long idtype,
     if (target_wrusage) {
         wrusage_ptr = &wrusage;
     }
-    ret = get_errno(wait6(idtype, target_arg64(id1, id2), &status, options, wrusage_ptr, &info));
+    ret = get_errno(safe_wait6(idtype, target_arg64(id1, id2), &status, options, wrusage_ptr, &info));
     if (target_status != 0) {
         status = host_to_target_waitstatus(status);
         if (put_user_s32(status, target_status) != 0) {

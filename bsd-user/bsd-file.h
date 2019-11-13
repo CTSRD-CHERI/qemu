@@ -82,6 +82,19 @@ static void unlock_iovec(struct iovec *vec, abi_ulong target_addr, int count,
         int copy);
 extern int __getcwd(char *path, size_t len);
 
+int safe_open(const char *path, int flags, mode_t mode);
+int safe_openat(int fd, const char *path, int flags, mode_t mode);
+
+ssize_t safe_read(int fd, void *buf, size_t nbytes);
+ssize_t safe_pread(int fd, void *buf, size_t nbytes, off_t offset);
+ssize_t safe_readv(int fd, const struct iovec *iov, int iovcnt);
+ssize_t safe_preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset);
+
+ssize_t safe_write(int fd, void *buf, size_t nbytes);
+ssize_t safe_pwrite(int fd, void *buf, size_t nbytes, off_t offset);
+ssize_t safe_writev(int fd, const struct iovec *iov, int iovcnt);
+ssize_t safe_pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset);
+
 /* read(2) */
 static inline abi_long do_bsd_read(abi_long arg1, abi_long arg2, abi_long arg3)
 {
@@ -92,7 +105,7 @@ static inline abi_long do_bsd_read(abi_long arg1, abi_long arg2, abi_long arg3)
     if (p == NULL) {
         return -TARGET_EFAULT;
     }
-    ret = get_errno(read(arg1, p, arg3));
+    ret = get_errno(safe_read(arg1, p, arg3));
     unlock_user(p, arg2, ret);
 
     return ret;
@@ -113,7 +126,7 @@ static inline abi_long do_bsd_pread(void *cpu_env, abi_long arg1,
         arg4 = arg5;
         arg5 = arg6;
     }
-    ret = get_errno(pread(arg1, p, arg3, target_arg64(arg4, arg5)));
+    ret = get_errno(safe_pread(arg1, p, arg3, target_arg64(arg4, arg5)));
     unlock_user(p, arg2, ret);
 
     return ret;
@@ -126,7 +139,7 @@ static inline abi_long do_bsd_readv(abi_long arg1, abi_long arg2, abi_long arg3)
     struct iovec *vec = lock_iovec(VERIFY_WRITE, arg2, arg3, 0);
 
     if (vec != NULL) {
-        ret = get_errno(readv(arg1, vec, arg3));
+        ret = get_errno(safe_readv(arg1, vec, arg3));
         unlock_iovec(vec, arg2, arg3, 1);
     } else {
         ret = -host_to_target_errno(errno);
@@ -145,7 +158,7 @@ static inline abi_long do_bsd_write(abi_long arg1, abi_long arg2, abi_long arg3)
     if (p == NULL) {
         return -TARGET_EFAULT;
     }
-    ret = get_errno(write(arg1, p, arg3));
+    ret = get_errno(safe_write(arg1, p, arg3));
     unlock_user(p, arg2, 0);
 
     return ret;
@@ -166,7 +179,7 @@ static inline abi_long do_bsd_pwrite(void *cpu_env, abi_long arg1,
         arg4 = arg5;
         arg5 = arg6;
     }
-    ret = get_errno(pwrite(arg1, p, arg3, target_arg64(arg4, arg5)));
+    ret = get_errno(safe_pwrite(arg1, p, arg3, target_arg64(arg4, arg5)));
     unlock_user(p, arg2, 0);
 
     return ret;
@@ -180,7 +193,7 @@ static inline abi_long do_bsd_writev(abi_long arg1, abi_long arg2,
     struct iovec *vec = lock_iovec(VERIFY_READ, arg2, arg3, 1);
 
     if (vec != NULL) {
-        ret = get_errno(writev(arg1, vec, arg3));
+        ret = get_errno(safe_writev(arg1, vec, arg3));
         unlock_iovec(vec, arg2, arg3, 0);
     } else {
         ret = -host_to_target_errno(errno);
@@ -201,7 +214,7 @@ static inline abi_long do_bsd_pwritev(void *cpu_env, abi_long arg1,
             arg4 = arg5;
             arg5 = arg6;
         }
-        ret = get_errno(pwritev(arg1, vec, arg3, target_arg64(arg4, arg5)));
+        ret = get_errno(safe_pwritev(arg1, vec, arg3, target_arg64(arg4, arg5)));
         unlock_iovec(vec, arg2, arg3, 0);
     } else {
         ret = -host_to_target_errno(errno);
@@ -217,8 +230,8 @@ static inline abi_long do_bsd_open(abi_long arg1, abi_long arg2, abi_long arg3)
     void *p;
 
     LOCK_PATH(p, arg1);
-    ret = get_errno(open(path(p), target_to_host_bitmask(arg2, fcntl_flags_tbl),
-                arg3));
+    ret = get_errno(safe_open(path(p), target_to_host_bitmask(arg2,
+                fcntl_flags_tbl), arg3));
     UNLOCK_PATH(p, arg1);
 
     return ret;
@@ -232,7 +245,7 @@ static inline abi_long do_bsd_openat(abi_long arg1, abi_long arg2,
     void *p;
 
     LOCK_PATH(p, arg2);
-    ret = get_errno(openat(arg1, path(p),
+    ret = get_errno(safe_openat(arg1, path(p),
                 target_to_host_bitmask(arg3, fcntl_flags_tbl), arg4));
     UNLOCK_PATH(p, arg2);
 
@@ -290,7 +303,7 @@ static inline abi_long do_bsd_creat(abi_long arg1, abi_long arg2)
     void *p;
 
     LOCK_PATH(p, arg1);
-    ret = get_errno(open(path(p), O_CREAT | O_TRUNC | O_WRONLY, arg2));
+    ret = get_errno(safe_open(path(p), O_CREAT | O_TRUNC | O_WRONLY, arg2));
     UNLOCK_PATH(p, arg1);
 
     return ret;

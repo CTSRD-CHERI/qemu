@@ -30,6 +30,8 @@
 #include "qemu.h"
 #include "qemu-os.h"
 
+int safe_nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
+
 #ifndef BSD_HAVE_KEVENT64
 #define	freebsd11_kevent	kevent
 #else
@@ -46,7 +48,7 @@ static inline abi_long do_freebsd_nanosleep(abi_long arg1, abi_long arg2)
 
     ret = t2h_freebsd_timespec(&req, arg1);
     if (!is_error(ret)) {
-        ret = get_errno(nanosleep(&req, &rem));
+        ret = get_errno(safe_nanosleep(&req, &rem));
         if (!is_error(ret) && arg2) {
             h2t_freebsd_timespec(arg2, &rem);
         }
@@ -424,8 +426,7 @@ static inline abi_long do_freebsd_select(CPUArchState *env, int n,
     TaskState *ts = (TaskState *)cpu->opaque;
     fd_set rfds, wfds, efds;
     fd_set *rfds_ptr, *wfds_ptr, *efds_ptr;
-    struct timeval tv, tv2;
-    struct timespec tspec, *ts_ptr;
+    struct timeval tv, *tvp;
     abi_long ret, error;
     sigset_t mask, omask;
 
@@ -447,28 +448,12 @@ static inline abi_long do_freebsd_select(CPUArchState *env, int n,
         if (t2h_freebsd_timeval(&tv, target_tv_addr)) {
             return -TARGET_EFAULT;
         }
-        tspec.tv_sec = tv.tv_sec;
-        tspec.tv_nsec = tv.tv_usec * 1000;
-        ts_ptr = &tspec;
+        tvp = &tv;
     } else {
-        ts_ptr = NULL;
+        tvp = NULL;
     }
 
-    sigfillset(&mask);
-    sigprocmask(SIG_BLOCK, &mask, &omask);
-	if (ts->signal_pending) {
-        sigprocmask(SIG_SETMASK, &omask, NULL);
-
-        /* We have a signal pending so just poll select() and return. */
-        tv2.tv_sec = tv2.tv_usec = 0;
-        ret = get_errno(select(n, rfds_ptr, wfds_ptr, efds_ptr, &tv2));
-        if (ret == 0)
-            ret = TARGET_EINTR;
-	} else {
-        ret = get_errno(pselect(n, rfds_ptr, wfds_ptr, efds_ptr, ts_ptr,
-                    &omask));
-        sigprocmask(SIG_SETMASK, &omask, NULL);
-	}
+    ret = get_errno(safe_select(n, rfds_ptr, wfds_ptr, efds_ptr, tvp));
 
     if (!is_error(ret)) {
         if (rfd_addr != 0) {
@@ -546,7 +531,8 @@ static inline abi_long do_freebsd_pselect(int n, abi_ulong rfd_addr,
         set_ptr = NULL;
     }
 
-    ret = get_errno(pselect(n, rfds_ptr, wfds_ptr, efds_ptr, ts_ptr, set_ptr));
+    ret = get_errno(safe_pselect(n, rfds_ptr, wfds_ptr, efds_ptr, ts_ptr,
+        set_ptr));
 
     if (!is_error(ret)) {
         if (rfd_addr != 0) {

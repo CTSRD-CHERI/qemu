@@ -26,6 +26,9 @@
 
 #include "qemu-os.h"
 
+ssize_t safe_recvmsg(int s, struct msghdr *msg, int flags);
+ssize_t safe_sendmsg(int s, const struct msghdr *msg, int flags);
+
 /* do_sendrecvmsg_locked() Must return target values and target errnos. */
 static abi_long do_sendrecvmsg_locked(int fd, struct target_msghdr *msgp,
                                       int flags, int send)
@@ -85,10 +88,10 @@ static abi_long do_sendrecvmsg_locked(int fd, struct target_msghdr *msgp,
     if (send) {
         ret = t2h_freebsd_cmsg(&msg, msgp);
         if (ret == 0) {
-            ret = get_errno(sendmsg(fd, &msg, flags));
+            ret = get_errno(safe_sendmsg(fd, &msg, flags));
         }
     } else {
-        ret = get_errno(recvmsg(fd, &msg, flags));
+        ret = get_errno(safe_recvmsg(fd, &msg, flags));
         if (!is_error(ret)) {
             len = ret;
             ret = h2t_freebsd_cmsg(msgp, &msg);
