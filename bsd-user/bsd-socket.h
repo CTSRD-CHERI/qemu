@@ -26,6 +26,12 @@
 
 #include "qemu-bsd.h"
 
+ssize_t safe_recvfrom(int s, void *buf, size_t len, int flags,
+    struct sockaddr * restrict from, socklen_t * restrict fromlen);
+ssize_t safe_sendto(int s, const void *buf, size_t len, int flags,
+    const struct sockaddr *to, socklen_t tolen);
+
+
 /* bind(2) */
 static inline abi_long do_bsd_bind(int sockfd, abi_ulong target_addr,
         socklen_t addrlen)
@@ -196,7 +202,7 @@ static inline abi_long do_bsd_sendto(int fd, abi_ulong msg, size_t len,
             unlock_user(host_msg, msg, 0);
             return ret;
         }
-        ret = get_errno(sendto(fd, host_msg, len, flags, saddr, addrlen));
+        ret = get_errno(safe_sendto(fd, host_msg, len, flags, saddr, addrlen));
     } else {
         ret = get_errno(send(fd, host_msg, len, flags));
     }
@@ -227,7 +233,8 @@ static inline abi_long do_bsd_recvfrom(int fd, abi_ulong msg, size_t len,
             goto fail;
         }
         saddr = alloca(addrlen);
-        ret = get_errno(recvfrom(fd, host_msg, len, flags, saddr, &addrlen));
+        ret = get_errno(safe_recvfrom(fd, host_msg, len, flags, saddr,
+                    &addrlen));
     } else {
         saddr = NULL; /* To keep compiler quiet.  */
         ret = get_errno(qemu_recv(fd, host_msg, len, flags));
