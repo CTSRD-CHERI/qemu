@@ -438,6 +438,9 @@ static inline void target_cpu_loop(CPUPPCState *env)
                 /* Returning from a successful sigreturn syscall.
                    Avoid corrupting register state.  */
                 break;
+            } else if (ret == (target_ulong)(-TARGET_ERESTART)) {
+                env->nip -= 4;
+                break;
             }
             if (ret > (target_ulong)(-515)) {
                 env->crf[0] |= 0x1;
