@@ -46,7 +46,7 @@
 #endif
 
 #include "disas/disas.h"
-#include "disas/bfd.h"
+#include "disas/dis-asm.h"
 
 const char *cp2_fault_causestr[] = {
     "None",
