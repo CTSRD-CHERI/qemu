@@ -28,6 +28,7 @@
 #include "sysemu/hw_accel.h"
 #ifndef CONFIG_USER_ONLY
 #include "sysemu/sysemu.h"
+#include "sysemu/tcg.h"
 #endif
 
 #ifndef CONFIG_USER_ONLY
@@ -111,11 +112,11 @@ void load_psw(CPUS390XState *env, uint64_t mask, uint64_t addr)
     env->cc_op = (mask >> 44) & 3;
 
     if ((old_mask ^ mask) & PSW_MASK_PER) {
-        s390_cpu_recompute_watchpoints(CPU(s390_env_get_cpu(env)));
+        s390_cpu_recompute_watchpoints(env_cpu(env));
     }
 
     if (mask & PSW_MASK_WAIT) {
-        s390_handle_wait(s390_env_get_cpu(env));
+        s390_handle_wait(env_archcpu(env));
     }
 }
 
@@ -137,14 +138,13 @@ uint64_t get_psw_mask(CPUS390XState *env)
 
 LowCore *cpu_map_lowcore(CPUS390XState *env)
 {
-    S390CPU *cpu = s390_env_get_cpu(env);
     LowCore *lowcore;
     hwaddr len = sizeof(LowCore);
 
     lowcore = cpu_physical_memory_map(env->psa, &len, 1);
 
     if (len < sizeof(LowCore)) {
-        cpu_abort(CPU(cpu), "Could not map lowcore\n");
+        cpu_abort(env_cpu(env), "Could not map lowcore\n");
     }
 
     return lowcore;
@@ -249,7 +249,7 @@ int s390_store_status(S390CPU *cpu, hwaddr addr, bool store_arch)
         cpu_physical_memory_write(offsetof(LowCore, ar_access_id), &ar_id, 1);
     }
     for (i = 0; i < 16; ++i) {
-        sa->fprs[i] = cpu_to_be64(get_freg(&cpu->env, i)->ll);
+        sa->fprs[i] = cpu_to_be64(*get_freg(&cpu->env, i));
     }
     for (i = 0; i < 16; ++i) {
         sa->grs[i] = cpu_to_be64(cpu->env.regs[i]);
@@ -299,8 +299,8 @@ int s390_store_adtl_status(S390CPU *cpu, hwaddr addr, hwaddr len)
 
     if (s390_has_feat(S390_FEAT_VECTOR)) {
         for (i = 0; i < 32; i++) {
-            sa->vregs[i][0] = cpu_to_be64(cpu->env.vregs[i][0].ll);
-            sa->vregs[i][1] = cpu_to_be64(cpu->env.vregs[i][1].ll);
+            sa->vregs[i][0] = cpu_to_be64(cpu->env.vregs[i][0]);
+            sa->vregs[i][1] = cpu_to_be64(cpu->env.vregs[i][1]);
         }
     }
     if (s390_has_feat(S390_FEAT_GUARDED_STORAGE) && len >= ADTL_GS_MIN_SIZE) {
@@ -341,13 +341,13 @@ void s390_cpu_dump_state(CPUState *cs, FILE *f, int flags)
         if (s390_has_feat(S390_FEAT_VECTOR)) {
             for (i = 0; i < 32; i++) {
                 qemu_fprintf(f, "V%02d=%016" PRIx64 "%016" PRIx64 "%c",
-                             i, env->vregs[i][0].ll, env->vregs[i][1].ll,
+                             i, env->vregs[i][0], env->vregs[i][1],
                              i % 2 ? '\n' : ' ');
             }
         } else {
             for (i = 0; i < 16; i++) {
                 qemu_fprintf(f, "F%02d=%016" PRIx64 "%c",
-                             i, get_freg(env, i)->ll,
+                             i, *get_freg(env, i),
                              (i % 4) == 3 ? '\n' : ' ');
             }
         }
@@ -418,6 +418,7 @@ const char *cc_name(enum cc_op cc_op)
         [CC_OP_SLA_64]    = "CC_OP_SLA_64",
         [CC_OP_FLOGR]     = "CC_OP_FLOGR",
         [CC_OP_LCBB]      = "CC_OP_LCBB",
+        [CC_OP_VC]        = "CC_OP_VC",
     };
 
     return cc_names[cc_op];

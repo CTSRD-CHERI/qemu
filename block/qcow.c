@@ -156,7 +156,12 @@ static int qcow_open(BlockDriverState *bs, QDict *options, int flags,
         goto fail;
     }
     if (header.version != QCOW_VERSION) {
-        error_setg(errp, "Unsupported qcow version %" PRIu32, header.version);
+        error_setg(errp, "qcow (v%d) does not support qcow version %" PRIu32,
+                   QCOW_VERSION, header.version);
+        if (header.version == 2 || header.version == 3) {
+            error_append_hint(errp, "Try the 'qcow2' driver instead.\n");
+        }
+
         ret = -ENOTSUP;
         goto fail;
     }
@@ -844,7 +849,8 @@ static int coroutine_fn qcow_co_create(BlockdevCreateOptions *opts,
         return -EIO;
     }
 
-    qcow_blk = blk_new(BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL);
+    qcow_blk = blk_new(bdrv_get_aio_context(bs),
+                       BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL);
     ret = blk_insert_bs(qcow_blk, bs, errp);
     if (ret < 0) {
         goto exit;

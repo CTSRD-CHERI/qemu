@@ -12,8 +12,10 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu-common.h"
 #include "qapi/error.h"
 #include "sysemu/sysemu.h"
+#include "sysemu/tcg.h"
 #include "cpu.h"
 #include "elf.h"
 #include "hw/loader.h"
@@ -374,8 +376,7 @@ static bool s390_gen_initial_iplb(S390IPLState *ipl)
     if (ccw_dev) {
         switch (devtype) {
         case CCW_DEVTYPE_SCSI:
-            sd = (SCSIDevice *) object_dynamic_cast(OBJECT(dev_st),
-                                                           TYPE_SCSI_DEVICE);
+            sd = SCSI_DEVICE(dev_st);
             ipl->iplb.len = cpu_to_be32(S390_IPLB_MIN_QEMU_SCSI_LEN);
             ipl->iplb.blk0_len =
                 cpu_to_be32(S390_IPLB_MIN_QEMU_SCSI_LEN - S390_IPLB_HEADER_LEN);

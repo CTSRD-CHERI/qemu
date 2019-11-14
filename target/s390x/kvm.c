@@ -119,8 +119,8 @@
  * Needs to be big enough to contain max_cpus emergency signals
  * and in addition NR_LOCAL_IRQS interrupts
  */
-#define VCPU_IRQ_BUF_SIZE (sizeof(struct kvm_s390_irq) * \
-                           (max_cpus + NR_LOCAL_IRQS))
+#define VCPU_IRQ_BUF_SIZE(max_cpus) (sizeof(struct kvm_s390_irq) * \
+                                     (max_cpus + NR_LOCAL_IRQS))
 
 static CPUWatchpoint hw_watchpoint;
 /*
@@ -362,9 +362,20 @@ unsigned long kvm_arch_vcpu_id(CPUState *cpu)
 
 int kvm_arch_init_vcpu(CPUState *cs)
 {
+    unsigned int max_cpus = MACHINE(qdev_get_machine())->smp.max_cpus;
     S390CPU *cpu = S390_CPU(cs);
     kvm_s390_set_cpu_state(cpu, cpu->env.cpu_state);
-    cpu->irqstate = g_malloc0(VCPU_IRQ_BUF_SIZE);
+    cpu->irqstate = g_malloc0(VCPU_IRQ_BUF_SIZE(max_cpus));
+    return 0;
+}
+
+int kvm_arch_destroy_vcpu(CPUState *cs)
+{
+    S390CPU *cpu = S390_CPU(cs);
+
+    g_free(cpu->irqstate);
+    cpu->irqstate = NULL;
+
     return 0;
 }
 
@@ -418,21 +429,21 @@ int kvm_arch_put_registers(CPUState *cs, int level)
 
     if (can_sync_regs(cs, KVM_SYNC_VRS)) {
         for (i = 0; i < 32; i++) {
-            cs->kvm_run->s.regs.vrs[i][0] = env->vregs[i][0].ll;
-            cs->kvm_run->s.regs.vrs[i][1] = env->vregs[i][1].ll;
+            cs->kvm_run->s.regs.vrs[i][0] = env->vregs[i][0];
+            cs->kvm_run->s.regs.vrs[i][1] = env->vregs[i][1];
         }
         cs->kvm_run->s.regs.fpc = env->fpc;
         cs->kvm_run->kvm_dirty_regs |= KVM_SYNC_VRS;
     } else if (can_sync_regs(cs, KVM_SYNC_FPRS)) {
         for (i = 0; i < 16; i++) {
-            cs->kvm_run->s.regs.fprs[i] = get_freg(env, i)->ll;
+            cs->kvm_run->s.regs.fprs[i] = *get_freg(env, i);
         }
         cs->kvm_run->s.regs.fpc = env->fpc;
         cs->kvm_run->kvm_dirty_regs |= KVM_SYNC_FPRS;
     } else {
         /* Floating point */
         for (i = 0; i < 16; i++) {
-            fpu.fprs[i] = get_freg(env, i)->ll;
+            fpu.fprs[i] = *get_freg(env, i);
         }
         fpu.fpc = env->fpc;
 
@@ -586,13 +597,13 @@ int kvm_arch_get_registers(CPUState *cs)
     /* Floating point and vector registers */
     if (can_sync_regs(cs, KVM_SYNC_VRS)) {
         for (i = 0; i < 32; i++) {
-            env->vregs[i][0].ll = cs->kvm_run->s.regs.vrs[i][0];
-            env->vregs[i][1].ll = cs->kvm_run->s.regs.vrs[i][1];
+            env->vregs[i][0] = cs->kvm_run->s.regs.vrs[i][0];
+            env->vregs[i][1] = cs->kvm_run->s.regs.vrs[i][1];
         }
         env->fpc = cs->kvm_run->s.regs.fpc;
     } else if (can_sync_regs(cs, KVM_SYNC_FPRS)) {
         for (i = 0; i < 16; i++) {
-            get_freg(env, i)->ll = cs->kvm_run->s.regs.fprs[i];
+            *get_freg(env, i) = cs->kvm_run->s.regs.fprs[i];
         }
         env->fpc = cs->kvm_run->s.regs.fpc;
     } else {
@@ -601,7 +612,7 @@ int kvm_arch_get_registers(CPUState *cs)
             return r;
         }
         for (i = 0; i < 16; i++) {
-            get_freg(env, i)->ll = fpu.fprs[i];
+            *get_freg(env, i) = fpu.fprs[i];
         }
         env->fpc = fpu.fpc;
     }
@@ -1940,9 +1951,10 @@ int kvm_s390_set_cpu_state(S390CPU *cpu, uint8_t cpu_state)
 
 void kvm_s390_vcpu_interrupt_pre_save(S390CPU *cpu)
 {
+    unsigned int max_cpus = MACHINE(qdev_get_machine())->smp.max_cpus;
     struct kvm_s390_irq_state irq_state = {
         .buf = (uint64_t) cpu->irqstate,
-        .len = VCPU_IRQ_BUF_SIZE,
+        .len = VCPU_IRQ_BUF_SIZE(max_cpus),
     };
     CPUState *cs = CPU(cpu);
     int32_t bytes;
@@ -2073,6 +2085,15 @@ static int query_cpu_subfunc(S390FeatBitmap features)
     if (test_bit(S390_FEAT_MSA_EXT_8, features)) {
         s390_add_from_feat_block(features, S390_FEAT_TYPE_KMA, prop.kma);
     }
+    if (test_bit(S390_FEAT_MSA_EXT_9, features)) {
+        s390_add_from_feat_block(features, S390_FEAT_TYPE_KDSA, prop.kdsa);
+    }
+    if (test_bit(S390_FEAT_ESORT_BASE, features)) {
+        s390_add_from_feat_block(features, S390_FEAT_TYPE_SORTL, prop.sortl);
+    }
+    if (test_bit(S390_FEAT_DEFLATE_BASE, features)) {
+        s390_add_from_feat_block(features, S390_FEAT_TYPE_DFLTCC, prop.dfltcc);
+    }
     return 0;
 }
 
@@ -2116,6 +2137,15 @@ static int configure_cpu_subfunc(const S390FeatBitmap features)
     }
     if (test_bit(S390_FEAT_MSA_EXT_8, features)) {
         s390_fill_feat_block(features, S390_FEAT_TYPE_KMA, prop.kma);
+    }
+    if (test_bit(S390_FEAT_MSA_EXT_9, features)) {
+        s390_fill_feat_block(features, S390_FEAT_TYPE_KDSA, prop.kdsa);
+    }
+    if (test_bit(S390_FEAT_ESORT_BASE, features)) {
+        s390_fill_feat_block(features, S390_FEAT_TYPE_SORTL, prop.sortl);
+    }
+    if (test_bit(S390_FEAT_DEFLATE_BASE, features)) {
+        s390_fill_feat_block(features, S390_FEAT_TYPE_DFLTCC, prop.dfltcc);
     }
     return kvm_vm_ioctl(kvm_state, KVM_SET_DEVICE_ATTR, &attr);
 }

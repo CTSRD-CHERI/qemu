@@ -1,7 +1,6 @@
 #ifndef HW_PC_H
 #define HW_PC_H
 
-#include "qemu-common.h"
 #include "exec/memory.h"
 #include "hw/boards.h"
 #include "hw/isa/isa.h"
@@ -12,6 +11,7 @@
 
 #include "qemu/range.h"
 #include "qemu/bitmap.h"
+#include "qemu/module.h"
 #include "sysemu/sysemu.h"
 #include "hw/pci/pci.h"
 #include "hw/mem/pc-dimm.h"
@@ -24,6 +24,7 @@
  * PCMachineState:
  * @acpi_dev: link to ACPI PM device that performs ACPI hotplug handling
  * @boot_cpus: number of present VCPUs
+ * @smp_dies: number of dies per one package
  */
 struct PCMachineState {
     /*< private >*/
@@ -59,6 +60,7 @@ struct PCMachineState {
     bool apic_xrupt_override;
     unsigned apic_id_limit;
     uint16_t boot_cpus;
+    unsigned smp_dies;
 
     /* NUMA information: */
     uint64_t numa_nodes;
@@ -107,6 +109,9 @@ typedef struct PCMachineClass {
 
     /* Compat options: */
 
+    /* Default CPU model version.  See x86_cpu_set_default_version(). */
+    int default_cpu_version;
+
     /* ACPI compat: */
     bool has_acpi_build;
     bool rsdp_in_ram;
@@ -134,6 +139,9 @@ typedef struct PCMachineClass {
 
     /* use PVH to load kernels that support this feature */
     bool pvh_enabled;
+
+    /* Enables contiguous-apic-ID mode */
+    bool compat_apic_id_mode;
 } PCMachineClass;
 
 #define TYPE_PC_MACHINE "generic-pc-machine"
@@ -186,7 +194,8 @@ void pc_register_ferr_irq(qemu_irq irq);
 void pc_acpi_smi_interrupt(void *opaque, int irq, int level);
 
 void pc_cpus_init(PCMachineState *pcms);
-void pc_hot_add_cpu(const int64_t id, Error **errp);
+void pc_hot_add_cpu(MachineState *ms, const int64_t id, Error **errp);
+void pc_smp_parse(MachineState *ms, QemuOpts *opts);
 
 void pc_guest_info_init(PCMachineState *pcms);
 

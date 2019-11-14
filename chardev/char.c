@@ -35,6 +35,7 @@
 #include "qapi/qmp/qerror.h"
 #include "sysemu/replay.h"
 #include "qemu/help_option.h"
+#include "qemu/module.h"
 #include "qemu/option.h"
 
 #include "chardev/char-mux.h"
@@ -730,7 +731,7 @@ Chardev *qemu_chr_new_noreplay(const char *label, const char *filename,
 
     if (qemu_opt_get_bool(opts, "mux", 0)) {
         assert(permit_mux_mon);
-        monitor_init(chr, MONITOR_USE_READLINE);
+        monitor_init_hmp(chr, true);
     }
 
 out:

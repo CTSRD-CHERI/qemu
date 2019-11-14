@@ -20,18 +20,11 @@
 #ifndef TRICORE_CPU_H
 #define TRICORE_CPU_H
 
-#include "tricore-defs.h"
-#include "qemu-common.h"
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
-
-#define CPUArchState struct CPUTriCoreState
-
-struct CPUTriCoreState;
+#include "tricore-defs.h"
 
 struct tricore_boot_info;
-
-#define NB_MMU_MODES 3
 
 typedef struct tricore_def_t tricore_def_t;
 
@@ -190,8 +183,6 @@ struct CPUTriCoreState {
     int error_code;
     uint32_t hflags;    /* CPU State */
 
-    CPU_COMMON
-
     /* Internal CPU feature flags.  */
     uint64_t features;
 
@@ -211,17 +202,10 @@ struct TriCoreCPU {
     CPUState parent_obj;
     /*< public >*/
 
+    CPUNegativeOffsetState neg;
     CPUTriCoreState env;
 };
 
-static inline TriCoreCPU *tricore_env_get_cpu(CPUTriCoreState *env)
-{
-    return TRICORE_CPU(container_of(env, TriCoreCPU, env));
-}
-
-#define ENV_GET_CPU(e) CPU(tricore_env_get_cpu(e))
-
-#define ENV_OFFSET offsetof(TriCoreCPU, env)
 
 hwaddr tricore_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
 void tricore_cpu_dump_state(CPUState *cpu, FILE *f, int flags);
@@ -384,7 +368,8 @@ static inline int cpu_mmu_index(CPUTriCoreState *env, bool ifetch)
     return 0;
 }
 
-
+typedef CPUTriCoreState CPUArchState;
+typedef TriCoreCPU ArchCPU;
 
 #include "exec/cpu-all.h"
 
@@ -417,8 +402,8 @@ static inline void cpu_get_tb_cpu_state(CPUTriCoreState *env, target_ulong *pc,
 #define CPU_RESOLVING_TYPE TYPE_TRICORE_CPU
 
 /* helpers.c */
-int cpu_tricore_handle_mmu_fault(CPUState *cpu, target_ulong address,
-                                 int rw, int mmu_idx);
-#define cpu_handle_mmu_fault cpu_tricore_handle_mmu_fault
+bool tricore_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
+                          MMUAccessType access_type, int mmu_idx,
+                          bool probe, uintptr_t retaddr);
 
 #endif /* TRICORE_CPU_H */

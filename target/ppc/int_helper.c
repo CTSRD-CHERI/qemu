@@ -23,6 +23,8 @@
 #include "exec/helper-proto.h"
 #include "crypto/aes.h"
 #include "fpu/softfloat.h"
+#include "qapi/error.h"
+#include "qemu/guest-random.h"
 
 #include "helper_regs.h"
 /*****************************************************************************/
@@ -158,24 +160,37 @@ uint32_t helper_cmpeqb(target_ulong ra, target_ulong rb)
 #undef hasvalue
 
 /*
- * Return invalid random number.
- *
- * FIXME: Add rng backend or other mechanism to get cryptographically suitable
- * random number
+ * Return a random number.
  */
-target_ulong helper_darn32(void)
+uint64_t helper_darn32(void)
 {
-    return -1;
+    Error *err = NULL;
+    uint32_t ret;
+
+    if (qemu_guest_getrandom(&ret, sizeof(ret), &err) < 0) {
+        qemu_log_mask(LOG_UNIMP, "darn: Crypto failure: %s",
+                      error_get_pretty(err));
+        error_free(err);
+        return -1;
+    }
+
+    return ret;
 }
 
-target_ulong helper_darn64(void)
+uint64_t helper_darn64(void)
 {
-    return -1;
+    Error *err = NULL;
+    uint64_t ret;
+
+    if (qemu_guest_getrandom(&ret, sizeof(ret), &err) < 0) {
+        qemu_log_mask(LOG_UNIMP, "darn: Crypto failure: %s",
+                      error_get_pretty(err));
+        error_free(err);
+        return -1;
+    }
+
+    return ret;
 }
-
-#endif
-
-#if defined(TARGET_PPC64)
 
 uint64_t helper_bpermd(uint64_t rs, uint64_t rb)
 {
@@ -1776,23 +1791,6 @@ VSHIFT(l, 1)
 VSHIFT(r, 0)
 #undef VSHIFT
 
-#define VSL(suffix, element, mask)                                      \
-    void helper_vsl##suffix(ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)   \
-    {                                                                   \
-        int i;                                                          \
-                                                                        \
-        for (i = 0; i < ARRAY_SIZE(r->element); i++) {                  \
-            unsigned int shift = b->element[i] & mask;                  \
-                                                                        \
-            r->element[i] = a->element[i] << shift;                     \
-        }                                                               \
-    }
-VSL(b, u8, 0x7)
-VSL(h, u16, 0x0F)
-VSL(w, u32, 0x1F)
-VSL(d, u64, 0x3F)
-#undef VSL
-
 void helper_vslv(ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)
 {
     int i;
@@ -1800,10 +1798,10 @@ void helper_vslv(ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)
 
     size = ARRAY_SIZE(r->u8);
     for (i = 0; i < size; i++) {
-        shift = b->u8[i] & 0x7;             /* extract shift value */
-        bytes = (a->u8[i] << 8) +             /* extract adjacent bytes */
-            (((i + 1) < size) ? a->u8[i + 1] : 0);
-        r->u8[i] = (bytes << shift) >> 8;   /* shift and store result */
+        shift = b->VsrB(i) & 0x7;             /* extract shift value */
+        bytes = (a->VsrB(i) << 8) +           /* extract adjacent bytes */
+            (((i + 1) < size) ? a->VsrB(i + 1) : 0);
+        r->VsrB(i) = (bytes << shift) >> 8;   /* shift and store result */
     }
 }
 
@@ -1818,10 +1816,10 @@ void helper_vsrv(ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)
      * order will guarantee that computed result is not fed back.
      */
     for (i = ARRAY_SIZE(r->u8) - 1; i >= 0; i--) {
-        shift = b->u8[i] & 0x7;                 /* extract shift value */
-        bytes = ((i ? a->u8[i - 1] : 0) << 8) + a->u8[i];
+        shift = b->VsrB(i) & 0x7;               /* extract shift value */
+        bytes = ((i ? a->VsrB(i - 1) : 0) << 8) + a->VsrB(i);
                                                 /* extract adjacent bytes */
-        r->u8[i] = (bytes >> shift) & 0xFF;     /* shift and store result */
+        r->VsrB(i) = (bytes >> shift) & 0xFF;   /* shift and store result */
     }
 }
 
@@ -1901,41 +1899,35 @@ VEXTRACT(uw, u32)
 VEXTRACT(d, u64)
 #undef VEXTRACT
 
-void helper_xxextractuw(CPUPPCState *env, target_ulong xtn,
-                        target_ulong xbn, uint32_t index)
+void helper_xxextractuw(CPUPPCState *env, ppc_vsr_t *xt,
+                        ppc_vsr_t *xb, uint32_t index)
 {
-    ppc_vsr_t xt, xb;
+    ppc_vsr_t t = { };
     size_t es = sizeof(uint32_t);
     uint32_t ext_index;
     int i;
 
-    getVSR(xbn, &xb, env);
-    memset(&xt, 0, sizeof(xt));
-
     ext_index = index;
     for (i = 0; i < es; i++, ext_index++) {
-        xt.VsrB(8 - es + i) = xb.VsrB(ext_index % 16);
+        t.VsrB(8 - es + i) = xb->VsrB(ext_index % 16);
     }
 
-    putVSR(xtn, &xt, env);
+    *xt = t;
 }
 
-void helper_xxinsertw(CPUPPCState *env, target_ulong xtn,
-                      target_ulong xbn, uint32_t index)
+void helper_xxinsertw(CPUPPCState *env, ppc_vsr_t *xt,
+                      ppc_vsr_t *xb, uint32_t index)
 {
-    ppc_vsr_t xt, xb;
+    ppc_vsr_t t = *xt;
     size_t es = sizeof(uint32_t);
     int ins_index, i = 0;
 
-    getVSR(xbn, &xb, env);
-    getVSR(xtn, &xt, env);
-
     ins_index = index;
     for (i = 0; i < es && ins_index < 16; i++, ins_index++) {
-        xt.VsrB(ins_index) = xb.VsrB(8 - es + i);
+        t.VsrB(ins_index) = xb->VsrB(8 - es + i);
     }
 
-    putVSR(xtn, &xt, env);
+    *xt = t;
 }
 
 #define VEXT_SIGNED(name, element, cast)                            \
@@ -1964,26 +1956,6 @@ void helper_##name(ppc_avr_t *r, ppc_avr_t *b)                      \
 VNEG(vnegw, s32)
 VNEG(vnegd, s64)
 #undef VNEG
-
-#define VSR(suffix, element, mask)                                      \
-    void helper_vsr##suffix(ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)   \
-    {                                                                   \
-        int i;                                                          \
-                                                                        \
-        for (i = 0; i < ARRAY_SIZE(r->element); i++) {                  \
-            unsigned int shift = b->element[i] & mask;                  \
-            r->element[i] = a->element[i] >> shift;                     \
-        }                                                               \
-    }
-VSR(ab, s8, 0x7)
-VSR(ah, s16, 0xF)
-VSR(aw, s32, 0x1F)
-VSR(ad, s64, 0x3F)
-VSR(b, u8, 0x7)
-VSR(h, u16, 0xF)
-VSR(w, u32, 0x1F)
-VSR(d, u64, 0x3F)
-#undef VSR
 
 void helper_vsro(ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)
 {
@@ -2038,7 +2010,7 @@ void helper_vsum2sws(CPUPPCState *env, ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)
     for (i = 0; i < ARRAY_SIZE(r->u64); i++) {
         int64_t t = (int64_t)b->VsrSW(upper + i * 2);
 
-        result.VsrW(i) = 0;
+        result.VsrD(i) = 0;
         for (j = 0; j < ARRAY_SIZE(r->u64); j++) {
             t += a->VsrSW(2 * i + j);
         }

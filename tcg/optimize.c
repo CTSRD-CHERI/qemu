@@ -24,7 +24,6 @@
  */
 
 #include "qemu/osdep.h"
-#include "qemu-common.h"
 #include "exec/cpu-common.h"
 #include "tcg-op.h"
 
@@ -734,9 +733,13 @@ void tcg_optimize(TCGContext *s)
                 } else if (opc == INDEX_op_sub_i64) {
                     neg_op = INDEX_op_neg_i64;
                     have_neg = TCG_TARGET_HAS_neg_i64;
-                } else {
+                } else if (TCG_TARGET_HAS_neg_vec) {
+                    TCGType type = TCGOP_VECL(op) + TCG_TYPE_V64;
+                    unsigned vece = TCGOP_VECE(op);
                     neg_op = INDEX_op_neg_vec;
-                    have_neg = TCG_TARGET_HAS_neg_vec;
+                    have_neg = tcg_can_emit_vec_op(neg_op, type, vece) > 0;
+                } else {
+                    break;
                 }
                 if (!have_neg) {
                     break;
@@ -1210,8 +1213,8 @@ void tcg_optimize(TCGContext *s)
                 if (opc == INDEX_op_extract2_i64) {
                     tmp = (v1 >> op->args[3]) | (v2 << (64 - op->args[3]));
                 } else {
-                    tmp = (v1 >> op->args[3]) | (v2 << (32 - op->args[3]));
-                    tmp = (int32_t)tmp;
+                    tmp = (int32_t)(((uint32_t)v1 >> op->args[3]) |
+                                    ((uint32_t)v2 << (32 - op->args[3])));
                 }
                 tcg_opt_gen_movi(s, op, op->args[0], tmp);
                 break;

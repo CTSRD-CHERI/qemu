@@ -222,8 +222,9 @@ uint64_t cpu_mips_get_rtc64 (CPUMIPSState *env);
 void cpu_mips_set_rtc64 (CPUMIPSState *env, uint64_t value);
 
 /* helper.c */
-int mips_cpu_handle_mmu_fault(CPUState *cpu, vaddr address, int size, int rw,
-                              int mmu_idx);
+bool mips_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
+                       MMUAccessType access_type, int mmu_idx,
+                       bool probe, uintptr_t retaddr);
 
 /* op_helper.c */
 uint32_t float_class_s(uint32_t arg, float_status *fst);

@@ -60,6 +60,7 @@ bool kvmppc_has_cap_fixup_hcalls(void);
 bool kvmppc_has_cap_htm(void);
 bool kvmppc_has_cap_mmu_radix(void);
 bool kvmppc_has_cap_mmu_hash_v3(void);
+bool kvmppc_has_cap_xive(void);
 int kvmppc_get_cap_safe_cache(void);
 int kvmppc_get_cap_safe_bounds_check(void);
 int kvmppc_get_cap_safe_indirect_branch(void);
@@ -79,6 +80,7 @@ bool kvmppc_pvr_workaround_required(PowerPCCPU *cpu);
 bool kvmppc_hpt_needs_host_contiguous_pages(void);
 void kvm_check_mmu(PowerPCCPU *cpu, Error **errp);
 void kvmppc_set_reg_ppc_online(PowerPCCPU *cpu, unsigned int online);
+void kvmppc_set_reg_tb_offset(PowerPCCPU *cpu, int64_t tb_offset);
 
 #else
 
@@ -205,6 +207,10 @@ static inline void kvmppc_set_reg_ppc_online(PowerPCCPU *cpu,
     return;
 }
 
+static inline void kvmppc_set_reg_tb_offset(PowerPCCPU *cpu, int64_t tb_offset)
+{
+}
+
 #ifndef CONFIG_USER_ONLY
 static inline bool kvmppc_spapr_use_multitce(void)
 {
@@ -316,6 +322,11 @@ static inline bool kvmppc_has_cap_mmu_hash_v3(void)
     return false;
 }
 
+static inline bool kvmppc_has_cap_xive(void)
+{
+    return false;
+}
+
 static inline int kvmppc_get_cap_safe_cache(void)
 {
     return 0;
@@ -386,6 +397,11 @@ static inline int kvmppc_resize_hpt_commit(PowerPCCPU *cpu,
                                            target_ulong flags, int shift)
 {
     return -ENOSYS;
+}
+
+static inline bool kvmppc_pvr_workaround_required(PowerPCCPU *cpu)
+{
+    return false;
 }
 
 #endif

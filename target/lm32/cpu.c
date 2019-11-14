@@ -22,7 +22,6 @@
 #include "qapi/error.h"
 #include "qemu/qemu-print.h"
 #include "cpu.h"
-#include "qemu-common.h"
 
 
 static void lm32_cpu_set_pc(CPUState *cs, vaddr value)
@@ -142,11 +141,10 @@ static void lm32_cpu_realizefn(DeviceState *dev, Error **errp)
 
 static void lm32_cpu_initfn(Object *obj)
 {
-    CPUState *cs = CPU(obj);
     LM32CPU *cpu = LM32_CPU(obj);
     CPULM32State *env = &cpu->env;
 
-    cs->env_ptr = env;
+    cpu_set_cpustate_pointers(cpu);
 
     env->flags = 0;
 }
@@ -231,9 +229,8 @@ static void lm32_cpu_class_init(ObjectClass *oc, void *data)
     cc->set_pc = lm32_cpu_set_pc;
     cc->gdb_read_register = lm32_cpu_gdb_read_register;
     cc->gdb_write_register = lm32_cpu_gdb_write_register;
-#ifdef CONFIG_USER_ONLY
-    cc->handle_mmu_fault = lm32_cpu_handle_mmu_fault;
-#else
+    cc->tlb_fill = lm32_cpu_tlb_fill;
+#ifndef CONFIG_USER_ONLY
     cc->get_phys_page_debug = lm32_cpu_get_phys_page_debug;
     cc->vmsd = &vmstate_lm32_cpu;
 #endif

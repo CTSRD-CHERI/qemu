@@ -75,6 +75,7 @@ static int cap_fixup_hcalls;
 static int cap_htm;             /* Hardware transactional memory support */
 static int cap_mmu_radix;
 static int cap_mmu_hash_v3;
+static int cap_xive;
 static int cap_resize_hpt;
 static int cap_ppc_pvr_compat;
 static int cap_ppc_safe_cache;
@@ -146,6 +147,7 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
     cap_htm = kvm_vm_check_extension(s, KVM_CAP_PPC_HTM);
     cap_mmu_radix = kvm_vm_check_extension(s, KVM_CAP_PPC_MMU_RADIX);
     cap_mmu_hash_v3 = kvm_vm_check_extension(s, KVM_CAP_PPC_MMU_HASH_V3);
+    cap_xive = kvm_vm_check_extension(s, KVM_CAP_PPC_IRQ_XIVE);
     cap_resize_hpt = kvm_vm_check_extension(s, KVM_CAP_SPAPR_RESIZE_HPT);
     kvmppc_get_cpu_characteristics(s);
     cap_ppc_nested_kvm_hv = kvm_vm_check_extension(s, KVM_CAP_PPC_NESTED_HV);
@@ -517,6 +519,11 @@ int kvm_arch_init_vcpu(CPUState *cs)
     kvmppc_hw_debug_points_init(cenv);
 
     return ret;
+}
+
+int kvm_arch_destroy_vcpu(CPUState *cs)
+{
+    return 0;
 }
 
 static void kvm_sw_tlb_put(PowerPCCPU *cpu)
@@ -1721,7 +1728,7 @@ int kvm_arch_handle_exit(CPUState *cs, struct kvm_run *run)
             trace_kvm_handle_dcr_write();
             ret = kvmppc_handle_dcr_write(env, run->dcr.dcrn, run->dcr.data);
         } else {
-            trace_kvm_handle_drc_read();
+            trace_kvm_handle_dcr_read();
             ret = kvmppc_handle_dcr_read(env, run->dcr.dcrn, &run->dcr.data);
         }
         break;
@@ -1989,9 +1996,8 @@ static int kvmppc_get_dec_bits(void)
 }
 
 static int kvmppc_get_pvinfo(CPUPPCState *env, struct kvm_ppc_pvinfo *pvinfo)
- {
-     PowerPCCPU *cpu = ppc_env_get_cpu(env);
-     CPUState *cs = CPU(cpu);
+{
+    CPUState *cs = env_cpu(env);
 
     if (kvm_vm_check_extension(cs->kvm_state, KVM_CAP_PPC_GET_PVINFO) &&
         !kvm_vm_ioctl(cs->kvm_state, KVM_PPC_GET_PVINFO, pvinfo)) {
@@ -2478,6 +2484,11 @@ static int parse_cap_ppc_count_cache_flush_assist(struct kvm_ppc_cpu_char c)
     return 0;
 }
 
+bool kvmppc_has_cap_xive(void)
+{
+    return cap_xive;
+}
+
 static void kvmppc_get_cpu_characteristics(KVMState *s)
 {
     struct kvm_ppc_cpu_char c;
@@ -2639,7 +2650,7 @@ int kvmppc_define_rtas_kernel_token(uint32_t token, const char *function)
         return -ENOENT;
     }
 
-    strncpy(args.name, function, sizeof(args.name));
+    strncpy(args.name, function, sizeof(args.name) - 1);
 
     return kvm_vm_ioctl(kvm_state, KVM_PPC_RTAS_DEFINE_TOKEN, &args);
 }
@@ -2931,5 +2942,14 @@ void kvmppc_set_reg_ppc_online(PowerPCCPU *cpu, unsigned int online)
 
     if (kvm_enabled()) {
         kvm_set_one_reg(cs, KVM_REG_PPC_ONLINE, &online);
+    }
+}
+
+void kvmppc_set_reg_tb_offset(PowerPCCPU *cpu, int64_t tb_offset)
+{
+    CPUState *cs = CPU(cpu);
+
+    if (kvm_enabled()) {
+        kvm_set_one_reg(cs, KVM_REG_PPC_TB_OFFSET, &tb_offset);
     }
 }

@@ -169,7 +169,6 @@ static inline void disas_set_insn_syndrome(DisasContext *s, uint32_t syn)
 #ifdef TARGET_AARCH64
 void a64_translate_init(void);
 void gen_a64_set_pc_im(uint64_t val);
-void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags);
 extern const TranslatorOps aarch64_translator_ops;
 #else
 static inline void a64_translate_init(void)
@@ -177,10 +176,6 @@ static inline void a64_translate_init(void)
 }
 
 static inline void gen_a64_set_pc_im(uint64_t val)
-{
-}
-
-static inline void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 {
 }
 #endif
@@ -237,10 +232,14 @@ static inline void gen_ss_advance(DisasContext *s)
     }
 }
 
+/*
+ * Given a VFP floating point constant encoded into an 8 bit immediate in an
+ * instruction, expand it to the actual constant value of the specified
+ * size, as per the VFPExpandImm() pseudocode in the Arm ARM.
+ */
+uint64_t vfp_expand_imm(int size, uint8_t imm8);
+
 /* Vector operations shared between ARM and AArch64.  */
-extern const GVecGen3 bsl_op;
-extern const GVecGen3 bit_op;
-extern const GVecGen3 bif_op;
 extern const GVecGen3 mla_op[4];
 extern const GVecGen3 mls_op[4];
 extern const GVecGen3 cmtst_op[4];
