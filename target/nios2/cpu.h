@@ -141,7 +141,7 @@ typedef struct Nios2CPUClass {
 #define R_PC         64
 
 /* Exceptions */
-#define EXCP_BREAK    -1
+#define EXCP_BREAK    0x1000
 #define EXCP_RESET    0
 #define EXCP_PRESET   1
 #define EXCP_IRQ      2
@@ -212,9 +212,8 @@ static inline Nios2CPU *nios2_env_get_cpu(CPUNios2State *env)
 void nios2_tcg_init(void);
 void nios2_cpu_do_interrupt(CPUState *cs);
 int cpu_nios2_signal_handler(int host_signum, void *pinfo, void *puc);
-void dump_mmu(FILE *f, fprintf_function cpu_fprintf, CPUNios2State *env);
-void nios2_cpu_dump_state(CPUState *cpu, FILE *f, fprintf_function cpu_fprintf,
-                          int flags);
+void dump_mmu(CPUNios2State *env);
+void nios2_cpu_dump_state(CPUState *cpu, FILE *f, int flags);
 hwaddr nios2_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
 void nios2_cpu_do_unaligned_access(CPUState *cpu, vaddr addr,
                                    MMUAccessType access_type,
@@ -222,6 +221,8 @@ void nios2_cpu_do_unaligned_access(CPUState *cpu, vaddr addr,
 
 qemu_irq *nios2_cpu_pic_init(Nios2CPU *cpu);
 void nios2_check_interrupts(CPUNios2State *env);
+
+void do_nios2_semihosting(CPUNios2State *env);
 
 #define TARGET_PHYS_ADDR_SPACE_BITS 32
 #ifdef CONFIG_USER_ONLY

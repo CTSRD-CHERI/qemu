@@ -278,6 +278,8 @@ ld_has() {
 
 # default parameters
 source_path=$(dirname "$0")
+# make source path absolute
+source_path=$(cd "$source_path"; pwd)
 cpu=""
 iasl="iasl"
 interp_prefix="/usr/gnemul/qemu-%M"
@@ -521,8 +523,6 @@ for opt do
   ;;
   --cxx=*) CXX="$optarg"
   ;;
-  --source-path=*) source_path="$optarg"
-  ;;
   --cpu=*) cpu="$optarg"
   ;;
   --extra-cflags=*) QEMU_CFLAGS="$QEMU_CFLAGS $optarg"
@@ -600,9 +600,6 @@ if test "$debug_info" = "yes"; then
     CFLAGS="-g $CFLAGS"
     LDFLAGS="-g $LDFLAGS"
 fi
-
-# make source path absolute
-source_path=$(cd "$source_path"; pwd)
 
 # running configure in the source tree?
 # we know that's the case if configure is there.
@@ -947,8 +944,6 @@ for opt do
   ;;
   --interp-prefix=*) interp_prefix="$optarg"
   ;;
-  --source-path=*)
-  ;;
   --cross-prefix=*)
   ;;
   --cc=*)
@@ -1125,6 +1120,8 @@ for opt do
   --enable-vnc-png) vnc_png="yes"
   ;;
   --disable-slirp) slirp="no"
+  ;;
+  --enable-slirp=git) slirp="git"
   ;;
   --enable-slirp=system) slirp="system"
   ;;
@@ -1657,7 +1654,6 @@ $(echo Available targets: $default_target_list | \
   --target-list-exclude=LIST exclude a set of targets from the default target-list
 
 Advanced options (experts only):
-  --source-path=PATH       path of source code [$source_path]
   --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]
   --cc=CC                  use C compiler CC [$cc]
   --iasl=IASL              use ACPI compiler IASL [$iasl]
@@ -1830,6 +1826,9 @@ EOF
 exit 0
 fi
 
+# Remove old dependency files to make sure that they get properly regenerated
+rm -f *-config-devices.mak.d
+
 if ! has $python; then
   error_exit "Python not found. Use --python=/path/to/python"
 fi
@@ -1920,7 +1919,7 @@ gcc_flags="-Wformat-security -Wformat-y2k -Winit-self -Wignored-qualifiers $gcc_
 gcc_flags="-Wno-missing-include-dirs -Wempty-body -Wnested-externs $gcc_flags"
 gcc_flags="-Wendif-labels -Wno-shift-negative-value $gcc_flags"
 gcc_flags="-Wno-initializer-overrides -Wexpansion-to-defined $gcc_flags"
-gcc_flags="-Wno-string-plus-int $gcc_flags"
+gcc_flags="-Wno-string-plus-int -Wno-typedef-redefinition $gcc_flags"
 # Note that we do not add -Werror to gcc_flags here, because that would
 # enable it for all configure tests. If a configure test failed due
 # to -Werror this would just silently disable some features,
@@ -2383,36 +2382,16 @@ fi
 ##########################################
 # libseccomp check
 
-libseccomp_minver="2.2.0"
 if test "$seccomp" != "no" ; then
-    case "$cpu" in
-    i386|x86_64|mips)
-        ;;
-    arm|aarch64)
-        libseccomp_minver="2.2.3"
-        ;;
-    ppc|ppc64|s390x)
-        libseccomp_minver="2.3.0"
-        ;;
-    *)
-        libseccomp_minver=""
-        ;;
-    esac
-
-    if test "$libseccomp_minver" != "" &&
-       $pkg_config --atleast-version=$libseccomp_minver libseccomp ; then
+    libseccomp_minver="2.3.0"
+    if $pkg_config --atleast-version=$libseccomp_minver libseccomp ; then
         seccomp_cflags="$($pkg_config --cflags libseccomp)"
         seccomp_libs="$($pkg_config --libs libseccomp)"
         seccomp="yes"
     else
         if test "$seccomp" = "yes" ; then
-            if test "$libseccomp_minver" != "" ; then
-                feature_not_found "libseccomp" \
-                    "Install libseccomp devel >= $libseccomp_minver"
-            else
-                feature_not_found "libseccomp" \
-                    "libseccomp is not supported for host cpu $cpu"
-            fi
+            feature_not_found "libseccomp" \
+                 "Install libseccomp devel >= $libseccomp_minver"
         fi
         seccomp="no"
     fi
@@ -5897,6 +5876,8 @@ case "$slirp" in
   "" | yes)
     if $pkg_config slirp; then
       slirp=system
+    elif test -e "${source_path}/.git" && test $git_update = 'yes' ; then
+      slirp=git
     elif test -e "${source_path}/slirp/Makefile" ; then
       slirp=internal
     elif test -z "$slirp" ; then
@@ -5914,7 +5895,10 @@ case "$slirp" in
 esac
 
 case "$slirp" in
-  internal)
+  git | internal)
+    if test "$slirp" = git; then
+      git_submodules="${git_submodules} slirp"
+    fi
     mkdir -p slirp
     slirp_cflags="-I\$(SRC_PATH)/slirp/src -I\$(BUILD_DIR)/slirp/src"
     slirp_libs="-L\$(BUILD_DIR)/slirp -lslirp"
@@ -6581,7 +6565,7 @@ if test "$slirp" != "no"; then
   echo "SLIRP_CFLAGS=$slirp_cflags" >> $config_host_mak
   echo "SLIRP_LIBS=$slirp_libs" >> $config_host_mak
 fi
-if [ "$slirp" = "internal" ]; then
+if [ "$slirp" = "git" -o "$slirp" = "internal" ]; then
     echo "config-host.h: subdir-slirp" >> $config_host_mak
 fi
 if test "$vde" = "yes" ; then
@@ -7914,6 +7898,7 @@ for bios_file in \
     $source_path/pc-bios/*.img \
     $source_path/pc-bios/openbios-* \
     $source_path/pc-bios/u-boot.* \
+    $source_path/pc-bios/edk2-*.fd.bz2 \
     $source_path/pc-bios/palcode-*
 do
     LINKS="$LINKS pc-bios/$(basename $bios_file)"
