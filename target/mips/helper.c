@@ -134,9 +134,14 @@ int r4k_map_address (CPUMIPSState *env, hwaddr *physical, int *prot,
                 *prot = PAGE_READ;
                 if (n ? tlb->D1 : tlb->D0)
                     *prot |= PAGE_WRITE;
+#if !defined(TARGET_CHERI)
                 if (!(n ? tlb->XI1 : tlb->XI0)) {
+#endif
                     *prot |= PAGE_EXEC;
+#if !defined(TARGET_CHERI)
+
                 }
+#endif
                 return TLBRET_MATCH;
             }
             return TLBRET_DIRTY;
@@ -1697,7 +1702,7 @@ static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
     paddr = cpu_mips_translate_address_c2(env, vaddr, rw, reg);
 
     if (paddr == -1LL) {
-        cpu_loop_exit_restore(CPU(mips_env_get_cpu(env)), pc);
+        cpu_loop_exit_restore(env_cpu(env), pc);
     } else {
         return paddr;
     }
@@ -1718,7 +1723,7 @@ static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr, MemoryRegion**
 {
     hwaddr l;
     MemoryRegion *mr;
-    CPUState *cs = CPU(mips_env_get_cpu(env));
+    CPUState *cs = env_cpu(env);
 
     mr = address_space_translate(cs->as, addr, &addr, &l, false, MEMTXATTRS_UNSPECIFIED);
     if (mrp)
@@ -1768,7 +1773,7 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
         FILE* f = fmemopen(buffer, sizeof(buffer), "w");
         assert(f);
         fprintf(f, "Probably caused by guest instruction: ");
-        target_disas(f, CPU(mips_env_get_cpu(env)),
+        target_disas(f, env_cpu(env),
                      cap_get_cursor(&env->active_tc.PCC), isa == 0 ? 4 : 2);
         fprintf(f, "\r");
         fclose(f);

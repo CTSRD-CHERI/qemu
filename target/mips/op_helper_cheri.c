@@ -2663,7 +2663,7 @@ void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int f
 
 void CHERI_HELPER_IMPL(mtc2_dumpcstate(CPUMIPSState *env, target_ulong arg1))
 {
-    cheri_dump_state(CPU(mips_env_get_cpu(env)),
+    cheri_dump_state(env_cpu(env),
             (qemu_logfile == NULL) ? stderr : qemu_logfile,
             fprintf, CPU_DUMP_CODE);
 }

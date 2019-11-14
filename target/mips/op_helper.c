@@ -57,7 +57,7 @@ static void raise_exception(CPUMIPSState *env, uint32_t exception)
 
 void helper_check_breakcount(struct CPUMIPSState* env)
 {
-    CPUState *cs = CPU(mips_env_get_cpu(env));
+    CPUState *cs = env_cpu(env);
     /* Decrement the startup breakcount, if set. */
     if (unlikely(cs->breakcount)) {
         cs->breakcount--;
@@ -76,8 +76,7 @@ void helper_log_instruction(CPUMIPSState *env, target_ulong pc)
 {
     int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        MIPSCPU *cpu = mips_env_get_cpu(env);
-        CPUState *cs = CPU(cpu);
+        CPUState *cs = env_cpu(env);
 
         /* Disassemble and print instruction. */
         if (isa == 0) {
@@ -90,8 +89,7 @@ void helper_log_instruction(CPUMIPSState *env, target_ulong pc)
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         static uint16_t cycles = 0;  /* XXX */
         uint32_t opcode;
-        MIPSCPU *cpu = mips_env_get_cpu(env);
-        CPUState *cs = CPU(cpu);
+        CPUState *cs = env_cpu(env);
 
         /* if the logfile is empty we need to emit the cvt magic */
         if (env->cvtrace.version != 0 && ftell(qemu_logfile) != 0) {
@@ -1752,8 +1750,7 @@ target_ulong helper_mfc0_coreid(CPUMIPSState *env)
                       " register for non-BERI CPU %s\n", env->cpu_model->name);
         do_raise_exception(env, EXCP_RI, GETPC());
     }
-    MIPSCPU *cpu = mips_env_get_cpu(env);
-    CPUState *cs = CPU(cpu);
+    CPUState *cs = env_cpu(env);
 
     return (uint32_t)(((cs->nr_cores - 1) << 16) |
             (cs->cpu_index & 0xffff));
@@ -2071,7 +2068,7 @@ void helper_mtc0_debug(CPUMIPSState *env, target_ulong arg1)
     // The shutdown request will only be handled once we exit the current
     // translation block so we need to stop the CPU and then exit the current TB
     cpu_stop_current();
-    cpu_loop_exit_noexc(ENV_GET_CPU(env));
+    cpu_loop_exit_noexc(env_cpu(env));
 }
 
 void helper_mttc0_debug(CPUMIPSState *env, target_ulong arg1)
@@ -2291,7 +2288,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     }
     // Otherwise we meed to fetch the memory referenced by vaddr+length
     // NB: length has already been capped at sizeof(buffer)
-    int ret = cpu_memory_rw_debug(ENV_GET_CPU(env), vaddr, buffer, length, false);
+    int ret = cpu_memory_rw_debug(env_cpu(env), vaddr, buffer, length, false);
     if (ret != 0) {
         warn_report("CHERI DEBUG HELPER: Could not read " TARGET_FMT_ld
                     " bytes at vaddr 0x" TARGET_FMT_lx "\r\n", length, vaddr);
@@ -2411,7 +2408,7 @@ static void simple_dump_state(CPUMIPSState *env, FILE *f,
 void helper_mtc0_dumpstate(CPUMIPSState *env, target_ulong arg1)
 {
 #if 0
-    cpu_dump_state(CPU(mips_env_get_cpu(env)),
+    cpu_dump_state(env_cpu(env),
             (qemu_logfile == NULL) ? stderr : qemu_logfile,
             fprintf, CPU_DUMP_CODE);
 #else
@@ -6196,7 +6193,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     const bool src_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     // If neither src nor dest buffer cross a page boundary we can just do an address_space_read+write
     // Fast case: less than a page and neither of the buffers crosses a page boundary
-    CPUState *cs = CPU(mips_env_get_cpu(env));
+    CPUState *cs = env_cpu(env);
     if (dest_same_page && src_same_page) {
         tcg_debug_assert(already_written == 0);
         tcg_debug_assert(len <= TARGET_PAGE_SIZE);
@@ -6402,7 +6399,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
         goto success; // nothing to do
     }
 
-    CPUState *cs = CPU(mips_env_get_cpu(env));
+    CPUState *cs = env_cpu(env);
 
     while (len_nitems > 0) {
         const target_ulong total_len_nbytes = len_nitems * pattern_length;
@@ -6535,7 +6532,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             warn_report("%s: Falling back to memset slowpath for address "
                         TARGET_FMT_plx " (phys addr=%" HWADDR_PRIx", len_nitems=0x"
                         TARGET_FMT_lx ")! I/O memory or QEMU TLB bug?\r",
-                        __func__, dest, mips_cpu_get_phys_page_debug(CPU(mips_env_get_cpu(env)), dest), len_nitems);
+                        __func__, dest, mips_cpu_get_phys_page_debug(env_cpu(env), dest), len_nitems);
             target_ulong end = original_dest + original_len_bytes;
             tcg_debug_assert(((end - dest) % pattern_length) == 0);
             // in case we fault mark this as a continuation in $v1 (so that we continue sensibly after the tlb miss was handled)
@@ -6644,7 +6641,7 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
                 fprintf(stderr, "--- partial dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
                         lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
             }
-            if (cpu_memory_rw_debug(ENV_GET_CPU(env), src, buffer, len, false) == 0) {
+            if (cpu_memory_rw_debug(env_cpu(env), src, buffer, len, false) == 0) {
                 bool have_nonzero = false;
                 for (int i = 0; i < len; i++)
                     if (buffer[i] != 0)

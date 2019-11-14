@@ -525,7 +525,7 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
         }
         char buf[4096];
         FILE* buf_file = fmemopen(buf, sizeof(buf), "w");
-        cheri_dump_state(CPU(mips_env_get_cpu(env)), buf_file, fprintf, CPU_DUMP_CODE);
+        cheri_dump_state(env_cpu(env), buf_file, fprintf, CPU_DUMP_CODE);
         error_report("%s\r\n", buf);
         sleep(1); // to flush the write buffer
         fclose(buf_file);
