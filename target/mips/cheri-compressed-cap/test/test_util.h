@@ -113,7 +113,7 @@ inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_l
     creg.cr_uperms = CC128_UPERMS_ALL;
     creg.cr_otype = CC128_OTYPE_UNSEALED;
     creg.cr_tag = true;
-    CHECK(cc128_is_representable(false, base, length, offset, offset));
+    CHECK(cc128_is_representable_cap_exact(&creg));
     return creg;
 }
 
@@ -122,7 +122,7 @@ inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_l
 #define STRINGIFY(x) DO_STRINGIFY1(x)
 
 #define CHECK_FIELD_RAW(value, expected) CHECK(value == expected)
-#define CHECK_FIELD(cap, field, expected) CHECK((uint64_t)expected == (uint64_t)cap.cr_##field)
+#define CHECK_FIELD(cap, field, expected) CHECK((uint64_t)expected == cap.field())
 
 enum {
 #ifdef CC128_OLD_FORMAT

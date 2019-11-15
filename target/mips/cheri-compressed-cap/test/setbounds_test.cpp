@@ -181,6 +181,10 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         // Check CRAP/CRAM:
         check_cram_matches_setbounds(input.top2, second_input, second_bounds);
 
+        if (second_bounds.cr_base >= second_bounds.top()) {
+            INFO("Cannot set bounds on capability that is not in-bounds");
+            continue;
+        }
         // Check that calling setbounds with the same target top yields the same result
         bool second_again_exact = false;
         const cap_register_t second_bounds_again = do_csetbounds(second_bounds, input.top2, &second_again_exact);
