@@ -81,7 +81,8 @@ static inline cap_offset_t cap_get_offset(const cap_register_t* c) {
 
 static inline uint64_t cap_get_length(const cap_register_t* c) {
     // TODO: should handle last byte of address space properly
-    cheri_debug_assert(c->_cr_top >= c->cr_base);
+    cheri_debug_assert((!c->cr_tag || c->_cr_top >= c->cr_base) &&
+                       "Tagged capabilities must be in bounds!");
     unsigned __int128 length = c->_cr_top - c->cr_base;
     return length > UINT64_MAX ? UINT64_MAX : (uint64_t)length;
 }
