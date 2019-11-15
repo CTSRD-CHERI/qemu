@@ -250,8 +250,8 @@ int_to_cap(uint64_t x, cap_register_t *cr)
 static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_register_t *cr)
 {
 #ifndef OLD_UNREPRESENTABLE_BEHAVIOUR
-    // Clear the tag and assert that the address is already correct:
-    cheri_debug_assert(cap_get_cursor(cr) == addr);
+    // Clear the tag and assert update the address:
+    cr->_cr_cursor = addr;
     cr->cr_tag = false;
 #ifdef CHERI_128
     // re-compute the compressed representation to ensure we have the same
