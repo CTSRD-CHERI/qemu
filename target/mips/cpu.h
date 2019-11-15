@@ -1536,8 +1536,8 @@ int  cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr, uintptr_t pc);
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg,
         uintptr_t pc);
-void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
-                               fprintf_function cpu_fprintf, int flags);
+void cheri_cpu_dump_statistics(CPUState *cs, int flags);
+void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags);
 void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const char* name);
 target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, bool instavail, uintptr_t retpc);
 #ifdef CHERI_MAGIC128

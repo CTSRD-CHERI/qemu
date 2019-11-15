@@ -37,6 +37,7 @@
 #include "internal.h"
 #include "qemu/host-utils.h"
 #include "qemu/error-report.h"
+#include "qemu/qemu-print.h"
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
 #include "exec/helper-proto.h"
@@ -182,45 +183,44 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
     _became_unrepresentable(env, reg, retpc); \
 } while (0)
 
-static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
-                                     const char* name, uint64_t total,
+static void dump_out_of_bounds_stats(FILE* f, const char* name, uint64_t total,
                                      uint64_t* after_bounds,
                                      uint64_t* before_bounds,
                                      uint64_t unrepresentable)
 {
 
-    cpu_fprintf(f, "Number of %ss: %" PRIu64 "\n", name, total);
+    qemu_fprintf(f, "Number of %ss: %" PRIu64 "\n", name, total);
     uint64_t total_out_of_bounds = after_bounds[0];
     // one past the end is fine according to ISO C
-    cpu_fprintf(f, "  One past the end:           %" PRIu64 "\n", after_bounds[0]);
+    qemu_fprintf(f, "  One past the end:           %" PRIu64 "\n", after_bounds[0]);
     assert(bounds_buckets[0].howmuch == 1);
     // All the others are invalid:
     for (int i = 1; i < ARRAY_SIZE(bounds_buckets); i++) {
-        cpu_fprintf(f, "  Out of bounds by up to %s: %" PRIu64 "\n", bounds_buckets[i].name, after_bounds[i]);
+        qemu_fprintf(f, "  Out of bounds by up to %s: %" PRIu64 "\n", bounds_buckets[i].name, after_bounds[i]);
         total_out_of_bounds += after_bounds[i];
     }
-    cpu_fprintf(f, "  Out of bounds by over  %s: %" PRIu64 "\n",
+    qemu_fprintf(f, "  Out of bounds by over  %s: %" PRIu64 "\n",
         bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, after_bounds[ARRAY_SIZE(bounds_buckets)]);
     total_out_of_bounds += after_bounds[ARRAY_SIZE(bounds_buckets)];
 
 
     // One before the start is invalid though:
     for (int i = 0; i < ARRAY_SIZE(bounds_buckets); i++) {
-        cpu_fprintf(f, "  Before bounds by up to -%s: %" PRIu64 "\n", bounds_buckets[i].name, before_bounds[i]);
+        qemu_fprintf(f, "  Before bounds by up to -%s: %" PRIu64 "\n", bounds_buckets[i].name, before_bounds[i]);
         total_out_of_bounds += before_bounds[i];
     }
-    cpu_fprintf(f, "  Before bounds by over  -%s: %" PRIu64 "\n",
+    qemu_fprintf(f, "  Before bounds by over  -%s: %" PRIu64 "\n",
         bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, before_bounds[ARRAY_SIZE(bounds_buckets)]);
     total_out_of_bounds += before_bounds[ARRAY_SIZE(bounds_buckets)];
 
 
     // unrepresentable, i.e. massively out of bounds:
-    cpu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", unrepresentable);
+    qemu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", unrepresentable);
     total_out_of_bounds += unrepresentable; // TODO: count how far it was out of bounds for this stat
 
-    cpu_fprintf(f, "Total out of bounds %ss: %" PRIu64 " (%f%%)\n", name, total_out_of_bounds,
+    qemu_fprintf(f, "Total out of bounds %ss: %" PRIu64 " (%f%%)\n", name, total_out_of_bounds,
                 total == 0 ? 0.0 : ((double)(100 * total_out_of_bounds) / (double)total));
-    cpu_fprintf(f, "Total out of bounds %ss (excluding one past the end): %" PRIu64 " (%f%%)\n",
+    qemu_fprintf(f, "Total out of bounds %ss (excluding one past the end): %" PRIu64 " (%f%%)\n",
                 name, total_out_of_bounds - after_bounds[0],
                 total == 0 ? 0.0 : ((double)(100 * (total_out_of_bounds - after_bounds[0])) / (double)total));
 }
@@ -233,14 +233,13 @@ static void dump_out_of_bounds_stats(FILE* f, fprintf_function cpu_fprintf,
 
 #endif /* DO_CHERI_STATISTICS */
 
-void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
-                              fprintf_function cpu_fprintf, int flags)
+void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags)
 {
 #ifndef DO_CHERI_STATISTICS
-    cpu_fprintf(f, "CPUSTATS DISABLED, RECOMPILE WITH -DDO_CHERI_STATISTICS\n");
+    qemu_fprintf(f, "CPUSTATS DISABLED, RECOMPILE WITH -DDO_CHERI_STATISTICS\n");
 #else
 #define DUMP_CHERI_STAT(name, printname) \
-    dump_out_of_bounds_stats(f, cpu_fprintf, printname, stat_num_##name, \
+    dump_out_of_bounds_stats(f, printname, stat_num_##name, \
         stat_num_##name##_after_bounds, stat_num_##name##_before_bounds, \
         stat_num_##name##_out_of_bounds_unrep);
 
@@ -251,6 +250,11 @@ void cheri_cpu_dump_statistics(CPUState *cs, FILE*f,
 #undef DUMP_CHERI_STAT
 #endif
 }
+
+void cheri_cpu_dump_statistics(CPUState *cs, int flags) {
+    cheri_cpu_dump_statistics_f(cs, NULL, flags);
+}
+
 
 static inline bool
 is_cap_sealed(const cap_register_t *cp)
