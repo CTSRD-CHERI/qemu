@@ -135,19 +135,19 @@ static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, cap_register_t* 
     if (addr == cap_get_top65(cr)) {
         // This case is very common so we should not print a message here
         return 1;
-    } else if (offset < 0 || offset > cap_get_length(cr)) {
+    } else if (offset < 0 || offset > cap_get_length65(cr)) {
         // handle negative offsets:
         int64_t howmuch;
         if (offset < 0)
             howmuch = (int64_t)offset;
         else
-            howmuch = offset - cap_get_length(cr) + 1;
+            howmuch = offset - cap_get_length65(cr) + 1;
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS,
                       "BOUNDS: Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
                       " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64 " pc=%016" PRIx64 " ASID=%u\n",
                       howmuch, name, cr->cr_tag, !cap_is_unsealed(cr),
                       (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
-                      cr->cr_base, cap_get_length(cr), (int64_t)offset,
+                      cr->cr_base, cap_get_length64(cr), (int64_t)offset,
                       cap_get_cursor(&env->active_tc.PCC),
                       (unsigned)(env->CP0_EntryHi & 0xFF));
         return howmuch;
@@ -692,9 +692,9 @@ target_ulong CHERI_HELPER_IMPL(cgetlen(CPUMIPSState *env, uint32_t cb))
      */
     /*
      * For 128-bit Capabilities we must check len >= 2^64:
-     * cap_get_length() converts 1 << 64 to UINT64_MAX)
+     * cap_get_length64() converts 1 << 64 to UINT64_MAX)
      */
-    return (target_ulong)cap_get_length(get_readonly_capreg(&env->active_tc, cb));
+    return (target_ulong)cap_get_length64(get_readonly_capreg(&env->active_tc, cb));
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUMIPSState *env, uint32_t cb))
@@ -1257,7 +1257,8 @@ static target_ulong crap_impl(target_ulong len) {
     cap_register_t tmpcap;
     set_max_perms_capability(&tmpcap, 0);
     cc128_setbounds(&tmpcap, 0, len);
-    return cap_get_length(&tmpcap);
+    // FIXME: should we return 0 for 1 << 64? instead?
+    return cap_get_length64(&tmpcap);
 #else
   // For MAGIC128 and 256 everything is representable -> we can return len
   return len;
@@ -1952,7 +1953,7 @@ static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         cvtrace->val3 = tswap64(cr->_cr_cursor);
         cvtrace->val4 = tswap64(cr->cr_base);
-        cvtrace->val5 = tswap64(cap_get_length(cr)); // write UINT64_MAX for 1 << 64
+        cvtrace->val5 = tswap64(cap_get_length64(cr)); // write UINT64_MAX for 1 << 64
     }
 }
 
@@ -2226,7 +2227,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     uint64_t tps = ((uint64_t)(csp->cr_otype ^ CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
         (perms << 1) | (sbit ? 1UL : 0UL);
 
-    uint64_t length = cap_get_length(csp) ^ CAP_MAX_LENGTH;
+    uint64_t length = cap_get_length64(csp) ^ CAP_MAX_LENGTH;
 
     /*
      * Touching the tags will take both the data write TLB fault and
@@ -2352,7 +2353,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         dump_cap_load_op(vaddr, mem_buffer.u64s[0], tag);
         cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
-        dump_cap_load_cbl(cap_get_cursor(&ncd), cap_get_base(&ncd), cap_get_length(&ncd));
+        dump_cap_load_cbl(cap_get_cursor(&ncd), cap_get_base(&ncd), cap_get_length64(&ncd));
         cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
 #endif
@@ -2421,8 +2422,8 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
         cvtrace_dump_cap_cursor(&env->cvtrace, cap_get_cursor(csp));
         dump_cap_store_base(csp->cr_base);
         cvtrace_dump_cap_base(&env->cvtrace, cap_get_base(csp));
-        dump_cap_store_length(cap_get_length(csp));
-        cvtrace_dump_cap_length(&env->cvtrace, cap_get_length(csp));
+        dump_cap_store_length(cap_get_length64(csp));
+        cvtrace_dump_cap_length(&env->cvtrace, cap_get_length64(csp));
     }
 #endif
 }
@@ -2628,7 +2629,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
             (crp->cr_perms & CAP_PERMS_ALL),
             (uint64_t)cap_get_otype(crp), /* testsuite wants -1 for unsealed */
             (uint64_t)cap_get_offset(crp), cap_get_base(crp),
-            cap_get_length(crp) /* testsuite expects UINT64_MAX for 1 << 64) */);
+            cap_get_length64(crp) /* testsuite expects UINT64_MAX for 1 << 64) */);
 #endif
 }
 

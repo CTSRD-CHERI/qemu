@@ -58,7 +58,7 @@
 #define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
 #define PRINT_CAP_ARGS_L1(cr) (cr)->cr_tag, cap_is_sealed_with_type(cr), \
             ((((cr)->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | ((cr)->cr_perms & CAP_PERMS_ALL)), \
-            cap_get_base(cr), cap_get_length(cr)
+            cap_get_base(cr), cap_get_length64(cr)
 #define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
 #define PRINT_CAP_ARGS_L2(cr) (uint64_t)cap_get_offset(cr), (cr)->cr_otype
 
@@ -79,11 +79,15 @@ static inline cap_offset_t cap_get_offset(const cap_register_t* c) {
     return (cap_offset_t)c->_cr_cursor - (cap_offset_t)c->cr_base;
 }
 
-static inline uint64_t cap_get_length(const cap_register_t* c) {
+static inline uint64_t cap_get_length64(const cap_register_t* c) {
     // TODO: should handle last byte of address space properly
     cheri_debug_assert((!c->cr_tag || c->_cr_top >= c->cr_base) &&
                        "Tagged capabilities must be in bounds!");
     unsigned __int128 length = c->_cr_top - c->cr_base;
+    if (unlikely(c->_cr_top < c->cr_base)) {
+        return (uint64_t)length; // negative length -> strip top bits
+    }
+    // Otherwise clamp the length to UINT64_MAX
     return length > UINT64_MAX ? UINT64_MAX : (uint64_t)length;
 }
 
