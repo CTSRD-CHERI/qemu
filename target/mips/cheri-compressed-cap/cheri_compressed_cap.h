@@ -1020,7 +1020,9 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
     cc128_debug_assert((orig_length65 >> 64) <= 1 && "Length cannot be bigger than 1 << 64");
     cc128_debug_assert((req_top >> 64) <= 1 && "New top cannot be bigger than 1 << 64");
     cc128_debug_assert(req_length65 <= orig_length65 && "Cannot grow capabilities");
-    cc128_debug_assert(cap->_cr_cursor < cap->_cr_top && "Must be used on inbounds caps");
+    cc128_debug_assert(
+        (cap->_cr_cursor < cap->_cr_top || (cap->_cr_cursor == cap->_cr_top && cap->_cr_top == cap->cr_base)) &&
+        "Must be used on inbounds (or zero-length) caps");
     cc128_debug_assert(cap->_cr_cursor >= cap->cr_base && "Must be used on inbounds caps");
 
     // function setCapBounds(cap, base, top) : (Capability, bits(64), bits(65)) -> (bool, Capability) = {
