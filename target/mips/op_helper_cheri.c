@@ -1206,12 +1206,7 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
     } else if (cursor < cbp->cr_base) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (new_top > UINT64_MAX) {
-        // TODO: special case for cheri128 full address space caps!
-        /* We don't allow setbounds to create full address space caps */
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-    } else if (new_top > cap_get_top(cbp)) {
-        tcg_debug_assert(((unsigned __int128)cap_get_base(cbp) + cap_get_length(cbp)) <= UINT64_MAX && "csetbounds top currently limited to UINT64_MAX"); // 65 bits
+    } else if (new_top > cap_get_top65(cbp)) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
     } else {
         cap_register_t result = *cbp;
