@@ -31416,6 +31416,12 @@ void cpu_state_reset(CPUMIPSState *env)
     compute_hflags(env);
     restore_fp_status(env);
     restore_pamask(env);
+#ifdef TARGET_CHERI
+    if (strcmp(env->cpu_model->name, "BERI") == 0) {
+      assert(env->PABITS == 40 && "BERI should support 40 PABITS");
+      assert(env->PAMask == (1ULL << 40) - 1 && "BERI should support 40 PABITS");
+    }
+#endif
     cs->exception_index = EXCP_NONE;
 
     if (semihosting_get_argc()) {

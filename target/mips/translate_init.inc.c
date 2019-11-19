@@ -668,7 +668,7 @@ const mips_def_t mips_defs[] =
                        (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP),
         .CP0_Config2 = MIPS_CONFIG2,
         .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI) | (1 << CP0C3_BI) |
-                       (1 << CP0C3_BP),
+                       (1 << CP0C3_BP) | (1 << CP0C3_LPA),
         .CP0_LLAddr_rw_bitmask = 0,
         .CP0_LLAddr_shift = 0,
         .SYNCI_Step = 32,
@@ -684,7 +684,10 @@ const mips_def_t mips_defs[] =
         .CP1_fcr31 = 0,
         .CP1_fcr31_rw_bitmask = 0xFF8FFFFF,
         .SEGBITS = 42,
-        .PABITS = 36,
+        .PABITS = 40,
+        /* These flags are needed in addition to Config3.LPA for > 36 bits PA */
+        .CP0_PageGrain = (1 << CP0PG_ELPA),
+        .CP0_PageGrain_rw_bitmask = (1 << CP0PG_ELPA), /* TODO: should it be R/W? */
         .insn_flags = CPU_MIPS64R2,
         .mmu_type = MMU_TYPE_R4000,
     },
