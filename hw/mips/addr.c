@@ -26,12 +26,15 @@
 
 static int mips_um_ksegs;
 
-#if defined(TARGET_MIPS64)
-uint64_t cpu_cheri_kseg0_to_phys(void *opaque, uint64_t addr)
-{
-    return addr & 0xffffffffffll;
-}
+uint64_t cpu_mips_translate_elf_to_phys(void *opaque, uint64_t addr) {
+#ifdef TARGET_MIPS64
+  if (addr < (UINT64_C(0xff) << 48) && (addr <= 0x80000000 || addr >= 0x9fffffff)) {
+    // assume the user really meant this physical address (but strip access mode)
+    return addr & UINT64_C(0x07fffffffffffffff);
+  }
 #endif
+  return addr & 0x1fffffffll;
+}
 
 uint64_t cpu_mips_kseg0_to_phys(void *opaque, uint64_t addr)
 {

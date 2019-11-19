@@ -70,11 +70,7 @@ static int64_t load_kernel(void)
 #endif
 
     kernel_size = load_elf(loaderparams.kernel_filename, NULL,
-#if defined(TARGET_MIPS64)
-                           cpu_cheri_kseg0_to_phys, NULL,
-#else
-                           cpu_mips_kseg0_to_phys, NULL,
-#endif
+                           cpu_mips_translate_elf_to_phys, NULL,
                            (uint64_t *)&entry, NULL,
                            (uint64_t *)&kernel_high, big_endian,
                            EM_MIPS, 1, 0);
