@@ -920,7 +920,11 @@ static void write_bootloader(uint8_t *base, int64_t run_addr,
     stl_p(p++, 0xad280088);                                      /* sw t0, 0x0088(t1) */
 
     /* Jump to kernel code */
-    stl_p(p++, 0x3c1f0000 | ((kernel_entry >> 16) & 0xffff));    /* lui ra, high(kernel_entry) */
+    stl_p(p++, 0x3c1f0000 | ((kernel_entry >> 48)  & 0xffff));   /* lui ra, highest(kernel_entry) */
+    stl_p(p++, 0x37ff0000 | ((kernel_entry >> 32)  & 0xffff));   /* ori ra, ra, higher(kernel_entry) */
+    stl_p(p++, 0x001ffc38);                                      /* dsll ra, ra, 16 */
+    stl_p(p++, 0x37ff0000 | ((kernel_entry >> 16)  & 0xffff));   /* ori ra, ra, high(kernel_entry) */
+    stl_p(p++, 0x001ffc38);                                      /* dsll ra, ra, 16 */
     stl_p(p++, 0x37ff0000 | (kernel_entry & 0xffff));            /* ori ra, ra, low(kernel_entry) */
     stl_p(p++, 0x03e00009);                                      /* jalr ra */
     stl_p(p++, 0x00000000);                                      /* nop */
