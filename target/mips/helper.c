@@ -141,7 +141,6 @@ int r4k_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
                 if (!(n ? tlb->XI1 : tlb->XI0)) {
 #else
                 if (true) {
-#if !defined(TARGET_CHERI)
 #endif
                     *prot |= PAGE_EXEC;
                 }

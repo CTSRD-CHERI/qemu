@@ -31,7 +31,7 @@
 #endif
 #include "sysemu/kvm.h"
 #include "fpu/softfloat.h"
-#include "sysemu/sysemu.h"
+#include "sysemu/runstate.h"
 
 /*****************************************************************************/
 /* Exceptions processing helpers */
