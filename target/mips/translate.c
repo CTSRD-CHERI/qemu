@@ -4022,17 +4022,32 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     TCGv addr, t0, val;
     TCGLabel *l1 = gen_new_label();
     TCGLabel *done = gen_new_label();
+    TCGLabel *not_misaligned = gen_new_label();
 
     t0 = tcg_temp_new();
-
-    addr = tcg_temp_new();
+    // IMPORTANT! addr must be allocated using tcg_temp_local_new since we
+    // reference it in two different basic blocks.
+    // The naming makes no sense... But is documented in tcg/README.
+    // I should read the documentation before debugging :(
+    addr = tcg_temp_local_new();
     /* compare the address against that of the preceeding LL */
     gen_base_offset_addr(ctx, addr, base, offset);
-#ifdef TARGET_CHERI
     size_t memop_size = 1 << (tcg_mo & MO_SIZE);
+#ifdef TARGET_CHERI
     tcg_debug_assert((memop_size == 8 || memop_size == 4)  && "Only 64 and 32 bit supported");
     GEN_CAP_CHECK_STORE(addr, addr, memop_size);
 #endif
+    /*
+     * Alignment must be checked even if the CPU supports unaligned accesses:
+     *
+     * The effective address must be naturally-aligned. If either of the 2/3
+     * least-significant bits of the address is non-zero, an Address Error
+     * exception occurs.
+     */
+    tcg_gen_andi_tl(t0, addr, memop_size - 1);
+    tcg_gen_brcondi_tl(TCG_COND_EQ, t0, 0x0, not_misaligned);
+    generate_exception(ctx, EXCP_AdES);
+    gen_set_label(not_misaligned);
 
     tcg_gen_brcond_tl(TCG_COND_EQ, addr, cpu_lladdr, l1);
     tcg_temp_free(addr);
@@ -4044,14 +4059,7 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     /* generate cmpxchg */
     val = tcg_temp_new();
     gen_load_gpr(val, rt);
-    /*
-     * Set the MO_ALIGN flag even if the CPU supports unaligned accesses:
-     *
-     * The effective address must be naturally-aligned. If either of the 2/3
-     * least-significant bits of the address is non-zero, an Address Error
-     * exception occurs.
-     */
-    tcg_mo |= MO_ALIGN;
+
     tcg_gen_atomic_cmpxchg_tl(t0, cpu_lladdr, cpu_llval, val,
                               eva ? MIPS_HFLAG_UM : ctx->mem_idx, tcg_mo);
     // Print opc for CHERI logging
