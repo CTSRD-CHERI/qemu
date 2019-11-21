@@ -10,10 +10,10 @@ def archiveQEMU(String target) {
   
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
       buildStage: "Build Linux", nodeLabel: 'linux',
-      extraArgs: '--unified-sdk --without-sdk --install-prefix=/usr',
+      extraArgs: '--without-sdk --install-prefix=/usr',
       skipTarball: true, afterBuild: archiveQEMU('linux'))
 
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
       buildStage: "Build FreeBSD", nodeLabel: 'freebsd',
-      extraArgs: '--unified-sdk --without-sdk --install-prefix=/usr',
+      extraArgs: '--without-sdk --install-prefix=/usr',
       skipTarball: true, afterBuild: archiveQEMU('freebsd'))
