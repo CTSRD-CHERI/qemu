@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
+
 #include "qemu/osdep.h"
 #include "qemu/units.h"
 #include "cpu.h"
@@ -29,6 +30,7 @@
 #include "exec/log.h"
 #include "helper_regs.h"
 #include "qemu/error-report.h"
+#include "qemu/main-loop.h"
 #include "qemu/qemu-print.h"
 #include "mmu-book3s-v3.h"
 #include "mmu-radix64.h"
@@ -98,7 +100,7 @@ static int pp_check(int key, int pp, int nx)
         case 0x1:
         case 0x2:
             access |= PAGE_WRITE;
-            /* No break here */
+            /* fall through */
         case 0x3:
             access |= PAGE_READ;
             break;
@@ -706,7 +708,7 @@ static int mmu40x_get_physical_address(CPUPPCState *env, mmu_ctx_t *ctx,
             if (pr != 0) {
                 goto check_perms;
             }
-            /* No break here */
+            /* fall through */
         case 0x3:
             /* All accesses granted */
             ctx->prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
@@ -720,7 +722,7 @@ static int mmu40x_get_physical_address(CPUPPCState *env, mmu_ctx_t *ctx,
                 ret = -2;
                 break;
             }
-            /* No break here */
+            /* fall through */
         case 0x1:
         check_perms:
             /* Check from TLB entry */

@@ -15,9 +15,8 @@
 #define QEMU_KVM_H
 
 #include "qemu/queue.h"
-#include "qom/cpu.h"
+#include "hw/core/cpu.h"
 #include "exec/memattrs.h"
-#include "hw/irq.h"
 
 #ifdef NEED_CPU_H
 # ifdef CONFIG_KVM
@@ -309,7 +308,7 @@ int kvm_vm_check_attr(KVMState *s, uint32_t group, uint64_t attr);
 int kvm_device_check_attr(int fd, uint32_t group, uint64_t attr);
 
 /**
- * kvm_device_access - set or get value of a specific vm attribute
+ * kvm_device_access - set or get value of a specific device attribute
  * @fd: The device file descriptor
  * @group: the group
  * @attr: the attribute of that group to set or get
@@ -463,7 +462,7 @@ int kvm_vm_check_extension(KVMState *s, unsigned int extension);
 
 uint32_t kvm_arch_get_supported_cpuid(KVMState *env, uint32_t function,
                                       uint32_t index, int reg);
-uint32_t kvm_arch_get_supported_msr_feature(KVMState *s, uint32_t index);
+uint64_t kvm_arch_get_supported_msr_feature(KVMState *s, uint32_t index);
 
 
 void kvm_set_sigmask_len(KVMState *s, unsigned int sigmask_len);

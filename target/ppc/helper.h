@@ -193,8 +193,6 @@ DEF_HELPER_2(vprtybw, void, avr, avr)
 DEF_HELPER_2(vprtybd, void, avr, avr)
 DEF_HELPER_2(vprtybq, void, avr, avr)
 DEF_HELPER_3(vsubcuw, void, avr, avr, avr)
-DEF_HELPER_2(lvsl, void, avr, tl)
-DEF_HELPER_2(lvsr, void, avr, tl)
 DEF_HELPER_FLAGS_5(vaddsbs, TCG_CALL_NO_RWG, void, avr, avr, avr, avr, i32)
 DEF_HELPER_FLAGS_5(vaddshs, TCG_CALL_NO_RWG, void, avr, avr, avr, avr, i32)
 DEF_HELPER_FLAGS_5(vaddsws, TCG_CALL_NO_RWG, void, avr, avr, avr, avr, i32)
@@ -219,8 +217,6 @@ DEF_HELPER_3(vrlb, void, avr, avr, avr)
 DEF_HELPER_3(vrlh, void, avr, avr, avr)
 DEF_HELPER_3(vrlw, void, avr, avr, avr)
 DEF_HELPER_3(vrld, void, avr, avr, avr)
-DEF_HELPER_3(vsl, void, avr, avr, avr)
-DEF_HELPER_3(vsr, void, avr, avr, avr)
 DEF_HELPER_4(vsldoi, void, avr, avr, avr, i32)
 DEF_HELPER_3(vextractub, void, avr, avr, i32)
 DEF_HELPER_3(vextractuh, void, avr, avr, i32)
@@ -314,8 +310,6 @@ DEF_HELPER_4(vctsxs, void, env, avr, avr, i32)
 
 DEF_HELPER_2(vclzb, void, avr, avr)
 DEF_HELPER_2(vclzh, void, avr, avr)
-DEF_HELPER_2(vclzw, void, avr, avr)
-DEF_HELPER_2(vclzd, void, avr, avr)
 DEF_HELPER_2(vctzb, void, avr, avr)
 DEF_HELPER_2(vctzh, void, avr, avr)
 DEF_HELPER_2(vctzw, void, avr, avr)
@@ -328,7 +322,6 @@ DEF_HELPER_1(vclzlsbb, tl, avr)
 DEF_HELPER_1(vctzlsbb, tl, avr)
 DEF_HELPER_3(vbpermd, void, avr, avr, avr)
 DEF_HELPER_3(vbpermq, void, avr, avr, avr)
-DEF_HELPER_2(vgbbd, void, avr, avr)
 DEF_HELPER_3(vpmsumb, void, avr, avr, avr)
 DEF_HELPER_3(vpmsumh, void, avr, avr, avr)
 DEF_HELPER_3(vpmsumw, void, avr, avr, avr)
@@ -693,7 +686,7 @@ DEF_HELPER_3(store_601_batu, void, env, i32, tl)
 #endif
 
 #define dh_alias_fprp ptr
-#define dh_ctype_fprp uint64_t *
+#define dh_ctype_fprp ppc_fprp_t *
 #define dh_is_signed_fprp dh_is_signed_ptr
 
 DEF_HELPER_4(dadd, void, env, fprp, fprp, fprp)

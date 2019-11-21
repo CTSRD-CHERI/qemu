@@ -26,8 +26,7 @@ The @option{enforce-config-section} parameter is replaced by the
 
 @subsection -no-kvm (since 1.3.0)
 
-The ``-no-kvm'' argument is now a synonym for setting
-``-machine accel=tcg''.
+The ``-no-kvm'' argument is now a synonym for setting ``-accel tcg''.
 
 @subsection -usbdevice (since 2.10.0)
 
@@ -71,6 +70,13 @@ The ``-audiodev'' argument is now the preferred way to specify audio
 backend settings instead of environment variables.  To ease migration to
 the new format, the ``-audiodev-help'' option can be used to convert
 the current values of the environment variables to ``-audiodev'' options.
+
+@subsection Creating sound card devices and vnc without audiodev= property (since 4.2)
+
+When not using the deprecated legacy audio config, each sound card
+should specify an @code{audiodev=} property.  Additionally, when using
+vnc, you should specify an @code{audiodev=} propery if you plan to
+transmit audio through the VNC protocol.
 
 @subsection -mon ...,control=readline,pretty=on|off (since 4.1)
 
@@ -143,16 +149,35 @@ QEMU 4.1 has three options, please migrate to one of these three:
 
 @section QEMU Machine Protocol (QMP) commands
 
-@subsection block-dirty-bitmap-add "autoload" parameter (since 2.12.0)
+@subsection change (since 2.5.0)
 
-"autoload" parameter is now ignored. All bitmaps are automatically loaded
-from qcow2 images.
+Use ``blockdev-change-medium'' or ``change-vnc-password'' instead.
+
+@subsection migrate_set_downtime and migrate_set_speed (since 2.8.0)
+
+Use ``migrate-set-parameters'' instead.
+
+@subsection migrate-set-cache-size and query-migrate-cache-size (since 2.11.0)
+
+Use ``migrate-set-parameters'' and ``query-migrate-parameters'' instead.
 
 @subsection query-block result field dirty-bitmaps[i].status (since 4.0)
 
 The ``status'' field of the ``BlockDirtyInfo'' structure, returned by
 the query-block command is deprecated. Two new boolean fields,
 ``recording'' and ``busy'' effectively replace it.
+
+@subsection query-block result field dirty-bitmaps (Since 4.2)
+
+The ``dirty-bitmaps`` field of the ``BlockInfo`` structure, returned by
+the query-block command is itself now deprecated. The ``dirty-bitmaps``
+field of the ``BlockDeviceInfo`` struct should be used instead, which is the
+type of the ``inserted`` field in query-block replies, as well as the
+type of array items in query-named-block-nodes.
+
+Since the ``dirty-bitmaps`` field is optionally present in both the old and
+new locations, clients must use introspection to learn where to anticipate
+the field if/when it does appear in command output.
 
 @subsection query-cpus (since 2.12.0)
 
@@ -228,6 +253,16 @@ The bluetooth subsystem is unmaintained since many years and likely bitrotten
 quite a bit. It will be removed without replacement unless some users speaks
 up at the @email{qemu-devel@@nongnu.org} mailing list with information about
 their usecases.
+
+@subsection ide-drive (since 4.2)
+
+The 'ide-drive' device is deprecated. Users should use 'ide-hd' or
+'ide-cd' as appropriate to get an IDE hard disk or CD-ROM as needed.
+
+@subsection scsi-disk (since 4.2)
+
+The 'scsi-disk' device is deprecated. Users should use 'scsi-hd' or
+'scsi-cd' as appropriate to get a SCSI hard disk or CD-ROM as needed.
 
 @section System emulator machines
 
@@ -305,6 +340,13 @@ to just export the entire image and then mount only /dev/nbd0p1 than
 it is to reinvoke @command{qemu-nbd -c /dev/nbd0} limited to just a
 subset of the image.
 
+@subsection qemu-img convert -n -o (since 4.2.0)
+
+All options specified in @option{-o} are image creation options, so
+they have no effect when used with @option{-n} to skip image creation.
+Silently ignored options can be confusing, so this combination of
+options will be made an error in future versions.
+
 @section Build system
 
 @subsection Python 2 support (since 4.1.0)
@@ -331,3 +373,18 @@ existing CPU models.  Management software that needs runnability
 guarantees must resolve the CPU model aliases using te
 ``alias-of'' field returned by the ``query-cpu-definitions'' QMP
 command.
+
+
+@node Recently removed features
+@appendix Recently removed features
+
+What follows is a record of recently removed, formerly deprecated
+features that serves as a record for users who have encountered
+trouble after a recent upgrade.
+
+@section QEMU Machine Protocol (QMP) commands
+
+@subsection block-dirty-bitmap-add "autoload" parameter (since 4.2.0)
+
+The "autoload" parameter has been ignored since 2.12.0. All bitmaps
+are automatically loaded from qcow2 images.

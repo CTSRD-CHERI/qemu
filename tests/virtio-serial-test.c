@@ -8,7 +8,7 @@
  */
 
 #include "qemu/osdep.h"
-#include "libqtest.h"
+#include "libqtest-single.h"
 #include "qemu/module.h"
 #include "libqos/virtio-serial.h"
 
@@ -20,8 +20,8 @@ static void virtio_serial_nop(void *obj, void *data, QGuestAllocator *alloc)
 
 static void serial_hotplug(void *obj, void *data, QGuestAllocator *alloc)
 {
-    qtest_qmp_device_add("virtserialport", "hp-port", "{}");
-    qtest_qmp_device_del("hp-port");
+    qtest_qmp_device_add(global_qtest, "virtserialport", "hp-port", "{}");
+    qtest_qmp_device_del(global_qtest, "hp-port");
 }
 
 static void register_virtio_serial_test(void)

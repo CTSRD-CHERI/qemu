@@ -294,6 +294,7 @@ static int qemu_nbd_client_list(SocketAddress *saddr, QCryptoTLSCreds *tls,
                 [NBD_FLAG_CAN_MULTI_CONN_BIT]       = "multi",
                 [NBD_FLAG_SEND_RESIZE_BIT]          = "resize",
                 [NBD_FLAG_SEND_CACHE_BIT]           = "cache",
+                [NBD_FLAG_SEND_FAST_ZERO_BIT]       = "fast-zero",
             };
 
             printf("  size:  %" PRIu64 "\n", list[i].size);
@@ -362,7 +363,7 @@ static void *nbd_client_thread(void *arg)
         goto out;
     }
 
-    ret = nbd_receive_negotiate(QIO_CHANNEL(sioc),
+    ret = nbd_receive_negotiate(NULL, QIO_CHANNEL(sioc),
                                 NULL, NULL, NULL, &info, &local_error);
     if (ret < 0) {
         if (local_error) {
@@ -506,6 +507,13 @@ static QemuOptsList qemu_object_opts = {
     },
 };
 
+static bool qemu_nbd_object_print_help(const char *type, QemuOpts *opts)
+{
+    if (user_creatable_print_help(type, opts)) {
+        exit(0);
+    }
+    return true;
+}
 
 
 static QCryptoTLSCreds *nbd_get_tls_creds(const char *id, bool list,
@@ -600,7 +608,7 @@ int main(int argc, char **argv)
     BlockBackend *blk;
     BlockDriverState *bs;
     uint64_t dev_offset = 0;
-    uint16_t nbdflags = 0;
+    bool readonly = false;
     bool disconnect = false;
     const char *bindto = NULL;
     const char *port = NULL;
@@ -782,7 +790,7 @@ int main(int argc, char **argv)
             }
             /* fall through */
         case 'r':
-            nbdflags |= NBD_FLAG_READ_ONLY;
+            readonly = true;
             flags &= ~BDRV_O_RDWR;
             break;
         case 'P':
@@ -825,9 +833,18 @@ int main(int argc, char **argv)
             break;
         case 'x':
             export_name = optarg;
+            if (strlen(export_name) > NBD_MAX_STRING_SIZE) {
+                error_report("export name '%s' too long", export_name);
+                exit(EXIT_FAILURE);
+            }
             break;
         case 'D':
             export_description = optarg;
+            if (strlen(export_description) > NBD_MAX_STRING_SIZE) {
+                error_report("export description '%s' too long",
+                             export_description);
+                exit(EXIT_FAILURE);
+            }
             break;
         case 'v':
             verbose = 1;
@@ -901,7 +918,7 @@ int main(int argc, char **argv)
 
     qemu_opts_foreach(&qemu_object_opts,
                       user_creatable_add_opts_foreach,
-                      NULL, &error_fatal);
+                      qemu_nbd_object_print_help, &error_fatal);
 
     if (!trace_init_backends()) {
         exit(1);
@@ -1054,7 +1071,7 @@ int main(int argc, char **argv)
     server = qio_net_listener_new();
     if (socket_activation == 0) {
         saddr = nbd_build_socket_address(sockpath, bindto, port);
-        if (qio_net_listener_open_sync(server, saddr, &local_err) < 0) {
+        if (qio_net_listener_open_sync(server, saddr, 1, &local_err) < 0) {
             object_unref(OBJECT(server));
             error_report_err(local_err);
             exit(EXIT_FAILURE);
@@ -1173,7 +1190,7 @@ int main(int argc, char **argv)
     }
 
     export = nbd_export_new(bs, dev_offset, fd_size, export_name,
-                            export_description, bitmap, nbdflags,
+                            export_description, bitmap, readonly, shared > 1,
                             nbd_export_closed, writethrough, NULL,
                             &error_fatal);
 

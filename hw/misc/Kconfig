@@ -117,4 +117,12 @@ config AUX
     bool
     select I2C
 
+config UNIMP
+    bool
+
+config MAC_VIA
+    bool
+    select MOS6522
+    select ADB
+
 source macio/Kconfig

@@ -21,18 +21,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include "qemu/osdep.h"
 #include "cpu.h"
-#include "hw/hw.h"
+#include "hw/irq.h"
 #include "hw/ppc/ppc.h"
 #include "hw/ppc/ppc_e500.h"
 #include "qemu/timer.h"
-#include "sysemu/sysemu.h"
 #include "sysemu/cpus.h"
 #include "qemu/log.h"
+#include "qemu/main-loop.h"
 #include "qemu/error-report.h"
 #include "sysemu/kvm.h"
+#include "sysemu/runstate.h"
 #include "kvm_ppc.h"
+#include "migration/vmstate.h"
 #include "trace.h"
 
 //#define PPC_DEBUG_IRQ
@@ -1008,6 +1011,8 @@ static void timebase_save(PPCTimebase *tb)
      * there is no need to update it from KVM here
      */
     tb->guest_timebase = ticks + first_ppc_cpu->env.tb_env->tb_offset;
+
+    tb->runstate_paused = runstate_check(RUN_STATE_PAUSED);
 }
 
 static void timebase_load(PPCTimebase *tb)
@@ -1051,9 +1056,9 @@ void cpu_ppc_clock_vm_state_change(void *opaque, int running,
 }
 
 /*
- * When migrating, read the clock just before migration,
- * so that the guest clock counts during the events
- * between:
+ * When migrating a running guest, read the clock just
+ * before migration, so that the guest clock counts
+ * during the events between:
  *
  *  * vm_stop()
  *  *
@@ -1068,7 +1073,10 @@ static int timebase_pre_save(void *opaque)
 {
     PPCTimebase *tb = opaque;
 
-    timebase_save(tb);
+    /* guest_timebase won't be overridden in case of paused guest */
+    if (!tb->runstate_paused) {
+        timebase_save(tb);
+    }
 
     return 0;
 }

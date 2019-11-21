@@ -23,13 +23,14 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "monitor/monitor.h"
-#include "hw/hw.h"
 #include "hw/i386/pc.h"
 #include "hw/i386/apic.h"
 #include "hw/i386/ioapic.h"
 #include "hw/i386/ioapic_internal.h"
 #include "hw/pci/msi.h"
+#include "hw/qdev-properties.h"
 #include "sysemu/kvm.h"
+#include "sysemu/sysemu.h"
 #include "hw/i386/apic-msidef.h"
 #include "hw/i386/x86-iommu.h"
 #include "trace.h"
@@ -88,7 +89,7 @@ static void ioapic_entry_parse(uint64_t entry, struct ioapic_entry_info *info)
 
 static void ioapic_service(IOAPICCommonState *s)
 {
-    AddressSpace *ioapic_as = PC_MACHINE(qdev_get_machine())->ioapic_as;
+    AddressSpace *ioapic_as = X86_MACHINE(qdev_get_machine())->ioapic_as;
     struct ioapic_entry_info info;
     uint8_t i;
     uint32_t mask;

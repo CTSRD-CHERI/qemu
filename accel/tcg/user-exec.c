@@ -188,6 +188,38 @@ static inline int handle_cpu_signal(uintptr_t pc, siginfo_t *info,
     g_assert_not_reached();
 }
 
+void *probe_access(CPUArchState *env, target_ulong addr, int size,
+                   MMUAccessType access_type, int mmu_idx, uintptr_t retaddr)
+{
+    int flags;
+
+    g_assert(-(addr | TARGET_PAGE_MASK) >= size);
+
+    switch (access_type) {
+    case MMU_DATA_STORE:
+        flags = PAGE_WRITE;
+        break;
+    case MMU_DATA_LOAD:
+        flags = PAGE_READ;
+        break;
+    case MMU_INST_FETCH:
+        flags = PAGE_EXEC;
+        break;
+    default:
+        g_assert_not_reached();
+    }
+
+    if (!guest_addr_valid(addr) || page_check_range(addr, size, flags) < 0) {
+        CPUState *cpu = env_cpu(env);
+        CPUClass *cc = CPU_GET_CLASS(cpu);
+        cc->tlb_fill(cpu, addr, size, access_type, MMU_USER_IDX, false,
+                     retaddr);
+        g_assert_not_reached();
+    }
+
+    return size ? g2h(addr) : NULL;
+}
+
 #if defined(__i386__)
 
 #if defined(__NetBSD__)
@@ -719,9 +751,12 @@ static void *atomic_mmu_lookup(CPUArchState *env, target_ulong addr,
 #define ATOMIC_MMU_DECLS do {} while (0)
 #define ATOMIC_MMU_LOOKUP  atomic_mmu_lookup(env, addr, DATA_SIZE, GETPC())
 #define ATOMIC_MMU_CLEANUP do { clear_helper_retaddr(); } while (0)
+#define ATOMIC_MMU_IDX MMU_USER_IDX
 
 #define ATOMIC_NAME(X)   HELPER(glue(glue(atomic_ ## X, SUFFIX), END))
 #define EXTRA_ARGS
+
+#include "atomic_common.inc.c"
 
 #define DATA_SIZE 1
 #include "atomic_template.h"

@@ -23,6 +23,8 @@
 #include "cpu.h"
 #include "qemu/cutils.h"
 #include "qemu/bswap.h"
+#include "sysemu/reset.h"
+#include "sysemu/runstate.h"
 #include "sysemu/sysemu.h"
 #include "hw/arm/omap.h"
 #include "hw/arm/boot.h"
@@ -34,6 +36,7 @@
 #include "hw/input/tsc2xxx.h"
 #include "hw/misc/cbus.h"
 #include "hw/misc/tmp105.h"
+#include "hw/qdev-properties.h"
 #include "hw/block/flash.h"
 #include "hw/hw.h"
 #include "hw/bt.h"
@@ -44,6 +47,7 @@
 
 /* Nokia N8x0 support */
 struct n800_s {
+    MemoryRegion sdram;
     struct omap_mpu_state_s *mpu;
 
     struct rfbi_chip_s blizzard;
@@ -1308,11 +1312,14 @@ static int n810_atag_setup(const struct arm_boot_info *info, void *p)
 static void n8x0_init(MachineState *machine,
                       struct arm_boot_info *binfo, int model)
 {
-    MemoryRegion *sysmem = get_system_memory();
     struct n800_s *s = (struct n800_s *) g_malloc0(sizeof(*s));
-    int sdram_size = binfo->ram_size;
+    uint64_t sdram_size = binfo->ram_size;
 
-    s->mpu = omap2420_mpu_init(sysmem, sdram_size, machine->cpu_type);
+    memory_region_allocate_system_memory(&s->sdram, NULL, "omap2.dram",
+                                         sdram_size);
+    memory_region_add_subregion(get_system_memory(), OMAP2_Q2_BASE, &s->sdram);
+
+    s->mpu = omap2420_mpu_init(&s->sdram, machine->cpu_type);
 
     /* Setup peripherals
      *
@@ -1358,10 +1365,7 @@ static void n8x0_init(MachineState *machine,
 
     if (machine->kernel_filename) {
         /* Or at the linux loader.  */
-        binfo->kernel_filename = machine->kernel_filename;
-        binfo->kernel_cmdline = machine->kernel_cmdline;
-        binfo->initrd_filename = machine->initrd_filename;
-        arm_load_kernel(s->mpu->cpu, binfo);
+        arm_load_kernel(s->mpu->cpu, machine, binfo);
 
         qemu_register_reset(n8x0_boot_init, s);
     }

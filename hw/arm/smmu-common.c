@@ -17,11 +17,10 @@
  */
 
 #include "qemu/osdep.h"
-#include "sysemu/sysemu.h"
 #include "exec/address-spaces.h"
 #include "trace.h"
 #include "exec/target_page.h"
-#include "qom/cpu.h"
+#include "hw/core/cpu.h"
 #include "hw/qdev-properties.h"
 #include "qapi/error.h"
 #include "qemu/jhash.h"

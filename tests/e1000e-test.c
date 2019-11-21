@@ -26,7 +26,7 @@
 
 #include "qemu/osdep.h"
 #include "qemu-common.h"
-#include "libqtest.h"
+#include "libqtest-single.h"
 #include "qemu-common.h"
 #include "libqos/pci-pc.h"
 #include "qemu/sockets.h"
@@ -235,7 +235,7 @@ static void test_e1000e_hotplug(void *obj, void *data, QGuestAllocator * alloc)
 {
     QTestState *qts = global_qtest;  /* TODO: get rid of global_qtest here */
 
-    qtest_qmp_device_add("e1000e", "e1000e_net", "{'addr': '0x06'}");
+    qtest_qmp_device_add(qts, "e1000e", "e1000e_net", "{'addr': '0x06'}");
     qpci_unplug_acpi_device_test(qts, "e1000e_net", 0x06);
 }
 

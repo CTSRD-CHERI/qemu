@@ -34,15 +34,21 @@
 
 typedef struct SpaprPhbState SpaprPhbState;
 
-typedef struct spapr_pci_msi {
+typedef struct SpaprPciMsi {
     uint32_t first_irq;
     uint32_t num;
-} spapr_pci_msi;
+} SpaprPciMsi;
 
-typedef struct spapr_pci_msi_mig {
+typedef struct SpaprPciMsiMig {
     uint32_t key;
-    spapr_pci_msi value;
-} spapr_pci_msi_mig;
+    SpaprPciMsi value;
+} SpaprPciMsiMig;
+
+typedef struct SpaprPciLsi {
+    uint32_t irq;
+} SpaprPciLsi;
+
+typedef struct SpaprPhbPciNvGpuConfig SpaprPhbPciNvGpuConfig;
 
 struct SpaprPhbState {
     PCIHostState parent_obj;
@@ -63,14 +69,12 @@ struct SpaprPhbState {
     AddressSpace iommu_as;
     MemoryRegion iommu_root;
 
-    struct spapr_pci_lsi {
-        uint32_t irq;
-    } lsi_table[PCI_NUM_PINS];
+    SpaprPciLsi lsi_table[PCI_NUM_PINS];
 
     GHashTable *msi;
     /* Temporary cache for migration purposes */
     int32_t msi_devs_num;
-    spapr_pci_msi_mig *msi_devs;
+    SpaprPciMsiMig *msi_devs;
 
     QLIST_ENTRY(SpaprPhbState) list;
 
@@ -89,7 +93,7 @@ struct SpaprPhbState {
     hwaddr mig_io_win_addr, mig_io_win_size;
     hwaddr nv2_gpa_win_addr;
     hwaddr nv2_atsd_win_addr;
-    struct spapr_phb_pci_nvgpu_config *nvgpus;
+    SpaprPhbPciNvGpuConfig *nvgpus;
 };
 
 #define SPAPR_PCI_MEM_WIN_BUS_OFFSET 0x80000000ULL
@@ -124,15 +128,8 @@ struct SpaprPhbState {
 #define SPAPR_PCI_NV2ATSD_WIN_SIZE   (NVGPU_MAX_NUM * NVGPU_MAX_LINKS * \
                                       64 * KiB)
 
-static inline qemu_irq spapr_phb_lsi_qirq(struct SpaprPhbState *phb, int pin)
-{
-    SpaprMachineState *spapr = SPAPR_MACHINE(qdev_get_machine());
-
-    return spapr_qirq(spapr, phb->lsi_table[pin].irq);
-}
-
-int spapr_dt_phb(SpaprPhbState *phb, uint32_t intc_phandle, void *fdt,
-                 uint32_t nr_msis, int *node_offset);
+int spapr_dt_phb(SpaprMachineState *spapr, SpaprPhbState *phb,
+                 uint32_t intc_phandle, void *fdt, int *node_offset);
 
 void spapr_pci_rtas_init(void);
 

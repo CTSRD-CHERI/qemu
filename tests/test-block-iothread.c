@@ -28,6 +28,7 @@
 #include "sysemu/block-backend.h"
 #include "qapi/error.h"
 #include "qapi/qmp/qdict.h"
+#include "qemu/main-loop.h"
 #include "iothread.h"
 
 static int coroutine_fn bdrv_test_co_prwv(BlockDriverState *bs,
@@ -44,7 +45,7 @@ static int coroutine_fn bdrv_test_co_pdiscard(BlockDriverState *bs,
 }
 
 static int coroutine_fn
-bdrv_test_co_truncate(BlockDriverState *bs, int64_t offset,
+bdrv_test_co_truncate(BlockDriverState *bs, int64_t offset, bool exact,
                       PreallocMode prealloc, Error **errp)
 {
     return 0;
@@ -184,18 +185,18 @@ static void test_sync_op_truncate(BdrvChild *c)
     int ret;
 
     /* Normal success path */
-    ret = bdrv_truncate(c, 65536, PREALLOC_MODE_OFF, NULL);
+    ret = bdrv_truncate(c, 65536, false, PREALLOC_MODE_OFF, NULL);
     g_assert_cmpint(ret, ==, 0);
 
     /* Early error: Negative offset */
-    ret = bdrv_truncate(c, -2, PREALLOC_MODE_OFF, NULL);
+    ret = bdrv_truncate(c, -2, false, PREALLOC_MODE_OFF, NULL);
     g_assert_cmpint(ret, ==, -EINVAL);
 
     /* Error: Read-only image */
     c->bs->read_only = true;
     c->bs->open_flags &= ~BDRV_O_RDWR;
 
-    ret = bdrv_truncate(c, 65536, PREALLOC_MODE_OFF, NULL);
+    ret = bdrv_truncate(c, 65536, false, PREALLOC_MODE_OFF, NULL);
     g_assert_cmpint(ret, ==, -EACCES);
 
     c->bs->read_only = false;
@@ -400,7 +401,6 @@ BlockJobDriver test_job_driver = {
         .instance_size  = sizeof(TestBlockJob),
         .free           = block_job_free,
         .user_resume    = block_job_user_resume,
-        .drain          = block_job_drain,
         .run            = test_job_run,
         .complete       = test_job_complete,
         .prepare        = test_job_prepare,
@@ -611,7 +611,7 @@ static void test_propagate_mirror(void)
 
     /* Start a mirror job */
     mirror_start("job0", src, target, NULL, JOB_DEFAULT, 0, 0, 0,
-                 MIRROR_SYNC_MODE_NONE, MIRROR_OPEN_BACKING_CHAIN,
+                 MIRROR_SYNC_MODE_NONE, MIRROR_OPEN_BACKING_CHAIN, false,
                  BLOCKDEV_ON_ERROR_REPORT, BLOCKDEV_ON_ERROR_REPORT,
                  false, "filter_node", MIRROR_COPY_MODE_BACKGROUND,
                  &error_abort);

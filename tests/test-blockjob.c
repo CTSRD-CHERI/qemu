@@ -15,13 +15,13 @@
 #include "qemu/main-loop.h"
 #include "block/blockjob_int.h"
 #include "sysemu/block-backend.h"
+#include "qapi/qmp/qdict.h"
 
 static const BlockJobDriver test_block_job_driver = {
     .job_driver = {
         .instance_size = sizeof(BlockJob),
         .free          = block_job_free,
         .user_resume   = block_job_user_resume,
-        .drain         = block_job_drain,
     },
 };
 
@@ -71,7 +71,9 @@ static BlockBackend *create_blk(const char *name)
     BlockBackend *blk = blk_new(qemu_get_aio_context(), 0, BLK_PERM_ALL);
     BlockDriverState *bs;
 
-    bs = bdrv_open("null-co://", NULL, NULL, 0, &error_abort);
+    QDict *opt = qdict_new();
+    qdict_put_str(opt, "file.read-zeroes", "on");
+    bs = bdrv_open("null-co://", NULL, opt, 0, &error_abort);
     g_assert_nonnull(bs);
 
     blk_insert_bs(blk, bs, &error_abort);
@@ -193,7 +195,6 @@ static const BlockJobDriver test_cancel_driver = {
         .instance_size = sizeof(CancelJob),
         .free          = block_job_free,
         .user_resume   = block_job_user_resume,
-        .drain         = block_job_drain,
         .run           = cancel_job_run,
         .complete      = cancel_job_complete,
     },

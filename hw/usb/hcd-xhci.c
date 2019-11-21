@@ -20,12 +20,13 @@
  */
 
 #include "qemu/osdep.h"
-#include "hw/hw.h"
 #include "qemu/timer.h"
 #include "qemu/module.h"
 #include "qemu/queue.h"
 #include "hw/usb.h"
+#include "migration/vmstate.h"
 #include "hw/pci/pci.h"
+#include "hw/qdev-properties.h"
 #include "hw/pci/msi.h"
 #include "hw/pci/msix.h"
 #include "trace.h"
@@ -1913,6 +1914,7 @@ static void xhci_kick_epctx(XHCIEPContext *epctx, unsigned int streamid)
             }
             usb_handle_packet(xfer->packet.ep->dev, &xfer->packet);
             if (xfer->packet.status == USB_RET_NAK) {
+                xhci_xfer_unmap(xfer);
                 return;
             }
             xhci_try_complete_packet(xfer);
@@ -2160,6 +2162,7 @@ static TRBCCode xhci_address_slot(XHCIState *xhci, unsigned int slotid,
                                   DeviceOutRequest | USB_REQ_SET_ADDRESS,
                                   slotid, 0, 0, NULL);
         assert(p.status != USB_RET_ASYNC);
+        usb_packet_cleanup(&p);
     }
 
     res = xhci_enable_ep(xhci, slotid, 1, octx+32, ep0_ctx);
@@ -2541,6 +2544,9 @@ static void xhci_process_commands(XHCIState *xhci)
             break;
         case CR_GET_PORT_BANDWIDTH:
             event.ccode = xhci_get_port_bandwidth(xhci, trb.parameter);
+            break;
+        case CR_NOOP:
+            event.ccode = CC_SUCCESS;
             break;
         case CR_VENDOR_NEC_FIRMWARE_REVISION:
             if (xhci->nec_quirks) {

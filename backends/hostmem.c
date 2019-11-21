@@ -12,6 +12,7 @@
 
 #include "qemu/osdep.h"
 #include "sysemu/hostmem.h"
+#include "sysemu/sysemu.h"
 #include "hw/boards.h"
 #include "qapi/error.h"
 #include "qapi/qapi-builtin-visit.h"
@@ -303,7 +304,7 @@ size_t host_memory_backend_pagesize(HostMemoryBackend *memdev)
 #else
 size_t host_memory_backend_pagesize(HostMemoryBackend *memdev)
 {
-    return getpagesize();
+    return qemu_real_host_page_size;
 }
 #endif
 

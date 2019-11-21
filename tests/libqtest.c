@@ -35,14 +35,13 @@
 #define SOCKET_TIMEOUT 50
 #define SOCKET_MAX_FDS 16
 
-QTestState *global_qtest;
-
 struct QTestState
 {
     int fd;
     int qmp_fd;
     pid_t qemu_pid;  /* our child QEMU process */
     int wstatus;
+    int expected_status;
     bool big_endian;
     bool irq_level[MAX_IRQ];
     GString *rx;
@@ -113,6 +112,11 @@ bool qtest_probe_child(QTestState *s)
     return false;
 }
 
+void qtest_set_expected_status(QTestState *s, int status)
+{
+    s->expected_status = status;
+}
+
 static void kill_qemu(QTestState *s)
 {
     pid_t pid = s->qemu_pid;
@@ -126,24 +130,23 @@ static void kill_qemu(QTestState *s)
     }
 
     /*
-     * We expect qemu to exit with status 0; anything else is
+     * Check whether qemu exited with expected exit status; anything else is
      * fishy and should be logged with as much detail as possible.
      */
     wstatus = s->wstatus;
-    if (wstatus) {
-        if (WIFEXITED(wstatus)) {
-            fprintf(stderr, "%s:%d: kill_qemu() tried to terminate QEMU "
-                    "process but encountered exit status %d\n",
-                    __FILE__, __LINE__, WEXITSTATUS(wstatus));
-        } else if (WIFSIGNALED(wstatus)) {
-            int sig = WTERMSIG(wstatus);
-            const char *signame = strsignal(sig) ?: "unknown ???";
-            const char *dump = WCOREDUMP(wstatus) ? " (core dumped)" : "";
+    if (WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != s->expected_status) {
+        fprintf(stderr, "%s:%d: kill_qemu() tried to terminate QEMU "
+                "process but encountered exit status %d (expected %d)\n",
+                __FILE__, __LINE__, WEXITSTATUS(wstatus), s->expected_status);
+        abort();
+    } else if (WIFSIGNALED(wstatus)) {
+        int sig = WTERMSIG(wstatus);
+        const char *signame = strsignal(sig) ?: "unknown ???";
+        const char *dump = WCOREDUMP(wstatus) ? " (core dumped)" : "";
 
-            fprintf(stderr, "%s:%d: kill_qemu() detected QEMU death "
-                    "from signal %d (%s)%s\n",
-                    __FILE__, __LINE__, sig, signame, dump);
-        }
+        fprintf(stderr, "%s:%d: kill_qemu() detected QEMU death "
+                "from signal %d (%s)%s\n",
+                __FILE__, __LINE__, sig, signame, dump);
         abort();
     }
 }
@@ -238,7 +241,7 @@ QTestState *qtest_init_without_qmp_handshake(const char *extra_args)
                               "-qtest-log %s "
                               "-chardev socket,path=%s,id=char0 "
                               "-mon chardev=char0,mode=control "
-                              "-machine accel=qtest "
+                              "-accel qtest "
                               "-display none "
                               "%s", qemu_binary, socket_path,
                               getenv("QTEST_LOG") ? "/dev/fd/2" : "/dev/null",
@@ -248,6 +251,7 @@ QTestState *qtest_init_without_qmp_handshake(const char *extra_args)
     g_test_message("starting QEMU: %s", command);
 
     s->wstatus = 0;
+    s->expected_status = 0;
     s->qemu_pid = fork();
     if (s->qemu_pid == 0) {
         setenv("QEMU_AUDIO_DRV", "none", true);
@@ -811,6 +815,12 @@ bool qtest_get_irq(QTestState *s, int num)
     return s->irq_level[num];
 }
 
+void qtest_module_load(QTestState *s, const char *prefix, const char *libname)
+{
+    qtest_sendf(s, "module_load %s %s\n", prefix, libname);
+    qtest_rsp(s, 0);
+}
+
 static int64_t qtest_clock_rsp(QTestState *s)
 {
     gchar **words;
@@ -1100,24 +1110,13 @@ void qtest_memset(QTestState *s, uint64_t addr, uint8_t pattern, size_t size)
     qtest_rsp(s, 0);
 }
 
-QDict *qmp(const char *fmt, ...)
+void qtest_qmp_assert_success(QTestState *qts, const char *fmt, ...)
 {
     va_list ap;
     QDict *response;
 
     va_start(ap, fmt);
-    response = qtest_vqmp(global_qtest, fmt, ap);
-    va_end(ap);
-    return response;
-}
-
-void qmp_assert_success(const char *fmt, ...)
-{
-    va_list ap;
-    QDict *response;
-
-    va_start(ap, fmt);
-    response = qtest_vqmp(global_qtest, fmt, ap);
+    response = qtest_vqmp(qts, fmt, ap);
     va_end(ap);
 
     g_assert(response);
@@ -1128,17 +1127,6 @@ void qmp_assert_success(const char *fmt, ...)
     }
     g_assert(qdict_haskey(response, "return"));
     qobject_unref(response);
-}
-
-char *hmp(const char *fmt, ...)
-{
-    va_list ap;
-    char *ret;
-
-    va_start(ap, fmt);
-    ret = qtest_vhmp(global_qtest, fmt, ap);
-    va_end(ap);
-    return ret;
 }
 
 bool qtest_big_endian(QTestState *s)
@@ -1200,9 +1188,10 @@ void qtest_cb_for_every_machine(void (*cb)(const char *machine),
     QObject *qobj;
     QString *qstr;
     const char *mname;
+    QTestState *qts;
 
-    qtest_start("-machine none");
-    response = qmp("{ 'execute': 'query-machines' }");
+    qts = qtest_init("-machine none");
+    response = qtest_qmp(qts, "{ 'execute': 'query-machines' }");
     g_assert(response);
     list = qdict_get_qlist(response, "return");
     g_assert(list);
@@ -1220,7 +1209,7 @@ void qtest_cb_for_every_machine(void (*cb)(const char *machine),
         }
     }
 
-    qtest_end();
+    qtest_quit(qts);
     qobject_unref(response);
 }
 
@@ -1254,27 +1243,38 @@ QDict *qtest_qmp_receive_success(QTestState *s,
 }
 
 /*
- * Generic hot-plugging test via the device_add QMP command.
+ * Generic hot-plugging test via the device_add QMP commands.
  */
-void qtest_qmp_device_add(const char *driver, const char *id,
+void qtest_qmp_device_add_qdict(QTestState *qts, const char *drv,
+                                const QDict *arguments)
+{
+    QDict *resp;
+    QDict *args = arguments ? qdict_clone_shallow(arguments) : qdict_new();
+
+    g_assert(!qdict_haskey(args, "driver"));
+    qdict_put_str(args, "driver", drv);
+    resp = qtest_qmp(qts, "{'execute': 'device_add', 'arguments': %p}", args);
+    g_assert(resp);
+    g_assert(!qdict_haskey(resp, "event")); /* We don't expect any events */
+    g_assert(!qdict_haskey(resp, "error"));
+    qobject_unref(resp);
+}
+
+void qtest_qmp_device_add(QTestState *qts, const char *driver, const char *id,
                           const char *fmt, ...)
 {
-    QDict *args, *response;
+    QDict *args;
     va_list ap;
 
     va_start(ap, fmt);
     args = qdict_from_vjsonf_nofail(fmt, ap);
     va_end(ap);
 
-    g_assert(!qdict_haskey(args, "driver") && !qdict_haskey(args, "id"));
-    qdict_put_str(args, "driver", driver);
+    g_assert(!qdict_haskey(args, "id"));
     qdict_put_str(args, "id", id);
 
-    response = qmp("{'execute': 'device_add', 'arguments': %p}", args);
-    g_assert(response);
-    g_assert(!qdict_haskey(response, "event")); /* We don't expect any events */
-    g_assert(!qdict_haskey(response, "error"));
-    qobject_unref(response);
+    qtest_qmp_device_add_qdict(qts, driver, args);
+    qobject_unref(args);
 }
 
 static void device_deleted_cb(void *opaque, const char *name, QDict *data)
@@ -1303,19 +1303,17 @@ static void device_deleted_cb(void *opaque, const char *name, QDict *data)
  *
  * But the order of arrival may vary - so we've got to detect both.
  */
-void qtest_qmp_device_del(const char *id)
+void qtest_qmp_device_del(QTestState *qts, const char *id)
 {
     bool got_event = false;
     QDict *rsp;
 
-    qtest_qmp_send(global_qtest,
-                   "{'execute': 'device_del', 'arguments': {'id': %s}}",
+    qtest_qmp_send(qts, "{'execute': 'device_del', 'arguments': {'id': %s}}",
                    id);
-    rsp = qtest_qmp_receive_success(global_qtest, device_deleted_cb,
-                                    &got_event);
+    rsp = qtest_qmp_receive_success(qts, device_deleted_cb, &got_event);
     qobject_unref(rsp);
     if (!got_event) {
-        rsp = qtest_qmp_receive(global_qtest);
+        rsp = qtest_qmp_receive(qts);
         g_assert_cmpstr(qdict_get_try_str(rsp, "event"),
                         ==, "DEVICE_DELETED");
         qobject_unref(rsp);

@@ -8,7 +8,7 @@
  */
 
 #include "qemu/osdep.h"
-#include "libqtest.h"
+#include "libqtest-single.h"
 #include "qemu/module.h"
 #include "libqos/usb.h"
 #include "libqos/qgraph.h"
@@ -23,7 +23,7 @@ struct QOHCI_PCI {
 
 static void test_ohci_hotplug(void *obj, void *data, QGuestAllocator *alloc)
 {
-    usb_test_hotplug("ohci", "1", NULL);
+    usb_test_hotplug(global_qtest, "ohci", "1", NULL);
 }
 
 static void *ohci_pci_get_driver(void *obj, const char *interface)

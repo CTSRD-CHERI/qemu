@@ -24,6 +24,7 @@
 #include "hw/net/lan9118.h"
 #include "hw/char/serial.h"
 #include "sysemu/qtest.h"
+#include "sysemu/sysemu.h"
 
 /* Memory map for Kzm Emulation Baseboard:
  * 0x00000000-0x7fffffff See i.MX31 SOC for support
@@ -126,13 +127,10 @@ static void kzm_init(MachineState *machine)
     }
 
     kzm_binfo.ram_size = machine->ram_size;
-    kzm_binfo.kernel_filename = machine->kernel_filename;
-    kzm_binfo.kernel_cmdline = machine->kernel_cmdline;
-    kzm_binfo.initrd_filename = machine->initrd_filename;
     kzm_binfo.nb_cpus = 1;
 
     if (!qtest_enabled()) {
-        arm_load_kernel(&s->soc.cpu, &kzm_binfo);
+        arm_load_kernel(&s->soc.cpu, machine, &kzm_binfo);
     }
 }
 

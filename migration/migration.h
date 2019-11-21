@@ -14,11 +14,11 @@
 #ifndef QEMU_MIGRATION_H
 #define QEMU_MIGRATION_H
 
+#include "exec/cpu-common.h"
+#include "hw/qdev-core.h"
 #include "qapi/qapi-types-migration.h"
 #include "qemu/thread.h"
-#include "exec/cpu-common.h"
 #include "qemu/coroutine_int.h"
-#include "hw/qdev.h"
 #include "io/channel.h"
 #include "net/announce.h"
 
@@ -132,7 +132,6 @@ struct MigrationState
     DeviceState parent_obj;
 
     /*< public >*/
-    size_t bytes_xfer;
     QemuThread thread;
     QEMUBH *cleanup_bh;
     QEMUFile *to_dst_file;
@@ -206,6 +205,9 @@ struct MigrationState
 
     /* Flag set once the migration thread called bdrv_inactivate_all */
     bool block_inactive;
+
+    /* Migration is waiting for guest to unplug device */
+    QemuSemaphore wait_unplug_sem;
 
     /* Migration is paused due to pause-before-switchover */
     QemuSemaphore pause_sem;
@@ -291,6 +293,7 @@ bool migrate_postcopy_ram(void);
 bool migrate_zero_blocks(void);
 bool migrate_dirty_bitmaps(void);
 bool migrate_ignore_shared(void);
+bool migrate_validate_uuid(void);
 
 bool migrate_auto_converge(void);
 bool migrate_use_multifd(void);

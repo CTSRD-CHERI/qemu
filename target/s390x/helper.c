@@ -26,8 +26,8 @@
 #include "qemu/qemu-print.h"
 #include "hw/s390x/ioinst.h"
 #include "sysemu/hw_accel.h"
+#include "sysemu/runstate.h"
 #ifndef CONFIG_USER_ONLY
-#include "sysemu/sysemu.h"
 #include "sysemu/tcg.h"
 #endif
 
@@ -52,13 +52,23 @@ hwaddr s390_cpu_get_phys_page_debug(CPUState *cs, vaddr vaddr)
     target_ulong raddr;
     int prot;
     uint64_t asc = env->psw.mask & PSW_MASK_ASC;
+    uint64_t tec;
 
     /* 31-Bit mode */
     if (!(env->psw.mask & PSW_MASK_64)) {
         vaddr &= 0x7fffffff;
     }
 
-    if (mmu_translate(env, vaddr, MMU_INST_FETCH, asc, &raddr, &prot, false)) {
+    /* We want to read the code (e.g., see what we are single-stepping).*/
+    if (asc != PSW_ASC_HOME) {
+        asc = PSW_ASC_PRIMARY;
+    }
+
+    /*
+     * We want to read code even if IEP is active. Use MMU_DATA_LOAD instead
+     * of MMU_INST_FETCH.
+     */
+    if (mmu_translate(env, vaddr, MMU_DATA_LOAD, asc, &raddr, &prot, &tec)) {
         return -1;
     }
     return raddr;

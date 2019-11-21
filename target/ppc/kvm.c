@@ -27,7 +27,6 @@
 #include "cpu.h"
 #include "cpu-models.h"
 #include "qemu/timer.h"
-#include "sysemu/sysemu.h"
 #include "sysemu/hw_accel.h"
 #include "kvm_ppc.h"
 #include "sysemu/cpus.h"
@@ -37,7 +36,9 @@
 #include "hw/sysbus.h"
 #include "hw/ppc/spapr.h"
 #include "hw/ppc/spapr_cpu_core.h"
+#include "hw/hw.h"
 #include "hw/ppc/ppc.h"
+#include "migration/qemu-file-types.h"
 #include "sysemu/watchdog.h"
 #include "trace.h"
 #include "exec/gdbstub.h"
@@ -45,6 +46,7 @@
 #include "exec/ram_addr.h"
 #include "sysemu/hostmem.h"
 #include "qemu/cutils.h"
+#include "qemu/main-loop.h"
 #include "qemu/mmap-alloc.h"
 #include "elf.h"
 #include "sysemu/kvm_int.h"
@@ -56,7 +58,6 @@ const KVMCapabilityInfo kvm_arch_required_capabilities[] = {
 };
 
 static int cap_interrupt_unset;
-static int cap_interrupt_level;
 static int cap_segstate;
 static int cap_booke_sregs;
 static int cap_ppc_smt;
@@ -88,25 +89,6 @@ static int cap_large_decr;
 static uint32_t debug_inst_opcode;
 
 /*
- * XXX We have a race condition where we actually have a level triggered
- *     interrupt, but the infrastructure can't expose that yet, so the guest
- *     takes but ignores it, goes to sleep and never gets notified that there's
- *     still an interrupt pending.
- *
- *     As a quick workaround, let's just wake up again 20 ms after we injected
- *     an interrupt. That way we can assure that we're always reinjecting
- *     interrupts in case the guest swallowed them.
- */
-static QEMUTimer *idle_timer;
-
-static void kvm_kick_cpu(void *opaque)
-{
-    PowerPCCPU *cpu = opaque;
-
-    qemu_cpu_kick(CPU(cpu));
-}
-
-/*
  * Check whether we are running with KVM-PR (instead of KVM-HV).  This
  * should only be used for fallback tests - generally we should use
  * explicit capabilities for the features we want, rather than
@@ -118,14 +100,13 @@ static bool kvmppc_is_pr(KVMState *ks)
     return kvm_vm_check_extension(ks, KVM_CAP_PPC_GET_PVINFO) != 0;
 }
 
-static int kvm_ppc_register_host_cpu_type(MachineState *ms);
+static int kvm_ppc_register_host_cpu_type(void);
 static void kvmppc_get_cpu_characteristics(KVMState *s);
 static int kvmppc_get_dec_bits(void);
 
 int kvm_arch_init(MachineState *ms, KVMState *s)
 {
     cap_interrupt_unset = kvm_check_extension(s, KVM_CAP_PPC_UNSET_IRQ);
-    cap_interrupt_level = kvm_check_extension(s, KVM_CAP_PPC_IRQ_LEVEL);
     cap_segstate = kvm_check_extension(s, KVM_CAP_PPC_SEGSTATE);
     cap_booke_sregs = kvm_check_extension(s, KVM_CAP_PPC_BOOKE_SREGS);
     cap_ppc_smt_possible = kvm_vm_check_extension(s, KVM_CAP_PPC_SMT_POSSIBLE);
@@ -161,12 +142,12 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
      */
     cap_ppc_pvr_compat = false;
 
-    if (!cap_interrupt_level) {
-        fprintf(stderr, "KVM: Couldn't find level irq capability. Expect the "
-                        "VM to stall at times!\n");
+    if (!kvm_check_extension(s, KVM_CAP_PPC_IRQ_LEVEL)) {
+        error_report("KVM: Host kernel doesn't have level irq capability");
+        exit(1);
     }
 
-    kvm_ppc_register_host_cpu_type(ms);
+    kvm_ppc_register_host_cpu_type();
 
     return 0;
 }
@@ -430,7 +411,7 @@ void kvm_check_mmu(PowerPCCPU *cpu, Error **errp)
          * will be a normal mapping, not a special hugepage one used
          * for RAM.
          */
-        if (getpagesize() < 0x10000) {
+        if (qemu_real_host_page_size < 0x10000) {
             error_setg(errp,
                        "KVM can't supply 64kiB CI pages, which guest expects");
         }
@@ -490,8 +471,6 @@ int kvm_arch_init_vcpu(CPUState *cs)
         }
         return ret;
     }
-
-    idle_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, kvm_kick_cpu, cpu);
 
     switch (cenv->mmu_model) {
     case POWERPC_MMU_BOOKE206:
@@ -1014,6 +993,10 @@ int kvm_arch_put_registers(CPUState *cs, int level)
         }
 
         kvm_set_one_reg(cs, KVM_REG_PPC_TB_OFFSET, &env->tb_env->tb_offset);
+
+        if (level > KVM_PUT_RUNTIME_STATE) {
+            kvm_put_one_spr(cs, KVM_REG_PPC_DPDES, SPR_DPDES);
+        }
 #endif /* TARGET_PPC64 */
     }
 
@@ -1318,6 +1301,7 @@ int kvm_arch_get_registers(CPUState *cs)
         }
 
         kvm_get_one_reg(cs, KVM_REG_PPC_TB_OFFSET, &env->tb_env->tb_offset);
+        kvm_get_one_spr(cs, KVM_REG_PPC_DPDES, SPR_DPDES);
 #endif
     }
 
@@ -1332,7 +1316,7 @@ int kvmppc_set_interrupt(PowerPCCPU *cpu, int irq, int level)
         return 0;
     }
 
-    if (!kvm_enabled() || !cap_interrupt_unset || !cap_interrupt_level) {
+    if (!kvm_enabled() || !cap_interrupt_unset) {
         return 0;
     }
 
@@ -1349,49 +1333,7 @@ int kvmppc_set_interrupt(PowerPCCPU *cpu, int irq, int level)
 
 void kvm_arch_pre_run(CPUState *cs, struct kvm_run *run)
 {
-    PowerPCCPU *cpu = POWERPC_CPU(cs);
-    CPUPPCState *env = &cpu->env;
-    int r;
-    unsigned irq;
-
-    qemu_mutex_lock_iothread();
-
-    /*
-     * PowerPC QEMU tracks the various core input pins (interrupt,
-     * critical interrupt, reset, etc) in PPC-specific
-     * env->irq_input_state.
-     */
-    if (!cap_interrupt_level &&
-        run->ready_for_interrupt_injection &&
-        (cs->interrupt_request & CPU_INTERRUPT_HARD) &&
-        (env->irq_input_state & (1 << PPC_INPUT_INT)))
-    {
-        /*
-         * For now KVM disregards the 'irq' argument. However, in the
-         * future KVM could cache it in-kernel to avoid a heavyweight
-         * exit when reading the UIC.
-         */
-        irq = KVM_INTERRUPT_SET;
-
-        trace_kvm_injected_interrupt(irq);
-        r = kvm_vcpu_ioctl(cs, KVM_INTERRUPT, &irq);
-        if (r < 0) {
-            printf("cpu %d fail inject %x\n", cs->cpu_index, irq);
-        }
-
-        /* Always wake up soon in case the interrupt was level based */
-        timer_mod(idle_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) +
-                       (NANOSECONDS_PER_SECOND / 50));
-    }
-
-    /*
-     * We don't know if there are more interrupts pending after
-     * this. However, the guest will return to userspace in the course
-     * of handling this one anyways, so we will get a chance to
-     * deliver the rest.
-     */
-
-    qemu_mutex_unlock_iothread();
+    return;
 }
 
 MemTxAttrs kvm_arch_post_run(CPUState *cs, struct kvm_run *run)
@@ -2592,13 +2534,19 @@ PowerPCCPUClass *kvm_ppc_get_host_cpu_class(void)
     return pvr_pcc;
 }
 
-static int kvm_ppc_register_host_cpu_type(MachineState *ms)
+static void pseries_machine_class_fixup(ObjectClass *oc, void *opaque)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->default_cpu_type = TYPE_HOST_POWERPC_CPU;
+}
+
+static int kvm_ppc_register_host_cpu_type(void)
 {
     TypeInfo type_info = {
         .name = TYPE_HOST_POWERPC_CPU,
         .class_init = kvmppc_host_cpu_class_init,
     };
-    MachineClass *mc = MACHINE_GET_CLASS(ms);
     PowerPCCPUClass *pvr_pcc;
     ObjectClass *oc;
     DeviceClass *dc;
@@ -2610,10 +2558,9 @@ static int kvm_ppc_register_host_cpu_type(MachineState *ms)
     }
     type_info.parent = object_class_get_name(OBJECT_CLASS(pvr_pcc));
     type_register(&type_info);
-    if (object_dynamic_cast(OBJECT(ms), TYPE_SPAPR_MACHINE)) {
-        /* override TCG default cpu type with 'host' cpu model */
-        mc->default_cpu_type = TYPE_HOST_POWERPC_CPU;
-    }
+    /* override TCG default cpu type with 'host' cpu model */
+    object_class_foreach(pseries_machine_class_fixup, TYPE_SPAPR_MACHINE,
+                         false, NULL);
 
     oc = object_class_by_name(type_info.name);
     g_assert(oc);

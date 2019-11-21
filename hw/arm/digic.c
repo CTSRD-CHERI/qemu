@@ -24,6 +24,7 @@
 #include "qapi/error.h"
 #include "qemu/module.h"
 #include "hw/arm/digic.h"
+#include "hw/qdev-properties.h"
 #include "sysemu/sysemu.h"
 
 #define DIGIC4_TIMER_BASE(n)    (0xc0210000 + (n) * 0x100)
@@ -36,7 +37,8 @@ static void digic_init(Object *obj)
     int i;
 
     object_initialize_child(obj, "cpu", &s->cpu, sizeof(s->cpu),
-                            "arm946-" TYPE_ARM_CPU, &error_abort, NULL);
+                            ARM_CPU_TYPE_NAME("arm946"),
+                            &error_abort, NULL);
 
     for (i = 0; i < DIGIC4_NB_TIMERS; i++) {
 #define DIGIC_TIMER_NAME_MLEN    11

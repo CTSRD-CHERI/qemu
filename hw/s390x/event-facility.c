@@ -18,9 +18,9 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qemu/module.h"
-#include "sysemu/sysemu.h"
 
 #include "hw/s390x/sclp.h"
+#include "migration/vmstate.h"
 #include "hw/s390x/event-facility.h"
 
 typedef struct SCLPEventsBus {
@@ -376,9 +376,6 @@ static void command_handler(SCLPEventFacility *ef, SCCB *sccb, uint64_t code)
         break;
     case SCLP_CMD_WRITE_EVENT_MASK:
         write_event_mask(ef, sccb);
-        break;
-    default:
-        sccb->h.response_code = cpu_to_be16(SCLP_RC_INVALID_SCLP_COMMAND);
         break;
     }
 }

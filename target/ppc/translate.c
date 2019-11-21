@@ -26,6 +26,7 @@
 #include "tcg-op.h"
 #include "tcg-op-gvec.h"
 #include "qemu/host-utils.h"
+#include "qemu/main-loop.h"
 #include "exec/cpu_ldst.h"
 
 #include "exec/helper-proto.h"
@@ -162,7 +163,7 @@ struct DisasContext {
     int mem_idx;
     int access_type;
     /* Translation flags */
-    TCGMemOp default_tcg_memop_mask;
+    MemOp default_tcg_memop_mask;
 #if defined(TARGET_PPC64)
     bool sf_mode;
     bool has_cfar;
@@ -1860,7 +1861,6 @@ static void gen_darn(DisasContext *ctx)
             gen_helper_darn64(cpu_gpr[rD(ctx->opcode)]);
         }
         if (tb_cflags(ctx->base.tb) & CF_USE_ICOUNT) {
-            gen_io_end();
             gen_stop_exception(ctx);
         }
     }
@@ -3142,7 +3142,7 @@ static void gen_isync(DisasContext *ctx)
 
 #define MEMOP_GET_SIZE(x)  (1 << ((x) & MO_SIZE))
 
-static void gen_load_locked(DisasContext *ctx, TCGMemOp memop)
+static void gen_load_locked(DisasContext *ctx, MemOp memop)
 {
     TCGv gpr = cpu_gpr[rD(ctx->opcode)];
     TCGv t0 = tcg_temp_new();
@@ -3167,7 +3167,7 @@ LARX(lbarx, DEF_MEMOP(MO_UB))
 LARX(lharx, DEF_MEMOP(MO_UW))
 LARX(lwarx, DEF_MEMOP(MO_UL))
 
-static void gen_fetch_inc_conditional(DisasContext *ctx, TCGMemOp memop,
+static void gen_fetch_inc_conditional(DisasContext *ctx, MemOp memop,
                                       TCGv EA, TCGCond cond, int addend)
 {
     TCGv t = tcg_temp_new();
@@ -3193,7 +3193,7 @@ static void gen_fetch_inc_conditional(DisasContext *ctx, TCGMemOp memop,
     tcg_temp_free(u);
 }
 
-static void gen_ld_atomic(DisasContext *ctx, TCGMemOp memop)
+static void gen_ld_atomic(DisasContext *ctx, MemOp memop)
 {
     uint32_t gpr_FC = FC(ctx->opcode);
     TCGv EA = tcg_temp_new();
@@ -3306,7 +3306,7 @@ static void gen_ldat(DisasContext *ctx)
 }
 #endif
 
-static void gen_st_atomic(DisasContext *ctx, TCGMemOp memop)
+static void gen_st_atomic(DisasContext *ctx, MemOp memop)
 {
     uint32_t gpr_FC = FC(ctx->opcode);
     TCGv EA = tcg_temp_new();
@@ -3389,7 +3389,7 @@ static void gen_stdat(DisasContext *ctx)
 }
 #endif
 
-static void gen_conditional_store(DisasContext *ctx, TCGMemOp memop)
+static void gen_conditional_store(DisasContext *ctx, MemOp memop)
 {
     TCGLabel *l1 = gen_new_label();
     TCGLabel *l2 = gen_new_label();
@@ -3990,9 +3990,6 @@ static void gen_rfi(DisasContext *ctx)
     gen_update_cfar(ctx, ctx->base.pc_next - 4);
     gen_helper_rfi(cpu_env);
     gen_sync_exception(ctx);
-    if (tb_cflags(ctx->base.tb) & CF_USE_ICOUNT) {
-        gen_io_end();
-    }
 #endif
 }
 
@@ -4010,9 +4007,6 @@ static void gen_rfid(DisasContext *ctx)
     gen_update_cfar(ctx, ctx->base.pc_next - 4);
     gen_helper_rfid(cpu_env);
     gen_sync_exception(ctx);
-    if (tb_cflags(ctx->base.tb) & CF_USE_ICOUNT) {
-        gen_io_end();
-    }
 #endif
 }
 
@@ -4388,9 +4382,6 @@ static void gen_mtmsrd(DisasContext *ctx)
         /* Must stop the translation as machine state (may have) changed */
         /* Note that mtmsr is not always defined as context-synchronizing */
         gen_stop_exception(ctx);
-        if (tb_cflags(ctx->base.tb) & CF_USE_ICOUNT) {
-            gen_io_end();
-        }
     }
 #endif /* !defined(CONFIG_USER_ONLY) */
 }
@@ -4428,9 +4419,6 @@ static void gen_mtmsr(DisasContext *ctx)
         tcg_gen_mov_tl(msr, cpu_gpr[rS(ctx->opcode)]);
 #endif
         gen_helper_store_msr(cpu_env, msr);
-        if (tb_cflags(ctx->base.tb) & CF_USE_ICOUNT) {
-            gen_io_end();
-        }
         tcg_temp_free(msr);
         /* Must stop the translation as machine state (may have) changed */
         /* Note that mtmsr is not always defined as context-synchronizing */
@@ -7857,6 +7845,7 @@ static bool ppc_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cs,
 static void ppc_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
+    PowerPCCPU *cpu = POWERPC_CPU(cs);
     CPUPPCState *env = cs->env_ptr;
     opc_handler_t **table, *handler;
 
@@ -7864,17 +7853,15 @@ static void ppc_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     LOG_DISAS("nip=" TARGET_FMT_lx " super=%d ir=%d\n",
               ctx->base.pc_next, ctx->mem_idx, (int)msr_ir);
 
-    if (unlikely(need_byteswap(ctx))) {
-        ctx->opcode = bswap32(cpu_ldl_code(env, ctx->base.pc_next));
-    } else {
-        ctx->opcode = cpu_ldl_code(env, ctx->base.pc_next);
-    }
+    ctx->opcode = translator_ldl_swap(env, ctx->base.pc_next,
+                                      need_byteswap(ctx));
+
     LOG_DISAS("translate opcode %08x (%02x %02x %02x %02x) (%s)\n",
               ctx->opcode, opc1(ctx->opcode), opc2(ctx->opcode),
               opc3(ctx->opcode), opc4(ctx->opcode),
               ctx->le_mode ? "little" : "big");
     ctx->base.pc_next += 4;
-    table = env->opcodes;
+    table = cpu->opcodes;
     handler = table[opc1(ctx->opcode)];
     if (is_indirect_opcode(handler)) {
         table = ind_table(handler);

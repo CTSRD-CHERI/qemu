@@ -18,8 +18,8 @@
  */
 
 #include "qemu/osdep.h"
-#include "hw/qdev.h"
 #include "hw/sysbus.h"
+#include "monitor/hmp.h"
 #include "monitor/monitor.h"
 #include "monitor/qdev.h"
 #include "sysemu/arch_init.h"
@@ -32,8 +32,11 @@
 #include "qemu/help_option.h"
 #include "qemu/option.h"
 #include "qemu/qemu-print.h"
+#include "qemu/option_int.h"
 #include "sysemu/block-backend.h"
+#include "sysemu/sysemu.h"
 #include "migration/misc.h"
+#include "migration/migration.h"
 
 /*
  * Aliases were a bad idea from the start.  Let's keep them
@@ -561,13 +564,36 @@ void qdev_set_id(DeviceState *dev, const char *id)
     }
 }
 
+static int is_failover_device(void *opaque, const char *name, const char *value,
+                        Error **errp)
+{
+    if (strcmp(name, "failover_pair_id") == 0) {
+        QemuOpts *opts = (QemuOpts *)opaque;
+
+        if (qdev_should_hide_device(opts)) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static bool should_hide_device(QemuOpts *opts)
+{
+    if (qemu_opt_foreach(opts, is_failover_device, opts, NULL) == 0) {
+        return false;
+    }
+    return true;
+}
+
 DeviceState *qdev_device_add(QemuOpts *opts, Error **errp)
 {
     DeviceClass *dc;
     const char *driver, *path;
-    DeviceState *dev;
+    DeviceState *dev = NULL;
     BusState *bus = NULL;
     Error *err = NULL;
+    bool hide;
 
     driver = qemu_opt_get(opts, "driver");
     if (!driver) {
@@ -601,8 +627,14 @@ DeviceState *qdev_device_add(QemuOpts *opts, Error **errp)
             return NULL;
         }
     }
-    if (qdev_hotplug && bus && !qbus_is_hotpluggable(bus)) {
+    hide = should_hide_device(opts);
+
+    if ((hide || qdev_hotplug) && bus && !qbus_is_hotpluggable(bus)) {
         error_setg(errp, QERR_BUS_NO_HOTPLUG, bus->name);
+        return NULL;
+    }
+
+    if (hide) {
         return NULL;
     }
 
@@ -613,6 +645,13 @@ DeviceState *qdev_device_add(QemuOpts *opts, Error **errp)
 
     /* create device */
     dev = DEVICE(object_new(driver));
+
+    /* Check whether the hotplug is allowed by the machine */
+    if (qdev_hotplug && !qdev_hotplug_allowed(dev, &err)) {
+        /* Error must be set in the machine hook */
+        assert(err);
+        goto err_del_dev;
+    }
 
     if (bus) {
         qdev_set_parent_bus(dev, bus);
@@ -640,8 +679,10 @@ DeviceState *qdev_device_add(QemuOpts *opts, Error **errp)
 
 err_del_dev:
     error_propagate(errp, err);
-    object_unparent(OBJECT(dev));
-    object_unref(OBJECT(dev));
+    if (dev) {
+        object_unparent(OBJECT(dev));
+        object_unref(OBJECT(dev));
+    }
     return NULL;
 }
 
@@ -810,7 +851,7 @@ void qdev_unplug(DeviceState *dev, Error **errp)
         return;
     }
 
-    if (!migration_is_idle()) {
+    if (!migration_is_idle() && !dev->allow_unplug_during_migration) {
         error_setg(errp, "device_del not allowed while migrating");
         return;
     }
@@ -842,6 +883,23 @@ void qmp_device_del(const char *id, Error **errp)
     if (dev != NULL) {
         qdev_unplug(dev, errp);
     }
+}
+
+void hmp_device_add(Monitor *mon, const QDict *qdict)
+{
+    Error *err = NULL;
+
+    qmp_device_add((QDict *)qdict, NULL, &err);
+    hmp_handle_error(mon, &err);
+}
+
+void hmp_device_del(Monitor *mon, const QDict *qdict)
+{
+    const char *id = qdict_get_str(qdict, "id");
+    Error *err = NULL;
+
+    qmp_device_del(id, &err);
+    hmp_handle_error(mon, &err);
 }
 
 BlockBackend *blk_by_qdev_id(const char *id, Error **errp)
