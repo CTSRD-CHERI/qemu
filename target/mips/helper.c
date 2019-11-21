@@ -1526,7 +1526,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #endif /* TARGET_CHERI */
 #endif /* CONFIG_MIPS_LOG_INSTR */
-    if (qemu_loglevel_mask(CPU_LOG_INT)
+    if (qemu_loglevel_mask(CPU_LOG_INT | CPU_LOG_INSTR)
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
         qemu_log("%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
                  "    S %08x C %08x A " TARGET_FMT_lx " D " TARGET_FMT_lx "\n",
