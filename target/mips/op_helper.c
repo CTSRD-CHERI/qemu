@@ -3157,11 +3157,15 @@ static void set_pc(CPUMIPSState *env, target_ulong error_pc)
 #ifdef TARGET_CHERI
     env->active_tc.PCC = *error_pcc;
     target_ulong error_pc = cap_get_cursor(error_pcc);
-    assert((error_pc & (target_ulong)1) == 0 && "Micromips not supported on CHERI");
 #endif
     env->active_tc.PC = error_pc & ~(target_ulong)1;
     if (error_pc & 1) {
+#if defined(TARGET_CHERI)
+        warn_report("Got target pc with low bit set, but QEMU-CHERI does not"
+                    " support microMIPS: 0x%" PRIx64, error_pc);
+#else
         env->hflags |= MIPS_HFLAG_M16;
+#endif
     } else {
         env->hflags &= ~(MIPS_HFLAG_M16);
     }
