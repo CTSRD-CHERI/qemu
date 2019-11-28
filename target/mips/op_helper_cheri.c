@@ -92,6 +92,33 @@ const char *cp2_fault_causestr[] = {
 #define CHERI_HELPER_IMPL(name) \
     __attribute__((deprecated("Do not call the helper directly, it will crash at runtime. Call the _impl variant instead"))) helper_##name
 
+#if defined(CHERI_128) && !defined(CHERI_MAGIC128)
+
+extern bool cheri_c2e_on_unrepresentable;
+extern bool cheri_debugger_on_unrepresentable;
+
+static inline void
+_became_unrepresentable(CPUMIPSState *env, uint16_t reg, uintptr_t retpc)
+{
+    env->statcounters_unrepresentable_caps++;
+
+    if (cheri_debugger_on_unrepresentable)
+        helper_raise_exception_debug(env);
+
+    if (cheri_c2e_on_unrepresentable)
+        do_raise_c2_exception_impl(env, CP2Ca_INEXACT, reg, retpc);
+}
+
+#else
+
+static inline void
+_became_unrepresentable(CPUMIPSState *env, uint16_t reg, uintptr_t retpc)
+{
+    assert(false && "THIS SHOULD NOT BE CALLED");
+}
+
+#endif /* ! 128-bit capabilities */
+
 #ifdef DO_CHERI_STATISTICS
 
 struct bounds_bucket {
@@ -114,18 +141,28 @@ struct bounds_bucket bounds_buckets[] = {
     {64 * 1024 * 1024, "64M"},
 };
 
+struct oob_stats_info {
+    const char* operation;
+    uint64_t num_uses;
+    uint64_t unrepresentable; // Number of OOB caps that were unrepresentable
+    uint64_t after_bounds[ARRAY_SIZE(bounds_buckets) + 1]; // Number of OOB caps created pointing to after end
+    uint64_t before_bounds[ARRAY_SIZE(bounds_buckets) + 1];  // Number of OOB caps created pointing to before start
+};
+
 #define DEFINE_CHERI_STAT(op) \
-    static uint64_t stat_num_##op = 0; \
-    static uint64_t stat_num_##op##_after_bounds[ARRAY_SIZE(bounds_buckets) + 1]; \
-    static uint64_t stat_num_##op##_before_bounds[ARRAY_SIZE(bounds_buckets) + 1]; \
-    static uint64_t stat_num_##op##_out_of_bounds_unrep = 0;
+    static struct oob_stats_info oob_info_##op = { \
+        .operation = #op, \
+    };
+#define OOB_INFO(op) (&oob_info_##op)
 
 DEFINE_CHERI_STAT(cincoffset)
 DEFINE_CHERI_STAT(csetoffset)
+DEFINE_CHERI_STAT(csetaddr)
+DEFINE_CHERI_STAT(candaddr)
 DEFINE_CHERI_STAT(cgetpccsetoffset)
 DEFINE_CHERI_STAT(cfromptr)
 
-static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, cap_register_t* cr, const char* name)
+static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, const cap_register_t* cr, const char* name)
 {
     if (!cr->cr_tag)
         return 0;  // We don't care about arithmetic on untagged things
@@ -164,70 +201,75 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
     return ARRAY_SIZE(bounds_buckets); // more than 64MB
 }
 
-#define check_out_of_bounds_stat(env, op, capreg) do { \
-    int64_t howmuch = _howmuch_out_of_bounds(env, capreg, #op); \
-    if (howmuch > 0) { \
-        stat_num_##op##_after_bounds[out_of_bounds_stat_index(howmuch)]++; \
-    } else if (howmuch < 0) { \
-        stat_num_##op##_before_bounds[out_of_bounds_stat_index(llabs(howmuch))]++; \
-    } \
-} while (0)
+static inline void
+check_out_of_bounds_stat(CPUMIPSState *env, struct oob_stats_info *info,
+                         const cap_register_t* capreg) {
+    int64_t howmuch = _howmuch_out_of_bounds(env, capreg, info->operation);
+    if (howmuch > 0) {
+        info->after_bounds[out_of_bounds_stat_index(howmuch)]++;
+    } else if (howmuch < 0) {
+        info->before_bounds[out_of_bounds_stat_index(llabs(howmuch))]++;
+    }
+}
 
-// TODO: count how far it was out of bounds for this stat
-#define became_unrepresentable(env, reg, operation, retpc) do { \
-    /* unrepresentable implies more than one out of bounds: */ \
-    stat_num_##operation##_out_of_bounds_unrep++; \
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS, \
-         "BOUNDS: Unrepresentable capability created using %s, pc=%016" PRIx64 " ASID=%u\n", \
-        #operation, cap_get_cursor(&env->active_tc.PCC), (unsigned)(env->CP0_EntryHi & 0xFF)); \
-    _became_unrepresentable(env, reg, retpc); \
-} while (0)
+static inline void became_unrepresentable(CPUMIPSState *env, uint16_t reg,
+                                          struct oob_stats_info *info,
+                                          uintptr_t retpc) {
+    const cap_register_t *capreg = get_readonly_capreg(&env->active_tc, reg);
+    /* unrepresentable implies more than one out of bounds: */
+    check_out_of_bounds_stat(env, info, capreg);
+    info->unrepresentable++;
+    qemu_log_mask(
+        CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS,
+        "BOUNDS: Unrepresentable capability created using %s, pc=%016" PRIx64
+        " ASID=%u\n", info->operation, cap_get_cursor(&env->active_tc.PCC),
+        (unsigned)(env->CP0_EntryHi & 0xFF));
+    _became_unrepresentable(env, reg, retpc);
+}
 
-static void dump_out_of_bounds_stats(FILE* f, const char* name, uint64_t total,
-                                     uint64_t* after_bounds,
-                                     uint64_t* before_bounds,
-                                     uint64_t unrepresentable)
+static void dump_out_of_bounds_stats(FILE* f, const struct oob_stats_info *info)
 {
 
-    qemu_fprintf(f, "Number of %ss: %" PRIu64 "\n", name, total);
-    uint64_t total_out_of_bounds = after_bounds[0];
+    qemu_fprintf(f, "Number of %ss: %" PRIu64 "\n", info->operation, info->num_uses);
+    uint64_t total_out_of_bounds = info->after_bounds[0];
     // one past the end is fine according to ISO C
-    qemu_fprintf(f, "  One past the end:           %" PRIu64 "\n", after_bounds[0]);
+    qemu_fprintf(f, "  One past the end:           %" PRIu64 "\n", info->after_bounds[0]);
     assert(bounds_buckets[0].howmuch == 1);
     // All the others are invalid:
     for (int i = 1; i < ARRAY_SIZE(bounds_buckets); i++) {
-        qemu_fprintf(f, "  Out of bounds by up to %s: %" PRIu64 "\n", bounds_buckets[i].name, after_bounds[i]);
-        total_out_of_bounds += after_bounds[i];
+        qemu_fprintf(f, "  Out of bounds by up to %s: %" PRIu64 "\n", bounds_buckets[i].name, info->after_bounds[i]);
+        total_out_of_bounds += info->after_bounds[i];
     }
     qemu_fprintf(f, "  Out of bounds by over  %s: %" PRIu64 "\n",
-        bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, after_bounds[ARRAY_SIZE(bounds_buckets)]);
-    total_out_of_bounds += after_bounds[ARRAY_SIZE(bounds_buckets)];
+        bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, info->after_bounds[ARRAY_SIZE(bounds_buckets)]);
+    total_out_of_bounds += info->after_bounds[ARRAY_SIZE(bounds_buckets)];
 
 
     // One before the start is invalid though:
     for (int i = 0; i < ARRAY_SIZE(bounds_buckets); i++) {
-        qemu_fprintf(f, "  Before bounds by up to -%s: %" PRIu64 "\n", bounds_buckets[i].name, before_bounds[i]);
-        total_out_of_bounds += before_bounds[i];
+        qemu_fprintf(f, "  Before bounds by up to -%s: %" PRIu64 "\n", bounds_buckets[i].name, info->before_bounds[i]);
+        total_out_of_bounds += info->before_bounds[i];
     }
     qemu_fprintf(f, "  Before bounds by over  -%s: %" PRIu64 "\n",
-        bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, before_bounds[ARRAY_SIZE(bounds_buckets)]);
-    total_out_of_bounds += before_bounds[ARRAY_SIZE(bounds_buckets)];
+        bounds_buckets[ARRAY_SIZE(bounds_buckets) - 1].name, info->before_bounds[ARRAY_SIZE(bounds_buckets)]);
+    total_out_of_bounds += info->before_bounds[ARRAY_SIZE(bounds_buckets)];
 
 
     // unrepresentable, i.e. massively out of bounds:
-    qemu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", unrepresentable);
-    total_out_of_bounds += unrepresentable; // TODO: count how far it was out of bounds for this stat
+    qemu_fprintf(f, "  Became unrepresentable due to out-of-bounds: %" PRIu64 "\n", info->unrepresentable);
+    total_out_of_bounds += info->unrepresentable; // TODO: count how far it was out of bounds for this stat
 
-    qemu_fprintf(f, "Total out of bounds %ss: %" PRIu64 " (%f%%)\n", name, total_out_of_bounds,
-                total == 0 ? 0.0 : ((double)(100 * total_out_of_bounds) / (double)total));
+    qemu_fprintf(f, "Total out of bounds %ss: %" PRIu64 " (%f%%)\n", info->operation, total_out_of_bounds,
+                 info->num_uses == 0 ? 0.0 : ((double)(100 * total_out_of_bounds) / (double)info->num_uses));
     qemu_fprintf(f, "Total out of bounds %ss (excluding one past the end): %" PRIu64 " (%f%%)\n",
-                name, total_out_of_bounds - after_bounds[0],
-                total == 0 ? 0.0 : ((double)(100 * (total_out_of_bounds - after_bounds[0])) / (double)total));
+                 info->operation, total_out_of_bounds - info->after_bounds[0],
+                 info->num_uses == 0 ? 0.0 : ((double)(100 * (total_out_of_bounds - info->after_bounds[0])) / (double)info->num_uses));
 }
 
 #else /* !defined(DO_CHERI_STATISTICS) */
 
 // Don't collect any statistics by default (it slows down QEMU)
+#define OOB_INFO(op) NULL
 #define check_out_of_bounds_stat(env, op, capreg) do { } while (0)
 #define became_unrepresentable(env, reg, operation, retpc) _became_unrepresentable(env, reg, retpc)
 
@@ -238,16 +280,10 @@ void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags)
 #ifndef DO_CHERI_STATISTICS
     qemu_fprintf(f, "CPUSTATS DISABLED, RECOMPILE WITH -DDO_CHERI_STATISTICS\n");
 #else
-#define DUMP_CHERI_STAT(name, printname) \
-    dump_out_of_bounds_stats(f, printname, stat_num_##name, \
-        stat_num_##name##_after_bounds, stat_num_##name##_before_bounds, \
-        stat_num_##name##_out_of_bounds_unrep);
-
-    DUMP_CHERI_STAT(cincoffset, "CIncOffset");
-    DUMP_CHERI_STAT(csetoffset, "CSetOffset");
-    DUMP_CHERI_STAT(cgetpccsetoffset, "CGetPCCSetOffset");
-    DUMP_CHERI_STAT(cfromptr, "CFromPtr");
-#undef DUMP_CHERI_STAT
+    dump_out_of_bounds_stats(f, &oob_info_cincoffset);
+    dump_out_of_bounds_stats(f, &oob_info_csetoffset);
+    dump_out_of_bounds_stats(f, &oob_info_cfromptr);
+    dump_out_of_bounds_stats(f, &oob_info_cgetpccsetoffset);
 #endif
 }
 
@@ -268,33 +304,6 @@ void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const c
             prefix, name, PRINT_CAP_ARGS_L1(cr));
     fprintf(qemu_logfile, "             |" PRINT_CAP_FMTSTR_L2 "\n", PRINT_CAP_ARGS_L2(cr));
 }
-
-#if defined(CHERI_128) && !defined(CHERI_MAGIC128)
-
-extern bool cheri_c2e_on_unrepresentable;
-extern bool cheri_debugger_on_unrepresentable;
-
-static inline void
-_became_unrepresentable(CPUMIPSState *env, uint16_t reg, uintptr_t retpc)
-{
-    env->statcounters_unrepresentable_caps++;
-
-    if (cheri_debugger_on_unrepresentable)
-        helper_raise_exception_debug(env);
-
-    if (cheri_c2e_on_unrepresentable)
-        do_raise_c2_exception_impl(env, CP2Ca_INEXACT, reg, retpc);
-}
-
-#else
-
-static inline void
-_became_unrepresentable(CPUMIPSState *env, uint16_t reg, uintptr_t retpc)
-{
-    assert(false && "THIS SHOULD NOT BE CALLED");
-}
-
-#endif /* ! 128-bit capabilities */
 
 static inline int align_of(int size, uint64_t addr)
 {
@@ -600,7 +609,7 @@ void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 {
     GET_HOST_RETPC();
 #ifdef DO_CHERI_STATISTICS
-    stat_num_cfromptr++;
+    OOB_INFO(cfromptr)->num_uses++;
 #endif
     // CFromPtr traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space (and for backwards compat with old binaries).
@@ -621,11 +630,11 @@ void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         cap_register_t result = *cbp;
         uint64_t new_addr = cbp->cr_base + rt;
         if (!is_representable_cap_with_addr(cbp, new_addr)) {
-            became_unrepresentable(env, cd, cfromptr, _host_return_address);
+            became_unrepresentable(env, cd, OOB_INFO(cfromptr), _host_return_address);
             cap_mark_unrepresentable(new_addr, &result);
         } else {
             result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, cfromptr, &result);
+            check_out_of_bounds_stat(env, OOB_INFO(cfromptr), &result);
         }
         update_capreg(&env->active_tc, cd, &result);
     }
@@ -719,7 +728,7 @@ void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_u
 {
     GET_HOST_RETPC();
 #ifdef DO_CHERI_STATISTICS
-    stat_num_cgetpccsetoffset++;
+    OOB_INFO(cgetpccsetoffset)->num_uses++;
 #endif
     cap_register_t *pccp = &env->active_tc.PCC;
     /*
@@ -730,11 +739,11 @@ void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_u
     uint64_t new_addr = rs + cap_get_base(pccp);
     if (!is_representable_cap_with_addr(pccp, new_addr)) {
         if (pccp->cr_tag)
-            became_unrepresentable(env, cd, cgetpccsetoffset, _host_return_address);
+            became_unrepresentable(env, cd, OOB_INFO(cgetpccsetoffset), _host_return_address);
         cap_mark_unrepresentable(new_addr, &result);
     } else {
         result._cr_cursor = new_addr;
-        check_out_of_bounds_stat(env, cgetpccsetoffset, &result);
+        check_out_of_bounds_stat(env, OOB_INFO(cgetpccsetoffset), &result);
         /* Note that the offset(cursor) is updated by ccheck_pcc */
     }
     update_capreg(&env->active_tc, cd, &result);
@@ -798,11 +807,17 @@ void CHERI_HELPER_IMPL(cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb, tar
     do_raise_exception(env, EXCP_RI, GETPC());
 }
 
-static void cincoffset_impl(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt, uintptr_t retpc)
-{
+
+static void
+cincoffset_impl(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt,
 #ifdef DO_CHERI_STATISTICS
-    stat_num_cincoffset++;
+                uintptr_t retpc, struct oob_stats_info* oob_info) {
+    oob_info->num_uses++;
+#else
+                uintptr_t retpc, void* dummy_arg) {
+    (void)dummy_arg;
 #endif
+
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
      * CIncOffset: Increase Offset
@@ -814,32 +829,32 @@ static void cincoffset_impl(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_
         cap_register_t result = *cbp;
         if (unlikely(!is_representable_cap_with_addr(cbp, new_addr))) {
             if (cbp->cr_tag) {
-                became_unrepresentable(env, cd, cincoffset, retpc);
+                became_unrepresentable(env, cd, oob_info, retpc);
             }
             cap_mark_unrepresentable(new_addr, &result);
         } else {
             result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, cincoffset, &result);
+            check_out_of_bounds_stat(env, oob_info, &result);
         }
         update_capreg(&env->active_tc, cd, &result);
     }
 }
 
 void CHERI_HELPER_IMPL(cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
-  return cincoffset_impl(env, cd, cb, rt, GETPC());
+  return cincoffset_impl(env, cd, cb, rt, GETPC(), OOB_INFO(cincoffset));
 }
 
 void CHERI_HELPER_IMPL(csetaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong target_addr)) {
     target_ulong cursor = helper_cgetaddr(env, cb); // aaa
     target_ulong diff = target_addr - cursor;
-    cincoffset_impl(env, cd, cb, diff, GETPC());
+    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetaddr));
 }
 
 void CHERI_HELPER_IMPL(candaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
     target_ulong cursor = helper_cgetaddr(env, cb);
     target_ulong target_addr = cursor & rt;
     target_ulong diff = target_addr - cursor;
-    cincoffset_impl(env, cd, cb, diff, GETPC());
+    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(candaddr));
 }
 
 /* Note: not using CHERI_HELPER_IMPL since it cannot trap */
@@ -1353,7 +1368,7 @@ void CHERI_HELPER_IMPL(csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 {
     GET_HOST_RETPC();
 #ifdef DO_CHERI_STATISTICS
-    stat_num_csetoffset++;
+    OOB_INFO(csetoffset)->num_uses++;
 #endif
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
     /*
@@ -1366,11 +1381,11 @@ void CHERI_HELPER_IMPL(csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         const uint64_t new_addr = cap_get_base(cbp) + rt;
         if (!is_representable_cap_with_addr(cbp, new_addr)) {
             if (cbp->cr_tag)
-                became_unrepresentable(env, cd, csetoffset, _host_return_address);
+                became_unrepresentable(env, cd, OOB_INFO(csetoffset), _host_return_address);
             cap_mark_unrepresentable(new_addr, &result);
         } else {
             result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, csetoffset, &result);
+            check_out_of_bounds_stat(env, OOB_INFO(csetoffset), &result);
         }
         update_capreg(&env->active_tc, cd, &result);
     }
