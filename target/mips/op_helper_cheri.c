@@ -160,6 +160,8 @@ DEFINE_CHERI_STAT(csetoffset)
 DEFINE_CHERI_STAT(csetaddr)
 DEFINE_CHERI_STAT(candaddr)
 DEFINE_CHERI_STAT(cgetpccsetoffset)
+DEFINE_CHERI_STAT(cgetpccincoffset)
+DEFINE_CHERI_STAT(cgetpccsetaddr)
 DEFINE_CHERI_STAT(cfromptr)
 
 static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, const cap_register_t* cr, const char* name)
@@ -282,8 +284,12 @@ void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags)
 #else
     dump_out_of_bounds_stats(f, &oob_info_cincoffset);
     dump_out_of_bounds_stats(f, &oob_info_csetoffset);
+    dump_out_of_bounds_stats(f, &oob_info_csetaddr);
+    dump_out_of_bounds_stats(f, &oob_info_candaddr);
     dump_out_of_bounds_stats(f, &oob_info_cfromptr);
     dump_out_of_bounds_stats(f, &oob_info_cgetpccsetoffset);
+    dump_out_of_bounds_stats(f, &oob_info_cgetpccincoffset);
+    dump_out_of_bounds_stats(f, &oob_info_cgetpccsetaddr);
 #endif
 }
 
@@ -724,11 +730,17 @@ void CHERI_HELPER_IMPL(cgetpcc(CPUMIPSState *env, uint32_t cd))
     /* Note that the offset(cursor) is updated by ccheck_pcc */
 }
 
-void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs))
-{
-    GET_HOST_RETPC();
+static void
+derive_from_pcc_impl(CPUMIPSState *env, uint32_t cd, target_ulong new_addr,
 #ifdef DO_CHERI_STATISTICS
-    OOB_INFO(cgetpccsetoffset)->num_uses++;
+                     uintptr_t retpc, struct oob_stats_info* oob_info) {
+    oob_info->num_uses++;
+#else
+                     uintptr_t retpc, void* dummy_arg) {
+    (void)dummy_arg;
+#endif
+#ifdef DO_CHERI_STATISTICS
+    oob_info->num_uses++;
 #endif
     cap_register_t *pccp = &env->active_tc.PCC;
     /*
@@ -736,17 +748,34 @@ void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_u
      * See Chapter 5 in CHERI Architecture manual.
      */
     cap_register_t result = *pccp;
-    uint64_t new_addr = rs + cap_get_base(pccp);
     if (!is_representable_cap_with_addr(pccp, new_addr)) {
         if (pccp->cr_tag)
-            became_unrepresentable(env, cd, OOB_INFO(cgetpccsetoffset), _host_return_address);
+            became_unrepresentable(env, cd, oob_info, retpc);
         cap_mark_unrepresentable(new_addr, &result);
     } else {
         result._cr_cursor = new_addr;
-        check_out_of_bounds_stat(env, OOB_INFO(cgetpccsetoffset), &result);
+        check_out_of_bounds_stat(env, oob_info, &result);
         /* Note that the offset(cursor) is updated by ccheck_pcc */
     }
     update_capreg(&env->active_tc, cd, &result);
+}
+
+void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs))
+{
+    uint64_t new_addr = rs + cap_get_base(&env->active_tc.PCC);
+    derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
+}
+
+void CHERI_HELPER_IMPL(cgetpccincoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs))
+{
+    uint64_t new_addr = rs + cap_get_cursor(&env->active_tc.PCC);
+    derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
+}
+
+void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUMIPSState *env, uint32_t cd, target_ulong rs))
+{
+    uint64_t new_addr = rs;
+    derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetperm(CPUMIPSState *env, uint32_t cb))

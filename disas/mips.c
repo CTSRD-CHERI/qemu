@@ -1303,8 +1303,12 @@ const struct mips_opcode mips_builtin_opcodes[] =
 {"cgetaddr", "t,+b",	0x480003ff, 0xffe007ff, 0,			0, I1},
 {"croundrepresentablelength", "t,d", 0x4800043f, 0xffe007ff, 0,			0, I1},
 {"crepresentablealignmentmask", "t,d", 0x4800047f, 0xffe007ff, 0,			0, I1},
-{"cloadtags", "t,+b",	0x480007bf, 0xffe007ff, 0,			0, I1},
+{"cgetflags", "t,+b", 0x480004bf, 0xffe007ff, 0,			0, I1},
+{"cgetpccincoffset", "+w,d", 0x480004ff, 0xffe007ff, 0,			0, I1},
+{"cgetpccsetaddr", "+w,d", 0x4800053f, 0xffe007ff, 0,			0, I1},
+
 {"csealentry", "+w,+b",	0x4800077f, 0xffe007ff, 0,			0, I1},
+{"cloadtags", "t,+b",	0x480007bf, 0xffe007ff, 0,			0, I1},
 
 /* New ISA: one-operand instructions */
 {"cgetpcc", "+w",	    0x480007ff, 0xffe0ffff, 0,			0, I1},

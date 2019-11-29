@@ -1224,6 +1224,9 @@ enum {
     OPC_CGETADDR_NI     = OPC_C2OPERAND_NI | (0x0f << 6),
     OPC_CRAP_NI         = OPC_C2OPERAND_NI | (0x10 << 6),
     OPC_CRAM_NI         = OPC_C2OPERAND_NI | (0x11 << 6),
+    OPC_CGETFLAGS_NI    = OPC_C2OPERAND_NI | (0x12 << 6), /* XXX: not implemented */
+    OPC_CGETPCCINCOFF_NI = OPC_C2OPERAND_NI | (0x13 << 6),
+    OPC_CGETPCCSETADDR_NI = OPC_C2OPERAND_NI | (0x14 << 6),
     OPC_CSEALENTRY_NI   = OPC_C2OPERAND_NI | (0x1d << 6),
     OPC_CLOADTAGS_NI    = OPC_C2OPERAND_NI | (0x1e << 6),
 };

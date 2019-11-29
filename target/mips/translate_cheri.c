@@ -365,13 +365,14 @@ static inline void generate_cgetpcc(int32_t cd)
     tcg_temp_free_i32(tcd);
 }
 
-static inline void generate_cgetpccsetoffset(int32_t cd, int32_t rs)
-{
+static inline void
+generate_helper_cap_regnum_gpr_val(int32_t cd, int32_t rs,
+                                   void (*gen_helper)(TCGv_env, TCGv_i32, TCGv)) {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv t0 = tcg_temp_new();
 
     gen_load_gpr(t0, rs);
-    gen_helper_cgetpccsetoffset(cpu_env, tcd, t0);
+    gen_helper(cpu_env, tcd, t0);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
 }
@@ -1927,8 +1928,18 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 break;
             case OPC_CGETPCCSETOFF_NI: /* 0x07 << 6 */
                 check_cop2x(ctx);
-                generate_cgetpccsetoffset(r16, r11);
+                generate_helper_cap_regnum_gpr_val(r16, r11, &gen_helper_cgetpccsetoffset);
                 opn = "cgetpccsetoffset";
+                break;
+            case OPC_CGETPCCINCOFF_NI: /* 0x013 << 6 */
+                check_cop2x(ctx);
+                generate_helper_cap_regnum_gpr_val(r16, r11, &gen_helper_cgetpccincoffset);
+                opn = "cgetpccincoffset";
+                break;
+            case OPC_CGETPCCSETADDR_NI: /* 0x014 << 6 */
+                check_cop2x(ctx);
+                generate_helper_cap_regnum_gpr_val(r16, r11, &gen_helper_cgetpccsetaddr);
+                opn = "cgetpccsetaddr";
                 break;
             case OPC_CCHECKPERM_NI:    /* 0x08 << 6 */
                 check_cop2x(ctx);
