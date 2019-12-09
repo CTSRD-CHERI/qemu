@@ -99,11 +99,6 @@ int r4k_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
                 return TLBRET_INVALID;
             }
 #if defined(TARGET_CHERI)
-            if (rw == MMU_DATA_CAP_LOAD && (n ? tlb->L1 : tlb->L0)) {
-                env->TLB_L = 1;
-            } else {
-                env->TLB_L = 0;
-            }
             if (rw == MMU_DATA_CAP_STORE) {
                 /*
                  * If we're trying to do a cap-store, first check for the
@@ -144,6 +139,13 @@ int r4k_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
 #endif
                     *prot |= PAGE_EXEC;
                 }
+
+#if defined(TARGET_CHERI)
+                if (n ? tlb->L1 : tlb->L0) {
+                    *prot |= PAGE_LC_CLEAR;
+                }
+#endif
+
                 return TLBRET_MATCH;
             }
             return TLBRET_DIRTY;
@@ -226,9 +228,6 @@ static int get_seg_physical_address(CPUMIPSState *env, hwaddr *physical,
         /* The segment is unmapped */
         *physical = physical_base | (real_address & segmask);
         *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
-#ifdef TARGET_CHERI
-        env->TLB_L = 0;
-#endif
         return TLBRET_MATCH;
     }
 }
@@ -1050,16 +1049,15 @@ hwaddr cpu_mips_translate_address(CPUMIPSState *env, target_ulong address,
 }
 
 #ifdef TARGET_CHERI
-static hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address, int rw, int reg)
+static hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address, int rw, int reg, int *prot)
 {
     hwaddr physical;
-    int prot;
     int access_type;
     int ret = 0;
 
     /* data access */
     access_type = ACCESS_INT;
-    ret = get_physical_address(env, &physical, &prot,
+    ret = get_physical_address(env, &physical, prot,
                                address, rw, access_type,
                                cpu_mmu_index(env, false));
     if (ret != TLBRET_MATCH) {
@@ -1724,11 +1722,11 @@ void cheri_tag_init(uint64_t memory_size)
 }
 
 static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
-        int reg, uintptr_t pc)
+        int reg, uintptr_t pc, int *prot)
 {
     hwaddr paddr;
 
-    paddr = cpu_mips_translate_address_c2(env, vaddr, rw, reg);
+    paddr = cpu_mips_translate_address_c2(env, vaddr, rw, reg, prot);
 
     if (paddr == -1LL) {
         cpu_loop_exit_restore(env_cpu(env), pc);
@@ -1767,8 +1765,9 @@ static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr, MemoryRegion**
 static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAccessType rw,
         int reg, uintptr_t pc)
 {
+    int prot;
     MemoryRegion* mr = NULL;
-    hwaddr paddr = v2p_addr(env, vaddr, rw, reg, pc);
+    hwaddr paddr = v2p_addr(env, vaddr, rw, reg, pc, &prot);
     ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
     if (rw == MMU_DATA_CAP_STORE || rw == MMU_DATA_STORE)
         check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
@@ -1817,8 +1816,9 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
      * so that we don't require that the SC inhibit be clear.
      */
 
+    int prot;
     MemoryRegion* mr = NULL;
-    hwaddr paddr = v2p_addr(env, vaddr, MMU_DATA_STORE, 0xFF, pc);
+    hwaddr paddr = v2p_addr(env, vaddr, MMU_DATA_STORE, 0xFF, pc, &prot);
     ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
     // Generate a trap if we try to clear tags in ROM instead of crashing
     check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
@@ -1926,13 +1926,13 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg, uintptr_t pc)
 static uint8_t *
 cheri_tag_get_block(CPUMIPSState *env, target_ulong vaddr, MMUAccessType at,
     int reg, int xshift, uintptr_t pc,
-    hwaddr *ret_paddr, ram_addr_t *ret_ram_addr, uint64_t *ret_tag)
+    hwaddr *ret_paddr, ram_addr_t *ret_ram_addr, uint64_t *ret_tag, int *prot)
 {
     hwaddr paddr;
     ram_addr_t ram_addr;
     uint64_t tag;
 
-    paddr = v2p_addr(env, vaddr, at, reg, pc);
+    paddr = v2p_addr(env, vaddr, at, reg, pc, prot);
 
     if (ret_paddr)
         *ret_paddr = paddr;
@@ -1953,11 +1953,11 @@ cheri_tag_get_block(CPUMIPSState *env, target_ulong vaddr, MMUAccessType at,
 }
 
 int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
-        hwaddr *ret_paddr, uintptr_t pc)
+        hwaddr *ret_paddr, int *prot, uintptr_t pc)
 {
     uint64_t tag;
     uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
-                                          0, pc, ret_paddr, NULL, &tag);
+                                          0, pc, ret_paddr, NULL, &tag, prot);
     if (tagblk == NULL)
         return 0;
     else
@@ -1974,9 +1974,18 @@ int cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr, uintptr_t pc)
 {
     uint64_t tag;
+    int prot;
     uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
                                           CAP_TAG_GET_MANY_SHFT, pc, ret_paddr,
-                                          NULL, &tag);
+                                          NULL, &tag, &prot);
+
+    /*
+     * XXX Right now, the sole consumer of this function is CLoadTags, and
+     * we let it "see around" the TLB capability load inhibit.  That should
+     * perhaps change?
+     */
+    (void) prot;
+
     if (tagblk == NULL)
         return 0;
     else {
@@ -1997,6 +2006,7 @@ int cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
 void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
         uint8_t tagbit, uint64_t tps, uint64_t length, hwaddr *ret_paddr, uintptr_t pc)
 {
+    int prot;
     uint64_t tag;
     uint64_t *tagblk64;
     ram_addr_t ram_addr;
@@ -2004,7 +2014,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     // If the data is untagged we shouldn't get a tlb fault
     uint8_t *tagblk = cheri_tag_get_block(env, vaddr,
 					  tagbit ? MMU_DATA_CAP_STORE : MMU_DATA_STORE,
-					  reg, 0, pc, ret_paddr, &ram_addr, &tag);
+					  reg, 0, pc, ret_paddr, &ram_addr, &tag, &prot);
     if (tagblk == NULL) {
         /* Allocated a tag block. */
         tagblk = cheri_tag_new_tagblk(tag);
@@ -2023,11 +2033,11 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
 }
 
 int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint64_t *ret_tps, uint64_t *ret_length, hwaddr *ret_paddr, uintptr_t pc)
+        uint64_t *ret_tps, uint64_t *ret_length, hwaddr *ret_paddr, int *prot, uintptr_t pc)
 {
     uint64_t tag;
     uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
-                                          0, pc, ret_paddr, NULL, &tag);
+                                          0, pc, ret_paddr, NULL, &tag, prot);
 
     if (tagblk == NULL) {
         *ret_tps = *ret_length = 0ULL;

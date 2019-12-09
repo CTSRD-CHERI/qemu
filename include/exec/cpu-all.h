@@ -261,6 +261,10 @@ extern intptr_t qemu_host_page_mask;
 /* FIXME: Code that sets/uses this is broken and needs to go away.  */
 #define PAGE_RESERVED  0x0020
 #endif
+#ifdef TARGET_CHERI
+#define PAGE_LC_CLEAR	0x8000
+#define PAGE_SC_TRAP	0x2000
+#endif
 
 #if defined(CONFIG_USER_ONLY)
 void page_dump(FILE *f);
