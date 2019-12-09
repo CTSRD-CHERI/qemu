@@ -1521,6 +1521,11 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #ifdef TARGET_CHERI
         /* always set PCC from KCC even with EXL */
         env->active_tc.PCC = env->active_tc.CHWR.KCC;
+        // FIXME: KCC must not be sealed
+        if (!cap_is_unsealed(&env->active_tc.CHWR.KCC)) {
+            error_report("Sealed KCC in exception, detagging: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC));
+            env->active_tc.PCC.cr_tag = false;
+        }
         env->active_tc.PCC._cr_cursor =  env->active_tc.PC;
 #endif /* TARGET_CHERI */
 

@@ -3156,6 +3156,10 @@ static void set_pc(CPUMIPSState *env, target_ulong error_pc)
 {
 #ifdef TARGET_CHERI
     env->active_tc.PCC = *error_pcc;
+    // Sentry capabilities in EPCC should be unsealed on ERET
+    if (cap_is_sealed_entry(&env->active_tc.PCC)) {
+        cap_unseal_entry(&env->active_tc.PCC);
+    }
     target_ulong error_pc = cap_get_cursor(error_pcc);
 #endif
     env->active_tc.PC = error_pc & ~(target_ulong)1;
