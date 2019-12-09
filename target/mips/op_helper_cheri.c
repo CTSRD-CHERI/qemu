@@ -1467,7 +1467,9 @@ void CHERI_HELPER_IMPL(cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (!cap_is_unsealed(ctp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, ct);
-    } else if (ct_cursor != csp->cr_otype || !cap_is_sealed_with_type(csp)) {
+    } else if (!cap_is_sealed_with_type(csp)) {
+        do_raise_c2_exception(env, CP2Ca_TYPE, cs); /* Reserved otypes */
+    } else if (ct_cursor != csp->cr_otype) {
         do_raise_c2_exception(env, CP2Ca_TYPE, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_UNSEAL, ct);
