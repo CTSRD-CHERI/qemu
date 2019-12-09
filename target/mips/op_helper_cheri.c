@@ -396,11 +396,11 @@ do_exception:
 }
 
 static inline target_ulong
-clear_tag_if_no_loadcap(CPUMIPSState *env, target_ulong tag, const cap_register_t* cbp) {
-    if (tag && (env->TLB_L || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
+clear_tag_if_no_loadcap(target_ulong tag, const cap_register_t* cbp, int prot) {
+    if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
         if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-            qemu_log("Clearing tag bit due to missing %s",
-                     env->TLB_L ? "TLB_L" : "CAP_PERM_LOAD_CAP");
+            qemu_log("Clearing tag bit due to missing %s\n",
+                     prot & PAGE_LC_CLEAR ? "TLB_L" : "CAP_PERM_LOAD_CAP");
         }
         return 0;
     }
@@ -2112,6 +2112,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
                                  target_ulong vaddr, target_ulong retpc, bool linked)
 {
+    int prot;
     cap_register_t ncd;
 
     // Since this is used by cl* we need to treat cb == 0 as $ddc
@@ -2123,8 +2124,8 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint64_t pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc);
     uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
 
-    target_ulong tag = cheri_tag_get(env, vaddr, cb, linked ? &env->lladdr : NULL, retpc);
-    tag = clear_tag_if_no_loadcap(env, tag, cbp);
+    target_ulong tag = cheri_tag_get(env, vaddr, cb, linked ? &env->lladdr : NULL, &prot, retpc);
+    tag = clear_tag_if_no_loadcap(tag, cbp, prot);
     decompress_128cap(pesbt, cursor, &ncd);
     ncd.cr_tag = tag;
 
@@ -2216,6 +2217,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
                                  target_ulong vaddr, target_ulong retpc, bool linked)
 {
+    int prot;
     cap_register_t ncd;
 
     // Since this is used by cl* we need to treat cb == 0 as $ddc
@@ -2228,8 +2230,8 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
 
     uint64_t tps, length;
-    target_ulong tag = cheri_tag_get_m128(env, vaddr, cd, &tps, &length, linked ? &env->lladdr : NULL, retpc);
-    tag = clear_tag_if_no_loadcap(env, tag, cbp);
+    target_ulong tag = cheri_tag_get_m128(env, vaddr, cd, &tps, &length, linked ? &env->lladdr : NULL, &prot, retpc);
+    tag = clear_tag_if_no_loadcap(tag, cbp, prot);
 
     ncd.cr_otype = (uint32_t)(tps >> 32) ^ CAP_MAX_REPRESENTABLE_OTYPE;
     ncd.cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
@@ -2373,6 +2375,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
                                  target_ulong vaddr, target_ulong retpc, bool linked)
 {
     cap_register_t ncd;
+    int prot;
 
     // Since this is used by cl* we need to treat cb == 0 as $ddc
     const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
@@ -2385,8 +2388,8 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     mem_buffer.u64s[2] = cpu_ldq_data_ra(env, vaddr + 16, retpc); /* base */
     mem_buffer.u64s[3] = cpu_ldq_data_ra(env, vaddr + 24, retpc); /* length */
 
-    target_ulong tag = cheri_tag_get(env, vaddr, cd, linked ? &env->lladdr : NULL, retpc);
-    tag = clear_tag_if_no_loadcap(env, tag, cbp);
+    target_ulong tag = cheri_tag_get(env, vaddr, cd, linked ? &env->lladdr : NULL, &prot, retpc);
+    tag = clear_tag_if_no_loadcap(tag, cbp, prot);
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;

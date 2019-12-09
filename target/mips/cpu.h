@@ -1132,8 +1132,6 @@ struct CPUMIPSState {
     uint32_t llnewval_wp;
 #ifdef TARGET_CHERI
     uint64_t linkedflag; // TODO: remove this!
-    int32_t TLB_L;
-    int32_t TLB_S;
 #endif
     uint64_t CP0_LLAddr_rw_bitmask;
     int CP0_LLAddr_shift;
@@ -1590,7 +1588,7 @@ void cheri_tag_init(uint64_t memory_size);
 void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size,
                           uintptr_t pc);
 int  cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
-        hwaddr *ret_paddr, uintptr_t pc);
+        hwaddr *ret_paddr, int *prot, uintptr_t pc);
 int  cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr, uintptr_t pc);
 void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg,
@@ -1601,7 +1599,7 @@ void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const c
 target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, bool instavail, uintptr_t retpc);
 #ifdef CHERI_MAGIC128
 int  cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
-        uint64_t *tps, uint64_t *length, hwaddr *ret_paddr, uintptr_t pc);
+        uint64_t *tps, uint64_t *length, hwaddr *ret_paddr, int *prot, uintptr_t pc);
 void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
         uint8_t tag, uint64_t tps, uint64_t length, hwaddr *ret_paddr, uintptr_t pc);
 #endif /* CHERI_MAGIC128 */
