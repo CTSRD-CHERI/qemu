@@ -123,12 +123,10 @@ static inline void target_sigemptyset(target_sigset_t *set)
     memset(set, 0, sizeof(*set));
 }
 
-#if !defined(__FreeBSD__) || !defined(__FreeBSD_version) || \
-    __FreeBSD_version < 1400000
 #include <signal.h>
 
 int
-sigorset(sigset_t *dest, const sigset_t *left, const sigset_t *right)
+qemu_sigorset(sigset_t *dest, const sigset_t *left, const sigset_t *right)
 {
     int i;
 
@@ -140,7 +138,6 @@ sigorset(sigset_t *dest, const sigset_t *left, const sigset_t *right)
 
     return (0);
 }
-#endif
 
 static inline void target_sigaddset(target_sigset_t *set, int signum)
 {
@@ -964,7 +961,7 @@ static void handle_pending_signal(CPUArchState *cpu_env, int sig,
 
         blocked_set = ts->in_sigsuspend ?
             &ts->sigsuspend_mask : &ts->signal_mask;
-        sigorset(&ts->signal_mask, blocked_set, &set);
+        qemu_sigorset(&ts->signal_mask, blocked_set, &set);
         ts->in_sigsuspend = false;
 
 #if 0  /* not yet */
