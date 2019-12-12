@@ -20,6 +20,8 @@
 #ifndef __BSD_SIGNAL_H_
 #define __BSD_SIGNAL_H_
 
+#include <signal.h>
+
 /* sigaction(2) */
 static inline abi_long do_bsd_sigaction(abi_long arg1, abi_long arg2,
         abi_long arg3)
@@ -83,7 +85,7 @@ static inline abi_long do_bsd_sigprocmask(abi_long arg1, abi_ulong arg2,
         switch (arg1) {
         case TARGET_SIG_BLOCK:
             how = SIG_BLOCK;
-            sigorset(&ts->signal_mask, &ts->signal_mask, set_ptr);
+            qemu_sigorset(&ts->signal_mask, &ts->signal_mask, set_ptr);
             break;
 
         case TARGET_SIG_UNBLOCK:

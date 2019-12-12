@@ -19,10 +19,7 @@
 
 #include <sys/param.h>
 
-#if !defined(__FreeBSD__) || !defined(__FreeBSD_version) || \
-    __FreeBSD_version < 1400000
-int sigorset(sigset_t *dest, const sigset_t *left, const sigset_t *right);
-#endif
+int qemu_sigorset(sigset_t *dest, const sigset_t *left, const sigset_t *right);
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
 #define BSD_HAVE_INO64
