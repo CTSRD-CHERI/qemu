@@ -1265,7 +1265,7 @@ struct CPUMIPSState {
     /* TODO: we could implement the TLB ones as well */
 
     /*
-     * See section 4.4.2 (Table 4.3) of the CHERI Architecture Reference.
+     * See section 3.9.2 (Table 3.3) of the CHERI Architecture Reference v7.
      */
     uint16_t CP2_CapCause; /* Upper 8 bits exception code; lower reg# */
 #define CP2Ca_NONE          0x00    /* None */
@@ -1279,7 +1279,8 @@ struct CPUMIPSState {
 #define CP2Ca_USRDEFINE     0x08    /* User-defined Permission Violation */
 #define CP2Ca_TLB_STORE     0x09    /* TLB prohibits store capability */
 #define CP2Ca_INEXACT       0x0A    /* Bounds cannot be represented exactly */
-// 0x0b-0x0f Reserved
+#define CP2Ca_BASE_UNALIGN  0x0B
+// 0x0c-0x0f Reserved
 #define CP2Ca_GLOBAL        0x10 /* Global Violation */
 #define CP2Ca_PERM_EXE      0x11 /* Permit_Execute Violation */
 #define CP2Ca_PERM_LD       0x12 /* Permit_Load Violation */
@@ -1292,6 +1293,7 @@ struct CPUMIPSState {
 #define CP2Ca_PERM_CCALL    0x19 /* Permit_CCall Violation */
 #define CP2Ca_ACCESS_CCALL_IDC 0x1a /* Access IDC in a CCall delay slot */
 #define CP2Ca_PERM_UNSEAL   0x1b /* Permit_Unseal violation */
+#define CP2Ca_PERM_SETCID   0x1c /* Permit_SetCID violation */
 // 0x1b-0x1f Reserved
 
 #define MASK_CCALL_SEL(op)  ((op) & 0x7ff)

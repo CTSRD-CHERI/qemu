@@ -64,7 +64,7 @@ const char *cp2_fault_causestr[] = {
     "User-defined Permission Violation",
     "TLB prohibits Store Capability",
     "Bounds Cannot Be Represented Exactly",
-    "Reserved 0x0b",
+    "Unaligned Base",
     "Reserved 0x0c",
     "Reserved 0x0d",
     "Reserved 0x0e",
