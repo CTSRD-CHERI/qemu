@@ -1231,7 +1231,7 @@ struct CPUMIPSState {
     /* TODO: we could implement the TLB ones as well */
 
     /*
-     * See section 4.4.2 (Table 4.3) of the CHERI Architecture Reference.
+     * See section 3.9.2 (Table 3.3) of the CHERI Architecture Reference v7.
      */
     uint16_t CP2_CapCause; /* Upper 8 bits exception code; lower reg# */
     /* See cheri-archspecific.h */
