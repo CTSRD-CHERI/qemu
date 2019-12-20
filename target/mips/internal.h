@@ -344,6 +344,20 @@ static inline int mips_vp_active(CPUMIPSState *env)
     return 1;
 }
 
+static inline bool can_access_cp0(CPUMIPSState* env) {
+    if (((env->CP0_Status & (1 << CP0St_CU0)) &&
+        !(env->insn_flags & ISA_MIPS32R6)) ||
+        !(env->hflags & MIPS_HFLAG_KSU)) {
+#ifdef TARGET_CHERI
+        // For CHERI we need to check PCC.perms before enabling access to cp0 features.
+        if (!(env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS))
+            return false;
+#endif
+        return true; // plain MIPS can always access system registers.
+    }
+    return false;
+}
+
 static inline void compute_hflags(CPUMIPSState *env)
 {
     env->hflags &= ~(MIPS_HFLAG_COP1X | MIPS_HFLAG_64 | MIPS_HFLAG_CP0 |
@@ -352,11 +366,9 @@ static inline void compute_hflags(CPUMIPSState *env)
                      MIPS_HFLAG_DSP_R3 | MIPS_HFLAG_SBRI | MIPS_HFLAG_MSA |
                      MIPS_HFLAG_FRE | MIPS_HFLAG_ELPA |
 #ifdef TARGET_CHERI
-                    /* XXXAR: why do we ignore ERL? */
-                     MIPS_HFLAG_COP2X);
-#else
-                     MIPS_HFLAG_ERL);
+                     MIPS_HFLAG_COP2X |
 #endif /* TARGET_CHERI */
+                     MIPS_HFLAG_ERL);
     if (env->CP0_Status & (1 << CP0St_ERL)) {
         env->hflags |= MIPS_HFLAG_ERL;
     }
@@ -389,9 +401,7 @@ static inline void compute_hflags(CPUMIPSState *env)
         }
     }
 #endif
-    if (((env->CP0_Status & (1 << CP0St_CU0)) &&
-         !(env->insn_flags & ISA_MIPS32R6)) ||
-        !(env->hflags & MIPS_HFLAG_KSU)) {
+    if (can_access_cp0(env)) {
         env->hflags |= MIPS_HFLAG_CP0;
     }
     if (env->CP0_Status & (1 << CP0St_CU1)) {

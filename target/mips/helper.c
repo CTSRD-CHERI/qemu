@@ -2059,7 +2059,15 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env,
 {
     CPUState *cs = env_cpu(env);
 
-    qemu_log_mask(CPU_LOG_INT, "%s: %d %d\n",
+#ifdef TARGET_CHERI
+    // Translate CP0 Unusable to CP2 ASR fault if PCC is missing ASR:
+    if (exception == EXCP_CpU && error_code == 0) {
+        if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
+            do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYS_REGS, pc);
+        }
+    }
+#endif
+    qemu_log_mask(CPU_LOG_INT | CPU_LOG_INSTR, "%s: %d %d\n",
                   __func__, exception, error_code);
     cs->exception_index = exception;
     env->error_code = error_code;
