@@ -350,13 +350,30 @@ static inline bool can_access_cp0(CPUMIPSState* env) {
         !(env->hflags & MIPS_HFLAG_KSU)) {
 #ifdef TARGET_CHERI
         // For CHERI we need to check PCC.perms before enabling access to cp0 features.
-        if (!(env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS))
+        if (!(env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS)) {
+            /* qemu_log_mask(CPU_LOG_INSTR, "Kernel mode but no ASR!\n"); */
             return false;
+        }
 #endif
         return true; // plain MIPS can always access system registers.
     }
     return false;
 }
+
+static inline void update_cp0_access_for_pc(CPUMIPSState* env) {
+    if (can_access_cp0(env)) {
+        if ((env->hflags & MIPS_HFLAG_CP0) == 0) {
+            qemu_log_mask(CPU_LOG_INSTR, "%s: restoring access to CP0 since $pcc has ASR permission\n", __func__);
+            env->hflags |= MIPS_HFLAG_CP0;
+        }
+    } else {
+        if ((env->hflags & MIPS_HFLAG_CP0)) {
+            qemu_log_mask(CPU_LOG_INSTR, "%s: removing access to CP0 since $pcc does not have ASR permission\n", __func__);
+            env->hflags &= ~MIPS_HFLAG_CP0;
+        }
+    }
+}
+
 
 static inline void compute_hflags(CPUMIPSState *env)
 {

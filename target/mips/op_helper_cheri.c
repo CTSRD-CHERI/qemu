@@ -2491,17 +2491,7 @@ void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUMIPSState *env))
 {
     env->active_tc.PCC = env->active_tc.CapBranchTarget;
     // Restore or clear MIPS_HFLAG_CP0 depending on Access_System_Registers permission
-    if (can_access_cp0(env)) {
-        if ((env->hflags & MIPS_HFLAG_CP0) == 0) {
-            qemu_log_mask(CPU_LOG_INSTR, "%s: restoring access to CP0 since $pcc has ASR permission\n", __func__);
-            env->hflags |= MIPS_HFLAG_CP0;
-        }
-    } else {
-        if ((env->hflags & MIPS_HFLAG_CP0)) {
-            qemu_log_mask(CPU_LOG_INSTR, "%s: removing access to CP0 since $pcc does not have ASR permission\n", __func__);
-            env->hflags &= ~MIPS_HFLAG_CP0;
-        }
-    }
+    update_cp0_access_for_pc(env);
 }
 
 void CHERI_HELPER_IMPL(ccheck_pc(CPUMIPSState *env, uint64_t next_pc))

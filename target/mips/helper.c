@@ -1196,8 +1196,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
         }
 
         qemu_log("%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
-                 " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x\n", __func__, env->active_tc.PC, get_CP0_EPC(env),
-                 name, env->hflags & MIPS_HFLAG_BMASK);
+                 " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n", __func__, env->active_tc.PC, get_CP0_EPC(env),
+                 name, env->hflags & MIPS_HFLAG_BMASK, env->hflags);
 #ifdef TARGET_CHERI
         qemu_log("\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
                  PRINT_CAP_ARGS(&env->active_tc.PCC), PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
@@ -1515,14 +1515,21 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 
 #ifdef TARGET_CHERI
-        /* always set PCC from KCC even with EXL */
-        env->active_tc.PCC = env->active_tc.CHWR.KCC;
-        // FIXME: KCC must not be sealed
-        if (!cap_is_unsealed(&env->active_tc.CHWR.KCC)) {
-            error_report("Sealed KCC in exception, detagging: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC));
-            env->active_tc.PCC.cr_tag = false;
-        }
-        env->active_tc.PCC._cr_cursor =  env->active_tc.PC;
+    /* always set PCC from KCC even with EXL */
+    env->active_tc.PCC = env->active_tc.CHWR.KCC;
+    // FIXME: KCC must not be sealed
+    if (!cap_is_unsealed(&env->active_tc.PCC)) {
+        error_report("Sealed KCC in exception, detagging: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(&env->active_tc.PCC));
+        env->active_tc.PCC.cr_tag = false;
+    }
+    env->active_tc.PCC._cr_cursor =  env->active_tc.PC;
+    // We may have to change the CP0 access flag since CHERI may have previously
+    // disabled it by installing a $pcc without the Access_Sys_Regs flag
+    update_cp0_access_for_pc(env);
+    assert(can_access_cp0(env) && "Installing $pcc without ASR in exception?");
+#if defined(CHERI_128)
+  assert(cc128_is_representable_cap_exact(&env->active_tc.PCC));
+#endif
 #endif /* TARGET_CHERI */
 
 #ifdef CONFIG_MIPS_LOG_INSTR
