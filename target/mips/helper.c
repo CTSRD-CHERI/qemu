@@ -2065,8 +2065,9 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env,
     CPUState *cs = env_cpu(env);
 
 #ifdef TARGET_CHERI
-    // Translate CP0 Unusable to CP2 ASR fault if PCC is missing ASR:
-    if (exception == EXCP_CpU && error_code == 0) {
+    // Translate CP0 Unusable to CP2 ASR fault if we are in kernel mode and
+    // PCC is missing ASR:
+    if (exception == EXCP_CpU && error_code == 0 && in_kernel_mode(env)) {
         if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
             do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYS_REGS, pc);
         }
