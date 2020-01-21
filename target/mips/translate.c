@@ -13701,24 +13701,6 @@ static inline void clear_branch_hflags(DisasContext *ctx)
     }
 }
 
-#ifdef TARGET_CHERI
-static void _gen_copy_cap_register_impl(size_t dst_offset, size_t src_offset) {
-    TCGv t0 = tcg_temp_new();
-    _Static_assert(sizeof(cap_register_t) % 8 == 0, "Must be divisible by 8");
-    for (size_t i = 0; i < sizeof(cap_register_t); i += 8) {
-        tcg_gen_ld_i64(t0, cpu_env, src_offset + i);
-        tcg_gen_st_i64(t0, cpu_env, dst_offset + i);
-    }
-
-    tcg_temp_free(t0);
-}
-
-#define gen_copy_cap_register(dest, src) \
-    _gen_copy_cap_register_impl(offsetof(CPUMIPSState, active_tc.dest), \
-        offsetof(CPUMIPSState, active_tc.src))
-
-#endif
-
 static void gen_branch(DisasContext *ctx, int insn_bytes)
 {
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
@@ -13788,7 +13770,7 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
 
             tcg_gen_mov_tl(cpu_PC, btarget);
             /* Update PCC with capability register */
-            gen_copy_cap_register(PCC, CapBranchTarget);
+            gen_helper_copy_cap_btarget_to_pcc(cpu_env);
 
             if (ctx->base.singlestep_enabled) {
                 save_cpu_state(ctx, 0);

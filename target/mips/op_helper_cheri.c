@@ -2487,6 +2487,13 @@ void CHERI_HELPER_IMPL(ccheck_btarget(CPUMIPSState *env))
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false, GETPC());
 }
 
+void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUMIPSState *env))
+{
+    env->active_tc.PCC = env->active_tc.CapBranchTarget;
+    // Restore or clear MIPS_HFLAG_CP0 depending on Access_System_Registers permission
+    update_cp0_access_for_pc(env);
+}
+
 void CHERI_HELPER_IMPL(ccheck_pc(CPUMIPSState *env, uint64_t next_pc))
 {
     cap_register_t *pcc = &env->active_tc.PCC;
@@ -2501,10 +2508,13 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUMIPSState *env, uint64_t next_pc))
 
     /* Update statcounters icount */
     env->statcounters_icount++;
-    if (in_kernel_mode(env))
+    if (in_kernel_mode(env)) {
+        assert(((env->hflags & MIPS_HFLAG_CP0) == MIPS_HFLAG_CP0) == can_access_cp0(env));
         env->statcounters_icount_kernel++;
-    else
+    } else {
+        assert((env->hflags & MIPS_HFLAG_CP0) == 0);
         env->statcounters_icount_user++;
+    }
 
     // branch instructions have already checked the validity of the target,
     // but we still need to check if the next instruction is accessible.

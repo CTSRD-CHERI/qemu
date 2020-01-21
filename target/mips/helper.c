@@ -1196,8 +1196,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
         }
 
         qemu_log("%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
-                 " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x\n", __func__, env->active_tc.PC, get_CP0_EPC(env),
-                 name, env->hflags & MIPS_HFLAG_BMASK);
+                 " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n", __func__, env->active_tc.PC, get_CP0_EPC(env),
+                 name, env->hflags & MIPS_HFLAG_BMASK, env->hflags);
 #ifdef TARGET_CHERI
         qemu_log("\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
                  PRINT_CAP_ARGS(&env->active_tc.PCC), PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
@@ -1429,8 +1429,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
         cause = 18;
         update_badinstr = !(env->error_code & EXCP_INST_NOTAVAIL);
 #ifdef TARGET_CHERI
-        // FIXME: why do we always clear ERL?
-        env->CP0_Status &= ~(1 << CP0St_ERL);
         if ((env->CP2_CapCause >> 8) == CP2Ca_CALL ||
                 (env->CP2_CapCause >> 8) == CP2Ca_RETURN)
             offset = 0x280;
@@ -1517,14 +1515,21 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 
 #ifdef TARGET_CHERI
-        /* always set PCC from KCC even with EXL */
-        env->active_tc.PCC = env->active_tc.CHWR.KCC;
-        // FIXME: KCC must not be sealed
-        if (!cap_is_unsealed(&env->active_tc.CHWR.KCC)) {
-            error_report("Sealed KCC in exception, detagging: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC));
-            env->active_tc.PCC.cr_tag = false;
-        }
-        env->active_tc.PCC._cr_cursor =  env->active_tc.PC;
+    /* always set PCC from KCC even with EXL */
+    env->active_tc.PCC = env->active_tc.CHWR.KCC;
+    // FIXME: KCC must not be sealed
+    if (!cap_is_unsealed(&env->active_tc.PCC)) {
+        error_report("Sealed KCC in exception, detagging: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(&env->active_tc.PCC));
+        env->active_tc.PCC.cr_tag = false;
+    }
+    env->active_tc.PCC._cr_cursor =  env->active_tc.PC;
+    // We may have to change the CP0 access flag since CHERI may have previously
+    // disabled it by installing a $pcc without the Access_Sys_Regs flag
+    update_cp0_access_for_pc(env);
+    assert(can_access_cp0(env) && "Installing $pcc without ASR in exception?");
+#if defined(CHERI_128)
+  assert(cc128_is_representable_cap_exact(&env->active_tc.PCC));
+#endif
 #endif /* TARGET_CHERI */
 
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -2059,7 +2064,16 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env,
 {
     CPUState *cs = env_cpu(env);
 
-    qemu_log_mask(CPU_LOG_INT, "%s: %d %d\n",
+#ifdef TARGET_CHERI
+    // Translate CP0 Unusable to CP2 ASR fault if we are in kernel mode and
+    // PCC is missing ASR:
+    if (exception == EXCP_CpU && error_code == 0 && in_kernel_mode(env)) {
+        if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
+            do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYS_REGS, pc);
+        }
+    }
+#endif
+    qemu_log_mask(CPU_LOG_INT | CPU_LOG_INSTR, "%s: %d %d\n",
                   __func__, exception, error_code);
     cs->exception_index = exception;
     env->error_code = error_code;
