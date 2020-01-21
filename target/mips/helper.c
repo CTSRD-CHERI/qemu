@@ -1429,8 +1429,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
         cause = 18;
         update_badinstr = !(env->error_code & EXCP_INST_NOTAVAIL);
 #ifdef TARGET_CHERI
-        // FIXME: why do we always clear ERL?
-        env->CP0_Status &= ~(1 << CP0St_ERL);
         if ((env->CP2_CapCause >> 8) == CP2Ca_CALL ||
                 (env->CP2_CapCause >> 8) == CP2Ca_RETURN)
             offset = 0x280;
