@@ -9,7 +9,8 @@ def archiveQEMU(String target) {
 }
   
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
-      buildStage: "Build Linux", nodeLabel: 'linux',
+      buildStage: "Build Linux",
+      nodeLabel: 'xenial', // build on the oldest supported ubuntu version so the binaries also run there
       extraArgs: '--without-sdk --install-prefix=/usr',
       skipTarball: true, afterBuild: archiveQEMU('linux'))
 
