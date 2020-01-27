@@ -64,7 +64,8 @@ void qemu_set_log(int log_flags)
             qemu_logfile = fopen(logfilename, log_append ? "a" : "w");
             if (!qemu_logfile) {
                 perror(logfilename);
-                _exit(1);
+                qemu_log_close();
+                return;
             }
             /* In case we are a daemon redirect stderr to logfile */
             if (is_daemonized()) {
@@ -128,6 +129,9 @@ void qemu_set_log_filename(const char *filename, Error **errp)
     }
     qemu_log_close();
     qemu_set_log(qemu_loglevel);
+    if (!qemu_logfile) {
+        error_setg(errp, "Failed to open logfile: %s", filename);
+    }
 }
 
 /* Returns true if addr is in our debug filter or no filter defined
