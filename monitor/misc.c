@@ -66,8 +66,13 @@
 #include "qemu/option.h"
 #include "qemu/thread.h"
 #include "block/qapi.h"
-#include "qapi/qapi-commands.h"
+#include "qapi/qapi-commands-char.h"
+#include "qapi/qapi-commands-migration.h"
+#include "qapi/qapi-commands-misc.h"
+#include "qapi/qapi-commands-qom.h"
+#include "qapi/qapi-commands-trace.h"
 #include "qapi/qapi-emit-events.h"
+#include "qapi/qapi-init-commands.h"
 #include "qapi/error.h"
 #include "qapi/qmp-event.h"
 #include "qapi/qapi-introspect.h"
@@ -105,9 +110,6 @@ struct MonFdset {
     QLIST_HEAD(, MonFdsetFd) dup_fds;
     QLIST_ENTRY(MonFdset) next;
 };
-
-/* QMP checker flags */
-#define QMP_ACCEPT_UNKNOWNS 1
 
 /* Protects mon_fdsets */
 static QemuMutex mon_fdsets_lock;
@@ -394,7 +396,7 @@ int monitor_set_cpu(int cpu_index)
 /* Callers must hold BQL. */
 static CPUState *mon_get_cpu_sync(bool synchronize)
 {
-    CPUState *cpu;
+    CPUState *cpu = NULL;
 
     if (cur_mon->mon_cpu_path) {
         cpu = (CPUState *) object_resolve_path_type(cur_mon->mon_cpu_path,
@@ -411,6 +413,7 @@ static CPUState *mon_get_cpu_sync(bool synchronize)
         monitor_set_cpu(first_cpu->cpu_index);
         cpu = first_cpu;
     }
+    assert(cpu != NULL);
     if (synchronize) {
         cpu_synchronize_state(cpu);
     }
@@ -1959,6 +1962,32 @@ void object_add_completion(ReadLineState *rs, int nb_args, const char *str)
         elt = elt->next;
     }
     g_slist_free(list);
+}
+
+static int qdev_add_hotpluggable_device(Object *obj, void *opaque)
+{
+    GSList **list = opaque;
+    DeviceState *dev = (DeviceState *)object_dynamic_cast(OBJECT(obj),
+                                                          TYPE_DEVICE);
+
+    if (dev == NULL) {
+        return 0;
+    }
+
+    if (dev->realized && object_property_get_bool(obj, "hotpluggable", NULL)) {
+        *list = g_slist_append(*list, dev);
+    }
+
+    return 0;
+}
+
+static GSList *qdev_build_hotpluggable_device_list(Object *peripheral)
+{
+    GSList *list = NULL;
+
+    object_child_foreach(peripheral, qdev_add_hotpluggable_device, &list);
+
+    return list;
 }
 
 static void peripheral_device_del_completion(ReadLineState *rs,

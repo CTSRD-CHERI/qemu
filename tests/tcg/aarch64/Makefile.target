@@ -18,8 +18,9 @@ run-fcvt: fcvt
 	$(call diff-out,$<,$(AARCH64_SRC)/fcvt.ref)
 
 # Pauth Tests
-AARCH64_TESTS += pauth-1 pauth-2
+AARCH64_TESTS += pauth-1 pauth-2 pauth-4
 run-pauth-%: QEMU_OPTS += -cpu max
+pauth-%: CFLAGS += -march=armv8.3-a
 
 # Semihosting smoke test for linux-user
 AARCH64_TESTS += semihosting
@@ -31,5 +32,12 @@ run-plugin-semihosting-with-%:
 		-plugin $(PLUGIN_DIR)/$(call extract-plugin,$@) \
 		 $(call strip-plugin,$<) 2> $<.err, \
 		"$< on $(TARGET_NAME) with $*")
+
+AARCH64_TESTS += semiconsole
+run-semiconsole: semiconsole
+	$(call skip-test, $<, "MANUAL ONLY")
+
+run-plugin-semiconsole-with-%:
+	$(call skip-test, $<, "MANUAL ONLY")
 
 TESTS += $(AARCH64_TESTS)

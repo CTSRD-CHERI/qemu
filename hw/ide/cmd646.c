@@ -302,7 +302,7 @@ static void pci_cmd646_ide_realize(PCIDevice *dev, Error **errp)
     }
     g_free(irq);
 
-    vmstate_register(DEVICE(dev), 0, &vmstate_ide_pci, d);
+    vmstate_register(VMSTATE_IF(dev), 0, &vmstate_ide_pci, d);
     qemu_register_reset(cmd646_reset, d);
 }
 
@@ -347,7 +347,7 @@ static void cmd646_ide_class_init(ObjectClass *klass, void *data)
     k->class_id = PCI_CLASS_STORAGE_IDE;
     k->config_read = cmd646_pci_config_read;
     k->config_write = cmd646_pci_config_write;
-    dc->props = cmd646_ide_properties;
+    device_class_set_props(dc, cmd646_ide_properties);
     set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
 }
 

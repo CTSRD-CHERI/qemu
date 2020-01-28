@@ -208,10 +208,10 @@ static int ast2600_rambits(AspeedSDMCState *s)
     }
 
     /* use a common default */
-    warn_report("Invalid RAM size 0x%" PRIx64 ". Using default 512M",
+    warn_report("Invalid RAM size 0x%" PRIx64 ". Using default 1024M",
                 s->ram_size);
-    s->ram_size = 512 << 20;
-    return ASPEED_SDMC_AST2600_512MB;
+    s->ram_size = 1024 << 20;
+    return ASPEED_SDMC_AST2600_1024MB;
 }
 
 static void aspeed_sdmc_reset(DeviceState *dev)
@@ -261,7 +261,7 @@ static void aspeed_sdmc_class_init(ObjectClass *klass, void *data)
     dc->reset = aspeed_sdmc_reset;
     dc->desc = "ASPEED SDRAM Memory Controller";
     dc->vmsd = &vmstate_aspeed_sdmc;
-    dc->props = aspeed_sdmc_properties;
+    device_class_set_props(dc, aspeed_sdmc_properties);
 }
 
 static const TypeInfo aspeed_sdmc_info = {

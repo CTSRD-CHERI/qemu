@@ -1093,7 +1093,7 @@ static void strongarm_uart_receive(void *opaque, const uint8_t *buf, int size)
     strongarm_uart_update_int_status(s);
 }
 
-static void strongarm_uart_event(void *opaque, int event)
+static void strongarm_uart_event(void *opaque, QEMUChrEvent event)
 {
     StrongARMUARTState *s = opaque;
     if (event == CHR_EVENT_BREAK) {
@@ -1327,7 +1327,7 @@ static void strongarm_uart_class_init(ObjectClass *klass, void *data)
     dc->desc = "StrongARM UART controller";
     dc->reset = strongarm_uart_reset;
     dc->vmsd = &vmstate_strongarm_uart_regs;
-    dc->props = strongarm_uart_properties;
+    device_class_set_props(dc, strongarm_uart_properties);
     dc->realize = strongarm_uart_realize;
 }
 

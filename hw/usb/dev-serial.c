@@ -461,7 +461,7 @@ static void usb_serial_read(void *opaque, const uint8_t *buf, int size)
     s->recv_used += size;
 }
 
-static void usb_serial_event(void *opaque, int event)
+static void usb_serial_event(void *opaque, QEMUChrEvent event)
 {
     USBSerialState *s = opaque;
 
@@ -478,6 +478,10 @@ static void usb_serial_event(void *opaque, int event)
             if (s->dev.attached) {
                 usb_device_detach(&s->dev);
             }
+            break;
+        case CHR_EVENT_MUX_IN:
+        case CHR_EVENT_MUX_OUT:
+            /* Ignore */
             break;
     }
 }
@@ -563,7 +567,7 @@ static void usb_serial_class_initfn(ObjectClass *klass, void *data)
 
     uc->product_desc   = "QEMU USB Serial";
     uc->usb_desc       = &desc_serial;
-    dc->props = serial_properties;
+    device_class_set_props(dc, serial_properties);
 }
 
 static const TypeInfo serial_info = {
@@ -584,7 +588,7 @@ static void usb_braille_class_initfn(ObjectClass *klass, void *data)
 
     uc->product_desc   = "QEMU USB Braille";
     uc->usb_desc       = &desc_braille;
-    dc->props = braille_properties;
+    device_class_set_props(dc, braille_properties);
 }
 
 static const TypeInfo braille_info = {

@@ -162,6 +162,11 @@ def qemu_io(*args):
         sys.stderr.write('qemu-io received signal %i: %s\n' % (-exitcode, ' '.join(args)))
     return subp.communicate()[0]
 
+def qemu_io_log(*args):
+    result = qemu_io(*args)
+    log(result, filters=[filter_testfiles, filter_qemu_io])
+    return result
+
 def qemu_io_silent(*args):
     '''Run qemu-io and return the exit code, suppressing stdout'''
     args = qemu_io_args + list(args)
@@ -604,7 +609,7 @@ class VM(qtest.QEMUQtestMachine):
         ]
         error = None
         while True:
-            ev = filter_qmp_event(self.events_wait(events))
+            ev = filter_qmp_event(self.events_wait(events, timeout=wait))
             if ev['event'] != 'JOB_STATUS_CHANGE':
                 if use_log:
                     log(ev)
@@ -617,6 +622,8 @@ class VM(qtest.QEMUQtestMachine):
                         error = j['error']
                         if use_log:
                             log('Job failed: %s' % (j['error']))
+            elif status == 'ready':
+                self.qmp_log('job-complete', id=job)
             elif status == 'pending' and not auto_finalize:
                 if pre_finalize:
                     pre_finalize()
@@ -636,6 +643,22 @@ class VM(qtest.QEMUQtestMachine):
             elif status == 'null':
                 return error
 
+    # Returns None on success, and an error string on failure
+    def blockdev_create(self, options, job_id='job0', filters=None):
+        if filters is None:
+            filters = [filter_qmp_testfiles]
+        result = self.qmp_log('blockdev-create', filters=filters,
+                              job_id=job_id, options=options)
+
+        if 'return' in result:
+            assert result['return'] == {}
+            job_result = self.run_job(job_id)
+        else:
+            job_result = result['error']
+
+        log("")
+        return job_result
+
     def enable_migration_events(self, name):
         log('Enabling migration QMP events on %s...' % name)
         log(self.qmp('migrate-set-capabilities', capabilities=[
@@ -645,12 +668,16 @@ class VM(qtest.QEMUQtestMachine):
             }
         ]))
 
-    def wait_migration(self):
+    def wait_migration(self, expect_runstate):
         while True:
             event = self.event_wait('MIGRATION')
             log(event, filters=[filter_qmp_event])
             if event['data']['status'] == 'completed':
                 break
+        # The event may occur in finish-migrate, so wait for the expected
+        # post-migration runstate
+        while self.qmp('query-status')['return']['status'] != expect_runstate:
+            pass
 
     def node_info(self, node_name):
         nodes = self.qmp('query-named-block-nodes')
@@ -788,15 +815,20 @@ class QMPTestCase(unittest.TestCase):
         self.assert_no_active_block_jobs()
         return result
 
-    def wait_until_completed(self, drive='drive0', check_offset=True, wait=60.0):
+    def wait_until_completed(self, drive='drive0', check_offset=True, wait=60.0,
+                             error=None):
         '''Wait for a block job to finish, returning the event'''
         while True:
             for event in self.vm.get_qmp_events(wait=wait):
                 if event['event'] == 'BLOCK_JOB_COMPLETED':
                     self.assert_qmp(event, 'data/device', drive)
-                    self.assert_qmp_absent(event, 'data/error')
-                    if check_offset:
-                        self.assert_qmp(event, 'data/offset', event['data']['len'])
+                    if error is None:
+                        self.assert_qmp_absent(event, 'data/error')
+                        if check_offset:
+                            self.assert_qmp(event, 'data/offset',
+                                            event['data']['len'])
+                    else:
+                        self.assert_qmp(event, 'data/error', error)
                     self.assert_no_active_block_jobs()
                     return event
                 elif event['event'] == 'JOB_STATUS_CHANGE':
@@ -814,7 +846,8 @@ class QMPTestCase(unittest.TestCase):
         self.assert_qmp(event, 'data/type', 'mirror')
         self.assert_qmp(event, 'data/offset', event['data']['len'])
 
-    def complete_and_wait(self, drive='drive0', wait_ready=True):
+    def complete_and_wait(self, drive='drive0', wait_ready=True,
+                          completion_error=None):
         '''Complete a block job and wait for it to finish'''
         if wait_ready:
             self.wait_ready(drive=drive)
@@ -822,7 +855,7 @@ class QMPTestCase(unittest.TestCase):
         result = self.vm.qmp('block-job-complete', device=drive)
         self.assert_qmp(result, 'return', {})
 
-        event = self.wait_until_completed(drive=drive)
+        event = self.wait_until_completed(drive=drive, error=completion_error)
         self.assert_qmp(event, 'data/type', 'mirror')
 
     def pause_wait(self, job_id='job0'):

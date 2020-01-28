@@ -394,11 +394,8 @@ static NamedGPIOList *qdev_get_named_gpio_list(DeviceState *dev,
     NamedGPIOList *ngl;
 
     QLIST_FOREACH(ngl, &dev->gpios, node) {
-        /* NULL is a valid and matchable name, otherwise do a normal
-         * strcmp match.
-         */
-        if ((!ngl->name && !name) ||
-                (name && ngl->name && strcmp(name, ngl->name) == 0)) {
+        /* NULL is a valid and matchable name. */
+        if (g_strcmp0(name, ngl->name) == 0) {
             return ngl;
         }
     }
@@ -681,13 +678,11 @@ static void qdev_get_legacy_property(Object *obj, Visitor *v,
 }
 
 /**
- * qdev_property_add_legacy:
+ * qdev_class_add_legacy_property:
  * @dev: Device to add the property to.
  * @prop: The qdev property definition.
- * @errp: location to store error information.
  *
  * Add a legacy QOM property to @dev for qdev property @prop.
- * On error, store error in @errp.
  *
  * Legacy properties are string versions of QOM properties.  The format of
  * the string depends on the property type.  Legacy properties are only
@@ -696,75 +691,66 @@ static void qdev_get_legacy_property(Object *obj, Visitor *v,
  * Do not use this in new code!  QOM Properties added through this interface
  * will be given names in the "legacy" namespace.
  */
-static void qdev_property_add_legacy(DeviceState *dev, Property *prop,
-                                     Error **errp)
+static void qdev_class_add_legacy_property(DeviceClass *dc, Property *prop)
 {
-    gchar *name;
+    g_autofree char *name = NULL;
 
     /* Register pointer properties as legacy properties */
     if (!prop->info->print && prop->info->get) {
         return;
     }
 
-    if (prop->info->create) {
-        return;
-    }
-
     name = g_strdup_printf("legacy-%s", prop->name);
-    object_property_add(OBJECT(dev), name, "str",
-                        prop->info->print ? qdev_get_legacy_property : prop->info->get,
-                        NULL,
-                        NULL,
-                        prop, errp);
-
-    g_free(name);
+    object_class_property_add(OBJECT_CLASS(dc), name, "str",
+        prop->info->print ? qdev_get_legacy_property : prop->info->get,
+        NULL, NULL, prop, &error_abort);
 }
 
-/**
- * qdev_property_add_static:
- * @dev: Device to add the property to.
- * @prop: The qdev property definition.
- * @errp: location to store error information.
- *
- * Add a static QOM property to @dev for qdev property @prop.
- * On error, store error in @errp.  Static properties access data in a struct.
- * The type of the QOM property is derived from prop->info.
- */
-void qdev_property_add_static(DeviceState *dev, Property *prop,
-                              Error **errp)
+void qdev_property_add_static(DeviceState *dev, Property *prop)
 {
-    Error *local_err = NULL;
     Object *obj = OBJECT(dev);
+    ObjectProperty *op;
 
-    if (prop->info->create) {
-        prop->info->create(obj, prop, &local_err);
-    } else {
-        /*
-         * TODO qdev_prop_ptr does not have getters or setters.  It must
-         * go now that it can be replaced with links.  The test should be
-         * removed along with it: all static properties are read/write.
-         */
-        if (!prop->info->get && !prop->info->set) {
-            return;
-        }
-        object_property_add(obj, prop->name, prop->info->name,
-                            prop->info->get, prop->info->set,
-                            prop->info->release,
-                            prop, &local_err);
-    }
+    assert(!prop->info->create);
 
-    if (local_err) {
-        error_propagate(errp, local_err);
-        return;
-    }
+    op = object_property_add(obj, prop->name, prop->info->name,
+                             prop->info->get, prop->info->set,
+                             prop->info->release,
+                             prop, &error_abort);
 
     object_property_set_description(obj, prop->name,
                                     prop->info->description,
                                     &error_abort);
 
     if (prop->set_default) {
-        prop->info->set_default_value(obj, prop);
+        prop->info->set_default_value(op, prop);
+        if (op->init) {
+            op->init(obj, op);
+        }
     }
+}
+
+static void qdev_class_add_property(DeviceClass *klass, Property *prop)
+{
+    ObjectClass *oc = OBJECT_CLASS(klass);
+
+    if (prop->info->create) {
+        prop->info->create(oc, prop, &error_abort);
+    } else {
+        ObjectProperty *op;
+
+        op = object_class_property_add(oc,
+                                       prop->name, prop->info->name,
+                                       prop->info->get, prop->info->set,
+                                       prop->info->release,
+                                       prop, &error_abort);
+        if (prop->set_default) {
+            prop->info->set_default_value(op, prop);
+        }
+    }
+    object_class_property_set_description(oc, prop->name,
+                                          prop->info->description,
+                                          &error_abort);
 }
 
 /* @qdev_alias_all_properties - Add alias properties to the source object for
@@ -779,7 +765,7 @@ void qdev_alias_all_properties(DeviceState *target, Object *source)
     do {
         DeviceClass *dc = DEVICE_CLASS(class);
 
-        for (prop = dc->props; prop && prop->name; prop++) {
+        for (prop = dc->props_; prop && prop->name; prop++) {
             object_property_add_alias(source, prop->name,
                                       OBJECT(target), prop->name,
                                       &error_abort);
@@ -788,44 +774,18 @@ void qdev_alias_all_properties(DeviceState *target, Object *source)
     } while (class != object_class_by_name(TYPE_DEVICE));
 }
 
-static int qdev_add_hotpluggable_device(Object *obj, void *opaque)
-{
-    GSList **list = opaque;
-    DeviceState *dev = (DeviceState *)object_dynamic_cast(OBJECT(obj),
-                                                          TYPE_DEVICE);
-
-    if (dev == NULL) {
-        return 0;
-    }
-
-    if (dev->realized && object_property_get_bool(obj, "hotpluggable", NULL)) {
-        *list = g_slist_append(*list, dev);
-    }
-
-    return 0;
-}
-
-GSList *qdev_build_hotpluggable_device_list(Object *peripheral)
-{
-    GSList *list = NULL;
-
-    object_child_foreach(peripheral, qdev_add_hotpluggable_device, &list);
-
-    return list;
-}
-
 static bool device_get_realized(Object *obj, Error **errp)
 {
     DeviceState *dev = DEVICE(obj);
     return dev->realized;
 }
 
-static bool check_only_migratable(Object *obj, Error **err)
+static bool check_only_migratable(Object *obj, Error **errp)
 {
     DeviceClass *dc = DEVICE_GET_CLASS(obj);
 
     if (!vmstate_check_only_migratable(dc->vmsd)) {
-        error_setg(err, "Device %s is not migratable, but "
+        error_setg(errp, "Device %s is not migratable, but "
                    "--only-migratable was specified",
                    object_get_typename(obj));
         return false;
@@ -874,10 +834,9 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
 
         if (dc->realize) {
             dc->realize(dev, &local_err);
-        }
-
-        if (local_err != NULL) {
-            goto fail;
+            if (local_err != NULL) {
+                goto fail;
+            }
         }
 
         DEVICE_LISTENER_CALL(realize, Forward, dev);
@@ -890,7 +849,9 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
         dev->canonical_path = object_get_canonical_path(OBJECT(dev));
 
         if (qdev_get_vmsd(dev)) {
-            if (vmstate_register_with_alias_id(dev, -1, qdev_get_vmsd(dev), dev,
+            if (vmstate_register_with_alias_id(VMSTATE_IF(dev),
+                                               VMSTATE_INSTANCE_ID_ANY,
+                                               qdev_get_vmsd(dev), dev,
                                                dev->instance_id_alias,
                                                dev->alias_required_for_version,
                                                &local_err) < 0) {
@@ -918,27 +879,26 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
        }
 
     } else if (!value && dev->realized) {
-        Error **local_errp = NULL;
+        /* We want local_err to track only the first error */
         QLIST_FOREACH(bus, &dev->child_bus, sibling) {
-            local_errp = local_err ? NULL : &local_err;
             object_property_set_bool(OBJECT(bus), false, "realized",
-                                     local_errp);
+                                     local_err ? NULL : &local_err);
         }
         if (qdev_get_vmsd(dev)) {
-            vmstate_unregister(dev, qdev_get_vmsd(dev), dev);
+            vmstate_unregister(VMSTATE_IF(dev), qdev_get_vmsd(dev), dev);
         }
         if (dc->unrealize) {
-            local_errp = local_err ? NULL : &local_err;
-            dc->unrealize(dev, local_errp);
+            dc->unrealize(dev, local_err ? NULL : &local_err);
         }
         dev->pending_deleted_event = true;
         DEVICE_LISTENER_CALL(unrealize, Reverse, dev);
+
+        if (local_err != NULL) {
+            goto fail;
+        }
     }
 
-    if (local_err != NULL) {
-        goto fail;
-    }
-
+    assert(local_err == NULL);
     dev->realized = value;
     return;
 
@@ -949,7 +909,7 @@ child_realize_fail:
     }
 
     if (qdev_get_vmsd(dev)) {
-        vmstate_unregister(dev, qdev_get_vmsd(dev), dev);
+        vmstate_unregister(VMSTATE_IF(dev), qdev_get_vmsd(dev), dev);
     }
 
 post_realize_fail:
@@ -976,7 +936,7 @@ static bool device_get_hotpluggable(Object *obj, Error **errp)
                                 qbus_is_hotpluggable(dev->parent_bus));
 }
 
-static bool device_get_hotplugged(Object *obj, Error **err)
+static bool device_get_hotplugged(Object *obj, Error **errp)
 {
     DeviceState *dev = DEVICE(obj);
 
@@ -986,8 +946,6 @@ static bool device_get_hotplugged(Object *obj, Error **err)
 static void device_initfn(Object *obj)
 {
     DeviceState *dev = DEVICE(obj);
-    ObjectClass *class;
-    Property *prop;
 
     if (qdev_hotplug) {
         dev->hotplugged = 1;
@@ -998,26 +956,6 @@ static void device_initfn(Object *obj)
     dev->realized = false;
     dev->allow_unplug_during_migration = false;
 
-    object_property_add_bool(obj, "realized",
-                             device_get_realized, device_set_realized, NULL);
-    object_property_add_bool(obj, "hotpluggable",
-                             device_get_hotpluggable, NULL, NULL);
-    object_property_add_bool(obj, "hotplugged",
-                             device_get_hotplugged, NULL,
-                             &error_abort);
-
-    class = object_get_class(OBJECT(dev));
-    do {
-        for (prop = DEVICE_CLASS(class)->props; prop && prop->name; prop++) {
-            qdev_property_add_legacy(dev, prop, &error_abort);
-            qdev_property_add_static(dev, prop, &error_abort);
-        }
-        class = object_class_get_parent(class);
-    } while (class != object_class_by_name(TYPE_DEVICE));
-
-    object_property_add_link(OBJECT(dev), "parent_bus", TYPE_BUS,
-                             (Object **)&dev->parent_bus, NULL, 0,
-                             &error_abort);
     QLIST_INIT(&dev->gpios);
 }
 
@@ -1067,7 +1005,7 @@ static void device_class_base_init(ObjectClass *class, void *data)
     /* We explicitly look up properties in the superclasses,
      * so do not propagate them to the subclasses.
      */
-    klass->props = NULL;
+    klass->props_ = NULL;
 }
 
 static void device_unparent(Object *obj)
@@ -1089,9 +1027,18 @@ static void device_unparent(Object *obj)
     }
 }
 
+static char *
+device_vmstate_if_get_id(VMStateIf *obj)
+{
+    DeviceState *dev = DEVICE(obj);
+
+    return qdev_get_dev_path(dev);
+}
+
 static void device_class_init(ObjectClass *class, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(class);
+    VMStateIfClass *vc = VMSTATE_IF_CLASS(class);
 
     class->unparent = device_unparent;
 
@@ -1103,6 +1050,31 @@ static void device_class_init(ObjectClass *class, void *data)
      */
     dc->hotpluggable = true;
     dc->user_creatable = true;
+    vc->get_id = device_vmstate_if_get_id;
+
+    object_class_property_add_bool(class, "realized",
+                                   device_get_realized, device_set_realized,
+                                   &error_abort);
+    object_class_property_add_bool(class, "hotpluggable",
+                                   device_get_hotpluggable, NULL,
+                                   &error_abort);
+    object_class_property_add_bool(class, "hotplugged",
+                                   device_get_hotplugged, NULL,
+                                   &error_abort);
+    object_class_property_add_link(class, "parent_bus", TYPE_BUS,
+                                   offsetof(DeviceState, parent_bus), NULL, 0,
+                                   &error_abort);
+}
+
+void device_class_set_props(DeviceClass *dc, Property *props)
+{
+    Property *prop;
+
+    dc->props_ = props;
+    for (prop = props; prop && prop->name; prop++) {
+        qdev_class_add_legacy_property(dc, prop);
+        qdev_class_add_property(dc, prop);
+    }
 }
 
 void device_class_set_parent_reset(DeviceClass *dc,
@@ -1160,6 +1132,10 @@ static const TypeInfo device_type_info = {
     .class_init = device_class_init,
     .abstract = true,
     .class_size = sizeof(DeviceClass),
+    .interfaces = (InterfaceInfo[]) {
+        { TYPE_VMSTATE_IF },
+        { }
+    }
 };
 
 static void qdev_register_types(void)

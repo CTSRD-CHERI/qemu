@@ -1,17 +1,17 @@
 #######################################################################
 # Common libraries for tools and emulators
-stub-obj-y = stubs/ util/ crypto/
-util-obj-y = util/ qobject/ qapi/
+stub-obj-y = stubs/
+util-obj-y = crypto/ util/ qobject/ qapi/
+qom-obj-y = qom/
+
+#######################################################################
+# code used by both qemu system emulation and qemu-img
+
+ifeq ($(call lor,$(CONFIG_SOFTMMU),$(CONFIG_TOOLS)),y)
 
 chardev-obj-y = chardev/
 
-#######################################################################
-# authz-obj-y is code used by both qemu system emulation and qemu-img
-
 authz-obj-y = authz/
-
-#######################################################################
-# block-obj-y is code used by both qemu system emulation and qemu-img
 
 block-obj-y = nbd/
 block-obj-y += block.o blockjob.o job.o
@@ -21,21 +21,11 @@ block-obj-$(CONFIG_REPLICATION) += replication.o
 
 block-obj-m = block/
 
-#######################################################################
-# crypto-obj-y is code used by both qemu system emulation and qemu-img
-
 crypto-obj-y = crypto/
-crypto-user-obj-y = crypto/
-
-#######################################################################
-# qom-obj-y is code used by both qemu system emulation and qemu-img
-
-qom-obj-y = qom/
-
-#######################################################################
-# io-obj-y is code used by both qemu system emulation and qemu-img
 
 io-obj-y = io/
+
+endif # CONFIG_SOFTMMU or CONFIG_TOOLS
 
 ######################################################################
 # Target independent part of system emulation. The long term path is to
@@ -55,6 +45,7 @@ common-obj-$(CONFIG_POSIX) += os-posix.o
 
 common-obj-$(CONFIG_LINUX) += fsdev/
 
+common-obj-y += accel/
 common-obj-y += migration/
 
 common-obj-y += audio/
@@ -65,8 +56,6 @@ common-obj-y += replay/
 
 common-obj-y += ui/
 common-obj-m += ui/
-common-obj-y += bt-host.o bt-vhci.o
-bt-host.o-cflags := $(BLUEZ_CFLAGS)
 
 common-obj-y += dma-helpers.o
 common-obj-$(CONFIG_TPM) += tpm.o
@@ -80,11 +69,9 @@ qemu-seccomp.o-libs := $(SECCOMP_LIBS)
 
 common-obj-$(CONFIG_FDT) += device_tree.o
 
-######################################################################
-# qapi
-
 common-obj-y += qapi/
-endif
+
+endif # CONFIG_SOFTMMU
 
 #######################################################################
 # Target-independent parts used in system and user emulation
@@ -123,11 +110,13 @@ vhost-user-blk-obj-y = contrib/vhost-user-blk/
 rdmacm-mux-obj-y = contrib/rdmacm-mux/
 vhost-user-input-obj-y = contrib/vhost-user-input/
 vhost-user-gpu-obj-y = contrib/vhost-user-gpu/
+virtiofsd-obj-y = tools/virtiofsd/
 
 ######################################################################
 trace-events-subdirs =
 trace-events-subdirs += accel/kvm
 trace-events-subdirs += accel/tcg
+trace-events-subdirs += backends
 trace-events-subdirs += crypto
 trace-events-subdirs += monitor
 ifeq ($(CONFIG_USER_ONLY),y)

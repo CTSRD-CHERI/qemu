@@ -263,7 +263,6 @@ static Property vuf_properties[] = {
     DEFINE_PROP_UINT16("num-request-queues", VHostUserFS,
                        conf.num_request_queues, 1),
     DEFINE_PROP_UINT16("queue-size", VHostUserFS, conf.queue_size, 128),
-    DEFINE_PROP_STRING("vhostfd", VHostUserFS, conf.vhostfd),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -272,7 +271,7 @@ static void vuf_class_init(ObjectClass *klass, void *data)
     DeviceClass *dc = DEVICE_CLASS(klass);
     VirtioDeviceClass *vdc = VIRTIO_DEVICE_CLASS(klass);
 
-    dc->props = vuf_properties;
+    device_class_set_props(dc, vuf_properties);
     dc->vmsd = &vuf_vmstate;
     set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
     vdc->realize = vuf_device_realize;

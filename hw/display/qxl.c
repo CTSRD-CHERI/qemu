@@ -1181,6 +1181,7 @@ static const QXLInterface qxl_interface = {
 
 static const GraphicHwOps qxl_ops = {
     .gfx_update  = qxl_hw_update,
+    .gfx_update_async = true,
 };
 
 static void qxl_enter_vga_mode(PCIQXLDevice *d)
@@ -2477,7 +2478,7 @@ static void qxl_pci_class_init(ObjectClass *klass, void *data)
     set_bit(DEVICE_CATEGORY_DISPLAY, dc->categories);
     dc->reset = qxl_reset_handler;
     dc->vmsd = &qxl_vmstate;
-    dc->props = qxl_properties;
+    device_class_set_props(dc, qxl_properties);
 }
 
 static const TypeInfo qxl_pci_type_info = {

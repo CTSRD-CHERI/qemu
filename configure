@@ -101,7 +101,7 @@ update_cxxflags() {
     # Set QEMU_CXXFLAGS from QEMU_CFLAGS by filtering out those
     # options which some versions of GCC's C++ compiler complain about
     # because they only make sense for C programs.
-    QEMU_CXXFLAGS="$QEMU_CXXFLAGS -D__STDC_LIMIT_MACROS"
+    QEMU_CXXFLAGS="$QEMU_CXXFLAGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS"
 
     for arg in $QEMU_CFLAGS; do
         case $arg in
@@ -126,7 +126,7 @@ compile_object() {
 compile_prog() {
   local_cflags="$1"
   local_ldflags="$2"
-  do_cc $QEMU_CFLAGS $local_cflags -o $TMPE $TMPC $LDFLAGS $local_ldflags
+  do_cc $QEMU_CFLAGS $local_cflags -o $TMPE $TMPC $QEMU_LDFLAGS $local_ldflags
 }
 
 # symbolically link $1 to $2.  Portable version of "ln -sf".
@@ -302,6 +302,7 @@ audio_win_int=""
 libs_qga=""
 debug_info="yes"
 stack_protector=""
+use_containers="yes"
 
 if test -e "$source_path/.git"
 then
@@ -349,7 +350,6 @@ unset target_list_exclude
 # Distributions want to ensure that several features are compiled in, and it
 # is impossible without a --enable-foo that exits if a feature is not found.
 
-bluez=""
 brlapi=""
 curl=""
 curses=""
@@ -524,10 +524,11 @@ for opt do
   --cpu=*) cpu="$optarg"
   ;;
   --extra-cflags=*) QEMU_CFLAGS="$QEMU_CFLAGS $optarg"
+                    QEMU_LDFLAGS="$QEMU_LDFLAGS $optarg"
   ;;
   --extra-cxxflags=*) QEMU_CXXFLAGS="$QEMU_CXXFLAGS $optarg"
   ;;
-  --extra-ldflags=*) LDFLAGS="$LDFLAGS $optarg"
+  --extra-ldflags=*) QEMU_LDFLAGS="$QEMU_LDFLAGS $optarg"
                      EXTRA_LDFLAGS="$optarg"
   ;;
   --enable-debug-info) debug_info="yes"
@@ -597,9 +598,9 @@ QEMU_CFLAGS="-Wall -Wundef -Wwrite-strings -Wmissing-prototypes $QEMU_CFLAGS"
 QEMU_CFLAGS="-Wstrict-prototypes -Wredundant-decls $QEMU_CFLAGS"
 QEMU_CFLAGS="-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE $QEMU_CFLAGS"
 QEMU_INCLUDES="-iquote . -iquote \$(SRC_PATH) -iquote \$(SRC_PATH)/accel/tcg -iquote \$(SRC_PATH)/include"
+QEMU_INCLUDES="$QEMU_INCLUDES -iquote \$(SRC_PATH)/disas/libvixl"
 if test "$debug_info" = "yes"; then
     CFLAGS="-g $CFLAGS"
-    LDFLAGS="-g $LDFLAGS"
 fi
 
 # running configure in the source tree?
@@ -845,12 +846,12 @@ Darwin)
   LDFLAGS_SHARED="-bundle -undefined dynamic_lookup"
   if [ "$cpu" = "x86_64" ] ; then
     QEMU_CFLAGS="-arch x86_64 $QEMU_CFLAGS"
-    LDFLAGS="-arch x86_64 $LDFLAGS"
+    QEMU_LDFLAGS="-arch x86_64 $QEMU_LDFLAGS"
   fi
   cocoa="yes"
   audio_drv_list="coreaudio try-sdl"
   audio_possible_drivers="coreaudio sdl"
-  LDFLAGS="-framework CoreFoundation -framework IOKit $LDFLAGS"
+  QEMU_LDFLAGS="-framework CoreFoundation -framework IOKit $QEMU_LDFLAGS"
   libs_softmmu="-F/System/Library/Frameworks -framework Cocoa -framework IOKit $libs_softmmu"
   # Disable attempts to use ObjectiveC features in os/object.h since they
   # won't work when we're compiling with gcc as a C compiler.
@@ -903,13 +904,13 @@ fi
 : ${install=${INSTALL-install}}
 # We prefer python 3.x. A bare 'python' is traditionally
 # python 2.x, but some distros have it as python 3.x, so
-# we check that before python2
+# we check that too
 python=
-for binary in "${PYTHON-python3}" python python2
+for binary in "${PYTHON-python3}" python
 do
     if has "$binary"
     then
-        python="$binary"
+        python=$(command -v "$binary")
         break
     fi
 done
@@ -927,7 +928,7 @@ if test "$mingw32" = "yes" ; then
   DSOSUF=".dll"
   # MinGW needs -mthreads for TLS and macro _MT.
   QEMU_CFLAGS="-mthreads $QEMU_CFLAGS"
-  LIBS="-lwinmm -lws2_32 -liphlpapi $LIBS"
+  LIBS="-lwinmm -lws2_32 $LIBS"
   write_c_skeleton;
   if compile_prog "" "-liberty" ; then
     LIBS="-liberty $LIBS"
@@ -1025,7 +1026,7 @@ for opt do
   ;;
   --static)
     static="yes"
-    LDFLAGS="-static $LDFLAGS"
+    QEMU_LDFLAGS="-static $QEMU_LDFLAGS"
     QEMU_PKG_CONFIG_FLAGS="--static $QEMU_PKG_CONFIG_FLAGS"
   ;;
   --mandir=*) mandir="$optarg"
@@ -1156,10 +1157,6 @@ for opt do
   --disable-brlapi) brlapi="no"
   ;;
   --enable-brlapi) brlapi="yes"
-  ;;
-  --disable-bluez) bluez="no"
-  ;;
-  --enable-bluez) bluez="yes"
   ;;
   --disable-kvm) kvm="no"
   ;;
@@ -1545,6 +1542,10 @@ for opt do
   ;;
   --disable-plugins) plugins="no"
   ;;
+  --enable-containers) use_containers="yes"
+  ;;
+  --disable-containers) use_containers="no"
+  ;;
   *)
       echo "ERROR: unknown option $opt"
       echo "Try '$0 --help' for more information"
@@ -1556,42 +1557,42 @@ done
 case "$cpu" in
     ppc)
            CPU_CFLAGS="-m32"
-           LDFLAGS="-m32 $LDFLAGS"
+           QEMU_LDFLAGS="-m32 $QEMU_LDFLAGS"
            ;;
     ppc64)
            CPU_CFLAGS="-m64"
-           LDFLAGS="-m64 $LDFLAGS"
+           QEMU_LDFLAGS="-m64 $QEMU_LDFLAGS"
            ;;
     sparc)
            CPU_CFLAGS="-m32 -mv8plus -mcpu=ultrasparc"
-           LDFLAGS="-m32 -mv8plus $LDFLAGS"
+           QEMU_LDFLAGS="-m32 -mv8plus $QEMU_LDFLAGS"
            ;;
     sparc64)
            CPU_CFLAGS="-m64 -mcpu=ultrasparc"
-           LDFLAGS="-m64 $LDFLAGS"
+           QEMU_LDFLAGS="-m64 $QEMU_LDFLAGS"
            ;;
     s390)
            CPU_CFLAGS="-m31"
-           LDFLAGS="-m31 $LDFLAGS"
+           QEMU_LDFLAGS="-m31 $QEMU_LDFLAGS"
            ;;
     s390x)
            CPU_CFLAGS="-m64"
-           LDFLAGS="-m64 $LDFLAGS"
+           QEMU_LDFLAGS="-m64 $QEMU_LDFLAGS"
            ;;
     i386)
            CPU_CFLAGS="-m32"
-           LDFLAGS="-m32 $LDFLAGS"
+           QEMU_LDFLAGS="-m32 $QEMU_LDFLAGS"
            ;;
     x86_64)
            # ??? Only extremely old AMD cpus do not have cmpxchg16b.
            # If we truly care, we should simply detect this case at
            # runtime and generate the fallback to serial emulation.
            CPU_CFLAGS="-m64 -mcx16"
-           LDFLAGS="-m64 $LDFLAGS"
+           QEMU_LDFLAGS="-m64 $QEMU_LDFLAGS"
            ;;
     x32)
            CPU_CFLAGS="-mx32"
-           LDFLAGS="-mx32 $LDFLAGS"
+           QEMU_LDFLAGS="-mx32 $QEMU_LDFLAGS"
            ;;
     # No special flags required for other host CPUs
 esac
@@ -1728,6 +1729,7 @@ Advanced options (experts only):
                            track the maximum stack usage of stacks created by qemu_alloc_stack
   --enable-plugins
                            enable plugins via shared library loading
+  --disable-containers     don't use containers for cross-building
 
 Optional features, enabled with --enable-FEATURE and
 disabled with --disable-FEATURE, default is enabled if available:
@@ -1768,7 +1770,6 @@ disabled with --disable-FEATURE, default is enabled if available:
   curl            curl connectivity
   membarrier      membarrier system call (for Linux 4.14+ or Windows)
   fdt             fdt device tree
-  bluez           bluez stack connectivity
   kvm             KVM acceleration support
   hax             HAX acceleration support
   hvf             Hypervisor.framework acceleration support
@@ -1847,8 +1848,8 @@ fi
 
 # Note that if the Python conditional here evaluates True we will exit
 # with status 1 which is a shell 'false' value.
-if ! $python -c 'import sys; sys.exit(sys.version_info < (2,7))'; then
-  error_exit "Cannot use '$python', Python 2 >= 2.7 or Python 3 is required." \
+if ! $python -c 'import sys; sys.exit(sys.version_info < (3,5))'; then
+  error_exit "Cannot use '$python', Python >= 3.5 is required." \
       "Use --python=/path/to/python to specify a supported Python."
 fi
 
@@ -1972,6 +1973,7 @@ EOF
     if do_cc $QEMU_CFLAGS -Werror $flag -c -o $TMPO $TMPC &&
        compile_prog "-Werror $flag" ""; then
       QEMU_CFLAGS="$QEMU_CFLAGS $flag"
+      QEMU_LDFLAGS="$QEMU_LDFLAGS $flag"
       sp_on=1
       break
     fi
@@ -2056,10 +2058,10 @@ EOF
 
   if compile_prog "-fPIE -DPIE" "-pie"; then
     QEMU_CFLAGS="-fPIE -DPIE $QEMU_CFLAGS"
-    LDFLAGS="-pie $LDFLAGS"
+    QEMU_LDFLAGS="-pie $QEMU_LDFLAGS"
     pie="yes"
     if compile_prog "" "-Wl,-z,relro -Wl,-z,now" ; then
-      LDFLAGS="-Wl,-z,relro -Wl,-z,now $LDFLAGS"
+      QEMU_LDFLAGS="-Wl,-z,relro -Wl,-z,now $QEMU_LDFLAGS"
     fi
   else
     if test "$pie" = "yes"; then
@@ -3672,26 +3674,6 @@ EOF
 fi # test "$curl"
 
 ##########################################
-# bluez support probe
-if test "$bluez" != "no" ; then
-  cat > $TMPC << EOF
-#include <bluetooth/bluetooth.h>
-int main(void) { return bt_error(0); }
-EOF
-  bluez_cflags=$($pkg_config --cflags bluez 2>/dev/null)
-  bluez_libs=$($pkg_config --libs bluez 2>/dev/null)
-  if compile_prog "$bluez_cflags" "$bluez_libs" ; then
-    bluez=yes
-    libs_softmmu="$bluez_libs $libs_softmmu"
-  else
-    if test "$bluez" = "yes" ; then
-      feature_not_found "bluez" "Install bluez-libs/libbluetooth devel"
-    fi
-    bluez="no"
-  fi
-fi
-
-##########################################
 # glib support probe
 
 glib_req_ver=2.48
@@ -3726,8 +3708,17 @@ if $pkg_config --atleast-version=$glib_req_ver gio-2.0; then
     gio=yes
     gio_cflags=$($pkg_config --cflags gio-2.0)
     gio_libs=$($pkg_config --libs gio-2.0)
+    gdbus_codegen=$($pkg_config --variable=gdbus_codegen gio-2.0)
+    if [ ! -x "$gdbus_codegen" ]; then
+        gdbus_codegen=
+    fi
 else
     gio=no
+fi
+
+if $pkg_config --atleast-version=$glib_req_ver gio-unix-2.0; then
+    gio_cflags="$gio_cflags $($pkg_config --cflags gio-unix-2.0)"
+    gio_libs="$gio_libs $($pkg_config --libs gio-unix-2.0)"
 fi
 
 # Sanity check that the current size_t matches the
@@ -3867,22 +3858,6 @@ EOF
   fi
 else
   mpathpersist=no
-fi
-
-##########################################
-# libcap probe
-
-if test "$cap" != "no" ; then
-  cat > $TMPC <<EOF
-#include <stdio.h>
-#include <sys/capability.h>
-int main(void) { cap_t caps; caps = cap_init(); return caps != NULL; }
-EOF
-  if compile_prog "" "-lcap" ; then
-    cap=yes
-  else
-    cap=no
-  fi
 fi
 
 ##########################################
@@ -4127,6 +4102,8 @@ if test "$fdt_required" = "yes"; then
       "targets which need it (by specifying a cut down --target-list)."
   fi
   fdt=yes
+elif test "$fdt" != "yes" ; then
+  fdt=no
 fi
 
 if test "$fdt" != "no" ; then
@@ -4793,6 +4770,12 @@ if compile_prog "" "" ; then
   syncfs=yes
 fi
 
+# check for kcov support (kernel must be 4.4+, compiled with certain options)
+kcov=no
+if check_include sys/kcov.h ; then
+    kcov=yes
+fi
+
 # Check we have a new enough version of sphinx-build
 has_sphinx_build() {
     # This is a bit awkward but works: create a trivial document and
@@ -5221,6 +5204,19 @@ int main(void) { return strchrnul(haystack, 'x') != &haystack[6]; }
 EOF
 if compile_prog "" "" ; then
     strchrnul=yes
+fi
+
+#########################################
+# check if we have st_atim
+
+st_atim=no
+cat > $TMPC << EOF
+#include <sys/stat.h>
+#include <stddef.h>
+int main(void) { return offsetof(struct stat, st_atim); }
+EOF
+if compile_prog "" "" ; then
+    st_atim=yes
 fi
 
 ##########################################
@@ -5867,7 +5863,7 @@ EOF
     hvf='no'
   else
     hvf='yes'
-    LDFLAGS="-framework Hypervisor $LDFLAGS"
+    QEMU_LDFLAGS="-framework Hypervisor $QEMU_LDFLAGS"
   fi
 fi
 
@@ -6075,6 +6071,9 @@ case "$slirp" in
     mkdir -p slirp
     slirp_cflags="-I\$(SRC_PATH)/slirp/src -I\$(BUILD_DIR)/slirp/src"
     slirp_libs="-L\$(BUILD_DIR)/slirp -lslirp"
+    if test "$mingw32" = "yes" ; then
+      slirp_libs="$slirp_libs -lws2_32 -liphlpapi"
+    fi
     ;;
 
   system)
@@ -6098,8 +6097,8 @@ esac
 write_c_skeleton
 
 if test "$gcov" = "yes" ; then
-  CFLAGS="-fprofile-arcs -ftest-coverage -g $CFLAGS"
-  LDFLAGS="-fprofile-arcs -ftest-coverage $LDFLAGS"
+  QEMU_CFLAGS="-fprofile-arcs -ftest-coverage -g $QEMU_CFLAGS"
+  QEMU_LDFLAGS="-fprofile-arcs -ftest-coverage $QEMU_LDFLAGS"
 elif test "$fortify_source" = "yes" ; then
   CFLAGS="-O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 $CFLAGS"
 elif test "$debug" = "no"; then
@@ -6107,7 +6106,8 @@ elif test "$debug" = "no"; then
 fi
 
 if test "$have_asan" = "yes"; then
-  CFLAGS="-fsanitize=address $CFLAGS"
+  QEMU_CFLAGS="-fsanitize=address $QEMU_CFLAGS"
+  QEMU_LDFLAGS="-fsanitize=address $QEMU_LDFLAGS"
   if test "$have_asan_iface_h" = "no" ; then
       echo "ASAN build enabled, but ASAN header missing." \
            "Without code annotation, the report may be inferior."
@@ -6117,7 +6117,8 @@ if test "$have_asan" = "yes"; then
   fi
 fi
 if test "$have_ubsan" = "yes"; then
-  CFLAGS="-fsanitize=undefined $CFLAGS"
+  QEMU_CFLAGS="-fsanitize=undefined $QEMU_CFLAGS"
+  QEMU_LDFLAGS="-fsanitize=undefined $QEMU_LDFLAGS"
 fi
 
 ##########################################
@@ -6152,7 +6153,7 @@ fi
 
 if test "$solaris" = "no" ; then
     if $ld --version 2>/dev/null | grep "GNU ld" >/dev/null 2>/dev/null ; then
-        LDFLAGS="-Wl,--warn-common $LDFLAGS"
+        QEMU_LDFLAGS="-Wl,--warn-common $QEMU_LDFLAGS"
     fi
 fi
 
@@ -6167,7 +6168,7 @@ fi
 if test "$mingw32" = "yes" ; then
     for flag in --dynamicbase --no-seh --nxcompat; do
         if ld_has $flag ; then
-            LDFLAGS="-Wl,$flag $LDFLAGS"
+            QEMU_LDFLAGS="-Wl,$flag $QEMU_LDFLAGS"
         fi
     done
 fi
@@ -6210,12 +6211,12 @@ if test "$want_tools" = "yes" ; then
 fi
 if test "$softmmu" = yes ; then
   if test "$linux" = yes; then
-    if test "$virtfs" != no && test "$cap" = yes && test "$attr" = yes ; then
+    if test "$virtfs" != no && test "$cap_ng" = yes && test "$attr" = yes ; then
       virtfs=yes
       tools="$tools fsdev/virtfs-proxy-helper\$(EXESUF)"
     else
       if test "$virtfs" = yes; then
-        error_exit "VirtFS requires libcap devel and libattr devel"
+        error_exit "VirtFS requires libcap-ng devel and libattr devel"
       fi
       virtfs=no
     fi
@@ -6402,7 +6403,7 @@ EOF
 
     update_cxxflags
 
-    if do_cxx $QEMU_CXXFLAGS -o $TMPE $TMPCXX $TMPO $LDFLAGS; then
+    if do_cxx $QEMU_CXXFLAGS -o $TMPE $TMPCXX $TMPO $QEMU_LDFLAGS; then
         # C++ compiler $cxx works ok with C compiler $cc
         :
     else
@@ -6443,6 +6444,7 @@ else
 echo "local state directory   queried at runtime"
 echo "Windows SDK       $win_sdk"
 fi
+echo "Build directory   $(pwd)"
 echo "Source path       $source_path"
 echo "GIT binary        $git"
 echo "GIT submodules    $git_submodules"
@@ -6453,7 +6455,6 @@ echo "Objective-C compiler $objcc"
 echo "ARFLAGS           $ARFLAGS"
 echo "CFLAGS            $CFLAGS"
 echo "QEMU_CFLAGS       $QEMU_CFLAGS"
-echo "LDFLAGS           $LDFLAGS"
 echo "QEMU_LDFLAGS      $QEMU_LDFLAGS"
 echo "make              $make"
 echo "install           $install"
@@ -6515,7 +6516,6 @@ if test "$xen" = "yes" ; then
   echo "xen ctrl version  $xen_ctrl_version"
 fi
 echo "brlapi support    $brlapi"
-echo "bluez  support    $bluez"
 echo "Documentation     $docs"
 echo "PIE               $pie"
 echo "vde support       $vde"
@@ -6631,15 +6631,6 @@ if test "$supported_os" = "no"; then
     echo "configure has succeeded and you can continue to build, but"
     echo "if you care about QEMU on this platform you should contact"
     echo "us upstream at qemu-devel@nongnu.org."
-fi
-
-# Note that if the Python conditional here evaluates True we will exit
-# with status 1 which is a shell 'false' value.
-if ! $python -c 'import sys; sys.exit(sys.version_info < (3,0))'; then
-  echo
-  echo "warning: Python 2 support is deprecated" >&2
-  echo "warning: Python 3 will be required for building future versions of QEMU" >&2
-  python2="y"
 fi
 
 config_host_mak="config-host.mak"
@@ -6769,7 +6760,7 @@ if test "$l2tpv3" = "yes" ; then
   echo "CONFIG_L2TPV3=y" >> $config_host_mak
 fi
 if test "$cap_ng" = "yes" ; then
-  echo "CONFIG_LIBCAP=y" >> $config_host_mak
+  echo "CONFIG_LIBCAP_NG=y" >> $config_host_mak
 fi
 echo "CONFIG_AUDIO_DRIVERS=$audio_drv_list" >> $config_host_mak
 for drv in $audio_drv_list; do
@@ -6916,6 +6907,9 @@ fi
 if test "$syncfs" = "yes" ; then
   echo "CONFIG_SYNCFS=y" >> $config_host_mak
 fi
+if test "$kcov" = "yes" ; then
+  echo "CONFIG_KCOV=y" >> $config_host_mak
+fi
 if test "$inotify" = "yes" ; then
   echo "CONFIG_INOTIFY=y" >> $config_host_mak
 fi
@@ -6927,6 +6921,9 @@ if test "$sem_timedwait" = "yes" ; then
 fi
 if test "$strchrnul" = "yes" ; then
   echo "HAVE_STRCHRNUL=y" >> $config_host_mak
+fi
+if test "$st_atim" = "yes" ; then
+  echo "HAVE_STRUCT_STAT_ST_ATIM=y" >> $config_host_mak
 fi
 if test "$byteswap_h" = "yes" ; then
   echo "CONFIG_BYTESWAP_H=y" >> $config_host_mak
@@ -6943,10 +6940,6 @@ if test "$brlapi" = "yes" ; then
   echo "CONFIG_BRLAPI=y" >> $config_host_mak
   echo "BRLAPI_LIBS=$brlapi_libs" >> $config_host_mak
 fi
-if test "$bluez" = "yes" ; then
-  echo "CONFIG_BLUEZ=y" >> $config_host_mak
-  echo "BLUEZ_CFLAGS=$bluez_cflags" >> $config_host_mak
-fi
 if test "$gtk" = "yes" ; then
   echo "CONFIG_GTK=m" >> $config_host_mak
   echo "GTK_CFLAGS=$gtk_cflags" >> $config_host_mak
@@ -6959,6 +6952,7 @@ if test "$gio" = "yes" ; then
     echo "CONFIG_GIO=y" >> $config_host_mak
     echo "GIO_CFLAGS=$gio_cflags" >> $config_host_mak
     echo "GIO_LIBS=$gio_libs" >> $config_host_mak
+    echo "GDBUS_CODEGEN=$gdbus_codegen" >> $config_host_mak
 fi
 echo "CONFIG_TLS_PRIORITY=\"$tls_priority\"" >> $config_host_mak
 if test "$gnutls" = "yes" ; then
@@ -7482,7 +7476,6 @@ elif test "$ARCH" = "riscv32" || test "$ARCH" = "riscv64" ; then
 else
   QEMU_INCLUDES="-iquote \$(SRC_PATH)/tcg/\$(ARCH) $QEMU_INCLUDES"
 fi
-QEMU_INCLUDES="-iquote \$(SRC_PATH)/tcg $QEMU_INCLUDES"
 
 echo "TOOLS=$tools" >> $config_host_mak
 echo "ROMS=$roms" >> $config_host_mak
@@ -7493,7 +7486,6 @@ echo "INSTALL_DATA=$install -c -m 0644" >> $config_host_mak
 echo "INSTALL_PROG=$install -c -m 0755" >> $config_host_mak
 echo "INSTALL_LIB=$install -c -m 0644" >> $config_host_mak
 echo "PYTHON=$python" >> $config_host_mak
-echo "PYTHON2=$python2" >> $config_host_mak
 echo "CC=$cc" >> $config_host_mak
 if $iasl -h > /dev/null 2>&1; then
   echo "IASL=$iasl" >> $config_host_mak
@@ -7524,9 +7516,8 @@ if test "$sparse" = "yes" ; then
   echo "HOST_CC      := REAL_CC=\"\$(HOST_CC)\" cgcc"  >> $config_host_mak
   echo "QEMU_CFLAGS  += -Wbitwise -Wno-transparent-union -Wno-old-initializer -Wno-non-pointer-null" >> $config_host_mak
 fi
-echo "LDFLAGS=$LDFLAGS" >> $config_host_mak
-echo "LDFLAGS_NOPIE=$LDFLAGS_NOPIE" >> $config_host_mak
 echo "QEMU_LDFLAGS=$QEMU_LDFLAGS" >> $config_host_mak
+echo "LDFLAGS_NOPIE=$LDFLAGS_NOPIE" >> $config_host_mak
 echo "LD_REL_FLAGS=$LD_REL_FLAGS" >> $config_host_mak
 echo "LD_I386_EMULATION=$ld_i386_emulation" >> $config_host_mak
 echo "LIBS+=$LIBS" >> $config_host_mak
@@ -7864,7 +7855,7 @@ if test "$target_bsd_user" = "yes" ; then
 fi
 
 
-# generate QEMU_CFLAGS/LDFLAGS for targets
+# generate QEMU_CFLAGS/QEMU_LDFLAGS for targets
 
 cflags=""
 ldflags=""
@@ -7985,7 +7976,7 @@ if test "$TARGET_ARCH" = "s390x" && test "$target_softmmu" = "yes" && \
     fi
 fi
 
-echo "LDFLAGS+=$ldflags" >> $config_target_mak
+echo "QEMU_LDFLAGS+=$ldflags" >> $config_target_mak
 echo "QEMU_CFLAGS+=$cflags" >> $config_target_mak
 
 done # for target in $targets
@@ -8021,8 +8012,8 @@ fi
 # so the build tree will be missing the link back to the new file, and
 # tests might fail. Prefer to keep the relevant files in their own
 # directory and symlink the directory instead.
-DIRS="tests tests/tcg tests/tcg/lm32 tests/libqos tests/qapi-schema tests/qemu-iotests tests/vm"
-DIRS="$DIRS tests/fp tests/qgraph"
+DIRS="tests tests/tcg tests/tcg/lm32 tests/qapi-schema tests/qtest/libqos"
+DIRS="$DIRS tests/qtest tests/qemu-iotests tests/vm tests/fp tests/qgraph"
 DIRS="$DIRS docs docs/interop fsdev scsi"
 DIRS="$DIRS pc-bios/optionrom pc-bios/s390-ccw"
 DIRS="$DIRS roms/seabios roms/vgabios"
@@ -8061,7 +8052,7 @@ done
 (for i in $cross_cc_vars; do
   export $i
 done
-export target_list source_path
+export target_list source_path use_containers
 $source_path/tests/tcg/configure.sh)
 
 # temporary config to build submodules

@@ -2,13 +2,13 @@ FROM fedora:30
 ENV PACKAGES \
     bc \
     bison \
-    bluez-libs-devel \
     brlapi-devel \
     bzip2 \
     bzip2-devel \
     ccache \
     clang \
     cyrus-sasl-devel \
+    dbus-daemon \
     device-mapper-multipath-devel \
     findutils \
     flex \
@@ -25,7 +25,6 @@ ENV PACKAGES \
     libasan \
     libattr-devel \
     libblockdev-mpath-devel \
-    libcap-devel \
     libcap-ng-devel \
     libcurl-devel \
     libfdt-devel \

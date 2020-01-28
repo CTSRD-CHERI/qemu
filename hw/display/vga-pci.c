@@ -264,11 +264,6 @@ static void pci_std_vga_realize(PCIDevice *dev, Error **errp)
 
         pci_register_bar(&d->dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &d->mmio);
     }
-
-    if (!dev->rom_bar) {
-        /* compatibility with pc-0.13 and older */
-        vga_init_vbe(s, OBJECT(dev), pci_address_space(dev));
-    }
 }
 
 static void pci_std_vga_init(Object *obj)
@@ -388,7 +383,7 @@ static void vga_class_init(ObjectClass *klass, void *data)
     k->realize = pci_std_vga_realize;
     k->romfile = "vgabios-stdvga.bin";
     k->class_id = PCI_CLASS_DISPLAY_VGA;
-    dc->props = vga_pci_properties;
+    device_class_set_props(dc, vga_pci_properties);
     dc->hotpluggable = false;
 }
 
@@ -400,7 +395,7 @@ static void secondary_class_init(ObjectClass *klass, void *data)
     k->realize = pci_secondary_vga_realize;
     k->exit = pci_secondary_vga_exit;
     k->class_id = PCI_CLASS_DISPLAY_OTHER;
-    dc->props = secondary_pci_properties;
+    device_class_set_props(dc, secondary_pci_properties);
     dc->reset = pci_secondary_vga_reset;
 }
 

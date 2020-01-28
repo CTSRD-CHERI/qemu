@@ -2227,6 +2227,24 @@ void bdrv_format_default_perms(BlockDriverState *bs, BdrvChild *c,
     *nshared = shared;
 }
 
+uint64_t bdrv_qapi_perm_to_blk_perm(BlockPermission qapi_perm)
+{
+    static const uint64_t permissions[] = {
+        [BLOCK_PERMISSION_CONSISTENT_READ]  = BLK_PERM_CONSISTENT_READ,
+        [BLOCK_PERMISSION_WRITE]            = BLK_PERM_WRITE,
+        [BLOCK_PERMISSION_WRITE_UNCHANGED]  = BLK_PERM_WRITE_UNCHANGED,
+        [BLOCK_PERMISSION_RESIZE]           = BLK_PERM_RESIZE,
+        [BLOCK_PERMISSION_GRAPH_MOD]        = BLK_PERM_GRAPH_MOD,
+    };
+
+    QEMU_BUILD_BUG_ON(ARRAY_SIZE(permissions) != BLOCK_PERMISSION__MAX);
+    QEMU_BUILD_BUG_ON(1UL << ARRAY_SIZE(permissions) != BLK_PERM_ALL + 1);
+
+    assert(qapi_perm < BLOCK_PERMISSION__MAX);
+
+    return permissions[qapi_perm];
+}
+
 static void bdrv_replace_child_noperm(BdrvChild *child,
                                       BlockDriverState *new_bs)
 {
@@ -4854,23 +4872,8 @@ static void xdbg_graph_add_node(XDbgBlockGraphConstructor *gr, void *node,
 static void xdbg_graph_add_edge(XDbgBlockGraphConstructor *gr, void *parent,
                                 const BdrvChild *child)
 {
-    typedef struct {
-        unsigned int flag;
-        BlockPermission num;
-    } PermissionMap;
-
-    static const PermissionMap permissions[] = {
-        { BLK_PERM_CONSISTENT_READ, BLOCK_PERMISSION_CONSISTENT_READ },
-        { BLK_PERM_WRITE,           BLOCK_PERMISSION_WRITE },
-        { BLK_PERM_WRITE_UNCHANGED, BLOCK_PERMISSION_WRITE_UNCHANGED },
-        { BLK_PERM_RESIZE,          BLOCK_PERMISSION_RESIZE },
-        { BLK_PERM_GRAPH_MOD,       BLOCK_PERMISSION_GRAPH_MOD },
-        { 0, 0 }
-    };
-    const PermissionMap *p;
+    BlockPermission qapi_perm;
     XDbgBlockGraphEdge *edge;
-
-    QEMU_BUILD_BUG_ON(1UL << (ARRAY_SIZE(permissions) - 1) != BLK_PERM_ALL + 1);
 
     edge = g_new0(XDbgBlockGraphEdge, 1);
 
@@ -4878,12 +4881,14 @@ static void xdbg_graph_add_edge(XDbgBlockGraphConstructor *gr, void *parent,
     edge->child = xdbg_graph_node_num(gr, child->bs);
     edge->name = g_strdup(child->name);
 
-    for (p = permissions; p->flag; p++) {
-        if (p->flag & child->perm) {
-            QAPI_LIST_ADD(edge->perm, p->num);
+    for (qapi_perm = 0; qapi_perm < BLOCK_PERMISSION__MAX; qapi_perm++) {
+        uint64_t flag = bdrv_qapi_perm_to_blk_perm(qapi_perm);
+
+        if (flag & child->perm) {
+            QAPI_LIST_ADD(edge->perm, qapi_perm);
         }
-        if (p->flag & child->shared_perm) {
-            QAPI_LIST_ADD(edge->shared_perm, p->num);
+        if (flag & child->shared_perm) {
+            QAPI_LIST_ADD(edge->shared_perm, qapi_perm);
         }
     }
 
@@ -5335,10 +5340,6 @@ static void coroutine_fn bdrv_co_invalidate_cache(BlockDriverState *bs,
         return;
     }
 
-    if (!(bs->open_flags & BDRV_O_INACTIVE)) {
-        return;
-    }
-
     QLIST_FOREACH(child, &bs->children, next) {
         bdrv_co_invalidate_cache(child->bs, &local_err);
         if (local_err) {
@@ -5360,34 +5361,36 @@ static void coroutine_fn bdrv_co_invalidate_cache(BlockDriverState *bs,
      * just keep the extended permissions for the next time that an activation
      * of the image is tried.
      */
-    bs->open_flags &= ~BDRV_O_INACTIVE;
-    bdrv_get_cumulative_perm(bs, &perm, &shared_perm);
-    ret = bdrv_check_perm(bs, NULL, perm, shared_perm, NULL, NULL, &local_err);
-    if (ret < 0) {
-        bs->open_flags |= BDRV_O_INACTIVE;
-        error_propagate(errp, local_err);
-        return;
-    }
-    bdrv_set_perm(bs, perm, shared_perm);
-
-    if (bs->drv->bdrv_co_invalidate_cache) {
-        bs->drv->bdrv_co_invalidate_cache(bs, &local_err);
-        if (local_err) {
+    if (bs->open_flags & BDRV_O_INACTIVE) {
+        bs->open_flags &= ~BDRV_O_INACTIVE;
+        bdrv_get_cumulative_perm(bs, &perm, &shared_perm);
+        ret = bdrv_check_perm(bs, NULL, perm, shared_perm, NULL, NULL, &local_err);
+        if (ret < 0) {
             bs->open_flags |= BDRV_O_INACTIVE;
             error_propagate(errp, local_err);
             return;
         }
-    }
+        bdrv_set_perm(bs, perm, shared_perm);
 
-    FOR_EACH_DIRTY_BITMAP(bs, bm) {
-        bdrv_dirty_bitmap_skip_store(bm, false);
-    }
+        if (bs->drv->bdrv_co_invalidate_cache) {
+            bs->drv->bdrv_co_invalidate_cache(bs, &local_err);
+            if (local_err) {
+                bs->open_flags |= BDRV_O_INACTIVE;
+                error_propagate(errp, local_err);
+                return;
+            }
+        }
 
-    ret = refresh_total_sectors(bs, bs->total_sectors);
-    if (ret < 0) {
-        bs->open_flags |= BDRV_O_INACTIVE;
-        error_setg_errno(errp, -ret, "Could not refresh total sector count");
-        return;
+        FOR_EACH_DIRTY_BITMAP(bs, bm) {
+            bdrv_dirty_bitmap_skip_store(bm, false);
+        }
+
+        ret = refresh_total_sectors(bs, bs->total_sectors);
+        if (ret < 0) {
+            bs->open_flags |= BDRV_O_INACTIVE;
+            error_setg_errno(errp, -ret, "Could not refresh total sector count");
+            return;
+        }
     }
 
     QLIST_FOREACH(parent, &bs->parents, next_parent) {
@@ -5751,12 +5754,11 @@ void bdrv_img_create(const char *filename, const char *fmt,
         return;
     }
 
+    /* Create parameter list */
     create_opts = qemu_opts_append(create_opts, drv->create_opts);
     create_opts = qemu_opts_append(create_opts, proto_drv->create_opts);
 
-    /* Create parameter list with default values */
     opts = qemu_opts_create(create_opts, NULL, 0, &error_abort);
-    qemu_opt_set_number(opts, BLOCK_OPT_SIZE, img_size, &error_abort);
 
     /* Parse -o options */
     if (options) {
@@ -5764,6 +5766,13 @@ void bdrv_img_create(const char *filename, const char *fmt,
         if (local_err) {
             goto out;
         }
+    }
+
+    if (!qemu_opt_get(opts, BLOCK_OPT_SIZE)) {
+        qemu_opt_set_number(opts, BLOCK_OPT_SIZE, img_size, &error_abort);
+    } else if (img_size != UINT64_C(-1)) {
+        error_setg(errp, "The image size must be specified only once");
+        goto out;
     }
 
     if (base_filename) {

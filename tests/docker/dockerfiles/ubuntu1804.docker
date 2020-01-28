@@ -8,11 +8,9 @@ ENV PACKAGES flex bison \
     glusterfs-common \
     libaio-dev \
     libattr1-dev \
-    libbluetooth-dev \
     libbrlapi-dev \
     libbz2-dev \
     libcacard-dev \
-    libcap-dev \
     libcap-ng-dev \
     libcurl4-gnutls-dev \
     libdrm-dev \

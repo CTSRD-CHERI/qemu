@@ -38,7 +38,6 @@
 * Introduction::
 * QEMU PC System emulator::
 * QEMU System emulator for non PC targets::
-* QEMU Guest Agent::
 * QEMU User space emulator::
 * System requirements::
 * Security::
@@ -634,17 +633,6 @@ encrypted disk images.
 * disk_images_snapshot_mode:: Snapshot mode
 * vm_snapshots::              VM snapshots
 * qemu_img_invocation::       qemu-img Invocation
-* qemu_nbd_invocation::       qemu-nbd Invocation
-* disk_images_formats::       Disk image file formats
-* host_drives::               Using host drives
-* disk_images_fat_images::    Virtual FAT disk images
-* disk_images_nbd::           NBD access
-* disk_images_sheepdog::      Sheepdog disk images
-* disk_images_iscsi::         iSCSI LUNs
-* disk_images_gluster::       GlusterFS disk images
-* disk_images_ssh::           Secure Shell (ssh) disk images
-* disk_images_nvme::          NVMe userspace driver
-* disk_image_locking::        Disk image file locking
 @end menu
 
 @node disk_images_quickstart
@@ -724,13 +712,6 @@ state is not saved or restored properly (in particular USB).
 @subsection @code{qemu-img} Invocation
 
 @include qemu-img.texi
-
-@node qemu_nbd_invocation
-@subsection @code{qemu-nbd} Invocation
-
-@include qemu-nbd.texi
-
-@include docs/qemu-block-drivers.texi
 
 @node pcsys_network
 @section Network emulation
@@ -983,21 +964,6 @@ For instance, user-mode networking can be used with
 Smartcard reader device
 @item usb-audio
 USB audio device
-@item usb-bt-dongle
-Bluetooth dongle for the transport layer of HCI. It is connected to HCI
-scatternet 0 by default (corresponds to @code{-bt hci,vlan=0}).
-Note that the syntax for the @code{-device usb-bt-dongle} option is not as
-useful yet as it was with the legacy @code{-usbdevice} option. So to
-configure an USB bluetooth device, you might need to use
-"@code{-usbdevice bt}[:@var{hci-type}]" instead. This configures a
-bluetooth dongle whose type is specified in the same format as with
-the @option{-bt hci} option, @pxref{bt-hcis,,allowed HCI types}.  If
-no type is given, the HCI logic corresponds to @code{-bt hci,vlan=0}.
-This USB device implements the USB Transport Layer of HCI.  Example
-usage:
-@example
-@command{@value{qemu_system}} [...@var{OPTIONS}...] @option{-usbdevice} bt:hci,vlan=3 @option{-bt} device:keyboard,vlan=3
-@end example
 @end table
 
 @node host_usb_devices
@@ -2307,8 +2273,6 @@ through I@math{^2}C bus
 Secure Digital card connected to OMAP MMC/SD host
 @item
 Three OMAP on-chip UARTs and on-chip STI debugging console
-@item
-A Bluetooth(R) transceiver and HCI connected to an UART
 @item
 Mentor Graphics "Inventra" dual-role USB controller embedded in a TI
 TUSB6010 chip - only USB host mode is supported

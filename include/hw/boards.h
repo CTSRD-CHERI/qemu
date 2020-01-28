@@ -63,10 +63,6 @@ extern MachineState *current_machine;
 
 void machine_run_board_init(MachineState *machine);
 bool machine_usb(MachineState *machine);
-bool machine_kernel_irqchip_allowed(MachineState *machine);
-bool machine_kernel_irqchip_required(MachineState *machine);
-bool machine_kernel_irqchip_split(MachineState *machine);
-int machine_kvm_shadow_mem(MachineState *machine);
 int machine_phandle_start(MachineState *machine);
 bool machine_dump_guest_core(MachineState *machine);
 bool machine_mem_merge(MachineState *machine);
@@ -275,11 +271,6 @@ struct MachineState {
 
     /*< public >*/
 
-    char *accel;
-    bool kernel_irqchip_allowed;
-    bool kernel_irqchip_required;
-    bool kernel_irqchip_split;
-    int kvm_shadow_mem;
     char *dtb;
     char *dumpdtb;
     int phandle_start;
@@ -288,7 +279,6 @@ struct MachineState {
     bool mem_merge;
     bool usb;
     bool usb_disabled;
-    bool igd_gfx_passthru;
     char *firmware;
     bool iommu;
     bool suppress_vmdesc;
@@ -328,6 +318,9 @@ struct MachineState {
         type_register_static(&machine_initfn##_typeinfo); \
     } \
     type_init(machine_initfn##_register_types)
+
+extern GlobalProperty hw_compat_4_2[];
+extern const size_t hw_compat_4_2_len;
 
 extern GlobalProperty hw_compat_4_1[];
 extern const size_t hw_compat_4_1_len;

@@ -348,6 +348,7 @@ typedef enum X86Seg {
 #define MSR_IA32_SPEC_CTRL              0x48
 #define MSR_VIRT_SSBD                   0xc001011f
 #define MSR_IA32_PRED_CMD               0x49
+#define MSR_IA32_UCODE_REV              0x8b
 #define MSR_IA32_CORE_CAPABILITY        0xcf
 
 #define MSR_IA32_ARCH_CAPABILITIES      0x10a
@@ -771,6 +772,8 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define CPUID_7_0_EDX_AVX512_4FMAPS     (1U << 3)
 /* Speculation Control */
 #define CPUID_7_0_EDX_SPEC_CTRL         (1U << 26)
+/* Single Thread Indirect Branch Predictors */
+#define CPUID_7_0_EDX_STIBP             (1U << 27)
 /* Arch Capabilities */
 #define CPUID_7_0_EDX_ARCH_CAPABILITIES (1U << 29)
 /* Core Capability */
@@ -833,11 +836,15 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define CPUID_TOPOLOGY_LEVEL_DIE      (5U << 8)
 
 /* MSR Feature Bits */
-#define MSR_ARCH_CAP_RDCL_NO    (1U << 0)
-#define MSR_ARCH_CAP_IBRS_ALL   (1U << 1)
-#define MSR_ARCH_CAP_RSBA       (1U << 2)
+#define MSR_ARCH_CAP_RDCL_NO            (1U << 0)
+#define MSR_ARCH_CAP_IBRS_ALL           (1U << 1)
+#define MSR_ARCH_CAP_RSBA               (1U << 2)
 #define MSR_ARCH_CAP_SKIP_L1DFL_VMENTRY (1U << 3)
-#define MSR_ARCH_CAP_SSB_NO     (1U << 4)
+#define MSR_ARCH_CAP_SSB_NO             (1U << 4)
+#define MSR_ARCH_CAP_MDS_NO             (1U << 5)
+#define MSR_ARCH_CAP_PSCHANGE_MC_NO     (1U << 6)
+#define MSR_ARCH_CAP_TSX_CTRL_MSR       (1U << 7)
+#define MSR_ARCH_CAP_TAA_NO             (1U << 8)
 
 #define MSR_CORE_CAP_SPLIT_LOCK_DETECT  (1U << 5)
 
@@ -1621,6 +1628,8 @@ struct X86CPU {
     CPUNegativeOffsetState neg;
     CPUX86State env;
 
+    uint64_t ucode_rev;
+
     uint32_t hyperv_spinlock_attempts;
     char *hyperv_vendor_id;
     bool hyperv_synic_kvm_only;
@@ -1949,9 +1958,6 @@ uint64_t cpu_get_tsc(CPUX86State *env);
 #define cpu_list x86_cpu_list
 
 /* MMU modes definitions */
-#define MMU_MODE0_SUFFIX _ksmap
-#define MMU_MODE1_SUFFIX _user
-#define MMU_MODE2_SUFFIX _knosmap /* SMAP disabled or CPL<3 && AC=1 */
 #define MMU_KSMAP_IDX   0
 #define MMU_USER_IDX    1
 #define MMU_KNOSMAP_IDX 2

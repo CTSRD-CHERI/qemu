@@ -147,6 +147,14 @@ static void cris_cpu_set_irq(void *opaque, int irq, int level)
     CPUState *cs = CPU(cpu);
     int type = irq == CRIS_CPU_IRQ ? CPU_INTERRUPT_HARD : CPU_INTERRUPT_NMI;
 
+    if (irq == CRIS_CPU_IRQ) {
+        /*
+         * The PIC passes us the vector for the IRQ as the value it sends
+         * over the qemu_irq line
+         */
+        cpu->env.interrupt_vector = level;
+    }
+
     if (level) {
         cpu_interrupt(cs, type);
     } else {
@@ -256,8 +264,7 @@ static void cris_cpu_class_init(ObjectClass *oc, void *data)
     device_class_set_parent_realize(dc, cris_cpu_realizefn,
                                     &ccc->parent_realize);
 
-    ccc->parent_reset = cc->reset;
-    cc->reset = cris_cpu_reset;
+    cpu_class_set_parent_reset(cc, cris_cpu_reset, &ccc->parent_reset);
 
     cc->class_by_name = cris_cpu_class_by_name;
     cc->has_work = cris_cpu_has_work;

@@ -295,7 +295,12 @@ void HELPER(wfi)(CPUARMState *env, uint32_t insn_len)
     }
 
     if (target_el) {
-        env->pc -= insn_len;
+        if (env->aarch64) {
+            env->pc -= insn_len;
+        } else {
+            env->regs[15] -= insn_len;
+        }
+
         raise_exception(env, EXCP_UDEF, syn_wfx(1, 0xe, 0, insn_len == 2),
                         target_el);
     }
@@ -603,6 +608,27 @@ void HELPER(access_check_cp_reg)(CPUARMState *env, void *rip, uint32_t syndrome,
         raise_exception(env, EXCP_UDEF, syndrome, exception_target_el(env));
     }
 
+    /*
+     * Check for an EL2 trap due to HSTR_EL2. We expect EL0 accesses
+     * to sysregs non accessible at EL0 to have UNDEF-ed already.
+     */
+    if (!is_a64(env) && arm_current_el(env) < 2 && ri->cp == 15 &&
+        (arm_hcr_el2_eff(env) & (HCR_E2H | HCR_TGE)) != (HCR_E2H | HCR_TGE)) {
+        uint32_t mask = 1 << ri->crn;
+
+        if (ri->type & ARM_CP_64BIT) {
+            mask = 1 << ri->crm;
+        }
+
+        /* T4 and T14 are RES0 */
+        mask &= ~((1 << 4) | (1 << 14));
+
+        if (env->cp15.hstr_el2 & mask) {
+            target_el = 2;
+            goto exept;
+        }
+    }
+
     if (!ri->accessfn) {
         return;
     }
@@ -652,6 +678,7 @@ void HELPER(access_check_cp_reg)(CPUARMState *env, void *rip, uint32_t syndrome,
         g_assert_not_reached();
     }
 
+exept:
     raise_exception(env, EXCP_UDEF, syndrome, target_el);
 }
 

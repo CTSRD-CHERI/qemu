@@ -304,6 +304,7 @@ void audio_pcm_init_info (struct audio_pcm_info *info, struct audsettings *as)
     switch (as->fmt) {
     case AUDIO_FORMAT_S8:
         sign = 1;
+        /* fall through */
     case AUDIO_FORMAT_U8:
         mul = 1;
         break;
@@ -1738,7 +1739,7 @@ static AudioState *audio_init(Audiodev *dev, const char *name)
     if (dev->timer_period <= 0) {
         s->period_ticks = 1;
     } else {
-        s->period_ticks = dev->timer_period * SCALE_US;
+        s->period_ticks = dev->timer_period * (int64_t)SCALE_US;
     }
 
     e = qemu_add_vm_change_state_handler (audio_vm_change_state_handler, s);

@@ -53,6 +53,7 @@
 /* Supported chipsets: */
 #include "hw/southbridge/piix.h"
 #include "hw/acpi/pcihp.h"
+#include "hw/i386/fw_cfg.h"
 #include "hw/i386/ich9.h"
 #include "hw/pci/pci_bus.h"
 #include "hw/pci-host/q35.h"
@@ -67,6 +68,7 @@
 #include "hw/i386/intel_iommu.h"
 
 #include "hw/acpi/ipmi.h"
+#include "hw/acpi/hmat.h"
 
 /* These are used to size the ACPI tables for -M pc-i440fx-1.7 and
  * -M pc-i440fx-2.0.  Even if the actual amount of AML generated grows
@@ -1814,7 +1816,6 @@ static void build_smb0(Aml *table, I2CBus *smbus, int devnr, int func)
     Aml *scope = aml_scope("_SB.PCI0");
     Aml *dev = aml_device("SMB0");
 
-    aml_append(dev, aml_name_decl("_HID", aml_eisaid("APP0005")));
     aml_append(dev, aml_name_decl("_ADR", aml_int(devnr << 16 | func)));
     build_acpi_ipmi_devices(dev, BUS(smbus), "\\_SB.PCI0.SMB0");
     aml_append(scope, dev);
@@ -2833,6 +2834,10 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
         if (machine->numa_state->have_numa_distance) {
             acpi_add_table(table_offsets, tables_blob);
             build_slit(tables_blob, tables->linker, machine);
+        }
+        if (machine->numa_state->hmat_enabled) {
+            acpi_add_table(table_offsets, tables_blob);
+            build_hmat(tables_blob, tables->linker, machine->numa_state);
         }
     }
     if (acpi_get_mcfg(&mcfg)) {

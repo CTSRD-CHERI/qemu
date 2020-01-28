@@ -365,16 +365,19 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
     /*
      * The migration interface for ais was introduced with kernel 4.13
      * but the capability itself had been active since 4.12. As migration
-     * support is considered necessary let's disable ais in the 2.10
-     * machine.
+     * support is considered necessary, we only try to enable this for
+     * newer machine types if KVM_CAP_S390_AIS_MIGRATION is available.
      */
-    /* kvm_vm_enable_cap(s, KVM_CAP_S390_AIS, 0); */
+    if (cpu_model_allowed() && kvm_kernel_irqchip_allowed() &&
+        kvm_check_extension(s, KVM_CAP_S390_AIS_MIGRATION)) {
+        kvm_vm_enable_cap(s, KVM_CAP_S390_AIS, 0);
+    }
 
     kvm_set_max_memslot_size(KVM_SLOT_MAX_BYTES);
     return 0;
 }
 
-int kvm_arch_irqchip_create(MachineState *ms, KVMState *s)
+int kvm_arch_irqchip_create(KVMState *s)
 {
     return 0;
 }
@@ -1159,13 +1162,13 @@ void kvm_s390_access_exception(S390CPU *cpu, uint16_t code, uint64_t te_code)
     kvm_s390_vcpu_interrupt(cpu, &irq);
 }
 
-static int kvm_sclp_service_call(S390CPU *cpu, struct kvm_run *run,
+static void kvm_sclp_service_call(S390CPU *cpu, struct kvm_run *run,
                                  uint16_t ipbh0)
 {
     CPUS390XState *env = &cpu->env;
     uint64_t sccb;
     uint32_t code;
-    int r = 0;
+    int r;
 
     sccb = env->regs[ipbh0 & 0xf];
     code = env->regs[(ipbh0 & 0xf0) >> 4];
@@ -1173,11 +1176,9 @@ static int kvm_sclp_service_call(S390CPU *cpu, struct kvm_run *run,
     r = sclp_service_call(env, sccb, code);
     if (r < 0) {
         kvm_s390_program_interrupt(cpu, -r);
-    } else {
-        setcc(cpu, r);
+        return;
     }
-
-    return 0;
+    setcc(cpu, r);
 }
 
 static int handle_b2(S390CPU *cpu, struct kvm_run *run, uint8_t ipa1)
@@ -1240,7 +1241,7 @@ static int handle_b2(S390CPU *cpu, struct kvm_run *run, uint8_t ipa1)
         setcc(cpu, 3);
         break;
     case PRIV_B2_SCLP_CALL:
-        rc = kvm_sclp_service_call(cpu, run, ipbh0);
+        kvm_sclp_service_call(cpu, run, ipbh0);
         break;
     default:
         rc = -1;

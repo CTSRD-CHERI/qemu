@@ -2042,13 +2042,13 @@ void spapr_phb_dma_reset(SpaprPhbState *sphb)
 static void spapr_phb_reset(DeviceState *qdev)
 {
     SpaprPhbState *sphb = SPAPR_PCI_HOST_BRIDGE(qdev);
-    Error *errp = NULL;
+    Error *err = NULL;
 
     spapr_phb_dma_reset(sphb);
     spapr_phb_nvgpu_free(sphb);
-    spapr_phb_nvgpu_setup(sphb, &errp);
-    if (errp) {
-        error_report_err(errp);
+    spapr_phb_nvgpu_setup(sphb, &err);
+    if (err) {
+        error_report_err(err);
     }
 
     /* Reset the IOMMU state */
@@ -2217,7 +2217,7 @@ static void spapr_phb_class_init(ObjectClass *klass, void *data)
     hc->root_bus_path = spapr_phb_root_bus_path;
     dc->realize = spapr_phb_realize;
     dc->unrealize = spapr_phb_unrealize;
-    dc->props = spapr_phb_properties;
+    device_class_set_props(dc, spapr_phb_properties);
     dc->reset = spapr_phb_reset;
     dc->vmsd = &vmstate_spapr_pci;
     /* Supported by TYPE_SPAPR_MACHINE */
@@ -2326,7 +2326,7 @@ int spapr_dt_phb(SpaprMachineState *spapr, SpaprPhbState *phb,
                                 cpu_to_be32(phb->numa_node)};
     SpaprTceTable *tcet;
     SpaprDrc *drc;
-    Error *errp = NULL;
+    Error *err = NULL;
 
     /* Start populating the FDT */
     _FDT(bus_off = fdt_add_subnode(fdt, 0, phb->dtbusname));
@@ -2408,9 +2408,9 @@ int spapr_dt_phb(SpaprMachineState *spapr, SpaprPhbState *phb,
         return ret;
     }
 
-    spapr_phb_nvgpu_populate_dt(phb, fdt, bus_off, &errp);
-    if (errp) {
-        error_report_err(errp);
+    spapr_phb_nvgpu_populate_dt(phb, fdt, bus_off, &err);
+    if (err) {
+        error_report_err(err);
     }
     spapr_phb_nvgpu_ram_populate_dt(phb, fdt);
 

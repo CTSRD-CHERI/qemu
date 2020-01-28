@@ -361,7 +361,7 @@ static gboolean vhost_user_blk_watch(GIOChannel *chan, GIOCondition cond,
     return true;
 }
 
-static void vhost_user_blk_event(void *opaque, int event)
+static void vhost_user_blk_event(void *opaque, QEMUChrEvent event)
 {
     DeviceState *dev = opaque;
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
@@ -382,6 +382,11 @@ static void vhost_user_blk_event(void *opaque, int event)
             g_source_remove(s->watch);
             s->watch = 0;
         }
+        break;
+    case CHR_EVENT_BREAK:
+    case CHR_EVENT_MUX_IN:
+    case CHR_EVENT_MUX_OUT:
+        /* Ignore */
         break;
     }
 }
@@ -506,7 +511,7 @@ static void vhost_user_blk_class_init(ObjectClass *klass, void *data)
     DeviceClass *dc = DEVICE_CLASS(klass);
     VirtioDeviceClass *vdc = VIRTIO_DEVICE_CLASS(klass);
 
-    dc->props = vhost_user_blk_properties;
+    device_class_set_props(dc, vhost_user_blk_properties);
     dc->vmsd = &vmstate_vhost_user_blk;
     set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
     vdc->realize = vhost_user_blk_device_realize;

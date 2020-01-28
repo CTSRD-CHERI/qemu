@@ -152,7 +152,7 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
     return 0;
 }
 
-int kvm_arch_irqchip_create(MachineState *ms, KVMState *s)
+int kvm_arch_irqchip_create(KVMState *s)
 {
     return 0;
 }
@@ -258,7 +258,7 @@ static void kvm_get_smmu_info(struct kvm_ppc_smmu_info *info, Error **errp)
 
 struct ppc_radix_page_info *kvm_get_radix_page_info(void)
 {
-    KVMState *s = KVM_STATE(current_machine->accelerator);
+    KVMState *s = KVM_STATE(current_accel());
     struct ppc_radix_page_info *radix_page_info;
     struct kvm_ppc_rmmu_info rmmu_info;
     int i;
@@ -1325,12 +1325,6 @@ int kvmppc_set_interrupt(PowerPCCPU *cpu, int irq, int level)
     return 0;
 }
 
-#if defined(TARGET_PPC64)
-#define PPC_INPUT_INT PPC970_INPUT_INT
-#else
-#define PPC_INPUT_INT PPC6xx_INPUT_INT
-#endif
-
 void kvm_arch_pre_run(CPUState *cs, struct kvm_run *run)
 {
     return;
@@ -2076,7 +2070,7 @@ int kvmppc_set_smt_threads(int smt)
     return ret;
 }
 
-void kvmppc_hint_smt_possible(Error **errp)
+void kvmppc_error_append_smt_possible_hint(Error *const *errp)
 {
     int i;
     GString *g;
@@ -2898,5 +2892,23 @@ void kvmppc_set_reg_tb_offset(PowerPCCPU *cpu, int64_t tb_offset)
 
     if (kvm_enabled()) {
         kvm_set_one_reg(cs, KVM_REG_PPC_TB_OFFSET, &tb_offset);
+    }
+}
+
+/*
+ * Don't set error if KVM_PPC_SVM_OFF ioctl is invoked on kernels
+ * that don't support this ioctl.
+ */
+void kvmppc_svm_off(Error **errp)
+{
+    int rc;
+
+    if (!kvm_enabled()) {
+        return;
+    }
+
+    rc = kvm_vm_ioctl(KVM_STATE(current_accel()), KVM_PPC_SVM_OFF);
+    if (rc && rc != -ENOTTY) {
+        error_setg_errno(errp, -rc, "KVM_PPC_SVM_OFF ioctl failed");
     }
 }

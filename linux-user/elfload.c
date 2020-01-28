@@ -10,6 +10,7 @@
 #include "qemu/path.h"
 #include "qemu/queue.h"
 #include "qemu/guest-random.h"
+#include "qemu/units.h"
 
 #ifdef _ARCH_PPC64
 #undef ARCH_DLINFO
@@ -656,6 +657,7 @@ static uint32_t get_elf_hwcap(void)
     GET_FEATURE_ID(aa64_jscvt, ARM_HWCAP_A64_JSCVT);
     GET_FEATURE_ID(aa64_sb, ARM_HWCAP_A64_SB);
     GET_FEATURE_ID(aa64_condm_4, ARM_HWCAP_A64_FLAGM);
+    GET_FEATURE_ID(aa64_dcpop, ARM_HWCAP_A64_DCPOP);
 
     return hwcaps;
 }
@@ -665,6 +667,7 @@ static uint32_t get_elf_hwcap2(void)
     ARMCPU *cpu = ARM_CPU(thread_cpu);
     uint32_t hwcaps = 0;
 
+    GET_FEATURE_ID(aa64_dcpodp, ARM_HWCAP2_A64_DCPODP);
     GET_FEATURE_ID(aa64_condm_5, ARM_HWCAP2_A64_FLAGM2);
     GET_FEATURE_ID(aa64_frint, ARM_HWCAP2_A64_FRINT);
 
@@ -2189,7 +2192,7 @@ unsigned long init_guest_space(unsigned long host_start,
              * to where we need to put the commpage.
              */
             munmap((void *)real_start, host_size);
-            real_size = aligned_size + qemu_host_page_size;
+            real_size = aligned_size + align;
             real_start = (unsigned long)
                 mmap((void *)real_start, real_size, PROT_NONE, flags, -1, 0);
             if (real_start == (unsigned long)-1) {
@@ -2362,24 +2365,51 @@ static void load_elf_image(const char *image_name, int image_fd,
         }
     }
 
-    load_addr = loaddr;
-    if (ehdr->e_type == ET_DYN) {
-        /* The image indicates that it can be loaded anywhere.  Find a
-           location that can hold the memory space required.  If the
-           image is pre-linked, LOADDR will be non-zero.  Since we do
-           not supply MAP_FIXED here we'll use that address if and
-           only if it remains available.  */
-        load_addr = target_mmap(loaddr, hiaddr - loaddr, PROT_NONE,
-                                MAP_PRIVATE | MAP_ANON | MAP_NORESERVE,
-                                -1, 0);
-        if (load_addr == -1) {
-            goto exit_perror;
+    if (pinterp_name != NULL) {
+        /*
+         * This is the main executable.
+         *
+         * Reserve extra space for brk.
+         * We hold on to this space while placing the interpreter
+         * and the stack, lest they be placed immediately after
+         * the data segment and block allocation from the brk.
+         *
+         * 16MB is chosen as "large enough" without being so large
+         * as to allow the result to not fit with a 32-bit guest on
+         * a 32-bit host.
+         */
+        info->reserve_brk = 16 * MiB;
+        hiaddr += info->reserve_brk;
+
+        if (ehdr->e_type == ET_EXEC) {
+            /*
+             * Make sure that the low address does not conflict with
+             * MMAP_MIN_ADDR or the QEMU application itself.
+             */
+            probe_guest_base(image_name, loaddr, hiaddr);
         }
-    } else if (pinterp_name != NULL) {
-        /* This is the main executable.  Make sure that the low
-           address does not conflict with MMAP_MIN_ADDR or the
-           QEMU application itself.  */
-        probe_guest_base(image_name, loaddr, hiaddr);
+    }
+
+    /*
+     * Reserve address space for all of this.
+     *
+     * In the case of ET_EXEC, we supply MAP_FIXED so that we get
+     * exactly the address range that is required.
+     *
+     * Otherwise this is ET_DYN, and we are searching for a location
+     * that can hold the memory space required.  If the image is
+     * pre-linked, LOADDR will be non-zero, and the kernel should
+     * honor that address if it happens to be free.
+     *
+     * In both cases, we will overwrite pages in this range with mappings
+     * from the executable.
+     */
+    load_addr = target_mmap(loaddr, hiaddr - loaddr, PROT_NONE,
+                            MAP_PRIVATE | MAP_ANON | MAP_NORESERVE |
+                            (ehdr->e_type == ET_EXEC ? MAP_FIXED : 0),
+                            -1, 0);
+    if (load_addr == -1) {
+        goto exit_perror;
     }
     load_bias = load_addr - loaddr;
 
@@ -2857,6 +2887,17 @@ int load_elf_binary(struct linux_binprm *bprm, struct image_info *info)
 #ifdef USE_ELF_CORE_DUMP
     bprm->core_dump = &elf_core_dump;
 #endif
+
+    /*
+     * If we reserved extra space for brk, release it now.
+     * The implementation of do_brk in syscalls.c expects to be able
+     * to mmap pages in this space.
+     */
+    if (info->reserve_brk) {
+        abi_ulong start_brk = HOST_PAGE_ALIGN(info->brk);
+        abi_ulong end_brk = HOST_PAGE_ALIGN(info->brk + info->reserve_brk);
+        target_munmap(start_brk, end_brk - start_brk);
+    }
 
     return 0;
 }

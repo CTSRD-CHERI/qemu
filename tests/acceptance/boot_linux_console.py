@@ -62,7 +62,6 @@ class BootLinuxConsole(Test):
         kernel_hash = '23bebd2680757891cf7adedb033532163a792495'
         kernel_path = self.fetch_asset(kernel_url, asset_hash=kernel_hash)
 
-        self.vm.set_machine('pc')
         self.vm.set_console()
         kernel_command_line = self.KERNEL_COMMON_COMMAND_LINE + 'console=ttyS0'
         self.vm.add_args('-kernel', kernel_path,
@@ -85,7 +84,6 @@ class BootLinuxConsole(Test):
         kernel_path = self.extract_from_deb(deb_path,
                                             '/boot/vmlinux-2.6.32-5-4kc-malta')
 
-        self.vm.set_machine('malta')
         self.vm.set_console()
         kernel_command_line = self.KERNEL_COMMON_COMMAND_LINE + 'console=ttyS0'
         self.vm.add_args('-kernel', kernel_path,
@@ -118,7 +116,6 @@ class BootLinuxConsole(Test):
         kernel_path = self.extract_from_deb(deb_path,
                                             '/boot/vmlinux-2.6.32-5-5kc-malta')
 
-        self.vm.set_machine('malta')
         self.vm.set_console()
         kernel_command_line = self.KERNEL_COMMON_COMMAND_LINE + 'console=ttyS0'
         self.vm.add_args('-kernel', kernel_path,
@@ -148,7 +145,6 @@ class BootLinuxConsole(Test):
         initrd_path = self.workdir + "rootfs.cpio"
         archive.gzip_uncompress(initrd_path_gz, initrd_path)
 
-        self.vm.set_machine('malta')
         self.vm.set_console()
         kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE
                                + 'console=ttyS0 console=tty '
@@ -188,7 +184,6 @@ class BootLinuxConsole(Test):
         initrd_path = self.workdir + "rootfs.cpio"
         archive.gzip_uncompress(initrd_path_gz, initrd_path)
 
-        self.vm.set_machine('malta')
         self.vm.set_console()
         kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE
                                + 'console=ttyS0 console=tty '
@@ -215,7 +210,6 @@ class BootLinuxConsole(Test):
             with open(kernel_path, 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
 
-        self.vm.set_machine('malta')
         self.vm.set_console()
         kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE
                                + 'mem=256m@@0x0 '
@@ -275,7 +269,6 @@ class BootLinuxConsole(Test):
         kernel_hash = '8c73e469fc6ea06a58dc83a628fc695b693b8493'
         kernel_path = self.fetch_asset(kernel_url, asset_hash=kernel_hash)
 
-        self.vm.set_machine('virt')
         self.vm.set_console()
         kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE +
                                'console=ttyAMA0')
@@ -297,7 +290,6 @@ class BootLinuxConsole(Test):
         kernel_hash = 'e9826d741b4fb04cadba8d4824d1ed3b7fb8b4d4'
         kernel_path = self.fetch_asset(kernel_url, asset_hash=kernel_hash)
 
-        self.vm.set_machine('virt')
         self.vm.set_console()
         kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE +
                                'console=ttyAMA0')
@@ -310,7 +302,7 @@ class BootLinuxConsole(Test):
     def test_arm_emcraft_sf2(self):
         """
         :avocado: tags=arch:arm
-        :avocado: tags=machine:emcraft_sf2
+        :avocado: tags=machine:emcraft-sf2
         :avocado: tags=endian:little
         """
         uboot_url = ('https://raw.githubusercontent.com/'
@@ -324,7 +316,6 @@ class BootLinuxConsole(Test):
         spi_hash = '85f698329d38de63aea6e884a86fbde70890a78a'
         spi_path = self.fetch_asset(spi_url, asset_hash=spi_hash)
 
-        self.vm.set_machine('emcraft-sf2')
         self.vm.set_console()
         kernel_command_line = self.KERNEL_COMMON_COMMAND_LINE
         self.vm.add_args('-kernel', uboot_path,
@@ -351,7 +342,6 @@ class BootLinuxConsole(Test):
         kernel_path = self.extract_from_deb(deb_path, '/boot/kernel7.img')
         dtb_path = self.extract_from_deb(deb_path, '/boot/bcm2709-rpi-2-b.dtb')
 
-        self.vm.set_machine('raspi2')
         self.vm.set_console()
         kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE +
                                serial_kernel_cmdline[uart_id])
@@ -393,7 +383,6 @@ class BootLinuxConsole(Test):
         initrd_path = os.path.join(self.workdir, 'rootfs.cpio')
         archive.gzip_uncompress(initrd_path_gz, initrd_path)
 
-        self.vm.set_machine('smdkc210')
         self.vm.set_console()
         kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE +
                                'earlycon=exynos4210,0x13800000 earlyprintk ' +
@@ -411,10 +400,95 @@ class BootLinuxConsole(Test):
         self.wait_for_console_pattern('Boot successful.')
         # TODO user command, for now the uart is stuck
 
+    def test_arm_cubieboard_initrd(self):
+        """
+        :avocado: tags=arch:arm
+        :avocado: tags=machine:cubieboard
+        """
+        deb_url = ('https://apt.armbian.com/pool/main/l/'
+                   'linux-4.20.7-sunxi/linux-image-dev-sunxi_5.75_armhf.deb')
+        deb_hash = '1334c29c44d984ffa05ed10de8c3361f33d78315'
+        deb_path = self.fetch_asset(deb_url, asset_hash=deb_hash)
+        kernel_path = self.extract_from_deb(deb_path,
+                                            '/boot/vmlinuz-4.20.7-sunxi')
+        dtb_path = '/usr/lib/linux-image-dev-sunxi/sun4i-a10-cubieboard.dtb'
+        dtb_path = self.extract_from_deb(deb_path, dtb_path)
+        initrd_url = ('https://github.com/groeck/linux-build-test/raw/'
+                      '2eb0a73b5d5a28df3170c546ddaaa9757e1e0848/rootfs/'
+                      'arm/rootfs-armv5.cpio.gz')
+        initrd_hash = '2b50f1873e113523967806f4da2afe385462ff9b'
+        initrd_path_gz = self.fetch_asset(initrd_url, asset_hash=initrd_hash)
+        initrd_path = os.path.join(self.workdir, 'rootfs.cpio')
+        archive.gzip_uncompress(initrd_path_gz, initrd_path)
+
+        self.vm.set_console()
+        kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE +
+                               'console=ttyS0,115200 '
+                               'usbcore.nousb '
+                               'panic=-1 noreboot')
+        self.vm.add_args('-kernel', kernel_path,
+                         '-dtb', dtb_path,
+                         '-initrd', initrd_path,
+                         '-append', kernel_command_line,
+                         '-no-reboot')
+        self.vm.launch()
+        self.wait_for_console_pattern('Boot successful.')
+
+        exec_command_and_wait_for_pattern(self, 'cat /proc/cpuinfo',
+                                                'Allwinner sun4i/sun5i')
+        exec_command_and_wait_for_pattern(self, 'cat /proc/iomem',
+                                                'system-control@1c00000')
+        exec_command_and_wait_for_pattern(self, 'reboot',
+                                                'reboot: Restarting system')
+
+    def test_arm_cubieboard_sata(self):
+        """
+        :avocado: tags=arch:arm
+        :avocado: tags=machine:cubieboard
+        """
+        deb_url = ('https://apt.armbian.com/pool/main/l/'
+                   'linux-4.20.7-sunxi/linux-image-dev-sunxi_5.75_armhf.deb')
+        deb_hash = '1334c29c44d984ffa05ed10de8c3361f33d78315'
+        deb_path = self.fetch_asset(deb_url, asset_hash=deb_hash)
+        kernel_path = self.extract_from_deb(deb_path,
+                                            '/boot/vmlinuz-4.20.7-sunxi')
+        dtb_path = '/usr/lib/linux-image-dev-sunxi/sun4i-a10-cubieboard.dtb'
+        dtb_path = self.extract_from_deb(deb_path, dtb_path)
+        rootfs_url = ('https://github.com/groeck/linux-build-test/raw/'
+                      '2eb0a73b5d5a28df3170c546ddaaa9757e1e0848/rootfs/'
+                      'arm/rootfs-armv5.ext2.gz')
+        rootfs_hash = '093e89d2b4d982234bf528bc9fb2f2f17a9d1f93'
+        rootfs_path_gz = self.fetch_asset(rootfs_url, asset_hash=rootfs_hash)
+        rootfs_path = os.path.join(self.workdir, 'rootfs.cpio')
+        archive.gzip_uncompress(rootfs_path_gz, rootfs_path)
+
+        self.vm.set_console()
+        kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE +
+                               'console=ttyS0,115200 '
+                               'usbcore.nousb '
+                               'root=/dev/sda ro '
+                               'panic=-1 noreboot')
+        self.vm.add_args('-kernel', kernel_path,
+                         '-dtb', dtb_path,
+                         '-drive', 'if=none,format=raw,id=disk0,file='
+                                   + rootfs_path,
+                         '-device', 'ide-hd,bus=ide.0,drive=disk0',
+                         '-append', kernel_command_line,
+                         '-no-reboot')
+        self.vm.launch()
+        self.wait_for_console_pattern('Boot successful.')
+
+        exec_command_and_wait_for_pattern(self, 'cat /proc/cpuinfo',
+                                                'Allwinner sun4i/sun5i')
+        exec_command_and_wait_for_pattern(self, 'cat /proc/partitions',
+                                                'sda')
+        exec_command_and_wait_for_pattern(self, 'reboot',
+                                                'reboot: Restarting system')
+
     def test_s390x_s390_ccw_virtio(self):
         """
         :avocado: tags=arch:s390x
-        :avocado: tags=machine:s390_ccw_virtio
+        :avocado: tags=machine:s390-ccw-virtio
         """
         kernel_url = ('https://archives.fedoraproject.org/pub/archive'
                       '/fedora-secondary/releases/29/Everything/s390x/os/images'
@@ -422,7 +496,6 @@ class BootLinuxConsole(Test):
         kernel_hash = 'e8e8439103ef8053418ef062644ffd46a7919313'
         kernel_path = self.fetch_asset(kernel_url, asset_hash=kernel_hash)
 
-        self.vm.set_machine('s390-ccw-virtio')
         self.vm.set_console()
         kernel_command_line = self.KERNEL_COMMON_COMMAND_LINE + 'console=sclp0'
         self.vm.add_args('-nodefaults',
@@ -444,7 +517,6 @@ class BootLinuxConsole(Test):
 
         uncompressed_kernel = archive.uncompress(kernel_path, self.workdir)
 
-        self.vm.set_machine('clipper')
         self.vm.set_console()
         kernel_command_line = self.KERNEL_COMMON_COMMAND_LINE + 'console=ttyS0'
         self.vm.add_args('-vga', 'std',
@@ -465,7 +537,6 @@ class BootLinuxConsole(Test):
         kernel_hash = '3fe04abfc852b66653b8c3c897a59a689270bc77'
         kernel_path = self.fetch_asset(kernel_url, asset_hash=kernel_hash)
 
-        self.vm.set_machine('pseries')
         self.vm.set_console()
         kernel_command_line = self.KERNEL_COMMON_COMMAND_LINE + 'console=hvc0'
         self.vm.add_args('-kernel', kernel_path,
@@ -479,17 +550,14 @@ class BootLinuxConsole(Test):
         :avocado: tags=arch:m68k
         :avocado: tags=machine:q800
         """
-        deb_url = ('http://ftp.ports.debian.org/debian-ports/pool-m68k/main'
+        deb_url = ('https://snapshot.debian.org/archive/debian-ports'
+                   '/20191021T083923Z/pool-m68k/main'
                    '/l/linux/kernel-image-5.3.0-1-m68k-di_5.3.7-1_m68k.udeb')
         deb_hash = '044954bb9be4160a3ce81f8bc1b5e856b75cccd1'
-        try:
-            deb_path = self.fetch_asset(deb_url, asset_hash=deb_hash)
-        except OSError as exp:
-            self.cancel(exp)
+        deb_path = self.fetch_asset(deb_url, asset_hash=deb_hash)
         kernel_path = self.extract_from_deb(deb_path,
                                             '/boot/vmlinux-5.3.0-1-m68k')
 
-        self.vm.set_machine('q800')
         self.vm.set_console()
         kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE +
                                'console=ttyS0 vga=off')

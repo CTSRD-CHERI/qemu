@@ -144,7 +144,8 @@ static int alloc_guestfd(void)
         guestfd_array = g_array_new(FALSE, TRUE, sizeof(GuestFD));
     }
 
-    for (i = 0; i < guestfd_array->len; i++) {
+    /* SYS_OPEN should return nonzero handle on success. Start guestfd from 1 */
+    for (i = 1; i < guestfd_array->len; i++) {
         GuestFD *gf = &g_array_index(guestfd_array, GuestFD, i);
 
         if (gf->type == GuestFDUnused) {
@@ -168,7 +169,7 @@ static GuestFD *do_get_guestfd(int guestfd)
         return NULL;
     }
 
-    if (guestfd < 0 || guestfd >= guestfd_array->len) {
+    if (guestfd <= 0 || guestfd >= guestfd_array->len) {
         return NULL;
     }
 
@@ -802,8 +803,7 @@ target_ulong do_arm_semihosting(CPUARMState *env)
 
         return guestfd_fns[gf->type].readfn(cpu, gf, arg1, len);
     case TARGET_SYS_READC:
-        qemu_log_mask(LOG_UNIMP, "%s: SYS_READC not implemented", __func__);
-        return 0;
+        return qemu_semihosting_console_inc(env);
     case TARGET_SYS_ISTTY:
         GET_ARG(0);
 

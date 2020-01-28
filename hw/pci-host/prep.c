@@ -32,7 +32,7 @@
 #include "hw/pci/pci_host.h"
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
-#include "hw/i386/pc.h"
+#include "hw/intc/i8259.h"
 #include "hw/irq.h"
 #include "hw/loader.h"
 #include "hw/or-irq.h"
@@ -415,7 +415,7 @@ static void raven_pcihost_class_init(ObjectClass *klass, void *data)
 
     set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
     dc->realize = raven_pcihost_realizefn;
-    dc->props = raven_pcihost_properties;
+    device_class_set_props(dc, raven_pcihost_properties);
     dc->fw_name = "pci";
 }
 

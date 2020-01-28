@@ -26,7 +26,6 @@
 #include "sysemu/kvm.h"
 #include "sysemu/kvm_int.h"
 #include "kvm_arm.h"
-#include "hw/boards.h"
 #include "internals.h"
 
 static bool have_guest_debug;
@@ -613,14 +612,14 @@ bool kvm_arm_get_host_cpu_features(ARMHostCPUFeatures *ahcf)
 
 bool kvm_arm_aarch32_supported(CPUState *cpu)
 {
-    KVMState *s = KVM_STATE(current_machine->accelerator);
+    KVMState *s = KVM_STATE(current_accel());
 
     return kvm_check_extension(s, KVM_CAP_ARM_EL1_32BIT);
 }
 
 bool kvm_arm_sve_supported(CPUState *cpu)
 {
-    KVMState *s = KVM_STATE(current_machine->accelerator);
+    KVMState *s = KVM_STATE(current_accel());
 
     return kvm_check_extension(s, KVM_CAP_ARM_SVE);
 }
@@ -874,30 +873,6 @@ static int kvm_arch_put_fpsimd(CPUState *cs)
     }
 
     return 0;
-}
-
-/*
- * SVE registers are encoded in KVM's memory in an endianness-invariant format.
- * The byte at offset i from the start of the in-memory representation contains
- * the bits [(7 + 8 * i) : (8 * i)] of the register value. As this means the
- * lowest offsets are stored in the lowest memory addresses, then that nearly
- * matches QEMU's representation, which is to use an array of host-endian
- * uint64_t's, where the lower offsets are at the lower indices. To complete
- * the translation we just need to byte swap the uint64_t's on big-endian hosts.
- */
-static uint64_t *sve_bswap64(uint64_t *dst, uint64_t *src, int nr)
-{
-#ifdef HOST_WORDS_BIGENDIAN
-    int i;
-
-    for (i = 0; i < nr; ++i) {
-        dst[i] = bswap64(src[i]);
-    }
-
-    return dst;
-#else
-    return src;
-#endif
 }
 
 /*
