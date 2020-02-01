@@ -1535,10 +1535,10 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         if (cs->exception_index == EXCP_EXT_INTERRUPT)
-            fprintf (qemu_logfile, "--- Interrupt, vector " TARGET_FMT_lx "\n",
+            qemu_log("--- Interrupt, vector " TARGET_FMT_lx "\n",
                     env->active_tc.PC);
         else
-            fprintf (qemu_logfile, "--- Exception #%u: %s, vector "
+            qemu_log("--- Exception #%u: %s, vector "
                     TARGET_FMT_lx "\n", cause, name, env->active_tc.PC);
     }
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {

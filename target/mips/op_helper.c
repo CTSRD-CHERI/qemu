@@ -93,18 +93,20 @@ void helper_log_instruction(CPUMIPSState *env, target_ulong pc)
         uint32_t opcode;
         CPUState *cs = env_cpu(env);
 
+        FILE* logfile = qemu_log_lock();
         /* if the logfile is empty we need to emit the cvt magic */
-        if (env->cvtrace.version != 0 && ftell(qemu_logfile) != 0) {
+        if (env->cvtrace.version != 0 && ftell(logfile) != 0) {
             /* Write previous instruction trace to log. */
-            fwrite(&env->cvtrace, sizeof(env->cvtrace), 1, qemu_logfile);
+            fwrite(&env->cvtrace, sizeof(env->cvtrace), 1, logfile);
         } else {
             char buffer[sizeof(env->cvtrace)];
 
             buffer[0] = CVT_QEMU_VERSION;
             g_strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
-            fwrite(buffer, sizeof(env->cvtrace), 1, qemu_logfile);
+            fwrite(buffer, sizeof(env->cvtrace), 1, logfile);
             cycles = 0;
         }
+        qemu_log_unlock(logfile);
         bzero(&env->cvtrace, sizeof(env->cvtrace));
         env->cvtrace.version = CVT_NO_REG;
         env->cvtrace.pc = tswap64(pc);
@@ -2254,7 +2256,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     if (!mode && qemu_loglevel_mask(CPU_LOG_GUEST_DEBUG_MSG))
         mode = CPU_LOG_INSTR;
 
-    if (!mode)
+    if (!mode || !qemu_log_enabled())
         return;
 
     uint8_t buffer[4096];
@@ -2288,7 +2290,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
         warn_report("CHERI DEBUG HELPER: Could not read " TARGET_FMT_ld
                     " bytes at vaddr 0x" TARGET_FMT_lx "\r\n", length, vaddr);
     }
-    if ((mode & CPU_LOG_INSTR) || qemu_logfile) {
+    if ((mode & CPU_LOG_INSTR) || qemu_log_enabled()) {
         qemu_log_mask(CPU_LOG_INSTR, "DEBUG MESSAGE @ 0x" TARGET_FMT_lx " addr=0x"
             TARGET_FMT_lx " len=" TARGET_FMT_ld "\r\n", pc, vaddr, length);
         if (print_mode == DEBUG_MESSAGE_CSTRING) {
@@ -2298,7 +2300,9 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
             qemu_log_mask(CPU_LOG_INSTR, "   Dumping " TARGET_FMT_lu
                      " bytes starting at 0x"
                      TARGET_FMT_lx "\r\n", length, vaddr);
-            do_hexdump(qemu_logfile, buffer, length, vaddr);
+            FILE* logfile = qemu_log_lock();
+            do_hexdump(logfile, buffer, length, vaddr);
+            qemu_log_unlock(logfile);
         }
     } else if (mode & CPU_LOG_CVTRACE) {
         warn_report("NOT IMPLEMENTED: CVTRACE debug message nop at 0x"
@@ -2402,14 +2406,14 @@ static void simple_dump_state(CPUMIPSState *env, FILE *f,
 
 void helper_mtc0_dumpstate(CPUMIPSState *env, target_ulong arg1)
 {
+    FILE* logfile = qemu_log_enabled() ? qemu_log_lock() : stderr;
 #if 0
-    cpu_dump_state(env_cpu(env),
-            (qemu_logfile == NULL) ? stderr : qemu_logfile,
-            fprintf, CPU_DUMP_CODE);
+    cpu_dump_state(env_cpu(env), logfile, fprintf, CPU_DUMP_CODE);
 #else
-    simple_dump_state(env, (qemu_logfile == NULL) ? stderr : qemu_logfile,
-            fprintf);
+    simple_dump_state(env, logfile, fprintf);
 #endif
+    if (logfile != stderr)
+        qemu_log_unlock(logfile);
 }
 
 
@@ -2743,7 +2747,7 @@ static void r4k_fill_tlb(CPUMIPSState *env, int idx)
     tlb->PFN[1] = (get_tlb_pfn_from_entrylo(env->CP0_EntryLo1) & ~mask) << 12;
 }
 
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
 static void r4k_dump_tlb(CPUMIPSState *env, int idx)
 {
     r4k_tlb_t *tlb = &env->tlb->mmu.r4k.tlb[idx];
@@ -2776,7 +2780,7 @@ static void r4k_dump_tlb(CPUMIPSState *env, int idx)
 #endif
             (tlb->C1 << 3) | (tlb->PFN[1] >> 6);
     }
-    fprintf(qemu_logfile, "    Write TLB[%u] = pgmsk:%08x hi:%08x lo0:%08x lo1:%08x\n",
+    qemu_log("    Write TLB[%u] = pgmsk:%08x hi:%08x lo0:%08x lo1:%08x\n",
             idx, pagemask, hi, lo0, lo1);
 }
 #endif /* TARGET_CHERI */
@@ -2869,7 +2873,7 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
 
     r4k_invalidate_tlb(env, idx, 0);
     r4k_fill_tlb(env, idx);
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
         r4k_dump_tlb(env, idx);
 #endif /* TARGET_CHERI */
@@ -2881,7 +2885,7 @@ void r4k_helper_tlbwr(CPUMIPSState *env)
 
     r4k_invalidate_tlb(env, r, 1);
     r4k_fill_tlb(env, r);
-#ifdef TARGET_CHERI
+#ifdef CONFIG_MIPS_LOG_INSTR
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
         r4k_dump_tlb(env, r);
 #endif /* TARGET_CHERI */
@@ -3494,10 +3498,10 @@ static void dump_changed_cop0_reg(CPUMIPSState *env, int idx,
     if (value != env->last_cop0[idx]) {
         env->last_cop0[idx] = value;
         if (cop0_name[idx])
-            fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
+            qemu_log("    Write %s = " TARGET_FMT_lx "\n",
                     cop0_name[idx], value);
         else
-            fprintf(qemu_logfile, "    Write (idx=%d) = " TARGET_FMT_lx "\n",
+            qemu_log("    Write (idx=%d) = " TARGET_FMT_lx "\n",
                     idx, value);
 
     }
@@ -3676,10 +3680,8 @@ static void dump_changed_regs(CPUMIPSState *env)
         if (cur->gpr[i] != env->last_gpr[i]) {
             env->last_gpr[i] = cur->gpr[i];
             cvtrace_dump_gpr(&env->cvtrace, cur->gpr[i]);
-            if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-                fprintf(qemu_logfile, "    Write %s = " TARGET_FMT_lx "\n",
-                        gpr_name[i], cur->gpr[i]);
-            }
+            qemu_log_mask(CPU_LOG_INSTR, "    Write %s = " TARGET_FMT_lx "\n",
+                          gpr_name[i], cur->gpr[i]);
         }
     }
 #ifdef TARGET_CHERI
@@ -3871,8 +3873,8 @@ void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_CSD:
     case OPC_CSTOREC:
     case OPC_CSCD:
-        fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = "
-                TARGET_FMT_lx"\n", addr, value);
+        qemu_log("    Memory Write [" TARGET_FMT_lx "] = " TARGET_FMT_lx "\n",
+                 addr, value);
         break;
 #endif
     case OPC_SC:
@@ -3885,26 +3887,26 @@ void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
 
     case OPC_CSW:
     case OPC_CSCW:
-        fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %08x\n",
-                addr, (uint32_t) value);
+        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %08x\n", addr,
+                 (uint32_t)value);
         break;
     case OPC_SH:
 
     case OPC_CSH:
     case OPC_CSCH:
-        fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %04x\n",
-                addr, (uint16_t) value);
+        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %04x\n", addr,
+                 (uint16_t)value);
         break;
     case OPC_SB:
 
     case OPC_CSB:
     case OPC_CSCB:
-        fprintf(qemu_logfile, "    Memory Write [" TARGET_FMT_lx "] = %02x\n",
-                addr, (uint8_t) value);
+        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %02x\n", addr,
+                 (uint8_t)value);
         break;
     default:
-        fprintf(qemu_logfile, "    Memory op%u [" TARGET_FMT_lx "] = %08x\n",
-                opc, addr, (uint32_t) value);
+        qemu_log("    Memory op%u [" TARGET_FMT_lx "] = %08x\n", opc, addr,
+                 (uint32_t)value);
     }
 }
 
@@ -3943,8 +3945,8 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_CLD:
     case OPC_CLOADC:
     case OPC_CLLD:
-        fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = "
-                TARGET_FMT_lx "\n", addr, value);
+        qemu_log("    Memory Read [" TARGET_FMT_lx "] = " TARGET_FMT_lx "\n",
+                 addr, value);
         break;
     case OPC_LWU:
 #endif
@@ -3961,8 +3963,8 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_CLWU:
     case OPC_CLLW:
     case OPC_CLLWU:
-        fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %08x\n",
-                addr, (uint32_t) value);
+        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %08x\n", addr,
+                 (uint32_t)value);
         break;
     case OPC_LH:
     case OPC_LHU:
@@ -3971,8 +3973,8 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_CLHU:
     case OPC_CLLH:
     case OPC_CLLHU:
-        fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %04x\n",
-                addr, (uint16_t) value);
+        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %04x\n", addr,
+                 (uint16_t)value);
         break;
     case OPC_LB:
     case OPC_LBU:
@@ -3981,8 +3983,8 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     case OPC_CLBU:
     case OPC_CLLB:
     case OPC_CLLBU:
-        fprintf(qemu_logfile, "    Memory Read [" TARGET_FMT_lx "] = %02x\n",
-                addr, (uint8_t) value);
+        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %02x\n", addr,
+                 (uint8_t)value);
         break;
     }
 }

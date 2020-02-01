@@ -305,10 +305,10 @@ is_cap_sealed(const cap_register_t *cp)
     return cap_is_sealed_with_type(cp) || cap_is_sealed_entry(cp);
 }
 
-void print_capreg(FILE* f, const cap_register_t *cr, const char* prefix, const char* name) {
-    fprintf(f, "%s%s|" PRINT_CAP_FMTSTR_L1 "\n",
-            prefix, name, PRINT_CAP_ARGS_L1(cr));
-    fprintf(qemu_logfile, "             |" PRINT_CAP_FMTSTR_L2 "\n", PRINT_CAP_ARGS_L2(cr));
+void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* name) {
+    qemu_log("%s%s|" PRINT_CAP_FMTSTR_L1 "\n"
+             "             |" PRINT_CAP_FMTSTR_L2 "\n",
+             prefix, name, PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr));
 }
 
 static inline int align_of(int size, uint64_t addr)
@@ -352,27 +352,27 @@ static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
      */
     if (!cr->cr_tag) {
         cause = CP2Ca_TAG;
-        // fprintf(qemu_logfile, "CAP Tag VIOLATION: ");
+        // qemu_log("CAP Tag VIOLATION: ");
         goto do_exception;
     }
     if (is_cap_sealed(cr)) {
         cause = CP2Ca_SEAL;
-        // fprintf(qemu_logfile, "CAP Seal VIOLATION: ");
+        // qemu_log("CAP Seal VIOLATION: ");
         goto do_exception;
     }
     if ((cr->cr_perms & perm) != perm) {
         switch (perm) {
             case CAP_PERM_EXECUTE:
                 cause = CP2Ca_PERM_EXE;
-                // fprintf(qemu_logfile, "CAP Exe VIOLATION: ");
+                // qemu_log("CAP Exe VIOLATION: ");
                 goto do_exception;
             case CAP_PERM_LOAD:
                 cause = CP2Ca_PERM_LD;
-                // fprintf(qemu_logfile, "CAP LD VIOLATION: ");
+                // qemu_log("CAP LD VIOLATION: ");
                 goto do_exception;
             case CAP_PERM_STORE:
                 cause = CP2Ca_PERM_ST;
-                // fprintf(qemu_logfile, "CAP ST VIOLATION: ");
+                // qemu_log("CAP ST VIOLATION: ");
                 goto do_exception;
             default:
                 break;
@@ -382,7 +382,7 @@ static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
     //     (size_t)addr, (size_t)len, (size_t)cr->cr_base, (size_t)cr->cr_length);
     if (!cap_is_in_bounds(cr, addr, len)) {
         cause = CP2Ca_LENGTH;
-        // fprintf(qemu_logfile, "CAP Len VIOLATION: ");
+        // qemu_log("CAP Len VIOLATION: ");
         goto do_exception;
     }
 
@@ -2018,7 +2018,7 @@ void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
             cvtrace_dump_cap_cbl(&env->cvtrace, cr);
         }
         if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-            print_capreg(qemu_logfile, cr, "    Write ", name);
+            qemu_log_capreg(cr, "    Write ", name);
         }
     }
 }
@@ -2088,7 +2088,7 @@ static inline void dump_cap_load(uint64_t addr, uint64_t pesbt,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx
+        qemu_log("    Cap Memory Read [" TARGET_FMT_lx
                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
                 addr, tag, pesbt, cursor);
     }
@@ -2102,7 +2102,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx
+        qemu_log("    Cap Memory Write [" TARGET_FMT_lx
                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
                 addr, tag, pesbt, cursor);
     }
@@ -2195,7 +2195,7 @@ static inline void dump_cap_load(uint64_t addr, uint64_t cursor,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-       fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx "] = v:%d c:"
+       qemu_log("    Cap Memory Read [" TARGET_FMT_lx "] = v:%d c:"
                TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
     }
 }
@@ -2208,7 +2208,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-      fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx "] = v:%d c:"
+      qemu_log("    Cap Memory Write [" TARGET_FMT_lx "] = v:%d c:"
               TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
     }
 }
@@ -2317,7 +2317,7 @@ static inline void dump_cap_load_op(uint64_t addr, uint64_t perm_type,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    Cap Memory Read [" TARGET_FMT_lx
+        qemu_log("    Cap Memory Read [" TARGET_FMT_lx
              "] = v:%d tps:" TARGET_FMT_lx "\n", addr, tag, perm_type);
     }
 }
@@ -2327,7 +2327,7 @@ static inline void dump_cap_load_cbl(uint64_t cursor, uint64_t base,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    c:" TARGET_FMT_lx " b:" TARGET_FMT_lx " l:"
+        qemu_log("    c:" TARGET_FMT_lx " b:" TARGET_FMT_lx " l:"
                 TARGET_FMT_lx "\n", cursor, base, length);
     }
 }
@@ -2340,7 +2340,7 @@ static inline void dump_cap_store_op(uint64_t addr, uint64_t perm_type,
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    Cap Memory Write [" TARGET_FMT_lx
+        qemu_log("    Cap Memory Write [" TARGET_FMT_lx
                 "] = v:%d tps:" TARGET_FMT_lx "\n", addr, tag, perm_type);
     }
 }
@@ -2349,7 +2349,7 @@ static inline void dump_cap_store_cursor(uint64_t cursor)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, "    c:" TARGET_FMT_lx, cursor);
+        qemu_log("    c:" TARGET_FMT_lx, cursor);
     }
 }
 
@@ -2357,7 +2357,7 @@ static inline void dump_cap_store_base(uint64_t base)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, " b:" TARGET_FMT_lx, base);
+        qemu_log(" b:" TARGET_FMT_lx, base);
     }
 }
 
@@ -2365,7 +2365,7 @@ static inline void dump_cap_store_length(uint64_t length)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        fprintf(qemu_logfile, " l:" TARGET_FMT_lx "\n", length);
+        qemu_log(" l:" TARGET_FMT_lx "\n", length);
     }
 }
 
@@ -2522,7 +2522,7 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUMIPSState *env, uint64_t next_pc))
     // before checking the bounds.
     pcc->_cr_cursor = next_pc;
     check_cap(env, pcc, CAP_PERM_EXECUTE, next_pc, 0xff, 4, /*instavail=*/false, GETPC());
-    // fprintf(qemu_logfile, "PC:%016lx\n", pc);
+    // qemu_log("PC:%016lx\n", pc);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     // Finally, log the instruction that will be executed next
@@ -2577,7 +2577,7 @@ target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t ddc_offset, ui
 {
     const cap_register_t *ddc = &env->active_tc.CHWR.DDC;
     target_ulong addr = ddc_offset + cap_get_cursor(ddc);
-    // fprintf(qemu_logfile, "ST(%u):%016lx\n", len, addr);
+    // qemu_log("ST(%u):%016lx\n", len, addr);
     // FIXME: should regnum be 32 instead?
     check_cap(env, ddc, perm, addr, /*regnum=*/0, len, instavail, retpc);
     return addr;
@@ -2722,7 +2722,8 @@ void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int f
 
 void CHERI_HELPER_IMPL(mtc2_dumpcstate(CPUMIPSState *env, target_ulong arg1))
 {
-    cheri_dump_state(env_cpu(env),
-            (qemu_logfile == NULL) ? stderr : qemu_logfile,
-            fprintf, CPU_DUMP_CODE);
+    FILE* logfile = qemu_log_enabled() ? qemu_log_lock() : stderr;
+    cheri_dump_state(env_cpu(env), logfile, fprintf, CPU_DUMP_CODE);
+    if (logfile != stderr)
+        qemu_log_unlock(logfile);
 }

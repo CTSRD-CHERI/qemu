@@ -230,9 +230,11 @@ static void dump_cpu_ips_on_exit(void) {
 #if defined(DO_CHERI_STATISTICS)
 static void dump_stats_on_exit(void)
 {
-    if (qemu_log_enabled() && qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS))
-        cheri_cpu_dump_statistics_f(NULL, qemu_logfile, 0);
-    else
+    if (qemu_log_enabled() && qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS)) {
+        FILE* logf = qemu_log_lock();
+        cheri_cpu_dump_statistics_f(NULL, logf, 0);
+        qemu_log_unlock(logf);
+    } else
         cheri_cpu_dump_statistics_f(NULL, stderr, 0);
 }
 #endif
