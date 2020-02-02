@@ -191,6 +191,7 @@ DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
 DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
 DEF_HELPER_2(instr_stop, void, env, i64)
 DEF_HELPER_2(cheri_debug_message, void, env, i64)
+DEF_HELPER_3(log_value, void, env, cptr, i64)
 #endif
 
 DEF_HELPER_2(magic_library_function, void, env, tl)

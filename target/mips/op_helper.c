@@ -2322,6 +2322,11 @@ static inline void cvtrace_dump_gpr(cvtrace_t *cvtrace, uint64_t value)
     }
 }
 
+void helper_log_value(CPUMIPSState *env, const void* ptr, uint64_t value)
+{
+    qemu_log_mask(CPU_LOG_INSTR, "%s: " TARGET_FMT_plx "\n", ptr, value);
+}
+
 #endif // CONFIG_MIPS_LOG_INSTR
 
 static void simple_dump_state(CPUMIPSState *env, FILE *f,
