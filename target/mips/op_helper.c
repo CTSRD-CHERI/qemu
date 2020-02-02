@@ -3593,7 +3593,7 @@ static void dump_changed_cop0(CPUMIPSState *env)
     dump_changed_cop0_reg(env, 16*8 + 6, env->CP0_Config6);
     dump_changed_cop0_reg(env, 16*8 + 7, env->CP0_Config7);
 
-    dump_changed_cop0_reg(env, 17*8 + 0, env->lladdr >> env->CP0_LLAddr_shift);
+    dump_changed_cop0_reg(env, 17*8 + 0, env->CP0_LLAddr >> env->CP0_LLAddr_shift);
 
     dump_changed_cop0_reg(env, 18*8 + 0, env->CP0_WatchLo[0]);
     dump_changed_cop0_reg(env, 18*8 + 1, env->CP0_WatchLo[1]);
@@ -3924,7 +3924,8 @@ void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
     if (opc == OPC_CLLD || opc == OPC_CLLWU || opc == OPC_CLLW ||
         opc == OPC_CLLHU || opc == OPC_CLLH || opc == OPC_CLLBU ||
         opc == OPC_CLLB) {
-        env->lladdr = do_translate_address(env, addr, 0, GETPC());
+        env->CP0_LLAddr = do_translate_address(env, addr, 0, GETPC());
+        env->lladdr = addr;
         env->llval = value;
     }
     if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR) |
@@ -6462,7 +6463,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         hwaddr src_paddr = do_translate_address(env, original_src, MMU_DATA_LOAD, ra);
         hwaddr dest_paddr = do_translate_address(env, original_dest, MMU_DATA_STORE, ra);
 #ifdef TARGET_CHERI
-        if (dest_paddr <= env->lladdr && dest_paddr + len > env->lladdr) {
+        if (dest_paddr <= env->CP0_LLAddr && dest_paddr + len > env->CP0_LLAddr) {
             // reset the linked flag if we touch the address with this write
             env->linkedflag = 0;
         }
@@ -6741,7 +6742,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             // First try address_space_write and if that fails fall back to bytewise setting
             hwaddr paddr = do_translate_address(env, dest, MMU_DATA_STORE, ra);
 #ifdef TARGET_CHERI
-            if (paddr <= env->lladdr && paddr + l_adj_bytes > env->lladdr) {
+            if (paddr <= env->CP0_LLAddr && paddr + l_adj_bytes > env->CP0_LLAddr) {
                 // reset the linked flag if we touch the address with this write
                 env->linkedflag = 0;
             }
