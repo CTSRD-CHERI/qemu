@@ -4032,6 +4032,7 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     TCGLabel *l1 = gen_new_label();
     TCGLabel *done = gen_new_label();
     TCGLabel *not_misaligned = gen_new_label();
+    TCGLabel *store_succeeded = gen_new_label();
 
     t0 = tcg_temp_new();
     // IMPORTANT! addr must be allocated using tcg_temp_local_new since we
@@ -4061,20 +4062,19 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     // DEBUG_VALUE(addr);
     // DEBUG_VALUE(cpu_lladdr);
     tcg_gen_brcond_tl(TCG_COND_EQ, addr, cpu_lladdr, l1);
-    tcg_temp_free(addr);
     tcg_gen_movi_tl(t0, 0);
     gen_store_gpr(t0, rt);
     tcg_gen_br(done);
 
     gen_set_label(l1);
     /* generate cmpxchg */
-    val = tcg_temp_new();
+    val = tcg_temp_local_new(); // local_new since used in another BB
     gen_load_gpr(val, rt);
 
     // DEBUG_VALUE(addr);
     // DEBUG_VALUE(cpu_llval);
     // DEBUG_VALUE(val);
-    tcg_gen_atomic_cmpxchg_tl(t0, cpu_lladdr, cpu_llval, val,
+    tcg_gen_atomic_cmpxchg_tl(t0, addr, cpu_llval, val,
                               eva ? MIPS_HFLAG_UM : ctx->mem_idx, tcg_mo);
     // Print opc for CHERI logging
     switch (opc) {
@@ -4087,14 +4087,20 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     default:
         tcg_debug_assert(false && "Unhandled opcode");
     }
-    // FIXME: a failed SC should not clear the tag bit!
-    GEN_CAP_INVADIATE_TAG(cpu_lladdr, memop_size, opc, val);
 
     tcg_gen_setcond_tl(TCG_COND_EQ, t0, t0, cpu_llval);
     gen_store_gpr(t0, rt);
-    tcg_temp_free(val);
+    tcg_gen_brcondi_tl(TCG_COND_EQ, t0, 0x1, store_succeeded);
 
+    // If we didn't branch the store failed -> return zero
+    tcg_gen_br(done);
+
+    gen_set_label(store_succeeded);
+    // Store succeeded -> invalidate tag bit and return one
+    GEN_CAP_INVADIATE_TAG(addr, memop_size, opc, cpu_llval);
     gen_set_label(done);
+    tcg_temp_free(val);
+    tcg_temp_free(addr);
     tcg_temp_free(t0);
 }
 
