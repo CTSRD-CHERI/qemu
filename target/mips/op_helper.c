@@ -2767,7 +2767,7 @@ static void r4k_dump_tlb(CPUMIPSState *env, int idx)
         pagemask = tlb->PageMask;
         hi = tlb->VPN | tlb->ASID;
         lo0 = tlb->G | (tlb->V0 << 1) | (tlb->D0 << 2) |
-#if 1
+#ifdef TARGET_CHERI
             ((target_ulong)tlb->S0 << CP0EnLo_S) |
             ((target_ulong)tlb->L0 << CP0EnLo_L) |
 #else
@@ -2776,7 +2776,7 @@ static void r4k_dump_tlb(CPUMIPSState *env, int idx)
 #endif
             (tlb->C0 << 3) | (tlb->PFN[0] >> 6);
         lo1 = tlb->G | (tlb->V1 << 1) | (tlb->D1 << 2) |
-#if 1
+#ifdef TARGET_CHERI
             ((target_ulong)tlb->S1 << CP0EnLo_S) |
             ((target_ulong)tlb->L1 << CP0EnLo_L) |
 #else
