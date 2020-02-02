@@ -4017,6 +4017,12 @@ static void gen_st(DisasContext *ctx, uint32_t opc, int rt,
     tcg_temp_free(t1);
 }
 
+ATTRIBUTE_UNUSED static void _debug_value(TCGv value, const char* msg) {
+    TCGv_ptr dbg_msg = tcg_const_ptr(msg);
+    gen_helper_log_value(cpu_env, dbg_msg, value);
+    tcg_temp_free_ptr(dbg_msg);
+}
+#define DEBUG_VALUE(value) _debug_value(value, #value)
 
 /* Store conditional */
 static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
@@ -4052,6 +4058,8 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     generate_exception(ctx, EXCP_AdES);
     gen_set_label(not_misaligned);
 
+    // DEBUG_VALUE(addr);
+    // DEBUG_VALUE(cpu_lladdr);
     tcg_gen_brcond_tl(TCG_COND_EQ, addr, cpu_lladdr, l1);
     tcg_temp_free(addr);
     tcg_gen_movi_tl(t0, 0);
@@ -4063,6 +4071,9 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     val = tcg_temp_new();
     gen_load_gpr(val, rt);
 
+    // DEBUG_VALUE(addr);
+    // DEBUG_VALUE(cpu_llval);
+    // DEBUG_VALUE(val);
     tcg_gen_atomic_cmpxchg_tl(t0, cpu_lladdr, cpu_llval, val,
                               eva ? MIPS_HFLAG_UM : ctx->mem_idx, tcg_mo);
     // Print opc for CHERI logging
