@@ -271,9 +271,6 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     cc->tlb_fill = mips_cpu_tlb_fill;
 #endif
 
-    error_report("This version of QEMU has a broken LL/SC, please checkout commit 84ccf99f09f840b4a6869cf3982671e97e749f39 instead!");
-    exit(1);
-
 #if defined(TARGET_MIPS64)
     cc->gdb_core_xml_file = "mips64-cpu.xml";
 #else
