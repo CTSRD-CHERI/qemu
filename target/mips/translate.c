@@ -3772,20 +3772,20 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         gen_store_gpr(t0, rt);
         break;
     case OPC_LDPC:
-        GEN_CAP_CHECK_LOAD(t3, t0, t0, 8);
         t1 = tcg_const_tl(pc_relative_pc(ctx));
         gen_op_addr_add(ctx, t0, t0, t1);
         tcg_temp_free(t1);
+        GEN_CAP_CHECK_LOAD_PCREL(t0, 8);
         tcg_gen_qemu_ld_tl(t0, t0, mem_idx, MO_TEQ);
         GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);
         break;
 #endif
     case OPC_LWPC:
-        GEN_CAP_CHECK_LOAD(t3, t0, t0, 4);
         t1 = tcg_const_tl(pc_relative_pc(ctx));
         gen_op_addr_add(ctx, t0, t0, t1);
         tcg_temp_free(t1);
+        GEN_CAP_CHECK_LOAD_PCREL(t0, 4);
         tcg_gen_qemu_ld_tl(t0, t0, mem_idx, MO_TESL);
         GEN_CAP_DUMP_LOAD(opc, t3, t0);
         gen_store_gpr(t0, rt);

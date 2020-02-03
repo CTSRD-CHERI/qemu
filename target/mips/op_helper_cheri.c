@@ -2593,6 +2593,13 @@ target_ulong CHERI_HELPER_IMPL(ccheck_load(CPUMIPSState *env, target_ulong offse
     return check_ddc(env, CAP_PERM_LOAD, offset, len, /*instavail=*/true, GETPC());
 }
 
+void CHERI_HELPER_IMPL(ccheck_load_pcrel(CPUMIPSState *env, target_ulong addr,
+                                         uint32_t len)) {
+    // Note: the address is already absolute, no need to add pcc.base
+    check_cap(env, &env->active_tc.PCC, CAP_PERM_LOAD, addr, /*regnum=*/0, len,
+              /*instavail=*/true, GETPC());
+}
+
 void CHERI_HELPER_IMPL(cinvalidate_tag_left_right(CPUMIPSState *env, target_ulong addr, uint32_t len,
     uint32_t opc, target_ulong value))
 {

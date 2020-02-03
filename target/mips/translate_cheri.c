@@ -1589,10 +1589,18 @@ static inline void generate_ccheck_load_right(TCGv addr, TCGv offset, int32_t le
     gen_helper_ccheck_load_right(addr, cpu_env, offset, tlen);
     tcg_temp_free_i32(tlen);
 }
+static inline void generate_ccheck_load_pcrel(TCGv addr, int32_t len)
+{
+    TCGv_i32 tlen = tcg_const_i32(len);
+    gen_helper_ccheck_load_pcrel(cpu_env, addr, tlen);
+    tcg_temp_free_i32(tlen);
+}
 #define GEN_CAP_CHECK_LOAD_RIGHT(save, addr, offset, len) \
     generate_ccheck_load_right(addr, offset, len); tcg_gen_mov_tl(save, addr)
 #define GEN_CAP_CHECK_LOAD(save, addr, offset, len) \
     generate_ccheck_load(addr, offset, len); tcg_gen_mov_tl(save, addr)
+#define GEN_CAP_CHECK_LOAD_PCREL(addr, len) \
+    generate_ccheck_load_pcrel(addr, len)
 
 static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
         TCGv value)
@@ -1685,6 +1693,7 @@ static inline void generate_dump_state_and_log_instr(DisasContext *ctx)
 #endif
 #define GEN_CAP_CHECK_STORE(addr, offset, len)
 #define GEN_CAP_CHECK_LOAD(save, addr, offset, len)
+#define GEN_CAP_CHECK_LOAD_PCREL(addr, len)
 #define GEN_CAP_CHECK_STORE_RIGHT(addr, offset, len)
 #define GEN_CAP_CHECK_LOAD_RIGHT(save, addr, offset, len)
 #define GEN_CAP_INVADIATE_TAG(addr, len, opc, value)
