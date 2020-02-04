@@ -336,6 +336,24 @@ static inline int align_of(int size, uint64_t addr)
     }
 }
 
+static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *ctp);
+
+static inline void update_ddc(CPUMIPSState *env, const cap_register_t* new_ddc) {
+    if (!cap_exactly_equal(&env->active_tc.CHWR.DDC, new_ddc)) {
+        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_MMU, "Flushing TCG TLB since $ddc is changing to " PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
+        // TODO: in the future we may want to move $ddc to the guest -> host addr
+        // translation. This would allow skipping $ddc checks for all pages that
+        // are fully covered by $ddc for the second load/store check
+        // (QEMU has separate TLBs for both cases already).
+        // If we implment this, we will have to flush the entire TLB whenever
+        // $ddc changes (or at least flush all pages affected by the $ddc chaged)
+        // XXX: tlb_flush(env_cpu(env));
+        env->active_tc.CHWR.DDC = *new_ddc;
+    } else {
+        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_MMU, "Installing same $ddc again, not flushing TCG TLB: " PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
+    }
+}
+
 static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
         uint32_t perm, uint64_t addr, uint16_t regnum, uint32_t len, bool instavail, uintptr_t pc)
 {
@@ -541,8 +559,9 @@ void CHERI_HELPER_IMPL(cclearreg(CPUMIPSState *env, uint32_t mask))
 {
     // Register zero means $ddc here since it is useful to clear $ddc on a
     // sandbox switch whereas clearing $NULL is useless
-    if (mask & 0x1)
-        (void)null_capability(&env->active_tc.CHWR.DDC);
+    if (mask & 0x1) {
+        update_ddc(env,&env->active_tc._CGPR[0]); // nullify $ddc
+    }
 
     for (int creg = 1; creg < 32; creg++) {
         if (mask & (0x1 << creg))
@@ -1137,7 +1156,8 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong _
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
     switch (hwr) {
     case CP2HWR_DDC: /* always accessible */
-        return &env->active_tc.CHWR.DDC;
+        assert(false && "$ddc should not be handled here");
+        break;
     case CP2HWR_USER_TLS:  /* always accessible */
         return &env->active_tc.CHWR.UserTlsCap;
     case CP2HWR_PRIV_TLS:
@@ -1186,6 +1206,8 @@ static inline const cap_register_t *
 check_readonly_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong pc) {
     // Currently there is no difference for access permissions between read
     // and write access but that may change in the future
+    if (hwr == CP2HWR_DDC)
+        return &env->active_tc.CHWR.DDC;
     return check_writable_cap_hwr_access(env, hwr, pc);
 }
 
@@ -1232,6 +1254,11 @@ void CHERI_HELPER_IMPL(creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr))
 void CHERI_HELPER_IMPL(cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr))
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
+    if (hwr == CP2HWR_DDC) {
+        // $ddc is always writable
+        update_ddc(env, csp);
+        return;
+    }
     cap_register_t *cdp = check_writable_cap_hwr_access(env, CP2HWR_BASE_INDEX + hwr, GETPC());
     *cdp = *csp;
 }
