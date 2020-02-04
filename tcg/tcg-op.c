@@ -2804,7 +2804,7 @@ static inline void plugin_gen_mem_callbacks(TCGv vaddr, uint16_t info)
 #endif
 }
 
-void tcg_gen_qemu_ld_i32(TCGv_i32 val, TCGv addr, TCGArg idx, MemOp memop)
+void (tcg_gen_qemu_ld_i32)(TCGv_i32 val, TCGv addr, TCGArg idx, MemOp memop)
 {
     MemOp orig_memop;
     uint16_t info = trace_mem_get_info(memop, idx, 0);
@@ -2842,7 +2842,7 @@ void tcg_gen_qemu_ld_i32(TCGv_i32 val, TCGv addr, TCGArg idx, MemOp memop)
     }
 }
 
-void tcg_gen_qemu_st_i32(TCGv_i32 val, TCGv addr, TCGArg idx, MemOp memop)
+void (tcg_gen_qemu_st_i32)(TCGv_i32 val, TCGv addr, TCGArg idx, MemOp memop)
 {
     TCGv_i32 swap = NULL;
     uint16_t info = trace_mem_get_info(memop, idx, 1);
@@ -2876,13 +2876,13 @@ void tcg_gen_qemu_st_i32(TCGv_i32 val, TCGv addr, TCGArg idx, MemOp memop)
     }
 }
 
-void tcg_gen_qemu_ld_i64(TCGv_i64 val, TCGv addr, TCGArg idx, MemOp memop)
+void (tcg_gen_qemu_ld_i64)(TCGv_i64 val, TCGv addr, TCGArg idx, MemOp memop)
 {
     MemOp orig_memop;
     uint16_t info;
 
     if (TCG_TARGET_REG_BITS == 32 && (memop & MO_SIZE) < MO_64) {
-        tcg_gen_qemu_ld_i32(TCGV_LOW(val), addr, idx, memop);
+        (tcg_gen_qemu_ld_i32)(TCGV_LOW(val), addr, idx, memop);
         if (memop & MO_SIGN) {
             tcg_gen_sari_i32(TCGV_HIGH(val), TCGV_LOW(val), 31);
         } else {
@@ -2931,13 +2931,13 @@ void tcg_gen_qemu_ld_i64(TCGv_i64 val, TCGv addr, TCGArg idx, MemOp memop)
     }
 }
 
-void tcg_gen_qemu_st_i64(TCGv_i64 val, TCGv addr, TCGArg idx, MemOp memop)
+void (tcg_gen_qemu_st_i64)(TCGv_i64 val, TCGv addr, TCGArg idx, MemOp memop)
 {
     TCGv_i64 swap = NULL;
     uint16_t info;
 
     if (TCG_TARGET_REG_BITS == 32 && (memop & MO_SIZE) < MO_64) {
-        tcg_gen_qemu_st_i32(TCGV_LOW(val), addr, idx, memop);
+        (tcg_gen_qemu_st_i32)(TCGV_LOW(val), addr, idx, memop);
         return;
     }
 
@@ -3066,9 +3066,9 @@ void tcg_gen_atomic_cmpxchg_i32(TCGv_i32 retv, TCGv addr, TCGv_i32 cmpv,
 
         tcg_gen_ext_i32(t2, cmpv, memop & MO_SIZE);
 
-        tcg_gen_qemu_ld_i32(t1, addr, idx, memop & ~MO_SIGN);
+        (tcg_gen_qemu_ld_i32)(t1, addr, idx, memop & ~MO_SIGN);
         tcg_gen_movcond_i32(TCG_COND_EQ, t2, t1, t2, newv, t1);
-        tcg_gen_qemu_st_i32(t2, addr, idx, memop);
+        (tcg_gen_qemu_st_i32)(t2, addr, idx, memop);
         tcg_temp_free_i32(t2);
 
         if (memop & MO_SIGN) {
@@ -3110,9 +3110,9 @@ void tcg_gen_atomic_cmpxchg_i64(TCGv_i64 retv, TCGv addr, TCGv_i64 cmpv,
 
         tcg_gen_ext_i64(t2, cmpv, memop & MO_SIZE);
 
-        tcg_gen_qemu_ld_i64(t1, addr, idx, memop & ~MO_SIGN);
+        (tcg_gen_qemu_ld_i64)(t1, addr, idx, memop & ~MO_SIGN);
         tcg_gen_movcond_i64(TCG_COND_EQ, t2, t1, t2, newv, t1);
-        tcg_gen_qemu_st_i64(t2, addr, idx, memop);
+        (tcg_gen_qemu_st_i64)(t2, addr, idx, memop);
         tcg_temp_free_i64(t2);
 
         if (memop & MO_SIGN) {
@@ -3172,9 +3172,9 @@ static void do_nonatomic_op_i32(TCGv_i32 ret, TCGv addr, TCGv_i32 val,
 
     memop = tcg_canonicalize_memop(memop, 0, 0);
 
-    tcg_gen_qemu_ld_i32(t1, addr, idx, memop & ~MO_SIGN);
+    (tcg_gen_qemu_ld_i32)(t1, addr, idx, memop & ~MO_SIGN);
     gen(t2, t1, val);
-    tcg_gen_qemu_st_i32(t2, addr, idx, memop);
+    (tcg_gen_qemu_st_i32)(t2, addr, idx, memop);
 
     tcg_gen_ext_i32(ret, (new_val ? t2 : t1), memop);
     tcg_temp_free_i32(t1);
@@ -3215,9 +3215,9 @@ static void do_nonatomic_op_i64(TCGv_i64 ret, TCGv addr, TCGv_i64 val,
 
     memop = tcg_canonicalize_memop(memop, 1, 0);
 
-    tcg_gen_qemu_ld_i64(t1, addr, idx, memop & ~MO_SIGN);
+    (tcg_gen_qemu_ld_i64)(t1, addr, idx, memop & ~MO_SIGN);
     gen(t2, t1, val);
-    tcg_gen_qemu_st_i64(t2, addr, idx, memop);
+    (tcg_gen_qemu_st_i64)(t2, addr, idx, memop);
 
     tcg_gen_ext_i64(ret, (new_val ? t2 : t1), memop);
     tcg_temp_free_i64(t1);

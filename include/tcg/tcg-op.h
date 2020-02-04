@@ -862,62 +862,97 @@ static inline void tcg_gen_plugin_cb_end(void)
 #define tcg_gen_qemu_st_tl tcg_gen_qemu_st_i64
 #endif
 
-void tcg_gen_qemu_ld_i32(TCGv_i32, TCGv, TCGArg, MemOp);
-void tcg_gen_qemu_st_i32(TCGv_i32, TCGv, TCGArg, MemOp);
-void tcg_gen_qemu_ld_i64(TCGv_i64, TCGv, TCGArg, MemOp);
-void tcg_gen_qemu_st_i64(TCGv_i64, TCGv, TCGArg, MemOp);
+void (tcg_gen_qemu_ld_i32)(TCGv_i32, TCGv, TCGArg, MemOp);
+void (tcg_gen_qemu_st_i32)(TCGv_i32, TCGv, TCGArg, MemOp);
+void (tcg_gen_qemu_ld_i64)(TCGv_i64, TCGv, TCGArg, MemOp);
+void (tcg_gen_qemu_st_i64)(TCGv_i64, TCGv, TCGArg, MemOp);
 
-static inline void tcg_gen_qemu_ld8u(TCGv ret, TCGv addr, int mem_index)
+#ifdef TARGET_CHERI
+typedef struct _TCGCapCheckedAddr {
+    TCGv _addr;
+} TCGCapCheckedAddr;
+typedef TCGCapCheckedAddr TCGGuestPtr;
+
+static inline void cheri_tcg_gen_qemu_ld_i32(TCGv_i32 ret,
+                                             TCGCapCheckedAddr addr, TCGArg arg,
+                                             MemOp op) {
+    (tcg_gen_qemu_ld_i32)(ret, addr._addr, arg, op);
+}
+#define tcg_gen_qemu_ld_i32(ret, addr, arg, op) cheri_tcg_gen_qemu_ld_i32(ret, addr, arg, op)
+static inline void cheri_tcg_gen_qemu_st_i32(TCGv_i32 ret,
+                                             TCGCapCheckedAddr addr, TCGArg arg,
+                                             MemOp op) {
+    (tcg_gen_qemu_st_i32)(ret, addr._addr, arg, op);
+}
+#define tcg_gen_qemu_st_i32(ret, addr, arg, op) cheri_tcg_gen_qemu_st_i32(ret, addr, arg, op)
+static inline void cheri_tcg_gen_qemu_ld_i64(TCGv_i64 ret,
+                                             TCGCapCheckedAddr addr, TCGArg arg,
+                                             MemOp op) {
+    (tcg_gen_qemu_ld_i64)(ret, addr._addr, arg, op);
+}
+#define tcg_gen_qemu_ld_i64(ret, addr, arg, op) cheri_tcg_gen_qemu_ld_i64(ret, addr, arg, op)
+static inline void cheri_tcg_gen_qemu_st_i64(TCGv_i64 ret,
+                                             TCGCapCheckedAddr addr, TCGArg arg,
+                                             MemOp op) {
+    (tcg_gen_qemu_st_i64)(ret, addr._addr, arg, op);
+}
+#define tcg_gen_qemu_st_i64(ret, addr, arg, op) cheri_tcg_gen_qemu_st_i64(ret, addr, arg, op)
+
+#else
+typedef TCGv TCGGuestPtr;
+#endif
+
+static inline void tcg_gen_qemu_ld8u(TCGv ret, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_ld_tl(ret, addr, mem_index, MO_UB);
 }
 
-static inline void tcg_gen_qemu_ld8s(TCGv ret, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_ld8s(TCGv ret, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_ld_tl(ret, addr, mem_index, MO_SB);
 }
 
-static inline void tcg_gen_qemu_ld16u(TCGv ret, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_ld16u(TCGv ret, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_ld_tl(ret, addr, mem_index, MO_TEUW);
 }
 
-static inline void tcg_gen_qemu_ld16s(TCGv ret, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_ld16s(TCGv ret, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_ld_tl(ret, addr, mem_index, MO_TESW);
 }
 
-static inline void tcg_gen_qemu_ld32u(TCGv ret, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_ld32u(TCGv ret, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_ld_tl(ret, addr, mem_index, MO_TEUL);
 }
 
-static inline void tcg_gen_qemu_ld32s(TCGv ret, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_ld32s(TCGv ret, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_ld_tl(ret, addr, mem_index, MO_TESL);
 }
 
-static inline void tcg_gen_qemu_ld64(TCGv_i64 ret, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_ld64(TCGv_i64 ret, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_ld_i64(ret, addr, mem_index, MO_TEQ);
 }
 
-static inline void tcg_gen_qemu_st8(TCGv arg, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_st8(TCGv arg, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_st_tl(arg, addr, mem_index, MO_UB);
 }
 
-static inline void tcg_gen_qemu_st16(TCGv arg, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_st16(TCGv arg, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_st_tl(arg, addr, mem_index, MO_TEUW);
 }
 
-static inline void tcg_gen_qemu_st32(TCGv arg, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_st32(TCGv arg, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_st_tl(arg, addr, mem_index, MO_TEUL);
 }
 
-static inline void tcg_gen_qemu_st64(TCGv_i64 arg, TCGv addr, int mem_index)
+static inline void tcg_gen_qemu_st64(TCGv_i64 arg, TCGGuestPtr addr, int mem_index)
 {
     tcg_gen_qemu_st_i64(arg, addr, mem_index, MO_TEQ);
 }
