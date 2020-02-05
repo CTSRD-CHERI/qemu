@@ -23031,7 +23031,7 @@ static int decode_nanomips_opc(CPUMIPSState *env, DisasContext *ctx)
             gen_pool16c_nanomips_insn(ctx);
             break;
         case NM_LWXS16:
-            gen_ldxs(ctx, rt, rs, rd, opc);
+            gen_ldxs(ctx, rt, rs, rd, op);
             break;
         }
         break;
