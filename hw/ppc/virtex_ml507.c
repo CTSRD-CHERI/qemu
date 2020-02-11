@@ -89,10 +89,7 @@ static void mmubooke_create_initial_mapping(CPUPPCState *env,
     tlb->PID = 0;
 }
 
-static PowerPCCPU *ppc440_init_xilinx(ram_addr_t *ram_size,
-                                      int do_init,
-                                      const char *cpu_type,
-                                      uint32_t sysclk)
+static PowerPCCPU *ppc440_init_xilinx(const char *cpu_type, uint32_t sysclk)
 {
     PowerPCCPU *cpu;
     CPUPPCState *env;
@@ -213,7 +210,7 @@ static void virtex_init(MachineState *machine)
     int i;
 
     /* init CPUs */
-    cpu = ppc440_init_xilinx(&ram_size, 1, machine->cpu_type, 400000000);
+    cpu = ppc440_init_xilinx(machine->cpu_type, 400000000);
     env = &cpu->env;
 
     if (env->mmu_model != POWERPC_MMU_BOOKE) {
@@ -259,7 +256,7 @@ static void virtex_init(MachineState *machine)
 
         /* Boots a kernel elf binary.  */
         kernel_size = load_elf(kernel_filename, NULL, NULL, NULL,
-                               &entry, &low, &high, 1, PPC_ELF_MACHINE,
+                               &entry, &low, &high, NULL, 1, PPC_ELF_MACHINE,
                                0, 0);
         boot_info.bootstrap_pc = entry & 0x00ffffff;
 

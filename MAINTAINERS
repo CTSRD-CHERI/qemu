@@ -178,6 +178,8 @@ S: Maintained
 F: target/hppa/
 F: hw/hppa/
 F: disas/hppa.c
+F: hw/net/*i82596*
+F: include/hw/net/lasi_82596.h
 
 LM32 TCG CPUs
 M: Michael Walle <michael@walle.cc>
@@ -890,7 +892,7 @@ F: hw/*/etraxfs_*.c
 
 HP-PARISC Machines
 ------------------
-Dino
+HP B160L
 M: Richard Henderson <rth@twiddle.net>
 R: Helge Deller <deller@gmx.de>
 S: Odd Fixes
@@ -1101,7 +1103,6 @@ F: hw/dma/i82374.c
 F: hw/rtc/m48t59-isa.c
 F: include/hw/isa/pc87312.h
 F: include/hw/rtc/m48t59.h
-F: pc-bios/ppc_rom.bin
 F: tests/acceptance/ppc_prep_40p.py
 
 sPAPR
@@ -1573,6 +1574,7 @@ S: Odd Fixes
 F: hw/9pfs/
 X: hw/9pfs/xen-9p*
 F: fsdev/
+F: docs/interop/virtfs-proxy-helper.rst
 F: tests/qtest/virtio-9p-test.c
 T: git https://github.com/gkurz/qemu.git 9p-next
 
@@ -1833,6 +1835,7 @@ F: block/
 F: hw/block/
 F: include/block/
 F: qemu-img*
+F: docs/interop/qemu-img.rst
 F: qemu-io*
 F: tests/qemu-iotests/
 F: util/qemu-progress.c
@@ -1973,6 +1976,7 @@ F: ioport.c
 F: include/exec/memop.h
 F: include/exec/memory.h
 F: include/exec/ram_addr.h
+F: include/exec/ramblock.h
 F: memory.c
 F: include/exec/memory-internal.h
 F: exec.c
@@ -2190,6 +2194,7 @@ F: qemu-option-trace.texi
 F: scripts/tracetool.py
 F: scripts/tracetool/
 F: scripts/qemu-trace-stap*
+F: docs/interop/qemu-trace-stap.rst
 F: docs/devel/tracing.txt
 T: git https://github.com/stefanha/qemu.git tracing
 
@@ -2630,6 +2635,15 @@ F: block/raw-format.c
 F: block/file-posix.c
 F: block/file-win32.c
 F: block/win32-aio.c
+
+Linux io_uring
+M: Aarushi Mehta <mehta.aaru20@gmail.com>
+M: Julia Suvorova <jusual@redhat.com>
+M: Stefan Hajnoczi <stefanha@redhat.com>
+L: qemu-block@nongnu.org
+S: Maintained
+F: block/io_uring.c
+F: stubs/io_uring.c
 
 qcow2
 M: Kevin Wolf <kwolf@redhat.com>
