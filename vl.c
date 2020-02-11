@@ -3660,7 +3660,8 @@ int main(int argc, char **argv, char **envp)
                 warn_report("The -tb-size option is deprecated, use -accel tcg,tb-size instead");
                 object_register_sugar_prop(ACCEL_CLASS_NAME("tcg"), "tb-size", optarg);
                 break;
-            case QEMU_OPTION_breakpoint:
+#if defined(CONFIG_CHERI)
+                case QEMU_OPTION_breakpoint:
                 cl_breakpoint = strtoull(optarg, NULL, 0);
                 break;
             case QEMU_OPTION_breakcount:
@@ -3678,6 +3679,8 @@ int main(int argc, char **argv, char **envp)
                 }
                 break;
 #endif /* CONFIG_MIPS_LOG_INSTR */
+#endif /* CONFIG_CHERI */
+
 #ifdef CONFIG_CHERI
             case QEMU_OPTION_cheri_c2e_on_unrepresentable:
                 cheri_c2e_on_unrepresentable = true;
