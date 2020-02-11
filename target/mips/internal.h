@@ -375,7 +375,6 @@ static inline void update_cp0_access_for_pc(CPUMIPSState* env) {
     }
 }
 
-
 static inline void compute_hflags(CPUMIPSState *env)
 {
     env->hflags &= ~(MIPS_HFLAG_COP1X | MIPS_HFLAG_64 | MIPS_HFLAG_CP0 |
@@ -526,6 +525,13 @@ static inline void QEMU_NORETURN do_raise_exception(CPUMIPSState *env,
     do_raise_exception_err(env, exception, env->error_code & EXCP_INST_NOTAVAIL, pc);
 }
 
+static inline void check_hwrena(CPUMIPSState *env, int reg, uintptr_t pc) {
+    if ((env->hflags & MIPS_HFLAG_CP0) || (env->CP0_HWREna & (1 << reg))) {
+        return;
+    }
+    do_raise_exception(env, EXCP_RI, pc);
+}
+
 #ifdef TARGET_CHERI
 static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
         uint16_t exc_code)
@@ -616,5 +622,10 @@ static inline target_ulong get_CP0_ErrorEPC(CPUMIPSState *env)
 
 void set_CP0_EPC(CPUMIPSState *env, target_ulong value);
 void set_CP0_ErrorEPC(CPUMIPSState *env, target_ulong value);
-
+#ifdef CONFIG_MIPS_LOG_INSTR
+void r4k_dump_tlb(CPUMIPSState *env, int idx);
+#endif
+void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vaddr);
+hwaddr do_translate_address(CPUMIPSState *env, target_ulong address, int rw,
+                            uintptr_t retaddr);
 #endif

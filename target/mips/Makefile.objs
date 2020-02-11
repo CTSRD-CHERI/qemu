@@ -4,3 +4,4 @@ obj-$(CONFIG_SOFTMMU) += mips-semi.o
 obj-$(CONFIG_SOFTMMU) += machine.o cp0_timer.o
 obj-$(CONFIG_KVM) += kvm.o
 obj-$(TARGET_CHERI) += op_helper_cheri.o
+obj-y += op_helper_log_instr.o op_helper_beri.o
