@@ -42,6 +42,8 @@
 #include "exec/cpu_ldst.h"
 #include "exec/helper-proto.h"
 
+#include "cheri_tagmem.h"
+
 #ifndef TARGET_CHERI
 #error "This file should only be compiled for CHERI"
 #endif

@@ -55,6 +55,10 @@
 #include <linux/falloc.h>
 #endif
 
+#if defined(TARGET_CHERI)
+#include "cheri_tagmem.h"
+#endif
+
 #endif
 #include "qemu/rcu_queue.h"
 #include "qemu/main-loop.h"

@@ -57,6 +57,10 @@
 #include "hw/semihosting/semihost.h"
 #include "hw/mips/cps.h"
 
+#if defined(TARGET_CHERI)
+#include "cheri_tagmem.h"
+#endif
+
 #define ENVP_ADDR           0x80002000l
 #define ENVP_NB_ENTRIES     16
 #define ENVP_ENTRY_SIZE     256

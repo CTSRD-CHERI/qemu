@@ -31,6 +31,9 @@
 #ifdef CONFIG_MIPS_LOG_INSTR
 #include "exec/log.h"
 #endif
+#ifdef TARGET_CHERI
+#include "cheri_tagmem.h"
+#endif
 #include "sysemu/kvm.h"
 
 

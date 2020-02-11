@@ -46,6 +46,10 @@
 #include "sysemu/qtest.h"
 #include "sysemu/reset.h"
 
+#if defined(TARGET_CHERI)
+#include "cheri_tagmem.h"
+#endif
+
 static struct _loaderparams {
     int ram_size;
     const char *kernel_filename;
