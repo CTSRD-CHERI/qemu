@@ -233,11 +233,13 @@ enum {
 
 #define CC_SPECIAL_OTYPE(name, subtract) \
     CAP_ ## name = (CAP_MAX_REPRESENTABLE_OTYPE - subtract ## u), \
+    CAP_ ## name ## _SIGNED = (((int64_t)-1) - subtract ## u), \
     CC128_ ## name = (CC128_MAX_REPRESENTABLE_OTYPE - subtract ## u), \
     CC256_ ## name = (CC256_MAX_REPRESENTABLE_OTYPE - subtract ## u)
 
 // Reserve 16 otypes
 enum CC_OTypes {
+    CAP_FIRST_NONRESERVED_OTYPE = 0,
     CC128_MAX_REPRESENTABLE_OTYPE = ((1u << CC128_OTYPE_BITS) - 1u),
     CC256_MAX_REPRESENTABLE_OTYPE = ((1u << CC256_OTYPE_BITS) - 1u),
 #ifdef CHERI_128
@@ -245,13 +247,13 @@ enum CC_OTypes {
 #else
     CAP_MAX_REPRESENTABLE_OTYPE = CC256_MAX_REPRESENTABLE_OTYPE,
 #endif
+    CC_SPECIAL_OTYPE(FIRST_SPECIAL_OTYPE, 0),
     CC_SPECIAL_OTYPE(OTYPE_UNSEALED, 0),
     CC_SPECIAL_OTYPE(OTYPE_SENTRY, 1),
     CC_SPECIAL_OTYPE(OTYPE_RESERVED2, 2),
     CC_SPECIAL_OTYPE(OTYPE_RESERVED3, 3),
     CC_SPECIAL_OTYPE(LAST_SPECIAL_OTYPE, 15),
-    CC_SPECIAL_OTYPE(MAX_SEALED_OTYPE, 4)
-
+    CC_SPECIAL_OTYPE(LAST_NONRESERVED_OTYPE, 15),
 };
 
 /* Silence ISO C restricts enumerator values to range of 'int' */
@@ -545,7 +547,7 @@ static inline void decompress_128cap(uint64_t pesbt, uint64_t cursor, cap_regist
     decompress_128cap_already_xored(pesbt ^ CC128_NULL_XOR_MASK, cursor, cdp);
 }
 
-static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr_otype <= CC128_MAX_SEALED_OTYPE; }
+static inline bool cc128_is_cap_sealed(const cap_register_t* cp) { return cp->cr_otype != CC128_OTYPE_UNSEALED; }
 
 /*
  * Compress a capability to 128 bits.
@@ -979,9 +981,8 @@ typedef union _inmemory_chericap256 {
 } inmemory_chericap256;
 
 static inline bool cc256_is_cap_sealed(const cap_register_t* cp) {
-    return cp->cr_otype <= CC256_MAX_SEALED_OTYPE;
+    return cp->cr_otype != CC256_OTYPE_UNSEALED;
 }
-
 
 static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* cdp, bool tagged) {
     /* See CHERI ISA: Figure 3.1: 256-bit memory representation of a capability */
