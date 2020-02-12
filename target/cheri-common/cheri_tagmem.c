@@ -34,9 +34,9 @@
 #include "cheri_tagmem.h"
 #include "exec/exec-all.h"
 #include "exec/log.h"
-#include "cheri_utils.h"
 
 #if defined(TARGET_MIPS)
+#include "cheri_utils.h"
 #include "internal.h"
 #endif
 
@@ -114,12 +114,16 @@ void cheri_tag_init(uint64_t memory_size)
     }
 }
 
-static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
+static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr, int rw,
         int reg, uintptr_t pc, int *prot)
 {
     hwaddr paddr;
 
+#ifdef TARGET_MIPS
     paddr = cpu_mips_translate_address_c2(env, vaddr, rw, reg, prot);
+#else
+#pragma message("TODO: implement v2p_addr check")
+#endif
 
     if (paddr == -1LL) {
         cpu_loop_exit_restore(env_cpu(env), pc);
@@ -128,18 +132,22 @@ static inline hwaddr v2p_addr(CPUMIPSState *env, target_ulong vaddr, int rw,
     }
 }
 
-static inline void check_tagmem_writable(CPUMIPSState *env, target_ulong vaddr,
+static inline void check_tagmem_writable(CPUArchState *env, target_ulong vaddr,
                                          hwaddr paddr, ram_addr_t ram_addr, MemoryRegion *mr, uintptr_t pc)
 {
     if (memory_region_is_rom(mr) || memory_region_is_romd(mr)) {
-        error_report("QEMU ERROR: attempting change clear tag bit on read-only memory:");
+        error_report("QEMU ERROR: attempting change tag bit on read-only memory:");
         error_report("%s: vaddr=0x%jx -> ram_addr=0x%jx (paddr=0x%jx)", __func__,
             (uintmax_t)vaddr, (uintmax_t)ram_addr, (uintmax_t)paddr);
+#ifdef TARGET_MIPS
         do_raise_c0_exception_impl(env, EXCP_DBE, 0, pc);
+#else
+#pragma message("TODO: implement ROM check")
+#endif
     }
 }
 
-static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr, MemoryRegion** mrp)
+static inline ram_addr_t p2r_addr(CPUArchState *env, hwaddr addr, MemoryRegion** mrp)
 {
     hwaddr l;
     MemoryRegion *mr;
@@ -155,7 +163,7 @@ static inline ram_addr_t p2r_addr(CPUMIPSState *env, hwaddr addr, MemoryRegion**
     return (memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK) + addr;
 }
 
-static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAccessType rw,
+static inline ram_addr_t v2r_addr(CPUArchState *env, target_ulong vaddr, MMUAccessType rw,
         int reg, uintptr_t pc)
 {
     int prot;
@@ -167,7 +175,7 @@ static inline ram_addr_t v2r_addr(CPUMIPSState *env, target_ulong vaddr, MMUAcce
     return ram_addr;
 }
 
-void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, uintptr_t pc)
+void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, uintptr_t pc)
 {
     // This must not cross a page boundary since we are only translating once!
     assert(size > 0);
@@ -185,11 +193,11 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
         }
 #endif
 
-
-        int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
-        /* Disassemble and print instruction. */
         qemu_log_flush();
         error_report("FATAL: %s: " TARGET_FMT_lx "+%d crosses a page boundary\r", __func__, vaddr, size);
+#ifdef TARGET_MIPS
+        /* Disassemble and print instruction. */
+        int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
         char buffer[256];
         FILE* f = fmemopen(buffer, sizeof(buffer), "w");
         assert(f);
@@ -200,6 +208,7 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
         fclose(f);
         buffer[sizeof(buffer) - 1] = '\0';
         error_report("%s", buffer);
+#endif
         exit(1);
     }
 
@@ -220,10 +229,12 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
 
     cheri_tag_phys_invalidate(ram_addr, size);
 
+#ifdef TARGET_MIPS
     /* Check RAM address to see if the linkedflag needs to be reset. */
     if (QEMU_ALIGN_DOWN(paddr, CHERI_CAP_SIZE) ==
         QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE))
         env->linkedflag = 0;
+#endif
 }
 
 void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
@@ -276,7 +287,7 @@ static uint8_t *cheri_tag_new_tagblk(uint64_t tag)
     }
 }
 
-void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg, uintptr_t pc)
+void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
 {
     ram_addr_t ram_addr;
     uint64_t tag;
@@ -312,15 +323,17 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg, uintptr_t pc)
     }
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
+#ifdef TARGET_MIPS
     /* Check RAM address to see if the linkedflag needs to be reset. */
     // FIXME: we should really be using a different approach for LL/SC
     if (QEMU_ALIGN_DOWN(ram_addr, CHERI_CAP_SIZE) ==
         QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE))
         env->linkedflag = 0;
+#endif
 }
 
 static uint8_t *
-cheri_tag_get_block(CPUMIPSState *env, target_ulong vaddr, MMUAccessType at,
+cheri_tag_get_block(CPUArchState *env, target_ulong vaddr, MMUAccessType at,
     int reg, int xshift, uintptr_t pc,
     hwaddr *ret_paddr, ram_addr_t *ret_ram_addr, uint64_t *ret_tag, int *prot)
 {
@@ -348,7 +361,7 @@ cheri_tag_get_block(CPUMIPSState *env, target_ulong vaddr, MMUAccessType at,
     return get_cheri_tagmem(tag >> CAP_TAGBLK_SHFT);
 }
 
-int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
+int cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr, int *prot, uintptr_t pc)
 {
     uint64_t tag;
@@ -366,7 +379,7 @@ int cheri_tag_get(CPUMIPSState *env, target_ulong vaddr, int reg,
  * we pretend that our cache lines always contain 8 capabilities.
  */
 #define CAP_TAG_GET_MANY_SHFT    3
-int cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
+int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr, uintptr_t pc)
 {
     uint64_t tag;
@@ -399,7 +412,7 @@ int cheri_tag_get_many(CPUMIPSState *env, target_ulong vaddr, int reg,
 }
 
 #ifdef CHERI_MAGIC128
-void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
+void cheri_tag_set_m128(CPUArchState *env, target_ulong vaddr, int reg,
         uint8_t tagbit, uint64_t tps, uint64_t length, hwaddr *ret_paddr, uintptr_t pc)
 {
     int prot;
@@ -428,7 +441,7 @@ void cheri_tag_set_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
     return;
 }
 
-int cheri_tag_get_m128(CPUMIPSState *env, target_ulong vaddr, int reg,
+int cheri_tag_get_m128(CPUArchState *env, target_ulong vaddr, int reg,
         uint64_t *ret_tps, uint64_t *ret_length, hwaddr *ret_paddr, int *prot, uintptr_t pc)
 {
     uint64_t tag;
