@@ -514,7 +514,7 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (!cap_is_sealed_with_type(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_MAX_SEALED_OTYPE) {
+    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_TYPE, cs);
     } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
         do_raise_c2_exception(env, CP2Ca_PERM_EXE, cs);
@@ -611,7 +611,7 @@ void CHERI_HELPER_IMPL(cchecktype(CPUMIPSState *env, uint32_t cs, uint32_t cb))
         do_raise_c2_exception(env, CP2Ca_SEAL, cs);
     } else if (!is_cap_sealed(cbp)) {
         do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_MAX_SEALED_OTYPE) {
+    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_TYPE, cs);
     }
 }
@@ -624,10 +624,6 @@ void CHERI_HELPER_IMPL(ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb))
      */
     cap_register_t result = *cbp;
     result.cr_tag = 0;
-#ifdef CHERI_128
-    /* Save the compressed bits at the moment the tag was invalidated. */
-    result.cr_pesbt_xored_for_mem = compress_128cap(&result);
-#endif /* CHERI_128 */
     update_capreg(&env->active_tc, cd, &result);
 }
 
@@ -838,15 +834,15 @@ target_ulong CHERI_HELPER_IMPL(cgettype(CPUMIPSState *env, uint32_t cb))
      * CGetType: Move Object Type Field to a General-Purpose Register
      */
     const cap_register_t *cbp = get_readonly_capreg(&env->active_tc, cb);
-    const target_ulong otype = cap_get_otype(cbp);
+    const int64_t otype = cap_get_otype(cbp);
     // otype must either be unsealed type or within range
     if (cbp->cr_otype > CAP_MAX_REPRESENTABLE_OTYPE) {
-        // For untagged values mask of all bits greater than
+        // For untagged values mask of all bits greater than the maximum
         if (!cbp->cr_tag)
             return otype & CAP_MAX_REPRESENTABLE_OTYPE;
         else {
-            assert(otype <= CAP_FIRST_SPECIAL_OTYPE_SIGN_EXTENDED);
-            assert(otype >= CAP_LAST_SPECIAL_OTYPE_SIGN_EXTENDED);
+            assert(otype <= CAP_FIRST_SPECIAL_OTYPE_SIGNED);
+            assert(otype >= CAP_LAST_SPECIAL_OTYPE_SIGNED);
         }
     }
     return otype;
@@ -1027,7 +1023,7 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else if (!cap_is_in_bounds(ctp, ct_base_plus_offset, /*num_bytes=*/1)) {
         // Must be within bounds -> num_bytes=1
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if (ct_base_plus_offset > (uint64_t)CAP_MAX_SEALED_OTYPE) {
+    } else if (ct_base_plus_offset > (uint64_t)CAP_LAST_NONRESERVED_OTYPE) {
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
     } else if (!is_representable_cap_when_sealed_with_addr(csp, cap_get_cursor(csp))) {
         do_raise_c2_exception(env, CP2Ca_INEXACT, cs);
@@ -1505,7 +1501,7 @@ void CHERI_HELPER_IMPL(cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
     } else if (!cap_is_in_bounds(ctp, ct_cursor, /*num_bytes=1*/1)) {
         // Must be within bounds and not one past end (i.e. not equal to top -> num_bytes=1)
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
-    } else if (ct_cursor >= CAP_MAX_SEALED_OTYPE) {
+    } else if (ct_cursor >= CAP_LAST_NONRESERVED_OTYPE) {
         // This should never happen due to the ct_cursor != csp->cr_otype check
         // above that should never succeed for
         do_raise_c2_exception(env, CP2Ca_LENGTH, ct);
@@ -2164,7 +2160,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        dump_cap_load(vaddr, ncd.cr_pesbt_xored_for_mem, cursor, tag);
+        dump_cap_load(vaddr, compress_128cap(&ncd), cursor, tag);
         cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
         cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
@@ -2178,12 +2174,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
 {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
     uint64_t cursor = cap_get_cursor(csp);
-    uint64_t pesbt;
-    if (csp->cr_tag)
-        pesbt = compress_128cap(csp);
-    else
-        pesbt = csp->cr_pesbt_xored_for_mem;
-
+    uint64_t pesbt = compress_128cap(csp);
     /*
      * Touching the tags will take both the data write TLB fault and
      * capability write TLB fault before updating anything.  Thereafter, the

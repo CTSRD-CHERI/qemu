@@ -162,12 +162,12 @@ static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
     // If the capability has a valid tag bit we must recompress since the
     // pesbt value might not match the current value (csetbounds could have
     // changed the bounds).
-    stq_p(mem_buf, cap->cr_tag ? compress_128cap(cap) : cap->cr_pesbt_xored_for_mem);
+    stq_p(mem_buf, compress_128cap(cap));
     stq_p(mem_buf + 8, cap_get_cursor(cap));
     return 16;
 #elif defined(CHERI_MAGIC128)
     /* XXX: Would need to generate pesbt. */
-    stq_p(mem_buf, 0);
+    stq_p(mem_buf, compress_128cap(cap));
     stq_p(mem_buf + 8, cap_get_cursor(cap));
     return 16;
 #else

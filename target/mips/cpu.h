@@ -6,6 +6,10 @@
 #include "fpu/softfloat-types.h"
 #include "mips-defs.h"
 
+#ifdef TARGET_CHERI
+#include "cheri_defs.h"
+#endif
+
 #define TCG_GUEST_DEFAULT_MO (0)
 
 typedef struct CPUMIPSTLBContext CPUMIPSTLBContext;
@@ -169,62 +173,6 @@ typedef struct cvtrace cvtrace_t;
 #else
 #define CHERI_CAP_SIZE  32
 #endif
-
-
-typedef signed __int128 cap_offset_t;
-typedef unsigned __int128 cap_length_t;
-
-/*
- * Please note if this structure is changed then the TCG gen_branch() in
- * translate.c may need to be changed as well.
- */
-struct cap_register {
-                        /* offset = cursor - base */
-    uint64_t _cr_cursor; /* Capability offset */
-    uint64_t cr_base;   /* Capability base addr */
-    /* Length is actually 65 bits (TODO: should store top instead) */
-    cap_length_t _cr_top; /* Capability top */
-    uint32_t cr_perms;  /* Permissions */
-    uint32_t cr_uperms; /* User Permissions */
-#ifdef CHERI_128
-    uint64_t cr_pesbt_xored_for_mem;  /* Perms, E, Sealed, Bot, & Top bits (128-bit) */
-#endif
-    uint32_t cr_otype;  /* Object Type, 24 bits */
-    uint8_t  cr_tag;    /* Tag */
-#ifndef CHERI_128
-    bool _sbit_for_memory;
-#endif
-};
-typedef struct cap_register cap_register_t;
-
-#define CAP_PERM_GLOBAL         (1 << 0)
-#define CAP_PERM_EXECUTE        (1 << 1)
-#define CAP_PERM_LOAD           (1 << 2)
-#define CAP_PERM_STORE          (1 << 3)
-#define CAP_PERM_LOAD_CAP       (1 << 4)
-#define CAP_PERM_STORE_CAP      (1 << 5)
-#define CAP_PERM_STORE_LOCAL    (1 << 6)
-#define CAP_PERM_SEAL           (1 << 7)
-#define CAP_PERM_CCALL          (1 << 8)
-#define CAP_PERM_UNSEAL         (1 << 9)
-#define CAP_ACCESS_SYS_REGS     (1 << 10)
-#define CAP_PERM_SETCID         (1 << 11)
-#define CAP_RESERVED4           (1 << 12)
-#define CAP_RESERVED5           (1 << 13)
-#define CAP_RESERVED6           (1 << 14)
-/* 15-18 Software-defined */
-#if defined(CHERI_128) || defined(CHERI_MAGIC128)
-#define CAP_PERMS_ALL           (0xfff)      /* [0...11] */
-#define CAP_UPERMS_ALL          (0xf)        /* [15...18] */
-#define CAP_UPERMS_SHFT         (15)
-#define CAP_MAX_UPERM           (3)
-#else /* ! CHERI_128 */
-#define CAP_PERMS_ALL           (0xfff)     /* [0...11] */
-#define CAP_HW_PERMS_ALL_MEM    (0x7fff)    /* [0...14] (loaded into cr_perms for untagged values) */
-#define CAP_UPERMS_ALL          (0xffff)    /* [15...30] */
-#define CAP_UPERMS_SHFT         (15)
-#define CAP_MAX_UPERM           (15)
-#endif /* ! CHERI_128 */
 
 struct cheri_cap_hwregs {
     cap_register_t DDC;        /* CapHwr 0 */
