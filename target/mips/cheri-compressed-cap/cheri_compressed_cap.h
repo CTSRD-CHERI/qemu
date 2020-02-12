@@ -626,10 +626,8 @@ static bool cc128_is_representable_cap_exact(const cap_register_t* cap) {
     return true;
 }
 
-static inline bool cc128_compute_representable_bounds_and_ebt(uint64_t cursor, uint64_t req_base,
-                                                              cc128_length_t req_top, uint64_t* alignment_mask,
-                                                              uint32_t* ebt_bits, uint64_t* representable_base,
-                                                              cc128_length_t* representable_top) {
+static inline uint32_t cc128_compute_ebt(uint64_t req_base, cc128_length_t req_top, uint64_t* alignment_mask,
+                                         bool* exact) {
     cc128_debug_assert(req_base <= req_top && "Cannot invert base and top");
     /*
      * With compressed capabilities we may need to increase the range of
@@ -659,15 +657,14 @@ static inline bool cc128_compute_representable_bounds_and_ebt(uint64_t cursor, u
         //  lostSignificantTop  : bool = false;
         //  lostSignificantBase : bool = false;
         //  incE : bool = false;
-        *representable_top = req_top;
-        *representable_base = req_base;
-        *ebt_bits =
+        uint32_t ebt_bits =
             CC128_ENCODE_EBT_FIELD(0, INTERNAL_EXPONENT) |
             CC128_ENCODE_EBT_FIELD(req_top, TOP_ENCODED) |
             CC128_ENCODE_EBT_FIELD(req_base, BOTTOM_ENCODED);
         if (alignment_mask)
             *alignment_mask = UINT64_MAX; // no adjustment to base required
-        return true; /* Exactly representable */
+        *exact = true;
+        return ebt_bits; /* Exactly representable */
     }
     // Handle IE case:
     //  if ie then {
@@ -693,7 +690,6 @@ static inline bool cc128_compute_representable_bounds_and_ebt(uint64_t cursor, u
     const cc128_length_t zero65 = 0;
     bool lostSignificantBase = (req_base & maskLo) != zero65;
     bool lostSignificantTop = (req_top & maskLo) != zero65;
-
     //    if lostSignificantTop then {
     //      /* we must increment T to make sure it is still above top even with lost bits.
     //         It might wrap around but if that makes B<T then decoding will compensate. */
@@ -743,31 +739,15 @@ static inline bool cc128_compute_representable_bounds_and_ebt(uint64_t cursor, u
 
     //  };
     //  let exact = not(lostSignificantBase | lostSignificantTop);
-    bool exact = !lostSignificantBase && !lostSignificantTop;
+    *exact = !lostSignificantBase && !lostSignificantTop;
     // Split E between T and B
     const uint64_t expHighBits =
         cc128_getbits(newE >> CC128_FIELD_EXPONENT_LOW_PART_SIZE, 0, CC128_FIELD_EXPONENT_HIGH_PART_SIZE);
     const uint64_t expLowBits = cc128_getbits(newE, 0, CC128_FIELD_EXPONENT_LOW_PART_SIZE);
     const uint64_t Te = Tbits | expHighBits;
     const uint64_t Be = Bbits | expLowBits;
-    *ebt_bits = CC128_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | CC128_ENCODE_EBT_FIELD(Te, TOP_ENCODED) |
-                CC128_ENCODE_EBT_FIELD(Be, BOTTOM_ENCODED);
-    // TODO: find a faster way to compute top and bot:
-    const uint64_t pesbt = CC128_ENCODE_FIELD(0, UPERMS) | CC128_ENCODE_FIELD(0, HWPERMS) |
-                           CC128_ENCODE_FIELD(CC128_OTYPE_UNSEALED, OTYPE) | CC128_ENCODE_FIELD(*ebt_bits, EBT);
-    cap_register_t new_cap;
-    // decompress_128cap_already_xored(pesbt, req_base, &new_cap);
-    decompress_128cap_already_xored(pesbt, cursor, &new_cap);
-    *representable_base = new_cap.cr_base;
-    *representable_top = new_cap._cr_top;
-    if (exact) {
-        cc128_debug_assert(*representable_top == req_top && "Should be exact");
-        cc128_debug_assert(*representable_base == req_base && "Should be exact");
-    } else {
-        cc128_debug_assert((*representable_base != req_base || *representable_top != req_top) &&
-                           "Was inexact, but neither base nor top different?");
-    }
-    return exact;
+    return CC128_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | CC128_ENCODE_EBT_FIELD(Te, TOP_ENCODED) |
+           CC128_ENCODE_EBT_FIELD(Be, BOTTOM_ENCODED);
 }
 
 
@@ -811,21 +791,12 @@ static inline bool cc128_is_representable_new_addr(bool sealed, uint64_t base, c
         c._cr_cursor = cursor;
         c.cr_otype = sealed ? 42 : CC128_OTYPE_UNSEALED; // important to set as compress assumes this is in bounds
         /* Get an EBT */
-        uint64_t repr_base;
-        cc128_length_t repr_top;
-        // FIXME: for now keep both checks and assert that they are the same
-        bool exact_input =
-            cc128_compute_representable_bounds_and_ebt(cursor, base, top, NULL, &c.cr_ebt, &repr_base, &repr_top);
+        bool exact_input = false;
+        c.cr_ebt = cc128_compute_ebt(base, top, NULL, &exact_input);
         cc128_debug_assert(exact_input && "Input capability not representable? It should have been rounded before!");
-        cc128_debug_assert(repr_base == base && "Input capability not representable? It should have been rounded before!");
-        cc128_debug_assert(repr_top == top && "Input capability not representable? It should have been rounded before!");
-        bool representable_new_check =
-            cc128_compute_representable_bounds_and_ebt(new_cursor, base, top, NULL, &c.cr_ebt, &repr_base, &repr_top);
         /* Check with new cursor */
         c._cr_cursor = new_cursor;
-        bool representable_old_check = cc128_is_representable_cap_exact(&c);
-        cc128_debug_assert(representable_new_check == representable_old_check);
-        return representable_new_check;
+        return cc128_is_representable_cap_exact(&c);
     } else {
         return fast_cc128_is_representable_new_addr(sealed, base, length, cursor, new_cursor);
     }
@@ -909,10 +880,25 @@ static inline bool cc128_setbounds_impl(cap_register_t* cap, uint64_t req_base, 
     CC128_STATIC_ASSERT(CC128_BOT_WIDTH == 14, "");
     CC128_STATIC_ASSERT(CC128_BOT_INTERNAL_EXP_WIDTH == 11, "");
     CC128_STATIC_ASSERT(CC128_EXP_LOW_WIDTH == 3, ""); // expected 6-bit exponent
-    cc128_length_t new_top = 0;
-    uint64_t new_base = 0;
-    uint32_t new_ebt = 0;
-    bool exact = cc128_compute_representable_bounds_and_ebt(cursor, req_base, req_top, alignment_mask, &new_ebt, &new_base, &new_top);
+    bool exact = false;
+    uint32_t new_ebt = cc128_compute_ebt(req_base, req_top, alignment_mask, &exact);
+
+    // TODO: find a faster way to compute top and bot:
+    const uint64_t pesbt = CC128_ENCODE_FIELD(0, UPERMS) | CC128_ENCODE_FIELD(0, HWPERMS) |
+        CC128_ENCODE_FIELD(CC128_OTYPE_UNSEALED, OTYPE) | CC128_ENCODE_FIELD(new_ebt, EBT);
+    cap_register_t new_cap;
+    // decompress_128cap_already_xored(pesbt, req_base, &new_cap);
+    decompress_128cap_already_xored(pesbt, cursor, &new_cap);
+    uint64_t new_base = new_cap.cr_base;
+    cc128_length_t new_top = new_cap._cr_top;
+    if (exact) {
+        cc128_debug_assert(new_base == req_base && "Should be exact");
+        cc128_debug_assert(new_top == req_top && "Should be exact");
+    } else {
+        cc128_debug_assert((new_base != req_base || new_top != req_top) &&
+            "Was inexact, but neither base nor top different?");
+    }
+
     cc128_debug_assert(new_top >= new_base);
     cc128_debug_assert(!(cap->cr_tag && cap->cr_reserved) && "Unknown reserved bits set in tagged capability");
     cap->cr_base = new_base;
