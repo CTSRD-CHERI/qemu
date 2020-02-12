@@ -59,7 +59,7 @@ generate_dump_load32(int op, TCGv addr, TCGv_i32 value)
 #define generate_dump_load32(op, addr, value)
 #endif // CONFIG_MIPS_LOG_INSTR
 
-#if defined(TARGET_CHERI)
+#if defined(TARGET_CHERI) && defined(TARGET_MIPS)
 
 static inline TCGCapCheckedAddr CAP_CHECKED(TCGv addr) {
     TCGCapCheckedAddr result = { addr };

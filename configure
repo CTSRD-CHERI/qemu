@@ -7720,6 +7720,7 @@ case "$target_name" in
     TARGET_BASE_ARCH=mips
     echo "TARGET_ABI_MIPSN64=y" >> $config_target_mak
     echo "TARGET_CHERI=y" >> $config_target_mak
+    echo "CONFIG_CHERI=y" >> $config_target_mak
     echo "CONFIG_CHERI=y" >> $config_host_mak
     gdb_xml_files="mips64-cpu.xml mips64-cp0.xml mips64-fpu.xml mips64-sys.xml mips64-cheri-c128.xml mips64-cheri-c256.xml"
   ;;
@@ -7760,10 +7761,16 @@ case "$target_name" in
     mttcg=yes
     gdb_xml_files="riscv-32bit-cpu.xml riscv-32bit-fpu.xml riscv-32bit-csr.xml riscv-32bit-virtual.xml"
   ;;
-  riscv64)
+  riscv64|riscv64cheri)
     TARGET_BASE_ARCH=riscv
     TARGET_ABI_DIR=riscv
     mttcg=yes
+    if [ "$target_name" = "riscv64cheri" ]; then
+        TARGET_ARCH=riscv64
+        echo "TARGET_CHERI=y" >> $config_target_mak
+        echo "CONFIG_CHERI=y" >> $config_target_mak
+        echo "CONFIG_CHERI=y" >> $config_host_mak
+    fi
     gdb_xml_files="riscv-64bit-cpu.xml riscv-64bit-fpu.xml riscv-64bit-csr.xml riscv-64bit-virtual.xml"
   ;;
   sh4|sh4eb)

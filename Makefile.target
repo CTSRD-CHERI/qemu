@@ -15,7 +15,7 @@ ifdef CONFIG_LINUX
 QEMU_CFLAGS += -I../linux-headers
 endif
 QEMU_CFLAGS += -iquote .. -iquote $(SRC_PATH)/target/$(TARGET_BASE_ARCH) -DNEED_CPU_H
-ifdef CONFIG_CHERI
+ifdef TARGET_CHERI
 QEMU_CFLAGS += -iquote $(SRC_PATH)/target/cheri-common
 endif
 QEMU_CFLAGS+=-iquote $(SRC_PATH)/include
@@ -141,7 +141,7 @@ obj-$(CONFIG_TCG_INTERPRETER) += tcg/tci.o
 obj-$(CONFIG_TCG_INTERPRETER) += disas/tci.o
 obj-$(CONFIG_TCG) += fpu/softfloat.o
 obj-y += target/$(TARGET_BASE_ARCH)/
-obj-$(CONFIG_CHERI) += target/cheri-common/
+obj-$(TARGET_CHERI) += target/cheri-common/
 obj-y += disas.o
 obj-$(call notempty,$(TARGET_XML_FILES)) += gdbstub-xml.o
 LIBS := $(libs_cpu) $(LIBS)

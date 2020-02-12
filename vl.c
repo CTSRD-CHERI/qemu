@@ -198,7 +198,7 @@ int icount_align_option;
 bool cheri_c2e_on_unrepresentable = false;
 bool cheri_debugger_on_unrepresentable = false;
 #endif
-#ifdef CHERI_128
+#if defined(CHERI_128) && defined(TARGET_MIPS)
 #include "target/mips/cheri_utils.h"
 #endif
 
@@ -1710,6 +1710,7 @@ static void version(void)
     printf("Built with support for unaligned loads/stores\n");
 #endif
 #ifdef TARGET_CHERI
+#ifdef TARGET_MIPS
 #ifdef CHERI_128
     printf("Compiled for CHERI128\n");
     printf("CHERI-CC base width is %d\n", CC128_BOT_WIDTH);
@@ -1717,6 +1718,11 @@ static void version(void)
     printf("Compiled for CHERI128 (magic)\n");
 #elif defined(CHERI_256)
     printf("Compiled for CHERI256\n");
+#else
+#error "INVALID CHERI-MIPS target"
+#endif
+#elif defined(TARGET_RISCV64)
+    printf("Compiled for RISCV64 (with CHERI)\n");
 #else
 #error "INVALID CHERI target"
 #endif

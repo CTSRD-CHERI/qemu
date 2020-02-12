@@ -867,7 +867,11 @@ void (tcg_gen_qemu_st_i32)(TCGv_i32, TCGv, TCGArg, MemOp);
 void (tcg_gen_qemu_ld_i64)(TCGv_i64, TCGv, TCGArg, MemOp);
 void (tcg_gen_qemu_st_i64)(TCGv_i64, TCGv, TCGArg, MemOp);
 
-#ifdef TARGET_CHERI
+#if defined(TARGET_MIPS)
+#define CHERI_CHECK_TCG_ADDRS
+#endif
+
+#if defined(TARGET_CHERI) && defined(CHERI_CHECK_TCG_ADDRS)
 typedef struct _TCGCapCheckedAddr {
     TCGv _addr;
 } TCGCapCheckedAddr;
