@@ -221,7 +221,8 @@ void cheri_tag_invalidate(CPUMIPSState *env, target_ulong vaddr, int32_t size, u
     cheri_tag_phys_invalidate(ram_addr, size);
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (env->lladdr > paddr && env->lladdr < paddr + size)
+    if (QEMU_ALIGN_DOWN(paddr, CHERI_CAP_SIZE) ==
+        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE))
         env->linkedflag = 0;
 }
 
@@ -312,7 +313,9 @@ void cheri_tag_set(CPUMIPSState *env, target_ulong vaddr, int reg, uintptr_t pc)
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
+    // FIXME: we should really be using a different approach for LL/SC
+    if (QEMU_ALIGN_DOWN(ram_addr, CHERI_CAP_SIZE) ==
+        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE))
         env->linkedflag = 0;
 }
 
