@@ -870,6 +870,8 @@ void (tcg_gen_qemu_st_i64)(TCGv_i64, TCGv, TCGArg, MemOp);
 #if defined(TARGET_MIPS)
 #define CHERI_CHECK_TCG_ADDRS
 #endif
+#define tcg_temp_new_cap_checked() (TCGv_cap_checked_ptr)tcg_temp_new()
+#define tcg_temp_free_cap_checked(val) tcg_temp_free((TCGv)val)
 
 #if defined(TARGET_CHERI) && defined(CHERI_CHECK_TCG_ADDRS)
 typedef struct _TCGCapCheckedAddr {

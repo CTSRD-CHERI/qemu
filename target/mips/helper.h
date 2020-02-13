@@ -188,8 +188,8 @@ DEF_HELPER_1(mfc0_coreid, tl, env)
 #ifdef CONFIG_MIPS_LOG_INSTR
 DEF_HELPER_1(dump_changed_state, void, env)
 DEF_HELPER_2(log_instruction, void, env, i64)
-DEF_HELPER_4(dump_load, void, env, int, tl, tl)
-DEF_HELPER_4(dump_load32, void, env, int, tl, i32)
+DEF_HELPER_4(dump_load, void, env, int, cap_checked_ptr, tl)
+DEF_HELPER_4(dump_load32, void, env, int, cap_checked_ptr, i32)
 DEF_HELPER_2(instr_start, void, env, i64)
 DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
 DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
@@ -263,7 +263,7 @@ DEF_HELPER_4(ccopytype, void, env, i32, i32, i32)
 DEF_HELPER_3(creadhwr, void, env, i32, i32)
 DEF_HELPER_3(cwritehwr, void, env, i32, i32)
 DEF_HELPER_3(csealentry, void, env, i32, i32)
-DEF_HELPER_3(cloadtags, tl, env, i32, i64)
+DEF_HELPER_3(cloadtags, tl, env, i32, cap_checked_ptr)
 
 DEF_HELPER_3(ceq, tl, env, i32, i32)
 DEF_HELPER_3(cne, tl, env, i32, i32)
@@ -278,11 +278,11 @@ DEF_HELPER_3(cgetandaddr, tl, env, i32, tl)
 DEF_HELPER_4(candaddr, void, env, i32, i32, tl)
 DEF_HELPER_3(ctestsubset, tl, env, i32, i32)
 
-DEF_HELPER_5(cload, tl, env, i32, tl, i32, i32)
+DEF_HELPER_5(cload, cap_checked_ptr, env, i32, tl, i32, i32)
 
 DEF_HELPER_5(cstore, tl, env, i32, tl, i32, i32)
 
-DEF_HELPER_3(cloadlinked, tl, env, i32, i32)
+DEF_HELPER_3(cloadlinked, cap_checked_ptr, env, i32, i32)
 
 DEF_HELPER_3(cstorecond, tl, env, i32, i32)
 

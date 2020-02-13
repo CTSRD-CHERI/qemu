@@ -31407,28 +31407,44 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
 
             switch(MASK_CLDST_OPC(opc)) {
             case OPC_CLBU:
-                generate_clbu(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cap_load(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                  MO_UB | ctx->default_tcg_memop_mask,
+                                  MASK_CLDST_OPC(opc));
                 break;
             case OPC_CLHU:
-                generate_clhu(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cap_load(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                  MO_TEUW | ctx->default_tcg_memop_mask,
+                                  MASK_CLDST_OPC(opc));
                 break;
             case OPC_CLWU:
-                generate_clwu(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cap_load(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                  MO_TEUL | ctx->default_tcg_memop_mask,
+                                  MASK_CLDST_OPC(opc));
                 break;
             case OPC_CLDU:
-                generate_cld(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cap_load(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                  MO_TEQ | ctx->default_tcg_memop_mask,
+                                  MASK_CLDST_OPC(opc));
                 break;
             case OPC_CLB:
-                generate_clb(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cap_load(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                  MO_SB | ctx->default_tcg_memop_mask,
+                                  MASK_CLDST_OPC(opc));
                 break;
             case OPC_CLH:
-                generate_clh(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cap_load(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                  MO_TESW | ctx->default_tcg_memop_mask,
+                                  MASK_CLDST_OPC(opc));
                 break;
             case OPC_CLW:
-                generate_clw(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cap_load(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                  MO_TESL | ctx->default_tcg_memop_mask,
+                                  MASK_CLDST_OPC(opc));
                 break;
             case OPC_CLD:
-                generate_cld(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cap_load(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                  MO_TEQ | ctx->default_tcg_memop_mask,
+                                  MASK_CLDST_OPC(opc));
                 break;
             default:
                 MIPS_INVAL("cl");
