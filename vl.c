@@ -199,7 +199,7 @@ bool cheri_c2e_on_unrepresentable = false;
 bool cheri_debugger_on_unrepresentable = false;
 #endif
 #if defined(CHERI_128) && defined(TARGET_MIPS)
-#include "target/mips/cheri_defs.h"
+#include "target/cheri-common/cheri_defs.h"
 #endif
 
 /* The bytes in qemu_uuid are in the order specified by RFC4122, _not_ in the
