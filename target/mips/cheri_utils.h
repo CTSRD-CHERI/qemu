@@ -194,6 +194,9 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
     cp->_cr_top = CAP_MAX_TOP;
     cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
+#ifdef CHERI_128
+    cp->cr_ebt = CC128_RESET_EBT;
+#endif
     return cp;
 }
 
@@ -239,8 +242,7 @@ int_to_cap(uint64_t x, cap_register_t *cr)
  */
 static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_register_t *cr)
 {
-#ifndef OLD_UNREPRESENTABLE_BEHAVIOUR
-    // Clear the tag and assert update the address:
+    // Clear the tag and update the address:
     cr->_cr_cursor = addr;
     cr->cr_tag = false;
 #ifdef CHERI_128
@@ -250,11 +252,6 @@ static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_regist
     // more like the hardware and sail.
     uint64_t pesbt_for_mem = compress_128cap(cr);
     decompress_128cap(pesbt_for_mem, addr, cr);
-#endif
-#else
-#warning "Using old unrepresentable behaviour"
-    // Old behaviour: use int_to_cap()
-    int_to_cap(addr, cr);
 #endif
     return cr;
 }
