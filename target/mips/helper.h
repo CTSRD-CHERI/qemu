@@ -280,11 +280,11 @@ DEF_HELPER_3(ctestsubset, tl, env, i32, i32)
 
 DEF_HELPER_5(cload, cap_checked_ptr, env, i32, tl, i32, i32)
 
-DEF_HELPER_5(cstore, tl, env, i32, tl, i32, i32)
+DEF_HELPER_5(cstore, cap_checked_ptr, env, i32, tl, i32, i32)
 
 DEF_HELPER_3(cloadlinked, cap_checked_ptr, env, i32, i32)
 
-DEF_HELPER_3(cstorecond, tl, env, i32, i32)
+DEF_HELPER_3(cstorecond, cap_checked_ptr, env, i32, i32)
 
 DEF_HELPER_3(cscc_without_tcg, tl, env, i32, i32)
 DEF_HELPER_5(csc_without_tcg, void, env, i32, i32, tl, i32)

@@ -999,7 +999,7 @@ static inline void generate_cloadlinked_int(DisasContext *ctx, int32_t rd, int32
 static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
                 TCGv value);
 
-static inline void generate_cstorecond(TCGv taddr, int32_t cb, int32_t len)
+static inline void generate_cstorecond(TCGv_cap_checked_ptr taddr, int32_t cb, int32_t len)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tlen = tcg_const_i32(len);
@@ -1009,11 +1009,12 @@ static inline void generate_cstorecond(TCGv taddr, int32_t cb, int32_t len)
     tcg_temp_free_i32(tlen);
 }
 
-static inline void generate_cscb(DisasContext *ctx, int32_t rs, int32_t cb,
-        int32_t rd)
-{
-    const int size = 1;
-    TCGv taddr = tcg_temp_local_new();
+static inline void generate_cstorecond_int(DisasContext *ctx, int32_t rs,
+                                           int32_t cb, int32_t rd, MemOp op,
+                                           int opcode) {
+    check_cop2x(ctx);
+    const int size = memop_size(op);
+    TCGv_cap_checked_ptr taddr = tcg_temp_local_new_cap_checked();
     TCGv t0 = tcg_temp_new();
     TCGv tlf = tcg_temp_local_new();
     TCGLabel *l1 = gen_new_label();
@@ -1028,12 +1029,12 @@ static inline void generate_cscb(DisasContext *ctx, int32_t rs, int32_t cb,
 
     /* Write rs to memory. */
     gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED(taddr), ctx->mem_idx, MO_8);
+    tcg_gen_qemu_st_tl(t0, CAP_CHECKED((TCGv)taddr), ctx->mem_idx, op);
 
     /* Invalidate tag and log write to memory, if enabled. */
-    generate_cinvalidate_tag(taddr, size, OPC_CSCB, t0);
+    generate_cinvalidate_tag((TCGv)taddr, size, opcode, t0);
 
-    tcg_temp_free(taddr);
+    tcg_temp_free_cap_checked(taddr);
     tcg_temp_free(t0);
 
     gen_set_label(l1);
@@ -1042,207 +1043,32 @@ static inline void generate_cscb(DisasContext *ctx, int32_t rs, int32_t cb,
     tcg_temp_free(tlf);
 }
 
-static inline void generate_csch(DisasContext *ctx, int32_t rs, int32_t cb,
-        int32_t rd)
+
+static inline void generate_cstore(DisasContext *ctx, int32_t rs, int32_t cb,
+        int32_t rt, int32_t offset, MemOp op, int opcode)
 {
-    const int size = 2;
-    TCGv taddr = tcg_temp_local_new();
+    const int size = memop_size(op);
+    TCGv_cap_checked_ptr taddr = tcg_temp_local_new_cap_checked();
     TCGv t0 = tcg_temp_new();
-    TCGv tlf = tcg_temp_local_new();
-    TCGLabel *l1 = gen_new_label();
 
-    generate_cstorecond(taddr, cb, size);
+    gen_load_gpr(t0, rt);  // t0 <- register offset
 
-    /* Get linkedFlag. */
-    tcg_gen_ld_tl(tlf, cpu_env, offsetof(CPUMIPSState, linkedflag));
-
-    /* If linkedFlag is zero then don't store rs, invalidate tag */
-    tcg_gen_brcondi_tl(TCG_COND_EQ, tlf, 0, l1);
-
-    /* Write rs to memory. */
-    gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED(taddr), ctx->mem_idx, MO_TEUW |
-            ctx->default_tcg_memop_mask);
-
-    /* Invalidate tag and log write, if enabled. */
-    generate_cinvalidate_tag(taddr, size, OPC_CSCH, t0);
-
-    tcg_temp_free(taddr);
-    tcg_temp_free(t0);
-
-    gen_set_label(l1);
-    /* Store linkedflag in rd. */
-    gen_store_gpr(tlf, rd);
-    tcg_temp_free(tlf);
-}
-
-static inline void generate_cscw(DisasContext *ctx, int32_t rs, int32_t cb,
-        int32_t rd)
-{
-    const int size = 4;
-    TCGv taddr = tcg_temp_local_new();
-    TCGv t0 = tcg_temp_new();
-    TCGv tlf = tcg_temp_local_new();
-    TCGLabel *l1 = gen_new_label();
-
-    generate_cstorecond(taddr, cb, size);
-
-    /* Get linkedFlag. */
-    tcg_gen_ld_tl(tlf, cpu_env, offsetof(CPUMIPSState, linkedflag));
-
-    /* If linkedFlag is zero then don't store rs, invalidate tag */
-    tcg_gen_brcondi_tl(TCG_COND_EQ, tlf, 0, l1);
-
-    /* Write rs to memory. */
-    gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED(taddr), ctx->mem_idx, MO_TEUL |
-            ctx->default_tcg_memop_mask);
-
-    /* Invalidate tag and log write, if enabled. */
-    generate_cinvalidate_tag(taddr, size, OPC_CSCW, t0);
-
-    tcg_temp_free(taddr);
-    tcg_temp_free(t0);
-
-    gen_set_label(l1);
-    /* Store linkedflag in rd. */
-    gen_store_gpr(tlf, rd);
-    tcg_temp_free(tlf);
-}
-
-static inline void generate_cscd(DisasContext *ctx, int32_t rs, int32_t cb,
-        int32_t rd)
-{
-    const int size = 8;
-    TCGv taddr = tcg_temp_local_new();
-    TCGv t0 = tcg_temp_new();
-    TCGv tlf = tcg_temp_local_new();
-    TCGLabel *l1 = gen_new_label();
-
-    generate_cstorecond(taddr, cb, size);
-
-    /* Get linkedFlag. */
-    tcg_gen_ld_tl(tlf, cpu_env, offsetof(CPUMIPSState, linkedflag));
-
-    /* If linkedFlag is zero then don't store rs, invalidate tag */
-    tcg_gen_brcondi_tl(TCG_COND_EQ, tlf, 0, l1);
-
-    /* Write rs to memory. */
-    gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED(taddr), ctx->mem_idx, MO_TEQ |
-            ctx->default_tcg_memop_mask);
-
-    /* Invalidate tag and log write, if enabled. */
-    generate_cinvalidate_tag(taddr, size, OPC_CSCD, t0);
-
-    tcg_temp_free(taddr);
-    tcg_temp_free(t0);
-
-    gen_set_label(l1);
-    /* Store linkedflag in rd. */
-    gen_store_gpr(tlf, rd);
-    tcg_temp_free(tlf);
-}
-
-static inline void generate_cstore(TCGv taddr, TCGv trt, int32_t cb,
-        int32_t offset, const int size)
-{
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset) * size);
     TCGv_i32 tlen = tcg_const_i32(size);
-
-    gen_helper_cstore(taddr, cpu_env, tcb, trt, toffset, tlen);
-
+    gen_helper_cstore(taddr, cpu_env, tcb, t0, toffset, tlen);
     tcg_temp_free_i32(tlen);
     tcg_temp_free_i32(toffset);
     tcg_temp_free_i32(tcb);
-}
 
-static inline void generate_csb(DisasContext *ctx, int32_t rs, int32_t cb,
-        int32_t rt, int32_t offset)
-{
-    const int size = 1;
-    TCGv taddr = tcg_temp_new();
-    TCGv t0 = tcg_temp_new();
-
-    gen_load_gpr(t0, rt);
-
-    generate_cstore(taddr, t0, cb, offset, size);
-
-    gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED(taddr), ctx->mem_idx, MO_8);
+    gen_load_gpr(t0, rs); // t0 <- load value to store
+    tcg_gen_qemu_st_tl(t0, CAP_CHECKED((TCGv)taddr), ctx->mem_idx, op);
 
     /* Invalidate tag and log write, if enabled. */
-    generate_cinvalidate_tag(taddr, size, OPC_CSB, t0);
+    generate_cinvalidate_tag((TCGv)taddr, size, opcode, t0);
 
     tcg_temp_free(t0);
-    tcg_temp_free(taddr);
-}
-
-static inline void generate_csh(DisasContext *ctx, int32_t rs, int32_t cb,
-        int32_t rt, int32_t offset)
-{
-    const int size = 2;
-    TCGv taddr = tcg_temp_new();
-    TCGv t0 = tcg_temp_new();
-
-    gen_load_gpr(t0, rt);
-
-    generate_cstore(taddr, t0, cb, offset, size);
-
-    gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED(taddr), ctx->mem_idx, MO_TEUW |
-            ctx->default_tcg_memop_mask);
-
-    /* Invalidate tag and log write, if enabled. */
-    generate_cinvalidate_tag(taddr, size, OPC_CSH, t0);
-
-    tcg_temp_free(t0);
-    tcg_temp_free(taddr);
-}
-
-static inline void generate_csw(DisasContext *ctx, int32_t rs, int32_t cb,
-        int32_t rt, int32_t offset)
-{
-    const int size = 4;
-    TCGv taddr = tcg_temp_new();
-    TCGv t0 = tcg_temp_new();
-
-    gen_load_gpr(t0, rt);
-
-    generate_cstore(taddr, t0, cb, offset, size);
-
-    gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED(taddr), ctx->mem_idx, MO_TEUL |
-            ctx->default_tcg_memop_mask);
-
-    /* Invalidate tag and log write, if enabled. */
-    generate_cinvalidate_tag(taddr, size, OPC_CSW, t0);
-
-    tcg_temp_free(t0);
-    tcg_temp_free(taddr);
-}
-
-static inline void generate_csd(DisasContext *ctx, int32_t rs, int32_t cb,
-        int32_t rt, int32_t offset)
-{
-    const int size = 8;
-    TCGv taddr = tcg_temp_new();
-    TCGv t0 = tcg_temp_new();
-
-    gen_load_gpr(t0, rt);
-
-    generate_cstore(taddr, t0, cb, offset, size);
-
-    gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED(taddr), ctx->mem_idx, MO_TEQ |
-            ctx->default_tcg_memop_mask);
-
-    /* Invalidate tag and log write, if enabled. */
-    generate_cinvalidate_tag(taddr, size, OPC_CSD, t0);
-
-    tcg_temp_free(t0);
-    tcg_temp_free(taddr);
+    tcg_temp_free_cap_checked(taddr);
 }
 
 static inline int32_t clc_sign_extend(int32_t x, bool big_imm)
@@ -2055,23 +1881,25 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
          */
         switch(MASK_CAP4(opc)) {
         case OPC_CSCB: /* 0x0 */
-            check_cop2x(ctx);
-            generate_cscb(ctx, r16, r11, r6);
+            generate_cstorecond_int(ctx, r16, r11, r6, MO_8, MASK_CAP4(opc));
             opn = "cscb";
             break;
         case OPC_CSCH: /* 0x1 */
-            check_cop2x(ctx);
-            generate_csch(ctx, r16, r11, r6);
+            generate_cstorecond_int(ctx, r16, r11, r6,
+                                    MO_TEUW | ctx->default_tcg_memop_mask,
+                                    MASK_CAP4(opc));
             opn = "csch";
             break;
         case OPC_CSCW: /* 0x2 */
-            check_cop2x(ctx);
-            generate_cscw(ctx, r16, r11, r6);
+            generate_cstorecond_int(ctx, r16, r11, r6,
+                                    MO_TEUL | ctx->default_tcg_memop_mask,
+                                    MASK_CAP4(opc));
             opn = "cscw";
             break;
         case OPC_CSCD: /* 0x3 */
-            check_cop2x(ctx);
-            generate_cscd(ctx, r16, r11, r6);
+            generate_cstorecond_int(ctx, r16, r11, r6,
+                                    MO_TEQ | ctx->default_tcg_memop_mask,
+                                    MASK_CAP4(opc));
             opn = "cscd";
             break;
 

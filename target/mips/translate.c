@@ -31473,18 +31473,25 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
  *
  *          switch(MASK_CLDST_OPC(opc)) {
  */
-            switch(MASK_CLDST_OPC(opc) & ~0x4) {
+            uint32_t inst_opc = MASK_CLDST_OPC(opc) & ~0x4;
+            switch(inst_opc) {
             case OPC_CSB:
-                generate_csb(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cstore(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc), MO_8,
+                                inst_opc);
                 break;
             case OPC_CSH:
-                generate_csh(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cstore(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                MO_TEUW | ctx->default_tcg_memop_mask,
+                                inst_opc);
                 break;
             case OPC_CSW:
-                generate_csw(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cstore(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                MO_TEUL | ctx->default_tcg_memop_mask,
+                                inst_opc);
                 break;
             case OPC_CSD:
-                generate_csd(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc));
+                generate_cstore(ctx, rs, rt, rd, MASK_CLDST_OFFSET(opc),
+                                MO_TEQ | ctx->default_tcg_memop_mask, inst_opc);
                 break;
             default:
                 MIPS_INVAL("cs");
