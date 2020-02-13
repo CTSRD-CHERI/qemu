@@ -793,7 +793,7 @@ static inline bool cc128_is_representable_new_addr(bool sealed, uint64_t base, c
         /* Get an EBT */
         bool exact_input = false;
         c.cr_ebt = cc128_compute_ebt(base, top, NULL, &exact_input);
-        cc128_debug_assert(exact_input && "Input capability not representable? It should have been rounded before!");
+        cc128_debug_assert(exact_input && "Input capability bounds not representable? They should have been rounded before!");
         /* Check with new cursor */
         c._cr_cursor = new_cursor;
         return cc128_is_representable_cap_exact(&c);
