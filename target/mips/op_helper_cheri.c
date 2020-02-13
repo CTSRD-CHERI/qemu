@@ -1702,6 +1702,8 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUMIPSState *env, uint32_t cb, uint3
     uint64_t addr = cap_get_cursor(cbp);
 
     env->linkedflag = 0;
+    env->lladdr = 1;
+    env->CP0_LLAddr = 0;
     if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -1715,6 +1717,9 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUMIPSState *env, uint32_t cb, uint3
         do_raise_c0_exception(env, EXCP_AdEL, addr);
     } else {
         env->linkedflag = 1;
+        env->lladdr = addr;
+        env->CP0_LLAddr = do_translate_address(env, addr, 0, _host_return_address);
+        // TODO: do the load and return
         return addr;
     }
     return 0;
@@ -1744,9 +1749,15 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUMIPSState *env, uint32_t cb, uint32
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdES, addr);
     } else {
+        qemu_log_mask(CPU_LOG_INSTR, "cstorecond: linkedflag = %d,"
+                      " addr=" TARGET_FMT_plx "lladdr=" TARGET_FMT_plx
+                      " CP0_LLaddr=" TARGET_FMT_plx "\n",
+                      (int)env->linkedflag, addr, env->lladdr, env->CP0_LLAddr);
         // Can't do this here.  It might miss in the TLB.
         // cheri_tag_invalidate(env, addr, size);
         // Also, rd is set by the actual store conditional operation.
+        if (env->lladdr != addr)
+            env->linkedflag = 0; // FIXME: remove the linkedflag hack
         return addr;
     }
     return 0;
@@ -1839,47 +1850,6 @@ static target_ulong get_clc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
-static target_ulong get_cllc_addr(CPUMIPSState *env, uint32_t cd, uint32_t cb, uintptr_t _host_return_address)
-{
-    // CLLC traps on cbp == NULL so we use reg0 as $ddc to save encoding
-    // space and increase code density since loading relative to $ddc is common
-    // in the hybrid ABI (and also for backwards compat with old binaries).
-    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
-    uint64_t addr = cap_get_cursor(cbp);
-
-    env->linkedflag = 0;
-    if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_TAG, cb);
-        return (target_ulong)0;
-    } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-        return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
-        return (target_ulong)0;
-    } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
-        return (target_ulong)0;
-    } else if (align_of(CHERI_CAP_SIZE, addr)) {
-         do_raise_c0_exception(env, EXCP_AdEL, addr);
-         return (target_ulong)0;
-    }
-
-    /*
-     * XXX Don't chance taking the TLB missing in cheri_tag_get().
-     * Do the first load of the capability and then get the tag in
-     * helper_bytes2cap_opll() below.
-    tag = cheri_tag_get(env, addr, cd, &env->lladdr);
-    if (env->TLB_L)
-        tag = 0;
-    cdp->cr_tag = tag;
-    */
-
-    env->linkedflag = 1;
-
-    return (target_ulong)addr;
-}
-
 static inline target_ulong get_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset, uintptr_t _host_return_address)
 {
@@ -1958,14 +1928,18 @@ static inline target_ulong get_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_
 }
 
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs, target_ulong vaddr, target_ulong retpc);
-static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong vaddr, target_ulong retpc, bool linked);
+static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong vaddr, target_ulong retpc, hwaddr* physaddr);
 
 target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb))
 {
     target_ulong retpc = GETPC();
     target_ulong vaddr = get_cscc_addr(env, cs, cb, retpc);
+    qemu_log_mask(CPU_LOG_INSTR,
+                  "cscc: linkedflag = %d, addr=" TARGET_FMT_plx
+                  " lladdr=" TARGET_FMT_plx " CP0_LLaddr=" TARGET_FMT_plx "\n",
+                  (int)env->linkedflag, vaddr, env->lladdr, env->CP0_LLAddr);
     /* If linkedflag is zero then don't store capability. */
-    if (!env->linkedflag)
+    if (!env->linkedflag || env->lladdr != vaddr)
         return 0;
     store_cap_to_memory(env, cs, vaddr, retpc);
     return 1;
@@ -1988,16 +1962,40 @@ void CHERI_HELPER_IMPL(clc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t 
     target_ulong vaddr = get_clc_addr(env, cd, cb, rt, offset, retpc);
     // helper_clc_addr should check for alignment
     cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
-    load_cap_from_memory(env, cd, cb, vaddr, retpc, /*linked=*/false);
+    load_cap_from_memory(env, cd, cb, vaddr, retpc, /*physaddr_out=*/NULL);
 }
 
 void CHERI_HELPER_IMPL(cllc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t cb))
 {
-    target_ulong retpc = GETPC();
-    target_ulong vaddr = get_cllc_addr(env, cd, cb, retpc);
-    // helper_cllc_addr should check for alignment
-    cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
-    load_cap_from_memory(env, cd, cb, vaddr, retpc, /*linked=*/true);
+    GET_HOST_RETPC();
+
+    // CLLC traps on cbp == NULL so we use reg0 as $ddc to save encoding
+    // space and increase code density since loading relative to $ddc is common
+    // in the hybrid ABI (and also for backwards compat with old binaries).
+    const cap_register_t *cbp = get_capreg_0_is_ddc(&env->active_tc, cb);
+    uint64_t addr = cap_get_cursor(cbp);
+
+    /* Clear linked state */
+    env->linkedflag = 0;
+    env->lladdr = 1;
+    env->CP0_LLAddr = 0;
+    if (!cbp->cr_tag) {
+        do_raise_c2_exception(env, CP2Ca_TAG, cb);
+    } else if (is_cap_sealed(cbp)) {
+        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        do_raise_c2_exception(env, CP2Ca_PERM_LD, cb);
+    } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
+        do_raise_c2_exception(env, CP2Ca_LENGTH, cb);
+    } else if (align_of(CHERI_CAP_SIZE, addr)) {
+        do_raise_c0_exception(env, EXCP_AdEL, addr);
+    }
+    cheri_debug_assert(align_of(CHERI_CAP_SIZE, addr) == 0);
+    hwaddr physaddr;
+    load_cap_from_memory(env, cd, cb, addr, _host_return_address, &physaddr);
+    env->lladdr = addr;
+    env->CP0_LLAddr = physaddr;
+    env->linkedflag = 1; // FIXME: remove
 }
 
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -2135,7 +2133,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
 #endif // CONFIG_MIPS_LOG_INSTR
 
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
-                                 target_ulong vaddr, target_ulong retpc, bool linked)
+                                 target_ulong vaddr, target_ulong retpc, hwaddr* physaddr)
 {
     int prot;
     cap_register_t ncd;
@@ -2149,7 +2147,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint64_t pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc);
     uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
 
-    target_ulong tag = cheri_tag_get(env, vaddr, cb, linked ? &env->lladdr : NULL, &prot, retpc);
+    target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
     tag = clear_tag_if_no_loadcap(tag, cbp, prot);
     decompress_128cap(pesbt, cursor, &ncd);
     ncd.cr_tag = tag;
@@ -2235,7 +2233,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 #endif // CONFIG_MIPS_LOG_INSTR
 
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
-                                 target_ulong vaddr, target_ulong retpc, bool linked)
+                                 target_ulong vaddr, target_ulong retpc, hwaddr* physaddr)
 {
     int prot;
     cap_register_t ncd;
@@ -2250,7 +2248,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
 
     uint64_t tps, length;
-    target_ulong tag = cheri_tag_get_m128(env, vaddr, cd, &tps, &length, linked ? &env->lladdr : NULL, &prot, retpc);
+    target_ulong tag = cheri_tag_get_m128(env, vaddr, cd, &tps, &length, physaddr, &prot, retpc);
     tag = clear_tag_if_no_loadcap(tag, cbp, prot);
 
     ncd.cr_otype = (uint32_t)(tps >> 32) ^ CAP_MAX_REPRESENTABLE_OTYPE;
@@ -2392,7 +2390,7 @@ static inline void dump_cap_store_length(uint64_t length)
 #endif // CONFIG_MIPS_LOG_INSTR
 
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
-                                 target_ulong vaddr, target_ulong retpc, bool linked)
+                                 target_ulong vaddr, target_ulong retpc, hwaddr* physaddr)
 {
     cap_register_t ncd;
     int prot;
@@ -2408,7 +2406,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     mem_buffer.u64s[2] = cpu_ldq_data_ra(env, vaddr + 16, retpc); /* base */
     mem_buffer.u64s[3] = cpu_ldq_data_ra(env, vaddr + 24, retpc); /* length */
 
-    target_ulong tag = cheri_tag_get(env, vaddr, cd, linked ? &env->lladdr : NULL, &prot, retpc);
+    target_ulong tag = cheri_tag_get(env, vaddr, cd, physaddr, &prot, retpc);
     tag = clear_tag_if_no_loadcap(tag, cbp, prot);
     env->statcounters_cap_read++;
     if (tag)

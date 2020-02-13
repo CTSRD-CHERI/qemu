@@ -445,7 +445,7 @@ static const char *cop0_name[32*8] = {
         0,              0,              0,              0,
 /*16*/  "Config",       "Config1",      "Config2",      "Config3",
         "Config4",      "Config5",      "Config6",      "Config7",
-/*17*/  "LLAddr",       0,              0,              0,
+/*17*/  "LLAddr",       "internal_lladdr (virtual)", "internal_llval", "internal_linkedflag",
         0,              0,              0,              0,
 /*18*/  "WatchLo",      "WatchLo1",     "WatchLo2",     "WatchLo3",
         "WatchLo4",     "WatchLo5",     "WatchLo6",     "WatchLo7",
@@ -577,6 +577,9 @@ static void dump_changed_cop0(CPUMIPSState *env)
     dump_changed_cop0_reg(env, 16*8 + 7, env->CP0_Config7);
 
     dump_changed_cop0_reg(env, 17*8 + 0, env->CP0_LLAddr >> env->CP0_LLAddr_shift);
+    dump_changed_cop0_reg(env, 17*8 + 1, env->lladdr);
+    dump_changed_cop0_reg(env, 17*8 + 2, env->llval);
+    dump_changed_cop0_reg(env, 17*8 + 3, env->linkedflag);
 
     dump_changed_cop0_reg(env, 18*8 + 0, env->CP0_WatchLo[0]);
     dump_changed_cop0_reg(env, 18*8 + 1, env->CP0_WatchLo[1]);
@@ -902,13 +905,6 @@ void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
 void helper_dump_load(CPUMIPSState *env, int opc, target_ulong addr,
         target_ulong value)
 {
-    if (opc == OPC_CLLD || opc == OPC_CLLWU || opc == OPC_CLLW ||
-        opc == OPC_CLLHU || opc == OPC_CLLH || opc == OPC_CLLBU ||
-        opc == OPC_CLLB) {
-        env->CP0_LLAddr = do_translate_address(env, addr, 0, GETPC());
-        env->lladdr = addr;
-        env->llval = value;
-    }
     if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR) |
                  qemu_loglevel_mask(CPU_LOG_CVTRACE))))
         return;

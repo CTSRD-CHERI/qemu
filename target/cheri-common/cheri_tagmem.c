@@ -226,15 +226,17 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
     check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
     if (ram_addr == -1LL)
         return;
-
-    cheri_tag_phys_invalidate(ram_addr, size);
-
 #ifdef TARGET_MIPS
     /* Check RAM address to see if the linkedflag needs to be reset. */
     if (QEMU_ALIGN_DOWN(paddr, CHERI_CAP_SIZE) ==
-        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE))
+        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
         env->linkedflag = 0;
+        env->lladdr = 1;
+        env->CP0_LLAddr = 0;
+    }
 #endif
+    cheri_tag_phys_invalidate(ram_addr, size);
+
 }
 
 void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
@@ -327,8 +329,11 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
     /* Check RAM address to see if the linkedflag needs to be reset. */
     // FIXME: we should really be using a different approach for LL/SC
     if (QEMU_ALIGN_DOWN(ram_addr, CHERI_CAP_SIZE) ==
-        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE))
+        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
         env->linkedflag = 0;
+        env->lladdr = 1;
+        env->CP0_LLAddr = 0;
+    }
 #endif
 }
 
@@ -435,8 +440,12 @@ void cheri_tag_set_m128(CPUArchState *env, target_ulong vaddr, int reg,
 
 
     /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (ram_addr == p2r_addr(env, env->lladdr, NULL))
+    if (QEMU_ALIGN_DOWN(ram_addr, CHERI_CAP_SIZE) ==
+        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
         env->linkedflag = 0;
+        env->lladdr = 1;
+        env->CP0_LLAddr = 0;
+    }
 
     return;
 }
