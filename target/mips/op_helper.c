@@ -1137,6 +1137,7 @@ void helper_eret(CPUMIPSState *env)
     exception_return(env);
     env->CP0_LLAddr = 1;
     env->lladdr = 1;
+    env->linkedflag = 0;
 #ifdef TARGET_CHERI
     env->linkedflag = 0;
 #endif /* TARGET_CHERI */
@@ -1960,6 +1961,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         if (dest_paddr <= env->CP0_LLAddr && dest_paddr + len > env->CP0_LLAddr) {
             // reset the linked flag if we touch the address with this write
             env->linkedflag = 0;
+            env->lladdr = 0;
         }
 #endif
         // Do a single load+store to update the MMU flags
@@ -2239,6 +2241,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             if (paddr <= env->CP0_LLAddr && paddr + l_adj_bytes > env->CP0_LLAddr) {
                 // reset the linked flag if we touch the address with this write
                 env->linkedflag = 0;
+                env->lladdr = 0;
             }
 #endif
             // Note: address_space_write will also clear the tag bits!

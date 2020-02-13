@@ -1703,7 +1703,6 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUMIPSState *env, uint32_t cb, uint3
 
     env->linkedflag = 0;
     env->lladdr = 1;
-    env->CP0_LLAddr = 0;
     if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -1716,9 +1715,9 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUMIPSState *env, uint32_t cb, uint3
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdEL, addr);
     } else {
+        env->CP0_LLAddr = do_translate_address(env, addr, 0, _host_return_address);
         env->linkedflag = 1;
         env->lladdr = addr;
-        env->CP0_LLAddr = do_translate_address(env, addr, 0, _host_return_address);
         // TODO: do the load and return
         return addr;
     }
@@ -1978,7 +1977,6 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t
     /* Clear linked state */
     env->linkedflag = 0;
     env->lladdr = 1;
-    env->CP0_LLAddr = 0;
     if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
     } else if (is_cap_sealed(cbp)) {

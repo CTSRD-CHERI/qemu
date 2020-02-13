@@ -232,7 +232,6 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
         QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
         env->linkedflag = 0;
         env->lladdr = 1;
-        env->CP0_LLAddr = 0;
     }
 #endif
     cheri_tag_phys_invalidate(ram_addr, size);
@@ -332,7 +331,6 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
         QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
         env->linkedflag = 0;
         env->lladdr = 1;
-        env->CP0_LLAddr = 0;
     }
 #endif
 }
@@ -444,7 +442,6 @@ void cheri_tag_set_m128(CPUArchState *env, target_ulong vaddr, int reg,
         QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
         env->linkedflag = 0;
         env->lladdr = 1;
-        env->CP0_LLAddr = 0;
     }
 
     return;
