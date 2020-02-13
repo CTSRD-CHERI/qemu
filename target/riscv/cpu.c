@@ -235,7 +235,7 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 
     for (i = 0; i < 32; i++) {
         qemu_fprintf(f, " %s " TARGET_FMT_lx,
-                     riscv_int_regnames[i], env->gpr[i]);
+                     riscv_int_regnames[i], gpr_int_value(env, i));
         if ((i & 3) == 3) {
             qemu_fprintf(f, "\n");
         }

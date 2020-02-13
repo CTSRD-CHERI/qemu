@@ -92,9 +92,14 @@ enum {
 typedef struct CPURISCVState CPURISCVState;
 
 #include "pmp.h"
+#include "cheri_capregs.h"
 
 struct CPURISCVState {
+#ifdef TARGET_CHERI
+    struct GPCapRegs gpcapregs;
+#else
     target_ulong gpr[32];
+#endif
     uint64_t fpr[32]; /* assume both F and D extensions */
     target_ulong pc;
     target_ulong load_res;
@@ -165,6 +170,24 @@ struct CPURISCVState {
     /* Fields from here on are preserved across CPU reset. */
     QEMUTimer *timer; /* Internal timer */
 };
+
+static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
+#ifdef TARGET_CHERI
+    return env->gpcapregs.cursor[reg];
+#else
+    return env->gpr[reg];
+#endif
+}
+
+static inline void gpr_set_int_value(CPURISCVState *env, unsigned reg,
+                                     target_ulong value) {
+    assert(reg != 0);
+#ifdef TARGET_CHERI
+    env->gpcapregs.cursor[reg] = value;
+#else
+    env->gpr[reg] = value;
+#endif
+}
 
 #define RISCV_CPU_CLASS(klass) \
     OBJECT_CLASS_CHECK(RISCVCPUClass, (klass), TYPE_RISCV_CPU)

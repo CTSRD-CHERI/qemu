@@ -31,8 +31,16 @@
 
 #include "instmap.h"
 
+
 /* global register indices */
+#ifdef TARGET_CHERI
+#include "cheri_capregs.h"
+static TCGv _cpu_cursors_do_not_access_directly[32];
+static TCGv_i64 cpu_capreg_state; // 32 times 2 bits
+static TCGv cpu_pc; // TODO: PCC
+#else
 static TCGv cpu_gpr[32], cpu_pc;
+#endif
 static TCGv_i64 cpu_fpr[32]; /* assume F and D extensions */
 static TCGv load_res;
 static TCGv load_val;
@@ -176,9 +184,23 @@ static inline void gen_get_gpr(TCGv t, int reg_num)
     if (reg_num == 0) {
         tcg_gen_movi_tl(t, 0);
     } else {
+#ifdef TARGET_CHERI
+        tcg_gen_mov_tl(t, _cpu_cursors_do_not_access_directly[reg_num]);
+#else
         tcg_gen_mov_tl(t, cpu_gpr[reg_num]);
+#endif
     }
 }
+
+#ifdef TARGET_CHERI
+static inline void gen_mark_gpr_as_integer(int reg_num_dst) {
+    /* Currently, the integer flag is 0, so we can mask the 64-bit value holding
+     * the capreg state appropriately to clear the bits for register N. */
+    tcg_gen_andi_i64(cpu_capreg_state, cpu_capreg_state, capreg_state_set_to_integer_mask(reg_num_dst));
+    /* TODO: maybe all ones is more efficient? We can just do an or and don't
+     *   have to negate? */
+}
+#endif
 
 /* Wrapper for setting reg values - need to check of reg is zero since
  * cpu_gpr[0] is not actually allocated. this is more for safety purposes,
@@ -188,9 +210,27 @@ static inline void gen_get_gpr(TCGv t, int reg_num)
 static inline void gen_set_gpr(int reg_num_dst, TCGv t)
 {
     if (reg_num_dst != 0) {
+#ifdef TARGET_CHERI
+        gen_mark_gpr_as_integer(reg_num_dst); // Reset the register type to int.
+        tcg_gen_mov_tl(_cpu_cursors_do_not_access_directly[reg_num_dst], t);
+#else
         tcg_gen_mov_tl(cpu_gpr[reg_num_dst], t);
+#endif
     }
 }
+static inline void gen_set_gpr_const(int reg_num_dst, target_ulong value)
+{
+    if (reg_num_dst != 0) {
+#ifdef TARGET_CHERI
+        gen_mark_gpr_as_integer(reg_num_dst); // Reset the register type to int.
+        tcg_gen_movi_tl(_cpu_cursors_do_not_access_directly[reg_num_dst], value);
+#else
+        tcg_gen_movi_tl(cpu_gpr[reg_num_dst], value);
+#endif
+    }
+}
+
+
 
 static void gen_mulhsu(TCGv ret, TCGv arg1, TCGv arg2)
 {
@@ -327,9 +367,7 @@ static void gen_jal(DisasContext *ctx, int rd, target_ulong imm)
             return;
         }
     }
-    if (rd != 0) {
-        tcg_gen_movi_tl(cpu_gpr[rd], ctx->pc_succ_insn);
-    }
+    gen_set_gpr_const(rd, ctx->pc_succ_insn);
 
     gen_goto_tb(ctx, 0, ctx->base.pc_next + imm); /* must use this for safety */
     ctx->base.is_jmp = DISAS_NORETURN;
@@ -833,15 +871,34 @@ void riscv_translate_init(void)
 {
     int i;
 
+
     /* cpu_gpr[0] is a placeholder for the zero register. Do not use it. */
     /* Use the gen_set_gpr and gen_get_gpr helper functions when accessing */
     /* registers, unless you specifically block reads/writes to reg 0 */
+#ifndef TARGET_CHERI
     cpu_gpr[0] = NULL;
-
     for (i = 1; i < 32; i++) {
         cpu_gpr[i] = tcg_global_mem_new(cpu_env,
             offsetof(CPURISCVState, gpr[i]), riscv_int_regnames[i]);
     }
+#else
+    /* CNULL cursor should never be written! */
+    _cpu_cursors_do_not_access_directly[0] = NULL;
+    /*
+     * Provide fast access to integer part of capability registers using
+     * gen_get_gpr() and get_set_gpr(). But don't expose the cpu_gprs TCGv
+     * directly to avoid errors.
+     */
+    for (i = 1; i < 32; i++) {
+        _cpu_cursors_do_not_access_directly[i] = tcg_global_mem_new(
+            cpu_env, offsetof(CPURISCVState, gpcapregs.cursor[i]),
+            riscv_int_regnames[i]);
+    }
+    cpu_capreg_state = tcg_global_mem_new(
+        cpu_env, offsetof(CPURISCVState, gpcapregs.capreg_state),
+        "capreg_state");
+#endif
+
 
     for (i = 0; i < 32; i++) {
         cpu_fpr[i] = tcg_global_mem_new_i64(cpu_env,

@@ -26,17 +26,13 @@ static bool trans_illegal(DisasContext *ctx, arg_empty *a)
 
 static bool trans_lui(DisasContext *ctx, arg_lui *a)
 {
-    if (a->rd != 0) {
-        tcg_gen_movi_tl(cpu_gpr[a->rd], a->imm);
-    }
+    gen_set_gpr_const(a->rd, a->imm);
     return true;
 }
 
 static bool trans_auipc(DisasContext *ctx, arg_auipc *a)
 {
-    if (a->rd != 0) {
-        tcg_gen_movi_tl(cpu_gpr[a->rd], a->imm + ctx->base.pc_next);
-    }
+    gen_set_gpr_const(a->rd, a->imm + ctx->base.pc_next);
     return true;
 }
 
@@ -63,9 +59,7 @@ static bool trans_jalr(DisasContext *ctx, arg_jalr *a)
         tcg_gen_brcondi_tl(TCG_COND_NE, t0, 0x0, misaligned);
     }
 
-    if (a->rd != 0) {
-        tcg_gen_movi_tl(cpu_gpr[a->rd], ctx->pc_succ_insn);
-    }
+    gen_set_gpr_const(a->rd, ctx->pc_succ_insn);
     lookup_and_goto_ptr(ctx);
 
     if (misaligned) {
