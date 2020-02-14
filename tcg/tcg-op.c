@@ -2804,6 +2804,12 @@ static inline void plugin_gen_mem_callbacks(TCGv_cap_checked_ptr vaddr, uint16_t
 #endif
 }
 
+#ifdef TARGET_CHERI
+static inline void gen_cheri_invalidate_tags(TCGv_cap_checked_ptr out_addr, TCGv_i32 memop) {
+    gen_helper_cheri_invalidate_tags(cpu_env, out_addr, memop);
+}
+#endif
+
 void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop)
 {
     MemOp orig_memop;
@@ -2870,6 +2876,11 @@ void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
 
     gen_ldst_i32(INDEX_op_qemu_st_i32, val, addr, memop, idx);
     plugin_gen_mem_callbacks(addr, info);
+#ifdef TARGET_CHERI
+    TCGv_i32 cinvop = tcg_const_i32(memop);
+    gen_cheri_invalidate_tags(addr, cinvop);
+    tcg_temp_free_i32(cinvop);
+#endif
 
     if (swap) {
         tcg_temp_free_i32(swap);
@@ -2969,6 +2980,11 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
 
     gen_ldst_i64(INDEX_op_qemu_st_i64, val, addr, memop, idx);
     plugin_gen_mem_callbacks(addr, info);
+#ifdef TARGET_CHERI
+    TCGv_i32 cinvop = tcg_const_i32(memop);
+    gen_cheri_invalidate_tags(addr, cinvop);
+    tcg_temp_free_i32(cinvop);
+#endif
 
     if (swap) {
         tcg_temp_free_i64(swap);
@@ -2977,48 +2993,40 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
 
 
 #ifdef TARGET_CHERI
-static inline void gen_cheri_invalidate_tags(TCGv_cap_checked_ptr out_addr, TCGv_i32 memop) {
-    gen_helper_cheri_invalidate_tags(cpu_env, out_addr, memop);
-}
 
 void tcg_gen_qemu_ld_ddc_i32(TCGv_i32 val, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg idx, MemOp memop) {
     TCGv_i32 op = tcg_const_i32(memop);
     if (out_addr == NULL)
         out_addr = (TCGv_cap_checked_ptr)in_addr;
     gen_helper_ddc_check_load(out_addr, cpu_env, in_addr, op);
-    tcg_gen_qemu_ld_i32_with_checked_addr(val, out_addr, idx, memop);
     tcg_temp_free_i32(op);
+    tcg_gen_qemu_ld_i32_with_checked_addr(val, out_addr, idx, memop);
 }
 void tcg_gen_qemu_ld_ddc_i64(TCGv_i64 val, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg idx, MemOp memop) {
     TCGv_i32 op = tcg_const_i32(memop);
     if (out_addr == NULL)
         out_addr = (TCGv_cap_checked_ptr)in_addr;
     gen_helper_ddc_check_load(out_addr, cpu_env, in_addr, op);
-    tcg_gen_qemu_ld_i64_with_checked_addr(val, out_addr, idx, memop);
     tcg_temp_free_i32(op);
+    tcg_gen_qemu_ld_i64_with_checked_addr(val, out_addr, idx, memop);
 }
 void tcg_gen_qemu_st_ddc_i32(TCGv_i32 val, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg idx, MemOp memop) {
     TCGv_i32 op = tcg_const_i32(memop);
     if (out_addr == NULL)
         out_addr = (TCGv_cap_checked_ptr)in_addr;
     gen_helper_ddc_check_store(out_addr, cpu_env, in_addr, op);
-    tcg_gen_qemu_st_i32_with_checked_addr(val, out_addr, idx, memop);
-    gen_cheri_invalidate_tags(out_addr, op); /* Store succeeded -> clear tags for op */
     tcg_temp_free_i32(op);
+    tcg_gen_qemu_st_i32_with_checked_addr(val, out_addr, idx, memop);
 }
 void tcg_gen_qemu_st_ddc_i64(TCGv_i64 val, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg idx, MemOp memop) {
     TCGv_i32 op = tcg_const_i32(memop);
     if (out_addr == NULL)
         out_addr = (TCGv_cap_checked_ptr)in_addr;
     gen_helper_ddc_check_store(out_addr, cpu_env, in_addr, op);
-    tcg_gen_qemu_st_i64_with_checked_addr(val, out_addr, idx, memop);
-    gen_cheri_invalidate_tags(out_addr, op); /* Store succeeded -> clear tags for op */
     tcg_temp_free_i32(op);
+    tcg_gen_qemu_st_i64_with_checked_addr(val, out_addr, idx, memop);
 }
 #endif
-
-
-
 
 
 static void tcg_gen_ext_i32(TCGv_i32 ret, TCGv_i32 val, MemOp opc)
