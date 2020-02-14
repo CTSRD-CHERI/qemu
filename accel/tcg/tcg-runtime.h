@@ -143,6 +143,25 @@ GEN_ATOMIC_HELPERS(xchg)
 
 #undef GEN_ATOMIC_HELPERS
 
+#ifdef TARGET_CHERI
+/* result is addr + ddc.cursor, first argument is the integer address, second argument is the MemOp */
+DEF_HELPER_3(ddc_check_store, cap_checked_ptr, env, tl, memop) /* Needs load perms */
+DEF_HELPER_3(ddc_check_load, cap_checked_ptr, env, tl, memop) /* Needs store perms */
+DEF_HELPER_3(ddc_check_rmw, cap_checked_ptr, env, tl, memop) /* Needs load and store perms */
+/* Same but relative to PCC */
+DEF_HELPER_3(pcc_check_load, cap_checked_ptr, env, tl, memop)
+/* Clear tags due to a store. Only calll this after the store succeeded. */
+DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop)
+#endif
+
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+DEF_HELPER_4(dump_load, void, env, cap_checked_ptr, tl, memop)
+DEF_HELPER_4(dump_load32, void, env, cap_checked_ptr, i32, memop)
+DEF_HELPER_4(dump_store, void, env, cap_checked_ptr, tl, memop)
+DEF_HELPER_4(dump_store32, void, env, cap_checked_ptr, i32, memop)
+#endif
+
+
 DEF_HELPER_FLAGS_3(gvec_mov, TCG_CALL_NO_RWG, void, ptr, ptr, i32)
 
 DEF_HELPER_FLAGS_3(gvec_dup8, TCG_CALL_NO_RWG, void, ptr, i32, i32)

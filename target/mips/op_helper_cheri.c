@@ -43,6 +43,7 @@
 #include "exec/helper-proto.h"
 
 #include "cheri_tagmem.h"
+#include "cheri-archspecific.h"
 
 #ifndef TARGET_CHERI
 #error "This file should only be compiled for CHERI"
@@ -354,65 +355,6 @@ static inline void update_ddc(CPUMIPSState *env, const cap_register_t* new_ddc) 
     } else {
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_MMU, "Installing same $ddc again, not flushing TCG TLB: " PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
     }
-}
-
-static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
-        uint32_t perm, uint64_t addr, uint16_t regnum, uint32_t len, bool instavail, uintptr_t pc)
-{
-    uint16_t cause;
-    /*
-     * See section 5.6 in CHERI Architecture.
-     *
-     * Capability checks (in order of priority):
-     * (1) <ctag> must be set (CP2Ca_TAG Violation).
-     * (2) Seal bit must be unset (CP2Ca_SEAL Violation).
-     * (3) <perm> permission must be set (CP2Ca_PERM_EXE, CP2Ca_PERM_LD,
-     * or CP2Ca_PERM_ST Violation).
-     * (4) <addr> must be within bounds (CP2Ca_LENGTH Violation).
-     */
-    if (!cr->cr_tag) {
-        cause = CP2Ca_TAG;
-        // qemu_log("CAP Tag VIOLATION: ");
-        goto do_exception;
-    }
-    if (is_cap_sealed(cr)) {
-        cause = CP2Ca_SEAL;
-        // qemu_log("CAP Seal VIOLATION: ");
-        goto do_exception;
-    }
-    if ((cr->cr_perms & perm) != perm) {
-        switch (perm) {
-            case CAP_PERM_EXECUTE:
-                cause = CP2Ca_PERM_EXE;
-                // qemu_log("CAP Exe VIOLATION: ");
-                goto do_exception;
-            case CAP_PERM_LOAD:
-                cause = CP2Ca_PERM_LD;
-                // qemu_log("CAP LD VIOLATION: ");
-                goto do_exception;
-            case CAP_PERM_STORE:
-                cause = CP2Ca_PERM_ST;
-                // qemu_log("CAP ST VIOLATION: ");
-                goto do_exception;
-            default:
-                break;
-        }
-    }
-    // fprintf(stderr, "addr=%zx, len=%zd, cr_base=%zx, cr_len=%zd\n",
-    //     (size_t)addr, (size_t)len, (size_t)cr->cr_base, (size_t)cr->cr_length);
-    if (!cap_is_in_bounds(cr, addr, len)) {
-        cause = CP2Ca_LENGTH;
-        // qemu_log("CAP Len VIOLATION: ");
-        goto do_exception;
-    }
-
-    return;
-
-do_exception:
-    env->CP0_BadVAddr = addr;
-    if (!instavail)
-        env->error_code |= EXCP_INST_NOTAVAIL;
-    do_raise_c2_exception_impl(env, cause, regnum, pc);
 }
 
 static inline target_ulong
@@ -2529,27 +2471,6 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUMIPSState *env, uint64_t next_pc))
 #endif
 }
 
-target_ulong CHERI_HELPER_IMPL(ccheck_store_right(CPUMIPSState *env, target_ulong offset, uint32_t len))
-{
-#ifndef TARGET_WORDS_BIGENDIAN
-#error "This check is only valid for big endian targets, for little endian the load/store left instructions need to be checked"
-#endif
-    // For swr/sdr if offset & 3/7 == 0 we store only first byte, if all low bits are set we store the full amount
-    uint32_t low_bits = (uint32_t)offset & (len - 1);
-    uint32_t stored_bytes = low_bits + 1;
-    // From spec:
-    //if BigEndianMem = 1 then
-    //  pAddr <- pAddr(PSIZE-1)..3 || 000 (for ldr), 00 for lwr
-    //endif
-    // clear the low bits in offset to perform the length check
-    target_ulong write_offset = offset & ~((target_ulong)len - 1);
-    // fprintf(stderr, "%s: len=%d, offset=%zd, write_offset=%zd: will touch %d bytes\n",
-    //    __func__, len, (size_t)offset, (size_t)write_offset, stored_bytes);
-    // return the actual address by adding the low bits (this is expected by translate.c
-    return check_ddc(env, CAP_PERM_STORE, write_offset, stored_bytes, /*instavail=*/true, GETPC()) + low_bits;
-}
-
-
 target_ulong CHERI_HELPER_IMPL(ccheck_load_right(CPUMIPSState *env, target_ulong offset, uint32_t len))
 {
 #ifndef TARGET_WORDS_BIGENDIAN
@@ -2567,27 +2488,17 @@ target_ulong CHERI_HELPER_IMPL(ccheck_load_right(CPUMIPSState *env, target_ulong
     // fprintf(stderr, "%s: len=%d, offset=%zd, read_offset=%zd: will touch %d bytes\n",
     //      __func__, len, (size_t)offset, (size_t)read_offset, loaded_bytes);
     // return the actual address by adding the low bits (this is expected by translate.c
-    return check_ddc(env, CAP_PERM_LOAD, read_offset, loaded_bytes, /*instavail=*/true, GETPC()) + low_bits;
-}
-
-target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t ddc_offset, uint32_t len, bool instavail, uintptr_t retpc)
-{
-    const cap_register_t *ddc = &env->active_tc.CHWR.DDC;
-    target_ulong addr = ddc_offset + cap_get_cursor(ddc);
-    // qemu_log("ST(%u):%016lx\n", len, addr);
-    // FIXME: should regnum be 32 instead?
-    check_cap(env, ddc, perm, addr, /*regnum=*/0, len, instavail, retpc);
-    return addr;
+    return check_ddc(env, CAP_PERM_LOAD, read_offset, loaded_bytes, GETPC()) + low_bits;
 }
 
 target_ulong CHERI_HELPER_IMPL(ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len))
 {
-    return check_ddc(env, CAP_PERM_STORE, offset, len, /*instavail=*/true, GETPC());
+    return check_ddc(env, CAP_PERM_STORE, offset, len, GETPC());
 }
 
 target_ulong CHERI_HELPER_IMPL(ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t len))
 {
-    return check_ddc(env, CAP_PERM_LOAD, offset, len, /*instavail=*/true, GETPC());
+    return check_ddc(env, CAP_PERM_LOAD, offset, len, GETPC());
 }
 
 void CHERI_HELPER_IMPL(ccheck_load_pcrel(CPUMIPSState *env, target_ulong addr,
@@ -2596,40 +2507,6 @@ void CHERI_HELPER_IMPL(ccheck_load_pcrel(CPUMIPSState *env, target_ulong addr,
     check_cap(env, &env->active_tc.PCC, CAP_PERM_LOAD, addr, /*regnum=*/0, len,
               /*instavail=*/true, GETPC());
 }
-
-void CHERI_HELPER_IMPL(cinvalidate_tag_left_right(CPUMIPSState *env, target_ulong addr, uint32_t len,
-    uint32_t opc, target_ulong value))
-{
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log write, if enabled */
-    dump_store(env, opc, addr, value);
-#endif
-    // swr/sdr/swl/sdl will never invalidate more than one capability
-    cheri_tag_invalidate(env, addr, 1, GETPC());
-}
-
-void CHERI_HELPER_IMPL(cinvalidate_tag(CPUMIPSState *env, target_ulong addr, uint32_t len,
-    uint32_t opc, target_ulong value))
-{
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log write, if enabled. */
-    dump_store(env, opc, addr, value);
-#endif
-
-    cheri_tag_invalidate(env, addr, len, GETPC());
-}
-
-void CHERI_HELPER_IMPL(cinvalidate_tag32(CPUMIPSState *env, target_ulong addr, uint32_t len,
-    uint32_t opc, uint32_t value))
-{
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log write, if enabled. */
-    dump_store(env, opc, addr, (target_ulong)value);
-#endif
-
-    cheri_tag_invalidate(env, addr, len, GETPC());
-}
-
 
 static const char *cheri_cap_reg[] = {
   "DDC",  "",   "",      "",     "",    "",    "",    "",  /* C00 - C07 */

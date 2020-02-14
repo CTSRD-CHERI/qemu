@@ -1530,7 +1530,6 @@ static inline bool in_kernel_mode(CPUMIPSState *env) {
 void cheri_cpu_dump_statistics(CPUState *cs, int flags);
 void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags);
 void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* name);
-target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, bool instavail, uintptr_t retpc);
 hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address, int rw, int reg, int *prot);
 #endif /* TARGET_CHERI */
 

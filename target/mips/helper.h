@@ -14,9 +14,9 @@ DEF_HELPER_4(swl, void, env, tl, tl, int)
 DEF_HELPER_4(swr, void, env, tl, tl, int)
 
 #ifndef CONFIG_USER_ONLY
-DEF_HELPER_3(ll, tl, env, tl, int)
+DEF_HELPER_3(ll, tl, env, cap_checked_ptr, int)
 #ifdef TARGET_MIPS64
-DEF_HELPER_3(lld, tl, env, tl, int)
+DEF_HELPER_3(lld, tl, env, cap_checked_ptr, int)
 #endif
 #endif
 
@@ -188,8 +188,6 @@ DEF_HELPER_1(mfc0_coreid, tl, env)
 #ifdef CONFIG_MIPS_LOG_INSTR
 DEF_HELPER_1(dump_changed_state, void, env)
 DEF_HELPER_2(log_instruction, void, env, i64)
-DEF_HELPER_4(dump_load, void, env, int, cap_checked_ptr, tl)
-DEF_HELPER_4(dump_load32, void, env, int, cap_checked_ptr, i32)
 DEF_HELPER_2(instr_start, void, env, i64)
 DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
 DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
@@ -205,14 +203,10 @@ DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
 DEF_HELPER_1(ccheck_btarget, void, env)
 DEF_HELPER_1(copy_cap_btarget_to_pcc, void, env)
 DEF_HELPER_2(ccheck_pc, void, env, i64)
-DEF_HELPER_3(ccheck_store, tl, env, tl, i32)
-DEF_HELPER_3(ccheck_store_right, tl, env, tl, i32)
-DEF_HELPER_3(ccheck_load, tl, env, tl, i32)
+DEF_HELPER_3(ccheck_store, cap_checked_ptr, env, tl, i32)
+DEF_HELPER_3(ccheck_load, cap_checked_ptr, env, tl, i32)
 DEF_HELPER_3(ccheck_load_pcrel, void, env, tl, i32)
-DEF_HELPER_3(ccheck_load_right, tl, env, tl, i32)
-DEF_HELPER_5(cinvalidate_tag, void, env, tl, i32, i32, tl)
-DEF_HELPER_5(cinvalidate_tag_left_right, void, env, tl, i32, i32, tl)
-DEF_HELPER_5(cinvalidate_tag32, void, env, tl, i32, i32, i32)
+DEF_HELPER_3(ccheck_load_right, cap_checked_ptr, env, tl, i32)
 DEF_HELPER_4(candperm, void, env, i32, i32, tl)
 DEF_HELPER_3(cbez, tl, env, i32, i32)
 DEF_HELPER_3(cbnz, tl, env, i32, i32)

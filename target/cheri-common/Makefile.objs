@@ -1,2 +1,2 @@
-obj-$(TARGET_CHERI) += cheri_tagmem.o
+obj-$(TARGET_CHERI) += cheri_tagmem.o op_helper_cheri_common.o
 

@@ -33,45 +33,59 @@
  */
 #if defined(CONFIG_MIPS_LOG_INSTR)
 static inline void
-generate_dump_load(int op, TCGv_cap_checked_ptr addr, TCGv value)
+generate_dump_load(TCGv_cap_checked_ptr addr, TCGv value, MemOp mo)
 {
-    TCGv_i32 top = tcg_const_i32(op);
-    gen_helper_dump_load(cpu_env, top, addr, value);
-    tcg_temp_free_i32(top);
+    tcg_debug_assert(addr != NULL);
+    TCGv_i32 tcop = tcg_const_i32(mo);
+    gen_helper_dump_load(cpu_env, addr, value, tcop);
+    tcg_temp_free_i32(tcop);
 }
-#define GEN_CAP_DUMP_LOAD(op, addr, value) \
-    generate_dump_load(op, (TCGv_cap_checked_ptr)addr, value)
+static inline void
+generate_dump_store(TCGv_cap_checked_ptr addr, TCGv value, MemOp mo)
+{
+    tcg_debug_assert(addr != NULL);
+    TCGv_i32 tcop = tcg_const_i32(mo);
+    gen_helper_dump_store(cpu_env, addr, value, tcop);
+    tcg_temp_free_i32(tcop);
+}
 
 static inline void
-generate_dump_load32(int op, TCGv_cap_checked_ptr addr, TCGv_i32 value)
+generate_dump_load32(TCGv_cap_checked_ptr addr, TCGv_i32 value, MemOp mo)
 {
-    TCGv_i32 top = tcg_const_i32(op);
-    gen_helper_dump_load32(cpu_env, top, addr, value);
-    tcg_temp_free_i32(top);
+    TCGv_i32 tcop = tcg_const_i32(mo);
+    gen_helper_dump_load32(cpu_env, addr, value, tcop);
+    tcg_temp_free_i32(tcop);
 }
-#define GEN_CAP_DUMP_LOAD32(op, addr, value) \
-    generate_dump_load32(op, (TCGv_cap_checked_ptr)addr, value)
+static inline void
+generate_dump_store32(TCGv_cap_checked_ptr addr, TCGv_i32 value, MemOp mo)
+{
+    TCGv_i32 tcop = tcg_const_i32(mo);
+    gen_helper_dump_store32(cpu_env, addr, value, tcop);
+    tcg_temp_free_i32(tcop);
+}
 
 #else
-#define GEN_CAP_DUMP_LOAD(op, addr, value)
-#define GEN_CAP_DUMP_LOAD32(op, addr, value)
-#define generate_dump_load(op, addr, value)
-#define generate_dump_load32(op, addr, value)
+#define generate_dump_load(addr, value, op)
+#define generate_dump_load32(addr, value, op)
+#define generate_dump_store(addr, value, op)
+#define generate_dump_store32(addr, value, op)
 #endif // CONFIG_MIPS_LOG_INSTR
 
+static inline void
+generate_ddc_check_load(TCGv_cap_checked_ptr addr, TCGv ddc_offset, MemOp mo)
+{
+#ifdef TARGET_CHERI
+    TCGv_i32 tcop = tcg_const_i32(mo);
+    gen_helper_ddc_check_load(addr, cpu_env, ddc_offset, tcop);
+    tcg_temp_free_i32(tcop);
+#else
+    if (addr != ddc_offset) {
+        tcg_gen_mov_tl(addr, ddc_offset);
+    }
+#endif
+}
+
 #if defined(TARGET_CHERI) && defined(TARGET_MIPS)
-
-static inline TCGCapCheckedAddr CAP_CHECKED(TCGv addr) {
-    TCGCapCheckedAddr result = { addr };
-    return result;
-}
-static inline TCGCapCheckedAddr DDC_CHECKED(TCGv addr) {
-    return CAP_CHECKED(addr);
-}
-static inline TCGCapCheckedAddr PCC_CHECKED(TCGv addr) {
-    return CAP_CHECKED(addr);
-}
-
 /* Verify that the processor is running with CHERI instructions enabled. */
 static inline void check_cop2x(DisasContext *ctx)
 {
@@ -350,7 +364,7 @@ static inline void generate_cloadtags(int32_t rd, int32_t cb)
     tcg_gen_mb(TCG_MO_LD_LD | TCG_MO_ST_LD | TCG_BAR_SC);
 
     gen_helper_cloadtags(ttags, cpu_env, tcb, tcbc);
-    generate_dump_load(OPC_CLOADTAGS_NI, tcbc, ttags);
+    generate_dump_load(tcbc, ttags, MO_TEQ); // FIXME: not really correct
     gen_store_gpr (ttags, rd);
 
     tcg_temp_free_cap_checked(tcbc);
@@ -966,8 +980,8 @@ static inline void generate_cap_load(DisasContext *ctx, int32_t rd, int32_t cb,
 
     gen_load_gpr(t1, rt);
     gen_helper_cload(vaddr, cpu_env, tcb, t1, toffset, tlen);
-    tcg_gen_qemu_ld_tl(t1, CAP_CHECKED((TCGv)vaddr), ctx->mem_idx, op);
-    generate_dump_load(opcode, vaddr, t1);
+    tcg_gen_qemu_ld_tl_with_checked_addr(t1, vaddr, ctx->mem_idx, op);
+    generate_dump_load(vaddr, t1, op);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -986,8 +1000,8 @@ static inline void generate_cloadlinked_int(DisasContext *ctx, int32_t rd, int32
     TCGv_i32 tlen = tcg_const_i32(memop_size(op));
 
     gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
-    tcg_gen_qemu_ld_tl(t0, CAP_CHECKED((TCGv)taddr), ctx->mem_idx, op);
-    generate_dump_load(opcode, taddr, t0);
+    tcg_gen_qemu_ld_tl_with_checked_addr(t0, taddr, ctx->mem_idx, op);
+    generate_dump_load(taddr, t0, op);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
@@ -995,9 +1009,6 @@ static inline void generate_cloadlinked_int(DisasContext *ctx, int32_t rd, int32
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcb);
 }
-
-static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
-                TCGv value);
 
 static inline void generate_cstorecond(TCGv_cap_checked_ptr taddr, int32_t cb, int32_t len)
 {
@@ -1029,10 +1040,9 @@ static inline void generate_cstorecond_int(DisasContext *ctx, int32_t rs,
 
     /* Write rs to memory. */
     gen_load_gpr(t0, rs);
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED((TCGv)taddr), ctx->mem_idx, op);
-
-    /* Invalidate tag and log write to memory, if enabled. */
-    generate_cinvalidate_tag((TCGv)taddr, size, opcode, t0);
+    tcg_gen_qemu_st_tl_with_checked_addr(t0, taddr, ctx->mem_idx, op);
+    /* log write to memory, if enabled. */
+    generate_dump_store(taddr, t0, op);
 
     tcg_temp_free_cap_checked(taddr);
     tcg_temp_free(t0);
@@ -1062,10 +1072,10 @@ static inline void generate_cstore(DisasContext *ctx, int32_t rs, int32_t cb,
     tcg_temp_free_i32(tcb);
 
     gen_load_gpr(t0, rs); // t0 <- load value to store
-    tcg_gen_qemu_st_tl(t0, CAP_CHECKED((TCGv)taddr), ctx->mem_idx, op);
+    tcg_gen_qemu_st_tl_with_checked_addr(t0, taddr, ctx->mem_idx, op);
 
-    /* Invalidate tag and log write, if enabled. */
-    generate_cinvalidate_tag((TCGv)taddr, size, opcode, t0);
+    /* log write to memory, if enabled. */
+    generate_dump_store(taddr, t0, op);
 
     tcg_temp_free(t0);
     tcg_temp_free_cap_checked(taddr);
@@ -1146,33 +1156,10 @@ static inline void generate_ccheck_pc(DisasContext *ctx)
 
 #define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx)    generate_ccheck_pc(ctx)
 
-static inline void generate_ccheck_store(TCGv addr, TCGv offset, int32_t len)
-{
-    TCGv_i32 tlen = tcg_const_i32(len);
-    gen_helper_ccheck_store(addr, cpu_env, offset, tlen);
-    tcg_temp_free_i32(tlen);
-}
-
-static inline void generate_ccheck_store_right(TCGv addr, TCGv offset, int32_t len)
-{
-    TCGv_i32 tlen = tcg_const_i32(len);
-    gen_helper_ccheck_store_right(addr, cpu_env, offset, tlen);
-    tcg_temp_free_i32(tlen);
-}
-
-#define GEN_CAP_CHECK_STORE_RIGHT(addr, offset, len) \
-    generate_ccheck_store_right(addr, offset, len)
 #define GEN_CAP_CHECK_STORE(addr, offset, len) \
     generate_ccheck_store(addr, offset, len)
 
-static inline void generate_ccheck_load(TCGv addr, TCGv offset, int32_t len)
-{
-    TCGv_i32 tlen = tcg_const_i32(len);
-
-    gen_helper_ccheck_load(addr, cpu_env, offset, tlen);
-    tcg_temp_free_i32(tlen);
-}
-static inline void generate_ccheck_load_right(TCGv addr, TCGv offset, int32_t len)
+static inline void generate_ccheck_load_right(TCGv_cap_checked_ptr addr, TCGv offset, int32_t len)
 {
     TCGv_i32 tlen = tcg_const_i32(len);
 
@@ -1185,58 +1172,6 @@ static inline void generate_ccheck_load_pcrel(TCGv addr, int32_t len)
     gen_helper_ccheck_load_pcrel(cpu_env, addr, tlen);
     tcg_temp_free_i32(tlen);
 }
-#define GEN_CAP_CHECK_LOAD_RIGHT(save, addr, offset, len) \
-    generate_ccheck_load_right(addr, offset, len); tcg_gen_mov_tl(save, addr)
-#define GEN_CAP_CHECK_LOAD(save, addr, offset, len) \
-    do { generate_ccheck_load(addr, offset, len); if (save != addr) { tcg_gen_mov_tl(save, addr); } } while(0)
-#define GEN_CAP_CHECK_LOAD_PCREL(addr, len) \
-    generate_ccheck_load_pcrel(addr, len)
-
-static inline TCGCapCheckedAddr ddc_interpose(TCGv addr, MemOp op) {
-    generate_ccheck_load(addr, addr, memop_size(op));
-    return DDC_CHECKED(addr);
-}
-
-static inline void generate_cinvalidate_tag(TCGv addr, int32_t len, int32_t opc,
-        TCGv value)
-{
-    TCGv_i32 tlen = tcg_const_i32(len);
-    TCGv_i32 topc = tcg_const_i32(opc);
-
-    gen_helper_cinvalidate_tag(cpu_env, addr, tlen, topc, value);
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
-}
-
-static inline void generate_cinvalidate_tag32(TCGv addr, int32_t len,
-        int32_t opc, TCGv_i32 value)
-{
-    TCGv_i32 tlen = tcg_const_i32(len);
-    TCGv_i32 topc = tcg_const_i32(opc);
-
-    gen_helper_cinvalidate_tag32(cpu_env, addr, tlen, topc, value);
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
-}
-
-static inline void generate_cinvalidate_tag_left_right(TCGv addr, int32_t len, int32_t opc, TCGv value)
-{
-    TCGv_i32 tlen = tcg_const_i32(len);
-    TCGv_i32 topc = tcg_const_i32(opc);
-
-    gen_helper_cinvalidate_tag_left_right(cpu_env, addr, tlen, topc, value);
-    tcg_temp_free_i32(topc);
-    tcg_temp_free_i32(tlen);
-}
-
-#define GEN_CAP_INVADIATE_TAG(addr, len, opc, value) \
-    generate_cinvalidate_tag(addr, len, opc, value)
-
-#define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value) \
-    generate_cinvalidate_tag32(addr, len, opc, value)
-
-#define GEN_CAP_INVADIATE_TAG_LEFT_RIGHT(addr, len, opc, value) \
-    generate_cinvalidate_tag_left_right(addr, len, opc, value)
 
 static void gen_mtc2(DisasContext *ctx, TCGv arg, int reg, int sel)
 {
@@ -1271,6 +1206,7 @@ cp2_unimplemented:
 
 
 #else /* ! TARGET_CHERI */
+#define generate_ccheck_load_right(addr, offset, len) tcg_gen_mov_tl(addr, offset);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
 #define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx) generate_dump_state_and_log_instr(ctx)
@@ -1286,20 +1222,11 @@ static inline void generate_dump_state_and_log_instr(DisasContext *ctx)
 /* Do nothing */
 #define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx)
 #endif
-#define GEN_CAP_CHECK_STORE(addr, offset, len)
-#define GEN_CAP_CHECK_LOAD(save, addr, offset, len)
-#define GEN_CAP_CHECK_LOAD_PCREL(addr, len)
-#define GEN_CAP_CHECK_STORE_RIGHT(addr, offset, len)
-#define GEN_CAP_CHECK_LOAD_RIGHT(save, addr, offset, len)
-#define GEN_CAP_INVADIATE_TAG(addr, len, opc, value)
-#define GEN_CAP_INVADIATE_TAG32(addr, len, opc, value)
-#define GEN_CAP_INVADIATE_TAG_LEFT_RIGHT(addr, len, opc, value)
-#define DDC_CHECKED(addr) addr
-#define PCC_CHECKED(addr) addr
-static inline TCGv ddc_interpose(TCGv addr, MemOp op) {
-    return DDC_CHECKED(addr);
-}
+#define generate_ccheck_load_pcrel(addr, len)
 #endif /* ! TARGET_CHERI */
+static inline TCGv_cap_checked_ptr PCC_CHECKED(TCGv addr) {
+    return (TCGv_cap_checked_ptr)addr;
+}
 
 
 // instruction decoding for CHERI insns:

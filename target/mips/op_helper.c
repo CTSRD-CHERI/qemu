@@ -33,6 +33,7 @@
 #endif
 #ifdef TARGET_CHERI
 #include "cheri_tagmem.h"
+#include "cheri-archspecific.h"
 #endif
 #include "sysemu/kvm.h"
 
@@ -354,9 +355,46 @@ HELPER_LD_ATOMIC(lld, ldq, 0x7, (target_ulong))
 #define GET_OFFSET(addr, offset) (addr - (offset))
 #endif
 
+#ifdef TARGET_CHERI
+static inline target_ulong ccheck_store_right(CPUMIPSState *env, target_ulong offset, uint32_t len, uintptr_t retpc)
+{
+#ifndef TARGET_WORDS_BIGENDIAN
+#error "This check is only valid for big endian targets, for little endian the load/store left instructions need to be checked"
+#endif
+    // For swr/sdr if offset & 3/7 == 0 we store only first byte, if all low bits are set we store the full amount
+    uint32_t low_bits = (uint32_t)offset & (len - 1);
+    uint32_t stored_bytes = low_bits + 1;
+    // From spec:
+    //if BigEndianMem = 1 then
+    //  pAddr <- pAddr(PSIZE-1)..3 || 000 (for ldr), 00 for lwr
+    //endif
+    // clear the low bits in offset to perform the length check
+    target_ulong write_offset = offset & ~((target_ulong)len - 1);
+    // fprintf(stderr, "%s: len=%d, offset=%zd, write_offset=%zd: will touch %d bytes\n",
+    //    __func__, len, (size_t)offset, (size_t)write_offset, stored_bytes);
+    // return the actual address by adding the low bits (this is expected by translate.c
+    return check_ddc(env, CAP_PERM_STORE, write_offset, stored_bytes, retpc) + low_bits;
+}
+#endif
+
+static inline void invalidate_tags_store_left_right(CPUMIPSState *env,
+                                                    target_ulong addr,
+                                                    uintptr_t retpc) {
+#ifdef TARGET_CHERI
+    // swr/sdr/swl/sdl will never invalidate more than one capability
+    cheri_tag_invalidate(env, addr, 1, retpc);
+#endif
+}
+
+
+
 void helper_swl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
                 int mem_idx)
 {
+#ifdef TARGET_CHERI
+    const int num_bytes = 4 - GET_LMASK(arg2);
+    arg2 = check_ddc(env, CAP_PERM_STORE, arg2, num_bytes, GETPC());
+#endif
     cpu_stb_mmuidx_ra(env, arg2, (uint8_t)(arg1 >> 24), mem_idx, GETPC());
 
     if (GET_LMASK(arg2) <= 2) {
@@ -373,11 +411,14 @@ void helper_swl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
         cpu_stb_mmuidx_ra(env, GET_OFFSET(arg2, 3), (uint8_t)arg1,
                           mem_idx, GETPC());
     }
+    invalidate_tags_store_left_right(env, arg2, GETPC());
 }
 
 void helper_swr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
-                int mem_idx)
-{
+                int mem_idx) {
+#ifdef TARGET_CHERI
+    arg2 = ccheck_store_right(env, arg2, 4, GETPC());
+#endif
     cpu_stb_mmuidx_ra(env, arg2, (uint8_t)arg1, mem_idx, GETPC());
 
     if (GET_LMASK(arg2) >= 1) {
@@ -394,6 +435,7 @@ void helper_swr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
         cpu_stb_mmuidx_ra(env, GET_OFFSET(arg2, -3), (uint8_t)(arg1 >> 24),
                           mem_idx, GETPC());
     }
+    invalidate_tags_store_left_right(env, arg2, GETPC());
 }
 
 #if defined(TARGET_MIPS64)
@@ -410,6 +452,10 @@ void helper_swr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
 void helper_sdl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
                 int mem_idx)
 {
+#ifdef TARGET_CHERI
+    const int num_bytes = 4 - GET_LMASK(arg2);
+    arg2 = check_ddc(env, CAP_PERM_STORE, arg2, num_bytes, GETPC());
+#endif
     cpu_stb_mmuidx_ra(env, arg2, (uint8_t)(arg1 >> 56), mem_idx, GETPC());
 
     if (GET_LMASK64(arg2) <= 6) {
@@ -446,11 +492,15 @@ void helper_sdl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
         cpu_stb_mmuidx_ra(env, GET_OFFSET(arg2, 7), (uint8_t)arg1,
                           mem_idx, GETPC());
     }
+    invalidate_tags_store_left_right(env, arg2, GETPC());
 }
 
 void helper_sdr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
                 int mem_idx)
 {
+#ifdef TARGET_CHERI
+    arg2 = ccheck_store_right(env, arg2, 8, GETPC());
+#endif
     cpu_stb_mmuidx_ra(env, arg2, (uint8_t)arg1, mem_idx, GETPC());
 
     if (GET_LMASK64(arg2) >= 1) {
@@ -487,6 +537,7 @@ void helper_sdr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
         cpu_stb_mmuidx_ra(env, GET_OFFSET(arg2, -7), (uint8_t)(arg1 >> 56),
                           mem_idx, GETPC());
     }
+    invalidate_tags_store_left_right(env, arg2, GETPC());
 }
 #endif /* TARGET_MIPS64 */
 
@@ -1291,89 +1342,6 @@ void mips_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr,
 }
 #endif /* !CONFIG_USER_ONLY */
 
-#ifdef CONFIG_MIPS_LOG_INSTR
-
-enum {
-    /* Load and stores */
-    OPC_LDL      = (0x1A << 26),
-    OPC_LDR      = (0x1B << 26),
-    OPC_LB       = (0x20 << 26),
-    OPC_LH       = (0x21 << 26),
-    OPC_LWL      = (0x22 << 26),
-    OPC_LW       = (0x23 << 26),
-    OPC_LWPC     = OPC_LW | 0x5,
-    OPC_LBU      = (0x24 << 26),
-    OPC_LHU      = (0x25 << 26),
-    OPC_LWR      = (0x26 << 26),
-    OPC_LWU      = (0x27 << 26),
-    OPC_SB       = (0x28 << 26),
-    OPC_SH       = (0x29 << 26),
-    OPC_SWL      = (0x2A << 26),
-    OPC_SW       = (0x2B << 26),
-    OPC_SDL      = (0x2C << 26),
-    OPC_SDR      = (0x2D << 26),
-    OPC_SWR      = (0x2E << 26),
-    OPC_LL       = (0x30 << 26),
-
-    OPC_LWC1     = (0x31 << 26),
-    OPC_LDC1     = (0x35 << 26),
-    OPC_SWC1     = (0x39 << 26),
-    OPC_SDC1     = (0x3D << 26),
-
-    OPC_LWXC1   = 0x00 | (0x13 << 26),
-    OPC_LDXC1   = 0x01 | (0x13 << 26),
-    OPC_LUXC1   = 0x05 | (0x13 << 26),
-    OPC_SWXC1   = 0x08 | (0x13 << 26),
-    OPC_SDXC1   = 0x09 | (0x13 << 26),
-    OPC_SUXC1   = 0x0D | (0x13 << 26),
-
-    OPC_CSCB     = (0x12 << 26) | (0x10 << 21) | (0x0),
-    OPC_CSCH     = (0x12 << 26) | (0x10 << 21) | (0x1),
-    OPC_CSCW     = (0x12 << 26) | (0x10 << 21) | (0x2),
-    OPC_CSCD     = (0x12 << 26) | (0x10 << 21) | (0x3),
-
-    OPC_CSCC     = (0x12 << 26) | (0x10 << 21) | (0x7),
-
-    OPC_CLLBU    = (0x12 << 26) | (0x10 << 21) | (0x8),
-    OPC_CLLHU    = (0x12 << 26) | (0x10 << 21) | (0x9),
-    OPC_CLLWU    = (0x12 << 26) | (0x10 << 21) | (0xa),
-    OPC_CLLD     = (0x12 << 26) | (0x10 << 21) | (0xb),
-    OPC_CLLB     = (0x12 << 26) | (0x10 << 21) | (0xc),
-    OPC_CLLH     = (0x12 << 26) | (0x10 << 21) | (0xd),
-    OPC_CLLW     = (0x12 << 26) | (0x10 << 21) | (0xe),
-
-    OPC_CLLC     = (0x12 << 26) | (0x10 << 21) | (0xf),
-
-    OPC_CLOADTAGS = (0x12 << 26) | (0x00 << 21) | (0x3f) | (0x1e << 6),
-
-    OPC_CLBU     = (0x32 << 26) | (0x0),
-    OPC_CLHU     = (0x32 << 26) | (0x1),
-    OPC_CLWU     = (0x32 << 26) | (0x2),
-    OPC_CLDU     = (0x32 << 26) | (0x3),
-    OPC_CLB      = (0x32 << 26) | (0x4),
-    OPC_CLH      = (0x32 << 26) | (0x5),
-    OPC_CLW      = (0x32 << 26) | (0x6),
-    OPC_CLD      = (0x32 << 26) | (0x7),
-
-    OPC_CLOADC   = (0x36 << 26),
-
-    OPC_CSB      = (0x3A << 26) | (0x0),
-    OPC_CSH      = (0x3A << 26) | (0x1),
-    OPC_CSW      = (0x3A << 26) | (0x2),
-    OPC_CSD      = (0x3A << 26) | (0x3),
-
-    OPC_CSTOREC  = (0x3E << 26),
-
-    OPC_LLD      = (0x34 << 26),
-    OPC_LD       = (0x37 << 26),
-    OPC_LDPC     = OPC_LD | 0x5,
-    OPC_SC       = (0x38 << 26),
-    OPC_SCD      = (0x3C << 26),
-    OPC_SD       = (0x3F << 26),
-};
-#endif /* CONFIG_MIPS_LOG_INSTR */
-
-
 /* MSA */
 /* Data format min and max values */
 #define DF_BITS(df) (1 << ((df) + 3))
@@ -1889,7 +1857,7 @@ store_u32_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint32_t val,
 }
 
 #ifdef TARGET_CHERI
-#define CHECK_AND_ADD_DDC(env, perms, ptr, len, retpc) check_ddc(env, perms, ptr, len, /*instavail=*/true, retpc);
+#define CHECK_AND_ADD_DDC(env, perms, ptr, len, retpc) check_ddc(env, perms, ptr, len, retpc);
 #else
 #define CHECK_AND_ADD_DDC(env, perms, ptr, len, retpc) ptr
 #endif
@@ -1926,7 +1894,6 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
             do_raise_exception(env, EXCP_RI, GETPC());
         }
     }
-    const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     if (len == 0) {
         goto success; // nothing to do
     }
@@ -1945,6 +1912,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     const target_ulong dest_past_end = original_dest + original_len;
     const target_ulong src_past_end = original_src + original_len;
 #if 0 // FIXME: for some reason this causes errors
+    const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     const bool dest_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     const bool src_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     // If neither src nor dest buffer cross a page boundary we can just do an address_space_read+write
@@ -1982,8 +1950,8 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         result = address_space_write(cs->as, dest_paddr, MEMTXATTRS_UNSPECIFIED, buffer, len);
         if (unlikely(log_instr)) {
             for (int i = 0; i < len; i++) {
-                helper_dump_load(env, OPC_LBU, original_src + i, buffer[i]);
-                dump_store(env, OPC_SB, original_dest + i, buffer[i]);
+                helper_dump_load(env, original_src + i, buffer[i], MO_8);
+                helper_dump_store(env, original_dest + i, buffer[i], MO_8);
             }
         }
         if (result != MEMTX_OK) {
@@ -2023,14 +1991,8 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         collect_magic_nop_stats(env, &magic_memmove_slowpath, len);
         while (already_written < original_len) {
             uint8_t value = helper_ret_ldub_mmu(env, current_src_cursor, oi, ra);
-            if (unlikely(log_instr)) {
-                helper_dump_load(env, OPC_LBU, current_src_cursor, value);
-            }
             store_byte_and_clear_tag(env, current_dest_cursor, value, oi, ra); // might trap
-            if (unlikely(log_instr)) {
-                dump_store(env, OPC_SB, current_dest_cursor, value);
-            }
-            current_dest_cursor--;
+             current_dest_cursor--;
             current_src_cursor--;
             already_written++;
             env->active_tc.gpr[MIPS_REGNUM_V0] = already_written;
@@ -2054,13 +2016,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         collect_magic_nop_stats(env, &magic_memmove_slowpath, len);
         while (already_written < original_len) {
             uint8_t value = helper_ret_ldub_mmu(env, current_src_cursor, oi, ra);
-            if (unlikely(log_instr)) {
-                helper_dump_load(env, OPC_LBU, current_src_cursor, value);
-            }
             store_byte_and_clear_tag(env, current_dest_cursor, value, oi, ra); // might trap
-            if (unlikely(log_instr)) {
-                dump_store(env, OPC_SB, current_dest_cursor, value);
-            }
             current_dest_cursor++;
             current_src_cursor++;
             already_written++;
@@ -2190,9 +2146,6 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
              * so that we get the fault address right.
              */
             store_byte_and_clear_tag(env, dest, 0xff, oi, ra);
-            if (unlikely(log_instr)) {
-                dump_store(env, OPC_SB, dest, 0xff);
-            }
             // This should definitely fill the host TLB. If not we are probably writing to I/O memory
             // FIXME: tlb_vaddr_to_host() also returns null if the notdirty flag is set (not sure if that's a bug
             probe_write(env, dest, 1, mmu_idx, ra);
@@ -2220,9 +2173,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                 // TODO: dump as a single big block?
                 for (target_ulong i = 0; i < l_adj_nitems; i++) {
                     if (pattern_length == 1)
-                        dump_store(env, OPC_SB, dest + i, value);
+                        helper_dump_store(env, dest + i, value, MO_8);
                     else if (pattern_length == 4)
-                        dump_store(env, OPC_SW, dest + (i * pattern_length), value);
+                        helper_dump_store(env, dest + (i * pattern_length), value, MO_32);
                     else
                         assert(false && "invalid pattern length");
                 }
@@ -2261,9 +2214,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                     // TODO: dump as a single big block?
                     for (target_ulong i = 0; i < l_adj_nitems; i++) {
                         if (pattern_length == 1)
-                            dump_store(env, OPC_SB, dest + i, value);
+                            helper_dump_store(env, dest + i, value, MO_8);
                         else if (pattern_length == 4)
-                            dump_store(env, OPC_SW, dest + (i * pattern_length), value);
+                            helper_dump_store(env, dest + (i * pattern_length), value, MO_32);
                         else
                             assert(false && "invalid pattern length");
                     }
@@ -2308,12 +2261,12 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                 }
                 if (unlikely(log_instr)) {
                     if (pattern_length == 1)
-                        dump_store(env, OPC_SB, dest, value);
+                        helper_dump_store(env, dest, value, MO_8);
                     else if (pattern_length == 4)
-                        dump_store(env, OPC_SW, dest, value);
+                        helper_dump_store(env, dest, value, MO_32);
                     else
                         assert(false && "invalid pattern length");
-                    dump_store(env, OPC_SB, dest, value);
+                    helper_dump_store(env, dest, value, MO_8);
                 }
                 dest += pattern_length;
                 len_nitems--;
