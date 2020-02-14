@@ -3729,43 +3729,23 @@ static inline void gen_ddc_interposed_st_i64(TCGv_i64 value,
                                              TCGv_cap_checked_ptr checked_addr,
                                              TCGv ddc_offset, TCGArg arg,
                                              MemOp op, int opc) {
-    bool need_free = false;
-    if (checked_addr == NULL) {
-        checked_addr = tcg_temp_local_new_cap_checked();
-        need_free = true;
-    }
 #ifdef TARGET_CHERI
     tcg_gen_qemu_st_ddc_i64(value, checked_addr, ddc_offset, arg, op);
 #else
     tcg_gen_mov_tl(checked_addr, ddc_offset);
     tcg_gen_qemu_st_i64(value, checked_addr, arg, op);
 #endif
-    // TODO: make generate_dump_store target-indenpendent
-    generate_dump_store(checked_addr, value, op);
-    if (need_free) {
-        tcg_temp_free_cap_checked(checked_addr);
-    }
 }
 static inline void gen_ddc_interposed_st_i32(TCGv_i32 value,
                                              TCGv_cap_checked_ptr checked_addr,
                                              TCGv ddc_offset, TCGArg arg,
                                              MemOp op, int opc) {
-    bool need_free = false;
-    if (checked_addr == NULL) {
-        checked_addr = tcg_temp_local_new_cap_checked();
-        need_free = true;
-    }
 #ifdef TARGET_CHERI
     tcg_gen_qemu_st_ddc_i32(value, checked_addr, ddc_offset, arg, op);
 #else
     tcg_gen_mov_tl(checked_addr, ddc_offset);
     tcg_gen_qemu_st_i32(value, checked_addr, arg, op);
 #endif
-    // TODO: make generate_dump_store32 target-indenpendent
-    generate_dump_store32(checked_addr, value, op);
-    if (need_free) {
-        tcg_temp_free_cap_checked(checked_addr);
-    }
 }
 
 #if TARGET_LONG_BITS == 32

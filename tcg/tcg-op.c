@@ -2890,9 +2890,12 @@ void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
     gen_ldst_i32(INDEX_op_qemu_st_i32, val, addr, memop, idx);
     plugin_gen_mem_callbacks(addr, info);
 #ifdef TARGET_CHERI
-    TCGv_i32 cinvop = tcg_const_i32(memop);
-    gen_cheri_invalidate_tags(addr, cinvop);
-    tcg_temp_free_i32(cinvop);
+    TCGv_i32 tcop = tcg_const_i32(memop);
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+    gen_helper_dump_store32(cpu_env, addr, val, tcop);
+#endif
+    gen_cheri_invalidate_tags(addr, tcop);
+    tcg_temp_free_i32(tcop);
 #endif
 
     if (swap) {
@@ -2994,9 +2997,12 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     gen_ldst_i64(INDEX_op_qemu_st_i64, val, addr, memop, idx);
     plugin_gen_mem_callbacks(addr, info);
 #ifdef TARGET_CHERI
-    TCGv_i32 cinvop = tcg_const_i32(memop);
-    gen_cheri_invalidate_tags(addr, cinvop);
-    tcg_temp_free_i32(cinvop);
+    TCGv_i32 tcop = tcg_const_i32(memop);
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+    gen_helper_dump_store(cpu_env, addr, val, tcop);
+#endif
+    gen_cheri_invalidate_tags(addr, tcop);
+    tcg_temp_free_i32(tcop);
 #endif
 
     if (swap) {

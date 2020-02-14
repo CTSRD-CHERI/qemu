@@ -41,34 +41,15 @@ generate_dump_load(TCGv_cap_checked_ptr addr, TCGv value, MemOp mo)
     tcg_temp_free_i32(tcop);
 }
 static inline void
-generate_dump_store(TCGv_cap_checked_ptr addr, TCGv value, MemOp mo)
-{
-    tcg_debug_assert(addr != NULL);
-    TCGv_i32 tcop = tcg_const_i32(mo);
-    gen_helper_dump_store(cpu_env, addr, value, tcop);
-    tcg_temp_free_i32(tcop);
-}
-
-static inline void
 generate_dump_load32(TCGv_cap_checked_ptr addr, TCGv_i32 value, MemOp mo)
 {
     TCGv_i32 tcop = tcg_const_i32(mo);
     gen_helper_dump_load32(cpu_env, addr, value, tcop);
     tcg_temp_free_i32(tcop);
 }
-static inline void
-generate_dump_store32(TCGv_cap_checked_ptr addr, TCGv_i32 value, MemOp mo)
-{
-    TCGv_i32 tcop = tcg_const_i32(mo);
-    gen_helper_dump_store32(cpu_env, addr, value, tcop);
-    tcg_temp_free_i32(tcop);
-}
-
 #else
 #define generate_dump_load(addr, value, op)
 #define generate_dump_load32(addr, value, op)
-#define generate_dump_store(addr, value, op)
-#define generate_dump_store32(addr, value, op)
 #endif // CONFIG_MIPS_LOG_INSTR
 
 static inline void
@@ -1041,8 +1022,6 @@ static inline void generate_cstorecond_int(DisasContext *ctx, int32_t rs,
     /* Write rs to memory. */
     gen_load_gpr(t0, rs);
     tcg_gen_qemu_st_tl_with_checked_addr(t0, taddr, ctx->mem_idx, op);
-    /* log write to memory, if enabled. */
-    generate_dump_store(taddr, t0, op);
 
     tcg_temp_free_cap_checked(taddr);
     tcg_temp_free(t0);
@@ -1073,9 +1052,6 @@ static inline void generate_cstore(DisasContext *ctx, int32_t rs, int32_t cb,
 
     gen_load_gpr(t0, rs); // t0 <- load value to store
     tcg_gen_qemu_st_tl_with_checked_addr(t0, taddr, ctx->mem_idx, op);
-
-    /* log write to memory, if enabled. */
-    generate_dump_store(taddr, t0, op);
 
     tcg_temp_free(t0);
     tcg_temp_free_cap_checked(taddr);
