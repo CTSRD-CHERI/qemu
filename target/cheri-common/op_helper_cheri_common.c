@@ -58,10 +58,6 @@
 #define CHERI_HELPER_IMPL(name) \
     __attribute__((deprecated("Do not call the helper directly, it will crash at runtime. Call the _impl variant instead"))) helper_##name
 
-
-#define CHERI_EXC_REGNUM_DDC 32
-#define CHERI_EXC_REGNUM_PCC 0xff
-
 #ifndef TARGET_MIPS
 static inline /* Currently needed for other helpers */
 #endif

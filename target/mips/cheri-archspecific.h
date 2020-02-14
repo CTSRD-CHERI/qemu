@@ -41,6 +41,9 @@
 #include "internal.h"
 #include "cheri_defs.h"
 
+#define CHERI_EXC_REGNUM_DDC 0 /* TODO: 32 */
+#define CHERI_EXC_REGNUM_PCC 0xff
+
 target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, uintptr_t retpc);
 
 static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
