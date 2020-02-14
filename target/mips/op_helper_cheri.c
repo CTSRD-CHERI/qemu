@@ -2243,13 +2243,12 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     // and use address_space_read to read the full 16 byte buffer
     /* Load base and perms from memory (might trap on load) */
     inmemory_chericap256 mem_buffer;
-    mem_buffer.u64s[0] =
-        cpu_ldq_data_ra(env, vaddr + 0, retpc); /* perms+otype */
+    mem_buffer.u64s[2] = cpu_ldq_data_ra(env, vaddr + 0, retpc); /* base */
     mem_buffer.u64s[1] = cpu_ldq_data_ra(env, vaddr + 8, retpc); /* cursor */
     /* Load the two magic values */
     target_ulong tag =
-        cheri_tag_get_m128(env, vaddr, cd, &mem_buffer.u64s[2],
-                           &mem_buffer.u64s[3], physaddr, &prot, retpc);
+        cheri_tag_get_m128(env, vaddr, cd, &mem_buffer.u64s[0] /* tps */,
+                           &mem_buffer.u64s[3] /* length */, physaddr, &prot, retpc);
 
     tag = clear_tag_if_no_loadcap(tag, cbp, prot);
     env->statcounters_cap_read++;
@@ -2284,13 +2283,13 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
      * tag logic, is not multi-TCG-thread safe.
      */
     /* Store the "magic" data with the tags */
-    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, mem_buffer.u64s[2],
-                       mem_buffer.u64s[3], NULL, retpc);
+    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, mem_buffer.u64s[0] /* tps */,
+                       mem_buffer.u64s[3] /* length */, NULL, retpc);
     env->statcounters_cap_write++;
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;
     }
-    cpu_stq_data_ra(env, vaddr, mem_buffer.u64s[0], retpc); /* perms + otype */
+    cpu_stq_data_ra(env, vaddr, mem_buffer.u64s[2], retpc); /* base */
     cpu_stq_data_ra(env, vaddr + 8, mem_buffer.u64s[1], retpc);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
