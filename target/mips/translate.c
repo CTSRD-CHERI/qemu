@@ -1152,13 +1152,13 @@ enum {
 
     OPC_CSCC        = OPC_CLL | (0x7),
 
-    OPC_CLLB        = OPC_CLL | (0x8),
-    OPC_CLLH        = OPC_CLL | (0x9),
-    OPC_CLLW        = OPC_CLL | (0xa),
+    OPC_CLLBU       = OPC_CLL | (0x8),
+    OPC_CLLHU       = OPC_CLL | (0x9),
+    OPC_CLLWU       = OPC_CLL | (0xa),
     OPC_CLLD        = OPC_CLL | (0xb),
-    OPC_CLLBU       = OPC_CLL | (0xc),
-    OPC_CLLHU       = OPC_CLL | (0xd),
-    OPC_CLLWU       = OPC_CLL | (0xe),
+    OPC_CLLB        = OPC_CLL | (0xc),
+    OPC_CLLH        = OPC_CLL | (0xd),
+    OPC_CLLW        = OPC_CLL | (0xe),
 
     OPC_CLLC        = OPC_CLL | (0xf),
 };

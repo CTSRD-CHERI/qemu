@@ -1909,18 +1909,18 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "cscc";
             break;
 
-        case OPC_CLLB: /* 0x8 */
+        case OPC_CLLB: /* 0xc */
             generate_cloadlinked_int(ctx, r16, r11, MO_SB,MASK_CAP4(opc));
             opn = "cllb";
             break;
-        case OPC_CLLH: /* 0x9 */
+        case OPC_CLLH: /* 0xd */
             generate_cloadlinked_int(ctx, r16, r11,
                                      MO_TESW | ctx->default_tcg_memop_mask,
                                      MASK_CAP4(opc));
 
             opn = "cllh";
             break;
-        case OPC_CLLW: /* 0xa */
+        case OPC_CLLW: /* 0xe */
             generate_cloadlinked_int(ctx, r16, r11,
                                      MO_TESL | ctx->default_tcg_memop_mask,
                                      MASK_CAP4(opc));
@@ -1932,19 +1932,19 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                                      MASK_CAP4(opc));
             opn = "clld";
             break;
-        case OPC_CLLBU: /* 0xc */
+        case OPC_CLLBU: /* 0x8 */
             generate_cloadlinked_int(ctx, r16, r11,
                                      MO_UB | ctx->default_tcg_memop_mask,
                                      MASK_CAP4(opc));
             opn = "cllbu";
             break;
-        case OPC_CLLHU: /* 0xd */
+        case OPC_CLLHU: /* 0x9 */
             generate_cloadlinked_int(ctx, r16, r11,
                                      MO_TEUW | ctx->default_tcg_memop_mask,
                                      MASK_CAP4(opc));
             opn = "cllhu";
             break;
-        case OPC_CLLWU: /* 0xe */
+        case OPC_CLLWU: /* 0xa */
             generate_cloadlinked_int(ctx, r16, r11,
                                      MO_TEUL | ctx->default_tcg_memop_mask,
                                      MASK_CAP4(opc));
