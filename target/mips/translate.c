@@ -3685,44 +3685,24 @@ static inline void gen_ddc_interposed_ld_i64(TCGv_i64 result,
                                              TCGv_cap_checked_ptr checked_addr,
                                              TCGv ddc_offset, TCGArg arg,
                                              MemOp op, int opc) {
-    bool need_free = false;
-    if (checked_addr == NULL) {
-        checked_addr = tcg_temp_local_new_cap_checked();
-        need_free = true;
-    }
 #ifdef TARGET_CHERI
     tcg_gen_qemu_ld_ddc_i64(result, checked_addr, ddc_offset, arg, op);
 #else
     tcg_gen_mov_tl(checked_addr, ddc_offset);
     tcg_gen_qemu_ld_i64(result, checked_addr, arg, op);
 #endif
-    // TODO: make generate_dump_load target-indenpendent
-    generate_dump_load(checked_addr, result, op);
-    if (need_free) {
-        tcg_temp_free_cap_checked(checked_addr);
-    }
 }
 
 static inline void gen_ddc_interposed_ld_i32(TCGv_i32 result,
                                              TCGv_cap_checked_ptr checked_addr,
                                              TCGv ddc_offset, TCGArg arg,
                                              MemOp op, int opc) {
-    bool need_free = false;
-    if (checked_addr == NULL) {
-        checked_addr = tcg_temp_local_new_cap_checked();
-        need_free = true;
-    }
 #ifdef TARGET_CHERI
     tcg_gen_qemu_ld_ddc_i32(result, checked_addr, ddc_offset, arg, op);
 #else
     tcg_gen_mov_tl(checked_addr, ddc_offset);
     tcg_gen_qemu_ld_i32(result, checked_addr, arg, op);
 #endif
-    // TODO: make generate_dump_load32 target-indenpendent
-    generate_dump_load32(checked_addr, result, op);
-    if (need_free) {
-        tcg_temp_free_cap_checked(checked_addr);
-    }
 }
 
 static inline void gen_ddc_interposed_st_i64(TCGv_i64 value,
@@ -3798,7 +3778,6 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
     case R6_OPC_LLD:
         generate_ddc_check_load(ddc_interposed, t0, MO_64);
         op_ld_lld(t0, ddc_interposed, mem_idx, ctx);
-        generate_dump_load(ddc_interposed, t0, MO_64);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LDL:
@@ -3824,7 +3803,6 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_temp_free(t2);
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
-        generate_dump_load(ddc_interposed, t0, MO_TEQ);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LDR:
@@ -3851,16 +3829,13 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_temp_free(t2);
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
-        generate_dump_load(ddc_interposed, t0, MO_TEQ);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LDPC:
         t1 = tcg_const_tl(pc_relative_pc(ctx));
         gen_op_addr_add(ctx, t0, t0, t1);
         generate_ccheck_load_pcrel(t0, 8);
-        tcg_gen_mov_tl(t1, t0);
         tcg_gen_qemu_ld_tl_with_checked_addr(t0, PCC_CHECKED(t0), mem_idx, MO_TEQ);
-        generate_dump_load(PCC_CHECKED(t1), t0, MO_TEQ);
         tcg_temp_free(t1);
         gen_store_gpr(t0, rt);
         break;
@@ -3871,7 +3846,6 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         generate_ccheck_load_pcrel(t0, 4);
         tcg_gen_mov_tl(t1, t0);
         tcg_gen_qemu_ld_tl_with_checked_addr(t0, PCC_CHECKED(t0), mem_idx, MO_TESL);
-        generate_dump_load(PCC_CHECKED(t1), t0, MO_TESL);
         tcg_temp_free(t1);
         gen_store_gpr(t0, rt);
         break;
@@ -3942,7 +3916,6 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_ext32s_tl(t0, t0);
-        generate_dump_load(ddc_interposed, t0, MO_TESL);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LWRE:
@@ -3973,7 +3946,6 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         tcg_gen_or_tl(t0, t0, t1);
         tcg_temp_free(t1);
         tcg_gen_ext32s_tl(t0, t0);
-        generate_dump_load(ddc_interposed, t0, MO_TESL);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LLE:
@@ -3983,7 +3955,6 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
     case R6_OPC_LL:
         generate_ddc_check_load(ddc_interposed, t0, 4);
         op_ld_ll(t0, ddc_interposed, mem_idx, ctx);
-        generate_dump_load(ddc_interposed, t0, MO_TESL);
         gen_store_gpr(t0, rt);
         break;
     }
@@ -5028,7 +4999,6 @@ static inline void gen_r6_pcrel_ld(target_long addr, int reg, int memidx,
     TCGv tval = tcg_temp_new();
     generate_ccheck_load_pcrel(t0, memop_size(memop));
     tcg_gen_qemu_ld_tl_with_checked_addr(tval, PCC_CHECKED(t0), memidx, memop);
-    generate_dump_load(PCC_CHECKED(t0), tval, memop);
     gen_store_gpr(tval, reg);
     tcg_temp_free(tval);
     tcg_temp_free(t0);

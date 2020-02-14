@@ -31,26 +31,6 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#if defined(CONFIG_MIPS_LOG_INSTR)
-static inline void
-generate_dump_load(TCGv_cap_checked_ptr addr, TCGv value, MemOp mo)
-{
-    tcg_debug_assert(addr != NULL);
-    TCGv_i32 tcop = tcg_const_i32(mo);
-    gen_helper_dump_load(cpu_env, addr, value, tcop);
-    tcg_temp_free_i32(tcop);
-}
-static inline void
-generate_dump_load32(TCGv_cap_checked_ptr addr, TCGv_i32 value, MemOp mo)
-{
-    TCGv_i32 tcop = tcg_const_i32(mo);
-    gen_helper_dump_load32(cpu_env, addr, value, tcop);
-    tcg_temp_free_i32(tcop);
-}
-#else
-#define generate_dump_load(addr, value, op)
-#define generate_dump_load32(addr, value, op)
-#endif // CONFIG_MIPS_LOG_INSTR
 
 static inline void
 generate_ddc_check_load(TCGv_cap_checked_ptr addr, TCGv ddc_offset, MemOp mo)
@@ -345,8 +325,9 @@ static inline void generate_cloadtags(int32_t rd, int32_t cb)
     tcg_gen_mb(TCG_MO_LD_LD | TCG_MO_ST_LD | TCG_BAR_SC);
 
     gen_helper_cloadtags(ttags, cpu_env, tcb, tcbc);
-    generate_dump_load(tcbc, ttags, MO_TEQ); // FIXME: not really correct
-    gen_store_gpr (ttags, rd);
+    tcg_gen_movi_i32(tcb, MO_TEQ);
+    gen_helper_dump_load(cpu_env, tcbc, ttags, tcb); // FIXME: not really correct
+    gen_store_gpr(ttags, rd);
 
     tcg_temp_free_cap_checked(tcbc);
     tcg_temp_free(ttags);
@@ -962,7 +943,6 @@ static inline void generate_cap_load(DisasContext *ctx, int32_t rd, int32_t cb,
     gen_load_gpr(t1, rt);
     gen_helper_cload(vaddr, cpu_env, tcb, t1, toffset, tlen);
     tcg_gen_qemu_ld_tl_with_checked_addr(t1, vaddr, ctx->mem_idx, op);
-    generate_dump_load(vaddr, t1, op);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
@@ -982,7 +962,6 @@ static inline void generate_cloadlinked_int(DisasContext *ctx, int32_t rd, int32
 
     gen_helper_cloadlinked(taddr, cpu_env, tcb, tlen);
     tcg_gen_qemu_ld_tl_with_checked_addr(t0, taddr, ctx->mem_idx, op);
-    generate_dump_load(taddr, t0, op);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free_i32(tlen);
