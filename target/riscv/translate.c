@@ -387,8 +387,12 @@ static void gen_load_c(DisasContext *ctx, uint32_t opc, int rd, int rs1,
         gen_exception_illegal(ctx);
         return;
     }
-
+#ifdef TARGET_CHERI
+    tcg_gen_qemu_ld_ddc_tl(t1, /* Update addr in-place */ NULL, t0,
+                           ctx->mem_idx, memop);
+#else
     tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, memop);
+#endif
     gen_set_gpr(rd, t1);
     tcg_temp_free(t0);
     tcg_temp_free(t1);
@@ -409,7 +413,12 @@ static void gen_store_c(DisasContext *ctx, uint32_t opc, int rs1, int rs2,
         return;
     }
 
+#ifdef TARGET_CHERI
+    tcg_gen_qemu_st_ddc_tl(dat, /* Update addr in-place */ NULL, t0,
+                           ctx->mem_idx, memop);
+#else
     tcg_gen_qemu_st_tl(dat, t0, ctx->mem_idx, memop);
+#endif
     tcg_temp_free(t0);
     tcg_temp_free(dat);
 }

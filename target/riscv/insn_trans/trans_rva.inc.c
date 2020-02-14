@@ -26,7 +26,12 @@ static inline bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
     if (a->rl) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
     }
+#ifdef TARGET_CHERI
+    tcg_gen_qemu_ld_ddc_tl(load_val, /* Update addr in-place */ NULL, src1,
+                           ctx->mem_idx, mop);
+#else
     tcg_gen_qemu_ld_tl(load_val, src1, ctx->mem_idx, mop);
+#endif
     if (a->aq) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_LDAQ);
     }
@@ -53,8 +58,13 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
      * Note that the TCG atomic primitives are SC,
      * so we can ignore AQ/RL along this path.
      */
+#ifdef TARGET_CHERI
+    tcg_gen_atomic_cmpxchg_ddc_tl(src1, load_res, load_val, src2,
+                              ctx->mem_idx, mop);
+#else
     tcg_gen_atomic_cmpxchg_tl(src1, load_res, load_val, src2,
                               ctx->mem_idx, mop);
+#endif
     tcg_gen_setcond_tl(TCG_COND_NE, dat, src1, load_val);
     gen_set_gpr(a->rd, dat);
     tcg_gen_br(l2);

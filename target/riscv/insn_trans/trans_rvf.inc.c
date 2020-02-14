@@ -31,7 +31,12 @@ static bool trans_flw(DisasContext *ctx, arg_flw *a)
     REQUIRE_EXT(ctx, RVF);
     tcg_gen_addi_tl(t0, t0, a->imm);
 
+#ifdef TARGET_CHERI
+    tcg_gen_qemu_ld_ddc_i64(cpu_fpr[a->rd], /* Update addr in-place */ NULL, t0,
+                            ctx->mem_idx, MO_TEUL);
+#else
     tcg_gen_qemu_ld_i64(cpu_fpr[a->rd], t0, ctx->mem_idx, MO_TEUL);
+#endif
     /* RISC-V requires NaN-boxing of narrower width floating point values */
     tcg_gen_ori_i64(cpu_fpr[a->rd], cpu_fpr[a->rd], 0xffffffff00000000ULL);
 
@@ -49,7 +54,12 @@ static bool trans_fsw(DisasContext *ctx, arg_fsw *a)
     REQUIRE_EXT(ctx, RVF);
     tcg_gen_addi_tl(t0, t0, a->imm);
 
+#ifdef TARGET_CHERI
+    tcg_gen_qemu_st_ddc_i64(cpu_fpr[a->rs2], /* Update addr in-place */ NULL,
+                            t0, ctx->mem_idx, MO_TEUL);
+#else
     tcg_gen_qemu_st_i64(cpu_fpr[a->rs2], t0, ctx->mem_idx, MO_TEUL);
+#endif
 
     tcg_temp_free(t0);
     return true;

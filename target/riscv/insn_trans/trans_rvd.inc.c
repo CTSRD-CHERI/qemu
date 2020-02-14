@@ -26,7 +26,12 @@ static bool trans_fld(DisasContext *ctx, arg_fld *a)
     REQUIRE_EXT(ctx, RVD);
     tcg_gen_addi_tl(t0, t0, a->imm);
 
+#ifdef TARGET_CHERI
+    tcg_gen_qemu_ld_ddc_i64(cpu_fpr[a->rd], /* Update addr in-place */ NULL, t0,
+                            ctx->mem_idx, MO_TEQ);
+#else
     tcg_gen_qemu_ld_i64(cpu_fpr[a->rd], t0, ctx->mem_idx, MO_TEQ);
+#endif
 
     mark_fs_dirty(ctx);
     tcg_temp_free(t0);
@@ -41,8 +46,12 @@ static bool trans_fsd(DisasContext *ctx, arg_fsd *a)
     REQUIRE_EXT(ctx, RVD);
     tcg_gen_addi_tl(t0, t0, a->imm);
 
+#ifdef TARGET_CHERI
+    tcg_gen_qemu_st_ddc_i64(cpu_fpr[a->rs2], /* Update addr in-place */ NULL,
+                            t0, ctx->mem_idx, MO_TEQ);
+#else
     tcg_gen_qemu_st_i64(cpu_fpr[a->rs2], t0, ctx->mem_idx, MO_TEQ);
-
+#endif
     tcg_temp_free(t0);
     return true;
 }
