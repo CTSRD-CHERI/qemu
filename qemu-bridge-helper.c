@@ -47,7 +47,7 @@
 #include <cap-ng.h>
 #endif
 
-#define DEFAULT_ACL_FILE CONFIG_QEMU_CONFDIR "/bridge.conf"
+#define DEFAULT_ACL_FILE qemu_exe_relative_path(CONFIG_QEMU_CONFDIR_BIN_RELATIVE "/bridge.conf")
 
 enum {
     ACL_ALLOW = 0,

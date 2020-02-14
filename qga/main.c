@@ -55,10 +55,10 @@
 #define QGA_SERIAL_PATH_DEFAULT "COM1"
 #endif
 #ifdef CONFIG_FSFREEZE
-#define QGA_FSFREEZE_HOOK_DEFAULT CONFIG_QEMU_CONFDIR "/fsfreeze-hook"
+#define QGA_FSFREEZE_HOOK_DEFAULT qemu_exe_relative_path(CONFIG_QEMU_CONFDIR_BIN_RELATIVE "/fsfreeze-hook")
 #endif
 #define QGA_SENTINEL_BYTE 0xFF
-#define QGA_CONF_DEFAULT CONFIG_QEMU_CONFDIR G_DIR_SEPARATOR_S "qemu-ga.conf"
+#define QGA_CONF_DEFAULT qemu_exe_relative_path(CONFIG_QEMU_CONFDIR_BIN_RELATIVE G_DIR_SEPARATOR_S "qemu-ga.conf")
 #define QGA_RETRY_INTERVAL 5
 
 static struct {
@@ -1021,7 +1021,7 @@ end:
     if (gerr &&
         !(gerr->domain == G_FILE_ERROR && gerr->code == G_FILE_ERROR_NOENT)) {
         g_critical("error loading configuration from path: %s, %s",
-                   QGA_CONF_DEFAULT, gerr->message);
+                   conf, gerr->message);
         exit(EXIT_FAILURE);
     }
     g_clear_error(&gerr);

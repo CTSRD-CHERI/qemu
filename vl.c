@@ -2747,7 +2747,7 @@ static int qemu_read_default_config_file(void)
 {
     int ret;
 
-    ret = qemu_read_config_file(CONFIG_QEMU_CONFDIR "/qemu.conf");
+    ret = qemu_read_config_file(qemu_exe_relative_path(CONFIG_QEMU_CONFDIR_BIN_RELATIVE "/qemu.conf"));
     if (ret < 0 && ret != -ENOENT) {
         return ret;
     }

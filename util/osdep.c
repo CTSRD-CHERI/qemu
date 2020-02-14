@@ -519,6 +519,26 @@ int socket_init(void)
     return 0;
 }
 
+const char *qemu_exe_relative_path(const char* binrel)
+{
+    g_autofree char *exec_dir = qemu_get_exec_dir();
+    g_return_val_if_fail(exec_dir != NULL, NULL);
+
+    g_autoptr(GString) result = g_string_new(NULL);
+    /* add configured firmware directories */
+    char **dirs = g_strsplit(binrel, G_SEARCHPATH_SEPARATOR_S, 0);
+    for (int i = 0; dirs[i] != NULL; i++) {
+        if (i != 0)
+            g_string_append(result, G_SEARCHPATH_SEPARATOR_S);
+        g_string_append_printf(result, "%s%s%s", exec_dir, G_DIR_SEPARATOR_S, dirs[i]);
+    }
+    g_strfreev(dirs);
+    /* Copy it into a thread local buffer so callers don't have to care about free()'ing it */
+    static __thread char result_buffer[PATH_MAX];
+    g_strlcpy(result_buffer, result->str, sizeof(result_buffer));
+    return result_buffer;
+}
+
 
 #ifndef CONFIG_IOVEC
 /* helper function for iov_send_recv() */

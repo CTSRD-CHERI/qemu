@@ -557,6 +557,13 @@ void qemu_init_exec_dir(const char *argv0);
  * Caller needs to release the returned string by g_free() */
 char *qemu_get_exec_dir(void);
 
+/* Expands a path (or : separated list) that is relative to the QEMU
+ * executable to an absolute path.
+ *
+ * This returns a pointer to a thread local char array so the result
+ * is clobbered by the next call. */
+const char *qemu_exe_relative_path(const char* rel);
+
 /**
  * qemu_getauxval:
  * @type: the auxiliary vector key to lookup
