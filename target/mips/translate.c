@@ -3690,7 +3690,12 @@ static inline void gen_ddc_interposed_ld_i64(TCGv_i64 result,
         checked_addr = tcg_temp_local_new_cap_checked();
         need_free = true;
     }
+#ifdef TARGET_CHERI
     tcg_gen_qemu_ld_ddc_i64(result, checked_addr, ddc_offset, arg, op);
+#else
+    tcg_gen_mov_tl(checked_addr, ddc_offset);
+    tcg_gen_qemu_ld_i64(result, checked_addr, arg, op);
+#endif
     // TODO: make generate_dump_load target-indenpendent
     generate_dump_load(checked_addr, result, op);
     if (need_free) {
@@ -3707,7 +3712,12 @@ static inline void gen_ddc_interposed_ld_i32(TCGv_i32 result,
         checked_addr = tcg_temp_local_new_cap_checked();
         need_free = true;
     }
+#ifdef TARGET_CHERI
     tcg_gen_qemu_ld_ddc_i32(result, checked_addr, ddc_offset, arg, op);
+#else
+    tcg_gen_mov_tl(checked_addr, ddc_offset);
+    tcg_gen_qemu_ld_i32(result, checked_addr, arg, op);
+#endif
     // TODO: make generate_dump_load32 target-indenpendent
     generate_dump_load32(checked_addr, result, op);
     if (need_free) {
@@ -3724,7 +3734,12 @@ static inline void gen_ddc_interposed_st_i64(TCGv_i64 value,
         checked_addr = tcg_temp_local_new_cap_checked();
         need_free = true;
     }
+#ifdef TARGET_CHERI
     tcg_gen_qemu_st_ddc_i64(value, checked_addr, ddc_offset, arg, op);
+#else
+    tcg_gen_mov_tl(checked_addr, ddc_offset);
+    tcg_gen_qemu_st_i64(value, checked_addr, arg, op);
+#endif
     // TODO: make generate_dump_store target-indenpendent
     generate_dump_store(checked_addr, value, op);
     if (need_free) {
@@ -3740,7 +3755,12 @@ static inline void gen_ddc_interposed_st_i32(TCGv_i32 value,
         checked_addr = tcg_temp_local_new_cap_checked();
         need_free = true;
     }
+#ifdef TARGET_CHERI
     tcg_gen_qemu_st_ddc_i32(value, checked_addr, ddc_offset, arg, op);
+#else
+    tcg_gen_mov_tl(checked_addr, ddc_offset);
+    tcg_gen_qemu_st_i32(value, checked_addr, arg, op);
+#endif
     // TODO: make generate_dump_store32 target-indenpendent
     generate_dump_store32(checked_addr, value, op);
     if (need_free) {
@@ -4003,8 +4023,7 @@ static void gen_llwp(DisasContext *ctx, uint32_t base, int16_t offset,
     TCGv tmp2 = tcg_temp_new();
 
     gen_base_offset_addr(ctx, taddr, base, offset);
-#error
-    tcg_gen_qemu_ld64(tval, ddc_interpose(taddr, MO_TEQ), ctx->mem_idx);
+    tcg_gen_qemu_ld64(tval, taddr, ctx->mem_idx);
 #ifdef TARGET_WORDS_BIGENDIAN
     tcg_gen_extr_i64_tl(tmp2, tmp1, tval);
 #else

@@ -910,7 +910,7 @@ void tcg_gen_qemu_st_i64(TCGv_i64, TCGv, TCGArg, MemOp);
                                            int mem_index) {                    \
         tcg_gen_qemu_ld_tl(ret, addr, mem_index, memop);                       \
     }
-#define TCG_LD_HELPER(name, memop)                                             \
+#define TCG_ST_HELPER(name, memop)                                             \
     static inline void tcg_gen_qemu_##name(TCGv ret, TCGv addr,                \
                                            int mem_index) {                    \
         tcg_gen_qemu_st_tl(ret, addr, mem_index, memop);                       \
