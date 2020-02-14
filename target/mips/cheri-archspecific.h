@@ -71,22 +71,22 @@ static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
         goto do_exception;
     }
     if ((cr->cr_perms & perm) != perm) {
-        switch (perm) {
-        case CAP_PERM_EXECUTE:
+        if (perm & CAP_PERM_EXECUTE) {
             cause = CP2Ca_PERM_EXE;
             // qemu_log("CAP Exe VIOLATION: ");
             goto do_exception;
-        case CAP_PERM_LOAD:
-            cause = CP2Ca_PERM_LD;
-            // qemu_log("CAP LD VIOLATION: ");
-            goto do_exception;
-        case CAP_PERM_STORE:
+        } else if (perm & CAP_PERM_STORE) {
             cause = CP2Ca_PERM_ST;
             // qemu_log("CAP ST VIOLATION: ");
             goto do_exception;
-        default:
-            break;
+        } else if (perm & CAP_PERM_LOAD) {
+            cause = CP2Ca_PERM_LD;
+            // qemu_log("CAP LD VIOLATION: ");
+            goto do_exception;
         }
+        // Multiple missing permissions:
+        error_report("Bad permissions check %d", perm);
+        tcg_abort();
     }
     // fprintf(stderr, "addr=%zx, len=%zd, cr_base=%zx, cr_len=%zd\n",
     //     (size_t)addr, (size_t)len, (size_t)cr->cr_base, (size_t)cr->cr_length);
