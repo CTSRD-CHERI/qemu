@@ -3098,7 +3098,7 @@ static void invalidate_and_set_dirty(MemoryRegion *mr, hwaddr addr,
 
 #if defined(TARGET_CHERI)
     /* Invalidate the CHERI memory tags. */
-    cheri_tag_phys_invalidate(addr, length);
+    cheri_tag_phys_invalidate(NULL, addr, length);
 #endif
 }
 

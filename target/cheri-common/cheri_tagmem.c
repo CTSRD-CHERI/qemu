@@ -226,19 +226,11 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
     check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
     if (ram_addr == -1LL)
         return;
-#ifdef TARGET_MIPS
-    /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (QEMU_ALIGN_DOWN(paddr, CHERI_CAP_SIZE) ==
-        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
-        env->linkedflag = 0;
-        env->lladdr = 1;
-    }
-#endif
-    cheri_tag_phys_invalidate(ram_addr, size);
+    cheri_tag_phys_invalidate(env, ram_addr, size);
 
 }
 
-void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
+void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_t len)
 {
     uint64_t tag, addr, endaddr, tagmem_idx;
     uint8_t *tagblk;
@@ -261,8 +253,15 @@ void cheri_tag_phys_invalidate(ram_addr_t ram_addr, ram_addr_t len)
             tagblk[CAP_TAGBLK_IDX(tag)] = 0;
         }
     }
-
-    /* XXX - linkedflag reset check? */
+#ifdef TARGET_MIPS
+    /* If a tag was cleared, unset the linkedflag and reset lladdr: */
+    /* Check RAM address to see if the linkedflag needs to be reset. */
+    if (env && QEMU_ALIGN_DOWN(ram_addr, CHERI_CAP_SIZE) ==
+        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
+        env->linkedflag = 0;
+        env->lladdr = 1;
+    }
+#endif
 }
 
 static uint8_t *cheri_tag_new_tagblk(uint64_t tag)

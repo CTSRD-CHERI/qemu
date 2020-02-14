@@ -2828,6 +2828,14 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
         }
     }
 
+#ifdef TARGET_CHERI
+    TCGv_cap_checked_ptr saved_load_addr;
+    // If addr and val are the same, we need to allocate a temporary
+    if ((TCGv)addr == (TCGv)val)
+        saved_load_addr = tcg_temp_new_cap_checked();
+    else
+        saved_load_addr = addr;
+#endif
     gen_ldst_i32(INDEX_op_qemu_ld_i32, val, addr, memop, idx);
     plugin_gen_mem_callbacks(addr, info);
 
@@ -2846,6 +2854,11 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
             g_assert_not_reached();
         }
     }
+#ifdef TARGET_CHERI
+    // Free the saved address if we needed it
+    if (saved_load_addr != addr)
+        tcg_temp_free_cap_checked(saved_load_addr);
+#endif
 }
 
 void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop)
@@ -2993,7 +3006,6 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
 
 
 #ifdef TARGET_CHERI
-
 void tcg_gen_qemu_ld_ddc_i32(TCGv_i32 val, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg idx, MemOp memop) {
     TCGv_i32 op = tcg_const_i32(memop);
     if (out_addr == NULL)
@@ -3025,6 +3037,41 @@ void tcg_gen_qemu_st_ddc_i64(TCGv_i64 val, TCGv_cap_checked_ptr out_addr, TCGv i
     gen_helper_ddc_check_store(out_addr, cpu_env, in_addr, op);
     tcg_temp_free_i32(op);
     tcg_gen_qemu_st_i64_with_checked_addr(val, out_addr, idx, memop);
+}
+void tcg_gen_atomic_cmpxchg_ddc_i64(TCGv_i64 retv, TCGv int_addr, TCGv_i64 cmpv,
+                                    TCGv_i64 newv, TCGArg idx, MemOp memop)
+{
+#ifdef TARGET_CHERI
+    TCGv_i32 op = tcg_const_i32(memop);
+    TCGv_cap_checked_ptr checked_addr = tcg_temp_new_cap_checked();
+    gen_helper_ddc_check_rmw(checked_addr, cpu_env, int_addr, op);
+#else
+    TCGv checked_addr = int_addr;
+#endif
+    tcg_gen_atomic_cmpxchg_i64_with_checked_addr(retv, checked_addr, cmpv, newv,
+                                                 idx, memop);
+#ifdef TARGET_CHERI
+    tcg_temp_free_cap_checked(checked_addr);
+    tcg_temp_free_i32(op);
+#endif
+}
+
+void tcg_gen_atomic_cmpxchg_ddc_i32(TCGv_i32 retv, TCGv int_addr, TCGv_i32 cmpv,
+                                    TCGv_i32 newv, TCGArg idx, MemOp memop)
+{
+#ifdef TARGET_CHERI
+    TCGv_i32 op = tcg_const_i32(memop);
+    TCGv_cap_checked_ptr checked_addr = tcg_temp_new_cap_checked();
+    gen_helper_ddc_check_rmw(checked_addr, cpu_env, int_addr, op);
+#else
+    TCGv checked_addr = int_addr;
+#endif
+    tcg_gen_atomic_cmpxchg_i32_with_checked_addr(retv, checked_addr, cmpv, newv,
+                                                 idx, memop);
+#ifdef TARGET_CHERI
+    tcg_temp_free_cap_checked(checked_addr);
+    tcg_temp_free_i32(op);
+#endif
 }
 #endif
 
@@ -3109,17 +3156,11 @@ static void * const table_cmpxchg[16] = {
     WITH_ATOMIC64([MO_64 | MO_BE] = gen_helper_atomic_cmpxchgq_be)
 };
 
-void tcg_gen_atomic_cmpxchg_i32(TCGv_i32 retv, TCGv int_addr, TCGv_i32 cmpv,
-                                TCGv_i32 newv, TCGArg idx, MemOp memop)
+void tcg_gen_atomic_cmpxchg_i32_with_checked_addr(
+    TCGv_i32 retv, TCGv_cap_checked_ptr checked_addr, TCGv_i32 cmpv,
+    TCGv_i32 newv, TCGArg idx, MemOp memop)
 {
     memop = tcg_canonicalize_memop(memop, 0, 0);
-#ifdef TARGET_CHERI
-    TCGv_i32 op = tcg_const_i32(memop);
-    TCGv_cap_checked_ptr checked_addr = tcg_temp_new_cap_checked();
-    gen_helper_ddc_check_rmw(checked_addr, cpu_env, int_addr, op);
-#else
-    TCGv checked_addr = int_addr;
-#endif
     if (!(tcg_ctx->tb_cflags & CF_PARALLEL)) {
         TCGv_i32 t1 = tcg_temp_new_i32();
         TCGv_i32 t2 = tcg_temp_new_i32();
@@ -3159,23 +3200,18 @@ void tcg_gen_atomic_cmpxchg_i32(TCGv_i32 retv, TCGv int_addr, TCGv_i32 cmpv,
     }
 #ifdef TARGET_CHERI
     // XXX: always clear the tag even on failure
+    TCGv_i32 op = tcg_const_i32(memop);
     gen_cheri_invalidate_tags(checked_addr, op);
-    tcg_temp_free_cap_checked(checked_addr);
     tcg_temp_free_i32(op);
 #endif
 }
 
-void tcg_gen_atomic_cmpxchg_i64(TCGv_i64 retv, TCGv int_addr, TCGv_i64 cmpv,
-                                TCGv_i64 newv, TCGArg idx, MemOp memop)
+void tcg_gen_atomic_cmpxchg_i64_with_checked_addr(
+    TCGv_i64 retv, TCGv_cap_checked_ptr checked_addr, TCGv_i64 cmpv,
+    TCGv_i64 newv, TCGArg idx, MemOp memop)
 {
     memop = tcg_canonicalize_memop(memop, 1, 0);
-#ifdef TARGET_CHERI
-    TCGv_i32 op = tcg_const_i32(memop);
-    TCGv_cap_checked_ptr checked_addr = tcg_temp_new_cap_checked();
-    gen_helper_ddc_check_rmw(checked_addr, cpu_env, int_addr, op);
-#else
-    TCGv checked_addr = int_addr;
-#endif
+
     if (!(tcg_ctx->tb_cflags & CF_PARALLEL)) {
         TCGv_i64 t1 = tcg_temp_new_i64();
         TCGv_i64 t2 = tcg_temp_new_i64();
@@ -3221,8 +3257,7 @@ void tcg_gen_atomic_cmpxchg_i64(TCGv_i64 retv, TCGv int_addr, TCGv_i64 cmpv,
 
         tcg_gen_extrl_i64_i32(c32, cmpv);
         tcg_gen_extrl_i64_i32(n32, newv);
-        // XXX: do the checks again to avoid double $ddc indirection
-        tcg_gen_atomic_cmpxchg_i32(r32, int_addr, c32, n32, idx, memop & ~MO_SIGN);
+        tcg_gen_atomic_cmpxchg_i32_with_checked_addr(r32, checked_addr, c32, n32, idx, memop & ~MO_SIGN);
         tcg_temp_free_i32(c32);
         tcg_temp_free_i32(n32);
 
@@ -3235,8 +3270,8 @@ void tcg_gen_atomic_cmpxchg_i64(TCGv_i64 retv, TCGv int_addr, TCGv_i64 cmpv,
     }
 #ifdef TARGET_CHERI
     // XXX: always clear the tag even on failure
+    TCGv_i32 op = tcg_const_i32(memop);
     gen_cheri_invalidate_tags(checked_addr, op);
-    tcg_temp_free_cap_checked(checked_addr);
     tcg_temp_free_i32(op);
 #endif
 }

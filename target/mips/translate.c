@@ -4093,21 +4093,27 @@ ATTRIBUTE_UNUSED static void _debug_value(TCGv value, const char* msg) {
 static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
                         MemOp tcg_mo, bool eva, int opc)
 {
-    TCGv addr, t0, val;
+    TCGv t0, val;
+    TCGv_cap_checked_ptr addr;
     TCGLabel *l1 = gen_new_label();
     TCGLabel *done = gen_new_label();
     TCGLabel *not_misaligned = gen_new_label();
-    TCGLabel *store_succeeded = gen_new_label();
 
     t0 = tcg_temp_new();
     // IMPORTANT! addr must be allocated using tcg_temp_local_new since we
     // reference it in two different basic blocks.
     // The naming makes no sense... But is documented in tcg/README.
     // I should read the documentation before debugging :(
-    addr = tcg_temp_local_new();
-    /* compare the address against that of the preceeding LL */
-    gen_base_offset_addr(ctx, addr, base, offset);
-    size_t size = memop_size(tcg_mo);
+    addr = tcg_temp_local_new_cap_checked();
+    gen_base_offset_addr(ctx, t0, base, offset);
+#ifdef TARGET_CHERI
+    /* We have to add $ddc to the address for the alignment check and the memory access */
+    TCGv_i32 tmemop = tcg_const_i32(tcg_mo);
+    gen_helper_ddc_check_rmw(addr, cpu_env, t0, tmemop);
+    tcg_temp_free_i32(tmemop);
+#else
+    tcg_gen_mov_tl(addr, t0);
+#endif
     /*
      * Alignment must be checked even if the CPU supports unaligned accesses:
      *
@@ -4115,14 +4121,15 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
      * least-significant bits of the address is non-zero, an Address Error
      * exception occurs.
      */
-    tcg_gen_andi_tl(t0, addr, size - 1);
+    tcg_gen_andi_tl(t0, (TCGv)addr, memop_size(tcg_mo) - 1);
     tcg_gen_brcondi_tl(TCG_COND_EQ, t0, 0x0, not_misaligned);
     generate_exception(ctx, EXCP_AdES);
     gen_set_label(not_misaligned);
 
-    // DEBUG_VALUE(addr);
-    // DEBUG_VALUE(cpu_lladdr);
-    tcg_gen_brcond_tl(TCG_COND_EQ, addr, cpu_lladdr, l1);
+    //    DEBUG_VALUE((TCGv)addr);
+    //    DEBUG_VALUE(cpu_lladdr);
+    /* compare the address against that of the preceeding LL */
+    tcg_gen_brcond_tl(TCG_COND_EQ, (TCGv)addr, cpu_lladdr, l1);
     tcg_gen_movi_tl(t0, 0);
     gen_store_gpr(t0, rt);
     tcg_gen_br(done);
@@ -4132,35 +4139,20 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     val = tcg_temp_local_new(); // local_new since used in another BB
     gen_load_gpr(val, rt);
 
-    // DEBUG_VALUE(addr);
-    // DEBUG_VALUE(cpu_llval);
-    // DEBUG_VALUE(val);
-    // Note: this checks $ddc
-    tcg_gen_atomic_cmpxchg_tl(t0, addr, cpu_llval, val,
-                              eva ? MIPS_HFLAG_UM : ctx->mem_idx, tcg_mo);
-    // Print opc for CHERI logging
-    switch (opc) {
-    case OPC_SCD:
-    case R6_OPC_SCD:
-    case OPC_SCE:
-    case OPC_SC:
-    case R6_OPC_SC:
-        break;
-    default:
-        tcg_debug_assert(false && "Unhandled opcode");
-    }
+    //    DEBUG_VALUE((TCGv)addr);
+    //    DEBUG_VALUE(cpu_llval);
+    //    DEBUG_VALUE(val);
+    tcg_gen_atomic_cmpxchg_tl_with_checked_addr(
+        t0, addr, cpu_llval, val, eva ? MIPS_HFLAG_UM : ctx->mem_idx, tcg_mo);
 
+    //    DEBUG_VALUE(t0);
     tcg_gen_setcond_tl(TCG_COND_EQ, t0, t0, cpu_llval);
+    //    DEBUG_VALUE(t0);
     gen_store_gpr(t0, rt);
-    tcg_gen_brcondi_tl(TCG_COND_EQ, t0, 0x1, store_succeeded);
-
-    // If we didn't branch the store failed -> return zero
-    tcg_gen_br(done);
-
-    gen_set_label(store_succeeded);
-    gen_set_label(done);
     tcg_temp_free(val);
-    tcg_temp_free(addr);
+
+    gen_set_label(done);
+    tcg_temp_free_cap_checked(addr);
     tcg_temp_free(t0);
 }
 

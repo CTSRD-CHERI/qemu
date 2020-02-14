@@ -36,7 +36,8 @@
 #include "exec/cpu-common.h"
 
 #if defined(TARGET_CHERI)
-void cheri_tag_phys_invalidate(ram_addr_t paddr, ram_addr_t len);
+/* Note: for cheri_tag_phys_invalidate, env may be NULL */
+void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t paddr, ram_addr_t len);
 void cheri_tag_init(uint64_t memory_size);
 void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                           uintptr_t pc);

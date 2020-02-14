@@ -937,10 +937,26 @@ TCG_ST_HELPER(st16, MO_TEUW)
 TCG_ST_HELPER(st32, MO_TEUL)
 TCG_ST_HELPER(st64, MO_TEQ)
 
-void tcg_gen_atomic_cmpxchg_i32(TCGv_i32, TCGv, TCGv_i32, TCGv_i32,
-                                TCGArg, MemOp);
-void tcg_gen_atomic_cmpxchg_i64(TCGv_i64, TCGv, TCGv_i64, TCGv_i64,
-                                TCGArg, MemOp);
+#ifdef TARGET_CHERI
+void tcg_gen_atomic_cmpxchg_ddc_i32(TCGv_i32, TCGv, TCGv_i32, TCGv_i32, TCGArg,
+                                    MemOp);
+void tcg_gen_atomic_cmpxchg_ddc_i64(TCGv_i64, TCGv, TCGv_i64, TCGv_i64, TCGArg,
+                                    MemOp);
+#pragma GCC poison tcg_gen_atomic_cmpxchg_i32
+#pragma GCC poison tcg_gen_atomic_cmpxchg_i64
+#pragma GCC poison tcg_gen_atomic_cmpxchg_tl
+#else
+#define tcg_gen_atomic_cmpxchg_i32 tcg_gen_atomic_cmpxchg_i32_with_checked_addr
+#define tcg_gen_atomic_cmpxchg_i64 tcg_gen_atomic_cmpxchg_i64_with_checked_addr
+#endif
+void tcg_gen_atomic_cmpxchg_i32_with_checked_addr(TCGv_i32,
+                                                  TCGv_cap_checked_ptr,
+                                                  TCGv_i32, TCGv_i32, TCGArg,
+                                                  MemOp);
+void tcg_gen_atomic_cmpxchg_i64_with_checked_addr(TCGv_i64,
+                                                  TCGv_cap_checked_ptr,
+                                                  TCGv_i64, TCGv_i64, TCGArg,
+                                                  MemOp);
 
 void tcg_gen_atomic_xchg_i32(TCGv_i32, TCGv, TCGv_i32, TCGArg, MemOp);
 void tcg_gen_atomic_xchg_i64(TCGv_i64, TCGv, TCGv_i64, TCGArg, MemOp);
@@ -1129,7 +1145,12 @@ void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 #define tcg_gen_umin_tl tcg_gen_umin_i64
 #define tcg_gen_smax_tl tcg_gen_smax_i64
 #define tcg_gen_umax_tl tcg_gen_umax_i64
+#ifdef TARGET_CHERI
+#define tcg_gen_atomic_cmpxchg_ddc_tl tcg_gen_atomic_cmpxchg_ddc_i64
+#else
 #define tcg_gen_atomic_cmpxchg_tl tcg_gen_atomic_cmpxchg_i64
+#endif
+#define tcg_gen_atomic_cmpxchg_tl_with_checked_addr tcg_gen_atomic_cmpxchg_i64_with_checked_addr
 #define tcg_gen_atomic_xchg_tl tcg_gen_atomic_xchg_i64
 #define tcg_gen_atomic_fetch_add_tl tcg_gen_atomic_fetch_add_i64
 #define tcg_gen_atomic_fetch_and_tl tcg_gen_atomic_fetch_and_i64
@@ -1241,7 +1262,12 @@ void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 #define tcg_gen_umin_tl tcg_gen_umin_i32
 #define tcg_gen_smax_tl tcg_gen_smax_i32
 #define tcg_gen_umax_tl tcg_gen_umax_i32
+#ifdef TARGET_CHERI
+#define tcg_gen_atomic_cmpxchg_ddc_tl tcg_gen_atomic_cmpxchg_ddc_i32
+#else
 #define tcg_gen_atomic_cmpxchg_tl tcg_gen_atomic_cmpxchg_i32
+#endif
+#define tcg_gen_atomic_cmpxchg_tl_with_checked_addr tcg_gen_atomic_cmpxchg_i32_with_checked_addr
 #define tcg_gen_atomic_xchg_tl tcg_gen_atomic_xchg_i32
 #define tcg_gen_atomic_fetch_add_tl tcg_gen_atomic_fetch_add_i32
 #define tcg_gen_atomic_fetch_and_tl tcg_gen_atomic_fetch_and_i32
