@@ -2231,8 +2231,8 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 #endif // CONFIG_MIPS_LOG_INSTR
 
 static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
-                                 target_ulong vaddr, target_ulong retpc, hwaddr* physaddr)
-{
+                                 target_ulong vaddr, target_ulong retpc,
+                                 hwaddr *physaddr) {
     int prot;
     cap_register_t ncd;
 
@@ -2241,34 +2241,28 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 
     // TODO: do one physical translation and then use that to speed up tag read
     // and use address_space_read to read the full 16 byte buffer
-    /* Load base and cursor from memory (might trap on load) */
-    uint64_t base = cpu_ldq_data_ra(env, vaddr + 0, retpc);
-    uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
+    /* Load base and perms from memory (might trap on load) */
+    inmemory_chericap256 mem_buffer;
+    mem_buffer.u64s[0] =
+        cpu_ldq_data_ra(env, vaddr + 0, retpc); /* perms+otype */
+    mem_buffer.u64s[1] = cpu_ldq_data_ra(env, vaddr + 8, retpc); /* cursor */
+    /* Load the two magic values */
+    target_ulong tag =
+        cheri_tag_get_m128(env, vaddr, cd, &mem_buffer.u64s[2],
+                           &mem_buffer.u64s[3], physaddr, &prot, retpc);
 
-    uint64_t tps, length;
-    target_ulong tag = cheri_tag_get_m128(env, vaddr, cd, &tps, &length, physaddr, &prot, retpc);
     tag = clear_tag_if_no_loadcap(tag, cbp, prot);
-
-    ncd.cr_otype = (uint32_t)(tps >> 32) ^ CAP_MAX_REPRESENTABLE_OTYPE;
-    ncd.cr_perms = (uint32_t)((tps >> 1) & CAP_PERMS_ALL);
-    ncd.cr_uperms = (uint32_t)(((tps >> 1) >> CAP_UPERMS_SHFT) &
-            CAP_UPERMS_ALL);
-    if (tps & 1ULL)
-        ncd._sbit_for_memory = 1;
-    else
-        ncd._sbit_for_memory = 0;
-    ncd._cr_top = base + (length ^ CAP_MAX_LENGTH);
-    ncd.cr_base = base;
-    ncd._cr_cursor = cursor;
-    ncd.cr_tag = tag;
-
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
+
+    // XOR with -1 so that NULL is zero in memory, etc.
+    decompress_256cap(mem_buffer, &ncd, tag);
+
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        dump_cap_load(vaddr, cursor, ncd.cr_base, tag);
+        dump_cap_load(vaddr, cap_get_cursor(&ncd), ncd.cr_base, tag);
         cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
         cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
@@ -2278,21 +2272,10 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 }
 
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
-    target_ulong vaddr, target_ulong retpc)
-{
+                                target_ulong vaddr, target_ulong retpc) {
     const cap_register_t *csp = get_readonly_capreg(&env->active_tc, cs);
-    uint64_t base = cap_get_base(csp);
-    uint64_t cursor = cap_get_cursor(csp);
-
-    uint64_t perms = (uint64_t)(((csp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-        (csp->cr_perms & CAP_PERMS_ALL));
-
-    bool sbit = csp->cr_tag ? is_cap_sealed(csp) : csp->_sbit_for_memory;
-    uint64_t tps = ((uint64_t)(csp->cr_otype ^ CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
-        (perms << 1) | (sbit ? 1UL : 0UL);
-
-    uint64_t length = cap_get_length64(csp) ^ CAP_MAX_LENGTH;
-
+    inmemory_chericap256 mem_buffer;
+    compress_256cap(&mem_buffer, csp);
     /*
      * Touching the tags will take both the data write TLB fault and
      * capability write TLB fault before updating anything.  Thereafter, the
@@ -2300,16 +2283,15 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
      * accidentally tagging a shorn data write.  This, like the rest of the
      * tag logic, is not multi-TCG-thread safe.
      */
-
     /* Store the "magic" data with the tags */
-    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, tps, length, NULL, retpc);
+    cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag, mem_buffer.u64s[2],
+                       mem_buffer.u64s[3], NULL, retpc);
     env->statcounters_cap_write++;
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;
     }
-
-    cpu_stq_data_ra(env, vaddr, base, retpc);
-    cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
+    cpu_stq_data_ra(env, vaddr, mem_buffer.u64s[0], retpc); /* perms + otype */
+    cpu_stq_data_ra(env, vaddr + 8, mem_buffer.u64s[1], retpc);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
@@ -2317,7 +2299,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
         /* Log memory cap write, if needed. */
         cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
         cvtrace_dump_cap_cbl(&env->cvtrace, csp);
-        dump_cap_store(vaddr, cursor, csp->cr_base, csp->cr_tag);
+        dump_cap_store(vaddr, cap_get_cursor(csp), csp->cr_base, csp->cr_tag);
     }
 #endif
 }

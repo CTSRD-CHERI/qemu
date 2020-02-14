@@ -36,9 +36,12 @@
 #include "qemu/error-report.h"
 
 #define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
-#define PRINT_CAP_ARGS_L1(cr) (cr)->cr_tag, cap_is_sealed_with_type(cr), \
-            ((((cr)->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | ((cr)->cr_perms & CAP_PERMS_ALL)), \
-            cap_get_base(cr), cap_get_length64(cr)
+#define COMBINED_PERMS_VALUE(cr)                                               \
+    (unsigned)((((cr)->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |       \
+               ((cr)->cr_perms & CAP_PERMS_ALL))
+#define PRINT_CAP_ARGS_L1(cr)                                                  \
+    (cr)->cr_tag, cap_is_sealed_with_type(cr), COMBINED_PERMS_VALUE(cr),       \
+        cap_get_base(cr), cap_get_length64(cr)
 #define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
 #define PRINT_CAP_ARGS_L2(cr) (uint64_t)cap_get_offset(cr), (cr)->cr_otype
 
@@ -47,6 +50,7 @@
 #define PRINT_CAP_ARGS(cr) PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr)
 
 #ifdef TARGET_CHERI
+
 #include "tcg/tcg.h"  // for tcg_debug_assert()
 #define cheri_debug_assert(cond) tcg_debug_assert(cond)
 
@@ -105,14 +109,9 @@ static inline int64_t cap_get_otype(const cap_register_t* c) {
 static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
     // TODO: how should we treat the other reserved types? as sealed?
     // TODO: what about untagged capabilities with out-of-range otypes?
-#ifndef CHERI_128
     if (c->cr_tag) {
-        if (c->_sbit_for_memory)
-            cheri_debug_assert(c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE);
-        else
-            cheri_debug_assert(c->cr_otype == CAP_OTYPE_UNSEALED || c->cr_otype == CAP_OTYPE_SENTRY);
+        cheri_debug_assert(c->cr_otype <= CAP_MAX_REPRESENTABLE_OTYPE);
     }
-#endif
     return c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE;
 }
 
@@ -139,14 +138,9 @@ static inline bool cap_is_unsealed(const cap_register_t* c) {
     // TODO: how should we treat the other reserved types? as sealed?
     // TODO: what about untagged capabilities with out-of-range otypes?
     _Static_assert(CAP_MAX_REPRESENTABLE_OTYPE == CAP_OTYPE_UNSEALED, "");
-#ifndef CHERI_128
     if (c->cr_tag) {
-        if (c->_sbit_for_memory)
-            cheri_debug_assert(c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE);
-        else
-            cheri_debug_assert(c->cr_otype == CAP_OTYPE_UNSEALED || c->cr_otype == CAP_OTYPE_SENTRY);
+        cheri_debug_assert(c->cr_otype <= CAP_MAX_REPRESENTABLE_OTYPE);
     }
-#endif
     return c->cr_otype >= CAP_OTYPE_UNSEALED;
 }
 
@@ -156,10 +150,6 @@ static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
     assert(type <= CAP_LAST_NONRESERVED_OTYPE);
     _Static_assert(CAP_LAST_NONRESERVED_OTYPE < CAP_OTYPE_UNSEALED, "");
     c->cr_otype = type;
-#ifndef CHERI_128
-    assert(c->_sbit_for_memory == false);
-    c->_sbit_for_memory = true;
-#endif
 }
 
 static inline void cap_set_unsealed(cap_register_t* c) {
@@ -167,10 +157,6 @@ static inline void cap_set_unsealed(cap_register_t* c) {
     assert(cap_is_sealed_with_type(c));
     assert(c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE && "should not use this to unsealed reserved types");
     c->cr_otype = CAP_OTYPE_UNSEALED;
-#ifndef CHERI_128
-    assert(c->_sbit_for_memory == true);
-    c->_sbit_for_memory = false;
-#endif
 }
 
 static inline bool cap_is_sealed_entry(const cap_register_t* c) {
@@ -273,27 +259,23 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t cursor
 }
 
 #if defined(CHERI_128) && !defined(CHERI_MAGIC128)
-
 static inline bool
 is_representable_cap_with_addr(const cap_register_t* cap, uint64_t new_addr)
 {
     return cc128_is_representable_with_addr(cap, new_addr);
 }
-
 static inline bool
 is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t new_addr)
 {
     cheri_debug_assert(cap_is_unsealed(cap));
     return cc128_is_representable_new_addr(true, cap_get_base(cap), cap_get_length65(cap), cap_get_cursor(cap), new_addr);
 }
-
 #else
 static inline bool
 is_representable_cap_with_addr(const cap_register_t* cap, uint64_t new_offset)
 {
     return true;
 }
-
 static inline bool
 is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t new_offset)
 {

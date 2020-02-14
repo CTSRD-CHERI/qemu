@@ -154,6 +154,7 @@ typedef struct cap_register cap_register_t;
 #define CC256_HWPERMS_COUNT           (12)
 #define CC256_HWPERMS_RESERVED_COUNT  (3)
 #define CC256_UPERMS_COUNT            (16)
+#define CC256_MAX_UPERM               CC256_UPERMS_COUNT
 #define CC256_FLAGS_COUNT             (1)
 #define CC256_FLAGS_ALL_BITS          CC_BITMASK64(CC256_FLAGS_COUNT) /* 1 bit */
 #define CC256_PERMS_MEM_SHFT          CC256_FLAGS_COUNT /* flags bit comes first */
