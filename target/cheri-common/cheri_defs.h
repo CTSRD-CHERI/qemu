@@ -32,14 +32,14 @@
  */
 #pragma once
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
-#ifdef CHERI_128
+#if defined(CHERI_128) || defined(CHERI_MAGIC128)
+/* Magic 128 has the same set of permissios as 128 */
 #define CAP_MAX_LENGTH CC128_NULL_LENGTH
 #define CAP_MAX_TOP CC128_NULL_TOP
 #define CAP_PERMS_ALL CC128_PERMS_ALL
 #define CAP_UPERMS_ALL CC128_UPERMS_ALL
 #define CAP_UPERMS_SHFT CC128_UPERMS_SHFT
 #define CAP_MAX_UPERM CC128_MAX_UPERM
-#undef CC128_OLD_FORMAT // don't use the old format
 #else
 #define CAP_MAX_LENGTH CC256_NULL_LENGTH
 #define CAP_MAX_TOP CC256_NULL_TOP
