@@ -7726,7 +7726,7 @@ case "$target_name" in
     gdb_xml_files="mips64-cpu.xml mips64-cp0.xml mips64-fpu.xml mips64-sys.xml"
   ;;
   cheri|cheri256|cheri128|cheri128magic)
-    mttcg="yes"
+    mttcg="no"  # Helpers not safe?
     TARGET_ARCH=mips64
     TARGET_BASE_ARCH=mips
     echo "TARGET_ABI_MIPSN64=y" >> $config_target_mak
