@@ -253,6 +253,8 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t cursor
     // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
     crp->_cr_top = CAP_MAX_TOP;
     crp->cr_otype = CAP_OTYPE_UNSEALED;
+    crp->cr_flags = 0;
+    crp->cr_reserved = 0;
 #ifdef CHERI_128
     crp->cr_ebt = CC128_RESET_EBT;
 #endif

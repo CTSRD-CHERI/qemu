@@ -33,20 +33,25 @@
 #pragma once
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
 #if defined(CHERI_128) || defined(CHERI_MAGIC128)
-/* Magic 128 has the same set of permissios as 128 */
-#define CAP_MAX_LENGTH CC128_NULL_LENGTH
-#define CAP_MAX_TOP CC128_NULL_TOP
+/* Magic 128 has the same set of permissions as 128 */
 #define CAP_PERMS_ALL CC128_PERMS_ALL
 #define CAP_UPERMS_ALL CC128_UPERMS_ALL
 #define CAP_UPERMS_SHFT CC128_UPERMS_SHFT
 #define CAP_MAX_UPERM CC128_MAX_UPERM
 #else
-#define CAP_MAX_LENGTH CC256_NULL_LENGTH
-#define CAP_MAX_TOP CC256_NULL_TOP
 #define CAP_PERMS_ALL CC256_PERMS_ALL_BITS
 #define CAP_UPERMS_ALL CC256_UPERMS_ALL_BITS
 #define CAP_UPERMS_SHFT CC256_UPERMS_SHFT
 #define CAP_MAX_UPERM CC256_MAX_UPERM
+#endif
+
+/* compressed capabilities use a 65-bit top, precise and magic 64-bits */
+#if defined(CHERI_128)
+#define CAP_MAX_LENGTH CC128_NULL_LENGTH
+#define CAP_MAX_TOP CC128_NULL_TOP
+#else
+#define CAP_MAX_LENGTH CC256_NULL_LENGTH
+#define CAP_MAX_TOP CC256_NULL_TOP
 #endif
 
 typedef signed __int128 cap_offset_t;
