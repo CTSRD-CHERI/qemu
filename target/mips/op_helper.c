@@ -1137,7 +1137,6 @@ void helper_eret(CPUMIPSState *env)
     exception_return(env);
     env->CP0_LLAddr = 1;
     env->lladdr = 1;
-    env->linkedflag = 0;
 #ifdef TARGET_CHERI
     env->linkedflag = 0;
 #endif /* TARGET_CHERI */

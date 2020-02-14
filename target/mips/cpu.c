@@ -22,7 +22,9 @@
 #include "qapi/error.h"
 #include "cpu.h"
 #include "internal.h"
+#ifdef TARGET_CHERI
 #include "cheri_utils.h"
+#endif
 #include "kvm_mips.h"
 #include "qemu/module.h"
 #include "sysemu/kvm.h"

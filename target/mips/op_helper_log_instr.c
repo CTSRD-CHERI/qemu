@@ -579,7 +579,9 @@ static void dump_changed_cop0(CPUMIPSState *env)
     dump_changed_cop0_reg(env, 17*8 + 0, env->CP0_LLAddr >> env->CP0_LLAddr_shift);
     dump_changed_cop0_reg(env, 17*8 + 1, env->lladdr);
     dump_changed_cop0_reg(env, 17*8 + 2, env->llval);
+#ifdef TARGET_CHERI
     dump_changed_cop0_reg(env, 17*8 + 3, env->linkedflag);
+#endif
 
     dump_changed_cop0_reg(env, 18*8 + 0, env->CP0_WatchLo[0]);
     dump_changed_cop0_reg(env, 18*8 + 1, env->CP0_WatchLo[1]);
