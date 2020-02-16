@@ -2831,10 +2831,12 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
 #ifdef TARGET_CHERI
     TCGv_cap_checked_ptr saved_load_addr;
     // If addr and val are the same, we need to allocate a temporary
-    if ((TCGv)addr == (TCGv)val)
+    if ((TCGv)addr == (TCGv)val) {
         saved_load_addr = tcg_temp_new_cap_checked();
-    else
+        tcg_gen_mov_tl((TCGv)saved_load_addr, (TCGv)addr);
+    } else {
         saved_load_addr = addr;
+    }
 #endif
     gen_ldst_i32(INDEX_op_qemu_ld_i32, val, addr, memop, idx);
     plugin_gen_mem_callbacks(addr, info);
@@ -2940,10 +2942,12 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
 #ifdef TARGET_CHERI
     TCGv_cap_checked_ptr saved_load_addr;
     // If addr and val are the same, we need to allocate a temporary
-    if ((TCGv)addr == (TCGv)val)
+    if ((TCGv)addr == (TCGv)val) {
         saved_load_addr = tcg_temp_new_cap_checked();
-    else
+        tcg_gen_mov_tl((TCGv)saved_load_addr, (TCGv)addr);
+    } else {
         saved_load_addr = addr;
+    }
 #endif
     gen_ldst_i64(INDEX_op_qemu_ld_i64, val, addr, memop, idx);
     plugin_gen_mem_callbacks(addr, info);
