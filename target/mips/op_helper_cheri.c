@@ -611,9 +611,9 @@ target_ulong helper_cgetaddr(CPUMIPSState *env, uint32_t cb)
 {
     /*
      * CGetAddr: Move Virtual Address to a General-Purpose Register
+     * TODO: could do this directly from TCG now.
      */
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    return (target_ulong)cap_get_cursor(cbp);
+    return (target_ulong)get_capreg_cursor(env, cb);
 }
 
 target_ulong CHERI_HELPER_IMPL(cloadtags(CPUMIPSState *env, uint32_t cb, uint64_t cbcursor))

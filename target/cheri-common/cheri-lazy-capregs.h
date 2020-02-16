@@ -53,28 +53,40 @@ static inline uint64_t capreg_state_set_to_integer_mask(unsigned reg)
 
 static inline CapRegState get_capreg_state(GPCapRegs *gpcrs, unsigned reg)
 {
-    tcg_debug_assert(reg < 32);
+    cheri_debug_assert(reg < 32);
     return (CapRegState)extract64(gpcrs->capreg_state, reg * 2, 2);
 }
 
 static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned reg,
                                     CapRegState new_state)
 {
-    tcg_debug_assert(reg < 32);
+    cheri_debug_assert(reg < 32);
     if (reg == 0) {
-        tcg_debug_assert(new_state == CREG_FULLY_DECOMPRESSED &&
-                         "NULL is always fully decompressed");
+        cheri_debug_assert(new_state == CREG_FULLY_DECOMPRESSED &&
+                           "NULL is always fully decompressed");
     }
     gpcrs->capreg_state = deposit64(gpcrs->capreg_state, reg * 2, 2, new_state);
 }
 
 static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 {
-    tcg_debug_assert(regnum < 32);
-    const cap_register_t *c = &gpcrs->decompressed[regnum];
-    // Check that the compressed and decompressed caps are in sync
-    cheri_debug_assert(compress_128cap_without_xor(c) == gpcrs->pesbt[regnum]);
-    cheri_debug_assert(cap_get_cursor(c) == gpcrs->cursor[regnum]);
+#ifdef CONFIG_DEBUG_TCG
+    if (get_capreg_state(gpcrs, regnum) == CREG_FULLY_DECOMPRESSED) {
+        cheri_debug_assert(regnum < 32);
+        cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
+                           CREG_FULLY_DECOMPRESSED);
+        const cap_register_t *c = &gpcrs->decompressed[regnum];
+        // Check that the compressed and decompressed caps are in sync
+        cheri_debug_assert(compress_128cap_without_xor(c) ==
+                           gpcrs->pesbt[regnum]);
+        cheri_debug_assert(cap_get_cursor(c) == gpcrs->cursor[regnum]);
+    } else {
+        // Reset decompressed values to invalid data to check they aren't
+        // accessed.
+        cap_register_t *decompressed = &gpcrs->decompressed[regnum];
+        memset(decompressed, 0xaa, sizeof(*decompressed));
+    }
+#endif
 }
 
 static inline __attribute__((always_inline)) const cap_register_t *
@@ -144,6 +156,13 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     gpcrs->pesbt[regnum] = compress_128cap_without_xor(target);
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
+}
+
+static inline target_ulong get_capreg_cursor(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    sanity_check_capreg(regnum);
+    return gpcrs->cursor[regnum];
 }
 
 static inline void nullify_capreg(CPUArchState *env, unsigned regnum)
