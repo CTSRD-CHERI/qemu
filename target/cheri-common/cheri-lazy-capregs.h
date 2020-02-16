@@ -165,7 +165,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
 static inline target_ulong get_capreg_cursor(CPUArchState *env, unsigned regnum)
 {
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
-    sanity_check_capreg(regnum);
+    sanity_check_capreg(gpcrs, regnum);
     return gpcrs->cursor[regnum];
 }
 
