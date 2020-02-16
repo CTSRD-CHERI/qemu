@@ -36,6 +36,11 @@
  */
 #pragma once
 #ifdef TARGET_CHERI
+
+#include "cheri_defs.h"
+// This needs to be a separate header so that cpu.h can include it.
+// The rest of cheri-lazy-capregs.h depends on including cpu.h
+
 // We store capability registers in their compressed form an decompress
 // on demand. To allow fast use of GPRs from TCG we expose the integer part
 // and maintain an array of the state for each capability register (integer,
@@ -48,28 +53,24 @@
 //
 // Note: Could also use all-ones and perform a bitwise or instead. Not sure
 // if this makes a difference for the x86 tcg backend.
-
-enum CapRegState {
+typedef enum CapRegState {
     /// This capability register holds an integer value, therefore
     /// the PESBT bits are ignored and assumed to be those of a NULL capability.
     CREG_INTEGER,
-    /// This capability register holds a capability with the tag cleared
+    /// This capability register holds a capability with the tag cleared (not decompressed yet)
     CREG_UNTAGGED_CAP,
-    /// This capability register holds a capability with the tag set
+    /// This capability register holds a capability with the tag set (not decompressed yet)
     CREG_TAGGED_CAP,
-};
-struct GPCapRegs {
+    /// This capability register holds a fully decompressed capability.
+    /// The tag bit can be read from the cap_register_t structure.
+    CREG_FULLY_DECOMPRESSED
+} CapRegState;
+typedef struct GPCapRegs {
     target_ulong cursor[32];
     target_ulong pesbt[32]; // permissions+exponent+sealing type+bottom+top
     uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
-};
-
-static inline uint64_t capreg_state_set_to_integer_mask(unsigned reg) {
-    return ~(UINT64_C(3) << (reg * 2));
-}
-
-static inline uint64_t get_capreg_state(uint64_t capreg_state, unsigned reg) {
-    return extract64(capreg_state, reg * 2, 2);
-}
-
+    // We cache the decompressed capregs here (to avoid constantly decompressing
+    // values such as $csp which are used frequently)
+    cap_register_t decompressed[32];
+} GPCapRegs;
 #endif

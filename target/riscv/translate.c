@@ -34,7 +34,7 @@
 
 /* global register indices */
 #ifdef TARGET_CHERI
-#include "cheri_capregs.h"
+#include "cheri-lazy-capregs.h"
 static TCGv _cpu_cursors_do_not_access_directly[32];
 static TCGv_i64 cpu_capreg_state; // 32 times 2 bits
 static TCGv cpu_pc; // TODO: PCC

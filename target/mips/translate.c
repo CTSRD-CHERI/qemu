@@ -40,6 +40,10 @@
 #include "exec/log.h"
 #include "qemu/qemu-print.h"
 
+#ifdef TARGET_CHERI
+#include "cheri-lazy-capregs.h"
+#endif
+
 #define MIPS_DEBUG_DISAS 0
 
 /* MIPS major opcodes */
@@ -32136,9 +32140,7 @@ void cpu_state_reset(CPUMIPSState *env)
      * set to zero. length is set to (2^64 - 1). Offset (or cursor)
      * is set to zero (or boot vector address for PCC).
      */
-    for (int i = 0; i < 32; i++) {
-        null_capability(&env->active_tc._CGPR[i]);
-    }
+    reset_capregs(&env->active_tc.gpcapregs);
     set_max_perms_capability(&env->active_tc.PCC, env->exception_base);
     // TODO: make DDC and KCC unconditionally only be in the special reg file
     set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);

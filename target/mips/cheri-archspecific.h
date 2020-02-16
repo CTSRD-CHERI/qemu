@@ -112,3 +112,7 @@ static inline const cap_register_t *cheri_get_ddc(CPUMIPSState *env) {
 static inline const cap_register_t *cheri_get_pcc(CPUMIPSState *env) {
     return &env->active_tc.PCC;
 }
+
+static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
+    return &env->active_tc.gpcapregs;
+}

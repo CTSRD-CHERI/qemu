@@ -8,6 +8,7 @@
 
 #ifdef TARGET_CHERI
 #include "cheri_defs.h"
+#include "cheri-lazy-capregs-types.h"
 #endif
 
 #define TCG_GUEST_DEFAULT_MO (0)
@@ -529,7 +530,7 @@ struct TCState {
 #if defined(TARGET_CHERI)
     cap_register_t PCC;
     cap_register_t CapBranchTarget; /* Target of the next cjr/cjalr/ccall */
-    cap_register_t _CGPR[32];
+    struct GPCapRegs gpcapregs;
     struct cheri_cap_hwregs CHWR;
 // #define CP2CAP_RCC  24  /* Return Code Capability */
 #define CP2CAP_IDC  26  /* Invoked Data Capability */
@@ -592,33 +593,6 @@ struct TCState {
 
 
 #if defined(TARGET_CHERI)
-static inline  __attribute__((always_inline)) const cap_register_t*
-get_readonly_capreg(TCState* state, unsigned num) {
-    return &state->_CGPR[num];
-}
-
-/// return a read-only capability register with register number 0 meaning $ddc
-/// This is useful for cl*/cs*/cll*/csc*/cfromptr/cbuildcap since using $ddc as the address
-/// argument there will cause a trap
-/// We also use it for the cb argument to ctoptr/cbuildcap since using a ctoptr
-/// relative to $ddc make sense whereas using it relative to NULL is the same as
-/// just cmove $cN, $cnull
-static inline __attribute__((always_inline)) const cap_register_t*
-get_capreg_0_is_ddc(TCState* state, unsigned num) {
-    if (unlikely(num == 0)) {
-        return &state->CHWR.DDC;
-    }
-    return &state->_CGPR[num];
-}
-
-static inline void
-update_capreg(TCState* state, unsigned num, const cap_register_t* newval) {
-    // writing to $c0/$cnull is a no-op
-    if (unlikely(num == 0))
-        return;
-    state->_CGPR[num] = *newval;
-}
-
 #define CP2HWR_BASE_INDEX 0
 // TODO: start at 32: #define CP2HWR_BASE_NUM 32
 
@@ -1484,7 +1458,7 @@ target_ulong exception_resume_pc(CPUMIPSState *env);
 void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     target_ulong value);
 #ifdef TARGET_CHERI
-void dump_changed_capreg(CPUMIPSState *env, cap_register_t *cr,
+void dump_changed_capreg(CPUMIPSState *env, const cap_register_t *cr,
                          cap_register_t *old_reg, const char* name);
 void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */

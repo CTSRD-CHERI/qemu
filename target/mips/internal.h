@@ -577,7 +577,7 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
         // Print some debug information for CheriBSD kernel crashes
         error_report("C2 EXCEPTION: cause=%d(%s) reg=%d\r", cause, cp2_fault_causestr[cause], reg);
         if (reg < 32) {
-            const cap_register_t* cr = get_readonly_capreg(&env->active_tc, reg);
+            const cap_register_t* cr = get_readonly_capreg(env, reg);
             error_report("Caused by: "PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(cr));
         }
         char buf[4096];

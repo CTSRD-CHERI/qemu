@@ -21,6 +21,9 @@
 #include "cpu.h"
 #include "internal.h"
 #include "exec/gdbstub.h"
+#ifdef TARGET_CHERI
+#include "cheri-lazy-capregs.h"
+#endif
 
 int mips_cpu_gdb_read_register(CPUState *cs, uint8_t *mem_buf, int n)
 {
@@ -156,7 +159,7 @@ int mips_gdb_set_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 }
 
 #if defined(TARGET_CHERI)
-static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
+static int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap)
 {
 #if defined(CHERI_128)
     // If the capability has a valid tag bit we must recompress since the
@@ -183,8 +186,10 @@ static int gdb_get_capreg(uint8_t *mem_buf, cap_register_t *cap)
 
 int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 {
-    if (n < 32)
-        return gdb_get_capreg(mem_buf, &env->active_tc._CGPR[n]);
+    if (n < 32) {
+        // TODO: no need to decompress and recompress
+        return gdb_get_capreg(mem_buf, get_readonly_capreg(env, n));
+    }
     switch (n) {
     case 32:
         return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.DDC);
@@ -216,7 +221,7 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
         if (env->active_tc.CHWR.DDC.cr_tag)
             cap_valid |= 1;
         for (i = 1; i < 32; i++) {
-            if (env->active_tc._CGPR[i].cr_tag)
+            if (get_readonly_capreg(env, i)->cr_tag) // TODO: no need to decompress
                 cap_valid |= ((uint64_t)1 << i);
         }
         if (env->active_tc.PCC.cr_tag)

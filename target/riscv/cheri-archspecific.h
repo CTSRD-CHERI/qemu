@@ -50,3 +50,7 @@ static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {
 static inline const cap_register_t *cheri_get_pcc(CPURISCVState *env) {
     return NULL; // &env->PCC;
 }
+
+static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
+    return &env->gpcapregs;
+}
