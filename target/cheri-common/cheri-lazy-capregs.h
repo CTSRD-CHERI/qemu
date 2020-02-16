@@ -100,11 +100,15 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
         return &gpcrs->decompressed[0];
     }
     switch (get_capreg_state(gpcrs, regnum)) {
-    case CREG_INTEGER:
+    case CREG_INTEGER: {
         set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
         // Update capreg to a decompressed integer value and clear pesbt
         gpcrs->pesbt[regnum] = CC128_NULL_PESBT;
-        return int_to_cap(gpcrs->cursor[regnum], &gpcrs->decompressed[regnum]);
+        const cap_register_t *result =
+            int_to_cap(gpcrs->cursor[regnum], &gpcrs->decompressed[regnum]);
+        sanity_check_capreg(gpcrs, regnum);
+        return result;
+    }
     case CREG_FULLY_DECOMPRESSED:
         break;
     case CREG_TAGGED_CAP:
@@ -185,8 +189,10 @@ static inline void reset_capregs(GPCapRegs *gpcrs)
         gpcrs->cursor[i] = 0;
     }
     gpcrs->capreg_state = 0; // All integer values
+#ifdef CONFIG_DEBUG_TCG
     // Reset decompressed values to invalid data to check they aren't accessed.
     memset(gpcrs->decompressed, 0xaa, sizeof(gpcrs->decompressed));
+#endif
     // Mark NULL register as fully decompressed
     null_capability(&gpcrs->decompressed[0]);
     set_capreg_state(gpcrs, 0, CREG_FULLY_DECOMPRESSED);
