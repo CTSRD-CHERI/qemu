@@ -1757,7 +1757,6 @@ static inline target_ulong get_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t
     // space and increase code density since storing relative to $ddc is common
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-    const cap_register_t *csp = get_readonly_capreg(env, cs);
 
     if (!cbp->cr_tag) {
         do_raise_c2_exception(env, CP2Ca_TAG, cb);
@@ -1771,8 +1770,9 @@ static inline target_ulong get_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST_CAP, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) && csp->cr_tag &&
-            !(csp->cr_perms & CAP_PERM_GLOBAL)) {
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
+               get_capreg_tag(env, cs) &&
+               !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL)) {
         do_raise_c2_exception(env, CP2Ca_PERM_ST_LC_CAP, cb);
         return (target_ulong)0;
     } else {

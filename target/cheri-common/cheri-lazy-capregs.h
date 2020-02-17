@@ -132,8 +132,9 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
     case CREG_UNTAGGED_CAP:
         return _update_from_compressed(gpcrs, regnum, /*tag=*/false);
     default:
-        tcg_abort();
+        __builtin_unreachable();
     }
+    tcg_abort();
 }
 
 /// return a read-only capability register with register number 0 meaning $ddc
@@ -214,8 +215,30 @@ static inline target_ulong get_capreg_tag(CPUArchState *env, unsigned regnum)
     case CREG_FULLY_DECOMPRESSED:
         return gpcrs->decompressed[regnum].cr_tag;
     default:
-        tcg_abort();
+        __builtin_unreachable();
     }
+    tcg_abort();
+}
+
+static inline uint32_t get_capreg_hwperms(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    sanity_check_capreg(gpcrs, regnum);
+    // We can determine the value of the tag by looking at the current state:
+    // Three of them directly encode the tag value and in the fully decompressed
+    // state we simply read the cr_tag member.
+    switch (get_capreg_state(gpcrs, regnum)) {
+    case CREG_INTEGER:
+        return 0; /* No permissions */
+    case CREG_TAGGED_CAP:
+    case CREG_UNTAGGED_CAP:
+        return (uint32_t)CC128_EXTRACT_FIELD(gpcrs->pesbt[regnum], HWPERMS);
+    case CREG_FULLY_DECOMPRESSED:
+        return gpcrs->decompressed[regnum].cr_perms;
+    default:
+        __builtin_unreachable();
+    }
+    tcg_abort();
 }
 
 static inline void nullify_capreg(CPUArchState *env, unsigned regnum)
