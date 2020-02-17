@@ -91,7 +91,9 @@ enum {
 
 typedef struct CPURISCVState CPURISCVState;
 
+#ifdef TARGET_CHERI
 #include "cheri-lazy-capregs-types.h"
+#endif
 #include "pmp.h"
 
 struct CPURISCVState {
