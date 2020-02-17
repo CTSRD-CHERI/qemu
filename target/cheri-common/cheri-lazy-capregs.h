@@ -167,6 +167,22 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     sanity_check_capreg(gpcrs, regnum);
 }
 
+static inline void update_compressed_capreg(CPUArchState *env, unsigned regnum,
+                                            target_ulong pesbt, bool tag,
+                                            target_ulong cursor)
+{
+    // writing to $c0/$cnull is a no-op
+    if (unlikely(regnum == 0))
+        return;
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    gpcrs->cursor[regnum] = cursor;
+    gpcrs->pesbt[regnum] = pesbt;
+    CapRegState new_state = tag ? CREG_TAGGED_CAP : CREG_UNTAGGED_CAP;
+    set_capreg_state(gpcrs, regnum, new_state);
+    cheri_debug_assert(get_capreg_state(gpcrs, regnum) == new_state);
+    sanity_check_capreg(gpcrs, regnum);
+}
+
 static inline target_ulong get_capreg_cursor(CPUArchState *env, unsigned regnum)
 {
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
