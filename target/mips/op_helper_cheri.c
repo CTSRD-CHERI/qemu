@@ -2057,19 +2057,31 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
                                  hwaddr *physaddr)
 {
     cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
-    // TODO: do one physical translation and then use that to speed up tag read
-    // and use address_space_read to read the full 16 byte buffer
     /*
      * Load otype and perms from memory (might trap on load)
      *
      * Note: In-memory capabilities pesbt is xored with a mask to ensure that
      * NULL capabilities have an all zeroes representation.
      */
-    uint64_t pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc) ^ CC128_NULL_XOR_MASK;
-    uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
-
+    /* No TLB fault possible, should be safe to get a host pointer now */
+    void* host = probe_read(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
+    // When writing back pesbt we have to XOR with the NULL mask to ensure that
+    // NULL capabilities have an all-zeroes representation.
+    uint64_t pesbt;
+    uint64_t cursor;
+    if (host) {
+        // Fast path, host address in TLB
+        pesbt = ldq_p(host) ^ CC128_NULL_XOR_MASK;
+        cursor = ldq_p((char*)host + 8);
+    } else {
+        // Slow path for e.g. IO regions.
+        qemu_log_mask(CPU_LOG_INSTR, "Using slow path for load from guest address " TARGET_FMT_plx "\n", vaddr);
+        pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc) ^ CC128_NULL_XOR_MASK;
+        cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
+    }
     int prot;
     target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
+    // TODO: qemu_ram_addr_from_host()
     tag = clear_tag_if_no_loadcap(tag, source, prot);
 
     env->statcounters_cap_read++;
@@ -2105,17 +2117,27 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
      */
 
     env->statcounters_cap_write++;
+    // TODO: qemu_ram_addr_from_host()
     if (tag) {
         env->statcounters_cap_write_tagged++;
         cheri_tag_set(env, vaddr, cs, retpc);
     } else {
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
     }
-
+    /* No TLB fault possible, should be safe to get a host pointer now */
+    void* host = probe_write(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
-    cpu_stq_data_ra(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, retpc);
-    cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
+    if (host) {
+        // Fast path, host address in TLB
+        stq_p(host, pesbt ^ CC128_NULL_XOR_MASK);
+        stq_p((char*)host + 8, cursor);
+    } else {
+        // Slow path for e.g. IO regions.
+        qemu_log_mask(CPU_LOG_INSTR, "Using slow path for store to guest address " TARGET_FMT_plx "\n", vaddr);
+        cpu_stq_data_ra(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, retpc);
+        cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
+    }
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
