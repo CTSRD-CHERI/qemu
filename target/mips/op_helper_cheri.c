@@ -2069,10 +2069,18 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     // NULL capabilities have an all-zeroes representation.
     uint64_t pesbt;
     uint64_t cursor;
-    if (host) {
+    if (likely(host)) {
         // Fast path, host address in TLB
         pesbt = ldq_p(host) ^ CC128_NULL_XOR_MASK;
         cursor = ldq_p((char*)host + 8);
+#ifdef CONFIG_MIPS_LOG_INSTR
+        // cpu_ldq_data_ra() performs the read logging, with raw memory
+        // accesses we have to do it manually
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+            helper_dump_load(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_load(env, vaddr + 8, cursor, MO_64);
+        }
+#endif
     } else {
         // Slow path for e.g. IO regions.
         qemu_log_mask(CPU_LOG_INSTR, "Using slow path for load from guest address " TARGET_FMT_plx "\n", vaddr);
@@ -2128,10 +2136,18 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     void* host = probe_write(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
-    if (host) {
+    if (likely(host)) {
         // Fast path, host address in TLB
         stq_p(host, pesbt ^ CC128_NULL_XOR_MASK);
         stq_p((char*)host + 8, cursor);
+#ifdef CONFIG_MIPS_LOG_INSTR
+        // cpu_stq_data_ra() performs the write logging, with raw memory
+        // accesses we have to do it manually
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+            helper_dump_store(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_store(env, vaddr + 8, cursor, MO_64);
+        }
+#endif
     } else {
         // Slow path for e.g. IO regions.
         qemu_log_mask(CPU_LOG_INSTR, "Using slow path for store to guest address " TARGET_FMT_plx "\n", vaddr);
