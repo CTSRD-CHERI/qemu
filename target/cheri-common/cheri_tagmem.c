@@ -59,6 +59,8 @@
  *
  * XXX Should consider adding a reference count per tag block so that
  * blocks can be deallocated when no longer used maybe.
+ *
+ * FIXME: rewrite using somethign more like the upcoming MTE changes (https://github.com/rth7680/qemu/commits/tgt-arm-mte-user)
  */
 #include "cheri_tagmem.h"
 

@@ -31,6 +31,14 @@
  * SUCH DAMAGE.
  */
 #pragma once
+
+
+#if (defined(CHERI_128) || defined(CHERI_64)) && !defined(CHERI_MAGIC128)
+#define QEMU_USE_COMPRESSED_CHERI_CAPS 1
+#else
+#define QEMU_USE_COMPRESSED_CHERI_CAPS 0
+#endif
+
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
 #if defined(CHERI_128) || defined(CHERI_MAGIC128)
 /* Magic 128 has the same set of permissions as 128 */
