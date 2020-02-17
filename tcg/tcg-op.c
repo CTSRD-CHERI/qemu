@@ -3271,11 +3271,11 @@ void tcg_gen_atomic_cmpxchg_i64_with_checked_addr(
 #ifdef CONFIG_SOFTMMU
         {
             TCGv_i32 oi = tcg_const_i32(make_memop_idx(memop, idx));
-            gen(retv, cpu_env, addr, cmpv, newv, oi);
+            gen(retv, cpu_env, (TCGv)checked_addr, cmpv, newv, oi);
             tcg_temp_free_i32(oi);
         }
 #else
-        gen(retv, cpu_env, addr, cmpv, newv);
+        gen(retv, cpu_env, (TCGv)checked_addr, cmpv, newv);
 #endif
 #else
         gen_helper_exit_atomic(cpu_env);
@@ -3428,11 +3428,11 @@ static void do_atomic_op_i64(TCGv_i64 ret, TCGv int_addr, TCGv_i64 val,
 #ifdef CONFIG_SOFTMMU
         {
             TCGv_i32 oi = tcg_const_i32(make_memop_idx(memop & ~MO_SIGN, idx));
-            gen(ret, cpu_env, addr, val, oi);
+            gen(ret, cpu_env, (TCGv)checked_addr, val, oi);
             tcg_temp_free_i32(oi);
         }
 #else
-        gen(ret, cpu_env, addr, val);
+        gen(ret, cpu_env, (TCGv)checked_addr, val);
 #endif
 #else
         gen_helper_exit_atomic(cpu_env);
