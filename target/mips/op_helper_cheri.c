@@ -2080,7 +2080,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         // Decompress to log all fields
         cap_register_t ncd;
-        decompress_128cap(pesbt, cursor, &ncd);
+        decompress_128cap_already_xored(pesbt, cursor, &ncd);
         ncd.cr_tag = tag;
         dump_cap_load(vaddr, compress_128cap(&ncd), cursor, tag);
         cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
@@ -2093,9 +2093,9 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
 static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
     target_ulong vaddr, target_ulong retpc)
 {
-    const cap_register_t *csp = get_readonly_capreg(env, cs);
-    uint64_t cursor = cap_get_cursor(csp);
-    uint64_t pesbt = compress_128cap(csp);
+    uint64_t cursor = get_capreg_cursor(env, cs);
+    uint64_t pesbt = get_capreg_pesbt(env, cs);
+    bool tag = get_capreg_tag(env, cs);
     /*
      * Touching the tags will take both the data write TLB fault and
      * capability write TLB fault before updating anything.  Thereafter, the
@@ -2105,23 +2105,30 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
      */
 
     env->statcounters_cap_write++;
-    if (csp->cr_tag) {
+    if (tag) {
         env->statcounters_cap_write_tagged++;
         cheri_tag_set(env, vaddr, cs, retpc);
     } else {
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
     }
 
-    cpu_stq_data_ra(env, vaddr, pesbt, retpc);
+    // When writing back pesbt we have to XOR with the NULL mask to ensure that
+    // NULL capabilities have an all-zeroes representation.
+    cpu_stq_data_ra(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, retpc);
     cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
 
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         /* Log memory cap write, if needed. */
-        dump_cap_store(vaddr, pesbt, cap_get_cursor(csp), csp->cr_tag);
-        cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
-        cvtrace_dump_cap_cbl(&env->cvtrace, csp);
+        // Decompress to log all fields
+        cap_register_t stored_cap;
+        decompress_128cap_already_xored(pesbt, cursor, &stored_cap);
+        stored_cap.cr_tag = tag;
+        cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
+        dump_cap_store(vaddr, pesbt, cursor, tag);
+        cvtrace_dump_cap_store(&env->cvtrace, vaddr, &stored_cap);
+        cvtrace_dump_cap_cbl(&env->cvtrace, &stored_cap);
     }
 #endif
 }

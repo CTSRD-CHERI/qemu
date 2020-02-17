@@ -190,6 +190,34 @@ static inline target_ulong get_capreg_cursor(CPUArchState *env, unsigned regnum)
     return gpcrs->cursor[regnum];
 }
 
+static inline target_ulong get_capreg_pesbt(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    sanity_check_capreg(gpcrs, regnum);
+    return gpcrs->pesbt[regnum];
+}
+
+static inline target_ulong get_capreg_tag(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    sanity_check_capreg(gpcrs, regnum);
+    // We can determine the value of the tag by looking at the current state:
+    // Three of them directly encode the tag value and in the fully decompressed
+    // state we simply read the cr_tag member.
+    switch (get_capreg_state(gpcrs, regnum)) {
+    case CREG_INTEGER:
+        return false;
+    case CREG_TAGGED_CAP:
+        return true;
+    case CREG_UNTAGGED_CAP:
+        return false;
+    case CREG_FULLY_DECOMPRESSED:
+        return gpcrs->decompressed[regnum].cr_tag;
+    default:
+        tcg_abort();
+    }
+}
+
 static inline void nullify_capreg(CPUArchState *env, unsigned regnum)
 {
     cheri_debug_assert(regnum != 0);
