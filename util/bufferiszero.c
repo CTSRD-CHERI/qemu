@@ -68,8 +68,12 @@ buffer_zero_int(const void *buf, size_t len)
  * does not support them.
  */
 #ifdef CONFIG_AVX2_OPT
+#ifdef __clang__
+#pragma clang attribute push (__attribute__((target("sse2"))), apply_to=function)
+#else
 #pragma GCC push_options
 #pragma GCC target("sse2")
+#endif
 #endif
 #include <emmintrin.h>
 
@@ -105,7 +109,11 @@ buffer_zero_sse2(const void *buf, size_t len)
     return _mm_movemask_epi8(_mm_cmpeq_epi8(t, zero)) == 0xFFFF;
 }
 #ifdef CONFIG_AVX2_OPT
+#ifdef __clang__
+#pragma clang attribute pop
+#else
 #pragma GCC pop_options
+#endif
 #endif
 
 #ifdef CONFIG_AVX2_OPT
@@ -113,8 +121,12 @@ buffer_zero_sse2(const void *buf, size_t len)
  * the includes have to be within the corresponding push_options region, and
  * therefore the regions themselves have to be ordered with increasing ISA.
  */
+#ifdef __clang__
+#pragma clang attribute push (__attribute__((target("sse4"))), apply_to=function)
+#else
 #pragma GCC push_options
 #pragma GCC target("sse4")
+#endif
 #include <smmintrin.h>
 
 static bool
@@ -145,9 +157,17 @@ buffer_zero_sse4(const void *buf, size_t len)
     return _mm_testz_si128(t, t);
 }
 
+#ifdef __clang__
+#pragma clang attribute pop
+#else
 #pragma GCC pop_options
+#endif
+#ifdef __clang__
+#pragma clang attribute push (__attribute__((target("avx2"))), apply_to=function)
+#else
 #pragma GCC push_options
 #pragma GCC target("avx2")
+#endif
 #include <immintrin.h>
 
 static bool
@@ -184,7 +204,11 @@ buffer_zero_avx2(const void *buf, size_t len)
 
     return _mm256_testz_si256(t, t);
 }
+#ifdef __clang__
+#pragma clang attribute pop
+#else
 #pragma GCC pop_options
+#endif
 #endif /* CONFIG_AVX2_OPT */
 
 /* Note that for test_buffer_is_zero_next_accel, the most preferred

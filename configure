@@ -5477,6 +5477,7 @@ if test "$cpuid_h" = "yes" && test "$avx2_opt" != "no"; then
   cat > $TMPC << EOF
 #pragma GCC push_options
 #pragma GCC target("avx2")
+#pragma clang attribute push (__attribute__((target("avx2"))), apply_to=function)
 #include <cpuid.h>
 #include <immintrin.h>
 static int bar(void *a) {
@@ -5484,6 +5485,7 @@ static int bar(void *a) {
     return _mm256_testz_si256(x, x);
 }
 int main(int argc, char *argv[]) { return bar(argv[0]); }
+#pragma clang attribute pop
 EOF
   if compile_object "" ; then
     avx2_opt="yes"
