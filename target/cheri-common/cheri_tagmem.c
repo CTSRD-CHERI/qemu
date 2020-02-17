@@ -158,7 +158,7 @@ static inline ram_addr_t p2r_addr(CPUArchState *env, hwaddr addr, MemoryRegion**
         *mrp = mr;
 
     if (!(memory_region_is_ram(mr) || memory_region_is_romd(mr))) {
-        return -1LL;
+        return RAM_ADDR_INVALID;
     }
     return (memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK) + addr;
 }
@@ -306,7 +306,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
      */
 
     ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg, pc);
-    if (ram_addr == -1LL)
+    if (ram_addr == RAM_ADDR_INVALID)
         return;
 
     /* Get the tag number and tag block ptr. */
