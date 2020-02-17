@@ -334,7 +334,7 @@ void helper_mips_cvtrace_log_instruction(CPUMIPSState *env, target_ulong pc)
 void r4k_dump_tlb(CPUMIPSState *env, int idx)
 {
     r4k_tlb_t *tlb = &env->tlb->mmu.r4k.tlb[idx];
-    unsigned pagemask, hi, lo0, lo1;
+    target_ulong pagemask, hi, lo0, lo1;
 
     if (tlb->EHINV) {
         pagemask = 0;
@@ -363,7 +363,7 @@ void r4k_dump_tlb(CPUMIPSState *env, int idx)
 #endif
             (tlb->C1 << 3) | (tlb->PFN[1] >> 6);
     }
-    qemu_log("    Write TLB[%u] = pgmsk:%08x hi:%08x lo0:%08x lo1:%08x\n",
+    qemu_log("    Write TLB[%u] = pgmsk:%08lx hi:%08lx lo0:%08lx lo1:%08lx\n",
             idx, pagemask, hi, lo0, lo1);
 }
 
