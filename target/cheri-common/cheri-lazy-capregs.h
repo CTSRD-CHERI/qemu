@@ -57,17 +57,6 @@ static inline CapRegState get_capreg_state(GPCapRegs *gpcrs, unsigned reg)
     return (CapRegState)extract64(gpcrs->capreg_state, reg * 2, 2);
 }
 
-static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned reg,
-                                    CapRegState new_state)
-{
-    cheri_debug_assert(reg < 32);
-    if (reg == 0) {
-        cheri_debug_assert(new_state == CREG_FULLY_DECOMPRESSED &&
-                           "NULL is always fully decompressed");
-    }
-    gpcrs->capreg_state = deposit64(gpcrs->capreg_state, reg * 2, 2, new_state);
-}
-
 static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 {
 #ifdef CONFIG_DEBUG_TCG
@@ -80,6 +69,8 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         cheri_debug_assert(compress_128cap_without_xor(c) ==
                            gpcrs->pesbt[regnum]);
         cheri_debug_assert(cap_get_cursor(c) == gpcrs->cursor[regnum]);
+        cheri_debug_assert((c->cr_tag == 0 || c->cr_tag == 1) &&
+                           "Unitialized value used?");
     } else {
         // Reset decompressed values to invalid data to check they aren't
         // accessed.
@@ -87,6 +78,30 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         memset(decompressed, 0xaa, sizeof(*decompressed));
     }
 #endif
+}
+
+static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned regnum,
+                                    CapRegState new_state)
+{
+    cheri_debug_assert(regnum < 32);
+    if (regnum == 0) {
+        cheri_debug_assert(new_state == CREG_FULLY_DECOMPRESSED &&
+                           "NULL is always fully decompressed");
+    }
+    gpcrs->capreg_state =
+        deposit64(gpcrs->capreg_state, regnum * 2, 2, new_state);
+    // Check that the compressed and decompressed caps are in sync
+    sanity_check_capreg(gpcrs, regnum);
+}
+
+static inline const cap_register_t *
+_update_from_compressed(GPCapRegs *gpcrs, unsigned regnum, bool tag)
+{
+    decompress_128cap_already_xored(gpcrs->pesbt[regnum], gpcrs->cursor[regnum],
+                                    &gpcrs->decompressed[regnum]);
+    gpcrs->decompressed[regnum].cr_tag = tag;
+    set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
+    return &gpcrs->decompressed[regnum];
 }
 
 static inline __attribute__((always_inline)) const cap_register_t *
@@ -101,34 +116,24 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
     }
     switch (get_capreg_state(gpcrs, regnum)) {
     case CREG_INTEGER: {
-        set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
         // Update capreg to a decompressed integer value and clear pesbt
         gpcrs->pesbt[regnum] = CC128_NULL_PESBT;
         const cap_register_t *result =
             int_to_cap(gpcrs->cursor[regnum], &gpcrs->decompressed[regnum]);
-        sanity_check_capreg(gpcrs, regnum);
+        set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
         return result;
     }
     case CREG_FULLY_DECOMPRESSED:
-        break;
+        // Check that the compressed and decompressed caps are in sync
+        sanity_check_capreg(gpcrs, regnum);
+        return &gpcrs->decompressed[regnum];
     case CREG_TAGGED_CAP:
-        // TODO: sanity check that the decompressed value is valid (e.g. top >=
-        // base, etc)
-        decompress_128cap(gpcrs->pesbt[regnum], gpcrs->cursor[regnum],
-                          &gpcrs->decompressed[regnum]);
-        gpcrs->decompressed[regnum].cr_tag = true;
-        break;
+        return _update_from_compressed(gpcrs, regnum, /*tag=*/true);
     case CREG_UNTAGGED_CAP:
-        decompress_128cap(gpcrs->pesbt[regnum], gpcrs->cursor[regnum],
-                          &gpcrs->decompressed[regnum]);
-        gpcrs->decompressed[regnum].cr_tag = false;
-        break;
+        return _update_from_compressed(gpcrs, regnum, /*tag=*/false);
     default:
         tcg_abort();
     }
-    // Check that the compressed and decompressed caps are in sync
-    sanity_check_capreg(gpcrs, regnum);
-    return &gpcrs->decompressed[regnum];
 }
 
 /// return a read-only capability register with register number 0 meaning $ddc
