@@ -1910,8 +1910,8 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t
     }
     cheri_debug_assert(align_of(CHERI_CAP_SIZE, addr) == 0);
     hwaddr physaddr;
-    load_cap_from_memory(env, cd, cb, cbp, /*offset=*/0, _host_return_address,
-                         &physaddr);
+    load_cap_from_memory(env, cd, cb, cbp, /*addr=*/cap_get_cursor(cbp),
+                         _host_return_address, &physaddr);
     env->lladdr = addr;
     env->CP0_LLAddr = physaddr;
     env->linkedflag = 1; // FIXME: remove
