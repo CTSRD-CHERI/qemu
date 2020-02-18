@@ -302,6 +302,10 @@ extern int rvfi_client_fd;
 
 static void rvfi_dii_send_trace(CPURISCVState* env, rvfi_dii_trace_t* trace)
 {
+    fprintf(stderr, "Sending %jd PCWD: 0x%08jx, RD: %02d, RWD: 0x%08jx, MA: 0x%08jx, MWD: 0x%08jx, MWM: 0x%08x, I: 0x%016jx\n",
+            (uintmax_t)trace->rvfi_dii_order, (uintmax_t)trace->rvfi_dii_pc_wdata, trace->rvfi_dii_rd_addr, (uintmax_t)trace->rvfi_dii_rd_wdata,
+            (uintmax_t)trace->rvfi_dii_mem_addr, (uintmax_t)trace->rvfi_dii_mem_wdata, trace->rvfi_dii_mem_wmask,
+            (uintmax_t)trace->rvfi_dii_insn);
     ssize_t nbytes = write(rvfi_client_fd, trace, sizeof(*trace));
     if (nbytes != sizeof(*trace)) {
         error_report("Failed to write trace entry to socket: %zd (%s)", nbytes, strerror(errno));
@@ -318,11 +322,9 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
     // TestRIG expects a zero $pc after a trap:
     if (env->rvfi_dii_trace.rvfi_dii_trap) {
         info_report("Got trap at " TARGET_FMT_plx, env->pc);
-        env->rvfi_dii_trace.rvfi_dii_pc_wdata = 0;
     }
     env->rvfi_dii_have_injected_insn = false;
     while (true) {
-        cs->cflags_next_tb |= CF_NOCACHE;
         assert(cs->singlestep_enabled);
         rvfi_dii_command_t cmd_buf;
         _Static_assert(sizeof(cmd_buf) == 8, "Expected 8 bytes of data");
@@ -345,12 +347,14 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
         switch (cmd_buf.rvfi_dii_cmd) {
         case '\0': {
             env->rvfi_dii_trace.rvfi_dii_halt = 1;
+            env->rvfi_dii_trace.rvfi_dii_order = 0;
             // Reset the processor (and ensure that it resets to 0x80000000
             cpu_reset(cs);
             // FIXME: Hopefully this resets RAM?
             qemu_system_reset(SHUTDOWN_CAUSE_HOST_SIGNAL);
             // Overwrite the processor's PC as the reset() writes it with default RSTVECTOR (0x10000)
             env->pc = 0x80000000;
+            cs->cflags_next_tb |= CF_NOCACHE;
             break;
         }
         case 'B': {
@@ -368,12 +372,20 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
         }
         case 1: {
             cpu_single_step(cs, SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER);
-            info_report("injecting instruction '0x%08x' at " TARGET_FMT_plx,
-                        cmd_buf.rvfi_dii_insn, env->pc);
-#if 0
+            info_report("injecting instruction %d '0x%08x' at " TARGET_FMT_plx,
+                        cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, env->pc);
             // Store the new code to the destination pointer
             cpu_memory_rw_debug(cs, env->pc, (uint8_t *)&cmd_buf.rvfi_dii_insn,
                                 sizeof(cmd_buf.rvfi_dii_insn), true);
+            // This is extremely important even though we don't use the value
+            // written there in translate.c (since it can fail when env->pc is
+            // an inaccessisible address such as 0x00000 on trap).
+            // The reason we need this is that it ends up calling
+            // tb_invalidate_phys_range() which flushes the cached translated
+            // TCG blocks for that address.
+            // Ideally we would just completely disable caching of translated
+            // blocks in RVFI-DII mode, but I can't figure out how to do this.
+#if 0
             uint32_t injected_inst = cpu_ldl_code(env, env->pc);
             if (injected_inst != cmd_buf.rvfi_dii_insn) {
                 error_report("Failed to inject instruction '0x%08x' at "
@@ -387,13 +399,14 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             target_disas_buf(stderr, cs, &cmd_buf.rvfi_dii_insn,
                   sizeof(cmd_buf.rvfi_dii_insn), env->pc, 1);
             resume_all_vcpus();
-            // Clear the EXCP_DEBUG flag to avoid dropping into GDB
             cpu_resume(cs);
-
             env->rvfi_dii_trace.rvfi_dii_pc_wdata = -1; // Will be set after single-step trap
+            // Clear the EXCP_DEBUG flag to avoid dropping into GDB
+            cs->exception_index = EXCP_NONE; // EXCP_INTERRUPT;
+            rvfi_dii_started = true;
+            cs->cflags_next_tb |= CF_NOCACHE;
             // Continue execution at env->pc
-            cs->exception_index = EXCP_NONE;
-            cpu_loop_exit_restore(cs, 0); // noreturn -> jumps back to TCG
+            cpu_loop_exit_noexc(cs); // noreturn -> jumps back to TCG
         }
         default:
             error_report("rvfi_dii got unsupported command '%c'\n",
