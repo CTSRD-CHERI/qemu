@@ -4520,6 +4520,10 @@ int main(int argc, char **argv, char **envp)
         return 0;
     }
 
+    if (singlestep) {
+        CPUState *cpu;
+        CPU_FOREACH(cpu) { cpu_single_step(cpu, 1); }
+    }
     if (incoming) {
         Error *local_err = NULL;
         qemu_start_incoming_migration(incoming, &local_err);
