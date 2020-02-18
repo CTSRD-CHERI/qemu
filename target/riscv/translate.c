@@ -202,6 +202,30 @@ static inline void gen_mark_gpr_as_integer(int reg_num_dst) {
 }
 #endif
 
+#ifdef CONFIG_RVFI_DII
+static inline void _gen_rvfi_dii_set_field(size_t offset, TCGv value)
+{
+    tcg_gen_st_tl(value, cpu_env, offset);
+}
+static inline void _gen_rvfi_dii_set_field_const(size_t offset, uint64_t value)
+{
+    TCGv_i64 tv = tcg_const_i64(value);
+    tcg_gen_st_tl(tv, cpu_env, offset);
+    tcg_temp_free_i64(tv);
+}
+#define rvfi_dii_offset(field)                                                 \
+    offsetof(CPURISCVState, rvfi_dii_trace.rvfi_dii_##field)
+
+#define gen_rvfi_dii_set_field(field, value)                                   \
+    _gen_rvfi_dii_set_field(rvfi_dii_offset(field), value)
+#define gen_rvfi_dii_set_field_const(field, value)                             \
+    _gen_rvfi_dii_set_field_const(                                             \
+        offsetof(CPURISCVState, rvfi_dii_trace.rvfi_dii_##field), value)
+#else
+#define gen_rvfi_dii_set_field_const(field, value) ((void)0)
+#define gen_rvfi_dii_set_field(field, value) ((void)0)
+#endif
+
 /* Wrapper for setting reg values - need to check of reg is zero since
  * cpu_gpr[0] is not actually allocated. this is more for safety purposes,
  * since we usually avoid calling the OP_TYPE_gen function if we see a write to
@@ -216,8 +240,11 @@ static inline void gen_set_gpr(int reg_num_dst, TCGv t)
 #else
         tcg_gen_mov_tl(cpu_gpr[reg_num_dst], t);
 #endif
+        gen_rvfi_dii_set_field_const(rd_addr, reg_num_dst);
+        gen_rvfi_dii_set_field(rd_wdata, t);
     }
 }
+
 static inline void gen_set_gpr_const(int reg_num_dst, target_ulong value)
 {
     if (reg_num_dst != 0) {
@@ -227,6 +254,8 @@ static inline void gen_set_gpr_const(int reg_num_dst, target_ulong value)
 #else
         tcg_gen_movi_tl(cpu_gpr[reg_num_dst], value);
 #endif
+        gen_rvfi_dii_set_field_const(rd_addr, reg_num_dst);
+        gen_rvfi_dii_set_field_const(rd_wdata, value);
     }
 }
 
