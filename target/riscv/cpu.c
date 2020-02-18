@@ -297,6 +297,7 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
 }
 
 
+#ifdef CONFIG_RVFI_DII
 extern int rvfi_client_fd;
 
 static void rvfi_dii_send_trace(CPURISCVState* env, rvfi_dii_trace_t* trace)
@@ -385,19 +386,22 @@ static void handle_rvfi_dii_singlestep(CPUState* cs, RISCVCPU* cpu, CPURISCVStat
     }
 }
 
+#endif // CONFIG_RVFI_DII
+
 static void riscv_debug_excp_handler(CPUState *cs)
 {
     /*
      * Called by core code when a watchpoint or breakpoint fires;
-     * need to check which one and raise the appropriate exception.
+     * Also happens for singlestep events
      */
+#ifdef CONFIG_RVFI_DII
     struct RISCVCPU *cpu = RISCV_CPU(cs);
     struct CPURISCVState *env = &cpu->env;
-    if (rvfi_client_fd) {
-        info_report("Got DEBUG EXCEPTION @" TARGET_FMT_plx, env->pc);
+    if (rvfi_client_fd && cs->singlestep_enabled) {
         handle_rvfi_dii_singlestep(cs, cpu, env);
         return;
     }
+#endif
 }
 
 static void riscv_cpu_reset(CPUState *cs)

@@ -393,6 +393,7 @@ pvrdma=""
 gprof="no"
 debug_tcg="no"
 mips_log_instr="yes"
+rvfi_dii="no"
 debug="no"
 sanitizers="no"
 fortify_source=""
@@ -1107,12 +1108,17 @@ for opt do
   ;;
   --disable-mips-log-instr) mips_log_instr="no"
   ;;
+  --enable-rvfi-dii) rvfi_dii="yes"
+  ;;
+  --disable-rvfi-dii) rvfi_dii="no"
+  ;;
   --enable-debug)
       # Enable debugging options that aren't excessively noisy
       debug_tcg="yes"
       debug_mutex="yes"
       debug="yes"
       mips_log_instr="yes"
+      rvfi_dii="yes"
       strip_opt="no"
       fortify_source="no"
   ;;
@@ -6562,6 +6568,7 @@ if test "$tcg" = "yes" ; then
     echo "TCG interpreter   $tcg_interpreter"
 fi
 echo "MIPS instruction logging $mips_log_instr"
+echo "RVFI-DII support  $rvfi_dii"
 echo "malloc trim support $malloc_trim"
 echo "RDMA support      $rdma"
 echo "PVRDMA support    $pvrdma"
@@ -6714,6 +6721,9 @@ if test "$debug_tcg" = "yes" ; then
 fi
 if test "$mips_log_instr" = "yes" ; then
   echo "CONFIG_MIPS_LOG_INSTR=y" >> $config_host_mak
+fi
+if test "$rvfi_dii" = "yes" ; then
+  echo "CONFIG_RVFI_DII=y" >> $config_host_mak
 fi
 if test "$strip_opt" = "yes" ; then
   echo "STRIP=${strip}" >> $config_host_mak

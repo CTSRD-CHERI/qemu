@@ -4062,12 +4062,14 @@ ETEXI
 
 #endif
 
+#ifdef CONFIG_RVFI_DII
 DEF("rvfi-dii-port", HAS_ARG, QEMU_OPTION_rvfi_dii_port, \
     "-rvfi-dii-port <port>     Run QEMU in RVFI-DII mode, listing on <port>\n", QEMU_ARCH_RISCV)
 STEXI
 @item -rvfi-dii-port @var{port}
 Run QEMU in RVFI-DII mode, listing on <port>.
 ETEXI
+#endif
 
 
 DEF("incoming", HAS_ARG, QEMU_OPTION_incoming, \

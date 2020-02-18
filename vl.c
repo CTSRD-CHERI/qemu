@@ -202,6 +202,7 @@ bool cheri_debugger_on_unrepresentable = false;
 #include "target/cheri-common/cheri_defs.h"
 #endif
 
+#ifdef CONFIG_RVFI_DII
 int rvfi_client_fd = 0;
 
 static int rvfi_dii_socket_init(uint16_t port) {
@@ -243,6 +244,7 @@ static int rvfi_dii_socket_init(uint16_t port) {
     info_report("Listening for remote rvfi_dii connection on port %d.\n", ntohs(addr.sin_port));
     return rvfi_listen_fd;
 }
+#endif
 
 /* The bytes in qemu_uuid are in the order specified by RFC4122, _not_ in the
  * little-endian "wire format" described in the SMBIOS 2.6 specification.
@@ -2957,7 +2959,9 @@ int main(int argc, char **argv, char **envp)
     uint64_t cl_breakpoint = 0L;
     uint64_t cl_breakcount = 0L;
 #endif
+#ifdef CONFIG_RVFI_DII
     int rvfi_dii_port = 0;
+#endif
     bool list_data_dirs = false;
     char *dir, **dirs;
     BlockdevOptionsQueue bdo_queue = QSIMPLEQ_HEAD_INITIALIZER(bdo_queue);
@@ -3746,6 +3750,7 @@ int main(int argc, char **argv, char **envp)
                 cheri_debugger_on_unrepresentable = true;
                 break;
 #endif /* CONFIG_CHERI */
+#ifdef CONFIG_RVFI_DII
             case QEMU_OPTION_rvfi_dii_port:
                 rvfi_dii_port = strtoull(optarg, NULL, 0);
                 if (rvfi_dii_port == 0 || rvfi_dii_port > USHRT_MAX) {
@@ -3763,6 +3768,7 @@ int main(int argc, char **argv, char **envp)
                 }
                 autostart = false;
                 break;
+#endif
             case QEMU_OPTION_icount:
                 icount_opts = qemu_opts_parse_noisily(qemu_find_opts("icount"),
                                                       optarg, true);
@@ -4587,7 +4593,7 @@ int main(int argc, char **argv, char **envp)
         dump_vmstate_json_to_file(vmstate_dump_file);
         return 0;
     }
-
+#ifdef CONFIG_RVFI_DII
     if (rvfi_dii_port) {
         if (maxram_size != 8 * MiB) {
             error_report("RVFI-DII: maxram_size must be 8 MiB.");
@@ -4600,6 +4606,7 @@ int main(int argc, char **argv, char **envp)
         assert(!incoming);
         singlestep = true;
     }
+#endif
     if (singlestep) {
         CPUState *cpu;
         CPU_FOREACH(cpu) { cpu_single_step(cpu, SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER); }

@@ -171,7 +171,9 @@ struct CPURISCVState {
 
     float_status fp_status;
 
-    rvfi_dii_trace_t rvfi_dii_trace; // TODO: malloc on-demand to reduce sizeof(env)?
+#ifdef CONFIG_RVFI_DII
+    rvfi_dii_trace_t rvfi_dii_trace;
+#endif
 
     /* Fields from here on are preserved across CPU reset. */
     QEMUTimer *timer; /* Internal timer */
