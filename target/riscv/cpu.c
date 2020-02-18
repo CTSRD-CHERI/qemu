@@ -312,6 +312,9 @@ static void rvfi_dii_send_trace(CPURISCVState* env, rvfi_dii_trace_t* trace)
 static void handle_rvfi_dii_singlestep(CPUState* cs, RISCVCPU* cpu, CPURISCVState* env) {
     static bool rvfi_dii_started = false;
 
+    // Single-step completed -> update PC in the trace buffer
+    env->rvfi_dii_trace.rvfi_dii_pc_wdata = env->pc;
+    env->rvfi_dii_trace.rvfi_dii_order++;
     while (true) {
         cs->cflags_next_tb |= CF_NOCACHE;
         assert(cs->singlestep_enabled);
@@ -320,8 +323,10 @@ static void handle_rvfi_dii_singlestep(CPUState* cs, RISCVCPU* cpu, CPURISCVStat
         if (rvfi_dii_started) {
             // Send previous state
             rvfi_dii_send_trace(env, &env->rvfi_dii_trace);
-            // Zero the output trace for the next test
+            // Zero the output trace for the next test except for instret
+            uint64_t old_instret = env->rvfi_dii_trace.rvfi_dii_order;
             memset(&env->rvfi_dii_trace, 0, sizeof(env->rvfi_dii_trace));
+            env->rvfi_dii_trace.rvfi_dii_order = old_instret;
         }
         // Should be blocking, so we only read fewer bytes on EOF
         ssize_t nbytes = read(rvfi_client_fd, &cmd_buf, sizeof(cmd_buf));
@@ -373,6 +378,12 @@ static void handle_rvfi_dii_singlestep(CPUState* cs, RISCVCPU* cpu, CPURISCVStat
             resume_all_vcpus();
             // Clear the EXCP_DEBUG flag to avoid dropping into GDB
             cpu_resume(cs);
+
+            // Set all the fields in rvfi_dii that we know about now
+            env->rvfi_dii_trace.rvfi_dii_pc_rdata = env->pc;
+            env->rvfi_dii_trace.rvfi_dii_pc_wdata = -1; // Will be set after single-step trap
+            env->rvfi_dii_trace.rvfi_dii_insn = injected_inst;
+
             riscv_raise_exception(env, EXCP_NONE, env->pc);
             // cs->exception_index = -1;
             return; // we can execute the next instruction now
