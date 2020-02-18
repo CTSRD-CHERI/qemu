@@ -213,8 +213,6 @@ static inline void _gen_rvfi_dii_set_field_const(size_t offset, uint64_t value)
     tcg_gen_st_tl(tv, cpu_env, offset);
     tcg_temp_free_i64(tv);
 }
-#define rvfi_dii_offset(field)                                                 \
-    offsetof(CPURISCVState, rvfi_dii_trace.rvfi_dii_##field)
 
 #define gen_rvfi_dii_set_field(field, value)                                   \
     _gen_rvfi_dii_set_field(rvfi_dii_offset(field), value)

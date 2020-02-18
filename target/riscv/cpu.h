@@ -276,6 +276,8 @@ extern const char * const riscv_intr_names[];
 
 #ifdef CONFIG_RVFI_DII
 void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env);
+#define rvfi_dii_offset(field)                                                 \
+    offsetof(CPURISCVState, rvfi_dii_trace.rvfi_dii_##field)
 #endif
 
 void riscv_cpu_do_interrupt(CPUState *cpu);
