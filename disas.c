@@ -476,6 +476,62 @@ void target_disas(FILE *out, CPUState *cpu, target_ulong code,
     }
 }
 
+void target_disas_buf(FILE *out, CPUState *cpu, void *code, unsigned long size,
+                      target_ulong vma, target_ulong max_insns)
+{
+    CPUClass *cc = CPU_GET_CLASS(cpu);
+    target_ulong pc;
+    target_ulong num_insns;
+    int count;
+    CPUDebug s;
+
+    INIT_DISASSEMBLE_INFO(s.info, out, fprintf);
+
+    s.cpu = cpu;
+    s.info.read_memory_func = target_read_memory;
+    s.info.buffer = code;
+    s.info.buffer_vma = vma;
+    s.info.buffer_length = size;
+    s.info.print_address_func = generic_print_address;
+    s.info.cap_arch = -1;
+    s.info.cap_mode = 0;
+    s.info.cap_insn_unit = 4;
+    s.info.cap_insn_split = 4;
+
+#ifdef TARGET_WORDS_BIGENDIAN
+    s.info.endian = BFD_ENDIAN_BIG;
+#else
+    s.info.endian = BFD_ENDIAN_LITTLE;
+#endif
+
+    if (cc->disas_set_info) {
+        cc->disas_set_info(cpu, &s.info);
+    }
+
+    if (s.info.cap_arch >= 0 && cap_disas_target(&s.info, code, size)) {
+        return;
+    }
+
+    if (s.info.print_insn == NULL) {
+        s.info.print_insn = print_insn_od_target;
+    }
+
+    for (pc = vma, num_insns = 0; size > 0 && num_insns < max_insns; pc += count, size -= count) {
+        fprintf(out, "0x" TARGET_FMT_lx ":  ", pc);
+        count = s.info.print_insn(pc, &s.info);
+        fprintf(out, "\n");
+        if (count < 0)
+            break;
+        if (size < count) {
+            fprintf(out,
+                    "Disassembler disagrees with translator over instruction "
+                    "decoding\n"
+                    "Please report this to qemu-devel@nongnu.org\n");
+            break;
+        }
+    }
+}
+
 static __thread GString plugin_disas_output;
 
 static int plugin_printf(FILE *stream, const char *fmt, ...)
