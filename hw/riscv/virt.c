@@ -51,6 +51,10 @@
 # define BIOS_FILENAME "opensbi-riscv64-virt-fw_jump.bin"
 #endif
 
+#ifdef TARGET_CHERI
+#include "cheri_tagmem.h"
+#endif
+
 static const struct MemmapEntry {
     hwaddr base;
     hwaddr size;
@@ -465,6 +469,9 @@ static void riscv_virt_board_init(MachineState *machine)
                            machine->ram_size, &error_fatal);
     memory_region_add_subregion(system_memory, memmap[VIRT_DRAM].base,
         main_mem);
+#ifdef TARGET_CHERI
+    cheri_tag_init(machine->ram_size);
+#endif
 
     /* create device tree */
     create_fdt(s, memmap, machine->ram_size, machine->kernel_cmdline);

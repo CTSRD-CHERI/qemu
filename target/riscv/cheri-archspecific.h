@@ -44,10 +44,11 @@ static inline void check_cap(CPURISCVState *env, const cap_register_t *cr,
 }
 
 static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {
-    return NULL; // &env->DDC;
+    return &env->DDC;
 }
 
 static inline const cap_register_t *cheri_get_pcc(CPURISCVState *env) {
+    abort();
     return NULL; // &env->PCC;
 }
 

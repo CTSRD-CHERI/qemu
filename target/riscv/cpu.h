@@ -99,6 +99,7 @@ typedef struct CPURISCVState CPURISCVState;
 struct CPURISCVState {
 #ifdef TARGET_CHERI
     struct GPCapRegs gpcapregs;
+    cap_register_t DDC;
 #else
     target_ulong gpr[32];
 #endif

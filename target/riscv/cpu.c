@@ -28,6 +28,9 @@
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
 #include "fpu/softfloat-helpers.h"
+#ifdef TARGET_CHERI
+#include "cheri-lazy-capregs.h"
+#endif
 
 /* RISC-V CPU definitions */
 
@@ -302,6 +305,31 @@ static void riscv_cpu_reset(CPUState *cs)
     cs->exception_index = EXCP_NONE;
     env->load_res = -1;
     set_default_nan_mode(1, &env->fp_status);
+
+#if defined(TARGET_CHERI)
+    // All general purpose capability registers are reset to NULL:
+    reset_capregs(&env->gpcapregs);
+    /*
+     * See Table 5.2: Special Capability Registers (SCRs) in the CHERI ISA spec
+     */
+    // TODO: 0 Program counter cap. (PCC)
+    // TODO: set_max_perms_capability(&env->PCC, env->resetvec);
+    // 1 Default data cap. (DDC)
+    set_max_perms_capability(&env->DDC, 0);
+    // TODO:
+    // 4 User trap code cap. (UTCC)
+    // 5 User trap data cap. (UTDC)
+    // 6 User scratch cap. (UScratchC)
+    // 7 User exception PC cap. (UEPCC)
+    // 12 Supervisor trap code cap. (STCC)
+    // 13 Supervisor trap data cap. (STDC)
+    // 14 Supervisor scratch cap. (SScratchC)
+    // 15 Supervisor exception PC cap. (SEPCC)
+    // 28 Machine trap code cap. (MTCC)
+    // 29 Machine trap data cap. (MTDC)
+    // 30 Machine scratch cap. (MScratchC)
+    // 31 Machine exception PC cap. (MEPCC)
+#endif /* TARGET_CHERI */
 }
 
 static void riscv_cpu_disas_set_info(CPUState *s, disassemble_info *info)
