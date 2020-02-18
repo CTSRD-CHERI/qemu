@@ -85,6 +85,27 @@ int r4k_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
 
     MMID = mi ? MMID : (uint32_t) ASID;
 
+#if defined(TARGET_CHERI)
+    unsigned gclg_bit;
+    if (address < 0x4000000000000000) {
+        /* useg, xuseg */
+        gclg_bit = CP0EnHi_CLGU;
+    } else if (address < 0x8000000000000000) {
+        /* xsseg */
+        gclg_bit = CP0EnHi_CLGS;
+    } else if (address < 0xFFFFFFFFC0000000) {
+        /* xkphys (won't be called), xkseg, kseg0, kseg1 */
+        gclg_bit = CP0EnHi_CLGK;
+    } else if (address < 0xFFFFFFFFE0000000) {
+        /* sseg */
+        gclg_bit = CP0EnHi_CLGS;
+    } else {
+        /* kseg3 */
+        gclg_bit = CP0EnHi_CLGK;
+    }
+    bool gclg = !!(env->CP0_EntryHi & (1UL << gclg_bit));
+#endif
+
     for (i = 0; i < env->tlb->tlb_in_use; i++) {
         r4k_tlb_t *tlb = &env->tlb->mmu.r4k.tlb[i];
         /* 1k pages are not supported. */
@@ -149,6 +170,10 @@ int r4k_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
 #if defined(TARGET_CHERI)
                 if (n ? tlb->L1 : tlb->L0) {
                     *prot |= PAGE_LC_CLEAR;
+                }
+                bool pclg = n ? tlb->CLG1 : tlb->CLG0;
+                if (pclg != gclg) {
+                    *prot |= PAGE_LC_TRAP;
                 }
 #endif
 

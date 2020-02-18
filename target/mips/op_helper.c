@@ -717,6 +717,7 @@ static void r4k_fill_tlb(CPUMIPSState *env, int idx)
 #if defined(TARGET_CHERI)
     tlb->L0 = (env->CP0_EntryLo0 >> CP0EnLo_L) & 1;
     tlb->S0 = (env->CP0_EntryLo0 >> CP0EnLo_S) & 1;
+    tlb->CLG0 = (env->CP0_EntryLo0 >> CP0EnLo_CLG) & 1;
 #else
     tlb->XI0 = (env->CP0_EntryLo0 >> CP0EnLo_XI) & 1;
     tlb->RI0 = (env->CP0_EntryLo0 >> CP0EnLo_RI) & 1;
@@ -728,6 +729,7 @@ static void r4k_fill_tlb(CPUMIPSState *env, int idx)
 #if defined(TARGET_CHERI)
     tlb->L1 = (env->CP0_EntryLo1 >> CP0EnLo_L) & 1;
     tlb->S1 = (env->CP0_EntryLo1 >> CP0EnLo_S) & 1;
+    tlb->CLG1 = (env->CP0_EntryLo1 >> CP0EnLo_CLG) & 1;
 #else
     tlb->XI1 = (env->CP0_EntryLo1 >> CP0EnLo_XI) & 1;
     tlb->RI1 = (env->CP0_EntryLo1 >> CP0EnLo_RI) & 1;
@@ -949,6 +951,7 @@ void r4k_helper_tlbr(CPUMIPSState *env)
 #if defined(TARGET_CHERI)
                         ((uint64_t)tlb->L0 << CP0EnLo_L) |
                         ((uint64_t)tlb->S0 << CP0EnLo_S) |
+                        ((uint64_t)tlb->CLG0 << CP0EnLo_CLG) |
 #else
                         ((uint64_t)tlb->RI0 << CP0EnLo_RI) |
                         ((uint64_t)tlb->XI0 << CP0EnLo_XI) |
@@ -959,6 +962,7 @@ void r4k_helper_tlbr(CPUMIPSState *env)
 #if defined(TARGET_CHERI)
                         ((uint64_t)tlb->L1 << CP0EnLo_L) |
                         ((uint64_t)tlb->S1 << CP0EnLo_S) |
+                        ((uint64_t)tlb->CLG1 << CP0EnLo_CLG) |
 #else
                         ((uint64_t)tlb->RI1 << CP0EnLo_RI) |
                         ((uint64_t)tlb->XI1 << CP0EnLo_XI) |

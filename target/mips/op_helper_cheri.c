@@ -65,7 +65,7 @@ const char *cp2_fault_causestr[] = {
     "TLB prohibits Store Capability",
     "Bounds Cannot Be Represented Exactly",
     "Unaligned Base",
-    "Reserved 0x0c",
+    "Cap Load Gen Mismatch",
     "Reserved 0x0d",
     "Reserved 0x0e",
     "Reserved 0x0f",
@@ -358,13 +358,19 @@ static inline void update_ddc(CPUMIPSState *env, const cap_register_t* new_ddc) 
 }
 
 static inline target_ulong
-clear_tag_if_no_loadcap(target_ulong tag, const cap_register_t* cbp, int prot) {
+tag_prot_clear_or_trap(CPUMIPSState *env, int cb, const cap_register_t* cbp,
+                       int prot, uintptr_t _host_return_address,
+                       target_ulong tag)
+{
     if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
         if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
             qemu_log("Clearing tag bit due to missing %s\n",
                      prot & PAGE_LC_CLEAR ? "TLB_L" : "CAP_PERM_LOAD_CAP");
         }
         return 0;
+    }
+    if (tag && (prot & PAGE_LC_TRAP)) {
+        do_raise_c2_exception(env, CP2Ca_CAP_LOAD_GEN, cb);
     }
     return tag;
 }
@@ -2088,7 +2094,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     uint64_t cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
 
     target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
-    tag = clear_tag_if_no_loadcap(tag, cbp, prot);
+    tag = tag_prot_clear_or_trap(env, cb, cbp, prot, retpc, tag);
     decompress_128cap(pesbt, cursor, &ncd);
     ncd.cr_tag = tag;
 
@@ -2192,7 +2198,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         cheri_tag_get_m128(env, vaddr, cd, &mem_buffer.u64s[0] /* tps */,
                            &mem_buffer.u64s[3] /* length */, physaddr, &prot, retpc);
 
-    tag = clear_tag_if_no_loadcap(tag, cbp, prot);
+    tag = tag_prot_clear_or_trap(env, cb, cbp, prot, retpc, tag);
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
@@ -2328,7 +2334,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     mem_buffer.u64s[3] = cpu_ldq_data_ra(env, vaddr + 24, retpc); /* length */
 
     target_ulong tag = cheri_tag_get(env, vaddr, cd, physaddr, &prot, retpc);
-    tag = clear_tag_if_no_loadcap(tag, cbp, prot);
+    tag = tag_prot_clear_or_trap(env, cb, cbp, prot, retpc, tag);
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;

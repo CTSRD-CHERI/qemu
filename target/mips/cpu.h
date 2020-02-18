@@ -722,6 +722,7 @@ struct CPUMIPSState {
 #if defined(TARGET_CHERI)
 # define CP0EnLo_S 63
 # define CP0EnLo_L 62
+# define CP0EnLo_CLG 61
 #else
 # define CP0EnLo_RI 63
 # define CP0EnLo_XI 62
@@ -873,6 +874,11 @@ struct CPUMIPSState {
  */
     target_ulong CP0_EntryHi;
 #define CP0EnHi_EHINV 10
+#if defined(TARGET_CHERI)
+#define CP0EnHi_CLGK 61
+#define CP0EnHi_CLGS 60
+#define CP0EnHi_CLGU 59
+#endif
     target_ulong CP0_EntryHi_ASID_mask;
 /*
  * CP0 Register 11
@@ -1280,7 +1286,8 @@ struct CPUMIPSState {
 #define CP2Ca_TLB_STORE     0x09    /* TLB prohibits store capability */
 #define CP2Ca_INEXACT       0x0A    /* Bounds cannot be represented exactly */
 #define CP2Ca_BASE_UNALIGN  0x0B
-// 0x0c-0x0f Reserved
+#define CP2Ca_CAP_LOAD_GEN	0x0C	/* Capability Load Generation mismatch */
+// 0x0d-0x0f Reserved
 #define CP2Ca_GLOBAL        0x10 /* Global Violation */
 #define CP2Ca_PERM_EXE      0x11 /* Permit_Execute Violation */
 #define CP2Ca_PERM_LD       0x12 /* Permit_Load Violation */

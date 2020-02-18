@@ -351,6 +351,7 @@ void r4k_dump_tlb(CPUMIPSState *env, int idx)
 #ifdef TARGET_CHERI
             ((target_ulong)tlb->S0 << CP0EnLo_S) |
             ((target_ulong)tlb->L0 << CP0EnLo_L) |
+            ((target_ulong)tlb->CLG0 << CP0EnLo_CLG) |
 #else
             ((target_ulong)tlb->RI0 << CP0EnLo_RI) |
             ((target_ulong)tlb->XI0 << CP0EnLo_XI) |
@@ -360,6 +361,7 @@ void r4k_dump_tlb(CPUMIPSState *env, int idx)
 #ifdef TARGET_CHERI
             ((target_ulong)tlb->S1 << CP0EnLo_S) |
             ((target_ulong)tlb->L1 << CP0EnLo_L) |
+            ((target_ulong)tlb->CLG1 << CP0EnLo_CLG) |
 #else
             ((target_ulong)tlb->RI1 << CP0EnLo_RI) |
             ((target_ulong)tlb->XI1 << CP0EnLo_XI) |

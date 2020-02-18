@@ -118,6 +118,8 @@ struct r4k_tlb_t {
     unsigned int L1:1;
     unsigned int S0:1;
     unsigned int S1:1;
+    unsigned int CLG0:1;
+    unsigned int CLG1:1;
 #else
     unsigned int XI0:1;
     unsigned int XI1:1;
