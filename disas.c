@@ -488,7 +488,6 @@ void target_disas_buf(FILE *out, CPUState *cpu, void *code, unsigned long size,
     INIT_DISASSEMBLE_INFO(s.info, out, fprintf);
 
     s.cpu = cpu;
-    s.info.read_memory_func = target_read_memory;
     s.info.buffer = code;
     s.info.buffer_vma = vma;
     s.info.buffer_length = size;
@@ -516,7 +515,7 @@ void target_disas_buf(FILE *out, CPUState *cpu, void *code, unsigned long size,
         s.info.print_insn = print_insn_od_target;
     }
 
-    for (pc = vma, num_insns = 0; size > 0 && num_insns < max_insns; pc += count, size -= count) {
+    for (pc = vma, num_insns = 0; size > 0 && num_insns < max_insns; pc += count, size -= count, num_insns++) {
         fprintf(out, "0x" TARGET_FMT_lx ":  ", pc);
         count = s.info.print_insn(pc, &s.info);
         fprintf(out, "\n");

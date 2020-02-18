@@ -906,7 +906,7 @@ static void riscv_tr_disas_log(const DisasContextBase *dcbase, CPUState *cpu)
         uint32_t insn = env->rvfi_dii_trace.rvfi_dii_insn;
         if (logfile) {
             fprintf(logfile, "IN: %s\n", lookup_symbol(dcbase->pc_first));
-            disas(logfile, &insn, sizeof(insn));
+            target_disas_buf(stderr, cpu, &insn, sizeof(insn), dcbase->pc_first, 1);
         }
         qemu_log_unlock(logfile);
     }

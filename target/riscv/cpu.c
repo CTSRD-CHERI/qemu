@@ -384,8 +384,8 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
 #endif
             env->rvfi_dii_trace.rvfi_dii_insn = cmd_buf.rvfi_dii_insn;
             env->rvfi_dii_have_injected_insn = true;
-            target_disas_buf(stderr, cs, &env->rvfi_dii_trace.rvfi_dii_insn,
-                  sizeof(env->rvfi_dii_trace.rvfi_dii_insn), env->pc, 1);
+            target_disas_buf(stderr, cs, &cmd_buf.rvfi_dii_insn,
+                  sizeof(cmd_buf.rvfi_dii_insn), env->pc, 1);
             resume_all_vcpus();
             // Clear the EXCP_DEBUG flag to avoid dropping into GDB
             cpu_resume(cs);
