@@ -21,6 +21,7 @@
 #include "qemu/qemu-print.h"
 #include "qemu/ctype.h"
 #include "qemu/log.h"
+#include "qemu/main-loop.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
 #include "qapi/error.h"
@@ -28,6 +29,12 @@
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
 #include "fpu/softfloat-helpers.h"
+#include "sysemu/runstate.h"
+#include "disas/disas.h"
+#include "monitor/monitor.h"
+
+#include "rvfi_dii.h"
+
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs.h"
 #endif
@@ -289,6 +296,110 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
     env->pc = data[0];
 }
 
+
+extern int rvfi_client_fd;
+
+static void rvfi_dii_send_trace(CPURISCVState* env, rvfi_dii_trace_t* trace)
+{
+    ssize_t nbytes = write(rvfi_client_fd, trace, sizeof(*trace));
+    if (nbytes != sizeof(*trace)) {
+        error_report("Failed to write trace entry to socket: %zd (%s)", nbytes, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void handle_rvfi_dii_singlestep(CPUState* cs, RISCVCPU* cpu, CPURISCVState* env) {
+    static bool rvfi_dii_started = false;
+
+    while (true) {
+        cs->cflags_next_tb |= CF_NOCACHE;
+        assert(cs->singlestep_enabled);
+        rvfi_dii_command_t cmd_buf;
+        _Static_assert(sizeof(cmd_buf) == 8, "Expected 8 bytes of data");
+        if (rvfi_dii_started) {
+            // Send previous state
+            rvfi_dii_send_trace(env, &env->rvfi_dii_trace);
+            // Zero the output trace for the next test
+            memset(&env->rvfi_dii_trace, 0, sizeof(env->rvfi_dii_trace));
+        }
+        // Should be blocking, so we only read fewer bytes on EOF
+        ssize_t nbytes = read(rvfi_client_fd, &cmd_buf, sizeof(cmd_buf));
+        if (nbytes != sizeof(cmd_buf)) {
+            error_report("GOT EOF/Error reading from socket: %zd (%s)", nbytes,
+                         strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        info_report("Handling RVFI-DII command %d", cmd_buf.rvfi_dii_cmd);
+        switch (cmd_buf.rvfi_dii_cmd) {
+        case '\0': {
+            env->rvfi_dii_trace.rvfi_dii_halt = 1;
+            // Reset the processor (and ensure that it resets to 0x80000000
+            cpu_reset(cs);
+            // FIXME: Hopefully this resets RAM?
+            qemu_system_reset(SHUTDOWN_CAUSE_HOST_SIGNAL);
+            // Overwrite the processor's PC as the reset() writes it with default RSTVECTOR (0x10000)
+            env->pc = 0x80000000;
+            break;
+        }
+        case 'B': {
+            fprintf(stderr, "*BLINK*\n");
+            info_report("*BLINK*\n");
+            break;
+        }
+        case 'Q': {
+            // The remote disconnected.
+            fprintf(stderr, "Received a quit command. Quitting.\n");
+            info_report("Received a quit command. Quitting.\n");
+            close(rvfi_client_fd);
+            rvfi_client_fd = 0;
+            exit(EXIT_SUCCESS);
+        }
+        case 1: {
+            cpu_single_step(cs, SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER);
+            info_report("injecting instruction '0x%08x' at " TARGET_FMT_plx,
+                        cmd_buf.rvfi_dii_insn, env->pc);
+            // Store the new code to the destination pointer
+            cpu_memory_rw_debug(cs, env->pc, (uint8_t *)&cmd_buf.rvfi_dii_insn,
+                                sizeof(cmd_buf.rvfi_dii_insn), true);
+            target_disas(stderr, cs, env->pc, 4);
+            uint32_t injected_inst = cpu_ldl_code(env, env->pc);
+            if (injected_inst != cmd_buf.rvfi_dii_insn) {
+                error_report("Failed to inject instruction '0x%08x' at "
+                             "PC=" TARGET_FMT_plx " -- got '0x%08x' instead",
+                             cmd_buf.rvfi_dii_insn, env->pc, injected_inst);
+                exit(EXIT_FAILURE);
+            }
+            resume_all_vcpus();
+            // Clear the EXCP_DEBUG flag to avoid dropping into GDB
+            cpu_resume(cs);
+            riscv_raise_exception(env, EXCP_NONE, env->pc);
+            // cs->exception_index = -1;
+            return; // we can execute the next instruction now
+        }
+        default:
+            error_report("rvfi_dii got unsupported command '%c'\n",
+                         cmd_buf.rvfi_dii_cmd);
+            exit(EXIT_FAILURE);
+        }
+        rvfi_dii_started = true;
+    }
+}
+
+static void riscv_debug_excp_handler(CPUState *cs)
+{
+    /*
+     * Called by core code when a watchpoint or breakpoint fires;
+     * need to check which one and raise the appropriate exception.
+     */
+    struct RISCVCPU *cpu = RISCV_CPU(cs);
+    struct CPURISCVState *env = &cpu->env;
+    if (rvfi_client_fd) {
+        info_report("Got DEBUG EXCEPTION @" TARGET_FMT_plx, env->pc);
+        handle_rvfi_dii_singlestep(cs, cpu, env);
+        return;
+    }
+}
+
 static void riscv_cpu_reset(CPUState *cs)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
@@ -517,6 +628,7 @@ static void riscv_cpu_class_init(ObjectClass *c, void *data)
 #ifdef CONFIG_TCG
     cc->tcg_initialize = riscv_translate_init;
     cc->tlb_fill = riscv_cpu_tlb_fill;
+    cc->debug_excp_handler = riscv_debug_excp_handler;
 #endif
     /* For now, mark unmigratable: */
     cc->vmsd = &vmstate_riscv_cpu;

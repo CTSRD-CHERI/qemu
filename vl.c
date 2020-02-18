@@ -202,6 +202,48 @@ bool cheri_debugger_on_unrepresentable = false;
 #include "target/cheri-common/cheri_defs.h"
 #endif
 
+int rvfi_client_fd = 0;
+
+static int rvfi_dii_socket_init(uint16_t port) {
+    int rvfi_listen_fd = qemu_socket(AF_INET, SOCK_STREAM, 0);
+    if (rvfi_listen_fd == -1) {
+        error_report("RVFI-DII failed to create socket on port %d: %s (%d)\n", port, strerror(errno), errno);
+        exit(EXIT_FAILURE);
+    }
+
+    qemu_set_block(rvfi_listen_fd);
+    int reuseaddr = 1;
+    if (setsockopt(rvfi_listen_fd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(int)) == -1) {
+        error_report("RVFI-DII SO_REUSEADDR failed: %s (%d)\n", strerror(errno), errno);
+        exit(EXIT_FAILURE);
+    }
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(port);
+
+    if (bind(rvfi_listen_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        error_report("RVFI-DII bind() failed: %s (%d)\n", strerror(errno), errno);
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(rvfi_listen_fd, 1) == -1) {
+        error_report("RVFI-DII listen() failed: %s (%d)\n", strerror(errno), errno);
+        exit(EXIT_FAILURE);
+    }
+
+    socklen_t addrlen = sizeof(addr);
+    if (getsockname(rvfi_listen_fd, (struct sockaddr *) &addr, &addrlen) == -1) {
+        error_report("RVFI-DII getsockname() failed: %s (%d)\n", strerror(errno), errno);
+        exit(EXIT_FAILURE);
+    }
+
+    info_report("Listening for remote rvfi_dii connection on port %d.\n", ntohs(addr.sin_port));
+    return rvfi_listen_fd;
+}
+
 /* The bytes in qemu_uuid are in the order specified by RFC4122, _not_ in the
  * little-endian "wire format" described in the SMBIOS 2.6 specification.
  */
@@ -2915,6 +2957,7 @@ int main(int argc, char **argv, char **envp)
     uint64_t cl_breakpoint = 0L;
     uint64_t cl_breakcount = 0L;
 #endif
+    int rvfi_dii_port = 0;
     bool list_data_dirs = false;
     char *dir, **dirs;
     BlockdevOptionsQueue bdo_queue = QSIMPLEQ_HEAD_INITIALIZER(bdo_queue);
@@ -3667,11 +3710,19 @@ int main(int argc, char **argv, char **envp)
                 object_register_sugar_prop(ACCEL_CLASS_NAME("tcg"), "tb-size", optarg);
                 break;
 #if defined(CONFIG_CHERI)
-                case QEMU_OPTION_breakpoint:
+            case QEMU_OPTION_breakpoint:
                 cl_breakpoint = strtoull(optarg, NULL, 0);
+                if (cl_breakpoint == 0 || cl_breakpoint == ULLONG_MAX) {
+                    error_report("Invalid breakpoint '%s'", optarg);
+                    exit(1);
+                }
                 break;
             case QEMU_OPTION_breakcount:
                 cl_breakcount = strtoull(optarg, NULL, 0);
+                if (cl_breakcount == 0 || cl_breakcount == ULLONG_MAX) {
+                    error_report("Invalid break count '%s'", optarg);
+                    exit(1);
+                }
                 break;
 #if defined(CONFIG_MIPS_LOG_INSTR)
             case QEMU_OPTION_cheri_trace_format:
@@ -3695,6 +3746,23 @@ int main(int argc, char **argv, char **envp)
                 cheri_debugger_on_unrepresentable = true;
                 break;
 #endif /* CONFIG_CHERI */
+            case QEMU_OPTION_rvfi_dii_port:
+                rvfi_dii_port = strtoull(optarg, NULL, 0);
+                if (rvfi_dii_port == 0 || rvfi_dii_port > USHRT_MAX) {
+                    error_report("Invalid RVFI-DII port '%s'", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                // Set -M virt and -m 8 Mib
+                opts = qemu_opts_parse_noisily(qemu_find_opts("machine"), "virt", true);
+                if (!opts) {
+                    exit(EXIT_FAILURE);
+                }
+                opts = qemu_opts_parse_noisily(qemu_find_opts("memory"), "8M", true);
+                if (!opts) {
+                    exit(EXIT_FAILURE);
+                }
+                autostart = false;
+                break;
             case QEMU_OPTION_icount:
                 icount_opts = qemu_opts_parse_noisily(qemu_find_opts("icount"),
                                                       optarg, true);
@@ -4520,9 +4588,21 @@ int main(int argc, char **argv, char **envp)
         return 0;
     }
 
+    if (rvfi_dii_port) {
+        if (maxram_size != 8 * MiB) {
+            error_report("RVFI-DII: maxram_size must be 8 MiB.");
+            exit(EXIT_FAILURE);
+        }
+        int rvfi_listen_fd = rvfi_dii_socket_init(rvfi_dii_port);
+        info_report("Waiting for incoming RVFI socket packets");
+        rvfi_client_fd = accept(rvfi_listen_fd, NULL, NULL);
+        autostart = true;
+        assert(!incoming);
+        singlestep = true;
+    }
     if (singlestep) {
         CPUState *cpu;
-        CPU_FOREACH(cpu) { cpu_single_step(cpu, 1); }
+        CPU_FOREACH(cpu) { cpu_single_step(cpu, SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER); }
     }
     if (incoming) {
         Error *local_err = NULL;

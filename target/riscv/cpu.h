@@ -23,6 +23,7 @@
 #include "hw/core/cpu.h"
 #include "exec/cpu-defs.h"
 #include "fpu/softfloat-types.h"
+#include "rvfi_dii.h"
 
 #define TCG_GUEST_DEFAULT_MO 0
 
@@ -169,6 +170,8 @@ struct CPURISCVState {
 #endif
 
     float_status fp_status;
+
+    rvfi_dii_trace_t rvfi_dii_trace; // TODO: malloc on-demand to reduce sizeof(env)?
 
     /* Fields from here on are preserved across CPU reset. */
     QEMUTimer *timer; /* Internal timer */
