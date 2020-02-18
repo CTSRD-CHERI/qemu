@@ -853,9 +853,23 @@ static void riscv_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
     CPURISCVState *env = cpu->env_ptr;
 
+#ifdef CONFIG_RVFI_DII
+    // We have to avoid memory accesses for injected instructions since
+    // the PC could point somewhere invalid.
+    // If
+    if (env->rvfi_dii_have_injected_insn) {
+        ctx->opcode = env->rvfi_dii_trace.rvfi_dii_insn;
+    } else {
+        ctx->opcode = translator_ldl(env, ctx->base.pc_next);
+    }
+    gen_rvfi_dii_set_field_const(pc_rdata, ctx->base.pc_next);
+    gen_rvfi_dii_set_field_const(insn, ctx->opcode);
+#else
     ctx->opcode = translator_ldl(env, ctx->base.pc_next);
+#endif
     decode_opc(ctx);
     ctx->base.pc_next = ctx->pc_succ_insn;
+    gen_rvfi_dii_set_field_const(pc_wdata, ctx->base.pc_next);
 
     if (ctx->base.is_jmp == DISAS_NEXT) {
         target_ulong page_start;
@@ -884,8 +898,22 @@ static void riscv_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
 
 static void riscv_tr_disas_log(const DisasContextBase *dcbase, CPUState *cpu)
 {
+#ifdef CONFIG_RVFI_DII
+    CPURISCVState* env = &(RISCV_CPU(cpu)->env);
+    if (env->rvfi_dii_have_injected_insn) {
+        assert(dcbase->num_insns == 1);
+        FILE *logfile = qemu_log_lock();
+        uint32_t insn = env->rvfi_dii_trace.rvfi_dii_insn;
+        if (logfile) {
+            fprintf(logfile, "IN: %s\n", lookup_symbol(dcbase->pc_first));
+            disas(logfile, &insn, sizeof(insn));
+        }
+        qemu_log_unlock(logfile);
+    }
+#else
     qemu_log("IN: %s\n", lookup_symbol(dcbase->pc_first));
     log_target_disas(cpu, dcbase->pc_first, dcbase->tb->size);
+#endif
 }
 
 static const TranslatorOps riscv_tr_ops = {

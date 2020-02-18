@@ -590,6 +590,11 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         riscv_cpu_set_mode(env, PRV_M);
     }
 
+#ifdef CONFIG_RVFI_DII
+    qemu_log_mask(CPU_LOG_INT, "%s: Got real exception %d\n", __func__, cs->exception_index);
+    env->rvfi_dii_trace.rvfi_dii_trap = true;
+    rvfi_dii_communicate(env_cpu(env), env);
+#endif
     /* NOTE: it is not necessary to yield load reservations here. It is only
      * necessary for an SC from "another hart" to cause a load reservation
      * to be yielded. Refer to the memory consistency model section of the

@@ -173,6 +173,7 @@ struct CPURISCVState {
 
 #ifdef CONFIG_RVFI_DII
     rvfi_dii_trace_t rvfi_dii_trace;
+    bool rvfi_dii_have_injected_insn;
 #endif
 
     /* Fields from here on are preserved across CPU reset. */
@@ -272,6 +273,10 @@ extern const char * const riscv_int_regnames[];
 extern const char * const riscv_fpr_regnames[];
 extern const char * const riscv_excp_names[];
 extern const char * const riscv_intr_names[];
+
+#ifdef CONFIG_RVFI_DII
+void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env);
+#endif
 
 void riscv_cpu_do_interrupt(CPUState *cpu);
 int riscv_cpu_gdb_read_register(CPUState *cpu, uint8_t *buf, int reg);

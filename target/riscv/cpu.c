@@ -309,12 +309,18 @@ static void rvfi_dii_send_trace(CPURISCVState* env, rvfi_dii_trace_t* trace)
     }
 }
 
-static void handle_rvfi_dii_singlestep(CPUState* cs, RISCVCPU* cpu, CPURISCVState* env) {
+void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
     static bool rvfi_dii_started = false;
-
     // Single-step completed -> update PC in the trace buffer
     env->rvfi_dii_trace.rvfi_dii_pc_wdata = env->pc;
     env->rvfi_dii_trace.rvfi_dii_order++;
+
+    // TestRIG expects a zero $pc after a trap:
+    if (env->rvfi_dii_trace.rvfi_dii_trap) {
+        info_report("Got trap at " TARGET_FMT_plx, env->pc);
+        env->rvfi_dii_trace.rvfi_dii_pc_wdata = 0;
+    }
+    env->rvfi_dii_have_injected_insn = false;
     while (true) {
         cs->cflags_next_tb |= CF_NOCACHE;
         assert(cs->singlestep_enabled);
@@ -364,10 +370,10 @@ static void handle_rvfi_dii_singlestep(CPUState* cs, RISCVCPU* cpu, CPURISCVStat
             cpu_single_step(cs, SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER);
             info_report("injecting instruction '0x%08x' at " TARGET_FMT_plx,
                         cmd_buf.rvfi_dii_insn, env->pc);
+#if 0
             // Store the new code to the destination pointer
             cpu_memory_rw_debug(cs, env->pc, (uint8_t *)&cmd_buf.rvfi_dii_insn,
                                 sizeof(cmd_buf.rvfi_dii_insn), true);
-            target_disas(stderr, cs, env->pc, 4);
             uint32_t injected_inst = cpu_ldl_code(env, env->pc);
             if (injected_inst != cmd_buf.rvfi_dii_insn) {
                 error_report("Failed to inject instruction '0x%08x' at "
@@ -375,18 +381,19 @@ static void handle_rvfi_dii_singlestep(CPUState* cs, RISCVCPU* cpu, CPURISCVStat
                              cmd_buf.rvfi_dii_insn, env->pc, injected_inst);
                 exit(EXIT_FAILURE);
             }
+#endif
+            env->rvfi_dii_trace.rvfi_dii_insn = cmd_buf.rvfi_dii_insn;
+            env->rvfi_dii_have_injected_insn = true;
+            disas(stderr, &env->rvfi_dii_trace.rvfi_dii_insn,
+                  sizeof(env->rvfi_dii_trace.rvfi_dii_insn));
             resume_all_vcpus();
             // Clear the EXCP_DEBUG flag to avoid dropping into GDB
             cpu_resume(cs);
 
-            // Set all the fields in rvfi_dii that we know about now
-            env->rvfi_dii_trace.rvfi_dii_pc_rdata = env->pc;
             env->rvfi_dii_trace.rvfi_dii_pc_wdata = -1; // Will be set after single-step trap
-            env->rvfi_dii_trace.rvfi_dii_insn = injected_inst;
-
-            riscv_raise_exception(env, EXCP_NONE, env->pc);
-            // cs->exception_index = -1;
-            return; // we can execute the next instruction now
+            // Continue execution at env->pc
+            cs->exception_index = EXCP_NONE;
+            cpu_loop_exit_restore(cs, 0); // noreturn -> jumps back to TCG
         }
         default:
             error_report("rvfi_dii got unsupported command '%c'\n",
@@ -409,7 +416,7 @@ static void riscv_debug_excp_handler(CPUState *cs)
     struct RISCVCPU *cpu = RISCV_CPU(cs);
     struct CPURISCVState *env = &cpu->env;
     if (rvfi_client_fd && cs->singlestep_enabled) {
-        handle_rvfi_dii_singlestep(cs, cpu, env);
+        rvfi_dii_communicate(cs, env);
         return;
     }
 #endif
