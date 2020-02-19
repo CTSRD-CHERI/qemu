@@ -2721,6 +2721,14 @@ static void set_memory_options(uint64_t *ram_slots, ram_addr_t *maxram_size,
         exit(EXIT_FAILURE);
     }
 
+    if (!xen_enabled()) {
+        /* On 32-bit hosts, QEMU is limited by virtual address space */
+        if (ram_size > (2047 << 20) && HOST_LONG_BITS == 32) {
+            error_report("at most 2047 MB RAM can be simulated");
+            exit(1);
+        }
+    }
+
     loc_pop(&loc);
 }
 
@@ -3951,8 +3959,6 @@ int main(int argc, char **argv, char **envp)
     machine_class = select_machine();
     object_set_machine_compat_props(machine_class->compat_props);
 
-    set_memory_options(&ram_slots, &maxram_size, machine_class);
-
     os_daemonize();
 
     /*
@@ -4269,9 +4275,6 @@ int main(int argc, char **argv, char **envp)
     machine_opts = qemu_get_machine_opts();
     qemu_opt_foreach(machine_opts, machine_set_property, current_machine,
                      &error_fatal);
-    current_machine->ram_size = ram_size;
-    current_machine->maxram_size = maxram_size;
-    current_machine->ram_slots = ram_slots;
 
     /*
      * Note: uses machine properties such as kernel-irqchip, must run
@@ -4386,14 +4389,6 @@ int main(int argc, char **argv, char **envp)
 
     tpm_init();
 
-    if (!xen_enabled()) {
-        /* On 32-bit hosts, QEMU is limited by virtual address space */
-        if (ram_size > (2047 << 20) && HOST_LONG_BITS == 32) {
-            error_report("at most 2047 MB RAM can be simulated");
-            exit(1);
-        }
-    }
-
     blk_mig_init();
     ram_mig_init();
     dirty_bitmap_mig_init();
@@ -4438,6 +4433,12 @@ int main(int argc, char **argv, char **envp)
     if (cpu_option) {
         current_machine->cpu_type = parse_cpu_option(cpu_option);
     }
+
+    set_memory_options(&ram_slots, &maxram_size, machine_class);
+    current_machine->ram_size = ram_size;
+    current_machine->maxram_size = maxram_size;
+    current_machine->ram_slots = ram_slots;
+
     parse_numa_opts(current_machine);
 
     if (machine_class->default_ram_id && current_machine->ram_size &&
