@@ -179,7 +179,7 @@ static void gen_goto_tb(DisasContext *ctx, int n, target_ulong dest)
 /* Wrapper for getting reg values - need to check of reg is zero since
  * cpu_gpr[0] is not actually allocated
  */
-static inline void gen_get_gpr(TCGv t, int reg_num)
+static inline void _gen_get_gpr(TCGv t, int reg_num)
 {
     if (reg_num == 0) {
         tcg_gen_movi_tl(t, 0);
@@ -203,26 +203,16 @@ static inline void gen_mark_gpr_as_integer(int reg_num_dst) {
 #endif
 
 #ifdef CONFIG_RVFI_DII
-static inline void _gen_rvfi_dii_set_field(size_t offset, TCGv value)
-{
-    tcg_gen_st_tl(value, cpu_env, offset);
-}
-static inline void _gen_rvfi_dii_set_field_const(size_t offset, uint64_t value)
-{
-    TCGv_i64 tv = tcg_const_i64(value);
-    tcg_gen_st_tl(tv, cpu_env, offset);
-    tcg_temp_free_i64(tv);
-}
-
-#define gen_rvfi_dii_set_field(field, value)                                   \
-    _gen_rvfi_dii_set_field(rvfi_dii_offset(field), value)
-#define gen_rvfi_dii_set_field_const(field, value)                             \
-    _gen_rvfi_dii_set_field_const(                                             \
-        offsetof(CPURISCVState, rvfi_dii_trace.rvfi_dii_##field), value)
+//#define gen_get_gpr(t, reg_num, field_prefix)                                  \
+//    do {                                                                       \
+//        _gen_get_gpr(t, reg_num);                                              \
+//        gen_rvfi_dii_set_field(field_prefix##_data, t);                        \
+//        gen_rvfi_dii_set_field_const(field_prefix##_addr, reg_num);            \
+//    } while (0)
 #else
-#define gen_rvfi_dii_set_field_const(field, value) ((void)0)
-#define gen_rvfi_dii_set_field(field, value) ((void)0)
+// #define gen_get_gpr(t, reg_num, field) _gen_get_gpr(t, reg_num)
 #endif
+#define gen_get_gpr(t, reg_num) _gen_get_gpr(t, reg_num)
 
 /* Wrapper for setting reg values - need to check of reg is zero since
  * cpu_gpr[0] is not actually allocated. this is more for safety purposes,

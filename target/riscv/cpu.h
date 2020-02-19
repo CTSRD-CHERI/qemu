@@ -275,9 +275,20 @@ extern const char * const riscv_excp_names[];
 extern const char * const riscv_intr_names[];
 
 #ifdef CONFIG_RVFI_DII
-void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env);
+void rvfi_dii_communicate(CPUState *cs, CPURISCVState *env);
 #define rvfi_dii_offset(field)                                                 \
     offsetof(CPURISCVState, rvfi_dii_trace.rvfi_dii_##field)
+#define gen_rvfi_dii_set_field(field, arg)                                     \
+    tcg_gen_st_tl((TCGv)arg, cpu_env, rvfi_dii_offset(field))
+#define gen_rvfi_dii_set_field_const(field, constant)                          \
+    do {                                                                       \
+        TCGv_i64 rvfi_tc = tcg_const_i64(constant);                            \
+        tcg_gen_st_tl(rvfi_tc, cpu_env, rvfi_dii_offset(field));               \
+        tcg_temp_free_i64(rvfi_tc);                                            \
+    } while (0)
+#else
+#define gen_rvfi_dii_set_field(value, field) ((void)0)
+#define gen_rvfi_dii_set_field_const(value, field) ((void)0)
 #endif
 
 void riscv_cpu_do_interrupt(CPUState *cpu);

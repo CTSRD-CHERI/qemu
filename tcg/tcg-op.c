@@ -2810,10 +2810,13 @@ static inline void gen_cheri_invalidate_tags(TCGv_cap_checked_ptr out_addr, TCGv
 }
 #endif
 
-#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
-#define rvfi_dii_save_value(arg, field) tcg_gen_st_tl((TCGv)arg, cpu_env, rvfi_dii_offset(field));
-#else
-#define rvfi_dii_save_value(value, field) ((void)0)
+
+static inline uint64_t memop_rvfi_mask(MemOp op) {
+    return MAKE_64BIT_MASK(0, memop_size(op));
+}
+#if !defined(TARGET_RISCV) || !defined(CONFIG_RVFI_DII)
+#define gen_rvfi_dii_set_field(value, field) ((void)0)
+#define gen_rvfi_dii_set_field_const(value, field) ((void)0)
 #endif
 
 void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop)
@@ -2844,9 +2847,11 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
         saved_load_addr = addr;
     }
 #endif
-    rvfi_dii_save_value(addr, mem_addr);
+    gen_rvfi_dii_set_field(mem_addr, addr);
     gen_ldst_i32(INDEX_op_qemu_ld_i32, val, addr, memop, idx);
-    rvfi_dii_save_value(addr, mem_rdata);
+    gen_rvfi_dii_set_field(mem_rdata, val);
+    gen_rvfi_dii_set_field_const(mem_rmask, memop_rvfi_mask(memop));
+
     plugin_gen_mem_callbacks(addr, info);
 
     if ((orig_memop ^ memop) & MO_BSWAP) {
@@ -2902,9 +2907,10 @@ void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
         memop &= ~MO_BSWAP;
     }
 
-    rvfi_dii_save_value(addr, mem_addr);
+    gen_rvfi_dii_set_field(mem_addr, addr);
     gen_ldst_i32(INDEX_op_qemu_st_i32, val, addr, memop, idx);
-    rvfi_dii_save_value(val, mem_wdata);
+    gen_rvfi_dii_set_field(mem_wdata, val);
+    gen_rvfi_dii_set_field_const(mem_wmask, memop_rvfi_mask(memop));
 
     plugin_gen_mem_callbacks(addr, info);
 #ifdef TARGET_CHERI
@@ -2960,9 +2966,10 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
         saved_load_addr = addr;
     }
 #endif
-    rvfi_dii_save_value(addr, mem_addr);
+    gen_rvfi_dii_set_field(mem_addr, addr);
     gen_ldst_i64(INDEX_op_qemu_ld_i64, val, addr, memop, idx);
-    rvfi_dii_save_value(val, mem_rdata);
+    gen_rvfi_dii_set_field(mem_rdata, val);
+    gen_rvfi_dii_set_field_const(mem_rmask, memop_rvfi_mask(memop));
 
     plugin_gen_mem_callbacks(addr, info);
 
@@ -3035,9 +3042,11 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
         memop &= ~MO_BSWAP;
     }
 
-    rvfi_dii_save_value(addr, mem_addr);
+    gen_rvfi_dii_set_field(mem_addr, addr);
     gen_ldst_i64(INDEX_op_qemu_st_i64, val, addr, memop, idx);
-    rvfi_dii_save_value(val, mem_wdata);
+    gen_rvfi_dii_set_field(mem_wdata, val);
+    gen_rvfi_dii_set_field_const(mem_wmask, memop_rvfi_mask(memop));
+
     plugin_gen_mem_callbacks(addr, info);
 #ifdef TARGET_CHERI
     TCGv_i32 tcop = tcg_const_i32(memop);
