@@ -26,6 +26,7 @@
 #include "exec/exec-all.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
+#include "qemu-common.h"
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
 #include "fpu/softfloat-helpers.h"
@@ -353,7 +354,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             // FIXME: Hopefully this resets RAM?
             qemu_system_reset(SHUTDOWN_CAUSE_HOST_SIGNAL);
             // Overwrite the processor's PC as the reset() writes it with default RSTVECTOR (0x10000)
-            env->pc = 0x80000000;
+            env->pc = RVFI_DII_RAM_START;
             cs->cflags_next_tb |= CF_NOCACHE;
             hwaddr system_ram_addr;
             hwaddr system_ram_size;

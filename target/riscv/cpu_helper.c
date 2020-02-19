@@ -456,6 +456,19 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                   __func__, address, access_type, mmu_idx);
 
     ret = get_physical_address(env, &pa, &prot, address, access_type, mmu_idx);
+#ifdef CONFIG_RVFI_DII
+    // For RVFI-DII we have to reject all memory accesses outside of the RAM
+    // region (even if there is a valid ROM there)
+    // However, we still have to allow MMU_INST_FETCH accesess since they are
+    // triggered by tb_find().
+    if (access_type != MMU_INST_FETCH && env->rvfi_dii_have_injected_insn &&
+        ret == TRANSLATE_SUCCESS &&
+        (address < RVFI_DII_RAM_START || address >= RVFI_DII_RAM_END)) {
+        fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
+                " since it is outside the RVFI-DII range", address);
+        ret = TRANSLATE_FAIL;
+    }
+#endif
 
     if (mode == PRV_M && access_type != MMU_INST_FETCH) {
         if (get_field(env->mstatus, MSTATUS_MPRV)) {

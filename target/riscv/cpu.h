@@ -22,6 +22,7 @@
 
 #include "hw/core/cpu.h"
 #include "exec/cpu-defs.h"
+#include "qemu/units.h"
 #include "fpu/softfloat-types.h"
 #include "rvfi_dii.h"
 
@@ -275,6 +276,9 @@ extern const char * const riscv_excp_names[];
 extern const char * const riscv_intr_names[];
 
 #ifdef CONFIG_RVFI_DII
+#define RVFI_DII_RAM_START 0x80000000
+#define RVFI_DII_RAM_SIZE (8 * MiB)
+#define RVFI_DII_RAM_END (RVFI_DII_RAM_START + RVFI_DII_RAM_SIZE)
 void rvfi_dii_communicate(CPUState *cs, CPURISCVState *env);
 #define rvfi_dii_offset(field)                                                 \
     offsetof(CPURISCVState, rvfi_dii_trace.rvfi_dii_##field)
