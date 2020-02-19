@@ -3115,6 +3115,15 @@ void memory_region_flush_rom_device(MemoryRegion *mr, hwaddr addr, hwaddr size)
     invalidate_and_set_dirty(mr, addr, size);
 }
 
+void memory_region_flush_ram(MemoryRegion *mr, hwaddr addr, hwaddr size)
+{
+    /*
+     * Needed For RVFI-DII
+     */
+    assert(memory_region_is_ram(mr));
+    invalidate_and_set_dirty(mr, addr, size);
+}
+
 static int memory_access_size(MemoryRegion *mr, unsigned l, hwaddr addr)
 {
     unsigned access_size_max = mr->ops->valid.max_access_size;

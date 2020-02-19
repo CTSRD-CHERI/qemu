@@ -1601,6 +1601,7 @@ void memory_region_reset_dirty(MemoryRegion *mr, hwaddr addr,
  * @size: the size, in bytes, of the range being flushed.
  */
 void memory_region_flush_rom_device(MemoryRegion *mr, hwaddr addr, hwaddr size);
+void memory_region_flush_ram(MemoryRegion *mr, hwaddr addr, hwaddr size);
 
 /**
  * memory_region_set_readonly: Turn a memory region read-only (or read-write)

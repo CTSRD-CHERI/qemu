@@ -355,6 +355,18 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             // Overwrite the processor's PC as the reset() writes it with default RSTVECTOR (0x10000)
             env->pc = 0x80000000;
             cs->cflags_next_tb |= CF_NOCACHE;
+            hwaddr system_ram_addr;
+            hwaddr system_ram_size;
+            MemoryRegion *ram_region = address_space_translate(
+                cs->as, cpu_get_phys_page_debug(cs, env->pc), &system_ram_addr,
+                &system_ram_size, true, MEMTXATTRS_UNSPECIFIED);
+            assert(system_ram_size == RVFI_DII_RAM_SIZE);
+            // TODO: would be nice to do this lazily instead of writing 8 MiB
+            memset(memory_region_get_ram_ptr(ram_region), 0, system_ram_size);
+            // FIXME: is it safe to do a munmap/mmap?
+            // Tell TCG that the data has changed
+            memory_region_flush_ram(ram_region, system_ram_addr, system_ram_size);
+            // TODO: if this is too fragile, we could do a address_space_write()/cpu_memory_rw_debug() loop
             break;
         }
         case 'B': {
