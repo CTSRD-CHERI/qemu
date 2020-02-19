@@ -323,6 +323,13 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
     // TestRIG expects a zero $pc after a trap:
     if (env->rvfi_dii_trace.rvfi_dii_trap) {
         info_report("Got trap at " TARGET_FMT_plx, env->pc);
+    } else if (env->rvfi_dii_validate_ifetch &&
+               env->pc >= 2 * TARGET_PAGE_SIZE && /* At least the first two pages seem accessible in sail? */
+               (env->pc < RVFI_DII_RAM_START || env->pc >= RVFI_DII_RAM_END)) {
+        info_report("Failed to validate ifetch memory access to " TARGET_FMT_plx
+                    " since it is outside the RVFI-DII range", env->pc);
+        env->rvfi_dii_validate_ifetch = false;
+        riscv_raise_exception(env, RISCV_EXCP_INST_ACCESS_FAULT, 0);
     }
     env->rvfi_dii_have_injected_insn = false;
     while (true) {
