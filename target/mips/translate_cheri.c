@@ -308,6 +308,18 @@ static inline void generate_cgetaddr(int32_t rd, int32_t cb)
     tcg_temp_free_i32(tcb);
 }
 
+static inline void generate_cgetflags(int32_t rd, int32_t cb)
+{
+    TCGv_i32 tcb = tcg_const_i32(cb);
+    TCGv t0 = tcg_temp_new();
+
+    gen_helper_cgetflags(t0, cpu_env, tcb);
+    gen_store_gpr (t0, rd);
+
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(tcb);
+}
+
 static inline void generate_cloadtags(int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -1498,6 +1510,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 opn = "crepresentablealignmentmask";
                 break;
             }
+            case OPC_CGETFLAGS_NI:   /* 0x12 << 6 */
+                check_cop2x(ctx);
+                generate_cgetflags(r16, r11);
+                opn = "cgetflags";
+                break;
             case OPC_CSEALENTRY_NI:   /* 0x1d << 6 */
                 check_cop2x(ctx);
                 gen_helper_2_consti32(csealentry, r16, r11);

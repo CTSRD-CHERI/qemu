@@ -42,13 +42,9 @@ cgetlen     1111111  00011 ..... 000 ..... 1011011 @r2
 cgettag     1111111  00100 ..... 000 ..... 1011011 @r2
 cgetsealed  1111111  00101 ..... 000 ..... 1011011 @r2
 cgetoffset  1111111  00110 ..... 000 ..... 1011011 @r2
-# mapping clause encdec = CGetTag(rd, cb)    if (haveXcheri()) <-> 0b1111111 @ 0b00100 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CGetSealed(rd, cb) if (haveXcheri()) <-> 0b1111111 @ 0b00101 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CGetOffset(rd, cb) if (haveXcheri()) <-> 0b1111111 @ 0b00110 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CGetFlags(rd, cb)  if (haveXcheri()) <-> 0b1111111 @ 0b00111 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CGetAddr(rd, cb)   if (haveXcheri()) <-> 0b1111111 @ 0b01111 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
-#
+cgetflags   1111111  00111 ..... 000 ..... 1011011 @r2
 cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
+
 # mapping clause encdec = CMove(cd, cs)      if (haveXcheri()) <-> 0b1111111 @ 0b01010 @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CClearTag(cd, cs)  if (haveXcheri()) <-> 0b1111111 @ 0b01011 @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CJALR(cd, cb)      if (haveXcheri()) <-> 0b1111111 @ 0b01100 @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
