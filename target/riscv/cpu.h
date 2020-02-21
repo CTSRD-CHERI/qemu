@@ -175,7 +175,6 @@ struct CPURISCVState {
 #ifdef CONFIG_RVFI_DII
     rvfi_dii_trace_t rvfi_dii_trace;
     bool rvfi_dii_have_injected_insn;
-    uint8_t rvfi_dii_validate_ifetch;
 #endif
 
     /* Fields from here on are preserved across CPU reset. */
