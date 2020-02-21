@@ -368,6 +368,8 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             memset(ram_ptr, 0, system_ram_size);
             // Unmap: this should invalidate all caches for that regio.
             cpu_physical_memory_unmap(ram_ptr, system_ram_size, /*is_write=*/true, system_ram_size);
+            // Flush the TCG state:
+            tb_flush(cs);
             break;
         }
         case 'B': {
