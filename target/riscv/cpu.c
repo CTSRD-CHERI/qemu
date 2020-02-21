@@ -468,6 +468,10 @@ static void riscv_cpu_reset(CPUState *cs)
     set_default_nan_mode(1, &env->fp_status);
 
 #if defined(TARGET_CHERI)
+    if (!cpu->cfg.ext_cheri) {
+        error_report("CHERI extension can't be disabled yet!");
+        exit(EXIT_FAILURE);
+    }
     // All general purpose capability registers are reset to NULL:
     reset_capregs(&env->gpcapregs);
     /*
@@ -636,6 +640,9 @@ static Property riscv_cpu_properties[] = {
     DEFINE_PROP_BOOL("Counters", RISCVCPU, cfg.ext_counters, true),
     DEFINE_PROP_BOOL("Zifencei", RISCVCPU, cfg.ext_ifencei, true),
     DEFINE_PROP_BOOL("Zicsr", RISCVCPU, cfg.ext_icsr, true),
+#ifdef TARGET_CHERI
+    DEFINE_PROP_BOOL("Xcheri", RISCVCPU, cfg.ext_cheri, true),
+#endif
     DEFINE_PROP_STRING("priv_spec", RISCVCPU, cfg.priv_spec),
     DEFINE_PROP_BOOL("mmu", RISCVCPU, cfg.mmu, true),
     DEFINE_PROP_BOOL("pmp", RISCVCPU, cfg.pmp, true),
@@ -697,6 +704,7 @@ char *riscv_isa_string(RISCVCPU *cpu)
         }
     }
     *p = '\0';
+    // TODO: add Xcheri?
     return isa_str;
 }
 

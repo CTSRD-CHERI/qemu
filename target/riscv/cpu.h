@@ -249,6 +249,9 @@ typedef struct RISCVCPU {
         bool ext_counters;
         bool ext_ifencei;
         bool ext_icsr;
+#ifdef TARGET_CHERI
+        bool ext_cheri;
+#endif
 
         char *priv_spec;
         char *user_spec;
