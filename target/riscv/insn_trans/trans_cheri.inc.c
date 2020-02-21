@@ -51,11 +51,11 @@ static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
     return true;
 }
 
-static bool trans_cgetperm(DisasContext *ctx, arg_cgetperm *a)
-{
-    return gen_cheri_get(a->rd, a->rs1, &gen_helper_cgetperm);
-}
-static bool trans_cgettype(DisasContext *ctx, arg_cgetperm *a)
-{
-    return gen_cheri_get(a->rd, a->rs1, &gen_helper_cgettype);
-}
+#define TRANSLATE_CGET(name)                                                   \
+    static bool trans_##name(DisasContext *ctx, arg_cgetperm *a)               \
+    {                                                                          \
+        return gen_cheri_get(a->rd, a->rs1, &gen_helper_##name);               \
+    }
+
+TRANSLATE_CGET(cgetperm)
+TRANSLATE_CGET(cgettype)
