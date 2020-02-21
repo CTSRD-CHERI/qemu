@@ -107,6 +107,8 @@ struct CPURISCVState {
 #endif
     uint64_t fpr[32]; /* assume both F and D extensions */
     target_ulong pc;
+    cap_register_t PCC; // TODO: implement this properly
+
     target_ulong load_res;
     target_ulong load_val;
 

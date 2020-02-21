@@ -477,8 +477,8 @@ static void riscv_cpu_reset(CPUState *cs)
     /*
      * See Table 5.2: Special Capability Registers (SCRs) in the CHERI ISA spec
      */
-    // TODO: 0 Program counter cap. (PCC)
-    // TODO: set_max_perms_capability(&env->PCC, env->resetvec);
+    // 0 Program counter cap. (PCC)
+    set_max_perms_capability(&env->PCC, env->resetvec);
     // 1 Default data cap. (DDC)
     set_max_perms_capability(&env->DDC, 0);
     // TODO:
