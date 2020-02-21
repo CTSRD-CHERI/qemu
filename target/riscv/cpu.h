@@ -183,7 +183,7 @@ struct CPURISCVState {
 
 static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
 #ifdef TARGET_CHERI
-    return env->gpcapregs.cursor[reg];
+    return env->gpcapregs.decompressed[reg]._cr_cursor;
 #else
     return env->gpr[reg];
 #endif
@@ -193,7 +193,7 @@ static inline void gpr_set_int_value(CPURISCVState *env, unsigned reg,
                                      target_ulong value) {
     assert(reg != 0);
 #ifdef TARGET_CHERI
-    env->gpcapregs.cursor[reg] = value;
+    env->gpcapregs.decompressed[reg]._cr_cursor = value;
 #else
     env->gpr[reg] = value;
 #endif

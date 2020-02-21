@@ -955,7 +955,8 @@ void riscv_translate_init(void)
      */
     for (i = 1; i < 32; i++) {
         _cpu_cursors_do_not_access_directly[i] = tcg_global_mem_new(
-            cpu_env, offsetof(CPURISCVState, gpcapregs.cursor[i]),
+            cpu_env,
+            offsetof(CPURISCVState, gpcapregs.decompressed[i]._cr_cursor),
             riscv_int_regnames[i]);
     }
     cpu_capreg_state = tcg_global_mem_new(

@@ -68,7 +68,6 @@ typedef enum CapRegState {
     CREG_FULLY_DECOMPRESSED
 } CapRegState;
 typedef struct GPCapRegs {
-    target_ulong cursor[32];
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
     target_ulong pesbt[32]; // permissions+exponent+sealing type+bottom+top
 #endif
