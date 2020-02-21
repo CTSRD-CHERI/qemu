@@ -111,39 +111,7 @@ void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
 
 /// Implementations of individual instructions start here
 
-target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
-{
-    /*
-     * CGetPerm: Move Memory Permissions Field to a General-Purpose
-     * Register.
-     */
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    cheri_debug_assert((cbp->cr_perms & CAP_PERMS_ALL) == cbp->cr_perms &&
-                       "Unknown HW perms bits set!");
-    cheri_debug_assert((cbp->cr_uperms & CAP_UPERMS_ALL) == cbp->cr_uperms &&
-                       "Unknown SW perms bits set!");
-
-    return (target_ulong)cbp->cr_perms |
-           ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
-}
-
-target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
-{
-    /*
-     * CGetType: Move Object Type Field to a General-Purpose Register.
-     */
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const int64_t otype = cap_get_otype(cbp);
-    // Must be either a valid positive type < maximum or one of the special
-    // hardware-interpreted otypes
-    if (otype < 0) {
-        cheri_debug_assert(otype <= CAP_FIRST_SPECIAL_OTYPE_SIGNED);
-        cheri_debug_assert(otype >= CAP_LAST_SPECIAL_OTYPE_SIGNED);
-    } else {
-        cheri_debug_assert(otype <= CAP_LAST_NONRESERVED_OTYPE);
-    }
-    return otype;
-}
+/// Two operand inspection instructions:
 
 target_ulong CHERI_HELPER_IMPL(cgetbase(CPUArchState *env, uint32_t cb))
 {
@@ -162,4 +130,67 @@ target_ulong CHERI_HELPER_IMPL(cgetlen(CPUArchState *env, uint32_t cb))
      * cap_get_length64() converts 1 << 64 to UINT64_MAX
      */
     return (target_ulong)cap_get_length64(get_readonly_capreg(env, cb));
+}
+
+target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetPerm: Move Memory Permissions Field to a General-Purpose
+     * Register.
+     */
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    cheri_debug_assert((cbp->cr_perms & CAP_PERMS_ALL) == cbp->cr_perms &&
+        "Unknown HW perms bits set!");
+    cheri_debug_assert((cbp->cr_uperms & CAP_UPERMS_ALL) == cbp->cr_uperms &&
+        "Unknown SW perms bits set!");
+
+    return (target_ulong)cbp->cr_perms |
+        ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
+}
+
+target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetOffset: Move Offset to a General-Purpose Register
+     */
+    return (target_ulong)cap_get_offset(get_readonly_capreg(env, cb));
+}
+
+
+target_ulong CHERI_HELPER_IMPL(cgetsealed(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetSealed: Move sealed bit to a General-Purpose Register
+     */
+    const cap_register_t* cbp = get_readonly_capreg(env, cb);
+    if (cap_is_sealed_with_type(cbp) || cap_is_sealed_entry(cbp))
+        return (target_ulong)1;
+    assert(cap_is_unsealed(cbp) && "Unknown reserved otype?");
+    return (target_ulong)0;
+}
+
+target_ulong CHERI_HELPER_IMPL(cgettag(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetTag: Move Tag to a General-Purpose Register
+     */
+    return (target_ulong)get_capreg_tag(env, cb);
+}
+
+target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetType: Move Object Type Field to a General-Purpose Register.
+     */
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    const int64_t otype = cap_get_otype(cbp);
+    // Must be either a valid positive type < maximum or one of the special
+    // hardware-interpreted otypes
+    if (otype < 0) {
+        cheri_debug_assert(otype <= CAP_FIRST_SPECIAL_OTYPE_SIGNED);
+        cheri_debug_assert(otype >= CAP_LAST_SPECIAL_OTYPE_SIGNED);
+    } else {
+        cheri_debug_assert(otype <= CAP_LAST_NONRESERVED_OTYPE);
+    }
+    return otype;
 }

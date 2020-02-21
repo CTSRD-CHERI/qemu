@@ -36,15 +36,21 @@
  */
 
 /* All helpers shared between RISCV and MIPS are defined here.
+ * Helpers are grouped by instruction kind and sorted alphabetically within
+ * each group.
  *
  * Most are implemented in op_helper_cheri_common.c, but some have
  * target-dependent implementations and are defined in
  * target/mips/op_helper_cheri.c or target/riscv/op_helper_cheri.c.
  */
 
-DEF_HELPER_2(cgetperm, tl, env, i32)
-DEF_HELPER_2(cgettype, tl, env, i32)
+// Two-operand capability inspection
 DEF_HELPER_2(cgetbase, tl, env, i32)
 DEF_HELPER_2(cgetlen, tl, env, i32)
+DEF_HELPER_2(cgetperm, tl, env, i32)
+DEF_HELPER_2(cgetoffset, tl, env, i32)
+DEF_HELPER_2(cgetsealed, tl, env, i32)
+DEF_HELPER_2(cgettag, tl, env, i32)
+DEF_HELPER_2(cgettype, tl, env, i32)
 
 

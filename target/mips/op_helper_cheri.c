@@ -652,14 +652,6 @@ target_ulong CHERI_HELPER_IMPL(cgetcause(CPUMIPSState *env))
     }
 }
 
-target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUMIPSState *env, uint32_t cb))
-{
-    /*
-     * CGetOffset: Move Offset to a General-Purpose Register
-     */
-    return (target_ulong)cap_get_offset(get_readonly_capreg(env, cb));
-}
-
 void CHERI_HELPER_IMPL(cgetpcc(CPUMIPSState *env, uint32_t cd))
 {
     /*
@@ -716,25 +708,6 @@ void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUMIPSState *env, uint32_t cd, target_ulo
 {
     uint64_t new_addr = rs;
     derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
-}
-
-target_ulong CHERI_HELPER_IMPL(cgetsealed(CPUMIPSState *env, uint32_t cb))
-{
-    /*
-     * CGetSealed: Move sealed bit to a General-Purpose Register
-     */
-    const cap_register_t* cbp = get_readonly_capreg(env, cb);
-    if (cap_is_sealed_with_type(cbp) || cap_is_sealed_entry(cbp))
-        return (target_ulong)1;
-    return (target_ulong)0;
-}
-
-target_ulong CHERI_HELPER_IMPL(cgettag(CPUMIPSState *env, uint32_t cb))
-{
-    /*
-     * CGetTag: Move Tag to a General-Purpose Register
-     */
-    return (target_ulong)get_readonly_capreg(env, cb)->cr_tag;
 }
 
 void CHERI_HELPER_IMPL(cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt))
