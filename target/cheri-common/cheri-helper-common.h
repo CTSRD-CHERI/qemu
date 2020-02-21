@@ -45,6 +45,7 @@
  */
 
 // Two-operand capability inspection
+DEF_HELPER_2(cgetaddr, tl, env, i32)
 DEF_HELPER_2(cgetbase, tl, env, i32)
 DEF_HELPER_2(cgetlen, tl, env, i32)
 DEF_HELPER_2(cgetperm, tl, env, i32)

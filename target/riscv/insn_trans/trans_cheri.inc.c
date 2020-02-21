@@ -57,6 +57,7 @@ static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
         return gen_cheri_get(a->rd, a->rs1, &gen_helper_##name);               \
     }
 
+// TODO: all of these could be implemented in TCG without calling a helper
 TRANSLATE_CGET(cgetperm)
 TRANSLATE_CGET(cgettype)
 TRANSLATE_CGET(cgetbase)
@@ -64,3 +65,4 @@ TRANSLATE_CGET(cgetlen)
 TRANSLATE_CGET(cgettag)
 TRANSLATE_CGET(cgetsealed)
 TRANSLATE_CGET(cgetoffset)
+TRANSLATE_CGET(cgetaddr)

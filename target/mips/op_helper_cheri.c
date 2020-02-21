@@ -606,16 +606,6 @@ void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
-/* XXXAR: Note: not using CHERI_HELPER_IMPL() since this cannot trap */
-target_ulong helper_cgetaddr(CPUMIPSState *env, uint32_t cb)
-{
-    /*
-     * CGetAddr: Move Virtual Address to a General-Purpose Register
-     * TODO: could do this directly from TCG now.
-     */
-    return (target_ulong)get_capreg_cursor(env, cb);
-}
-
 target_ulong CHERI_HELPER_IMPL(cloadtags(CPUMIPSState *env, uint32_t cb, uint64_t cbcursor))
 {
     GET_HOST_RETPC();
@@ -753,13 +743,13 @@ void CHERI_HELPER_IMPL(cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb, t
 }
 
 void CHERI_HELPER_IMPL(csetaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong target_addr)) {
-    target_ulong cursor = helper_cgetaddr(env, cb); // aaa
+    target_ulong cursor = get_capreg_cursor(env, cb); // aaa
     target_ulong diff = target_addr - cursor;
     cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetaddr));
 }
 
 void CHERI_HELPER_IMPL(candaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
-    target_ulong cursor = helper_cgetaddr(env, cb);
+    target_ulong cursor = get_capreg_cursor(env, cb);
     target_ulong target_addr = cursor & rt;
     target_ulong diff = target_addr - cursor;
     cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(candaddr));
@@ -1485,7 +1475,7 @@ target_ulong CHERI_HELPER_IMPL(cnexeq(CPUMIPSState *env, uint32_t cb, uint32_t c
 
 target_ulong CHERI_HELPER_IMPL(cgetandaddr(CPUMIPSState *env, uint32_t cb, target_ulong rt))
 {
-    target_ulong addr = helper_cgetaddr(env, cb);
+    target_ulong addr = get_capreg_cursor(env, cb);
     return addr & rt;
 }
 

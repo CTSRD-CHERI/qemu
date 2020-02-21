@@ -113,6 +113,15 @@ void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
 
 /// Two operand inspection instructions:
 
+target_ulong CHERI_HELPER_IMPL(cgetaddr(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetAddr: Move Virtual Address to a General-Purpose Register
+     * TODO: could do this directly from TCG now.
+     */
+    return (target_ulong)get_capreg_cursor(env, cb);
+}
+
 target_ulong CHERI_HELPER_IMPL(cgetbase(CPUArchState *env, uint32_t cb))
 {
     /*
