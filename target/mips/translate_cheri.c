@@ -284,40 +284,19 @@ static inline void generate_cfromptr(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgetbase(int32_t rd, int32_t cb)
+typedef void (cheri_cget_helper)(TCGv, TCGv_ptr, TCGv_i32);
+static inline void generate_cheri_cget(DisasContext *ctx, int rd, int cs,
+                                       cheri_cget_helper *gen_func)
 {
-    TCGv_i32 tcb = tcg_const_i32(cb);
+    check_cop2x(ctx);
+    TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv t0 = tcg_temp_new();
 
-    gen_helper_cgetbase(t0, cpu_env, tcb);
+    gen_func(t0, cpu_env, tcs);
     gen_store_gpr (t0, rd);
 
     tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
-}
-
-static inline void generate_cgetaddr(int32_t rd, int32_t cb)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv t0 = tcg_temp_new();
-
-    gen_helper_cgetaddr(t0, cpu_env, tcb);
-    gen_store_gpr (t0, rd);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
-}
-
-static inline void generate_cgetflags(int32_t rd, int32_t cb)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv t0 = tcg_temp_new();
-
-    gen_helper_cgetflags(t0, cpu_env, tcb);
-    gen_store_gpr (t0, rd);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
+    tcg_temp_free_i32(tcs);
 }
 
 static inline void generate_cloadtags(int32_t rd, int32_t cb)
@@ -375,78 +354,6 @@ generate_helper_cap_regnum_gpr_val(int32_t cd, int32_t rs,
     gen_helper(cpu_env, tcd, t0);
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
-}
-
-static inline void generate_cgetlen(int32_t rd, int32_t cb)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv t0 = tcg_temp_new();
-
-    gen_helper_cgetlen(t0, cpu_env, tcb);
-    gen_store_gpr (t0, rd);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
-}
-
-static inline void generate_cgetoffset(int32_t rd, int32_t cb)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv t0 = tcg_temp_new();
-
-    gen_helper_cgetoffset(t0, cpu_env, tcb);
-    gen_store_gpr (t0, rd);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
-}
-
-static inline void generate_cgetperm(int32_t rd, int32_t cb)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv t0 = tcg_temp_new();
-
-    gen_helper_cgetperm(t0, cpu_env, tcb);
-    gen_store_gpr (t0, rd);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
-}
-
-static inline void generate_cgetsealed(int32_t rd, int32_t cb)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv t0 = tcg_temp_new();
-
-    gen_helper_cgetsealed(t0, cpu_env, tcb);
-    gen_store_gpr (t0, rd);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
-}
-
-static inline void generate_cgettag(int32_t rd, int32_t cb)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv t0 = tcg_temp_new();
-
-    gen_helper_cgettag(t0, cpu_env, tcb);
-    gen_store_gpr (t0, rd);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
-}
-
-static inline void generate_cgettype(int32_t rd, int32_t cb)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv t0 = tcg_temp_new();
-
-    gen_helper_cgettype(t0, cpu_env, tcb);
-    gen_store_gpr (t0, rd);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcb);
 }
 
 static inline void generate_cincbase(int32_t cd, int32_t cb, int32_t rt)
@@ -1218,23 +1125,19 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CGET:  /* same as OPC_CAP_NI, 0x00 */
         switch(MASK_CAP6(opc)) {
         case OPC_CGETPERM:          /* 0x00 */
-            check_cop2x(ctx);
-            generate_cgetperm(r16, r11);
+            generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetperm);
             opn = "cgetperm";
             break;
         case OPC_CGETTYPE:          /* 0x01 */
-            check_cop2x(ctx);
-            generate_cgettype(r16, r11);
+            generate_cheri_cget(ctx, r16, r11, &gen_helper_cgettype);
             opn = "cgettype";
             break;
         case OPC_CGETBASE:          /* 0x02 */
-            check_cop2x(ctx);
-            generate_cgetbase(r16, r11);
+            generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetbase);
             opn = "cgetbase";
             break;
         case OPC_CGETLEN:           /* 0x03 */
-            check_cop2x(ctx);
-            generate_cgetlen(r16, r11);
+            generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetlen);
             opn = "cgetlen";
             break;
         case OPC_CGETCAUSE:         /* 0x04 */
@@ -1243,13 +1146,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "cgetcause";
             break;
         case OPC_CGETTAG:           /* 0x05 */
-            check_cop2x(ctx);
-            generate_cgettag(r16, r11);
+            generate_cheri_cget(ctx, r16, r11, &gen_helper_cgettag);
             opn = "cgettag";
             break;
         case OPC_CGETSEALED:        /* 0x06 */
-            check_cop2x(ctx);
-            generate_cgetsealed(r16, r11);
+            generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetsealed);
             opn = "cgetsealed";
             break;
         case OPC_CGETPCC:           /* 0x07 */
@@ -1395,38 +1296,31 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         case OPC_C2OPERAND_NI:         /* 0x3f */
             switch(MASK_CAP7(opc)) {
             case OPC_CGETPERM_NI:   /* 0x00 << 6 */
-                check_cop2x(ctx);
-                generate_cgetperm(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetperm);
                 opn = "cgetperm";
                 break;
             case OPC_CGETTYPE_NI:   /* 0x01 << 6 */
-                check_cop2x(ctx);
-                generate_cgettype(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgettype);
                 opn = "cgettype";
                 break;
             case OPC_CGETBASE_NI:   /* 0x02 << 6 */
-                check_cop2x(ctx);
-                generate_cgetbase(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetbase);
                 opn = "cgetbase";
                 break;
             case OPC_CGETLEN_NI:    /* 0x03 << 6 */
-                check_cop2x(ctx);
-                generate_cgetlen(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetlen);
                 opn = "cgetlen";
                 break;
             case OPC_CGETTAG_NI:    /* 0x04 << 6 */
-                check_cop2x(ctx);
-                generate_cgettag(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgettag);
                 opn = "cgettag";
                 break;
             case OPC_CGETSEALED_NI: /* 0x05 << 6 */
-                check_cop2x(ctx);
-                generate_cgetsealed(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetsealed);
                 opn = "cgetsealed";
                 break;
             case OPC_CGETOFFSET_NI: /* 0x06 << 6 */
-                check_cop2x(ctx);
-                generate_cgetoffset(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetoffset);
                 opn = "cgetoffset";
                 break;
             case OPC_CGETPCCSETOFF_NI: /* 0x07 << 6 */
@@ -1480,8 +1374,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 opn = "cwritehwr";
                 break;
             case OPC_CGETADDR_NI:   /* 0x0f << 6 */
-                check_cop2x(ctx);
-                generate_cgetaddr(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetaddr);
                 opn = "cgetaddr";
                 break;
             case OPC_CRAP_NI:   /* 0x10 << 6 */
@@ -1511,8 +1404,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 break;
             }
             case OPC_CGETFLAGS_NI:   /* 0x12 << 6 */
-                check_cop2x(ctx);
-                generate_cgetflags(r16, r11);
+                generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetflags);
                 opn = "cgetflags";
                 break;
             case OPC_CSEALENTRY_NI:   /* 0x1d << 6 */
@@ -1712,8 +1604,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "csetoffset";
             break;
         case OPC_CGETOFFSET: /* 0x2 */
-            check_cop2x(ctx);
-            generate_cgetoffset(r16, r11);
+            generate_cheri_cget(ctx, r16, r11, &gen_helper_cgetoffset);
             opn = "cgetoffset";
             break;
         default:
