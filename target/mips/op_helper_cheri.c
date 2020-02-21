@@ -757,26 +757,6 @@ target_ulong CHERI_HELPER_IMPL(cgettag(CPUMIPSState *env, uint32_t cb))
     return (target_ulong)get_readonly_capreg(env, cb)->cr_tag;
 }
 
-target_ulong CHERI_HELPER_IMPL(cgettype(CPUMIPSState *env, uint32_t cb))
-{
-    /*
-     * CGetType: Move Object Type Field to a General-Purpose Register
-     */
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const int64_t otype = cap_get_otype(cbp);
-    // otype must either be unsealed type or within range
-    if (cbp->cr_otype > CAP_MAX_REPRESENTABLE_OTYPE) {
-        // For untagged values mask of all bits greater than the maximum
-        if (!cbp->cr_tag)
-            return otype & CAP_MAX_REPRESENTABLE_OTYPE;
-        else {
-            assert(otype <= CAP_FIRST_SPECIAL_OTYPE_SIGNED);
-            assert(otype >= CAP_LAST_SPECIAL_OTYPE_SIGNED);
-        }
-    }
-    return otype;
-}
-
 void CHERI_HELPER_IMPL(cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt))
 {
     do_raise_exception(env, EXCP_RI, GETPC());

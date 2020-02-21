@@ -119,3 +119,21 @@ target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
     return (target_ulong)cbp->cr_perms |
            ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
 }
+
+target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetType: Move Object Type Field to a General-Purpose Register.
+     */
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    const int64_t otype = cap_get_otype(cbp);
+    // Must be either a valid positive type < maximum or one of the special
+    // hardware-interpreted otypes
+    if (otype < 0) {
+        cheri_debug_assert(otype <= CAP_FIRST_SPECIAL_OTYPE_SIGNED);
+        cheri_debug_assert(otype >= CAP_LAST_SPECIAL_OTYPE_SIGNED);
+    } else {
+        cheri_debug_assert(otype <= CAP_LAST_NONRESERVED_OTYPE);
+    }
+    return otype;
+}

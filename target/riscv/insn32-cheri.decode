@@ -35,10 +35,8 @@
 # Most of the fields and formats are there.
 
 # TODO: generate from sail?
-# mapping clause encdec = CGetPerm(rd, cb)   if (haveXcheri()) <-> 0b1111111 @ 0b00000 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
 cgetperm    1111111  00000 ..... 000 ..... 1011011 @r2
-# mapping clause encdec = CGetType(rd, cb)   if (haveXcheri()) <-> 0b1111111 @ 0b00001 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
-#cgettype    1111111  00001 ..... 000 ..... 1011011 @r2
+cgettype    1111111  00001 ..... 000 ..... 1011011 @r2
 # mapping clause encdec = CGetBase(rd, cb)   if (haveXcheri()) <-> 0b1111111 @ 0b00010 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
 
 # mapping clause encdec = CGetLen(rd, cb)    if (haveXcheri()) <-> 0b1111111 @ 0b00011 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())

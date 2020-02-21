@@ -55,4 +55,7 @@ static bool trans_cgetperm(DisasContext *ctx, arg_cgetperm *a)
 {
     return gen_cheri_get(a->rd, a->rs1, &gen_helper_cgetperm);
 }
-
+static bool trans_cgettype(DisasContext *ctx, arg_cgetperm *a)
+{
+    return gen_cheri_get(a->rd, a->rs1, &gen_helper_cgettype);
+}
