@@ -32,7 +32,6 @@
  */
 #pragma once
 
-
 #if (defined(CHERI_128) || defined(CHERI_64)) && !defined(CHERI_MAGIC128)
 #define QEMU_USE_COMPRESSED_CHERI_CAPS 1
 #else
@@ -40,17 +39,36 @@
 #endif
 
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
-#if defined(CHERI_128) || defined(CHERI_MAGIC128)
+#if defined(CHERI_64) || defined(CHERI_MAGIC64)
+#error "Not implemented yet"
+#elif defined(CHERI_128) || defined(CHERI_MAGIC128)
 /* Magic 128 has the same set of permissions as 128 */
 #define CAP_PERMS_ALL CC128_PERMS_ALL
 #define CAP_UPERMS_ALL CC128_UPERMS_ALL
 #define CAP_UPERMS_SHFT CC128_UPERMS_SHFT
 #define CAP_MAX_UPERM CC128_MAX_UPERM
+#define CHERI_CAP_SIZE  16
+#ifdef TARGET_WORDS_BIGENDIAN
+#define CHERI_MEM_OFFSET_CURSOR 8
+#define CHERI_MEM_OFFSET_METADATA 0
+#else
+#define CHERI_MEM_OFFSET_CURSOR 0
+#define CHERI_MEM_OFFSET_METADATA 8
+#endif
 #else
 #define CAP_PERMS_ALL CC256_PERMS_ALL_BITS
 #define CAP_UPERMS_ALL CC256_UPERMS_ALL_BITS
 #define CAP_UPERMS_SHFT CC256_UPERMS_SHFT
 #define CAP_MAX_UPERM CC256_MAX_UPERM
+#define CHERI_CAP_SIZE  32
+#ifdef TARGET_WORDS_BIGENDIAN
+#define CHERI_MEM_OFFSET_METADATA 0
+#define CHERI_MEM_OFFSET_CURSOR 8
+#define CHERI_MEM_OFFSET_BASE 16
+#define CHERI_MEM_OFFSET_LENGTH 24
+#else
+#error no little endian CHERI256
+#endif
 #endif
 
 /* compressed capabilities use a 65-bit top, precise and magic 64-bits */

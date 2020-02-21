@@ -1,2 +1,2 @@
-obj-$(TARGET_CHERI) += cheri_tagmem.o op_helper_cheri_common.o
+obj-$(TARGET_CHERI) += cheri_tagmem.o op_helper_cheri_common.o cheri_gdbstub.o
 

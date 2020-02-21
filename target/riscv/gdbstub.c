@@ -19,6 +19,9 @@
 #include "qemu/osdep.h"
 #include "exec/gdbstub.h"
 #include "cpu.h"
+#ifdef TARGET_CHERI
+#include "cheri-lazy-capregs.h"
+#endif
 
 /*
  * The GDB CSR xml files list them in documentation order, not numerical order,
@@ -399,6 +402,62 @@ static int riscv_gdb_set_virtual(CPURISCVState *cs, uint8_t *mem_buf, int n)
     return 0;
 }
 
+
+#if defined(TARGET_CHERI)
+#define CHERI_GDB_NUM_GP_CAPREGS 32
+#define CHERI_GDB_NUM_SPECIAL_CAPREGS 2
+#define CHERI_GDB_NUM_CAPREGS (CHERI_GDB_NUM_GP_CAPREGS + CHERI_GDB_NUM_SPECIAL_CAPREGS)
+#define CHERI_GDB_NUM_INTREGS 1
+#define CHERI_GDB_NUM_REGS (CHERI_GDB_NUM_CAPREGS + CHERI_GDB_NUM_INTREGS)
+
+static int riscv_gdb_get_cheri_reg(CPURISCVState *env, uint8_t *mem_buf, int n)
+{
+    if (n < 0)
+        return 0;
+
+    if (n < CHERI_GDB_NUM_GP_CAPREGS) {
+        return gdb_get_general_purpose_capreg(mem_buf, env, n);
+    }
+    switch (n) {
+    case CHERI_GDB_NUM_GP_CAPREGS:
+        return gdb_get_capreg(mem_buf, cheri_get_ddc(env));
+    case CHERI_GDB_NUM_GP_CAPREGS + 1:
+        return gdb_get_capreg(mem_buf, cheri_get_pcc(env));
+    case CHERI_GDB_NUM_CAPREGS: {   // First integer register is the tag mask:
+        uint64_t cap_valid;
+        int i;
+
+        cap_valid = 0;
+        if (cheri_get_ddc(env)->cr_tag)
+            cap_valid |= 1;
+        for (i = 1; i < 32; i++) {
+            if (get_capreg_tag(env, i))
+                cap_valid |= ((uint64_t)1 << i);
+        }
+        if (cheri_get_pcc(env)->cr_tag)
+            cap_valid |= ((uint64_t)1 << 32);
+        return gdb_get_regl(mem_buf, cap_valid);
+    }
+    }
+    return 0;
+}
+
+static int riscv_gdb_set_cheri_reg(CPURISCVState *env, uint8_t *mem_buf, int n)
+{
+    /* All CHERI registers are read-only currently.  */
+    if (n <= CHERI_GDB_NUM_CAPREGS) {
+        return CHERI_CAP_SIZE;
+    }
+
+    /* Save for the status registers */
+    if (n <= CHERI_GDB_NUM_CAPREGS + CHERI_GDB_NUM_INTREGS)
+        return 8;
+
+    return 0;
+}
+#endif
+
+
 void riscv_cpu_register_gdb_regs_for_features(CPUState *cs)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
@@ -425,5 +484,16 @@ void riscv_cpu_register_gdb_regs_for_features(CPUState *cs)
 
     gdb_register_coprocessor(cs, riscv_gdb_get_virtual, riscv_gdb_set_virtual,
                              1, "riscv-64bit-virtual.xml", 0);
+#endif
+#if defined(TARGET_CHERI)
+    gdb_register_coprocessor(cs, riscv_gdb_get_cheri_reg,
+                             riscv_gdb_set_cheri_reg, CHERI_GDB_NUM_REGS,
+#if defined(TARGET_RISCV32)
+                             "riscv-32bit-cheri.xml", 0);
+#elif defined(TARGET_RISCV64)
+                             "riscv-64bit-cheri.xml", 0);
+#else
+#error INVALID TARGET
+#endif
 #endif
 }

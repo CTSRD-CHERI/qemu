@@ -159,36 +159,19 @@ int mips_gdb_set_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 }
 
 #if defined(TARGET_CHERI)
-static int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap)
-{
-#if defined(CHERI_128)
-    // If the capability has a valid tag bit we must recompress since the
-    // pesbt value might not match the current value (csetbounds could have
-    // changed the bounds).
-    stq_p(mem_buf, compress_128cap(cap));
-    stq_p(mem_buf + 8, cap_get_cursor(cap));
-    return 16;
-#elif defined(CHERI_MAGIC128)
-    /* XXX: Would need to generate pesbt. */
-    stq_p(mem_buf, compress_128cap(cap));
-    stq_p(mem_buf + 8, cap_get_cursor(cap));
-    return 16;
-#else
-    inmemory_chericap256 memory_representation;
-    compress_256cap(&memory_representation, cap);
-    stq_p(mem_buf, memory_representation.u64s[0]);
-    stq_p(mem_buf + 8, memory_representation.u64s[1]);
-    stq_p(mem_buf + 16, memory_representation.u64s[2]);
-    stq_p(mem_buf + 24, memory_representation.u64s[3]);
-    return 32;
-#endif
-}
+#define CHERI_GDB_NUM_GP_CAPREGS 32
+#define CHERI_GDB_NUM_SPECIAL_CAPREGS 10
+#define CHERI_GDB_NUM_CAPREGS (CHERI_GDB_NUM_GP_CAPREGS + CHERI_GDB_NUM_SPECIAL_CAPREGS)
+#define CHERI_GDB_NUM_INTREGS 2
+#define CHERI_GDB_NUM_REGS (CHERI_GDB_NUM_CAPREGS + CHERI_GDB_NUM_INTREGS)
 
 int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 {
-    if (n < 32) {
-        // TODO: no need to decompress and recompress
-        return gdb_get_capreg(mem_buf, get_readonly_capreg(env, n));
+    if (n < 0)
+        return 0;
+
+    if (n < CHERI_GDB_NUM_GP_CAPREGS) {
+        return gdb_get_general_purpose_capreg(mem_buf, env, n);
     }
     switch (n) {
     case 32:
@@ -211,9 +194,9 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
         return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.EPCC);
     case 41:
         return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.ErrorEPCC);
-    case 42:
+    case CHERI_GDB_NUM_CAPREGS + 1:
         return gdb_get_regl(mem_buf, env->CP2_CapCause);
-    case 43: {
+    case CHERI_GDB_NUM_CAPREGS + 2: {
         uint64_t cap_valid;
         int i;
 
@@ -221,7 +204,7 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
         if (env->active_tc.CHWR.DDC.cr_tag)
             cap_valid |= 1;
         for (i = 1; i < 32; i++) {
-            if (get_readonly_capreg(env, i)->cr_tag) // TODO: no need to decompress
+            if (get_capreg_tag(env, i))
                 cap_valid |= ((uint64_t)1 << i);
         }
         if (env->active_tc.PCC.cr_tag)
@@ -236,13 +219,12 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 int mips_gdb_set_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 {
     /* All CHERI registers are read-only currently.  */
-    if (n < 42)
-#if defined(CHERI_128) || defined(CHERI_MAGIC128)
-        return 16;
-#else
-        return 32;
-#endif
-    if (n == 42 || n == 43)
+    if (n < CHERI_GDB_NUM_CAPREGS) {
+        return CHERI_CAP_SIZE;
+    }
+
+    /* Save for the status registers */
+    if (n < CHERI_GDB_NUM_CAPREGS + CHERI_GDB_NUM_INTREGS)
         return 8;
 
     return 0;

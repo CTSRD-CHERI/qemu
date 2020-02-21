@@ -31,9 +31,11 @@
  */
 
 #pragma once
+#include "qemu/compiler.h"
+#include "qemu/osdep.h"
+#include "qemu/error-report.h"
 
 #include "cheri_defs.h"
-#include "qemu/error-report.h"
 
 #define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
 #define COMBINED_PERMS_VALUE(cr)                                               \
@@ -285,5 +287,8 @@ is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t n
 }
 #endif
 
+int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap);
+int gdb_get_general_purpose_capreg(uint8_t *mem_buf, CPUArchState *env,
+                                   unsigned regnum);
 #endif /* TARGET_CHERI */
 

@@ -167,14 +167,6 @@ typedef struct cvtrace cvtrace_t;
 
 #if defined(TARGET_CHERI)
 
-#if defined(CHERI_MAGIC128)
-#define CHERI_CAP_SIZE  16
-#elif defined(CHERI_128)
-#define CHERI_CAP_SIZE  16
-#else
-#define CHERI_CAP_SIZE  32
-#endif
-
 struct cheri_cap_hwregs {
     cap_register_t DDC;        /* CapHwr 0 */
     cap_register_t UserTlsCap; /* CapHwr 1 */
