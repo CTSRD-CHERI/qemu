@@ -239,7 +239,8 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
 
 void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_t len)
 {
-    uint64_t tag, addr, endaddr, tagmem_idx;
+    uint64_t tag, tagmem_idx;
+    ram_addr_t addr, endaddr;
     uint8_t *tagblk;
 
     endaddr = (uint64_t)(ram_addr + len);
@@ -258,7 +259,7 @@ void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_
 
         if (tagblk != NULL) {
             if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-                qemu_log("    Cap Tag Write [%" HWADDR_PRIx "] %d -> 0\n", addr,
+                qemu_log("    Cap Tag Write [" RAM_ADDR_FMT "] %d -> 0\n", addr,
                          tagblk[CAP_TAGBLK_IDX(tag)]);
             }
             tagblk[CAP_TAGBLK_IDX(tag)] = 0;
