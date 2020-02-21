@@ -38,8 +38,7 @@
 cgetperm    1111111  00000 ..... 000 ..... 1011011 @r2
 cgettype    1111111  00001 ..... 000 ..... 1011011 @r2
 cgetbase    1111111  00010 ..... 000 ..... 1011011 @r2
-
-# mapping clause encdec = CGetLen(rd, cb)    if (haveXcheri()) <-> 0b1111111 @ 0b00011 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
+cgetlen     1111111  00011 ..... 000 ..... 1011011 @r2
 # mapping clause encdec = CGetTag(rd, cb)    if (haveXcheri()) <-> 0b1111111 @ 0b00100 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CGetSealed(rd, cb) if (haveXcheri()) <-> 0b1111111 @ 0b00101 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CGetOffset(rd, cb) if (haveXcheri()) <-> 0b1111111 @ 0b00110 @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())

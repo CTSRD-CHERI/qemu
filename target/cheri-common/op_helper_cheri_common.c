@@ -152,3 +152,14 @@ target_ulong CHERI_HELPER_IMPL(cgetbase(CPUArchState *env, uint32_t cb))
      */
     return (target_ulong)cap_get_base(get_readonly_capreg(env, cb));
 }
+
+target_ulong CHERI_HELPER_IMPL(cgetlen(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetLen: Move Length to a General-Purpose Register.
+     *
+     * Note: For 128-bit Capabilities we must handle len >= 2^64:
+     * cap_get_length64() converts 1 << 64 to UINT64_MAX
+     */
+    return (target_ulong)cap_get_length64(get_readonly_capreg(env, cb));
+}

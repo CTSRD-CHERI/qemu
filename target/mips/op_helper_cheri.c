@@ -652,18 +652,6 @@ target_ulong CHERI_HELPER_IMPL(cgetcause(CPUMIPSState *env))
     }
 }
 
-target_ulong CHERI_HELPER_IMPL(cgetlen(CPUMIPSState *env, uint32_t cb))
-{
-    /*
-     * CGetLen: Move Length to a General-Purpose Register
-     */
-    /*
-     * For 128-bit Capabilities we must check len >= 2^64:
-     * cap_get_length64() converts 1 << 64 to UINT64_MAX)
-     */
-    return (target_ulong)cap_get_length64(get_readonly_capreg(env, cb));
-}
-
 target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUMIPSState *env, uint32_t cb))
 {
     /*
