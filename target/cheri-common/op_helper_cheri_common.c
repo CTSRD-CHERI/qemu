@@ -36,11 +36,11 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include "qemu/osdep.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
 #include "exec/helper-proto.h"
 #include "exec/memop.h"
-#include "qemu/osdep.h"
 
 #include "cheri-lazy-capregs.h"
 #include "cheri_tagmem.h"
@@ -143,4 +143,12 @@ target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
         cheri_debug_assert(otype <= CAP_LAST_NONRESERVED_OTYPE);
     }
     return otype;
+}
+
+target_ulong CHERI_HELPER_IMPL(cgetbase(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetBase: Move Base to a General-Purpose Register.
+     */
+    return (target_ulong)cap_get_base(get_readonly_capreg(env, cb));
 }

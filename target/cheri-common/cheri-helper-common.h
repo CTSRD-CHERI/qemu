@@ -44,5 +44,6 @@
 
 DEF_HELPER_2(cgetperm, tl, env, i32)
 DEF_HELPER_2(cgettype, tl, env, i32)
+DEF_HELPER_2(cgetbase, tl, env, i32)
 
 

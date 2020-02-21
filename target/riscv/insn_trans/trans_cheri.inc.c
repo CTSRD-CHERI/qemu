@@ -59,3 +59,4 @@ static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
 
 TRANSLATE_CGET(cgetperm)
 TRANSLATE_CGET(cgettype)
+TRANSLATE_CGET(cgetbase)

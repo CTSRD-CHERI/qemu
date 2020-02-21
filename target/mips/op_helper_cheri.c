@@ -637,14 +637,6 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUMIPSState *env, uint32_t cb, uint64_
     return 0;
 }
 
-target_ulong CHERI_HELPER_IMPL(cgetbase(CPUMIPSState *env, uint32_t cb))
-{
-    /*
-     * CGetBase: Move Base to a General-Purpose Register
-     */
-    return (target_ulong)get_readonly_capreg(env, cb)->cr_base;
-}
-
 target_ulong CHERI_HELPER_IMPL(cgetcause(CPUMIPSState *env))
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
