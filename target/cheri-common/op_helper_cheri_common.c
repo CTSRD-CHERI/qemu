@@ -36,15 +36,14 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "qemu/osdep.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
 #include "exec/helper-proto.h"
 #include "exec/memop.h"
+#include "qemu/osdep.h"
 
-#include "cheri_tagmem.h"
 #include "cheri-lazy-capregs.h"
-
+#include "cheri_tagmem.h"
 
 #ifndef TARGET_CHERI
 #error "This file should only be compiled for CHERI"
@@ -55,14 +54,18 @@
 #else
 #pragma GCC diagnostic error "-Wdeprecated-declarations"
 #endif
-#define CHERI_HELPER_IMPL(name) \
-    __attribute__((deprecated("Do not call the helper directly, it will crash at runtime. Call the _impl variant instead"))) helper_##name
+#define CHERI_HELPER_IMPL(name)                                                \
+    __attribute__(                                                             \
+        (deprecated("Do not call the helper directly, it will crash at "       \
+                    "runtime. Call the _impl variant instead"))) helper_##name
 
 #ifndef TARGET_MIPS
 static inline /* Currently needed for other helpers */
 #endif
-target_ulong check_ddc(CPUArchState *env, uint32_t perm, uint64_t ddc_offset,
-                       uint32_t len, uintptr_t retpc) {
+    target_ulong
+    check_ddc(CPUArchState *env, uint32_t perm, uint64_t ddc_offset,
+              uint32_t len, uintptr_t retpc)
+{
     const cap_register_t *ddc = cheri_get_ddc(env);
     target_ulong addr = ddc_offset + cap_get_cursor(ddc);
     check_cap(env, ddc, perm, addr, CHERI_EXC_REGNUM_DDC, len,
@@ -71,24 +74,28 @@ target_ulong check_ddc(CPUArchState *env, uint32_t perm, uint64_t ddc_offset,
 }
 
 target_ulong CHERI_HELPER_IMPL(ddc_check_load(CPUArchState *env,
-                                              target_ulong offset, MemOp op)) {
+                                              target_ulong offset, MemOp op))
+{
     return check_ddc(env, CAP_PERM_LOAD, offset, memop_size(op), GETPC());
 }
 
 target_ulong CHERI_HELPER_IMPL(ddc_check_store(CPUArchState *env,
-                                               target_ulong offset, MemOp op)) {
+                                               target_ulong offset, MemOp op))
+{
     return check_ddc(env, CAP_PERM_STORE, offset, memop_size(op), GETPC());
 }
 
 target_ulong CHERI_HELPER_IMPL(ddc_check_rmw(CPUArchState *env,
-                                             target_ulong offset, MemOp op)) {
+                                             target_ulong offset, MemOp op))
+{
     return check_ddc(env, CAP_PERM_LOAD | CAP_PERM_STORE, offset,
                      memop_size(op), GETPC());
 }
 
 target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
                                               target_ulong pcc_offset,
-                                              MemOp op)) {
+                                              MemOp op))
+{
     const cap_register_t *pcc = cheri_get_pcc(env);
     target_ulong addr = pcc_offset + cap_get_cursor(pcc);
     check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
@@ -97,10 +104,10 @@ target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
 }
 
 void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
-                                             target_ulong vaddr, MemOp op)) {
+                                             target_ulong vaddr, MemOp op))
+{
     cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC());
 }
-
 
 /// Implementations of individual instructions start here
 
@@ -108,7 +115,7 @@ target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
 {
     /*
      * CGetPerm: Move Memory Permissions Field to a General-Purpose
-     * Register
+     * Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     cheri_debug_assert((cbp->cr_perms & CAP_PERMS_ALL) == cbp->cr_perms &&
