@@ -105,6 +105,11 @@ static inline uint8_t* get_cheri_tagmem(size_t index) {
 void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size)
 {
     // printf("%s: memory_size=0x%lx\n", __func__, memory_size);
+    assert(memory_region_is_ram(mr));
+#ifdef NOTYET
+    assert(memory_region_size(mr) == memory_size &&
+           "Incorrect tag mem size passed?");
+#endif
     if (_cheri_tagmem != NULL)
         return;
 
