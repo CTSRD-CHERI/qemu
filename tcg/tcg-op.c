@@ -2811,12 +2811,14 @@ static inline void gen_cheri_invalidate_tags(TCGv_cap_checked_ptr out_addr, TCGv
 #endif
 
 
-static inline uint64_t memop_rvfi_mask(MemOp op) {
-    return MAKE_64BIT_MASK(0, memop_size(op));
-}
 #if !defined(TARGET_RISCV) || !defined(CONFIG_RVFI_DII)
 #define gen_rvfi_dii_set_field(value, field) ((void)0)
 #define gen_rvfi_dii_set_field_const(value, field) ((void)0)
+
+#else
+static inline uint64_t memop_rvfi_mask(MemOp op) {
+    return MAKE_64BIT_MASK(0, memop_size(op));
+}
 #endif
 
 void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop)
