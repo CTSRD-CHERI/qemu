@@ -779,6 +779,9 @@ static bool gen_shift(DisasContext *ctx, arg_r *a,
 #include "insn_trans/trans_rvf.inc.c"
 #include "insn_trans/trans_rvd.inc.c"
 #include "insn_trans/trans_privileged.inc.c"
+#ifdef TARGET_CHERI
+#include "insn_trans/trans_cheri.inc.c"
+#endif
 
 /* Include the auto-generated decoder for 16 bit insn */
 #include "decode_insn16.inc.c"

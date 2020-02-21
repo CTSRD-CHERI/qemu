@@ -43,8 +43,8 @@
 #include "exec/memop.h"
 
 #include "cheri_tagmem.h"
-#include "cheri_utils.h"
-#include "cheri-archspecific.h"
+#include "cheri-lazy-capregs.h"
+
 
 #ifndef TARGET_CHERI
 #error "This file should only be compiled for CHERI"
@@ -99,4 +99,23 @@ target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
 void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
                                              target_ulong vaddr, MemOp op)) {
     cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC());
+}
+
+
+/// Implementations of individual instructions start here
+
+target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetPerm: Move Memory Permissions Field to a General-Purpose
+     * Register
+     */
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    cheri_debug_assert((cbp->cr_perms & CAP_PERMS_ALL) == cbp->cr_perms &&
+                       "Unknown HW perms bits set!");
+    cheri_debug_assert((cbp->cr_uperms & CAP_UPERMS_ALL) == cbp->cr_uperms &&
+                       "Unknown SW perms bits set!");
+
+    return (target_ulong)cbp->cr_perms |
+           ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
 }

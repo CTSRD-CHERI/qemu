@@ -738,20 +738,6 @@ void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUMIPSState *env, uint32_t cd, target_ulo
     derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
-target_ulong CHERI_HELPER_IMPL(cgetperm(CPUMIPSState *env, uint32_t cb))
-{
-    /*
-     * CGetPerm: Move Memory Permissions Field to a General-Purpose
-     * Register
-     */
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    uint64_t perms =  (uint64_t)
-        ((cbp->cr_perms & CAP_PERMS_ALL) |
-         ((cbp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT));
-
-    return (target_ulong)perms;
-}
-
 target_ulong CHERI_HELPER_IMPL(cgetsealed(CPUMIPSState *env, uint32_t cb))
 {
     /*
