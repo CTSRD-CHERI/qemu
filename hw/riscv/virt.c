@@ -470,7 +470,7 @@ static void riscv_virt_board_init(MachineState *machine)
     memory_region_add_subregion(system_memory, memmap[VIRT_DRAM].base,
         main_mem);
 #ifdef TARGET_CHERI
-    cheri_tag_init(machine->ram_size);
+    cheri_tag_init(main_mem, machine->ram_size);
 #endif
 
     /* create device tree */

@@ -170,13 +170,12 @@ mips_mipssim_init(MachineState *machine)
     reset_info->vector = env->active_tc.PC;
     qemu_register_reset(main_cpu_reset, reset_info);
 
-#ifdef TARGET_CHERI
-    cheri_tag_init(ram_size);
-#endif
-
     /* Allocate RAM. */
     memory_region_allocate_system_memory(ram, NULL, "mips_mipssim.ram",
                                          ram_size);
+#ifdef TARGET_CHERI
+    cheri_tag_init(ram, ram_size);
+#endif
     memory_region_init_ram(bios, NULL, "mips_mipssim.bios", BIOS_SIZE,
                            &error_fatal);
     memory_region_set_readonly(bios, true);

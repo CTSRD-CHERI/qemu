@@ -102,7 +102,7 @@ static inline uint8_t* get_cheri_tagmem(size_t index) {
     return _cheri_tagmem[index];
 }
 
-void cheri_tag_init(uint64_t memory_size)
+void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size)
 {
     // printf("%s: memory_size=0x%lx\n", __func__, memory_size);
     if (_cheri_tagmem != NULL)

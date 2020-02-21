@@ -1254,12 +1254,14 @@ void mips_malta_init(MachineState *machine)
     DeviceState *dev = qdev_create(NULL, TYPE_MIPS_MALTA);
     MaltaState *s = MIPS_MALTA(dev);
 
+#ifndef TARGET_CHERI // We want the traps for CHERI
     /*
      * The whole address space decoded by the GT-64120A doesn't generate
      * exception when accessing invalid memory. Create an empty slot to
      * emulate this feature.
      */
     empty_slot_init(0, 0x20000000);
+#endif
 
     qdev_init_nofail(dev);
 
@@ -1279,7 +1281,7 @@ void mips_malta_init(MachineState *machine)
     memory_region_add_subregion(system_memory, 0x80000000, ram_high);
 
 #ifdef TARGET_CHERI
-    cheri_tag_init(0x80000000 + memory_region_size(ram_high));
+    cheri_tag_init(ram_high, 0x80000000 + memory_region_size(ram_high));
 #endif /* TARGET_CHERI */
 
     /* alias for pre IO hole access */

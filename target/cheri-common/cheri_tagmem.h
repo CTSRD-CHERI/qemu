@@ -34,11 +34,12 @@
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "exec/cpu-common.h"
+#include "exec/memory.h"
 
 #if defined(TARGET_CHERI)
 /* Note: for cheri_tag_phys_invalidate, env may be NULL */
 void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t paddr, ram_addr_t len);
-void cheri_tag_init(uint64_t memory_size);
+void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size);
 void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                           uintptr_t pc);
 int  cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
