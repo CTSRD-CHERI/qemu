@@ -63,12 +63,12 @@ int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap)
 int gdb_get_general_purpose_capreg(uint8_t *mem_buf, CPUArchState *env,
                                    unsigned regnum)
 {
-#if CHERI_CAP_SIZE == 16
+#if CHERI_CAP_SIZE == 16 && QEMU_USE_COMPRESSED_CHERI_CAPS
     // No need to decompress:
     stq_p(mem_buf + CHERI_MEM_OFFSET_METADATA, get_capreg_pesbt(env, regnum));
     stq_p(mem_buf + CHERI_MEM_OFFSET_CURSOR, get_capreg_cursor(env, regnum));
     return CHERI_CAP_SIZE;
 #else
-    return gdb_get_capreg(mem_buf, get_readonly_capreg(env, regnum))
+    return gdb_get_capreg(mem_buf, get_readonly_capreg(env, regnum));
 #endif
 }
