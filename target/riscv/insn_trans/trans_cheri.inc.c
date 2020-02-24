@@ -185,3 +185,4 @@ TRANSLATE_CAP_CAP_INT(csetoffset)
 
 // Three operand (int cap cap)
 TRANSLATE_INT_CAP_CAP(ctoptr)
+TRANSLATE_INT_CAP_CAP(csub)

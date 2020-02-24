@@ -83,3 +83,4 @@ DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 
 // Three operands (int cap cap)
 DEF_HELPER_3(ctoptr, tl, env, i32, i32)
+DEF_HELPER_3(csub, tl, env, i32, i32)

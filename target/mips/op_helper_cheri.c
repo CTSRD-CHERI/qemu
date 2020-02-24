@@ -697,36 +697,6 @@ target_ulong CHERI_HELPER_IMPL(cram(CPUArchState *env, target_ulong len))
 #endif
 }
 
-//static inline bool cap_bounds_are_subset(const cap_register_t *first, const cap_register_t *second) {
-//    return cap_get_base(first) <= cap_get_base(second) && cap_get_top(second) <= cap_get_top(first);
-//}
-
-target_ulong CHERI_HELPER_IMPL(csub(CPUArchState *env, uint32_t cb, uint32_t ct))
-{
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const cap_register_t *ctp = get_readonly_capreg(env, ct);
-
-#if 0
-    // This is very noisy, but may be interesting for C-compatibility analysis
-
-    // If the capabilities are not subsets (i.e. at least one tagged and derived from different caps,
-    // emit a warning to see how many subtractions are being performed that are invalid in ISO C
-    if (cbp->cr_tag != ctp->cr_tag ||
-        (cbp->cr_tag && !cap_bounds_are_subset(cbp, ctp) && !cap_bounds_are_subset(ctp, cbp))) {
-        // Don't warn about subtracting NULL:
-        if (!is_null_capability(ctp)) {
-            warn_report("Subtraction between two capabilities that are not subsets: \r\n"
-                    "\tLHS: " PRINT_CAP_FMTSTR "\r\n\tRHS: " PRINT_CAP_FMTSTR "\r",
-                    PRINT_CAP_ARGS(cbp), PRINT_CAP_ARGS(ctp));
-        }
-    }
-#endif
-    /*
-     * CSub: Subtract Capabilities
-     */
-    return (target_ulong)(cap_get_cursor(cbp) - cap_get_cursor(ctp));
-}
-
 void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
