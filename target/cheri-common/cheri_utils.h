@@ -293,7 +293,6 @@ int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap);
 int gdb_get_general_purpose_capreg(uint8_t *mem_buf, CPUArchState *env,
                                    unsigned regnum);
 
-
 #define raise_cheri_exception(env, cause, reg)                                 \
     raise_cheri_exception_impl(env, cause, reg, _host_return_address)
 
