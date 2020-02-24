@@ -161,4 +161,7 @@ TRANSLATE_CAP_CAP_CAP(cunseal)
 
 // Three operand (cap cap int)
 TRANSLATE_CAP_CAP_INT(candperm)
+TRANSLATE_CAP_CAP_INT(cincoffset)
+TRANSLATE_CAP_CAP_INT(csetaddr)
 TRANSLATE_CAP_CAP_INT(csetflags)
+TRANSLATE_CAP_CAP_INT(csetoffset)

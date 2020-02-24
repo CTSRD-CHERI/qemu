@@ -61,9 +61,9 @@ cseal       0001011  ..... ..... 000 ..... 1011011 @r
 cunseal     0001100  ..... ..... 000 ..... 1011011 @r
 candperm    0001101  ..... ..... 000 ..... 1011011 @r
 csetflags   0001110  ..... ..... 000 ..... 1011011 @r
-# mapping clause encdec = CSetOffset(cd, cs, rt)  if (haveXcheri()) <-> 0b0001111 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CSetAddr(cd, cs, rt)    if (haveXcheri()) <-> 0b0010000 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CIncOffset(cd, cs, rt)  if (haveXcheri()) <-> 0b0010001 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
+csetoffset  0001111  ..... ..... 000 ..... 1011011 @r
+csetaddr    0010000  ..... ..... 000 ..... 1011011 @r
+cincoffset  0010001  ..... ..... 000 ..... 1011011 @r
 # mapping clause encdec = CSetBounds(cd, cs, rt)  if (haveXcheri()) <-> 0b0001000 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CSetBoundsExact(cd, cs, rt) if (haveXcheri()) <-> 0b0001001 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CBuildCap(cd, cb, ct)   if (haveXcheri()) <-> 0b0011101 @ ct @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
