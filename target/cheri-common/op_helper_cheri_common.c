@@ -377,3 +377,28 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
         update_capreg(env, cd, &result);
     }
 }
+
+/// Three operands (capability capability int)
+
+void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
+                                target_ulong rt))
+{
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    GET_HOST_RETPC();
+    /*
+     * CAndPerm: Restrict Permissions
+     */
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (!cap_is_unsealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else {
+        uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
+        uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
+
+        cap_register_t result = *cbp;
+        result.cr_perms = cbp->cr_perms & rt_perms;
+        result.cr_uperms = cbp->cr_uperms & rt_uperms;
+        update_capreg(env, cd, &result);
+    }
+}
