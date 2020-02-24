@@ -288,4 +288,21 @@ static inline void reset_capregs(GPCapRegs *gpcrs)
     }
 }
 
+static inline void set_max_perms_capregs(GPCapRegs *gpcrs)
+{
+    // Reset all to max perms (except NULL of course):
+    gpcrs->capreg_state = UINT64_MAX; // All decompressed values
+    null_capability(&gpcrs->decompressed[0]);
+    sanity_check_capreg(gpcrs, 0);
+    for (size_t i = 1; i < ARRAY_SIZE(gpcrs->decompressed); i++) {
+        set_max_perms_capability(&gpcrs->decompressed[i], 0);
+#if QEMU_USE_COMPRESSED_CHERI_CAPS
+        gpcrs->pesbt[i] = compress_128cap_without_xor(&gpcrs->decompressed[i]);
+#endif
+        // Mark register as fully decompressed
+        cheri_debug_assert(get_capreg_state(gpcrs, i) == CREG_FULLY_DECOMPRESSED);
+        sanity_check_capreg(gpcrs, i);
+    }
+}
+
 #endif

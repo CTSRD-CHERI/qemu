@@ -370,6 +370,8 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             cpu_physical_memory_unmap(ram_ptr, system_ram_size, /*is_write=*/true, system_ram_size);
             // Flush the TCG state:
             tb_flush(cs);
+            // TestRIG expects all capability registers to be max perms
+            set_max_perms_capregs(&env->gpcapregs);
             break;
         }
         case 'B': {
