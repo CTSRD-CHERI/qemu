@@ -157,12 +157,12 @@ target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     cheri_debug_assert((cbp->cr_perms & CAP_PERMS_ALL) == cbp->cr_perms &&
-        "Unknown HW perms bits set!");
+                       "Unknown HW perms bits set!");
     cheri_debug_assert((cbp->cr_uperms & CAP_UPERMS_ALL) == cbp->cr_uperms &&
-        "Unknown SW perms bits set!");
+                       "Unknown SW perms bits set!");
 
     return (target_ulong)cbp->cr_perms |
-        ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
+           ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUArchState *env, uint32_t cb))
@@ -173,13 +173,12 @@ target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUArchState *env, uint32_t cb))
     return (target_ulong)cap_get_offset(get_readonly_capreg(env, cb));
 }
 
-
 target_ulong CHERI_HELPER_IMPL(cgetsealed(CPUArchState *env, uint32_t cb))
 {
     /*
      * CGetSealed: Move sealed bit to a General-Purpose Register
      */
-    const cap_register_t* cbp = get_readonly_capreg(env, cb);
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
     if (cap_is_sealed_with_type(cbp) || cap_is_sealed_entry(cbp))
         return (target_ulong)1;
     assert(cap_is_unsealed(cbp) && "Unknown reserved otype?");
@@ -252,13 +251,15 @@ void CHERI_HELPER_IMPL(cchecktype(CPUArchState *env, uint32_t cs, uint32_t cb))
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (cap_is_unsealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
+    } else if (csp->cr_otype != cbp->cr_otype ||
+               csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
         raise_cheri_exception(env, CapEx_TypeViolation, cs);
     }
 }
 
 /// Two operands (capability and int)
-void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs, target_ulong rt))
+void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
+                                  target_ulong rt))
 {
     GET_HOST_RETPC();
     const cap_register_t *csp = get_readonly_capreg(env, cs);
@@ -280,7 +281,8 @@ void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs, target_ulong r
 
 /// Three operands (capability capability capability)
 static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
-                         uint32_t ct, bool conditional, uintptr_t _host_return_address)
+                         uint32_t ct, bool conditional,
+                         uintptr_t _host_return_address)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -308,7 +310,8 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (ct_base_plus_offset > (uint64_t)CAP_LAST_NONRESERVED_OTYPE) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if (!is_representable_cap_when_sealed_with_addr(csp, cap_get_cursor(csp))) {
+    } else if (!is_representable_cap_when_sealed_with_addr(
+                   csp, cap_get_cursor(csp))) {
         raise_cheri_exception(env, CapEx_InexactBounds, cs);
     } else {
         cap_register_t result = *csp;
@@ -317,7 +320,8 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
     }
 }
 
-void CHERI_HELPER_IMPL(ccseal(CPUArchState *env, uint32_t cd, uint32_t cs, uint32_t ct))
+void CHERI_HELPER_IMPL(ccseal(CPUArchState *env, uint32_t cd, uint32_t cs,
+                              uint32_t ct))
 {
     /*
      * CCSeal: Conditionally seal a capability.
@@ -326,7 +330,7 @@ void CHERI_HELPER_IMPL(ccseal(CPUArchState *env, uint32_t cd, uint32_t cs, uint3
 }
 
 void CHERI_HELPER_IMPL(cseal(CPUArchState *env, uint32_t cd, uint32_t cs,
-    uint32_t ct))
+                             uint32_t ct))
 {
     /*
      * CSeal: Seal a capability
@@ -335,7 +339,7 @@ void CHERI_HELPER_IMPL(cseal(CPUArchState *env, uint32_t cd, uint32_t cs,
 }
 
 void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
-    uint32_t ct))
+                               uint32_t ct))
 {
     GET_HOST_RETPC();
     const cap_register_t *csp = get_readonly_capreg(env, cs);
@@ -353,13 +357,15 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
     } else if (!cap_is_unsealed(ctp)) {
         raise_cheri_exception(env, CapEx_SealViolation, ct);
     } else if (!cap_is_sealed_with_type(csp)) {
-        raise_cheri_exception(env, CapEx_TypeViolation, cs); /* Reserved otypes */
+        raise_cheri_exception(env, CapEx_TypeViolation,
+                              cs); /* Reserved otypes */
     } else if (ct_cursor != csp->cr_otype) {
         raise_cheri_exception(env, CapEx_TypeViolation, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
         raise_cheri_exception(env, CapEx_PermitUnsealViolation, ct);
-    } else if (!cap_is_in_bounds(ctp, ct_cursor, /*num_bytes=1*/1)) {
-        // Must be within bounds and not one past end (i.e. not equal to top -> num_bytes=1)
+    } else if (!cap_is_in_bounds(ctp, ct_cursor, /*num_bytes=1*/ 1)) {
+        // Must be within bounds and not one past end (i.e. not equal to top ->
+        // num_bytes=1)
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (ct_cursor >= CAP_LAST_NONRESERVED_OTYPE) {
         // This should never happen due to the ct_cursor != csp->cr_otype check
