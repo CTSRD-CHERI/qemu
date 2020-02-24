@@ -51,6 +51,8 @@
 #define PRINT_CAP_FMTSTR PRINT_CAP_FMTSTR_L1 " " PRINT_CAP_FMTSTR_L2
 #define PRINT_CAP_ARGS(cr) PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr)
 
+#define GET_HOST_RETPC() const uintptr_t _host_return_address = GETPC()
+
 #ifdef TARGET_CHERI
 
 #include "tcg/tcg.h"  // for tcg_debug_assert()
@@ -290,5 +292,10 @@ is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t n
 int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap);
 int gdb_get_general_purpose_capreg(uint8_t *mem_buf, CPUArchState *env,
                                    unsigned regnum);
+
+
+#define raise_cheri_exception(env, cause, reg)                                 \
+    raise_cheri_exception_impl(env, cause, reg, _host_return_address)
+
 #endif /* TARGET_CHERI */
 

@@ -28,6 +28,10 @@
 #include "hw/mips/cpudevs.h"
 #include "qapi/qapi-commands-machine-target.h"
 
+#ifdef TARGET_CHERI
+#include "cheri-lazy-capregs.h"
+#endif
+
 enum {
 #ifdef TARGET_CHERI
     TLBRET_S = -5,

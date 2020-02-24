@@ -559,7 +559,6 @@ extern const char *cp2_fault_causestr[];
 
 void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int flags);
 
-#define GET_HOST_RETPC() const uintptr_t _host_return_address = GETPC()
 #define do_raise_c2_exception(env, cause, reg) \
   do_raise_c2_exception_impl(env, cause, reg, _host_return_address)
 #define do_raise_c0_exception(env, cause, reg) \

@@ -1234,31 +1234,7 @@ struct CPUMIPSState {
      * See section 4.4.2 (Table 4.3) of the CHERI Architecture Reference.
      */
     uint16_t CP2_CapCause; /* Upper 8 bits exception code; lower reg# */
-#define CP2Ca_NONE          0x00    /* None */
-#define CP2Ca_LENGTH        0x01    /* Length Violation */
-#define CP2Ca_TAG           0x02    /* Tag Violation */
-#define CP2Ca_SEAL          0x03    /* Seal Violation */
-#define CP2Ca_TYPE          0x04    /* Type Violation */
-#define CP2Ca_CALL          0x05    /* Call Trap */
-#define CP2Ca_RETURN        0x06    /* Return Trap */
-#define CP2Ca_UNDERFLOW     0x07    /* Underflow of trusted system stack */
-#define CP2Ca_USRDEFINE     0x08    /* User-defined Permission Violation */
-#define CP2Ca_TLB_STORE     0x09    /* TLB prohibits store capability */
-#define CP2Ca_INEXACT       0x0A    /* Bounds cannot be represented exactly */
-// 0x0b-0x0f Reserved
-#define CP2Ca_GLOBAL        0x10 /* Global Violation */
-#define CP2Ca_PERM_EXE      0x11 /* Permit_Execute Violation */
-#define CP2Ca_PERM_LD       0x12 /* Permit_Load Violation */
-#define CP2Ca_PERM_ST       0x13 /* Permit_Store Violation */
-#define CP2Ca_PERM_LD_CAP   0x14 /* Permit_Load_Capability Violation */
-#define CP2Ca_PERM_ST_CAP   0x15 /* Permit_Store_Capability Violation */
-#define CP2Ca_PERM_ST_LC_CAP 0x16 /* Permit_Store_Local_Capability Violation */
-#define CP2Ca_PERM_SEAL     0x17 /* Permit_Seal Violation */
-#define CP2Ca_ACCESS_SYS_REGS 0x18 /* Access System Registers Violation */
-#define CP2Ca_PERM_CCALL    0x19 /* Permit_CCall Violation */
-#define CP2Ca_ACCESS_CCALL_IDC 0x1a /* Access IDC in a CCall delay slot */
-#define CP2Ca_PERM_UNSEAL   0x1b /* Permit_Unseal violation */
-// 0x1b-0x1f Reserved
+    /* See cheri-archspecific.h */
 
 #define MASK_CCALL_SEL(op)  ((op) & 0x7ff)
 #define CCALL_SELECTOR_0 (0x0)

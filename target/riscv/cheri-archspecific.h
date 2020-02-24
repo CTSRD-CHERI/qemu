@@ -37,6 +37,35 @@
 #define CHERI_EXC_REGNUM_DDC 32
 #define CHERI_EXC_REGNUM_PCC 0xff
 
+
+typedef enum CheriCapExc {
+    CapEx_None                          = 0x0,
+    CapEx_LengthViolation               = 0x1,
+    CapEx_TagViolation                  = 0x2,
+    CapEx_SealViolation                 = 0x3,
+    CapEx_TypeViolation                 = 0x4,
+    CapEx_CallTrap                      = 0x5,
+    CapEx_ReturnTrap                    = 0x6,
+    CapEx_TSSUnderFlow                  = 0x7,
+    CapEx_UserDefViolation              = 0x8,
+    CapEx_TLBNoStoreCap                 = 0x9,
+    CapEx_InexactBounds                 = 0xA,
+    CapEx_UnalignedBase                 = 0xB,
+    CapEx_GlobalViolation               = 0x10,
+    CapEx_PermitExecuteViolation        = 0x11,
+    CapEx_PermitLoadViolation           = 0x12,
+    CapEx_PermitStoreViolation          = 0x13,
+    CapEx_PermitLoadCapViolation        = 0x14,
+    CapEx_PermitStoreCapViolation       = 0x15,
+    CapEx_PermitStoreLocalCapViolation  = 0x16,
+    CapEx_PermitSealViolation           = 0x17,
+    CapEx_AccessSystemRegsViolation     = 0x18,
+    CapEx_PermitCCallViolation          = 0x19,
+    CapEx_AccessCCallIDCViolation       = 0x1A,
+    CapEx_PermitUnsealViolation         = 0x1B,
+    CapEx_PermitSetCIDViolation         = 0x1C,
+} CheriCapExcCause;
+
 static inline void check_cap(CPURISCVState *env, const cap_register_t *cr,
                              uint32_t perm, uint64_t addr, uint16_t regnum,
                              uint32_t len, bool instavail, uintptr_t pc) {
@@ -53,4 +82,11 @@ static inline const cap_register_t *cheri_get_pcc(CPURISCVState *env) {
 
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
     return &env->gpcapregs;
+}
+
+static inline void QEMU_NORETURN raise_cheri_exception_impl(
+    CPUArchState *env, CheriCapExcCause cause, unsigned regnum, uintptr_t hostpc)
+{
+    // TODO: use cause and regnum
+    riscv_raise_exception(env, RISCV_EXCP_CHERI, hostpc);
 }
