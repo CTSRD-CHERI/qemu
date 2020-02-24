@@ -98,14 +98,10 @@ const char *cp2_fault_causestr[] = {
 
 #ifdef DO_CHERI_STATISTICS
 
-DEFINE_CHERI_STAT(cincoffset)
-DEFINE_CHERI_STAT(csetoffset)
-DEFINE_CHERI_STAT(csetaddr)
-DEFINE_CHERI_STAT(cfromptr)
-static DEFINE_CHERI_STAT(candaddr)
-static DEFINE_CHERI_STAT(cgetpccsetoffset)
-static DEFINE_CHERI_STAT(cgetpccincoffset)
-static DEFINE_CHERI_STAT(cgetpccsetaddr)
+DEFINE_CHERI_STAT(cfromptr);
+static DEFINE_CHERI_STAT(cgetpccsetoffset);
+static DEFINE_CHERI_STAT(cgetpccincoffset);
+static DEFINE_CHERI_STAT(cgetpccsetaddr);
 
 #endif
 
@@ -456,56 +452,6 @@ void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd, target_ulo
 void CHERI_HELPER_IMPL(cincbase(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt))
 {
     do_raise_exception(env, EXCP_RI, GETPC());
-}
-
-
-static void
-cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
-#ifdef DO_CHERI_STATISTICS
-                uintptr_t retpc, struct oob_stats_info* oob_info) {
-    oob_info->num_uses++;
-#else
-                uintptr_t retpc, void* dummy_arg) {
-    (void)dummy_arg;
-#endif
-
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    /*
-     * CIncOffset: Increase Offset
-     */
-    if (cbp->cr_tag && is_cap_sealed(cbp) && rt != 0) {
-        do_raise_c2_exception_impl(env, CapEx_SealViolation, cb, retpc);
-    } else {
-        uint64_t new_addr = cap_get_cursor(cbp) + rt;
-        cap_register_t result = *cbp;
-        if (unlikely(!is_representable_cap_with_addr(cbp, new_addr))) {
-            if (cbp->cr_tag) {
-                became_unrepresentable(env, cd, oob_info, retpc);
-            }
-            cap_mark_unrepresentable(new_addr, &result);
-        } else {
-            result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, oob_info, &result);
-        }
-        update_capreg(env, cd, &result);
-    }
-}
-
-void CHERI_HELPER_IMPL(cincoffset(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
-  return cincoffset_impl(env, cd, cb, rt, GETPC(), OOB_INFO(cincoffset));
-}
-
-void CHERI_HELPER_IMPL(csetaddr(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong target_addr)) {
-    target_ulong cursor = get_capreg_cursor(env, cb); // aaa
-    target_ulong diff = target_addr - cursor;
-    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetaddr));
-}
-
-void CHERI_HELPER_IMPL(candaddr(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
-    target_ulong cursor = get_capreg_cursor(env, cb);
-    target_ulong target_addr = cursor & rt;
-    target_ulong diff = target_addr - cursor;
-    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(candaddr));
 }
 
 /* Note: not using CHERI_HELPER_IMPL since it cannot trap */
@@ -965,34 +911,6 @@ void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
 void CHERI_HELPER_IMPL(csetlen(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt))
 {
     do_raise_exception(env, EXCP_RI, GETPC());
-}
-
-void CHERI_HELPER_IMPL(csetoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
-        target_ulong rt))
-{
-    GET_HOST_RETPC();
-#ifdef DO_CHERI_STATISTICS
-    OOB_INFO(csetoffset)->num_uses++;
-#endif
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    /*
-     * CSetOffset: Set cursor to an offset from base
-     */
-    if (cbp->cr_tag && is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else {
-        cap_register_t result = *cbp;
-        const uint64_t new_addr = cap_get_base(cbp) + rt;
-        if (!is_representable_cap_with_addr(cbp, new_addr)) {
-            if (cbp->cr_tag)
-                became_unrepresentable(env, cd, OOB_INFO(csetoffset), _host_return_address);
-            cap_mark_unrepresentable(new_addr, &result);
-        } else {
-            result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, OOB_INFO(csetoffset), &result);
-        }
-        update_capreg(env, cd, &result);
-    }
 }
 
 target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb, uint32_t ct))

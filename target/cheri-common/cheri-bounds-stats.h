@@ -36,6 +36,7 @@
  */
 #pragma once
 #include "cheri_utils.h"
+#include "qemu/qemu-print.h"
 
 #ifndef DO_CHERI_STATISTICS // FIXME: remove
 #define DO_CHERI_STATISTICS 1
@@ -81,21 +82,8 @@ struct bounds_bucket {
     uint64_t howmuch;
     const char* name;
 };
-struct bounds_bucket bounds_buckets[] = {
-    {1, "1  "}, // 1
-    {2, "2  "}, // 2
-    {4, "4  "}, // 3
-    {8, "8  "}, // 4
-    {16, "16 "},
-    {32, "32 "},
-    {64, "64 "},
-    {256, "256"},
-    {1024, "1K "},
-    {4096, "4K "},
-    {64 * 1024, "64K"},
-    {1024 * 1024, "1M "},
-    {64 * 1024 * 1024, "64M"},
-};
+#define NUM_BOUNDS_BUCKETS 13
+extern struct bounds_bucket bounds_buckets[NUM_BOUNDS_BUCKETS];
 
 struct oob_stats_info {
     const char* operation;
@@ -108,7 +96,7 @@ struct oob_stats_info {
 #define DEFINE_CHERI_STAT(op) \
     struct oob_stats_info oob_info_##op = { \
         .operation = #op, \
-    };
+    }
 #define DECLARE_CHERI_STAT(op) extern struct oob_stats_info oob_info_##op;
 #define OOB_INFO(op) (&oob_info_##op)
 
@@ -130,13 +118,15 @@ static inline int64_t _howmuch_out_of_bounds(CPUArchState *env, const cap_regist
         else
             howmuch = offset - cap_get_length65(cr) + 1;
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS,
-                      "BOUNDS: Out of bounds capability (by %" PRId64 ") created using %s: v:%d s:%d"
-                                                                      " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64 " pc=%016" PRIx64 " ASID=%u\n",
-            howmuch, name, cr->cr_tag, !cap_is_unsealed(cr),
-            (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) | (cr->cr_perms & CAP_PERMS_ALL)),
-            cr->cr_base, cap_get_length64(cr), (int64_t)offset,
-            cap_get_cursor(cheri_get_pcc(env)),
-            (unsigned)(env->CP0_EntryHi & 0xFF));
+                      "BOUNDS: Out of bounds capability (by %" PRId64
+                      ") created using %s: v:%d s:%d"
+                      " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64
+                      " pc=%016" PRIx64 " ASID=%u\n",
+                      howmuch, name, cr->cr_tag, !cap_is_unsealed(cr),
+                      (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+                       (cr->cr_perms & CAP_PERMS_ALL)),
+                      cr->cr_base, cap_get_length64(cr), (int64_t)offset,
+                      cap_get_cursor(cheri_get_pcc(env)), cheri_get_asid(env));
         return howmuch;
     }
     return 0;
@@ -172,12 +162,12 @@ static inline void became_unrepresentable(CPUArchState *env, uint16_t reg,
     qemu_log_mask(
         CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS,
         "BOUNDS: Unrepresentable capability created using %s, pc=%016" PRIx64
-    " ASID=%u\n", info->operation, cap_get_cursor(cheri_get_pcc(env)),
-        (unsigned)(env->CP0_EntryHi & 0xFF));
+        " ASID=%u\n", info->operation, cap_get_cursor(cheri_get_pcc(env)),
+        cheri_get_asid(env));
     _became_unrepresentable(env, reg, retpc);
 }
 
-static void dump_out_of_bounds_stats(FILE* f, const struct oob_stats_info *info)
+static inline void dump_out_of_bounds_stats(FILE* f, const struct oob_stats_info *info)
 {
 
     qemu_fprintf(f, "Number of %ss: %" PRIu64 "\n", info->operation, info->num_uses);
@@ -217,10 +207,11 @@ static void dump_out_of_bounds_stats(FILE* f, const struct oob_stats_info *info)
 }
 
 // Common cross-architecture stats:
-DECLARE_CHERI_STAT(cincoffset)
-DECLARE_CHERI_STAT(csetoffset)
-DECLARE_CHERI_STAT(csetaddr)
+DECLARE_CHERI_STAT(candaddr)
 DECLARE_CHERI_STAT(cfromptr)
+DECLARE_CHERI_STAT(cincoffset)
+DECLARE_CHERI_STAT(csetaddr)
+DECLARE_CHERI_STAT(csetoffset)
 
 #else /* !defined(DO_CHERI_STATISTICS) */
 

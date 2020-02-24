@@ -90,3 +90,8 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
     // TODO: use cause and regnum
     riscv_raise_exception(env, RISCV_EXCP_CHERI, hostpc);
 }
+
+static inline unsigned cheri_get_asid(CPUArchState *env) {
+    uint16_t ASID = 0; // TODO: implement?
+    return ASID;
+}
