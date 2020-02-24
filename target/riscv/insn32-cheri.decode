@@ -45,8 +45,9 @@ cgetoffset  1111111  00110 ..... 000 ..... 1011011 @r2
 cgetflags   1111111  00111 ..... 000 ..... 1011011 @r2
 cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 
-# mapping clause encdec = CMove(cd, cs)      if (haveXcheri()) <-> 0b1111111 @ 0b01010 @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CClearTag(cd, cs)  if (haveXcheri()) <-> 0b1111111 @ 0b01011 @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
+
+cmove       1111111  01010 ..... 000 ..... 1011011 @r2
+ccleartag   1111111  01011 ..... 000 ..... 1011011 @r2
 # mapping clause encdec = CJALR(cd, cb)      if (haveXcheri()) <-> 0b1111111 @ 0b01100 @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 #
 # mapping clause encdec = CCheckPerm(cs, rt) if (haveXcheri()) <-> 0b1111111 @ 0b01000 @ rt @ 0b000 @ cs @ 0b1011011 if (haveXcheri())

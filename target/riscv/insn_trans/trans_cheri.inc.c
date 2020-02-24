@@ -33,13 +33,7 @@
  * SUCH DAMAGE.
  */
 
-#define REQUIRE_FPU do {\
-    if (ctx->mstatus_fs == 0) \
-        return false;                       \
-} while (0)
-
-
-typedef void (cheri_cget_helper)(TCGv, TCGv_ptr, TCGv_i32);
+typedef void(cheri_cget_helper)(TCGv, TCGv_ptr, TCGv_i32);
 static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
 {
     TCGv_i32 source_regnum = tcg_const_i32(cs);
@@ -52,10 +46,22 @@ static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
 }
 
 #define TRANSLATE_CGET(name)                                                   \
-    static bool trans_##name(DisasContext *ctx, arg_cgetperm *a)               \
+    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
     {                                                                          \
         return gen_cheri_get(a->rd, a->rs1, &gen_helper_##name);               \
     }
+
+typedef void(cheri_cap_cap_helper)(TCGv_ptr, TCGv_i32, TCGv_i32);
+static inline bool gen_cheri_cap_cap(int cd, int cs,
+                                     cheri_cap_cap_helper *gen_func)
+{
+    TCGv_i32 dest_regnum = tcg_const_i32(cd);
+    TCGv_i32 source_regnum = tcg_const_i32(cs);
+    gen_func(cpu_env, dest_regnum, source_regnum);
+    tcg_temp_free_i32(source_regnum);
+    tcg_temp_free_i32(dest_regnum);
+    return true;
+}
 
 // TODO: all of these could be implemented in TCG without calling a helper
 TRANSLATE_CGET(cgetaddr)
@@ -67,3 +73,13 @@ TRANSLATE_CGET(cgetperm)
 TRANSLATE_CGET(cgettag)
 TRANSLATE_CGET(cgettype)
 TRANSLATE_CGET(cgetsealed)
+
+static bool trans_cmove(DisasContext *ctx, arg_cmove *a)
+{
+    return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_cmove);
+}
+
+static bool trans_ccleartag(DisasContext *ctx, arg_ccleartag *a)
+{
+    return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_ccleartag);
+}

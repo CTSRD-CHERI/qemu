@@ -402,11 +402,9 @@ static inline void generate_cmove(int32_t cd, int32_t cs)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcs = tcg_const_i32(cs);
-    TCGv t0 = tcg_const_tl(0);
 
-    gen_helper_cmovz(cpu_env, tcd, tcs, t0);
+    gen_helper_cmove(cpu_env, tcd, tcs);
 
-    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcs);
 }

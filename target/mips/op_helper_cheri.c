@@ -559,17 +559,6 @@ void CHERI_HELPER_IMPL(cchecktype(CPUMIPSState *env, uint32_t cs, uint32_t cb))
     }
 }
 
-void CHERI_HELPER_IMPL(ccleartag(CPUMIPSState *env, uint32_t cd, uint32_t cb))
-{
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    /*
-     * CClearTag: Clear the tag bit
-     */
-    cap_register_t result = *cbp;
-    result.cr_tag = 0;
-    update_capreg(env, cd, &result);
-}
-
 void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt))
 {

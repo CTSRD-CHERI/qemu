@@ -211,3 +211,27 @@ target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
     }
     return otype;
 }
+
+/// Two operands (both capabilities)
+
+void CHERI_HELPER_IMPL(ccleartag(CPUArchState *env, uint32_t cd, uint32_t cb))
+{
+    /*
+     * CClearTag: Clear the tag bit
+     */
+    // TODO: could do this without decompressing.
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    cap_register_t result = *cbp;
+    result.cr_tag = 0;
+    update_capreg(env, cd, &result);
+}
+
+void CHERI_HELPER_IMPL(cmove(CPUArchState *env, uint32_t cd, uint32_t cb))
+{
+    /*
+     * CMove: Move Capability to another Register
+     */
+    // TODO: could do this without decompressing.
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    update_capreg(env, cd, cbp);
+}
