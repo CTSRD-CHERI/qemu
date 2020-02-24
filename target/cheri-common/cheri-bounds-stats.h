@@ -119,13 +119,9 @@ static inline int64_t _howmuch_out_of_bounds(CPUArchState *env, const cap_regist
             howmuch = offset - cap_get_length65(cr) + 1;
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS,
                       "BOUNDS: Out of bounds capability (by %" PRId64
-                      ") created using %s: v:%d s:%d"
-                      " p:%08x b:%016" PRIx64 " l:%" PRId64 " o: %" PRId64
+                      ") created using %s: " PRINT_CAP_FMTSTR ", "
                       " pc=%016" PRIx64 " ASID=%u\n",
-                      howmuch, name, cr->cr_tag, !cap_is_unsealed(cr),
-                      (((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-                       (cr->cr_perms & CAP_PERMS_ALL)),
-                      cr->cr_base, cap_get_length64(cr), (int64_t)offset,
+                      howmuch, name, PRINT_CAP_ARGS(cr),
                       cap_get_cursor(cheri_get_pcc(env)), cheri_get_asid(env));
         return howmuch;
     }
