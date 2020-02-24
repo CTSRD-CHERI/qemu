@@ -709,13 +709,6 @@ static inline int generate_cclearregs(DisasContext *ctx, int32_t regset, int32_t
     case 3: /* CClearHi */
         if (!mask)
             return 0;
-        if ((ctx->hflags & MIPS_HFLAG_BMASK_BASE) == MIPS_HFLAG_BRCCALL &&
-            (mask & 1 << (CP2CAP_IDC - 16))) {
-            // custom check for idc being accessed in a ccall delay slot
-            // XXXAM it may be cleaner to just make an helper that throws the exception.
-            TCGv_i32 tmp = tcg_const_i32(CP2CAP_IDC);
-            tcg_temp_free_i32(tmp);
-        }
         tcr0 = tcg_const_i32(mask << 16);
         gen_helper_cclearreg(cpu_env, tcr0);
         tcg_temp_free_i32(tcr0);
