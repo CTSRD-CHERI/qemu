@@ -95,13 +95,15 @@ static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
 // We assume that all these instructions can trap (e.g. seal violation)
 #define INSN_CAN_TRAP(ctx) tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next)
 
-#define TRANSLATE_CAP_CAP_CAP(name)                                            \
+#define TRANSLATE_MAYBE_TRAP(name, gen_helper, ...)                                 \
     static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
     {                                                                          \
         INSN_CAN_TRAP(ctx);                                                    \
-        return gen_cheri_cap_cap_cap(a->rd, a->rs1, a->rs2,                    \
-                                     &gen_helper_##name);                      \
+        return gen_helper(__VA_ARGS__, &gen_helper_##name); \
     }
+
+#define TRANSLATE_CAP_CAP_CAP(name) \
+    TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_cap, a->rd, a->rs1, a->rs2)
 
 typedef void(cheri_cap_cap_int_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv);
 static inline bool gen_cheri_cap_cap_int(int cd, int cs1, int rs2,
@@ -118,13 +120,8 @@ static inline bool gen_cheri_cap_cap_int(int cd, int cs1, int rs2,
     tcg_temp_free_i32(dest_regnum);
     return true;
 }
-#define TRANSLATE_CAP_CAP_INT(name)                                            \
-    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
-    {                                                                          \
-        INSN_CAN_TRAP(ctx);                                                    \
-        return gen_cheri_cap_cap_int(a->rd, a->rs1, a->rs2,                    \
-                                     &gen_helper_##name);                      \
-    }
+#define TRANSLATE_CAP_CAP_INT(name) \
+    TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_int, a->rd, a->rs1, a->rs2)
 
 // TODO: all of these could be implemented in TCG without calling a helper
 TRANSLATE_CGET(cgetaddr)
