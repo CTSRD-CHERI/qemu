@@ -559,7 +559,7 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
 #ifdef TARGET_CHERI
     case TLBRET_S:
         /* TLB capability store bit was set, blocking capability store. */
-        cpu_mips_store_capcause(env, reg, CP2Ca_TLB_STORE);
+        cpu_mips_store_capcause(env, reg, CapEx_TLBNoStoreCap);
         env->active_tc.PC = cap_get_cursor(&env->active_tc.PCC);
         exception = EXCP_C2E;
         break;
@@ -1439,8 +1439,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
         cause = 18;
         update_badinstr = !(env->error_code & EXCP_INST_NOTAVAIL);
 #ifdef TARGET_CHERI
-        if ((env->CP2_CapCause >> 8) == CP2Ca_CALL ||
-                (env->CP2_CapCause >> 8) == CP2Ca_RETURN)
+        if ((env->CP2_CapCause >> 8) == CapEx_CallTrap ||
+                (env->CP2_CapCause >> 8) == CapEx_ReturnTrap)
             offset = 0x280;
 #endif /* TARGET_CHERI */
         goto set_EPC;
@@ -1685,7 +1685,7 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env,
     // PCC is missing ASR:
     if (exception == EXCP_CpU && error_code == 0 && in_kernel_mode(env)) {
         if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
-            do_raise_c2_exception_noreg(env, CP2Ca_ACCESS_SYS_REGS, pc);
+            do_raise_c2_exception_noreg(env, CapEx_AccessSystemRegsViolation, pc);
         }
     }
 #endif
