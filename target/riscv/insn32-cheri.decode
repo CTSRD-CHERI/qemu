@@ -64,8 +64,8 @@ csetflags   0001110  ..... ..... 000 ..... 1011011 @r
 csetoffset  0001111  ..... ..... 000 ..... 1011011 @r
 csetaddr    0010000  ..... ..... 000 ..... 1011011 @r
 cincoffset  0010001  ..... ..... 000 ..... 1011011 @r
-# mapping clause encdec = CSetBounds(cd, cs, rt)  if (haveXcheri()) <-> 0b0001000 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CSetBoundsExact(cd, cs, rt) if (haveXcheri()) <-> 0b0001001 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
+csetbounds  0001000  ..... ..... 000 ..... 1011011 @r
+csetboundsexact 0001001  ..... ..... 000 ..... 1011011 @r
 # mapping clause encdec = CBuildCap(cd, cb, ct)   if (haveXcheri()) <-> 0b0011101 @ ct @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CCopyType(cd, cb, ct)   if (haveXcheri()) <-> 0b0011110 @ ct @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 ccseal      0011111  ..... ..... 000 ..... 1011011 @r
