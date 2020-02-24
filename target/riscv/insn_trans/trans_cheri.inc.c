@@ -33,6 +33,20 @@
  * SUCH DAMAGE.
  */
 
+#define INSN_CAN_TRAP(ctx) tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next)
+
+#define TRANSLATE_MAYBE_TRAP(name, gen_helper, ...)                            \
+    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+    {                                                                          \
+        INSN_CAN_TRAP(ctx);                                                    \
+        return gen_helper(__VA_ARGS__, &gen_helper_##name);                    \
+    }
+#define TRANSLATE_NO_TRAP(name, gen_helper, ...)                               \
+    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+    {                                                                          \
+        return gen_helper(__VA_ARGS__, &gen_helper_##name);                    \
+    }
+
 typedef void(cheri_cget_helper)(TCGv, TCGv_ptr, TCGv_i32);
 static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
 {
@@ -46,10 +60,7 @@ static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
 }
 
 #define TRANSLATE_CGET(name)                                                   \
-    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
-    {                                                                          \
-        return gen_cheri_get(a->rd, a->rs1, &gen_helper_##name);               \
-    }
+    TRANSLATE_NO_TRAP(name, gen_cheri_get, a->rd, a->rs1)
 
 typedef void(cheri_cap_cap_helper)(TCGv_ptr, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_cap_cap(int cd, int cs,
@@ -63,6 +74,10 @@ static inline bool gen_cheri_cap_cap(int cd, int cs,
     tcg_temp_free_i32(dest_regnum);
     return true;
 }
+#define TRANSLATE_CAP_CAP(name)                                                \
+    TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap, a->rd, a->rs1)
+#define TRANSLATE_CAP_CAP_NO_TRAP(name)                                        \
+    TRANSLATE_NO_TRAP(name, gen_cheri_cap_cap, a->rd, a->rs1)
 
 typedef void(cheri_cap_int_helper)(TCGv_ptr, TCGv_i32, TCGv);
 static inline bool gen_cheri_cap_int(int cd, int rs,
@@ -93,16 +108,7 @@ static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
     return true;
 }
 // We assume that all these instructions can trap (e.g. seal violation)
-#define INSN_CAN_TRAP(ctx) tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next)
-
-#define TRANSLATE_MAYBE_TRAP(name, gen_helper, ...)                                 \
-    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
-    {                                                                          \
-        INSN_CAN_TRAP(ctx);                                                    \
-        return gen_helper(__VA_ARGS__, &gen_helper_##name); \
-    }
-
-#define TRANSLATE_CAP_CAP_CAP(name) \
+#define TRANSLATE_CAP_CAP_CAP(name)                                            \
     TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_cap, a->rd, a->rs1, a->rs2)
 
 typedef void(cheri_cap_cap_int_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv);
@@ -120,7 +126,7 @@ static inline bool gen_cheri_cap_cap_int(int cd, int cs1, int rs2,
     tcg_temp_free_i32(dest_regnum);
     return true;
 }
-#define TRANSLATE_CAP_CAP_INT(name) \
+#define TRANSLATE_CAP_CAP_INT(name)                                            \
     TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_int, a->rd, a->rs1, a->rs2)
 
 typedef void(cheri_int_cap_cap_helper)(TCGv, TCGv_ptr, TCGv_i32, TCGv_i32);
@@ -137,10 +143,11 @@ static inline bool gen_cheri_int_cap_cap(int rd, int cs1, int cs2,
     tcg_temp_free_i32(source_regnum1);
     return true;
 }
-#define TRANSLATE_INT_CAP_CAP(name) \
+#define TRANSLATE_INT_CAP_CAP(name)                                            \
     TRANSLATE_MAYBE_TRAP(name, gen_cheri_int_cap_cap, a->rd, a->rs1, a->rs2)
 
 // TODO: all of these could be implemented in TCG without calling a helper
+// Two operand (int cap)
 TRANSLATE_CGET(cgetaddr)
 TRANSLATE_CGET(cgetbase)
 TRANSLATE_CGET(cgetflags)
@@ -151,28 +158,15 @@ TRANSLATE_CGET(cgettag)
 TRANSLATE_CGET(cgettype)
 TRANSLATE_CGET(cgetsealed)
 
-static bool trans_cmove(DisasContext *ctx, arg_cmove *a)
-{
-    return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_cmove);
-}
+// Two operand (cap int)
+TRANSLATE_MAYBE_TRAP(ccheckperm, gen_cheri_cap_int, a->rd, a->rs1)
 
-static bool trans_ccleartag(DisasContext *ctx, arg_ccleartag *a)
-{
-    return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_ccleartag);
-}
+// Two operand (cap cap)
+TRANSLATE_CAP_CAP_NO_TRAP(ccleartag)
+TRANSLATE_CAP_CAP(cchecktype)
+TRANSLATE_CAP_CAP_NO_TRAP(cmove)
 
-static bool trans_ccheckperm(DisasContext *ctx, arg_ccheckperm *a)
-{
-    INSN_CAN_TRAP(ctx); // Update env->pc for trap
-    return gen_cheri_cap_int(a->rd, a->rs1, &gen_helper_ccheckperm);
-}
-
-static bool trans_cchecktype(DisasContext *ctx, arg_cchecktype *a)
-{
-    INSN_CAN_TRAP(ctx); // Update env->pc for trap
-    return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_cchecktype);
-}
-
+// Three operand (cap cap cap)
 TRANSLATE_CAP_CAP_CAP(cbuildcap)
 TRANSLATE_CAP_CAP_CAP(ccopytype)
 TRANSLATE_CAP_CAP_CAP(ccseal)
