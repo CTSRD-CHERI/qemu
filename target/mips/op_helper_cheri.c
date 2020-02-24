@@ -101,7 +101,7 @@ extern bool cheri_c2e_on_unrepresentable;
 extern bool cheri_debugger_on_unrepresentable;
 
 static inline void
-_became_unrepresentable(CPUMIPSState *env, uint16_t reg, uintptr_t retpc)
+_became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
 {
     env->statcounters_unrepresentable_caps++;
 
@@ -115,7 +115,7 @@ _became_unrepresentable(CPUMIPSState *env, uint16_t reg, uintptr_t retpc)
 #else
 
 static inline void
-_became_unrepresentable(CPUMIPSState *env, uint16_t reg, uintptr_t retpc)
+_became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
 {
     assert(false && "THIS SHOULD NOT BE CALLED");
 }
@@ -167,7 +167,7 @@ DEFINE_CHERI_STAT(cgetpccincoffset)
 DEFINE_CHERI_STAT(cgetpccsetaddr)
 DEFINE_CHERI_STAT(cfromptr)
 
-static inline int64_t _howmuch_out_of_bounds(CPUMIPSState *env, const cap_register_t* cr, const char* name)
+static inline int64_t _howmuch_out_of_bounds(CPUArchState *env, const cap_register_t* cr, const char* name)
 {
     if (!cr->cr_tag)
         return 0;  // We don't care about arithmetic on untagged things
@@ -207,7 +207,7 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
 }
 
 static inline void
-check_out_of_bounds_stat(CPUMIPSState *env, struct oob_stats_info *info,
+check_out_of_bounds_stat(CPUArchState *env, struct oob_stats_info *info,
                          const cap_register_t* capreg) {
     int64_t howmuch = _howmuch_out_of_bounds(env, capreg, info->operation);
     if (howmuch > 0) {
@@ -217,7 +217,7 @@ check_out_of_bounds_stat(CPUMIPSState *env, struct oob_stats_info *info,
     }
 }
 
-static inline void became_unrepresentable(CPUMIPSState *env, uint16_t reg,
+static inline void became_unrepresentable(CPUArchState *env, uint16_t reg,
                                           struct oob_stats_info *info,
                                           uintptr_t retpc) {
     const cap_register_t *capreg = get_readonly_capreg(env, reg);
@@ -341,7 +341,7 @@ static inline int align_of(int size, uint64_t addr)
 
 static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *ctp);
 
-static inline void update_ddc(CPUMIPSState *env, const cap_register_t* new_ddc) {
+static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) {
     if (!cap_exactly_equal(&env->active_tc.CHWR.DDC, new_ddc)) {
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_MMU, "Flushing TCG TLB since $ddc is changing to " PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
         // TODO: in the future we may want to move $ddc to the guest -> host addr
@@ -369,7 +369,7 @@ clear_tag_if_no_loadcap(target_ulong tag, const cap_register_t* cbp, int prot) {
     return tag;
 }
 
-target_ulong CHERI_HELPER_IMPL(cbez(CPUMIPSState *env, uint32_t cb, uint32_t offset))
+target_ulong CHERI_HELPER_IMPL(cbez(CPUArchState *env, uint32_t cb, uint32_t offset))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
@@ -384,7 +384,7 @@ target_ulong CHERI_HELPER_IMPL(cbez(CPUMIPSState *env, uint32_t cb, uint32_t off
         return (target_ulong)0;
 }
 
-target_ulong CHERI_HELPER_IMPL(cbnz(CPUMIPSState *env, uint32_t cb, uint32_t offset))
+target_ulong CHERI_HELPER_IMPL(cbnz(CPUArchState *env, uint32_t cb, uint32_t offset))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
@@ -399,7 +399,7 @@ target_ulong CHERI_HELPER_IMPL(cbnz(CPUMIPSState *env, uint32_t cb, uint32_t off
         return (target_ulong)1;
 }
 
-target_ulong CHERI_HELPER_IMPL(cbts(CPUMIPSState *env, uint32_t cb, uint32_t offset))
+target_ulong CHERI_HELPER_IMPL(cbts(CPUArchState *env, uint32_t cb, uint32_t offset))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
@@ -408,7 +408,7 @@ target_ulong CHERI_HELPER_IMPL(cbts(CPUMIPSState *env, uint32_t cb, uint32_t off
     return (target_ulong)cbp->cr_tag;
 }
 
-target_ulong CHERI_HELPER_IMPL(cbtu(CPUMIPSState *env, uint32_t cb, uint32_t offset))
+target_ulong CHERI_HELPER_IMPL(cbtu(CPUArchState *env, uint32_t cb, uint32_t offset))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
@@ -417,7 +417,7 @@ target_ulong CHERI_HELPER_IMPL(cbtu(CPUMIPSState *env, uint32_t cb, uint32_t off
     return (target_ulong)!cbp->cr_tag;
 }
 
-static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, uint32_t selector, uintptr_t _host_return_address)
+static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, uint32_t selector, uintptr_t _host_return_address)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
@@ -465,17 +465,17 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
     return (target_ulong)0;
 }
 
-void CHERI_HELPER_IMPL(ccall(CPUMIPSState *env, uint32_t cs, uint32_t cb))
+void CHERI_HELPER_IMPL(ccall(CPUArchState *env, uint32_t cs, uint32_t cb))
 {
     (void)ccall_common(env, cs, cb, CCALL_SELECTOR_0, GETPC());
 }
 
-target_ulong CHERI_HELPER_IMPL(ccall_notrap(CPUMIPSState *env, uint32_t cs, uint32_t cb))
+target_ulong CHERI_HELPER_IMPL(ccall_notrap(CPUArchState *env, uint32_t cs, uint32_t cb))
 {
     return ccall_common(env, cs, cb, CCALL_SELECTOR_1, GETPC());
 }
 
-void CHERI_HELPER_IMPL(cclearreg(CPUMIPSState *env, uint32_t mask))
+void CHERI_HELPER_IMPL(cclearreg(CPUArchState *env, uint32_t mask))
 {
     // Register zero means $ddc here since it is useful to clear $ddc on a
     // sandbox switch whereas clearing $NULL is useless
@@ -490,11 +490,11 @@ void CHERI_HELPER_IMPL(cclearreg(CPUMIPSState *env, uint32_t mask))
     }
 }
 
-void CHERI_HELPER_IMPL(creturn(CPUMIPSState *env)) {
+void CHERI_HELPER_IMPL(creturn(CPUArchState *env)) {
     do_raise_c2_exception_noreg(env, CapEx_ReturnTrap, GETPC());
 }
 
-void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+void CHERI_HELPER_IMPL(cfromptr(CPUArchState *env, uint32_t cd, uint32_t cb,
         target_ulong rt))
 {
     GET_HOST_RETPC();
@@ -530,7 +530,7 @@ void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
-target_ulong CHERI_HELPER_IMPL(cloadtags(CPUMIPSState *env, uint32_t cb, uint64_t cbcursor))
+target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb, uint64_t cbcursor))
 {
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
@@ -551,7 +551,7 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUMIPSState *env, uint32_t cb, uint64_
     return 0;
 }
 
-target_ulong CHERI_HELPER_IMPL(cgetcause(CPUMIPSState *env))
+target_ulong CHERI_HELPER_IMPL(cgetcause(CPUArchState *env))
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     /*
@@ -566,7 +566,7 @@ target_ulong CHERI_HELPER_IMPL(cgetcause(CPUMIPSState *env))
     }
 }
 
-void CHERI_HELPER_IMPL(cgetpcc(CPUMIPSState *env, uint32_t cd))
+void CHERI_HELPER_IMPL(cgetpcc(CPUArchState *env, uint32_t cd))
 {
     /*
      * CGetPCC: Move PCC to capability register
@@ -577,7 +577,7 @@ void CHERI_HELPER_IMPL(cgetpcc(CPUMIPSState *env, uint32_t cd))
 }
 
 static void
-derive_from_pcc_impl(CPUMIPSState *env, uint32_t cd, target_ulong new_addr,
+derive_from_pcc_impl(CPUArchState *env, uint32_t cd, target_ulong new_addr,
 #ifdef DO_CHERI_STATISTICS
                      uintptr_t retpc, struct oob_stats_info* oob_info) {
     oob_info->num_uses++;
@@ -606,32 +606,32 @@ derive_from_pcc_impl(CPUMIPSState *env, uint32_t cd, target_ulong new_addr,
     update_capreg(env, cd, &result);
 }
 
-void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs))
+void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
     uint64_t new_addr = rs + cap_get_base(&env->active_tc.PCC);
     derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
 }
 
-void CHERI_HELPER_IMPL(cgetpccincoffset(CPUMIPSState *env, uint32_t cd, target_ulong rs))
+void CHERI_HELPER_IMPL(cgetpccincoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
     uint64_t new_addr = rs + cap_get_cursor(&env->active_tc.PCC);
     derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
 }
 
-void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUMIPSState *env, uint32_t cd, target_ulong rs))
+void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
     uint64_t new_addr = rs;
     derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
-void CHERI_HELPER_IMPL(cincbase(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt))
+void CHERI_HELPER_IMPL(cincbase(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt))
 {
     do_raise_exception(env, EXCP_RI, GETPC());
 }
 
 
 static void
-cincoffset_impl(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt,
+cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
 #ifdef DO_CHERI_STATISTICS
                 uintptr_t retpc, struct oob_stats_info* oob_info) {
     oob_info->num_uses++;
@@ -662,17 +662,17 @@ cincoffset_impl(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt,
     }
 }
 
-void CHERI_HELPER_IMPL(cincoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
+void CHERI_HELPER_IMPL(cincoffset(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
   return cincoffset_impl(env, cd, cb, rt, GETPC(), OOB_INFO(cincoffset));
 }
 
-void CHERI_HELPER_IMPL(csetaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong target_addr)) {
+void CHERI_HELPER_IMPL(csetaddr(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong target_addr)) {
     target_ulong cursor = get_capreg_cursor(env, cb); // aaa
     target_ulong diff = target_addr - cursor;
     cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetaddr));
 }
 
-void CHERI_HELPER_IMPL(candaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
+void CHERI_HELPER_IMPL(candaddr(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt)) {
     target_ulong cursor = get_capreg_cursor(env, cb);
     target_ulong target_addr = cursor & rt;
     target_ulong diff = target_addr - cursor;
@@ -680,7 +680,7 @@ void CHERI_HELPER_IMPL(candaddr(CPUMIPSState *env, uint32_t cd, uint32_t cb, tar
 }
 
 /* Note: not using CHERI_HELPER_IMPL since it cannot trap */
-void helper_cmovz(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
+void helper_cmovz(CPUArchState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     /*
@@ -692,12 +692,12 @@ void helper_cmovz(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 }
 
 /* Note: not using CHERI_HELPER_IMPL since it cannot trap */
-void helper_cmovn(CPUMIPSState *env, uint32_t cd, uint32_t cs, target_ulong rs)
+void helper_cmovn(CPUArchState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 {
     helper_cmovz(env, cd, cs, rs == 0);
 }
 
-target_ulong CHERI_HELPER_IMPL(cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb))
+target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd, uint32_t cb))
 {
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
@@ -738,7 +738,7 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb
     return (target_ulong)0;
 }
 
-target_ulong CHERI_HELPER_IMPL(cjr(CPUMIPSState *env, uint32_t cb))
+target_ulong CHERI_HELPER_IMPL(cjr(CPUArchState *env, uint32_t cb))
 {
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
@@ -772,7 +772,7 @@ target_ulong CHERI_HELPER_IMPL(cjr(CPUMIPSState *env, uint32_t cb))
     return (target_ulong)0;
 }
 
-void CHERI_HELPER_IMPL(csealentry(CPUMIPSState *env, uint32_t cd, uint32_t cs))
+void CHERI_HELPER_IMPL(csealentry(CPUArchState *env, uint32_t cd, uint32_t cs))
 {
     GET_HOST_RETPC();
     /*
@@ -795,7 +795,7 @@ void CHERI_HELPER_IMPL(csealentry(CPUMIPSState *env, uint32_t cd, uint32_t cs))
     }
 }
 
-void CHERI_HELPER_IMPL(cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct))
+void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb, uint32_t ct))
 {
     GET_HOST_RETPC();
     // CBuildCap traps on cbp == NULL so we use reg0 as $ddc. This saves encoding
@@ -841,7 +841,7 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, ui
     }
 }
 
-void CHERI_HELPER_IMPL(ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, uint32_t ct))
+void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb, uint32_t ct))
 {
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
@@ -869,7 +869,7 @@ void CHERI_HELPER_IMPL(ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, ui
 }
 
 static inline cap_register_t *
-check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong _host_return_address) {
+check_writable_cap_hwr_access(CPUArchState *env, enum CP2HWR hwr, target_ulong _host_return_address) {
     cheri_debug_assert((int)hwr >= (int)CP2HWR_BASE_INDEX);
     cheri_debug_assert((int)hwr < (int)(CP2HWR_BASE_INDEX + 32));
     bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
@@ -922,7 +922,7 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong _
 }
 
 static inline const cap_register_t *
-check_readonly_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong pc) {
+check_readonly_cap_hwr_access(CPUArchState *env, enum CP2HWR hwr, target_ulong pc) {
     // Currently there is no difference for access permissions between read
     // and write access but that may change in the future
     if (hwr == CP2HWR_DDC)
@@ -930,17 +930,17 @@ check_readonly_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong p
     return check_writable_cap_hwr_access(env, hwr, pc);
 }
 
-target_ulong CHERI_HELPER_IMPL(mfc0_epc(CPUMIPSState *env))
+target_ulong CHERI_HELPER_IMPL(mfc0_epc(CPUArchState *env))
 {
     return get_CP0_EPC(env);
 }
 
-target_ulong CHERI_HELPER_IMPL(mfc0_error_epc(CPUMIPSState *env))
+target_ulong CHERI_HELPER_IMPL(mfc0_error_epc(CPUArchState *env))
 {
     return get_CP0_ErrorEPC(env);
 }
 
-void CHERI_HELPER_IMPL(mtc0_epc(CPUMIPSState *env, target_ulong arg))
+void CHERI_HELPER_IMPL(mtc0_epc(CPUArchState *env, target_ulong arg))
 {
     GET_HOST_RETPC();
     // Check that we can write to EPCC (should always be true since we would have got a trap when not in kernel mode)
@@ -952,7 +952,7 @@ void CHERI_HELPER_IMPL(mtc0_epc(CPUMIPSState *env, target_ulong arg))
     set_CP0_EPC(env, arg + cap_get_base(&env->active_tc.CHWR.EPCC));
 }
 
-void CHERI_HELPER_IMPL(mtc0_error_epc(CPUMIPSState *env, target_ulong arg))
+void CHERI_HELPER_IMPL(mtc0_error_epc(CPUArchState *env, target_ulong arg))
 {
     GET_HOST_RETPC();
     // Check that we can write to ErrorEPCC (should always be true since we would have got a trap when not in kernel mode)
@@ -964,13 +964,13 @@ void CHERI_HELPER_IMPL(mtc0_error_epc(CPUMIPSState *env, target_ulong arg))
     set_CP0_ErrorEPC(env, arg + cap_get_base(&env->active_tc.CHWR.ErrorEPCC));
 }
 
-void CHERI_HELPER_IMPL(creadhwr(CPUMIPSState *env, uint32_t cd, uint32_t hwr))
+void CHERI_HELPER_IMPL(creadhwr(CPUArchState *env, uint32_t cd, uint32_t hwr))
 {
     cap_register_t result = *check_readonly_cap_hwr_access(env, CP2HWR_BASE_INDEX + hwr, GETPC());
     update_capreg(env, cd, &result);
 }
 
-void CHERI_HELPER_IMPL(cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr))
+void CHERI_HELPER_IMPL(cwritehwr(CPUArchState *env, uint32_t cs, uint32_t hwr))
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     if (hwr == CP2HWR_DDC) {
@@ -982,7 +982,7 @@ void CHERI_HELPER_IMPL(cwritehwr(CPUMIPSState *env, uint32_t cs, uint32_t hwr))
     *cdp = *csp;
 }
 
-static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
+static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
                          uint32_t cb, target_ulong length, uintptr_t _host_return_address) {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     uint64_t cursor = cap_get_cursor(cbp);
@@ -1028,13 +1028,13 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
     }
 }
 
-void CHERI_HELPER_IMPL(csetbounds(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+void CHERI_HELPER_IMPL(csetbounds(CPUArchState *env, uint32_t cd, uint32_t cb,
         target_ulong rt))
 {
     do_setbounds(false, env, cd, cb, rt, GETPC());
 }
 
-void CHERI_HELPER_IMPL(csetboundsexact(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+void CHERI_HELPER_IMPL(csetboundsexact(CPUArchState *env, uint32_t cd, uint32_t cb,
         target_ulong rt))
 {
     do_setbounds(true, env, cd, cb, rt, GETPC());
@@ -1055,7 +1055,7 @@ static target_ulong crap_impl(target_ulong len) {
 #endif
 }
 
-target_ulong CHERI_HELPER_IMPL(crap(CPUMIPSState *env, target_ulong len))
+target_ulong CHERI_HELPER_IMPL(crap(CPUArchState *env, target_ulong len))
 {
     // CRoundArchitecturalPrecision rt, rs:
     // rt is set to the smallest value greater or equal to rs that can be used
@@ -1063,7 +1063,7 @@ target_ulong CHERI_HELPER_IMPL(crap(CPUMIPSState *env, target_ulong len))
     return crap_impl(len);
 }
 
-target_ulong CHERI_HELPER_IMPL(cram(CPUMIPSState *env, target_ulong len))
+target_ulong CHERI_HELPER_IMPL(cram(CPUArchState *env, target_ulong len))
 {
     // CRepresentableAlignmentMask rt, rs:
     // rt is set to a mask that can be used to align down addresses to a value
@@ -1094,7 +1094,7 @@ target_ulong CHERI_HELPER_IMPL(cram(CPUMIPSState *env, target_ulong len))
 //    return cap_get_base(first) <= cap_get_base(second) && cap_get_top(second) <= cap_get_top(first);
 //}
 
-target_ulong CHERI_HELPER_IMPL(csub(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(csub(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -1120,7 +1120,7 @@ target_ulong CHERI_HELPER_IMPL(csub(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     return (target_ulong)(cap_get_cursor(cbp) - cap_get_cursor(ctp));
 }
 
-void CHERI_HELPER_IMPL(csetcause(CPUMIPSState *env, target_ulong rt))
+void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
 {
     uint32_t perms = env->active_tc.PCC.cr_perms;
     /*
@@ -1133,12 +1133,12 @@ void CHERI_HELPER_IMPL(csetcause(CPUMIPSState *env, target_ulong rt))
     }
 }
 
-void CHERI_HELPER_IMPL(csetlen(CPUMIPSState *env, uint32_t cd, uint32_t cb, target_ulong rt))
+void CHERI_HELPER_IMPL(csetlen(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt))
 {
     do_raise_exception(env, EXCP_RI, GETPC());
 }
 
-void CHERI_HELPER_IMPL(csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+void CHERI_HELPER_IMPL(csetoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
         target_ulong rt))
 {
     GET_HOST_RETPC();
@@ -1166,7 +1166,7 @@ void CHERI_HELPER_IMPL(csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     }
 }
 
-target_ulong CHERI_HELPER_IMPL(ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     GET_HOST_RETPC();
     // CToPtr traps on ctp == NULL so we use reg0 as $ddc there. This means we
@@ -1198,7 +1198,7 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t c
 /*
  * CPtrCmp Instructions. Capability Pointer Compare.
  */
-target_ulong CHERI_HELPER_IMPL(ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(ceq(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -1208,7 +1208,7 @@ target_ulong CHERI_HELPER_IMPL(ceq(CPUMIPSState *env, uint32_t cb, uint32_t ct))
     return (target_ulong)(cap_get_cursor(cbp) == cap_get_cursor(ctp));
 }
 
-target_ulong CHERI_HELPER_IMPL(cne(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(cne(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -1219,7 +1219,7 @@ target_ulong CHERI_HELPER_IMPL(cne(CPUMIPSState *env, uint32_t cb, uint32_t ct))
 
 }
 
-target_ulong CHERI_HELPER_IMPL(clt(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(clt(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -1231,7 +1231,7 @@ target_ulong CHERI_HELPER_IMPL(clt(CPUMIPSState *env, uint32_t cb, uint32_t ct))
     return (target_ulong)(cursor1_signed < cursor2_signed);
 }
 
-target_ulong CHERI_HELPER_IMPL(cle(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(cle(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -1243,7 +1243,7 @@ target_ulong CHERI_HELPER_IMPL(cle(CPUMIPSState *env, uint32_t cb, uint32_t ct))
     return (target_ulong)(cursor1_signed <= cursor2_signed);
 }
 
-target_ulong CHERI_HELPER_IMPL(cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(cltu(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -1255,7 +1255,7 @@ target_ulong CHERI_HELPER_IMPL(cltu(CPUMIPSState *env, uint32_t cb, uint32_t ct)
     return (target_ulong)(cursor1_unsigned < cursor2_unsigned);
 }
 
-target_ulong CHERI_HELPER_IMPL(cleu(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(cleu(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -1284,27 +1284,27 @@ static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *c
   return true;
 }
 
-target_ulong CHERI_HELPER_IMPL(cexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(cexeq(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
     return (target_ulong)cap_exactly_equal(cbp, ctp);
 }
 
-target_ulong CHERI_HELPER_IMPL(cnexeq(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(cnexeq(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
     return (target_ulong) cap_exactly_equal(cbp, ctp) ? false : true;
 }
 
-target_ulong CHERI_HELPER_IMPL(cgetandaddr(CPUMIPSState *env, uint32_t cb, target_ulong rt))
+target_ulong CHERI_HELPER_IMPL(cgetandaddr(CPUArchState *env, uint32_t cb, target_ulong rt))
 {
     target_ulong addr = get_capreg_cursor(env, cb);
     return addr & rt;
 }
 
-target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUMIPSState *env, uint32_t cb, uint32_t ct))
+target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
@@ -1328,7 +1328,7 @@ target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUMIPSState *env, uint32_t cb, uint3
 /*
  * Load Via Capability Register
  */
-target_ulong CHERI_HELPER_IMPL(cload(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+target_ulong CHERI_HELPER_IMPL(cload(CPUArchState *env, uint32_t cb, target_ulong rt,
         uint32_t offset, uint32_t size))
 {
     GET_HOST_RETPC();
@@ -1369,7 +1369,7 @@ target_ulong CHERI_HELPER_IMPL(cload(CPUMIPSState *env, uint32_t cb, target_ulon
 /*
  * Load Linked Via Capability Register
  */
-target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUMIPSState *env, uint32_t cb, uint32_t size))
+target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint32_t size))
 {
     GET_HOST_RETPC();
     // CLL[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
@@ -1404,7 +1404,7 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUMIPSState *env, uint32_t cb, uint3
 /*
  * Store Conditional Via Capability Register
  */
-target_ulong CHERI_HELPER_IMPL(cstorecond(CPUMIPSState *env, uint32_t cb, uint32_t size))
+target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32_t size))
 {
     GET_HOST_RETPC();
     // CSC[BHWD] traps on cbp == NULL so we use reg0 as $ddc to save encoding
@@ -1442,7 +1442,7 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUMIPSState *env, uint32_t cb, uint32
 /*
  * Store Via Capability Register
  */
-target_ulong CHERI_HELPER_IMPL(cstore(CPUMIPSState *env, uint32_t cb, target_ulong rt,
+target_ulong CHERI_HELPER_IMPL(cstore(CPUArchState *env, uint32_t cb, target_ulong rt,
         uint32_t offset, uint32_t size))
 {
     GET_HOST_RETPC();
@@ -1484,7 +1484,7 @@ target_ulong CHERI_HELPER_IMPL(cstore(CPUMIPSState *env, uint32_t cb, target_ulo
     return 0;
 }
 
-static inline target_ulong get_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb,
+static inline target_ulong get_csc_addr(CPUArchState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset, uintptr_t _host_return_address)
 {
     // CSC traps on cbp == NULL so we use reg0 as $ddc to save encoding
@@ -1525,7 +1525,7 @@ static inline target_ulong get_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t
     }
 }
 
-static inline target_ulong get_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_t cb, uintptr_t _host_return_address)
+static inline target_ulong get_cscc_addr(CPUArchState *env, uint32_t cs, uint32_t cb, uintptr_t _host_return_address)
 {
     // CSCC traps on cbp == NULL so we use reg0 as $ddc to save encoding
     // space and increase code density since storing relative to $ddc is common
@@ -1561,13 +1561,13 @@ static inline target_ulong get_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_
     return (target_ulong)addr;
 }
 
-static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs, target_ulong vaddr, target_ulong retpc);
-static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+static void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr, target_ulong retpc);
+static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  const cap_register_t *source,
                                  target_ulong offset, target_ulong retpc,
                                  hwaddr *physaddr);
 
-target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb))
+target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, uint32_t cb))
 {
     target_ulong retpc = GETPC();
     target_ulong vaddr = get_cscc_addr(env, cs, cb, retpc);
@@ -1582,7 +1582,7 @@ target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUMIPSState *env, uint32_t cs, 
     return 1;
 }
 
-void CHERI_HELPER_IMPL(csc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t cb,
+void CHERI_HELPER_IMPL(csc_without_tcg(CPUArchState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset))
 {
     target_ulong retpc = GETPC();
@@ -1592,7 +1592,7 @@ void CHERI_HELPER_IMPL(csc_without_tcg(CPUMIPSState *env, uint32_t cs, uint32_t 
     store_cap_to_memory(env, cs, vaddr, retpc);
 }
 
-void CHERI_HELPER_IMPL(clc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+void CHERI_HELPER_IMPL(clc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t cb,
         target_ulong rt, uint32_t offset))
 {
     target_ulong _host_return_address = GETPC();
@@ -1618,7 +1618,7 @@ void CHERI_HELPER_IMPL(clc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t 
     load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address, /*physaddr_out=*/NULL);
 }
 
-void CHERI_HELPER_IMPL(cllc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t cb))
+void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t cb))
 {
     GET_HOST_RETPC();
 
@@ -1679,7 +1679,7 @@ static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t
     }
 }
 
-void dump_changed_capreg(CPUMIPSState *env, const cap_register_t *cr,
+void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
         cap_register_t *old_reg, const char* name)
 {
     if (memcmp(cr, old_reg, sizeof(cap_register_t))) {
@@ -1699,7 +1699,7 @@ void dump_changed_capreg(CPUMIPSState *env, const cap_register_t *cr,
     }
 }
 
-void dump_changed_cop2(CPUMIPSState *env, TCState *cur) {
+void dump_changed_cop2(CPUArchState *env, TCState *cur) {
     static const char * const capreg_name[] = {
         "C00", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
         "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15",
@@ -1785,7 +1785,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  const cap_register_t *source,
                                  target_ulong vaddr, target_ulong retpc,
                                  hwaddr *physaddr)
@@ -1844,7 +1844,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
 }
 
-static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
+static void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     target_ulong vaddr, target_ulong retpc)
 {
     uint64_t cursor = get_capreg_cursor(env, cs);
@@ -1934,7 +1934,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  const cap_register_t *source,
                                  target_ulong vaddr, target_ulong retpc,
                                  hwaddr *physaddr)
@@ -1973,7 +1973,7 @@ static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
     update_capreg(env, cd, &ncd);
 }
 
-static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
+static void store_cap_to_memory(CPUArchState *env, uint32_t cs,
                                 target_ulong vaddr, target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
@@ -2073,7 +2073,7 @@ static inline void dump_cap_store_length(uint64_t length)
 
 #endif // CONFIG_MIPS_LOG_INSTR
 
-static void load_cap_from_memory(CPUMIPSState *env, uint32_t cd, uint32_t cb,
+static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  const cap_register_t *source,
                                  target_ulong vaddr, target_ulong retpc,
                                  hwaddr *physaddr)
@@ -2136,7 +2136,7 @@ static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
+static void store_cap_to_memory(CPUArchState *env, uint32_t cs,
                                 target_ulong vaddr, target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
@@ -2182,7 +2182,7 @@ static void store_cap_to_memory(CPUMIPSState *env, uint32_t cs,
 
 #endif /* ! CHERI_MAGIC128 */
 
-void CHERI_HELPER_IMPL(ccheck_btarget(CPUMIPSState *env))
+void CHERI_HELPER_IMPL(ccheck_btarget(CPUArchState *env))
 {
     // Check whether the branch target is within $pcc and if not raise an exception
     // qemu_log_mask(CPU_LOG_INSTR, "%s: env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
@@ -2190,14 +2190,14 @@ void CHERI_HELPER_IMPL(ccheck_btarget(CPUMIPSState *env))
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false, GETPC());
 }
 
-void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUMIPSState *env))
+void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))
 {
     env->active_tc.PCC = env->active_tc.CapBranchTarget;
     // Restore or clear MIPS_HFLAG_CP0 depending on Access_System_Registers permission
     update_cp0_access_for_pc(env);
 }
 
-void CHERI_HELPER_IMPL(ccheck_pc(CPUMIPSState *env, uint64_t next_pc))
+void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
 {
     cap_register_t *pcc = &env->active_tc.PCC;
 
@@ -2235,7 +2235,7 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUMIPSState *env, uint64_t next_pc))
 #endif
 }
 
-target_ulong CHERI_HELPER_IMPL(ccheck_load_right(CPUMIPSState *env, target_ulong offset, uint32_t len))
+target_ulong CHERI_HELPER_IMPL(ccheck_load_right(CPUArchState *env, target_ulong offset, uint32_t len))
 {
 #ifndef TARGET_WORDS_BIGENDIAN
 #error "This check is only valid for big endian targets, for little endian the load/store left instructions need to be checked"
@@ -2255,17 +2255,17 @@ target_ulong CHERI_HELPER_IMPL(ccheck_load_right(CPUMIPSState *env, target_ulong
     return check_ddc(env, CAP_PERM_LOAD, read_offset, loaded_bytes, GETPC()) + low_bits;
 }
 
-target_ulong CHERI_HELPER_IMPL(ccheck_store(CPUMIPSState *env, target_ulong offset, uint32_t len))
+target_ulong CHERI_HELPER_IMPL(ccheck_store(CPUArchState *env, target_ulong offset, uint32_t len))
 {
     return check_ddc(env, CAP_PERM_STORE, offset, len, GETPC());
 }
 
-target_ulong CHERI_HELPER_IMPL(ccheck_load(CPUMIPSState *env, target_ulong offset, uint32_t len))
+target_ulong CHERI_HELPER_IMPL(ccheck_load(CPUArchState *env, target_ulong offset, uint32_t len))
 {
     return check_ddc(env, CAP_PERM_LOAD, offset, len, GETPC());
 }
 
-void CHERI_HELPER_IMPL(ccheck_load_pcrel(CPUMIPSState *env, target_ulong addr,
+void CHERI_HELPER_IMPL(ccheck_load_pcrel(CPUArchState *env, target_ulong addr,
                                          uint32_t len)) {
     // Note: the address is already absolute, no need to add pcc.base
     check_cap(env, &env->active_tc.PCC, CAP_PERM_LOAD, addr, /*regnum=*/0, len,
@@ -2340,7 +2340,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
 void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int flags)
 {
     MIPSCPU *cpu = MIPS_CPU(cs);
-    CPUMIPSState *env = &cpu->env;
+    CPUArchState *env = &cpu->env;
     int i;
     char name[8];
 
@@ -2365,7 +2365,7 @@ void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int f
     cpu_fprintf(f, "\n");
 }
 
-void CHERI_HELPER_IMPL(mtc2_dumpcstate(CPUMIPSState *env, target_ulong arg1))
+void CHERI_HELPER_IMPL(mtc2_dumpcstate(CPUArchState *env, target_ulong arg1))
 {
     FILE* logfile = qemu_log_enabled() ? qemu_log_lock() : stderr;
     cheri_dump_state(env_cpu(env), logfile, fprintf, CPU_DUMP_CODE);
