@@ -187,3 +187,34 @@ TRANSLATE_CAP_CAP_INT(csetoffset)
 TRANSLATE_INT_CAP_CAP(csub)
 TRANSLATE_INT_CAP_CAP(ctestsubset)
 TRANSLATE_INT_CAP_CAP(ctoptr)
+
+// CIncOffsetImm/CSetBoundsImm:
+typedef void(cheri_cap_cap_imm_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv);
+static inline bool gen_cheri_cap_cap_imm(int cd, int cs1, target_long imm,
+                                         cheri_cap_cap_imm_helper *gen_func)
+{
+    TCGv_i32 dest_regnum = tcg_const_i32(cd);
+    TCGv_i32 source_regnum = tcg_const_i32(cs1);
+    TCGv imm_value = tcg_const_tl(imm);
+    gen_func(cpu_env, dest_regnum, source_regnum, imm_value);
+    gen_rvfi_dii_set_field_const(rd_addr, cd);
+    tcg_temp_free(imm_value);
+    tcg_temp_free_i32(source_regnum);
+    tcg_temp_free_i32(dest_regnum);
+    return true;
+}
+#define TRANSLATE_CAP_CAP_IMM(name)                                            \
+    TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_int, a->rd, a->rs1, a->imm)
+
+static bool trans_cincoffsetimm(DisasContext *ctx, arg_cincoffsetimm *a)
+{
+    INSN_CAN_TRAP(ctx);
+    return gen_cheri_cap_cap_imm(a->rd, a->rs1, a->imm, &gen_helper_cincoffset);
+}
+
+static bool trans_csetboundsimm(DisasContext *ctx, arg_cincoffsetimm *a)
+{
+    INSN_CAN_TRAP(ctx);
+    tcg_debug_assert(a->imm >= 0);
+    return gen_cheri_cap_cap_imm(a->rd, a->rs1, a->imm, &gen_helper_csetbounds);
+}

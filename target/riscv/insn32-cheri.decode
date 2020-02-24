@@ -77,8 +77,15 @@ ctestsubset 0100000  ..... ..... 000 ..... 1011011 @r
 #
 # mapping clause encdec = CSpecialRW(cd, cs, idx) if (haveXcheri()) <-> 0b0000001 @ idx @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 #
-# mapping clause encdec = CIncOffsetImmediate(cd, cb, imm12) if (haveXcheri()) <-> imm12 : bits(12) @ cb @ 0b001 @ cd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CSetBoundsImmediate(cd, cb, imm12) if (haveXcheri()) <-> imm12 : bits(12) @ cb @ 0b010 @ cd @ 0b1011011 if (haveXcheri())
+
+## Instructions with 12-bit immediates:
+# We have to add a new i format with unsigned immediate for csetboundsimm:
+%imm_i_unsigned    20:12
+@i_unsigned   ............    ..... ... ..... ....... &i      imm=%imm_i_unsigned     %rs1 %rd
+
+cincoffsetimm ............     ..... 001 ..... 1011011 @i
+csetboundsimm ............     ..... 010 ..... 1011011 @i_unsigned
+
 #
 # /* Loads and stores */
 # mapping clause encdec = CLoadDDC(rd, rs, false, BYTE)   if (haveXcheri()) <-> 0b1111101 @ 0b00000 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri())  /* lbddc */
