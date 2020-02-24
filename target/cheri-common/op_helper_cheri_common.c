@@ -485,6 +485,7 @@ DEFINE_CHERI_STAT(cincoffset);
 DEFINE_CHERI_STAT(csetoffset);
 DEFINE_CHERI_STAT(csetaddr);
 DEFINE_CHERI_STAT(candaddr);
+DEFINE_CHERI_STAT(cfromptr);
 
 static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
                             target_ulong rt, uintptr_t retpc,
@@ -573,6 +574,43 @@ void CHERI_HELPER_IMPL(csetoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
     cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetoffset));
 }
 
+void CHERI_HELPER_IMPL(cfromptr(CPUArchState *env, uint32_t cd, uint32_t cb,
+                                target_ulong rt))
+{
+    GET_HOST_RETPC();
+#ifdef DO_CHERI_STATISTICS
+    OOB_INFO(cfromptr)->num_uses++;
+#endif
+    // CFromPtr traps on cbp == NULL so we use reg0 as $ddc to save encoding
+    // space (and for backwards compat with old binaries).
+    // Note: This is also still required for new binaries since clang assumes it
+    // can use zero as $ddc in cfromptr/ctoptr
+    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+    /*
+     * CFromPtr: Create capability from pointer
+     */
+    if (rt == (target_ulong)0) {
+        cap_register_t result;
+        update_capreg(env, cd, null_capability(&result));
+    } else if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else {
+        cap_register_t result = *cbp;
+        uint64_t new_addr = cbp->cr_base + rt;
+        if (!is_representable_cap_with_addr(cbp, new_addr)) {
+            became_unrepresentable(env, cd, OOB_INFO(cfromptr),
+                                   _host_return_address);
+            cap_mark_unrepresentable(new_addr, &result);
+        } else {
+            result._cr_cursor = new_addr;
+            check_out_of_bounds_stat(env, OOB_INFO(cfromptr), &result);
+        }
+        update_capreg(env, cd, &result);
+    }
+}
+
 static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
                          uint32_t cb, target_ulong length,
                          uintptr_t _host_return_address)
@@ -655,4 +693,37 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
     result.cr_flags = flags;
     update_capreg(env, cd, &result);
+}
+
+/// Three operands (int capability capability)
+
+target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
+                                      uint32_t ct))
+{
+    GET_HOST_RETPC();
+    // CToPtr traps on ctp == NULL so we use reg0 as $ddc there. This means we
+    // can have a CToPtr relative to $ddc as one instruction instead of two and
+    // is required since clang still assumes it can use zero as $ddc in
+    // cfromptr/ctoptr
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    const cap_register_t *ctp = get_capreg_0_is_ddc(env, ct);
+    uint64_t cb_cursor = cap_get_cursor(cbp);
+    uint64_t ct_top = cap_get_top(ctp);
+    /*
+     * CToPtr: Capability to Pointer
+     */
+    if (!ctp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, ct);
+    } else if (!cbp->cr_tag) {
+        return (target_ulong)0;
+    } else if ((cb_cursor < ctp->cr_base) || (cb_cursor > ct_top)) {
+        /* XXX cb can not be wholly represented within ct. */
+        return (target_ulong)0;
+    } else if (ctp->cr_base > cb_cursor) {
+        return (target_ulong)(ctp->cr_base - cb_cursor);
+    } else {
+        return (target_ulong)(cb_cursor - ctp->cr_base);
+    }
+
+    return (target_ulong)0;
 }

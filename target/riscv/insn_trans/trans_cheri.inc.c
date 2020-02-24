@@ -123,6 +123,23 @@ static inline bool gen_cheri_cap_cap_int(int cd, int cs1, int rs2,
 #define TRANSLATE_CAP_CAP_INT(name) \
     TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_int, a->rd, a->rs1, a->rs2)
 
+typedef void(cheri_int_cap_cap_helper)(TCGv, TCGv_ptr, TCGv_i32, TCGv_i32);
+static inline bool gen_cheri_int_cap_cap(int rd, int cs1, int cs2,
+                                         cheri_int_cap_cap_helper *gen_func)
+{
+    TCGv_i32 source_regnum1 = tcg_const_i32(cs1);
+    TCGv_i32 source_regnum2 = tcg_const_i32(cs2);
+    TCGv result = tcg_temp_new();
+    gen_func(result, cpu_env, source_regnum1, source_regnum2);
+    gen_set_gpr(rd, result);
+    tcg_temp_free(result);
+    tcg_temp_free_i32(source_regnum2);
+    tcg_temp_free_i32(source_regnum1);
+    return true;
+}
+#define TRANSLATE_INT_CAP_CAP(name) \
+    TRANSLATE_MAYBE_TRAP(name, gen_cheri_int_cap_cap, a->rd, a->rs1, a->rs2)
+
 // TODO: all of these could be implemented in TCG without calling a helper
 TRANSLATE_CGET(cgetaddr)
 TRANSLATE_CGET(cgetbase)
@@ -164,9 +181,13 @@ TRANSLATE_CAP_CAP_CAP(cunseal)
 
 // Three operand (cap cap int)
 TRANSLATE_CAP_CAP_INT(candperm)
+TRANSLATE_CAP_CAP_INT(cfromptr)
 TRANSLATE_CAP_CAP_INT(cincoffset)
 TRANSLATE_CAP_CAP_INT(csetaddr)
 TRANSLATE_CAP_CAP_INT(csetbounds)
 TRANSLATE_CAP_CAP_INT(csetboundsexact)
 TRANSLATE_CAP_CAP_INT(csetflags)
 TRANSLATE_CAP_CAP_INT(csetoffset)
+
+// Three operand (int cap cap)
+TRANSLATE_INT_CAP_CAP(ctoptr)

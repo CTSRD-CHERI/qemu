@@ -69,9 +69,8 @@ cbuildcap   0011101  ..... ..... 000 ..... 1011011 @r
 ccopytype   0011110  ..... ..... 000 ..... 1011011 @r
 ccseal      0011111  ..... ..... 000 ..... 1011011 @r
 
-#
-# mapping clause encdec = CToPtr(rd, cb, cs)      if (haveXcheri()) <-> 0b0010010 @ cs @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CFromPtr(cd, cb, rs)    if (haveXcheri()) <-> 0b0010011 @ rs @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
+ctoptr      0010010  ..... ..... 000 ..... 1011011 @r
+cfromptr    0010011  ..... ..... 000 ..... 1011011 @r
 # mapping clause encdec = CSub(rd, cb, ct)        if (haveXcheri()) <-> 0b0010100 @ ct @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CCall(cs, cb)           if (haveXcheri()) <-> 0b1111110 @ cb @ cs @ 0b000 @ 0b00001 @ 0b1011011 if (haveXcheri())
 #
