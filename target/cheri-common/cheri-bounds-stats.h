@@ -38,10 +38,6 @@
 #include "cheri_utils.h"
 #include "qemu/qemu-print.h"
 
-#ifndef DO_CHERI_STATISTICS // FIXME: remove
-#define DO_CHERI_STATISTICS 1
-#endif
-
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
 
 extern bool cheri_c2e_on_unrepresentable;
