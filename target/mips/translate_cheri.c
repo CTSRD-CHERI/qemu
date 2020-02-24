@@ -378,17 +378,10 @@ static inline void generate_cincoffset(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
-    // Special case for CIncOffset $zero:
-    // We treat this the same way as CMove since that is what we were using
-    // before CMove became a dedicated instruction.
-    if (rt == 0) {
-        gen_helper_cmove(cpu_env, tcd, tcb);
-    } else {
-        TCGv t0 = tcg_temp_new();
-        gen_load_gpr(t0, rt);
-        gen_helper_cincoffset(cpu_env, tcd, tcb, t0);
-        tcg_temp_free(t0);
-    }
+    TCGv t0 = tcg_temp_new();
+    gen_load_gpr(t0, rt);
+    gen_helper_cincoffset(cpu_env, tcd, tcb, t0);
+    tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
     tcg_temp_free_i32(tcb);
 }
