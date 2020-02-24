@@ -34,6 +34,36 @@
 # This is concatenated with insn32.decode for risc64 targets.
 # Most of the fields and formats are there.
 
+### Three operand instructions
+# 0000000 unused
+# TODO: mapping clause encdec = CSpecialRW(cd, cs, idx) if (haveXcheri()) <-> 0b0000001 @ idx @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
+# 0000010-0000111 unused
+csetbounds  0001000  ..... ..... 000 ..... 1011011 @r
+csetboundsexact 0001001  ..... ..... 000 ..... 1011011 @r
+# 0001010 unused
+cseal       0001011  ..... ..... 000 ..... 1011011 @r
+cunseal     0001100  ..... ..... 000 ..... 1011011 @r
+candperm    0001101  ..... ..... 000 ..... 1011011 @r
+csetflags   0001110  ..... ..... 000 ..... 1011011 @r
+csetoffset  0001111  ..... ..... 000 ..... 1011011 @r
+csetaddr    0010000  ..... ..... 000 ..... 1011011 @r
+cincoffset  0010001  ..... ..... 000 ..... 1011011 @r
+ctoptr      0010010  ..... ..... 000 ..... 1011011 @r
+cfromptr    0010011  ..... ..... 000 ..... 1011011 @r
+csub        0010100  ..... ..... 000 ..... 1011011 @r
+# 0010101-0011100 unused
+cbuildcap   0011101  ..... ..... 000 ..... 1011011 @r
+ccopytype   0011110  ..... ..... 000 ..... 1011011 @r
+ccseal      0011111  ..... ..... 000 ..... 1011011 @r
+ctestsubset 0100000  ..... ..... 000 ..... 1011011 @r
+# 1111011 unused
+# 1111100 Used for Stores (see below)
+# 1111101 Used for Loads (see below)
+# 1111110 Used for two source ops
+# 1111111 Used for Source & Dest ops (see below)
+
+
+### Two operands (source and dest)
 # TODO: generate from sail?
 cgetperm    1111111  00000 ..... 000 ..... 1011011 @r2
 cgettype    1111111  00001 ..... 000 ..... 1011011 @r2
@@ -43,42 +73,20 @@ cgettag     1111111  00100 ..... 000 ..... 1011011 @r2
 cgetsealed  1111111  00101 ..... 000 ..... 1011011 @r2
 cgetoffset  1111111  00110 ..... 000 ..... 1011011 @r2
 cgetflags   1111111  00111 ..... 000 ..... 1011011 @r2
-cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
-
-
+ccheckperm  1111111  01000 ..... 000 ..... 1011011 @r2
+cchecktype  1111111  01001 ..... 000 ..... 1011011 @r2
 cmove       1111111  01010 ..... 000 ..... 1011011 @r2
 ccleartag   1111111  01011 ..... 000 ..... 1011011 @r2
 # TODO: mapping clause encdec = CJALR(cd, cb)      if (haveXcheri()) <-> 0b1111111 @ 0b01100 @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
-ccheckperm  1111111  01000 ..... 000 ..... 1011011 @r2
-cchecktype  1111111  01001 ..... 000 ..... 1011011 @r2
-
 # TODO: mapping clause encdec = ClearRegs(GPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b01101 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
+cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 # TODO: mapping clause encdec = ClearRegs(FPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b10000 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
-#
-# /* Three arg */
-cseal       0001011  ..... ..... 000 ..... 1011011 @r
-cunseal     0001100  ..... ..... 000 ..... 1011011 @r
-candperm    0001101  ..... ..... 000 ..... 1011011 @r
-csetflags   0001110  ..... ..... 000 ..... 1011011 @r
-csetoffset  0001111  ..... ..... 000 ..... 1011011 @r
-csetaddr    0010000  ..... ..... 000 ..... 1011011 @r
-cincoffset  0010001  ..... ..... 000 ..... 1011011 @r
-csetbounds  0001000  ..... ..... 000 ..... 1011011 @r
-csetboundsexact 0001001  ..... ..... 000 ..... 1011011 @r
-cbuildcap   0011101  ..... ..... 000 ..... 1011011 @r
-ccopytype   0011110  ..... ..... 000 ..... 1011011 @r
-ccseal      0011111  ..... ..... 000 ..... 1011011 @r
 
-ctoptr      0010010  ..... ..... 000 ..... 1011011 @r
-cfromptr    0010011  ..... ..... 000 ..... 1011011 @r
-csub        0010100  ..... ..... 000 ..... 1011011 @r
-ctestsubset 0100000  ..... ..... 000 ..... 1011011 @r
+### Two operands (source1 and source2)
 # TODO: mapping clause encdec = CCall(cs, cb)           if (haveXcheri()) <-> 0b1111110 @ cb @ cs @ 0b000 @ 0b00001 @ 0b1011011 if (haveXcheri())
-#
-# mapping clause encdec = CSpecialRW(cd, cs, idx) if (haveXcheri()) <-> 0b0000001 @ idx @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
-#
 
-## Instructions with 12-bit immediates:
+
+### Instructions with 12-bit immediates:
 # We have to add a new i format with unsigned immediate for csetboundsimm:
 %imm_i_unsigned    20:12
 @i_unsigned   ............    ..... ... ..... ....... &i      imm=%imm_i_unsigned     %rs1 %rd
