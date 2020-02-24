@@ -180,6 +180,17 @@ struct CPURISCVState {
     rvfi_dii_trace_t rvfi_dii_trace;
     bool rvfi_dii_have_injected_insn;
 #endif
+#ifdef TARGET_CHERI
+    // Some statcounters:
+    uint64_t statcounters_cap_read;
+    uint64_t statcounters_cap_read_tagged;
+    uint64_t statcounters_cap_write;
+    uint64_t statcounters_cap_write_tagged;
+
+    uint64_t statcounters_imprecise_setbounds;
+    uint64_t statcounters_unrepresentable_caps;
+
+#endif
 
     /* Fields from here on are preserved across CPU reset. */
     QEMUTimer *timer; /* Internal timer */

@@ -503,6 +503,65 @@ void CHERI_HELPER_IMPL(csetoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
     cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetoffset));
 }
 
+static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
+                         uint32_t cb, target_ulong length, uintptr_t _host_return_address) {
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    uint64_t cursor = cap_get_cursor(cbp);
+    unsigned __int128 new_top = (unsigned __int128)cursor + length; // 65 bits
+    /*
+     * CSetBounds: Set Bounds
+     */
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (cursor < cbp->cr_base) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else if (new_top > cap_get_top65(cbp)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else {
+        cap_register_t result = *cbp;
+#if QEMU_USE_COMPRESSED_CHERI_CAPS
+        _Static_assert(CHERI_CAP_SIZE == 16, "");
+        /*
+         * With compressed capabilities we may need to increase the range of
+         * memory addresses to be wider than requested so it is
+         * representable.
+         */
+        const bool exact = cc128_setbounds(&result, cursor, new_top);
+        if (!exact)
+            env->statcounters_imprecise_setbounds++;
+        if (must_be_exact && !exact) {
+            raise_cheri_exception(env, CapEx_InexactBounds, cb);
+            return;
+        }
+        assert(cc128_is_representable_cap_exact(&result) && "CSetBounds must create a representable capability");
+#else
+        (void)must_be_exact;
+        /* Capabilities are precise -> can just set the values here */
+        result.cr_base = cursor;
+        result._cr_top = new_top;
+        result._cr_cursor = cursor;
+#endif
+        assert(result.cr_base >= cbp->cr_base && "CSetBounds broke monotonicity (base)");
+        assert(cap_get_length65(&result) <= cap_get_length65(cbp) && "CSetBounds broke monotonicity (length)");
+        assert(cap_get_top65(&result) <= cap_get_top65(cbp) && "CSetBounds broke monotonicity (top)");
+        update_capreg(env, cd, &result);
+    }
+}
+
+void CHERI_HELPER_IMPL(csetbounds(CPUArchState *env, uint32_t cd, uint32_t cb,
+    target_ulong rt))
+{
+    do_setbounds(false, env, cd, cb, rt, GETPC());
+}
+
+void CHERI_HELPER_IMPL(csetboundsexact(CPUArchState *env, uint32_t cd, uint32_t cb,
+    target_ulong rt))
+{
+    do_setbounds(true, env, cd, cb, rt, GETPC());
+}
+
 void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  target_ulong flags))
 {
