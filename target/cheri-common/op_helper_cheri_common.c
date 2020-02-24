@@ -288,6 +288,80 @@ void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
 }
 
 /// Three operands (capability capability capability)
+
+void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb, uint32_t ct))
+{
+    GET_HOST_RETPC();
+    // CBuildCap traps on cbp == NULL so we use reg0 as $ddc. This saves encoding
+    // space and also means a cbuildcap relative to $ddc can be one instr instead
+    // of two.
+    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+    const cap_register_t *ctp = get_readonly_capreg(env, ct);
+    /*
+     * CBuildCap: create capability from untagged register.
+     * XXXAM: Note this is experimental and may change.
+     */
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (ctp->cr_base < cbp->cr_base) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else if (cap_get_top(ctp) > cap_get_top(cbp)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+        // } else if (ctp->cr_length < 0) {
+        //    raise_cheri_exception(env, CapEx_LengthViolation, ct);
+    } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
+        raise_cheri_exception(env, CapEx_UserDefViolation, cb);
+    } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
+        raise_cheri_exception(env, CapEx_UserDefViolation, cb);
+    } else {
+        /* XXXAM basic trivial implementation may not handle
+         * compressed capabilities fully, does not perform renormalization.
+         */
+        // Without the temporary cap_register_t we would copy cb into cd
+        // if cdp cd == ct (this was caught by testing cbuildcap $c3, $c1, $c3)
+        cap_register_t result = *cbp;
+        result.cr_base = ctp->cr_base;
+        result._cr_top = ctp->_cr_top;
+        result.cr_perms = ctp->cr_perms;
+        result.cr_uperms = ctp->cr_uperms;
+        result._cr_cursor = ctp->_cr_cursor;
+        if (cap_is_sealed_entry(ctp))
+            cap_make_sealed_entry(&result);
+        else
+            result.cr_otype = CAP_OTYPE_UNSEALED;
+        update_capreg(env, cd, &result);
+    }
+}
+
+void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb, uint32_t ct))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    const cap_register_t *ctp = get_readonly_capreg(env, ct);
+    /*
+     * CCopyType: copy object type from untagged capability.
+     * XXXAM: Note this is experimental and may change.
+     */
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (!cap_is_sealed_with_type(ctp)) {
+        cap_register_t result;
+        update_capreg(env, cd, int_to_cap(-1, &result));
+    } else if (ctp->cr_otype < cap_get_base(cbp)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else if (ctp->cr_otype >= cap_get_top(cbp)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else {
+        cap_register_t result = *cbp;
+        result._cr_cursor = ctp->cr_otype;
+        update_capreg(env, cd, &result);
+    }
+}
+
 static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
                          uint32_t ct, bool conditional,
                          uintptr_t _host_return_address)

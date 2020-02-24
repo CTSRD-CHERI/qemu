@@ -159,6 +159,8 @@ static bool trans_cchecktype(DisasContext *ctx, arg_cchecktype *a)
     return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_cchecktype);
 }
 
+TRANSLATE_CAP_CAP_CAP(cbuildcap)
+TRANSLATE_CAP_CAP_CAP(ccopytype)
 TRANSLATE_CAP_CAP_CAP(ccseal)
 TRANSLATE_CAP_CAP_CAP(cseal)
 TRANSLATE_CAP_CAP_CAP(cunseal)

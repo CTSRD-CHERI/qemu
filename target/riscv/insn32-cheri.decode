@@ -56,7 +56,6 @@ cchecktype  1111111  01001 ..... 000 ..... 1011011 @r2
 # TODO: mapping clause encdec = ClearRegs(FPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b10000 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
 #
 # /* Three arg */
-#
 cseal       0001011  ..... ..... 000 ..... 1011011 @r
 cunseal     0001100  ..... ..... 000 ..... 1011011 @r
 candperm    0001101  ..... ..... 000 ..... 1011011 @r
@@ -66,8 +65,8 @@ csetaddr    0010000  ..... ..... 000 ..... 1011011 @r
 cincoffset  0010001  ..... ..... 000 ..... 1011011 @r
 csetbounds  0001000  ..... ..... 000 ..... 1011011 @r
 csetboundsexact 0001001  ..... ..... 000 ..... 1011011 @r
-# mapping clause encdec = CBuildCap(cd, cb, ct)   if (haveXcheri()) <-> 0b0011101 @ ct @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
-# mapping clause encdec = CCopyType(cd, cb, ct)   if (haveXcheri()) <-> 0b0011110 @ ct @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
+cbuildcap   0011101  ..... ..... 000 ..... 1011011 @r
+ccopytype   0011110  ..... ..... 000 ..... 1011011 @r
 ccseal      0011111  ..... ..... 000 ..... 1011011 @r
 
 #
