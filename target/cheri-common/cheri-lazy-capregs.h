@@ -74,9 +74,11 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
                            "Unitialized value used?");
     } else {
         // Reset decompressed values to invalid data to check they aren't
-        // accessed.
+        // accessed. However, the cursor must remain valid.
         cap_register_t *decompressed = &gpcrs->decompressed[regnum];
+        target_ulong cursor = decompressed->_cr_cursor;
         memset(decompressed, 0xaa, sizeof(*decompressed));
+        decompressed->_cr_cursor = cursor;
     }
 #endif
 }
