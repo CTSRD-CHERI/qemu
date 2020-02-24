@@ -378,9 +378,9 @@ void CHERI_HELPER_IMPL(candperm(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CAndPerm: Restrict Permissions
      */
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else {
         uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
         uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) &
@@ -449,29 +449,29 @@ static target_ulong ccall_common(CPUMIPSState *env, uint32_t cs, uint32_t cb, ui
      * CCall: Call into a new security domain
      */
     if (!csp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cs);
+        raise_cheri_exception(env, CapEx_TagViolation, cs);
     } else if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (!cap_is_sealed_with_type(csp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cs);
+        raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (!cap_is_sealed_with_type(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
-        do_raise_c2_exception(env, CapEx_TypeViolation, cs);
+        raise_cheri_exception(env, CapEx_TypeViolation, cs);
     } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
-        do_raise_c2_exception(env, CapEx_PermitExecuteViolation, cs);
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
     } else if (cbp->cr_perms & CAP_PERM_EXECUTE) {
-        do_raise_c2_exception(env, CapEx_PermitExecuteViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
     } else if (!cap_is_in_bounds(csp, cap_get_cursor(csp), 1)) {
         // TODO: check for at least one instruction worth of data? Like cjr/cjalr?
-        do_raise_c2_exception(env, CapEx_LengthViolation, cs);
+        raise_cheri_exception(env, CapEx_LengthViolation, cs);
     } else {
         if (selector == CCALL_SELECTOR_0) {
-            do_raise_c2_exception(env, CapEx_CallTrap, cs);
+            raise_cheri_exception(env, CapEx_CallTrap, cs);
         } else if (!(csp->cr_perms & CAP_PERM_CCALL)){
-            do_raise_c2_exception(env, CapEx_PermitCCallViolation, cs);
+            raise_cheri_exception(env, CapEx_PermitCCallViolation, cs);
         } else if (!(cbp->cr_perms & CAP_PERM_CCALL)){
-            do_raise_c2_exception(env, CapEx_PermitCCallViolation, cb);
+            raise_cheri_exception(env, CapEx_PermitCCallViolation, cb);
         } else {
             cap_register_t idc = *cbp;
             cap_set_unsealed(&idc);
@@ -537,9 +537,9 @@ void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         cap_register_t result;
         update_capreg(env, cd, null_capability(&result));
     } else if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else {
         cap_register_t result = *cbp;
         uint64_t new_addr = cbp->cr_base + rt;
@@ -560,13 +560,13 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUMIPSState *env, uint32_t cb, uint64_
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
 
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        do_raise_c2_exception(env, CapEx_PermitLoadViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
-        do_raise_c2_exception(env, CapEx_PermitLoadCapViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitLoadCapViolation, cb);
     } else if ((cbcursor & (8 * CHERI_CAP_SIZE - 1)) != 0) {
         do_raise_c0_exception(env, EXCP_AdEL, cbcursor);
     } else {
@@ -729,16 +729,16 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUMIPSState *env, uint32_t cd, uint32_t cb
      * CJALR: Jump and Link Capability Register
      */
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (cap_is_sealed_with_type(cbp)) {
         // Note: "sentry" caps can be called using cjalr
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
-        do_raise_c2_exception(env, CapEx_PermitExecuteViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
-        do_raise_c2_exception(env, CapEx_GlobalViolation, cb);
+        raise_cheri_exception(env, CapEx_GlobalViolation, cb);
     } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (align_of(4, cap_get_cursor(cbp))) {
         do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
     } else {
@@ -770,16 +770,16 @@ target_ulong CHERI_HELPER_IMPL(cjr(CPUMIPSState *env, uint32_t cb))
      * CJR: Jump Capability Register
      */
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (cap_is_sealed_with_type(cbp)) {
         // Note: "sentry" caps can be called using cjalr
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
-        do_raise_c2_exception(env, CapEx_PermitExecuteViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
-        do_raise_c2_exception(env, CapEx_GlobalViolation, cb);
+        raise_cheri_exception(env, CapEx_GlobalViolation, cb);
     } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (align_of(4, cap_get_cursor(cbp))) {
         do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
     } else {
@@ -806,27 +806,27 @@ static void cseal_common(CPUMIPSState *env, uint32_t cd, uint32_t cs,
      * CSeal: Seal a capability
      */
     if (!csp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cs);
+        raise_cheri_exception(env, CapEx_TagViolation, cs);
     } else if (!ctp->cr_tag) {
         if (conditional)
             update_capreg(env, cd, csp);
         else
-            do_raise_c2_exception(env, CapEx_TagViolation, ct);
+            raise_cheri_exception(env, CapEx_TagViolation, ct);
     } else if (conditional && cap_get_cursor(ctp) == -1) {
         update_capreg(env, cd, csp);
     } else if (is_cap_sealed(csp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cs);
+        raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (is_cap_sealed(ctp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, ct);
+        raise_cheri_exception(env, CapEx_SealViolation, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
-        do_raise_c2_exception(env, CapEx_PermitSealViolation, ct);
+        raise_cheri_exception(env, CapEx_PermitSealViolation, ct);
     } else if (!cap_is_in_bounds(ctp, ct_base_plus_offset, /*num_bytes=*/1)) {
         // Must be within bounds -> num_bytes=1
-        do_raise_c2_exception(env, CapEx_LengthViolation, ct);
+        raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (ct_base_plus_offset > (uint64_t)CAP_LAST_NONRESERVED_OTYPE) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, ct);
+        raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (!is_representable_cap_when_sealed_with_addr(csp, cap_get_cursor(csp))) {
-        do_raise_c2_exception(env, CapEx_InexactBounds, cs);
+        raise_cheri_exception(env, CapEx_InexactBounds, cs);
     } else {
         cap_register_t result = *csp;
         cap_set_sealed(&result, (uint32_t)ct_base_plus_offset);
@@ -860,12 +860,12 @@ void CHERI_HELPER_IMPL(csealentry(CPUMIPSState *env, uint32_t cd, uint32_t cs))
      */
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     if (!csp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cs);
+        raise_cheri_exception(env, CapEx_TagViolation, cs);
     } else if (!cap_is_unsealed(csp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cs);
+        raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
         // Capability must be executable otherwise csealentry doesn't make sense
-        do_raise_c2_exception(env, CapEx_PermitExecuteViolation, cs);
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
     } else {
         cap_register_t result = *csp;
         // capability can now only be used in cjr/cjalr
@@ -887,19 +887,19 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUMIPSState *env, uint32_t cd, uint32_t cb, ui
      * XXXAM: Note this is experimental and may change.
      */
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (ctp->cr_base < cbp->cr_base) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (cap_get_top(ctp) > cap_get_top(cbp)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     // } else if (ctp->cr_length < 0) {
-    //    do_raise_c2_exception(env, CapEx_LengthViolation, ct);
+    //    raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
-        do_raise_c2_exception(env, CapEx_UserDefViolation, cb);
+        raise_cheri_exception(env, CapEx_UserDefViolation, cb);
     } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
-        do_raise_c2_exception(env, CapEx_UserDefViolation, cb);
+        raise_cheri_exception(env, CapEx_UserDefViolation, cb);
     } else {
         /* XXXAM basic trivial implementation may not handle
          * compressed capabilities fully, does not perform renormalization.
@@ -930,16 +930,16 @@ void CHERI_HELPER_IMPL(ccopytype(CPUMIPSState *env, uint32_t cd, uint32_t cb, ui
      * XXXAM: Note this is experimental and may change.
      */
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!cap_is_sealed_with_type(ctp)) {
         cap_register_t result;
         update_capreg(env, cd, int_to_cap(-1, &result));
     } else if (ctp->cr_otype < cap_get_base(cbp)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (ctp->cr_otype >= cap_get_top(cbp)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else {
         cap_register_t result = *cbp;
         result._cr_cursor = ctp->cr_otype;
@@ -960,38 +960,38 @@ check_writable_cap_hwr_access(CPUMIPSState *env, enum CP2HWR hwr, target_ulong _
         return &env->active_tc.CHWR.UserTlsCap;
     case CP2HWR_PRIV_TLS:
         if (!access_sysregs) {
-            do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, hwr);
+            raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, hwr);
         }
         return &env->active_tc.CHWR.PrivTlsCap;
     case CP2HWR_K1RC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, hwr);
+            raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, hwr);
         }
         return &env->active_tc.CHWR.KR1C;
     case CP2HWR_K2RC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, hwr);
+            raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, hwr);
         }
         return &env->active_tc.CHWR.KR2C;
     case CP2HWR_ErrorEPCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, hwr);
+            raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, hwr);
         }
 
         return &env->active_tc.CHWR.ErrorEPCC;
     case CP2HWR_KCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, hwr);
+            raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, hwr);
         }
         return &env->active_tc.CHWR.KCC;
     case CP2HWR_KDC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, hwr);
+            raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, hwr);
         }
         return &env->active_tc.CHWR.KDC;
     case CP2HWR_EPCC:
         if (!in_kernel_mode(env) || !access_sysregs) {
-            do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, hwr);
+            raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, hwr);
         }
         return &env->active_tc.CHWR.EPCC;
     }
@@ -1026,7 +1026,7 @@ void CHERI_HELPER_IMPL(mtc0_epc(CPUMIPSState *env, target_ulong arg))
     if (!in_kernel_mode(env)) {
         do_raise_exception(env, EXCP_RI, GETPC());
     } else if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
-        do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, CP2HWR_EPCC);
+        raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, CP2HWR_EPCC);
     }
     set_CP0_EPC(env, arg + cap_get_base(&env->active_tc.CHWR.EPCC));
 }
@@ -1038,7 +1038,7 @@ void CHERI_HELPER_IMPL(mtc0_error_epc(CPUMIPSState *env, target_ulong arg))
     if (!in_kernel_mode(env)) {
         do_raise_exception(env, EXCP_RI, GETPC());
     } else if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
-        do_raise_c2_exception(env, CapEx_AccessSystemRegsViolation, CP2HWR_ErrorEPCC);
+        raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, CP2HWR_ErrorEPCC);
     }
     set_CP0_ErrorEPC(env, arg + cap_get_base(&env->active_tc.CHWR.ErrorEPCC));
 }
@@ -1070,13 +1070,13 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
      * CSetBounds: Set Bounds
      */
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (cursor < cbp->cr_base) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (new_top > cap_get_top65(cbp)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else {
         cap_register_t result = *cbp;
 #ifdef CHERI_128
@@ -1089,7 +1089,7 @@ static void do_setbounds(bool must_be_exact, CPUMIPSState *env, uint32_t cd,
         if (!exact)
             env->statcounters_imprecise_setbounds++;
         if (must_be_exact && !exact) {
-            do_raise_c2_exception(env, CapEx_InexactBounds, cb);
+            raise_cheri_exception(env, CapEx_InexactBounds, cb);
             return;
         }
         assert(cc128_is_representable_cap_exact(&result) && "CSetBounds must create a representable capability");
@@ -1229,7 +1229,7 @@ void CHERI_HELPER_IMPL(csetoffset(CPUMIPSState *env, uint32_t cd, uint32_t cb,
      * CSetOffset: Set cursor to an offset from base
      */
     if (cbp->cr_tag && is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else {
         cap_register_t result = *cbp;
         const uint64_t new_addr = cap_get_base(cbp) + rt;
@@ -1259,7 +1259,7 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUMIPSState *env, uint32_t cb, uint32_t c
      * CToPtr: Capability to Pointer
      */
     if (!ctp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, ct);
+        raise_cheri_exception(env, CapEx_TagViolation, ct);
     } else if (!cbp->cr_tag) {
         return (target_ulong)0;
     } else if ((cb_cursor < ctp->cr_base) || (cb_cursor > ct_top)) {
@@ -1285,26 +1285,26 @@ void CHERI_HELPER_IMPL(cunseal(CPUMIPSState *env, uint32_t cd, uint32_t cs,
      * CUnseal: Unseal a sealed capability
      */
     if (!csp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cs);
+        raise_cheri_exception(env, CapEx_TagViolation, cs);
     } else if (!ctp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, ct);
+        raise_cheri_exception(env, CapEx_TagViolation, ct);
     } else if (cap_is_unsealed(csp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cs);
+        raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (!cap_is_unsealed(ctp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, ct);
+        raise_cheri_exception(env, CapEx_SealViolation, ct);
     } else if (!cap_is_sealed_with_type(csp)) {
-        do_raise_c2_exception(env, CapEx_TypeViolation, cs); /* Reserved otypes */
+        raise_cheri_exception(env, CapEx_TypeViolation, cs); /* Reserved otypes */
     } else if (ct_cursor != csp->cr_otype) {
-        do_raise_c2_exception(env, CapEx_TypeViolation, ct);
+        raise_cheri_exception(env, CapEx_TypeViolation, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
-        do_raise_c2_exception(env, CapEx_PermitUnsealViolation, ct);
+        raise_cheri_exception(env, CapEx_PermitUnsealViolation, ct);
     } else if (!cap_is_in_bounds(ctp, ct_cursor, /*num_bytes=1*/1)) {
         // Must be within bounds and not one past end (i.e. not equal to top -> num_bytes=1)
-        do_raise_c2_exception(env, CapEx_LengthViolation, ct);
+        raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (ct_cursor >= CAP_LAST_NONRESERVED_OTYPE) {
         // This should never happen due to the ct_cursor != csp->cr_otype check
         // above that should never succeed for
-        do_raise_c2_exception(env, CapEx_LengthViolation, ct);
+        raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else {
         cap_register_t result = *csp;
         if ((csp->cr_perms & CAP_PERM_GLOBAL) &&
@@ -1461,17 +1461,17 @@ target_ulong CHERI_HELPER_IMPL(cload(CPUMIPSState *env, uint32_t cb, target_ulon
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
 
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        do_raise_c2_exception(env, CapEx_PermitLoadViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     } else {
         uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = cursor + rt + (int32_t)offset;
 
         if (!cap_is_in_bounds(cbp, addr, size)) {
-            do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+            raise_cheri_exception(env, CapEx_LengthViolation, cb);
         } else if (align_of(size, addr)) {
 #if defined(CHERI_UNALIGNED)
             qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte load of "
@@ -1504,13 +1504,13 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUMIPSState *env, uint32_t cb, uint3
     env->linkedflag = 0;
     env->lladdr = 1;
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        do_raise_c2_exception(env, CapEx_PermitLoadViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, size)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (align_of(size, addr)) {
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdEL, addr);
@@ -1537,13 +1537,13 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUMIPSState *env, uint32_t cb, uint32
     uint64_t addr = cap_get_cursor(cbp);
 
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        do_raise_c2_exception(env, CapEx_PermitStoreViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, size)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (align_of(size, addr)) {
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdES, addr);
@@ -1575,17 +1575,17 @@ target_ulong CHERI_HELPER_IMPL(cstore(CPUMIPSState *env, uint32_t cb, target_ulo
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
 
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        do_raise_c2_exception(env, CapEx_PermitStoreViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
     } else {
         uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = cursor + rt + (int32_t)offset;
 
         if (!cap_is_in_bounds(cbp, addr, size)) {
-            do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+            raise_cheri_exception(env, CapEx_LengthViolation, cb);
         } else if (align_of(size, addr)) {
 #if defined(CHERI_UNALIGNED)
             qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte store to "
@@ -1616,28 +1616,28 @@ static inline target_ulong get_csc_addr(CPUMIPSState *env, uint32_t cs, uint32_t
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
 
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
         return (target_ulong)0;
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
         return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        do_raise_c2_exception(env, CapEx_PermitStoreViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
         return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
-        do_raise_c2_exception(env, CapEx_PermitStoreCapViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
         return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
                get_capreg_tag(env, cs) &&
                !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL)) {
-        do_raise_c2_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
         return (target_ulong)0;
     } else {
         uint64_t cursor = cap_get_cursor(cbp);
         uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
 
         if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-            do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+            raise_cheri_exception(env, CapEx_LengthViolation, cb);
             return (target_ulong)0;
         } else if (align_of(CHERI_CAP_SIZE, addr)) {
             do_raise_c0_exception(env, EXCP_AdES, addr);
@@ -1658,23 +1658,23 @@ static inline target_ulong get_cscc_addr(CPUMIPSState *env, uint32_t cs, uint32_
     uint64_t addr = cap_get_cursor(cbp);
 
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
         return (target_ulong)0;
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
         return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        do_raise_c2_exception(env, CapEx_PermitStoreViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
         return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
-        do_raise_c2_exception(env, CapEx_PermitStoreCapViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
         return (target_ulong)0;
     } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) && csp->cr_tag &&
             !(csp->cr_perms & CAP_PERM_GLOBAL)) {
-        do_raise_c2_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
         return (target_ulong)0;
     } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
         return (target_ulong)0;
     } else if (align_of(CHERI_CAP_SIZE, addr)) {
         do_raise_c0_exception(env, EXCP_AdES, addr);
@@ -1725,16 +1725,16 @@ void CHERI_HELPER_IMPL(clc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t 
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
 
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        do_raise_c2_exception(env, CapEx_PermitLoadViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     }
     uint64_t addr = (uint64_t)((cap_get_cursor(cbp) + rt) + (int32_t)offset);
     /* uint32_t tag = cheri_tag_get(env, addr, cd, NULL); */
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (align_of(CHERI_CAP_SIZE, addr)) {
         do_raise_c0_exception(env, EXCP_AdEL, addr);
     }
@@ -1755,13 +1755,13 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUMIPSState *env, uint32_t cd, uint32_t
     env->linkedflag = 0;
     env->lladdr = 1;
     if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        do_raise_c2_exception(env, CapEx_PermitLoadViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        do_raise_c2_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (align_of(CHERI_CAP_SIZE, addr)) {
         do_raise_c0_exception(env, EXCP_AdEL, addr);
     }
