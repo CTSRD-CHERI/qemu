@@ -76,7 +76,29 @@ static inline bool gen_cheri_cap_int(int cd, int rs,
     return true;
 }
 
+typedef void(cheri_cap_cap_cap_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv_i32);
+static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
+                                         cheri_cap_cap_cap_helper *gen_func)
+{
+    TCGv_i32 dest_regnum = tcg_const_i32(cd);
+    TCGv_i32 source_regnum1 = tcg_const_i32(cs1);
+    TCGv_i32 source_regnum2 = tcg_const_i32(cs2);
+    gen_func(cpu_env, dest_regnum, source_regnum1, source_regnum2);
+    tcg_temp_free_i32(source_regnum2);
+    tcg_temp_free_i32(source_regnum1);
+    tcg_temp_free_i32(dest_regnum);
+    return true;
+}
+// We assume that all these instructions can trap (e.g. seal violation)
 #define INSN_CAN_TRAP(ctx) tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next)
+
+#define TRANSLATE_CAP_CAP_CAP(name)                                            \
+    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+    {                                                                          \
+        INSN_CAN_TRAP(ctx);                                                    \
+        return gen_cheri_cap_cap_cap(a->rd, a->rs1, a->rs2,                    \
+                                     &gen_helper_##name);                      \
+    }
 
 // TODO: all of these could be implemented in TCG without calling a helper
 TRANSLATE_CGET(cgetaddr)
@@ -110,3 +132,7 @@ static bool trans_cchecktype(DisasContext *ctx, arg_cchecktype *a)
     INSN_CAN_TRAP(ctx); // Update env->pc for trap
     return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_cchecktype);
 }
+
+TRANSLATE_CAP_CAP_CAP(ccseal)
+TRANSLATE_CAP_CAP_CAP(cseal)
+TRANSLATE_CAP_CAP_CAP(cunseal)

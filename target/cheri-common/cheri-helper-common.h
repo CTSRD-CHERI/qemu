@@ -63,3 +63,7 @@ DEF_HELPER_3(cmove, void, env, i32, i32)
 DEF_HELPER_3(ccheckperm, void, env, i32, tl)
 DEF_HELPER_3(cchecktype, void, env, i32, i32)
 
+// Three operands (cap cap cap)
+DEF_HELPER_4(ccseal, void, env, i32, i32, i32)
+DEF_HELPER_4(cseal, void, env, i32, i32, i32)
+DEF_HELPER_4(cunseal, void, env, i32, i32, i32)
