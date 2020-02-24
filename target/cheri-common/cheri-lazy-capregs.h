@@ -179,6 +179,9 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
 #endif
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
+#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    env->rvfi_dii_trace.rvfi_dii_rd_wdata = newval->_cr_cursor;
+#endif
 }
 
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
@@ -196,6 +199,9 @@ static inline void update_compressed_capreg(CPUArchState *env, unsigned regnum,
     set_capreg_state(gpcrs, regnum, new_state);
     cheri_debug_assert(get_capreg_state(gpcrs, regnum) == new_state);
     sanity_check_capreg(gpcrs, regnum);
+#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    env->rvfi_dii_trace.rvfi_dii_rd_wdata = cursor;
+#endif
 }
 
 static inline target_ulong get_capreg_pesbt(CPUArchState *env, unsigned regnum)
