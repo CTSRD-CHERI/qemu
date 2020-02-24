@@ -824,27 +824,6 @@ target_ulong CHERI_HELPER_IMPL(cgetandaddr(CPUArchState *env, uint32_t cb, targe
     return addr & rt;
 }
 
-target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUArchState *env, uint32_t cb, uint32_t ct))
-{
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const cap_register_t *ctp = get_readonly_capreg(env, ct);
-    gboolean is_subset = FALSE;
-    /*
-     * CTestSubset: Test if capability is a subset of another
-     */
-    {
-        if (cbp->cr_tag == ctp->cr_tag &&
-            /* is_cap_sealed(cbp) == is_cap_sealed(ctp) && */
-            cap_get_base(cbp) <= cap_get_base(ctp) &&
-            cap_get_top(ctp) <= cap_get_top(cbp) &&
-            (ctp->cr_perms & cbp->cr_perms) == ctp->cr_perms &&
-            (ctp->cr_uperms & cbp->cr_uperms) == ctp->cr_uperms) {
-            is_subset = TRUE;
-        }
-    }
-    return (target_ulong) is_subset;
-}
-
 /*
  * Load Via Capability Register
  */

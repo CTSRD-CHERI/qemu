@@ -72,9 +72,9 @@ ccseal      0011111  ..... ..... 000 ..... 1011011 @r
 ctoptr      0010010  ..... ..... 000 ..... 1011011 @r
 cfromptr    0010011  ..... ..... 000 ..... 1011011 @r
 csub        0010100  ..... ..... 000 ..... 1011011 @r
+ctestsubset 0100000  ..... ..... 000 ..... 1011011 @r
 # TODO: mapping clause encdec = CCall(cs, cb)           if (haveXcheri()) <-> 0b1111110 @ cb @ cs @ 0b000 @ 0b00001 @ 0b1011011 if (haveXcheri())
 #
-# mapping clause encdec = CTestSubset(rd, cb, ct) if (haveXcheri()) <-> 0b0100000 @ ct @ cb @ 0b000 @ rd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CSpecialRW(cd, cs, idx) if (haveXcheri()) <-> 0b0000001 @ idx @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 #
 # mapping clause encdec = CIncOffsetImmediate(cd, cb, imm12) if (haveXcheri()) <-> imm12 : bits(12) @ cb @ 0b001 @ cd @ 0b1011011 if (haveXcheri())
