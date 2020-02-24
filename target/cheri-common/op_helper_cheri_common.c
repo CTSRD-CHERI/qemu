@@ -431,7 +431,7 @@ static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
     /*
      * CIncOffset: Increase Offset
      */
-    if (cbp->cr_tag && is_cap_sealed(cbp) && rt != 0) {
+    if (cbp->cr_tag && is_cap_sealed(cbp)) {
         raise_cheri_exception_impl(env, CapEx_SealViolation, cb, retpc);
     } else {
         uint64_t new_addr = cap_get_cursor(cbp) + rt;
