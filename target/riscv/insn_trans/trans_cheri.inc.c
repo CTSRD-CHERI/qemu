@@ -63,6 +63,21 @@ static inline bool gen_cheri_cap_cap(int cd, int cs,
     return true;
 }
 
+typedef void(cheri_cap_int_helper)(TCGv_ptr, TCGv_i32, TCGv);
+static inline bool gen_cheri_cap_int(int cd, int rs,
+                                     cheri_cap_int_helper *gen_func)
+{
+    TCGv_i32 dest_regnum = tcg_const_i32(cd);
+    TCGv gpr_value = tcg_temp_new();
+    gen_get_gpr(gpr_value, rs);
+    gen_func(cpu_env, dest_regnum, gpr_value);
+    tcg_temp_free(gpr_value);
+    tcg_temp_free_i32(dest_regnum);
+    return true;
+}
+
+#define INSN_CAN_TRAP(ctx) tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next)
+
 // TODO: all of these could be implemented in TCG without calling a helper
 TRANSLATE_CGET(cgetaddr)
 TRANSLATE_CGET(cgetbase)
@@ -82,4 +97,16 @@ static bool trans_cmove(DisasContext *ctx, arg_cmove *a)
 static bool trans_ccleartag(DisasContext *ctx, arg_ccleartag *a)
 {
     return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_ccleartag);
+}
+
+static bool trans_ccheckperm(DisasContext *ctx, arg_ccheckperm *a)
+{
+    INSN_CAN_TRAP(ctx); // Update env->pc for trap
+    return gen_cheri_cap_int(a->rd, a->rs1, &gen_helper_ccheckperm);
+}
+
+static bool trans_cchecktype(DisasContext *ctx, arg_cchecktype *a)
+{
+    INSN_CAN_TRAP(ctx); // Update env->pc for trap
+    return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_cchecktype);
 }

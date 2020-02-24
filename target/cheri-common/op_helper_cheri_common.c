@@ -235,3 +235,45 @@ void CHERI_HELPER_IMPL(cmove(CPUArchState *env, uint32_t cd, uint32_t cb))
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     update_capreg(env, cd, cbp);
 }
+
+void CHERI_HELPER_IMPL(cchecktype(CPUArchState *env, uint32_t cs, uint32_t cb))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *csp = get_readonly_capreg(env, cs);
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    /*
+     * CCheckType: Raise exception if otypes don't match
+     */
+    if (!csp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cs);
+    } else if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (cap_is_unsealed(csp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cs);
+    } else if (cap_is_unsealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
+        raise_cheri_exception(env, CapEx_TypeViolation, cs);
+    }
+}
+
+/// Two operands (capability and int)
+void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs, target_ulong rt))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *csp = get_readonly_capreg(env, cs);
+    uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
+    uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
+    /*
+     * CCheckPerm: Raise exception if don't have permission
+     */
+    if (!csp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cs);
+    } else if ((csp->cr_perms & rt_perms) != rt_perms) {
+        raise_cheri_exception(env, CapEx_UserDefViolation, cs);
+    } else if ((csp->cr_uperms & rt_uperms) != rt_uperms) {
+        raise_cheri_exception(env, CapEx_UserDefViolation, cs);
+    } else if ((rt >> (16 + CAP_MAX_UPERM)) != 0UL) {
+        raise_cheri_exception(env, CapEx_UserDefViolation, cs);
+    }
+}

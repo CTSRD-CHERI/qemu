@@ -518,47 +518,6 @@ void CHERI_HELPER_IMPL(creturn(CPUMIPSState *env)) {
     do_raise_c2_exception_noreg(env, CP2Ca_RETURN, GETPC());
 }
 
-void CHERI_HELPER_IMPL(ccheckperm(CPUMIPSState *env, uint32_t cs, target_ulong rt))
-{
-    GET_HOST_RETPC();
-    const cap_register_t *csp = get_readonly_capreg(env, cs);
-    uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
-    uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
-    /*
-     * CCheckPerm: Raise exception if don't have permission
-     */
-    if (!csp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_TAG, cs);
-    } else if ((csp->cr_perms & rt_perms) != rt_perms) {
-        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
-    } else if ((csp->cr_uperms & rt_uperms) != rt_uperms) {
-        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
-    } else if ((rt >> (16 + CAP_MAX_UPERM)) != 0UL) {
-        do_raise_c2_exception(env, CP2Ca_USRDEFINE, cs);
-    }
-}
-
-void CHERI_HELPER_IMPL(cchecktype(CPUMIPSState *env, uint32_t cs, uint32_t cb))
-{
-    GET_HOST_RETPC();
-    const cap_register_t *csp = get_readonly_capreg(env, cs);
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    /*
-     * CCheckType: Raise exception if otypes don't match
-     */
-    if (!csp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_TAG, cs);
-    } else if (!cbp->cr_tag) {
-        do_raise_c2_exception(env, CP2Ca_TAG, cb);
-    } else if (!is_cap_sealed(csp)) {
-        do_raise_c2_exception(env, CP2Ca_SEAL, cs);
-    } else if (!is_cap_sealed(cbp)) {
-        do_raise_c2_exception(env, CP2Ca_SEAL, cb);
-    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
-        do_raise_c2_exception(env, CP2Ca_TYPE, cs);
-    }
-}
-
 void CHERI_HELPER_IMPL(cfromptr(CPUMIPSState *env, uint32_t cd, uint32_t cb,
         target_ulong rt))
 {
