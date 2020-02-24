@@ -58,6 +58,7 @@ static inline bool gen_cheri_cap_cap(int cd, int cs,
     TCGv_i32 dest_regnum = tcg_const_i32(cd);
     TCGv_i32 source_regnum = tcg_const_i32(cs);
     gen_func(cpu_env, dest_regnum, source_regnum);
+    gen_rvfi_dii_set_field_const(rd_addr, cd);
     tcg_temp_free_i32(source_regnum);
     tcg_temp_free_i32(dest_regnum);
     return true;
@@ -71,6 +72,7 @@ static inline bool gen_cheri_cap_int(int cd, int rs,
     TCGv gpr_value = tcg_temp_new();
     gen_get_gpr(gpr_value, rs);
     gen_func(cpu_env, dest_regnum, gpr_value);
+    gen_rvfi_dii_set_field_const(rd_addr, cd);
     tcg_temp_free(gpr_value);
     tcg_temp_free_i32(dest_regnum);
     return true;
@@ -84,6 +86,7 @@ static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
     TCGv_i32 source_regnum1 = tcg_const_i32(cs1);
     TCGv_i32 source_regnum2 = tcg_const_i32(cs2);
     gen_func(cpu_env, dest_regnum, source_regnum1, source_regnum2);
+    gen_rvfi_dii_set_field_const(rd_addr, cd);
     tcg_temp_free_i32(source_regnum2);
     tcg_temp_free_i32(source_regnum1);
     tcg_temp_free_i32(dest_regnum);
@@ -109,6 +112,7 @@ static inline bool gen_cheri_cap_cap_int(int cd, int cs1, int rs2,
     TCGv gpr_value = tcg_temp_new();
     gen_get_gpr(gpr_value, rs2);
     gen_func(cpu_env, dest_regnum, source_regnum, gpr_value);
+    gen_rvfi_dii_set_field_const(rd_addr, cd);
     tcg_temp_free(gpr_value);
     tcg_temp_free_i32(source_regnum);
     tcg_temp_free_i32(dest_regnum);
