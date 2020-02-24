@@ -449,15 +449,6 @@ static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
     }
 }
 
-void CHERI_HELPER_IMPL(candaddr(CPUArchState *env, uint32_t cd, uint32_t cb,
-    target_ulong rt))
-{
-    target_ulong cursor = get_capreg_cursor(env, cb);
-    target_ulong target_addr = cursor & rt;
-    target_ulong diff = target_addr - cursor;
-    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(candaddr));
-}
-
 void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
                                 target_ulong rt))
 {
@@ -487,12 +478,29 @@ void CHERI_HELPER_IMPL(cincoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
     return cincoffset_impl(env, cd, cb, rt, GETPC(), OOB_INFO(cincoffset));
 }
 
+void CHERI_HELPER_IMPL(candaddr(CPUArchState *env, uint32_t cd, uint32_t cb,
+    target_ulong rt))
+{
+    target_ulong cursor = get_capreg_cursor(env, cb);
+    target_ulong target_addr = cursor & rt;
+    target_ulong diff = target_addr - cursor;
+    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(candaddr));
+}
+
 void CHERI_HELPER_IMPL(csetaddr(CPUArchState *env, uint32_t cd, uint32_t cb,
                                 target_ulong target_addr))
 {
-    target_ulong cursor = get_capreg_cursor(env, cb); // aaa
+    target_ulong cursor = get_capreg_cursor(env, cb);
     target_ulong diff = target_addr - cursor;
     cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetaddr));
+}
+
+void CHERI_HELPER_IMPL(csetoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
+    target_ulong target_offset))
+{
+    target_ulong offset = cap_get_offset(get_readonly_capreg(env, cb));
+    target_ulong diff = target_offset - offset;
+    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetoffset));
 }
 
 void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
@@ -512,33 +520,4 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
     result.cr_flags = flags;
     update_capreg(env, cd, &result);
-}
-
-void CHERI_HELPER_IMPL(csetoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
-                                  target_ulong rt))
-{
-    GET_HOST_RETPC();
-#ifdef DO_CHERI_STATISTICS
-    OOB_INFO(csetoffset)->num_uses++;
-#endif
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    /*
-     * CSetOffset: Set cursor to an offset from base
-     */
-    if (cbp->cr_tag && is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else {
-        cap_register_t result = *cbp;
-        const uint64_t new_addr = cap_get_base(cbp) + rt;
-        if (!is_representable_cap_with_addr(cbp, new_addr)) {
-            if (cbp->cr_tag)
-                became_unrepresentable(env, cd, OOB_INFO(csetoffset),
-                                       _host_return_address);
-            cap_mark_unrepresentable(new_addr, &result);
-        } else {
-            result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, OOB_INFO(csetoffset), &result);
-        }
-        update_capreg(env, cd, &result);
-    }
 }
