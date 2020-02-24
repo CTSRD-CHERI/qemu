@@ -60,7 +60,7 @@ cchecktype  1111111  01001 ..... 000 ..... 1011011 @r2
 cseal       0001011  ..... ..... 000 ..... 1011011 @r
 cunseal     0001100  ..... ..... 000 ..... 1011011 @r
 candperm    0001101  ..... ..... 000 ..... 1011011 @r
-# mapping clause encdec = CSetFlags(cd, cs, rt)   if (haveXcheri()) <-> 0b0001110 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
+csetflags   0001110  ..... ..... 000 ..... 1011011 @r
 # mapping clause encdec = CSetOffset(cd, cs, rt)  if (haveXcheri()) <-> 0b0001111 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CSetAddr(cd, cs, rt)    if (haveXcheri()) <-> 0b0010000 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # mapping clause encdec = CIncOffset(cd, cs, rt)  if (haveXcheri()) <-> 0b0010001 @ rt @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())

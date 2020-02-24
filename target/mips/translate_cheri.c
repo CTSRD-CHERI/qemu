@@ -119,14 +119,18 @@ static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t 
     }
 }
 
-static inline void generate_candperm(int32_t cd, int32_t cb, int32_t rt)
+typedef void(cheri_cap_cap_int_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv);
+static inline void gen_cheri_cap_cap_int(DisasContext *ctx, int cd, int cb,
+                                         int rt,
+                                         cheri_cap_cap_int_helper *gen_func)
 {
+    check_cop2x(ctx);
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv t0 = tcg_temp_new();
 
     gen_load_gpr(t0, rt);
-    gen_helper_candperm(cpu_env, tcd, tcb, t0);
+    gen_func(cpu_env, tcd, tcb, t0);
 
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcd);
@@ -1171,8 +1175,11 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "cunseal";
             break;
         case OPC_CANDPERM_NI: /* 0x0d */
-            check_cop2x(ctx);
-            generate_candperm(r16, r11, r6);
+            gen_cheri_cap_cap_int(ctx, r16, r11, r6, &gen_helper_candperm);
+            opn = "candperm";
+            break;
+        case OPC_CSETFLAGS_NI: /* 0x0e */
+            gen_cheri_cap_cap_int(ctx, r16, r11, r6, &gen_helper_csetflags);
             opn = "candperm";
             break;
         case OPC_CSETOFFSET_NI: /* 0x0f */
@@ -1468,8 +1475,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
     case OPC_CMISC: /* 0x04 */
         switch(MASK_CAP3(opc)) {
         case OPC_CANDPERM: /* 0x0 */
-            check_cop2x(ctx);
-            generate_candperm(r16, r11, r6);
+            gen_cheri_cap_cap_int(ctx, r16, r11, r6, &gen_helper_candperm);
             opn = "candperm";
             break;
 

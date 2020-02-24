@@ -1241,6 +1241,7 @@ enum {
     OPC_CSEAL_NI        = OPC_CAP_NI | (0x0b),
     OPC_CUNSEAL_NI      = OPC_CAP_NI | (0x0c),
     OPC_CANDPERM_NI     = OPC_CAP_NI | (0x0d),
+    OPC_CSETFLAGS_NI    = OPC_CAP_NI | (0x0e),
     OPC_CSETOFFSET_NI   = OPC_CAP_NI | (0x0f),
     OPC_CSETBOUNDS_NI   = OPC_CAP_NI | (0x08),
     /* OPC_SETBOUNDSEXACT_NI = OPC_CAP_NI | (0x09), unchanged OPC_SETBOUNDSEXACT */

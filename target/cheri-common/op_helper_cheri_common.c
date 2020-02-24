@@ -408,3 +408,22 @@ void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
         update_capreg(env, cd, &result);
     }
 }
+
+void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
+    target_ulong flags))
+{
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    GET_HOST_RETPC();
+    /*
+     * CSetFlags: Set Flags
+     */
+    if (!cap_is_unsealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    }
+    // FIXME: should we trap instead of masking?
+    cap_register_t result = *cbp;
+    flags &= CAP_FLAGS_ALL_BITS;
+    _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
+    result.cr_flags = flags;
+    update_capreg(env, cd, &result);
+}
