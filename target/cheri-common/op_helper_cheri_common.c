@@ -822,7 +822,6 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_capreg_0_is_ddc(env, ct);
     uint64_t cb_cursor = cap_get_cursor(cbp);
-    uint64_t ct_top = cap_get_top(ctp);
     /*
      * CToPtr: Capability to Pointer
      */
