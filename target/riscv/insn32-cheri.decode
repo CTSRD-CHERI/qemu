@@ -107,26 +107,19 @@ lwddc       1111101  00010 ..... 000 ..... 1011011 @r2
 # 00011 is ldddc for RV64/lcddc for RV32
 lbuddc      1111101  00100 ..... 000 ..... 1011011 @r2
 lhuddc      1111101  00101 ..... 000 ..... 1011011 @r2
-lwuddc      1111101  00110 ..... 000 ..... 1011011 @r2  # RV64-only
-#  lduddc   1111101  00111 ..... 000 ..... 1011011 @r2  # RV128-only
+# 00110 is lwuddc for RV64
+# 00111 would be ldudd for RV128
 # 10111 is capability load for RV64
-
-# mapping clause encdec = CLoadCapDDC(rd, rs)             if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111101 @ 0b10111 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64)  /* lqddc */
-# mapping clause encdec = CLoadCapDDC(rd, rs)             if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111101 @ 0b00011 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32)  /* ldddc */
-#
 
 lbcap       1111101  01000 ..... 000 ..... 1011011 @r2
 lhcap       1111101  01001 ..... 000 ..... 1011011 @r2
 lwcap       1111101  01010 ..... 000 ..... 1011011 @r2
-ldcap       1111101  01011 ..... 000 ..... 1011011 @r2  # RV64-only
+# 01011 is ldcap for RV64/lccap for RV32
 lbucap      1111101  01100 ..... 000 ..... 1011011 @r2
 lhucap      1111101  01101 ..... 000 ..... 1011011 @r2
-lwucap      1111101  01110 ..... 000 ..... 1011011 @r2  # RV64-only
-#  lducap   1111101  01111 ..... 000 ..... 1011011 @r2  # RV128-only
-
-# mapping clause encdec = CLoadCapCap(rd, cs)             if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111101 @ 0b11111 @ cs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64)  /* lqcap */
-# mapping clause encdec = CLoadCapCap(rd, cs)             if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111101 @ 0b01011 @ cs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32)  /* ldcap */
-#
+# 01110 is lwucap for RV64
+# 01111 would be lducap for RV128
+# 11111 is lccap for RV64
 
 ### Stores
 sbddc       1111100  ..... ..... 000 00000 1011011 @r_2source

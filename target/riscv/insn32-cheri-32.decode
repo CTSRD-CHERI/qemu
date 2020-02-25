@@ -35,3 +35,4 @@
 # This file defines the RV32-specific encoding
 
 lcddc       1111101  00011 ..... 000 ..... 1011011 @r2  # This is ldddc (8-byte load) for RV64
+lccap       1111101  01011 ..... 000 ..... 1011011 @r2  # This is ldcap (8-byte load) for RV64

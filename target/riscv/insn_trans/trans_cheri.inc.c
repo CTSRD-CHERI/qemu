@@ -277,6 +277,11 @@ static inline bool trans_lcddc(DisasContext *ctx, arg_lcddc *a)
     return gen_cheri_cap_cap_int(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, &gen_helper_load_cap_via_cap);
 }
 
+static inline bool trans_lccap(DisasContext *ctx, arg_lcddc *a)
+{
+    // No immediate available for lccap
+    return gen_cheri_cap_cap_imm(a->rd, a->rs1, 0, &gen_helper_load_cap_via_cap);
+}
 
 /* Load Via Capability Register */
 static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,

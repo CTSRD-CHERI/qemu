@@ -35,4 +35,9 @@
 # This file defines the RV64-specific encoding
 
 ldddc       1111101  00011 ..... 000 ..... 1011011 @r2  # This is lcddc (capability load) for RV32
+lwuddc      1111101  00110 ..... 000 ..... 1011011 @r2  # RV64-only
 lcddc       1111101  10111 ..... 000 ..... 1011011 @r2  # Would be lqddc for RV128
+
+lwucap      1111101  01110 ..... 000 ..... 1011011 @r2  # RV64-only
+ldcap       1111101  01011 ..... 000 ..... 1011011 @r2  # RV64-only
+lccap       1111101  11111 ..... 000 ..... 1011011 @r2  # Would be lqcap for RV128
