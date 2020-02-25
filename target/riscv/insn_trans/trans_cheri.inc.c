@@ -271,6 +271,13 @@ TRANSLATE_DDC_LOAD(lhuddc, MO_UW)
 TRANSLATE_DDC_LOAD(lwuddc, MO_UL)
 #endif
 
+static inline bool trans_lcddc(DisasContext *ctx, arg_lcddc *a)
+{
+    // always uses DDC as the base register
+    return gen_cheri_cap_cap_int(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, &gen_helper_load_cap_via_cap);
+}
+
+
 /* Load Via Capability Register */
 static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
                                 target_long offset, MemOp op)

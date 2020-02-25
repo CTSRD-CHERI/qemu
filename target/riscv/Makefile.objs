@@ -12,6 +12,10 @@ decode32-y = $(SRC_PATH)/target/riscv/insn32.decode
 decode32-$(TARGET_RISCV64) += $(SRC_PATH)/target/riscv/insn32-64.decode
 # TODO: separate TARGET_CHERI variant
 decode32-$(TARGET_CHERI) += $(SRC_PATH)/target/riscv/insn32-cheri.decode
+ifeq ($(TARGET_CHERI),y)
+decode32-$(TARGET_RISCV32) += $(SRC_PATH)/target/riscv/insn32-cheri-32.decode
+decode32-$(TARGET_RISCV64) += $(SRC_PATH)/target/riscv/insn32-cheri-64.decode
+endif
 
 decode16-y = $(SRC_PATH)/target/riscv/insn16.decode
 decode16-$(TARGET_RISCV32) += $(SRC_PATH)/target/riscv/insn16-32.decode
