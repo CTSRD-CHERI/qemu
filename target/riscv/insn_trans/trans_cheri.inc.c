@@ -399,5 +399,5 @@ static inline bool trans_sccap(DisasContext *ctx, arg_sccap *a)
 {
     // No immediate available for sccap
     INSN_CAN_TRAP(ctx);
-    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0, &gen_helper_load_cap_via_cap);
+    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0, &gen_helper_store_cap_via_cap);
 }
