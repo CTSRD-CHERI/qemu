@@ -244,13 +244,14 @@ static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
 static bool gen_ddc_load(DisasContext *ctx, int rd, int rs1, MemOp memop)
 {
     INSN_CAN_TRAP(ctx);
-    TCGv t0 = tcg_temp_new();
-    TCGv t1 = tcg_temp_new();
-    gen_get_gpr(t0, rs1);
-    tcg_gen_qemu_ld_ddc_tl(t1, /* Update t0 in-place */ NULL, t0, ctx->mem_idx, memop);
-    gen_set_gpr(rd, t1);
-    tcg_temp_free(t0);
-    tcg_temp_free(t1);
+    TCGv addr = tcg_temp_new();
+    TCGv value = tcg_temp_new();
+    gen_get_gpr(addr, rs1);
+    tcg_gen_qemu_ld_ddc_tl(value, /* Update addr in-place */ NULL, addr,
+                           ctx->mem_idx, memop);
+    gen_set_gpr(rd, value);
+    tcg_temp_free(addr);
+    tcg_temp_free(value);
     return true;
 }
 #define TRANSLATE_DDC_LOAD(name, op)                                           \
@@ -268,4 +269,31 @@ TRANSLATE_DDC_LOAD(lbuddc, MO_UB)
 TRANSLATE_DDC_LOAD(lhuddc, MO_UW)
 #ifdef TARGET_RISCV64
 TRANSLATE_DDC_LOAD(lwuddc, MO_UL)
+#endif
+
+// Stores
+static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
+{
+    INSN_CAN_TRAP(ctx);
+    TCGv addr = tcg_temp_new();
+    TCGv value = tcg_temp_new();
+    gen_get_gpr(addr, rs1);
+    gen_get_gpr(value, rs2);
+    tcg_gen_qemu_st_ddc_tl(value, /* Update addr in-place */ NULL, addr,
+                           ctx->mem_idx, memop);
+    tcg_temp_free(value);
+    tcg_temp_free(addr);
+    return true;
+}
+#define TRANSLATE_DDC_STORE(name, op)                                          \
+    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+    {                                                                          \
+        return gen_ddc_store(ctx, a->rs1, a->rs2, op);                         \
+    }
+
+TRANSLATE_DDC_STORE(sbddc, MO_SB)
+TRANSLATE_DDC_STORE(shddc, MO_SW)
+TRANSLATE_DDC_STORE(swddc, MO_SL)
+#ifdef TARGET_RISCV64
+TRANSLATE_DDC_STORE(sdddc, MO_Q)
 #endif

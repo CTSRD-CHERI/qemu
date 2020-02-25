@@ -82,6 +82,11 @@ cjalr       1111111  01100 ..... 000 ..... 1011011 @r2
 cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 # TODO: mapping clause encdec = ClearRegs(FPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b10000 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
 
+
+
+# There is an existing @sfence_vma format with rs1+rs2 fields, but let's define a new name
+@r_2source ....... ..... .....   ... ..... ....... %rs2 %rs1
+
 ### Two operands (source1 and source2)
 # TODO: mapping clause encdec = CCall(cs, cb)           if (haveXcheri()) <-> 0b1111110 @ cb @ cs @ 0b000 @ 0b00001 @ 0b1011011 if (haveXcheri())
 
@@ -94,8 +99,8 @@ cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 cincoffsetimm ............     ..... 001 ..... 1011011 @i
 csetboundsimm ............     ..... 010 ..... 1011011 @i_unsigned
 
-#
-# /* Loads and stores */
+#### Loads
+
 lbddc       1111101  00000 ..... 000 ..... 1011011 @r2
 lhddc       1111101  00001 ..... 000 ..... 1011011 @r2
 lwddc       1111101  00010 ..... 000 ..... 1011011 @r2
@@ -119,10 +124,13 @@ lwuddc      1111101  00110 ..... 000 ..... 1011011 @r2  # RV64-only
 # mapping clause encdec = CLoadCapCap(rd, cs)             if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111101 @ 0b11111 @ cs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64)  /* lqcap */
 # mapping clause encdec = CLoadCapCap(rd, cs)             if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111101 @ 0b01011 @ cs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32)  /* ldcap */
 #
-# mapping clause encdec = CStoreDDC(rs2, rs1, BYTE)       if (haveXcheri()) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00000 @ 0b1011011 if (haveXcheri()) /* sbddc */
-# mapping clause encdec = CStoreDDC(rs2, rs1, HALF)       if (haveXcheri()) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00001 @ 0b1011011 if (haveXcheri()) /* shddc */
-# mapping clause encdec = CStoreDDC(rs2, rs1, WORD)       if (haveXcheri()) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00010 @ 0b1011011 if (haveXcheri()) /* swddc */
-# mapping clause encdec = CStoreDDC(rs2, rs1, DOUBLE)     if (haveXcheri() & haveRV64) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00011 @ 0b1011011 if (haveXcheri() & haveRV64) /* sdddc */
+
+### Stores
+sbddc       1111100  ..... ..... 000 00000 1011011 @r_2source
+shddc       1111100  ..... ..... 000 00001 1011011 @r_2source
+swddc       1111100  ..... ..... 000 00010 1011011 @r_2source
+sdddc       1111100  ..... ..... 000 00011 1011011 @r_2source  # RV64-only
+
 # mapping clause encdec = CStoreCapDDC(rs2, rs1)          if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00100 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64) /* sqddc */
 # mapping clause encdec = CStoreCapDDC(rs2, rs1)          if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00011 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32) /* sdddc */
 #
