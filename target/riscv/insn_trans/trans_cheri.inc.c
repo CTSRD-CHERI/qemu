@@ -274,12 +274,14 @@ TRANSLATE_DDC_LOAD(lwuddc, MO_UL)
 static inline bool trans_lcddc(DisasContext *ctx, arg_lcddc *a)
 {
     // always uses DDC as the base register
+    INSN_CAN_TRAP(ctx);
     return gen_cheri_cap_cap_int(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, &gen_helper_load_cap_via_cap);
 }
 
-static inline bool trans_lccap(DisasContext *ctx, arg_lcddc *a)
+static inline bool trans_lccap(DisasContext *ctx, arg_lccap *a)
 {
     // No immediate available for lccap
+    INSN_CAN_TRAP(ctx);
     return gen_cheri_cap_cap_imm(a->rd, a->rs1, 0, &gen_helper_load_cap_via_cap);
 }
 
@@ -288,6 +290,7 @@ static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
                                 target_long offset, MemOp op)
 {
     // FIXME: just do everything in the helper
+    INSN_CAN_TRAP(ctx);
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv toffset = tcg_const_tl(offset);
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
@@ -351,6 +354,7 @@ TRANSLATE_DDC_STORE(sdddc, MO_Q)
 static inline bool gen_cap_store(DisasContext *ctx, int32_t cs1, int32_t rs2,
                                  target_long offset, MemOp op)
 {
+    INSN_CAN_TRAP(ctx);
     // FIXME: just do everything in the helper
     TCGv_i32 tcs = tcg_const_i32(cs1);
     TCGv toffset = tcg_const_tl(offset);
@@ -381,3 +385,18 @@ TRANSLATE_CAP_STORE(swcap, MO_UL)
 #ifdef TARGET_RISCV64
 TRANSLATE_CAP_STORE(sdcap, MO_Q)
 #endif
+
+// RS2 is the value, RS1 is the capability/ddc offset
+static inline bool trans_scddc(DisasContext *ctx, arg_scddc *a)
+{
+    // always uses DDC as the base register
+    INSN_CAN_TRAP(ctx);
+    return gen_cheri_cap_cap_int(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, &gen_helper_load_cap_via_cap);
+}
+
+static inline bool trans_sccap(DisasContext *ctx, arg_sccap *a)
+{
+    // No immediate available for sccap
+    INSN_CAN_TRAP(ctx);
+    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0, &gen_helper_load_cap_via_cap);
+}

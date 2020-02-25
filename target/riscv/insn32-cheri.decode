@@ -125,19 +125,15 @@ lhucap      1111101  01101 ..... 000 ..... 1011011 @r2
 sbddc       1111100  ..... ..... 000 00000 1011011 @r_2source
 shddc       1111100  ..... ..... 000 00001 1011011 @r_2source
 swddc       1111100  ..... ..... 000 00010 1011011 @r_2source
-sdddc       1111100  ..... ..... 000 00011 1011011 @r_2source  # RV64-only
-
-# mapping clause encdec = CStoreCapDDC(rs2, rs1)          if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00100 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64) /* sqddc */
-# mapping clause encdec = CStoreCapDDC(rs2, rs1)          if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00011 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32) /* sdddc */
-#
+# 00011 is sdddc for RV64/scddc for RV32
+# 00100 is scddc for RV64
 
 sbcap       1111100  ..... ..... 000 01000 1011011 @r_2source
 shcap       1111100  ..... ..... 000 01001 1011011 @r_2source
 swcap       1111100  ..... ..... 000 01010 1011011 @r_2source
-sdcap       1111100  ..... ..... 000 01011 1011011 @r_2source  # RV64-only
+# 01011 is sdcap for RV64/scddc for RV32
+# 01100 is sccap for RV64
 
-# mapping clause encdec = CStoreCapCap(rs2, cs)           if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111100 @ rs2 @ cs  @ 0b000 @ 0b01100 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64) /* sqcap */
-# mapping clause encdec = CStoreCapCap(rs2, cs)           if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111100 @ rs2 @ cs  @ 0b000 @ 0b01011 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32) /* sdcap */
 #
 # mapping clause encdec = CLoadCapImm(cd, rs1, offset) if sizeof(xlen) == 64 <-> offset @ rs1 @ 0b010 @ cd @ 0b0001111 if sizeof(xlen) == 64 /* clc / lq */
 # mapping clause encdec = CLoadCapImm(cd, rs1, offset) if sizeof(xlen) == 32 <-> offset @ rs1 @ 0b011 @ cd @ 0b0000011 if sizeof(xlen) == 32 /* clc / ld */
