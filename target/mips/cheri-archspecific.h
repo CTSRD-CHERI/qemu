@@ -158,6 +158,81 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
     do_raise_c2_exception_impl(env, cause, regnum, hostpc);
 }
 
+static inline bool
+clear_tag_if_no_loadcap(bool tag, const cap_register_t* cbp, int prot) {
+    if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
+        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+            qemu_log("Clearing tag bit due to missing %s\n",
+                     prot & PAGE_LC_CLEAR ? "TLB_L" : "CAP_PERM_LOAD_CAP");
+        }
+        return 0;
+    }
+    return tag;
+}
+
+#ifdef CONFIG_MIPS_LOG_INSTR
+
+#define cvtrace_dump_cap_load(trace, addr, cr)          \
+    cvtrace_dump_cap_ldst(trace, CVT_LD_CAP, addr, cr)
+#define cvtrace_dump_cap_store(trace, addr, cr)         \
+    cvtrace_dump_cap_ldst(trace, CVT_ST_CAP, addr, cr)
+
+/*
+* Dump cap load or store to cvtrace
+*/
+static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
+                                         uint64_t addr, const cap_register_t *cr)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->version = version;
+        cvtrace->val1 = tswap64(addr);
+        cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
+            ((uint64_t)(cr->cr_otype & CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
+            ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+                (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
+            (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
+    }
+}
+/*
+ * Dump cap tag, otype, permissions and seal bit to cvtrace entry
+ */
+static inline void
+cvtrace_dump_cap_perms(cvtrace_t *cvtrace, const cap_register_t *cr)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
+            ((uint64_t)(cr->cr_otype & CAP_MAX_REPRESENTABLE_OTYPE)<< 32) |
+            ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
+                (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
+            (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
+    }
+}
+
+/*
+ * Dump capability cursor, base and length to cvtrace entry
+ */
+static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t *cr)
+{
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        cvtrace->val3 = tswap64(cr->_cr_cursor);
+        cvtrace->val4 = tswap64(cr->cr_base);
+        cvtrace->val5 = tswap64(cap_get_length64(cr)); // write UINT64_MAX for 1 << 64
+    }
+}
+#endif // CONFIG_MIPS_LOG_INSTR
+
+static inline void QEMU_NORETURN raise_unaligned_load_exception(
+    CPUArchState *env, target_ulong addr, uintptr_t retpc)
+{
+    do_raise_c0_exception_impl(env, EXCP_AdEL, addr, retpc);
+}
+
+static inline void QEMU_NORETURN raise_unaligned_store_exception(
+    CPUArchState *env, target_ulong addr, uintptr_t retpc)
+{
+    do_raise_c0_exception_impl(env, EXCP_AdES, addr, retpc);
+}
+
 static inline bool validate_cjalr_target(CPUMIPSState *env,
                                          const cap_register_t *target,
                                          unsigned regnum,

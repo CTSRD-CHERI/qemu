@@ -181,18 +181,6 @@ static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) 
     }
 }
 
-static inline target_ulong
-clear_tag_if_no_loadcap(target_ulong tag, const cap_register_t* cbp, int prot) {
-    if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
-        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-            qemu_log("Clearing tag bit due to missing %s\n",
-                     prot & PAGE_LC_CLEAR ? "TLB_L" : "CAP_PERM_LOAD_CAP");
-        }
-        return 0;
-    }
-    return tag;
-}
-
 target_ulong CHERI_HELPER_IMPL(cbez(CPUArchState *env, uint32_t cb, uint32_t offset))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
@@ -856,47 +844,6 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32
     return 0;
 }
 
-static inline target_ulong get_csc_addr(CPUArchState *env, uint32_t cs, uint32_t cb,
-        target_ulong rt, uint32_t offset, uintptr_t _host_return_address)
-{
-    // CSC traps on cbp == NULL so we use reg0 as $ddc to save encoding
-    // space and increase code density since storing relative to $ddc is common
-    // in the hybrid ABI (and also for backwards compat with old binaries).
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-        return (target_ulong)0;
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-        return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
-        return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
-        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
-        return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
-               get_capreg_tag(env, cs) &&
-               !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL)) {
-        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
-        return (target_ulong)0;
-    } else {
-        uint64_t cursor = cap_get_cursor(cbp);
-        uint64_t addr = (uint64_t)((int64_t)(cursor + rt) + (int32_t)offset);
-
-        if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-            raise_cheri_exception(env, CapEx_LengthViolation, cb);
-            return (target_ulong)0;
-        } else if (align_of(CHERI_CAP_SIZE, addr)) {
-            do_raise_c0_exception(env, EXCP_AdES, addr);
-            return (target_ulong)0;
-        }
-
-        return (target_ulong)addr;
-    }
-}
-
 static inline target_ulong get_cscc_addr(CPUArchState *env, uint32_t cs, uint32_t cb, uintptr_t _host_return_address)
 {
     // CSCC traps on cbp == NULL so we use reg0 as $ddc to save encoding
@@ -933,8 +880,8 @@ static inline target_ulong get_cscc_addr(CPUArchState *env, uint32_t cs, uint32_
     return (target_ulong)addr;
 }
 
-static void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr, target_ulong retpc);
-static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr, target_ulong retpc);
+void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  const cap_register_t *source,
                                  target_ulong offset, target_ulong retpc,
                                  hwaddr *physaddr);
@@ -952,42 +899,6 @@ target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, 
         return 0;
     store_cap_to_memory(env, cs, vaddr, retpc);
     return 1;
-}
-
-void CHERI_HELPER_IMPL(csc_without_tcg(CPUArchState *env, uint32_t cs, uint32_t cb,
-        target_ulong rt, uint32_t offset))
-{
-    target_ulong retpc = GETPC();
-    target_ulong vaddr = get_csc_addr(env, cs, cb, rt, offset, retpc);
-    // helper_csc_addr should check for alignment
-    cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
-    store_cap_to_memory(env, cs, vaddr, retpc);
-}
-
-void CHERI_HELPER_IMPL(clc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t cb,
-        target_ulong rt, uint32_t offset))
-{
-    target_ulong _host_return_address = GETPC();
-    // CLC traps on cbp == NULL so we use reg0 as $ddc to save encoding
-    // space and increase code density since loading relative to $ddc is common
-    // in the hybrid ABI (and also for backwards compat with old binaries).
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    }
-    uint64_t addr = (uint64_t)((cap_get_cursor(cbp) + rt) + (int32_t)offset);
-    /* uint32_t tag = cheri_tag_get(env, addr, cd, NULL); */
-    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (align_of(CHERI_CAP_SIZE, addr)) {
-        do_raise_c0_exception(env, EXCP_AdEL, addr);
-    }
-    load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address, /*physaddr_out=*/NULL);
 }
 
 void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t cb))
@@ -1024,32 +935,6 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
 }
 
 #ifdef CONFIG_MIPS_LOG_INSTR
-/*
- * Dump cap tag, otype, permissions and seal bit to cvtrace entry
- */
-static inline void
-cvtrace_dump_cap_perms(cvtrace_t *cvtrace, const cap_register_t *cr)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
-            ((uint64_t)(cr->cr_otype & CAP_MAX_REPRESENTABLE_OTYPE)<< 32) |
-            ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-              (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
-            (uint64_t)(is_cap_sealed(cr) ? 1 : 0));
-    }
-}
-
-/*
- * Dump capability cursor, base and length to cvtrace entry
- */
-static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t *cr)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val3 = tswap64(cr->_cr_cursor);
-        cvtrace->val4 = tswap64(cr->cr_base);
-        cvtrace->val5 = tswap64(cap_get_length64(cr)); // write UINT64_MAX for 1 << 64
-    }
-}
 
 void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
         cap_register_t *old_reg, const char* name)
@@ -1102,181 +987,9 @@ void dump_changed_cop2(CPUArchState *env, TCState *cur) {
     }
 }
 
-/*
- * Dump cap load or store to cvtrace
- */
-static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
-        uint64_t addr, const cap_register_t *cr)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->version = version;
-        cvtrace->val1 = tswap64(addr);
-        cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
-            ((uint64_t)(cr->cr_otype & CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
-            ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-              (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
-            (uint64_t)(is_cap_sealed(cr) ? 1 : 0));
-    }
-}
-#define cvtrace_dump_cap_load(trace, addr, cr)          \
-    cvtrace_dump_cap_ldst(trace, CVT_LD_CAP, addr, cr)
-#define cvtrace_dump_cap_store(trace, addr, cr)         \
-    cvtrace_dump_cap_ldst(trace, CVT_ST_CAP, addr, cr)
-
 #endif // CONFIG_MIPS_LOG_INSTR
 
 #ifdef CHERI_128
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-/*
- * Print capability load from memory to log file.
- */
-static inline void dump_cap_load(uint64_t addr, uint64_t pesbt,
-        uint64_t cursor, uint8_t tag)
-{
-
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        qemu_log("    Cap Memory Read [" TARGET_FMT_lx
-                "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
-                addr, tag, pesbt, cursor);
-    }
-}
-
-/*
- * Print capability store to memory to log file.
- */
-static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
-        uint64_t cursor, uint8_t tag)
-{
-
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        qemu_log("    Cap Memory Write [" TARGET_FMT_lx
-                "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
-                addr, tag, pesbt, cursor);
-    }
-}
-#endif // CONFIG_MIPS_LOG_INSTR
-
-static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
-                                 const cap_register_t *source,
-                                 target_ulong vaddr, target_ulong retpc,
-                                 hwaddr *physaddr)
-{
-    cheri_debug_assert(align_of(CHERI_CAP_SIZE, vaddr) == 0);
-    /*
-     * Load otype and perms from memory (might trap on load)
-     *
-     * Note: In-memory capabilities pesbt is xored with a mask to ensure that
-     * NULL capabilities have an all zeroes representation.
-     */
-    /* No TLB fault possible, should be safe to get a host pointer now */
-    void* host = probe_read(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
-    // When writing back pesbt we have to XOR with the NULL mask to ensure that
-    // NULL capabilities have an all-zeroes representation.
-    uint64_t pesbt;
-    uint64_t cursor;
-    if (likely(host)) {
-        // Fast path, host address in TLB
-        pesbt = ldq_p(host) ^ CC128_NULL_XOR_MASK;
-        cursor = ldq_p((char*)host + 8);
-#ifdef CONFIG_MIPS_LOG_INSTR
-        // cpu_ldq_data_ra() performs the read logging, with raw memory
-        // accesses we have to do it manually
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-            helper_dump_load(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
-            helper_dump_load(env, vaddr + 8, cursor, MO_64);
-        }
-#endif
-    } else {
-        // Slow path for e.g. IO regions.
-        qemu_log_mask(CPU_LOG_INSTR, "Using slow path for load from guest address " TARGET_FMT_plx "\n", vaddr);
-        pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc) ^ CC128_NULL_XOR_MASK;
-        cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
-    }
-    int prot;
-    target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
-    // TODO: qemu_ram_addr_from_host()
-    tag = clear_tag_if_no_loadcap(tag, source, prot);
-
-    env->statcounters_cap_read++;
-    if (tag)
-        env->statcounters_cap_read_tagged++;
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory read, if needed. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        // Decompress to log all fields
-        cap_register_t ncd;
-        decompress_128cap_already_xored(pesbt, cursor, &ncd);
-        ncd.cr_tag = tag;
-        dump_cap_load(vaddr, compress_128cap(&ncd), cursor, tag);
-        cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
-        cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
-    }
-#endif
-    update_compressed_capreg(env, cd, pesbt, tag, cursor);
-}
-
-static void store_cap_to_memory(CPUArchState *env, uint32_t cs,
-    target_ulong vaddr, target_ulong retpc)
-{
-    uint64_t cursor = get_capreg_cursor(env, cs);
-    uint64_t pesbt = get_capreg_pesbt(env, cs);
-    bool tag = get_capreg_tag(env, cs);
-    /*
-     * Touching the tags will take both the data write TLB fault and
-     * capability write TLB fault before updating anything.  Thereafter, the
-     * data stores will not take additional faults, so there is no risk of
-     * accidentally tagging a shorn data write.  This, like the rest of the
-     * tag logic, is not multi-TCG-thread safe.
-     */
-
-    env->statcounters_cap_write++;
-    // TODO: qemu_ram_addr_from_host()
-    if (tag) {
-        env->statcounters_cap_write_tagged++;
-        cheri_tag_set(env, vaddr, cs, retpc);
-    } else {
-        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
-    }
-    /* No TLB fault possible, should be safe to get a host pointer now */
-    void* host = probe_write(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
-    // When writing back pesbt we have to XOR with the NULL mask to ensure that
-    // NULL capabilities have an all-zeroes representation.
-    if (likely(host)) {
-        // Fast path, host address in TLB
-        stq_p(host, pesbt ^ CC128_NULL_XOR_MASK);
-        stq_p((char*)host + 8, cursor);
-#ifdef CONFIG_MIPS_LOG_INSTR
-        // cpu_stq_data_ra() performs the write logging, with raw memory
-        // accesses we have to do it manually
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-            helper_dump_store(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
-            helper_dump_store(env, vaddr + 8, cursor, MO_64);
-        }
-#endif
-    } else {
-        // Slow path for e.g. IO regions.
-        qemu_log_mask(CPU_LOG_INSTR, "Using slow path for store to guest address " TARGET_FMT_plx "\n", vaddr);
-        cpu_stq_data_ra(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, retpc);
-        cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
-    }
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Log memory cap write, if needed. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        /* Log memory cap write, if needed. */
-        // Decompress to log all fields
-        cap_register_t stored_cap;
-        decompress_128cap_already_xored(pesbt, cursor, &stored_cap);
-        stored_cap.cr_tag = tag;
-        cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
-        dump_cap_store(vaddr, pesbt, cursor, tag);
-        cvtrace_dump_cap_store(&env->cvtrace, vaddr, &stored_cap);
-        cvtrace_dump_cap_cbl(&env->cvtrace, &stored_cap);
-    }
-#endif
-}
-
 #elif defined(CHERI_MAGIC128)
 #ifdef CONFIG_MIPS_LOG_INSTR
 /*
@@ -1306,7 +1019,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  const cap_register_t *source,
                                  target_ulong vaddr, target_ulong retpc,
                                  hwaddr *physaddr)
@@ -1345,7 +1058,7 @@ static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     update_capreg(env, cd, &ncd);
 }
 
-static void store_cap_to_memory(CPUArchState *env, uint32_t cs,
+void store_cap_to_memory(CPUArchState *env, uint32_t cs,
                                 target_ulong vaddr, target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
@@ -1445,7 +1158,7 @@ static inline void dump_cap_store_length(uint64_t length)
 
 #endif // CONFIG_MIPS_LOG_INSTR
 
-static void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  const cap_register_t *source,
                                  target_ulong vaddr, target_ulong retpc,
                                  hwaddr *physaddr)
@@ -1508,7 +1221,7 @@ static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-static void store_cap_to_memory(CPUArchState *env, uint32_t cs,
+void store_cap_to_memory(CPUArchState *env, uint32_t cs,
                                 target_ulong vaddr, target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);

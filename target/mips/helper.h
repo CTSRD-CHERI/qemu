@@ -250,8 +250,6 @@ DEF_HELPER_3(cloadlinked, cap_checked_ptr, env, i32, i32)
 DEF_HELPER_3(cstorecond, cap_checked_ptr, env, i32, i32)
 
 DEF_HELPER_3(cscc_without_tcg, tl, env, i32, i32)
-DEF_HELPER_5(csc_without_tcg, void, env, i32, i32, tl, i32)
-DEF_HELPER_5(clc_without_tcg, void, env, i32, i32, tl, i32)
 DEF_HELPER_3(cllc_without_tcg, void, env, i32, i32)
 #endif
 

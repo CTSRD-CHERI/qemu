@@ -839,6 +839,29 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
 }
 
 /// Loads and stores
+
+static inline const cap_register_t *get_load_store_base_cap(CPUArchState *env,
+                                                            uint32_t cb)
+{
+#ifdef TARGET_MIPS
+    // CLC/CSC and the integer variants trap on cbp == NULL so we use reg0 as
+    // $ddc to save encoding space and increase code density since loading
+    // relative to $ddc is common in the hybrid ABI (and also for backwards
+    // compat with old binaries).
+    return get_capreg_0_is_ddc(env, cb);
+#elif defined(TARGET_RISCV)
+    // However, RISCV does not use this encoding and uses zero for the
+    // null register (i.e. always trap).
+    // The helpers can also be invoked from the explicitly DDC-relative
+    // instructions with cb == 33 which means DDC:
+    return (cb == CHERI_EXC_REGNUM_DDC) ? cheri_get_ddc(env)
+                                        : get_readonly_capreg(env, cb);
+#else
+#error "Wrong arch?"
+#endif
+}
+
+
 /*
  * Load Via Capability Register
  */
@@ -846,10 +869,7 @@ target_ulong CHERI_HELPER_IMPL(cload_check(CPUArchState *env, uint32_t cb,
                                            target_ulong offset, uint32_t size))
 {
     GET_HOST_RETPC();
-    // CL[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
-    // space and increase code density since loading relative to $ddc is common
-    // in the hybrid ABI (and also for backwards compat with old binaries).
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -861,6 +881,11 @@ target_ulong CHERI_HELPER_IMPL(cload_check(CPUArchState *env, uint32_t cb,
     const target_ulong cursor = cap_get_cursor(cbp);
     const target_ulong addr = cursor + (target_long)offset;
     if (!cap_is_in_bounds(cbp, addr, size)) {
+        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
+                      "Failed capability bounds check:"
+                      "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+                      " addr=" TARGET_FMT_plx "\n",
+                      offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     }
 #ifdef TARGET_MIPS
@@ -887,10 +912,7 @@ target_ulong CHERI_HELPER_IMPL(cstore_check(CPUArchState *env, uint32_t cb,
                                             target_ulong offset, uint32_t size))
 {
     GET_HOST_RETPC();
-    // CS[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
-    // space and increase code density since storing relative to $ddc is common
-    // in the hybrid ABI (and also for backwards compat with old binaries).
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
@@ -903,6 +925,11 @@ target_ulong CHERI_HELPER_IMPL(cstore_check(CPUArchState *env, uint32_t cb,
     const uint64_t addr = cursor + (target_long)offset;
 
     if (!cap_is_in_bounds(cbp, addr, size)) {
+        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
+                      "Failed capability bounds check:"
+                      "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+                      " addr=" TARGET_FMT_plx "\n",
+                      offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     }
 
@@ -924,3 +951,232 @@ target_ulong CHERI_HELPER_IMPL(cstore_check(CPUArchState *env, uint32_t cb,
     // cheri_tag_invalidate(env, addr, size);
     return addr;
 }
+
+/// Capability loads and stores
+extern void store_cap_to_memory(CPUArchState *env, uint32_t cs,
+                                target_ulong vaddr, target_ulong retpc);
+extern void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+                                 const cap_register_t *source,
+                                 target_ulong offset, target_ulong retpc,
+                                 hwaddr *physaddr);
+
+void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
+                                        uint32_t cb, target_ulong offset))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
+
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
+    }
+
+    uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
+    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
+        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
+                      "Failed capability bounds check:"
+                      "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+                      " addr=" TARGET_FMT_plx "\n",
+                      offset, cap_get_cursor(cbp), addr);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
+        raise_unaligned_load_exception(env, addr, _host_return_address);
+    }
+    load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address,
+                         /*physaddr_out=*/NULL);
+}
+
+void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
+                                         uint32_t cb, target_ulong offset))
+{
+    GET_HOST_RETPC();
+    // CSC traps on cbp == NULL so we use reg0 as $ddc to save encoding
+    // space and increase code density since storing relative to $ddc is common
+    // in the hybrid ABI (and also for backwards compat with old binaries).
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
+
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
+        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
+        get_capreg_tag(env, cs) &&
+        !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL)) {
+        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
+    }
+
+    const uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
+    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
+        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
+                      "Failed capability bounds check:"
+                      "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+                      " addr=" TARGET_FMT_plx "\n",
+                      offset, cap_get_cursor(cbp), addr);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
+        raise_unaligned_store_exception(env, addr, _host_return_address);
+    }
+    store_cap_to_memory(env, cs, addr, _host_return_address);
+}
+
+#if defined(CHERI_128) && QEMU_USE_COMPRESSED_CHERI_CAPS
+
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+/*
+ * Print capability load from memory to log file.
+ */
+static inline void dump_cap_load(uint64_t addr, uint64_t pesbt,
+                                 uint64_t cursor, uint8_t tag)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        qemu_log("    Cap Memory Read [" TARGET_FMT_lx
+                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
+                 addr, tag, pesbt, cursor);
+    }
+}
+
+/*
+ * Print capability store to memory to log file.
+ */
+static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
+                                  uint64_t cursor, uint8_t tag)
+{
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        qemu_log("    Cap Memory Write [" TARGET_FMT_lx
+                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
+                 addr, tag, pesbt, cursor);
+    }
+}
+#endif // CONFIG_MIPS_LOG_INSTR
+
+void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+                          const cap_register_t *source,
+                          target_ulong vaddr, target_ulong retpc,
+                          hwaddr *physaddr)
+{
+    cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
+    /*
+     * Load otype and perms from memory (might trap on load)
+     *
+     * Note: In-memory capabilities pesbt is xored with a mask to ensure that
+     * NULL capabilities have an all zeroes representation.
+     */
+    /* No TLB fault possible, should be safe to get a host pointer now */
+    void* host = probe_read(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
+    // When writing back pesbt we have to XOR with the NULL mask to ensure that
+    // NULL capabilities have an all-zeroes representation.
+    uint64_t pesbt;
+    uint64_t cursor;
+    if (likely(host)) {
+        // Fast path, host address in TLB
+        pesbt = ldq_p(host) ^ CC128_NULL_XOR_MASK;
+        cursor = ldq_p((char*)host + 8);
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+        // cpu_ldq_data_ra() performs the read logging, with raw memory
+        // accesses we have to do it manually
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+            helper_dump_load(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_load(env, vaddr + 8, cursor, MO_64);
+        }
+#endif
+    } else {
+        // Slow path for e.g. IO regions.
+        qemu_log_mask(CPU_LOG_INSTR, "Using slow path for load from guest address " TARGET_FMT_plx "\n", vaddr);
+        pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc) ^ CC128_NULL_XOR_MASK;
+        cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
+    }
+    int prot;
+    target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
+    tag = clear_tag_if_no_loadcap(tag, source, prot);
+
+    env->statcounters_cap_read++;
+    if (tag)
+        env->statcounters_cap_read_tagged++;
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+    /* Log memory read, if needed. */
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+        // Decompress to log all fields
+        cap_register_t ncd;
+        decompress_128cap_already_xored(pesbt, cursor, &ncd);
+        ncd.cr_tag = tag;
+        dump_cap_load(vaddr, compress_128cap(&ncd), cursor, tag);
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+            cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
+            cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
+        }
+    }
+#endif
+    update_compressed_capreg(env, cd, pesbt, tag, cursor);
+}
+
+void store_cap_to_memory(CPUArchState *env, uint32_t cs,
+                         target_ulong vaddr, target_ulong retpc)
+{
+    uint64_t cursor = get_capreg_cursor(env, cs);
+    uint64_t pesbt = get_capreg_pesbt(env, cs);
+    bool tag = get_capreg_tag(env, cs);
+    /*
+     * Touching the tags will take both the data write TLB fault and
+     * capability write TLB fault before updating anything.  Thereafter, the
+     * data stores will not take additional faults, so there is no risk of
+     * accidentally tagging a shorn data write.  This, like the rest of the
+     * tag logic, is not multi-TCG-thread safe.
+     */
+
+    env->statcounters_cap_write++;
+    if (tag) {
+        env->statcounters_cap_write_tagged++;
+        cheri_tag_set(env, vaddr, cs, retpc);
+    } else {
+        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
+    }
+    /* No TLB fault possible, should be safe to get a host pointer now */
+    void* host = probe_write(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
+    // When writing back pesbt we have to XOR with the NULL mask to ensure that
+    // NULL capabilities have an all-zeroes representation.
+    if (likely(host)) {
+        // Fast path, host address in TLB
+        stq_p(host, pesbt ^ CC128_NULL_XOR_MASK);
+        stq_p((char*)host + 8, cursor);
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+        // cpu_stq_data_ra() performs the write logging, with raw memory
+        // accesses we have to do it manually
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+            helper_dump_store(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_store(env, vaddr + 8, cursor, MO_64);
+        }
+#endif
+    } else {
+        // Slow path for e.g. IO regions.
+        qemu_log_mask(CPU_LOG_INSTR, "Using slow path for store to guest address " TARGET_FMT_plx "\n", vaddr);
+        cpu_stq_data_ra(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, retpc);
+        cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
+    }
+
+#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+    /* Log memory cap write, if needed. */
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+        /* Log memory cap write, if needed. */
+        // Decompress to log all fields
+        cap_register_t stored_cap;
+        decompress_128cap_already_xored(pesbt, cursor, &stored_cap);
+        stored_cap.cr_tag = tag;
+        cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
+        dump_cap_store(vaddr, pesbt, cursor, tag);
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+            cvtrace_dump_cap_store(&env->cvtrace, vaddr, &stored_cap);
+            cvtrace_dump_cap_cbl(&env->cvtrace, &stored_cap);
+        }
+    }
+#endif
+}
+#endif

@@ -960,12 +960,11 @@ static inline void generate_clc(DisasContext *ctx, int32_t cd, int32_t cb,
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
-    TCGv t0 = tcg_temp_new();
-    gen_load_gpr(t0, rt);
-    gen_helper_clc_without_tcg(cpu_env, tcd, tcb, t0, toffset);
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(toffset);
+    TCGv toffset = tcg_temp_new();
+    gen_load_gpr(toffset, rt);
+    tcg_gen_addi_tl(toffset, toffset, clc_sign_extend(offset, big_imm) * 16);
+    gen_helper_load_cap_via_cap(cpu_env, tcd, tcb, toffset);
+    tcg_temp_free(toffset);
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tcd);
 }
@@ -984,14 +983,11 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
 {
     TCGv_i32 tcs = tcg_const_i32(cs);
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(clc_sign_extend(offset, big_imm) * 16);
-    /* Check the cap registers and compute the address. */
-    TCGv t0 = tcg_temp_new();
-    gen_load_gpr(t0, rt);
-    gen_helper_csc_without_tcg(cpu_env, tcs, tcb, t0, toffset);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(toffset);
+    TCGv toffset = tcg_temp_new();
+    gen_load_gpr(toffset, rt);
+    tcg_gen_addi_tl(toffset, toffset, clc_sign_extend(offset, big_imm) * 16);
+    gen_helper_store_cap_via_cap(cpu_env, tcs, tcb, toffset);
+    tcg_temp_free(toffset);
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tcs);
 }

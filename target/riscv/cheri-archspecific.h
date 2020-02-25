@@ -34,10 +34,6 @@
 
 #include "cheri_defs.h"
 
-#define CHERI_EXC_REGNUM_DDC 32
-#define CHERI_EXC_REGNUM_PCC 0xff
-
-
 typedef enum CheriCapExc {
     CapEx_None                          = 0x0,
     CapEx_LengthViolation               = 0x1,
@@ -86,6 +82,9 @@ enum CheriSCR {
     CheriSCR_MEPCC = 31,
 };
 
+#define CHERI_EXC_REGNUM_PCC (32 + CheriSCR_PCC)
+#define CHERI_EXC_REGNUM_DDC (32 + CheriSCR_DDC)
+
 
 static inline void check_cap(CPURISCVState *env, const cap_register_t *cr,
                              uint32_t perm, uint64_t addr, uint16_t regnum,
@@ -115,6 +114,28 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
 static inline unsigned cheri_get_asid(CPUArchState *env) {
     uint16_t ASID = 0; // TODO: implement?
     return ASID;
+}
+
+static inline bool
+clear_tag_if_no_loadcap(bool tag, const cap_register_t* cbp, int prot) {
+    // TODO: implement load-inhibit tlb flags
+    return tag;
+}
+
+static inline void QEMU_NORETURN raise_unaligned_load_exception(
+    CPUArchState *env, target_ulong addr, uintptr_t retpc)
+{
+    env->badaddr = addr;
+    riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, retpc);
+}
+
+static inline void QEMU_NORETURN raise_unaligned_store_exception(
+    CPUArchState *env, target_ulong addr, uintptr_t retpc)
+{
+    env->badaddr = addr;
+    // Note: RISCV_EXCP_STORE_AMO_ADDR_MIS means "Store/AMO address misaligned"
+    riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ADDR_MIS, retpc);
+
 }
 
 static inline bool validate_cjalr_target(CPUArchState *env,
