@@ -172,6 +172,8 @@ TRANSLATE_CAP_CAP_CAP(ccopytype)
 TRANSLATE_CAP_CAP_CAP(ccseal)
 TRANSLATE_CAP_CAP_CAP(cseal)
 TRANSLATE_CAP_CAP_CAP(cunseal)
+// Not quite (cap cap cap) but the index argument can be handled the same way
+TRANSLATE_CAP_CAP_CAP(cspecialrw)
 
 // Three operand (cap cap int)
 TRANSLATE_CAP_CAP_INT(candperm)

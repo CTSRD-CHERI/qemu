@@ -36,7 +36,7 @@
 
 ### Three operand instructions
 # 0000000 unused
-# TODO: mapping clause encdec = CSpecialRW(cd, cs, idx) if (haveXcheri()) <-> 0b0000001 @ idx @ cs @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
+cspecialrw  0000001  ..... ..... 000 ..... 1011011 @r
 # 0000010-0000111 unused
 csetbounds  0001000  ..... ..... 000 ..... 1011011 @r
 csetboundsexact 0001001  ..... ..... 000 ..... 1011011 @r

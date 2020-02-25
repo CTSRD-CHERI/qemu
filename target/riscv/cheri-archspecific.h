@@ -66,6 +66,27 @@ typedef enum CheriCapExc {
     CapEx_PermitSetCIDViolation         = 0x1C,
 } CheriCapExcCause;
 
+enum CheriSCR {
+    CheriSCR_PCC = 0,
+    CheriSCR_DDC = 1,
+
+    CheriSCR_UTCC = 4,
+    CheriSCR_UTDC = 5,
+    CheriSCR_UScratchC = 6,
+    CheriSCR_UEPCC = 7,
+
+    CheriSCR_STCC = 12,
+    CheriSCR_STDC = 13,
+    CheriSCR_SScratchC = 14,
+    CheriSCR_SEPCC = 15,
+
+    CheriSCR_MTCC = 28,
+    CheriSCR_MTDC = 29,
+    CheriSCR_MScratchC = 30,
+    CheriSCR_MEPCC = 31,
+};
+
+
 static inline void check_cap(CPURISCVState *env, const cap_register_t *cr,
                              uint32_t perm, uint64_t addr, uint16_t regnum,
                              uint32_t len, bool instavail, uintptr_t pc) {

@@ -68,6 +68,7 @@ DEF_HELPER_FLAGS_1(fclass_d, TCG_CALL_NO_RWG_SE, tl, i64)
 
 #ifdef TARGET_CHERI
 #include "cheri-helper-common.h"
+DEF_HELPER_4(cspecialrw, void, env, i32, i32, i32)
 #endif
 
 /* Special functions */

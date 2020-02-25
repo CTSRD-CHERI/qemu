@@ -1,5 +1,6 @@
 obj-y += translate.o op_helper.o cpu_helper.o cpu.o csr.o fpu_helper.o gdbstub.o
 obj-$(CONFIG_SOFTMMU) += pmp.o
+obj-$(TARGET_CHERI) += op_helper_cheri.o
 
 ifeq ($(CONFIG_SOFTMMU),y)
 obj-y += monitor.o
