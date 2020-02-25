@@ -63,6 +63,9 @@ typedef struct DisasContext {
        to reset this known value.  */
     int frm;
     bool ext_ifencei;
+#ifdef TARGET_CHERI
+    bool capmode;
+#endif
 } DisasContext;
 
 #ifdef TARGET_RISCV64
@@ -816,6 +819,9 @@ static void riscv_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
     ctx->pc_succ_insn = ctx->base.pc_first;
     ctx->mem_idx = ctx->base.tb->flags & TB_FLAGS_MMU_MASK;
     ctx->mstatus_fs = ctx->base.tb->flags & TB_FLAGS_MSTATUS_FS;
+#ifdef TARGET_CHERI
+    ctx->capmode = (ctx->base.tb->flags & TB_FLAGS_CAPMODE) != 0;
+#endif
     ctx->priv_ver = env->priv_ver;
     ctx->misa = env->misa;
     ctx->frm = -1;  /* unknown rounding mode */
