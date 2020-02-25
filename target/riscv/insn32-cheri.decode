@@ -78,7 +78,6 @@ cchecktype  1111111  01001 ..... 000 ..... 1011011 @r2
 cmove       1111111  01010 ..... 000 ..... 1011011 @r2
 ccleartag   1111111  01011 ..... 000 ..... 1011011 @r2
 cjalr       1111111  01100 ..... 000 ..... 1011011 @r2
-# TODO: mapping clause encdec = CJALR(cd, cb)      if (haveXcheri()) <-> 0b1111111 @ 0b01100 @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # TODO: mapping clause encdec = ClearRegs(GPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b01101 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
 cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 # TODO: mapping clause encdec = ClearRegs(FPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b10000 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
@@ -97,14 +96,15 @@ csetboundsimm ............     ..... 010 ..... 1011011 @i_unsigned
 
 #
 # /* Loads and stores */
-# mapping clause encdec = CLoadDDC(rd, rs, false, BYTE)   if (haveXcheri()) <-> 0b1111101 @ 0b00000 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri())  /* lbddc */
-# mapping clause encdec = CLoadDDC(rd, rs, false, HALF)   if (haveXcheri()) <-> 0b1111101 @ 0b00001 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri())  /* lhddc */
-# mapping clause encdec = CLoadDDC(rd, rs, false, WORD)   if (haveXcheri()) <-> 0b1111101 @ 0b00010 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri())  /* lwddc */
-# mapping clause encdec = CLoadDDC(rd, rs, false, DOUBLE) if (haveXcheri() & haveRV64) <-> 0b1111101 @ 0b00011 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & haveRV64) /* ldddc */
-# mapping clause encdec = CLoadDDC(rd, rs, true, BYTE)    if (haveXcheri()) <-> 0b1111101 @ 0b00100 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri())  /* lbuddc */
-# mapping clause encdec = CLoadDDC(rd, rs, true, HALF)    if (haveXcheri()) <-> 0b1111101 @ 0b00101 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri())  /* lhuddc */
-# mapping clause encdec = CLoadDDC(rd, rs, true, WORD)    if (haveXcheri() & haveRV64)  <-> 0b1111101 @ 0b00110 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & haveRV64)  /* lwuddc */
-# mapping clause encdec = CLoadDDC(rd, rs, true, DOUBLE)  if (haveXcheri() & haveRV128) <-> 0b1111101 @ 0b00111 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & haveRV128) /* lduddc */
+lbddc       1111101  00000 ..... 000 ..... 1011011 @r2
+lhddc       1111101  00001 ..... 000 ..... 1011011 @r2
+lwddc       1111101  00010 ..... 000 ..... 1011011 @r2
+ldddc       1111101  00011 ..... 000 ..... 1011011 @r2  # RV64-only
+lbuddc      1111101  00100 ..... 000 ..... 1011011 @r2
+lhuddc      1111101  00101 ..... 000 ..... 1011011 @r2
+lwuddc      1111101  00110 ..... 000 ..... 1011011 @r2  # RV64-only
+#  lduddc   1111101  00111 ..... 000 ..... 1011011 @r2  # RV128-only
+
 # mapping clause encdec = CLoadCapDDC(rd, rs)             if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111101 @ 0b10111 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64)  /* lqddc */
 # mapping clause encdec = CLoadCapDDC(rd, rs)             if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111101 @ 0b00011 @ rs @ 0b000 @ rd @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32)  /* ldddc */
 #

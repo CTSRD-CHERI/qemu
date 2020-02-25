@@ -239,3 +239,33 @@ static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
     ctx->base.is_jmp = DISAS_NORETURN;
     return true;
 }
+
+// Loads
+static bool gen_ddc_load(DisasContext *ctx, int rd, int rs1, MemOp memop)
+{
+    INSN_CAN_TRAP(ctx);
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+    gen_get_gpr(t0, rs1);
+    tcg_gen_qemu_ld_ddc_tl(t1, /* Update t0 in-place */ NULL, t0, ctx->mem_idx, memop);
+    gen_set_gpr(rd, t1);
+    tcg_temp_free(t0);
+    tcg_temp_free(t1);
+    return true;
+}
+#define TRANSLATE_DDC_LOAD(name, op)                                           \
+    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+    {                                                                          \
+        return gen_ddc_load(ctx, a->rd, a->rs1, op);                           \
+    }
+TRANSLATE_DDC_LOAD(lbddc, MO_SB)
+TRANSLATE_DDC_LOAD(lhddc, MO_SW)
+TRANSLATE_DDC_LOAD(lwddc, MO_SL)
+#ifdef TARGET_RISCV64
+TRANSLATE_DDC_LOAD(ldddc, MO_Q)
+#endif
+TRANSLATE_DDC_LOAD(lbuddc, MO_UB)
+TRANSLATE_DDC_LOAD(lhuddc, MO_UW)
+#ifdef TARGET_RISCV64
+TRANSLATE_DDC_LOAD(lwuddc, MO_UL)
+#endif
