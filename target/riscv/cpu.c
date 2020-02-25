@@ -383,7 +383,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             qemu_system_reset(SHUTDOWN_CAUSE_HOST_SIGNAL);
             cs->cflags_next_tb |= CF_NOCACHE;
             hwaddr system_ram_addr = cpu_get_phys_page_debug(cs, PC_ADDR(env));
-            hwaddr system_ram_size;
+            hwaddr system_ram_size = RVFI_DII_RAM_SIZE;
             void *ram_ptr = cpu_physical_memory_map(
                 system_ram_addr, &system_ram_size, /*is_write=*/true);
             assert(system_ram_size == RVFI_DII_RAM_SIZE);
