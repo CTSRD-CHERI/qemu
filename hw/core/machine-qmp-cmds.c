@@ -82,7 +82,7 @@ CpuInfoList *qmp_query_cpus(Error **errp)
         info->value->u.s390.cpu_state = env->cpu_state;
 #elif defined(TARGET_RISCV)
         info->value->arch = CPU_INFO_ARCH_RISCV;
-        info->value->u.riscv.pc = env->pc;
+        info->value->u.riscv.pc = PC_ADDR(env);
 #else
         info->value->arch = CPU_INFO_ARCH_OTHER;
 #endif

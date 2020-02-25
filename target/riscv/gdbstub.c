@@ -280,7 +280,7 @@ int riscv_cpu_gdb_read_register(CPUState *cs, uint8_t *mem_buf, int n)
     if (n < 32) {
         return gdb_get_regl(mem_buf, gpr_int_value(env, n));
     } else if (n == 32) {
-        return gdb_get_regl(mem_buf, env->pc);
+        return gdb_get_regl(mem_buf, GET_SPECIAL_REG(env, pc, PCC));
     }
     return 0;
 }
@@ -297,7 +297,7 @@ int riscv_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
         gpr_set_int_value(env, n, ldtul_p(mem_buf));
         return sizeof(target_ulong);
     } else if (n == 32) {
-        env->pc = ldtul_p(mem_buf);
+        SET_SPECIAL_REG(env, pc, PCC, ldtul_p(mem_buf));
         return sizeof(target_ulong);
     }
     return 0;

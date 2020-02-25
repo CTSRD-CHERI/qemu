@@ -572,7 +572,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         }
     }
 
-    trace_riscv_trap(env->mhartid, async, cause, env->pc, tval, cause < 16 ?
+    trace_riscv_trap(env->mhartid, async, cause, PC_ADDR(env), tval, cause < 16 ?
         (async ? riscv_intr_names : riscv_excp_names)[cause] : "(unknown)");
 
     if (env->priv <= PRV_S &&
@@ -585,11 +585,18 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         s = set_field(s, MSTATUS_SIE, 0);
         env->mstatus = s;
         env->scause = cause | ((target_ulong)async << (TARGET_LONG_BITS - 1));
-        SET_SPECIAL_REG(env, sepc, SEPCC, env->pc);
+        COPY_SPECIAL_REG(env, sepc, SEPCC, pc, PCC);
         env->sbadaddr = tval;
         target_ulong stvec = GET_SPECIAL_REG(env, stvec, STCC);
-        env->pc = (stvec >> 2 << 2) +
+        target_ulong new_pc = (stvec >> 2 << 2) +
             ((async && (stvec & 3) == 1) ? cause * 4 : 0);
+#ifdef TARGET_CHERI
+        env->PCC = env->STCC;
+        assert(cap_is_in_bounds(&env->PCC, new_pc, 0));
+        env->PCC._cr_cursor = new_pc;
+#else
+        env->pc = new_pc;
+#endif
         riscv_cpu_set_mode(env, PRV_S);
     } else {
         /* handle the trap in M-mode */
@@ -600,11 +607,18 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         s = set_field(s, MSTATUS_MIE, 0);
         env->mstatus = s;
         env->mcause = cause | ~(((target_ulong)-1) >> async);
-        SET_SPECIAL_REG(env, mepc, MEPCC, env->pc);
+        COPY_SPECIAL_REG(env, mepc, MEPCC, pc, PCC);
         env->mbadaddr = tval;
         target_ulong mtvec = GET_SPECIAL_REG(env, mtvec, MTCC);
-        env->pc = (mtvec >> 2 << 2) +
+        target_ulong new_pc = (mtvec >> 2 << 2) +
             ((async && (mtvec & 3) == 1) ? cause * 4 : 0);
+#ifdef TARGET_CHERI
+        env->PCC = env->MTCC;
+        assert(cap_is_in_bounds(&env->PCC, new_pc, 0));
+        env->PCC._cr_cursor = new_pc;
+#else
+        env->pc = new_pc;
+#endif
         riscv_cpu_set_mode(env, PRV_M);
     }
 

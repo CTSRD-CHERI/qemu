@@ -105,10 +105,11 @@ struct CPURISCVState {
     target_ulong gpr[32];
 #endif
     uint64_t fpr[32]; /* assume both F and D extensions */
-    target_ulong pc;
 #ifdef TARGET_CHERI
     cap_register_t PCC; // SCR 0 Program counter cap. (PCC) TODO: implement this properly
     cap_register_t DDC; // SCR 1 Default data cap. (DDC)
+#else
+    target_ulong pc;
 #endif
 
     target_ulong load_res;
@@ -235,9 +236,15 @@ void update_special_register_offset(cap_register_t *scr, const char *name,
                                     target_ulong value);
 #define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
     update_special_register_offset(&((env)->cheri_name), #cheri_name, value)
+#define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)  \
+    env->cheri_name = env->new_cheri_reg
+#define PC_ADDR(env) ((target_ulong)env->PCC._cr_cursor)
 #else
 #define GET_SPECIAL_REG(env, name, cheri_name) ((env)->name)
 #define SET_SPECIAL_REG(env, name, cheri_name, value) ((env)->name) = value
+#define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)  \
+    env->name = env->new_reg
+#define PC_ADDR(env) ((env)->pc)
 #endif
 
 static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
@@ -403,7 +410,7 @@ void riscv_cpu_set_fflags(CPURISCVState *env, target_ulong);
 static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
                                         target_ulong *cs_base, uint32_t *flags)
 {
-    *pc = env->pc;
+    *pc = PC_ADDR(env); // We want the full virtual address here and not an offset
     *cs_base = 0;
 #ifdef CONFIG_USER_ONLY
     *flags = TB_FLAGS_MSTATUS_FS;

@@ -973,7 +973,11 @@ void riscv_translate_init(void)
             offsetof(CPURISCVState, fpr[i]), riscv_fpr_regnames[i]);
     }
 
+#ifdef TARGET_CHERI
+    cpu_pc = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, PCC._cr_cursor), "pc");
+#else
     cpu_pc = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, pc), "pc");
+#endif
     load_res = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, load_res),
                              "load_res");
     load_val = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, load_val),

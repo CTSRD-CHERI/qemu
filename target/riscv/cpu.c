@@ -231,7 +231,10 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     CPURISCVState *env = &cpu->env;
     int i;
 
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc      ", env->pc);
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc      ", PC_ADDR(env));
+#ifdef TARGET_CHERI
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc (offset) ", GET_SPECIAL_REG(env, pc, PCC));
+#endif
 #ifndef CONFIG_USER_ONLY
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mhartid ", env->mhartid);
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mstatus ", env->mstatus);
@@ -264,16 +267,28 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 
 static void riscv_cpu_set_pc(CPUState *cs, vaddr value)
 {
+#ifdef TARGET_CHERI
+    // FIXME: does this set addr or offset?
+    assert(false && "Not implemented yet");
+#else
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
     env->pc = value;
+#endif
 }
 
 static void riscv_cpu_synchronize_from_tb(CPUState *cs, TranslationBlock *tb)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
+#ifdef TARGET_CHERI
+    // Note: this sets the cursor not the address
+    assert(false && "Not implemented yet");
+    assert(cap_is_in_bounds(&env->PCC, tb->pc, 0));
+    env->PCC._cr_cursor = tb->pc;
+#else
     env->pc = tb->pc;
+#endif
 }
 
 static bool riscv_cpu_has_work(CPUState *cs)
@@ -294,7 +309,12 @@ static bool riscv_cpu_has_work(CPUState *cs)
 void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
                           target_ulong *data)
 {
+#ifdef TARGET_CHERI
+    assert(cap_is_in_bounds(&env->PCC, data[0], 0));
+    env->PCC._cr_cursor = data[0];
+#else
     env->pc = data[0];
+#endif
 }
 
 
@@ -320,12 +340,12 @@ static void rvfi_dii_send_trace(CPURISCVState* env, rvfi_dii_trace_t* trace)
 void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
     static bool rvfi_dii_started = false;
     // Single-step completed -> update PC in the trace buffer
-    env->rvfi_dii_trace.rvfi_dii_pc_wdata = env->pc;
+    env->rvfi_dii_trace.rvfi_dii_pc_wdata = GET_SPECIAL_REG(env, pc, PCC);
     env->rvfi_dii_trace.rvfi_dii_order++;
 
     // TestRIG expects a zero $pc after a trap:
     if (env->rvfi_dii_trace.rvfi_dii_trap) {
-        info_report("Got trap at " TARGET_FMT_plx, env->pc);
+        info_report("Got trap at " TARGET_FMT_plx, PC_ADDR(env));
     }
     env->rvfi_dii_have_injected_insn = false;
     while (true) {
@@ -354,14 +374,15 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
         case '\0': {
             env->rvfi_dii_trace.rvfi_dii_halt = 1;
             env->rvfi_dii_trace.rvfi_dii_order = 0;
-            // Reset the processor (and ensure that it resets to 0x80000000
+            // Overwrite the processor's resetvec as otherwise reset()
+            // writes PC with default RSTVECTOR (0x10000)
+            env->resetvec = RVFI_DII_RAM_START;
+            // Reset the processor (and ensure that it resets to 0x80000000)
             cpu_reset(cs);
             // FIXME: Hopefully this resets RAM?
             qemu_system_reset(SHUTDOWN_CAUSE_HOST_SIGNAL);
-            // Overwrite the processor's PC as the reset() writes it with default RSTVECTOR (0x10000)
-            env->pc = RVFI_DII_RAM_START;
             cs->cflags_next_tb |= CF_NOCACHE;
-            hwaddr system_ram_addr = cpu_get_phys_page_debug(cs, env->pc);
+            hwaddr system_ram_addr = cpu_get_phys_page_debug(cs, PC_ADDR(env));
             hwaddr system_ram_size;
             void *ram_ptr = cpu_physical_memory_map(
                 system_ram_addr, &system_ram_size, /*is_write=*/true);
@@ -400,10 +421,10 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             if (rvfi_debug_output) {
                 info_report(
                     "injecting instruction %d '0x%08x' at " TARGET_FMT_plx,
-                    cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, env->pc);
+                    cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, PC_ADDR(env));
             }
             // Store the new code to the destination pointer
-            cpu_memory_rw_debug(cs, env->pc, (uint8_t *)&cmd_buf.rvfi_dii_insn,
+            cpu_memory_rw_debug(cs, PC_ADDR(env), (uint8_t *)&cmd_buf.rvfi_dii_insn,
                                 sizeof(cmd_buf.rvfi_dii_insn), true);
             // This is extremely important even though we don't use the value
             // written there in translate.c (since it can fail when env->pc is
@@ -424,8 +445,11 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
 #endif
             env->rvfi_dii_trace.rvfi_dii_insn = cmd_buf.rvfi_dii_insn;
             env->rvfi_dii_have_injected_insn = true;
-            target_disas_buf(stderr, cs, &cmd_buf.rvfi_dii_insn,
-                  sizeof(cmd_buf.rvfi_dii_insn), env->pc, 1);
+            if (rvfi_debug_output) {
+                target_disas_buf(stderr, cs, &cmd_buf.rvfi_dii_insn,
+                                 sizeof(cmd_buf.rvfi_dii_insn), PC_ADDR(env),
+                                 1);
+            }
             resume_all_vcpus();
             cpu_resume(cs);
             env->rvfi_dii_trace.rvfi_dii_pc_wdata = -1; // Will be set after single-step trap
@@ -474,18 +498,18 @@ static void riscv_cpu_reset(CPUState *cs)
     env->priv = PRV_M;
     env->mstatus &= ~(MSTATUS_MIE | MSTATUS_MPRV);
     env->mcause = 0;
-    env->pc = env->resetvec;
 #endif
-#ifndef TARGET_CHERI
-    // Also reset mepc/sepc to zero for predicatable behaviour
-    env->mepc = 0;
-    env->sepc = 0;
-#endif
+
     cs->exception_index = EXCP_NONE;
     env->load_res = -1;
     set_default_nan_mode(1, &env->fp_status);
 
-#if defined(TARGET_CHERI)
+#if !defined(TARGET_CHERI)
+    env->pc = env->resetvec;
+    // Also reset mepc/sepc to zero for predicatable behaviour
+    env->mepc = 0;
+    env->sepc = 0;
+#else
     if (!cpu->cfg.ext_cheri) {
         error_report("CHERI extension can't be disabled yet!");
         exit(EXIT_FAILURE);
