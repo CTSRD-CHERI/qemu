@@ -101,14 +101,14 @@ typedef struct CPURISCVState CPURISCVState;
 struct CPURISCVState {
 #ifdef TARGET_CHERI
     struct GPCapRegs gpcapregs;
-    cap_register_t DDC;
 #else
     target_ulong gpr[32];
 #endif
     uint64_t fpr[32]; /* assume both F and D extensions */
     target_ulong pc;
 #ifdef TARGET_CHERI
-    cap_register_t PCC; // TODO: implement this properly
+    cap_register_t PCC; // SCR 0 Program counter cap. (PCC) TODO: implement this properly
+    cap_register_t DDC; // SCR 1 Default data cap. (DDC)
 #endif
 
     target_ulong load_res;
@@ -147,12 +147,34 @@ struct CPURISCVState {
     target_ulong mbadaddr;
     target_ulong medeleg;
 
+#ifdef TARGET_CHERI
+    // XXX: not implemented properly
+    cap_register_t UTCC; // SCR 4 User trap code cap. (UTCC)
+    cap_register_t UTDC; // SCR 5 User trap data cap. (UTDC)
+    cap_register_t UScratchC; // SCR 6 User scratch cap. (UScratchC)
+    cap_register_t UEPCC; // SCR 7 User exception PC cap. (UEPCC)
+#endif
+
+#ifdef TARGET_CHERI
+    cap_register_t STCC;      // SCR 12 Supervisor trap code cap. (STCC)
+    cap_register_t STDC;      // SCR 13 Supervisor trap data cap. (STDC)
+    cap_register_t SScratchC; // SCR 14 Supervisor scratch cap. (SScratchC)
+    cap_register_t SEPCC;     // SCR 15 Supervisor exception PC cap. (SEPCC)
+#else
     target_ulong stvec;
     target_ulong sepc;
+#endif
     target_ulong scause;
 
+#ifdef TARGET_CHERI
+    cap_register_t MTCC;      // SCR 28 Machine trap code cap. (MTCC)
+    cap_register_t MTDC;      // SCR 29 Machine trap data cap. (MTDC)
+    cap_register_t MScratchC; // SCR 30 Machine scratch cap. (MScratchC)
+    cap_register_t MEPCC;     // SCR 31 Machine exception PC cap. (MEPCC)
+#else
     target_ulong mtvec;
     target_ulong mepc;
+#endif
     target_ulong mcause;
     target_ulong mtval;  /* since: priv-1.10.0 */
 
@@ -195,6 +217,28 @@ struct CPURISCVState {
     /* Fields from here on are preserved across CPU reset. */
     QEMUTimer *timer; /* Internal timer */
 };
+
+// From 5.3.6 Special Capability Registers (SCRs)
+// Where an SCR extends a RISC-V CSR, e.g. MTCC extending mtvec, any read to the
+// CSR shall return the offset of the corresponding SCR. Similarly, any write to
+// the CSR shall set the offset of the SCR to the value written. This shall be
+// equivalent to a CSetOffset instruction, but with any exception condition
+// instead just clearing the tag of the SCR. This allows sealed capabilities to
+// be held in SCRs without allowing them to be modified in a tag-preserving way,
+// while also pre- venting exceptions when installing trap vectors: something
+// that can be problematic where the task is delegated to a higher privilege
+// level.
+#ifdef TARGET_CHERI
+#define GET_SPECIAL_REG(env, name, cheri_name)                                 \
+    ((target_ulong)cap_get_offset(&((env)->cheri_name)))
+void update_special_register_offset(cap_register_t *scr, const char *name,
+                                    target_ulong value);
+#define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
+    update_special_register_offset(&((env)->cheri_name), #cheri_name, value)
+#else
+#define GET_SPECIAL_REG(env, name, cheri_name) ((env)->name)
+#define SET_SPECIAL_REG(env, name, cheri_name, value) ((env)->name) = value
+#endif
 
 static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
 #ifdef TARGET_CHERI

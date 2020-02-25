@@ -22,6 +22,9 @@
 #include "cpu.h"
 #include "qemu/main-loop.h"
 #include "exec/exec-all.h"
+#ifdef TARGET_CHERI
+#include "cheri_utils.h"
+#endif
 
 /* CSR function table */
 static riscv_csr_operations csr_ops[];
@@ -445,7 +448,7 @@ static int write_mie(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_mtvec(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = env->mtvec;
+    *val = GET_SPECIAL_REG(env, mtvec, MTCC);
     return 0;
 }
 
@@ -453,7 +456,7 @@ static int write_mtvec(CPURISCVState *env, int csrno, target_ulong val)
 {
     /* bits [1:0] encode mode; 0 = direct, 1 = vectored, 2 >= reserved */
     if ((val & 3) < 2) {
-        env->mtvec = val;
+        SET_SPECIAL_REG(env, mtvec, MTCC, val);
     } else {
         qemu_log_mask(LOG_UNIMP, "CSR_MTVEC: reserved mode not supported\n");
     }
@@ -533,13 +536,13 @@ static int write_mscratch(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_mepc(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = env->mepc;
+    *val = GET_SPECIAL_REG(env, mepc, MEPCC);
     return 0;
 }
 
 static int write_mepc(CPURISCVState *env, int csrno, target_ulong val)
 {
-    env->mepc = val;
+    SET_SPECIAL_REG(env, mepc, MEPCC, val);
     return 0;
 }
 
@@ -619,7 +622,7 @@ static int write_sie(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_stvec(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = env->stvec;
+    *val = GET_SPECIAL_REG(env, stvec, STCC);
     return 0;
 }
 
@@ -627,7 +630,7 @@ static int write_stvec(CPURISCVState *env, int csrno, target_ulong val)
 {
     /* bits [1:0] encode mode; 0 = direct, 1 = vectored, 2 >= reserved */
     if ((val & 3) < 2) {
-        env->stvec = val;
+        SET_SPECIAL_REG(env, stvec, STCC, val);
     } else {
         qemu_log_mask(LOG_UNIMP, "CSR_STVEC: reserved mode not supported\n");
     }
@@ -667,13 +670,13 @@ static int write_sscratch(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_sepc(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = env->sepc;
+    *val = GET_SPECIAL_REG(env, sepc, SEPCC);
     return 0;
 }
 
 static int write_sepc(CPURISCVState *env, int csrno, target_ulong val)
 {
-    env->sepc = val;
+    SET_SPECIAL_REG(env, sepc, SEPCC, val);
     return 0;
 }
 

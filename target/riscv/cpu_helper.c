@@ -24,6 +24,9 @@
 #include "exec/exec-all.h"
 #include "tcg/tcg-op.h"
 #include "trace.h"
+#ifdef TARGET_CHERI
+#include "cheri_utils.h"
+#endif
 
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch)
 {
@@ -582,10 +585,11 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         s = set_field(s, MSTATUS_SIE, 0);
         env->mstatus = s;
         env->scause = cause | ((target_ulong)async << (TARGET_LONG_BITS - 1));
-        env->sepc = env->pc;
+        SET_SPECIAL_REG(env, sepc, SEPCC, env->pc);
         env->sbadaddr = tval;
-        env->pc = (env->stvec >> 2 << 2) +
-            ((async && (env->stvec & 3) == 1) ? cause * 4 : 0);
+        target_ulong stvec = GET_SPECIAL_REG(env, stvec, STCC);
+        env->pc = (stvec >> 2 << 2) +
+            ((async && (stvec & 3) == 1) ? cause * 4 : 0);
         riscv_cpu_set_mode(env, PRV_S);
     } else {
         /* handle the trap in M-mode */
@@ -596,10 +600,11 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         s = set_field(s, MSTATUS_MIE, 0);
         env->mstatus = s;
         env->mcause = cause | ~(((target_ulong)-1) >> async);
-        env->mepc = env->pc;
+        SET_SPECIAL_REG(env, mepc, MEPCC, env->pc);
         env->mbadaddr = tval;
-        env->pc = (env->mtvec >> 2 << 2) +
-            ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
+        target_ulong mtvec = GET_SPECIAL_REG(env, mtvec, MTCC);
+        env->pc = (mtvec >> 2 << 2) +
+            ((async && (mtvec & 3) == 1) ? cause * 4 : 0);
         riscv_cpu_set_mode(env, PRV_M);
     }
 
@@ -617,3 +622,37 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 #endif
     cs->exception_index = EXCP_NONE; /* mark handled to qemu */
 }
+
+#ifdef TARGET_CHERI
+void update_special_register_offset(cap_register_t *scr, const char *name,
+                                    target_ulong new_value)
+{
+    // Any write to the CSR shall set the offset of the SCR to the value
+    // written. This shall be equivalent to a CSetOffset instruction, but with
+    // any exception condition instead just clearing the tag of the SCR.
+    target_ulong cursor = cap_get_cursor(scr);
+    target_ulong current_offset = cap_get_offset(scr);
+    target_ulong diff = new_value - current_offset;
+    target_ulong new_cursor = cursor + diff;
+
+    if (!cap_is_unsealed(scr)) {
+        error_report("Attempting to modify sealed %s: " PRINT_CAP_FMTSTR "\r\n",
+                     name, PRINT_CAP_ARGS(scr));
+        qemu_log("Attempting to modify sealed %s: " PRINT_CAP_FMTSTR "\n", name,
+                 PRINT_CAP_ARGS(scr));
+        // Clear the tag bit and update the cursor:
+        cap_mark_unrepresentable(new_cursor, scr);
+    } else if (!is_representable_cap_with_addr(scr, new_cursor)) {
+        error_report(
+            "Attempting to set unrepresentable cursor (0x" TARGET_FMT_lx
+            ") on %s: " PRINT_CAP_FMTSTR "\r\n",
+            new_cursor, name, PRINT_CAP_ARGS(scr));
+        qemu_log("Attempting to set unrepresentable cursor (0x" TARGET_FMT_lx
+                 ") on %s: " PRINT_CAP_FMTSTR "\r\n",
+                 new_cursor, name, PRINT_CAP_ARGS(scr));
+        cap_mark_unrepresentable(new_cursor, scr);
+    } else {
+        scr->_cr_cursor = new_cursor;
+    }
+}
+#endif

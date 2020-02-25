@@ -239,8 +239,8 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mie     ", env->mie);
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mideleg ", env->mideleg);
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "medeleg ", env->medeleg);
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mtvec   ", env->mtvec);
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mepc    ", env->mepc);
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mtvec   ", GET_SPECIAL_REG(env, mtvec, MTCC));
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mepc    ", GET_SPECIAL_REG(env, mepc, MEPCC));
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mcause  ", env->mcause);
 #endif
 
@@ -487,23 +487,23 @@ static void riscv_cpu_reset(CPUState *cs)
     /*
      * See Table 5.2: Special Capability Registers (SCRs) in the CHERI ISA spec
      */
-    // 0 Program counter cap. (PCC)
     set_max_perms_capability(&env->PCC, env->resetvec);
-    // 1 Default data cap. (DDC)
     set_max_perms_capability(&env->DDC, 0);
-    // TODO:
-    // 4 User trap code cap. (UTCC)
-    // 5 User trap data cap. (UTDC)
-    // 6 User scratch cap. (UScratchC)
-    // 7 User exception PC cap. (UEPCC)
-    // 12 Supervisor trap code cap. (STCC)
-    // 13 Supervisor trap data cap. (STDC)
-    // 14 Supervisor scratch cap. (SScratchC)
-    // 15 Supervisor exception PC cap. (SEPCC)
-    // 28 Machine trap code cap. (MTCC)
-    // 29 Machine trap data cap. (MTDC)
-    // 30 Machine scratch cap. (MScratchC)
-    // 31 Machine exception PC cap. (MEPCC)
+    // User mode trap handling:
+    set_max_perms_capability(&env->UTCC, 0);
+    null_capability(&env->UTDC);
+    null_capability(&env->UScratchC);
+    set_max_perms_capability(&env->UEPCC, 0);
+    // Supervisor mode trap handling
+    set_max_perms_capability(&env->STCC, 0);
+    null_capability(&env->STDC);
+    null_capability(&env->SScratchC);
+    set_max_perms_capability(&env->SEPCC, 0);
+    // Machine mode trap handling
+    set_max_perms_capability(&env->MTCC, 0);
+    null_capability(&env->MTDC);
+    null_capability(&env->MScratchC);
+    set_max_perms_capability(&env->MEPCC, 0);
 #endif /* TARGET_CHERI */
 }
 
