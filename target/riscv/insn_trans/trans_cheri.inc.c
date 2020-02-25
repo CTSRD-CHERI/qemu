@@ -271,6 +271,43 @@ TRANSLATE_DDC_LOAD(lhuddc, MO_UW)
 TRANSLATE_DDC_LOAD(lwuddc, MO_UL)
 #endif
 
+/* Load Via Capability Register */
+static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
+                                target_long offset, MemOp op)
+{
+    // FIXME: just do everything in the helper
+    TCGv_i32 tcs = tcg_const_i32(cs);
+    TCGv toffset = tcg_const_tl(offset);
+    TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
+    TCGv value = tcg_temp_new();
+    TCGv_i32 tsize = tcg_const_i32(memop_size(op));
+    gen_helper_cload_check(vaddr, cpu_env, tcs, toffset, tsize);
+    tcg_gen_qemu_ld_tl_with_checked_addr(value, vaddr, ctx->mem_idx, op);
+    gen_set_gpr(rd, value);
+    tcg_temp_free_i32(tsize);
+    tcg_temp_free(value);
+    tcg_temp_free_cap_checked(vaddr);
+    tcg_temp_free(toffset);
+    tcg_temp_free_i32(tcs);
+    return true;
+}
+#define TRANSLATE_CAP_LOAD(name, op)                                           \
+    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+    {                                                                          \
+        return gen_cap_load(ctx, a->rd, a->rs1, /*offset=*/0, op);             \
+    }
+TRANSLATE_CAP_LOAD(lbcap, MO_SB)
+TRANSLATE_CAP_LOAD(lhcap, MO_SW)
+TRANSLATE_CAP_LOAD(lwcap, MO_SL)
+#ifdef TARGET_RISCV64
+TRANSLATE_CAP_LOAD(ldcap, MO_Q)
+#endif
+TRANSLATE_CAP_LOAD(lbucap, MO_UB)
+TRANSLATE_CAP_LOAD(lhucap, MO_UW)
+#ifdef TARGET_RISCV64
+TRANSLATE_CAP_LOAD(lwucap, MO_UL)
+#endif
+
 // Stores
 static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
 {

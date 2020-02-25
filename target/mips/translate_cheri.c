@@ -310,14 +310,12 @@ static inline void generate_cloadtags(int32_t rd, int32_t cb)
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_cap_checked_ptr tcbc  = tcg_temp_new_cap_checked();
     TCGv ttags = tcg_temp_new();
-    TCGv tc0 = tcg_const_i64(0);
-    TCGv_i32 toffset = tcg_const_i32(0);
+    TCGv toffset = tcg_const_tl(0);
     TCGv_i32 tlen = tcg_const_i32(128); // XXX cache line width
 
-    gen_helper_cload(tcbc, cpu_env, tcb, tc0, toffset, tlen);
+    gen_helper_cload_check(tcbc, cpu_env, tcb, toffset, tlen);
     tcg_temp_free_i32(tlen);
-    tcg_temp_free_i32(toffset);
-    tcg_temp_free(tc0);
+    tcg_temp_free(toffset);
 
     tcg_gen_mb(TCG_MO_LD_LD | TCG_MO_ST_LD | TCG_BAR_SC);
 
@@ -849,20 +847,19 @@ static inline void generate_cap_load(DisasContext *ctx, int32_t rd, int32_t cb,
 {
     // FIXME: just do everything in the helper
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset) * memop_size(op));
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
     TCGv t1 = tcg_temp_new();
     TCGv_i32 tlen = tcg_const_i32(memop_size(op));
 
     gen_load_gpr(t1, rt);
-    gen_helper_cload(vaddr, cpu_env, tcb, t1, toffset, tlen);
+    tcg_gen_addi_tl(t1, t1, cload_sign_extend(offset) * memop_size(op));
+    gen_helper_cload_check(vaddr, cpu_env, tcb, t1, tlen);
     tcg_gen_qemu_ld_tl_with_checked_addr(t1, vaddr, ctx->mem_idx, op);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free_i32(tlen);
     tcg_temp_free(t1);
     tcg_temp_free_cap_checked(vaddr);
-    tcg_temp_free_i32(toffset);
     tcg_temp_free_i32(tcb);
 }
 

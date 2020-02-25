@@ -86,3 +86,6 @@ DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 DEF_HELPER_3(csub, tl, env, i32, i32)
 DEF_HELPER_3(ctestsubset, tl, env, i32, i32)
 DEF_HELPER_3(ctoptr, tl, env, i32, i32)
+
+// Loads+Stores
+DEF_HELPER_4(cload_check, cap_checked_ptr, env, i32, tl, i32)

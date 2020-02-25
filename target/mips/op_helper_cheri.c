@@ -784,47 +784,6 @@ target_ulong CHERI_HELPER_IMPL(cgetandaddr(CPUArchState *env, uint32_t cb, targe
 }
 
 /*
- * Load Via Capability Register
- */
-target_ulong CHERI_HELPER_IMPL(cload(CPUArchState *env, uint32_t cb, target_ulong rt,
-        uint32_t offset, uint32_t size))
-{
-    GET_HOST_RETPC();
-    // CL[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
-    // space and increase code density since loading relative to $ddc is common
-    // in the hybrid ABI (and also for backwards compat with old binaries).
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    } else {
-        uint64_t cursor = cap_get_cursor(cbp);
-        uint64_t addr = cursor + rt + (int32_t)offset;
-
-        if (!cap_is_in_bounds(cbp, addr, size)) {
-            raise_cheri_exception(env, CapEx_LengthViolation, cb);
-        } else if (align_of(size, addr)) {
-#if defined(CHERI_UNALIGNED)
-            qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte load of "
-                "address 0x%" PRIx64 "\n", size, addr);
-            return addr;
-#else
-            // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
-            // check for alignment already.
-            do_raise_c0_exception(env, EXCP_AdEL, addr);
-#endif
-        } else {
-            return addr;
-        }
-    }
-    return 0;
-}
-
-/*
  * Load Linked Via Capability Register
  */
 target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint32_t size))
