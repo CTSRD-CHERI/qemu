@@ -770,9 +770,6 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
         raise_cheri_exception(env, CapEx_TagViolation, ct);
     } else if (!cbp->cr_tag) {
         return (target_ulong)0;
-    } else if ((cb_cursor < ctp->cr_base) || (cb_cursor > ct_top)) {
-        /* XXX cb can not be wholly represented within ct. */
-        return (target_ulong)0;
     } else if (ctp->cr_base > cb_cursor) {
         return (target_ulong)(ctp->cr_base - cb_cursor);
     } else {
