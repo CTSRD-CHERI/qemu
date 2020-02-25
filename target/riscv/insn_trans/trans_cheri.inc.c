@@ -328,9 +328,44 @@ static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
         return gen_ddc_store(ctx, a->rs1, a->rs2, op);                         \
     }
 
-TRANSLATE_DDC_STORE(sbddc, MO_SB)
-TRANSLATE_DDC_STORE(shddc, MO_SW)
-TRANSLATE_DDC_STORE(swddc, MO_SL)
+TRANSLATE_DDC_STORE(sbddc, MO_UB)
+TRANSLATE_DDC_STORE(shddc, MO_UW)
+TRANSLATE_DDC_STORE(swddc, MO_UL)
 #ifdef TARGET_RISCV64
 TRANSLATE_DDC_STORE(sdddc, MO_Q)
+#endif
+
+/* Load Via Capability Register */
+static inline bool gen_cap_store(DisasContext *ctx, int32_t cs1, int32_t rs2,
+                                 target_long offset, MemOp op)
+{
+    // FIXME: just do everything in the helper
+    TCGv_i32 tcs = tcg_const_i32(cs1);
+    TCGv toffset = tcg_const_tl(offset);
+    TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
+
+    TCGv_i32 tsize = tcg_const_i32(memop_size(op));
+    gen_helper_cstore_check(vaddr, cpu_env, tcs, toffset, tsize);
+    tcg_temp_free_i32(tsize);
+    tcg_temp_free(toffset);
+    tcg_temp_free_i32(tcs);
+
+    TCGv value = tcg_temp_new();
+    gen_get_gpr(value, rs2);
+    tcg_gen_qemu_st_tl_with_checked_addr(value, vaddr, ctx->mem_idx, op);
+    tcg_temp_free(value);
+    tcg_temp_free_cap_checked(vaddr);
+    return true;
+}
+#define TRANSLATE_CAP_STORE(name, op)                                          \
+    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+    {                                                                          \
+        return gen_cap_store(ctx, a->rs1, a->rs2, /*offset=*/0, op);           \
+    }
+
+TRANSLATE_CAP_STORE(sbcap, MO_UB)
+TRANSLATE_CAP_STORE(shcap, MO_UW)
+TRANSLATE_CAP_STORE(swcap, MO_UL)
+#ifdef TARGET_RISCV64
+TRANSLATE_CAP_STORE(sdcap, MO_Q)
 #endif

@@ -931,13 +931,12 @@ static inline void generate_cstore(DisasContext *ctx, int32_t rs, int32_t cb,
     TCGv t0 = tcg_temp_new();
 
     gen_load_gpr(t0, rt);  // t0 <- register offset
+    tcg_gen_addi_tl(t0, t0, cload_sign_extend(offset) * size);
 
     TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 toffset = tcg_const_i32(cload_sign_extend(offset) * size);
     TCGv_i32 tlen = tcg_const_i32(size);
-    gen_helper_cstore(taddr, cpu_env, tcb, t0, toffset, tlen);
+    gen_helper_cstore_check(taddr, cpu_env, tcb, t0, tlen);
     tcg_temp_free_i32(tlen);
-    tcg_temp_free_i32(toffset);
     tcg_temp_free_i32(tcb);
 
     gen_load_gpr(t0, rs); // t0 <- load value to store

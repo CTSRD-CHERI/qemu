@@ -136,10 +136,12 @@ sdddc       1111100  ..... ..... 000 00011 1011011 @r_2source  # RV64-only
 # mapping clause encdec = CStoreCapDDC(rs2, rs1)          if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00100 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64) /* sqddc */
 # mapping clause encdec = CStoreCapDDC(rs2, rs1)          if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111100 @ rs2 @ rs1 @ 0b000 @ 0b00011 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32) /* sdddc */
 #
-# mapping clause encdec = CStoreCap(rs2, cs, BYTE)        if (haveXcheri()) <-> 0b1111100 @ rs2 @ cs  @ 0b000 @ 0b01000 @ 0b1011011 if (haveXcheri()) /* sbcap */
-# mapping clause encdec = CStoreCap(rs2, cs, HALF)        if (haveXcheri()) <-> 0b1111100 @ rs2 @ cs  @ 0b000 @ 0b01001 @ 0b1011011 if (haveXcheri()) /* shcap */
-# mapping clause encdec = CStoreCap(rs2, cs, WORD)        if (haveXcheri()) <-> 0b1111100 @ rs2 @ cs  @ 0b000 @ 0b01010 @ 0b1011011 if (haveXcheri()) /* swcap */
-# mapping clause encdec = CStoreCap(rs2, cs, DOUBLE)      if (haveXcheri() & haveRV64) <-> 0b1111100 @ rs2 @ cs  @ 0b000 @ 0b01011 @ 0b1011011 if (haveXcheri() & haveRV64) /* sdcap */
+
+sbcap       1111100  ..... ..... 000 01000 1011011 @r_2source
+shcap       1111100  ..... ..... 000 01001 1011011 @r_2source
+swcap       1111100  ..... ..... 000 01010 1011011 @r_2source
+sdcap       1111100  ..... ..... 000 01011 1011011 @r_2source  # RV64-only
+
 # mapping clause encdec = CStoreCapCap(rs2, cs)           if (haveXcheri() & sizeof(xlen) == 64) <-> 0b1111100 @ rs2 @ cs  @ 0b000 @ 0b01100 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 64) /* sqcap */
 # mapping clause encdec = CStoreCapCap(rs2, cs)           if (haveXcheri() & sizeof(xlen) == 32) <-> 0b1111100 @ rs2 @ cs  @ 0b000 @ 0b01011 @ 0b1011011 if (haveXcheri() & sizeof(xlen) == 32) /* sdcap */
 #

@@ -856,51 +856,6 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32
     return 0;
 }
 
-/*
- * Store Via Capability Register
- */
-target_ulong CHERI_HELPER_IMPL(cstore(CPUArchState *env, uint32_t cb, target_ulong rt,
-        uint32_t offset, uint32_t size))
-{
-    GET_HOST_RETPC();
-    // CS[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
-    // space and increase code density since storing relative to $ddc is common
-    // in the hybrid ABI (and also for backwards compat with old binaries).
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
-    } else {
-        uint64_t cursor = cap_get_cursor(cbp);
-        uint64_t addr = cursor + rt + (int32_t)offset;
-
-        if (!cap_is_in_bounds(cbp, addr, size)) {
-            raise_cheri_exception(env, CapEx_LengthViolation, cb);
-        } else if (align_of(size, addr)) {
-#if defined(CHERI_UNALIGNED)
-            qemu_log_mask(CPU_LOG_INSTR, "Allowing unaligned %d-byte store to "
-                "address 0x%" PRIx64 "\n", size, addr);
-            // Can't do this here.  It might miss in the TLB.
-            // cheri_tag_invalidate(env, addr, size);
-            return addr;
-#else
-            // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
-            // check for alignment already.
-            do_raise_c0_exception(env, EXCP_AdES, addr);
-#endif
-        } else {
-            // Can't do this here.  It might miss in the TLB.
-            // cheri_tag_invalidate(env, addr, size);
-            return addr;
-        }
-    }
-    return 0;
-}
-
 static inline target_ulong get_csc_addr(CPUArchState *env, uint32_t cs, uint32_t cb,
         target_ulong rt, uint32_t offset, uintptr_t _host_return_address)
 {

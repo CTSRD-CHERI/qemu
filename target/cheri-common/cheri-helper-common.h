@@ -89,3 +89,4 @@ DEF_HELPER_3(ctoptr, tl, env, i32, i32)
 
 // Loads+Stores
 DEF_HELPER_4(cload_check, cap_checked_ptr, env, i32, tl, i32)
+DEF_HELPER_4(cstore_check, cap_checked_ptr, env, i32, tl, i32)

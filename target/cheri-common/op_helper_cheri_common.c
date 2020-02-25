@@ -859,7 +859,7 @@ target_ulong CHERI_HELPER_IMPL(cload_check(CPUArchState *env, uint32_t cb,
     }
 
     const target_ulong cursor = cap_get_cursor(cbp);
-    const target_ulong addr = cursor + offset;
+    const target_ulong addr = cursor + (target_long)offset;
     if (!cap_is_in_bounds(cbp, addr, size)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     }
@@ -877,5 +877,50 @@ target_ulong CHERI_HELPER_IMPL(cload_check(CPUArchState *env, uint32_t cb,
 #endif
     }
 #endif // TARGET_MIPS
+    return addr;
+}
+
+/*
+ * Store Via Capability Register
+ */
+target_ulong CHERI_HELPER_IMPL(cstore_check(CPUArchState *env, uint32_t cb,
+                                            target_ulong offset, uint32_t size))
+{
+    GET_HOST_RETPC();
+    // CS[BHWD][U] traps on cbp == NULL so we use reg0 as $ddc to save encoding
+    // space and increase code density since storing relative to $ddc is common
+    // in the hybrid ABI (and also for backwards compat with old binaries).
+    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+    }
+    const uint64_t cursor = cap_get_cursor(cbp);
+    const uint64_t addr = cursor + (target_long)offset;
+
+    if (!cap_is_in_bounds(cbp, addr, size)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    }
+
+#ifdef TARGET_MIPS
+    if (!QEMU_IS_ALIGNED(addr, size)) {
+#if defined(CHERI_UNALIGNED)
+        qemu_log_mask(CPU_LOG_INSTR,
+                      "Allowing unaligned %d-byte store to "
+                      "address 0x%" PRIx64 "\n",
+                      size, addr);
+#else
+        // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
+        // check for alignment already.
+        do_raise_c0_exception(env, EXCP_AdES, addr);
+#endif
+    }
+#endif
+    // Can't do this here.  It might miss in the TLB.
+    // cheri_tag_invalidate(env, addr, size);
     return addr;
 }
