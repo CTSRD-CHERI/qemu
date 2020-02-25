@@ -833,9 +833,9 @@ static inline void generate_cnexeq(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcb);
 }
 
-static inline int32_t cload_sign_extend(int32_t x)
+static inline target_long cload_sign_extend(target_long x)
 {
-    int32_t const mask = 1U << (8 - 1);
+    target_long const mask = 1U << (8 - 1);
 
     x = x & ((1U << 8) - 1);
     return (x ^ mask) - mask;
@@ -946,10 +946,10 @@ static inline void generate_cstore(DisasContext *ctx, int32_t rs, int32_t cb,
     tcg_temp_free_cap_checked(taddr);
 }
 
-static inline int32_t clc_sign_extend(int32_t x, bool big_imm)
+static inline target_long clc_sign_extend(target_long x, bool big_imm)
 {
-    const int32_t bits = big_imm ? 16 : 11;
-    int32_t const mask = 1U << (bits - 1);
+    const target_long bits = big_imm ? 16 : 11;
+    target_long const mask = 1U << (bits - 1);
 
     x = x & ((1U << bits) - 1);
     return (x ^ mask) - mask;
