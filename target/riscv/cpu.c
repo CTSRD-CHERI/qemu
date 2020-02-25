@@ -300,13 +300,16 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
 
 #ifdef CONFIG_RVFI_DII
 extern int rvfi_client_fd;
+extern bool rvfi_debug_output;
 
 static void rvfi_dii_send_trace(CPURISCVState* env, rvfi_dii_trace_t* trace)
 {
-    fprintf(stderr, "Sending %jd PCWD: 0x%08jx, RD: %02d, RWD: 0x%08jx, MA: 0x%08jx, MWD: 0x%08jx, MWM: 0x%08x, I: 0x%016jx\n",
-            (uintmax_t)trace->rvfi_dii_order, (uintmax_t)trace->rvfi_dii_pc_wdata, trace->rvfi_dii_rd_addr, (uintmax_t)trace->rvfi_dii_rd_wdata,
-            (uintmax_t)trace->rvfi_dii_mem_addr, (uintmax_t)trace->rvfi_dii_mem_wdata, trace->rvfi_dii_mem_wmask,
-            (uintmax_t)trace->rvfi_dii_insn);
+    if (rvfi_debug_output) {
+        info_report("Sending %jd PCWD: 0x%08jx, RD: %02d, RWD: 0x%08jx, MA: 0x%08jx, MWD: 0x%08jx, MWM: 0x%08x, I: 0x%016jx\n",
+                (uintmax_t)trace->rvfi_dii_order, (uintmax_t)trace->rvfi_dii_pc_wdata, trace->rvfi_dii_rd_addr, (uintmax_t)trace->rvfi_dii_rd_wdata,
+                (uintmax_t)trace->rvfi_dii_mem_addr, (uintmax_t)trace->rvfi_dii_mem_wdata, trace->rvfi_dii_mem_wmask,
+                (uintmax_t)trace->rvfi_dii_insn);
+    }
     ssize_t nbytes = write(rvfi_client_fd, trace, sizeof(*trace));
     if (nbytes != sizeof(*trace)) {
         error_report("Failed to write trace entry to socket: %zd (%s)", nbytes, strerror(errno));
@@ -344,7 +347,9 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
                          strerror(errno));
             exit(EXIT_FAILURE);
         }
-        info_report("Handling RVFI-DII command %d", cmd_buf.rvfi_dii_cmd);
+        if (rvfi_debug_output) {
+            info_report("Handling RVFI-DII command %d", cmd_buf.rvfi_dii_cmd);
+        }
         switch (cmd_buf.rvfi_dii_cmd) {
         case '\0': {
             env->rvfi_dii_trace.rvfi_dii_halt = 1;
@@ -389,8 +394,11 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
         }
         case 1: {
             cpu_single_step(cs, SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER);
-            info_report("injecting instruction %d '0x%08x' at " TARGET_FMT_plx,
-                        cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, env->pc);
+            if (rvfi_debug_output) {
+                info_report(
+                    "injecting instruction %d '0x%08x' at " TARGET_FMT_plx,
+                    cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, env->pc);
+            }
             // Store the new code to the destination pointer
             cpu_memory_rw_debug(cs, env->pc, (uint8_t *)&cmd_buf.rvfi_dii_insn,
                                 sizeof(cmd_buf.rvfi_dii_insn), true);

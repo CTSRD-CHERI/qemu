@@ -4069,6 +4069,12 @@ STEXI
 @item -rvfi-dii-port @var{port}
 Run QEMU in RVFI-DII mode, listing on <port>.
 ETEXI
+DEF("rvfi-dii-debug", 0, QEMU_OPTION_rvfi_dii_debug, \
+    "-rvfi-dii-debug     Print RVFI-DII debug messages\n", QEMU_ARCH_RISCV)
+STEXI
+@item -rvfi-dii-debug
+Print RVFI-DII debug messages.
+ETEXI
 #endif
 
 

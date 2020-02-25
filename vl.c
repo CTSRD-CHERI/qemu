@@ -204,6 +204,7 @@ bool cheri_debugger_on_unrepresentable = false;
 
 #ifdef CONFIG_RVFI_DII
 int rvfi_client_fd = 0;
+bool rvfi_debug_output = false;
 
 static int rvfi_dii_socket_init(uint16_t port) {
     int rvfi_listen_fd = qemu_socket(AF_INET, SOCK_STREAM, 0);
@@ -3751,6 +3752,9 @@ int main(int argc, char **argv, char **envp)
                 break;
 #endif /* CONFIG_CHERI */
 #ifdef CONFIG_RVFI_DII
+            case QEMU_OPTION_rvfi_dii_debug:
+                rvfi_debug_output = true;
+                break;
             case QEMU_OPTION_rvfi_dii_port:
                 rvfi_dii_port = strtoull(optarg, NULL, 0);
                 if (rvfi_dii_port == 0 || rvfi_dii_port > USHRT_MAX) {
