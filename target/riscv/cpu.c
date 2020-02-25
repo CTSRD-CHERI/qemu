@@ -375,8 +375,11 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             cpu_physical_memory_unmap(ram_ptr, system_ram_size, /*is_write=*/true, system_ram_size);
             // Flush the TCG state:
             tb_flush(cs);
+
             // TestRIG expects all capability registers to be max perms
+#ifdef TARGET_CHERI
             set_max_perms_capregs(&env->gpcapregs);
+#endif
             break;
         }
         case 'B': {
@@ -472,6 +475,11 @@ static void riscv_cpu_reset(CPUState *cs)
     env->mstatus &= ~(MSTATUS_MIE | MSTATUS_MPRV);
     env->mcause = 0;
     env->pc = env->resetvec;
+#endif
+#ifndef TARGET_CHERI
+    // Also reset mepc/sepc to zero for predicatable behaviour
+    env->mepc = 0;
+    env->sepc = 0;
 #endif
     cs->exception_index = EXCP_NONE;
     env->load_res = -1;
