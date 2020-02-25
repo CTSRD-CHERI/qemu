@@ -233,6 +233,66 @@ void CHERI_HELPER_IMPL(ccleartag(CPUArchState *env, uint32_t cd, uint32_t cb))
     update_capreg(env, cd, &result);
 }
 
+target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
+                                     uint32_t cb, target_ulong link_pc))
+{
+    /*
+     * CJALR: Jump and Link Capability Register
+     */
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (cap_is_sealed_with_type(cbp)) {
+        // Note: "sentry" caps can be called using cjalr
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
+        raise_cheri_exception(env, CapEx_GlobalViolation, cb);
+    } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else if (!validate_cjalr_target(env, cbp, cb, _host_return_address)) {
+        assert(false && "Should have raised an exception");
+    }
+
+    cheri_debug_assert(cap_is_unsealed(cbp) || cap_is_sealed_entry(cbp));
+    cap_register_t next_pcc = *cbp;
+    if (cap_is_sealed_entry(cbp)) {
+        // If we are calling a "sentry" cap, remove the sealed flag
+        cap_unseal_entry(&next_pcc);
+    }
+    // Don't generate a link capability if cd == zero register
+    if (cd != 0) {
+        cap_register_t result = *cheri_get_pcc(env);
+        // can never create an unrepresentable capability since PCC must be in bounds
+        result._cr_cursor = link_pc;
+#if QEMU_USE_COMPRESSED_CHERI_CAPS == 1
+        assert(cc128_is_representable_with_addr(&result, link_pc) &&
+               "Link addr must be representable");
+#endif
+        if (cap_is_sealed_entry(cbp)) {
+            // When calling a sentry capability the return capability is
+            // turned into a sentry, too.
+            cap_make_sealed_entry(&result);
+        }
+        update_capreg(env, cd, &result);
+    }
+
+#ifdef TARGET_MIPS
+    // The capability register is loaded into PCC during delay slot
+    env->active_tc.CapBranchTarget = next_pcc;
+#elif defined(TARGET_RISCV)
+    // Update PCC now. On return to TCG we will jump there immediately, so
+    // updating it now should be fine.
+    env->PCC = next_pcc;
+#else
+#error "No CJALR for this target"
+#endif
+    // Return the branch target address
+    return cap_get_cursor(cbp);
+}
+
 void CHERI_HELPER_IMPL(cmove(CPUArchState *env, uint32_t cd, uint32_t cb))
 {
     /*

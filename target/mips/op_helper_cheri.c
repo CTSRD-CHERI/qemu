@@ -435,47 +435,6 @@ void helper_cmovn(CPUArchState *env, uint32_t cd, uint32_t cs, target_ulong rs)
     helper_cmovz(env, cd, cs, rs == 0);
 }
 
-target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd, uint32_t cb))
-{
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    /*
-     * CJALR: Jump and Link Capability Register
-     */
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (cap_is_sealed_with_type(cbp)) {
-        // Note: "sentry" caps can be called using cjalr
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
-        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
-        raise_cheri_exception(env, CapEx_GlobalViolation, cb);
-    } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (align_of(4, cap_get_cursor(cbp))) {
-        do_raise_c0_exception(env, EXCP_AdEL, cap_get_cursor(cbp));
-    } else {
-        cheri_debug_assert(cap_is_unsealed(cbp) || cap_is_sealed_entry(cbp));
-        cap_register_t result = env->active_tc.PCC;
-        // can never create an unrepresentable capability since PCC must be in bounds
-        result._cr_cursor += 8;
-        // The capability register is loaded into PCC during delay slot
-        env->active_tc.CapBranchTarget = *cbp;
-        if (cap_is_sealed_entry(cbp)) {
-            // If we are calling a "sentry" cap, remove the sealed flag
-            cap_unseal_entry(&env->active_tc.CapBranchTarget);
-            // When calling a sentry capability the return capability is
-            // turned into a sentry, too.
-            cap_make_sealed_entry(&result);
-        }
-        update_capreg(env, cd, &result);
-         // Return the branch target address
-        return cap_get_cursor(cbp);
-    }
-    return (target_ulong)0;
-}
-
 target_ulong CHERI_HELPER_IMPL(cjr(CPUArchState *env, uint32_t cb))
 {
     GET_HOST_RETPC();

@@ -37,9 +37,9 @@
 #pragma once
 #ifdef TARGET_CHERI
 #include "cheri_defs.h"
+#include "cheri_utils.h"
 #include "cheri-archspecific.h"
 #include "cheri-lazy-capregs-types.h"
-#include "cheri_utils.h"
 #include "cpu.h"
 #include "tcg/tcg.h"
 
