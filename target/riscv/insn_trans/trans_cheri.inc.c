@@ -351,12 +351,13 @@ TRANSLATE_DDC_STORE(sdddc, MO_Q)
 #endif
 
 /* Load Via Capability Register */
-static inline bool gen_cap_store(DisasContext *ctx, int32_t cs1, int32_t rs2,
-                                 target_long offset, MemOp op)
+static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
+                                 int32_t val_regnum, target_long offset,
+                                 MemOp op)
 {
     INSN_CAN_TRAP(ctx);
     // FIXME: just do everything in the helper
-    TCGv_i32 tcs = tcg_const_i32(cs1);
+    TCGv_i32 tcs = tcg_const_i32(addr_regnum);
     TCGv toffset = tcg_const_tl(offset);
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
 
@@ -367,7 +368,7 @@ static inline bool gen_cap_store(DisasContext *ctx, int32_t cs1, int32_t rs2,
     tcg_temp_free_i32(tcs);
 
     TCGv value = tcg_temp_new();
-    gen_get_gpr(value, rs2);
+    gen_get_gpr(value, val_regnum);
     tcg_gen_qemu_st_tl_with_checked_addr(value, vaddr, ctx->mem_idx, op);
     tcg_temp_free(value);
     tcg_temp_free_cap_checked(vaddr);

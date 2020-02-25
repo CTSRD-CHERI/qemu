@@ -133,6 +133,12 @@ static bool trans_bgeu(DisasContext *ctx, arg_bgeu *a)
 
 static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
+#ifdef TARGET_CHERI
+    if (ctx->capmode) {
+        // TODO: LD is LC for RV32
+        return gen_cap_load(ctx, a->rd, a->rs1, a->imm, memop);
+    }
+#endif
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
     gen_get_gpr(t0, a->rs1);
@@ -176,6 +182,12 @@ static bool trans_lhu(DisasContext *ctx, arg_lhu *a)
 
 static bool gen_store(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
+#ifdef TARGET_CHERI
+    if (ctx->capmode) {
+        // TODO: SD is SC for RV32
+        return gen_cap_store(ctx, a->rs1, a->rs2, a->imm, memop);
+    }
+#endif
     TCGv t0 = tcg_temp_new();
     TCGv dat = tcg_temp_new();
     gen_get_gpr(t0, a->rs1);
