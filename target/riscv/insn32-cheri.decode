@@ -77,6 +77,7 @@ ccheckperm  1111111  01000 ..... 000 ..... 1011011 @r2
 cchecktype  1111111  01001 ..... 000 ..... 1011011 @r2
 cmove       1111111  01010 ..... 000 ..... 1011011 @r2
 ccleartag   1111111  01011 ..... 000 ..... 1011011 @r2
+cjalr       1111111  01100 ..... 000 ..... 1011011 @r2
 # TODO: mapping clause encdec = CJALR(cd, cb)      if (haveXcheri()) <-> 0b1111111 @ 0b01100 @ cb @ 0b000 @ cd @ 0b1011011 if (haveXcheri())
 # TODO: mapping clause encdec = ClearRegs(GPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b01101 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
 cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2

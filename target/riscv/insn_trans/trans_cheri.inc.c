@@ -220,3 +220,22 @@ static bool trans_csetboundsimm(DisasContext *ctx, arg_cincoffsetimm *a)
     tcg_debug_assert(a->imm >= 0);
     return gen_cheri_cap_cap_imm(a->rd, a->rs1, a->imm, &gen_helper_csetbounds);
 }
+
+/// Control-flow instructions
+static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
+{
+    INSN_CAN_TRAP(ctx);
+    TCGv_i32 dest_regnum = tcg_const_i32(a->rd);
+    TCGv_i32 source_regnum = tcg_const_i32(a->rs1);
+    TCGv t0 = tcg_const_tl(ctx->pc_succ_insn); // Link addr + resulting $pc
+    gen_helper_cjalr(t0, cpu_env, dest_regnum, source_regnum, t0);
+    gen_rvfi_dii_set_field_const(rd_addr, a->rd);
+    tcg_temp_free(t0);
+    tcg_temp_free_i32(source_regnum);
+    tcg_temp_free_i32(dest_regnum);
+    gen_rvfi_dii_validate_jump(ctx);
+
+    // PC has been updated -> exit translation block
+    ctx->base.is_jmp = DISAS_NORETURN;
+    return true;
+}
