@@ -47,8 +47,7 @@
 #endif
 
 #include "cheri_tagmem.h"
-#include "cheri-lazy-capregs.h"
-#include "cheri-bounds-stats.h"
+#include "cheri-helper-utils.h"
 
 #include "disas/disas.h"
 #include "disas/dis-asm.h"
@@ -352,52 +351,22 @@ void CHERI_HELPER_IMPL(cgetpcc(CPUArchState *env, uint32_t cd))
     /* Note that the offset(cursor) is updated by ccheck_pcc */
 }
 
-static void
-derive_from_pcc_impl(CPUArchState *env, uint32_t cd, target_ulong new_addr,
-#ifdef DO_CHERI_STATISTICS
-                     uintptr_t retpc, struct oob_stats_info* oob_info) {
-    oob_info->num_uses++;
-#else
-                     uintptr_t retpc, void* dummy_arg) {
-    (void)dummy_arg;
-#endif
-#ifdef DO_CHERI_STATISTICS
-    oob_info->num_uses++;
-#endif
-    cap_register_t *pccp = &env->active_tc.PCC;
-    /*
-     * CGetPCCSetOffset: Get PCC with new offset
-     * See Chapter 5 in CHERI Architecture manual.
-     */
-    cap_register_t result = *pccp;
-    if (!is_representable_cap_with_addr(pccp, new_addr)) {
-        if (pccp->cr_tag)
-            became_unrepresentable(env, cd, oob_info, retpc);
-        cap_mark_unrepresentable(new_addr, &result);
-    } else {
-        result._cr_cursor = new_addr;
-        check_out_of_bounds_stat(env, oob_info, &result);
-        /* Note that the offset(cursor) is updated by ccheck_pcc */
-    }
-    update_capreg(env, cd, &result);
-}
-
 void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
     uint64_t new_addr = rs + cap_get_base(&env->active_tc.PCC);
-    derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
 }
 
 void CHERI_HELPER_IMPL(cgetpccincoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
     uint64_t new_addr = rs + cap_get_cursor(&env->active_tc.PCC);
-    derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
 }
 
 void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
     uint64_t new_addr = rs;
-    derive_from_pcc_impl(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
 void CHERI_HELPER_IMPL(cincbase(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt))

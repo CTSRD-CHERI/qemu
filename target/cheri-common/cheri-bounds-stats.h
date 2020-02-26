@@ -205,6 +205,7 @@ DECLARE_CHERI_STAT(csetoffset)
 #else /* !defined(DO_CHERI_STATISTICS) */
 
 // Don't collect any statistics by default (it slows down QEMU)
+struct oob_stats_info;
 #define OOB_INFO(op) NULL
 #define check_out_of_bounds_stat(env, op, capreg) do { } while (0)
 #define became_unrepresentable(env, reg, operation, retpc) _became_unrepresentable(env, reg, retpc)
