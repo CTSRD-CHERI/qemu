@@ -1028,7 +1028,7 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
 
 #if defined(CHERI_128) && QEMU_USE_COMPRESSED_CHERI_CAPS
 
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
 /*
  * Print capability load from memory to log file.
  */
@@ -1080,7 +1080,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
         // Fast path, host address in TLB
         pesbt = ldq_p(host) ^ CC128_NULL_XOR_MASK;
         cursor = ldq_p((char*)host + 8);
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_ldq_data_ra() performs the read logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
@@ -1101,7 +1101,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
         // Decompress to log all fields
@@ -1109,10 +1109,12 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
         decompress_128cap_already_xored(pesbt, cursor, &ncd);
         ncd.cr_tag = tag;
         dump_cap_load(vaddr, compress_128cap(&ncd), cursor, tag);
+#ifdef TARGET_MIPS
         if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
             cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
             cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
         }
+#endif
     }
 #endif
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
@@ -1147,7 +1149,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         // Fast path, host address in TLB
         stq_p(host, pesbt ^ CC128_NULL_XOR_MASK);
         stq_p((char*)host + 8, cursor);
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_stq_data_ra() performs the write logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
@@ -1162,7 +1164,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
     }
 
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
         /* Log memory cap write, if needed. */
@@ -1172,10 +1174,12 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         stored_cap.cr_tag = tag;
         cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
         dump_cap_store(vaddr, pesbt, cursor, tag);
+#ifdef TARGET_MIPS
         if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
             cvtrace_dump_cap_store(&env->cvtrace, vaddr, &stored_cap);
             cvtrace_dump_cap_cbl(&env->cvtrace, &stored_cap);
         }
+#endif
     }
 #endif
 }

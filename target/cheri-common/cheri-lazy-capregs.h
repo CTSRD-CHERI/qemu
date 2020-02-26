@@ -42,6 +42,7 @@
 #include "cheri-lazy-capregs-types.h"
 #include "cpu.h"
 #include "tcg/tcg.h"
+#include "qemu/log.h"
 
 static inline const cap_register_t *cheri_get_ddc(CPUArchState *env);
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
@@ -183,6 +184,8 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     env->rvfi_dii_trace.rvfi_dii_rd_addr = regnum;
     env->rvfi_dii_trace.rvfi_dii_rd_wdata = newval->_cr_cursor;
 #endif
+    qemu_log_mask(CPU_LOG_INSTR, "  C%02d <- " PRINT_CAP_FMTSTR "\n", regnum,
+                  PRINT_CAP_ARGS(target));
 }
 
 #if QEMU_USE_COMPRESSED_CHERI_CAPS

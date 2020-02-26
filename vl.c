@@ -1773,8 +1773,8 @@ static void version(void)
 #endif
     printf("Built with C0 as NULL register\n");
 #endif  // TARGET_CHERI
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
-    printf("Built with MIPS instruction logging enabled\n");
+#if defined(CONFIG_MIPS_LOG_INSTR)
+    printf("Built with instruction logging enabled\n");
 #endif
 }
 

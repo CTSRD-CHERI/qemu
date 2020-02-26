@@ -1751,7 +1751,7 @@ static inline uint64_t cpu_load_helper(CPUArchState *env, abi_ptr addr,
     oi = make_memop_idx(op, mmu_idx);
     ret = full_load(env, addr, oi, retaddr);
 
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
     helper_dump_load(env, addr, ret, op);
 #endif
     qemu_plugin_vcpu_mem_cb(env_cpu(env), addr, meminfo);
@@ -2111,7 +2111,7 @@ cpu_store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
 
     oi = make_memop_idx(op, mmu_idx);
     store_helper(env, addr, val, oi, retaddr, op);
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
     helper_dump_store(env, addr, val, op);
 #endif
     qemu_plugin_vcpu_mem_cb(env_cpu(env), addr, meminfo);
