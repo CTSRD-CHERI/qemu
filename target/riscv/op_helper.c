@@ -102,7 +102,9 @@ target_ulong helper_sret(CPURISCVState *env, target_ulong cpu_pc_deb)
     mstatus = set_field(mstatus, MSTATUS_SPP, PRV_U);
     riscv_cpu_set_mode(env, prev_priv);
     env->mstatus = mstatus;
-
+#ifdef TARGET_CHERI
+    env->PCC = env->SEPCC;
+#endif
     return retpc;
 }
 
@@ -128,6 +130,9 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
     riscv_cpu_set_mode(env, prev_priv);
     env->mstatus = mstatus;
 
+#ifdef TARGET_CHERI
+    env->PCC = env->MEPCC;
+#endif
     return retpc;
 }
 
