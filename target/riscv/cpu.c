@@ -283,9 +283,11 @@ static void riscv_cpu_synchronize_from_tb(CPUState *cs, TranslationBlock *tb)
     CPURISCVState *env = &cpu->env;
 #ifdef TARGET_CHERI
     // Note: this sets the cursor not the address
-    assert(false && "Not implemented yet");
     assert(cap_is_in_bounds(&env->PCC, tb->pc, 0));
     env->PCC._cr_cursor = tb->pc;
+    // We also have to synchronize the capmode flag
+    // XXXAR: is this necessary?
+    env->PCC.cr_flags = tb->flags & TB_FLAGS_CAPMODE ? CHERI_FLAG_CAPMODE : 0;
 #else
     env->pc = tb->pc;
 #endif
