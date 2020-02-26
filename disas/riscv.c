@@ -481,7 +481,20 @@ typedef enum {
     // CHERI:
     rv_op_auipcc = 319,
     rv_op_clc,
+    rv_op_clb,
+    rv_op_clbu,
+    rv_op_clh,
+    rv_op_clhu,
+    rv_op_clw,
+    rv_op_clwu,
+    rv_op_cld,
+
     rv_op_csc,
+    rv_op_csb,
+    rv_op_csh,
+    rv_op_csw,
+    rv_op_csd,
+
     rv_op_cincoffsetimm,
     rv_op_csetboundsimm,
 
@@ -588,11 +601,13 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_rd_rs1_imm             "O\t0,1,i"
 #define rv_fmt_rd_rs1_offset          "O\t0,1,i"
 #define rv_fmt_rd_offset_rs1          "O\t0,i(1)"
+#define rv_fmt_rd_offset_cs1          "O\t0,i(C1)"
 #define rv_fmt_cd_offset_cs1          "O\tC0,i(C1)"
 #define rv_fmt_frd_offset_rs1         "O\t3,i(1)"
 #define rv_fmt_rd_csr_rs1             "O\t0,c,1"
 #define rv_fmt_rd_csr_zimm            "O\t0,c,7"
 #define rv_fmt_rs2_offset_rs1         "O\t2,i(1)"
+#define rv_fmt_rs2_offset_cs1         "O\t2,i(C1)"
 #define rv_fmt_cs2_offset_cs1         "O\tC2,i(C1)"
 #define rv_fmt_frs2_offset_rs1        "O\t5,i(1)"
 #define rv_fmt_rs1_rs2_offset         "O\t1,2,o"
@@ -1177,6 +1192,19 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_cjalr] = { "cjalr", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_cgetaddr] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
 
+    // capmode loads:
+    [rv_op_clb] = { "clb", rv_codec_i, rv_fmt_rd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_clh] = { "clh", rv_codec_i, rv_fmt_rd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_clw] = { "clw", rv_codec_i, rv_fmt_rd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_cld] = { "cld", rv_codec_i, rv_fmt_rd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_clbu] = { "clbu", rv_codec_i, rv_fmt_rd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_clhu] = { "clhu", rv_codec_i, rv_fmt_rd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_clwu] = { "clwu", rv_codec_i, rv_fmt_rd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_csb] = { "sb", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_csh] = { "sh", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_csw] = { "sw", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_csd] = { "sd", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
+
 };
 
 /* CSR names */
@@ -1558,13 +1586,19 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
         switch (((inst >> 2) & 0b11111)) {
         case 0:
             switch (((inst >> 12) & 0b111)) {
-            case 0: op = rv_op_lb; break;
-            case 1: op = rv_op_lh; break;
-            case 2: op = rv_op_lw; break;
-            case 3: op = (isa == rv32 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clc : rv_op_ld; break;
-            case 4: op = rv_op_lbu; break;
-            case 5: op = rv_op_lhu; break;
-            case 6: op = rv_op_lwu; break;
+            case 0: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clb : rv_op_lb; break;
+            case 1: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clh : rv_op_lh; break;
+            case 2: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clw : rv_op_lw; break;
+            case 3:
+                if (flags & RISCV_DIS_FLAG_CAPMODE) {
+                    op = isa == rv32 ? rv_op_clc : rv_op_cld;
+                } else {
+                    op = rv_op_ld;
+                }
+                break;
+            case 4: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clbu : rv_op_lbu; break;
+            case 5: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clhu : rv_op_lhu; break;
+            case 6: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clwu : rv_op_lwu; break;
             case 7: op = rv_op_ldu; break;
             }
             break;
@@ -1627,7 +1661,13 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
             case 0: op = rv_op_sb; break;
             case 1: op = rv_op_sh; break;
             case 2: op = rv_op_sw; break;
-            case 3: op = (isa == rv32 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_csc : rv_op_sd; break;
+            case 3:
+                if (flags & RISCV_DIS_FLAG_CAPMODE) {
+                    op = isa == rv32 ? rv_op_csc : rv_op_csd;
+                } else {
+                    op = rv_op_sd;
+                }
+                break;
             case 4: op = (isa == rv64 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_csc : rv_op_sq; break;
             }
             break;
