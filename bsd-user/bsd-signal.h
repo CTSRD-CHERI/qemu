@@ -145,7 +145,7 @@ static inline abi_long do_bsd_sigpending(abi_long arg1)
 static inline abi_long do_bsd_sigsuspend(void *cpu_env, abi_long arg1,
         abi_long arg2)
 {
-    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    CPUState *cpu = env_cpu(cpu_env);
     TaskState *ts = cpu->opaque;
     void *p;
     abi_long ret;

@@ -422,7 +422,7 @@ static inline abi_long do_freebsd_select(CPUArchState *env, int n,
 	abi_ulong rfd_addr, abi_ulong wfd_addr, abi_ulong efd_addr,
 	abi_ulong target_tv_addr)
 {
-    CPUState *cpu = ENV_GET_CPU(env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = (TaskState *)cpu->opaque;
     fd_set rfds, wfds, efds;
     fd_set *rfds_ptr, *wfds_ptr, *efds_ptr;

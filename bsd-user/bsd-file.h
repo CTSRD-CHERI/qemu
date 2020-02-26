@@ -671,7 +671,7 @@ static inline abi_long do_bsd_readlink(CPUArchState *env, abi_long arg1,
     }
 #ifdef __FreeBSD__
     if (strcmp(p1, "/proc/curproc/file") == 0) {
-        CPUState *cpu = ENV_GET_CPU(env);
+        CPUState *cpu = env_cpu(env);
         TaskState *ts = (TaskState *)cpu->opaque;
         strncpy(p2, ts->bprm->fullpath, arg3);
         ret = MIN((abi_long)strlen(ts->bprm->fullpath), arg3);
@@ -985,7 +985,7 @@ static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
     struct pollfd *pfd;
     struct target_pollfd *target_pfd;
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
-    CPUState *cpu = ENV_GET_CPU(env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = (TaskState *)cpu->opaque;
     sigset_t mask, omask;
 #endif /* !  __FreeBSD_version >= 1100000 */
