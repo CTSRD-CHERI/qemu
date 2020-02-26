@@ -32,15 +32,17 @@ static bool trans_lui(DisasContext *ctx, arg_lui *a)
 
 static bool trans_auipc(DisasContext *ctx, arg_auipc *a)
 {
+#ifdef TARGET_CHERI
     if (ctx->capmode) {
         TCGv_i32 dst = tcg_const_i32(a->rd);
         TCGv new_cursor = tcg_const_tl(a->imm + ctx->base.pc_next);
         gen_helper_auipcc(cpu_env, dst, new_cursor);
         tcg_temp_free(new_cursor);
         tcg_temp_free_i32(dst);
-    } else {
-        gen_set_gpr_const(a->rd, a->imm + ctx->base.pc_next);
+        return true;
     }
+#endif
+    gen_set_gpr_const(a->rd, a->imm + ctx->base.pc_next);
     return true;
 }
 
