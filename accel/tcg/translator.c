@@ -66,7 +66,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         if ((tb_cflags(db->tb) & CF_LOG_INSTR)) {
             TCGv tpc = tcg_const_tl(db->pc_next);
             gen_helper_log_instruction(cpu_env, tpc);
-            tcg_temp_free_i64(tpc);
+            tcg_temp_free(tpc);
         }
 #endif
         tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */

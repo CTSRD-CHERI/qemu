@@ -321,7 +321,7 @@ static inline void generate_cloadtags(int32_t rd, int32_t cb)
 
     gen_helper_cloadtags(ttags, cpu_env, tcb, tcbc);
     tcg_gen_movi_i32(tcb, MO_TEQ);
-    gen_helper_dump_load(cpu_env, tcbc, ttags, tcb); // FIXME: not really correct
+    gen_helper_dump_load64(cpu_env, tcbc, ttags, tcb); // FIXME: not really correct
     gen_store_gpr(ttags, rd);
 
     tcg_temp_free_cap_checked(tcbc);

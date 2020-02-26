@@ -1950,8 +1950,8 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         result = address_space_write(cs->as, dest_paddr, MEMTXATTRS_UNSPECIFIED, buffer, len);
         if (unlikely(log_instr)) {
             for (int i = 0; i < len; i++) {
-                helper_dump_load(env, original_src + i, buffer[i], MO_8);
-                helper_dump_store(env, original_dest + i, buffer[i], MO_8);
+                helper_dump_load64(env, original_src + i, buffer[i], MO_8);
+                helper_dump_store64(env, original_dest + i, buffer[i], MO_8);
             }
         }
         if (result != MEMTX_OK) {
@@ -2173,9 +2173,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                 // TODO: dump as a single big block?
                 for (target_ulong i = 0; i < l_adj_nitems; i++) {
                     if (pattern_length == 1)
-                        helper_dump_store(env, dest + i, value, MO_8);
+                        helper_dump_store64(env, dest + i, value, MO_8);
                     else if (pattern_length == 4)
-                        helper_dump_store(env, dest + (i * pattern_length), value, MO_32);
+                        helper_dump_store64(env, dest + (i * pattern_length), value, MO_32);
                     else
                         assert(false && "invalid pattern length");
                 }
@@ -2214,9 +2214,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                     // TODO: dump as a single big block?
                     for (target_ulong i = 0; i < l_adj_nitems; i++) {
                         if (pattern_length == 1)
-                            helper_dump_store(env, dest + i, value, MO_8);
+                            helper_dump_store64(env, dest + i, value, MO_8);
                         else if (pattern_length == 4)
-                            helper_dump_store(env, dest + (i * pattern_length), value, MO_32);
+                            helper_dump_store64(env, dest + (i * pattern_length), value, MO_32);
                         else
                             assert(false && "invalid pattern length");
                     }
@@ -2261,12 +2261,12 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                 }
                 if (unlikely(log_instr)) {
                     if (pattern_length == 1)
-                        helper_dump_store(env, dest, value, MO_8);
+                        helper_dump_store64(env, dest, value, MO_8);
                     else if (pattern_length == 4)
-                        helper_dump_store(env, dest, value, MO_32);
+                        helper_dump_store64(env, dest, value, MO_32);
                     else
                         assert(false && "invalid pattern length");
-                    helper_dump_store(env, dest, value, MO_8);
+                    helper_dump_store64(env, dest, value, MO_8);
                 }
                 dest += pattern_length;
                 len_nitems--;

@@ -199,7 +199,7 @@ static inline void cvtrace_dump_gpr_ldst(cvtrace_t *cvtrace, uint8_t version,
 /*
  * Print the memory store to log file.
  */
-void HELPER(dump_store)(CPUArchState *env, target_ulong addr,target_ulong value, MemOp op)
+void HELPER(dump_store64)(CPUArchState *env, target_ulong addr, uint64_t value, MemOp op)
 {
 
     if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))))
@@ -239,13 +239,13 @@ void HELPER(dump_store)(CPUArchState *env, target_ulong addr,target_ulong value,
 
 void HELPER(dump_store32)(CPUArchState *env, target_ulong addr, uint32_t value, MemOp op)
 {
-    helper_dump_store(env, addr, (target_ulong)value, op);
+    helper_dump_store64(env, addr, (uint64_t)value, op);
 }
 
 /*
  * Print the memory load to log file.
  */
-void HELPER(dump_load)(CPUArchState *env, target_ulong addr, target_ulong value, MemOp op)
+void HELPER(dump_load64)(CPUArchState *env, target_ulong addr, uint64_t value, MemOp op)
 {
     if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))))
         return;
@@ -281,7 +281,7 @@ void HELPER(dump_load)(CPUArchState *env, target_ulong addr, target_ulong value,
 
 void HELPER(dump_load32)(CPUArchState *env, target_ulong addr, uint32_t value, MemOp op)
 {
-    helper_dump_load(env, addr, (target_ulong)value, op);
+    helper_dump_load64(env, addr, (uint64_t)value, op);
 }
 #endif
 

@@ -1084,8 +1084,8 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
         // cpu_ldq_data_ra() performs the read logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-            helper_dump_load(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
-            helper_dump_load(env, vaddr + 8, cursor, MO_64);
+            helper_dump_load64(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_load64(env, vaddr + 8, cursor, MO_64);
         }
 #endif
     } else {
@@ -1153,8 +1153,8 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         // cpu_stq_data_ra() performs the write logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-            helper_dump_store(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
-            helper_dump_store(env, vaddr + 8, cursor, MO_64);
+            helper_dump_store64(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_store64(env, vaddr + 8, cursor, MO_64);
         }
 #endif
     } else {
