@@ -250,23 +250,12 @@ void helper_log_value(CPUMIPSState *env, const void* ptr, uint64_t value)
 }
 
 /*
- * Print the instruction to log file.
+ * Print the instruction to cvtrace log file.
  */
-void helper_log_instruction(CPUMIPSState *env, target_ulong pc)
+void helper_mips_cvtrace_log_instruction(CPUMIPSState *env, target_ulong pc)
 {
-    int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        CPUState *cs = env_cpu(env);
-
-        /* Disassemble and print instruction. */
-        if (isa == 0) {
-            log_target_disas(cs, pc, 4);
-        } else {
-            log_target_disas(cs, pc, 2);
-        }
-    }
-
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+        int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
         static uint16_t cycles = 0;  /* XXX */
         uint32_t opcode;
         CPUState *cs = env_cpu(env);
@@ -737,109 +726,6 @@ void helper_dump_changed_state(CPUMIPSState *env)
         /* Print change state: HI/LO COP0 (not included in CVTRACE) */
         dump_changed_cop0(env);
     }
-}
-
-/*
- * dump non-capability data to cvtrace entry
- */
-static inline void cvtrace_dump_gpr_ldst(cvtrace_t *cvtrace, uint8_t version,
-        uint64_t addr, uint64_t value)
-{
-    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        cvtrace->version = version;
-        cvtrace->val1 = tswap64(addr);
-        cvtrace->val2 = tswap64(value);
-    }
-}
-#define cvtrace_dump_gpr_load(trace, addr, val)          \
-    cvtrace_dump_gpr_ldst(trace, CVT_LD_GPR, addr, val)
-#define cvtrace_dump_gpr_store(trace, addr, val)         \
-    cvtrace_dump_gpr_ldst(trace, CVT_ST_GPR, addr, val)
-
-/*
- * Print the memory store to log file.
- */
-void helper_dump_store(CPUMIPSState *env, target_ulong addr,target_ulong value, MemOp op)
-{
-
-    if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR) |
-                 qemu_loglevel_mask(CPU_LOG_CVTRACE))))
-        return;
-    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        cvtrace_dump_gpr_store(&env->cvtrace, addr, value);
-        return;
-    }
-
-    // FIXME: value printed is not correct for sdl!
-    // FIXME: value printed is not correct for sdr!
-    // FIXME: value printed is not correct for swl!
-    // FIXME: value printed is not correct for swr!
-    switch (memop_size(op)) {
-    case 8:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = " TARGET_FMT_lx "\n",
-                 addr, value);
-        break;
-    case 4:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %08x\n", addr,
-                 (uint32_t)value);
-        break;
-    case 2:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %04x\n", addr,
-                 (uint16_t)value);
-        break;
-    case 1:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %02x\n", addr,
-                 (uint8_t)value);
-        break;
-    default:
-        tcg_abort();
-    }
-}
-
-void helper_dump_store32(CPUMIPSState *env, target_ulong addr, uint32_t value, MemOp op)
-{
-    helper_dump_store(env, addr, (target_ulong)value, op);
-}
-
-/*
- * Print the memory load to log file.
- */
-void helper_dump_load(CPUMIPSState *env, target_ulong addr, target_ulong value, MemOp op)
-{
-    if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR) |
-                 qemu_loglevel_mask(CPU_LOG_CVTRACE))))
-        return;
-    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        cvtrace_dump_gpr_load(&env->cvtrace, addr, value);
-        return;
-    }
-    // FIXME: cloadtags not correct
-    switch (memop_size(op)) {
-    case 8:
-        qemu_log("    Memory Read [" TARGET_FMT_lx "] = " TARGET_FMT_lx "\n",
-                 addr, value);
-        break;
-    case 4:
-        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %08x\n", addr,
-                 (uint32_t)value);
-        break;
-    case 2:
-        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %04x\n", addr,
-                 (uint16_t)value);
-        break;
-    case 1:
-
-        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %02x\n", addr,
-                 (uint8_t)value);
-        break;
-    default:
-        tcg_abort();
-    }
-}
-
-void helper_dump_load32(CPUMIPSState *env, target_ulong addr, uint32_t value, MemOp op)
-{
-    helper_dump_load(env, addr, (target_ulong)value, op);
 }
 
 #endif // CONFIG_MIPS_LOG_INSTR

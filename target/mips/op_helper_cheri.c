@@ -1315,7 +1315,7 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
 #ifdef CONFIG_MIPS_LOG_INSTR
     // Finally, log the instruction that will be executed next
     if (unlikely(should_log_instr)) {
-        helper_log_instruction(env, next_pc);
+        helper_mips_cvtrace_log_instruction(env, next_pc);
     }
 #endif
 }

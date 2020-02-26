@@ -62,6 +62,11 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     while (true) {
         db->num_insns++;
         ops->insn_start(db, cpu);
+#if defined(CONFIG_MIPS_LOG_INSTR)
+        TCGv tpc = tcg_const_tl(db->pc_next);
+        gen_helper_log_instruction(cpu_env, tpc);
+        tcg_temp_free_i64(tpc);
+#endif
         tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 
         if (plugin_enabled) {

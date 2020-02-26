@@ -2839,7 +2839,7 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
         }
     }
 
-#ifdef TARGET_CHERI
+#if defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_cap_checked_ptr saved_load_addr;
     // If addr and val are the same, we need to allocate a temporary
     if ((TCGv)addr == (TCGv)val) {
@@ -2871,12 +2871,10 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
             g_assert_not_reached();
         }
     }
-#ifdef TARGET_CHERI
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
     gen_helper_dump_load32(cpu_env, saved_load_addr, val, tcop);
     tcg_temp_free_i32(tcop);
-#endif
     // Free the saved address if we needed it
     if (saved_load_addr != addr)
         tcg_temp_free_cap_checked(saved_load_addr);
@@ -2915,12 +2913,14 @@ void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
     gen_rvfi_dii_set_field_const(mem_wmask, memop_rvfi_mask(memop));
 
     plugin_gen_mem_callbacks(addr, info);
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
     gen_helper_dump_store32(cpu_env, addr, val, tcop);
 #endif
+#ifdef TARGET_CHERI
     gen_cheri_invalidate_tags(addr, tcop);
+#endif
     tcg_temp_free_i32(tcop);
 #endif
 
@@ -2958,7 +2958,7 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
         }
     }
 
-#ifdef TARGET_CHERI
+#if defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_cap_checked_ptr saved_load_addr;
     // If addr and val are the same, we need to allocate a temporary
     if ((TCGv)addr == (TCGv)val) {
@@ -2996,12 +2996,10 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
             g_assert_not_reached();
         }
     }
-#ifdef TARGET_CHERI
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
     gen_helper_dump_load(cpu_env, saved_load_addr, val, tcop);
     tcg_temp_free_i32(tcop);
-#endif
     // Free the saved address if we needed it
     if (saved_load_addr != addr)
         tcg_temp_free_cap_checked(saved_load_addr);
@@ -3050,12 +3048,14 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     gen_rvfi_dii_set_field_const(mem_wmask, memop_rvfi_mask(memop));
 
     plugin_gen_mem_callbacks(addr, info);
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
-#if defined(TARGET_MIPS) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_MIPS_LOG_INSTR)
     gen_helper_dump_store(cpu_env, addr, val, tcop);
 #endif
+#if defined(TARGET_CHERI)
     gen_cheri_invalidate_tags(addr, tcop);
+#endif
     tcg_temp_free_i32(tcop);
 #endif
 

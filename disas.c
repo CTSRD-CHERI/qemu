@@ -432,6 +432,13 @@ void target_disas(FILE *out, CPUState *cpu, target_ulong code,
 
     INIT_DISASSEMBLE_INFO(s.info, out, fprintf);
 
+    // Ugly workaround to disassemble exactly one instruction
+    bool only_one_inst = size == (target_ulong)-1;
+    if (only_one_inst) {
+        size = 1;
+    }
+
+
     s.cpu = cpu;
     s.info.read_memory_func = target_read_memory;
     s.info.buffer_vma = code;
@@ -464,7 +471,7 @@ void target_disas(FILE *out, CPUState *cpu, target_ulong code,
 	fprintf(out, "0x" TARGET_FMT_lx ":  ", pc);
 	count = s.info.print_insn(pc, &s.info);
 	fprintf(out, "\n");
-	if (count < 0)
+	if (count < 0 || only_one_inst)
 	    break;
         if (size < count) {
             fprintf(out,

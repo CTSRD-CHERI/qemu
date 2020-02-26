@@ -1075,7 +1075,7 @@ static inline void generate_dump_state_and_log_instr(DisasContext *ctx)
 {
     gen_helper_dump_changed_state(cpu_env);
     TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
-    gen_helper_log_instruction(cpu_env, tpc);
+    gen_helper_mips_cvtrace_log_instruction(cpu_env, tpc);
     tcg_temp_free_i64(tpc);
 
 }
