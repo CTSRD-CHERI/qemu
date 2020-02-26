@@ -478,6 +478,13 @@ typedef enum {
     rv_op_fsflags = 316,
     rv_op_fsrmi = 317,
     rv_op_fsflagsi = 318,
+    // CHERI:
+    rv_op_auipcc = 319,
+    rv_op_clc,
+    rv_op_csc,
+    rv_op_cincoffsetimm,
+    rv_op_csetboundsimm,
+
 } rv_op;
 
 /* structures */
@@ -1117,6 +1124,13 @@ const rv_opcode_data opcode_data[] = {
     { "fsflags", rv_codec_i_csr, rv_fmt_rd_rs1, NULL, 0, 0, 0 },
     { "fsrmi", rv_codec_i_csr, rv_fmt_rd_zimm, NULL, 0, 0, 0 },
     { "fsflagsi", rv_codec_i_csr, rv_fmt_rd_zimm, NULL, 0, 0, 0 },
+
+    // CHERI extensions
+    [rv_op_auipcc] = { "auipcc", rv_codec_u, rv_fmt_rd_offset, NULL, 0, 0, 0 },
+    [rv_op_clc] = { "clc", rv_codec_i, rv_fmt_rd_offset_rs1, NULL, 0, 0, 0 },
+    [rv_op_csc] = { "csc", rv_codec_s, rv_fmt_rs2_offset_rs1, NULL, 0, 0, 0 },
+    [rv_op_cincoffsetimm] = { "cincoffset", rv_codec_i, rv_fmt_rd_rs1_imm, NULL, 0, 0, 0 },
+    [rv_op_csetboundsimm] = { "csetbounds", rv_codec_i, rv_fmt_rd_rs1_imm, NULL, 0, 0, 0 },
 };
 
 /* CSR names */
@@ -1328,7 +1342,7 @@ static const char *csr_name(int csrno)
 
 /* decode opcode */
 
-static void decode_inst_opcode(rv_decode *dec, rv_isa isa)
+static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
 {
     rv_inst inst = dec->inst;
     rv_opcode op = rv_op_illegal;
@@ -1481,7 +1495,7 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa)
             case 0: op = rv_op_lb; break;
             case 1: op = rv_op_lh; break;
             case 2: op = rv_op_lw; break;
-            case 3: op = rv_op_ld; break;
+            case 3: op = (isa == rv32 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clc : rv_op_ld; break;
             case 4: op = rv_op_lbu; break;
             case 5: op = rv_op_lhu; break;
             case 6: op = rv_op_lwu; break;
@@ -1499,7 +1513,7 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa)
             switch (((inst >> 12) & 0b111)) {
             case 0: op = rv_op_fence; break;
             case 1: op = rv_op_fence_i; break;
-            case 2: op = rv_op_lq; break;
+            case 2: op = (isa == rv64 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clc : rv_op_lq; break;
             }
             break;
         case 4:
@@ -1523,7 +1537,9 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa)
             case 7: op = rv_op_andi; break;
             }
             break;
-        case 5: op = rv_op_auipc; break;
+        case 5:
+            op = flags & RISCV_DIS_FLAG_CAPMODE ? rv_op_auipcc : rv_op_auipc;
+            break;
         case 6:
             switch (((inst >> 12) & 0b111)) {
             case 0: op = rv_op_addiw; break;
@@ -1545,8 +1561,8 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa)
             case 0: op = rv_op_sb; break;
             case 1: op = rv_op_sh; break;
             case 2: op = rv_op_sw; break;
-            case 3: op = rv_op_sd; break;
-            case 4: op = rv_op_sq; break;
+            case 3: op = (isa == rv32 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_csc : rv_op_sd; break;
+            case 4: op = (isa == rv64 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_csc : rv_op_sq; break;
             }
             break;
         case 9:
@@ -1861,19 +1877,42 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa)
             }
             break;
         case 22:
-            switch (((inst >> 12) & 0b111)) {
-            case 0: op = rv_op_addid; break;
-            case 1:
-                switch (((inst >> 26) & 0b111111)) {
-                case 0: op = rv_op_sllid; break;
+            if (isa == rv128) {
+                switch (((inst >> 12) & 0b111)) {
+                case 0:
+                    op = rv_op_addid;
+                    break;
+                case 1:
+                    switch (((inst >> 26) & 0b111111)) {
+                    case 0:
+                        op = rv_op_sllid;
+                        break;
+                    }
+                    break;
+                case 5:
+                    switch (((inst >> 26) & 0b111111)) {
+                    case 0:
+                        op = rv_op_srlid;
+                        break;
+                    case 16:
+                        op = rv_op_sraid;
+                        break;
+                    }
+                    break;
                 }
-                break;
-            case 5:
-                switch (((inst >> 26) & 0b111111)) {
-                case 0: op = rv_op_srlid; break;
-                case 16: op = rv_op_sraid; break;
+            } else if (flags & RISCV_DIS_FLAG_CHERI) {
+                // CHERI instructions:
+                switch (((inst >> 12) & 0b111)) {
+                case 0:
+                    // TODO:
+                    break;
+                case 1:
+                    op = rv_op_cincoffsetimm;
+                    break;
+                case 2:
+                    op = rv_op_csetboundsimm;
+                    break;
                 }
-                break;
             }
             break;
         case 24:
@@ -2865,12 +2904,12 @@ static void decode_inst_decompress(rv_decode *dec, rv_isa isa)
 /* disassemble instruction */
 
 static void
-disasm_inst(char *buf, size_t buflen, rv_isa isa, uint64_t pc, rv_inst inst)
+disasm_inst(char *buf, size_t buflen, rv_isa isa, uint64_t pc, rv_inst inst, int flags)
 {
     rv_decode dec = { 0 };
     dec.pc = pc;
     dec.inst = inst;
-    decode_inst_opcode(&dec, isa);
+    decode_inst_opcode(&dec, isa, flags);
     decode_inst_operands(&dec);
     decode_inst_decompress(&dec, isa);
     decode_inst_lift_pseudo(&dec);
@@ -2924,7 +2963,7 @@ print_insn_riscv(bfd_vma memaddr, struct disassemble_info *info, rv_isa isa)
         break;
     }
 
-    disasm_inst(buf, sizeof(buf), isa, memaddr, inst);
+    disasm_inst(buf, sizeof(buf), isa, memaddr, inst, info->flags);
     (*info->fprintf_func)(info->stream, "%s", buf);
 
     return len;

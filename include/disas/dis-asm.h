@@ -436,6 +436,8 @@ int print_insn_little_nios2     (bfd_vma, disassemble_info*);
 int print_insn_xtensa           (bfd_vma, disassemble_info*);
 int print_insn_riscv32          (bfd_vma, disassemble_info*);
 int print_insn_riscv64          (bfd_vma, disassemble_info*);
+#define RISCV_DIS_FLAG_CHERI 1
+#define RISCV_DIS_FLAG_CAPMODE 2
 
 #if 0
 /* Fetch the disassembler for a given BFD, if that support is available.  */

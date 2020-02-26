@@ -548,6 +548,14 @@ static void riscv_cpu_disas_set_info(CPUState *s, disassemble_info *info)
 #elif defined(TARGET_RISCV64)
     info->print_insn = print_insn_riscv64;
 #endif
+#ifdef TARGET_CHERI
+    struct RISCVCPU *cpu = RISCV_CPU(s);
+    info->flags |= RISCV_DIS_FLAG_CHERI;
+    if (cpu->env.PCC.cr_flags & CHERI_FLAG_CAPMODE) {
+        info->flags |= RISCV_DIS_FLAG_CAPMODE;
+        info->print_insn = print_insn_riscv64;
+    }
+#endif
 }
 
 static void riscv_cpu_realize(DeviceState *dev, Error **errp)
