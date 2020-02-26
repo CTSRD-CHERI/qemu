@@ -667,7 +667,10 @@ void helper_mtc0_entrylo0(CPUMIPSState *env, target_ulong arg1)
 
 #if defined(TARGET_MIPS64)
 #ifdef TARGET_CHERI
-#define DMTC0_ENTRYLO_MASK(env) ((env->PAMask >> 6) | (1ull << CP0EnLo_S) | (1ull << CP0EnLo_L))
+#define DMTC0_ENTRYLO_MASK(env) ((env->PAMask >> 6) \
+                                    | (1ull << CP0EnLo_CLG) \
+                                    | (1ull << CP0EnLo_S) \
+                                    | (1ull << CP0EnLo_L))
 #else
 #define DMTC0_ENTRYLO_MASK(env) (env->PAMask >> 6)
 #endif /* TARGET_CHERI */
@@ -1133,6 +1136,11 @@ void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
     if (((env->CP0_Config4 >> CP0C4_IE) & 0x3) >= 2) {
         mask |= 1 << CP0EnHi_EHINV;
     }
+#if defined(TARGET_CHERI)
+    mask |= (1UL << CP0EnHi_CLGU)
+            | (1UL << CP0EnHi_CLGS)
+            | (1UL << CP0EnHi_CLGK);
+#endif
 
     /* 1k pages not implemented */
 #if defined(TARGET_MIPS64)

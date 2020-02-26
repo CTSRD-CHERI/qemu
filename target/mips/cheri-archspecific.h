@@ -57,7 +57,8 @@ typedef enum CheriCapExc {
     CapEx_TLBNoStoreCap                 = 0x9,  /* TLB prohibits store capability */
     CapEx_InexactBounds                 = 0xA,  /* Bounds cannot be represented exactly */
     CapEx_UnalignedBase                 = 0xB,
-    // 0x0C-0x0F Reserved
+    CapEx_CapLoadGen                    = 0xC,
+    // 0x0D-0x0F Reserved
     CapEx_GlobalViolation               = 0x10,  /* Global Violation */
     CapEx_PermitExecuteViolation        = 0x11,  /* Permit_Execute Violation */
     CapEx_PermitLoadViolation           = 0x12,  /* Permit_Load Violation */
@@ -159,13 +160,18 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
 }
 
 static inline bool
-clear_tag_if_no_loadcap(bool tag, const cap_register_t* cbp, int prot) {
+cheri_tag_prot_clear_or_trap(CPUMIPSState *env, int cb, const cap_register_t* cbp,
+                             int prot, uintptr_t retpc, target_ulong tag)
+{
     if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
         if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
             qemu_log("Clearing tag bit due to missing %s\n",
                      prot & PAGE_LC_CLEAR ? "TLB_L" : "CAP_PERM_LOAD_CAP");
         }
         return 0;
+    }
+    if (tag && (prot & PAGE_LC_TRAP)) {
+      do_raise_c2_exception_impl(env, CapEx_CapLoadGen, cb, retpc);
     }
     return tag;
 }

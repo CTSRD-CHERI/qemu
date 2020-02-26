@@ -1096,7 +1096,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     }
     int prot;
     target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
-    tag = clear_tag_if_no_loadcap(tag, source, prot);
+    tag = cheri_tag_prot_clear_or_trap(env, cb, source, prot, retpc, tag);
 
     env->statcounters_cap_read++;
     if (tag)

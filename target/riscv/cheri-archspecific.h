@@ -47,6 +47,7 @@ typedef enum CheriCapExc {
     CapEx_TLBNoStoreCap                 = 0x9,
     CapEx_InexactBounds                 = 0xA,
     CapEx_UnalignedBase                 = 0xB,
+    CapEx_CapLoadGen                    = 0xC,
     CapEx_GlobalViolation               = 0x10,
     CapEx_PermitExecuteViolation        = 0x11,
     CapEx_PermitLoadViolation           = 0x12,
@@ -117,7 +118,9 @@ static inline unsigned cheri_get_asid(CPUArchState *env) {
 }
 
 static inline bool
-clear_tag_if_no_loadcap(bool tag, const cap_register_t* cbp, int prot) {
+cheri_tag_prot_clear_or_trap(CPUArchState *env, int cb, const cap_register_t* cbp,
+                             int prot, uintptr_t retpc, target_ulong tag)
+{
     // TODO: implement load-inhibit tlb flags
     return tag;
 }

@@ -32121,6 +32121,11 @@ void cpu_state_reset(CPUMIPSState *env)
         env->SEGMask |= 3ULL << 62;
     }
 #endif
+#if defined(TARGET_CHERI)
+    env->SEGMask |= (1UL << CP0EnHi_CLGU)
+            | (1UL << CP0EnHi_CLGS)
+            | (1UL << CP0EnHi_CLGK);
+#endif
     env->PABITS = env->cpu_model->PABITS;
     env->CP0_SRSConf0_rw_bitmask = env->cpu_model->CP0_SRSConf0_rw_bitmask;
     env->CP0_SRSConf0 = env->cpu_model->CP0_SRSConf0;

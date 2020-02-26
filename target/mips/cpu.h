@@ -688,6 +688,7 @@ struct CPUMIPSState {
 #if defined(TARGET_CHERI)
 # define CP0EnLo_S 63
 # define CP0EnLo_L 62
+# define CP0EnLo_CLG 61
 #else
 # define CP0EnLo_RI 63
 # define CP0EnLo_XI 62
@@ -839,6 +840,11 @@ struct CPUMIPSState {
  */
     target_ulong CP0_EntryHi;
 #define CP0EnHi_EHINV 10
+#if defined(TARGET_CHERI)
+#define CP0EnHi_CLGK 61
+#define CP0EnHi_CLGS 60
+#define CP0EnHi_CLGU 59
+#endif
     target_ulong CP0_EntryHi_ASID_mask;
 /*
  * CP0 Register 11

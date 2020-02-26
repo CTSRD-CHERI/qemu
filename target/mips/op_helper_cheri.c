@@ -65,7 +65,7 @@ const char *cp2_fault_causestr[] = {
     "TLB prohibits Store Capability",
     "Bounds Cannot Be Represented Exactly",
     "Unaligned Base",
-    "Reserved 0x0c",
+    "Cap Load Gen Mismatch",
     "Reserved 0x0d",
     "Reserved 0x0e",
     "Reserved 0x0f",
@@ -1007,7 +1007,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
         env, vaddr, cd, &mem_buffer.u64s[0] /* tps */,
         &mem_buffer.u64s[3] /* length */, physaddr, &prot, retpc);
 
-    tag = clear_tag_if_no_loadcap(tag, source, prot);
+    tag = cheri_tag_prot_clear_or_trap(env, cb, source, prot, retpc, tag);
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
@@ -1145,7 +1145,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     mem_buffer.u64s[3] = cpu_ldq_data_ra(env, vaddr + 24, retpc); /* length */
 
     target_ulong tag = cheri_tag_get(env, vaddr, cd, physaddr, &prot, retpc);
-    tag = clear_tag_if_no_loadcap(tag, source, prot);
+    tag = cheri_tag_prot_clear_or_trap(env, cb, source, prot, retpc, tag);
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;

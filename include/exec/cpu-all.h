@@ -263,6 +263,7 @@ extern intptr_t qemu_host_page_mask;
 #endif
 #ifdef TARGET_CHERI
 #define PAGE_LC_CLEAR	0x8000
+#define PAGE_LC_TRAP	0x4000
 #define PAGE_SC_TRAP	0x2000
 #endif
 
