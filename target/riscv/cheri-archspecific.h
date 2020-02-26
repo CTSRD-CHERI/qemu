@@ -34,6 +34,7 @@
 
 #include "cheri_defs.h"
 
+// Table 3.3: Capability Exception Codes
 typedef enum CheriCapExc {
     CapEx_None                          = 0x0,
     CapEx_LengthViolation               = 0x1,
@@ -48,6 +49,7 @@ typedef enum CheriCapExc {
     CapEx_InexactBounds                 = 0xA,
     CapEx_UnalignedBase                 = 0xB,
     CapEx_CapLoadGen                    = 0xC,
+    // 0xd - 0xf reserved
     CapEx_GlobalViolation               = 0x10,
     CapEx_PermitExecuteViolation        = 0x11,
     CapEx_PermitLoadViolation           = 0x12,
@@ -61,6 +63,7 @@ typedef enum CheriCapExc {
     CapEx_AccessCCallIDCViolation       = 0x1A,
     CapEx_PermitUnsealViolation         = 0x1B,
     CapEx_PermitSetCIDViolation         = 0x1C,
+    // 0x1d - 0x1f reserved
 } CheriCapExcCause;
 
 enum CheriSCR {
@@ -102,7 +105,8 @@ static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum, uintptr_t hostpc)
 {
-    // TODO: use cause and regnum
+    env->cap_cause = cause;
+    env->cap_index = regnum;
     riscv_raise_exception(env, RISCV_EXCP_CHERI, hostpc);
 }
 

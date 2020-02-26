@@ -119,6 +119,18 @@ struct CPURISCVState {
     target_ulong frm;
 
     target_ulong badaddr;
+#ifdef TARGET_CHERI
+    // The cause field reports the cause of the last capability exception,
+    // following the encoding described in Table 3.9.2.
+    // See enum CheriCapExc in cheri-archspecific.h
+    uint8_t cap_cause; //
+    // The cap idx field reports the index of the capability register that
+    // caused the last ex- ception. When the most significant bit is set, the 5
+    // least significant bits are used to index the special purpose capability
+    // register file described in Table 5.3, otherwise, they index the
+    // general-purpose capability register file.
+    uint8_t cap_index;
+#endif
 
     target_ulong priv_ver;
     target_ulong misa;
