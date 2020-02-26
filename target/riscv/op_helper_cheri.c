@@ -40,7 +40,7 @@
 #include "qemu/main-loop.h"
 #include "exec/exec-all.h"
 #include "exec/helper-proto.h"
-#include "cheri-lazy-capregs.h"
+#include "cheri-helper-utils.h"
 #ifndef TARGET_CHERI
 #error TARGET_CHERI must be set
 #endif
@@ -56,10 +56,12 @@ enum SCRAccessMode {
     M_ASR = M_Always | ASR_Flag,
 };
 
-static inline int scr_min_priv(enum SCRAccessMode mode) {
+static inline int scr_min_priv(enum SCRAccessMode mode)
+{
     return ((int)mode >> 1) - 1;
 }
-static inline int scr_needs_asr(enum SCRAccessMode mode) {
+static inline int scr_needs_asr(enum SCRAccessMode mode)
+{
     return (mode & ASR_Flag) == ASR_Flag;
 }
 
@@ -67,10 +69,10 @@ struct SCRInfo {
     bool r;
     bool w;
     enum SCRAccessMode access; /* Default = Invalid */
-//#define PRV_U 0
-//#define PRV_S 1
-//#define PRV_H 2 /* Reserved */
-//#define PRV_M 3
+    //#define PRV_U 0
+    //#define PRV_S 1
+    //#define PRV_H 2 /* Reserved */
+    //#define PRV_M 3
 } scr_info[32] = {
     [CheriSCR_PCC] = {.r = true, .w = false, .access = U_Always},
     [CheriSCR_DDC] = {.r = true, .w = true, .access = U_Always},
@@ -130,15 +132,18 @@ static inline cap_register_t *get_scr(CPUArchState *env, uint32_t index)
     }
 }
 
-void helper_cspecialrw(CPUArchState *env, uint32_t cd, uint32_t cs, uint32_t index)
+void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
+                        uint32_t index)
 {
     uintptr_t _host_return_address = GETPC();
     assert(index <= 31 && "Bug in translator?");
     enum SCRAccessMode mode = scr_info[index].access;
     if (mode == SCR_Invalid) {
-        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, _host_return_address);
+        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST,
+                              _host_return_address);
     }
-    // XXXAR: Raising Access_System_Registers for write to read-only SCR seems odd to me
+    // XXXAR: Raising Access_System_Registers for write to read-only SCR seems
+    // odd to me
     if (cs != 0 && !scr_info[index].w) {
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, 32 + index);
     }
