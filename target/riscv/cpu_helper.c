@@ -623,9 +623,12 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     }
 
 #ifdef CONFIG_RVFI_DII
-    qemu_log_mask(CPU_LOG_INT, "%s: Got real exception %d\n", __func__, cs->exception_index);
-    env->rvfi_dii_trace.rvfi_dii_trap = true;
-    rvfi_dii_communicate(env_cpu(env), env);
+    if (unlikely(env->rvfi_dii_have_injected_insn)) {
+        qemu_log_mask(CPU_LOG_INT, "%s: Got real exception %d\n", __func__,
+                      cs->exception_index);
+        env->rvfi_dii_trace.rvfi_dii_trap = true;
+        rvfi_dii_communicate(env_cpu(env), env);
+    }
 #endif
     /* NOTE: it is not necessary to yield load reservations here. It is only
      * necessary for an SC from "another hart" to cause a load reservation
