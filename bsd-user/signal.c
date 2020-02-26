@@ -345,7 +345,7 @@ static int core_dump_signal(int sig)
 /* Signal queue handling. */
 static inline struct qemu_sigqueue *alloc_sigqueue(CPUArchState *env)
 {
-    CPUState *cpu = ENV_GET_CPU(env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = cpu->opaque;
     struct qemu_sigqueue *q = ts->first_free;
 
@@ -359,7 +359,7 @@ static inline struct qemu_sigqueue *alloc_sigqueue(CPUArchState *env)
 static inline void free_sigqueue(CPUArchState *env, struct qemu_sigqueue *q)
 {
 
-    CPUState *cpu = ENV_GET_CPU(env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = cpu->opaque;
     q->next = ts->first_free;
     ts->first_free = q;
@@ -369,7 +369,7 @@ static inline void free_sigqueue(CPUArchState *env, struct qemu_sigqueue *q)
 void QEMU_NORETURN force_sig(int target_sig)
 {
     CPUArchState *env = thread_cpu->env_ptr;
-    CPUState *cpu = ENV_GET_CPU(env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = cpu->opaque;
     int core_dumped = 0;
     int host_sig;
@@ -430,7 +430,7 @@ void QEMU_NORETURN force_sig(int target_sig)
  */
 int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info)
 {
-    CPUState *cpu = ENV_GET_CPU(env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = cpu->opaque;
     struct emulated_sigtable *k;
     struct qemu_sigqueue *q, **pq;
@@ -891,7 +891,7 @@ void signal_init(void)
 static void handle_pending_signal(CPUArchState *cpu_env, int sig,
                                   struct emulated_sigtable *k)
 {
-    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    CPUState *cpu = env_cpu(cpu_env);
     TaskState *ts = cpu->opaque;
     struct qemu_sigqueue *q;
     struct target_sigaction *sa;
@@ -995,7 +995,7 @@ static void handle_pending_signal(CPUArchState *cpu_env, int sig,
 
 void process_pending_signals(CPUArchState *cpu_env)
 {
-    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    CPUState *cpu = env_cpu(cpu_env);
     int sig;
     sigset_t set;
     struct emulated_sigtable *k;
