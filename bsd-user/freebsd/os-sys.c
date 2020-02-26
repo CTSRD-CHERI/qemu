@@ -1123,7 +1123,7 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
 #endif
     abi_long ret;
     size_t holdlen, oldlen;
-    CPUState *cpu = ENV_GET_CPU(env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = (TaskState *)cpu->opaque;
 
     holdlen = oldlen = *holdlenp;

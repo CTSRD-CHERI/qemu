@@ -1882,7 +1882,7 @@ static size_t note_size(const struct memelfnote *note)
 static abi_long fill_thread_info(struct elf_note_info *info, int signr,
     CPUArchState *env)
 {
-    CPUState *cpu = ENV_GET_CPU((CPUArchState *)env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = (TaskState *)cpu->opaque;
     struct elf_thread_status *ets;
 
@@ -1984,7 +1984,7 @@ static abi_long fill_psstrings(abi_ulong *psstrings)
 static int fill_note_info(struct elf_note_info *info,
         int signr, CPUArchState *env)
 {
-    CPUState *cpu = ENV_GET_CPU((CPUArchState *)env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = (TaskState *)cpu->opaque;
     int i, err, numnotes = 0;
     pid_t pid = getpid();
@@ -2178,7 +2178,7 @@ static int elf_core_dump(int signr, CPUArchState *env)
     int fd = -1;
     int segs = 0;
     off_t offset = 0, data_offset = 0;
-    CPUState *cpu = ENV_GET_CPU((CPUArchState *)env);
+    CPUState *cpu = env_cpu(env);
     TaskState *ts = (TaskState *)cpu->opaque;
     struct vm_area_struct *vma = NULL;
     struct mm_struct *mm = NULL;

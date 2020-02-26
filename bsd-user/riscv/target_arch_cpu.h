@@ -40,7 +40,7 @@ static inline void target_cpu_init(CPURISCVState *env,
 
 static inline void target_cpu_loop(CPURISCVState *env)
 {
-    CPUState *cs = ENV_GET_CPU(env);
+    CPUState *cs = env_cpu(env);
     int trapnr;
     target_siginfo_t info;
     abi_long ret;

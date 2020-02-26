@@ -53,7 +53,7 @@ static abi_long do_freebsd_thr_self(abi_ulong target_id)
 
 static abi_long do_freebsd_thr_exit(CPUArchState *cpu_env, abi_ulong tid_addr)
 {
-    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    CPUState *cpu = env_cpu(cpu_env);
     TaskState *ts;
 
     /*
@@ -71,7 +71,7 @@ static abi_long do_freebsd_thr_exit(CPUArchState *cpu_env, abi_ulong tid_addr)
         }
     }
     thread_cpu = NULL;
-    object_unref(OBJECT(ENV_GET_CPU(cpu_env)));
+    object_unref(OBJECT(env_cpu(cpu_env)));
     ts = cpu->opaque;
     g_free(ts);
     rcu_unregister_thread();

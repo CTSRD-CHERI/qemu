@@ -316,7 +316,7 @@ static inline void target_cpu_clone_regs(CPUX86State *env, target_ulong newsp)
 
 static inline void target_cpu_reset(CPUArchState *cpu)
 {
-    cpu_reset(ENV_GET_CPU(cpu));
+    cpu_reset(env_cpu(cpu));
 }
 
 #endif /* ! _TARGET_ARCH_CPU_H_ */
