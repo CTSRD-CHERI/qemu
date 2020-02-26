@@ -480,6 +480,7 @@ typedef enum {
     rv_op_fsflagsi = 318,
     // CHERI:
     rv_op_auipcc = 319,
+    rv_op_lc,
     rv_op_clc,
     rv_op_clb,
     rv_op_clbu,
@@ -489,6 +490,7 @@ typedef enum {
     rv_op_clwu,
     rv_op_cld,
 
+    rv_op_sc,
     rv_op_csc,
     rv_op_csb,
     rv_op_csh,
@@ -602,12 +604,14 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_rd_rs1_offset          "O\t0,1,i"
 #define rv_fmt_rd_offset_rs1          "O\t0,i(1)"
 #define rv_fmt_rd_offset_cs1          "O\t0,i(C1)"
+#define rv_fmt_cd_offset_rs1          "O\tC0,i(1)"
 #define rv_fmt_cd_offset_cs1          "O\tC0,i(C1)"
 #define rv_fmt_frd_offset_rs1         "O\t3,i(1)"
 #define rv_fmt_rd_csr_rs1             "O\t0,c,1"
 #define rv_fmt_rd_csr_zimm            "O\t0,c,7"
 #define rv_fmt_rs2_offset_rs1         "O\t2,i(1)"
 #define rv_fmt_rs2_offset_cs1         "O\t2,i(C1)"
+#define rv_fmt_cs2_offset_rs1         "O\tC2,i(1)"
 #define rv_fmt_cs2_offset_cs1         "O\tC2,i(C1)"
 #define rv_fmt_frs2_offset_rs1        "O\t5,i(1)"
 #define rv_fmt_rs1_rs2_offset         "O\t1,2,o"
@@ -1171,7 +1175,9 @@ const rv_opcode_data opcode_data[] = {
 
     // CHERI extensions
     [rv_op_auipcc] = { "auipcc", rv_codec_u, rv_fmt_cd_offset, NULL, 0, 0, 0 },
+    [rv_op_lc] = { "lc", rv_codec_i, rv_fmt_cd_offset_rs1, NULL, 0, 0, 0 },
     [rv_op_clc] = { "clc", rv_codec_i, rv_fmt_cd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_sc] = { "sc", rv_codec_s, rv_fmt_cs2_offset_rs1, NULL, 0, 0, 0 },
     [rv_op_csc] = { "csc", rv_codec_s, rv_fmt_cs2_offset_cs1, NULL, 0, 0, 0 },
     [rv_op_cincoffsetimm] = { "cincoffset", rv_codec_i, rv_fmt_rd_rs1_imm, NULL, 0, 0, 0 },
     [rv_op_csetboundsimm] = { "csetbounds", rv_codec_i, rv_fmt_rd_rs1_imm, NULL, 0, 0, 0 },
@@ -1590,10 +1596,10 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
             case 1: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clh : rv_op_lh; break;
             case 2: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clw : rv_op_lw; break;
             case 3:
-                if (flags & RISCV_DIS_FLAG_CAPMODE) {
-                    op = isa == rv32 ? rv_op_clc : rv_op_cld;
+                if (isa == rv32 && flags & RISCV_DIS_FLAG_CHERI) {
+                    op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clc : rv_op_lc;
                 } else {
-                    op = rv_op_ld;
+                    op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_cld : rv_op_ld;
                 }
                 break;
             case 4: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clbu : rv_op_lbu; break;
@@ -1613,7 +1619,13 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
             switch (((inst >> 12) & 0b111)) {
             case 0: op = rv_op_fence; break;
             case 1: op = rv_op_fence_i; break;
-            case 2: op = (isa == rv64 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clc : rv_op_lq; break;
+            case 2:
+                if (isa == rv64 && flags & RISCV_DIS_FLAG_CHERI) {
+                    op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_clc : rv_op_lc;
+                } else {
+                    op = rv_op_lq;
+                }
+                break;
             }
             break;
         case 4:
@@ -1662,13 +1674,19 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
             case 1: op = rv_op_sh; break;
             case 2: op = rv_op_sw; break;
             case 3:
-                if (flags & RISCV_DIS_FLAG_CAPMODE) {
-                    op = isa == rv32 ? rv_op_csc : rv_op_csd;
+                if (isa == rv32 && flags & RISCV_DIS_FLAG_CHERI) {
+                    op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_csc : rv_op_sc;
                 } else {
-                    op = rv_op_sd;
+                    op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_csd : rv_op_ld;
                 }
                 break;
-            case 4: op = (isa == rv64 && flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_csc : rv_op_sq; break;
+            case 4:
+                if (isa == rv64 && flags & RISCV_DIS_FLAG_CHERI) {
+                    op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_csc : rv_op_sc;
+                } else {
+                    op = rv_op_sq;
+                };
+                break;
             }
             break;
         case 9:
