@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2020 Alex Richardson
+ * Copyright (c) 2018-2020 Alex Richardson
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -180,6 +180,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    env->rvfi_dii_trace.rvfi_dii_rd_addr = regnum;
     env->rvfi_dii_trace.rvfi_dii_rd_wdata = newval->_cr_cursor;
 #endif
 }
