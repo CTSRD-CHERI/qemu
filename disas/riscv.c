@@ -485,6 +485,22 @@ typedef enum {
     rv_op_cincoffsetimm,
     rv_op_csetboundsimm,
 
+    // Two operand
+    rv_op_cgetperm,
+    rv_op_cgettype,
+    rv_op_cgetbase,
+    rv_op_cgetlen,
+    rv_op_cgettag,
+    rv_op_cgetsealed,
+    rv_op_cgetoffset,
+    rv_op_cgetflags,
+    rv_op_ccheckperm,
+    rv_op_cchecktype,
+    rv_op_cmove,
+    rv_op_ccleartag,
+    rv_op_cjalr,
+    rv_op_cgetaddr,
+
 } rv_op;
 
 /* structures */
@@ -535,6 +551,13 @@ static const char rv_ireg_name_sym[32][5] = {
     "s8",   "s9",   "s10",  "s11",  "t3",   "t4",   "t5",   "t6",
 };
 
+static const char rv_creg_name_sym[32][6] = {
+    "cnull", "cra",   "csp",   "cgp",   "ctp",   "ct0",   "ct1",   "ct2",
+    "cs0",   "cs1",   "ca0",   "ca1",   "ca2",   "ca3",   "ca4",   "ca5",
+    "ca6",   "ca7",   "cs2",   "cs3",   "cs4",   "cs5",   "cs6",   "cs7",
+    "cs8",   "cs9",   "cs10",  "cs11",  "ct3",   "ct4",   "ct5",   "ct6",
+};
+
 static const char rv_freg_name_sym[32][5] = {
     "ft0",  "ft1",  "ft2",  "ft3",  "ft4",  "ft5",  "ft6",  "ft7",
     "fs0",  "fs1",  "fa0",  "fa1",  "fa2",  "fa3",  "fa4",  "fa5",
@@ -551,6 +574,7 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_rs1_rs2                "O\t1,2"
 #define rv_fmt_rd_imm                 "O\t0,i"
 #define rv_fmt_rd_offset              "O\t0,o"
+#define rv_fmt_cd_offset              "O\tC0,o"
 #define rv_fmt_rd_rs1_rs2             "O\t0,1,2"
 #define rv_fmt_frd_rs1                "O\t3,1"
 #define rv_fmt_rd_frs1                "O\t0,4"
@@ -564,10 +588,12 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_rd_rs1_imm             "O\t0,1,i"
 #define rv_fmt_rd_rs1_offset          "O\t0,1,i"
 #define rv_fmt_rd_offset_rs1          "O\t0,i(1)"
+#define rv_fmt_cd_offset_cs1          "O\tC0,i(C1)"
 #define rv_fmt_frd_offset_rs1         "O\t3,i(1)"
 #define rv_fmt_rd_csr_rs1             "O\t0,c,1"
 #define rv_fmt_rd_csr_zimm            "O\t0,c,7"
 #define rv_fmt_rs2_offset_rs1         "O\t2,i(1)"
+#define rv_fmt_cs2_offset_cs1         "O\tC2,i(C1)"
 #define rv_fmt_frs2_offset_rs1        "O\t5,i(1)"
 #define rv_fmt_rs1_rs2_offset         "O\t1,2,o"
 #define rv_fmt_rs2_rs1_offset         "O\t2,1,o"
@@ -577,6 +603,9 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_rd_zimm                "O\t0,7"
 #define rv_fmt_rd_rs1                 "O\t0,1"
 #define rv_fmt_rd_rs2                 "O\t0,2"
+#define rv_fmt_rd_cs1                 "O\t0,C1"
+#define rv_fmt_cd_cs1                 "O\tC0,C1"
+#define rv_fmt_cd_rs1                 "O\tC0,1"
 #define rv_fmt_rs1_offset             "O\t1,o"
 #define rv_fmt_rs2_offset             "O\t2,o"
 
@@ -1126,11 +1155,28 @@ const rv_opcode_data opcode_data[] = {
     { "fsflagsi", rv_codec_i_csr, rv_fmt_rd_zimm, NULL, 0, 0, 0 },
 
     // CHERI extensions
-    [rv_op_auipcc] = { "auipcc", rv_codec_u, rv_fmt_rd_offset, NULL, 0, 0, 0 },
-    [rv_op_clc] = { "clc", rv_codec_i, rv_fmt_rd_offset_rs1, NULL, 0, 0, 0 },
-    [rv_op_csc] = { "csc", rv_codec_s, rv_fmt_rs2_offset_rs1, NULL, 0, 0, 0 },
+    [rv_op_auipcc] = { "auipcc", rv_codec_u, rv_fmt_cd_offset, NULL, 0, 0, 0 },
+    [rv_op_clc] = { "clc", rv_codec_i, rv_fmt_cd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_csc] = { "csc", rv_codec_s, rv_fmt_cs2_offset_cs1, NULL, 0, 0, 0 },
     [rv_op_cincoffsetimm] = { "cincoffset", rv_codec_i, rv_fmt_rd_rs1_imm, NULL, 0, 0, 0 },
     [rv_op_csetboundsimm] = { "csetbounds", rv_codec_i, rv_fmt_rd_rs1_imm, NULL, 0, 0, 0 },
+
+    // Two operand
+    [rv_op_cgetperm] = { "cgetperm", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgettype] = { "cgettype", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetbase] = { "cgetbase", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetlen] = { "cgetlen", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgettag] = { "cgettag", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetsealed] = { "cgetsealed", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetoffset] = { "cgetoffset", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetflags] = { "cgetflags", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_ccheckperm] = { "ccheckperm", rv_codec_r, rv_fmt_cd_rs1, NULL, 0, 0, 0 },
+    [rv_op_cchecktype] = { "cchecktype", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cmove] = { "cmove", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
+    [rv_op_ccleartag] = { "ccleartag", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cjalr] = { "cjalr", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetaddr] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+
 };
 
 /* CSR names */
@@ -1341,6 +1387,26 @@ static const char *csr_name(int csrno)
 }
 
 /* decode opcode */
+
+static rv_opcode decode_cheri_two_op(unsigned func) {
+    switch (func) {
+    case 0b00000: return rv_op_cgetperm;
+    case 0b00001: return rv_op_cgettype;
+    case 0b00010: return rv_op_cgetbase;
+    case 0b00011: return rv_op_cgetlen;
+    case 0b00100: return rv_op_cgettag;
+    case 0b00101: return rv_op_cgetsealed;
+    case 0b00110: return rv_op_cgetoffset;
+    case 0b00111: return rv_op_cgetflags;
+    case 0b01000: return rv_op_ccheckperm;
+    case 0b01001: return rv_op_cchecktype;
+    case 0b01010: return rv_op_cmove;
+    case 0b01011: return rv_op_ccleartag;
+    case 0b01100: return rv_op_cjalr;
+    case 0b01111: return rv_op_cgetaddr;
+    default: return rv_op_illegal;
+    }
+}
 
 static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
 {
@@ -1904,7 +1970,12 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
                 // CHERI instructions:
                 switch (((inst >> 12) & 0b111)) {
                 case 0:
+                    switch (((inst >> 26) & 0b111111)) {
+                    case 0b111111: // Two-operand
+                        op = decode_cheri_two_op((inst >> 20) & 0b11111);
+                        break;
                     // TODO:
+                    }
                     break;
                 case 1:
                     op = rv_op_cincoffsetimm;
@@ -2725,6 +2796,23 @@ static void format_inst(char *buf, size_t buflen, size_t tab, rv_decode *dec)
             snprintf(tmp, sizeof(tmp), "%d", dec->rs1);
             append(buf, tmp, buflen);
             break;
+        case 'C': {
+            fmt++;
+            switch (*fmt) {
+            case '0':
+                append(buf, rv_creg_name_sym[dec->rd], buflen);
+                break;
+            case '1':
+                append(buf, rv_creg_name_sym[dec->rs1], buflen);
+                break;
+            case '2':
+                append(buf, rv_creg_name_sym[dec->rs2], buflen);
+                break;
+            default:
+                abort();
+            }
+            break;
+        }
         case 'i':
             snprintf(tmp, sizeof(tmp), "%d", dec->imm);
             append(buf, tmp, buflen);
