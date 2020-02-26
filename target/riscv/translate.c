@@ -141,6 +141,9 @@ static void lookup_and_goto_ptr(DisasContext *ctx)
 
 static void gen_exception_illegal(DisasContext *ctx)
 {
+    TCGv opcode = tcg_const_tl(ctx->opcode);
+    tcg_gen_st_tl(opcode, cpu_env, offsetof(CPURISCVState, badaddr));
+    tcg_temp_free(opcode);
     generate_exception(ctx, RISCV_EXCP_ILLEGAL_INST);
 }
 

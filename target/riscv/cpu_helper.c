@@ -24,6 +24,7 @@
 #include "exec/exec-all.h"
 #include "tcg/tcg-op.h"
 #include "trace.h"
+#include "disas/disas.h"
 #ifdef TARGET_CHERI
 #include "cheri_utils.h"
 #endif
@@ -586,6 +587,17 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             tval = env->cap_cause | env->cap_index << 5;
             break;
 #endif
+        case RISCV_EXCP_ILLEGAL_INST:
+            tval = env->badaddr;
+            if (unlikely(qemu_loglevel_mask(CPU_LOG_INT))) {
+                uint32_t opcode = env->badaddr;
+                FILE* logf = qemu_log_lock();
+                qemu_log("Illegal instruction trap was probably caused by: ");
+                target_disas_buf(logf, cs, &opcode, sizeof(opcode),
+                                 PC_ADDR(env), 1);
+                qemu_log_unlock(logf);
+            }
+            break;
         default:
             break;
         }
