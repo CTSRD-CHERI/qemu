@@ -63,23 +63,31 @@ void helper_instr_start(CPUMIPSState *env, target_ulong pc)
             pc, env->CP0_EntryHi & 0xFF);
         env->tracing_suspended = true;
     } else {
+        bool was_off = !qemu_loglevel_mask(cl_default_trace_format);
         qemu_set_log(qemu_loglevel | cl_default_trace_format);
-        user_trace_dbg("Switching on tracing @ 0x%lx ASID %lu\n",
-            pc, env->CP0_EntryHi & 0xFF);
+        if (was_off) {
+            qemu_log("Enabled instruction logging @ " TARGET_FMT_plx " ASID %u\n", pc, (unsigned)(env->CP0_EntryHi & 0xFF));
+        }
         env->tracing_suspended = false;
     }
+    // Set the translation block instruction logging flag
+    // FIXME: this causes assertions: env_cpu(env)->cflags_next_tb |= CF_LOG_INSTR;
 }
 
 /* Stop instruction trace logging. */
 void helper_instr_stop(CPUMIPSState *env, target_ulong pc)
 {
-    user_trace_dbg("Switching off tracing @ 0x%lx ASID %lu\n",
-        pc, env->CP0_EntryHi & 0xFF);
+    bool was_on = qemu_loglevel_mask(cl_default_trace_format);
     qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
+    if (was_on) {
+        qemu_log("Disabled instruction logging @ " TARGET_FMT_plx " ASID %u\n", pc, (unsigned)(env->CP0_EntryHi & 0xFF));
+    }
     /* Make sure a kernel -> user switch does not turn on tracing */
     env->tracing_suspended = false;
     /* don't turn on on next kernel -> userspace change */
     env->trace_explicitly_disabled = true;
+    // Clear the translation block instruction logging flag
+    // FIXME: this causes assertions: env_cpu(env)->cflags_next_tb &= ~CF_LOG_INSTR;
 }
 
 /* Set instruction trace logging to user mode only. */
