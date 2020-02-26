@@ -42,8 +42,7 @@
 #include "exec/helper-proto.h"
 #include "exec/memop.h"
 
-#include "cheri-lazy-capregs.h"
-#include "cheri-bounds-stats.h"
+#include "cheri-helper-utils.h"
 #include "cheri_tagmem.h"
 
 #ifndef TARGET_CHERI

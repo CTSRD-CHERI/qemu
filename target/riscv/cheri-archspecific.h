@@ -87,12 +87,6 @@ enum CheriSCR {
 #define CHERI_EXC_REGNUM_DDC (32 + CheriSCR_DDC)
 
 
-static inline void check_cap(CPURISCVState *env, const cap_register_t *cr,
-                             uint32_t perm, uint64_t addr, uint16_t regnum,
-                             uint32_t len, bool instavail, uintptr_t pc) {
-    return; // No checks yet
-}
-
 static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {
     return &env->DDC;
 }

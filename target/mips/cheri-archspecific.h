@@ -77,65 +77,6 @@ typedef enum CheriCapExc {
 
 target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, uintptr_t retpc);
 
-static inline void check_cap(CPUMIPSState *env, const cap_register_t *cr,
-                             uint32_t perm, uint64_t addr, uint16_t regnum,
-                             uint32_t len, bool instavail, uintptr_t pc) {
-    uint16_t cause;
-    /*
-     * See section 5.6 in CHERI Architecture.
-     *
-     * Capability checks (in order of priority):
-     * (1) <ctag> must be set (CapEx_TagViolation Violation).
-     * (2) Seal bit must be unset (CapEx_SealViolation Violation).
-     * (3) <perm> permission must be set (CapEx_PermitExecuteViolation, CapEx_PermitLoadViolation,
-     * or CapEx_PermitStoreViolation Violation).
-     * (4) <addr> must be within bounds (CapEx_LengthViolation Violation).
-     */
-    if (!cr->cr_tag) {
-        cause = CapEx_TagViolation;
-        // qemu_log("CAP Tag VIOLATION: ");
-        goto do_exception;
-    }
-    if (!cap_is_unsealed(cr)) {
-        cause = CapEx_SealViolation;
-        // qemu_log("CAP Seal VIOLATION: ");
-        goto do_exception;
-    }
-    if ((cr->cr_perms & perm) != perm) {
-        if (perm & CAP_PERM_EXECUTE) {
-            cause = CapEx_PermitExecuteViolation;
-            // qemu_log("CAP Exe VIOLATION: ");
-            goto do_exception;
-        } else if (perm & CAP_PERM_STORE) {
-            cause = CapEx_PermitStoreViolation;
-            // qemu_log("CAP ST VIOLATION: ");
-            goto do_exception;
-        } else if (perm & CAP_PERM_LOAD) {
-            cause = CapEx_PermitLoadViolation;
-            // qemu_log("CAP LD VIOLATION: ");
-            goto do_exception;
-        }
-        // Multiple missing permissions:
-        error_report("Bad permissions check %d", perm);
-        tcg_abort();
-    }
-    // fprintf(stderr, "addr=%zx, len=%zd, cr_base=%zx, cr_len=%zd\n",
-    //     (size_t)addr, (size_t)len, (size_t)cr->cr_base, (size_t)cr->cr_length);
-    if (!cap_is_in_bounds(cr, addr, len)) {
-        cause = CapEx_LengthViolation;
-        // qemu_log("CAP Len VIOLATION: ");
-        goto do_exception;
-    }
-
-    return;
-
-    do_exception:
-    env->CP0_BadVAddr = addr;
-    if (!instavail)
-        env->error_code |= EXCP_INST_NOTAVAIL;
-    do_raise_c2_exception_impl(env, cause, regnum, pc);
-}
-
 static inline const cap_register_t *cheri_get_ddc(CPUMIPSState *env) {
     return &env->active_tc.CHWR.DDC;
 }
