@@ -372,6 +372,11 @@ bool riscv_cpu_exec_interrupt(CPUState *cs, int interrupt_request);
 bool riscv_cpu_fp_enabled(CPURISCVState *env);
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch);
 hwaddr riscv_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
+#ifdef TARGET_CHERI
+hwaddr cpu_riscv_translate_address_tagmem(CPURISCVState *env,
+                                          target_ulong address, int rw, int reg,
+                                          int *prot, uintptr_t retpc);
+#endif
 void  riscv_cpu_do_unaligned_access(CPUState *cs, vaddr addr,
                                     MMUAccessType access_type, int mmu_idx,
                                     uintptr_t retaddr);

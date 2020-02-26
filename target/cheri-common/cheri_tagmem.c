@@ -127,16 +127,14 @@ static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr, int rw,
     hwaddr paddr = 0;
 
 #ifdef TARGET_MIPS
-    paddr = cpu_mips_translate_address_c2(env, vaddr, rw, reg, prot);
+    paddr = cpu_mips_translate_address_c2(env, vaddr, rw, reg, prot, pc);
+#elif defined(TARGET_RISCV)
+    paddr = cpu_riscv_translate_address_tagmem(env, vaddr, rw, reg, prot, pc);
 #else
-#pragma message("TODO: implement v2p_addr check")
+#error "TODO: IMPLEMENT cpu_translate_address_tagmem"
 #endif
-
-    if (paddr == -1LL) {
-        cpu_loop_exit_restore(env_cpu(env), pc);
-    } else {
-        return paddr;
-    }
+    assert(paddr != -1LL && "Should have raised an MMU fault on failure");
+    return paddr;
 }
 
 static inline void check_tagmem_writable(CPUArchState *env, target_ulong vaddr,

@@ -520,6 +520,23 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 #endif
 }
 
+#ifdef TARGET_CHERI
+hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
+                                          target_ulong address, int rw, int reg,
+                                          int *prot, uintptr_t retpc)
+{
+    hwaddr physical = -1LL;
+    int ret = get_physical_address(env, &physical, prot, address, rw,
+                               cpu_mmu_index(env, false));
+    if (ret != TRANSLATE_SUCCESS) {
+        raise_mmu_exception(env, address, rw, false);
+        // TODO: use register
+        riscv_raise_exception(env, env_cpu(env)->exception_index, retpc);
+    }
+    return physical;
+}
+#endif /* TARGET_CHERI */
+
 /*
  * Handle Traps
  *

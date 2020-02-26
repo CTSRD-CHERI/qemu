@@ -1059,7 +1059,7 @@ hwaddr cpu_mips_translate_address(CPUMIPSState *env, target_ulong address,
 }
 
 #ifdef TARGET_CHERI
-hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address, int rw, int reg, int *prot)
+hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address, int rw, int reg, int *prot, uintptr_t retpc)
 {
     hwaddr physical;
     int access_type;
@@ -1072,10 +1072,9 @@ hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address, in
                                cpu_mmu_index(env, false));
     if (ret != TLBRET_MATCH) {
         raise_mmu_exception(env, address, rw, ret, reg);
-        return -1LL;
-    } else {
-        return physical;
+        do_raise_exception_err(env, env_cpu(env)->exception_index, env->error_code, retpc);
     }
+    return physical;
 }
 #endif /* TARGET_CHERI */
 
