@@ -128,7 +128,7 @@ void *new_freebsd_thread_start(void *arg)
     rcu_register_thread();
     tcg_register_thread();
     env = info->env;
-    cpu = ENV_GET_CPU(env);
+    cpu = env_cpu(env);
     thread_cpu = cpu;
     (void)thr_self(&tid);
 
@@ -1349,7 +1349,7 @@ abi_long do_freebsd_thr_new(CPUArchState *env,
     abi_ulong target_rtp_addr;
     struct target_freebsd_rtprio *target_rtp;
     struct rtprio *rtp_ptr, rtp;
-    CPUState *cpu = ENV_GET_CPU(env);
+    CPUState *cpu = env_cpu(env);
     TaskState *parent_ts = (TaskState *)cpu->opaque;
     sigset_t sigmask;
     struct sched_param sched_param;
@@ -1395,7 +1395,7 @@ abi_long do_freebsd_thr_new(CPUArchState *env,
 
     /* init regs that differ from the parent thread. */
     target_cpu_clone_regs(new_env, info.param.stack_base);
-    new_cpu = ENV_GET_CPU(new_env);
+    new_cpu = env_cpu(new_env);
     new_cpu->opaque = ts;
     ts->bprm = parent_ts->bprm;
     ts->info = parent_ts->info;
