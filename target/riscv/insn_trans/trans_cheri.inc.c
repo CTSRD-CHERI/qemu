@@ -397,7 +397,7 @@ static inline bool trans_scddc(DisasContext *ctx, arg_scddc *a)
 {
     // always uses DDC as the base register
     INSN_CAN_TRAP(ctx);
-    return gen_cheri_cap_cap_int(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, &gen_helper_load_cap_via_cap);
+    return gen_cheri_cap_cap_int(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, &gen_helper_store_cap_via_cap);
 }
 
 static inline bool trans_sccap(DisasContext *ctx, arg_sccap *a)
