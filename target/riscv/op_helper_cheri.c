@@ -162,3 +162,12 @@ void helper_cspecialrw(CPUArchState *env, uint32_t cd, uint32_t cs, uint32_t ind
         *scr = new_val;
     }
 }
+
+#ifdef DO_CHERI_STATISTICS
+static DEFINE_CHERI_STAT(auipcc);
+#endif
+
+void HELPER(auipcc)(CPUArchState *env, uint32_t cd, target_ulong new_cursor)
+{
+    derive_cap_from_pcc(env, cd, new_cursor, GETPC(), OOB_INFO(auipcc));
+}
