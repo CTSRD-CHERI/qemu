@@ -366,7 +366,7 @@ void r4k_dump_tlb(CPUMIPSState *env, int idx)
             (tlb->C1 << 3) | (tlb->PFN[1] >> 6);
     }
     qemu_log("    Write TLB[%u] = pgmsk:%08lx hi:%08lx lo0:%08lx lo1:%08lx\n",
-            idx, pagemask, hi, lo0, lo1);
+            idx, (long)pagemask, (long)hi, (long)lo0, (long)lo1);
 }
 
 
