@@ -24,7 +24,7 @@
 #include "exec/exec-all.h"
 #include "exec/helper-proto.h"
 #ifdef TARGET_CHERI
-#include "cheri_utils.h"
+#include "cheri-helper-utils.h"
 #endif
 
 

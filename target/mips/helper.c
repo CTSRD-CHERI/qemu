@@ -29,7 +29,7 @@
 #include "qapi/qapi-commands-machine-target.h"
 
 #ifdef TARGET_CHERI
-#include "cheri-lazy-capregs.h"
+#include "cheri-helper-utils.h"
 #endif
 
 enum {
@@ -1708,7 +1708,7 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env,
     // Translate CP0 Unusable to CP2 ASR fault if we are in kernel mode and
     // PCC is missing ASR:
     if (exception == EXCP_CpU && error_code == 0 && in_kernel_mode(env)) {
-        if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
+        if (!cheri_have_access_sysregs(env)) {
             do_raise_c2_exception_noreg(env, CapEx_AccessSystemRegsViolation, pc);
         }
     }

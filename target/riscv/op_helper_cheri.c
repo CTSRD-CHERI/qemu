@@ -148,8 +148,7 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
     if (cs != 0 && !scr_info[index].w) {
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, 32 + index);
     }
-    bool can_access_sysregs =
-        (env->PCC.cr_perms & CAP_ACCESS_SYS_REGS) == CAP_ACCESS_SYS_REGS;
+    bool can_access_sysregs = cheri_have_access_sysregs(env);
     if (scr_needs_asr(mode) && !can_access_sysregs) {
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, 32 + index);
     }

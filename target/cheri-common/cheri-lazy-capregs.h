@@ -44,7 +44,6 @@
 #include "tcg/tcg.h"
 #include "qemu/log.h"
 
-static inline const cap_register_t *cheri_get_ddc(CPUArchState *env);
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
 
 static inline uint64_t capreg_state_set_to_integer_mask(unsigned reg)
@@ -324,4 +323,4 @@ static inline void set_max_perms_capregs(GPCapRegs *gpcrs)
     }
 }
 
-#endif
+#endif // TARGET_CHERI

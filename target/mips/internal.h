@@ -353,7 +353,8 @@ static inline bool can_access_cp0(CPUMIPSState* env) {
         !(env->hflags & MIPS_HFLAG_KSU)) {
 #ifdef TARGET_CHERI
         // For CHERI we need to check PCC.perms before enabling access to cp0 features.
-        if (!(env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS)) {
+        // XXX: can't use cheri_have_access_sysregs() here due to cyclic deps
+        if (!cap_has_perms(&env->active_tc.PCC, CAP_ACCESS_SYS_REGS)) {
             /* qemu_log_mask(CPU_LOG_INSTR, "Kernel mode but no ASR!\n"); */
             return false;
         }
@@ -595,7 +596,7 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
     do_raise_exception(env, EXCP_C2E, pc);
 }
 
-static inline void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause, uintptr_t pc)
+static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause, uintptr_t pc)
 {
     do_raise_c2_exception_impl(env, cause, 0xff, pc);
 }

@@ -126,3 +126,8 @@ do_exception:
 #endif
     raise_cheri_exception_impl(env, cause, regnum, pc);
 }
+
+static inline bool cheri_have_access_sysregs(CPUArchState* env)
+{
+    return cap_has_perms(cheri_get_pcc(env), CAP_ACCESS_SYS_REGS);
+}

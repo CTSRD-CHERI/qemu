@@ -328,14 +328,12 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb, uint64_
 
 target_ulong CHERI_HELPER_IMPL(cgetcause(CPUArchState *env))
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     /*
      * CGetCause: Move the Capability Exception Cause Register to a
      * General- Purpose Register
      */
-    if (!(perms & CAP_ACCESS_SYS_REGS)) {
+    if (!cheri_have_access_sysregs(env)) {
         do_raise_c2_exception_noreg(env, CapEx_AccessSystemRegsViolation, GETPC());
-        return (target_ulong)0;
     } else {
         return (target_ulong)env->CP2_CapCause;
     }
@@ -453,7 +451,7 @@ static inline cap_register_t *
 check_writable_cap_hwr_access(CPUArchState *env, enum CP2HWR hwr, target_ulong _host_return_address) {
     cheri_debug_assert((int)hwr >= (int)CP2HWR_BASE_INDEX);
     cheri_debug_assert((int)hwr < (int)(CP2HWR_BASE_INDEX + 32));
-    bool access_sysregs = (env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) != 0;
+    bool access_sysregs = cheri_have_access_sysregs(env);
     switch (hwr) {
     case CP2HWR_DDC: /* always accessible */
         assert(false && "$ddc should not be handled here");
@@ -527,7 +525,7 @@ void CHERI_HELPER_IMPL(mtc0_epc(CPUArchState *env, target_ulong arg))
     // Check that we can write to EPCC (should always be true since we would have got a trap when not in kernel mode)
     if (!in_kernel_mode(env)) {
         do_raise_exception(env, EXCP_RI, GETPC());
-    } else if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
+    } else if (!cheri_have_access_sysregs(env)) {
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, CP2HWR_EPCC);
     }
     set_CP0_EPC(env, arg + cap_get_base(&env->active_tc.CHWR.EPCC));
@@ -539,7 +537,7 @@ void CHERI_HELPER_IMPL(mtc0_error_epc(CPUArchState *env, target_ulong arg))
     // Check that we can write to ErrorEPCC (should always be true since we would have got a trap when not in kernel mode)
     if (!in_kernel_mode(env)) {
         do_raise_exception(env, EXCP_RI, GETPC());
-    } else if ((env->active_tc.PCC.cr_perms & CAP_ACCESS_SYS_REGS) == 0) {
+    } else if (!cheri_have_access_sysregs(env)) {
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, CP2HWR_ErrorEPCC);
     }
     set_CP0_ErrorEPC(env, arg + cap_get_base(&env->active_tc.CHWR.ErrorEPCC));
@@ -615,11 +613,10 @@ target_ulong CHERI_HELPER_IMPL(cram(CPUArchState *env, target_ulong len))
 
 void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
 {
-    uint32_t perms = env->active_tc.PCC.cr_perms;
     /*
      * CSetCause: Set the Capability Exception Cause Register
      */
-    if (!(perms & CAP_ACCESS_SYS_REGS)) {
+    if (!cheri_have_access_sysregs(env)) {
         do_raise_c2_exception_noreg(env, CapEx_AccessSystemRegsViolation, GETPC());
     } else {
         env->CP2_CapCause = (uint16_t)(rt & 0xffffUL);
