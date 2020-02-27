@@ -23,7 +23,7 @@
 #include "qemu/main-loop.h"
 #include "exec/exec-all.h"
 #ifdef TARGET_CHERI
-#include "cheri_utils.h"
+#include "cheri-helper-utils.h"
 #endif
 
 /* CSR function table */
@@ -784,6 +784,36 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
 
 #endif
 
+#ifdef TARGET_CHERI
+static inline bool csr_needs_asr(CPURISCVState *env, int csrno) {
+    switch (csrno) {
+    case CSR_CYCLE:
+    case CSR_CYCLEH:
+    case CSR_TIME:
+    case CSR_TIMEH:
+    case CSR_INSTRET:
+    case CSR_INSTRETH:
+    case CSR_FFLAGS:
+    case CSR_FRM:
+    case CSR_FCSR:
+        return false;
+    default:
+        break;
+    }
+    if (csrno >= CSR_HPMCOUNTER3 && csrno <= CSR_HPMCOUNTER31)
+        return false;
+    if (csrno >= CSR_HPMCOUNTER3H && csrno <= CSR_HPMCOUNTER31H)
+        return false;
+    // FIXME: what about MHMPCOUNTER?
+    if (csrno >= CSR_MHPMCOUNTER3 && csrno <= CSR_MHPMCOUNTER31)
+        return false;
+    if (csrno >= CSR_MHPMCOUNTER3H && csrno <= CSR_MHPMCOUNTER31H)
+        return false;
+    // Assume that all others require ASR.
+    return true;
+}
+#endif
+
 /*
  * riscv_csrrw - read and/or update control and status register
  *
@@ -794,7 +824,7 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
  */
 
 int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
-                target_ulong new_value, target_ulong write_mask)
+                target_ulong new_value, target_ulong write_mask, uintptr_t retpc)
 {
     int ret;
     target_ulong old_value;
@@ -821,6 +851,21 @@ int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
     if (!csr_ops[csrno].predicate || csr_ops[csrno].predicate(env, csrno) < 0) {
         return -1;
     }
+
+    // When CHERI is enabled, only certain CSRs can be accessed without the
+    // Access_System_Registers permission in PCC.
+    // TODO: could merge this with predicate callback?
+#ifdef TARGET_CHERI
+    // See Table 5.2 (CSR Whitelist) in ISAv7
+    if (!cheri_have_access_sysregs(env) && csr_needs_asr(env, csrno)) {
+#if !defined(CONFIG_USER_ONLY)
+        if (env->debugger) {
+            return -1;
+        }
+        raise_cheri_exception_impl(env, CapEx_AccessSystemRegsViolation, /*regnum=*/0, true, retpc);
+#endif
+    }
+#endif // TARGET_CHERI
 
     /* execute combined read/write operation if it exists */
     if (csr_ops[csrno].op) {
@@ -868,7 +913,7 @@ int riscv_csrrw_debug(CPURISCVState *env, int csrno, target_ulong *ret_value,
 #if !defined(CONFIG_USER_ONLY)
     env->debugger = true;
 #endif
-    ret = riscv_csrrw(env, csrno, ret_value, new_value, write_mask);
+    ret = riscv_csrrw(env, csrno, ret_value, new_value, write_mask, 0);
 #if !defined(CONFIG_USER_ONLY)
     env->debugger = false;
 #endif
@@ -938,6 +983,9 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
     [CSR_SSTATUS] =             { smode, read_sstatus,     write_sstatus     },
     [CSR_SIE] =                 { smode, read_sie,         write_sie         },
     [CSR_STVEC] =               { smode, read_stvec,       write_stvec       },
+    [CSR_SCOUNTEREN] =          { smode, read_scounteren,  write_scounteren  },
+
+
     [CSR_SCOUNTEREN] =          { smode, read_scounteren,  write_scounteren  },
 
     /* Supervisor Trap Handling */
