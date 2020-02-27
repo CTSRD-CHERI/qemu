@@ -439,6 +439,9 @@ static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
     *flags = cpu_mmu_index(env, 0) | (env->mstatus & MSTATUS_FS);
 #endif
 #ifdef TARGET_CHERI
+    // Note: can't include cheri-archspecific-here
+    // FIXME: move stuff around to allow using the helper
+    // TODO:  *flags |= cheri_in_capmode(env) ? TB_FLAGS_CAPMODE : 0;
     *flags |= (env->PCC.cr_flags & CHERI_FLAG_CAPMODE) ? TB_FLAGS_CAPMODE : 0;
 #endif
 }

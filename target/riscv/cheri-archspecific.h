@@ -95,7 +95,14 @@ static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {
 }
 
 static inline const cap_register_t *cheri_get_pcc(CPURISCVState *env) {
+    // FIXME: TODO: add a debug assertion that env->pc has been synced with TCG!
     return &env->PCC;
+}
+
+static inline bool cheri_in_capmode(CPURISCVState *env) {
+    // Note: No need to synchronize the PCC.cursor value from TCG since
+    // Every change to capmode will exit the current translation block.
+    return (env->PCC.cr_flags & CHERI_FLAG_CAPMODE) == CHERI_FLAG_CAPMODE;
 }
 
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {

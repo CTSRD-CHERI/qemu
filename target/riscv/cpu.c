@@ -555,7 +555,7 @@ static void riscv_cpu_disas_set_info(CPUState *s, disassemble_info *info)
 #ifdef TARGET_CHERI
     struct RISCVCPU *cpu = RISCV_CPU(s);
     info->flags |= RISCV_DIS_FLAG_CHERI;
-    if (cpu->env.PCC.cr_flags & CHERI_FLAG_CAPMODE) {
+    if (cheri_in_capmode(&cpu->env)) {
         info->flags |= RISCV_DIS_FLAG_CAPMODE;
         info->print_insn = print_insn_riscv64;
     }
