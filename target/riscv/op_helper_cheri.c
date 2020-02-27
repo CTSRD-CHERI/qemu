@@ -39,6 +39,7 @@
 #include "cpu.h"
 #include "qemu/main-loop.h"
 #include "exec/exec-all.h"
+#include "exec/log.h"
 #include "exec/helper-proto.h"
 #include "cheri-helper-utils.h"
 #ifndef TARGET_CHERI
@@ -137,6 +138,9 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
                         uint32_t index)
 {
     uintptr_t _host_return_address = GETPC();
+    // Ensure that env->PCC.cursor is correct:
+    cpu_restore_state(env_cpu(env), GETPC(), false);
+
     assert(index <= 31 && "Bug in translator?");
     enum SCRAccessMode mode = scr_info[index].access;
     if (mode == SCR_Invalid) {
@@ -164,9 +168,14 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
     }
     if (cs != 0) {
         assert(scr_info[index].w && "Bug? Should be writable");
-        *scr = new_val;
         qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "  %s <- " PRINT_CAP_FMTSTR "\n", scr_info[index].name,
-                      PRINT_CAP_ARGS(scr));
+                      PRINT_CAP_ARGS(&new_val));
+        if (index == CheriSCR_DDC && !new_val.cr_tag && !cheri_in_capmode(env)) {
+            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
+                          "  Note: Installed untagged $ddc (while not in "
+                          "capmode) at " TARGET_FMT_lx "\n", PC_ADDR(env));
+        }
+        *scr = new_val;
     }
 }
 
