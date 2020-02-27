@@ -1139,6 +1139,11 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     }
 #endif
     bool tag = get_capreg_tag(env, cs);
+    if (cs == 0) {
+        tcg_debug_assert(pesbt_for_mem == 0 && "Wrong value for cnull?");
+        tcg_debug_assert(cursor == 0 && "Wrong value for cnull?");
+        tcg_debug_assert(!tag && "Wrong value for cnull?");
+    }
     /*
      * Touching the tags will take both the data write TLB fault and
      * capability write TLB fault before updating anything.  Thereafter, the

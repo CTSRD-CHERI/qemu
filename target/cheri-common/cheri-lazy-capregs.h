@@ -85,6 +85,14 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         // Set pesbt to a known marker flag
         gpcrs->pesbt[regnum] = 0xdeadbeef;
     }
+    if (regnum == 0) {
+        tcg_debug_assert(gpcrs->pesbt[regnum] == CC128_NULL_PESBT);
+        tcg_debug_assert(gpcrs->decompressed[regnum]._cr_cursor == 0);
+        tcg_debug_assert(compress_128cap_without_xor(&gpcrs->decompressed[regnum]) == CC128_NULL_PESBT);
+        tcg_debug_assert(get_capreg_state(gpcrs, regnum) ==
+                             CREG_FULLY_DECOMPRESSED &&
+                         "Null should always be fully decompressed");
+    }
 #endif
 #endif // CONFIG_DEBUG_TCG
 }
