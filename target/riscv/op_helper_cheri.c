@@ -70,7 +70,7 @@ struct SCRInfo {
     bool r;
     bool w;
     enum SCRAccessMode access; /* Default = Invalid */
-    const char* name;
+    const char *name;
     //#define PRV_U 0
     //#define PRV_S 1
     //#define PRV_H 2 /* Reserved */
@@ -81,17 +81,26 @@ struct SCRInfo {
 
     [CheriSCR_UTCC] = {.r = true, .w = true, .access = U_ASR, .name = "UTCC"},
     [CheriSCR_UTDC] = {.r = true, .w = true, .access = U_ASR, .name = "UTDC"},
-    [CheriSCR_UScratchC] = {.r = true, .w = true, .access = U_ASR, .name = "UScratchC"},
+    [CheriSCR_UScratchC] = {.r = true,
+                            .w = true,
+                            .access = U_ASR,
+                            .name = "UScratchC"},
     [CheriSCR_UEPCC] = {.r = true, .w = true, .access = U_ASR, .name = "UEPCC"},
 
     [CheriSCR_STCC] = {.r = true, .w = true, .access = S_ASR, .name = "STCC"},
     [CheriSCR_STDC] = {.r = true, .w = true, .access = S_ASR, .name = "STDC"},
-    [CheriSCR_SScratchC] = {.r = true, .w = true, .access = S_ASR, .name = "SScratchC"},
+    [CheriSCR_SScratchC] = {.r = true,
+                            .w = true,
+                            .access = S_ASR,
+                            .name = "SScratchC"},
     [CheriSCR_SEPCC] = {.r = true, .w = true, .access = S_ASR, .name = "SEPCC"},
 
     [CheriSCR_MTCC] = {.r = true, .w = true, .access = M_ASR, .name = "MTCC"},
     [CheriSCR_MTDC] = {.r = true, .w = true, .access = M_ASR, .name = "MTDC"},
-    [CheriSCR_MScratchC] = {.r = true, .w = true, .access = M_ASR, .name = "MScratchC"},
+    [CheriSCR_MScratchC] = {.r = true,
+                            .w = true,
+                            .access = M_ASR,
+                            .name = "MScratchC"},
     [CheriSCR_MEPCC] = {.r = true, .w = true, .access = M_ASR, .name = "MEPCC"},
 };
 
@@ -168,14 +177,17 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
     }
     if (cs != 0) {
         assert(scr_info[index].w && "Bug? Should be writable");
-        qemu_log_mask_and_addr(CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env), "  %s <- " PRINT_CAP_FMTSTR "\n", scr_info[index].name,
-                      PRINT_CAP_ARGS(&new_val));
+        qemu_log_mask_and_addr(CPU_LOG_INSTR | CPU_LOG_INT,
+                               cpu_get_recent_pc(env),
+                               "  %s <- " PRINT_CAP_FMTSTR "\n",
+                               scr_info[index].name, PRINT_CAP_ARGS(&new_val));
         if (index == CheriSCR_DDC && !new_val.cr_tag) {
+            target_ulong recent_pc = cpu_get_recent_pc(env);
             qemu_log_mask_and_addr(
-                CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+                CPU_LOG_INSTR | CPU_LOG_INT, recent_pc,
                 "  Note: Installed untagged $ddc (while not in "
                 "capmode) at " TARGET_FMT_lx "\n",
-                PC_ADDR(env));
+                recent_pc);
         }
         *scr = new_val;
     }
