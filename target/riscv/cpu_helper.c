@@ -589,14 +589,6 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 #endif
         case RISCV_EXCP_ILLEGAL_INST:
             tval = env->badaddr;
-            if (unlikely(qemu_loglevel_mask(CPU_LOG_INT))) {
-                uint32_t opcode = env->badaddr;
-                FILE* logf = qemu_log_lock();
-                qemu_log("Illegal instruction trap was probably caused by: ");
-                target_disas_buf(logf, cs, &opcode, sizeof(opcode),
-                                 PC_ADDR(env), 1);
-                qemu_log_unlock(logf);
-            }
             break;
         default:
             break;
@@ -610,6 +602,13 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
     trace_riscv_trap(env->mhartid, async, cause, PC_ADDR(env), tval, cause < 16 ?
         (async ? riscv_intr_names : riscv_excp_names)[cause] : "(unknown)");
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INT))) {
+        FILE* logf = qemu_log_lock();
+        qemu_log("Trap was probably caused by: ");
+        target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/UINT64_MAX);
+        qemu_log_unlock(logf);
+    }
 
     if (env->priv <= PRV_S &&
             cause < TARGET_LONG_BITS && ((deleg >> cause) & 1)) {
