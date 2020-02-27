@@ -80,11 +80,13 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         memset(decompressed, 0xaa, sizeof(*decompressed));
         decompressed->_cr_cursor = cursor;
     }
+#if QEMU_USE_COMPRESSED_CHERI_CAPS
     if (get_capreg_state(gpcrs, regnum) == CREG_INTEGER) {
         // Set pesbt to a known marker flag
         gpcrs->pesbt[regnum] = 0xdeadbeef;
     }
 #endif
+#endif // CONFIG_DEBUG_TCG
 }
 
 static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned regnum,
