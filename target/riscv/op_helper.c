@@ -30,7 +30,7 @@
 
 static inline const char* exception_str(uint32_t exception)
 {
-    // See Table 3.6 In privileged ISA spec
+    // See Table 3.6 In privileged ISA spec (20190608-Priv-MSU-Ratified)
     switch(exception) {
     case RISCV_EXCP_INST_ADDR_MIS: return "Instruction address misaligned";
     case RISCV_EXCP_INST_ACCESS_FAULT: return "Instruction access fault";
@@ -46,7 +46,7 @@ static inline const char* exception_str(uint32_t exception)
     case RISCV_EXCP_M_ECALL: return "Environment call from M-mode";
     case RISCV_EXCP_INST_PAGE_FAULT: return "Instruction page fault";
     case RISCV_EXCP_LOAD_PAGE_FAULT: return "Load page fault";
-    case 0xe: return "Reserved for future standard use";
+    // 14 Reserved for future standard use
     case RISCV_EXCP_STORE_PAGE_FAULT: return "Store/AMO page fault";
     // 16–23 Reserved for future standard use
     // 24-31 Reserved for custom use (we use 28/0x1c) for CHERI
