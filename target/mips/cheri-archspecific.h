@@ -95,8 +95,11 @@ static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
 }
 
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
-    CPUArchState *env, CheriCapExcCause cause, unsigned regnum, uintptr_t hostpc)
+    CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
+    bool instavail, uintptr_t hostpc)
 {
+    if (!instavail)
+        env->error_code |= EXCP_INST_NOTAVAIL;
     do_raise_c2_exception_impl(env, cause, regnum, hostpc);
 }
 

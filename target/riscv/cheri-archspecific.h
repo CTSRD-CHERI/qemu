@@ -103,7 +103,8 @@ static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
 }
 
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
-    CPUArchState *env, CheriCapExcCause cause, unsigned regnum, uintptr_t hostpc)
+    CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
+    bool instavail, uintptr_t hostpc)
 {
     env->cap_cause = cause;
     env->cap_index = regnum;
@@ -148,7 +149,7 @@ static inline bool validate_cjalr_target(CPUArchState *env,
     target_ulong new_addr = cap_get_cursor(new_pcc);
     unsigned min_base_alignment = riscv_has_ext(env, RVC) ? 2 : 4;
     if (!QEMU_IS_ALIGNED(new_base, min_base_alignment)) {
-        raise_cheri_exception_impl(env, CapEx_UnalignedBase, regnum, retpc);
+        raise_cheri_exception_impl(env, CapEx_UnalignedBase, regnum, true, retpc);
     }
     // XXX: Sail only checks bit 1 why not also bit zero? Is it because that is ignored?
     if (!riscv_has_ext(env, RVC) && (new_addr & 0x2)) {

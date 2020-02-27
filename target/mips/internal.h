@@ -568,12 +568,12 @@ void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int f
   do_raise_c0_exception_impl(env, cause, reg, _host_return_address)
 
 static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
-        uint16_t cause, uint16_t reg, uintptr_t pc)
+        uint16_t cause, uint16_t reg, uintptr_t hostpc)
 {
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s)"
        " reg=%d PCC=" PRINT_CAP_FMTSTR " -> host PC: 0x%jx active_tc.PC=0x" TARGET_FMT_plx "\n",
        cause, cp2_fault_causestr[cause], reg, PRINT_CAP_ARGS(&env->active_tc.PCC),
-      (uintmax_t)pc, env->active_tc.PC);
+      (uintmax_t)hostpc, env->active_tc.PC);
 #ifdef DEBUG_KERNEL_CP2_VIOLATION
     if (in_kernel_mode(env)) {
         // Print some debug information for CheriBSD kernel crashes
@@ -591,9 +591,7 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
     }
 #endif
     cpu_mips_store_capcause(env, reg, cause);
-    // env->active_tc.PC = pc;
-    env->CP0_BadVAddr = pc;
-    do_raise_exception(env, EXCP_C2E, pc);
+    do_raise_exception(env, EXCP_C2E, hostpc);
 }
 
 static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause, uintptr_t pc)

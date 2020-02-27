@@ -115,16 +115,7 @@ static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
     return;
 
 do_exception:
-#ifdef TARGET_MIPS
-    env->CP0_BadVAddr = addr;
-    if (!instavail)
-        env->error_code |= EXCP_INST_NOTAVAIL;
-#elif defined(TARGET_RISCV)
-    env->badaddr = addr;
-#else
-#error "Unknown target"
-#endif
-    raise_cheri_exception_impl(env, cause, regnum, pc);
+    raise_cheri_exception_impl(env, cause, regnum, instavail, pc);
 }
 
 static inline bool cheri_have_access_sysregs(CPUArchState* env)

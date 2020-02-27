@@ -57,7 +57,7 @@ _became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
 #error "Unknonwn CHERI target"
 #endif
     if (cheri_c2e_on_unrepresentable)
-        raise_cheri_exception_impl(env, CapEx_InexactBounds, reg, retpc);
+        raise_cheri_exception_impl(env, CapEx_InexactBounds, reg, false, retpc);
 }
 
 #else
