@@ -26,7 +26,7 @@
 #include "trace.h"
 #include "disas/disas.h"
 #ifdef TARGET_CHERI
-#include "cheri_utils.h"
+#include "cheri-helper-utils.h"
 #endif
 
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch)
@@ -586,6 +586,9 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             tcg_debug_assert(env->cap_cause < 32);
             tcg_debug_assert(env->cap_index < 64);
             tval = env->cap_cause | env->cap_index << 5;
+            qemu_log_mask(CPU_LOG_INT | CPU_LOG_INSTR,
+                          "Got CHERI trap %s caused by register %d\n",
+                          cheri_cause_str(env->cap_cause), env->cap_index);
             break;
 #endif
         case RISCV_EXCP_ILLEGAL_INST:
