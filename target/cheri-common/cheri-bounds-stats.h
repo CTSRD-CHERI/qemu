@@ -49,7 +49,7 @@ _became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
     env->statcounters_unrepresentable_caps++;
 #ifdef TARGET_MIPS
     if (cheri_debugger_on_unrepresentable)
-        helper_raise_exception_debug(env);
+        do_raise_exception(env, EXCP_DEBUG, retpc);
 #elif defined(TARGET_RISCV)
     if (cheri_debugger_on_unrepresentable)
         riscv_raise_exception(env, EXCP_DEBUG, retpc);
