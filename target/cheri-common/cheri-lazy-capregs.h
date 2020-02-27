@@ -81,6 +81,10 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         memset(decompressed, 0xaa, sizeof(*decompressed));
         decompressed->_cr_cursor = cursor;
     }
+    if (get_capreg_state(gpcrs, regnum) == CREG_INTEGER) {
+        // Set pesbt to a known marker flag
+        gpcrs->pesbt[regnum] = 0xdeadbeef;
+    }
 #endif
 }
 
@@ -212,6 +216,11 @@ static inline target_ulong get_capreg_pesbt(CPUArchState *env, unsigned regnum)
 {
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     sanity_check_capreg(gpcrs, regnum);
+    // The pesbt field is invalid for capability registers holding integers
+    // and we have to return the value that NULL would have.
+    if (get_capreg_state(gpcrs, regnum) == CREG_INTEGER) {
+        return CC128_NULL_PESBT;
+    }
     return gpcrs->pesbt[regnum];
 }
 #endif

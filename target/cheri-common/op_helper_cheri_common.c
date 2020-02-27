@@ -1123,7 +1123,12 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
                          target_ulong vaddr, target_ulong retpc)
 {
     uint64_t cursor = get_capreg_cursor(env, cs);
-    uint64_t pesbt = get_capreg_pesbt(env, cs);
+    uint64_t pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CC128_NULL_XOR_MASK;
+#ifdef CONFIG_DEBUG_TCG
+    if (get_capreg_state(cheri_get_gpcrs(env), cs) == CREG_INTEGER) {
+        tcg_debug_assert(pesbt_for_mem == 0 && "Integer values should have NULL PESBT");
+    }
+#endif
     bool tag = get_capreg_tag(env, cs);
     /*
      * Touching the tags will take both the data write TLB fault and
@@ -1146,20 +1151,20 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
         // Fast path, host address in TLB
-        stq_p(host, pesbt ^ CC128_NULL_XOR_MASK);
+        stq_p(host, pesbt_for_mem);
         stq_p((char*)host + 8, cursor);
 #if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_stq_data_ra() performs the write logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-            helper_dump_store64(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_store64(env, vaddr, pesbt_for_mem, MO_64);
             helper_dump_store64(env, vaddr + 8, cursor, MO_64);
         }
 #endif
     } else {
         // Slow path for e.g. IO regions.
         qemu_log_mask(CPU_LOG_INSTR, "Using slow path for store to guest address " TARGET_FMT_plx "\n", vaddr);
-        cpu_stq_data_ra(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, retpc);
+        cpu_stq_data_ra(env, vaddr, pesbt_for_mem, retpc);
         cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
     }
 
@@ -1169,6 +1174,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         /* Log memory cap write, if needed. */
         // Decompress to log all fields
         cap_register_t stored_cap;
+        const uint64_t pesbt = pesbt_for_mem ^ CC128_NULL_XOR_MASK;
         decompress_128cap_already_xored(pesbt, cursor, &stored_cap);
         stored_cap.cr_tag = tag;
         cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
