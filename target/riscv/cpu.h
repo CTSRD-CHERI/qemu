@@ -369,7 +369,7 @@ void rvfi_dii_communicate(CPUState *cs, CPURISCVState *env);
 #define gen_rvfi_dii_set_field_const(field, constant)                          \
     do {                                                                       \
         TCGv_i64 rvfi_tc = tcg_const_i64(constant);                            \
-        tcg_gen_st_tl(rvfi_tc, cpu_env, rvfi_dii_offset(field));               \
+        tcg_gen_st_i64(rvfi_tc, cpu_env, rvfi_dii_offset(field));              \
         tcg_temp_free_i64(rvfi_tc);                                            \
     } while (0)
 #else

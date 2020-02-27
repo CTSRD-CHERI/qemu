@@ -313,8 +313,8 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
 {
 #ifdef TARGET_CHERI
     assert(cap_is_in_bounds(&env->PCC, data[0], 0));
-    qemu_log_mask(CPU_LOG_INT, "%s: Updating pc from TB: " TARGET_FMT_plx
-                  " -> " TARGET_FMT_plx "\n", __func__,
+    qemu_log_mask(CPU_LOG_INT, "%s: Updating pc from TB: " TARGET_FMT_lx
+                  " -> " TARGET_FMT_lx "\n", __func__,
                   (target_ulong)env->PCC._cr_cursor, data[0]);
     env->PCC._cr_cursor = data[0];
 #else
@@ -350,7 +350,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
 
     // TestRIG expects a zero $pc after a trap:
     if (env->rvfi_dii_trace.rvfi_dii_trap) {
-        info_report("Got trap at " TARGET_FMT_plx, PC_ADDR(env));
+        info_report("Got trap at " TARGET_FMT_lx, PC_ADDR(env));
     }
     env->rvfi_dii_have_injected_insn = false;
     while (true) {
@@ -425,7 +425,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             cpu_single_step(cs, SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER);
             if (rvfi_debug_output) {
                 info_report(
-                    "injecting instruction %d '0x%08x' at " TARGET_FMT_plx,
+                    "injecting instruction %d '0x%08x' at " TARGET_FMT_lx,
                     cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, PC_ADDR(env));
             }
             // Store the new code to the destination pointer
@@ -443,7 +443,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             uint32_t injected_inst = cpu_ldl_code(env, env->pc);
             if (injected_inst != cmd_buf.rvfi_dii_insn) {
                 error_report("Failed to inject instruction '0x%08x' at "
-                             "PC=" TARGET_FMT_plx " -- got '0x%08x' instead",
+                             "PC=" TARGET_FMT_lx " -- got '0x%08x' instead",
                              cmd_buf.rvfi_dii_insn, env->pc, injected_inst);
                 exit(EXIT_FAILURE);
             }
