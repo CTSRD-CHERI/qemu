@@ -232,34 +232,39 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
     check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
     if (ram_addr == -1LL)
         return;
-    cheri_tag_phys_invalidate(env, ram_addr, size);
-
+    cheri_tag_phys_invalidate(env, ram_addr, size, &vaddr);
 }
 
-void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_t len)
+void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_t len, const target_ulong* vaddr)
 {
     uint64_t tag, tagmem_idx;
-    ram_addr_t addr, endaddr;
     uint8_t *tagblk;
 
-    endaddr = (uint64_t)(ram_addr + len);
+    ram_addr_t endaddr = (uint64_t)(ram_addr + len);
+    ram_addr_t startaddr = QEMU_ALIGN_DOWN(ram_addr, CAP_SIZE);
 
-    for(addr = (uint64_t)(ram_addr & ~CAP_MASK); addr < endaddr;
-            addr += CAP_SIZE) {
+    for(ram_addr_t addr = startaddr; addr < endaddr; addr += CAP_SIZE) {
         tag = addr >> CAP_TAG_SHFT;
         tagmem_idx = tag >> CAP_TAGBLK_SHFT;
         if (tagmem_idx >= cheri_ntagblks) {
             qemu_log_mask(CPU_LOG_INSTR, "Could not find tag block for RAM addr " RAM_ADDR_FMT "\n", addr);
-            return;
+            return ;
         }
         tagblk = get_cheri_tagmem(tagmem_idx);
 
         if (tagblk != NULL) {
+            const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
+            if (unlikely(env && vaddr && should_log_mem_access(env, CPU_LOG_INSTR, *vaddr))) {
+                ram_addr_t write_vaddr = QEMU_ALIGN_DOWN(*vaddr, CAP_SIZE) + (addr - startaddr);
+                qemu_log("    Cap Tag Write [" RAM_ADDR_FMT "] %d -> 0\n", write_vaddr,
+                         tagblk[tagblk_index]);
+            }
             if (unlikely(env && should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
                 qemu_log("    Cap Tag ramaddr Write [" RAM_ADDR_FMT "] %d -> 0\n", addr,
-                         tagblk[CAP_TAGBLK_IDX(tag)]);
+                         tagblk[tagblk_index]);
             }
-            tagblk[CAP_TAGBLK_IDX(tag)] = 0;
+            // changed |= tagblk[CAP_TAGBLK_IDX(tag)];
+            tagblk[tagblk_index] = 0;
         }
     }
 #ifdef TARGET_MIPS

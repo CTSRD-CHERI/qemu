@@ -2170,7 +2170,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             // qemu_ram_addr_from_host is faster than using the v2r routines in cheri_tag_invalidate
             ram_addr_t ram_addr = qemu_ram_addr_from_host(hostaddr);
             if (ram_addr != RAM_ADDR_INVALID) {
-                cheri_tag_phys_invalidate(env, ram_addr, l_adj_bytes);
+                cheri_tag_phys_invalidate(env, ram_addr, l_adj_bytes, NULL);
             } else {
                 cheri_tag_invalidate(env, dest, l_adj_bytes, ra);
             }
