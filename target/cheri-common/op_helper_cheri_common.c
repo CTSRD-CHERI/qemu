@@ -1034,15 +1034,15 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
 /*
  * Print capability load from memory to log file.
  */
-static inline void dump_cap_load(CPUArchState *env, uint64_t addr, uint64_t pesbt,
-                                 uint64_t cursor, uint8_t tag)
+static inline void dump_cap_load(CPUArchState *env, uint64_t addr,
+                                 uint64_t pesbt, uint64_t cursor, uint8_t tag)
 {
 
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                           "    Cap Memory Read [" TARGET_FMT_lx
-                           "] = v:%d PESBT:" TARGET_FMT_lx
-                           " Cursor:" TARGET_FMT_lx "\n",
-                           addr, tag, pesbt, cursor);
+    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
+        qemu_log("    Cap Memory Read [" TARGET_FMT_lx
+                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
+                 addr, tag, pesbt, cursor);
+    }
 }
 
 /*
@@ -1052,11 +1052,11 @@ static inline void dump_cap_store(CPUArchState *env, uint64_t addr, uint64_t pes
                                   uint64_t cursor, uint8_t tag)
 {
 
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                           "    Cap Memory Write [" TARGET_FMT_lx
-                           "] = v:%d PESBT:" TARGET_FMT_lx
-                           " Cursor:" TARGET_FMT_lx "\n",
-                           addr, tag, pesbt, cursor);
+    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
+        qemu_log("    Cap Memory Write [" TARGET_FMT_lx
+                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
+                 addr, tag, pesbt, cursor);
+    }
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
@@ -1085,8 +1085,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 #if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_ldq_data_ra() performs the read logging, with raw memory
         // accesses we have to do it manually
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR) &&
-                     qemu_log_in_addr_range(cpu_get_recent_pc(env)))) {
+        if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
             helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
             helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, MO_64);
         }
@@ -1112,8 +1111,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 #endif
 #if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory read, if needed. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE) &&
-        qemu_log_in_addr_range(cpu_get_recent_pc(env)))) {
+    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
         // Decompress to log all fields
         cap_register_t ncd;
         decompress_128cap_already_xored(pesbt, cursor, &ncd);
@@ -1167,8 +1165,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 #if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_stq_data_ra() performs the write logging, with raw memory
         // accesses we have to do it manually
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR) &&
-            qemu_log_in_addr_range(cpu_get_recent_pc(env)))) {
+        if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
             helper_dump_store64(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem, MO_64);
             helper_dump_store64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, MO_64);
         }
@@ -1187,8 +1184,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 
 #if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory cap write, if needed. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE) &&
-        qemu_log_in_addr_range(cpu_get_recent_pc(env)))) {
+    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
         /* Log memory cap write, if needed. */
         // Decompress to log all fields
         cap_register_t stored_cap;

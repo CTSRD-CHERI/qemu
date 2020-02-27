@@ -63,6 +63,7 @@
  * FIXME: rewrite using somethign more like the upcoming MTE changes (https://github.com/rth7680/qemu/commits/tgt-arm-mte-user)
  */
 #include "cheri_tagmem.h"
+#include "cheri-helper-utils.h"
 
 
 #if defined(CHERI_MAGIC128) || defined(CHERI_128)
@@ -254,10 +255,10 @@ void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_
         tagblk = get_cheri_tagmem(tagmem_idx);
 
         if (tagblk != NULL) {
-            qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                                   "    Cap Tag Write [" RAM_ADDR_FMT
-                                   "] %d -> 0\n",
-                                   addr, tagblk[CAP_TAGBLK_IDX(tag)]);
+            if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
+                qemu_log("    Cap Tag ramaddr Write [" RAM_ADDR_FMT "] %d -> 0\n", addr,
+                         tagblk[CAP_TAGBLK_IDX(tag)]);
+            }
             tagblk[CAP_TAGBLK_IDX(tag)] = 0;
         }
     }
@@ -325,9 +326,10 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
         /* Allocated a tag block. */
         tagblk = cheri_tag_new_tagblk(tag);
     }
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                           "    Cap Tag Write [" RAM_ADDR_FMT "] %d -> 1\n",
-                           ram_addr, tagblk[CAP_TAGBLK_IDX(tag)]);
+    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
+        qemu_log("    Cap Tag Write [" TARGET_FMT_lx "] %d -> 1\n", vaddr,
+                 tagblk[CAP_TAGBLK_IDX(tag)]);
+    }
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
 #ifdef TARGET_MIPS
@@ -376,10 +378,16 @@ int cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
     uint64_t tag;
     uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
                                           0, pc, ret_paddr, NULL, &tag, prot);
+    uint8_t result;
     if (tagblk == NULL)
-        return 0;
+        result = 0;
     else
-        return tagblk[CAP_TAGBLK_IDX(tag)];
+        result = tagblk[CAP_TAGBLK_IDX(tag)];
+    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
+        qemu_log("    Cap Tag Read [" TARGET_FMT_lx "] -> %d1\n", vaddr,
+                 result);
+    }
+    return result;
 }
 
 /* QEMU currently tells the kernel that there are no caches installed

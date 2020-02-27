@@ -31,6 +31,9 @@
 #include "disas/disas.h"
 #include "exec/log.h"
 #include "tcg/tcg.h"
+#ifdef TARGET_CHERI
+#include "cheri-helper-utils.h"
+#endif
 
 /* 32-bit helpers */
 
@@ -206,7 +209,8 @@ void HELPER(dump_store64)(CPUArchState *env, target_ulong addr, uint64_t value, 
 
 #ifdef TARGET_CHERI
     // Try not to dump all stores when -dfilter is enabled
-    if (likely(!qemu_log_in_addr_range(cpu_get_recent_pc(env))))
+    // Note: we check both PC and memory location in -dfilter
+    if (likely(!should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, addr)))
         return;
 #endif
 
@@ -258,7 +262,8 @@ void HELPER(dump_load64)(CPUArchState *env, target_ulong addr, uint64_t value, M
 
 #ifdef TARGET_CHERI
     // Try not to dump all loads when -dfilter is enabled
-    if (likely(!qemu_log_in_addr_range(cpu_get_recent_pc(env))))
+    // Note: we check both PC and memory location in -dfilter
+    if (likely(!should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, addr)))
         return;
 #endif
 
