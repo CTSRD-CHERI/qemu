@@ -1077,21 +1077,21 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     uint64_t cursor;
     if (likely(host)) {
         // Fast path, host address in TLB
-        pesbt = ldq_p(host) ^ CC128_NULL_XOR_MASK;
-        cursor = ldq_p((char*)host + 8);
+        pesbt = ldq_p((char*)host + CHERI_MEM_OFFSET_METADATA) ^ CC128_NULL_XOR_MASK;
+        cursor = ldq_p((char*)host + CHERI_MEM_OFFSET_CURSOR);
 #if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_ldq_data_ra() performs the read logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-            helper_dump_load64(env, vaddr, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
-            helper_dump_load64(env, vaddr + 8, cursor, MO_64);
+            helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, MO_64);
         }
 #endif
     } else {
         // Slow path for e.g. IO regions.
         qemu_log_mask(CPU_LOG_INSTR, "Using slow path for load from guest address " TARGET_FMT_plx "\n", vaddr);
-        pesbt = cpu_ldq_data_ra(env, vaddr + 0, retpc) ^ CC128_NULL_XOR_MASK;
-        cursor = cpu_ldq_data_ra(env, vaddr + 8, retpc);
+        pesbt = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^ CC128_NULL_XOR_MASK;
+        cursor = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
     int prot;
     target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
@@ -1151,21 +1151,21 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
         // Fast path, host address in TLB
-        stq_p(host, pesbt_for_mem);
-        stq_p((char*)host + 8, cursor);
+        stq_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
+        stq_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
 #if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_stq_data_ra() performs the write logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-            helper_dump_store64(env, vaddr, pesbt_for_mem, MO_64);
-            helper_dump_store64(env, vaddr + 8, cursor, MO_64);
+            helper_dump_store64(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem, MO_64);
+            helper_dump_store64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, MO_64);
         }
 #endif
     } else {
         // Slow path for e.g. IO regions.
         qemu_log_mask(CPU_LOG_INSTR, "Using slow path for store to guest address " TARGET_FMT_plx "\n", vaddr);
-        cpu_stq_data_ra(env, vaddr, pesbt_for_mem, retpc);
-        cpu_stq_data_ra(env, vaddr + 8, cursor, retpc);
+        cpu_stq_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem, retpc);
+        cpu_stq_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, retpc);
     }
 
 #if defined(CONFIG_MIPS_LOG_INSTR)
