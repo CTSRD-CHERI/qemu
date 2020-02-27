@@ -96,6 +96,11 @@ static int any(CPURISCVState *env, int csrno)
     return 0;
 }
 
+static int umode(CPURISCVState *env, int csrno)
+{
+    return -!riscv_has_ext(env, RVU);
+}
+
 static int smode(CPURISCVState *env, int csrno)
 {
     return -!riscv_has_ext(env, RVS);
@@ -785,6 +790,41 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
 #endif
 
 #ifdef TARGET_CHERI
+
+// See Capability Control and Status Registers (CCSRs) in CHERI ISA spec
+// The e “enable” bit tells whether capability extensions are enabled or disabled.
+#define CCSR_ENABLE 0x1
+// The d “dirty” bit tells whether a capability register has been written.
+#define CCSR_DIRTY 0x2
+// We used to report cause and capcause here, but those have moved to xTVAL
+
+static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    // We report the same values for all modes and don't perform dirty tracking
+    // The capability cause has moved to xTVAL so we don't report it here.
+    *val = env->sbadaddr;
+    RISCVCPU *cpu = env_archcpu(env);
+    target_ulong ccsr = 0;
+    ccsr = set_field(ccsr, CCSR_ENABLE, cpu->cfg.ext_cheri);
+    ccsr = set_field(ccsr, CCSR_DIRTY, 1); /* Always report dirty */
+    // For backwards compat we also report cap cause and cap index
+    // However, this is the last value and is not separated by privilege mode!
+    // TODO: remove when CheriBSD has been updated to read xTVAL
+    ccsr |= env->cap_cause << 5;
+    ccsr |= env->cap_index << 10;
+    qemu_log_mask(CPU_LOG_INT, "Reading xCCSR(%#x): %x\n", csrno, (int)ccsr);
+    *val = ccsr;
+    return 0;
+}
+
+static int write_ccsr(CPURISCVState *env, int csrno, target_ulong val)
+{
+    error_report("Attempting to write " TARGET_FMT_lx
+                 "to xCCSR(%#x), this is not supported (yet?).",
+                 val, csrno);
+    return -1;
+}
+
 static inline bool csr_needs_asr(CPURISCVState *env, int csrno) {
     switch (csrno) {
     case CSR_CYCLE:
@@ -997,6 +1037,14 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
 
     /* Supervisor Protection and Translation */
     [CSR_SATP] =                { smode, read_satp,        write_satp        },
+
+#ifdef TARGET_CHERI
+    // CHERI CSRs: For now we alway report the same values and don't allow
+    // turning off any of the bits
+    [CSR_UCCSR] =               { umode, read_ccsr, write_ccsr},
+    [CSR_SCCSR] =               { smode,  read_ccsr,write_ccsr },
+    [CSR_MCCSR] =               { any,  read_ccsr, write_ccsr },
+#endif
 
     /* Physical Memory Protection */
     [CSR_PMPCFG0  ... CSR_PMPADDR9] =  { pmp,   read_pmpcfg,  write_pmpcfg   },
