@@ -1098,7 +1098,12 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     }
     int prot;
     target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
-    tag = cheri_tag_prot_clear_or_trap(env, cb, source, prot, retpc, tag);
+    if (tag) {
+        tag = cheri_tag_prot_clear_or_trap(env, cb, source, prot, retpc, tag);
+        if (unlikely(!tag && should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
+            qemu_log("Clearing tag at for capability loaded from" TARGET_FMT_lx "\n", vaddr);
+        }
+    }
 
     env->statcounters_cap_read++;
     if (tag)
