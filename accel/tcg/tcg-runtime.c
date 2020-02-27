@@ -203,6 +203,13 @@ void HELPER(dump_store64)(CPUArchState *env, target_ulong addr, uint64_t value, 
 
     if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))))
         return;
+
+#ifdef TARGET_CHERI
+    // Try not to dump all stores when -dfilter is enabled
+    if (likely(!qemu_log_in_addr_range(cpu_get_recent_pc(env))))
+        return;
+#endif
+
 #ifdef TARGET_MIPS
     if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
         cvtrace_dump_gpr_store(&env->cvtrace, addr, value);
@@ -248,6 +255,13 @@ void HELPER(dump_load64)(CPUArchState *env, target_ulong addr, uint64_t value, M
 {
     if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))))
         return;
+
+#ifdef TARGET_CHERI
+    // Try not to dump all loads when -dfilter is enabled
+    if (likely(!qemu_log_in_addr_range(cpu_get_recent_pc(env))))
+        return;
+#endif
+
 #ifdef TARGET_MIPS
     if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
         cvtrace_dump_gpr_load(&env->cvtrace, addr, value);

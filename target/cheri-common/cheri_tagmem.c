@@ -248,18 +248,16 @@ void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_
         tag = addr >> CAP_TAG_SHFT;
         tagmem_idx = tag >> CAP_TAGBLK_SHFT;
         if (tagmem_idx >= cheri_ntagblks) {
-            if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-                qemu_log("Could not find tag block for RAM addr " RAM_ADDR_FMT "\n", addr);
-            }
+            qemu_log_mask(CPU_LOG_INSTR, "Could not find tag block for RAM addr " RAM_ADDR_FMT "\n", addr);
             return;
         }
         tagblk = get_cheri_tagmem(tagmem_idx);
 
         if (tagblk != NULL) {
-            if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-                qemu_log("    Cap Tag Write [" RAM_ADDR_FMT "] %d -> 0\n", addr,
-                         tagblk[CAP_TAGBLK_IDX(tag)]);
-            }
+            qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                                   "    Cap Tag Write [" RAM_ADDR_FMT
+                                   "] %d -> 0\n",
+                                   addr, tagblk[CAP_TAGBLK_IDX(tag)]);
             tagblk[CAP_TAGBLK_IDX(tag)] = 0;
         }
     }
@@ -327,10 +325,9 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
         /* Allocated a tag block. */
         tagblk = cheri_tag_new_tagblk(tag);
     }
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        qemu_log("    Cap Tag Write [" RAM_ADDR_FMT "] %d -> 1\n", ram_addr,
-                 tagblk[CAP_TAGBLK_IDX(tag)]);
-    }
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                           "    Cap Tag Write [" RAM_ADDR_FMT "] %d -> 1\n",
+                           ram_addr, tagblk[CAP_TAGBLK_IDX(tag)]);
     tagblk[CAP_TAGBLK_IDX(tag)] = 1;
 
 #ifdef TARGET_MIPS

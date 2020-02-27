@@ -168,12 +168,14 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
     }
     if (cs != 0) {
         assert(scr_info[index].w && "Bug? Should be writable");
-        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "  %s <- " PRINT_CAP_FMTSTR "\n", scr_info[index].name,
+        qemu_log_mask_and_addr(CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env), "  %s <- " PRINT_CAP_FMTSTR "\n", scr_info[index].name,
                       PRINT_CAP_ARGS(&new_val));
-        if (index == CheriSCR_DDC && !new_val.cr_tag && !cheri_in_capmode(env)) {
-            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
-                          "  Note: Installed untagged $ddc (while not in "
-                          "capmode) at " TARGET_FMT_lx "\n", PC_ADDR(env));
+        if (index == CheriSCR_DDC && !new_val.cr_tag) {
+            qemu_log_mask_and_addr(
+                CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+                "  Note: Installed untagged $ddc (while not in "
+                "capmode) at " TARGET_FMT_lx "\n",
+                PC_ADDR(env));
         }
         *scr = new_val;
     }

@@ -268,6 +268,15 @@ static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
 #endif
 }
 
+#ifdef TARGET_CHERI
+// Note: the pc does not have to be up-to-date, tb start is fine.
+// We may miss a few dumps or print too many if -dfilter is on but
+// that shouldn't really matter.
+static inline target_ulong cpu_get_recent_pc(CPURISCVState *env) {
+    return env->PCC._cr_cursor;
+}
+#endif
+
 static inline void gpr_set_int_value(CPURISCVState *env, unsigned reg,
                                      target_ulong value) {
     assert(reg != 0);

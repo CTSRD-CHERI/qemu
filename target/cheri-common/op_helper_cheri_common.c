@@ -880,11 +880,11 @@ target_ulong CHERI_HELPER_IMPL(cload_check(CPUArchState *env, uint32_t cb,
     const target_ulong cursor = cap_get_cursor(cbp);
     const target_ulong addr = cursor + (target_long)offset;
     if (!cap_is_in_bounds(cbp, addr, size)) {
-        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
-                      "Failed capability bounds check:"
-                      "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-                      " addr=" TARGET_FMT_plx "\n",
-                      offset, cursor, addr);
+        qemu_log_mask_and_addr(
+            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+            "Failed capability bounds check:"
+            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+            " addr=" TARGET_FMT_plx "\n", offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     }
 #ifdef TARGET_MIPS
@@ -924,11 +924,12 @@ target_ulong CHERI_HELPER_IMPL(cstore_check(CPUArchState *env, uint32_t cb,
     const uint64_t addr = cursor + (target_long)offset;
 
     if (!cap_is_in_bounds(cbp, addr, size)) {
-        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
-                      "Failed capability bounds check:"
-                      "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-                      " addr=" TARGET_FMT_plx "\n",
-                      offset, cursor, addr);
+        qemu_log_mask_and_addr(
+            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+            "Failed capability bounds check:"
+            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+            " addr=" TARGET_FMT_plx "\n",
+            offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     }
 
@@ -975,11 +976,12 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
 
     uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
-                      "Failed capability bounds check:"
-                      "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-                      " addr=" TARGET_FMT_plx "\n",
-                      offset, cap_get_cursor(cbp), addr);
+        qemu_log_mask_and_addr(
+            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+            "Failed capability bounds check:"
+            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+            " addr=" TARGET_FMT_plx "\n",
+            offset, cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_load_exception(env, addr, _host_return_address);
@@ -1013,11 +1015,12 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
 
     const uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
-                      "Failed capability bounds check:"
-                      "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-                      " addr=" TARGET_FMT_plx "\n",
-                      offset, cap_get_cursor(cbp), addr);
+        qemu_log_mask_and_addr(
+            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+            "Failed capability bounds check:"
+            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+            " addr=" TARGET_FMT_plx "\n",
+            offset, cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_store_exception(env, addr, _host_return_address);
@@ -1031,29 +1034,29 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
 /*
  * Print capability load from memory to log file.
  */
-static inline void dump_cap_load(uint64_t addr, uint64_t pesbt,
+static inline void dump_cap_load(CPUArchState *env, uint64_t addr, uint64_t pesbt,
                                  uint64_t cursor, uint8_t tag)
 {
 
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        qemu_log("    Cap Memory Read [" TARGET_FMT_lx
-                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
-                 addr, tag, pesbt, cursor);
-    }
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                           "    Cap Memory Read [" TARGET_FMT_lx
+                           "] = v:%d PESBT:" TARGET_FMT_lx
+                           " Cursor:" TARGET_FMT_lx "\n",
+                           addr, tag, pesbt, cursor);
 }
 
 /*
  * Print capability store to memory to log file.
  */
-static inline void dump_cap_store(uint64_t addr, uint64_t pesbt,
+static inline void dump_cap_store(CPUArchState *env, uint64_t addr, uint64_t pesbt,
                                   uint64_t cursor, uint8_t tag)
 {
 
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        qemu_log("    Cap Memory Write [" TARGET_FMT_lx
-                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
-                 addr, tag, pesbt, cursor);
-    }
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                           "    Cap Memory Write [" TARGET_FMT_lx
+                           "] = v:%d PESBT:" TARGET_FMT_lx
+                           " Cursor:" TARGET_FMT_lx "\n",
+                           addr, tag, pesbt, cursor);
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
@@ -1082,7 +1085,8 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 #if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_ldq_data_ra() performs the read logging, with raw memory
         // accesses we have to do it manually
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR) &&
+                     qemu_log_in_addr_range(cpu_get_recent_pc(env)))) {
             helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
             helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, MO_64);
         }
@@ -1108,12 +1112,13 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 #endif
 #if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory read, if needed. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE) &&
+        qemu_log_in_addr_range(cpu_get_recent_pc(env)))) {
         // Decompress to log all fields
         cap_register_t ncd;
         decompress_128cap_already_xored(pesbt, cursor, &ncd);
         ncd.cr_tag = tag;
-        dump_cap_load(vaddr, compress_128cap(&ncd), cursor, tag);
+        dump_cap_load(env, vaddr, compress_128cap(&ncd), cursor, tag);
 #ifdef TARGET_MIPS
         if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
             cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
@@ -1162,7 +1167,8 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 #if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_stq_data_ra() performs the write logging, with raw memory
         // accesses we have to do it manually
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR) &&
+            qemu_log_in_addr_range(cpu_get_recent_pc(env)))) {
             helper_dump_store64(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem, MO_64);
             helper_dump_store64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, MO_64);
         }
@@ -1181,7 +1187,8 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 
 #if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory cap write, if needed. */
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE) &&
+        qemu_log_in_addr_range(cpu_get_recent_pc(env)))) {
         /* Log memory cap write, if needed. */
         // Decompress to log all fields
         cap_register_t stored_cap;
@@ -1189,7 +1196,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         decompress_128cap_already_xored(pesbt, cursor, &stored_cap);
         stored_cap.cr_tag = tag;
         cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
-        dump_cap_store(vaddr, pesbt, cursor, tag);
+        dump_cap_store(env, vaddr, pesbt, cursor, tag);
 #ifdef TARGET_MIPS
         if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
             cvtrace_dump_cap_store(&env->cvtrace, vaddr, &stored_cap);

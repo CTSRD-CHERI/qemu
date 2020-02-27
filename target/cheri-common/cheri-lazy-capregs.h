@@ -189,7 +189,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     env->rvfi_dii_trace.rvfi_dii_rd_addr = regnum;
     env->rvfi_dii_trace.rvfi_dii_rd_wdata = newval->_cr_cursor;
 #endif
-    qemu_log_mask(CPU_LOG_INSTR, "  C%02d <- " PRINT_CAP_FMTSTR "\n", regnum,
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env), "  C%02d <- " PRINT_CAP_FMTSTR "\n", regnum,
                   PRINT_CAP_ARGS(target));
 }
 
