@@ -339,7 +339,7 @@ restart:
             /* for superpage mappings, make a fake leaf PTE for the TLB's
                benefit. */
             target_ulong vpn = addr >> PGSHIFT;
-            *physical = (ppn | (vpn & ((1L << ptshift) - 1))) << PGSHIFT;
+            *physical = ((ppn | (vpn & ((1L << ptshift) - 1))) << PGSHIFT)  | (addr & ~TARGET_PAGE_MASK);
 
             /* set permissions on the TLB entry */
             if ((pte & PTE_R) || ((pte & PTE_X) && mxr)) {
@@ -534,6 +534,7 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
         // TODO: use register
         riscv_raise_exception(env, env_cpu(env)->exception_index, retpc);
     }
+    tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (physical &~TARGET_PAGE_MASK));
     return physical;
 }
 #endif /* TARGET_CHERI */
