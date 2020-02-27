@@ -33,7 +33,7 @@
 #endif
 #ifdef TARGET_CHERI
 #include "cheri_tagmem.h"
-#include "cheri-archspecific.h"
+#include "cheri-helper-utils.h"
 #endif
 #include "sysemu/kvm.h"
 

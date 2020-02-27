@@ -52,41 +52,6 @@
 #include "disas/disas.h"
 #include "disas/dis-asm.h"
 
-const char *cp2_fault_causestr[] = {
-    "None",
-    "Length Violation",
-    "Tag Violation",
-    "Seal Violation",
-    "Type Violation",
-    "Call Trap",
-    "Return Trap",
-    "Underflow of Trusted System Stack",
-    "User-defined Permission Violation",
-    "TLB prohibits Store Capability",
-    "Bounds Cannot Be Represented Exactly",
-    "Unaligned Base",
-    "Cap Load Gen Mismatch",
-    "Reserved 0x0d",
-    "Reserved 0x0e",
-    "Reserved 0x0f",
-    "Global Violation",
-    "Permit_Execute Violation",
-    "Permit_Load Violation",
-    "Permit_Store Violation",
-    "Permit_Load_Capability Violation",
-    "Permit_Store_Capability Violation",
-    "Permit_Store_Local_Capability Violation",
-    "Permit_Seal Violation",
-    "Access_Sys_Reg Violation",
-    "Permit_CCall Violation",
-    "Access_EPCC Violation",
-    "Access_KDC Violation",
-    "Access_KCC Violation",
-    "Access_KR1C Violation",
-    "Access_KR2C Violation"
-};
-
-
 #ifdef __clang__
 #pragma clang diagnostic error "-Wdeprecated-declarations"
 #else

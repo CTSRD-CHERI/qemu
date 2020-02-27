@@ -41,7 +41,7 @@
 #include "qemu/qemu-print.h"
 
 #ifdef TARGET_CHERI
-#include "cheri-lazy-capregs.h"
+#include "cheri-helper-utils.h"
 #endif
 
 #define MIPS_DEBUG_DISAS 0

@@ -94,6 +94,44 @@ static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
     return &env->active_tc.gpcapregs;
 }
 
+static inline const char* cheri_cause_str(CheriCapExcCause cause);
+
+static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
+                                                            uint16_t cause, uint16_t reg, uintptr_t hostpc)
+{
+    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
+                  "C2 EXCEPTION: cause=%d(%s)"
+                  " reg=%d PCC=" PRINT_CAP_FMTSTR
+                  " -> host PC: 0x%jx active_tc.PC=0x" TARGET_FMT_plx "\n",
+                  cause, cheri_cause_str(cause), reg,
+                  PRINT_CAP_ARGS(&env->active_tc.PCC), (uintmax_t)hostpc,
+                  env->active_tc.PC);
+#ifdef DEBUG_KERNEL_CP2_VIOLATION
+    if (in_kernel_mode(env)) {
+        // Print some debug information for CheriBSD kernel crashes
+        error_report("C2 EXCEPTION: cause=%d(%s) reg=%d\r", cause, cheri_fault_str(cause), reg);
+        if (reg < 32) {
+            const cap_register_t* cr = get_readonly_capreg(env, reg);
+            error_report("Caused by: "PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(cr));
+        }
+        char buf[4096];
+        FILE* buf_file = fmemopen(buf, sizeof(buf), "w");
+        cheri_dump_state(env_cpu(env), buf_file, fprintf, CPU_DUMP_CODE);
+        error_report("%s\r\n", buf);
+        sleep(1); // to flush the write buffer
+        fclose(buf_file);
+    }
+#endif
+    cpu_mips_store_capcause(env, reg, cause);
+    do_raise_exception(env, EXCP_C2E, hostpc);
+}
+
+static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause, uintptr_t pc)
+{
+    do_raise_c2_exception_impl(env, cause, 0xff, pc);
+}
+
+
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     bool instavail, uintptr_t hostpc)

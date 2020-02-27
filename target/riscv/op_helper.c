@@ -78,7 +78,6 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
         } else {
             env->badaddr = opcode;
         }
-
     }
     cs->exception_index = exception;
     cpu_loop_exit_restore(cs, pc);

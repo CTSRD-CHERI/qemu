@@ -134,3 +134,37 @@ static inline bool should_log_mem_access(CPUArchState *env, int log_mask, target
         return false;
     return true;
 }
+
+static inline const char* cheri_cause_str(CheriCapExcCause cause) {
+    switch (cause) {
+    case CapEx_None: return "None";
+    case CapEx_LengthViolation: return "Length Violation";
+    case CapEx_TagViolation: return "Tag Violation";
+    case CapEx_SealViolation: return "Seal Violation";
+    case CapEx_TypeViolation: return "Type Violation";
+    case CapEx_CallTrap: return "Call Trap";
+    case CapEx_ReturnTrap: return "Return Trap";
+    case CapEx_TSSUnderFlow: return "Underflow of Trusted System Stack";
+    case CapEx_UserDefViolation: return "User-defined Permission Violation";
+    case CapEx_TLBNoStoreCap: return "TLB prohibits Store Capability";
+    case CapEx_InexactBounds: return "Bounds Cannot Be Represented Exactly";
+    case CapEx_UnalignedBase: return "Unaligned Base";
+    case CapEx_CapLoadGen: return "Cap Load Gen Mismatch";
+    case CapEx_GlobalViolation: return "Global Violation";
+    case CapEx_PermitExecuteViolation: return "Permit_Execute Violation";
+    case CapEx_PermitLoadViolation: return "Permit_Load Violation";
+    case CapEx_PermitStoreViolation: return "Permit_Store Violation";
+    case CapEx_PermitLoadCapViolation: return "Permit_Load_Capability Violation";
+    case CapEx_PermitStoreCapViolation: return "Permit_Store_Capability Violation";
+    case CapEx_PermitStoreLocalCapViolation: return "Permit_Store_Local_Capability Violation";
+    case CapEx_PermitSealViolation: return "Permit_Seal Violation";
+    case CapEx_AccessSystemRegsViolation: return "Access_System_Registers Violation";
+    case CapEx_AccessCCallIDCViolation: return "IDC used in CCall delay slot";
+    case CapEx_PermitCCallViolation: return "Permit_CCall Violation";
+    case CapEx_PermitUnsealViolation: return "Permit_Unseal Violation";
+    case CapEx_PermitSetCIDViolation: return "Permit_SetCID Violation";
+    }
+    // default: return "Unknown cause";
+    __builtin_unreachable();
+    abort();
+}

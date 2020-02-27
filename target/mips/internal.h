@@ -555,50 +555,12 @@ static inline QEMU_NORETURN void do_raise_c0_exception_impl(CPUMIPSState *env,
     do_raise_exception(env, cause, pc);
 }
 
-/*
- * See section 4.4 of the CHERI Architecture.
- */
-extern const char *cp2_fault_causestr[];
-
 void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int flags);
 
 #define do_raise_c2_exception(env, cause, reg) \
   do_raise_c2_exception_impl(env, cause, reg, _host_return_address)
 #define do_raise_c0_exception(env, cause, reg) \
   do_raise_c0_exception_impl(env, cause, reg, _host_return_address)
-
-static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
-        uint16_t cause, uint16_t reg, uintptr_t hostpc)
-{
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C2 EXCEPTION: cause=%d(%s)"
-       " reg=%d PCC=" PRINT_CAP_FMTSTR " -> host PC: 0x%jx active_tc.PC=0x" TARGET_FMT_plx "\n",
-       cause, cp2_fault_causestr[cause], reg, PRINT_CAP_ARGS(&env->active_tc.PCC),
-      (uintmax_t)hostpc, env->active_tc.PC);
-#ifdef DEBUG_KERNEL_CP2_VIOLATION
-    if (in_kernel_mode(env)) {
-        // Print some debug information for CheriBSD kernel crashes
-        error_report("C2 EXCEPTION: cause=%d(%s) reg=%d\r", cause, cp2_fault_causestr[cause], reg);
-        if (reg < 32) {
-            const cap_register_t* cr = get_readonly_capreg(env, reg);
-            error_report("Caused by: "PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(cr));
-        }
-        char buf[4096];
-        FILE* buf_file = fmemopen(buf, sizeof(buf), "w");
-        cheri_dump_state(env_cpu(env), buf_file, fprintf, CPU_DUMP_CODE);
-        error_report("%s\r\n", buf);
-        sleep(1); // to flush the write buffer
-        fclose(buf_file);
-    }
-#endif
-    cpu_mips_store_capcause(env, reg, cause);
-    do_raise_exception(env, EXCP_C2E, hostpc);
-}
-
-static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause, uintptr_t pc)
-{
-    do_raise_c2_exception_impl(env, cause, 0xff, pc);
-}
-
 
 #endif /* TARGET_CHERI */
 

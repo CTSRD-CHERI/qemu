@@ -36,7 +36,7 @@
  */
 #include "qemu/osdep.h"
 #include "cpu.h"
-#include "cheri-lazy-capregs.h"
+#include "cheri-helper-utils.h"
 #include "exec/cpu-all.h"
 
 int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap)
