@@ -516,6 +516,25 @@ typedef enum {
     rv_op_cjalr,
     rv_op_cgetaddr,
 
+    // Three operand
+    rv_op_cspecialrw,
+    rv_op_csetbounds,
+    rv_op_csetboundsexact,
+    rv_op_cseal,
+    rv_op_cunseal,
+    rv_op_candperm,
+    rv_op_csetflags,
+    rv_op_csetoffset,
+    rv_op_csetaddr,
+    rv_op_cincoffset,
+    rv_op_ctoptr,
+    rv_op_cfromptr,
+    rv_op_csub,
+    rv_op_cbuildcap,
+    rv_op_ccopytype,
+    rv_op_ccseal,
+    rv_op_ctestsubset,
+
 } rv_op;
 
 /* structures */
@@ -591,6 +610,10 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_rd_offset              "O\t0,o"
 #define rv_fmt_cd_offset              "O\tC0,o"
 #define rv_fmt_rd_rs1_rs2             "O\t0,1,2"
+#define rv_fmt_cd_cs1_cs2             "O\tC0,C1,C2"
+#define rv_fmt_cd_cs1_rs2             "O\tC0,C1,2"
+#define rv_fmt_rd_cs1_cs2             "O\t0,C1,C2"
+#define rv_fmt_cd_cs1_scr             "O\tC0,C1,Cs"
 #define rv_fmt_frd_rs1                "O\t3,1"
 #define rv_fmt_rd_frs1                "O\t0,4"
 #define rv_fmt_rd_frs1_frs2           "O\t0,4,5"
@@ -1210,6 +1233,26 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_csh] = { "sh", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
     [rv_op_csw] = { "sw", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
     [rv_op_csd] = { "sd", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_csd] = { "csd", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
+
+    // Three operand
+    [rv_op_cspecialrw] = {"cspecialrw", rv_codec_r, rv_fmt_cd_cs1_scr, NULL, 0, 0, 0 },
+    [rv_op_csetbounds] = {"csetbounds", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_csetboundsexact] = {"csetboundsexact", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_cseal] = {"cseal", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_cunseal] = {"cunseal", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_candperm] = {"candperm", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_csetflags] = {"csetflags", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_csetoffset] = {"csetoffset", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_csetaddr] = {"csetaddr", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_cincoffset] = {"cincoffset", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_ctoptr] = {"ctoptr", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_cfromptr] = {"cfromptr", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_csub] = {"csub", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_cbuildcap] = {"cbuildcap", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_ccopytype] = {"ccopytype", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_ccseal] = {"ccseal", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_ctestsubset] = {"ctestsubset", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
 
 };
 
@@ -1439,6 +1482,47 @@ static rv_opcode decode_cheri_two_op(unsigned func) {
     case 0b01100: return rv_op_cjalr;
     case 0b01111: return rv_op_cgetaddr;
     default: return rv_op_illegal;
+    }
+}
+
+// From insn32-cheri.decode
+#define CHERI_THREEOP_CASE(name, high_bits, ...)                               \
+    case 0b##high_bits:                                                        \
+        return rv_op_##name;
+
+static rv_opcode decode_cheri_inst(rv_inst inst) {
+    int func = ((inst >> 25) & 0b111111);
+    switch (func) {
+    // 0000000, unused
+    CHERI_THREEOP_CASE(cspecialrw,  0000001,  ..... ..... 000 ..... 1011011 @r)
+    // 0000010-0000111 unused
+    CHERI_THREEOP_CASE(csetbounds,  0001000,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(csetboundsexact, 0001001,  ..... ..... 000 ..... 1011011 @r)
+    // 0001010 unused
+    CHERI_THREEOP_CASE(cseal,       0001011,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(cunseal,     0001100,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(candperm,    0001101,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(csetflags,   0001110,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(csetoffset,  0001111,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(csetaddr,    0010000,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(cincoffset,  0010001,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(ctoptr,      0010010,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(cfromptr,    0010011,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(csub,        0010100,  ..... ..... 000 ..... 1011011 @r)
+    // 0010101-0011100 unused
+    CHERI_THREEOP_CASE(cbuildcap,   0011101,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(ccopytype,   0011110,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(ccseal,      0011111,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(ctestsubset, 0100000,  ..... ..... 000 ..... 1011011 @r)
+    // 1111011 unused
+    // TODO: 1111100 Used for Stores (see below)
+    // TODO: 1111101 Used for Loads (see below)
+    // TODO: 1111110 Used for two source ops
+    // 1111111 Used for Source & Dest ops (see above)
+    case 0b111111:
+        return decode_cheri_two_op((inst >> 20) & 0b11111);
+    default:
+        return rv_op_illegal;
     }
 }
 
@@ -2028,12 +2112,7 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
                 // CHERI instructions:
                 switch (((inst >> 12) & 0b111)) {
                 case 0:
-                    switch (((inst >> 26) & 0b111111)) {
-                    case 0b111111: // Two-operand
-                        op = decode_cheri_two_op((inst >> 20) & 0b11111);
-                        break;
-                    // TODO:
-                    }
+                    op = decode_cheri_inst(inst);
                     break;
                 case 1:
                     op = rv_op_cincoffsetimm;
@@ -2865,6 +2944,10 @@ static void format_inst(char *buf, size_t buflen, size_t tab, rv_decode *dec)
                 break;
             case '2':
                 append(buf, rv_creg_name_sym[dec->rs2], buflen);
+                break;
+            case 's':
+                snprintf(tmp, sizeof(tmp), "scr%d", dec->rs2);
+                append(buf, tmp, buflen);
                 break;
             default:
                 abort();
