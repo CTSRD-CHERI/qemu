@@ -6,3 +6,8 @@ AllowShortIfStatementsOnASingleLine: Never
 IndentCaseLabels: false
 ColumnLimit: 80
 SortIncludes: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortLambdasOnASingleLine: Inline
+AlwaysBreakBeforeMultilineStrings: false
+BreakStringLiterals: true
+PointerAlignment: Right
