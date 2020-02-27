@@ -255,7 +255,7 @@ void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_
         tagblk = get_cheri_tagmem(tagmem_idx);
 
         if (tagblk != NULL) {
-            if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
+            if (unlikely(env && should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
                 qemu_log("    Cap Tag ramaddr Write [" RAM_ADDR_FMT "] %d -> 0\n", addr,
                          tagblk[CAP_TAGBLK_IDX(tag)]);
             }
@@ -384,7 +384,7 @@ int cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
     else
         result = tagblk[CAP_TAGBLK_IDX(tag)];
     if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
-        qemu_log("    Cap Tag Read [" TARGET_FMT_lx "] -> %d1\n", vaddr,
+        qemu_log("    Cap Tag Read [" TARGET_FMT_lx "] -> %d\n", vaddr,
                  result);
     }
     return result;
