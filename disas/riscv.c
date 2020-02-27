@@ -613,7 +613,7 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_cd_cs1_cs2             "O\tC0,C1,C2"
 #define rv_fmt_cd_cs1_rs2             "O\tC0,C1,2"
 #define rv_fmt_rd_cs1_cs2             "O\t0,C1,C2"
-#define rv_fmt_cd_cs1_scr             "O\tC0,C1,Cs"
+#define rv_fmt_cd_scr_cs1             "O\tC0,Cs,C1"
 #define rv_fmt_frd_rs1                "O\t3,1"
 #define rv_fmt_rd_frs1                "O\t0,4"
 #define rv_fmt_rd_frs1_frs2           "O\t0,4,5"
@@ -1236,7 +1236,7 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_csd] = { "csd", rv_codec_s, rv_fmt_rs2_offset_cs1, NULL, 0, 0, 0 },
 
     // Three operand
-    [rv_op_cspecialrw] = {"cspecialrw", rv_codec_r, rv_fmt_cd_cs1_scr, NULL, 0, 0, 0 },
+    [rv_op_cspecialrw] = {"cspecialrw", rv_codec_r, rv_fmt_cd_scr_cs1, NULL, 0, 0, 0 },
     [rv_op_csetbounds] = {"csetbounds", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
     [rv_op_csetboundsexact] = {"csetboundsexact", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
     [rv_op_cseal] = {"cseal", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
