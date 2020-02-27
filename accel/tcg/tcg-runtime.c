@@ -170,10 +170,9 @@ void *HELPER(lookup_tb_ptr)(CPUArchState *env)
  */
 void HELPER(log_instruction)(CPUArchState *env, target_ulong pc)
 {
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        CPUState *cs = env_cpu(env);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR) && qemu_log_in_addr_range(pc))) {
         /* Disassemble and print one nstruction. */
-        log_target_disas(cs, pc, -1);
+        log_target_disas(env_cpu(env), pc, -1);
     }
 }
 
