@@ -37,13 +37,14 @@
 
 #include "cheri_defs.h"
 
-#define PRINT_CAP_FMTSTR_L1 "v:%d s:%d p:%08x b:%016" PRIx64 " l:%016" PRIx64
+#define PRINT_CAP_FMTSTR_L1                                                    \
+    "v:%d s:%d p:%08x f:%d b:%016" PRIx64 " l:%016" PRIx64
 #define COMBINED_PERMS_VALUE(cr)                                               \
     (unsigned)((((cr)->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |       \
                ((cr)->cr_perms & CAP_PERMS_ALL))
 #define PRINT_CAP_ARGS_L1(cr)                                                  \
     (cr)->cr_tag, cap_is_sealed_with_type(cr), COMBINED_PERMS_VALUE(cr),       \
-        cap_get_base(cr), cap_get_length64(cr)
+        (cr)->cr_flags, cap_get_base(cr), cap_get_length64(cr)
 #define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
 #define PRINT_CAP_ARGS_L2(cr) (uint64_t)cap_get_offset(cr), (cr)->cr_otype
 
