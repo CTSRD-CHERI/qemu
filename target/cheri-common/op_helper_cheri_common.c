@@ -1100,6 +1100,12 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     env->statcounters_cap_read++;
     if (tag)
         env->statcounters_cap_read_tagged++;
+
+#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    env->rvfi_dii_trace.rvfi_dii_mem_addr = vaddr;
+    // env->rvfi_dii_trace.rvfi_dii_mem_rdata = cursor;
+    env->rvfi_dii_trace.rvfi_dii_mem_rmask = 0xff;
+#endif
 #if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
@@ -1167,6 +1173,11 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         cpu_stq_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem, retpc);
         cpu_stq_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, retpc);
     }
+#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    env->rvfi_dii_trace.rvfi_dii_mem_addr = vaddr;
+    // env->rvfi_dii_trace.rvfi_dii_mem_wdata = cursor;
+    env->rvfi_dii_trace.rvfi_dii_mem_wmask = 0xff;
+#endif
 
 #if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory cap write, if needed. */
