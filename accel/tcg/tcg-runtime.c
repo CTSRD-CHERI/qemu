@@ -223,7 +223,7 @@ void HELPER(dump_store64)(CPUArchState *env, target_ulong addr, uint64_t value, 
     // FIXME: value printed is not correct for swr!
     switch (memop_size(op)) {
     case 8:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = " TARGET_FMT_lx "\n",
+        qemu_log("    Memory Write [" TARGET_FMT_lx "] = " TARGET_FMT_plx "\n",
                  addr, value);
         break;
     case 4:
