@@ -117,7 +117,9 @@ static inline bool gen_cheri_cap_cap_int_imm(int cd, int cs1, int rs2,
     TCGv_i32 source_regnum = tcg_const_i32(cs1);
     TCGv gpr_value = tcg_temp_new();
     gen_get_gpr(gpr_value, rs2);
-    tcg_gen_addi_tl(gpr_value, gpr_value, imm);
+    if (imm != 0) {
+        tcg_gen_addi_tl(gpr_value, gpr_value, imm);
+    }
     gen_func(cpu_env, dest_regnum, source_regnum, gpr_value);
     tcg_temp_free(gpr_value);
     tcg_temp_free_i32(source_regnum);
