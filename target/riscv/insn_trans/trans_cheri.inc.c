@@ -284,7 +284,7 @@ static inline bool trans_clc(DisasContext *ctx, arg_clc *a)
 {
     INSN_CAN_TRAP(ctx);
     if (!ctx->capmode) {
-        // Without capmode we load relative to $ddc (lc instructions)
+        // Without capmode we load relative to DDC (lc instructions)
         return gen_cheri_cap_cap_int(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, &gen_helper_load_cap_via_cap);
     }
     return gen_cheri_cap_cap_imm(a->rd, a->rs1, /*offset=*/a->imm, &gen_helper_load_cap_via_cap);
@@ -412,7 +412,7 @@ static inline bool trans_csc(DisasContext *ctx, arg_csc *a)
     // RS2 is the value, RS1 is the capability
     INSN_CAN_TRAP(ctx);
     if (!ctx->capmode) {
-        // Without capmode we load relative to $ddc (sc instructions)
+        // Without capmode we store relative to DDC (sc instructions)
         return gen_cheri_cap_cap_int(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, &gen_helper_store_cap_via_cap);
     }
     return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/a->imm, &gen_helper_store_cap_via_cap);
