@@ -28,12 +28,42 @@
 #endif
 
 
+static inline const char* exception_str(uint32_t exception)
+{
+    // See Table 3.6 In privileged ISA spec
+    switch(exception) {
+    case RISCV_EXCP_INST_ADDR_MIS: return "Instruction address misaligned";
+    case RISCV_EXCP_INST_ACCESS_FAULT: return "Instruction access fault";
+    case RISCV_EXCP_ILLEGAL_INST: return "Illegal instruction";
+    case RISCV_EXCP_BREAKPOINT: return "Breakpoint";
+    case RISCV_EXCP_LOAD_ADDR_MIS: return "Load address misaligned";
+    case RISCV_EXCP_LOAD_ACCESS_FAULT: return "Load access fault";
+    case RISCV_EXCP_STORE_AMO_ADDR_MIS: return "Store/AMO address misaligned";
+    case RISCV_EXCP_STORE_AMO_ACCESS_FAULT: return "Store/AMO access fault";
+    case RISCV_EXCP_U_ECALL: return "Environment call from U-mode";
+    case RISCV_EXCP_S_ECALL: return "Environment call from S-mode";
+    case RISCV_EXCP_H_ECALL: return "Reserved/Environment call from H-mode";
+    case RISCV_EXCP_M_ECALL: return "Environment call from M-mode";
+    case RISCV_EXCP_INST_PAGE_FAULT: return "Instruction page fault";
+    case RISCV_EXCP_LOAD_PAGE_FAULT: return "Load page fault";
+    case 0xe: return "Reserved for future standard use";
+    case RISCV_EXCP_STORE_PAGE_FAULT: return "Store/AMO page fault";
+    // 16–23 Reserved for future standard use
+    // 24-31 Reserved for custom use (we use 28/0x1c) for CHERI
+    case RISCV_EXCP_CHERI: return "CHERI fault";
+    // 32–47 Reserved for future standard use
+    // 48-63 Reserved for custom use
+    // >64 Reserved for future standard use
+    default: return "Unknown exception";
+    }
+}
+
 /* Exceptions processing helpers */
 void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
                                           uint32_t exception, uintptr_t pc)
 {
     CPUState *cs = env_cpu(env);
-    qemu_log_mask(CPU_LOG_INT, "%s: %d\n", __func__, exception);
+    qemu_log_mask(CPU_LOG_INT, "%s: %s (%d)\n", __func__, exception_str(exception), exception);
     if (pc != 0 && exception == RISCV_EXCP_ILLEGAL_INST) {
         // Try to fetch the faulting instruction and store it in badaddr
         uint32_t opcode = 0;
@@ -120,6 +150,9 @@ target_ulong helper_sret(CPURISCVState *env, target_ulong cpu_pc_deb)
     env->mstatus = mstatus;
 #ifdef TARGET_CHERI
     env->PCC = env->SEPCC;
+    qemu_log_mask(CPU_LOG_INT,
+                  "%s: Updating PCC from SEPCC: " PRINT_CAP_FMTSTR "\n",
+                  __func__, PRINT_CAP_ARGS(&env->SEPCC));
 #endif
     return retpc;
 }
@@ -148,6 +181,9 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
 
 #ifdef TARGET_CHERI
     env->PCC = env->MEPCC;
+    qemu_log_mask(CPU_LOG_INT,
+                  "%s: Updating PCC from MEPCC: " PRINT_CAP_FMTSTR "\n",
+                  __func__, PRINT_CAP_ARGS(&env->MEPCC));
 #endif
     return retpc;
 }
