@@ -96,10 +96,12 @@ static int any(CPURISCVState *env, int csrno)
     return 0;
 }
 
+#ifdef TARGET_CHERI
 static int umode(CPURISCVState *env, int csrno)
 {
     return -!riscv_has_ext(env, RVU);
 }
+#endif
 
 static int smode(CPURISCVState *env, int csrno)
 {

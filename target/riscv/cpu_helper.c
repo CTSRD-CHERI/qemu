@@ -606,7 +606,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INT))) {
         FILE* logf = qemu_log_lock();
         qemu_log("Trap was probably caused by: ");
-        target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/UINT64_MAX);
+        target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/-1);
         qemu_log_unlock(logf);
     }
 
