@@ -44,55 +44,6 @@ static inline void target_cpu_init(CPUMIPSState *env,
     }
 }
 
-static int do_store_exclusive(CPUMIPSState *env)
-{
-    target_ulong addr;
-    target_ulong page_addr;
-    target_ulong val;
-    int flags;
-    int segv = 0;
-    int reg;
-    int d;
-
-    addr = env->lladdr;
-    page_addr = addr & TARGET_PAGE_MASK;
-    start_exclusive();
-    mmap_lock();
-    flags = page_get_flags(page_addr);
-    if ((flags & PAGE_READ) == 0) {
-        segv = 1;
-    } else {
-        reg = env->llreg & 0x1f;
-        d = (env->llreg & 0x20) != 0;
-        if (d) {
-            segv = get_user_s64(val, addr);
-        } else {
-            segv = get_user_s32(val, addr);
-        }
-        if (!segv) {
-            if (val != env->llval) {
-                env->active_tc.gpr[reg] = 0;
-            } else {
-                if (d) {
-                    segv = put_user_u64(env->llnewval, addr);
-                } else {
-                    segv = put_user_u32(env->llnewval, addr);
-                }
-                if (!segv) {
-                    env->active_tc.gpr[reg] = 1;
-                }
-            }
-        }
-    }
-    env->lladdr = -1;
-    if (!segv) {
-        env->active_tc.PC += 4;
-    }
-    mmap_unlock();
-    end_exclusive();
-    return segv;
-}
-
 static inline void target_cpu_loop(CPUMIPSState *env)
 {
     CPUState *cs = CPU(env_cpu(env));
@@ -215,16 +166,6 @@ static inline void target_cpu_loop(CPUMIPSState *env)
                 info.target_si_signo = TARGET_SIGTRAP;
                 info.target_si_errno = 0;
                 info.target_si_code = TARGET_TRAP_BRKPT;
-                queue_signal(env, info.target_si_signo, &info);
-            }
-            break;
-
-        case EXCP_SC:
-            if (do_store_exclusive(env)) {
-                info.target_si_signo = TARGET_SIGSEGV;
-                info.target_si_errno = 0;
-                info.target_si_code = TARGET_SEGV_MAPERR;
-                info.target_si_addr = env->active_tc.PC;
                 queue_signal(env, info.target_si_signo, &info);
             }
             break;
