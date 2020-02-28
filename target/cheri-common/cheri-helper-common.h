@@ -58,10 +58,14 @@ DEF_HELPER_2(cgettype, tl, env, i32)
 // Two operands (cap cap)
 DEF_HELPER_3(ccleartag, void, env, i32, i32)
 DEF_HELPER_3(cmove, void, env, i32, i32)
+DEF_HELPER_3(cchecktype, void, env, i32, i32)
 
 // Two operands (cap int)
 DEF_HELPER_3(ccheckperm, void, env, i32, tl)
-DEF_HELPER_3(cchecktype, void, env, i32, i32)
+
+// Two operands (int int)
+DEF_HELPER_2(crap, tl, env, tl)
+DEF_HELPER_2(cram, tl, env, tl)
 
 // Three operands (cap cap cap)
 DEF_HELPER_4(cbuildcap, void, env, i32, i32, i32)

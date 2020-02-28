@@ -346,6 +346,59 @@ void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
     }
 }
 
+/// Two operands (int int)
+
+static target_ulong crap_impl(target_ulong len) {
+#ifdef CHERI_128
+    // In QEMU we do this by performing a csetbounds on a maximum permissions
+    // capability and returning the resulting length
+    cap_register_t tmpcap;
+    set_max_perms_capability(&tmpcap, 0);
+    cc128_setbounds(&tmpcap, 0, len);
+    // FIXME: should we return 0 for 1 << 64? instead?
+    return cap_get_length64(&tmpcap);
+#else
+    // For MAGIC128 and 256 everything is representable -> we can return len
+  return len;
+#endif
+}
+
+target_ulong CHERI_HELPER_IMPL(crap(CPUArchState *env, target_ulong len))
+{
+    // CRoundArchitecturalPrecision rt, rs:
+    // rt is set to the smallest value greater or equal to rs that can be used
+    // by CSetBoundsExact without trapping (assuming a suitably aligned base).
+    // Now renamed to CRoundReprensentableLength (CRRL)
+    return crap_impl(len);
+}
+
+target_ulong CHERI_HELPER_IMPL(cram(CPUArchState *env, target_ulong len))
+{
+    // CRepresentableAlignmentMask rt, rs:
+    // rt is set to a mask that can be used to align down addresses to a value
+    // that is sufficiently aligned to set precise bounds for the nearest
+    // representable length of rs (as obtained by CRoundArchitecturalPrecision).
+#ifdef CHERI_128
+    // The mask used to align down is all ones followed by (required exponent
+    // for compressed representation) zeroes
+    target_ulong result = cc128_get_alignment_mask(len);
+    target_ulong rounded_with_crap = crap_impl(len);
+    target_ulong rounded_with_cram = (len + ~result) & result;
+    qemu_log_mask(CPU_LOG_INSTR, "cram(" TARGET_FMT_lx ") rounded=" TARGET_FMT_lx " rounded with mask=" TARGET_FMT_lx
+        " mask result=" TARGET_FMT_lx "\n", len, rounded_with_crap, rounded_with_cram, result);
+    if (rounded_with_cram != rounded_with_crap) {
+        warn_report("CRAM and CRRL disagree for " TARGET_FMT_lx ": crrl=" TARGET_FMT_lx
+                    " cram=" TARGET_FMT_lx, len, rounded_with_crap, rounded_with_cram);
+        qemu_log_mask(CPU_LOG_INSTR, "WARNING: CRAM and CRRL disagree for " TARGET_FMT_lx ": crrl=" TARGET_FMT_lx
+            " cram=" TARGET_FMT_lx, len, rounded_with_crap, rounded_with_cram);
+    }
+    return result;
+#else
+    // For MAGIC128 and 256 everything is representable -> we can return all ones
+    return UINT64_MAX;
+#endif
+}
+
 /// Three operands (capability capability capability)
 
 void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,

@@ -91,6 +91,20 @@ static inline bool gen_cheri_cap_int(int cd, int rs,
     return true;
 }
 
+typedef void(cheri_int_int_helper)(TCGv, TCGv_ptr, TCGv);
+static inline bool gen_cheri_int_int(int rd, int rs,
+                                     cheri_int_int_helper *gen_func)
+{
+    TCGv result = tcg_temp_new();
+    TCGv gpr_src_value = tcg_temp_new();
+    gen_get_gpr(gpr_src_value, rs);
+    gen_func(result, cpu_env, gpr_src_value);
+    gen_set_gpr(rd, result);
+    tcg_temp_free(gpr_src_value);
+    tcg_temp_free(result);
+    return true;
+}
+
 typedef void(cheri_cap_cap_cap_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
                                          cheri_cap_cap_cap_helper *gen_func)
@@ -158,12 +172,19 @@ TRANSLATE_CGET(cgettag)
 TRANSLATE_CGET(cgettype)
 TRANSLATE_CGET(cgetsealed)
 
-// Two operand (cap int)
-TRANSLATE_MAYBE_TRAP(ccheckperm, gen_cheri_cap_int, a->rd, a->rs1)
+// Two operand (int int)
+static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)
+{
+    INSN_CAN_TRAP(ctx);
+    return gen_cheri_int_int(a->rd, a->rs1, &gen_helper_crap);
+}
+static inline bool trans_cram(DisasContext *ctx, arg_cram *a)
+{
+    return gen_cheri_int_int(a->rd, a->rs1, &gen_helper_cram);
+}
 
 // Two operand (cap cap)
 TRANSLATE_CAP_CAP_NO_TRAP(ccleartag)
-TRANSLATE_CAP_CAP(cchecktype)
 TRANSLATE_CAP_CAP_NO_TRAP(cmove)
 
 // Three operand (cap cap cap)
