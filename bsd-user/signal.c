@@ -21,7 +21,7 @@
 #include "qemu/osdep.h"
 
 #include "qemu.h"
-#include "trace.h"
+#include "linux-user/trace.h"
 
 static target_stack_t target_sigaltstack_used = {
     .ss_sp = 0,
