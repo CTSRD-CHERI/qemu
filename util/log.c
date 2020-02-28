@@ -73,7 +73,7 @@ static void qemu_logfile_free(QemuLogFile *logfile)
 
 static bool log_uses_own_buffers;
 
-
+__attribute__((weak)) void flush_tcg_on_log_instr_chage(void);
 __attribute__((weak)) void flush_tcg_on_log_instr_chage(void) {
     // Real implementation in translate-all.c
     warn_report("Calling no-op %s\n", __func__);

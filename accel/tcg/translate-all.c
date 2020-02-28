@@ -1211,6 +1211,7 @@ static gboolean tb_host_size_iter(gpointer key, gpointer value, gpointer data)
     return false;
 }
 
+void flush_tcg_on_log_instr_chage(void);
 void flush_tcg_on_log_instr_chage(void) {
     warn_report("Calling real %s\n", __func__);
     CPUState *cpu;
