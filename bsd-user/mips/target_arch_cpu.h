@@ -95,7 +95,7 @@ static int do_store_exclusive(CPUMIPSState *env)
 
 static inline void target_cpu_loop(CPUMIPSState *env)
 {
-    CPUState *cs = CPU(mips_env_get_cpu(env));
+    CPUState *cs = CPU(env_cpu(env));
     target_siginfo_t info;
     int trapnr;
     abi_long ret;
