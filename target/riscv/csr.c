@@ -804,7 +804,6 @@ static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
 {
     // We report the same values for all modes and don't perform dirty tracking
     // The capability cause has moved to xTVAL so we don't report it here.
-    *val = env->sbadaddr;
     RISCVCPU *cpu = env_archcpu(env);
     target_ulong ccsr = 0;
     ccsr = set_field(ccsr, CCSR_ENABLE, cpu->cfg.ext_cheri);
@@ -1025,9 +1024,6 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
     [CSR_SSTATUS] =             { smode, read_sstatus,     write_sstatus     },
     [CSR_SIE] =                 { smode, read_sie,         write_sie         },
     [CSR_STVEC] =               { smode, read_stvec,       write_stvec       },
-    [CSR_SCOUNTEREN] =          { smode, read_scounteren,  write_scounteren  },
-
-
     [CSR_SCOUNTEREN] =          { smode, read_scounteren,  write_scounteren  },
 
     /* Supervisor Trap Handling */
