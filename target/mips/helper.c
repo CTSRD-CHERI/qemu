@@ -1610,6 +1610,12 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #ifdef TARGET_CHERI
     assert(cap_get_cursor(&env->active_tc.PCC) == env->active_tc.PC);
 #endif
+#ifdef CONFIG_MIPS_LOG_INSTR
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
+                     || env->user_only_tracing_enabled)) {
+        helper_dump_changed_state(env);
+    }
+#endif /* CONFIG_MIPS_LOG_INSTR */
 }
 
 bool mips_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
