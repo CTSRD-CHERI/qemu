@@ -236,7 +236,7 @@ static inline void target_cpu_loop(CPUMIPSState *env)
         default:
             fprintf(stderr, "qemu: unhandled CPU exception "
                 "0x%x - aborting\n", trapnr);
-            cpu_dump_state(cs, stderr, fprintf, 0);
+            cpu_dump_state(cs, stderr, 0);
             abort();
         }
         process_pending_signals(env);
