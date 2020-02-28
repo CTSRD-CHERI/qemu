@@ -73,6 +73,12 @@ static void qemu_logfile_free(QemuLogFile *logfile)
 
 static bool log_uses_own_buffers;
 
+
+__attribute__((weak)) void flush_tcg_on_log_instr_chage(void) {
+    // Real implementation in translate-all.c
+    warn_report("Calling no-op %s\n", __func__);
+}
+
 /* enable or disable low levels log */
 void qemu_set_log(int log_flags)
 {
@@ -80,6 +86,16 @@ void qemu_set_log(int log_flags)
     QemuLogFile *logfile;
 
     qemu_loglevel = log_flags;
+    const int need_to_flush_tcg_on_change =
+        CPU_LOG_INSTR | CPU_LOG_USER_ONLY | CPU_LOG_CVTRACE;
+    if ((qemu_loglevel & need_to_flush_tcg_on_change) !=
+        (log_flags & need_to_flush_tcg_on_change)) {
+        // When instruction tracing flags change, we have to re-translate all
+        // blocks that were translated with tracing on/off.
+        // This may flush too much state, but such changes should be rare.
+        flush_tcg_on_log_instr_chage();
+    }
+
 #ifdef CONFIG_TRACE_LOG
     qemu_loglevel |= LOG_TRACE;
 #endif
@@ -94,6 +110,7 @@ void qemu_set_log(int log_flags)
     if (qemu_loglevel && (!is_daemonized() || logfilename)) {
         need_to_open_file = true;
     }
+
     qemu_mutex_lock(&qemu_logfile_mutex);
     if (qemu_logfile && !need_to_open_file) {
         logfile = qemu_logfile;

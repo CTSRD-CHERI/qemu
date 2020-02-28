@@ -2873,7 +2873,9 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
     }
 #if defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
-    gen_helper_dump_load32(cpu_env, saved_load_addr, val, tcop);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+        gen_helper_dump_load32(cpu_env, saved_load_addr, val, tcop);
+    }
     tcg_temp_free_i32(tcop);
     // Free the saved address if we needed it
     if (saved_load_addr != addr)
@@ -2916,7 +2918,9 @@ void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
 #if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
 #if defined(CONFIG_MIPS_LOG_INSTR)
-    gen_helper_dump_store32(cpu_env, addr, val, tcop);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+        gen_helper_dump_store32(cpu_env, addr, val, tcop);
+    }
 #endif
 #ifdef TARGET_CHERI
     gen_cheri_invalidate_tags(addr, tcop);
@@ -2998,7 +3002,9 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     }
 #if defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
-    gen_helper_dump_load64(cpu_env, saved_load_addr, val, tcop);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+        gen_helper_dump_load64(cpu_env, saved_load_addr, val, tcop);
+    }
     tcg_temp_free_i32(tcop);
     // Free the saved address if we needed it
     if (saved_load_addr != addr)
@@ -3051,7 +3057,9 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
 #if defined(TARGET_CHERI) || defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
 #if defined(CONFIG_MIPS_LOG_INSTR)
-    gen_helper_dump_store64(cpu_env, addr, val, tcop);
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+        gen_helper_dump_store64(cpu_env, addr, val, tcop);
+    }
 #endif
 #if defined(TARGET_CHERI)
     gen_cheri_invalidate_tags(addr, tcop);
