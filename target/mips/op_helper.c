@@ -940,6 +940,11 @@ void r4k_helper_tlbr(CPUMIPSState *env)
 
     r4k_mips_tlb_flush_extra(env, env->tlb->nb_tlb);
 
+#ifdef CPU_CHERI
+	uint64_t save_clg = env->CP0_EntryHi &
+		((1 << CP0EnHi_CLGU) | (1 << CP0EnHi_CLGS) | (1 << CP0EnHi_CLGK));
+#endif
+
     if (tlb->EHINV) {
         env->CP0_EntryHi = 1 << CP0EnHi_EHINV;
         env->CP0_PageMask = 0;
@@ -972,6 +977,10 @@ void r4k_helper_tlbr(CPUMIPSState *env)
                         (tlb->C1 << 3) |
                         get_entrylo_pfn_from_tlb(tlb->PFN[1] >> 12);
     }
+
+#ifdef CPU_CHERI
+	env->CP0_EntryHi |= save_clg;
+#endif
 }
 
 void helper_tlbwi(CPUMIPSState *env)
