@@ -2794,13 +2794,26 @@ static void tcg_gen_req_mo(TCGBar type)
     }
 }
 
+static inline TCGv_cap_checked_ptr plugin_prep_mem_callbacks(TCGv_cap_checked_ptr vaddr)
+{
+#ifdef CONFIG_PLUGIN
+    if (tcg_ctx->plugin_insn != NULL) {
+        /* Save a copy of the vaddr for use after a load.  */
+        TCGv_cap_checked_ptr temp = tcg_temp_new_cap_checked();
+        tcg_gen_mov_tl((TCGv)temp, (TCGv)vaddr);
+        return temp;
+    }
+#endif
+    return vaddr;
+}
+
 static inline void plugin_gen_mem_callbacks(TCGv_cap_checked_ptr vaddr, uint16_t info)
 {
 #ifdef CONFIG_PLUGIN
-    if (tcg_ctx->plugin_insn == NULL) {
-        return;
+    if (tcg_ctx->plugin_insn != NULL) {
+        plugin_gen_empty_mem_callback((TCGv)vaddr, info);
+        tcg_temp_free_cap_checked(vaddr);
     }
-    plugin_gen_empty_mem_callback((TCGv)vaddr, info);
 #endif
 }
 
@@ -2809,7 +2822,6 @@ static inline void gen_cheri_invalidate_tags(TCGv_cap_checked_ptr out_addr, TCGv
     gen_helper_cheri_invalidate_tags(cpu_env, out_addr, memop);
 }
 #endif
-
 
 #if !defined(TARGET_RISCV) || !defined(CONFIG_RVFI_DII)
 #define gen_rvfi_dii_set_field(value, field) ((void)0)
@@ -2839,6 +2851,7 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
         }
     }
 
+    addr = plugin_prep_mem_callbacks(addr);
 #if defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_cap_checked_ptr saved_load_addr;
     // If addr and val are the same, we need to allocate a temporary
@@ -2909,6 +2922,7 @@ void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
         memop &= ~MO_BSWAP;
     }
 
+    addr = plugin_prep_mem_callbacks(addr);
     gen_rvfi_dii_set_field(mem_addr, addr);
     gen_ldst_i32(INDEX_op_qemu_st_i32, val, addr, memop, idx);
     gen_rvfi_dii_set_field(mem_wdata, val);
@@ -2962,6 +2976,7 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
         }
     }
 
+    addr = plugin_prep_mem_callbacks(addr);
 #if defined(CONFIG_MIPS_LOG_INSTR)
     TCGv_cap_checked_ptr saved_load_addr;
     // If addr and val are the same, we need to allocate a temporary
@@ -3048,6 +3063,7 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
         memop &= ~MO_BSWAP;
     }
 
+    addr = plugin_prep_mem_callbacks(addr);
     gen_rvfi_dii_set_field(mem_addr, addr);
     gen_ldst_i64(INDEX_op_qemu_st_i64, val, addr, memop, idx);
     gen_rvfi_dii_set_field(mem_wdata, val);

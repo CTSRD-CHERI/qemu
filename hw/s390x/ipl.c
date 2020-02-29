@@ -179,7 +179,7 @@ static void s390_ipl_realize(DeviceState *dev, Error **errp)
                 /* if not Linux load the address of the (short) IPL PSW */
                 ipl_psw = rom_ptr(4, 4);
                 if (ipl_psw) {
-                    pentry = be32_to_cpu(*ipl_psw) & 0x7fffffffUL;
+                    pentry = be32_to_cpu(*ipl_psw) & PSW_MASK_SHORT_ADDR;
                 } else {
                     error_setg(&err, "Could not get IPL PSW");
                     goto error;
@@ -626,7 +626,7 @@ static void s390_ipl_prepare_qipl(S390CPU *cpu)
     uint8_t *addr;
     uint64_t len = 4096;
 
-    addr = cpu_physical_memory_map(cpu->env.psa, &len, 1);
+    addr = cpu_physical_memory_map(cpu->env.psa, &len, true);
     if (!addr || len < QIPL_ADDRESS + sizeof(QemuIplParameters)) {
         error_report("Cannot set QEMU IPL parameters");
         return;

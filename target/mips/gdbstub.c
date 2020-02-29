@@ -22,7 +22,7 @@
 #include "internal.h"
 #include "exec/gdbstub.h"
 #ifdef TARGET_CHERI
-#include "cheri-lazy-capregs.h"
+#include "cheri-helper-utils.h"
 #endif
 
 int mips_cpu_gdb_read_register(CPUState *cs, uint8_t *mem_buf, int n)

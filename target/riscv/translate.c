@@ -52,7 +52,6 @@ typedef struct DisasContext {
     /* pc_succ_insn points to the instruction following base.pc_next */
     target_ulong pc_succ_insn;
     target_ulong priv_ver;
-    uint32_t opcode;
     uint32_t mstatus_fs;
     uint32_t misa;
     uint32_t mem_idx;
@@ -141,9 +140,6 @@ static void lookup_and_goto_ptr(DisasContext *ctx)
 
 static void gen_exception_illegal(DisasContext *ctx)
 {
-    TCGv opcode = tcg_const_tl(ctx->opcode);
-    tcg_gen_st_tl(opcode, cpu_env, offsetof(CPURISCVState, badaddr));
-    tcg_temp_free(opcode);
     generate_exception(ctx, RISCV_EXCP_ILLEGAL_INST);
 }
 
@@ -572,45 +568,45 @@ static void gen_set_rm(DisasContext *ctx, int rm)
     tcg_temp_free_i32(t0);
 }
 
-static void decode_RV32_64C0(DisasContext *ctx)
+static void decode_RV32_64C0(DisasContext *ctx, uint16_t opcode)
 {
-    uint8_t funct3 = extract32(ctx->opcode, 13, 3);
-    uint8_t rd_rs2 = GET_C_RS2S(ctx->opcode);
-    uint8_t rs1s = GET_C_RS1S(ctx->opcode);
+    uint8_t funct3 = extract16(opcode, 13, 3);
+    uint8_t rd_rs2 = GET_C_RS2S(opcode);
+    uint8_t rs1s = GET_C_RS1S(opcode);
 
     switch (funct3) {
     case 3:
 #if defined(TARGET_RISCV64)
         /* C.LD(RV64/128) -> ld rd', offset[7:3](rs1')*/
         gen_load_c(ctx, OPC_RISC_LD, rd_rs2, rs1s,
-                 GET_C_LD_IMM(ctx->opcode));
+                 GET_C_LD_IMM(opcode));
 #else
         /* C.FLW (RV32) -> flw rd', offset[6:2](rs1')*/
         gen_fp_load(ctx, OPC_RISC_FLW, rd_rs2, rs1s,
-                    GET_C_LW_IMM(ctx->opcode));
+                    GET_C_LW_IMM(opcode));
 #endif
         break;
     case 7:
 #if defined(TARGET_RISCV64)
         /* C.SD (RV64/128) -> sd rs2', offset[7:3](rs1')*/
         gen_store_c(ctx, OPC_RISC_SD, rs1s, rd_rs2,
-                  GET_C_LD_IMM(ctx->opcode));
+                  GET_C_LD_IMM(opcode));
 #else
         /* C.FSW (RV32) -> fsw rs2', offset[6:2](rs1')*/
         gen_fp_store(ctx, OPC_RISC_FSW, rs1s, rd_rs2,
-                     GET_C_LW_IMM(ctx->opcode));
+                     GET_C_LW_IMM(opcode));
 #endif
         break;
     }
 }
 
-static void decode_RV32_64C(DisasContext *ctx)
+static void decode_RV32_64C(DisasContext *ctx, uint16_t opcode)
 {
-    uint8_t op = extract32(ctx->opcode, 0, 2);
+    uint8_t op = extract16(opcode, 0, 2);
 
     switch (op) {
     case 0:
-        decode_RV32_64C0(ctx);
+        decode_RV32_64C0(ctx, opcode);
         break;
     }
 }
@@ -793,22 +789,45 @@ static bool gen_shift(DisasContext *ctx, arg_r *a,
 /* Include the auto-generated decoder for 16 bit insn */
 #include "decode_insn16.inc.c"
 
-static void decode_opc(DisasContext *ctx)
+static void decode_opc(CPURISCVState *env, DisasContext *ctx)
 {
+#ifdef CONFIG_RVFI_DII
+    // We have to avoid memory accesses for injected instructions since
+    // the PC could point somewhere invalid.
+    uint16_t opcode = env->rvfi_dii_have_injected_insn
+                          ? env->rvfi_dii_trace.rvfi_dii_insn
+                          : translator_lduw(env, ctx->base.pc_next);
+    gen_rvfi_dii_set_field_const(pc_rdata, ctx->base.pc_next);
+#else
+    uint16_t opcode = translator_lduw(env, ctx->base.pc_next);
+#endif
     /* check for compressed insn */
-    if (extract32(ctx->opcode, 0, 2) != 3) {
+    if (extract16(opcode, 0, 2) != 3) {
+        gen_rvfi_dii_set_field_const(insn, opcode);
         if (!has_ext(ctx, RVC)) {
             gen_exception_illegal(ctx);
         } else {
             ctx->pc_succ_insn = ctx->base.pc_next + 2;
-            if (!decode_insn16(ctx, ctx->opcode)) {
+            if (!decode_insn16(ctx, opcode)) {
                 /* fall back to old decoder */
-                decode_RV32_64C(ctx);
+                decode_RV32_64C(ctx, opcode);
             }
         }
     } else {
+#ifdef CONFIG_RVFI_DII
+        // We have to avoid memory accesses for injected instructions since
+        // the PC could point somewhere invalid.
+        uint16_t next_16 = env->rvfi_dii_have_injected_insn
+                          ? (env->rvfi_dii_trace.rvfi_dii_insn >> 16)
+                          : translator_lduw(env, ctx->base.pc_next + 2);
+#else
+        uint16_t next_16 = translator_lduw(env, ctx->base.pc_next + 2);
+#endif
+        uint32_t opcode32 = opcode;
+        opcode32 = deposit32(opcode32, 16, 16, next_16);
         ctx->pc_succ_insn = ctx->base.pc_next + 4;
-        if (!decode_insn32(ctx, ctx->opcode)) {
+        gen_rvfi_dii_set_field_const(insn, opcode32);
+        if (!decode_insn32(ctx, opcode32)) {
             gen_exception_illegal(ctx);
         }
     }
@@ -864,21 +883,7 @@ static void riscv_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
     CPURISCVState *env = cpu->env_ptr;
 
-#ifdef CONFIG_RVFI_DII
-    // We have to avoid memory accesses for injected instructions since
-    // the PC could point somewhere invalid.
-    // If
-    if (env->rvfi_dii_have_injected_insn) {
-        ctx->opcode = env->rvfi_dii_trace.rvfi_dii_insn;
-    } else {
-        ctx->opcode = translator_ldl(env, ctx->base.pc_next);
-    }
-    gen_rvfi_dii_set_field_const(pc_rdata, ctx->base.pc_next);
-    gen_rvfi_dii_set_field_const(insn, ctx->opcode);
-#else
-    ctx->opcode = translator_ldl(env, ctx->base.pc_next);
-#endif
-    decode_opc(ctx);
+    decode_opc(env, ctx);
     ctx->base.pc_next = ctx->pc_succ_insn;
     gen_rvfi_dii_set_field_const(pc_wdata, ctx->base.pc_next);
 

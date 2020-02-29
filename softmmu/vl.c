@@ -36,25 +36,6 @@
 #include "sysemu/seccomp.h"
 #include "sysemu/tcg.h"
 
-#ifdef CONFIG_SDL
-#if defined(__APPLE__) || defined(main)
-#include <SDL.h>
-int qemu_main(int argc, char **argv, char **envp);
-int main(int argc, char **argv)
-{
-    return qemu_main(argc, argv, NULL);
-}
-#undef main
-#define main qemu_main
-#endif
-#endif /* CONFIG_SDL */
-
-#ifdef CONFIG_COCOA
-#undef main
-#define main qemu_main
-#endif /* CONFIG_COCOA */
-
-
 #include "qemu/error-report.h"
 #include "qemu/sockets.h"
 #include "sysemu/accel.h"
@@ -75,6 +56,7 @@ int main(int argc, char **argv)
 #include "ui/input.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/numa.h"
+#include "sysemu/hostmem.h"
 #include "exec/gdbstub.h"
 #include "qemu/timer.h"
 #include "chardev/char.h"
@@ -139,8 +121,6 @@ enum vga_retrace_method vga_retrace_method = VGA_RETRACE_DUMB;
 int display_opengl;
 const char* keyboard_layout = NULL;
 ram_addr_t ram_size;
-const char *mem_path = NULL;
-int mem_prealloc = 0; /* force preallocation of physical target memory */
 bool enable_mlock = false;
 bool enable_cpu_pm = false;
 int nb_nics;
@@ -168,7 +148,6 @@ int no_hpet = 0;
 int fd_bootchk = 1;
 static int no_reboot;
 int no_shutdown = 0;
-int cursor_hide = 1;
 int graphic_rotate = 0;
 const char *watchdog;
 QEMUOptionRom option_rom[MAX_OPTION_ROMS];
@@ -1731,7 +1710,7 @@ static bool main_loop_should_exit(void)
     return false;
 }
 
-static void main_loop(void)
+void qemu_main_loop(void)
 {
 #ifdef CONFIG_PROFILER
     int64_t ti;
@@ -2016,6 +1995,16 @@ static void parse_display(const char *p)
                 } else {
                     goto invalid_sdl_args;
                 }
+            } else if (strstart(opts, ",show-cursor=", &nextopt)) {
+                opts = nextopt;
+                dpy.has_show_cursor = true;
+                if (strstart(opts, "on", &nextopt)) {
+                    dpy.show_cursor = true;
+                } else if (strstart(opts, "off", &nextopt)) {
+                    dpy.show_cursor = false;
+                } else {
+                    goto invalid_sdl_args;
+                }
             } else if (strstart(opts, ",gl=", &nextopt)) {
                 opts = nextopt;
                 dpy.has_gl = true;
@@ -2203,50 +2192,7 @@ static int fsdev_init_func(void *opaque, QemuOpts *opts, Error **errp)
 
 static int mon_init_func(void *opaque, QemuOpts *opts, Error **errp)
 {
-    Chardev *chr;
-    bool qmp;
-    bool pretty = false;
-    const char *chardev;
-    const char *mode;
-
-    mode = qemu_opt_get(opts, "mode");
-    if (mode == NULL) {
-        mode = "readline";
-    }
-    if (strcmp(mode, "readline") == 0) {
-        qmp = false;
-    } else if (strcmp(mode, "control") == 0) {
-        qmp = true;
-    } else {
-        error_setg(errp, "unknown monitor mode \"%s\"", mode);
-        return -1;
-    }
-
-    if (!qmp && qemu_opt_get(opts, "pretty")) {
-        warn_report("'pretty' is deprecated for HMP monitors, it has no effect "
-                    "and will be removed in future versions");
-    }
-    if (qemu_opt_get_bool(opts, "pretty", 0)) {
-        pretty = true;
-    }
-
-    chardev = qemu_opt_get(opts, "chardev");
-    if (!chardev) {
-        error_report("chardev is required");
-        exit(1);
-    }
-    chr = qemu_chr_find(chardev);
-    if (chr == NULL) {
-        error_setg(errp, "chardev \"%s\" not found", chardev);
-        return -1;
-    }
-
-    if (qmp) {
-        monitor_init_qmp(chr, pretty);
-    } else {
-        monitor_init_hmp(chr, true);
-    }
-    return 0;
+    return monitor_init_opts(opts, errp);
 }
 
 static void monitor_parse(const char *optarg, const char *mode, bool pretty)
@@ -2697,7 +2643,7 @@ static bool object_create_delayed(const char *type, QemuOpts *opts)
 }
 
 
-static void set_memory_options(uint64_t *ram_slots, ram_addr_t *maxram_size,
+static bool set_memory_options(uint64_t *ram_slots, ram_addr_t *maxram_size,
                                MachineClass *mc)
 {
     uint64_t sz;
@@ -2774,6 +2720,7 @@ static void set_memory_options(uint64_t *ram_slots, ram_addr_t *maxram_size,
     }
 
     loc_pop(&loc);
+    return !!mem_str;
 }
 
 static int global_init_func(void *opaque, QemuOpts *opts, Error **errp)
@@ -2924,7 +2871,25 @@ static void configure_accelerators(const char *progname)
     }
 }
 
-int main(int argc, char **argv, char **envp)
+static void create_default_memdev(MachineState *ms, const char *path)
+{
+    Object *obj;
+    MachineClass *mc = MACHINE_GET_CLASS(ms);
+
+    obj = object_new(path ? TYPE_MEMORY_BACKEND_FILE : TYPE_MEMORY_BACKEND_RAM);
+    if (path) {
+        object_property_set_str(obj, path, "mem-path", &error_fatal);
+    }
+    object_property_set_int(obj, ms->ram_size, "size", &error_fatal);
+    object_property_add_child(object_get_objects_root(), mc->default_ram_id,
+                              obj, &error_fatal);
+    user_creatable_complete(USER_CREATABLE(obj), &error_fatal);
+    object_unref(obj);
+    object_property_set_str(OBJECT(ms), mc->default_ram_id, "memory-backend",
+                            &error_fatal);
+}
+
+void qemu_init(int argc, char **argv, char **envp)
 {
     int i;
     int snapshot, linux_boot;
@@ -2965,8 +2930,11 @@ int main(int argc, char **argv, char **envp)
 #endif
     bool list_data_dirs = false;
     char *dir, **dirs;
+    const char *mem_path = NULL;
+    bool have_custom_ram_size;
     BlockdevOptionsQueue bdo_queue = QSIMPLEQ_HEAD_INITIALIZER(bdo_queue);
     QemuPluginList plugin_list = QTAILQ_HEAD_INITIALIZER(plugin_list);
+    int mem_prealloc = 0; /* force preallocation of physical target memory */
 
     os_set_line_buffering();
 
@@ -3483,7 +3451,7 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_watchdog:
                 if (watchdog) {
                     error_report("only one watchdog option may be given");
-                    return 1;
+                    exit(1);
                 }
                 watchdog = optarg;
                 break;
@@ -3593,7 +3561,7 @@ int main(int argc, char **argv, char **envp)
                             gchar **optname = g_strsplit(typename,
                                                          ACCEL_CLASS_SUFFIX, 0);
                             printf("%s\n", optname[0]);
-                            g_free(optname);
+                            g_strfreev(optname);
                         }
                         g_free(typename);
                     }
@@ -3645,7 +3613,10 @@ int main(int argc, char **argv, char **envp)
                 no_shutdown = 1;
                 break;
             case QEMU_OPTION_show_cursor:
-                cursor_hide = 0;
+                warn_report("The -show-cursor option is deprecated, "
+                            "use -display {sdl,gtk},show-cursor=on instead");
+                dpy.has_show_cursor = true;
+                dpy.show_cursor = true;
                 break;
             case QEMU_OPTION_uuid:
                 if (qemu_uuid_parse(optarg, &qemu_uuid) < 0) {
@@ -3980,10 +3951,21 @@ int main(int argc, char **argv, char **envp)
     machine_class = select_machine();
     object_set_machine_compat_props(machine_class->compat_props);
 
-    set_memory_options(&ram_slots, &maxram_size, machine_class);
+    have_custom_ram_size = set_memory_options(&ram_slots, &maxram_size,
+                                              machine_class);
 
     os_daemonize();
-    rcu_disable_atfork();
+
+    /*
+     * If QTest is enabled, keep the rcu_atfork enabled, since system processes
+     * may be forked testing purposes (e.g. fork-server based fuzzing) The fork
+     * should happen before a signle cpu instruction is executed, to prevent
+     * deadlocks. See commit 73c6e40, rcu: "completely disable pthread_atfork
+     * callbacks as soon as possible"
+     */
+    if (!qtest_enabled()) {
+        rcu_disable_atfork();
+    }
 
     if (pid_file && !qemu_write_pidfile(pid_file, &err)) {
         error_reportf_err(err, "cannot create PID file: ");
@@ -4123,6 +4105,15 @@ int main(int argc, char **argv, char **envp)
                      current_machine->smp.max_cpus,
                      machine_class->name, machine_class->max_cpus);
         exit(1);
+    }
+
+    if (mem_prealloc) {
+        char *val;
+
+        val = g_strdup_printf("%d", current_machine->smp.cpus);
+        object_register_sugar_prop("memory-backend", "prealloc-threads", val);
+        g_free(val);
+        object_register_sugar_prop("memory-backend", "prealloc", "on");
     }
 
     /*
@@ -4288,9 +4279,6 @@ int main(int argc, char **argv, char **envp)
     machine_opts = qemu_get_machine_opts();
     qemu_opt_foreach(machine_opts, machine_set_property, current_machine,
                      &error_fatal);
-    current_machine->ram_size = ram_size;
-    current_machine->maxram_size = maxram_size;
-    current_machine->ram_slots = ram_slots;
 
     /*
      * Note: uses machine properties such as kernel-irqchip, must run
@@ -4405,14 +4393,6 @@ int main(int argc, char **argv, char **envp)
 
     tpm_init();
 
-    if (!xen_enabled()) {
-        /* On 32-bit hosts, QEMU is limited by virtual address space */
-        if (ram_size > (2047 << 20) && HOST_LONG_BITS == 32) {
-            error_report("at most 2047 MB RAM can be simulated");
-            exit(1);
-        }
-    }
-
     blk_mig_init();
     ram_mig_init();
     dirty_bitmap_mig_init();
@@ -4457,10 +4437,42 @@ int main(int argc, char **argv, char **envp)
     if (cpu_option) {
         current_machine->cpu_type = parse_cpu_option(cpu_option);
     }
+
+    if (current_machine->ram_memdev_id) {
+        Object *backend;
+        ram_addr_t backend_size;
+
+        backend = object_resolve_path_type(current_machine->ram_memdev_id,
+                                           TYPE_MEMORY_BACKEND, NULL);
+        backend_size = object_property_get_uint(backend, "size",  &error_abort);
+        if (have_custom_ram_size && backend_size != ram_size) {
+                error_report("Size specified by -m option must match size of "
+                             "explicitly specified 'memory-backend' property");
+                exit(EXIT_FAILURE);
+        }
+        ram_size = backend_size;
+    }
+
+    if (!xen_enabled()) {
+        /* On 32-bit hosts, QEMU is limited by virtual address space */
+        if (ram_size > (2047 << 20) && HOST_LONG_BITS == 32) {
+            error_report("at most 2047 MB RAM can be simulated");
+            exit(1);
+        }
+    }
+
+    current_machine->ram_size = ram_size;
+    current_machine->maxram_size = maxram_size;
+    current_machine->ram_slots = ram_slots;
+
     parse_numa_opts(current_machine);
 
+    if (machine_class->default_ram_id && current_machine->ram_size &&
+        numa_uses_legacy_mem() && !current_machine->ram_memdev_id) {
+        create_default_memdev(current_machine, mem_path);
+    }
     /* do monitor/qmp handling at preconfig state if requested */
-    main_loop();
+    qemu_main_loop();
 
     audio_init_audiodevs();
 
@@ -4595,7 +4607,7 @@ int main(int argc, char **argv, char **envp)
     if (vmstate_dump_file) {
         /* dump and exit */
         dump_vmstate_json_to_file(vmstate_dump_file);
-        return 0;
+        exit(0);
     }
 #ifdef CONFIG_RVFI_DII
     if (rvfi_dii_port) {
@@ -4629,8 +4641,11 @@ int main(int argc, char **argv, char **envp)
     accel_setup_post(current_machine);
     os_setup_post();
 
-    main_loop();
+    return;
+}
 
+void qemu_cleanup(void)
+{
     gdbserver_cleanup();
 
     /*
@@ -4667,6 +4682,4 @@ int main(int argc, char **argv, char **envp)
     qemu_chr_cleanup();
     user_creatable_cleanup();
     /* TODO: unref root container, check all devices are ok */
-
-    return 0;
 }

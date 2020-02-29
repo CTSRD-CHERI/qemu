@@ -462,7 +462,7 @@ sub top_of_kernel_tree {
 	my @tree_check = (
 		"COPYING", "MAINTAINERS", "Makefile",
 		"README.rst", "docs", "VERSION",
-		"vl.c"
+		"linux-user", "softmmu"
 	);
 
 	foreach my $check (@tree_check) {
@@ -1828,6 +1828,11 @@ sub process {
 # 'do ... while (0/false)' only makes sense in macros, without trailing ';'
 		if ($line =~ /while\s*\((0|false)\);/) {
 			ERROR("suspicious ; after while (0)\n" . $herecurr);
+		}
+
+# Check superfluous trailing ';'
+		if ($line =~ /;;$/) {
+			ERROR("superfluous trailing semicolon\n" . $herecurr);
 		}
 
 # Check relative indent for conditionals and blocks.

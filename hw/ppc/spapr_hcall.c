@@ -832,7 +832,7 @@ static target_ulong h_page_init(PowerPCCPU *cpu, SpaprMachineState *spapr,
     if (!is_ram_address(spapr, dst) || (dst & ~TARGET_PAGE_MASK) != 0) {
         return H_PARAMETER;
     }
-    pdst = cpu_physical_memory_map(dst, &len, 1);
+    pdst = cpu_physical_memory_map(dst, &len, true);
     if (!pdst || len != TARGET_PAGE_SIZE) {
         return H_PARAMETER;
     }
@@ -843,7 +843,7 @@ static target_ulong h_page_init(PowerPCCPU *cpu, SpaprMachineState *spapr,
             ret = H_PARAMETER;
             goto unmap_out;
         }
-        psrc = cpu_physical_memory_map(src, &len, 0);
+        psrc = cpu_physical_memory_map(src, &len, false);
         if (!psrc || len != TARGET_PAGE_SIZE) {
             ret = H_PARAMETER;
             goto unmap_out;
@@ -1640,20 +1640,24 @@ static uint32_t cas_check_pvr(SpaprMachineState *spapr, PowerPCCPU *cpu,
     return best_compat;
 }
 
-static bool spapr_hotplugged_dev_before_cas(void)
+static bool spapr_transient_dev_before_cas(void)
 {
-    Object *drc_container, *obj;
+    Object *drc_container;
     ObjectProperty *prop;
     ObjectPropertyIterator iter;
 
     drc_container = container_get(object_get_root(), "/dr-connector");
     object_property_iter_init(&iter, drc_container);
     while ((prop = object_property_iter_next(&iter))) {
+        SpaprDrc *drc;
+
         if (!strstart(prop->type, "link<", NULL)) {
             continue;
         }
-        obj = object_property_get_link(drc_container, prop->name, NULL);
-        if (spapr_drc_needed(obj)) {
+        drc = SPAPR_DR_CONNECTOR(object_property_get_link(drc_container,
+                                                          prop->name, NULL));
+
+        if (spapr_drc_transient(drc)) {
             return true;
         }
     }
@@ -1830,7 +1834,7 @@ static target_ulong h_client_architecture_support(PowerPCCPU *cpu,
 
     spapr_irq_update_active_intc(spapr);
 
-    if (spapr_hotplugged_dev_before_cas()) {
+    if (spapr_transient_dev_before_cas()) {
         spapr->cas_reboot = true;
     }
 

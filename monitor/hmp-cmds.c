@@ -31,6 +31,7 @@
 #include "qapi/qapi-builtin-visit.h"
 #include "qapi/qapi-commands-block.h"
 #include "qapi/qapi-commands-char.h"
+#include "qapi/qapi-commands-control.h"
 #include "qapi/qapi-commands-migration.h"
 #include "qapi/qapi-commands-misc.h"
 #include "qapi/qapi-commands-net.h"
@@ -619,7 +620,7 @@ void hmp_info_block(Monitor *mon, const QDict *qdict)
     }
 
     /* Print node information */
-    blockdev_list = qmp_query_named_block_nodes(NULL);
+    blockdev_list = qmp_query_named_block_nodes(false, false, NULL);
     for (blockdev = blockdev_list; blockdev; blockdev = blockdev->next) {
         assert(blockdev->value->has_node_name);
         if (device && strcmp(device, blockdev->value->node_name)) {

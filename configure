@@ -457,7 +457,7 @@ guest_agent_ntddscsi="no"
 guest_agent_msi=""
 vss_win32_sdk=""
 win_sdk="no"
-want_tools="yes"
+want_tools=""
 libiscsi=""
 libnfs=""
 coroutine=""
@@ -507,6 +507,7 @@ debug_mutex="no"
 libpmem=""
 default_devices="yes"
 plugins="no"
+fuzzing="no"
 
 supported_cpu="no"
 supported_os="no"
@@ -634,6 +635,15 @@ EOF
 write_c_skeleton() {
     cat > $TMPC <<EOF
 int main(void) { return 0; }
+EOF
+}
+
+write_c_fuzzer_skeleton() {
+    cat > $TMPC <<EOF
+#include <stdint.h>
+#include <sys/types.h>
+int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size);
+int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) { return 0; }
 EOF
 }
 
@@ -916,6 +926,17 @@ do
         break
     fi
 done
+
+sphinx_build=
+for binary in sphinx-build-3 sphinx-build
+do
+    if has "$binary"
+    then
+        sphinx_build=$(command -v "$binary")
+        break
+    fi
+done
+
 : ${smbd=${SMBD-/usr/sbin/smbd}}
 
 # Default objcc to clang if available, otherwise use CC
@@ -977,6 +998,8 @@ for opt do
   --install=*) install="$optarg"
   ;;
   --python=*) python="$optarg"
+  ;;
+  --sphinx-build=*) sphinx_build="$optarg"
   ;;
   --gcov=*) gcov_tool="$optarg"
   ;;
@@ -1562,6 +1585,10 @@ for opt do
   ;;
   --disable-containers) use_containers="no"
   ;;
+  --enable-fuzzing) fuzzing=yes
+  ;;
+  --disable-fuzzing) fuzzing=no
+  ;;
   *)
       echo "ERROR: unknown option $opt"
       echo "Try '$0 --help' for more information"
@@ -1694,6 +1721,7 @@ Advanced options (experts only):
   --make=MAKE              use specified make [$make]
   --install=INSTALL        use specified install [$install]
   --python=PYTHON          use specified python [$python]
+  --sphinx-build=SPHINX    use specified sphinx-build [$sphinx_build]
   --smbd=SMBD              use specified smbd [$smbd]
   --with-git=GIT           use specified git [$git]
   --static                 enable static build [$static]
@@ -2214,6 +2242,16 @@ if compile_object ; then
     fi
 else
     echo "big/little test failed (failed to compile test binary)"
+fi
+
+##########################################
+# system tools
+if test -z "$want_tools"; then
+    if test "$softmmu" = "no"; then
+        want_tools=no
+    else
+        want_tools=yes
+    fi
 fi
 
 ##########################################
@@ -4138,6 +4176,11 @@ elif test "$fdt" != "yes" ; then
   fdt=no
 fi
 
+# fdt is only required when building softmmu targets
+if test -z "$fdt" -a "$softmmu" != "yes" ; then
+    fdt="no"
+fi
+
 if test "$fdt" != "no" ; then
   fdt_libs="-lfdt"
   # explicitly check for libfdt_env.h as it is missing in some stable installs
@@ -4816,16 +4859,24 @@ has_sphinx_build() {
     # sphinx-build doesn't exist at all or if it is too old.
     mkdir -p "$TMPDIR1/sphinx"
     touch "$TMPDIR1/sphinx/index.rst"
-    sphinx-build -c "$source_path/docs" -b html "$TMPDIR1/sphinx" "$TMPDIR1/sphinx/out" >/dev/null 2>&1
+    "$sphinx_build" -c "$source_path/docs" -b html "$TMPDIR1/sphinx" "$TMPDIR1/sphinx/out" >/dev/null 2>&1
 }
 
 # Check if tools are available to build documentation.
 if test "$docs" != "no" ; then
-  if has makeinfo && has pod2man && has_sphinx_build; then
+  if has_sphinx_build; then
+    sphinx_ok=yes
+  else
+    sphinx_ok=no
+  fi
+  if has makeinfo && has pod2man && test "$sphinx_ok" = "yes"; then
     docs=yes
   else
     if test "$docs" = "yes" ; then
-      feature_not_found "docs" "Install texinfo, Perl/perl-podlators and python-sphinx"
+      if has $sphinx_build && test "$sphinx_ok" != "yes"; then
+        echo "Warning: $sphinx_build exists but it is either too old or uses too old a Python version" >&2
+      fi
+      feature_not_found "docs" "Install texinfo, Perl/perl-podlators and a Python 3 version of python-sphinx"
     fi
     docs=no
   fi
@@ -6055,6 +6106,15 @@ EOF
 fi
 
 ##########################################
+# checks for fuzzer
+if test "$fuzzing" = "yes" ; then
+  write_c_fuzzer_skeleton
+  if compile_prog "$CPU_CFLAGS -Werror -fsanitize=address,fuzzer" ""; then
+      have_fuzzer=yes
+  fi
+fi
+
+##########################################
 # check for libpmem
 
 if test "$libpmem" != "no"; then
@@ -6074,6 +6134,11 @@ fi
 
 ##########################################
 # check for slirp
+
+# slirp is only required when building softmmu targets
+if test -z "$slirp" -a "$softmmu" != "yes" ; then
+    slirp="no"
+fi
 
 case "$slirp" in
   "" | yes)
@@ -6493,6 +6558,9 @@ echo "QEMU_LDFLAGS      $QEMU_LDFLAGS"
 echo "make              $make"
 echo "install           $install"
 echo "python            $python ($python_version)"
+if test "$docs" != "no"; then
+    echo "sphinx-build      $sphinx_build"
+fi
 echo "slirp support     $slirp $(echo_version $slirp $slirp_version)"
 if test "$slirp" != "no" ; then
     echo "smbd              $smbd"
@@ -6642,6 +6710,7 @@ echo "libpmem support   $libpmem"
 echo "libudev           $libudev"
 echo "default devices   $default_devices"
 echo "plugin support    $plugins"
+echo "fuzzing support   $fuzzing"
 
 if test "$supported_cpu" = "no"; then
     echo
@@ -6804,6 +6873,9 @@ if test "$netmap" = "yes" ; then
 fi
 if test "$l2tpv3" = "yes" ; then
   echo "CONFIG_L2TPV3=y" >> $config_host_mak
+fi
+if test "$gprof" = "yes" ; then
+  echo "CONFIG_GPROF=y" >> $config_host_mak
 fi
 if test "$cap_ng" = "yes" ; then
   echo "CONFIG_LIBCAP_NG=y" >> $config_host_mak
@@ -7490,6 +7562,16 @@ fi
 if test "$sheepdog" = "yes" ; then
   echo "CONFIG_SHEEPDOG=y" >> $config_host_mak
 fi
+if test "$fuzzing" = "yes" ; then
+  if test "$have_fuzzer" = "yes"; then
+    FUZZ_LDFLAGS=" -fsanitize=address,fuzzer"
+    FUZZ_CFLAGS=" -fsanitize=address,fuzzer"
+    CFLAGS=" -fsanitize=address,fuzzer-no-link"
+  else
+    error_exit "Your compiler doesn't support -fsanitize=address,fuzzer"
+    exit 1
+  fi
+fi
 
 if test "$plugins" = "yes" ; then
     echo "CONFIG_PLUGIN=y" >> $config_host_mak
@@ -7536,6 +7618,7 @@ echo "INSTALL_DIR=$install -d -m 0755" >> $config_host_mak
 echo "INSTALL_DATA=$install -c -m 0644" >> $config_host_mak
 echo "INSTALL_PROG=$install -c -m 0755" >> $config_host_mak
 echo "INSTALL_LIB=$install -c -m 0644" >> $config_host_mak
+echo "SPHINX_BUILD=$sphinx_build" >> $config_host_mak
 echo "CC=$cc" >> $config_host_mak
 if $iasl -h > /dev/null 2>&1; then
   echo "IASL=$iasl" >> $config_host_mak
@@ -7588,6 +7671,11 @@ fi
 if test "$libudev" != "no"; then
     echo "CONFIG_LIBUDEV=y" >> $config_host_mak
     echo "LIBUDEV_LIBS=$libudev_libs" >> $config_host_mak
+fi
+if test "$fuzzing" != "no"; then
+    echo "CONFIG_FUZZ=y" >> $config_host_mak
+    echo "FUZZ_CFLAGS=$FUZZ_CFLAGS" >> $config_host_mak
+    echo "FUZZ_LDFLAGS=$FUZZ_LDFLAGS" >> $config_host_mak
 fi
 
 if test "$edk2_blobs" = "yes" ; then
@@ -7782,7 +7870,7 @@ case "$target_name" in
     TARGET_BASE_ARCH=riscv
     TARGET_ABI_DIR=riscv
     mttcg=yes
-    gdb_xml_files="riscv-32bit-cpu.xml riscv-32bit-fpu.xml riscv-32bit-csr.xml riscv-32bit-virtual.xml"
+    gdb_xml_files="riscv-32bit-cpu.xml riscv-32bit-fpu.xml riscv-64bit-fpu.xml riscv-32bit-csr.xml riscv-32bit-virtual.xml"
     if [ "$target_name" = "riscv32cheri" ]; then
         TARGET_ARCH=riscv64
         echo "TARGET_CHERI=y" >> $config_target_mak
@@ -7795,7 +7883,7 @@ case "$target_name" in
     TARGET_BASE_ARCH=riscv
     TARGET_ABI_DIR=riscv
     mttcg=yes
-    gdb_xml_files="riscv-64bit-cpu.xml riscv-64bit-fpu.xml riscv-64bit-csr.xml riscv-64bit-virtual.xml"
+    gdb_xml_files="riscv-64bit-cpu.xml riscv-32bit-fpu.xml riscv-64bit-fpu.xml riscv-64bit-csr.xml riscv-64bit-virtual.xml"
     if [ "$target_name" = "riscv64cheri" ]; then
         TARGET_ARCH=riscv64
         echo "TARGET_CHERI=y" >> $config_target_mak
@@ -8011,7 +8099,6 @@ alpha)
 esac
 
 if test "$gprof" = "yes" ; then
-  echo "TARGET_GPROF=y" >> $config_target_mak
   if test "$target_linux_user" = "yes" ; then
     cflags="-p $cflags"
     ldflags="-p $ldflags"

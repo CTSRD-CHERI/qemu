@@ -30,7 +30,6 @@ typedef struct VersalVirt {
     MachineState parent_obj;
 
     Versal soc;
-    MemoryRegion mr_ddr;
 
     void *fdt;
     int fdt_size;
@@ -350,7 +349,7 @@ static void create_virtio_regions(VersalVirt *s)
     int i;
 
     for (i = 0; i < NUM_VIRTIO_TRANSPORT; i++) {
-        char *name = g_strdup_printf("virtio%d", i);;
+        char *name = g_strdup_printf("virtio%d", i);
         hwaddr base = MM_TOP_RSVD + i * virtio_mmio_size;
         int irq = VERSAL_RSVD_IRQ_FIRST + i;
         MemoryRegion *mr;
@@ -414,12 +413,9 @@ static void versal_virt_init(MachineState *machine)
         psci_conduit = QEMU_PSCI_CONDUIT_SMC;
     }
 
-    memory_region_allocate_system_memory(&s->mr_ddr, NULL, "ddr",
-                                         machine->ram_size);
-
     sysbus_init_child_obj(OBJECT(machine), "xlnx-ve", &s->soc,
                           sizeof(s->soc), TYPE_XLNX_VERSAL);
-    object_property_set_link(OBJECT(&s->soc), OBJECT(&s->mr_ddr),
+    object_property_set_link(OBJECT(&s->soc), OBJECT(machine->ram),
                              "ddr", &error_abort);
     object_property_set_int(OBJECT(&s->soc), psci_conduit,
                             "psci-conduit", &error_abort);
@@ -473,6 +469,7 @@ static void versal_virt_machine_class_init(ObjectClass *oc, void *data)
     mc->max_cpus = XLNX_VERSAL_NR_ACPUS;
     mc->default_cpus = XLNX_VERSAL_NR_ACPUS;
     mc->no_cdrom = true;
+    mc->default_ram_id = "ddr";
 }
 
 static const TypeInfo versal_virt_machine_init_typeinfo = {
