@@ -1136,11 +1136,6 @@ void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
     if (((env->CP0_Config4 >> CP0C4_IE) & 0x3) >= 2) {
         mask |= 1 << CP0EnHi_EHINV;
     }
-#if defined(TARGET_CHERI)
-    mask |= (1UL << CP0EnHi_CLGU)
-            | (1UL << CP0EnHi_CLGS)
-            | (1UL << CP0EnHi_CLGK);
-#endif
 
     /* 1k pages not implemented */
 #if defined(TARGET_MIPS64)
@@ -1156,6 +1151,13 @@ void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
     }
     mask &= env->SEGMask;
 #endif
+
+#if defined(TARGET_CHERI)
+    mask |= (1UL << CP0EnHi_CLGU)
+            | (1UL << CP0EnHi_CLGS)
+            | (1UL << CP0EnHi_CLGK);
+#endif
+
     old = env->CP0_EntryHi;
     val = (arg1 & mask) | (old & ~mask);
     env->CP0_EntryHi = val;
