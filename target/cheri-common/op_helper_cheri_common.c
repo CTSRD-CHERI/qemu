@@ -796,7 +796,7 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     /*
      * CSetFlags: Set Flags
      */
-    if (!cap_is_unsealed(cbp)) {
+    if (cbp->cr_tag && !cap_is_unsealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     }
     // FIXME: should we trap instead of masking?
