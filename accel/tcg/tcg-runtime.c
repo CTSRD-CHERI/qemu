@@ -174,8 +174,17 @@ void *HELPER(lookup_tb_ptr)(CPUArchState *env)
 void HELPER(log_instruction)(CPUArchState *env, target_ulong pc)
 {
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR) && qemu_log_in_addr_range(pc))) {
-        /* Disassemble and print one nstruction. */
-        log_target_disas(env_cpu(env), pc, -1);
+#if defined(CONFIG_RVFI_DII) && defined(TARGET_RISCV)
+        if (env->rvfi_dii_have_injected_insn) {
+            uint32_t insn = env->rvfi_dii_trace.rvfi_dii_insn;
+            target_disas_buf(stderr, env_cpu(env), &insn, sizeof(insn),
+                             PC_ADDR(env), 1);
+        } else
+#endif
+        {
+            /* Disassemble and print one instruction. */
+            log_target_disas(env_cpu(env), pc, -1);
+        }
     }
 }
 
