@@ -42,7 +42,7 @@ static TCGv cpu_pc; // TODO: PCC
 static TCGv cpu_gpr[32], cpu_pc;
 #endif
 static TCGv_i64 cpu_fpr[32]; /* assume F and D extensions */
-static TCGv load_res;
+static TCGv_cap_checked_ptr load_res;
 static TCGv load_val;
 
 #include "exec/gen-icount.h"
@@ -993,8 +993,8 @@ void riscv_translate_init(void)
 #else
     cpu_pc = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, pc), "pc");
 #endif
-    load_res = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, load_res),
-                             "load_res");
+    load_res = (TCGv_cap_checked_ptr)tcg_global_mem_new(
+        cpu_env, offsetof(CPURISCVState, load_res), "load_res");
     load_val = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, load_val),
                              "load_val");
 }

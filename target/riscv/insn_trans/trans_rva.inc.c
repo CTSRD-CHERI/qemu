@@ -20,25 +20,31 @@
 
 static inline bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
 {
-    TCGv src1 = tcg_temp_new();
+    TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();
     /* Put addr in load_res, data in load_val.  */
-    gen_get_gpr(src1, a->rs1);
+#ifdef TARGET_CHERI
+    if (ctx->capmode) {
+        generate_cap_load_check_imm(addr, a->rs1, 0, mop);
+    } else {
+        TCGv_i32 tcop = tcg_const_i32(mop);
+        gen_get_gpr((TCGv)addr, a->rs1);
+        gen_helper_ddc_check_load(addr, cpu_env, (TCGv)addr, tcop);
+        tcg_temp_free_i32(tcop);
+    }
+#else
+    gen_get_gpr(addr, a->rs1);
+#endif
     if (a->rl) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
     }
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_ld_ddc_tl(load_val, /* Update addr in-place */ NULL, src1,
-                           ctx->mem_idx, mop);
-#else
-    tcg_gen_qemu_ld_tl(load_val, src1, ctx->mem_idx, mop);
-#endif
+    tcg_gen_qemu_ld_tl_with_checked_addr(load_val, addr, ctx->mem_idx, mop);
     if (a->aq) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_LDAQ);
     }
-    tcg_gen_mov_tl(load_res, src1);
+    tcg_gen_mov_cap_checked(load_res, addr);
     gen_set_gpr(a->rd, load_val);
 
-    tcg_temp_free(src1);
+    tcg_temp_free_cap_checked(addr);
     return true;
 }
 
@@ -50,21 +56,31 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
     TCGLabel *l1 = gen_new_label();
     TCGLabel *l2 = gen_new_label();
 
+#ifdef TARGET_CHERI
+    // Note: src1 is used as address first
+    TCGv_cap_checked_ptr addr = (TCGv_cap_checked_ptr)src1;
+    if (ctx->capmode) {
+        generate_cap_load_check_imm(addr, a->rs1, 0, mop);
+    } else {
+        TCGv_i32 tcop = tcg_const_i32(mop);
+        gen_get_gpr(src1, a->rs1);
+        gen_helper_ddc_check_load((TCGv_cap_checked_ptr)src1, cpu_env, src1, tcop);
+        tcg_temp_free_i32(tcop);
+    }
+    tcg_gen_brcond_cap_checked(TCG_COND_NE, load_res, addr, l1);
+    addr = NULL; // Don't use it anymore, use src1 now
+#else
     gen_get_gpr(src1, a->rs1);
     tcg_gen_brcond_tl(TCG_COND_NE, load_res, src1, l1);
+#endif
 
     gen_get_gpr(src2, a->rs2);
     /*
      * Note that the TCG atomic primitives are SC,
      * so we can ignore AQ/RL along this path.
      */
-#ifdef TARGET_CHERI
-    tcg_gen_atomic_cmpxchg_ddc_tl(src1, load_res, load_val, src2,
-                              ctx->mem_idx, mop);
-#else
-    tcg_gen_atomic_cmpxchg_tl(src1, load_res, load_val, src2,
-                              ctx->mem_idx, mop);
-#endif
+    tcg_gen_atomic_cmpxchg_tl_with_checked_addr(src1, load_res, load_val, src2,
+                                                ctx->mem_idx, mop);
     tcg_gen_setcond_tl(TCG_COND_NE, dat, src1, load_val);
     gen_set_gpr(a->rd, dat);
     tcg_gen_br(l2);
@@ -83,7 +99,7 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
      * Clear the load reservation, since an SC must fail if there is
      * an SC to any address, in between an LR and SC pair.
      */
-    tcg_gen_movi_tl(load_res, -1);
+    tcg_gen_movi_tl((TCGv)load_res, -1);
 
     tcg_temp_free(dat);
     tcg_temp_free(src1);

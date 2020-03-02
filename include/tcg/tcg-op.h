@@ -1288,8 +1288,17 @@ void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 #define tcg_gen_dup_tl_vec  tcg_gen_dup_i32_vec
 #endif
 
-static inline void tcg_gen_mov_cap_checked(TCGv_cap_checked_ptr ret, TCGv_cap_checked_ptr arg) {
+static inline void tcg_gen_mov_cap_checked(TCGv_cap_checked_ptr ret,
+                                           TCGv_cap_checked_ptr arg)
+{
     tcg_gen_mov_tl((TCGv)ret, (TCGv)arg);
+}
+static inline void tcg_gen_brcond_cap_checked(TCGCond cond,
+                                              TCGv_cap_checked_ptr arg1,
+                                              TCGv_cap_checked_ptr arg2,
+                                              TCGLabel *label)
+{
+    tcg_gen_brcond_tl(cond, (TCGv)arg1, (TCGv)arg2, label);
 }
 
 #if UINTPTR_MAX == UINT32_MAX
