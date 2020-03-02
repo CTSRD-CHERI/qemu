@@ -433,26 +433,11 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
                     "injecting instruction %d '0x%08x' at " TARGET_FMT_lx,
                     cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, PC_ADDR(env));
             }
-            // Store the new code to the destination pointer
-            cpu_memory_rw_debug(cs, PC_ADDR(env), (uint8_t *)&cmd_buf.rvfi_dii_insn,
-                                sizeof(cmd_buf.rvfi_dii_insn), true);
-            // This is extremely important even though we don't use the value
-            // written there in translate.c (since it can fail when env->pc is
-            // an inaccessisible address such as 0x00000 on trap).
-            // The reason we need this is that it ends up calling
-            // tb_invalidate_phys_range() which flushes the cached translated
-            // TCG blocks for that address.
             // Ideally we would just completely disable caching of translated
             // blocks in RVFI-DII mode, but I can't figure out how to do this.
-#if 0
-            uint32_t injected_inst = cpu_ldl_code(env, env->pc);
-            if (injected_inst != cmd_buf.rvfi_dii_insn) {
-                error_report("Failed to inject instruction '0x%08x' at "
-                             "PC=" TARGET_FMT_lx " -- got '0x%08x' instead",
-                             cmd_buf.rvfi_dii_insn, env->pc, injected_inst);
-                exit(EXIT_FAILURE);
-            }
-#endif
+            // Instead let's just flush the entire TCG cache (which should have
+            // the same effect).
+            tb_flush(cs); // flush TCG state
             env->rvfi_dii_trace.rvfi_dii_insn = cmd_buf.rvfi_dii_insn;
             env->rvfi_dii_have_injected_insn = true;
             if (rvfi_debug_output) {
