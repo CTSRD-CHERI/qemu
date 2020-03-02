@@ -34,6 +34,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#pragma once
 #include "cheri_defs.h"
 #include "cheri_utils.h"
 #include "cheri-lazy-capregs.h"
@@ -170,26 +171,3 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause) {
     __builtin_unreachable();
     abort();
 }
-
-#define _gen_cap_check(type)                                                   \
-    static inline void generate_cap_##type##_check(                            \
-        TCGv_cap_checked_ptr resultaddr, uint32_t capreg, TCGv offset,         \
-        MemOp op)                                                              \
-    {                                                                          \
-        TCGv_i32 tcs = tcg_const_i32(capreg);                                  \
-        TCGv_i32 tsize = tcg_const_i32(memop_size(op));                        \
-        gen_helper_c##type##_check(resultaddr, cpu_env, tcs, offset, tsize);   \
-        tcg_temp_free_i32(tsize);                                              \
-        tcg_temp_free_i32(tcs);                                                \
-    }                                                                          \
-    static inline void generate_cap_##type##_check_imm(                        \
-        TCGv_cap_checked_ptr resultaddr, uint32_t capreg, target_long offset,  \
-        MemOp op)                                                              \
-    {                                                                          \
-        TCGv toffset = tcg_const_tl(offset);                                   \
-        generate_cap_##type##_check(resultaddr, capreg, toffset, op);          \
-        tcg_temp_free(toffset);                                                \
-    }
-
-_gen_cap_check(load)
-_gen_cap_check(store)

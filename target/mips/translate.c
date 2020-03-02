@@ -41,6 +41,7 @@
 #include "qemu/qemu-print.h"
 
 #ifdef TARGET_CHERI
+#include "cheri-translate-utils.h"
 #include "cheri-helper-utils.h"
 #endif
 

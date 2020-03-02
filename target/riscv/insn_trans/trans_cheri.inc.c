@@ -32,7 +32,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "cheri-helper-utils.h"
+#include "cheri-translate-utils.h"
 
 #define INSN_CAN_TRAP(ctx) tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next)
 

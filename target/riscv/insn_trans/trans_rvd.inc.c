@@ -20,39 +20,47 @@
 
 static bool trans_fld(DisasContext *ctx, arg_fld *a)
 {
-    TCGv t0 = tcg_temp_new();
-    gen_get_gpr(t0, a->rs1);
     REQUIRE_FPU;
     REQUIRE_EXT(ctx, RVD);
-    tcg_gen_addi_tl(t0, t0, a->imm);
-
+    TCGv_cap_checked_ptr t0 = tcg_temp_new_cap_checked();
+    const MemOp mop = MO_TEQ;
 #ifdef TARGET_CHERI
-    tcg_gen_qemu_ld_ddc_i64(cpu_fpr[a->rd], /* Update addr in-place */ NULL, t0,
-                            ctx->mem_idx, MO_TEQ);
+    if (ctx->capmode) {
+        generate_cap_load_check_imm(t0, a->rs1, a->imm, mop);
+    } else {
+        generate_get_ddc_checked_gpr_plus_offset(t0, a->rs1, a->imm, mop,
+                                                 &gen_helper_ddc_check_load);
+    }
 #else
-    tcg_gen_qemu_ld_i64(cpu_fpr[a->rd], t0, ctx->mem_idx, MO_TEQ);
+    gen_get_gpr(t0, a->rs1);
+    tcg_gen_addi_tl(t0, t0, a->imm);
 #endif
+    tcg_gen_qemu_ld_i64_with_checked_addr(cpu_fpr[a->rd], t0, ctx->mem_idx, mop);
 
     mark_fs_dirty(ctx);
-    tcg_temp_free(t0);
+    tcg_temp_free_cap_checked(t0);
     return true;
 }
 
 static bool trans_fsd(DisasContext *ctx, arg_fsd *a)
 {
-    TCGv t0 = tcg_temp_new();
-    gen_get_gpr(t0, a->rs1);
     REQUIRE_FPU;
     REQUIRE_EXT(ctx, RVD);
-    tcg_gen_addi_tl(t0, t0, a->imm);
-
+    TCGv_cap_checked_ptr t0 = tcg_temp_new_cap_checked();
+    const MemOp mop = MO_TEQ;
 #ifdef TARGET_CHERI
-    tcg_gen_qemu_st_ddc_i64(cpu_fpr[a->rs2], /* Update addr in-place */ NULL,
-                            t0, ctx->mem_idx, MO_TEQ);
+    if (ctx->capmode) {
+        generate_cap_store_check_imm(t0, a->rs1, a->imm, mop);
+    } else {
+        generate_get_ddc_checked_gpr_plus_offset(t0, a->rs1, a->imm, mop,
+                                                 &gen_helper_ddc_check_store);
+    }
 #else
-    tcg_gen_qemu_st_i64(cpu_fpr[a->rs2], t0, ctx->mem_idx, MO_TEQ);
+    gen_get_gpr(t0, a->rs1);
+    tcg_gen_addi_tl(t0, t0, a->imm);
 #endif
-    tcg_temp_free(t0);
+    tcg_gen_qemu_st_i64_with_checked_addr(cpu_fpr[a->rs2], t0, ctx->mem_idx, mop);
+    tcg_temp_free_cap_checked(t0);
     return true;
 }
 

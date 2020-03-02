@@ -535,6 +535,12 @@ typedef enum {
     rv_op_ccseal,
     rv_op_ctestsubset,
 
+    // FP loads/store
+    rv_op_cflw,
+    rv_op_cfsw,
+    rv_op_cfld,
+    rv_op_cfsd,
+
 } rv_op;
 
 /* structures */
@@ -630,6 +636,7 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_cd_offset_rs1          "O\tC0,i(1)"
 #define rv_fmt_cd_offset_cs1          "O\tC0,i(C1)"
 #define rv_fmt_frd_offset_rs1         "O\t3,i(1)"
+#define rv_fmt_frd_offset_cs1         "O\t3,i(C1)"
 #define rv_fmt_rd_csr_rs1             "O\t0,c,1"
 #define rv_fmt_rd_csr_zimm            "O\t0,c,7"
 #define rv_fmt_rs2_offset_rs1         "O\t2,i(1)"
@@ -637,6 +644,7 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_cs2_offset_rs1         "O\tC2,i(1)"
 #define rv_fmt_cs2_offset_cs1         "O\tC2,i(C1)"
 #define rv_fmt_frs2_offset_rs1        "O\t5,i(1)"
+#define rv_fmt_frs2_offset_cs1        "O\t5,i(C1)"
 #define rv_fmt_rs1_rs2_offset         "O\t1,2,o"
 #define rv_fmt_rs2_rs1_offset         "O\t2,1,o"
 #define rv_fmt_aqrl_rd_rs2_rs1        "OAR\t0,2,(1)"
@@ -1254,6 +1262,11 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_ccseal] = {"ccseal", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
     [rv_op_ctestsubset] = {"ctestsubset", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
 
+    // FP load store
+    [rv_op_fld] = { "fld", rv_codec_i, rv_fmt_frd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_fsd] = { "fsd", rv_codec_s, rv_fmt_frs2_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_flw] = { "flw", rv_codec_i, rv_fmt_frd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_fsw] = { "fsw", rv_codec_s, rv_fmt_frs2_offset_cs1, NULL, 0, 0, 0 },
 };
 
 /* CSR names */
@@ -1694,8 +1707,8 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
             break;
         case 1:
             switch (((inst >> 12) & 0b111)) {
-            case 2: op = rv_op_flw; break;
-            case 3: op = rv_op_fld; break;
+            case 2: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_cflw : rv_op_flw; break;
+            case 3: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_cfld : rv_op_fld; break;
             case 4: op = rv_op_flq; break;
             }
             break;
@@ -1775,8 +1788,8 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
             break;
         case 9:
             switch (((inst >> 12) & 0b111)) {
-            case 2: op = rv_op_fsw; break;
-            case 3: op = rv_op_fsd; break;
+            case 2: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_cfsw : rv_op_fsw; break;
+            case 3: op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_cfsd : rv_op_fsd; break;
             case 4: op = rv_op_fsq; break;
             }
             break;
