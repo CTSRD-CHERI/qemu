@@ -169,11 +169,19 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
     // region (even if there is a valid ROM there)
     // However, we still have to allow MMU_INST_FETCH accesess since they are
     // triggered by tb_find().
-    if (access_type != MMU_INST_FETCH && env->rvfi_dii_have_injected_insn &&
-        (addr < RVFI_DII_RAM_START || addr >= RVFI_DII_RAM_END)) {
-        fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
-                        " since it is outside the RVFI-DII range", addr);
-        return TRANSLATE_FAIL; // XXX: TRANSLATE_PFAIL
+    if (env->rvfi_dii_have_injected_insn) {
+        if (access_type == MMU_INST_FETCH) {
+            // Pretend we have a 1:1 mapping and never fail for instruction
+            // fetches since the instruction is injected directly via
+            // env->rvfi_dii_trace.rvfi_dii_insn
+            *physical = addr;
+            *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
+            return TRANSLATE_SUCCESS;
+        } else if (addr < RVFI_DII_RAM_START || addr >= RVFI_DII_RAM_END) {
+            fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
+                    " since it is outside the RVFI-DII range\n", addr);
+            return TRANSLATE_FAIL; // XXX: TRANSLATE_PMP_FAIL?
+        }
     }
 #endif
 
