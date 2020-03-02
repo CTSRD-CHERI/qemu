@@ -32,6 +32,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include "cheri-helper-utils.h"
 
 #define INSN_CAN_TRAP(ctx) tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next)
 
@@ -321,19 +322,13 @@ static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
 {
     // FIXME: just do everything in the helper
     INSN_CAN_TRAP(ctx);
-    TCGv_i32 tcs = tcg_const_i32(cs);
-    TCGv toffset = tcg_const_tl(offset);
-    TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
     TCGv value = tcg_temp_new();
-    TCGv_i32 tsize = tcg_const_i32(memop_size(op));
-    gen_helper_cload_check(vaddr, cpu_env, tcs, toffset, tsize);
+    TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
+    generate_cap_load_check_imm(vaddr, cs, offset, op);
     tcg_gen_qemu_ld_tl_with_checked_addr(value, vaddr, ctx->mem_idx, op);
     gen_set_gpr(rd, value);
-    tcg_temp_free_i32(tsize);
-    tcg_temp_free(value);
     tcg_temp_free_cap_checked(vaddr);
-    tcg_temp_free(toffset);
-    tcg_temp_free_i32(tcs);
+    tcg_temp_free(value);
     return true;
 }
 #define TRANSLATE_CAP_LOAD(name, op)                                           \
@@ -387,15 +382,8 @@ static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
 {
     INSN_CAN_TRAP(ctx);
     // FIXME: just do everything in the helper
-    TCGv_i32 tcs = tcg_const_i32(addr_regnum);
-    TCGv toffset = tcg_const_tl(offset);
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
-
-    TCGv_i32 tsize = tcg_const_i32(memop_size(op));
-    gen_helper_cstore_check(vaddr, cpu_env, tcs, toffset, tsize);
-    tcg_temp_free_i32(tsize);
-    tcg_temp_free(toffset);
-    tcg_temp_free_i32(tcs);
+    generate_cap_store_check_imm(vaddr, addr_regnum, offset, op);
 
     TCGv value = tcg_temp_new();
     gen_get_gpr(value, val_regnum);

@@ -846,21 +846,17 @@ static inline void generate_cap_load(DisasContext *ctx, int32_t rd, int32_t cb,
         int32_t rt, int32_t offset, MemOp op, int opcode)
 {
     // FIXME: just do everything in the helper
-    TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
     TCGv t1 = tcg_temp_new();
-    TCGv_i32 tlen = tcg_const_i32(memop_size(op));
-
     gen_load_gpr(t1, rt);
     tcg_gen_addi_tl(t1, t1, cload_sign_extend(offset) * memop_size(op));
-    gen_helper_cload_check(vaddr, cpu_env, tcb, t1, tlen);
+
+    generate_cap_load_check(vaddr, cb, t1, op);
     tcg_gen_qemu_ld_tl_with_checked_addr(t1, vaddr, ctx->mem_idx, op);
     gen_store_gpr(t1, rd);
 
-    tcg_temp_free_i32(tlen);
     tcg_temp_free(t1);
     tcg_temp_free_cap_checked(vaddr);
-    tcg_temp_free_i32(tcb);
 }
 
 static inline void generate_cloadlinked_int(DisasContext *ctx, int32_t rd, int32_t cb, MemOp op, int opcode)
@@ -933,11 +929,7 @@ static inline void generate_cstore(DisasContext *ctx, int32_t rs, int32_t cb,
     gen_load_gpr(t0, rt);  // t0 <- register offset
     tcg_gen_addi_tl(t0, t0, cload_sign_extend(offset) * size);
 
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 tlen = tcg_const_i32(size);
-    gen_helper_cstore_check(taddr, cpu_env, tcb, t0, tlen);
-    tcg_temp_free_i32(tlen);
-    tcg_temp_free_i32(tcb);
+    generate_cap_store_check(taddr, cb, t0, op);
 
     gen_load_gpr(t0, rs); // t0 <- load value to store
     tcg_gen_qemu_st_tl_with_checked_addr(t0, taddr, ctx->mem_idx, op);

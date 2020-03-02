@@ -38,6 +38,8 @@
 #include "cheri_utils.h"
 #include "cheri-lazy-capregs.h"
 #include "cheri-bounds-stats.h"
+#include "tcg/tcg.h"
+#include "tcg/tcg-op.h"
 
 static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
                                        target_ulong new_addr, uintptr_t retpc,
@@ -168,3 +170,26 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause) {
     __builtin_unreachable();
     abort();
 }
+
+#define _gen_cap_check(type)                                                   \
+    static inline void generate_cap_##type##_check(                            \
+        TCGv_cap_checked_ptr resultaddr, uint32_t capreg, TCGv offset,         \
+        MemOp op)                                                              \
+    {                                                                          \
+        TCGv_i32 tcs = tcg_const_i32(capreg);                                  \
+        TCGv_i32 tsize = tcg_const_i32(memop_size(op));                        \
+        gen_helper_c##type##_check(resultaddr, cpu_env, tcs, offset, tsize);   \
+        tcg_temp_free_i32(tsize);                                              \
+        tcg_temp_free_i32(tcs);                                                \
+    }                                                                          \
+    static inline void generate_cap_##type##_check_imm(                        \
+        TCGv_cap_checked_ptr resultaddr, uint32_t capreg, target_long offset,  \
+        MemOp op)                                                              \
+    {                                                                          \
+        TCGv toffset = tcg_const_tl(offset);                                   \
+        generate_cap_##type##_check(resultaddr, capreg, toffset, op);          \
+        tcg_temp_free(toffset);                                                \
+    }
+
+_gen_cap_check(load)
+_gen_cap_check(store)
