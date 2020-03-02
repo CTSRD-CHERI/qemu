@@ -313,7 +313,7 @@ static inline void generate_cloadtags(int32_t rd, int32_t cb)
     TCGv toffset = tcg_const_tl(0);
     TCGv_i32 tlen = tcg_const_i32(128); // XXX cache line width
 
-    gen_helper_cload_check(tcbc, cpu_env, tcb, toffset, tlen);
+    gen_helper_cap_load_check(tcbc, cpu_env, tcb, toffset, tlen);
     tcg_temp_free_i32(tlen);
     tcg_temp_free(toffset);
 

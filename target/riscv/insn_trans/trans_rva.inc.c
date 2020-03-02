@@ -20,20 +20,9 @@
 
 static inline bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
 {
-    TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();
     /* Put addr in load_res, data in load_val.  */
-#ifdef TARGET_CHERI
-    if (ctx->capmode) {
-        generate_cap_load_check_imm(addr, a->rs1, 0, mop);
-    } else {
-        TCGv_i32 tcop = tcg_const_i32(mop);
-        gen_get_gpr((TCGv)addr, a->rs1);
-        gen_helper_ddc_check_load(addr, cpu_env, (TCGv)addr, tcop);
-        tcg_temp_free_i32(tcop);
-    }
-#else
-    gen_get_gpr(addr, a->rs1);
-#endif
+    TCGv_cap_checked_ptr addr =
+        get_capmode_dependent_load_addr(ctx, a->rs1, 0, mop);
     if (a->rl) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
     }
@@ -57,18 +46,9 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
     TCGLabel *l2 = gen_new_label();
 
 #ifdef TARGET_CHERI
-    // Note: src1 is used as address first
-    TCGv_cap_checked_ptr addr = (TCGv_cap_checked_ptr)src1;
-    if (ctx->capmode) {
-        generate_cap_load_check_imm(addr, a->rs1, 0, mop);
-    } else {
-        TCGv_i32 tcop = tcg_const_i32(mop);
-        gen_get_gpr(src1, a->rs1);
-        gen_helper_ddc_check_load((TCGv_cap_checked_ptr)src1, cpu_env, src1, tcop);
-        tcg_temp_free_i32(tcop);
-    }
+    TCGv_cap_checked_ptr addr = get_capmode_dependent_store_addr(ctx, a->rs1, 0, mop);
     tcg_gen_brcond_cap_checked(TCG_COND_NE, load_res, addr, l1);
-    addr = NULL; // Don't use it anymore, use src1 now
+    tcg_temp_free_cap_checked(addr); // Don't use it anymore, use src1 now
 #else
     gen_get_gpr(src1, a->rs1);
     tcg_gen_brcond_tl(TCG_COND_NE, load_res, src1, l1);
@@ -111,22 +91,8 @@ static bool gen_amo(DisasContext *ctx, arg_atomic *a,
                     void(*func)(TCGv, TCGv_cap_checked_ptr, TCGv, TCGArg, MemOp),
                     MemOp mop)
 {
-    TCGv_cap_checked_ptr src1 = tcg_temp_new_cap_checked();
+    TCGv_cap_checked_ptr src1 = get_capmode_dependent_rmw_addr(ctx, a->rs1, 0, mop);
     TCGv src2 = tcg_temp_new();
-
-#ifdef TARGET_CHERI
-    if (ctx->capmode) {
-        generate_cap_load_check_imm(src1, a->rs1, 0, mop);
-    } else {
-        TCGv_i32 tcop = tcg_const_i32(mop);
-        gen_get_gpr((TCGv)src1, a->rs1);
-        gen_helper_ddc_check_rmw(src1, cpu_env, /* overwrite src1 */ (TCGv)src1,
-                                 tcop);
-        tcg_temp_free_i32(tcop);
-    }
-#else
-    gen_get_gpr(src1, a->rs1);
-#endif
     gen_get_gpr(src2, a->rs2);
 
     (*func)(src2, src1, src2, ctx->mem_idx, mop);

@@ -27,21 +27,11 @@ static bool trans_flw(DisasContext *ctx, arg_flw *a)
 {
     REQUIRE_FPU;
     REQUIRE_EXT(ctx, RVF);
-    TCGv_cap_checked_ptr t0 = tcg_temp_new_cap_checked();
     const MemOp mop = MO_TEUL;
-#ifdef TARGET_CHERI
-    if (ctx->capmode) {
-        generate_cap_load_check_imm(t0, a->rs1, a->imm, mop);
-    } else {
-        generate_get_ddc_checked_gpr_plus_offset(t0, a->rs1, a->imm, mop,
-                                                 &gen_helper_ddc_check_load);
-    }
-#else
-    gen_get_gpr(t0, a->rs1);
-    tcg_gen_addi_tl(t0, t0, a->imm);
-#endif
-
-    tcg_gen_qemu_ld_i64_with_checked_addr(cpu_fpr[a->rd], t0, ctx->mem_idx, mop);
+    TCGv_cap_checked_ptr t0 =
+        get_capmode_dependent_load_addr(ctx, a->rs1, a->imm, mop);
+    tcg_gen_qemu_ld_i64_with_checked_addr(cpu_fpr[a->rd], t0, ctx->mem_idx,
+                                          mop);
     /* RISC-V requires NaN-boxing of narrower width floating point values */
     tcg_gen_ori_i64(cpu_fpr[a->rd], cpu_fpr[a->rd], 0xffffffff00000000ULL);
 
@@ -54,20 +44,11 @@ static bool trans_fsw(DisasContext *ctx, arg_fsw *a)
 {
     REQUIRE_FPU;
     REQUIRE_EXT(ctx, RVF);
-    TCGv_cap_checked_ptr t0 = tcg_temp_new_cap_checked();
     const MemOp mop = MO_TEUL;
-#ifdef TARGET_CHERI
-    if (ctx->capmode) {
-        generate_cap_store_check_imm(t0, a->rs1, a->imm, mop);
-    } else {
-        generate_get_ddc_checked_gpr_plus_offset(t0, a->rs1, a->imm, mop,
-                                                 &gen_helper_ddc_check_store);
-    }
-#else
-    gen_get_gpr(t0, a->rs1);
-    tcg_gen_addi_tl(t0, t0, a->imm);
-#endif
-    tcg_gen_qemu_st_i64_with_checked_addr(cpu_fpr[a->rs2], t0, ctx->mem_idx, MO_TEUL);
+    TCGv_cap_checked_ptr t0 =
+        get_capmode_dependent_store_addr(ctx, a->rs1, a->imm, mop);
+    tcg_gen_qemu_st_i64_with_checked_addr(cpu_fpr[a->rs2], t0, ctx->mem_idx,
+                                          mop);
     tcg_temp_free_cap_checked(t0);
     return true;
 }

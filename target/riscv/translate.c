@@ -779,6 +779,73 @@ static bool gen_shift(DisasContext *ctx, arg_r *a,
 /* Must be included first since the helpers are used by trans_rvi.inc.c */
 #include "insn_trans/trans_cheri.inc.c"
 #endif
+// Helpers to generate a virtual address that has been checked by the CHERI
+// capability helpers: If ctx->capmode is set, the register number will be
+// a capability and we check that capability, otherwise we treat the register
+// as an offset relative to $ddc and check if that is in bounds.
+// Note: the return value must be freed with tcg_temp_free_cap_checked()
+static inline TCGv_cap_checked_ptr _get_capmode_dependent_addr(
+    DisasContext *ctx, int reg_num, target_long regoffs,
+#ifdef TARGET_CHERI
+    void (*gen_check_cap)(TCGv_cap_checked_ptr, uint32_t, target_long, MemOp),
+    void (*check_ddc)(TCGv_cap_checked_ptr, TCGv_ptr, TCGv, TCGv_i32),
+#endif
+    MemOp mop)
+
+{
+    TCGv_cap_checked_ptr result = tcg_temp_new_cap_checked();
+#ifdef TARGET_CHERI
+    if (ctx->capmode) {
+        gen_check_cap(result, reg_num, regoffs, mop);
+    } else {
+        generate_get_ddc_checked_gpr_plus_offset(result, reg_num, regoffs, mop,
+                                                 check_ddc);
+    }
+#else
+    gen_get_gpr(result, a->rs1);
+    if (!__builtin_constant_p(regoffs) || regoffs != 0) {
+        tcg_gen_addi_tl(result, result, regoffs);
+    }
+#endif
+    return result;
+}
+
+static inline TCGv_cap_checked_ptr
+get_capmode_dependent_load_addr(DisasContext *ctx, int reg_num,
+                               target_long regoffs, MemOp mop)
+{
+    return _get_capmode_dependent_addr(ctx, reg_num, regoffs,
+#ifdef TARGET_CHERI
+                                       &generate_cap_load_check_imm,
+                                       &gen_helper_ddc_check_load,
+#endif
+                                       mop);
+}
+
+static inline TCGv_cap_checked_ptr
+get_capmode_dependent_store_addr(DisasContext *ctx, int reg_num,
+                                target_long regoffs, MemOp mop)
+{
+    return _get_capmode_dependent_addr(ctx, reg_num, regoffs,
+#ifdef TARGET_CHERI
+                                       &generate_cap_store_check_imm,
+                                       &gen_helper_ddc_check_store,
+#endif
+                                       mop);
+}
+
+static inline TCGv_cap_checked_ptr
+get_capmode_dependent_rmw_addr(DisasContext *ctx, int reg_num,
+                               target_long regoffs, MemOp mop)
+{
+    return _get_capmode_dependent_addr(ctx, reg_num, regoffs,
+#ifdef TARGET_CHERI
+                                       &generate_cap_rmw_check_imm,
+                                       &gen_helper_ddc_check_rmw,
+#endif
+                                       mop);
+}
+
 #include "insn_trans/trans_rvi.inc.c"
 #include "insn_trans/trans_rvm.inc.c"
 #include "insn_trans/trans_rva.inc.c"

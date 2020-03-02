@@ -92,7 +92,8 @@ DEF_HELPER_3(ctestsubset, tl, env, i32, i32)
 DEF_HELPER_3(ctoptr, tl, env, i32, i32)
 
 // Loads+Stores
-DEF_HELPER_4(cload_check, cap_checked_ptr, env, i32, tl, i32)
-DEF_HELPER_4(cstore_check, cap_checked_ptr, env, i32, tl, i32)
+DEF_HELPER_4(cap_load_check, cap_checked_ptr, env, i32, tl, i32)
+DEF_HELPER_4(cap_store_check, cap_checked_ptr, env, i32, tl, i32)
+DEF_HELPER_4(cap_rmw_check, cap_checked_ptr, env, i32, tl, i32)
 DEF_HELPER_4(load_cap_via_cap, void, env, i32, i32, tl)
 DEF_HELPER_4(store_cap_via_cap, void, env, i32, i32, tl)

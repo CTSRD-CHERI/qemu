@@ -41,7 +41,8 @@
     {                                                                          \
         TCGv_i32 tcs = tcg_const_i32(capreg);                                  \
         TCGv_i32 tsize = tcg_const_i32(memop_size(op));                        \
-        gen_helper_c##type##_check(resultaddr, cpu_env, tcs, offset, tsize);   \
+        gen_helper_cap_##type##_check(resultaddr, cpu_env, tcs, offset,        \
+                                      tsize);                                  \
         tcg_temp_free_i32(tsize);                                              \
         tcg_temp_free_i32(tcs);                                                \
     }                                                                          \
@@ -56,6 +57,7 @@
 
 _gen_cap_check(load)
 _gen_cap_check(store)
+_gen_cap_check(rmw)
 
 #ifdef TARGET_MIPS
 static inline void gen_load_gpr(TCGv t, int reg);
@@ -72,7 +74,9 @@ static inline void generate_get_ddc_checked_gpr_plus_offset(
 #else
 #error "Don't know how to fetch a GPR value"
 #endif
-    tcg_gen_addi_tl((TCGv)addr, (TCGv)addr, offset);
+    if (!__builtin_constant_p(offset) || offset != 0) {
+        tcg_gen_addi_tl((TCGv)addr, (TCGv)addr, offset);
+    }
     TCGv_i32 tcop = tcg_const_i32(mop);
     check_ddc(addr, cpu_env, /* overwrite addr */ (TCGv)addr, tcop);
     tcg_temp_free_i32(tcop);
