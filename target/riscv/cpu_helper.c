@@ -175,7 +175,7 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
             // fetches since the instruction is injected directly via
             // env->rvfi_dii_trace.rvfi_dii_insn
             *physical = addr;
-            *prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
+            *prot = PAGE_EXEC;
             return TRANSLATE_SUCCESS;
         } else if (addr < RVFI_DII_RAM_START || addr >= RVFI_DII_RAM_END) {
             fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
@@ -487,12 +487,16 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     // region (even if there is a valid ROM there)
     // However, we still have to allow MMU_INST_FETCH accesess since they are
     // triggered by tb_find().
-    if (access_type != MMU_INST_FETCH && env->rvfi_dii_have_injected_insn &&
-        ret == TRANSLATE_SUCCESS &&
-        (address < RVFI_DII_RAM_START || address >= RVFI_DII_RAM_END)) {
-        fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
-                " since it is outside the RVFI-DII range", address);
-        ret = TRANSLATE_FAIL;
+    if (env->rvfi_dii_have_injected_insn && ret == TRANSLATE_SUCCESS) {
+        if (access_type == MMU_INST_FETCH) {
+            // Avoid filling the QEMU guest->host TLB with read/write entries
+            // for the faked instr fetch translation
+            prot &= PAGE_EXEC;
+        } else if (address < RVFI_DII_RAM_START || address >= RVFI_DII_RAM_END) {
+            fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
+                    " since it is outside the RVFI-DII range", address);
+            ret = TRANSLATE_FAIL;
+        }
     }
 #endif
 

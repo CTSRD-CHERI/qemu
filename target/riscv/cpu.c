@@ -405,6 +405,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             cpu_physical_memory_unmap(ram_ptr, system_ram_size, /*is_write=*/true, system_ram_size);
             // Flush the TCG state:
             tb_flush(cs);
+            tlb_flush(cs); // Flush the QEMU guest->host tlb
 
             // TestRIG expects all capability registers to be max perms
 #ifdef TARGET_CHERI
