@@ -120,12 +120,12 @@ fld               001 .  .....  ..... 10 @c_ldsp
 }
 {
   illegal         100 0  00000  00000 10 # c.jr, RES rs1=0
-  jalr            100 0  .....  00000 10 @c_jalr rd=0  # C.JR
+  compr_jalr      100 0  .....  00000 10 @c_jalr rd=0  # C.JR
   addi            100 0  .....  ..... 10 @c_mv
 }
 {
   ebreak          100 1  00000  00000 10
-  jalr            100 1  .....  00000 10 @c_jalr rd=1  # C.JALR
+  compr_jalr      100 1  .....  00000 10 @c_jalr rd=1  # C.JALR
   add             100 1  .....  ..... 10 @cr
 }
 fsd               101   ......  ..... 10 @c_sdsp

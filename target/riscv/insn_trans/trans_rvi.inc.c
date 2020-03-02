@@ -83,6 +83,21 @@ static bool trans_jalr(DisasContext *ctx, arg_jalr *a)
     return true;
 }
 
+static bool trans_compr_jalr(DisasContext *ctx, arg_jalr *a)
+{
+#ifdef TARGET_CHERI
+    // In capmode c.jalr is c.cjalr and uses capability registers
+    // TODO: this function could be removed if jalr was made mode-dependent
+    if (ctx->capmode) {
+        tcg_debug_assert(a->imm == 0);
+        arg_cjalr cjalr_arg = {.rd = a->rd, .rs1 = a->rs1};
+        return trans_cjalr(ctx, &cjalr_arg);
+    }
+#endif
+    return trans_jalr(ctx, a);
+}
+
+
 static bool gen_branch(DisasContext *ctx, arg_b *a, TCGCond cond)
 {
     TCGLabel *l = gen_new_label();
