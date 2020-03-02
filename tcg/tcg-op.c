@@ -2800,7 +2800,7 @@ static inline TCGv_cap_checked_ptr plugin_prep_mem_callbacks(TCGv_cap_checked_pt
     if (tcg_ctx->plugin_insn != NULL) {
         /* Save a copy of the vaddr for use after a load.  */
         TCGv_cap_checked_ptr temp = tcg_temp_new_cap_checked();
-        tcg_gen_mov_tl((TCGv)temp, (TCGv)vaddr);
+        tcg_gen_mov_tl(temp, vaddr);
         return temp;
     }
 #endif
@@ -2857,7 +2857,7 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
     // If addr and val are the same, we need to allocate a temporary
     if ((TCGv)addr == (TCGv)val) {
         saved_load_addr = tcg_temp_new_cap_checked();
-        tcg_gen_mov_tl((TCGv)saved_load_addr, (TCGv)addr);
+        tcg_gen_mov_cap_checked(saved_load_addr, addr);
     } else {
         saved_load_addr = addr;
     }
@@ -2982,7 +2982,7 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     // If addr and val are the same, we need to allocate a temporary
     if ((TCGv)addr == (TCGv)val) {
         saved_load_addr = tcg_temp_new_cap_checked();
-        tcg_gen_mov_tl((TCGv)saved_load_addr, (TCGv)addr);
+        tcg_gen_mov_cap_checked(saved_load_addr, addr);
     } else {
         saved_load_addr = addr;
     }

@@ -1288,6 +1288,10 @@ void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 #define tcg_gen_dup_tl_vec  tcg_gen_dup_i32_vec
 #endif
 
+static inline void tcg_gen_mov_cap_checked(TCGv_cap_checked_ptr ret, TCGv_cap_checked_ptr arg) {
+    tcg_gen_mov_tl((TCGv)ret, (TCGv)arg);
+}
+
 #if UINTPTR_MAX == UINT32_MAX
 # define PTR  i32
 # define NAT  TCGv_i32
