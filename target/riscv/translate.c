@@ -802,7 +802,7 @@ static inline TCGv_cap_checked_ptr _get_capmode_dependent_addr(
                                                  check_ddc);
     }
 #else
-    gen_get_gpr(result, a->rs1);
+    gen_get_gpr(result, reg_num);
     if (!__builtin_constant_p(regoffs) || regoffs != 0) {
         tcg_gen_addi_tl(result, result, regoffs);
     }
