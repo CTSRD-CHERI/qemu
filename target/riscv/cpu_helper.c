@@ -593,18 +593,21 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         [PRV_M] = RISCV_EXCP_M_ECALL
     };
 
+    bool log_inst = true;
     if (!async) {
         /* set tval to badaddr for traps with address information */
         switch (cause) {
+        case RISCV_EXCP_INST_PAGE_FAULT:
+        case RISCV_EXCP_LOAD_PAGE_FAULT:
+        case RISCV_EXCP_STORE_PAGE_FAULT:
+            log_inst = false;
+            // FALLTHROUGH
         case RISCV_EXCP_INST_ADDR_MIS:
         case RISCV_EXCP_INST_ACCESS_FAULT:
         case RISCV_EXCP_LOAD_ADDR_MIS:
         case RISCV_EXCP_STORE_AMO_ADDR_MIS:
         case RISCV_EXCP_LOAD_ACCESS_FAULT:
         case RISCV_EXCP_STORE_AMO_ACCESS_FAULT:
-        case RISCV_EXCP_INST_PAGE_FAULT:
-        case RISCV_EXCP_LOAD_PAGE_FAULT:
-        case RISCV_EXCP_STORE_PAGE_FAULT:
             tval = env->badaddr;
             break;
 #ifdef TARGET_CHERI
@@ -633,9 +636,9 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     trace_riscv_trap(env->mhartid, async, cause, PC_ADDR(env), tval, cause < 16 ?
         (async ? riscv_intr_names : riscv_excp_names)[cause] : "(unknown)");
 
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INT))) {
+    if (unlikely(log_inst && qemu_loglevel_mask(CPU_LOG_INT))) {
         FILE* logf = qemu_log_lock();
-        qemu_log("Trap was probably caused by: ");
+        qemu_log("Trap (%s) was probably caused by: ", (async ? riscv_intr_names : riscv_excp_names)[cause]);
         target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/-1);
         qemu_log_unlock(logf);
     }
