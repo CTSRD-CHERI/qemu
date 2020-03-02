@@ -108,19 +108,31 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
 }
 
 static bool gen_amo(DisasContext *ctx, arg_atomic *a,
-                    void(*func)(TCGv, TCGv, TCGv, TCGArg, MemOp),
+                    void(*func)(TCGv, TCGv_cap_checked_ptr, TCGv, TCGArg, MemOp),
                     MemOp mop)
 {
-    TCGv src1 = tcg_temp_new();
+    TCGv_cap_checked_ptr src1 = tcg_temp_new_cap_checked();
     TCGv src2 = tcg_temp_new();
 
+#ifdef TARGET_CHERI
+    if (ctx->capmode) {
+        generate_cap_load_check_imm(src1, a->rs1, 0, mop);
+    } else {
+        TCGv_i32 tcop = tcg_const_i32(mop);
+        gen_get_gpr((TCGv)src1, a->rs1);
+        gen_helper_ddc_check_rmw(src1, cpu_env, /* overwrite src1 */ (TCGv)src1,
+                                 tcop);
+        tcg_temp_free_i32(tcop);
+    }
+#else
     gen_get_gpr(src1, a->rs1);
+#endif
     gen_get_gpr(src2, a->rs2);
 
     (*func)(src2, src1, src2, ctx->mem_idx, mop);
 
     gen_set_gpr(a->rd, src2);
-    tcg_temp_free(src1);
+    tcg_temp_free_cap_checked(src1);
     tcg_temp_free(src2);
     return true;
 }
