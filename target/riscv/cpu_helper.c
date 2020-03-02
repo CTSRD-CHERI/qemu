@@ -394,10 +394,12 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
             RISCV_EXCP_INST_PAGE_FAULT : RISCV_EXCP_INST_ACCESS_FAULT;
         break;
     case MMU_DATA_LOAD:
+    case MMU_DATA_CAP_LOAD:
         cs->exception_index = page_fault_exceptions ?
             RISCV_EXCP_LOAD_PAGE_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
         break;
     case MMU_DATA_STORE:
+    case MMU_DATA_CAP_STORE:
         cs->exception_index = page_fault_exceptions ?
             RISCV_EXCP_STORE_PAGE_FAULT : RISCV_EXCP_STORE_AMO_ACCESS_FAULT;
         break;
