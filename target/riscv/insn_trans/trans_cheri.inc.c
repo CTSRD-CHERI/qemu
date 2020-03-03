@@ -433,8 +433,38 @@ static inline bool trans_csc(DisasContext *ctx, arg_csc *a)
 
 
 // Atomic ops
+static inline bool trans_lr_cap(DisasContext *ctx, arg_lr_cap *a)
+{
+    /* In a parallel context, stop the world and single step.  */
+    if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
+        gen_helper_exit_atomic(cpu_env);
+        ctx->base.is_jmp = DISAS_NORETURN;
+    } else {
+        // Note: we ignore the Acquire/release flags since this using
+        // helper_exit_atomic forces exlusive execution so we get SC semantics.
+        tcg_debug_assert(a->rs2 == 0);
+        gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_lr_cap);
+    }
+    return true;
+}
+
+static inline bool trans_sc_cap(DisasContext *ctx, arg_sc_cap *a)
+{
+    /* In a parallel context, stop the world and single step.  */
+    if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
+        gen_helper_exit_atomic(cpu_env);
+        ctx->base.is_jmp = DISAS_NORETURN;
+    } else {
+        // Note: we ignore the Acquire/release flags since this using
+        // helper_exit_atomic forces exlusive execution so we get SC semantics.
+        gen_cheri_int_cap_cap(a->rd, a->rs1, a->rs2, &gen_helper_sc_cap);
+    }
+    return true;
+}
+
 static inline bool trans_amoswap_cap(DisasContext *ctx, arg_amoswap_cap *a)
 {
+    /* In a parallel context, stop the world and single step.  */
     if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
         gen_helper_exit_atomic(cpu_env);
         ctx->base.is_jmp = DISAS_NORETURN;

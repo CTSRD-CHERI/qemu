@@ -115,6 +115,10 @@ struct CPURISCVState {
 
     target_ulong load_res;
     target_ulong load_val;
+#ifdef TARGET_CHERI
+    target_ulong load_pesbt;
+    bool load_tag;
+#endif
 
     target_ulong frm;
 
