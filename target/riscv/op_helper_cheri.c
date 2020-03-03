@@ -148,7 +148,7 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
 {
     uintptr_t _host_return_address = GETPC();
     // Ensure that env->PCC.cursor is correct:
-    cpu_restore_state(env_cpu(env), GETPC(), false);
+    cpu_restore_state(env_cpu(env), _host_return_address, false);
 
     assert(index <= 31 && "Bug in translator?");
     enum SCRAccessMode mode = scr_info[index].access;
@@ -198,4 +198,64 @@ static DEFINE_CHERI_STAT(auipcc);
 void HELPER(auipcc)(CPUArchState *env, uint32_t cd, target_ulong new_cursor)
 {
     derive_cap_from_pcc(env, cd, new_cursor, GETPC(), OOB_INFO(auipcc));
+}
+
+void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
+                         uint32_t addr_reg, uint32_t val_reg)
+{
+    uintptr_t _host_return_address = GETPC();
+    assert(cpu_in_exclusive_context(env_cpu(env)) &&
+           "Should have raised EXCP_ATOMIC");
+    target_long offset = 0;
+    if (!cheri_in_capmode(env)) {
+        offset = get_capreg_cursor(env, addr_reg);
+        addr_reg = CHERI_EXC_REGNUM_DDC;
+    }
+    const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
+
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
+    } else if (!cap_is_unsealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, addr_reg);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, addr_reg);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, addr_reg);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
+        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, addr_reg);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
+               get_capreg_tag(env, val_reg) &&
+               !(get_capreg_hwperms(env, val_reg) & CAP_PERM_GLOBAL)) {
+        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, val_reg);
+    }
+
+    uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
+    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
+        qemu_log_mask_and_addr(
+            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+            "Failed capability bounds check:"
+            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
+            " addr=" TARGET_FMT_plx "\n",
+            offset, cap_get_cursor(cbp), addr);
+        raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
+    } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
+        raise_unaligned_store_exception(env, addr, _host_return_address);
+    }
+    hwaddr paddr = 0;
+    void *probe_access(CPUArchState * env, target_ulong addr, int size,
+                       MMUAccessType access_type, int mmu_idx,
+                       uintptr_t retaddr);
+    // Load the value to store from the register file now in case the
+    // load_cap_from_memory call overwrites that register
+    uint64_t loaded_pesbt;
+    uint64_t loaded_cursor;
+    bool loaded_tag =
+        load_cap_from_memory_128(env, &loaded_pesbt, &loaded_cursor, addr_reg,
+                                 cbp, addr, _host_return_address, &paddr);
+    // The store may still trap, so we must only update the dest register after
+    // the store succeeded.
+    store_cap_to_memory(env, val_reg, addr, _host_return_address);
+    // Store succeeded -> we can update cd
+    update_compressed_capreg(env, dest_reg, loaded_pesbt, loaded_tag,
+                             loaded_cursor);
 }

@@ -430,3 +430,18 @@ static inline bool trans_csc(DisasContext *ctx, arg_csc *a)
     }
     return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/a->imm, &gen_helper_store_cap_via_cap);
 }
+
+
+// Atomic ops
+static inline bool trans_amoswap_cap(DisasContext *ctx, arg_amoswap_cap *a)
+{
+    if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
+        gen_helper_exit_atomic(cpu_env);
+        ctx->base.is_jmp = DISAS_NORETURN;
+    } else {
+        // Note: we ignore the Acquire/release flags since this using
+        // helper_exit_atomic forces exlusive execution so we get SC semantics.
+        gen_cheri_cap_cap_cap(a->rd, a->rs1, a->rs2, &gen_helper_amoswap_cap);
+    }
+    return true;
+}

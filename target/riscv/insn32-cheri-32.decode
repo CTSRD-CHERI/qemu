@@ -43,3 +43,5 @@ sccap       1111100  ..... ..... 000 01011 1011011 @r_2source  # This is sdcap (
 # We reuse the ld/sd opcodes for clc/csc for RV32
 clc       ............   ..... 011 ..... 0000011 @i # def LC_64  : RVInstI<0x3, OPC_LOAD (0b0000011)
 csc       ....... .....  ..... 011 ..... 0100011 @s # def SC_64  : RVInstS<0x3, OPC_STORE (0b0100011)
+
+amoswap_cap 00001 . . ..... ..... 011 ..... 0101111 @atom_st

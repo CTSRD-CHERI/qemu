@@ -892,8 +892,7 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
 
 /// Loads and stores
 
-static inline const cap_register_t *get_load_store_base_cap(CPUArchState *env,
-                                                            uint32_t cb)
+const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb)
 {
 #ifdef TARGET_MIPS
     // CLC/CSC and the integer variants trap on cbp == NULL so we use reg0 as
@@ -990,13 +989,6 @@ target_ulong CHERI_HELPER_IMPL(cap_rmw_check(CPUArchState *env, uint32_t cb,
 }
 
 /// Capability loads and stores
-extern void store_cap_to_memory(CPUArchState *env, uint32_t cs,
-                                target_ulong vaddr, target_ulong retpc);
-extern void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
-                                 const cap_register_t *source,
-                                 target_ulong offset, target_ulong retpc,
-                                 hwaddr *physaddr);
-
 void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
                                         uint32_t cb, target_ulong offset))
 {
@@ -1097,10 +1089,10 @@ static inline void dump_cap_store(CPUArchState *env, uint64_t addr, uint64_t pes
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
-                          const cap_register_t *source,
-                          target_ulong vaddr, target_ulong retpc,
-                          hwaddr *physaddr)
+bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
+                              uint64_t *cursor, uint32_t cb,
+                              const cap_register_t *source, target_ulong vaddr,
+                              target_ulong retpc, hwaddr *physaddr)
 {
     cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
     /*
@@ -1110,35 +1102,45 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
      * NULL capabilities have an all zeroes representation.
      */
     /* No TLB fault possible, should be safe to get a host pointer now */
-    void* host = probe_read(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
+    void *host = probe_read(env, vaddr, CHERI_CAP_SIZE,
+                            cpu_mmu_index(env, false), retpc);
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
-    uint64_t pesbt;
-    uint64_t cursor;
     if (likely(host)) {
         // Fast path, host address in TLB
-        pesbt = ldq_p((char*)host + CHERI_MEM_OFFSET_METADATA) ^ CC128_NULL_XOR_MASK;
-        cursor = ldq_p((char*)host + CHERI_MEM_OFFSET_CURSOR);
+        *pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
+                CC128_NULL_XOR_MASK;
+        *cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
 #if defined(CONFIG_MIPS_LOG_INSTR)
         // cpu_ldq_data_ra() performs the read logging, with raw memory
         // accesses we have to do it manually
-        if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
-            helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt ^ CC128_NULL_XOR_MASK, MO_64);
-            helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, MO_64);
+        if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE,
+                                           vaddr))) {
+            helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_METADATA,
+                               *pesbt ^ CC128_NULL_XOR_MASK, MO_64);
+            helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, *cursor,
+                               MO_64);
         }
 #endif
     } else {
         // Slow path for e.g. IO regions.
-        qemu_log_mask(CPU_LOG_INSTR, "Using slow path for load from guest address " TARGET_FMT_plx "\n", vaddr);
-        pesbt = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^ CC128_NULL_XOR_MASK;
-        cursor = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
+        qemu_log_mask(
+            CPU_LOG_INSTR,
+            "Using slow path for load from guest address " TARGET_FMT_plx "\n",
+            vaddr);
+        *pesbt = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
+                CC128_NULL_XOR_MASK;
+        *cursor = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
     int prot;
     target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
     if (tag) {
         tag = cheri_tag_prot_clear_or_trap(env, cb, source, prot, retpc, tag);
-        if (unlikely(!tag && should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
-            qemu_log("Clearing tag at for capability loaded from" TARGET_FMT_lx "\n", vaddr);
+        if (unlikely(!tag &&
+                     should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
+            qemu_log("Clearing tag at for capability loaded from" TARGET_FMT_lx
+                     "\n",
+                     vaddr);
         }
     }
 
@@ -1153,12 +1155,13 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 #endif
 #if defined(CONFIG_MIPS_LOG_INSTR)
     /* Log memory read, if needed. */
-    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
+    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE,
+                                       vaddr))) {
         // Decompress to log all fields
         cap_register_t ncd;
-        decompress_128cap_already_xored(pesbt, cursor, &ncd);
+        decompress_128cap_already_xored(*pesbt, *cursor, &ncd);
         ncd.cr_tag = tag;
-        dump_cap_load(env, vaddr, compress_128cap(&ncd), cursor, tag);
+        dump_cap_load(env, vaddr, compress_128cap(&ncd), *cursor, tag);
 #ifdef TARGET_MIPS
         if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
             cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
@@ -1167,6 +1170,17 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 #endif
     }
 #endif
+    return tag;
+}
+
+void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+                          const cap_register_t *source, target_ulong vaddr,
+                          target_ulong retpc, hwaddr *physaddr)
+{
+    uint64_t pesbt;
+    uint64_t cursor;
+    bool tag = load_cap_from_memory_128(env, &pesbt, &cursor, cb, source, vaddr,
+                                        retpc, physaddr);
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
 }
 
@@ -1250,3 +1264,6 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 #endif
 }
 #endif
+
+
+// FIXME: atomic128.h for atomic xchg?

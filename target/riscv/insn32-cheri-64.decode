@@ -50,3 +50,5 @@ sccap       1111100  ..... ..... 000 01100 1011011 @r_2source  # Would be sqcap 
 
 clc       ............   ..... 010 ..... 0001111 @i  # def LC_128  : RVInstI<0x2, OPC_MISC_MEM (0b0001111)
 csc       ....... .....  ..... 100 ..... 0100011 @s  # def SC_128  : RVInstS<0x4, OPC_STORE (0b0100011)
+
+amoswap_cap 00001 . . ..... ..... 100 ..... 0101111 @atom_st
