@@ -3251,7 +3251,7 @@ void tcg_gen_atomic_cmpxchg_i32_with_checked_addr(
             tcg_temp_free_i32(oi);
         }
 #else
-        gen(retv, cpu_env, addr, cmpv, newv);
+        gen(retv, cpu_env, checked_addr, cmpv, newv);
 #endif
 
         if (memop & MO_SIGN) {
@@ -3391,7 +3391,7 @@ static void do_atomic_op_i32(TCGv_i32 ret, TCGv int_addr, TCGv_i32 val,
         tcg_temp_free_i32(oi);
     }
 #else
-    gen(ret, cpu_env, addr, val);
+    gen(ret, cpu_env, checked_addr, val);
 #endif
 #ifdef TARGET_CHERI
     gen_cheri_invalidate_tags(checked_addr, op);
