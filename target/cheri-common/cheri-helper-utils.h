@@ -176,7 +176,7 @@ const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb);
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
                          target_ulong retpc);
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
-                          const cap_register_t *source, target_ulong offset,
+                          const cap_register_t *source, target_ulong vaddr,
                           target_ulong retpc, hwaddr *physaddr);
 // Helper for RISCV AMOSWAP
 bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,

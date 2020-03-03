@@ -761,12 +761,6 @@ static inline target_ulong get_cscc_addr(CPUArchState *env, uint32_t cs, uint32_
     return (target_ulong)addr;
 }
 
-void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr, target_ulong retpc);
-void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
-                                 const cap_register_t *source,
-                                 target_ulong offset, target_ulong retpc,
-                                 hwaddr *physaddr);
-
 target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, uint32_t cb))
 {
     target_ulong retpc = GETPC();
@@ -876,34 +870,35 @@ void dump_changed_cop2(CPUArchState *env, TCState *cur) {
 /*
  * Print capability load from memory to log file.
  */
-static inline void dump_cap_load(uint64_t addr, uint64_t cursor,
-        uint64_t base, uint8_t tag)
+static inline void dump_cap_load(uint64_t addr, uint64_t cursor, uint64_t base,
+                                 uint8_t tag)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-       qemu_log("    Cap Memory Read [" TARGET_FMT_lx "] = v:%d c:"
-               TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
+        qemu_log("    Cap Memory Read [" TARGET_FMT_lx
+                 "] = v:%d c:" TARGET_FMT_lx " b:" TARGET_FMT_lx "\n",
+                 addr, tag, cursor, base);
     }
 }
 
 /*
  * Print capability store to memory to log file.
  */
-static inline void dump_cap_store(uint64_t addr, uint64_t cursor,
-        uint64_t base, uint8_t tag)
+static inline void dump_cap_store(uint64_t addr, uint64_t cursor, uint64_t base,
+                                  uint8_t tag)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-      qemu_log("    Cap Memory Write [" TARGET_FMT_lx "] = v:%d c:"
-              TARGET_FMT_lx " b:" TARGET_FMT_lx "\n", addr, tag, cursor, base);
+        qemu_log("    Cap Memory Write [" TARGET_FMT_lx
+                 "] = v:%d c:" TARGET_FMT_lx " b:" TARGET_FMT_lx "\n",
+                 addr, tag, cursor, base);
     }
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
-                                 const cap_register_t *source,
-                                 target_ulong vaddr, target_ulong retpc,
-                                 hwaddr *physaddr)
+                          const cap_register_t *source, target_ulong vaddr,
+                          target_ulong retpc, hwaddr *physaddr)
 {
     int prot;
     cap_register_t ncd;
@@ -939,8 +934,8 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     update_capreg(env, cd, &ncd);
 }
 
-void store_cap_to_memory(CPUArchState *env, uint32_t cs,
-                                target_ulong vaddr, target_ulong retpc)
+void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
+                         target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     inmemory_chericap256 mem_buffer;
@@ -981,22 +976,24 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
  * Print capability load from memory to log file.
  */
 static inline void dump_cap_load_op(uint64_t addr, uint64_t perm_type,
-        uint8_t tag)
+                                    uint8_t tag)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         qemu_log("    Cap Memory Read [" TARGET_FMT_lx
-             "] = v:%d tps:" TARGET_FMT_lx "\n", addr, tag, perm_type);
+                 "] = v:%d tps:" TARGET_FMT_lx "\n",
+                 addr, tag, perm_type);
     }
 }
 
 static inline void dump_cap_load_cbl(uint64_t cursor, uint64_t base,
-        uint64_t length)
+                                     uint64_t length)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
-        qemu_log("    c:" TARGET_FMT_lx " b:" TARGET_FMT_lx " l:"
-                TARGET_FMT_lx "\n", cursor, base, length);
+        qemu_log("    c:" TARGET_FMT_lx " b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
+                 "\n",
+                 cursor, base, length);
     }
 }
 
@@ -1004,12 +1001,13 @@ static inline void dump_cap_load_cbl(uint64_t cursor, uint64_t base,
  * Print capability store to memory to log file.
  */
 static inline void dump_cap_store_op(uint64_t addr, uint64_t perm_type,
-        uint8_t tag)
+                                     uint8_t tag)
 {
 
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         qemu_log("    Cap Memory Write [" TARGET_FMT_lx
-                "] = v:%d tps:" TARGET_FMT_lx "\n", addr, tag, perm_type);
+                 "] = v:%d tps:" TARGET_FMT_lx "\n",
+                 addr, tag, perm_type);
     }
 }
 
@@ -1040,9 +1038,8 @@ static inline void dump_cap_store_length(uint64_t length)
 #endif // CONFIG_MIPS_LOG_INSTR
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
-                                 const cap_register_t *source,
-                                 target_ulong vaddr, target_ulong retpc,
-                                 hwaddr *physaddr)
+                          const cap_register_t *source, target_ulong vaddr,
+                          target_ulong retpc, hwaddr *physaddr)
 {
     cap_register_t ncd;
     int prot;
@@ -1102,8 +1099,8 @@ static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
 }
 #endif // CONFIG_MIPS_LOG_INSTR
 
-void store_cap_to_memory(CPUArchState *env, uint32_t cs,
-                                target_ulong vaddr, target_ulong retpc)
+void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
+                         target_ulong retpc)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     inmemory_chericap256 mem_buffer;

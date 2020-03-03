@@ -107,39 +107,24 @@ struct SCRInfo {
 static inline cap_register_t *get_scr(CPUArchState *env, uint32_t index)
 {
     switch (index) {
-    case CheriSCR_PCC:
-        return &env->PCC;
-    case CheriSCR_DDC:
-        return &env->DDC;
+    case CheriSCR_PCC: return &env->PCC;
+    case CheriSCR_DDC: return &env->DDC;
 
-    case CheriSCR_UTCC:
-        return &env->UTCC;
-    case CheriSCR_UTDC:
-        return &env->UTDC;
-    case CheriSCR_UScratchC:
-        return &env->UScratchC;
-    case CheriSCR_UEPCC:
-        return &env->UEPCC;
+    case CheriSCR_UTCC: return &env->UTCC;
+    case CheriSCR_UTDC: return &env->UTDC;
+    case CheriSCR_UScratchC: return &env->UScratchC;
+    case CheriSCR_UEPCC: return &env->UEPCC;
 
-    case CheriSCR_STCC:
-        return &env->STCC;
-    case CheriSCR_STDC:
-        return &env->STDC;
-    case CheriSCR_SScratchC:
-        return &env->SScratchC;
-    case CheriSCR_SEPCC:
-        return &env->SEPCC;
+    case CheriSCR_STCC: return &env->STCC;
+    case CheriSCR_STDC: return &env->STDC;
+    case CheriSCR_SScratchC: return &env->SScratchC;
+    case CheriSCR_SEPCC: return &env->SEPCC;
 
-    case CheriSCR_MTCC:
-        return &env->MTCC;
-    case CheriSCR_MTDC:
-        return &env->MTDC;
-    case CheriSCR_MScratchC:
-        return &env->MScratchC;
-    case CheriSCR_MEPCC:
-        return &env->MEPCC;
-    default:
-        assert(false && "Should have raised an invalid inst trap!");
+    case CheriSCR_MTCC: return &env->MTCC;
+    case CheriSCR_MTDC: return &env->MTDC;
+    case CheriSCR_MScratchC: return &env->MScratchC;
+    case CheriSCR_MEPCC: return &env->MEPCC;
+    default: assert(false && "Should have raised an invalid inst trap!");
     }
 }
 
