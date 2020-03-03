@@ -115,6 +115,31 @@ static bool trans_sc_w(DisasContext *ctx, arg_sc_w *a)
     return gen_sc(ctx, a, (MO_ALIGN | MO_TESL));
 }
 
+/// Note: LR/SC.{B,H} is a CHERI extension but we allow them everywhere
+static bool trans_lr_h(DisasContext *ctx, arg_lr_w *a)
+{
+    REQUIRE_EXT(ctx, RVA);
+    return gen_lr(ctx, a, (MO_ALIGN | MO_TESW));
+}
+
+static bool trans_sc_h(DisasContext *ctx, arg_sc_w *a)
+{
+    REQUIRE_EXT(ctx, RVA);
+    return gen_sc(ctx, a, (MO_ALIGN | MO_TESW));
+}
+
+static bool trans_lr_b(DisasContext *ctx, arg_lr_w *a)
+{
+    REQUIRE_EXT(ctx, RVA);
+    return gen_lr(ctx, a, (MO_ALIGN | MO_SB));
+}
+
+static bool trans_sc_b(DisasContext *ctx, arg_sc_w *a)
+{
+    REQUIRE_EXT(ctx, RVA);
+    return gen_sc(ctx, a, (MO_ALIGN | MO_SB));
+}
+
 static bool trans_amoswap_w(DisasContext *ctx, arg_amoswap_w *a)
 {
     REQUIRE_EXT(ctx, RVA);
