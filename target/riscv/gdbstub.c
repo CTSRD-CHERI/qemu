@@ -427,9 +427,9 @@ static int riscv_gdb_get_cheri_reg(CPURISCVState *env, uint8_t *mem_buf, int n)
     }
     switch (n) {
     case CHERI_GDB_NUM_GP_CAPREGS:
-        return gdb_get_capreg(mem_buf, cheri_get_ddc(env));
-    case CHERI_GDB_NUM_GP_CAPREGS + 1:
         return gdb_get_capreg(mem_buf, cheri_get_pcc(env));
+    case CHERI_GDB_NUM_GP_CAPREGS + 1:
+        return gdb_get_capreg(mem_buf, cheri_get_ddc(env));
     case CHERI_GDB_NUM_CAPREGS: {   // First integer register is the tag mask:
         uint64_t cap_valid;
         int i;

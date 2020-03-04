@@ -11,7 +11,7 @@
 
 <!DOCTYPE feature SYSTEM "gdb-target.dtd">
 <feature name="org.gnu.gdb.riscv.cheri">
-    <reg name="cnull" bitsize="128" type="data_ptr" regnum="0"/>
+    <reg name="cnull" bitsize="128" type="data_ptr"/>
     <reg name="cra" bitsize="128" type="code_ptr"/>
     <reg name="csp" bitsize="128" type="data_ptr"/>
     <reg name="cgp" bitsize="128" type="data_ptr"/>
@@ -44,8 +44,8 @@
     <reg name="ct5" bitsize="128" type="data_ptr"/>
     <reg name="ct6" bitsize="128" type="data_ptr"/>
 
-    <reg name="ddc" bitsize="128" type="data_ptr"/>
     <reg name="pcc" bitsize="128" type="code_ptr"/>
+    <reg name="ddc" bitsize="128" type="data_ptr"/>
 
     <reg name="cap_valid" bitsize="64"/>
 </feature>
