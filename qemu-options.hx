@@ -4056,9 +4056,16 @@ DEF("cheri-debugger-on-unrepresentable", 0, QEMU_OPTION_cheri_debugger_on_unrepr
 STEXI
 @item -cheri-debugger-on-unrepresentable
 @findex -cheri-debugger-on-unrepresentable
-Generate debugger exception when capability becomes unrepresentable.
+Generate debugger exception when a capability becomes unrepresentable.
 ETEXI
 
+DEF("cheri-debugger-on-trap", 0, QEMU_OPTION_cheri_debugger_on_trap, \
+    "-cheri-debugger-on-trap     Create debug exception when a capability fault is taken\n", QEMU_ARCH_ALL)
+STEXI
+@item -cheri-debugger-on-trap
+@findex -cheri-debugger-on-trap
+Generate debugger exception when a capability fault is taken.
+ETEXI
 
 #endif
 

@@ -96,6 +96,8 @@ static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
 
 static inline const char* cheri_cause_str(CheriCapExcCause cause);
 
+extern bool cheri_debugger_on_trap;
+
 static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
                                                             uint16_t cause, uint16_t reg, uintptr_t hostpc)
 {
@@ -123,6 +125,11 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
     }
 #endif
     cpu_mips_store_capcause(env, reg, cause);
+    // Allow drop into debugger on first CHERI trap:
+    // FIXME: allow c command to work by adding another boolean flag to skip
+    // this breakpoint when GDB asks to continue
+    if (cheri_debugger_on_trap)
+        do_raise_exception(env, EXCP_DEBUG, hostpc);
     do_raise_exception(env, EXCP_C2E, hostpc);
 }
 

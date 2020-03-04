@@ -176,6 +176,7 @@ int icount_align_option;
 #ifdef CONFIG_CHERI
 bool cheri_c2e_on_unrepresentable = false;
 bool cheri_debugger_on_unrepresentable = false;
+bool cheri_debugger_on_trap = false;
 #endif
 #if defined(CHERI_128) && defined(TARGET_MIPS)
 #include "target/cheri-common/cheri_defs.h"
@@ -3720,6 +3721,9 @@ void qemu_init(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_cheri_debugger_on_unrepresentable:
                 cheri_debugger_on_unrepresentable = true;
+                break;
+            case QEMU_OPTION_cheri_debugger_on_trap:
+                cheri_debugger_on_trap = true;
                 break;
 #endif /* CONFIG_CHERI */
 #ifdef CONFIG_RVFI_DII
