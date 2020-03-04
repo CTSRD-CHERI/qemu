@@ -953,7 +953,9 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
 #else
         // TODO: is this actually needed? tcg_gen_qemu_st_tl() should
         // check for alignment already.
-        do_raise_c0_exception(env, EXCP_AdEL, addr);
+        do_raise_c0_exception(
+            env, (required_perms & CAP_PERM_STORE) ? EXCP_AdEL : EXCP_AdES,
+            addr);
 #endif
     }
 #endif // TARGET_MIPS
