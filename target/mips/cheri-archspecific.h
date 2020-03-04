@@ -142,7 +142,8 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
 }
 
 static inline bool
-cheri_tag_prot_clear_or_trap(CPUMIPSState *env, int cb, const cap_register_t* cbp,
+cheri_tag_prot_clear_or_trap(CPUMIPSState *env, target_ulong va,
+                             int cb, const cap_register_t* cbp,
                              int prot, uintptr_t retpc, target_ulong tag)
 {
     if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
@@ -153,6 +154,7 @@ cheri_tag_prot_clear_or_trap(CPUMIPSState *env, int cb, const cap_register_t* cb
         return 0;
     }
     if (tag && (prot & PAGE_LC_TRAP)) {
+      env->CP0_BadVAddr = va;
       do_raise_c2_exception_impl(env, CapEx_CapLoadGen, cb, retpc);
     }
     return tag;

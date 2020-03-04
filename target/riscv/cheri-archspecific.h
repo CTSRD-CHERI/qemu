@@ -124,7 +124,8 @@ static inline unsigned cheri_get_asid(CPUArchState *env) {
 }
 
 static inline bool
-cheri_tag_prot_clear_or_trap(CPUArchState *env, int cb, const cap_register_t* cbp,
+cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
+                             int cb, const cap_register_t* cbp,
                              int prot, uintptr_t retpc, target_ulong tag)
 {
     // TODO: implement load-inhibit tlb flags
