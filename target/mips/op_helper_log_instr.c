@@ -65,7 +65,7 @@ void helper_instr_start(CPUMIPSState *env, target_ulong pc)
     } else {
         bool was_off = !qemu_loglevel_mask(cl_default_trace_format);
         qemu_set_log(qemu_loglevel | cl_default_trace_format);
-        if (was_off) {
+        if (was_off && !qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
             qemu_log("Enabled instruction logging @ " TARGET_FMT_plx " ASID %u\n", pc, (unsigned)(env->CP0_EntryHi & 0xFF));
         }
         env->tracing_suspended = false;
@@ -79,7 +79,7 @@ void helper_instr_stop(CPUMIPSState *env, target_ulong pc)
 {
     bool was_on = qemu_loglevel_mask(cl_default_trace_format);
     qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
-    if (was_on) {
+    if (was_on && !qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
         qemu_log("Disabled instruction logging @ " TARGET_FMT_plx " ASID %u\n", pc, (unsigned)(env->CP0_EntryHi & 0xFF));
     }
     /* Make sure a kernel -> user switch does not turn on tracing */
