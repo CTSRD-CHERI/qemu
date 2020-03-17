@@ -178,7 +178,7 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
             *prot = PAGE_EXEC;
             return TRANSLATE_SUCCESS;
         } else if (addr < RVFI_DII_RAM_START || addr >= RVFI_DII_RAM_END) {
-            fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
+            fprintf(stderr, "Rejecting memory access to " TARGET_FMT_lx
                     " since it is outside the RVFI-DII range\n", addr);
             return TRANSLATE_FAIL; // XXX: TRANSLATE_PMP_FAIL?
         }
