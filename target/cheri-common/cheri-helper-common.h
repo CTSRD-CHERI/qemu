@@ -45,15 +45,15 @@
  */
 
 // Two-operand capability inspection
-DEF_HELPER_2(cgetaddr, tl, env, i32)
-DEF_HELPER_2(cgetbase, tl, env, i32)
-DEF_HELPER_2(cgetflags, tl, env, i32)
-DEF_HELPER_2(cgetlen, tl, env, i32)
-DEF_HELPER_2(cgetperm, tl, env, i32)
-DEF_HELPER_2(cgetoffset, tl, env, i32)
-DEF_HELPER_2(cgetsealed, tl, env, i32)
-DEF_HELPER_2(cgettag, tl, env, i32)
-DEF_HELPER_2(cgettype, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetaddr, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetbase, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetflags, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetlen, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetperm, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetoffset, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetsealed, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgettag, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgettype, TCG_CALL_NO_WG, tl, env, i32)
 
 // Two operands (cap cap)
 DEF_HELPER_3(ccleartag, void, env, i32, i32)
@@ -64,8 +64,8 @@ DEF_HELPER_3(cchecktype, void, env, i32, i32)
 DEF_HELPER_3(ccheckperm, void, env, i32, tl)
 
 // Two operands (int int)
-DEF_HELPER_2(crap, tl, env, tl)
-DEF_HELPER_2(cram, tl, env, tl)
+DEF_HELPER_FLAGS_2(crap, TCG_CALL_NO_RWG_SE, tl, env, tl)
+DEF_HELPER_FLAGS_2(cram, TCG_CALL_NO_RWG_SE, tl, env, tl)
 
 // Three operands (cap cap cap)
 DEF_HELPER_4(cbuildcap, void, env, i32, i32, i32)
@@ -87,9 +87,9 @@ DEF_HELPER_4(csetflags, void, env, i32, i32, tl)
 DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 
 // Three operands (int cap cap)
-DEF_HELPER_3(csub, tl, env, i32, i32)
-DEF_HELPER_3(ctestsubset, tl, env, i32, i32)
-DEF_HELPER_3(ctoptr, tl, env, i32, i32)
+DEF_HELPER_FLAGS_3(csub, TCG_CALL_NO_WG, tl, env, i32, i32)
+DEF_HELPER_FLAGS_3(ctestsubset, TCG_CALL_NO_WG, tl, env, i32, i32)
+DEF_HELPER_FLAGS_3(ctoptr, TCG_CALL_NO_WG, tl, env, i32, i32)
 
 // Loads+Stores
 DEF_HELPER_4(cap_load_check, cap_checked_ptr, env, i32, tl, i32)
