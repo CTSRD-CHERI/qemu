@@ -109,7 +109,7 @@ lbuddc      1111101  00100 ..... 000 ..... 1011011 @r2
 lhuddc      1111101  00101 ..... 000 ..... 1011011 @r2
 # 00110 is lwuddc for RV64
 # 00111 would be ldudd for RV128
-# 10111 is capability load for RV64
+# 10111 is lcddc for RV64
 
 lbcap       1111101  01000 ..... 000 ..... 1011011 @r2
 lhcap       1111101  01001 ..... 000 ..... 1011011 @r2
@@ -131,5 +131,5 @@ swddc       1111100  ..... ..... 000 00010 1011011 @r_2source
 sbcap       1111100  ..... ..... 000 01000 1011011 @r_2source
 shcap       1111100  ..... ..... 000 01001 1011011 @r_2source
 swcap       1111100  ..... ..... 000 01010 1011011 @r_2source
-# 01011 is sdcap for RV64/scddc for RV32
+# 01011 is sdcap for RV64/sccap for RV32
 # 01100 is sccap for RV64
