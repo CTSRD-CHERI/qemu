@@ -1278,7 +1278,7 @@ void mips_malta_init(MachineState *machine)
     memory_region_add_subregion(system_memory, 0x80000000, machine->ram);
 
 #ifdef TARGET_CHERI
-    cheri_tag_init(machine->ram, 0x80000000 + memory_region_size(machine->ram));
+    cheri_tag_init(machine->ram, memory_region_size(machine->ram));
 #endif /* TARGET_CHERI */
 
     /* alias for pre IO hole access */

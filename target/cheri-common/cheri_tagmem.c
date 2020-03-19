@@ -96,6 +96,7 @@
 #endif /* ! CHERI_MAGIC128 */
 
 uint8_t **_cheri_tagmem = NULL;
+ram_addr_t cheri_covered_start = 0;
 uint64_t cheri_ntagblks = 0ul;
 
 static inline uint8_t* get_cheri_tagmem(size_t index) {
@@ -107,13 +108,12 @@ void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size)
 {
     // printf("%s: memory_size=0x%lx\n", __func__, memory_size);
     assert(memory_region_is_ram(mr));
-#ifdef NOTYET
     assert(memory_region_size(mr) == memory_size &&
            "Incorrect tag mem size passed?");
-#endif
     if (_cheri_tagmem != NULL)
         return;
 
+    cheri_covered_start = memory_region_get_ram_addr(mr);
     cheri_ntagblks = (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT;
     _cheri_tagmem = (uint8_t **)g_malloc0(cheri_ntagblks * sizeof(uint8_t *));
     if (_cheri_tagmem == NULL) {
@@ -155,18 +155,20 @@ static inline void check_tagmem_writable(CPUArchState *env, target_ulong vaddr,
 
 static inline ram_addr_t p2r_addr(CPUArchState *env, hwaddr addr, MemoryRegion** mrp)
 {
-    hwaddr l;
+    hwaddr offset, l;
     MemoryRegion *mr;
     CPUState *cs = env_cpu(env);
 
-    mr = address_space_translate(cs->as, addr, &addr, &l, false, MEMTXATTRS_UNSPECIFIED);
+    mr = address_space_translate(cs->as, addr, &offset, &l, false, MEMTXATTRS_UNSPECIFIED);
     if (mrp)
         *mrp = mr;
 
-    if (!(memory_region_is_ram(mr) || memory_region_is_romd(mr))) {
+    // ROM/ROMD regions can have "RAM" addresses, but for our purposes we want
+    // them to not have tags and so return RAM_ADDR_INVALID.
+    if (memory_region_is_rom(mr) || memory_region_is_romd(mr)) {
         return RAM_ADDR_INVALID;
     }
-    return (memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK) + addr;
+    return memory_region_get_ram_addr(mr) + offset - cheri_covered_start;
 }
 
 static inline ram_addr_t v2r_addr(CPUArchState *env, target_ulong vaddr, MMUAccessType rw,
