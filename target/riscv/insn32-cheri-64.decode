@@ -48,8 +48,8 @@ scddc       1111100  ..... ..... 000 00100 1011011 @r_2source  # Would be lqddc 
 sdcap       1111100  ..... ..... 000 01011 1011011 @r_2source  # This is sccap (capability store) for RV32
 sccap       1111100  ..... ..... 000 01100 1011011 @r_2source  # Would be sqcap for RV128
 
-clc       ............   ..... 010 ..... 0001111 @i  # def LC_128  : RVInstI<0x2, OPC_MISC_MEM (0b0001111)
-csc       ....... .....  ..... 100 ..... 0100011 @s  # def SC_128  : RVInstS<0x4, OPC_STORE (0b0100011)
+lc       ............   ..... 010 ..... 0001111 @i  # def LC_128  : RVInstI<0x2, OPC_MISC_MEM (0b0001111)
+sc       ....... .....  ..... 100 ..... 0100011 @s  # def SC_128  : RVInstS<0x4, OPC_STORE (0b0100011)
 
 lr_cap      00010 . . 00000 ..... 100 ..... 0101111 @atom_ld
 sc_cap      00011 . . ..... ..... 100 ..... 0101111 @atom_st

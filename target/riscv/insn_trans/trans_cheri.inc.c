@@ -306,7 +306,7 @@ static inline bool trans_lccap(DisasContext *ctx, arg_lccap *a)
     return gen_cheri_cap_cap_imm(a->rd, a->rs1, 0, &gen_helper_load_cap_via_cap);
 }
 
-static inline bool trans_clc(DisasContext *ctx, arg_clc *a)
+static inline bool trans_lc(DisasContext *ctx, arg_lc *a)
 {
     INSN_CAN_TRAP(ctx);
     if (!ctx->capmode) {
@@ -420,7 +420,7 @@ static inline bool trans_sccap(DisasContext *ctx, arg_sccap *a)
     return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0, &gen_helper_store_cap_via_cap);
 }
 
-static inline bool trans_csc(DisasContext *ctx, arg_csc *a)
+static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
 {
     // RS2 is the value, RS1 is the capability
     INSN_CAN_TRAP(ctx);
