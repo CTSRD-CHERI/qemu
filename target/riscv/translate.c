@@ -230,7 +230,7 @@ static inline void gen_mark_gpr_as_integer(int reg_num_dst) {
  * since we usually avoid calling the OP_TYPE_gen function if we see a write to
  * $zero
  */
-static inline void gen_set_gpr(int reg_num_dst, TCGv t)
+static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t)
 {
     if (reg_num_dst != 0) {
 #ifdef TARGET_CHERI
@@ -241,10 +241,21 @@ static inline void gen_set_gpr(int reg_num_dst, TCGv t)
 #endif
         gen_rvfi_dii_set_field_const(rd_addr, reg_num_dst);
         gen_rvfi_dii_set_field(rd_wdata, t);
+#ifdef CONFIG_MIPS_LOG_INSTR
+        // Log GPR writes here
+        if (unlikely((tb_cflags(ctx->base.tb) & CF_LOG_INSTR))) {
+            TCGv tpc = tcg_const_tl(ctx->base.pc_next);
+            TCGv_i32 tregnum = tcg_const_i32(reg_num_dst);
+            gen_helper_log_gpr_write(tregnum, t, tpc);
+            tcg_temp_free_i32(tregnum);
+            tcg_temp_free(tpc);
+        }
+#endif
     }
 }
 
-static inline void gen_set_gpr_const(int reg_num_dst, target_ulong value)
+static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
+                                      target_ulong value)
 {
     if (reg_num_dst != 0) {
 #ifdef TARGET_CHERI
@@ -255,9 +266,23 @@ static inline void gen_set_gpr_const(int reg_num_dst, target_ulong value)
 #endif
         gen_rvfi_dii_set_field_const(rd_addr, reg_num_dst);
         gen_rvfi_dii_set_field_const(rd_wdata, value);
+#ifdef CONFIG_MIPS_LOG_INSTR
+        // Log GPR writes here
+        if (unlikely((tb_cflags(ctx->base.tb) & CF_LOG_INSTR))) {
+            TCGv tpc = tcg_const_tl(ctx->base.pc_next);
+            TCGv_i32 tregnum = tcg_const_i32(reg_num_dst);
+            TCGv tval = tcg_const_tl(value);
+            gen_helper_log_gpr_write(tregnum, tval, tpc);
+            tcg_temp_free(tval);
+            tcg_temp_free_i32(tregnum);
+            tcg_temp_free(tpc);
+        }
+#endif
     }
 }
 
+#define gen_set_gpr(reg_num_dst, t) _gen_set_gpr(ctx, reg_num_dst, t)
+#define gen_set_gpr_const(reg_num_dst, t) _gen_set_gpr_const(ctx, reg_num_dst, t)
 
 
 static void gen_mulhsu(TCGv ret, TCGv arg1, TCGv arg2)

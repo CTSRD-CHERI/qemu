@@ -75,6 +75,10 @@ DEF_HELPER_3(lr_cap, void, env, i32, i32)
 DEF_HELPER_3(sc_cap, tl, env, i32, i32)
 #endif
 
+#ifdef CONFIG_MIPS_LOG_INSTR
+DEF_HELPER_FLAGS_3(log_gpr_write, TCG_CALL_NO_RWG, void, i32, tl, tl)
+#endif
+
 /* Special functions */
 DEF_HELPER_3(csrrw, tl, env, tl, tl)
 DEF_HELPER_4(csrrs, tl, env, tl, tl, tl)

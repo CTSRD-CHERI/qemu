@@ -187,6 +187,15 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
     return retpc;
 }
 
+#ifdef CONFIG_MIPS_LOG_INSTR
+void HELPER(log_gpr_write)(uint32_t regnum, target_ulong value, target_ulong pc)
+{
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, pc,
+                           "    Write %s = " TARGET_FMT_lx "\n",
+                           riscv_int_regnames[regnum], value);
+}
+#endif
+
 void helper_wfi(CPURISCVState *env)
 {
     CPUState *cs = env_cpu(env);

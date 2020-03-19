@@ -49,7 +49,8 @@
     }
 
 typedef void(cheri_cget_helper)(TCGv, TCGv_ptr, TCGv_i32);
-static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
+static inline bool gen_cheri_get(DisasContext *ctx, int rd, int cs,
+                                 cheri_cget_helper *gen_func)
 {
     TCGv_i32 source_regnum = tcg_const_i32(cs);
     TCGv result = tcg_temp_new();
@@ -61,7 +62,7 @@ static inline bool gen_cheri_get(int rd, int cs, cheri_cget_helper *gen_func)
 }
 
 #define TRANSLATE_CGET(name)                                                   \
-    TRANSLATE_NO_TRAP(name, gen_cheri_get, a->rd, a->rs1)
+    TRANSLATE_NO_TRAP(name, gen_cheri_get, ctx, a->rd, a->rs1)
 
 typedef void(cheri_cap_cap_helper)(TCGv_ptr, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_cap_cap(int cd, int cs,
@@ -93,7 +94,7 @@ static inline bool gen_cheri_cap_int(int cd, int rs,
 }
 
 typedef void(cheri_int_int_helper)(TCGv, TCGv_ptr, TCGv);
-static inline bool gen_cheri_int_int(int rd, int rs,
+static inline bool gen_cheri_int_int(DisasContext *ctx, int rd, int rs,
                                      cheri_int_int_helper *gen_func)
 {
     TCGv result = tcg_temp_new();
@@ -145,7 +146,8 @@ static inline bool gen_cheri_cap_cap_int_imm(int cd, int cs1, int rs2,
     TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_int_imm, a->rd, a->rs1, a->rs2, 0)
 
 typedef void(cheri_int_cap_cap_helper)(TCGv, TCGv_ptr, TCGv_i32, TCGv_i32);
-static inline bool gen_cheri_int_cap_cap(int rd, int cs1, int cs2,
+static inline bool gen_cheri_int_cap_cap(DisasContext *ctx, int rd, int cs1,
+                                         int cs2,
                                          cheri_int_cap_cap_helper *gen_func)
 {
     TCGv_i32 source_regnum1 = tcg_const_i32(cs1);
@@ -159,7 +161,7 @@ static inline bool gen_cheri_int_cap_cap(int rd, int cs1, int cs2,
     return true;
 }
 #define TRANSLATE_INT_CAP_CAP(name)                                            \
-    TRANSLATE_MAYBE_TRAP(name, gen_cheri_int_cap_cap, a->rd, a->rs1, a->rs2)
+    TRANSLATE_MAYBE_TRAP(name, gen_cheri_int_cap_cap, ctx, a->rd, a->rs1, a->rs2)
 
 // TODO: all of these could be implemented in TCG without calling a helper
 // Two operand (int cap)
@@ -177,11 +179,11 @@ TRANSLATE_CGET(cgetsealed)
 static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)
 {
     INSN_CAN_TRAP(ctx);
-    return gen_cheri_int_int(a->rd, a->rs1, &gen_helper_crap);
+    return gen_cheri_int_int(ctx, a->rd, a->rs1, &gen_helper_crap);
 }
 static inline bool trans_cram(DisasContext *ctx, arg_cram *a)
 {
-    return gen_cheri_int_int(a->rd, a->rs1, &gen_helper_cram);
+    return gen_cheri_int_int(ctx, a->rd, a->rs1, &gen_helper_cram);
 }
 
 // Two operand (cap cap)
@@ -457,7 +459,7 @@ static inline bool trans_sc_cap(DisasContext *ctx, arg_sc_cap *a)
     } else {
         // Note: we ignore the Acquire/release flags since this using
         // helper_exit_atomic forces exlusive execution so we get SC semantics.
-        gen_cheri_int_cap_cap(a->rd, a->rs1, a->rs2, &gen_helper_sc_cap);
+        gen_cheri_int_cap_cap(ctx, a->rd, a->rs1, a->rs2, &gen_helper_sc_cap);
     }
     return true;
 }

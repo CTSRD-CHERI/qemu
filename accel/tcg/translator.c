@@ -63,7 +63,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         db->num_insns++;
         ops->insn_start(db, cpu);
 #if defined(CONFIG_MIPS_LOG_INSTR)
-        if ((tb_cflags(db->tb) & CF_LOG_INSTR)) {
+        if (unlikely((tb_cflags(db->tb) & CF_LOG_INSTR))) {
             TCGv tpc = tcg_const_tl(db->pc_next);
             gen_helper_log_instruction(cpu_env, tpc);
             tcg_temp_free(tpc);
