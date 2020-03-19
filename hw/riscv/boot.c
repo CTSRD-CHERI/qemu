@@ -36,7 +36,7 @@
 
 void riscv_find_and_load_firmware(MachineState *machine,
                                   const char *default_machine_firmware,
-                                  hwaddr firmware_load_addr)
+                                  hwaddr* firmware_load_addr)
 {
     char *firmware_filename = NULL;
 
@@ -76,7 +76,8 @@ void riscv_find_and_load_firmware(MachineState *machine,
 
     if (firmware_filename) {
         /* If not "none" load the firmware */
-        riscv_load_firmware(firmware_filename, firmware_load_addr);
+        *firmware_load_addr =
+            riscv_load_firmware(firmware_filename, *firmware_load_addr);
         g_free(firmware_filename);
     }
 }
