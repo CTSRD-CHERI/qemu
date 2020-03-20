@@ -248,6 +248,19 @@ static inline target_ulong get_capreg_pesbt(CPUArchState *env, unsigned regnum)
 }
 #endif
 
+static inline void update_capreg_to_intval(CPUArchState *env, unsigned regnum,
+                                           target_ulong newval)
+{
+    // writing to $c0/$cnull is a no-op
+    if (unlikely(regnum == 0))
+        return;
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    gpcrs->decompressed[regnum]._cr_cursor = newval;
+    set_capreg_state(gpcrs, regnum, CREG_INTEGER);
+    sanity_check_capreg(gpcrs, regnum);
+    rvfi_changed_capreg(env, regnum, newval);
+}
+
 static inline target_ulong get_capreg_cursor(CPUArchState *env, unsigned regnum)
 {
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);

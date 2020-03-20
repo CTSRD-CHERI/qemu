@@ -1473,14 +1473,13 @@ static inline bool in_kernel_mode(CPUMIPSState *env) {
 #define is_beri_or_cheri(env) (strcmp(env->cpu_model->name, "BERI") == 0)
 #endif
 
-
-#if defined(TARGET_CHERI)
 // Note: the pc does not have to be up-to-date, tb start is fine.
 // We may miss a few dumps or print too many if -dfilter is on but
 // that shouldn't really matter.
 static inline target_ulong cpu_get_recent_pc(CPUMIPSState *env) {
     return env->active_tc.PC;
 }
+#if defined(TARGET_CHERI)
 void cheri_cpu_dump_statistics(CPUState *cs, int flags);
 void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags);
 void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* name);

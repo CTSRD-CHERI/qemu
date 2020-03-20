@@ -249,12 +249,16 @@ struct CPURISCVState {
 #ifdef TARGET_CHERI
 #define GET_SPECIAL_REG(env, name, cheri_name)                                 \
     ((target_ulong)cap_get_offset(&((env)->cheri_name)))
-void update_special_register_offset(cap_register_t *scr, const char *name,
-                                    target_ulong value);
+void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
+                                    const char *name, target_ulong value);
 #define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
-    update_special_register_offset(&((env)->cheri_name), #cheri_name, value)
-#define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)  \
-    env->cheri_name = env->new_cheri_reg
+    update_special_register_offset(env, &((env)->cheri_name), #cheri_name, value)
+
+#define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)        \
+    do {                                                                       \
+        env->cheri_name = env->new_cheri_reg;                                  \
+        log_changed_capreg(env, #cheri_name, &((env)->cheri_name));            \
+    } while (false)
 #define PC_ADDR(env) ((target_ulong)env->PCC._cr_cursor)
 #else
 #define GET_SPECIAL_REG(env, name, cheri_name) ((env)->name)
@@ -264,30 +268,14 @@ void update_special_register_offset(cap_register_t *scr, const char *name,
 #define PC_ADDR(env) ((env)->pc)
 #endif
 
-static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
-#ifdef TARGET_CHERI
-    return env->gpcapregs.decompressed[reg]._cr_cursor;
-#else
-    return env->gpr[reg];
-#endif
-}
-
-#ifdef TARGET_CHERI
 // Note: the pc does not have to be up-to-date, tb start is fine.
 // We may miss a few dumps or print too many if -dfilter is on but
 // that shouldn't really matter.
 static inline target_ulong cpu_get_recent_pc(CPURISCVState *env) {
-    return env->PCC._cr_cursor;
-}
-#endif
-
-static inline void gpr_set_int_value(CPURISCVState *env, unsigned reg,
-                                     target_ulong value) {
-    assert(reg != 0);
 #ifdef TARGET_CHERI
-    env->gpcapregs.decompressed[reg]._cr_cursor = value;
+    return env->PCC._cr_cursor;
 #else
-    env->gpr[reg] = value;
+    return env->pc;
 #endif
 }
 
