@@ -155,11 +155,11 @@ DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop)
 #endif
 
 #if defined(CONFIG_MIPS_LOG_INSTR)
-DEF_HELPER_4(dump_load64, void, env, cap_checked_ptr, i64, memop)
-DEF_HELPER_4(dump_load32, void, env, cap_checked_ptr, i32, memop)
-DEF_HELPER_4(dump_store64, void, env, cap_checked_ptr, i64, memop)
-DEF_HELPER_4(dump_store32, void, env, cap_checked_ptr, i32, memop)
-DEF_HELPER_2(log_instruction, void, env, tl)
+DEF_HELPER_FLAGS_4(dump_load64, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i64, memop)
+DEF_HELPER_FLAGS_4(dump_load32, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i32, memop)
+DEF_HELPER_FLAGS_4(dump_store64, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i64, memop)
+DEF_HELPER_FLAGS_4(dump_store32, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i32, memop)
+DEF_HELPER_FLAGS_2(log_instruction, TCG_CALL_NO_RWG, void, env, tl)
 #endif
 
 DEF_HELPER_FLAGS_3(gvec_mov, TCG_CALL_NO_RWG, void, ptr, ptr, i32)

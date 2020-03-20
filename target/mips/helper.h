@@ -187,7 +187,7 @@ DEF_HELPER_1(mfc0_coreid, tl, env)
 
 #ifdef CONFIG_MIPS_LOG_INSTR
 DEF_HELPER_1(dump_changed_state, void, env)
-DEF_HELPER_2(mips_cvtrace_log_instruction, void, env, i64)
+DEF_HELPER_FLAGS_2(mips_cvtrace_log_instruction, TCG_CALL_NO_RWG, void, env, i64)
 DEF_HELPER_2(instr_start, void, env, i64)
 DEF_HELPER_2(instr_start_user_mode_only, void, env, i64)
 DEF_HELPER_2(instr_stop_user_mode_only, void, env, i64)
