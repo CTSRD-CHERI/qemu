@@ -178,6 +178,15 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
     return get_readonly_capreg(env, regnum);
 }
 
+static inline void rvfi_changed_capreg(CPUArchState *env, unsigned regnum,
+                                       target_ulong cursor)
+{
+#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    env->rvfi_dii_trace.rvfi_dii_rd_addr = regnum;
+    env->rvfi_dii_trace.rvfi_dii_rd_wdata = cursor;
+#endif
+}
+
 static inline void update_capreg(CPUArchState *env, unsigned regnum,
                                  const cap_register_t *newval)
 {
@@ -193,10 +202,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
 #endif
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
-#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
-    env->rvfi_dii_trace.rvfi_dii_rd_addr = regnum;
-    env->rvfi_dii_trace.rvfi_dii_rd_wdata = newval->_cr_cursor;
-#endif
+    rvfi_changed_capreg(env, regnum, newval->_cr_cursor);
     qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env), "  C%02d <- " PRINT_CAP_FMTSTR "\n", regnum,
                   PRINT_CAP_ARGS(target));
 }
@@ -216,9 +222,7 @@ static inline void update_compressed_capreg(CPUArchState *env, unsigned regnum,
     set_capreg_state(gpcrs, regnum, new_state);
     cheri_debug_assert(get_capreg_state(gpcrs, regnum) == new_state);
     sanity_check_capreg(gpcrs, regnum);
-#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
-    env->rvfi_dii_trace.rvfi_dii_rd_wdata = cursor;
-#endif
+    rvfi_changed_capreg(env, regnum, cursor);
 }
 
 static inline target_ulong get_capreg_pesbt(CPUArchState *env, unsigned regnum)
