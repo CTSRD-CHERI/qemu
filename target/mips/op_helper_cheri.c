@@ -831,17 +831,17 @@ void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
     }
 }
 
-void dump_changed_cop2(CPUArchState *env, TCState *cur) {
-    static const char * const capreg_name[] = {
-        "C00", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
-        "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15",
-        "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23",
-        "C24", "C25", "C26", "C27", "C28", "C29", "C30", "C31",
-    };
+const char * const cheri_gp_regnames[] = {
+    "C00", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
+    "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15",
+    "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23",
+    "C24", "C25", "C26", "C27", "C28", "C29", "C30", "C31",
+};
 
+void dump_changed_cop2(CPUArchState *env, TCState *cur) {
     dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget, "CapBranchTarget");
     for (int i=0; i<32; i++) {
-        dump_changed_capreg(env, get_readonly_capreg(env, i), &env->last_C[i], capreg_name[i]);
+        dump_changed_capreg(env, get_readonly_capreg(env, i), &env->last_C[i], cheri_gp_regnames[i]);
     }
     dump_changed_capreg(env, &cur->CHWR.DDC, &env->last_CHWR.DDC, "DDC");
     dump_changed_capreg(env, &cur->CHWR.UserTlsCap, &env->last_CHWR.UserTlsCap, "UserTlsCap");

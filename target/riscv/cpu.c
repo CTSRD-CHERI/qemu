@@ -35,6 +35,7 @@
 #include "monitor/monitor.h"
 
 #include "rvfi_dii.h"
+#include "helper_utils.h"
 
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs.h"
@@ -50,6 +51,14 @@ const char * const riscv_int_regnames[] = {
   "x14/a4",  "x15/a5", "x16/a6", "x17/a7", "x18/s2", "x19/s3",  "x20/s4",
   "x21/s5",  "x22/s6", "x23/s7", "x24/s8", "x25/s9", "x26/s10", "x27/s11",
   "x28/t3",  "x29/t4", "x30/t5", "x31/t6"
+};
+
+const char * const cheri_gp_regnames[32] = {
+    "c0/cnull", "c1/cra",  "c2/csp",  "c3/cgp",  "c4/ctp",  "c5/ct0",   "c6/ct1",
+    "c7/ct2",   "c8/cs0",  "c9/cs1",  "c10/ca0", "c11/ca1", "c12/ca2",  "c13/ca3",
+    "c14/ca4",  "c15/ca5", "c16/ca6", "c17/ca7", "c18/cs2", "c19/cs3",  "c20/cs4",
+    "c21/cs5",  "c22/cs6", "c23/cs7", "c24/cs8", "c25/cs9", "c26/cs10", "c27/cs11",
+    "c28/ct3",  "c29/ct4", "c30/ct5", "c31/ct6"
 };
 
 const char * const riscv_fpr_regnames[] = {

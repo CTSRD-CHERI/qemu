@@ -721,8 +721,8 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 }
 
 #ifdef TARGET_CHERI
-void update_special_register_offset(cap_register_t *scr, const char *name,
-                                    target_ulong new_value)
+void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
+                                    const char *name, target_ulong new_value)
 {
     // Any write to the CSR shall set the offset of the SCR to the value
     // written. This shall be equivalent to a CSetOffset instruction, but with
@@ -751,5 +751,6 @@ void update_special_register_offset(cap_register_t *scr, const char *name,
     } else {
         scr->_cr_cursor = new_cursor;
     }
+    log_changed_capreg(env, name, scr);
 }
 #endif

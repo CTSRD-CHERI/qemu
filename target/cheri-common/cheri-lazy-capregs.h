@@ -178,6 +178,17 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
     return get_readonly_capreg(env, regnum);
 }
 
+
+#ifdef CONFIG_MIPS_LOG_INSTR
+extern const char * const cheri_gp_regnames[];
+#define log_changed_capreg(env, name, newval) \
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env), \
+                           "  %s <- " PRINT_CAP_FMTSTR "\n", name, \
+                           PRINT_CAP_ARGS(newval))
+#else
+#define log_changed_capreg(env, name, newval)
+#endif
+
 static inline void rvfi_changed_capreg(CPUArchState *env, unsigned regnum,
                                        target_ulong cursor)
 {
@@ -203,8 +214,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, newval->_cr_cursor);
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env), "  C%02d <- " PRINT_CAP_FMTSTR "\n", regnum,
-                  PRINT_CAP_ARGS(target));
+    log_changed_capreg(env, cheri_gp_regnames[regnum], target);
 }
 
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
