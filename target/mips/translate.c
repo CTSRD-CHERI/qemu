@@ -32153,7 +32153,7 @@ void cpu_state_reset(CPUMIPSState *env)
      * set to zero. length is set to (2^64 - 1). Offset (or cursor)
      * is set to zero (or boot vector address for PCC).
      */
-    reset_capregs(&env->active_tc.gpcapregs);
+    reset_capregs(env);
     set_max_perms_capability(&env->active_tc.PCC, env->exception_base);
     // TODO: make DDC and KCC unconditionally only be in the special reg file
     set_max_perms_capability(&env->active_tc.CHWR.DDC, 0);

@@ -418,7 +418,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
 
             // TestRIG expects all capability registers to be max perms
 #ifdef TARGET_CHERI
-            set_max_perms_capregs(&env->gpcapregs);
+            set_max_perms_capregs(env);
 #endif
             break;
         }
@@ -519,7 +519,7 @@ static void riscv_cpu_reset(CPUState *cs)
         exit(EXIT_FAILURE);
     }
     // All general purpose capability registers are reset to NULL:
-    reset_capregs(&env->gpcapregs);
+    reset_capregs(env);
     /*
      * See Table 5.2: Special Capability Registers (SCRs) in the CHERI ISA spec
      */
