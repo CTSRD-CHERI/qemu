@@ -662,12 +662,12 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         env->PCC = env->STCC;
         assert(cap_is_in_bounds(&env->PCC, new_pc, 0));
         env->PCC._cr_cursor = new_pc;
-        qemu_log_mask(CPU_LOG_INSTR,
-                      "%s: Set SEPCC from PCC: " PRINT_CAP_FMTSTR "\n",
-                      __func__, PRINT_CAP_ARGS(&env->SEPCC));
-        qemu_log_mask(CPU_LOG_INSTR,
-                      "%s: Set PCC from STCC: " PRINT_CAP_FMTSTR "\n",
-                      __func__, PRINT_CAP_ARGS(&env->PCC));
+        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                               "%s: Set SEPCC from PCC: " PRINT_CAP_FMTSTR "\n",
+                               __func__, PRINT_CAP_ARGS(&env->SEPCC));
+        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                               "%s: Set PCC from STCC: " PRINT_CAP_FMTSTR "\n",
+                               __func__, PRINT_CAP_ARGS(&env->PCC));
 #else
         env->pc = new_pc;
 #endif
@@ -690,12 +690,12 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         env->PCC = env->MTCC;
         assert(cap_is_in_bounds(&env->PCC, new_pc, 0));
         env->PCC._cr_cursor = new_pc;
-        qemu_log_mask(CPU_LOG_INSTR,
-                      "%s: Set MEPCC from PCC: " PRINT_CAP_FMTSTR "\n",
-                      __func__, PRINT_CAP_ARGS(&env->MEPCC));
-        qemu_log_mask(CPU_LOG_INSTR,
-                      "%s: Set PCC from MTCC: " PRINT_CAP_FMTSTR "\n",
-                      __func__, PRINT_CAP_ARGS(&env->PCC));
+        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                               "%s: Set MEPCC from PCC: " PRINT_CAP_FMTSTR "\n",
+                               __func__, PRINT_CAP_ARGS(&env->MEPCC));
+        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                               "%s: Set PCC from MTCC: " PRINT_CAP_FMTSTR "\n",
+                               __func__, PRINT_CAP_ARGS(&env->PCC));
 #else
         env->pc = new_pc;
 #endif

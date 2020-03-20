@@ -384,13 +384,15 @@ target_ulong CHERI_HELPER_IMPL(cram(CPUArchState *env, target_ulong len))
     target_ulong result = cc128_get_alignment_mask(len);
     target_ulong rounded_with_crap = crap_impl(len);
     target_ulong rounded_with_cram = (len + ~result) & result;
-    qemu_log_mask(CPU_LOG_INSTR, "cram(" TARGET_FMT_lx ") rounded=" TARGET_FMT_lx " rounded with mask=" TARGET_FMT_lx
-        " mask result=" TARGET_FMT_lx "\n", len, rounded_with_crap, rounded_with_cram, result);
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+        "cram(" TARGET_FMT_lx ") rounded=" TARGET_FMT_lx " rounded with mask=" TARGET_FMT_lx " mask result=" TARGET_FMT_lx "\n",
+        len, rounded_with_crap, rounded_with_cram, result);
     if (rounded_with_cram != rounded_with_crap) {
         warn_report("CRAM and CRRL disagree for " TARGET_FMT_lx ": crrl=" TARGET_FMT_lx
                     " cram=" TARGET_FMT_lx, len, rounded_with_crap, rounded_with_cram);
-        qemu_log_mask(CPU_LOG_INSTR, "WARNING: CRAM and CRRL disagree for " TARGET_FMT_lx ": crrl=" TARGET_FMT_lx
-            " cram=" TARGET_FMT_lx, len, rounded_with_crap, rounded_with_cram);
+        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+            "WARNING: CRAM and CRRL disagree for " TARGET_FMT_lx ": crrl=" TARGET_FMT_lx " cram=" TARGET_FMT_lx,
+            len, rounded_with_crap, rounded_with_cram);
     }
     return result;
 #else
