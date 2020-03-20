@@ -1263,10 +1263,10 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_ctestsubset] = {"ctestsubset", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
 
     // FP load store
-    [rv_op_fld] = { "fld", rv_codec_i, rv_fmt_frd_offset_cs1, NULL, 0, 0, 0 },
-    [rv_op_fsd] = { "fsd", rv_codec_s, rv_fmt_frs2_offset_cs1, NULL, 0, 0, 0 },
-    [rv_op_flw] = { "flw", rv_codec_i, rv_fmt_frd_offset_cs1, NULL, 0, 0, 0 },
-    [rv_op_fsw] = { "fsw", rv_codec_s, rv_fmt_frs2_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_cflw] = { "cflw", rv_codec_i, rv_fmt_frd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_cfsw] = { "cfsw", rv_codec_s, rv_fmt_frs2_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_cfld] = { "cfld", rv_codec_i, rv_fmt_frd_offset_cs1, NULL, 0, 0, 0 },
+    [rv_op_cfsd] = { "cfsd", rv_codec_s, rv_fmt_frs2_offset_cs1, NULL, 0, 0, 0 },
 };
 
 /* CSR names */
