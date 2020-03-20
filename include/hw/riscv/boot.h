@@ -22,9 +22,9 @@
 
 #include "exec/cpu-defs.h"
 
-void riscv_find_and_load_firmware(MachineState *machine,
-                                  const char *default_machine_firmware,
-                                  hwaddr *firmware_load_addr);
+QEMU_WARN_UNUSED_RESULT target_ulong riscv_find_and_load_firmware(
+    MachineState *machine, const char *default_machine_firmware,
+    hwaddr firmware_load_addr);
 char *riscv_find_firmware(const char *firmware_filename);
 target_ulong riscv_load_firmware(const char *firmware_filename,
                                  hwaddr firmware_load_addr);

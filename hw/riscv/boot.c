@@ -34,11 +34,12 @@
 # define KERNEL_BOOT_ADDRESS 0x80200000
 #endif
 
-void riscv_find_and_load_firmware(MachineState *machine,
-                                  const char *default_machine_firmware,
-                                  hwaddr* firmware_load_addr)
+target_ulong riscv_find_and_load_firmware(MachineState *machine,
+                                          const char *default_machine_firmware,
+                                          hwaddr firmware_load_addr)
 {
     char *firmware_filename = NULL;
+    target_ulong entry_addr = firmware_load_addr;
 
     if (!machine->firmware) {
         /*
@@ -54,7 +55,7 @@ void riscv_find_and_load_firmware(MachineState *machine,
                         "this happens.");
             warn_report("See QEMU's deprecation documentation for details.");
         }
-        return;
+        return entry_addr;
     }
 
     if (!strcmp(machine->firmware, "default")) {
@@ -76,10 +77,10 @@ void riscv_find_and_load_firmware(MachineState *machine,
 
     if (firmware_filename) {
         /* If not "none" load the firmware */
-        *firmware_load_addr =
-            riscv_load_firmware(firmware_filename, *firmware_load_addr);
+        entry_addr = riscv_load_firmware(firmware_filename, firmware_load_addr);
         g_free(firmware_filename);
     }
+    return entry_addr;
 }
 
 char *riscv_find_firmware(const char *firmware_filename)
