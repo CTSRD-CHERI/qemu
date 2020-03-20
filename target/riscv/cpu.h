@@ -261,10 +261,24 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
     } while (false)
 #define PC_ADDR(env) ((target_ulong)env->PCC._cr_cursor)
 #else
+#ifdef CONFIG_MIPS_LOG_INSTR
+#define log_changed_special_reg(env, name, newval)                             \
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),              \
+                           "  %s <- " TARGET_FMT_lx "\n", name, newval)
+#else
+#define log_changed_special_reg(env, name, newval) ((void)0)
+#endif
 #define GET_SPECIAL_REG(env, name, cheri_name) ((env)->name)
-#define SET_SPECIAL_REG(env, name, cheri_name, value) ((env)->name) = value
-#define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)  \
-    env->name = env->new_reg
+#define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
+    do {                                                                       \
+        env->name = value;                                                     \
+        log_changed_special_reg(env, #name, value);                            \
+    } while (false)
+#define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)        \
+    do {                                                                       \
+        env->name = env->new_reg;                                              \
+        log_changed_special_reg(env, #name, ((env)->name));                    \
+    } while (false)
 #define PC_ADDR(env) ((env)->pc)
 #endif
 

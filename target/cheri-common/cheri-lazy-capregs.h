@@ -195,8 +195,8 @@ static inline void log_changed_capreg_int(CPUArchState *env, const char *name,
     }
 }
 #else
-#define log_changed_capreg(env, name, newval)
-#define log_changed_capreg_int(env, name, newval)
+#define log_changed_capreg(env, name, newval) ((void)0)
+#define log_changed_capreg_int(env, name, newval) ((void)0)
 #endif
 #define log_changed_gp_capreg(env, regnum, newval)                             \
     log_changed_capreg(env, cheri_gp_regnames[regnum], newval)

@@ -855,6 +855,14 @@ static inline bool csr_needs_asr(CPURISCVState *env, int csrno) {
 }
 #endif
 
+#ifdef CONFIG_MIPS_LOG_INSTR
+#define log_changed_csr(env, csrno, newval)                                    \
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),              \
+                           "  csr_%d <- " TARGET_FMT_lx "\n", csrno, newval)
+#else
+#define log_changed_csr(env, name, newval) ((void)0)
+#endif
+
 /*
  * riscv_csrrw - read and/or update control and status register
  *
@@ -910,7 +918,11 @@ int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
 
     /* execute combined read/write operation if it exists */
     if (csr_ops[csrno].op) {
-        return csr_ops[csrno].op(env, csrno, ret_value, new_value, write_mask);
+        ret = csr_ops[csrno].op(env, csrno, ret_value, new_value, write_mask);
+        if (ret >= 0) {
+            log_changed_csr(env, csrno, new_value);
+        }
+        return ret;
     }
 
     /* if no accessor exists then return failure */
@@ -932,6 +944,7 @@ int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
             if (ret < 0) {
                 return ret;
             }
+            log_changed_csr(env, csrno, new_value);
         }
     }
 
