@@ -368,10 +368,10 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
 #ifdef TARGET_CHERI
     assert(cap_is_in_bounds(&env->PCC, data[0], 0));
     if (unlikely(env->PCC._cr_cursor != data[0])) {
-        qemu_log_mask(CPU_LOG_INT | CPU_LOG_INSTR,
-                      "%s: Updating pc from TB: " TARGET_FMT_lx
-                      " -> " TARGET_FMT_lx "\n",
-                      __func__, (target_ulong)env->PCC._cr_cursor, data[0]);
+        qemu_log_mask_and_addr(CPU_LOG_INT | CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                               "%s: Updating pc from TB: " TARGET_FMT_lx
+                               " -> " TARGET_FMT_lx "\n",
+                               __func__, (target_ulong)env->PCC._cr_cursor, data[0]);
     }
     env->PCC._cr_cursor = data[0];
 #else

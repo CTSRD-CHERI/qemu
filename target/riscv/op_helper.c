@@ -185,9 +185,9 @@ target_ulong helper_sret(CPURISCVState *env, target_ulong cpu_pc_deb)
 
 #ifdef TARGET_CHERI
     env->PCC = env->SEPCC;
-    qemu_log_mask(CPU_LOG_INSTR,
-                  "%s: Updating PCC from SEPCC: " PRINT_CAP_FMTSTR "\n",
-                  __func__, PRINT_CAP_ARGS(&env->SEPCC));
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                           "%s: Updating PCC from SEPCC: " PRINT_CAP_FMTSTR "\n",
+                           __func__, PRINT_CAP_ARGS(&env->SEPCC));
 #endif
     return retpc;
 }
@@ -230,9 +230,9 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
 
 #ifdef TARGET_CHERI
     env->PCC = env->MEPCC;
-    qemu_log_mask(CPU_LOG_INSTR,
-                  "%s: Updating PCC from MEPCC: " PRINT_CAP_FMTSTR "\n",
-                  __func__, PRINT_CAP_ARGS(&env->MEPCC));
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
+                           "%s: Updating PCC from MEPCC: " PRINT_CAP_FMTSTR "\n",
+                           __func__, PRINT_CAP_ARGS(&env->MEPCC));
 #endif
     return retpc;
 }
