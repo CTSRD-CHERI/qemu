@@ -42,13 +42,16 @@ static inline const char* exception_str(uint32_t exception)
     case RISCV_EXCP_STORE_AMO_ACCESS_FAULT: return "Store/AMO access fault";
     case RISCV_EXCP_U_ECALL: return "Environment call from U-mode";
     case RISCV_EXCP_S_ECALL: return "Environment call from S-mode";
-    case RISCV_EXCP_H_ECALL: return "Reserved/Environment call from H-mode";
+    case RISCV_EXCP_VS_ECALL: return "Environment call from H-mode";
     case RISCV_EXCP_M_ECALL: return "Environment call from M-mode";
     case RISCV_EXCP_INST_PAGE_FAULT: return "Instruction page fault";
     case RISCV_EXCP_LOAD_PAGE_FAULT: return "Load page fault";
     // 14 Reserved for future standard use
     case RISCV_EXCP_STORE_PAGE_FAULT: return "Store/AMO page fault";
     // 16–23 Reserved for future standard use
+    case RISCV_EXCP_INST_GUEST_PAGE_FAULT: return "Guest instruction page fault";
+    case RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT: return "Guest load page fault";
+    case RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT: return "Guest store/AMO page fault";
     // 24-31 Reserved for custom use (we use 28/0x1c) for CHERI
     case RISCV_EXCP_CHERI: return "CHERI fault";
     // 32–47 Reserved for future standard use

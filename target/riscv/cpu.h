@@ -216,10 +216,17 @@ struct CPURISCVState {
     uint64_t htimedelta;
 
     /* Virtual CSRs */
-    target_ulong vsstatus;
+#ifdef TARGET_CHERI
+    cap_register_t VSTCC;
+    cap_register_t VSTDC;
+    cap_register_t VSScratchC;
+    cap_register_t VSEPCC;
+#else
     target_ulong vstvec;
-    target_ulong vsscratch;
     target_ulong vsepc;
+#endif
+    target_ulong vsstatus;
+    target_ulong vsscratch;
     target_ulong vscause;
     target_ulong vstval;
     target_ulong vsatp;
@@ -231,9 +238,14 @@ struct CPURISCVState {
     target_ulong mtinst;
 
     /* HS Backup CSRs */
+#ifdef TARGET_CHERI
+    cap_register_t STCC_HS;
+    cap_register_t SEPCC_HS;
+#else
     target_ulong stvec_hs;
-    target_ulong sscratch_hs;
     target_ulong sepc_hs;
+#endif
+    target_ulong sscratch_hs;
     target_ulong scause_hs;
     target_ulong stval_hs;
     target_ulong satp_hs;

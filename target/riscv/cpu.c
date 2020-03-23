@@ -281,12 +281,12 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mtvec   ", GET_SPECIAL_REG(env, mtvec, MTCC));
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "stvec   ", GET_SPECIAL_REG(env, stvec, STCC));
     if (riscv_has_ext(env, RVH)) {
-        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vstvec  ", env->vstvec);
+        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vstvec  ", GET_SPECIAL_REG(env, vstvec, VSTCC));
     }
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mepc    ", GET_SPECIAL_REG(env, mepc, MEPCC));
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "sepc    ", GET_SPECIAL_REG(env, sepc, SEPCC));
     if (riscv_has_ext(env, RVH)) {
-        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vsepc   ", env->vsepc);
+        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vsepc   ", GET_SPECIAL_REG(env, vsepc, VSEPCC));
     }
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mcause  ", env->mcause);
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "scause  ", env->scause);

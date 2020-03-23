@@ -135,14 +135,14 @@ void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env)
         env->mstatush |= env->mstatush_hs;
 #endif
 
-        env->vstvec = env->stvec;
-        env->stvec = env->stvec_hs;
+        COPY_SPECIAL_REG(env, vstvec, VSTCC, stvec, STCC);
+        COPY_SPECIAL_REG(env, stvec, STCC, stvec_hs, STCC_HS);
 
         env->vsscratch = env->sscratch;
         env->sscratch = env->sscratch_hs;
 
-        env->vsepc = env->sepc;
-        env->sepc = env->sepc_hs;
+        COPY_SPECIAL_REG(env, vsepc, VSEPCC, sepc, SEPCC);
+        COPY_SPECIAL_REG(env, sepc, SEPCC, sepc_hs, SEPCC_HS);
 
         env->vscause = env->scause;
         env->scause = env->scause_hs;
@@ -163,14 +163,14 @@ void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env)
         env->mstatush |= env->vsstatush;
 #endif
 
-        env->stvec_hs = env->stvec;
-        env->stvec = env->vstvec;
+        COPY_SPECIAL_REG(env, stvec_hs, STCC_HS, stvec, STCC);
+        COPY_SPECIAL_REG(env, stvec, STCC, vstvec, VSTCC);
 
         env->sscratch_hs = env->sscratch;
         env->sscratch = env->vsscratch;
 
-        env->sepc_hs = env->sepc;
-        env->sepc = env->vsepc;
+        COPY_SPECIAL_REG(env, sepc_hs, SEPCC_HS, sepc, SEPCC);
+        COPY_SPECIAL_REG(env, sepc, SEPCC, vsepc, VSEPCC);
 
         env->scause_hs = env->scause;
         env->scause = env->vscause;
@@ -750,20 +750,16 @@ static inline int rvfi_dii_check_addr(CPURISCVState *env, int ret,
     return ret;
 }
 
-bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
-                        MMUAccessType access_type, int mmu_idx,
-                        bool probe, uintptr_t retaddr)
-{
-    RISCVCPU *cpu = RISCV_CPU(cs);
-    CPURISCVState *env = &cpu->env;
 #ifndef CONFIG_USER_ONLY
+// Do all of riscv_cpu_tlb_fill() except for filling the TLB/raising a trap
+static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
+                                   MMUAccessType access_type, int mmu_idx,
+                                   bool *pmp_violation, bool *first_stage_error,
+                                   int *prot, hwaddr *pa, uintptr_t retaddr)
+{
     vaddr im_address;
-    hwaddr pa = 0;
-    int prot;
-    bool pmp_violation = false;
     bool m_mode_two_stage = false;
     bool hs_mode_two_stage = false;
-    bool first_stage_error = true;
     int ret = TRANSLATE_FAIL;
     int mode = mmu_idx;
 
@@ -797,29 +793,29 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 
     if (riscv_cpu_virt_enabled(env) || m_mode_two_stage || hs_mode_two_stage) {
         /* Two stage lookup */
-        ret = get_physical_address(env, &pa, &prot, address, access_type,
+        ret = get_physical_address(env, pa, prot, address, access_type,
                                    mmu_idx, true, true);
 
         qemu_log_mask(CPU_LOG_MMU,
                       "%s 1st-stage address=%" VADDR_PRIx " ret %d physical "
                       TARGET_FMT_plx " prot %d\n",
-                      __func__, address, ret, pa, prot);
-        ret = rvfi_dii_check_addr(env, ret, address, size, &prot, access_type);
+                      __func__, address, ret, *pa, *prot);
+        ret = rvfi_dii_check_addr(env, ret, address, size, prot, access_type);
         if (ret != TRANSLATE_FAIL) {
             /* Second stage lookup */
-            im_address = pa;
+            im_address = *pa;
 
-            ret = get_physical_address(env, &pa, &prot, im_address,
+            ret = get_physical_address(env, pa, prot, im_address,
                                        access_type, mmu_idx, false, true);
 
             qemu_log_mask(CPU_LOG_MMU,
                     "%s 2nd-stage address=%" VADDR_PRIx " ret %d physical "
                     TARGET_FMT_plx " prot %d\n",
-                    __func__, im_address, ret, pa, prot);
+                    __func__, im_address, ret, *pa, *prot);
 
             if (riscv_feature(env, RISCV_FEATURE_PMP) &&
                 (ret == TRANSLATE_SUCCESS) &&
-                !pmp_hart_has_privs(env, pa, size, 1 << access_type, mode)) {
+                !pmp_hart_has_privs(env, *pa, size, 1 << access_type, mode)) {
                 ret = TRANSLATE_PMP_FAIL;
             }
 
@@ -828,7 +824,7 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                  * Guest physical address translation failed, this is a HS
                  * level exception
                  */
-                first_stage_error = false;
+                *first_stage_error = false;
                 env->guest_phys_fault_addr = (im_address |
                                               (address &
                                                (TARGET_PAGE_SIZE - 1))) >> 2;
@@ -836,25 +832,43 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
         }
     } else {
         /* Single stage lookup */
-        ret = get_physical_address(env, &pa, &prot, address, access_type,
+        ret = get_physical_address(env, pa, prot, address, access_type,
                                    mmu_idx, true, false);
-        ret = rvfi_dii_check_addr(env, ret, address, size, &prot, access_type);
+        ret = rvfi_dii_check_addr(env, ret, address, size, prot, access_type);
 
         qemu_log_mask(CPU_LOG_MMU,
                       "%s address=%" VADDR_PRIx " ret %d physical "
                       TARGET_FMT_plx " prot %d\n",
-                      __func__, address, ret, pa, prot);
+                      __func__, address, ret, *pa, *prot);
     }
 
     if (riscv_feature(env, RISCV_FEATURE_PMP) &&
         (ret == TRANSLATE_SUCCESS) &&
-        !pmp_hart_has_privs(env, pa, size, 1 << access_type, mode)) {
+        !pmp_hart_has_privs(env, *pa, size, 1 << access_type, mode)) {
         ret = TRANSLATE_PMP_FAIL;
     }
     if (ret == TRANSLATE_PMP_FAIL) {
-        pmp_violation = true;
+        *pmp_violation = true;
     }
 
+    return ret;
+}
+#endif
+
+bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
+                        MMUAccessType access_type, int mmu_idx,
+                        bool probe, uintptr_t retaddr)
+{
+#ifndef CONFIG_USER_ONLY
+    RISCVCPU *cpu = RISCV_CPU(cs);
+    CPURISCVState *env = &cpu->env;
+    bool pmp_violation = false;
+    bool first_stage_error = true;
+    int prot = 0;
+    hwaddr pa = 0;
+    int ret = riscv_cpu_tlb_fill_impl(env, address, size, access_type, mmu_idx,
+                                      &pmp_violation, &first_stage_error, &prot,
+                                      &pa, retaddr);
     if (ret == TRANSLATE_SUCCESS) {
         tlb_set_page(cs, address & TARGET_PAGE_MASK, pa & TARGET_PAGE_MASK,
                      prot, mmu_idx, TARGET_PAGE_SIZE);
@@ -862,12 +876,12 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     } else if (probe) {
         return false;
     } else {
-        raise_mmu_exception(env, address, access_type, pmp_violation, first_stage_error);
+        raise_mmu_exception(env, address, access_type, pmp_violation,
+                            first_stage_error);
         riscv_raise_exception(env, cs->exception_index, retaddr);
     }
 
     return true;
-
 #else
     switch (access_type) {
     case MMU_INST_FETCH:
@@ -893,11 +907,14 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
                                           int *prot, uintptr_t retpc)
 {
     hwaddr physical = -1LL;
-    int ret = get_physical_address(env, &physical, prot, address, rw,
-                               cpu_mmu_index(env, false));
+    bool pmp_violation = false;
+    bool first_stage_error = true;
+    hwaddr pa = 0;
+    int ret = riscv_cpu_tlb_fill_impl(env, address, 1, rw, cpu_mmu_index(env, false),
+                                      &pmp_violation, &first_stage_error, prot,
+                                      &pa, retpc);
     if (ret != TRANSLATE_SUCCESS) {
-        raise_mmu_exception(env, address, rw, false);
-        // TODO: use register
+        raise_mmu_exception(env, address, rw, pmp_violation, first_stage_error);
         riscv_raise_exception(env, env_cpu(env)->exception_index, retpc);
     }
     tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (physical &~TARGET_PAGE_MASK));
