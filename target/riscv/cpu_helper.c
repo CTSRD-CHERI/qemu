@@ -906,7 +906,6 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
                                           target_ulong address, int rw, int reg,
                                           int *prot, uintptr_t retpc)
 {
-    hwaddr physical = -1LL;
     bool pmp_violation = false;
     bool first_stage_error = true;
     hwaddr pa = 0;
@@ -917,8 +916,8 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
         raise_mmu_exception(env, address, rw, pmp_violation, first_stage_error);
         riscv_raise_exception(env, env_cpu(env)->exception_index, retpc);
     }
-    tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (physical &~TARGET_PAGE_MASK));
-    return physical;
+    tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (pa & ~TARGET_PAGE_MASK));
+    return pa;
 }
 #endif /* TARGET_CHERI */
 
