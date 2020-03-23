@@ -1484,7 +1484,7 @@ void cheri_cpu_dump_statistics(CPUState *cs, int flags);
 void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags);
 void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* name);
 hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address,
-                                     int rw, int reg, int *prot,
+                                     MMUAccessType rw, int reg, int *prot,
                                      uintptr_t retpc);
 #endif /* TARGET_CHERI */
 

@@ -467,8 +467,9 @@ int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch);
 hwaddr riscv_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
 #ifdef TARGET_CHERI
 hwaddr cpu_riscv_translate_address_tagmem(CPURISCVState *env,
-                                          target_ulong address, int rw, int reg,
-                                          int *prot, uintptr_t retpc);
+                                          target_ulong address,
+                                          MMUAccessType rw, int reg, int *prot,
+                                          uintptr_t retpc);
 #endif
 void  riscv_cpu_do_unaligned_access(CPUState *cs, vaddr addr,
                                     MMUAccessType access_type, int mmu_idx,

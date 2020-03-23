@@ -1084,7 +1084,9 @@ hwaddr cpu_mips_translate_address(CPUMIPSState *env, target_ulong address,
 }
 
 #ifdef TARGET_CHERI
-hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address, int rw, int reg, int *prot, uintptr_t retpc)
+hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address,
+                                     MMUAccessType rw, int reg, int *prot,
+                                     uintptr_t retpc)
 {
     hwaddr physical;
     int access_type;

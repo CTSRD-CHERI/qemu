@@ -29,6 +29,20 @@ typedef enum {
     PMP_LOCK  = 1 << 7
 } pmp_priv_t;
 
+static inline pmp_priv_t access_type_to_pmp_priv(MMUAccessType at)
+{
+    switch (at) {
+#ifdef CONFIG_CHERI
+    case MMU_DATA_CAP_LOAD: return PMP_READ;
+    case MMU_DATA_CAP_STORE: return PMP_WRITE;
+#endif
+    case MMU_DATA_LOAD: return PMP_READ;
+    case MMU_DATA_STORE: return PMP_WRITE;
+    case MMU_INST_FETCH: return PMP_EXEC;
+    }
+    abort();
+}
+
 typedef enum {
     PMP_AMATCH_OFF,  /* Null (off)                            */
     PMP_AMATCH_TOR,  /* Top of Range                          */

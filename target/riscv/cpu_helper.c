@@ -815,7 +815,9 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
 
             if (riscv_feature(env, RISCV_FEATURE_PMP) &&
                 (ret == TRANSLATE_SUCCESS) &&
-                !pmp_hart_has_privs(env, *pa, size, 1 << access_type, mode)) {
+                !pmp_hart_has_privs(env, *pa, size,
+                                    access_type_to_pmp_priv(access_type),
+                                    mode)) {
                 ret = TRANSLATE_PMP_FAIL;
             }
 
@@ -842,9 +844,9 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
                       __func__, address, ret, *pa, *prot);
     }
 
-    if (riscv_feature(env, RISCV_FEATURE_PMP) &&
-        (ret == TRANSLATE_SUCCESS) &&
-        !pmp_hart_has_privs(env, *pa, size, 1 << access_type, mode)) {
+    if (riscv_feature(env, RISCV_FEATURE_PMP) && (ret == TRANSLATE_SUCCESS) &&
+        !pmp_hart_has_privs(env, *pa, size,
+                            access_type_to_pmp_priv(access_type), mode)) {
         ret = TRANSLATE_PMP_FAIL;
     }
     if (ret == TRANSLATE_PMP_FAIL) {
@@ -903,8 +905,9 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 
 #ifdef TARGET_CHERI
 hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
-                                          target_ulong address, int rw, int reg,
-                                          int *prot, uintptr_t retpc)
+                                          target_ulong address,
+                                          MMUAccessType rw, int reg, int *prot,
+                                          uintptr_t retpc)
 {
     bool pmp_violation = false;
     bool first_stage_error = true;

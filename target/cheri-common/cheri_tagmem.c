@@ -122,8 +122,9 @@ void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size)
     }
 }
 
-static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr, int rw,
-        int reg, uintptr_t pc, int *prot)
+static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr,
+                              MMUAccessType rw, int reg, uintptr_t pc,
+                              int *prot)
 {
     hwaddr paddr = 0;
 
