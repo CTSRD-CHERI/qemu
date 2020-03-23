@@ -4055,7 +4055,6 @@ DEF("rvfi-dii-port", HAS_ARG, QEMU_OPTION_rvfi_dii_port, \
     "-rvfi-dii-port <port>     Run QEMU in RVFI-DII mode, listing on <port>\n", QEMU_ARCH_RISCV)
 SRST
 ``-rvfi-dii-port port``
-``-rvfi-dii-port port``
     Run QEMU in RVFI-DII mode, listing on <port>.
 ERST
 DEF("rvfi-dii-debug", 0, QEMU_OPTION_rvfi_dii_debug, \
