@@ -4008,65 +4008,62 @@ ERST
 #if defined(CONFIG_CHERI)
 DEF("bp", HAS_ARG, QEMU_OPTION_breakpoint, \
     "-bp <addr>      set breakpoint at <addr>\n", QEMU_ARCH_ALL)
-STEXI
-@item -bp @var{addr}
-@findex -bp
-Set GDB breakpoint at addr.
-ETEXI
+SRST
+``-bp addr``
+    Set GDB breakpoint at addr.
+ERST
 
 DEF("bc", HAS_ARG, QEMU_OPTION_breakcount, \
     "-bc <count>     set breakpoint at <count> instructions\n", QEMU_ARCH_ALL)
-STEXI
-@item -bc @var{count}
-Set GDB breakpoint in <count> instructions after start.
-ETEXI
+SRST
+``-bc count``
+    Set GDB breakpoint in <count> instructions after start.
+ERST
 
 DEF("cheri-trace-format", HAS_ARG, QEMU_OPTION_cheri_trace_format, \
 "-cheri-trace-format [text|cvtrace]     Select CHERI trace mode.\n", QEMU_ARCH_ALL)
-STEXI
-@item -cheri-trace-format @var{type}
-Set CHERI trace format to <type> (text or cvtrace)
-ETEXI
+SRST
+``-cheri-trace-format type``
+    Set CHERI trace format to <type> (text or cvtrace)
+ERST
 
 DEF("cheri-c2e-on-unrepresentable", 0, QEMU_OPTION_cheri_c2e_on_unrepresentable, \
     "-cheri-c2e-on-unrepresentable     Generate C2E exception when a capability becomes unrepresentable\n", QEMU_ARCH_ALL)
-STEXI
-@item -cheri-c2e-on-unrepresentable
-@findex -cheri-c2e-on-unrepresentable
-Generate C2E exception when capability becomes unrepresentable.
-ETEXI
+SRST
+``-cheri-c2e-on-unrepresentable``
+    Generate C2E exception when capability becomes unrepresentable.
+ERST
 
 DEF("cheri-debugger-on-unrepresentable", 0, QEMU_OPTION_cheri_debugger_on_unrepresentable, \
     "-cheri-debugger-on-unrepresentable     Create debug exception when a capability becomes unrepresentable\n", QEMU_ARCH_ALL)
-STEXI
-@item -cheri-debugger-on-unrepresentable
-@findex -cheri-debugger-on-unrepresentable
-Generate debugger exception when a capability becomes unrepresentable.
-ETEXI
+SRST
+``-cheri-debugger-on-unrepresentable``
+    Generate debugger exception when a capability becomes unrepresentable.
+ERST
 
 DEF("cheri-debugger-on-trap", 0, QEMU_OPTION_cheri_debugger_on_trap, \
     "-cheri-debugger-on-trap     Create debug exception when a capability fault is taken\n", QEMU_ARCH_ALL)
-STEXI
-@item -cheri-debugger-on-trap
-@findex -cheri-debugger-on-trap
-Generate debugger exception when a capability fault is taken.
-ETEXI
+SRST
+``-cheri-debugger-on-trap``
+    Generate debugger exception when a capability fault is taken.
+ERST
 
 #endif
 
 #ifdef CONFIG_RVFI_DII
 DEF("rvfi-dii-port", HAS_ARG, QEMU_OPTION_rvfi_dii_port, \
     "-rvfi-dii-port <port>     Run QEMU in RVFI-DII mode, listing on <port>\n", QEMU_ARCH_RISCV)
-STEXI
-@item -rvfi-dii-port @var{port}
-Run QEMU in RVFI-DII mode, listing on <port>.
-ETEXI
+SRST
+``-rvfi-dii-port port``
+``-rvfi-dii-port port``
+    Run QEMU in RVFI-DII mode, listing on <port>.
+ERST
 DEF("rvfi-dii-debug", 0, QEMU_OPTION_rvfi_dii_debug, \
     "-rvfi-dii-debug     Print RVFI-DII debug messages\n", QEMU_ARCH_RISCV)
-STEXI
-@item -rvfi-dii-debug
-Print RVFI-DII debug messages.
-ETEXI
+SRST
+``-rvfi-dii-debug``
+    Print RVFI-DII debug messages.
+ERST
 #endif
 
 
