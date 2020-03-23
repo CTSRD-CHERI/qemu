@@ -419,19 +419,19 @@ static int riscv_gdb_set_virtual(CPURISCVState *cs, uint8_t *mem_buf, int n)
 #define CHERI_GDB_NUM_INTREGS 1
 #define CHERI_GDB_NUM_REGS (CHERI_GDB_NUM_CAPREGS + CHERI_GDB_NUM_INTREGS)
 
-static int riscv_gdb_get_cheri_reg(CPURISCVState *env, uint8_t *mem_buf, int n)
+static int riscv_gdb_get_cheri_reg(CPURISCVState *env, GByteArray *buf, int n)
 {
     if (n < 0)
         return 0;
 
     if (n < CHERI_GDB_NUM_GP_CAPREGS) {
-        return gdb_get_general_purpose_capreg(mem_buf, env, n);
+        return gdb_get_general_purpose_capreg(buf, env, n);
     }
     switch (n) {
     case CHERI_GDB_NUM_GP_CAPREGS:
-        return gdb_get_capreg(mem_buf, cheri_get_pcc(env));
+        return gdb_get_capreg(buf, cheri_get_pcc(env));
     case CHERI_GDB_NUM_GP_CAPREGS + 1:
-        return gdb_get_capreg(mem_buf, cheri_get_ddc(env));
+        return gdb_get_capreg(buf, cheri_get_ddc(env));
     case CHERI_GDB_NUM_CAPREGS: {   // First integer register is the tag mask:
         uint64_t cap_valid;
         int i;
@@ -445,7 +445,7 @@ static int riscv_gdb_get_cheri_reg(CPURISCVState *env, uint8_t *mem_buf, int n)
         }
         if (cheri_get_pcc(env)->cr_tag)
             cap_valid |= ((uint64_t)1 << 32);
-        return gdb_get_regl(mem_buf, cap_valid);
+        return gdb_get_regl(buf, cap_valid);
     }
     }
     return 0;

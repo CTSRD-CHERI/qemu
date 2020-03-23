@@ -295,8 +295,8 @@ is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t n
 }
 #endif
 
-int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap);
-int gdb_get_general_purpose_capreg(uint8_t *mem_buf, CPUArchState *env,
+int gdb_get_capreg(GByteArray *buf, const cap_register_t *cap);
+int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
                                    unsigned regnum);
 
 #define raise_cheri_exception(env, cause, reg)                                 \

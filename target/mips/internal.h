@@ -82,10 +82,10 @@ enum CPUMIPSMSADataFormat {
 #ifdef TARGET_CHERI
 #include "cheri_utils.h"
 
-int mips_gdb_get_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
+int mips_gdb_get_cheri_reg(CPUMIPSState *env, GByteArray *buf, int n);
 int mips_gdb_set_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
 #endif
-int mips_gdb_get_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
+int mips_gdb_get_sys_reg(CPUMIPSState *env, GByteArray *buf, int n);
 int mips_gdb_set_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
 
 void mips_cpu_do_interrupt(CPUState *cpu);

@@ -39,36 +39,60 @@
 #include "cheri-helper-utils.h"
 #include "exec/cpu-all.h"
 
-int gdb_get_capreg(uint8_t *mem_buf, const cap_register_t *cap)
+static inline void append(GByteArray *buf, uint64_t value)
+{
+    uint64_t tmp = tswap64(value);
+    g_byte_array_append(buf, (uint8_t *)&tmp, 8);
+}
+
+int gdb_get_capreg(GByteArray *buf, const cap_register_t *cap)
 {
 #if CHERI_CAP_SIZE == 16
     // If the capability has a valid tag bit we must recompress since the
     // pesbt value might not match the current value (csetbounds could have
     // changed the bounds).
-    stq_p(mem_buf + CHERI_MEM_OFFSET_METADATA, compress_128cap(cap));
-    stq_p(mem_buf + CHERI_MEM_OFFSET_CURSOR, cap_get_cursor(cap));
+#if CHERI_MEM_OFFSET_METADATA == 0
+    append(buf, compress_128cap(cap));
+    append(buf, cap_get_cursor(cap));
+#else
+    _Static_assert(CHERI_MEM_OFFSET_CURSOR == 0, "");
+    append(buf, cap_get_cursor(cap));
+    append(buf, compress_128cap(cap));
+#endif
 #elif CHERI_CAP_SIZE == 32
     inmemory_chericap256 memory_representation;
     compress_256cap(&memory_representation, cap);
-    stq_p(mem_buf + CHERI_MEM_OFFSET_METADATA, memory_representation.u64s[0]);
-    stq_p(mem_buf + CHERI_MEM_OFFSET_CURSOR, memory_representation.u64s[1]);
-    stq_p(mem_buf + CHERI_MEM_OFFSET_BASE, memory_representation.u64s[2]);
-    stq_p(mem_buf + CHERI_MEM_OFFSET_LENGTH, memory_representation.u64s[3]);
+    _Static_assert(CHERI_MEM_OFFSET_METADATA == 0, "");
+    append(buf, memory_representation.u64s[0]);
+    _Static_assert(CHERI_MEM_OFFSET_CURSOR == 8, "");
+    append(buf, memory_representation.u64s[1]);
+    _Static_assert(CHERI_MEM_OFFSET_BASE == 16, "");
+    append(buf, memory_representation.u64s[2]);
+    _Static_assert(CHERI_MEM_OFFSET_LENGTH == 24, "");
+    append(buf, memory_representation.u64s[3]);
 #else
 #error "64-bit capabilities not implemented yet"
 #endif
     return CHERI_CAP_SIZE;
 }
 
-int gdb_get_general_purpose_capreg(uint8_t *mem_buf, CPUArchState *env,
+int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
                                    unsigned regnum)
 {
 #if CHERI_CAP_SIZE == 16 && QEMU_USE_COMPRESSED_CHERI_CAPS
     // No need to decompress:
-    stq_p(mem_buf + CHERI_MEM_OFFSET_METADATA, get_capreg_pesbt(env, regnum) ^ CC128_NULL_XOR_MASK);
-    stq_p(mem_buf + CHERI_MEM_OFFSET_CURSOR, get_capreg_cursor(env, regnum));
+    uint64_t pesbt_for_mem =
+        get_capreg_pesbt(env, regnum) ^ CC128_NULL_XOR_MASK;
+#if CHERI_MEM_OFFSET_METADATA == 0
+    append(buf, pesbt_for_mem);
+    append(buf, get_capreg_cursor(env, regnum));
+#else
+    _Static_assert(CHERI_MEM_OFFSET_CURSOR == 0, "");
+    append(buf, get_capreg_cursor(env, regnum));
+    append(buf, pesbt_for_mem);
+#endif
     return CHERI_CAP_SIZE;
 #else
-    return gdb_get_capreg(mem_buf, get_readonly_capreg(env, regnum));
+    return gdb_get_capreg(buf, get_readonly_capreg(env, regnum));
 #endif
 }
