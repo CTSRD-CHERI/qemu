@@ -514,6 +514,9 @@ typedef struct TCState TCState;
 struct TCState {
     target_ulong gpr[32];
     target_ulong PC;
+#ifdef CONFIG_DEBUG_TCG
+    target_ulong _pc_is_current;
+#endif
     target_ulong HI[MIPS_DSP_ACC];
     target_ulong LO[MIPS_DSP_ACC];
     target_ulong ACX[MIPS_DSP_ACC];
@@ -1357,9 +1360,9 @@ enum {
 };
 
 /* Exceptions */
-enum {
-    EXCP_NONE          = -1,
-    EXCP_RESET         = 0,
+typedef enum {
+    EXCP_NONE = -1,
+    EXCP_RESET = 0,
     EXCP_SRESET,
     EXCP_DSS,
     EXCP_DINT,
@@ -1399,7 +1402,7 @@ enum {
     EXCP_TLBRI,
 
     EXCP_LAST = EXCP_TLBRI,
-};
+} MipsExcp;
 
 /*
  * This is an internally generated WAKE request line.
@@ -1476,9 +1479,36 @@ static inline bool in_kernel_mode(CPUMIPSState *env) {
 // Note: the pc does not have to be up-to-date, tb start is fine.
 // We may miss a few dumps or print too many if -dfilter is on but
 // that shouldn't really matter.
-static inline target_ulong cpu_get_recent_pc(CPUMIPSState *env) {
+static inline target_ulong cpu_get_recent_pc(CPUMIPSState *env)
+{
     return env->active_tc.PC;
 }
+
+static inline bool pc_is_current(CPUArchState *env)
+{
+#ifdef CONFIG_DEBUG_TCG
+    return env->active_tc._pc_is_current;
+#else
+    return true;
+#endif
+}
+static inline void mips_update_pc_impl(TCState *state, target_ulong pc_addr)
+{
+    state->PC = pc_addr;
+#ifdef TARGET_CHERI
+    // Note: no representability check, those are done on jump.
+    state->PCC._cr_cursor = pc_addr;
+#endif
+#ifdef CONFIG_DEBUG_TCG
+    state->_pc_is_current = true;
+#endif
+}
+
+static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr)
+{
+    mips_update_pc_impl(&env->active_tc, pc_addr);
+}
+
 #if defined(TARGET_CHERI)
 void cheri_cpu_dump_statistics(CPUState *cs, int flags);
 void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags);

@@ -1029,7 +1029,7 @@ int kvm_arch_get_registers(CPUState *cs)
 
     env->active_tc.HI[0] = regs.hi;
     env->active_tc.LO[0] = regs.lo;
-    env->active_tc.PC = regs.pc;
+    mips_update_pc(env, regs.pc);
 
     kvm_mips_get_cp0_registers(cs);
     kvm_mips_get_fpu_registers(cs);

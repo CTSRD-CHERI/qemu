@@ -335,15 +335,14 @@ static void riscv_cpu_synchronize_from_tb(CPUState *cs, TranslationBlock *tb)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
+    riscv_update_pc(env, tb->pc);
 #ifdef TARGET_CHERI
-    // Note: this sets the cursor not the address
-    assert(cap_is_in_bounds(&env->PCC, tb->pc, 0));
-    env->PCC._cr_cursor = tb->pc;
     // We also have to synchronize the capmode flag
     // XXXAR: is this necessary?
     env->PCC.cr_flags = tb->flags & TB_FLAGS_CAPMODE ? CHERI_FLAG_CAPMODE : 0;
-#else
-    env->pc = tb->pc;
+#endif
+#ifdef CONFIG_DEBUG_TCG
+    env->_pc_is_current = true;
 #endif
 }
 
@@ -373,10 +372,8 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
                                " -> " TARGET_FMT_lx "\n",
                                __func__, (target_ulong)env->PCC._cr_cursor, data[0]);
     }
-    env->PCC._cr_cursor = data[0];
-#else
-    env->pc = data[0];
 #endif
+    riscv_update_pc(env, data[0]);
 }
 
 
@@ -586,6 +583,9 @@ static void riscv_cpu_reset(DeviceState *dev)
     null_capability(&env->MScratchC);
     set_max_perms_capability(&env->MEPCC, 0);
 #endif /* TARGET_CHERI */
+#ifdef CONFIG_DEBUG_TCG
+    env->_pc_is_current = true;
+#endif
 }
 
 static void riscv_cpu_disas_set_info(CPUState *s, disassemble_info *info)

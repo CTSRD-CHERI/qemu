@@ -1178,10 +1178,11 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
     /* Update statcounters icount */
     env->statcounters_icount++;
     if (in_kernel_mode(env)) {
-        assert(((env->hflags & MIPS_HFLAG_CP0) == MIPS_HFLAG_CP0) == can_access_cp0(env));
+        tcg_debug_assert(((env->hflags & MIPS_HFLAG_CP0) == MIPS_HFLAG_CP0) ==
+                         can_access_cp0(env));
         env->statcounters_icount_kernel++;
     } else {
-        assert((env->hflags & MIPS_HFLAG_CP0) == 0);
+        tcg_debug_assert((env->hflags & MIPS_HFLAG_CP0) == 0);
         env->statcounters_icount_user++;
     }
 

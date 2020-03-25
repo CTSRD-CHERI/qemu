@@ -585,7 +585,6 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
     case TLBRET_S:
         /* TLB capability store bit was set, blocking capability store. */
         cpu_mips_store_capcause(env, reg, CapEx_TLBNoStoreCap);
-        env->active_tc.PC = cap_get_cursor(&env->active_tc.PCC);
         exception = EXCP_C2E;
         break;
 #else
@@ -1213,11 +1212,36 @@ static inline void set_badinstr_registers(CPUMIPSState *env)
 extern void helper_dump_changed_state(CPUMIPSState *env);
 #endif
 
+static inline void mips_update_pc_for_exc_handler(CPUMIPSState *env,
+                                                  target_ulong new_pc)
+{
+#ifdef TARGET_CHERI
+    /* always set PCC from KCC even with EXL */
+    env->active_tc.PCC = env->active_tc.CHWR.KCC;
+    // FIXME: KCC must not be sealed
+    if (!cap_is_unsealed(&env->active_tc.PCC)) {
+        error_report("Sealed KCC in exception, detagging: " PRINT_CAP_FMTSTR
+                     "\r",
+                     PRINT_CAP_ARGS(&env->active_tc.PCC));
+        env->active_tc.PCC.cr_tag = false;
+    }
+    if (env->active_tc.PCC.cr_tag &&
+        !is_representable_cap_with_addr(&env->active_tc.PCC, new_pc)) {
+        error_report("Attempting to set unrepresentable cursor(0x" TARGET_FMT_lx
+                     ") on PCC (in exception): " PRINT_CAP_FMTSTR "\r",
+                     new_pc, PRINT_CAP_ARGS(&env->active_tc.PCC));
+        cap_mark_unrepresentable(new_pc, &env->active_tc.PCC);
+    }
+#endif
+    mips_update_pc(env, new_pc);
+}
+
 void mips_cpu_do_interrupt(CPUState *cs)
 {
 #if !defined(CONFIG_USER_ONLY)
     MIPSCPU *cpu = MIPS_CPU(cs);
     CPUMIPSState *env = &cpu->env;
+    tcg_debug_assert(pc_is_current(env));
     bool update_badinstr = 0;
     target_ulong offset;
     int cause = -1;
@@ -1296,7 +1320,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         if (!(env->CP0_Status & (1 << CP0St_EXL))) {
             env->CP0_Cause &= ~(1U << CP0Ca_BD);
         }
-        env->active_tc.PC = env->exception_base + 0x480;
+        mips_update_pc_for_exc_handler(env, env->exception_base + 0x480);
         set_hflags_for_handler(env);
         break;
     case EXCP_RESET:
@@ -1331,7 +1355,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         if (!(env->CP0_Status & (1 << CP0St_EXL))) {
             env->CP0_Cause &= ~(1U << CP0Ca_BD);
         }
-        env->active_tc.PC = env->exception_base;
+        mips_update_pc_for_exc_handler(env, env->exception_base);
         set_hflags_for_handler(env);
         break;
     case EXCP_EXT_INTERRUPT:
@@ -1531,17 +1555,18 @@ void mips_cpu_do_interrupt(CPUState *cs)
             env->hflags &= ~(MIPS_HFLAG_KSU);
         }
         env->hflags &= ~MIPS_HFLAG_BMASK;
+        target_ulong new_pc;
         if (env->CP0_Status & (1 << CP0St_BEV)) {
-            env->active_tc.PC = env->exception_base + 0x200;
+            new_pc = env->exception_base + 0x200;
         } else if (cause == 30 && !(env->CP0_Config3 & (1 << CP0C3_SC) &&
                                     env->CP0_Config5 & (1 << CP0C5_CV))) {
             /* Force KSeg1 for cache errors */
-            env->active_tc.PC = KSEG1_BASE | (env->CP0_EBase & 0x1FFFF000);
+            new_pc = KSEG1_BASE | (env->CP0_EBase & 0x1FFFF000);
         } else {
-            env->active_tc.PC = env->CP0_EBase & ~0xfff;
+            new_pc = env->CP0_EBase & ~0xfff;
         }
-
-        env->active_tc.PC += offset;
+        new_pc += offset;
+        mips_update_pc_for_exc_handler(env, new_pc);
         set_hflags_for_handler(env);
         env->CP0_Cause = (env->CP0_Cause & ~(0x1f << CP0Ca_EC)) |
                          (cause << CP0Ca_EC);
@@ -1551,14 +1576,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 
 #ifdef TARGET_CHERI
-    /* always set PCC from KCC even with EXL */
-    env->active_tc.PCC = env->active_tc.CHWR.KCC;
-    // FIXME: KCC must not be sealed
-    if (!cap_is_unsealed(&env->active_tc.PCC)) {
-        error_report("Sealed KCC in exception, detagging: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(&env->active_tc.PCC));
-        env->active_tc.PCC.cr_tag = false;
-    }
-    env->active_tc.PCC._cr_cursor =  env->active_tc.PC;
     // We may have to change the CP0 access flag since CHERI may have previously
     // disabled it by installing a $pcc without the Access_Sys_Regs flag
     update_cp0_access_for_pc(env);
@@ -1705,10 +1722,8 @@ void r4k_invalidate_tlb(CPUMIPSState *env, int idx, int use_extra)
 }
 #endif
 
-void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env,
-                                          uint32_t exception,
-                                          int error_code,
-                                          uintptr_t pc)
+void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env, MipsExcp exception,
+                                          int error_code, uintptr_t pc)
 {
     CPUState *cs = env_cpu(env);
 
@@ -1721,8 +1736,10 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env,
         }
     }
 #endif
-    qemu_log_mask(CPU_LOG_INT | CPU_LOG_INSTR, "%s: %d %d\n",
-                  __func__, exception, error_code);
+    qemu_log_mask(CPU_LOG_INT | CPU_LOG_INSTR, "%s: %s %d\n", __func__,
+                  exception <= EXCP_LAST ? excp_names[exception]
+                                         : "unknown excp",
+                  error_code);
     cs->exception_index = exception;
     env->error_code = error_code;
 

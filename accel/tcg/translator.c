@@ -61,6 +61,12 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 
     while (true) {
         db->num_insns++;
+#ifdef CONFIG_DEBUG_TCG
+        // For debugging mark the current PCC.cursor as outdated
+        if (_pc_is_current) {
+            tcg_gen_movi_tl(_pc_is_current, 0);
+        }
+#endif
         ops->insn_start(db, cpu);
 #if defined(CONFIG_MIPS_LOG_INSTR)
         if (unlikely((tb_cflags(db->tb) & CF_LOG_INSTR))) {

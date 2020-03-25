@@ -94,8 +94,8 @@ static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {
     return &env->DDC;
 }
 
-static inline const cap_register_t *cheri_get_pcc(CPURISCVState *env) {
-    // FIXME: TODO: add a debug assertion that env->pc has been synced with TCG!
+static inline const cap_register_t *_cheri_get_pcc_unchecked(CPURISCVState *env)
+{
     return &env->PCC;
 }
 

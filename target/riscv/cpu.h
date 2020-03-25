@@ -113,6 +113,9 @@ struct CPURISCVState {
 #else
     target_ulong pc;
 #endif
+#ifdef CONFIG_DEBUG_TCG
+    target_ulong _pc_is_current;
+#endif
 
     target_ulong load_res;
     target_ulong load_val;
@@ -320,7 +323,6 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         env->cheri_name = env->new_cheri_reg;                                  \
         log_changed_capreg(env, #cheri_name, &((env)->cheri_name));            \
     } while (false)
-#define PC_ADDR(env) ((target_ulong)env->PCC._cr_cursor)
 #else
 #ifdef CONFIG_MIPS_LOG_INSTR
 #define log_changed_special_reg(env, name, newval)                             \
@@ -340,8 +342,16 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         env->name = env->new_reg;                                              \
         log_changed_special_reg(env, #name, ((env)->name));                    \
     } while (false)
-#define PC_ADDR(env) ((env)->pc)
 #endif
+
+static inline bool pc_is_current(CPURISCVState *env)
+{
+#ifdef CONFIG_DEBUG_TCG
+    return env->_pc_is_current;
+#else
+    return true;
+#endif
+}
 
 // Note: the pc does not have to be up-to-date, tb start is fine.
 // We may miss a few dumps or print too many if -dfilter is on but
@@ -352,6 +362,13 @@ static inline target_ulong cpu_get_recent_pc(CPURISCVState *env) {
 #else
     return env->pc;
 #endif
+}
+static inline target_ulong PC_ADDR(CPURISCVState *env)
+{
+#ifdef CONFIG_DEBUG_TCG
+    assert(pc_is_current(env));
+#endif
+    return cpu_get_recent_pc(env);
 }
 
 #define RISCV_CPU_CLASS(klass) \

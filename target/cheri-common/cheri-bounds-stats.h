@@ -93,7 +93,9 @@ struct oob_stats_info {
 #define DECLARE_CHERI_STAT(op) extern struct oob_stats_info oob_info_##op;
 #define OOB_INFO(op) (&oob_info_##op)
 
-static inline int64_t _howmuch_out_of_bounds(CPUArchState *env, const cap_register_t* cr, const char* name)
+static inline int64_t _howmuch_out_of_bounds(CPUArchState *env,
+                                             const cap_register_t *cr,
+                                             const char *name, uintptr_t retpc)
 {
     if (!cr->cr_tag)
         return 0;  // We don't care about arithmetic on untagged things
@@ -115,7 +117,7 @@ static inline int64_t _howmuch_out_of_bounds(CPUArchState *env, const cap_regist
                       ") created using %s: " PRINT_CAP_FMTSTR ", "
                       " pc=%016" PRIx64 " ASID=%u\n",
                       howmuch, name, PRINT_CAP_ARGS(cr),
-                      cap_get_cursor(cheri_get_pcc(env)), cheri_get_asid(env));
+                      cpu_get_current_pc(env, retpc), cheri_get_asid(env));
         return howmuch;
     }
     return 0;
@@ -130,10 +132,13 @@ static inline int out_of_bounds_stat_index(uint64_t howmuch) {
     return ARRAY_SIZE(bounds_buckets); // more than 64MB
 }
 
-static inline void
-check_out_of_bounds_stat(CPUArchState *env, struct oob_stats_info *info,
-                         const cap_register_t* capreg) {
-    int64_t howmuch = _howmuch_out_of_bounds(env, capreg, info->operation);
+static inline void check_out_of_bounds_stat(CPUArchState *env,
+                                            struct oob_stats_info *info,
+                                            const cap_register_t *capreg,
+                                            uintptr_t retpc)
+{
+    int64_t howmuch =
+        _howmuch_out_of_bounds(env, capreg, info->operation, retpc);
     if (howmuch > 0) {
         info->after_bounds[out_of_bounds_stat_index(howmuch)]++;
     } else if (howmuch < 0) {
@@ -146,12 +151,12 @@ static inline void became_unrepresentable(CPUArchState *env, uint16_t reg,
                                           uintptr_t retpc) {
     const cap_register_t *capreg = get_readonly_capreg(env, reg);
     /* unrepresentable implies more than one out of bounds: */
-    check_out_of_bounds_stat(env, info, capreg);
+    check_out_of_bounds_stat(env, info, capreg, retpc);
     info->unrepresentable++;
     qemu_log_mask(
         CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS,
         "BOUNDS: Unrepresentable capability created using %s, pc=%016" PRIx64
-        " ASID=%u\n", info->operation, cap_get_cursor(cheri_get_pcc(env)),
+        " ASID=%u\n", info->operation, cheri_get_current_pc(env, retpc)),
         cheri_get_asid(env));
     _became_unrepresentable(env, reg, retpc);
 }
@@ -207,7 +212,9 @@ DECLARE_CHERI_STAT(csetoffset)
 // Don't collect any statistics by default (it slows down QEMU)
 struct oob_stats_info;
 #define OOB_INFO(op) NULL
-#define check_out_of_bounds_stat(env, op, capreg) do { } while (0)
+#define check_out_of_bounds_stat(env, op, capreg, retpc)                       \
+    do {                                                                       \
+    } while (0)
 #define became_unrepresentable(env, reg, operation, retpc) _became_unrepresentable(env, reg, retpc)
 
 #endif /* DO_CHERI_STATISTICS */

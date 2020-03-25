@@ -38,8 +38,8 @@
  */
 #pragma once
 
-#include "internal.h"
 #include "cheri_defs.h"
+#include "internal.h"
 
 #define CHERI_EXC_REGNUM_DDC 0 /* TODO: 32 */
 #define CHERI_EXC_REGNUM_PCC 0xff
@@ -81,7 +81,8 @@ static inline const cap_register_t *cheri_get_ddc(CPUMIPSState *env) {
     return &env->active_tc.CHWR.DDC;
 }
 
-static inline const cap_register_t *cheri_get_pcc(CPUMIPSState *env) {
+static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUMIPSState *env)
+{
     return &env->active_tc.PCC;
 }
 

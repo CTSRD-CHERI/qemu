@@ -347,6 +347,8 @@ static inline int mips_vp_active(CPUMIPSState *env)
     return 1;
 }
 
+static inline bool cheri_have_access_sysregs(CPUArchState *env);
+
 static inline bool can_access_cp0(CPUMIPSState* env) {
     if (((env->CP0_Status & (1 << CP0St_CU0)) &&
         !(env->insn_flags & ISA_MIPS32R6)) ||
@@ -354,7 +356,7 @@ static inline bool can_access_cp0(CPUMIPSState* env) {
 #ifdef TARGET_CHERI
         // For CHERI we need to check PCC.perms before enabling access to cp0 features.
         // XXX: can't use cheri_have_access_sysregs() here due to cyclic deps
-        if (!cap_has_perms(&env->active_tc.PCC, CAP_ACCESS_SYS_REGS)) {
+        if (!cheri_have_access_sysregs(env)) {
             /* qemu_log_mask(CPU_LOG_INSTR, "Kernel mode but no ASR!\n"); */
             return false;
         }
@@ -517,11 +519,11 @@ void sync_c0_status(CPUMIPSState *env, CPUMIPSState *cpu, int tc);
 void cpu_mips_store_status(CPUMIPSState *env, target_ulong val);
 void cpu_mips_store_cause(CPUMIPSState *env, target_ulong val);
 
-void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env, uint32_t exception,
+void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env, MipsExcp exception,
                                           int error_code, uintptr_t pc);
 
 static inline void QEMU_NORETURN do_raise_exception(CPUMIPSState *env,
-                                                    uint32_t exception,
+                                                    MipsExcp exception,
                                                     uintptr_t pc)
 {
     /* NOTE: pc is a HOST program counter (from GETPC()) and not a MIPS guest pc */
@@ -546,11 +548,6 @@ static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
 static inline QEMU_NORETURN void do_raise_c0_exception_impl(CPUMIPSState *env,
         uint16_t cause, uint64_t badvaddr, uintptr_t pc)
 {
-    qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT, "C0 EXCEPTION: cause=%d"
-        " badvaddr=0x%016" PRIx64 " PCC=" PRINT_CAP_FMTSTR
-        " -> Host PC=0x%jx active_tc.PC=0x" TARGET_FMT_lx "\n",
-        cause, badvaddr, PRINT_CAP_ARGS(&env->active_tc.PCC), (uintmax_t)pc, env->active_tc.PC);
-    // env->active_tc.PC = pc;
     env->CP0_BadVAddr = badvaddr;
     do_raise_exception(env, cause, pc);
 }
@@ -590,4 +587,8 @@ void r4k_dump_tlb(CPUMIPSState *env, int idx);
 void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vaddr);
 hwaddr do_translate_address(CPUMIPSState *env, target_ulong address, int rw,
                             uintptr_t retaddr);
+#endif
+
+#ifdef TARGET_CHERI
+#include "cheri-helper-utils.h"
 #endif

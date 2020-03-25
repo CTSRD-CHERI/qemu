@@ -34,7 +34,7 @@
  */
 #include "cheri-translate-utils.h"
 
-#define INSN_CAN_TRAP(ctx) tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next)
+#define INSN_CAN_TRAP(ctx) gen_update_cpu_pc(ctx->base.pc_next)
 
 #define TRANSLATE_MAYBE_TRAP(name, gen_helper, ...)                            \
     static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \

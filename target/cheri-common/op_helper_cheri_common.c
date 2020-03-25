@@ -103,10 +103,11 @@ target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
                                               target_ulong pcc_offset,
                                               MemOp op))
 {
-    const cap_register_t *pcc = cheri_get_pcc(env);
+    uintptr_t retpc = GETPC();
+    const cap_register_t *pcc = cheri_update_and_get_current_pcc(env, retpc);
     target_ulong addr = pcc_offset + cap_get_cursor(pcc);
     check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
-              memop_size(op), /*instavail=*/true, GETPC());
+              memop_size(op), /*instavail=*/true, retpc);
     return addr;
 }
 
@@ -263,7 +264,9 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     }
     // Don't generate a link capability if cd == zero register
     if (cd != 0) {
-        cap_register_t result = *cheri_get_pcc(env);
+        // Note: PCC.cursor doesn't need to be up-to-date, TB start is fine
+        // since we are writing a new cursor anyway.
+        cap_register_t result = *cheri_get_recent_pcc(env);
         // can never create an unrepresentable capability since PCC must be in bounds
         result._cr_cursor = link_pc;
 #if QEMU_USE_COMPRESSED_CHERI_CAPS == 1
@@ -285,6 +288,9 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     // Update PCC now. On return to TCG we will jump there immediately, so
     // updating it now should be fine.
     env->PCC = next_pcc;
+#ifdef CONFIG_DEBUG_TCG
+    env->_pc_is_current = true;
+#endif
 #else
 #error "No CJALR for this target"
 #endif
@@ -628,7 +634,8 @@ static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
             cap_mark_unrepresentable(new_addr, &result);
         } else {
             result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, oob_info, &result);
+            check_out_of_bounds_stat(env, oob_info, &result,
+                                     _host_return_address);
         }
         update_capreg(env, cd, &result);
     }
@@ -719,7 +726,8 @@ void CHERI_HELPER_IMPL(cfromptr(CPUArchState *env, uint32_t cd, uint32_t cb,
             cap_mark_unrepresentable(new_addr, &result);
         } else {
             result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, OOB_INFO(cfromptr), &result);
+            check_out_of_bounds_stat(env, OOB_INFO(cfromptr), &result,
+                                     _host_return_address);
         }
         update_capreg(env, cd, &result);
     }

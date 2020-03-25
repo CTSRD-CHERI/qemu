@@ -41,6 +41,54 @@
 #include "cheri-bounds-stats.h"
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
+#include "exec/exec-all.h"
+
+static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUArchState *env);
+
+// Returns a recebt PCC value. This means that the cursor field may be out of
+// date (possibly pointing to the beginning of the translation block). However,
+// all permissions, flags and bounds are valid and can be accessed.
+// This function exists since updating pcc.cursor on every instruction is
+// expensive and generally not required. If the current value is needed, it can
+// be computed from the return address (GETPC() in the toplevel helper function)
+// by calling cpu_restore_state(). However, it is preferable if the translator
+// code writes the updated pcc.cursor before calling the helper if this is the
+// common case (for example, it should not be saved if the current pc value is
+// only needed if a trap is raised).
+static inline const cap_register_t *cheri_get_recent_pcc(CPUArchState *env)
+{
+    return _cheri_get_pcc_unchecked(env);
+}
+
+static inline bool pc_is_current(CPUArchState *env);
+
+// This function can be called if the pcc.cursor value must be accurate.
+static inline const cap_register_t *cheri_get_current_pcc(CPUArchState *env)
+{
+    tcg_debug_assert(pc_is_current(env));
+    return _cheri_get_pcc_unchecked(env);
+}
+
+static inline const cap_register_t *
+cheri_update_and_get_current_pcc(CPUArchState *env, uintptr_t retpc)
+{
+    cpu_restore_state(env_cpu(env), retpc, false);
+    return cheri_get_current_pcc(env);
+}
+
+static inline target_ulong cpu_get_current_pc(CPUArchState *env,
+                                              uintptr_t retpc)
+{
+    cpu_restore_state(env_cpu(env), retpc, false);
+    tcg_debug_assert(pc_is_current(env));
+    return cpu_get_recent_pc(env);
+}
+
+static inline target_ulong cpu_get_current_pc_checked(CPUArchState *env)
+{
+    tcg_debug_assert(pc_is_current(env));
+    return cpu_get_recent_pc(env);
+}
 
 static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
                                        target_ulong new_addr, uintptr_t retpc,
@@ -51,7 +99,9 @@ static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
 #else
     (void)oob_info;
 #endif
-    const cap_register_t *pccp = cheri_get_pcc(env);
+    // Note: we can use a PCC value with an outdated cursor since we are writing
+    // a new address.
+    const cap_register_t *pccp = cheri_get_recent_pcc(env);
     cap_register_t result = *pccp;
     if (!is_representable_cap_with_addr(pccp, new_addr)) {
         if (pccp->cr_tag)
@@ -59,7 +109,7 @@ static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
         cap_mark_unrepresentable(new_addr, &result);
     } else {
         result._cr_cursor = new_addr;
-        check_out_of_bounds_stat(env, oob_info, &result);
+        check_out_of_bounds_stat(env, oob_info, &result, retpc);
     }
     update_capreg(env, cd, &result);
 }
@@ -123,7 +173,7 @@ do_exception:
 
 static inline bool cheri_have_access_sysregs(CPUArchState* env)
 {
-    return cap_has_perms(cheri_get_pcc(env), CAP_ACCESS_SYS_REGS);
+    return cap_has_perms(cheri_get_recent_pcc(env), CAP_ACCESS_SYS_REGS);
 }
 
 static inline bool should_log_mem_access(CPUArchState *env, int log_mask, target_ulong addr) {
