@@ -543,7 +543,8 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
 #endif
 {
     CPUState *cs = env_cpu(env);
-    int exception = 0, error_code = 0;
+    MipsExcp exception = 0;
+    int error_code = 0;
 
     if (rw == MMU_INST_FETCH) {
         error_code |= EXCP_INST_NOTAVAIL;
