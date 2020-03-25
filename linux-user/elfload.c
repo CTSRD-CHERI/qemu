@@ -1002,7 +1002,7 @@ static void elf_core_copy_regs(target_elf_gregset_t *regs, const CPUMIPSState *e
     (*regs)[TARGET_EF_R27] = 0;
     (*regs)[TARGET_EF_LO] = tswapreg(env->active_tc.LO[0]);
     (*regs)[TARGET_EF_HI] = tswapreg(env->active_tc.HI[0]);
-    (*regs)[TARGET_EF_CP0_EPC] = tswapreg(env->active_tc.PC);
+    (*regs)[TARGET_EF_CP0_EPC] = tswapreg(PC_ADDR(env));
     (*regs)[TARGET_EF_CP0_BADVADDR] = tswapreg(env->CP0_BadVAddr);
     (*regs)[TARGET_EF_CP0_STATUS] = tswapreg(env->CP0_Status);
     (*regs)[TARGET_EF_CP0_CAUSE] = tswapreg(env->CP0_Cause);

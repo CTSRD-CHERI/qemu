@@ -56,9 +56,6 @@
 
 #ifdef TARGET_CHERI
 
-#include "tcg/tcg.h"  // for tcg_debug_assert()
-#define cheri_debug_assert(cond) tcg_debug_assert(cond)
-
 static inline uint64_t cap_get_cursor(const cap_register_t* c) {
     return c->_cr_cursor;
 }

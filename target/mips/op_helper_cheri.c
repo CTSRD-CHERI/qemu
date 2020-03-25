@@ -322,7 +322,7 @@ void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd, target_u
 
 void CHERI_HELPER_IMPL(cgetpccincoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
-    uint64_t new_addr = rs + cap_get_cursor(&env->active_tc.PCC);
+    uint64_t new_addr = rs + PC_ADDR(env);
     derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
 }
 
@@ -1149,7 +1149,7 @@ void CHERI_HELPER_IMPL(ccheck_btarget(CPUArchState *env))
 {
     // Check whether the branch target is within $pcc and if not raise an exception
     // qemu_log_mask(CPU_LOG_INSTR, "%s: env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
-    //    __func__, env->active_tc.PC, env->hflags, env->btarget);
+    //    __func__, PC_ADDR(env), env->hflags, env->btarget);
     check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false, GETPC());
 }
 
@@ -1178,10 +1178,11 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
     /* Update statcounters icount */
     env->statcounters_icount++;
     if (in_kernel_mode(env)) {
-        assert(((env->hflags & MIPS_HFLAG_CP0) == MIPS_HFLAG_CP0) == can_access_cp0(env));
+        tcg_debug_assert(((env->hflags & MIPS_HFLAG_CP0) == MIPS_HFLAG_CP0) ==
+                         can_access_cp0(env));
         env->statcounters_icount_kernel++;
     } else {
-        assert((env->hflags & MIPS_HFLAG_CP0) == 0);
+        tcg_debug_assert((env->hflags & MIPS_HFLAG_CP0) == 0);
         env->statcounters_icount_user++;
     }
 

@@ -73,7 +73,7 @@ CpuInfoList *qmp_query_cpus(Error **errp)
         info->value->u.q_sparc.npc = env->npc;
 #elif defined(TARGET_MIPS)
         info->value->arch = CPU_INFO_ARCH_MIPS;
-        info->value->u.q_mips.PC = env->active_tc.PC;
+        info->value->u.q_mips.PC = PC_ADDR(env);
 #elif defined(TARGET_TRICORE)
         info->value->arch = CPU_INFO_ARCH_TRICORE;
         info->value->u.tricore.PC = env->PC;

@@ -261,7 +261,7 @@ target_ulong helper_mftc0_tcbind(CPUMIPSState *env)
 
 target_ulong helper_mfc0_tcrestart(CPUMIPSState *env)
 {
-    return env->active_tc.PC;
+    return PC_ADDR(env);
 }
 
 target_ulong helper_mftc0_tcrestart(CPUMIPSState *env)
@@ -270,9 +270,13 @@ target_ulong helper_mftc0_tcrestart(CPUMIPSState *env)
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
     if (other_tc == other->current_tc) {
-        return other->active_tc.PC;
+        return PC_ADDR(other);
     } else {
+#ifdef TARGET_CHERI
+        return other->tcs[other_tc].PCC._cr_cursor;
+#else
         return other->tcs[other_tc].PC;
+#endif
     }
 }
 
@@ -456,7 +460,7 @@ target_ulong helper_mftc0_debug(CPUMIPSState *env)
 #if defined(TARGET_MIPS64)
 target_ulong helper_dmfc0_tcrestart(CPUMIPSState *env)
 {
-    return env->active_tc.PC;
+    return PC_ADDR(env);
 }
 
 target_ulong helper_dmfc0_tchalt(CPUMIPSState *env)
@@ -739,7 +743,7 @@ void helper_mttc0_tcbind(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mtc0_tcrestart(CPUMIPSState *env, target_ulong arg1)
 {
-    env->active_tc.PC = arg1;
+    mips_update_pc(env, arg1, /*can_be_unrepresentable=*/false);
     env->active_tc.CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
     env->CP0_LLAddr = 0;
     env->lladdr = 0;
@@ -752,13 +756,13 @@ void helper_mttc0_tcrestart(CPUMIPSState *env, target_ulong arg1)
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
     if (other_tc == other->current_tc) {
-        other->active_tc.PC = arg1;
+        mips_update_pc(other, arg1, /*can_be_unrepresentable=*/false);
         other->active_tc.CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
         other->CP0_LLAddr = 0;
         other->lladdr = 0;
         /* MIPS16 not implemented. */
     } else {
-        other->tcs[other_tc].PC = arg1;
+        mips_update_pc_impl(&other->tcs[other_tc], arg1, /*can_be_unrepresentable=*/false);
         other->tcs[other_tc].CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
         other->CP0_LLAddr = 0;
         other->lladdr = 0;

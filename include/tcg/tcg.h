@@ -684,6 +684,9 @@ struct TCGContext {
 extern TCGContext tcg_init_ctx;
 extern __thread TCGContext *tcg_ctx;
 extern TCGv_env cpu_env;
+#ifdef CONFIG_DEBUG_TCG
+extern TCGv _pc_is_current;
+#endif
 
 static inline size_t temp_idx(TCGTemp *ts)
 {

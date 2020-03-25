@@ -2215,12 +2215,13 @@ void cpu_io_recompile(CPUState *cpu, uintptr_t retaddr)
     n = 1;
 #if defined(TARGET_MIPS)
     if ((env->hflags & MIPS_HFLAG_BMASK) != 0
-        && env->active_tc.PC != tb->pc) {
-        env->active_tc.PC -= (env->hflags & MIPS_HFLAG_B16 ? 2 : 4);
+        && PC_ADDR(env) != tb->pc) {
 #ifdef TARGET_CHERI
-        env->active_tc.PCC._cr_cursor -= (env->hflags & MIPS_HFLAG_B16 ? 2 : 4);
-        assert(env->active_tc.PCC._cr_cursor == env->active_tc.PC);
+        env->active_tc.PCC._cr_cursor -=
+#else
+        env->active_tc.PC -=
 #endif
+            (env->hflags & MIPS_HFLAG_B16 ? 2 : 4);
         cpu_neg(cpu)->icount_decr.u16.low++;
         env->hflags &= ~MIPS_HFLAG_BMASK;
         n = 2;

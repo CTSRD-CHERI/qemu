@@ -67,12 +67,17 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
 {
     CPUState *cs = env_cpu(env);
     qemu_log_mask(CPU_LOG_INT, "%s: %s (%d)\n", __func__, exception_str(exception), exception);
-    if (pc != 0 && exception == RISCV_EXCP_ILLEGAL_INST) {
+    cs->exception_index = exception;
+    // Expand this call to print debug info: cpu_loop_exit_restore(cs, pc);
+    if (pc) {
+        cpu_restore_state(cs, pc, true);
+    }
+    if (exception == RISCV_EXCP_ILLEGAL_INST) {
         // Try to fetch the faulting instruction and store it in badaddr
         uint32_t opcode = 0;
-        int ret =
-            cpu_memory_rw_debug(env_cpu(env), PC_ADDR(env), (uint8_t *)&opcode,
-                                sizeof(opcode), /*is_write=*/false);
+        int ret = cpu_memory_rw_debug(env_cpu(env), PC_ADDR(env),
+                                      (uint8_t *)&opcode, sizeof(opcode),
+                                      /*is_write=*/false);
         opcode = tswap32(opcode); // FIXME is this needed?
         if (ret != 0) {
             warn_report("RISCV_EXCP_ILLEGAL_INST: Could not read %zu bytes at "
@@ -82,8 +87,7 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
             env->badaddr = opcode;
         }
     }
-    cs->exception_index = exception;
-    cpu_loop_exit_restore(cs, pc);
+    cpu_loop_exit(cs);
 }
 
 void helper_raise_exception(CPURISCVState *env, uint32_t exception)

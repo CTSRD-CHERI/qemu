@@ -38,61 +38,10 @@
  */
 #pragma once
 
-#include "internal.h"
 #include "cheri_defs.h"
-
-#define CHERI_EXC_REGNUM_DDC 0 /* TODO: 32 */
-#define CHERI_EXC_REGNUM_PCC 0xff
-
-typedef enum CheriCapExc {
-    CapEx_None                          = 0x0,  /* None */
-    CapEx_LengthViolation               = 0x1,  /* Length Violation */
-    CapEx_TagViolation                  = 0x2,  /* Tag Violation */
-    CapEx_SealViolation                 = 0x3,  /* Seal Violation */
-    CapEx_TypeViolation                 = 0x4,  /* Type Violation */
-    CapEx_CallTrap                      = 0x5,  /* Call Trap */
-    CapEx_ReturnTrap                    = 0x6,  /* Return Trap */
-    CapEx_TSSUnderFlow                  = 0x7,  /* Underflow of trusted system stack */
-    CapEx_UserDefViolation              = 0x8,  /* User-defined Permission Violation */
-    CapEx_TLBNoStoreCap                 = 0x9,  /* TLB prohibits store capability */
-    CapEx_InexactBounds                 = 0xA,  /* Bounds cannot be represented exactly */
-    CapEx_UnalignedBase                 = 0xB,
-    CapEx_CapLoadGen                    = 0xC,
-    // 0x0D-0x0F Reserved
-    CapEx_GlobalViolation               = 0x10,  /* Global Violation */
-    CapEx_PermitExecuteViolation        = 0x11,  /* Permit_Execute Violation */
-    CapEx_PermitLoadViolation           = 0x12,  /* Permit_Load Violation */
-    CapEx_PermitStoreViolation          = 0x13,  /* Permit_Store Violation */
-    CapEx_PermitLoadCapViolation        = 0x14,  /* Permit_Load_Capability Violation */
-    CapEx_PermitStoreCapViolation       = 0x15,  /* Permit_Store_Capability Violation */
-    CapEx_PermitStoreLocalCapViolation  = 0x16,  /* Permit_Store_Local_Capability Violation */
-    CapEx_PermitSealViolation           = 0x17,  /* Permit_Seal Violation */
-    CapEx_AccessSystemRegsViolation     = 0x18,  /* Access System Registers Violation */
-    CapEx_PermitCCallViolation          = 0x19,  /* Permit_CCall Violation */
-    CapEx_AccessCCallIDCViolation       = 0x1A,  /* Access IDC in a CCall delay slot */
-    CapEx_PermitUnsealViolation         = 0x1B,  /* Permit_Unseal violation */
-    CapEx_PermitSetCIDViolation         = 0x1C,  /* Permit_SetCID violation */
-    // 0x1d-0x1f Reserved
-} CheriCapExcCause;
+#include "internal.h"
 
 target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, uintptr_t retpc);
-
-static inline const cap_register_t *cheri_get_ddc(CPUMIPSState *env) {
-    return &env->active_tc.CHWR.DDC;
-}
-
-static inline const cap_register_t *cheri_get_pcc(CPUMIPSState *env) {
-    return &env->active_tc.PCC;
-}
-
-static inline unsigned cheri_get_asid(CPUMIPSState *env) {
-    uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
-    return ASID;
-}
-
-static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
-    return &env->active_tc.gpcapregs;
-}
 
 static inline const char* cheri_cause_str(CheriCapExcCause cause);
 
@@ -104,10 +53,9 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
                   "C2 EXCEPTION: cause=%d(%s)"
                   " reg=%d PCC=" PRINT_CAP_FMTSTR
-                  " -> host PC: 0x%jx active_tc.PC=0x" TARGET_FMT_plx "\n",
+                  " -> host PC: 0x%jx\n",
                   cause, cheri_cause_str(cause), reg,
-                  PRINT_CAP_ARGS(&env->active_tc.PCC), (uintmax_t)hostpc,
-                  env->active_tc.PC);
+                  PRINT_CAP_ARGS(&env->active_tc.PCC), (uintmax_t)hostpc);
 #ifdef DEBUG_KERNEL_CP2_VIOLATION
     if (in_kernel_mode(env)) {
         // Print some debug information for CheriBSD kernel crashes

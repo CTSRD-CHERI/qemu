@@ -352,7 +352,7 @@ void target_cpu_copy_regs(CPUArchState *env, struct target_pt_regs *regs)
     for(i = 0; i < 32; i++) {
         env->active_tc.gpr[i] = regs->regs[i];
     }
-    env->active_tc.PC = regs->cp0_epc & ~(target_ulong)1;
+    mips_update_pc(env, regs->cp0_epc & ~(target_ulong)1, /*can_be_unrepresentable=*/false);
     if (regs->cp0_epc & 1) {
         env->hflags |= MIPS_HFLAG_M16;
     }

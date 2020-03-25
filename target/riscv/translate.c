@@ -89,6 +89,19 @@ static const int tcg_memop_lookup[8] = {
 #define CASE_OP_32_64(X) case X
 #endif
 
+#ifdef CONFIG_DEBUG_TCG
+#define gen_mark_pc_updated() tcg_gen_movi_tl(_pc_is_current, 1)
+#else
+#define gen_mark_pc_updated() ((void)0)
+#endif
+
+
+static inline void gen_update_cpu_pc(target_ulong new_pc)
+{
+    tcg_gen_movi_tl(cpu_pc, new_pc);
+    gen_mark_pc_updated();
+}
+
 static inline bool has_ext(DisasContext *ctx, uint32_t ext)
 {
     return ctx->misa & ext;
@@ -96,7 +109,7 @@ static inline bool has_ext(DisasContext *ctx, uint32_t ext)
 
 static void generate_exception(DisasContext *ctx, int excp)
 {
-    tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next);
+    gen_update_cpu_pc(ctx->base.pc_next);
     TCGv_i32 helper_tmp = tcg_const_i32(excp);
     gen_helper_raise_exception(cpu_env, helper_tmp);
     tcg_temp_free_i32(helper_tmp);
@@ -105,7 +118,7 @@ static void generate_exception(DisasContext *ctx, int excp)
 
 static void generate_exception_mbadaddr(DisasContext *ctx, int excp)
 {
-    tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next);
+    gen_update_cpu_pc(ctx->base.pc_next);
     tcg_gen_st_tl(cpu_pc, cpu_env, offsetof(CPURISCVState, badaddr));
     TCGv_i32 helper_tmp = tcg_const_i32(excp);
     gen_helper_raise_exception(cpu_env, helper_tmp);
@@ -168,14 +181,14 @@ static void gen_goto_tb(DisasContext *ctx, int n, target_ulong dest)
     if (use_goto_tb(ctx, dest)) {
         /* chaining is only allowed when the jump is to the same page */
         tcg_gen_goto_tb(n);
-        tcg_gen_movi_tl(cpu_pc, dest);
+        gen_update_cpu_pc(dest);
 
         /* No need to check for single stepping here as use_goto_tb() will
          * return false in case of single stepping.
          */
         tcg_gen_exit_tb(ctx->base.tb, n);
     } else {
-        tcg_gen_movi_tl(cpu_pc, dest);
+        gen_update_cpu_pc(dest);
         lookup_and_goto_ptr(ctx);
     }
 }
@@ -986,7 +999,7 @@ static bool riscv_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cpu,
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
 
-    tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next);
+    gen_update_cpu_pc(ctx->base.pc_next);
     ctx->base.is_jmp = DISAS_NORETURN;
     gen_exception_debug();
     /* The address covered by the breakpoint must be included in
@@ -1118,6 +1131,10 @@ void riscv_translate_init(void)
     cpu_pc = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, PCC._cr_cursor), "pc");
 #else
     cpu_pc = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, pc), "pc");
+#endif
+#ifdef CONFIG_DEBUG_TCG
+    _pc_is_current = tcg_global_mem_new(
+        cpu_env, offsetof(CPURISCVState, _pc_is_current), "_pc_is_current");
 #endif
     load_res = (TCGv_cap_checked_ptr)tcg_global_mem_new(
         cpu_env, offsetof(CPURISCVState, load_res), "load_res");

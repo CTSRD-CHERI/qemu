@@ -32,82 +32,8 @@
  */
 #pragma once
 
-#include "cheri_defs.h"
-
-// Table 3.3: Capability Exception Codes
-typedef enum CheriCapExc {
-    CapEx_None                          = 0x0,
-    CapEx_LengthViolation               = 0x1,
-    CapEx_TagViolation                  = 0x2,
-    CapEx_SealViolation                 = 0x3,
-    CapEx_TypeViolation                 = 0x4,
-    CapEx_CallTrap                      = 0x5,
-    CapEx_ReturnTrap                    = 0x6,
-    CapEx_TSSUnderFlow                  = 0x7,
-    CapEx_UserDefViolation              = 0x8,
-    CapEx_TLBNoStoreCap                 = 0x9,
-    CapEx_InexactBounds                 = 0xA,
-    CapEx_UnalignedBase                 = 0xB,
-    CapEx_CapLoadGen                    = 0xC,
-    // 0xd - 0xf reserved
-    CapEx_GlobalViolation               = 0x10,
-    CapEx_PermitExecuteViolation        = 0x11,
-    CapEx_PermitLoadViolation           = 0x12,
-    CapEx_PermitStoreViolation          = 0x13,
-    CapEx_PermitLoadCapViolation        = 0x14,
-    CapEx_PermitStoreCapViolation       = 0x15,
-    CapEx_PermitStoreLocalCapViolation  = 0x16,
-    CapEx_PermitSealViolation           = 0x17,
-    CapEx_AccessSystemRegsViolation     = 0x18,
-    CapEx_PermitCCallViolation          = 0x19,
-    CapEx_AccessCCallIDCViolation       = 0x1A,
-    CapEx_PermitUnsealViolation         = 0x1B,
-    CapEx_PermitSetCIDViolation         = 0x1C,
-    // 0x1d - 0x1f reserved
-} CheriCapExcCause;
-
-enum CheriSCR {
-    CheriSCR_PCC = 0,
-    CheriSCR_DDC = 1,
-
-    CheriSCR_UTCC = 4,
-    CheriSCR_UTDC = 5,
-    CheriSCR_UScratchC = 6,
-    CheriSCR_UEPCC = 7,
-
-    CheriSCR_STCC = 12,
-    CheriSCR_STDC = 13,
-    CheriSCR_SScratchC = 14,
-    CheriSCR_SEPCC = 15,
-
-    CheriSCR_MTCC = 28,
-    CheriSCR_MTDC = 29,
-    CheriSCR_MScratchC = 30,
-    CheriSCR_MEPCC = 31,
-};
-
-#define CHERI_EXC_REGNUM_PCC (32 + CheriSCR_PCC)
-#define CHERI_EXC_REGNUM_DDC (32 + CheriSCR_DDC)
-
-
-static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {
-    return &env->DDC;
-}
-
-static inline const cap_register_t *cheri_get_pcc(CPURISCVState *env) {
-    // FIXME: TODO: add a debug assertion that env->pc has been synced with TCG!
-    return &env->PCC;
-}
-
-static inline bool cheri_in_capmode(CPURISCVState *env) {
-    // Note: No need to synchronize the PCC.cursor value from TCG since
-    // Every change to capmode will exit the current translation block.
-    return (env->PCC.cr_flags & CHERI_FLAG_CAPMODE) == CHERI_FLAG_CAPMODE;
-}
-
-static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
-    return &env->gpcapregs;
-}
+#include "cpu.h"
+#include "cheri-lazy-capregs.h"
 
 extern bool cheri_debugger_on_trap;
 

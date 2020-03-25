@@ -165,7 +165,7 @@ static void main_cpu_reset(void *opaque)
     CPUMIPSState *env = &s->cpu->env;
 
     cpu_reset(CPU(s->cpu));
-    env->active_tc.PC = s->vector;
+    mips_update_pc(env, s->vector, /*can_be_unrepresentable=*/false);
 }
 
 static const int sector_len = 32 * KiB;
@@ -198,7 +198,7 @@ void mips_r4k_init(MachineState *machine)
 
     reset_info = g_malloc0(sizeof(ResetData));
     reset_info->cpu = cpu;
-    reset_info->vector = env->active_tc.PC;
+    reset_info->vector = PC_ADDR(env);
     qemu_register_reset(main_cpu_reset, reset_info);
 
     /* allocate RAM */

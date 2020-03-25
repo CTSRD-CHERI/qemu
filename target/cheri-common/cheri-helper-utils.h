@@ -41,6 +41,7 @@
 #include "cheri-bounds-stats.h"
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
+#include "exec/exec-all.h"
 
 static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
                                        target_ulong new_addr, uintptr_t retpc,
@@ -51,7 +52,11 @@ static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
 #else
     (void)oob_info;
 #endif
-    const cap_register_t *pccp = cheri_get_pcc(env);
+    // Note: we can use a "stale" PCC value with an outdated cursor here since
+    // we only really care about the bounds and permissions to derive the
+    // resulting capability (e.g. auipcc or CGetPCCIncOffset).
+    // If the result is not representable it will be untagged.
+    const cap_register_t *pccp = cheri_get_recent_pcc(env);
     cap_register_t result = *pccp;
     if (!is_representable_cap_with_addr(pccp, new_addr)) {
         if (pccp->cr_tag)
@@ -59,7 +64,7 @@ static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
         cap_mark_unrepresentable(new_addr, &result);
     } else {
         result._cr_cursor = new_addr;
-        check_out_of_bounds_stat(env, oob_info, &result);
+        check_out_of_bounds_stat(env, oob_info, &result, retpc);
     }
     update_capreg(env, cd, &result);
 }
@@ -123,7 +128,7 @@ do_exception:
 
 static inline bool cheri_have_access_sysregs(CPUArchState* env)
 {
-    return cap_has_perms(cheri_get_pcc(env), CAP_ACCESS_SYS_REGS);
+    return cap_has_perms(cheri_get_recent_pcc(env), CAP_ACCESS_SYS_REGS);
 }
 
 static inline bool should_log_mem_access(CPUArchState *env, int log_mask, target_ulong addr) {

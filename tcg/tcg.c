@@ -160,6 +160,9 @@ static int tcg_out_ldst_finalize(TCGContext *s);
 static TCGContext **tcg_ctxs;
 static unsigned int n_tcg_ctxs;
 TCGv_env cpu_env = 0;
+#ifdef CONFIG_DEBUG_TCG
+TCGv _pc_is_current = 0;
+#endif
 
 struct tcg_region_tree {
     QemuMutex lock;

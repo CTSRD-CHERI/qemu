@@ -1034,6 +1034,7 @@ static void gen_mtc2(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 0:
         switch (sel) {
         case 6:
+            save_cpu_state(ctx, 1); // Need to sync PC
             gen_helper_mtc2_dumpcstate(cpu_env, arg);
             rn = "capdump";
             goto out;
@@ -1312,6 +1313,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 break;
             case OPC_CGETPCCINCOFF_NI: /* 0x013 << 6 */
                 check_cop2x(ctx);
+                save_cpu_state(ctx, 1); // save pcc.cursor for the helper call
                 generate_helper_cap_regnum_gpr_val(r16, r11, &gen_helper_cgetpccincoffset);
                 opn = "cgetpccincoffset";
                 break;

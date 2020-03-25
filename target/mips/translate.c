@@ -2974,6 +2974,9 @@ static inline void gen_store_mxu_cr(TCGv t)
 static inline void gen_save_pc(target_ulong pc)
 {
     tcg_gen_movi_tl(cpu_PC, pc);
+#ifdef CONFIG_DEBUG_TCG
+    tcg_gen_movi_tl(_pc_is_current, 1); // PC has been updated.
+#endif
 }
 
 static inline void save_cpu_state(DisasContext *ctx, int do_save_pc)
@@ -3024,7 +3027,8 @@ static inline void restore_cpu_state(CPUMIPSState *env, DisasContext *ctx)
     }
 }
 
-static inline void generate_exception_err(DisasContext *ctx, int excp, int err)
+static inline void generate_exception_err(DisasContext *ctx, MipsExcp excp,
+                                          int err)
 {
     TCGv_i32 texcp = tcg_const_i32(excp);
     TCGv_i32 terr = tcg_const_i32(err);
@@ -8967,6 +8971,7 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
        break;
     case CP0_REGISTER_26:
 #if defined(TARGET_CHERI)
+        save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
 #else
         switch (sel) {
@@ -10502,6 +10507,7 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         break;
     case CP0_REGISTER_26:
 #if defined(TARGET_CHERI)
+        save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
 #else
         switch (sel) {
@@ -11196,6 +11202,7 @@ static void gen_cp0(CPUMIPSState *env, DisasContext *ctx, uint32_t opc,
             goto die;
         } else {
             int bit_shift = (ctx->hflags & MIPS_HFLAG_M16) ? 16 : 6;
+            gen_save_pc(ctx->base.pc_next);
             if (ctx->opcode & (1 << bit_shift)) {
                 /* OPC_ERETNC */
                 opn = "eretnc";
@@ -13853,6 +13860,9 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
             } else {
                 tcg_gen_mov_tl(cpu_PC, btarget);
             }
+#ifdef CONFIG_DEBUG_TCG
+            tcg_gen_movi_tl(_pc_is_current, 1); // PC has been updated.
+#endif
             if (ctx->base.singlestep_enabled) {
                 save_cpu_state(ctx, 0);
                 gen_helper_raise_exception_debug(cpu_env);
@@ -13871,6 +13881,9 @@ static void gen_branch(DisasContext *ctx, int insn_bytes)
             tcg_gen_mov_tl(cpu_PC, btarget);
             /* Update PCC with capability register */
             gen_helper_copy_cap_btarget_to_pcc(cpu_env);
+#ifdef CONFIG_DEBUG_TCG
+            tcg_gen_movi_tl(_pc_is_current, 1); // PC has been updated.
+#endif
 
             if (ctx->base.singlestep_enabled) {
                 save_cpu_state(ctx, 0);
@@ -20905,6 +20918,9 @@ static void gen_compute_nanomips_pbalrsc_branch(DisasContext *ctx, int rs,
 
     /* unconditional branch to register */
     tcg_gen_mov_tl(cpu_PC, btarget);
+#ifdef CONFIG_DEBUG_TCG
+    tcg_gen_movi_tl(_pc_is_current, 1); // PC has been updated.
+#endif
     tcg_gen_lookup_and_goto_ptr();
 
     tcg_temp_free(t0);
@@ -31944,7 +31960,7 @@ void mips_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     qemu_fprintf(f, "pc=0x" TARGET_FMT_lx " HI=0x" TARGET_FMT_lx
                  " LO=0x" TARGET_FMT_lx " ds %04x "
                  TARGET_FMT_lx " " TARGET_FMT_ld "\n",
-                 env->active_tc.PC, env->active_tc.HI[0], env->active_tc.LO[0],
+                 PC_ADDR(env), env->active_tc.HI[0], env->active_tc.LO[0],
                  env->hflags, env->btarget, env->bcond);
     for (i = 0; i < 32; i++) {
         if ((i & 3) == 0) {
@@ -31998,7 +32014,16 @@ void mips_tcg_init(void)
     }
 
     cpu_PC = tcg_global_mem_new(cpu_env,
+#ifdef TARGET_CHERI
+                                offsetof(CPUMIPSState, active_tc.PCC._cr_cursor), "PC");
+#else
                                 offsetof(CPUMIPSState, active_tc.PC), "PC");
+#endif
+#ifdef CONFIG_DEBUG_TCG
+    _pc_is_current = tcg_global_mem_new(
+        cpu_env, offsetof(CPUArchState, active_tc._pc_is_current),
+        "_pc_is_current");
+#endif
     for (i = 0; i < MIPS_DSP_ACC; i++) {
         cpu_HI[i] = tcg_global_mem_new(cpu_env,
                                        offsetof(CPUMIPSState, active_tc.HI[i]),
@@ -32017,9 +32042,6 @@ void mips_tcg_init(void)
                                  offsetof(CPUMIPSState, btarget), "btarget");
     hflags = tcg_global_mem_new_i32(cpu_env,
                                     offsetof(CPUMIPSState, hflags), "hflags");
-#ifdef TARGET_CHERI
-    // btcr = tcg_global_mem_new_i32(cpu_env, offsetof(CPUMIPSState, btcr), "btcr");
-#endif
 
     fpu_fcr0 = tcg_global_mem_new_i32(cpu_env,
                                       offsetof(CPUMIPSState, active_fpu.fcr0),
@@ -32210,12 +32232,14 @@ void cpu_state_reset(CPUMIPSState *env)
          * If the exception was raised from a delay slot,
          * come back to the jump.
          */
-        set_CP0_ErrorEPC(env, env->active_tc.PC
-                         - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4));
+        set_CP0_ErrorEPC(env, PC_ADDR(env) - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4));
     } else {
-        set_CP0_ErrorEPC(env, env->active_tc.PC);
+        set_CP0_ErrorEPC(env, PC_ADDR(env));
     }
-    env->active_tc.PC = env->exception_base;
+    mips_update_pc(env, env->exception_base, /*can_be_unrepresentable=*/false);
+#ifdef CONFIG_DEBUG_TCG
+    env->active_tc._pc_is_current = true;
+#endif
     env->CP0_Random = env->tlb->nb_tlb - 1;
     env->tlb->tlb_in_use = env->tlb->nb_tlb;
     env->CP0_Wired = 0;
@@ -32360,15 +32384,12 @@ void cpu_state_reset(CPUMIPSState *env)
         // enable KX bit on startup
         env->CP0_Status |= (1 << CP0St_KX);
     }
-#ifdef TARGET_CHERI
-    assert(env->active_tc.PC == cap_get_cursor(&env->active_tc.PCC));
-#endif
 }
 
 void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb,
                           target_ulong *data)
 {
-    env->active_tc.PC = data[0];
+    mips_update_pc(env, data[0], /*can_be_unrepresentable=*/false);
     env->hflags &= ~MIPS_HFLAG_BMASK;
     env->hflags |= data[1];
     switch (env->hflags & MIPS_HFLAG_BMASK_BASE) {

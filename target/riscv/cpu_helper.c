@@ -25,6 +25,7 @@
 #include "tcg/tcg-op.h"
 #include "trace.h"
 #include "disas/disas.h"
+#include "helper_utils.h"
 #ifdef TARGET_CHERI
 #include "cheri-helper-utils.h"
 #endif
@@ -924,6 +925,32 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
 }
 #endif /* TARGET_CHERI */
 
+static inline void _riscv_update_pc_for_exc_handler(CPURISCVState *env,
+#ifdef TARGET_CHERI
+                                                    cap_register_t *src_cap,
+#endif
+                                                    target_ulong new_pc)
+{
+#ifdef TARGET_CHERI
+    env->PCC = *src_cap;
+    // FIXME: KCC must not be sealed
+    if (!cap_is_unsealed(&env->PCC)) {
+        error_report(
+            "Sealed target PCC in exception, detagging: " PRINT_CAP_FMTSTR "\r",
+            PRINT_CAP_ARGS(&env->PCC));
+        env->PCC.cr_tag = false;
+    }
+#endif
+    riscv_update_pc(env, new_pc, /*can_be_unrepresentable=*/true);
+}
+
+#ifdef TARGET_CHERI
+#define riscv_update_pc_for_exc_handler _riscv_update_pc_for_exc_handler
+#else
+#define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)                  \
+    _riscv_update_pc_for_exc_handler(env, new_pc)
+#endif
+
 /*
  * Handle Traps
  *
@@ -936,6 +963,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
+    tcg_debug_assert(pc_is_current(env));
     bool force_hs_execp = riscv_cpu_force_hs_excep_enabled(env);
     target_ulong s;
 
@@ -1069,18 +1097,14 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         target_ulong stvec = GET_SPECIAL_REG(env, stvec, STCC);
         target_ulong new_pc = (stvec >> 2 << 2) +
             ((async && (stvec & 3) == 1) ? cause * 4 : 0);
+        riscv_update_pc_for_exc_handler(env, &env->STCC, new_pc);
 #ifdef TARGET_CHERI
-        env->PCC = env->STCC;
-        assert(cap_is_in_bounds(&env->PCC, new_pc, 0));
-        env->PCC._cr_cursor = new_pc;
         qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
                                "%s: Set SEPCC from PCC: " PRINT_CAP_FMTSTR "\n",
                                __func__, PRINT_CAP_ARGS(&env->SEPCC));
         qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
                                "%s: Set PCC from STCC: " PRINT_CAP_FMTSTR "\n",
                                __func__, PRINT_CAP_ARGS(&env->PCC));
-#else
-        env->pc = new_pc;
 #endif
         riscv_cpu_set_mode(env, PRV_S);
     } else {
@@ -1121,18 +1145,14 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         target_ulong mtvec = GET_SPECIAL_REG(env, mtvec, MTCC);
         target_ulong new_pc = (mtvec >> 2 << 2) +
             ((async && (mtvec & 3) == 1) ? cause * 4 : 0);
+        riscv_update_pc_for_exc_handler(env, &env->MTCC, new_pc);
 #ifdef TARGET_CHERI
-        env->PCC = env->MTCC;
-        assert(cap_is_in_bounds(&env->PCC, new_pc, 0));
-        env->PCC._cr_cursor = new_pc;
         qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
                                "%s: Set MEPCC from PCC: " PRINT_CAP_FMTSTR "\n",
                                __func__, PRINT_CAP_ARGS(&env->MEPCC));
         qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
                                "%s: Set PCC from MTCC: " PRINT_CAP_FMTSTR "\n",
                                __func__, PRINT_CAP_ARGS(&env->PCC));
-#else
-        env->pc = new_pc;
 #endif
         riscv_cpu_set_mode(env, PRV_M);
     }

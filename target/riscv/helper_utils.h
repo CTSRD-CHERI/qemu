@@ -61,3 +61,16 @@ static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
     return env->gpr[reg];
 #endif
 }
+
+static inline void riscv_update_pc(CPURISCVState *env, target_ulong pc_addr,
+                                   bool can_be_unrepresentable)
+{
+#ifdef TARGET_CHERI
+    cheri_update_pcc(&env->PCC, pc_addr, can_be_unrepresentable);
+#else
+    env->pc = pc_addr;
+#endif
+#ifdef CONFIG_DEBUG_TCG
+    env->_pc_is_current = true;
+#endif
+}

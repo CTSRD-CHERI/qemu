@@ -96,7 +96,6 @@ typedef struct CPURISCVState CPURISCVState;
 
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs-types.h"
-#define CHERI_FLAG_CAPMODE 1
 #endif
 #include "pmp.h"
 
@@ -112,6 +111,9 @@ struct CPURISCVState {
     cap_register_t DDC; // SCR 1 Default data cap. (DDC)
 #else
     target_ulong pc;
+#endif
+#ifdef CONFIG_DEBUG_TCG
+    target_ulong _pc_is_current;
 #endif
 
     target_ulong load_res;
@@ -320,7 +322,6 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         env->cheri_name = env->new_cheri_reg;                                  \
         log_changed_capreg(env, #cheri_name, &((env)->cheri_name));            \
     } while (false)
-#define PC_ADDR(env) ((target_ulong)env->PCC._cr_cursor)
 #else
 #ifdef CONFIG_MIPS_LOG_INSTR
 #define log_changed_special_reg(env, name, newval)                             \
@@ -340,8 +341,16 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         env->name = env->new_reg;                                              \
         log_changed_special_reg(env, #name, ((env)->name));                    \
     } while (false)
-#define PC_ADDR(env) ((env)->pc)
 #endif
+
+static inline bool pc_is_current(CPURISCVState *env)
+{
+#ifdef CONFIG_DEBUG_TCG
+    return env->_pc_is_current;
+#else
+    return true;
+#endif
+}
 
 // Note: the pc does not have to be up-to-date, tb start is fine.
 // We may miss a few dumps or print too many if -dfilter is on but
@@ -506,33 +515,6 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
 target_ulong riscv_cpu_get_fflags(CPURISCVState *env);
 void riscv_cpu_set_fflags(CPURISCVState *env, target_ulong);
 
-#define TB_FLAGS_MMU_MASK   3
-// For capmode we pick any flags bit that isn't used yet, 0x100 right now
-#define TB_FLAGS_CAPMODE 0x100
-#define TB_FLAGS_MSTATUS_FS MSTATUS_FS
-_Static_assert((TB_FLAGS_CAPMODE & TB_FLAGS_MSTATUS_FS) == 0, "overlap");
-
-static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
-                                        target_ulong *cs_base, uint32_t *flags)
-{
-    *pc = PC_ADDR(env); // We want the full virtual address here and not an offset
-    *cs_base = 0;
-#ifdef CONFIG_USER_ONLY
-    *flags = TB_FLAGS_MSTATUS_FS;
-#else
-    *flags = cpu_mmu_index(env, 0);
-    if (riscv_cpu_fp_enabled(env)) {
-        *flags |= env->mstatus & MSTATUS_FS;
-    }
-#endif
-#ifdef TARGET_CHERI
-    // Note: can't include cheri-archspecific-here
-    // FIXME: move stuff around to allow using the helper
-    // TODO:  *flags |= cheri_in_capmode(env) ? TB_FLAGS_CAPMODE : 0;
-    *flags |= (env->PCC.cr_flags & CHERI_FLAG_CAPMODE) ? TB_FLAGS_CAPMODE : 0;
-#endif
-}
-
 int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
                 target_ulong new_value, target_ulong write_mask, uintptr_t retpc);
 int riscv_csrrw_debug(CPURISCVState *env, int csrno, target_ulong *ret_value,
@@ -575,5 +557,30 @@ typedef CPURISCVState CPUArchState;
 typedef RISCVCPU ArchCPU;
 
 #include "exec/cpu-all.h"
+#include "cpu_cheri.h"
+
+#define TB_FLAGS_MMU_MASK   3
+// For capmode we pick any flags bit that isn't used yet, 0x100 right now
+#define TB_FLAGS_CAPMODE 0x100
+#define TB_FLAGS_MSTATUS_FS MSTATUS_FS
+_Static_assert((TB_FLAGS_CAPMODE & TB_FLAGS_MSTATUS_FS) == 0, "overlap");
+
+static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
+                                        target_ulong *cs_base, uint32_t *flags)
+{
+    *pc = PC_ADDR(env); // We want the full virtual address here and not an offset
+    *cs_base = 0;
+#ifdef CONFIG_USER_ONLY
+    *flags = TB_FLAGS_MSTATUS_FS;
+#else
+    *flags = cpu_mmu_index(env, 0);
+    if (riscv_cpu_fp_enabled(env)) {
+        *flags |= env->mstatus & MSTATUS_FS;
+    }
+#endif
+#ifdef TARGET_CHERI
+    *flags |= cheri_in_capmode(env) ? TB_FLAGS_CAPMODE : 0;
+#endif
+}
 
 #endif /* RISCV_CPU_H */

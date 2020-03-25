@@ -62,6 +62,7 @@ static bool trans_jalr(DisasContext *ctx, arg_jalr *a)
     gen_get_gpr(cpu_pc, a->rs1);
     tcg_gen_addi_tl(cpu_pc, cpu_pc, a->imm);
     tcg_gen_andi_tl(cpu_pc, cpu_pc, (target_ulong)-2);
+    gen_mark_pc_updated();
 
     if (!has_ext(ctx, RVC)) {
         misaligned = gen_new_label();
@@ -534,7 +535,7 @@ static bool trans_fence_i(DisasContext *ctx, arg_fence_i *a)
      * FENCE_I is a no-op in QEMU,
      * however we need to end the translation block
      */
-    tcg_gen_movi_tl(cpu_pc, ctx->pc_succ_insn);
+    gen_update_cpu_pc(ctx->pc_succ_insn);
     exit_tb(ctx);
     ctx->base.is_jmp = DISAS_NORETURN;
     return true;
@@ -546,7 +547,7 @@ static bool trans_fence_i(DisasContext *ctx, arg_fence_i *a)
     dest = tcg_temp_new(); \
     rs1_pass = tcg_temp_new(); \
     gen_get_gpr(source1, a->rs1); \
-    tcg_gen_movi_tl(cpu_pc, ctx->base.pc_next); \
+    gen_update_cpu_pc(ctx->base.pc_next); \
     tcg_gen_movi_tl(rs1_pass, a->rs1); \
     tcg_gen_movi_tl(csr_store, a->csr); \
     gen_io_start();\
@@ -554,7 +555,7 @@ static bool trans_fence_i(DisasContext *ctx, arg_fence_i *a)
 
 #define RISCV_OP_CSR_POST do {\
     gen_set_gpr(a->rd, dest); \
-    tcg_gen_movi_tl(cpu_pc, ctx->pc_succ_insn); \
+    gen_update_cpu_pc(ctx->pc_succ_insn); \
     exit_tb(ctx); \
     ctx->base.is_jmp = DISAS_NORETURN; \
     tcg_temp_free(source1); \

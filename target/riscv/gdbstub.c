@@ -22,6 +22,7 @@
 #include "helper_utils.h"
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs.h"
+#include "cheri-helper-utils.h"
 #endif
 
 /*
@@ -429,7 +430,7 @@ static int riscv_gdb_get_cheri_reg(CPURISCVState *env, GByteArray *buf, int n)
     }
     switch (n) {
     case CHERI_GDB_NUM_GP_CAPREGS:
-        return gdb_get_capreg(buf, cheri_get_pcc(env));
+        return gdb_get_capreg(buf, cheri_get_current_pcc(env));
     case CHERI_GDB_NUM_GP_CAPREGS + 1:
         return gdb_get_capreg(buf, cheri_get_ddc(env));
     case CHERI_GDB_NUM_CAPREGS: {   // First integer register is the tag mask:
@@ -443,7 +444,7 @@ static int riscv_gdb_get_cheri_reg(CPURISCVState *env, GByteArray *buf, int n)
             if (get_capreg_tag(env, i))
                 cap_valid |= ((uint64_t)1 << i);
         }
-        if (cheri_get_pcc(env)->cr_tag)
+        if (cheri_get_recent_pcc(env)->cr_tag)
             cap_valid |= ((uint64_t)1 << 32);
         return gdb_get_regl(buf, cap_valid);
     }
