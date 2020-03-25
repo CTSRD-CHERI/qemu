@@ -36,6 +36,7 @@
  */
 #pragma once
 // This file should be included from cpu.h after CPURISCVState has been defined
+#include "qemu/log.h"
 #include "cheri_utils.h"
 
 bool cpu_restore_state(CPUState *cpu, uintptr_t host_pc, bool will_exit);
@@ -176,4 +177,16 @@ static inline target_ulong PC_ADDR(CPUArchState *env)
     assert(pc_is_current(env));
 #endif
     return cpu_get_recent_pc(env);
+}
+
+static inline bool should_log_mem_access(CPUArchState *env, int log_mask, target_ulong addr) {
+    if (likely(!(qemu_loglevel_mask(log_mask))))
+        return false;
+
+    // Try not to dump all stores when -dfilter is enabled
+    // Note: we check both PC and memory location in -dfilter
+    if (likely(!qemu_log_in_addr_range(cpu_get_recent_pc(env)) &&
+        !qemu_log_in_addr_range(addr)))
+        return false;
+    return true;
 }
