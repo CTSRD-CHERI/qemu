@@ -93,7 +93,9 @@ struct oob_stats_info {
 #define DECLARE_CHERI_STAT(op) extern struct oob_stats_info oob_info_##op;
 #define OOB_INFO(op) (&oob_info_##op)
 
-static inline int64_t _howmuch_out_of_bounds(CPUArchState *env,
+// Note: despite taking both CPUArchState and retpc, this function does not throw CPU
+// exceptions. The retpc parameter is there purely for diagnostic reporting.
+ static inline int64_t _howmuch_out_of_bounds(CPUArchState *env,
                                              const cap_register_t *cr,
                                              const char *name, uintptr_t retpc)
 {
