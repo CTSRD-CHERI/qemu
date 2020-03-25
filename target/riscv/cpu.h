@@ -96,7 +96,6 @@ typedef struct CPURISCVState CPURISCVState;
 
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs-types.h"
-#define CHERI_FLAG_CAPMODE 1
 #endif
 #include "pmp.h"
 
@@ -523,33 +522,6 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
 target_ulong riscv_cpu_get_fflags(CPURISCVState *env);
 void riscv_cpu_set_fflags(CPURISCVState *env, target_ulong);
 
-#define TB_FLAGS_MMU_MASK   3
-// For capmode we pick any flags bit that isn't used yet, 0x100 right now
-#define TB_FLAGS_CAPMODE 0x100
-#define TB_FLAGS_MSTATUS_FS MSTATUS_FS
-_Static_assert((TB_FLAGS_CAPMODE & TB_FLAGS_MSTATUS_FS) == 0, "overlap");
-
-static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
-                                        target_ulong *cs_base, uint32_t *flags)
-{
-    *pc = PC_ADDR(env); // We want the full virtual address here and not an offset
-    *cs_base = 0;
-#ifdef CONFIG_USER_ONLY
-    *flags = TB_FLAGS_MSTATUS_FS;
-#else
-    *flags = cpu_mmu_index(env, 0);
-    if (riscv_cpu_fp_enabled(env)) {
-        *flags |= env->mstatus & MSTATUS_FS;
-    }
-#endif
-#ifdef TARGET_CHERI
-    // Note: can't include cheri-archspecific-here
-    // FIXME: move stuff around to allow using the helper
-    // TODO:  *flags |= cheri_in_capmode(env) ? TB_FLAGS_CAPMODE : 0;
-    *flags |= (env->PCC.cr_flags & CHERI_FLAG_CAPMODE) ? TB_FLAGS_CAPMODE : 0;
-#endif
-}
-
 int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
                 target_ulong new_value, target_ulong write_mask, uintptr_t retpc);
 int riscv_csrrw_debug(CPURISCVState *env, int csrno, target_ulong *ret_value,
@@ -592,5 +564,30 @@ typedef CPURISCVState CPUArchState;
 typedef RISCVCPU ArchCPU;
 
 #include "exec/cpu-all.h"
+#include "cpu_cheri.h"
+
+#define TB_FLAGS_MMU_MASK   3
+// For capmode we pick any flags bit that isn't used yet, 0x100 right now
+#define TB_FLAGS_CAPMODE 0x100
+#define TB_FLAGS_MSTATUS_FS MSTATUS_FS
+_Static_assert((TB_FLAGS_CAPMODE & TB_FLAGS_MSTATUS_FS) == 0, "overlap");
+
+static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
+                                        target_ulong *cs_base, uint32_t *flags)
+{
+    *pc = PC_ADDR(env); // We want the full virtual address here and not an offset
+    *cs_base = 0;
+#ifdef CONFIG_USER_ONLY
+    *flags = TB_FLAGS_MSTATUS_FS;
+#else
+    *flags = cpu_mmu_index(env, 0);
+    if (riscv_cpu_fp_enabled(env)) {
+        *flags |= env->mstatus & MSTATUS_FS;
+    }
+#endif
+#ifdef TARGET_CHERI
+    *flags |= cheri_in_capmode(env) ? TB_FLAGS_CAPMODE : 0;
+#endif
+}
 
 #endif /* RISCV_CPU_H */

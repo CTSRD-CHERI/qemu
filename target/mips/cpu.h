@@ -179,10 +179,6 @@ struct cheri_cap_hwregs {
     cap_register_t EPCC; /* CapHwr 31 */
 };
 
-#else /* !TARGET_CHERI */
-
-#define cheri_debug_assert(cond)
-
 #endif /* TARGET_CHERI */
 
 
@@ -1342,6 +1338,7 @@ typedef CPUMIPSState CPUArchState;
 typedef MIPSCPU ArchCPU;
 
 #include "exec/cpu-all.h"
+#include "cpu_cheri.h"
 
 /*
  * Memory access type :

@@ -15,9 +15,7 @@ ifdef CONFIG_LINUX
 QEMU_CFLAGS += -isystem ../linux-headers
 endif
 QEMU_CFLAGS += -iquote .. -iquote $(SRC_PATH)/target/$(TARGET_BASE_ARCH) -DNEED_CPU_H
-ifdef TARGET_CHERI
 QEMU_CFLAGS += -iquote $(SRC_PATH)/target/cheri-common
-endif
 QEMU_CFLAGS+=-iquote $(SRC_PATH)/include
 
 #$(info CONFIG_CHERI128=$(CONFIG_CHERI128))

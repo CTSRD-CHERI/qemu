@@ -32,6 +32,13 @@
  */
 #pragma once
 
+#if defined CONFIG_DEBUG_TCG || defined QEMU_STATIC_ANALYSIS
+# define cheri_debug_assert(X) do { assert(X); } while (0)
+#else
+# define cheri_debug_assert(X) ((void)0)
+#endif
+
+#ifdef TARGET_CHERI
 #if (defined(CHERI_128) || defined(CHERI_64)) && !defined(CHERI_MAGIC128)
 #define QEMU_USE_COMPRESSED_CHERI_CAPS 1
 #else
@@ -102,3 +109,8 @@ typedef enum CheriPermissions {
     CAP_RESERVED5 = (1 << 13),
     CAP_RESERVED6 = (1 << 14),
 } CheriPermissions;
+
+typedef enum CheriFlags {
+    CHERI_FLAG_CAPMODE = (1 << 0),
+} CheriFlags;
+#endif // TARGET_CHERI
