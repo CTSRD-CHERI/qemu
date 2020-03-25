@@ -103,9 +103,11 @@ cheri_tag_prot_clear_or_trap(CPUMIPSState *env, target_ulong va,
                              int prot, uintptr_t retpc, target_ulong tag)
 {
     if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
-        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-            qemu_log("Clearing tag bit due to missing %s\n",
-                     prot & PAGE_LC_CLEAR ? "TLB_L" : "CAP_PERM_LOAD_CAP");
+        if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, va))) {
+            qemu_log("Clearing tag loaded from " TARGET_FMT_lx " due to %s\n",
+		     va,
+		     prot & PAGE_LC_CLEAR ? "asserted TLB_LI"
+					  : "missing CAP_PERM_LOAD_CAP");
         }
         return 0;
     }

@@ -142,18 +142,6 @@ static inline bool cheri_have_access_sysregs(CPUArchState* env)
     return cap_has_perms(cheri_get_recent_pcc(env), CAP_ACCESS_SYS_REGS);
 }
 
-static inline bool should_log_mem_access(CPUArchState *env, int log_mask, target_ulong addr) {
-    if (likely(!(qemu_loglevel_mask(log_mask))))
-        return false;
-
-    // Try not to dump all stores when -dfilter is enabled
-    // Note: we check both PC and memory location in -dfilter
-    if (likely(!qemu_log_in_addr_range(cpu_get_recent_pc(env)) &&
-        !qemu_log_in_addr_range(addr)))
-        return false;
-    return true;
-}
-
 static inline void cheri_update_pcc_for_exc_handler(cap_register_t *pcc,
                                                     cap_register_t *src_cap,
                                                     target_ulong new_pc)
