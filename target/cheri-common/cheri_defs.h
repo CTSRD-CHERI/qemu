@@ -85,18 +85,20 @@
 typedef signed __int128 cap_offset_t;
 typedef unsigned __int128 cap_length_t;
 
-#define CAP_PERM_GLOBAL         (1 << 0)
-#define CAP_PERM_EXECUTE        (1 << 1)
-#define CAP_PERM_LOAD           (1 << 2)
-#define CAP_PERM_STORE          (1 << 3)
-#define CAP_PERM_LOAD_CAP       (1 << 4)
-#define CAP_PERM_STORE_CAP      (1 << 5)
-#define CAP_PERM_STORE_LOCAL    (1 << 6)
-#define CAP_PERM_SEAL           (1 << 7)
-#define CAP_PERM_CCALL          (1 << 8)
-#define CAP_PERM_UNSEAL         (1 << 9)
-#define CAP_ACCESS_SYS_REGS     (1 << 10)
-#define CAP_PERM_SETCID         (1 << 11)
-#define CAP_RESERVED4           (1 << 12)
-#define CAP_RESERVED5           (1 << 13)
-#define CAP_RESERVED6           (1 << 14)
+typedef enum CheriPermissions {
+    CAP_PERM_GLOBAL = (1 << 0),
+    CAP_PERM_EXECUTE = (1 << 1),
+    CAP_PERM_LOAD = (1 << 2),
+    CAP_PERM_STORE = (1 << 3),
+    CAP_PERM_LOAD_CAP = (1 << 4),
+    CAP_PERM_STORE_CAP = (1 << 5),
+    CAP_PERM_STORE_LOCAL = (1 << 6),
+    CAP_PERM_SEAL = (1 << 7),
+    CAP_PERM_CCALL = (1 << 8),
+    CAP_PERM_UNSEAL = (1 << 9),
+    CAP_ACCESS_SYS_REGS = (1 << 10),
+    CAP_PERM_SETCID = (1 << 11),
+    CAP_RESERVED4 = (1 << 12),
+    CAP_RESERVED5 = (1 << 13),
+    CAP_RESERVED6 = (1 << 14),
+} CheriPermissions;
