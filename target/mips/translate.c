@@ -11202,6 +11202,7 @@ static void gen_cp0(CPUMIPSState *env, DisasContext *ctx, uint32_t opc,
             goto die;
         } else {
             int bit_shift = (ctx->hflags & MIPS_HFLAG_M16) ? 16 : 6;
+            gen_save_pc(ctx->base.pc_next);
             if (ctx->opcode & (1 << bit_shift)) {
                 /* OPC_ERETNC */
                 opn = "eretnc";
