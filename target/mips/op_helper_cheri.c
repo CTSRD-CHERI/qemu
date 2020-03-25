@@ -322,7 +322,7 @@ void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd, target_u
 
 void CHERI_HELPER_IMPL(cgetpccincoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
-    uint64_t new_addr = rs + cap_get_cursor(&env->active_tc.PCC);
+    uint64_t new_addr = rs + PC_ADDR(env);
     derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
 }
 
