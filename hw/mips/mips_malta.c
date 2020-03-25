@@ -1168,7 +1168,7 @@ static void main_cpu_reset(void *opaque)
 
     if (kvm_enabled()) {
         /* Start running from the bootloader we wrote to end of RAM */
-        mips_update_pc(env, 0x40000000 + loaderparams.ram_low_size);
+        mips_update_pc(env, 0x40000000 + loaderparams.ram_low_size, /*can_be_unrepresentable=*/false);
     }
 }
 

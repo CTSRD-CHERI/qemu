@@ -165,7 +165,7 @@ static void main_cpu_reset(void *opaque)
     CPUMIPSState *env = &s->cpu->env;
 
     cpu_reset(CPU(s->cpu));
-    mips_update_pc(env, s->vector);
+    mips_update_pc(env, s->vector, /*can_be_unrepresentable=*/false);
 }
 
 static const int sector_len = 32 * KiB;

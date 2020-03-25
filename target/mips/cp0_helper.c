@@ -743,7 +743,7 @@ void helper_mttc0_tcbind(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mtc0_tcrestart(CPUMIPSState *env, target_ulong arg1)
 {
-    mips_update_pc(env, arg1);
+    mips_update_pc(env, arg1, /*can_be_unrepresentable=*/false);
     env->active_tc.CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
     env->CP0_LLAddr = 0;
     env->lladdr = 0;
@@ -756,13 +756,13 @@ void helper_mttc0_tcrestart(CPUMIPSState *env, target_ulong arg1)
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
     if (other_tc == other->current_tc) {
-        mips_update_pc(other, arg1);
+        mips_update_pc(other, arg1, /*can_be_unrepresentable=*/false);
         other->active_tc.CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
         other->CP0_LLAddr = 0;
         other->lladdr = 0;
         /* MIPS16 not implemented. */
     } else {
-        mips_update_pc_impl(&other->tcs[other_tc], arg1);
+        mips_update_pc_impl(&other->tcs[other_tc], arg1, /*can_be_unrepresentable=*/false);
         other->tcs[other_tc].CP0_TCStatus &= ~(1 << CP0TCSt_TDS);
         other->CP0_LLAddr = 0;
         other->lladdr = 0;

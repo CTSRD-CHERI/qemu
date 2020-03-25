@@ -36,7 +36,7 @@
  */
 #pragma once
 // This file should be included from cpu.h after CPURISCVState has been defined
-#include "cheri_defs.h"
+#include "cheri_utils.h"
 
 bool cpu_restore_state(CPUState *cpu, uintptr_t host_pc, bool will_exit);
 static inline bool pc_is_current(CPUArchState *env);
@@ -45,7 +45,7 @@ static inline target_ulong cpu_get_recent_pc(CPUArchState *env);
 #ifdef TARGET_CHERI
 static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUArchState *env);
 #include "cheri-archspecific-early.h"
-// Returns a recebt PCC value. This means that the cursor field may be out of
+// Returns a recent PCC value. This means that the cursor field may be out of
 // date (possibly pointing to the beginning of the translation block). However,
 // all permissions, flags and bounds are valid and can be accessed.
 // This function exists since updating pcc.cursor on every instruction is
@@ -67,10 +67,37 @@ static inline const cap_register_t *cheri_get_current_pcc(CPUArchState *env)
 }
 
 static inline const cap_register_t *
-cheri_update_and_get_current_pcc(CPUArchState *env, uintptr_t retpc)
+cheri_get_current_pcc_fetch_from_tcg(CPUArchState *env, uintptr_t retpc)
 {
     cpu_restore_state(env_cpu(env), retpc, false);
     return cheri_get_current_pcc(env);
+}
+
+static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
+                                    bool can_be_unrepresenable)
+{
+    // Note: This function is mostly called when updating PCC.cursor from the
+    // generated TCG state. Therefore the new value must be in-bounds (or at
+    // least representable). The only case where this may not hold is on
+    // exception handler entry/return. For jumps/branches an out-of-bounds PCC
+    // value should raise a trap on the branch/jump so we can't get an
+    // unrpresentable value here.
+#if QEMU_USE_COMPRESSED_CHERI_CAPS
+    if (can_be_unrepresenable) {
+        if (pcc->cr_tag && !is_representable_cap_with_addr(pcc, pc_addr)) {
+            error_report(
+                "Attempting to set unrepresentable cursor (0x" TARGET_FMT_lx
+                ") on PCC: " PRINT_CAP_FMTSTR "\r",
+                pc_addr, PRINT_CAP_ARGS(pcc));
+            cap_mark_unrepresentable(pc_addr, pcc);
+        }
+    } else {
+        // TODO: once we do bounds checks in the translator, this can assert
+        // that the value is in-bounds.
+        cheri_debug_assert(is_representable_cap_with_addr(pcc, pc_addr));
+    }
+#endif
+    pcc->_cr_cursor = pc_addr;
 }
 
 static inline bool cheri_in_capmode(CPUArchState *env) {

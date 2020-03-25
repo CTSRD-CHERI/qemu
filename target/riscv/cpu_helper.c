@@ -940,14 +940,8 @@ static inline void _riscv_update_pc_for_exc_handler(CPURISCVState *env,
             PRINT_CAP_ARGS(&env->PCC));
         env->PCC.cr_tag = false;
     }
-    if (env->PCC.cr_tag && !is_representable_cap_with_addr(&env->PCC, new_pc)) {
-        error_report("Attempting to set unrepresentable cursor(0x" TARGET_FMT_lx
-                     ") on PCC (in exception): " PRINT_CAP_FMTSTR "\r",
-                     new_pc, PRINT_CAP_ARGS(&env->PCC));
-        cap_mark_unrepresentable(new_pc, &env->PCC);
-    }
 #endif
-    riscv_update_pc(env, new_pc);
+    riscv_update_pc(env, new_pc, /*can_be_unrepresentable=*/true);
 }
 
 #ifdef TARGET_CHERI

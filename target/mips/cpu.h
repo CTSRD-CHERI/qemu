@@ -1499,11 +1499,10 @@ static inline bool pc_is_current(CPUArchState *env)
     return true;
 #endif
 }
-static inline void mips_update_pc_impl(TCState *state, target_ulong pc_addr)
+static inline void mips_update_pc_impl(TCState *state, target_ulong pc_addr, bool can_be_unrepresenable)
 {
 #ifdef TARGET_CHERI
-    // Note: no representability check, those are done on jump.
-    state->PCC._cr_cursor = pc_addr;
+    cheri_update_pcc(&state->PCC, pc_addr, can_be_unrepresenable);
 #else
     state->PC = pc_addr;
 #endif
@@ -1512,9 +1511,9 @@ static inline void mips_update_pc_impl(TCState *state, target_ulong pc_addr)
 #endif
 }
 
-static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr)
+static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr, bool can_be_unrepresenable)
 {
-    mips_update_pc_impl(&env->active_tc, pc_addr);
+    mips_update_pc_impl(&env->active_tc, pc_addr, can_be_unrepresenable);
 }
 
 #if defined(TARGET_CHERI)

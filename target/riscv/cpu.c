@@ -335,7 +335,7 @@ static void riscv_cpu_synchronize_from_tb(CPUState *cs, TranslationBlock *tb)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
-    riscv_update_pc(env, tb->pc);
+    riscv_update_pc(env, tb->pc, /*can_be_unrepresentable=*/false);
 #ifdef TARGET_CHERI
     // We also have to synchronize the capmode flag
     // XXXAR: is this necessary?
@@ -373,7 +373,7 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
                                __func__, (target_ulong)env->PCC._cr_cursor, data[0]);
     }
 #endif
-    riscv_update_pc(env, data[0]);
+    riscv_update_pc(env, data[0], /*can_be_unrepresentable=*/false);
 }
 
 

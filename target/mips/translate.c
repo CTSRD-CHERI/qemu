@@ -32235,7 +32235,7 @@ void cpu_state_reset(CPUMIPSState *env)
     } else {
         set_CP0_ErrorEPC(env, PC_ADDR(env));
     }
-    mips_update_pc(env, env->exception_base);
+    mips_update_pc(env, env->exception_base, /*can_be_unrepresentable=*/false);
 #ifdef CONFIG_DEBUG_TCG
     env->active_tc._pc_is_current = true;
 #endif
@@ -32388,7 +32388,7 @@ void cpu_state_reset(CPUMIPSState *env)
 void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb,
                           target_ulong *data)
 {
-    mips_update_pc(env, data[0]);
+    mips_update_pc(env, data[0], /*can_be_unrepresentable=*/false);
     env->hflags &= ~MIPS_HFLAG_BMASK;
     env->hflags |= data[1];
     switch (env->hflags & MIPS_HFLAG_BMASK_BASE) {

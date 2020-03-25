@@ -38,7 +38,7 @@ static void mips_cpu_set_pc(CPUState *cs, vaddr value)
     MIPSCPU *cpu = MIPS_CPU(cs);
     CPUMIPSState *env = &cpu->env;
 
-    mips_update_pc(env, value & ~(target_ulong)1);
+    mips_update_pc(env, value & ~(target_ulong)1, /*can_be_unrepresentable=*/false);
     if (value & 1) {
         env->hflags |= MIPS_HFLAG_M16;
     } else {
@@ -51,7 +51,7 @@ static void mips_cpu_synchronize_from_tb(CPUState *cs, TranslationBlock *tb)
     MIPSCPU *cpu = MIPS_CPU(cs);
     CPUMIPSState *env = &cpu->env;
 
-    mips_update_pc(env, tb->pc);
+    mips_update_pc(env, tb->pc, /*can_be_unrepresentable=*/false);
     env->hflags &= ~MIPS_HFLAG_BMASK;
     env->hflags |= tb->flags & MIPS_HFLAG_BMASK;
 }

@@ -1147,7 +1147,7 @@ static void set_pc(CPUMIPSState *env, target_ulong error_pc)
     }
     target_ulong error_pc = cap_get_cursor(error_pcc);
 #endif
-    mips_update_pc(env, error_pc & ~(target_ulong)1);
+    mips_update_pc(env, error_pc & ~(target_ulong)1, /*can_be_unrepresentable=*/true);
     if (error_pc & 1) {
 #if defined(TARGET_CHERI)
         warn_report("Got target pc with low bit set, but QEMU-CHERI does not"

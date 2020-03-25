@@ -123,7 +123,7 @@ int mips_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
         break;
     case 37:
         // FIXME: should this be vaddr or offset for CHERI
-        mips_update_pc(env, tmp & ~(target_ulong)1);
+        mips_update_pc(env, tmp & ~(target_ulong)1, /*can_be_unrepresentable=*/true);
         if (tmp & 1) {
             env->hflags |= MIPS_HFLAG_M16;
         } else {

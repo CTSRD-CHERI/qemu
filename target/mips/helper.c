@@ -1225,15 +1225,8 @@ static inline void mips_update_pc_for_exc_handler(CPUMIPSState *env,
                      PRINT_CAP_ARGS(&env->active_tc.PCC));
         env->active_tc.PCC.cr_tag = false;
     }
-    if (env->active_tc.PCC.cr_tag &&
-        !is_representable_cap_with_addr(&env->active_tc.PCC, new_pc)) {
-        error_report("Attempting to set unrepresentable cursor(0x" TARGET_FMT_lx
-                     ") on PCC (in exception): " PRINT_CAP_FMTSTR "\r",
-                     new_pc, PRINT_CAP_ARGS(&env->active_tc.PCC));
-        cap_mark_unrepresentable(new_pc, &env->active_tc.PCC);
-    }
 #endif
-    mips_update_pc(env, new_pc);
+    mips_update_pc(env, new_pc, /* can_be_unrep=*/true);
 }
 
 void mips_cpu_do_interrupt(CPUState *cs)

@@ -122,7 +122,7 @@ static void main_cpu_reset(void *opaque)
     CPUMIPSState *env = &s->cpu->env;
 
     cpu_reset(CPU(s->cpu));
-    mips_update_pc(env, s->vector & ~(target_ulong)1);
+    mips_update_pc(env, s->vector & ~(target_ulong)1, /*can_be_unrepresentable=*/false);
     if (s->vector & 1) {
         env->hflags |= MIPS_HFLAG_M16;
     }
@@ -197,7 +197,7 @@ mips_mipssim_init(MachineState *machine)
         exit(1);
     } else {
         /* We have a boot vector start address. */
-        mips_update_pc(env, (target_long)(int32_t)0xbfc00000);
+        mips_update_pc(env, (target_long)(int32_t)0xbfc00000, /*can_be_unrepresentable=*/false);
     }
 
     if (kernel_filename) {

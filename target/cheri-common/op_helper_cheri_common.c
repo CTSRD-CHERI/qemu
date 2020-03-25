@@ -104,7 +104,7 @@ target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
                                               MemOp op))
 {
     uintptr_t retpc = GETPC();
-    const cap_register_t *pcc = cheri_update_and_get_current_pcc(env, retpc);
+    const cap_register_t *pcc = cheri_get_current_pcc_fetch_from_tcg(env, retpc);
     target_ulong addr = pcc_offset + cap_get_cursor(pcc);
     check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
               memop_size(op), /*instavail=*/true, retpc);
