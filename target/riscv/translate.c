@@ -51,6 +51,9 @@ typedef struct DisasContext {
     DisasContextBase base;
     /* pc_succ_insn points to the instruction following base.pc_next */
     target_ulong pc_succ_insn;
+#ifdef TARGET_CHERI
+    target_ulong pcc_base;
+#endif
     target_ulong priv_ver;
     bool virt_enabled;
     uint32_t opcode;
@@ -957,6 +960,8 @@ static void riscv_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
     ctx->mstatus_fs = ctx->base.tb->flags & TB_FLAGS_MSTATUS_FS;
 #ifdef TARGET_CHERI
     ctx->capmode = (ctx->base.tb->flags & TB_FLAGS_CAPMODE) != 0;
+    ctx->pcc_base = dcbase->tb->cs_base;
+    cheri_debug_assert(ctx->pcc_base == cap_get_base(cheri_get_recent_pcc(env)));
 #endif
     ctx->priv_ver = env->priv_ver;
 #if !defined(CONFIG_USER_ONLY)
