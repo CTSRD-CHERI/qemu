@@ -8971,6 +8971,7 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
        break;
     case CP0_REGISTER_26:
 #if defined(TARGET_CHERI)
+        save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
 #else
         switch (sel) {
@@ -10506,6 +10507,7 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         break;
     case CP0_REGISTER_26:
 #if defined(TARGET_CHERI)
+        save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
 #else
         switch (sel) {

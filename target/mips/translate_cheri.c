@@ -1034,6 +1034,7 @@ static void gen_mtc2(DisasContext *ctx, TCGv arg, int reg, int sel)
     case 0:
         switch (sel) {
         case 6:
+            save_cpu_state(ctx, 1); // Need to sync PC
             gen_helper_mtc2_dumpcstate(cpu_env, arg);
             rn = "capdump";
             goto out;
