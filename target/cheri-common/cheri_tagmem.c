@@ -146,11 +146,10 @@ static inline void check_tagmem_writable(CPUArchState *env, target_ulong vaddr,
         error_report("QEMU ERROR: attempting change tag bit on read-only memory:");
         error_report("%s: vaddr=0x%jx -> ram_addr=0x%jx (paddr=0x%jx)", __func__,
             (uintmax_t)vaddr, (uintmax_t)ram_addr, (uintmax_t)paddr);
-#ifdef TARGET_MIPS
-        do_raise_c0_exception_impl(env, EXCP_DBE, 0, pc);
-#else
-#pragma message("TODO: implement ROM check")
-#endif
+        cpu_transaction_failed(env_cpu(env), paddr, vaddr, CAP_SIZE,
+                               MMU_DATA_STORE, // TODO: MMU_DATA_CAP_STORE
+                               cpu_mmu_index(env, false),
+                               MEMTXATTRS_UNSPECIFIED, MEMTX_ERROR, pc);
     }
 }
 
