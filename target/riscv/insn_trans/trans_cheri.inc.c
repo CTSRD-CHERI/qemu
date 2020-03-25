@@ -34,15 +34,7 @@
  */
 #include "cheri-translate-utils.h"
 
-#define INSN_CAN_TRAP(ctx) gen_update_cpu_pc(ctx->base.pc_next)
-
-#define TRANSLATE_MAYBE_TRAP(name, gen_helper, ...)                            \
-    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
-    {                                                                          \
-        INSN_CAN_TRAP(ctx);                                                    \
-        return gen_helper(__VA_ARGS__, &gen_helper_##name);                    \
-    }
-#define TRANSLATE_NO_TRAP(name, gen_helper, ...)                               \
+#define DO_TRANSLATE(name, gen_helper, ...)                                    \
     static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
     {                                                                          \
         return gen_helper(__VA_ARGS__, &gen_helper_##name);                    \
@@ -62,7 +54,7 @@ static inline bool gen_cheri_get(DisasContext *ctx, int rd, int cs,
 }
 
 #define TRANSLATE_CGET(name)                                                   \
-    TRANSLATE_NO_TRAP(name, gen_cheri_get, ctx, a->rd, a->rs1)
+    DO_TRANSLATE(name, gen_cheri_get, ctx, a->rd, a->rs1)
 
 typedef void(cheri_cap_cap_helper)(TCGv_env, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_cap_cap(int cd, int cs,
@@ -76,9 +68,7 @@ static inline bool gen_cheri_cap_cap(int cd, int cs,
     return true;
 }
 #define TRANSLATE_CAP_CAP(name)                                                \
-    TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap, a->rd, a->rs1)
-#define TRANSLATE_CAP_CAP_NO_TRAP(name)                                        \
-    TRANSLATE_NO_TRAP(name, gen_cheri_cap_cap, a->rd, a->rs1)
+    DO_TRANSLATE(name, gen_cheri_cap_cap, a->rd, a->rs1)
 
 typedef void(cheri_cap_int_helper)(TCGv_env, TCGv_i32, TCGv);
 static inline bool gen_cheri_cap_int(int cd, int rs,
@@ -122,7 +112,7 @@ static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
 }
 // We assume that all these instructions can trap (e.g. seal violation)
 #define TRANSLATE_CAP_CAP_CAP(name)                                            \
-    TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_cap, a->rd, a->rs1, a->rs2)
+    DO_TRANSLATE(name, gen_cheri_cap_cap_cap, a->rd, a->rs1, a->rs2)
 
 typedef void(cheri_cap_cap_int_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv);
 static inline bool gen_cheri_cap_cap_int_imm(int cd, int cs1, int rs2,
@@ -143,7 +133,7 @@ static inline bool gen_cheri_cap_cap_int_imm(int cd, int cs1, int rs2,
     return true;
 }
 #define TRANSLATE_CAP_CAP_INT(name)                                            \
-    TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_int_imm, a->rd, a->rs1, a->rs2, 0)
+    DO_TRANSLATE(name, gen_cheri_cap_cap_int_imm, a->rd, a->rs1, a->rs2, 0)
 
 typedef void(cheri_int_cap_cap_helper)(TCGv, TCGv_env, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_int_cap_cap(DisasContext *ctx, int rd, int cs1,
@@ -161,7 +151,7 @@ static inline bool gen_cheri_int_cap_cap(DisasContext *ctx, int rd, int cs1,
     return true;
 }
 #define TRANSLATE_INT_CAP_CAP(name)                                            \
-    TRANSLATE_MAYBE_TRAP(name, gen_cheri_int_cap_cap, ctx, a->rd, a->rs1, a->rs2)
+    DO_TRANSLATE(name, gen_cheri_int_cap_cap, ctx, a->rd, a->rs1, a->rs2)
 
 // TODO: all of these could be implemented in TCG without calling a helper
 // Two operand (int cap)
@@ -178,7 +168,6 @@ TRANSLATE_CGET(cgetsealed)
 // Two operand (int int)
 static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)
 {
-    INSN_CAN_TRAP(ctx);
     return gen_cheri_int_int(ctx, a->rd, a->rs1, &gen_helper_crap);
 }
 static inline bool trans_cram(DisasContext *ctx, arg_cram *a)
@@ -187,8 +176,8 @@ static inline bool trans_cram(DisasContext *ctx, arg_cram *a)
 }
 
 // Two operand (cap cap)
-TRANSLATE_CAP_CAP_NO_TRAP(ccleartag)
-TRANSLATE_CAP_CAP_NO_TRAP(cmove)
+TRANSLATE_CAP_CAP(ccleartag)
+TRANSLATE_CAP_CAP(cmove)
 
 // Three operand (cap cap cap)
 TRANSLATE_CAP_CAP_CAP(cbuildcap)
@@ -233,13 +222,11 @@ static inline bool gen_cheri_cap_cap_imm(int cd, int cs1, target_long imm,
 
 static bool trans_cincoffsetimm(DisasContext *ctx, arg_cincoffsetimm *a)
 {
-    INSN_CAN_TRAP(ctx);
     return gen_cheri_cap_cap_imm(a->rd, a->rs1, a->imm, &gen_helper_cincoffset);
 }
 
 static bool trans_csetboundsimm(DisasContext *ctx, arg_cincoffsetimm *a)
 {
-    INSN_CAN_TRAP(ctx);
     tcg_debug_assert(a->imm >= 0);
     return gen_cheri_cap_cap_imm(a->rd, a->rs1, a->imm, &gen_helper_csetbounds);
 }
@@ -247,7 +234,6 @@ static bool trans_csetboundsimm(DisasContext *ctx, arg_cincoffsetimm *a)
 /// Control-flow instructions
 static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
 {
-    INSN_CAN_TRAP(ctx);
     TCGv_i32 dest_regnum = tcg_const_i32(a->rd);
     TCGv_i32 source_regnum = tcg_const_i32(a->rs1);
     TCGv t0 = tcg_const_tl(ctx->pc_succ_insn); // Link addr + resulting $pc
@@ -266,7 +252,6 @@ static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
 // Loads
 static bool gen_ddc_load(DisasContext *ctx, int rd, int rs1, MemOp memop)
 {
-    INSN_CAN_TRAP(ctx);
     TCGv addr = tcg_temp_new();
     TCGv value = tcg_temp_new();
     gen_get_gpr(addr, rs1);
@@ -297,20 +282,17 @@ TRANSLATE_DDC_LOAD(lwuddc, MO_UL)
 static inline bool trans_lcddc(DisasContext *ctx, arg_lcddc *a)
 {
     // always uses DDC as the base register
-    INSN_CAN_TRAP(ctx);
     return gen_cheri_cap_cap_int_imm(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, 0, &gen_helper_load_cap_via_cap);
 }
 
 static inline bool trans_lccap(DisasContext *ctx, arg_lccap *a)
 {
     // No immediate available for lccap
-    INSN_CAN_TRAP(ctx);
     return gen_cheri_cap_cap_imm(a->rd, a->rs1, 0, &gen_helper_load_cap_via_cap);
 }
 
 static inline bool trans_lc(DisasContext *ctx, arg_lc *a)
 {
-    INSN_CAN_TRAP(ctx);
     if (!ctx->capmode) {
         // Without capmode we load relative to DDC (lc instructions)
         return gen_cheri_cap_cap_int_imm(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, a->imm, &gen_helper_load_cap_via_cap);
@@ -323,7 +305,6 @@ static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
                                 target_long offset, MemOp op)
 {
     // FIXME: just do everything in the helper
-    INSN_CAN_TRAP(ctx);
     TCGv value = tcg_temp_new();
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
     generate_cap_load_check_imm(vaddr, cs, offset, op);
@@ -353,7 +334,6 @@ TRANSLATE_CAP_LOAD(lwucap, MO_UL)
 // Stores
 static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
 {
-    INSN_CAN_TRAP(ctx);
     TCGv addr = tcg_temp_new();
     TCGv value = tcg_temp_new();
     gen_get_gpr(addr, rs1);
@@ -382,7 +362,6 @@ static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
                                  int32_t val_regnum, target_long offset,
                                  MemOp op)
 {
-    INSN_CAN_TRAP(ctx);
     // FIXME: just do everything in the helper
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
     generate_cap_store_check_imm(vaddr, addr_regnum, offset, op);
@@ -411,21 +390,18 @@ TRANSLATE_CAP_STORE(sdcap, MO_Q)
 static inline bool trans_scddc(DisasContext *ctx, arg_scddc *a)
 {
     // always uses DDC as the base register
-    INSN_CAN_TRAP(ctx);
     return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, 0, &gen_helper_store_cap_via_cap);
 }
 
 static inline bool trans_sccap(DisasContext *ctx, arg_sccap *a)
 {
     // No immediate available for sccap
-    INSN_CAN_TRAP(ctx);
     return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0, &gen_helper_store_cap_via_cap);
 }
 
 static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
 {
     // RS2 is the value, RS1 is the capability
-    INSN_CAN_TRAP(ctx);
     if (!ctx->capmode) {
         // Without capmode we store relative to DDC (sc instructions)
         return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, a->imm, &gen_helper_store_cap_via_cap);
