@@ -52,8 +52,10 @@ static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
 #else
     (void)oob_info;
 #endif
-    // Note: we can use a PCC value with an outdated cursor since we are writing
-    // a new address.
+    // Note: we can use a "stale" PCC value with an outdated cursor here since
+    // we only really care about the bounds and permissions to derive the
+    // resulting capability (e.g. auipcc or CGetPCCIncOffset).
+    // If the result is not representable it will be untagged.
     const cap_register_t *pccp = cheri_get_recent_pcc(env);
     cap_register_t result = *pccp;
     if (!is_representable_cap_with_addr(pccp, new_addr)) {
