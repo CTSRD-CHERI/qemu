@@ -1446,8 +1446,9 @@ static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
 {
     *pc = PC_ADDR(env);
 #ifdef TARGET_CHERI
-    *cs_base = 0;
+    *cs_base = cap_get_base(&env->active_tc.PCC);
 #else
+    *cs_base = 0;
 #endif
     *flags = env->hflags & (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK |
                             MIPS_HFLAG_HWRENA_ULR);

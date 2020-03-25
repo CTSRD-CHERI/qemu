@@ -2769,6 +2769,9 @@ typedef struct DisasContext {
     DisasContextBase base;
     target_ulong saved_pc;
     target_ulong page_start;
+#ifdef TARGET_CHERI
+    target_ulong pcc_base;
+#endif
     uint32_t opcode;
     uint64_t insn_flags;
     int32_t CP0_Config1;
@@ -6484,6 +6487,8 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
 
+    // Note: For CHERI btgt is an absolute address not an offset relative
+    // to PCC.base.
 #if defined(TARGET_CHERI)
     bool btarget_checked = false;
     // Some debug assertions to ensure all branch cases are bounds checked
@@ -6554,31 +6559,17 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
 #ifndef TARGET_CHERI
     case OPC_JALX:
 #endif
+    {
         /* Jump to immediate */
-
 #ifdef TARGET_CHERI
-        /*
-         * The branch target address is not known since the PCC.base can
-         * change.  Therefore treat this like a JR/JALR and compute the
-         * branch target from the current PCC.base.
-         *
-         * ((ctx->base.pc_next + insn_bytes) - PCC.base) >> 28 << 28 | offset +
-         * PCC.base
-         */
-        tcg_gen_movi_i64(t0, ctx->base.pc_next + insn_bytes);
-        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
-            offsetof(cap_register_t, cr_base));
-        tcg_gen_sub_i64(t0, t0, t1);
-        tcg_gen_shri_i64(t0, t0, 28);
-        tcg_gen_shli_i64(t0, t0, 28);
-        tcg_gen_ori_i64(t0, t0, offset);
-        tcg_gen_add_i64(btarget, t0, t1);
-        GEN_CCHECK_BTARGET(cpu_env);
+        btgt = (((ctx->base.pc_next + insn_bytes - ctx->pcc_base) >> 28) << 28) |
+            (uint32_t)offset + ctx->pcc_base;
 #else
         btgt = ((ctx->base.pc_next + insn_bytes) & (int32_t)0xF0000000) |
             (uint32_t)offset;
-#endif /* ! TARGET_CHERI */
+#endif /* TARGET_CHERI */
         break;
+    }
     case OPC_JR:
     case OPC_JALR:
         /* Jump to register */
@@ -6595,11 +6586,9 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
         gen_load_gpr(btarget, rs);
 #ifdef TARGET_CHERI
         /* Add PCC.base to rs */
-        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
-                offsetof(cap_register_t, cr_base));
-        tcg_gen_add_i64(btarget, btarget, t1);
-        GEN_CCHECK_BTARGET(cpu_env);
+        tcg_gen_addi_tl(btarget, btarget, ctx->pcc_base);
 #endif /* TARGET_CHERI */
+        GEN_CCHECK_BTARGET(cpu_env);
         break;
     default:
         MIPS_INVAL("branch/jump");
@@ -6641,13 +6630,12 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
             ctx->hflags |= MIPS_HFLAG_B;
             break;
         case OPC_BLTZALL: /* 0 < 0 likely */
-            tcg_gen_movi_tl(cpu_gpr[31], ctx->base.pc_next + 8);
 #ifdef TARGET_CHERI
             /* Subtract PCC.base from r31 */
-            tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState,
-                        active_tc.PCC) + offsetof(cap_register_t, cr_base));
-            tcg_gen_sub_i64(cpu_gpr[31], cpu_gpr[31], t1);
-#endif /* TARGET_CHERI */
+            tcg_gen_movi_tl(cpu_gpr[31], ctx->base.pc_next + 8 - ctx->pcc_base);
+#else
+            tcg_gen_movi_tl(cpu_gpr[31], ctx->base.pc_next + 8);
+#endif
             /* Skip the instruction in the delay slot */
             ctx->base.pc_next += 4;
             SET_BTARGET_CHECKED(true); // not taken -> no need to check
@@ -6674,12 +6662,7 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
 #endif
         case OPC_JAL:
             blink = 31;
-#ifdef TARGET_CHERI
-            ctx->hflags |= MIPS_HFLAG_BR | MIPS_HFLAG_BDS32;
-            save_cpu_state(ctx, 0);
-#else
             ctx->hflags |= MIPS_HFLAG_B;
-#endif /* TARGET_CHERI */
             break;
         case OPC_JR:
             ctx->hflags |= MIPS_HFLAG_BR;
@@ -6799,13 +6782,12 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
         int lowbit = !!(ctx->hflags & MIPS_HFLAG_M16);
 
         tcg_gen_movi_tl(cpu_gpr[blink],
-                        ctx->base.pc_next + post_delay + lowbit);
 #ifdef TARGET_CHERI
-        /* Subtract PCC.base from r[blink] */
-        tcg_gen_ld_i64(t1, cpu_env, offsetof(CPUMIPSState, active_tc.PCC) +
-            offsetof(cap_register_t, cr_base));
-        tcg_gen_sub_i64(cpu_gpr[blink], cpu_gpr[blink], t1);
-#endif /* TARGET_CHERI */
+                        /* Subtract PCC.base from r[blink] */
+                        ctx->base.pc_next + post_delay + lowbit - ctx->pcc_base);
+#else
+                        ctx->base.pc_next + post_delay + lowbit);
+#endif
     }
 
  out:
@@ -31697,6 +31679,11 @@ static void mips_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
     CPUMIPSState *env = cs->env_ptr;
+
+#ifdef TARGET_CHERI
+    ctx->pcc_base = dcbase->tb->cs_base;
+    cheri_debug_assert(ctx->pcc_base == cap_get_base(cheri_get_recent_pcc(env)));
+#endif
 
     ctx->page_start = ctx->base.pc_first & TARGET_PAGE_MASK;
     ctx->saved_pc = -1;
