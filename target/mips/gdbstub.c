@@ -62,7 +62,7 @@ int mips_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
         return gdb_get_regl(mem_buf, (int32_t)env->CP0_Cause);
     case 37:
         // FIXME: should this be vaddr or offset for CHERI?
-        return gdb_get_regl(mem_buf, env->active_tc.PC |
+        return gdb_get_regl(mem_buf, PC_ADDR(env) |
                                      !!(env->hflags & MIPS_HFLAG_M16));
     }
 

@@ -261,7 +261,7 @@ target_ulong helper_mftc0_tcbind(CPUMIPSState *env)
 
 target_ulong helper_mfc0_tcrestart(CPUMIPSState *env)
 {
-    return env->active_tc.PC;
+    return PC_ADDR(env);
 }
 
 target_ulong helper_mftc0_tcrestart(CPUMIPSState *env)
@@ -270,9 +270,13 @@ target_ulong helper_mftc0_tcrestart(CPUMIPSState *env)
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
     if (other_tc == other->current_tc) {
-        return other->active_tc.PC;
+        return PC_ADDR(other);
     } else {
+#ifdef TARGET_CHERI
+        return other->tcs[other_tc].PCC._cr_cursor;
+#else
         return other->tcs[other_tc].PC;
+#endif
     }
 }
 
@@ -456,7 +460,7 @@ target_ulong helper_mftc0_debug(CPUMIPSState *env)
 #if defined(TARGET_MIPS64)
 target_ulong helper_dmfc0_tcrestart(CPUMIPSState *env)
 {
-    return env->active_tc.PC;
+    return PC_ADDR(env);
 }
 
 target_ulong helper_dmfc0_tchalt(CPUMIPSState *env)

@@ -94,3 +94,11 @@ static inline target_ulong cpu_get_current_pc_checked(CPUArchState *env)
     cheri_debug_assert(pc_is_current(env));
     return cpu_get_recent_pc(env);
 }
+
+static inline target_ulong PC_ADDR(CPUArchState *env)
+{
+#ifdef CONFIG_DEBUG_TCG
+    assert(pc_is_current(env));
+#endif
+    return cpu_get_recent_pc(env);
+}

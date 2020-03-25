@@ -53,10 +53,9 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
     qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT,
                   "C2 EXCEPTION: cause=%d(%s)"
                   " reg=%d PCC=" PRINT_CAP_FMTSTR
-                  " -> host PC: 0x%jx active_tc.PC=0x" TARGET_FMT_plx "\n",
+                  " -> host PC: 0x%jx\n",
                   cause, cheri_cause_str(cause), reg,
-                  PRINT_CAP_ARGS(&env->active_tc.PCC), (uintmax_t)hostpc,
-                  env->active_tc.PC);
+                  PRINT_CAP_ARGS(&env->active_tc.PCC), (uintmax_t)hostpc);
 #ifdef DEBUG_KERNEL_CP2_VIOLATION
     if (in_kernel_mode(env)) {
         // Print some debug information for CheriBSD kernel crashes

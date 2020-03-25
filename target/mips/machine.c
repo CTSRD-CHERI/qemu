@@ -80,7 +80,11 @@ const VMStateDescription vmstate_inactive_fpu = {
 
 static VMStateField vmstate_tc_fields[] = {
     VMSTATE_UINTTL_ARRAY(gpr, TCState, 32),
+#ifdef TARGET_CHERI
+    VMSTATE_UINTTL(PCC._cr_cursor, TCState),
+#else
     VMSTATE_UINTTL(PC, TCState),
+#endif
     VMSTATE_UINTTL_ARRAY(HI, TCState, MIPS_DSP_ACC),
     VMSTATE_UINTTL_ARRAY(LO, TCState, MIPS_DSP_ACC),
     VMSTATE_UINTTL_ARRAY(ACX, TCState, MIPS_DSP_ACC),

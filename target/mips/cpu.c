@@ -111,6 +111,9 @@ static void mips_cpu_reset(DeviceState *dev)
     mcc->parent_reset(dev);
 
     memset(env, 0, offsetof(CPUMIPSState, end_reset_fields));
+#ifdef CONFIG_DEBUG_TCG
+    env->active_tc._pc_is_current = true;
+#endif
 
     cpu_state_reset(env);
 

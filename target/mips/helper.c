@@ -1151,7 +1151,7 @@ target_ulong exception_resume_pc(CPUMIPSState *env)
     target_ulong isa_mode;
 
     isa_mode = !!(env->hflags & MIPS_HFLAG_M16);
-    bad_pc = env->active_tc.PC | isa_mode;
+    bad_pc = PC_ADDR(env) | isa_mode;
     if (env->hflags & MIPS_HFLAG_BMASK) {
         /*
          * If the exception was raised from a delay slot, come back to
@@ -1180,14 +1180,14 @@ static inline void set_badinstr_registers(CPUMIPSState *env)
 {
     if (env->insn_flags & ISA_NANOMIPS32) {
         if (env->CP0_Config3 & (1 << CP0C3_BI)) {
-            uint32_t instr = (cpu_lduw_code(env, env->active_tc.PC)) << 16;
+            uint32_t instr = (cpu_lduw_code(env, PC_ADDR(env))) << 16;
             if ((instr & 0x10000000) == 0) {
-                instr |= cpu_lduw_code(env, env->active_tc.PC + 2);
+                instr |= cpu_lduw_code(env, PC_ADDR(env) + 2);
             }
             env->CP0_BadInstr = instr;
 
             if ((instr & 0xFC000000) == 0x60000000) {
-                instr = cpu_lduw_code(env, env->active_tc.PC + 4) << 16;
+                instr = cpu_lduw_code(env, PC_ADDR(env) + 4) << 16;
                 env->CP0_BadInstrX = instr;
             }
         }
@@ -1199,11 +1199,11 @@ static inline void set_badinstr_registers(CPUMIPSState *env)
         return;
     }
     if (env->CP0_Config3 & (1 << CP0C3_BI)) {
-        env->CP0_BadInstr = cpu_ldl_code(env, env->active_tc.PC);
+        env->CP0_BadInstr = cpu_ldl_code(env, PC_ADDR(env));
     }
     if ((env->CP0_Config3 & (1 << CP0C3_BP)) &&
         (env->hflags & MIPS_HFLAG_BMASK)) {
-        env->CP0_BadInstrP = cpu_ldl_code(env, env->active_tc.PC - 4);
+        env->CP0_BadInstrP = cpu_ldl_code(env, PC_ADDR(env) - 4);
     }
 }
 #endif
@@ -1256,7 +1256,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         }
 
         qemu_log("%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
-                 " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n", __func__, env->active_tc.PC, get_CP0_EPC(env),
+                 " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n", __func__, PC_ADDR(env), get_CP0_EPC(env),
                  name, env->hflags & MIPS_HFLAG_BMASK, env->hflags);
 #ifdef TARGET_CHERI
         qemu_log("\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
@@ -1284,7 +1284,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
          * (but we assume the pc has always been updated during
          * code translation).
          */
-        env->CP0_DEPC = env->active_tc.PC | !!(env->hflags & MIPS_HFLAG_M16);
+        env->CP0_DEPC = PC_ADDR(env) | !!(env->hflags & MIPS_HFLAG_M16);
         goto enter_debug_mode;
     case EXCP_DINT:
         env->CP0_Debug |= 1 << CP0DB_DINT;
@@ -1589,10 +1589,10 @@ void mips_cpu_do_interrupt(CPUState *cs)
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         if (cs->exception_index == EXCP_EXT_INTERRUPT)
             qemu_log("--- Interrupt, vector " TARGET_FMT_lx "\n",
-                    env->active_tc.PC);
+                     PC_ADDR(env));
         else
             qemu_log("--- Exception #%u: %s, vector "
-                    TARGET_FMT_lx "\n", cause, name, env->active_tc.PC);
+                    TARGET_FMT_lx "\n", cause, name, PC_ADDR(env));
     }
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
         env->cvtrace.exception = cause;
@@ -1611,7 +1611,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
         qemu_log("%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
                  "    S %08x C %08x A " TARGET_FMT_lx " D " TARGET_FMT_lx "\n",
-                 __func__, env->active_tc.PC, get_CP0_EPC(env), cause,
+                 __func__, PC_ADDR(env), get_CP0_EPC(env), cause,
                  env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
                  env->CP0_DEPC);
 #if defined(TARGET_CHERI) && defined(CONFIG_MIPS_LOG_INSTR)
@@ -1626,9 +1626,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #endif
     cs->exception_index = EXCP_NONE;
-#ifdef TARGET_CHERI
-    assert(cap_get_cursor(&env->active_tc.PCC) == env->active_tc.PC);
-#endif
 #ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
                      || env->user_only_tracing_enabled)) {

@@ -31959,7 +31959,7 @@ void mips_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     qemu_fprintf(f, "pc=0x" TARGET_FMT_lx " HI=0x" TARGET_FMT_lx
                  " LO=0x" TARGET_FMT_lx " ds %04x "
                  TARGET_FMT_lx " " TARGET_FMT_ld "\n",
-                 env->active_tc.PC, env->active_tc.HI[0], env->active_tc.LO[0],
+                 PC_ADDR(env), env->active_tc.HI[0], env->active_tc.LO[0],
                  env->hflags, env->btarget, env->bcond);
     for (i = 0; i < 32; i++) {
         if ((i & 3) == 0) {
@@ -32013,7 +32013,11 @@ void mips_tcg_init(void)
     }
 
     cpu_PC = tcg_global_mem_new(cpu_env,
+#ifdef TARGET_CHERI
+                                offsetof(CPUMIPSState, active_tc.PCC._cr_cursor), "PC");
+#else
                                 offsetof(CPUMIPSState, active_tc.PC), "PC");
+#endif
 #ifdef CONFIG_DEBUG_TCG
     _pc_is_current = tcg_global_mem_new(
         cpu_env, offsetof(CPUArchState, active_tc._pc_is_current),
@@ -32227,10 +32231,9 @@ void cpu_state_reset(CPUMIPSState *env)
          * If the exception was raised from a delay slot,
          * come back to the jump.
          */
-        set_CP0_ErrorEPC(env, env->active_tc.PC
-                         - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4));
+        set_CP0_ErrorEPC(env, PC_ADDR(env) - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4));
     } else {
-        set_CP0_ErrorEPC(env, env->active_tc.PC);
+        set_CP0_ErrorEPC(env, PC_ADDR(env));
     }
     mips_update_pc(env, env->exception_base);
 #ifdef CONFIG_DEBUG_TCG
@@ -32380,9 +32383,6 @@ void cpu_state_reset(CPUMIPSState *env)
         // enable KX bit on startup
         env->CP0_Status |= (1 << CP0St_KX);
     }
-#ifdef TARGET_CHERI
-    assert(env->active_tc.PC == cap_get_cursor(&env->active_tc.PCC));
-#endif
 }
 
 void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb,

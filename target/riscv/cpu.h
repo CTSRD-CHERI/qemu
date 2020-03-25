@@ -362,13 +362,6 @@ static inline target_ulong cpu_get_recent_pc(CPURISCVState *env) {
     return env->pc;
 #endif
 }
-static inline target_ulong PC_ADDR(CPURISCVState *env)
-{
-#ifdef CONFIG_DEBUG_TCG
-    assert(pc_is_current(env));
-#endif
-    return cpu_get_recent_pc(env);
-}
 
 #define RISCV_CPU_CLASS(klass) \
     OBJECT_CLASS_CHECK(RISCVCPUClass, (klass), TYPE_RISCV_CPU)

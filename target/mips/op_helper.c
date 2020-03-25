@@ -1091,7 +1091,7 @@ static void debug_pre_eret(CPUMIPSState *env)
 {
     if (qemu_loglevel_mask(CPU_LOG_EXEC | CPU_LOG_INSTR)) {
         qemu_log("ERET: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
-                env->active_tc.PC, get_CP0_EPC(env));
+                 PC_ADDR(env), get_CP0_EPC(env));
         if (should_use_error_epc(env)) {
           qemu_log(" ErrorEPC " TARGET_FMT_lx, get_CP0_ErrorEPC(env));
         }
@@ -1106,7 +1106,7 @@ static void debug_post_eret(CPUMIPSState *env)
 {
     if (qemu_loglevel_mask(CPU_LOG_EXEC)) {
         qemu_log("  =>  PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
-                env->active_tc.PC, get_CP0_EPC(env));
+                 PC_ADDR(env), get_CP0_EPC(env));
         if (should_use_error_epc(env)) {
           qemu_log(" ErrorEPC " TARGET_FMT_lx, get_CP0_ErrorEPC(env));
         }
@@ -2359,13 +2359,13 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
         target_ulong src = env->active_tc.gpr[MIPS_REGNUM_A0];
         target_ulong real_len = env->active_tc.gpr[MIPS_REGNUM_A2];
         fprintf(stderr, "--- Memory dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
-                lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), real_len, src);
+                lookup_symbol(PC_ADDR(env)), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), real_len, src);
         while (real_len > 0) {
             target_ulong len = adj_len_to_page(real_len, src);
             real_len -= len;
             if (len != env->active_tc.gpr[MIPS_REGNUM_A2]) {
                 fprintf(stderr, "--- partial dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
-                        lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
+                        lookup_symbol(PC_ADDR(env)), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
             }
             if (cpu_memory_rw_debug(env_cpu(env), src, buffer, len, false) == 0) {
                 bool have_nonzero = false;
@@ -2378,7 +2378,7 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
                     fprintf(stderr, "   -- all zeroes\r\n");
             } else {
                 fprintf(stderr, "--- Memory dump at %s(%s): Could not fetch" TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
-                        lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
+                        lookup_symbol(PC_ADDR(env)), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
             }
         }
     }
@@ -2389,7 +2389,7 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
                     "\tv0 = 0x" TARGET_FMT_lx "\tv1 = 0x" TARGET_FMT_lx "\r\n"
                     "\ta0 = 0x" TARGET_FMT_lx "\ta1 = 0x" TARGET_FMT_lx "\r\n"
                     "\ta2 = 0x" TARGET_FMT_lx "\ta3 = 0x" TARGET_FMT_lx "\r\n",
-                    lookup_symbol(env->active_tc.PC), ((which & UINT32_MAX) == 0xfe ? "entry" : "exit"),
+                    lookup_symbol(PC_ADDR(env)), ((which & UINT32_MAX) == 0xfe ? "entry" : "exit"),
                     env->active_tc.gpr[2], env->active_tc.gpr[3],
                     env->active_tc.gpr[4], env->active_tc.gpr[5],
                     env->active_tc.gpr[6], env->active_tc.gpr[7]);

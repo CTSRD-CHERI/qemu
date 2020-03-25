@@ -165,7 +165,7 @@ mips_mipssim_init(MachineState *machine)
 
     reset_info = g_malloc0(sizeof(ResetData));
     reset_info->cpu = cpu;
-    reset_info->vector = env->active_tc.PC;
+    reset_info->vector = PC_ADDR(env);
     qemu_register_reset(main_cpu_reset, reset_info);
 
     /* Allocate RAM. */

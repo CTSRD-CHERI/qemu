@@ -987,7 +987,7 @@ int kvm_arch_put_registers(CPUState *cs, int level)
 
     regs.hi = (int64_t)(target_long)env->active_tc.HI[0];
     regs.lo = (int64_t)(target_long)env->active_tc.LO[0];
-    regs.pc = (int64_t)(target_long)env->active_tc.PC;
+    regs.pc = (int64_t)(target_long)PC_ADDR(env);
 
     ret = kvm_vcpu_ioctl(cs, KVM_SET_REGS, &regs);
 

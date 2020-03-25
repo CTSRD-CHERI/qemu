@@ -518,7 +518,7 @@ static void dump_changed_cop0(CPUMIPSState *env)
     if (env->CP0_Config3 & (1 << CP0C3_MT)) {
         dump_changed_cop0_reg(env, 2*8 + 1, env->active_tc.CP0_TCStatus);
         dump_changed_cop0_reg(env, 2*8 + 2, env->active_tc.CP0_TCBind);
-        dump_changed_cop0_reg(env, 2*8 + 3, env->active_tc.PC);
+        dump_changed_cop0_reg(env, 2*8 + 3, PC_ADDR(env));
         dump_changed_cop0_reg(env, 2*8 + 4, env->active_tc.CP0_TCHalt);
         dump_changed_cop0_reg(env, 2*8 + 5, env->active_tc.CP0_TCContext);
         dump_changed_cop0_reg(env, 2*8 + 6, env->active_tc.CP0_TCSchedule);
@@ -695,7 +695,7 @@ static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mod
         assert(strcmp(new_mode, TRACE_MODE_USER) != 0);
         /* When changing from user mode to kernel mode disable tracing */
         user_trace_dbg("%s -> %s: 0x%lx ASID %lu -- switching off tracing \n",
-            env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
+            env->last_mode, new_mode, PC_ADDR(env), env->CP0_EntryHi & 0xFF);
         env->tracing_suspended = true;
         qemu_set_log(qemu_loglevel & ~cl_default_trace_format);
     } else if (strcmp(new_mode, TRACE_MODE_USER) == 0) {
@@ -704,11 +704,11 @@ static void update_tracing_on_mode_change(CPUMIPSState *env, const char* new_mod
         if (env->trace_explicitly_disabled) {
             user_trace_dbg("Not turning on tracing on switch %s -> %s 0x%lx. "
                 "Tracing was explicitly disabled, ASID=%lu\n",
-                env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
+                env->last_mode, new_mode, PC_ADDR(env), env->CP0_EntryHi & 0xFF);
         } else if (env->tracing_suspended) {
             qemu_set_log(qemu_loglevel | cl_default_trace_format);
             user_trace_dbg("%s -> %s 0x%lx ASID %lu -- switching on tracing\n",
-                env->last_mode, new_mode, env->active_tc.PC, env->CP0_EntryHi & 0xFF);
+                env->last_mode, new_mode, PC_ADDR(env), env->CP0_EntryHi & 0xFF);
             env->tracing_suspended = false;
         }
     }
@@ -745,7 +745,7 @@ static void simple_dump_state(CPUMIPSState *env, FILE *f,
 {
 
 /* gxemul compat:
-    cpu_fprintf(f, "pc = 0x" TARGET_FMT_lx "\n", env->active_tc.PC);
+    cpu_fprintf(f, "pc = 0x" TARGET_FMT_lx "\n", PC_ADDR(env));
     cpu_fprintf(f, "hi = 0x" TARGET_FMT_lx "    lo = 0x" TARGET_FMT_lx "\n",
             env->active_tc.HI[0], env->active_tc.LO[0]);
     cpu_fprintf(f, "                       ""    s0 = 0x" TARGET_FMT_lx "\n",
@@ -784,7 +784,7 @@ static void simple_dump_state(CPUMIPSState *env, FILE *f,
 
     /* sim compatible register dump: */
     cpu_fprintf(f, "DEBUG MIPS COREID 0\n");
-    cpu_fprintf(f, "DEBUG MIPS PC 0x" TARGET_FMT_lx "\n", env->active_tc.PC);
+    cpu_fprintf(f, "DEBUG MIPS PC 0x" TARGET_FMT_lx "\n", PC_ADDR(env));
     cpu_fprintf(f, "DEBUG MIPS REG 00 0x" TARGET_FMT_lx "\n", env->active_tc.gpr[0]);
     cpu_fprintf(f, "DEBUG MIPS REG 01 0x" TARGET_FMT_lx "\n", env->active_tc.gpr[1]);
     cpu_fprintf(f, "DEBUG MIPS REG 02 0x" TARGET_FMT_lx "\n", env->active_tc.gpr[2]);

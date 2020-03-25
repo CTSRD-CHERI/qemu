@@ -509,7 +509,13 @@ struct cheri_cap_hwregs {
 typedef struct TCState TCState;
 struct TCState {
     target_ulong gpr[32];
+#ifdef TARGET_CHERI
+    cap_register_t PCC;
+    cap_register_t CapBranchTarget; /* Target of the next cjr/cjalr/ccall */
+#else
     target_ulong PC;
+#endif
+
 #ifdef CONFIG_DEBUG_TCG
     target_ulong _pc_is_current;
 #endif
@@ -519,8 +525,6 @@ struct TCState {
     target_ulong DSPControl;
 
 #if defined(TARGET_CHERI)
-    cap_register_t PCC;
-    cap_register_t CapBranchTarget; /* Target of the next cjr/cjalr/ccall */
     struct GPCapRegs gpcapregs;
     struct cheri_cap_hwregs CHWR;
 // #define CP2CAP_RCC  24  /* Return Code Capability */
@@ -1138,7 +1142,7 @@ struct CPUMIPSState {
     uint32_t hflags;    /* CPU State */
     /* TMASK defines different execution modes */
 #ifdef TARGET_CHERI
-#define MIPS_HFLAG_TMASK  0x2F5807FF
+#define MIPS_HFLAG_TMASK  0x3F5807FF
 #else
 #define MIPS_HFLAG_TMASK  0x1F5807FF
 #endif /* TARGET_CHERI */
@@ -1204,8 +1208,7 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_ITC_CACHE  0x8000000 /* CACHE instr. operates on ITC tag */
 #define MIPS_HFLAG_ERL   0x10000000 /* error level flag */
 #ifdef TARGET_CHERI
-#define MIPS_HFLAG_COP2X   0x20000000 /* CHERI/CP2 enabled              */
-    // int btcr;                    /* cjr/cjalr Cap register target      */
+#define MIPS_HFLAG_COP2X 0x20000000 /* CHERI/CP2 enabled              */
 #endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
     target_ulong bcond;          /* Branch condition (if needed)       */
@@ -1441,8 +1444,11 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
                                         target_ulong *cs_base, uint32_t *flags)
 {
-    *pc = env->active_tc.PC;
+    *pc = PC_ADDR(env);
+#ifdef TARGET_CHERI
     *cs_base = 0;
+#else
+#endif
     *flags = env->hflags & (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK |
                             MIPS_HFLAG_HWRENA_ULR);
 }
@@ -1478,7 +1484,11 @@ static inline bool in_kernel_mode(CPUMIPSState *env) {
 // that shouldn't really matter.
 static inline target_ulong cpu_get_recent_pc(CPUMIPSState *env)
 {
+#ifdef TARGET_CHERI
+    return env->active_tc.PCC._cr_cursor;
+#else
     return env->active_tc.PC;
+#endif
 }
 
 static inline bool pc_is_current(CPUArchState *env)
@@ -1491,10 +1501,11 @@ static inline bool pc_is_current(CPUArchState *env)
 }
 static inline void mips_update_pc_impl(TCState *state, target_ulong pc_addr)
 {
-    state->PC = pc_addr;
 #ifdef TARGET_CHERI
     // Note: no representability check, those are done on jump.
     state->PCC._cr_cursor = pc_addr;
+#else
+    state->PC = pc_addr;
 #endif
 #ifdef CONFIG_DEBUG_TCG
     state->_pc_is_current = true;
