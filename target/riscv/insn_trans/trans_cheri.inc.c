@@ -48,7 +48,7 @@
         return gen_helper(__VA_ARGS__, &gen_helper_##name);                    \
     }
 
-typedef void(cheri_cget_helper)(TCGv, TCGv_ptr, TCGv_i32);
+typedef void(cheri_cget_helper)(TCGv, TCGv_env, TCGv_i32);
 static inline bool gen_cheri_get(DisasContext *ctx, int rd, int cs,
                                  cheri_cget_helper *gen_func)
 {
@@ -64,7 +64,7 @@ static inline bool gen_cheri_get(DisasContext *ctx, int rd, int cs,
 #define TRANSLATE_CGET(name)                                                   \
     TRANSLATE_NO_TRAP(name, gen_cheri_get, ctx, a->rd, a->rs1)
 
-typedef void(cheri_cap_cap_helper)(TCGv_ptr, TCGv_i32, TCGv_i32);
+typedef void(cheri_cap_cap_helper)(TCGv_env, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_cap_cap(int cd, int cs,
                                      cheri_cap_cap_helper *gen_func)
 {
@@ -80,7 +80,7 @@ static inline bool gen_cheri_cap_cap(int cd, int cs,
 #define TRANSLATE_CAP_CAP_NO_TRAP(name)                                        \
     TRANSLATE_NO_TRAP(name, gen_cheri_cap_cap, a->rd, a->rs1)
 
-typedef void(cheri_cap_int_helper)(TCGv_ptr, TCGv_i32, TCGv);
+typedef void(cheri_cap_int_helper)(TCGv_env, TCGv_i32, TCGv);
 static inline bool gen_cheri_cap_int(int cd, int rs,
                                      cheri_cap_int_helper *gen_func)
 {
@@ -93,7 +93,7 @@ static inline bool gen_cheri_cap_int(int cd, int rs,
     return true;
 }
 
-typedef void(cheri_int_int_helper)(TCGv, TCGv_ptr, TCGv);
+typedef void(cheri_int_int_helper)(TCGv, TCGv_env, TCGv);
 static inline bool gen_cheri_int_int(DisasContext *ctx, int rd, int rs,
                                      cheri_int_int_helper *gen_func)
 {
@@ -107,7 +107,7 @@ static inline bool gen_cheri_int_int(DisasContext *ctx, int rd, int rs,
     return true;
 }
 
-typedef void(cheri_cap_cap_cap_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv_i32);
+typedef void(cheri_cap_cap_cap_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
                                          cheri_cap_cap_cap_helper *gen_func)
 {
@@ -124,7 +124,7 @@ static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
 #define TRANSLATE_CAP_CAP_CAP(name)                                            \
     TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_cap, a->rd, a->rs1, a->rs2)
 
-typedef void(cheri_cap_cap_int_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv);
+typedef void(cheri_cap_cap_int_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv);
 static inline bool gen_cheri_cap_cap_int_imm(int cd, int cs1, int rs2,
                                              target_long imm,
                                              cheri_cap_cap_int_helper *gen_func)
@@ -145,7 +145,7 @@ static inline bool gen_cheri_cap_cap_int_imm(int cd, int cs1, int rs2,
 #define TRANSLATE_CAP_CAP_INT(name)                                            \
     TRANSLATE_MAYBE_TRAP(name, gen_cheri_cap_cap_int_imm, a->rd, a->rs1, a->rs2, 0)
 
-typedef void(cheri_int_cap_cap_helper)(TCGv, TCGv_ptr, TCGv_i32, TCGv_i32);
+typedef void(cheri_int_cap_cap_helper)(TCGv, TCGv_env, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_int_cap_cap(DisasContext *ctx, int rd, int cs1,
                                          int cs2,
                                          cheri_int_cap_cap_helper *gen_func)
@@ -215,7 +215,7 @@ TRANSLATE_INT_CAP_CAP(ctestsubset)
 TRANSLATE_INT_CAP_CAP(ctoptr)
 
 // CIncOffsetImm/CSetBoundsImm:
-typedef void(cheri_cap_cap_imm_helper)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv);
+typedef void(cheri_cap_cap_imm_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv);
 static inline bool gen_cheri_cap_cap_imm(int cd, int cs1, target_long imm,
                                          cheri_cap_cap_imm_helper *gen_func)
 {
