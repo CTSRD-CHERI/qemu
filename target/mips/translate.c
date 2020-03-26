@@ -5047,13 +5047,15 @@ static inline void gen_pcrel(DisasContext *ctx, int opc, target_ulong pc,
     case OPC_ADDIUPC:
         if (rs != 0) {
             offset = sextract32(ctx->opcode << 2, 0, 21);
-            addr = addr_add(ctx, pc, offset);
+            // For CHERI the result is an offset relative to PC
+            addr = addr_add(ctx, pc - pcc_base(ctx), offset);
             tcg_gen_movi_tl(cpu_gpr[rs], addr);
         }
         break;
     case R6_OPC_LWPC:
         offset = sextract32(ctx->opcode << 2, 0, 21);
         addr = addr_add(ctx, pc, offset);
+        // For CHERI we check that the absolute PC address is within PCC
         gen_r6_pcrel_ld(addr, rs, ctx->mem_idx, MO_TESL);
         break;
 #if defined(TARGET_MIPS64)
@@ -5061,6 +5063,7 @@ static inline void gen_pcrel(DisasContext *ctx, int opc, target_ulong pc,
         check_mips_64(ctx);
         offset = sextract32(ctx->opcode << 2, 0, 21);
         addr = addr_add(ctx, pc, offset);
+        // For CHERI we check that the absolute PC address is within PCC
         gen_r6_pcrel_ld(addr, rs, ctx->mem_idx, MO_TEUL);
         break;
 #endif
@@ -5069,14 +5072,16 @@ static inline void gen_pcrel(DisasContext *ctx, int opc, target_ulong pc,
         case OPC_AUIPC:
             if (rs != 0) {
                 offset = sextract32(ctx->opcode, 0, 16) << 16;
-                addr = addr_add(ctx, pc, offset);
+                // For CHERI the result is an offset relative to PC
+                addr = addr_add(ctx, pc - pcc_base(ctx), offset);
                 tcg_gen_movi_tl(cpu_gpr[rs], addr);
             }
             break;
         case OPC_ALUIPC:
             if (rs != 0) {
                 offset = sextract32(ctx->opcode, 0, 16) << 16;
-                addr = ~0xFFFF & addr_add(ctx, pc, offset);
+                // For CHERI the result is an offset relative to PC
+                addr = ~0xFFFF & addr_add(ctx, pc - pcc_base(ctx), offset);
                 tcg_gen_movi_tl(cpu_gpr[rs], addr);
             }
             break;
@@ -5088,6 +5093,7 @@ static inline void gen_pcrel(DisasContext *ctx, int opc, target_ulong pc,
             check_mips_64(ctx);
             offset = sextract32(ctx->opcode << 3, 0, 21);
             addr = addr_add(ctx, (pc & ~0x7), offset);
+            // For CHERI we check that the absolute PC address is within PCC
             gen_r6_pcrel_ld(addr, rs, ctx->mem_idx, MO_TEQ);
             break;
 #endif
