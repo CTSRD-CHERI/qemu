@@ -1173,8 +1173,8 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
     /* Print changed state before advancing to the next instruction: GPR, HI/LO,
      * COP0. */
     const bool should_log_instr =
-        (qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR | CPU_LOG_USER_ONLY) ||
-         env->user_only_tracing_enabled) &&
+        qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR |
+                           CPU_LOG_USER_ONLY) &&
         qemu_log_in_addr_range(next_pc);
     if (unlikely(should_log_instr))
         helper_dump_changed_state(env);

@@ -4360,6 +4360,7 @@ static void gen_arith_imm(DisasContext *ctx, uint32_t opc,
 #define GEN_CHERI_TRACE_HELPER(env, name)                                      \
     {                                                                          \
         TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);                       \
+        gen_save_pc(ctx->base.pc_next);                                        \
         gen_helper_##name(env, tpc);                                           \
         tcg_temp_free_i64(tpc);                                                \
         /* Exit translation block since tracing flag may change */             \
@@ -31732,6 +31733,15 @@ static void mips_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
               ctx->hflags);
 }
 
+static bool mips_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
+{
+    DisasContext *ctx = container_of(dcbase, DisasContext, base);
+    CPUMIPSState *env = cs->env_ptr;
+    tcg_debug_assert((env->hflags & MIPS_HFLAG_UM) ==
+                     (ctx->hflags & MIPS_HFLAG_UM));
+    return (ctx->hflags & MIPS_HFLAG_UM) != 0;
+}
+
 static void mips_tr_tb_start(DisasContextBase *dcbase, CPUState *cs)
 {
 }
@@ -31889,6 +31899,7 @@ static const TranslatorOps mips_tr_ops = {
     .translate_insn     = mips_tr_translate_insn,
     .tb_stop            = mips_tr_tb_stop,
     .disas_log          = mips_tr_disas_log,
+    .tb_in_user_mode    = mips_tr_tb_in_user_mode,
 };
 
 void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)

@@ -1254,11 +1254,7 @@ struct CPUMIPSState {
 #ifdef CONFIG_MIPS_LOG_INSTR
 #define TRACE_MODE_USER "User mode"
     const char *last_mode;
-#define IN_USERSPACE(env) \
-    ((env)->last_mode && strcmp((env)->last_mode, TRACE_MODE_USER) == 0)
-    bool user_only_tracing_enabled;
-    bool trace_explicitly_disabled;
-    bool tracing_suspended;
+#define IN_USERSPACE(env) ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM)
 #endif /* CONFIG_MIPS_LOG_INSTR */
 
     /* Fields up to this point are cleared by a CPU reset */

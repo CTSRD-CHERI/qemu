@@ -31,6 +31,10 @@ void translator_loop_temp_check(DisasContextBase *db)
     }
 }
 
+#ifdef CONFIG_MIPS_LOG_INSTR
+extern int cl_default_trace_format;
+#endif
+
 void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
                      CPUState *cpu, TranslationBlock *tb, int max_insns)
 {
@@ -48,6 +52,29 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
+#ifdef CONFIG_MIPS_LOG_INSTR
+    // Note: changes to the instruction logging flags result in a call to
+    // tb_flush so we can do the logging checks at translate time.
+    bool should_log_instr =
+        qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY);
+    if (unlikely(should_log_instr && qemu_loglevel_mask(CPU_LOG_USER_ONLY))) {
+        if (!ops->tb_in_user_mode(db, cpu)) {
+            qemu_log("-- Userspace Instruction logging disabled for "
+                     "TB@" TARGET_FMT_lx "\n", db->pc_next);
+            should_log_instr = false;
+            // FIXME: this does not work properly with multiple threads
+            qemu_loglevel &= ~(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
+        } else {
+            // FIXME: this does not work properly with multiple threads
+            qemu_loglevel |= cl_default_trace_format;
+        }
+    }
+    if (unlikely(should_log_instr)) {
+        qemu_log("-- Instruction logging enabled for TB@" TARGET_FMT_lx
+            " (usermode=%d)\n", db->pc_next, ops->tb_in_user_mode(db, cpu));
+    }
+    db->log_instr = should_log_instr;
+#endif
 
     /* Reset the temp count so that we can identify leaks */
     tcg_clear_temp_count();
@@ -69,7 +96,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #endif
         ops->insn_start(db, cpu);
 #if defined(CONFIG_MIPS_LOG_INSTR)
-        if (unlikely((tb_cflags(db->tb) & CF_LOG_INSTR))) {
+        if (unlikely(should_log_instr)) {
             TCGv tpc = tcg_const_tl(db->pc_next);
             gen_helper_log_instruction(cpu_env, tpc);
             tcg_temp_free(tpc);
