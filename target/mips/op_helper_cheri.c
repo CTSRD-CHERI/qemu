@@ -1157,6 +1157,11 @@ void CHERI_HELPER_IMPL(ccheck_btarget(CPUArchState *env))
 
 void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))
 {
+#ifdef QEMU_USE_COMPRESSED_CHERI_CAPS
+    // It should not have been possible to create an invalid CapBranchTarget
+    cheri_debug_assert(
+        cc128_is_representable_cap_exact(&env->active_tc.CapBranchTarget));
+#endif
     env->active_tc.PCC = env->active_tc.CapBranchTarget;
     // Restore or clear MIPS_HFLAG_CP0 depending on Access_System_Registers permission
     update_cp0_access_for_pc(env);
