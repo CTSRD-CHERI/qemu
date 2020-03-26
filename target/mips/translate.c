@@ -2807,6 +2807,15 @@ typedef struct DisasContext {
     int gi;
 } DisasContext;
 
+static inline target_ulong pcc_base(DisasContext *ctx)
+{
+#ifdef TARGET_CHERI
+    return ctx->pcc_base;
+#else
+    return 0;
+#endif
+}
+
 #define DISAS_STOP       DISAS_TARGET_0
 #define DISAS_EXIT       DISAS_TARGET_1
 
@@ -6559,17 +6568,10 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
 #ifndef TARGET_CHERI
     case OPC_JALX:
 #endif
-    {
-        /* Jump to immediate */
-#ifdef TARGET_CHERI
-        btgt = (((ctx->base.pc_next + insn_bytes - ctx->pcc_base) >> 28) << 28) |
-            (uint32_t)offset + ctx->pcc_base;
-#else
-        btgt = ((ctx->base.pc_next + insn_bytes) & (int32_t)0xF0000000) |
-            (uint32_t)offset;
-#endif /* TARGET_CHERI */
+        /* Jump to immediate (taking PCC.base into account) */
+        btgt = (((ctx->base.pc_next + insn_bytes - pcc_base(ctx)) &
+                 (int32_t)0xF0000000) | (uint32_t)offset) + pcc_base(ctx);
         break;
-    }
     case OPC_JR:
     case OPC_JALR:
         /* Jump to register */
@@ -6585,7 +6587,7 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
         }
         gen_load_gpr(btarget, rs);
 #ifdef TARGET_CHERI
-        /* Add PCC.base to rs */
+        /* Add PCC.base to rs (jr/jalr is relative to PCC) */
         tcg_gen_addi_tl(btarget, btarget, ctx->pcc_base);
 #endif /* TARGET_CHERI */
         GEN_CCHECK_BTARGET(cpu_env);
@@ -6630,12 +6632,8 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
             ctx->hflags |= MIPS_HFLAG_B;
             break;
         case OPC_BLTZALL: /* 0 < 0 likely */
-#ifdef TARGET_CHERI
-            /* Subtract PCC.base from r31 */
-            tcg_gen_movi_tl(cpu_gpr[31], ctx->base.pc_next + 8 - ctx->pcc_base);
-#else
-            tcg_gen_movi_tl(cpu_gpr[31], ctx->base.pc_next + 8);
-#endif
+            /* For CHERI, we have to subtract PCC.base from r31 */
+            tcg_gen_movi_tl(cpu_gpr[31], ctx->base.pc_next + 8 - pcc_base(ctx));
             /* Skip the instruction in the delay slot */
             ctx->base.pc_next += 4;
             SET_BTARGET_CHECKED(true); // not taken -> no need to check
@@ -6782,12 +6780,8 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
         int lowbit = !!(ctx->hflags & MIPS_HFLAG_M16);
 
         tcg_gen_movi_tl(cpu_gpr[blink],
-#ifdef TARGET_CHERI
                         /* Subtract PCC.base from r[blink] */
-                        ctx->base.pc_next + post_delay + lowbit - ctx->pcc_base);
-#else
-                        ctx->base.pc_next + post_delay + lowbit);
-#endif
+                        ctx->base.pc_next + post_delay + lowbit - pcc_base(ctx));
     }
 
  out:

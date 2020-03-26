@@ -72,6 +72,15 @@ typedef struct DisasContext {
 #endif
 } DisasContext;
 
+static inline target_ulong pcc_base(DisasContext *ctx)
+{
+#ifdef TARGET_CHERI
+    return ctx->pcc_base;
+#else
+    return 0;
+#endif
+}
+
 #ifdef TARGET_RISCV64
 /* convert riscv funct3 to qemu memop for load/store */
 static const int tcg_memop_lookup[8] = {
