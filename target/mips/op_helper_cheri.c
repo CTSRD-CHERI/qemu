@@ -1169,43 +1169,13 @@ void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))
 
 void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
 {
-#ifdef CONFIG_MIPS_LOG_INSTR
-    /* Print changed state before advancing to the next instruction: GPR, HI/LO,
-     * COP0. */
-    const bool should_log_instr =
-        qemu_loglevel_mask(CPU_LOG_CVTRACE | CPU_LOG_INSTR |
-                           CPU_LOG_USER_ONLY) &&
-        qemu_log_in_addr_range(next_pc);
-    if (unlikely(should_log_instr))
-        helper_dump_changed_state(env);
-#endif
-
-    /* Update statcounters icount */
-    env->statcounters_icount++;
-    if (in_kernel_mode(env)) {
-        tcg_debug_assert(((env->hflags & MIPS_HFLAG_CP0) == MIPS_HFLAG_CP0) ==
-                         can_access_cp0(env));
-        env->statcounters_icount_kernel++;
-    } else {
-        tcg_debug_assert((env->hflags & MIPS_HFLAG_CP0) == 0);
-        env->statcounters_icount_user++;
-    }
-
     // branch instructions have already checked the validity of the target,
     // but we still need to check if the next instruction is accessible.
-    // In order to ensure that EPC is set correctly we must set the offset
-    // before checking the bounds.
+    // In order to ensure that EPC is set correctly we must ensure that the
+    // cursor is correct.
     cap_register_t *pcc = &env->active_tc.PCC;
     // pcc->_cr_cursor = next_pc;
     check_cap(env, pcc, CAP_PERM_EXECUTE, next_pc, 0xff, 4, /*instavail=*/false, GETPC());
-    // qemu_log("PC:%016lx\n", pc);
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-    // Finally, log the instruction that will be executed next
-    if (unlikely(should_log_instr)) {
-        helper_mips_cvtrace_log_instruction(env, next_pc);
-    }
-#endif
 }
 
 target_ulong CHERI_HELPER_IMPL(ccheck_load_right(CPUArchState *env, target_ulong offset, uint32_t len))

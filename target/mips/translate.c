@@ -2699,6 +2699,10 @@ static TCGv_i32 hflags;
 static TCGv_i32 fpu_fcr0, fpu_fcr31;
 static TCGv_i64 fpu_f64[32];
 static TCGv_i64 msa_wr_d[64];
+#ifdef TARGET_CHERI
+static TCGv cpu_statcounters_icount, cpu_statcounters_icount_kernel,
+    cpu_statcounters_icount_user;
+#endif
 
 #if defined(TARGET_MIPS64)
 /* Upper halves of R5900's 128-bit registers: MMRs (multimedia registers) */
@@ -31758,7 +31762,35 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
     tcg_gen_insn_start(ctx->base.pc_next, ctx->hflags & MIPS_HFLAG_BMASK,
                        ctx->btarget);
     /* Generate capabilities check on PC (and possibly log registers + instrs) */
-    GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx);
+#ifdef TARGET_CHERI
+    /* Update statcounters icount */
+    tcg_gen_addi_tl(cpu_statcounters_icount, cpu_statcounters_icount, 1);
+    if (mips_tr_tb_in_user_mode(dcbase, cs)) {
+        tcg_gen_addi_tl(cpu_statcounters_icount_user,
+                        cpu_statcounters_icount_user, 1);
+    } else {
+        tcg_gen_addi_tl(cpu_statcounters_icount_kernel,
+                        cpu_statcounters_icount_kernel, 1);
+    }
+    /* Check PCC permissions and bounds. */
+    {
+        TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
+        gen_helper_ccheck_pc(cpu_env, tpc);
+        tcg_temp_free_i64(tpc);
+    }
+#endif
+#ifdef CONFIG_MIPS_LOG_INSTR
+    if (unlikely(ctx->base.log_instr)) {
+        // Print changed state before advancing to the next instruction: GPR,
+        // HI/LO, COP0, etc.
+        gen_helper_dump_changed_state(cpu_env);
+        if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
+            TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
+            gen_helper_mips_cvtrace_log_instruction(cpu_env, tpc);
+            tcg_temp_free_i64(tpc);
+        }
+    }
+#endif
 }
 
 static bool mips_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cs,
@@ -32052,6 +32084,17 @@ void mips_tcg_init(void)
     cpu_llval = tcg_global_mem_new(cpu_env, offsetof(CPUMIPSState, llval),
                                    "llval");
 
+#ifdef TARGET_CHERI
+    cpu_statcounters_icount =
+        tcg_global_mem_new(cpu_env, offsetof(CPUMIPSState, statcounters_icount),
+                           "statcounters_icount");
+    cpu_statcounters_icount_kernel = tcg_global_mem_new(
+        cpu_env, offsetof(CPUMIPSState, statcounters_icount_kernel),
+        "statcounters_icount_kernel");
+    cpu_statcounters_icount_user = tcg_global_mem_new(
+        cpu_env, offsetof(CPUMIPSState, statcounters_icount_user),
+        "statcounters_icount_user");
+#endif
 #if defined(TARGET_MIPS64)
     cpu_mmr[0] = NULL;
     for (i = 1; i < 32; i++) {

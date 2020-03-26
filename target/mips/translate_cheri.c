@@ -1001,15 +1001,6 @@ static inline void generate_cscc(DisasContext *ctx, int32_t cs, int32_t cb,
     tcg_temp_free(t0);
 }
 
-static inline void generate_ccheck_pc(DisasContext *ctx)
-{
-    TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
-    gen_helper_ccheck_pc(cpu_env, tpc);
-    tcg_temp_free_i64(tpc);
-}
-
-#define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx)    generate_ccheck_pc(ctx)
-
 #define GEN_CAP_CHECK_STORE(addr, offset, len) \
     generate_ccheck_store(addr, offset, len)
 
@@ -1062,27 +1053,12 @@ cp2_unimplemented:
 
 #else /* ! TARGET_CHERI */
 #define generate_ccheck_load_right(addr, offset, len) tcg_gen_mov_tl(addr, offset);
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-#define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx) generate_dump_state_and_log_instr(ctx)
-static inline void generate_dump_state_and_log_instr(DisasContext *ctx)
-{
-    gen_helper_dump_changed_state(cpu_env);
-    TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
-    gen_helper_mips_cvtrace_log_instruction(cpu_env, tpc);
-    tcg_temp_free_i64(tpc);
-
-}
-#else
-/* Do nothing */
-#define GEN_CAP_CHECK_PC_AND_LOG_INSTR(ctx)
-#endif
 #define generate_ccheck_load_pcrel(addr, len)
 #endif /* ! TARGET_CHERI */
+
 static inline TCGv_cap_checked_ptr PCC_CHECKED(TCGv addr) {
     return (TCGv_cap_checked_ptr)addr;
 }
-
 
 // instruction decoding for CHERI insns:
 #if defined(TARGET_CHERI)
