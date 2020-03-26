@@ -82,8 +82,9 @@ static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
     // exception handler entry/return. For jumps/branches an out-of-bounds PCC
     // value should raise a trap on the branch/jump so we can't get an
     // unrpresentable value here.
+    cheri_debug_assert(!pcc->cr_tag || cap_is_unsealed(pcc) ||
+                       pcc->_cr_cursor == pc_addr);
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
-    cheri_debug_assert(!pcc->cr_tag || cap_is_unsealed(pcc));
     if (can_be_unrepresenable) {
         if (pcc->cr_tag && !is_representable_cap_with_addr(pcc, pc_addr)) {
             error_report(
@@ -99,46 +100,6 @@ static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
     }
 #endif
     pcc->_cr_cursor = pc_addr;
-}
-
-static inline void cheri_update_pcc_for_exc_handler(cap_register_t *pcc,
-                                                    cap_register_t *src_cap,
-                                                    target_ulong new_pc)
-{
-    *pcc = *src_cap;
-    // FIXME: KCC must not be sealed
-    if (!cap_is_unsealed(pcc)) {
-        error_report("Sealed PCC set for exception"
-                     " handler, detagging: " PRINT_CAP_FMTSTR "\r",
-                     PRINT_CAP_ARGS(pcc));
-        pcc->cr_tag = false;
-    }
-    cheri_update_pcc(pcc, new_pc, /* can_be_unrep=*/true);
-}
-
-static inline void cheri_update_pcc_for_exc_return(cap_register_t *pcc,
-                                                   cap_register_t *src_cap,
-                                                   target_ulong new_cursor)
-{
-    *pcc = *src_cap;
-    // On exception return we unseal sentry capabilities (if the address
-    // matches)
-    if (pcc->cr_tag && cap_is_sealed_entry(pcc)) {
-        if (new_cursor != cap_get_cursor(pcc)) {
-            error_report("Sentry PCC in exception return with different target "
-                         "addr, detagging: " PRINT_CAP_FMTSTR "\r",
-                         PRINT_CAP_ARGS(pcc));
-            pcc->cr_tag = false;
-        } else {
-            cap_unseal_entry(pcc);
-        }
-    } else if (pcc->cr_tag && !cap_is_unsealed(pcc)) {
-        error_report("Sealed target PCC in exception return, "
-                     "detagging: " PRINT_CAP_FMTSTR "\r",
-                     PRINT_CAP_ARGS(pcc));
-        pcc->cr_tag = false;
-    }
-    pcc->_cr_cursor = new_cursor;
 }
 
 static inline bool cheri_in_capmode(CPUArchState *env) {

@@ -143,6 +143,51 @@ static inline bool should_log_mem_access(CPUArchState *env, int log_mask, target
     return true;
 }
 
+static inline void cheri_update_pcc_for_exc_handler(cap_register_t *pcc,
+                                                    cap_register_t *src_cap,
+                                                    target_ulong new_pc)
+{
+    *pcc = *src_cap;
+    // FIXME: KCC must not be sealed
+    if (!cap_is_unsealed(pcc)) {
+        error_report("Sealed PCC set for exception"
+                     " handler, detagging: " PRINT_CAP_FMTSTR "\r",
+                     PRINT_CAP_ARGS(pcc));
+        pcc->cr_tag = false;
+    }
+    cheri_update_pcc(pcc, new_pc, /* can_be_unrep=*/true);
+}
+
+static inline void cheri_update_pcc_for_exc_return(cap_register_t *pcc,
+                                                   cap_register_t *src_cap,
+                                                   target_ulong new_cursor)
+{
+    *pcc = *src_cap;
+    // On exception return we unseal sentry capabilities (if the address
+    // matches)
+    if (pcc->cr_tag && cap_is_sealed_entry(pcc)) {
+        if (new_cursor == cap_get_cursor(pcc)) {
+            cap_unseal_entry(pcc);
+            return;
+        } else {
+            error_report("Sentry PCC in exception return with different target "
+                         "addr: " PRINT_CAP_FMTSTR "\r",
+                         PRINT_CAP_ARGS(pcc));
+            pcc->cr_tag = false;
+        }
+    } else if (pcc->cr_tag && !cap_is_unsealed(pcc)) {
+        if (new_cursor == cap_get_cursor(pcc)) {
+            // Don't detag, we should get a seal violation on the next inst fetch
+            return;
+        } else {
+            error_report("Sealed target PCC in exception return" PRINT_CAP_FMTSTR "\r",
+                         PRINT_CAP_ARGS(pcc));
+            pcc->cr_tag = false;
+        }
+    }
+    cheri_update_pcc(pcc, new_cursor, /*can_be_unrepresentable=*/true);
+}
+
 static inline const char* cheri_cause_str(CheriCapExcCause cause) {
     switch (cause) {
     case CapEx_None: return "None";
