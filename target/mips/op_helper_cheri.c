@@ -1169,8 +1169,6 @@ void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))
 
 void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
 {
-    cap_register_t *pcc = &env->active_tc.PCC;
-
 #ifdef CONFIG_MIPS_LOG_INSTR
     /* Print changed state before advancing to the next instruction: GPR, HI/LO,
      * COP0. */
@@ -1197,7 +1195,8 @@ void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
     // but we still need to check if the next instruction is accessible.
     // In order to ensure that EPC is set correctly we must set the offset
     // before checking the bounds.
-    pcc->_cr_cursor = next_pc;
+    cap_register_t *pcc = &env->active_tc.PCC;
+    // pcc->_cr_cursor = next_pc;
     check_cap(env, pcc, CAP_PERM_EXECUTE, next_pc, 0xff, 4, /*instavail=*/false, GETPC());
     // qemu_log("PC:%016lx\n", pc);
 
