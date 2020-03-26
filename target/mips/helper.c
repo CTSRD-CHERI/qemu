@@ -1218,16 +1218,11 @@ static inline void mips_update_pc_for_exc_handler(CPUMIPSState *env,
 {
 #ifdef TARGET_CHERI
     /* always set PCC from KCC even with EXL */
-    env->active_tc.PCC = env->active_tc.CHWR.KCC;
-    // FIXME: KCC must not be sealed
-    if (!cap_is_unsealed(&env->active_tc.PCC)) {
-        error_report("Sealed KCC in exception, detagging: " PRINT_CAP_FMTSTR
-                     "\r",
-                     PRINT_CAP_ARGS(&env->active_tc.PCC));
-        env->active_tc.PCC.cr_tag = false;
-    }
+    cheri_update_pcc_for_exc_handler(&env->active_tc.PCC,
+                                     &env->active_tc.CHWR.KCC, new_pc);
+#else
+    mips_update_pc(env, new_pc, /*can_be_unrep=*/true);
 #endif
-    mips_update_pc(env, new_pc, /* can_be_unrep=*/true);
 }
 
 void mips_cpu_do_interrupt(CPUState *cs)

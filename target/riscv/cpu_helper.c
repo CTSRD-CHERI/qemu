@@ -923,33 +923,12 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
     tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (pa & ~TARGET_PAGE_MASK));
     return pa;
 }
-#endif /* TARGET_CHERI */
-
-static inline void _riscv_update_pc_for_exc_handler(CPURISCVState *env,
-#ifdef TARGET_CHERI
-                                                    cap_register_t *src_cap,
-#endif
-                                                    target_ulong new_pc)
-{
-#ifdef TARGET_CHERI
-    env->PCC = *src_cap;
-    // FIXME: KCC must not be sealed
-    if (!cap_is_unsealed(&env->PCC)) {
-        error_report(
-            "Sealed target PCC in exception, detagging: " PRINT_CAP_FMTSTR "\r",
-            PRINT_CAP_ARGS(&env->PCC));
-        env->PCC.cr_tag = false;
-    }
-#endif
-    riscv_update_pc(env, new_pc, /*can_be_unrepresentable=*/true);
-}
-
-#ifdef TARGET_CHERI
-#define riscv_update_pc_for_exc_handler _riscv_update_pc_for_exc_handler
+#define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)                  \
+    cheri_update_pcc_for_exc_handler(&env->PCC, src_cap, new_pc);
 #else
 #define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)                  \
-    _riscv_update_pc_for_exc_handler(env, new_pc)
-#endif
+    riscv_update_pc(env, new_pc, /*can_be_unrepresentable=*/true);
+#endif /* TARGET_CHERI */
 
 /*
  * Handle Traps

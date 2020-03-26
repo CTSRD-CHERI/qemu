@@ -1134,20 +1134,18 @@ static void debug_post_eret(CPUMIPSState *env)
 }
 
 #ifdef TARGET_CHERI
-static void set_pc(CPUMIPSState *env, cap_register_t* error_pcc)
+static void set_pc_for_eret(CPUMIPSState *env, cap_register_t *error_pcc)
 #else
-static void set_pc(CPUMIPSState *env, target_ulong error_pc)
+static void set_pc_for_eret(CPUMIPSState *env, target_ulong error_pc)
 #endif
 {
 #ifdef TARGET_CHERI
-    env->active_tc.PCC = *error_pcc;
-    // Sentry capabilities in EPCC should be unsealed on ERET
-    if (cap_is_sealed_entry(&env->active_tc.PCC)) {
-        cap_unseal_entry(&env->active_tc.PCC);
-    }
     target_ulong error_pc = cap_get_cursor(error_pcc);
-#endif
+    cheri_update_pcc_for_exc_return(&env->active_tc.PCC, error_pcc,
+                                    error_pc & ~(target_ulong)1);
+#else
     mips_update_pc(env, error_pc & ~(target_ulong)1, /*can_be_unrepresentable=*/true);
+#endif
     if (error_pc & 1) {
 #if defined(TARGET_CHERI)
         warn_report("Got target pc with low bit set, but QEMU-CHERI does not"
@@ -1181,16 +1179,16 @@ static inline void exception_return(CPUMIPSState *env)
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
 #ifdef TARGET_CHERI
-        set_pc(env, &env->active_tc.CHWR.ErrorEPCC);
+        set_pc_for_eret(env, &env->active_tc.CHWR.ErrorEPCC);
 #else
-        set_pc(env, env->CP0_ErrorEPC);
+        set_pc_for_eret(env, env->CP0_ErrorEPC);
 #endif
         env->CP0_Status &= ~(1 << CP0St_ERL);
     } else {
 #ifdef TARGET_CHERI
-        set_pc(env, &env->active_tc.CHWR.EPCC);
+        set_pc_for_eret(env, &env->active_tc.CHWR.EPCC);
 #else
-        set_pc(env, env->CP0_EPC);
+        set_pc_for_eret(env, env->CP0_EPC);
 #endif
         env->CP0_Status &= ~(1 << CP0St_EXL);
     }
@@ -1226,7 +1224,7 @@ void helper_deret(CPUMIPSState *env)
     env->hflags &= ~MIPS_HFLAG_DM;
     compute_hflags(env);
 
-    set_pc(env, env->CP0_DEPC);
+    set_pc_for_eret(env, env->CP0_DEPC);
 
     debug_post_eret(env);
 #endif
