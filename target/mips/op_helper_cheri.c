@@ -310,13 +310,13 @@ void CHERI_HELPER_IMPL(cgetpcc(CPUArchState *env, uint32_t cd))
      * CGetPCC: Move PCC to capability register
      * See Chapter 4 in CHERI Architecture manual.
      */
-    update_capreg(env, cd, &env->active_tc.PCC);
-    /* Note that the offset(cursor) is updated by ccheck_pcc */
+    update_capreg(env, cd, cheri_get_current_pcc(env));
 }
 
 void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
-    // PCC.cursor does not need to be up-to-date here since we only look at the base.
+    // PCC.cursor does not need to be up-to-date here since we only look at the
+    // base.
     uint64_t new_addr = rs + cap_get_base(cheri_get_recent_pcc(env));
     derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
 }
@@ -1151,7 +1151,8 @@ void CHERI_HELPER_IMPL(ccheck_btarget(CPUArchState *env))
     // Check whether the branch target is within $pcc and if not raise an exception
     // qemu_log_mask(CPU_LOG_INSTR, "%s: env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
     //    __func__, PC_ADDR(env), env->hflags, env->btarget);
-    check_cap(env, cheri_get_recent_pcc(env), CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false, GETPC());
+    check_cap(env, cheri_get_recent_pcc(env), CAP_PERM_EXECUTE, env->btarget,
+              0xff, 4, /*instavail=*/false, GETPC());
 }
 
 void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))

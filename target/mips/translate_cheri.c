@@ -340,10 +340,11 @@ static inline void generate_cgetcause(int32_t rd)
     tcg_temp_free(t0);
 }
 
-static inline void generate_cgetpcc(int32_t cd)
+static inline void generate_cgetpcc(DisasContext *ctx, int32_t cd)
 {
     TCGv_i32 tcd = tcg_const_i32(cd);
 
+    save_cpu_state(ctx, 1); // save pcc.cursor for the helper call
     gen_helper_cgetpcc(cpu_env, tcd);
     tcg_temp_free_i32(tcd);
 }
@@ -1135,7 +1136,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CGETPCC:           /* 0x07 */
             check_cop2x(ctx);
-            generate_cgetpcc(r11);
+            generate_cgetpcc(ctx, r11);
             opn = "cgetpcc";
             break;
                                     /* 0x08 */
@@ -1407,7 +1408,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 switch(MASK_CAP8(opc)) {
                 case OPC_CGETPCC_NI:    /* 0x00 << 11 */
                     check_cop2x(ctx);
-                    generate_cgetpcc(r16);
+                    generate_cgetpcc(ctx, r16);
                     opn = "cgetpcc";
                     break;
                 case OPC_CGETCAUSE_NI:  /* 0x01 << 11 */
