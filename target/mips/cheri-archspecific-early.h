@@ -83,11 +83,6 @@ static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUMIPSState *env)
     return &env->active_tc.PCC;
 }
 
-static inline unsigned cheri_get_asid(CPUMIPSState *env) {
-    uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
-    return ASID;
-}
-
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
     return &env->active_tc.gpcapregs;
 }
