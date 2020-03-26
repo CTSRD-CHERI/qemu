@@ -316,7 +316,8 @@ void CHERI_HELPER_IMPL(cgetpcc(CPUArchState *env, uint32_t cd))
 
 void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
 {
-    uint64_t new_addr = rs + cap_get_base(&env->active_tc.PCC);
+    // PCC.cursor does not need to be up-to-date here since we only look at the base.
+    uint64_t new_addr = rs + cap_get_base(cheri_get_recent_pcc(env));
     derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
 }
 
@@ -1150,7 +1151,7 @@ void CHERI_HELPER_IMPL(ccheck_btarget(CPUArchState *env))
     // Check whether the branch target is within $pcc and if not raise an exception
     // qemu_log_mask(CPU_LOG_INSTR, "%s: env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
     //    __func__, PC_ADDR(env), env->hflags, env->btarget);
-    check_cap(env, &env->active_tc.PCC, CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false, GETPC());
+    check_cap(env, cheri_get_recent_pcc(env), CAP_PERM_EXECUTE, env->btarget, 0xff, 4, /*instavail=*/false, GETPC());
 }
 
 void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))
@@ -1235,8 +1236,10 @@ target_ulong CHERI_HELPER_IMPL(ccheck_load(CPUArchState *env, target_ulong offse
 void CHERI_HELPER_IMPL(ccheck_load_pcrel(CPUArchState *env, target_ulong addr,
                                          uint32_t len)) {
     // Note: the address is already absolute, no need to add pcc.base
-    check_cap(env, &env->active_tc.PCC, CAP_PERM_LOAD, addr, /*regnum=*/0, len,
-              /*instavail=*/true, GETPC());
+    // Also we don't need PCC.cursor to be current since we are only looking at
+    // the bounds
+    check_cap(env, cheri_get_recent_pcc(env), CAP_PERM_LOAD, addr, /*regnum=*/0,
+              len, /*instavail=*/true, GETPC());
 }
 
 static const char *cheri_cap_reg[] = {
@@ -1312,7 +1315,7 @@ void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int f
     char name[8];
 
     cpu_fprintf(f, "DEBUG CAP COREID 0\n");
-    cheri_dump_creg(&env->active_tc.PCC, "PCC", "", f, cpu_fprintf);
+    cheri_dump_creg(cheri_get_current_pcc(env), "PCC", "", f, cpu_fprintf);
     for (i = 0; i < 32; i++) {
         // snprintf(name, sizeof(name), "C%02d", i);
         snprintf(name, sizeof(name), "REG %02d", i);

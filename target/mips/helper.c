@@ -1253,8 +1253,10 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n", __func__, PC_ADDR(env), get_CP0_EPC(env),
                  name, env->hflags & MIPS_HFLAG_BMASK, env->hflags);
 #ifdef TARGET_CHERI
-        qemu_log("\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
-                 PRINT_CAP_ARGS(&env->active_tc.PCC), PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
+        qemu_log("\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR
+                 "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
+                 PRINT_CAP_ARGS(cheri_get_current_pcc(env)),
+                 PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
                  PRINT_CAP_ARGS(&env->active_tc.CHWR.EPCC));
 #endif
     }
@@ -1331,7 +1333,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
         // qemu_log("%s: ErrorEPC <- " TARGET_FMT_lx "\n", __func__,
         // exception_resume_pc(env));
         // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
-        env->active_tc.CHWR.ErrorEPCC = env->active_tc.PCC;
+        env->active_tc.CHWR.ErrorEPCC = *cheri_get_current_pcc(env);
         // Note: set_CP0_ErrorEPC() handles the special cases of sealed/unrep EPCC
 #endif /* TARGET_CHERI */
         set_CP0_ErrorEPC(env, exception_resume_pc(env));
@@ -1525,7 +1527,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
             //  exception_resume_pc(env));
             // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
 
-            env->active_tc.CHWR.EPCC = env->active_tc.PCC;
+            env->active_tc.CHWR.EPCC = *cheri_get_current_pcc(env);
             // Note: set_CP0_EPC() handles the special cases of sealed/unrep EPCC
 #endif /* TARGET_CHERI */
             set_CP0_EPC(env, exception_resume_pc(env));
@@ -1575,7 +1577,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
     update_cp0_access_for_pc(env);
     assert(can_access_cp0(env) && "Installing $pcc without ASR in exception?");
 #if defined(CHERI_128)
-  assert(cc128_is_representable_cap_exact(&env->active_tc.PCC));
+    assert(!cheri_get_current_pcc(env)->cr_tag ||
+           cc128_is_representable_cap_exact(cheri_get_current_pcc(env)));
 #endif
 #endif /* TARGET_CHERI */
 
@@ -1597,7 +1600,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
          cap_register_t tmp;
          // We use a null cap as oldreg so that we always print it.
          null_capability(&tmp);
-         dump_changed_capreg(env, &env->active_tc.PCC, &tmp, "PCC");
+         dump_changed_capreg(env, cheri_get_current_pcc(env), &tmp, "PCC");
     }
 #endif /* TARGET_CHERI */
 #endif /* CONFIG_MIPS_LOG_INSTR */

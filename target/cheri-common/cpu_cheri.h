@@ -83,6 +83,7 @@ static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
     // value should raise a trap on the branch/jump so we can't get an
     // unrpresentable value here.
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
+    cheri_debug_assert(!pcc->cr_tag || cap_is_unsealed(pcc));
     if (can_be_unrepresenable) {
         if (pcc->cr_tag && !is_representable_cap_with_addr(pcc, pc_addr)) {
             error_report(

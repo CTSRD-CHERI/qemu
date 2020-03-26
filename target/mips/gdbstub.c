@@ -177,7 +177,7 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, GByteArray *mem_buf, int n)
     case 32:
         return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.DDC);
     case 33:
-        return gdb_get_capreg(mem_buf, &env->active_tc.PCC);
+        return gdb_get_capreg(mem_buf, cheri_get_current_pcc(env));
     case 34: 
         return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.UserTlsCap);
     case 35:
@@ -207,7 +207,7 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, GByteArray *mem_buf, int n)
             if (get_capreg_tag(env, i))
                 cap_valid |= ((uint64_t)1 << i);
         }
-        if (env->active_tc.PCC.cr_tag)
+        if (cheri_get_recent_pcc(env)->cr_tag)
             cap_valid |= ((uint64_t)1 << 32);
         return gdb_get_regl(mem_buf, cap_valid);
     }
