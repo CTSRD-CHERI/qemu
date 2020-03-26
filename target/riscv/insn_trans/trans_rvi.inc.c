@@ -42,7 +42,8 @@ static bool trans_auipc(DisasContext *ctx, arg_auipc *a)
         return true;
     }
 #endif
-    gen_set_gpr_const(a->rd, a->imm + ctx->base.pc_next);
+    // AUIPC returns a value relative to PCC.base
+    gen_set_gpr_const(a->rd, a->imm + ctx->base.pc_next - pcc_base(ctx));
     return true;
 }
 
