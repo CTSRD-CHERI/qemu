@@ -187,7 +187,8 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
 {
     // This must not cross a page boundary since we are only translating once!
     assert(size > 0);
-    if (((vaddr & TARGET_PAGE_MASK) != ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
+    if (unlikely((vaddr & TARGET_PAGE_MASK) !=
+                 ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
 #ifdef CHERI_UNALIGNED
         // this can happen with unaligned stores
         if (size == 2 || size == 4 || size == 8) {
@@ -200,23 +201,18 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
             return;
         }
 #endif
-
         qemu_log_flush();
         error_report("FATAL: %s: " TARGET_FMT_lx "+%d crosses a page boundary\r", __func__, vaddr, size);
-#ifdef TARGET_MIPS
-        /* Disassemble and print instruction. */
-        int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
         char buffer[256];
         FILE* f = fmemopen(buffer, sizeof(buffer), "w");
         assert(f);
         fprintf(f, "Probably caused by guest instruction: ");
-        target_disas(f, env_cpu(env),
-                     cap_get_cursor(&env->active_tc.PCC), isa == 0 ? 4 : 2);
+        target_disas(f, env_cpu(env), cpu_get_current_pc(env, pc, false),
+                     /* Only one instr*/ -1);
         fprintf(f, "\r");
         fclose(f);
         buffer[sizeof(buffer) - 1] = '\0';
         error_report("%s", buffer);
-#endif
         exit(1);
     }
 
