@@ -123,7 +123,7 @@ static inline void cheri_update_pcc_for_exc_return(cap_register_t *pcc,
     *pcc = *src_cap;
     // On exception return we unseal sentry capabilities (if the address
     // matches)
-    if (!cap_is_sealed_entry(pcc)) {
+    if (pcc->cr_tag && cap_is_sealed_entry(pcc)) {
         if (new_cursor != cap_get_cursor(pcc)) {
             error_report("Sentry PCC in exception return with different target "
                          "addr, detagging: " PRINT_CAP_FMTSTR "\r",
@@ -132,7 +132,7 @@ static inline void cheri_update_pcc_for_exc_return(cap_register_t *pcc,
         } else {
             cap_unseal_entry(pcc);
         }
-    } else if (!cap_is_unsealed(pcc)) {
+    } else if (pcc->cr_tag && !cap_is_unsealed(pcc)) {
         error_report("Sealed target PCC in exception return, "
                      "detagging: " PRINT_CAP_FMTSTR "\r",
                      PRINT_CAP_ARGS(pcc));
