@@ -60,12 +60,8 @@ static bool trans_jalr(DisasContext *ctx, arg_jalr *a)
 
 
     gen_get_gpr(cpu_pc, a->rs1);
-#ifdef TARGET_CHERI
     // For CHERI the jump destination is an offset relative to PCC.base
-    tcg_gen_addi_tl(cpu_pc, cpu_pc, a->imm + ctx->pcc_base);
-#else
-    tcg_gen_addi_tl(cpu_pc, cpu_pc, a->imm);
-#endif
+    tcg_gen_addi_tl(cpu_pc, cpu_pc, a->imm + pcc_base(ctx));
     tcg_gen_andi_tl(cpu_pc, cpu_pc, (target_ulong)-2);
     gen_mark_pc_updated();
 
@@ -75,12 +71,8 @@ static bool trans_jalr(DisasContext *ctx, arg_jalr *a)
         tcg_gen_brcondi_tl(TCG_COND_NE, t0, 0x0, misaligned);
     }
 
-#ifdef TARGET_CHERI
-    gen_set_gpr_const(a->rd, ctx->pc_succ_insn);
-#else
     // For CHERI the result is an offset relative to PCC.base
-    gen_set_gpr_const(a->rd, ctx->pc_succ_insn - ctx->pcc_base);
-#endif
+    gen_set_gpr_const(a->rd, ctx->pc_succ_insn - pcc_base(ctx));
     gen_rvfi_dii_validate_jump(ctx);
     lookup_and_goto_ptr(ctx);
 
