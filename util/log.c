@@ -85,7 +85,6 @@ void qemu_set_log(int log_flags)
     bool need_to_open_file = false;
     QemuLogFile *logfile;
 
-    qemu_loglevel = log_flags;
     const int need_to_flush_tcg_on_change =
         CPU_LOG_INSTR | CPU_LOG_USER_ONLY | CPU_LOG_CVTRACE;
     if ((qemu_loglevel & need_to_flush_tcg_on_change) !=
@@ -95,6 +94,7 @@ void qemu_set_log(int log_flags)
         // This may flush too much state, but such changes should be rare.
         flush_tcg_on_log_instr_chage();
     }
+    qemu_loglevel = log_flags;
 
 #ifdef CONFIG_TRACE_LOG
     qemu_loglevel |= LOG_TRACE;
