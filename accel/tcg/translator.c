@@ -34,6 +34,7 @@ void translator_loop_temp_check(DisasContextBase *db)
 #ifdef CONFIG_MIPS_LOG_INSTR
 extern int cl_default_trace_format;
 #endif
+#define DEBUG_INSTR_LOGGING 0
 
 void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
                      CPUState *cpu, TranslationBlock *tb, int max_insns)
@@ -59,8 +60,10 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY);
     if (unlikely(should_log_instr && qemu_loglevel_mask(CPU_LOG_USER_ONLY))) {
         if (!ops->tb_in_user_mode(db, cpu)) {
+#if DEBUG_INSTR_LOGGING
             qemu_log("-- Userspace Instruction logging disabled for "
                      "TB@" TARGET_FMT_lx "\n", db->pc_next);
+#endif
             should_log_instr = false;
             // FIXME: this does not work properly with multiple threads
             qemu_loglevel &= ~(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
@@ -69,10 +72,12 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
             qemu_loglevel |= cl_default_trace_format;
         }
     }
+#if DEBUG_INSTR_LOGGING
     if (unlikely(should_log_instr)) {
         qemu_log("-- Instruction logging enabled for TB@" TARGET_FMT_lx
             " (usermode=%d)\n", db->pc_next, ops->tb_in_user_mode(db, cpu));
     }
+#endif
     db->log_instr = should_log_instr;
 #endif
 
