@@ -566,10 +566,10 @@ typedef RISCVCPU ArchCPU;
 _Static_assert((TB_FLAGS_CAPMODE & TB_FLAGS_MSTATUS_FS) == 0, "overlap");
 
 static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
-                                        target_ulong *cs_base, uint32_t *flags)
+                                        target_ulong *cs_base,
+                                        target_ulong *cs_top, uint32_t *flags)
 {
     *pc = PC_ADDR(env); // We want the full virtual address here and not an offset
-    *cs_base = 0;
 #ifdef CONFIG_USER_ONLY
     *flags = TB_FLAGS_MSTATUS_FS;
 #else
@@ -580,6 +580,10 @@ static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
 #endif
 #ifdef TARGET_CHERI
     *flags |= cheri_in_capmode(env) ? TB_FLAGS_CAPMODE : 0;
+    *cs_base = cap_get_base(&env->PCC);
+    *cs_top = cap_get_top(&env->PCC);
+#else
+    *cs_base = 0;
 #endif
 }
 

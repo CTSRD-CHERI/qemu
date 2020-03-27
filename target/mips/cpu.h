@@ -1438,11 +1438,13 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* CONFIG_MIPS_LOG_INSTR */
 
 static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
-                                        target_ulong *cs_base, uint32_t *flags)
+                                        target_ulong *cs_base,
+                                        target_ulong *cs_top, uint32_t *flags)
 {
     *pc = PC_ADDR(env);
 #ifdef TARGET_CHERI
     *cs_base = cap_get_base(&env->active_tc.PCC);
+    *cs_top = cap_get_top(&env->active_tc.PCC);
 #else
     *cs_base = 0;
 #endif

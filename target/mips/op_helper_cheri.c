@@ -1167,17 +1167,6 @@ void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))
     update_cp0_access_for_pc(env);
 }
 
-void CHERI_HELPER_IMPL(ccheck_pc(CPUArchState *env, uint64_t next_pc))
-{
-    // branch instructions have already checked the validity of the target,
-    // but we still need to check if the next instruction is accessible.
-    // In order to ensure that EPC is set correctly we must ensure that the
-    // cursor is correct.
-    cap_register_t *pcc = &env->active_tc.PCC;
-    // pcc->_cr_cursor = next_pc;
-    check_cap(env, pcc, CAP_PERM_EXECUTE, next_pc, 0xff, 4, /*instavail=*/false, GETPC());
-}
-
 target_ulong CHERI_HELPER_IMPL(ccheck_load_right(CPUArchState *env, target_ulong offset, uint32_t len))
 {
 #ifndef TARGET_WORDS_BIGENDIAN

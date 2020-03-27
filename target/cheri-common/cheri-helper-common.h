@@ -44,6 +44,10 @@
  * target/mips/op_helper_cheri.c or target/riscv/op_helper_cheri.c.
  */
 
+// PCC bounds checks:
+DEF_HELPER_1(ccheck_pcc_on_tb_entry, void, env)
+DEF_HELPER_2(raise_exception_pcc_bounds, noreturn, env, i32)
+
 // Two-operand capability inspection
 DEF_HELPER_FLAGS_2(cgetaddr, TCG_CALL_NO_WG, tl, env, i32)
 DEF_HELPER_FLAGS_2(cgetbase, TCG_CALL_NO_WG, tl, env, i32)

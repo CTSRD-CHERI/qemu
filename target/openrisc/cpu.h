@@ -374,9 +374,9 @@ static inline void cpu_set_gpr(CPUOpenRISCState *env, int i, uint32_t val)
     env->shadow_gpr[0][i] = val;
 }
 
-static inline void cpu_get_tb_cpu_state(CPUOpenRISCState *env,
-                                        target_ulong *pc,
-                                        target_ulong *cs_base, uint32_t *flags)
+static inline void cpu_get_tb_cpu_state(CPUOpenRISCState *env, target_ulong *pc,
+                                        target_ulong *cs_base,
+                                        target_ulong *cs_top, uint32_t *flags)
 {
     *pc = env->pc;
     *cs_base = 0;
