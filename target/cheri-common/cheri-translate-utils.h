@@ -34,6 +34,7 @@
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
 
+#ifdef TARGET_CHERI
 #define _gen_cap_check(type)                                                   \
     static inline void generate_cap_##type##_check(                            \
         TCGv_cap_checked_ptr resultaddr, uint32_t capreg, TCGv offset,         \
@@ -80,4 +81,20 @@ static inline void generate_get_ddc_checked_gpr_plus_offset(
     TCGv_i32 tcop = tcg_const_i32(mop);
     check_ddc(addr, cpu_env, /* overwrite addr */ (TCGv)addr, tcop);
     tcg_temp_free_i32(tcop);
+}
+
+#endif // TARGET_CHERI
+
+static inline void gen_check_pcc_bounds(DisasContext* ctx, uint32_t num_bytes)
+{
+#ifdef TARGET_CHERI
+    // XXX: __builtin_add_overflow() for end of address space?
+    if (unlikely(ctx->base.pc_next + num_bytes > ctx->base.pcc_top)) {
+        // Raise a bounds violation exception
+        gen_cheri_update_cpu_pc(ctx->base.pc_next); // Set PCC.cursor for correct EPCC value
+        TCGv_i32 tbytes = tcg_const_i32(num_bytes);
+        gen_helper_raise_exception_pcc_bounds(cpu_env, tbytes);
+        tcg_temp_free_i32(tbytes);
+    }
+#endif
 }

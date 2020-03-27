@@ -32,7 +32,6 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "cheri-translate-utils.h"
 
 #define DO_TRANSLATE(name, gen_helper, ...)                                    \
     static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \

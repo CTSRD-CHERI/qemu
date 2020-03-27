@@ -70,6 +70,10 @@ typedef struct DisasContextBase {
     TranslationBlock *tb;
     target_ulong pc_first;
     target_ulong pc_next;
+#ifdef TARGET_CHERI
+    target_ulong pcc_base;
+    target_ulong pcc_top;
+#endif
     DisasJumpType is_jmp;
     int num_insns;
     int max_insns;
@@ -78,6 +82,12 @@ typedef struct DisasContextBase {
     bool log_instr;
 #endif
 } DisasContextBase;
+
+#ifdef TARGET_CHERI
+#define pcc_base(ctx) ctx->base.pcc_base
+#else
+#define pcc_base(ctx) 0
+#endif
 
 /**
  * TranslatorOps:

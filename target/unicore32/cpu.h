@@ -148,8 +148,9 @@ typedef UniCore32CPU ArchCPU;
 #define UNICORE32_CPU_TYPE_NAME(model) model UNICORE32_CPU_TYPE_SUFFIX
 #define CPU_RESOLVING_TYPE TYPE_UNICORE32_CPU
 
-static inline void cpu_get_tb_cpu_state(CPUUniCore32State *env, target_ulong *pc,
-                                        target_ulong *cs_base, uint32_t *flags)
+static inline void cpu_get_tb_cpu_state(CPUUniCore32State *env,
+                                        target_ulong *pc, target_ulong *cs_base,
+                                        target_ulong *cs_top, uint32_t *flags)
 {
     *pc = env->regs[31];
     *cs_base = 0;

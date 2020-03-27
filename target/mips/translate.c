@@ -41,7 +41,6 @@
 #include "qemu/qemu-print.h"
 
 #ifdef TARGET_CHERI
-#include "cheri-translate-utils.h"
 #include "cheri-helper-utils.h"
 #endif
 
@@ -2770,9 +2769,6 @@ typedef struct DisasContext {
     DisasContextBase base;
     target_ulong saved_pc;
     target_ulong page_start;
-#ifdef TARGET_CHERI
-    target_ulong pcc_base;
-#endif
     uint32_t opcode;
     uint64_t insn_flags;
     int32_t CP0_Config1;
@@ -2807,15 +2803,6 @@ typedef struct DisasContext {
     bool mi;
     int gi;
 } DisasContext;
-
-static inline target_ulong pcc_base(DisasContext *ctx)
-{
-#ifdef TARGET_CHERI
-    return ctx->pcc_base;
-#else
-    return 0;
-#endif
-}
 
 #define DISAS_STOP       DISAS_TARGET_0
 #define DISAS_EXIT       DISAS_TARGET_1
@@ -2993,6 +2980,8 @@ static inline void gen_save_pc(target_ulong pc)
     tcg_gen_movi_tl(_pc_is_current, 1); // PC has been updated.
 #endif
 }
+#define gen_cheri_update_cpu_pc gen_save_pc
+#include "cheri-translate-utils.h"
 
 static inline void save_cpu_state(DisasContext *ctx, int do_save_pc)
 {
@@ -6598,7 +6587,7 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
         gen_load_gpr(btarget, rs);
 #ifdef TARGET_CHERI
         /* Add PCC.base to rs (jr/jalr is relative to PCC) */
-        tcg_gen_addi_tl(btarget, btarget, ctx->pcc_base);
+        tcg_gen_addi_tl(btarget, btarget, ctx->base.pcc_base);
 #endif /* TARGET_CHERI */
         GEN_CCHECK_BTARGET(cpu_env);
         break;
@@ -31684,11 +31673,6 @@ static void mips_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
     CPUMIPSState *env = cs->env_ptr;
 
-#ifdef TARGET_CHERI
-    ctx->pcc_base = dcbase->tb->cs_base;
-    cheri_debug_assert(ctx->pcc_base == cap_get_base(cheri_get_recent_pcc(env)));
-#endif
-
     ctx->page_start = ctx->base.pc_first & TARGET_PAGE_MASK;
     ctx->saved_pc = -1;
     ctx->insn_flags = env->insn_flags;
@@ -31792,12 +31776,11 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
     mips_update_statcounters_icount(ctx); // Increment the current icount value
 
 #ifdef TARGET_CHERI
-    /* Check PCC permissions and bounds. */
-    {
-        TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
-        gen_helper_ccheck_pc(cpu_env, tpc);
-        tcg_temp_free_i64(tpc);
-    }
+    // Note: PC can only be incremented since a branch exits the TB, so checking
+    // for pc_next < pcc.base should not be needed.
+    // Add a debug assertion in case this assumption no longer holds in the
+    // future.
+    tcg_debug_assert(ctx->base.pc_next >= ctx->base.pc_first);
 #endif
 #ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(ctx->base.log_instr)) {
@@ -31837,7 +31820,9 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
     int insn_bytes;
     int is_slot;
-
+    // XXX: we don't support micromips, etc. so we can hardcode 4 bytes as the
+    // instruction size (see assert below).
+    gen_check_pcc_bounds(ctx, 4);
     is_slot = ctx->hflags & MIPS_HFLAG_BMASK;
     if (ctx->insn_flags & ISA_NANOMIPS32) {
 #ifdef TARGET_CHERI
@@ -31866,6 +31851,9 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
         g_assert(ctx->base.is_jmp == DISAS_NORETURN);
         return;
     }
+#ifdef TARGET_CHERI
+    tcg_debug_assert(insn_bytes == 4 && "Compressed insns not supported");
+#endif
 
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
         if (!(ctx->hflags & (MIPS_HFLAG_BDS16 | MIPS_HFLAG_BDS32 |

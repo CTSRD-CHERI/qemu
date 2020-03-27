@@ -51,9 +51,6 @@ typedef struct DisasContext {
     DisasContextBase base;
     /* pc_succ_insn points to the instruction following base.pc_next */
     target_ulong pc_succ_insn;
-#ifdef TARGET_CHERI
-    target_ulong pcc_base;
-#endif
     target_ulong priv_ver;
     bool virt_enabled;
     uint32_t opcode;
@@ -71,15 +68,6 @@ typedef struct DisasContext {
     bool capmode;
 #endif
 } DisasContext;
-
-static inline target_ulong pcc_base(DisasContext *ctx)
-{
-#ifdef TARGET_CHERI
-    return ctx->pcc_base;
-#else
-    return 0;
-#endif
-}
 
 #ifdef TARGET_RISCV64
 /* convert riscv funct3 to qemu memop for load/store */
@@ -310,6 +298,8 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
 
 #define gen_set_gpr(reg_num_dst, t) _gen_set_gpr(ctx, reg_num_dst, t)
 #define gen_set_gpr_const(reg_num_dst, t) _gen_set_gpr_const(ctx, reg_num_dst, t)
+#define gen_cheri_update_cpu_pc gen_update_cpu_pc
+#include "cheri-translate-utils.h"
 
 
 static void gen_mulhsu(TCGv ret, TCGv arg1, TCGv arg2)
@@ -929,6 +919,7 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
     /* check for compressed insn */
     if (extract16(opcode, 0, 2) != 3) {
         gen_rvfi_dii_set_field_const(insn, opcode);
+        gen_check_pcc_bounds(ctx, 2);
         if (!has_ext(ctx, RVC)) {
             gen_exception_illegal(ctx);
         } else {
@@ -950,6 +941,7 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
 #endif
         uint32_t opcode32 = opcode;
         opcode32 = deposit32(opcode32, 16, 16, next_16);
+        gen_check_pcc_bounds(ctx, 4);
         ctx->pc_succ_insn = ctx->base.pc_next + 4;
         gen_rvfi_dii_set_field_const(insn, opcode32);
         if (!decode_insn32(ctx, opcode32)) {
@@ -969,8 +961,6 @@ static void riscv_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
     ctx->mstatus_fs = ctx->base.tb->flags & TB_FLAGS_MSTATUS_FS;
 #ifdef TARGET_CHERI
     ctx->capmode = (ctx->base.tb->flags & TB_FLAGS_CAPMODE) != 0;
-    ctx->pcc_base = dcbase->tb->cs_base;
-    cheri_debug_assert(ctx->pcc_base == cap_get_base(cheri_get_recent_pcc(env)));
 #endif
     ctx->priv_ver = env->priv_ver;
 #if !defined(CONFIG_USER_ONLY)

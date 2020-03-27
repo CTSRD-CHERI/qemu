@@ -2013,9 +2013,11 @@ typedef X86CPU ArchCPU;
 #endif
 
 static inline void cpu_get_tb_cpu_state(CPUX86State *env, target_ulong *pc,
-                                        target_ulong *cs_base, uint32_t *flags)
+                                        target_ulong *cs_base,
+                                        target_ulong *cs_top, uint32_t *flags)
 {
     *cs_base = env->segs[R_CS].base;
+    *cs_top = env->segs[R_CS].limit;
     *pc = *cs_base + env->eip;
     *flags = env->hflags |
         (env->eflags & (IOPL_MASK | TF_MASK | RF_MASK | VM_MASK | AC_MASK));

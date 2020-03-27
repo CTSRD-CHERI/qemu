@@ -50,7 +50,14 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     db->num_insns = 0;
     db->max_insns = max_insns;
     db->singlestep_enabled = cpu->singlestep_enabled;
-
+#ifdef TARGET_CHERI
+    db->pcc_base = tb->cs_base;
+    db->pcc_top = tb->cs_top;
+    cheri_debug_assert(db->pcc_base ==
+                       cap_get_base(cheri_get_recent_pcc(cpu->env_ptr)));
+    cheri_debug_assert(db->pcc_top ==
+                       cap_get_top(cheri_get_recent_pcc(cpu->env_ptr)));
+#endif
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 #ifdef CONFIG_MIPS_LOG_INSTR
@@ -86,7 +93,17 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 
     /* Start translating.  */
     gen_tb_start(db->tb);
+#ifdef CONFIG_DEBUG_TCG
+    // On TB entry pc is up-to-date.
+    if (_pc_is_current) {
+        tcg_gen_movi_tl(_pc_is_current, 1);
+    }
+#endif
     ops->tb_start(db, cpu);
+#ifdef TARGET_CHERI
+    /* Check PCC permissions and tag once on TB entry. */
+    gen_helper_ccheck_pcc_on_tb_entry(cpu_env);
+#endif
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 
     plugin_enabled = plugin_gen_tb_start(cpu, tb);

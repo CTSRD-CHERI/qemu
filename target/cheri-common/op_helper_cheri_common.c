@@ -1271,5 +1271,29 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 }
 #endif
 
+void CHERI_HELPER_IMPL(ccheck_pcc_on_tb_entry(CPUArchState *env))
+{
+    // On translation block entry we check that PCC is tagged and unsealed,
+    // has the required permissions and is within bounds
+    // The running of the end check is performed in the translator
+    cheri_debug_assert(pc_is_current(env));
+    // Note: we set pc=0 since PC it will have been saved prior to calling the
+    // helper and we don't need to recompute it from the generated code.
+    check_cap(env, cheri_get_current_pcc(env), CAP_PERM_EXECUTE, PC_ADDR(env),
+              CHERI_EXC_REGNUM_PCC, 0, /*instavail=*/true, 0);
+}
 
-// FIXME: atomic128.h for atomic xchg?
+void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
+                                                  uint32_t num_bytes))
+{
+    // On translation block entry we check that PCC is tagged and unsealed,
+    // has the required permissions and is within bounds
+    // The running of the end check is performed in the translator
+    cheri_debug_assert(pc_is_current(env));
+    cheri_debug_assert(
+        !cap_is_in_bounds(cheri_get_current_pcc(env), PC_ADDR(env), num_bytes));
+    // Note: we set pc=0 since PC it will have been saved prior to calling the
+    // helper and we don't need to recompute it from the generated code.
+    raise_cheri_exception_impl(env, CapEx_LengthViolation, CHERI_EXC_REGNUM_PCC,
+                               /*instavail=*/true, 0);
+}
