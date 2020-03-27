@@ -2699,10 +2699,8 @@ static TCGv_i32 hflags;
 static TCGv_i32 fpu_fcr0, fpu_fcr31;
 static TCGv_i64 fpu_f64[32];
 static TCGv_i64 msa_wr_d[64];
-#ifdef TARGET_CHERI
 static TCGv cpu_statcounters_icount, cpu_statcounters_icount_kernel,
     cpu_statcounters_icount_user;
-#endif
 
 #if defined(TARGET_MIPS64)
 /* Upper halves of R5900's 128-bit registers: MMRs (multimedia registers) */
@@ -2888,6 +2886,8 @@ static const char * const mxuregnames[] = {
                           ((ctx->opcode >> 16) & 0x1F));                      \
         }                                                                     \
     } while (0)
+
+static inline void mips_update_statcounters_icount(DisasContext *ctx);
 
 /* General purpose registers moves. */
 static inline void gen_load_gpr(TCGv t, int reg)
@@ -31746,6 +31746,32 @@ static bool mips_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
     return (ctx->hflags & MIPS_HFLAG_UM) != 0;
 }
 
+static inline void mips_update_statcounters_icount(DisasContext *ctx)
+{
+    // FIXME: Don't do this for every executed instruction.
+#ifdef NOTYET
+    _debug_value(cpu_PC, "mips_update_icount");
+    if (ctx->icount_already_added == ctx->base.num_insns) {
+        qemu_log("%s: icount already updated: %d\n", __func__, ctx->base.num_insns);
+        return;
+    }
+    target_ulong diff = ctx->base.num_insns - ctx->icount_already_added;
+#else
+    target_ulong diff = 1;
+#endif
+    tcg_gen_addi_tl(cpu_statcounters_icount, cpu_statcounters_icount, diff);
+    if (ctx->hflags & MIPS_HFLAG_UM) {
+        tcg_gen_addi_tl(cpu_statcounters_icount_user,
+                        cpu_statcounters_icount_user, diff);
+    } else {
+        tcg_gen_addi_tl(cpu_statcounters_icount_kernel,
+                        cpu_statcounters_icount_kernel, diff);
+    }
+#ifdef NOTYET
+    ctx->icount_already_added = ctx->base.num_insns;
+#endif
+}
+
 static void mips_tr_tb_start(DisasContextBase *dcbase, CPUState *cs)
 {
 }
@@ -31761,17 +31787,13 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
 
     tcg_gen_insn_start(ctx->base.pc_next, ctx->hflags & MIPS_HFLAG_BMASK,
                        ctx->btarget);
-    /* Generate capabilities check on PC (and possibly log registers + instrs) */
+
+    /* Update the icount statcounter */
+    // TODO: it would be nice if we could do this at TB end but exceptions
+    // use longjmp to jump out of the tb so it is quite difficult.
+    mips_update_statcounters_icount(ctx); // Increment the current icount value
+
 #ifdef TARGET_CHERI
-    /* Update statcounters icount */
-    tcg_gen_addi_tl(cpu_statcounters_icount, cpu_statcounters_icount, 1);
-    if (mips_tr_tb_in_user_mode(dcbase, cs)) {
-        tcg_gen_addi_tl(cpu_statcounters_icount_user,
-                        cpu_statcounters_icount_user, 1);
-    } else {
-        tcg_gen_addi_tl(cpu_statcounters_icount_kernel,
-                        cpu_statcounters_icount_kernel, 1);
-    }
     /* Check PCC permissions and bounds. */
     {
         TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
@@ -31891,6 +31913,7 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
 static void mips_tr_tb_stop(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
+    // tcg_debug_assert(ctx->icount_already_added == dcbase->num_insns);
 
     if (ctx->base.singlestep_enabled && ctx->base.is_jmp != DISAS_NORETURN) {
         save_cpu_state(ctx, ctx->base.is_jmp != DISAS_EXIT);
@@ -32084,7 +32107,6 @@ void mips_tcg_init(void)
     cpu_llval = tcg_global_mem_new(cpu_env, offsetof(CPUMIPSState, llval),
                                    "llval");
 
-#ifdef TARGET_CHERI
     cpu_statcounters_icount =
         tcg_global_mem_new(cpu_env, offsetof(CPUMIPSState, statcounters_icount),
                            "statcounters_icount");
@@ -32094,7 +32116,6 @@ void mips_tcg_init(void)
     cpu_statcounters_icount_user = tcg_global_mem_new(
         cpu_env, offsetof(CPUMIPSState, statcounters_icount_user),
         "statcounters_icount_user");
-#endif
 #if defined(TARGET_MIPS64)
     cpu_mmr[0] = NULL;
     for (i = 1; i < 32; i++) {

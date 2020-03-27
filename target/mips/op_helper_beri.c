@@ -82,7 +82,6 @@ target_ulong helper_mfc0_coreid(CPUMIPSState *env)
         (cs->cpu_index & 0xffff));
 }
 
-#if defined(TARGET_CHERI)
 target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env, uint32_t sel)
 {
     qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
@@ -91,12 +90,15 @@ target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env, uint32_t sel)
     case 0: return env->statcounters_icount;
     case 1: return env->statcounters_icount_user;
     case 2: return env->statcounters_icount_kernel;
+#ifdef TARGET_CHERI
     case 3: return env->statcounters_imprecise_setbounds;
     case 4: return env->statcounters_unrepresentable_caps;
+#endif
     default: return 0xdeadbeef;
     }
 }
 
+#if defined(TARGET_CHERI)
 target_ulong helper_rdhwr_statcounters_itlb_miss(CPUMIPSState *env)
 {
     qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);

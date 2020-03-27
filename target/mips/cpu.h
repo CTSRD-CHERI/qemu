@@ -1222,11 +1222,12 @@ struct CPUMIPSState {
 
 
 
-#if defined(TARGET_CHERI)
-    /* BERI Statcounters (CHERI only for now): */
+    /* BERI Statcounters: */
     uint64_t statcounters_icount;
     uint64_t statcounters_icount_user;
     uint64_t statcounters_icount_kernel;
+    /* The other ones are CHERI only for now */
+#if defined(TARGET_CHERI)
     uint64_t statcounters_itlb_miss;
     uint64_t statcounters_dtlb_miss;
     uint64_t statcounters_cap_read;
