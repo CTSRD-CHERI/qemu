@@ -343,8 +343,7 @@ typedef MicroBlazeCPU ArchCPU;
 #include "exec/cpu-all.h"
 
 static inline void cpu_get_tb_cpu_state(CPUMBState *env, target_ulong *pc,
-                                        target_ulong *cs_base,
-                                        target_ulong *cs_top, uint32_t *flags)
+                                        target_ulong *cs_base, uint32_t *flags)
 {
     *pc = env->sregs[SR_PC];
     *cs_base = 0;

@@ -2368,8 +2368,7 @@ void cpu_write_xer(CPUPPCState *env, target_ulong xer);
 #define is_book3s_arch2x(ctx) (!!((ctx)->insns_flags & PPC_SEGMENT_64B))
 
 static inline void cpu_get_tb_cpu_state(CPUPPCState *env, target_ulong *pc,
-                                        target_ulong *cs_base,
-                                        target_ulong *cs_top, uint32_t *flags)
+                                        target_ulong *cs_base, uint32_t *flags)
 {
     *pc = env->nip;
     *cs_base = 0;

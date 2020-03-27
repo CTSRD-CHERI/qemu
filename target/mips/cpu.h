@@ -1439,9 +1439,11 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */
 #endif /* CONFIG_MIPS_LOG_INSTR */
 
-static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
-                                        target_ulong *cs_base,
-                                        target_ulong *cs_top, uint32_t *flags)
+static inline void mips_cpu_get_tb_cpu_state(CPUMIPSState *env,
+                                             target_ulong *pc,
+                                             target_ulong *cs_base,
+                                             target_ulong *cs_top,
+                                             uint32_t *flags)
 {
     *pc = PC_ADDR(env);
     *flags = env->hflags &
@@ -1452,6 +1454,8 @@ static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
     *cs_base = 0;
 #endif
 }
+// Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets
+#define cpu_get_tb_cpu_state mips_cpu_get_tb_cpu_state
 
 static inline bool should_use_error_epc(CPUMIPSState *env)
 {

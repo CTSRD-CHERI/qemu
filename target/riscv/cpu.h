@@ -567,11 +567,14 @@ _Static_assert(((TB_FLAG_CHERI_CAPMODE | TB_FLAG_CHERI_PCC_VALID) &
 #include "exec/cpu-all.h"
 #include "cpu_cheri.h"
 
-static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
-                                        target_ulong *cs_base,
-                                        target_ulong *cs_top, uint32_t *flags)
+static inline void riscv_cpu_get_tb_cpu_state(CPURISCVState *env,
+                                              target_ulong *pc,
+                                              target_ulong *cs_base,
+                                              target_ulong *cs_top,
+                                              uint32_t *flags)
 {
-    *pc = PC_ADDR(env); // We want the full virtual address here and not an offset
+    *pc =
+        PC_ADDR(env); // We want the full virtual address here and not an offset
 #ifdef CONFIG_USER_ONLY
     *flags = TB_FLAGS_MSTATUS_FS;
 #else
@@ -586,5 +589,7 @@ static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
     *cs_base = 0;
 #endif
 }
+// Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets
+#define cpu_get_tb_cpu_state riscv_cpu_get_tb_cpu_state
 
 #endif /* RISCV_CPU_H */

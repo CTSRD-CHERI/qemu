@@ -377,8 +377,7 @@ static inline void cpu_write_sr(CPUSH4State *env, target_ulong sr)
 }
 
 static inline void cpu_get_tb_cpu_state(CPUSH4State *env, target_ulong *pc,
-                                        target_ulong *cs_base,
-                                        target_ulong *cs_top, uint32_t *flags)
+                                        target_ulong *cs_base, uint32_t *flags)
 {
     *pc = env->pc;
     /* For a gUSA region, notice the end of the region.  */
