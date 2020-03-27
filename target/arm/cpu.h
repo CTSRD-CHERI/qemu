@@ -3276,8 +3276,7 @@ static inline bool arm_cpu_bswap_data(CPUARMState *env)
 #endif
 
 void cpu_get_tb_cpu_state(CPUARMState *env, target_ulong *pc,
-                          target_ulong *cs_base, target_ulong *cs_top,
-                          uint32_t *flags);
+                          target_ulong *cs_base, uint32_t *flags);
 
 enum {
     QEMU_PSCI_CONDUIT_DISABLED = 0,

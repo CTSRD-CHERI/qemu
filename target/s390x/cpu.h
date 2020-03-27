@@ -364,9 +364,8 @@ static inline int cpu_mmu_index(CPUS390XState *env, bool ifetch)
 #endif
 }
 
-static inline void cpu_get_tb_cpu_state(CPUS390XState *env, target_ulong *pc,
-                                        target_ulong *cs_base,
-                                        target_ulong *cs_top, uint32_t *flags)
+static inline void cpu_get_tb_cpu_state(CPUS390XState* env, target_ulong *pc,
+                                        target_ulong *cs_base, uint32_t *flags)
 {
     *pc = env->psw.addr;
     *cs_base = env->ex_value;
