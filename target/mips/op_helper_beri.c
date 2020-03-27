@@ -87,7 +87,7 @@ target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env, uint32_t sel)
     qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
     check_hwrena(env, 4, GETPC());
     switch (sel) {
-    case 0: return env->statcounters_icount;
+    case 0: return env->statcounters_icount_user + env->statcounters_icount_kernel;
     case 1: return env->statcounters_icount_user;
     case 2: return env->statcounters_icount_kernel;
 #ifdef TARGET_CHERI

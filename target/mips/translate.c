@@ -2699,8 +2699,7 @@ static TCGv_i32 hflags;
 static TCGv_i32 fpu_fcr0, fpu_fcr31;
 static TCGv_i64 fpu_f64[32];
 static TCGv_i64 msa_wr_d[64];
-static TCGv cpu_statcounters_icount, cpu_statcounters_icount_kernel,
-    cpu_statcounters_icount_user;
+static TCGv cpu_statcounters_icount_kernel, cpu_statcounters_icount_user;
 
 #if defined(TARGET_MIPS64)
 /* Upper halves of R5900's 128-bit registers: MMRs (multimedia registers) */
@@ -31759,7 +31758,6 @@ static inline void mips_update_statcounters_icount(DisasContext *ctx)
 #else
     target_ulong diff = 1;
 #endif
-    tcg_gen_addi_tl(cpu_statcounters_icount, cpu_statcounters_icount, diff);
     if (ctx->hflags & MIPS_HFLAG_UM) {
         tcg_gen_addi_tl(cpu_statcounters_icount_user,
                         cpu_statcounters_icount_user, diff);
@@ -32107,9 +32105,6 @@ void mips_tcg_init(void)
     cpu_llval = tcg_global_mem_new(cpu_env, offsetof(CPUMIPSState, llval),
                                    "llval");
 
-    cpu_statcounters_icount =
-        tcg_global_mem_new(cpu_env, offsetof(CPUMIPSState, statcounters_icount),
-                           "statcounters_icount");
     cpu_statcounters_icount_kernel = tcg_global_mem_new(
         cpu_env, offsetof(CPUMIPSState, statcounters_icount_kernel),
         "statcounters_icount_kernel");
