@@ -6645,12 +6645,7 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
             SET_BTARGET_CHECKED(true); // not taken -> no need to check
             goto out;
         case OPC_J:
-#ifdef TARGET_CHERI
-            ctx->hflags |= MIPS_HFLAG_BR | MIPS_HFLAG_BDS32;
-            save_cpu_state(ctx, 0);
-#else
             ctx->hflags |= MIPS_HFLAG_B;
-#endif /* TARGET_CHERI */
             break;
 #ifndef TARGET_CHERI
         case OPC_JALX:
