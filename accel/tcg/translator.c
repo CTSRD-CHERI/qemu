@@ -102,7 +102,16 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     ops->tb_start(db, cpu);
 #ifdef TARGET_CHERI
     /* Check PCC permissions and tag once on TB entry. */
-    gen_helper_ccheck_pcc_on_tb_entry(cpu_env);
+    // Each target must define one flag
+    if (unlikely((tb->flags & TB_FLAG_CHERI_PCC_VALID) !=
+                 TB_FLAG_CHERI_PCC_VALID)) {
+        gen_helper_raise_exception_pcc_perms(cpu_env);
+    } else if (unlikely(db->pc_next < db->pcc_base ||
+                        db->pc_next >= db->pcc_top)) {
+        TCGv_i32 tzero = tcg_const_i32(0);
+        gen_helper_raise_exception_pcc_bounds(cpu_env, tzero);
+        tcg_temp_free_i32(tzero);
+    }
 #endif
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 

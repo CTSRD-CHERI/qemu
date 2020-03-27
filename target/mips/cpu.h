@@ -1142,7 +1142,7 @@ struct CPUMIPSState {
     uint32_t hflags;    /* CPU State */
     /* TMASK defines different execution modes */
 #ifdef TARGET_CHERI
-#define MIPS_HFLAG_TMASK  0x3F5807FF
+#define MIPS_HFLAG_TMASK (0x1F5807FF | MIPS_HFLAG_COP2X)
 #else
 #define MIPS_HFLAG_TMASK  0x1F5807FF
 #endif /* TARGET_CHERI */
@@ -1209,6 +1209,7 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_ERL   0x10000000 /* error level flag */
 #ifdef TARGET_CHERI
 #define MIPS_HFLAG_COP2X 0x20000000 /* CHERI/CP2 enabled              */
+#define TB_FLAG_CHERI_PCC_VALID 0x40000000 /* CHERI PCC is tagged, executable and unsealed */
 #endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
     target_ulong bcond;          /* Branch condition (if needed)       */
@@ -1442,14 +1443,17 @@ static inline void cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
                                         target_ulong *cs_top, uint32_t *flags)
 {
     *pc = PC_ADDR(env);
+    *flags = env->hflags &
+             (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK | MIPS_HFLAG_HWRENA_ULR);
 #ifdef TARGET_CHERI
-    *cs_base = cap_get_base(&env->active_tc.PCC);
-    *cs_top = cap_get_top(&env->active_tc.PCC);
+    cheri_debug_assert((*flags & TB_FLAG_CHERI_PCC_VALID) == 0);
+    const cap_register_t *pcc = &env->active_tc.PCC;
+    *flags |= cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
+    *cs_base = cap_get_base(pcc);
+    *cs_top = cap_get_top(pcc);
 #else
     *cs_base = 0;
 #endif
-    *flags = env->hflags & (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK |
-                            MIPS_HFLAG_HWRENA_ULR);
 }
 
 static inline bool should_use_error_epc(CPUMIPSState *env)

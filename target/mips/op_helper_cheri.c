@@ -1164,6 +1164,9 @@ void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))
 #endif
     env->active_tc.PCC = env->active_tc.CapBranchTarget;
     // Restore or clear MIPS_HFLAG_CP0 depending on Access_System_Registers permission
+#ifdef CONFIG_DEBUG_TCG
+    env->active_tc._pc_is_current = true;
+#endif
     update_cp0_access_for_pc(env);
 }
 
