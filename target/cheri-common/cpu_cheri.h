@@ -102,10 +102,14 @@ static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
     pcc->_cr_cursor = pc_addr;
 }
 
+static inline bool cap_has_capmode_flag(const cap_register_t *cap) {
+    return (cap->cr_flags & CHERI_FLAG_CAPMODE) == CHERI_FLAG_CAPMODE;
+}
+
 static inline bool cheri_in_capmode(CPUArchState *env) {
     // Note: No need to synchronize the PCC.cursor value from TCG since
     // Every change to capmode will exit the current translation block.
-    return (cheri_get_recent_pcc(env)->cr_flags & CHERI_FLAG_CAPMODE) == CHERI_FLAG_CAPMODE;
+    return cap_has_capmode_flag(cheri_get_recent_pcc(env));
 }
 
 // Note: this function does not check the bounds of pcc!
@@ -115,6 +119,23 @@ static inline bool cheri_cap_perms_valid_for_exec(const cap_register_t *pcc)
     // in-bounds).
     return pcc->cr_tag && cap_has_perms(pcc, CAP_PERM_EXECUTE) &&
            cap_is_unsealed(pcc);
+}
+
+// Note: can't use an inline function here since TranslationBlock isn't defined
+#define tb_in_capmode(tb)                                                      \
+    ((tb->flags & TB_FLAG_CHERI_CAPMODE) == TB_FLAG_CHERI_CAPMODE)
+
+static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
+                                              uint32_t *flags,
+                                              target_ulong *cs_base,
+                                              target_ulong *cs_top)
+{
+    cheri_debug_assert(
+        (*flags & (TB_FLAG_CHERI_PCC_VALID | TB_FLAG_CHERI_CAPMODE)) == 0);
+    *flags |= cap_has_capmode_flag(pcc) ? TB_FLAG_CHERI_CAPMODE : 0;
+    *flags |= cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
+    *cs_base = cap_get_base(pcc);
+    *cs_top = cap_get_top(pcc);
 }
 
 #endif

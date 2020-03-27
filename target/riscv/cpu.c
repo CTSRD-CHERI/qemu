@@ -337,9 +337,7 @@ static void riscv_cpu_synchronize_from_tb(CPUState *cs, TranslationBlock *tb)
     CPURISCVState *env = &cpu->env;
     riscv_update_pc(env, tb->pc, /*can_be_unrepresentable=*/false);
 #ifdef TARGET_CHERI
-    // We also have to synchronize the capmode flag
-    // XXXAR: is this necessary?
-    env->PCC.cr_flags = tb->flags & TB_FLAGS_CAPMODE ? CHERI_FLAG_CAPMODE : 0;
+    cheri_debug_assert(tb_in_capmode(tb) == cheri_in_capmode(env));
 #endif
 #ifdef CONFIG_DEBUG_TCG
     env->_pc_is_current = true;

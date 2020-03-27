@@ -556,15 +556,16 @@ void riscv_cpu_register_gdb_regs_for_features(CPUState *cs);
 typedef CPURISCVState CPUArchState;
 typedef RISCVCPU ArchCPU;
 
-#include "exec/cpu-all.h"
-#include "cpu_cheri.h"
-
 #define TB_FLAGS_MMU_MASK   3
 // For capmode we pick any flags bit that isn't used yet, 0x100 right now
-#define TB_FLAGS_CAPMODE 0x100
+#define TB_FLAG_CHERI_CAPMODE 0x100
 #define TB_FLAG_CHERI_PCC_VALID 0x200 /* CHERI PCC is tagged, executable and unsealed */
 #define TB_FLAGS_MSTATUS_FS MSTATUS_FS
-_Static_assert((TB_FLAGS_CAPMODE & TB_FLAGS_MSTATUS_FS) == 0, "overlap");
+_Static_assert(((TB_FLAG_CHERI_CAPMODE | TB_FLAG_CHERI_PCC_VALID) &
+                TB_FLAGS_MSTATUS_FS) == 0, "overlap");
+
+#include "exec/cpu-all.h"
+#include "cpu_cheri.h"
 
 static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
                                         target_ulong *cs_base,
@@ -580,11 +581,7 @@ static inline void cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
     }
 #endif
 #ifdef TARGET_CHERI
-    *flags |= cheri_in_capmode(env) ? TB_FLAGS_CAPMODE : 0;
-    *flags |=
-        cheri_cap_perms_valid_for_exec(&env->PCC) ? TB_FLAG_CHERI_PCC_VALID : 0;
-    *cs_base = cap_get_base(&env->PCC);
-    *cs_top = cap_get_top(&env->PCC);
+    cheri_cpu_get_tb_cpu_state(&env->PCC, flags, cs_base, cs_top);
 #else
     *cs_base = 0;
 #endif

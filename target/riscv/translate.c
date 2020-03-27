@@ -960,7 +960,7 @@ static void riscv_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
     ctx->mem_idx = ctx->base.tb->flags & TB_FLAGS_MMU_MASK;
     ctx->mstatus_fs = ctx->base.tb->flags & TB_FLAGS_MSTATUS_FS;
 #ifdef TARGET_CHERI
-    ctx->capmode = (ctx->base.tb->flags & TB_FLAGS_CAPMODE) != 0;
+    ctx->capmode = tb_in_capmode(ctx->base.tb);
 #endif
     ctx->priv_ver = env->priv_ver;
 #if !defined(CONFIG_USER_ONLY)
