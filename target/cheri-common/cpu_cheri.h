@@ -108,6 +108,15 @@ static inline bool cheri_in_capmode(CPUArchState *env) {
     return (cheri_get_recent_pcc(env)->cr_flags & CHERI_FLAG_CAPMODE) == CHERI_FLAG_CAPMODE;
 }
 
+// Note: this function does not check the bounds of pcc!
+static inline bool cheri_cap_perms_valid_for_exec(const cap_register_t *pcc)
+{
+    // When executing, PCC must be tagged, executable and unsealed (and
+    // in-bounds).
+    return pcc->cr_tag && cap_has_perms(pcc, CAP_PERM_EXECUTE) &&
+           cap_is_unsealed(pcc);
+}
+
 #endif
 
 static inline target_ulong cpu_get_current_pc(CPUArchState *env,

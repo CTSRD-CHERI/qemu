@@ -45,7 +45,7 @@
  */
 
 // PCC bounds checks:
-DEF_HELPER_1(ccheck_pcc_on_tb_entry, void, env)
+DEF_HELPER_1(raise_exception_pcc_perms, noreturn, env)
 DEF_HELPER_2(raise_exception_pcc_bounds, noreturn, env, i32)
 
 // Two-operand capability inspection

@@ -1271,16 +1271,30 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 }
 #endif
 
-void CHERI_HELPER_IMPL(ccheck_pcc_on_tb_entry(CPUArchState *env))
+void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
 {
     // On translation block entry we check that PCC is tagged and unsealed,
     // has the required permissions and is within bounds
     // The running of the end check is performed in the translator
     cheri_debug_assert(pc_is_current(env));
+    const cap_register_t *pcc = cheri_get_current_pcc(env);
+    CheriCapExcCause cause;
+    if (!pcc->cr_tag) {
+        cause = CapEx_TagViolation;
+    } else if (!cap_is_unsealed(pcc)) {
+        cause = CapEx_SealViolation;
+    } else if (!cap_has_perms(pcc, CAP_PERM_EXECUTE)) {
+        cause = CapEx_PermitExecuteViolation;
+    } else {
+        error_report("%s: PCC must be invalid. Logic error in translator? "
+                     "PCC=" PRINT_CAP_FMTSTR,
+                     __func__, PRINT_CAP_ARGS(pcc));
+        tcg_abort();
+    }
     // Note: we set pc=0 since PC it will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
-    check_cap(env, cheri_get_current_pcc(env), CAP_PERM_EXECUTE, PC_ADDR(env),
-              CHERI_EXC_REGNUM_PCC, 0, /*instavail=*/true, 0);
+    raise_cheri_exception_impl(env, cause, CHERI_EXC_REGNUM_PCC,
+                               /*instavail=*/true, 0);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
