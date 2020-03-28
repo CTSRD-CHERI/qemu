@@ -85,9 +85,15 @@ static inline void generate_get_ddc_checked_gpr_plus_offset(
 
 #endif // TARGET_CHERI
 
-static inline void gen_check_pcc_bounds(DisasContext* ctx, uint32_t num_bytes)
+static inline void gen_check_pcc_bounds_next_inst(DisasContext *ctx,
+                                                  uint32_t num_bytes)
 {
 #ifdef TARGET_CHERI
+    // Note: PC can only be incremented since a branch exits the TB, so checking
+    // for pc_next < pcc.base should not be needed.
+    // Add a debug assertion in case this assumption no longer holds in the
+    // future.
+    tcg_debug_assert(ctx->base.pc_next >= ctx->base.pc_first);
     // XXX: __builtin_add_overflow() for end of address space?
     if (unlikely(ctx->base.pc_next + num_bytes > ctx->base.pcc_top)) {
         // Raise a bounds violation exception

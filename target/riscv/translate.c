@@ -919,7 +919,7 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
     /* check for compressed insn */
     if (extract16(opcode, 0, 2) != 3) {
         gen_rvfi_dii_set_field_const(insn, opcode);
-        gen_check_pcc_bounds(ctx, 2);
+        gen_check_pcc_bounds_next_inst(ctx, 2);
         if (!has_ext(ctx, RVC)) {
             gen_exception_illegal(ctx);
         } else {
@@ -941,7 +941,7 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
 #endif
         uint32_t opcode32 = opcode;
         opcode32 = deposit32(opcode32, 16, 16, next_16);
-        gen_check_pcc_bounds(ctx, 4);
+        gen_check_pcc_bounds_next_inst(ctx, 4);
         ctx->pc_succ_insn = ctx->base.pc_next + 4;
         gen_rvfi_dii_set_field_const(insn, opcode32);
         if (!decode_insn32(ctx, opcode32)) {
