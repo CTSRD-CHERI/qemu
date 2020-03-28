@@ -1291,7 +1291,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
                      __func__, PRINT_CAP_ARGS(pcc));
         tcg_abort();
     }
-    // Note: we set pc=0 since PC it will have been saved prior to calling the
+    // Note: we set pc=0 since PC will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
     raise_cheri_exception_impl(env, cause, CHERI_EXC_REGNUM_PCC,
                                /*instavail=*/true, 0);
@@ -1306,7 +1306,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     cheri_debug_assert(pc_is_current(env));
     cheri_debug_assert(
         !cap_is_in_bounds(cheri_get_current_pcc(env), PC_ADDR(env), num_bytes));
-    // Note: we set pc=0 since PC it will have been saved prior to calling the
+    // Note: we set pc=0 since PC will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
     raise_cheri_exception_impl(env, CapEx_LengthViolation, CHERI_EXC_REGNUM_PCC,
                                /*instavail=*/true, 0);
