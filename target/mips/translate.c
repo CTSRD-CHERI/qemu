@@ -6501,10 +6501,7 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
     // Some debug assertions to ensure all branch cases are bounds checked
 #define SET_BTARGET_CHECKED(value) \
     do { tcg_debug_assert(!btarget_checked); btarget_checked = value; } while (false)
-#define GEN_CCHECK_BTARGET(cpu_env) \
-    do { SET_BTARGET_CHECKED(true); gen_helper_ccheck_btarget(cpu_env); } while (false)
 #else
-#define GEN_CCHECK_BTARGET(cpu_env)
 #define SET_BTARGET_CHECKED(value)
 #endif // defined(TARGET_CHERI)
 
@@ -6588,7 +6585,8 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
         /* Add PCC.base to rs (jr/jalr is relative to PCC) */
         tcg_gen_addi_tl(btarget, btarget, ctx->base.pcc_base);
 #endif /* TARGET_CHERI */
-        GEN_CCHECK_BTARGET(cpu_env);
+        gen_check_branch_target_dynamic(ctx, btarget);
+        SET_BTARGET_CHECKED(true);
         break;
     default:
         MIPS_INVAL("branch/jump");

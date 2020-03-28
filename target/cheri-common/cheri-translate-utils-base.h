@@ -44,15 +44,23 @@ static inline bool in_pcc_bounds(DisasContextBase *db, target_ulong addr)
 }
 
 // Raise a bounds violation exception on PCC
-static inline void gen_raise_pcc_violation(DisasContextBase *db, target_ulong addr,
-                                           uint32_t num_bytes)
+static inline void gen_raise_pcc_violation_tcgv(DisasContextBase *db,
+                                                TCGv taddr, uint32_t num_bytes)
 {
-    tcg_debug_assert(!in_pcc_bounds(db, addr));
     gen_cheri_update_cpu_pc(db->pc_next); // Ensure correct PCC.cursor
     TCGv_i32 tbytes = tcg_const_i32(num_bytes);
-    TCGv taddr = tcg_const_tl(addr);
     gen_helper_raise_exception_pcc_bounds(cpu_env, taddr, tbytes);
     tcg_temp_free_i32(tbytes);
+}
+
+static inline void gen_raise_pcc_violation(DisasContextBase *db,
+                                           target_ulong addr,
+                                           uint32_t num_bytes)
+{
+    tcg_debug_assert(!in_pcc_bounds(db, addr + num_bytes) ||
+                     !in_pcc_bounds(db, addr));
+    TCGv taddr = tcg_const_tl(addr);
+    gen_raise_pcc_violation_tcgv(db, taddr, num_bytes);
     tcg_temp_free(taddr);
 }
 

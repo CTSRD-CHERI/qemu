@@ -1146,15 +1146,6 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
 
 #endif /* ! CHERI_MAGIC128 */
 
-void CHERI_HELPER_IMPL(ccheck_btarget(CPUArchState *env))
-{
-    // Check whether the branch target is within $pcc and if not raise an exception
-    // qemu_log_mask(CPU_LOG_INSTR, "%s: env->pc=0x" TARGET_FMT_lx " hflags=0x%x, btarget=0x" TARGET_FMT_lx "\n",
-    //    __func__, PC_ADDR(env), env->hflags, env->btarget);
-    check_cap(env, cheri_get_recent_pcc(env), CAP_PERM_EXECUTE, env->btarget,
-              0xff, 4, /*instavail=*/false, GETPC());
-}
-
 void CHERI_HELPER_IMPL(copy_cap_btarget_to_pcc(CPUArchState *env))
 {
 #ifdef QEMU_USE_COMPRESSED_CHERI_CAPS

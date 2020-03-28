@@ -110,6 +110,40 @@ static inline void gen_check_branch_target(DisasContext *ctx, target_ulong addr)
 #endif
 }
 
+// Same as above, but in this case the actual address isn't known at translate
+// time so we have to emit the branches in the generated code
+static inline void gen_check_branch_target_dynamic(DisasContext *ctx, TCGv addr)
+{
+#ifdef TARGET_CHERI
+    // XXXAR: would it be faster to do two setconds and a single branch?
+    // GCC and clang output the following assembly for the following code:
+    // See https://godbolt.org/z/bdwJ7P
+    // if (unlikely(addr < base || addr > top)) {
+    //   raise_bounds_violation(1);
+    //  }
+    // bounds_violation_unlikely:
+    //        cmp     rdi, rsi
+    //        jl      .L4
+    //        cmp     rdi, rdx
+    //        jg      .L4
+    //        ret
+    //.L4:
+    //        sub     rsp, 8
+    //        mov     edi, 1
+    //        call    raise_bounds_violation
+    TCGLabel *skip_btarget_check = gen_new_label();
+    TCGLabel *bounds_violation = gen_new_label();
+    // Skip the bounds violation if addr >= base && <= top
+    tcg_gen_brcondi_tl(TCG_COND_LTU, addr, ctx->base.pcc_base, bounds_violation);
+    tcg_gen_brcondi_tl(TCG_COND_GEU, addr, ctx->base.pcc_top, bounds_violation);
+    tcg_gen_br(skip_btarget_check); // No violation -> return
+    // One of the branches taken -> raise a bounds violation exception
+    gen_set_label(bounds_violation); // skip helper call
+    gen_raise_pcc_violation_tcgv(&ctx->base, addr, 0);
+    gen_set_label(skip_btarget_check); // skip helper call
+#endif
+}
+
 static inline void gen_check_cond_branch_target(DisasContext *ctx,
                                                 TCGv branchcond,
                                                 target_ulong addr)
