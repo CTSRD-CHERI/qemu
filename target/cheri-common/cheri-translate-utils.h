@@ -131,11 +131,25 @@ static inline void gen_check_branch_target_dynamic(DisasContext *ctx, TCGv addr)
     //        sub     rsp, 8
     //        mov     edi, 1
     //        call    raise_bounds_violation
+    // Note: JR/JALR will often be used in hybrid/non-CHERI cases, so we can
+    // skip the less than check if pcc.base is zero and top is MAX:
+    const bool need_base_check = ctx->base.pcc_base > 0;
+    const bool need_top_check = ctx->base.pcc_top != TYPE_MAXIMUM(target_ulong);
+    if (likely(!need_base_check && !need_top_check)) {
+        return;
+    }
     TCGLabel *skip_btarget_check = gen_new_label();
     TCGLabel *bounds_violation = gen_new_label();
-    // Skip the bounds violation if addr >= base && <= top
-    tcg_gen_brcondi_tl(TCG_COND_LTU, addr, ctx->base.pcc_base, bounds_violation);
-    tcg_gen_brcondi_tl(TCG_COND_GEU, addr, ctx->base.pcc_top, bounds_violation);
+    // We can skip the check of pcc.base if it is zero (common case in
+    // hybrid/non-CHERI  mode).
+    if (unlikely(need_base_check)) {
+        tcg_gen_brcondi_tl(TCG_COND_LTU, addr, ctx->base.pcc_base,
+                           bounds_violation);
+    }
+    if (need_top_check) {
+        tcg_gen_brcondi_tl(TCG_COND_GEU, addr, ctx->base.pcc_top,
+                           bounds_violation);
+    }
     tcg_gen_br(skip_btarget_check); // No violation -> return
     // One of the branches taken -> raise a bounds violation exception
     gen_set_label(bounds_violation); // skip helper call
