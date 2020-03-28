@@ -125,17 +125,23 @@ static inline bool cheri_cap_perms_valid_for_exec(const cap_register_t *pcc)
 #define tb_in_capmode(tb)                                                      \
     ((tb->flags & TB_FLAG_CHERI_CAPMODE) == TB_FLAG_CHERI_CAPMODE)
 
-static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
-                                              uint32_t *flags,
-                                              target_ulong *cs_base,
-                                              target_ulong *cs_top)
+static inline void
+cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc, const cap_register_t *ddc,
+                           uint32_t *flags, target_ulong *cs_base,
+                           target_ulong *cs_top, target_ulong *ds_base,
+                           target_ulong *ds_top)
 {
     cheri_debug_assert(
         (*flags & (TB_FLAG_CHERI_PCC_VALID | TB_FLAG_CHERI_CAPMODE)) == 0);
     *flags |= cap_has_capmode_flag(pcc) ? TB_FLAG_CHERI_CAPMODE : 0;
-    *flags |= cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
     *cs_base = cap_get_base(pcc);
     *cs_top = cap_get_top(pcc);
+    *flags |= cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
+    *ds_base = cap_get_base(ddc);
+    *ds_top = cap_get_top(ddc);
+    // FIXME: reserve two flags bits for DDC permits loads+permits stores (and
+    // is tagged+unsealed). MIPS doesn't have any available right now so I need
+    // to refactor first
 }
 
 #endif

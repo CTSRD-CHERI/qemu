@@ -153,18 +153,20 @@ void *HELPER(lookup_tb_ptr)(CPUArchState *env)
     CPUState *cpu = env_cpu(env);
     TranslationBlock *tb;
     target_ulong cs_base, cs_top = 0, pc;
+    target_ulong ds_base = 0, ds_top = 0;
     uint32_t flags;
 
-    tb = tb_lookup__cpu_state(cpu, &pc, &cs_base, &cs_top, &flags,
-                              curr_cflags());
+    tb = tb_lookup__cpu_state(cpu, &pc, &cs_base, &cs_top, &ds_base, &ds_top,
+                              &flags, curr_cflags());
     if (tb == NULL) {
         return tcg_ctx->code_gen_epilogue;
     }
     qemu_log_mask_and_addr(CPU_LOG_EXEC, pc,
                            "Chain %d: %p [" TARGET_FMT_lx "/" TARGET_FMT_lx
-                           "/" TARGET_FMT_lx "/%#x] %s\n",
+                           "/" TARGET_FMT_lx "/" TARGET_FMT_lx "/" TARGET_FMT_lx
+                           "/%#x] %s\n",
                            cpu->cpu_index, tb->tc.ptr, cs_base, pc, cs_top,
-                           flags, lookup_symbol(pc));
+                           ds_base, ds_top, flags, lookup_symbol(pc));
     return tb->tc.ptr;
 }
 

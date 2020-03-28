@@ -59,6 +59,11 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
                        cap_get_base(cheri_get_recent_pcc(cpu->env_ptr)));
     cheri_debug_assert(db->pcc_top ==
                        cap_get_top(cheri_get_recent_pcc(cpu->env_ptr)));
+    db->ddc_base = tb->ds_base;
+    db->ddc_top = tb->ds_top;
+    cheri_debug_assert(db->ddc_base ==
+                       cap_get_base(cheri_get_ddc(cpu->env_ptr)));
+    cheri_debug_assert(db->ddc_top == cap_get_top(cheri_get_ddc(cpu->env_ptr)));
 #endif
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */

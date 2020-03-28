@@ -567,14 +567,13 @@ _Static_assert(((TB_FLAG_CHERI_CAPMODE | TB_FLAG_CHERI_PCC_VALID) &
 #include "exec/cpu-all.h"
 #include "cpu_cheri.h"
 
-static inline void riscv_cpu_get_tb_cpu_state(CPURISCVState *env,
-                                              target_ulong *pc,
-                                              target_ulong *cs_base,
-                                              target_ulong *cs_top,
-                                              uint32_t *flags)
+static inline void
+riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
+                           target_ulong *cs_base, target_ulong *cs_top,
+                           target_ulong *ds_base, target_ulong *ds_top,
+                           uint32_t *flags)
 {
-    *pc =
-        PC_ADDR(env); // We want the full virtual address here and not an offset
+    *pc = PC_ADDR(env); // We want the full virtual address here (no offset)
 #ifdef CONFIG_USER_ONLY
     *flags = TB_FLAGS_MSTATUS_FS;
 #else
@@ -584,7 +583,8 @@ static inline void riscv_cpu_get_tb_cpu_state(CPURISCVState *env,
     }
 #endif
 #ifdef TARGET_CHERI
-    cheri_cpu_get_tb_cpu_state(&env->PCC, flags, cs_base, cs_top);
+    cheri_cpu_get_tb_cpu_state(&env->PCC, &env->DDC, flags, cs_base, cs_top,
+                               ds_base, ds_top);
 #else
     *cs_base = 0;
 #endif
