@@ -100,3 +100,31 @@ static inline void gen_check_pcc_bounds_next_inst(DisasContext *ctx,
     }
 #endif
 }
+
+static inline void gen_check_branch_target(DisasContext *ctx, target_ulong addr)
+{
+#ifdef TARGET_CHERI
+    if (unlikely(!in_pcc_bounds(&ctx->base, addr))) {
+        gen_raise_pcc_violation(&ctx->base, addr, 0);
+    }
+#endif
+}
+
+static inline void gen_check_cond_branch_target(DisasContext *ctx,
+                                                TCGv branchcond,
+                                                target_ulong addr)
+{
+#ifdef TARGET_CHERI
+    // In the common case the target will be within the bounds of PCC so we
+    // don't need a check no matter whether the branch is taken or not.
+    if (likely(in_pcc_bounds(&ctx->base, addr)))
+        return;
+
+    TCGLabel *skip_btarget_check = gen_new_label();
+    // skip the bounds violation if bcond == 0 (i.e. branch not taken)
+    tcg_gen_brcondi_tl(TCG_COND_EQ, branchcond, 0, skip_btarget_check);
+    // Brach taken -> raise a bounds violation exception
+    gen_raise_pcc_violation(&ctx->base, addr, 0);
+    gen_set_label(skip_btarget_check); // skip helper call
+#endif
+}
