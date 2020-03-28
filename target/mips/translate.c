@@ -31770,13 +31770,6 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
     // use longjmp to jump out of the tb so it is quite difficult.
     mips_update_statcounters_icount(ctx); // Increment the current icount value
 
-#ifdef TARGET_CHERI
-    // Note: PC can only be incremented since a branch exits the TB, so checking
-    // for pc_next < pcc.base should not be needed.
-    // Add a debug assertion in case this assumption no longer holds in the
-    // future.
-    tcg_debug_assert(ctx->base.pc_next >= ctx->base.pc_first);
-#endif
 #ifdef CONFIG_MIPS_LOG_INSTR
     if (unlikely(ctx->base.log_instr)) {
         // Print changed state before advancing to the next instruction: GPR,
@@ -31817,7 +31810,7 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     int is_slot;
     // XXX: we don't support micromips, etc. so we can hardcode 4 bytes as the
     // instruction size (see assert below).
-    gen_check_pcc_bounds(ctx, 4);
+    gen_check_pcc_bounds_next_inst(ctx, 4);
     is_slot = ctx->hflags & MIPS_HFLAG_BMASK;
     if (ctx->insn_flags & ISA_NANOMIPS32) {
 #ifdef TARGET_CHERI
