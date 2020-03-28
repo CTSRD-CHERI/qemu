@@ -33,6 +33,7 @@
 #pragma once
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
+#include "cheri-translate-utils-base.h"
 
 #ifdef TARGET_CHERI
 #define _gen_cap_check(type)                                                   \
@@ -90,17 +91,12 @@ static inline void gen_check_pcc_bounds_next_inst(DisasContext *ctx,
 {
 #ifdef TARGET_CHERI
     // Note: PC can only be incremented since a branch exits the TB, so checking
-    // for pc_next < pcc.base should not be needed.
-    // Add a debug assertion in case this assumption no longer holds in the
-    // future.
+    // for pc_next < pcc.base should not be needed. Add a debug assertion in
+    // case this assumption no longer holds in the future.
     tcg_debug_assert(ctx->base.pc_next >= ctx->base.pc_first);
     // XXX: __builtin_add_overflow() for end of address space?
     if (unlikely(ctx->base.pc_next + num_bytes > ctx->base.pcc_top)) {
-        // Raise a bounds violation exception
-        gen_cheri_update_cpu_pc(ctx->base.pc_next); // Set PCC.cursor for correct EPCC value
-        TCGv_i32 tbytes = tcg_const_i32(num_bytes);
-        gen_helper_raise_exception_pcc_bounds(cpu_env, tbytes);
-        tcg_temp_free_i32(tbytes);
+        gen_raise_pcc_violation(&ctx->base, ctx->base.pc_next, num_bytes);
     }
 #endif
 }
