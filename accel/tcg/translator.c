@@ -18,6 +18,11 @@
 #include "exec/translator.h"
 #include "exec/plugin-gen.h"
 
+// Avoid depedendencies on translate.c (pcc.cursor is always valid when we raise
+// an exception here):
+#define gen_cheri_update_cpu_pc(pc)
+#include "cheri-translate-utils-base.h"
+
 /* Pairs with tcg_clear_temp_count.
    To be called by #TranslatorOps.{translate_insn,tb_stop} if
    (1) the target is sufficiently clean to support reporting,
@@ -101,16 +106,13 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #endif
     ops->tb_start(db, cpu);
 #ifdef TARGET_CHERI
-    /* Check PCC permissions and tag once on TB entry. */
-    // Each target must define one flag
+    // Check PCC permissions and tag once on TB entry.
+    // Each target must reserve one bit in tb->flags as the "PCC valid" flag.
     if (unlikely((tb->flags & TB_FLAG_CHERI_PCC_VALID) !=
                  TB_FLAG_CHERI_PCC_VALID)) {
         gen_helper_raise_exception_pcc_perms(cpu_env);
-    } else if (unlikely(db->pc_next < db->pcc_base ||
-                        db->pc_next >= db->pcc_top)) {
-        TCGv_i32 tzero = tcg_const_i32(0);
-        gen_helper_raise_exception_pcc_bounds(cpu_env, tzero);
-        tcg_temp_free_i32(tzero);
+    } else if (unlikely(!in_pcc_bounds(db, db->pc_next))) {
+        gen_raise_pcc_violation(db, db->pc_next, 0);
     }
 #endif
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
