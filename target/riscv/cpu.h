@@ -557,12 +557,7 @@ typedef CPURISCVState CPUArchState;
 typedef RISCVCPU ArchCPU;
 
 #define TB_FLAGS_MMU_MASK   3
-// For capmode we pick any flags bit that isn't used yet, 0x100 right now
-#define TB_FLAG_CHERI_CAPMODE 0x100
-#define TB_FLAG_CHERI_PCC_VALID 0x200 /* CHERI PCC is tagged, executable and unsealed */
 #define TB_FLAGS_MSTATUS_FS MSTATUS_FS
-_Static_assert(((TB_FLAG_CHERI_CAPMODE | TB_FLAG_CHERI_PCC_VALID) &
-                TB_FLAGS_MSTATUS_FS) == 0, "overlap");
 
 #include "exec/cpu-all.h"
 #include "cpu_cheri.h"
@@ -570,8 +565,7 @@ _Static_assert(((TB_FLAG_CHERI_CAPMODE | TB_FLAG_CHERI_PCC_VALID) &
 static inline void
 riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
                            target_ulong *cs_base, target_ulong *cs_top,
-                           target_ulong *ds_base, target_ulong *ds_top,
-                           uint32_t *flags)
+                           uint32_t *cheri_flags, uint32_t *flags)
 {
     *pc = PC_ADDR(env); // We want the full virtual address here (no offset)
 #ifdef CONFIG_USER_ONLY
@@ -583,8 +577,8 @@ riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
     }
 #endif
 #ifdef TARGET_CHERI
-    cheri_cpu_get_tb_cpu_state(&env->PCC, &env->DDC, flags, cs_base, cs_top,
-                               ds_base, ds_top);
+    cheri_cpu_get_tb_cpu_state(&env->PCC, &env->DDC, cs_base, cs_top,
+                               cheri_flags);
 #else
     *cs_base = 0;
 #endif

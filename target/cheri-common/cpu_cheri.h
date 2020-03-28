@@ -123,25 +123,30 @@ static inline bool cheri_cap_perms_valid_for_exec(const cap_register_t *pcc)
 
 // Note: can't use an inline function here since TranslationBlock isn't defined
 #define tb_in_capmode(tb)                                                      \
-    ((tb->flags & TB_FLAG_CHERI_CAPMODE) == TB_FLAG_CHERI_CAPMODE)
+    ((tb->cheri_flags & TB_FLAG_CHERI_CAPMODE) == TB_FLAG_CHERI_CAPMODE)
 
-static inline void
-cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc, const cap_register_t *ddc,
-                           uint32_t *flags, target_ulong *cs_base,
-                           target_ulong *cs_top, target_ulong *ds_base,
-                           target_ulong *ds_top)
+static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
+                                              const cap_register_t *ddc,
+                                              target_ulong *cs_base,
+                                              target_ulong *cs_top,
+                                              uint32_t *cheri_flags)
 {
-    cheri_debug_assert(
-        (*flags & (TB_FLAG_CHERI_PCC_VALID | TB_FLAG_CHERI_CAPMODE)) == 0);
-    *flags |= cap_has_capmode_flag(pcc) ? TB_FLAG_CHERI_CAPMODE : 0;
+    cheri_debug_assert(*cheri_flags == 0);
+    *cheri_flags |= cap_has_capmode_flag(pcc) ? TB_FLAG_CHERI_CAPMODE : 0;
     *cs_base = cap_get_base(pcc);
     *cs_top = cap_get_top(pcc);
-    *flags |= cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
-    *ds_base = cap_get_base(ddc);
-    *ds_top = cap_get_top(ddc);
-    // FIXME: reserve two flags bits for DDC permits loads+permits stores (and
-    // is tagged+unsealed). MIPS doesn't have any available right now so I need
-    // to refactor first
+    *cheri_flags |=
+        cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
+    if (ddc->cr_tag && cap_is_unsealed(ddc)) {
+        if (cap_has_perms(pcc, CAP_PERM_LOAD))
+            *cheri_flags |= TB_FLAG_CHERI_DDC_READABLE;
+        if (cap_has_perms(pcc, CAP_PERM_STORE))
+            *cheri_flags |= TB_FLAG_CHERI_DDC_WRITABLE;
+        if (cap_get_base(ddc) == 0)
+            *cheri_flags |= TB_FLAG_CHERI_DDC_BASE_ZERO;
+        if (cap_get_top65(ddc) == CAP_MAX_TOP)
+            *cheri_flags |= TB_FLAG_CHERI_DDC_TOP_MAX;
+    }
 }
 
 #endif

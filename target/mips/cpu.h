@@ -1209,8 +1209,6 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_ERL   0x10000000 /* error level flag */
 #ifdef TARGET_CHERI
 #define MIPS_HFLAG_COP2X 0x20000000 /* CHERI/CP2 enabled              */
-#define TB_FLAG_CHERI_PCC_VALID 0x40000000 /* CHERI PCC is tagged, executable and unsealed */
-#define TB_FLAG_CHERI_CAPMODE 0x80000000 /* PCC.cr_flags == capmode */
 #endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
     target_ulong bcond;          /* Branch condition (if needed)       */
@@ -1442,15 +1440,14 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 static inline void
 mips_cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
                           target_ulong *cs_base, target_ulong *cs_top,
-                          target_ulong *ds_base, target_ulong *ds_top,
-                          uint32_t *flags)
+                          uint32_t *cheri_flags, uint32_t *flags)
 {
     *pc = PC_ADDR(env); // We want the full virtual address here (no offset)
     *flags = env->hflags &
              (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK | MIPS_HFLAG_HWRENA_ULR);
 #ifdef TARGET_CHERI
     cheri_cpu_get_tb_cpu_state(&env->active_tc.PCC, &env->active_tc.CHWR.DDC,
-                               flags, cs_base, cs_top, ds_base, ds_top);
+                               cs_base, cs_top, cheri_flags);
 #else
     *cs_base = 0;
 #endif
