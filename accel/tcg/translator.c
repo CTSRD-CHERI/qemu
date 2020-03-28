@@ -59,11 +59,8 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
                        cap_get_base(cheri_get_recent_pcc(cpu->env_ptr)));
     cheri_debug_assert(db->pcc_top ==
                        cap_get_top(cheri_get_recent_pcc(cpu->env_ptr)));
-    db->ddc_base = tb->ds_base;
-    db->ddc_top = tb->ds_top;
-    cheri_debug_assert(db->ddc_base ==
-                       cap_get_base(cheri_get_ddc(cpu->env_ptr)));
-    cheri_debug_assert(db->ddc_top == cap_get_top(cheri_get_ddc(cpu->env_ptr)));
+    db->cheri_flags = tb->cheri_flags;
+    // TODO: verify cheri_flags are correct?
 #endif
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
@@ -110,7 +107,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #ifdef TARGET_CHERI
     // Check PCC permissions and tag once on TB entry.
     // Each target must reserve one bit in tb->flags as the "PCC valid" flag.
-    if (unlikely((tb->flags & TB_FLAG_CHERI_PCC_VALID) !=
+    if (unlikely((tb->cheri_flags & TB_FLAG_CHERI_PCC_VALID) !=
                  TB_FLAG_CHERI_PCC_VALID)) {
         gen_helper_raise_exception_pcc_perms(cpu_env);
     } else if (unlikely(!in_pcc_bounds(db, db->pc_next))) {

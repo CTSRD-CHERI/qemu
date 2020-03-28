@@ -73,8 +73,7 @@ typedef struct DisasContextBase {
 #ifdef TARGET_CHERI
     target_ulong pcc_base;
     target_ulong pcc_top;
-    target_ulong ddc_base;
-    target_ulong ddc_top;
+    uint32_t cheri_flags;
 #endif
     DisasJumpType is_jmp;
     int num_insns;

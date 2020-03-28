@@ -113,4 +113,17 @@ typedef enum CheriPermissions {
 typedef enum CheriFlags {
     CHERI_FLAG_CAPMODE = (1 << 0),
 } CheriFlags;
+
+#define TB_FLAG_CHERI_PCC_VALID                                                \
+    (1 << 0) /* CHERI PCC is tagged, executable and unsealed */
+#define TB_FLAG_CHERI_CAPMODE (1 << 1) /* PCC.cr_flags == capmode */
+#define TB_FLAG_CHERI_DDC_READABLE                                             \
+    (1 << 2) /* DDC is tagged, unsealed and has PERM_LOAD */
+#define TB_FLAG_CHERI_DDC_WRITABLE                                             \
+    (1 << 3) /* DDC is tagged, unsealed and has PERM_STORE */
+#define TB_FLAG_CHERI_DDC_BASE_ZERO                                            \
+    (1 << 4) /* DDC is tagged, unsealed and base is zero */
+#define TB_FLAG_CHERI_DDC_TOP_MAX                                              \
+    (1 << 5) /* DDC is tagged, unsealed and top is max_addr  */
+
 #endif // TARGET_CHERI
