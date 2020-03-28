@@ -1439,17 +1439,18 @@ void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */
 #endif /* CONFIG_MIPS_LOG_INSTR */
 
-static inline void mips_cpu_get_tb_cpu_state(CPUMIPSState *env,
-                                             target_ulong *pc,
-                                             target_ulong *cs_base,
-                                             target_ulong *cs_top,
-                                             uint32_t *flags)
+static inline void
+mips_cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
+                          target_ulong *cs_base, target_ulong *cs_top,
+                          target_ulong *ds_base, target_ulong *ds_top,
+                          uint32_t *flags)
 {
-    *pc = PC_ADDR(env);
+    *pc = PC_ADDR(env); // We want the full virtual address here (no offset)
     *flags = env->hflags &
              (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK | MIPS_HFLAG_HWRENA_ULR);
 #ifdef TARGET_CHERI
-    cheri_cpu_get_tb_cpu_state(&env->active_tc.PCC, flags, cs_base, cs_top);
+    cheri_cpu_get_tb_cpu_state(&env->active_tc.PCC, &env->active_tc.CHWR.DDC,
+                               flags, cs_base, cs_top, ds_base, ds_top);
 #else
     *cs_base = 0;
 #endif

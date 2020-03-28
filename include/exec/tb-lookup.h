@@ -19,13 +19,14 @@
 /* Might cause an exception, so have a longjmp destination ready */
 static inline TranslationBlock *
 tb_lookup__cpu_state(CPUState *cpu, target_ulong *pc, target_ulong *cs_base,
-                     target_ulong *cs_top, uint32_t *flags, uint32_t cf_mask)
+                     target_ulong *cs_top, target_ulong *ds_base,
+                     target_ulong *ds_top, uint32_t *flags, uint32_t cf_mask)
 {
     CPUArchState *env = (CPUArchState *)cpu->env_ptr;
     TranslationBlock *tb;
     uint32_t hash;
 
-    cpu_get_tb_cpu_state(env, pc, cs_base, cs_top, flags);
+    cpu_get_tb_cpu_state(env, pc, cs_base, cs_top, ds_base, ds_top, flags);
     hash = tb_jmp_cache_hash_func(*pc);
     tb = atomic_rcu_read(&cpu->tb_jmp_cache[hash]);
 
@@ -33,12 +34,14 @@ tb_lookup__cpu_state(CPUState *cpu, target_ulong *pc, target_ulong *cs_base,
     cf_mask |= cpu->cluster_index << CF_CLUSTER_SHIFT;
 
     if (likely(tb && tb->pc == *pc && tb->cs_base == *cs_base &&
-               tb->cs_top == *cs_top && tb->flags == *flags &&
+               tb->cs_top == *cs_top && tb->ds_base == *ds_base &&
+               tb->ds_top == *ds_top && tb->flags == *flags &&
                tb->trace_vcpu_dstate == *cpu->trace_dstate &&
                (tb_cflags(tb) & (CF_HASH_MASK | CF_INVALID)) == cf_mask)) {
         return tb;
     }
-    tb = tb_htable_lookup(cpu, *pc, *cs_base, *cs_top, *flags, cf_mask);
+    tb = tb_htable_lookup(cpu, *pc, *cs_base, *cs_top, *ds_base, *ds_top,
+                          *flags, cf_mask);
     if (tb == NULL) {
         return NULL;
     }
