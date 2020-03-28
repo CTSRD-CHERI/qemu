@@ -201,7 +201,6 @@ DEF_HELPER_2(magic_library_function, void, env, tl)
 #if defined(TARGET_CHERI)
 #include "cheri-helper-common.h"
 DEF_HELPER_2(mtc2_dumpcstate, void, env, tl)
-DEF_HELPER_1(ccheck_btarget, void, env)
 DEF_HELPER_1(copy_cap_btarget_to_pcc, void, env)
 DEF_HELPER_3(ccheck_store, cap_checked_ptr, env, tl, i32)
 DEF_HELPER_3(ccheck_load, cap_checked_ptr, env, tl, i32)
