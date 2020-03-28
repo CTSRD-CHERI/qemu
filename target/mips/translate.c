@@ -2999,7 +2999,6 @@ static inline void save_cpu_state(DisasContext *ctx, int do_save_pc)
 #ifdef TARGET_CHERI
         case MIPS_HFLAG_BRCCALL:
         case MIPS_HFLAG_BRC:
-            // tcg_gen_movi_i32(btcr, ctx->btcr);
             break;
 #endif
         case MIPS_HFLAG_BC:
@@ -6748,15 +6747,13 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
 #ifdef TARGET_CHERI
     if (bcond_compute) {
         // Check that the conditional branch target is in range (but only if the branch is taken)
-        gen_ccheck_conditional_branch(btgt);
+        tcg_debug_assert(btgt != -1 && "btgt should have been set!");
+        gen_check_cond_branch_target(ctx, bcond, btgt);
         SET_BTARGET_CHECKED(true);
     } else if (!btarget_checked) {
-        // If the unconditional branch target has not been checked yet
-        // (i.e. not JALR/JR/JAL/J) move btgt to the environment and invoke the
-        // bounds checking helper now
         tcg_debug_assert(btgt != -1 && "btgt should have been set!");
-        tcg_gen_movi_tl(btarget, btgt);  // save btarget so that the helper can read it:
-        GEN_CCHECK_BTARGET(cpu_env);
+        gen_check_branch_target(ctx, btgt);
+        SET_BTARGET_CHECKED(true);
     }
 #endif
 
@@ -11328,10 +11325,9 @@ static void gen_compute_branch1(DisasContext *ctx, uint32_t op,
         generate_exception_end(ctx, EXCP_RI);
         goto out;
     }
-#ifdef TARGET_CHERI
-    // Check that the conditional branch target is in range (but only if the branch is taken)
-    gen_ccheck_conditional_branch(btarget);
-#endif
+    // Check that the conditional branch target is in range (but only if the
+    // branch is taken).
+    gen_check_cond_branch_target(ctx, bcond, btarget);
 
     ctx->btarget = btarget;
     ctx->hflags |= MIPS_HFLAG_BDS32;
@@ -11378,10 +11374,9 @@ static void gen_compute_branch1_r6(DisasContext *ctx, uint32_t op,
 
     tcg_gen_trunc_i64_tl(bcond, t0);
 
-#ifdef TARGET_CHERI
-    // Check that the conditional branch target is in range (but only if the branch is taken)
-    gen_ccheck_conditional_branch(btarget);
-#endif
+    // Check that the conditional branch target is in range (but only if the
+    // branch is taken)
+    gen_check_cond_branch_target(ctx, bcond, btarget);
     ctx->btarget = btarget;
 
     switch (delayslot_size) {
@@ -13969,11 +13964,8 @@ static void gen_compute_compact_branch(DisasContext *ctx, uint32_t opc,
             generate_exception_end(ctx, EXCP_RI);
             goto out;
         }
-#ifdef TARGET_CHERI
-        // bounds check for unconditional branch:
-        tcg_gen_movi_tl(btarget, ctx->btarget);  // save btarget so that the helper can read it:
-        gen_helper_ccheck_btarget(cpu_env);
-#endif
+        // Bounds check against $pcc for unconditional branches.
+        gen_check_branch_target(ctx, ctx->btarget);
         /* Generating branch here as compact branches don't have delay slot */
         gen_branch(ctx, 4);
     } else {
@@ -14096,10 +14088,8 @@ static void gen_compute_compact_branch(DisasContext *ctx, uint32_t opc,
             generate_exception_end(ctx, EXCP_RI);
             goto out;
         }
-#ifdef TARGET_CHERI
-        // bounds check against $pcc for conditional branch
-        gen_ccheck_conditional_branch(ctx->btarget);
-#endif
+        // Bounds check against $pcc for conditional branches.
+        gen_check_cond_branch_target(ctx, bcond, ctx->btarget);
 
         /* Generating branch here as compact branches don't have delay slot */
         gen_goto_tb(ctx, 1, ctx->btarget);
