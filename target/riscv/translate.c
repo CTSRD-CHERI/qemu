@@ -464,12 +464,8 @@ static void gen_load_c(DisasContext *ctx, uint32_t opc, int rd, int rs1,
         gen_exception_illegal(ctx);
         return;
     }
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_ld_ddc_tl(t1, /* Update addr in-place */ NULL, t0,
-                           ctx->mem_idx, memop);
-#else
-    tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, memop);
-#endif
+    gen_ddc_interposed_ld_tl(ctx, t1, /* Update addr in-place */ NULL, t0,
+                             ctx->mem_idx, memop);
     gen_set_gpr(rd, t1);
     tcg_temp_free(t0);
     tcg_temp_free(t1);
@@ -490,12 +486,8 @@ static void gen_store_c(DisasContext *ctx, uint32_t opc, int rs1, int rs2,
         return;
     }
 
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_st_ddc_tl(dat, /* Update addr in-place */ NULL, t0,
-                           ctx->mem_idx, memop);
-#else
-    tcg_gen_qemu_st_tl(dat, t0, ctx->mem_idx, memop);
-#endif
+    gen_ddc_interposed_st_tl(ctx, dat, /* Update addr in-place */ NULL, t0,
+                             ctx->mem_idx, memop);
     tcg_temp_free(t0);
     tcg_temp_free(dat);
 }
@@ -842,7 +834,7 @@ static inline TCGv_cap_checked_ptr _get_capmode_dependent_addr(
     DisasContext *ctx, int reg_num, target_long regoffs,
 #ifdef TARGET_CHERI
     void (*gen_check_cap)(TCGv_cap_checked_ptr, uint32_t, target_long, MemOp),
-    void (*check_ddc)(TCGv_cap_checked_ptr, TCGv_ptr, TCGv, TCGv_i32),
+    void (*check_ddc)(TCGv_cap_checked_ptr, DisasContext *, TCGv, target_ulong),
 #endif
     MemOp mop)
 
@@ -852,8 +844,8 @@ static inline TCGv_cap_checked_ptr _get_capmode_dependent_addr(
     if (ctx->capmode) {
         gen_check_cap(result, reg_num, regoffs, mop);
     } else {
-        generate_get_ddc_checked_gpr_plus_offset(result, reg_num, regoffs, mop,
-                                                 check_ddc);
+        generate_get_ddc_checked_gpr_plus_offset(result, ctx, reg_num, regoffs,
+                                                 mop, check_ddc);
     }
 #else
     gen_get_gpr(result, reg_num);
@@ -871,7 +863,7 @@ get_capmode_dependent_load_addr(DisasContext *ctx, int reg_num,
     return _get_capmode_dependent_addr(ctx, reg_num, regoffs,
 #ifdef TARGET_CHERI
                                        &generate_cap_load_check_imm,
-                                       &gen_helper_ddc_check_load,
+                                       &generate_ddc_checked_load_ptr,
 #endif
                                        mop);
 }
@@ -883,7 +875,7 @@ get_capmode_dependent_store_addr(DisasContext *ctx, int reg_num,
     return _get_capmode_dependent_addr(ctx, reg_num, regoffs,
 #ifdef TARGET_CHERI
                                        &generate_cap_store_check_imm,
-                                       &gen_helper_ddc_check_store,
+                                       &generate_ddc_checked_store_ptr,
 #endif
                                        mop);
 }
@@ -895,7 +887,7 @@ get_capmode_dependent_rmw_addr(DisasContext *ctx, int reg_num,
     return _get_capmode_dependent_addr(ctx, reg_num, regoffs,
 #ifdef TARGET_CHERI
                                        &generate_cap_rmw_check_imm,
-                                       &gen_helper_ddc_check_rmw,
+                                       &generate_ddc_checked_rmw_ptr,
 #endif
                                        mop);
 }

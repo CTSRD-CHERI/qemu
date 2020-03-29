@@ -66,8 +66,9 @@ static inline void gen_load_gpr(TCGv t, int reg);
 #endif
 
 static inline void generate_get_ddc_checked_gpr_plus_offset(
-    TCGv_cap_checked_ptr addr, int reg_num, target_long offset, MemOp mop,
-    void (*check_ddc)(TCGv_cap_checked_ptr, TCGv_ptr, TCGv, TCGv_i32))
+    TCGv_cap_checked_ptr addr, DisasContext *ctx, int reg_num,
+    target_long offset, MemOp mop,
+    void (*check_ddc)(TCGv_cap_checked_ptr, DisasContext *, TCGv, target_ulong))
 {
 #if defined(TARGET_RISCV)
     gen_get_gpr((TCGv)addr, reg_num);
@@ -79,9 +80,7 @@ static inline void generate_get_ddc_checked_gpr_plus_offset(
     if (!__builtin_constant_p(offset) || offset != 0) {
         tcg_gen_addi_tl((TCGv)addr, (TCGv)addr, offset);
     }
-    TCGv_i32 tcop = tcg_const_i32(mop);
-    check_ddc(addr, cpu_env, /* overwrite addr */ (TCGv)addr, tcop);
-    tcg_temp_free_i32(tcop);
+    check_ddc(addr, ctx, /* overwrite addr */ (TCGv)addr, memop_size(mop));
 }
 
 static inline bool have_cheri_tb_flags(DisasContext *ctx, uint32_t flags)

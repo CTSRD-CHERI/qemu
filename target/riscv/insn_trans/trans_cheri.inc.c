@@ -269,8 +269,8 @@ static bool gen_ddc_load(DisasContext *ctx, int rd, int rs1, MemOp memop)
     TCGv addr = tcg_temp_new();
     TCGv value = tcg_temp_new();
     gen_get_gpr(addr, rs1);
-    tcg_gen_qemu_ld_ddc_tl(value, /* Update addr in-place */ NULL, addr,
-                           ctx->mem_idx, memop);
+    gen_ddc_interposed_ld_tl(ctx, value, /* Update addr in-place */ NULL, addr,
+                             ctx->mem_idx, memop);
     gen_set_gpr(rd, value);
     tcg_temp_free(addr);
     tcg_temp_free(value);
@@ -352,8 +352,8 @@ static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
     TCGv value = tcg_temp_new();
     gen_get_gpr(addr, rs1);
     gen_get_gpr(value, rs2);
-    tcg_gen_qemu_st_ddc_tl(value, /* Update addr in-place */ NULL, addr,
-                           ctx->mem_idx, memop);
+    gen_ddc_interposed_st_tl(ctx, value, /* Update addr in-place */ NULL, addr,
+                             ctx->mem_idx, memop);
     tcg_temp_free(value);
     tcg_temp_free(addr);
     return true;
