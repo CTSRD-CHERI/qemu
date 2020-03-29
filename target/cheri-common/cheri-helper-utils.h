@@ -126,6 +126,17 @@ do_exception:
     raise_cheri_exception_impl(env, cause, regnum, instavail, pc);
 }
 
+static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
+                                     uint64_t ddc_offset, uint32_t len,
+                                     uintptr_t retpc)
+{
+    const cap_register_t *ddc = cheri_get_ddc(env);
+    target_ulong addr = ddc_offset + cap_get_cursor(ddc);
+    check_cap(env, ddc, perm, addr, CHERI_EXC_REGNUM_DDC, len,
+        /*instavail=*/true, retpc);
+    return addr;
+}
+
 static inline bool cheri_have_access_sysregs(CPUArchState* env)
 {
     return cap_has_perms(cheri_get_recent_pcc(env), CAP_ACCESS_SYS_REGS);

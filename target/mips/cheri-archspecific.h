@@ -41,8 +41,6 @@
 #include "cheri_defs.h"
 #include "internal.h"
 
-target_ulong check_ddc(CPUMIPSState *env, uint32_t perm, uint64_t addr, uint32_t len, uintptr_t retpc);
-
 static inline const char* cheri_cause_str(CheriCapExcCause cause);
 
 extern bool cheri_debugger_on_trap;
