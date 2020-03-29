@@ -163,6 +163,9 @@ TCGv_env cpu_env = 0;
 #ifdef CONFIG_DEBUG_TCG
 TCGv _pc_is_current = 0;
 #endif
+#ifdef TARGET_CHERI
+TCGv ddc_interposition;
+#endif
 
 struct tcg_region_tree {
     QemuMutex lock;

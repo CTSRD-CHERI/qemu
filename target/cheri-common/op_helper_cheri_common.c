@@ -99,6 +99,16 @@ target_ulong CHERI_HELPER_IMPL(ddc_check_rmw(CPUArchState *env,
                      memop_size(op), GETPC());
 }
 
+void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
+                                        target_ulong num_bytes))
+{
+    const cap_register_t *ddc = cheri_get_ddc(env);
+    cheri_debug_assert(ddc->cr_tag && cap_is_unsealed(ddc) &&
+                       "Should have been checked before bounds!");
+    check_cap(env, ddc, 0, addr, CHERI_EXC_REGNUM_DDC, num_bytes,
+              /*instavail=*/true, GETPC());
+}
+
 target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
                                               target_ulong pcc_offset,
                                               MemOp op))
@@ -1316,4 +1326,29 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     cheri_debug_assert(
         !cap_is_in_bounds(cheri_get_current_pcc(env), addr, num_bytes));
     raise_pcc_fault(env, CapEx_LengthViolation);
+}
+
+void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
+                                                 uint32_t required_perms))
+{
+    check_cap(env, cheri_get_ddc(env), required_perms,
+              cap_get_base(cheri_get_ddc(env)), CHERI_EXC_REGNUM_DDC, 0,
+              /*instavail=*/true, GETPC());
+    error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,
+                 PRINT_CAP_ARGS(cheri_get_ddc(env)));
+    tcg_abort();
+}
+
+void CHERI_HELPER_IMPL(raise_exception_ddc_bounds(CPUArchState *env,
+                                                     target_ulong addr,
+                                                     uint32_t num_bytes))
+{
+    const cap_register_t *ddc = cheri_get_ddc(env);
+    cheri_debug_assert(ddc->cr_tag && cap_is_unsealed(ddc) &&
+                       "Should have been checked before bounds!");
+    check_cap(env, ddc, 0, addr, CHERI_EXC_REGNUM_DDC, num_bytes,
+              /*instavail=*/true, GETPC());
+    error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,
+                 PRINT_CAP_ARGS(cheri_get_ddc(env)));
+    tcg_abort();
 }

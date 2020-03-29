@@ -184,8 +184,23 @@ TRANSLATE_CAP_CAP_CAP(ccopytype)
 TRANSLATE_CAP_CAP_CAP(ccseal)
 TRANSLATE_CAP_CAP_CAP(cseal)
 TRANSLATE_CAP_CAP_CAP(cunseal)
+
 // Not quite (cap cap cap) but the index argument can be handled the same way
-TRANSLATE_CAP_CAP_CAP(cspecialrw)
+static bool trans_cspecialrw(DisasContext *ctx, arg_cspecialrw *a)
+{
+    if (gen_cheri_cap_cap_cap(a->rd, a->rs1, a->rs2, &gen_helper_cspecialrw)) {
+        if (a->rs1 != 0 && a->rs2 == CheriSCR_DDC) {
+            // When DDC changes we have to exit the current translation block
+            // since we cache DDC properties in the flags to optimize out
+            // bounds/permission checks.
+            gen_update_cpu_pc(ctx->pc_succ_insn);
+            exit_tb(ctx);
+            ctx->base.is_jmp = DISAS_NORETURN;
+        }
+        return true;
+    }
+    return false;
+}
 
 // Three operand (cap cap int)
 TRANSLATE_CAP_CAP_INT(candperm)

@@ -148,6 +148,7 @@ GEN_ATOMIC_HELPERS(xchg)
 DEF_HELPER_3(ddc_check_store, cap_checked_ptr, env, tl, memop) /* Needs load perms */
 DEF_HELPER_3(ddc_check_load, cap_checked_ptr, env, tl, memop) /* Needs store perms */
 DEF_HELPER_3(ddc_check_rmw, cap_checked_ptr, env, tl, memop) /* Needs load and store perms */
+DEF_HELPER_3(ddc_check_bounds, void, env, tl, tl) /* Needs load and store perms */
 /* Same but relative to PCC */
 DEF_HELPER_3(pcc_check_load, cap_checked_ptr, env, tl, memop)
 /* Clear tags due to a store. Only calll this after the store succeeded. */

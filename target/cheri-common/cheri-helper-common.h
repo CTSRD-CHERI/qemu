@@ -47,6 +47,8 @@
 // PCC bounds checks:
 DEF_HELPER_1(raise_exception_pcc_perms, noreturn, env)
 DEF_HELPER_3(raise_exception_pcc_bounds, noreturn, env, tl, i32)
+DEF_HELPER_2(raise_exception_ddc_perms, noreturn, env, i32)
+DEF_HELPER_3(raise_exception_ddc_bounds, noreturn, env, tl, i32)
 
 // Two-operand capability inspection
 DEF_HELPER_FLAGS_2(cgetaddr, TCG_CALL_NO_WG, tl, env, i32)
