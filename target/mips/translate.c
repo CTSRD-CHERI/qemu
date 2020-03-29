@@ -3702,62 +3702,6 @@ static target_ulong pc_relative_pc(DisasContext *ctx)
     return pc;
 }
 
-static inline void gen_ddc_interposed_ld_i64(TCGv_i64 result,
-                                             TCGv_cap_checked_ptr checked_addr,
-                                             TCGv ddc_offset, TCGArg arg,
-                                             MemOp op, int opc) {
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_ld_ddc_i64(result, checked_addr, ddc_offset, arg, op);
-#else
-    tcg_gen_mov_tl(checked_addr, ddc_offset);
-    tcg_gen_qemu_ld_i64(result, checked_addr, arg, op);
-#endif
-}
-
-static inline void gen_ddc_interposed_ld_i32(TCGv_i32 result,
-                                             TCGv_cap_checked_ptr checked_addr,
-                                             TCGv ddc_offset, TCGArg arg,
-                                             MemOp op, int opc) {
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_ld_ddc_i32(result, checked_addr, ddc_offset, arg, op);
-#else
-    tcg_gen_mov_tl(checked_addr, ddc_offset);
-    tcg_gen_qemu_ld_i32(result, checked_addr, arg, op);
-#endif
-}
-
-static inline void gen_ddc_interposed_st_i64(TCGv_i64 value,
-                                             TCGv_cap_checked_ptr checked_addr,
-                                             TCGv ddc_offset, TCGArg arg,
-                                             MemOp op, int opc) {
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_st_ddc_i64(value, checked_addr, ddc_offset, arg, op);
-#else
-    tcg_gen_mov_tl(checked_addr, ddc_offset);
-    tcg_gen_qemu_st_i64(value, checked_addr, arg, op);
-#endif
-}
-static inline void gen_ddc_interposed_st_i32(TCGv_i32 value,
-                                             TCGv_cap_checked_ptr checked_addr,
-                                             TCGv ddc_offset, TCGArg arg,
-                                             MemOp op, int opc) {
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_st_ddc_i32(value, checked_addr, ddc_offset, arg, op);
-#else
-    tcg_gen_mov_tl(checked_addr, ddc_offset);
-    tcg_gen_qemu_st_i32(value, checked_addr, arg, op);
-#endif
-}
-
-#if TARGET_LONG_BITS == 32
-#define gen_ddc_interposed_ld_tl gen_ddc_interposed_ld_i32
-#define gen_ddc_interposed_st_tl gen_ddc_interposed_st_i32
-#elif TARGET_LONG_BITS == 64
-#define gen_ddc_interposed_ld_tl gen_ddc_interposed_ld_i64
-#define gen_ddc_interposed_st_tl gen_ddc_interposed_st_i64
-#endif
-
-
 /* Load */
 static void gen_ld(DisasContext *ctx, uint32_t opc,
                    int rt, int base, int offset)
@@ -3786,23 +3730,23 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_LWU:
-        gen_ddc_interposed_ld_tl(t0, ddc_interposed, t0, mem_idx,
-                                 MO_TEUL | ctx->default_tcg_memop_mask, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, ddc_interposed, t0, mem_idx,
+                                 MO_TEUL | ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LD:
-        gen_ddc_interposed_ld_tl(t0, ddc_interposed, t0, mem_idx,
-                                 MO_TEQ | ctx->default_tcg_memop_mask, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, ddc_interposed, t0, mem_idx,
+                                 MO_TEQ | ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LLD:
     case R6_OPC_LLD:
-        generate_ddc_check_load(ddc_interposed, t0, MO_64);
+        generate_ddc_checked_load_ptr(ddc_interposed, ctx, t0, 8);
         op_ld_lld(t0, ddc_interposed, mem_idx, ctx);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LDL:
-        generate_ddc_check_load(ddc_interposed, t0, MO_64);
+        generate_ddc_checked_load_ptr(ddc_interposed, ctx, t0, 8);
         t1 = tcg_temp_new();
         /*
          * Do a byte access to possibly trigger a page
@@ -3874,40 +3818,38 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_LW:
-        gen_ddc_interposed_ld_tl(t0, ddc_interposed, t0, mem_idx,
-                                 MO_TESL | ctx->default_tcg_memop_mask, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, ddc_interposed, t0, mem_idx,
+                                 MO_TESL | ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LHE:
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_LH:
-        gen_ddc_interposed_ld_tl(t0, ddc_interposed, t0, mem_idx,
-                                 MO_TESW | ctx->default_tcg_memop_mask, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, ddc_interposed, t0, mem_idx,
+                                 MO_TESW | ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LHUE:
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_LHU:
-        gen_ddc_interposed_ld_tl(t0, ddc_interposed, t0, mem_idx,
-                                 MO_TEUW | ctx->default_tcg_memop_mask, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, ddc_interposed, t0, mem_idx,
+                                 MO_TEUW | ctx->default_tcg_memop_mask);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LBE:
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_LB:
-        gen_ddc_interposed_ld_tl(t0, ddc_interposed, t0, mem_idx,
-                                 MO_SB, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, ddc_interposed, t0, mem_idx, MO_SB);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LBUE:
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_LBU:
-        gen_ddc_interposed_ld_tl(t0, ddc_interposed, t0, mem_idx,
-                                 MO_UB, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, ddc_interposed, t0, mem_idx, MO_UB);
         gen_store_gpr(t0, rt);
         break;
     case OPC_LWLE:
@@ -3915,7 +3857,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         /* fall through */
     case OPC_LWL:
         t1 = tcg_temp_new();
-        generate_ddc_check_load(ddc_interposed, t0, MO_32);
+        generate_ddc_checked_load_ptr(ddc_interposed, ctx, t0, 4);
         /*
          * Do a byte access to possibly trigger a page
          * fault with the unaligned address.
@@ -3974,7 +3916,7 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         /* fall through */
     case OPC_LL:
     case R6_OPC_LL:
-        generate_ddc_check_load(ddc_interposed, t0, 4);
+        generate_ddc_checked_load_ptr(ddc_interposed, ctx, t0, 4);
         op_ld_ll(t0, ddc_interposed, mem_idx, ctx);
         gen_store_gpr(t0, rt);
         break;
@@ -4025,8 +3967,8 @@ static void gen_st(DisasContext *ctx, uint32_t opc, int rt,
     switch (opc) {
 #if defined(TARGET_MIPS64)
     case OPC_SD:
-        gen_ddc_interposed_st_tl(t1, NULL/* add $ddc to t0*/, t0, mem_idx,
-                                 MO_TEQ | ctx->default_tcg_memop_mask, opc);
+        gen_ddc_interposed_st_tl(ctx, t1, NULL/* add $ddc to t0*/, t0, mem_idx,
+                                 MO_TEQ | ctx->default_tcg_memop_mask);
         break;
     case OPC_SDL:
         /* Add $ddc */
@@ -4040,21 +3982,21 @@ static void gen_st(DisasContext *ctx, uint32_t opc, int rt,
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_SW:
-        gen_ddc_interposed_st_tl(t1, NULL/* add $ddc to t0*/, t0, mem_idx,
-                                 MO_TEUL | ctx->default_tcg_memop_mask, opc);
+        gen_ddc_interposed_st_tl(ctx, t1, NULL/* add $ddc to t0*/, t0, mem_idx,
+                                 MO_TEUL | ctx->default_tcg_memop_mask);
         break;
     case OPC_SHE:
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_SH:
-        gen_ddc_interposed_st_tl(t1, NULL/* add $ddc to t0*/, t0, mem_idx,
-                                 MO_TEUW | ctx->default_tcg_memop_mask, opc);
+        gen_ddc_interposed_st_tl(ctx, t1, NULL/* add $ddc to t0*/, t0, mem_idx,
+                                 MO_TEUW | ctx->default_tcg_memop_mask);
         break;
     case OPC_SBE:
         mem_idx = MIPS_HFLAG_UM;
         /* fall through */
     case OPC_SB:
-        gen_ddc_interposed_st_tl(t1, NULL/* add $ddc to t0*/, t0, mem_idx, MO_8, opc);
+        gen_ddc_interposed_st_tl(ctx, t1, NULL/* add $ddc to t0*/, t0, mem_idx, MO_8);
         break;
     case OPC_SWLE:
         mem_idx = MIPS_HFLAG_UM;
@@ -4097,14 +4039,8 @@ static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
     // I should read the documentation before debugging :(
     addr = tcg_temp_local_new_cap_checked();
     gen_base_offset_addr(ctx, t0, base, offset);
-#ifdef TARGET_CHERI
     /* We have to add $ddc to the address for the alignment check and the memory access */
-    TCGv_i32 tmemop = tcg_const_i32(tcg_mo);
-    gen_helper_ddc_check_rmw(addr, cpu_env, t0, tmemop);
-    tcg_temp_free_i32(tmemop);
-#else
-    tcg_gen_mov_tl(addr, t0);
-#endif
+    generate_ddc_checked_store_ptr(addr, ctx, t0, memop_size(tcg_mo));
     /*
      * Alignment must be checked even if the CPU supports unaligned accesses:
      *
@@ -4209,8 +4145,8 @@ static void gen_flt_ldst(DisasContext *ctx, uint32_t opc, int ft,
     case OPC_LWC1:
         {
             TCGv_i32 fp0 = tcg_temp_new_i32();
-            gen_ddc_interposed_ld_i32(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx,
-                                      MO_TESL | ctx->default_tcg_memop_mask, opc);
+            gen_ddc_interposed_ld_i32(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx,
+                                      MO_TESL | ctx->default_tcg_memop_mask);
             gen_store_fpr32(ctx, fp0, ft);
             tcg_temp_free_i32(fp0);
         }
@@ -4219,16 +4155,16 @@ static void gen_flt_ldst(DisasContext *ctx, uint32_t opc, int ft,
         {
             TCGv_i32 fp0 = tcg_temp_new_i32();
             gen_load_fpr32(ctx, fp0, ft);
-            gen_ddc_interposed_st_i32(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx,
-                                      MO_TEUL | ctx->default_tcg_memop_mask, opc);
+            gen_ddc_interposed_st_i32(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx,
+                                      MO_TEUL | ctx->default_tcg_memop_mask);
             tcg_temp_free_i32(fp0);
         }
         break;
     case OPC_LDC1:
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
-            gen_ddc_interposed_ld_i64(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ |
-                                      ctx->default_tcg_memop_mask, opc);
+            gen_ddc_interposed_ld_i64(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ |
+                                      ctx->default_tcg_memop_mask);
             gen_store_fpr64(ctx, fp0, ft);
             tcg_temp_free_i64(fp0);
         }
@@ -4237,8 +4173,8 @@ static void gen_flt_ldst(DisasContext *ctx, uint32_t opc, int ft,
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
             gen_load_fpr64(ctx, fp0, ft);
-            gen_ddc_interposed_st_i64(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ |
-                                      ctx->default_tcg_memop_mask, opc);
+            gen_ddc_interposed_st_i64(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ |
+                                      ctx->default_tcg_memop_mask);
             tcg_temp_free_i64(fp0);
         }
         break;
@@ -13324,7 +13260,7 @@ static void gen_flt3_ldst(DisasContext *ctx, uint32_t opc,
         {
             TCGv_i32 fp0 = tcg_temp_new_i32();
 
-            gen_ddc_interposed_ld_tl(t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TESL, opc);
+            gen_ddc_interposed_ld_tl(ctx, t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TESL);
             tcg_gen_trunc_tl_i32(fp0, t0);
             gen_store_fpr32(ctx, fp0, fd);
             tcg_temp_free_i32(fp0);
@@ -13336,7 +13272,7 @@ static void gen_flt3_ldst(DisasContext *ctx, uint32_t opc,
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
 
-            gen_ddc_interposed_ld_i64(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ, opc);
+            gen_ddc_interposed_ld_i64(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ);
             gen_store_fpr64(ctx, fp0, fd);
             tcg_temp_free_i64(fp0);
         }
@@ -13347,7 +13283,7 @@ static void gen_flt3_ldst(DisasContext *ctx, uint32_t opc,
         {
             TCGv_i64 fp0 = tcg_temp_new_i64();
 
-            gen_ddc_interposed_ld_i64(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ, opc);
+            gen_ddc_interposed_ld_i64(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ);
             gen_store_fpr64(ctx, fp0, fd);
             tcg_temp_free_i64(fp0);
         }
@@ -13358,7 +13294,7 @@ static void gen_flt3_ldst(DisasContext *ctx, uint32_t opc,
             TCGv_i32 fp0 = tcg_temp_new_i32();
 
             gen_load_fpr32(ctx, fp0, fs);
-            gen_ddc_interposed_st_i32(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEUL, opc);
+            gen_ddc_interposed_st_i32(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEUL);
             tcg_temp_free_i32(fp0);
         }
         break;
@@ -13369,7 +13305,7 @@ static void gen_flt3_ldst(DisasContext *ctx, uint32_t opc,
             TCGv_i64 fp0 = tcg_temp_new_i64();
 
             gen_load_fpr64(ctx, fp0, fs);
-            gen_ddc_interposed_st_i64(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ, opc);
+            gen_ddc_interposed_st_i64(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ);
             tcg_temp_free_i64(fp0);
         }
         break;
@@ -13380,7 +13316,7 @@ static void gen_flt3_ldst(DisasContext *ctx, uint32_t opc,
             TCGv_i64 fp0 = tcg_temp_new_i64();
 
             gen_load_fpr64(ctx, fp0, fs);
-            gen_ddc_interposed_st_i64(fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ, opc);
+            gen_ddc_interposed_st_i64(ctx, fp0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ);
             tcg_temp_free_i64(fp0);
         }
         break;
@@ -16260,7 +16196,7 @@ static void gen_ldxs(DisasContext *ctx, int base, int index, int rd, int opc)
         tcg_gen_shli_tl(t1, t1, 2);
         gen_op_addr_add(ctx, t0, t1, t0);
     }
-    gen_ddc_interposed_ld_tl(t1, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TESL, opc);
+    gen_ddc_interposed_ld_tl(ctx, t1, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TESL);
     gen_store_gpr(t1, rd);
 
     tcg_temp_free(t0);
@@ -16290,20 +16226,22 @@ static void gen_ldst_pair(DisasContext *ctx, uint32_t opc, int rd,
             return;
         }
         // FIXME: should LWP fail early or allow loading one word for $ddc errors?
-        gen_ddc_interposed_ld_tl(t1, ddc_adjusted, t0, ctx->mem_idx, MO_TESL, opc);
+        generate_ddc_checked_load_ptr(ddc_adjusted, ctx, t0, memop_size(MO_TESL) * 2);
+        tcg_gen_qemu_ld_tl_with_checked_addr(t1, ddc_adjusted, ctx->mem_idx, MO_TESL);
         gen_store_gpr(t1, rd);
         tcg_gen_movi_tl(t1, 4);
-        gen_op_addr_add(ctx, t0, t0, t1);
-        gen_ddc_interposed_ld_tl(t1, ddc_adjusted, t0, ctx->mem_idx, MO_TESL, opc);
+        gen_op_addr_add(ctx, (TCGv)ddc_adjusted, (TCGv)ddc_adjusted, t1);
+        tcg_gen_qemu_ld_tl_with_checked_addr(t1, ddc_adjusted, ctx->mem_idx, MO_TESL);
         gen_store_gpr(t1, rd + 1);
         break;
     case SWP:
+        generate_ddc_checked_store_ptr(ddc_adjusted, ctx, t0, memop_size(MO_TESL) * 2);
         gen_load_gpr(t1, rd);
-        gen_ddc_interposed_st_tl(t1, ddc_adjusted, t0, ctx->mem_idx, MO_TEUL, opc);
+        tcg_gen_qemu_st_tl_with_checked_addr(t1, ddc_adjusted, ctx->mem_idx, MO_TEUL);
         tcg_gen_movi_tl(t1, 4);
-        gen_op_addr_add(ctx, t0, t0, t1);
+        gen_op_addr_add(ctx, (TCGv)ddc_adjusted, (TCGv)ddc_adjusted, t1);
         gen_load_gpr(t1, rd + 1);
-        gen_ddc_interposed_st_tl(t1, ddc_adjusted, t0, ctx->mem_idx, MO_TEUL, opc);
+        tcg_gen_qemu_st_tl_with_checked_addr(t1, ddc_adjusted, ctx->mem_idx, MO_TEUL);
         break;
 #ifdef TARGET_MIPS64
     case LDP:
@@ -16311,20 +16249,22 @@ static void gen_ldst_pair(DisasContext *ctx, uint32_t opc, int rd,
             generate_exception_end(ctx, EXCP_RI);
             return;
         }
-        gen_ddc_interposed_ld_tl(t1, ddc_adjusted, t0, ctx->mem_idx, MO_TEQ, opc);
+        generate_ddc_checked_load_ptr(ddc_adjusted, ctx, t0, memop_size(MO_TEQ) * 2);
+        tcg_gen_qemu_ld_tl_with_checked_addr(t1, ddc_adjusted, ctx->mem_idx, MO_TEQ);
         gen_store_gpr(t1, rd);
         tcg_gen_movi_tl(t1, 8);
-        gen_op_addr_add(ctx, t0, t0, t1);
-        gen_ddc_interposed_ld_tl(t1, ddc_adjusted, t0, ctx->mem_idx, MO_TEQ, opc);
+        gen_op_addr_add(ctx, (TCGv)ddc_adjusted, (TCGv)ddc_adjusted, t1);
+        tcg_gen_qemu_ld_tl_with_checked_addr(t1, ddc_adjusted, ctx->mem_idx, MO_TEQ);
         gen_store_gpr(t1, rd + 1);
         break;
     case SDP:
+        generate_ddc_checked_store_ptr(ddc_adjusted, ctx, t0, memop_size(MO_TEQ) * 2);
         gen_load_gpr(t1, rd);
-        gen_ddc_interposed_st_tl(t1, ddc_adjusted, t0, ctx->mem_idx, MO_TEQ, opc);
+        tcg_gen_qemu_st_tl_with_checked_addr(t1, ddc_adjusted, ctx->mem_idx, MO_TEQ);
         tcg_gen_movi_tl(t1, 8);
-        gen_op_addr_add(ctx, t0, t0, t1);
+        gen_op_addr_add(ctx, (TCGv)ddc_adjusted, (TCGv)ddc_adjusted, t1);
         gen_load_gpr(t1, rd + 1);
-        gen_ddc_interposed_st_tl(t1, ddc_adjusted, t0, ctx->mem_idx, MO_TEQ, opc);
+        tcg_gen_qemu_st_tl_with_checked_addr(t1, ddc_adjusted, ctx->mem_idx, MO_TEQ);
         break;
 #endif
     }
@@ -23350,20 +23290,20 @@ static void gen_mipsdsp_ld(DisasContext *ctx, uint32_t opc,
 
     switch (opc) {
     case OPC_LBUX:
-        gen_ddc_interposed_ld_tl(t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_UB, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_UB);
         gen_store_gpr(t0, rd);
         break;
     case OPC_LHX:
-        gen_ddc_interposed_ld_tl(t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TESW, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TESW);
         gen_store_gpr(t0, rd);
         break;
     case OPC_LWX:
-        gen_ddc_interposed_ld_tl(t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TESL, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TESL);
         gen_store_gpr(t0, rd);
         break;
 #if defined(TARGET_MIPS64)
     case OPC_LDX:
-        gen_ddc_interposed_ld_tl(t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ, opc);
+        gen_ddc_interposed_ld_tl(ctx, t0, NULL/* add $ddc to t0*/, t0, ctx->mem_idx, MO_TEQ);
         gen_store_gpr(t0, rd);
         break;
 #endif
@@ -32036,10 +31976,14 @@ void mips_tcg_init(void)
                 tcg_global_mem_new_i64(cpu_env, off, msaregnames[i * 2 + 1]);
     }
 
-    cpu_PC = tcg_global_mem_new(cpu_env,
 #ifdef TARGET_CHERI
+    cpu_PC = tcg_global_mem_new(cpu_env,
                                 offsetof(CPUMIPSState, active_tc.PCC._cr_cursor), "PC");
+    /// XXXAR: We currently interpose using DDC.cursor and not DDC.base!
+    ddc_interposition = tcg_global_mem_new(cpu_env,
+                                offsetof(CPUMIPSState, active_tc.CHWR.DDC._cr_cursor), "ddc_interpose");
 #else
+    cpu_PC = tcg_global_mem_new(cpu_env,
                                 offsetof(CPUMIPSState, active_tc.PC), "PC");
 #endif
 #ifdef CONFIG_DEBUG_TCG

@@ -32,20 +32,6 @@
  * SUCH DAMAGE.
  */
 
-static inline void
-generate_ddc_check_load(TCGv_cap_checked_ptr addr, TCGv ddc_offset, MemOp mo)
-{
-#ifdef TARGET_CHERI
-    TCGv_i32 tcop = tcg_const_i32(mo);
-    gen_helper_ddc_check_load(addr, cpu_env, ddc_offset, tcop);
-    tcg_temp_free_i32(tcop);
-#else
-    if (addr != ddc_offset) {
-        tcg_gen_mov_tl(addr, ddc_offset);
-    }
-#endif
-}
-
 #if defined(TARGET_CHERI) && defined(TARGET_MIPS)
 /* Verify that the processor is running with CHERI instructions enabled. */
 static inline void check_cop2x(DisasContext *ctx)
@@ -1322,6 +1308,15 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             case OPC_CWRITEHWR_NI:  /* 0x0e << 6 */
                 check_cop2x(ctx);
                 gen_helper_2_consti32(cwritehwr, r16, r11);
+                if (r11 == CP2HWR_DDC) {
+                    // When DDC changes we have to exit the current translation
+                    // block since we cache DDC properties in the flags to
+                    // optimize out bounds/permission checks.
+                    // XXXAR: DISAS_STOP seems to be enough?
+                    // gen_save_pc(ctx->base.pc_next + 4);
+                    // ctx->base.is_jmp = DISAS_EXIT;
+                    ctx->base.is_jmp = DISAS_STOP;
+                }
                 opn = "cwritehwr";
                 break;
             case OPC_CGETADDR_NI:   /* 0x0f << 6 */

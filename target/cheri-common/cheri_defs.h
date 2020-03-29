@@ -114,16 +114,30 @@ typedef enum CheriFlags {
     CHERI_FLAG_CAPMODE = (1 << 0),
 } CheriFlags;
 
-#define TB_FLAG_CHERI_PCC_VALID                                                \
-    (1 << 0) /* CHERI PCC is tagged, executable and unsealed */
-#define TB_FLAG_CHERI_CAPMODE (1 << 1) /* PCC.cr_flags == capmode */
-#define TB_FLAG_CHERI_DDC_READABLE                                             \
-    (1 << 2) /* DDC is tagged, unsealed and has PERM_LOAD */
-#define TB_FLAG_CHERI_DDC_WRITABLE                                             \
-    (1 << 3) /* DDC is tagged, unsealed and has PERM_STORE */
-#define TB_FLAG_CHERI_DDC_BASE_ZERO                                            \
-    (1 << 4) /* DDC is tagged, unsealed and base is zero */
-#define TB_FLAG_CHERI_DDC_TOP_MAX                                              \
-    (1 << 5) /* DDC is tagged, unsealed and top is max_addr  */
-
+typedef enum CheriTbFlags {
+    /* CHERI PCC is tagged, executable and unsealed */
+    TB_FLAG_CHERI_PCC_VALID = (1 << 0),
+    /* PCC.cr_flags == capmode */
+    TB_FLAG_CHERI_CAPMODE = (1 << 1),
+    /* DDC is tagged, unsealed and has PERM_LOAD */
+    TB_FLAG_CHERI_DDC_READABLE = (1 << 2),
+    /* DDC is tagged, unsealed and has PERM_STORE */
+    TB_FLAG_CHERI_DDC_WRITABLE = (1 << 3),
+    /* DDC is tagged, unsealed and base is zero */
+    TB_FLAG_CHERI_DDC_BASE_ZERO = (1 << 4),
+    /* DDC is tagged, unsealed and top is max_addr  */
+    TB_FLAG_CHERI_DDC_CURSOR_ZERO = (1 << 5),
+    /* DDC is tagged, unsealed and top is max_addr  */
+    TB_FLAG_CHERI_DDC_TOP_MAX = (1 << 6),
+    /* DDC spans the whole address space */
+    TB_FLAG_CHERI_DDC_FULL_AS =
+        (TB_FLAG_CHERI_DDC_BASE_ZERO | TB_FLAG_CHERI_DDC_TOP_MAX),
+    /* No need to add a value to virtual address loads since DDC cursor and base
+     * are zero. This handles both cases where interposition via DDC uses the
+     * base or the cursor (in case we change our mind which one to use).
+     * This is purely an optimization to skip an addition so it doesn't matter.
+     */
+    TB_FLAG_CHERI_DDC_NO_INTERPOSE =
+        (TB_FLAG_CHERI_DDC_BASE_ZERO | TB_FLAG_CHERI_DDC_CURSOR_ZERO),
+} CheriTbFlags;
 #endif // TARGET_CHERI
