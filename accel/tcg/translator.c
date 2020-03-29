@@ -18,9 +18,6 @@
 #include "exec/translator.h"
 #include "exec/plugin-gen.h"
 
-// Avoid depedendencies on translate.c (pcc.cursor is always valid when we raise
-// an exception here):
-#define gen_cheri_update_cpu_pc(pc)
 #include "cheri-translate-utils-base.h"
 
 /* Pairs with tcg_clear_temp_count.

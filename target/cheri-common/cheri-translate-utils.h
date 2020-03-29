@@ -96,6 +96,7 @@ static inline void gen_check_pcc_bounds_next_inst(DisasContext *ctx,
     tcg_debug_assert(ctx->base.pc_next >= ctx->base.pc_first);
     // XXX: __builtin_add_overflow() for end of address space?
     if (unlikely(ctx->base.pc_next + num_bytes > ctx->base.pcc_top)) {
+        cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
         gen_raise_pcc_violation(&ctx->base, ctx->base.pc_next, num_bytes);
     }
 #endif
@@ -105,6 +106,7 @@ static inline void gen_check_branch_target(DisasContext *ctx, target_ulong addr)
 {
 #ifdef TARGET_CHERI
     if (unlikely(!in_pcc_bounds(&ctx->base, addr))) {
+        cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
         gen_raise_pcc_violation(&ctx->base, addr, 0);
     }
 #endif

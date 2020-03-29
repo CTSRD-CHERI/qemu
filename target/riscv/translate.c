@@ -298,9 +298,15 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
 
 #define gen_set_gpr(reg_num_dst, t) _gen_set_gpr(ctx, reg_num_dst, t)
 #define gen_set_gpr_const(reg_num_dst, t) _gen_set_gpr_const(ctx, reg_num_dst, t)
-#define gen_cheri_update_cpu_pc gen_update_cpu_pc
 #include "cheri-translate-utils.h"
-
+void cheri_tcg_save_pc(DisasContextBase *db) { gen_update_cpu_pc(db->pc_next); }
+// We have to call gen_update_cpu_pc() before setting DISAS_NORETURN (see
+// generate_exception())
+void cheri_tcg_prepare_for_unconditional_exception(DisasContextBase *db)
+{
+    cheri_tcg_save_pc(db);
+    db->is_jmp = DISAS_NORETURN;
+}
 
 static void gen_mulhsu(TCGv ret, TCGv arg1, TCGv arg2)
 {
