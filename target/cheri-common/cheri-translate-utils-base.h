@@ -37,6 +37,9 @@
 // file and must avoid anything defined in translate.c as it is also included
 // from accel/tcg/translator.c.
 
+void cheri_tcg_prepare_for_unconditional_exception(DisasContextBase *db);
+void cheri_tcg_save_pc(DisasContextBase *db);
+
 #ifdef TARGET_CHERI
 static inline bool in_pcc_bounds(DisasContextBase *db, target_ulong addr)
 {
@@ -47,10 +50,13 @@ static inline bool in_pcc_bounds(DisasContextBase *db, target_ulong addr)
 static inline void gen_raise_pcc_violation_tcgv(DisasContextBase *db,
                                                 TCGv taddr, uint32_t num_bytes)
 {
-    gen_cheri_update_cpu_pc(db->pc_next); // Ensure correct PCC.cursor
+    // Ensure correct PCC.cursor
+    cheri_tcg_save_pc(db);
     TCGv_i32 tbytes = tcg_const_i32(num_bytes);
     gen_helper_raise_exception_pcc_bounds(cpu_env, taddr, tbytes);
     tcg_temp_free_i32(tbytes);
+    // Note: we don't set DISAS_NORETURN (must be called before helper) since
+    // this helper function might only be called in a conditional branch
 }
 
 static inline void gen_raise_pcc_violation(DisasContextBase *db,

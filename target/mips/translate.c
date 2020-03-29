@@ -2980,7 +2980,6 @@ static inline void gen_save_pc(target_ulong pc)
     tcg_gen_movi_tl(_pc_is_current, 1); // PC has been updated.
 #endif
 }
-#define gen_cheri_update_cpu_pc gen_save_pc
 #include "cheri-translate-utils.h"
 
 static inline void save_cpu_state(DisasContext *ctx, int do_save_pc)
@@ -3050,6 +3049,15 @@ static inline void generate_exception(DisasContext *ctx, int excp)
 static inline void generate_exception_end(DisasContext *ctx, int excp)
 {
     generate_exception_err(ctx, excp, 0);
+}
+
+void cheri_tcg_save_pc(DisasContextBase *db) { gen_save_pc(db->pc_next); }
+// We have to save the current PC before setting DISAS_NORETURN (see
+// generate_exception_err())
+void cheri_tcg_prepare_for_unconditional_exception(DisasContextBase *db)
+{
+    cheri_tcg_save_pc(db);
+    db->is_jmp = DISAS_NORETURN;
 }
 
 /* Floating point register moves. */
