@@ -66,20 +66,6 @@ static inline bool is_cap_sealed(const cap_register_t *cp)
     return !cap_is_unsealed(cp);
 }
 
-#ifndef TARGET_MIPS
-static inline /* Currently needed for other helpers */
-#endif
-    target_ulong
-    check_ddc(CPUArchState *env, uint32_t perm, uint64_t ddc_offset,
-              uint32_t len, uintptr_t retpc)
-{
-    const cap_register_t *ddc = cheri_get_ddc(env);
-    target_ulong addr = ddc_offset + cap_get_cursor(ddc);
-    check_cap(env, ddc, perm, addr, CHERI_EXC_REGNUM_DDC, len,
-              /*instavail=*/true, retpc);
-    return addr;
-}
-
 void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
                                         target_ulong num_bytes))
 {
