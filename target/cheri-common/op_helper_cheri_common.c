@@ -80,25 +80,6 @@ static inline /* Currently needed for other helpers */
     return addr;
 }
 
-target_ulong CHERI_HELPER_IMPL(ddc_check_load(CPUArchState *env,
-                                              target_ulong offset, MemOp op))
-{
-    return check_ddc(env, CAP_PERM_LOAD, offset, memop_size(op), GETPC());
-}
-
-target_ulong CHERI_HELPER_IMPL(ddc_check_store(CPUArchState *env,
-                                               target_ulong offset, MemOp op))
-{
-    return check_ddc(env, CAP_PERM_STORE, offset, memop_size(op), GETPC());
-}
-
-target_ulong CHERI_HELPER_IMPL(ddc_check_rmw(CPUArchState *env,
-                                             target_ulong offset, MemOp op))
-{
-    return check_ddc(env, CAP_PERM_LOAD | CAP_PERM_STORE, offset,
-                     memop_size(op), GETPC());
-}
-
 void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
                                         target_ulong num_bytes))
 {
