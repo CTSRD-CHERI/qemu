@@ -850,10 +850,7 @@ static inline void tcg_gen_plugin_cb_end(void)
 #define tcg_global_mem_new tcg_global_mem_new_i32
 #define tcg_temp_local_new() tcg_temp_local_new_i32()
 #define tcg_temp_free tcg_temp_free_i32
-#ifdef TARGET_CHERI
-#define tcg_gen_qemu_ld_ddc_tl tcg_gen_qemu_ld_ddc_i32
-#define tcg_gen_qemu_st_ddc_tl tcg_gen_qemu_st_ddc_i32
-#else
+#ifndef TARGET_CHERI
 #define tcg_gen_qemu_ld_tl tcg_gen_qemu_ld_i32
 #define tcg_gen_qemu_st_tl tcg_gen_qemu_st_i32
 #endif
@@ -865,10 +862,7 @@ static inline void tcg_gen_plugin_cb_end(void)
 #define tcg_global_mem_new tcg_global_mem_new_i64
 #define tcg_temp_local_new() tcg_temp_local_new_i64()
 #define tcg_temp_free tcg_temp_free_i64
-#ifdef TARGET_CHERI
-#define tcg_gen_qemu_ld_ddc_tl tcg_gen_qemu_ld_ddc_i64
-#define tcg_gen_qemu_st_ddc_tl tcg_gen_qemu_st_ddc_i64
-#else
+#ifndef TARGET_CHERI
 #define tcg_gen_qemu_ld_tl tcg_gen_qemu_ld_i64
 #define tcg_gen_qemu_st_tl tcg_gen_qemu_st_i64
 #endif
@@ -882,21 +876,8 @@ static inline void tcg_gen_plugin_cb_end(void)
 #ifdef TARGET_CHERI
 #pragma GCC poison tcg_gen_qemu_ld_tl
 #pragma GCC poison tcg_gen_qemu_st_tl
-void tcg_gen_qemu_ld_ddc_i32(TCGv_i32 ret, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg mem_index, MemOp op);
-void tcg_gen_qemu_st_ddc_i32(TCGv_i32 ret, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg mem_index, MemOp op);
-void tcg_gen_qemu_ld_ddc_i64(TCGv_i64 ret, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg mem_index, MemOp op);
-void tcg_gen_qemu_st_ddc_i64(TCGv_i64 ret, TCGv_cap_checked_ptr out_addr, TCGv in_addr, TCGArg mem_index, MemOp op);
-
-#define TCG_LD_HELPER(name, memop)                                             \
-    static inline void tcg_gen_qemu_ddc_##name(                                \
-        TCGv ret, TCGv_cap_checked_ptr out_addr, TCGv in_addr, int mem_index) {    \
-        tcg_gen_qemu_ld_ddc_tl(ret, out_addr, in_addr, mem_index, memop);          \
-    }
-#define TCG_ST_HELPER(name, memop)                                             \
-    static inline void tcg_gen_qemu_ddc_##name(                                \
-        TCGv ret, TCGv_cap_checked_ptr out_addr, TCGv in_addr, int mem_index) {    \
-        tcg_gen_qemu_st_ddc_tl(ret, out_addr, in_addr, mem_index, memop);          \
-    }
+#define TCG_LD_HELPER(name, memop)
+#define TCG_ST_HELPER(name, memop)
 #else
 #define tcg_gen_qemu_ld_i32 tcg_gen_qemu_ld_i32_with_checked_addr
 #define tcg_gen_qemu_st_i32 tcg_gen_qemu_st_i32_with_checked_addr
@@ -919,10 +900,18 @@ void tcg_gen_qemu_st_i64(TCGv_i64, TCGv, TCGArg, MemOp);
 
 // These can be called if the address has already been checked (e.g. $ddc indirection of CHERI capability loads)
 // For non-CHERI targets these are the same as as the non-checked version.
-void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 ret, TCGv_cap_checked_ptr checked_addr, TCGArg mem_index, MemOp op);
-void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 ret, TCGv_cap_checked_ptr checked_addr, TCGArg mem_index, MemOp op);
-void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 ret, TCGv_cap_checked_ptr checked_addr, TCGArg mem_index, MemOp op);
-void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 ret, TCGv_cap_checked_ptr checked_addr, TCGArg mem_index, MemOp op);
+void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 ret,
+                                           TCGv_cap_checked_ptr checked_addr,
+                                           TCGArg mem_index, MemOp op);
+void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 ret,
+                                           TCGv_cap_checked_ptr checked_addr,
+                                           TCGArg mem_index, MemOp op);
+void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 ret,
+                                           TCGv_cap_checked_ptr checked_addr,
+                                           TCGArg mem_index, MemOp op);
+void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 ret,
+                                           TCGv_cap_checked_ptr checked_addr,
+                                           TCGArg mem_index, MemOp op);
 
 TCG_LD_HELPER(ld8u, MO_UB)
 TCG_LD_HELPER(ld8s, MO_SB)
@@ -938,10 +927,6 @@ TCG_ST_HELPER(st32, MO_TEUL)
 TCG_ST_HELPER(st64, MO_TEQ)
 
 #ifdef TARGET_CHERI
-void tcg_gen_atomic_cmpxchg_ddc_i32(TCGv_i32, TCGv, TCGv_i32, TCGv_i32, TCGArg,
-                                    MemOp);
-void tcg_gen_atomic_cmpxchg_ddc_i64(TCGv_i64, TCGv, TCGv_i64, TCGv_i64, TCGArg,
-                                    MemOp);
 #pragma GCC poison tcg_gen_atomic_cmpxchg_i32
 #pragma GCC poison tcg_gen_atomic_cmpxchg_i64
 #pragma GCC poison tcg_gen_atomic_cmpxchg_tl
@@ -1145,9 +1130,7 @@ void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 #define tcg_gen_umin_tl tcg_gen_umin_i64
 #define tcg_gen_smax_tl tcg_gen_smax_i64
 #define tcg_gen_umax_tl tcg_gen_umax_i64
-#ifdef TARGET_CHERI
-#define tcg_gen_atomic_cmpxchg_ddc_tl tcg_gen_atomic_cmpxchg_ddc_i64
-#else
+#ifndef TARGET_CHERI
 #define tcg_gen_atomic_cmpxchg_tl tcg_gen_atomic_cmpxchg_i64
 #endif
 #define tcg_gen_atomic_cmpxchg_tl_with_checked_addr tcg_gen_atomic_cmpxchg_i64_with_checked_addr
@@ -1262,9 +1245,7 @@ void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 #define tcg_gen_umin_tl tcg_gen_umin_i32
 #define tcg_gen_smax_tl tcg_gen_smax_i32
 #define tcg_gen_umax_tl tcg_gen_umax_i32
-#ifdef TARGET_CHERI
-#define tcg_gen_atomic_cmpxchg_ddc_tl tcg_gen_atomic_cmpxchg_ddc_i32
-#else
+#ifndef TARGET_CHERI
 #define tcg_gen_atomic_cmpxchg_tl tcg_gen_atomic_cmpxchg_i32
 #endif
 #define tcg_gen_atomic_cmpxchg_tl_with_checked_addr tcg_gen_atomic_cmpxchg_i32_with_checked_addr

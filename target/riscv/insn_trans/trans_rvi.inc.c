@@ -173,11 +173,8 @@ static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
     gen_get_gpr(t0, a->rs1);
     tcg_gen_addi_tl(t0, t0, a->imm);
 
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_ld_ddc_tl(t1, /* Update addr in-place */ NULL, t0, ctx->mem_idx, memop);
-#else
-    tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx, memop);
-#endif
+    gen_ddc_interposed_ld_tl(ctx, t1, /* Update addr in-place */ NULL, t0,
+                             ctx->mem_idx, memop);
     gen_set_gpr(a->rd, t1);
     tcg_temp_free(t0);
     tcg_temp_free(t1);
@@ -223,12 +220,8 @@ static bool gen_store(DisasContext *ctx, arg_sb *a, MemOp memop)
     tcg_gen_addi_tl(t0, t0, a->imm);
     gen_get_gpr(dat, a->rs2);
 
-#ifdef TARGET_CHERI
-    tcg_gen_qemu_st_ddc_tl(dat, /* Update addr in-place */ NULL, t0,
-                           ctx->mem_idx, memop);
-#else
-    tcg_gen_qemu_st_tl(dat, t0, ctx->mem_idx, memop);
-#endif
+    gen_ddc_interposed_st_tl(ctx, dat, /* Update addr in-place */ NULL, t0,
+                             ctx->mem_idx, memop);
     tcg_temp_free(t0);
     tcg_temp_free(dat);
     return true;
