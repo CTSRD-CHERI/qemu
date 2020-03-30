@@ -34,6 +34,7 @@
 #include "cheri_tagmem.h"
 #include "exec/exec-all.h"
 #include "exec/log.h"
+#include "exec/ramblock.h"
 
 #if defined(TARGET_MIPS)
 #include "cheri_utils.h"
@@ -221,15 +222,26 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
      * (MMU_DATA_STORE) rather than a capability store (MMU_DATA_CAP_STORE),
      * so that we don't require that the SC inhibit be clear.
      */
-
-    int prot;
-    MemoryRegion* mr = NULL;
-    hwaddr paddr = v2p_addr(env, vaddr, MMU_DATA_STORE, 0xFF, pc, &prot);
-    ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
-    // Generate a trap if we try to clear tags in ROM instead of crashing
-    check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
-    if (ram_addr == -1LL)
+    void* host_addr = probe_write(env, vaddr, size, cpu_mmu_index(env, false), pc);
+    // Only RAM and ROM regions are backed by host addresses so if probe_write()
+    // returns NULL we know that we can't write the tagmem.
+    if (unlikely(!host_addr))
         return;
+
+    ram_addr_t offset;
+    RAMBlock *block = qemu_ram_block_from_host(host_addr, false, &offset);
+    if (unlikely(!block)) {
+        // Not backed by RAM?
+        error_report("%s: vaddr=0x%jx -> host_addr=%p not backed by RAM?",
+                     __func__, (uintmax_t)vaddr, host_addr);
+        return;
+    }
+    ram_addr_t ram_addr = block->offset + offset;
+    MemoryRegion* mr = block->mr;
+
+    // XXX: I am not sure if this can ever trigger since probe_write should have
+    // returned NULL in that case?
+    cheri_debug_assert(!memory_region_is_rom(mr) && !memory_region_is_romd(mr));
     cheri_tag_phys_invalidate(env, ram_addr, size, &vaddr);
 }
 
@@ -361,7 +373,7 @@ cheri_tag_get_block(CPUArchState *env, target_ulong vaddr, MMUAccessType at,
         *ret_paddr = paddr;
 
     ram_addr = p2r_addr(env, paddr, NULL);
-    if (ram_addr == -1LL)
+    if (ram_addr == RAM_ADDR_INVALID)
         return NULL;
 
     if (ret_ram_addr)
