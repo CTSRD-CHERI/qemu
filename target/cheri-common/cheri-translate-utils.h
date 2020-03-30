@@ -264,7 +264,7 @@ static inline void gen_check_branch_target_dynamic(DisasContext *ctx, TCGv addr)
     //        call    raise_bounds_violation
     // Note: JR/JALR will often be used in hybrid/non-CHERI cases, so we can
     // skip the less than check if pcc.base is zero and top is MAX:
-    if (likely(have_cheri_tb_flags(ctx, TB_FLAG_PCC_FULL_AS))) {
+    if (have_cheri_tb_flags(ctx, TB_FLAG_PCC_FULL_AS)) {
         return; // PCC spans the full address space, no need to check
     }
 
@@ -272,7 +272,7 @@ static inline void gen_check_branch_target_dynamic(DisasContext *ctx, TCGv addr)
     TCGLabel *bounds_violation = gen_new_label();
     // We can skip the check of pcc.base if it is zero (common case in
     // hybrid/non-CHERI  mode).
-    if (unlikely(ctx->base.pcc_base > 0)) {
+    if (ctx->base.pcc_base > 0) {
         tcg_gen_brcondi_tl(TCG_COND_LTU, addr, ctx->base.pcc_base,
                            bounds_violation);
     }
