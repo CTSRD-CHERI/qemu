@@ -43,6 +43,9 @@ void cheri_tcg_save_pc(DisasContextBase *db);
 #ifdef TARGET_CHERI
 static inline bool in_pcc_bounds(DisasContextBase *db, target_ulong addr)
 {
+    if ((db->cheri_flags & TB_FLAG_PCC_FULL_AS) == TB_FLAG_PCC_FULL_AS) {
+        return true; // PCC spans the full address space
+    }
     return addr >= db->pcc_base && addr < db->pcc_top;
 }
 
