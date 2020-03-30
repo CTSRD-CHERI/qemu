@@ -35,6 +35,10 @@
 #include "exec/exec-all.h"
 #include "exec/log.h"
 #include "exec/ramblock.h"
+#include "cheri_tagmem.h"
+#include "cheri-helper-utils.h"
+// XXX: use hbitmap? Or a different data structure?
+#include "qemu/bitmap.h"
 
 #if defined(TARGET_MIPS)
 #include "cheri_utils.h"
@@ -44,6 +48,8 @@
 #if !defined(TARGET_CHERI)
 #error "Should only be included for TARGET_CHERI"
 #endif
+
+// XXX: use secure/target_tlb_bit0/target_tlb_bit1 for cheri TLB permissions?
 
 /*
  * Tagged Memory Emulation
@@ -63,9 +69,6 @@
  *
  * FIXME: rewrite using somethign more like the upcoming MTE changes (https://github.com/rth7680/qemu/commits/tgt-arm-mte-user)
  */
-#include "cheri_tagmem.h"
-#include "cheri-helper-utils.h"
-
 
 #if defined(CHERI_MAGIC128) || defined(CHERI_128)
 #define CAP_TAG_SHFT        4           // 5 for 256-bit caps, 4 for 128-bit
