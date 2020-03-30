@@ -213,11 +213,17 @@ static inline void gen_check_pcc_bounds_next_inst(DisasContext *ctx,
                                                   uint32_t num_bytes)
 {
 #ifdef TARGET_CHERI
+    if (have_cheri_tb_flags(ctx, TB_FLAG_PCC_FULL_AS)) {
+        return; // PCC spans the full address space, no need to check
+    }
+
     // Note: PC can only be incremented since a branch exits the TB, so checking
     // for pc_next < pcc.base should not be needed. Add a debug assertion in
     // case this assumption no longer holds in the future.
+    // Note: we don't have to check for wraparound here since this case is
+    // already handled by the TB_FLAG_PCC_FULL_AS check above. Wraparound is
+    // permitted to avoid any differences with non-CHERI enabled CPUs.
     tcg_debug_assert(ctx->base.pc_next >= ctx->base.pc_first);
-    // XXX: __builtin_add_overflow() for end of address space?
     if (unlikely(ctx->base.pc_next + num_bytes > ctx->base.pcc_top)) {
         cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
         gen_raise_pcc_violation(&ctx->base, ctx->base.pc_next, num_bytes);
@@ -258,20 +264,19 @@ static inline void gen_check_branch_target_dynamic(DisasContext *ctx, TCGv addr)
     //        call    raise_bounds_violation
     // Note: JR/JALR will often be used in hybrid/non-CHERI cases, so we can
     // skip the less than check if pcc.base is zero and top is MAX:
-    const bool need_base_check = ctx->base.pcc_base > 0;
-    const bool need_top_check = ctx->base.pcc_top != TYPE_MAXIMUM(target_ulong);
-    if (likely(!need_base_check && !need_top_check)) {
-        return;
+    if (likely(have_cheri_tb_flags(ctx, TB_FLAG_PCC_FULL_AS))) {
+        return; // PCC spans the full address space, no need to check
     }
+
     TCGLabel *skip_btarget_check = gen_new_label();
     TCGLabel *bounds_violation = gen_new_label();
     // We can skip the check of pcc.base if it is zero (common case in
     // hybrid/non-CHERI  mode).
-    if (unlikely(need_base_check)) {
+    if (unlikely(ctx->base.pcc_base > 0)) {
         tcg_gen_brcondi_tl(TCG_COND_LTU, addr, ctx->base.pcc_base,
                            bounds_violation);
     }
-    if (need_top_check) {
+    if (ctx->base.pcc_top != TYPE_MAXIMUM(target_ulong)) {
         tcg_gen_brcondi_tl(TCG_COND_GEU, addr, ctx->base.pcc_top,
                            bounds_violation);
     }

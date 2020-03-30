@@ -139,5 +139,10 @@ typedef enum CheriTbFlags {
      */
     TB_FLAG_CHERI_DDC_NO_INTERPOSE =
         (TB_FLAG_CHERI_DDC_BASE_ZERO | TB_FLAG_CHERI_DDC_CURSOR_ZERO),
+    /*
+     * PCC spans the full adddress space and has base zero. This means we do
+     * not need to perform bounds checks or subtract/add PCC.base
+     */
+    TB_FLAG_PCC_FULL_AS = (1 << 7)
 } CheriTbFlags;
 #endif // TARGET_CHERI
