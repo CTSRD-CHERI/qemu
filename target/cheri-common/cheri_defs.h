@@ -125,7 +125,7 @@ typedef enum CheriTbFlags {
     TB_FLAG_CHERI_DDC_WRITABLE = (1 << 3),
     /* DDC is tagged, unsealed and base is zero */
     TB_FLAG_CHERI_DDC_BASE_ZERO = (1 << 4),
-    /* DDC is tagged, unsealed and top is max_addr  */
+    /* DDC is tagged, unsealed and cursor (addresss) is zero */
     TB_FLAG_CHERI_DDC_CURSOR_ZERO = (1 << 5),
     /* DDC is tagged, unsealed and top is max_addr  */
     TB_FLAG_CHERI_DDC_TOP_MAX = (1 << 6),
