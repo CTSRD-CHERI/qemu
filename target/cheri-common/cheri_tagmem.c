@@ -87,7 +87,7 @@
           * large as main memory. Fortunately, for this implementation
           * tags are not needed everywhere and sparsely allocated.
           */
-#define CAP_TAGBLK_SZ       ((1 << CAP_TAGBLK_SHFT) * 16)
+#define CAP_TAGBLK_SIZE       ((1 << CAP_TAGBLK_SHFT) * 16)
 #define CAP_TAGBLK_IDX(tag_idx) (((tag_idx) & CAP_TAGBLK_MSK) * 16)
 #if defined(HOST_WORDS_BIGENDIAN)
 #   define CAP_TAG_TPS_SHFT 0
@@ -95,15 +95,29 @@
 #   define CAP_TAG_TPS_SHFT 8
 #endif
 #else /* ! CHERI_MAGIC128 */
-#define CAP_TAGBLK_SZ       (1 << CAP_TAGBLK_SHFT)
+#define CAP_TAGBLK_SIZE       (1 << CAP_TAGBLK_SHFT)
 #define CAP_TAGBLK_IDX(tag_idx) ((tag_idx) & CAP_TAGBLK_MSK)
 #endif /* ! CHERI_MAGIC128 */
 
-uint8_t **_cheri_tagmem = NULL;
+#define TAGMEM_USE_BITMAP 0
+#if TAGMEM_USE_BITMAP
+// Use one bit per tag:
+typedef struct CheriTagBlock {
+    DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE);
+} CheriTagBlock;
+#else
+// Use one byte per tag:
+typedef struct CheriTagBlock {
+    uint8_t tags[CAP_TAGBLK_SIZE];
+} CheriTagBlock;
+#endif
+
+CheriTagBlock **_cheri_tagmem = NULL;
 ram_addr_t cheri_covered_start = 0;
 uint64_t cheri_ntagblks = 0ul;
 
-static inline uint8_t* get_cheri_tagmem(size_t index) {
+
+static inline CheriTagBlock* get_cheri_tagmem(size_t index) {
     assert(index < cheri_ntagblks && "Tag index out of bounds");
     return _cheri_tagmem[index];
 }
@@ -119,7 +133,7 @@ void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size)
 
     cheri_covered_start = memory_region_get_ram_addr(mr);
     cheri_ntagblks = (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT;
-    _cheri_tagmem = (uint8_t **)g_malloc0(cheri_ntagblks * sizeof(uint8_t *));
+    _cheri_tagmem = (CheriTagBlock **)g_malloc0(cheri_ntagblks * sizeof(CheriTagBlock *));
     if (_cheri_tagmem == NULL) {
         error_report("%s: Can't allocated tag memory", __func__);
         exit (-1);
@@ -251,7 +265,7 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size, u
 void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_t len, const target_ulong* vaddr)
 {
     uint64_t tag, tagmem_idx;
-    uint8_t *tagblk;
+    CheriTagBlock *tagblk;
 
     ram_addr_t endaddr = (uint64_t)(ram_addr + len);
     ram_addr_t startaddr = QEMU_ALIGN_DOWN(ram_addr, CAP_SIZE);
@@ -270,14 +284,14 @@ void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_
             if (unlikely(env && vaddr && should_log_mem_access(env, CPU_LOG_INSTR, *vaddr))) {
                 ram_addr_t write_vaddr = QEMU_ALIGN_DOWN(*vaddr, CAP_SIZE) + (addr - startaddr);
                 qemu_log("    Cap Tag Write [" RAM_ADDR_FMT "] %d -> 0\n", write_vaddr,
-                         tagblk[tagblk_index]);
+                         tagblk->tags[tagblk_index]);
             }
             if (unlikely(env && should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
                 qemu_log("    Cap Tag ramaddr Write [" RAM_ADDR_FMT "] %d -> 0\n", addr,
-                         tagblk[tagblk_index]);
+                         tagblk->tags[tagblk_index]);
             }
             // changed |= tagblk[CAP_TAGBLK_IDX(tag)];
-            tagblk[tagblk_index] = 0;
+            tagblk->tags[tagblk_index] = 0;
         }
     }
 #ifdef TARGET_MIPS
@@ -291,11 +305,11 @@ void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t ram_addr, ram_addr_
 #endif
 }
 
-static uint8_t *cheri_tag_new_tagblk(uint64_t tag)
+static CheriTagBlock *cheri_tag_new_tagblk(uint64_t tag)
 {
-    uint8_t *tagblk, *old;
+    CheriTagBlock *tagblk, *old;
 
-    tagblk = g_malloc0(CAP_TAGBLK_SZ);
+    tagblk = g_malloc0(sizeof(CheriTagBlock));
     if (tagblk == NULL) {
         error_report("Can't allocate tag block.");
         exit(1);
@@ -318,7 +332,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
 {
     ram_addr_t ram_addr;
     uint64_t tag;
-    uint8_t *tagblk;
+    CheriTagBlock *tagblk;
 
     /*
      * This attempt to resolve a virtual address may cause both a data store
@@ -346,9 +360,9 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
     }
     if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
         qemu_log("    Cap Tag Write [" TARGET_FMT_lx "] %d -> 1\n", vaddr,
-                 tagblk[CAP_TAGBLK_IDX(tag)]);
+                 tagblk->tags[CAP_TAGBLK_IDX(tag)]);
     }
-    tagblk[CAP_TAGBLK_IDX(tag)] = 1;
+    tagblk->tags[CAP_TAGBLK_IDX(tag)] = 1;
 
 #ifdef TARGET_MIPS
     /* Check RAM address to see if the linkedflag needs to be reset. */
@@ -361,7 +375,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
 #endif
 }
 
-static uint8_t *
+static CheriTagBlock *
 cheri_tag_get_block(CPUArchState *env, target_ulong vaddr, MMUAccessType at,
     int reg, int xshift, uintptr_t pc,
     hwaddr *ret_paddr, ram_addr_t *ret_ram_addr, uint64_t *ret_tag, int *prot)
@@ -394,13 +408,13 @@ int cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr, int *prot, uintptr_t pc)
 {
     uint64_t tag;
-    uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
+    CheriTagBlock *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
                                           0, pc, ret_paddr, NULL, &tag, prot);
-    uint8_t result;
+    bool result;
     if (tagblk == NULL)
-        result = 0;
+        result = false;
     else
-        result = tagblk[CAP_TAGBLK_IDX(tag)];
+        result = tagblk->tags[CAP_TAGBLK_IDX(tag)];
     if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
         qemu_log("    Cap Tag Read [" TARGET_FMT_lx "] -> %d\n", vaddr,
                  result);
@@ -419,7 +433,7 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 {
     uint64_t tag;
     int prot;
-    uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
+    CheriTagBlock *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
                                           CAP_TAG_GET_MANY_SHFT, pc, ret_paddr,
                                           NULL, &tag, &prot);
 
@@ -433,7 +447,7 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
     if (tagblk == NULL)
         return 0;
     else {
-#define TAG_BYTE_TO_BIT(ix) (tagblk[CAP_TAGBLK_IDX(tag+ix)] ? (1 << ix) : 0)
+#define TAG_BYTE_TO_BIT(ix) (tagblk->tags[CAP_TAGBLK_IDX(tag+ix)] ? (1 << ix) : 0)
         return TAG_BYTE_TO_BIT(0)
              | TAG_BYTE_TO_BIT(1)
              | TAG_BYTE_TO_BIT(2)
