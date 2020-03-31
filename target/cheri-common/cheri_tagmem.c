@@ -92,6 +92,14 @@ struct Magic128Data {
 };
 #endif
 
+static inline size_t num_tagblocks(RAMBlock* ram)
+{
+    uint64_t memory_size = memory_region_size(ram->mr);
+    size_t result = DIV_ROUND_UP(memory_size, CHERI_CAP_SIZE * CAP_TAGBLK_SIZE);
+    assert(result == (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT);
+    return result;
+}
+
 #define TAGMEM_USE_BITMAP 0
 #if TAGMEM_USE_BITMAP
 // Use one bit per tag:
@@ -125,7 +133,7 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
         return;
 
     cheri_covered_start = memory_region_get_ram_addr(mr);
-    cheri_ntagblks = (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT;
+    cheri_ntagblks = num_tagblocks(mr->ram_block);
     _cheri_tagmem = (CheriTagBlock **)g_malloc0(cheri_ntagblks * sizeof(CheriTagBlock *));
     if (_cheri_tagmem == NULL) {
         error_report("%s: Can't allocated tag memory", __func__);
@@ -136,6 +144,12 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
         magic128_table = g_hash_table_new(g_int64_hash, NULL);
     }
 #endif
+    if (qemu_tcg_mttcg_enabled()) {
+        warn_report("The CHERI tagged memory implementation is not thread-safe "
+                    "and therefore not compatible with MTTCG. Capability tags "
+                    "may mysteriously appear/disappear. Run with \"--accel "
+                    "tcg,thread=single\" to fix.");
+    }
 }
 
 static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr,
@@ -156,13 +170,16 @@ static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr,
 }
 
 static inline void check_tagmem_writable(CPUArchState *env, target_ulong vaddr,
-                                         hwaddr paddr, ram_addr_t ram_addr, MemoryRegion *mr, uintptr_t pc)
+                                         hwaddr paddr, ram_addr_t ram_offset,
+                                         MemoryRegion *mr, uintptr_t pc)
 {
     if (memory_region_is_rom(mr) || memory_region_is_romd(mr)) {
-        error_report("QEMU ERROR: attempting change tag bit on read-only memory:");
-        error_report("%s: vaddr=0x%jx -> ram_addr=0x%jx (paddr=0x%jx)", __func__,
-            (uintmax_t)vaddr, (uintmax_t)ram_addr, (uintmax_t)paddr);
-        cpu_transaction_failed(env_cpu(env), paddr, vaddr, CAP_SIZE,
+        error_report(
+            "QEMU ERROR: attempting change tag bit on read-only memory:");
+        error_report("%s: vaddr=0x%jx -> %s+0x%jx (paddr=0x%jx)", __func__,
+                     (uintmax_t)vaddr, memory_region_name(mr),
+                     (uintmax_t)ram_offset, (uintmax_t)paddr);
+        cpu_transaction_failed(env_cpu(env), paddr, vaddr, CHERI_CAP_SIZE,
                                MMU_DATA_STORE, // TODO: MMU_DATA_CAP_STORE
                                cpu_mmu_index(env, false),
                                MEMTXATTRS_UNSPECIFIED, MEMTX_ERROR, pc);
