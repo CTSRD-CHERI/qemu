@@ -47,7 +47,7 @@ int  cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
 int  cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
         hwaddr *ret_paddr, uintptr_t pc);
 void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
-        uintptr_t pc);
+                   hwaddr *ret_paddr, uintptr_t pc);
 #ifdef CHERI_MAGIC128
 int  cheri_tag_get_m128(CPUArchState *env, target_ulong vaddr, int reg,
         uint64_t *tps, uint64_t *length, hwaddr *ret_paddr, int *prot, uintptr_t pc);

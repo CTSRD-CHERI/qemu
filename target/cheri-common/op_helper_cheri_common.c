@@ -1194,7 +1194,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     env->statcounters_cap_write++;
     if (tag) {
         env->statcounters_cap_write_tagged++;
-        cheri_tag_set(env, vaddr, cs, retpc);
+        cheri_tag_set(env, vaddr, cs, NULL, retpc);
     } else {
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
     }

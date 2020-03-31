@@ -39,6 +39,7 @@
 #include "cheri-helper-utils.h"
 // XXX: use hbitmap? Or a different data structure?
 #include "qemu/bitmap.h"
+#include "glib/ghash.h"
 
 #if defined(TARGET_MIPS)
 #include "cheri_utils.h"
@@ -79,25 +80,17 @@
 #define CAP_MASK            ((1 << CAP_TAG_SHFT) - 1)
 #define CAP_TAGBLK_SHFT     12          // 2^12 or 4096 tags per block
 #define CAP_TAGBLK_MSK      ((1 << CAP_TAGBLK_SHFT) - 1)
-#ifdef CHERI_MAGIC128
-         /*
-          * With "magic 128-bit" capabilities the object type,
-          * permissions, sealed bit, and length are all stored in tag
-          * memory along with the tag. This makes the tag memory as
-          * large as main memory. Fortunately, for this implementation
-          * tags are not needed everywhere and sparsely allocated.
-          */
-#define CAP_TAGBLK_SIZE       ((1 << CAP_TAGBLK_SHFT) * 16)
-#define CAP_TAGBLK_IDX(tag_idx) (((tag_idx) & CAP_TAGBLK_MSK) * 16)
-#if defined(HOST_WORDS_BIGENDIAN)
-#   define CAP_TAG_TPS_SHFT 0
-#else
-#   define CAP_TAG_TPS_SHFT 8
-#endif
-#else /* ! CHERI_MAGIC128 */
 #define CAP_TAGBLK_SIZE       (1 << CAP_TAGBLK_SHFT)
 #define CAP_TAGBLK_IDX(tag_idx) ((tag_idx) & CAP_TAGBLK_MSK)
-#endif /* ! CHERI_MAGIC128 */
+#ifdef CHERI_MAGIC128
+// "Magic" table to store the additional 128 metadata bits for the magic128
+// configuration of QEMU
+static GHashTable *magic128_table;
+struct Magic128Data {
+    uint64_t tps;    // type, permissions, sealed
+    uint64_t length; // length of capability
+};
+#endif
 
 #define TAGMEM_USE_BITMAP 0
 #if TAGMEM_USE_BITMAP
@@ -122,7 +115,7 @@ static inline CheriTagBlock* get_cheri_tagmem(size_t index) {
     return _cheri_tagmem[index];
 }
 
-void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size)
+void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
 {
     // printf("%s: memory_size=0x%lx\n", __func__, memory_size);
     assert(memory_region_is_ram(mr));
@@ -138,6 +131,11 @@ void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size)
         error_report("%s: Can't allocated tag memory", __func__);
         exit (-1);
     }
+#ifdef CHERI_MAGIC128
+    if (!magic128_table) {
+        magic128_table = g_hash_table_new(g_int64_hash, NULL);
+    }
+#endif
 }
 
 static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr,
@@ -189,12 +187,15 @@ static inline ram_addr_t p2r_addr(CPUArchState *env, hwaddr addr, MemoryRegion**
     return memory_region_get_ram_addr(mr) + offset - cheri_covered_start;
 }
 
-static inline ram_addr_t v2r_addr(CPUArchState *env, target_ulong vaddr, MMUAccessType rw,
-        int reg, uintptr_t pc)
+static inline ram_addr_t v2r_addr(CPUArchState *env, target_ulong vaddr,
+                                  hwaddr *ret_paddr, MMUAccessType rw, int reg,
+                                  uintptr_t pc)
 {
     int prot;
     MemoryRegion* mr = NULL;
     hwaddr paddr = v2p_addr(env, vaddr, rw, reg, pc, &prot);
+    if (ret_paddr)
+        *ret_paddr = paddr;
     ram_addr_t ram_addr = p2r_addr(env, paddr, &mr);
     if (rw == MMU_DATA_CAP_STORE || rw == MMU_DATA_STORE)
         check_tagmem_writable(env, vaddr, paddr, ram_addr, mr, pc);
@@ -328,7 +329,7 @@ static CheriTagBlock *cheri_tag_new_tagblk(uint64_t tag)
     }
 }
 
-void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
+void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc)
 {
     ram_addr_t ram_addr;
     uint64_t tag;
@@ -346,7 +347,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, uintptr_t pc)
      * data stores).
      */
 
-    ram_addr = v2r_addr(env, vaddr, MMU_DATA_CAP_STORE, reg, pc);
+    ram_addr = v2r_addr(env, vaddr, ret_paddr, MMU_DATA_CAP_STORE, reg, pc);
     if (ram_addr == RAM_ADDR_INVALID)
         return;
 
@@ -462,51 +463,44 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 
 #ifdef CHERI_MAGIC128
 void cheri_tag_set_m128(CPUArchState *env, target_ulong vaddr, int reg,
-        uint8_t tagbit, uint64_t tps, uint64_t length, hwaddr *ret_paddr, uintptr_t pc)
+                        uint8_t tagbit, uint64_t tps, uint64_t length,
+                        hwaddr *ret_paddr, uintptr_t pc)
 {
-    int prot;
-    uint64_t tag;
-    uint64_t *tagblk64;
-    ram_addr_t ram_addr;
-
-    // If the data is untagged we shouldn't get a tlb fault
-    uint8_t *tagblk = cheri_tag_get_block(env, vaddr,
-					  tagbit ? MMU_DATA_CAP_STORE : MMU_DATA_STORE,
-					  reg, 0, pc, ret_paddr, &ram_addr, &tag, &prot);
-    if (tagblk == NULL) {
-        /* Allocated a tag block. */
-        tagblk = cheri_tag_new_tagblk(tag);
+    // We index the "magic" table by physical address:
+    hwaddr paddr;
+    cheri_tag_set(env, vaddr, reg, &paddr, pc);
+    gpointer htable_key = GINT_TO_POINTER(paddr);
+    struct Magic128Data *data = g_hash_table_lookup(magic128_table, htable_key);
+    if (!data) {
+        data = g_malloc(sizeof(struct Magic128Data));
+        g_hash_table_insert(magic128_table, htable_key, data);
     }
-    tagblk64 = (uint64_t *)&tagblk[CAP_TAGBLK_IDX(tag)];
-    *tagblk64 = (tps << CAP_TAG_TPS_SHFT) | tagbit;
-    tagblk64++;
-    *tagblk64 = length;
-
-
-    /* Check RAM address to see if the linkedflag needs to be reset. */
-    if (QEMU_ALIGN_DOWN(ram_addr, CHERI_CAP_SIZE) ==
-        QEMU_ALIGN_DOWN(env->CP0_LLAddr, CHERI_CAP_SIZE)) {
-        env->linkedflag = 0;
-        env->lladdr = 1;
-    }
-
-    return;
+    data->tps = tps;
+    data->length = length;
+    if (ret_paddr)
+        *ret_paddr = paddr;
 }
 
 int cheri_tag_get_m128(CPUArchState *env, target_ulong vaddr, int reg,
-        uint64_t *ret_tps, uint64_t *ret_length, hwaddr *ret_paddr, int *prot, uintptr_t pc)
+                       uint64_t *ret_tps, uint64_t *ret_length,
+                       hwaddr *ret_paddr, int *prot, uintptr_t pc)
 {
-    uint64_t tag;
-    uint8_t *tagblk = cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
-                                          0, pc, ret_paddr, NULL, &tag, prot);
-
-    if (tagblk == NULL) {
-        *ret_tps = *ret_length = 0ULL;
-        return 0;
-    } else {
-        *ret_tps = (*(uint64_t *)&tagblk[CAP_TAGBLK_IDX(tag)]) >> CAP_TAG_TPS_SHFT;
-        *ret_length = *(uint64_t *)&tagblk[CAP_TAGBLK_IDX(tag) + 8];
-        return tagblk[CAP_TAGBLK_IDX(tag)];
+    hwaddr paddr;
+    bool tag = cheri_tag_get(env, vaddr, reg, &paddr, prot, pc);
+    // Only fetch the extra data if the value is tagged
+    struct Magic128Data *data = NULL;
+    if (tag) {
+        data = g_hash_table_lookup(magic128_table, GINT_TO_POINTER(paddr));
     }
+    if (data) {
+        *ret_tps = data->tps;
+        *ret_length = data->length;
+    } else {
+        *ret_tps = 0ULL;
+        *ret_length = 0ULL;
+    }
+    if (ret_paddr)
+        *ret_paddr = paddr;
+    return tag;
 }
 #endif /* CHERI_MAGIC128 */
