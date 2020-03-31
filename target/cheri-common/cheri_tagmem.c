@@ -59,13 +59,22 @@
  * capability-sized word in physical memory.  This allows capabilities
  * to be safely loaded and stored in meory without loss of integrity.
  *
- * For emulation purposes the tag is an one-byte flag.  This makes it
- * easy to set or unset a tag without the need of locking or atomics.
- * This requires eight times the memory, however.  To reduce the amount
- * of memory needed the tag flag array is allocated sparsely, 4K at at
- * time, and on demand.
+ * For emulation purposes the tag is stored in a two-level array containing
+ * fixed size bitmaps. To reduce the amount of memory needed the tag flag array
+ * is allocated sparsely, 4K tags at at time, and on demand.
+ * This 4K number is arbitary and depending on the workload other sizes may be
+ * better.
  *
- * FIXME: find a solution to make this safe (or just always disable multi-tcg)
+ * Note: We also support an mode where we use one byte per tag. This makes it
+ * easy to set or unset a tag without the need of locking or atomics.
+ * This requires eight times the memory.
+ *
+ * As tag accesses are not atomic with regard to data writes/reads spurious
+ * invalid capabilities could be created in a threaded context.
+ * Therefore, we don't use atomic bitwise RMW operations and the one byte per
+ * tag variant actually performs slightly worse due to increased memory usage.
+ *
+ * FIXME: find a solution to make tags safe (or just always disable multi-tcg)
  *
  * XXX Should consider adding a reference count per tag block so that
  * blocks can be deallocated when no longer used maybe.
@@ -102,12 +111,8 @@ static inline size_t num_tagblocks(RAMBlock* ram)
     return result;
 }
 
-#define TAGMEM_USE_BITMAP 0
+#define TAGMEM_USE_BITMAP 1
 #if TAGMEM_USE_BITMAP
-#define _tag_bit_get test_bit
-#define _tag_bit_set set_bit
-#define _tag_bit_clear clear_bit
-#define _tag_bit_range_clear bitmap_test_and_clear_atomic
 // Use one bit per tag:
 typedef struct CheriTagBlock {
     DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE);
@@ -158,7 +163,7 @@ static inline QEMU_ALWAYS_INLINE bool tagblock_get_tag(CheriTagBlock *block,
                                                        size_t block_index)
 {
 #if TAGMEM_USE_BITMAP
-    return block ? _tag_bit_get(block_index, block->tag_bitmap) : false;
+    return block ? test_bit(block_index, block->tag_bitmap) : false;
 #else
     return block ? block->_tags[block_index] : false;
 #endif
@@ -168,7 +173,7 @@ static inline QEMU_ALWAYS_INLINE void tagblock_set_tag(CheriTagBlock *block,
                                                        size_t block_index)
 {
 #if TAGMEM_USE_BITMAP
-    _tag_bit_set(block_index, block->tag_bitmap);
+    set_bit(block_index, block->tag_bitmap);
 #else
     block->_tags[block_index] = true;
 #endif
@@ -178,7 +183,7 @@ static inline QEMU_ALWAYS_INLINE void tagblock_clear_tag(CheriTagBlock *block,
                                                          size_t block_index)
 {
 #if TAGMEM_USE_BITMAP
-    _tag_bit_clear(block_index, block->tag_bitmap);
+    clear_bit(block_index, block->tag_bitmap);
 #else
     block->_tags[block_index] = false;
 #endif
