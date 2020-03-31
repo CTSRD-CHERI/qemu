@@ -38,20 +38,22 @@
 
 #if defined(TARGET_CHERI)
 /* Note: for cheri_tag_phys_invalidate, env may be NULL */
-void cheri_tag_phys_invalidate(CPUArchState *env, ram_addr_t paddr, ram_addr_t len, const target_ulong* vaddr);
+void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
+                               ram_addr_t offset, size_t len,
+                               const target_ulong *vaddr);
 void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size);
 void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                           uintptr_t pc);
-int  cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
-        hwaddr *ret_paddr, int *prot, uintptr_t pc);
-int  cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
-        hwaddr *ret_paddr, uintptr_t pc);
+bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
+                   hwaddr *ret_paddr, int *prot, uintptr_t pc);
+int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
+                       hwaddr *ret_paddr, uintptr_t pc);
 void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
                    hwaddr *ret_paddr, uintptr_t pc);
 #ifdef CHERI_MAGIC128
-int  cheri_tag_get_m128(CPUArchState *env, target_ulong vaddr, int reg,
+bool cheri_tag_get_m128(CPUArchState *env, target_ulong vaddr, int reg,
         uint64_t *tps, uint64_t *length, hwaddr *ret_paddr, int *prot, uintptr_t pc);
 void cheri_tag_set_m128(CPUArchState *env, target_ulong vaddr, int reg,
-        uint8_t tag, uint64_t tps, uint64_t length, hwaddr *ret_paddr, uintptr_t pc);
+        uint8_t tag, uint64_t tps, uint64_t length, uintptr_t pc);
 #endif /* CHERI_MAGIC128 */
 #endif /* TARGET_CHERI */

@@ -3036,6 +3036,9 @@ static void invalidate_and_set_dirty(MemoryRegion *mr, hwaddr addr,
                                      hwaddr length)
 {
     uint8_t dirty_log_mask = memory_region_get_dirty_log_mask(mr);
+#if defined(TARGET_CHERI)
+    ram_addr_t ram_offset = addr;
+#endif
     addr += memory_region_get_ram_addr(mr);
 
     /* No early return if dirty_log_mask is or becomes 0, because
@@ -3055,7 +3058,10 @@ static void invalidate_and_set_dirty(MemoryRegion *mr, hwaddr addr,
 
 #if defined(TARGET_CHERI)
     /* Invalidate the CHERI memory tags. */
-    cheri_tag_phys_invalidate(NULL, addr, length, NULL);
+    if (mr->ram_block) {
+        cheri_tag_phys_invalidate(NULL, mr->ram_block, ram_offset, length,
+                                  NULL);
+    }
 #endif
 }
 

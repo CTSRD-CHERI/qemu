@@ -27,6 +27,7 @@
 #include "exec/helper-proto.h"
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
+#include "exec/ramblock.h"
 #include "exec/memop.h"
 #ifdef CONFIG_MIPS_LOG_INSTR
 #include "exec/log.h"
@@ -2175,12 +2176,9 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
 #ifdef TARGET_CHERI
             // We also need to invalidate the tags bits written by the memset
             // qemu_ram_addr_from_host is faster than using the v2r routines in cheri_tag_invalidate
-            ram_addr_t ram_addr = qemu_ram_addr_from_host(hostaddr);
-            if (ram_addr != RAM_ADDR_INVALID) {
-                cheri_tag_phys_invalidate(env, ram_addr, l_adj_bytes, NULL);
-            } else {
-                cheri_tag_invalidate(env, dest, l_adj_bytes, ra);
-            }
+            ram_addr_t ram_offset;
+            RAMBlock *block = qemu_ram_block_from_host(hostaddr, false, &ram_offset);
+            cheri_tag_phys_invalidate(env, block, ram_offset, l_adj_bytes, &dest);
 #endif
             if (unlikely(log_instr)) {
                 // TODO: dump as a single big block?

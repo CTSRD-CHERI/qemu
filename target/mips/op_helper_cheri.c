@@ -911,7 +911,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     mem_buffer.u64s[2] = cpu_ldq_data_ra(env, vaddr + 0, retpc); /* base */
     mem_buffer.u64s[1] = cpu_ldq_data_ra(env, vaddr + 8, retpc); /* cursor */
     /* Load the two magic values */
-    target_ulong tag = cheri_tag_get_m128(
+    bool tag = cheri_tag_get_m128(
         env, vaddr, cd, &mem_buffer.u64s[0] /* tps */,
         &mem_buffer.u64s[3] /* length */, physaddr, &prot, retpc);
 
@@ -951,7 +951,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     /* Store the "magic" data with the tags */
     cheri_tag_set_m128(env, vaddr, cs, csp->cr_tag,
                        mem_buffer.u64s[0] /* tps */,
-                       mem_buffer.u64s[3] /* length */, NULL, retpc);
+                       mem_buffer.u64s[3] /* length */, retpc);
     env->statcounters_cap_write++;
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;
@@ -1054,7 +1054,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     mem_buffer.u64s[2] = cpu_ldq_data_ra(env, vaddr + 16, retpc); /* base */
     mem_buffer.u64s[3] = cpu_ldq_data_ra(env, vaddr + 24, retpc); /* length */
 
-    target_ulong tag = cheri_tag_get(env, vaddr, cd, physaddr, &prot, retpc);
+    bool tag = cheri_tag_get(env, vaddr, cd, physaddr, &prot, retpc);
     tag = cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
     env->statcounters_cap_read++;
     if (tag)

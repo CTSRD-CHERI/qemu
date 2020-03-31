@@ -22,6 +22,8 @@
 #ifndef CONFIG_USER_ONLY
 #include "cpu-common.h"
 
+struct CheriTagMem; // opaque struct
+
 struct RAMBlock {
     struct rcu_head rcu;
     struct MemoryRegion *mr;
@@ -43,6 +45,9 @@ struct RAMBlock {
     unsigned long *bmap;
     /* bitmap of already received pages in postcopy */
     unsigned long *receivedmap;
+
+    /* Bitmap of CHERI tag bits */
+    struct CheriTagMem *cheri_tags;
 
     /*
      * bitmap to track already cleared dirty bitmap.  When the bit is

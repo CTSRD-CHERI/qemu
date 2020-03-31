@@ -1116,7 +1116,7 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
         *cursor = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
     int prot;
-    target_ulong tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
+    bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
     if (tag) {
         tag = cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
         if (unlikely(!tag &&
