@@ -968,10 +968,10 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
     if (!QEMU_IS_ALIGNED(addr, size)) {
 #if defined(CHERI_UNALIGNED)
         const char *access_type =
-            (required_perms == CAP_PERM_STORE | CAP_PERM_LOAD)
+            (required_perms == (CAP_PERM_STORE | CAP_PERM_LOAD))
                 ? "RMW"
                 : ((required_perms == CAP_PERM_STORE) ? "store" : "load");
-        qemu_log_mask(CPU_LOG_INSTR,
+        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
                       "Allowing unaligned %d-byte %s of "
                       "address 0x%" PRIx64 "\n",
                       size, access_type, addr);
@@ -1080,7 +1080,7 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
 
 #if defined(CHERI_128) && QEMU_USE_COMPRESSED_CHERI_CAPS
 
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
 /*
  * Print capability load from memory to log file.
  */
@@ -1108,7 +1108,7 @@ static inline void dump_cap_store(CPUArchState *env, uint64_t addr, uint64_t pes
                  addr, tag, pesbt, cursor);
     }
 }
-#endif // CONFIG_MIPS_LOG_INSTR
+#endif // CONFIG_CHERI_LOG_INSTR
 
 bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
                               uint64_t *cursor, uint32_t cb,
@@ -1132,7 +1132,7 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
         *pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
                 CC128_NULL_XOR_MASK;
         *cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
         // cpu_ldq_data_ra() performs the read logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE,
@@ -1168,7 +1168,7 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
     // env->rvfi_dii_trace.rvfi_dii_mem_rdata = cursor;
     env->rvfi_dii_trace.rvfi_dii_mem_rmask = 0xff;
 #endif
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
     /* Log memory read, if needed. */
     if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE,
                                        vaddr))) {
@@ -1238,7 +1238,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         // Fast path, host address in TLB
         stq_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
         stq_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
         // cpu_stq_data_ra() performs the write logging, with raw memory
         // accesses we have to do it manually
         if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
@@ -1258,7 +1258,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     env->rvfi_dii_trace.rvfi_dii_mem_wmask = 0xff;
 #endif
 
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
     /* Log memory cap write, if needed. */
     if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
         /* Log memory cap write, if needed. */

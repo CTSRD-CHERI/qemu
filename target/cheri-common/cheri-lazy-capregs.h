@@ -179,7 +179,7 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 }
 
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 extern const char * const cheri_gp_regnames[];
 #define log_changed_capreg(env, name, newval) \
     qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env), \

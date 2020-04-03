@@ -580,14 +580,9 @@ static inline target_ulong get_CP0_ErrorEPC(CPUMIPSState *env)
 #endif
 }
 
-static inline unsigned cheri_get_asid(CPUMIPSState *env) {
-    uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
-    return ASID;
-}
-
 void set_CP0_EPC(CPUMIPSState *env, target_ulong value);
 void set_CP0_ErrorEPC(CPUMIPSState *env, target_ulong value);
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 void r4k_dump_tlb(CPUMIPSState *env, int idx);
 #endif
 void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vaddr);

@@ -22,6 +22,7 @@
 
 #include "hw/core/cpu.h"
 #include "exec/cpu-defs.h"
+#include "exec/cpu_log_instr.h"
 #include "qemu/units.h"
 #include "fpu/softfloat-types.h"
 #include "rvfi_dii.h"
@@ -592,5 +593,26 @@ riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
 }
 // Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets
 #define cpu_get_tb_cpu_state_6 riscv_cpu_get_tb_cpu_state
+
+#ifdef CONFIG_CHERI_LOG_INSTR
+/* TODO(am2419): Document these as required to support a new target.
+ * New common log API arch-specific helpers.
+ */
+static inline bool cpu_in_user_mode(CPURISCVState *env)
+{
+    return false;
+}
+
+static inline cpu_log_buffer_t *cpu_get_log_buffer(CPURISCVState *env)
+{
+    return NULL;
+}
+
+// TODO(am2419) should probably rename as cpu_get_asid()
+static inline unsigned cheri_get_asid(CPURISCVState *env) {
+    uint16_t ASID = 0; // TODO: implement?
+    return ASID;
+}
+#endif
 
 #endif /* RISCV_CPU_H */

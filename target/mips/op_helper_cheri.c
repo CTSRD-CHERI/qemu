@@ -131,7 +131,10 @@ static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *c
 
 static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) {
     if (!cap_exactly_equal(&env->active_tc.CHWR.DDC, new_ddc)) {
-        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_MMU, "Flushing TCG TLB since $ddc is changing to " PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
+        qemu_log_mask_and_addr(
+            CPU_LOG_INSTR | CPU_LOG_MMU, cpu_get_recent_pc(env),
+            "Flushing TCG TLB since $ddc is changing to " PRINT_CAP_FMTSTR "\n",
+            PRINT_CAP_ARGS(new_ddc));
         // TODO: in the future we may want to move $ddc to the guest -> host addr
         // translation. This would allow skipping $ddc checks for all pages that
         // are fully covered by $ddc for the second load/store check
@@ -141,7 +144,10 @@ static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) 
         // XXX: tlb_flush(env_cpu(env));
         env->active_tc.CHWR.DDC = *new_ddc;
     } else {
-        qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_MMU, "Installing same $ddc again, not flushing TCG TLB: " PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
+        qemu_log_mask_and_addr(
+            CPU_LOG_INSTR | CPU_LOG_MMU, cpu_get_recent_pc(env),
+            "Installing same $ddc again, not flushing TCG TLB: " PRINT_CAP_FMTSTR "\n",
+            PRINT_CAP_ARGS(new_ddc));
     }
 }
 
@@ -689,10 +695,11 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdES, addr);
     } else {
-        qemu_log_mask(CPU_LOG_INSTR, "cstorecond: linkedflag = %d,"
-                      " addr=" TARGET_FMT_plx "lladdr=" TARGET_FMT_plx
-                      " CP0_LLaddr=" TARGET_FMT_plx "\n",
-                      (int)env->linkedflag, addr, env->lladdr, env->CP0_LLAddr);
+        qemu_log_mask_and_addr(
+            CPU_LOG_INSTR, cpu_get_recent_pc(env),
+            "cstorecond: linkedflag = %d," " addr=" TARGET_FMT_plx
+            "lladdr=" TARGET_FMT_plx " CP0_LLaddr=" TARGET_FMT_plx "\n",
+            (int)env->linkedflag, addr, env->lladdr, env->CP0_LLAddr);
         // Can't do this here.  It might miss in the TLB.
         // cheri_tag_invalidate(env, addr, size);
         // Also, rd is set by the actual store conditional operation.
@@ -743,10 +750,11 @@ target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, 
 {
     target_ulong retpc = GETPC();
     target_ulong vaddr = get_cscc_addr(env, cs, cb, retpc);
-    qemu_log_mask(CPU_LOG_INSTR,
-                  "cscc: linkedflag = %d, addr=" TARGET_FMT_plx
-                  " lladdr=" TARGET_FMT_plx " CP0_LLaddr=" TARGET_FMT_plx "\n",
-                  (int)env->linkedflag, vaddr, env->lladdr, env->CP0_LLAddr);
+    qemu_log_mask_and_addr(
+        CPU_LOG_INSTR, cpu_get_recent_pc(env),
+        "cscc: linkedflag = %d, addr=" TARGET_FMT_plx
+        " lladdr=" TARGET_FMT_plx " CP0_LLaddr=" TARGET_FMT_plx "\n",
+        (int)env->linkedflag, vaddr, env->lladdr, env->CP0_LLAddr);
     /* If linkedflag is zero then don't store capability. */
     if (!env->linkedflag || env->lladdr != vaddr)
         return 0;
@@ -787,7 +795,7 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
     env->linkedflag = 1; // FIXME: remove
 }
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 
 void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
         cap_register_t *old_reg, const char* name)
@@ -840,11 +848,11 @@ void dump_changed_cop2(CPUArchState *env, TCState *cur) {
     }
 }
 
-#endif // CONFIG_MIPS_LOG_INSTR
+#endif // CONFIG_CHERI_LOG_INSTR
 
 #ifdef CHERI_128
 #elif defined(CHERI_MAGIC128)
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 /*
  * Print capability load from memory to log file.
  */
@@ -872,7 +880,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor, uint64_t base,
                  addr, tag, cursor, base);
     }
 }
-#endif // CONFIG_MIPS_LOG_INSTR
+#endif // CONFIG_CHERI_LOG_INSTR
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
@@ -900,7 +908,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     // XOR with -1 so that NULL is zero in memory, etc.
     decompress_256cap(mem_buffer, &ncd, tag);
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         dump_cap_load(vaddr, cap_get_cursor(&ncd), ncd.cr_base, tag);
@@ -936,7 +944,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     cpu_stq_data_ra(env, vaddr, mem_buffer.u64s[2], retpc); /* base */
     cpu_stq_data_ra(env, vaddr + 8, mem_buffer.u64s[1], retpc);
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         /* Log memory cap write, if needed. */
@@ -949,7 +957,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
 
 #else /* ! CHERI_MAGIC128 */
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 /*
  * Print capability load from memory to log file.
  */
@@ -1013,7 +1021,7 @@ static inline void dump_cap_store_length(uint64_t length)
     }
 }
 
-#endif // CONFIG_MIPS_LOG_INSTR
+#endif // CONFIG_CHERI_LOG_INSTR
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
@@ -1040,7 +1048,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     // XOR with -1 so that NULL is zero in memory, etc.
     decompress_256cap(mem_buffer, &ncd, tag);
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
     /* Log memory reads, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         dump_cap_load_op(vaddr, mem_buffer.u64s[0], tag);
@@ -1054,7 +1062,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     update_capreg(env, cd, &ncd);
 }
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 static inline void cvtrace_dump_cap_cursor(cvtrace_t *cvtrace, uint64_t cursor)
 {
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
@@ -1075,7 +1083,7 @@ static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
         cvtrace->val5 = tswap64(length);
     }
 }
-#endif // CONFIG_MIPS_LOG_INSTR
+#endif // CONFIG_CHERI_LOG_INSTR
 
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
                          target_ulong retpc)
@@ -1105,7 +1113,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     cpu_stq_data_ra(env, vaddr + 16, mem_buffer.u64s[2], retpc);
     cpu_stq_data_ra(env, vaddr + 24, mem_buffer.u64s[3], retpc);
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         uint64_t otype_and_perms = mem_buffer.u64s[0];
