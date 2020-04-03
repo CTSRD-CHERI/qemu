@@ -166,13 +166,13 @@ bool wakeup_suspend_enabled;
 
 int icount_align_option;
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 #ifdef CHERI_DEFAULT_CVTRACE
     int cl_default_trace_format = CPU_LOG_CVTRACE;
 #else
     int cl_default_trace_format = CPU_LOG_INSTR;
 #endif
-#endif /* CONFIG_MIPS_LOG_INSTR */
+#endif /* CONFIG_CHERI_LOG_INSTR */
 #ifdef CONFIG_CHERI
 bool cheri_c2e_on_unrepresentable = false;
 bool cheri_debugger_on_unrepresentable = false;
@@ -1755,7 +1755,7 @@ static void version(void)
 #endif
     printf("Built with C0 as NULL register\n");
 #endif  // TARGET_CHERI
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
     printf("Built with instruction logging enabled\n");
 #endif
 }
@@ -3711,7 +3711,7 @@ void qemu_init(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
             case QEMU_OPTION_cheri_trace_format:
                 if (strcmp(optarg, "text") == 0)
                     cl_default_trace_format = CPU_LOG_INSTR;
@@ -3722,7 +3722,7 @@ void qemu_init(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-#endif /* CONFIG_MIPS_LOG_INSTR */
+#endif /* CONFIG_CHERI_LOG_INSTR */
 #endif /* CONFIG_CHERI */
 
 #ifdef CONFIG_CHERI

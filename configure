@@ -393,7 +393,7 @@ rdma=""
 pvrdma=""
 gprof="no"
 debug_tcg="no"
-mips_log_instr="yes"
+cheri_log_instr="yes"
 rvfi_dii="no"
 debug="no"
 sanitizers="no"
@@ -1145,9 +1145,9 @@ for opt do
   ;;
   --disable-debug-tcg) debug_tcg="no"
   ;;
-  --enable-mips-log-instr) mips_log_instr="yes"
+  --enable-cheri-log-instr) cheri_log_instr="yes"
   ;;
-  --disable-mips-log-instr) mips_log_instr="no"
+  --disable-cheri-log-instr) cheri_log_instr="no"
   ;;
   --enable-rvfi-dii) rvfi_dii="yes"
   ;;
@@ -6831,8 +6831,8 @@ fi
 if test "$debug_tcg" = "yes" ; then
   echo "CONFIG_DEBUG_TCG=y" >> $config_host_mak
 fi
-if test "$mips_log_instr" = "yes" ; then
-  echo "CONFIG_MIPS_LOG_INSTR=y" >> $config_host_mak
+if test "$cheri_log_instr" = "yes" ; then
+  echo "CONFIG_CHERI_LOG_INSTR=y" >> $config_host_mak
 fi
 if test "$rvfi_dii" = "yes" ; then
   echo "CONFIG_RVFI_DII=y" >> $config_host_mak

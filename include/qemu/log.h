@@ -16,7 +16,6 @@ extern QemuLogFile *qemu_logfile;
 
 /* 
  * The new API:
- *
  */
 
 /* Log settings checking macros: */

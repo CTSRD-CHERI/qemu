@@ -51,11 +51,6 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
     riscv_raise_exception(env, RISCV_EXCP_CHERI, hostpc);
 }
 
-static inline unsigned cheri_get_asid(CPUArchState *env) {
-    uint16_t ASID = 0; // TODO: implement?
-    return ASID;
-}
-
 static inline bool
 cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
                              int cb, const cap_register_t* cbp,

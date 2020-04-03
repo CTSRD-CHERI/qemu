@@ -169,7 +169,7 @@ void *HELPER(lookup_tb_ptr)(CPUArchState *env)
     return tb->tc.ptr;
 }
 
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
 /*
  * Print the instruction to log file.
  */

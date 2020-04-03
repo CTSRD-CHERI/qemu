@@ -38,8 +38,9 @@
 #include "exec/log.h"
 #include "cpu.h"
 #include "internal.h"
+#include "exec/log_instr.h"
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 
 extern int cl_default_trace_format;
 
@@ -51,59 +52,30 @@ extern int cl_default_trace_format;
 #define user_trace_dbg(...)
 #endif
 
+/* TODO(am2419): move helpers to cheri_log */
+
 /* Start instruction trace logging. */
 void helper_instr_start(CPUMIPSState *env, target_ulong pc)
 {
-    /* Don't turn on tracing if user-mode only is selected and we are in the kernel */
-    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && !IN_USERSPACE(env)) {
-        user_trace_dbg("Delaying tracing request at " TARGET_FMT_lx
-                       " until next switch to user mode, ASID %u\n",
-                       pc, cheri_get_asid(env));
-    } else {
-        bool was_off = !qemu_loglevel_mask(cl_default_trace_format);
-        qemu_set_log(qemu_loglevel | cl_default_trace_format);
-        if (was_off && !qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-            qemu_log("Requested instruction logging @ " TARGET_FMT_plx
-                     " ASID %u\n", pc, cheri_get_asid(env));
-        }
-    }
+    qemu_log_instr_start(env, cl_default_trace_format, pc);
 }
 
 /* Stop instruction trace logging. */
 void helper_instr_stop(CPUMIPSState *env, target_ulong pc)
 {
-    bool was_on = qemu_loglevel_mask(cl_default_trace_format);
-    qemu_set_log(qemu_loglevel & ~(cl_default_trace_format));
-    if (was_on && !qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        qemu_log("Disabled instruction logging @ " TARGET_FMT_plx " ASID %u\n",
-                 pc, cheri_get_asid(env));
-    }
+    qemu_log_instr_stop(env, cl_default_trace_format, pc);
 }
 
 /* Set instruction trace logging to user mode only. */
 void helper_instr_start_user_mode_only(CPUMIPSState *env, target_ulong pc)
 {
-    /*
-     * Make sure that qemu_loglevel doesn't get set to zero when we
-     * suspend tracing because otherwise qemu will close the logfile.
-     */
-    user_trace_dbg("User-mode only tracing enabled at " TARGET_FMT_lx
-                   ", ASID %u\n", pc, cheri_get_asid(env));
-    /* Disable tracing if we are not currently in user mode */
-    if (!IN_USERSPACE(env)) {
-        qemu_set_log((qemu_loglevel & ~cl_default_trace_format) | CPU_LOG_USER_ONLY);
-    } else {
-        qemu_set_log(qemu_loglevel | cl_default_trace_format | CPU_LOG_USER_ONLY);
-    }
+    qemu_log_instr_start(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
 }
 
 /* Stop instruction trace logging to user mode only. */
 void helper_instr_stop_user_mode_only(CPUMIPSState *env, target_ulong pc)
 {
-    /* Disable user-mode only and restore the previous tracing level */
-    user_trace_dbg("User-mode only tracing disabled at " TARGET_FMT_lx
-                   ", ASID %u\n", pc, cheri_get_asid(env));
-    qemu_set_log(qemu_loglevel & ~CPU_LOG_USER_ONLY);
+    qemu_log_instr_stop(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
 }
 
 void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vaddr) {
@@ -242,7 +214,7 @@ void helper_log_value(CPUMIPSState *env, const void* ptr, uint64_t value)
  */
 void helper_mips_cvtrace_log_instruction(CPUMIPSState *env, target_ulong pc)
 {
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+    if (unlikely(should_log_instr(env, CPU_LOG_CVTRACE))) {
         int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
         static uint16_t cycles = 0;  /* XXX */
         uint32_t opcode;
@@ -665,25 +637,25 @@ static void dump_changed_regs(CPUMIPSState *env)
  */
 void helper_dump_changed_state(CPUMIPSState *env)
 {
-    const char* new_mode = mips_cpu_get_changed_mode(env);
-    /* Testing pointer equality is fine, it always points to the same constants */
-    if (new_mode != env->last_mode) {
-        env->last_mode = new_mode;
-        qemu_log_mask(CPU_LOG_INSTR, "--- %s\n", new_mode);
-    }
+    if (unlikely(should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+        const char* new_mode = mips_cpu_get_changed_mode(env);
+        /* Testing pointer equality is fine, it always points to the same constants */
+        if (new_mode != env->last_mode) {
+            env->last_mode = new_mode;
+            qemu_log_mask(CPU_LOG_INSTR, "--- %s\n", new_mode);
+        }
 
-    if (qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE)) {
         /* Print changed state: GPR, Cap. */
         dump_changed_regs(env);
-    }
 
-    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-        /* Print change state: HI/LO COP0 (not included in CVTRACE) */
-        dump_changed_cop0(env);
+        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+            /* Print change state: HI/LO COP0 (not included in CVTRACE) */
+            dump_changed_cop0(env);
+        }
     }
 }
 
-#endif // CONFIG_MIPS_LOG_INSTR
+#endif // CONFIG_CHERI_LOG_INSTR
 
 static void simple_dump_state(CPUMIPSState *env, FILE *f,
                               fprintf_function cpu_fprintf)

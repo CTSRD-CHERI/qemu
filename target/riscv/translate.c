@@ -256,7 +256,7 @@ static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t)
 #endif
         gen_rvfi_dii_set_field_const(rd_addr, reg_num_dst);
         gen_rvfi_dii_set_field(rd_wdata, t);
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
         // Log GPR writes here
         if (unlikely(ctx->base.log_instr)) {
             TCGv tpc = tcg_const_tl(ctx->base.pc_next);
@@ -281,7 +281,7 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
 #endif
         gen_rvfi_dii_set_field_const(rd_addr, reg_num_dst);
         gen_rvfi_dii_set_field_const(rd_wdata, value);
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
         // Log GPR writes here
         if (unlikely(ctx->base.log_instr)) {
             TCGv tpc = tcg_const_tl(ctx->base.pc_next);

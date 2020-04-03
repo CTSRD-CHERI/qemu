@@ -1,8 +1,12 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2020 Alex Richardson <Alexander.Richardson@cl.cam.ac.uk>
+ * Copyright (c) 2020 Alfredo Mazzinghi
  * All rights reserved.
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory (Department of Computer Science and
@@ -30,47 +34,11 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#pragma once
 
-#include "cpu.h"
-#include "tcg/tcg.h"
-#include "tcg/tcg-op.h"
-#include "exec/log.h"
-#ifdef TARGET_CHERI
-#include "cheri-lazy-capregs.h"
-#endif
+/*
+ * All logging helpers shared between MIPS and RISCV are defined here.
+ */
 
-static inline void gpr_set_int_value(CPUArchState *env, unsigned reg,
-                                     target_ulong value)
-{
-    assert(reg != 0);
-#ifdef TARGET_CHERI
-    update_capreg_to_intval(env, reg, value);
-#else
-    env->gpr[reg] = value;
-#endif
-#if defined(CONFIG_CHERI_LOG_INSTR)
-    helper_log_gpr_write(reg, value, cpu_get_recent_pc(env));
-#endif
-}
-
-static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
-#ifdef TARGET_CHERI
-    return env->gpcapregs.decompressed[reg]._cr_cursor;
-#else
-    return env->gpr[reg];
-#endif
-}
-
-static inline void riscv_update_pc(CPURISCVState *env, target_ulong pc_addr,
-                                   bool can_be_unrepresentable)
-{
-#ifdef TARGET_CHERI
-    cheri_update_pcc(&env->PCC, pc_addr, can_be_unrepresentable);
-#else
-    env->pc = pc_addr;
-#endif
-#ifdef CONFIG_DEBUG_TCG
-    env->_pc_is_current = true;
-#endif
-}
+/* DEF_HELPER_1(qemu_log_instr_start, void, env) */
+/* DEF_HELPER_1(qemu_log_instr_stop, void, env) */
+DEF_HELPER_1(qemu_log_instr_commit, void, env)

@@ -33,7 +33,7 @@ void translator_loop_temp_check(DisasContextBase *db)
     }
 }
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 extern int cl_default_trace_format;
 #endif
 #define DEBUG_INSTR_LOGGING 0
@@ -64,7 +64,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #endif
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
     // Note: changes to the instruction logging flags result in a call to
     // tb_flush so we can do the logging checks at translate time.
     bool should_log_instr =
@@ -127,7 +127,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         }
 #endif
         ops->insn_start(db, cpu);
-#if defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(CONFIG_CHERI_LOG_INSTR)
         if (unlikely(should_log_instr)) {
             TCGv tpc = tcg_const_tl(db->pc_next);
             gen_helper_log_instruction(cpu_env, tpc);

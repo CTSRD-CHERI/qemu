@@ -5,6 +5,8 @@
 #include "exec/cpu-defs.h"
 #include "fpu/softfloat-types.h"
 #include "mips-defs.h"
+#include "exec/log.h"
+#include "exec/cpu_log_instr.h"
 
 #ifdef TARGET_CHERI
 #include "cheri_defs.h"
@@ -135,35 +137,6 @@ typedef struct mips_def_t mips_def_t;
 #define MIPS_DSP_ACC 4
 #define MIPS_KSCRATCH_NUM 6
 #define MIPS_MAAR_MAX 16 /* Must be an even number. */
-
-#ifdef CONFIG_MIPS_LOG_INSTR
-struct cvtrace {
-    uint8_t version;
-#define CVT_GPR     1   /* GPR change (val2) */
-#define CVT_LD_GPR  2   /* Load into GPR (val2) from address (val1) */
-#define CVT_ST_GPR  3   /* Store from GPR (val2) to address (val1) */
-#define CVT_NO_REG  4   /* No register is changed. */
-#define CVT_CAP     11  /* Cap change (val2,val3,val4,val5) */
-#define CVT_LD_CAP  12  /* Load Cap (val2,val3,val4,val5) from addr (val1) */
-#define CVT_ST_CAP  13  /* Store Cap (val2,val3,val4,val5) to addr (val1) */
-    uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
-    uint16_t cycles;    /* Currently not used. */
-    uint32_t inst;      /* Encoded instruction. */
-    uint64_t pc;        /* PC value of instruction. */
-    uint64_t val1;      /* val1 is used for memory address. */
-    uint64_t val2;      /* val2, val3, val4, val5 are used for reg content. */
-    uint64_t val3;
-    uint64_t val4;
-    uint64_t val5;
-    uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
-    uint8_t asid;       /* Address Space ID (i.e. CP0_TCStatus & 0xff) */
-} __attribute__((packed));
-typedef struct cvtrace cvtrace_t;
-
-/* Version 3 Cheri Stream Trace header info */
-#define CVT_QEMU_VERSION    (0x80U + 3)
-#define CVT_QEMU_MAGIC      "CheriTraceV03"
-#endif // CONFIG_MIPS_LOG_INSTR
 
 #if defined(TARGET_CHERI)
 
@@ -1251,11 +1224,11 @@ struct CPUMIPSState {
 
 #endif /* TARGET_CHERI */
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 #define TRACE_MODE_USER "User mode"
     const char *last_mode;
 #define IN_USERSPACE(env) ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM)
-#endif /* CONFIG_MIPS_LOG_INSTR */
+#endif /* CONFIG_CHERI_LOG_INSTR */
 
     /* Fields up to this point are cleared by a CPU reset */
     struct {} end_reset_fields;
@@ -1271,7 +1244,7 @@ struct CPUMIPSState {
     QEMUTimer *timer; /* Internal timer */
     struct MIPSITUState *itu;
     MemoryRegion *itc_tag; /* ITC Configuration Tags */
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
     /*
      * Processor state after the last instruction.
      * Used for instruction tracing.
@@ -1285,7 +1258,9 @@ struct CPUMIPSState {
 #endif // TARGET_CHERI
 
     cvtrace_t cvtrace;
-#endif /* CONFIG_MIPS_LOG_INSTR */
+    /* New common log API information */
+    cpu_log_buffer_t log_info;
+#endif /* CONFIG_CHERI_LOG_INSTR */
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
 
@@ -1427,7 +1402,7 @@ void itc_reconfigure(struct MIPSITUState *tag);
 /* helper.c */
 target_ulong exception_resume_pc(CPUMIPSState *env);
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     target_ulong value);
 #ifdef TARGET_CHERI
@@ -1435,7 +1410,7 @@ void dump_changed_capreg(CPUMIPSState *env, const cap_register_t *cr,
                          cap_register_t *old_reg, const char* name);
 void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */
-#endif /* CONFIG_MIPS_LOG_INSTR */
+#endif /* CONFIG_CHERI_LOG_INSTR */
 
 static inline void
 mips_cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
@@ -1516,6 +1491,38 @@ static inline void mips_update_pc_impl(TCState *state, target_ulong pc_addr, boo
 static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr, bool can_be_unrepresenable)
 {
     mips_update_pc_impl(&env->active_tc, pc_addr, can_be_unrepresenable);
+}
+
+#ifdef CONFIG_CHERI_LOG_INSTR
+/* TODO(am2419): Document these as required to support a new target.
+ * New common log API arch-specific helpers.
+ */
+static inline bool cpu_in_user_mode(CPUMIPSState *env)
+{
+    return ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM);
+}
+
+static inline cpu_log_buffer_t *cpu_get_log_buffer(CPUMIPSState *env)
+{
+    return (&env->log_info);
+}
+
+// TODO(am2419) should probably rename as cpu_get_asid()
+static inline unsigned cheri_get_asid(CPUMIPSState *env) {
+    uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
+    return ASID;
+}
+#endif
+
+static inline bool should_log_instr(CPUArchState *env, int log_mask) {
+    if (likely(!(qemu_loglevel_mask(log_mask))))
+        return false;
+
+    // Try not to dump all registers when -dfilter is enabled
+    // Note: we check PC in -dfilter
+    if (likely(!qemu_log_in_addr_range(cpu_get_recent_pc(env))))
+        return false;
+    return true;
 }
 
 #if defined(TARGET_CHERI)

@@ -1209,7 +1209,7 @@ static inline void set_badinstr_registers(CPUMIPSState *env)
 }
 #endif
 
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 extern void helper_dump_changed_state(CPUMIPSState *env);
 #endif
 
@@ -1236,8 +1236,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
     int cause = -1;
     const char *name = "";
 
-    if ((qemu_loglevel_mask(CPU_LOG_INT) || qemu_loglevel_mask(CPU_LOG_INSTR))
-        && cs->exception_index != EXCP_EXT_INTERRUPT) {
+    if (should_log_instr(env, CPU_LOG_INT | CPU_LOG_INSTR) &&
+        cs->exception_index != EXCP_EXT_INTERRUPT) {
         if (cs->exception_index < 0 || cs->exception_index > EXCP_LAST) {
             name = "unknown";
         } else {
@@ -1255,12 +1255,12 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  PRINT_CAP_ARGS(&env->active_tc.CHWR.EPCC));
 #endif
     }
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE |
                                     CPU_LOG_USER_ONLY))) {
         helper_dump_changed_state(env);
     }
-#endif /* CONFIG_MIPS_LOG_INSTR */
+#endif /* CONFIG_CHERI_LOG_INSTR */
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&
         (env->hflags & MIPS_HFLAG_DM)) {
         cs->exception_index = EXCP_DINT;
@@ -1577,8 +1577,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #endif
 #endif /* TARGET_CHERI */
 
-#ifdef CONFIG_MIPS_LOG_INSTR
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+#ifdef CONFIG_CHERI_LOG_INSTR
+    if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
         if (cs->exception_index == EXCP_EXT_INTERRUPT)
             qemu_log("--- Interrupt, vector " TARGET_FMT_lx "\n",
                      PC_ADDR(env));
@@ -1586,11 +1586,11 @@ void mips_cpu_do_interrupt(CPUState *cs)
             qemu_log("--- Exception #%u: %s, vector "
                     TARGET_FMT_lx "\n", cause, name, PC_ADDR(env));
     }
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
+    if (unlikely(should_log_instr(env, CPU_LOG_CVTRACE))) {
         env->cvtrace.exception = cause;
     }
 #ifdef TARGET_CHERI
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+    if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
          // Print the new PCC value for debugging traces.
          cap_register_t tmp;
          // We use a null cap as oldreg so that we always print it.
@@ -1598,15 +1598,15 @@ void mips_cpu_do_interrupt(CPUState *cs)
          dump_changed_capreg(env, cheri_get_current_pcc(env), &tmp, "PCC");
     }
 #endif /* TARGET_CHERI */
-#endif /* CONFIG_MIPS_LOG_INSTR */
-    if (qemu_loglevel_mask(CPU_LOG_INT | CPU_LOG_INSTR)
+#endif /* CONFIG_CHERI_LOG_INSTR */
+    if (should_log_instr(env, CPU_LOG_INT | CPU_LOG_INSTR)
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
         qemu_log("%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
                  "    S %08x C %08x A " TARGET_FMT_lx " D " TARGET_FMT_lx "\n",
                  __func__, PC_ADDR(env), get_CP0_EPC(env), cause,
                  env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
                  env->CP0_DEPC);
-#if defined(TARGET_CHERI) && defined(CONFIG_MIPS_LOG_INSTR)
+#if defined(TARGET_CHERI) && defined(CONFIG_CHERI_LOG_INSTR)
         qemu_log("ErrorEPC " TARGET_FMT_lx "\n", get_CP0_ErrorEPC(env));
         cap_register_t tmp;
         // We use a null cap as oldreg so that we always print it.
@@ -1618,12 +1618,12 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #endif
     cs->exception_index = EXCP_NONE;
-#ifdef CONFIG_MIPS_LOG_INSTR
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE |
-                                    CPU_LOG_USER_ONLY))) {
+#ifdef CONFIG_CHERI_LOG_INSTR
+    if (unlikely(should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE |
+                                  CPU_LOG_USER_ONLY))) {
         helper_dump_changed_state(env);
     }
-#endif /* CONFIG_MIPS_LOG_INSTR */
+#endif /* CONFIG_CHERI_LOG_INSTR */
 }
 
 bool mips_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
@@ -1760,10 +1760,9 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env, MipsExcp exception,
         }
     }
 #endif
-    qemu_log_mask(CPU_LOG_INT | CPU_LOG_INSTR, "%s: %s %d\n", __func__,
-                  exception <= EXCP_LAST ? excp_names[exception]
-                                         : "unknown excp",
-                  error_code);
+    if (unlikely(should_log_instr(env, CPU_LOG_INT | CPU_LOG_INSTR)))
+        qemu_log("%s: %s %d\n", __func__, exception <= EXCP_LAST ?
+                 excp_names[exception] : "unknown excp", error_code);
     cs->exception_index = exception;
     env->error_code = error_code;
 

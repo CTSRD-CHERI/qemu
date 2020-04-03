@@ -29,7 +29,7 @@
 #include "exec/cpu_ldst.h"
 #include "exec/ramblock.h"
 #include "exec/memop.h"
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_CHERI_LOG_INSTR
 #include "exec/log.h"
 #endif
 #ifdef TARGET_CHERI
@@ -850,7 +850,7 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
     r4k_invalidate_tlb(env, idx, 0);
     r4k_fill_tlb(env, idx);
 #ifdef CONFIG_MIPS_LOG_INSTR
-    if (qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_MMU))
+    if (should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_MMU))
         r4k_dump_tlb(env, idx);
 #endif /* TARGET_CHERI */
 }
@@ -870,7 +870,7 @@ void r4k_helper_tlbwr(CPUMIPSState *env)
     r4k_invalidate_tlb(env, r, 1);
     r4k_fill_tlb(env, r);
 #ifdef CONFIG_MIPS_LOG_INSTR
-    if (qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_MMU))
+    if (should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_MMU))
         r4k_dump_tlb(env, r);
 #endif /* TARGET_CHERI */
 }
@@ -1108,7 +1108,7 @@ target_ulong helper_ei(CPUMIPSState *env)
 
 static void debug_pre_eret(CPUMIPSState *env)
 {
-    if (qemu_loglevel_mask(CPU_LOG_EXEC | CPU_LOG_INSTR)) {
+    if (should_log_instr(env, CPU_LOG_EXEC | CPU_LOG_INSTR)) {
         qemu_log("ERET: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
                  PC_ADDR(env), get_CP0_EPC(env));
         if (should_use_error_epc(env)) {
@@ -1123,7 +1123,7 @@ static void debug_pre_eret(CPUMIPSState *env)
 
 static void debug_post_eret(CPUMIPSState *env)
 {
-    if (qemu_loglevel_mask(CPU_LOG_EXEC)) {
+    if (should_log_instr(env, CPU_LOG_EXEC)) {
         qemu_log("  =>  PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
                  PC_ADDR(env), get_CP0_EPC(env));
         if (should_use_error_epc(env)) {
@@ -1182,8 +1182,8 @@ static inline void exception_return(CPUMIPSState *env)
     debug_pre_eret(env);
 #ifdef TARGET_CHERI
     // qemu_log_mask(CPU_LOG_INSTR, "%s: PCC <- EPCC\n", __func__);
-#ifdef CONFIG_MIPS_LOG_INSTR
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
+#ifdef CONFIG_CHERI_LOG_INSTR
+    if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
          // Print the new PCC value for debugging traces (compare to null
          // so that we always print it)
          cap_register_t null_cap;
@@ -1194,7 +1194,7 @@ static inline void exception_return(CPUMIPSState *env)
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &null_cap, "ErrorEPCC");
     }
-#endif // CONFIG_MIPS_LOG_INSTR
+#endif // CONFIG_CHERI_LOG_INSTR
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
 #ifdef TARGET_CHERI
@@ -1944,7 +1944,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     const target_ulong dest_past_end = original_dest + original_len;
     const target_ulong src_past_end = original_src + original_len;
 #if 0 // FIXME: for some reason this causes errors
-    const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
+    const bool log_instr = should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     const bool dest_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     const bool src_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     // If neither src nor dest buffer cross a page boundary we can just do an address_space_read+write
@@ -2139,7 +2139,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
     const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len_nitems, ra);
 
     tcg_debug_assert(dest + (len_nitems * pattern_length) == original_dest + original_len_bytes && "continuation broken?");
-    const bool log_instr = qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
+    const bool log_instr = should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     if (len_nitems == 0) {
         goto success; // nothing to do
     }
@@ -2332,7 +2332,9 @@ enum {
 // Magic library function calls:
 void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
 {
-    qemu_log_mask(CPU_LOG_INSTR, "--- Calling magic library function 0x" TARGET_FMT_lx "\n", which);
+    qemu_log_mask_and_addr(
+        CPU_LOG_INSTR, cpu_get_recent_pc(env),
+        "--- Calling magic library function 0x" TARGET_FMT_lx "\n", which);
     // High bits can be used by function to indicate continuation after TLB miss
     switch (which & UINT32_MAX) {
     case MAGIC_NOP_MEMSET:
