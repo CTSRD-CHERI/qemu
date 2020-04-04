@@ -865,6 +865,12 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_bsd_swapoff(arg1);
         break;
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300080
+    case TARGET_FREEBSD_NR_realpathat: /* realpathat(2) (XXX no realpathat()) */
+        ret = do_freebsd_realpathat(arg1, arg2, arg3, arg4, arg5);
+        break;
+#endif
+
         /*
          * stat system calls
          */
