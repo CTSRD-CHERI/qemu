@@ -423,31 +423,50 @@ static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
     return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/a->imm, &gen_helper_store_cap_via_cap);
 }
 
-
 // Atomic ops
-static inline bool trans_lr_cap(DisasContext *ctx, arg_lr_cap *a)
+static inline bool trans_lr_c_impl(DisasContext *ctx, arg_atomic *a,
+                                   cheri_cap_cap_helper *helper)
 {
-    /* In a parallel context, stop the world and single step.  */
     if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
+        // In a parallel context, stop the world and single step.
         gen_helper_exit_atomic(cpu_env);
         ctx->base.is_jmp = DISAS_NORETURN;
     } else {
-        // Note: we ignore the Acquire/release flags since this using
+        // Note: we ignore the Acquire/release flags since using
         // helper_exit_atomic forces exlusive execution so we get SC semantics.
         tcg_debug_assert(a->rs2 == 0);
-        gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_lr_cap);
+        gen_cheri_cap_cap(a->rd, a->rs1, helper);
     }
     return true;
 }
 
+static inline bool trans_lr_c(DisasContext *ctx, arg_lr_c *a)
+{
+    // Note: The capmode dependent address interpretation happens in the
+    // helper and not during translation.
+    return trans_lr_c_impl(ctx, a, &gen_helper_lr_c_modedep);
+}
+
+static inline bool trans_lr_c_ddc(DisasContext *ctx, arg_lr_c_ddc *a)
+{
+    return trans_lr_c_impl(ctx, a, &gen_helper_lr_c_ddc);
+}
+
+static inline bool trans_lr_c_cap(DisasContext *ctx, arg_lr_c_cap *a)
+{
+    return trans_lr_c_impl(ctx, a, &gen_helper_lr_c_cap);
+}
+
 static inline bool trans_sc_cap(DisasContext *ctx, arg_sc_cap *a)
 {
-    /* In a parallel context, stop the world and single step.  */
+    // Note: The capmode dependent address interpretation happens in the
+    // helper and not during translation.
     if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
+        // In a parallel context, stop the world and single step.
         gen_helper_exit_atomic(cpu_env);
         ctx->base.is_jmp = DISAS_NORETURN;
     } else {
-        // Note: we ignore the Acquire/release flags since this using
+        // Note: we ignore the Acquire/release flags since using
         // helper_exit_atomic forces exlusive execution so we get SC semantics.
         gen_cheri_int_cap_cap(ctx, a->rd, a->rs1, a->rs2, &gen_helper_sc_cap);
     }
@@ -467,3 +486,33 @@ static inline bool trans_amoswap_cap(DisasContext *ctx, arg_amoswap_cap *a)
     }
     return true;
 }
+
+// Explicit CAP/DDC atomic ops (no unsigned versions):
+// Reuses gen_lr_impl, defined in trans_rva.inc.c
+static inline bool gen_lr_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
+                               arg_atomic *a, MemOp mop);
+
+#define TRANSLATE_LR_EXPLICIT(name, op)                                        \
+    static bool trans_##name##_ddc(DisasContext *ctx, arg_##name##_ddc *a)     \
+    {                                                                          \
+        TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
+        generate_get_ddc_checked_gpr_plus_offset(                              \
+            addr, ctx, a->rs1, 0, op, &generate_ddc_checked_load_ptr);         \
+        bool result = gen_lr_impl(ctx, addr, a, op);                           \
+        tcg_temp_free_cap_checked(addr);                                       \
+        return result;                                                         \
+    }                                                                          \
+    static bool trans_##name##_cap(DisasContext *ctx, arg_##name##_cap *a)     \
+    {                                                                          \
+        TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
+        generate_cap_load_check_imm(addr, a->rs1, 0, op);                      \
+        bool result = gen_lr_impl(ctx, addr, a, op);                           \
+        tcg_temp_free_cap_checked(addr);                                       \
+        return result;                                                         \
+    }
+TRANSLATE_LR_EXPLICIT(lr_b, MO_SB);
+TRANSLATE_LR_EXPLICIT(lr_h, MO_SW);
+TRANSLATE_LR_EXPLICIT(lr_w, MO_SL);
+#ifdef TARGET_RISCV64
+TRANSLATE_LR_EXPLICIT(lr_d, MO_Q);
+#endif

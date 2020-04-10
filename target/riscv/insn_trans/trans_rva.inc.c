@@ -18,11 +18,10 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-static inline bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
+static inline bool gen_lr_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
+                               arg_atomic *a, MemOp mop)
 {
     /* Put addr in load_res, data in load_val.  */
-    TCGv_cap_checked_ptr addr =
-        get_capmode_dependent_load_addr(ctx, a->rs1, 0, mop);
     if (a->rl) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
     }
@@ -33,8 +32,16 @@ static inline bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
     tcg_gen_mov_cap_checked(load_res, addr);
     gen_set_gpr(a->rd, load_val);
 
-    tcg_temp_free_cap_checked(addr);
     return true;
+}
+
+static inline bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
+{
+    TCGv_cap_checked_ptr addr =
+        get_capmode_dependent_load_addr(ctx, a->rs1, 0, mop);
+    bool result = gen_lr_impl(ctx, addr, a, mop);
+    tcg_temp_free_cap_checked(addr);
+    return result;
 }
 
 static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)

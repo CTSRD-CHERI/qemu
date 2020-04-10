@@ -41,9 +41,14 @@ lcddc       1111101  10111 ..... 000 ..... 1011011 @r2  # Would be lqddc for RV1
 lwucap      1111101  01110 ..... 000 ..... 1011011 @r2  # RV64-only
 ldcap       1111101  01011 ..... 000 ..... 1011011 @r2  # RV64-only
 lccap       1111101  11111 ..... 000 ..... 1011011 @r2  # Would be lqcap for RV128
+lr_d_ddc    1111101  10011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # RV64-only (lr_c_ddc for RV32)
+lr_c_ddc    1111101  10100 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # RV64-only (would be lr_q_ddc for RV128)
+lr_d_cap    1111101  11011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # RV64-only (lr_c_cap for RV32)
+lr_c_cap    1111101  11100 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # RV64-only (would be lr_q_cap for RV128)
+
 
 sdddc       1111100  ..... ..... 000 00011 1011011 @r_2source  # This is scddc (capability store) for RV32
-scddc       1111100  ..... ..... 000 00100 1011011 @r_2source  # Would be lqddc for RV128
+scddc       1111100  ..... ..... 000 00100 1011011 @r_2source  # Would be sqddc for RV128
 
 sdcap       1111100  ..... ..... 000 01011 1011011 @r_2source  # This is sccap (capability store) for RV32
 sccap       1111100  ..... ..... 000 01100 1011011 @r_2source  # Would be sqcap for RV128
@@ -51,6 +56,6 @@ sccap       1111100  ..... ..... 000 01100 1011011 @r_2source  # Would be sqcap 
 lc       ............   ..... 010 ..... 0001111 @i  # def LC_128  : RVInstI<0x2, OPC_MISC_MEM (0b0001111)
 sc       ....... .....  ..... 100 ..... 0100011 @s  # def SC_128  : RVInstS<0x4, OPC_STORE (0b0100011)
 
-lr_cap      00010 . . 00000 ..... 100 ..... 0101111 @atom_ld
+lr_c        00010 . . 00000 ..... 100 ..... 0101111 @atom_ld
 sc_cap      00011 . . ..... ..... 100 ..... 0101111 @atom_st
 amoswap_cap 00001 . . ..... ..... 100 ..... 0101111 @atom_st
