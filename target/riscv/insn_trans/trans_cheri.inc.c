@@ -460,8 +460,6 @@ static inline bool trans_lr_c_cap(DisasContext *ctx, arg_lr_c_cap *a)
 static inline bool trans_sc_c_impl(DisasContext *ctx, arg_atomic *a,
                                      cheri_int_cap_cap_helper *helper)
 {
-    // Note: The capmode dependent address interpretation happens in the
-    // helper and not during translation.
     if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
         // In a parallel context, stop the world and single step.
         gen_helper_exit_atomic(cpu_env);
@@ -493,14 +491,14 @@ static inline bool trans_sc_c_cap(DisasContext *ctx, arg_sc_c_cap *a)
     return trans_sc_c_impl(ctx, a, &gen_helper_sc_c_cap);
 }
 
-static inline bool trans_amoswap_cap(DisasContext *ctx, arg_amoswap_cap *a)
+static inline bool trans_amoswap_c(DisasContext *ctx, arg_amoswap_c *a)
 {
-    /* In a parallel context, stop the world and single step.  */
     if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
+        // In a parallel context, stop the world and single step.
         gen_helper_exit_atomic(cpu_env);
         ctx->base.is_jmp = DISAS_NORETURN;
     } else {
-        // Note: we ignore the Acquire/release flags since this using
+        // Note: we ignore the Acquire/release flags since using
         // helper_exit_atomic forces exlusive execution so we get SC semantics.
         gen_cheri_cap_cap_cap(a->rd, a->rs1, a->rs2, &gen_helper_amoswap_cap);
     }
