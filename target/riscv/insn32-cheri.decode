@@ -100,56 +100,72 @@ cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 @atom_ld_cap_or_ddc .......   ..... ..... ... ..... ....... &atomic aq=1 rl=1 rs2=0  %rs1 %rd
 @atom_st_cap_or_ddc .......   ..... ..... ... ..... ....... &atomic aq=1 rl=1 rd=0   %rs2 %rs1
 
-
 cincoffsetimm ............     ..... 001 ..... 1011011 @i
 csetboundsimm ............     ..... 010 ..... 1011011 @i_unsigned
 
-#### Loads
+### Memory Loads (including Load-Reserved) with Explicit Address Type
+ld_b_ddc       1111101  00000 ..... 000 ..... 1011011 @r2
+ld_h_ddc       1111101  00001 ..... 000 ..... 1011011 @r2
+ld_w_ddc       1111101  00010 ..... 000 ..... 1011011 @r2
+#                       00011 is ld_d_ddc for RV64/ld_c_ddc for RV32
+ld_bu_ddc      1111101  00100 ..... 000 ..... 1011011 @r2
+ld_hu_ddc      1111101  00101 ..... 000 ..... 1011011 @r2
+#                      00110 is ld_wu_ddc for RV64/ld_c_ddc for RV32
+ld_b_cap       1111101  01000 ..... 000 ..... 1011011 @r2
+ld_h_cap       1111101  01001 ..... 000 ..... 1011011 @r2
+ld_w_cap       1111101  01010 ..... 000 ..... 1011011 @r2
+#                       01011 is ldcap for RV64/lccap for RV32
+ld_bu_cap      1111101  01100 ..... 000 ..... 1011011 @r2
+ld_hu_cap      1111101  01101 ..... 000 ..... 1011011 @r2
+#                       01110 is ld_wu_cap for RV64
+#                       01111 would be ld_du_cap for RV128
+lr_b_ddc       1111101  10000 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+lr_h_ddc       1111101  10001 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+lr_w_ddc       1111101  10010 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+#                       10011 is lr_d_ddc for RV64/lr_c_ddc for RV32
+#                       10100 is lr_c_ddc for RV64
+#                       10101 is reserved
+#                       10110 is reserved
+#                       10111 is ld_c_ddc for RV64 (would be ld_du_ddc for RV128)
+lr_b_cap       1111101  11000 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+lr_h_cap       1111101  11001 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+lr_w_cap       1111101  11010 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+#                       11011 is lr_d_cap for RV64/lr_c_cap for RV32
+#                       11100 is lr_c_cap for RV64
+#                       11101 is reserved
+#                       11110 is reserved
+#                       11111 is ld_c_cap for RV64
 
-lbddc       1111101  00000 ..... 000 ..... 1011011 @r2
-lhddc       1111101  00001 ..... 000 ..... 1011011 @r2
-lwddc       1111101  00010 ..... 000 ..... 1011011 @r2
-# 00011 is ldddc for RV64/lcddc for RV32
-lbuddc      1111101  00100 ..... 000 ..... 1011011 @r2
-lhuddc      1111101  00101 ..... 000 ..... 1011011 @r2
-# 00110 is lwuddc for RV64
-# 00111 would be ldudd for RV128
-# 10111 is lcddc for RV64
-
-lbcap       1111101  01000 ..... 000 ..... 1011011 @r2
-lhcap       1111101  01001 ..... 000 ..... 1011011 @r2
-lwcap       1111101  01010 ..... 000 ..... 1011011 @r2
-# 01011 is ldcap for RV64/lccap for RV32
-lbucap      1111101  01100 ..... 000 ..... 1011011 @r2
-lhucap      1111101  01101 ..... 000 ..... 1011011 @r2
-# 01110 is lwucap for RV64
-# 01111 would be lducap for RV128
-# 11111 is lccap for RV64
-lr_b_ddc    1111101  10000 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
-lr_h_ddc    1111101  10001 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
-lr_w_ddc    1111101  10010 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
-
-lr_b_cap    1111101  11000 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
-lr_h_cap    1111101  11001 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
-lr_w_cap    1111101  11010 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
-
-sc_b_ddc    1111100  ..... ..... 000 10000 1011011 @atom_st_cap_or_ddc
-sc_h_ddc    1111100  ..... ..... 000 10001 1011011 @atom_st_cap_or_ddc
-sc_w_ddc    1111100  ..... ..... 000 10010 1011011 @atom_st_cap_or_ddc
-
-sc_b_cap    1111100  ..... ..... 000 11000 1011011 @atom_st_cap_or_ddc
-sc_h_cap    1111100  ..... ..... 000 11001 1011011 @atom_st_cap_or_ddc
-sc_w_cap    1111100  ..... ..... 000 11010 1011011 @atom_st_cap_or_ddc
-
-### Stores
-sbddc       1111100  ..... ..... 000 00000 1011011 @r_2source
-shddc       1111100  ..... ..... 000 00001 1011011 @r_2source
-swddc       1111100  ..... ..... 000 00010 1011011 @r_2source
-# 00011 is sdddc for RV64/scddc for RV32
-# 00100 is scddc for RV64
-
-sbcap       1111100  ..... ..... 000 01000 1011011 @r_2source
-shcap       1111100  ..... ..... 000 01001 1011011 @r_2source
-swcap       1111100  ..... ..... 000 01010 1011011 @r_2source
-# 01011 is sdcap for RV64/sccap for RV32
-# 01100 is sccap for RV64
+### Memory Stores (including Store-Conditional) with Explicit Address Type
+st_b_ddc       1111100  ..... ..... 000 00000 1011011 @r_2source
+st_h_ddc       1111100  ..... ..... 000 00001 1011011 @r_2source
+st_w_ddc       1111100  ..... ..... 000 00010 1011011 @r_2source
+#                                       00011 is st_d_ddc for RV64/st_c_ddc for RV32
+#                                       00100 is st_c_ddc for RV64
+#                                       00101 is reserved
+#                                       00110 is reserved
+#                                       00111 is reserved
+st_b_cap       1111100  ..... ..... 000 01000 1011011 @r_2source
+st_h_cap       1111100  ..... ..... 000 01001 1011011 @r_2source
+st_w_cap       1111100  ..... ..... 000 01010 1011011 @r_2source
+#                                       01011 is st_d_cap for RV64/st_c_cap for RV32
+#                                       01100 is st_c_cap for RV64
+#                                       01101 is reserved
+#                                       01110 is reserved
+#                                       01111 is reserved
+sc_b_ddc       1111100  ..... ..... 000 10000 1011011 @atom_st_cap_or_ddc
+sc_h_ddc       1111100  ..... ..... 000 10001 1011011 @atom_st_cap_or_ddc
+sc_w_ddc       1111100  ..... ..... 000 10010 1011011 @atom_st_cap_or_ddc
+#                                       10011 is sc_d_ddc for RV64/sc_c_ddc for RV32
+#                                       10100 is sc_c_ddc for RV64
+#                                       10101 is reserved
+#                                       10110 is reserved
+#                                       10111 is reserved
+sc_b_cap       1111100  ..... ..... 000 11000 1011011 @atom_st_cap_or_ddc
+sc_h_cap       1111100  ..... ..... 000 11001 1011011 @atom_st_cap_or_ddc
+sc_w_cap       1111100  ..... ..... 000 11010 1011011 @atom_st_cap_or_ddc
+#                                       11011 is sc_d_cap for RV64/sc_c_cap for RV32
+#                                       11100 is sc_c_cap for RV64
+#                                       11101 is reserved
+#                                       11110 is reserved
+#                                       11111 is reserved
