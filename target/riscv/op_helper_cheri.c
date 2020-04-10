@@ -245,18 +245,12 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
                              loaded_cursor);
 }
 
-void HELPER(lr_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
+static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
+                      target_long offset, uintptr_t _host_return_address)
 {
-    uintptr_t _host_return_address = GETPC();
     assert(cpu_in_exclusive_context(env_cpu(env)) &&
-           "Should have raised EXCP_ATOMIC");
-    target_long offset = 0;
-    if (!cheri_in_capmode(env)) {
-        offset = get_capreg_cursor(env, addr_reg);
-        addr_reg = CHERI_EXC_REGNUM_DDC;
-    }
+        "Should have raised EXCP_ATOMIC");
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
-
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
     } else if (!cap_is_unsealed(cbp)) {
@@ -287,6 +281,27 @@ void HELPER(lr_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
     env->load_pesbt = pesbt;
     env->load_tag = tag;
     update_compressed_capreg(env, dest_reg, pesbt, tag, cursor);
+}
+
+void HELPER(lr_c_modedep)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
+{
+    target_long offset = 0;
+    if (!cheri_in_capmode(env)) {
+        offset = get_capreg_cursor(env, addr_reg);
+        addr_reg = CHERI_EXC_REGNUM_DDC;
+    }
+    lr_c_impl(env, dest_reg, addr_reg, offset, GETPC());
+}
+
+void HELPER(lr_c_ddc)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
+{
+    target_long offset = get_capreg_cursor(env, addr_reg);
+    lr_c_impl(env, dest_reg, CHERI_EXC_REGNUM_DDC, offset, GETPC());
+}
+
+void HELPER(lr_c_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
+{
+    lr_c_impl(env, dest_reg, addr_reg, /*offset=*/0, GETPC());
 }
 
 // SC returns zero on success, one on failure

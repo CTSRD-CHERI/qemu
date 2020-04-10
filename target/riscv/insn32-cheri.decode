@@ -96,6 +96,10 @@ cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 %imm_i_unsigned    20:12
 @i_unsigned   ............    ..... ... ..... ....... &i      imm=%imm_i_unsigned     %rs1 %rd
 
+# Explicit capability/DDC atomics:
+@atom_ld_cap_or_ddc .......   ..... ..... ... ..... ....... &atomic aq=1 rl=1 rs2=0  %rs1 %rd
+
+
 cincoffsetimm ............     ..... 001 ..... 1011011 @i
 csetboundsimm ............     ..... 010 ..... 1011011 @i_unsigned
 
@@ -120,6 +124,14 @@ lhucap      1111101  01101 ..... 000 ..... 1011011 @r2
 # 01110 is lwucap for RV64
 # 01111 would be lducap for RV128
 # 11111 is lccap for RV64
+lr_b_ddc    1111101  10000 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+lr_h_ddc    1111101  10001 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+lr_w_ddc    1111101  10010 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+
+lr_b_cap    1111101  11000 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+lr_h_cap    1111101  11001 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+lr_w_cap    1111101  11010 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
+
 
 ### Stores
 sbddc       1111100  ..... ..... 000 00000 1011011 @r_2source
