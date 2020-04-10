@@ -202,13 +202,13 @@ static inline QEMU_ALWAYS_INLINE void tag_bit_set(size_t index, RAMBlock *ram)
     }
     tagblock_set_tag(block, CAP_TAGBLK_IDX(index));
 }
-static inline QEMU_ALWAYS_INLINE void tag_bit_clear(size_t index, RAMBlock *ram)
-{
-    CheriTagBlock *block = cheri_tag_block(index, ram);
-    if (block) {
-        tagblock_clear_tag(block, CAP_TAGBLK_IDX(index));
-    }
-}
+//static inline QEMU_ALWAYS_INLINE void tag_bit_clear(size_t index, RAMBlock *ram)
+//{
+//    CheriTagBlock *block = cheri_tag_block(index, ram);
+//    if (block) {
+//        tagblock_clear_tag(block, CAP_TAGBLK_IDX(index));
+//    }
+//}
 //static inline QEMU_ALWAYS_INLINE void
 //tag_bit_range_clear(RAMBlock *ram, size_t start, size_t count)
 //{
