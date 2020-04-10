@@ -39,6 +39,9 @@ lccap       1111101  01011 ..... 000 ..... 1011011 @r2  # This is ldcap (8-byte 
 lr_c_ddc    1111101  10011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # This is lr_d_ddc for RV64
 lr_c_cap    1111101  11011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # This is lr_d_cap for RV64
 
+sc_c_ddc    1111100  ..... ..... 000 10011 1011011 @atom_st_cap_or_ddc  # This is sc_d_ddc for RV64
+sc_c_cap    1111100  ..... ..... 000 11011 1011011 @atom_st_cap_or_ddc  # This is sc_d_cap for RV64
+
 scddc       1111100  ..... ..... 000 00011 1011011 @r_2source  # This is sdddc (8-byte store) for RV64
 sccap       1111100  ..... ..... 000 01011 1011011 @r_2source  # This is sdcap (8-byte store) for RV64
 
@@ -47,5 +50,5 @@ lc       ............   ..... 011 ..... 0000011 @i # def LC_64  : RVInstI<0x3, O
 sc       ....... .....  ..... 011 ..... 0100011 @s # def SC_64  : RVInstS<0x3, OPC_STORE (0b0100011)
 
 lr_c        00010 . . 00000 ..... 011 ..... 0101111 @atom_ld
-sc_cap      00011 . . ..... ..... 011 ..... 0101111 @atom_st
+sc_c        00011 . . ..... ..... 011 ..... 0101111 @atom_st
 amoswap_cap 00001 . . ..... ..... 011 ..... 0101111 @atom_st

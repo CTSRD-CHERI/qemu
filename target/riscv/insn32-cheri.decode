@@ -98,6 +98,7 @@ cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 
 # Explicit capability/DDC atomics:
 @atom_ld_cap_or_ddc .......   ..... ..... ... ..... ....... &atomic aq=1 rl=1 rs2=0  %rs1 %rd
+@atom_st_cap_or_ddc .......   ..... ..... ... ..... ....... &atomic aq=1 rl=1 rd=0   %rs2 %rs1
 
 
 cincoffsetimm ............     ..... 001 ..... 1011011 @i
@@ -132,6 +133,13 @@ lr_b_cap    1111101  11000 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
 lr_h_cap    1111101  11001 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
 lr_w_cap    1111101  11010 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc
 
+sc_b_ddc    1111100  ..... ..... 000 10000 1011011 @atom_st_cap_or_ddc
+sc_h_ddc    1111100  ..... ..... 000 10001 1011011 @atom_st_cap_or_ddc
+sc_w_ddc    1111100  ..... ..... 000 10010 1011011 @atom_st_cap_or_ddc
+
+sc_b_cap    1111100  ..... ..... 000 11000 1011011 @atom_st_cap_or_ddc
+sc_h_cap    1111100  ..... ..... 000 11001 1011011 @atom_st_cap_or_ddc
+sc_w_cap    1111100  ..... ..... 000 11010 1011011 @atom_st_cap_or_ddc
 
 ### Stores
 sbddc       1111100  ..... ..... 000 00000 1011011 @r_2source

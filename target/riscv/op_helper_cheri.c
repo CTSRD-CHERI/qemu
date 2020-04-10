@@ -305,17 +305,12 @@ void HELPER(lr_c_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
 }
 
 // SC returns zero on success, one on failure
-target_ulong HELPER(sc_cap)(CPUArchState *env, uint32_t addr_reg,
-                            uint32_t val_reg)
+static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
+                              uint32_t val_reg, target_ulong offset,
+                              uintptr_t _host_return_address)
 {
-    uintptr_t _host_return_address = GETPC();
     assert(cpu_in_exclusive_context(env_cpu(env)) &&
            "Should have raised EXCP_ATOMIC");
-    target_long offset = 0;
-    if (!cheri_in_capmode(env)) {
-        offset = get_capreg_cursor(env, addr_reg);
-        addr_reg = CHERI_EXC_REGNUM_DDC;
-    }
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
 
     if (!cbp->cr_tag) {
@@ -367,4 +362,25 @@ target_ulong HELPER(sc_cap)(CPUArchState *env, uint32_t addr_reg,
 sc_failed:
     tcg_debug_assert(env->load_res == -1);
     return 1; // failure
+}
+
+target_ulong HELPER(sc_c_modedep)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)
+{
+    target_long offset = 0;
+    if (!cheri_in_capmode(env)) {
+        offset = get_capreg_cursor(env, addr_reg);
+        addr_reg = CHERI_EXC_REGNUM_DDC;
+    }
+    return sc_c_impl(env, addr_reg, val_reg, offset, GETPC());
+}
+
+target_ulong HELPER(sc_c_ddc)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)
+{
+    target_long offset = get_capreg_cursor(env, addr_reg);
+    return sc_c_impl(env, CHERI_EXC_REGNUM_DDC, val_reg, offset, GETPC());
+}
+
+target_ulong HELPER(sc_c_cap)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)
+{
+    return sc_c_impl(env, addr_reg, val_reg, /*offset=*/0, GETPC());
 }
