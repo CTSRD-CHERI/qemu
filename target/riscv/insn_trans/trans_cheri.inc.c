@@ -276,45 +276,7 @@ static bool gen_ddc_load(DisasContext *ctx, int rd, int rs1, MemOp memop)
     tcg_temp_free(value);
     return true;
 }
-#define TRANSLATE_DDC_LOAD(name, op)                                           \
-    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
-    {                                                                          \
-        return gen_ddc_load(ctx, a->rd, a->rs1, op);                           \
-    }
-TRANSLATE_DDC_LOAD(lbddc, MO_SB)
-TRANSLATE_DDC_LOAD(lhddc, MO_SW)
-TRANSLATE_DDC_LOAD(lwddc, MO_SL)
-#ifdef TARGET_RISCV64
-TRANSLATE_DDC_LOAD(ldddc, MO_Q)
-#endif
-TRANSLATE_DDC_LOAD(lbuddc, MO_UB)
-TRANSLATE_DDC_LOAD(lhuddc, MO_UW)
-#ifdef TARGET_RISCV64
-TRANSLATE_DDC_LOAD(lwuddc, MO_UL)
-#endif
 
-static inline bool trans_lcddc(DisasContext *ctx, arg_lcddc *a)
-{
-    // always uses DDC as the base register
-    return gen_cheri_cap_cap_int_imm(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, 0, &gen_helper_load_cap_via_cap);
-}
-
-static inline bool trans_lccap(DisasContext *ctx, arg_lccap *a)
-{
-    // No immediate available for lccap
-    return gen_cheri_cap_cap_imm(a->rd, a->rs1, 0, &gen_helper_load_cap_via_cap);
-}
-
-static inline bool trans_lc(DisasContext *ctx, arg_lc *a)
-{
-    if (!ctx->capmode) {
-        // Without capmode we load relative to DDC (lc instructions)
-        return gen_cheri_cap_cap_int_imm(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, a->imm, &gen_helper_load_cap_via_cap);
-    }
-    return gen_cheri_cap_cap_imm(a->rd, a->rs1, /*offset=*/a->imm, &gen_helper_load_cap_via_cap);
-}
-
-/* Load Via Capability Register */
 static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
                                 target_long offset, MemOp op)
 {
@@ -328,22 +290,53 @@ static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
     tcg_temp_free(value);
     return true;
 }
-#define TRANSLATE_CAP_LOAD(name, op)                                           \
-    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+
+#define TRANSLATE_EXPLICIT_LOAD(name, op)                                      \
+    static bool trans_##name##_ddc(DisasContext *ctx, arg_##name##_ddc *a)     \
+    {                                                                          \
+        return gen_ddc_load(ctx, a->rd, a->rs1, op);                           \
+    }                                                                          \
+    static bool trans_##name##_cap(DisasContext *ctx, arg_##name##_cap *a)     \
     {                                                                          \
         return gen_cap_load(ctx, a->rd, a->rs1, /*offset=*/0, op);             \
     }
-TRANSLATE_CAP_LOAD(lbcap, MO_SB)
-TRANSLATE_CAP_LOAD(lhcap, MO_SW)
-TRANSLATE_CAP_LOAD(lwcap, MO_SL)
+
+TRANSLATE_EXPLICIT_LOAD(ld_b, MO_SB)
+TRANSLATE_EXPLICIT_LOAD(ld_h, MO_SW)
+TRANSLATE_EXPLICIT_LOAD(ld_w, MO_SL)
 #ifdef TARGET_RISCV64
-TRANSLATE_CAP_LOAD(ldcap, MO_Q)
+TRANSLATE_EXPLICIT_LOAD(ld_d, MO_Q)
 #endif
-TRANSLATE_CAP_LOAD(lbucap, MO_UB)
-TRANSLATE_CAP_LOAD(lhucap, MO_UW)
+TRANSLATE_EXPLICIT_LOAD(ld_bu, MO_UB)
+TRANSLATE_EXPLICIT_LOAD(ld_hu, MO_UW)
 #ifdef TARGET_RISCV64
-TRANSLATE_CAP_LOAD(lwucap, MO_UL)
+TRANSLATE_EXPLICIT_LOAD(ld_wu, MO_UL)
 #endif
+
+static inline bool trans_ld_c_ddc(DisasContext *ctx, arg_ld_c_ddc *a)
+{
+    // always uses DDC as the base register
+    return gen_cheri_cap_cap_int_imm(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, 0,
+                                     &gen_helper_load_cap_via_cap);
+}
+
+static inline bool trans_ld_c_cap(DisasContext *ctx, arg_ld_c_cap *a)
+{
+    // No immediate available for lccap
+    return gen_cheri_cap_cap_imm(a->rd, a->rs1, 0,
+                                 &gen_helper_load_cap_via_cap);
+}
+
+static inline bool trans_lc(DisasContext *ctx, arg_lc *a)
+{
+    if (!ctx->capmode) {
+        // Without capmode we load relative to DDC (lc instructions)
+        return gen_cheri_cap_cap_int_imm(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1,
+                                         a->imm, &gen_helper_load_cap_via_cap);
+    }
+    return gen_cheri_cap_cap_imm(a->rd, a->rs1, /*offset=*/a->imm,
+                                 &gen_helper_load_cap_via_cap);
+}
 
 // Stores
 static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
@@ -358,18 +351,6 @@ static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
     tcg_temp_free(addr);
     return true;
 }
-#define TRANSLATE_DDC_STORE(name, op)                                          \
-    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
-    {                                                                          \
-        return gen_ddc_store(ctx, a->rs1, a->rs2, op);                         \
-    }
-
-TRANSLATE_DDC_STORE(sbddc, MO_UB)
-TRANSLATE_DDC_STORE(shddc, MO_UW)
-TRANSLATE_DDC_STORE(swddc, MO_UL)
-#ifdef TARGET_RISCV64
-TRANSLATE_DDC_STORE(sdddc, MO_Q)
-#endif
 
 /* Load Via Capability Register */
 static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
@@ -387,30 +368,37 @@ static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
     tcg_temp_free_cap_checked(vaddr);
     return true;
 }
-#define TRANSLATE_CAP_STORE(name, op)                                          \
-    static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
+
+#define TRANSLATE_EXPLICIT_STORE(name, op)                                     \
+    static bool trans_##name##_ddc(DisasContext *ctx, arg_##name##_ddc *a)     \
+    {                                                                          \
+        return gen_ddc_store(ctx, a->rs1, a->rs2, op);                         \
+    }                                                                          \
+    static bool trans_##name##_cap(DisasContext *ctx, arg_##name##_cap *a)     \
     {                                                                          \
         return gen_cap_store(ctx, a->rs1, a->rs2, /*offset=*/0, op);           \
     }
 
-TRANSLATE_CAP_STORE(sbcap, MO_UB)
-TRANSLATE_CAP_STORE(shcap, MO_UW)
-TRANSLATE_CAP_STORE(swcap, MO_UL)
+TRANSLATE_EXPLICIT_STORE(st_b, MO_UB)
+TRANSLATE_EXPLICIT_STORE(st_h, MO_UW)
+TRANSLATE_EXPLICIT_STORE(st_w, MO_UL)
 #ifdef TARGET_RISCV64
-TRANSLATE_CAP_STORE(sdcap, MO_Q)
+TRANSLATE_EXPLICIT_STORE(st_d, MO_Q)
 #endif
 
 // RS2 is the value, RS1 is the capability/ddc offset
-static inline bool trans_scddc(DisasContext *ctx, arg_scddc *a)
+static inline bool trans_st_c_ddc(DisasContext *ctx, arg_st_c_ddc *a)
 {
     // always uses DDC as the base register
-    return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, 0, &gen_helper_store_cap_via_cap);
+    return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, 0,
+                                     &gen_helper_store_cap_via_cap);
 }
 
-static inline bool trans_sccap(DisasContext *ctx, arg_sccap *a)
+static inline bool trans_st_c_cap(DisasContext *ctx, arg_st_c_cap *a)
 {
     // No immediate available for sccap
-    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0, &gen_helper_store_cap_via_cap);
+    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0,
+                                 &gen_helper_store_cap_via_cap);
 }
 
 static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
@@ -418,9 +406,11 @@ static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
     // RS2 is the value, RS1 is the capability
     if (!ctx->capmode) {
         // Without capmode we store relative to DDC (sc instructions)
-        return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, a->imm, &gen_helper_store_cap_via_cap);
+        return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1,
+                                         a->imm, &gen_helper_store_cap_via_cap);
     }
-    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/a->imm, &gen_helper_store_cap_via_cap);
+    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/a->imm,
+                                 &gen_helper_store_cap_via_cap);
 }
 
 // Atomic ops

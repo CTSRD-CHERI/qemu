@@ -34,28 +34,25 @@
 # This is concatenated with insn32-cheri.decode for risc64 targets.
 # This file defines the RV64-specific encoding
 
-ldddc       1111101  00011 ..... 000 ..... 1011011 @r2  # This is lcddc (capability load) for RV32
-lwuddc      1111101  00110 ..... 000 ..... 1011011 @r2  # RV64-only
-lcddc       1111101  10111 ..... 000 ..... 1011011 @r2  # Would be lqddc for RV128
-
-lwucap      1111101  01110 ..... 000 ..... 1011011 @r2  # RV64-only
-ldcap       1111101  01011 ..... 000 ..... 1011011 @r2  # RV64-only
-lccap       1111101  11111 ..... 000 ..... 1011011 @r2  # Would be lqcap for RV128
+ld_d_ddc    1111101  00011 ..... 000 ..... 1011011 @r2  # This is lcddc (capability load) for RV32
+ld_wu_ddc   1111101  00110 ..... 000 ..... 1011011 @r2  # RV64-only
+ld_wu_cap   1111101  01110 ..... 000 ..... 1011011 @r2  # RV64-only
+ld_d_cap    1111101  01011 ..... 000 ..... 1011011 @r2  # RV64-only
 lr_d_ddc    1111101  10011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # RV64-only (lr_c_ddc for RV32)
 lr_c_ddc    1111101  10100 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # RV64-only (would be lr_q_ddc for RV128)
+ld_c_ddc    1111101  10111 ..... 000 ..... 1011011 @r2  # Would be ld_q_ddc for RV128
 lr_d_cap    1111101  11011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # RV64-only (lr_c_cap for RV32)
 lr_c_cap    1111101  11100 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # RV64-only (would be lr_q_cap for RV128)
+ld_c_cap    1111101  11111 ..... 000 ..... 1011011 @r2  # Would be ld_q_cap for RV128
 
+st_d_ddc    1111100  ..... ..... 000 00011 1011011 @r_2source  # This is st_c_ddc (capability store) for RV32
+st_c_ddc    1111100  ..... ..... 000 00100 1011011 @r_2source  # Would be st_q_ddc for RV128
+st_d_cap    1111100  ..... ..... 000 01011 1011011 @r_2source  # This is st_c_cap (capability store) for RV32
+st_c_cap    1111100  ..... ..... 000 01100 1011011 @r_2source  # Would be st_q_cap for RV128
 sc_d_ddc    1111100  ..... ..... 000 10011 1011011 @atom_st_cap_or_ddc  # RV64-only (sc_c_ddc for RV32)
 sc_d_cap    1111100  ..... ..... 000 11011 1011011 @atom_st_cap_or_ddc  # RV64-only (sc_c_cap for RV32)
 sc_c_ddc    1111100  ..... ..... 000 10100 1011011 @atom_st_cap_or_ddc  # RV64-only (would be sc_q_ddc for RV128)
 sc_c_cap    1111100  ..... ..... 000 11100 1011011 @atom_st_cap_or_ddc  # RV64-only (would be sc_q_cap for RV128)
-
-sdddc       1111100  ..... ..... 000 00011 1011011 @r_2source  # This is scddc (capability store) for RV32
-scddc       1111100  ..... ..... 000 00100 1011011 @r_2source  # Would be sqddc for RV128
-
-sdcap       1111100  ..... ..... 000 01011 1011011 @r_2source  # This is sccap (capability store) for RV32
-sccap       1111100  ..... ..... 000 01100 1011011 @r_2source  # Would be sqcap for RV128
 
 lc       ............   ..... 010 ..... 0001111 @i  # def LC_128  : RVInstI<0x2, OPC_MISC_MEM (0b0001111)
 sc       ....... .....  ..... 100 ..... 0100011 @s  # def SC_128  : RVInstS<0x4, OPC_STORE (0b0100011)

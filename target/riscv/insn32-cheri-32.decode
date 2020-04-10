@@ -34,16 +34,15 @@
 # This is concatenated with insn32-cheri.decode for risc32 targets.
 # This file defines the RV32-specific encoding
 
-lcddc       1111101  00011 ..... 000 ..... 1011011 @r2  # This is ldddc (8-byte load) for RV64
-lccap       1111101  01011 ..... 000 ..... 1011011 @r2  # This is ldcap (8-byte load) for RV64
+ld_c_ddc    1111101  00011 ..... 000 ..... 1011011 @r2  # This is ld_d_ddc (8-byte load) for RV64
+ld_c_cap    1111101  01011 ..... 000 ..... 1011011 @r2  # This is ld_d_cap (8-byte load) for RV64
 lr_c_ddc    1111101  10011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # This is lr_d_ddc for RV64
 lr_c_cap    1111101  11011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # This is lr_d_cap for RV64
 
+st_c_ddc    1111100  ..... ..... 000 00011 1011011 @r_2source  # This is st_d_ddc (8-byte store) for RV64
+st_c_cap    1111100  ..... ..... 000 01011 1011011 @r_2source  # This is st_d_cap (8-byte store) for RV64
 sc_c_ddc    1111100  ..... ..... 000 10011 1011011 @atom_st_cap_or_ddc  # This is sc_d_ddc for RV64
 sc_c_cap    1111100  ..... ..... 000 11011 1011011 @atom_st_cap_or_ddc  # This is sc_d_cap for RV64
-
-scddc       1111100  ..... ..... 000 00011 1011011 @r_2source  # This is sdddc (8-byte store) for RV64
-sccap       1111100  ..... ..... 000 01011 1011011 @r_2source  # This is sdcap (8-byte store) for RV64
 
 # We reuse the ld/sd opcodes for lc/sc for RV32
 lc       ............   ..... 011 ..... 0000011 @i # def LC_64  : RVInstI<0x3, OPC_LOAD (0b0000011)
