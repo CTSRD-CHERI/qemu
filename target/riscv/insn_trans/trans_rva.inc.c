@@ -44,7 +44,8 @@ static inline bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
     return result;
 }
 
-static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
+static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
+                               arg_atomic *a, MemOp mop)
 {
     TCGv src1 = tcg_temp_new();
     TCGv src2 = tcg_temp_new();
@@ -52,15 +53,7 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
     TCGLabel *l1 = gen_new_label();
     TCGLabel *l2 = gen_new_label();
 
-#ifdef TARGET_CHERI
-    TCGv_cap_checked_ptr addr = get_capmode_dependent_store_addr(ctx, a->rs1, 0, mop);
     tcg_gen_brcond_cap_checked(TCG_COND_NE, load_res, addr, l1);
-    tcg_temp_free_cap_checked(addr); // Don't use it anymore, use src1 now
-#else
-    gen_get_gpr(src1, a->rs1);
-    tcg_gen_brcond_tl(TCG_COND_NE, load_res, src1, l1);
-#endif
-
     gen_get_gpr(src2, a->rs2);
     /*
      * Note that the TCG atomic primitives are SC,
@@ -92,6 +85,15 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
     tcg_temp_free(src1);
     tcg_temp_free(src2);
     return true;
+}
+
+static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
+{
+    TCGv_cap_checked_ptr addr =
+        get_capmode_dependent_load_addr(ctx, a->rs1, 0, mop);
+    bool result = gen_sc_impl(ctx, addr, a, mop);
+    tcg_temp_free_cap_checked(addr);
+    return result;
 }
 
 static bool gen_amo(DisasContext *ctx, arg_atomic *a,

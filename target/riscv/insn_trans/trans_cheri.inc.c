@@ -457,7 +457,8 @@ static inline bool trans_lr_c_cap(DisasContext *ctx, arg_lr_c_cap *a)
     return trans_lr_c_impl(ctx, a, &gen_helper_lr_c_cap);
 }
 
-static inline bool trans_sc_cap(DisasContext *ctx, arg_sc_cap *a)
+static inline bool trans_sc_c_impl(DisasContext *ctx, arg_atomic *a,
+                                     cheri_int_cap_cap_helper *helper)
 {
     // Note: The capmode dependent address interpretation happens in the
     // helper and not during translation.
@@ -468,9 +469,28 @@ static inline bool trans_sc_cap(DisasContext *ctx, arg_sc_cap *a)
     } else {
         // Note: we ignore the Acquire/release flags since using
         // helper_exit_atomic forces exlusive execution so we get SC semantics.
-        gen_cheri_int_cap_cap(ctx, a->rd, a->rs1, a->rs2, &gen_helper_sc_cap);
+        gen_cheri_int_cap_cap(ctx, a->rd, a->rs1, a->rs2, helper);
     }
     return true;
+}
+
+static inline bool trans_sc_c(DisasContext *ctx, arg_sc_c *a)
+{
+    // Note: The capmode dependent address interpretation happens in the
+    // helper and not during translation.
+    return trans_sc_c_impl(ctx, a, &gen_helper_sc_c_modedep);
+}
+
+static inline bool trans_sc_c_ddc(DisasContext *ctx, arg_sc_c_ddc *a)
+{
+    a->rd = a->rs2; /* Not enough encoding space for explicit rd */
+    return trans_sc_c_impl(ctx, a, &gen_helper_sc_c_ddc);
+}
+
+static inline bool trans_sc_c_cap(DisasContext *ctx, arg_sc_c_cap *a)
+{
+    a->rd = a->rs2; /* Not enough encoding space for explicit rd */
+    return trans_sc_c_impl(ctx, a, &gen_helper_sc_c_cap);
 }
 
 static inline bool trans_amoswap_cap(DisasContext *ctx, arg_amoswap_cap *a)
@@ -515,4 +535,34 @@ TRANSLATE_LR_EXPLICIT(lr_h, MO_SW);
 TRANSLATE_LR_EXPLICIT(lr_w, MO_SL);
 #ifdef TARGET_RISCV64
 TRANSLATE_LR_EXPLICIT(lr_d, MO_Q);
+#endif
+
+static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
+                               arg_atomic *a, MemOp mop);
+
+#define TRANSLATE_SC_EXPLICIT(name, op)                                        \
+    static bool trans_##name##_ddc(DisasContext *ctx, arg_##name##_ddc *a)     \
+    {                                                                          \
+        TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
+        generate_get_ddc_checked_gpr_plus_offset(                              \
+            addr, ctx, a->rs1, 0, op, &generate_ddc_checked_load_ptr);         \
+        a->rd = a->rs2; /* Not enough encoding space for explicit rd */        \
+        bool result = gen_sc_impl(ctx, addr, a, op);                           \
+        tcg_temp_free_cap_checked(addr);                                       \
+        return result;                                                         \
+    }                                                                          \
+    static bool trans_##name##_cap(DisasContext *ctx, arg_##name##_cap *a)     \
+    {                                                                          \
+        TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
+        generate_cap_load_check_imm(addr, a->rs1, 0, op);                      \
+        a->rd = a->rs2; /* Not enough encoding space for explicit rd */        \
+        bool result = gen_sc_impl(ctx, addr, a, op);                           \
+        tcg_temp_free_cap_checked(addr);                                       \
+        return result;                                                         \
+    }
+TRANSLATE_SC_EXPLICIT(sc_b, MO_SB);
+TRANSLATE_SC_EXPLICIT(sc_h, MO_SW);
+TRANSLATE_SC_EXPLICIT(sc_w, MO_SL);
+#ifdef TARGET_RISCV64
+TRANSLATE_SC_EXPLICIT(sc_d, MO_Q);
 #endif
