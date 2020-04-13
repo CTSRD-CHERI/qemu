@@ -783,6 +783,7 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
 #endif
     r4k_tlb_t *tlb;
     int idx;
+    int duplicate = -1;
 
     MMID = mi ? MMID : (uint32_t) ASID;
 
@@ -837,10 +838,19 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
         r4k_mips_tlb_flush_extra(env, env->tlb->nb_tlb);
     }
 
+    /*
+     * Check if the tlb contains another entry with the same
+     * VPN and ASID. If so, raise a Machine Check Exception.
+     */
+    if (r4k_lookup_tlb(env, &duplicate, /*use_extra*/false) &&
+        duplicate != idx) {
+        do_raise_exception(env, EXCP_MCHECK, GETPC());
+    }
+
     r4k_invalidate_tlb(env, idx, 0);
     r4k_fill_tlb(env, idx);
 #ifdef CONFIG_MIPS_LOG_INSTR
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+    if (qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_MMU))
         r4k_dump_tlb(env, idx);
 #endif /* TARGET_CHERI */
 }
@@ -849,10 +859,18 @@ void r4k_helper_tlbwr(CPUMIPSState *env)
 {
     int r = cpu_mips_get_random(env);
 
+    /*
+     * Check if the tlb contains another entry with the same
+     * VPN and ASID. If so, raise a Machine Check Exception.
+     */
+    if (r4k_lookup_tlb(env, NULL, /*use_extra*/true)) {
+        do_raise_exception(env, EXCP_MCHECK, GETPC());
+    }
+
     r4k_invalidate_tlb(env, r, 1);
     r4k_fill_tlb(env, r);
 #ifdef CONFIG_MIPS_LOG_INSTR
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+    if (qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_MMU))
         r4k_dump_tlb(env, r);
 #endif /* TARGET_CHERI */
 }
