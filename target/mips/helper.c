@@ -1645,6 +1645,41 @@ bool mips_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
 }
 
 #if !defined(CONFIG_USER_ONLY)
+bool r4k_lookup_tlb(CPUMIPSState *env, int *matching, bool use_extra)
+{
+    bool mi = !!((env->CP0_Config5 >> CP0C5_MI) & 1);
+    r4k_tlb_t *tlb;
+    target_ulong mask;
+    target_ulong tag;
+    target_ulong VPN;
+    uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
+    uint32_t MMID = env->CP0_MemoryMapID;
+    uint32_t tlb_mmid;
+    int i;
+    int limit = (use_extra) ? env->tlb->tlb_in_use : env->tlb->nb_tlb;
+
+    MMID = mi ? MMID : (uint32_t) ASID;
+    for (i = 0; i < limit; i++) {
+        tlb = &env->tlb->mmu.r4k.tlb[i];
+        /* 1k pages are not supported. */
+        mask = tlb->PageMask | ~(TARGET_PAGE_MASK << 1);
+        tag = env->CP0_EntryHi & ~mask;
+        VPN = tlb->VPN & ~mask;
+#if defined(TARGET_MIPS64)
+        tag &= env->SEGMask;
+#endif
+        tlb_mmid = mi ? tlb->MMID : (uint32_t) tlb->ASID;
+        /* Check ASID/MMID, virtual page number & size */
+        if ((tlb->G == 1 || tlb_mmid == MMID) && VPN == tag && !tlb->EHINV) {
+            if (matching)
+                *matching = i;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void r4k_invalidate_tlb(CPUMIPSState *env, int idx, int use_extra)
 {
     CPUState *cs = env_cpu(env);
