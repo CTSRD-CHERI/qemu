@@ -417,6 +417,7 @@ static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
 static inline bool trans_lr_c_impl(DisasContext *ctx, arg_atomic *a,
                                    cheri_cap_cap_helper *helper)
 {
+    REQUIRE_EXT(ctx, RVA);
     if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
         // In a parallel context, stop the world and single step.
         gen_helper_exit_atomic(cpu_env);
@@ -448,8 +449,9 @@ static inline bool trans_lr_c_cap(DisasContext *ctx, arg_lr_c_cap *a)
 }
 
 static inline bool trans_sc_c_impl(DisasContext *ctx, arg_atomic *a,
-                                     cheri_int_cap_cap_helper *helper)
+                                   cheri_int_cap_cap_helper *helper)
 {
+    REQUIRE_EXT(ctx, RVA);
     if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
         // In a parallel context, stop the world and single step.
         gen_helper_exit_atomic(cpu_env);
@@ -483,6 +485,7 @@ static inline bool trans_sc_c_cap(DisasContext *ctx, arg_sc_c_cap *a)
 
 static inline bool trans_amoswap_c(DisasContext *ctx, arg_amoswap_c *a)
 {
+    REQUIRE_EXT(ctx, RVA);
     if (tb_cflags(ctx->base.tb) & CF_PARALLEL) {
         // In a parallel context, stop the world and single step.
         gen_helper_exit_atomic(cpu_env);
@@ -503,6 +506,7 @@ static inline bool gen_lr_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
 #define TRANSLATE_LR_EXPLICIT(name, op)                                        \
     static bool trans_##name##_ddc(DisasContext *ctx, arg_##name##_ddc *a)     \
     {                                                                          \
+        REQUIRE_EXT(ctx, RVA);                                                 \
         TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
         generate_get_ddc_checked_gpr_plus_offset(                              \
             addr, ctx, a->rs1, 0, op, &generate_ddc_checked_load_ptr);         \
@@ -512,6 +516,7 @@ static inline bool gen_lr_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
     }                                                                          \
     static bool trans_##name##_cap(DisasContext *ctx, arg_##name##_cap *a)     \
     {                                                                          \
+        REQUIRE_EXT(ctx, RVA);                                                 \
         TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
         generate_cap_load_check_imm(addr, a->rs1, 0, op);                      \
         bool result = gen_lr_impl(ctx, addr, a, op);                           \
@@ -531,6 +536,7 @@ static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
 #define TRANSLATE_SC_EXPLICIT(name, op)                                        \
     static bool trans_##name##_ddc(DisasContext *ctx, arg_##name##_ddc *a)     \
     {                                                                          \
+        REQUIRE_EXT(ctx, RVA);                                                 \
         TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
         generate_get_ddc_checked_gpr_plus_offset(                              \
             addr, ctx, a->rs1, 0, op, &generate_ddc_checked_load_ptr);         \
@@ -541,6 +547,7 @@ static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
     }                                                                          \
     static bool trans_##name##_cap(DisasContext *ctx, arg_##name##_cap *a)     \
     {                                                                          \
+        REQUIRE_EXT(ctx, RVA);                                                 \
         TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
         generate_cap_load_check_imm(addr, a->rs1, 0, op);                      \
         a->rd = a->rs2; /* Not enough encoding space for explicit rd */        \
