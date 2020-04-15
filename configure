@@ -7928,7 +7928,8 @@ case "$target_name" in
     gdb_xml_files="mips64-cpu.xml mips64-cp0.xml mips64-fpu.xml mips64-sys.xml"
   ;;
   cheri|cheri256|cheri128|cheri128magic)
-    mttcg="no"  # Helpers not safe?
+    # Capability loads/stores+tagged memory don't work with MTTCG
+    mttcg="no"
     TARGET_ARCH=mips64
     TARGET_BASE_ARCH=mips
     echo "TARGET_ABI_MIPSN64=y" >> $config_target_mak
@@ -7997,6 +7998,8 @@ case "$target_name" in
         echo "CONFIG_CHERI=y" >> $config_target_mak
         echo "CONFIG_CHERI=y" >> $config_host_mak
         gdb_xml_files="$gdb_xml_files riscv-64bit-cheri.xml"
+        # Capability loads/stores+tagged memory don't work with MTTCG
+        mttcg="no"
     fi
   ;;
   rx)
