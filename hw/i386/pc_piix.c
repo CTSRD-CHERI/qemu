@@ -275,7 +275,7 @@ static void pc_init1(MachineState *machine,
         pci_create_simple(pci_bus, piix3_devfn + 2, "piix3-usb-uhci");
     }
 
-    if (pcmc->pci_enabled && acpi_enabled) {
+    if (pcmc->pci_enabled && x86_machine_is_acpi_enabled(X86_MACHINE(pcms))) {
         DeviceState *piix4_pm;
 
         smi_irq = qemu_allocate_irq(pc_acpi_smi_interrupt, first_cpu, 0);
@@ -948,13 +948,26 @@ DEFINE_PC_MACHINE(isapc, "isapc", pc_init_isa,
 
 
 #ifdef CONFIG_XEN
-static void xenfv_machine_options(MachineClass *m)
+static void xenfv_4_2_machine_options(MachineClass *m)
 {
+    pc_i440fx_4_2_machine_options(m);
     m->desc = "Xen Fully-virtualized PC";
     m->max_cpus = HVM_MAX_VCPUS;
     m->default_machine_opts = "accel=xen";
 }
 
-DEFINE_PC_MACHINE(xenfv, "xenfv", pc_xen_hvm_init,
-                  xenfv_machine_options);
+DEFINE_PC_MACHINE(xenfv_4_2, "xenfv-4.2", pc_xen_hvm_init,
+                  xenfv_4_2_machine_options);
+
+static void xenfv_3_1_machine_options(MachineClass *m)
+{
+    pc_i440fx_3_1_machine_options(m);
+    m->desc = "Xen Fully-virtualized PC";
+    m->alias = "xenfv";
+    m->max_cpus = HVM_MAX_VCPUS;
+    m->default_machine_opts = "accel=xen";
+}
+
+DEFINE_PC_MACHINE(xenfv, "xenfv-3.1", pc_xen_hvm_init,
+                  xenfv_3_1_machine_options);
 #endif

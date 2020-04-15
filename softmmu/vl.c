@@ -144,7 +144,6 @@ static Chardev **serial_hds;
 Chardev *parallel_hds[MAX_PARALLEL_PORTS];
 int win2k_install_hack = 0;
 int singlestep = 0;
-int acpi_enabled = 1;
 int no_hpet = 0;
 int fd_bootchk = 1;
 static int no_reboot;
@@ -2687,6 +2686,9 @@ static bool set_memory_options(uint64_t *ram_slots, ram_addr_t *maxram_size,
     }
 
     sz = QEMU_ALIGN_UP(sz, 8192);
+    if (mc->fixup_ram_size) {
+        sz = mc->fixup_ram_size(sz);
+    }
     ram_size = sz;
     if (ram_size != sz) {
         error_report("ram size too large");
@@ -2887,6 +2889,9 @@ static void create_default_memdev(MachineState *ms, const char *path)
     object_property_set_int(obj, ms->ram_size, "size", &error_fatal);
     object_property_add_child(object_get_objects_root(), mc->default_ram_id,
                               obj, &error_fatal);
+    /* Ensure backend's memory region name is equal to mc->default_ram_id */
+    object_property_set_bool(obj, false, "x-use-canonical-path-for-ramblock-id",
+                             &error_fatal);
     user_creatable_complete(USER_CREATABLE(obj), &error_fatal);
     object_unref(obj);
     object_property_set_str(OBJECT(ms), mc->default_ram_id, "memory-backend",
@@ -3606,7 +3611,8 @@ void qemu_init(int argc, char **argv, char **envp)
                 vnc_parse(optarg, &error_fatal);
                 break;
             case QEMU_OPTION_no_acpi:
-                acpi_enabled = 0;
+                olist = qemu_find_opts("machine");
+                qemu_opts_parse_noisily(olist, "acpi=off", false);
                 break;
             case QEMU_OPTION_no_hpet:
                 no_hpet = 1;
@@ -4294,6 +4300,9 @@ void qemu_init(int argc, char **argv, char **envp)
     machine_opts = qemu_get_machine_opts();
     qemu_opt_foreach(machine_opts, machine_set_property, current_machine,
                      &error_fatal);
+    current_machine->ram_size = ram_size;
+    current_machine->maxram_size = maxram_size;
+    current_machine->ram_slots = ram_slots;
 
     /*
      * Note: uses machine properties such as kernel-irqchip, must run
@@ -4459,11 +4468,21 @@ void qemu_init(int argc, char **argv, char **envp)
 
         backend = object_resolve_path_type(current_machine->ram_memdev_id,
                                            TYPE_MEMORY_BACKEND, NULL);
+        if (!backend) {
+            error_report("Memory backend '%s' not found",
+                         current_machine->ram_memdev_id);
+            exit(EXIT_FAILURE);
+        }
         backend_size = object_property_get_uint(backend, "size",  &error_abort);
         if (have_custom_ram_size && backend_size != ram_size) {
                 error_report("Size specified by -m option must match size of "
                              "explicitly specified 'memory-backend' property");
                 exit(EXIT_FAILURE);
+        }
+        if (mem_path) {
+            error_report("'-mem-path' can't be used together with"
+                         "'-machine memory-backend'");
+            exit(EXIT_FAILURE);
         }
         ram_size = backend_size;
     }
@@ -4475,10 +4494,6 @@ void qemu_init(int argc, char **argv, char **envp)
             exit(1);
         }
     }
-
-    current_machine->ram_size = ram_size;
-    current_machine->maxram_size = maxram_size;
-    current_machine->ram_slots = ram_slots;
 
     parse_numa_opts(current_machine);
 

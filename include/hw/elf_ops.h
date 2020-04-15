@@ -104,19 +104,21 @@ static int glue(symcmp, SZ)(const void *s0, const void *s1)
         : ((sym0->st_value > sym1->st_value) ? 1 : 0);
 }
 
-static int glue(load_symbols, SZ)(struct elfhdr *ehdr, int fd, int must_swab,
-                                  int clear_lsb, symbol_fn_t sym_cb)
+static void glue(load_symbols, SZ)(struct elfhdr *ehdr, int fd, int must_swab,
+                                   int clear_lsb, symbol_fn_t sym_cb)
 {
-    struct elf_shdr *symtab, *strtab, *shdr_table = NULL;
-    struct elf_sym *syms = NULL;
+    struct elf_shdr *symtab, *strtab;
+    g_autofree struct elf_shdr *shdr_table = NULL;
+    g_autofree struct elf_sym *syms = NULL;
+    g_autofree char *str = NULL;
     struct syminfo *s;
     int nsyms, i;
-    char *str = NULL;
 
     shdr_table = load_at(fd, ehdr->e_shoff,
                          sizeof(struct elf_shdr) * ehdr->e_shnum);
-    if (!shdr_table)
-        return -1;
+    if (!shdr_table) {
+        return ;
+    }
 
     if (must_swab) {
         for (i = 0; i < ehdr->e_shnum; i++) {
@@ -125,23 +127,25 @@ static int glue(load_symbols, SZ)(struct elfhdr *ehdr, int fd, int must_swab,
     }
 
     symtab = glue(find_section, SZ)(shdr_table, ehdr->e_shnum, SHT_SYMTAB);
-    if (!symtab)
-        goto fail;
+    if (!symtab) {
+        return;
+    }
     syms = load_at(fd, symtab->sh_offset, symtab->sh_size);
-    if (!syms)
-        goto fail;
+    if (!syms) {
+        return;
+    }
 
     nsyms = symtab->sh_size / sizeof(struct elf_sym);
 
     /* String table */
     if (symtab->sh_link >= ehdr->e_shnum) {
-        goto fail;
+        return;
     }
     strtab = &shdr_table[symtab->sh_link];
 
     str = load_at(fd, strtab->sh_offset, strtab->sh_size);
     if (!str) {
-        goto fail;
+        return;
     }
 
     i = 0;
@@ -170,15 +174,14 @@ static int glue(load_symbols, SZ)(struct elfhdr *ehdr, int fd, int must_swab,
         }
         i++;
     }
-    // Avoid ASAN error that qsort() argument 1 must be non-null
-    if (nsyms > 0) {
-        syms = g_realloc(syms, nsyms * sizeof(*syms));
-        assert(syms != NULL);
-        qsort(syms, nsyms, sizeof(*syms), glue(symcmp, SZ));
-    } else {
-        syms = NULL;
-        fprintf(stderr, "Warning: could not find any function symbols in ELF file\n");
+
+    /* check we have symbols left */
+    if (nsyms == 0) {
+        return;
     }
+
+    syms = g_realloc(syms, nsyms * sizeof(*syms));
+    qsort(syms, nsyms, sizeof(*syms), glue(symcmp, SZ));
     for (i = 0; i < nsyms - 1; i++) {
         if (syms[i].st_size == 0) {
             syms[i].st_size = syms[i + 1].st_value - syms[i].st_value;
@@ -188,18 +191,11 @@ static int glue(load_symbols, SZ)(struct elfhdr *ehdr, int fd, int must_swab,
     /* Commit */
     s = g_malloc0(sizeof(*s));
     s->lookup_symbol = glue(lookup_symbol, SZ);
-    glue(s->disas_symtab.elf, SZ) = syms;
+    glue(s->disas_symtab.elf, SZ) = g_steal_pointer(&syms);
     s->disas_num_syms = nsyms;
-    s->disas_strtab = str;
+    s->disas_strtab = g_steal_pointer(&str);
     s->next = syminfos;
     syminfos = s;
-    g_free(shdr_table);
-    return 0;
- fail:
-    g_free(syms);
-    g_free(str);
-    g_free(shdr_table);
-    return -1;
 }
 
 static int glue(elf_reloc, SZ)(struct elfhdr *ehdr, int fd, int must_swab,

@@ -101,7 +101,8 @@ F: include/hw/watchdog/wdt_diag288.h
 F: pc-bios/s390-ccw/
 F: pc-bios/s390-ccw.img
 F: target/s390x/
-F: docs/vfio-ap.txt
+F: docs/system/target-s390x.rst
+F: docs/system/s390x/
 F: tests/migration/s390x/
 K: ^Subject:.*(?i)s390x?
 T: git https://github.com/cohuck/qemu.git s390-next
@@ -411,6 +412,13 @@ S: Supported
 F: target/i386/kvm.c
 F: scripts/kvm/vmxcap
 
+X86 HVF CPUs
+M: Roman Bolshakov <r.bolshakov@yadro.com>
+S: Maintained
+F: accel/stubs/hvf-stub.c
+F: target/i386/hvf/
+F: include/sysemu/hvf.h
+
 WHPX CPUs
 M: Sunil Muthuswamy <sunilmut@microsoft.com>
 S: Supported
@@ -432,6 +440,7 @@ F: hw/9pfs/xen-9p*
 F: hw/char/xen_console.c
 F: hw/display/xenfb.c
 F: hw/net/xen_nic.c
+F: hw/usb/xen-usb.c
 F: hw/block/xen*
 F: hw/block/dataplane/xen*
 F: hw/xen/
@@ -1611,7 +1620,7 @@ F: hw/s390x/ap-bridge.c
 F: include/hw/s390x/ap-device.h
 F: include/hw/s390x/ap-bridge.h
 F: hw/vfio/ap.c
-F: docs/system/vfio-ap.rst
+F: docs/system/s390x/vfio-ap.rst
 L: qemu-s390x@nongnu.org
 
 vhost
@@ -1632,6 +1641,15 @@ F: hw/virtio/Makefile.objs
 F: hw/virtio/trace-events
 F: net/vhost-user.c
 F: include/hw/virtio/
+
+virtio-balloon
+M: Michael S. Tsirkin <mst@redhat.com>
+M: David Hildenbrand <david@redhat.com>
+S: Maintained
+F: hw/virtio/virtio-balloon*.c
+F: include/hw/virtio/virtio-balloon.h
+F: balloon.c
+F: include/sysemu/balloon.h
 
 virtio-9p
 M: Greg Kurz <groug@kaod.org>
@@ -1835,6 +1853,18 @@ F: hw/display/virtio-gpu*
 F: hw/display/virtio-vga.*
 F: include/hw/virtio/virtio-gpu.h
 
+vhost-user-blk
+M: Raphael Norwitz <raphael.norwitz@nutanix.com>
+S: Maintained
+F: contrib/vhost-user-blk/
+F: contrib/vhost-user-scsi/
+F: hw/block/vhost-user-blk.c
+F: hw/scsi/vhost-user-scsi.c
+F: hw/virtio/vhost-user-blk-pci.c
+F: hw/virtio/vhost-user-scsi-pci.c
+F: include/hw/virtio/vhost-user-blk.h
+F: include/hw/virtio/vhost-user-scsi.h
+
 vhost-user-gpu
 M: Marc-André Lureau <marcandre.lureau@redhat.com>
 M: Gerd Hoffmann <kraxel@redhat.com>
@@ -2008,6 +2038,11 @@ M: Markus Armbruster <armbru@redhat.com>
 S: Supported
 F: scripts/coverity-model.c
 
+Coverity Scan integration
+M: Peter Maydell <peter.maydell@linaro.org>
+S: Maintained
+F: scripts/coverity-scan/
+
 Device Tree
 M: Alistair Francis <alistair.francis@wdc.com>
 R: David Gibson <david@gibson.dropbear.id.au>
@@ -2036,6 +2071,11 @@ F: include/qemu/error-report.h
 F: qapi/error.json
 F: util/error.c
 F: util/qemu-error.c
+F: scripts/coccinelle/err-bad-newline.cocci
+F: scripts/coccinelle/error-use-after-free.cocci
+F: scripts/coccinelle/error_propagate_null.cocci
+F: scripts/coccinelle/remove_local_err.cocci
+F: scripts/coccinelle/use-error_fatal.cocci
 
 GDB stub
 M: Alex Bennée <alex.bennee@linaro.org>
@@ -2811,6 +2851,7 @@ M: Alex Bennée <alex.bennee@linaro.org>
 M: Fam Zheng <fam@euphon.net>
 R: Philippe Mathieu-Daudé <philmd@redhat.com>
 S: Maintained
+F: .github/lockdown.yml
 F: .travis.yml
 F: scripts/travis/
 F: .shippable.yml

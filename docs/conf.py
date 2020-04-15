@@ -29,14 +29,15 @@
 import os
 import sys
 import sphinx
-from sphinx.errors import VersionRequirementError
+from sphinx.errors import ConfigError
 
 # Make Sphinx fail cleanly if using an old Python, rather than obscurely
 # failing because some code in one of our extensions doesn't work there.
-# Unfortunately this doesn't display very neatly (there's an unavoidable
-# Python backtrace) but at least the information gets printed...
+# In newer versions of Sphinx this will display nicely; in older versions
+# Sphinx will also produce a Python backtrace but at least the information
+# gets printed...
 if sys.version_info < (3,5):
-    raise VersionRequirementError(
+    raise ConfigError(
         "QEMU requires a Sphinx that uses Python 3.5 or better\n")
 
 # The per-manual conf.py will set qemu_docdir for a single-manual build;
@@ -58,8 +59,10 @@ sys.path.insert(0, os.path.join(qemu_docdir, "sphinx"))
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-# 1.3 is where the 'alabaster' theme was shipped with Sphinx.
-needs_sphinx = '1.3'
+# Sphinx 1.5 and earlier can't build our docs because they are too
+# picky about the syntax of the argument to the option:: directive
+# (see Sphinx bugs #646, #3366).
+needs_sphinx = '1.6'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom

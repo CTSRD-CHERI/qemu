@@ -2855,9 +2855,13 @@ static void tcg_out_vec_op(TCGContext *s, TCGOpcode opc,
         goto gen_simd;
 #if TCG_TARGET_REG_BITS == 32
     case INDEX_op_dup2_vec:
-        /* Constraints have already placed both 32-bit inputs in xmm regs.  */
-        insn = OPC_PUNPCKLDQ;
-        goto gen_simd;
+        /* First merge the two 32-bit inputs to a single 64-bit element. */
+        tcg_out_vex_modrm(s, OPC_PUNPCKLDQ, a0, a1, a2);
+        /* Then replicate the 64-bit elements across the rest of the vector. */
+        if (type != TCG_TYPE_V64) {
+            tcg_out_dup_vec(s, type, MO_64, a0, a0);
+        }
+        break;
 #endif
     case INDEX_op_abs_vec:
         insn = abs_insn[vece];
@@ -3733,7 +3737,7 @@ static void tcg_target_qemu_prologue(TCGContext *s)
         } else {
             /* Choose R12 because, as a base, it requires a SIB byte. */
             x86_guest_base_index = TCG_REG_R12;
-            tcg_out_mov(s, TCG_TYPE_PTR, x86_guest_base_index, guest_base);
+            tcg_out_movi(s, TCG_TYPE_PTR, x86_guest_base_index, guest_base);
             tcg_regset_set_reg(s->reserved_regs, x86_guest_base_index);
         }
     }
