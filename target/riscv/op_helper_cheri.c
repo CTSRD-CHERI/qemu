@@ -248,8 +248,9 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
 static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
                       target_long offset, uintptr_t _host_return_address)
 {
-    assert(cpu_in_exclusive_context(env_cpu(env)) &&
-        "Should have raised EXCP_ATOMIC");
+    assert(!qemu_tcg_mttcg_enabled() ||
+           (cpu_in_exclusive_context(env_cpu(env)) &&
+            "Should have raised EXCP_ATOMIC"));
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
@@ -280,6 +281,10 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
     env->load_val = cursor;
     env->load_pesbt = pesbt;
     env->load_tag = tag;
+    log_changed_special_reg(env, "load_res", env->load_res);
+    log_changed_special_reg(env, "load_val", env->load_val);
+    log_changed_special_reg(env, "load_pesbt", env->load_pesbt);
+    log_changed_special_reg(env, "load_tag", (uint64_t)env->load_tag);
     update_compressed_capreg(env, dest_reg, pesbt, tag, cursor);
 }
 
@@ -309,8 +314,9 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
                               uint32_t val_reg, target_ulong offset,
                               uintptr_t _host_return_address)
 {
-    assert(cpu_in_exclusive_context(env_cpu(env)) &&
-           "Should have raised EXCP_ATOMIC");
+    assert(!qemu_tcg_mttcg_enabled() ||
+        (cpu_in_exclusive_context(env_cpu(env)) &&
+            "Should have raised EXCP_ATOMIC"));
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
 
     if (!cbp->cr_tag) {
@@ -346,13 +352,19 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     // an SC to any address, in between an LR and SC pair.
     // We do this regardless of success/failure.
     env->load_res = -1;
+    log_changed_special_reg(env, "load_res", env->load_res);
     if (addr != expected_addr) {
         goto sc_failed;
     }
-    // Now perform the "cmpxchg" operation
-    if (get_capreg_cursor(env, val_reg) != env->load_val ||
-        get_capreg_pesbt(env, val_reg) != env->load_pesbt ||
-        get_capreg_tag(env, val_reg) != env->load_tag) {
+    // Now perform the "cmpxchg" operation by checking if the current values
+    // in memory are the same as the ones that the load-reserved observed.
+    target_ulong current_pesbt;
+    target_ulong current_cursor;
+    bool current_tag =
+        load_cap_from_memory_128(env, &current_pesbt, &current_cursor, addr_reg,
+                                 cbp, addr, _host_return_address, NULL);
+    if (current_cursor != env->load_val || current_pesbt != env->load_pesbt ||
+        current_tag != env->load_tag) {
         goto sc_failed;
     }
     // This store may still trap, so we should update env->load_res before

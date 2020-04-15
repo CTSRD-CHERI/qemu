@@ -323,13 +323,6 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         log_changed_capreg(env, #cheri_name, &((env)->cheri_name));            \
     } while (false)
 #else
-#ifdef CONFIG_MIPS_LOG_INSTR
-#define log_changed_special_reg(env, name, newval)                             \
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),              \
-                           "  %s <- " TARGET_FMT_lx "\n", name, newval)
-#else
-#define log_changed_special_reg(env, name, newval) ((void)0)
-#endif
 #define GET_SPECIAL_REG(env, name, cheri_name) ((env)->name)
 #define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
     do {                                                                       \
@@ -341,6 +334,13 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         env->name = env->new_reg;                                              \
         log_changed_special_reg(env, #name, ((env)->name));                    \
     } while (false)
+#endif
+#ifdef CONFIG_MIPS_LOG_INSTR
+#define log_changed_special_reg(env, name, newval)                             \
+    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),              \
+                           "  %s <- " TARGET_FMT_lx "\n", name, newval)
+#else
+#define log_changed_special_reg(env, name, newval) ((void)0)
 #endif
 
 static inline bool pc_is_current(CPURISCVState *env)
