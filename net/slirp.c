@@ -863,7 +863,8 @@ static int slirp_smb(SlirpState* s, const char *exported_dir_unparsed,
             "case sensitive = yes\n"
             // "debug level = 10\n"
             // "debug pid = true\n"
-            "usershare max shares = 0\n",
+            "usershare max shares = 0\n"
+            "min protocol = NT1\n",
             s->smb_dir,
             s->smb_dir,
             s->smb_dir,
