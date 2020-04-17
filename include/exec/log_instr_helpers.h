@@ -39,6 +39,8 @@
  * All logging helpers shared between MIPS and RISCV are defined here.
  */
 
-/* DEF_HELPER_1(qemu_log_instr_start, void, env) */
-/* DEF_HELPER_1(qemu_log_instr_stop, void, env) */
+DEF_HELPER_2(qemu_log_instr_start, void, env, tl)
+DEF_HELPER_2(qemu_log_instr_stop, void, env, tl)
+DEF_HELPER_2(qemu_log_instr_user_start, void, env, tl)
+DEF_HELPER_2(qemu_log_instr_user_stop, void, env, tl)
 DEF_HELPER_1(qemu_log_instr_commit, void, env)

@@ -41,7 +41,7 @@
 
 #ifdef CONFIG_CHERI_LOG_INSTR
 
-#define CHERI_LOG_MASK (CPU_LOG_INST | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
+#define INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
 
 /*
  * Initialize instruction logging for a cpu.
@@ -62,7 +62,7 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc);
 void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc);
 
 #define qemu_maybe_log_instr(op, ...) do {                      \
-        if (unlikely(qemu_loglevel_mask(CHERI_LOG_MASK)))       \
+        if (unlikely(qemu_loglevel_mask(INSTR_LOG_MASK)))       \
             op(__VA_ARGS__);                                    \
     } while (0)
 
