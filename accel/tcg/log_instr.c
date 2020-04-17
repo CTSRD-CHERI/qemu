@@ -100,6 +100,72 @@ static void emit_cvtrace(cpu_log_buffer_t *log)
     /* } */
 }
 
+static void emit_log_start(CPUArchState *env, target_ulong pc)
+{
+    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+        qemu_log("Requested instruction logging @ " TARGET_FMT_plx
+                 " ASID %u\n", pc, cheri_get_asid(env));
+                    qemu_log("User-mode only tracing enabled at " TARGET_FMT_lx
+                     ", ASID %u\n", pc, cheri_get_asid(env));
+    } else if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
+        // TODO(am2419) Emit an event for instruction logging start
+    }
+}
+
+static void emit_log_stop(CPUArchState *env, target_ulong pc)
+{
+    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+        if (qemu_loglevel_mask(CPU_LOG_USER_ONLY))
+            qemu_log("User-mode only tracing disabled at " TARGET_FMT_lx
+                     ", ASID %u\n", pc, cheri_get_asid(env));
+        else
+            qemu_log("Disabled instruction logging @ " TARGET_FMT_plx " ASID %u\n",
+                     pc, cheri_get_asid(env));
+    } else if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
+        // TODO(am2419) Emit an event for instruction logging stop
+    }
+}
+
+static void reset_log_buffer(cpu_log_buffer_t *log)
+{
+    g_array_remove_range(log->regs, 0, log->regs->len);
+    g_string_erase(log->txt_buffer, 0, -1);
+    log->force_drop = false;
+}
+
+void helper_qemu_log_instr_start(CPUArchState *env, target_ulong pc)
+{
+    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+
+    qemu_log_instr_start(env, cl_default_trace_format, pc);
+    /* Skip this instruction commit */
+    log->force_drop = true;
+}
+
+void helper_qemu_log_instr_stop(CPUArchState *env, target_ulong pc)
+{
+    qemu_log_instr_stop(env, cl_default_trace_format, pc);
+}
+
+void helper_qemu_log_instr_user_start(CPUArchState *env, target_ulong pc)
+{
+    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+
+    qemu_log_instr_start(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
+    /* Skip this instruction commit */
+    log->force_drop = true;
+}
+
+void helper_qemu_log_instr_user_stop(CPUArchState *env, target_ulong pc)
+{
+    qemu_log_instr_stop(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
+}
+
+void helper_qemu_log_instr_commit(CPUArchState *env)
+{
+    _qemu_log_instr_commit(env);
+}
+
 void qemu_log_instr_init(CPUArchState *env)
 {
     cpu_log_buffer_t *log = cpu_get_log_buffer(env);
@@ -110,51 +176,38 @@ void qemu_log_instr_init(CPUArchState *env)
 }
 
 /*
+ * Start user tracing in the given mode.
+ * Note:
  * Log start events are logged regardless of -dfilter and without waiting for
  * the commit() call.
+ * Don't turn on tracing if user-mode only is selected and we are in the kernel.
+ * Make sure that qemu_loglevel doesn't get set to zero when we
+ * suspend tracing because otherwise qemu will close the logfile.
  */
 void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
 {
-    bool was_cvtrace_on = qemu_loglevel_mask(CPU_LOG_CVTRACE);
-    bool was_instr_on = qemu_loglevel_mask(CPU_LOG_INSTR);
-    uint32_t requested = qemu_loglevel | mode;
     cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    uint32_t enabled = qemu_loglevel & INSTR_LOG_MASK;
 
-    assert((requested & CPU_LOG_INSTR) ^ (requested & CPU_LOG_CVTRACE) &&
-           "Can not enable both LOG_INSTR and LOG_CVTRACE");
+    assert(log != NULL && "Invalid log buffer");
+    assert((mode & CPU_LOG_INSTR) ^ (mode & CPU_LOG_CVTRACE) &&
+        "Instruction logging must be enabled in either INSTR or CVTRACE mode");
 
-    /* 
-     * Don't turn on tracing if user-mode only is selected and we are
-     * in the kernel.
-     * Make sure that qemu_loglevel doesn't get set to zero when we
-     * suspend tracing because otherwise qemu will close the logfile.
-     */
-    if ((requested & CPU_LOG_USER_ONLY)) {
-        if (!cpu_in_user_mode(env)) {
-            /* Inform that we will start logging later if we are not in cvtrace */
-            if ((requested & CPU_LOG_CVTRACE) == 0)
-                qemu_log("Delaying tracing request at " TARGET_FMT_lx
-                         " until next switch to user mode, ASID %u\n",
-                         pc, cheri_get_asid(env));
-            requested &= ~(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
-        } else if ((requested & CPU_LOG_CVTRACE) == 0) {
-            qemu_log("User-mode only tracing enabled at " TARGET_FMT_lx
-                     ", ASID %u\n", pc, cheri_get_asid(env));
-        }
-    }
-    qemu_set_log(requested);
-
-    /* Initialize buffers */
-    if (qemu_loglevel_mask(CPU_LOG_INSTR) && !was_instr_on) {
-        qemu_log("Requested instruction logging @ " TARGET_FMT_plx
-                 " ASID %u\n", pc, cheri_get_asid(env));
-    } else if (qemu_loglevel_mask(CPU_LOG_CVTRACE) && !was_cvtrace_on) {
-        // TODO(am2419) Emit an event for instruction logging start
+    if ((mode & CPU_LOG_USER_ONLY) && !cpu_in_user_mode(env)) {
+        if ((mode & CPU_LOG_CVTRACE) == 0)
+            qemu_log("Delaying tracing request at " TARGET_FMT_lx
+                     " until next switch to user mode, ASID %u\n",
+                     pc, cheri_get_asid(env));
+        /* Delay enabling user-mode tracing */
+        mode &= ~(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     }
 
-    /* Skip this instruction commit */
-    log->force_drop = true;
-    log->dfilter_matched = false;
+    qemu_set_log((qemu_loglevel & ~(INSTR_LOG_MASK)) | mode);
+
+    /* If mode bits were not in enabled, we changed state */
+    if ((mode & enabled) == 0)
+        emit_log_start(env, pc);
+    reset_log_buffer(log);
 }
 
 /*
@@ -163,31 +216,30 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
  */
 void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
 {
-    /* cpu_log_buffer_t *log = cpu_get_log_buffer(env); */
+    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    uint32_t enabled = qemu_loglevel & INSTR_LOG_MASK;
 
-    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        if (mode & CPU_LOG_CVTRACE) {
-            /* Switch off cvtrace */
-            // TODO(am2419) Emit an event for instruction logging stop
-        }
-    } else {
-        if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && (mode & CPU_LOG_USER_ONLY))
-            qemu_log("User-mode only tracing disabled at " TARGET_FMT_lx
-                     ", ASID %u\n", pc, cheri_get_asid(env));
-        if (qemu_loglevel_mask(CPU_LOG_INSTR))
-            qemu_log("Disabled instruction logging @ " TARGET_FMT_plx " ASID %u\n",
-                     pc, cheri_get_asid(env));
-    }
+    assert(log != NULL && "Invalid log buffer");
+
+    if (mode & enabled)
+        emit_log_stop(env, pc);
     qemu_set_log(qemu_loglevel & ~(mode));
+    reset_log_buffer(log);
 }
 
+/*
+ * Toggle tracing if we are switching mode.
+ */
 void _qemu_log_instr_mode_switch(CPUArchState *env, bool user, target_ulong pc)
 {
-    /* Disable tracing if we are not currently in user mode */
-    if (!cpu_in_user_mode(env)) {
-        qemu_set_log((qemu_loglevel & ~cl_default_trace_format) | CPU_LOG_USER_ONLY);
-    } else {
-        qemu_set_log(qemu_loglevel | cl_default_trace_format | CPU_LOG_USER_ONLY);
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
+        if (cpu_in_user_mode(env)) {
+            qemu_set_log(qemu_loglevel | cl_default_trace_format |
+                         CPU_LOG_USER_ONLY);
+        } else {
+            qemu_set_log((qemu_loglevel & ~(cl_default_trace_format)) |
+                         CPU_LOG_USER_ONLY);
+        }
     }
 }
 
@@ -195,12 +247,16 @@ void _qemu_log_instr_drop(CPUArchState *env)
 {
     cpu_log_buffer_t *log = cpu_get_log_buffer(env);
 
+    assert(log != NULL && "Invalid log buffer");
+
     log->force_drop = true;
 }
 
 void _qemu_log_instr_commit(CPUArchState *env)
 {
     cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+
+    assert(log != NULL && "Invalid log buffer");
 
     if (log->force_drop)
         goto out;
@@ -215,11 +271,6 @@ out:
     g_array_remove_range(log->regs, 0, log->regs->len);
     g_string_erase(log->txt_buffer, 0, -1);
     log->force_drop = false;
-}
-
-void helper_qemu_log_instr_commit(CPUArchState *env)
-{
-    _qemu_log_instr_commit(env);
 }
 
 void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong value)

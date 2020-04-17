@@ -4293,7 +4293,7 @@ static void gen_arith_imm(DisasContext *ctx, uint32_t opc,
     }
 }
 
-#define GEN_CHERI_TRACE_HELPER(env, name)                                      \
+#define GEN_INSTR_TRACE_HELPER(env, name)                                      \
     {                                                                          \
         TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);                       \
         gen_save_pc(ctx->base.pc_next);                                        \
@@ -4322,24 +4322,25 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
         /* If no destination, treat it as a NOP. */
 #ifdef CONFIG_CHERI_LOG_INSTR
         if (opc == OPC_ORI && rs == 0) {
+            
             /* With 'li $0, 0xbeef' turn on instruction trace logging. */
             if ((uint16_t)imm == 0xbeef)
-                GEN_CHERI_TRACE_HELPER(cpu_env, instr_start);
+                GEN_INSTR_TRACE_HELPER(cpu_env, qemu_log_instr_start);
 
             /* With 'li $0, 0xdead' turn off instruction trace logging. */
             if ((uint16_t)imm == 0xdead)
-                GEN_CHERI_TRACE_HELPER(cpu_env, instr_stop);
+                GEN_INSTR_TRACE_HELPER(cpu_env, qemu_log_instr_stop);
 
             /* With 'li $0, 0xdeaf' switch to userspace-only instruction trace logging. */
             if ((uint16_t)imm == 0xdeaf)
-                GEN_CHERI_TRACE_HELPER(cpu_env, instr_start_user_mode_only);
+                GEN_INSTR_TRACE_HELPER(cpu_env, qemu_log_instr_user_start);
 
             /* With 'li $0, 0xfaed' switch off userspace-only instruction trace logging. */
             if ((uint16_t)imm == 0xfaed)
-                GEN_CHERI_TRACE_HELPER(cpu_env, instr_stop_user_mode_only);
+                GEN_INSTR_TRACE_HELPER(cpu_env, qemu_log_instr_user_stop);
 
             if ((uint16_t)imm == 0xface)
-                GEN_CHERI_TRACE_HELPER(cpu_env, cheri_debug_message);
+                GEN_INSTR_TRACE_HELPER(cpu_env, cheri_debug_message);
 
             /* With 0xcode invoke QEMU helper functions such as fast memset, memcpy etc.
              * They are designed to take the same register arguments as the libc function:

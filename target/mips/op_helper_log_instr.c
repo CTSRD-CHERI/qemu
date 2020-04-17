@@ -52,32 +52,6 @@ extern int cl_default_trace_format;
 #define user_trace_dbg(...)
 #endif
 
-/* TODO(am2419): move helpers to cheri_log */
-
-/* Start instruction trace logging. */
-void helper_instr_start(CPUMIPSState *env, target_ulong pc)
-{
-    qemu_log_instr_start(env, cl_default_trace_format, pc);
-}
-
-/* Stop instruction trace logging. */
-void helper_instr_stop(CPUMIPSState *env, target_ulong pc)
-{
-    qemu_log_instr_stop(env, cl_default_trace_format, pc);
-}
-
-/* Set instruction trace logging to user mode only. */
-void helper_instr_start_user_mode_only(CPUMIPSState *env, target_ulong pc)
-{
-    qemu_log_instr_start(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
-}
-
-/* Stop instruction trace logging to user mode only. */
-void helper_instr_stop_user_mode_only(CPUMIPSState *env, target_ulong pc)
-{
-    qemu_log_instr_stop(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
-}
-
 void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vaddr) {
     char ascii_chars[17] = { 0 };
     target_ulong line_start = vaddr & ~0xf;
