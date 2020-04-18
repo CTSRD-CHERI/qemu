@@ -36,11 +36,17 @@
  */
 
 /*
- * All logging helpers shared between MIPS and RISCV are defined here.
+ * All instruction logging helpers shared between targets are defined here.
+ * These are automatically made available to all targets when instruction
+ * logging support is enabled.
  */
 
+// TODO(am2419): should be TCG_CALL_NO_RWG?
 DEF_HELPER_2(qemu_log_instr_start, void, env, tl)
 DEF_HELPER_2(qemu_log_instr_stop, void, env, tl)
 DEF_HELPER_2(qemu_log_instr_user_start, void, env, tl)
 DEF_HELPER_2(qemu_log_instr_user_stop, void, env, tl)
+// TODO(am2419): should be TCG_CALL_NO_RWG?
 DEF_HELPER_1(qemu_log_instr_commit, void, env)
+// TODO(am2419): should be TCG_CALL_NO_RWG?
+DEF_HELPER_2(qemu_log_instr, void, env, tl)

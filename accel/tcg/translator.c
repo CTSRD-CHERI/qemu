@@ -17,6 +17,7 @@
 #include "exec/log.h"
 #include "exec/translator.h"
 #include "exec/plugin-gen.h"
+#include "exec/log_instr.h"
 
 #include "cheri-translate-utils-base.h"
 
@@ -127,10 +128,15 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         }
 #endif
         ops->insn_start(db, cpu);
-#if defined(CONFIG_CHERI_LOG_INSTR)
-        if (unlikely(should_log_instr)) {
+#ifdef CONFIG_CHERI_LOG_INSTR
+        /* if (unlikely(should_log_instr)) { TODO(am2419): why checking dynamically? */
+        if (qemu_log_instr_enabled) {
             TCGv tpc = tcg_const_tl(db->pc_next);
-            gen_helper_log_instruction(cpu_env, tpc);
+
+            ops->log_instr_changed_state(db, cpu);
+            /* TODO(am2419): can we merge the commit and instruction log helpers? */
+            gen_helper_qemu_log_instr_commit(cpu_env);
+            gen_helper_qemu_log_instr(cpu_env, tpc);
             tcg_temp_free(tpc);
         }
 #endif
