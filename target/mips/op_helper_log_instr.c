@@ -611,6 +611,7 @@ static void dump_changed_regs(CPUMIPSState *env)
  */
 void helper_dump_changed_state(CPUMIPSState *env)
 {
+    // TODO(am2419): probably redundant check?
     if (unlikely(should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
         const char* new_mode = mips_cpu_get_changed_mode(env);
         /* Testing pointer equality is fine, it always points to the same constants */

@@ -37,11 +37,27 @@
 
 /*
  * Instruction logging interface for targets.
+ *
+ * # Adding a new target
+ * The following functions must be defined by the target and declared in cpu.h:
+ * - cpu_get_log_buffer() (avoidable by moving buffer to base cpustate)
+ * - cpu_in_user_mode()
+ * - cpu_get_asid() (currently cheri_get_asid())
+ *
+ * The following hooks must be implemented:
+ * - log_instr_changed_state
+ *
  */
 
 #ifdef CONFIG_CHERI_LOG_INSTR
 
 #define INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
+
+/*
+ * Check whether instruction tracing is enabled.
+ */
+#define qemu_log_instr_enabled                          \
+    unlikely(qemu_loglevel_mask(INSTR_LOG_MASK))
 
 /*
  * Initialize instruction logging for a cpu.
@@ -189,6 +205,7 @@ void _qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
 void _qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 
 #else /* ! defined(CONFIG_CHERI_LOG_INSTR) */
+#define	qemu_log_instr_enabled false
 #define	qemu_log_instr_init(env)
 #define	qemu_log_instr_start(env, mode, pc)
 #define	qemu_log_instr_stop(env, mode, pc)

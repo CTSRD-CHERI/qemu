@@ -35,8 +35,10 @@
 #include "qemu/osdep.h"
 #include "qemu/log.h"
 #include "cpu.h"
+#include "exec/log.h"
 #include "exec/helper-proto.h"
 #include "exec/log_instr.h"
+#include "disas/disas.h"
 
 /*
  * CHERI common instruction logging.
@@ -71,15 +73,39 @@ typedef struct log_reginfo log_reginfo_t;
 
 extern int cl_default_trace_format;
 
-static void emit_text_trace(cpu_log_buffer_t *log)
+/*
+ * Emit textual trace entry to the log.
+ */
+static void emit_text_trace(CPUArchState *env, cpu_log_buffer_t *log)
 {
-    qemu_log("0x" TARGET_FMT_lx ":  %s\n",
-             log->pc, "<inst placeholder>");
+    /* Dump main instruction log */
+#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    /*
+     * TODO(am2419): what to do with injected instructions?
+     * Is the rvfi_dii_trace state valid at log commit?
+     */
+    if (env->rvfi_dii_have_injected_insn) {
+        uint32_t insn = env->rvfi_dii_trace.rvfi_dii_insn;
+        target_disas_buf(stderr, env_cpu(env), &insn, sizeof(insn),
+                         PC_ADDR(env), 1);
+    } else
+#endif
+    {
+        log_target_disas(env_cpu(env), log->instr_begin,
+                         /*only one*/-1);
+    }
 
+    /* Dump register changes and side-effects */
+
+
+    /* Dump extra logged messages, if any */
     if (log->txt_buffer->len > 0)
         qemu_log("%s", log->txt_buffer->str);
 }
 
+/*
+ * Emit binary trace entry to the log.
+ */
 static void emit_cvtrace(cpu_log_buffer_t *log)
 {
     /*     if (qemu_loglevel_mask(CPU_LOG_INSTR)) { */
@@ -166,6 +192,11 @@ void helper_qemu_log_instr_commit(CPUArchState *env)
     _qemu_log_instr_commit(env);
 }
 
+void helper_qemu_log_instr(CPUArchState *env, target_ulong pc)
+{
+    _qemu_log_instr_instr(env, pc);
+}
+
 void qemu_log_instr_init(CPUArchState *env)
 {
     cpu_log_buffer_t *log = cpu_get_log_buffer(env);
@@ -176,13 +207,38 @@ void qemu_log_instr_init(CPUArchState *env)
 }
 
 /*
+ * Callback invoked by tcg when flushing on state changed
+ * TODO(am2419): should we move the flush callback here? it seems to be
+ *  instr logging-related and only used for this.
+ */
+/*
+void flush_tcg_on_log_instr_chage(void);
+void flush_tcg_on_log_instr_chage(void) {
+    warn_report("Calling real %s\r", __func__);
+    CPUState *cpu;
+    int cpu_index = 0;
+    CPU_FOREACH(cpu) {
+        warn_report("Flushing TCG for CPU %d\r", cpu_index++);
+        tb_flush(cpu);
+    }
+}
+*/
+
+/*
  * Start user tracing in the given mode.
  * Note:
- * Log start events are logged regardless of -dfilter and without waiting for
- * the commit() call.
  * Don't turn on tracing if user-mode only is selected and we are in the kernel.
  * Make sure that qemu_loglevel doesn't get set to zero when we
  * suspend tracing because otherwise qemu will close the logfile.
+ *
+ * Log start events are logged regardless of -dfilter and without waiting for
+ * the commit() call.
+ *
+ * We do not emit a start event to the trace if the tracing is enabled from
+ * command line or from the qemu monitor. This is because there is no associated
+ * instruction/ASID to pin the event to.
+ * TODO(am2419): Not sure if this is sensible, would be useful to have the event
+ * for consistency anyway, but what to do with multiple cpus?
  */
 void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
 {
@@ -263,7 +319,7 @@ void _qemu_log_instr_commit(CPUArchState *env)
     // TODO(am2419) handle dfilter: need to check if enabled and if the entry matched
 
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        emit_text_trace(log);
+        emit_text_trace(env, log);
     else if (qemu_loglevel_mask(CPU_LOG_CVTRACE))
         emit_cvtrace(log);
 
@@ -307,7 +363,7 @@ void _qemu_log_instr_pc(CPUArchState *env, target_ulong pc)
 void _qemu_log_instr_mem(CPUArchState *env, target_ulong addr)
 {
     cpu_log_buffer_t *log = cpu_get_log_buffer(env);
- 
+
     /* log->mem = addr; */
 }
 

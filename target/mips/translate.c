@@ -31734,20 +31734,6 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
     // TODO: it would be nice if we could do this at TB end but exceptions
     // use longjmp to jump out of the tb so it is quite difficult.
     mips_update_statcounters_icount(ctx); // Increment the current icount value
-
-#ifdef CONFIG_CHERI_LOG_INSTR
-    if (unlikely(ctx->base.log_instr)) {
-        // Print changed state before advancing to the next instruction: GPR,
-        // HI/LO, COP0, etc.
-        gen_helper_dump_changed_state(cpu_env);
-        gen_helper_qemu_log_instr_commit(cpu_env);
-        if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-            TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);
-            gen_helper_mips_cvtrace_log_instruction(cpu_env, tpc);
-            tcg_temp_free_i64(tpc);
-        }
-    }
-#endif
 }
 
 static bool mips_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cs,
@@ -31886,6 +31872,17 @@ static void mips_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs)
     log_target_disas(cs, dcbase->pc_first, dcbase->tb->size);
 }
 
+/*
+ * This is only called when logging is enabled at translation time.
+ * Log changed state before advancing to the next instruction: GPR,
+ * HI/LO, COP0, etc.
+ */
+static void mips_tr_log_changed_state(const DisasContextBase *db, CPUState *cs)
+{
+    //if (unlikely(ctx->base.log_instr)) // why we check this dynamically??
+    gen_helper_dump_changed_state(cpu_env);
+}
+
 static const TranslatorOps mips_tr_ops = {
     .init_disas_context = mips_tr_init_disas_context,
     .tb_start           = mips_tr_tb_start,
@@ -31895,6 +31892,9 @@ static const TranslatorOps mips_tr_ops = {
     .tb_stop            = mips_tr_tb_stop,
     .disas_log          = mips_tr_disas_log,
     .tb_in_user_mode    = mips_tr_tb_in_user_mode,
+#ifdef CONFIG_CHERI_LOG_INSTR
+    .log_instr_changed_state = mips_tr_log_changed_state,
+#endif
 };
 
 void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)
