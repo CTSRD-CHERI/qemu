@@ -596,11 +596,6 @@ static inline bool cpu_in_user_mode(CPURISCVState *env)
     return false;
 }
 
-static inline cpu_log_buffer_t *cpu_get_log_buffer(CPURISCVState *env)
-{
-    return NULL;
-}
-
 // TODO(am2419) should probably rename as cpu_get_asid()
 static inline unsigned cheri_get_asid(CPURISCVState *env) {
     uint16_t ASID = 0; // TODO: implement?

@@ -1248,6 +1248,7 @@ struct CPUMIPSState {
     /*
      * Processor state after the last instruction.
      * Used for instruction tracing.
+     * TODO(am2419): possibly deprecate & remove?
      */
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
@@ -1257,9 +1258,7 @@ struct CPUMIPSState {
     struct cheri_cap_hwregs last_CHWR;
 #endif // TARGET_CHERI
 
-    cvtrace_t cvtrace;
-    /* New common log API information */
-    cpu_log_buffer_t log_info;
+    cvtrace_t cvtrace; /* TODO(am2419): deprecated, remove */
 #endif /* CONFIG_CHERI_LOG_INSTR */
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
@@ -1500,11 +1499,6 @@ static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr, bool 
 static inline bool cpu_in_user_mode(CPUMIPSState *env)
 {
     return ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM);
-}
-
-static inline cpu_log_buffer_t *cpu_get_log_buffer(CPUMIPSState *env)
-{
-    return (&env->log_info);
 }
 
 // TODO(am2419) should probably rename as cpu_get_asid()

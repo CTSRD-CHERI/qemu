@@ -67,9 +67,10 @@ typedef struct cvtrace cvtrace_t;
  * define the cpu_get_log_buffer() function/macro to retrieve a pointer to
  * the log buffer. The per-cpu log buffer structure is defined below.
  */
-struct cpu_log_buffer {
+struct cpu_log_instr_info {
     bool force_drop;
     bool dfilter_matched;
+    bool user_mode_tracing;
     uint8_t event_type;
 #define CHERI_LOG_NO_REG  0   /* No register changed */
 #define CHERI_LOG_GPR     1   /* GPR change (val2) */
@@ -88,5 +89,5 @@ struct cpu_log_buffer {
     cvtrace_t cv_buffer;
     GString *txt_buffer;
 };
-typedef struct cpu_log_buffer cpu_log_buffer_t;
+typedef struct cpu_log_instr_info cpu_log_instr_info_t;
 #endif /* CONFIG_CHERI_LOG_INSTR */

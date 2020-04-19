@@ -73,10 +73,20 @@ typedef struct log_reginfo log_reginfo_t;
 
 extern int cl_default_trace_format;
 
+static cpu_log_instr_info_t *cpu_get_log(CPUState *cpu)
+{
+    return &cpu->log_info;
+}
+
+static cpu_log_instr_info_t *target_cpu_get_log(CPUArchState *env)
+{
+    return &env_cpu(env)->log_info;
+}
+
 /*
  * Emit textual trace entry to the log.
  */
-static void emit_text_trace(CPUArchState *env, cpu_log_buffer_t *log)
+static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
 {
     /* Dump main instruction log */
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
@@ -106,7 +116,7 @@ static void emit_text_trace(CPUArchState *env, cpu_log_buffer_t *log)
 /*
  * Emit binary trace entry to the log.
  */
-static void emit_cvtrace(cpu_log_buffer_t *log)
+static void emit_cvtrace(cpu_log_instr_info_t *log)
 {
     /*     if (qemu_loglevel_mask(CPU_LOG_INSTR)) { */
     /*     g_string_append_printf( */
@@ -152,7 +162,7 @@ static void emit_log_stop(CPUArchState *env, target_ulong pc)
     }
 }
 
-static void reset_log_buffer(cpu_log_buffer_t *log)
+static void reset_log_buffer(cpu_log_instr_info_t *log)
 {
     g_array_remove_range(log->regs, 0, log->regs->len);
     g_string_erase(log->txt_buffer, 0, -1);
@@ -161,7 +171,7 @@ static void reset_log_buffer(cpu_log_buffer_t *log)
 
 void helper_qemu_log_instr_start(CPUArchState *env, target_ulong pc)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
     qemu_log_instr_start(env, cl_default_trace_format, pc);
     /* Skip this instruction commit */
@@ -175,7 +185,7 @@ void helper_qemu_log_instr_stop(CPUArchState *env, target_ulong pc)
 
 void helper_qemu_log_instr_user_start(CPUArchState *env, target_ulong pc)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
     qemu_log_instr_start(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
     /* Skip this instruction commit */
@@ -199,7 +209,7 @@ void helper_qemu_log_instr(CPUArchState *env, target_ulong pc)
 
 void qemu_log_instr_init(CPUArchState *env)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
     memset((void *)log, 0, sizeof(*log));
     log->txt_buffer = g_string_new(NULL);
@@ -242,7 +252,7 @@ void flush_tcg_on_log_instr_chage(void) {
  */
 void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
     uint32_t enabled = qemu_loglevel & INSTR_LOG_MASK;
 
     assert(log != NULL && "Invalid log buffer");
@@ -272,7 +282,7 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
  */
 void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
     uint32_t enabled = qemu_loglevel & INSTR_LOG_MASK;
 
     assert(log != NULL && "Invalid log buffer");
@@ -301,7 +311,7 @@ void _qemu_log_instr_mode_switch(CPUArchState *env, bool user, target_ulong pc)
 
 void _qemu_log_instr_drop(CPUArchState *env)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
     assert(log != NULL && "Invalid log buffer");
 
@@ -310,7 +320,7 @@ void _qemu_log_instr_drop(CPUArchState *env)
 
 void _qemu_log_instr_commit(CPUArchState *env)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
     assert(log != NULL && "Invalid log buffer");
 
@@ -331,7 +341,7 @@ out:
 
 void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong value)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
     log_reginfo_t r;
 
     r.is_capability = false;
@@ -343,7 +353,7 @@ void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong v
 #ifdef TARGET_CHERI
 void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name, cap_register_t *cr)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
     log_reginfo_t r;
 
     r.is_capability = true;
@@ -355,42 +365,38 @@ void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name, cap_register_t
 
 void _qemu_log_instr_pc(CPUArchState *env, target_ulong pc)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
     log->pc = pc;
 }
 
 void _qemu_log_instr_mem(CPUArchState *env, target_ulong addr)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
 
     /* log->mem = addr; */
 }
 
 void _qemu_log_instr_instr(CPUArchState *env, target_ulong opcode_start)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
     log->instr_begin = opcode_start;
 }
 
 void _qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
 
     /* log->cv_buffer.thread = tid; */
 }
 
 void _qemu_log_instr_asid(CPUArchState *env, uint8_t asid)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
 
     /* log->cv_buffer.asid = asid; */
 }
 
 void _qemu_log_instr_exception(CPUArchState *env, uint8_t code)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
 
     /* log->cv_buffer.exception = code; */
 }
@@ -409,7 +415,7 @@ void _qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
 
 void _qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
 {
-    cpu_log_buffer_t *log = cpu_get_log_buffer(env);
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
     va_list va;
 
     va_start(va, msg);
