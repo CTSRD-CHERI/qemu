@@ -59,6 +59,12 @@
 
 #ifdef CONFIG_CHERI_LOG_INSTR
 
+#ifdef DEBUG_INSTR_LOGGING
+#define log_assert(x) assert((x))
+#else
+#define log_assert(x)
+#endif
+
 struct log_reginfo {
     bool is_capability;
     const char *name;
@@ -235,6 +241,20 @@ void flush_tcg_on_log_instr_chage(void) {
 */
 
 /*
+ * Check for the instruction logging flags in qemu_loglevel.
+ * If we are tracing user-mode, then we need to check the per-cpu
+ * flag as multiple CPUs may be in different modes.
+ */
+bool qemu_log_instr_enabled(CPUState *cpu)
+{
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
+        return cpu_get_log(cpu)->user_mode_tracing;
+    }
+
+    return (qemu_loglevel_mask(INSTR_LOG_MASK));
+}
+
+/*
  * Start user tracing in the given mode.
  * Note:
  * Don't turn on tracing if user-mode only is selected and we are in the kernel.
@@ -255,17 +275,23 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
     uint32_t enabled = qemu_loglevel & INSTR_LOG_MASK;
 
-    assert(log != NULL && "Invalid log buffer");
-    assert((mode & CPU_LOG_INSTR) ^ (mode & CPU_LOG_CVTRACE) &&
+    log_assert(log != NULL && "Invalid log buffer");
+    log_assert((mode & CPU_LOG_INSTR) ^ (mode & CPU_LOG_CVTRACE) &&
         "Instruction logging must be enabled in either INSTR or CVTRACE mode");
 
-    if ((mode & CPU_LOG_USER_ONLY) && !cpu_in_user_mode(env)) {
-        if ((mode & CPU_LOG_CVTRACE) == 0)
-            qemu_log("Delaying tracing request at " TARGET_FMT_lx
-                     " until next switch to user mode, ASID %u\n",
-                     pc, cheri_get_asid(env));
-        /* Delay enabling user-mode tracing */
-        mode &= ~(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
+    if ((mode & CPU_LOG_USER_ONLY)) {
+        // TODO(am2419): looks like translator_ops::tb_in_user_mode(db, cpu) does
+        // a very similar check, maybe there is a way to reuse it?
+        if (cpu_in_user_mode(env)) {
+            log->user_mode_tracing = true;
+        } else {
+            /* Delay enabling user-mode tracing */
+            if ((mode & CPU_LOG_CVTRACE) == 0)
+                qemu_log("Delaying tracing request at " TARGET_FMT_lx
+                         " until next switch to user mode, ASID %u\n",
+                         pc, cheri_get_asid(env));
+            log->user_mode_tracing = false;
+        }
     }
 
     qemu_set_log((qemu_loglevel & ~(INSTR_LOG_MASK)) | mode);
@@ -285,7 +311,10 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
     uint32_t enabled = qemu_loglevel & INSTR_LOG_MASK;
 
-    assert(log != NULL && "Invalid log buffer");
+    log_assert(log != NULL && "Invalid log buffer");
+
+    if (mode & CPU_LOG_USER_ONLY)
+        log->user_mode_tracing = false;
 
     if (mode & enabled)
         emit_log_stop(env, pc);
@@ -295,25 +324,25 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
 
 /*
  * Toggle tracing if we are switching mode.
+ * Note: this does not flush the tcg instruction buffer, this must be
+ * done by the caller, if needed.
  */
-void _qemu_log_instr_mode_switch(CPUArchState *env, bool user, target_ulong pc)
+void _qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
+                                 target_ulong pc)
 {
-    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
-        if (cpu_in_user_mode(env)) {
-            qemu_set_log(qemu_loglevel | cl_default_trace_format |
-                         CPU_LOG_USER_ONLY);
-        } else {
-            qemu_set_log((qemu_loglevel & ~(cl_default_trace_format)) |
-                         CPU_LOG_USER_ONLY);
-        }
-    }
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+
+    log_assert(log != NULL && "Invalid log info");
+
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY))
+        log->user_mode_tracing = enable;
 }
 
 void _qemu_log_instr_drop(CPUArchState *env)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
-    assert(log != NULL && "Invalid log buffer");
+    log_assert(log != NULL && "Invalid log buffer");
 
     log->force_drop = true;
 }
@@ -322,7 +351,7 @@ void _qemu_log_instr_commit(CPUArchState *env)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
-    assert(log != NULL && "Invalid log buffer");
+    log_assert(log != NULL && "Invalid log buffer");
 
     if (log->force_drop)
         goto out;

@@ -66,32 +66,27 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 #ifdef CONFIG_CHERI_LOG_INSTR
-    // Note: changes to the instruction logging flags result in a call to
-    // tb_flush so we can do the logging checks at translate time.
-    bool should_log_instr =
-        qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY);
-    if (unlikely(should_log_instr && qemu_loglevel_mask(CPU_LOG_USER_ONLY))) {
-        if (!ops->tb_in_user_mode(db, cpu)) {
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_USER_ONLY))) {
+        if (ops->tb_in_user_mode(db, cpu)) {
+            // TODO(am2419): move debug logging to qemu_log_instr_mode_switch?
 #if DEBUG_INSTR_LOGGING
-            qemu_log("-- Userspace Instruction logging disabled for "
-                     "TB@" TARGET_FMT_lx "\n", db->pc_next);
+            qemu_log_mask(CPU_LOG_INSTR, "-- Instruction logging enabled for TB@"
+                          TARGET_FMT_lx " (usermode=%d)\n", db->pc_next,
+                          ops->tb_in_user_mode(db, cpu));
 #endif
-            should_log_instr = false;
-            // FIXME: this does not work properly with multiple threads
-            qemu_loglevel &= ~(CPU_LOG_INSTR | CPU_LOG_CVTRACE);
+            qemu_log_instr_mode_switch(cpu->env_ptr, /* enable*/true,
+                                       db->pc_next);
         } else {
-            // FIXME: this does not work properly with multiple threads
-            qemu_loglevel |= cl_default_trace_format;
+#if DEBUG_INSTR_LOGGING
+            qemu_log_mask(CPU_LOG_INSTR,
+                          "-- Userspace Instruction logging disabled "
+                          "for TB@" TARGET_FMT_lx "\n", db->pc_next);
+#endif
+            qemu_log_instr_mode_switch(cpu->env_ptr, /*enable*/false,
+                                       db->pc_next);
         }
     }
-#if DEBUG_INSTR_LOGGING
-    if (unlikely(should_log_instr)) {
-        qemu_log("-- Instruction logging enabled for TB@" TARGET_FMT_lx
-            " (usermode=%d)\n", db->pc_next, ops->tb_in_user_mode(db, cpu));
-    }
-#endif
-    db->log_instr = should_log_instr;
-#endif
+#endif /* CONFIG_CHERI_LOG_INSTR */
 
     /* Reset the temp count so that we can identify leaks */
     tcg_clear_temp_count();
@@ -129,8 +124,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #endif
         ops->insn_start(db, cpu);
 #ifdef CONFIG_CHERI_LOG_INSTR
-        /* if (unlikely(should_log_instr)) { TODO(am2419): why checking dynamically? */
-        if (qemu_log_instr_enabled) {
+        if (unlikely(qemu_log_instr_enabled(cpu))) {
             TCGv tpc = tcg_const_tl(db->pc_next);
 
             ops->log_instr_changed_state(db, cpu);

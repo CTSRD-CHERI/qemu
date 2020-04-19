@@ -31680,15 +31680,6 @@ static void mips_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
               ctx->hflags);
 }
 
-static bool mips_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
-{
-    DisasContext *ctx = container_of(dcbase, DisasContext, base);
-    CPUMIPSState *env = cs->env_ptr;
-    tcg_debug_assert((env->hflags & MIPS_HFLAG_UM) ==
-                     (ctx->hflags & MIPS_HFLAG_UM));
-    return (ctx->hflags & MIPS_HFLAG_UM) != 0;
-}
-
 static inline void mips_update_statcounters_icount(DisasContext *ctx)
 {
     // FIXME: Don't do this for every executed instruction.
@@ -31872,6 +31863,16 @@ static void mips_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs)
     log_target_disas(cs, dcbase->pc_first, dcbase->tb->size);
 }
 
+#ifdef CONFIG_CHERI_LOG_INSTR
+static bool mips_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
+{
+    DisasContext *ctx = container_of(dcbase, DisasContext, base);
+    CPUMIPSState *env = cs->env_ptr;
+    tcg_debug_assert((env->hflags & MIPS_HFLAG_UM) ==
+                     (ctx->hflags & MIPS_HFLAG_UM));
+    return (ctx->hflags & MIPS_HFLAG_UM) != 0;
+}
+
 /*
  * This is only called when logging is enabled at translation time.
  * Log changed state before advancing to the next instruction: GPR,
@@ -31879,9 +31880,9 @@ static void mips_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs)
  */
 static void mips_tr_log_changed_state(const DisasContextBase *db, CPUState *cs)
 {
-    //if (unlikely(ctx->base.log_instr)) // why we check this dynamically??
     gen_helper_dump_changed_state(cpu_env);
 }
+#endif /* CONFIG_CHERI_LOG_INSTR */
 
 static const TranslatorOps mips_tr_ops = {
     .init_disas_context = mips_tr_init_disas_context,
@@ -31891,8 +31892,8 @@ static const TranslatorOps mips_tr_ops = {
     .translate_insn     = mips_tr_translate_insn,
     .tb_stop            = mips_tr_tb_stop,
     .disas_log          = mips_tr_disas_log,
-    .tb_in_user_mode    = mips_tr_tb_in_user_mode,
 #ifdef CONFIG_CHERI_LOG_INSTR
+    .tb_in_user_mode    = mips_tr_tb_in_user_mode,
     .log_instr_changed_state = mips_tr_log_changed_state,
 #endif
 };
