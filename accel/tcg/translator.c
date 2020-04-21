@@ -34,11 +34,6 @@ void translator_loop_temp_check(DisasContextBase *db)
     }
 }
 
-#ifdef CONFIG_CHERI_LOG_INSTR
-extern int cl_default_trace_format;
-#endif
-#define DEBUG_INSTR_LOGGING 0
-
 void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
                      CPUState *cpu, TranslationBlock *tb, int max_insns)
 {
@@ -69,7 +64,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     if (unlikely(qemu_loglevel_mask(CPU_LOG_USER_ONLY))) {
         if (ops->tb_in_user_mode(db, cpu)) {
             // TODO(am2419): move debug logging to qemu_log_instr_mode_switch?
-#if DEBUG_INSTR_LOGGING
+#ifdef DEBUG_INSTR_LOGGING
             qemu_log_mask(CPU_LOG_INSTR, "-- Instruction logging enabled for TB@"
                           TARGET_FMT_lx " (usermode=%d)\n", db->pc_next,
                           ops->tb_in_user_mode(db, cpu));
@@ -77,7 +72,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
             qemu_log_instr_mode_switch(cpu->env_ptr, /* enable*/true,
                                        db->pc_next);
         } else {
-#if DEBUG_INSTR_LOGGING
+#ifdef DEBUG_INSTR_LOGGING
             qemu_log_mask(CPU_LOG_INSTR,
                           "-- Userspace Instruction logging disabled "
                           "for TB@" TARGET_FMT_lx "\n", db->pc_next);
@@ -86,6 +81,8 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
                                        db->pc_next);
         }
     }
+    /* Cache whether we are logging instructions in this tb */
+    db->log_instr_enabled = qemu_log_instr_enabled(cpu);
 #endif /* CONFIG_CHERI_LOG_INSTR */
 
     /* Reset the temp count so that we can identify leaks */
@@ -124,10 +121,13 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #endif
         ops->insn_start(db, cpu);
 #ifdef CONFIG_CHERI_LOG_INSTR
+        /*
+         * TODO(am2419): could move the commit below tr_insn or would we lose something?
+         * this positioning also causes an artifact logging an empty entry when tracing
+         * is enabeled at boot from CLI -d instr.
+         */
         if (unlikely(qemu_log_instr_enabled(cpu))) {
             TCGv tpc = tcg_const_tl(db->pc_next);
-
-            ops->log_instr_changed_state(db, cpu);
             /* TODO(am2419): can we merge the commit and instruction log helpers? */
             gen_helper_qemu_log_instr_commit(cpu_env);
             gen_helper_qemu_log_instr(cpu_env, tpc);
@@ -173,6 +173,14 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         } else {
             ops->translate_insn(db, cpu);
         }
+#ifdef CONFIG_CHERI_LOG_INSTR
+        /*
+         * Log instruction opcode after translation.
+         * This way the translate_insn hook updates the next pc for us
+         * and we get the opcode size implicitly.
+         */
+        /* gen_helper_qemu_log_instr(cpu_env, tpc, tsize); */
+#endif
 
         /* Stop translation if translate_insn so indicated.  */
         if (db->is_jmp != DISAS_NEXT) {

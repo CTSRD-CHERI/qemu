@@ -23,6 +23,7 @@
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
 #include "exec/log.h"
+#include "exec/log_instr.h"
 #include "qemu/atomic.h"
 #include "qemu/error-report.h"
 #include "hw/mips/cpudevs.h"
@@ -1210,7 +1211,8 @@ static inline void set_badinstr_registers(CPUMIPSState *env)
 #endif
 
 #ifdef CONFIG_CHERI_LOG_INSTR
-extern void helper_dump_changed_state(CPUMIPSState *env);
+extern void helper_mips_log_instr_changed_state(
+    CPUMIPSState *env, target_ulong pc);
 #endif
 
 static inline void mips_update_pc_for_exc_handler(CPUMIPSState *env,
@@ -1256,9 +1258,10 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #endif
     }
 #ifdef CONFIG_CHERI_LOG_INSTR
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE |
-                                    CPU_LOG_USER_ONLY))) {
-        helper_dump_changed_state(env);
+    // TODO(am2419): there is another one at the end of this function. Is this redundant?
+    if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+        /* Note pc is guaranteed to be the current pc by the assertion above. */
+        helper_mips_log_instr_changed_state(env, cpu_get_recent_pc(env));
     }
 #endif /* CONFIG_CHERI_LOG_INSTR */
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&
@@ -1619,9 +1622,9 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #endif
     cs->exception_index = EXCP_NONE;
 #ifdef CONFIG_CHERI_LOG_INSTR
-    if (unlikely(should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE |
-                                  CPU_LOG_USER_ONLY))) {
-        helper_dump_changed_state(env);
+    if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+        /* Note pc is guaranteed to be the current pc by the assertion above. */
+        helper_mips_log_instr_changed_state(env, cpu_get_recent_pc(env));
     }
 #endif /* CONFIG_CHERI_LOG_INSTR */
 }

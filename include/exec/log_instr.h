@@ -40,8 +40,8 @@
  *
  * # Adding a new target
  * The following functions must be defined by the target and declared in cpu.h:
- * - cpu_in_user_mode()
- * - cpu_get_asid() (currently cheri_get_asid())
+ * - cpu_in_user_mode() // rename to target_log_instr_in_user_mode(_
+ * - cpu_get_asid() (currently cheri_get_asid()) // rename to target_log_instr_get_asid
  *
  * The following hooks must be implemented:
  * - log_instr_changed_state
@@ -94,9 +94,6 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc);
 #else
 #define qemu_log_instr_cap(...)
 #endif
-
-#define qemu_log_instr_pc(...)                                 \
-    qemu_maybe_log_instr(_qemu_log_instr_pc, __VA_ARGS__)
 
 #define qemu_log_instr_mem(...)                                 \
     qemu_maybe_log_instr(_qemu_log_instr_mem, __VA_ARGS__)
@@ -156,20 +153,14 @@ void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
 #endif
 
 /*
- * Log instruction pc.
- */
-void _qemu_log_instr_pc(CPUArchState *env, target_ulong pc);
-
-/*
  * Log memory access performed by instruction
  */
 void _qemu_log_instr_mem(CPUArchState *env, target_ulong addr);
 
 /*
- * Log instruction opcode. Note that currently cvtrace only supports
- * 32-bit instructions.
+ * Log instruction pc and opcode.
  */
-void _qemu_log_instr_instr(CPUArchState *env, target_ulong opcode_start);
+void _qemu_log_instr_instr(CPUArchState *env, target_ulong pc);
 
 /*
  * Log hardware thread id.
@@ -212,7 +203,6 @@ void _qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 #define	qemu_log_instr_mode_switch(...)
 #define	qemu_log_instr_reg(...)
 #define	qemu_log_instr_cap(...)
-#define	qemu_log_instr_pc(...)
 #define	qemu_log_instr_mem(...)
 #define	qemu_log_instr_instr(...)
 #define	qemu_log_instr_hwtid(...)

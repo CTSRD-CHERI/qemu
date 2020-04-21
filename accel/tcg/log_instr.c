@@ -107,8 +107,7 @@ static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
     } else
 #endif
     {
-        log_target_disas(env_cpu(env), log->instr_begin,
-                         /*only one*/-1);
+        log_target_disas(env_cpu(env), log->pc, /*only one*/-1);
     }
 
     /* Dump register changes and side-effects */
@@ -124,6 +123,10 @@ static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
  */
 static void emit_cvtrace(cpu_log_instr_info_t *log)
 {
+    // TODO(am2419): how do we get the opcode from pc? this is a machine-dependant
+    // thing, maybe we can reuse disas or have an hook to determine the opcode length
+    // can we get it from next instruction pc?
+
     /*     if (qemu_loglevel_mask(CPU_LOG_INSTR)) { */
     /*     g_string_append_printf( */
     /*         "    Write %s|" PRINT_CAP_FMTSTR_L1 "\n |" PRINT_CAP_FMTSTR_L2 "\n", */
@@ -220,6 +223,7 @@ void qemu_log_instr_init(CPUArchState *env)
     memset((void *)log, 0, sizeof(*log));
     log->txt_buffer = g_string_new(NULL);
     log->regs = g_array_new(FALSE, TRUE, sizeof(log_reginfo_t));
+    log->force_drop = true;
 }
 
 /*
@@ -326,6 +330,8 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
  * Toggle tracing if we are switching mode.
  * Note: this does not flush the tcg instruction buffer, this must be
  * done by the caller, if needed.
+ * TODO(am2419): we need a version that flushes the tcg as well, we do not
+ * want targets to care.
  */
 void _qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
                                  target_ulong pc)
@@ -334,8 +340,10 @@ void _qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
 
     log_assert(log != NULL && "Invalid log info");
 
-    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY))
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
         log->user_mode_tracing = enable;
+        // TODO(am2419): emit logging start/stop events.
+    }
 }
 
 void _qemu_log_instr_drop(CPUArchState *env)
@@ -392,24 +400,17 @@ void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name, cap_register_t
 }
 #endif
 
-void _qemu_log_instr_pc(CPUArchState *env, target_ulong pc)
-{
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
-
-    log->pc = pc;
-}
-
 void _qemu_log_instr_mem(CPUArchState *env, target_ulong addr)
 {
 
     /* log->mem = addr; */
 }
 
-void _qemu_log_instr_instr(CPUArchState *env, target_ulong opcode_start)
+void _qemu_log_instr_instr(CPUArchState *env, target_ulong pc)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
-    log->instr_begin = opcode_start;
+    log->pc = pc;
 }
 
 void _qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid)
