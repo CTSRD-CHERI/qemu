@@ -584,6 +584,6 @@ riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
 #endif
 }
 // Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets
-#define cpu_get_tb_cpu_state riscv_cpu_get_tb_cpu_state
+#define cpu_get_tb_cpu_state_6 riscv_cpu_get_tb_cpu_state
 
 #endif /* RISCV_CPU_H */

@@ -26,7 +26,7 @@ tb_lookup__cpu_state(CPUState *cpu, target_ulong *pc, target_ulong *cs_base,
     TranslationBlock *tb;
     uint32_t hash;
 
-    cpu_get_tb_cpu_state(env, pc, cs_base, cs_top, cheri_flags, flags);
+    cpu_get_tb_cpu_state_6(env, pc, cs_base, cs_top, cheri_flags, flags);
     hash = tb_jmp_cache_hash_func(*pc);
     tb = atomic_rcu_read(&cpu->tb_jmp_cache[hash]);
 

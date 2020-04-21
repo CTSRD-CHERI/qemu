@@ -445,11 +445,17 @@ struct TranslationBlock {
 extern bool parallel_cpus;
 
 // Reduce diff to upstream for CHERI (since we addd cs_top/ds_base/ds_top)
-#ifndef cpu_get_tb_cpu_state
-static inline void cpu_get_tb_cpu_state(CPUArchState *env, target_ulong *pc,
-                                        target_ulong *cs_base, uint32_t *flags);
-#define cpu_get_tb_cpu_state(env, pc, cs_base, cs_top, cheri_flags, flags)     \
-    (cpu_get_tb_cpu_state)(env, pc, cs_base, flags)
+#if !defined(cpu_get_tb_cpu_state_6)
+static inline void cpu_get_tb_cpu_state_6(CPUArchState *env, target_ulong *pc,
+                                          target_ulong *cs_base,
+                                          target_ulong *cs_top,
+                                          uint32_t *cheri_flags,
+                                          uint32_t *flags)
+{
+    (void)cs_top;
+    (void)cheri_flags;
+    cpu_get_tb_cpu_state(env, pc, cs_base, flags);
+}
 #endif
 
 /* Hide the atomic_read to make code a little easier on the eyes */

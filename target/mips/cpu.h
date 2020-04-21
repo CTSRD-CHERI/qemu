@@ -1453,7 +1453,7 @@ mips_cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
 #endif
 }
 // Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets
-#define cpu_get_tb_cpu_state mips_cpu_get_tb_cpu_state
+#define cpu_get_tb_cpu_state_6 mips_cpu_get_tb_cpu_state
 
 static inline bool should_use_error_epc(CPUMIPSState *env)
 {

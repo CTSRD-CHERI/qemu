@@ -1941,7 +1941,7 @@ tb_invalidate_phys_page_range__locked(struct page_collection *pages,
                  */
                 current_tb_modified = true;
                 cpu_restore_state_from_tb(cpu, current_tb, retaddr, true);
-                cpu_get_tb_cpu_state(env, &current_pc, &current_cs_base,
+                cpu_get_tb_cpu_state_6(env, &current_pc, &current_cs_base,
                                      &current_cs_top, &current_cheri_flags,
                                      &current_flags);
             }
@@ -2121,7 +2121,7 @@ static bool tb_invalidate_phys_page(tb_page_addr_t addr, uintptr_t pc)
 
             current_tb_modified = 1;
             cpu_restore_state_from_tb(cpu, current_tb, pc, true);
-            cpu_get_tb_cpu_state(env, &current_pc, &current_cs_base,
+            cpu_get_tb_cpu_state_6(env, &current_pc, &current_cs_base,
                                  &current_cs_top, &current_cheri_flags,
                                  &current_flags);
         }
@@ -2162,7 +2162,7 @@ void tb_check_watchpoint(CPUState *cpu, uintptr_t retaddr)
         tb_page_addr_t addr;
         uint32_t flags;
 
-        cpu_get_tb_cpu_state(env, &pc, &cs_base, &cs_top, &cheri_flags, &flags);
+        cpu_get_tb_cpu_state_6(env, &pc, &cs_base, &cs_top, &cheri_flags, &flags);
         addr = get_page_addr_code(env, pc);
         if (addr != -1) {
             tb_invalidate_phys_range(addr, addr + 1);
