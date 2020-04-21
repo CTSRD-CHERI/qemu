@@ -40,11 +40,38 @@
 #include "internal.h"
 #include "exec/log_instr.h"
 
+#ifdef TARGET_CHERI
+#include "cheri-helper-utils.h"
+#endif
+
 #ifdef CONFIG_CHERI_LOG_INSTR
 
 /* TODO(am2419): New logging API helpers */
 
 static const char* mips_cpu_get_changed_mode(CPUMIPSState *env);
+
+/*
+ * Log general purpose register modification.
+ */
+void helper_mips_log_instr_gpr(CPUArchState *env, uint32_t reg,
+                               target_ulong value)
+{
+    if (unlikely(qemu_log_instr_enabled(env_cpu(env))))
+        qemu_log_instr_reg(env, mips_gp_regnames[reg], value);
+}
+
+/*
+ * Log Cop0 register modification.
+ * Most of the mtc0 logging is done in cp0_helper, this takes care
+ * of logging updates that do not go though helpers in cp0_helper.
+ * TODO(am2419): may be merged with the log_instr_cop0_update in an header.
+ */
+void helper_mips_log_instr_cop0(CPUArchState *env, uint32_t reg, uint32_t sel,
+                                target_ulong value)
+{
+    if (unlikely(qemu_log_instr_enabled(env_cpu(env))))
+        qemu_log_instr_reg(env, mips_cop0_regnames[reg * 8 + sel], value);
+}
 
 static void dump_changed_regs(CPUMIPSState *env);
 
@@ -66,11 +93,11 @@ void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
 
     /* TODO(am2419): remove below, just for testing. */
     /* Print changed state: GPR, Cap. */
-    /* dump_changed_regs(env); */
-    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-        /* Print change state: HI/LO COP0 (not included in CVTRACE) */
-        dump_changed_cop0(env);
-    }
+    dump_changed_regs(env);
+    /* if (qemu_loglevel_mask(CPU_LOG_INSTR)) { */
+    /*     /\* Print change state: HI/LO COP0 (not included in CVTRACE) *\/ */
+    /*     dump_changed_cop0(env); */
+    /* } */
 }
 
 /*
@@ -364,113 +391,6 @@ void r4k_dump_tlb(CPUMIPSState *env, int idx)
             idx, (long)pagemask, (long)hi, (long)lo0, (long)lo1);
 }
 
-
-/*
- * Print changed kernel/user/debug mode.
- */
-static const char* mips_cpu_get_changed_mode(CPUMIPSState *env)
-{
-    const char *kernel0, *kernel1, *mode;
-
-#if defined(TARGET_MIPS64)
-    if (env->CP0_Status & (1 << CP0St_KX)) {
-        kernel0 = "Kernel mode (ERL=0, KX=1)";
-        kernel1 = "Kernel mode (ERL=1, KX=1)";
-    } else {
-        kernel0 = "Kernel mode (ERL=0, KX=0)";
-        kernel1 = "Kernel mode (ERL=1, KX=0)";
-    }
-#else
-    kernel0 = "Kernel mode (ERL=0)";
-    kernel1 = "Kernel mode (ERL=1)";
-#endif
-
-    if (env->CP0_Debug & (1 << CP0DB_DM)) {
-        mode = "Debug mode";
-    } else if (env->CP0_Status & (1 << CP0St_ERL)) {
-        mode = kernel1;
-    } else if (env->CP0_Status & (1 << CP0St_EXL)) {
-        mode = kernel0;
-    } else {
-        switch (extract32(env->CP0_Status, CP0St_KSU, 2)) {
-        case 0:  mode = kernel0;           break;
-        case 1:  mode = "Supervisor mode"; break;
-        default: mode = TRACE_MODE_USER;   break;
-        }
-    }
-    return mode;
-}
-
-/*
- * Names of coprocessor 0 registers.
- */
-static const char *cop0_name[32*8] = {
-/*0*/   "Index",        "MVPControl",   "MVPConf0",     "MVPConf1",
-        0,              0,              0,              0,
-/*1*/   "Random",       "VPEControl",   "VPEConf0",     "VPEConf1",
-        "YQMask",       "VPESchedule",  "VPEScheFBack", "VPEOpt",
-/*2*/   "EntryLo0",     "TCStatus",     "TCBind",       "TCRestart",
-        "TCHalt",       "TCContext",    "TCSchedule",   "TCScheFBack",
-/*3*/   "EntryLo1",     0,              0,              0,
-        0,              0,              0,              "TCOpt",
-/*4*/   "Context",      "ContextConfig","UserLocal",    "XContextConfig",
-        0,              0,              0,              0,
-/*5*/   "PageMask",     "PageGrain",    "SegCtl0",      "SegCtl1",
-        "SegCtl2",      0,              0,              0,
-/*6*/   "Wired",        "SRSConf0",     "SRSConf1",     "SRSConf2",
-        "SRSConf3",     "SRSConf4",     0,              0,
-/*7*/   "HWREna",       0,              0,              0,
-        0,              0,              0,              0,
-/*8*/   "BadVAddr",     "BadInstr",     "BadInstrP",    0,
-        0,              0,              0,              0,
-/*9*/   "Count",        0,              0,              0,
-        0,              0,              0,              0,
-/*10*/  "EntryHi",      0,              0,              0,
-        0,              "MSAAccess",    "MSASave",      "MSARequest",
-/*11*/  "Compare",      0,              0,              0,
-        0,              0,              0,              0,
-/*12*/  "Status",       "IntCtl",       "SRSCtl",       "SRSMap",
-        "ViewIPL",      "SRSMap2",      0,              0,
-/*13*/  "Cause",        0,              0,              0,
-        "ViewRIPL",     "NestedExc",    0,              0,
-/*14*/  "EPC",          0,              "NestedEPC",    0,
-        0,              0,              0,              0,
-/*15*/  "PRId",         "EBase",        "CDMMBase",     "CMGCRBase",
-        0,              0,              0,              0,
-/*16*/  "Config",       "Config1",      "Config2",      "Config3",
-        "Config4",      "Config5",      "Config6",      "Config7",
-/*17*/  "LLAddr",       "internal_lladdr (virtual)", "internal_llval", "internal_linkedflag",
-        0,              0,              0,              0,
-/*18*/  "WatchLo",      "WatchLo1",     "WatchLo2",     "WatchLo3",
-        "WatchLo4",     "WatchLo5",     "WatchLo6",     "WatchLo7",
-/*19*/  "WatchHi",      "WatchHi1",     "WatchHi2",     "WatchHi3",
-        "WatchHi4",     "WatchHi5",     "WatchHi6",     "WatchHi7",
-/*20*/  "XContext",     0,              0,              0,
-        0,              0,              0,              0,
-/*21*/  0,              0,              0,              0,
-        0,              0,              0,              0,
-/*22*/  0,              0,              0,              0,
-        0,              0,              0,              0,
-/*23*/  "Debug",        "TraceControl", "TraceControl2","UserTraceData",
-        "TraceIBPC",    "TraceDBPC",    "Debug2",       0,
-/*24*/  "DEPC",         0,              "TraceControl3","UserTraceData2",
-        0,              0,              0,              0,
-/*25*/  "PerfCnt",      "PerfCnt1",     "PerfCnt2",     "PerfCnt3",
-        "PerfCnt4",     "PerfCnt5",     "PerfCnt6",     "PerfCnt7",
-/*26*/  "ErrCtl",       0,              0,              0,
-        0,              0,              0,              0,
-/*27*/  "CacheErr",     0,              0,              0,
-        0,              0,              0,              0,
-/*28*/  "ITagLo",       "IDataLo",      "DTagLo",       "DDataLo",
-        "L23TagLo",     "L23DataLo",    0,              0,
-/*29*/  "ITagHi",       "IDataHi",      "DTagHi",       0,
-        0,              "L23DataHi",    0,              0,
-/*30*/  "ErrorEPC",     0,              0,              0,
-        0,              0,              0,              0,
-/*31*/  "DESAVE",       0,              "KScratch1",    "KScratch2",
-        "KScratch3",    "KScratch4",    "KScratch5",    "KScratch6",
-};
-
 /*
  * Print changed values of COP0 registers.
  */
@@ -479,9 +399,9 @@ static void dump_changed_cop0_reg(CPUMIPSState *env, int idx,
 {
     if (value != env->last_cop0[idx]) {
         env->last_cop0[idx] = value;
-        if (cop0_name[idx])
+        if (mips_cop0_regnames[idx])
             qemu_log("    Write %s = " TARGET_FMT_lx "\n",
-                    cop0_name[idx], value);
+                     mips_cop0_regnames[idx], value);
         else
             qemu_log("    Write (idx=%d) = " TARGET_FMT_lx "\n",
                     idx, value);

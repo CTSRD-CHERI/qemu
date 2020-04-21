@@ -450,6 +450,10 @@ extern const char * const riscv_int_regnames[];
 extern const char * const riscv_fpr_regnames[];
 extern const char * const riscv_excp_names[];
 extern const char * const riscv_intr_names[];
+#ifdef TARGET_CHERI
+/* Needed for cheri-common logging */
+extern const char * const cheri_gp_regnames[];
+#endif
 
 #ifdef CONFIG_RVFI_DII
 #define RVFI_DII_RAM_START 0x80000000

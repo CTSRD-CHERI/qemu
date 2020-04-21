@@ -48,6 +48,7 @@
 
 #include "cheri_tagmem.h"
 #include "cheri-helper-utils.h"
+#include "cheri-lazy-capregs.h"
 
 #include "disas/disas.h"
 #include "disas/dis-asm.h"
@@ -96,11 +97,23 @@ is_cap_sealed(const cap_register_t *cp)
     return cap_is_sealed_with_type(cp) || cap_is_sealed_entry(cp);
 }
 
+// TODO(am2419): deprecated, remove
 void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* name) {
     qemu_log("%s%s|" PRINT_CAP_FMTSTR_L1 "\n"
              "             |" PRINT_CAP_FMTSTR_L2 "\n",
              prefix, name, PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr));
 }
+
+#ifdef CONFIG_CHERI_LOG_INSTR
+#define log_instr_hwreg_update(env, name, newval) do {   \
+        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {   \
+            qemu_log_instr_reg(env, name, newval);              \
+        }                                                       \
+    } while (0)
+
+#else
+#define log_instr_cop2_update(env, name, newval) ((void)0)
+#endif
 
 static inline int align_of(int size, uint64_t addr)
 {
@@ -131,8 +144,11 @@ static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *c
 
 static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) {
     if (!cap_exactly_equal(&env->active_tc.CHWR.DDC, new_ddc)) {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR | CPU_LOG_MMU, cpu_get_recent_pc(env),
+        if (qemu_log_instr_enabled(env_cpu(env)))
+            qemu_log_instr_extra(
+                env, "Flushing TCG TLB since $ddc is changing to "
+                PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
+        qemu_log_mask_and_addr(CPU_LOG_MMU, cpu_get_recent_pc(env),
             "Flushing TCG TLB since $ddc is changing to " PRINT_CAP_FMTSTR "\n",
             PRINT_CAP_ARGS(new_ddc));
         // TODO: in the future we may want to move $ddc to the guest -> host addr
@@ -144,11 +160,15 @@ static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) 
         // XXX: tlb_flush(env_cpu(env));
         env->active_tc.CHWR.DDC = *new_ddc;
     } else {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR | CPU_LOG_MMU, cpu_get_recent_pc(env),
+        if (qemu_log_instr_enabled(env_cpu(env)))
+            qemu_log_instr_extra(
+                env, "Installing same $ddc again, not flushing TCG TLB: "
+                PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
+        qemu_log_mask_and_addr(CPU_LOG_MMU, cpu_get_recent_pc(env),
             "Installing same $ddc again, not flushing TCG TLB: " PRINT_CAP_FMTSTR "\n",
             PRINT_CAP_ARGS(new_ddc));
     }
+    log_changed_capreg(env, mips_cheri_hw_regnames[0], new_ddc);
 }
 
 target_ulong CHERI_HELPER_IMPL(cbez(CPUArchState *env, uint32_t cb, uint32_t offset))
@@ -478,6 +498,8 @@ void CHERI_HELPER_IMPL(mtc0_epc(CPUArchState *env, target_ulong arg))
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, CP2HWR_EPCC);
     }
     set_CP0_EPC(env, arg + cap_get_base(&env->active_tc.CHWR.EPCC));
+    log_instr_hwreg_update(env, mips_cop0_regnames[14],
+                           env->active_tc.CHWR.EPCC._cr_cursor);
 }
 
 void CHERI_HELPER_IMPL(mtc0_error_epc(CPUArchState *env, target_ulong arg))
@@ -490,11 +512,14 @@ void CHERI_HELPER_IMPL(mtc0_error_epc(CPUArchState *env, target_ulong arg))
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, CP2HWR_ErrorEPCC);
     }
     set_CP0_ErrorEPC(env, arg + cap_get_base(&env->active_tc.CHWR.ErrorEPCC));
+    log_instr_hwreg_update(env, mips_cop0_regnames[30],
+                           env->active_tc.CHWR.ErrorEPCC._cr_cursor);
 }
 
 void CHERI_HELPER_IMPL(creadhwr(CPUArchState *env, uint32_t cd, uint32_t hwr))
 {
-    cap_register_t result = *check_readonly_cap_hwr_access(env, CP2HWR_BASE_INDEX + hwr, GETPC());
+    cap_register_t result = *check_readonly_cap_hwr_access(
+        env, CP2HWR_BASE_INDEX + hwr, GETPC());
     update_capreg(env, cd, &result);
 }
 
@@ -506,8 +531,11 @@ void CHERI_HELPER_IMPL(cwritehwr(CPUArchState *env, uint32_t cs, uint32_t hwr))
         update_ddc(env, csp);
         return;
     }
-    cap_register_t *cdp = check_writable_cap_hwr_access(env, CP2HWR_BASE_INDEX + hwr, GETPC());
+    cap_register_t *cdp = check_writable_cap_hwr_access(
+        env, CP2HWR_BASE_INDEX + hwr, GETPC());
     *cdp = *csp;
+    /* Note: DDC updates are logged in update_ddc. */
+    log_changed_capreg(env, mips_cheri_hw_regnames[hwr], csp);
 }
 
 void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
@@ -520,6 +548,7 @@ void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
     } else {
         env->CP2_CapCause = (uint16_t)(rt & 0xffffUL);
     }
+    log_instr_hwreg_update(env, "CapCause", env->CP2_CapCause);
 }
 
 void CHERI_HELPER_IMPL(csetlen(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt))
@@ -797,6 +826,7 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
 
 #ifdef CONFIG_CHERI_LOG_INSTR
 
+// TODO(am2419): deprecated, remove
 void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
         cap_register_t *old_reg, const char* name)
 {
@@ -817,17 +847,13 @@ void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
     }
 }
 
-const char * const cheri_gp_regnames[] = {
-    "C00", "C01", "C02", "C03", "C04", "C05", "C06", "C07",
-    "C08", "C09", "C10", "C11", "C12", "C13", "C14", "C15",
-    "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23",
-    "C24", "C25", "C26", "C27", "C28", "C29", "C30", "C31",
-};
-
+// TODO(am2419): deprecated, remove
 void dump_changed_cop2(CPUArchState *env, TCState *cur) {
-    dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget, "CapBranchTarget");
+    dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget,
+                        "CapBranchTarget");
     for (int i=0; i<32; i++) {
-        dump_changed_capreg(env, get_readonly_capreg(env, i), &env->last_C[i], cheri_gp_regnames[i]);
+        dump_changed_capreg(env, get_readonly_capreg(env, i), &env->last_C[i],
+                            cheri_gp_regnames[i]);
     }
     dump_changed_capreg(env, &cur->CHWR.DDC, &env->last_CHWR.DDC, "DDC");
     dump_changed_capreg(env, &cur->CHWR.UserTlsCap, &env->last_CHWR.UserTlsCap, "UserTlsCap");

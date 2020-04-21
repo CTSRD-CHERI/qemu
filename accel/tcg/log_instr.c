@@ -66,7 +66,10 @@
 #endif
 
 struct log_reginfo {
-    bool is_capability;
+    uint16_t flags;
+#define LRI_CAP_REG    1
+#define LRI_HOLDS_CAP  2
+
     const char *name;
     union {
         target_ulong gpr;
@@ -76,6 +79,9 @@ struct log_reginfo {
     };
 };
 typedef struct log_reginfo log_reginfo_t;
+
+#define reginfo_is_cap(ri) (ri->flags & LRI_CAP_REG)
+#define reginfo_has_cap(ri) (reginfo_is_cap(ri) && (ri->flags & LRI_HOLDS_CAP))
 
 extern int cl_default_trace_format;
 
@@ -94,6 +100,8 @@ static cpu_log_instr_info_t *target_cpu_get_log(CPUArchState *env)
  */
 static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
 {
+    int i;
+
     /* Dump main instruction log */
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     /*
@@ -110,8 +118,34 @@ static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
         log_target_disas(env_cpu(env), log->pc, /*only one*/-1);
     }
 
-    /* Dump register changes and side-effects */
+    /* Dump memory access */
 
+    /* Dump register changes and side-effects */
+    for (i = 0; i < log->regs->len; i++) {
+        log_reginfo_t *rinfo = &g_array_index(log->regs, log_reginfo_t, i);
+
+#ifndef TARGET_CHERI
+        log_assert(!reginfo_is_cap(rinfo) && "Register marked as capability "
+                   "register whitout CHERI support");
+#else
+        if (reginfo_is_cap(rinfo)) {
+            if (reginfo_has_cap(rinfo))
+                qemu_log("newapi    Write %s|" PRINT_CAP_FMTSTR_L1 "\n"
+                         "             |" PRINT_CAP_FMTSTR_L2 "\n",
+                         rinfo->name,
+                         PRINT_CAP_ARGS_L1(&rinfo->cap),
+                         PRINT_CAP_ARGS_L2(&rinfo->cap));
+            else
+                qemu_log("newapi  %s <- " TARGET_FMT_lx
+                         " (setting integer value)\n",
+                         rinfo->name, rinfo->gpr);
+        } else
+#endif
+        {
+            qemu_log("newapi    Write %s = " TARGET_FMT_lx "\n", rinfo->name,
+                     rinfo->gpr);
+        }
+    }
 
     /* Dump extra logged messages, if any */
     if (log->txt_buffer->len > 0)
@@ -148,10 +182,10 @@ static void emit_cvtrace(cpu_log_instr_info_t *log)
 static void emit_log_start(CPUArchState *env, target_ulong pc)
 {
     if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-        qemu_log("Requested instruction logging @ " TARGET_FMT_plx
+        qemu_log("Requested instruction logging @ " TARGET_FMT_lx
                  " ASID %u\n", pc, cheri_get_asid(env));
-                    qemu_log("User-mode only tracing enabled at " TARGET_FMT_lx
-                     ", ASID %u\n", pc, cheri_get_asid(env));
+        qemu_log("User-mode only tracing enabled at " TARGET_FMT_lx
+                 ", ASID %u\n", pc, cheri_get_asid(env));
     } else if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
         // TODO(am2419) Emit an event for instruction logging start
     }
@@ -164,8 +198,8 @@ static void emit_log_stop(CPUArchState *env, target_ulong pc)
             qemu_log("User-mode only tracing disabled at " TARGET_FMT_lx
                      ", ASID %u\n", pc, cheri_get_asid(env));
         else
-            qemu_log("Disabled instruction logging @ " TARGET_FMT_plx " ASID %u\n",
-                     pc, cheri_get_asid(env));
+            qemu_log("Disabled instruction logging @ " TARGET_FMT_lx
+                     " ASID %u\n", pc, cheri_get_asid(env));
     } else if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
         // TODO(am2419) Emit an event for instruction logging stop
     }
@@ -376,26 +410,49 @@ out:
     log->force_drop = false;
 }
 
-void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong value)
+/*
+ * TODO(am2419): how do we deal with orderding in case multiple registers are updated?
+ * Maybe add a log_instr_reg_extra to distinguish from primary side-effect and other
+ * side effects? (e.g. primary side effect is to update destination register, secondary
+ * might be to clear status flag registers).
+ * This is however an half-solution to the limitations imposed by the binary trace format,
+ * we may just discard the assumption that there is any ordering at all and all side-effects
+ * are granted equal rights under the constitution.
+ */
+void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name,
+                         target_ulong value)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
     log_reginfo_t r;
 
-    r.is_capability = false;
+    r.flags = 0;
     r.name = reg_name;
     r.gpr = value;
     g_array_append_val(log->regs, r);
 }
 
 #ifdef TARGET_CHERI
-void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name, cap_register_t *cr)
+void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
+                         const cap_register_t *cr)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
     log_reginfo_t r;
 
-    r.is_capability = true;
+    r.flags = LRI_CAP_REG | LRI_HOLDS_CAP;
     r.name = reg_name;
     r.cap = *cr;
+    g_array_append_val(log->regs, r);
+}
+
+void _qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
+                             target_ulong value)
+{
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    log_reginfo_t r;
+
+    r.flags = LRI_CAP_REG;
+    r.name = reg_name;
+    r.gpr = value;
     g_array_append_val(log->regs, r);
 }
 #endif

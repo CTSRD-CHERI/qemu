@@ -32,6 +32,153 @@
 #include "exec/exec-all.h"
 #include "qemu/error-report.h"
 
+#ifndef TARGET_MIPS64
+const char mips_gp_regnames[32][5] = {
+    {"zero"}, {"at"},   {"v0"},   {"v1"},   {"a0"},   {"a1"},   {"a2"},   {"a3"},
+    {"t0"},   {"t1"},   {"t2"},   {"t3"},   {"t4"},   {"t5"},   {"t6"},   {"t7"},
+    {"s0"},   {"s1"},   {"s2"},   {"s3"},   {"s4"},   {"s5"},   {"s6"},   {"s7"},
+    {"t8"},   {"t9"},   {"k0"},   {"k1"},   {"gp"},   {"sp"},   {"s8"},   {"ra"
+};
+#else
+// Use n64 register names
+const char mips_gp_regnames[32][5] = {
+    {"zero"}, {"at"},   {"v0"},   {"v1"},   {"a0"},   {"a1"},   {"a2"},   {"a3"},
+    {"a4"},   {"a5"},   {"a6"},   {"a7"},   {"t0"},   {"t1"},   {"t2"},   {"t3"},
+    {"s0"},   {"s1"},   {"s2"},   {"s3"},   {"s4"},   {"s5"},   {"s6"},   {"s7"},
+    {"t8"},   {"t9"},   {"k0"},   {"k1"},   {"gp"},   {"sp"},   {"s8"},   {"ra"},
+};
+#endif
+
+const char mips_regnames_HI[4][4] = {
+    {"HI0"}, {"HI1"}, {"HI2"}, {"HI3"},
+};
+
+const char mips_regnames_LO[4][4] = {
+    {"LO0"}, {"LO1"}, {"LO2"}, {"LO3"},
+};
+
+const char mips_fregnames[32][4] = {
+    {"f0"},  {"f1"},  {"f2"},  {"f3"},  {"f4"},  {"f5"},  {"f6"},  {"f7"},
+    {"f8"},  {"f9"},  {"f10"}, {"f11"}, {"f12"}, {"f13"}, {"f14"}, {"f15"},
+    {"f16"}, {"f17"}, {"f18"}, {"f19"}, {"f20"}, {"f21"}, {"f22"}, {"f23"},
+    {"f24"}, {"f25"}, {"f26"}, {"f27"}, {"f28"}, {"f29"}, {"f30"}, {"f31"},
+};
+
+const char mips_msaregnames[64][7] = {
+    {"w0.d0"},  {"w0.d1"},  {"w1.d0"},  {"w1.d1"},
+    {"w2.d0"},  {"w2.d1"},  {"w3.d0"},  {"w3.d1"},
+    {"w4.d0"},  {"w4.d1"},  {"w5.d0"},  {"w5.d1"},
+    {"w6.d0"},  {"w6.d1"},  {"w7.d0"},  {"w7.d1"},
+    {"w8.d0"},  {"w8.d1"},  {"w9.d0"},  {"w9.d1"},
+    {"w10.d0"}, {"w10.d1"}, {"w11.d0"}, {"w11.d1"},
+    {"w12.d0"}, {"w12.d1"}, {"w13.d0"}, {"w13.d1"},
+    {"w14.d0"}, {"w14.d1"}, {"w15.d0"}, {"w15.d1"},
+    {"w16.d0"}, {"w16.d1"}, {"w17.d0"}, {"w17.d1"},
+    {"w18.d0"}, {"w18.d1"}, {"w19.d0"}, {"w19.d1"},
+    {"w20.d0"}, {"w20.d1"}, {"w21.d0"}, {"w21.d1"},
+    {"w22.d0"}, {"w22.d1"}, {"w23.d0"}, {"w23.d1"},
+    {"w24.d0"}, {"w24.d1"}, {"w25.d0"}, {"w25.d1"},
+    {"w26.d0"}, {"w26.d1"}, {"w27.d0"}, {"w27.d1"},
+    {"w28.d0"}, {"w28.d1"}, {"w29.d0"}, {"w29.d1"},
+    {"w30.d0"}, {"w30.d1"}, {"w31.d0"}, {"w31.d1"},
+};
+
+#if !defined(TARGET_MIPS64)
+const char * const mips_mxuregnames[16][7] = {
+    {"XR1"},  {"XR2"},  {"XR3"},  {"XR4"},  {"XR5"},  {"XR6"},  {"XR7"},  {"XR8"},
+    {"XR9"},  {"XR10"}, {"XR11"}, {"XR12"}, {"XR13"}, {"XR14"}, {"XR15"}, {"MXU_CR"},
+};
+#endif
+
+/*
+ * Names of coprocessor 0 registers.
+ */
+const char mips_cop0_regnames[32*8][32] = {
+/*0*/   {"Index"},        {"MVPControl"},   {"MVPConf0"},     {"MVPConf1"},
+        {0},              {0},              {0},              {0},
+/*1*/   {"Random"},       {"VPEControl"},   {"VPEConf0"},     {"VPEConf1"},
+        {"YQMask"},       {"VPESchedule"},  {"VPEScheFBack"}, {"VPEOpt"},
+/*2*/   {"EntryLo0"},     {"TCStatus"},     {"TCBind"},       {"TCRestart"},
+        {"TCHalt"},       {"TCContext"},    {"TCSchedule"},   {"TCScheFBack"},
+/*3*/   {"EntryLo1"},     {0},              {0},              {0},
+        {0},              {0},              {0},              {"TCOpt"},
+/*4*/   {"Context"},      {"ContextConfig"}, {"UserLocal"},    {"XContextConfig"},
+        {0},              {0},              {0},              {0},
+/*5*/   {"PageMask"},     {"PageGrain"},    {"SegCtl0"},      {"SegCtl1"},
+        {"SegCtl2"},      {0},              {0},              {0},
+/*6*/   {"Wired"},        {"SRSConf0"},     {"SRSConf1"},     {"SRSConf2"},
+        {"SRSConf3"},     {"SRSConf4"},     {0},              {0},
+/*7*/   {"HWREna"},       {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*8*/   {"BadVAddr"},     {"BadInstr"},     {"BadInstrP"},    {0},
+        {0},              {0},              {0},              {0},
+/*9*/   {"Count"},        {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*10*/  {"EntryHi"},      {0},              {0},              {0},
+        {0},              {"MSAAccess"},    {"MSASave"},      {"MSARequest"},
+/*11*/  {"Compare"},      {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*12*/  {"Status"},       {"IntCtl"},       {"SRSCtl"},       {"SRSMap"},
+        {"ViewIPL"},      {"SRSMap2"},      {0},              {0},
+/*13*/  {"Cause"},        {0},              {0},              {0},
+        {"ViewRIPL"},     {"NestedExc"},    {0},              {0},
+/*14*/  {"EPC"},          {0},              {"NestedEPC"},    {0},
+        {0},              {0},              {0},              {0},
+/*15*/  {"PRId"},         {"EBase"},        {"CDMMBase"},     {"CMGCRBase"},
+        {0},              {0},              {0},              {0},
+/*16*/  {"Config"},       {"Config1"},      {"Config2"},      {"Config3"},
+        {"Config4"},      {"Config5"},      {"Config6"},      {"Config7"},
+/*17*/  {"LLAddr"},       {"internal_lladdr (virtual)"}, {"internal_llval"}, {"internal_linkedflag"},
+        {0},              {0},              {0},              {0},
+/*18*/  {"WatchLo"},      {"WatchLo1"},     {"WatchLo2"},     {"WatchLo3"},
+        {"WatchLo4"},     {"WatchLo5"},     {"WatchLo6"},     {"WatchLo7"},
+/*19*/  {"WatchHi"},      {"WatchHi1"},     {"WatchHi2"},     {"WatchHi3"},
+        {"WatchHi4"},     {"WatchHi5"},     {"WatchHi6"},     {"WatchHi7"},
+/*20*/  {"XContext"},     {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*21*/  {0},              {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*22*/  {0},              {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*23*/  {"Debug"},        {"TraceControl"}, {"TraceControl2"}, {"UserTraceData"},
+        {"TraceIBPC"},    {"TraceDBPC"},    {"Debug2"},       {0},
+/*24*/  {"DEPC"},         {0},              {"TraceControl3"}, {"UserTraceData2"},
+        {0},              {0},              {0},              {0},
+/*25*/  {"PerfCnt"},      {"PerfCnt1"},     {"PerfCnt2"},     {"PerfCnt3"},
+        {"PerfCnt4"},     {"PerfCnt5"},     {"PerfCnt6"},     {"PerfCnt7"},
+/*26*/  {"ErrCtl"},       {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*27*/  {"CacheErr"},     {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*28*/  {"ITagLo"},       {"IDataLo"},      {"DTagLo"},       {"DDataLo"},
+        {"L23TagLo"},     {"L23DataLo"},    {0},              {0},
+/*29*/  {"ITagHi"},       {"IDataHi"},      {"DTagHi"},       {0},
+        {0},              {"L23DataHi"},    {0},              {0},
+/*30*/  {"ErrorEPC"},     {0},              {0},              {0},
+        {0},              {0},              {0},              {0},
+/*31*/  {"DESAVE"},       {0},              {"KScratch1"},    {"KScratch2"},
+        {"KScratch3"},    {"KScratch4"},    {"KScratch5"},    {"KScratch6"},
+};
+
+#ifdef TARGET_CHERI
+const char cheri_gp_regnames[32][4] = {
+    {"C00"}, {"C01"}, {"C02"}, {"C03"}, {"C04"}, {"C05"}, {"C06"}, {"C07"},
+    {"C08"}, {"C09"}, {"C10"}, {"C11"}, {"C12"}, {"C13"}, {"C14"}, {"C15"},
+    {"C16"}, {"C17"}, {"C18"}, {"C19"}, {"C20"}, {"C21"}, {"C22"}, {"C23"},
+    {"C24"}, {"C25"}, {"C26"}, {"C27"}, {"C28"}, {"C29"}, {"C30"}, {"C31"},
+};
+
+const char mips_cheri_hw_regnames[32][10] = {
+    {"DDC"},       {"UserTLS"}, {0},      {0},
+    {0},           {0},         {0},      {0},
+    {"PrivTLS"},   {0},         {0},      {0},
+    {0},           {0},         {0},      {0},
+    {0},           {0},         {0},      {0},
+    {0},           {0},         {"KR1C"}, {"KR2C"},
+    {0},           {0},         {0},      {0},
+    {"ErrorEPCC"}, {"KCC"},     {"KDC"},  {"EPCC"},
+};
+#endif
 
 static void mips_cpu_set_pc(CPUState *cs, vaddr value)
 {

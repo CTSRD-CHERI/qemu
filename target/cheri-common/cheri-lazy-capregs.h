@@ -43,6 +43,7 @@
 #include "cpu.h"
 #include "tcg/tcg.h"
 #include "qemu/log.h"
+#include "exec/log_instr.h"
 
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
 
@@ -180,25 +181,33 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 
 
 #ifdef CONFIG_CHERI_LOG_INSTR
-extern const char * const cheri_gp_regnames[];
-#define log_changed_capreg(env, name, newval) \
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env), \
-                           "  %s <- " PRINT_CAP_FMTSTR "\n", name, \
-                           PRINT_CAP_ARGS(newval))
-static inline void log_changed_capreg_int(CPUArchState *env, const char *name,
-                                          target_ulong newval)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR)) &&
-        qemu_log_in_addr_range(cpu_get_recent_pc(env))) {
-        qemu_log("  %s <- " TARGET_FMT_lx " (setting integer value)\n", name,
-                 newval);
-    }
-}
+
+/*
+ * Log instruction update to the given capability register.
+ */
+#define log_changed_capreg(env, name, newval) do {                      \
+        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {           \
+            qemu_log_instr_cap(env, name, newval);                      \
+        }                                                               \
+    } while (0)
+
+/*
+ * Log instruction update to the given capability register with
+ * integer value.
+ */
+#define log_changed_capreg_int(env, name, newval) do {          \
+        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {   \
+            qemu_log_instr_cap_int(env, name, newval);          \
+        }                                                       \
+    } while (0)
+
 #else
 #define log_changed_capreg(env, name, newval) ((void)0)
 #define log_changed_capreg_int(env, name, newval) ((void)0)
 #endif
-#define log_changed_gp_capreg(env, regnum, newval)                             \
+
+/* Note: cheri_gp_regnames should be declared in cpu.h or cheri-archspecific.h */
+#define log_changed_gp_capreg(env, regnum, newval)              \
     log_changed_capreg(env, cheri_gp_regnames[regnum], newval)
 
 static inline void rvfi_changed_capreg(CPUArchState *env, unsigned regnum,
