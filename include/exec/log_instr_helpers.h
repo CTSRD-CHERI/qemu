@@ -50,3 +50,5 @@ DEF_HELPER_2(qemu_log_instr_user_stop, void, env, tl)
 DEF_HELPER_1(qemu_log_instr_commit, void, env)
 // TODO(am2419): should be TCG_CALL_NO_RWG?
 DEF_HELPER_2(qemu_log_instr, void, env, tl)
+//DEF_HELPER_3(qemu_log_instr_gpr, void, env, tl, tl)
+//DEF_HELPER_3(qemu_log_instr_cap, void, env, tl, tl)

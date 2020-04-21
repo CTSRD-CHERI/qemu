@@ -42,6 +42,75 @@
 
 #ifdef CONFIG_CHERI_LOG_INSTR
 
+/* TODO(am2419): New logging API helpers */
+
+static const char* mips_cpu_get_changed_mode(CPUMIPSState *env);
+
+static void dump_changed_regs(CPUMIPSState *env);
+
+static void dump_changed_cop0(CPUMIPSState *env);
+/*
+ * Print the changed processor state.
+ * Note: if this is emitted, tracing was enabled for this translation block,
+ * so we do not repeat the check.
+ */
+void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
+{
+    const char *new_mode = mips_cpu_get_changed_mode(env);
+    /* Testing pointer equality is fine, it always points to the same constants */
+    if (new_mode != env->last_mode) {
+        env->last_mode = new_mode;
+        qemu_log_instr_extra(env, "--- %s\n", new_mode);
+        qemu_log_instr_mode_switch(env, /*enable*/cpu_in_user_mode(env), pc);
+    }
+
+    /* TODO(am2419): remove below, just for testing. */
+    /* Print changed state: GPR, Cap. */
+    /* dump_changed_regs(env); */
+    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
+        /* Print change state: HI/LO COP0 (not included in CVTRACE) */
+        dump_changed_cop0(env);
+    }
+}
+
+/*
+ * Print changed kernel/user/debug mode.
+ */
+static const char* mips_cpu_get_changed_mode(CPUMIPSState *env)
+{
+    const char *kernel0, *kernel1, *mode;
+
+#if defined(TARGET_MIPS64)
+    if (env->CP0_Status & (1 << CP0St_KX)) {
+        kernel0 = "Kernel mode (ERL=0, KX=1)";
+        kernel1 = "Kernel mode (ERL=1, KX=1)";
+    } else {
+        kernel0 = "Kernel mode (ERL=0, KX=0)";
+        kernel1 = "Kernel mode (ERL=1, KX=0)";
+    }
+#else
+    kernel0 = "Kernel mode (ERL=0)";
+    kernel1 = "Kernel mode (ERL=1)";
+#endif
+
+    if (env->CP0_Debug & (1 << CP0DB_DM)) {
+        mode = "Debug mode";
+    } else if (env->CP0_Status & (1 << CP0St_ERL)) {
+        mode = kernel1;
+    } else if (env->CP0_Status & (1 << CP0St_EXL)) {
+        mode = kernel0;
+    } else {
+        switch (extract32(env->CP0_Status, CP0St_KSU, 2)) {
+        case 0:  mode = kernel0;           break;
+        case 1:  mode = "Supervisor mode"; break;
+        default: mode = TRACE_MODE_USER;   break;
+        }
+    }
+    return mode;
+}
+
+/* TODO(am2419): Old Stuff */
+
 extern int cl_default_trace_format;
 
 
@@ -605,30 +674,6 @@ static void dump_changed_regs(CPUMIPSState *env)
 #endif
 }
 
-
-/*
- * Print the changed processor state.
- */
-void helper_dump_changed_state(CPUMIPSState *env)
-{
-    // TODO(am2419): probably redundant check?
-    if (unlikely(should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
-        const char* new_mode = mips_cpu_get_changed_mode(env);
-        /* Testing pointer equality is fine, it always points to the same constants */
-        if (new_mode != env->last_mode) {
-            env->last_mode = new_mode;
-            qemu_log_mask(CPU_LOG_INSTR, "--- %s\n", new_mode);
-        }
-
-        /* Print changed state: GPR, Cap. */
-        dump_changed_regs(env);
-
-        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-            /* Print change state: HI/LO COP0 (not included in CVTRACE) */
-            dump_changed_cop0(env);
-        }
-    }
-}
 
 #endif // CONFIG_CHERI_LOG_INSTR
 

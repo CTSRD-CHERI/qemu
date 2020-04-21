@@ -259,9 +259,7 @@ static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t)
         gen_rvfi_dii_set_field(rd_wdata, t);
 #ifdef CONFIG_CHERI_LOG_INSTR
         // Log GPR writes here
-        // TODO(am2419): find a way to propagate env or cpu here
-        /* if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) { */
-        if (false) {
+        if (unlikely(ctx->base.log_instr_enabled)) {
             TCGv tpc = tcg_const_tl(ctx->base.pc_next);
             TCGv_i32 tregnum = tcg_const_i32(reg_num_dst);
             gen_helper_log_gpr_write(tregnum, t, tpc);
@@ -286,9 +284,7 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
         gen_rvfi_dii_set_field_const(rd_wdata, value);
 #ifdef CONFIG_CHERI_LOG_INSTR
         // Log GPR writes here
-        // TODO(am2419): find a way to propagate env or cpu here
-        /* if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) { */
-        if (false) {
+        if (unlikely(ctx->base.log_instr_enabled)) {
             TCGv tpc = tcg_const_tl(ctx->base.pc_next);
             TCGv_i32 tregnum = tcg_const_i32(reg_num_dst);
             TCGv tval = tcg_const_tl(value);
@@ -1085,10 +1081,6 @@ static bool riscv_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
     tcg_debug_assert((dcbase->tb->flags & TB_FLAGS_MMU_MASK) == env->priv);
     return env->priv == PRV_U;
 }
-
-static void riscv_tr_log_changed_state(const DisasContextBase *db, CPUState *cs)
-{
-}
 #endif /* CONFIG_CHERI_LOG_INSTR */
 
 static const TranslatorOps riscv_tr_ops = {
@@ -1101,7 +1093,6 @@ static const TranslatorOps riscv_tr_ops = {
     .disas_log          = riscv_tr_disas_log,
 #ifdef CONFIG_CHERI_LOG_INSTR
     .tb_in_user_mode    = riscv_tr_tb_in_user_mode,
-    .log_instr_changed_state = riscv_tr_log_changed_state,
 #endif
 };
 

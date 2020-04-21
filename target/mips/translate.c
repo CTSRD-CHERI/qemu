@@ -31807,6 +31807,17 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     if (is_slot) {
         gen_branch(ctx, insn_bytes);
     }
+#ifdef CONFIG_CHERI_LOG_INSTR
+    if (unlikely(ctx->base.log_instr_enabled)) {
+        /*
+         * TODO(am2419): do we really need this? we catch mode changes in
+         * the exception path anyway...
+         */
+        TCGv tpc = tcg_const_tl(ctx->base.pc_next);
+        gen_helper_mips_log_instr_changed_state(cpu_env, tpc);
+        tcg_temp_free(tpc);
+    }
+#endif
     ctx->base.pc_next += insn_bytes;
 
     if (ctx->base.is_jmp != DISAS_NEXT) {
@@ -31872,16 +31883,6 @@ static bool mips_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
                      (ctx->hflags & MIPS_HFLAG_UM));
     return (ctx->hflags & MIPS_HFLAG_UM) != 0;
 }
-
-/*
- * This is only called when logging is enabled at translation time.
- * Log changed state before advancing to the next instruction: GPR,
- * HI/LO, COP0, etc.
- */
-static void mips_tr_log_changed_state(const DisasContextBase *db, CPUState *cs)
-{
-    gen_helper_dump_changed_state(cpu_env);
-}
 #endif /* CONFIG_CHERI_LOG_INSTR */
 
 static const TranslatorOps mips_tr_ops = {
@@ -31894,7 +31895,6 @@ static const TranslatorOps mips_tr_ops = {
     .disas_log          = mips_tr_disas_log,
 #ifdef CONFIG_CHERI_LOG_INSTR
     .tb_in_user_mode    = mips_tr_tb_in_user_mode,
-    .log_instr_changed_state = mips_tr_log_changed_state,
 #endif
 };
 
