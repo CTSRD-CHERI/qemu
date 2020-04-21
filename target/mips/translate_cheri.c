@@ -32,6 +32,8 @@
  * SUCH DAMAGE.
  */
 
+/* Note: this is included in translate.c */
+
 #if defined(TARGET_CHERI) && defined(TARGET_MIPS)
 /* Verify that the processor is running with CHERI instructions enabled. */
 static inline void check_cop2x(DisasContext *ctx)
@@ -275,13 +277,13 @@ static inline void generate_cheri_cget(DisasContext *ctx, int rd, int cs,
     TCGv t0 = tcg_temp_new();
 
     gen_func(t0, cpu_env, tcs);
-    gen_store_gpr (t0, rd);
+    gen_store_gpr(t0, rd);
 
     tcg_temp_free(t0);
     tcg_temp_free_i32(tcs);
 }
 
-static inline void generate_cloadtags(int32_t rd, int32_t cb)
+static inline void generate_cloadtags(DisasContext *ctx, int32_t rd, int32_t cb)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_cap_checked_ptr tcbc  = tcg_temp_new_cap_checked();
@@ -306,12 +308,12 @@ static inline void generate_cloadtags(int32_t rd, int32_t cb)
 }
 
 
-static inline void generate_cgetcause(int32_t rd)
+static inline void generate_cgetcause(DisasContext *ctx, int32_t rd)
 {
     TCGv t0 = tcg_temp_new();
 
     gen_helper_cgetcause(t0, cpu_env);
-    gen_store_gpr (t0, rd);
+    gen_store_gpr(t0, rd);
 
     tcg_temp_free(t0);
 }
@@ -452,7 +454,8 @@ static inline void generate_ccopytype(int32_t cd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tct);
 }
 
-static inline void generate_ctestsubset(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_ctestsubset(DisasContext *ctx, int32_t rd,
+                                        int32_t cb, int32_t ct)
 {
     TCGv t0 = tcg_temp_new();
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -525,7 +528,8 @@ static inline void generate_csetaddr(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cgetandaddr(int32_t rd, int32_t cb, int32_t rt)
+static inline void generate_cgetandaddr(DisasContext *ctx, int32_t rd,
+                                        int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv t0 = tcg_temp_new();
@@ -569,7 +573,8 @@ static inline void generate_csetbounds_imm(int32_t cd, int32_t cb, int32_t lengt
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_csub(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_csub(DisasContext *ctx, int32_t rd, int32_t cb,
+                                 int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -620,7 +625,8 @@ static inline void generate_csetoffset(int32_t cd, int32_t cb, int32_t rt)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_ctoptr(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_ctoptr(DisasContext *ctx, int32_t rd, int32_t cb,
+                                   int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -698,7 +704,8 @@ static inline int generate_cclearregs(DisasContext *ctx, int32_t regset, int32_t
     return 0;
 }
 
-static inline void generate_ceq(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_ceq(DisasContext *ctx, int32_t rd, int32_t cb,
+                                int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -712,7 +719,8 @@ static inline void generate_ceq(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cne(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_cne(DisasContext *ctx, int32_t rd, int32_t cb,
+                                int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -726,7 +734,8 @@ static inline void generate_cne(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_clt(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_clt(DisasContext *ctx, int32_t rd, int32_t cb,
+                                int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -740,7 +749,8 @@ static inline void generate_clt(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cle(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_cle(DisasContext *ctx, int32_t rd, int32_t cb,
+                                int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -754,7 +764,8 @@ static inline void generate_cle(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cltu(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_cltu(DisasContext *ctx, int32_t rd, int32_t cb,
+                                 int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -768,7 +779,8 @@ static inline void generate_cltu(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cleu(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_cleu(DisasContext *ctx, int32_t rd, int32_t cb,
+                                 int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -782,7 +794,8 @@ static inline void generate_cleu(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cexeq(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_cexeq(DisasContext *ctx, int32_t rd, int32_t cb,
+                                  int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -796,7 +809,8 @@ static inline void generate_cexeq(int32_t rd, int32_t cb, int32_t ct)
     tcg_temp_free_i32(tcb);
 }
 
-static inline void generate_cnexeq(int32_t rd, int32_t cb, int32_t ct)
+static inline void generate_cnexeq(DisasContext *ctx, int32_t rd, int32_t cb,
+                                   int32_t ct)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_i32 tct = tcg_const_i32(ct);
@@ -1038,6 +1052,7 @@ static inline TCGv_cap_checked_ptr PCC_CHECKED(TCGv addr) {
 
 // instruction decoding for CHERI insns:
 #if defined(TARGET_CHERI)
+
 static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
 {
     const char *opn = "cp2inst";
@@ -1075,7 +1090,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CGETCAUSE:         /* 0x04 */
             check_cop2x(ctx);
-            generate_cgetcause(r16);
+            generate_cgetcause(ctx, r16);
             opn = "cgetcause";
             break;
         case OPC_CGETTAG:           /* 0x05 */
@@ -1099,7 +1114,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CSUB:              /* 0x0a */
             check_cop2x(ctx);
-            generate_csub(r16, r11, r6);
+            generate_csub(ctx, r16, r11, r6);
             opn = "csub";
             break;
         case OPC_CSEAL_NI: /* 0x0b */
@@ -1137,7 +1152,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CTOPTR_NI: /* 0x12 */
             check_cop2x(ctx);
-            generate_ctoptr(r16, r11, r6);
+            generate_ctoptr(ctx, r16, r11, r6);
             opn = "ctoptr";
             break;
         case OPC_CFROMPTR_NI: /* 0x13 */
@@ -1147,37 +1162,37 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CEQ_NI: /* 0x14 */
             check_cop2x(ctx);
-            generate_ceq(r16, r11, r6);
+            generate_ceq(ctx, r16, r11, r6);
             opn = "ceq";
             break;
         case OPC_CNE_NI: /* 0x15 */
             check_cop2x(ctx);
-            generate_cne(r16, r11, r6);
+            generate_cne(ctx, r16, r11, r6);
             opn = "cne";
             break;
         case OPC_CLT_NI: /* 0x16 */
             check_cop2x(ctx);
-            generate_clt(r16, r11, r6);
+            generate_clt(ctx, r16, r11, r6);
             opn = "clt";
             break;
         case OPC_CLE_NI: /* 0x17 */
             check_cop2x(ctx);
-            generate_cle(r16, r11, r6);
+            generate_cle(ctx, r16, r11, r6);
             opn = "cle";
             break;
         case OPC_CLTU_NI: /* 0x18 */
             check_cop2x(ctx);
-            generate_cltu(r16, r11, r6);
+            generate_cltu(ctx, r16, r11, r6);
             opn = "cltu";
             break;
         case OPC_CLEU_NI: /* 0x19 */
             check_cop2x(ctx);
-            generate_cleu(r16, r11, r6);
+            generate_cleu(ctx, r16, r11, r6);
             opn = "cleu";
             break;
         case OPC_CEXEQ_NI: /* 0x1a */
             check_cop2x(ctx);
-            generate_cexeq(r16, r11, r6);
+            generate_cexeq(ctx, r16, r11, r6);
             opn = "cexeq";
             break;
         case OPC_CMOVZ_NI: /* 0x1b */
@@ -1205,12 +1220,12 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             generate_ccseal(r16, r11, r6);
         case OPC_CTESTSUBSET_NI: /* 0x20 */
             check_cop2x(ctx);
-            generate_ctestsubset(r16, r11, r6);
+            generate_ctestsubset(ctx, r16, r11, r6);
             opn = "ctestsubset";
             break;
         case OPC_CNEXEQ_NI: /* 0x21 */
             check_cop2x(ctx);
-            generate_cnexeq(r16, r11, r6);
+            generate_cnexeq(ctx, r16, r11, r6);
             opn = "cnexeq";
             break;
         case OPC_CSETADDR_NI: /* 0x22 */
@@ -1220,7 +1235,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CGETANDADDR_NI: /* 0x23 */
             check_cop2x(ctx);
-            generate_cgetandaddr(r16, r11, r6);
+            generate_cgetandaddr(ctx, r16, r11, r6);
             opn = "cgetaddrmasked";
             break;
         case OPC_CANDADDR_NI: /* 0x24 */
@@ -1330,7 +1345,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 TCGv t1 = tcg_temp_new();
                 gen_load_gpr(t0, r11);
                 gen_helper_crap(t1, cpu_env, t0);
-                gen_store_gpr (t1, r16);
+                gen_store_gpr(t1, r16);
                 tcg_temp_free(t1);
                 tcg_temp_free(t0);
                 opn = "croundrepresetablelength";
@@ -1343,7 +1358,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 TCGv t1 = tcg_temp_new();
                 gen_load_gpr(t0, r11);
                 gen_helper_cram(t1, cpu_env, t0);
-                gen_store_gpr (t1, r16);
+                gen_store_gpr(t1, r16);
                 tcg_temp_free(t1);
                 tcg_temp_free(t0);
                 opn = "crepresentablealignmentmask";
@@ -1360,7 +1375,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                 break;
             case OPC_CLOADTAGS_NI:   /* 0x1e << 6 */
                 check_cop2x(ctx);
-                generate_cloadtags(r16, r11);
+                generate_cloadtags(ctx, r16, r11);
                 opn = "cloadtags";
                 break;
 
@@ -1374,7 +1389,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
                     break;
                 case OPC_CGETCAUSE_NI:  /* 0x01 << 11 */
                     check_cop2x(ctx);
-                    generate_cgetcause(r16);
+                    generate_cgetcause(ctx, r16);
                     opn = "cgetcause";
                     break;
                 case OPC_CSETCAUSE_NI:  /* 0x02 << 11 */
@@ -1533,7 +1548,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         break;
     case OPC_CTOPTR: /* 0x0c */
         check_cop2x(ctx);
-        generate_ctoptr(r16, r11, r6);
+        generate_ctoptr(ctx, r16, r11, r6);
         opn = "ctoptr";
         break;
     case OPC_COFFSET: /* 0x0d */
@@ -1561,42 +1576,42 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         switch(MASK_CAP3(opc)) {
         case OPC_CEQ:  /* 0x0 */
             check_cop2x(ctx);
-            generate_ceq(r16, r11, r6);
+            generate_ceq(ctx, r16, r11, r6);
             opn = "ceq";
             break;
         case OPC_CNE:  /* 0x1 */
             check_cop2x(ctx);
-            generate_cne(r16, r11, r6);
+            generate_cne(ctx, r16, r11, r6);
             opn = "cne";
             break;
         case OPC_CLT:  /* 0x2 */
             check_cop2x(ctx);
-            generate_clt(r16, r11, r6);
+            generate_clt(ctx, r16, r11, r6);
             opn = "clt";
             break;
         case OPC_CLE:  /* 0x3 */
             check_cop2x(ctx);
-            generate_cle(r16, r11, r6);
+            generate_cle(ctx, r16, r11, r6);
             opn = "cle";
             break;
         case OPC_CLTU: /* 0x4 */
             check_cop2x(ctx);
-            generate_cltu(r16, r11, r6);
+            generate_cltu(ctx, r16, r11, r6);
             opn = "cltu";
             break;
         case OPC_CLEU: /* 0x5 */
             check_cop2x(ctx);
-            generate_cleu(r16, r11, r6);
+            generate_cleu(ctx, r16, r11, r6);
             opn = "cleu";
             break;
         case OPC_CEXEQ: /* 0x6 */
             check_cop2x(ctx);
-            generate_cexeq(r16, r11, r6);
+            generate_cexeq(ctx, r16, r11, r6);
             opn = "cexeq";
             break;
         case OPC_CNEXEQ: /* 0x7 */
             check_cop2x(ctx);
-            generate_cnexeq(r16, r11, r6);
+            generate_cnexeq(ctx, r16, r11, r6);
             opn = "cnexeq";
             break;
         default: /* Can't happen, because all possible values are allocated */

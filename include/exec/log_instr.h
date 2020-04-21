@@ -46,6 +46,14 @@
  * The following hooks must be implemented:
  * - log_instr_changed_state
  * - tb_in_user_mode
+ *
+ * Each target should implement their own register update logging helpers that
+ * call into qemu_log_instr_gpr(), qemu_log_instr_cap() and similar interface
+ *  functions.
+ * Note that the target is responsible for producing a register name to use.
+ * It is recommended to use the helper_<target>_log_instr_{gpr,cap..}() naming
+ * convention to distinguish target-specific and generic qemu_log_instr
+ * interfaces.
  */
 
 #ifdef CONFIG_CHERI_LOG_INSTR
@@ -77,6 +85,8 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc);
  */
 void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc);
 
+// TODO(am2419): the maybe part is redundant, we only call these from helpers or
+// translator code which checks for logging enabled anyway.
 #define qemu_maybe_log_instr(op, ...) do {                      \
         if (unlikely(qemu_loglevel_mask(INSTR_LOG_MASK)))       \
             op(__VA_ARGS__);                                    \
@@ -91,8 +101,11 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc);
 #ifdef TARGET_CHERI
 #define qemu_log_instr_cap(...)                                 \
     qemu_maybe_log_instr(_qemu_log_instr_cap, __VA_ARGS__)
+#define qemu_log_instr_cap_int(...)                             \
+    qemu_maybe_log_instr(_qemu_log_instr_cap_int, __VA_ARGS__)
 #else
 #define qemu_log_instr_cap(...)
+#define qemu_log_instr_cap_int(...)
 #endif
 
 #define qemu_log_instr_mem(...)                                 \
@@ -149,7 +162,13 @@ void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name,
  * Log changed capability register.
  */
 void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
-                         cap_register_t *cr);
+                         const cap_register_t *cr);
+
+/*
+ * Log changed capability register with integer value.
+ */
+void _qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
+                             target_ulong value);
 #endif
 
 /*
