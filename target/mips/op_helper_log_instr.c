@@ -44,7 +44,7 @@
 #include "cheri-helper-utils.h"
 #endif
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 
 /* TODO(am2419): New logging API helpers */
 
@@ -595,7 +595,7 @@ static void dump_changed_regs(CPUMIPSState *env)
 }
 
 
-#endif // CONFIG_CHERI_LOG_INSTR
+#endif // CONFIG_TCG_LOG_INSTR
 
 static void simple_dump_state(CPUMIPSState *env, FILE *f,
                               fprintf_function cpu_fprintf)

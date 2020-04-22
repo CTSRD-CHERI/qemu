@@ -1224,11 +1224,11 @@ struct CPUMIPSState {
 
 #endif /* TARGET_CHERI */
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 #define TRACE_MODE_USER "User mode"
     const char *last_mode;
 #define IN_USERSPACE(env) ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM)
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
 
     /* Fields up to this point are cleared by a CPU reset */
     struct {} end_reset_fields;
@@ -1244,7 +1244,7 @@ struct CPUMIPSState {
     QEMUTimer *timer; /* Internal timer */
     struct MIPSITUState *itu;
     MemoryRegion *itc_tag; /* ITC Configuration Tags */
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     /*
      * Processor state after the last instruction.
      * Used for instruction tracing.
@@ -1259,7 +1259,7 @@ struct CPUMIPSState {
 #endif // TARGET_CHERI
 
     cvtrace_t cvtrace; /* TODO(am2419): deprecated, remove */
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
 
@@ -1414,7 +1414,7 @@ void itc_reconfigure(struct MIPSITUState *tag);
 /* helper.c */
 target_ulong exception_resume_pc(CPUMIPSState *env);
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     target_ulong value);
 #ifdef TARGET_CHERI
@@ -1422,7 +1422,7 @@ void dump_changed_capreg(CPUMIPSState *env, const cap_register_t *cr,
                          cap_register_t *old_reg, const char* name);
 void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
 #endif /* TARGET_CHERI */
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
 
 static inline void
 mips_cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
@@ -1505,7 +1505,7 @@ static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr, bool 
     mips_update_pc_impl(&env->active_tc, pc_addr, can_be_unrepresenable);
 }
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 /* TODO(am2419): Document these as required to support a new target.
  * New common log API arch-specific helpers.
  */

@@ -118,7 +118,7 @@ cheri_tag_prot_clear_or_trap(CPUMIPSState *env, target_ulong va,
     return tag;
 }
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 
 #define cvtrace_dump_cap_load(trace, addr, cr)          \
     cvtrace_dump_cap_ldst(trace, CVT_LD_CAP, addr, cr)
@@ -167,7 +167,7 @@ static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t
         cvtrace->val5 = tswap64(cap_get_length64(cr)); // write UINT64_MAX for 1 << 64
     }
 }
-#endif // CONFIG_CHERI_LOG_INSTR
+#endif // CONFIG_TCG_LOG_INSTR
 
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)

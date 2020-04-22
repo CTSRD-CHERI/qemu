@@ -1210,7 +1210,7 @@ static inline void set_badinstr_registers(CPUMIPSState *env)
 }
 #endif
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 extern void helper_mips_log_instr_changed_state(
     CPUMIPSState *env, target_ulong pc);
 #endif
@@ -1257,13 +1257,13 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  PRINT_CAP_ARGS(&env->active_tc.CHWR.EPCC));
 #endif
     }
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     // TODO(am2419): there is another one at the end of this function. Is this redundant?
     if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
         /* Note pc is guaranteed to be the current pc by the assertion above. */
         helper_mips_log_instr_changed_state(env, cpu_get_recent_pc(env));
     }
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&
         (env->hflags & MIPS_HFLAG_DM)) {
         cs->exception_index = EXCP_DINT;
@@ -1580,7 +1580,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #endif
 #endif /* TARGET_CHERI */
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
         if (cs->exception_index == EXCP_EXT_INTERRUPT)
             qemu_log("--- Interrupt, vector " TARGET_FMT_lx "\n",
@@ -1601,7 +1601,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
          dump_changed_capreg(env, cheri_get_current_pcc(env), &tmp, "PCC");
     }
 #endif /* TARGET_CHERI */
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
     if (should_log_instr(env, CPU_LOG_INT | CPU_LOG_INSTR)
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
         qemu_log("%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
@@ -1609,7 +1609,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
                  __func__, PC_ADDR(env), get_CP0_EPC(env), cause,
                  env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
                  env->CP0_DEPC);
-#if defined(TARGET_CHERI) && defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) && defined(CONFIG_TCG_LOG_INSTR)
         qemu_log("ErrorEPC " TARGET_FMT_lx "\n", get_CP0_ErrorEPC(env));
         cap_register_t tmp;
         // We use a null cap as oldreg so that we always print it.
@@ -1621,12 +1621,12 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #endif
     cs->exception_index = EXCP_NONE;
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
         /* Note pc is guaranteed to be the current pc by the assertion above. */
         helper_mips_log_instr_changed_state(env, cpu_get_recent_pc(env));
     }
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
 }
 
 bool mips_cpu_exec_interrupt(CPUState *cs, int interrupt_request)

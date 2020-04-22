@@ -104,7 +104,7 @@ void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* n
              prefix, name, PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr));
 }
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 #define log_instr_hwreg_update(env, name, newval) do {   \
         if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {   \
             qemu_log_instr_reg(env, name, newval);              \
@@ -824,7 +824,7 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
     env->linkedflag = 1; // FIXME: remove
 }
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 
 // TODO(am2419): deprecated, remove
 void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
@@ -874,11 +874,11 @@ void dump_changed_cop2(CPUArchState *env, TCState *cur) {
     }
 }
 
-#endif // CONFIG_CHERI_LOG_INSTR
+#endif // CONFIG_TCG_LOG_INSTR
 
 #ifdef CHERI_128
 #elif defined(CHERI_MAGIC128)
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 /*
  * Print capability load from memory to log file.
  */
@@ -906,7 +906,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor, uint64_t base,
                  addr, tag, cursor, base);
     }
 }
-#endif // CONFIG_CHERI_LOG_INSTR
+#endif // CONFIG_TCG_LOG_INSTR
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
@@ -934,7 +934,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     // XOR with -1 so that NULL is zero in memory, etc.
     decompress_256cap(mem_buffer, &ncd, tag);
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         dump_cap_load(vaddr, cap_get_cursor(&ncd), ncd.cr_base, tag);
@@ -970,7 +970,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     cpu_stq_data_ra(env, vaddr, mem_buffer.u64s[2], retpc); /* base */
     cpu_stq_data_ra(env, vaddr + 8, mem_buffer.u64s[1], retpc);
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         /* Log memory cap write, if needed. */
@@ -983,7 +983,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
 
 #else /* ! CHERI_MAGIC128 */
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 /*
  * Print capability load from memory to log file.
  */
@@ -1047,7 +1047,7 @@ static inline void dump_cap_store_length(uint64_t length)
     }
 }
 
-#endif // CONFIG_CHERI_LOG_INSTR
+#endif // CONFIG_TCG_LOG_INSTR
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
@@ -1074,7 +1074,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     // XOR with -1 so that NULL is zero in memory, etc.
     decompress_256cap(mem_buffer, &ncd, tag);
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     /* Log memory reads, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         dump_cap_load_op(vaddr, mem_buffer.u64s[0], tag);
@@ -1088,7 +1088,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     update_capreg(env, cd, &ncd);
 }
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 static inline void cvtrace_dump_cap_cursor(cvtrace_t *cvtrace, uint64_t cursor)
 {
     if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
@@ -1109,7 +1109,7 @@ static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
         cvtrace->val5 = tswap64(length);
     }
 }
-#endif // CONFIG_CHERI_LOG_INSTR
+#endif // CONFIG_TCG_LOG_INSTR
 
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
                          target_ulong retpc)
@@ -1139,7 +1139,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     cpu_stq_data_ra(env, vaddr + 16, mem_buffer.u64s[2], retpc);
     cpu_stq_data_ra(env, vaddr + 24, mem_buffer.u64s[3], retpc);
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         uint64_t otype_and_perms = mem_buffer.u64s[0];

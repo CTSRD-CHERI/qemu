@@ -449,7 +449,7 @@ struct CPUState {
     /* track IOMMUs whose translations we've cached in the TCG TLB */
     GArray *iommu_notifiers;
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     /* Instruction logging state and buffer */
     cpu_log_instr_info_t log_info;
 #endif

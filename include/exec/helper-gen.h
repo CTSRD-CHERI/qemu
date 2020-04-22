@@ -83,7 +83,7 @@ static inline void glue(gen_helper_, name)(dh_retvar_decl(ret)          \
 #include "trace/generated-helpers-wrappers.h"
 #include "tcg-runtime.h"
 #include "plugin-helpers.h"
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 // TODO(am2419): maybe move to tcg or merge with tcg-runtime?
 #include "exec/log_instr_helpers.h"
 #endif

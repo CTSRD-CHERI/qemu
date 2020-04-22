@@ -513,7 +513,7 @@ target_ulong helper_dmfc0_saar(CPUMIPSState *env)
 }
 #endif /* TARGET_MIPS64 */
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 /*
  * Log Cop0 register updates.
  */

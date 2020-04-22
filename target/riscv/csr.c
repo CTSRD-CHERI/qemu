@@ -1237,7 +1237,7 @@ static inline bool csr_needs_asr(CPURISCVState *env, int csrno) {
 }
 #endif
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 #define log_changed_csr(env, csrno, newval)                                    \
     qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),              \
                            "  csr_%d <- " TARGET_FMT_lx "\n", csrno, newval)

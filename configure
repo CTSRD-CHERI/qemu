@@ -6832,7 +6832,7 @@ if test "$debug_tcg" = "yes" ; then
   echo "CONFIG_DEBUG_TCG=y" >> $config_host_mak
 fi
 if test "$cheri_log_instr" = "yes" ; then
-  echo "CONFIG_CHERI_LOG_INSTR=y" >> $config_host_mak
+  echo "CONFIG_TCG_LOG_INSTR=y" >> $config_host_mak
 fi
 if test "$rvfi_dii" = "yes" ; then
   echo "CONFIG_RVFI_DII=y" >> $config_host_mak

@@ -2828,7 +2828,7 @@ typedef struct DisasContext {
 
 static inline void mips_update_statcounters_icount(DisasContext *ctx);
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 /*
  * Generate helper to log general purpose register update by the
  * instruction.
@@ -3719,11 +3719,11 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
     t0 = tcg_temp_new();
     gen_base_offset_addr(ctx, t0, base, offset);
 
-#if defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     TCGv_cap_checked_ptr ddc_interposed = tcg_temp_new_cap_checked();
 #else
     TCGv_cap_checked_ptr ddc_interposed = t0;
-#endif /* defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR) */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR) */
 
     switch (opc) {
 #if defined(TARGET_MIPS64)
@@ -3920,9 +3920,9 @@ static void gen_ld(DisasContext *ctx, uint32_t opc,
         break;
     }
     tcg_temp_free(t0);
-#if defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     tcg_temp_free_cap_checked(ddc_interposed);
-#endif /* defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR) */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR) */
 }
 
 #ifndef TARGET_CHERI
@@ -4132,9 +4132,9 @@ static void gen_scwp(DisasContext *ctx, uint32_t base, int16_t offset,
 static void gen_flt_ldst(DisasContext *ctx, uint32_t opc, int ft,
                          TCGv t0)
 {
-#if defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     TCGv t1 = tcg_temp_new();
-#endif /* defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR) */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR) */
     /*
      * Don't do NOP if destination is zero: we must perform the actual
      * memory access.
@@ -4181,9 +4181,9 @@ static void gen_flt_ldst(DisasContext *ctx, uint32_t opc, int ft,
         generate_exception_end(ctx, EXCP_RI);
         break;
     }
-#if defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     tcg_temp_free(t1);
-#endif /* defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR) */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR) */
 }
 
 static void gen_cop1_ldst(DisasContext *ctx, uint32_t op, int rt,
@@ -4319,7 +4319,7 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
 
     if (rt == 0) {
         /* If no destination, treat it as a NOP. */
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
         if (opc == OPC_ORI && rs == 0) {
             
             /* With 'li $0, 0xbeef' turn on instruction trace logging. */
@@ -4359,7 +4359,7 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
             }
 
         }
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
         return;
     }
     uimm = (uint16_t)imm;
@@ -13335,9 +13335,9 @@ static void gen_flt3_ldst(DisasContext *ctx, uint32_t opc,
                           int fd, int fs, int base, int index)
 {
     TCGv t0 = tcg_temp_new();
-#if defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     TCGv t1 = tcg_temp_new();
-#endif /* defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR) */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR) */
 
     if (base == 0) {
         gen_load_gpr(t0, index);
@@ -13418,9 +13418,9 @@ static void gen_flt3_ldst(DisasContext *ctx, uint32_t opc,
         break;
     }
     tcg_temp_free(t0);
-#if defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     tcg_temp_free(t1);
-#endif /* defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR) */
+#endif /* defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR) */
 }
 
 static void gen_flt3_arith(DisasContext *ctx, uint32_t opc,
@@ -28104,7 +28104,7 @@ static void decode_opc_special3_legacy(CPUMIPSState *env, DisasContext *ctx)
     int rs, rt, rd;
     uint32_t op1, op2;
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(ctx->base.log_instr_enabled)) {
         warn_report("DSP instruction tracing is not implemented\n");
     }
@@ -30881,7 +30881,7 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         decode_opc_special(env, ctx);
         break;
     case OPC_SPECIAL2:
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(ctx->base.log_instr_enabled)) {
         warn_report("OPC_SPECIAL2 (mxu or mmi) instruction tracing is "
                     "not implemented\n");
@@ -30899,7 +30899,7 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
     case OPC_SPECIAL3:
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(ctx->base.log_instr_enabled)) {
         warn_report("OPC_SPECIAL3 (mmi) instruction tracing is "
                     "not implemented\n");
@@ -31870,7 +31870,7 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
         return;
 #else
         ctx->opcode = cpu_lduw_code(env, ctx->base.pc_next);
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(ctx->base.log_instr_enabled)) {
         warn_report("nanomips instruction tracing is not implemented\n");
     }
@@ -31921,7 +31921,7 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     if (is_slot) {
         gen_branch(ctx, insn_bytes);
     }
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(ctx->base.log_instr_enabled)) {
         /*
          * TODO(am2419): do we really need this? we catch mode changes in
@@ -31988,7 +31988,7 @@ static void mips_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs)
     log_target_disas(cs, dcbase->pc_first, dcbase->tb->size);
 }
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 static bool mips_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
 {
     DisasContext *ctx = container_of(dcbase, DisasContext, base);
@@ -31997,7 +31997,7 @@ static bool mips_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
                      (ctx->hflags & MIPS_HFLAG_UM));
     return (ctx->hflags & MIPS_HFLAG_UM) != 0;
 }
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
 
 static const TranslatorOps mips_tr_ops = {
     .init_disas_context = mips_tr_init_disas_context,
@@ -32007,7 +32007,7 @@ static const TranslatorOps mips_tr_ops = {
     .translate_insn     = mips_tr_translate_insn,
     .tb_stop            = mips_tr_tb_stop,
     .disas_log          = mips_tr_disas_log,
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     .tb_in_user_mode    = mips_tr_tb_in_user_mode,
 #endif
 };
@@ -32231,7 +32231,7 @@ void cpu_state_reset(CPUMIPSState *env)
 {
     CPUState *cs = env_cpu(env);
 
-#if defined(TARGET_CHERI) && defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) && defined(CONFIG_TCG_LOG_INSTR)
     qemu_log_instr_init(env);
 #endif
 
