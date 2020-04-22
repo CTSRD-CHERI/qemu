@@ -49,7 +49,7 @@ static inline void gpr_set_int_value(CPUArchState *env, unsigned reg,
 #else
     env->gpr[reg] = value;
 #endif
-#if defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(CONFIG_TCG_LOG_INSTR)
     helper_log_gpr_write(reg, value, cpu_get_recent_pc(env));
 #endif
 }

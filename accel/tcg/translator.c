@@ -60,11 +60,11 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #endif
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_USER_ONLY))) {
         if (ops->tb_in_user_mode(db, cpu)) {
             // TODO(am2419): move debug logging to qemu_log_instr_mode_switch?
-#ifdef DEBUG_INSTR_LOGGING
+#ifdef CONFIG_DEBUG_TCG
             qemu_log_mask(CPU_LOG_INSTR, "-- Instruction logging enabled for TB@"
                           TARGET_FMT_lx " (usermode=%d)\n", db->pc_next,
                           ops->tb_in_user_mode(db, cpu));
@@ -72,7 +72,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
             qemu_log_instr_mode_switch(cpu->env_ptr, /* enable*/true,
                                        db->pc_next);
         } else {
-#ifdef DEBUG_INSTR_LOGGING
+#ifdef CONFIG_DEBUG_TCG
             qemu_log_mask(CPU_LOG_INSTR,
                           "-- Userspace Instruction logging disabled "
                           "for TB@" TARGET_FMT_lx "\n", db->pc_next);
@@ -83,7 +83,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     }
     /* Cache whether we are logging instructions in this tb */
     db->log_instr_enabled = qemu_log_instr_enabled(cpu);
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */
 
     /* Reset the temp count so that we can identify leaks */
     tcg_clear_temp_count();
@@ -120,7 +120,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         }
 #endif
         ops->insn_start(db, cpu);
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
         /*
          * TODO(am2419): could move the commit below tr_insn or would we lose something?
          * this positioning also causes an artifact logging an empty entry when tracing
@@ -173,7 +173,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         } else {
             ops->translate_insn(db, cpu);
         }
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
         /*
          * Log instruction opcode after translation.
          * This way the translate_insn hook updates the next pc for us

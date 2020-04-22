@@ -79,7 +79,7 @@ typedef struct DisasContextBase {
     int num_insns;
     int max_insns;
     bool singlestep_enabled;
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     bool log_instr_enabled;
 #endif
 } DisasContextBase;
@@ -136,7 +136,7 @@ typedef struct TranslatorOps {
     void (*translate_insn)(DisasContextBase *db, CPUState *cpu);
     void (*tb_stop)(DisasContextBase *db, CPUState *cpu);
     void (*disas_log)(const DisasContextBase *db, CPUState *cpu);
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     bool (*tb_in_user_mode)(DisasContextBase *db, CPUState *cpu);
 #endif
 

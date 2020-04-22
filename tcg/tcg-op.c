@@ -2852,7 +2852,7 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
     }
 
     addr = plugin_prep_mem_callbacks(addr);
-#if defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(CONFIG_TCG_LOG_INSTR)
     TCGv_cap_checked_ptr saved_load_addr;
     // If addr and val are the same, we need to allocate a temporary
     if ((TCGv)addr == (TCGv)val) {
@@ -2884,7 +2884,7 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
             g_assert_not_reached();
         }
     }
-#if defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(CONFIG_TCG_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
         gen_helper_dump_load32(cpu_env, saved_load_addr, val, tcop);
@@ -2929,9 +2929,9 @@ void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
     gen_rvfi_dii_set_field_const(mem_wmask, memop_rvfi_mask(memop));
 
     plugin_gen_mem_callbacks(addr, info);
-#if defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
-#if defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(CONFIG_TCG_LOG_INSTR)
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
         gen_helper_dump_store32(cpu_env, addr, val, tcop);
     }
@@ -2977,7 +2977,7 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     }
 
     addr = plugin_prep_mem_callbacks(addr);
-#if defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(CONFIG_TCG_LOG_INSTR)
     TCGv_cap_checked_ptr saved_load_addr;
     // If addr and val are the same, we need to allocate a temporary
     if ((TCGv)addr == (TCGv)val) {
@@ -3015,7 +3015,7 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
             g_assert_not_reached();
         }
     }
-#if defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(CONFIG_TCG_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
         gen_helper_dump_load64(cpu_env, saved_load_addr, val, tcop);
@@ -3070,9 +3070,9 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     gen_rvfi_dii_set_field_const(mem_wmask, memop_rvfi_mask(memop));
 
     plugin_gen_mem_callbacks(addr, info);
-#if defined(TARGET_CHERI) || defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
-#if defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(CONFIG_TCG_LOG_INSTR)
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
         gen_helper_dump_store64(cpu_env, addr, val, tcop);
     }

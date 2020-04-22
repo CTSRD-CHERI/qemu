@@ -29,7 +29,7 @@
 #include "exec/cpu_ldst.h"
 #include "exec/ramblock.h"
 #include "exec/memop.h"
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 #include "exec/log.h"
 #endif
 #ifdef TARGET_CHERI
@@ -1182,7 +1182,7 @@ static inline void exception_return(CPUMIPSState *env)
     debug_pre_eret(env);
 #ifdef TARGET_CHERI
     // qemu_log_mask(CPU_LOG_INSTR, "%s: PCC <- EPCC\n", __func__);
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
          // Print the new PCC value for debugging traces (compare to null
          // so that we always print it)
@@ -1194,7 +1194,7 @@ static inline void exception_return(CPUMIPSState *env)
          null_capability(&null_cap);
          dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &null_cap, "ErrorEPCC");
     }
-#endif // CONFIG_CHERI_LOG_INSTR
+#endif // CONFIG_TCG_LOG_INSTR
 #endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
 #ifdef TARGET_CHERI

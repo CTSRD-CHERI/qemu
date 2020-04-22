@@ -56,7 +56,7 @@
  * interfaces.
  */
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 
 #define INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
 
@@ -214,7 +214,7 @@ void _qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
  */
 void _qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 
-#else /* ! defined(CONFIG_CHERI_LOG_INSTR) */
+#else /* ! defined(CONFIG_TCG_LOG_INSTR) */
 #define	qemu_log_instr_enabled(cpu) false
 #define	qemu_log_instr_init(env)
 #define	qemu_log_instr_start(env, mode, pc)
@@ -230,4 +230,4 @@ void _qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 #define	qemu_log_instr_env(...)
 #define	qemu_log_instr_extra(...)
 #define	qemu_log_instr_commit(...)
-#endif /* ! defined(CONFIG_CHERI_LOG_INSTR) */
+#endif /* ! defined(CONFIG_TCG_LOG_INSTR) */

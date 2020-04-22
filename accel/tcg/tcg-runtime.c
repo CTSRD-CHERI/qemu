@@ -169,7 +169,7 @@ void *HELPER(lookup_tb_ptr)(CPUArchState *env)
     return tb->tc.ptr;
 }
 
-#if defined(CONFIG_CHERI_LOG_INSTR)
+#if defined(CONFIG_TCG_LOG_INSTR)
 
 #ifdef TARGET_MIPS
 /*

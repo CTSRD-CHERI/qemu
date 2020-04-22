@@ -57,9 +57,9 @@
  * both the text and binary format.
  */
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 
-#ifdef DEBUG_INSTR_LOGGING
+#ifdef CONFIG_DEBUG_TCG
 #define log_assert(x) assert((x))
 #else
 #define log_assert(x)
@@ -510,4 +510,4 @@ void _qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
     va_end(va);
 }
 
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */

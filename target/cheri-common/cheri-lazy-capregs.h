@@ -180,7 +180,7 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 }
 
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 
 /*
  * Log instruction update to the given capability register.

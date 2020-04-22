@@ -32,7 +32,7 @@
 
 #pragma once
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 
 /* TODO(am2419): there is no need for this to be visible, hide in util/log_instr.c */
 struct cvtrace {
@@ -90,4 +90,4 @@ struct cpu_log_instr_info {
     GString *txt_buffer;
 };
 typedef struct cpu_log_instr_info cpu_log_instr_info_t;
-#endif /* CONFIG_CHERI_LOG_INSTR */
+#endif /* CONFIG_TCG_LOG_INSTR */

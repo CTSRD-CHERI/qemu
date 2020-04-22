@@ -336,7 +336,7 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         log_changed_special_reg(env, #name, ((env)->name));                    \
     } while (false)
 #endif
-#ifdef CONFIG_MIPS_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 #define log_changed_special_reg(env, name, newval)                             \
     qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),              \
                            "  %s <- " TARGET_FMT_lx "\n", name, newval)
@@ -591,7 +591,7 @@ riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
 // Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets
 #define cpu_get_tb_cpu_state_6 riscv_cpu_get_tb_cpu_state
 
-#ifdef CONFIG_CHERI_LOG_INSTR
+#ifdef CONFIG_TCG_LOG_INSTR
 /* TODO(am2419): Document these as required to support a new target.
  * New common log API arch-specific helpers.
  */
