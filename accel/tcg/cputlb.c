@@ -1736,6 +1736,16 @@ tcg_target_ulong helper_be_ldsl_mmu(CPUArchState *env, target_ulong addr,
  * Load helpers for cpu_ldst.h.
  */
 
+#ifdef CONFIG_TCG_LOG_INSTR
+/*
+ * Log a target memory load via cpu_ldst.
+ */
+#define log_instr_load_int(env, addr, value, op)        \
+    helper_qemu_log_instr_load64(env, addr, value, op)
+#else
+#define log_instr_load_int(env, addr, val, op) ((void)0)
+#endif
+
 static inline uint64_t cpu_load_helper(CPUArchState *env, abi_ptr addr,
                                        int mmu_idx, uintptr_t retaddr,
                                        MemOp op, FullLoadHelper *full_load)
@@ -1750,10 +1760,6 @@ static inline uint64_t cpu_load_helper(CPUArchState *env, abi_ptr addr,
     op &= ~MO_SIGN;
     oi = make_memop_idx(op, mmu_idx);
     ret = full_load(env, addr, oi, retaddr);
-
-#if defined(CONFIG_TCG_LOG_INSTR)
-    helper_dump_load64(env, addr, ret, op);
-#endif
     qemu_plugin_vcpu_mem_cb(env_cpu(env), addr, meminfo);
 
     return ret;
@@ -1762,46 +1768,59 @@ static inline uint64_t cpu_load_helper(CPUArchState *env, abi_ptr addr,
 uint32_t cpu_ldub_mmuidx_ra(CPUArchState *env, abi_ptr addr,
                             int mmu_idx, uintptr_t ra)
 {
-    return cpu_load_helper(env, addr, mmu_idx, ra, MO_UB, full_ldub_mmu);
+    uint32_t ret = cpu_load_helper(env, addr, mmu_idx, ra, MO_UB,
+                                   full_ldub_mmu);
+    log_instr_load_int(env, addr, ret, MO_UB);
+    return ret;
 }
 
 int cpu_ldsb_mmuidx_ra(CPUArchState *env, abi_ptr addr,
                        int mmu_idx, uintptr_t ra)
 {
-    return (int8_t)cpu_load_helper(env, addr, mmu_idx, ra, MO_SB,
-                                   full_ldub_mmu);
+    int ret = (int8_t)cpu_load_helper(env, addr, mmu_idx, ra, MO_SB,
+                                      full_ldub_mmu);
+    log_instr_load_int(env, addr, ret, MO_SB);
+    return ret;
 }
 
 uint32_t cpu_lduw_mmuidx_ra(CPUArchState *env, abi_ptr addr,
                             int mmu_idx, uintptr_t ra)
 {
-    return cpu_load_helper(env, addr, mmu_idx, ra, MO_TEUW,
-                           MO_TE == MO_LE
-                           ? full_le_lduw_mmu : full_be_lduw_mmu);
+    uint32_t ret = cpu_load_helper(env, addr, mmu_idx, ra, MO_TEUW,
+                                   MO_TE == MO_LE
+                                   ? full_le_lduw_mmu : full_be_lduw_mmu);
+    log_instr_load_int(env, addr, ret, MO_TEUW);
+    return ret;
 }
 
 int cpu_ldsw_mmuidx_ra(CPUArchState *env, abi_ptr addr,
                        int mmu_idx, uintptr_t ra)
 {
-    return (int16_t)cpu_load_helper(env, addr, mmu_idx, ra, MO_TESW,
-                                    MO_TE == MO_LE
-                                    ? full_le_lduw_mmu : full_be_lduw_mmu);
+    int ret = (int16_t)cpu_load_helper(env, addr, mmu_idx, ra, MO_TESW,
+                                       MO_TE == MO_LE
+                                       ? full_le_lduw_mmu : full_be_lduw_mmu);
+    log_instr_load_int(env, addr, ret, MO_TESW);
+    return ret;
 }
 
 uint32_t cpu_ldl_mmuidx_ra(CPUArchState *env, abi_ptr addr,
                            int mmu_idx, uintptr_t ra)
 {
-    return cpu_load_helper(env, addr, mmu_idx, ra, MO_TEUL,
-                           MO_TE == MO_LE
-                           ? full_le_ldul_mmu : full_be_ldul_mmu);
+    uint32_t ret =  cpu_load_helper(env, addr, mmu_idx, ra, MO_TEUL,
+                                    MO_TE == MO_LE
+                                    ? full_le_ldul_mmu : full_be_ldul_mmu);
+    log_instr_load_int(env, addr, ret, MO_TEUL);
+    return ret;
 }
 
 uint64_t cpu_ldq_mmuidx_ra(CPUArchState *env, abi_ptr addr,
                            int mmu_idx, uintptr_t ra)
 {
-    return cpu_load_helper(env, addr, mmu_idx, ra, MO_TEQ,
-                           MO_TE == MO_LE
-                           ? helper_le_ldq_mmu : helper_be_ldq_mmu);
+    uint64_t ret = cpu_load_helper(env, addr, mmu_idx, ra, MO_TEQ,
+                                   MO_TE == MO_LE
+                                   ? helper_le_ldq_mmu : helper_be_ldq_mmu);
+    log_instr_load_int(env, addr, ret, MO_TEQ);
+    return ret;
 }
 
 uint32_t cpu_ldub_data_ra(CPUArchState *env, target_ulong ptr,
@@ -1835,6 +1854,20 @@ uint64_t cpu_ldq_data_ra(CPUArchState *env, target_ulong ptr, uintptr_t retaddr)
 {
     return cpu_ldq_mmuidx_ra(env, ptr, cpu_mmu_index(env, false), retaddr);
 }
+
+#ifdef TARGET_CHERI
+/*
+ * TODO(am2419): Ugly hack to avoid logging memory accesses that load capability
+ * components as normal memory accesses. The caller is responsible for logging.
+ */
+uint64_t cpu_ldq_cap_data_ra(CPUArchState *env, target_ulong ptr,
+                             uintptr_t retaddr)
+{
+    return cpu_load_helper(env, ptr, cpu_mmu_index(env, false),
+                           retaddr, MO_TEQ, MO_TE == MO_LE
+                           ? helper_le_ldq_mmu : helper_be_ldq_mmu);
+}
+#endif
 
 uint32_t cpu_ldub_data(CPUArchState *env, target_ulong ptr)
 {
@@ -2099,6 +2132,16 @@ void helper_be_stq_mmu(CPUArchState *env, target_ulong addr, uint64_t val,
  * Store Helpers for cpu_ldst.h
  */
 
+#ifdef CONFIG_TCG_LOG_INSTR
+/*
+ * Log a target memory store via cpu_ldst.
+ */
+#define log_instr_store_int(env, addr, value, op)       \
+    helper_qemu_log_instr_store64(env, addr, value, op)
+#else
+#define log_instr_store_int(env, addr, val, op) ((void)0)
+#endif
+
 static inline void QEMU_ALWAYS_INLINE
 cpu_store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
                  int mmu_idx, uintptr_t retaddr, MemOp op)
@@ -2111,9 +2154,6 @@ cpu_store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
 
     oi = make_memop_idx(op, mmu_idx);
     store_helper(env, addr, val, oi, retaddr, op);
-#if defined(CONFIG_TCG_LOG_INSTR)
-    helper_dump_store64(env, addr, val, op);
-#endif
     qemu_plugin_vcpu_mem_cb(env_cpu(env), addr, meminfo);
 }
 
@@ -2121,24 +2161,28 @@ void cpu_stb_mmuidx_ra(CPUArchState *env, target_ulong addr, uint32_t val,
                        int mmu_idx, uintptr_t retaddr)
 {
     cpu_store_helper(env, addr, val, mmu_idx, retaddr, MO_UB);
+    log_instr_store_int(env, addr, val, MO_UB);
 }
 
 void cpu_stw_mmuidx_ra(CPUArchState *env, target_ulong addr, uint32_t val,
                        int mmu_idx, uintptr_t retaddr)
 {
     cpu_store_helper(env, addr, val, mmu_idx, retaddr, MO_TEUW);
+    log_instr_store_int(env, addr, val, MO_TEUW);
 }
 
 void cpu_stl_mmuidx_ra(CPUArchState *env, target_ulong addr, uint32_t val,
                        int mmu_idx, uintptr_t retaddr)
 {
     cpu_store_helper(env, addr, val, mmu_idx, retaddr, MO_TEUL);
+    log_instr_store_int(env, addr, val, MO_TEUL);
 }
 
 void cpu_stq_mmuidx_ra(CPUArchState *env, target_ulong addr, uint64_t val,
                        int mmu_idx, uintptr_t retaddr)
 {
     cpu_store_helper(env, addr, val, mmu_idx, retaddr, MO_TEQ);
+    log_instr_store_int(env, addr, val, MO_TEQ);
 }
 
 void cpu_stb_data_ra(CPUArchState *env, target_ulong ptr,
@@ -2164,6 +2208,18 @@ void cpu_stq_data_ra(CPUArchState *env, target_ulong ptr,
 {
     cpu_stq_mmuidx_ra(env, ptr, val, cpu_mmu_index(env, false), retaddr);
 }
+
+#ifdef TARGET_CHERI
+/*
+ * TODO(am2419): Ugly hack to avoid logging memory accesses that store capability
+ * components as normal memory accesses. The caller is responsible for logging.
+ */
+void cpu_stq_cap_data_ra(CPUArchState *env, target_ulong ptr,
+                         uint64_t val, uintptr_t retaddr)
+{
+    cpu_store_helper(env, ptr, val, cpu_mmu_index(env, false), retaddr, MO_TEQ);
+}
+#endif
 
 void cpu_stb_data(CPUArchState *env, target_ulong ptr, uint32_t val)
 {

@@ -157,6 +157,18 @@ void _qemu_log_instr_commit(CPUArchState *env);
 void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name,
                          target_ulong value);
 
+/*
+ * Log integer memory load.
+ */
+void qemu_log_instr_ld_int(CPUArchState *env, target_ulong addr, MemOp op,
+                           target_ulong value);
+
+/*
+ * Log integer memory store.
+ */
+void qemu_log_instr_st_int(CPUArchState *env, target_ulong addr, MemOp op,
+                           target_ulong value);
+
 #ifdef TARGET_CHERI
 /*
  * Log changed capability register.
@@ -169,12 +181,19 @@ void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
  */
 void _qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
                              target_ulong value);
-#endif
 
 /*
- * Log memory access performed by instruction
+ * Log capability memory load.
  */
-void _qemu_log_instr_mem(CPUArchState *env, target_ulong addr);
+void qemu_log_instr_ld_cap(CPUArchState *env, target_ulong addr,
+                           const cap_register_t *value);
+
+/*
+ * Log capability memory store.
+ */
+void qemu_log_instr_st_cap(CPUArchState *env, target_ulong addr,
+                           const cap_register_t *value);
+#endif
 
 /*
  * Log instruction pc and opcode.

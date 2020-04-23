@@ -1065,36 +1065,6 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
 
 #if defined(CHERI_128) && QEMU_USE_COMPRESSED_CHERI_CAPS
 
-#if defined(CONFIG_TCG_LOG_INSTR)
-/*
- * Print capability load from memory to log file.
- */
-static inline void dump_cap_load(CPUArchState *env, uint64_t addr,
-                                 uint64_t pesbt, uint64_t cursor, uint8_t tag)
-{
-
-    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
-        qemu_log("    Cap Memory Read [" TARGET_FMT_lx
-                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
-                 addr, tag, pesbt, cursor);
-    }
-}
-
-/*
- * Print capability store to memory to log file.
- */
-static inline void dump_cap_store(CPUArchState *env, uint64_t addr, uint64_t pesbt,
-                                  uint64_t cursor, uint8_t tag)
-{
-
-    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
-        qemu_log("    Cap Memory Write [" TARGET_FMT_lx
-                 "] = v:%d PESBT:" TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
-                 addr, tag, pesbt, cursor);
-    }
-}
-#endif // CONFIG_TCG_LOG_INSTR
-
 bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
                               uint64_t *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
@@ -1117,26 +1087,14 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
         *pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
                 CC128_NULL_XOR_MASK;
         *cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
-#if defined(CONFIG_TCG_LOG_INSTR)
-        // cpu_ldq_data_ra() performs the read logging, with raw memory
-        // accesses we have to do it manually
-        if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE,
-                                           vaddr))) {
-            helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_METADATA,
-                               *pesbt ^ CC128_NULL_XOR_MASK, MO_64);
-            helper_dump_load64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, *cursor,
-                               MO_64);
-        }
-#endif
     } else {
         // Slow path for e.g. IO regions.
-        qemu_log_mask(
-            CPU_LOG_INSTR,
-            "Using slow path for load from guest address " TARGET_FMT_plx "\n",
-            vaddr);
-        *pesbt = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
+        if (unlikely(qemu_log_instr_enabled(env_cpu(env))))
+            qemu_log_instr_extra(env, "Using slow path for load from guest "
+                                 "address " TARGET_FMT_plx "\n", vaddr);
+        *pesbt = cpu_ldq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
                 CC128_NULL_XOR_MASK;
-        *cursor = cpu_ldq_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
+        *cursor = cpu_ldq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
     int prot;
     bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
@@ -1154,20 +1112,18 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
     env->rvfi_dii_trace.rvfi_dii_mem_rmask = 0xff;
 #endif
 #if defined(CONFIG_TCG_LOG_INSTR)
-    /* Log memory read, if needed. */
-    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE,
-                                       vaddr))) {
-        // Decompress to log all fields
+    /* Log capability memory access as a single access */
+    if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+        /*
+         * Decompress to log all fields
+         * TODO(am2419): why do we decompress? we and up having to compress
+         * again in logging implementation. Passing pesbt + cursor would
+         * assume a 128-bit format and be less generic?
+         */
         cap_register_t ncd;
         decompress_128cap_already_xored(*pesbt, *cursor, &ncd);
         ncd.cr_tag = tag;
-        dump_cap_load(env, vaddr, compress_128cap(&ncd), *cursor, tag);
-#ifdef TARGET_MIPS
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-            cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
-            cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
-        }
-#endif
+        qemu_log_instr_ld_cap(env, vaddr, &ncd);
     }
 #endif
     return tag;
@@ -1223,43 +1179,34 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         // Fast path, host address in TLB
         stq_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
         stq_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
-#if defined(CONFIG_TCG_LOG_INSTR)
-        // cpu_stq_data_ra() performs the write logging, with raw memory
-        // accesses we have to do it manually
-        if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
-            helper_dump_store64(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem, MO_64);
-            helper_dump_store64(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, MO_64);
-        }
-#endif
     } else {
         // Slow path for e.g. IO regions.
-        qemu_log_mask(CPU_LOG_INSTR, "Using slow path for store to guest address " TARGET_FMT_plx "\n", vaddr);
-        cpu_stq_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem, retpc);
-        cpu_stq_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor, retpc);
+        if (unlikely(qemu_log_instr_enabled(env_cpu(env))))
+            qemu_log_instr_extra(env, "Using slow path for store to guest "
+                                 "address " TARGET_FMT_plx "\n", vaddr);
+        cpu_stq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
+                            pesbt_for_mem, retpc);
+        cpu_stq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor,
+                            retpc);
     }
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     env->rvfi_dii_trace.rvfi_dii_mem_addr = vaddr;
     // env->rvfi_dii_trace.rvfi_dii_mem_wdata = cursor;
     env->rvfi_dii_trace.rvfi_dii_mem_wmask = 0xff;
 #endif
-
 #if defined(CONFIG_TCG_LOG_INSTR)
-    /* Log memory cap write, if needed. */
-    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, vaddr))) {
-        /* Log memory cap write, if needed. */
-        // Decompress to log all fields
+    /* Log capability memory access as a single access */
+    if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+        /*
+         * Decompress to log all fields
+         * TODO(am2419): see notes on the load path on compression.
+         */
         cap_register_t stored_cap;
         const uint64_t pesbt = pesbt_for_mem ^ CC128_NULL_XOR_MASK;
         decompress_128cap_already_xored(pesbt, cursor, &stored_cap);
         stored_cap.cr_tag = tag;
         cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
-        dump_cap_store(env, vaddr, pesbt, cursor, tag);
-#ifdef TARGET_MIPS
-        if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-            cvtrace_dump_cap_store(&env->cvtrace, vaddr, &stored_cap);
-            cvtrace_dump_cap_cbl(&env->cvtrace, &stored_cap);
-        }
-#endif
+        qemu_log_instr_st_cap(env, vaddr, &stored_cap);
     }
 #endif
 }

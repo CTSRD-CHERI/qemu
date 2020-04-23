@@ -123,8 +123,6 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #ifdef CONFIG_TCG_LOG_INSTR
         /*
          * TODO(am2419): could move the commit below tr_insn or would we lose something?
-         * this positioning also causes an artifact logging an empty entry when tracing
-         * is enabeled at boot from CLI -d instr.
          */
         if (unlikely(qemu_log_instr_enabled(cpu))) {
             TCGv tpc = tcg_const_tl(db->pc_next);

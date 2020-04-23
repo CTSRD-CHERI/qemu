@@ -1414,6 +1414,7 @@ void itc_reconfigure(struct MIPSITUState *tag);
 /* helper.c */
 target_ulong exception_resume_pc(CPUMIPSState *env);
 
+// TODO(am2419): deprecated, remove
 #ifdef CONFIG_TCG_LOG_INSTR
 void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
     target_ulong value);

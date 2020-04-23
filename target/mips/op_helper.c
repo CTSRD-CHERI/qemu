@@ -31,6 +31,7 @@
 #include "exec/memop.h"
 #ifdef CONFIG_TCG_LOG_INSTR
 #include "exec/log.h"
+#include "exec/log_instr.h"
 #endif
 #ifdef TARGET_CHERI
 #include "cheri_tagmem.h"
@@ -1944,7 +1945,6 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     const target_ulong dest_past_end = original_dest + original_len;
     const target_ulong src_past_end = original_src + original_len;
 #if 0 // FIXME: for some reason this causes errors
-    const bool log_instr = should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     const bool dest_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     const bool src_same_page = (original_dest & TARGET_PAGE_MASK) == ((dest_past_end - 1) & TARGET_PAGE_MASK);
     // If neither src nor dest buffer cross a page boundary we can just do an address_space_read+write
@@ -1980,12 +1980,14 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         // also write one byte to the target buffer to ensure that the flags are updated
         // store_byte_and_clear_tag(env, original_dest, first_value, oi, ra); // might trap
         result = address_space_write(cs->as, dest_paddr, MEMTXATTRS_UNSPECIFIED, buffer, len);
-        if (unlikely(log_instr)) {
+#ifdef CONFIG_TCG_LOG_INSTR
+        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
             for (int i = 0; i < len; i++) {
-                helper_dump_load64(env, original_src + i, buffer[i], MO_8);
-                helper_dump_store64(env, original_dest + i, buffer[i], MO_8);
+                helper_qemu_log_instr_load64(env, original_src + i, buffer[i], MO_8);
+                helper_qemu_log_instr_store64(env, original_dest + i, buffer[i], MO_8);
             }
         }
+#endif
         if (result != MEMTX_OK) {
             warn_report("magic memmove: error writing %d bytes to paddr %"HWADDR_PRIx
                         ". Unmapped memory? Error code was %d\r", (int)len, dest_paddr, result);
@@ -2139,7 +2141,6 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
     const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len_nitems, ra);
 
     tcg_debug_assert(dest + (len_nitems * pattern_length) == original_dest + original_len_bytes && "continuation broken?");
-    const bool log_instr = should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE);
     if (len_nitems == 0) {
         goto success; // nothing to do
     }
@@ -2198,20 +2199,23 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             RAMBlock *block = qemu_ram_block_from_host(hostaddr, false, &ram_offset);
             cheri_tag_phys_invalidate(env, block, ram_offset, l_adj_bytes, &dest);
 #endif
-            if (unlikely(log_instr)) {
+#ifdef CONFIG_TCG_LOG_INSTR
+            if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
                 // TODO: dump as a single big block?
                 for (target_ulong i = 0; i < l_adj_nitems; i++) {
                     if (pattern_length == 1)
-                        helper_dump_store64(env, dest + i, value, MO_8);
+                        helper_qemu_log_instr_store64(env, dest + i, value, MO_8);
                     else if (pattern_length == 4)
-                        helper_dump_store64(env, dest + (i * pattern_length), value, MO_32);
+                        helper_qemu_log_instr_store64(
+                            env, dest + (i * pattern_length), value, MO_32);
                     else
                         assert(false && "invalid pattern length");
                 }
-                qemu_log_mask(CPU_LOG_INSTR, "%s: Set " TARGET_FMT_ld
+                qemu_log_instr_extra(env, "%s: Set " TARGET_FMT_ld
                     " %d-byte items to 0x%" PRIx64 " at 0x" TARGET_FMT_plx "\n",
                     __func__, l_adj_nitems, pattern_length, value, dest);
             }
+#endif
             // fprintf(stderr, "%s: Set " TARGET_FMT_ld " bytes to 0x%x at 0x" TARGET_FMT_plx "/%p\r\n", __func__, l_adj, value, dest, hostaddr);
             dest += l_adj_bytes;
             len_nitems -= l_adj_nitems;
@@ -2239,20 +2243,24 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             if (result == MEMTX_OK) {
                 dest += l_adj_bytes;
                 len_nitems -= l_adj_nitems;
-                if (unlikely(log_instr)) {
+#ifdef CONFIG_TCG_LOG_INSTR
+                if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
                     // TODO: dump as a single big block?
                     for (target_ulong i = 0; i < l_adj_nitems; i++) {
                         if (pattern_length == 1)
-                            helper_dump_store64(env, dest + i, value, MO_8);
+                            helper_qemu_log_instr_store64(
+                                env, dest + i, value, MO_8);
                         else if (pattern_length == 4)
-                            helper_dump_store64(env, dest + (i * pattern_length), value, MO_32);
+                            helper_qemu_log_instr_store64(
+                                env, dest + (i * pattern_length), value, MO_32);
                         else
                             assert(false && "invalid pattern length");
                     }
-                    qemu_log_mask(CPU_LOG_INSTR, "%s: Set " TARGET_FMT_ld
+                    qemu_log_instr_extra(env, "%s: Set " TARGET_FMT_ld
                         " %d-byte items to 0x%" PRIx64 " at 0x" TARGET_FMT_plx "\n",
                         __func__, l_adj_nitems, pattern_length, value, dest);
                 }
+#endif
                 continue; // try again with next page
             } else {
                 warn_report("address_space_write failed with error %d for %"HWADDR_PRIx "\r", result, paddr);
@@ -2288,15 +2296,17 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                 } else {
                     assert(false && "invalid pattern length");
                 }
-                if (unlikely(log_instr)) {
+#ifdef CONFIG_TCG_LOG_INSTR
+                if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
                     if (pattern_length == 1)
-                        helper_dump_store64(env, dest, value, MO_8);
+                        helper_qemu_log_instr_store64(env, dest, value, MO_8);
                     else if (pattern_length == 4)
-                        helper_dump_store64(env, dest, value, MO_32);
+                        helper_qemu_log_instr_store64(env, dest, value, MO_32);
                     else
                         assert(false && "invalid pattern length");
-                    helper_dump_store64(env, dest, value, MO_8);
+                    helper_qemu_log_instr_store64(env, dest, value, MO_8);
                 }
+#endif
                 dest += pattern_length;
                 len_nitems--;
             }
@@ -2332,9 +2342,8 @@ enum {
 // Magic library function calls:
 void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
 {
-    qemu_log_mask_and_addr(
-        CPU_LOG_INSTR, cpu_get_recent_pc(env),
-        "--- Calling magic library function 0x" TARGET_FMT_lx "\n", which);
+    qemu_log_instr_extra(env, "--- Calling magic library function 0x"
+                         TARGET_FMT_lx "\n", which);
     // High bits can be used by function to indicate continuation after TLB miss
     switch (which & UINT32_MAX) {
     case MAGIC_NOP_MEMSET:

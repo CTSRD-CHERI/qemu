@@ -30,6 +30,7 @@
 #include "exec/tb-lookup.h"
 #include "disas/disas.h"
 #include "exec/log.h"
+#include "exec/log_instr.h"
 #include "tcg/tcg.h"
 #ifdef TARGET_CHERI
 #include "cheri-helper-utils.h"
@@ -168,133 +169,6 @@ void *HELPER(lookup_tb_ptr)(CPUArchState *env)
                            cheri_flags, flags, lookup_symbol(pc));
     return tb->tc.ptr;
 }
-
-#if defined(CONFIG_TCG_LOG_INSTR)
-
-#ifdef TARGET_MIPS
-/*
- * dump non-capability data to cvtrace entry
- */
-static inline void cvtrace_dump_gpr_ldst(cvtrace_t *cvtrace, uint8_t version,
-                                         uint64_t addr, uint64_t value)
-{
-    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        cvtrace->version = version;
-        cvtrace->val1 = tswap64(addr);
-        cvtrace->val2 = tswap64(value);
-    }
-}
-#define cvtrace_dump_gpr_load(trace, addr, val)          \
-    cvtrace_dump_gpr_ldst(trace, CVT_LD_GPR, addr, val)
-#define cvtrace_dump_gpr_store(trace, addr, val)         \
-    cvtrace_dump_gpr_ldst(trace, CVT_ST_GPR, addr, val)
-#endif
-
-/*
- * Print the memory store to log file.
- */
-void HELPER(dump_store64)(CPUArchState *env, target_ulong addr, uint64_t value, MemOp op)
-{
-
-    if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))))
-        return;
-
-#ifdef TARGET_CHERI
-    // Try not to dump all stores when -dfilter is enabled
-    // Note: we check both PC and memory location in -dfilter
-    if (likely(!should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, addr)))
-        return;
-#endif
-
-#ifdef TARGET_MIPS
-    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        cvtrace_dump_gpr_store(&env->cvtrace, addr, value);
-        return;
-    }
-#endif
-
-    // FIXME: value printed is not correct for sdl!
-    // FIXME: value printed is not correct for sdr!
-    // FIXME: value printed is not correct for swl!
-    // FIXME: value printed is not correct for swr!
-    switch (memop_size(op)) {
-    case 8:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = " TARGET_FMT_plx "\n",
-                 addr, value);
-        break;
-    case 4:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %08x\n", addr,
-                 (uint32_t)value);
-        break;
-    case 2:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %04x\n", addr,
-                 (uint16_t)value);
-        break;
-    case 1:
-        qemu_log("    Memory Write [" TARGET_FMT_lx "] = %02x\n", addr,
-                 (uint8_t)value);
-        break;
-    default:
-        tcg_abort();
-    }
-}
-
-void HELPER(dump_store32)(CPUArchState *env, target_ulong addr, uint32_t value, MemOp op)
-{
-    helper_dump_store64(env, addr, (uint64_t)value, op);
-}
-
-/*
- * Print the memory load to log file.
- */
-void HELPER(dump_load64)(CPUArchState *env, target_ulong addr, uint64_t value, MemOp op)
-{
-    if (likely(!(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))))
-        return;
-
-#ifdef TARGET_CHERI
-    // Try not to dump all loads when -dfilter is enabled
-    // Note: we check both PC and memory location in -dfilter
-    if (likely(!should_log_mem_access(env, CPU_LOG_INSTR | CPU_LOG_CVTRACE, addr)))
-        return;
-#endif
-
-#ifdef TARGET_MIPS
-    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        cvtrace_dump_gpr_load(&env->cvtrace, addr, value);
-        return;
-    }
-#endif
-    // FIXME: cloadtags not correct
-    switch (memop_size(op)) {
-    case 8:
-        qemu_log("    Memory Read [" TARGET_FMT_lx "] = " TARGET_FMT_plx "\n",
-                 addr, value);
-        break;
-    case 4:
-        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %08x\n", addr,
-                 (uint32_t)value);
-        break;
-    case 2:
-        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %04x\n", addr,
-                 (uint16_t)value);
-        break;
-    case 1:
-
-        qemu_log("    Memory Read [" TARGET_FMT_lx "] = %02x\n", addr,
-                 (uint8_t)value);
-        break;
-    default:
-        tcg_abort();
-    }
-}
-
-void HELPER(dump_load32)(CPUArchState *env, target_ulong addr, uint32_t value, MemOp op)
-{
-    helper_dump_load64(env, addr, (uint64_t)value, op);
-}
-#endif
-
 
 void HELPER(exit_atomic)(CPUArchState *env)
 {
