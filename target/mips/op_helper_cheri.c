@@ -112,7 +112,7 @@ void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* n
     } while (0)
 
 #else
-#define log_instr_cop2_update(env, name, newval) ((void)0)
+#define log_instr_hwreg_update(env, name, newval) ((void)0)
 #endif
 
 static inline int align_of(int size, uint64_t addr)

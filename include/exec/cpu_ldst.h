@@ -121,6 +121,12 @@ void cpu_stl_data_ra(CPUArchState *env, abi_ptr ptr,
                      uint32_t val, uintptr_t retaddr);
 void cpu_stq_data_ra(CPUArchState *env, abi_ptr ptr,
                      uint64_t val, uintptr_t retaddr);
+#ifdef TARGET_CHERI
+uint64_t cpu_ldq_cap_data_ra(CPUArchState *env, target_ulong ptr,
+                             uintptr_t retaddr);
+void cpu_stq_cap_data_ra(CPUArchState *env, target_ulong ptr,
+                         uint64_t val, uintptr_t retaddr);
+#endif
 
 #if defined(CONFIG_USER_ONLY)
 

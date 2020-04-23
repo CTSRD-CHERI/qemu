@@ -69,24 +69,24 @@ typedef struct cvtrace cvtrace_t;
  */
 struct cpu_log_instr_info {
     bool force_drop;
-    bool dfilter_matched;
     bool user_mode_tracing;
-    uint8_t event_type;
-#define CHERI_LOG_NO_REG  0   /* No register changed */
-#define CHERI_LOG_GPR     1   /* GPR change (val2) */
-#define CHERI_LOG_CAP     2   /* Cap change (val2-val5) */
-#define CHERI_LOG_MEM     4   /* Memory access flag to combine with CAP or GPR */
-#define CHERI_LOG_GPR_MEM 5   /* GPR (val2) to/from memory (val1) */
-#define CHERI_LOG_CAP_MEM 6   /* Cap (val2-val5) to/from memory (val1) */
-#define CHERI_LOG_EVT     8   /* Trace event (val1-val4) fn code (val5) */
-    uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
-    uint16_t cycles;    /* Currently not used. */
-    uint64_t instr_begin;  /* Encoded instruction. */
-    uint64_t pc;        /* PC value of instruction. */
-    uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
-    uint8_t asid;       /* Address Space ID (i.e. CP0_TCStatus & 0xff) */
-    GArray *regs;       /* Array of log_reginfo_t */
-    cvtrace_t cv_buffer;
+    uint8_t exception;
+    uint64_t pc;
+    uint8_t thread;
+    uint8_t asid;
+    /*
+     * TODO(am2419):
+     * Some architectures may have multiple memory accesses
+     * in the same instruction (e.g. x86-64 pop r/m64,
+     * vector/matrix instructions, load/store pair). It is unclear
+     * whether we would treat these as multiple trace "entities".
+     *
+     * Array of log_meminfo_t
+     */
+    GArray *mem;
+    /* Register modifications. Array of log_reginfo_t */
+    GArray *regs;
+    /* Extra text-only log */
     GString *txt_buffer;
 };
 typedef struct cpu_log_instr_info cpu_log_instr_info_t;

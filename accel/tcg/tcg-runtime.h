@@ -154,13 +154,6 @@ DEF_HELPER_3(pcc_check_load, cap_checked_ptr, env, tl, memop)
 DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop)
 #endif
 
-#if defined(CONFIG_TCG_LOG_INSTR)
-DEF_HELPER_FLAGS_4(dump_load64, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i64, memop)
-DEF_HELPER_FLAGS_4(dump_load32, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i32, memop)
-DEF_HELPER_FLAGS_4(dump_store64, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i64, memop)
-DEF_HELPER_FLAGS_4(dump_store32, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i32, memop)
-#endif
-
 DEF_HELPER_FLAGS_3(gvec_mov, TCG_CALL_NO_RWG, void, ptr, ptr, i32)
 
 DEF_HELPER_FLAGS_3(gvec_dup8, TCG_CALL_NO_RWG, void, ptr, i32, i32)

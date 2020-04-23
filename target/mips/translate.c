@@ -27648,6 +27648,13 @@ static void decode_opc_mxu(CPUMIPSState *env, DisasContext *ctx)
      */
     uint32_t opcode = extract32(ctx->opcode, 0, 6);
 
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (unlikely(ctx->base.log_instr_enabled)) {
+        warn_report("OPC_SPECIAL2 MXU instruction tracing is "
+                    "not implemented\n");
+    }
+#endif
+
     if (opcode == OPC__MXU_MUL) {
         uint32_t  rs, rt, rd, op1;
 
@@ -28782,6 +28789,13 @@ static void decode_mmi(CPUMIPSState *env, DisasContext *ctx)
     int rs = extract32(ctx->opcode, 21, 5);
     int rt = extract32(ctx->opcode, 16, 5);
     int rd = extract32(ctx->opcode, 11, 5);
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (unlikely(ctx->base.log_instr_enabled)) {
+        warn_report("OPC_SPECIAL2 MMI instruction tracing is "
+                    "not implemented\n");
+    }
+#endif
 
     switch (opc) {
     case MMI_OPC_CLASS_MMI0:
@@ -30881,12 +30895,6 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
         decode_opc_special(env, ctx);
         break;
     case OPC_SPECIAL2:
-#ifdef CONFIG_TCG_LOG_INSTR
-    if (unlikely(ctx->base.log_instr_enabled)) {
-        warn_report("OPC_SPECIAL2 (mxu or mmi) instruction tracing is "
-                    "not implemented\n");
-    }
-#endif
 #if defined(TARGET_MIPS64)
         if ((ctx->insn_flags & INSN_R5900) && (ctx->insn_flags & ASE_MMI)) {
             decode_mmi(env, ctx);
