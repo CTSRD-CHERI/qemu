@@ -1089,7 +1089,7 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
         *cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
     } else {
         // Slow path for e.g. IO regions.
-        if (unlikely(qemu_log_instr_enabled(env_cpu(env))))
+        if (qemu_log_instr_enabled(env))
             qemu_log_instr_extra(env, "Using slow path for load from guest "
                                  "address " TARGET_FMT_plx "\n", vaddr);
         *pesbt = cpu_ldq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
@@ -1113,7 +1113,7 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
 #endif
 #if defined(CONFIG_TCG_LOG_INSTR)
     /* Log capability memory access as a single access */
-    if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+    if (qemu_log_instr_enabled(env)) {
         /*
          * Decompress to log all fields
          * TODO(am2419): why do we decompress? we and up having to compress
@@ -1181,7 +1181,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         stq_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
     } else {
         // Slow path for e.g. IO regions.
-        if (unlikely(qemu_log_instr_enabled(env_cpu(env))))
+        if (qemu_log_instr_enabled(env))
             qemu_log_instr_extra(env, "Using slow path for store to guest "
                                  "address " TARGET_FMT_plx "\n", vaddr);
         cpu_stq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
@@ -1196,7 +1196,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 #endif
 #if defined(CONFIG_TCG_LOG_INSTR)
     /* Log capability memory access as a single access */
-    if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+    if (qemu_log_instr_enabled(env)) {
         /*
          * Decompress to log all fields
          * TODO(am2419): see notes on the load path on compression.

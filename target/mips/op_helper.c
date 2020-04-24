@@ -1981,7 +1981,7 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         // store_byte_and_clear_tag(env, original_dest, first_value, oi, ra); // might trap
         result = address_space_write(cs->as, dest_paddr, MEMTXATTRS_UNSPECIFIED, buffer, len);
 #ifdef CONFIG_TCG_LOG_INSTR
-        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+        if (qemu_log_instr_enabled(env)) {
             for (int i = 0; i < len; i++) {
                 helper_qemu_log_instr_load64(env, original_src + i, buffer[i], MO_8);
                 helper_qemu_log_instr_store64(env, original_dest + i, buffer[i], MO_8);
@@ -2200,7 +2200,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             cheri_tag_phys_invalidate(env, block, ram_offset, l_adj_bytes, &dest);
 #endif
 #ifdef CONFIG_TCG_LOG_INSTR
-            if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+            if (qemu_log_instr_enabled(env)) {
                 // TODO: dump as a single big block?
                 for (target_ulong i = 0; i < l_adj_nitems; i++) {
                     if (pattern_length == 1)
@@ -2244,7 +2244,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                 dest += l_adj_bytes;
                 len_nitems -= l_adj_nitems;
 #ifdef CONFIG_TCG_LOG_INSTR
-                if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+                if (qemu_log_instr_enabled(env)) {
                     // TODO: dump as a single big block?
                     for (target_ulong i = 0; i < l_adj_nitems; i++) {
                         if (pattern_length == 1)
@@ -2297,7 +2297,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
                     assert(false && "invalid pattern length");
                 }
 #ifdef CONFIG_TCG_LOG_INSTR
-                if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+                if (qemu_log_instr_enabled(env)) {
                     if (pattern_length == 1)
                         helper_qemu_log_instr_store64(env, dest, value, MO_8);
                     else if (pattern_length == 4)

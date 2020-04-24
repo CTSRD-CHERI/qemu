@@ -186,7 +186,7 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
  * Log instruction update to the given capability register.
  */
 #define log_changed_capreg(env, name, newval) do {                      \
-        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {           \
+        if (qemu_log_instr_enabled(env)) {                              \
             qemu_log_instr_cap(env, name, newval);                      \
         }                                                               \
     } while (0)
@@ -196,7 +196,7 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
  * integer value.
  */
 #define log_changed_capreg_int(env, name, newval) do {          \
-        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {   \
+        if (qemu_log_instr_enabled(env)) {                      \
             qemu_log_instr_cap_int(env, name, newval);          \
         }                                                       \
     } while (0)

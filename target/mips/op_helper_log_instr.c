@@ -56,7 +56,7 @@ static const char* mips_cpu_get_changed_mode(CPUMIPSState *env);
 void helper_mips_log_instr_gpr(CPUArchState *env, uint32_t reg,
                                target_ulong value)
 {
-    if (unlikely(qemu_log_instr_enabled(env_cpu(env))))
+    if (qemu_log_instr_enabled(env))
         qemu_log_instr_reg(env, mips_gp_regnames[reg], value);
 }
 
@@ -69,7 +69,7 @@ void helper_mips_log_instr_gpr(CPUArchState *env, uint32_t reg,
 void helper_mips_log_instr_cop0(CPUArchState *env, uint32_t reg, uint32_t sel,
                                 target_ulong value)
 {
-    if (unlikely(qemu_log_instr_enabled(env_cpu(env))))
+    if (qemu_log_instr_enabled(env))
         qemu_log_instr_reg(env, mips_cop0_regnames[reg * 8 + sel], value);
 }
 
