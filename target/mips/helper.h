@@ -191,7 +191,6 @@ DEF_HELPER_3(mips_log_instr_gpr, void, env, i32, tl)
 DEF_HELPER_4(mips_log_instr_cop0, void, env, i32, i32, tl)
 DEF_HELPER_2(mips_log_instr_changed_state, void, env, tl)
 /* Old stuff TODO(am2419): deprecate */
-DEF_HELPER_FLAGS_2(mips_cvtrace_log_instruction, TCG_CALL_NO_RWG, void, env, i64)
 DEF_HELPER_2(cheri_debug_message, void, env, i64)
 DEF_HELPER_3(log_value, void, env, cptr, i64)
 #endif

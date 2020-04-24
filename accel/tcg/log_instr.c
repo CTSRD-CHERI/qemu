@@ -210,6 +210,21 @@ static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
         log_target_disas(env_cpu(env), log->pc, /*only one*/-1);
     }
 
+    /* Dump interrupt/exception info */
+    switch (log->flags & LI_FLAG_INTR_MASK) {
+    case LI_FLAG_INTR_TRAP:
+        qemu_log("--- Exception #%u vector %#016lx fault-addr %#016lx\n",
+                 log->intr_code, log->intr_vector, log->intr_faultaddr);
+        break;
+    case LI_FLAG_INTR_ASYNC:
+        qemu_log("--- Interrupt #%04x vector %#016lx\n",
+                 log->intr_code, log->intr_vector);
+        break;
+    default:
+        /* No interrupt */
+        break;
+    }
+
     /* Dump memory access */
     for (i = 0; i < log->mem->len; i++) {
         log_meminfo_t *minfo = &g_array_index(log->mem, log_meminfo_t, i);
@@ -228,7 +243,7 @@ static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
 
     /* Dump extra logged messages, if any */
     if (log->txt_buffer->len > 0)
-        qemu_log("%s", log->txt_buffer->str);
+        qemu_log("na %s", log->txt_buffer->str);
 }
 
 /*
@@ -286,6 +301,7 @@ static void emit_log_stop(CPUArchState *env, target_ulong pc)
 
 static void reset_log_buffer(cpu_log_instr_info_t *log)
 {
+    memset(&log->force_drop, 0, ((char *)&log->pc - (char *)&log->force_drop));
     g_array_remove_range(log->regs, 0, log->regs->len);
     g_array_remove_range(log->mem, 0, log->mem->len);
     g_string_erase(log->txt_buffer, 0, -1);
@@ -575,10 +591,25 @@ void qemu_log_instr_asid(CPUArchState *env, uint8_t asid)
     /* log->cv_buffer.asid = asid; */
 }
 
-void qemu_log_instr_exception(CPUArchState *env, uint8_t code)
+void qemu_log_instr_exception(CPUArchState *env, uint32_t code,
+                              target_ulong vector, target_ulong faultaddr)
 {
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
-    /* log->cv_buffer.exception = code; */
+    log->flags |= LI_FLAG_INTR_TRAP;
+    log->intr_code = code;
+    log->intr_vector = vector;
+    log->intr_faultaddr = faultaddr;
+}
+
+void qemu_log_instr_interrupt(CPUArchState *env, uint32_t code,
+                              target_ulong vector)
+{
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+
+    log->flags |= LI_FLAG_INTR_ASYNC;
+    log->intr_code = code;
+    log->intr_vector = vector;
 }
 
 void qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
