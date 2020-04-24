@@ -118,6 +118,8 @@ cheri_tag_prot_clear_or_trap(CPUMIPSState *env, target_ulong va,
     return tag;
 }
 
+// TODO(am2419): deprecated remove
+#if 0
 #ifdef CONFIG_TCG_LOG_INSTR
 
 #define cvtrace_dump_cap_load(trace, addr, cr)          \
@@ -168,6 +170,7 @@ static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t
     }
 }
 #endif // CONFIG_TCG_LOG_INSTR
+#endif // 0 deprecated
 
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)

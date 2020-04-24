@@ -1589,9 +1589,10 @@ void mips_cpu_do_interrupt(CPUState *cs)
             qemu_log("--- Exception #%u: %s, vector "
                     TARGET_FMT_lx "\n", cause, name, PC_ADDR(env));
     }
-    if (unlikely(should_log_instr(env, CPU_LOG_CVTRACE))) {
-        env->cvtrace.exception = cause;
-    }
+    // TODO(am2419): deprecated remove
+    /* if (unlikely(should_log_instr(env, CPU_LOG_CVTRACE))) { */
+    /*     env->cvtrace.exception = cause; */
+    /* } */
 #ifdef TARGET_CHERI
     if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
          // Print the new PCC value for debugging traces.
