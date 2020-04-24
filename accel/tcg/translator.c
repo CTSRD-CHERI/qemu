@@ -63,7 +63,6 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #ifdef CONFIG_TCG_LOG_INSTR
     if (unlikely(qemu_loglevel_mask(CPU_LOG_USER_ONLY))) {
         if (ops->tb_in_user_mode(db, cpu)) {
-            // TODO(am2419): move debug logging to qemu_log_instr_mode_switch?
 #ifdef CONFIG_DEBUG_TCG
             qemu_log_mask(CPU_LOG_INSTR, "-- Instruction logging enabled for TB@"
                           TARGET_FMT_lx " (usermode=%d)\n", db->pc_next,
