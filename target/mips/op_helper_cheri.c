@@ -831,15 +831,6 @@ void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
         cap_register_t *old_reg, const char* name)
 {
     if (memcmp(cr, old_reg, sizeof(cap_register_t))) {
-        if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-            if (env->cvtrace.version == CVT_NO_REG ||
-                env->cvtrace.version == CVT_GPR)
-                env->cvtrace.version = CVT_CAP;
-            if (env->cvtrace.version == CVT_ST_GPR)
-                env->cvtrace.version = CVT_ST_CAP;
-            cvtrace_dump_cap_perms(&env->cvtrace, cr);
-            cvtrace_dump_cap_cbl(&env->cvtrace, cr);
-        }
         if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
             qemu_log_capreg(cr, "    Write ", name);
         }
@@ -938,8 +929,6 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     /* Log memory read, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         dump_cap_load(vaddr, cap_get_cursor(&ncd), ncd.cr_base, tag);
-        cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
-        cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
 #endif
 
@@ -974,8 +963,6 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     /* Log memory cap write, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         /* Log memory cap write, if needed. */
-        cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
-        cvtrace_dump_cap_cbl(&env->cvtrace, csp);
         dump_cap_store(vaddr, cap_get_cursor(csp), csp->cr_base, csp->cr_tag);
     }
 #endif
@@ -1078,38 +1065,13 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     /* Log memory reads, if needed. */
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         dump_cap_load_op(vaddr, mem_buffer.u64s[0], tag);
-        cvtrace_dump_cap_load(&env->cvtrace, vaddr, &ncd);
         dump_cap_load_cbl(cap_get_cursor(&ncd), cap_get_base(&ncd),
                           cap_get_length64(&ncd));
-        cvtrace_dump_cap_cbl(&env->cvtrace, &ncd);
     }
 #endif
 
     update_capreg(env, cd, &ncd);
 }
-
-#ifdef CONFIG_TCG_LOG_INSTR
-static inline void cvtrace_dump_cap_cursor(cvtrace_t *cvtrace, uint64_t cursor)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val3 = tswap64(cursor);
-    }
-}
-
-static inline void cvtrace_dump_cap_base(cvtrace_t *cvtrace, uint64_t base)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val4 = tswap64(base);
-    }
-}
-
-static inline void cvtrace_dump_cap_length(cvtrace_t *cvtrace, uint64_t length)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val5 = tswap64(length);
-    }
-}
-#endif // CONFIG_TCG_LOG_INSTR
 
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
                          target_ulong retpc)
@@ -1144,13 +1106,9 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
         uint64_t otype_and_perms = mem_buffer.u64s[0];
         dump_cap_store_op(vaddr, otype_and_perms, csp->cr_tag);
-        cvtrace_dump_cap_store(&env->cvtrace, vaddr, csp);
         dump_cap_store_cursor(cap_get_cursor(csp));
-        cvtrace_dump_cap_cursor(&env->cvtrace, cap_get_cursor(csp));
         dump_cap_store_base(csp->cr_base);
-        cvtrace_dump_cap_base(&env->cvtrace, cap_get_base(csp));
         dump_cap_store_length(cap_get_length64(csp));
-        cvtrace_dump_cap_length(&env->cvtrace, cap_get_length64(csp));
     }
 #endif
 }

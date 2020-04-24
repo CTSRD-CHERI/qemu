@@ -94,10 +94,6 @@ void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
     /* TODO(am2419): remove below, just for testing. */
     /* Print changed state: GPR, Cap. */
     dump_changed_regs(env);
-    /* if (qemu_loglevel_mask(CPU_LOG_INSTR)) { */
-    /*     /\* Print change state: HI/LO COP0 (not included in CVTRACE) *\/ */
-    /*     dump_changed_cop0(env); */
-    /* } */
 }
 
 /*
@@ -264,21 +260,13 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     }
 }
 
-
-static inline void cvtrace_dump_gpr(cvtrace_t *cvtrace, uint64_t value)
-{
-    if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        if (cvtrace->version == CVT_NO_REG)
-            cvtrace->version = CVT_GPR;
-        cvtrace->val2 = tswap64(value);
-    }
-}
-
 void helper_log_value(CPUMIPSState *env, const void* ptr, uint64_t value)
 {
     qemu_log_mask(CPU_LOG_INSTR, "%s: " TARGET_FMT_plx "\n", ptr, value);
 }
 
+// TODO(am2419): deprecated, remove
+#if 0
 /*
  * Print the instruction to cvtrace log file.
  */
@@ -350,6 +338,7 @@ void helper_mips_cvtrace_log_instruction(CPUMIPSState *env, target_ulong pc)
         env->cvtrace.inst = opcode;  /* XXX need bswapped? */
     }
 }
+#endif // 0
 
 #ifndef CONFIG_USER_ONLY
 
@@ -584,7 +573,6 @@ static void dump_changed_regs(CPUMIPSState *env)
     for (i=1; i<32; i++) {
         if (cur->gpr[i] != env->last_gpr[i]) {
             env->last_gpr[i] = cur->gpr[i];
-            cvtrace_dump_gpr(&env->cvtrace, cur->gpr[i]);
             qemu_log_mask(CPU_LOG_INSTR, "    Write %s = " TARGET_FMT_lx "\n",
                           gpr_name[i], cur->gpr[i]);
         }
