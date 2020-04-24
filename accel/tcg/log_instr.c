@@ -194,7 +194,10 @@ static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
 {
     int i;
 
-    /* Dump main instruction log */
+    /* Dump ASID before instruction address */
+    qemu_log("[%d:%x] ", env_cpu(env)->cpu_index, log->asid);
+
+    /* Instruction address + disassembly */
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     /*
      * TODO(am2419): what to do with injected instructions?
@@ -579,16 +582,11 @@ void qemu_log_instr_pc(CPUArchState *env, target_ulong pc)
     log->pc = pc;
 }
 
-void qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid)
+void qemu_log_instr_asid(CPUArchState *env, uint16_t asid)
 {
+    cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
-    /* log->cv_buffer.thread = tid; */
-}
-
-void qemu_log_instr_asid(CPUArchState *env, uint8_t asid)
-{
-
-    /* log->cv_buffer.asid = asid; */
+    log->asid = asid;
 }
 
 void qemu_log_instr_exception(CPUArchState *env, uint32_t code,

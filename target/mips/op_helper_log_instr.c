@@ -83,6 +83,9 @@ static void dump_changed_cop0(CPUMIPSState *env);
  */
 void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
 {
+    uint8_t asid = (env->active_tc.CP0_TCStatus & 0xff) >> CP0TCSt_TASID;
+    qemu_log_instr_asid(env, asid);
+
     const char *new_mode = mips_cpu_get_changed_mode(env);
     /* Testing pointer equality is fine, it always points to the same constants */
     if (new_mode != env->last_mode) {

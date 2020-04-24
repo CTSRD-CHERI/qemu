@@ -170,16 +170,9 @@ void qemu_log_instr_st_cap(CPUArchState *env, target_ulong addr,
 void qemu_log_instr_pc(CPUArchState *env, target_ulong pc);
 
 /*
- * Log hardware thread id.
- * This is currently the cpu index in qemu.
+ * Log Address Space IDentifier (also known as PCID).
  */
-void qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid);
-
-/*
- * Log ASID. Note on some architectures this is larger, we
- * may want to account for this.
- */
-void qemu_log_instr_asid(CPUArchState *env, uint8_t asid);
+void qemu_log_instr_asid(CPUArchState *env, uint16_t asid);
 
 /*
  * Log exception event.

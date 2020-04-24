@@ -71,8 +71,7 @@ struct cpu_log_instr_info {
     bool user_mode_tracing;
 
     bool force_drop;
-    uint8_t thread;
-    uint8_t asid;
+    uint16_t asid;
 
     int flags;
 #define LI_FLAG_INTR_TRAP 1
