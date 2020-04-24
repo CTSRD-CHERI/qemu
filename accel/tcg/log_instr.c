@@ -326,10 +326,10 @@ void flush_tcg_on_log_instr_chage(void) {
  * If we are tracing user-mode, then we need to check the per-cpu
  * flag as multiple CPUs may be in different modes.
  */
-bool qemu_log_instr_enabled(CPUState *cpu)
+bool qemu_log_instr_check_enabled(CPUArchState *env)
 {
     if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
-        return cpu_get_log(cpu)->user_mode_tracing;
+        return target_cpu_get_log(env)->user_mode_tracing;
     }
 
     return (qemu_loglevel_mask(INSTR_LOG_MASK));
@@ -410,7 +410,7 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
  * TODO(am2419): we need a version that flushes the tcg as well, we do not
  * want targets to care.
  */
-void _qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
+void qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
                                  target_ulong pc)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
@@ -423,7 +423,7 @@ void _qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
     }
 }
 
-void _qemu_log_instr_drop(CPUArchState *env)
+void qemu_log_instr_drop(CPUArchState *env)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
@@ -432,7 +432,7 @@ void _qemu_log_instr_drop(CPUArchState *env)
     log->force_drop = true;
 }
 
-void _qemu_log_instr_commit(CPUArchState *env)
+void qemu_log_instr_commit(CPUArchState *env)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
@@ -460,7 +460,7 @@ out:
  * we may just discard the assumption that there is any ordering at all and all side-effects
  * are granted equal rights under the constitution.
  */
-void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong value)
+void qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong value)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
     log_reginfo_t r;
@@ -472,7 +472,7 @@ void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong v
 }
 
 #ifdef TARGET_CHERI
-void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
+void qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
                          const cap_register_t *cr)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
@@ -484,7 +484,7 @@ void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
     g_array_append_val(log->regs, r);
 }
 
-void _qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
+void qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
                              target_ulong value)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
@@ -556,32 +556,32 @@ void qemu_log_instr_st_cap(CPUArchState *env, target_ulong addr,
 }
 #endif
 
-void _qemu_log_instr_instr(CPUArchState *env, target_ulong pc)
+void qemu_log_instr_pc(CPUArchState *env, target_ulong pc)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
 
     log->pc = pc;
 }
 
-void _qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid)
+void qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid)
 {
 
     /* log->cv_buffer.thread = tid; */
 }
 
-void _qemu_log_instr_asid(CPUArchState *env, uint8_t asid)
+void qemu_log_instr_asid(CPUArchState *env, uint8_t asid)
 {
 
     /* log->cv_buffer.asid = asid; */
 }
 
-void _qemu_log_instr_exception(CPUArchState *env, uint8_t code)
+void qemu_log_instr_exception(CPUArchState *env, uint8_t code)
 {
 
     /* log->cv_buffer.exception = code; */
 }
 
-void _qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
+void qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
                          target_ulong arg1, target_ulong arg2,
                          target_ulong arg3)
 {
@@ -593,7 +593,7 @@ void _qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
     /* log->cv_buffer.val4 = arg3; */
 }
 
-void _qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
+void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
 {
     cpu_log_instr_info_t *log = target_cpu_get_log(env);
     va_list va;
@@ -635,47 +635,41 @@ void helper_qemu_log_instr_user_stop(CPUArchState *env, target_ulong pc)
 
 void helper_qemu_log_instr_commit(CPUArchState *env)
 {
-    _qemu_log_instr_commit(env);
+    if (qemu_log_instr_enabled(env))
+        qemu_log_instr_commit(env);
 }
 
 void helper_qemu_log_instr(CPUArchState *env, target_ulong pc)
 {
-    _qemu_log_instr_instr(env, pc);
+    if (qemu_log_instr_enabled(env))
+        qemu_log_instr_pc(env, pc);
 }
 
 void helper_qemu_log_instr_load64(CPUArchState *env, target_ulong addr,
                                   uint64_t value, MemOp op)
 {
-    CPUState *cpu = env_cpu(env);
-
-    if (unlikely(qemu_log_instr_enabled(cpu)))
+    if (qemu_log_instr_enabled(env))
         qemu_log_instr_mem_int(env, addr, LMI_LD, op, value);
 }
 
 void helper_qemu_log_instr_store64(CPUArchState *env, target_ulong addr,
                                    uint64_t value, MemOp op)
 {
-    CPUState *cpu = env_cpu(env);
-
-    if (unlikely(qemu_log_instr_enabled(cpu)))
+    if (qemu_log_instr_enabled(env))
         qemu_log_instr_mem_int(env, addr, LMI_ST, op, value);
 }
 
 void helper_qemu_log_instr_load32(CPUArchState *env, target_ulong addr,
                                   uint32_t value, MemOp op)
 {
-    CPUState *cpu = env_cpu(env);
-
-    if (unlikely(qemu_log_instr_enabled(cpu)))
+    if (qemu_log_instr_enabled(env))
         qemu_log_instr_mem_int(env, addr, LMI_LD, op, (uint64_t)value);
 }
 
 void helper_qemu_log_instr_store32(CPUArchState *env, target_ulong addr,
                                    uint32_t value, MemOp op)
 {
-    CPUState *cpu = env_cpu(env);
-
-    if (unlikely(qemu_log_instr_enabled(cpu)))
+    if (qemu_log_instr_enabled(env))
         qemu_log_instr_mem_int(env, addr, LMI_ST, op, (uint64_t)value);
 }
 

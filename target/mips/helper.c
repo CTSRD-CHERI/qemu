@@ -1259,7 +1259,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #ifdef CONFIG_TCG_LOG_INSTR
     // TODO(am2419): there is another one at the end of this function. Is this redundant?
-    if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+    if (qemu_log_instr_enabled(env)) {
         /* Note pc is guaranteed to be the current pc by the assertion above. */
         helper_mips_log_instr_changed_state(env, cpu_get_recent_pc(env));
     }
@@ -1622,7 +1622,7 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #endif
     cs->exception_index = EXCP_NONE;
 #ifdef CONFIG_TCG_LOG_INSTR
-    if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {
+    if (qemu_log_instr_enabled(env)) {
         /* Note pc is guaranteed to be the current pc by the assertion above. */
         helper_mips_log_instr_changed_state(env, cpu_get_recent_pc(env));
     }

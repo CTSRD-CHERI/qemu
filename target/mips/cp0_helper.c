@@ -517,23 +517,20 @@ target_ulong helper_dmfc0_saar(CPUMIPSState *env)
 /*
  * Log Cop0 register updates.
  */
-static inline void log_instr_cop0_update(CPUMIPSState *env, int cp0_reg,
-                                         int cp0_sel, target_ulong value)
-{
-    CPUState *cpu = env_cpu(env);
-
-    if (unlikely(qemu_log_instr_enabled(cpu)))
-        qemu_log_instr_reg(env, mips_cop0_regnames[cp0_reg * 8 + cp0_sel],
-                           value);
-}
+#define log_instr_cop0_update(env, cp0_reg, cp0_sel, value) do {        \
+        if (qemu_log_instr_enabled(env)) {                              \
+            qemu_log_instr_reg(env, mips_cop0_regnames[cp0_reg * 8 + cp0_sel], \
+                               value);                                  \
+        }                                                               \
+    } while (0)
 
 #define log_instr_cop0_unsupported(env, msg) do {               \
-        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {   \
+        if (qemu_log_instr_enabled(env)) {                      \
             qemu_log_instr_extra(env, msg);                     \
         }                                                       \
     } while (0)
 #else
-#define log_instr_cop0_update(env, cp0_reg, value)
+#define log_instr_cop0_update(env, cp0_reg, cp0_sel, value)
 #define log_instr_cop0_unsupported(env, msg)
 #endif
 

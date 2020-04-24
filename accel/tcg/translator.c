@@ -82,7 +82,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         }
     }
     /* Cache whether we are logging instructions in this tb */
-    db->log_instr_enabled = qemu_log_instr_enabled(cpu);
+    db->log_instr_enabled = qemu_log_instr_enabled(cpu->env_ptr);
 #endif /* CONFIG_TCG_LOG_INSTR */
 
     /* Reset the temp count so that we can identify leaks */
@@ -124,7 +124,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         /*
          * TODO(am2419): could move the commit below tr_insn or would we lose something?
          */
-        if (unlikely(qemu_log_instr_enabled(cpu))) {
+        if (qemu_log_instr_enabled(cpu->env_ptr)) {
             TCGv tpc = tcg_const_tl(db->pc_next);
             /* TODO(am2419): can we merge the commit and instruction log helpers? */
             gen_helper_qemu_log_instr_commit(cpu_env);

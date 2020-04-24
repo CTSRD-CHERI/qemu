@@ -105,8 +105,8 @@ void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* n
 }
 
 #ifdef CONFIG_TCG_LOG_INSTR
-#define log_instr_hwreg_update(env, name, newval) do {   \
-        if (unlikely(qemu_log_instr_enabled(env_cpu(env)))) {   \
+#define log_instr_hwreg_update(env, name, newval) do {          \
+        if (qemu_log_instr_enabled(env)) {                      \
             qemu_log_instr_reg(env, name, newval);              \
         }                                                       \
     } while (0)
@@ -144,7 +144,7 @@ static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *c
 
 static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) {
     if (!cap_exactly_equal(&env->active_tc.CHWR.DDC, new_ddc)) {
-        if (qemu_log_instr_enabled(env_cpu(env)))
+        if (qemu_log_instr_enabled(env))
             qemu_log_instr_extra(
                 env, "Flushing TCG TLB since $ddc is changing to "
                 PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
@@ -160,7 +160,7 @@ static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) 
         // XXX: tlb_flush(env_cpu(env));
         env->active_tc.CHWR.DDC = *new_ddc;
     } else {
-        if (qemu_log_instr_enabled(env_cpu(env)))
+        if (qemu_log_instr_enabled(env))
             qemu_log_instr_extra(
                 env, "Installing same $ddc again, not flushing TCG TLB: "
                 PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));

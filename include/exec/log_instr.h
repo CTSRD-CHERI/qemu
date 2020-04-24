@@ -47,25 +47,43 @@
  * - log_instr_changed_state
  * - tb_in_user_mode
  *
- * Each target should implement their own register update logging helpers that
- * call into qemu_log_instr_gpr(), qemu_log_instr_cap() and similar interface
- *  functions.
- * Note that the target is responsible for producing a register name to use.
- * It is recommended to use the helper_<target>_log_instr_{gpr,cap..}() naming
- * convention to distinguish target-specific and generic qemu_log_instr
- * interfaces.
+ * - Each target should implement their own register update logging helpers that
+ *   call into qemu_log_instr_gpr(), qemu_log_instr_cap() and similar interface
+ *   functions.
+ *   Note that the target is responsible for producing a register name to use.
+ * - It is recommended to use the helper_<target>_log_instr_{gpr,cap..}() naming
+ *   convention to distinguish target-specific and generic qemu_log_instr
+ *   interfaces.
+ * - The discipline for checking whether instruction logging is enabled is
+ *   the following:
+ *   + TCG helpers should be emitted after checking the cached value
+ *     of DisasContextBase::log_instr_enabled.
+ *   + TCG logging helpers internally must check whether logging is enabled,
+ *     this is because sometimes the DisasContext is not available to check
+ *     the condition above.
+ *   + qemu_log_instr_* functions do not internally check whether logging is
+ *     enabled. This must be done by the caller or via a macro.
+ *   + Use the macro qemu_log_instr_enabled to check whether instruction logging
+ *     is enabled. This can be used in `if (...)` statements without adding
+ *     `unlikely(...)` built-ins.
+ *
+ * TODO(am2419): decide whether to inline some of these.
  */
 
 #ifdef CONFIG_TCG_LOG_INSTR
 
-#define INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
+#define	INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
+
+/* Helper macro to check for instruction logging enabled */
+#define	qemu_log_instr_enabled(env)                                     \
+    (unlikely(qemu_log_instr_check_enabled((env))) ? true : false)
 
 /*
  * Check whether instruction tracing is enabled.
  * Note: changes to the instruction logging flags result in a call to
  * tb_flush so we can do the logging checks at translate time as well.
  */
-bool qemu_log_instr_enabled(CPUState *cpu);
+bool qemu_log_instr_check_enabled(CPUArchState *env);
 
 /*
  * Initialize instruction logging for a cpu.
@@ -85,76 +103,27 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc);
  */
 void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc);
 
-// TODO(am2419): the maybe part is redundant, we only call these from helpers or
-// translator code which checks for logging enabled anyway.
-#define qemu_maybe_log_instr(op, ...) do {                      \
-        if (unlikely(qemu_loglevel_mask(INSTR_LOG_MASK)))       \
-            op(__VA_ARGS__);                                    \
-    } while (0)
-
-#define qemu_log_instr_mode_switch(...)                                 \
-    qemu_maybe_log_instr(_qemu_log_instr_mode_switch, __VA_ARGS__)
-
-#define qemu_log_instr_reg(...)                                 \
-    qemu_maybe_log_instr(_qemu_log_instr_reg, __VA_ARGS__)
-
-#ifdef TARGET_CHERI
-#define qemu_log_instr_cap(...)                                 \
-    qemu_maybe_log_instr(_qemu_log_instr_cap, __VA_ARGS__)
-#define qemu_log_instr_cap_int(...)                             \
-    qemu_maybe_log_instr(_qemu_log_instr_cap_int, __VA_ARGS__)
-#else
-#define qemu_log_instr_cap(...)
-#define qemu_log_instr_cap_int(...)
-#endif
-
-#define qemu_log_instr_mem(...)                                 \
-    qemu_maybe_log_instr(_qemu_log_instr_mem, __VA_ARGS__)
-
-#define qemu_log_instr_instr(...)                               \
-    qemu_maybe_log_instr(_qemu_log_instr_instr, __VA_ARGS__)
-
-#define qemu_log_instr_hwtid(...)                               \
-    qemu_maybe_log_instr(_qemu_log_instr_hwtid, __VA_ARGS__)
-
-#define qemu_log_instr_asid(...)                                \
-    qemu_maybe_log_instr(_qemu_log_instr_asid, __VA_ARGS__)
-
-#define qemu_log_instr_exception(...)                           \
-    qemu_maybe_log_instr(_qemu_log_instr_exception, __VA_ARGS__)
-
-#define qemu_log_instr_env(...)                                 \
-    qemu_maybe_log_instr(_qemu_log_instr_env, __VA_ARGS__)
-
-#define qemu_log_instr_extra(...)                               \
-    qemu_maybe_log_instr(_qemu_log_instr_extra, __VA_ARGS__)
-
-#define qemu_log_instr_commit(...)                              \
-    qemu_maybe_log_instr(_qemu_log_instr_commit, __VA_ARGS__)
-
-/* TODO(am2419): decide whether to inline these */
-
 /*
  * Switch user/kernel modes. Note this could be extended to support other rings
  * if needed.
  */
-void _qemu_log_instr_mode_switch(CPUArchState *env, bool user, target_ulong pc);
+void qemu_log_instr_mode_switch(CPUArchState *env, bool user, target_ulong pc);
 
 /*
  * Drop the current buffered entry and ignore logging until next commit.
  */
-void _qemu_log_instr_drop(CPUArchState *env);
+void qemu_log_instr_drop(CPUArchState *env);
 
 /*
  * Notify that we are done with this instruction and the buffer
  * can be sent to the output.
  */
-void _qemu_log_instr_commit(CPUArchState *env);
+void qemu_log_instr_commit(CPUArchState *env);
 
 /*
  * Log changed general purpose register.
  */
-void _qemu_log_instr_reg(CPUArchState *env, const char *reg_name,
+void qemu_log_instr_reg(CPUArchState *env, const char *reg_name,
                          target_ulong value);
 
 /*
@@ -173,13 +142,13 @@ void qemu_log_instr_st_int(CPUArchState *env, target_ulong addr, MemOp op,
 /*
  * Log changed capability register.
  */
-void _qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
+void qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
                          const cap_register_t *cr);
 
 /*
  * Log changed capability register with integer value.
  */
-void _qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
+void qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
                              target_ulong value);
 
 /*
@@ -198,32 +167,32 @@ void qemu_log_instr_st_cap(CPUArchState *env, target_ulong addr,
 /*
  * Log instruction pc and opcode.
  */
-void _qemu_log_instr_instr(CPUArchState *env, target_ulong pc);
+void qemu_log_instr_pc(CPUArchState *env, target_ulong pc);
 
 /*
  * Log hardware thread id.
  * This is currently the cpu index in qemu.
  */
-void _qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid);
+void qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid);
 
 /*
  * Log ASID. Note on some architectures this is larger, we
  * may want to account for this.
  */
-void _qemu_log_instr_asid(CPUArchState *env, uint8_t asid);
+void qemu_log_instr_asid(CPUArchState *env, uint8_t asid);
 
 /*
  * Log exception code. Note on some architectures this is larger,
  * we may want to account for this.
  */
-void _qemu_log_instr_exception(CPUArchState *env, uint8_t code);
+void qemu_log_instr_exception(CPUArchState *env, uint8_t code);
 
 /*
  * Log magic NOP event, we record a function number and 4 arguments.
  * Note that we have 6 bytes left in the cvtrace format, we may need
  * some trickery to reclaim those.
  */
-void _qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
+void qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
                          target_ulong arg1, target_ulong arg2,
                          target_ulong arg3);
 
@@ -231,7 +200,7 @@ void _qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
  * Log extra information as a string. Some logging formats may
  * ignore this.
  */
-void _qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
+void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 
 #else /* ! defined(CONFIG_TCG_LOG_INSTR) */
 #define	qemu_log_instr_enabled(cpu) false
