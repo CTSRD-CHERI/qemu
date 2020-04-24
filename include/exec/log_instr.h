@@ -182,10 +182,15 @@ void qemu_log_instr_hwtid(CPUArchState *env, uint8_t tid);
 void qemu_log_instr_asid(CPUArchState *env, uint8_t asid);
 
 /*
- * Log exception code. Note on some architectures this is larger,
- * we may want to account for this.
+ * Log exception event.
  */
-void qemu_log_instr_exception(CPUArchState *env, uint8_t code);
+void qemu_log_instr_exception(CPUArchState *env, uint32_t code,
+                              target_ulong vector, target_ulong faultaddr);
+
+/*
+ * Log interrupt event.
+ */
+void qemu_log_instr_interrupt(CPUArchState *env, uint32_t code, target_ulong vector);
 
 /*
  * Log magic NOP event, we record a function number and 4 arguments.
@@ -203,6 +208,7 @@ void qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
 void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 
 #else /* ! defined(CONFIG_TCG_LOG_INSTR) */
+#define	INSTR_LOG_MASK (0)
 #define	qemu_log_instr_enabled(cpu) false
 #define	qemu_log_instr_init(env)
 #define	qemu_log_instr_start(env, mode, pc)
@@ -215,6 +221,7 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 #define	qemu_log_instr_hwtid(...)
 #define	qemu_log_instr_asid(...)
 #define	qemu_log_instr_exception(...)
+#define	qemu_log_instr_interrupt(...)
 #define	qemu_log_instr_env(...)
 #define	qemu_log_instr_extra(...)
 #define	qemu_log_instr_commit(...)

@@ -68,14 +68,25 @@ typedef struct cvtrace cvtrace_t;
  * the log buffer. The per-cpu log buffer structure is defined below.
  */
 struct cpu_log_instr_info {
-    bool force_drop;
     bool user_mode_tracing;
-    uint8_t exception;
-    uint64_t pc;
+
+    bool force_drop;
     uint8_t thread;
     uint8_t asid;
+
+    int flags;
+#define LI_FLAG_INTR_TRAP 1
+#define LI_FLAG_INTR_ASYNC 2
+#define LI_FLAG_INTR_MASK 0x3
+
+    uint32_t intr_code;
+    // TODO(am2419): should be target_ulong
+    uint64_t intr_vector;
+    uint64_t intr_faultaddr;
+
+    uint64_t pc;
     /*
-     * TODO(am2419):
+     * For now we allow multiple accesses to be tied to one instruction.
      * Some architectures may have multiple memory accesses
      * in the same instruction (e.g. x86-64 pop r/m64,
      * vector/matrix instructions, load/store pair). It is unclear

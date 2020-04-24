@@ -47,6 +47,26 @@ enum {
     TLBRET_MATCH = 0
 };
 
+/*
+ * Helper to simplify checking whether we are logging interrupts
+ * or instructions.
+ */
+#define log_exc_or_instr(env)                           \
+    ((unlikely(qemu_loglevel_mask(CPU_LOG_INT)) ||      \
+      qemu_log_instr_enabled(env)) ? true : false)
+
+/*
+ * Helper to dispatch a message both to instruction and
+ * interrupt logging.
+ */
+#define log_exc_or_instr_msg(env, msg, ...) do {                \
+        if (qemu_loglevel_mask(CPU_LOG_INT)) {                  \
+            qemu_log(msg, __VA_ARGS__);                         \
+        } else {                                                \
+            qemu_log_instr_extra(env, msg, __VA_ARGS__);        \
+        }                                                       \
+    } while (0)
+
 #if !defined(CONFIG_USER_ONLY)
 
 /* no MMU emulation */
@@ -1238,25 +1258,29 @@ void mips_cpu_do_interrupt(CPUState *cs)
     int cause = -1;
     const char *name = "";
 
-    if (should_log_instr(env, CPU_LOG_INT | CPU_LOG_INSTR) &&
+    /* Log interrupt extra debug info */
+    if (log_exc_or_instr(env) &&
         cs->exception_index != EXCP_EXT_INTERRUPT) {
         if (cs->exception_index < 0 || cs->exception_index > EXCP_LAST) {
             name = "unknown";
         } else {
             name = excp_names[cs->exception_index];
         }
-
-        qemu_log("%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
-                 " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n", __func__, PC_ADDR(env), get_CP0_EPC(env),
-                 name, env->hflags & MIPS_HFLAG_BMASK, env->hflags);
+        log_exc_or_instr_msg(
+            env, "%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
+            " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n",
+            __func__, PC_ADDR(env), get_CP0_EPC(env), name,
+            env->hflags & MIPS_HFLAG_BMASK, env->hflags);
 #ifdef TARGET_CHERI
-        qemu_log("\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR
-                 "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
-                 PRINT_CAP_ARGS(cheri_get_current_pcc(env)),
-                 PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
-                 PRINT_CAP_ARGS(&env->active_tc.CHWR.EPCC));
+        log_exc_or_instr_msg(
+            env, "\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR
+            "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
+            PRINT_CAP_ARGS(cheri_get_current_pcc(env)),
+            PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
+            PRINT_CAP_ARGS(&env->active_tc.CHWR.EPCC));
 #endif
     }
+
 #ifdef CONFIG_TCG_LOG_INSTR
     // TODO(am2419): there is another one at the end of this function. Is this redundant?
     if (qemu_log_instr_enabled(env)) {
@@ -1328,9 +1352,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
         env->CP0_Status |= (1 << CP0St_NMI);
  set_error_EPC:
 #ifdef TARGET_CHERI
-        // qemu_log("%s: ErrorEPC <- " TARGET_FMT_lx "\n", __func__,
-        // exception_resume_pc(env));
-        // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
         env->active_tc.CHWR.ErrorEPCC = *cheri_get_current_pcc(env);
         // Note: set_CP0_ErrorEPC() handles the special cases of sealed/unrep EPCC
 #endif /* TARGET_CHERI */
@@ -1521,10 +1542,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
  set_EPC:
         if (!(env->CP0_Status & (1 << CP0St_EXL))) {
 #ifdef TARGET_CHERI
-            // qemu_log("%s: EPC <- " TARGET_FMT_lx "\n", __func__,
-            //  exception_resume_pc(env));
-            // qemu_log("%s: EPCC <- PCC and PCC <- KCC\n", __func__);
-
             env->active_tc.CHWR.EPCC = *cheri_get_current_pcc(env);
             // Note: set_CP0_EPC() handles the special cases of sealed/unrep EPCC
 #endif /* TARGET_CHERI */
@@ -1581,47 +1598,48 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #endif /* TARGET_CHERI */
 
 #ifdef CONFIG_TCG_LOG_INSTR
-    if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
-        if (cs->exception_index == EXCP_EXT_INTERRUPT)
-            qemu_log("--- Interrupt, vector " TARGET_FMT_lx "\n",
-                     PC_ADDR(env));
-        else
-            qemu_log("--- Exception #%u: %s, vector "
-                    TARGET_FMT_lx "\n", cause, name, PC_ADDR(env));
-    }
-    // TODO(am2419): deprecated remove
-    /* if (unlikely(should_log_instr(env, CPU_LOG_CVTRACE))) { */
-    /*     env->cvtrace.exception = cause; */
-    /* } */
+    if (qemu_log_instr_enabled(env)) {
+        uint32_t log_cause;
+        /* Log generic exception/interrupt info */
+        if (cs->exception_index == EXCP_EXT_INTERRUPT) {
+            log_cause = (env->CP0_Cause & CP0Ca_IP_mask) >> CP0Ca_IP;
+            qemu_log_instr_interrupt(env, log_cause, PC_ADDR(env));
+        } else {
+            /*
+             * Note on CHERI-MIPS the logged cause is the concatenation
+             * {cap_cause | cause}.
+             */
 #ifdef TARGET_CHERI
-    if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
-         // Print the new PCC value for debugging traces.
-         cap_register_t tmp;
-         // We use a null cap as oldreg so that we always print it.
-         null_capability(&tmp);
-         dump_changed_capreg(env, cheri_get_current_pcc(env), &tmp, "PCC");
+            log_cause = cause | (((uint32_t)env->CP2_CapCause) << 8);
+#else
+            log_cause = cause;
+#endif
+            qemu_log_instr_exception(env, log_cause, PC_ADDR(env),
+                                     env->CP0_BadVAddr);
+        }
+#ifdef TARGET_CHERI
+        /* TODO(am2419): should log as changed registers instead of extra? */
+        /* Log extra changed register information */
+        qemu_log_instr_cap(env, "PCC", cheri_get_current_pcc(env));
+        qemu_log_instr_cap(env, "EPCC", &env->active_tc.CHWR.EPCC);
+        qemu_log_instr_cap(env, "ErrorEPCC", &env->active_tc.CHWR.ErrorEPCC);
+#endif
+        qemu_log_instr_reg(env, "ErrorEPC", get_CP0_ErrorEPC(env));
     }
-#endif /* TARGET_CHERI */
 #endif /* CONFIG_TCG_LOG_INSTR */
-    if (should_log_instr(env, CPU_LOG_INT | CPU_LOG_INSTR)
+
+    if (log_exc_or_instr(env)
         && cs->exception_index != EXCP_EXT_INTERRUPT) {
-        qemu_log("%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
-                 "    S %08x C %08x A " TARGET_FMT_lx " D " TARGET_FMT_lx "\n",
-                 __func__, PC_ADDR(env), get_CP0_EPC(env), cause,
-                 env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
-                 env->CP0_DEPC);
-#if defined(TARGET_CHERI) && defined(CONFIG_TCG_LOG_INSTR)
-        qemu_log("ErrorEPC " TARGET_FMT_lx "\n", get_CP0_ErrorEPC(env));
-        cap_register_t tmp;
-        // We use a null cap as oldreg so that we always print it.
-        null_capability(&tmp);
-        dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &tmp, "EPCC");
-        null_capability(&tmp);
-        dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &tmp, "ErrorEPCC");
-#endif
+        log_exc_or_instr_msg(
+            env, "%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
+            "    S %08x C %08x A " TARGET_FMT_lx " D " TARGET_FMT_lx "\n",
+            __func__, PC_ADDR(env), get_CP0_EPC(env), cause,
+            env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
+            env->CP0_DEPC);
     }
-#endif
+#endif /* ! CONFIG_USER_ONLY */
     cs->exception_index = EXCP_NONE;
+
 #ifdef CONFIG_TCG_LOG_INSTR
     if (qemu_log_instr_enabled(env)) {
         /* Note pc is guaranteed to be the current pc by the assertion above. */
@@ -1764,9 +1782,10 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env, MipsExcp exception,
         }
     }
 #endif
-    if (unlikely(should_log_instr(env, CPU_LOG_INT | CPU_LOG_INSTR)))
-        qemu_log("%s: %s %d\n", __func__, exception <= EXCP_LAST ?
-                 excp_names[exception] : "unknown excp", error_code);
+    if (log_exc_or_instr(env)) {
+        log_exc_or_instr_msg(env, "%s: %s %d\n", __func__, exception <= EXCP_LAST ?
+                             excp_names[exception] : "unknown excp", error_code);
+    }
     cs->exception_index = exception;
     env->error_code = error_code;
 
