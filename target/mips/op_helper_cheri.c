@@ -860,9 +860,10 @@ void dump_changed_cop2(CPUArchState *env, TCState *cur) {
      * was also changed, do not overwrite that value with EPCC, otherwise
      * the original result of the instruction is lost.
      */
-    if (!qemu_loglevel_mask(CPU_LOG_CVTRACE) || env->cvtrace.exception == 31) {
-        dump_changed_capreg(env, &cur->CHWR.EPCC, &env->last_CHWR.EPCC, "EPCC");
-    }
+    // TODO(am2419): deprecated, remove
+    /* if (!qemu_loglevel_mask(CPU_LOG_CVTRACE) || env->cvtrace.exception == 31) { */
+    /*     dump_changed_capreg(env, &cur->CHWR.EPCC, &env->last_CHWR.EPCC, "EPCC"); */
+    /* } */
 }
 
 #endif // CONFIG_TCG_LOG_INSTR

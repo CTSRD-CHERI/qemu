@@ -26,4 +26,8 @@
 #define TARGET_PAGE_BITS 12
 #define NB_MMU_MODES 4
 
+#ifdef CONFIG_TCG_LOG_INSTR
+#define TARGET_MAX_INSN_SIZE 4
+#endif
+
 #endif

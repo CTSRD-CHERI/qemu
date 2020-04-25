@@ -49,7 +49,7 @@ DEF_HELPER_2(qemu_log_instr_user_stop, void, env, tl)
 // TODO(am2419): should be TCG_CALL_NO_RWG?
 DEF_HELPER_1(qemu_log_instr_commit, void, env)
 // TODO(am2419): should be TCG_CALL_NO_RWG?
-DEF_HELPER_2(qemu_log_instr, void, env, tl)
+/* DEF_HELPER_3(qemu_log_instr, void, env, tl, tl) */
 DEF_HELPER_FLAGS_4(qemu_log_instr_load64, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i64, memop)
 DEF_HELPER_FLAGS_4(qemu_log_instr_store64, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i64, memop)
 DEF_HELPER_FLAGS_4(qemu_log_instr_load32, TCG_CALL_NO_RWG, void, env, cap_checked_ptr, i32, memop)

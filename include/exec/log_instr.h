@@ -72,6 +72,19 @@
 
 #ifdef CONFIG_TCG_LOG_INSTR
 
+/* struct trace_format { */
+/*     void (*emit_header)(CPUArchState *env); */
+/*     void (*emit_start)(CPUArchState *env, cpu_log_instr_info_t *log); */
+/*     void (*emit_stop)(CPUArchState *env, cpu_log_instr_info_t *log); */
+/*     void (*emit_entry)(CPUArchState *env, cpu_log_instr_info_t *log); */
+/*     void *context; */
+/* }; */
+
+/*
+ * Initialize instruction logging for a cpu.
+ */
+void qemu_log_instr_init(CPUArchState *env);
+
 #define	INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
 
 /* Helper macro to check for instruction logging enabled */
@@ -84,11 +97,6 @@
  * tb_flush so we can do the logging checks at translate time as well.
  */
 bool qemu_log_instr_check_enabled(CPUArchState *env);
-
-/*
- * Initialize instruction logging for a cpu.
- */
-void qemu_log_instr_init(CPUArchState *env);
 
 /*
  * Start instruction tracing. Note that the instruction currently being
@@ -167,7 +175,8 @@ void qemu_log_instr_st_cap(CPUArchState *env, target_ulong addr,
 /*
  * Log instruction pc and opcode.
  */
-void qemu_log_instr_pc(CPUArchState *env, target_ulong pc);
+void qemu_log_instr(CPUArchState *env, target_ulong pc, const char *insn,
+                    uint32_t size);
 
 /*
  * Log Address Space IDentifier (also known as PCID).
@@ -200,10 +209,9 @@ void qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
  */
 void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 
-#else /* ! defined(CONFIG_TCG_LOG_INSTR) */
+#else /* ! CONFIG_TCG_LOG_INSTR */
 #define	INSTR_LOG_MASK (0)
 #define	qemu_log_instr_enabled(cpu) false
-#define	qemu_log_instr_init(env)
 #define	qemu_log_instr_start(env, mode, pc)
 #define	qemu_log_instr_stop(env, mode, pc)
 #define	qemu_log_instr_mode_switch(...)
@@ -218,4 +226,4 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 #define	qemu_log_instr_env(...)
 #define	qemu_log_instr_extra(...)
 #define	qemu_log_instr_commit(...)
-#endif /* ! defined(CONFIG_TCG_LOG_INSTR) */
+#endif /* ! CONFIG_TCG_LOG_INSTR */

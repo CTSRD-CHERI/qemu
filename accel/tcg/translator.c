@@ -124,11 +124,9 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
          * TODO(am2419): could move the commit below tr_insn or would we lose something?
          */
         if (qemu_log_instr_enabled(cpu->env_ptr)) {
-            TCGv tpc = tcg_const_tl(db->pc_next);
             /* TODO(am2419): can we merge the commit and instruction log helpers? */
             gen_helper_qemu_log_instr_commit(cpu_env);
-            gen_helper_qemu_log_instr(cpu_env, tpc);
-            tcg_temp_free(tpc);
+            /* gen_helper_qemu_log_instr(cpu_env, tpc, tpc); */
         }
 #endif
         tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
@@ -170,14 +168,6 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         } else {
             ops->translate_insn(db, cpu);
         }
-#ifdef CONFIG_TCG_LOG_INSTR
-        /*
-         * Log instruction opcode after translation.
-         * This way the translate_insn hook updates the next pc for us
-         * and we get the opcode size implicitly.
-         */
-        /* gen_helper_qemu_log_instr(cpu_env, tpc, tsize); */
-#endif
 
         /* Stop translation if translate_insn so indicated.  */
         if (db->is_jmp != DISAS_NEXT) {

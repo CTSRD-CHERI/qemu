@@ -1244,11 +1244,17 @@ struct CPUMIPSState {
     QEMUTimer *timer; /* Internal timer */
     struct MIPSITUState *itu;
     MemoryRegion *itc_tag; /* ITC Configuration Tags */
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    /* Instruction logging state */
+    cpu_log_instr_info_t log_info;
+#endif
+
+    // TODO(am2419): deprecated remove
 #ifdef CONFIG_TCG_LOG_INSTR
     /*
      * Processor state after the last instruction.
      * Used for instruction tracing.
-     * TODO(am2419): possibly deprecate & remove?
      */
     target_ulong last_gpr[32];
     target_ulong last_cop0[32*8];
@@ -1258,7 +1264,6 @@ struct CPUMIPSState {
     struct cheri_cap_hwregs last_CHWR;
 #endif // TARGET_CHERI
 
-    cvtrace_t cvtrace; /* TODO(am2419): deprecated, remove */
 #endif /* CONFIG_TCG_LOG_INSTR */
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
@@ -1506,15 +1511,25 @@ static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr, bool 
     mips_update_pc_impl(&env->active_tc, pc_addr, can_be_unrepresenable);
 }
 
+
 #ifdef CONFIG_TCG_LOG_INSTR
-/* TODO(am2419): Document these as required to support a new target.
- * New common log API arch-specific helpers.
+/*
+ * Check whether the cpu is in user mode.
  */
 static inline bool cpu_in_user_mode(CPUMIPSState *env)
 {
     return ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM);
 }
 
+/*
+ * Target-specific hook to fetch the cpu log state
+ */
+static inline cpu_log_instr_info_t *cpu_get_log_instr_state(CPUMIPSState *env)
+{
+    return &env->log_info;
+}
+
+// TODO(am2419): deprecate and remove 
 // TODO(am2419) should probably rename as cpu_get_asid()
 static inline unsigned cheri_get_asid(CPUMIPSState *env) {
     uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
