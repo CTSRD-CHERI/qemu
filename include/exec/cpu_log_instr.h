@@ -32,35 +32,13 @@
 
 #pragma once
 
+#include "cpu-param.h"
+
 #ifdef CONFIG_TCG_LOG_INSTR
 
-/* TODO(am2419): there is no need for this to be visible, hide in util/log_instr.c */
-struct cvtrace {
-    uint8_t version;
-#define CVT_GPR     1   /* GPR change (val2) */
-#define CVT_LD_GPR  2   /* Load into GPR (val2) from address (val1) */
-#define CVT_ST_GPR  3   /* Store from GPR (val2) to address (val1) */
-#define CVT_NO_REG  4   /* No register is changed. */
-#define CVT_CAP     11  /* Cap change (val2,val3,val4,val5) */
-#define CVT_LD_CAP  12  /* Load Cap (val2,val3,val4,val5) from addr (val1) */
-#define CVT_ST_CAP  13  /* Store Cap (val2,val3,val4,val5) to addr (val1) */
-    uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
-    uint16_t cycles;    /* Currently not used. */
-    uint32_t inst;      /* Encoded instruction. */
-    uint64_t pc;        /* PC value of instruction. */
-    uint64_t val1;      /* val1 is used for memory address. */
-    uint64_t val2;      /* val2, val3, val4, val5 are used for reg content. */
-    uint64_t val3;
-    uint64_t val4;
-    uint64_t val5;
-    uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
-    uint8_t asid;       /* Address Space ID (i.e. CP0_TCStatus & 0xff) */
-} __attribute__((packed));
-typedef struct cvtrace cvtrace_t;
-
-/* Version 3 Cheri Stream Trace header info */
-#define CVT_QEMU_VERSION    (0x80U + 3)
-#define CVT_QEMU_MAGIC      "CheriTraceV03"
+#ifndef TARGET_MAX_INSN_SIZE
+#error "Target does not define TARGET_MAX_INSN_SIZE in cpu-param.h"
+#endif
 
 /*
  * The log buffer is associated with the cpu arch state, each target should
@@ -69,21 +47,23 @@ typedef struct cvtrace cvtrace_t;
  */
 struct cpu_log_instr_info {
     bool user_mode_tracing;
-
+#define cpu_log_iinfo_startzero force_drop
     bool force_drop;
     uint16_t asid;
-
     int flags;
 #define LI_FLAG_INTR_TRAP 1
 #define LI_FLAG_INTR_ASYNC 2
 #define LI_FLAG_INTR_MASK 0x3
-
     uint32_t intr_code;
     // TODO(am2419): should be target_ulong
     uint64_t intr_vector;
     uint64_t intr_faultaddr;
 
     uint64_t pc;
+    /* Generic instruction opcode buffer */
+    int insn_size;
+    char insn_bytes[TARGET_MAX_INSN_SIZE];
+#define cpu_log_iinfo_endzero mem
     /*
      * For now we allow multiple accesses to be tied to one instruction.
      * Some architectures may have multiple memory accesses

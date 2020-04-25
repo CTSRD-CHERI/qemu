@@ -24,7 +24,6 @@
 #include "disas/dis-asm.h"
 #include "exec/hwaddr.h"
 #include "exec/memattrs.h"
-#include "exec/cpu_log_instr.h"
 #include "qapi/qapi-types-run-state.h"
 #include "qemu/bitmap.h"
 #include "qemu/rcu_queue.h"
@@ -448,11 +447,6 @@ struct CPUState {
 
     /* track IOMMUs whose translations we've cached in the TCG TLB */
     GArray *iommu_notifiers;
-
-#ifdef CONFIG_TCG_LOG_INSTR
-    /* Instruction logging state and buffer */
-    cpu_log_instr_info_t log_info;
-#endif
 };
 
 typedef QTAILQ_HEAD(CPUTailQ, CPUState) CPUTailQ;

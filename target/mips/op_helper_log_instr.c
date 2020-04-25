@@ -46,8 +46,6 @@
 
 #ifdef CONFIG_TCG_LOG_INSTR
 
-/* TODO(am2419): New logging API helpers */
-
 static const char* mips_cpu_get_changed_mode(CPUMIPSState *env);
 
 /*
@@ -73,19 +71,23 @@ void helper_mips_log_instr_cop0(CPUArchState *env, uint32_t reg, uint32_t sel,
         qemu_log_instr_reg(env, mips_cop0_regnames[reg * 8 + sel], value);
 }
 
-static void dump_changed_regs(CPUMIPSState *env);
-
-static void dump_changed_cop0(CPUMIPSState *env);
-/*
- * Print the changed processor state.
- * Note: if this is emitted, tracing was enabled for this translation block,
- * so we do not repeat the check.
- */
-void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
+void helper_mips_log_instr32(CPUMIPSState *env, target_ulong pc,
+                             uint32_t opcode)
 {
     uint8_t asid = (env->active_tc.CP0_TCStatus & 0xff) >> CP0TCSt_TASID;
-    qemu_log_instr_asid(env, asid);
 
+    qemu_log_instr_asid(env, asid);
+    qemu_log_instr(env, pc, (char *)&opcode, sizeof(opcode));
+}
+
+void helper_mips_log_instr_drop(CPUMIPSState *env)
+{
+    qemu_log_instr_drop(env);
+}
+
+void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc);
+void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
+{
     const char *new_mode = mips_cpu_get_changed_mode(env);
     /* Testing pointer equality is fine, it always points to the same constants */
     if (new_mode != env->last_mode) {
@@ -93,11 +95,28 @@ void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
         qemu_log_instr_extra(env, "--- %s\n", new_mode);
         qemu_log_instr_mode_switch(env, /*enable*/cpu_in_user_mode(env), pc);
     }
+}
+/* TODO(am2419): Old Stuff */
+
+#if 0
+static void dump_changed_regs(CPUMIPSState *env);
+
+static void dump_changed_cop0(CPUMIPSState *env);
+void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
+{
+    /* const char *new_mode = mips_cpu_get_changed_mode(env); */
+    /* /\* Testing pointer equality is fine, it always points to the same constants *\/ */
+    /* if (new_mode != env->last_mode) { */
+    /*     env->last_mode = new_mode; */
+    /*     qemu_log_instr_extra(env, "--- %s\n", new_mode); */
+    /*     qemu_log_instr_mode_switch(env, /\*enable*\/cpu_in_user_mode(env), pc); */
+    /* } */
 
     /* TODO(am2419): remove below, just for testing. */
     /* Print changed state: GPR, Cap. */
-    dump_changed_regs(env);
+    /* dump_changed_regs(env); */
 }
+#endif
 
 /*
  * Print changed kernel/user/debug mode.
@@ -134,8 +153,6 @@ static const char* mips_cpu_get_changed_mode(CPUMIPSState *env)
     }
     return mode;
 }
-
-/* TODO(am2419): Old Stuff */
 
 extern int cl_default_trace_format;
 
@@ -263,6 +280,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     }
 }
 
+// TODO(am2419): deprecated, remove
 void helper_log_value(CPUMIPSState *env, const void* ptr, uint64_t value)
 {
     qemu_log_mask(CPU_LOG_INSTR, "%s: " TARGET_FMT_plx "\n", ptr, value);

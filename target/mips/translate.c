@@ -31860,6 +31860,31 @@ static bool mips_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cs,
     return true;
 }
 
+#ifdef CONFIG_TCG_LOG_INSTR
+static inline void gen_mips_log_instr_unsupported(
+    DisasContext *ctx, const char *what)
+{
+    if (unlikely(ctx->base.log_instr_enabled)) {
+        warn_report("%s instruction tracing is not implemented\n", what);
+        gen_helper_mips_log_instr_drop(cpu_env);
+    }
+}
+
+static inline void gen_mips_log_instr32(DisasContext *ctx)
+{
+    if (unlikely(ctx->base.log_instr_enabled)) {
+        TCGv pc = tcg_const_tl(ctx->base.pc_next);
+        TCGv_i32 opc = tcg_const_i32(ctx->opcode);
+        gen_helper_mips_log_instr32(cpu_env, pc, opc);
+        tcg_temp_free(pc);
+        tcg_temp_free_i32(opc);
+    }
+}
+#else
+#define gen_mips_log_instr_unsupported(ctx, what) ((void)0)
+#define gen_mips_log_instr32(ctx) ((void)0)
+#endif
+
 static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
 {
     CPUMIPSState *env = cs->env_ptr;
@@ -31877,26 +31902,23 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
         g_assert(ctx->base.is_jmp == DISAS_NORETURN);
         return;
 #else
+        gen_mips_log_instr_unsupported(ctx, "nanomips");
         ctx->opcode = cpu_lduw_code(env, ctx->base.pc_next);
-#ifdef CONFIG_TCG_LOG_INSTR
-    if (unlikely(ctx->base.log_instr_enabled)) {
-        warn_report("nanomips instruction tracing is not implemented\n");
-    }
-#endif
         insn_bytes = decode_nanomips_opc(env, ctx);
 #endif
     } else if (!(ctx->hflags & MIPS_HFLAG_M16)) {
         ctx->opcode = cpu_ldl_code(env, ctx->base.pc_next);
         insn_bytes = 4;
+        gen_mips_log_instr32(ctx);
         decode_opc(env, ctx);
     } else if (ctx->insn_flags & ASE_MICROMIPS) {
+        gen_mips_log_instr_unsupported(ctx, "micromips");
         ctx->opcode = cpu_lduw_code(env, ctx->base.pc_next);
-        // TODO(am2419): instrument logging
         insn_bytes = decode_micromips_opc(env, ctx);
 #ifndef TARGET_CHERI /* MIPS16 not supported */
     } else if (ctx->insn_flags & ASE_MIPS16) {
+        gen_mips_log_instr_unsupported(ctx, "mips16");
         ctx->opcode = cpu_lduw_code(env, ctx->base.pc_next);
-        // TODO(am2419): instrument logging
         insn_bytes = decode_mips16_opc(env, ctx);
 #endif
     } else {
@@ -31929,17 +31951,17 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     if (is_slot) {
         gen_branch(ctx, insn_bytes);
     }
-#ifdef CONFIG_TCG_LOG_INSTR
-    if (unlikely(ctx->base.log_instr_enabled)) {
-        /*
-         * TODO(am2419): do we really need this? we catch mode changes in
-         * the exception path anyway...
-         */
-        TCGv tpc = tcg_const_tl(ctx->base.pc_next);
-        gen_helper_mips_log_instr_changed_state(cpu_env, tpc);
-        tcg_temp_free(tpc);
-    }
-#endif
+/* #ifdef CONFIG_TCG_LOG_INSTR */
+/*     if (unlikely(ctx->base.log_instr_enabled)) { */
+/*         /\* */
+/*          * TODO(am2419): do we really need this? we catch mode changes in */
+/*          * the exception path anyway... */
+/*          *\/ */
+/*         TCGv tpc = tcg_const_tl(ctx->base.pc_next); */
+/*         gen_helper_mips_log_instr_changed_state(cpu_env, tpc); */
+/*         tcg_temp_free(tpc); */
+/*     } */
+/* #endif */
     ctx->base.pc_next += insn_bytes;
 
     if (ctx->base.is_jmp != DISAS_NEXT) {
@@ -32210,6 +32232,9 @@ void cpu_mips_realize_env(CPUMIPSState *env)
 {
     env->exception_base = (int32_t)0xBFC00000;
 
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_instr_init(env);
+#endif
 #ifndef CONFIG_USER_ONLY
     mmu_init(env, env->cpu_model);
 #endif
@@ -32238,10 +32263,6 @@ void cpu_set_exception_base(int vp_index, target_ulong address)
 void cpu_state_reset(CPUMIPSState *env)
 {
     CPUState *cs = env_cpu(env);
-
-#if defined(TARGET_CHERI) && defined(CONFIG_TCG_LOG_INSTR)
-    qemu_log_instr_init(env);
-#endif
 
     /* Reset registers to their default values */
     env->CP0_PRid = env->cpu_model->CP0_PRid;

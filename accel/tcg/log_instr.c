@@ -41,10 +41,6 @@
 #include "exec/memop.h"
 #include "disas/disas.h"
 
-#ifdef TARGET_CHERI
-// cheri-common includes?
-#endif
-
 /*
  * CHERI common instruction logging.
  *
@@ -90,7 +86,6 @@ typedef struct log_reginfo log_reginfo_t;
 
 struct log_meminfo {
     uint8_t flags;
-#define LMI_NOMEM 0
 #define LMI_LD 1
 #define LMI_ST 2
 #define LMI_CAP 4
@@ -105,17 +100,56 @@ struct log_meminfo {
 };
 typedef struct log_meminfo log_meminfo_t;
 
+/*
+ * target-endiannes bswap helpers
+ */
+#ifdef TARGET_WORDS_BIGENDIAN
+#define cpu_to_host16(x) be16_to_cpu(x)
+#define cpu_to_host32(x) be32_to_cpu(x)
+#define cpu_to_host64(x) be64_to_cpu(x)
+#else
+#define cpu_to_host16(x) le16_to_cpu(x)
+#define cpu_to_host32(x) le32_to_cpu(x)
+#define cpu_to_host64(x) le64_to_cpu(x)
+#endif
+
+/*
+ * CHERI binary trace format, originally used for MIPS only.
+ * The format is limited to one entry per instruction, each
+ * entry can hold at most one register modification and one
+ * memory address.
+ */
+struct cheri_trace_entry {
+    uint8_t entry_type;
+#define CTE_NO_REG  0   /* No register is changed. */
+#define CTE_GPR     1   /* GPR change (val2) */
+#define CTE_LD_GPR  2   /* Load into GPR (val2) from address (val1) */
+#define CTE_ST_GPR  3   /* Store from GPR (val2) to address (val1) */
+#define CTE_CAP     11  /* Cap change (val2,val3,val4,val5) */
+#define CTE_LD_CAP  12  /* Load Cap (val2,val3,val4,val5) from addr (val1) */
+#define CTE_ST_CAP  13  /* Store Cap (val2,val3,val4,val5) to addr (val1) */
+    uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
+#define CTE_EXCEPTION_NONE 0xff
+    uint16_t cycles;    /* Currently not used. */
+    uint32_t inst;      /* Encoded instruction. */
+    uint64_t pc;        /* PC value of instruction. */
+    uint64_t val1;      /* val1 is used for memory address. */
+    uint64_t val2;      /* val2, val3, val4, val5 are used for reg content. */
+    uint64_t val3;
+    uint64_t val4;
+    uint64_t val5;
+    uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
+    uint8_t asid;       /* Address Space ID */
+} __attribute__((packed));
+typedef struct cheri_trace_entry cheri_trace_entry_t;
+
+/* Version 3 Cheri Stream Trace header info */
+#define CTE_QEMU_VERSION    (0x80U + 3)
+#define CTE_QEMU_MAGIC      "CheriTraceV03"
+
 extern int cl_default_trace_format;
 
-static cpu_log_instr_info_t *cpu_get_log(CPUState *cpu)
-{
-    return &cpu->log_info;
-}
-
-static cpu_log_instr_info_t *target_cpu_get_log(CPUArchState *env)
-{
-    return &env_cpu(env)->log_info;
-}
+/* Text trace format emitters */
 
 /*
  * Emit textual trace representation of memory access
@@ -190,7 +224,7 @@ static inline void emit_text_reg(log_reginfo_t *rinfo)
 /*
  * Emit textual trace entry to the log.
  */
-static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
+static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *log)
 {
     int i;
 
@@ -250,76 +284,180 @@ static void emit_text_trace(CPUArchState *env, cpu_log_instr_info_t *log)
 }
 
 /*
- * Emit binary trace entry to the log.
+ * Emit text tracing start event.
  */
-static void emit_cvtrace(cpu_log_instr_info_t *log)
+static void emit_text_start(CPUArchState *env, target_ulong pc)
+{
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
+
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && log->user_mode_tracing)
+        qemu_log("User-mode only tracing enabled at " TARGET_FMT_lx
+                 ", ASID %u\n", pc, log->asid);
+    else
+        qemu_log("Requested instruction logging @ " TARGET_FMT_lx
+                 " ASID %u\n", pc, log->asid);
+}
+
+/*
+ * Emit text tracing stop event.
+ */
+static void emit_text_stop(CPUArchState *env, target_ulong pc)
+{
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
+
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && log->user_mode_tracing)
+        qemu_log("User-mode only tracing disabled at " TARGET_FMT_lx
+                 ", ASID %u\n", pc, log->asid);
+    else
+        qemu_log("Disabled instruction logging @ " TARGET_FMT_lx
+                 " ASID %u\n", pc, log->asid);
+}
+
+/* CHERI trace V3 format emitters */
+
+/*
+ * Emit binary trace entry to the log.
+ * TODO(am2419): The binary trace formats may be more varied than the text format,
+ * make it easy to switch to a new format if desidred.
+ */
+static void emit_bin_entry(CPUArchState *env, cpu_log_instr_info_t *log)
 {
     // TODO(am2419): how do we get the opcode from pc? this is a machine-dependant
     // thing, maybe we can reuse disas or have an hook to determine the opcode length
     // can we get it from next instruction pc?
 
-    /*     if (qemu_loglevel_mask(CPU_LOG_INSTR)) { */
-    /*     g_string_append_printf( */
-    /*         "    Write %s|" PRINT_CAP_FMTSTR_L1 "\n |" PRINT_CAP_FMTSTR_L2 "\n", */
-    /*         reg_name, PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr)); */
-    /* } else if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) { */
-    /*     uint64_t metadata = (((uint64_t)cr->cr_tag << 63) | */
-    /*                          (cap_get_otype(cr) << 32) | */
-    /*                          (COMBINED_PERMS_VALUE(cr) << 1) | */
-    /*                          (uint64_t)(cap_is_unsealed(cr) ? 0 : 1)); */
+    FILE *logfile;
+    cheri_trace_entry_t entry;
+    static uint16_t cycles = 0; // TODO(am2419): this should be a per-cpu counter.
 
-    /*     log->cv_buffer.entry_type |= CVT_CAP; */
-    /*     log->cv_buffer.val2 = metadata; */
-    /*     log->cv_buffer.val3 = cap_get_cursor(cr); */
-    /*     log->cv_buffer.val4 = cap_get_base(cr); */
-    /*     log->cv_buffer.val5 = cap_get_length64(cr); */
-    /* } */
+    entry.entry_type = CTE_NO_REG;
+    entry.thread = (uint8_t)env_cpu(env)->cpu_index;
+    entry.asid = (uint8_t)log->asid;
+    entry.pc = cpu_to_host64(log->pc);
+    entry.cycles = cpu_to_host16(cycles++);
+    entry.inst = *((uint32_t *)&log->insn_bytes[0]);
+    /* entry.inst = log->opcode; // TODO(am2419): opcode, how to pick it up? */
+    switch (log->flags & LI_FLAG_INTR_MASK) {
+    case LI_FLAG_INTR_TRAP:
+        entry.exception = (uint8_t)log->intr_code;
+    case LI_FLAG_INTR_ASYNC:
+        entry.exception = 0; // TODO(am2419): this is very MIPS-specific.
+    default:
+        entry.exception = CTE_EXCEPTION_NONE;
+    }
+
+    if (log->regs->len) {
+        log_reginfo_t *rinfo = &g_array_index(log->regs, log_reginfo_t, 0);
+#ifndef TARGET_CHERI
+        log_assert(!reginfo_is_cap(rinfo) && "Capability register access "
+                   "without CHERI support");
+#else
+        if (reginfo_is_cap(rinfo)) {
+            // TODO(am2419): cvtrace expects a null capability in the integer case
+            uint64_t metadata = (
+                ((uint64_t)rinfo->cap.cr_tag << 63) |
+                (cap_get_otype(&rinfo->cap) << 32) |
+                (COMBINED_PERMS_VALUE(&rinfo->cap) << 1) |
+                (uint64_t)(cap_is_unsealed(&rinfo->cap) ? 0 : 1));
+
+            entry.entry_type = CTE_CAP;
+            entry.val2 = cpu_to_host64(metadata);
+            entry.val3 = cpu_to_host64(cap_get_cursor(&rinfo->cap));
+            entry.val4 = cpu_to_host64(cap_get_base(&rinfo->cap));
+            entry.val5 = cpu_to_host64(cap_get_length64(&rinfo->cap));
+        } else
+#endif
+        {
+            entry.entry_type = CTE_GPR;
+            entry.val2 = cpu_to_host64(rinfo->gpr);
+        }
+    }
+
+    if (log->mem->len) {
+        log_meminfo_t *minfo = &g_array_index(log->mem, log_meminfo_t, 0);
+#ifndef TARGET_CHERI
+        log_assert((minfo->flags & LMI_CAP) == 0 && "Capability memory access "
+                   "without CHERI support");
+#endif
+        entry.val1 = cpu_to_host64(minfo->addr);
+        // Hack to avoid checking for GPR or CAP
+        if (minfo->flags & LMI_LD)
+            entry.entry_type += 1;
+        else if (minfo->flags & LMI_ST)
+            entry.entry_type += 2;
+    }
+
+    logfile = qemu_log_lock();
+    fwrite(&entry, sizeof(entry), 1, logfile);
+    qemu_log_unlock(logfile);
 }
+
+static void emit_bin_start(CPUArchState *env, target_ulong pc)
+{
+    // TODO(am2419) Emit an event for instruction logging start
+}
+
+static void emit_bin_stop(CPUArchState *env, target_ulong pc)
+{
+    // TODO(am2419) Emit an event for instruction logging stop
+}
+
+/* Core instruction logging implementation */
 
 static void emit_log_start(CPUArchState *env, target_ulong pc)
 {
     if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-        qemu_log("Requested instruction logging @ " TARGET_FMT_lx
-                 " ASID %u\n", pc, cheri_get_asid(env));
-        qemu_log("User-mode only tracing enabled at " TARGET_FMT_lx
-                 ", ASID %u\n", pc, cheri_get_asid(env));
+        emit_text_start(env, pc);
     } else if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        // TODO(am2419) Emit an event for instruction logging start
+        emit_bin_start(env, pc);
     }
 }
 
 static void emit_log_stop(CPUArchState *env, target_ulong pc)
 {
     if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-        if (qemu_loglevel_mask(CPU_LOG_USER_ONLY))
-            qemu_log("User-mode only tracing disabled at " TARGET_FMT_lx
-                     ", ASID %u\n", pc, cheri_get_asid(env));
-        else
-            qemu_log("Disabled instruction logging @ " TARGET_FMT_lx
-                     " ASID %u\n", pc, cheri_get_asid(env));
+        emit_text_stop(env, pc);
     } else if (qemu_loglevel_mask(CPU_LOG_CVTRACE)) {
-        // TODO(am2419) Emit an event for instruction logging stop
+        emit_bin_stop(env, pc);
     }
 }
 
 static void reset_log_buffer(cpu_log_instr_info_t *log)
 {
-    memset(&log->force_drop, 0, ((char *)&log->pc - (char *)&log->force_drop));
+    memset(&log->cpu_log_iinfo_startzero, 0,
+           ((char *)&log->cpu_log_iinfo_endzero -
+            (char *)&log->cpu_log_iinfo_startzero));
     g_array_remove_range(log->regs, 0, log->regs->len);
     g_array_remove_range(log->mem, 0, log->mem->len);
     g_string_erase(log->txt_buffer, 0, -1);
     log->force_drop = false;
 }
 
+/*
+ * This is called upon cpu creation.
+ */
 void qemu_log_instr_init(CPUArchState *env)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     memset((void *)log, 0, sizeof(*log));
     log->txt_buffer = g_string_new(NULL);
     log->regs = g_array_new(FALSE, TRUE, sizeof(log_reginfo_t));
     log->mem = g_array_new(FALSE, TRUE, sizeof(log_meminfo_t));
     log->force_drop = true;
+
+    // TODO(am2419): add hook to trace format generator
+    // make this idempotent in case multiple cpus are init'ed
+    /* emit log file header */
+    if ((cl_default_trace_format & CPU_LOG_CVTRACE)) {
+        FILE *logfile = qemu_log_lock();
+        char buffer[sizeof(cheri_trace_entry_t)];
+
+        buffer[0] = CTE_QEMU_VERSION;
+        g_strlcpy(buffer + 1, CTE_QEMU_MAGIC, sizeof(buffer) - 2);
+        fwrite(buffer, sizeof(buffer), 1, logfile);
+        qemu_log_unlock(logfile);
+    }
 }
 
 /*
@@ -348,7 +486,7 @@ void flush_tcg_on_log_instr_chage(void) {
 bool qemu_log_instr_check_enabled(CPUArchState *env)
 {
     if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
-        return target_cpu_get_log(env)->user_mode_tracing;
+        return cpu_get_log_instr_state(env)->user_mode_tracing;
     }
 
     return (qemu_loglevel_mask(INSTR_LOG_MASK));
@@ -372,7 +510,7 @@ bool qemu_log_instr_check_enabled(CPUArchState *env)
  */
 void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
     uint32_t enabled = qemu_loglevel & INSTR_LOG_MASK;
 
     log_assert(log != NULL && "Invalid log buffer");
@@ -408,7 +546,7 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
  */
 void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
     uint32_t enabled = qemu_loglevel & INSTR_LOG_MASK;
 
     log_assert(log != NULL && "Invalid log buffer");
@@ -432,19 +570,23 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
 void qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
                                  target_ulong pc)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     log_assert(log != NULL && "Invalid log info");
 
-    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) &&
+        log->user_mode_tracing != enable) {
         log->user_mode_tracing = enable;
-        // TODO(am2419): emit logging start/stop events.
+        if (enable)
+            emit_log_start(env, pc);
+        else
+            emit_log_stop(env, pc);
     }
 }
 
 void qemu_log_instr_drop(CPUArchState *env)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     log_assert(log != NULL && "Invalid log buffer");
 
@@ -453,7 +595,7 @@ void qemu_log_instr_drop(CPUArchState *env)
 
 void qemu_log_instr_commit(CPUArchState *env)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     log_assert(log != NULL && "Invalid log buffer");
 
@@ -462,9 +604,9 @@ void qemu_log_instr_commit(CPUArchState *env)
     // TODO(am2419) handle dfilter: need to check if enabled and if the entry matched
 
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
-        emit_text_trace(env, log);
+        emit_text_entry(env, log);
     else if (qemu_loglevel_mask(CPU_LOG_CVTRACE))
-        emit_cvtrace(log);
+        emit_bin_entry(env, log);
 
 out:
     reset_log_buffer(log);
@@ -481,7 +623,7 @@ out:
  */
 void qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong value)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
     log_reginfo_t r;
 
     r.flags = 0;
@@ -494,7 +636,7 @@ void qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong va
 void qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
                          const cap_register_t *cr)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
     log_reginfo_t r;
 
     r.flags = LRI_CAP_REG | LRI_HOLDS_CAP;
@@ -506,7 +648,7 @@ void qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
 void qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
                              target_ulong value)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
     log_reginfo_t r;
 
     r.flags = LRI_CAP_REG;
@@ -520,7 +662,7 @@ static inline void qemu_log_instr_mem_int(
     CPUArchState *env, target_ulong addr, int flags,
     MemOp op, target_ulong value)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
     log_meminfo_t m;
 
     m.flags = flags;
@@ -553,7 +695,7 @@ static inline void qemu_log_instr_mem_cap(
     CPUArchState *env, target_ulong addr, int flags,
     const cap_register_t *value)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
     log_meminfo_t m;
 
     m.flags = flags;
@@ -575,16 +717,19 @@ void qemu_log_instr_st_cap(CPUArchState *env, target_ulong addr,
 }
 #endif
 
-void qemu_log_instr_pc(CPUArchState *env, target_ulong pc)
+void qemu_log_instr(CPUArchState *env, target_ulong pc, const char *insn,
+                    uint32_t size)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     log->pc = pc;
+    log->insn_size = size;
+    memcpy(log->insn_bytes, insn, size);
 }
 
 void qemu_log_instr_asid(CPUArchState *env, uint16_t asid)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     log->asid = asid;
 }
@@ -592,7 +737,7 @@ void qemu_log_instr_asid(CPUArchState *env, uint16_t asid)
 void qemu_log_instr_exception(CPUArchState *env, uint32_t code,
                               target_ulong vector, target_ulong faultaddr)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     log->flags |= LI_FLAG_INTR_TRAP;
     log->intr_code = code;
@@ -603,7 +748,7 @@ void qemu_log_instr_exception(CPUArchState *env, uint32_t code,
 void qemu_log_instr_interrupt(CPUArchState *env, uint32_t code,
                               target_ulong vector)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     log->flags |= LI_FLAG_INTR_ASYNC;
     log->intr_code = code;
@@ -624,7 +769,7 @@ void qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
 
 void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
     va_list va;
 
     va_start(va, msg);
@@ -636,7 +781,7 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
 
 void helper_qemu_log_instr_start(CPUArchState *env, target_ulong pc)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     qemu_log_instr_start(env, cl_default_trace_format, pc);
     /* Skip this instruction commit */
@@ -650,7 +795,7 @@ void helper_qemu_log_instr_stop(CPUArchState *env, target_ulong pc)
 
 void helper_qemu_log_instr_user_start(CPUArchState *env, target_ulong pc)
 {
-    cpu_log_instr_info_t *log = target_cpu_get_log(env);
+    cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
 
     qemu_log_instr_start(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
     /* Skip this instruction commit */
@@ -659,20 +804,22 @@ void helper_qemu_log_instr_user_start(CPUArchState *env, target_ulong pc)
 
 void helper_qemu_log_instr_user_stop(CPUArchState *env, target_ulong pc)
 {
+    /* qemu_log_instr_commit(env); */
     qemu_log_instr_stop(env, cl_default_trace_format | CPU_LOG_USER_ONLY, pc);
 }
 
 void helper_qemu_log_instr_commit(CPUArchState *env)
 {
-    if (qemu_log_instr_enabled(env))
+    /* if (qemu_log_instr_enabled(env)) */
         qemu_log_instr_commit(env);
 }
 
-void helper_qemu_log_instr(CPUArchState *env, target_ulong pc)
-{
-    if (qemu_log_instr_enabled(env))
-        qemu_log_instr_pc(env, pc);
-}
+/* void helper_qemu_log_instr(CPUArchState *env, target_ulong pc, */
+/*                            log_instrinfo_t *insn) */
+/* { */
+/*     if (qemu_log_instr_enabled(env)) */
+/*         qemu_log_instr(env, pc, insn); */
+/* } */
 
 void helper_qemu_log_instr_load64(CPUArchState *env, target_ulong addr,
                                   uint64_t value, MemOp op)
