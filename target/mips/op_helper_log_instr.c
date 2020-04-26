@@ -154,8 +154,6 @@ static const char* mips_cpu_get_changed_mode(CPUMIPSState *env)
     return mode;
 }
 
-extern int cl_default_trace_format;
-
 
 #define USER_TRACE_DEBUG 0
 #if USER_TRACE_DEBUG
@@ -218,7 +216,7 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     uint32_t mode = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
     if (!mode) {
         /* Always print these messages even if user-space only tracing is on */
-        mode = cl_default_trace_format;
+        /* mode = cl_default_trace_format; */ // TODO(am2419): handle removal of this.
     }
 
     if (!mode && qemu_loglevel_mask(CPU_LOG_GUEST_DEBUG_MSG))

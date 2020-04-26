@@ -1195,17 +1195,6 @@ static gboolean tb_host_size_iter(gpointer key, gpointer value, gpointer data)
     return false;
 }
 
-void flush_tcg_on_log_instr_chage(void);
-void flush_tcg_on_log_instr_chage(void) {
-    warn_report("Calling real %s\r", __func__);
-    CPUState *cpu;
-    int cpu_index = 0;
-    CPU_FOREACH(cpu) {
-        warn_report("Flushing TCG for CPU %d\r", cpu_index++);
-        tb_flush(cpu);
-    }
-}
-
 /* flush all the translation blocks */
 static void do_tb_flush(CPUState *cpu, run_on_cpu_data tb_flush_count)
 {

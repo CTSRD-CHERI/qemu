@@ -47,26 +47,6 @@ enum {
     TLBRET_MATCH = 0
 };
 
-/*
- * Helper to simplify checking whether we are logging interrupts
- * or instructions.
- */
-#define log_exc_or_instr(env)                           \
-    ((unlikely(qemu_loglevel_mask(CPU_LOG_INT)) ||      \
-      qemu_log_instr_enabled(env)) ? true : false)
-
-/*
- * Helper to dispatch a message both to instruction and
- * interrupt logging.
- */
-#define log_exc_or_instr_msg(env, msg, ...) do {                \
-        if (qemu_loglevel_mask(CPU_LOG_INT)) {                  \
-            qemu_log(msg, __VA_ARGS__);                         \
-        } else {                                                \
-            qemu_log_instr_extra(env, msg, __VA_ARGS__);        \
-        }                                                       \
-    } while (0)
-
 #if !defined(CONFIG_USER_ONLY)
 
 /* no MMU emulation */
@@ -1260,21 +1240,21 @@ void mips_cpu_do_interrupt(CPUState *cs)
     const char *name = "";
 
     /* Log interrupt extra debug info */
-    if (log_exc_or_instr(env) &&
+    if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT) &&
         cs->exception_index != EXCP_EXT_INTERRUPT) {
         if (cs->exception_index < 0 || cs->exception_index > EXCP_LAST) {
             name = "unknown";
         } else {
             name = excp_names[cs->exception_index];
         }
-        log_exc_or_instr_msg(
-            env, "%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
             " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n",
             __func__, PC_ADDR(env), get_CP0_EPC(env), name,
             env->hflags & MIPS_HFLAG_BMASK, env->hflags);
 #ifdef TARGET_CHERI
-        log_exc_or_instr_msg(
-            env, "\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "\tPCC=" PRINT_CAP_FMTSTR "\n\tKCC= " PRINT_CAP_FMTSTR
             "\n\tEPCC=" PRINT_CAP_FMTSTR "\n",
             PRINT_CAP_ARGS(cheri_get_current_pcc(env)),
             PRINT_CAP_ARGS(&env->active_tc.CHWR.KCC),
@@ -1282,13 +1262,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
 #endif
     }
 
-#ifdef CONFIG_TCG_LOG_INSTR
-    // TODO(am2419): there is another one at the end of this function. Is this redundant?
-    if (qemu_log_instr_enabled(env)) {
-        /* Note pc is guaranteed to be the current pc by the assertion above. */
-        helper_mips_log_instr_changed_state(env, cpu_get_recent_pc(env));
-    }
-#endif /* CONFIG_TCG_LOG_INSTR */
     if (cs->exception_index == EXCP_EXT_INTERRUPT &&
         (env->hflags & MIPS_HFLAG_DM)) {
         cs->exception_index = EXCP_DINT;
@@ -1619,7 +1592,6 @@ void mips_cpu_do_interrupt(CPUState *cs)
                                      env->CP0_BadVAddr);
         }
 #ifdef TARGET_CHERI
-        /* TODO(am2419): should log as changed registers instead of extra? */
         /* Log extra changed register information */
         qemu_log_instr_cap(env, "PCC", cheri_get_current_pcc(env));
         qemu_log_instr_cap(env, "EPCC", &env->active_tc.CHWR.EPCC);
@@ -1629,10 +1601,11 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
 #endif /* CONFIG_TCG_LOG_INSTR */
 
-    if (log_exc_or_instr(env)
-        && cs->exception_index != EXCP_EXT_INTERRUPT) {
-        log_exc_or_instr_msg(
-            env, "%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
+    // TODO(am2419): log these as extra changed registers?
+    if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT) &&
+        cs->exception_index != EXCP_EXT_INTERRUPT) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "%s: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx " cause %d\n"
             "    S %08x C %08x A " TARGET_FMT_lx " D " TARGET_FMT_lx "\n",
             __func__, PC_ADDR(env), get_CP0_EPC(env), cause,
             env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
@@ -1642,9 +1615,13 @@ void mips_cpu_do_interrupt(CPUState *cs)
     cs->exception_index = EXCP_NONE;
 
 #ifdef CONFIG_TCG_LOG_INSTR
-    if (qemu_log_instr_enabled(env)) {
-        /* Note pc is guaranteed to be the current pc by the assertion above. */
-        helper_mips_log_instr_changed_state(env, cpu_get_recent_pc(env));
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
+        /*
+         * Note: This must be issued after we logged everything we wanted for
+         * the current instruction.
+         * PC is guaranteed to be the current pc by the assertion above.
+         */
+        qemu_log_instr_mode_switch(env, /*enable*/false, cpu_get_recent_pc(env));
     }
 #endif /* CONFIG_TCG_LOG_INSTR */
 }
@@ -1783,9 +1760,10 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env, MipsExcp exception,
         }
     }
 #endif
-    if (log_exc_or_instr(env)) {
-        log_exc_or_instr_msg(env, "%s: %s %d\n", __func__, exception <= EXCP_LAST ?
-                             excp_names[exception] : "unknown excp", error_code);
+    if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT)) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "%s: %s %d\n", __func__, exception <= EXCP_LAST ?
+            excp_names[exception] : "unknown excp", error_code);
     }
     cs->exception_index = exception;
     env->error_code = error_code;

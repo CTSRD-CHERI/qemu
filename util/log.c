@@ -73,8 +73,8 @@ static void qemu_logfile_free(QemuLogFile *logfile)
 
 static bool log_uses_own_buffers;
 
-__attribute__((weak)) void flush_tcg_on_log_instr_chage(void);
-__attribute__((weak)) void flush_tcg_on_log_instr_chage(void) {
+__attribute__((weak)) void qemu_log_instr_flush_tcg(void);
+__attribute__((weak)) void qemu_log_instr_flush_tcg(void) {
     // Real implementation in translate-all.c
     warn_report("Calling no-op %s\r", __func__);
 }
@@ -85,15 +85,13 @@ void qemu_set_log(int log_flags)
     bool need_to_open_file = false;
     QemuLogFile *logfile;
 
-    const int need_to_flush_tcg_on_change =
-        CPU_LOG_INSTR | CPU_LOG_USER_ONLY | CPU_LOG_CVTRACE;
+#ifdef CONFIG_TCG_LOG_INSTR
+    const int need_to_flush_tcg_on_change = CPU_LOG_INSTR | CPU_LOG_USER_ONLY;
     if ((qemu_loglevel & need_to_flush_tcg_on_change) !=
         (log_flags & need_to_flush_tcg_on_change)) {
-        // When instruction tracing flags change, we have to re-translate all
-        // blocks that were translated with tracing on/off.
-        // This may flush too much state, but such changes should be rare.
-        flush_tcg_on_log_instr_chage();
+        qemu_log_instr_flush_tcg();
     }
+#endif
     qemu_loglevel = log_flags;
 
 #ifdef CONFIG_TRACE_LOG

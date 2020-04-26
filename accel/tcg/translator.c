@@ -61,26 +61,11 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     ops->init_disas_context(db, cpu);
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 #ifdef CONFIG_TCG_LOG_INSTR
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_USER_ONLY))) {
-        if (ops->tb_in_user_mode(db, cpu)) {
-#ifdef CONFIG_DEBUG_TCG
-            qemu_log_mask(CPU_LOG_INSTR, "-- Instruction logging enabled for TB@"
-                          TARGET_FMT_lx " (usermode=%d)\n", db->pc_next,
-                          ops->tb_in_user_mode(db, cpu));
-#endif
-            qemu_log_instr_mode_switch(cpu->env_ptr, /* enable*/true,
-                                       db->pc_next);
-        } else {
-#ifdef CONFIG_DEBUG_TCG
-            qemu_log_mask(CPU_LOG_INSTR,
-                          "-- Userspace Instruction logging disabled "
-                          "for TB@" TARGET_FMT_lx "\n", db->pc_next);
-#endif
-            qemu_log_instr_mode_switch(cpu->env_ptr, /*enable*/false,
-                                       db->pc_next);
-        }
-    }
-    /* Cache whether we are logging instructions in this tb */
+    /*
+     * Cache whether we are logging instructions in this tb
+     * This assumes that the TCG buffer will be flushed on instruction
+     * log level changes.
+     */
     db->log_instr_enabled = qemu_log_instr_enabled(cpu->env_ptr);
 #endif /* CONFIG_TCG_LOG_INSTR */
 
