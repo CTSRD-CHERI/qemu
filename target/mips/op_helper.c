@@ -69,7 +69,9 @@ void helper_check_breakcount(struct CPUMIPSState* env)
     if (unlikely(cs->breakcount)) {
         cs->breakcount--;
         if (cs->breakcount == 0UL) {
-            qemu_log_mask(CPU_LOG_INSTR | CPU_LOG_INT | CPU_LOG_EXEC, "Reached breakcount!\n");
+            if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT | CPU_LOG_EXEC))
+                qemu_log_instr_or_mask_msg(env, CPU_LOG_INT | CPU_LOG_EXEC,
+                    "Reached breakcount!\n");
             helper_raise_exception_debug(env);
         }
     }
@@ -848,10 +850,9 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
 
     r4k_invalidate_tlb(env, idx, 0);
     r4k_fill_tlb(env, idx);
-#ifdef CONFIG_MIPS_LOG_INSTR
-    if (should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_MMU))
-        r4k_dump_tlb(env, idx);
-#endif /* TARGET_CHERI */
+#ifdef CONFIG_TCG_LOG_INSTR
+    r4k_dump_tlb(env, idx);
+#endif /* CONFIG_TCG_LOG_INSTR */
 }
 
 void r4k_helper_tlbwr(CPUMIPSState *env)
@@ -868,10 +869,9 @@ void r4k_helper_tlbwr(CPUMIPSState *env)
 
     r4k_invalidate_tlb(env, r, 1);
     r4k_fill_tlb(env, r);
-#ifdef CONFIG_MIPS_LOG_INSTR
-    if (should_log_instr(env, CPU_LOG_INSTR | CPU_LOG_MMU))
-        r4k_dump_tlb(env, r);
-#endif /* TARGET_CHERI */
+#ifdef CONFIG_TCG_LOG_INSTR
+    r4k_dump_tlb(env, r);
+#endif /* CONFIG_TCG_LOG_INSTR */
 }
 
 void r4k_helper_tlbp(CPUMIPSState *env)
@@ -1122,21 +1122,15 @@ static void debug_pre_eret(CPUMIPSState *env)
         qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC, "\n");
     }
 
-    // TODO(am2419): consider appending these to the current instruction
-    // this should be done post eret???
-/* #ifdef TARGET_CHERI */
-/*     if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) { */
-/*          // Print the new PCC value for debugging traces (compare to null */
-/*          // so that we always print it) */
-/*          cap_register_t null_cap; */
-/*          null_capability(&null_cap); */
-/*          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC"); */
-/*          null_capability(&null_cap); */
-/*          dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &null_cap, "EPCC"); */
-/*          null_capability(&null_cap); */
-/*          dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &null_cap, "ErrorEPCC"); */
-/*     } */
-/* #endif /\* TARGET_CHERI *\/ */
+#if defined(CONFIG_TCG_LOG_INSTR) && defined(TARGET_CHERI)
+    if (qemu_log_instr_enabled(env)) {
+        // Print the new PCC value for debugging traces (compare to null
+        // so that we always print it)
+        qemu_log_instr_cap(env, "PCC", &env->active_tc.PCC);
+        qemu_log_instr_cap(env, "EPCC", &env->active_tc.CHWR.EPCC);
+        qemu_log_instr_cap(env, "ErrorEPCC", &env->active_tc.CHWR.ErrorEPCC);
+    }
+#endif /* defined(CONFIG_TCG_LOG_INSTR) && defined(TARGET_CHERI) */
 }
 
 static void debug_post_eret(CPUMIPSState *env)
@@ -2438,12 +2432,12 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
                     env->active_tc.gpr[6], env->active_tc.gpr[7]);
         break;
     case MAGIC_HELPER_DONE_FLAG:
-        qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call library function "
-                                     "with success flag set in $v1!\n");
+        qemu_maybe_log_instr_extra(env, "ERROR: Attempted to call library "
+            "function with success flag set in $v1!\n");
         do_raise_exception(env, EXCP_RI, GETPC());
     default:
-        qemu_log_mask(CPU_LOG_INSTR, "ERROR: Attempted to call invalid library function "
-                          TARGET_FMT_lx "\n", which);
+        qemu_maybe_log_instr_extra(env, "ERROR: Attempted to call invalid "
+            "library function " TARGET_FMT_lx "\n", which);
         return;
     }
     // Indicate success by setting $v1 to 0xaffe

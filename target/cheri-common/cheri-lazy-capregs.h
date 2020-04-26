@@ -254,8 +254,7 @@ static inline void update_compressed_capreg(CPUArchState *env, unsigned regnum,
     cheri_debug_assert(get_capreg_state(gpcrs, regnum) == new_state);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, cursor);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR)) &&
-        qemu_log_in_addr_range(cpu_get_recent_pc(env))) {
+    if (qemu_log_instr_enabled(env)) {
         // Decompress and log value if instruction logging is on
         const cap_register_t *decompressed = get_readonly_capreg(env, regnum);
         log_changed_gp_capreg(env, regnum, decompressed);

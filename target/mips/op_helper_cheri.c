@@ -97,13 +97,6 @@ is_cap_sealed(const cap_register_t *cp)
     return cap_is_sealed_with_type(cp) || cap_is_sealed_entry(cp);
 }
 
-// TODO(am2419): deprecated, remove
-void qemu_log_capreg(const cap_register_t *cr, const char* prefix, const char* name) {
-    qemu_log("%s%s|" PRINT_CAP_FMTSTR_L1 "\n"
-             "             |" PRINT_CAP_FMTSTR_L2 "\n",
-             prefix, name, PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr));
-}
-
 #ifdef CONFIG_TCG_LOG_INSTR
 #define log_instr_hwreg_update(env, name, newval) do {          \
         if (qemu_log_instr_enabled(env)) {                      \
@@ -144,11 +137,7 @@ static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *c
 
 static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) {
     if (!cap_exactly_equal(&env->active_tc.CHWR.DDC, new_ddc)) {
-        if (qemu_log_instr_enabled(env))
-            qemu_log_instr_extra(
-                env, "Flushing TCG TLB since $ddc is changing to "
-                PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
-        qemu_log_mask_and_addr(CPU_LOG_MMU, cpu_get_recent_pc(env),
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_MMU,
             "Flushing TCG TLB since $ddc is changing to " PRINT_CAP_FMTSTR "\n",
             PRINT_CAP_ARGS(new_ddc));
         // TODO: in the future we may want to move $ddc to the guest -> host addr
@@ -160,13 +149,9 @@ static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) 
         // XXX: tlb_flush(env_cpu(env));
         env->active_tc.CHWR.DDC = *new_ddc;
     } else {
-        if (qemu_log_instr_enabled(env))
-            qemu_log_instr_extra(
-                env, "Installing same $ddc again, not flushing TCG TLB: "
-                PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
-        qemu_log_mask_and_addr(CPU_LOG_MMU, cpu_get_recent_pc(env),
-            "Installing same $ddc again, not flushing TCG TLB: " PRINT_CAP_FMTSTR "\n",
-            PRINT_CAP_ARGS(new_ddc));
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_MMU,
+            "Installing same $ddc again, not flushing TCG TLB: "
+            PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
     }
     log_changed_capreg(env, mips_cheri_hw_regnames[0], new_ddc);
 }
@@ -724,11 +709,10 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdES, addr);
     } else {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR, cpu_get_recent_pc(env),
-            "cstorecond: linkedflag = %d," " addr=" TARGET_FMT_plx
-            "lladdr=" TARGET_FMT_plx " CP0_LLaddr=" TARGET_FMT_plx "\n",
-            (int)env->linkedflag, addr, env->lladdr, env->CP0_LLAddr);
+        qemu_maybe_log_instr_extra(env, "cstorecond: linkedflag = %d," " addr="
+            TARGET_FMT_plx "lladdr=" TARGET_FMT_plx " CP0_LLaddr="
+            TARGET_FMT_plx "\n", (int)env->linkedflag, addr, env->lladdr,
+            env->CP0_LLAddr);
         // Can't do this here.  It might miss in the TLB.
         // cheri_tag_invalidate(env, addr, size);
         // Also, rd is set by the actual store conditional operation.
@@ -779,9 +763,8 @@ target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, 
 {
     target_ulong retpc = GETPC();
     target_ulong vaddr = get_cscc_addr(env, cs, cb, retpc);
-    qemu_log_mask_and_addr(
-        CPU_LOG_INSTR, cpu_get_recent_pc(env),
-        "cscc: linkedflag = %d, addr=" TARGET_FMT_plx
+
+    qemu_maybe_log_instr_extra(env, "cscc: linkedflag = %d, addr=" TARGET_FMT_plx
         " lladdr=" TARGET_FMT_plx " CP0_LLaddr=" TARGET_FMT_plx "\n",
         (int)env->linkedflag, vaddr, env->lladdr, env->CP0_LLAddr);
     /* If linkedflag is zero then don't store capability. */
@@ -823,40 +806,6 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
     env->CP0_LLAddr = physaddr;
     env->linkedflag = 1; // FIXME: remove
 }
-
-#ifdef CONFIG_TCG_LOG_INSTR
-
-// TODO(am2419): deprecated, remove
-void dump_changed_capreg(CPUArchState *env, const cap_register_t *cr,
-        cap_register_t *old_reg, const char* name)
-{
-    if (memcmp(cr, old_reg, sizeof(cap_register_t))) {
-        if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-            qemu_log_capreg(cr, "    Write ", name);
-        }
-        *old_reg = *cr;
-    }
-}
-
-// TODO(am2419): deprecated, remove
-void dump_changed_cop2(CPUArchState *env, TCState *cur) {
-    dump_changed_capreg(env, &cur->CapBranchTarget, &env->last_CapBranchTarget,
-                        "CapBranchTarget");
-    for (int i=0; i<32; i++) {
-        dump_changed_capreg(env, get_readonly_capreg(env, i), &env->last_C[i],
-                            cheri_gp_regnames[i]);
-    }
-    dump_changed_capreg(env, &cur->CHWR.DDC, &env->last_CHWR.DDC, "DDC");
-    dump_changed_capreg(env, &cur->CHWR.UserTlsCap, &env->last_CHWR.UserTlsCap, "UserTlsCap");
-    dump_changed_capreg(env, &cur->CHWR.PrivTlsCap, &env->last_CHWR.PrivTlsCap, "PrivTlsCap");
-    dump_changed_capreg(env, &cur->CHWR.KR1C, &env->last_CHWR.KR1C, "ChwrKR1C");
-    dump_changed_capreg(env, &cur->CHWR.KR2C, &env->last_CHWR.KR2C, "ChwrKR1C");
-    dump_changed_capreg(env, &cur->CHWR.ErrorEPCC, &env->last_CHWR.ErrorEPCC, "ErrorEPCC");
-    dump_changed_capreg(env, &cur->CHWR.KCC, &env->last_CHWR.KCC, "KCC");
-    dump_changed_capreg(env, &cur->CHWR.KDC, &env->last_CHWR.KDC, "KDC");
-}
-
-#endif // CONFIG_TCG_LOG_INSTR
 
 #ifdef CHERI_128
 #elif defined(CHERI_MAGIC128)
