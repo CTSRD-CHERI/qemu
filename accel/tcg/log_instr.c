@@ -33,6 +33,7 @@
 #include <stdint.h>
 
 #include "qemu/osdep.h"
+#include "qemu/range.h"
 #include "qemu/log.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
@@ -57,6 +58,15 @@
  * multiple trace entries, but this is currently unimplemented.
  * Another design goal is to allow tracing of arbitrary events via nops in
  * both the text and binary format.
+ *
+ * TODO(am2419): how do we deal with orderding in case multiple registers are updated?
+ * This is critical to recognize which value goes in which register, and also how to
+ * tie multiple memory accesses to the respective value/register.
+ * We could add an explicit target-specific register ID handle in place of the
+ * register name. This could be used also to fetch the register name and would
+ * provide an identifier to external parsers.
+ * Memory updates are harder to deal with, at least in the current format, perhaps
+ * the semantic of the instruction is enough to recover the ordering from a trace.
  */
 
 #ifdef CONFIG_TCG_LOG_INSTR
@@ -66,6 +76,11 @@
 #else
 #define log_assert(x)
 #endif
+
+/*
+ * -dfilter ranges in common logging implementation.
+ */
+extern GArray *debug_regions;
 
 struct log_reginfo {
     uint16_t flags;
@@ -578,8 +593,6 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
  * Toggle tracing if we are switching mode.
  * Note: this does not flush the tcg instruction buffer, this must be
  * done by the caller, if needed.
- * TODO(am2419): we need a version that flushes the tcg as well, we do not
- * want targets to care.
  */
 void qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
                                  target_ulong pc)
@@ -620,23 +633,35 @@ void qemu_log_instr_commit(CPUArchState *env)
 
     if (log->force_drop)
         goto out;
-    // TODO(am2419) handle dfilter: need to check if enabled and if the entry matched
 
-    trace_format->emit_entry(env, log);
+    /* Check for dfilter matches in this instruction */
+    if (debug_regions) {
+        int i, j;
+        bool match = false;
+        for (i = 0; !match && i < debug_regions->len; i++) {
+            Range *range = &g_array_index(debug_regions, Range, i);
+            match = range_contains(range, log->pc);
+            if (match)
+                break;
+
+            for (j = 0; j < log->mem->len; j++) {
+                log_meminfo_t *minfo = &g_array_index(log->mem, log_meminfo_t, j);
+                match = range_contains(range, minfo->addr);
+                if (match)
+                    break;
+            }
+        }
+        if (match)
+            trace_format->emit_entry(env, log);
+    } else {
+        /* dfilter disabled, always log */
+        trace_format->emit_entry(env, log);
+    }
 
 out:
     reset_log_buffer(log);
 }
 
-/*
- * TODO(am2419): how do we deal with orderding in case multiple registers are updated?
- * Maybe add a log_instr_reg_extra to distinguish from primary side-effect and other
- * side effects? (e.g. primary side effect is to update destination register, secondary
- * might be to clear status flag registers).
- * This is however an half-solution to the limitations imposed by the binary trace format,
- * we may just discard the assumption that there is any ordering at all and all side-effects
- * are granted equal rights under the constitution.
- */
 void qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong value)
 {
     cpu_log_instr_info_t *log = cpu_get_log_instr_state(env);
@@ -820,7 +845,6 @@ void helper_qemu_log_instr_user_start(CPUArchState *env, target_ulong pc)
 
 void helper_qemu_log_instr_user_stop(CPUArchState *env, target_ulong pc)
 {
-    /* qemu_log_instr_commit(env); */
     qemu_log_instr_stop(env, CPU_LOG_INSTR | CPU_LOG_USER_ONLY, pc);
 }
 
