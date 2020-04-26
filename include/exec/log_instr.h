@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include "qemu/log_instr.h"
 #include "cpu_log_instr.h"
 #include "cpu.h"
 
@@ -70,22 +71,41 @@
  * TODO(am2419): decide whether to inline some of these.
  */
 
-#ifdef CONFIG_TCG_LOG_INSTR
+#define _glue_args(...) , ## __VA_ARGS__
 
-/* struct trace_format { */
-/*     void (*emit_header)(CPUArchState *env); */
-/*     void (*emit_start)(CPUArchState *env, cpu_log_instr_info_t *log); */
-/*     void (*emit_stop)(CPUArchState *env, cpu_log_instr_info_t *log); */
-/*     void (*emit_entry)(CPUArchState *env, cpu_log_instr_info_t *log); */
-/*     void *context; */
-/* }; */
+/*
+ * Helper to simplify checking for either instruction logging or
+ * another loglevel enabled
+ */
+#define qemu_log_instr_or_mask_enabled(env, mask)       \
+    ((unlikely(qemu_loglevel_mask(mask)) ||             \
+      qemu_log_instr_enabled(env)) ? true : false)
+
+/*
+ * Helper to simplify emitting a message either to instruction
+ * logging extra text buffer or when another loglevel is enabled
+ */
+#define qemu_log_instr_or_mask_msg(env, mask, msg, ...) do {            \
+        if (qemu_loglevel_mask(mask)) {                                 \
+            qemu_log(msg _glue_args(__VA_ARGS__));                      \
+        } else {                                                        \
+            qemu_log_instr_extra(env, msg _glue_args(__VA_ARGS__));     \
+        }                                                               \
+    } while (0)
+
+#ifdef CONFIG_TCG_LOG_INSTR
 
 /*
  * Initialize instruction logging for a cpu.
  */
 void qemu_log_instr_init(CPUArchState *env);
 
-#define	INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_CVTRACE | CPU_LOG_USER_ONLY)
+/*
+ * Request a flush of the TCG when changing loglevel outside of qemu_log_instr.
+ */
+void qemu_log_instr_flush_tcg(void);
+
+#define	INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_USER_ONLY)
 
 /* Helper macro to check for instruction logging enabled */
 #define	qemu_log_instr_enabled(env)                                     \

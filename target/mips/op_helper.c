@@ -29,10 +29,8 @@
 #include "exec/cpu_ldst.h"
 #include "exec/ramblock.h"
 #include "exec/memop.h"
-#ifdef CONFIG_TCG_LOG_INSTR
 #include "exec/log.h"
 #include "exec/log_instr.h"
-#endif
 #ifdef TARGET_CHERI
 #include "cheri_tagmem.h"
 #include "cheri-helper-utils.h"
@@ -1109,47 +1107,78 @@ target_ulong helper_ei(CPUMIPSState *env)
 
 static void debug_pre_eret(CPUMIPSState *env)
 {
-    if (should_log_instr(env, CPU_LOG_EXEC | CPU_LOG_INSTR)) {
-        qemu_log("ERET: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
-                 PC_ADDR(env), get_CP0_EPC(env));
+    if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_EXEC)) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC,
+            "ERET: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
+             PC_ADDR(env), get_CP0_EPC(env));
         if (should_use_error_epc(env)) {
-          qemu_log(" ErrorEPC " TARGET_FMT_lx, get_CP0_ErrorEPC(env));
+            qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC,
+                " ErrorEPC " TARGET_FMT_lx, get_CP0_ErrorEPC(env));
         }
         if (env->hflags & MIPS_HFLAG_DM) {
-            qemu_log(" DEPC " TARGET_FMT_lx, env->CP0_DEPC);
+            qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC,
+                " DEPC " TARGET_FMT_lx, env->CP0_DEPC);
         }
-        qemu_log("\n");
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC, "\n");
     }
+
+    // TODO(am2419): consider appending these to the current instruction
+    // this should be done post eret???
+/* #ifdef TARGET_CHERI */
+/*     if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) { */
+/*          // Print the new PCC value for debugging traces (compare to null */
+/*          // so that we always print it) */
+/*          cap_register_t null_cap; */
+/*          null_capability(&null_cap); */
+/*          dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC"); */
+/*          null_capability(&null_cap); */
+/*          dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &null_cap, "EPCC"); */
+/*          null_capability(&null_cap); */
+/*          dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &null_cap, "ErrorEPCC"); */
+/*     } */
+/* #endif /\* TARGET_CHERI *\/ */
 }
 
 static void debug_post_eret(CPUMIPSState *env)
 {
-    if (should_log_instr(env, CPU_LOG_EXEC)) {
-        qemu_log("  =>  PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
-                 PC_ADDR(env), get_CP0_EPC(env));
+    const char *flag;
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && cpu_in_user_mode(env)) {
+        qemu_log_instr_mode_switch(env, /*enable*/true, cpu_get_recent_pc(env));
+    }
+#endif
+
+    if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_EXEC)) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC,
+            "  =>  PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx,
+            PC_ADDR(env), get_CP0_EPC(env));
         if (should_use_error_epc(env)) {
-          qemu_log(" ErrorEPC " TARGET_FMT_lx, get_CP0_ErrorEPC(env));
+            qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC,
+                " ErrorEPC " TARGET_FMT_lx, get_CP0_ErrorEPC(env));
         }
         if (env->hflags & MIPS_HFLAG_DM) {
-            qemu_log(" DEPC " TARGET_FMT_lx, env->CP0_DEPC);
+            qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC,
+                " DEPC " TARGET_FMT_lx, env->CP0_DEPC);
         }
         switch (cpu_mmu_index(env, false)) {
         case 3:
-            qemu_log(", ERL\n");
+            flag = ", ERL\n";
             break;
         case MIPS_HFLAG_UM:
-            qemu_log(", UM\n");
+            flag = ", UM\n";
             break;
         case MIPS_HFLAG_SM:
-            qemu_log(", SM\n");
+            flag = ", SM\n";
             break;
         case MIPS_HFLAG_KM:
-            qemu_log("\n");
+            flag = "\n";
             break;
         default:
             cpu_abort(env_cpu(env), "Invalid MMU mode!\n");
             break;
         }
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_EXEC, "%s", flag);
     }
 }
 
@@ -1181,22 +1210,6 @@ static void set_pc_for_eret(CPUMIPSState *env, target_ulong error_pc)
 static inline void exception_return(CPUMIPSState *env)
 {
     debug_pre_eret(env);
-#ifdef TARGET_CHERI
-    // qemu_log_mask(CPU_LOG_INSTR, "%s: PCC <- EPCC\n", __func__);
-#ifdef CONFIG_TCG_LOG_INSTR
-    if (unlikely(should_log_instr(env, CPU_LOG_INSTR))) {
-         // Print the new PCC value for debugging traces (compare to null
-         // so that we always print it)
-         cap_register_t null_cap;
-         null_capability(&null_cap);
-         dump_changed_capreg(env, &env->active_tc.PCC, &null_cap, "PCC");
-         null_capability(&null_cap);
-         dump_changed_capreg(env, &env->active_tc.CHWR.EPCC, &null_cap, "EPCC");
-         null_capability(&null_cap);
-         dump_changed_capreg(env, &env->active_tc.CHWR.ErrorEPCC, &null_cap, "ErrorEPCC");
-    }
-#endif // CONFIG_TCG_LOG_INSTR
-#endif /* TARGET_CHERI */
     if (env->CP0_Status & (1 << CP0St_ERL)) {
 #ifdef TARGET_CHERI
         set_pc_for_eret(env, &env->active_tc.CHWR.ErrorEPCC);

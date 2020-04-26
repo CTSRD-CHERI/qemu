@@ -63,6 +63,7 @@
 #include "chardev/char.h"
 #include "qemu/bitmap.h"
 #include "qemu/log.h"
+#include "qemu/log_instr.h"
 #include "sysemu/blockdev.h"
 #include "hw/block/block.h"
 #include "migration/misc.h"
@@ -166,13 +167,6 @@ bool wakeup_suspend_enabled;
 
 int icount_align_option;
 
-#ifdef CONFIG_TCG_LOG_INSTR
-#ifdef CHERI_DEFAULT_CVTRACE
-    int cl_default_trace_format = CPU_LOG_CVTRACE;
-#else
-    int cl_default_trace_format = CPU_LOG_INSTR;
-#endif
-#endif /* CONFIG_TCG_LOG_INSTR */
 #ifdef CONFIG_CHERI
 bool cheri_c2e_on_unrepresentable = false;
 bool cheri_debugger_on_unrepresentable = false;
@@ -3713,11 +3707,11 @@ void qemu_init(int argc, char **argv, char **envp)
                 break;
 #if defined(CONFIG_TCG_LOG_INSTR)
             case QEMU_OPTION_cheri_trace_format:
-                if (strcmp(optarg, "text") == 0)
-                    cl_default_trace_format = CPU_LOG_INSTR;
-                else if (strcmp(optarg, "cvtrace") == 0)
-                    cl_default_trace_format = CPU_LOG_CVTRACE;
-                else {
+                if (strcmp(optarg, "text") == 0) {
+                    qemu_log_instr_set_format(QLI_FMT_TEXT);
+                } else if (strcmp(optarg, "cvtrace") == 0) {
+                    qemu_log_instr_set_format(QLI_FMT_CVTRACE);
+                } else {
                     printf("Invalid choice for cheri-trace-format: '%s'\n", optarg);
                     exit(1);
                 }
