@@ -484,8 +484,8 @@
 #define	TARGET_FREEBSD_NR_cpuset_setdomain	562
 #define	TARGET_FREEBSD_NR_getrandom	563
 #define	TARGET_FREEBSD_NR___sysctlbyname	570
-/* None of these yet implemented. */
 #define	TARGET_FREEBSD_NR_shm_open2     571
+/* None of these yet implemented. */
 #define	TARGET_FREEBSD_NR_shm_rename    572
 /* #define	TARGET_FREEBSD_NR_sigfastblock  573 */
 #define	TARGET_FREEBSD_NR___realpathat  574
