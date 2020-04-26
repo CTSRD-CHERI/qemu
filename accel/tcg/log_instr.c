@@ -45,8 +45,8 @@
 /*
  * CHERI common instruction logging.
  *
- * This is the central implementation of the CPU_LOG_INSTR, CPU_LOG_CVTRACE
- * and CPU_LOG_USER_ONLY methods.
+ * This is the central implementation of the CPU_LOG_INSTR and CPU_LOG_USER_ONLY
+ * tracing.
  * The same functions can be used by CHERI targets to append to the instruction
  * log buffer. Once the instruction is fully processed, the target commits the
  * log buffer and depending on the instruction operations and -dfilter options

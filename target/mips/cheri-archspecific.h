@@ -118,60 +118,6 @@ cheri_tag_prot_clear_or_trap(CPUMIPSState *env, target_ulong va,
     return tag;
 }
 
-// TODO(am2419): deprecated remove
-#if 0
-#ifdef CONFIG_TCG_LOG_INSTR
-
-#define cvtrace_dump_cap_load(trace, addr, cr)          \
-    cvtrace_dump_cap_ldst(trace, CVT_LD_CAP, addr, cr)
-#define cvtrace_dump_cap_store(trace, addr, cr)         \
-    cvtrace_dump_cap_ldst(trace, CVT_ST_CAP, addr, cr)
-
-/*
-* Dump cap load or store to cvtrace
-*/
-static inline void cvtrace_dump_cap_ldst(cvtrace_t *cvtrace, uint8_t version,
-                                         uint64_t addr, const cap_register_t *cr)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->version = version;
-        cvtrace->val1 = tswap64(addr);
-        cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
-            ((uint64_t)(cr->cr_otype & CAP_MAX_REPRESENTABLE_OTYPE) << 32) |
-            ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-                (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
-            (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
-    }
-}
-/*
- * Dump cap tag, otype, permissions and seal bit to cvtrace entry
- */
-static inline void
-cvtrace_dump_cap_perms(cvtrace_t *cvtrace, const cap_register_t *cr)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val2 = tswap64(((uint64_t)cr->cr_tag << 63) |
-            ((uint64_t)(cr->cr_otype & CAP_MAX_REPRESENTABLE_OTYPE)<< 32) |
-            ((((cr->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-                (cr->cr_perms & CAP_PERMS_ALL)) << 1) |
-            (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
-    }
-}
-
-/*
- * Dump capability cursor, base and length to cvtrace entry
- */
-static inline void cvtrace_dump_cap_cbl(cvtrace_t *cvtrace, const cap_register_t *cr)
-{
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_CVTRACE))) {
-        cvtrace->val3 = tswap64(cr->_cr_cursor);
-        cvtrace->val4 = tswap64(cr->cr_base);
-        cvtrace->val5 = tswap64(cap_get_length64(cr)); // write UINT64_MAX for 1 << 64
-    }
-}
-#endif // CONFIG_TCG_LOG_INSTR
-#endif // 0 deprecated
-
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {

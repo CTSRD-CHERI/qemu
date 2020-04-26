@@ -3018,7 +3018,7 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     }
 #if defined(CONFIG_TCG_LOG_INSTR)
     TCGv_i32 tcop = tcg_const_i32(memop);
-    if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CVTRACE))) {
+    if (unlikely(qemu_loglevel_mask(INSTR_LOG_MASK))) {
         gen_helper_qemu_log_instr_load64(cpu_env, saved_load_addr, val, tcop);
     }
     tcg_temp_free_i32(tcop);
