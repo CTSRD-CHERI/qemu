@@ -1054,6 +1054,12 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 #endif
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300049
+    case TARGET_FREEBSD_NR_shm_rename: /* shm_rename(2) */
+        ret = do_freebsd_shm_rename(arg1, arg2, arg3);
+        break;
+#endif
+
     case TARGET_FREEBSD_NR_shm_unlink: /* shm_unlink(2) */
         ret = do_bsd_shm_unlink(arg1);
         break;
