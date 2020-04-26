@@ -31,7 +31,7 @@ static QemuMutex qemu_logfile_mutex;
 QemuLogFile *qemu_logfile;
 int qemu_loglevel;
 static int log_append = 0;
-static GArray *debug_regions;
+GArray *debug_regions;
 
 /* Return the number of characters emitted.  */
 int qemu_log(const char *fmt, ...)
