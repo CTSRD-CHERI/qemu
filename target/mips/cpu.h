@@ -1250,21 +1250,6 @@ struct CPUMIPSState {
     cpu_log_instr_info_t log_info;
 #endif
 
-    // TODO(am2419): deprecated remove
-#ifdef CONFIG_TCG_LOG_INSTR
-    /*
-     * Processor state after the last instruction.
-     * Used for instruction tracing.
-     */
-    target_ulong last_gpr[32];
-    target_ulong last_cop0[32*8];
-#ifdef TARGET_CHERI
-    cap_register_t last_C[32];
-    cap_register_t last_CapBranchTarget;
-    struct cheri_cap_hwregs last_CHWR;
-#endif // TARGET_CHERI
-
-#endif /* CONFIG_TCG_LOG_INSTR */
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
 
@@ -1419,17 +1404,6 @@ void itc_reconfigure(struct MIPSITUState *tag);
 /* helper.c */
 target_ulong exception_resume_pc(CPUMIPSState *env);
 
-// TODO(am2419): deprecated, remove
-#ifdef CONFIG_TCG_LOG_INSTR
-void dump_store(CPUMIPSState *env, int opc, target_ulong addr,
-    target_ulong value);
-#ifdef TARGET_CHERI
-void dump_changed_capreg(CPUMIPSState *env, const cap_register_t *cr,
-                         cap_register_t *old_reg, const char* name);
-void dump_changed_cop2(CPUMIPSState *env, TCState *cur);
-#endif /* TARGET_CHERI */
-#endif /* CONFIG_TCG_LOG_INSTR */
-
 static inline void
 mips_cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
                           target_ulong *cs_base, target_ulong *cs_top,
@@ -1529,7 +1503,6 @@ static inline cpu_log_instr_info_t *cpu_get_log_instr_state(CPUMIPSState *env)
     return &env->log_info;
 }
 
-// TODO(am2419): deprecate and remove 
 // TODO(am2419) should probably rename as cpu_get_asid()
 static inline unsigned cheri_get_asid(CPUMIPSState *env) {
     uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
@@ -1537,6 +1510,7 @@ static inline unsigned cheri_get_asid(CPUMIPSState *env) {
 }
 #endif
 
+// TODO(am2419): deprecated remove
 static inline bool should_log_instr(CPUArchState *env, int log_mask) {
     if (likely(!(qemu_loglevel_mask(log_mask))))
         return false;

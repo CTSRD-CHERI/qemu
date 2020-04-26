@@ -1210,12 +1210,6 @@ static inline void set_badinstr_registers(CPUMIPSState *env)
 }
 #endif
 
-// TODO(am2419): deprecated, remove
-#ifdef CONFIG_TCG_LOG_INSTR
-extern void helper_mips_log_instr_changed_state(
-    CPUMIPSState *env, target_ulong pc);
-#endif
-
 static inline void mips_update_pc_for_exc_handler(CPUMIPSState *env,
                                                   target_ulong new_pc)
 {

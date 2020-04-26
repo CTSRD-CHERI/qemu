@@ -394,20 +394,17 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
         CheriTagBlock *tagblk = cheri_tag_block(tag, ram);
         if (tagblk != NULL) {
             const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
-            if (unlikely(env && vaddr &&
-                         should_log_mem_access(env, CPU_LOG_INSTR, *vaddr))) {
+            if (unlikely(env && vaddr && qemu_log_instr_enabled(env))) {
                 target_ulong write_vaddr =
                     QEMU_ALIGN_DOWN(*vaddr, CAP_SIZE) + (addr - startaddr);
-                qemu_log("    Cap Tag Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT
-                         "] %d -> 0\n",
-                         write_vaddr, addr,
-                         tagblock_get_tag(tagblk, tagblk_index));
+                qemu_log_instr_extra(env, "    Cap Tag Write [" TARGET_FMT_lx
+                    "/" RAM_ADDR_FMT "] %d -> 0\n", write_vaddr, addr,
+                    tagblock_get_tag(tagblk, tagblk_index));
             }
-            if (unlikely(env &&
-                         should_log_mem_access(env, CPU_LOG_INSTR, addr))) {
-                qemu_log("    Cap Tag ramaddr Write [" RAM_ADDR_FMT
-                         "] %d -> 0\n",
-                         addr, tagblock_get_tag(tagblk, tagblk_index));
+            if (unlikely(env && qemu_log_instr_enabled(env))) {
+                qemu_log_instr_extra(env, "    Cap Tag ramaddr Write ["
+                    RAM_ADDR_FMT "] %d -> 0\n", addr,
+                    tagblock_get_tag(tagblk, tagblk_index));
             }
             // changed |= tagblock_get_tag(tagblk, tagblk_index);
             tagblock_clear_tag(tagblk, tagblk_index);
@@ -443,11 +440,9 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     if (!ram)
         return;
     /* Get the tag number and tag block ptr. */
-    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
-        qemu_log(
-            "    Cap Tag Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] %d -> 1\n",
-            vaddr, ram_offset, tag_bit_get(ram_offset >> CAP_TAG_SHFT, ram));
-    }
+    qemu_maybe_log_instr_extra(env, "    Cap Tag Write [" TARGET_FMT_lx "/"
+        RAM_ADDR_FMT "] %d -> 1\n", vaddr, ram_offset,
+        tag_bit_get(ram_offset >> CAP_TAG_SHFT, ram));
     tag_bit_set(ram_offset >> CAP_TAG_SHFT, ram);
 
 #ifdef TARGET_MIPS
@@ -491,10 +486,8 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
         env, vaddr, MMU_DATA_CAP_LOAD, reg, 0, pc, ret_paddr, &tag, prot);
     bool result = tagblock_get_tag(tagblk, CAP_TAGBLK_IDX(tag));
     // XXX: Not atomic w.r.t. writes to tag memory
-    if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, vaddr))) {
-        qemu_log("    Cap Tag Read [" TARGET_FMT_lx "/" RAM_ADDR_FMT
-                 "] -> %d\n", vaddr, (ram_addr_t)(tag << CAP_TAG_SHFT), result);
-    }
+    qemu_maybe_log_instr_extra(env, "    Cap Tag Read [" TARGET_FMT_lx "/"
+        RAM_ADDR_FMT "] -> %d\n", vaddr, (ram_addr_t)(tag << CAP_TAG_SHFT), result);
     return result;
 }
 

@@ -4300,10 +4300,9 @@ static void gen_arith_imm(DisasContext *ctx, uint32_t opc,
         tcg_temp_free_i64(tpc);                                                \
         /* Exit translation block since tracing flag may change */             \
         if (ctx->hflags & MIPS_HFLAG_BMASK) {                                  \
-            qemu_log(                                                          \
-                "warning: magic trace helper in delay / forbidden slot at PC " \
-                "0x" TARGET_FMT_lx " may not work as expected\n",              \
-                ctx->base.pc_next);                                            \
+            warn_report("warning: magic trace helper "                         \
+                "in delay / forbidden slot at PC 0x" TARGET_FMT_lx             \
+                " may not work as expected\n", ctx->base.pc_next);             \
             return; /* We are already exiting the TB */                        \
         }                                                                      \
         gen_save_pc(ctx->base.pc_next + 4);                                    \

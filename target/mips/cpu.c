@@ -488,13 +488,17 @@ static inline void set_epc_or_error_epc(CPUMIPSState *env, cap_register_t* epc_o
     // Setting EPC should clear EPCC.tag if EPCC is sealed or becomes unrepresentable.
     // This will cause exception on instruction fetch following subsequent eret
     if (!cap_is_unsealed(epc_or_error_epc)) {
-        error_report("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
-        qemu_log("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
+        error_report("Attempting to modify sealed EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR
+                     "\r", PRINT_CAP_ARGS(epc_or_error_epc));
+        qemu_maybe_log_instr_extra(env,
+            "Attempting to modify sealed EPCC/ErrorEPCC: "
+            PRINT_CAP_FMTSTR "\r", PRINT_CAP_ARGS(epc_or_error_epc));
         // Clear the tag bit and update the cursor:
         cap_mark_unrepresentable(new_cursor, epc_or_error_epc);
     } else if (!is_representable_cap_with_addr(epc_or_error_epc, new_cursor)) {
         error_report("Attempting to set unrepresentable cursor(0x" TARGET_FMT_lx
-                    ") on EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", new_cursor, PRINT_CAP_ARGS(epc_or_error_epc));
+                    ") on EPCC/ErrorEPCC: " PRINT_CAP_FMTSTR "\r", new_cursor,
+                     PRINT_CAP_ARGS(epc_or_error_epc));
         cap_mark_unrepresentable(new_cursor, epc_or_error_epc);
     } else {
         epc_or_error_epc->_cr_cursor = new_cursor;

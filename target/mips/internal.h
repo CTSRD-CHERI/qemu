@@ -10,6 +10,7 @@
 
 #include "fpu/softfloat-helpers.h"
 #include "qemu/log.h"
+#include "exec/log_instr.h"
 
 /*
  * MMU types, the first four entries have the same layout as the
@@ -370,12 +371,14 @@ static inline bool can_access_cp0(CPUMIPSState* env) {
 static inline void update_cp0_access_for_pc(CPUMIPSState* env) {
     if (can_access_cp0(env)) {
         if ((env->hflags & MIPS_HFLAG_CP0) == 0) {
-            qemu_log_mask(CPU_LOG_INSTR, "%s: restoring access to CP0 since $pcc has ASR permission\n", __func__);
+            qemu_maybe_log_instr_extra(env, "%s: restoring access to CP0 since "
+                "$pcc has ASR permission\n", __func__);
             env->hflags |= MIPS_HFLAG_CP0;
         }
     } else {
         if ((env->hflags & MIPS_HFLAG_CP0)) {
-            qemu_log_mask(CPU_LOG_INSTR, "%s: removing access to CP0 since $pcc does not have ASR permission\n", __func__);
+            qemu_maybe_log_instr_extra(env, "%s: removing access to CP0 since "
+                "$pcc does not have ASR permission\n", __func__);
             env->hflags &= ~MIPS_HFLAG_CP0;
         }
     }

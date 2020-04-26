@@ -88,10 +88,20 @@
 #define qemu_log_instr_or_mask_msg(env, mask, msg, ...) do {            \
         if (qemu_loglevel_mask(mask)) {                                 \
             qemu_log(msg _glue_args(__VA_ARGS__));                      \
-        } else {                                                        \
+        } else if (qemu_log_instr_enabled(env)) {                       \
             qemu_log_instr_extra(env, msg _glue_args(__VA_ARGS__));     \
         }                                                               \
     } while (0)
+
+/*
+ * Helper version of qemu_log_instr_extra that checks whether logging is
+ * enabled.
+ */
+#define qemu_maybe_log_instr_extra(env, msg, ...) do {                  \
+        if (qemu_log_instr_enabled(env))                                \
+            qemu_log_instr_extra(env, msg _glue_args(__VA_ARGS__));     \
+    } while (0)
+
 
 #ifdef CONFIG_TCG_LOG_INSTR
 

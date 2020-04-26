@@ -360,10 +360,6 @@ static void emit_cvtrace_header(CPUArchState *env)
  */
 static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *log)
 {
-    // TODO(am2419): how do we get the opcode from pc? this is a machine-dependant
-    // thing, maybe we can reuse disas or have an hook to determine the opcode length
-    // can we get it from next instruction pc?
-
     FILE *logfile;
     cheri_trace_entry_t entry;
     static uint16_t cycles = 0; // TODO(am2419): this should be a per-cpu counter.
@@ -391,18 +387,23 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *log)
                    "without CHERI support");
 #else
         if (reginfo_is_cap(rinfo)) {
-            // TODO(am2419): cvtrace expects a null capability in the integer case
+            cap_register_t intcap;
+            cap_register_t *cr = &rinfo->cap;
+
+            if (!reginfo_has_cap(rinfo)) {
+                // cvtrace expects a null capability in the integer case
+                cr = null_capability(&intcap);
+            }
             uint64_t metadata = (
-                ((uint64_t)rinfo->cap.cr_tag << 63) |
-                (cap_get_otype(&rinfo->cap) << 32) |
-                (COMBINED_PERMS_VALUE(&rinfo->cap) << 1) |
-                (uint64_t)(cap_is_unsealed(&rinfo->cap) ? 0 : 1));
+                ((uint64_t)cr->cr_tag << 63) | (cap_get_otype(cr) << 32) |
+                (COMBINED_PERMS_VALUE(cr) << 1) |
+                (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
 
             entry.entry_type = CTE_CAP;
             entry.val2 = cpu_to_host64(metadata);
-            entry.val3 = cpu_to_host64(cap_get_cursor(&rinfo->cap));
-            entry.val4 = cpu_to_host64(cap_get_base(&rinfo->cap));
-            entry.val5 = cpu_to_host64(cap_get_length64(&rinfo->cap));
+            entry.val3 = cpu_to_host64(cap_get_cursor(cr));
+            entry.val4 = cpu_to_host64(cap_get_base(cr));
+            entry.val5 = cpu_to_host64(cap_get_length64(cr));
         } else
 #endif
         {

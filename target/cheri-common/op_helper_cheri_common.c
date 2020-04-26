@@ -390,14 +390,14 @@ target_ulong CHERI_HELPER_IMPL(cram(CPUArchState *env, target_ulong len))
     target_ulong result = cc128_get_alignment_mask(len);
     target_ulong rounded_with_crap = crap_impl(len);
     target_ulong rounded_with_cram = (len + ~result) & result;
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-        "cram(" TARGET_FMT_lx ") rounded=" TARGET_FMT_lx " rounded with mask=" TARGET_FMT_lx " mask result=" TARGET_FMT_lx "\n",
-        len, rounded_with_crap, rounded_with_cram, result);
+    qemu_maybe_log_instr_extra(env, "cram(" TARGET_FMT_lx ") rounded="
+        TARGET_FMT_lx " rounded with mask=" TARGET_FMT_lx " mask result="
+        TARGET_FMT_lx "\n", len, rounded_with_crap, rounded_with_cram, result);
     if (rounded_with_cram != rounded_with_crap) {
         warn_report("CRAM and CRRL disagree for " TARGET_FMT_lx ": crrl=" TARGET_FMT_lx
                     " cram=" TARGET_FMT_lx, len, rounded_with_crap, rounded_with_cram);
-        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-            "WARNING: CRAM and CRRL disagree for " TARGET_FMT_lx ": crrl=" TARGET_FMT_lx " cram=" TARGET_FMT_lx,
+        qemu_maybe_log_instr_extra(env, "WARNING: CRAM and CRRL disagree for "
+            TARGET_FMT_lx ": crrl=" TARGET_FMT_lx " cram=" TARGET_FMT_lx,
             len, rounded_with_crap, rounded_with_cram);
     }
     return result;
@@ -957,11 +957,10 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
     const target_ulong cursor = cap_get_cursor(cbp);
     const target_ulong addr = cursor + (target_long)offset;
     if (!cap_is_in_bounds(cbp, addr, size)) {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
-            "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-                " addr=" TARGET_FMT_plx "\n", offset, cursor, addr);
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "Failed capability bounds check: offset=" TARGET_FMT_plx
+            " cursor=" TARGET_FMT_plx " addr=" TARGET_FMT_plx "\n",
+            offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     }
 #ifdef TARGET_MIPS
@@ -971,10 +970,8 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
             (required_perms == (CAP_PERM_STORE | CAP_PERM_LOAD))
                 ? "RMW"
                 : ((required_perms == CAP_PERM_STORE) ? "store" : "load");
-        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                      "Allowing unaligned %d-byte %s of "
-                      "address 0x%" PRIx64 "\n",
-                      size, access_type, addr);
+        qemu_maybe_log_instr_extra(env, "Allowing unaligned %d-byte %s of "
+            "address 0x%" PRIx64 "\n", size, access_type, addr);
 #endif
     }
 #endif // TARGET_MIPS
@@ -1026,12 +1023,10 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
 
     uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
-            "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-            " addr=" TARGET_FMT_plx "\n",
-            offset, cap_get_cursor(cbp), addr);
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "Failed capability bounds check: offset=" TARGET_FMT_plx " cursor="
+            TARGET_FMT_plx " addr=" TARGET_FMT_plx "\n", offset,
+            cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_load_exception(env, addr, _host_return_address);
@@ -1065,12 +1060,10 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
 
     const uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
-            "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-            " addr=" TARGET_FMT_plx "\n",
-            offset, cap_get_cursor(cbp), addr);
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "Failed capability bounds check: offset=" TARGET_FMT_plx " cursor="
+            TARGET_FMT_plx " addr=" TARGET_FMT_plx "\n", offset,
+            cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_store_exception(env, addr, _host_return_address);
@@ -1104,9 +1097,8 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
         *cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
     } else {
         // Slow path for e.g. IO regions.
-        if (qemu_log_instr_enabled(env))
-            qemu_log_instr_extra(env, "Using slow path for load from guest "
-                                 "address " TARGET_FMT_plx "\n", vaddr);
+        qemu_maybe_log_instr_extra(env, "Using slow path for load from guest "
+            "address " TARGET_FMT_plx "\n", vaddr);
         *pesbt = cpu_ldq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
                 CC128_NULL_XOR_MASK;
         *cursor = cpu_ldq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
@@ -1196,9 +1188,8 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         stq_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
     } else {
         // Slow path for e.g. IO regions.
-        if (qemu_log_instr_enabled(env))
-            qemu_log_instr_extra(env, "Using slow path for store to guest "
-                                 "address " TARGET_FMT_plx "\n", vaddr);
+        qemu_maybe_log_instr_extra(env, "Using slow path for store to guest "
+            "address " TARGET_FMT_plx "\n", vaddr);
         cpu_stq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
                             pesbt_for_mem, retpc);
         cpu_stq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor,

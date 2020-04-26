@@ -50,13 +50,13 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
                                                             uint16_t reg,
                                                             uintptr_t hostpc)
 {
-    qemu_log_mask_and_addr(
-        CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
-        "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=" PRINT_CAP_FMTSTR
-        " -> host PC: 0x%jx\n",
-        cause, cheri_cause_str(cause), reg,
-        PRINT_CAP_ARGS(cheri_get_current_pcc_fetch_from_tcg(env, hostpc)),
-        (uintmax_t)hostpc);
+    if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT)) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=" PRINT_CAP_FMTSTR
+            " -> host PC: 0x%jx\n", cause, cheri_cause_str(cause), reg,
+            PRINT_CAP_ARGS(cheri_get_current_pcc_fetch_from_tcg(env, hostpc)),
+            (uintmax_t)hostpc);
+    }
 #ifdef DEBUG_KERNEL_CP2_VIOLATION
     if (in_kernel_mode(env)) {
         // Print some debug information for CheriBSD kernel crashes
@@ -103,12 +103,9 @@ cheri_tag_prot_clear_or_trap(CPUMIPSState *env, target_ulong va,
                              int prot, uintptr_t retpc, target_ulong tag)
 {
     if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
-        if (unlikely(should_log_mem_access(env, CPU_LOG_INSTR, va))) {
-            qemu_log("Clearing tag loaded from " TARGET_FMT_lx " due to %s\n",
-		     va,
-		     prot & PAGE_LC_CLEAR ? "asserted TLB_LI"
-					  : "missing CAP_PERM_LOAD_CAP");
-        }
+        qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
+            " due to %s\n", va, prot & PAGE_LC_CLEAR ?
+            "asserted TLB_LI" : "missing CAP_PERM_LOAD_CAP");
         return 0;
     }
     if (tag && (prot & PAGE_LC_TRAP)) {

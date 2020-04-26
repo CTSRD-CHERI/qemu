@@ -40,8 +40,8 @@
 uint64_t helper_mfc0_rtc64(CPUMIPSState *env)
 {
     if (!is_beri_or_cheri(env)) {
-        qemu_log_mask(CPU_LOG_INSTR, "Error: Attempted to use BERI RTC64"
-                                     " register for non-BERI CPU %s\n", env->cpu_model->name);
+        qemu_maybe_log_instr_extra(env, "Error: Attempted to use BERI RTC64",
+            " register for non-BERI CPU %s\n", env->cpu_model->name);
         do_raise_exception(env, EXCP_RI, GETPC());
     }
     return cpu_mips_get_rtc64(env);
@@ -50,8 +50,8 @@ uint64_t helper_mfc0_rtc64(CPUMIPSState *env)
 void helper_mtc0_rtc64(CPUMIPSState *env, uint64_t arg1)
 {
     if (!is_beri_or_cheri(env)) {
-        qemu_log_mask(CPU_LOG_INSTR, "Error: Attempted to use BERI RTC64"
-                                     " register for non-BERI CPU %s\n", env->cpu_model->name);
+        qemu_maybe_log_instr_extra(env, "Error: Attempted to use BERI RTC64"
+            " register for non-BERI CPU %s\n", env->cpu_model->name);
         do_raise_exception(env, EXCP_RI, GETPC());
     }
     cpu_mips_set_rtc64(env, arg1);
@@ -72,8 +72,8 @@ void helper_mtc0_rtc64(CPUMIPSState *env, uint64_t arg1)
 target_ulong helper_mfc0_coreid(CPUMIPSState *env)
 {
     if (!is_beri_or_cheri(env)) {
-        qemu_log_mask(CPU_LOG_INSTR, "Error: Attempted to use BERI CoreID"
-                                     " register for non-BERI CPU %s\n", env->cpu_model->name);
+        qemu_maybe_log_instr_extra(env, "Error: Attempted to use BERI CoreID"
+            " register for non-BERI CPU %s\n", env->cpu_model->name);
         do_raise_exception(env, EXCP_RI, GETPC());
     }
     CPUState *cs = env_cpu(env);
@@ -84,7 +84,7 @@ target_ulong helper_mfc0_coreid(CPUMIPSState *env)
 
 target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env, uint32_t sel)
 {
-    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    qemu_maybe_log_instr_extra(env, "%s\n", __func__);
     check_hwrena(env, 4, GETPC());
     switch (sel) {
     case 0: return env->statcounters_icount_user + env->statcounters_icount_kernel;
@@ -101,21 +101,21 @@ target_ulong helper_rdhwr_statcounters_icount(CPUMIPSState *env, uint32_t sel)
 #if defined(TARGET_CHERI)
 target_ulong helper_rdhwr_statcounters_itlb_miss(CPUMIPSState *env)
 {
-    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    qemu_maybe_log_instr_extra(env, "%s\n", __func__);
     check_hwrena(env, 5, GETPC());
     return env->statcounters_itlb_miss;
 }
 
 target_ulong helper_rdhwr_statcounters_dtlb_miss(CPUMIPSState *env)
 {
-    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    qemu_maybe_log_instr_extra(env, "%s\n", __func__);
     check_hwrena(env, 6, GETPC());
     return env->statcounters_dtlb_miss;
 }
 
 target_ulong helper_rdhwr_statcounters_memory(CPUMIPSState *env, uint32_t sel)
 {
-    qemu_log_mask(CPU_LOG_INSTR, "%s(%d)\n", __func__, sel);
+    qemu_maybe_log_instr_extra(env, "%s(%d)\n", __func__, sel);
     check_hwrena(env, 11, GETPC());
     switch (sel) {
     case 2: return env->statcounters_icount_user;
@@ -131,14 +131,14 @@ target_ulong helper_rdhwr_statcounters_memory(CPUMIPSState *env, uint32_t sel)
 target_ulong helper_rdhwr_statcounters_reset(CPUMIPSState *env)
 {
     // TODO: actually implement this
-    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    qemu_maybe_log_instr_extra(env, "%s\n", __func__);
     check_hwrena(env, 7, GETPC());
     return 0;
 }
 
 target_ulong helper_rdhwr_statcounters_ignored(CPUMIPSState *env, uint32_t num)
 {
-    qemu_log_mask(CPU_LOG_INSTR, "%s\n", __func__);
+    qemu_maybe_log_instr_extra(env, "%s\n", __func__);
     check_hwrena(env, num, GETPC());
     return 0xdeadbeef;
 }
