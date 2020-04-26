@@ -585,7 +585,8 @@ void set_CP0_ErrorEPC(CPUMIPSState *env, target_ulong value);
 #ifdef CONFIG_TCG_LOG_INSTR
 void r4k_dump_tlb(CPUMIPSState *env, int idx);
 #endif
-void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vaddr);
+void do_hexdump(GString *strbuf, uint8_t* buffer, target_ulong length,
+                target_ulong vaddr);
 hwaddr do_translate_address(CPUMIPSState *env, target_ulong address, int rw,
                             uintptr_t retaddr);
 #endif

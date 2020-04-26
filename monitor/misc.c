@@ -480,11 +480,6 @@ static void hmp_log(Monitor *mon, const QDict *qdict)
             help_cmd(mon, "log");
             return;
         }
-        /* Special case for cvtrace, can't be used with any other flag. */
-        if (mask & CPU_LOG_CVTRACE && mask != CPU_LOG_CVTRACE) {
-            help_cmd(mon, "log");
-            return;
-        }
     }
     qemu_set_log(mask);
 }

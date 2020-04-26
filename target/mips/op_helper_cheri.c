@@ -854,16 +854,6 @@ void dump_changed_cop2(CPUArchState *env, TCState *cur) {
     dump_changed_capreg(env, &cur->CHWR.ErrorEPCC, &env->last_CHWR.ErrorEPCC, "ErrorEPCC");
     dump_changed_capreg(env, &cur->CHWR.KCC, &env->last_CHWR.KCC, "KCC");
     dump_changed_capreg(env, &cur->CHWR.KDC, &env->last_CHWR.KDC, "KDC");
-    /*
-     * The binary trace format only allows a single register to be changed by
-     * an instruction so if there is an exception where another register
-     * was also changed, do not overwrite that value with EPCC, otherwise
-     * the original result of the instruction is lost.
-     */
-    // TODO(am2419): deprecated, remove
-    /* if (!qemu_loglevel_mask(CPU_LOG_CVTRACE) || env->cvtrace.exception == 31) { */
-    /*     dump_changed_capreg(env, &cur->CHWR.EPCC, &env->last_CHWR.EPCC, "EPCC"); */
-    /* } */
 }
 
 #endif // CONFIG_TCG_LOG_INSTR

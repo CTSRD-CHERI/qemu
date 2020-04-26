@@ -154,27 +154,21 @@ static const char* mips_cpu_get_changed_mode(CPUMIPSState *env)
     return mode;
 }
 
-
-#define USER_TRACE_DEBUG 0
-#if USER_TRACE_DEBUG
-#define user_trace_dbg(...) qemu_log("=== " __VA_ARGS__)
-#else
-#define user_trace_dbg(...)
-#endif
-
-void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vaddr) {
+void do_hexdump(GString *strbuf, uint8_t* buffer, target_ulong length,
+                target_ulong vaddr)
+{
     char ascii_chars[17] = { 0 };
     target_ulong line_start = vaddr & ~0xf;
     target_ulong addr;
 
     /* print leading empty space to always start with an aligned address */
     if (line_start != vaddr) {
-        fprintf(f, "    " TARGET_FMT_lx" : ", line_start);
+        g_string_append_printf(strbuf, "    " TARGET_FMT_lx" : ", line_start);
         for (addr = line_start; addr < vaddr; addr++) {
             if ((addr % 4) == 0) {
-                fprintf(f, "   ");
+                g_string_append_printf(strbuf, "   ");
             } else {
-                fprintf(f, "  ");
+                g_string_append_printf(strbuf, "  ");
             }
             ascii_chars[addr % 16] = ' ';
         }
@@ -182,16 +176,17 @@ void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vadd
     ascii_chars[16] = '\0';
     for (addr = vaddr; addr < vaddr + length; addr++) {
         if ((addr % 16) == 0) {
-            fprintf(f, "    " TARGET_FMT_lx ": ", line_start);
+            g_string_append_printf(strbuf, "    " TARGET_FMT_lx ": ",
+                                   line_start);
         }
         if ((addr % 4) == 0) {
-            fprintf(f, " ");
+            g_string_append_printf(strbuf, " ");
         }
         unsigned char c = (unsigned char)buffer[addr - vaddr];
-        fprintf(f, "%02x", c);
+        g_string_append_printf(strbuf, "%02x", c);
         ascii_chars[addr % 16] = isprint(c) ? c : '.';
         if ((addr % 16) == 15) {
-            fprintf(f, "  %s\r\n", ascii_chars);
+            g_string_append_printf(strbuf, "  %s\r\n", ascii_chars);
             line_start += 16;
         }
     }
@@ -199,30 +194,23 @@ void do_hexdump(FILE* f, uint8_t* buffer, target_ulong length, target_ulong vadd
         const target_ulong hexdump_end_addr = (vaddr + length) | 0xf;
         for (addr = vaddr + length; addr <= hexdump_end_addr; addr++) {
             if ((addr % 4) == 0) {
-                fprintf(f, "   ");
+                g_string_append_printf(strbuf, "   ");
             } else {
-                fprintf(f, "  ");
+                g_string_append_printf(strbuf, "  ");
             }
             ascii_chars[addr % 16] = ' ';
         }
-        fprintf(f, "  %s\r\n", ascii_chars);
+        g_string_append_printf(strbuf, "  %s\r\n", ascii_chars);
     }
 }
 
-
-/* Stop instruction trace logging to user mode only. */
+/*
+ * Log a special user-specified message to the trace
+ * TODO(am2419): Always print these messages even if user-space only tracing is on.
+ */
 void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
 {
-    uint32_t mode = qemu_loglevel & (CPU_LOG_CVTRACE | CPU_LOG_INSTR);
-    if (!mode) {
-        /* Always print these messages even if user-space only tracing is on */
-        /* mode = cl_default_trace_format; */ // TODO(am2419): handle removal of this.
-    }
-
-    if (!mode && qemu_loglevel_mask(CPU_LOG_GUEST_DEBUG_MSG))
-        mode = CPU_LOG_INSTR;
-
-    if (!qemu_loglevel_mask(CPU_LOG_GUEST_DEBUG_MSG) || !qemu_log_enabled())
+    if (!qemu_log_instr_enabled(env) || !qemu_loglevel_mask(CPU_LOG_GUEST_DEBUG_MSG))
         return;
 
     uint8_t buffer[4096];
@@ -239,14 +227,10 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
 
     // For ptr + decimal mode we only need
     if (print_mode == DEBUG_MESSAGE_PTR) {
-        if (mode & CPU_LOG_INSTR) {
-            qemu_log_mask(CPU_LOG_INSTR, "   ptr = 0x" TARGET_FMT_lx "\r\n", vaddr);
-        }
+        qemu_log_instr_extra(env, "   ptr = 0x" TARGET_FMT_lx "\r\n", vaddr);
         return;
     } else if (print_mode == DEBUG_MESSAGE_DECIMAL) {
-        if (mode & CPU_LOG_INSTR) {
-            qemu_log_mask(CPU_LOG_INSTR, "   value = " TARGET_FMT_ld "\r\n", vaddr);
-        }
+        qemu_log_instr_extra(env, "   value = " TARGET_FMT_ld "\r\n", vaddr); 
         return;
     }
     // Otherwise we meed to fetch the memory referenced by vaddr+length
@@ -256,108 +240,32 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
         warn_report("CHERI DEBUG HELPER: Could not read " TARGET_FMT_ld
                     " bytes at vaddr 0x" TARGET_FMT_lx "\r\n", length, vaddr);
     }
-    if ((mode & CPU_LOG_INSTR) || qemu_log_enabled()) {
-        qemu_log_mask(CPU_LOG_INSTR, "DEBUG MESSAGE @ 0x" TARGET_FMT_lx " addr=0x"
+
+    qemu_log_instr_extra(env, "DEBUG MESSAGE @ 0x" TARGET_FMT_lx " addr=0x"
             TARGET_FMT_lx " len=" TARGET_FMT_ld "\r\n", pc, vaddr, length);
-        if (print_mode == DEBUG_MESSAGE_CSTRING) {
-            /* XXXAR: Escape newlines, etc.? */
-            qemu_log_mask(CPU_LOG_INSTR, "    message = \"%*.*s\"\n", (int)length, (int)length, buffer);
-        } else if (print_mode == DEBUG_MESSAGE_HEXDUMP) {
-            qemu_log_mask(CPU_LOG_INSTR, "   Dumping " TARGET_FMT_lu
-                     " bytes starting at 0x"
-                     TARGET_FMT_lx "\r\n", length, vaddr);
-            FILE* logfile = qemu_log_lock();
-            do_hexdump(logfile, buffer, length, vaddr);
-            qemu_log_unlock(logfile);
-        }
-    } else if (mode & CPU_LOG_CVTRACE) {
-        warn_report("NOT IMPLEMENTED: CVTRACE debug message nop at 0x"
-                    TARGET_FMT_lx "\n", pc);
+    if (print_mode == DEBUG_MESSAGE_CSTRING) {
+        /* XXXAR: Escape newlines, etc.? */
+        qemu_log_instr_extra(env, "    message = \"%*.*s\"\n", (int)length,
+            (int)length, buffer);
+    } else if (print_mode == DEBUG_MESSAGE_HEXDUMP) {
+        /* This is probably inefficient but we don't dump that much.. */
+        qemu_log_instr_extra(env, "   Dumping " TARGET_FMT_lu
+            " bytes starting at 0x" TARGET_FMT_lx "\r\n", length, vaddr);
+        GString *strbuf = g_string_new(NULL);
+        do_hexdump(strbuf, buffer, length, vaddr);
+        qemu_log_instr_extra(env, "%s", strbuf);
+        g_string_free(strbuf, true);
     } else {
         assert(false && "logic error");
     }
 }
 
-// TODO(am2419): deprecated, remove
 void helper_log_value(CPUMIPSState *env, const void* ptr, uint64_t value)
 {
-    qemu_log_mask(CPU_LOG_INSTR, "%s: " TARGET_FMT_plx "\n", ptr, value);
+    if (qemu_log_instr_enabled(env))
+        qemu_log_instr_extra(env, "%s: " TARGET_FMT_plx "\n", ptr, value);
 }
 
-// TODO(am2419): deprecated, remove
-#if 0
-/*
- * Print the instruction to cvtrace log file.
- */
-void helper_mips_cvtrace_log_instruction(CPUMIPSState *env, target_ulong pc)
-{
-    if (unlikely(should_log_instr(env, CPU_LOG_CVTRACE))) {
-        int isa = (env->hflags & MIPS_HFLAG_M16) == 0 ? 0 : (env->insn_flags & ASE_MICROMIPS) ? 1 : 2;
-        static uint16_t cycles = 0;  /* XXX */
-        uint32_t opcode;
-        CPUState *cs = env_cpu(env);
-
-        FILE* logfile = qemu_log_lock();
-        /* if the logfile is empty we need to emit the cvt magic */
-        if (env->cvtrace.version != 0 && ftell(logfile) != 0) {
-            /* Write previous instruction trace to log. */
-            fwrite(&env->cvtrace, sizeof(env->cvtrace), 1, logfile);
-        } else {
-            char buffer[sizeof(env->cvtrace)];
-
-            buffer[0] = CVT_QEMU_VERSION;
-            g_strlcpy(buffer+1, CVT_QEMU_MAGIC, sizeof(env->cvtrace)-2);
-            fwrite(buffer, sizeof(env->cvtrace), 1, logfile);
-            cycles = 0;
-        }
-        qemu_log_unlock(logfile);
-        bzero(&env->cvtrace, sizeof(env->cvtrace));
-        env->cvtrace.version = CVT_NO_REG;
-        env->cvtrace.pc = tswap64(pc);
-        env->cvtrace.cycles = tswap16(cycles++);
-        env->cvtrace.thread = (uint8_t)cs->cpu_index;
-        env->cvtrace.asid = (uint8_t)(env->active_tc.CP0_TCStatus & 0xff);
-        env->cvtrace.exception = 31;
-
-        /* Fetch opcode. */
-        if (isa == 0) {
-            /* mips32/mips64 instruction. */
-            opcode = cpu_ldl_code(env, pc);
-        } else {
-            /* micromips or mips16. */
-            opcode = cpu_lduw_code(env, pc);
-            if (isa == 1) {
-                /* micromips */
-                switch (opcode >> 10) {
-                case 0x01: case 0x02: case 0x03: case 0x09:
-                case 0x0a: case 0x0b:
-                case 0x11: case 0x12: case 0x13: case 0x19:
-                case 0x1a: case 0x1b:
-                case 0x20: case 0x21: case 0x22: case 0x23:
-                case 0x28: case 0x29: case 0x2a: case 0x2b:
-                case 0x30: case 0x31: case 0x32: case 0x33:
-                case 0x38: case 0x39: case 0x3a: case 0x3b:
-                    break;
-                default:
-                    opcode <<= 16;
-                    opcode |= cpu_lduw_code(env, pc + 2);
-                    break;
-                }
-            } else {
-                /* mips16 */
-                switch (opcode >> 11) {
-                case 0x03:
-                case 0x1e:
-                    opcode <<= 16;
-                    opcode |= cpu_lduw_code(env, pc + 2);
-                    break;
-                }
-            }
-        }
-        env->cvtrace.inst = opcode;  /* XXX need bswapped? */
-    }
-}
-#endif // 0
 
 #ifndef CONFIG_USER_ONLY
 

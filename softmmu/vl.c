@@ -4063,11 +4063,6 @@ void qemu_init(int argc, char **argv, char **envp)
             qemu_print_log_usage(stdout);
             exit(1);
         }
-        /* Special case for cvtrace, can't be used with any other flag. */
-        if (mask & CPU_LOG_CVTRACE && mask != CPU_LOG_CVTRACE) {
-            qemu_print_log_usage(stdout);
-            exit(1);
-        }
         qemu_set_log(mask);
     } else {
         qemu_set_log(0);

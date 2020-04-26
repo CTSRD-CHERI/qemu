@@ -2410,8 +2410,13 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
                 for (int i = 0; i < len; i++)
                     if (buffer[i] != 0)
                         have_nonzero = true;
-                if (have_nonzero)
-                    do_hexdump(stderr, buffer, len, src);
+                if (have_nonzero) {
+                    /* This is probably inefficient but we don't dump that much.. */
+                    GString *strbuf = g_string_sized_new(TARGET_PAGE_SIZE);
+                    do_hexdump(strbuf, buffer, len, src);
+                    fwrite(strbuf->str, strbuf->len, 1, stderr);
+                    g_string_free(strbuf, true);
+                }
                 else
                     fprintf(stderr, "   -- all zeroes\r\n");
             } else {
