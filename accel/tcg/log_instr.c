@@ -329,14 +329,14 @@ static void emit_text_start(CPUArchState *env, target_ulong pc)
 
     if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && log->user_mode_tracing)
         qemu_log("User-mode only tracing enabled at " TARGET_FMT_lx
-                 ", ASID %u\n", pc, cheri_get_asid(env));
+                 ", ASID %u\n", pc, cpu_get_asid(env));
     else if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && !log->user_mode_tracing)
         qemu_log("Delaying tracing request at " TARGET_FMT_lx
                  " until next switch to user mode, ASID %u\n",
-                 pc, cheri_get_asid(env));
+                 pc, cpu_get_asid(env));
     else
         qemu_log("Requested instruction logging @ " TARGET_FMT_lx
-                 " ASID %u\n", pc, cheri_get_asid(env));
+                 " ASID %u\n", pc, cpu_get_asid(env));
 }
 
 /*
@@ -348,10 +348,10 @@ static void emit_text_stop(CPUArchState *env, target_ulong pc)
 
     if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && log->user_mode_tracing)
         qemu_log("User-mode only tracing disabled at " TARGET_FMT_lx
-                 ", ASID %u\n", pc, cheri_get_asid(env));
+                 ", ASID %u\n", pc, cpu_get_asid(env));
     else
         qemu_log("Disabled instruction logging @ " TARGET_FMT_lx
-                 " ASID %u\n", pc, cheri_get_asid(env));
+                 " ASID %u\n", pc, cpu_get_asid(env));
 }
 
 /* CHERI trace V3 format emitters */

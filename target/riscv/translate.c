@@ -1074,15 +1074,6 @@ static void riscv_tr_disas_log(const DisasContextBase *dcbase, CPUState *cpu)
 #endif
 }
 
-#ifdef CONFIG_TCG_LOG_INSTR
-static bool riscv_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
-{
-    CPURISCVState *env = cs->env_ptr;
-    tcg_debug_assert((dcbase->tb->flags & TB_FLAGS_MMU_MASK) == env->priv);
-    return env->priv == PRV_U;
-}
-#endif /* CONFIG_TCG_LOG_INSTR */
-
 static const TranslatorOps riscv_tr_ops = {
     .init_disas_context = riscv_tr_init_disas_context,
     .tb_start           = riscv_tr_tb_start,
@@ -1091,9 +1082,6 @@ static const TranslatorOps riscv_tr_ops = {
     .translate_insn     = riscv_tr_translate_insn,
     .tb_stop            = riscv_tr_tb_stop,
     .disas_log          = riscv_tr_disas_log,
-#ifdef CONFIG_TCG_LOG_INSTR
-    .tb_in_user_mode    = riscv_tr_tb_in_user_mode,
-#endif
 };
 
 void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)

@@ -41,12 +41,8 @@
  *
  * # Adding a new target
  * The following functions must be defined by the target and declared in cpu.h:
- * - cpu_in_user_mode() // rename to target_log_instr_in_user_mode(_
- * - cpu_get_asid() (currently cheri_get_asid()) // rename to target_log_instr_get_asid
- *
- * The following hooks must be implemented:
- * - log_instr_changed_state
- * - tb_in_user_mode
+ * - bool cpu_in_user_mode(env) // return whether the cpu is in user mode
+ * - uint16_t cpu_get_asid(env) // return the hardware address space identifier
  *
  * - Each target should implement their own register update logging helpers that
  *   call into qemu_log_instr_gpr(), qemu_log_instr_cap() and similar interface

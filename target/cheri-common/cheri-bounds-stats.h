@@ -118,7 +118,7 @@ struct oob_stats_info {
             "BOUNDS: Out of bounds capability (by %" PRId64
             ") created using %s: " PRINT_CAP_FMTSTR ", pc=%016" PRIx64
             " ASID=%u\n", howmuch, name, PRINT_CAP_ARGS(cr),
-            cpu_get_current_pc(env, retpc, false), cheri_get_asid(env));
+            cpu_get_current_pc(env, retpc, false), cpu_get_asid(env));
         return howmuch;
     }
     return 0;
@@ -157,7 +157,7 @@ static inline void became_unrepresentable(CPUArchState *env, uint16_t reg,
     qemu_log_instr_or_mask_msg(env, CPU_LOG_CHERI_BOUNDS,
         "BOUNDS: Unrepresentable capability created using %s, pc=%016" PRIx64
         " ASID=%u\n", info->operation, cheri_get_current_pc(env, retpc)),
-        cheri_get_asid(env));
+        cpu_get_asid(env));
     _became_unrepresentable(env, reg, retpc);
 }
 

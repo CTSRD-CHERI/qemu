@@ -612,12 +612,12 @@ static inline cpu_log_instr_info_t *cpu_get_log_instr_state(CPURISCVState *env)
  */
 static inline bool cpu_in_user_mode(CPURISCVState *env)
 {
-    return false;
+    return env->priv == PRV_U;
 }
 
 // TODO(am2419): deprecate and remove 
 // TODO(am2419) should probably rename as cpu_get_asid()
-static inline unsigned cheri_get_asid(CPURISCVState *env) {
+static inline unsigned cpu_get_asid(CPURISCVState *env) {
     uint16_t ASID = 0; // TODO: implement?
     return ASID;
 }

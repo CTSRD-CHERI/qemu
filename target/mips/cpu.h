@@ -1503,8 +1503,7 @@ static inline cpu_log_instr_info_t *cpu_get_log_instr_state(CPUMIPSState *env)
     return &env->log_info;
 }
 
-// TODO(am2419) should probably rename as cpu_get_asid()
-static inline unsigned cheri_get_asid(CPUMIPSState *env) {
+static inline unsigned cpu_get_asid(CPUMIPSState *env) {
     uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
     return ASID;
 }
