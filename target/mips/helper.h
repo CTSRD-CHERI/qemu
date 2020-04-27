@@ -189,6 +189,7 @@ DEF_HELPER_1(mfc0_coreid, tl, env)
 /* Target dependant-helpers */
 DEF_HELPER_3(mips_log_instr_gpr, void, env, i32, tl)
 DEF_HELPER_4(mips_log_instr_cop0, void, env, i32, i32, tl)
+DEF_HELPER_4(mips_log_instr_hilo, void, env, i32, i32, tl)
 DEF_HELPER_3(mips_log_instr32, void, env, tl, i32)
 DEF_HELPER_1(mips_log_instr_drop, void, env)
 /* Extra MIPS-only helpers */

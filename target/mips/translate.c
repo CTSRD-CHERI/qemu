@@ -2860,9 +2860,25 @@ static inline void gen_log_instr_cop0_update(DisasContext *ctx, int reg,
         tcg_temp_free_i32(tsel);
     }
 }
+
+/*
+ * Generate helper to log HI/LO register updates.
+ */
+static inline void gen_log_instr_hilo_update(DisasContext *ctx, int hiLO,
+                                             int index, int reg)
+{
+    if (unlikely(ctx->base.log_instr_enabled)) {
+        TCGv_i32 thilo = tcg_const_i32(hiLO);
+        TCGv_i32 tindex = tcg_const_i32(index);
+        gen_helper_mips_log_instr_hilo(cpu_env, thilo, tindex, cpu_gpr[reg]);
+        tcg_temp_free_i32(thilo);
+        tcg_temp_free_i32(tindex);
+    }
+}
 #else
 #define gen_log_instr_gpr_update(ctx, reg) ((void)0)
 #define gen_log_instr_cop0_update(ctx, reg) ((void)0)
+#define gen_log_instr_hilo_update(ctx, hiLO, index, reg) ((void)0)
 #endif
 
 /* General purpose registers moves. */
@@ -4962,6 +4978,7 @@ static void gen_HILO(DisasContext *ctx, uint32_t opc, int acc, int reg)
         } else {
             tcg_gen_movi_tl(cpu_HI[acc], 0);
         }
+        gen_log_instr_hilo_update(ctx, /*hiLO*/0, acc, reg);
         break;
     case OPC_MTLO:
         if (reg != 0) {
@@ -4976,6 +4993,7 @@ static void gen_HILO(DisasContext *ctx, uint32_t opc, int acc, int reg)
         } else {
             tcg_gen_movi_tl(cpu_LO[acc], 0);
         }
+        gen_log_instr_hilo_update(ctx, /*hiLO*/1, acc, reg);
         break;
     }
 }
