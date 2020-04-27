@@ -60,13 +60,29 @@ void helper_mips_log_instr_gpr(CPUArchState *env, uint32_t reg,
  * Log Cop0 register modification.
  * Most of the mtc0 logging is done in cp0_helper, this takes care
  * of logging updates that do not go though helpers in cp0_helper.
- * TODO(am2419): may be merged with the log_instr_cop0_update in an header.
  */
 void helper_mips_log_instr_cop0(CPUArchState *env, uint32_t reg, uint32_t sel,
                                 target_ulong value)
 {
     if (qemu_log_instr_enabled(env))
         qemu_log_instr_reg(env, mips_cop0_regnames[reg * 8 + sel], value);
+}
+
+/*
+ * Log HI/LO register modification.
+ * Note: sel is 0 for HI registers and 1 for LO registers
+ */
+void helper_mips_log_instr_hilo(CPUArchState *env, uint32_t sel, uint32_t index,
+                                target_ulong value)
+{
+    if (!qemu_log_instr_enabled(env))
+        return;
+
+    if (sel) {
+        qemu_log_instr_reg(env, mips_regnames_LO[index], value);
+    } else {
+        qemu_log_instr_reg(env, mips_regnames_HI[index], value);
+    }
 }
 
 void helper_mips_log_instr32(CPUMIPSState *env, target_ulong pc,
