@@ -199,7 +199,7 @@ static inline void emit_text_ldst(log_meminfo_t *minfo, const char *direction)
                "Capability memory access without CHERI support");
 #else
     if (minfo->flags & LMI_CAP) {
-        qemu_log("na    Cap Memory %s [" TARGET_FMT_lx "] = v:%d PESBT:"
+        qemu_log("    Cap Memory %s [" TARGET_FMT_lx "] = v:%d PESBT:"
                  TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
                  direction, minfo->addr, minfo->cap.cr_tag,
                  compress_128cap(&minfo->cap),
@@ -212,19 +212,19 @@ static inline void emit_text_ldst(log_meminfo_t *minfo, const char *direction)
             qemu_log("    Unknown memory access width\n");
             /* fallthrough */
         case 8:
-            qemu_log("na    Memory %s [" TARGET_FMT_lx "] = " TARGET_FMT_plx "\n",
+            qemu_log("    Memory %s [" TARGET_FMT_lx "] = " TARGET_FMT_plx "\n",
                      direction, minfo->addr, minfo->value);
             break;
         case 4:
-            qemu_log("na    Memory %s [" TARGET_FMT_lx "] = %08x\n",
+            qemu_log("    Memory %s [" TARGET_FMT_lx "] = %08x\n",
                      direction, minfo->addr, (uint32_t)minfo->value);
             break;
         case 2:
-            qemu_log("na    Memory %s [" TARGET_FMT_lx "] = %04x\n",
+            qemu_log("    Memory %s [" TARGET_FMT_lx "] = %04x\n",
                      direction, minfo->addr, (uint16_t)minfo->value);
             break;
         case 1:
-            qemu_log("na    Memory %s [" TARGET_FMT_lx "] = %02x\n",
+            qemu_log("    Memory %s [" TARGET_FMT_lx "] = %02x\n",
                      direction, minfo->addr, (uint8_t)minfo->value);
             break;
         }
@@ -242,18 +242,18 @@ static inline void emit_text_reg(log_reginfo_t *rinfo)
 #else
     if (reginfo_is_cap(rinfo)) {
         if (reginfo_has_cap(rinfo))
-            qemu_log("na    Write %s|" PRINT_CAP_FMTSTR_L1 "\n"
+            qemu_log("    Write %s|" PRINT_CAP_FMTSTR_L1 "\n"
                      "             |" PRINT_CAP_FMTSTR_L2 "\n",
                      rinfo->name,
                      PRINT_CAP_ARGS_L1(&rinfo->cap),
                      PRINT_CAP_ARGS_L2(&rinfo->cap));
         else
-            qemu_log("na  %s <- " TARGET_FMT_lx " (setting integer value)\n",
+            qemu_log("  %s <- " TARGET_FMT_lx " (setting integer value)\n",
                      rinfo->name, rinfo->gpr);
     } else
 #endif
     {
-        qemu_log("na    Write %s = " TARGET_FMT_lx "\n", rinfo->name,
+        qemu_log("    Write %s = " TARGET_FMT_lx "\n", rinfo->name,
                  rinfo->gpr);
     }
 }
@@ -317,7 +317,7 @@ static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *log)
 
     /* Dump extra logged messages, if any */
     if (log->txt_buffer->len > 0)
-        qemu_log("na %s", log->txt_buffer->str);
+        qemu_log(" %s", log->txt_buffer->str);
 }
 
 /*
