@@ -32035,17 +32035,6 @@ static void mips_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs)
     log_target_disas(cs, dcbase->pc_first, dcbase->tb->size);
 }
 
-#ifdef CONFIG_TCG_LOG_INSTR
-static bool mips_tr_tb_in_user_mode(DisasContextBase *dcbase, CPUState *cs)
-{
-    DisasContext *ctx = container_of(dcbase, DisasContext, base);
-    CPUMIPSState *env = cs->env_ptr;
-    tcg_debug_assert((env->hflags & MIPS_HFLAG_UM) ==
-                     (ctx->hflags & MIPS_HFLAG_UM));
-    return (ctx->hflags & MIPS_HFLAG_UM) != 0;
-}
-#endif /* CONFIG_TCG_LOG_INSTR */
-
 static const TranslatorOps mips_tr_ops = {
     .init_disas_context = mips_tr_init_disas_context,
     .tb_start           = mips_tr_tb_start,
@@ -32054,9 +32043,6 @@ static const TranslatorOps mips_tr_ops = {
     .translate_insn     = mips_tr_translate_insn,
     .tb_stop            = mips_tr_tb_stop,
     .disas_log          = mips_tr_disas_log,
-#ifdef CONFIG_TCG_LOG_INSTR
-    .tb_in_user_mode    = mips_tr_tb_in_user_mode,
-#endif
 };
 
 void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)

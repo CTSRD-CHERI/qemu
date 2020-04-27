@@ -122,10 +122,6 @@ typedef struct DisasContextBase {
  *
  * @disas_log:
  *      Print instruction disassembly to log.
- *
- * @tb_in_user_mode:
- *      Return true if the TB will execute in user mode. Used for the "user-instr"
- *      isntruction logging feature (and MIPS magic nops)
  */
 typedef struct TranslatorOps {
     void (*init_disas_context)(DisasContextBase *db, CPUState *cpu);
@@ -136,10 +132,6 @@ typedef struct TranslatorOps {
     void (*translate_insn)(DisasContextBase *db, CPUState *cpu);
     void (*tb_stop)(DisasContextBase *db, CPUState *cpu);
     void (*disas_log)(const DisasContextBase *db, CPUState *cpu);
-#ifdef CONFIG_TCG_LOG_INSTR
-    bool (*tb_in_user_mode)(DisasContextBase *db, CPUState *cpu);
-#endif
-
 } TranslatorOps;
 
 /**
