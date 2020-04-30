@@ -78,9 +78,11 @@ cram        1111111  01001 ..... 000 ..... 1011011 @r2
 cmove       1111111  01010 ..... 000 ..... 1011011 @r2
 ccleartag   1111111  01011 ..... 000 ..... 1011011 @r2
 cjalr       1111111  01100 ..... 000 ..... 1011011 @r2
-# TODO: mapping clause encdec = ClearRegs(GPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b01101 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
+# clear     1111111  01101 ..... 000 ..... 1011011 @r2
+# cclear    1111111  01110 ..... 000 ..... 1011011 @r2
 cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
-# TODO: mapping clause encdec = ClearRegs(FPRegs, q, m3 @ m5) if (haveXcheri()) <-> 0b1111111 @ 0b10000 @ q : bits(2) @ m3 : bits(3) @ 0b000 @ m5 : regidx @ 0b1011011 if (haveXcheri())
+# fpclear   1111111  10000 ..... 000 ..... 1011011 @r2
+csealentry  1111111  10001 ..... 000 ..... 1011011 @r2
 
 
 

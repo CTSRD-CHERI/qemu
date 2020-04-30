@@ -307,6 +307,29 @@ void CHERI_HELPER_IMPL(cchecktype(CPUArchState *env, uint32_t cs, uint32_t cb))
     }
 }
 
+void CHERI_HELPER_IMPL(csealentry(CPUArchState *env, uint32_t cd, uint32_t cs))
+{
+    /*
+     * CSealEntry: Seal a code capability so it is only callable with cjr/cjalr
+     * (all other permissions are ignored so it can't be used for loads, etc)
+     */
+    GET_HOST_RETPC();
+    const cap_register_t *csp = get_readonly_capreg(env, cs);
+    if (!csp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cs);
+    } else if (!cap_is_unsealed(csp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cs);
+    } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
+        // Capability must be executable otherwise csealentry doesn't make sense
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
+    } else {
+        cap_register_t result = *csp;
+        // capability can now only be used in cjr/cjalr
+        cap_make_sealed_entry(&result);
+        update_capreg(env, cd, &result);
+    }
+}
+
 /// Two operands (capability and int)
 void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
                                   target_ulong rt))

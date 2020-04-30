@@ -390,29 +390,6 @@ target_ulong CHERI_HELPER_IMPL(cjr(CPUArchState *env, uint32_t cb))
     return (target_ulong)0;
 }
 
-void CHERI_HELPER_IMPL(csealentry(CPUArchState *env, uint32_t cd, uint32_t cs))
-{
-    GET_HOST_RETPC();
-    /*
-     * CSealEntry: Seal a code capability so it is only callable with cjr/cjalr
-     * (all other permissions are ignored so it can't be used for loads, etc)
-     */
-    const cap_register_t *csp = get_readonly_capreg(env, cs);
-    if (!csp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cs);
-    } else if (!cap_is_unsealed(csp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cs);
-    } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
-        // Capability must be executable otherwise csealentry doesn't make sense
-        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
-    } else {
-        cap_register_t result = *csp;
-        // capability can now only be used in cjr/cjalr
-        cap_make_sealed_entry(&result);
-        update_capreg(env, cd, &result);
-    }
-}
-
 static inline cap_register_t *
 check_writable_cap_hwr_access(CPUArchState *env, enum CP2HWR hwr, target_ulong _host_return_address) {
     cheri_debug_assert((int)hwr >= (int)CP2HWR_BASE_INDEX);

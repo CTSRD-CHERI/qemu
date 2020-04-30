@@ -177,6 +177,7 @@ static inline bool trans_cram(DisasContext *ctx, arg_cram *a)
 // Two operand (cap cap)
 TRANSLATE_CAP_CAP(ccleartag)
 TRANSLATE_CAP_CAP(cmove)
+TRANSLATE_CAP_CAP(csealentry)
 
 // Three operand (cap cap cap)
 TRANSLATE_CAP_CAP_CAP(cbuildcap)
