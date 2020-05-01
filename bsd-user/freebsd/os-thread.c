@@ -893,9 +893,11 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
             * Decrease count if we failed.  This one will not have a
             * matching wake to account for it.
             */
+            pthread_mutex_lock(&umtx_wait_lck);
             __get_user(count, &target_umutex->m_count);
             count--;
             __put_user(count, &target_umutex->m_count);
+            pthread_mutex_unlock(&umtx_wait_lck);
             break;
         }
     }
