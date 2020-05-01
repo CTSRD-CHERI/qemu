@@ -95,7 +95,8 @@ safe_syscall5(int, select, int, nfds, fd_set *, readfs, fd_set *, writefds,
     fd_set *, exceptfds, struct timeval *, timeout);
 safe_syscall6(int, pselect, int, nfds, fd_set * restrict, readfs,
     fd_set * restrict, writefds, fd_set * restrict, exceptfds,
-    const struct timeval *, timeout, const sigset_t * restrict, newsigmask);
+    const struct timespec * restrict, timeout,
+    const sigset_t * restrict, newsigmask);
 
 safe_syscall6(ssize_t, recvfrom, int, fd, void *, buf, size_t, len, int, flags,
     struct sockaddr * restrict, from, socklen_t * restrict, fromlen);

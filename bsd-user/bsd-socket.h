@@ -30,7 +30,12 @@ ssize_t safe_recvfrom(int s, void *buf, size_t len, int flags,
     struct sockaddr * restrict from, socklen_t * restrict fromlen);
 ssize_t safe_sendto(int s, const void *buf, size_t len, int flags,
     const struct sockaddr *to, socklen_t tolen);
-
+int safe_select(int nfds, fd_set *readfs, fd_set *writefds, fd_set *exceptfds,
+    struct timeval *timeout);
+int safe_pselect(int nfds, fd_set * restrict readfds,
+    fd_set * restrict writefds, fd_set * restrict exceptfds,
+    const struct timespec * restrict timeout,
+    const sigset_t * restrict newsigmask);
 
 /* bind(2) */
 static inline abi_long do_bsd_bind(int sockfd, abi_ulong target_addr,
