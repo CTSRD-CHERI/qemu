@@ -254,16 +254,33 @@ static inline abi_long do_bsd_shm_open(abi_ulong arg1, abi_long arg2,
     int ret;
     void *p;
 
-    p = lock_user_string(arg1);
-    if (p == NULL) {
-        return -TARGET_EFAULT;
+#ifdef SHM_ANON
+#define SHM_PATH(p) (p) == SHM_ANON ? (p) : path(p)
+    if (arg1 == SHM_ANON) {
+        p = arg1;
+    } else
+#else
+#define SHM_PATH(p) path(p)
+#endif
+    {
+        p = lock_user_string(arg1);
+        if (p == NULL) {
+            return -TARGET_EFAULT;
+        }
     }
-    ret = get_errno(shm_open(path(p),
+    ret = get_errno(shm_open(SHM_PATH(p),
                 target_to_host_bitmask(arg2, fcntl_flags_tbl), arg3));
-    unlock_user(p, arg1, 0);
+
+#ifdef SHM_ANON
+    if (p != SHM_ANON)
+#endif
+    {
+        unlock_user(p, arg1, 0);
+    }
 
     return ret;
 }
+#undef SHM_PATH
 
 /* shm_unlink(2) */
 static inline abi_long do_bsd_shm_unlink(abi_ulong arg1)
