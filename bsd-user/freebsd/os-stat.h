@@ -683,9 +683,10 @@ static inline abi_long do_freebsd_fcntl(abi_long arg1, abi_long arg2,
 }
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1300080
+extern int __realpathat(int fd, const char *path, char *buf, size_t size,
+        int flags);
 // https://svnweb.freebsd.org/base?view=revision&revision=358172
 // no man page
-// int __realpathat(int fd, const char *path, char *buf, size_t size, int flags);
 static inline abi_long do_freebsd_realpathat(abi_long arg1, abi_long arg2,
         abi_long arg3, abi_long arg4, abi_long arg5)
 {
