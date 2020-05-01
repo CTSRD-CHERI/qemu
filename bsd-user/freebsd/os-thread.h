@@ -29,15 +29,15 @@
 int safe_thr_suspend(struct timespec *timeout);
 int safe__umtx_op(void *, int, unsigned long, void *, void *);
 
-static abi_long do_freebsd_thr_create(CPUArchState *env, abi_ulong target_ctx,
-        abi_ulong target_id, int flags)
+static inline abi_long do_freebsd_thr_create(CPUArchState *env,
+        abi_ulong target_ctx, abi_ulong target_id, int flags)
 {
 
     qemu_log("qemu: Unsupported syscall thr_create()\n");
     return -TARGET_ENOSYS;
 }
 
-static abi_long do_freebsd_thr_self(abi_ulong target_id)
+static inline abi_long do_freebsd_thr_self(abi_ulong target_id)
 {
     abi_long ret;
     long tid;
@@ -51,7 +51,8 @@ static abi_long do_freebsd_thr_self(abi_ulong target_id)
     return ret;
 }
 
-static abi_long do_freebsd_thr_exit(CPUArchState *cpu_env, abi_ulong tid_addr)
+static inline abi_long do_freebsd_thr_exit(CPUArchState *cpu_env,
+        abi_ulong tid_addr)
 {
     CPUState *cpu = env_cpu(cpu_env);
     TaskState *ts;
@@ -80,19 +81,19 @@ static abi_long do_freebsd_thr_exit(CPUArchState *cpu_env, abi_ulong tid_addr)
     return 0;
 }
 
-static abi_long do_freebsd_thr_kill(long id, int sig)
+static inline abi_long do_freebsd_thr_kill(long id, int sig)
 {
 
     return get_errno(thr_kill(id, target_to_host_signal(sig)));
 }
 
-static abi_long do_freebsd_thr_kill2(pid_t pid, long id, int sig)
+static inline abi_long do_freebsd_thr_kill2(pid_t pid, long id, int sig)
 {
 
     return get_errno(thr_kill2(pid, id, target_to_host_signal(sig)));
 }
 
-static abi_long do_freebsd_thr_suspend(abi_ulong target_ts)
+static inline abi_long do_freebsd_thr_suspend(abi_ulong target_ts)
 {
     abi_long ret;
     struct timespec ts;
@@ -108,13 +109,13 @@ static abi_long do_freebsd_thr_suspend(abi_ulong target_ts)
     return ret;
 }
 
-static abi_long do_freebsd_thr_wake(long tid)
+static inline abi_long do_freebsd_thr_wake(long tid)
 {
 
     return get_errno(thr_wake(tid));
 }
 
-static abi_long do_freebsd_thr_set_name(long tid, abi_ulong target_name)
+static inline abi_long do_freebsd_thr_set_name(long tid, abi_ulong target_name)
 {
     abi_long ret;
     void *p;
@@ -129,7 +130,7 @@ static abi_long do_freebsd_thr_set_name(long tid, abi_ulong target_name)
     return ret;
 }
 
-static abi_long do_freebsd_rtprio_thread(int function, lwpid_t lwpid,
+static inline abi_long do_freebsd_rtprio_thread(int function, lwpid_t lwpid,
         abi_ulong target_addr)
 {
     int ret;
@@ -145,7 +146,7 @@ static abi_long do_freebsd_rtprio_thread(int function, lwpid_t lwpid,
     return ret;
 }
 
-static abi_long do_freebsd_getcontext(void *cpu_env, abi_ulong arg1)
+static inline abi_long do_freebsd_getcontext(void *cpu_env, abi_ulong arg1)
 {
     abi_long ret;
     target_ucontext_t *ucp;
@@ -168,7 +169,7 @@ static abi_long do_freebsd_getcontext(void *cpu_env, abi_ulong arg1)
     return ret;
 }
 
-static abi_long do_freebsd_setcontext(void *cpu_env, abi_ulong arg1)
+static inline abi_long do_freebsd_setcontext(void *cpu_env, abi_ulong arg1)
 {
     abi_long ret;
     target_ucontext_t *ucp;
@@ -190,7 +191,7 @@ static abi_long do_freebsd_setcontext(void *cpu_env, abi_ulong arg1)
 }
 
 /* swapcontext(2) */
-static abi_long do_freebsd_swapcontext(void *cpu_env, abi_ulong arg1,
+static inline abi_long do_freebsd_swapcontext(void *cpu_env, abi_ulong arg1,
         abi_ulong arg2)
 {
     abi_long ret;
