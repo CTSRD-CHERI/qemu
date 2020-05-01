@@ -488,7 +488,6 @@
 #define	TARGET_FREEBSD_NR_shm_rename    572
 /* #define	TARGET_FREEBSD_NR_sigfastblock  573 */
 #define	TARGET_FREEBSD_NR___realpathat  574
-/* None of these yet implemented. */
 #define	TARGET_FREEBSD_NR_close_range   575
 #define	TARGET_FREEBSD_NR_MAXSYSCALL	576
 /* Legacy system calls. */

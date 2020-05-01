@@ -151,4 +151,16 @@ static inline abi_long do_bsd_chflagsat(__unused int fd,
 }
 
 #endif /* !  __FreeBSD_version >= 1000000 */
+
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300091
+/* close_range(2) */
+static inline abi_long do_freebsd_close_range(unsigned int lowfd,
+    unsigned int highfd, int flags)
+{
+
+    return (close_range(lowfd, highfd, flags));
+}
+
+#endif /* __FreeBSD_version >= 1300091 */
+
 #endif /* __FREEBSD_OS_FILE_H_ */
