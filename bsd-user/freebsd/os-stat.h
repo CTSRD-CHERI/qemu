@@ -675,6 +675,8 @@ static inline abi_long do_freebsd_fcntl(abi_long arg1, abi_long arg2,
     case TARGET_F_SETFL:
     case TARGET_F_READAHEAD:
     case TARGET_F_RDAHEAD:
+    case TARGET_F_ADD_SEALS:
+    case TARGET_F_GET_SEALS:
     default:
         ret = get_errno(safe_fcntl(arg1, host_cmd, arg3));
         break;

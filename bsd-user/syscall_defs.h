@@ -708,6 +708,9 @@ typedef struct target_freebsd_fhandle target_freebsd_fhandle_t;
 #define TARGET_F_RDAHEAD            16
 #define TARGET_F_DUPFD_CLOEXEC     17
 #define TARGET_F_DUP2FD_CLOEXEC    18
+/* FreeBSD-specific */
+#define TARGET_F_ADD_SEALS          19
+#define TARGET_F_GET_SEALS          20
 
 struct target_freebsd_flock {
     int64_t l_start;

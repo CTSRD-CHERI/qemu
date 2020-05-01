@@ -319,6 +319,16 @@ abi_long target_to_host_fcntl_cmd(int cmd)
         return F_DUP2FD_CLOEXEC;
 #endif
 
+#ifdef F_ADD_SEALS
+    case TARGET_F_ADD_SEALS:
+        return F_ADD_SEALS;
+#endif
+
+#ifdef F_GET_SEALS
+    case TARGET_F_GET_SEALS:
+        return F_GET_SEALS;
+#endif
+
     default:
         return -TARGET_EINVAL;
     }
