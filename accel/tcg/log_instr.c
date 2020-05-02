@@ -132,19 +132,6 @@ static trace_fmt_hooks_t *trace_format = NULL;
 static trace_fmt_hooks_t trace_formats[];
 
 /*
- * target-endiannes bswap helpers
- */
-#ifdef TARGET_WORDS_BIGENDIAN
-#define cpu_to_host16(x) be16_to_cpu(x)
-#define cpu_to_host32(x) be32_to_cpu(x)
-#define cpu_to_host64(x) be64_to_cpu(x)
-#else
-#define cpu_to_host16(x) le16_to_cpu(x)
-#define cpu_to_host32(x) le32_to_cpu(x)
-#define cpu_to_host64(x) le64_to_cpu(x)
-#endif
-
-/*
  * Helper to check whether a tracing mode bit matches int two different masks
  */
 #define loglevel_changed(mask, old, requested)  \
@@ -155,6 +142,8 @@ static trace_fmt_hooks_t trace_formats[];
  * The format is limited to one entry per instruction, each
  * entry can hold at most one register modification and one
  * memory address.
+ * Note that the CHERI format is the legacy MIPS format and
+ * assumes big-endian byte order.
  */
 typedef struct {
     uint8_t entry_type;
@@ -379,8 +368,8 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *log)
     entry.entry_type = CTE_NO_REG;
     entry.thread = (uint8_t)env_cpu(env)->cpu_index;
     entry.asid = (uint8_t)log->asid;
-    entry.pc = cpu_to_host64(log->pc);
-    entry.cycles = cpu_to_host16(cycles++);
+    entry.pc = cpu_to_be64(log->pc);
+    entry.cycles = cpu_to_be16(cycles++);
     entry.inst = *((uint32_t *)&log->insn_bytes[0]);
     /* entry.inst = log->opcode; // TODO(am2419): opcode, how to pick it up? */
     switch (log->flags & LI_FLAG_INTR_MASK) {
@@ -412,15 +401,15 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *log)
                 (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
 
             entry.entry_type = CTE_CAP;
-            entry.val2 = cpu_to_host64(metadata);
-            entry.val3 = cpu_to_host64(cap_get_cursor(cr));
-            entry.val4 = cpu_to_host64(cap_get_base(cr));
-            entry.val5 = cpu_to_host64(cap_get_length64(cr));
+            entry.val2 = cpu_to_be64(metadata);
+            entry.val3 = cpu_to_be64(cap_get_cursor(cr));
+            entry.val4 = cpu_to_be64(cap_get_base(cr));
+            entry.val5 = cpu_to_be64(cap_get_length64(cr));
         } else
 #endif
         {
             entry.entry_type = CTE_GPR;
-            entry.val2 = cpu_to_host64(rinfo->gpr);
+            entry.val2 = cpu_to_be64(rinfo->gpr);
         }
     }
 
@@ -430,7 +419,7 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *log)
         log_assert((minfo->flags & LMI_CAP) == 0 && "Capability memory access "
                    "without CHERI support");
 #endif
-        entry.val1 = cpu_to_host64(minfo->addr);
+        entry.val1 = cpu_to_be64(minfo->addr);
         // Hack to avoid checking for GPR or CAP
         if (minfo->flags & LMI_LD)
             entry.entry_type += 1;
