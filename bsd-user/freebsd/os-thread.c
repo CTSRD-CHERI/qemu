@@ -58,8 +58,12 @@ struct target_umutex {
     uint32_t    m_owner;    /* Owner of the mutex */
     uint32_t    m_flags;    /* Flags of the mutex */
     uint32_t    m_ceiling[2];   /* Priority protect ceiling */
-    uint32_t    m_spare[3];
-    uint32_t    m_count;   /* XXX qemu-only waiters count */
+    abi_ulong   m_rb_lnk;   /* Robust linkage. */
+#if TARGET_ABI_BITS == 32
+    uint32_t    m_pad;
+#endif
+    uint32_t    m_spare;
+    uint32_t    m_count;    /* Qemu-internal; takes one spare. */
 };
 
 struct target_ucond {
