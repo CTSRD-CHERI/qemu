@@ -75,7 +75,7 @@ static bool log_uses_own_buffers;
 
 __attribute__((weak)) void qemu_log_instr_flush_tcg(void);
 __attribute__((weak)) void qemu_log_instr_flush_tcg(void) {
-    // Real implementation in translate-all.c
+    // Real implementation in accel/tcg/log_instr.c
     warn_report("Calling no-op %s\r", __func__);
 }
 

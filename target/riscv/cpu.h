@@ -607,16 +607,11 @@ static inline cpu_log_instr_info_t *cpu_get_log_instr_state(CPURISCVState *env)
     return NULL;
 }
 
-/* TODO(am2419): Document these as required to support a new target.
- * New common log API arch-specific helpers.
- */
 static inline bool cpu_in_user_mode(CPURISCVState *env)
 {
     return env->priv == PRV_U;
 }
 
-// TODO(am2419): deprecate and remove 
-// TODO(am2419) should probably rename as cpu_get_asid()
 static inline unsigned cpu_get_asid(CPURISCVState *env) {
     uint16_t ASID = 0; // TODO: implement?
     return ASID;
