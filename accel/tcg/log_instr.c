@@ -82,7 +82,7 @@
  */
 extern GArray *debug_regions;
 
-struct log_reginfo {
+typedef struct {
     uint16_t flags;
 #define LRI_CAP_REG    1
 #define LRI_HOLDS_CAP  2
@@ -94,13 +94,12 @@ struct log_reginfo {
         cap_register_t cap;
 #endif
     };
-};
-typedef struct log_reginfo log_reginfo_t;
+} log_reginfo_t;
 
 #define reginfo_is_cap(ri) (ri->flags & LRI_CAP_REG)
 #define reginfo_has_cap(ri) (reginfo_is_cap(ri) && (ri->flags & LRI_HOLDS_CAP))
 
-struct log_meminfo {
+typedef struct {
     uint8_t flags;
 #define LMI_LD 1
 #define LMI_ST 2
@@ -113,8 +112,7 @@ struct log_meminfo {
         cap_register_t cap;
 #endif
     };
-};
-typedef struct log_meminfo log_meminfo_t;
+} log_meminfo_t;
 
 struct trace_fmt_hooks {
     void (*emit_header)(CPUArchState *env);
@@ -158,7 +156,7 @@ static trace_fmt_hooks_t trace_formats[];
  * entry can hold at most one register modification and one
  * memory address.
  */
-struct cheri_trace_entry {
+typedef struct {
     uint8_t entry_type;
 #define CTE_NO_REG  0   /* No register is changed. */
 #define CTE_GPR     1   /* GPR change (val2) */
@@ -179,8 +177,7 @@ struct cheri_trace_entry {
     uint64_t val5;
     uint8_t thread;     /* Hardware thread/CPU (i.e. cpu->cpu_index ) */
     uint8_t asid;       /* Address Space ID */
-} __attribute__((packed));
-typedef struct cheri_trace_entry cheri_trace_entry_t;
+} __attribute__((packed)) cheri_trace_entry_t;
 
 /* Version 3 Cheri Stream Trace header info */
 #define CTE_QEMU_VERSION    (0x80U + 3)
