@@ -39,6 +39,10 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 {
     int bp_insn = 0;
     bool plugin_enabled;
+#ifdef CONFIG_TCG_LOG_INSTR
+    /* Local cached copy of the log-enabled check. */
+    const bool log_instr_enabled = qemu_log_instr_enabled(cpu->env_ptr);
+#endif
 
     /* Initialize DisasContext */
     db->tb = tb;
@@ -66,7 +70,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
      * This assumes that the TCG buffer will be flushed on instruction
      * log level changes.
      */
-    db->log_instr_enabled = qemu_log_instr_enabled(cpu->env_ptr);
+    db->log_instr_enabled = log_instr_enabled;
 #endif /* CONFIG_TCG_LOG_INSTR */
 
     /* Reset the temp count so that we can identify leaks */
@@ -105,13 +109,9 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #endif
         ops->insn_start(db, cpu);
 #ifdef CONFIG_TCG_LOG_INSTR
-        /*
-         * TODO(am2419): could move the commit below tr_insn or would we lose something?
-         */
-        if (qemu_log_instr_enabled(cpu->env_ptr)) {
-            /* TODO(am2419): can we merge the commit and instruction log helpers? */
+        /* Commit previous instruction */
+        if (log_instr_enabled) {
             gen_helper_qemu_log_instr_commit(cpu_env);
-            /* gen_helper_qemu_log_instr(cpu_env, tpc, tpc); */
         }
 #endif
         tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
