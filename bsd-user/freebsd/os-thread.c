@@ -920,7 +920,7 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
 abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
 {
     struct target_umutex *target_umutex;
-    uint32_t owner, count, *addr;
+    uint32_t owner, *addr;
 
 
     pthread_mutex_lock(&umtx_wait_lck);
@@ -944,11 +944,6 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
     }
     /* This is a contested lock. Unlock it. */
     __put_user(TARGET_UMUTEX_UNOWNED, &target_umutex->m_owner);
-
-    __get_user(count, &target_umutex->m_count);
-    if (count)
-	count--;
-    __put_user(count, &target_umutex->m_count);
 
     addr = g2h((uintptr_t)&target_umutex->m_owner);
 
