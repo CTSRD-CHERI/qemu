@@ -186,12 +186,12 @@ DEF_HELPER_2(mtc0_rtc64, void, env, i64)
 DEF_HELPER_1(mfc0_coreid, tl, env)
 
 #ifdef CONFIG_TCG_LOG_INSTR
-/* Target dependant-helpers */
-DEF_HELPER_3(mips_log_instr_gpr, void, env, i32, tl)
-DEF_HELPER_4(mips_log_instr_cop0, void, env, i32, i32, tl)
-DEF_HELPER_4(mips_log_instr_hilo, void, env, i32, i32, tl)
-DEF_HELPER_3(mips_log_instr32, void, env, tl, i32)
-DEF_HELPER_1(mips_log_instr_drop, void, env)
+/* Target dependent-helpers */
+DEF_HELPER_FLAGS_3(mips_log_instr_gpr, TCG_CALL_NO_WG, void, env, i32, tl)
+DEF_HELPER_FLAGS_4(mips_log_instr_cop0, TCG_CALL_NO_WG, void, env, i32, i32, tl)
+DEF_HELPER_FLAGS_4(mips_log_instr_hilo, TCG_CALL_NO_WG, void, env, i32, i32, tl)
+DEF_HELPER_FLAGS_3(mips_log_instr32, TCG_CALL_NO_WG, void, env, tl, i32)
+DEF_HELPER_FLAGS_1(mips_log_instr_drop, TCG_CALL_NO_WG, void, env)
 /* Extra MIPS-only helpers */
 DEF_HELPER_2(cheri_debug_message, void, env, i64)
 DEF_HELPER_3(log_value, void, env, cptr, i64)
