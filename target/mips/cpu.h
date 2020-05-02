@@ -6,7 +6,6 @@
 #include "fpu/softfloat-types.h"
 #include "mips-defs.h"
 #include "exec/log.h"
-#include "exec/cpu_log_instr.h"
 
 #ifdef TARGET_CHERI
 #include "cheri_defs.h"
@@ -1224,6 +1223,7 @@ struct CPUMIPSState {
 
 #endif /* TARGET_CHERI */
 
+    /* TODO(am2419): deprecated, remove */
 #ifdef CONFIG_TCG_LOG_INSTR
 #define TRACE_MODE_USER "User mode"
     const char *last_mode;
@@ -1244,11 +1244,6 @@ struct CPUMIPSState {
     QEMUTimer *timer; /* Internal timer */
     struct MIPSITUState *itu;
     MemoryRegion *itc_tag; /* ITC Configuration Tags */
-
-#ifdef CONFIG_TCG_LOG_INSTR
-    /* Instruction logging state */
-    cpu_log_instr_info_t log_info;
-#endif
 
     target_ulong exception_base; /* ExceptionBase input to the core */
 };
@@ -1493,14 +1488,6 @@ static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr, bool 
 static inline bool cpu_in_user_mode(CPUMIPSState *env)
 {
     return ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM);
-}
-
-/*
- * Target-specific hook to fetch the cpu log state
- */
-static inline cpu_log_instr_info_t *cpu_get_log_instr_state(CPUMIPSState *env)
-{
-    return &env->log_info;
 }
 
 static inline unsigned cpu_get_asid(CPUMIPSState *env) {

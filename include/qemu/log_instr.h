@@ -59,6 +59,28 @@ static inline qemu_log_instr_fmt_t qemu_log_instr_get_format()
     return qemu_log_instr_format;
 }
 
+struct cpu_log_instr_info;
+
+/*
+ * Per-cpu logging state.
+ */
+typedef struct {
+    /* CPU tracing user mode only enable flag */
+    bool user_mode_tracing;
+    /*
+     * Opaque handle to the current instruction info
+     * TODO(am2419): It would be interesting to have a ring buffer
+     * of log_instr_info here, so that we can avoid dumping to file
+     * all the time.
+     */
+    struct cpu_log_instr_info *instr_info;
+} cpu_log_instr_state_t;
+
+/*
+ * Initialize instruction logging for a cpu.
+ */
+void qemu_log_instr_init(CPUState *env);
+
 #else /* ! CONFIG_TCG_LOG_INSTR */
 #define qemu_log_instr_set_format(fmt) ((void)0)
 #endif /* ! CONFIG_TCG_LOG_INSTR */

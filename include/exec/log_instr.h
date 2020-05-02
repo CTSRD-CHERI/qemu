@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include "hw/core/cpu.h"
 #include "qemu/log_instr.h"
 #include "cpu_log_instr.h"
 #include "cpu.h"
@@ -100,11 +101,6 @@
 
 
 #ifdef CONFIG_TCG_LOG_INSTR
-
-/*
- * Initialize instruction logging for a cpu.
- */
-void qemu_log_instr_init(CPUArchState *env);
 
 /*
  * Request a flush of the TCG when changing loglevel outside of qemu_log_instr.

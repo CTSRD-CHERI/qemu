@@ -30,6 +30,7 @@
 #include "qemu/queue.h"
 #include "qemu/thread.h"
 #include "qemu/plugin.h"
+#include "qemu/log_instr.h"
 
 typedef int (*WriteCoreDumpFunction)(const void *buf, size_t size,
                                      void *opaque);
@@ -344,6 +345,7 @@ struct qemu_work_item;
  * @ignore_memory_transaction_failures: Cached copy of the MachineState
  *    flag of the same name: allows the board to suppress calling of the
  *    CPU do_transaction_failed hook function.
+ * @log_state: The per-cpu instruction logging state.
  *
  * State of one CPU core or thread.
  */
@@ -447,6 +449,10 @@ struct CPUState {
 
     /* track IOMMUs whose translations we've cached in the TCG TLB */
     GArray *iommu_notifiers;
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    cpu_log_instr_state_t log_state;
+#endif
 };
 
 typedef QTAILQ_HEAD(CPUTailQ, CPUState) CPUTailQ;

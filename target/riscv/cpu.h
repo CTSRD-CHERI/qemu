@@ -22,7 +22,6 @@
 
 #include "hw/core/cpu.h"
 #include "exec/cpu-defs.h"
-#include "exec/cpu_log_instr.h"
 #include "qemu/units.h"
 #include "fpu/softfloat-types.h"
 #include "rvfi_dii.h"
@@ -592,14 +591,6 @@ riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
 #define cpu_get_tb_cpu_state_6 riscv_cpu_get_tb_cpu_state
 
 #ifdef CONFIG_TCG_LOG_INSTR
-/*
- * Target-specific hook to fetch the cpu log state
- */
-static inline cpu_log_instr_info_t *cpu_get_log_instr_state(CPURISCVState *env)
-{
-    return NULL;
-}
-
 static inline bool cpu_in_user_mode(CPURISCVState *env)
 {
     return env->priv == PRV_U;
