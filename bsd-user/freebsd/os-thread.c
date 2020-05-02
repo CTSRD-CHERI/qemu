@@ -436,7 +436,7 @@ abi_long freebsd_umtx_mutex_wake2(abi_ulong target_addr, uint32_t flags)
             __get_user(owner, &target_umutex->m_owner);
         }
     }
-    addr = g2h((uintptr_t)&target_umutex->m_count);
+    addr = g2h((uintptr_t)&target_umutex->m_owner);
     unlock_user(target_umutex, target_addr, 0);
     pthread_mutex_unlock(&umtx_wait_lck);
 
@@ -872,18 +872,27 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         }
 
         /* Set the contested bit and sleep. */
-        if (!tcmpset_32(&target_umutex->m_owner, owner,
+        if ((owner & TARGET_UMUTEX_CONTESTED) == 0) {
+            if (!tcmpset_32(&target_umutex->m_owner, owner,
                     owner | TARGET_UMUTEX_CONTESTED)) {
-            unlock_user_struct(target_umutex, target_addr, 1);
-            pthread_mutex_unlock(&umtx_wait_lck);
-            continue;
+                unlock_user_struct(target_umutex, target_addr, 1);
+                pthread_mutex_unlock(&umtx_wait_lck);
+                continue;
+            }
+
+            /*
+             * Keep our local view of owner consistent with what we think we've
+             * set it to.  We're about to sleep on it, and we don't really want
+             * a spurious return from _umtx_op because of this.
+             */
+            owner |= TARGET_UMUTEX_CONTESTED;
         }
 
         __get_user(count, &target_umutex->m_count);
         count++;
         __put_user(count, &target_umutex->m_count);
 
-        addr = g2h((uintptr_t)&target_umutex->m_count);
+        addr = g2h((uintptr_t)&target_umutex->m_owner);
 
         unlock_user_struct(target_umutex, target_addr, 1);
         pthread_mutex_unlock(&umtx_wait_lck);
@@ -891,7 +900,7 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         DEBUG_UMTX("<WAIT UMUTEX> %s: _umtx_op(%p, %d, 0x%x, %d, %jx) "
                 "count = %d\n", __func__, g2h(target_addr), UMTX_OP_WAIT_PRIVATE,
                 tswap32(target_umutex->m_owner), tsz, (uintmax_t)ts, count);
-       ret = _umtx_wait_uint_private(addr, count, tsz, (void *)ts, __func__);
+       ret = _umtx_wait_uint_private(addr, owner, tsz, (void *)ts, __func__);
        if (ret != 0) {
            /*
             * Decrease count if we failed.  This one will not have a
@@ -941,7 +950,7 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
 	count--;
     __put_user(count, &target_umutex->m_count);
 
-    addr = g2h((uintptr_t)&target_umutex->m_count);
+    addr = g2h((uintptr_t)&target_umutex->m_owner);
 
     unlock_user_struct(target_umutex, target_addr, 1);
     pthread_mutex_unlock(&umtx_wait_lck);
