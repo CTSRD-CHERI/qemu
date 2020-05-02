@@ -45,7 +45,7 @@
  * define the cpu_get_log_buffer() function/macro to retrieve a pointer to
  * the log buffer. The per-cpu log buffer structure is defined below.
  */
-struct cpu_log_instr_info {
+typedef struct cpu_log_instr_info {
     bool user_mode_tracing;
 #define cpu_log_iinfo_startzero force_drop
     bool force_drop;
@@ -78,6 +78,5 @@ struct cpu_log_instr_info {
     GArray *regs;
     /* Extra text-only log */
     GString *txt_buffer;
-};
-typedef struct cpu_log_instr_info cpu_log_instr_info_t;
+} cpu_log_instr_info_t;
 #endif /* CONFIG_TCG_LOG_INSTR */
