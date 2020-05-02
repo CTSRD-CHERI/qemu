@@ -34,7 +34,6 @@
 
 #include "hw/core/cpu.h"
 #include "qemu/log_instr.h"
-#include "cpu_log_instr.h"
 #include "cpu.h"
 
 /*
