@@ -440,7 +440,7 @@ abi_long freebsd_umtx_mutex_wake2(abi_ulong target_addr, uint32_t flags)
     unlock_user(target_umutex, target_addr, 0);
     pthread_mutex_unlock(&umtx_wait_lck);
 
-    return get_errno(safe__umtx_op(addr, UMTX_OP_WAKE_PRIVATE, INT_MAX, NULL, NULL));
+    return get_errno(safe__umtx_op(addr, UMTX_OP_WAKE_PRIVATE, 1, NULL, NULL));
 }
 #endif /* UMTX_OP_MUTEX_WAKE2 */
 #endif /* __FreeBSD_version > 900000 */
@@ -958,7 +958,7 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
     /* And wake up all those contesting it. */
     DEBUG_UMTX("<WAKE> %s: _umtx_op(%p, %d, 0x%x, NULL, NULL)\n",
             __func__, g2h(target_addr), UMTX_OP_WAKE, 0);
-    return get_errno(safe__umtx_op(addr, UMTX_OP_WAKE_PRIVATE, INT_MAX, NULL, NULL));
+    return get_errno(safe__umtx_op(addr, UMTX_OP_WAKE_PRIVATE, 1, NULL, NULL));
 }
 
 /*
