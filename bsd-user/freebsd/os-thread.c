@@ -801,18 +801,18 @@ abi_long freebsd_umtx_mutex_wake(abi_ulong obj, abi_long val)
 abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         void *ts, size_t tsz, int mode)
 {
+    struct target_umutex *target_umutex;
     uint32_t owner, flags, count, *addr;
     int ret = 0;
 
+    pthread_mutex_lock(&umtx_wait_lck);
+
+    if (!lock_user_struct(VERIFY_WRITE, target_umutex, target_addr, 0)) {
+        pthread_mutex_unlock(&umtx_wait_lck);
+        return -TARGET_EFAULT;
+    }
+
     for (;;) {
-        struct target_umutex *target_umutex;
-
-        pthread_mutex_lock(&umtx_wait_lck);
-
-        if (!lock_user_struct(VERIFY_WRITE, target_umutex, target_addr, 0)) {
-            pthread_mutex_unlock(&umtx_wait_lck);
-            return -TARGET_EFAULT;
-        }
 
         __get_user(owner, &target_umutex->m_owner);
 
@@ -841,7 +841,6 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
                     return 0;
                 }
                 /* The lock changed so restart. */
-                unlock_user_struct(target_umutex, target_addr, 1);
                 pthread_mutex_unlock(&umtx_wait_lck);
                 continue;
             }
@@ -875,7 +874,6 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         if ((owner & TARGET_UMUTEX_CONTESTED) == 0) {
             if (!tcmpset_32(&target_umutex->m_owner, owner,
                     owner | TARGET_UMUTEX_CONTESTED)) {
-                unlock_user_struct(target_umutex, target_addr, 1);
                 pthread_mutex_unlock(&umtx_wait_lck);
                 continue;
             }
@@ -900,20 +898,23 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         DEBUG_UMTX("<WAIT UMUTEX> %s: _umtx_op(%p, %d, 0x%x, %d, %jx) "
                 "count = %d\n", __func__, g2h(target_addr), UMTX_OP_WAIT_PRIVATE,
                 tswap32(target_umutex->m_owner), tsz, (uintmax_t)ts, count);
-       ret = _umtx_wait_uint_private(addr, owner, tsz, (void *)ts, __func__);
-       if (ret != 0) {
-           /*
-            * Decrease count if we failed.  This one will not have a
-            * matching wake to account for it.
-            */
-            pthread_mutex_lock(&umtx_wait_lck);
-            __get_user(count, &target_umutex->m_count);
-            count--;
-            __put_user(count, &target_umutex->m_count);
+        ret = _umtx_wait_uint_private(addr, owner, tsz, (void *)ts, __func__);
+        pthread_mutex_lock(&umtx_wait_lck);
+
+        if (!lock_user_struct(VERIFY_WRITE, target_umutex, target_addr, 0)) {
             pthread_mutex_unlock(&umtx_wait_lck);
+            return -TARGET_EFAULT;
+        }
+
+        __get_user(count, &target_umutex->m_count);
+        count--;
+        __put_user(count, &target_umutex->m_count);
+        if (ret != 0) {
             break;
         }
     }
+    unlock_user_struct(target_umutex, target_addr, 1);
+    pthread_mutex_unlock(&umtx_wait_lck);
     return ret;
 }
 
