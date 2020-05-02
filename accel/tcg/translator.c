@@ -40,7 +40,11 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     int bp_insn = 0;
     bool plugin_enabled;
 #ifdef CONFIG_TCG_LOG_INSTR
-    /* Local cached copy of the log-enabled check. */
+    /*
+     * Cache whether we are logging instructions in this tb
+     * This assumes that the TCG buffer will be flushed on instruction
+     * log level changes.
+     */    
     const bool log_instr_enabled = qemu_log_instr_enabled(cpu->env_ptr);
 #endif
 
@@ -66,7 +70,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 #ifdef CONFIG_TCG_LOG_INSTR
     /*
-     * Cache whether we are logging instructions in this tb
+     * Propagate cached log enabled check to disas context.
      * This assumes that the TCG buffer will be flushed on instruction
      * log level changes.
      */
@@ -110,7 +114,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         ops->insn_start(db, cpu);
 #ifdef CONFIG_TCG_LOG_INSTR
         /* Commit previous instruction */
-        if (log_instr_enabled) {
+        if (unlikely(log_instr_enabled)) {
             gen_helper_qemu_log_instr_commit(cpu_env);
         }
 #endif
