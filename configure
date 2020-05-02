@@ -393,7 +393,7 @@ rdma=""
 pvrdma=""
 gprof="no"
 debug_tcg="no"
-cheri_log_instr="yes"
+tcg_log_instr="yes"
 rvfi_dii="no"
 debug="no"
 sanitizers="no"
@@ -1145,9 +1145,9 @@ for opt do
   ;;
   --disable-debug-tcg) debug_tcg="no"
   ;;
-  --enable-cheri-log-instr) cheri_log_instr="yes"
+  --enable-tcg-log-instr) tcg_log_instr="yes"
   ;;
-  --disable-cheri-log-instr) cheri_log_instr="no"
+  --disable-tcg-log-instr) tcg_log_instr="no"
   ;;
   --enable-rvfi-dii) rvfi_dii="yes"
   ;;
@@ -6831,7 +6831,7 @@ fi
 if test "$debug_tcg" = "yes" ; then
   echo "CONFIG_DEBUG_TCG=y" >> $config_host_mak
 fi
-if test "$cheri_log_instr" = "yes" ; then
+if test "$tcg_log_instr" = "yes" ; then
   echo "CONFIG_TCG_LOG_INSTR=y" >> $config_host_mak
 fi
 if test "$rvfi_dii" = "yes" ; then
