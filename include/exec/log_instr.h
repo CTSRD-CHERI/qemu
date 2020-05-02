@@ -154,7 +154,7 @@ void qemu_log_instr_commit(CPUArchState *env);
  * Log changed general purpose register.
  */
 void qemu_log_instr_reg(CPUArchState *env, const char *reg_name,
-                         target_ulong value);
+                        target_ulong value);
 
 /*
  * Log integer memory load.
@@ -173,13 +173,13 @@ void qemu_log_instr_st_int(CPUArchState *env, target_ulong addr, MemOp op,
  * Log changed capability register.
  */
 void qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
-                         const cap_register_t *cr);
+                        const cap_register_t *cr);
 
 /*
  * Log changed capability register with integer value.
  */
 void qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
-                             target_ulong value);
+                            target_ulong value);
 
 /*
  * Log capability memory load.
@@ -222,8 +222,8 @@ void qemu_log_instr_interrupt(CPUArchState *env, uint32_t code, target_ulong vec
  * some trickery to reclaim those.
  */
 void qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
-                         target_ulong arg1, target_ulong arg2,
-                         target_ulong arg3);
+                        target_ulong arg1, target_ulong arg2,
+                        target_ulong arg3);
 
 /*
  * Log extra information as a string. Some logging formats may
