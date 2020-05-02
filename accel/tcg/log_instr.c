@@ -53,12 +53,13 @@
  * log buffer. Once the instruction is fully processed, the target commits the
  * log buffer and depending on the instruction operations and -dfilter options
  * we either flush the buffer or drop it.
- * A central design goal is to deterministically output the main side effect of
- * the instruction (generally the destination register value), other side
- * effects, such as multiple register updates, may be implemented by emitting
- * multiple trace entries, but this is currently unimplemented.
- * Another design goal is to allow tracing of arbitrary events via nops in
- * both the text and binary format.
+ * A central desing goal is to reliably log multiple register updates and memory
+ * accesses performed by an instruction. We also want to allow to log arbitary
+ * events via special no-op instructions. Extra text debug output can also be
+ * appended to the instruction log info.
+ *
+ * The output trace format can be easily changed by implementing a new set of
+ * trace_fmt_hooks.
  *
  * TODO(am2419): how do we deal with orderding in case multiple registers are updated?
  * This is critical to recognize which value goes in which register, and also how to
