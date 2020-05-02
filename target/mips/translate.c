@@ -32235,9 +32235,6 @@ void cpu_mips_realize_env(CPUMIPSState *env)
 {
     env->exception_base = (int32_t)0xBFC00000;
 
-#ifdef CONFIG_TCG_LOG_INSTR
-    qemu_log_instr_init(env);
-#endif
 #ifndef CONFIG_USER_ONLY
     mmu_init(env, env->cpu_model);
 #endif
