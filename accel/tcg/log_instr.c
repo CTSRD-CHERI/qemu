@@ -325,7 +325,7 @@ static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
     int i;
 
     /* Dump ASID before instruction address */
-    qemu_log("[%d:%x] ", env_cpu(env)->cpu_index, iinfo->asid);
+    qemu_log("[%d:%d] ", env_cpu(env)->cpu_index, iinfo->asid);
 
     /* Instruction address + disassembly */
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
