@@ -1073,7 +1073,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         COPY_SPECIAL_REG(env, sepc, SEPCC, pc, PCC);
         env->sbadaddr = tval;
         env->htval = htval;
-        target_ulong stvec = GET_SPECIAL_REG(env, stvec, STCC);
+        target_ulong stvec = GET_SPECIAL_REG_ADDR(env, stvec, STCC);
         target_ulong new_pc = (stvec >> 2 << 2) +
             ((async && (stvec & 3) == 1) ? cause * 4 : 0);
         riscv_update_pc_for_exc_handler(env, &env->STCC, new_pc);
@@ -1121,7 +1121,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         COPY_SPECIAL_REG(env, mepc, MEPCC, pc, PCC);
         env->mbadaddr = tval;
         env->mtval2 = mtval2;
-        target_ulong mtvec = GET_SPECIAL_REG(env, mtvec, MTCC);
+        target_ulong mtvec = GET_SPECIAL_REG_ADDR(env, mtvec, MTCC);
         target_ulong new_pc = (mtvec >> 2 << 2) +
             ((async && (mtvec & 3) == 1) ? cause * 4 : 0);
         riscv_update_pc_for_exc_handler(env, &env->MTCC, new_pc);

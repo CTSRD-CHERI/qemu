@@ -135,7 +135,7 @@ target_ulong helper_sret(CPURISCVState *env, target_ulong cpu_pc_deb)
         riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
     }
 
-    target_ulong retpc = GET_SPECIAL_REG(env, sepc, SEPCC);
+    target_ulong retpc = GET_SPECIAL_REG_ADDR(env, sepc, SEPCC);
 
     if (!riscv_has_ext(env, RVC) && (retpc & 0x3)) {
         riscv_raise_exception(env, RISCV_EXCP_INST_ADDR_MIS, GETPC());
@@ -202,7 +202,7 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
         riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
     }
 
-    target_ulong retpc = GET_SPECIAL_REG(env, mepc, MEPCC);
+    target_ulong retpc = GET_SPECIAL_REG_ADDR(env, mepc, MEPCC);
     if (!riscv_has_ext(env, RVC) && (retpc & 0x3)) {
         riscv_raise_exception(env, RISCV_EXCP_INST_ADDR_MIS, GETPC());
     }

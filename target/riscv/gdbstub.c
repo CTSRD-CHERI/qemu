@@ -285,7 +285,7 @@ int riscv_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
     if (n < 32) {
         return gdb_get_regl(mem_buf, gpr_int_value(env, n));
     } else if (n == 32) {
-        return gdb_get_regl(mem_buf, GET_SPECIAL_REG(env, pc, PCC));
+        return gdb_get_regl(mem_buf, GET_SPECIAL_REG_ARCH(env, pc, PCC));
     }
     return 0;
 }

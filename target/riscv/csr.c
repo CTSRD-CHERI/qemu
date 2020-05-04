@@ -528,7 +528,7 @@ static int write_mie(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_mtvec(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = GET_SPECIAL_REG(env, mtvec, MTCC);
+    *val = GET_SPECIAL_REG_ARCH(env, mtvec, MTCC);
     return 0;
 }
 
@@ -616,7 +616,7 @@ static int write_mscratch(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_mepc(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = GET_SPECIAL_REG(env, mepc, MEPCC);
+    *val = GET_SPECIAL_REG_ARCH(env, mepc, MEPCC);
     return 0;
 }
 
@@ -716,7 +716,7 @@ static int write_sie(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_stvec(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = GET_SPECIAL_REG(env, stvec, STCC);
+    *val = GET_SPECIAL_REG_ARCH(env, stvec, STCC);
     return 0;
 }
 
@@ -764,7 +764,7 @@ static int write_sscratch(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_sepc(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = GET_SPECIAL_REG(env, sepc, SEPCC);
+    *val = GET_SPECIAL_REG_ARCH(env, sepc, SEPCC);
     return 0;
 }
 
@@ -1052,7 +1052,7 @@ static int write_vsie(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_vstvec(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = GET_SPECIAL_REG(env, vstvec, VSTCC);
+    *val = GET_SPECIAL_REG_ARCH(env, vstvec, VSTCC);
     return 0;
 }
 
@@ -1076,7 +1076,7 @@ static int write_vsscratch(CPURISCVState *env, int csrno, target_ulong val)
 
 static int read_vsepc(CPURISCVState *env, int csrno, target_ulong *val)
 {
-    *val = GET_SPECIAL_REG(env, vsepc, VSEPCC);
+    *val = GET_SPECIAL_REG_ARCH(env, vsepc, VSEPCC);
     return 0;
 }
 

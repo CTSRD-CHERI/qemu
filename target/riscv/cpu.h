@@ -309,9 +309,15 @@ struct CPURISCVState {
 // while also pre- venting exceptions when installing trap vectors: something
 // that can be problematic where the task is delegated to a higher privilege
 // level.
+//
+// GET_SPECIAL_REG_ARCH returns the architectural view of the underlying CSR,
+// namely the offset. GET_SPECIAL_REG_ADDR returns the address as we feed our
+// PC around as an address not the architectural offset.
 #ifdef TARGET_CHERI
-#define GET_SPECIAL_REG(env, name, cheri_name)                                 \
+#define GET_SPECIAL_REG_ARCH(env, name, cheri_name)                            \
     ((target_ulong)cap_get_offset(&((env)->cheri_name)))
+#define GET_SPECIAL_REG_ADDR(env, name, cheri_name)                            \
+    ((target_ulong)cap_get_cursor(&((env)->cheri_name)))
 void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
                                     const char *name, target_ulong value);
 #define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
@@ -323,7 +329,8 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         log_changed_capreg(env, #cheri_name, &((env)->cheri_name));            \
     } while (false)
 #else
-#define GET_SPECIAL_REG(env, name, cheri_name) ((env)->name)
+#define GET_SPECIAL_REG_ARCH(env, name, cheri_name) ((env)->name)
+#define GET_SPECIAL_REG_ADDR(env, name, cheri_name) ((env)->name)
 #define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
     do {                                                                       \
         env->name = value;                                                     \

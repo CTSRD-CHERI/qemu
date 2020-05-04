@@ -256,7 +256,7 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 #endif
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc      ", PC_ADDR(env));
 #ifdef TARGET_CHERI
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc (offset) ", GET_SPECIAL_REG(env, pc, PCC));
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc (offset) ", GET_SPECIAL_REG_ARCH(env, pc, PCC));
 #endif
 #ifndef CONFIG_USER_ONLY
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mhartid ", env->mhartid);
@@ -278,15 +278,15 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     if (riscv_has_ext(env, RVH)) {
         qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "hedeleg ", env->hedeleg);
     }
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mtvec   ", GET_SPECIAL_REG(env, mtvec, MTCC));
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "stvec   ", GET_SPECIAL_REG(env, stvec, STCC));
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mtvec   ", GET_SPECIAL_REG_ARCH(env, mtvec, MTCC));
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "stvec   ", GET_SPECIAL_REG_ARCH(env, stvec, STCC));
     if (riscv_has_ext(env, RVH)) {
-        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vstvec  ", GET_SPECIAL_REG(env, vstvec, VSTCC));
+        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vstvec  ", GET_SPECIAL_REG_ARCH(env, vstvec, VSTCC));
     }
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mepc    ", GET_SPECIAL_REG(env, mepc, MEPCC));
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "sepc    ", GET_SPECIAL_REG(env, sepc, SEPCC));
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mepc    ", GET_SPECIAL_REG_ARCH(env, mepc, MEPCC));
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "sepc    ", GET_SPECIAL_REG_ARCH(env, sepc, SEPCC));
     if (riscv_has_ext(env, RVH)) {
-        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vsepc   ", GET_SPECIAL_REG(env, vsepc, VSEPCC));
+        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vsepc   ", GET_SPECIAL_REG_ARCH(env, vsepc, VSEPCC));
     }
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mcause  ", env->mcause);
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "scause  ", env->scause);
@@ -397,7 +397,7 @@ static void rvfi_dii_send_trace(CPURISCVState* env, rvfi_dii_trace_t* trace)
 void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
     static bool rvfi_dii_started = false;
     // Single-step completed -> update PC in the trace buffer
-    env->rvfi_dii_trace.rvfi_dii_pc_wdata = GET_SPECIAL_REG(env, pc, PCC);
+    env->rvfi_dii_trace.rvfi_dii_pc_wdata = GET_SPECIAL_REG_ARCH(env, pc, PCC);
     env->rvfi_dii_trace.rvfi_dii_order++;
 
     // TestRIG expects a zero $pc after a trap:
