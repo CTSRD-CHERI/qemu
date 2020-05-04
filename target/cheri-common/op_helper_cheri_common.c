@@ -417,25 +417,30 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     // encoding space and also means a cbuildcap relative to $ddc can be one
     // instr instead of two.
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+#ifdef TARGET_RISCV
+    uint32_t cb_exc = cb == 0 ? CHERI_EXC_REGNUM_DDC : cb;
+#else
+    uint32_t cb_exc = cb;
+#endif
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
     /*
      * CBuildCap: create capability from untagged register.
      * XXXAM: Note this is experimental and may change.
      */
     if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb_exc);
     } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb_exc);
     } else if (ctp->cr_base < cbp->cr_base) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb_exc);
     } else if (cap_get_top(ctp) > cap_get_top(cbp)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb_exc);
         // } else if (ctp->cr_length < 0) {
         //    raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
-        raise_cheri_exception(env, CapEx_UserDefViolation, cb);
+        raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
     } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
-        raise_cheri_exception(env, CapEx_UserDefViolation, cb);
+        raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
     } else {
         /* XXXAM basic trivial implementation may not handle
          * compressed capabilities fully, does not perform renormalization.
@@ -707,6 +712,11 @@ void CHERI_HELPER_IMPL(cfromptr(CPUArchState *env, uint32_t cd, uint32_t cb,
     // Note: This is also still required for new binaries since clang assumes it
     // can use zero as $ddc in cfromptr/ctoptr
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+#ifdef TARGET_RISCV
+    uint32_t cb_exc = cb == 0 ? CHERI_EXC_REGNUM_DDC : cb;
+#else
+    uint32_t cb_exc = cb;
+#endif
     /*
      * CFromPtr: Create capability from pointer
      */
@@ -714,9 +724,9 @@ void CHERI_HELPER_IMPL(cfromptr(CPUArchState *env, uint32_t cd, uint32_t cb,
         cap_register_t result;
         update_capreg(env, cd, null_capability(&result));
     } else if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, cb_exc);
     } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, cb_exc);
     } else {
         cap_register_t result = *cbp;
         uint64_t new_addr = cbp->cr_base + rt;
@@ -884,11 +894,16 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_capreg_0_is_ddc(env, ct);
     uint64_t cb_cursor = cap_get_cursor(cbp);
+#ifdef TARGET_RISCV
+    uint32_t ct_exc = ct == 0 ? CHERI_EXC_REGNUM_DDC : ct;
+#else
+    uint32_t ct_exc = ct;
+#endif
     /*
      * CToPtr: Capability to Pointer
      */
     if (!ctp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, ct);
+        raise_cheri_exception(env, CapEx_TagViolation, ct_exc);
     } else if (!cbp->cr_tag) {
         return (target_ulong)0;
     } else if (ctp->cr_base > cb_cursor) {
