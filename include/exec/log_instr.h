@@ -195,6 +195,7 @@ void qemu_log_instr_st_cap(CPUArchState *env, target_ulong addr,
 
 /*
  * Log instruction pc and opcode.
+ * Note that the insn buffer is expected to be in target byte-order.
  */
 void qemu_log_instr(CPUArchState *env, target_ulong pc, const char *insn,
                     uint32_t size);

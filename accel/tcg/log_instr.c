@@ -101,11 +101,10 @@ typedef struct cpu_log_instr_info {
 #define LI_FLAG_INTR_ASYNC 2
 #define LI_FLAG_INTR_MASK 0x3
     uint32_t intr_code;
-    // TODO(am2419): should be target_ulong
-    uint64_t intr_vector;
-    uint64_t intr_faultaddr;
+    target_ulong intr_vector;
+    target_ulong intr_faultaddr;
 
-    uint64_t pc;
+    target_ulong pc;
     /* Generic instruction opcode buffer */
     int insn_size;
     char insn_bytes[TARGET_MAX_INSN_SIZE];
@@ -322,35 +321,45 @@ static inline void emit_text_reg(log_reginfo_t *rinfo)
  */
 static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
 {
+    QemuLogFile *logfile;
     int i;
 
-    /* Dump ASID before instruction address */
+    /* Dump CPU-ID:ASID + address */
     qemu_log("[%d:%d] ", env_cpu(env)->cpu_index, iinfo->asid);
 
-    /* Instruction address + disassembly */
-#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    /*
+     * Instruction disassembly, note that we use the instruction info
+     * opcode bytes, without accessing target memory here.
+     */
+    rcu_read_lock();
+    logfile = atomic_rcu_read(&qemu_logfile);
+    if (logfile) {
+        target_disas_buf(logfile->fd, env_cpu(env), iinfo->insn_bytes,
+                         sizeof(iinfo->insn_bytes), iinfo->pc, 1);
+    }
+    rcu_read_unlock();
+
     /*
      * TODO(am2419): what to do with injected instructions?
      * Is the rvfi_dii_trace state valid at log commit?
      */
-    if (env->rvfi_dii_have_injected_insn) {
-        uint32_t insn = env->rvfi_dii_trace.rvfi_dii_insn;
-        target_disas_buf(stderr, env_cpu(env), &insn, sizeof(insn),
-                         PC_ADDR(env), 1);
-    } else
-#endif
-    {
-        log_target_disas(env_cpu(env), iinfo->pc, /*only one*/-1);
-    }
+/* #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII) */
+/*     if (env->rvfi_dii_have_injected_insn) { */
+/*         uint32_t insn = env->rvfi_dii_trace.rvfi_dii_insn; */
+/*         target_disas_buf(stderr, env_cpu(env), &insn, sizeof(insn), */
+/*                          PC_ADDR(env), 1); */
+/*     } else */
+/* #endif */
 
     /* Dump interrupt/exception info */
     switch (iinfo->flags & LI_FLAG_INTR_MASK) {
     case LI_FLAG_INTR_TRAP:
-        qemu_log("--- Exception #%u vector %#016lx fault-addr %#016lx\n",
+        qemu_log("--- Exception #%u vector 0x" TARGET_FMT_lx
+                 " fault-addr 0x" TARGET_FMT_lx "\n",
                  iinfo->intr_code, iinfo->intr_vector, iinfo->intr_faultaddr);
         break;
     case LI_FLAG_INTR_ASYNC:
-        qemu_log("--- Interrupt #%04x vector %#016lx\n",
+        qemu_log("--- Interrupt #%04x vector 0x" TARGET_FMT_lx "\n",
                  iinfo->intr_code, iinfo->intr_vector);
         break;
     default:
@@ -431,25 +440,30 @@ static void emit_cvtrace_header(CPUArchState *env)
 
 /*
  * Emit cvtrace trace entry.
+ * Note: this format is very MIPS-specific.
  */
 static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
 {
     FILE *logfile;
     cheri_trace_entry_t entry;
     static uint16_t cycles = 0; // TODO(am2419): this should be a per-cpu counter.
+    uint32_t *insn = (uint32_t *)&iinfo->insn_bytes[0];
 
     entry.entry_type = CTE_NO_REG;
     entry.thread = (uint8_t)env_cpu(env)->cpu_index;
     entry.asid = (uint8_t)iinfo->asid;
     entry.pc = cpu_to_be64(iinfo->pc);
     entry.cycles = cpu_to_be16(cycles++);
-    entry.inst = *((uint32_t *)&iinfo->insn_bytes[0]);
-    /* entry.inst = iinfo->opcode; // TODO(am2419): opcode, how to pick it up? */
+    /*
+     * TODO(am2419): The instruction bytes are alread in target byte-order, however
+     * cheritrace does not currently expect this.
+     */
+    entry.inst = cpu_to_be32(*insn);
     switch (iinfo->flags & LI_FLAG_INTR_MASK) {
     case LI_FLAG_INTR_TRAP:
         entry.exception = (uint8_t)(iinfo->intr_code & 0xff);
     case LI_FLAG_INTR_ASYNC:
-        entry.exception = 0; // TODO(am2419): this is very MIPS-specific.
+        entry.exception = 0;
     default:
         entry.exception = CTE_EXCEPTION_NONE;
     }
