@@ -903,6 +903,8 @@ void helper_qemu_log_instr_start(CPUArchState *env, target_ulong pc)
 
 void helper_qemu_log_instr_stop(CPUArchState *env, target_ulong pc)
 {
+    /* Commit the stopping instruction in any case */
+    qemu_log_instr_commit(env);
     qemu_log_instr_stop(env, CPU_LOG_INSTR, pc);
 }
 
