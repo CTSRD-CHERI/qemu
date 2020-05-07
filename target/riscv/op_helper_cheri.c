@@ -173,7 +173,7 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
                 recent_pc);
         }
         *scr = new_val;
-        log_changed_capreg(env, scr_info[index].name, scr);
+        cheri_log_instr_changed_capreg(env, scr_info[index].name, scr);
     }
 }
 
