@@ -378,7 +378,7 @@ static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
 
     /* Dump extra logged messages, if any */
     if (iinfo->txt_buffer->len > 0)
-        qemu_log(" %s", iinfo->txt_buffer->str);
+        qemu_log("%s", iinfo->txt_buffer->str);
 }
 
 /*
