@@ -921,14 +921,14 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
 abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
 {
     struct target_umutex *target_umutex;
-    uint32_t owner, *addr;
-
+    uint32_t count, owner, *addr;
 
     pthread_mutex_lock(&umtx_wait_lck);
     if (!lock_user_struct(VERIFY_WRITE, target_umutex, target_addr, 0)) {
         return -TARGET_EFAULT;
     }
     /* Make sure we own this mutex. */
+    __get_user(count, &target_umutex->m_count);
     __get_user(owner, &target_umutex->m_owner);
     if ((owner & ~TARGET_UMUTEX_CONTESTED) != id) {
         unlock_user_struct(target_umutex, target_addr, 1);
@@ -943,8 +943,13 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
             return 0;
         }
     }
+
     /* This is a contested lock. Unlock it. */
-    __put_user(TARGET_UMUTEX_UNOWNED, &target_umutex->m_owner);
+    if (count > 1)
+        __put_user(TARGET_UMUTEX_CONTESTED | TARGET_UMUTEX_UNOWNED,
+                &target_umutex->m_owner);
+    else
+        __put_user(TARGET_UMUTEX_UNOWNED, &target_umutex->m_owner);
 
     addr = g2h((uintptr_t)&target_umutex->m_owner);
 
