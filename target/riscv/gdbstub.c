@@ -18,6 +18,7 @@
 
 #include "qemu/osdep.h"
 #include "exec/gdbstub.h"
+#include "exec/log_instr.h"
 #include "cpu.h"
 #include "helper_utils.h"
 #ifdef TARGET_CHERI

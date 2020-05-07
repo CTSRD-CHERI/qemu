@@ -326,9 +326,9 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
 #define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)        \
     do {                                                                       \
         env->cheri_name = env->new_cheri_reg;                                  \
-        log_changed_capreg(env, #cheri_name, &((env)->cheri_name));            \
+        cheri_log_instr_changed_capreg(env, #cheri_name, &((env)->cheri_name)); \
     } while (false)
-#else
+#else /* ! TARGET_CHERI */
 #define GET_SPECIAL_REG_ARCH(env, name, cheri_name) ((env)->name)
 #define GET_SPECIAL_REG_ADDR(env, name, cheri_name) ((env)->name)
 #define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
@@ -341,11 +341,13 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
         env->name = env->new_reg;                                              \
         log_changed_special_reg(env, #name, ((env)->name));                    \
     } while (false)
-#endif
+#endif /* ! TARGET_CHERI */
+
 #ifdef CONFIG_TCG_LOG_INSTR
-#define log_changed_special_reg(env, name, newval)                             \
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),              \
-                           "  %s <- " TARGET_FMT_lx "\n", name, newval)
+#define log_changed_special_reg(env, name, newval) do { \
+        if (qemu_log_instr_enabled(env))                \
+            qemu_log_instr_reg(env, name, newval);      \
+    } while(0)
 #else
 #define log_changed_special_reg(env, name, newval) ((void)0)
 #endif

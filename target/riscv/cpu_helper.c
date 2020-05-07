@@ -22,6 +22,7 @@
 #include "qemu/main-loop.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
+#include "exec/log_instr.h"
 #include "tcg/tcg-op.h"
 #include "trace.h"
 #include "disas/disas.h"
@@ -1185,6 +1186,6 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
     } else {
         scr->_cr_cursor = new_cursor;
     }
-    log_changed_capreg(env, name, scr);
+    cheri_log_instr_changed_capreg(env, name, scr);
 }
 #endif

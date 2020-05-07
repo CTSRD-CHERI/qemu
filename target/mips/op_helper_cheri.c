@@ -153,7 +153,7 @@ static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) 
             "Installing same $ddc again, not flushing TCG TLB: "
             PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
     }
-    log_changed_capreg(env, mips_cheri_hw_regnames[0], new_ddc);
+    cheri_log_instr_changed_capreg(env, mips_cheri_hw_regnames[0], new_ddc);
 }
 
 target_ulong CHERI_HELPER_IMPL(cbez(CPUArchState *env, uint32_t cb, uint32_t offset))
@@ -520,7 +520,7 @@ void CHERI_HELPER_IMPL(cwritehwr(CPUArchState *env, uint32_t cs, uint32_t hwr))
         env, CP2HWR_BASE_INDEX + hwr, GETPC());
     *cdp = *csp;
     /* Note: DDC updates are logged in update_ddc. */
-    log_changed_capreg(env, mips_cheri_hw_regnames[hwr], csp);
+    cheri_log_instr_changed_capreg(env, mips_cheri_hw_regnames[hwr], csp);
 }
 
 void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
