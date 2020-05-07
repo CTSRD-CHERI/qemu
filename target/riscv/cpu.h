@@ -551,12 +551,16 @@ typedef int (*riscv_csr_write_fn)(CPURISCVState *env, int csrno,
     target_ulong new_value);
 typedef int (*riscv_csr_op_fn)(CPURISCVState *env, int csrno,
     target_ulong *ret_value, target_ulong new_value, target_ulong write_mask);
+typedef void (*riscv_csr_log_update_fn)(CPURISCVState *env, int csrno,
+                                        target_ulong new_value);
 
 typedef struct {
     riscv_csr_predicate_fn predicate;
     riscv_csr_read_fn read;
     riscv_csr_write_fn write;
     riscv_csr_op_fn op;
+    riscv_csr_log_update_fn log_update;
+    const char *csr_name;
 } riscv_csr_operations;
 
 void riscv_get_csr_ops(int csrno, riscv_csr_operations *ops);
@@ -603,9 +607,9 @@ static inline bool cpu_in_user_mode(CPURISCVState *env)
     return env->priv == PRV_U;
 }
 
-static inline unsigned cpu_get_asid(CPURISCVState *env) {
-    uint16_t ASID = 0; // TODO: implement?
-    return ASID;
+static inline unsigned cpu_get_asid(CPURISCVState *env)
+{
+    return get_field(env->satp, SATP_ASID);
 }
 #endif
 

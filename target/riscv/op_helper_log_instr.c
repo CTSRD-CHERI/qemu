@@ -30,57 +30,25 @@
  * SUCH DAMAGE.
  */
 
-#pragma once
+#include "qemu/osdep.h"
+#include "exec/log_instr.h"
+#include "exec/helper-proto.h"
+#include "cpu.h"
 
-/*
- * CPU-independant instruction logging configuration helpers.
- * These are generally used during initialization to setup
- * logging.
- */
-
-#ifdef CONFIG_TCG_LOG_INSTR
-/*
- * Instruction logging format
- */
-typedef enum {
-    QLI_FMT_TEXT = 0,
-    QLI_FMT_CVTRACE = 1
-} qemu_log_instr_fmt_t;
-
-extern qemu_log_instr_fmt_t qemu_log_instr_format;
-
-static inline void qemu_log_instr_set_format(qemu_log_instr_fmt_t fmt)
+void HELPER(riscv_log_gpr_write)(CPURISCVState *env, uint32_t regnum,
+                                 target_ulong value)
 {
-    qemu_log_instr_format = fmt;
+    if (qemu_log_instr_enabled(env)) {
+        // TODO(am2419): should be using qemu_log_isntr_cap_int() when TARGET_CHERI?
+        qemu_log_instr_reg(env, riscv_int_regnames[regnum], value);
+    }
 }
 
-static inline qemu_log_instr_fmt_t qemu_log_instr_get_format()
+void HELPER(riscv_log_instr)(CPURISCVState *env, target_ulong pc,
+                             uint32_t opcode, uint32_t opcode_size)
 {
-    return qemu_log_instr_format;
+    if (qemu_log_instr_enabled(env)) {
+        qemu_log_instr_asid(env, cpu_get_asid(env));
+        qemu_log_instr(env, pc, (char *)&opcode, opcode_size);
+    }
 }
-
-struct cpu_log_instr_info;
-
-/*
- * Per-cpu logging state.
- */
-typedef struct {
-    /* CPU tracing user mode only enable flag */
-    bool user_mode_tracing;
-    /*
-     * Opaque handle to the current instruction info
-     * TODO(am2419): It would be interesting to have a ring buffer
-     * of log_instr_info here, so that we can avoid dumping to file
-     * all the time.
-     */
-    struct cpu_log_instr_info *instr_info;
-} cpu_log_instr_state_t;
-
-/*
- * Initialize instruction logging for a cpu.
- */
-void qemu_log_instr_init(CPUState *env);
-
-#else /* ! CONFIG_TCG_LOG_INSTR */
-#define qemu_log_instr_set_format(fmt) ((void)0)
-#endif /* ! CONFIG_TCG_LOG_INSTR */
