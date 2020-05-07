@@ -278,6 +278,43 @@ static void gen_sltu(TCGv ret, TCGv s1, TCGv s2)
 
 static bool trans_slti(DisasContext *ctx, arg_slti *a)
 {
+#ifdef CONFIG_TCG_LOG_INSTR
+    /*
+     * If instruction tracing is enabled, we use addi zero, zero, <magic>
+     * to perform magic-nop tracing control operations.
+     * These will trigger a flush of the TCG buffer, so prepare to resume
+     * from next instruction.
+     */
+    if (unlikely(a->rd == 0)) {
+        TCGv tpc = tcg_const_tl(ctx->base.pc_next);
+        /* gen_update_cpu_pc(ctx->base.pc_next); */
+        switch (a->imm) {
+        case 0x1b:
+            gen_helper_qemu_log_instr_start(cpu_env, tpc);
+            ctx->base.is_jmp = DISAS_NORETURN;
+            break;
+        case 0x1e:
+            gen_helper_qemu_log_instr_stop(cpu_env, tpc);
+            ctx->base.is_jmp = DISAS_NORETURN;
+            break;
+        case 0x2b:
+            gen_helper_qemu_log_instr_user_start(cpu_env, tpc);
+            ctx->base.is_jmp = DISAS_NORETURN;
+            break;
+        case 0x2e:
+            gen_helper_qemu_log_instr_user_stop(cpu_env, tpc);
+            ctx->base.is_jmp = DISAS_NORETURN;
+            break;
+        }
+        tcg_temp_free(tpc);
+
+        if (ctx->base.is_jmp != DISAS_NEXT) {
+            gen_update_cpu_pc(ctx->pc_succ_insn);
+            exit_tb(ctx);
+            return true;
+        }
+    }
+#endif
     return gen_arith_imm_tl(ctx, a, &gen_slt);
 }
 
