@@ -22,6 +22,7 @@
 #include "cpu.h"
 #include "qemu/main-loop.h"
 #include "exec/exec-all.h"
+#include "exec/log_instr.h"
 #ifdef TARGET_CHERI
 #include "cheri-helper-utils.h"
 #endif
@@ -1156,6 +1157,13 @@ static int read_pmpcfg(CPURISCVState *env, int csrno, target_ulong *val)
 static int write_pmpcfg(CPURISCVState *env, int csrno, target_ulong val)
 {
     pmpcfg_csr_write(env, csrno - CSR_PMPCFG0, val);
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (qemu_log_instr_enabled(env)) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "pmpcfg%d", csrno - CSR_PMPCFG0);
+        qemu_log_instr_reg(env, buf, val);
+    }
+#endif
     return 0;
 }
 
@@ -1168,6 +1176,13 @@ static int read_pmpaddr(CPURISCVState *env, int csrno, target_ulong *val)
 static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
 {
     pmpaddr_csr_write(env, csrno - CSR_PMPADDR0, val);
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (qemu_log_instr_enabled(env)) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "pmpaddr%d", csrno - CSR_PMPCFG0);
+        qemu_log_instr_reg(env, buf, val);
+    }
+#endif
     return 0;
 }
 
@@ -1237,14 +1252,6 @@ static inline bool csr_needs_asr(CPURISCVState *env, int csrno) {
 }
 #endif
 
-#ifdef CONFIG_TCG_LOG_INSTR
-#define log_changed_csr(env, csrno, newval)                                    \
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),              \
-                           "  csr_%d <- " TARGET_FMT_lx "\n", csrno, newval)
-#else
-#define log_changed_csr(env, name, newval) ((void)0)
-#endif
-
 /*
  * riscv_csrrw - read and/or update control and status register
  *
@@ -1311,9 +1318,11 @@ int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
     /* execute combined read/write operation if it exists */
     if (csr_ops[csrno].op) {
         ret = csr_ops[csrno].op(env, csrno, ret_value, new_value, write_mask);
-        if (ret >= 0) {
-            log_changed_csr(env, csrno, new_value);
+#ifdef CONFIG_TCG_LOG_INSTR
+        if (ret >= 0 && csr_ops[csrno].log_update) {
+            csr_ops[csrno].log_update(env, csrno, new_value);
         }
+#endif
         return ret;
     }
 
@@ -1336,7 +1345,10 @@ int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
             if (ret < 0) {
                 return ret;
             }
-            log_changed_csr(env, csrno, new_value);
+#ifdef CONFIG_TCG_LOG_INSTR
+            if (csr_ops[csrno].log_update)
+                csr_ops[csrno].log_update(env, csrno, new_value);
+#endif
         }
     }
 
@@ -1366,129 +1378,181 @@ int riscv_csrrw_debug(CPURISCVState *env, int csrno, target_ulong *ret_value,
     return ret;
 }
 
+/*
+ * Helper to log a changed CSR register for the current instruction.
+ */
+#ifdef CONFIG_TCG_LOG_INSTR
+static void log_changed_csr(CPURISCVState *env, int csrno,
+                            target_ulong value)
+{
+    if (qemu_log_instr_enabled(env)) {
+        qemu_log_instr_reg(env, csr_ops[csrno].csr_name, value);
+    }
+}
+#else
+#define log_changed_csr(env, name, newval) (NULL)
+#endif
+
+/* Define csr_ops entry for read-only CSR register */
+#define CSR_OP_FN_R(pred, readfn, name)                            \
+    {.predicate=pred, .read=readfn, .write=NULL, .op=NULL,         \
+     .log_update=NULL, .csr_name=name}
+
+/* Shorthand for functions following the read_<csr> pattern */
+#define CSR_OP_R(pred, name)                                    \
+    CSR_OP_FN_R(pred, glue(read_, name), stringify(name))
+
+/* Internal - use CSR_OP_FN_RW, CSR_OP_RW and CSR_OP_NOLOG_RW */
+#define _CSR_OP_FN_RW(pred, readfn, writefn, logfn, name)          \
+    {.predicate=pred, .read=readfn, .write=writefn,                \
+     .op=NULL, .log_update=logfn, .csr_name=name}
+
+/* Define csr_ops entry for read-write CSR register */
+#define CSR_OP_FN_RW(pred, readfn, writefn, name)                  \
+    _CSR_OP_FN_RW(pred, readfn, writefn, log_changed_csr, name)
+
+/* Shorthand for functions following the read/write_<csr> pattern */
+#define CSR_OP_RW(pred, name)                                      \
+    CSR_OP_FN_RW(pred, glue(read_, name), glue(write_, name),      \
+                 stringify(name))
+
+/*
+ * Shorthand for functions following the read/write_<csr> pattern,
+ * with custom write logging.
+ */
+#define CSR_OP_NOLOG_RW(pred, name)                                \
+    _CSR_OP_FN_RW(pred, glue(read_, name), glue(write_, name),     \
+                  NULL, stringify(name))
+
+/* Define csr_ops entry for read-modify-write CSR register */
+#define CSR_OP_RMW(pred, name)                                     \
+    {.predicate=pred, .read=NULL, .write=NULL,                     \
+     .op=glue(rmw_, name), .log_update=log_changed_csr,            \
+     .csr_name=stringify(name)}
+
 /* Control and Status Register function table */
 static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
     /* User Floating-Point CSRs */
-    [CSR_FFLAGS] =              { fs,   read_fflags,      write_fflags      },
-    [CSR_FRM] =                 { fs,   read_frm,         write_frm         },
-    [CSR_FCSR] =                { fs,   read_fcsr,        write_fcsr        },
+    [CSR_FFLAGS] =              CSR_OP_RW(fs, fflags),
+    [CSR_FRM] =                 CSR_OP_RW(fs, frm),
+    [CSR_FCSR] =                CSR_OP_RW(fs, fcsr),
 
     /* User Timers and Counters */
-    [CSR_CYCLE] =               { ctr,  read_instret                        },
-    [CSR_INSTRET] =             { ctr,  read_instret                        },
+    [CSR_CYCLE] =               CSR_OP_FN_R(ctr, read_instret, "cycle"),
+    [CSR_INSTRET] =             CSR_OP_FN_R(ctr, read_instret, "instret"),
 #if defined(TARGET_RISCV32)
-    [CSR_CYCLEH] =              { ctr,  read_instreth                       },
-    [CSR_INSTRETH] =            { ctr,  read_instreth                       },
+    [CSR_CYCLEH] =              CSR_OP_FN_R(ctr, read_instreth, "cycleh"),
+    [CSR_INSTRETH] =            CSR_OP_FN_R(ctr, read_instreth, "instreth"),
 #endif
 
     /* In privileged mode, the monitor will have to emulate TIME CSRs only if
      * rdtime callback is not provided by machine/platform emulation */
-    [CSR_TIME] =                { ctr,  read_time                           },
+    [CSR_TIME] =                CSR_OP_R(ctr, time),
 #if defined(TARGET_RISCV32)
-    [CSR_TIMEH] =               { ctr,  read_timeh                          },
+    [CSR_TIMEH] =               CSR_OP_R(ctr, timeh),
 #endif
 
 #if !defined(CONFIG_USER_ONLY)
     /* Machine Timers and Counters */
-    [CSR_MCYCLE] =              { any,  read_instret                        },
-    [CSR_MINSTRET] =            { any,  read_instret                        },
+    [CSR_MCYCLE] =              CSR_OP_FN_R(any, read_instret, "mcycle"),
+    [CSR_MINSTRET] =            CSR_OP_FN_R(any, read_instret, "minstret"),
 #if defined(TARGET_RISCV32)
-    [CSR_MCYCLEH] =             { any,  read_instreth                       },
-    [CSR_MINSTRETH] =           { any,  read_instreth                       },
+    [CSR_MCYCLEH] =             CSR_OP_FN_R(any, read_instreth, "mcycleh"),
+    [CSR_MINSTRETH] =           CSR_OP_FN_R(any, read_instreth, "minstreth"),
 #endif
 
     /* Machine Information Registers */
-    [CSR_MVENDORID] =           { any,  read_zero                           },
-    [CSR_MARCHID] =             { any,  read_zero                           },
-    [CSR_MIMPID] =              { any,  read_zero                           },
-    [CSR_MHARTID] =             { any,  read_mhartid                        },
+    [CSR_MVENDORID] =           CSR_OP_FN_R(any, read_zero, "mvendorid"),
+    [CSR_MARCHID] =             CSR_OP_FN_R(any, read_zero, "marchid"),
+    [CSR_MIMPID] =              CSR_OP_FN_R(any, read_zero, "mimppid"),
+    [CSR_MHARTID] =             CSR_OP_R(any, mhartid),
 
     /* Machine Trap Setup */
-    [CSR_MSTATUS] =             { any,  read_mstatus,     write_mstatus     },
-    [CSR_MISA] =                { any,  read_misa,        write_misa        },
-    [CSR_MIDELEG] =             { any,  read_mideleg,     write_mideleg     },
-    [CSR_MEDELEG] =             { any,  read_medeleg,     write_medeleg     },
-    [CSR_MIE] =                 { any,  read_mie,         write_mie         },
-    [CSR_MTVEC] =               { any,  read_mtvec,       write_mtvec       },
-    [CSR_MCOUNTEREN] =          { any,  read_mcounteren,  write_mcounteren  },
+    [CSR_MSTATUS] =             CSR_OP_RW(any, mstatus),
+    [CSR_MISA] =                CSR_OP_RW(any, misa),
+    [CSR_MIDELEG] =             CSR_OP_RW(any, mideleg),
+    [CSR_MEDELEG] =             CSR_OP_RW(any, medeleg),
+    [CSR_MIE] =                 CSR_OP_RW(any, mie),
+    [CSR_MTVEC] =               CSR_OP_RW(any, mtvec),
+    [CSR_MCOUNTEREN] =          CSR_OP_RW(any, mcounteren),
 
 #if defined(TARGET_RISCV32)
-    [CSR_MSTATUSH] =            { any,  read_mstatush,    write_mstatush    },
+    [CSR_MSTATUSH] =            CSR_OP_RW(any, mstatush),
 #endif
 
     /* Legacy Counter Setup (priv v1.9.1) */
-    [CSR_MUCOUNTEREN] =         { any,  read_mucounteren, write_mucounteren },
-    [CSR_MSCOUNTEREN] =         { any,  read_mscounteren, write_mscounteren },
+    [CSR_MUCOUNTEREN] =         CSR_OP_RW(any, mucounteren),
+    [CSR_MSCOUNTEREN] =         CSR_OP_RW(any, mscounteren),
 
     /* Machine Trap Handling */
-    [CSR_MSCRATCH] =            { any,  read_mscratch,    write_mscratch    },
-    [CSR_MEPC] =                { any,  read_mepc,        write_mepc        },
-    [CSR_MCAUSE] =              { any,  read_mcause,      write_mcause      },
-    [CSR_MBADADDR] =            { any,  read_mbadaddr,    write_mbadaddr    },
-    [CSR_MIP] =                 { any,  NULL,     NULL,     rmw_mip         },
+    [CSR_MSCRATCH] =            CSR_OP_RW(any, mscratch),
+    [CSR_MEPC] =                CSR_OP_RW(any, mepc),
+    [CSR_MCAUSE] =              CSR_OP_RW(any, mcause),
+    [CSR_MBADADDR] =            CSR_OP_RW(any, mbadaddr),
+    [CSR_MIP] =                 CSR_OP_RMW(any, mip),
 
     /* Supervisor Trap Setup */
-    [CSR_SSTATUS] =             { smode, read_sstatus,     write_sstatus     },
-    [CSR_SIE] =                 { smode, read_sie,         write_sie         },
-    [CSR_STVEC] =               { smode, read_stvec,       write_stvec       },
-    [CSR_SCOUNTEREN] =          { smode, read_scounteren,  write_scounteren  },
+    [CSR_SSTATUS] =             CSR_OP_RW(smode, sstatus),
+    [CSR_SIE] =                 CSR_OP_RW(smode, sie),
+    [CSR_STVEC] =               CSR_OP_RW(smode, stvec),
+    [CSR_SCOUNTEREN] =          CSR_OP_RW(smode, scounteren),
 
     /* Supervisor Trap Handling */
-    [CSR_SSCRATCH] =            { smode, read_sscratch,    write_sscratch    },
-    [CSR_SEPC] =                { smode, read_sepc,        write_sepc        },
-    [CSR_SCAUSE] =              { smode, read_scause,      write_scause      },
-    [CSR_SBADADDR] =            { smode, read_sbadaddr,    write_sbadaddr    },
-    [CSR_SIP] =                 { smode, NULL,     NULL,     rmw_sip         },
+    [CSR_SSCRATCH] =            CSR_OP_RW(smode, sscratch),
+    [CSR_SEPC] =                CSR_OP_RW(smode, sepc),
+    [CSR_SCAUSE] =              CSR_OP_RW(smode, scause),
+    [CSR_SBADADDR] =            CSR_OP_RW(smode, sbadaddr),
+    [CSR_SIP] =                 CSR_OP_RMW(smode, sip),
 
     /* Supervisor Protection and Translation */
-    [CSR_SATP] =                { smode, read_satp,        write_satp        },
+    [CSR_SATP] =                CSR_OP_RW(smode, satp),
 
-    [CSR_HSTATUS] =             { hmode,   read_hstatus,     write_hstatus    },
-    [CSR_HEDELEG] =             { hmode,   read_hedeleg,     write_hedeleg    },
-    [CSR_HIDELEG] =             { hmode,   read_hideleg,     write_hideleg    },
-    [CSR_HIP] =                 { hmode,   NULL,     NULL,     rmw_hip        },
-    [CSR_HIE] =                 { hmode,   read_hie,         write_hie        },
-    [CSR_HCOUNTEREN] =          { hmode,   read_hcounteren,  write_hcounteren },
-    [CSR_HTVAL] =               { hmode,   read_htval,       write_htval      },
-    [CSR_HTINST] =              { hmode,   read_htinst,      write_htinst     },
-    [CSR_HGATP] =               { hmode,   read_hgatp,       write_hgatp      },
-    [CSR_HTIMEDELTA] =          { hmode,   read_htimedelta,  write_htimedelta },
+    [CSR_HSTATUS] =             CSR_OP_RW(hmode, hstatus),
+    [CSR_HEDELEG] =             CSR_OP_RW(hmode, hedeleg),
+    [CSR_HIDELEG] =             CSR_OP_RW(hmode, hideleg),
+    [CSR_HIP] =                 CSR_OP_RMW(hmode, hip),
+    [CSR_HIE] =                 CSR_OP_RW(hmode, hie),
+    [CSR_HCOUNTEREN] =          CSR_OP_RW(hmode, hcounteren),
+    [CSR_HTVAL] =               CSR_OP_RW(hmode, htval),
+    [CSR_HTINST] =              CSR_OP_RW(hmode, htinst),
+    [CSR_HGATP] =               CSR_OP_RW(hmode, hgatp),
+    [CSR_HTIMEDELTA] =          CSR_OP_RW(hmode, htimedelta),
 #if defined(TARGET_RISCV32)
-    [CSR_HTIMEDELTAH] =         { hmode,   read_htimedeltah, write_htimedeltah},
+    [CSR_HTIMEDELTAH] =         CSR_OP_RW(hmode, htimedeltah),
 #endif
 
-    [CSR_VSSTATUS] =            { hmode,   read_vsstatus,    write_vsstatus   },
-    [CSR_VSIP] =                { hmode,   NULL,     NULL,     rmw_vsip       },
-    [CSR_VSIE] =                { hmode,   read_vsie,        write_vsie       },
-    [CSR_VSTVEC] =              { hmode,   read_vstvec,      write_vstvec     },
-    [CSR_VSSCRATCH] =           { hmode,   read_vsscratch,   write_vsscratch  },
-    [CSR_VSEPC] =               { hmode,   read_vsepc,       write_vsepc      },
-    [CSR_VSCAUSE] =             { hmode,   read_vscause,     write_vscause    },
-    [CSR_VSTVAL] =              { hmode,   read_vstval,      write_vstval     },
-    [CSR_VSATP] =               { hmode,   read_vsatp,       write_vsatp      },
+    [CSR_VSSTATUS] =            CSR_OP_RW(hmode, vsstatus),
+    [CSR_VSIP] =                CSR_OP_RMW(hmode, vsip),
+    [CSR_VSIE] =                CSR_OP_RW(hmode, vsie),
+    [CSR_VSTVEC] =              CSR_OP_RW(hmode, vstvec),
+    [CSR_VSSCRATCH] =           CSR_OP_RW(hmode, vsscratch),
+    [CSR_VSEPC] =               CSR_OP_RW(hmode, vsepc),
+    [CSR_VSCAUSE] =             CSR_OP_RW(hmode, vscause),
+    [CSR_VSTVAL] =              CSR_OP_RW(hmode, vstval),
+    [CSR_VSATP] =               CSR_OP_RW(hmode, vsatp),
 
-    [CSR_MTVAL2] =              { hmode,   read_mtval2,      write_mtval2     },
-    [CSR_MTINST] =              { hmode,   read_mtinst,      write_mtinst     },
+    [CSR_MTVAL2] =              CSR_OP_RW(hmode, mtval2),
+    [CSR_MTINST] =              CSR_OP_RW(hmode, mtinst),
 
 #ifdef TARGET_CHERI
     // CHERI CSRs: For now we alway report the same values and don't allow
     // turning off any of the bits
-    [CSR_UCCSR] =               { umode, read_ccsr, write_ccsr},
-    [CSR_SCCSR] =               { smode,  read_ccsr,write_ccsr },
-    [CSR_MCCSR] =               { any,  read_ccsr, write_ccsr },
+    [CSR_UCCSR] =               CSR_OP_FN_RW(umode, read_ccsr, write_ccsr, "uccsr"),
+    [CSR_SCCSR] =               CSR_OP_FN_RW(smode, read_ccsr, write_ccsr, "sccsr"),
+    [CSR_MCCSR] =               CSR_OP_FN_RW(any, read_ccsr, write_ccsr, "mccsr"),
 #endif
 
     /* Physical Memory Protection */
-    [CSR_PMPCFG0  ... CSR_PMPADDR9] =  { pmp,   read_pmpcfg,  write_pmpcfg   },
-    [CSR_PMPADDR0 ... CSR_PMPADDR15] = { pmp,   read_pmpaddr, write_pmpaddr  },
+    [CSR_PMPCFG0  ... CSR_PMPADDR9] =  CSR_OP_NOLOG_RW(pmp, pmpcfg),
+    [CSR_PMPADDR0 ... CSR_PMPADDR15] = CSR_OP_NOLOG_RW(pmp, pmpaddr),
 
     /* Performance Counters */
-    [CSR_HPMCOUNTER3   ... CSR_HPMCOUNTER31] =    { ctr,  read_zero          },
-    [CSR_MHPMCOUNTER3  ... CSR_MHPMCOUNTER31] =   { any,  read_zero          },
-    [CSR_MHPMEVENT3    ... CSR_MHPMEVENT31] =     { any,  read_zero          },
+    [CSR_HPMCOUNTER3   ... CSR_HPMCOUNTER31] =    CSR_OP_FN_R(ctr, read_zero, "hpmcounterN"),
+    [CSR_MHPMCOUNTER3  ... CSR_MHPMCOUNTER31] =   CSR_OP_FN_R(ctr, read_zero, "mhpmcounterN"),
+    [CSR_MHPMEVENT3    ... CSR_MHPMEVENT31] =     CSR_OP_FN_R(ctr, read_zero, "mhpmeventN"),
 #if defined(TARGET_RISCV32)
-    [CSR_HPMCOUNTER3H  ... CSR_HPMCOUNTER31H] =   { ctr,  read_zero          },
-    [CSR_MHPMCOUNTER3H ... CSR_MHPMCOUNTER31H] =  { any,  read_zero          },
+    [CSR_HPMCOUNTER3H  ... CSR_HPMCOUNTER31H] =   CSR_OP_FN_R(ctr, read_zero, "hpmcounterNh"),
+    [CSR_MHPMCOUNTER3H ... CSR_MHPMCOUNTER31H] =  CSR_OP_FN_R(ctr, read_zero, "mhpmcounterNh"),
 #endif
 #endif /* !CONFIG_USER_ONLY */
 };

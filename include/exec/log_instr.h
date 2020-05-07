@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2020 (holder)
+ * Copyright (c) 2020 Alfredo Mazzinghi
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory (Department of Computer Science and

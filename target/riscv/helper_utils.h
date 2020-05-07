@@ -50,7 +50,8 @@ static inline void gpr_set_int_value(CPUArchState *env, unsigned reg,
     env->gpr[reg] = value;
 #endif
 #if defined(CONFIG_TCG_LOG_INSTR)
-    helper_log_gpr_write(reg, value, cpu_get_recent_pc(env));
+    // TODO(am2419): should be using qemu_log_isntr_cap_int()?
+    helper_riscv_log_gpr_write(env, reg, value);
 #endif
 }
 
