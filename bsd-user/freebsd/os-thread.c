@@ -849,15 +849,6 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
             return -TARGET_EBUSY;
         }
 
-        /*
-         * If we caught a signal, we have retried and now
-         * exit immediately.
-         */
-        if (is_error(ret)) {
-            unlock_user_struct(target_umutex, target_addr, 1);
-            return ret;
-        }
-
         /* Set the contested bit and sleep. */
         if ((owner & TARGET_UMUTEX_CONTESTED) == 0) {
             if (!tcmpset_32(&target_umutex->m_owner, owner,
