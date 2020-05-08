@@ -414,26 +414,15 @@ abi_long freebsd_umtx_mutex_wake2(abi_ulong target_addr, uint32_t flags)
     }
     pthread_mutex_lock(&umtx_wait_lck);
     __get_user(count, &target_umutex->m_count);
-    if (count > 1) {
-        __get_user(owner, &target_umutex->m_owner);
-        while ((owner & TARGET_UMUTEX_CONTESTED) == 0) {
-            if (tcmpset_32(&target_umutex->m_owner, owner,
-                        (owner | TARGET_UMUTEX_CONTESTED)))
-                break;
+    __get_user(owner, &target_umutex->m_owner);
+    while ((owner & TARGET_UMUTEX_CONTESTED) == 0 && (count > 1 ||
+            (count == 1 && (owner & ~TARGET_UMUTEX_CONTESTED) != 0))) {
+        if (tcmpset_32(&target_umutex->m_owner, owner,
+                    (owner | TARGET_UMUTEX_CONTESTED)))
+            break;
 
-            /* owner has changed */
-            __get_user(owner, &target_umutex->m_owner);
-        }
-    } else if (count == 1) {
+        /* owner has changed */
         __get_user(owner, &target_umutex->m_owner);
-        while ((owner & ~TARGET_UMUTEX_CONTESTED) != 0 &&
-                (owner & TARGET_UMUTEX_CONTESTED) == 0) {
-            if (tcmpset_32(&target_umutex->m_owner, owner,
-                        (owner | TARGET_UMUTEX_CONTESTED)))
-                break;
-            /* owner has changed */
-            __get_user(owner, &target_umutex->m_owner);
-        }
     }
     pthread_mutex_unlock(&umtx_wait_lck);
     addr = g2h((uintptr_t)&target_umutex->m_owner);
@@ -811,30 +800,31 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
     for (;;) {
 
         __get_user(owner, &target_umutex->m_owner);
-        if (TARGET_UMUTEX_WAIT == mode) {
-            if (TARGET_UMUTEX_UNOWNED == owner ||
-                    TARGET_UMUTEX_CONTESTED == owner) {
-                unlock_user_struct(target_umutex, target_addr, 1);
-                return 0;
-            }
-        } else {
-            if (tcmpset_32(&target_umutex->m_owner, TARGET_UMUTEX_UNOWNED,
-                        id)) {
-                /* The acquired succeeded. */
+
+        if ((owner & ~TARGET_UMUTEX_CONTESTED) == 0) {
+            /* Lock is unowned. */
+            if (TARGET_UMUTEX_WAIT == mode) {
+                /* Waiting on an unlocked mutex; bail out. */
                 unlock_user_struct(target_umutex, target_addr, 1);
                 return 0;
             }
 
-            /* If no one owns it but it is contested try to acquire it. */
-            if (TARGET_UMUTEX_CONTESTED == owner) {
-                if (tcmpset_32(&target_umutex->m_owner, TARGET_UMUTEX_CONTESTED,
-                            id | TARGET_UMUTEX_CONTESTED)) {
-                    unlock_user_struct(target_umutex, target_addr, 1);
-                    return 0;
-                }
-                /* The lock changed so restart. */
-                continue;
+            /* Attempt to acquire it, preserve the contested bit ("owner"). */
+            while ((owner & ~TARGET_UMUTEX_CONTESTED) == 0 &&
+                    !tcmpset_32(&target_umutex->m_owner, owner, owner | id)) {
+                __get_user(owner, &target_umutex->m_owner);
             }
+
+            if ((owner & ~TARGET_UMUTEX_CONTESTED) == 0) {
+                /*
+                 * The acquire succeeded, because we didn't observe owner with
+                 * a different id.
+                 */
+                unlock_user_struct(target_umutex, target_addr, 1);
+                return 0;
+            }
+
+            /* Otherwise, someone beat us to it; carry on. */
         }
 
         __get_user(flags, &target_umutex->m_flags);
@@ -850,19 +840,25 @@ abi_long freebsd_lock_umutex(abi_ulong target_addr, uint32_t id,
         }
 
         /* Set the contested bit and sleep. */
-        if ((owner & TARGET_UMUTEX_CONTESTED) == 0) {
-            if (!tcmpset_32(&target_umutex->m_owner, owner,
+        while ((owner & TARGET_UMUTEX_CONTESTED) == 0) {
+            if (tcmpset_32(&target_umutex->m_owner, owner,
                     owner | TARGET_UMUTEX_CONTESTED)) {
-                continue;
-            }
+                /*
+                 * Keep our local view of owner consistent with what we think
+                 * we've set it to.  We're about to sleep on it, and we don't
+                 * really want a spurious return from _umtx_op because of this.
+                 */
+                owner |= TARGET_UMUTEX_CONTESTED;
 
-            /*
-             * Keep our local view of owner consistent with what we think we've
-             * set it to.  We're about to sleep on it, and we don't really want
-             * a spurious return from _umtx_op because of this.
-             */
-            owner |= TARGET_UMUTEX_CONTESTED;
+                break;
+            } else {
+                __get_user(owner, &target_umutex->m_count);
+            }
         }
+
+        /* If it changed during the above loop, we may be able to acquire now. */
+        if ((owner & ~TARGET_UMUTEX_CONTESTED) == 0)
+            continue;
 
         pthread_mutex_lock(&umtx_wait_lck);
         __get_user(count, &target_umutex->m_count);
