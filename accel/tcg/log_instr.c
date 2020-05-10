@@ -212,7 +212,7 @@ typedef struct {
 #define CTE_LD_CAP  12  /* Load Cap (val2,val3,val4,val5) from addr (val1) */
 #define CTE_ST_CAP  13  /* Store Cap (val2,val3,val4,val5) to addr (val1) */
     uint8_t exception;  /* 0=none, 1=TLB Mod, 2=TLB Load, 3=TLB Store, etc. */
-#define CTE_EXCEPTION_NONE 0xff
+#define CTE_EXCEPTION_NONE 31
     uint16_t cycles;    /* Currently not used. */
     uint32_t inst;      /* Encoded instruction. */
     uint64_t pc;        /* PC value of instruction. */
@@ -447,7 +447,7 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
     /* entry.inst = iinfo->opcode; // TODO(am2419): opcode, how to pick it up? */
     switch (iinfo->flags & LI_FLAG_INTR_MASK) {
     case LI_FLAG_INTR_TRAP:
-        entry.exception = (uint8_t)iinfo->intr_code;
+        entry.exception = (uint8_t)(iinfo->intr_code & 0xff);
     case LI_FLAG_INTR_ASYNC:
         entry.exception = 0; // TODO(am2419): this is very MIPS-specific.
     default:
