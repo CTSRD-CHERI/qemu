@@ -31,6 +31,30 @@
 #include "cheri-helper-utils.h"
 #endif
 
+#ifdef TARGET_CHERI
+#define COPY_SPECIAL_REG(env, dst, cheri_dst, src, cheri_src)   \
+    do {                                                        \
+        (env)->cheri_dst = (env)->cheri_src;                    \
+    } while (false)
+#else
+#define COPY_SPECIAL_REG(env, dst, cheri_dst, src, cheri_src)   \
+    do {                                                        \
+        (env)->dst = (env)->src;                                \
+    } while (false)
+#endif
+
+#ifdef CONFIG_TCG_LOG_INSTR
+#ifdef TARGET_CHERI
+#define LOG_SPECIAL_REG(env, csrno, scrno)      \
+    riscv_log_instr_scr_changed(env, scrno)
+#else
+#define LOG_SPECIAL_REG(env, csrno, scrno)      \
+    riscv_log_instr_csr_changed(env, csrno);
+#endif
+#else /* !CONFIG_TCG_LOG_INSTR */
+#define LOG_SPECIAL_REG(env, csrno, scrno) ((void)0)
+#endif /* !CONFIG_TCG_LOG_INSTR */
+
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch)
 {
 #ifdef CONFIG_USER_ONLY
@@ -114,7 +138,7 @@ bool riscv_cpu_fp_enabled(CPURISCVState *env)
     return false;
 }
 
-void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env)
+void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env, bool hs_mode_trap)
 {
     target_ulong mstatus_mask = MSTATUS_MXR | MSTATUS_SUM | MSTATUS_FS |
                                 MSTATUS_SPP | MSTATUS_SPIE | MSTATUS_SIE;
@@ -131,31 +155,61 @@ void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env)
         env->vsstatus = env->mstatus & mstatus_mask;
         env->mstatus &= ~mstatus_mask;
         env->mstatus |= env->mstatus_hs;
+        riscv_log_instr_csr_changed(env, CSR_VSSTATUS);
+        /* mstatus may be modified again by do_interrupt */
 
 #if defined(TARGET_RISCV32)
         env->vsstatush = env->mstatush;
         env->mstatush |= env->mstatush_hs;
+        /* TODO(am2419): CSR_VSSTATUSH does not exist, why? */
+        /* riscv_log_instr_csr_changed(env, CSR_VSSTATUSH); */
+        if (hs_mode_trap) {
+            /* mstatush is modified again when trapping to M-mode */
+            riscv_log_instr_csr_changed(env, CSR_MSTATUSH);
+        }
 #endif
 
-        COPY_SPECIAL_REG(env, vstvec, VSTCC, stvec, STCC);
+        COPY_SPECIAL_REG(env, stvec, VSTCC, stvec, STCC);
         COPY_SPECIAL_REG(env, stvec, STCC, stvec_hs, STCC_HS);
-
+        LOG_SPECIAL_REG(env, CSR_VSTVEC, CheriSCR_BSTCC);
+        LOG_SPECIAL_REG(env, CSR_STVEC, CheriSCR_STCC);
+        
         env->vsscratch = env->sscratch;
         env->sscratch = env->sscratch_hs;
+        riscv_log_instr_csr_changed(env, CSR_VSSCRATCH);
+        riscv_log_instr_csr_changed(env, CSR_SSCRATCH);
 
         COPY_SPECIAL_REG(env, vsepc, VSEPCC, sepc, SEPCC);
         COPY_SPECIAL_REG(env, sepc, SEPCC, sepc_hs, SEPCC_HS);
+        LOG_SPECIAL_REG(env, CSR_VSEPC, CheriSCR_BSEPCC);
+        LOG_SPECIAL_REG(env, CSR_SEPC, CheriSCR_SEPCC);
 
         env->vscause = env->scause;
         env->scause = env->scause_hs;
+        riscv_log_instr_csr_changed(env, CSR_VSCAUSE);
+        if (!hs_mode_trap) {
+            /* scause is modified again when trapping to HS-mode */
+            riscv_log_instr_csr_changed(env, CSR_SCAUSE);
+        }
 
         env->vstval = env->sbadaddr;
         env->sbadaddr = env->stval_hs;
+        riscv_log_instr_csr_changed(env, CSR_VSTVAL);
+        if (!hs_mode_trap) {
+            /* sbaddaddr is modified again when trapping to HS-mode */
+            riscv_log_instr_csr_changed(env, CSR_SBADADDR);
+        }
 
         env->vsatp = env->satp;
         env->satp = env->satp_hs;
+        riscv_log_instr_csr_changed(env, CSR_VSATP);
+        riscv_log_instr_csr_changed(env, CSR_SATP);
     } else {
         /* Current V=0 and we are about to change to V=1 */
+        /*
+         * TODO(am2419): Not sure whether we should log assignments to
+         * *_hs register variants.
+         */
         env->mstatus_hs = env->mstatus & mstatus_mask;
         env->mstatus &= ~mstatus_mask;
         env->mstatus |= env->vsstatus;
@@ -167,21 +221,27 @@ void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env)
 
         COPY_SPECIAL_REG(env, stvec_hs, STCC_HS, stvec, STCC);
         COPY_SPECIAL_REG(env, stvec, STCC, vstvec, VSTCC);
+        LOG_SPECIAL_REG(env, CSR_STVEC, CheriSCR_STCC);
 
         env->sscratch_hs = env->sscratch;
         env->sscratch = env->vsscratch;
+        riscv_log_instr_csr_changed(env, CSR_SSCRATCH);
 
         COPY_SPECIAL_REG(env, sepc_hs, SEPCC_HS, sepc, SEPCC);
         COPY_SPECIAL_REG(env, sepc, SEPCC, vsepc, VSEPCC);
+        LOG_SPECIAL_REG(env, CSR_SEPC, CheriSCR_SEPCC);
 
         env->scause_hs = env->scause;
         env->scause = env->vscause;
+        riscv_log_instr_csr_changed(env, CSR_SCAUSE);
 
         env->stval_hs = env->sbadaddr;
         env->sbadaddr = env->vstval;
+        riscv_log_instr_csr_changed(env, CSR_SBADADDR);
 
         env->satp_hs = env->satp;
         env->satp = env->vsatp;
+        riscv_log_instr_csr_changed(env, CSR_SATP);
     }
 }
 
@@ -289,6 +349,8 @@ void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv)
      * preemptive context switch. As a result, do both.
      */
     env->load_res = -1;
+
+    /* TODO(am2419): switch user mode logging on/off here */
 }
 
 /* get_physical_address - get the physical address for this virtual address
@@ -924,11 +986,23 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
     tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (pa & ~TARGET_PAGE_MASK));
     return pa;
 }
-#define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)                  \
-    cheri_update_pcc_for_exc_handler(&env->PCC, src_cap, new_pc);
+/* TODO(am2419): do we log PCC as a changed register? */
+#define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)           \
+    do {                                                                \
+        cheri_update_pcc_for_exc_handler(&env->PCC, src_cap, new_pc);   \
+        qemu_log_instr_dbg_cap(env, "PCC", &env->PCC);                  \
+    } while (false)
 #else
-#define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)                  \
-    riscv_update_pc(env, new_pc, /*can_be_unrepresentable=*/true);
+/*
+ * TODO(am2419): We don't have a register ID for pc, move to a separate
+ * logging helper that maps hwreg id to names for extra registers.
+ * TODO(am2419): do we log PCC as a changed register?
+ */
+#define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)           \
+    do {                                                                \
+        riscv_update_pc(env, new_pc, /*can_be_unrepresentable=*/true);  \
+        qemu_log_instr_dbg_reg(env, "pc", new_pc);                      \
+    } while (false)
 #endif /* TARGET_CHERI */
 
 /*
@@ -984,9 +1058,9 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             tcg_debug_assert(env->cap_cause < 32);
             tcg_debug_assert(env->cap_index < 64);
             tval = env->cap_cause | env->cap_index << 5;
-            qemu_log_mask(CPU_LOG_INT | CPU_LOG_INSTR,
-                          "Got CHERI trap %s caused by register %d\n",
-                          cheri_cause_str(env->cap_cause), env->cap_index);
+            qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+                "Got CHERI trap %s caused by register %d\n",
+                cheri_cause_str(env->cap_cause), env->cap_index);
             break;
 #endif
         case RISCV_EXCP_ILLEGAL_INST:
@@ -1039,7 +1113,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                 /* Trap to VS mode */
             } else if (riscv_cpu_virt_enabled(env)) {
                 /* Trap into HS mode, from virt */
-                riscv_cpu_swap_hypervisor_regs(env);
+                riscv_cpu_swap_hypervisor_regs(env, /*hs_mode_trap*/true);
                 env->hstatus = set_field(env->hstatus, HSTATUS_SP2V,
                                          get_field(env->hstatus, HSTATUS_SPV));
                 env->hstatus = set_field(env->hstatus, HSTATUS_SP2P,
@@ -1063,6 +1137,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                 htval = env->guest_phys_fault_addr;
             }
         }
+        riscv_log_instr_csr_changed(env, CSR_HSTATUS);
 
         s = env->mstatus;
         s = set_field(s, MSTATUS_SPIE, env->priv_ver >= PRIV_VERSION_1_10_0 ?
@@ -1070,34 +1145,38 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         s = set_field(s, MSTATUS_SPP, env->priv);
         s = set_field(s, MSTATUS_SIE, 0);
         env->mstatus = s;
+        riscv_log_instr_csr_changed(env, CSR_MSTATUS);
         env->scause = cause | ((target_ulong)async << (TARGET_LONG_BITS - 1));
-        COPY_SPECIAL_REG(env, sepc, SEPCC, pc, PCC);
+        riscv_log_instr_csr_changed(env, CSR_SCAUSE);
+#ifdef TARGET_CHERI
+        env->SEPCC = env->PCC;
+        riscv_log_instr_scr_changed(env, CheriSCR_SEPCC);
+#else
+        env->sepc = env->pc;
+        riscv_log_instr_csr_changed(env, CSR_SEPC);
+#endif
         env->sbadaddr = tval;
+        riscv_log_instr_csr_changed(env, CSR_SBADADDR);
         env->htval = htval;
+        riscv_log_instr_csr_changed(env, CSR_HTVAL);
+
         target_ulong stvec = GET_SPECIAL_REG_ADDR(env, stvec, STCC);
         target_ulong new_pc = (stvec >> 2 << 2) +
             ((async && (stvec & 3) == 1) ? cause * 4 : 0);
         riscv_update_pc_for_exc_handler(env, &env->STCC, new_pc);
-#ifdef TARGET_CHERI
-        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                               "%s: Set SEPCC from PCC: " PRINT_CAP_FMTSTR "\n",
-                               __func__, PRINT_CAP_ARGS(&env->SEPCC));
-        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                               "%s: Set PCC from STCC: " PRINT_CAP_FMTSTR "\n",
-                               __func__, PRINT_CAP_ARGS(&env->PCC));
-#endif
         riscv_cpu_set_mode(env, PRV_S);
     } else {
         /* handle the trap in M-mode */
         if (riscv_has_ext(env, RVH)) {
             if (riscv_cpu_virt_enabled(env)) {
-                riscv_cpu_swap_hypervisor_regs(env);
+                riscv_cpu_swap_hypervisor_regs(env, /*hs_mode_trap*/false);
             }
 #ifdef TARGET_RISCV32
             env->mstatush = set_field(env->mstatush, MSTATUS_MPV,
                                        riscv_cpu_virt_enabled(env));
             env->mstatush = set_field(env->mstatush, MSTATUS_MTL,
                                        riscv_cpu_force_hs_excep_enabled(env));
+            riscv_log_instr_csr_changed(env, CSR_MSTATUSH);
 #else
             env->mstatus = set_field(env->mstatus, MSTATUS_MPV,
                                       riscv_cpu_virt_enabled(env));
@@ -1118,24 +1197,39 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         s = set_field(s, MSTATUS_MPP, env->priv);
         s = set_field(s, MSTATUS_MIE, 0);
         env->mstatus = s;
+        riscv_log_instr_csr_changed(env, CSR_MSTATUS);
         env->mcause = cause | ~(((target_ulong)-1) >> async);
-        COPY_SPECIAL_REG(env, mepc, MEPCC, pc, PCC);
+        riscv_log_instr_csr_changed(env, CSR_MCAUSE);
+#ifdef TARGET_CHERI
+        env->MEPCC = env->PCC;
+        riscv_log_instr_scr_changed(env, CheriSCR_MEPCC);
+#else
+        env->mepc = env->pc;
+        riscv_log_instr_csr_changed(env, CSR_MEPC);
+#endif
         env->mbadaddr = tval;
+        riscv_log_instr_csr_changed(env, CSR_MBADADDR);
         env->mtval2 = mtval2;
+        riscv_log_instr_csr_changed(env, CSR_MTVAL2);
+
         target_ulong mtvec = GET_SPECIAL_REG_ADDR(env, mtvec, MTCC);
         target_ulong new_pc = (mtvec >> 2 << 2) +
             ((async && (mtvec & 3) == 1) ? cause * 4 : 0);
         riscv_update_pc_for_exc_handler(env, &env->MTCC, new_pc);
-#ifdef TARGET_CHERI
-        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                               "%s: Set MEPCC from PCC: " PRINT_CAP_FMTSTR "\n",
-                               __func__, PRINT_CAP_ARGS(&env->MEPCC));
-        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                               "%s: Set PCC from MTCC: " PRINT_CAP_FMTSTR "\n",
-                               __func__, PRINT_CAP_ARGS(&env->PCC));
-#endif
         riscv_cpu_set_mode(env, PRV_M);
     }
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (qemu_log_instr_enabled(env)) {
+        if (async) {
+            qemu_log_instr_interrupt(env, cause,
+                GET_SPECIAL_REG_ADDR(env, pc, PCC));
+        } else {
+            qemu_log_instr_exception(env, cause,
+                GET_SPECIAL_REG_ADDR(env, pc, PCC), tval);
+        }
+    }
+#endif
 
 #ifdef CONFIG_RVFI_DII
     if (unlikely(env->rvfi_dii_have_injected_insn)) {
@@ -1170,8 +1264,8 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
     if (!cap_is_unsealed(scr)) {
         error_report("Attempting to modify sealed %s: " PRINT_CAP_FMTSTR "\r\n",
                      name, PRINT_CAP_ARGS(scr));
-        qemu_log("Attempting to modify sealed %s: " PRINT_CAP_FMTSTR "\n", name,
-                 PRINT_CAP_ARGS(scr));
+        qemu_log_instr_extra(env, "Attempting to modify sealed %s: "
+            PRINT_CAP_FMTSTR "\n", name, PRINT_CAP_ARGS(scr));
         // Clear the tag bit and update the cursor:
         cap_mark_unrepresentable(new_cursor, scr);
     } else if (!is_representable_cap_with_addr(scr, new_cursor)) {
@@ -1179,13 +1273,18 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
             "Attempting to set unrepresentable cursor (0x" TARGET_FMT_lx
             ") on %s: " PRINT_CAP_FMTSTR "\r\n",
             new_cursor, name, PRINT_CAP_ARGS(scr));
-        qemu_log("Attempting to set unrepresentable cursor (0x" TARGET_FMT_lx
-                 ") on %s: " PRINT_CAP_FMTSTR "\r\n",
-                 new_cursor, name, PRINT_CAP_ARGS(scr));
+        qemu_log_instr_extra(env, "Attempting to set unrepresentable cursor (0x"
+            TARGET_FMT_lx ") on %s: " PRINT_CAP_FMTSTR "\r\n", new_cursor,
+            name, PRINT_CAP_ARGS(scr));
         cap_mark_unrepresentable(new_cursor, scr);
     } else {
         scr->_cr_cursor = new_cursor;
     }
+    /*
+     * TODO(am2419): this is redundant as we are already logging the update
+     * of the CSR register? Although it migth be useful in case we are making
+     * the capability unrepresentable.
+     */
     cheri_log_instr_changed_capreg(env, name, scr);
 }
 #endif

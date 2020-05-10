@@ -169,7 +169,7 @@ target_ulong helper_sret(CPURISCVState *env, target_ulong cpu_pc_deb)
         env->hstatus = hstatus;
 
         if (prev_virt) {
-            riscv_cpu_swap_hypervisor_regs(env);
+            riscv_cpu_swap_hypervisor_regs(env, /*hs_mode_trap*/true);
         }
 
         riscv_cpu_set_virt_enabled(env, prev_virt);
@@ -183,15 +183,15 @@ target_ulong helper_sret(CPURISCVState *env, target_ulong cpu_pc_deb)
         mstatus = set_field(mstatus, MSTATUS_SPIE, 1);
         mstatus = set_field(mstatus, MSTATUS_SPP, PRV_U);
         env->mstatus = mstatus;
+        riscv_log_instr_csr_changed(env, CSR_MSTATUS);
     }
 
     riscv_cpu_set_mode(env, prev_priv);
 
 #ifdef TARGET_CHERI
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                           "%s: Updating PCC from SEPCC: " PRINT_CAP_FMTSTR "\n",
-                           __func__, PRINT_CAP_ARGS(&env->SEPCC));
     cheri_update_pcc_for_exc_return(&env->PCC, &env->SEPCC, retpc);
+    /* TODO(am2419): do we log PCC as a changed register? */
+    qemu_log_instr_dbg_cap(env, "PCC", &env->PCC);
 #endif
     return retpc;
 }
@@ -226,17 +226,21 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
 
     if (riscv_has_ext(env, RVH)) {
         if (prev_virt) {
-            riscv_cpu_swap_hypervisor_regs(env);
+            riscv_cpu_swap_hypervisor_regs(env, /*hs_mode_trap*/false);
         }
 
         riscv_cpu_set_virt_enabled(env, prev_virt);
     }
 
+    riscv_log_instr_csr_changed(env, CSR_MSTATUS);
+#ifdef TARGET_RISCV32
+    riscv_log_instr_csr_changed(env, CSR_MSTATUSH);
+#endif
+
 #ifdef TARGET_CHERI
-    qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                           "%s: Updating PCC from MEPCC: " PRINT_CAP_FMTSTR "\n",
-                           __func__, PRINT_CAP_ARGS(&env->MEPCC));
     cheri_update_pcc_for_exc_return(&env->PCC, &env->MEPCC, retpc);
+    /* TODO(am2419): do we log PCC as a changed register? */
+    qemu_log_instr_dbg_cap(env, "PCC", &env->PCC);
 #endif
     return retpc;
 }

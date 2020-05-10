@@ -299,59 +299,6 @@ struct CPURISCVState {
     QEMUTimer *timer; /* Internal timer */
 };
 
-// From 5.3.6 Special Capability Registers (SCRs)
-// Where an SCR extends a RISC-V CSR, e.g. MTCC extending mtvec, any read to the
-// CSR shall return the offset of the corresponding SCR. Similarly, any write to
-// the CSR shall set the offset of the SCR to the value written. This shall be
-// equivalent to a CSetOffset instruction, but with any exception condition
-// instead just clearing the tag of the SCR. This allows sealed capabilities to
-// be held in SCRs without allowing them to be modified in a tag-preserving way,
-// while also pre- venting exceptions when installing trap vectors: something
-// that can be problematic where the task is delegated to a higher privilege
-// level.
-//
-// GET_SPECIAL_REG_ARCH returns the architectural view of the underlying CSR,
-// namely the offset. GET_SPECIAL_REG_ADDR returns the address as we feed our
-// PC around as an address not the architectural offset.
-#ifdef TARGET_CHERI
-#define GET_SPECIAL_REG_ARCH(env, name, cheri_name)                            \
-    ((target_ulong)cap_get_offset(&((env)->cheri_name)))
-#define GET_SPECIAL_REG_ADDR(env, name, cheri_name)                            \
-    ((target_ulong)cap_get_cursor(&((env)->cheri_name)))
-void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
-                                    const char *name, target_ulong value);
-#define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
-    update_special_register_offset(env, &((env)->cheri_name), #cheri_name, value)
-
-#define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)        \
-    do {                                                                       \
-        env->cheri_name = env->new_cheri_reg;                                  \
-        cheri_log_instr_changed_capreg(env, #cheri_name, &((env)->cheri_name)); \
-    } while (false)
-#else /* ! TARGET_CHERI */
-#define GET_SPECIAL_REG_ARCH(env, name, cheri_name) ((env)->name)
-#define GET_SPECIAL_REG_ADDR(env, name, cheri_name) ((env)->name)
-#define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
-    do {                                                                       \
-        env->name = value;                                                     \
-        log_changed_special_reg(env, #name, value);                            \
-    } while (false)
-#define COPY_SPECIAL_REG(env, name, cheri_name, new_reg, new_cheri_reg)        \
-    do {                                                                       \
-        env->name = env->new_reg;                                              \
-        log_changed_special_reg(env, #name, ((env)->name));                    \
-    } while (false)
-#endif /* ! TARGET_CHERI */
-
-#ifdef CONFIG_TCG_LOG_INSTR
-#define log_changed_special_reg(env, name, newval) do { \
-        if (qemu_log_instr_enabled(env))                \
-            qemu_log_instr_reg(env, name, newval);      \
-    } while(0)
-#else
-#define log_changed_special_reg(env, name, newval) ((void)0)
-#endif
-
 static inline bool pc_is_current(CPURISCVState *env)
 {
 #ifdef CONFIG_DEBUG_TCG
@@ -456,6 +403,58 @@ extern const char * const riscv_intr_names[];
 extern const char * const cheri_gp_regnames[];
 #endif
 
+#ifdef CONFIG_TCG_LOG_INSTR
+void riscv_log_instr_csr_changed(CPURISCVState *env, int csrno);
+
+#ifdef TARGET_CHERI
+void riscv_log_instr_scr_changed(CPURISCVState *env, int scrno);
+#endif
+
+#define log_changed_special_reg(env, name, newval) do { \
+        if (qemu_log_instr_enabled(env))                \
+            qemu_log_instr_reg(env, name, newval);      \
+    } while(0)
+#else /* !CONFIG_TCG_LOG_INSTR */
+#define log_changed_special_reg(env, name, newval) ((void)0)
+#define riscv_log_instr_csr_changed(env, csrno) ((void)0)
+#define riscv_log_instr_scr_changed(env, scrno) ((void)0)
+#endif /* !CONFIG_TCG_LOG_INSTR */
+
+
+// From 5.3.6 Special Capability Registers (SCRs)
+// Where an SCR extends a RISC-V CSR, e.g. MTCC extending mtvec, any read to the
+// CSR shall return the offset of the corresponding SCR. Similarly, any write to
+// the CSR shall set the offset of the SCR to the value written. This shall be
+// equivalent to a CSetOffset instruction, but with any exception condition
+// instead just clearing the tag of the SCR. This allows sealed capabilities to
+// be held in SCRs without allowing them to be modified in a tag-preserving way,
+// while also pre- venting exceptions when installing trap vectors: something
+// that can be problematic where the task is delegated to a higher privilege
+// level.
+//
+// GET_SPECIAL_REG_ARCH returns the architectural view of the underlying CSR,
+// namely the offset. GET_SPECIAL_REG_ADDR returns the address as we feed our
+// PC around as an address not the architectural offset.
+#ifdef TARGET_CHERI
+#define GET_SPECIAL_REG_ARCH(env, name, cheri_name)                            \
+    ((target_ulong)cap_get_offset(&((env)->cheri_name)))
+#define GET_SPECIAL_REG_ADDR(env, name, cheri_name)                            \
+    ((target_ulong)cap_get_cursor(&((env)->cheri_name)))
+void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
+                                    const char *name, target_ulong value);
+#define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
+    update_special_register_offset(env, &((env)->cheri_name), #cheri_name, value)
+
+#else /* ! TARGET_CHERI */
+#define GET_SPECIAL_REG_ARCH(env, name, cheri_name) ((env)->name)
+#define GET_SPECIAL_REG_ADDR(env, name, cheri_name) ((env)->name)
+#define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
+    do {                                                                       \
+        env->name = value;                                                     \
+        log_changed_special_reg(env, #name, value);                            \
+    } while (false)
+#endif /* ! TARGET_CHERI */
+
 #ifdef CONFIG_RVFI_DII
 #define RVFI_DII_RAM_START 0x80000000
 #define RVFI_DII_RAM_SIZE (8 * MiB)
@@ -512,7 +511,7 @@ void riscv_cpu_list(void);
 #define cpu_mmu_index riscv_cpu_mmu_index
 
 #ifndef CONFIG_USER_ONLY
-void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env);
+void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env, bool hs_mode_trap);
 int riscv_cpu_claim_interrupts(RISCVCPU *cpu, uint32_t interrupts);
 uint32_t riscv_cpu_update_mip(RISCVCPU *cpu, uint32_t mask, uint32_t value);
 #define BOOL_TO_MASK(x) (-!!(x)) /* helper for riscv_cpu_update_mip value */

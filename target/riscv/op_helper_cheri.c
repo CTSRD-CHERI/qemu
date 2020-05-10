@@ -53,6 +53,8 @@ enum SCRAccessMode {
     U_ASR = U_Always | ASR_Flag,
     S_Always = (PRV_S + 1) << 1,
     S_ASR = S_Always | ASR_Flag,
+    H_Always = (PRV_H + 1) << 1,
+    H_ASR = H_Always | ASR_Flag,
     M_Always = (PRV_M + 1) << 1,
     M_ASR = M_Always | ASR_Flag,
 };
@@ -75,7 +77,7 @@ struct SCRInfo {
     //#define PRV_S 1
     //#define PRV_H 2 /* Reserved */
     //#define PRV_M 3
-} scr_info[32] = {
+} scr_info[CheriSCR_MAX] = {
     [CheriSCR_PCC] = {.r = true, .w = false, .access = U_Always, .name = "PCC"},
     [CheriSCR_DDC] = {.r = true, .w = true, .access = U_Always, .name = "DDC"},
 
@@ -102,6 +104,12 @@ struct SCRInfo {
                             .access = M_ASR,
                             .name = "MScratchC"},
     [CheriSCR_MEPCC] = {.r = true, .w = true, .access = M_ASR, .name = "MEPCC"},
+
+    [CheriSCR_BSTCC] = {.r = true, .w = true, .access = H_ASR, .name= "BSTCC"},
+    [CheriSCR_BSTDC] = {.r = true, .w = true, .access = H_ASR, .name= "BSTCC"},
+    [CheriSCR_BSScratchC] = {.r = true, .w = true, .access = H_ASR,
+                             .name= "BSTCC"},
+    [CheriSCR_BSEPCC] = {.r = true, .w = true, .access = H_ASR, .name= "BSTCC"},
 };
 
 static inline cap_register_t *get_scr(CPUArchState *env, uint32_t index)
@@ -124,9 +132,23 @@ static inline cap_register_t *get_scr(CPUArchState *env, uint32_t index)
     case CheriSCR_MTDC: return &env->MTDC;
     case CheriSCR_MScratchC: return &env->MScratchC;
     case CheriSCR_MEPCC: return &env->MEPCC;
+
+    case CheriSCR_BSTCC: return &env->VSTCC;
+    case CheriSCR_BSTDC: return &env->VSTDC;
+    case CheriSCR_BSScratchC: return &env->VSScratchC;
+    case CheriSCR_BSEPCC: return &env->VSEPCC;
     default: assert(false && "Should have raised an invalid inst trap!");
     }
 }
+
+#ifdef CONFIG_TCG_LOG_INSTR
+void riscv_log_instr_scr_changed(CPURISCVState *env, int scrno)
+{
+    if (qemu_log_instr_enabled(env)) {
+        qemu_log_instr_cap(env, scr_info[scrno].name, get_scr(env, scrno));
+    }
+}
+#endif
 
 void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
                         uint32_t index)
