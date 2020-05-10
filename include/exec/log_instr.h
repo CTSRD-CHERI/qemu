@@ -98,6 +98,30 @@
             qemu_log_instr_extra(env, msg _glue_args(__VA_ARGS__));     \
     } while (0)
 
+/*
+ * Helper to append a changed register content to the extra debug info
+ * for the current instruction.
+ * Note that this can be ignored by the output trace format.
+ */
+#define qemu_log_instr_dbg_reg(env, name, value) do {                   \
+        if (qemu_log_instr_enabled(env))                                \
+            qemu_log_instr_extra(env, "    Write %s = " TARGET_FMT_lx "\n", \
+                                 name, value);                          \
+    } while (0)
+
+/*
+ * Helper to append a changed capability register content to the extra debug
+ * info for the current instruction.
+ * Note that this can be ignored by the output trace format.
+ */
+#define qemu_log_instr_dbg_cap(env, name, value) do {                   \
+        if (qemu_log_instr_enabled(env))                                \
+            qemu_log_instr_extra(                                       \
+                env, "    Write %s|" PRINT_CAP_FMTSTR_L1 "\n"           \
+                "             |" PRINT_CAP_FMTSTR_L2 "\n",              \
+                name, PRINT_CAP_ARGS_L1(value),                         \
+                PRINT_CAP_ARGS_L2(value));                              \
+    } while (0)
 
 #ifdef CONFIG_TCG_LOG_INSTR
 

@@ -84,6 +84,16 @@ enum CheriSCR {
     CheriSCR_MTDC = 29,
     CheriSCR_MScratchC = 30,
     CheriSCR_MEPCC = 31,
+
+    /*
+     * TODO(am2419): Register indices are placeholders,
+     * awaiting full specification of background registers.
+     */
+    CheriSCR_BSTCC = 32,
+    CheriSCR_BSTDC = 33,
+    CheriSCR_BSScratchC = 34,
+    CheriSCR_BSEPCC = 35,
+    CheriSCR_MAX,
 };
 
 #define CHERI_EXC_REGNUM_PCC (32 + CheriSCR_PCC)

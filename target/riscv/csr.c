@@ -35,6 +35,24 @@ enum {
     CSR_TABLE_SIZE = 0x1000
 };
 
+/* CSR update logging API */
+#if CONFIG_TCG_LOG_INSTR
+void riscv_log_instr_csr_changed(CPURISCVState *env, int csrno)
+{
+    target_ulong value;
+
+    if (qemu_log_instr_enabled(env)) {
+        if (csr_ops[csrno].read)
+            csr_ops[csrno].read(env, csrno, &value);
+        else if (csr_ops[csrno].op)
+            csr_ops[csrno].op(env, csrno, &value, 0, /*write_mask*/0);
+        else
+            return;
+        csr_ops[csrno].log_update(env, csrno, value);
+    }
+}
+#endif
+
 /* CSR function table public API */
 void riscv_get_csr_ops(int csrno, riscv_csr_operations *ops)
 {
@@ -1378,19 +1396,17 @@ int riscv_csrrw_debug(CPURISCVState *env, int csrno, target_ulong *ret_value,
     return ret;
 }
 
-/*
- * Helper to log a changed CSR register for the current instruction.
- */
+
 #ifdef CONFIG_TCG_LOG_INSTR
-static void log_changed_csr(CPURISCVState *env, int csrno,
-                            target_ulong value)
+static void log_changed_csr_fn(CPURISCVState *env, int csrno,
+                               target_ulong value)
 {
     if (qemu_log_instr_enabled(env)) {
         qemu_log_instr_reg(env, csr_ops[csrno].csr_name, value);
     }
 }
 #else
-#define log_changed_csr(env, name, newval) (NULL)
+#define log_changed_csr_fn (NULL)
 #endif
 
 /* Define csr_ops entry for read-only CSR register */
@@ -1409,7 +1425,7 @@ static void log_changed_csr(CPURISCVState *env, int csrno,
 
 /* Define csr_ops entry for read-write CSR register */
 #define CSR_OP_FN_RW(pred, readfn, writefn, name)                  \
-    _CSR_OP_FN_RW(pred, readfn, writefn, log_changed_csr, name)
+    _CSR_OP_FN_RW(pred, readfn, writefn, log_changed_csr_fn, name)
 
 /* Shorthand for functions following the read/write_<csr> pattern */
 #define CSR_OP_RW(pred, name)                                      \
@@ -1427,7 +1443,7 @@ static void log_changed_csr(CPURISCVState *env, int csrno,
 /* Define csr_ops entry for read-modify-write CSR register */
 #define CSR_OP_RMW(pred, name)                                     \
     {.predicate=pred, .read=NULL, .write=NULL,                     \
-     .op=glue(rmw_, name), .log_update=log_changed_csr,            \
+     .op=glue(rmw_, name), .log_update=log_changed_csr_fn,         \
      .csr_name=stringify(name)}
 
 /* Control and Status Register function table */
