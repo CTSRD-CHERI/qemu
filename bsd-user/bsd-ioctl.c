@@ -45,11 +45,10 @@
 #include <net/if_gre.h>
 #include <net/if_lagg.h>
 #include <net/if_media.h>
-#if defined(__FreeBSD_version) && __FreeBSD_version >= 1000000
-#include <netpfil/pf/pf.h>
-#endif
+#if HAVE_PF
 #include <net/pfvar.h>
 #include <net/if_pfsync.h>
+#endif
 #include <net/ethernet.h>
 #include <netinet/icmp6.h>
 #include <netinet/in.h>
