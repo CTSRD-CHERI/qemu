@@ -429,6 +429,7 @@ quorum="no"
 pcap="no"
 pcap_create="no"
 bpf="no"
+pf=""
 live_block_migration="yes"
 tcmalloc="no"
 jemalloc="no"
@@ -3349,6 +3350,35 @@ EOF
   fi
   libs_softmmu="$libpcap $libs_softmmu"
 fi # test "$pcap"
+
+##########################################
+# FreeBSD pf detection
+if test "$pf" != "no" ; then
+    if test "$targetos" = "FreeBSD" ; then
+      cat > $TMPC << EOF
+#include <sys/sockio.h>
+#include <net/if.h>
+#include <net/pfvar.h>
+#include <net/if_pfsync.h>
+
+int main(void) {
+#ifndef SIOCGETPFSYNC
+#error No PF
+#endif
+    return (0);
+}
+EOF
+        if compile_prog ; then
+            pf=yes
+        fi
+    elif test "$targetos" = "NetBSD" -o "$TargetOS" = "OpenBSD" ; then
+        pf=yes
+    fi
+
+    if test "$pf" = "" ; then
+        pf=no
+    fi
+fi
 
 ##########################################
 # vde libraries probe
@@ -6351,6 +6381,9 @@ if test "$have_openpty" = "yes" ; then
 fi
 if test "$have_sys_signal_h" = "yes" ; then
     echo "HAVE_SYS_SIGNAL_H=y" >> $config_host_mak
+fi
+if test "$pf" = "yes" ; then
+    echo "HAVE_PF=y" >> $config_host_mak
 fi
 
 # Work around a system header bug with some kernel/XFS header
