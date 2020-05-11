@@ -343,13 +343,6 @@ static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
      * TODO(am2419): what to do with injected instructions?
      * Is the rvfi_dii_trace state valid at log commit?
      */
-/* #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII) */
-/*     if (env->rvfi_dii_have_injected_insn) { */
-/*         uint32_t insn = env->rvfi_dii_trace.rvfi_dii_insn; */
-/*         target_disas_buf(stderr, env_cpu(env), &insn, sizeof(insn), */
-/*                          PC_ADDR(env), 1); */
-/*     } else */
-/* #endif */
 
     /* Dump interrupt/exception info */
     switch (iinfo->flags & LI_FLAG_INTR_MASK) {
