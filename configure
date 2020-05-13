@@ -6410,13 +6410,16 @@ if test "$softmmu" = yes ; then
     fi
     tools="$tools scsi/qemu-pr-helper\$(EXESUF)"
   else
-    if test "$darwin" = yes; then
-      virtfs=yes
-      tools="$tools fsdev/virtfs-proxy-helper\$(EXESUF)"
-    elif test "$virtfs" = yes; then
-      error_exit "VirtFS is supported only on Linux and Darwin"
-    else
-      virtfs=no
+    if test "$virtfs" != no ; then
+      if test "$darwin" = yes ; then
+        virtfs=yes
+        tools="$tools fsdev/virtfs-proxy-helper\$(EXESUF)"
+      else
+        if test "$virtfs" = yes ; then
+          error_exit "VirtFS is supported only on Linux and Darwin"
+        fi
+        virtfs=no
+      fi
     fi
     if test "$mpath" = yes; then
       error_exit "Multipath is supported only on Linux"
