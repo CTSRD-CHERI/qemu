@@ -2227,4 +2227,15 @@ static inline bool hyperv_feat_enabled(X86CPU *cpu, int feat)
 # define TARGET_VSYSCALL_PAGE  (UINT64_C(-10) << 20)
 #endif
 
+#ifdef CONFIG_TCG_LOG_INSTR
+static inline bool cpu_in_user_mode(CPUArchState *env)
+{
+    return false; /* TODO: implement */
+}
+
+static inline unsigned cpu_get_asid(CPUArchState *env) {
+    return 0; /* TODO: implement */
+}
+#endif
+
 #endif /* I386_CPU_H */
