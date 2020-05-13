@@ -40,6 +40,9 @@
 #include <sysexits.h>
 
 #include "cheri_compressed_cap.h"
+#ifdef DECOMPRESS_WITH_SAIL_GENERATED_CODE
+#include "test/sail_wrapper.h"
+#endif
 
 static const char* otype_suffix(uint32_t otype) {
     switch(otype) {
@@ -99,9 +102,17 @@ int main(int argc, char** argv) {
     cap_register_t result;
     memset(&result, 0, sizeof(result));
     printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt, cursor);
+#ifdef DECOMPRESS_WITH_SAIL_GENERATED_CODE
+    sail_decode_128_mem(pesbt, cursor, false, &result);
+#else
     decompress_128cap(pesbt, cursor, &result);
+#endif
     dump_cap_fields(&result);
+#ifdef DECOMPRESS_WITH_SAIL_GENERATED_CODE
+    uint64_t rt_pesbt = sail_compress_128_mem(&result);
+#else
     uint64_t rt_pesbt = compress_128cap(&result);
+#endif
     printf("Re-compressed pesbt = %016" PRIx64 "%s\n", rt_pesbt, pesbt == rt_pesbt ? "" : " - WAS DESTRUCTIVE");
     return EXIT_SUCCESS;
 }

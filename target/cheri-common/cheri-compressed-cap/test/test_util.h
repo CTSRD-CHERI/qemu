@@ -39,8 +39,14 @@ static const char* otype_suffix(uint32_t otype) {
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const cap_register_t& value);
+std::ostream& operator<<(std::ostream& os, const cc128_bounds_bits& value);
+std::ostream& operator<<(std::ostream& os, const cc128_bounds_bits& value) {
+    os << "{ B: " << (unsigned)value.B << " T: " << (unsigned)value.T << " E: " << (unsigned)value.E
+       << " IE: " << (unsigned)value.IE << " }";
+    return os;
+}
 
+std::ostream& operator<<(std::ostream& os, const cap_register_t& value);
 std::ostream& operator<<(std::ostream& os, const cap_register_t& value) {
     char buffer[4096];
     cc128_length_t top_full = value._cr_top;
@@ -112,9 +118,11 @@ inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_l
     creg.cr_perms = CC128_PERMS_ALL;
     creg.cr_uperms = CC128_UPERMS_ALL;
     creg.cr_otype = CC128_OTYPE_UNSEALED;
-    creg.cr_ebt = CC128_RESET_EBT;
     creg.cr_tag = true;
-    REQUIRE(cc128_is_representable_cap_exact(&creg));
+    bool exact_input = false;
+    creg.cr_ebt = cc128_compute_ebt(creg.cr_base, creg._cr_top, NULL, &exact_input);
+    assert(exact_input && "Invalid arguments");
+    assert(cc128_is_representable_cap_exact(&creg));
     return creg;
 }
 

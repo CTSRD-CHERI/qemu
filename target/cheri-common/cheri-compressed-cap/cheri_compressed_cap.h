@@ -403,53 +403,58 @@ static inline uint64_t cc128_truncate64(uint64_t value, size_t n) {
 
 // truncates `value`, keeping only the _most_ significant `n` bits.
 #define TRUNCATE_LSB_FUNC(type_width) \
-static inline uint64_t cc128_truncateLSB##type_width(uint64_t value, size_t n) { \
+static inline uint64_t cc128_truncateLSB_##type_width(uint64_t value, size_t n) { \
     CC128_STATIC_ASSERT(type_width <= 64, ""); \
     return value >> (type_width - n);\
 }
 
 TRUNCATE_LSB_FUNC(14)
-TRUNCATE_LSB_FUNC(23)
-// TRUNCATE_LSB_FUNC(64)
+TRUNCATE_LSB_FUNC(64)
 
 #define	CC128_CONCAT1(x,y)	x ## y
 #define	CC128_CONCAT(x,y)	CC128_CONCAT1(x,y)
+#define	CC128_EXPAND1(x)	x
+#define	CC128_EXPAND(x)	CC128_EXPAND1(x)
 // FIXME: only one level of expansion works here?
-#define cc128_truncateLSB_generic(type_width) CC128_CONCAT(cc128_truncateLSB, type_width)
+#define cc128_truncateLSB_generic(type_width) CC128_CONCAT(cc128_truncateLSB_, CC128_EXPAND(type_width))
+#define cc128_truncateLSB(type_width)   cc128_truncateLSB_generic(CC128_EXPAND(type_width))
 
-static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
-    cdp->_cr_cursor = cursor;
-    cdp->cr_perms = (uint32_t)CC128_EXTRACT_FIELD(pesbt, HWPERMS);
-    cdp->cr_uperms = (uint32_t)CC128_EXTRACT_FIELD(pesbt, UPERMS);
-    cdp->cr_otype = (uint32_t)CC128_EXTRACT_FIELD(pesbt, OTYPE);
-    cdp->cr_flags = (uint8_t)CC128_EXTRACT_FIELD(pesbt, FLAGS);
-    cdp->cr_reserved = (uint8_t)CC128_EXTRACT_FIELD(pesbt, RESERVED);
-    cdp->cr_ebt = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EBT);
 
+struct cc128_bounds_bits {
+    uint16_t B; // bottom bits (currently 14 bits)
+    uint16_t T; // top bits (12 bits plus two implied bits)
+    uint8_t E; // exponent
+    bool IE; // internal exponent flag
+};
+
+/// Extract the bits used for bounds and infer the top two bits of T
+static inline struct cc128_bounds_bits cc128_extract_bounds_bits(uint64_t pesbt) {
+    CC128_STATIC_ASSERT(CC128_MANTISSA_WIDTH == CC128_BOT_WIDTH, "Wrong bot width?");
     uint32_t BWidth = CC128_BOT_WIDTH;
     uint32_t BMask = (1u << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
-
-    bool IE = (bool)(uint32_t)CC128_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT);
-
-    uint8_t E, L_msb;
-    uint32_t B;
-    uint32_t T;
-
-    if (IE) {
-        E = (uint8_t)(CC128_EXTRACT_FIELD(pesbt, EXPONENT_LOW_PART) |
-            (CC128_EXTRACT_FIELD(pesbt, EXPONENT_HIGH_PART) << CC128_FIELD_EXPONENT_LOW_PART_SIZE));
+    struct cc128_bounds_bits result;
+    CC128_STATIC_ASSERT(sizeof(result.B) * __CHAR_BIT__ >= CC128_BOT_WIDTH, "B field too small");
+    CC128_STATIC_ASSERT(sizeof(result.T) * __CHAR_BIT__ >= CC128_BOT_WIDTH, "T field too small");
+    CC128_STATIC_ASSERT(sizeof(result.E) * __CHAR_BIT__ >=
+                            CC128_FIELD_EXPONENT_LOW_PART_SIZE + CC128_FIELD_EXPONENT_HIGH_PART_SIZE,
+                        "E field too small");
+    result.IE = (bool)(uint32_t)CC128_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT);
+    uint8_t L_msb;
+    if (result.IE) {
+        result.E = (uint8_t)(CC128_EXTRACT_FIELD(pesbt, EXPONENT_LOW_PART) |
+                             (CC128_EXTRACT_FIELD(pesbt, EXPONENT_HIGH_PART) << CC128_FIELD_EXPONENT_LOW_PART_SIZE));
         // Do not offset by 1! We also need to encode E=0 even with IE
         // Also allow nonsense values over 64 - BWidth + 2: this is expected by sail-generated tests
         // E = MIN(64 - BWidth + 2, E);
-        B = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_BOTTOM) << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
-        T = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_TOP) << CC128_FIELD_EXPONENT_HIGH_PART_SIZE;
+        result.B = (uint16_t)CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_BOTTOM) << CC128_FIELD_EXPONENT_LOW_PART_SIZE;
+        result.T = (uint16_t)CC128_EXTRACT_FIELD(pesbt, EXP_NONZERO_TOP) << CC128_FIELD_EXPONENT_HIGH_PART_SIZE;
         L_msb = 1;
     } else {
-        E = 0;
+        result.E = 0;
         L_msb = 0;
-        B = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_BOTTOM);
-        T = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_TOP);
+        result.B = (uint16_t)CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_BOTTOM);
+        result.T = (uint16_t)CC128_EXTRACT_FIELD(pesbt, EXP_ZERO_TOP);
     }
     /*
         Reconstruct top two bits of T given T = B + len and:
@@ -457,27 +462,42 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
         2) most significant two bits of length derived from format above
         3) carry out of B[20..0] + len[20..0] that is implied if T[20..0] < B[20..0]
     */
-    uint8_t L_carry = T < (B & TMask) ? 1 : 0;
-    uint64_t BTop2 = cc128_getbits(B, CC128_MANTISSA_WIDTH - 2, 2);
+    uint8_t L_carry = result.T < (result.B & TMask) ? 1 : 0;
+    uint64_t BTop2 = cc128_getbits(result.B, CC128_MANTISSA_WIDTH - 2, 2);
     uint8_t T_infer = (BTop2 + L_carry + L_msb) & 0x3;
-    T |= ((uint32_t)T_infer) << (BWidth - 2);
-    E = MIN(CC128_MAX_EXPONENT, E);
+    result.T |= ((uint16_t)T_infer) << (BWidth - 2);
+    return result;
+}
 
+// Certain bit patterns can result in invalid bounds bits. These values must never be tagged!
+static inline bool _cc128_bounds_bits_valid(struct cc128_bounds_bits bounds) {
+    // https://github.com/CTSRD-CHERI/sail-cheri-riscv/blob/7a308ef3661e43461c8431c391aaece7fba6e992/src/cheri_properties.sail#L104
+    uint64_t Bmsb = cc128_getbits(bounds.B, CC128_MANTISSA_WIDTH - 1, 1);
+    uint64_t Bmsb2 = cc128_getbits(bounds.B, CC128_MANTISSA_WIDTH - 2, 2);
+    uint64_t Tmsb = cc128_getbits(bounds.T, CC128_MANTISSA_WIDTH - 1, 1);
+    if (bounds.E >= CC128_MAX_EXPONENT) {
+        return Tmsb == 0 && Bmsb2 == 0;
+    } else if (bounds.E == CC128_MAX_EXPONENT - 1) {
+        return Bmsb == 0;
+    } else {
+        return true;
+    }
+}
+
+static inline void _cc128_compute_base_top(struct cc128_bounds_bits bounds, uint64_t cursor, uint64_t* base_out,
+                                           cc128_length_t* top_out) {
+    // For the remaining computations we have to clamp E to max_E
+    //  let E = min(maxE, unsigned(c.E)) in
+    uint8_t E = MIN(CC128_MAX_EXPONENT, bounds.E);
     /* Extract bits we need to make the top correction and calculate representable limit */
-    // let a3 = truncate(a >> (E + 11), 3) in
+    // let a3 = truncate(a >> (E + mantissa_width - 3), 3) in
     // let B3 = truncateLSB(c.B, 3) in
     // let T3 = truncateLSB(c.T, 3) in
-#if 0
     unsigned a3 = (unsigned)cc128_truncate64(cursor >> (E + CC128_MANTISSA_WIDTH - 3), 3);
-    unsigned B3 = (unsigned)cc128_truncateLSB_generic(CC128_MANTISSA_WIDTH)(B, 3);
-    unsigned T3 = (unsigned)cc128_truncateLSB_generic(CC128_MANTISSA_WIDTH)(T, 3);
-#else
-    unsigned a3 = (unsigned)cc128_getbits(cursor, E + CC128_MANTISSA_WIDTH - 3, 3);
-    unsigned B3 = (unsigned)cc128_getbits(B, CC128_MANTISSA_WIDTH - 3, 3);
-    unsigned T3 = (unsigned)cc128_getbits(T, CC128_MANTISSA_WIDTH - 3, 3);
-#endif
+    unsigned B3 = (unsigned)cc128_truncateLSB(CC128_MANTISSA_WIDTH)(bounds.B, 3);
+    unsigned T3 = (unsigned)cc128_truncateLSB(CC128_MANTISSA_WIDTH)(bounds.T, 3);
     // let R3 = B3 - 0b001 in /* wraps */
-    unsigned R3 = (unsigned)cc128_truncate64(B3 - 1, 3); //B3 == 0 ? 7 : B3 - 1;
+    unsigned R3 = (unsigned)cc128_truncate64(B3 - 1, 3); // B3 == 0 ? 7 : B3 - 1;
     /* Do address, base and top lie in the R aligned region above the one containing R? */
     // let aHi = if a3 <_u R3 then 1 else 0 in
     // let bHi = if B3 <_u R3 then 1 else 0 in
@@ -491,58 +511,66 @@ static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t curs
     // let correction_top  = tHi - aHi in
     int correction_base = bHi - aHi;
     int correction_top = tHi - aHi;
-    // let a_top = (a >> (E + mantissa_width)) in {
-    // let a_top = (a >> (E + 14)) in
-    // Note: shifting by 64 is a no-op and causes wrong results!
+    // Note: shifting by 64 is UB and causes wrong results -> clamp the shift value!
     const unsigned a_top_shift = E + CC128_MANTISSA_WIDTH;
-    uint64_t a_top = a_top_shift >= CC128_CAP_ADDR_WIDTH ? 0 :  cursor >> a_top_shift;
+    // let a_top = (a >> (E + mantissa_width)) in
+    uint64_t a_top = a_top_shift >= CC128_CAP_ADDR_WIDTH ? 0 : cursor >> a_top_shift;
 
     // base : CapLenBits = truncate((a_top + correction_base) @ c.B @ zeros(E), cap_len_width);
     cc128_length_t base = (uint64_t)((int64_t)a_top + correction_base);
     base <<= CC128_MANTISSA_WIDTH;
-    base |= B;
+    base |= bounds.B;
     base <<= E;
     base &= ((cc128_length_t)1 << CC128_CAP_LEN_WIDTH) - 1;
     cc128_debug_assert((uint64_t)(base >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
     // top  : truncate((a_top + correction_top)  @ c.T @ zeros(E), cap_len_width);
     cc128_length_t top = (uint64_t)((int64_t)a_top + correction_top);
     top <<= CC128_MANTISSA_WIDTH;
-    top |= T;
+    top |= bounds.T;
     top <<= E;
     top &= ((cc128_length_t)1 << CC128_CAP_LEN_WIDTH) - 1;
     cc128_debug_assert((uint64_t)(top >> CC128_CAP_ADDR_WIDTH) <= 1); // max 65 bits
 
-    // if (base[cap_addr_width] == bitone) then {
-    bool base_high = (base >> CC128_CAP_ADDR_WIDTH);
-    if (base_high) {
-          /* If base[64] is set this indicates under or overflow i.e. a has
-           * wrapped around the address space and been corrected. In this case
-           * we need to correct top[64] because top is not quite modulo 2**64 due
-           * to having max top == 2**64 in one particular case:
-           */
-        // top[cap_addr_width] = if (aHi == 1) & (tHi == 1) then bitone else bitzero;
-        if (aHi && tHi) {
-            top |= ((cc128_length_t)1 << 64);
-        } else {
-            top &= UINT64_MAX; // clear top bit
-        }
-        base = (uint64_t)base; // strip the high bit
+    /* If the base and top are more than an address space away from each other,
+       invert the MSB of top.  This corrects for errors that happen when the
+       representable space wraps the address space. */
+    //  let base2 : bits(2) = 0b0 @ [base[cap_addr_width - 1]];
+    // Note: we ignore the top bit of base here. If we don't we can get cases
+    // where setbounds/incoffset/etc. break monotonicity.
+    unsigned base2 = cc128_truncate64(base >> (CC128_CAP_ADDR_WIDTH - 1), 1);
+    //  let top2  : bits(2) = top[cap_addr_width .. cap_addr_width - 1];
+    unsigned top2 = cc128_truncate64(top >> (CC128_CAP_ADDR_WIDTH - 1), 2);
+    //  if (E < (maxE - 1)) & (unsigned(top2 - base2) > 1) then {
+    //      top[cap_addr_width] = ~(top[cap_addr_width]);
+    //  };
+    if (E < (CC128_MAX_EXPONENT - 1) && (top2 - base2) > 1) {
+        top = top ^ ((unsigned __int128)1 << 64);
     }
-    cc128_debug_assert(base <= CC128_CAP_ADDR_MAX);
 
-    /* The following is apparently equivalent to above and used by hw. */
-    /*
-    let base2 : bits(2) = bitzero @ base[63];
-    let top2  : bits(2) = top[64..63];
-    if (E < (unsigned(resetE) - 1)) & (unsigned(top2 - base2) > 1) then {
-      top[64] = ~(top[64]);
-    };
-    */
     cc128_debug_assert((uint64_t)(top >> 64) <= 1); // should be at most 1 bit over
+    // Check that base <= top for valid inputs
+    if (_cc128_bounds_bits_valid(bounds)) {
+        // Note: base can be > 2^64 for some (untagged) inputs with E near maxE
+        // It can also be > top for some (untagged) inputs.
+        cc128_debug_assert((uint64_t)base <= top);
+    } else {
+        // cc128_debug_assert(!tagged && "Should not create invalid tagged capabilities");
+    }
+    *base_out = (uint64_t)base; // strip the (invalid) top bit
+    *top_out = top;
+}
 
-    // Note: top<base can happen for invalid capabilities with arbitrary bit patterns
-    cdp->_cr_top = top;
-    cdp->cr_base = (uint64_t)base;
+static inline void decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cap_register_t* cdp) {
+    cdp->_cr_cursor = cursor;
+    cdp->cr_perms = (uint32_t)CC128_EXTRACT_FIELD(pesbt, HWPERMS);
+    cdp->cr_uperms = (uint32_t)CC128_EXTRACT_FIELD(pesbt, UPERMS);
+    cdp->cr_otype = (uint32_t)CC128_EXTRACT_FIELD(pesbt, OTYPE);
+    cdp->cr_flags = (uint8_t)CC128_EXTRACT_FIELD(pesbt, FLAGS);
+    cdp->cr_reserved = (uint8_t)CC128_EXTRACT_FIELD(pesbt, RESERVED);
+    cdp->cr_ebt = (uint32_t)CC128_EXTRACT_FIELD(pesbt, EBT);
+
+    struct cc128_bounds_bits bounds = cc128_extract_bounds_bits(pesbt);
+    _cc128_compute_base_top(bounds, cursor, &cdp->cr_base, &cdp->_cr_top);
 }
 
 /*
