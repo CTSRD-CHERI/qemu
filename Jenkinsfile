@@ -1,5 +1,15 @@
 // import the cheribuildProject() step
-library 'ctsrd-jenkins-scripts'
+@Library('ctsrd-jenkins-scripts') _
+
+properties([
+    disableConcurrentBuilds(),
+    disableResume(),
+    [$class: 'GithubProjectProperty', projectUrlStr: 'https://github.com/CTSRD-CHERI/qemu'],
+    copyArtifactPermission('*'),
+    durabilityHint('PERFORMANCE_OPTIMIZED'),
+    pipelineTriggers([githubPush(), pollSCM('@daily')])
+])
+
 
 def archiveQEMU(String target) {
 	return {
