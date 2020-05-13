@@ -53,6 +53,7 @@ common-obj-$(CONFIG_WIN32) += os-win32.o
 common-obj-$(CONFIG_POSIX) += os-posix.o
 
 common-obj-$(CONFIG_LINUX) += fsdev/
+common-obj-$(CONFIG_DARWIN) += fsdev/
 
 common-obj-y += accel/
 common-obj-y += migration/
