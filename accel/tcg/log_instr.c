@@ -611,7 +611,7 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
     uint32_t curr_level = qemu_loglevel & INSTR_LOG_MASK;
 
-    log_assert(log != NULL && "Invalid log buffer");
+    log_assert(iinfo != NULL && "Invalid log buffer");
     log_assert((mode & CPU_LOG_INSTR) || (mode & CPU_LOG_USER_ONLY) == 0 &&
         "If enabling USER_ONLY logging, LOG_INSTR must also be enabled");
 
@@ -644,7 +644,7 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
     uint32_t curr_level = qemu_loglevel & INSTR_LOG_MASK;
     uint32_t next_level = curr_level & ~(mode);
 
-    log_assert(log != NULL && "Invalid log buffer");
+    log_assert(iinfo != NULL && "Invalid log buffer");
 
     /* If mode bits changed, we changed state */
     if (loglevel_changed(CPU_LOG_INSTR, curr_level, next_level)) {
@@ -692,7 +692,7 @@ void qemu_log_instr_drop(CPUArchState *env)
 {
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
 
-    log_assert(log != NULL && "Invalid log buffer");
+    log_assert(iinfo != NULL && "Invalid log buffer");
 
     iinfo->force_drop = true;
 }
@@ -701,7 +701,7 @@ void qemu_log_instr_commit(CPUArchState *env)
 {
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
 
-    log_assert(log != NULL && "Invalid log buffer");
+    log_assert(iinfo != NULL && "Invalid log buffer");
 
     if (iinfo->force_drop)
         goto out;
