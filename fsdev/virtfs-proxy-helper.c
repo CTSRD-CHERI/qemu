@@ -13,19 +13,22 @@
 #include <sys/resource.h>
 #include <getopt.h>
 #include <syslog.h>
+#ifdef CONFIG_LINUX
 #include <sys/fsuid.h>
-#include <sys/vfs.h>
 #include <sys/ioctl.h>
 #include <linux/fs.h>
 #ifdef CONFIG_LINUX_MAGIC_H
 #include <linux/magic.h>
 #endif
 #include <cap-ng.h>
+#endif
 #include "qemu-common.h"
 #include "qemu/sockets.h"
 #include "qemu/xattr.h"
+#include "qemu/statfs.h"
 #include "9p-iov-marshal.h"
 #include "hw/9pfs/9p-proxy.h"
+#include "hw/9pfs/9p-util.h"
 #include "fsdev/9p-iov-marshal.h"
 
 #define PROGNAME "virtfs-proxy-helper"
@@ -79,6 +82,7 @@ static void do_perror(const char *string)
     }
 }
 
+#ifdef CONFIG_LINUX
 static int init_capabilities(void)
 {
     /* helper needs following capabilities only */
@@ -120,6 +124,51 @@ static int init_capabilities(void)
     }
     return 0;
 }
+#else
+static int setugid(int uid, int gid, int *suid, int *sgid)
+{
+    int retval;
+
+    *suid = geteuid();
+    *sgid = getegid();
+
+    if (setegid(gid) == -1) {
+        retval = -errno;
+        goto err_out;
+    }
+
+    if (seteuid(uid) == -1) {
+        retval = -errno;
+        goto err_sgid;
+    }
+
+err_sgid:
+    if (setgid(*sgid) == -1) {
+        abort();
+    }
+err_out:
+    return retval;
+}
+
+/*
+ * This is used to reset the ugid back with the saved values
+ * There is nothing much we can do checking error values here.
+ */
+static void resetugid(int suid, int sgid)
+{
+    if (setegid(sgid) == -1) {
+        abort();
+    }
+    if (seteuid(suid) == -1) {
+        abort();
+    }
+}
+
+static int init_capabilities(void)
+{
+    return 0;
+}
+#endif
 
 static int socket_read(int sockfd, void *buff, ssize_t size)
 {
@@ -263,6 +312,7 @@ static int send_status(int sockfd, struct iovec *iovec, int status)
     return 0;
 }
 
+#ifdef CONFIG_LINUX
 /*
  * from man 7 capabilities, section
  * Effect of User ID Changes on Capabilities:
@@ -337,6 +387,7 @@ static void resetugid(int suid, int sgid)
         abort();
     }
 }
+#endif
 
 /*
  * send response in two parts
@@ -445,7 +496,7 @@ static int do_getxattr(int type, struct iovec *iovec, struct iovec *out_iovec)
         v9fs_string_init(&name);
         retval = proxy_unmarshal(iovec, offset, "s", &name);
         if (retval > 0) {
-            retval = lgetxattr(path.data, name.data, xattr.data, size);
+            retval = qemu_lgetxattr(path.data, name.data, xattr.data, size);
             if (retval < 0) {
                 retval = -errno;
             } else {
@@ -455,7 +506,7 @@ static int do_getxattr(int type, struct iovec *iovec, struct iovec *out_iovec)
         v9fs_string_free(&name);
         break;
     case T_LLISTXATTR:
-        retval = llistxattr(path.data, xattr.data, size);
+        retval = qemu_llistxattr(path.data, xattr.data, size);
         if (retval < 0) {
             retval = -errno;
         } else {
@@ -492,12 +543,21 @@ static void stat_to_prstat(ProxyStat *pr_stat, struct stat *stat)
     pr_stat->st_size = stat->st_size;
     pr_stat->st_blksize = stat->st_blksize;
     pr_stat->st_blocks = stat->st_blocks;
+#ifdef CONFIG_DARWIN
+    pr_stat->st_atim_sec = stat->st_atimespec.tv_sec;
+    pr_stat->st_atim_nsec = stat->st_atimespec.tv_nsec;
+    pr_stat->st_mtim_sec = stat->st_mtimespec.tv_sec;
+    pr_stat->st_mtim_nsec = stat->st_mtimespec.tv_nsec;
+    pr_stat->st_ctim_sec = stat->st_ctimespec.tv_sec;
+    pr_stat->st_ctim_nsec = stat->st_ctimespec.tv_nsec;
+#else
     pr_stat->st_atim_sec = stat->st_atim.tv_sec;
     pr_stat->st_atim_nsec = stat->st_atim.tv_nsec;
     pr_stat->st_mtim_sec = stat->st_mtim.tv_sec;
     pr_stat->st_mtim_nsec = stat->st_mtim.tv_nsec;
     pr_stat->st_ctim_sec = stat->st_ctim.tv_sec;
     pr_stat->st_ctim_nsec = stat->st_ctim.tv_nsec;
+#endif
 }
 
 static void statfs_to_prstatfs(ProxyStatFS *pr_stfs, struct statfs *stfs)
@@ -510,10 +570,15 @@ static void statfs_to_prstatfs(ProxyStatFS *pr_stfs, struct statfs *stfs)
     pr_stfs->f_bavail = stfs->f_bavail;
     pr_stfs->f_files = stfs->f_files;
     pr_stfs->f_ffree = stfs->f_ffree;
+#ifdef CONFIG_DARWIN
+    pr_stfs->f_fsid[0] = stfs->f_fsid.val[0];
+    pr_stfs->f_fsid[1] = stfs->f_fsid.val[1];
+#else
     pr_stfs->f_fsid[0] = stfs->f_fsid.__val[0];
     pr_stfs->f_fsid[1] = stfs->f_fsid.__val[1];
     pr_stfs->f_namelen = stfs->f_namelen;
     pr_stfs->f_frsize = stfs->f_frsize;
+#endif
 }
 
 /*
@@ -934,8 +999,7 @@ static int process_requests(int sock)
                                      &spec[0].tv_sec, &spec[0].tv_nsec,
                                      &spec[1].tv_sec, &spec[1].tv_nsec);
             if (retval > 0) {
-                retval = utimensat(AT_FDCWD, path.data, spec,
-                                   AT_SYMLINK_NOFOLLOW);
+                retval = utimensat_nofollow(AT_FDCWD, path.data, spec);
                 if (retval < 0) {
                     retval = -errno;
                 }
@@ -978,7 +1042,7 @@ static int process_requests(int sock)
             retval = proxy_unmarshal(&in_iovec, PROXY_HDR_SZ, "sssdd", &path,
                                      &name, &value, &size, &flags);
             if (retval > 0) {
-                retval = lsetxattr(path.data,
+                retval = qemu_lsetxattr(path.data,
                                    name.data, value.data, size, flags);
                 if (retval < 0) {
                     retval = -errno;
@@ -994,7 +1058,7 @@ static int process_requests(int sock)
             retval = proxy_unmarshal(&in_iovec,
                                      PROXY_HDR_SZ, "ss", &path, &name);
             if (retval > 0) {
-                retval = lremovexattr(path.data, name.data);
+                retval = qemu_lremovexattr(path.data, name.data);
                 if (retval < 0) {
                     retval = -errno;
                 }
