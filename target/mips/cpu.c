@@ -180,6 +180,12 @@ const char mips_cheri_hw_regnames[32][10] = {
 };
 #endif
 
+#ifdef CONFIG_TCG_LOG_INSTR
+const char * const mips_cpu_mode_names[QEMU_LOG_INSTR_CPU_MODE_MAX] = {
+    "User", "Kernel", "<invalid>", "Debug", "Supervisor",
+};
+#endif
+
 static void mips_cpu_set_pc(CPUState *cs, vaddr value)
 {
     MIPSCPU *cpu = MIPS_CPU(cs);

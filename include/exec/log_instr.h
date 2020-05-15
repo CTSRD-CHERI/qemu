@@ -41,8 +41,12 @@
  *
  * # Adding a new target
  * The following functions must be defined by the target and declared in cpu.h:
- * - bool cpu_in_user_mode(env) // return whether the cpu is in user mode
- * - uint16_t cpu_get_asid(env) // return the hardware address space identifier
+ * - bool cpu_in_user_mode(env)
+ *   return whether the cpu is in user mode
+ * - uint16_t cpu_get_asid(env)
+ *   return the hardware address space identifier
+ * - const char *cpu_get_mode_name(env, mode)
+ *   return the mode name associated with a qemu_log_instr_cpu_mode_t for printing.
  *
  * - Each target should implement their own register update logging helpers that
  *   call into qemu_log_instr_gpr(), qemu_log_instr_cap() and similar interface
@@ -157,10 +161,18 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc);
 void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc);
 
 /*
- * Switch user/kernel modes. Note this could be extended to support other rings
- * if needed.
+ * Signal the start of a new translation block to the logging subsystem.
+ * This is currently used internally in TCG.
  */
-void qemu_log_instr_mode_switch(CPUArchState *env, bool user, target_ulong pc);
+void qemu_log_instr_tb_start(CPUArchState *env);
+
+/*
+ * Log a switch inc CPU modes.
+ * This will also trigger pause and resume of user-only logging activity,
+ * depending whether the mode parameter is QEMU_LOG_INSTR_CPU_USER or not.
+ */
+void qemu_log_instr_mode_switch(CPUArchState *env,
+    qemu_log_instr_cpu_mode_t mode, target_ulong pc);
 
 /*
  * Drop the current buffered entry and ignore logging until next commit.

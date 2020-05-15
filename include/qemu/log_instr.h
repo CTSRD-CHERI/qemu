@@ -49,6 +49,24 @@ typedef enum {
 
 extern qemu_log_instr_fmt_t qemu_log_instr_format;
 
+/*
+ * CPU mode. This unifies the logging codes for CPU mode switches.
+ * we take the same approach as with TCG DisasJumpType, where target
+ * specific modes are supported by using one of the TARGET* values.
+ * These values are meant to be usable for array indexing.
+ */
+typedef enum {
+    QEMU_LOG_INSTR_CPU_USER = 0,
+    QEMU_LOG_INSTR_CPU_SUPERVISOR = 1,
+    QEMU_LOG_INSTR_CPU_HYPERVISOR = 2,
+    QEMU_LOG_INSTR_CPU_DEBUG = 3,
+    QEMU_LOG_INSTR_CPU_TARGET1 = 4,
+    QEMU_LOG_INSTR_CPU_TARGET2 = 5,
+    QEMU_LOG_INSTR_CPU_TARGET3 = 6,
+    QEMU_LOG_INSTR_CPU_TARGET4 = 7,
+    QEMU_LOG_INSTR_CPU_MODE_MAX
+} qemu_log_instr_cpu_mode_t;
+
 static inline void qemu_log_instr_set_format(qemu_log_instr_fmt_t fmt)
 {
     qemu_log_instr_format = fmt;

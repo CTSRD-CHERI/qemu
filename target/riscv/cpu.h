@@ -603,6 +603,12 @@ riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
 #define cpu_get_tb_cpu_state_6 riscv_cpu_get_tb_cpu_state
 
 #ifdef CONFIG_TCG_LOG_INSTR
+#define RISCV_LOG_INSTR_CPU_U QEMU_LOG_INSTR_CPU_USER
+#define RISCV_LOG_INSTR_CPU_S QEMU_LOG_INSTR_CPU_SUPERVISOR
+#define RISCV_LOG_INSTR_CPU_H QEMU_LOG_INSTR_CPU_HYPERVISOR
+#define RISCV_LOG_INSTR_CPU_M QEMU_LOG_INSTR_CPU_TARGET1
+extern const char * const riscv_cpu_mode_names[];
+
 static inline bool cpu_in_user_mode(CPURISCVState *env)
 {
     return env->priv == PRV_U;
@@ -611,6 +617,13 @@ static inline bool cpu_in_user_mode(CPURISCVState *env)
 static inline unsigned cpu_get_asid(CPURISCVState *env)
 {
     return get_field(env->satp, SATP_ASID);
+}
+
+static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode)
+{
+    if (riscv_cpu_mode_names[mode])
+        return riscv_cpu_mode_names[mode];
+    return "<invalid>";
 }
 #endif
 

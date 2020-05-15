@@ -100,54 +100,34 @@ void helper_mips_log_instr_drop(CPUMIPSState *env)
     qemu_log_instr_drop(env);
 }
 
-// TODO(am2419): port to separate helper or deprecate remove
-static const char* mips_cpu_get_changed_mode(CPUMIPSState *env);
-void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc);
-void helper_mips_log_instr_changed_state(CPUMIPSState *env, target_ulong pc)
-{
-    const char *new_mode = mips_cpu_get_changed_mode(env);
-    /* Testing pointer equality is fine, it always points to the same constants */
-    if (new_mode != env->last_mode) {
-        env->last_mode = new_mode;
-        qemu_log_instr_extra(env, "--- %s\n", new_mode);
-        qemu_log_instr_mode_switch(env, /*enable*/cpu_in_user_mode(env), pc);
-    }
-}
-
 /*
- * Print changed kernel/user/debug mode.
+ * Note: do not check for logging enabled first, as this triggers
+ * user logging start.
  */
-static const char* mips_cpu_get_changed_mode(CPUMIPSState *env)
+void mips_log_instr_mode_changed(CPUMIPSState *env, target_ulong pc)
 {
-    const char *kernel0, *kernel1, *mode;
-
-#if defined(TARGET_MIPS64)
-    if (env->CP0_Status & (1 << CP0St_KX)) {
-        kernel0 = "Kernel mode (ERL=0, KX=1)";
-        kernel1 = "Kernel mode (ERL=1, KX=1)";
-    } else {
-        kernel0 = "Kernel mode (ERL=0, KX=0)";
-        kernel1 = "Kernel mode (ERL=1, KX=0)";
-    }
-#else
-    kernel0 = "Kernel mode (ERL=0)";
-    kernel1 = "Kernel mode (ERL=1)";
-#endif
+    qemu_log_instr_cpu_mode_t mode;
 
     if (env->CP0_Debug & (1 << CP0DB_DM)) {
-        mode = "Debug mode";
+        mode = MIPS_LOG_INSTR_CPU_DEBUG;
     } else if (env->CP0_Status & (1 << CP0St_ERL)) {
-        mode = kernel1;
+        mode = MIPS_LOG_INSTR_CPU_KERNEL;
     } else if (env->CP0_Status & (1 << CP0St_EXL)) {
-        mode = kernel0;
+        mode = MIPS_LOG_INSTR_CPU_KERNEL;
     } else {
         switch (extract32(env->CP0_Status, CP0St_KSU, 2)) {
-        case 0:  mode = kernel0;           break;
-        case 1:  mode = "Supervisor mode"; break;
-        default: mode = TRACE_MODE_USER;   break;
+        case 0:
+            mode = MIPS_LOG_INSTR_CPU_KERNEL;
+            break;
+        case 1:
+            mode = MIPS_LOG_INSTR_CPU_SUPERVISOR;
+            break;
+        default:
+            mode = MIPS_LOG_INSTR_CPU_USER;
+            break;
         }
     }
-    return mode;
+    qemu_log_instr_mode_switch(env, mode, pc);
 }
 
 void do_hexdump(GString *strbuf, uint8_t* buffer, target_ulong length,

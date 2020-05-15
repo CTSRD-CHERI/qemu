@@ -31968,17 +31968,6 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     if (is_slot) {
         gen_branch(ctx, insn_bytes);
     }
-/* #ifdef CONFIG_TCG_LOG_INSTR */
-/*     if (unlikely(ctx->base.log_instr_enabled)) { */
-/*         /\* */
-/*          * TODO(am2419): do we really need this? we catch mode changes in */
-/*          * the exception path anyway... */
-/*          *\/ */
-/*         TCGv tpc = tcg_const_tl(ctx->base.pc_next); */
-/*         gen_helper_mips_log_instr_changed_state(cpu_env, tpc); */
-/*         tcg_temp_free(tpc); */
-/*     } */
-/* #endif */
     ctx->base.pc_next += insn_bytes;
 
     if (ctx->base.is_jmp != DISAS_NEXT) {

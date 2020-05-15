@@ -48,7 +48,8 @@ void riscv_log_instr_csr_changed(CPURISCVState *env, int csrno)
             csr_ops[csrno].op(env, csrno, &value, 0, /*write_mask*/0);
         else
             return;
-        csr_ops[csrno].log_update(env, csrno, value);
+        if (csr_ops[csrno].log_update)
+            csr_ops[csrno].log_update(env, csrno, value);
     }
 }
 #endif

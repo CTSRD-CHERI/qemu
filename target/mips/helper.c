@@ -1609,15 +1609,8 @@ void mips_cpu_do_interrupt(CPUState *cs)
     cs->exception_index = EXCP_NONE;
 
 #ifdef CONFIG_TCG_LOG_INSTR
-    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
-        /*
-         * Note: This must be issued after we logged everything we wanted for
-         * the current instruction.
-         * PC is guaranteed to be the current pc by the assertion above.
-         */
-        qemu_log_instr_mode_switch(env, /*enable*/false, cpu_get_recent_pc(env));
-    }
-#endif /* CONFIG_TCG_LOG_INSTR */
+    mips_log_instr_mode_changed(env, cpu_get_recent_pc(env));
+#endif
 }
 
 bool mips_cpu_exec_interrupt(CPUState *cs, int interrupt_request)

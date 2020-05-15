@@ -1138,9 +1138,7 @@ static void debug_post_eret(CPUMIPSState *env)
     const char *flag;
 
 #ifdef CONFIG_TCG_LOG_INSTR
-    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) && cpu_in_user_mode(env)) {
-        qemu_log_instr_mode_switch(env, /*enable*/true, cpu_get_recent_pc(env));
-    }
+    mips_log_instr_mode_changed(env, cpu_get_recent_pc(env));
 #endif
 
     if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_EXEC)) {
