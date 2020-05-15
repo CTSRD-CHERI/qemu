@@ -117,6 +117,12 @@ const char * const riscv_intr_names[] = {
     "reserved"
 };
 
+#ifdef CONFIG_TCG_LOG_INSTR
+const char * const riscv_cpu_mode_names[QEMU_LOG_INSTR_CPU_MODE_MAX] = {
+    "User", "Supervisor", "Hypervisor", "<invalid>", "Machine",
+};
+#endif
+
 static void set_misa(CPURISCVState *env, target_ulong misa)
 {
     env->misa_mask = env->misa = misa;
@@ -365,10 +371,9 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
 #ifdef TARGET_CHERI
     assert(cap_is_in_bounds(&env->PCC, data[0], 0));
     if (unlikely(env->PCC._cr_cursor != data[0])) {
-        qemu_log_mask_and_addr(CPU_LOG_INT | CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                               "%s: Updating pc from TB: " TARGET_FMT_lx
-                               " -> " TARGET_FMT_lx "\n",
-                               __func__, (target_ulong)env->PCC._cr_cursor, data[0]);
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "%s: Updating pc from TB: " TARGET_FMT_lx " -> " TARGET_FMT_lx "\n",
+            __func__, (target_ulong)env->PCC._cr_cursor, data[0]);
     }
 #endif
     riscv_update_pc(env, data[0], /*can_be_unrepresentable=*/false);

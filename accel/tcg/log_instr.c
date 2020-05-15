@@ -97,9 +97,15 @@ typedef struct cpu_log_instr_info {
     bool force_drop;
     uint16_t asid;
     int flags;
+/* Entry contains a synchronous exception */
 #define LI_FLAG_INTR_TRAP 1
+/* Entry contains an asynchronous exception */
 #define LI_FLAG_INTR_ASYNC 2
 #define LI_FLAG_INTR_MASK 0x3
+/* Entry contains a CPU mode-switch and associated code */
+#define LI_FLAG_MODE_SWITCH 4
+
+    qemu_log_instr_cpu_mode_t next_cpu_mode;
     uint32_t intr_code;
     target_ulong intr_vector;
     target_ulong intr_faultaddr;
@@ -344,15 +350,18 @@ static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
      * Is the rvfi_dii_trace state valid at log commit?
      */
 
+    /* Dump mode switching info */
+    if (iinfo->flags & LI_FLAG_MODE_SWITCH)
+        qemu_log("-> Switch to %s mode\n", cpu_get_mode_name(iinfo->next_cpu_mode));
     /* Dump interrupt/exception info */
     switch (iinfo->flags & LI_FLAG_INTR_MASK) {
     case LI_FLAG_INTR_TRAP:
-        qemu_log("--- Exception #%u vector 0x" TARGET_FMT_lx
+        qemu_log("-> Exception #%u vector 0x" TARGET_FMT_lx
                  " fault-addr 0x" TARGET_FMT_lx "\n",
                  iinfo->intr_code, iinfo->intr_vector, iinfo->intr_faultaddr);
         break;
     case LI_FLAG_INTR_ASYNC:
-        qemu_log("--- Interrupt #%04x vector 0x" TARGET_FMT_lx "\n",
+        qemu_log("-> Interrupt #%04x vector 0x" TARGET_FMT_lx "\n",
                  iinfo->intr_code, iinfo->intr_vector);
         break;
     default:
@@ -524,6 +533,7 @@ static void emit_cvtrace_stop(CPUArchState *env, target_ulong pc)
 
 /* Core instruction logging implementation */
 
+/* Reset instruction info buffer for next instruction */
 static void reset_log_buffer(cpu_log_instr_info_t *iinfo)
 {
     memset(&iinfo->cpu_log_iinfo_startzero, 0,
@@ -533,6 +543,41 @@ static void reset_log_buffer(cpu_log_instr_info_t *iinfo)
     g_array_remove_range(iinfo->mem, 0, iinfo->mem->len);
     g_string_erase(iinfo->txt_buffer, 0, -1);
     iinfo->force_drop = false;
+}
+
+/* Common instruction commit implementation */
+static void do_instr_commit(CPUArchState *env)
+{
+    cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
+
+    log_assert(iinfo != NULL && "Invalid log buffer");
+
+    if (iinfo->force_drop)
+        return;
+
+    /* Check for dfilter matches in this instruction */
+    if (debug_regions) {
+        int i, j;
+        bool match = false;
+        for (i = 0; !match && i < debug_regions->len; i++) {
+            Range *range = &g_array_index(debug_regions, Range, i);
+            match = range_contains(range, iinfo->pc);
+            if (match)
+                break;
+
+            for (j = 0; j < iinfo->mem->len; j++) {
+                log_meminfo_t *minfo = &g_array_index(iinfo->mem, log_meminfo_t, j);
+                match = range_contains(range, minfo->addr);
+                if (match)
+                    break;
+            }
+        }
+        if (match)
+            trace_format->emit_entry(env, iinfo);
+    } else {
+        /* dfilter disabled, always log */
+        trace_format->emit_entry(env, iinfo);
+    }
 }
 
 /*
@@ -567,12 +612,28 @@ void qemu_log_instr_init(CPUState *cpu)
  * This may flush too much state, but such changes should be rare.
  */
 void qemu_log_instr_flush_tcg(void) {
+#ifdef CONFIG_DEBUG_TCG
     warn_report("Calling real %s\r", __func__);
-    CPUState *cpu;
     int cpu_index = 0;
+#endif
+    CPUState *cpu;
     CPU_FOREACH(cpu) {
+#ifdef CONFIG_DEBUG_TCG
         warn_report("Flushing TCG for CPU %d\r", cpu_index++);
+#endif
         tb_flush(cpu);
+        /*
+         * TODO(am2419): use async_safe_run_on_cpu to switch tracing state on/off.
+         * We are causing a translation loop exit anyway by flushing so there is
+         * no reason to replicate the machinery in the translator loop before
+         * the first instruction is issued (in qemu_log_instr_tb_start).
+         * Note: we should really make the global CPU_LOG_INSTR and
+         * CPU_LOG_USER_ONLY private flags of the instruction logging subsystem
+         * and handle them per-cpu so that no instruction logging state is global.
+         * This also means that when switching on/off we have the option to turn
+         * it on cpu-wise.
+         * async_safe_run_on_cpu(cpu, do_log_instr_switch, NULL);
+         */
     }
 }
 
@@ -623,8 +684,7 @@ void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc)
         cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
 
         cpulog->user_mode_tracing = cpu_in_user_mode(env);
-        /* if (iinfo->user_mode_tracing) */
-            trace_format->emit_start(env, pc);
+        trace_format->emit_start(env, pc);
     } else if (loglevel_changed(CPU_LOG_INSTR, curr_level, mode)) {
         trace_format->emit_start(env, pc);
     }
@@ -662,29 +722,71 @@ void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc)
 }
 
 /*
- * Toggle tracing if we are switching mode.
- * Note: this does not flush the tcg instruction buffer, this must be
- * done by the caller, if needed.
+ * Record a change in CPU mode.
+ * This will also trigger pause and resume of user-only logging activity,
+ * the bulk of the user-log mode switching is performed in
+ * qemu_log_instr_tb_start().
+ *
+ * We flush the TCG buffer when we have to change logging level, this
+ * will cause an exit from the cpu_exec() loop and resume in the
+ * translator loop for the fresh TCG TB for the next instruction,
+ * which triggers qemu_log_instr_tb_start().
  */
-void qemu_log_instr_mode_switch(CPUArchState *env, bool enable,
-                                 target_ulong pc)
+void qemu_log_instr_mode_switch(CPUArchState *env,
+    qemu_log_instr_cpu_mode_t mode, target_ulong pc)
 {
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
+    cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
 
     log_assert(cpulog != NULL && "Invalid log info");
 
+    iinfo->flags |= LI_FLAG_MODE_SWITCH;
+    iinfo->next_cpu_mode = mode;
+
     if (qemu_loglevel_mask(CPU_LOG_USER_ONLY) &&
-        cpulog->user_mode_tracing != enable) {
-        if (enable) {
-            cpulog->user_mode_tracing = true;
-            trace_format->emit_start(env, pc);
-        } else {
-            /* Commit the stopping instruction in any case */
-            qemu_log_instr_commit(env);
-            trace_format->emit_stop(env, pc);
-            cpulog->user_mode_tracing = false;
-        }
+        ((cpulog->user_mode_tracing && mode != QEMU_LOG_INSTR_CPU_USER) ||
+         (!cpulog->user_mode_tracing && mode == QEMU_LOG_INSTR_CPU_USER))) {
+        /* Make sure pc is up to date when starting logging */
+        iinfo->pc = pc;
         qemu_log_instr_flush_tcg();
+    }
+}
+
+/*
+ * Process start of a new translation block.
+ * This will pause and resume of user-only logging activity,
+ * depending whether the mode parameter is QEMU_LOG_INSTR_CPU_USER or not.
+ * - If we are resuming instruction logging, we emit the logging start event,
+ *   and drop everything until the next instruction commit.
+ *   This is because the instruction info entry for the instruction that
+ *   starts logging is assumed to be incomplete.
+ * - If we are pausing instruction logging, we commit the last instruction entry
+ *   so we catch catch side-effects happening during interrupt processing
+ *   after the TCG has been flushed on the return path from the cpu_exec() loop.
+ */
+void qemu_log_instr_tb_start(CPUArchState *env)
+{
+    cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
+    cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
+
+    if (qemu_loglevel_mask(CPU_LOG_USER_ONLY)) {
+        if (cpulog->user_mode_tracing &&
+            (iinfo->flags & LI_FLAG_MODE_SWITCH) &&
+            iinfo->next_cpu_mode != QEMU_LOG_INSTR_CPU_USER) {
+            /* Commit stopping instruction */
+            do_instr_commit(env);
+            /* Switch off user tracing */
+            trace_format->emit_stop(env, iinfo->pc);
+            cpulog->user_mode_tracing = false;
+            reset_log_buffer(iinfo);
+        } else if (!cpulog->user_mode_tracing &&
+                   (iinfo->flags & LI_FLAG_MODE_SWITCH) &&
+                   iinfo->next_cpu_mode == QEMU_LOG_INSTR_CPU_USER) {
+            /* start instruction logging from next instruction */
+            cpulog->user_mode_tracing = true;
+            trace_format->emit_start(env, iinfo->pc);
+            iinfo->force_drop = true;
+        }
     }
 }
 
@@ -701,36 +803,7 @@ void qemu_log_instr_commit(CPUArchState *env)
 {
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
 
-    log_assert(iinfo != NULL && "Invalid log buffer");
-
-    if (iinfo->force_drop)
-        goto out;
-
-    /* Check for dfilter matches in this instruction */
-    if (debug_regions) {
-        int i, j;
-        bool match = false;
-        for (i = 0; !match && i < debug_regions->len; i++) {
-            Range *range = &g_array_index(debug_regions, Range, i);
-            match = range_contains(range, iinfo->pc);
-            if (match)
-                break;
-
-            for (j = 0; j < iinfo->mem->len; j++) {
-                log_meminfo_t *minfo = &g_array_index(iinfo->mem, log_meminfo_t, j);
-                match = range_contains(range, minfo->addr);
-                if (match)
-                    break;
-            }
-        }
-        if (match)
-            trace_format->emit_entry(env, iinfo);
-    } else {
-        /* dfilter disabled, always log */
-        trace_format->emit_entry(env, iinfo);
-    }
-
-out:
+    do_instr_commit(env);
     reset_log_buffer(iinfo);
 }
 
@@ -904,7 +977,7 @@ void helper_qemu_log_instr_start(CPUArchState *env, target_ulong pc)
 void helper_qemu_log_instr_stop(CPUArchState *env, target_ulong pc)
 {
     /* Commit the stopping instruction in any case */
-    qemu_log_instr_commit(env);
+    do_instr_commit(env);
     qemu_log_instr_stop(env, CPU_LOG_INSTR, pc);
 }
 
@@ -919,6 +992,8 @@ void helper_qemu_log_instr_user_start(CPUArchState *env, target_ulong pc)
 
 void helper_qemu_log_instr_user_stop(CPUArchState *env, target_ulong pc)
 {
+    /* Commit the stopping instruction in any case */
+    do_instr_commit(env);
     qemu_log_instr_stop(env, CPU_LOG_INSTR | CPU_LOG_USER_ONLY, pc);
 }
 

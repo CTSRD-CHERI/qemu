@@ -1482,8 +1482,15 @@ static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr, bool 
 
 
 #ifdef CONFIG_TCG_LOG_INSTR
-/*
- * Check whether the cpu is in user mode.
+#define MIPS_LOG_INSTR_CPU_USER QEMU_LOG_INSTR_CPU_USER
+#define MIPS_LOG_INSTR_CPU_SUPERVISOR QEMU_LOG_INSTR_CPU_TARGET1
+#define MIPS_LOG_INSTR_CPU_KERNEL QEMU_LOG_INSTR_CPU_SUPERVISOR
+#define MIPS_LOG_INSTR_CPU_DEBUG QEMU_LOG_INSTR_CPU_DEBUG
+extern const char * const mips_cpu_mode_names[];
+
+/* 
+ * Check whether the cpu is in user mode. 
+ * TODO(am2419): this may be superseded by cpu-mode logging API.
  */
 static inline bool cpu_in_user_mode(CPUMIPSState *env)
 {
@@ -1494,19 +1501,16 @@ static inline unsigned cpu_get_asid(CPUMIPSState *env) {
     uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
     return ASID;
 }
-#endif
 
-// TODO(am2419): deprecated remove
-static inline bool should_log_instr(CPUArchState *env, int log_mask) {
-    if (likely(!(qemu_loglevel_mask(log_mask))))
-        return false;
-
-    // Try not to dump all registers when -dfilter is enabled
-    // Note: we check PC in -dfilter
-    if (likely(!qemu_log_in_addr_range(cpu_get_recent_pc(env))))
-        return false;
-    return true;
+static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode)
+{
+    if (mips_cpu_mode_names[mode])
+        return mips_cpu_mode_names[mode];
+    return "<invalid>";
 }
+
+void mips_log_instr_mode_changed(CPUMIPSState *env, target_ulong pc);
+#endif
 
 #if defined(TARGET_CHERI)
 void cheri_cpu_dump_statistics(CPUState *cs, int flags);
