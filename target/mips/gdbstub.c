@@ -164,6 +164,7 @@ int mips_gdb_set_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n)
 #define CHERI_GDB_NUM_CAPREGS (CHERI_GDB_NUM_GP_CAPREGS + CHERI_GDB_NUM_SPECIAL_CAPREGS)
 #define CHERI_GDB_NUM_INTREGS 2
 #define CHERI_GDB_NUM_REGS (CHERI_GDB_NUM_CAPREGS + CHERI_GDB_NUM_INTREGS)
+_Static_assert(CHERI_GDB_NUM_REGS == 44, "");
 
 int mips_gdb_get_cheri_reg(CPUMIPSState *env, GByteArray *mem_buf, int n)
 {
@@ -194,9 +195,9 @@ int mips_gdb_get_cheri_reg(CPUMIPSState *env, GByteArray *mem_buf, int n)
         return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.EPCC);
     case 41:
         return gdb_get_capreg(mem_buf, &env->active_tc.CHWR.ErrorEPCC);
-    case CHERI_GDB_NUM_CAPREGS + 1:
+    case CHERI_GDB_NUM_CAPREGS:
         return gdb_get_regl(mem_buf, env->CP2_CapCause);
-    case CHERI_GDB_NUM_CAPREGS + 2: {
+    case CHERI_GDB_NUM_CAPREGS + 1: {
         uint64_t cap_valid;
         int i;
 
