@@ -184,16 +184,16 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
     }
     if (cs != 0) {
         assert(scr_info[index].w && "Bug? Should be writable");
-        qemu_log_mask_and_addr(CPU_LOG_INSTR, cpu_get_recent_pc(env),
-                               "  %s <- " PRINT_CAP_FMTSTR "\n",
-                               scr_info[index].name, PRINT_CAP_ARGS(&new_val));
-        if (index == CheriSCR_DDC && !new_val.cr_tag) {
-            target_ulong recent_pc = cpu_get_recent_pc(env);
-            qemu_log_mask_and_addr(
-                CPU_LOG_INSTR | CPU_LOG_INT, recent_pc,
-                "  Note: Installed untagged $ddc at " TARGET_FMT_lx "\n",
-                recent_pc);
+#ifdef CONFIG_TCG_LOG_INSTR
+        if (qemu_log_instr_enabled(env)) {
+            qemu_log_instr_extra(env, "  %s <- " PRINT_CAP_FMTSTR "\n",
+                scr_info[index].name, PRINT_CAP_ARGS(&new_val));
         }
+#endif
+        if (index == CheriSCR_DDC && !new_val.cr_tag)
+            qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+                "  Note: Installed untagged $ddc at " TARGET_FMT_lx "\n",
+                cpu_get_recent_pc(env));
         *scr = new_val;
         cheri_log_instr_changed_capreg(env, scr_info[index].name, scr);
     }
@@ -239,8 +239,7 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
 
     uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
             "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
             " addr=" TARGET_FMT_plx "\n",
@@ -284,8 +283,7 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
 
     uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
             "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
             " addr=" TARGET_FMT_plx "\n",
@@ -357,8 +355,7 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
 
     uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_mask_and_addr(
-            CPU_LOG_INSTR | CPU_LOG_INT, cpu_get_recent_pc(env),
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
             "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
             " addr=" TARGET_FMT_plx "\n",
