@@ -303,6 +303,7 @@ int riscv_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
         gpr_set_int_value(env, n, ldtul_p(mem_buf));
         return sizeof(target_ulong);
     } else if (n == 32) {
+        /* TODO(am2419): arguably we don't want to log changes from gdb */
         SET_SPECIAL_REG(env, pc, PCC, ldtul_p(mem_buf));
         return sizeof(target_ulong);
     }
