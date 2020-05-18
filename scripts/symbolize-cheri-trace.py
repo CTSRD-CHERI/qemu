@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 
-address_regex = re.compile(b"^(0x[a-f0-9]+):")
+address_regex = re.compile(b"^\\[[\\w\\d:]+\\]\\s+(0x[a-f0-9]+):")
 # UNKNOWN_ADDRESS = b"??:0\n"
 UNKNOWN_ADDRESS = b"?? at ??:0:0\n"
 
@@ -18,11 +18,14 @@ def yamon_symbol_name(name: bytes, start_addr: int, addr: int):
 
 
 def symbolize_line(llvm_symbolizer: subprocess.Popen, line: bytes) -> bytes:
-    if not line.startswith(b"0x"):
+    # print(line, file=sys.stderr)
+    if not line.startswith(b"["):
         return line
     match = address_regex.match(line)
+    # print("Match=", match, file=sys.stderr)
     if not match:
         return line
+    # print("Group=", match.group(1), file=sys.stderr)
     address = match.group(1)
     llvm_symbolizer.stdin.write(address + b"\n")
     llvm_symbolizer.stdin.flush()
@@ -34,7 +37,7 @@ def symbolize_line(llvm_symbolizer: subprocess.Popen, line: bytes) -> bytes:
         symbol = symbol + b"\t\t\t\t" + next_line  # ensure the trailing newline is removed from symbol (but not second_line)
         next_line = llvm_symbolizer.stdout.readline()
     # Now the remaining line must be empty:
-    assert next_line == b"\n", b"Should have been followed by an empyt line but got: " + next_line
+    assert next_line == b"\n", b"Should have been followed by an empty line but got: " + next_line
     # Also symbolize bootloader addresses
     if symbol == UNKNOWN_ADDRESS:
         addrhex = int(address, 16)
