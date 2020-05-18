@@ -63,8 +63,8 @@
 
   <reg name="ddc" bitsize="256" type="cheri_cap256"/>
   <reg name="pcc" bitsize="256" type="cheri_cap256"/>
-  <reg name="UserTls" bitsize="256" type="cheri_cap256"/>
-  <reg name="PrivTls" bitsize="256" type="cheri_cap256"/>
+  <reg name="user_tls" bitsize="256" type="cheri_cap256"/>
+  <reg name="priv_tls" bitsize="256" type="cheri_cap256"/>
   <reg name="kr1c" bitsize="256" type="cheri_cap256"/>
   <reg name="kr2c" bitsize="256" type="cheri_cap256"/>
   <reg name="kcc" bitsize="256" type="cheri_cap256"/>
