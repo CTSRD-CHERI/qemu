@@ -1165,13 +1165,10 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         riscv_log_instr_csr_changed(env, CSR_MSTATUS);
         env->scause = cause | ((target_ulong)async << (TARGET_LONG_BITS - 1));
         riscv_log_instr_csr_changed(env, CSR_SCAUSE);
-#ifdef TARGET_CHERI
-        env->SEPCC = env->PCC;
-        riscv_log_instr_scr_changed(env, CheriSCR_SEPCC);
-#else
-        env->sepc = env->pc;
-        riscv_log_instr_csr_changed(env, CSR_SEPC);
-#endif
+
+        COPY_SPECIAL_REG(env, sepc, SEPCC, pc, PCC);
+        LOG_SPECIAL_REG(env, CSR_SEPC, CheriSCR_SEPCC);
+
         env->sbadaddr = tval;
         riscv_log_instr_csr_changed(env, CSR_SBADADDR);
         env->htval = htval;
@@ -1217,13 +1214,10 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         riscv_log_instr_csr_changed(env, CSR_MSTATUS);
         env->mcause = cause | ~(((target_ulong)-1) >> async);
         riscv_log_instr_csr_changed(env, CSR_MCAUSE);
-#ifdef TARGET_CHERI
-        env->MEPCC = env->PCC;
-        riscv_log_instr_scr_changed(env, CheriSCR_MEPCC);
-#else
-        env->mepc = env->pc;
-        riscv_log_instr_csr_changed(env, CSR_MEPC);
-#endif
+
+        COPY_SPECIAL_REG(env, mepc, MEPCC, pc, PCC);
+        LOG_SPECIAL_REG(env, CSR_MEPC, CheriSCR_MEPCC);
+
         env->mbadaddr = tval;
         riscv_log_instr_csr_changed(env, CSR_MBADADDR);
         env->mtval2 = mtval2;
