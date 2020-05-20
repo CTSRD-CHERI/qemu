@@ -2236,6 +2236,9 @@ static inline bool cpu_in_user_mode(CPUArchState *env)
 static inline unsigned cpu_get_asid(CPUArchState *env) {
     return 0; /* TODO: implement */
 }
+static inline char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode) {
+    return NULL; /* TODO: implement */
+}
 #endif
 
 #endif /* I386_CPU_H */

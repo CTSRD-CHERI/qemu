@@ -45,7 +45,7 @@
  *   return whether the cpu is in user mode
  * - uint16_t cpu_get_asid(env)
  *   return the hardware address space identifier
- * - const char *cpu_get_mode_name(env, mode)
+ * - const char *cpu_get_mode_name(mode)
  *   return the mode name associated with a qemu_log_instr_cpu_mode_t for printing.
  *
  * - Each target should implement their own register update logging helpers that

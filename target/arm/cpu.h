@@ -3848,3 +3848,17 @@ static inline bool isar_feature_any_ccidx(const ARMISARegisters *id)
     ({ ARMCPU *cpu_ = (cpu); isar_feature_##name(&cpu_->isar); })
 
 #endif
+
+#ifdef CONFIG_TCG_LOG_INSTR
+static inline bool cpu_in_user_mode(CPUArchState *env)
+{
+    return false; /* TODO: implement */
+}
+
+static inline unsigned cpu_get_asid(CPUArchState *env) {
+    return 0; /* TODO: implement */
+}
+static inline char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode) {
+    return NULL; /* TODO: implement */
+}
+#endif

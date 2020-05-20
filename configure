@@ -6838,6 +6838,9 @@ fi
 if test "$debug_tcg" = "yes" ; then
   echo "CONFIG_DEBUG_TCG=y" >> $config_host_mak
 fi
+if test "$tcg_log_instr" = "yes" ; then
+  echo "CONFIG_TCG_LOG_INSTR=y" >> $config_host_mak
+fi
 if test "$rvfi_dii" = "yes" ; then
   echo "CONFIG_RVFI_DII=y" >> $config_host_mak
 fi
@@ -7822,8 +7825,6 @@ TARGET_ARCH="$target_name"
 TARGET_BASE_ARCH=""
 TARGET_ABI_DIR=""
 
-target_tcg_log_instr="no"
-
 case "$target_name" in
   i386)
     mttcg="yes"
@@ -7879,7 +7880,6 @@ case "$target_name" in
     echo "TARGET_ABI_MIPSO32=y" >> $config_target_mak
     TARGET_SYSTBL_ABI=o32
     gdb_xml_files="mips-cpu.xml mips-cp0.xml mips-fpu.xml mips-sys.xml"
-    target_tcg_log_instr="$tcg_log_instr"
   ;;
   mipsn32|mipsn32el)
     mttcg="yes"
@@ -7889,7 +7889,6 @@ case "$target_name" in
     echo "TARGET_ABI32=y" >> $config_target_mak
     TARGET_SYSTBL_ABI=n32
     gdb_xml_files="mips64-cpu.xml mips64-cp0.xml mips64-fpu.xml mips-sys.xml"
-    target_tcg_log_instr="$tcg_log_instr"
   ;;
   mips64|mips64el)
     mttcg="no"
@@ -7898,7 +7897,6 @@ case "$target_name" in
     echo "TARGET_ABI_MIPSN64=y" >> $config_target_mak
     TARGET_SYSTBL_ABI=n64
     gdb_xml_files="mips64-cpu.xml mips64-cp0.xml mips64-fpu.xml mips64-sys.xml"
-    target_tcg_log_instr="$tcg_log_instr"
   ;;
   cheri|cheri256|cheri128|cheri128magic)
     # Capability loads/stores+tagged memory don't work with MTTCG
@@ -7911,7 +7909,6 @@ case "$target_name" in
     echo "CONFIG_CHERI=y" >> $config_host_mak
     TARGET_SYSTBL_ABI=n64
     gdb_xml_files="mips64-cpu.xml mips64-cp0.xml mips64-fpu.xml mips64-sys.xml mips64-cheri-c128.xml mips64-cheri-c256.xml"
-    target_tcg_log_instr="$tcg_log_instr"
   ;;
   moxie)
   ;;
@@ -7960,7 +7957,6 @@ case "$target_name" in
         echo "CONFIG_CHERI=y" >> $config_host_mak
         gdb_xml_files="$gdb_xml_files riscv-32bit-cheri.xml"
     fi
-    target_tcg_log_instr="$tcg_log_instr"
   ;;
   riscv64|riscv64cheri)
     TARGET_BASE_ARCH=riscv
@@ -7976,7 +7972,6 @@ case "$target_name" in
         # Capability loads/stores+tagged memory don't work with MTTCG
         mttcg="no"
     fi
-    target_tcg_log_instr="$tcg_log_instr"
   ;;
   rx)
     TARGET_ARCH=rx
@@ -8106,10 +8101,6 @@ if test "$target_user_only" = "yes" && test "$bflt" = "yes"; then
 fi
 if test "$target_bsd_user" = "yes" ; then
   echo "CONFIG_BSD_USER=y" >> $config_target_mak
-fi
-
-if test "$target_tcg_log_instr" = "yes" ; then
-    echo "CONFIG_TCG_LOG_INSTR=y" >> $config_target_mak
 fi
 
 
