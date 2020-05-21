@@ -913,7 +913,7 @@ void helper_mtc0_entrylo1(CPUMIPSState *env, target_ulong arg1)
 #else
                         | (rxi << (CP0EnLo_XI - 30));
 #endif
-    log_instr_cop0_update(env, CP0_REGISTER_02, 0, env->CP0_EntryLo1);
+    log_instr_cop0_update(env, CP0_REGISTER_03, 0, env->CP0_EntryLo1);
 }
 
 #if defined(TARGET_MIPS64)
@@ -921,7 +921,7 @@ void helper_dmtc0_entrylo1(CPUMIPSState *env, uint64_t arg1)
 {
     uint64_t rxi = arg1 & ((env->CP0_PageGrain & (3ull << CP0PG_XIE)) << 32);
     env->CP0_EntryLo1 = (arg1 & DMTC0_ENTRYLO_MASK(env)) | rxi;
-    log_instr_cop0_update(env, CP0_REGISTER_02, 0, env->CP0_EntryLo1);
+    log_instr_cop0_update(env, CP0_REGISTER_03, 0, env->CP0_EntryLo1);
 }
 #endif
 
