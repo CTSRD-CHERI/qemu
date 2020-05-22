@@ -49,6 +49,10 @@ static void riscv_hart_realize(RISCVHartArrayState *s, int idx,
     object_initialize_child(OBJECT(s), "harts[*]", &s->harts[idx],
                             sizeof(RISCVCPU), cpu_type,
                             &error_abort, NULL);
+    s->harts[idx].env.mhartid = s->hartid_base + idx;
+    qemu_register_reset(riscv_harts_cpu_reset, &s->harts[idx]);
+    object_property_set_bool(OBJECT(&s->harts[idx]), true,
+                             "realized", &err);
 #ifdef CONFIG_TCG_LOG_INSTR
     /*
      * Note that riscv allocates CPUState on an array without using cpu_create
@@ -56,10 +60,6 @@ static void riscv_hart_realize(RISCVHartArrayState *s, int idx,
      */
     qemu_log_instr_init(CPU(&s->harts[idx]));
 #endif
-    s->harts[idx].env.mhartid = s->hartid_base + idx;
-    qemu_register_reset(riscv_harts_cpu_reset, &s->harts[idx]);
-    object_property_set_bool(OBJECT(&s->harts[idx]), true,
-                             "realized", &err);
     if (err) {
         error_propagate(errp, err);
         return;
