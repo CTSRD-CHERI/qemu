@@ -4351,7 +4351,7 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
 
             /* With 'li $0, 0xfaed' switch off userspace-only instruction trace logging. */
             if ((uint16_t)imm == 0xfaed)
-                GEN_INSTR_TRACE_HELPER(cpu_env, qemu_log_instr_user_stop);
+                GEN_INSTR_TRACE_HELPER(cpu_env, qemu_log_instr_stop);
 
             if ((uint16_t)imm == 0xface)
                 GEN_INSTR_TRACE_HELPER(cpu_env, cheri_debug_message);

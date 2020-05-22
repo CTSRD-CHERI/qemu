@@ -40,9 +40,6 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     int bp_insn = 0;
     bool plugin_enabled;
 #ifdef CONFIG_TCG_LOG_INSTR
-
-    qemu_log_instr_tb_start(cpu->env_ptr);
-    
     /*
      * Cache whether we are logging instructions in this tb
      * This assumes that the TCG buffer will be flushed on instruction

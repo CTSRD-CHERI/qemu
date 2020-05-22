@@ -131,10 +131,9 @@
 
 /*
  * Request a flush of the TCG when changing loglevel outside of qemu_log_instr.
+ * TODO(am2419): this should be removed from the interface.
  */
-void qemu_log_instr_flush_tcg(void);
-
-#define	INSTR_LOG_MASK (CPU_LOG_INSTR | CPU_LOG_USER_ONLY)
+void qemu_log_instr_flush_tcg(bool request_stop);
 
 /* Helper macro to check for instruction logging enabled */
 #define	qemu_log_instr_enabled(env)                                     \
@@ -151,20 +150,12 @@ bool qemu_log_instr_check_enabled(CPUArchState *env);
  * Start instruction tracing. Note that the instruction currently being
  * executed will be replaced by a trace start event.
  */
-void qemu_log_instr_start(CPUArchState *env, uint32_t mode, target_ulong pc);
+void qemu_log_instr_start(CPUArchState *env, target_ulong pc);
 
 /*
- * Stop instruction tracing. Note that the instruction currently being
- * executed will be replaced by a trace stop event.
- * Mode is the mask of log modes to clear.
+ * Stop instruction tracing.
  */
-void qemu_log_instr_stop(CPUArchState *env, uint32_t mode, target_ulong pc);
-
-/*
- * Signal the start of a new translation block to the logging subsystem.
- * This is currently used internally in TCG.
- */
-void qemu_log_instr_tb_start(CPUArchState *env);
+void qemu_log_instr_stop(CPUArchState *env, target_ulong pc);
 
 /*
  * Log a switch inc CPU modes.
@@ -173,6 +164,16 @@ void qemu_log_instr_tb_start(CPUArchState *env);
  */
 void qemu_log_instr_mode_switch(CPUArchState *env,
     qemu_log_instr_cpu_mode_t mode, target_ulong pc);
+
+/*
+ * Set the given CPU per-CPU log level.
+ */
+void qemu_log_instr_set_level(CPUArchState *env, qemu_log_instr_loglevel_t lvl);
+
+/*
+ * Set the per-CPU log level for all the CPUs.
+ */
+void qemu_log_instr_allcpu_set_level(qemu_log_instr_loglevel_t lvl);
 
 /*
  * Drop the current buffered entry and ignore logging until next commit.
@@ -268,7 +269,6 @@ void qemu_log_instr_evt(CPUArchState *env, uint16_t fn, target_ulong arg0,
 void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 
 #else /* ! CONFIG_TCG_LOG_INSTR */
-#define	INSTR_LOG_MASK (0)
 #define	qemu_log_instr_enabled(cpu) false
 #define	qemu_log_instr_start(env, mode, pc)
 #define	qemu_log_instr_stop(env, mode, pc)
