@@ -44,7 +44,8 @@
  */
 typedef enum {
     QLI_FMT_TEXT = 0,
-    QLI_FMT_CVTRACE = 1
+    QLI_FMT_CVTRACE = 1,
+    QLI_FMT_NOP = 2
 } qemu_log_instr_fmt_t;
 
 extern qemu_log_instr_fmt_t qemu_log_instr_format;
@@ -67,6 +68,18 @@ typedef enum {
     QEMU_LOG_INSTR_CPU_MODE_MAX
 } qemu_log_instr_cpu_mode_t;
 
+/*
+ * Instruction logging per-CPU log level
+ */
+typedef enum {
+    /* No logging for this CPU */
+    QEMU_LOG_INSTR_LOGLVL_NONE = 0,
+    /* Log all instructions */
+    QEMU_LOG_INSTR_LOGLVL_ALL = 1,
+    /* Only log when running in user-mode */
+    QEMU_LOG_INSTR_LOGLVL_USER = 2,
+} qemu_log_instr_loglevel_t;
+
 static inline void qemu_log_instr_set_format(qemu_log_instr_fmt_t fmt)
 {
     qemu_log_instr_format = fmt;
@@ -83,8 +96,14 @@ struct cpu_log_instr_info;
  * Per-cpu logging state.
  */
 typedef struct {
-    /* CPU tracing user mode only enable flag */
-    bool user_mode_tracing;
+    /* Per-CPU instruction log level */
+    qemu_log_instr_loglevel_t loglevel;
+    /* Is the current log level active or paused? */
+    bool loglevel_active;
+    /* Force skipping of the current instruction being logged */
+    bool force_drop;
+    /* We are starting to log at the next commit */
+    bool starting;
     /*
      * Opaque handle to the current instruction info
      * TODO(am2419): It would be interesting to have a ring buffer

@@ -74,25 +74,18 @@ static void qemu_logfile_free(QemuLogFile *logfile)
 
 static bool log_uses_own_buffers;
 
-__attribute__((weak)) void qemu_log_instr_flush_tcg(void);
-__attribute__((weak)) void qemu_log_instr_flush_tcg(void) {
+__attribute__((weak)) void qemu_log_instr_flush_tcg(bool request_stop);
+__attribute__((weak)) void qemu_log_instr_flush_tcg(bool request_stop) {
     // Real implementation in accel/tcg/log_instr.c
     warn_report("Calling no-op %s\r", __func__);
 }
 
 /* enable or disable low levels log */
-void qemu_set_log(int log_flags)
+void qemu_set_log_noflush(int log_flags)
 {
     bool need_to_open_file = false;
     QemuLogFile *logfile;
 
-#ifdef CONFIG_TCG_LOG_INSTR
-    const int need_to_flush_tcg_on_change = CPU_LOG_INSTR | CPU_LOG_USER_ONLY;
-    if ((qemu_loglevel & need_to_flush_tcg_on_change) !=
-        (log_flags & need_to_flush_tcg_on_change)) {
-        qemu_log_instr_flush_tcg();
-    }
-#endif
     qemu_loglevel = log_flags;
 
 #ifdef CONFIG_TRACE_LOG
@@ -153,6 +146,19 @@ void qemu_set_log(int log_flags)
         atomic_rcu_set(&qemu_logfile, logfile);
     }
 }
+
+#ifdef CONFIG_TCG_LOG_INSTR
+void qemu_set_log(int log_flags) {
+    if ((qemu_loglevel & CPU_LOG_INSTR) != (log_flags & CPU_LOG_INSTR)) {
+        bool request_stop = ((log_flags & CPU_LOG_INSTR) == 0);
+        qemu_log_instr_flush_tcg(request_stop);
+    }
+
+    qemu_set_log_noflush(log_flags);
+}
+#else
+void qemu_set_log(int) __attribute__((alias("qemu_set_log_noflush")));
+#endif
 
 void qemu_log_needs_buffers(void)
 {
