@@ -719,6 +719,25 @@ void helper_dmtc0_entrylo0(CPUMIPSState *env, uint64_t arg1)
 }
 #endif
 
+#ifdef TARGET_CHERI
+
+void helper_mtc0_capfilter_lo(CPUMIPSState *env, target_ulong arg1)
+{
+    env->cheri_capfilter_lo = arg1;
+}
+
+void helper_mtc0_capfilter_hi(CPUMIPSState *env, target_ulong arg1)
+{
+    env->cheri_capfilter_hi = arg1;
+}
+
+void helper_mtc0_capfilter_perms(CPUMIPSState *env, target_ulong arg1)
+{
+    env->cheri_capfilter_perms = arg1;
+}
+
+#endif
+
 void helper_mtc0_tcstatus(CPUMIPSState *env, target_ulong arg1)
 {
     uint32_t mask = env->CP0_TCStatus_rw_bitmask;

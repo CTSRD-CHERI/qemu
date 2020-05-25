@@ -1212,9 +1212,14 @@ struct CPUMIPSState {
     uint16_t CP2_CapCause; /* Upper 8 bits exception code; lower reg# */
     /* See cheri-archspecific.h */
 
+    target_ulong cheri_capfilter_lo;
+    target_ulong cheri_capfilter_hi;
+    target_ulong cheri_capfilter_perms;
+
 #define MASK_CCALL_SEL(op)  ((op) & 0x7ff)
 #define CCALL_SELECTOR_0 (0x0)
 #define CCALL_SELECTOR_1 (0x01)
+#define CCALL_SELECTOR_2 (0x02)
 #define CCALL_SELECTOR_CRETURN (0x7ff)
 
 #endif /* TARGET_CHERI */

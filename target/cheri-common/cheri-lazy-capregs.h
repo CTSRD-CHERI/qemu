@@ -317,6 +317,27 @@ static inline target_ulong get_capreg_tag(CPUArchState *env, unsigned regnum)
     tcg_abort();
 }
 
+static inline target_ulong get_capreg_tag_filtered(CPUArchState *env, unsigned regnum) {
+#ifdef TARGET_MIPS
+    target_ulong tagged = get_capreg_tag(env, regnum);
+
+    // Try avoid decompress if at all possible
+    if (!tagged || env->cheri_capfilter_hi == 0) return tagged;
+
+    const cap_register_t *csp = get_readonly_capreg(env, regnum);
+
+    // TODO: Also revoke if (lo <= type < hi) && (csp->cr_perms & MAGIC_REVOKE_TYPE)
+    if (csp->cr_base >= env->cheri_capfilter_lo &&
+        csp->_cr_top <= env->cheri_capfilter_hi &&
+        (csp->cr_perms & env->cheri_capfilter_perms) == csp->cr_perms)
+      return 0;
+
+    return tagged;
+#else
+    return get_capreg_tag(env, regnum);
+#endif
+}
+
 static inline uint32_t get_capreg_hwperms(CPUArchState *env, unsigned regnum)
 {
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);

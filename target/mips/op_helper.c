@@ -2487,3 +2487,11 @@ error:
                     env->active_tc.gpr[MIPS_REGNUM_A0], env->active_tc.gpr[MIPS_REGNUM_A1],
                     env->active_tc.gpr[MIPS_REGNUM_A2], env->active_tc.gpr[MIPS_REGNUM_A3]);
 }
+
+void helper_smp_yield(CPUMIPSState *env) {
+    CPUState *cs = env_cpu(env);
+    cs->exception_index = EXCP_YIELD;
+
+    cpu_loop_exit(cs);
+}
+

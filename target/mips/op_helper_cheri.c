@@ -208,22 +208,28 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
+
+    // This assumes that the non-type sealed things can all be jumped to.
+    // This is true for sentries, which behave like unsealed caps in this way.
+    // If a new reserved sealing type is used this might have to be re-evaluated.
+
+    int allow_unsealed = (selector == CCALL_SELECTOR_2) && !cap_is_sealed_with_type(csp);
     /*
      * CCall: Call into a new security domain
      */
     if (!csp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cs);
-    } else if (!cbp->cr_tag) {
+    } else if (!cbp->cr_tag && !allow_unsealed) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (!cap_is_sealed_with_type(csp)) {
+    } else if (cap_is_sealed_with_type(csp) == allow_unsealed) {
         raise_cheri_exception(env, CapEx_SealViolation, cs);
-    } else if (!cap_is_sealed_with_type(cbp)) {
+    } else if (cap_is_sealed_with_type(cbp) == allow_unsealed) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
+    } else if ((csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) && !allow_unsealed) {
         raise_cheri_exception(env, CapEx_TypeViolation, cs);
     } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
-    } else if (cbp->cr_perms & CAP_PERM_EXECUTE) {
+    } else if (cbp->cr_perms & CAP_PERM_EXECUTE && !allow_unsealed) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
     } else if (!cap_is_in_bounds(csp, cap_get_cursor(csp), 1)) {
         // TODO: check for at least one instruction worth of data? Like cjr/cjalr?
@@ -231,20 +237,28 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
     } else {
         if (selector == CCALL_SELECTOR_0) {
             raise_cheri_exception(env, CapEx_CallTrap, cs);
-        } else if (!(csp->cr_perms & CAP_PERM_CCALL)){
+        } else if (!(csp->cr_perms & CAP_PERM_CCALL) && !allow_unsealed){
             raise_cheri_exception(env, CapEx_PermitCCallViolation, cs);
-        } else if (!(cbp->cr_perms & CAP_PERM_CCALL)){
+        } else if (!(cbp->cr_perms & CAP_PERM_CCALL) && !allow_unsealed){
             raise_cheri_exception(env, CapEx_PermitCCallViolation, cb);
         } else {
             cap_register_t idc = *cbp;
-            cap_set_unsealed(&idc);
+            // Use of !allow_unsealed rather than !cap_is_unsealed used on purpose.
+            // This should function like a jump and a move in the CCall2 case.
+            if (!allow_unsealed) cap_set_unsealed(&idc);
             update_capreg(env, CP2CAP_IDC, &idc);
             // The capability register is loaded into PCC during delay slot
             env->active_tc.CapBranchTarget = *csp;
             // XXXAR: clearing these fields is not strictly needed since they
             // aren't copied from the CapBranchTarget to $pcc but it does make
             // the LOG_INSTR output less confusing.
-            cap_set_unsealed(&env->active_tc.CapBranchTarget);
+            cap_register_t *target = &env->active_tc.CapBranchTarget;
+
+            if (cap_is_sealed_with_type(target)) {
+                cap_set_unsealed(target);
+            } else if (cap_is_sealed_entry(target)) {
+                cap_unseal_entry(target);
+            }
             // Return the branch target address
             return cap_get_cursor(csp);
         }
@@ -260,6 +274,11 @@ void CHERI_HELPER_IMPL(ccall(CPUArchState *env, uint32_t cs, uint32_t cb))
 target_ulong CHERI_HELPER_IMPL(ccall_notrap(CPUArchState *env, uint32_t cs, uint32_t cb))
 {
     return ccall_common(env, cs, cb, CCALL_SELECTOR_1, GETPC());
+}
+
+target_ulong CHERI_HELPER_IMPL(ccall_notrap2(CPUArchState *env, uint32_t cs, uint32_t cb))
+{
+    return ccall_common(env, cs, cb, CCALL_SELECTOR_2, GETPC());
 }
 
 void CHERI_HELPER_IMPL(cclearreg(CPUArchState *env, uint32_t mask))
@@ -1023,7 +1042,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
      */
 
     env->statcounters_cap_write++;
-    if (csp->cr_tag) {
+    if (get_capreg_tag_filtered(env,cs)) {
         env->statcounters_cap_write_tagged++;
         cheri_tag_set(env, vaddr, cs, NULL, retpc);
     } else {
