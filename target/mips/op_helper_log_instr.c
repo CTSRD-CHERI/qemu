@@ -130,56 +130,6 @@ void mips_log_instr_mode_changed(CPUMIPSState *env, target_ulong pc)
     qemu_log_instr_mode_switch(env, mode, pc);
 }
 
-void do_hexdump(GString *strbuf, uint8_t* buffer, target_ulong length,
-                target_ulong vaddr)
-{
-    char ascii_chars[17] = { 0 };
-    target_ulong line_start = vaddr & ~0xf;
-    target_ulong addr;
-
-    /* print leading empty space to always start with an aligned address */
-    if (line_start != vaddr) {
-        g_string_append_printf(strbuf, "    " TARGET_FMT_lx" : ", line_start);
-        for (addr = line_start; addr < vaddr; addr++) {
-            if ((addr % 4) == 0) {
-                g_string_append_printf(strbuf, "   ");
-            } else {
-                g_string_append_printf(strbuf, "  ");
-            }
-            ascii_chars[addr % 16] = ' ';
-        }
-    }
-    ascii_chars[16] = '\0';
-    for (addr = vaddr; addr < vaddr + length; addr++) {
-        if ((addr % 16) == 0) {
-            g_string_append_printf(strbuf, "    " TARGET_FMT_lx ": ",
-                                   line_start);
-        }
-        if ((addr % 4) == 0) {
-            g_string_append_printf(strbuf, " ");
-        }
-        unsigned char c = (unsigned char)buffer[addr - vaddr];
-        g_string_append_printf(strbuf, "%02x", c);
-        ascii_chars[addr % 16] = isprint(c) ? c : '.';
-        if ((addr % 16) == 15) {
-            g_string_append_printf(strbuf, "  %s\r\n", ascii_chars);
-            line_start += 16;
-        }
-    }
-    if (line_start != vaddr + length) {
-        const target_ulong hexdump_end_addr = (vaddr + length) | 0xf;
-        for (addr = vaddr + length; addr <= hexdump_end_addr; addr++) {
-            if ((addr % 4) == 0) {
-                g_string_append_printf(strbuf, "   ");
-            } else {
-                g_string_append_printf(strbuf, "  ");
-            }
-            ascii_chars[addr % 16] = ' ';
-        }
-        g_string_append_printf(strbuf, "  %s\r\n", ascii_chars);
-    }
-}
-
 /*
  * Log a special user-specified message to the trace
  * TODO(am2419): Always print these messages even if user-space only tracing is on.

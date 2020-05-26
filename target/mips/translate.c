@@ -2875,9 +2875,18 @@ static inline void gen_log_instr_hilo_update(DisasContext *ctx, int hiLO,
         tcg_temp_free_i32(tindex);
     }
 }
+
+ATTRIBUTE_UNUSED static void _debug_value(TCGv value, const char* msg) {
+    TCGv_ptr dbg_msg = tcg_const_ptr(msg);
+    gen_helper_log_value(cpu_env, dbg_msg, value);
+    tcg_temp_free_ptr(dbg_msg);
+}
+#define DEBUG_VALUE(value) _debug_value(value, #value)
+
 #else
+#define DEBUG_VALUE(value) ((void)0)
 #define gen_log_instr_gpr_update(ctx, reg) ((void)0)
-#define gen_log_instr_cop0_update(ctx, reg) ((void)0)
+#define gen_log_instr_cop0_update(ctx, reg, sel, off) ((void)0)
 #define gen_log_instr_hilo_update(ctx, hiLO, index, reg) ((void)0)
 #endif
 
@@ -4028,13 +4037,6 @@ static void gen_st(DisasContext *ctx, uint32_t opc, int rt,
     tcg_temp_free(t0);
     tcg_temp_free(t1);
 }
-
-ATTRIBUTE_UNUSED static void _debug_value(TCGv value, const char* msg) {
-    TCGv_ptr dbg_msg = tcg_const_ptr(msg);
-    gen_helper_log_value(cpu_env, dbg_msg, value);
-    tcg_temp_free_ptr(dbg_msg);
-}
-#define DEBUG_VALUE(value) _debug_value(value, #value)
 
 /* Store conditional */
 static void gen_st_cond(DisasContext *ctx, int rt, int base, int offset,
