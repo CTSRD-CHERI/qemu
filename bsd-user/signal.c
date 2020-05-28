@@ -957,6 +957,7 @@ static void handle_pending_signal(CPUArchState *cpu_env, int sig,
             &ts->sigsuspend_mask : &ts->signal_mask;
         qemu_sigorset(&ts->signal_mask, blocked_set, &set);
         ts->in_sigsuspend = false;
+        sigprocmask(SIG_SETMASK, &ts->signal_mask, NULL);
 
 #if 0  /* not yet */
 #if defined(TARGET_I386) && !defined(TARGET_X86_64)
