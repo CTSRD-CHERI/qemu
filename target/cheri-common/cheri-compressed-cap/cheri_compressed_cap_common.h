@@ -655,8 +655,7 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
      * representable.
      */
     const _cc_addr_t cursor = cap->_cr_cursor;
-    _cc_length_t orig_length65 = cap->_cr_top - cap->cr_base;
-    _cc_debug_assert((orig_length65 >> _CC_ADDR_WIDTH) <= 1 && "Length must be smaller than 1 << 65");
+    _cc_debug_assert(((cap->_cr_top - cap->cr_base) >> _CC_ADDR_WIDTH) <= 1 && "Length must be smaller than 1 << 65");
     _cc_debug_assert((req_top >> _CC_ADDR_WIDTH) <= 1 && "New top must be smaller than 1 << 65");
     _cc_debug_assert(req_base >= cap->cr_base && "Cannot decrease base");
     _cc_debug_assert(req_top <= cap->_cr_top && "Cannot increase top");
