@@ -73,11 +73,11 @@ typedef enum {
  */
 typedef enum {
     /* No logging for this CPU */
-    QEMU_LOG_INSTR_LOGLVL_NONE = 0,
+    QEMU_LOG_INSTR_LOGLEVEL_NONE = 0,
     /* Log all instructions */
-    QEMU_LOG_INSTR_LOGLVL_ALL = 1,
+    QEMU_LOG_INSTR_LOGLEVEL_ALL = 1,
     /* Only log when running in user-mode */
-    QEMU_LOG_INSTR_LOGLVL_USER = 2,
+    QEMU_LOG_INSTR_LOGLEVEL_USER = 2,
 } qemu_log_instr_loglevel_t;
 
 static inline void qemu_log_instr_set_format(qemu_log_instr_fmt_t fmt)

@@ -64,11 +64,6 @@ static inline bool qemu_log_separate(void)
 /* LOG_STRACE is used for user-mode strace logging. */
 #define LOG_STRACE         (1 << 19)
 #define CPU_LOG_INSTR      (1 << 20)
-/*
- * The CPU_LOG_USER_ONLY flag only exists so that temporarily suspending the
- * instruction tracing does not cause QEMU to close and reopen the logfile.
- */
-#define CPU_LOG_USER_ONLY  (1 << 22)
 #define CPU_LOG_CHERI_BOUNDS (1 << 23)
 #define CPU_LOG_GUEST_DEBUG_MSG (1 << 24)
 
