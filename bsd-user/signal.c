@@ -512,14 +512,6 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
          * code in case the guest code provokes one in the window between
          * now and it getting out to the main loop. Signals will be
          * unblocked again in process_pending_signals().
-         *
-         * WARNING: we cannot use sigfillset() here because the uc_sigmask
-         * field is a kernel sigset_t, which is much smaller than the
-         * libc sigset_t which sigfillset() operates on. Using sigfillset()
-         * would write 0xff bytes off the end of the structure and trash
-         * data on the struct.
-         * We can't use sizeof(uc->uc_sigmask) either, because the libc
-         * headers define the struct field with the wrong (too large) type.
          */
         sigfillset(&uc->uc_sigmask);
         sigdelset(&uc->uc_sigmask, SIGSEGV);
@@ -527,6 +519,8 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
 
         /* Interrupt the virtual CPU as soon as possible. */
         cpu_exit(thread_cpu);
+    } else {
+        /* XXX We should really be handling this. */
     }
 }
 
