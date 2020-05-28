@@ -27,6 +27,9 @@ if (HAVE_UBSAN)
     endif()
 endif()
 
+add_compile_options(-Wno-gnu-statement-expression)
+add_compile_options(-fno-common)
+
 add_compile_options(-pedantic -Wall -Wextra -Wno-old-style-cast -Wno-c++98-compat-pedantic -Wno-c++98-c++11-compat-binary-literal -Wno-c11-extensions -Wno-padded)
 # TODO: -Weverything
 add_library(cheri_compressed_cap14 cheri_compressed_cap.c cheri_compressed_cap.h)
@@ -60,8 +63,8 @@ set_target_properties(GMP::GMP PROPERTIES
 )
 
 
-function(add_sail_wrapper128 _suffix _sanitizer_flags)
-    add_library(sail_wrapper128${_suffix} STATIC test/sail_wrapper.c test/sail.c)
+function(add_sail_wrapper _suffix _sanitizer_flags)
+    add_library(sail_wrapper128${_suffix} STATIC test/sail_wrapper_128.c test/sail_wrapper_64.c test/sail.c test/rts.c test/sail_failure.c)
     if (_sanitizer_flags)
         target_compile_options(sail_wrapper128${_suffix} PRIVATE "${_sanitizer_flags}")
         target_link_libraries(sail_wrapper128${_suffix} PRIVATE "${_sanitizer_flags}")
@@ -70,12 +73,12 @@ function(add_sail_wrapper128 _suffix _sanitizer_flags)
     target_compile_options(sail_wrapper128${_suffix} PRIVATE -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-label -Wno-extra-semi -Wno-gnu-binary-literal)
 endfunction()
 
-add_sail_wrapper128("" "")
+add_sail_wrapper("" "")
 if (HAVE_ASAN)
-    add_sail_wrapper128("-asan-ubsan" "-fsanitize=undefined,address")
+    add_sail_wrapper("-asan-ubsan" "-fsanitize=undefined,address")
 endif()
 if (HAVE_MSAN)
-    add_sail_wrapper128("-msan-ubsan" "-fsanitize=undefined,memory")
+    add_sail_wrapper("-msan-ubsan" "-fsanitize=undefined,memory")
 endif()
 
 # Add a test exe for sail generated code
@@ -114,14 +117,14 @@ add_cc_test(random_inputs_test test/random_inputs_test.cpp)
 
 if (HAVE_LIBFUZZER)
     if (HAVE_ASAN)
-        add_sail_wrapper128("-fuzzer-asan-ubsan" "-fsanitize=undefined,address,fuzzer")
+        add_sail_wrapper("-fuzzer-asan-ubsan" "-fsanitize=undefined,address,fuzzer")
         add_executable(fuzz_decompress_asan test/fuzz-decompress.cpp)
         target_compile_options(fuzz_decompress_asan PRIVATE -fsanitize=undefined,address,fuzzer)
         target_link_libraries(fuzz_decompress_asan PRIVATE -fsanitize=undefined,address,fuzzer)
         target_link_libraries(fuzz_decompress_asan PRIVATE sail_wrapper128-fuzzer-asan-ubsan)
     endif()
     if (HAVE_MSAN)
-        add_sail_wrapper128("-fuzzer-msan-ubsan" "-fsanitize=undefined,memory,fuzzer")
+        add_sail_wrapper("-fuzzer-msan-ubsan" "-fsanitize=undefined,memory,fuzzer")
         add_executable(fuzz_decompress_msan test/fuzz-decompress.cpp)
         target_compile_options(fuzz_decompress_msan PRIVATE -fsanitize=undefined,memory,fuzzer)
         target_link_libraries(fuzz_decompress_msan PRIVATE -fsanitize=undefined,memory,fuzzer)

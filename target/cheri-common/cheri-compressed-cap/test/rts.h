@@ -1,20 +1,12 @@
 #pragma once
-// Provide the basic rts.c functions that are used by the generated code:
-__attribute__((noreturn)) static void sail_match_failure(sail_string msg) {
-    fprintf(stderr, "Pattern match failure in %s\n", msg);
-    abort();
-}
-unit sail_assert(bool b, sail_string msg) {
-    if (b)
-        return UNIT;
-    fprintf(stderr, "Assertion failed: %s\n", msg);
-    abort();
-}
+
+#include <stdbool.h>
+#include <stdlib.h>
 
 /* ***** Setup and cleanup functions for RTS ***** */
 static int process_arguments(int argc, char** argv) { abort(); }
-static void setup_rts(void) { setup_library(); }
-static void cleanup_rts(void) { cleanup_library(); }
+void setup_rts(void);
+void cleanup_rts(void);
 
 // this is needed for some reason:
-bool have_exception = false;
+static bool have_exception = false;

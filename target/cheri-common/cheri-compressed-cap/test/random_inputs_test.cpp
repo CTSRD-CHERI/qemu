@@ -4,30 +4,33 @@
 #include <cstdlib>
 #include <cstring>
 
-#define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
-#include "test_util.h"
+#define CATCH_CONFIG_MAIN // This tells Catch to provide a main() - only do this in one cpp file
 #include "sail_wrapper.h"
+#include "test_util.h"
 
 #include "decode_inputs.cpp"
-
 
 static_assert(CC128_FIELD_OTYPE_START == 27, "");
 static_assert(CC128_FIELD_OTYPE_SIZE == 18, "");
 static_assert(CC128_FIELD_OTYPE_LAST == 44, "");
 
-#define CHECK_AND_SAVE_SUCCESS(expr) do { CHECK(expr); if (!(expr)) { success = false; } } while (false)
+#define CHECK_AND_SAVE_SUCCESS(expr)                                                                                   \
+    do {                                                                                                               \
+        CHECK(expr);                                                                                                   \
+        if (!(expr)) {                                                                                                 \
+            success = false;                                                                                           \
+        }                                                                                                              \
+    } while (false)
 
-bool operator==(const cc128_bounds_bits& a, const cc128_bounds_bits& b) {
-    return a.B == b.B && a.E == b.E && a.T == b.T && a.IE == b.IE;
-}
-
-static bool check_fields_match(const cap_register_t& result, const test_input& input, const std::string& prefix) {
-    cap_register_t sail_result;
+template <class Handler, typename test_input>
+static bool check_fields_match(const typename Handler::cap_t& result, const test_input& input,
+                               const std::string& prefix) {
+    typename Handler::cap_t sail_result;
     memset(&sail_result, 0, sizeof(sail_result));
-    sail_decode_128_raw(input.pesbt, input.cursor, false, &sail_result);
+    Handler::sail_decode_raw(input.pesbt, input.cursor, false, &sail_result);
 
-    cc128_bounds_bits bounds_bits = cc128_extract_bounds_bits(input.pesbt);
-    cc128_bounds_bits sail_bounds_bits = sail_extract_bounds_bits_128(input.pesbt);
+    typename Handler::bounds_bits bounds_bits = Handler::extract_bounds_bits(input.pesbt);
+    typename Handler::bounds_bits sail_bounds_bits = Handler::sail_extract_bounds_bits(input.pesbt);
     REQUIRE(sail_bounds_bits == bounds_bits);
 
     CAPTURE(bounds_bits);
@@ -52,84 +55,80 @@ static bool check_fields_match(const cap_register_t& result, const test_input& i
     return success;
 }
 
-static bool test_one_entry(const test_input& ti) {
+template <class Handler, typename test_input> static bool test_one_entry(const test_input& ti) {
     // decompress_representable(ti.input.pesbt, ti.input.cursor);
-    cap_register_t result;
+    typename Handler::cap_t result;
     memset(&result, 0, sizeof(result));
-    // The inputs already have the NULL xor mask removed -> decompress_128cap_already_xored()
-    decompress_128cap_already_xored(ti.pesbt, ti.cursor, &result);
+    // The inputs already have the NULL xor mask removed -> Handler::decompress_raw()
+    Handler::decompress_raw(ti.pesbt, ti.cursor, false, &result);
     CAPTURE(ti.pesbt, ti.cursor);
 
-    bool success = check_fields_match(result, ti, "");
+    bool success = check_fields_match<Handler>(result, ti, "");
     if (!success) {
-        fprintf(stderr, "Decompressed raw pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", ti.pesbt, ti.cursor);
+        fprintf(stderr, "Decompressed raw pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", (uint64_t)ti.pesbt,
+                (uint64_t)ti.cursor);
         dump_cap_fields(result);
     }
-    // If it was a valid input ensure that recompressing results in the same pesbt field:
-    uint64_t reserved_bits = CC128_EXTRACT_FIELD(ti.pesbt, RESERVED);
-    // CHECK(UINT64_C(0), reserved_bits, "Reserved capability bits were non-zero");
-    if (reserved_bits != 0) {
-        // Set the PESBT field in the capreg so that the reserved bits can be added back to the capability
-        // This is an invalid capability
-        result.cr_reserved = reserved_bits;
-    }
-
     // Now try recompressing and compare pesbt (for valid capabilities)
-    cc128_length_t top_full = result.top();
+    typename Handler::length_t top_full = result.top();
     // Also don't attempt to recompress massively out-of-bounds caps since that might not work:
-    if (top_full >= result.cr_base && top_full <= CAP_MAX_ADDRESS_PLUS_ONE && result.address() <= result.length()) {
-        uint64_t recompressed_pesbt = compress_128cap_without_xor(&result);
-        uint64_t sail_recompressed_pesbt = sail_compress_128_raw(&result);
+    if (top_full >= result.cr_base && top_full <= CC128_MAX_TOP && result.address() <= result.length()) {
+        uint64_t recompressed_pesbt = Handler::compress_raw(&result);
+        uint64_t sail_recompressed_pesbt = Handler::sail_compress_raw(&result);
         CHECK_AND_SAVE_SUCCESS(recompressed_pesbt == sail_recompressed_pesbt);
         CAPTURE(recompressed_pesbt);
         if (ti.pesbt != recompressed_pesbt) {
-            fprintf(stderr, "Note: Recompressing resulted in different pesbt = 0x%016" PRIx64
-                            ", original = 0x%016" PRIx64 ", xor = 0x%016" PRIx64 "\n",
-                            recompressed_pesbt, ti.pesbt, recompressed_pesbt ^ ti.pesbt);
-            // This is not an error since there are multiple ways of encoding the same bot/top values with different exponents
+            fprintf(stderr,
+                    "Note: Recompressing resulted in different pesbt = 0x%016" PRIx64 ", original = 0x%016" PRIx64
+                    ", xor = 0x%016" PRIx64 "\n",
+                    recompressed_pesbt, ti.pesbt, recompressed_pesbt ^ ti.pesbt);
+            // This is not an error since there are multiple ways of encoding the same bot/top values with different
+            // exponents
         }
         // But even if it didn't compress the same at least all fields decompressed from the new pesbt must be the same:
-        cap_register_t result_recompressed;
+        typename Handler::cap_t result_recompressed;
         memset(&result_recompressed, 0, sizeof(result_recompressed));
-        // The inputs already have the NULL xor mask removed -> decompress_128cap_already_xored()
-        decompress_128cap_already_xored(recompressed_pesbt, ti.cursor, &result_recompressed);
-        success = success && check_fields_match(result_recompressed, ti, "Recompressed pesbt: ");
+        // The inputs already have the NULL xor mask removed -> Handler::decompress_raw()
+        Handler::decompress_raw(recompressed_pesbt, ti.cursor, false, &result_recompressed);
+        success = success && check_fields_match<Handler>(result_recompressed, ti, "Recompressed pesbt: ");
         // Sanity check: recompress with sail
         memset(&result_recompressed, 0, sizeof(result_recompressed));
-        sail_decode_128_raw(recompressed_pesbt, ti.cursor, false, &result_recompressed);
-        success = success && check_fields_match(result_recompressed, ti, "Sail recompressed pesbt: ");
+        Handler::sail_decode_raw(recompressed_pesbt, ti.cursor, false, &result_recompressed);
+        success = success && check_fields_match<Handler>(result_recompressed, ti, "Sail recompressed pesbt: ");
         if (!success) {
             fprintf(stderr, "\nOriginal decoded:\n");
             dump_cap_fields(result);
             fprintf(stderr, "\nRecompressed decoded:\n");
             dump_cap_fields(result_recompressed);
         }
-        // It should now be normalized -> recompressing again should result in the same pesbt:
-        if (reserved_bits != 0) {
-            // Set the PESBT field in the capreg so that the reserved bits can be added back to the capability
-            result_recompressed.cr_reserved = (uint8_t)CC128_EXTRACT_FIELD(recompressed_pesbt, RESERVED);
-        }
-        uint64_t recompressed_pesbt_after_normalize = compress_128cap_without_xor(&result_recompressed);
+        uint64_t recompressed_pesbt_after_normalize = Handler::compress_raw(&result_recompressed);
         CHECK_AND_SAVE_SUCCESS(recompressed_pesbt == recompressed_pesbt_after_normalize);
-        uint64_t sail_recompressed_pesbt_after_normalize = sail_compress_128_raw(&result_recompressed);
+        uint64_t sail_recompressed_pesbt_after_normalize = Handler::sail_compress_raw(&result_recompressed);
         // Should match the sail values:
         CHECK_AND_SAVE_SUCCESS(recompressed_pesbt_after_normalize == sail_recompressed_pesbt_after_normalize);
     }
     return success;
 }
 
-TEST_CASE("Check sail-generated inputs decode correctly", "[decode]") {
+TEST_CASE("Check sail-generated 128-bit inputs decode correctly", "[decode]") {
     int failure_count = 0;
-#if 0
-    test_input inputs[] = {
-        { .pesbt = 0x7b2a8ea87565c909, .cursor = 0x235ec19a4806f340 }
-    };
-#endif
-    for (size_t i = 0; i < array_lengthof(inputs); i++) {
-        if (!test_one_entry(inputs[i])) {
+    for (size_t i = 0; i < array_lengthof(inputs128); i++) {
+        if (!test_one_entry<TestAPI128>(inputs128[i])) {
             fprintf(stderr, "Failed at index %zd\n", i);
             failure_count++;
             // break;
+        }
+    }
+    REQUIRE(failure_count == 0);
+}
+
+TEST_CASE("Check sail-generated 64-bit inputs decode correctly", "[decode]") {
+    int failure_count = 0;
+    for (size_t i = 0; i < array_lengthof(inputs64); i++) {
+        if (!test_one_entry<TestAPI64>(inputs64[i])) {
+            fprintf(stderr, "Failed at index %zd\n", i);
+            failure_count++;
+            break;
         }
     }
     REQUIRE(failure_count == 0);

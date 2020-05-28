@@ -64,7 +64,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     cap_register_t sail_result;
     memset(&result, 0, sizeof(result));
     memset(&sail_result, 0, sizeof(sail_result));
-    decompress_128cap(pesbt, cursor, &result);
+    cc128_decompress_mem(pesbt, cursor, false, &result);
     sail_decode_128_mem(pesbt, cursor, false, &sail_result);
     if (memcmp(&result, &sail_result, sizeof(result)) != 0) {
         fprintf(stderr, "DECODE FROM MEM FAILED\n");
@@ -77,7 +77,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
     memset(&result, 0, sizeof(result));
     memset(&sail_result, 0, sizeof(sail_result));
-    decompress_128cap_already_xored(pesbt, cursor, &result);
+    cc128_decompress_raw(pesbt, cursor, false, &result);
     sail_decode_128_raw(pesbt, cursor, false, &sail_result);
     if (memcmp(&result, &sail_result, sizeof(result)) != 0) {
         fprintf(stderr, "DECODE ALREADY XORED FAILED\n");
