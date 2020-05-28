@@ -81,9 +81,14 @@
 #endif
 
 /* compressed capabilities use a 65-bit top, precise and magic 64-bits */
-#if defined(CHERI_128)
+#if defined(CHERI_128) || defined(CHERI_MAGIC128)
+#if defined(CHERI_MAGIC128)
 #define CAP_MAX_LENGTH CC128_MAX_LENGTH
 #define CAP_MAX_TOP CC128_MAX_TOP
+#else
+#define CAP_MAX_LENGTH CC256_NULL_LENGTH
+#define CAP_MAX_TOP CC256_NULL_TOP
+#endif
 #define CAP_MAX_REPRESENTABLE_OTYPE CC128_MAX_REPRESENTABLE_OTYPE
 #define CAP_LAST_NONRESERVED_OTYPE CC128_LAST_NONRESERVED_OTYPE
 #define CAP_OTYPE_UNSEALED CC128_OTYPE_UNSEALED
