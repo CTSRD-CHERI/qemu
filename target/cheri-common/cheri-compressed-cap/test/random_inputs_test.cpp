@@ -73,15 +73,15 @@ template <class Handler, typename test_input> static bool test_one_entry(const t
     typename Handler::length_t top_full = result.top();
     // Also don't attempt to recompress massively out-of-bounds caps since that might not work:
     if (top_full >= result.cr_base && top_full <= CC128_MAX_TOP && result.address() <= result.length()) {
-        uint64_t recompressed_pesbt = Handler::compress_raw(&result);
-        uint64_t sail_recompressed_pesbt = Handler::sail_compress_raw(&result);
+        typename Handler::addr_t recompressed_pesbt = Handler::compress_raw(&result);
+        typename Handler::addr_t sail_recompressed_pesbt = Handler::sail_compress_raw(&result);
         CHECK_AND_SAVE_SUCCESS(recompressed_pesbt == sail_recompressed_pesbt);
         CAPTURE(recompressed_pesbt);
         if (ti.pesbt != recompressed_pesbt) {
             fprintf(stderr,
                     "Note: Recompressing resulted in different pesbt = 0x%016" PRIx64 ", original = 0x%016" PRIx64
                     ", xor = 0x%016" PRIx64 "\n",
-                    recompressed_pesbt, ti.pesbt, recompressed_pesbt ^ ti.pesbt);
+                    (uint64_t)recompressed_pesbt, (uint64_t)ti.pesbt, (uint64_t)(recompressed_pesbt ^ ti.pesbt));
             // This is not an error since there are multiple ways of encoding the same bot/top values with different
             // exponents
         }
