@@ -68,8 +68,7 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         const cap_register_t *c = &gpcrs->decompressed[regnum];
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
         // Check that the compressed and decompressed caps are in sync
-        cheri_debug_assert(compress_128cap_without_xor(c) ==
-                           gpcrs->pesbt[regnum]);
+        cheri_debug_assert(cc128_compress_raw(c) == gpcrs->pesbt[regnum]);
 #endif
         cheri_debug_assert((c->cr_tag == 0 || c->cr_tag == 1) &&
                            "Unitialized value used?");
@@ -89,7 +88,7 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
     if (regnum == 0) {
         cheri_debug_assert(gpcrs->pesbt[regnum] == CC128_NULL_PESBT);
         cheri_debug_assert(gpcrs->decompressed[regnum]._cr_cursor == 0);
-        cheri_debug_assert(compress_128cap_without_xor(&gpcrs->decompressed[regnum]) == CC128_NULL_PESBT);
+        cheri_debug_assert(cc128_compress_raw(&gpcrs->decompressed[regnum]) == CC128_NULL_PESBT);
         cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
                              CREG_FULLY_DECOMPRESSED &&
                          "Null should always be fully decompressed");
@@ -116,11 +115,10 @@ static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned regnum,
 static inline const cap_register_t *
 _update_from_compressed(GPCapRegs *gpcrs, unsigned regnum, bool tag)
 {
-    // Note: The _cr_cusor is always valid. All others are lazy.
-    decompress_128cap_already_xored(gpcrs->pesbt[regnum],
-                                    gpcrs->decompressed[regnum]._cr_cursor,
-                                    &gpcrs->decompressed[regnum]);
-    gpcrs->decompressed[regnum].cr_tag = tag;
+    // Note: The _cr_cusor field is always valid. All others are lazy.
+    cc128_decompress_raw(gpcrs->pesbt[regnum],
+                         gpcrs->decompressed[regnum]._cr_cursor, tag,
+                         &gpcrs->decompressed[regnum]);
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     return &gpcrs->decompressed[regnum];
 }
@@ -230,7 +228,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     *target = *newval;
     // Update the compressed values for fast access from TCG
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
-    gpcrs->pesbt[regnum] = compress_128cap_without_xor(target);
+    gpcrs->pesbt[regnum] = cc128_compress_raw(target);
 #endif
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
@@ -382,7 +380,7 @@ static inline void set_max_perms_capregs(CPUArchState* env)
     for (size_t i = 1; i < ARRAY_SIZE(gpcrs->decompressed); i++) {
         set_max_perms_capability(&gpcrs->decompressed[i], 0);
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
-        gpcrs->pesbt[i] = compress_128cap_without_xor(&gpcrs->decompressed[i]);
+        gpcrs->pesbt[i] = cc128_compress_raw(&gpcrs->decompressed[i]);
 #endif
         // Mark register as fully decompressed
         cheri_debug_assert(get_capreg_state(gpcrs, i) == CREG_FULLY_DECOMPRESSED);

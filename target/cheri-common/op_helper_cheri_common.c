@@ -1128,8 +1128,7 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
          * assume a 128-bit format and be less generic?
          */
         cap_register_t ncd;
-        decompress_128cap_already_xored(*pesbt, *cursor, &ncd);
-        ncd.cr_tag = tag;
+        cc128_decompress_raw(*pesbt, *cursor, tag, &ncd);
         qemu_log_instr_ld_cap(env, vaddr, &ncd);
     }
 #endif
@@ -1209,8 +1208,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
          */
         cap_register_t stored_cap;
         const uint64_t pesbt = pesbt_for_mem ^ CC128_NULL_XOR_MASK;
-        decompress_128cap_already_xored(pesbt, cursor, &stored_cap);
-        stored_cap.cr_tag = tag;
+        cc128_decompress_raw(pesbt, cursor, tag, &stored_cap);
         cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
         qemu_log_instr_st_cap(env, vaddr, &stored_cap);
     }

@@ -52,12 +52,12 @@ int gdb_get_capreg(GByteArray *buf, const cap_register_t *cap)
     // pesbt value might not match the current value (csetbounds could have
     // changed the bounds).
 #if CHERI_MEM_OFFSET_METADATA == 0
-    append(buf, compress_128cap(cap));
+    append(buf, cc128_compress_mem(cap));
     append(buf, cap_get_cursor(cap));
 #else
     _Static_assert(CHERI_MEM_OFFSET_CURSOR == 0, "");
     append(buf, cap_get_cursor(cap));
-    append(buf, compress_128cap(cap));
+    append(buf, cc128_compress_mem(cap));
 #endif
 #elif CHERI_CAP_SIZE == 32
     inmemory_chericap256 memory_representation;

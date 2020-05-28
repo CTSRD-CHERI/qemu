@@ -243,8 +243,8 @@ static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_regist
     // resulting values for offset/base/top as the hardware:
     // TODO: this could go away if we used a cap_register_t representation
     // more like the hardware and sail.
-    uint64_t pesbt_for_mem = compress_128cap(cr);
-    decompress_128cap(pesbt_for_mem, addr, cr);
+    uint64_t pesbt = cc128_compress_raw(cr);
+    cc128_decompress_raw(pesbt, addr, false, cr);
 #endif
     return cr;
 }

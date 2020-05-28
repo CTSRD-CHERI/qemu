@@ -266,7 +266,7 @@ static inline void emit_text_ldst(log_meminfo_t *minfo, const char *direction)
         qemu_log("    Cap Memory %s [" TARGET_FMT_lx "] = v:%d PESBT:"
                  TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
                  direction, minfo->addr, minfo->cap.cr_tag,
-                 compress_128cap(&minfo->cap),
+                 cc128_compress_mem(&minfo->cap),
                  cap_get_cursor(&minfo->cap));
     } else
 #endif
