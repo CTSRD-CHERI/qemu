@@ -991,7 +991,7 @@ void process_pending_signals(CPUArchState *cpu_env)
 {
     CPUState *cpu = env_cpu(cpu_env);
     int sig;
-    sigset_t set;
+    sigset_t *blocked_set, set;
     struct emulated_sigtable *k;
     TaskState *ts = cpu->opaque;
 
@@ -1002,8 +1002,11 @@ void process_pending_signals(CPUArchState *cpu_env)
         sigprocmask(SIG_SETMASK, &set, 0);
 
         k = ts->sigtab;
+        blocked_set = ts->in_sigsuspend ?
+            &ts->sigsuspend_mask : &ts->signal_mask;
         for (sig = 1; sig <= TARGET_NSIG; sig++, k++) {
-            if (k->pending) {
+            if (k->pending &&
+                !sigismember(blocked_set, target_to_host_signal(sig))) {
                 handle_pending_signal(cpu_env, sig, k);
             }
         }
