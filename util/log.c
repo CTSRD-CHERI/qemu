@@ -23,6 +23,7 @@
 #include "qemu/error-report.h"
 #include "qapi/error.h"
 #include "qemu/cutils.h"
+#include "qemu/log_instr.h"
 #include "trace/control.h"
 #include "qemu/thread.h"
 
@@ -73,14 +74,14 @@ static void qemu_logfile_free(QemuLogFile *logfile)
 
 static bool log_uses_own_buffers;
 
-__attribute__((weak)) void qemu_log_instr_flush_tcg(bool request_stop);
-__attribute__((weak)) void qemu_log_instr_flush_tcg(bool request_stop) {
+__attribute__((weak)) void qemu_log_instr_global_switch(bool request_stop);
+__attribute__((weak)) void qemu_log_instr_global_switch(bool request_stop) {
     // Real implementation in accel/tcg/log_instr.c
     warn_report("Calling no-op %s\r", __func__);
 }
 
 /* enable or disable low levels log */
-void qemu_set_log_noflush(int log_flags)
+void qemu_set_log_internal(int log_flags)
 {
     bool need_to_open_file = false;
     QemuLogFile *logfile;
@@ -152,13 +153,14 @@ void qemu_set_log_noflush(int log_flags)
 void qemu_set_log(int log_flags) {
     if ((qemu_loglevel & CPU_LOG_INSTR) != (log_flags & CPU_LOG_INSTR)) {
         bool request_stop = ((log_flags & CPU_LOG_INSTR) == 0);
-        qemu_log_instr_flush_tcg(request_stop);
+        qemu_log_instr_global_switch(request_stop);
+        return;
     }
 
-    qemu_set_log_noflush(log_flags);
+    qemu_set_log_internal(log_flags);
 }
 #else
-void qemu_set_log(int) __attribute__((alias("qemu_set_log_noflush")));
+void qemu_set_log(int) __attribute__((alias("qemu_set_log_internal")));
 #endif
 
 void qemu_log_needs_buffers(void)
