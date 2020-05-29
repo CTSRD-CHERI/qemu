@@ -665,34 +665,53 @@ static void cpu_loglevel_switch(CPUArchState *env,
         RUN_ON_CPU_HOST_INT(level));
 }
 
-/*
- * Interface function to trigger a change in the CPU log level
- * while the global CPU_LOG_INSTR flag is being modified.
- */
-void qemu_log_instr_flush_tcg(bool request_stop)
-{
-#ifdef CONFIG_DEBUG_TCG
-    warn_report("Calling real %s\r", __func__);
-    int cpu_index = 0;
-#endif
-    CPUState *cpu;
-    CPU_FOREACH(cpu) {
-#ifdef CONFIG_DEBUG_TCG
-        warn_report("Flushing TCG for CPU %d\r", cpu_index++);
-#endif
-        if (request_stop) {
-            cpu_loglevel_switch(cpu->env_ptr, QEMU_LOG_INSTR_LOGLEVEL_NONE);
-        } else {
-            cpu_loglevel_switch(cpu->env_ptr, QEMU_LOG_INSTR_LOGLEVEL_ALL);
-        }
-    }
-}
-
 /* Start global logging flag if it was disabled */
 static void global_loglevel_enable()
 {
     if (!qemu_loglevel_mask(CPU_LOG_INSTR))
-        qemu_set_log_noflush(qemu_loglevel | CPU_LOG_INSTR);
+        qemu_set_log_internal(qemu_loglevel | CPU_LOG_INSTR);
+}
+
+/*
+ * Handle global logging switch, triggered by the qemu monitor or
+ * other external events.
+ * This runs in the CPU exclusive context.
+ */
+static void do_global_loglevel_switch(CPUState *cpu, run_on_cpu_data data)
+{
+    qemu_log_instr_loglevel_t level = data.host_int;
+
+    if (level != QEMU_LOG_INSTR_LOGLEVEL_NONE)
+        global_loglevel_enable();
+    /*
+     * TODO(am2419): To do things cleanly, we should clear the CPU_LOG_INSTR
+     * flag when stopping, however to do this we would need to keep track
+     * of the number of CPUs that we have disabled so far, so that we only
+     * clear the flag on the last CPU.
+     * qemu_set_log_internal(qemu_loglevel & (~CPU_LOG_INSTR));
+     */
+    do_cpu_loglevel_switch(cpu, RUN_ON_CPU_HOST_INT(level));
+}
+
+/*
+ * Interface for the monitor to start and stop tracing on all CPUs.
+ * Note: It is critical that when stopping we delay the stop until
+ * all the CPUs have exited their TCG exec loop. This will happen when
+ * the current TB is finished. If we clear the global flag immediately
+ * we will end up emitting stale instructions.
+ */
+void qemu_log_instr_global_switch(bool request_stop)
+{
+    CPUState *cpu;
+    qemu_log_instr_loglevel_t level;
+
+    level = (request_stop) ? QEMU_LOG_INSTR_LOGLEVEL_NONE :
+        QEMU_LOG_INSTR_LOGLEVEL_ALL;
+
+    CPU_FOREACH(cpu) {
+        async_safe_run_on_cpu(cpu, do_global_loglevel_switch,
+            RUN_ON_CPU_HOST_INT(level));
+    }
 }
 
 /*
