@@ -4064,9 +4064,9 @@ void qemu_init(int argc, char **argv, char **envp)
             qemu_print_log_usage(stdout);
             exit(1);
         }
-        qemu_set_log(mask);
+        qemu_set_log_internal(mask);
     } else {
-        qemu_set_log(0);
+        qemu_set_log_internal(0);
     }
 
     /* add configured firmware directories */
