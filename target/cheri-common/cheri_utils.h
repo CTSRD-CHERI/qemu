@@ -93,7 +93,6 @@ static inline unsigned __int128 cap_get_length65(const cap_register_t* c) {
 }
 
 static inline unsigned __int128 cap_get_top65(const cap_register_t* c) {
-    // TODO: should handle last byte of address space properly
     return c->_cr_top;
 }
 
@@ -189,6 +188,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
 #ifdef CHERI_128
     cp->cr_ebt = CC128_RESET_EBT;
+    cheri_debug_assert(cc128_is_representable_cap_exact(cp));
 #endif
     return cp;
 }
@@ -264,6 +264,7 @@ static inline void set_max_perms_capability(cap_register_t *crp, uint64_t cursor
     crp->cr_reserved = 0;
 #ifdef CHERI_128
     crp->cr_ebt = CC128_RESET_EBT;
+    cheri_debug_assert(cc128_is_representable_cap_exact(crp));
 #endif
 }
 
