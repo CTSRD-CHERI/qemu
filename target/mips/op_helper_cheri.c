@@ -626,6 +626,8 @@ static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *c
     return false;
   } else if (cbp->cr_perms != ctp->cr_perms) {
     return false;
+  } else if (cbp->cr_flags != ctp->cr_flags) {
+      return false;
   }
   return true;
 }
