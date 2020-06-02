@@ -2867,13 +2867,21 @@ static inline void gen_log_instr_cop0_update(DisasContext *ctx, int reg,
 static inline void gen_log_instr_hilo_update(DisasContext *ctx, int hiLO,
                                              int index, int reg)
 {
-    if (unlikely(ctx->base.log_instr_enabled)) {
-        TCGv_i32 thilo = tcg_const_i32(hiLO);
-        TCGv_i32 tindex = tcg_const_i32(index);
+    if (likely(!ctx->base.log_instr_enabled))
+        return;
+
+    TCGv_i32 thilo = tcg_const_i32(hiLO);
+    TCGv_i32 tindex = tcg_const_i32(index);
+    if (reg == 0) {
+        //  cpu_gpr[0] is NULL and should not be used.
+        TCGv tzero = tcg_const_tl(0);
+        gen_helper_mips_log_instr_hilo(cpu_env, thilo, tindex, tzero);
+        tcg_temp_free(tzero);
+    } else {
         gen_helper_mips_log_instr_hilo(cpu_env, thilo, tindex, cpu_gpr[reg]);
-        tcg_temp_free_i32(thilo);
-        tcg_temp_free_i32(tindex);
     }
+    tcg_temp_free_i32(thilo);
+    tcg_temp_free_i32(tindex);
 }
 #else
 #define gen_log_instr_gpr_update(ctx, reg) ((void)0)
