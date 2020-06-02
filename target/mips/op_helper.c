@@ -1789,13 +1789,16 @@ void helper_cache(CPUMIPSState *env, target_ulong addr, uint32_t op)
 #endif
 }
 
+#define TARGET_PAGE_SIZE_MIN (1 << TARGET_PAGE_BITS_MIN)
+static uint8_t ZEROARRAY[TARGET_PAGE_SIZE_MIN];
+
 /* Reduce the length so that addr + len doesn't cross a page boundary.  */
 static inline target_ulong adj_len_to_page(target_ulong len, target_ulong addr)
 {
 #ifndef CONFIG_USER_ONLY
     target_ulong low_bits = (addr & ~TARGET_PAGE_MASK);
-    if (low_bits + len - 1 >= TARGET_PAGE_SIZE) {
-        return TARGET_PAGE_SIZE - low_bits;
+    if (low_bits + len - 1 >= TARGET_PAGE_SIZE_MIN) {
+        return TARGET_PAGE_SIZE_MIN - low_bits;
     }
 #endif
     return len;
@@ -2079,8 +2082,6 @@ success:
     return true;
 }
 
-static uint8_t ZEROARRAY[TARGET_PAGE_SIZE];
-
 static void do_memset_pattern_hostaddr(void* hostaddr, uint64_t value, uint64_t nitems, unsigned pattern_length, uint64_t ra) {
     if (pattern_length == 1) {
         memset(hostaddr, value, nitems);
@@ -2237,10 +2238,11 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             // Note: address_space_write will also clear the tag bits!
             MemTxResult result = MEMTX_ERROR;
             if (value == 0) {
-                 result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, ZEROARRAY, l_adj_bytes);
+                tcg_debug_assert(l_adj_bytes <= sizeof(ZEROARRAY));
+                result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, ZEROARRAY, l_adj_bytes);
             } else {
                 // create a buffer filled with the correct value and use that for the write
-                uint8_t setbuffer[TARGET_PAGE_SIZE];
+                uint8_t setbuffer[TARGET_PAGE_SIZE_MIN];
                 tcg_debug_assert(l_adj_bytes <= sizeof(setbuffer));
                 do_memset_pattern_hostaddr(setbuffer, value, l_adj_nitems, pattern_length, ra);
                 result = address_space_write(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, setbuffer, l_adj_bytes);
@@ -2384,7 +2386,7 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
     case 0xf0:
     case 0xf1:
     {
-        uint8_t buffer[TARGET_PAGE_SIZE];
+        uint8_t buffer[TARGET_PAGE_SIZE_MIN];
         // to match memset/memcpy calling convention (use a0 and a2)
         target_ulong src = env->active_tc.gpr[MIPS_REGNUM_A0];
         target_ulong real_len = env->active_tc.gpr[MIPS_REGNUM_A2];
@@ -2404,7 +2406,7 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
                         have_nonzero = true;
                 if (have_nonzero) {
                     /* This is probably inefficient but we don't dump that much.. */
-                    GString *strbuf = g_string_sized_new(TARGET_PAGE_SIZE);
+                    GString *strbuf = g_string_sized_new(TARGET_PAGE_SIZE_MIN);
                     do_hexdump(strbuf, buffer, len, src);
                     fwrite(strbuf->str, strbuf->len, 1, stderr);
                     g_string_free(strbuf, true);

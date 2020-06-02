@@ -521,7 +521,7 @@ void target_disas_buf(FILE *out, CPUState *cpu, void *code, unsigned long size,
         cc->disas_set_info(cpu, &s.info);
     }
 
-    if (s.info.cap_arch >= 0 && cap_disas_host(&s.info, code, size)) {
+    if (s.info.cap_arch >= 0 && cap_disas_host(&s.info, code, size, "")) {
         return;
     }
 

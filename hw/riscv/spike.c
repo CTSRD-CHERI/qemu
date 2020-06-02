@@ -200,9 +200,8 @@ static void spike_board_init(MachineState *machine)
     memory_region_add_subregion(system_memory, memmap[SPIKE_MROM].base,
                                 mask_rom);
 
-    riscv_find_and_load_firmware(machine, BIOS_FILENAME,
-                                 memmap[SPIKE_DRAM].base,
-                                 htif_symbol_callback);
+    uint64_t start_addr = riscv_find_and_load_firmware(
+        machine, BIOS_FILENAME, memmap[SPIKE_DRAM].base, htif_symbol_callback);
 
     if (machine->kernel_filename) {
         uint64_t kernel_entry = riscv_load_kernel(machine->kernel_filename,
@@ -232,10 +231,11 @@ static void spike_board_init(MachineState *machine)
 #endif
         0x00028067,                  /*     jr     t0 */
         0x00000000,
-        memmap[SPIKE_DRAM].base,     /* start: .dword DRAM_BASE */
-        0x00000000,
+        cpu_to_le32(start_addr),     /* start: .dword DRAM_BASE */
+        cpu_to_le32(start_addr >> 32),
                                      /* dtb: */
     };
+
 
     /* copy in the reset vector in little_endian byte order */
     for (i = 0; i < sizeof(reset_vec) >> 2; i++) {

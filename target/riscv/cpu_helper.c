@@ -664,7 +664,7 @@ restart:
             /* for superpage mappings, make a fake leaf PTE for the TLB's
                benefit. */
             target_ulong vpn = addr >> PGSHIFT;
-            *physical = (ppn | (vpn & ((1L << ptshift) - 1))) << PGSHIFT | |
+            *physical = ((ppn | (vpn & ((1L << ptshift) - 1))) << PGSHIFT) |
                         (addr & ~TARGET_PAGE_MASK);
 
             /* set permissions on the TLB entry */
@@ -884,13 +884,13 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
             int prot2;
             im_address = *pa;
 
-            ret = get_physical_address(env, &pa, &prot2, im_address,
+            ret = get_physical_address(env, pa, &prot2, im_address,
                                        access_type, mmu_idx, false, true);
 
             qemu_log_mask(CPU_LOG_MMU,
                     "%s 2nd-stage address=%" VADDR_PRIx " ret %d physical "
                     TARGET_FMT_plx " prot %d\n",
-                    __func__, im_address, ret, pa, prot2);
+                    __func__, im_address, ret, *pa, prot2);
 
             *prot &= prot2;
 
@@ -925,7 +925,8 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
                       __func__, address, ret, *pa, *prot);
     }
 
-    if (riscv_feature(env, RISCV_FEATURE_PMP) && (ret == TRANSLATE_SUCCESS) &&
+    if (riscv_feature(env, RISCV_FEATURE_PMP) &&
+        (ret == TRANSLATE_SUCCESS) &&
         !pmp_hart_has_privs(env, *pa, size,
                             access_type_to_pmp_priv(access_type), mode)) {
         ret = TRANSLATE_PMP_FAIL;
@@ -959,12 +960,12 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     } else if (probe) {
         return false;
     } else {
-        raise_mmu_exception(env, address, access_type, pmp_violation,
-                            first_stage_error);
+        raise_mmu_exception(env, address, access_type, pmp_violation, first_stage_error);
         riscv_raise_exception(env, cs->exception_index, retaddr);
     }
 
     return true;
+
 #else
     switch (access_type) {
     case MMU_INST_FETCH:
