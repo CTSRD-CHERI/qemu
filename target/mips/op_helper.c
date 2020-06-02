@@ -769,7 +769,7 @@ void r4k_helper_tlbinvf(CPUMIPSState *env)
     cpu_mips_tlb_flush(env);
 }
 
-void r4k_helper_tlbwi(CPUMIPSState *env)
+void r4k_helper_tlbwi(CPUMIPSState *env, uintptr_t retpc)
 {
     bool mi = !!((env->CP0_Config5 >> CP0C5_MI) & 1);
     target_ulong VPN;
@@ -845,7 +845,7 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
      */
     if (r4k_lookup_tlb(env, &duplicate, /*use_extra*/false) &&
         duplicate != idx) {
-        do_raise_exception(env, EXCP_MCHECK, GETPC());
+        do_raise_exception(env, EXCP_MCHECK, retpc);
     }
 
     r4k_invalidate_tlb(env, idx, 0);
@@ -855,7 +855,7 @@ void r4k_helper_tlbwi(CPUMIPSState *env)
 #endif /* CONFIG_TCG_LOG_INSTR */
 }
 
-void r4k_helper_tlbwr(CPUMIPSState *env)
+void r4k_helper_tlbwr(CPUMIPSState *env, uintptr_t retpc)
 {
     int r = cpu_mips_get_random(env);
 
@@ -864,7 +864,7 @@ void r4k_helper_tlbwr(CPUMIPSState *env)
      * VPN and ASID. If so, raise a Machine Check Exception.
      */
     if (r4k_lookup_tlb(env, NULL, /*use_extra*/true)) {
-        do_raise_exception(env, EXCP_MCHECK, GETPC());
+        do_raise_exception(env, EXCP_MCHECK, retpc);
     }
 
     r4k_invalidate_tlb(env, r, 1);
@@ -1003,12 +1003,12 @@ void r4k_helper_tlbr(CPUMIPSState *env)
 
 void helper_tlbwi(CPUMIPSState *env)
 {
-    env->tlb->helper_tlbwi(env);
+    env->tlb->helper_tlbwi(env, GETPC());
 }
 
 void helper_tlbwr(CPUMIPSState *env)
 {
-    env->tlb->helper_tlbwr(env);
+    env->tlb->helper_tlbwr(env, GETPC());
 }
 
 void helper_tlbp(CPUMIPSState *env)

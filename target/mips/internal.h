@@ -136,8 +136,8 @@ struct CPUMIPSTLBContext {
     uint32_t tlb_in_use;
     int (*map_address)(struct CPUMIPSState *env, hwaddr *physical, int *prot,
                        target_ulong address, int rw, int access_type);
-    void (*helper_tlbwi)(struct CPUMIPSState *env);
-    void (*helper_tlbwr)(struct CPUMIPSState *env);
+    void (*helper_tlbwi)(struct CPUMIPSState *env, uintptr_t retpc);
+    void (*helper_tlbwr)(struct CPUMIPSState *env, uintptr_t retpc);
     void (*helper_tlbp)(struct CPUMIPSState *env);
     void (*helper_tlbr)(struct CPUMIPSState *env);
     void (*helper_tlbinv)(struct CPUMIPSState *env);
@@ -155,8 +155,8 @@ int fixed_mmu_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
                           target_ulong address, int rw, int access_type);
 int r4k_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
                     target_ulong address, int rw, int access_type);
-void r4k_helper_tlbwi(CPUMIPSState *env);
-void r4k_helper_tlbwr(CPUMIPSState *env);
+void r4k_helper_tlbwi(CPUMIPSState *env, uintptr_t retpc);
+void r4k_helper_tlbwr(CPUMIPSState *env, uintptr_t retpc);
 void r4k_helper_tlbp(CPUMIPSState *env);
 void r4k_helper_tlbr(CPUMIPSState *env);
 void r4k_helper_tlbinv(CPUMIPSState *env);
