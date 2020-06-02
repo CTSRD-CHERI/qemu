@@ -92,7 +92,7 @@ def verify_passwordless_sudo():
     """Check whether sudo is configured to allow
        password-less access to commands"""
 
-    args = ["sudo", "-n", "/bin/true"]
+    args = ["sudo", "-n", "true"]
 
     proc = subprocess.Popen(args,
                             stdin=subprocess.PIPE,

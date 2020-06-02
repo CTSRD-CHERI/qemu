@@ -785,7 +785,7 @@ ifeq ($(CONFIG_TCG),y)
 check-softfloat: check-softfloat-conv check-softfloat-compare check-softfloat-ops
 else
 check-softfloat:
-	$(call quiet-command, /bin/true, "FLOAT TEST", \
+	$(call quiet-command, true, "FLOAT TEST", \
 		"SKIPPED for non-TCG builds")
 endif
 
