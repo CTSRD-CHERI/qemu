@@ -96,10 +96,9 @@ static PFlashCFI01 *virt_flash_create1(RISCVVirtState *s,
     qdev_prop_set_uint16(dev, "id3", 0x00);
     qdev_prop_set_string(dev, "name", name);
 
-    object_property_add_child(OBJECT(s), name, OBJECT(dev),
-                              &error_abort);
+    object_property_add_child(OBJECT(s), name, OBJECT(dev));
     object_property_add_alias(OBJECT(s), alias_prop_name,
-                              OBJECT(dev), "drive", &error_abort);
+                              OBJECT(dev), "drive");
 
     return PFLASH_CFI01(dev);
 }
@@ -116,7 +115,7 @@ static void virt_flash_map1(PFlashCFI01 *flash,
 {
     DeviceState *dev = DEVICE(flash);
 
-    assert(size % VIRT_FLASH_SECTOR_SIZE == 0);
+    assert(QEMU_IS_ALIGNED(size, VIRT_FLASH_SECTOR_SIZE));
     assert(size / VIRT_FLASH_SECTOR_SIZE <= UINT32_MAX);
     qdev_prop_set_uint32(dev, "num-blocks", size / VIRT_FLASH_SECTOR_SIZE);
     qdev_init_nofail(dev);
@@ -233,7 +232,11 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
         char *intc = g_strdup_printf("/cpus/cpu@%d/interrupt-controller", cpu);
         char *isa = riscv_isa_string(&s->soc.harts[cpu]);
         qemu_fdt_add_subnode(fdt, nodename);
+#if defined(TARGET_RISCV32)
+        qemu_fdt_setprop_string(fdt, nodename, "mmu-type", "riscv,sv32");
+#else
         qemu_fdt_setprop_string(fdt, nodename, "mmu-type", "riscv,sv48");
+#endif
         qemu_fdt_setprop_string(fdt, nodename, "riscv,isa", isa);
         qemu_fdt_setprop_string(fdt, nodename, "compatible", "riscv");
         qemu_fdt_setprop_string(fdt, nodename, "status", "okay");
@@ -514,7 +517,7 @@ static void riscv_virt_board_init(MachineState *machine)
                                 mask_rom);
 
     start_addr =
-        riscv_find_and_load_firmware(machine, BIOS_FILENAME, start_addr);
+        riscv_find_and_load_firmware(machine, BIOS_FILENAME, start_addr, NULL);
 
     if (machine->kernel_filename) {
         uint64_t kernel_entry = riscv_load_kernel(machine->kernel_filename,

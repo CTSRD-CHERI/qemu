@@ -2421,7 +2421,7 @@ static void scsi_realize(SCSIDevice *dev, Error **errp)
                          dev->conf.lsecs);
 }
 
-static void scsi_unrealize(SCSIDevice *dev, Error **errp)
+static void scsi_unrealize(SCSIDevice *dev)
 {
     del_boot_device_lchs(&dev->qdev, NULL);
 }
@@ -3078,7 +3078,7 @@ static const TypeInfo scsi_cd_info = {
 
 #ifdef __linux__
 static Property scsi_block_properties[] = {
-    DEFINE_BLOCK_ERROR_PROPERTIES(SCSIDiskState, qdev.conf),         \
+    DEFINE_BLOCK_ERROR_PROPERTIES(SCSIDiskState, qdev.conf),
     DEFINE_PROP_DRIVE("drive", SCSIDiskState, qdev.conf.blk),
     DEFINE_PROP_BOOL("share-rw", SCSIDiskState, qdev.conf.share_rw, false),
     DEFINE_PROP_UINT16("rotation_rate", SCSIDiskState, rotation_rate, 0),

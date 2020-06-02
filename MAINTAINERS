@@ -115,6 +115,7 @@ M: Richard Henderson <rth@twiddle.net>
 R: Paolo Bonzini <pbonzini@redhat.com>
 S: Maintained
 F: cpus.c
+F: cpus-common.c
 F: exec.c
 F: accel/tcg/
 F: accel/stubs/tcg-stub.c
@@ -184,8 +185,8 @@ F: hw/net/*i82596*
 F: include/hw/net/lasi_82596.h
 
 LM32 TCG CPUs
-M: Michael Walle <michael@walle.cc>
-S: Maintained
+R: Michael Walle <michael@walle.cc>
+S: Orphan
 F: target/lm32/
 F: disas/lm32.c
 F: hw/lm32/
@@ -212,7 +213,7 @@ F: disas/microblaze.c
 MIPS TCG CPUs
 M: Aleksandar Markovic <aleksandar.qemu.devel@gmail.com>
 R: Aurelien Jarno <aurelien@aurel32.net>
-R: Aleksandar Rikalo <aleksandar.rikalo@rt-rk.com>
+R: Aleksandar Rikalo <aleksandar.rikalo@syrmia.com>
 S: Maintained
 F: target/mips/
 F: default-configs/*mips*
@@ -396,6 +397,8 @@ F: target/s390x/machine.c
 F: target/s390x/sigp.c
 F: target/s390x/cpu_features*.[ch]
 F: target/s390x/cpu_models.[ch]
+F: hw/s390x/pv.c
+F: include/hw/s390x/pv.h
 F: hw/intc/s390_flic.c
 F: hw/intc/s390_flic_kvm.c
 F: include/hw/s390x/s390_flic.h
@@ -605,6 +608,7 @@ S: Odd Fixes
 F: include/hw/arm/digic.h
 F: hw/*/digic*
 F: include/hw/*/digic*
+F: tests/acceptance/machine_arm_canona1100.py
 
 Goldfish RTC
 M: Anup Patel <anup.patel@wdc.com>
@@ -629,8 +633,10 @@ S: Odd Fixes
 F: hw/arm/fsl-imx25.c
 F: hw/arm/imx25_pdk.c
 F: hw/misc/imx25_ccm.c
+F: hw/watchdog/wdt_imx2.c
 F: include/hw/arm/fsl-imx25.h
 F: include/hw/misc/imx25_ccm.h
+F: include/hw/watchdog/wdt_imx2.h
 
 i.MX31 (kzm)
 M: Peter Chubb <peter.chubb@nicta.com.au>
@@ -697,12 +703,14 @@ F: hw/misc/armsse-cpuid.c
 F: include/hw/misc/armsse-cpuid.h
 F: hw/misc/armsse-mhu.c
 F: include/hw/misc/armsse-mhu.h
+F: docs/system/arm/mps2.rst
 
 Musca
 M: Peter Maydell <peter.maydell@linaro.org>
 L: qemu-arm@nongnu.org
 S: Maintained
 F: hw/arm/musca.c
+F: docs/system/arm/musca.rst
 
 Musicpal
 M: Jan Kiszka <jan.kiszka@web.de>
@@ -824,6 +832,7 @@ M: Peter Maydell <peter.maydell@linaro.org>
 L: qemu-arm@nongnu.org
 S: Maintained
 F: hw/arm/vexpress.c
+F: docs/system/arm/vexpress.rst
 
 Versatile PB
 M: Peter Maydell <peter.maydell@linaro.org>
@@ -919,6 +928,8 @@ F: include/hw/arm/msf2-soc.h
 F: include/hw/misc/msf2-sysreg.h
 F: include/hw/timer/mss-timer.h
 F: include/hw/ssi/mss-spi.h
+F: hw/net/msf2-emac.c
+F: include/hw/net/msf2-emac.h
 
 Emcraft M2S-FG484
 M: Subbaraya Sundeep <sundeep.lkml@gmail.com>
@@ -973,13 +984,13 @@ F: pc-bios/hppa-firmware.img
 LM32 Machines
 -------------
 EVR32 and uclinux BSP
-M: Michael Walle <michael@walle.cc>
-S: Maintained
+R: Michael Walle <michael@walle.cc>
+S: Orphan
 F: hw/lm32/lm32_boards.c
 
 milkymist
-M: Michael Walle <michael@walle.cc>
-S: Maintained
+R: Michael Walle <michael@walle.cc>
+S: Orphan
 F: hw/lm32/milkymist.c
 
 M68K Machines
@@ -1037,9 +1048,9 @@ MIPS Machines
 -------------
 Jazz
 M: Hervé Poussineau <hpoussin@reactos.org>
-R: Aleksandar Rikalo <aleksandar.rikalo@rt-rk.com>
+R: Aleksandar Rikalo <aleksandar.rikalo@syrmia.com>
 S: Maintained
-F: hw/mips/mips_jazz.c
+F: hw/mips/jazz.c
 F: hw/display/jazz_led.c
 F: hw/dma/rc4030.c
 
@@ -1050,7 +1061,7 @@ R: Aurelien Jarno <aurelien@aurel32.net>
 S: Maintained
 F: hw/isa/piix4.c
 F: hw/acpi/piix4.c
-F: hw/mips/mips_malta.c
+F: hw/mips/malta.c
 F: hw/mips/gt64xxx_pci.c
 F: include/hw/southbridge/piix.h
 F: tests/acceptance/linux_ssh_mips_malta.py
@@ -1058,30 +1069,32 @@ F: tests/acceptance/machine_mips_malta.py
 
 Mipssim
 M: Aleksandar Markovic <aleksandar.qemu.devel@gmail.com>
-R: Aleksandar Rikalo <aleksandar.rikalo@rt-rk.com>
+R: Aleksandar Rikalo <aleksandar.rikalo@syrmia.com>
 S: Odd Fixes
-F: hw/mips/mips_mipssim.c
+F: hw/mips/mipssim.c
 F: hw/net/mipsnet.c
 
 R4000
 M: Aleksandar Markovic <aleksandar.qemu.devel@gmail.com>
 R: Aurelien Jarno <aurelien@aurel32.net>
-R: Aleksandar Rikalo <aleksandar.rikalo@rt-rk.com>
+R: Aleksandar Rikalo <aleksandar.rikalo@syrmia.com>
 S: Obsolete
-F: hw/mips/mips_r4k.c
+F: hw/mips/r4k.c
 
-Fulong 2E
+Fuloong 2E
+M: Huacai Chen <chenhc@lemote.com>
 M: Philippe Mathieu-Daudé <f4bug@amsat.org>
 M: Aleksandar Markovic <aleksandar.qemu.devel@gmail.com>
+R: Jiaxun Yang <jiaxun.yang@flygoat.com>
 S: Odd Fixes
-F: hw/mips/mips_fulong2e.c
+F: hw/mips/fuloong2e.c
 F: hw/isa/vt82c686.c
 F: hw/pci-host/bonito.c
 F: include/hw/isa/vt82c686.h
 
 Boston
 M: Paul Burton <pburton@wavecomp.com>
-R: Aleksandar Rikalo <aleksandar.rikalo@rt-rk.com>
+R: Aleksandar Rikalo <aleksandar.rikalo@syrmia.com>
 S: Maintained
 F: hw/core/loader-fit.c
 F: hw/mips/boston.c
@@ -1512,6 +1525,15 @@ F: tests/qtest/bios-tables-test.c
 F: tests/qtest/acpi-utils.[hc]
 F: tests/data/acpi/
 
+ACPI/HEST/GHES
+R: Dongjiu Geng <gengdongjiu@huawei.com>
+R: Xiang Zheng <zhengxiang9@huawei.com>
+L: qemu-arm@nongnu.org
+S: Maintained
+F: hw/acpi/ghes.c
+F: include/hw/acpi/ghes.h
+F: docs/specs/acpi_hest_ghes.rst
+
 ppc4xx
 M: David Gibson <david@gibson.dropbear.id.au>
 L: qemu-ppc@nongnu.org
@@ -1653,7 +1675,7 @@ F: include/sysemu/balloon.h
 
 virtio-9p
 M: Greg Kurz <groug@kaod.org>
-R: Christian Schoenebeck <qemu_oss@crudebyte.com>
+M: Christian Schoenebeck <qemu_oss@crudebyte.com>
 S: Odd Fixes
 F: hw/9pfs/
 X: hw/9pfs/xen-9p*
@@ -1731,7 +1753,7 @@ F: hw/virtio/virtio-crypto-pci.c
 F: include/hw/virtio/virtio-crypto.h
 
 nvme
-M: Keith Busch <keith.busch@intel.com>
+M: Keith Busch <kbusch@kernel.org>
 L: qemu-block@nongnu.org
 S: Supported
 F: hw/block/nvme*
@@ -1997,19 +2019,21 @@ F: qapi/transaction.json
 T: git https://repo.or.cz/qemu/armbru.git block-next
 
 Dirty Bitmaps
-M: John Snow <jsnow@redhat.com>
-R: Vladimir Sementsov-Ogievskiy <vsementsov@virtuozzo.com>
+M: Eric Blake <eblake@redhat.com>
+M: Vladimir Sementsov-Ogievskiy <vsementsov@virtuozzo.com>
+R: John Snow <jsnow@redhat.com>
 L: qemu-block@nongnu.org
 S: Supported
 F: include/qemu/hbitmap.h
 F: include/block/dirty-bitmap.h
+F: block/monitor/bitmap-qmp-cmds.c
 F: block/dirty-bitmap.c
 F: block/qcow2-bitmap.c
 F: migration/block-dirty-bitmap.c
 F: util/hbitmap.c
 F: tests/test-hbitmap.c
 F: docs/interop/bitmaps.rst
-T: git https://github.com/jnsnow/qemu.git bitmaps
+T: git https://repo.or.cz/qemu/ericb.git bitmaps
 
 Character device backends
 M: Marc-André Lureau <marcandre.lureau@redhat.com>
@@ -2311,6 +2335,12 @@ F: net/slirp.c
 F: include/net/slirp.h
 T: git https://people.debian.org/~sthibault/qemu.git slirp
 
+Streams
+M: Edgar E. Iglesias <edgar.iglesias@gmail.com>
+S: Maintained
+F: hw/core/stream.c
+F: include/hw/stream.h
+
 Stubs
 M: Paolo Bonzini <pbonzini@redhat.com>
 S: Maintained
@@ -2512,7 +2542,7 @@ F: roms/edk2
 F: roms/edk2-*
 F: tests/data/uefi-boot-images/
 F: tests/uefi-test-tools/
-F: .gitlab-ci-edk2.yml
+F: .gitlab-ci.d/edk2.yml
 F: .gitlab-ci.d/edk2/
 
 Usermode Emulation
@@ -2578,7 +2608,7 @@ F: disas/i386.c
 MIPS TCG target
 M: Aleksandar Markovic <aleksandar.qemu.devel@gmail.com>
 R: Aurelien Jarno <aurelien@aurel32.net>
-R: Aleksandar Rikalo <aleksandar.rikalo@rt-rk.com>
+R: Aleksandar Rikalo <aleksandar.rikalo@syrmia.com>
 S: Maintained
 F: tcg/mips/
 
@@ -2871,6 +2901,9 @@ W: https://cirrus-ci.com/github/qemu/qemu
 
 GitLab Continuous Integration
 M: Thomas Huth <thuth@redhat.com>
+M: Philippe Mathieu-Daudé <philmd@redhat.com>
+M: Alex Bennée <alex.bennee@linaro.org>
+R: Wainer dos Santos Moschetta <wainersm@redhat.com>
 S: Maintained
 F: .gitlab-ci.yml
 

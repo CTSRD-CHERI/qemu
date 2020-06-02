@@ -991,8 +991,7 @@ iscsi_aio_ioctl_cb(struct iscsi_context *iscsi, int status,
         acb->ioh->driver_status |= SG_ERR_DRIVER_SENSE;
 
         acb->ioh->sb_len_wr = acb->task->datain.size - 2;
-        ss = (acb->ioh->mx_sb_len >= acb->ioh->sb_len_wr) ?
-             acb->ioh->mx_sb_len : acb->ioh->sb_len_wr;
+        ss = MIN(acb->ioh->mx_sb_len, acb->ioh->sb_len_wr);
         memcpy(acb->ioh->sbp, &acb->task->datain.data[2], ss);
     }
 
@@ -1395,20 +1394,17 @@ static void iscsi_nop_timed_event(void *opaque)
 {
     IscsiLun *iscsilun = opaque;
 
-    qemu_mutex_lock(&iscsilun->mutex);
+    QEMU_LOCK_GUARD(&iscsilun->mutex);
     if (iscsi_get_nops_in_flight(iscsilun->iscsi) >= MAX_NOP_FAILURES) {
         error_report("iSCSI: NOP timeout. Reconnecting...");
         iscsilun->request_timed_out = true;
     } else if (iscsi_nop_out_async(iscsilun->iscsi, NULL, NULL, 0, NULL) != 0) {
         error_report("iSCSI: failed to sent NOP-Out. Disabling NOP messages.");
-        goto out;
+        return;
     }
 
     timer_mod(iscsilun->nop_timer, qemu_clock_get_ms(QEMU_CLOCK_REALTIME) + NOP_INTERVAL);
     iscsi_set_events(iscsilun);
-
-out:
-    qemu_mutex_unlock(&iscsilun->mutex);
 }
 
 static void iscsi_readcapacity_sync(IscsiLun *iscsilun, Error **errp)
@@ -2125,7 +2121,7 @@ static void iscsi_reopen_commit(BDRVReopenState *reopen_state)
 
 static int coroutine_fn iscsi_co_truncate(BlockDriverState *bs, int64_t offset,
                                           bool exact, PreallocMode prealloc,
-                                          Error **errp)
+                                          BdrvRequestFlags flags, Error **errp)
 {
     IscsiLun *iscsilun = bs->opaque;
     int64_t cur_length;

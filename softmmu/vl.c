@@ -2882,7 +2882,7 @@ static void create_default_memdev(MachineState *ms, const char *path)
     }
     object_property_set_int(obj, ms->ram_size, "size", &error_fatal);
     object_property_add_child(object_get_objects_root(), mc->default_ram_id,
-                              obj, &error_fatal);
+                              obj);
     /* Ensure backend's memory region name is equal to mc->default_ram_id */
     object_property_set_bool(obj, false, "x-use-canonical-path-for-ramblock-id",
                              &error_fatal);
@@ -3146,19 +3146,19 @@ void qemu_init(int argc, char **argv, char **envp)
                 }
                 break;
             case QEMU_OPTION_kernel:
-                qemu_opts_set(qemu_find_opts("machine"), 0, "kernel", optarg,
+                qemu_opts_set(qemu_find_opts("machine"), NULL, "kernel", optarg,
                               &error_abort);
                 break;
             case QEMU_OPTION_initrd:
-                qemu_opts_set(qemu_find_opts("machine"), 0, "initrd", optarg,
+                qemu_opts_set(qemu_find_opts("machine"), NULL, "initrd", optarg,
                               &error_abort);
                 break;
             case QEMU_OPTION_append:
-                qemu_opts_set(qemu_find_opts("machine"), 0, "append", optarg,
+                qemu_opts_set(qemu_find_opts("machine"), NULL, "append", optarg,
                               &error_abort);
                 break;
             case QEMU_OPTION_dtb:
-                qemu_opts_set(qemu_find_opts("machine"), 0, "dtb", optarg,
+                qemu_opts_set(qemu_find_opts("machine"), NULL, "dtb", optarg,
                               &error_abort);
                 break;
             case QEMU_OPTION_cdrom:
@@ -3269,7 +3269,7 @@ void qemu_init(int argc, char **argv, char **envp)
                 }
                 break;
             case QEMU_OPTION_bios:
-                qemu_opts_set(qemu_find_opts("machine"), 0, "firmware", optarg,
+                qemu_opts_set(qemu_find_opts("machine"), NULL, "firmware", optarg,
                               &error_abort);
                 break;
             case QEMU_OPTION_singlestep:
@@ -3618,8 +3618,10 @@ void qemu_init(int argc, char **argv, char **envp)
                 no_shutdown = 1;
                 break;
             case QEMU_OPTION_show_cursor:
-                warn_report("The -show-cursor option is deprecated, "
-                            "use -display {sdl,gtk},show-cursor=on instead");
+                warn_report("The -show-cursor option is deprecated. Please "
+                            "add show-cursor=on to your -display options.");
+                warn_report("When using the default display you can use "
+                            "-display default,show-cursor=on");
                 dpy.has_show_cursor = true;
                 dpy.show_cursor = true;
                 break;
@@ -4027,11 +4029,10 @@ void qemu_init(int argc, char **argv, char **envp)
         exit(0);
     }
     object_property_add_child(object_get_root(), "machine",
-                              OBJECT(current_machine), &error_abort);
+                              OBJECT(current_machine));
     object_property_add_child(container_get(OBJECT(current_machine),
                                             "/unattached"),
-                              "sysbus", OBJECT(sysbus_get_default()),
-                              NULL);
+                              "sysbus", OBJECT(sysbus_get_default()));
 
     if (machine_class->minimum_page_bits) {
         if (!set_preferred_target_page_bits(machine_class->minimum_page_bits)) {

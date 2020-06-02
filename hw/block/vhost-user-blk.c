@@ -441,7 +441,9 @@ reconnect:
 
 virtio_err:
     g_free(s->vhost_vqs);
+    s->vhost_vqs = NULL;
     g_free(s->inflight);
+    s->inflight = NULL;
     for (i = 0; i < s->num_queues; i++) {
         virtio_delete_queue(s->virtqs[i]);
     }
@@ -450,7 +452,7 @@ virtio_err:
     vhost_user_cleanup(&s->vhost_user);
 }
 
-static void vhost_user_blk_device_unrealize(DeviceState *dev, Error **errp)
+static void vhost_user_blk_device_unrealize(DeviceState *dev)
 {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
     VHostUserBlk *s = VHOST_USER_BLK(dev);
@@ -462,7 +464,9 @@ static void vhost_user_blk_device_unrealize(DeviceState *dev, Error **errp)
     vhost_dev_cleanup(&s->dev);
     vhost_dev_free_inflight(s->inflight);
     g_free(s->vhost_vqs);
+    s->vhost_vqs = NULL;
     g_free(s->inflight);
+    s->inflight = NULL;
 
     for (i = 0; i < s->num_queues; i++) {
         virtio_delete_queue(s->virtqs[i]);
@@ -477,7 +481,7 @@ static void vhost_user_blk_instance_init(Object *obj)
     VHostUserBlk *s = VHOST_USER_BLK(obj);
 
     device_add_bootindex_property(obj, &s->bootindex, "bootindex",
-                                  "/disk@0,0", DEVICE(obj), NULL);
+                                  "/disk@0,0", DEVICE(obj));
 }
 
 static const VMStateDescription vmstate_vhost_user_blk = {

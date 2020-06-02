@@ -50,7 +50,7 @@ static void bdrv_parent_drained_begin(BlockDriverState *bs, BdrvChild *ignore,
     BdrvChild *c, *next;
 
     QLIST_FOREACH_SAFE(c, &bs->parents, next_parent, next) {
-        if (c == ignore || (ignore_bds_parents && c->role->parent_is_bds)) {
+        if (c == ignore || (ignore_bds_parents && c->klass->parent_is_bds)) {
             continue;
         }
         bdrv_parent_drained_begin_single(c, false);
@@ -62,8 +62,8 @@ static void bdrv_parent_drained_end_single_no_poll(BdrvChild *c,
 {
     assert(c->parent_quiesce_counter > 0);
     c->parent_quiesce_counter--;
-    if (c->role->drained_end) {
-        c->role->drained_end(c, drained_end_counter);
+    if (c->klass->drained_end) {
+        c->klass->drained_end(c, drained_end_counter);
     }
 }
 
@@ -81,7 +81,7 @@ static void bdrv_parent_drained_end(BlockDriverState *bs, BdrvChild *ignore,
     BdrvChild *c;
 
     QLIST_FOREACH(c, &bs->parents, next_parent) {
-        if (c == ignore || (ignore_bds_parents && c->role->parent_is_bds)) {
+        if (c == ignore || (ignore_bds_parents && c->klass->parent_is_bds)) {
             continue;
         }
         bdrv_parent_drained_end_single_no_poll(c, drained_end_counter);
@@ -90,8 +90,8 @@ static void bdrv_parent_drained_end(BlockDriverState *bs, BdrvChild *ignore,
 
 static bool bdrv_parent_drained_poll_single(BdrvChild *c)
 {
-    if (c->role->drained_poll) {
-        return c->role->drained_poll(c);
+    if (c->klass->drained_poll) {
+        return c->klass->drained_poll(c);
     }
     return false;
 }
@@ -103,7 +103,7 @@ static bool bdrv_parent_drained_poll(BlockDriverState *bs, BdrvChild *ignore,
     bool busy = false;
 
     QLIST_FOREACH_SAFE(c, &bs->parents, next_parent, next) {
-        if (c == ignore || (ignore_bds_parents && c->role->parent_is_bds)) {
+        if (c == ignore || (ignore_bds_parents && c->klass->parent_is_bds)) {
             continue;
         }
         busy |= bdrv_parent_drained_poll_single(c);
@@ -115,8 +115,8 @@ static bool bdrv_parent_drained_poll(BlockDriverState *bs, BdrvChild *ignore,
 void bdrv_parent_drained_begin_single(BdrvChild *c, bool poll)
 {
     c->parent_quiesce_counter++;
-    if (c->role->drained_begin) {
-        c->role->drained_begin(c);
+    if (c->klass->drained_begin) {
+        c->klass->drained_begin(c);
     }
     if (poll) {
         BDRV_POLL_WHILE(c->bs, bdrv_parent_drained_poll_single(c));
@@ -960,7 +960,7 @@ int bdrv_pwrite_zeroes(BdrvChild *child, int64_t offset,
  * flags are passed through to bdrv_pwrite_zeroes (e.g. BDRV_REQ_MAY_UNMAP,
  * BDRV_REQ_FUA).
  *
- * Returns < 0 on error, 0 on success. For error codes see bdrv_write().
+ * Returns < 0 on error, 0 on success. For error codes see bdrv_pwrite().
  */
 int bdrv_make_zero(BdrvChild *child, BdrvRequestFlags flags)
 {
@@ -994,6 +994,7 @@ int bdrv_make_zero(BdrvChild *child, BdrvRequestFlags flags)
     }
 }
 
+/* return < 0 if error. See bdrv_pwrite() for the return codes */
 int bdrv_preadv(BdrvChild *child, int64_t offset, QEMUIOVector *qiov)
 {
     int ret;
@@ -3325,8 +3326,8 @@ static void bdrv_parent_cb_resize(BlockDriverState *bs)
 {
     BdrvChild *c;
     QLIST_FOREACH(c, &bs->parents, next_parent) {
-        if (c->role->resize) {
-            c->role->resize(c);
+        if (c->klass->resize) {
+            c->klass->resize(c);
         }
     }
 }
@@ -3339,7 +3340,8 @@ static void bdrv_parent_cb_resize(BlockDriverState *bs)
  * 'offset' bytes in length.
  */
 int coroutine_fn bdrv_co_truncate(BdrvChild *child, int64_t offset, bool exact,
-                                  PreallocMode prealloc, Error **errp)
+                                  PreallocMode prealloc, BdrvRequestFlags flags,
+                                  Error **errp)
 {
     BlockDriverState *bs = child->bs;
     BlockDriver *drv = bs->drv;
@@ -3393,10 +3395,40 @@ int coroutine_fn bdrv_co_truncate(BdrvChild *child, int64_t offset, bool exact,
         goto out;
     }
 
+    /*
+     * If the image has a backing file that is large enough that it would
+     * provide data for the new area, we cannot leave it unallocated because
+     * then the backing file content would become visible. Instead, zero-fill
+     * the new area.
+     *
+     * Note that if the image has a backing file, but was opened without the
+     * backing file, taking care of keeping things consistent with that backing
+     * file is the user's responsibility.
+     */
+    if (new_bytes && bs->backing) {
+        int64_t backing_len;
+
+        backing_len = bdrv_getlength(backing_bs(bs));
+        if (backing_len < 0) {
+            ret = backing_len;
+            error_setg_errno(errp, -ret, "Could not get backing file size");
+            goto out;
+        }
+
+        if (backing_len > old_size) {
+            flags |= BDRV_REQ_ZERO_WRITE;
+        }
+    }
+
     if (drv->bdrv_co_truncate) {
-        ret = drv->bdrv_co_truncate(bs, offset, exact, prealloc, errp);
+        if (flags & ~bs->supported_truncate_flags) {
+            error_setg(errp, "Block driver does not support requested flags");
+            ret = -ENOTSUP;
+            goto out;
+        }
+        ret = drv->bdrv_co_truncate(bs, offset, exact, prealloc, flags, errp);
     } else if (bs->file && drv->is_filter) {
-        ret = bdrv_co_truncate(bs->file, offset, exact, prealloc, errp);
+        ret = bdrv_co_truncate(bs->file, offset, exact, prealloc, flags, errp);
     } else {
         error_setg(errp, "Image format driver does not support resize");
         ret = -ENOTSUP;
@@ -3429,6 +3461,7 @@ typedef struct TruncateCo {
     int64_t offset;
     bool exact;
     PreallocMode prealloc;
+    BdrvRequestFlags flags;
     Error **errp;
     int ret;
 } TruncateCo;
@@ -3437,12 +3470,12 @@ static void coroutine_fn bdrv_truncate_co_entry(void *opaque)
 {
     TruncateCo *tco = opaque;
     tco->ret = bdrv_co_truncate(tco->child, tco->offset, tco->exact,
-                                tco->prealloc, tco->errp);
+                                tco->prealloc, tco->flags, tco->errp);
     aio_wait_kick();
 }
 
 int bdrv_truncate(BdrvChild *child, int64_t offset, bool exact,
-                  PreallocMode prealloc, Error **errp)
+                  PreallocMode prealloc, BdrvRequestFlags flags, Error **errp)
 {
     Coroutine *co;
     TruncateCo tco = {
@@ -3450,6 +3483,7 @@ int bdrv_truncate(BdrvChild *child, int64_t offset, bool exact,
         .offset     = offset,
         .exact      = exact,
         .prealloc   = prealloc,
+        .flags      = flags,
         .errp       = errp,
         .ret        = NOT_DONE,
     };

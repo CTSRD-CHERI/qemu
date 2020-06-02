@@ -1242,6 +1242,42 @@ static int qcow2_update_options(BlockDriverState *bs, QDict *options,
     return ret;
 }
 
+static int validate_compression_type(BDRVQcow2State *s, Error **errp)
+{
+    switch (s->compression_type) {
+    case QCOW2_COMPRESSION_TYPE_ZLIB:
+#ifdef CONFIG_ZSTD
+    case QCOW2_COMPRESSION_TYPE_ZSTD:
+#endif
+        break;
+
+    default:
+        error_setg(errp, "qcow2: unknown compression type: %u",
+                   s->compression_type);
+        return -ENOTSUP;
+    }
+
+    /*
+     * if the compression type differs from QCOW2_COMPRESSION_TYPE_ZLIB
+     * the incompatible feature flag must be set
+     */
+    if (s->compression_type == QCOW2_COMPRESSION_TYPE_ZLIB) {
+        if (s->incompatible_features & QCOW2_INCOMPAT_COMPRESSION) {
+            error_setg(errp, "qcow2: Compression type incompatible feature "
+                             "bit must not be set");
+            return -EINVAL;
+        }
+    } else {
+        if (!(s->incompatible_features & QCOW2_INCOMPAT_COMPRESSION)) {
+            error_setg(errp, "qcow2: Compression type incompatible feature "
+                             "bit must be set");
+            return -EINVAL;
+        }
+    }
+
+    return 0;
+}
+
 /* Called with s->lock held.  */
 static int coroutine_fn qcow2_do_open(BlockDriverState *bs, QDict *options,
                                       int flags, Error **errp)
@@ -1356,6 +1392,23 @@ static int coroutine_fn qcow2_do_open(BlockDriverState *bs, QDict *options,
     s->incompatible_features    = header.incompatible_features;
     s->compatible_features      = header.compatible_features;
     s->autoclear_features       = header.autoclear_features;
+
+    /*
+     * Handle compression type
+     * Older qcow2 images don't contain the compression type header.
+     * Distinguish them by the header length and use
+     * the only valid (default) compression type in that case
+     */
+    if (header.header_length > offsetof(QCowHeader, compression_type)) {
+        s->compression_type = header.compression_type;
+    } else {
+        s->compression_type = QCOW2_COMPRESSION_TYPE_ZLIB;
+    }
+
+    ret = validate_compression_type(s, errp);
+    if (ret) {
+        goto fail;
+    }
 
     if (s->incompatible_features & ~QCOW2_INCOMPAT_MASK) {
         void *feature_table = NULL;
@@ -1537,7 +1590,8 @@ static int coroutine_fn qcow2_do_open(BlockDriverState *bs, QDict *options,
     }
 
     /* Open external data file */
-    s->data_file = bdrv_open_child(NULL, options, "data-file", bs, &child_file,
+    s->data_file = bdrv_open_child(NULL, options, "data-file", bs,
+                                   &child_of_bds, BDRV_CHILD_DATA,
                                    true, &local_err);
     if (local_err) {
         error_propagate(errp, local_err);
@@ -1548,8 +1602,8 @@ static int coroutine_fn qcow2_do_open(BlockDriverState *bs, QDict *options,
     if (s->incompatible_features & QCOW2_INCOMPAT_DATA_FILE) {
         if (!s->data_file && s->image_data_file) {
             s->data_file = bdrv_open_child(s->image_data_file, options,
-                                           "data-file", bs, &child_file,
-                                           false, errp);
+                                           "data-file", bs, &child_of_bds,
+                                           BDRV_CHILD_DATA, false, errp);
             if (!s->data_file) {
                 ret = -EINVAL;
                 goto fail;
@@ -1560,6 +1614,12 @@ static int coroutine_fn qcow2_do_open(BlockDriverState *bs, QDict *options,
             ret = -EINVAL;
             goto fail;
         }
+
+        /* No data here */
+        bs->file->role &= ~BDRV_CHILD_DATA;
+
+        /* Must succeed because we have given up permissions if anything */
+        bdrv_child_refresh_perms(bs, bs->file, &error_abort);
     } else {
         if (s->data_file) {
             error_setg(errp, "'data-file' can only be set for images with an "
@@ -1726,6 +1786,7 @@ static int coroutine_fn qcow2_do_open(BlockDriverState *bs, QDict *options,
 
     bs->supported_zero_flags = header.version >= 3 ?
                                BDRV_REQ_MAY_UNMAP | BDRV_REQ_NO_FALLBACK : 0;
+    bs->supported_truncate_flags = BDRV_REQ_ZERO_WRITE;
 
     /* Repair image if dirty */
     if (!(flags & (BDRV_O_CHECK | BDRV_O_INACTIVE)) && !bs->read_only &&
@@ -1809,8 +1870,8 @@ static int qcow2_open(BlockDriverState *bs, QDict *options, int flags,
         .ret = -EINPROGRESS
     };
 
-    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_file,
-                               false, errp);
+    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_of_bds,
+                               BDRV_CHILD_IMAGE, false, errp);
     if (!bs->file) {
         return -EINVAL;
     }
@@ -2727,6 +2788,11 @@ int qcow2_update_header(BlockDriverState *bs)
     total_size = bs->total_sectors * BDRV_SECTOR_SIZE;
     refcount_table_clusters = s->refcount_table_size >> (s->cluster_bits - 3);
 
+    ret = validate_compression_type(s, NULL);
+    if (ret) {
+        goto fail;
+    }
+
     *header = (QCowHeader) {
         /* Version 2 fields */
         .magic                  = cpu_to_be32(QCOW_MAGIC),
@@ -2749,6 +2815,7 @@ int qcow2_update_header(BlockDriverState *bs)
         .autoclear_features     = cpu_to_be64(s->autoclear_features),
         .refcount_order         = cpu_to_be32(s->refcount_order),
         .header_length          = cpu_to_be32(header_length),
+        .compression_type       = s->compression_type,
     };
 
     /* For older versions, write a shorter header */
@@ -2847,6 +2914,11 @@ int qcow2_update_header(BlockDriverState *bs)
                 .type = QCOW2_FEAT_TYPE_INCOMPATIBLE,
                 .bit  = QCOW2_INCOMPAT_DATA_FILE_BITNR,
                 .name = "external data file",
+            },
+            {
+                .type = QCOW2_FEAT_TYPE_INCOMPATIBLE,
+                .bit  = QCOW2_INCOMPAT_COMPRESSION_BITNR,
+                .name = "compression type",
             },
             {
                 .type = QCOW2_FEAT_TYPE_COMPATIBLE,
@@ -3095,7 +3167,7 @@ static int coroutine_fn preallocate_co(BlockDriverState *bs, uint64_t offset,
             mode = PREALLOC_MODE_OFF;
         }
         ret = bdrv_co_truncate(s->data_file, host_offset + cur_bytes, false,
-                               mode, errp);
+                               mode, 0, errp);
         if (ret < 0) {
             return ret;
         }
@@ -3286,6 +3358,7 @@ qcow2_co_create(BlockdevCreateOptions *create_options, Error **errp)
     uint64_t* refcount_table;
     Error *local_err = NULL;
     int ret;
+    uint8_t compression_type = QCOW2_COMPRESSION_TYPE_ZLIB;
 
     assert(create_options->driver == BLOCKDEV_DRIVER_QCOW2);
     qcow2_opts = &create_options->u.qcow2;
@@ -3403,11 +3476,36 @@ qcow2_co_create(BlockdevCreateOptions *create_options, Error **errp)
         }
     }
 
+    if (qcow2_opts->has_compression_type &&
+        qcow2_opts->compression_type != QCOW2_COMPRESSION_TYPE_ZLIB) {
+
+        ret = -EINVAL;
+
+        if (version < 3) {
+            error_setg(errp, "Non-zlib compression type is only supported with "
+                       "compatibility level 1.1 and above (use version=v3 or "
+                       "greater)");
+            goto out;
+        }
+
+        switch (qcow2_opts->compression_type) {
+#ifdef CONFIG_ZSTD
+        case QCOW2_COMPRESSION_TYPE_ZSTD:
+            break;
+#endif
+        default:
+            error_setg(errp, "Unknown compression type");
+            goto out;
+        }
+
+        compression_type = qcow2_opts->compression_type;
+    }
+
     /* Create BlockBackend to write to the image */
-    blk = blk_new(bdrv_get_aio_context(bs),
-                  BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL);
-    ret = blk_insert_bs(blk, bs, errp);
-    if (ret < 0) {
+    blk = blk_new_with_bs(bs, BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL,
+                          errp);
+    if (!blk) {
+        ret = -EPERM;
         goto out;
     }
     blk_set_allow_write_beyond_eof(blk, true);
@@ -3425,6 +3523,8 @@ qcow2_co_create(BlockdevCreateOptions *create_options, Error **errp)
         .refcount_table_offset      = cpu_to_be64(cluster_size),
         .refcount_table_clusters    = cpu_to_be32(1),
         .refcount_order             = cpu_to_be32(refcount_order),
+        /* don't deal with endianness since compression_type is 1 byte long */
+        .compression_type           = compression_type,
         .header_length              = cpu_to_be32(sizeof(*header)),
     };
 
@@ -3442,6 +3542,10 @@ qcow2_co_create(BlockdevCreateOptions *create_options, Error **errp)
     if (qcow2_opts->data_file_raw) {
         header->autoclear_features |=
             cpu_to_be64(QCOW2_AUTOCLEAR_DATA_FILE_RAW);
+    }
+    if (compression_type != QCOW2_COMPRESSION_TYPE_ZLIB) {
+        header->incompatible_features |=
+            cpu_to_be64(QCOW2_INCOMPAT_COMPRESSION);
     }
 
     ret = blk_pwrite(blk, 0, header, cluster_size, 0);
@@ -3511,7 +3615,7 @@ qcow2_co_create(BlockdevCreateOptions *create_options, Error **errp)
 
     /* Okay, now that we have a valid image, let's give it the right size */
     ret = blk_truncate(blk, qcow2_opts->size, false, qcow2_opts->preallocation,
-                       errp);
+                       0, errp);
     if (ret < 0) {
         error_prepend(errp, "Could not resize image: ");
         goto out;
@@ -3628,6 +3732,7 @@ static int coroutine_fn qcow2_co_create_opts(BlockDriver *drv,
         { BLOCK_OPT_ENCRYPT,            BLOCK_OPT_ENCRYPT_FORMAT },
         { BLOCK_OPT_COMPAT_LEVEL,       "version" },
         { BLOCK_OPT_DATA_FILE_RAW,      "data-file-raw" },
+        { BLOCK_OPT_COMPRESSION_TYPE,   "compression-type" },
         { NULL, NULL },
     };
 
@@ -3964,7 +4069,7 @@ fail:
 
 static int coroutine_fn qcow2_co_truncate(BlockDriverState *bs, int64_t offset,
                                           bool exact, PreallocMode prealloc,
-                                          Error **errp)
+                                          BdrvRequestFlags flags, Error **errp)
 {
     BDRVQcow2State *s = bs->opaque;
     uint64_t old_length;
@@ -3988,14 +4093,17 @@ static int coroutine_fn qcow2_co_truncate(BlockDriverState *bs, int64_t offset,
 
     qemu_co_mutex_lock(&s->lock);
 
-    /* cannot proceed if image has snapshots */
-    if (s->nb_snapshots) {
-        error_setg(errp, "Can't resize an image which has snapshots");
+    /*
+     * Even though we store snapshot size for all images, it was not
+     * required until v3, so it is not safe to proceed for v2.
+     */
+    if (s->nb_snapshots && s->qcow_version < 3) {
+        error_setg(errp, "Can't resize a v2 image which has snapshots");
         ret = -ENOTSUP;
         goto fail;
     }
 
-    /* cannot proceed if image has bitmaps */
+    /* See qcow2-bitmap.c for which bitmap scenarios prevent a resize. */
     if (qcow2_truncate_bitmaps_check(bs, errp)) {
         ret = -ENOTSUP;
         goto fail;
@@ -4061,7 +4169,7 @@ static int coroutine_fn qcow2_co_truncate(BlockDriverState *bs, int64_t offset,
              * always fulfilled, so there is no need to pass it on.)
              */
             bdrv_co_truncate(bs->file, (last_cluster + 1) * s->cluster_size,
-                             false, PREALLOC_MODE_OFF, &local_err);
+                             false, PREALLOC_MODE_OFF, 0, &local_err);
             if (local_err) {
                 warn_reportf_err(local_err,
                                  "Failed to truncate the tail of the image: ");
@@ -4083,7 +4191,8 @@ static int coroutine_fn qcow2_co_truncate(BlockDriverState *bs, int64_t offset,
              * file should be resized to the exact target size, too,
              * so we pass @exact here.
              */
-            ret = bdrv_co_truncate(s->data_file, offset, exact, prealloc, errp);
+            ret = bdrv_co_truncate(s->data_file, offset, exact, prealloc, 0,
+                                   errp);
             if (ret < 0) {
                 goto fail;
             }
@@ -4102,7 +4211,7 @@ static int coroutine_fn qcow2_co_truncate(BlockDriverState *bs, int64_t offset,
     {
         int64_t allocation_start, host_offset, guest_offset;
         int64_t clusters_allocated;
-        int64_t old_file_size, new_file_size;
+        int64_t old_file_size, last_cluster, new_file_size;
         uint64_t nb_new_data_clusters, nb_new_l2_tables;
 
         /* With a data file, preallocation means just allocating the metadata
@@ -4122,7 +4231,13 @@ static int coroutine_fn qcow2_co_truncate(BlockDriverState *bs, int64_t offset,
             ret = old_file_size;
             goto fail;
         }
-        old_file_size = ROUND_UP(old_file_size, s->cluster_size);
+
+        last_cluster = qcow2_get_last_cluster(bs, old_file_size);
+        if (last_cluster >= 0) {
+            old_file_size = (last_cluster + 1) * s->cluster_size;
+        } else {
+            old_file_size = ROUND_UP(old_file_size, s->cluster_size);
+        }
 
         nb_new_data_clusters = DIV_ROUND_UP(offset - old_length,
                                             s->cluster_size);
@@ -4168,8 +4283,25 @@ static int coroutine_fn qcow2_co_truncate(BlockDriverState *bs, int64_t offset,
         /* Allocate the data area */
         new_file_size = allocation_start +
                         nb_new_data_clusters * s->cluster_size;
-        /* Image file grows, so @exact does not matter */
-        ret = bdrv_co_truncate(bs->file, new_file_size, false, prealloc, errp);
+        /*
+         * Image file grows, so @exact does not matter.
+         *
+         * If we need to zero out the new area, try first whether the protocol
+         * driver can already take care of this.
+         */
+        if (flags & BDRV_REQ_ZERO_WRITE) {
+            ret = bdrv_co_truncate(bs->file, new_file_size, false, prealloc,
+                                   BDRV_REQ_ZERO_WRITE, NULL);
+            if (ret >= 0) {
+                flags &= ~BDRV_REQ_ZERO_WRITE;
+            }
+        } else {
+            ret = -1;
+        }
+        if (ret < 0) {
+            ret = bdrv_co_truncate(bs->file, new_file_size, false, prealloc, 0,
+                                   errp);
+        }
         if (ret < 0) {
             error_prepend(errp, "Failed to resize underlying file: ");
             qcow2_free_clusters(bs, allocation_start,
@@ -4210,6 +4342,41 @@ static int coroutine_fn qcow2_co_truncate(BlockDriverState *bs, int64_t offset,
 
     default:
         g_assert_not_reached();
+    }
+
+    if ((flags & BDRV_REQ_ZERO_WRITE) && offset > old_length) {
+        uint64_t zero_start = QEMU_ALIGN_UP(old_length, s->cluster_size);
+
+        /*
+         * Use zero clusters as much as we can. qcow2_cluster_zeroize()
+         * requires a cluster-aligned start. The end may be unaligned if it is
+         * at the end of the image (which it is here).
+         */
+        if (offset > zero_start) {
+            ret = qcow2_cluster_zeroize(bs, zero_start, offset - zero_start, 0);
+            if (ret < 0) {
+                error_setg_errno(errp, -ret, "Failed to zero out new clusters");
+                goto fail;
+            }
+        }
+
+        /* Write explicit zeros for the unaligned head */
+        if (zero_start > old_length) {
+            uint64_t len = MIN(zero_start, offset) - old_length;
+            uint8_t *buf = qemu_blockalign0(bs, len);
+            QEMUIOVector qiov;
+            qemu_iovec_init_buf(&qiov, buf, len);
+
+            qemu_co_mutex_unlock(&s->lock);
+            ret = qcow2_co_pwritev_part(bs, old_length, len, &qiov, 0, 0);
+            qemu_co_mutex_lock(&s->lock);
+
+            qemu_vfree(buf);
+            if (ret < 0) {
+                error_setg_errno(errp, -ret, "Failed to zero out the new area");
+                goto fail;
+            }
+        }
     }
 
     if (prealloc != PREALLOC_MODE_OFF) {
@@ -4348,7 +4515,8 @@ qcow2_co_pwritev_compressed_part(BlockDriverState *bs,
         if (len < 0) {
             return len;
         }
-        return bdrv_co_truncate(bs->file, len, false, PREALLOC_MODE_OFF, NULL);
+        return bdrv_co_truncate(bs->file, len, false, PREALLOC_MODE_OFF, 0,
+                                NULL);
     }
 
     if (offset_into_cluster(s, offset)) {
@@ -4563,7 +4731,7 @@ static int make_completely_empty(BlockDriverState *bs)
     }
 
     ret = bdrv_truncate(bs->file, (3 + l1_clusters) * s->cluster_size, false,
-                        PREALLOC_MODE_OFF, &local_err);
+                        PREALLOC_MODE_OFF, 0, &local_err);
     if (ret < 0) {
         error_report_err(local_err);
         goto fail;
@@ -4785,16 +4953,24 @@ static BlockMeasureInfo *qcow2_measure(QemuOpts *opts, BlockDriverState *in_bs,
         required = virtual_size;
     }
 
-    info = g_new(BlockMeasureInfo, 1);
+    info = g_new0(BlockMeasureInfo, 1);
     info->fully_allocated =
         qcow2_calc_prealloc_size(virtual_size, cluster_size,
                                  ctz32(refcount_bits)) + luks_payload_size;
 
-    /* Remove data clusters that are not required.  This overestimates the
+    /*
+     * Remove data clusters that are not required.  This overestimates the
      * required size because metadata needed for the fully allocated file is
-     * still counted.
+     * still counted.  Show bitmaps only if both source and destination
+     * would support them.
      */
     info->required = info->fully_allocated - virtual_size + required;
+    info->has_bitmaps = version >= 3 && in_bs &&
+        bdrv_supports_persistent_dirty_bitmap(in_bs);
+    if (info->has_bitmaps) {
+        info->bitmaps = qcow2_get_persistent_dirty_bitmap_size(in_bs,
+                                                               cluster_size);
+    }
     return info;
 
 err:
@@ -4861,6 +5037,7 @@ static ImageInfoSpecific *qcow2_get_specific_info(BlockDriverState *bs,
             .data_file          = g_strdup(s->image_data_file),
             .has_data_file_raw  = has_data_file(bs),
             .data_file_raw      = data_file_is_raw(bs),
+            .compression_type   = s->compression_type,
         };
     } else {
         /* if this assertion fails, this probably means a new version was
@@ -4952,6 +5129,7 @@ static int qcow2_downgrade(BlockDriverState *bs, int target_version,
     BDRVQcow2State *s = bs->opaque;
     int current_version = s->qcow_version;
     int ret;
+    int i;
 
     /* This is qcow2_downgrade(), not qcow2_upgrade() */
     assert(target_version < current_version);
@@ -4967,6 +5145,21 @@ static int qcow2_downgrade(BlockDriverState *bs, int target_version,
     if (has_data_file(bs)) {
         error_setg(errp, "Cannot downgrade an image with a data file");
         return -ENOTSUP;
+    }
+
+    /*
+     * If any internal snapshot has a different size than the current
+     * image size, or VM state size that exceeds 32 bits, downgrading
+     * is unsafe.  Even though we would still use v3-compliant output
+     * to preserve that data, other v2 programs might not realize
+     * those optional fields are important.
+     */
+    for (i = 0; i < s->nb_snapshots; i++) {
+        if (s->snapshots[i].vm_state_size > UINT32_MAX ||
+            s->snapshots[i].disk_size != bs->total_sectors * BDRV_SECTOR_SIZE) {
+            error_setg(errp, "Internal snapshots prevent downgrade of image");
+            return -ENOTSUP;
+        }
     }
 
     /* clear incompatible features */
@@ -5250,6 +5443,22 @@ static int qcow2_amend_options(BlockDriverState *bs, QemuOpts *opts,
                                  "images");
                 return -EINVAL;
             }
+        } else if (!strcmp(desc->name, BLOCK_OPT_COMPRESSION_TYPE)) {
+            const char *ct_name =
+                qemu_opt_get(opts, BLOCK_OPT_COMPRESSION_TYPE);
+            int compression_type =
+                qapi_enum_parse(&Qcow2CompressionType_lookup, ct_name, -1,
+                                NULL);
+            if (compression_type == -1) {
+                error_setg(errp, "Unknown compression type: %s", ct_name);
+                return -ENOTSUP;
+            }
+
+            if (compression_type != s->compression_type) {
+                error_setg(errp, "Changing the compression type "
+                                 "is not supported");
+                return -ENOTSUP;
+            }
         } else {
             /* if this point is reached, this probably means a new option was
              * added without having it covered here */
@@ -5359,19 +5568,17 @@ static int qcow2_amend_options(BlockDriverState *bs, QemuOpts *opts,
     }
 
     if (new_size) {
-        BlockBackend *blk = blk_new(bdrv_get_aio_context(bs),
-                                    BLK_PERM_RESIZE, BLK_PERM_ALL);
-        ret = blk_insert_bs(blk, bs, errp);
-        if (ret < 0) {
-            blk_unref(blk);
-            return ret;
+        BlockBackend *blk = blk_new_with_bs(bs, BLK_PERM_RESIZE, BLK_PERM_ALL,
+                                            errp);
+        if (!blk) {
+            return -EPERM;
         }
 
         /*
          * Amending image options should ensure that the image has
          * exactly the given new values, so pass exact=true here.
          */
-        ret = blk_truncate(blk, new_size, true, PREALLOC_MODE_OFF, errp);
+        ret = blk_truncate(blk, new_size, true, PREALLOC_MODE_OFF, 0, errp);
         blk_unref(blk);
         if (ret < 0) {
             return ret;
@@ -5518,6 +5725,12 @@ static QemuOptsList qcow2_create_opts = {
             .help = "Width of a reference count entry in bits",
             .def_value_str = "16"
         },
+        {
+            .name = BLOCK_OPT_COMPRESSION_TYPE,
+            .type = QEMU_OPT_STRING,
+            .help = "Compression method used for image cluster compression",
+            .def_value_str = "zlib"
+        },
         { /* end of list */ }
     }
 };
@@ -5539,11 +5752,10 @@ BlockDriver bdrv_qcow2 = {
     .bdrv_reopen_commit_post = qcow2_reopen_commit_post,
     .bdrv_reopen_abort    = qcow2_reopen_abort,
     .bdrv_join_options    = qcow2_join_options,
-    .bdrv_child_perm      = bdrv_format_default_perms,
+    .bdrv_child_perm      = bdrv_default_perms,
     .bdrv_co_create_opts  = qcow2_co_create_opts,
     .bdrv_co_create       = qcow2_co_create,
     .bdrv_has_zero_init   = qcow2_has_zero_init,
-    .bdrv_has_zero_init_truncate = bdrv_has_zero_init_1,
     .bdrv_co_block_status = qcow2_co_block_status,
 
     .bdrv_co_preadv_part    = qcow2_co_preadv_part,
@@ -5570,6 +5782,7 @@ BlockDriver bdrv_qcow2 = {
     .bdrv_save_vmstate    = qcow2_save_vmstate,
     .bdrv_load_vmstate    = qcow2_load_vmstate,
 
+    .is_format                  = true,
     .supports_backing           = true,
     .bdrv_change_backing_file   = qcow2_change_backing_file,
 
@@ -5586,6 +5799,8 @@ BlockDriver bdrv_qcow2 = {
     .bdrv_detach_aio_context  = qcow2_detach_aio_context,
     .bdrv_attach_aio_context  = qcow2_attach_aio_context,
 
+    .bdrv_supports_persistent_dirty_bitmap =
+            qcow2_supports_persistent_dirty_bitmap,
     .bdrv_co_can_store_new_dirty_bitmap = qcow2_co_can_store_new_dirty_bitmap,
     .bdrv_co_remove_persistent_dirty_bitmap =
             qcow2_co_remove_persistent_dirty_bitmap,

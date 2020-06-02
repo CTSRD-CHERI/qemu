@@ -104,18 +104,35 @@ static ssize_t block_crypto_init_func(QCryptoBlock *block,
                                       Error **errp)
 {
     struct BlockCryptoCreateData *data = opaque;
+    Error *local_error = NULL;
+    int ret;
 
     if (data->size > INT64_MAX || headerlen > INT64_MAX - data->size) {
-        error_setg(errp, "The requested file size is too large");
-        return -EFBIG;
+        ret = -EFBIG;
+        goto error;
     }
 
     /* User provided size should reflect amount of space made
      * available to the guest, so we must take account of that
      * which will be used by the crypto header
      */
-    return blk_truncate(data->blk, data->size + headerlen, false,
-                        data->prealloc, errp);
+    ret = blk_truncate(data->blk, data->size + headerlen, false,
+                       data->prealloc, 0, &local_error);
+
+    if (ret >= 0) {
+        return ret;
+    }
+
+error:
+    if (ret == -EFBIG) {
+        /* Replace the error message with a better one */
+        error_free(local_error);
+        error_setg(errp, "The requested file size is too large");
+    } else {
+        error_propagate(errp, local_error);
+    }
+
+    return ret;
 }
 
 
@@ -201,8 +218,8 @@ static int block_crypto_open_generic(QCryptoBlockFormat format,
     unsigned int cflags = 0;
     QDict *cryptoopts = NULL;
 
-    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_file,
-                               false, errp);
+    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_of_bds,
+                               BDRV_CHILD_IMAGE, false, errp);
     if (!bs->file) {
         return -EINVAL;
     }
@@ -261,11 +278,10 @@ static int block_crypto_co_create_generic(BlockDriverState *bs,
     QCryptoBlock *crypto = NULL;
     struct BlockCryptoCreateData data;
 
-    blk = blk_new(bdrv_get_aio_context(bs),
-                  BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL);
-
-    ret = blk_insert_bs(blk, bs, errp);
-    if (ret < 0) {
+    blk = blk_new_with_bs(bs, BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL,
+                          errp);
+    if (!blk) {
+        ret = -EPERM;
         goto cleanup;
     }
 
@@ -299,7 +315,8 @@ static int block_crypto_co_create_generic(BlockDriverState *bs,
 
 static int coroutine_fn
 block_crypto_co_truncate(BlockDriverState *bs, int64_t offset, bool exact,
-                         PreallocMode prealloc, Error **errp)
+                         PreallocMode prealloc, BdrvRequestFlags flags,
+                         Error **errp)
 {
     BlockCrypto *crypto = bs->opaque;
     uint64_t payload_offset =
@@ -312,7 +329,7 @@ block_crypto_co_truncate(BlockDriverState *bs, int64_t offset, bool exact,
 
     offset += payload_offset;
 
-    return bdrv_co_truncate(bs->file, offset, exact, prealloc, errp);
+    return bdrv_co_truncate(bs->file, offset, exact, prealloc, 0, errp);
 }
 
 static void block_crypto_close(BlockDriverState *bs)
@@ -535,7 +552,7 @@ static BlockMeasureInfo *block_crypto_measure(QemuOpts *opts,
      * Unallocated blocks are still encrypted so allocation status makes no
      * difference to the file size.
      */
-    info = g_new(BlockMeasureInfo, 1);
+    info = g_new0(BlockMeasureInfo, 1);
     info->fully_allocated = luks_payload_size + size;
     info->required = luks_payload_size + size;
     return info;
@@ -739,7 +756,7 @@ static BlockDriver bdrv_crypto_luks = {
     .bdrv_close         = block_crypto_close,
     /* This driver doesn't modify LUKS metadata except when creating image.
      * Allow share-rw=on as a special case. */
-    .bdrv_child_perm    = bdrv_filter_default_perms,
+    .bdrv_child_perm    = bdrv_default_perms,
     .bdrv_co_create     = block_crypto_co_create_luks,
     .bdrv_co_create_opts = block_crypto_co_create_opts_luks,
     .bdrv_co_truncate   = block_crypto_co_truncate,
@@ -753,6 +770,8 @@ static BlockDriver bdrv_crypto_luks = {
     .bdrv_measure       = block_crypto_measure,
     .bdrv_get_info      = block_crypto_get_info_luks,
     .bdrv_get_specific_info = block_crypto_get_specific_info_luks,
+
+    .is_format          = true,
 
     .strong_runtime_opts = block_crypto_strong_runtime_opts,
 };

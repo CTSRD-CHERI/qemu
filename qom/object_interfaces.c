@@ -6,6 +6,7 @@
 #include "qapi/qmp/qerror.h"
 #include "qapi/qmp/qjson.h"
 #include "qapi/qmp/qstring.h"
+#include "qapi/qobject-input-visitor.h"
 #include "qom/object_interfaces.h"
 #include "qemu/help_option.h"
 #include "qemu/module.h"
@@ -82,17 +83,13 @@ Object *user_creatable_add_type(const char *type, const char *id,
 
     if (id != NULL) {
         object_property_add_child(object_get_objects_root(),
-                                  id, obj, &local_err);
-        if (local_err) {
-            goto out;
-        }
+                                  id, obj);
     }
 
     user_creatable_complete(USER_CREATABLE(obj), &local_err);
     if (local_err) {
         if (id != NULL) {
-            object_property_del(object_get_objects_root(),
-                                id, &error_abort);
+            object_property_del(object_get_objects_root(), id);
         }
         goto out;
     }
@@ -105,6 +102,36 @@ out:
     return obj;
 }
 
+void user_creatable_add_dict(QDict *qdict, bool keyval, Error **errp)
+{
+    Visitor *v;
+    Object *obj;
+    g_autofree char *type = NULL;
+    g_autofree char *id = NULL;
+
+    type = g_strdup(qdict_get_try_str(qdict, "qom-type"));
+    if (!type) {
+        error_setg(errp, QERR_MISSING_PARAMETER, "qom-type");
+        return;
+    }
+    qdict_del(qdict, "qom-type");
+
+    id = g_strdup(qdict_get_try_str(qdict, "id"));
+    if (!id) {
+        error_setg(errp, QERR_MISSING_PARAMETER, "id");
+        return;
+    }
+    qdict_del(qdict, "id");
+
+    if (keyval) {
+        v = qobject_input_visitor_new_keyval(QOBJECT(qdict));
+    } else {
+        v = qobject_input_visitor_new(QOBJECT(qdict));
+    }
+    obj = user_creatable_add_type(type, id, qdict, v, errp);
+    visit_free(v);
+    object_unref(obj);
+}
 
 Object *user_creatable_add_opts(QemuOpts *opts, Error **errp)
 {

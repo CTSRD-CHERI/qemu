@@ -25,6 +25,7 @@
 #include "qemu/cutils.h"
 #include "trace/control.h"
 #include "qemu/thread.h"
+#include "qemu/lockable.h"
 
 static char *logfilename;
 static QemuMutex qemu_logfile_mutex;
@@ -108,8 +109,7 @@ void qemu_set_log(int log_flags)
     if (qemu_loglevel && (!is_daemonized() || logfilename)) {
         need_to_open_file = true;
     }
-
-    qemu_mutex_lock(&qemu_logfile_mutex);
+    QEMU_LOCK_GUARD(&qemu_logfile_mutex);
     if (qemu_logfile && !need_to_open_file) {
         logfile = qemu_logfile;
         atomic_rcu_set(&qemu_logfile, NULL);
@@ -152,7 +152,6 @@ void qemu_set_log(int log_flags)
         }
         atomic_rcu_set(&qemu_logfile, logfile);
     }
-    qemu_mutex_unlock(&qemu_logfile_mutex);
 }
 
 void qemu_log_needs_buffers(void)

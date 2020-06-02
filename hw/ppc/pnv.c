@@ -27,6 +27,7 @@
 #include "sysemu/runstate.h"
 #include "sysemu/cpus.h"
 #include "sysemu/device_tree.h"
+#include "sysemu/hw_accel.h"
 #include "target/ppc/cpu.h"
 #include "qemu/log.h"
 #include "hw/ppc/fdt.h"
@@ -34,6 +35,7 @@
 #include "hw/ppc/pnv.h"
 #include "hw/ppc/pnv_core.h"
 #include "hw/loader.h"
+#include "hw/nmi.h"
 #include "exec/address-spaces.h"
 #include "qapi/visitor.h"
 #include "monitor/monitor.h"
@@ -830,7 +832,7 @@ static void pnv_init(MachineState *machine)
         }
 
         snprintf(chip_name, sizeof(chip_name), "chip[%d]", PNV_CHIP_HWID(i));
-        object_property_add_child(OBJECT(pnv), chip_name, chip, &error_fatal);
+        object_property_add_child(OBJECT(pnv), chip_name, chip);
         object_property_set_int(chip, PNV_CHIP_HWID(i), "chip-id",
                                 &error_fatal);
         object_property_set_int(chip, machine->smp.cores,
@@ -1058,8 +1060,7 @@ static void pnv_chip_power8_instance_init(Object *obj)
     object_property_add_link(obj, "xics", TYPE_XICS_FABRIC,
                              (Object **)&chip8->xics,
                              object_property_allow_set_link,
-                             OBJ_PROP_LINK_STRONG,
-                             &error_abort);
+                             OBJ_PROP_LINK_STRONG);
 
     object_initialize_child(obj, "psi",  &chip8->psi, sizeof(chip8->psi),
                             TYPE_PNV8_PSI, &error_abort, NULL);
@@ -1319,7 +1320,7 @@ static void pnv_chip_power9_instance_init(Object *obj)
     object_initialize_child(obj, "xive", &chip9->xive, sizeof(chip9->xive),
                             TYPE_PNV_XIVE, &error_abort, NULL);
     object_property_add_alias(obj, "xive-fabric", OBJECT(&chip9->xive),
-                              "xive-fabric", &error_abort);
+                              "xive-fabric");
 
     object_initialize_child(obj, "psi",  &chip9->psi, sizeof(chip9->psi),
                             TYPE_PNV9_PSI, &error_abort, NULL);
@@ -1737,8 +1738,7 @@ static void pnv_chip_core_realize(PnvChip *chip, Error **errp)
         pnv_core = PNV_CORE(object_new(typename));
 
         snprintf(core_name, sizeof(core_name), "core[%d]", core_hwid);
-        object_property_add_child(OBJECT(chip), core_name, OBJECT(pnv_core),
-                                  &error_abort);
+        object_property_add_child(OBJECT(chip), core_name, OBJECT(pnv_core));
         chip->cores[i] = pnv_core;
         object_property_set_int(OBJECT(pnv_core), chip->nr_threads,
                                 "nr-threads", &error_fatal);
@@ -1977,10 +1977,49 @@ static void pnv_machine_set_hb(Object *obj, bool value, Error **errp)
     }
 }
 
+static void pnv_cpu_do_nmi_on_cpu(CPUState *cs, run_on_cpu_data arg)
+{
+    PowerPCCPU *cpu = POWERPC_CPU(cs);
+    CPUPPCState *env = &cpu->env;
+
+    cpu_synchronize_state(cs);
+    ppc_cpu_do_system_reset(cs);
+    if (env->spr[SPR_SRR1] & SRR1_WAKESTATE) {
+        /*
+         * Power-save wakeups, as indicated by non-zero SRR1[46:47] put the
+         * wakeup reason in SRR1[42:45], system reset is indicated with 0b0100
+         * (PPC_BIT(43)).
+         */
+        if (!(env->spr[SPR_SRR1] & SRR1_WAKERESET)) {
+            warn_report("ppc_cpu_do_system_reset does not set system reset wakeup reason");
+            env->spr[SPR_SRR1] |= SRR1_WAKERESET;
+        }
+    } else {
+        /*
+         * For non-powersave system resets, SRR1[42:45] are defined to be
+         * implementation-dependent. The POWER9 User Manual specifies that
+         * an external (SCOM driven, which may come from a BMC nmi command or
+         * another CPU requesting a NMI IPI) system reset exception should be
+         * 0b0010 (PPC_BIT(44)).
+         */
+        env->spr[SPR_SRR1] |= SRR1_WAKESCOM;
+    }
+}
+
+static void pnv_nmi(NMIState *n, int cpu_index, Error **errp)
+{
+    CPUState *cs;
+
+    CPU_FOREACH(cs) {
+        async_run_on_cpu(cs, pnv_cpu_do_nmi_on_cpu, RUN_ON_CPU_NULL);
+    }
+}
+
 static void pnv_machine_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
     InterruptStatsProviderClass *ispc = INTERRUPT_STATS_PROVIDER_CLASS(oc);
+    NMIClass *nc = NMI_CLASS(oc);
 
     mc->desc = "IBM PowerNV (Non-Virtualized)";
     mc->init = pnv_init;
@@ -1997,13 +2036,12 @@ static void pnv_machine_class_init(ObjectClass *oc, void *data)
     mc->default_ram_size = INITRD_LOAD_ADDR + INITRD_MAX_SIZE;
     mc->default_ram_id = "pnv.ram";
     ispc->print_info = pnv_pic_print_info;
+    nc->nmi_monitor_handler = pnv_nmi;
 
     object_class_property_add_bool(oc, "hb-mode",
-                                   pnv_machine_get_hb, pnv_machine_set_hb,
-                                   &error_abort);
+                                   pnv_machine_get_hb, pnv_machine_set_hb);
     object_class_property_set_description(oc, "hb-mode",
-                              "Use a hostboot like boot loader",
-                              NULL);
+                              "Use a hostboot like boot loader");
 }
 
 #define DEFINE_PNV8_CHIP_TYPE(type, class_initfn) \
@@ -2060,6 +2098,7 @@ static const TypeInfo types[] = {
         .class_size    = sizeof(PnvMachineClass),
         .interfaces = (InterfaceInfo[]) {
             { TYPE_INTERRUPT_STATS_PROVIDER },
+            { TYPE_NMI },
             { },
         },
     },

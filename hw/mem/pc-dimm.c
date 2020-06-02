@@ -44,8 +44,8 @@ void pc_dimm_pre_plug(PCDIMMDevice *dimm, MachineState *machine,
                                    &error_abort);
     if ((slot < 0 || slot >= machine->ram_slots) &&
          slot != PC_DIMM_UNASSIGNED_SLOT) {
-        error_setg(&local_err, "invalid slot number, valid range is [0-%"
-                   PRIu64 "]", machine->ram_slots - 1);
+        error_setg(&local_err, "invalid slot number %d, valid range is [0-%"
+                   PRIu64 "]", slot, machine->ram_slots - 1);
         goto out;
     }
 
@@ -165,7 +165,7 @@ static void pc_dimm_get_size(Object *obj, Visitor *v, const char *name,
 static void pc_dimm_init(Object *obj)
 {
     object_property_add(obj, PC_DIMM_SIZE_PROP, "uint64", pc_dimm_get_size,
-                        NULL, NULL, NULL, &error_abort);
+                        NULL, NULL, NULL);
 }
 
 static void pc_dimm_realize(DeviceState *dev, Error **errp)
@@ -199,7 +199,7 @@ static void pc_dimm_realize(DeviceState *dev, Error **errp)
     host_memory_backend_set_mapped(dimm->hostmem, true);
 }
 
-static void pc_dimm_unrealize(DeviceState *dev, Error **errp)
+static void pc_dimm_unrealize(DeviceState *dev)
 {
     PCDIMMDevice *dimm = PC_DIMM(dev);
 
@@ -218,7 +218,8 @@ static MemoryRegion *pc_dimm_get_memory_region(PCDIMMDevice *dimm, Error **errp)
 
 static uint64_t pc_dimm_md_get_addr(const MemoryDeviceState *md)
 {
-    return object_property_get_uint(OBJECT(md), PC_DIMM_ADDR_PROP, &error_abort);
+    return object_property_get_uint(OBJECT(md), PC_DIMM_ADDR_PROP,
+                                    &error_abort);
 }
 
 static void pc_dimm_md_set_addr(MemoryDeviceState *md, uint64_t addr,

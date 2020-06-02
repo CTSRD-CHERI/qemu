@@ -30,10 +30,10 @@ typedef enum DeviceCategory {
 } DeviceCategory;
 
 typedef void (*DeviceRealize)(DeviceState *dev, Error **errp);
-typedef void (*DeviceUnrealize)(DeviceState *dev, Error **errp);
+typedef void (*DeviceUnrealize)(DeviceState *dev);
 typedef void (*DeviceReset)(DeviceState *dev);
 typedef void (*BusRealize)(BusState *bus, Error **errp);
-typedef void (*BusUnrealize)(BusState *bus, Error **errp);
+typedef void (*BusUnrealize)(BusState *bus);
 
 /**
  * DeviceClass:
@@ -149,6 +149,17 @@ struct NamedGPIOList {
     QLIST_ENTRY(NamedGPIOList) node;
 };
 
+typedef struct Clock Clock;
+typedef struct NamedClockList NamedClockList;
+
+struct NamedClockList {
+    char *name;
+    Clock *clock;
+    bool output;
+    bool alias;
+    QLIST_ENTRY(NamedClockList) node;
+};
+
 /**
  * DeviceState:
  * @realized: Indicates whether the device has been fully constructed.
@@ -171,6 +182,7 @@ struct DeviceState {
     bool allow_unplug_during_migration;
     BusState *parent_bus;
     QLIST_HEAD(, NamedGPIOList) gpios;
+    QLIST_HEAD(, NamedClockList) clocks;
     QLIST_HEAD(, BusState) child_bus;
     int num_child_bus;
     int instance_id_alias;
@@ -274,7 +286,7 @@ struct PropertyInfo {
     const QEnumLookup *enum_table;
     int (*print)(DeviceState *dev, Property *prop, char *dest, size_t len);
     void (*set_default_value)(ObjectProperty *op, const Property *prop);
-    void (*create)(ObjectClass *oc, Property *prop, Error **errp);
+    void (*create)(ObjectClass *oc, Property *prop);
     ObjectPropertyAccessor *get;
     ObjectPropertyAccessor *set;
     ObjectPropertyRelease *release;

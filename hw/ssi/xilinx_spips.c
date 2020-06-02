@@ -868,7 +868,7 @@ static void xlnx_zynqmp_qspips_notify(void *opaque)
 
         memcpy(rq->dma_buf, rxd, num);
 
-        ret = stream_push(rq->dma, rq->dma_buf, num);
+        ret = stream_push(rq->dma, rq->dma_buf, num, false);
         assert(ret == num);
         xlnx_zynqmp_qspips_check_flush(rq);
     }
@@ -1360,8 +1360,7 @@ static void xlnx_zynqmp_qspips_init(Object *obj)
     object_property_add_link(obj, "stream-connected-dma", TYPE_STREAM_SLAVE,
                              (Object **)&rq->dma,
                              object_property_allow_set_link,
-                             OBJ_PROP_LINK_STRONG,
-                             NULL);
+                             OBJ_PROP_LINK_STRONG);
 }
 
 static int xilinx_spips_post_load(void *opaque, int version_id)

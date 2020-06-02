@@ -83,6 +83,8 @@
 #define VIRTIO_NET_HDR_F_RSC_INFO  4 /* rsc_ext data in csum_ fields */
 #define VIRTIO_NET_F_RSC_EXT       61
 
+#endif
+
 static inline __virtio16 *virtio_net_rsc_ext_num_packets(
     struct virtio_net_hdr *hdr)
 {
@@ -94,8 +96,6 @@ static inline __virtio16 *virtio_net_rsc_ext_num_dupacks(
 {
     return &hdr->csum_offset;
 }
-
-#endif
 
 static VirtIOFeature feature_sizes[] = {
     {.flags = 1ULL << VIRTIO_NET_F_MAC,
@@ -399,7 +399,7 @@ static void rxfilter_notify(NetClientState *nc)
     VirtIONet *n = qemu_get_nic_opaque(nc);
 
     if (nc->rxfilter_notify_enabled) {
-        gchar *path = object_get_canonical_path(OBJECT(n->qdev));
+        char *path = object_get_canonical_path(OBJECT(n->qdev));
         qapi_event_send_nic_rx_filter_changed(!!n->netclient_name,
                                               n->netclient_name, path);
         g_free(path);
@@ -1526,7 +1526,7 @@ static void virtio_net_rsc_extract_unit6(VirtioNetRscChain *chain,
                                  + sizeof(struct eth_header));
     unit->ip = ip6;
     unit->ip_plen = &(ip6->ip6_ctlun.ip6_un1.ip6_un1_plen);
-    unit->tcp = (struct tcp_header *)(((uint8_t *)unit->ip)\
+    unit->tcp = (struct tcp_header *)(((uint8_t *)unit->ip)
                                         + sizeof(struct ip6_header));
     unit->tcp_hdrlen = (htons(unit->tcp->th_offset_flags) & 0xF000) >> 10;
 
@@ -2947,6 +2947,7 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
             n->net_conf.duplex = DUPLEX_FULL;
         } else {
             error_setg(errp, "'duplex' must be 'half' or 'full'");
+            return;
         }
         n->host_features |= (1ULL << VIRTIO_NET_F_SPEED_DUPLEX);
     } else {
@@ -2955,7 +2956,9 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
 
     if (n->net_conf.speed < SPEED_UNKNOWN) {
         error_setg(errp, "'speed' must be between 0 and INT_MAX");
-    } else if (n->net_conf.speed >= 0) {
+        return;
+    }
+    if (n->net_conf.speed >= 0) {
         n->host_features |= (1ULL << VIRTIO_NET_F_SPEED_DUPLEX);
     }
 
@@ -3074,7 +3077,7 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
     n->qdev = dev;
 }
 
-static void virtio_net_device_unrealize(DeviceState *dev, Error **errp)
+static void virtio_net_device_unrealize(DeviceState *dev)
 {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
     VirtIONet *n = VIRTIO_NET(dev);
@@ -3122,7 +3125,7 @@ static void virtio_net_instance_init(Object *obj)
     n->config_size = sizeof(struct virtio_net_config);
     device_add_bootindex_property(obj, &n->nic_conf.bootindex,
                                   "bootindex", "/ethernet-phy@0",
-                                  DEVICE(n), NULL);
+                                  DEVICE(n));
 }
 
 static int virtio_net_pre_save(void *opaque)

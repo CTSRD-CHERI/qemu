@@ -378,8 +378,8 @@ static int vdi_open(BlockDriverState *bs, QDict *options, int flags,
     Error *local_err = NULL;
     QemuUUID uuid_link, uuid_parent;
 
-    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_file,
-                               false, errp);
+    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_of_bds,
+                               BDRV_CHILD_IMAGE, false, errp);
     if (!bs->file) {
         return -EINVAL;
     }
@@ -804,10 +804,10 @@ static int coroutine_fn vdi_co_do_create(BlockdevCreateOptions *create_options,
         goto exit;
     }
 
-    blk = blk_new(bdrv_get_aio_context(bs_file),
-                  BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL);
-    ret = blk_insert_bs(blk, bs_file, errp);
-    if (ret < 0) {
+    blk = blk_new_with_bs(bs_file, BLK_PERM_WRITE | BLK_PERM_RESIZE,
+                          BLK_PERM_ALL, errp);
+    if (!blk) {
+        ret = -EPERM;
         goto exit;
     }
 
@@ -875,7 +875,7 @@ static int coroutine_fn vdi_co_do_create(BlockdevCreateOptions *create_options,
 
     if (image_type == VDI_TYPE_STATIC) {
         ret = blk_truncate(blk, offset + blocks * block_size, false,
-                           PREALLOC_MODE_OFF, errp);
+                           PREALLOC_MODE_OFF, 0, errp);
         if (ret < 0) {
             error_prepend(errp, "Failed to statically allocate file");
             goto exit;
@@ -1039,7 +1039,7 @@ static BlockDriver bdrv_vdi = {
     .bdrv_open = vdi_open,
     .bdrv_close = vdi_close,
     .bdrv_reopen_prepare = vdi_reopen_prepare,
-    .bdrv_child_perm          = bdrv_format_default_perms,
+    .bdrv_child_perm          = bdrv_default_perms,
     .bdrv_co_create      = vdi_co_create,
     .bdrv_co_create_opts = vdi_co_create_opts,
     .bdrv_has_zero_init  = vdi_has_zero_init,
@@ -1053,6 +1053,7 @@ static BlockDriver bdrv_vdi = {
 
     .bdrv_get_info = vdi_get_info,
 
+    .is_format = true,
     .create_opts = &vdi_create_opts,
     .bdrv_co_check = vdi_co_check,
 };

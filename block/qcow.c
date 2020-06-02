@@ -130,8 +130,8 @@ static int qcow_open(BlockDriverState *bs, QDict *options, int flags,
     qdict_extract_subqdict(options, &encryptopts, "encrypt.");
     encryptfmt = qdict_get_try_str(encryptopts, "format");
 
-    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_file,
-                               false, errp);
+    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_of_bds,
+                               BDRV_CHILD_IMAGE, false, errp);
     if (!bs->file) {
         ret = -EINVAL;
         goto fail;
@@ -480,7 +480,7 @@ static int get_cluster_offset(BlockDriverState *bs,
                     return -E2BIG;
                 }
                 ret = bdrv_truncate(bs->file, cluster_offset + s->cluster_size,
-                                    false, PREALLOC_MODE_OFF, NULL);
+                                    false, PREALLOC_MODE_OFF, 0, NULL);
                 if (ret < 0) {
                     return ret;
                 }
@@ -849,10 +849,10 @@ static int coroutine_fn qcow_co_create(BlockdevCreateOptions *opts,
         return -EIO;
     }
 
-    qcow_blk = blk_new(bdrv_get_aio_context(bs),
-                       BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL);
-    ret = blk_insert_bs(qcow_blk, bs, errp);
-    if (ret < 0) {
+    qcow_blk = blk_new_with_bs(bs, BLK_PERM_WRITE | BLK_PERM_RESIZE,
+                               BLK_PERM_ALL, errp);
+    if (!qcow_blk) {
+        ret = -EPERM;
         goto exit;
     }
     blk_set_allow_write_beyond_eof(qcow_blk, true);
@@ -1035,7 +1035,7 @@ static int qcow_make_empty(BlockDriverState *bs)
             l1_length) < 0)
         return -1;
     ret = bdrv_truncate(bs->file, s->l1_table_offset + l1_length, false,
-                        PREALLOC_MODE_OFF, NULL);
+                        PREALLOC_MODE_OFF, 0, NULL);
     if (ret < 0)
         return ret;
 
@@ -1180,11 +1180,12 @@ static BlockDriver bdrv_qcow = {
     .bdrv_probe		= qcow_probe,
     .bdrv_open		= qcow_open,
     .bdrv_close		= qcow_close,
-    .bdrv_child_perm        = bdrv_format_default_perms,
+    .bdrv_child_perm        = bdrv_default_perms,
     .bdrv_reopen_prepare    = qcow_reopen_prepare,
     .bdrv_co_create         = qcow_co_create,
     .bdrv_co_create_opts    = qcow_co_create_opts,
     .bdrv_has_zero_init     = bdrv_has_zero_init_1,
+    .is_format              = true,
     .supports_backing       = true,
     .bdrv_refresh_limits    = qcow_refresh_limits,
 

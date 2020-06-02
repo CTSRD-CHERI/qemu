@@ -173,7 +173,7 @@ void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env, bool hs_mode_trap)
         COPY_SPECIAL_REG(env, stvec, STCC, stvec_hs, STCC_HS);
         LOG_SPECIAL_REG(env, CSR_VSTVEC, CheriSCR_BSTCC);
         LOG_SPECIAL_REG(env, CSR_STVEC, CheriSCR_STCC);
-        
+
         env->vsscratch = env->sscratch;
         env->sscratch = env->sscratch_hs;
         riscv_log_instr_csr_changed(env, CSR_VSSCRATCH);
@@ -557,10 +557,11 @@ restart:
         hwaddr pte_addr;
 
         if (two_stage && first_stage) {
+            int vbase_prot;
             hwaddr vbase;
 
             /* Do the second stage translation on the base PTE address. */
-            get_physical_address(env, &vbase, prot, base, access_type,
+            get_physical_address(env, &vbase, &vbase_prot, base, access_type,
                                  mmu_idx, false, true);
 
             pte_addr = vbase + idx * ptesize;
@@ -663,12 +664,8 @@ restart:
             /* for superpage mappings, make a fake leaf PTE for the TLB's
                benefit. */
             target_ulong vpn = addr >> PGSHIFT;
-            if (i == 0) {
-                *physical = ((ppn | (vpn & ((1L << (ptshift + widened)) - 1))) <<
-                             PGSHIFT) | (addr & ~TARGET_PAGE_MASK);
-            } else {
-                *physical = ((ppn | (vpn & ((1L << ptshift) - 1))) << PGSHIFT) | (addr & ~TARGET_PAGE_MASK);
-            }
+            *physical = (ppn | (vpn & ((1L << ptshift) - 1))) << PGSHIFT | |
+                        (addr & ~TARGET_PAGE_MASK);
 
             /* set permissions on the TLB entry */
             if ((pte & PTE_R) || ((pte & PTE_X) && mxr)) {
@@ -884,15 +881,18 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
         ret = rvfi_dii_check_addr(env, ret, address, size, prot, access_type);
         if (ret != TRANSLATE_FAIL) {
             /* Second stage lookup */
+            int prot2;
             im_address = *pa;
 
-            ret = get_physical_address(env, pa, prot, im_address,
+            ret = get_physical_address(env, &pa, &prot2, im_address,
                                        access_type, mmu_idx, false, true);
 
             qemu_log_mask(CPU_LOG_MMU,
                     "%s 2nd-stage address=%" VADDR_PRIx " ret %d physical "
                     TARGET_FMT_plx " prot %d\n",
-                    __func__, im_address, ret, *pa, *prot);
+                    __func__, im_address, ret, pa, prot2);
+
+            *prot &= prot2;
 
             if (riscv_feature(env, RISCV_FEATURE_PMP) &&
                 (ret == TRANSLATE_SUCCESS) &&

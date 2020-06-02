@@ -2615,6 +2615,7 @@ static void fdctrl_realize_common(DeviceState *dev, FDCtrl *fdctrl,
 
     if (fdctrl->fallback == FLOPPY_DRIVE_TYPE_AUTO) {
         error_setg(errp, "Cannot choose a fallback FDrive type of 'auto'");
+        return;
     }
 
     /* Fill 'command_to_handler' lookup table */
@@ -2812,10 +2813,10 @@ static void isabus_fdc_instance_init(Object *obj)
 
     device_add_bootindex_property(obj, &isa->bootindexA,
                                   "bootindexA", "/floppy@0",
-                                  DEVICE(obj), NULL);
+                                  DEVICE(obj));
     device_add_bootindex_property(obj, &isa->bootindexB,
                                   "bootindexB", "/floppy@1",
-                                  DEVICE(obj), NULL);
+                                  DEVICE(obj));
 }
 
 static const TypeInfo isa_fdc_info = {

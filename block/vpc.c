@@ -228,8 +228,8 @@ static int vpc_open(BlockDriverState *bs, QDict *options, int flags,
     int ret;
     int64_t bs_size;
 
-    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_file,
-                               false, errp);
+    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_of_bds,
+                               BDRV_CHILD_IMAGE, false, errp);
     if (!bs->file) {
         return -EINVAL;
     }
@@ -898,7 +898,7 @@ static int create_fixed_disk(BlockBackend *blk, uint8_t *buf,
     /* Add footer to total size */
     total_size += HEADER_SIZE;
 
-    ret = blk_truncate(blk, total_size, false, PREALLOC_MODE_OFF, errp);
+    ret = blk_truncate(blk, total_size, false, PREALLOC_MODE_OFF, 0, errp);
     if (ret < 0) {
         return ret;
     }
@@ -1012,10 +1012,10 @@ static int coroutine_fn vpc_co_create(BlockdevCreateOptions *opts,
         return -EIO;
     }
 
-    blk = blk_new(bdrv_get_aio_context(bs),
-                  BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL);
-    ret = blk_insert_bs(blk, bs, errp);
-    if (ret < 0) {
+    blk = blk_new_with_bs(bs, BLK_PERM_WRITE | BLK_PERM_RESIZE, BLK_PERM_ALL,
+                          errp);
+    if (!blk) {
+        ret = -EPERM;
         goto out;
     }
     blk_set_allow_write_beyond_eof(blk, true);
@@ -1240,7 +1240,7 @@ static BlockDriver bdrv_vpc = {
     .bdrv_open              = vpc_open,
     .bdrv_close             = vpc_close,
     .bdrv_reopen_prepare    = vpc_reopen_prepare,
-    .bdrv_child_perm        = bdrv_format_default_perms,
+    .bdrv_child_perm        = bdrv_default_perms,
     .bdrv_co_create         = vpc_co_create,
     .bdrv_co_create_opts    = vpc_co_create_opts,
 
@@ -1250,6 +1250,7 @@ static BlockDriver bdrv_vpc = {
 
     .bdrv_get_info          = vpc_get_info,
 
+    .is_format              = true,
     .create_opts            = &vpc_create_opts,
     .bdrv_has_zero_init     = vpc_has_zero_init,
     .strong_runtime_opts    = vpc_strong_runtime_opts,
