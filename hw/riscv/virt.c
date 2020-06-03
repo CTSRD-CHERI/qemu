@@ -45,10 +45,14 @@
 
 #include <libfdt.h>
 
-#if defined(TARGET_RISCV32)
-# define BIOS_FILENAME "opensbi-riscv32-virt-fw_jump.bin"
+#if defined(TARGET_CHERI)
+/*
+ * Use a purecap BBL as the BIOS for CHERI
+ * TODO: switch to OpenSBI since it's less awful.
+ */
+# define BIOS_FILENAME "bbl-" TARGET_NAME "-virt-fw_jump.bin"
 #else
-# define BIOS_FILENAME "opensbi-riscv64-virt-fw_jump.bin"
+# define BIOS_FILENAME "opensbi-" TARGET_NAME "-virt-fw_jump.bin"
 #endif
 
 #ifdef TARGET_CHERI
