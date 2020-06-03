@@ -1198,7 +1198,7 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
 #ifdef CONFIG_TCG_LOG_INSTR
     if (qemu_log_instr_enabled(env)) {
         char buf[16];
-        snprintf(buf, sizeof(buf), "pmpaddr%d", csrno - CSR_PMPCFG0);
+        snprintf(buf, sizeof(buf), "pmpaddr%d", csrno - CSR_PMPADDR0);
         qemu_log_instr_reg(env, buf, val);
     }
 #endif
