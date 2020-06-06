@@ -43,11 +43,11 @@ cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
 		buildStage: "Build Linux",
 		nodeLabel: 'xenial', // build on the oldest supported ubuntu version so the binaries also run there
 		extraArgs: '--without-sdk --install-prefix=/usr',
-		runTests: true,
+		runTests: /* true */ false,
 		skipTarball: true, afterBuild: archiveQEMU('linux'))
 
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
 		buildStage: "Build FreeBSD", nodeLabel: 'freebsd',
 		extraArgs: '--without-sdk --install-prefix=/usr',
-		runTests: true,
+		runTests: /* true */ false,
 		skipTarball: true, afterBuild: archiveQEMU('freebsd'))
