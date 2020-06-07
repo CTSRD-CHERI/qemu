@@ -30,7 +30,7 @@ cp \$WORKSPACE/tarball/share/qemu/bbl-riscv64cheri-virt-fw_jump.bin \$WORKSPACE/
 
 bblRepo = gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/riscv-pk.git')
 // Build the without-sysroot branch since otherwise we'd have to build CheriBSD first
-bblRepo["branches"] = [[name: '*/without-sysroot']]
+bblRepo["branches"] = [[name: '*/cheri_purecap']]
 cheribuildProject(target: 'bbl-baremetal-riscv64-purecap',
 		customGitCheckoutDir: 'bbl', scmOverride: bblRepo,
 		buildStage: "Build BBL BIOS", nodeLabel: 'linux',
