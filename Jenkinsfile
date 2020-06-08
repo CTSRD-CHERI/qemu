@@ -28,23 +28,39 @@ cp \$WORKSPACE/tarball/share/qemu/bbl-riscv64cheri-virt-fw_jump.bin \$WORKSPACE/
 	}
 }
 
-bblRepo = gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/riscv-pk.git')
-// Build the without-sysroot branch since otherwise we'd have to build CheriBSD first
-bblRepo["branches"] = [[name: '*/cheri_purecap']]
-cheribuildProject(target: 'bbl-baremetal-riscv64-purecap',
-		customGitCheckoutDir: 'bbl', scmOverride: bblRepo,
-		buildStage: "Build BBL BIOS", nodeLabel: 'linux',
-		extraArgs: '--install-prefix=/',
-		sdkCompilerOnly: true, skipTarball: true,
-		afterBuild: { archiveBBL(['freebsd', 'linux']) }
-)
+// build on the oldest supported ubuntu version so the binaries also run there
+node('xenial') {
+	bblRepo = gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/riscv-pk.git')
+	bblRepo["branches"] = [[name: '*/cheri_purecap']]
+	cheribuildProject(target: 'bbl-baremetal-riscv64-purecap',
+			customGitCheckoutDir: 'bbl', scmOverride: bblRepo,
+			buildStage: "Build BBL BIOS",
+			extraArgs: '--install-prefix=/',
+			sdkCompilerOnly: true, skipTarball: true,
+			afterBuild: { archiveBBL(['freebsd', 'linux']) }
+	)
 
-cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
-		buildStage: "Build Linux",
-		nodeLabel: 'xenial', // build on the oldest supported ubuntu version so the binaries also run there
-		extraArgs: '--without-sdk --install-prefix=/usr',
-		runTests: /* true */ false,
-		skipTarball: true, afterBuild: archiveQEMU('linux'))
+	cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
+			buildStage: "Build Linux",
+			extraArgs: '--without-sdk --install-prefix=/usr',
+			runTests: /* true */ false,
+			skipTarball: true, afterBuild: archiveQEMU('linux')
+	)
+
+	// Run the baremetal MIPS tests to check we didn't regress
+	cheribuildProject(target: 'cheritest-qemu',
+			customGitCheckoutDir: 'cheritest', scmOverride: gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/cheritest.git'),
+			buildStage: "Run CHERI-MIPS tests",
+			extraArgs: '--install-prefix=/',
+			sdkCompilerOnly: true, skipTarball: true,
+	)
+
+	def summary = junit allowEmptyResults: false, keepLongStdio: true, testResults: 'cheritest/nosetests_qemu*.xml'
+	echo("cheritest test summary: ${summary.totalCount}, Failures: ${summary.failCount}, Skipped: ${summary.skipCount}, Passed: ${summary.passCount}")
+	if (summary.passCount == 0 || summary.totalCount == 0) {
+		error("No tests successful?")
+	}
+}
 
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
 		buildStage: "Build FreeBSD", nodeLabel: 'freebsd',
