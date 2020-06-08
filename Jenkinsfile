@@ -51,17 +51,20 @@ node('xenial') {
 	cheribuildProject(target: 'cheritest-qemu', architecture: 'native',
 			customGitCheckoutDir: 'cheritest', scmOverride: gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/cheritest.git'),
 			nodeLabel: null, buildStage: "Run CHERI-MIPS tests",
-			extraArgs: '--install-prefix=/',
+			// Ensure we test failures don't prevent creation of the junit file
+			extraArgs: '--install-prefix=/ --cheritest-qemu/no-run-tests-with-build',
+			runTests: true,
 			// Set the status message on the QEMU repo not the cheritest one
 			gitHubStatusArgs: qemuResult.gitInfo,
 			sdkCompilerOnly: true, skipTarball: true,
+			afterTests: {
+				def summary = junit allowEmptyResults: false, keepLongStdio: true, testResults: 'cheritest/nosetests_qemu*.xml'
+				echo("cheritest test summary: ${summary.totalCount}, Failures: ${summary.failCount}, Skipped: ${summary.skipCount}, Passed: ${summary.passCount}")
+				if (summary.passCount == 0 || summary.totalCount == 0) {
+					error("No tests successful?")
+				}
+			}
 	)
-
-	def summary = junit allowEmptyResults: false, keepLongStdio: true, testResults: 'cheritest/nosetests_qemu*.xml'
-	echo("cheritest test summary: ${summary.totalCount}, Failures: ${summary.failCount}, Skipped: ${summary.skipCount}, Passed: ${summary.passCount}")
-	if (summary.passCount == 0 || summary.totalCount == 0) {
-		error("No tests successful?")
-	}
 }
 
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
