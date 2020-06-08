@@ -21,7 +21,7 @@ def archiveBBL(List targets) {
 	sh 'find \$WORKSPACE/tarball/'
 	for (target in targets) {
 		sh """
-mkdir -p $WORKSPACE/qemu-${target}/share/qemu/
+mkdir -p \$WORKSPACE/qemu-${target}/share/qemu/
 cp \$WORKSPACE/tarball/share/qemu/bbl-riscv64cheri-virt-fw_jump.bin \$WORKSPACE/qemu-${target}/share/qemu/
 """
 		archiveArtifacts allowEmptyArchive: false, artifacts: "qemu-${target}/share/qemu/bbl-riscv64cheri-virt-fw_jump.bin", fingerprint: true, onlyIfSuccessful: true
@@ -40,7 +40,7 @@ node('xenial') {
 			afterBuild: { archiveBBL(['freebsd', 'linux']) }
 	)
 
-	cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
+	def qemuResult = cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
 			buildStage: "Build Linux",
 			extraArgs: '--without-sdk --install-prefix=/usr',
 			runTests: /* true */ false,
@@ -48,10 +48,12 @@ node('xenial') {
 	)
 
 	// Run the baremetal MIPS tests to check we didn't regress
-	cheribuildProject(target: 'cheritest-qemu',
+	cheribuildProject(target: 'cheritest-qemu', architecture: 'native',
 			customGitCheckoutDir: 'cheritest', scmOverride: gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/cheritest.git'),
 			buildStage: "Run CHERI-MIPS tests",
 			extraArgs: '--install-prefix=/',
+			// Set the status message on the QEMU repo not the cheritest one
+			gitHubStatusArgs: qemuResult.gitInfo,
 			sdkCompilerOnly: true, skipTarball: true,
 	)
 
