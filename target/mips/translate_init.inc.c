@@ -683,7 +683,7 @@ const mips_def_t mips_defs[] =
         .CP0_Status_rw_bitmask = 0x36F8FFFF,
 #endif
         /* The 5Kf has F64 / L / W but doesn't use the fcr0 bits. */
-        .CP1_fcr0 = (1 << FCR0_D) | (1 << FCR0_S) |
+        .CP1_fcr0 = (1 << FCR0_F64) | (1 << FCR0_D) | (1 << FCR0_S) |
                     (0x81 << FCR0_PRID) | (0x0 << FCR0_REV),
         .CP1_fcr31 = 0,
         .CP1_fcr31_rw_bitmask = 0xFF8FFFFF,
