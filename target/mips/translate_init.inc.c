@@ -521,7 +521,7 @@ const mips_def_t mips_defs[] =
         .CP0_Config0 = (1 << 17) | (0x1 << 9) | (0x1 << 6) | (0x2 << CP0C0_K0),
         /* Note: Config1 is only used internally, the R4000 has only Config0. */
 #if defined(TARGET_CHERI)
-        .CP0_Config1 = (1 << CP0C1_FP) | (47 << CP0C1_MMU) | 0x40,
+        .CP0_Config1 = (1 << CP0C1_FP) | (47 << CP0C1_MMU) | (1 << CP0C1_C2),
 #else
         .CP0_Config1 = (1 << CP0C1_FP) | (47 << CP0C1_MMU),
 #endif
@@ -606,18 +606,13 @@ const mips_def_t mips_defs[] =
 #endif /* ! TARGET_CHERI */
         .CP0_Config0 = MIPS_CONFIG0 | (0x2 << CP0C0_AT) |
                        (MMU_TYPE_R4000 << CP0C0_MT),
+        .CP0_Config1 = MIPS_CONFIG1 | (1 << CP0C1_FP) | (31 << CP0C1_MMU) |
 #if defined(TARGET_CHERI)
-        .CP0_Config1 = MIPS_CONFIG1 | (1 << CP0C1_FP) | (31 << CP0C1_MMU) |
-                       (1 << CP0C1_IS) | (4 << CP0C1_IL) | (1 << CP0C1_IA) |
-                       (1 << CP0C1_DS) | (4 << CP0C1_DL) | (1 << CP0C1_DA) |
-                       (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP) |
-                       0x40,
-#else /* ! TARGET_CHERI */
-        .CP0_Config1 = MIPS_CONFIG1 | (1 << CP0C1_FP) | (31 << CP0C1_MMU) |
+                       (1 << CP0C1_C2) |
+#endif /* ! TARGET_CHERI */
                        (1 << CP0C1_IS) | (4 << CP0C1_IL) | (1 << CP0C1_IA) |
                        (1 << CP0C1_DS) | (4 << CP0C1_DL) | (1 << CP0C1_DA) |
                        (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP),
-#endif /* ! TARGET_CHERI */
         .CP0_Config2 = MIPS_CONFIG2,
 #if defined(TARGET_CHERI)
         .CP0_Config3 = MIPS_CONFIG3 | (1 << CP0C3_ULRI) | (1 << CP0C3_BI) |
