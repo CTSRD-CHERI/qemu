@@ -34,14 +34,14 @@ node('xenial') {
 	bblRepo["branches"] = [[name: '*/cheri_purecap']]
 	cheribuildProject(target: 'bbl-baremetal-riscv64-purecap',
 			customGitCheckoutDir: 'bbl', scmOverride: bblRepo,
-			buildStage: "Build BBL BIOS",
+			nodeLabel: null, buildStage: "Build BBL BIOS",
 			extraArgs: '--install-prefix=/',
 			sdkCompilerOnly: true, skipTarball: true,
 			afterBuild: { archiveBBL(['freebsd', 'linux']) }
 	)
 
 	def qemuResult = cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
-			buildStage: "Build Linux",
+			nodeLabel: null, buildStage: "Build Linux",
 			extraArgs: '--without-sdk --install-prefix=/usr',
 			runTests: /* true */ false,
 			skipTarball: true, afterBuild: archiveQEMU('linux')
@@ -50,7 +50,7 @@ node('xenial') {
 	// Run the baremetal MIPS tests to check we didn't regress
 	cheribuildProject(target: 'cheritest-qemu', architecture: 'native',
 			customGitCheckoutDir: 'cheritest', scmOverride: gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/cheritest.git'),
-			buildStage: "Run CHERI-MIPS tests",
+			nodeLabel: null, buildStage: "Run CHERI-MIPS tests",
 			extraArgs: '--install-prefix=/',
 			// Set the status message on the QEMU repo not the cheritest one
 			gitHubStatusArgs: qemuResult.gitInfo,
