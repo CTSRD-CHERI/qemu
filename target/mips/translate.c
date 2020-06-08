@@ -8884,6 +8884,7 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case CP0_REGISTER_23:
         switch (sel) {
         case CP0_REG23__DEBUG:
+            save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
             gen_helper_mtc0_debug(cpu_env, arg); /* EJTAG support */
             /* DISAS_STOP isn't good enough here, hflags may have changed. */
             gen_save_pc(ctx->base.pc_next + 4);
@@ -8982,10 +8983,9 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         }
        break;
     case CP0_REGISTER_26:
-#if defined(TARGET_CHERI)
         save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
-#else
+#if !defined(TARGET_CHERI)
         switch (sel) {
         case CP0_REG26__ERRCTL:
             gen_helper_mtc0_errctl(cpu_env, arg);
@@ -10429,6 +10429,7 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case CP0_REGISTER_23:
         switch (sel) {
         case CP0_REG23__DEBUG:
+            save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
             gen_helper_mtc0_debug(cpu_env, arg); /* EJTAG support */
             /* DISAS_STOP isn't good enough here, hflags may have changed. */
             gen_save_pc(ctx->base.pc_next + 4);
@@ -10524,10 +10525,9 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         }
         break;
     case CP0_REGISTER_26:
-#if defined(TARGET_CHERI)
         save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
-#else
+#if !defined(TARGET_CHERI)
         switch (sel) {
         case CP0_REG26__ERRCTL:
             gen_helper_mtc0_errctl(cpu_env, arg);
