@@ -250,11 +250,8 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
         assert(cc128_is_representable_with_addr(&result, link_pc) &&
                "Link addr must be representable");
 #endif
-        if (cap_is_sealed_entry(cbp)) {
-            // When calling a sentry capability the return capability is
-            // turned into a sentry, too.
-            cap_make_sealed_entry(&result);
-        }
+        // The return capability should always be a sentry
+        cap_make_sealed_entry(&result);
         update_capreg(env, cd, &result);
     }
 
