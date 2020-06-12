@@ -462,6 +462,18 @@ static int write_misa(CPURISCVState *env, int csrno, target_ulong val)
         return 0;
     }
 
+    /*
+     * XXXAR: this code is completely broken:
+     * 1) you can only turn **on** misa.C if PC is not aligned to 4 bytes???
+     * 2) They use GETPC() for this check! This is a QEMU internal program
+     * counter (the current return address, so not even the TCG generated code
+     * address since we could be multiple call stack levels down).
+     *
+     * Fortunately RISCV_FEATURE_MISA should never be enabled so we can't end
+     * up here... If we ever do, abort() is the only safe way out!
+     */
+    abort();
+
     /* 'I' or 'E' must be present */
     if (!(val & (RVI | RVE))) {
         /* It is not, drop write to misa */
