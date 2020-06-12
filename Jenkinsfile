@@ -5,7 +5,7 @@ properties([
 		disableConcurrentBuilds(),
 		disableResume(),
 		[$class: 'GithubProjectProperty', projectUrlStr: 'https://github.com/CTSRD-CHERI/qemu'],
-		copyArtifactPermission('*'),
+		[$class: 'CopyArtifactPermissionProperty', projectNames: '*'],
 		durabilityHint('PERFORMANCE_OPTIMIZED'),
 		pipelineTriggers([githubPush(), pollSCM('@daily')])
 ])
