@@ -653,7 +653,7 @@ target_ulong CHERI_HELPER_IMPL(cgetandaddr(CPUArchState *env, uint32_t cb, targe
 }
 
 /*
- * Load Linked Via Capability Register
+ * Compute the address for Load Linked Via Capability Register
  */
 target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint32_t size))
 {
@@ -664,7 +664,6 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint3
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
     uint64_t addr = cap_get_cursor(cbp);
 
-    env->linkedflag = 0;
     env->lladdr = 1;
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
@@ -679,16 +678,14 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint3
         do_raise_c0_exception(env, EXCP_AdEL, addr);
     } else {
         env->CP0_LLAddr = do_translate_address(env, addr, 0, _host_return_address);
-        env->linkedflag = 1;
         env->lladdr = addr;
-        // TODO: do the load and return
         return addr;
     }
     return 0;
 }
 
 /*
- * Store Conditional Via Capability Register
+ * Compute the address for Store Conditional Via Capability Register
  */
 target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32_t size))
 {
@@ -711,15 +708,13 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32
         // TODO: should #if (CHERI_UNALIGNED) also disable this check?
         do_raise_c0_exception(env, EXCP_AdES, addr);
     } else {
-        qemu_maybe_log_instr_extra(env, "cstorecond: linkedflag = %d," " addr="
+        qemu_maybe_log_instr_extra(env, "cstorecond: addr="
             TARGET_FMT_plx "lladdr=" TARGET_FMT_plx " CP0_LLaddr="
-            TARGET_FMT_plx "\n", (int)env->linkedflag, addr, env->lladdr,
-            env->CP0_LLAddr);
+            TARGET_FMT_plx "\n", addr, env->lladdr, env->CP0_LLAddr);
+
         // Can't do this here.  It might miss in the TLB.
         // cheri_tag_invalidate(env, addr, size);
         // Also, rd is set by the actual store conditional operation.
-        if (env->lladdr != addr)
-            env->linkedflag = 0; // FIXME: remove the linkedflag hack
         return addr;
     }
     return 0;
@@ -766,13 +761,13 @@ target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, 
     target_ulong retpc = GETPC();
     target_ulong vaddr = get_cscc_addr(env, cs, cb, retpc);
 
-    qemu_maybe_log_instr_extra(env, "cscc: linkedflag = %d, addr=" TARGET_FMT_plx
+    qemu_maybe_log_instr_extra(env, "cscc: addr=" TARGET_FMT_plx
         " lladdr=" TARGET_FMT_plx " CP0_LLaddr=" TARGET_FMT_plx "\n",
-        (int)env->linkedflag, vaddr, env->lladdr, env->CP0_LLAddr);
-    /* If linkedflag is zero then don't store capability. */
-    if (!env->linkedflag || env->lladdr != vaddr)
+        vaddr, env->lladdr, env->CP0_LLAddr);
+    if (env->lladdr != vaddr)
         return 0;
     store_cap_to_memory(env, cs, vaddr, retpc);
+    env->lladdr = 1;
     return 1;
 }
 
@@ -787,7 +782,6 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
     uint64_t addr = cap_get_cursor(cbp);
 
     /* Clear linked state */
-    env->linkedflag = 0;
     env->lladdr = 1;
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
@@ -801,12 +795,9 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
         do_raise_c0_exception(env, EXCP_AdEL, addr);
     }
     cheri_debug_assert(align_of(CHERI_CAP_SIZE, addr) == 0);
-    hwaddr physaddr;
     load_cap_from_memory(env, cd, cb, cbp, /*addr=*/cap_get_cursor(cbp),
-                         _host_return_address, &physaddr);
+                         _host_return_address, &env->CP0_LLAddr);
     env->lladdr = addr;
-    env->CP0_LLAddr = physaddr;
-    env->linkedflag = 1; // FIXME: remove
 }
 
 #ifdef CHERI_128
@@ -898,6 +889,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     if (csp->cr_tag) {
         env->statcounters_cap_write_tagged++;
     }
+    env->lladdr = 1;
     cpu_stq_data_ra(env, vaddr, mem_buffer.u64s[2], retpc); /* base */
     cpu_stq_data_ra(env, vaddr + 8, mem_buffer.u64s[1], retpc);
 
@@ -1037,6 +1029,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
     } else {
         cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
     }
+    env->lladdr = 1;
 
     cpu_stq_data_ra(env, vaddr + 0, mem_buffer.u64s[0], retpc);
     cpu_stq_data_ra(env, vaddr + 8, mem_buffer.u64s[1], retpc);

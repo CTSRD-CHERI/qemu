@@ -1226,15 +1226,12 @@ void helper_eret(CPUMIPSState *env)
     exception_return(env);
     env->CP0_LLAddr = 1;
     env->lladdr = 1;
-#ifdef TARGET_CHERI
-    env->linkedflag = 0;
-#endif /* TARGET_CHERI */
 }
 
 void helper_eretnc(CPUMIPSState *env)
 {
 #ifdef TARGET_CHERI
-    do_raise_exception(env, EXCP_RI, GETPC()); /* This does not unset linkedflag? */
+    do_raise_exception(env, EXCP_RI, GETPC()); /* This does not unset LL reservation? */
 #endif
     exception_return(env);
 }
@@ -1964,13 +1961,6 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
         // The translation operation might trap and longjump out!
         hwaddr src_paddr = do_translate_address(env, original_src, MMU_DATA_LOAD, ra);
         hwaddr dest_paddr = do_translate_address(env, original_dest, MMU_DATA_STORE, ra);
-#ifdef TARGET_CHERI
-        if (dest_paddr <= env->CP0_LLAddr && dest_paddr + len > env->CP0_LLAddr) {
-            // reset the linked flag if we touch the address with this write
-            env->linkedflag = 0;
-            env->lladdr = 0;
-        }
-#endif
         // Do a single load+store to update the MMU flags
         // uint8_t first_value = helper_ret_ldub_mmu(env, original_src, oi, ra);
         // Note: address_space_write will also clear the tag bits!
@@ -2065,6 +2055,8 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
             env->active_tc.gpr[MIPS_REGNUM_V0] = already_written;
         }
     }
+
+    env->lladdr = 1;
 success:
     if (unlikely(already_written != original_len)) {
         error_report("ERROR: %s: failed to memmove all bytes to " TARGET_FMT_plx " (" TARGET_FMT_plx " with $ddc added).\r\n"
@@ -2228,13 +2220,6 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
         } else {
             // First try address_space_write and if that fails fall back to bytewise setting
             hwaddr paddr = do_translate_address(env, dest, MMU_DATA_STORE, ra);
-#ifdef TARGET_CHERI
-            if (paddr <= env->CP0_LLAddr && paddr + l_adj_bytes > env->CP0_LLAddr) {
-                // reset the linked flag if we touch the address with this write
-                env->linkedflag = 0;
-                env->lladdr = 0;
-            }
-#endif
             // Note: address_space_write will also clear the tag bits!
             MemTxResult result = MEMTX_ERROR;
             if (value == 0) {
@@ -2320,6 +2305,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
         }
     }
     tcg_debug_assert(len_nitems == 0);
+    env->lladdr = 1;
 success:
     env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest_ddc_offset; // return value of memset is the src argument
     // also update a0 and a2 to match what the kernel memset does (a0 -> buf end, a2 -> 0):

@@ -1173,3 +1173,8 @@ void riscv_translate_init(void)
     load_val = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, load_val),
                              "load_val");
 }
+
+void gen_cheri_break_loadlink(TCGv_cap_checked_ptr out_addr, TCGv_i32 memop)
+{
+    tcg_gen_movi_tl((TCGv)load_res, -1);
+}
