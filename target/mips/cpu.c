@@ -217,7 +217,6 @@ static void mips_cpu_synchronize_from_tb(CPUState *cs, TranslationBlock *tb)
      *
      * See also target/mips/op_helper:/helper_eret
      */
-    env->CP0_LLAddr = 1;
     env->lladdr = 1;
 }
 
