@@ -159,7 +159,7 @@ void qemu_set_log(int log_flags) {
     qemu_set_log_internal(log_flags);
 }
 #else
-void qemu_set_log(int) __attribute__((alias("qemu_set_log_internal")));
+void qemu_set_log(int log_flags) { qemu_set_log_internal(log_flags); }
 #endif
 
 void qemu_log_needs_buffers(void)
