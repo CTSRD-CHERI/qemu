@@ -1024,10 +1024,6 @@ struct CPUMIPSState {
     target_ulong lladdr; /* LL virtual address compared against SC */
     target_ulong llval;
     uint64_t llval_wp;
-    uint32_t llnewval_wp;
-#ifdef TARGET_CHERI
-    uint64_t linkedflag; // TODO: remove this!
-#endif
     uint64_t CP0_LLAddr_rw_bitmask;
     int CP0_LLAddr_shift;
 /*

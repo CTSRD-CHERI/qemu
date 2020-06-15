@@ -32554,3 +32554,8 @@ void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb,
         break;
     }
 }
+
+void gen_cheri_break_loadlink(TCGv_cap_checked_ptr out_addr, TCGv_i32 memop)
+{
+    tcg_gen_movi_tl(cpu_lladdr, 0);
+}

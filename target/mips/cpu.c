@@ -128,7 +128,7 @@ const char mips_cop0_regnames[32*8][32] = {
         {0},              {0},              {0},              {0},
 /*16*/  {"Config"},       {"Config1"},      {"Config2"},      {"Config3"},
         {"Config4"},      {"Config5"},      {"Config6"},      {"Config7"},
-/*17*/  {"LLAddr"},       {"internal_lladdr (virtual)"}, {"internal_llval"}, {"internal_linkedflag"},
+/*17*/  {"LLAddr"},       {"internal_lladdr (virtual)"}, {"internal_llval"}, {0},
         {0},              {0},              {0},              {0},
 /*18*/  {"WatchLo"},      {"WatchLo1"},     {"WatchLo2"},     {"WatchLo3"},
         {"WatchLo4"},     {"WatchLo5"},     {"WatchLo6"},     {"WatchLo7"},
@@ -207,6 +207,18 @@ static void mips_cpu_synchronize_from_tb(CPUState *cs, TranslationBlock *tb)
     mips_update_pc(env, tb->pc, /*can_be_unrepresentable=*/false);
     env->hflags &= ~MIPS_HFLAG_BMASK;
     env->hflags |= tb->flags & MIPS_HFLAG_BMASK;
+
+    /*
+     * Break any load-link that's in flight on this CPU since we've been
+     * preempted.  This is sufficiently rare that it shouldn't hurt to do it
+     * every preemption.  Of course, it's also only really safe to use ->lladdr
+     * for capability work at all because we're forcing MTTCG off for CHERI due
+     * to its tag table implementation.  But this doesn't make it any worse!
+     *
+     * See also target/mips/op_helper:/helper_eret
+     */
+    env->CP0_LLAddr = 1;
+    env->lladdr = 1;
 }
 
 static bool mips_cpu_has_work(CPUState *cs)

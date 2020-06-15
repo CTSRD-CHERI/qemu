@@ -868,6 +868,11 @@ static inline void generate_cloadlinked_int(DisasContext *ctx, int32_t rd, int32
     tcg_temp_free_i32(tcb);
 }
 
+/*
+ * Compute the address for a CSC[BHWD]
+ *
+ * XXX There's nothing very CSC-specific about this, other than logging...
+ */
 static inline void generate_cstorecond(TCGv_cap_checked_ptr taddr, int32_t cb, int32_t len)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -890,11 +895,11 @@ static inline void generate_cstorecond_int(DisasContext *ctx, int32_t rs,
 
     generate_cstorecond(taddr, cb, size);
 
-    /* Get linkedFlag. */
-    tcg_gen_ld_tl(tlf, cpu_env, offsetof(CPUMIPSState, linkedflag));
+    /* Verify that the store matches the load link address */
+    tcg_gen_movi_tl(tlf, 0); // prepare to return failure
+    tcg_gen_brcond_tl(TCG_COND_NE, (TCGv)taddr, cpu_lladdr, l1);
 
-    /* If linkedFlag is zero then don't store rs, invalidate tag */
-    tcg_gen_brcondi_tl(TCG_COND_EQ, tlf, 0, l1);
+    tcg_gen_movi_tl(tlf, 1); // return success when we get there
 
     /* Write rs to memory. */
     gen_load_gpr(t0, rs);
@@ -904,7 +909,6 @@ static inline void generate_cstorecond_int(DisasContext *ctx, int32_t rs,
     tcg_temp_free(t0);
 
     gen_set_label(l1);
-    /* Store linkedflag in rd. */
     gen_store_gpr(tlf, rd);
     tcg_temp_free(tlf);
 }
@@ -970,6 +974,7 @@ static inline void generate_csc(DisasContext *ctx, int32_t cs, int32_t cb,
     gen_load_gpr(toffset, rt);
     tcg_gen_addi_tl(toffset, toffset, clc_sign_extend(offset, big_imm) * 16);
     gen_helper_store_cap_via_cap(cpu_env, tcs, tcb, toffset);
+    tcg_gen_movi_tl(cpu_lladdr, 1);
     tcg_temp_free(toffset);
     tcg_temp_free_i32(tcb);
     tcg_temp_free_i32(tcs);
@@ -1744,4 +1749,5 @@ invalid:
     generate_exception (ctx, EXCP_RI);
     return;
 }
+
 #endif /* TARGET_CHERI */

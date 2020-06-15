@@ -410,16 +410,6 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
             tagblock_clear_tag(tagblk, tagblk_index);
         }
     }
-
-#ifdef TARGET_MIPS
-    /* If a tag was cleared, unset the linkedflag and reset lladdr: */
-    if (env && vaddr &&
-        QEMU_ALIGN_DOWN(*vaddr, CHERI_CAP_SIZE) ==
-            QEMU_ALIGN_DOWN(env->lladdr, CHERI_CAP_SIZE)) {
-        env->linkedflag = 0;
-        env->lladdr = 1;
-    }
-#endif
 }
 
 void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc)
@@ -444,16 +434,6 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
         RAM_ADDR_FMT "] %d -> 1\n", vaddr, ram_offset,
         tag_bit_get(ram_offset >> CAP_TAG_SHFT, ram));
     tag_bit_set(ram_offset >> CAP_TAG_SHFT, ram);
-
-#ifdef TARGET_MIPS
-    /* Check address to see if the linkedflag needs to be reset. */
-    // FIXME: we should really be using a different approach for LL/SC
-    if (QEMU_ALIGN_DOWN(vaddr, CHERI_CAP_SIZE) ==
-        QEMU_ALIGN_DOWN(env->lladdr, CHERI_CAP_SIZE)) {
-        env->linkedflag = 0;
-        env->lladdr = 1;
-    }
-#endif
 }
 
 static CheriTagBlock *cheri_tag_get_block(CPUArchState *env, target_ulong vaddr,
