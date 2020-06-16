@@ -78,6 +78,21 @@ typedef void NeonGenThreeOpEnvFn(TCGv_i32, TCGv_env, TCGv_i32,
 /* Function prototypes for gen_ functions for fix point conversions */
 typedef void VFPGenFixPointFn(TCGv_i32, TCGv_i32, TCGv_i32, TCGv_ptr);
 
+#ifdef CONFIG_TCG_LOG_INSTR
+static inline void gen_arm_log_instr(DisasContext *dc)
+{
+    if (unlikely(dc->base.log_instr_enabled)) {
+        TCGv pc = tcg_const_tl(dc->pc_curr);
+        TCGv_i32 opc = tcg_const_i32(dc->insn);
+        get_helper_arm_log_instr(cpu_env, pc, opc);
+        tcg_temp_free(pc);
+        tcg_temp_free_i32(opc);
+    }
+}
+#else
+#define gen_arm_log_instr(ctx) ((void)0)
+#endif
+
 /* initialize TCG globals.  */
 void arm_translate_init(void)
 {
@@ -10918,6 +10933,7 @@ static void arm_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     insn = arm_ldl_code(env, dc->base.pc_next, dc->sctlr_b);
     dc->insn = insn;
     dc->base.pc_next += 4;
+    gen_arm_log_instr(dc);
     disas_arm_insn(dc, insn);
 
     arm_post_translate_insn(dc);

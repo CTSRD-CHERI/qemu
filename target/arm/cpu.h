@@ -24,6 +24,7 @@
 #include "hw/registerfields.h"
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
+#include "qemu/log_instr.h"
 
 /* ARM processors have a weak memory model */
 #define TCG_GUEST_DEFAULT_MO      (0)
@@ -3888,11 +3889,14 @@ static inline bool isar_feature_any_tts2uxn(const ARMISARegisters *id)
 #ifdef CONFIG_TCG_LOG_INSTR
 static inline bool cpu_in_user_mode(CPUArchState *env)
 {
-    return false; /* TODO: implement */
+    if (arm_current_el(env) == 0)
+        return true;
+    return false;
 }
 
 static inline unsigned cpu_get_asid(CPUArchState *env) {
-    return 0; /* TODO: implement */
+    /* TODO: implement */
+    return 0;
 }
 
 static inline char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode) {
