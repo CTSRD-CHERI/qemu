@@ -1176,5 +1176,9 @@ void riscv_translate_init(void)
 
 void gen_cheri_break_loadlink(TCGv_cap_checked_ptr out_addr, TCGv_i32 memop)
 {
-    tcg_gen_movi_tl((TCGv)load_res, -1);
+    // The SC implementation uses load_res directly, and apparently this helper
+    // can be called from inside the addr==load_res check and the cmpxchg being
+    // executed.
+    // Until this is fixed, comment out the invalidation
+    // tcg_gen_movi_tl((TCGv)load_res, -1);
 }
