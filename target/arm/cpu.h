@@ -3885,8 +3885,6 @@ static inline bool isar_feature_any_tts2uxn(const ARMISARegisters *id)
 #define cpu_isar_feature(name, cpu) \
     ({ ARMCPU *cpu_ = (cpu); isar_feature_##name(&cpu_->isar); })
 
-#endif
-
 #ifdef CONFIG_TCG_LOG_INSTR
 static inline bool cpu_in_user_mode(CPUArchState *env)
 {
@@ -3906,3 +3904,5 @@ static inline target_ulong cpu_get_recent_pc(CPUArchState *env)
     return env->pc;
 }
 #endif
+
+#endif /* ARM_CPU_H */
