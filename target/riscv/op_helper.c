@@ -52,8 +52,14 @@ static inline const char* exception_str(uint32_t exception)
     case RISCV_EXCP_INST_GUEST_PAGE_FAULT: return "Guest instruction page fault";
     case RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT: return "Guest load page fault";
     case RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT: return "Guest store/AMO page fault";
-    // 24-31 Reserved for custom use (we use 28/0x1c) for CHERI
+    // 24-31 Reserved for custom use
+#ifdef TARGET_CHERI
+#ifndef TARGET_RISCV32
+    case RISCV_EXCP_LOAD_CAP_PAGE_FAULT: return "Load capability page fault";
+    case RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT: return "Store/AMI capability page fault";
+#endif
     case RISCV_EXCP_CHERI: return "CHERI fault";
+#endif
     // 32–47 Reserved for future standard use
     // 48-63 Reserved for custom use
     // >64 Reserved for future standard use

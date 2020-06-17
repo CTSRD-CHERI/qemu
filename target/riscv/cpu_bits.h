@@ -506,6 +506,10 @@
 #define PTE_A               0x040 /* Accessed */
 #define PTE_D               0x080 /* Dirty */
 #define PTE_SOFT            0x300 /* Reserved for Software */
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+#define PTE_LC              0x4000000000000000 /* Load Cap */
+#define PTE_SC              0x8000000000000000 /* Store Cap */
+#endif
 
 /* Page table PPN shift amount */
 #define PTE_PPN_SHIFT       10
@@ -536,7 +540,13 @@
 #define RISCV_EXCP_INST_GUEST_PAGE_FAULT         0x14
 #define RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT       0x15
 #define RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT  0x17
-#define RISCV_EXCP_CHERI                   0x1c
+#ifdef TARGET_CHERI
+#ifndef TARGET_RISCV32
+#define RISCV_EXCP_LOAD_CAP_PAGE_FAULT           0x1a
+#define RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT      0x1b
+#endif
+#define RISCV_EXCP_CHERI                         0x1c
+#endif
 
 #define RISCV_EXCP_INT_FLAG                0x80000000
 #define RISCV_EXCP_INT_MASK                0x7fffffff

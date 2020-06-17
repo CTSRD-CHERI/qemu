@@ -53,7 +53,7 @@ static void print_pte_header(Monitor *mon)
 }
 
 static void print_pte(Monitor *mon, int va_bits, target_ulong vaddr,
-                      hwaddr paddr, target_ulong size, int attr)
+                      hwaddr paddr, target_ulong size, target_ulong attr)
 {
     /* santity check on vaddr */
     if (vaddr >= (1UL << va_bits)) {
@@ -65,7 +65,11 @@ static void print_pte(Monitor *mon, int va_bits, target_ulong vaddr,
     }
 
     monitor_printf(mon, TARGET_FMT_lx " " TARGET_FMT_plx " " TARGET_FMT_lx
-                   " %c%c%c%c%c%c%c\n",
+                   " %c%c%c%c%c%c%c"
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+                   "%c%c"
+#endif
+                   "\n",
                    addr_canonical(va_bits, vaddr),
                    paddr, size,
                    attr & PTE_R ? 'r' : '-',
@@ -74,20 +78,25 @@ static void print_pte(Monitor *mon, int va_bits, target_ulong vaddr,
                    attr & PTE_U ? 'u' : '-',
                    attr & PTE_G ? 'g' : '-',
                    attr & PTE_A ? 'a' : '-',
-                   attr & PTE_D ? 'd' : '-');
+                   attr & PTE_D ? 'd' : '-'
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+                   , attr & PTE_LC ? 'L' : '-'
+                   , attr & PTE_SC ? 'S' : '-'
+#endif
+        );
 }
 
 static void walk_pte(Monitor *mon, hwaddr base, target_ulong start,
                      int level, int ptidxbits, int ptesize, int va_bits,
                      target_ulong *vbase, hwaddr *pbase, hwaddr *last_paddr,
-                     target_ulong *last_size, int *last_attr)
+                     target_ulong *last_size, target_ulong *last_attr)
 {
     hwaddr pte_addr;
     hwaddr paddr;
     target_ulong pgsize;
     target_ulong pte;
     int ptshift;
-    int attr;
+    target_ulong attr;
     int idx;
 
     if (level < 0) {
@@ -102,7 +111,11 @@ static void walk_pte(Monitor *mon, hwaddr base, target_ulong start,
         cpu_physical_memory_read(pte_addr, &pte, ptesize);
 
         paddr = (hwaddr)(pte >> PTE_PPN_SHIFT) << PGSHIFT;
+#ifdef TARGET_CHERI
+        attr = pte & (PTE_LC | PTE_SC | 0xff);
+#else
         attr = pte & 0xff;
+#endif
 
         /* PTE has to be valid */
         if (attr & PTE_V) {
@@ -148,7 +161,7 @@ static void mem_info_svxx(Monitor *mon, CPUArchState *env)
     hwaddr pbase;
     hwaddr last_paddr;
     target_ulong last_size;
-    int last_attr;
+    target_ulong last_attr;
 
     base = (hwaddr)get_field(env->satp, SATP_PPN) << PGSHIFT;
 

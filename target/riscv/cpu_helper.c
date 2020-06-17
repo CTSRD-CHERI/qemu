@@ -609,16 +609,23 @@ restart:
         } else if (ppn & ((1ULL << ptshift) - 1)) {
             /* Misaligned PPN */
             return TRANSLATE_FAIL;
-        } else if (access_type == MMU_DATA_LOAD && !((pte & PTE_R) ||
-                   ((pte & PTE_X) && mxr))) {
+        } else if ((access_type == MMU_DATA_LOAD ||
+                    access_type == MMU_DATA_CAP_LOAD) &&
+                   !((pte & PTE_R) || ((pte & PTE_X) && mxr))) {
             /* Read access check failed */
             return TRANSLATE_FAIL;
-        } else if (access_type == MMU_DATA_STORE && !(pte & PTE_W)) {
+        } else if ((access_type == MMU_DATA_STORE ||
+                    access_type == MMU_DATA_CAP_STORE) && !(pte & PTE_W)) {
             /* Write access check failed */
             return TRANSLATE_FAIL;
         } else if (access_type == MMU_INST_FETCH && !(pte & PTE_X)) {
             /* Fetch access check failed */
             return TRANSLATE_FAIL;
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_SC)) {
+            /* SC inhibited */
+            return TRANSLATE_CHERI_FAIL;
+#endif
         } else {
             /* if necessary, set accessed and dirty bits. */
             target_ulong updated_pte = pte | PTE_A |
@@ -680,6 +687,10 @@ restart:
                     (access_type == MMU_DATA_STORE || (pte & PTE_D))) {
                 *prot |= PAGE_WRITE;
             }
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+            if ((pte & PTE_LC) == 0)
+                *prot |= PAGE_LC_CLEAR;
+#endif
             return TRANSLATE_SUCCESS;
         }
     }
@@ -688,6 +699,9 @@ restart:
 
 static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
                                 MMUAccessType access_type, bool pmp_violation,
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+                                bool cheri_violation,
+#endif
                                 bool first_stage)
 {
     CPUState *cs = env_cpu(env);
@@ -715,6 +729,10 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
     case MMU_DATA_CAP_LOAD:
         if (riscv_cpu_virt_enabled(env) && !first_stage) {
             cs->exception_index = RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT;
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+        } else if (cheri_violation) {
+            cs->exception_index = RISCV_EXCP_LOAD_CAP_PAGE_FAULT;
+#endif
         } else {
             cs->exception_index = page_fault_exceptions ?
                 RISCV_EXCP_LOAD_PAGE_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
@@ -724,6 +742,10 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
     case MMU_DATA_CAP_STORE:
         if (riscv_cpu_virt_enabled(env) && !first_stage) {
             cs->exception_index = RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT;
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+        } else if (cheri_violation) {
+            cs->exception_index = RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT;
+#endif
         } else {
             cs->exception_index = page_fault_exceptions ?
                 RISCV_EXCP_STORE_PAGE_FAULT : RISCV_EXCP_STORE_AMO_ACCESS_FAULT;
@@ -960,7 +982,11 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     } else if (probe) {
         return false;
     } else {
-        raise_mmu_exception(env, address, access_type, pmp_violation, first_stage_error);
+        raise_mmu_exception(env, address, access_type, pmp_violation,
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+                            ret == TRANSLATE_CHERI_FAIL,
+#endif
+                            first_stage_error);
         riscv_raise_exception(env, cs->exception_index, retaddr);
     }
 
@@ -998,7 +1024,11 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
                                       &pmp_violation, &first_stage_error, prot,
                                       &pa, retpc);
     if (ret != TRANSLATE_SUCCESS) {
-        raise_mmu_exception(env, address, rw, pmp_violation, first_stage_error);
+        raise_mmu_exception(env, address, rw, pmp_violation,
+#ifndef TARGET_RISCV32
+                            ret == TRANSLATE_CHERI_FAIL,
+#endif
+                            first_stage_error);
         riscv_raise_exception(env, env_cpu(env)->exception_index, retpc);
     }
     tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (pa & ~TARGET_PAGE_MASK));
@@ -1061,6 +1091,10 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         case RISCV_EXCP_INST_PAGE_FAULT:
         case RISCV_EXCP_LOAD_PAGE_FAULT:
         case RISCV_EXCP_STORE_PAGE_FAULT:
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+        case RISCV_EXCP_LOAD_CAP_PAGE_FAULT:
+        case RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT:
+#endif
             log_inst = false;
             /* fallthrough */
         case RISCV_EXCP_INST_ADDR_MIS:

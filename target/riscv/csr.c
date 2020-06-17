@@ -323,7 +323,14 @@ static const target_ulong delegable_excps =
     (1ULL << (RISCV_EXCP_INST_GUEST_PAGE_FAULT)) |
     (1ULL << (RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT)) |
     (1ULL << (RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT)) |
-    (1ULL << (RISCV_EXCP_CHERI));
+#ifdef TARGET_CHERI
+#ifndef TARGET_RISCV32
+    (1ULL << (RISCV_EXCP_LOAD_CAP_PAGE_FAULT)) |
+    (1ULL << (RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT)) |
+#endif
+    (1ULL << (RISCV_EXCP_CHERI)) |
+#endif
+    0;
 static const target_ulong sstatus_v1_9_mask = SSTATUS_SIE | SSTATUS_SPIE |
     SSTATUS_UIE | SSTATUS_UPIE | SSTATUS_SPP | SSTATUS_FS | SSTATUS_XS |
     SSTATUS_SUM | SSTATUS_SD;
