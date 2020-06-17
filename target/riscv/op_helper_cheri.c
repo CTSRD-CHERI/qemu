@@ -212,8 +212,9 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
                          uint32_t addr_reg, uint32_t val_reg)
 {
     uintptr_t _host_return_address = GETPC();
-    assert(cpu_in_exclusive_context(env_cpu(env)) &&
-           "Should have raised EXCP_ATOMIC");
+    assert(!qemu_tcg_mttcg_enabled() ||
+           (cpu_in_exclusive_context(env_cpu(env)) &&
+            "Should have raised EXCP_ATOMIC"));
     target_long offset = 0;
     if (!cheri_in_capmode(env)) {
         offset = get_capreg_cursor(env, addr_reg);
