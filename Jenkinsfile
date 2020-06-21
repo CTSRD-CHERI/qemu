@@ -29,7 +29,7 @@ cp \$WORKSPACE/tarball/share/qemu/bbl-riscv64cheri-virt-fw_jump.bin \$WORKSPACE/
 }
 
 // build on the oldest supported ubuntu version so the binaries also run there
-node('xenial') {
+node('linux-baseline') {
 	bblRepo = gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/riscv-pk.git')
 	bblRepo["branches"] = [[name: '*/cheri_purecap']]
 	cheribuildProject(target: 'bbl-baremetal-riscv64-purecap',
