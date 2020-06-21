@@ -1,13 +1,11 @@
 // import the cheribuildProject() step
 @Library('ctsrd-jenkins-scripts') _
 
-properties([
-		disableConcurrentBuilds(),
-		disableResume(),
+// Set the default job properties (work around properties() not being additive but replacing)
+setDefaultJobProperties([
+        rateLimitBuilds([count: 2, durationName: 'hour', userBoost: true]),
 		[$class: 'GithubProjectProperty', projectUrlStr: 'https://github.com/CTSRD-CHERI/qemu'],
-		[$class: 'CopyArtifactPermissionProperty', projectNames: '*'],
-		durabilityHint('PERFORMANCE_OPTIMIZED'),
-		pipelineTriggers([githubPush(), pollSCM('@daily')])
+        copyArtifactPermission('*'), // Downstream jobs need QEMU
 ])
 
 def archiveQEMU(String target) {
