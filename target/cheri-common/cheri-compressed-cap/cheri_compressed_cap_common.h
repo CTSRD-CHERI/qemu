@@ -659,8 +659,9 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
     _cc_debug_assert((req_top >> _CC_ADDR_WIDTH) <= 1 && "New top must be smaller than 1 << 65");
     _cc_debug_assert(req_base >= cap->cr_base && "Cannot decrease base");
     _cc_debug_assert(req_top <= cap->_cr_top && "Cannot increase top");
-    assert((cap->_cr_cursor < cap->_cr_top || (cap->_cr_cursor == cap->_cr_top && cap->_cr_top == cap->cr_base)) &&
-           "Must be used on inbounds (or zero-length) caps");
+    assert((cap->_cr_cursor < cap->_cr_top ||
+            (cap->_cr_cursor == cap->_cr_top && req_base == cap->_cr_top && req_base == req_top)) &&
+           "Must be used on inbounds caps or request zero-length cap at top");
     assert((cap->_cr_cursor >= cap->cr_base) && "Must be used on inbounds caps");
     _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 3, "expected 3 bits to be used by");  // expected 3 bits to
     _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 3, "expected 3 bits to be used by"); // expected 3 bits to
