@@ -163,6 +163,7 @@ static _cc_addr_t sail_compress_common_mem(const _cc_cap_t* csp) {
     sailbits = sailgen_capToMemBits(sailcap);
 #endif
     _cc_addr_t result = extract_sail_cap_bits(&sailbits, _CC_ADDR_WIDTH, _CC_ADDR_WIDTH);
+    KILL(sail_cap_bits)(&sailbits);
     return result;
 }
 

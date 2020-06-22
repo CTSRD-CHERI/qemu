@@ -56,7 +56,6 @@ static void cc_length_t_to_sail_cap_bits(sail_cap_bits* out, unsigned __int128 l
     lbits len_low;
     CREATE_OF(lbits, fbits)(&len_high, len >> 64, 1, true);
     CREATE_OF(lbits, fbits)(&len_low, (uint64_t)len, 64, true);
-    CREATE(lbits)(out);
     append(out, len_high, len_low);
     KILL(lbits)(&len_high);
     KILL(lbits)(&len_low);

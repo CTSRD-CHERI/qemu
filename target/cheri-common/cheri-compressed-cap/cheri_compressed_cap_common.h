@@ -728,6 +728,24 @@ static inline _cc_addr_t _cc_N(get_alignment_mask)(_cc_addr_t req_length) {
     return mask;
 }
 
+inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top) {
+    _cc_cap_t creg;
+    memset(&creg, 0, sizeof(creg));
+    assert(base <= top && "Invalid arguments");
+    creg.cr_base = base;
+    creg._cr_cursor = cursor;
+    creg._cr_top = top;
+    creg.cr_perms = _CC_N(PERMS_ALL);
+    creg.cr_uperms = _CC_N(UPERMS_ALL);
+    creg.cr_otype = _CC_N(OTYPE_UNSEALED);
+    creg.cr_tag = true;
+    bool exact_input = false;
+    creg.cr_ebt = _cc_N(compute_ebt)(creg.cr_base, creg._cr_top, NULL, &exact_input);
+    assert(exact_input && "Invalid arguments");
+    assert(_cc_N(is_representable_cap_exact)(&creg));
+    return creg;
+}
+
 static inline _cc_addr_t _cc_N(get_required_alignment)(_cc_addr_t req_length) {
     // To get the required alignment from the CRAM mask we can just invert
     // the bits and add one to get a power-of-two
@@ -763,5 +781,8 @@ public:
         return _cc_N(setbounds)(cap, req_base, req_top);
     }
     static inline bool is_representable_cap_exact(const cap_t* cap) { return _cc_N(is_representable_cap_exact)(cap); }
+    static inline cap_t make_max_perms_cap(addr_t base, addr_t cursor, length_t top) {
+        return _cc_N(make_max_perms_cap)(base, cursor, top);
+    }
 };
 #endif

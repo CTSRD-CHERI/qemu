@@ -15,6 +15,8 @@ set(CMAKE_REQUIRED_LIBRARIES -fsanitize=address)
 check_cxx_compiler_flag(-fsanitize=address HAVE_ASAN)
 set(CMAKE_REQUIRED_LIBRARIES -fsanitize=memory)
 check_cxx_compiler_flag(-fsanitize=memory HAVE_MSAN)
+# XXX: needs instrumented system libraries
+set(HAVE_MSAN FALSE)
 set(CMAKE_REQUIRED_LIBRARIES -fsanitize=fuzzer-no-link)
 check_cxx_compiler_flag(-fsanitize=fuzzer-no-link HAVE_LIBFUZZER)
 

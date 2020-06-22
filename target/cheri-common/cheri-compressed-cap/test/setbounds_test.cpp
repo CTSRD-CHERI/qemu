@@ -26,9 +26,9 @@ struct setbounds_regressions {
 #endif
 
 template <typename Handler>
-static inline void check_csetbounds_invariants(const cap_register_t& initial_cap, const cap_register_t& with_bounds,
-                                               bool was_exact, uint64_t requested_base,
-                                               typename Handler::length_t requested_top) {
+static inline void check_csetbounds_invariants(const typename Handler::cap_t& initial_cap,
+                                               const typename Handler::cap_t& with_bounds, bool was_exact,
+                                               uint64_t requested_base, typename Handler::length_t requested_top) {
     CAPTURE(initial_cap, with_bounds, was_exact);
     // Address should be the same!
     REQUIRE(with_bounds.address() == initial_cap.address());
@@ -47,15 +47,15 @@ static inline void check_csetbounds_invariants(const cap_register_t& initial_cap
 }
 
 template <typename Handler>
-static cap_register_t do_csetbounds(const typename Handler::cap_t& initial_cap,
-                                    typename Handler::length_t requested_top, bool* was_exact) {
-    cap_register_t with_bounds = initial_cap;
+static typename Handler::cap_t do_csetbounds(const typename Handler::cap_t& initial_cap,
+                                             typename Handler::length_t requested_top, bool* was_exact) {
+    typename Handler::cap_t with_bounds = initial_cap;
     typename Handler::addr_t requested_base = initial_cap.address();
     CAPTURE(initial_cap, requested_top, requested_base);
     bool exact = Handler::setbounds(&with_bounds, requested_base, requested_top);
     CAPTURE(with_bounds, exact);
 
-    cap_register_t sail_with_bounds = initial_cap;
+    typename Handler::cap_t sail_with_bounds = initial_cap;
     bool sail_exact = Handler::sail_setbounds(&sail_with_bounds, requested_base, requested_top);
     CAPTURE(sail_with_bounds, sail_exact);
 
@@ -155,6 +155,27 @@ static inline void check_cram_matches_setbounds(cc128_length_t req_top, const ca
     CHECK((cap_to_bound.address() & cram_value) == setbounds_result.base());
     CHECK(round_up_with_cram_mask(req_top, cram_value) == setbounds_result.top());
 }
+
+template <typename Handler>
+void test_zero_length_one_past_end() { // Create an out-of-bounds capability and set length to one
+    constexpr unsigned base = 12345;
+    constexpr unsigned base_plus_one = base + 1;
+    auto one_past_end = Handler::make_max_perms_cap(base, base_plus_one, base_plus_one);
+    bool exact;
+    auto result = do_csetbounds<Handler>(one_past_end, base_plus_one, &exact);
+    CHECK(result.base() == base_plus_one);
+    CHECK(result.top() == base_plus_one);
+    CHECK(result.address() == base_plus_one);
+    CHECK(result.cr_tag == 1);
+    CHECK(exact);
+    // Check that calling setbounds with the same target top yields the same result
+    bool same_again_exact = false;
+    auto same_again = do_csetbounds<Handler>(result, base_plus_one, &same_again_exact);
+    CHECK(result == same_again);
+}
+
+TEST_CASE("setbounds128 with req_top == top", "[bounds 128]") { test_zero_length_one_past_end<TestAPI128>(); }
+TEST_CASE("setbounds64 with req_top == top", "[bounds 64]") { test_zero_length_one_past_end<TestAPI64>(); }
 
 TEST_CASE("setbounds test cases from sail", "[bounds]") {
     using Handler = TestAPI128;
