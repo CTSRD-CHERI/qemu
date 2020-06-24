@@ -1068,6 +1068,26 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
     store_cap_to_memory(env, cs, addr, _host_return_address);
 }
 
+static inline bool
+cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
+                             int cb, const cap_register_t* cbp,
+                             int prot, uintptr_t retpc, target_ulong tag)
+{
+    if (tag && (prot & PAGE_LC_CLEAR)) {
+        qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
+            " due to MMU permissions\n", va);
+        return 0;
+    }
+    if (tag && !(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
+        qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
+            " due to missing CAP_PERM_LOAD_CAP\n", va);
+        return 0;
+    }
+    if (tag && (prot & PAGE_LC_TRAP))
+        raise_load_tag_exception(env, va, cb, retpc);
+    return tag;
+}
+
 #if defined(CHERI_128) && QEMU_USE_COMPRESSED_CHERI_CAPS
 
 bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
