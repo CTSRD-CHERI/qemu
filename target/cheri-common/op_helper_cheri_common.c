@@ -1153,7 +1153,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         tcg_debug_assert(pesbt_for_mem == 0 && "Integer values should have NULL PESBT");
     }
 #endif
-    bool tag = get_capreg_tag(env, cs);
+    bool tag = get_capreg_tag_filtered(env, cs);
     if (cs == 0) {
         tcg_debug_assert(pesbt_for_mem == 0 && "Wrong value for cnull?");
         tcg_debug_assert(cursor == 0 && "Wrong value for cnull?");

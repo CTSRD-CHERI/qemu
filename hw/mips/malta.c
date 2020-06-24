@@ -56,6 +56,7 @@
 #include "sysemu/kvm.h"
 #include "hw/semihosting/semihost.h"
 #include "hw/mips/cps.h"
+#include "hw/virtio/virtio-mmio.h"
 
 #if defined(TARGET_CHERI)
 #include "cheri_tagmem.h"
@@ -69,6 +70,13 @@
 #define FLASH_ADDRESS       0x1e000000ULL
 #define FPGA_ADDRESS        0x1f000000ULL
 #define RESET_ADDRESS       0x1fc00000ULL
+
+// Maximum number of virtio transports. These sit idle if no devices are specified when QEMU is run.
+#define VIRTIO_N_TRANSPORTS    2
+
+#define VIRTIO_MMIO_MMAP_BASE     0x1e400000ULL
+#define VIRTIO_MMIO_MMAP_SIZE     0x200ULL
+#define VIRTIO_MMIO_IRQ_START     5
 
 #define FLASH_SIZE          0x400000
 
@@ -1220,6 +1228,24 @@ static void mips_create_cpu(MachineState *ms, MaltaState *s,
     }
 }
 
+static void create_virtio_devices(void)
+{
+    CPUMIPSState *env;
+    MIPSCPU *cpu;
+
+    cpu = MIPS_CPU(first_cpu);
+    env = &cpu->env;
+
+    // Looping backwards makes the attachment order on the command-line match
+    // increasing address order.
+
+    for (int i = VIRTIO_N_TRANSPORTS-1; i >= 0; i--) {
+        sysbus_create_simple(TYPE_VIRTIO_MMIO,
+            VIRTIO_MMIO_MMAP_BASE+(VIRTIO_MMIO_MMAP_SIZE*i),
+            env->irq[VIRTIO_MMIO_IRQ_START+i]);
+    }
+}
+
 static
 void mips_malta_init(MachineState *machine)
 {
@@ -1438,6 +1464,9 @@ void mips_malta_init(MachineState *machine)
 
     /* Optional PCI video card */
     pci_vga_init(pci_bus);
+
+    /* Virtio over MMIO */
+    create_virtio_devices();
 }
 
 static const TypeInfo mips_malta_device = {

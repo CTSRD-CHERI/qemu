@@ -81,7 +81,7 @@ static inline void generate_ccall(int32_t cs, int32_t cb)
     tcg_temp_free_i32(tcs);
 }
 
-static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t cb)
+static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t cb, int32_t select)
 {
     /*
      * This version of ccall has a delay slot and also can not
@@ -97,7 +97,12 @@ static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t 
         TCGv_i32 tcs = tcg_const_i32(cs);
         TCGv_i32 tcb = tcg_const_i32(cb);
 
-        gen_helper_ccall_notrap(btarget, cpu_env, tcs, tcb);
+        if (select == CCALL_SELECTOR_1)
+            gen_helper_ccall_notrap(btarget, cpu_env, tcs, tcb);
+        else if(select == CCALL_SELECTOR_2)
+            gen_helper_ccall_notrap2(btarget, cpu_env, tcs, tcb);
+        else
+            tcg_debug_assert(0 && "Invalid CCall Selector");
         /* Set ccall branch flags */
         ctx->hflags |= (MIPS_HFLAG_BRCCALL);
         save_cpu_state(ctx, 0);
@@ -1502,8 +1507,9 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             opn = "ccall";
             break;
         case CCALL_SELECTOR_1: /* 0x001 */
+        case CCALL_SELECTOR_2: /* 0x002 */
             check_cop2x(ctx);
-            generate_ccall_notrap(ctx, r16, r11);
+            generate_ccall_notrap(ctx, r16, r11, MASK_CCALL_SEL(opc));
             opn = "ccall";
             break;
         default:

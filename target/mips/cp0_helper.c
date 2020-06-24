@@ -719,6 +719,25 @@ void helper_dmtc0_entrylo0(CPUMIPSState *env, uint64_t arg1)
 }
 #endif
 
+#ifdef TARGET_CHERI
+
+void helper_mtc0_capfilter_lo(CPUMIPSState *env, target_ulong arg1)
+{
+    env->cheri_capfilter_lo = arg1;
+}
+
+void helper_mtc0_capfilter_hi(CPUMIPSState *env, target_ulong arg1)
+{
+    env->cheri_capfilter_hi = arg1;
+}
+
+void helper_mtc0_capfilter_perms(CPUMIPSState *env, target_ulong arg1)
+{
+    env->cheri_capfilter_perms = arg1;
+}
+
+#endif
+
 void helper_mtc0_tcstatus(CPUMIPSState *env, target_ulong arg1)
 {
     uint32_t mask = env->CP0_TCStatus_rw_bitmask;
@@ -839,11 +858,13 @@ void helper_mttc0_tchalt(CPUMIPSState *env, target_ulong arg1)
     }
     log_instr_cop0_update(env, CP0_REGISTER_02, 4, arg1);
 
+    qemu_mutex_lock_iothread();
     if (arg1 & 1) {
         mips_tc_sleep(other_cpu, other_tc);
     } else {
         mips_tc_wake(other_cpu, other_tc);
     }
+    qemu_mutex_unlock_iothread();
 }
 
 void helper_mtc0_tccontext(CPUMIPSState *env, target_ulong arg1)
@@ -1298,6 +1319,7 @@ void helper_mtc0_status(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mttc0_status(CPUMIPSState *env, target_ulong arg1)
 {
+    qemu_mutex_lock_iothread();
     int other_tc = env->CP0_VPEControl & (0xff << CP0VPECo_TargTC);
     uint32_t mask = env->CP0_Status_rw_bitmask & ~0xf1000018;
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
@@ -1305,6 +1327,7 @@ void helper_mttc0_status(CPUMIPSState *env, target_ulong arg1)
     other->CP0_Status = (other->CP0_Status & ~mask) | (arg1 & mask);
     sync_c0_status(env, other, other_tc);
     log_instr_cop0_update(env, CP0_REGISTER_12, 0, env->CP0_Status);
+    qemu_mutex_unlock_iothread();
 }
 
 void helper_mtc0_intctl(CPUMIPSState *env, target_ulong arg1)
@@ -1328,11 +1351,13 @@ void helper_mtc0_cause(CPUMIPSState *env, target_ulong arg1)
 
 void helper_mttc0_cause(CPUMIPSState *env, target_ulong arg1)
 {
+    qemu_mutex_lock_iothread();
     int other_tc = env->CP0_VPEControl & (0xff << CP0VPECo_TargTC);
     CPUMIPSState *other = mips_cpu_map_tc(env, &other_tc);
 
     cpu_mips_store_cause(other, arg1);
     log_instr_cop0_update(env, CP0_REGISTER_13, 0, env->CP0_Cause);
+    qemu_mutex_unlock_iothread();
 }
 
 target_ulong helper_mftc0_epc(CPUMIPSState *env) {
