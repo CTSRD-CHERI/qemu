@@ -396,7 +396,7 @@ static bool _cc_N(fast_is_representable_new_addr)(bool sealed, _cc_addr_t base, 
                                                   _cc_addr_t new_cursor);
 
 /// Check that a capability is representable by compressing and recompressing
-static bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
+static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
     _cc_addr_t pesbt = _cc_N(compress_raw)(cap);
     _cc_cap_t decompressed_cap;
     _cc_N(decompress_raw)(pesbt, cap->_cr_cursor, cap->cr_tag, &decompressed_cap);
