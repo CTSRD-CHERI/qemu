@@ -52,30 +52,15 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
     riscv_raise_exception(env, RISCV_EXCP_CHERI, hostpc);
 }
 
-static inline bool
-cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
-                             int cb, const cap_register_t* cbp,
-                             int prot, uintptr_t retpc, target_ulong tag)
+static inline void QEMU_NORETURN raise_load_tag_exception(
+    CPUArchState *env, target_ulong va, int cb, uintptr_t retpc)
 {
-#ifndef TARGET_RISCV32
-    if (tag && (prot & PAGE_LC_CLEAR)) {
-        qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
-            " due to missing PTE_LC\n", va);
-        return 0;
-    }
+#ifdef TARGET_RISCV32
+    g_assert_not_reached();
+#else
+    env->badaddr = va;
+    riscv_raise_exception(env, RISCV_EXCP_LOAD_CAP_PAGE_FAULT, retpc);
 #endif
-    if (tag && !(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
-        qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
-            " due to missing CAP_PERM_LOAD_CAP\n", va);
-        return 0;
-    }
-#ifndef TARGET_RISCV32
-    if (tag && (prot & PAGE_LC_TRAP)) {
-      env->badaddr = va;
-      riscv_raise_exception(env, RISCV_EXCP_LOAD_CAP_PAGE_FAULT, retpc);
-    }
-#endif
-    return tag;
 }
 
 static inline void QEMU_NORETURN raise_unaligned_load_exception(

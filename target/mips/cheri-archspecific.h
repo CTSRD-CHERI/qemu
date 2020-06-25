@@ -97,22 +97,11 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
     do_raise_c2_exception_impl(env, cause, regnum, hostpc);
 }
 
-static inline bool
-cheri_tag_prot_clear_or_trap(CPUMIPSState *env, target_ulong va,
-                             int cb, const cap_register_t* cbp,
-                             int prot, uintptr_t retpc, target_ulong tag)
+static inline void QEMU_NORETURN raise_load_tag_exception(
+    CPUArchState *env, target_ulong va, int cb, uintptr_t retpc)
 {
-    if (tag && ((prot & PAGE_LC_CLEAR) || !(cbp->cr_perms & CAP_PERM_LOAD_CAP))) {
-        qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
-            " due to %s\n", va, prot & PAGE_LC_CLEAR ?
-            "asserted TLB_LI" : "missing CAP_PERM_LOAD_CAP");
-        return 0;
-    }
-    if (tag && (prot & PAGE_LC_TRAP)) {
-      env->CP0_BadVAddr = va;
-      do_raise_c2_exception_impl(env, CapEx_CapLoadGen, cb, retpc);
-    }
-    return tag;
+    env->CP0_BadVAddr = va;
+    do_raise_c2_exception_impl(env, CapEx_CapLoadGen, cb, retpc);
 }
 
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
