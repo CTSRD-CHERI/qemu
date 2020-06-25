@@ -556,7 +556,7 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
     case TLBRET_BADADDR:
         /* Reference to kernel address from user mode or supervisor mode */
         /* Reference to supervisor address from user mode */
-        if (rw == MMU_DATA_STORE) {
+        if (rw == MMU_DATA_STORE || rw == MMU_DATA_CAP_STORE) {
             exception = EXCP_AdES;
         } else {
             exception = EXCP_AdEL;
@@ -564,7 +564,7 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
         break;
     case TLBRET_NOMATCH:
         /* No TLB match for a mapped address */
-        if (rw == MMU_DATA_STORE) {
+        if (rw == MMU_DATA_STORE || rw == MMU_DATA_CAP_STORE) {
             exception = EXCP_TLBS;
         } else {
             exception = EXCP_TLBL;
@@ -573,7 +573,7 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
         break;
     case TLBRET_INVALID:
         /* TLB match with no valid bit */
-        if (rw == MMU_DATA_STORE) {
+        if (rw == MMU_DATA_STORE || rw == MMU_DATA_CAP_STORE) {
             exception = EXCP_TLBS;
         } else {
             exception = EXCP_TLBL;
