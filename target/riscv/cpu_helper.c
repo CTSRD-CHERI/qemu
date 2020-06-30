@@ -584,7 +584,16 @@ restart:
             return TRANSLATE_FAIL;
         }
 
+#if !defined(TARGET_RISCV32)
+        /*
+         * The top ten bits of the PTE are reserved.  While there may
+         * eventually be a RISCV system with more than 44 bits of ppn (that is,
+         * a 56-bit physical address space, or 64 PiB), we aren't one, yet.
+         */
+        hwaddr ppn = (pte & ~0xFFC0000000000000ULL) >> PTE_PPN_SHIFT;
+#else
         hwaddr ppn = pte >> PTE_PPN_SHIFT;
+#endif
 
         if (!(pte & PTE_V)) {
             /* Invalid PTE */
