@@ -959,10 +959,10 @@ PFlashCFI01 *pflash_cfi01_register(hwaddr base,
                                    uint16_t id2, uint16_t id3,
                                    int be)
 {
-    DeviceState *dev = qdev_create(NULL, TYPE_PFLASH_CFI01);
+    DeviceState *dev = qdev_new(TYPE_PFLASH_CFI01);
 
     if (blk) {
-        qdev_prop_set_drive(dev, "drive", blk, &error_abort);
+        qdev_prop_set_drive(dev, "drive", blk);
     }
     assert(QEMU_IS_ALIGNED(size, sector_len));
     qdev_prop_set_uint32(dev, "num-blocks", size / sector_len);
@@ -974,7 +974,7 @@ PFlashCFI01 *pflash_cfi01_register(hwaddr base,
     qdev_prop_set_uint16(dev, "id2", id2);
     qdev_prop_set_uint16(dev, "id3", id3);
     qdev_prop_set_string(dev, "name", name);
-    qdev_init_nofail(dev);
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
 
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base);
     return PFLASH_CFI01(dev);
@@ -1010,8 +1010,8 @@ void pflash_cfi01_legacy_drive(PFlashCFI01 *fl, DriveInfo *dinfo)
         error_report("clashes with -machine");
         exit(1);
     }
-    qdev_prop_set_drive(DEVICE(fl), "drive",
-                        blk_by_legacy_dinfo(dinfo), &error_fatal);
+    qdev_prop_set_drive_err(DEVICE(fl), "drive", blk_by_legacy_dinfo(dinfo),
+                            &error_fatal);
     loc_pop(&loc);
 }
 

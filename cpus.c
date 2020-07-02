@@ -97,9 +97,19 @@ bool cpu_is_stopped(CPUState *cpu)
     return cpu->stopped || !runstate_is_running();
 }
 
+static inline bool cpu_work_list_empty(CPUState *cpu)
+{
+    bool ret;
+
+    qemu_mutex_lock(&cpu->work_mutex);
+    ret = QSIMPLEQ_EMPTY(&cpu->work_list);
+    qemu_mutex_unlock(&cpu->work_mutex);
+    return ret;
+}
+
 static bool cpu_thread_is_idle(CPUState *cpu)
 {
-    if (cpu->stop || cpu->queued_work_first) {
+    if (cpu->stop || !cpu_work_list_empty(cpu)) {
         return false;
     }
     if (cpu_is_stopped(cpu)) {
@@ -379,7 +389,8 @@ static void icount_adjust(void)
 
     seqlock_write_lock(&timers_state.vm_clock_seqlock,
                        &timers_state.vm_clock_lock);
-    cur_time = cpu_get_clock_locked();
+    cur_time = REPLAY_CLOCK_LOCKED(REPLAY_CLOCK_VIRTUAL_RT,
+                                   cpu_get_clock_locked());
     cur_icount = cpu_get_icount_locked();
 
     delta = cur_icount - cur_time;
@@ -647,6 +658,11 @@ static bool adjust_timers_state_needed(void *opaque)
     return s->icount_rt_timer != NULL;
 }
 
+static bool shift_state_needed(void *opaque)
+{
+    return use_icount == 2;
+}
+
 /*
  * Subsection for warp timer migration is optional, because may not be created
  */
@@ -674,6 +690,17 @@ static const VMStateDescription icount_vmstate_adjust_timers = {
     }
 };
 
+static const VMStateDescription icount_vmstate_shift = {
+    .name = "timer/icount/shift",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .needed = shift_state_needed,
+    .fields = (VMStateField[]) {
+        VMSTATE_INT16(icount_time_shift, TimersState),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
 /*
  * This is a subsection for icount migration.
  */
@@ -690,6 +717,7 @@ static const VMStateDescription icount_vmstate_timers = {
     .subsections = (const VMStateDescription*[]) {
         &icount_vmstate_warp_timer,
         &icount_vmstate_adjust_timers,
+        &icount_vmstate_shift,
         NULL
     }
 };
@@ -803,8 +831,10 @@ void configure_icount(QemuOpts *opts, Error **errp)
     bool align = qemu_opt_get_bool(opts, "align", false);
     long time_shift = -1;
 
-    if (!option && qemu_opt_get(opts, "align")) {
-        error_setg(errp, "Please specify shift option when using align");
+    if (!option) {
+        if (qemu_opt_get(opts, "align") != NULL) {
+            error_setg(errp, "Please specify shift option when using align");
+        }
         return;
     }
 
@@ -1344,6 +1374,13 @@ static int64_t tcg_get_icount_limit(void)
     }
 }
 
+static void notify_aio_contexts(void)
+{
+    /* Wake up other AioContexts.  */
+    qemu_clock_notify(QEMU_CLOCK_VIRTUAL);
+    qemu_clock_run_timers(QEMU_CLOCK_VIRTUAL);
+}
+
 static void handle_icount_deadline(void)
 {
     assert(qemu_in_vcpu_thread());
@@ -1352,9 +1389,7 @@ static void handle_icount_deadline(void)
                                                       QEMU_TIMER_ATTR_ALL);
 
         if (deadline == 0) {
-            /* Wake up other AioContexts.  */
-            qemu_clock_notify(QEMU_CLOCK_VIRTUAL);
-            qemu_clock_run_timers(QEMU_CLOCK_VIRTUAL);
+            notify_aio_contexts();
         }
     }
 }
@@ -1377,6 +1412,10 @@ static void prepare_icount_for_run(CPUState *cpu)
         cpu->icount_extra = cpu->icount_budget - insns_left;
 
         replay_mutex_lock();
+
+        if (cpu->icount_budget == 0 && replay_has_checkpoint()) {
+            notify_aio_contexts();
+        }
     }
 }
 
@@ -1498,7 +1537,7 @@ static void *qemu_tcg_rr_cpu_thread_fn(void *arg)
             cpu = first_cpu;
         }
 
-        while (cpu && !cpu->queued_work_first && !cpu->exit_request) {
+        while (cpu && cpu_work_list_empty(cpu) && !cpu->exit_request) {
 
             atomic_mb_set(&tcg_current_rr_cpu, cpu);
             current_cpu = cpu;

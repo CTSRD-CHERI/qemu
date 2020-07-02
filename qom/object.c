@@ -262,8 +262,7 @@ static void type_initialize_interface(TypeImpl *ti, TypeImpl *interface_type,
     new_iface->concrete_class = ti->class;
     new_iface->interface_type = interface_type;
 
-    ti->class->interfaces = g_slist_append(ti->class->interfaces,
-                                           iface_impl->class);
+    ti->class->interfaces = g_slist_append(ti->class->interfaces, new_iface);
 }
 
 static void object_property_free(gpointer data)
@@ -316,8 +315,6 @@ static void type_initialize(TypeImpl *ti)
         g_assert(parent->instance_size <= ti->instance_size);
         memcpy(ti->class, parent->class, parent->class_size);
         ti->class->interfaces = NULL;
-        ti->class->properties = g_hash_table_new_full(
-            g_str_hash, g_str_equal, NULL, object_property_free);
 
         for (e = parent->class->interfaces; e; e = e->next) {
             InterfaceClass *iface = e->data;
@@ -347,10 +344,10 @@ static void type_initialize(TypeImpl *ti)
 
             type_initialize_interface(ti, t, t);
         }
-    } else {
-        ti->class->properties = g_hash_table_new_full(
-            g_str_hash, g_str_equal, NULL, object_property_free);
     }
+
+    ti->class->properties = g_hash_table_new_full(g_str_hash, g_str_equal, NULL,
+                                                  object_property_free);
 
     ti->class->type = ti;
 
@@ -497,10 +494,8 @@ static void object_class_property_init_all(Object *obj)
     }
 }
 
-static void object_initialize_with_type(void *data, size_t size, TypeImpl *type)
+static void object_initialize_with_type(Object *obj, size_t size, TypeImpl *type)
 {
-    Object *obj = data;
-
     type_initialize(type);
 
     g_assert(type->instance_size >= sizeof(Object));
@@ -529,19 +524,21 @@ void object_initialize(void *data, size_t size, const char *typename)
     object_initialize_with_type(data, size, type);
 }
 
-void object_initialize_child(Object *parentobj, const char *propname,
+void object_initialize_child_with_props(Object *parentobj,
+                             const char *propname,
                              void *childobj, size_t size, const char *type,
                              Error **errp, ...)
 {
     va_list vargs;
 
     va_start(vargs, errp);
-    object_initialize_childv(parentobj, propname, childobj, size, type, errp,
-                             vargs);
+    object_initialize_child_with_propsv(parentobj, propname,
+                                        childobj, size, type, errp, vargs);
     va_end(vargs);
 }
 
-void object_initialize_childv(Object *parentobj, const char *propname,
+void object_initialize_child_with_propsv(Object *parentobj,
+                              const char *propname,
                               void *childobj, size_t size, const char *type,
                               Error **errp, va_list vargs)
 {
@@ -580,6 +577,15 @@ out:
     object_unref(obj);
 
     error_propagate(errp, local_err);
+}
+
+void object_initialize_child_internal(Object *parent,
+                                      const char *propname,
+                                      void *child, size_t size,
+                                      const char *type)
+{
+    object_initialize_child_with_props(parent, propname, child, size, type,
+                                       &error_abort, NULL);
 }
 
 static inline bool object_property_is_child(ObjectProperty *prop)
@@ -1051,7 +1057,10 @@ static int do_object_child_foreach(Object *obj,
                 break;
             }
             if (recurse) {
-                do_object_child_foreach(child, fn, opaque, true);
+                ret = do_object_child_foreach(child, fn, opaque, true);
+                if (ret != 0) {
+                    break;
+                }
             }
         }
     }
@@ -1883,7 +1892,7 @@ object_property_add_const_link(Object *obj, const char *name,
                                 NULL, OBJ_PROP_LINK_DIRECT);
 }
 
-char *object_get_canonical_path_component(Object *obj)
+char *object_get_canonical_path_component(const Object *obj)
 {
     ObjectProperty *prop = NULL;
     GHashTableIter iter;
@@ -1908,7 +1917,7 @@ char *object_get_canonical_path_component(Object *obj)
     return NULL;
 }
 
-char *object_get_canonical_path(Object *obj)
+char *object_get_canonical_path(const Object *obj)
 {
     Object *root = object_get_root();
     char *newpath, *path = NULL;
@@ -1953,26 +1962,25 @@ Object *object_resolve_path_component(Object *parent, const char *part)
 }
 
 static Object *object_resolve_abs_path(Object *parent,
-                                       char **parts,
-                                       const char *typename,
-                                       int index)
+                                          char **parts,
+                                          const char *typename)
 {
     Object *child;
 
-    if (parts[index] == NULL) {
+    if (*parts == NULL) {
         return object_dynamic_cast(parent, typename);
     }
 
-    if (strcmp(parts[index], "") == 0) {
-        return object_resolve_abs_path(parent, parts, typename, index + 1);
+    if (strcmp(*parts, "") == 0) {
+        return object_resolve_abs_path(parent, parts + 1, typename);
     }
 
-    child = object_resolve_path_component(parent, parts[index]);
+    child = object_resolve_path_component(parent, *parts);
     if (!child) {
         return NULL;
     }
 
-    return object_resolve_abs_path(child, parts, typename, index + 1);
+    return object_resolve_abs_path(child, parts + 1, typename);
 }
 
 static Object *object_resolve_partial_path(Object *parent,
@@ -1984,7 +1992,7 @@ static Object *object_resolve_partial_path(Object *parent,
     GHashTableIter iter;
     ObjectProperty *prop;
 
-    obj = object_resolve_abs_path(parent, parts, typename, 0);
+    obj = object_resolve_abs_path(parent, parts, typename);
 
     g_hash_table_iter_init(&iter, parent->properties);
     while (g_hash_table_iter_next(&iter, NULL, (gpointer *)&prop)) {
@@ -2029,7 +2037,7 @@ Object *object_resolve_path_type(const char *path, const char *typename,
             *ambiguousp = ambiguous;
         }
     } else {
-        obj = object_resolve_abs_path(object_get_root(), parts, typename, 1);
+        obj = object_resolve_abs_path(object_get_root(), parts + 1, typename);
     }
 
     g_strfreev(parts);

@@ -91,7 +91,12 @@ static void usage(char *path)
         printf(" * %s  : %s\n", tmp->target->name,
                 tmp->target->description);
     }
-    printf("Alternatively, add -target-FUZZ_TARGET to the executable name\n");
+    printf("Alternatively, add -target-FUZZ_TARGET to the executable name\n\n"
+           "Set the environment variable FUZZ_SERIALIZE_QTEST=1 to serialize\n"
+           "QTest commands into an ASCII protocol. Useful for building crash\n"
+           "reproducers, but slows down execution.\n\n"
+           "Set the environment variable QTEST_LOG=1 to log all qtest commands"
+           "\n");
     exit(0);
 }
 
@@ -137,6 +142,8 @@ int LLVMFuzzerInitialize(int *argc, char ***argv, char ***envp)
 {
 
     char *target_name;
+    char *dir;
+    bool serialize = false;
 
     /* Initialize qgraph and modules */
     qos_graph_init();
@@ -147,6 +154,20 @@ int LLVMFuzzerInitialize(int *argc, char ***argv, char ***envp)
     target_name = strstr(**argv, "-target-");
     if (target_name) {        /* The binary name specifies the target */
         target_name += strlen("-target-");
+        /*
+         * With oss-fuzz, the executable is kept in the root of a directory (we
+         * cannot assume the path). All data (including bios binaries) must be
+         * in the same dir, or a subdir. Thus, we cannot place the pc-bios so
+         * that it would be in exec_dir/../pc-bios.
+         * As a workaround, oss-fuzz allows us to use argv[0] to get the
+         * location of the executable. Using this we add exec_dir/pc-bios to
+         * the datadirs.
+         */
+        dir = g_build_filename(g_path_get_dirname(**argv), "pc-bios", NULL);
+        if (g_file_test(dir, G_FILE_TEST_IS_DIR)) {
+            qemu_add_data_dir(dir);
+        }
+        g_free(dir);
     } else if (*argc > 1) {  /* The target is specified as an argument */
         target_name = (*argv)[1];
         if (!strstr(target_name, "--fuzz-target=")) {
@@ -156,6 +177,13 @@ int LLVMFuzzerInitialize(int *argc, char ***argv, char ***envp)
     } else {
         usage(**argv);
     }
+
+    /* Should we always serialize qtest commands? */
+    if (getenv("FUZZ_SERIALIZE_QTEST")) {
+        serialize = true;
+    }
+
+    fuzz_qtest_set_serialize(serialize);
 
     /* Identify the fuzz target */
     fuzz_target = fuzz_get_target(target_name);
@@ -171,6 +199,11 @@ int LLVMFuzzerInitialize(int *argc, char ***argv, char ***envp)
 
     /* Run QEMU's softmmu main with the fuzz-target dependent arguments */
     const char *init_cmdline = fuzz_target->get_init_cmdline(fuzz_target);
+    init_cmdline = g_strdup_printf("%s -qtest /dev/null -qtest-log %s",
+                                   init_cmdline,
+                                   getenv("QTEST_LOG") ? "/dev/fd/2"
+                                                       : "/dev/null");
+
 
     /* Split the runcmd into an argv and argc */
     wordexp_t result;

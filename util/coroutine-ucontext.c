@@ -37,11 +37,23 @@
 #endif
 #endif
 
+#ifdef CONFIG_TSAN
+#include <sanitizer/tsan_interface.h>
+#endif
+
 typedef struct {
     Coroutine base;
     void *stack;
     size_t stack_size;
+#ifdef CONFIG_SAFESTACK
+    /* Need an unsafe stack for each coroutine */
+    void *unsafe_stack;
+    size_t unsafe_stack_size;
+#endif
     sigjmp_buf env;
+
+    void *tsan_co_fiber;
+    void *tsan_caller_fiber;
 
 #ifdef CONFIG_VALGRIND_H
     unsigned int valgrind_stack_id;
@@ -65,7 +77,18 @@ union cc_arg {
     int i[2];
 };
 
-static void finish_switch_fiber(void *fake_stack_save)
+/* QEMU_ALWAYS_INLINE only does so if __OPTIMIZE__, so we cannot use it. */
+static inline __attribute__((always_inline))
+void on_new_fiber(CoroutineUContext *co)
+{
+#ifdef CONFIG_TSAN
+    co->tsan_co_fiber = __tsan_create_fiber(0); /* flags: sync on switch */
+    co->tsan_caller_fiber = __tsan_get_current_fiber();
+#endif
+}
+
+static inline __attribute__((always_inline))
+void finish_switch_fiber(void *fake_stack_save)
 {
 #ifdef CONFIG_ASAN
     const void *bottom_old;
@@ -78,13 +101,30 @@ static void finish_switch_fiber(void *fake_stack_save)
         leader.stack_size = size_old;
     }
 #endif
+#ifdef CONFIG_TSAN
+    if (fake_stack_save) {
+        __tsan_release(fake_stack_save);
+        __tsan_switch_to_fiber(fake_stack_save, 0);  /* 0=synchronize */
+    }
+#endif
 }
 
-static void start_switch_fiber(void **fake_stack_save,
-                               const void *bottom, size_t size)
+static inline __attribute__((always_inline)) void start_switch_fiber(
+    CoroutineAction action, void **fake_stack_save,
+    const void *bottom, size_t size, void *new_fiber)
 {
 #ifdef CONFIG_ASAN
-    __sanitizer_start_switch_fiber(fake_stack_save, bottom, size);
+    __sanitizer_start_switch_fiber(
+            action == COROUTINE_TERMINATE ? NULL : fake_stack_save,
+            bottom, size);
+#endif
+#ifdef CONFIG_TSAN
+    void *curr_fiber =
+        __tsan_get_current_fiber();
+    __tsan_acquire(curr_fiber);
+
+    *fake_stack_save = curr_fiber;
+    __tsan_switch_to_fiber(new_fiber, 0);  /* 0=synchronize */
 #endif
 }
 
@@ -104,8 +144,12 @@ static void coroutine_trampoline(int i0, int i1)
 
     /* Initialize longjmp environment and switch back the caller */
     if (!sigsetjmp(self->env, 0)) {
-        start_switch_fiber(&fake_stack_save,
-                           leader.stack, leader.stack_size);
+        start_switch_fiber(
+            COROUTINE_YIELD,
+            &fake_stack_save,
+            leader.stack,
+            leader.stack_size,
+            self->tsan_caller_fiber);
         siglongjmp(*(sigjmp_buf *)co->entry_arg, 1);
     }
 
@@ -140,6 +184,10 @@ Coroutine *qemu_coroutine_new(void)
     co = g_malloc0(sizeof(*co));
     co->stack_size = COROUTINE_STACK_SIZE;
     co->stack = qemu_alloc_stack(&co->stack_size);
+#ifdef CONFIG_SAFESTACK
+    co->unsafe_stack_size = COROUTINE_STACK_SIZE;
+    co->unsafe_stack = qemu_alloc_stack(&co->unsafe_stack_size);
+#endif
     co->base.entry_arg = &old_env; /* stash away our jmp_buf */
 
     uc.uc_link = &old_uc;
@@ -154,12 +202,32 @@ Coroutine *qemu_coroutine_new(void)
 
     arg.p = co;
 
+    on_new_fiber(co);
     makecontext(&uc, (void (*)(void))coroutine_trampoline,
                 2, arg.i[0], arg.i[1]);
 
     /* swapcontext() in, siglongjmp() back out */
     if (!sigsetjmp(old_env, 0)) {
-        start_switch_fiber(&fake_stack_save, co->stack, co->stack_size);
+        start_switch_fiber(
+            COROUTINE_YIELD,
+            &fake_stack_save,
+            co->stack, co->stack_size, co->tsan_co_fiber);
+
+#ifdef CONFIG_SAFESTACK
+        /*
+         * Before we swap the context, set the new unsafe stack
+         * The unsafe stack grows just like the normal stack, so start from
+         * the last usable location of the memory area.
+         * NOTE: we don't have to re-set the usp afterwards because we are
+         * coming back to this context through a siglongjmp.
+         * The compiler already wrapped the corresponding sigsetjmp call with
+         * code that saves the usp on the (safe) stack before the call, and
+         * restores it right after (which is where we return with siglongjmp).
+         */
+        void *usp = co->unsafe_stack + co->unsafe_stack_size;
+        __safestack_unsafe_stack_ptr = usp;
+#endif
+
         swapcontext(&old_uc, &uc);
     }
 
@@ -192,6 +260,9 @@ void qemu_coroutine_delete(Coroutine *co_)
 #endif
 
     qemu_free_stack(co->stack, co->stack_size);
+#ifdef CONFIG_SAFESTACK
+    qemu_free_stack(co->unsafe_stack, co->unsafe_stack_size);
+#endif
     g_free(co);
 }
 
@@ -216,8 +287,8 @@ qemu_coroutine_switch(Coroutine *from_, Coroutine *to_,
 
     ret = sigsetjmp(from->env, 0);
     if (ret == 0) {
-        start_switch_fiber(action == COROUTINE_TERMINATE ?
-                           NULL : &fake_stack_save, to->stack, to->stack_size);
+        start_switch_fiber(action, &fake_stack_save,
+                           to->stack, to->stack_size, to->tsan_co_fiber);
         siglongjmp(to->env, action);
     }
 
@@ -231,6 +302,11 @@ Coroutine *qemu_coroutine_self(void)
     if (!current) {
         current = &leader.base;
     }
+#ifdef CONFIG_TSAN
+    if (!leader.tsan_co_fiber) {
+        leader.tsan_co_fiber = __tsan_get_current_fiber();
+    }
+#endif
     return current;
 }
 

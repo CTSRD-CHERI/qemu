@@ -239,11 +239,7 @@ static void xen_block_realize(XenDevice *xendev, Error **errp)
         return;
     }
 
-    blkconf_blocksizes(conf);
-
-    if (conf->logical_block_size > conf->physical_block_size) {
-        error_setg(
-            errp, "logical_block_size > physical_block_size not supported");
+    if (!blkconf_blocksizes(conf, errp)) {
         return;
     }
 
@@ -937,7 +933,7 @@ static void xen_block_device_create(XenBackendInstance *backend,
         goto fail;
     }
 
-    xendev = XEN_DEVICE(qdev_create(BUS(xenbus), type));
+    xendev = XEN_DEVICE(qdev_new(type));
     blockdev = XEN_BLOCK_DEVICE(xendev);
 
     object_property_set_str(OBJECT(xendev), vdev, "vdev", &local_err);
@@ -965,7 +961,7 @@ static void xen_block_device_create(XenBackendInstance *backend,
     blockdev->iothread = iothread;
     blockdev->drive = drive;
 
-    object_property_set_bool(OBJECT(xendev), true, "realized", &local_err);
+    qdev_realize_and_unref(DEVICE(xendev), BUS(xenbus), &local_err);
     if (local_err) {
         error_propagate_prepend(errp, local_err,
                                 "realization of device %s failed: ",
