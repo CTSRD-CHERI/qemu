@@ -1352,35 +1352,24 @@ bool memory_region_access_valid(MemoryRegion *mr,
                                 bool is_write,
                                 MemTxAttrs attrs)
 {
-    int access_size_min, access_size_max;
-    int access_size, i;
+    if (mr->ops->valid.accepts
+        && !mr->ops->valid.accepts(mr->opaque, addr, size, is_write, attrs)) {
+        return false;
+    }
 
     if (!mr->ops->valid.unaligned && (addr & (size - 1))) {
         return false;
     }
 
-    if (!mr->ops->valid.accepts) {
+    /* Treat zero as compatibility all valid */
+    if (!mr->ops->valid.max_access_size) {
         return true;
     }
 
-    access_size_min = mr->ops->valid.min_access_size;
-    if (!mr->ops->valid.min_access_size) {
-        access_size_min = 1;
+    if (size > mr->ops->valid.max_access_size
+        || size < mr->ops->valid.min_access_size) {
+        return false;
     }
-
-    access_size_max = mr->ops->valid.max_access_size;
-    if (!mr->ops->valid.max_access_size) {
-        access_size_max = 4;
-    }
-
-    access_size = MAX(MIN(size, access_size_max), access_size_min);
-    for (i = 0; i < size; i += access_size) {
-        if (!mr->ops->valid.accepts(mr->opaque, addr + i, access_size,
-                                    is_write, attrs)) {
-            return false;
-        }
-    }
-
     return true;
 }
 
@@ -2197,15 +2186,21 @@ void memory_region_ram_resize(MemoryRegion *mr, ram_addr_t newsize, Error **errp
     qemu_ram_resize(mr->ram_block, newsize, errp);
 }
 
+void memory_region_msync(MemoryRegion *mr, hwaddr addr, hwaddr size)
+{
+    if (mr->ram_block) {
+        qemu_ram_msync(mr->ram_block, addr, size);
+    }
+}
 
-void memory_region_do_writeback(MemoryRegion *mr, hwaddr addr, hwaddr size)
+void memory_region_writeback(MemoryRegion *mr, hwaddr addr, hwaddr size)
 {
     /*
      * Might be extended case needed to cover
      * different types of memory regions
      */
-    if (mr->ram_block && mr->dirty_log_mask) {
-        qemu_ram_writeback(mr->ram_block, addr, size);
+    if (mr->dirty_log_mask) {
+        memory_region_msync(mr, addr, size);
     }
 }
 
@@ -2876,7 +2871,7 @@ static void mtree_print_mr_owner(const MemoryRegion *mr)
 static void mtree_print_mr(const MemoryRegion *mr, unsigned int level,
                            hwaddr base,
                            MemoryRegionListHead *alias_print_queue,
-                           bool owner)
+                           bool owner, bool display_disabled)
 {
     MemoryRegionList *new_ml, *ml, *next_ml;
     MemoryRegionListHead submr_print_queue;
@@ -2886,10 +2881,6 @@ static void mtree_print_mr(const MemoryRegion *mr, unsigned int level,
 
     if (!mr) {
         return;
-    }
-
-    for (i = 0; i < level; i++) {
-        qemu_printf(MTREE_INDENT);
     }
 
     cur_start = base + mr->addr;
@@ -2920,35 +2911,46 @@ static void mtree_print_mr(const MemoryRegion *mr, unsigned int level,
             ml->mr = mr->alias;
             QTAILQ_INSERT_TAIL(alias_print_queue, ml, mrqueue);
         }
-        qemu_printf(TARGET_FMT_plx "-" TARGET_FMT_plx
-                    " (prio %d, %s%s): alias %s @%s " TARGET_FMT_plx
-                    "-" TARGET_FMT_plx "%s",
-                    cur_start, cur_end,
-                    mr->priority,
-                    mr->nonvolatile ? "nv-" : "",
-                    memory_region_type((MemoryRegion *)mr),
-                    memory_region_name(mr),
-                    memory_region_name(mr->alias),
-                    mr->alias_offset,
-                    mr->alias_offset + MR_SIZE(mr->size),
-                    mr->enabled ? "" : " [disabled]");
-        if (owner) {
-            mtree_print_mr_owner(mr);
+        if (mr->enabled || display_disabled) {
+            for (i = 0; i < level; i++) {
+                qemu_printf(MTREE_INDENT);
+            }
+            qemu_printf(TARGET_FMT_plx "-" TARGET_FMT_plx
+                        " (prio %d, %s%s): alias %s @%s " TARGET_FMT_plx
+                        "-" TARGET_FMT_plx "%s",
+                        cur_start, cur_end,
+                        mr->priority,
+                        mr->nonvolatile ? "nv-" : "",
+                        memory_region_type((MemoryRegion *)mr),
+                        memory_region_name(mr),
+                        memory_region_name(mr->alias),
+                        mr->alias_offset,
+                        mr->alias_offset + MR_SIZE(mr->size),
+                        mr->enabled ? "" : " [disabled]");
+            if (owner) {
+                mtree_print_mr_owner(mr);
+            }
+            qemu_printf("\n");
         }
     } else {
-        qemu_printf(TARGET_FMT_plx "-" TARGET_FMT_plx
-                    " (prio %d, %s%s): %s%s",
-                    cur_start, cur_end,
-                    mr->priority,
-                    mr->nonvolatile ? "nv-" : "",
-                    memory_region_type((MemoryRegion *)mr),
-                    memory_region_name(mr),
-                    mr->enabled ? "" : " [disabled]");
-        if (owner) {
-            mtree_print_mr_owner(mr);
+        if (mr->enabled || display_disabled) {
+            for (i = 0; i < level; i++) {
+                qemu_printf(MTREE_INDENT);
+            }
+            qemu_printf(TARGET_FMT_plx "-" TARGET_FMT_plx
+                        " (prio %d, %s%s): %s%s",
+                        cur_start, cur_end,
+                        mr->priority,
+                        mr->nonvolatile ? "nv-" : "",
+                        memory_region_type((MemoryRegion *)mr),
+                        memory_region_name(mr),
+                        mr->enabled ? "" : " [disabled]");
+            if (owner) {
+                mtree_print_mr_owner(mr);
+            }
+            qemu_printf("\n");
         }
     }
-    qemu_printf("\n");
 
     QTAILQ_INIT(&submr_print_queue);
 
@@ -2971,7 +2973,7 @@ static void mtree_print_mr(const MemoryRegion *mr, unsigned int level,
 
     QTAILQ_FOREACH(ml, &submr_print_queue, mrqueue) {
         mtree_print_mr(ml->mr, level + 1, cur_start,
-                       alias_print_queue, owner);
+                       alias_print_queue, owner, display_disabled);
     }
 
     QTAILQ_FOREACH_SAFE(ml, &submr_print_queue, mrqueue, next_ml) {
@@ -3082,7 +3084,7 @@ static gboolean mtree_info_flatview_free(gpointer key, gpointer value,
     return true;
 }
 
-void mtree_info(bool flatview, bool dispatch_tree, bool owner)
+void mtree_info(bool flatview, bool dispatch_tree, bool owner, bool disabled)
 {
     MemoryRegionListHead ml_head;
     MemoryRegionList *ml, *ml2;
@@ -3130,14 +3132,14 @@ void mtree_info(bool flatview, bool dispatch_tree, bool owner)
 
     QTAILQ_FOREACH(as, &address_spaces, address_spaces_link) {
         qemu_printf("address-space: %s\n", as->name);
-        mtree_print_mr(as->root, 1, 0, &ml_head, owner);
+        mtree_print_mr(as->root, 1, 0, &ml_head, owner, disabled);
         qemu_printf("\n");
     }
 
     /* print aliased regions */
     QTAILQ_FOREACH(ml, &ml_head, mrqueue) {
         qemu_printf("memory-region: %s\n", memory_region_name(ml->mr));
-        mtree_print_mr(ml->mr, 1, 0, &ml_head, owner);
+        mtree_print_mr(ml->mr, 1, 0, &ml_head, owner, disabled);
         qemu_printf("\n");
     }
 

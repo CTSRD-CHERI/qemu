@@ -21,6 +21,7 @@
 #define RISCV_BOOT_H
 
 #include "exec/cpu-defs.h"
+#include "hw/loader.h"
 
 QEMU_WARN_UNUSED_RESULT target_ulong riscv_find_and_load_firmware(
     MachineState *machine, const char *default_machine_firmware,
