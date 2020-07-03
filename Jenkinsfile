@@ -54,14 +54,8 @@ node('linux-baseline') {
             // Set the status message on the QEMU repo not the cheritest one
             gitHubStatusArgs: qemuResult.gitInfo,
             sdkCompilerOnly: true, skipTarball: true,
-            uniqueId: "mips-baremetal-testsuite",
-            afterTests: {
-                def summary = junit allowEmptyResults: false, keepLongStdio: true, testResults: 'cheritest/nosetests_qemu*.xml'
-                echo("cheritest test summary: ${summary.totalCount}, Failures: ${summary.failCount}, Skipped: ${summary.skipCount}, Passed: ${summary.passCount}")
-                if (summary.passCount == 0 || summary.totalCount == 0) {
-                    error("No tests successful?")
-                }
-            })
+            uniqueId: 'mips-baremetal-testsuite',
+            junitXmlFiles: 'cheritest/nosetests_qemu*.xml')
 }
 
 cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
