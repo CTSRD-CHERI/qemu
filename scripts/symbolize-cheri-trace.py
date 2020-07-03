@@ -84,7 +84,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with Path(args.LOGFILE).open("rb") as logfile:
-        with subprocess.Popen([args.llvm_symbolizer, "-obj=" + args.BINARY, "-pretty-print", "-demangle"],
+        with subprocess.Popen([args.llvm_symbolizer, "-obj=" + args.BINARY,
+                                "-pretty-print", "-demangle", "--output-style=LLVM"],
                               stdout=subprocess.PIPE, stdin=subprocess.PIPE) as llvm_symbolizer:
             for line in logfile.readlines():
                 sys.stdout.buffer.write(symbolize_line(llvm_symbolizer, line))
