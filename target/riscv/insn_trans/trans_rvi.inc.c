@@ -280,7 +280,7 @@ static bool trans_slti(DisasContext *ctx, arg_slti *a)
 {
 #ifdef CONFIG_TCG_LOG_INSTR
     /*
-     * If instruction tracing is enabled, we use addi zero, zero, <magic>
+     * If instruction tracing is enabled, we use slti zero, zero, <magic>
      * to perform magic-nop tracing control operations.
      * These will trigger a flush of the TCG buffer, so prepare to resume
      * from next instruction.
