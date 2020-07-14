@@ -10,7 +10,14 @@ setDefaultJobProperties([rateLimitBuilds([count: 2, durationName: 'hour', userBo
 def archiveQEMU(String target) {
     return {
         sh "rm -rf \$WORKSPACE/qemu-${target} && mv \$WORKSPACE/tarball/usr \$WORKSPACE/qemu-${target}"
-        archiveArtifacts allowEmptyArchive: false, artifacts: "qemu-${target}/bin/qemu-system-*, qemu-${target}/share/qemu/efi-pcnet.rom, qemu-${target}/share/qemu/vgabios-cirrus.bin", fingerprint: true, onlyIfSuccessful: true
+        // Add all the firmwares that are needed to boot CheriBSD
+        // Note: The RISC-V BIOS is added in archiveBBL()
+        def firmwareFiles = [
+            "efi-pcnet.rom", "vgabios-cirrus.bin", // MIPS
+            "bios-256k.bin", "efi-virtio.rom", "vgabios-stdvga.bin", // x86_64
+            "edk2-aarch64-code.fd"  // AArch64
+        ].collect { "qemu-${target}/share/qemu/$it" }.join(', ')
+        archiveArtifacts allowEmptyArchive: false, artifacts: "qemu-${target}/bin/qemu-system-*, ${firmwareFiles}" fingerprint: true, onlyIfSuccessful: true
     }
 }
 
