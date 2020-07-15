@@ -217,11 +217,9 @@ static bool cpu_type_valid(const char *cpu)
 
 static void create_kaslr_seed(VirtMachineState *vms, const char *node)
 {
-    Error *err = NULL;
     uint64_t seed;
 
-    if (qemu_guest_getrandom(&seed, sizeof(seed), &err)) {
-        error_free(err);
+    if (qemu_guest_getrandom(&seed, sizeof(seed), NULL)) {
         return;
     }
     qemu_fdt_setprop_u64(vms->fdt, node, "kaslr-seed", seed);
@@ -596,12 +594,13 @@ static void create_its(VirtMachineState *vms)
 
     dev = qdev_new(itsclass);
 
-    object_property_set_link(OBJECT(dev), OBJECT(vms->gic), "parent-gicv3",
+    object_property_set_link(OBJECT(dev), "parent-gicv3", OBJECT(vms->gic),
                              &error_abort);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, vms->memmap[VIRT_GIC_ITS].base);
 
     fdt_add_its_gic_node(vms);
+    vms->msi_controller = VIRT_MSI_CTRL_ITS;
 }
 
 static void create_v2m(VirtMachineState *vms)
@@ -622,6 +621,7 @@ static void create_v2m(VirtMachineState *vms)
     }
 
     fdt_add_v2m_gic_node(vms);
+    vms->msi_controller = VIRT_MSI_CTRL_GICV2M;
 }
 
 static void create_gic(VirtMachineState *vms)
@@ -1175,7 +1175,7 @@ static void create_smmu(const VirtMachineState *vms,
 
     dev = qdev_new("arm-smmuv3");
 
-    object_property_set_link(OBJECT(dev), OBJECT(bus), "primary-bus",
+    object_property_set_link(OBJECT(dev), "primary-bus", OBJECT(bus),
                              &error_abort);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base);
@@ -1785,8 +1785,8 @@ static void machvirt_init(MachineState *machine)
         }
 
         cpuobj = object_new(possible_cpus->cpus[n].type);
-        object_property_set_int(cpuobj, possible_cpus->cpus[n].arch_id,
-                                "mp-affinity", NULL);
+        object_property_set_int(cpuobj, "mp-affinity",
+                                possible_cpus->cpus[n].arch_id, NULL);
 
         cs = CPU(cpuobj);
         cs->cpu_index = n;
@@ -1797,43 +1797,44 @@ static void machvirt_init(MachineState *machine)
         aarch64 &= object_property_get_bool(cpuobj, "aarch64", NULL);
 
         if (!vms->secure) {
-            object_property_set_bool(cpuobj, false, "has_el3", NULL);
+            object_property_set_bool(cpuobj, "has_el3", false, NULL);
         }
 
         if (!vms->virt && object_property_find(cpuobj, "has_el2", NULL)) {
-            object_property_set_bool(cpuobj, false, "has_el2", NULL);
+            object_property_set_bool(cpuobj, "has_el2", false, NULL);
         }
 
         if (vms->psci_conduit != QEMU_PSCI_CONDUIT_DISABLED) {
-            object_property_set_int(cpuobj, vms->psci_conduit,
-                                    "psci-conduit", NULL);
+            object_property_set_int(cpuobj, "psci-conduit", vms->psci_conduit,
+                                    NULL);
 
             /* Secondary CPUs start in PSCI powered-down state */
             if (n > 0) {
-                object_property_set_bool(cpuobj, true,
-                                         "start-powered-off", NULL);
+                object_property_set_bool(cpuobj, "start-powered-off", true,
+                                         NULL);
             }
         }
 
         if (vmc->kvm_no_adjvtime &&
             object_property_find(cpuobj, "kvm-no-adjvtime", NULL)) {
-            object_property_set_bool(cpuobj, true, "kvm-no-adjvtime", NULL);
+            object_property_set_bool(cpuobj, "kvm-no-adjvtime", true, NULL);
         }
 
         if (vmc->no_pmu && object_property_find(cpuobj, "pmu", NULL)) {
-            object_property_set_bool(cpuobj, false, "pmu", NULL);
+            object_property_set_bool(cpuobj, "pmu", false, NULL);
         }
 
         if (object_property_find(cpuobj, "reset-cbar", NULL)) {
-            object_property_set_int(cpuobj, vms->memmap[VIRT_CPUPERIPHS].base,
-                                    "reset-cbar", &error_abort);
+            object_property_set_int(cpuobj, "reset-cbar",
+                                    vms->memmap[VIRT_CPUPERIPHS].base,
+                                    &error_abort);
         }
 
-        object_property_set_link(cpuobj, OBJECT(sysmem), "memory",
+        object_property_set_link(cpuobj, "memory", OBJECT(sysmem),
                                  &error_abort);
         if (vms->secure) {
-            object_property_set_link(cpuobj, OBJECT(secure_sysmem),
-                                     "secure-memory", &error_abort);
+            object_property_set_link(cpuobj, "secure-memory",
+                                     OBJECT(secure_sysmem), &error_abort);
         }
 
         /*
@@ -1857,11 +1858,12 @@ static void machvirt_init(MachineState *machine)
                 }
             }
 
-            object_property_set_link(cpuobj, OBJECT(tag_sysmem),
-                                     "tag-memory", &error_abort);
+            object_property_set_link(cpuobj, "tag-memory", OBJECT(tag_sysmem),
+                                     &error_abort);
             if (vms->secure) {
-                object_property_set_link(cpuobj, OBJECT(secure_tag_sysmem),
-                                         "secure-tag-memory", &error_abort);
+                object_property_set_link(cpuobj, "secure-tag-memory",
+                                         OBJECT(secure_tag_sysmem),
+                                         &error_abort);
             }
         }
 
@@ -2200,8 +2202,36 @@ out:
 static void virt_machine_device_pre_plug_cb(HotplugHandler *hotplug_dev,
                                             DeviceState *dev, Error **errp)
 {
+    VirtMachineState *vms = VIRT_MACHINE(hotplug_dev);
+
     if (object_dynamic_cast(OBJECT(dev), TYPE_PC_DIMM)) {
         virt_memory_pre_plug(hotplug_dev, dev, errp);
+    } else if (object_dynamic_cast(OBJECT(dev), TYPE_VIRTIO_IOMMU_PCI)) {
+        hwaddr db_start = 0, db_end = 0;
+        char *resv_prop_str;
+
+        switch (vms->msi_controller) {
+        case VIRT_MSI_CTRL_NONE:
+            return;
+        case VIRT_MSI_CTRL_ITS:
+            /* GITS_TRANSLATER page */
+            db_start = base_memmap[VIRT_GIC_ITS].base + 0x10000;
+            db_end = base_memmap[VIRT_GIC_ITS].base +
+                     base_memmap[VIRT_GIC_ITS].size - 1;
+            break;
+        case VIRT_MSI_CTRL_GICV2M:
+            /* MSI_SETSPI_NS page */
+            db_start = base_memmap[VIRT_GIC_V2M].base;
+            db_end = db_start + base_memmap[VIRT_GIC_V2M].size - 1;
+            break;
+        }
+        resv_prop_str = g_strdup_printf("0x%"PRIx64":0x%"PRIx64":%u",
+                                        db_start, db_end,
+                                        VIRTIO_IOMMU_RESV_MEM_T_MSI);
+
+        qdev_prop_set_uint32(dev, "len-reserved-regions", 1);
+        qdev_prop_set_string(dev, "reserved-regions[0]", resv_prop_str);
+        g_free(resv_prop_str);
     }
 }
 
@@ -2373,6 +2403,7 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
     hc->unplug = virt_machine_device_unplug_cb;
     mc->nvdimm_supported = true;
     mc->auto_enable_numa_with_memhp = true;
+    mc->auto_enable_numa_with_memdev = true;
     mc->default_ram_id = "mach-virt.ram";
 
     object_class_property_add(oc, "acpi", "OnOffAuto",
@@ -2482,9 +2513,13 @@ DEFINE_VIRT_MACHINE_AS_LATEST(5, 1)
 
 static void virt_machine_5_0_options(MachineClass *mc)
 {
+    VirtMachineClass *vmc = VIRT_MACHINE_CLASS(OBJECT_CLASS(mc));
+
     virt_machine_5_1_options(mc);
     compat_props_add(mc->compat_props, hw_compat_5_0, hw_compat_5_0_len);
     mc->numa_mem_supported = true;
+    vmc->acpi_expose_flash = true;
+    mc->auto_enable_numa_with_memdev = false;
 }
 DEFINE_VIRT_MACHINE(5, 0)
 

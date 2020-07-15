@@ -159,19 +159,19 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
     for (i = 0; i < smp_cpus; i++) {
         o = OBJECT(&s->cpu[i]);
 
-        object_property_set_int(o, QEMU_PSCI_CONDUIT_SMC,
-                                "psci-conduit", &error_abort);
+        object_property_set_int(o, "psci-conduit", QEMU_PSCI_CONDUIT_SMC,
+                                &error_abort);
 
         /* On uniprocessor, the CBAR is set to 0 */
         if (smp_cpus > 1) {
-            object_property_set_int(o, FSL_IMX7_A7MPCORE_ADDR,
-                                    "reset-cbar", &error_abort);
+            object_property_set_int(o, "reset-cbar", FSL_IMX7_A7MPCORE_ADDR,
+                                    &error_abort);
         }
 
         if (i) {
             /* Secondary CPUs start in PSCI powered-down state */
-            object_property_set_bool(o, true,
-                                     "start-powered-off", &error_abort);
+            object_property_set_bool(o, "start-powered-off", true,
+                                     &error_abort);
         }
 
         qdev_realize(DEVICE(o), NULL, &error_abort);
@@ -180,11 +180,10 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
     /*
      * A7MPCORE
      */
-    object_property_set_int(OBJECT(&s->a7mpcore), smp_cpus, "num-cpu",
+    object_property_set_int(OBJECT(&s->a7mpcore), "num-cpu", smp_cpus,
                             &error_abort);
-    object_property_set_int(OBJECT(&s->a7mpcore),
-                            FSL_IMX7_MAX_IRQ + GIC_INTERNAL,
-                            "num-irq", &error_abort);
+    object_property_set_int(OBJECT(&s->a7mpcore), "num-irq",
+                            FSL_IMX7_MAX_IRQ + GIC_INTERNAL, &error_abort);
 
     sysbus_realize(SYS_BUS_DEVICE(&s->a7mpcore), &error_abort);
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->a7mpcore), 0, FSL_IMX7_A7MPCORE_ADDR);
@@ -364,8 +363,10 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
             FSL_IMX7_ENET2_ADDR,
         };
 
-        object_property_set_uint(OBJECT(&s->eth[i]), FSL_IMX7_ETH_NUM_TX_RINGS,
-                                 "tx-ring-num", &error_abort);
+        object_property_set_uint(OBJECT(&s->eth[i]), "phy-num",
+                                 s->phy_num[i], &error_abort);
+        object_property_set_uint(OBJECT(&s->eth[i]), "tx-ring-num",
+                                 FSL_IMX7_ETH_NUM_TX_RINGS, &error_abort);
         qdev_set_nic_properties(DEVICE(&s->eth[i]), &nd_table[i]);
         sysbus_realize(SYS_BUS_DEVICE(&s->eth[i]), &error_abort);
 
@@ -393,8 +394,8 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
             FSL_IMX7_USDHC3_IRQ,
         };
 
-        object_property_set_uint(OBJECT(&s->usdhc[i]), SDHCI_VENDOR_IMX,
-                                 "vendor", &error_abort);
+        object_property_set_uint(OBJECT(&s->usdhc[i]), "vendor",
+                                 SDHCI_VENDOR_IMX, &error_abort);
         sysbus_realize(SYS_BUS_DEVICE(&s->usdhc[i]), &error_abort);
 
         sysbus_mmio_map(SYS_BUS_DEVICE(&s->usdhc[i]), 0,
@@ -432,8 +433,8 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
             FSL_IMX7_WDOG4_IRQ,
         };
 
-        object_property_set_bool(OBJECT(&s->wdt[i]), true, "pretimeout-support",
-                                 &error_abort);
+        object_property_set_bool(OBJECT(&s->wdt[i]), "pretimeout-support",
+                                 true, &error_abort);
         sysbus_realize(SYS_BUS_DEVICE(&s->wdt[i]), &error_abort);
 
         sysbus_mmio_map(SYS_BUS_DEVICE(&s->wdt[i]), 0, FSL_IMX7_WDOGn_ADDR[i]);
@@ -551,10 +552,17 @@ static void fsl_imx7_realize(DeviceState *dev, Error **errp)
                                 FSL_IMX7_PCIE_PHY_SIZE);
 }
 
+static Property fsl_imx7_properties[] = {
+    DEFINE_PROP_UINT32("fec1-phy-num", FslIMX7State, phy_num[0], 0),
+    DEFINE_PROP_UINT32("fec2-phy-num", FslIMX7State, phy_num[1], 1),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
 static void fsl_imx7_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
 
+    device_class_set_props(dc, fsl_imx7_properties);
     dc->realize = fsl_imx7_realize;
 
     /* Reason: Uses serial_hds and nd_table in realize() directly */

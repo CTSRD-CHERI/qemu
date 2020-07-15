@@ -112,6 +112,9 @@
 #include <linux/if_alg.h>
 #include <linux/rtc.h>
 #include <sound/asound.h>
+#ifdef HAVE_DRM_H
+#include <libdrm/drm.h>
+#endif
 #include "linux_loop.h"
 #include "uname.h"
 
@@ -814,8 +817,13 @@ safe_syscall4(int, clock_nanosleep, const clockid_t, clock, int, flags,
               const struct timespec *, req, struct timespec *, rem)
 #endif
 #ifdef __NR_ipc
+#ifdef __s390x__
+safe_syscall5(int, ipc, int, call, long, first, long, second, long, third,
+              void *, ptr)
+#else
 safe_syscall6(int, ipc, int, call, long, first, long, second, long, third,
               void *, ptr, long, fifth)
+#endif
 #endif
 #ifdef __NR_msgsnd
 safe_syscall4(int, msgsnd, int, msgid, const void *, msgp, size_t, sz,
@@ -1227,7 +1235,8 @@ static inline abi_long copy_to_user_timeval64(abi_ulong target_tv_addr,
     defined(TARGET_NR_pselect6) || defined(TARGET_NR_pselect6) || \
     defined(TARGET_NR_nanosleep) || defined(TARGET_NR_clock_settime) || \
     defined(TARGET_NR_utimensat) || defined(TARGET_NR_mq_timedsend) || \
-    defined(TARGET_NR_mq_timedreceive)
+    defined(TARGET_NR_mq_timedreceive) || defined(TARGET_NR_ipc) || \
+    defined(TARGET_NR_semop) || defined(TARGET_NR_semtimedop)
 static inline abi_long target_to_host_timespec(struct timespec *host_ts,
                                                abi_ulong target_addr)
 {
@@ -2987,7 +2996,7 @@ static abi_long do_socket(int domain, int type, int protocol)
 #endif
          protocol == NETLINK_KOBJECT_UEVENT ||
          protocol == NETLINK_AUDIT)) {
-        return -TARGET_EPFNOSUPPORT;
+        return -TARGET_EPROTONOSUPPORT;
     }
 
     if (domain == AF_PACKET ||
@@ -3875,25 +3884,53 @@ static inline abi_long target_to_host_sembuf(struct sembuf *host_sembuf,
     return 0;
 }
 
-static inline abi_long do_semop(int semid, abi_long ptr, unsigned nsops)
+#if defined(TARGET_NR_ipc) || defined(TARGET_NR_semop) || \
+    defined(TARGET_NR_semtimedop)
+
+/*
+ * This macro is required to handle the s390 variants, which passes the
+ * arguments in a different order than default.
+ */
+#ifdef __s390x__
+#define SEMTIMEDOP_IPC_ARGS(__nsops, __sops, __timeout) \
+  (__nsops), (__timeout), (__sops)
+#else
+#define SEMTIMEDOP_IPC_ARGS(__nsops, __sops, __timeout) \
+  (__nsops), 0, (__sops), (__timeout)
+#endif
+
+static inline abi_long do_semtimedop(int semid,
+                                     abi_long ptr,
+                                     unsigned nsops,
+                                     abi_long timeout)
 {
     struct sembuf sops[nsops];
+    struct timespec ts, *pts = NULL;
     abi_long ret;
+
+    if (timeout) {
+        pts = &ts;
+        if (target_to_host_timespec(pts, timeout)) {
+            return -TARGET_EFAULT;
+        }
+    }
 
     if (target_to_host_sembuf(sops, ptr, nsops))
         return -TARGET_EFAULT;
 
     ret = -TARGET_ENOSYS;
 #ifdef __NR_semtimedop
-    ret = get_errno(safe_semtimedop(semid, sops, nsops, NULL));
+    ret = get_errno(safe_semtimedop(semid, sops, nsops, pts));
 #endif
 #ifdef __NR_ipc
     if (ret == -TARGET_ENOSYS) {
-        ret = get_errno(safe_ipc(IPCOP_semtimedop, semid, nsops, 0, sops, 0));
+        ret = get_errno(safe_ipc(IPCOP_semtimedop, semid,
+                                 SEMTIMEDOP_IPC_ARGS(nsops, sops, (long)pts)));
     }
 #endif
     return ret;
 }
+#endif
 
 struct target_msqid_ds
 {
@@ -4053,8 +4090,13 @@ static inline abi_long do_msgsnd(int msqid, abi_long msgp,
 #endif
 #ifdef __NR_ipc
     if (ret == -TARGET_ENOSYS) {
+#ifdef __s390x__
+        ret = get_errno(safe_ipc(IPCOP_msgsnd, msqid, msgsz, msgflg,
+                                 host_mb));
+#else
         ret = get_errno(safe_ipc(IPCOP_msgsnd, msqid, msgsz, msgflg,
                                  host_mb, 0));
+#endif
     }
 #endif
     g_free(host_mb);
@@ -4062,6 +4104,20 @@ static inline abi_long do_msgsnd(int msqid, abi_long msgp,
 
     return ret;
 }
+
+#ifdef __NR_ipc
+#if defined(__sparc__)
+/* SPARC for msgrcv it does not use the kludge on final 2 arguments.  */
+#define MSGRCV_ARGS(__msgp, __msgtyp) __msgp, __msgtyp
+#elif defined(__s390x__)
+/* The s390 sys_ipc variant has only five parameters.  */
+#define MSGRCV_ARGS(__msgp, __msgtyp) \
+    ((long int[]){(long int)__msgp, __msgtyp})
+#else
+#define MSGRCV_ARGS(__msgp, __msgtyp) \
+    ((long int[]){(long int)__msgp, __msgtyp}), 0
+#endif
+#endif
 
 static inline abi_long do_msgrcv(int msqid, abi_long msgp,
                                  ssize_t msgsz, abi_long msgtyp,
@@ -4091,7 +4147,7 @@ static inline abi_long do_msgrcv(int msqid, abi_long msgp,
 #ifdef __NR_ipc
     if (ret == -TARGET_ENOSYS) {
         ret = get_errno(safe_ipc(IPCOP_CALL(1, IPCOP_msgrcv), msqid, msgsz,
-                        msgflg, host_mb, msgtyp));
+                        msgflg, MSGRCV_ARGS(host_mb, msgtyp)));
     }
 #endif
 
@@ -4369,7 +4425,20 @@ static abi_long do_ipc(CPUArchState *cpu_env,
 
     switch (call) {
     case IPCOP_semop:
-        ret = do_semop(first, ptr, second);
+        ret = do_semtimedop(first, ptr, second, 0);
+        break;
+    case IPCOP_semtimedop:
+    /*
+     * The s390 sys_ipc variant has only five parameters instead of six
+     * (as for default variant) and the only difference is the handling of
+     * SEMTIMEDOP where on s390 the third parameter is used as a pointer
+     * to a struct timespec where the generic variant uses fifth parameter.
+     */
+#if defined(TARGET_S390X)
+        ret = do_semtimedop(first, ptr, second, third);
+#else
+        ret = do_semtimedop(first, ptr, second, fifth);
+#endif
         break;
 
     case IPCOP_semget:
@@ -4477,24 +4546,6 @@ STRUCT_MAX
 #include "syscall_types.h"
 #undef STRUCT
 #undef STRUCT_SPECIAL
-
-typedef struct IOCTLEntry IOCTLEntry;
-
-typedef abi_long do_ioctl_fn(const IOCTLEntry *ie, uint8_t *buf_temp,
-                             int fd, int cmd, abi_long arg);
-
-struct IOCTLEntry {
-    int target_cmd;
-    unsigned int host_cmd;
-    const char *name;
-    int access;
-    do_ioctl_fn *do_ioctl;
-    const argtype arg_type[5];
-};
-
-#define IOC_R 0x0001
-#define IOC_W 0x0002
-#define IOC_RW (IOC_R | IOC_W)
 
 #define MAX_STRUCT_SIZE 4096
 
@@ -5276,7 +5327,102 @@ static abi_long do_ioctl_tiocgptpeer(const IOCTLEntry *ie, uint8_t *buf_temp,
 }
 #endif
 
-static IOCTLEntry ioctl_entries[] = {
+#ifdef HAVE_DRM_H
+
+static void unlock_drm_version(struct drm_version *host_ver,
+                               struct target_drm_version *target_ver,
+                               bool copy)
+{
+    unlock_user(host_ver->name, target_ver->name,
+                                copy ? host_ver->name_len : 0);
+    unlock_user(host_ver->date, target_ver->date,
+                                copy ? host_ver->date_len : 0);
+    unlock_user(host_ver->desc, target_ver->desc,
+                                copy ? host_ver->desc_len : 0);
+}
+
+static inline abi_long target_to_host_drmversion(struct drm_version *host_ver,
+                                          struct target_drm_version *target_ver)
+{
+    memset(host_ver, 0, sizeof(*host_ver));
+
+    __get_user(host_ver->name_len, &target_ver->name_len);
+    if (host_ver->name_len) {
+        host_ver->name = lock_user(VERIFY_WRITE, target_ver->name,
+                                   target_ver->name_len, 0);
+        if (!host_ver->name) {
+            return -EFAULT;
+        }
+    }
+
+    __get_user(host_ver->date_len, &target_ver->date_len);
+    if (host_ver->date_len) {
+        host_ver->date = lock_user(VERIFY_WRITE, target_ver->date,
+                                   target_ver->date_len, 0);
+        if (!host_ver->date) {
+            goto err;
+        }
+    }
+
+    __get_user(host_ver->desc_len, &target_ver->desc_len);
+    if (host_ver->desc_len) {
+        host_ver->desc = lock_user(VERIFY_WRITE, target_ver->desc,
+                                   target_ver->desc_len, 0);
+        if (!host_ver->desc) {
+            goto err;
+        }
+    }
+
+    return 0;
+err:
+    unlock_drm_version(host_ver, target_ver, false);
+    return -EFAULT;
+}
+
+static inline void host_to_target_drmversion(
+                                          struct target_drm_version *target_ver,
+                                          struct drm_version *host_ver)
+{
+    __put_user(host_ver->version_major, &target_ver->version_major);
+    __put_user(host_ver->version_minor, &target_ver->version_minor);
+    __put_user(host_ver->version_patchlevel, &target_ver->version_patchlevel);
+    __put_user(host_ver->name_len, &target_ver->name_len);
+    __put_user(host_ver->date_len, &target_ver->date_len);
+    __put_user(host_ver->desc_len, &target_ver->desc_len);
+    unlock_drm_version(host_ver, target_ver, true);
+}
+
+static abi_long do_ioctl_drm(const IOCTLEntry *ie, uint8_t *buf_temp,
+                             int fd, int cmd, abi_long arg)
+{
+    struct drm_version *ver;
+    struct target_drm_version *target_ver;
+    abi_long ret;
+
+    switch (ie->host_cmd) {
+    case DRM_IOCTL_VERSION:
+        if (!lock_user_struct(VERIFY_WRITE, target_ver, arg, 0)) {
+            return -TARGET_EFAULT;
+        }
+        ver = (struct drm_version *)buf_temp;
+        ret = target_to_host_drmversion(ver, target_ver);
+        if (!is_error(ret)) {
+            ret = get_errno(safe_ioctl(fd, ie->host_cmd, ver));
+            if (is_error(ret)) {
+                unlock_drm_version(ver, target_ver, false);
+            } else {
+                host_to_target_drmversion(target_ver, ver);
+            }
+        }
+        unlock_user_struct(target_ver, arg, 0);
+        return ret;
+    }
+    return -TARGET_ENOSYS;
+}
+
+#endif
+
+IOCTLEntry ioctl_entries[] = {
 #define IOCTL(cmd, access, ...) \
     { TARGET_ ## cmd, cmd, #cmd, access, 0, {  __VA_ARGS__ } },
 #define IOCTL_SPECIAL(cmd, access, dofn, ...)                      \
@@ -6614,22 +6760,6 @@ void syscall_init(void)
     }
 }
 
-#if TARGET_ABI_BITS == 32
-static inline uint64_t target_offset64(uint32_t word0, uint32_t word1)
-{
-#ifdef TARGET_WORDS_BIGENDIAN
-    return ((uint64_t)word0 << 32) | word1;
-#else
-    return ((uint64_t)word1 << 32) | word0;
-#endif
-}
-#else /* TARGET_ABI_BITS == 32 */
-static inline uint64_t target_offset64(uint64_t word0, uint64_t word1)
-{
-    return word0;
-}
-#endif /* TARGET_ABI_BITS != 32 */
-
 #ifdef TARGET_NR_truncate64
 static inline abi_long target_truncate64(void *cpu_env, const char *arg1,
                                          abi_long arg2,
@@ -7658,7 +7788,7 @@ static abi_long do_syscall1(void *cpu_env, int num, abi_long arg1,
         if (CPU_NEXT(first_cpu)) {
             TaskState *ts = cpu->opaque;
 
-            object_property_set_bool(OBJECT(cpu), false, "realized", NULL);
+            object_property_set_bool(OBJECT(cpu), "realized", false, NULL);
             object_unref(OBJECT(cpu));
             /*
              * At this point the CPU should be unrealized and removed
@@ -9620,7 +9750,11 @@ static abi_long do_syscall1(void *cpu_env, int num, abi_long arg1,
 #endif
 #ifdef TARGET_NR_semop
     case TARGET_NR_semop:
-        return do_semop(arg1, arg2, arg3);
+        return do_semtimedop(arg1, arg2, arg3, 0);
+#endif
+#ifdef TARGET_NR_semtimedop
+    case TARGET_NR_semtimedop:
+        return do_semtimedop(arg1, arg2, arg3, arg4);
 #endif
 #ifdef TARGET_NR_semctl
     case TARGET_NR_semctl:
@@ -12467,7 +12601,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
                       arg5, arg6, arg7, arg8);
 
     if (unlikely(qemu_loglevel_mask(LOG_STRACE))) {
-        print_syscall_ret(num, ret);
+        print_syscall_ret(num, ret, arg1, arg2, arg3, arg4, arg5, arg6);
     }
 
     record_syscall_return(cpu, num, ret);

@@ -21,6 +21,7 @@
 #define RISCV_CPU_H
 
 #include "hw/core/cpu.h"
+#include "hw/registerfields.h"
 #include "exec/cpu-defs.h"
 #include "qemu/units.h"
 #include "fpu/softfloat-types.h"
@@ -61,6 +62,7 @@
 #define RVA RV('A')
 #define RVF RV('F')
 #define RVD RV('D')
+#define RVV RV('V')
 #define RVC RV('C')
 #define RVS RV('S')
 #define RVU RV('U')
@@ -79,6 +81,8 @@ enum {
 #define PRIV_VERSION_1_10_0 0x00011000
 #define PRIV_VERSION_1_11_0 0x00011100
 
+#define VEXT_VERSION_0_07_1 0x00000701
+
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
 #define TRANSLATE_CHERI_FAIL 3
 #endif
@@ -96,6 +100,14 @@ typedef struct CPURISCVState CPURISCVState;
 #endif
 #include "pmp.h"
 
+#define RV_VLEN_MAX 256
+
+FIELD(VTYPE, VLMUL, 0, 2)
+FIELD(VTYPE, VSEW, 2, 3)
+FIELD(VTYPE, VEDIV, 5, 2)
+FIELD(VTYPE, RESERVED, 7, sizeof(target_ulong) * 8 - 9)
+FIELD(VTYPE, VILL, sizeof(target_ulong) * 8 - 1, 1)
+
 struct CPURISCVState {
 #ifdef TARGET_CHERI
     struct GPCapRegs gpcapregs;
@@ -103,6 +115,15 @@ struct CPURISCVState {
     target_ulong gpr[32];
 #endif
     uint64_t fpr[32]; /* assume both F and D extensions */
+
+    /* vector coprocessor state. */
+    uint64_t vreg[32 * RV_VLEN_MAX / 64] QEMU_ALIGNED(16);
+    target_ulong vxrm;
+    target_ulong vxsat;
+    target_ulong vl;
+    target_ulong vstart;
+    target_ulong vtype;
+
 #ifdef TARGET_CHERI
     cap_register_t PCC; // SCR 0 Program counter cap. (PCC) TODO: implement this properly
     cap_register_t DDC; // SCR 1 Default data cap. (DDC)
@@ -138,6 +159,7 @@ struct CPURISCVState {
 #endif
 
     target_ulong priv_ver;
+    target_ulong vext_ver;
     target_ulong misa;
     target_ulong misa_mask;
 
@@ -364,6 +386,7 @@ typedef struct RISCVCPU {
         bool ext_s;
         bool ext_u;
         bool ext_h;
+        bool ext_v;
         bool ext_counters;
         bool ext_ifencei;
         bool ext_icsr;
@@ -373,6 +396,9 @@ typedef struct RISCVCPU {
 
         char *priv_spec;
         char *user_spec;
+        char *vext_spec;
+        uint16_t vlen;
+        uint16_t elen;
         bool mmu;
         bool pmp;
     } cfg;
@@ -524,6 +550,100 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
 target_ulong riscv_cpu_get_fflags(CPURISCVState *env);
 void riscv_cpu_set_fflags(CPURISCVState *env, target_ulong);
 
+#define TB_FLAGS_MMU_MASK   3
+#define TB_FLAGS_MSTATUS_FS MSTATUS_FS
+
+typedef CPURISCVState CPUArchState;
+typedef RISCVCPU ArchCPU;
+#include "exec/cpu-all.h"
+#include "cpu_cheri.h"
+
+FIELD(TB_FLAGS, VL_EQ_VLMAX, 2, 1)
+FIELD(TB_FLAGS, LMUL, 3, 2)
+FIELD(TB_FLAGS, SEW, 5, 3)
+FIELD(TB_FLAGS, VILL, 8, 1)
+
+/*
+ * A simplification for VLMAX
+ * = (1 << LMUL) * VLEN / (8 * (1 << SEW))
+ * = (VLEN << LMUL) / (8 << SEW)
+ * = (VLEN << LMUL) >> (SEW + 3)
+ * = VLEN >> (SEW + 3 - LMUL)
+ */
+static inline uint32_t vext_get_vlmax(RISCVCPU *cpu, target_ulong vtype)
+{
+    uint8_t sew, lmul;
+
+    sew = FIELD_EX64(vtype, VTYPE, VSEW);
+    lmul = FIELD_EX64(vtype, VTYPE, VLMUL);
+    return cpu->cfg.vlen >> (sew + 3 - lmul);
+}
+
+static inline void
+riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
+                           target_ulong *cs_base, target_ulong *cs_top,
+                           uint32_t *cheri_flags, uint32_t *pflags)
+{
+    uint32_t flags = 0;
+    *pc = PC_ADDR(env); // We want the full virtual address here (no offset)
+#ifdef TARGET_CHERI
+    cheri_cpu_get_tb_cpu_state(&env->PCC, &env->DDC, cs_base, cs_top,
+                               cheri_flags);
+#else
+    *cs_base = 0;
+#endif
+    if (riscv_has_ext(env, RVV)) {
+        uint32_t vlmax = vext_get_vlmax(env_archcpu(env), env->vtype);
+        bool vl_eq_vlmax = (env->vstart == 0) && (vlmax == env->vl);
+        flags = FIELD_DP32(flags, TB_FLAGS, VILL,
+                    FIELD_EX64(env->vtype, VTYPE, VILL));
+        flags = FIELD_DP32(flags, TB_FLAGS, SEW,
+                    FIELD_EX64(env->vtype, VTYPE, VSEW));
+        flags = FIELD_DP32(flags, TB_FLAGS, LMUL,
+                    FIELD_EX64(env->vtype, VTYPE, VLMUL));
+        flags = FIELD_DP32(flags, TB_FLAGS, VL_EQ_VLMAX, vl_eq_vlmax);
+    } else {
+        flags = FIELD_DP32(flags, TB_FLAGS, VILL, 1);
+    }
+
+#ifdef CONFIG_USER_ONLY
+    flags |= TB_FLAGS_MSTATUS_FS;
+#else
+    flags |= cpu_mmu_index(env, 0);
+    if (riscv_cpu_fp_enabled(env)) {
+        flags |= env->mstatus & MSTATUS_FS;
+    }
+#endif
+    *pflags = flags;
+}
+// Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets
+#define cpu_get_tb_cpu_state_6 riscv_cpu_get_tb_cpu_state
+
+#ifdef CONFIG_TCG_LOG_INSTR
+#define RISCV_LOG_INSTR_CPU_U QEMU_LOG_INSTR_CPU_USER
+#define RISCV_LOG_INSTR_CPU_S QEMU_LOG_INSTR_CPU_SUPERVISOR
+#define RISCV_LOG_INSTR_CPU_H QEMU_LOG_INSTR_CPU_HYPERVISOR
+#define RISCV_LOG_INSTR_CPU_M QEMU_LOG_INSTR_CPU_TARGET1
+extern const char * const riscv_cpu_mode_names[];
+
+static inline bool cpu_in_user_mode(CPURISCVState *env)
+{
+    return env->priv == PRV_U;
+}
+
+static inline unsigned cpu_get_asid(CPURISCVState *env)
+{
+    return get_field(env->satp, SATP_ASID);
+}
+
+static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode)
+{
+    if (riscv_cpu_mode_names[mode])
+        return riscv_cpu_mode_names[mode];
+    return "<invalid>";
+}
+#endif
+
 int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
                 target_ulong new_value, target_ulong write_mask, uintptr_t retpc);
 int riscv_csrrw_debug(CPURISCVState *env, int csrno, target_ulong *ret_value,
@@ -565,63 +685,5 @@ void riscv_get_csr_ops(int csrno, riscv_csr_operations *ops);
 void riscv_set_csr_ops(int csrno, riscv_csr_operations *ops);
 
 void riscv_cpu_register_gdb_regs_for_features(CPUState *cs);
-
-typedef CPURISCVState CPUArchState;
-typedef RISCVCPU ArchCPU;
-
-#define TB_FLAGS_MMU_MASK   3
-#define TB_FLAGS_MSTATUS_FS MSTATUS_FS
-
-#include "exec/cpu-all.h"
-#include "cpu_cheri.h"
-
-static inline void
-riscv_cpu_get_tb_cpu_state(CPURISCVState *env, target_ulong *pc,
-                           target_ulong *cs_base, target_ulong *cs_top,
-                           uint32_t *cheri_flags, uint32_t *flags)
-{
-    *pc = PC_ADDR(env); // We want the full virtual address here (no offset)
-#ifdef CONFIG_USER_ONLY
-    *flags = TB_FLAGS_MSTATUS_FS;
-#else
-    *flags = cpu_mmu_index(env, 0);
-    if (riscv_cpu_fp_enabled(env)) {
-        *flags |= env->mstatus & MSTATUS_FS;
-    }
-#endif
-#ifdef TARGET_CHERI
-    cheri_cpu_get_tb_cpu_state(&env->PCC, &env->DDC, cs_base, cs_top,
-                               cheri_flags);
-#else
-    *cs_base = 0;
-#endif
-}
-// Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets
-#define cpu_get_tb_cpu_state_6 riscv_cpu_get_tb_cpu_state
-
-#ifdef CONFIG_TCG_LOG_INSTR
-#define RISCV_LOG_INSTR_CPU_U QEMU_LOG_INSTR_CPU_USER
-#define RISCV_LOG_INSTR_CPU_S QEMU_LOG_INSTR_CPU_SUPERVISOR
-#define RISCV_LOG_INSTR_CPU_H QEMU_LOG_INSTR_CPU_HYPERVISOR
-#define RISCV_LOG_INSTR_CPU_M QEMU_LOG_INSTR_CPU_TARGET1
-extern const char * const riscv_cpu_mode_names[];
-
-static inline bool cpu_in_user_mode(CPURISCVState *env)
-{
-    return env->priv == PRV_U;
-}
-
-static inline unsigned cpu_get_asid(CPURISCVState *env)
-{
-    return get_field(env->satp, SATP_ASID);
-}
-
-static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode)
-{
-    if (riscv_cpu_mode_names[mode])
-        return riscv_cpu_mode_names[mode];
-    return "<invalid>";
-}
-#endif
 
 #endif /* RISCV_CPU_H */

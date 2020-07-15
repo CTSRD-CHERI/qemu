@@ -1032,6 +1032,34 @@ void *fw_cfg_modify_file(FWCfgState *s, const char *filename,
     return NULL;
 }
 
+void fw_cfg_add_from_generator(FWCfgState *s, const char *filename,
+                               const char *gen_id, Error **errp)
+{
+    ERRP_GUARD();
+    FWCfgDataGeneratorClass *klass;
+    GByteArray *array;
+    Object *obj;
+    gsize size;
+
+    obj = object_resolve_path_component(object_get_objects_root(), gen_id);
+    if (!obj) {
+        error_setg(errp, "Cannot find object ID '%s'", gen_id);
+        return;
+    }
+    if (!object_dynamic_cast(obj, TYPE_FW_CFG_DATA_GENERATOR_INTERFACE)) {
+        error_setg(errp, "Object ID '%s' is not a '%s' subclass",
+                   gen_id, TYPE_FW_CFG_DATA_GENERATOR_INTERFACE);
+        return;
+    }
+    klass = FW_CFG_DATA_GENERATOR_GET_CLASS(obj);
+    array = klass->get_data(obj, errp);
+    if (*errp) {
+        return;
+    }
+    size = array->len;
+    fw_cfg_add_file(s, filename, g_byte_array_free(array, TRUE), size);
+}
+
 static void fw_cfg_machine_reset(void *opaque)
 {
     MachineClass *mc = MACHINE_GET_CLASS(qdev_get_machine());
@@ -1231,12 +1259,11 @@ static Property fw_cfg_io_properties[] = {
 
 static void fw_cfg_io_realize(DeviceState *dev, Error **errp)
 {
+    ERRP_GUARD();
     FWCfgIoState *s = FW_CFG_IO(dev);
-    Error *local_err = NULL;
 
-    fw_cfg_file_slots_allocate(FW_CFG(s), &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
+    fw_cfg_file_slots_allocate(FW_CFG(s), errp);
+    if (*errp) {
         return;
     }
 
@@ -1282,14 +1309,13 @@ static Property fw_cfg_mem_properties[] = {
 
 static void fw_cfg_mem_realize(DeviceState *dev, Error **errp)
 {
+    ERRP_GUARD();
     FWCfgMemState *s = FW_CFG_MEM(dev);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
     const MemoryRegionOps *data_ops = &fw_cfg_data_mem_ops;
-    Error *local_err = NULL;
 
-    fw_cfg_file_slots_allocate(FW_CFG(s), &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
+    fw_cfg_file_slots_allocate(FW_CFG(s), errp);
+    if (*errp) {
         return;
     }
 
@@ -1333,12 +1359,18 @@ static const TypeInfo fw_cfg_mem_info = {
     .class_init    = fw_cfg_mem_class_init,
 };
 
+static const TypeInfo fw_cfg_data_generator_interface_info = {
+    .parent = TYPE_INTERFACE,
+    .name = TYPE_FW_CFG_DATA_GENERATOR_INTERFACE,
+    .class_size = sizeof(FWCfgDataGeneratorClass),
+};
 
 static void fw_cfg_register_types(void)
 {
     type_register_static(&fw_cfg_info);
     type_register_static(&fw_cfg_io_info);
     type_register_static(&fw_cfg_mem_info);
+    type_register_static(&fw_cfg_data_generator_interface_info);
 }
 
 type_init(fw_cfg_register_types)

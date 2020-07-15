@@ -532,7 +532,6 @@ static SocketAddress *sd_server_config(QDict *options, Error **errp)
     QDict *server = NULL;
     Visitor *iv = NULL;
     SocketAddress *saddr = NULL;
-    Error *local_err = NULL;
 
     qdict_extract_subqdict(options, &server, "server.");
 
@@ -541,9 +540,7 @@ static SocketAddress *sd_server_config(QDict *options, Error **errp)
         goto done;
     }
 
-    visit_type_SocketAddress(iv, NULL, &saddr, &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
+    if (!visit_type_SocketAddress(iv, NULL, &saddr, errp)) {
         goto done;
     }
 
@@ -1550,15 +1547,12 @@ static int sd_open(BlockDriverState *bs, QDict *options, int flags,
     uint64_t snap_id;
     char *buf = NULL;
     QemuOpts *opts;
-    Error *local_err = NULL;
 
     s->bs = bs;
     s->aio_context = bdrv_get_aio_context(bs);
 
     opts = qemu_opts_create(&runtime_opts, NULL, 0, &error_abort);
-    qemu_opts_absorb_qdict(opts, options, &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
+    if (!qemu_opts_absorb_qdict(opts, options, errp)) {
         ret = -EINVAL;
         goto err_no_fd;
     }
@@ -2157,13 +2151,21 @@ static int coroutine_fn sd_co_create_opts(BlockDriver *drv,
                                           Error **errp)
 {
     BlockdevCreateOptions *create_options = NULL;
-    QDict *qdict, *location_qdict;
+    QDict *qdict = NULL, *location_qdict;
     Visitor *v;
-    char *redundancy;
+    char *redundancy = NULL;
     Error *local_err = NULL;
     int ret;
+    char *backing_fmt = NULL;
 
     redundancy = qemu_opt_get_del(opts, BLOCK_OPT_REDUNDANCY);
+    backing_fmt = qemu_opt_get_del(opts, BLOCK_OPT_BACKING_FMT);
+
+    if (backing_fmt && strcmp(backing_fmt, "sheepdog") != 0) {
+        error_setg(errp, "backing_file must be a sheepdog image");
+        ret = -EINVAL;
+        goto fail;
+    }
 
     qdict = qemu_opts_to_qdict(opts, NULL);
     qdict_put_str(qdict, "driver", "sheepdog");
@@ -2199,11 +2201,9 @@ static int coroutine_fn sd_co_create_opts(BlockDriver *drv,
         goto fail;
     }
 
-    visit_type_BlockdevCreateOptions(v, NULL, &create_options, &local_err);
+    visit_type_BlockdevCreateOptions(v, NULL, &create_options, errp);
     visit_free(v);
-
-    if (local_err) {
-        error_propagate(errp, local_err);
+    if (!create_options) {
         ret = -EINVAL;
         goto fail;
     }
@@ -2228,6 +2228,7 @@ fail:
     qapi_free_BlockdevCreateOptions(create_options);
     qobject_unref(qdict);
     g_free(redundancy);
+    g_free(backing_fmt);
     return ret;
 }
 
@@ -3184,6 +3185,11 @@ static QemuOptsList sd_create_opts = {
             .name = BLOCK_OPT_BACKING_FILE,
             .type = QEMU_OPT_STRING,
             .help = "File name of a base image"
+        },
+        {
+            .name = BLOCK_OPT_BACKING_FMT,
+            .type = QEMU_OPT_STRING,
+            .help = "Must be 'sheepdog' if present",
         },
         {
             .name = BLOCK_OPT_PREALLOC,

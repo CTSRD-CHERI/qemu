@@ -69,11 +69,23 @@ void riscv_set_csr_ops(int csrno, riscv_csr_operations *ops)
 static int fs(CPURISCVState *env, int csrno)
 {
 #if !defined(CONFIG_USER_ONLY)
+    /* loose check condition for fcsr in vector extension */
+    if ((csrno == CSR_FCSR) && (env->misa & RVV)) {
+        return 0;
+    }
     if (!env->debugger && !riscv_cpu_fp_enabled(env)) {
         return -1;
     }
 #endif
     return 0;
+}
+
+static int vs(CPURISCVState *env, int csrno)
+{
+    if (env->misa & RVV) {
+        return 0;
+    }
+    return -1;
 }
 
 static int ctr(CPURISCVState *env, int csrno)
@@ -184,6 +196,10 @@ static int read_fcsr(CPURISCVState *env, int csrno, target_ulong *val)
 #endif
     *val = (riscv_cpu_get_fflags(env) << FSR_AEXC_SHIFT)
         | (env->frm << FSR_RD_SHIFT);
+    if (vs(env, csrno) >= 0) {
+        *val |= (env->vxrm << FSR_VXRM_SHIFT)
+                | (env->vxsat << FSR_VXSAT_SHIFT);
+    }
     return 0;
 }
 
@@ -196,7 +212,59 @@ static int write_fcsr(CPURISCVState *env, int csrno, target_ulong val)
     env->mstatus |= MSTATUS_FS;
 #endif
     env->frm = (val & FSR_RD) >> FSR_RD_SHIFT;
+    if (vs(env, csrno) >= 0) {
+        env->vxrm = (val & FSR_VXRM) >> FSR_VXRM_SHIFT;
+        env->vxsat = (val & FSR_VXSAT) >> FSR_VXSAT_SHIFT;
+    }
     riscv_cpu_set_fflags(env, (val & FSR_AEXC) >> FSR_AEXC_SHIFT);
+    return 0;
+}
+
+static int read_vtype(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->vtype;
+    return 0;
+}
+
+static int read_vl(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->vl;
+    return 0;
+}
+
+static int read_vxrm(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->vxrm;
+    return 0;
+}
+
+static int write_vxrm(CPURISCVState *env, int csrno, target_ulong val)
+{
+    env->vxrm = val;
+    return 0;
+}
+
+static int read_vxsat(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->vxsat;
+    return 0;
+}
+
+static int write_vxsat(CPURISCVState *env, int csrno, target_ulong val)
+{
+    env->vxsat = val;
+    return 0;
+}
+
+static int read_vstart(CPURISCVState *env, int csrno, target_ulong *val)
+{
+    *val = env->vstart;
+    return 0;
+}
+
+static int write_vstart(CPURISCVState *env, int csrno, target_ulong val)
+{
+    env->vstart = val;
     return 0;
 }
 
@@ -1387,6 +1455,12 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
     [CSR_FRM] =                 CSR_OP_RW(fs, frm),
     [CSR_FCSR] =                CSR_OP_RW(fs, fcsr),
 
+    /* Vector CSRs */
+    [CSR_VSTART] =              CSR_OP_RW(vs, vstart),
+    [CSR_VXSAT] =               CSR_OP_RW(vs, vxsat),
+    [CSR_VXRM] =                CSR_OP_RW(vs, vxrm),
+    [CSR_VL] =                  CSR_OP_R(vs, vl),
+    [CSR_VTYPE] =               CSR_OP_R(vs, vtype),
     /* User Timers and Counters */
     [CSR_CYCLE] =               CSR_OP_FN_R(ctr, read_instret, "cycle"),
     [CSR_INSTRET] =             CSR_OP_FN_R(ctr, read_instret, "instret"),

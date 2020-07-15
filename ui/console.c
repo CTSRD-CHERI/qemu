@@ -1910,7 +1910,7 @@ QemuConsole *graphic_console_init(DeviceState *dev, uint32_t head,
     }
     graphic_console_set_hwops(s, hw_ops, opaque);
     if (dev) {
-        object_property_set_link(OBJECT(s), OBJECT(dev), "device",
+        object_property_set_link(OBJECT(s), "device", OBJECT(dev),
                                  &error_abort);
     }
 
@@ -1937,7 +1937,7 @@ void graphic_console_close(QemuConsole *con)
     }
 
     trace_console_gfx_close(con->index);
-    object_property_set_link(OBJECT(con), NULL, "device", &error_abort);
+    object_property_set_link(OBJECT(con), "device", NULL, &error_abort);
     graphic_console_set_hwops(con, &unused_ops, NULL);
 
     if (con->gl) {
@@ -2184,12 +2184,12 @@ static void text_console_do_init(Chardev *chr, DisplayState *ds)
     text_console_resize(s);
 
     if (chr->label) {
-        char msg[128];
-        int len;
+        char *msg;
 
         s->t_attrib.bgcol = QEMU_COLOR_BLUE;
-        len = snprintf(msg, sizeof(msg), "%s console\r\n", chr->label);
-        vc_chr_write(chr, (uint8_t *)msg, len);
+        msg = g_strdup_printf("%s console\r\n", chr->label);
+        vc_chr_write(chr, (uint8_t *)msg, strlen(msg));
+        g_free(msg);
         s->t_attrib = s->t_attrib_default;
     }
 

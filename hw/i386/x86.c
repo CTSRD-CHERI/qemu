@@ -118,16 +118,15 @@ uint32_t x86_cpu_apic_id_from_index(X86MachineState *x86ms,
 
 void x86_cpu_new(X86MachineState *x86ms, int64_t apic_id, Error **errp)
 {
-    Object *cpu = NULL;
-    Error *local_err = NULL;
+    Object *cpu = object_new(MACHINE(x86ms)->cpu_type);
 
-    cpu = object_new(MACHINE(x86ms)->cpu_type);
+    if (!object_property_set_uint(cpu, "apic-id", apic_id, errp)) {
+        goto out;
+    }
+    qdev_realize(DEVICE(cpu), NULL, errp);
 
-    object_property_set_uint(cpu, apic_id, "apic-id", &local_err);
-    qdev_realize(DEVICE(cpu), NULL, &local_err);
-
+out:
     object_unref(cpu);
-    error_propagate(errp, local_err);
 }
 
 void x86_cpus_init(X86MachineState *x86ms, int default_cpu_version)

@@ -93,6 +93,11 @@ static PFlashCFI01 *pc_pflash_create(PCMachineState *pcms,
     object_property_add_child(OBJECT(pcms), name, OBJECT(dev));
     object_property_add_alias(OBJECT(pcms), alias_prop_name,
                               OBJECT(dev), "drive");
+    /*
+     * The returned reference is tied to the child property and
+     * will be removed with object_unparent.
+     */
+    object_unref(OBJECT(dev));
     return PFLASH_CFI01(dev);
 }
 
@@ -108,7 +113,7 @@ void pc_system_flash_create(PCMachineState *pcms)
     }
 }
 
-static void pc_system_flash_cleanup_unused(PCMachineState *pcms)
+void pc_system_flash_cleanup_unused(PCMachineState *pcms)
 {
     char *prop_name;
     int i;

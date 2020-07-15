@@ -217,18 +217,18 @@ static void pc_q35_init(MachineState *machine)
     q35_host = Q35_HOST_DEVICE(qdev_new(TYPE_Q35_HOST_DEVICE));
 
     object_property_add_child(qdev_get_machine(), "q35", OBJECT(q35_host));
-    object_property_set_link(OBJECT(q35_host), OBJECT(ram_memory),
-                             MCH_HOST_PROP_RAM_MEM, NULL);
-    object_property_set_link(OBJECT(q35_host), OBJECT(pci_memory),
-                             MCH_HOST_PROP_PCI_MEM, NULL);
-    object_property_set_link(OBJECT(q35_host), OBJECT(get_system_memory()),
-                             MCH_HOST_PROP_SYSTEM_MEM, NULL);
-    object_property_set_link(OBJECT(q35_host), OBJECT(system_io),
-                             MCH_HOST_PROP_IO_MEM, NULL);
-    object_property_set_int(OBJECT(q35_host), x86ms->below_4g_mem_size,
-                            PCI_HOST_BELOW_4G_MEM_SIZE, NULL);
-    object_property_set_int(OBJECT(q35_host), x86ms->above_4g_mem_size,
-                            PCI_HOST_ABOVE_4G_MEM_SIZE, NULL);
+    object_property_set_link(OBJECT(q35_host), MCH_HOST_PROP_RAM_MEM,
+                             OBJECT(ram_memory), NULL);
+    object_property_set_link(OBJECT(q35_host), MCH_HOST_PROP_PCI_MEM,
+                             OBJECT(pci_memory), NULL);
+    object_property_set_link(OBJECT(q35_host), MCH_HOST_PROP_SYSTEM_MEM,
+                             OBJECT(get_system_memory()), NULL);
+    object_property_set_link(OBJECT(q35_host), MCH_HOST_PROP_IO_MEM,
+                             OBJECT(system_io), NULL);
+    object_property_set_int(OBJECT(q35_host), PCI_HOST_BELOW_4G_MEM_SIZE,
+                            x86ms->below_4g_mem_size, NULL);
+    object_property_set_int(OBJECT(q35_host), PCI_HOST_ABOVE_4G_MEM_SIZE,
+                            x86ms->above_4g_mem_size, NULL);
     /* pci */
     sysbus_realize_and_unref(SYS_BUS_DEVICE(q35_host), &error_fatal);
     phb = PCI_HOST_BRIDGE(q35_host);
@@ -243,8 +243,8 @@ static void pc_q35_init(MachineState *machine)
                              (Object **)&pcms->acpi_dev,
                              object_property_allow_set_link,
                              OBJ_PROP_LINK_STRONG);
-    object_property_set_link(OBJECT(machine), OBJECT(lpc),
-                             PC_MACHINE_ACPI_DEVICE_PROP, &error_abort);
+    object_property_set_link(OBJECT(machine), PC_MACHINE_ACPI_DEVICE_PROP,
+                             OBJECT(lpc), &error_abort);
 
     /* irq lines */
     gsi_state = pc_gsi_create(&x86ms->gsi, pcmc->pci_enabled);
@@ -275,8 +275,7 @@ static void pc_q35_init(MachineState *machine)
     }
 
     /* init basic PC hardware */
-    pc_basic_device_init(isa_bus, x86ms->gsi, &rtc_state, !mc->no_floppy,
-                         (pcms->vmport != ON_OFF_AUTO_ON), pcms->pit_enabled,
+    pc_basic_device_init(pcms, isa_bus, x86ms->gsi, &rtc_state, !mc->no_floppy,
                          0xff0104);
 
     /* connect pm stuff to lpc */
@@ -372,6 +371,7 @@ static void pc_q35_5_0_machine_options(MachineClass *m)
     m->numa_mem_supported = true;
     compat_props_add(m->compat_props, hw_compat_5_0, hw_compat_5_0_len);
     compat_props_add(m->compat_props, pc_compat_5_0, pc_compat_5_0_len);
+    m->auto_enable_numa_with_memhp = false;
 }
 
 DEFINE_Q35_MACHINE(v5_0, "pc-q35-5.0", NULL,

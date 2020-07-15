@@ -166,17 +166,16 @@ static void fsl_imx6ul_realize(DeviceState *dev, Error **errp)
         return;
     }
 
-    object_property_set_int(OBJECT(&s->cpu), QEMU_PSCI_CONDUIT_SMC,
-                            "psci-conduit", &error_abort);
+    object_property_set_int(OBJECT(&s->cpu), "psci-conduit",
+                            QEMU_PSCI_CONDUIT_SMC, &error_abort);
     qdev_realize(DEVICE(&s->cpu), NULL, &error_abort);
 
     /*
      * A7MPCORE
      */
-    object_property_set_int(OBJECT(&s->a7mpcore), 1, "num-cpu", &error_abort);
-    object_property_set_int(OBJECT(&s->a7mpcore),
-                            FSL_IMX6UL_MAX_IRQ + GIC_INTERNAL,
-                            "num-irq", &error_abort);
+    object_property_set_int(OBJECT(&s->a7mpcore), "num-cpu", 1, &error_abort);
+    object_property_set_int(OBJECT(&s->a7mpcore), "num-irq",
+                            FSL_IMX6UL_MAX_IRQ + GIC_INTERNAL, &error_abort);
     sysbus_realize(SYS_BUS_DEVICE(&s->a7mpcore), &error_abort);
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->a7mpcore), 0, FSL_IMX6UL_A7MPCORE_ADDR);
 
@@ -427,9 +426,10 @@ static void fsl_imx6ul_realize(DeviceState *dev, Error **errp)
             FSL_IMX6UL_ENET2_TIMER_IRQ,
         };
 
-        object_property_set_uint(OBJECT(&s->eth[i]),
-                                 FSL_IMX6UL_ETH_NUM_TX_RINGS,
-                                 "tx-ring-num", &error_abort);
+        object_property_set_uint(OBJECT(&s->eth[i]), "phy-num",
+                                 s->phy_num[i], &error_abort);
+        object_property_set_uint(OBJECT(&s->eth[i]), "tx-ring-num",
+                                 FSL_IMX6UL_ETH_NUM_TX_RINGS, &error_abort);
         qdev_set_nic_properties(DEVICE(&s->eth[i]), &nd_table[i]);
         sysbus_realize(SYS_BUS_DEVICE(&s->eth[i]), &error_abort);
 
@@ -479,8 +479,8 @@ static void fsl_imx6ul_realize(DeviceState *dev, Error **errp)
             FSL_IMX6UL_USDHC2_IRQ,
         };
 
-        object_property_set_uint(OBJECT(&s->usdhc[i]), SDHCI_VENDOR_IMX,
-                                        "vendor", &error_abort);
+        object_property_set_uint(OBJECT(&s->usdhc[i]), "vendor",
+                                 SDHCI_VENDOR_IMX, &error_abort);
         sysbus_realize(SYS_BUS_DEVICE(&s->usdhc[i]), &error_abort);
 
         sysbus_mmio_map(SYS_BUS_DEVICE(&s->usdhc[i]), 0,
@@ -512,8 +512,8 @@ static void fsl_imx6ul_realize(DeviceState *dev, Error **errp)
             FSL_IMX6UL_WDOG3_IRQ,
         };
 
-        object_property_set_bool(OBJECT(&s->wdt[i]), true, "pretimeout-support",
-                                 &error_abort);
+        object_property_set_bool(OBJECT(&s->wdt[i]), "pretimeout-support",
+                                 true, &error_abort);
         sysbus_realize(SYS_BUS_DEVICE(&s->wdt[i]), &error_abort);
 
         sysbus_mmio_map(SYS_BUS_DEVICE(&s->wdt[i]), 0,
@@ -607,10 +607,17 @@ static void fsl_imx6ul_realize(DeviceState *dev, Error **errp)
                                 FSL_IMX6UL_OCRAM_ALIAS_ADDR, &s->ocram_alias);
 }
 
+static Property fsl_imx6ul_properties[] = {
+    DEFINE_PROP_UINT32("fec1-phy-num", FslIMX6ULState, phy_num[0], 0),
+    DEFINE_PROP_UINT32("fec2-phy-num", FslIMX6ULState, phy_num[1], 1),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
 static void fsl_imx6ul_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
 
+    device_class_set_props(dc, fsl_imx6ul_properties);
     dc->realize = fsl_imx6ul_realize;
     dc->desc = "i.MX6UL SOC";
     /* Reason: Uses serial_hds and nd_table in realize() directly */

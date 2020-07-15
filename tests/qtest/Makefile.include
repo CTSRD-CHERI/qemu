@@ -66,6 +66,8 @@ check-qtest-i386-y += numa-test
 
 check-qtest-x86_64-y += $(check-qtest-i386-y)
 
+check-qtest-avr-y += boot-serial-test
+
 check-qtest-alpha-y += boot-serial-test
 check-qtest-alpha-$(CONFIG_VGA) += display-vga-test
 
@@ -277,6 +279,7 @@ tests/qtest/tco-test$(EXESUF): tests/qtest/tco-test.o $(libqos-pc-obj-y)
 tests/qtest/virtio-ccw-test$(EXESUF): tests/qtest/virtio-ccw-test.o
 tests/qtest/display-vga-test$(EXESUF): tests/qtest/display-vga-test.o
 tests/qtest/qom-test$(EXESUF): tests/qtest/qom-test.o
+tests/qtest/modules-test$(EXESUF): tests/qtest/modules-test.o
 tests/qtest/test-hmp$(EXESUF): tests/qtest/test-hmp.o
 tests/qtest/machine-none-test$(EXESUF): tests/qtest/machine-none-test.o
 tests/qtest/device-plug-test$(EXESUF): tests/qtest/device-plug-test.o
