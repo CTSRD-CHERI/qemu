@@ -17,7 +17,7 @@ def archiveQEMU(String target) {
             "bios-256k.bin", "efi-virtio.rom", "vgabios-stdvga.bin", // x86_64
             "edk2-aarch64-code.fd"  // AArch64
         ].collect { "qemu-${target}/share/qemu/$it" }.join(', ')
-        archiveArtifacts allowEmptyArchive: false, artifacts: "qemu-${target}/bin/qemu-system-*, ${firmwareFiles}" fingerprint: true, onlyIfSuccessful: true
+        archiveArtifacts allowEmptyArchive: false, artifacts: "qemu-${target}/bin/qemu-system-*, ${firmwareFiles}", fingerprint: true, onlyIfSuccessful: true
     }
 }
 
