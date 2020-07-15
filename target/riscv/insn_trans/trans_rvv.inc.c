@@ -2416,7 +2416,7 @@ static bool trans_vmpopc_m(DisasContext *s, arg_rmr *a)
         tcg_gen_addi_ptr(mask, cpu_env, vreg_ofs(s, 0));
 
         gen_helper_vmpopc_m(dst, mask, src2, cpu_env, desc);
-        gen_set_gpr(a->rd, dst);
+        _gen_set_gpr(s, a->rd, dst);
 
         tcg_temp_free_ptr(mask);
         tcg_temp_free_ptr(src2);
@@ -2448,7 +2448,7 @@ static bool trans_vmfirst_m(DisasContext *s, arg_rmr *a)
         tcg_gen_addi_ptr(mask, cpu_env, vreg_ofs(s, 0));
 
         gen_helper_vmfirst_m(dst, mask, src2, cpu_env, desc);
-        gen_set_gpr(a->rd, dst);
+        _gen_set_gpr(s, a->rd, dst);
 
         tcg_temp_free_ptr(mask);
         tcg_temp_free_ptr(src2);
@@ -2645,10 +2645,13 @@ static bool trans_vext_x_v(DisasContext *s, arg_r *a)
     } else {
         /* This instruction ignores LMUL and vector register groups */
         int vlmax = s->vlen >> (3 + s->sew);
-        vec_element_loadx(s, tmp, a->rs2, cpu_gpr[a->rs1], vlmax);
+        TCGv trs1 = tcg_temp_new();
+        gen_get_gpr(trs1, a->rs1);
+        vec_element_loadx(s, tmp, a->rs2, trs1, vlmax);
+        tcg_temp_free(trs1);
     }
     tcg_gen_trunc_i64_tl(dest, tmp);
-    gen_set_gpr(a->rd, dest);
+    _gen_set_gpr(s, a->rd, dest);
 
     tcg_temp_free(dest);
     tcg_temp_free_i64(tmp);
@@ -2705,8 +2708,11 @@ static bool trans_vmv_s_x(DisasContext *s, arg_vmv_s_x *a)
         }
 
         t1 = tcg_temp_new_i64();
-        tcg_gen_extu_tl_i64(t1, cpu_gpr[a->rs1]);
+        TCGv trs1 = tcg_temp_new();
+        gen_get_gpr(trs1, a->rs1);
+        tcg_gen_extu_tl_i64(t1, trs1);
         vec_element_storei(s, a->rd, 0, t1);
+        tcg_temp_free(trs1);
         tcg_temp_free_i64(t1);
     done:
         gen_set_label(over);
@@ -2818,7 +2824,10 @@ static bool trans_vrgather_vx(DisasContext *s, arg_rmrr *a)
         if (a->rs1 == 0) {
             vec_element_loadi(s, dest, a->rs2, 0);
         } else {
-            vec_element_loadx(s, dest, a->rs2, cpu_gpr[a->rs1], vlmax);
+            TCGv trs1 = tcg_temp_new();
+            gen_get_gpr(trs1, a->rs1);
+            vec_element_loadx(s, dest, a->rs2, trs1, vlmax);
+            tcg_temp_free(trs1);
         }
 
         tcg_gen_gvec_dup_i64(s->sew, vreg_ofs(s, a->rd),
