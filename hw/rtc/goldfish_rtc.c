@@ -226,7 +226,7 @@ static const MemoryRegionOps goldfish_rtc_ops = {
 
 static const VMStateDescription goldfish_rtc_vmstate = {
     .name = TYPE_GOLDFISH_RTC,
-    .version_id = 1,
+    .version_id = 2,
     .pre_save = goldfish_rtc_pre_save,
     .post_load = goldfish_rtc_post_load,
     .fields = (VMStateField[]) {
@@ -235,6 +235,7 @@ static const VMStateDescription goldfish_rtc_vmstate = {
         VMSTATE_UINT32(alarm_running, GoldfishRTCState),
         VMSTATE_UINT32(irq_pending, GoldfishRTCState),
         VMSTATE_UINT32(irq_enabled, GoldfishRTCState),
+        VMSTATE_UINT32(time_high, GoldfishRTCState),
         VMSTATE_END_OF_LIST()
     }
 };
