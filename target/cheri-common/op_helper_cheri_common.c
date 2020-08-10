@@ -882,6 +882,23 @@ target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUArchState *env, uint32_t cb,
     return (target_ulong)is_subset;
 }
 
+target_ulong CHERI_HELPER_IMPL(cseqx(CPUArchState *env, uint32_t cb,
+                                     uint32_t ct))
+{
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    const cap_register_t *ctp = get_readonly_capreg(env, ct);
+
+    return cbp->cr_tag           == ctp->cr_tag           &&
+           cap_get_cursor  (cbp) == cap_get_cursor  (ctp) &&
+           cap_get_base    (cbp) == cap_get_base    (ctp) &&
+           cap_get_length65(cbp) == cap_get_length65(ctp) &&
+           cap_get_otype   (cbp) == cap_get_otype   (ctp) &&
+           cbp->cr_perms         == ctp->cr_perms         &&
+           cbp->cr_uperms        == ctp->cr_uperms        &&
+           cbp->cr_flags         == ctp->cr_flags         &&
+           cbp->cr_reserved      == ctp->cr_reserved;
+}
+
 target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
                                       uint32_t ct))
 {
