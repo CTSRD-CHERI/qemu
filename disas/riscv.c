@@ -535,6 +535,7 @@ typedef enum {
     rv_op_ccopytype,
     rv_op_ccseal,
     rv_op_ctestsubset,
+    rv_op_cseqx,
 
     // FP loads/store
     rv_op_cflw,
@@ -1264,6 +1265,7 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_ccopytype] = { "ccopytype", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
     [rv_op_ccseal] = { "ccseal", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
     [rv_op_ctestsubset] = { "ctestsubset", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_cseqx] = { "cseqx", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
 
     // FP load store
     [rv_op_cflw] = { "cflw", rv_codec_i, rv_fmt_frd_offset_cs1, NULL, 0, 0, 0 },
@@ -1531,6 +1533,7 @@ static rv_opcode decode_cheri_inst(rv_inst inst) {
     CHERI_THREEOP_CASE(ccopytype,   0011110,  ..... ..... 000 ..... 1011011 @r)
     CHERI_THREEOP_CASE(ccseal,      0011111,  ..... ..... 000 ..... 1011011 @r)
     CHERI_THREEOP_CASE(ctestsubset, 0100000,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(cseqx,       0100001,  ..... ..... 000 ..... 1011011 @r)
     // 1111011 unused
     // TODO: 1111100 Used for Stores (see below)
     // TODO: 1111101 Used for Loads (see below)
