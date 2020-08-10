@@ -56,6 +56,7 @@ cbuildcap   0011101  ..... ..... 000 ..... 1011011 @r
 ccopytype   0011110  ..... ..... 000 ..... 1011011 @r
 ccseal      0011111  ..... ..... 000 ..... 1011011 @r
 ctestsubset 0100000  ..... ..... 000 ..... 1011011 @r
+cseqx       0100001  ..... ..... 000 ..... 1011011 @r
 # 1111011 unused
 # 1111100 Used for Stores (see below)
 # 1111101 Used for Loads (see below)

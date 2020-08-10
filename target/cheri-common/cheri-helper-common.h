@@ -96,6 +96,7 @@ DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 // Three operands (int cap cap)
 DEF_HELPER_FLAGS_3(csub, TCG_CALL_NO_WG, tl, env, i32, i32)
 DEF_HELPER_FLAGS_3(ctestsubset, TCG_CALL_NO_WG, tl, env, i32, i32)
+DEF_HELPER_FLAGS_3(cseqx, TCG_CALL_NO_WG, tl, env, i32, i32)
 DEF_HELPER_FLAGS_3(ctoptr, TCG_CALL_NO_WG, tl, env, i32, i32)
 
 // Loads+Stores
