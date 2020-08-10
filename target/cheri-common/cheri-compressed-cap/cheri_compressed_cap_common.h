@@ -101,16 +101,23 @@ struct _cc_N(cap) {
     inline uint32_t permissions() const { return cr_perms; }
     inline uint32_t type() const { return cr_otype; }
     inline bool is_sealed() const { return cr_otype != _CC_N(OTYPE_UNSEALED); }
-    inline bool operator==(const _cc_N(cap) & other) const {
-        return _cr_cursor == other._cr_cursor && cr_base == other.cr_base && _cr_top == other._cr_top &&
-               cr_perms == other.cr_perms && cr_uperms == other.cr_uperms && cr_otype == other.cr_otype &&
-               cr_ebt == other.cr_ebt && cr_flags == other.cr_flags && cr_reserved == other.cr_reserved &&
-               cr_tag == other.cr_tag;
-    }
 #endif
 };
 typedef struct _cc_N(cap) _cc_N(cap_t);
 #define _cc_cap_t _cc_N(cap_t)
+
+static inline bool _cc_N(exactly_equal)(struct _cc_N(cap) const *a, struct _cc_N(cap) const *b) {
+  return a->cr_tag == b->cr_tag &&
+         a->_cr_cursor == b->_cr_cursor &&
+         a->cr_base == b->cr_base &&
+         a->_cr_top == b->_cr_top &&
+         a->cr_perms == b->cr_perms &&
+         a->cr_uperms == b->cr_uperms &&
+         a->cr_otype == b->cr_otype &&
+         a->cr_ebt == b->cr_ebt &&
+         a->cr_flags == b->cr_flags &&
+         a->cr_reserved == b->cr_reserved;
+}
 
 /* Returns the index of the most significant bit set in x */
 static inline uint32_t _cc_N(idx_MSNZ)(uint64_t x) {
@@ -760,6 +767,10 @@ static inline _cc_addr_t _cc_N(get_representable_length)(_cc_addr_t req_length) 
 /// Provide a C++ class with the same function names
 /// to simplify writing code that handles both 128 and 64-bit capabilities
 #ifdef __cplusplus
+inline bool _cc_N(cap)::operator==(const _cc_N(cap) & other) const {
+    return _cc_N(exactly_equal)(this, other);
+}
+
 class _CC_CONCAT(CompressedCap, CC_BITS) {
 public:
     using length_t = _cc_length_t;
