@@ -133,8 +133,6 @@ static inline int align_of(int size, uint64_t addr)
     }
 }
 
-static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *ctp);
-
 static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) {
     if (!cap_exactly_equal(&env->active_tc.CHWR.DDC, new_ddc)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_MMU,
@@ -632,37 +630,18 @@ target_ulong CHERI_HELPER_IMPL(cleu(CPUArchState *env, uint32_t cb, uint32_t ct)
     return (target_ulong)(cursor1_unsigned <= cursor2_unsigned);
 }
 
-static bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *ctp) {
-  if (cbp->cr_tag != ctp->cr_tag) {
-    return false;
-  } else if (cbp->cr_base != ctp->cr_base) {
-    return false;
-  } else if (cbp->_cr_cursor != ctp->_cr_cursor) {
-    return false;
-  } else if (cbp->_cr_top != ctp->_cr_top) {
-    return false;
-  } else if (cbp->cr_otype != ctp->cr_otype) {
-    return false;
-  } else if (cbp->cr_perms != ctp->cr_perms) {
-    return false;
-  } else if (cbp->cr_flags != ctp->cr_flags) {
-      return false;
-  }
-  return true;
-}
-
 target_ulong CHERI_HELPER_IMPL(cexeq(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
-    return (target_ulong)cap_exactly_equal(cbp, ctp);
+    return cap_exactly_equal(cbp, ctp);
 }
 
 target_ulong CHERI_HELPER_IMPL(cnexeq(CPUArchState *env, uint32_t cb, uint32_t ct))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
-    return (target_ulong) cap_exactly_equal(cbp, ctp) ? false : true;
+    return !cap_exactly_equal(cbp, ctp);
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetandaddr(CPUArchState *env, uint32_t cb, target_ulong rt))
