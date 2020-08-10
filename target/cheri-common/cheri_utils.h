@@ -107,6 +107,15 @@ static inline int64_t cap_get_otype(const cap_register_t* c) {
     return result < CAP_LAST_NONRESERVED_OTYPE ? result : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 }
 
+static inline bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *ctp)
+{
+#ifdef CHERI_128
+    return cc128_exactly_equal(cbp, ctp);
+#else
+    return cc256_exactly_equal(cbp, ctp);
+#endif
+}
+
 static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
     // TODO: how should we treat the other reserved types? as sealed?
     // TODO: what about untagged capabilities with out-of-range otypes?
