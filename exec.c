@@ -102,12 +102,6 @@ AddressSpace address_space_memory;
 static MemoryRegion io_mem_unassigned;
 #endif
 
-CPUTailQ cpus = QTAILQ_HEAD_INITIALIZER(cpus);
-
-/* current CPU in the current thread. It is only valid inside
-   cpu_exec() */
-__thread CPUState *current_cpu;
-
 uintptr_t qemu_host_page_size;
 intptr_t qemu_host_page_mask;
 
@@ -836,22 +830,6 @@ const VMStateDescription vmstate_cpu_common = {
     }
 };
 
-#endif
-
-CPUState *qemu_get_cpu(int index)
-{
-    CPUState *cpu;
-
-    CPU_FOREACH(cpu) {
-        if (cpu->cpu_index == index) {
-            return cpu;
-        }
-    }
-
-    return NULL;
-}
-
-#if !defined(CONFIG_USER_ONLY)
 void cpu_address_space_init(CPUState *cpu, int asidx,
                             const char *prefix, MemoryRegion *mr)
 {
@@ -4139,6 +4117,58 @@ void mtree_print_dispatch(AddressSpaceDispatch *d, MemoryRegion *root)
             mtree_print_phys_entries(jprev, j, prev.skip, prev.ptr);
         }
     }
+}
+
+/*
+ * If positive, discarding RAM is disabled. If negative, discarding RAM is
+ * required to work and cannot be disabled.
+ */
+static int ram_block_discard_disabled;
+
+int ram_block_discard_disable(bool state)
+{
+    int old;
+
+    if (!state) {
+        atomic_dec(&ram_block_discard_disabled);
+        return 0;
+    }
+
+    do {
+        old = atomic_read(&ram_block_discard_disabled);
+        if (old < 0) {
+            return -EBUSY;
+        }
+    } while (atomic_cmpxchg(&ram_block_discard_disabled, old, old + 1) != old);
+    return 0;
+}
+
+int ram_block_discard_require(bool state)
+{
+    int old;
+
+    if (!state) {
+        atomic_inc(&ram_block_discard_disabled);
+        return 0;
+    }
+
+    do {
+        old = atomic_read(&ram_block_discard_disabled);
+        if (old > 0) {
+            return -EBUSY;
+        }
+    } while (atomic_cmpxchg(&ram_block_discard_disabled, old, old - 1) != old);
+    return 0;
+}
+
+bool ram_block_discard_is_disabled(void)
+{
+    return atomic_read(&ram_block_discard_disabled) > 0;
+}
+
+bool ram_block_discard_is_required(void)
+{
+    return atomic_read(&ram_block_discard_disabled) < 0;
 }
 
 #endif

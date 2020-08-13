@@ -137,6 +137,9 @@ void qdev_set_parent_bus(DeviceState *dev, BusState *bus)
  */
 DeviceState *qdev_new(const char *name)
 {
+    if (!object_class_by_name(name)) {
+        module_load_qom_one(name);
+    }
     return DEVICE(object_new(name));
 }
 
@@ -147,10 +150,9 @@ DeviceState *qdev_new(const char *name)
  */
 DeviceState *qdev_try_new(const char *name)
 {
-    if (!object_class_by_name(name)) {
+    if (!module_object_class_by_name(name)) {
         return NULL;
     }
-
     return DEVICE(object_new(name));
 }
 
@@ -386,8 +388,6 @@ void qdev_simple_device_unplug_cb(HotplugHandler *hotplug_dev,
  */
 bool qdev_realize(DeviceState *dev, BusState *bus, Error **errp)
 {
-    Error *err = NULL;
-
     assert(!dev->realized && !dev->parent_bus);
 
     if (bus) {
@@ -396,11 +396,7 @@ bool qdev_realize(DeviceState *dev, BusState *bus, Error **errp)
         assert(!DEVICE_GET_CLASS(dev)->bus_type);
     }
 
-    object_property_set_bool(OBJECT(dev), true, "realized", &err);
-    if (err) {
-        error_propagate(errp, err);
-    }
-    return !err;
+    return object_property_set_bool(OBJECT(dev), "realized", true, errp);
 }
 
 /*
@@ -424,7 +420,7 @@ bool qdev_realize_and_unref(DeviceState *dev, BusState *bus, Error **errp)
 
 void qdev_unrealize(DeviceState *dev)
 {
-    object_property_set_bool(OBJECT(dev), false, "realized", &error_abort);
+    object_property_set_bool(OBJECT(dev), "realized", false, &error_abort);
 }
 
 static int qdev_assert_realized_properly(Object *obj, void *opaque)
@@ -565,7 +561,7 @@ void qdev_connect_gpio_out_named(DeviceState *dev, const char *name, int n,
                                                 "/unattached"),
                                   "non-qdev-gpio[*]", OBJECT(pin));
     }
-    object_property_set_link(OBJECT(dev), OBJECT(pin), propname, &error_abort);
+    object_property_set_link(OBJECT(dev), propname, OBJECT(pin), &error_abort);
     g_free(propname);
 }
 
@@ -591,7 +587,7 @@ static qemu_irq qdev_disconnect_gpio_out_named(DeviceState *dev,
     qemu_irq ret = (qemu_irq)object_property_get_link(OBJECT(dev), propname,
                                                       NULL);
     if (ret) {
-        object_property_set_link(OBJECT(dev), NULL, propname, NULL);
+        object_property_set_link(OBJECT(dev), propname, NULL, NULL);
     }
     g_free(propname);
     return ret;
@@ -875,7 +871,7 @@ static void device_set_realized(Object *obj, bool value, Error **errp)
     }
 
     if (value && !dev->realized) {
-        if (!check_only_migratable(obj, &local_err)) {
+        if (!check_only_migratable(obj, errp)) {
             goto fail;
         }
 

@@ -1263,7 +1263,6 @@ static int vmdk_open(BlockDriverState *bs, QDict *options, int flags,
     int ret;
     BDRVVmdkState *s = bs->opaque;
     uint32_t magic;
-    Error *local_err = NULL;
 
     bs->file = bdrv_open_child(NULL, options, "file", bs, &child_of_bds,
                                BDRV_CHILD_IMAGE, false, errp);
@@ -1317,9 +1316,8 @@ static int vmdk_open(BlockDriverState *bs, QDict *options, int flags,
     error_setg(&s->migration_blocker, "The vmdk format used by node '%s' "
                "does not support live migration",
                bdrv_get_device_or_node_name(bs));
-    ret = migrate_add_blocker(s->migration_blocker, &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
+    ret = migrate_add_blocker(s->migration_blocker, errp);
+    if (ret < 0) {
         error_free(s->migration_blocker);
         goto fail;
     }
@@ -2250,19 +2248,16 @@ static int vmdk_create_extent(const char *filename, int64_t filesize,
 {
     int ret;
     BlockBackend *blk = NULL;
-    Error *local_err = NULL;
 
-    ret = bdrv_create_file(filename, opts, &local_err);
+    ret = bdrv_create_file(filename, opts, errp);
     if (ret < 0) {
-        error_propagate(errp, local_err);
         goto exit;
     }
 
     blk = blk_new_open(filename, NULL, NULL,
                        BDRV_O_RDWR | BDRV_O_RESIZE | BDRV_O_PROTOCOL,
-                       &local_err);
+                       errp);
     if (blk == NULL) {
-        error_propagate(errp, local_err);
         ret = -EIO;
         goto exit;
     }
@@ -2638,6 +2633,14 @@ static int coroutine_fn vmdk_co_create_opts(BlockDriver *drv,
     bool zeroed_grain;
     bool compat6;
     VMDKCreateOptsData data;
+    char *backing_fmt = NULL;
+
+    backing_fmt = qemu_opt_get_del(opts, BLOCK_OPT_BACKING_FMT);
+    if (backing_fmt && strcmp(backing_fmt, "vmdk") != 0) {
+        error_setg(errp, "backing_file must be a vmdk image");
+        ret = -EINVAL;
+        goto exit;
+    }
 
     if (filename_decompose(filename, path, prefix, postfix, PATH_MAX, errp)) {
         ret = -EINVAL;
@@ -2696,6 +2699,7 @@ static int coroutine_fn vmdk_co_create_opts(BlockDriver *drv,
                             vmdk_co_create_opts_cb, &data, errp);
 
 exit:
+    g_free(backing_fmt);
     g_free(adapter_type);
     g_free(backing_file);
     g_free(hw_version);
@@ -3030,6 +3034,11 @@ static QemuOptsList vmdk_create_opts = {
             .name = BLOCK_OPT_BACKING_FILE,
             .type = QEMU_OPT_STRING,
             .help = "File name of a base image"
+        },
+        {
+            .name = BLOCK_OPT_BACKING_FMT,
+            .type = QEMU_OPT_STRING,
+            .help = "Must be 'vmdk' if present",
         },
         {
             .name = BLOCK_OPT_COMPAT6,

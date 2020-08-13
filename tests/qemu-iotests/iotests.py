@@ -29,18 +29,15 @@ import struct
 import subprocess
 import sys
 from typing import (Any, Callable, Dict, Iterable,
-                    List, Optional, Sequence, TypeVar)
+                    List, Optional, Sequence, Tuple, TypeVar)
 import unittest
 
 # pylint: disable=import-error, wrong-import-position
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'python'))
 from qemu import qtest
+from qemu.qmp import QMPMessage
 
 assert sys.version_info >= (3, 6)
-
-# Type Aliases
-QMPResponse = Dict[str, Any]
-
 
 # Use this logger for logging messages directly from the iotests module
 logger = logging.getLogger('qemu.iotests')
@@ -90,15 +87,24 @@ luks_default_secret_object = 'secret,id=keysec0,data=' + \
 luks_default_key_secret_opt = 'key-secret=keysec0'
 
 
-def qemu_img(*args):
-    '''Run qemu-img and return the exit code'''
-    devnull = open('/dev/null', 'r+')
-    exitcode = subprocess.call(qemu_img_args + list(args),
-                               stdin=devnull, stdout=devnull)
-    if exitcode < 0:
+def qemu_img_pipe_and_status(*args: str) -> Tuple[str, int]:
+    """
+    Run qemu-img and return both its output and its exit code
+    """
+    subp = subprocess.Popen(qemu_img_args + list(args),
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            universal_newlines=True)
+    output = subp.communicate()[0]
+    if subp.returncode < 0:
         sys.stderr.write('qemu-img received signal %i: %s\n'
-                         % (-exitcode, ' '.join(qemu_img_args + list(args))))
-    return exitcode
+                         % (-subp.returncode,
+                            ' '.join(qemu_img_args + list(args))))
+    return (output, subp.returncode)
+
+def qemu_img(*args: str) -> int:
+    '''Run qemu-img and return the exit code'''
+    return qemu_img_pipe_and_status(*args)[1]
 
 def ordered_qmp(qmsg, conv_keys=True):
     # Dictionaries are not ordered prior to 3.6, therefore:
@@ -140,17 +146,9 @@ def qemu_img_verbose(*args):
                          % (-exitcode, ' '.join(qemu_img_args + list(args))))
     return exitcode
 
-def qemu_img_pipe(*args):
+def qemu_img_pipe(*args: str) -> str:
     '''Run qemu-img and return its output'''
-    subp = subprocess.Popen(qemu_img_args + list(args),
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT,
-                            universal_newlines=True)
-    exitcode = subp.wait()
-    if exitcode < 0:
-        sys.stderr.write('qemu-img received signal %i: %s\n'
-                         % (-exitcode, ' '.join(qemu_img_args + list(args))))
-    return subp.communicate()[0]
+    return qemu_img_pipe_and_status(*args)[0]
 
 def qemu_img_log(*args):
     result = qemu_img_pipe(*args)
@@ -177,11 +175,11 @@ def qemu_io(*args):
     subp = subprocess.Popen(args, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,
                             universal_newlines=True)
-    exitcode = subp.wait()
-    if exitcode < 0:
+    output = subp.communicate()[0]
+    if subp.returncode < 0:
         sys.stderr.write('qemu-io received signal %i: %s\n'
-                         % (-exitcode, ' '.join(args)))
-    return subp.communicate()[0]
+                         % (-subp.returncode, ' '.join(args)))
+    return output
 
 def qemu_io_log(*args):
     result = qemu_io(*args)
@@ -211,12 +209,18 @@ def get_virtio_scsi_device():
 
 class QemuIoInteractive:
     def __init__(self, *args):
-        self.args = qemu_io_args + list(args)
+        self.args = qemu_io_args_no_fmt + list(args)
         self._p = subprocess.Popen(self.args, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT,
                                    universal_newlines=True)
-        assert self._p.stdout.read(9) == 'qemu-io> '
+        out = self._p.stdout.read(9)
+        if out != 'qemu-io> ':
+            # Most probably qemu-io just failed to start.
+            # Let's collect the whole output and exit.
+            out += self._p.stdout.read()
+            self._p.wait(timeout=1)
+            raise ValueError(out)
 
     def close(self):
         self._p.communicate('q\n')
@@ -257,15 +261,14 @@ def qemu_nbd_early_pipe(*args):
        and its output in case of an error'''
     subp = subprocess.Popen(qemu_nbd_args + ['--fork'] + list(args),
                             stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT,
                             universal_newlines=True)
-    exitcode = subp.wait()
-    if exitcode < 0:
+    output = subp.communicate()[0]
+    if subp.returncode < 0:
         sys.stderr.write('qemu-nbd received signal %i: %s\n' %
-                         (-exitcode,
+                         (-subp.returncode,
                           ' '.join(qemu_nbd_args + ['--fork'] + list(args))))
 
-    return exitcode, subp.communicate()[0] if exitcode else ''
+    return subp.returncode, output if subp.returncode else ''
 
 def qemu_nbd_popen(*args):
     '''Run qemu-nbd in daemon mode and return the parent's exit code'''
@@ -339,8 +342,9 @@ def filter_qmp(qmsg, filter_fn):
     return qmsg
 
 def filter_testfiles(msg):
-    prefix = os.path.join(test_dir, "%s-" % (os.getpid()))
-    return msg.replace(prefix, 'TEST_DIR/PID-')
+    pref1 = os.path.join(test_dir, "%s-" % (os.getpid()))
+    pref2 = os.path.join(sock_dir, "%s-" % (os.getpid()))
+    return msg.replace(pref1, 'TEST_DIR/PID-').replace(pref2, 'SOCK_DIR/PID-')
 
 def filter_qmp_testfiles(qmsg):
     def _filter(_key, value):
@@ -554,7 +558,7 @@ class VM(qtest.QEMUQtestMachine):
         self._args.append(addr)
         return self
 
-    def hmp(self, command_line: str, use_log: bool = False) -> QMPResponse:
+    def hmp(self, command_line: str, use_log: bool = False) -> QMPMessage:
         cmd = 'human-monitor-command'
         kwargs = {'command-line': command_line}
         if use_log:
@@ -575,7 +579,7 @@ class VM(qtest.QEMUQtestMachine):
         self.hmp(f'qemu-io {drive} "remove_break bp_{drive}"')
 
     def hmp_qemu_io(self, drive: str, cmd: str,
-                    use_log: bool = False) -> QMPResponse:
+                    use_log: bool = False) -> QMPMessage:
         """Write to a given drive using an HMP command"""
         return self.hmp(f'qemu-io {drive} "{cmd}"', use_log=use_log)
 
@@ -1010,11 +1014,16 @@ def _verify_image_format(supported_fmts: Sequence[str] = (),
         # similar to
         #   _supported_fmt generic
         # for bash tests
+        if imgfmt == 'luks':
+            verify_working_luks()
         return
 
     not_sup = supported_fmts and (imgfmt not in supported_fmts)
     if not_sup or (imgfmt in unsupported_fmts):
         notrun('not suitable for this image format: %s' % imgfmt)
+
+    if imgfmt == 'luks':
+        verify_working_luks()
 
 def _verify_protocol(supported: Sequence[str] = (),
                      unsupported: Sequence[str] = ()) -> None:
@@ -1052,6 +1061,45 @@ def verify_quorum():
     if not supports_quorum():
         notrun('quorum support missing')
 
+def has_working_luks() -> Tuple[bool, str]:
+    """
+    Check whether our LUKS driver can actually create images
+    (this extends to LUKS encryption for qcow2).
+
+    If not, return the reason why.
+    """
+
+    img_file = f'{test_dir}/luks-test.luks'
+    (output, status) = \
+        qemu_img_pipe_and_status('create', '-f', 'luks',
+                                 '--object', luks_default_secret_object,
+                                 '-o', luks_default_key_secret_opt,
+                                 '-o', 'iter-time=10',
+                                 img_file, '1G')
+    try:
+        os.remove(img_file)
+    except OSError:
+        pass
+
+    if status != 0:
+        reason = output
+        for line in output.splitlines():
+            if img_file + ':' in line:
+                reason = line.split(img_file + ':', 1)[1].strip()
+                break
+
+        return (False, reason)
+    else:
+        return (True, '')
+
+def verify_working_luks():
+    """
+    Skip test suite if LUKS does not work
+    """
+    (working, reason) = has_working_luks()
+    if not working:
+        notrun(reason)
+
 def qemu_pipe(*args):
     """
     Run qemu with an option to print something and exit (e.g. a help option).
@@ -1062,11 +1110,11 @@ def qemu_pipe(*args):
     subp = subprocess.Popen(args, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT,
                             universal_newlines=True)
-    exitcode = subp.wait()
-    if exitcode < 0:
+    output = subp.communicate()[0]
+    if subp.returncode < 0:
         sys.stderr.write('qemu received signal %i: %s\n' %
-                         (-exitcode, ' '.join(args)))
-    return subp.communicate()[0]
+                         (-subp.returncode, ' '.join(args)))
+    return output
 
 def supported_formats(read_only=False):
     '''Set 'read_only' to True to check ro-whitelist

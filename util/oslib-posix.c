@@ -38,7 +38,6 @@
 #include "qemu/sockets.h"
 #include "qemu/thread.h"
 #include <libgen.h>
-#include <sys/signal.h>
 #include "qemu/cutils.h"
 
 #ifdef CONFIG_LINUX
@@ -59,6 +58,10 @@
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
+#endif
+
+#ifdef __HAIKU__
+#include <kernel/image.h>
 #endif
 
 #include "qemu/mmap-alloc.h"
@@ -387,6 +390,21 @@ void qemu_init_exec_dir(const char *argv0)
             p = realpath(fpath, buf);
             if (!p) {
                 return;
+            }
+        }
+    }
+#elif defined(__HAIKU__)
+    {
+        image_info ii;
+        int32_t c = 0;
+
+        *buf = '\0';
+        while (get_next_image_info(0, &c, &ii) == B_OK) {
+            if (ii.type == B_APP_IMAGE) {
+                strncpy(buf, ii.name, sizeof(buf));
+                buf[sizeof(buf) - 1] = 0;
+                p = buf;
+                break;
             }
         }
     }
@@ -775,4 +793,39 @@ void sigaction_invoke(struct sigaction *action,
         si.si_uid = info->ssi_uid;
     }
     action->sa_sigaction(info->ssi_signo, &si, NULL);
+}
+
+#ifndef HOST_NAME_MAX
+# ifdef _POSIX_HOST_NAME_MAX
+#  define HOST_NAME_MAX _POSIX_HOST_NAME_MAX
+# else
+#  define HOST_NAME_MAX 255
+# endif
+#endif
+
+char *qemu_get_host_name(Error **errp)
+{
+    long len = -1;
+    g_autofree char *hostname = NULL;
+
+#ifdef _SC_HOST_NAME_MAX
+    len = sysconf(_SC_HOST_NAME_MAX);
+#endif /* _SC_HOST_NAME_MAX */
+
+    if (len < 0) {
+        len = HOST_NAME_MAX;
+    }
+
+    /* Unfortunately, gethostname() below does not guarantee a
+     * NULL terminated string. Therefore, allocate one byte more
+     * to be sure. */
+    hostname = g_new0(char, len + 1);
+
+    if (gethostname(hostname, len) < 0) {
+        error_setg_errno(errp, errno,
+                         "cannot get hostname");
+        return NULL;
+    }
+
+    return g_steal_pointer(&hostname);
 }

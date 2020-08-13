@@ -4372,9 +4372,8 @@ static void do_ldr(DisasContext *s, uint32_t vofs, int len, int rn, int imm)
 
         /* Copy the clean address into a local temp, live across the loop. */
         t0 = clean_addr;
-        clean_addr = tcg_temp_local_new_i64();
+        clean_addr = new_tmp_a64_local(s);
         tcg_gen_mov_i64(clean_addr, t0);
-        tcg_temp_free_i64(t0);
 
         gen_set_label(loop);
 
@@ -4422,7 +4421,6 @@ static void do_ldr(DisasContext *s, uint32_t vofs, int len, int rn, int imm)
         tcg_gen_st_i64(t0, cpu_env, vofs + len_align);
         tcg_temp_free_i64(t0);
     }
-    tcg_temp_free_i64(clean_addr);
 }
 
 /* Similarly for stores.  */
@@ -4463,9 +4461,8 @@ static void do_str(DisasContext *s, uint32_t vofs, int len, int rn, int imm)
 
         /* Copy the clean address into a local temp, live across the loop. */
         t0 = clean_addr;
-        clean_addr = tcg_temp_local_new_i64();
+        clean_addr = new_tmp_a64_local(s);
         tcg_gen_mov_i64(clean_addr, t0);
-        tcg_temp_free_i64(t0);
 
         gen_set_label(loop);
 
@@ -4509,7 +4506,6 @@ static void do_str(DisasContext *s, uint32_t vofs, int len, int rn, int imm)
         }
         tcg_temp_free_i64(t0);
     }
-    tcg_temp_free_i64(clean_addr);
 }
 
 static bool trans_LDR_zri(DisasContext *s, arg_rri *a)
@@ -5279,7 +5275,7 @@ static void do_mem_zpz(DisasContext *s, int zt, int pg, int zm,
         desc = FIELD_DP32(desc, MTEDESC, ESIZE, 1 << msz);
         desc <<= SVE_MTEDESC_SHIFT;
     }
-    desc = simd_desc(vsz, vsz, scale);
+    desc = simd_desc(vsz, vsz, desc | scale);
     t_desc = tcg_const_i32(desc);
 
     tcg_gen_addi_ptr(t_pg, cpu_env, pred_full_reg_offset(s, pg));

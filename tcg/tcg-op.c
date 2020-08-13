@@ -3312,7 +3312,8 @@ static void do_nonatomic_op_i32(TCGv_i32 ret, TCGv_cap_checked_ptr checked_addr,
     memop = tcg_canonicalize_memop(memop, 0, 0);
 
     tcg_gen_qemu_ld_i32_with_checked_addr(t1, checked_addr, idx, memop & ~MO_SIGN);
-    gen(t2, t1, val);
+    tcg_gen_ext_i32(t2, val, memop);
+    gen(t2, t1, t2);
     // Note: For CHERI tcg_gen_qemu_st_i32 calls gen_cheri_invalidate_tags()
     tcg_gen_qemu_st_i32_with_checked_addr(t2, checked_addr, idx, memop);
 
@@ -3366,7 +3367,8 @@ static void do_nonatomic_op_i64(TCGv_i64 ret, TCGv_cap_checked_ptr checked_addr,
 
     memop = tcg_canonicalize_memop(memop, 1, 0);
     tcg_gen_qemu_ld_i64_with_checked_addr(t1, checked_addr, idx, memop & ~MO_SIGN);
-    gen(t2, t1, val);
+    tcg_gen_ext_i64(t2, val, memop);
+    gen(t2, t1, t2);
     // Note: For CHERI tcg_gen_qemu_st_i64 calls gen_cheri_invalidate_tags()
     tcg_gen_qemu_st_i64_with_checked_addr(t2, checked_addr, idx, memop);
 

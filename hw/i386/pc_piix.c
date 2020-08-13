@@ -186,9 +186,12 @@ static void pc_init1(MachineState *machine,
     if (!xen_enabled()) {
         pc_memory_init(pcms, system_memory,
                        rom_memory, &ram_memory);
-    } else if (machine->kernel_filename != NULL) {
-        /* For xen HVM direct kernel boot, load linux here */
-        xen_load_linux(pcms);
+    } else {
+        pc_system_flash_cleanup_unused(pcms);
+        if (machine->kernel_filename != NULL) {
+            /* For xen HVM direct kernel boot, load linux here */
+            xen_load_linux(pcms);
+        }
     }
 
     gsi_state = pc_gsi_create(&x86ms->gsi, pcmc->pci_enabled);
@@ -235,8 +238,7 @@ static void pc_init1(MachineState *machine,
     }
 
     /* init basic PC hardware */
-    pc_basic_device_init(isa_bus, x86ms->gsi, &rtc_state, true,
-                         (pcms->vmport != ON_OFF_AUTO_ON), pcms->pit_enabled,
+    pc_basic_device_init(pcms, isa_bus, x86ms->gsi, &rtc_state, true,
                          0x4);
 
     pc_nic_init(pcmc, isa_bus, pci_bus);
@@ -294,8 +296,8 @@ static void pc_init1(MachineState *machine,
                                  (Object **)&pcms->acpi_dev,
                                  object_property_allow_set_link,
                                  OBJ_PROP_LINK_STRONG);
-        object_property_set_link(OBJECT(machine), OBJECT(piix4_pm),
-                                 PC_MACHINE_ACPI_DEVICE_PROP, &error_abort);
+        object_property_set_link(OBJECT(machine), PC_MACHINE_ACPI_DEVICE_PROP,
+                                 OBJECT(piix4_pm), &error_abort);
     }
 
     if (machine->nvdimms_state->is_enabled) {
@@ -444,6 +446,7 @@ static void pc_i440fx_5_0_machine_options(MachineClass *m)
     m->numa_mem_supported = true;
     compat_props_add(m->compat_props, hw_compat_5_0, hw_compat_5_0_len);
     compat_props_add(m->compat_props, pc_compat_5_0, pc_compat_5_0_len);
+    m->auto_enable_numa_with_memdev = false;
 }
 
 DEFINE_I440FX_MACHINE(v5_0, "pc-i440fx-5.0", NULL,

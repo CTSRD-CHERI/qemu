@@ -244,7 +244,7 @@ static bool vmstate_test_use_cpuhp(void *opaque)
 static int vmstate_cpuhp_pre_load(void *opaque)
 {
     Object *obj = OBJECT(opaque);
-    object_property_set_bool(obj, false, "cpu-hotplug-legacy", &error_abort);
+    object_property_set_bool(obj, "cpu-hotplug-legacy", false, &error_abort);
     return 0;
 }
 
@@ -506,7 +506,7 @@ static void piix4_pm_realize(PCIDevice *dev, Error **errp)
 
     piix4_acpi_system_hot_add_init(pci_address_space_io(dev),
                                    pci_get_bus(dev), s);
-    qbus_set_hotplug_handler(BUS(pci_get_bus(dev)), OBJECT(s), &error_abort);
+    qbus_set_hotplug_handler(BUS(pci_get_bus(dev)), OBJECT(s));
 
     piix4_pm_add_propeties(s);
 }

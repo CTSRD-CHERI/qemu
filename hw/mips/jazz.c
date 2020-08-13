@@ -250,7 +250,7 @@ static void mips_jazz_init(MachineState *machine,
     isa_bus_irqs(isa_bus, i8259);
     i8257_dma_init(isa_bus, 0);
     pit = i8254_pit_init(isa_bus, 0x40, 0, NULL);
-    pcspk_init(isa_bus, pit);
+    pcspk_init(isa_new(TYPE_PC_SPEAKER), isa_bus, pit);
 
     /* Video card */
     switch (jazz_model) {
@@ -290,8 +290,8 @@ static void mips_jazz_init(MachineState *machine,
             dev = qdev_new("dp8393x");
             qdev_set_nic_properties(dev, nd);
             qdev_prop_set_uint8(dev, "it_shift", 2);
-            object_property_set_link(OBJECT(dev), OBJECT(rc4030_dma_mr),
-                                     "dma_mr", &error_abort);
+            object_property_set_link(OBJECT(dev), "dma_mr",
+                                     OBJECT(rc4030_dma_mr), &error_abort);
             sysbus = SYS_BUS_DEVICE(dev);
             sysbus_realize_and_unref(sysbus, &error_fatal);
             sysbus_mmio_map(sysbus, 0, 0x80001000);

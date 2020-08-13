@@ -1,4 +1,4 @@
-obj-y += translate.o op_helper.o cpu_helper.o cpu.o csr.o fpu_helper.o gdbstub.o
+obj-y += translate.o op_helper.o cpu_helper.o cpu.o csr.o fpu_helper.o vector_helper.o gdbstub.o
 obj-$(CONFIG_SOFTMMU) += pmp.o
 obj-$(TARGET_CHERI) += op_helper_cheri.o
 obj-$(CONFIG_TCG_LOG_INSTR) += op_helper_log_instr.o

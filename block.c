@@ -1206,7 +1206,8 @@ static int bdrv_backing_update_filename(BdrvChild *c, BlockDriverState *base,
     }
 
     ret = bdrv_change_backing_file(parent, filename,
-                                   base->drv ? base->drv->format_name : "");
+                                   base->drv ? base->drv->format_name : "",
+                                   false);
     if (ret < 0) {
         error_setg_errno(errp, -ret, "Could not update backing file link");
     }
@@ -1629,9 +1630,7 @@ static int bdrv_open_common(BlockDriverState *bs, BlockBackend *file,
     assert(options != NULL && bs->options != options);
 
     opts = qemu_opts_create(&bdrv_runtime_opts, NULL, 0, &error_abort);
-    qemu_opts_absorb_qdict(opts, options, &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
+    if (!qemu_opts_absorb_qdict(opts, options, errp)) {
         ret = -EINVAL;
         goto fail_opts;
     }
@@ -4091,9 +4090,7 @@ int bdrv_reopen_prepare(BDRVReopenState *reopen_state, BlockReopenQueue *queue,
 
     /* Process generic block layer options */
     opts = qemu_opts_create(&bdrv_runtime_opts, NULL, 0, &error_abort);
-    qemu_opts_absorb_qdict(opts, reopen_state->options, &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
+    if (!qemu_opts_absorb_qdict(opts, reopen_state->options, errp)) {
         ret = -EINVAL;
         goto error;
     }
@@ -4684,8 +4681,8 @@ int bdrv_check(BlockDriverState *bs,
  *            image file header
  * -ENOTSUP - format driver doesn't support changing the backing file
  */
-int bdrv_change_backing_file(BlockDriverState *bs,
-    const char *backing_file, const char *backing_fmt)
+int bdrv_change_backing_file(BlockDriverState *bs, const char *backing_file,
+                             const char *backing_fmt, bool warn)
 {
     BlockDriver *drv = bs->drv;
     int ret;
@@ -4697,6 +4694,12 @@ int bdrv_change_backing_file(BlockDriverState *bs,
     /* Backing file format doesn't make sense without a backing file */
     if (backing_fmt && !backing_file) {
         return -EINVAL;
+    }
+
+    if (warn && backing_file && !backing_fmt) {
+        warn_report("Deprecated use of backing file without explicit "
+                    "backing format, use of this image requires "
+                    "potentially unsafe format probing");
     }
 
     if (drv->bdrv_change_backing_file != NULL) {
@@ -5408,21 +5411,6 @@ int bdrv_has_zero_init(BlockDriverState *bs)
     return 0;
 }
 
-bool bdrv_unallocated_blocks_are_zero(BlockDriverState *bs)
-{
-    BlockDriverInfo bdi;
-
-    if (bs->backing) {
-        return false;
-    }
-
-    if (bdrv_get_info(bs, &bdi) == 0) {
-        return bdi.unallocated_blocks_are_zero;
-    }
-
-    return false;
-}
-
 bool bdrv_can_write_zeroes_with_unmap(BlockDriverState *bs)
 {
     if (!(bs->open_flags & BDRV_O_UNMAP)) {
@@ -5680,10 +5668,9 @@ static void coroutine_fn bdrv_co_invalidate_cache(BlockDriverState *bs,
     if (bs->open_flags & BDRV_O_INACTIVE) {
         bs->open_flags &= ~BDRV_O_INACTIVE;
         bdrv_get_cumulative_perm(bs, &perm, &shared_perm);
-        ret = bdrv_check_perm(bs, NULL, perm, shared_perm, NULL, NULL, &local_err);
+        ret = bdrv_check_perm(bs, NULL, perm, shared_perm, NULL, NULL, errp);
         if (ret < 0) {
             bs->open_flags |= BDRV_O_INACTIVE;
-            error_propagate(errp, local_err);
             return;
         }
         bdrv_set_perm(bs, perm, shared_perm);
@@ -6078,8 +6065,7 @@ void bdrv_img_create(const char *filename, const char *fmt,
 
     /* Parse -o options */
     if (options) {
-        qemu_opts_do_parse(opts, options, NULL, &local_err);
-        if (local_err) {
+        if (!qemu_opts_do_parse(opts, options, NULL, errp)) {
             goto out;
         }
     }
@@ -6092,8 +6078,8 @@ void bdrv_img_create(const char *filename, const char *fmt,
     }
 
     if (base_filename) {
-        qemu_opt_set(opts, BLOCK_OPT_BACKING_FILE, base_filename, &local_err);
-        if (local_err) {
+        if (!qemu_opt_set(opts, BLOCK_OPT_BACKING_FILE, base_filename,
+                          NULL)) {
             error_setg(errp, "Backing file not supported for file format '%s'",
                        fmt);
             goto out;
@@ -6101,8 +6087,7 @@ void bdrv_img_create(const char *filename, const char *fmt,
     }
 
     if (base_fmt) {
-        qemu_opt_set(opts, BLOCK_OPT_BACKING_FMT, base_fmt, &local_err);
-        if (local_err) {
+        if (!qemu_opt_set(opts, BLOCK_OPT_BACKING_FMT, base_fmt, NULL)) {
             error_setg(errp, "Backing file format not supported for file "
                              "format '%s'", fmt);
             goto out;
@@ -6150,18 +6135,30 @@ void bdrv_img_create(const char *filename, const char *fmt,
         bs = bdrv_open(full_backing, NULL, backing_options, back_flags,
                        &local_err);
         g_free(full_backing);
-        if (!bs && size != -1) {
-            /* Couldn't open BS, but we have a size, so it's nonfatal */
-            warn_reportf_err(local_err,
-                            "Could not verify backing image. "
-                            "This may become an error in future versions.\n");
-            local_err = NULL;
-        } else if (!bs) {
-            /* Couldn't open bs, do not have size */
-            error_append_hint(&local_err,
-                              "Could not open backing image to determine size.\n");
+        if (!bs) {
+            error_append_hint(&local_err, "Could not open backing image.\n");
             goto out;
         } else {
+            if (!backing_fmt) {
+                warn_report("Deprecated use of backing file without explicit "
+                            "backing format (detected format of %s)",
+                            bs->drv->format_name);
+                if (bs->drv != &bdrv_raw) {
+                    /*
+                     * A probe of raw deserves the most attention:
+                     * leaving the backing format out of the image
+                     * will ensure bs->probed is set (ensuring we
+                     * don't accidentally commit into the backing
+                     * file), and allow more spots to warn the users
+                     * to fix their toolchain when opening this image
+                     * later.  For other images, we can safely record
+                     * the format that we probed.
+                     */
+                    backing_fmt = bs->drv->format_name;
+                    qemu_opt_set(opts, BLOCK_OPT_BACKING_FMT, backing_fmt,
+                                 NULL);
+                }
+            }
             if (size == -1) {
                 /* Opened BS, have no size */
                 size = bdrv_getlength(bs);
@@ -6175,7 +6172,12 @@ void bdrv_img_create(const char *filename, const char *fmt,
             }
             bdrv_unref(bs);
         }
-    } /* (backing_file && !(flags & BDRV_O_NO_BACKING)) */
+        /* (backing_file && !(flags & BDRV_O_NO_BACKING)) */
+    } else if (backing_file && !backing_fmt) {
+        warn_report("Deprecated use of unopened backing file without "
+                    "explicit backing format, use of this image requires "
+                    "potentially unsafe format probing");
+    }
 
     if (size == -1) {
         error_setg(errp, "Image creation needs a size parameter");
@@ -6186,6 +6188,7 @@ void bdrv_img_create(const char *filename, const char *fmt,
         printf("Formatting '%s', fmt=%s ", filename, fmt);
         qemu_opts_print(opts, " ");
         puts("");
+        fflush(stdout);
     }
 
     ret = bdrv_create(drv, filename, opts, &local_err);
@@ -6482,6 +6485,7 @@ void bdrv_remove_aio_context_notifier(BlockDriverState *bs,
 
 int bdrv_amend_options(BlockDriverState *bs, QemuOpts *opts,
                        BlockDriverAmendStatusCB *status_cb, void *cb_opaque,
+                       bool force,
                        Error **errp)
 {
     if (!bs->drv) {
@@ -6493,7 +6497,8 @@ int bdrv_amend_options(BlockDriverState *bs, QemuOpts *opts,
                    bs->drv->format_name);
         return -ENOTSUP;
     }
-    return bs->drv->bdrv_amend_options(bs, opts, status_cb, cb_opaque, errp);
+    return bs->drv->bdrv_amend_options(bs, opts, status_cb,
+                                       cb_opaque, force, errp);
 }
 
 /*

@@ -19,6 +19,7 @@
 #include "sysemu/runstate.h"
 #include "sysemu/sysemu.h"
 #include "qemu/main-loop.h"
+#include "qemu/rcu.h"
 #include "tests/qtest/libqtest.h"
 #include "tests/qtest/libqos/qgraph.h"
 #include "fuzz.h"
@@ -210,6 +211,9 @@ int LLVMFuzzerInitialize(int *argc, char ***argv, char ***envp)
     wordexp(init_cmdline, &result, 0);
 
     qemu_init(result.we_wordc, result.we_wordv, NULL);
+
+    /* re-enable the rcu atfork, which was previously disabled in qemu_init */
+    rcu_enable_atfork();
 
     return 0;
 }
