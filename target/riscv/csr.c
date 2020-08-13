@@ -1565,7 +1565,7 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
 #endif
 
     /* Physical Memory Protection */
-    [CSR_PMPCFG0  ... CSR_PMPADDR9] =  CSR_OP_NOLOG_RW(pmp, pmpcfg),
+    [CSR_PMPCFG0  ... CSR_PMPCFG3] =  CSR_OP_NOLOG_RW(pmp, pmpcfg),
     [CSR_PMPADDR0 ... CSR_PMPADDR15] = CSR_OP_NOLOG_RW(pmp, pmpaddr),
 
     /* Performance Counters */
