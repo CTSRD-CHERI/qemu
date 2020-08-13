@@ -503,7 +503,6 @@ numa=""
 tcmalloc="no"
 jemalloc="no"
 replication="yes"
-vxhs=""
 bochs="yes"
 cloop="yes"
 dmg="yes"
@@ -1558,10 +1557,6 @@ for opt do
   ;;
   --enable-replication) replication="yes"
   ;;
-  --disable-vxhs) vxhs="no"
-  ;;
-  --enable-vxhs) vxhs="yes"
-  ;;
   --disable-bochs) bochs="no"
   ;;
   --enable-bochs) bochs="yes"
@@ -1949,7 +1944,6 @@ disabled with --disable-FEATURE, default is enabled if available:
   xfsctl          xfsctl support
   qom-cast-debug  cast debugging support
   tools           build qemu-io, qemu-nbd and qemu-img tools
-  vxhs            Veritas HyperScale vDisk backend support
   bochs           bochs image format support
   cloop           cloop image format support
   dmg             dmg image format support
@@ -4088,7 +4082,7 @@ fi
 ##########################################
 # pixman support probe
 
-if test "$want_tools" = "no" && test "$softmmu" = "no"; then
+if test "$softmmu" = "no"; then
   pixman_cflags=
   pixman_libs=
 elif $pkg_config --atleast-version=0.21.8 pixman-1 > /dev/null 2>&1; then
@@ -4215,7 +4209,7 @@ pthread_setname_np_wo_tid=no
 cat > $TMPC << EOF
 #include <pthread.h>
 
-static void *f(void *p) { pthread_setname_np("QEMU"); }
+static void *f(void *p) { pthread_setname_np("QEMU"); return NULL; }
 int main(void)
 {
     pthread_t thread;
@@ -6269,33 +6263,6 @@ if compile_prog "" "" ; then
 fi
 
 ##########################################
-# Veritas HyperScale block driver VxHS
-# Check if libvxhs is installed
-
-if test "$vxhs" != "no" ; then
-  cat > $TMPC <<EOF
-#include <stdint.h>
-#include <qnio/qnio_api.h>
-
-void *vxhs_callback;
-
-int main(void) {
-    iio_init(QNIO_VERSION, vxhs_callback);
-    return 0;
-}
-EOF
-  vxhs_libs="-lvxhs -lssl"
-  if compile_prog "" "$vxhs_libs" ; then
-    vxhs=yes
-  else
-    if test "$vxhs" = "yes" ; then
-      feature_not_found "vxhs block device" "Install libvxhs See github"
-    fi
-    vxhs=no
-  fi
-fi
-
-##########################################
 # check for _Static_assert()
 
 have_static_assert=no
@@ -6389,7 +6356,7 @@ fi
 # checks for fuzzer
 if test "$fuzzing" = "yes" ; then
   write_c_fuzzer_skeleton
-  if compile_prog "$CPU_CFLAGS -Werror -fsanitize=address,fuzzer" ""; then
+  if compile_prog "$CPU_CFLAGS -Werror -fsanitize=fuzzer" ""; then
       have_fuzzer=yes
   fi
 fi
@@ -7061,7 +7028,6 @@ echo "jemalloc support  $jemalloc"
 echo "avx2 optimization $avx2_opt"
 echo "avx512f optimization $avx512f_opt"
 echo "replication support $replication"
-echo "VxHS block device $vxhs"
 echo "bochs support     $bochs"
 echo "cloop support     $cloop"
 echo "dmg support       $dmg"
@@ -7149,6 +7115,9 @@ echo "GIT_SUBMODULES=$git_submodules" >> $config_host_mak
 echo "GIT_UPDATE=$git_update" >> $config_host_mak
 
 echo "ARCH=$ARCH" >> $config_host_mak
+
+echo "GLIB_CFLAGS=$glib_cflags" >> $config_host_mak
+echo "GLIB_LDFLAGS=$glib_ldflags" >> $config_host_mak
 
 if test "$default_devices" = "yes" ; then
   echo "CONFIG_MINIKCONF_MODE=--defconfig" >> $config_host_mak
@@ -7922,11 +7891,6 @@ elif test "$pthread_setname_np_wo_tid" = "yes" ; then
   echo "CONFIG_PTHREAD_SETNAME_NP_WO_TID=y" >> $config_host_mak
 fi
 
-if test "$vxhs" = "yes" ; then
-  echo "CONFIG_VXHS=y" >> $config_host_mak
-  echo "VXHS_LIBS=$vxhs_libs" >> $config_host_mak
-fi
-
 if test "$libpmem" = "yes" ; then
   echo "CONFIG_LIBPMEM=y" >> $config_host_mak
 fi
@@ -7970,11 +7934,11 @@ if test "$have_mlockall" = "yes" ; then
 fi
 if test "$fuzzing" = "yes" ; then
   if test "$have_fuzzer" = "yes"; then
-    FUZZ_LDFLAGS=" -fsanitize=address,fuzzer"
-    FUZZ_CFLAGS=" -fsanitize=address,fuzzer"
-    CFLAGS="$CFLAGS -fsanitize=address,fuzzer-no-link"
+    FUZZ_LDFLAGS=" -fsanitize=fuzzer"
+    FUZZ_CFLAGS=" -fsanitize=fuzzer"
+    CFLAGS="$CFLAGS -fsanitize=fuzzer-no-link"
   else
-    error_exit "Your compiler doesn't support -fsanitize=address,fuzzer"
+    error_exit "Your compiler doesn't support -fsanitize=fuzzer"
     exit 1
   fi
 fi

@@ -100,6 +100,8 @@ int qemu_get_thread_id(void)
     return (int)tid;
 #elif defined(__NetBSD__)
     return _lwp_self();
+#elif defined(__OpenBSD__)
+    return getthrid();
 #else
     return getpid();
 #endif
@@ -260,25 +262,35 @@ void qemu_set_block(int fd)
     assert(f != -1);
 }
 
-void qemu_set_nonblock(int fd)
+int qemu_try_set_nonblock(int fd)
 {
     int f;
     f = fcntl(fd, F_GETFL);
-    assert(f != -1);
-    f = fcntl(fd, F_SETFL, f | O_NONBLOCK);
-#ifdef __OpenBSD__
     if (f == -1) {
+        return -errno;
+    }
+    if (fcntl(fd, F_SETFL, f | O_NONBLOCK) == -1) {
+#ifdef __OpenBSD__
         /*
          * Previous to OpenBSD 6.3, fcntl(F_SETFL) is not permitted on
          * memory devices and sets errno to ENODEV.
          * It's OK if we fail to set O_NONBLOCK on devices like /dev/null,
          * because they will never block anyway.
          */
-        assert(errno == ENODEV);
-    }
-#else
-    assert(f != -1);
+        if (errno == ENODEV) {
+            return 0;
+        }
 #endif
+        return -errno;
+    }
+    return 0;
+}
+
+void qemu_set_nonblock(int fd)
+{
+    int f;
+    f = qemu_try_set_nonblock(fd);
+    assert(f == 0);
 }
 
 int socket_set_fast_reuse(int fd)
@@ -828,4 +840,19 @@ char *qemu_get_host_name(Error **errp)
     }
 
     return g_steal_pointer(&hostname);
+}
+
+size_t qemu_get_host_physmem(void)
+{
+#ifdef _SC_PHYS_PAGES
+    long pages = sysconf(_SC_PHYS_PAGES);
+    if (pages > 0) {
+        if (pages > SIZE_MAX / qemu_real_host_page_size) {
+            return SIZE_MAX;
+        } else {
+            return pages * qemu_real_host_page_size;
+        }
+    }
+#endif
+    return 0;
 }
