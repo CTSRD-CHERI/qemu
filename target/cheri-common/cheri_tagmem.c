@@ -124,6 +124,8 @@ typedef struct CheriTagBlock {
 } CheriTagBlock;
 #endif
 
+static const CheriTagBlock ALL_ZERO_TAGBLK;
+
 static CheriTagBlock *cheri_tag_new_tagblk(RAMBlock *ram, uint64_t tagidx)
 {
     CheriTagBlock *tagblk, *old;
@@ -194,13 +196,16 @@ static inline QEMU_ALWAYS_INLINE bool tag_bit_get(size_t index, RAMBlock *ram)
     return tagblock_get_tag(cheri_tag_block(index, ram), CAP_TAGBLK_IDX(index));
 }
 
-static inline QEMU_ALWAYS_INLINE void tag_bit_set(size_t index, RAMBlock *ram)
+static inline QEMU_ALWAYS_INLINE bool tag_bit_set(size_t index, RAMBlock *ram)
 {
     CheriTagBlock *block = cheri_tag_block(index, ram);
+    bool allocated = false;
     if (!block) {
         block = cheri_tag_new_tagblk(ram, index);
+        allocated = true;
     }
     tagblock_set_tag(block, CAP_TAGBLK_IDX(index));
+    return allocated;
 }
 //static inline QEMU_ALWAYS_INLINE void tag_bit_clear(size_t index, RAMBlock *ram)
 //{
@@ -313,6 +318,43 @@ static inline RAMBlock *v2r_addr(CPUArchState *env, target_ulong vaddr,
     return block;
 }
 
+void *cheri_tagmem_for_addr(RAMBlock *ram, ram_addr_t ram_offset, size_t size)
+{
+#if !TAGMEM_USE_BITMAP
+    return NULL; /* Not implemented */
+#else
+    if (!ram->cheri_tags)
+        return (void *)(uintptr_t)&ALL_ZERO_TAGBLK; // const_cast
+
+    uint64_t tag = ram_offset >> CAP_TAG_SHFT;
+    cheri_debug_assert(size == TARGET_PAGE_SIZE && "Unexpected size");
+    CheriTagBlock *tagblk = cheri_tag_block(tag, ram);
+    if (tagblk != NULL) {
+        const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
+        return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
+    }
+    // No tags allocated yet
+    return (void *)(uintptr_t)&ALL_ZERO_TAGBLK; // const_cast
+#endif
+}
+
+static inline CPUIOTLBEntry *
+get_iotlb_entry_fast(CPUArchState *env, target_ulong vaddr, int mmu_idx)
+{
+    /* XXXAR: see mte_helper.c */
+    /*
+     * Find the iotlbentry for ptr.  This *must* be present in the TLB
+     * because we just found the mapping.
+     * TODO: Perhaps there should be a cputlb helper that returns a
+     * matching tlb entry + iotlb entry.
+     */
+#ifdef CONFIG_DEBUG_TCG
+    CPUTLBEntry *entry = tlb_entry(env, mmu_idx, vaddr);
+    g_assert(tlb_hit(tlb_addr_write(entry), vaddr));
+#endif
+    return &env_tlb(env)->d[mmu_idx].iotlb[tlb_index(env, mmu_idx, vaddr)];
+}
+
 void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                           uintptr_t pc)
 {
@@ -358,13 +400,66 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
      * (MMU_DATA_STORE) rather than a capability store (MMU_DATA_CAP_STORE),
      * so that we don't require that the SC inhibit be clear.
      */
-    void *host_addr =
-        probe_write(env, vaddr, size, cpu_mmu_index(env, false), pc);
+    const int mmu_idx = cpu_mmu_index(env, false);
+    void *host_addr = probe_write(env, vaddr, size, mmu_idx, pc);
     // Only RAM and ROM regions are backed by host addresses so if probe_write()
     // returns NULL we know that we can't write the tagmem.
     if (unlikely(!host_addr))
         return;
 
+    // This should raise an exception if the page is not present
+    if (!host_addr) {
+        error_report("%s: Could not find TLB entry for vaddr " TARGET_FMT_plx
+                     " -- This should have raised a tlb exception",
+                     __func__, vaddr);
+        return;
+    }
+    CPUIOTLBEntry * iotlbentry = get_iotlb_entry_fast(env, vaddr, mmu_idx);
+    if (likely(iotlbentry->tagmem != NULL)) {
+        if (iotlbentry->tagmem == &ALL_ZERO_TAGBLK) {
+            // All tags for this page are zero -> no need to invalidate
+            return;
+        }
+        // We cached the tagblock address in the iotlb -> find find the tag bit:
+        // allocated tagmem:
+        target_ulong first_offset = vaddr & ~TARGET_PAGE_MASK;
+        target_ulong last_offset = (vaddr + size - 1) & ~TARGET_PAGE_MASK;
+        size_t tag_start = first_offset >> CAP_TAG_SHFT;
+        size_t tag_end = last_offset >> CAP_TAG_SHFT;
+        size_t ntags = tag_end - tag_start + 1;
+        cheri_debug_assert(ntags >= 1);
+#if TAGMEM_USE_BITMAP
+        if (unlikely(ntags > 1))
+            bitmap_clear(iotlbentry->tagmem, tag_start, ntags);
+        else
+            clear_bit(tag_start, iotlbentry->tagmem);
+        unsigned long *p_new =
+            (unsigned long *)iotlbentry->tagmem + BIT_WORD(tag_start);
+#else
+        /* Not implemented */
+        abort();
+#endif
+#ifdef CONFIG_DEBUG_TCG
+    ram_addr_t offset;
+    RAMBlock *block = qemu_ram_block_from_host(host_addr, false, &offset);
+    uint64_t tag = offset >> CAP_TAG_SHFT;
+    CheriTagBlock *tagblk = cheri_tag_block(tag, block);
+    const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
+    unsigned long *p_old = tagblk->tag_bitmap + BIT_WORD(tagblk_index);
+    // warn_report("tag bit old: %p, tag bit new: %p\r", p_old, p_new);
+#if TAGMEM_USE_BITMAP
+    unsigned long *p_new =
+        (unsigned long *)iotlbentry->tagmem + BIT_WORD(tag_offset.value);
+#else
+#error "!TAGMEM_USE_BITMAP case not implemented"
+#endif
+    assert(p_old == p_new);
+#endif
+        return;
+    }
+    // Fall back to the slower path (should not happen!)
+    warn_report("Using slow path for tag invalidate:" TARGET_FMT_plx "\r",
+                vaddr);
     ram_addr_t offset;
     RAMBlock *block = qemu_ram_block_from_host(host_addr, false, &offset);
     if (unlikely(!block)) {
@@ -434,7 +529,14 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     qemu_maybe_log_instr_extra(env, "    Cap Tag Write [" TARGET_FMT_lx "/"
         RAM_ADDR_FMT "] %d -> 1\n", vaddr, ram_offset,
         tag_bit_get(ram_offset >> CAP_TAG_SHFT, ram));
-    tag_bit_set(ram_offset >> CAP_TAG_SHFT, ram);
+    if (tag_bit_set(ram_offset >> CAP_TAG_SHFT, ram)) {
+        // new tag block allocated, flush the TCG tlb so that the magic zero
+        // value is removed from the iotlb.
+        // warn_report("Allocated new tag block for " TARGET_FMT_plx  "->
+        // flushing tlb\r", vaddr);
+        // TODO: assert that the value was the magic zero constant
+        tlb_flush_page_all_cpus_synced(env_cpu(env), vaddr);
+    }
 }
 
 static CheriTagBlock *cheri_tag_get_block(CPUArchState *env, target_ulong vaddr,

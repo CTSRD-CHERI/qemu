@@ -150,6 +150,9 @@ typedef struct CPUIOTLBEntry {
      *     + the offset within the target MemoryRegion (otherwise)
      */
     hwaddr addr;
+#ifdef TARGET_CHERI
+    void *tagmem;
+#endif
     MemTxAttrs attrs;
 } CPUIOTLBEntry;
 
