@@ -1240,7 +1240,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         env->statcounters_cap_write_tagged++;
         cheri_tag_set(env, vaddr, cs, NULL, retpc);
     } else {
-        cheri_tag_invalidate(env, vaddr, CHERI_CAP_SIZE, retpc);
+        cheri_tag_invalidate_aligned(env, vaddr, retpc);
     }
     /* No TLB fault possible, should be safe to get a host pointer now */
     void* host = probe_write(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
