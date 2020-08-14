@@ -323,8 +323,8 @@ void *cheri_tagmem_for_addr(RAMBlock *ram, ram_addr_t ram_offset, size_t size)
 #if !TAGMEM_USE_BITMAP
     return NULL; /* Not implemented */
 #else
-    if (!ram->cheri_tags)
-        return (void *)(uintptr_t)&ALL_ZERO_TAGBLK; // const_cast
+    if (!ram || !ram->cheri_tags)
+        return (void*)(uintptr_t)&ALL_ZERO_TAGBLK;
 
     uint64_t tag = ram_offset >> CAP_TAG_SHFT;
     cheri_debug_assert(size == TARGET_PAGE_SIZE && "Unexpected size");
@@ -334,7 +334,7 @@ void *cheri_tagmem_for_addr(RAMBlock *ram, ram_addr_t ram_offset, size_t size)
         return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
     }
     // No tags allocated yet
-    return (void *)(uintptr_t)&ALL_ZERO_TAGBLK; // const_cast
+    return (void*)(uintptr_t)&ALL_ZERO_TAGBLK;
 #endif
 }
 
@@ -355,89 +355,118 @@ get_iotlb_entry_fast(CPUArchState *env, target_ulong vaddr, int mmu_idx)
     return &env_tlb(env)->d[mmu_idx].iotlb[tlb_index(env, mmu_idx, vaddr)];
 }
 
+typedef struct TagOffset {
+    target_ulong value;
+} TagOffset;
+
+static QEMU_ALWAYS_INLINE TagOffset addr_to_tag_offset(target_ulong addr)
+{
+    return (struct TagOffset){.value = addr >> CAP_TAG_SHFT};
+}
+
+static QEMU_ALWAYS_INLINE target_ulong tag_offset_to_addr(TagOffset offset)
+{
+    return offset.value << CAP_TAG_SHFT;
+}
+
+static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
+                                     uintptr_t pc);
+
+void cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
+                                  uintptr_t pc)
+{
+    cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
+    cheri_tag_invalidate_one(env, vaddr, pc);
+}
+
 void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                           uintptr_t pc)
 {
-    // This must not cross a page boundary since we are only translating once!
     cheri_debug_assert(size > 0);
-    if (unlikely((vaddr & TARGET_PAGE_MASK) !=
-                 ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
-#if !defined(TARGET_ALIGNED_ONLY) || defined(CHERI_UNALIGNED)
-        // this can happen with unaligned stores
-        warn_report("Got unaligned store in %d-byte store across page "
+    target_ulong first_addr = vaddr;
+    target_ulong last_addr = (vaddr + size - 1);
+    TagOffset tag_start = addr_to_tag_offset(first_addr);
+    TagOffset tag_end = addr_to_tag_offset(last_addr);
+    if (likely(tag_start.value == tag_end.value)) {
+        // Common case, only one tag (i.e. an aligned store)
+        cheri_tag_invalidate_one(env, vaddr, pc);
+        return;
+    }
+    // Unaligned store -> can cross a capabiblity alignment boundary and
+    // therefore invalidate two tags. It can also cross pages
+    size_t ntags = tag_end.value - tag_start.value + 1;
+    assert(ntags == 2 && "Should invalidate at most two tag bits here");
+    // Note: we always do a new page lookup here since unaligned stores
+    // should be rare and the probing should be fast if it's in the QEMU TLB
+#if defined(TARGET_ALIGNED_ONLY)
+#if defined(CHERI_UNALIGNED)
+    if (unlikely((first_addr & TARGET_PAGE_MASK) !=
+                 (last_addr & TARGET_PAGE_MASK))) {
+        warn_report("Got unaligned %d-byte store across page "
                     "boundary at 0x" TARGET_FMT_lx "\r\n",
                     size, vaddr);
-        assert(size == 2 || size == 4 || size == 8);
-        size_t remaining_in_page =
-            TARGET_PAGE_SIZE - (vaddr & ~TARGET_PAGE_MASK);
-        cheri_debug_assert(remaining_in_page < (size_t)size);
-        // invalidate tags for both pages (two lookups required!)
-        cheri_tag_invalidate(env, vaddr, remaining_in_page, pc);
-        cheri_tag_invalidate(env, vaddr + remaining_in_page,
-                             size - remaining_in_page, pc);
-        return;
-#else
-        // Unaligned stores are not supported, this should never happen!
-        qemu_log_flush();
-        error_report("FATAL: %s: " TARGET_FMT_lx
-                     "+%d crosses a page boundary\r",
-                     __func__, vaddr, size);
-        char buffer[256];
-        FILE *f = fmemopen(buffer, sizeof(buffer), "w");
-        fprintf(f, "Probably caused by guest instruction: ");
-        target_disas(f, env_cpu(env), cpu_get_current_pc(env, pc, false),
-                     /* Only one instr*/ -1);
-        fprintf(f, "\r");
-        fclose(f);
-        buffer[sizeof(buffer) - 1] = '\0';
-        error_report("%s", buffer);
-        exit(1);
-#endif
     }
+#else
+    qemu_log_flush();
+    error_report("FATAL: %s: " TARGET_FMT_lx
+                 "+%d crosses a page boundary\r",
+                 __func__, vaddr, size);
+    char buffer[256];
+    FILE *f = fmemopen(buffer, sizeof(buffer), "w");
+    fprintf(f, "Probably caused by guest instruction: ");
+    target_disas(f, env_cpu(env), cpu_get_current_pc(env, pc, false),
+                 /* Only one instr*/ -1);
+    fprintf(f, "\r");
+    fclose(f);
+    buffer[sizeof(buffer) - 1] = '\0';
+    error_report("%s", buffer);
+    exit(1);
+#endif
+#endif
+    for (target_ulong addr = tag_offset_to_addr(tag_start);
+         addr <= tag_offset_to_addr(tag_end); addr += CHERI_CAP_SIZE) {
+        cheri_tag_invalidate_one(env, addr, pc);
+    }
+}
 
+static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
+                                     uintptr_t pc)
+{
     /*
      * When resolving this address in the TLB, treat it like a data store
      * (MMU_DATA_STORE) rather than a capability store (MMU_DATA_CAP_STORE),
      * so that we don't require that the SC inhibit be clear.
      */
     const int mmu_idx = cpu_mmu_index(env, false);
-    void *host_addr = probe_write(env, vaddr, size, mmu_idx, pc);
-    // Only RAM and ROM regions are backed by host addresses so if probe_write()
-    // returns NULL we know that we can't write the tagmem.
+    void *host_addr = probe_write(env, vaddr, 1, mmu_idx, pc);
+    // Only RAM and ROM regions are backed by host addresses so if
+    // probe_write() returns NULL we know that we can't write the tagmem.
     if (unlikely(!host_addr))
         return;
 
-    // This should raise an exception if the page is not present
-    if (!host_addr) {
-        error_report("%s: Could not find TLB entry for vaddr " TARGET_FMT_plx
-                     " -- This should have raised a tlb exception",
-                     __func__, vaddr);
+    CPUIOTLBEntry *iotlbentry = get_iotlb_entry_fast(env, vaddr, mmu_idx);
+    // If the host_addr was not NULL, the tagmem value should also not be NULL!
+    cheri_debug_assert(iotlbentry->tagmem != NULL);
+
+    // Note: having this branch seems to be slightly faster than writing a zero
+    // just writing to the fake buffe due to eliding the mask calculation and
+    // store instructions.
+    if (iotlbentry->tagmem == &ALL_ZERO_TAGBLK) {
+        // All tags for this page are zero -> no need to invalidate
         return;
     }
-    CPUIOTLBEntry * iotlbentry = get_iotlb_entry_fast(env, vaddr, mmu_idx);
-    if (likely(iotlbentry->tagmem != NULL)) {
-        if (iotlbentry->tagmem == &ALL_ZERO_TAGBLK) {
-            // All tags for this page are zero -> no need to invalidate
-            return;
-        }
-        // We cached the tagblock address in the iotlb -> find find the tag bit:
-        // allocated tagmem:
-        target_ulong first_offset = vaddr & ~TARGET_PAGE_MASK;
-        target_ulong last_offset = (vaddr + size - 1) & ~TARGET_PAGE_MASK;
-        size_t tag_start = first_offset >> CAP_TAG_SHFT;
-        size_t tag_end = last_offset >> CAP_TAG_SHFT;
-        size_t ntags = tag_end - tag_start + 1;
-        cheri_debug_assert(ntags >= 1);
+
+    // We cached the tagblock address in the iotlb -> find find the tag
+    // bit: The iotlb->tagmem pointer always points to the tag memory
+    // for the start of the page so we can simply add the index for the
+    // page offset.
+    target_ulong page_offset = vaddr & ~TARGET_PAGE_MASK;
+    TagOffset tag_offset = addr_to_tag_offset(page_offset);
 #if TAGMEM_USE_BITMAP
-        if (unlikely(ntags > 1))
-            bitmap_clear(iotlbentry->tagmem, tag_start, ntags);
-        else
-            clear_bit(tag_start, iotlbentry->tagmem);
-        unsigned long *p_new =
-            (unsigned long *)iotlbentry->tagmem + BIT_WORD(tag_start);
+    clear_bit(tag_offset.value, iotlbentry->tagmem);
 #else
-        /* Not implemented */
-        abort();
+    /* Not implemented */
+    abort();
 #endif
 #ifdef CONFIG_DEBUG_TCG
     ram_addr_t offset;
@@ -455,20 +484,6 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
 #endif
     assert(p_old == p_new);
 #endif
-        return;
-    }
-    // Fall back to the slower path (should not happen!)
-    warn_report("Using slow path for tag invalidate:" TARGET_FMT_plx "\r",
-                vaddr);
-    ram_addr_t offset;
-    RAMBlock *block = qemu_ram_block_from_host(host_addr, false, &offset);
-    if (unlikely(!block)) {
-        // Not backed by RAM?
-        error_report("%s: vaddr=0x%jx -> host_addr=%p not backed by RAM?",
-                     __func__, (uintmax_t)vaddr, host_addr);
-        return;
-    }
-    cheri_tag_phys_invalidate(env, block, offset, size, &vaddr);
 }
 
 void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,

@@ -1217,12 +1217,8 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
     // Cache the CHERI tag block. This massively speeds up running QEMU: before
     // we added this optimization 10-25% of total runtime could be spent
     // looking up tag blocks for a given virtual address.
-    if (section->mr->ram_block && (address & TLB_INVALID_MASK) == 0) {
-        desc->iotlb[index].tagmem =
-            cheri_tagmem_for_addr(section->mr->ram_block, xlat, size);
-    } else {
-        desc->iotlb[index].tagmem = NULL;
-    }
+    desc->iotlb[index].tagmem =
+        cheri_tagmem_for_addr(section->mr->ram_block, xlat, size);
 #endif
     desc->iotlb[index].attrs = attrs;
 

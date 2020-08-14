@@ -42,8 +42,20 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
                                ram_addr_t offset, size_t len,
                                const target_ulong *vaddr);
 void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size);
+/**
+ * Generic tag invalidation function to be called for a *single* data store:
+ * Note: this will currently invalidate at most two tags (as can happen
+ * for a unaligned store that crosses a CHERI_CAP_SIZE alignment boundary).
+ */
 void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                           uintptr_t pc);
+/**
+ * Like cheri_tag_invalidate, but the address must be aligned and it will only
+ * invalidate a single tag (i.e. no unaligned accesses). A bit faster since it
+ * can avoid some branches.
+ */
+void cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
+                                  uintptr_t pc);
 bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
                    hwaddr *ret_paddr, int *prot, uintptr_t pc);
 int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
