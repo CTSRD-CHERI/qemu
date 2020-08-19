@@ -439,21 +439,23 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
     } else {
-        /* XXXAM basic trivial implementation may not handle
-         * compressed capabilities fully, does not perform renormalization.
+        cap_register_t result = *ctp;
+
+        /*
+	 * cbuildcap is allowed to seal at any ambiently-available otype,
+	 * subject to their construction conditions.
          */
-        // Without the temporary cap_register_t we would copy cb into cd
-        // if cdp cd == ct (this was caught by testing cbuildcap $c3, $c1, $c3)
-        cap_register_t result = *cbp;
-        result.cr_base = ctp->cr_base;
-        result._cr_top = ctp->_cr_top;
-        result.cr_perms = ctp->cr_perms;
-        result.cr_uperms = ctp->cr_uperms;
-        result._cr_cursor = ctp->_cr_cursor;
-        if (cap_is_sealed_entry(ctp))
-            cap_make_sealed_entry(&result);
-        else
+        if (cap_is_sealed_entry(ctp)) {
+          /* Sentries require PERM_EXECUTE in csealentry */
+          if ((ctp->cr_perms & CAP_PERM_EXECUTE) == 0) {
             result.cr_otype = CAP_OTYPE_UNSEALED;
+          }
+        } else {
+          result.cr_otype = CAP_OTYPE_UNSEALED;
+        }
+
+        result.cr_tag = 1;
+
         update_capreg(env, cd, &result);
     }
 }
