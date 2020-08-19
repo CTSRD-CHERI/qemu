@@ -808,7 +808,7 @@ static inline void generate_cexeq(DisasContext *ctx, int32_t rd, int32_t cb,
     TCGv_i32 tct = tcg_const_i32(ct);
     TCGv t0 = tcg_temp_new();
 
-    gen_helper_cexeq(t0, cpu_env, tcb, tct);
+    gen_helper_cseqx(t0, cpu_env, tcb, tct);
     gen_store_gpr(t0, rd);
 
     tcg_temp_free(t0);
