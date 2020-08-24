@@ -196,16 +196,15 @@ static inline QEMU_ALWAYS_INLINE bool tag_bit_get(size_t index, RAMBlock *ram)
     return tagblock_get_tag(cheri_tag_block(index, ram), CAP_TAGBLK_IDX(index));
 }
 
-static inline QEMU_ALWAYS_INLINE bool tag_bit_set(size_t index, RAMBlock *ram)
+static inline QEMU_ALWAYS_INLINE void tag_bit_set(size_t index, RAMBlock *ram,
+                                                  bool *allocated)
 {
     CheriTagBlock *block = cheri_tag_block(index, ram);
-    bool allocated = false;
     if (!block) {
         block = cheri_tag_new_tagblk(ram, index);
-        allocated = true;
+        *allocated = true;
     }
     tagblock_set_tag(block, CAP_TAGBLK_IDX(index));
-    return allocated;
 }
 //static inline QEMU_ALWAYS_INLINE void tag_bit_clear(size_t index, RAMBlock *ram)
 //{
@@ -543,7 +542,9 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     qemu_maybe_log_instr_extra(env, "    Cap Tag Write [" TARGET_FMT_lx "/"
         RAM_ADDR_FMT "] %d -> 1\n", vaddr, ram_offset,
         tag_bit_get(ram_offset >> CAP_TAG_SHFT, ram));
-    if (tag_bit_set(ram_offset >> CAP_TAG_SHFT, ram)) {
+    bool allocated_new_block = false;
+    tag_bit_set(ram_offset >> CAP_TAG_SHFT, ram, &allocated_new_block);
+    if (allocated_new_block) {
         // new tag block allocated, flush the TCG tlb so that the magic zero
         // value is removed from the iotlb.
         // warn_report("Allocated new tag block for " TARGET_FMT_plx  "->
