@@ -124,7 +124,7 @@ typedef struct CheriTagBlock {
 } CheriTagBlock;
 #endif
 
-static const CheriTagBlock ALL_ZERO_TAGBLK;
+#define ALL_ZERO_TAGBLK ((void*)(uintptr_t)1)
 
 static CheriTagBlock *cheri_tag_new_tagblk(RAMBlock *ram, uint64_t tagidx)
 {
@@ -324,7 +324,7 @@ void *cheri_tagmem_for_addr(RAMBlock *ram, ram_addr_t ram_offset, size_t size)
     return NULL; /* Not implemented */
 #else
     if (!ram || !ram->cheri_tags)
-        return (void*)(uintptr_t)&ALL_ZERO_TAGBLK;
+        return ALL_ZERO_TAGBLK;
 
     uint64_t tag = ram_offset >> CAP_TAG_SHFT;
     cheri_debug_assert(size == TARGET_PAGE_SIZE && "Unexpected size");
@@ -334,7 +334,7 @@ void *cheri_tagmem_for_addr(RAMBlock *ram, ram_addr_t ram_offset, size_t size)
         return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
     }
     // No tags allocated yet
-    return (void*)(uintptr_t)&ALL_ZERO_TAGBLK;
+    return ALL_ZERO_TAGBLK;
 #endif
 }
 
@@ -448,11 +448,10 @@ static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
     // If the host_addr was not NULL, the tagmem value should also not be NULL!
     cheri_debug_assert(iotlbentry->tagmem != NULL);
 
-    // Note: having this branch seems to be slightly faster than writing a zero
-    // just writing to the fake buffe due to eliding the mask calculation and
-    // store instructions.
-    if (iotlbentry->tagmem == &ALL_ZERO_TAGBLK) {
-        // All tags for this page are zero -> no need to invalidate
+    if (iotlbentry->tagmem == ALL_ZERO_TAGBLK) {
+        // All tags for this page are zero -> no need to invalidate. We also
+        // couldn't invalidate if we wanted to since ALL_ZERO_TAGBLK is not a
+        // valid pointer but a magic constant.
         return;
     }
 
