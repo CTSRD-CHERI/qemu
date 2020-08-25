@@ -238,7 +238,6 @@ DEF_HELPER_3(clt, tl, env, i32, i32)
 DEF_HELPER_3(cle, tl, env, i32, i32)
 DEF_HELPER_3(cltu, tl, env, i32, i32)
 DEF_HELPER_3(cleu, tl, env, i32, i32)
-DEF_HELPER_3(cnexeq, tl, env, i32, i32)
 DEF_HELPER_3(cgetandaddr, tl, env, i32, tl)
 
 DEF_HELPER_3(cloadlinked, cap_checked_ptr, env, i32, i32)

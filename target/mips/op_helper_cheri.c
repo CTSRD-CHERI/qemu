@@ -630,13 +630,6 @@ target_ulong CHERI_HELPER_IMPL(cleu(CPUArchState *env, uint32_t cb, uint32_t ct)
     return (target_ulong)(cursor1_unsigned <= cursor2_unsigned);
 }
 
-target_ulong CHERI_HELPER_IMPL(cnexeq(CPUArchState *env, uint32_t cb, uint32_t ct))
-{
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const cap_register_t *ctp = get_readonly_capreg(env, ct);
-    return !cap_exactly_equal(cbp, ctp);
-}
-
 target_ulong CHERI_HELPER_IMPL(cgetandaddr(CPUArchState *env, uint32_t cb, target_ulong rt))
 {
     target_ulong addr = get_capreg_cursor(env, cb);
