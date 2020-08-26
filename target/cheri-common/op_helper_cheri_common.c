@@ -444,7 +444,12 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
         result.cr_otype = CAP_OTYPE_UNSEALED;
         result.cr_tag = 1;
 
-        if (cap_is_sealed_entry(ctp)) {
+        /*
+         * cbuildcap is allowed to seal at any ambiently-available otype,
+         * subject to their construction conditions.  Otherwise, the result is
+         * unsealed.
+         */
+        if (cap_is_sealed_entry(ctp) && cap_has_perms(ctp, CAP_PERM_EXECUTE)) {
           cap_make_sealed_entry(&result);
         }
 
