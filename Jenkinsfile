@@ -2,7 +2,7 @@
 @Library('ctsrd-jenkins-scripts') _
 
 // Set the default job properties (work around properties() not being additive but replacing)
-setDefaultJobProperties([rateLimitBuilds([count: 2, durationName: 'hour', userBoost: true]),
+setDefaultJobProperties([rateLimitBuilds(throttle: [count: 2, durationName: 'hour', userBoost: true]),
                          [$class: 'GithubProjectProperty', projectUrlStr: 'https://github.com/CTSRD-CHERI/qemu'],
                          copyArtifactPermission('*'), // Downstream jobs need QEMU
 ])
