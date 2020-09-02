@@ -137,7 +137,7 @@ void qemu_log_instr_flush_tcg(bool request_stop);
 
 /* Helper macro to check for instruction logging enabled */
 #define	qemu_log_instr_enabled(env)                                     \
-    (unlikely(qemu_log_instr_check_enabled((env))) ? true : false)
+    unlikely(qemu_log_instr_check_enabled((env)))
 
 /*
  * Check whether instruction tracing is enabled.

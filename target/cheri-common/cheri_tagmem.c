@@ -93,6 +93,7 @@
 #define CAP_TAGBLK_MSK      ((1 << CAP_TAGBLK_SHFT) - 1)
 #define CAP_TAGBLK_SIZE       (1 << CAP_TAGBLK_SHFT)
 #define CAP_TAGBLK_IDX(tag_idx) ((tag_idx) & CAP_TAGBLK_MSK)
+#define TAGS_PER_PAGE        (TARGET_PAGE_SIZE / CHERI_CAP_SIZE)
 #ifdef CHERI_MAGIC128
 // "Magic" table to store the additional 128 metadata bits for the magic128
 // configuration of QEMU
@@ -206,13 +207,13 @@ static inline QEMU_ALWAYS_INLINE void tag_bit_set(size_t index, RAMBlock *ram,
     }
     tagblock_set_tag(block, CAP_TAGBLK_IDX(index));
 }
-//static inline QEMU_ALWAYS_INLINE void tag_bit_clear(size_t index, RAMBlock *ram)
-//{
-//    CheriTagBlock *block = cheri_tag_block(index, ram);
-//    if (block) {
-//        tagblock_clear_tag(block, CAP_TAGBLK_IDX(index));
-//    }
-//}
+static inline QEMU_ALWAYS_INLINE void tag_bit_clear(size_t index, RAMBlock *ram)
+{
+    CheriTagBlock *block = cheri_tag_block(index, ram);
+    if (block) {
+        tagblock_clear_tag(block, CAP_TAGBLK_IDX(index));
+    }
+}
 //static inline QEMU_ALWAYS_INLINE void
 //tag_bit_range_clear(RAMBlock *ram, size_t start, size_t count)
 //{
@@ -460,11 +461,17 @@ static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
     // page offset.
     target_ulong page_offset = vaddr & ~TARGET_PAGE_MASK;
     TagOffset tag_offset = addr_to_tag_offset(page_offset);
+    if (qemu_log_instr_enabled(env)) {
+        bool old_value = test_bit(tag_offset.value, iotlbentry->tagmem);
+        qemu_log_instr_extra(
+            env,
+            "    Cap Tag Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] %d -> 0\n",
+            vaddr, qemu_ram_addr_from_host(host_addr), old_value);
+    }
 #if TAGMEM_USE_BITMAP
     clear_bit(tag_offset.value, iotlbentry->tagmem);
 #else
-    /* Not implemented */
-    abort();
+#error "!TAGMEM_USE_BITMAP case not implemented"
 #endif
 #ifdef CONFIG_DEBUG_TCG
     ram_addr_t offset;
@@ -509,8 +516,7 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
                 qemu_log_instr_extra(env, "    Cap Tag Write [" TARGET_FMT_lx
                     "/" RAM_ADDR_FMT "] %d -> 0\n", write_vaddr, addr,
                     tagblock_get_tag(tagblk, tagblk_index));
-            }
-            if (unlikely(env && qemu_log_instr_enabled(env))) {
+            } else if (unlikely(env && qemu_log_instr_enabled(env))) {
                 qemu_log_instr_extra(env, "    Cap Tag ramaddr Write ["
                     RAM_ADDR_FMT "] %d -> 0\n", addr,
                     tagblock_get_tag(tagblk, tagblk_index));
@@ -547,10 +553,30 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     if (allocated_new_block) {
         // new tag block allocated, flush the TCG tlb so that the magic zero
         // value is removed from the iotlb.
-        // warn_report("Allocated new tag block for " TARGET_FMT_plx  "->
-        // flushing tlb\r", vaddr);
-        // TODO: assert that the value was the magic zero constant
-        tlb_flush_page_all_cpus_synced(env_cpu(env), vaddr);
+        // Note: each tag block contains tags for multiple pages
+        const size_t covered_bytes = CAP_TAGBLK_SIZE * CHERI_CAP_SIZE;
+        const target_ulong start = QEMU_ALIGN_DOWN(vaddr, covered_bytes);
+        const target_ulong end = start + covered_bytes;
+        cheri_debug_assert(is_power_of_2(covered_bytes));
+        cheri_debug_assert(covered_bytes / TARGET_PAGE_SIZE > 1);
+        cheri_debug_assert(is_power_of_2(covered_bytes / TARGET_PAGE_SIZE));
+        CPUState *cpu = env_cpu(env);
+        for (target_ulong page_addr = start; page_addr < end; page_addr += TARGET_PAGE_SIZE) {
+            qemu_maybe_log_instr_extra(env,
+                                       "Allocated new tag block -> flushing "
+                                       "TCG tlb for " TARGET_FMT_plx "\n",
+                                       page_addr);
+            tlb_flush_page_all_cpus_synced(cpu, page_addr);
+        }
+        // We have to exit the current TCG block so that QEMU refills the TLB
+        tag_bit_clear(ram_offset >> CAP_TAG_SHFT, ram);
+        qemu_maybe_log_instr_extra(env,
+                                   "    Clearing Tag [" TARGET_FMT_lx
+                                   "/" RAM_ADDR_FMT
+                                   "] to allow restarting instruction\n",
+                                   vaddr, ram_offset);
+        cpu_restore_state(cpu, pc, true);
+        cpu_loop_exit_noexc(cpu);
     }
 }
 
