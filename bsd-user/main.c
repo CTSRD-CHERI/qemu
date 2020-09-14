@@ -510,6 +510,13 @@ int main(int argc, char **argv)
         qemu_log("entry       0x" TARGET_ABI_FMT_lx "\n", info->entry);
     }
 
+    /* build Task State */
+    ts = g_new0(TaskState, 1);
+    init_task_state(ts);
+    ts->info = info;
+    ts->bprm = &bprm;
+    cpu->opaque = ts;
+
     target_set_brk(info->brk);
     syscall_init();
     signal_init();
@@ -519,13 +526,6 @@ int main(int argc, char **argv)
        the real value of GUEST_BASE into account.  */
     tcg_prologue_init(tcg_ctx);
     tcg_region_init();
-
-    /* build Task State */
-    ts = g_new0(TaskState, 1);
-    init_task_state(ts);
-    ts->info = info;
-    ts->bprm = &bprm;
-    cpu->opaque = ts;
 
     target_cpu_init(env, regs);
 
