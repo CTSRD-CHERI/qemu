@@ -104,13 +104,14 @@ typedef struct {
     bool force_drop;
     /* We are starting to log at the next commit */
     bool starting;
-    /*
-     * Opaque handle to the current instruction info
-     * TODO(am2419): It would be interesting to have a ring buffer
-     * of log_instr_info here, so that we can avoid dumping to file
-     * all the time.
-     */
-    struct cpu_log_instr_info *instr_info;
+    /* Per-CPU flags */
+    int flags;
+#define QEMU_LOG_INSTR_FLAG_BUFFERED 1
+
+    /* Ring buffer of log_instr_info */
+    GArray *instr_info;
+    /* Ring buffer head index */
+    size_t ring_head;
 } cpu_log_instr_state_t;
 
 /*

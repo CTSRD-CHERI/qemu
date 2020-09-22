@@ -104,10 +104,12 @@ typedef struct cpu_log_instr_info {
 /* Entry contains a synchronous exception */
 #define LI_FLAG_INTR_TRAP 1
 /* Entry contains an asynchronous exception */
-#define LI_FLAG_INTR_ASYNC 2
+#define LI_FLAG_INTR_ASYNC (1 << 1)
 #define LI_FLAG_INTR_MASK 0x3
 /* Entry contains a CPU mode-switch and associated code */
-#define LI_FLAG_MODE_SWITCH 4
+#define LI_FLAG_MODE_SWITCH (1 << 2)
+/* Entry in the ring buffer is valid */
+#define LI_FLAG_VALID (1 << 3)
 
     qemu_log_instr_cpu_mode_t next_cpu_mode;
     uint32_t intr_code;
@@ -232,6 +234,9 @@ typedef struct {
 #define CTE_QEMU_VERSION    (0x80U + 3)
 #define CTE_QEMU_MAGIC      "CheriTraceV03"
 
+/* Number of per-cpu ring buffer entries for ring-buffer tracing mode */
+#define QEMU_LOG_INSTR_CPU_BUF_ENTRIES (1 << 16)
+
 /*
  * Fetch the log state for a cpu.
  */
@@ -245,7 +250,10 @@ static inline cpu_log_instr_state_t *get_cpu_log_state(CPUArchState *env)
  */
 static inline cpu_log_instr_info_t *get_cpu_log_instr_info(CPUArchState *env)
 {
-    return get_cpu_log_state(env)->instr_info;
+    cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
+
+    return &g_array_index(cpulog->instr_info, cpu_log_instr_info_t,
+        cpulog->ring_head);
 }
 
 /* Text trace format emitters */
@@ -531,6 +539,31 @@ static void emit_cvtrace_stop(CPUArchState *env, target_ulong pc)
 
 /* Core instruction logging implementation */
 
+static inline void emit_start_event(CPUArchState *env, target_ulong pc)
+{
+    if ((get_cpu_log_state(env)->flags & QEMU_LOG_INSTR_FLAG_BUFFERED) == 0)
+        trace_format->emit_start(env, pc);
+}
+
+static inline void emit_stop_event(CPUArchState *env, target_ulong pc)
+{
+    if ((get_cpu_log_state(env)->flags & QEMU_LOG_INSTR_FLAG_BUFFERED) == 0)
+        trace_format->emit_stop(env, pc);
+}
+
+static inline void emit_entry_event(CPUArchState *env, cpu_log_instr_info_t *iinfo)
+{
+    cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
+
+    if (cpulog->flags & QEMU_LOG_INSTR_FLAG_BUFFERED) {
+        iinfo->flags |= LI_FLAG_VALID;
+        cpulog->ring_head = (cpulog->ring_head + 1) % cpulog->instr_info->len;
+    }
+    else {
+        trace_format->emit_entry(env, iinfo);
+    }
+}
+
 /* Reset instruction info buffer for next instruction */
 static void reset_log_buffer(cpu_log_instr_state_t *cpulog,
                              cpu_log_instr_info_t *iinfo)
@@ -559,7 +592,7 @@ static void do_instr_commit(CPUArchState *env)
 
     if (cpulog->starting) {
         cpulog->starting = false;
-        trace_format->emit_start(env, cpu_get_recent_pc(env));
+        emit_start_event(env, cpu_get_recent_pc(env));
         return;
     }
 
@@ -581,10 +614,10 @@ static void do_instr_commit(CPUArchState *env)
             }
         }
         if (match)
-            trace_format->emit_entry(env, iinfo);
+            emit_entry_event(env, iinfo);
     } else {
         /* dfilter disabled, always log */
-        trace_format->emit_entry(env, iinfo);
+        emit_entry_event(env, iinfo);
     }
 }
 
@@ -650,7 +683,9 @@ static void do_cpu_loglevel_switch(CPUState *cpu, run_on_cpu_data data)
             return;
         }
         do_instr_commit(env);
-        trace_format->emit_stop(env, cpu_get_recent_pc(env));
+        emit_stop_event(env, cpu_get_recent_pc(env));
+        /* Instruction commit may have advanced to the next iinfo buffer slot */
+        iinfo = get_cpu_log_instr_info(env);
         reset_log_buffer(cpulog, iinfo);
     }
     if (next_level_active) {
@@ -715,20 +750,54 @@ void qemu_log_instr_global_switch(bool request_stop)
 }
 
 /*
+ * Initialize instruction info entry from the ring buffer.
+ */
+static void qemu_log_instr_info_init(cpu_log_instr_info_t *iinfo)
+{
+    iinfo->txt_buffer = g_string_new(NULL);
+    iinfo->regs = g_array_new(false, true, sizeof(log_reginfo_t));
+    iinfo->mem = g_array_new(false, true, sizeof(log_meminfo_t));
+}
+
+/*
+ * Clear an instruction info entry from the ring buffer.
+ */
+static void qemu_log_instr_info_destroy(gpointer data)
+{
+    cpu_log_instr_info_t *iinfo = data;
+
+    g_string_free(iinfo->txt_buffer, TRUE);
+    g_array_free(iinfo->regs, TRUE);
+    g_array_free(iinfo->mem, TRUE);
+}
+
+/*
  * This must be called upon cpu creation.
+ * Initializes the per-CPU logging state and data structures.
+ *
+ * Currently the instruction info ring buffer size is fixed and can not
+ * be changed at runtime.
  */
 void qemu_log_instr_init(CPUState *cpu)
 {
     cpu_log_instr_state_t *cpulog = &cpu->log_state;
-    cpu_log_instr_info_t *iinfo = g_malloc0(sizeof(cpu_log_instr_info_t));
+    GArray *iinfo_ring = g_array_sized_new(FALSE, TRUE,
+        sizeof(cpu_log_instr_info_t), QEMU_LOG_INSTR_CPU_BUF_ENTRIES);
+    cpu_log_instr_info_t *iinfo;
+    int i;
 
-    iinfo->txt_buffer = g_string_new(NULL);
-    iinfo->regs = g_array_new(FALSE, TRUE, sizeof(log_reginfo_t));
-    iinfo->mem = g_array_new(FALSE, TRUE, sizeof(log_meminfo_t));
+    g_array_set_size(iinfo_ring, QEMU_LOG_INSTR_CPU_BUF_ENTRIES);
+    g_array_set_clear_func(iinfo_ring, qemu_log_instr_info_destroy);
+
+    for (i = 0; i < iinfo_ring->len; i++) {
+        iinfo = &g_array_index(iinfo_ring, cpu_log_instr_info_t, i);
+        qemu_log_instr_info_init(iinfo);
+    }
 
     cpulog->loglevel = QEMU_LOG_INSTR_LOGLEVEL_NONE;
     cpulog->loglevel_active = false;
-    cpulog->instr_info = iinfo;
+    cpulog->instr_info = iinfo_ring;
+    cpulog->ring_head = 0;
     reset_log_buffer(cpulog, iinfo);
 
     // Make sure we are using the correct trace format.
@@ -805,6 +874,8 @@ void qemu_log_instr_commit(CPUArchState *env)
     log_assert(iinfo != NULL && "Invalid log info");
 
     do_instr_commit(env);
+    /* commit may have advanced to the next iinfo buffer slot */
+    iinfo = get_cpu_log_instr_info(env);
     reset_log_buffer(cpulog, iinfo);
 }
 
@@ -964,7 +1035,45 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
     va_end(va);
 }
 
+void qemu_log_instr_flush(CPUArchState *env)
+{
+    cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
+    size_t curr = cpulog->ring_head;
+    cpu_log_instr_info_t *iinfo;
+
+    if ((cpulog->flags & QEMU_LOG_INSTR_FLAG_BUFFERED) == 0)
+        return;
+
+    do {
+        curr = (curr + 1) % cpulog->instr_info->len;
+        iinfo = &g_array_index(cpulog->instr_info, cpu_log_instr_info_t, curr);
+        if (iinfo->flags & LI_FLAG_VALID) {
+            trace_format->emit_entry(env, iinfo);
+        }
+    } while (cpulog->ring_head != curr);
+}
+
 /* Instruction logging helpers */
+
+/*
+ * Enable or disable buffered logging that is triggered by the target
+ * via qemu_log_instr_flush().
+ */
+void helper_qemu_log_instr_buffered_mode(CPUArchState *env, uint32_t enable)
+{
+    cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
+
+    if (enable) 
+        cpulog->flags |= QEMU_LOG_INSTR_FLAG_BUFFERED;
+    else
+        cpulog->flags &= ~QEMU_LOG_INSTR_FLAG_BUFFERED;
+}
+
+/* Helper version of qemu_log_instr_flush */
+void helper_qemu_log_instr_buffer_flush(CPUArchState *env)
+{
+    qemu_log_instr_flush(env);
+}
 
 /* Start logging all instructions on the current CPU */
 void helper_qemu_log_instr_start(CPUArchState *env, target_ulong pc)

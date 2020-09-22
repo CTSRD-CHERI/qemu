@@ -176,6 +176,12 @@ void qemu_log_instr_set_level(CPUArchState *env, qemu_log_instr_loglevel_t lvl);
 void qemu_log_instr_allcpu_set_level(qemu_log_instr_loglevel_t lvl);
 
 /*
+ * Emit all buffered instruction logs.
+ * This is only relevant when tracing in buffered mode.
+ */
+void qemu_log_instr_flush(CPUArchState *env);
+
+/*
  * Drop the current buffered entry and ignore logging until next commit.
  */
 void qemu_log_instr_drop(CPUArchState *env);
@@ -273,6 +279,7 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 #define	qemu_log_instr_start(env, mode, pc)
 #define	qemu_log_instr_stop(env, mode, pc)
 #define	qemu_log_instr_mode_switch(...)
+#define qemu_log_instr_flush(env)
 #define	qemu_log_instr_reg(...)
 #define	qemu_log_instr_cap(...)
 #define	qemu_log_instr_mem(...)
