@@ -333,6 +333,8 @@ DEF_HELPER_FLAGS_4(gvec_leu64, TCG_CALL_NO_RWG, void, ptr, ptr, ptr, i32)
 DEF_HELPER_FLAGS_5(gvec_bitsel, TCG_CALL_NO_RWG, void, ptr, ptr, ptr, ptr, i32)
 
 #ifdef CONFIG_TCG_LOG_INSTR
+DEF_HELPER_FLAGS_2(qemu_log_instr_buffered_mode, TCG_CALL_NO_RWG, void, env, i32)
+DEF_HELPER_FLAGS_1(qemu_log_instr_buffer_flush, TCG_CALL_NO_RWG, void, env)
 DEF_HELPER_FLAGS_2(qemu_log_instr_start, TCG_CALL_NO_WG, void, env, tl)
 DEF_HELPER_FLAGS_2(qemu_log_instr_user_start, TCG_CALL_NO_WG, void, env, tl)
 DEF_HELPER_FLAGS_2(qemu_log_instr_stop, TCG_CALL_NO_WG, void, env, tl)

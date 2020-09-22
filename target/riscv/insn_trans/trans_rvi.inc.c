@@ -287,8 +287,22 @@ static bool trans_slti(DisasContext *ctx, arg_slti *a)
      */
     if (unlikely(a->rd == 0)) {
         TCGv tpc = tcg_const_tl(ctx->base.pc_next);
-        /* gen_update_cpu_pc(ctx->base.pc_next); */
+        TCGv_i32 ttmp;
+
         switch (a->imm) {
+        case 0x01:
+            ttmp = tcg_const_i32(true);
+            gen_helper_qemu_log_instr_buffered_mode(cpu_env, ttmp);
+            tcg_temp_free_i32(ttmp);
+            break;
+        case 0x02:
+            ttmp = tcg_const_i32(false);
+            gen_helper_qemu_log_instr_buffered_mode(cpu_env, ttmp);
+            tcg_temp_free_i32(ttmp);
+            break;
+        case 0x03:
+            gen_helper_qemu_log_instr_buffer_flush(cpu_env);
+            break;
         case 0x1b:
             gen_helper_qemu_log_instr_start(cpu_env, tpc);
             ctx->base.is_jmp = DISAS_NORETURN;

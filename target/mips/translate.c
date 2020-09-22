@@ -4390,6 +4390,15 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
                 gen_helper_smp_yield(cpu_env);
             }
 
+            /* Buffered tracing switches, same as RISC-V */
+            if ((uint16_t)imm == 0x01 || (uint16_t)imm == 0x02) {
+                TCGv_i32 ttmp = tcg_const_i32(((uint16_t)imm == 0x01));
+                gen_helper_qemu_log_instr_buffered_mode(cpu_env, ttmp);
+                tcg_temp_free_i32(ttmp);
+            }
+            if ((uint16_t)imm == 0x03)
+                gen_helper_qemu_log_instr_buffer_flush(cpu_env);
+
         }
 #endif /* CONFIG_TCG_LOG_INSTR */
         return;
