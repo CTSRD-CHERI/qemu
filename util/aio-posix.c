@@ -27,7 +27,7 @@
 
 bool aio_poll_disabled(AioContext *ctx)
 {
-    return atomic_read(&ctx->poll_disable_cnt);
+    return qatomic_read(&ctx->poll_disable_cnt);
 }
 
 void aio_add_ready_handler(AioHandlerList *ready_list,
@@ -148,8 +148,8 @@ void aio_set_fd_handler(AioContext *ctx,
      * Changing handlers is a rare event, and a little wasted polling until
      * the aio_notify below is not an issue.
      */
-    atomic_set(&ctx->poll_disable_cnt,
-               atomic_read(&ctx->poll_disable_cnt) + poll_disable_change);
+    qatomic_set(&ctx->poll_disable_cnt,
+               qatomic_read(&ctx->poll_disable_cnt) + poll_disable_change);
 
     ctx->fdmon_ops->update(ctx, node, new_node);
     if (node) {
@@ -574,7 +574,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
      * so disable the optimization now.
      */
     if (blocking) {
-        atomic_set(&ctx->notify_me, atomic_read(&ctx->notify_me) + 2);
+        qatomic_set(&ctx->notify_me, qatomic_read(&ctx->notify_me) + 2);
         /*
          * Write ctx->notify_me before computing the timeout
          * (reading bottom half flags, etc.).  Pairs with
@@ -602,7 +602,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
 
     if (blocking) {
         /* Finish the poll before clearing the flag.  */
-        atomic_store_release(&ctx->notify_me, atomic_read(&ctx->notify_me) - 2);
+        qatomic_store_release(&ctx->notify_me, qatomic_read(&ctx->notify_me) - 2);
         aio_notify_accept(ctx);
     }
 

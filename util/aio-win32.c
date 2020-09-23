@@ -337,7 +337,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
      * so disable the optimization now.
      */
     if (blocking) {
-        atomic_set(&ctx->notify_me, atomic_read(&ctx->notify_me) + 2);
+        qatomic_set(&ctx->notify_me, qatomic_read(&ctx->notify_me) + 2);
         /*
          * Write ctx->notify_me before computing the timeout
          * (reading bottom half flags, etc.).  Pairs with
@@ -376,7 +376,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
         ret = WaitForMultipleObjects(count, events, FALSE, timeout);
         if (blocking) {
             assert(first);
-            atomic_store_release(&ctx->notify_me, atomic_read(&ctx->notify_me) - 2);
+            qatomic_store_release(&ctx->notify_me, qatomic_read(&ctx->notify_me) - 2);
             aio_notify_accept(ctx);
         }
 

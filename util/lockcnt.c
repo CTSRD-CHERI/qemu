@@ -61,7 +61,7 @@ static bool qemu_lockcnt_cmpxchg_or_wait(QemuLockCnt *lockcnt, int *val,
         int expected = *val;
 
         trace_lockcnt_fast_path_attempt(lockcnt, expected, new_if_free);
-        *val = atomic_cmpxchg(&lockcnt->count, expected, new_if_free);
+        *val = qatomic_cmpxchg(&lockcnt->count, expected, new_if_free);
         if (*val == expected) {
             trace_lockcnt_fast_path_success(lockcnt, expected, new_if_free);
             *val = new_if_free;
@@ -81,7 +81,7 @@ static bool qemu_lockcnt_cmpxchg_or_wait(QemuLockCnt *lockcnt, int *val,
             int new = expected - QEMU_LOCKCNT_STATE_LOCKED + QEMU_LOCKCNT_STATE_WAITING;
 
             trace_lockcnt_futex_wait_prepare(lockcnt, expected, new);
-            *val = atomic_cmpxchg(&lockcnt->count, expected, new);
+            *val = qatomic_cmpxchg(&lockcnt->count, expected, new);
             if (*val == expected) {
                 *val = new;
             }
@@ -92,7 +92,7 @@ static bool qemu_lockcnt_cmpxchg_or_wait(QemuLockCnt *lockcnt, int *val,
             *waited = true;
             trace_lockcnt_futex_wait(lockcnt, *val);
             qemu_futex_wait(&lockcnt->count, *val);
-            *val = atomic_read(&lockcnt->count);
+            *val = qatomic_read(&lockcnt->count);
             trace_lockcnt_futex_wait_resume(lockcnt, *val);
             continue;
         }
@@ -110,13 +110,13 @@ static void lockcnt_wake(QemuLockCnt *lockcnt)
 
 void qemu_lockcnt_inc(QemuLockCnt *lockcnt)
 {
-    int val = atomic_read(&lockcnt->count);
+    int val = qatomic_read(&lockcnt->count);
     bool waited = false;
 
     for (;;) {
         if (val >= QEMU_LOCKCNT_COUNT_STEP) {
             int expected = val;
-            val = atomic_cmpxchg(&lockcnt->count, val, val + QEMU_LOCKCNT_COUNT_STEP);
+            val = qatomic_cmpxchg(&lockcnt->count, val, val + QEMU_LOCKCNT_COUNT_STEP);
             if (val == expected) {
                 break;
             }
@@ -142,7 +142,7 @@ void qemu_lockcnt_inc(QemuLockCnt *lockcnt)
 
 void qemu_lockcnt_dec(QemuLockCnt *lockcnt)
 {
-    atomic_sub(&lockcnt->count, QEMU_LOCKCNT_COUNT_STEP);
+    qatomic_sub(&lockcnt->count, QEMU_LOCKCNT_COUNT_STEP);
 }
 
 /* Decrement a counter, and return locked if it is decremented to zero.
@@ -151,14 +151,14 @@ void qemu_lockcnt_dec(QemuLockCnt *lockcnt)
  */
 bool qemu_lockcnt_dec_and_lock(QemuLockCnt *lockcnt)
 {
-    int val = atomic_read(&lockcnt->count);
+    int val = qatomic_read(&lockcnt->count);
     int locked_state = QEMU_LOCKCNT_STATE_LOCKED;
     bool waited = false;
 
     for (;;) {
         if (val >= 2 * QEMU_LOCKCNT_COUNT_STEP) {
             int expected = val;
-            val = atomic_cmpxchg(&lockcnt->count, val, val - QEMU_LOCKCNT_COUNT_STEP);
+            val = qatomic_cmpxchg(&lockcnt->count, val, val - QEMU_LOCKCNT_COUNT_STEP);
             if (val == expected) {
                 break;
             }
@@ -199,7 +199,7 @@ bool qemu_lockcnt_dec_and_lock(QemuLockCnt *lockcnt)
  */
 bool qemu_lockcnt_dec_if_lock(QemuLockCnt *lockcnt)
 {
-    int val = atomic_read(&lockcnt->count);
+    int val = qatomic_read(&lockcnt->count);
     int locked_state = QEMU_LOCKCNT_STATE_LOCKED;
     bool waited = false;
 
@@ -233,7 +233,7 @@ bool qemu_lockcnt_dec_if_lock(QemuLockCnt *lockcnt)
 
 void qemu_lockcnt_lock(QemuLockCnt *lockcnt)
 {
-    int val = atomic_read(&lockcnt->count);
+    int val = qatomic_read(&lockcnt->count);
     int step = QEMU_LOCKCNT_STATE_LOCKED;
     bool waited = false;
 
@@ -255,12 +255,12 @@ void qemu_lockcnt_inc_and_unlock(QemuLockCnt *lockcnt)
 {
     int expected, new, val;
 
-    val = atomic_read(&lockcnt->count);
+    val = qatomic_read(&lockcnt->count);
     do {
         expected = val;
         new = (val + QEMU_LOCKCNT_COUNT_STEP) & ~QEMU_LOCKCNT_STATE_MASK;
         trace_lockcnt_unlock_attempt(lockcnt, val, new);
-        val = atomic_cmpxchg(&lockcnt->count, val, new);
+        val = qatomic_cmpxchg(&lockcnt->count, val, new);
     } while (val != expected);
 
     trace_lockcnt_unlock_success(lockcnt, val, new);
@@ -273,12 +273,12 @@ void qemu_lockcnt_unlock(QemuLockCnt *lockcnt)
 {
     int expected, new, val;
 
-    val = atomic_read(&lockcnt->count);
+    val = qatomic_read(&lockcnt->count);
     do {
         expected = val;
         new = val & ~QEMU_LOCKCNT_STATE_MASK;
         trace_lockcnt_unlock_attempt(lockcnt, val, new);
-        val = atomic_cmpxchg(&lockcnt->count, val, new);
+        val = qatomic_cmpxchg(&lockcnt->count, val, new);
     } while (val != expected);
 
     trace_lockcnt_unlock_success(lockcnt, val, new);
@@ -289,7 +289,7 @@ void qemu_lockcnt_unlock(QemuLockCnt *lockcnt)
 
 unsigned qemu_lockcnt_count(QemuLockCnt *lockcnt)
 {
-    return atomic_read(&lockcnt->count) >> QEMU_LOCKCNT_COUNT_SHIFT;
+    return qatomic_read(&lockcnt->count) >> QEMU_LOCKCNT_COUNT_SHIFT;
 }
 #else
 void qemu_lockcnt_init(QemuLockCnt *lockcnt)
@@ -307,13 +307,13 @@ void qemu_lockcnt_inc(QemuLockCnt *lockcnt)
 {
     int old;
     for (;;) {
-        old = atomic_read(&lockcnt->count);
+        old = qatomic_read(&lockcnt->count);
         if (old == 0) {
             qemu_lockcnt_lock(lockcnt);
             qemu_lockcnt_inc_and_unlock(lockcnt);
             return;
         } else {
-            if (atomic_cmpxchg(&lockcnt->count, old, old + 1) == old) {
+            if (qatomic_cmpxchg(&lockcnt->count, old, old + 1) == old) {
                 return;
             }
         }
@@ -322,7 +322,7 @@ void qemu_lockcnt_inc(QemuLockCnt *lockcnt)
 
 void qemu_lockcnt_dec(QemuLockCnt *lockcnt)
 {
-    atomic_dec(&lockcnt->count);
+    qatomic_dec(&lockcnt->count);
 }
 
 /* Decrement a counter, and return locked if it is decremented to zero.
@@ -331,9 +331,9 @@ void qemu_lockcnt_dec(QemuLockCnt *lockcnt)
  */
 bool qemu_lockcnt_dec_and_lock(QemuLockCnt *lockcnt)
 {
-    int val = atomic_read(&lockcnt->count);
+    int val = qatomic_read(&lockcnt->count);
     while (val > 1) {
-        int old = atomic_cmpxchg(&lockcnt->count, val, val - 1);
+        int old = qatomic_cmpxchg(&lockcnt->count, val, val - 1);
         if (old != val) {
             val = old;
             continue;
@@ -343,7 +343,7 @@ bool qemu_lockcnt_dec_and_lock(QemuLockCnt *lockcnt)
     }
 
     qemu_lockcnt_lock(lockcnt);
-    if (atomic_fetch_dec(&lockcnt->count) == 1) {
+    if (qatomic_fetch_dec(&lockcnt->count) == 1) {
         return true;
     }
 
@@ -360,13 +360,13 @@ bool qemu_lockcnt_dec_and_lock(QemuLockCnt *lockcnt)
 bool qemu_lockcnt_dec_if_lock(QemuLockCnt *lockcnt)
 {
     /* No need for acquire semantics if we return false.  */
-    int val = atomic_read(&lockcnt->count);
+    int val = qatomic_read(&lockcnt->count);
     if (val > 1) {
         return false;
     }
 
     qemu_lockcnt_lock(lockcnt);
-    if (atomic_fetch_dec(&lockcnt->count) == 1) {
+    if (qatomic_fetch_dec(&lockcnt->count) == 1) {
         return true;
     }
 
@@ -381,7 +381,7 @@ void qemu_lockcnt_lock(QemuLockCnt *lockcnt)
 
 void qemu_lockcnt_inc_and_unlock(QemuLockCnt *lockcnt)
 {
-    atomic_inc(&lockcnt->count);
+    qatomic_inc(&lockcnt->count);
     qemu_mutex_unlock(&lockcnt->mutex);
 }
 
@@ -392,6 +392,6 @@ void qemu_lockcnt_unlock(QemuLockCnt *lockcnt)
 
 unsigned qemu_lockcnt_count(QemuLockCnt *lockcnt)
 {
-    return atomic_read(&lockcnt->count);
+    return qatomic_read(&lockcnt->count);
 }
 #endif

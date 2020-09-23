@@ -139,7 +139,7 @@ static CheriTagBlock *cheri_tag_new_tagblk(RAMBlock *ram, uint64_t tagidx)
     /* Possible race here so use atomic compare and swap. */
     cheri_debug_assert(tagblock_index < num_tagblocks(ram) &&
                        "Tag index out of bounds");
-    old = atomic_cmpxchg(&tagmem[tagblock_index], NULL, tagblk);
+    old = qatomic_cmpxchg(&tagmem[tagblock_index], NULL, tagblk);
     if (old != NULL) {
         /* Lost the race, free. */
         g_free(tagblk);

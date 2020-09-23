@@ -1353,12 +1353,12 @@ int blk_make_zero(BlockBackend *blk, BdrvRequestFlags flags)
 
 void blk_inc_in_flight(BlockBackend *blk)
 {
-    atomic_inc(&blk->in_flight);
+    qatomic_inc(&blk->in_flight);
 }
 
 void blk_dec_in_flight(BlockBackend *blk)
 {
-    atomic_dec(&blk->in_flight);
+    qatomic_dec(&blk->in_flight);
     aio_wait_kick();
 }
 
@@ -1720,7 +1720,7 @@ void blk_drain(BlockBackend *blk)
 
     /* We may have -ENOMEDIUM completions in flight */
     AIO_WAIT_WHILE(blk_get_aio_context(blk),
-                   atomic_mb_read(&blk->in_flight) > 0);
+                   qatomic_mb_read(&blk->in_flight) > 0);
 
     if (bs) {
         bdrv_drained_end(bs);
@@ -1739,7 +1739,7 @@ void blk_drain_all(void)
         aio_context_acquire(ctx);
 
         /* We may have -ENOMEDIUM completions in flight */
-        AIO_WAIT_WHILE(ctx, atomic_mb_read(&blk->in_flight) > 0);
+        AIO_WAIT_WHILE(ctx, qatomic_mb_read(&blk->in_flight) > 0);
 
         aio_context_release(ctx);
     }
@@ -2353,7 +2353,7 @@ static void blk_root_drained_begin(BdrvChild *child)
     /* Note that blk->root may not be accessible here yet if we are just
      * attaching to a BlockDriverState that is drained. Use child instead. */
 
-    if (atomic_fetch_inc(&blk->public.throttle_group_member.io_limits_disabled) == 0) {
+    if (qatomic_fetch_inc(&blk->public.throttle_group_member.io_limits_disabled) == 0) {
         throttle_group_restart_tgm(&blk->public.throttle_group_member);
     }
 }
@@ -2371,7 +2371,7 @@ static void blk_root_drained_end(BdrvChild *child, int *drained_end_counter)
     assert(blk->quiesce_counter);
 
     assert(blk->public.throttle_group_member.io_limits_disabled);
-    atomic_dec(&blk->public.throttle_group_member.io_limits_disabled);
+    qatomic_dec(&blk->public.throttle_group_member.io_limits_disabled);
 
     if (--blk->quiesce_counter == 0) {
         if (blk->dev_ops && blk->dev_ops->drained_end) {

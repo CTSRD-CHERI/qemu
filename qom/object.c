@@ -831,7 +831,7 @@ Object *object_dynamic_cast_assert(Object *obj, const char *typename,
     Object *inst;
 
     for (i = 0; obj && i < OBJECT_CLASS_CAST_CACHE; i++) {
-        if (atomic_read(&obj->class->object_cast_cache[i]) == typename) {
+        if (qatomic_read(&obj->class->object_cast_cache[i]) == typename) {
             goto out;
         }
     }
@@ -848,10 +848,10 @@ Object *object_dynamic_cast_assert(Object *obj, const char *typename,
 
     if (obj && obj == inst) {
         for (i = 1; i < OBJECT_CLASS_CAST_CACHE; i++) {
-            atomic_set(&obj->class->object_cast_cache[i - 1],
-                       atomic_read(&obj->class->object_cast_cache[i]));
+            qatomic_set(&obj->class->object_cast_cache[i - 1],
+                       qatomic_read(&obj->class->object_cast_cache[i]));
         }
-        atomic_set(&obj->class->object_cast_cache[i - 1], typename);
+        qatomic_set(&obj->class->object_cast_cache[i - 1], typename);
     }
 
 out:
@@ -921,7 +921,7 @@ ObjectClass *object_class_dynamic_cast_assert(ObjectClass *class,
     int i;
 
     for (i = 0; class && i < OBJECT_CLASS_CAST_CACHE; i++) {
-        if (atomic_read(&class->class_cast_cache[i]) == typename) {
+        if (qatomic_read(&class->class_cast_cache[i]) == typename) {
             ret = class;
             goto out;
         }
@@ -942,10 +942,10 @@ ObjectClass *object_class_dynamic_cast_assert(ObjectClass *class,
 #ifdef CONFIG_QOM_CAST_DEBUG
     if (class && ret == class) {
         for (i = 1; i < OBJECT_CLASS_CAST_CACHE; i++) {
-            atomic_set(&class->class_cast_cache[i - 1],
-                       atomic_read(&class->class_cast_cache[i]));
+            qatomic_set(&class->class_cast_cache[i - 1],
+                       qatomic_read(&class->class_cast_cache[i]));
         }
-        atomic_set(&class->class_cast_cache[i - 1], typename);
+        qatomic_set(&class->class_cast_cache[i - 1], typename);
     }
 out:
 #endif
@@ -1129,7 +1129,7 @@ Object *object_ref(Object *obj)
     if (!obj) {
         return NULL;
     }
-    atomic_inc(&obj->ref);
+    qatomic_inc(&obj->ref);
     return obj;
 }
 
@@ -1141,7 +1141,7 @@ void object_unref(Object *obj)
     g_assert(obj->ref > 0);
 
     /* parent always holds a reference to its children */
-    if (atomic_fetch_dec(&obj->ref) == 1) {
+    if (qatomic_fetch_dec(&obj->ref) == 1) {
         object_finalize(obj);
     }
 }

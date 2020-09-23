@@ -342,7 +342,7 @@ static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
      * opcode bytes, without accessing target memory here.
      */
     rcu_read_lock();
-    logfile = atomic_rcu_read(&qemu_logfile);
+    logfile = qatomic_rcu_read(&qemu_logfile);
     if (logfile) {
         target_disas_buf(logfile->fd, env_cpu(env), iinfo->insn_bytes,
                          sizeof(iinfo->insn_bytes), iinfo->pc, 1);

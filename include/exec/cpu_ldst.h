@@ -306,7 +306,7 @@ static inline target_ulong tlb_addr_write(const CPUTLBEntry *entry)
 #if TCG_OVERSIZED_GUEST
     return entry->addr_write;
 #else
-    return atomic_read(&entry->addr_write);
+    return qatomic_read(&entry->addr_write);
 #endif
 }
 

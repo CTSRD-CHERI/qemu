@@ -2679,7 +2679,7 @@ static ssize_t qio_channel_rdma_writev(QIOChannel *ioc,
     size_t len = 0;
 
     RCU_READ_LOCK_GUARD();
-    rdma = atomic_rcu_read(&rioc->rdmaout);
+    rdma = qatomic_rcu_read(&rioc->rdmaout);
 
     if (!rdma) {
         return -EIO;
@@ -2761,7 +2761,7 @@ static ssize_t qio_channel_rdma_readv(QIOChannel *ioc,
     size_t done = 0;
 
     RCU_READ_LOCK_GUARD();
-    rdma = atomic_rcu_read(&rioc->rdmain);
+    rdma = qatomic_rcu_read(&rioc->rdmain);
 
     if (!rdma) {
         return -EIO;
@@ -2876,9 +2876,9 @@ qio_channel_rdma_source_prepare(GSource *source,
 
     RCU_READ_LOCK_GUARD();
     if (rsource->condition == G_IO_IN) {
-        rdma = atomic_rcu_read(&rsource->rioc->rdmain);
+        rdma = qatomic_rcu_read(&rsource->rioc->rdmain);
     } else {
-        rdma = atomic_rcu_read(&rsource->rioc->rdmaout);
+        rdma = qatomic_rcu_read(&rsource->rioc->rdmaout);
     }
 
     if (!rdma) {
@@ -2903,9 +2903,9 @@ qio_channel_rdma_source_check(GSource *source)
 
     RCU_READ_LOCK_GUARD();
     if (rsource->condition == G_IO_IN) {
-        rdma = atomic_rcu_read(&rsource->rioc->rdmain);
+        rdma = qatomic_rcu_read(&rsource->rioc->rdmain);
     } else {
-        rdma = atomic_rcu_read(&rsource->rioc->rdmaout);
+        rdma = qatomic_rcu_read(&rsource->rioc->rdmaout);
     }
 
     if (!rdma) {
@@ -2933,9 +2933,9 @@ qio_channel_rdma_source_dispatch(GSource *source,
 
     RCU_READ_LOCK_GUARD();
     if (rsource->condition == G_IO_IN) {
-        rdma = atomic_rcu_read(&rsource->rioc->rdmain);
+        rdma = qatomic_rcu_read(&rsource->rioc->rdmain);
     } else {
-        rdma = atomic_rcu_read(&rsource->rioc->rdmaout);
+        rdma = qatomic_rcu_read(&rsource->rioc->rdmaout);
     }
 
     if (!rdma) {
@@ -3036,12 +3036,12 @@ static int qio_channel_rdma_close(QIOChannel *ioc,
 
     rdmain = rioc->rdmain;
     if (rdmain) {
-        atomic_rcu_set(&rioc->rdmain, NULL);
+        qatomic_rcu_set(&rioc->rdmain, NULL);
     }
 
     rdmaout = rioc->rdmaout;
     if (rdmaout) {
-        atomic_rcu_set(&rioc->rdmaout, NULL);
+        qatomic_rcu_set(&rioc->rdmaout, NULL);
     }
 
     rcu->rdmain = rdmain;
@@ -3061,8 +3061,8 @@ qio_channel_rdma_shutdown(QIOChannel *ioc,
 
     RCU_READ_LOCK_GUARD();
 
-    rdmain = atomic_rcu_read(&rioc->rdmain);
-    rdmaout = atomic_rcu_read(&rioc->rdmain);
+    rdmain = qatomic_rcu_read(&rioc->rdmain);
+    rdmaout = qatomic_rcu_read(&rioc->rdmain);
 
     switch (how) {
     case QIO_CHANNEL_SHUTDOWN_READ:
@@ -3132,7 +3132,7 @@ static size_t qemu_rdma_save_page(QEMUFile *f, void *opaque,
     int ret;
 
     RCU_READ_LOCK_GUARD();
-    rdma = atomic_rcu_read(&rioc->rdmaout);
+    rdma = qatomic_rcu_read(&rioc->rdmaout);
 
     if (!rdma) {
         return -EIO;
@@ -3452,7 +3452,7 @@ static int qemu_rdma_registration_handle(QEMUFile *f, void *opaque)
     int i = 0;
 
     RCU_READ_LOCK_GUARD();
-    rdma = atomic_rcu_read(&rioc->rdmain);
+    rdma = qatomic_rcu_read(&rioc->rdmain);
 
     if (!rdma) {
         return -EIO;
@@ -3715,7 +3715,7 @@ rdma_block_notification_handle(QIOChannelRDMA *rioc, const char *name)
     int found = -1;
 
     RCU_READ_LOCK_GUARD();
-    rdma = atomic_rcu_read(&rioc->rdmain);
+    rdma = qatomic_rcu_read(&rioc->rdmain);
 
     if (!rdma) {
         return -EIO;
@@ -3763,7 +3763,7 @@ static int qemu_rdma_registration_start(QEMUFile *f, void *opaque,
     RDMAContext *rdma;
 
     RCU_READ_LOCK_GUARD();
-    rdma = atomic_rcu_read(&rioc->rdmaout);
+    rdma = qatomic_rcu_read(&rioc->rdmaout);
     if (!rdma) {
         return -EIO;
     }
@@ -3794,7 +3794,7 @@ static int qemu_rdma_registration_stop(QEMUFile *f, void *opaque,
     int ret = 0;
 
     RCU_READ_LOCK_GUARD();
-    rdma = atomic_rcu_read(&rioc->rdmaout);
+    rdma = qatomic_rcu_read(&rioc->rdmaout);
     if (!rdma) {
         return -EIO;
     }
