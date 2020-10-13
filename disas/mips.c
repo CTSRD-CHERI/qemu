@@ -1362,7 +1362,6 @@ const struct mips_opcode mips_builtin_opcodes[] =
 /* {"cgetpcc", "+b",	0x48000007, 0xffff07ff, 0,			0, I1}, old isa */
 {"cgetoffset", "t,+b",	0x49a00002, 0xffe007ff, 0,			0, I1},
 {"candperm", "+w,+b,m", 0x48800000, 0xffe0003f, 0,			0, I1},
-{"csettype", "+w,+b,m", 0x48800001, 0xffe0003f, 0,			0, I1},
 {"csetbounds", "+w,+b,m",0x48200000, 0xffe0003f,0,			0, I1},
 {"csetcause", "m",	0x48800004, 0xfffff83f, 0,			0, I1},
 {"csetdefault", "+b",	0x49a00000, 0xffff07ff, 0,			0, I1},
