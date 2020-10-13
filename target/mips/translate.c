@@ -1120,7 +1120,7 @@ enum {
 enum {
     OPC_CANDPERM    = OPC_CMISC | (0x0),
     OPC_CINCBASE    = OPC_CMISC | (0x2),
-    OPC_CSETLEN     = OPC_CMISC | (0x3),
+    /* 0x3 was CSetLen (prior to CHERI-128) */
     OPC_CSETCAUSE   = OPC_CMISC | (0x4),
     OPC_CCLEARTAG   = OPC_CMISC | (0x5),
     OPC_MTC2SEL6    = OPC_CMISC | (0x6),

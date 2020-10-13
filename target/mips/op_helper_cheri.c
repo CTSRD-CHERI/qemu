@@ -553,11 +553,6 @@ void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
     log_instr_hwreg_update(env, "CapCause", env->CP2_CapCause);
 }
 
-void CHERI_HELPER_IMPL(csetlen(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt))
-{
-    do_raise_exception(env, EXCP_RI, GETPC());
-}
-
 /*
  * CPtrCmp Instructions. Capability Pointer Compare.
  */

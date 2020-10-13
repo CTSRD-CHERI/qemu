@@ -224,7 +224,6 @@ DEF_HELPER_4(cincbase, void, env, i32, i32, tl)
 DEF_HELPER_2(cjr, tl, env, i32)
 DEF_HELPER_1(creturn, void, env)
 DEF_HELPER_2(csetcause, void, env, tl)
-DEF_HELPER_4(csetlen, void, env, i32, i32, tl)
 DEF_HELPER_4(cmovz, void, env, i32, i32, tl)
 DEF_HELPER_4(cmovn, void, env, i32, i32, tl)
 

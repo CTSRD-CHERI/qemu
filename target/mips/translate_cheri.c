@@ -604,20 +604,6 @@ static inline void generate_csetcause(int32_t rd)
     tcg_temp_free(t0);
 }
 
-static inline void generate_csetlen(int32_t cd, int32_t cb, int32_t rt)
-{
-    TCGv_i32 tcb = tcg_const_i32(cb);
-    TCGv_i32 tcd = tcg_const_i32(cd);
-    TCGv t0 = tcg_temp_new();
-
-    gen_load_gpr(t0, rt);
-    gen_helper_csetlen(cpu_env, tcd, tcb, t0);
-
-    tcg_temp_free(t0);
-    tcg_temp_free_i32(tcd);
-    tcg_temp_free_i32(tcb);
-}
-
 static inline void generate_csetoffset(int32_t cd, int32_t cb, int32_t rt)
 {
     TCGv_i32 tcb = tcg_const_i32(cb);
@@ -1459,11 +1445,6 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             check_cop2x(ctx);
             generate_cincbase(r16, r11, r6);
             opn = "cincbase";
-            break;
-        case OPC_CSETLEN: /* 0x3 */
-            check_cop2x(ctx);
-            generate_csetlen(r16, r11, r6);
-            opn = "csetlen";
             break;
         case OPC_CSETCAUSE: /* 0x4 */
             check_cop2x(ctx);
