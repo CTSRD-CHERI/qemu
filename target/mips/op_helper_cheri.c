@@ -361,11 +361,6 @@ void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd, target_ulo
     derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
-void CHERI_HELPER_IMPL(cincbase(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt))
-{
-    do_raise_exception(env, EXCP_RI, GETPC());
-}
-
 /* Note: not using CHERI_HELPER_IMPL since it cannot trap */
 void helper_cmovz(CPUArchState *env, uint32_t cd, uint32_t cs, target_ulong rs)
 {
