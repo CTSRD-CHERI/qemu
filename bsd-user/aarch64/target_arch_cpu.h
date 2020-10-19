@@ -122,7 +122,7 @@ static inline void target_cpu_loop(CPUARMState *env)
             break;
 
         case EXCP_UDEF:
-            info.si_signo = SIGILL;
+            info.si_signo = TARGET_SIGILL;
             info.si_errno = 0;
             info.si_code = TARGET_ILL_ILLOPN;
             info.si_addr = env->pc;
@@ -132,7 +132,7 @@ static inline void target_cpu_loop(CPUARMState *env)
 
 	case EXCP_PREFETCH_ABORT:
 	case EXCP_DATA_ABORT:
-            info.si_signo = SIGSEGV;
+            info.si_signo = TARGET_SIGSEGV;
             info.si_errno = 0;
             /* XXX: check env->error_code */
             info.si_code = TARGET_SEGV_MAPERR;

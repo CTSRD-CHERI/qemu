@@ -105,7 +105,7 @@ static inline void target_cpu_loop(CPUSPARCState *env)
         case TT_DFAULT:
 #if 0
             {
-                info.si_signo = SIGSEGV;
+                info.si_signo = TARGET_SIGSEGV;
                 info.si_errno = 0;
                 /* XXX: check env->error_code */
                 info.si_code = TARGET_SEGV_MAPERR;

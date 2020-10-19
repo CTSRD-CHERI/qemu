@@ -72,7 +72,7 @@ static inline void target_cpu_loop(CPUARMState *env)
                  * be.)
                  */
                 if ((info.si_addr & 3) != 0) {
-                    info.si_signo = SIGILL;
+                    info.si_signo = TARGET_SIGILL;
                     info.si_errno = 0;
                     info.si_code = TARGET_ILL_ILLADR;
                     queue_signal(env, info.si_signo, &info);
@@ -93,7 +93,7 @@ static inline void target_cpu_loop(CPUARMState *env)
 #endif /* NOT_YET */
                     if (rc == 0) {
                         /* illegal instruction */
-                        info.si_signo = SIGILL;
+                        info.si_signo = TARGET_SIGILL;
                         info.si_errno = 0;
                         info.si_code = TARGET_ILL_ILLOPC;
                         queue_signal(env, info.si_signo, &info);
@@ -296,7 +296,7 @@ static inline void target_cpu_loop(CPUARMState *env)
 #endif
         do_segv:
             {
-                info.si_signo = SIGSEGV;
+                info.si_signo = TARGET_SIGSEGV;
                 info.si_errno = 0;
                 /* XXX: check env->error_code */
                 info.si_code = 0;
