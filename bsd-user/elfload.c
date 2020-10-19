@@ -857,7 +857,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     for (i = 0, elf_ppnt = elf_phdata; i < elf_ex.e_phnum; i++, elf_ppnt++) {
         int elf_prot = 0;
         int elf_flags = 0;
-        abi_ulong error;
+        abi_ulong error, elf_mapsz;
 
         if (elf_ppnt->p_type != PT_LOAD)
             continue;
@@ -884,8 +884,9 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
             load_bias = TARGET_ELF_PAGESTART(error - elf_ppnt->p_vaddr);
         }
 
+        elf_mapsz = MAX(elf_ppnt->p_filesz, elf_ppnt->p_memsz);
         error = target_mmap(TARGET_ELF_PAGESTART(load_bias + elf_ppnt->p_vaddr),
-                            (elf_ppnt->p_filesz +
+                            (elf_mapsz +
                              TARGET_ELF_PAGEOFFSET(elf_ppnt->p_vaddr)),
                             elf_prot,
                             (MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE),
