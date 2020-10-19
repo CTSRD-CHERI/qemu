@@ -179,7 +179,7 @@ static inline void target_cpu_loop(CPUX86State *env)
 #if 0
         case EXCP0B_NOSEG:
         case EXCP0C_STACK:
-            info.si_signo = SIGBUS;
+            info.si_signo = TARGET_SIGBUS;
             info.si_errno = 0;
             info.si_code = TARGET_SI_KERNEL;
             info._sifields._sigfault._addr = 0;
@@ -191,7 +191,7 @@ static inline void target_cpu_loop(CPUX86State *env)
             if (env->eflags & VM_MASK) {
                 handle_vm86_fault(env);
             } else {
-                info.si_signo = SIGSEGV;
+                info.si_signo = TARGET_SIGSEGV;
                 info.si_errno = 0;
                 info.si_code = TARGET_SI_KERNEL;
                 info._sifields._sigfault._addr = 0;
@@ -200,7 +200,7 @@ static inline void target_cpu_loop(CPUX86State *env)
             break;
 
         case EXCP0E_PAGE:
-            info.si_signo = SIGSEGV;
+            info.si_signo = TARGET_SIGSEGV;
             info.si_errno = 0;
             if (!(env->error_code & 1)) {
                 info.si_code = TARGET_SEGV_MAPERR;
@@ -216,7 +216,7 @@ static inline void target_cpu_loop(CPUX86State *env)
                 handle_vm86_trap(env, trapnr);
             } else {
                 /* division by zero */
-                info.si_signo = SIGFPE;
+                info.si_signo = TARGET_SIGFPE;
                 info.si_errno = 0;
                 info.si_code = TARGET_FPE_INTDIV;
                 info._sifields._sigfault._addr = env->eip;
@@ -229,7 +229,7 @@ static inline void target_cpu_loop(CPUX86State *env)
             if (env->eflags & VM_MASK) {
                 handle_vm86_trap(env, trapnr);
             } else {
-                info.si_signo = SIGTRAP;
+                info.si_signo = TARGET_SIGTRAP;
                 info.si_errno = 0;
                 if (trapnr == EXCP01_DB) {
                     info.si_code = TARGET_TRAP_BRKPT;
@@ -247,7 +247,7 @@ static inline void target_cpu_loop(CPUX86State *env)
             if (env->eflags & VM_MASK) {
                 handle_vm86_trap(env, trapnr);
             } else {
-                info.si_signo = SIGSEGV;
+                info.si_signo = TARGET_SIGSEGV;
                 info.si_errno = 0;
                 info.si_code = TARGET_SI_KERNEL;
                 info._sifields._sigfault._addr = 0;
@@ -256,7 +256,7 @@ static inline void target_cpu_loop(CPUX86State *env)
             break;
 
         case EXCP06_ILLOP:
-            info.si_signo = SIGILL;
+            info.si_signo = TARGET_SIGILL;
             info.si_errno = 0;
             info.si_code = TARGET_ILL_ILLOPN;
             info._sifields._sigfault._addr = env->eip;
