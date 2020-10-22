@@ -914,6 +914,36 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
                     TARGET_FMT_plx " prot %d\n",
                     __func__, im_address, ret, *pa, prot2);
 
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+            /*
+             * CHERI's load-side caveats are enforced only on the guest
+             * tables at the moment.  Because we are about to AND the two
+             * prot words together, *set* both caveats in prot2 so that
+             * either bit will be preserved from prot.
+             */
+            prot2 |= PAGE_LC_TRAP | PAGE_LC_CLEAR;
+
+            /*
+             * XXX Eventually we probably want to permit the hypervisor to be
+             * able to force tag clearing or trapping.  That probably looks
+             * something like this (but details are subject to change):
+             *
+             *   Host     Guest    Action on tagged load
+             *   -------- -------- ---------------------
+             *
+             *   Clear    _        Clear tag
+             *   _        Clear    Clear tag
+             *
+             *   Accept   Accept   Accept
+             *   Accept   Trap     Supervisor (VS/S) fault
+             *
+             *   Trap     _        Hypervisor (HS) fault
+             *
+             * The rest of the bits are AND-ed together as before, and
+             * get_physical_address already handles the store-side CHERI
+             * extensions.
+             */
+#endif
             *prot &= prot2;
 
             if (riscv_feature(env, RISCV_FEATURE_PMP) &&
