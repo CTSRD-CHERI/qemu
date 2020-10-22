@@ -583,6 +583,14 @@ restart:
         } else if ((pte & (PTE_R | PTE_W | PTE_X)) == (PTE_W | PTE_X)) {
             /* Reserved leaf PTE flags: PTE_W + PTE_X */
             return TRANSLATE_FAIL;
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+        } else if ((pte & (PTE_CR | PTE_CRG)) == PTE_CRG) {
+            /* Reserved CHERI-extended PTE flags: no CR but CRG */
+            return TRANSLATE_CHERI_FAIL;
+        } else if ((pte & (PTE_CR | PTE_CRM | PTE_CRG)) == (PTE_CR | PTE_CRG)) {
+            /* Reserved CHERI-extended PTE flags: CR and no CRM but CRG */
+            return TRANSLATE_CHERI_FAIL;
+#endif
         } else if ((pte & PTE_U) && ((mode != PRV_U) &&
                    (!sum || access_type == MMU_INST_FETCH))) {
             /* User PTE flags when not U mode and mstatus.SUM is not set,
