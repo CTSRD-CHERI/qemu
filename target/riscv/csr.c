@@ -1333,6 +1333,10 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
 #endif
 
 #ifdef TARGET_CHERI
+// See Capability Control and Status Registers (CCSRs) in CHERI ISA spec
+
+// We used to report cause and capcause here, but those have moved to xTVAL
+
 static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
 {
     // We report the same values for all modes and don't perform dirty tracking
