@@ -526,8 +526,8 @@
 #define PTE_D               0x080 /* Dirty */
 #define PTE_SOFT            0x300 /* Reserved for Software */
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-#define PTE_LC              0x4000000000000000 /* Load Cap */
-#define PTE_SC              0x8000000000000000 /* Store Cap */
+#define PTE_CR              0x4000000000000000 /* Cap Read */
+#define PTE_CW              0x8000000000000000 /* Cap Write */
 #endif
 
 /* Page table PPN shift amount */
