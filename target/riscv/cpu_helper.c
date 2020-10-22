@@ -613,8 +613,17 @@ restart:
 #endif
         } else {
             /* if necessary, set accessed and dirty bits. */
-            target_ulong updated_pte = pte | PTE_A |
-                (access_type == MMU_DATA_STORE ? PTE_D : 0);
+            target_ulong updated_pte = pte | PTE_A;
+            switch (access_type) {
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+            case MMU_DATA_CAP_STORE:
+                updated_pte |= PTE_CD;
+                /* FALLTHROUGH */
+#endif
+            case MMU_DATA_STORE:
+                updated_pte |= PTE_D;
+                break;
+            }
 
             /* Page table updates need to be atomic with MTTCG enabled */
             if (updated_pte != pte) {

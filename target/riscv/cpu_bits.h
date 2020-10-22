@@ -526,6 +526,7 @@
 #define PTE_D               0x080 /* Dirty */
 #define PTE_SOFT            0x300 /* Reserved for Software */
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+#define PTE_CD              0x2000000000000000 /* Cap Dirty */
 #define PTE_CR              0x4000000000000000 /* Cap Read */
 #define PTE_CW              0x8000000000000000 /* Cap Write */
 #endif
