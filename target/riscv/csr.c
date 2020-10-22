@@ -1333,22 +1333,20 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
 #endif
 
 #ifdef TARGET_CHERI
-
-// See Capability Control and Status Registers (CCSRs) in CHERI ISA spec
-// The e “enable” bit tells whether capability extensions are enabled or disabled.
-#define CCSR_ENABLE 0x1
-// The d “dirty” bit tells whether a capability register has been written.
-#define CCSR_DIRTY 0x2
-// We used to report cause and capcause here, but those have moved to xTVAL
-
 static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
 {
     // We report the same values for all modes and don't perform dirty tracking
     // The capability cause has moved to xTVAL so we don't report it here.
     RISCVCPU *cpu = env_archcpu(env);
     target_ulong ccsr = 0;
-    ccsr = set_field(ccsr, CCSR_ENABLE, cpu->cfg.ext_cheri);
-    ccsr = set_field(ccsr, CCSR_DIRTY, 1); /* Always report dirty */
+    ccsr = set_field(ccsr, XCCSR_ENABLE, cpu->cfg.ext_cheri);
+    ccsr = set_field(ccsr, XCCSR_DIRTY, 1); /* Always report dirty */
+
+#if !defined(TARGET_RISCV32)
+    if (csrno == CSR_SCCSR)
+        ccsr |= env->sccsr;
+#endif
+
     qemu_log_mask(CPU_LOG_INT, "Reading xCCSR(%#x): %x\n", csrno, (int)ccsr);
     *val = ccsr;
     return 0;
@@ -1356,10 +1354,23 @@ static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
 
 static int write_ccsr(CPURISCVState *env, int csrno, target_ulong val)
 {
-    error_report("Attempting to write " TARGET_FMT_lx
-                 "to xCCSR(%#x), this is not supported (yet?).",
-                 val, csrno);
-    return -1;
+    switch (csrno) {
+    default:
+        error_report("Attempting to write " TARGET_FMT_lx
+                     "to xCCSR(%#x), this is not supported (yet?).",
+                     val, csrno);
+        return -1;
+#if !defined(TARGET_RISCV32)
+    case CSR_SCCSR: {
+        static const target_ulong gclgmask = (SCCSR_SGCLG | SCCSR_UGCLG);
+        /* Take the GCLG bits from the store and update state bits */
+        env->sccsr = set_field(env->sccsr, gclgmask, get_field(val, gclgmask));
+        break;
+      }
+#endif
+    }
+
+    return 0;
 }
 
 static inline bool csr_needs_asr(CPURISCVState *env, int csrno) {
@@ -1683,8 +1694,9 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
     [CSR_MTINST] =              CSR_OP_RW(hmode, mtinst),
 
 #ifdef TARGET_CHERI
-    // CHERI CSRs: For now we alway report the same values and don't allow
-    // turning off any of the bits
+    // CHERI CSRs: For now we always report enabled and dirty and don't support
+    // turning off CHERI.  sccsr contains global capability load generation bits
+    // that can be written, but the other two are constant.
     [CSR_UCCSR] =               CSR_OP_FN_RW(umode, read_ccsr, write_ccsr, "uccsr"),
     [CSR_SCCSR] =               CSR_OP_FN_RW(smode, read_ccsr, write_ccsr, "sccsr"),
     [CSR_MCCSR] =               CSR_OP_FN_RW(any, read_ccsr, write_ccsr, "mccsr"),
