@@ -682,8 +682,13 @@ restart:
                 *prot |= PAGE_WRITE;
             }
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-            if ((pte & PTE_CR) == 0)
-                *prot |= PAGE_LC_CLEAR;
+            if ((pte & PTE_CR) == 0) {
+                if ((pte & PTE_CRM) == 0) {
+                    *prot |= PAGE_LC_CLEAR;
+                } else {
+                    *prot |= PAGE_LC_TRAP;
+                }
+            }
 #endif
             return TRANSLATE_SUCCESS;
         }
