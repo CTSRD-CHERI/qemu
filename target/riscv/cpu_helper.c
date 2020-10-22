@@ -689,6 +689,18 @@ restart:
                 } else {
                     *prot |= PAGE_LC_TRAP;
                 }
+            } else {
+                if (pte & PTE_CRM) {
+                    /* Cap-loads checked against [SU]GCLG in CCSR using PTE_U */
+                    target_ulong gclgmask =
+                        (pte & PTE_U) ? SCCSR_UGCLG : SCCSR_SGCLG;
+                    bool gclg = (env->sccsr & gclgmask) != 0;
+                    bool lclg = (pte & PTE_CRG) != 0;
+
+                    if (gclg != lclg) {
+                        *prot |= PAGE_LC_TRAP;
+                    }
+                }
             }
             if ((pte & PTE_CW) == 0) {
                 *prot |= PAGE_SC_TRAP;
