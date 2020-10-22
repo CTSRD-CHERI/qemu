@@ -959,8 +959,7 @@ void r4k_helper_tlbr(CPUMIPSState *env)
     r4k_mips_tlb_flush_extra(env, env->tlb->nb_tlb);
 
 #ifdef CPU_CHERI
-	uint64_t save_clg = env->CP0_EntryHi &
-		((1 << CP0EnHi_CLGU) | (1 << CP0EnHi_CLGS) | (1 << CP0EnHi_CLGK));
+    uint64_t save_clg = env->CP0_EntryHi & CP0EnHi_CLG_MASK;
 #endif
 
     if (tlb->EHINV) {
@@ -997,7 +996,7 @@ void r4k_helper_tlbr(CPUMIPSState *env)
     }
 
 #ifdef CPU_CHERI
-	env->CP0_EntryHi |= save_clg;
+    env->CP0_EntryHi |= save_clg;
 #endif
 }
 
