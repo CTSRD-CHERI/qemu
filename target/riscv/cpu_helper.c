@@ -607,8 +607,8 @@ restart:
             /* Fetch access check failed */
             return TRANSLATE_FAIL;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_SC)) {
-            /* SC inhibited */
+        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_CW)) {
+            /* CW inhibited */
             return TRANSLATE_CHERI_FAIL;
 #endif
         } else {
@@ -674,10 +674,10 @@ restart:
                 *prot |= PAGE_WRITE;
             }
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-            if ((pte & PTE_LC) == 0) {
+            if ((pte & PTE_CR) == 0) {
                 *prot |= PAGE_LC_CLEAR;
             }
-            if ((pte & PTE_SC) == 0) {
+            if ((pte & PTE_CW) == 0) {
                 *prot |= PAGE_SC_TRAP;
             }
 #endif
