@@ -614,10 +614,11 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
     env->CP0_Context = (env->CP0_Context & ~0x007fffff) |
                        ((address >> 9) & 0x007ffff0);
     env->CP0_EntryHi = (env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask) |
+                       (env->CP0_EntryHi & CP0EnHi_CLG_MASK) |
                        (env->CP0_EntryHi & (1 << CP0EnHi_EHINV)) |
                        (address & (TARGET_PAGE_MASK << 1));
 #if defined(TARGET_MIPS64)
-    env->CP0_EntryHi &= env->SEGMask;
+    env->CP0_EntryHi &= env->SEGMask | CP0EnHi_CLG_MASK;
     env->CP0_XContext =
         (env->CP0_XContext & ((~0ULL) << (env->SEGBITS - 7))) | /* PTEBase */
         (extract64(address, 62, 2) << (env->SEGBITS - 9)) |     /* R       */
@@ -956,7 +957,8 @@ refill:
     }
     pw_pagemask = m >> 12;
     update_pagemask(env, pw_pagemask << 13, &pw_pagemask);
-    pw_entryhi = (address & ~0x1fff) | (env->CP0_EntryHi & 0xFF);
+    pw_entryhi = (address & ~0x1fff) |
+                 (env->CP0_EntryHi & (0xFF | CP0EnHi_CLG_MASK));
     {
         target_ulong tmp_entryhi = env->CP0_EntryHi;
         int32_t tmp_pagemask = env->CP0_PageMask;
