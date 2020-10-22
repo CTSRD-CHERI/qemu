@@ -80,8 +80,8 @@ static void print_pte(Monitor *mon, int va_bits, target_ulong vaddr,
                    attr & PTE_A ? 'a' : '-',
                    attr & PTE_D ? 'd' : '-'
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-                   , attr & PTE_LC ? 'L' : '-'
-                   , attr & PTE_SC ? 'S' : '-'
+                   , attr & PTE_CR ? 'L' : '-'
+                   , attr & PTE_CW ? 'S' : '-'
 #endif
         );
 }
@@ -112,7 +112,7 @@ static void walk_pte(Monitor *mon, hwaddr base, target_ulong start,
 
         paddr = (hwaddr)(pte >> PTE_PPN_SHIFT) << PGSHIFT;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-        attr = pte & (PTE_LC | PTE_SC | 0xff);
+        attr = pte & (PTE_CR | PTE_CW | 0xff);
 #else
         attr = pte & 0xff;
 #endif
