@@ -1281,11 +1281,7 @@ void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
     mask &= env->SEGMask;
 #endif
 
-#if defined(TARGET_CHERI)
-    mask |= (1UL << CP0EnHi_CLGU)
-            | (1UL << CP0EnHi_CLGS)
-            | (1UL << CP0EnHi_CLGK);
-#endif
+    mask |= CP0EnHi_CLG_MASK;
 
     old = env->CP0_EntryHi;
     val = (arg1 & mask) | (old & ~mask);
