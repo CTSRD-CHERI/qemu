@@ -12,7 +12,7 @@ By default this will install QEMU for CHERI-RISC-V and CHERI-MIPS to `$HOME/cher
 For information on how to customize install and build directory paths please read the [cheribuild README](http://github.com/CTSRD-CHERI/cheribuild)
 
 
-Building and Installing qemu-system-cheri manually (**not recommended)
+Building and Installing qemu-system-cheri manually (not recommended)
 -----------------------------------------
 
 These notes are based on using a Mac OS X for the host system. Most
