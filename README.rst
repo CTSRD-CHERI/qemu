@@ -1,5 +1,28 @@
+=================
+QEMU-CHERI README
+=================
+
+This repository contains a version of `QEMU <https://github.com/qemu/qemu>`_ that can be used to run CHERI code for both RISC-V and MIPS.
+
+Building
+========
+The recommended way of building QEMU uses cheribuild (http://github.com/CTSRD-CHERI/cheribuild).
+To build and install QEMU you can run `cheribuild.py qemu`.
+By default this will install QEMU for CHERI-RISC-V and CHERI-MIPS to `$HOME/cheri/output/sdk/bin/qemu-system-<arch>`.
+For information on how to customize install and build directory paths please read the `cheribuild README <http://github.com/CTSRD-CHERI/cheribuild>`_
+
+
+Submitting patches
+==================
+Unless the patches are intended for upstream QEMU, ignore the information below and open issues or pull requests on this repository.
+
+
+
+WARNING: The remaining sections of the README may be inaccurate and only remain here to avoid merge conflicts
+=============================================================================================================
+
 ===========
-QEMU README
+QEMU-CHERI
 ===========
 
 QEMU is a generic and open source machine & userspace emulator and
