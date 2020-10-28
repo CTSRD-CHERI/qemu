@@ -110,8 +110,10 @@ typedef struct {
 
     /* Ring buffer of log_instr_info */
     GArray *instr_info;
-    /* Ring buffer head index */
+    /* Ring buffer index of the next entry to write */
     size_t ring_head;
+    /* Ring buffer index of the first entry to dump */
+    size_t ring_tail;
 } cpu_log_instr_state_t;
 
 /*

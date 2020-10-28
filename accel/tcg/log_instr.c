@@ -108,8 +108,6 @@ typedef struct cpu_log_instr_info {
 #define LI_FLAG_INTR_MASK 0x3
 /* Entry contains a CPU mode-switch and associated code */
 #define LI_FLAG_MODE_SWITCH (1 << 2)
-/* Entry in the ring buffer is valid */
-#define LI_FLAG_VALID (1 << 3)
 
     qemu_log_instr_cpu_mode_t next_cpu_mode;
     uint32_t intr_code;
@@ -556,8 +554,9 @@ static inline void emit_entry_event(CPUArchState *env, cpu_log_instr_info_t *iin
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
 
     if (cpulog->flags & QEMU_LOG_INSTR_FLAG_BUFFERED) {
-        iinfo->flags |= LI_FLAG_VALID;
         cpulog->ring_head = (cpulog->ring_head + 1) % cpulog->instr_info->len;
+        if (cpulog->ring_tail == cpulog->ring_head)
+            cpulog->ring_tail = (cpulog->ring_tail + 1) % cpulog->instr_info->len;
     }
     else {
         trace_format->emit_entry(env, iinfo);
@@ -798,6 +797,7 @@ void qemu_log_instr_init(CPUState *cpu)
     cpulog->loglevel_active = false;
     cpulog->instr_info = iinfo_ring;
     cpulog->ring_head = 0;
+    cpulog->ring_tail = 0;
     reset_log_buffer(cpulog, iinfo);
 
     // Make sure we are using the correct trace format.
@@ -1038,19 +1038,18 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
 void qemu_log_instr_flush(CPUArchState *env)
 {
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
-    size_t curr = cpulog->ring_head;
+    size_t curr = cpulog->ring_tail;
     cpu_log_instr_info_t *iinfo;
 
     if ((cpulog->flags & QEMU_LOG_INSTR_FLAG_BUFFERED) == 0)
         return;
 
-    do {
-        curr = (curr + 1) % cpulog->instr_info->len;
+    while (curr != cpulog->ring_head) {
         iinfo = &g_array_index(cpulog->instr_info, cpu_log_instr_info_t, curr);
-        if (iinfo->flags & LI_FLAG_VALID) {
-            trace_format->emit_entry(env, iinfo);
-        }
-    } while (cpulog->ring_head != curr);
+        trace_format->emit_entry(env, iinfo);
+        curr = (curr + 1) % cpulog->instr_info->len;
+    }
+    cpulog->ring_tail = cpulog->ring_head;
 }
 
 /* Instruction logging helpers */
