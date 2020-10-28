@@ -290,13 +290,8 @@ static bool trans_slti(DisasContext *ctx, arg_slti *a)
         TCGv_i32 ttmp;
 
         switch (a->imm) {
-        case 0x01:
-            ttmp = tcg_const_i32(true);
-            gen_helper_qemu_log_instr_buffered_mode(cpu_env, ttmp);
-            tcg_temp_free_i32(ttmp);
-            break;
-        case 0x02:
-            ttmp = tcg_const_i32(false);
+        case 0x01: case 0x02:
+            ttmp = tcg_const_i32(a->imm == 0x01);
             gen_helper_qemu_log_instr_buffered_mode(cpu_env, ttmp);
             tcg_temp_free_i32(ttmp);
             break;
