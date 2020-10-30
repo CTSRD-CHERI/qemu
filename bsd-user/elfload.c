@@ -860,7 +860,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     for (i = 0, elf_ppnt = elf_phdata; i < elf_ex.e_phnum; i++, elf_ppnt++) {
         int elf_prot = 0;
         int elf_flags = 0;
-        abi_ulong error, elf_mapsz;
+        abi_ulong error;
 
         if (elf_ppnt->p_type != PT_LOAD)
             continue;
@@ -887,9 +887,8 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
             load_bias = TARGET_ELF_PAGESTART(error - elf_ppnt->p_vaddr);
         }
 
-        elf_mapsz = MAX(elf_ppnt->p_filesz, elf_ppnt->p_memsz);
         error = target_mmap(TARGET_ELF_PAGESTART(load_bias + elf_ppnt->p_vaddr),
-                            (elf_mapsz +
+                            (elf_ppnt->p_filesz +
                              TARGET_ELF_PAGEOFFSET(elf_ppnt->p_vaddr)),
                             elf_prot,
                             (MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE),
@@ -899,6 +898,18 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
         if (error == -1) {
             perror("mmap");
             exit(-1);
+        } else if (elf_ppnt->p_memsz != elf_ppnt->p_filesz) {
+            abi_ulong start_bss, end_bss;
+
+            start_bss = elf_ppnt->p_vaddr + elf_ppnt->p_filesz;
+            end_bss = elf_ppnt->p_vaddr + elf_ppnt->p_memsz;
+
+            /*
+             * Calling set_brk effectively mmaps the pages that we need for the
+             * bss and break sections.
+             */
+            set_brk(start_bss, end_bss);
+            padzero(start_bss, end_bss);
         }
 
 #ifdef LOW_ELF_STACK
@@ -986,14 +997,6 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     info->end_data = end_data;
     info->start_stack = bprm->p;
     info->load_bias = load_bias;
-
-    /*
-     * Calling set_brk effectively mmaps the pages that we need for the bss
-     * and break sections.
-     */
-    set_brk(elf_bss, elf_brk);
-
-    padzero(elf_bss, elf_brk);
 
 #if 0
     printf("(start_brk) 0x" TARGET_FMT_lx "\n" , info->start_brk);
