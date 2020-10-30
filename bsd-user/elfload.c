@@ -835,10 +835,13 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
             i++, elf_ppnt++) {
             if (elf_ppnt->p_type != PT_LOAD)
                 continue;
-            if (HOST_PAGE_ALIGN(elf_ppnt->p_vaddr) < mmap_min_addr) {
+            /*
+             * PT_LOAD segments are stored in ascending order of virtual address,
+             * so we only need to inspect the first one.
+             */
+            if (HOST_PAGE_ALIGN(elf_ppnt->p_vaddr) < mmap_min_addr)
                 guest_base = HOST_PAGE_ALIGN(mmap_min_addr);
-                break;
-            }
+            break;
         }
     }
 
