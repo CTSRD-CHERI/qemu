@@ -620,7 +620,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     int i;
     struct elf_phdr * elf_ppnt;
     struct elf_phdr *elf_phdata;
-    abi_ulong elf_bss, k, elf_brk;
+    abi_ulong elf_bss, elf_brk;
     int retval;
     char * elf_interpreter;
     abi_ulong elf_entry, interp_load_addr = 0;
@@ -916,20 +916,17 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
                 reloc_func_desc = load_bias;
             }
         }
-        k = elf_ppnt->p_vaddr;
-        if (k < start_code)
-            start_code = k;
-        if (start_data < k)
-            start_data = k;
-        k = elf_ppnt->p_vaddr + elf_ppnt->p_filesz;
-        if (k > elf_bss)
-            elf_bss = k;
-        if ((elf_ppnt->p_flags & PF_X) && end_code <  k)
-            end_code = k;
-        if (end_data < k)
-            end_data = k;
-        k = elf_ppnt->p_vaddr + elf_ppnt->p_memsz;
-        if (k > elf_brk) elf_brk = k;
+
+        if ((elf_ppnt->p_flags & PF_X)) {
+            start_code = MAX(elf_ppnt->p_vaddr, start_code);
+            end_code = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_filesz, end_code);
+        } else {
+            start_data = MAX(elf_ppnt->p_vaddr, start_data);
+            end_data = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_filesz, end_data);
+        }
+
+        elf_bss = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_filesz, elf_bss);
+        elf_brk = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_memsz, elf_brk);
     }
 
     elf_entry += load_bias;
