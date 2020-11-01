@@ -60,6 +60,8 @@ static size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
 #define TARGET_NT_PROCSTAT_AUXV        16       /* Procstat auxv data. */
 
 static int elf_core_dump(int signr, CPUArchState *env);
+static int load_elf_sections(const struct elfhdr *hdr, struct elf_phdr *phdr,
+    int fd, abi_ulong rbase, abi_ulong *baddrp);
 
 abi_ulong target_stksiz;
 abi_ulong target_stkbas;
@@ -290,12 +292,9 @@ static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
         int interpreter_fd, abi_ulong *interp_load_addr)
 {
     struct elf_phdr *elf_phdata  =  NULL;
-    struct elf_phdr *eppnt;
-    abi_ulong load_addr = 0;
-    int load_addr_set = 0;
+    abi_ulong rbase;
     int retval;
-    abi_ulong last_bss, elf_bss, error;
-    int i;
+    abi_ulong baddr, last_bss, elf_bss, error;
 
     elf_bss = 0;
     last_bss = 0;
@@ -341,6 +340,7 @@ static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
     }
     bswap_phdr(elf_phdata, interp_elf_ex->e_phnum);
 
+    rbase = 0;
     if (interp_elf_ex->e_type == ET_DYN) {
         /*
          * In order to avoid hardcoding the interpreter load
@@ -352,87 +352,22 @@ static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
             perror("mmap");
             exit(-1);
         }
-        load_addr = error;
-        load_addr_set = 1;
+        rbase = error;
     }
 
-    eppnt = elf_phdata;
-    for (i = 0; i < interp_elf_ex->e_phnum; i++, eppnt++)
-        if (eppnt->p_type == PT_LOAD) {
-            int elf_type = MAP_PRIVATE | MAP_DENYWRITE;
-            int elf_prot = 0;
+    error = load_elf_sections(interp_elf_ex, elf_phdata, interpreter_fd, rbase,
+        &baddr);
+    if (error != 0) {
+        perror("load_elf_sections");
+        exit(-1);
+    }
 
-            abi_ulong vaddr = 0;
-            abi_ulong k;
-
-            if (eppnt->p_flags & PF_R) {
-                elf_prot =  PROT_READ;
-            }
-            if (eppnt->p_flags & PF_W) {
-                elf_prot |= PROT_WRITE;
-            }
-            if (eppnt->p_flags & PF_X) {
-                elf_prot |= PROT_EXEC;
-            }
-            if (interp_elf_ex->e_type == ET_EXEC || load_addr_set) {
-                elf_type |= MAP_FIXED;
-                vaddr = eppnt->p_vaddr;
-            }
-            error = target_mmap(load_addr+TARGET_ELF_PAGESTART(vaddr),
-                    eppnt->p_filesz + TARGET_ELF_PAGEOFFSET(eppnt->p_vaddr),
-                    elf_prot, elf_type, interpreter_fd, eppnt->p_offset -
-                    TARGET_ELF_PAGEOFFSET(eppnt->p_vaddr));
-            if (error == -1) {
-                /* Real error */
-                close(interpreter_fd);
-                free(elf_phdata);
-                return ~((abi_ulong)0UL);
-            }
-            if (!load_addr_set && interp_elf_ex->e_type == ET_DYN) {
-                load_addr = error;
-                load_addr_set = 1;
-            }
-
-            /*
-             * Find the end of the file  mapping for this phdr, and keep
-             * track of the largest address we see for this.
-             */
-            k = load_addr + eppnt->p_vaddr + eppnt->p_filesz;
-            if (k > elf_bss) {
-                elf_bss = k;
-            }
-            /*
-             * Do the same thing for the memory mapping - between
-             * elf_bss and last_bss is the bss section.
-             */
-            k = load_addr + eppnt->p_memsz + eppnt->p_vaddr;
-            if (k > last_bss) {
-                last_bss = k;
-            }
-        }
     /* Now use mmap to map the library into memory. */
     close(interpreter_fd);
-
-    /*
-     * Now fill out the bss section.  First pad the last page up
-     * to the page boundary, and then perform a mmap to make sure
-     * that there are zeromapped pages up to and including the last
-     * bss page.
-     */
-    padzero(elf_bss, last_bss);
-    /* What we have mapped so far */
-    elf_bss = TARGET_ELF_PAGESTART(elf_bss + qemu_host_page_size - 1);
-
-    /* Map the last of the bss segment */
-    if (last_bss > elf_bss) {
-        target_mmap(elf_bss, last_bss-elf_bss,
-                    PROT_READ|PROT_WRITE|PROT_EXEC,
-                    MAP_FIXED|MAP_PRIVATE|MAP_ANON, -1, 0);
-    }
     free(elf_phdata);
 
-    *interp_load_addr = load_addr;
-    return ((abi_ulong) interp_elf_ex->e_entry) + load_addr;
+    *interp_load_addr = baddr;
+    return ((abi_ulong) interp_elf_ex->e_entry) + rbase;
 }
 
 static int symfind(const void *s0, const void *s1)
@@ -606,6 +541,69 @@ int is_target_elf_binary(int fd)
     }
 }
 
+static int
+load_elf_sections(const struct elfhdr *hdr, struct elf_phdr *phdr, int fd,
+    abi_ulong rbase, abi_ulong *baddrp)
+{
+    struct elf_phdr *elf_ppnt;
+    abi_ulong baddr;
+    int i;
+    bool first;
+
+    /* Now we do a little grungy work by mmaping the ELF image into
+     * the correct location in memory.  At this point, we assume that
+     * the image should be loaded at fixed address, not at a variable
+     * address.
+     */
+    first = true;
+    for (i = 0, elf_ppnt = phdr; i < hdr->e_phnum; i++, elf_ppnt++) {
+        int elf_prot = 0;
+        abi_ulong error;
+
+        /* XXX Skip memsz == 0. */
+        if (elf_ppnt->p_type != PT_LOAD)
+            continue;
+
+        if (elf_ppnt->p_flags & PF_R) elf_prot |= PROT_READ;
+        if (elf_ppnt->p_flags & PF_W) elf_prot |= PROT_WRITE;
+        if (elf_ppnt->p_flags & PF_X) elf_prot |= PROT_EXEC;
+
+        error = target_mmap(TARGET_ELF_PAGESTART(rbase + elf_ppnt->p_vaddr),
+                            (elf_ppnt->p_filesz +
+                             TARGET_ELF_PAGEOFFSET(elf_ppnt->p_vaddr)),
+                            elf_prot,
+                            (MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE),
+                            fd,
+                            (elf_ppnt->p_offset -
+                             TARGET_ELF_PAGEOFFSET(elf_ppnt->p_vaddr)));
+        if (error == -1) {
+            perror("mmap");
+            exit(-1);
+        } else if (elf_ppnt->p_memsz != elf_ppnt->p_filesz) {
+            abi_ulong start_bss, end_bss;
+
+            start_bss = rbase + elf_ppnt->p_vaddr + elf_ppnt->p_filesz;
+            end_bss = rbase + elf_ppnt->p_vaddr + elf_ppnt->p_memsz;
+
+            /*
+             * Calling set_brk effectively mmaps the pages that we need for the
+             * bss and break sections.
+             */
+            set_brk(start_bss, end_bss);
+            padzero(start_bss, end_bss);
+        }
+
+        if (first) {
+            baddr = TARGET_ELF_PAGESTART(rbase + elf_ppnt->p_vaddr);
+            first = false;
+        }
+    }
+
+    if (baddrp != NULL)
+        *baddrp = baddr;
+    return (0);
+}
+
 int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
                     struct image_info *info)
 {
@@ -613,24 +611,21 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     struct elfhdr interp_elf_ex;
     struct exec interp_ex;
     int interpreter_fd = -1; /* avoid warning */
-    abi_ulong load_addr, load_bias;
-    int load_addr_set = 0;
+    abi_ulong load_addr;
     unsigned int interpreter_type = INTERPRETER_NONE;
     unsigned char ibcs2_interpreter;
     int i;
     struct elf_phdr * elf_ppnt;
     struct elf_phdr *elf_phdata;
     abi_ulong elf_bss, elf_brk;
-    int retval;
+    int error, retval;
     char * elf_interpreter;
-    abi_ulong elf_entry, interp_load_addr = 0;
-    abi_ulong start_code, end_code, start_data, end_data;
+    abi_ulong baddr, elf_entry, et_dyn_addr, interp_load_addr = 0;
     abi_ulong reloc_func_desc = 0;
     char passed_fileno[6];
 
     ibcs2_interpreter = 0;
     load_addr = 0;
-    load_bias = 0;
     elf_ex = *((struct elfhdr *) bprm->buf);          /* exec-header */
     bswap_ehdr(&elf_ex);
 
@@ -676,10 +671,12 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
 
 
     elf_interpreter = NULL;
+#if 0
     start_code = ~((abi_ulong)0UL);
     end_code = 0;
     start_data = 0;
     end_data = 0;
+#endif
     interp_ex.a_info = 0;
 
     for (i = 0; i < elf_ex.e_phnum; i++) {
@@ -815,7 +812,18 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     info->mmap = 0;
     elf_entry = (abi_ulong) elf_ex.e_entry;
 
-    /* XXX Check for load address from first PT_LOAD segment. */
+    /* XXX Join this with PT_INTERP search? */
+    baddr = 0;
+    for (i = 0, elf_ppnt = elf_phdata; i < elf_ex.e_phnum; i++, elf_ppnt++) {
+        if (elf_ppnt->p_type != PT_LOAD)
+            continue;
+        baddr = elf_ppnt->p_vaddr;
+        break;
+    }
+
+    et_dyn_addr = 0;
+    if (elf_ex.e_type == ET_DYN && baddr == 0)
+        et_dyn_addr = ELF_ET_DYN_LOAD_ADDR;
 
     /* Do this so that we can load the interpreter, if need be.  We will
        change some of these later */
@@ -823,79 +831,21 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     setup_arg_pages(bprm, info, &bprm->p, &bprm->stringp);
     info->start_stack = bprm->p;
 
-    /* Now we do a little grungy work by mmaping the ELF image into
-     * the correct location in memory.  At this point, we assume that
-     * the image should be loaded at fixed address, not at a variable
-     * address.
-     */
-
+    error = load_elf_sections(&elf_ex, elf_phdata, bprm->fd, et_dyn_addr,
+        &load_addr);
     for (i = 0, elf_ppnt = elf_phdata; i < elf_ex.e_phnum; i++, elf_ppnt++) {
-        int elf_prot = 0;
-        int elf_flags = 0;
-        abi_ulong error;
-
-        /* XXX Skip memsz == 0. */
         if (elf_ppnt->p_type != PT_LOAD)
             continue;
-
-        if (elf_ppnt->p_flags & PF_R) elf_prot |= PROT_READ;
-        if (elf_ppnt->p_flags & PF_W) elf_prot |= PROT_WRITE;
-        if (elf_ppnt->p_flags & PF_X) elf_prot |= PROT_EXEC;
-        elf_flags = MAP_PRIVATE | MAP_DENYWRITE;
-        if (elf_ex.e_type == ET_EXEC || load_addr_set) {
-            elf_flags |= MAP_FIXED;
-        } else if (elf_ex.e_type == ET_DYN) {
-            /* Try and get dynamic programs out of the way of the default mmap
-               base, as well as whatever program they might try to exec.  This
-               is because the brk will follow the loader, and is not movable. */
-            /* NOTE: for qemu, we do a big mmap to get enough space
-               without hardcoding any address */
-            error = target_mmap(0, ET_DYN_MAP_SIZE,
-                                PROT_NONE, MAP_PRIVATE | MAP_ANON,
-                                -1, 0);
-            if (error == -1) {
-                perror("mmap");
-                exit(-1);
-            }
-            load_bias = TARGET_ELF_PAGESTART(error - elf_ppnt->p_vaddr);
-        }
-
-        error = target_mmap(TARGET_ELF_PAGESTART(load_bias + elf_ppnt->p_vaddr),
-                            (elf_ppnt->p_filesz +
-                             TARGET_ELF_PAGEOFFSET(elf_ppnt->p_vaddr)),
-                            elf_prot,
-                            (MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE),
-                            bprm->fd,
-                            (elf_ppnt->p_offset -
-                             TARGET_ELF_PAGEOFFSET(elf_ppnt->p_vaddr)));
-        if (error == -1) {
-            perror("mmap");
-            exit(-1);
-        } else if (elf_ppnt->p_memsz != elf_ppnt->p_filesz) {
-            abi_ulong start_bss, end_bss;
-
-            start_bss = elf_ppnt->p_vaddr + elf_ppnt->p_filesz;
-            end_bss = elf_ppnt->p_vaddr + elf_ppnt->p_memsz;
-
-            /*
-             * Calling set_brk effectively mmaps the pages that we need for the
-             * bss and break sections.
-             */
-            set_brk(start_bss, end_bss);
-            padzero(start_bss, end_bss);
-        }
-
-        if (!load_addr_set) {
-            load_addr_set = 1;
-            load_addr = elf_ppnt->p_vaddr - elf_ppnt->p_offset;
-            if (elf_ex.e_type == ET_DYN) {
-                load_bias += error -
-                    TARGET_ELF_PAGESTART(load_bias + elf_ppnt->p_vaddr);
-                load_addr += load_bias;
-                reloc_func_desc = load_bias;
-            }
-        }
-
+        if (elf_ppnt->p_memsz > elf_ppnt->p_filesz)
+            elf_brk = MAX(elf_brk, et_dyn_addr + elf_ppnt->p_vaddr +
+                elf_ppnt->p_memsz);
+    }
+    if (error != 0) {
+        perror("load_elf_sections");
+        exit(-1);
+    }
+        /* XXX Move this out? */
+#if 0
         if ((elf_ppnt->p_flags & PF_X)) {
             start_code = MAX(elf_ppnt->p_vaddr, start_code);
             end_code = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_filesz, end_code);
@@ -906,15 +856,16 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
 
         elf_bss = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_filesz, elf_bss);
         elf_brk = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_memsz, elf_brk);
-    }
+#endif
 
-    elf_entry += load_bias;
+#if 0
     elf_bss += load_bias;
     elf_brk += load_bias;
     start_code += load_bias;
     end_code += load_bias;
     start_data += load_bias;
     end_data += load_bias;
+#endif
 
     if (elf_interpreter) {
         if (interpreter_type & 1) {
@@ -935,6 +886,8 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
             exit(-1);
             return 0;
         }
+    } else {
+        interp_load_addr = et_dyn_addr;
     }
 
     free(elf_phdata);
@@ -950,18 +903,20 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
                     bprm->envc,
                     bprm->stringp,
                     &elf_ex,
-                    load_addr, load_bias,
+                    load_addr, et_dyn_addr,
                     interp_load_addr,
                     (interpreter_type == INTERPRETER_AOUT ? 0 : 1),
                     info);
     info->load_addr = reloc_func_desc;
     info->start_brk = info->brk = elf_brk;
+#if 0
     info->end_code = end_code;
     info->start_code = start_code;
     info->start_data = start_data;
     info->end_data = end_data;
+#endif
     info->start_stack = bprm->p;
-    info->load_bias = load_bias;
+    info->load_bias = 0; //load_bias;
 
 #if 0
     printf("(start_brk) 0x" TARGET_FMT_lx "\n" , info->start_brk);
