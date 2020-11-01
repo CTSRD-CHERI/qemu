@@ -53,7 +53,6 @@ bool ras_thread_set = false;
 int singlestep;
 static const char *cpu_model;
 static const char *cpu_type;
-unsigned long mmap_min_addr;
 unsigned long guest_base;
 bool have_guest_base;
 #if (TARGET_LONG_BITS == 32) && (HOST_LONG_BITS == 64)
@@ -460,27 +459,6 @@ int main(int argc, char **argv)
      * proper page alignment for guest_base.
      */
     guest_base = HOST_PAGE_ALIGN(guest_base);
-
-    /*
-     * Read in mmap_min_addr kernel parameter.  This value is used
-     * When loading the ELF image to determine whether guest_base
-     * is needed.
-     *
-     * When user has explicitly set the quest base, we skip this
-     * test.
-     */
-    if (!have_guest_base) {
-        FILE *fp;
-
-        if ((fp = fopen("/proc/sys/vm/mmap_min_addr", "r")) != NULL) {
-            unsigned long tmp;
-            if (fscanf(fp, "%lu", &tmp) == 1) {
-                mmap_min_addr = tmp;
-                qemu_log_mask(CPU_LOG_PAGE, "host mmap_min_addr=0x%lx\n", mmap_min_addr);
-            }
-            fclose(fp);
-        }
-    }
 
     if (loader_exec(filename, argv+optind, target_environ, regs, info, &bprm)) {
         printf("Error loading %s\n", filename);
