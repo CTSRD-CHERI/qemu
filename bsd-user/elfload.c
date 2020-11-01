@@ -626,9 +626,6 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     abi_ulong elf_entry, interp_load_addr = 0;
     abi_ulong start_code, end_code, start_data, end_data;
     abi_ulong reloc_func_desc = 0;
-#ifdef LOW_ELF_STACK
-    abi_ulong elf_stack = ~((abi_ulong)0UL);
-#endif
     char passed_fileno[6];
 
     ibcs2_interpreter = 0;
@@ -678,9 +675,6 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     elf_brk = 0;
 
 
-#ifdef LOW_ELF_STACK
-    elf_stack = ~((abi_ulong)0UL);
-#endif
     elf_interpreter = NULL;
     start_code = ~((abi_ulong)0UL);
     end_code = 0;
@@ -891,11 +885,6 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
             padzero(start_bss, end_bss);
         }
 
-#ifdef LOW_ELF_STACK
-        if (TARGET_ELF_PAGESTART(elf_ppnt->p_vaddr) < elf_stack)
-            elf_stack = TARGET_ELF_PAGESTART(elf_ppnt->p_vaddr);
-#endif
-
         if (!load_addr_set) {
             load_addr_set = 1;
             load_addr = elf_ppnt->p_vaddr - elf_ppnt->p_offset;
@@ -956,9 +945,6 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     if (interpreter_type != INTERPRETER_AOUT) close(bprm->fd);
     info->personality = (ibcs2_interpreter ? PER_SVR4 : PER_LINUX);
 
-#ifdef LOW_ELF_STACK
-    info->start_stack = bprm->p = elf_stack - 4;
-#endif
     bprm->p = target_create_elf_tables(bprm->p,
                     bprm->argc,
                     bprm->envc,
