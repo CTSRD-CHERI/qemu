@@ -187,7 +187,7 @@ static inline abi_long do_freebsd_setcontext(void *cpu_env, abi_ulong arg1)
     if (!is_error(ret)) {
         (void)sigprocmask(SIG_SETMASK, &sigmask, NULL);
     }
-    return ret;
+    return ret == 0 ? -TARGET_EJUSTRETURN : ret;
 }
 
 /* swapcontext(2) */
@@ -228,7 +228,7 @@ static inline abi_long do_freebsd_swapcontext(void *cpu_env, abi_ulong arg1,
     if (!is_error(ret)) {
         (void)sigprocmask(SIG_SETMASK, &sigmask, NULL);
     }
-    return ret;
+    return ret == 0 ? -TARGET_EJUSTRETURN : ret;
 }
 
 
