@@ -151,10 +151,15 @@ static inline abi_long do_bsd_readv(abi_long arg1, abi_long arg2, abi_long arg3)
 /* write(2) */
 static inline abi_long do_bsd_write(abi_long arg1, abi_long arg2, abi_long arg3)
 {
-    abi_long ret;
+    abi_long nbytes, ret;
     void *p;
 
-    p = lock_user(VERIFY_READ, arg2, arg3, 1);
+    /* nbytes < 0 implies that it was larger than SIZE_MAX. */
+    nbytes = arg3;
+    if (nbytes < 0) {
+        return -TARGET_EINVAL;
+    }
+    p = lock_user(VERIFY_READ, arg2, nbytes, 1);
     if (p == NULL) {
         return -TARGET_EFAULT;
     }
