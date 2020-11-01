@@ -21,6 +21,7 @@
 
 #define elf_check_arch(x) ( (x) == EM_MIPS )
 #define ELF_START_MMAP 0x2aaaaab000ULL
+#define ELF_ET_DYN_LOAD_ADDR    0x0120000
 #define ELF_CLASS   ELFCLASS64
 
 #ifdef TARGET_WORDS_BIGENDIAN

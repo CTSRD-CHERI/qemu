@@ -20,6 +20,7 @@
 #define _TARGET_ARCH_ELF_H_
 
 #define ELF_START_MMAP 0x80000000
+#define ELF_ET_DYN_LOAD_ADDR    0x500000
 
 #define elf_check_arch(x) ( (x) == EM_ARM )
 
