@@ -176,9 +176,10 @@ static inline abi_long get_mcontext(CPUARMState *regs, target_mcontext_t *mcp,
     int err = 0;
     uint32_t *gr = mcp->__gregs;
 
-
+    gr[TARGET_REG_CPSR] = tswap32(cpsr_read(regs));
     if (flags & TARGET_MC_GET_CLEAR_RET) {
         gr[TARGET_REG_R0] = 0;
+        gr[TARGET_REG_CPSR] &= ~CPSR_C;
     } else {
         gr[TARGET_REG_R0] = tswap32(regs->regs[0]);
     }
@@ -199,7 +200,6 @@ static inline abi_long get_mcontext(CPUARMState *regs, target_mcontext_t *mcp,
     gr[TARGET_REG_SP] = tswap32(regs->regs[13]);
     gr[TARGET_REG_LR] = tswap32(regs->regs[14]);
     gr[TARGET_REG_PC] = tswap32(regs->regs[15]);
-    gr[TARGET_REG_CPSR] = tswap32(cpsr_read(regs));
 
     return err;
 }
