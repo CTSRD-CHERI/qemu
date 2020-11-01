@@ -49,7 +49,7 @@ static inline abi_long do_freebsd_nanosleep(abi_long arg1, abi_long arg2)
     ret = t2h_freebsd_timespec(&req, arg1);
     if (!is_error(ret)) {
         ret = get_errno(safe_nanosleep(&req, &rem));
-        if (!is_error(ret) && arg2) {
+        if (ret == -TARGET_EINTR && arg2) {
             h2t_freebsd_timespec(arg2, &rem);
         }
     }
