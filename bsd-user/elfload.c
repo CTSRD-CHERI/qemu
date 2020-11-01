@@ -821,29 +821,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     info->mmap = 0;
     elf_entry = (abi_ulong) elf_ex.e_entry;
 
-    /*
-     * In case where user has not explicitly set the guest_base, we
-     * probe here that should we set it automatically.
-     */
-    if (!have_guest_base) {
-        /*
-         * Go through ELF program header table and find out whether
-         * any of the segments drop below our current mmap_min_addr and
-         * in that case set guest_base to corresponding address.
-         */
-        for (i = 0, elf_ppnt = elf_phdata; i < elf_ex.e_phnum;
-            i++, elf_ppnt++) {
-            if (elf_ppnt->p_type != PT_LOAD)
-                continue;
-            /*
-             * PT_LOAD segments are stored in ascending order of virtual address,
-             * so we only need to inspect the first one.
-             */
-            if (HOST_PAGE_ALIGN(elf_ppnt->p_vaddr) < mmap_min_addr)
-                guest_base = HOST_PAGE_ALIGN(mmap_min_addr);
-            break;
-        }
-    }
+    /* XXX Check for load address from first PT_LOAD segment. */
 
     /* Do this so that we can load the interpreter, if need be.  We will
        change some of these later */
@@ -862,6 +840,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
         int elf_flags = 0;
         abi_ulong error;
 
+        /* XXX Skip memsz == 0. */
         if (elf_ppnt->p_type != PT_LOAD)
             continue;
 
