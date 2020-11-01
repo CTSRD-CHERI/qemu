@@ -848,7 +848,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
     case TARGET_FREEBSD_NR_ppoll: /* ppoll(2) */
-        ret = do_freebsd_ppoll(arg1, arg2, arg3, arg4);
+        ret = do_freebsd_ppoll(cpu_env, arg1, arg2, arg3, arg4);
         break;
 #endif /* __FreeBSD_version >= 1100000 */
 
@@ -1182,7 +1182,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         break;
 
     case TARGET_FREEBSD_NR_pselect: /* pselect(2) */
-        ret = do_freebsd_pselect(arg1, arg2, arg3, arg4, arg5, arg6);
+        ret = do_freebsd_pselect(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6);
         break;
 
     case TARGET_FREEBSD_NR_kqueue: /* kqueue(2) */
