@@ -485,13 +485,15 @@ static inline abi_long do_freebsd_select(CPUArchState *env, int n,
 }
 
 /* pselect(2) */
-static inline abi_long do_freebsd_pselect(int n, abi_ulong rfd_addr,
-        abi_ulong wfd_addr, abi_ulong efd_addr, abi_ulong ts_addr,
-        abi_ulong set_addr)
+static inline abi_long do_freebsd_pselect(void *cpu_env, int n,
+        abi_ulong rfd_addr, abi_ulong wfd_addr, abi_ulong efd_addr,
+        abi_ulong ts_addr, abi_ulong set_addr)
 {
+    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    TaskState *tstate = cpu->opaque;
     fd_set rfds, wfds, efds;
     fd_set *rfds_ptr, *wfds_ptr, *efds_ptr;
-    sigset_t set, *set_ptr;
+    sigset_t *set_ptr;
     struct timespec ts, *ts_ptr;
     void *p;
     abi_long ret, error;
@@ -524,16 +526,18 @@ static inline abi_long do_freebsd_pselect(int n, abi_ulong rfd_addr,
         if (p == NULL) {
             return -TARGET_EFAULT;
         }
-        target_to_host_sigset(&set, p);
+        target_to_host_sigset(&tstate->sigsuspend_mask, p);
         unlock_user(p, set_addr, 0);
-        set_ptr = &set;
+        set_ptr = &tstate->sigsuspend_mask;
     } else {
         set_ptr = NULL;
     }
 
     ret = get_errno(safe_pselect(n, rfds_ptr, wfds_ptr, efds_ptr, ts_ptr,
         set_ptr));
-
+    if (ret != -TARGET_ERESTART)  {
+        tstate->in_sigsuspend = true;
+    }
     if (!is_error(ret)) {
         if (rfd_addr != 0) {
             error = copy_to_user_fdset(rfd_addr, &rfds, n);
@@ -559,15 +563,17 @@ static inline abi_long do_freebsd_pselect(int n, abi_ulong rfd_addr,
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
 /* ppoll(2) */
-static abi_long do_freebsd_ppoll(abi_long arg1, abi_long arg2, abi_ulong arg3,
-		abi_ulong arg4)
+static abi_long do_freebsd_ppoll(void *cpu_env, abi_long arg1, abi_long arg2,
+        abi_ulong arg3, abi_ulong arg4)
 {
+    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    TaskState *tstate = cpu->opaque;
     abi_long ret;
     nfds_t i, nfds = arg2;
     struct pollfd *pfd;
     struct target_pollfd *target_pfd;
     struct timespec ts, *ts_ptr;
-    sigset_t set, *set_ptr;
+    sigset_t *set_ptr;
     void *p;
 
     target_pfd = lock_user(VERIFY_WRITE, arg1,
@@ -593,14 +599,17 @@ static abi_long do_freebsd_ppoll(abi_long arg1, abi_long arg2, abi_ulong arg3,
         p = lock_user(VERIFY_READ, arg4, sizeof(target_sigset_t), 1);
         if (p == NULL)
             return -TARGET_EFAULT;
-        target_to_host_sigset(&set, p);
+        target_to_host_sigset(&tstate->sigsuspend_mask, p);
         unlock_user(p, arg4, 0);
-        set_ptr = &set;
+        set_ptr = &tstate->sigsuspend_mask;
     } else {
         set_ptr = NULL;
     }
 
     ret = get_errno(ppoll(pfd, nfds, ts_ptr, set_ptr));
+    if (ret != -TARGET_ERESTART) {
+        tstate->in_sigsuspend = true;
+    }
     if (!is_error(ret)) {
         for (i = 0; i < nfds; i++)
             target_pfd[i].revents = tswap16(pfd[i].revents);

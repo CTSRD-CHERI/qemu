@@ -144,9 +144,9 @@ static inline abi_long do_freebsd_select(int n, abi_ulong rfd_addr,
 }
 
 
-static inline abi_long do_freebsd_pselect(int n, abi_ulong rfd_addr,
-        abi_ulong wfd_addr, abi_ulong efd_addr, abi_ulong ts_addr,
-        abi_ulong set_addr)
+static inline abi_long do_freebsd_pselect(void *cpu_env, int n,
+        abi_ulong rfd_addr, abi_ulong wfd_addr, abi_ulong efd_addr,
+        abi_ulong ts_addr, abi_ulong set_addr)
 {
 
     qemu_log("qemu: Unsupported syscall %s\n", __func__);
