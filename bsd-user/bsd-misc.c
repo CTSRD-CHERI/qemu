@@ -167,11 +167,12 @@ abi_long target_to_host_msqid_ds(struct msqid_ds *host_md,
     if (!lock_user_struct(VERIFY_READ, target_md, target_addr, 1)) {
         return -TARGET_EFAULT;
     }
+
+    memset(host_md, 0, sizeof(struct msqid_ds));
     if (target_to_host_ipc_perm(&(host_md->msg_perm), target_addr)) {
         return -TARGET_EFAULT;
     }
 
-    memset(host_md, 0, sizeof(struct msqid_ds));
     /* msg_first and msg_last are not used by IPC_SET/IPC_STAT in kernel. */
     host_md->msg_cbytes = tswapal(target_md->msg_cbytes);
     host_md->msg_qnum = tswapal(target_md->msg_qnum);
@@ -200,11 +201,12 @@ abi_long host_to_target_msqid_ds(abi_ulong target_addr,
     if (!lock_user_struct(VERIFY_WRITE, target_md, target_addr, 0)) {
         return -TARGET_EFAULT;
     }
+
+    memset(target_md, 0, sizeof(struct target_msqid_ds));
     if (host_to_target_ipc_perm(target_addr, &(host_md->msg_perm))) {
         return -TARGET_EFAULT;
     }
 
-    memset(target_md, 0, sizeof(struct target_msqid_ds));
     /* msg_first and msg_last are not used by IPC_SET/IPC_STAT in kernel. */
     target_md->msg_cbytes = tswapal(host_md->msg_cbytes);
     target_md->msg_qnum = tswapal(host_md->msg_qnum);
