@@ -175,6 +175,9 @@ static inline abi_long do_bsd_socketpair(int domain, int type, int protocol,
     int tab[2];
     abi_long ret;
 
+    if (!access_ok(VERIFY_WRITE, target_tab_addr, sizeof(tab[0]) * 2)) {
+        return -TARGET_EFAULT;
+    }
     ret = get_errno(socketpair(domain, type, protocol, tab));
     if (!is_error(ret)) {
         if (put_user_s32(tab[0], target_tab_addr) ||
