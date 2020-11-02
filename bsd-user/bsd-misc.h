@@ -336,7 +336,8 @@ static inline abi_long do_bsd_msgrcv(int msqid, abi_long msgp,
         memcpy(target_mb->mtext, host_mb->mtext, ret);
         unlock_user(target_mtext, target_mtext_addr, ret);
     }
-    target_mb->mtype = tswapal(host_mb->mtype);
+    if (!is_error(ret))
+        target_mb->mtype = tswapal(host_mb->mtype);
 end:
     if (target_mb != NULL) {
         unlock_user_struct(target_mb, msgp, 1);
