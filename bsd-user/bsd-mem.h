@@ -93,10 +93,15 @@ static inline abi_long do_bsd_mprotect(abi_long arg1, abi_long arg2,
 }
 
 /* msync(2) */
-static inline abi_long do_bsd_msync(abi_long arg1, abi_long arg2, abi_long arg3)
+static inline abi_long do_bsd_msync(abi_long addr, abi_long len, abi_long flags)
 {
 
-    return get_errno(msync(g2h(arg1), arg2, arg3));
+    if (!access_ok(VERIFY_WRITE, addr, len)) {
+        /* XXX Should be EFAULT, but FreeBSD seems to get this wrong. */
+        return -TARGET_ENOMEM;
+    }
+
+    return get_errno(msync(g2h(addr), len, flags));
 }
 
 /* mlock(2) */
