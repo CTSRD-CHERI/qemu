@@ -62,6 +62,7 @@ abi_long copy_to_user_fdset(abi_ulong target_fds_addr, const fd_set *fds,
         int n);
 
 abi_int next_free_host_timer(void);
+target_timer_t host_to_target_timerid(target_timer_t timerid);
 abi_long target_to_host_itimerspec(struct itimerspec *host_itspec,
         abi_ulong target_addr);
 abi_long host_to_target_itimerspec(abi_ulong target_addr,

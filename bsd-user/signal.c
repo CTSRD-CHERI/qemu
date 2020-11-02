@@ -239,7 +239,13 @@ static inline void host_to_target_siginfo_noswap(target_siginfo_t *tinfo,
     }
 #endif
     if (SI_TIMER == code) {
-        tinfo->_reason._timer._timerid = info->_reason._timer._timerid;
+        timer_t timerid;
+
+        timerid = info->_reason._timer._timerid;
+#ifdef __FreeBSD__
+        timerid = host_to_target_timerid(timerid);
+#endif
+        tinfo->_reason._timer._timerid = timerid;
         tinfo->_reason._timer._overrun = info->_reason._timer._overrun;
     }
 }
