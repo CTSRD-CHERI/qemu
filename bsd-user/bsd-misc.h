@@ -28,6 +28,16 @@
 
 #include "qemu-bsd.h"
 
+#ifdef MSGMAX
+static int bsd_msgmax = MSGMAX;
+#else
+#if !defined(__FreeBSD__)
+#error Unsure how to proceed, no MSGMAX
+#endif
+
+static int bsd_msgmax;
+#endif
+
 /* quotactl(2) */
 static inline abi_long do_bsd_quotactl(abi_ulong path, abi_long cmd,
         __unused abi_ulong target_addr)
@@ -282,14 +292,34 @@ struct kern_mymsg {
     char mtext[1];
 };
 
+static inline abi_long bsd_validate_msgsz(abi_ulong msgsz)
+{
+    abi_long ret;
+
+    /* Fetch msgmax the first time we need it. */
+    if (bsd_msgmax == 0) {
+        size_t len = sizeof(bsd_msgmax);
+
+        if (sysctlbyname("kern.ipc.msgmax", &bsd_msgmax, &len, NULL, 0) == -1)
+            return -TARGET_EINVAL;
+    }
+
+    if (msgsz > bsd_msgmax)
+        return -TARGET_EINVAL;
+    return 0;
+}
+
 /* msgsnd(2) */
 static inline abi_long do_bsd_msgsnd(int msqid, abi_long msgp,
-        unsigned int msgsz, int msgflg)
+        abi_ulong msgsz, int msgflg)
 {
     struct target_msgbuf *target_mb;
     struct kern_mymsg *host_mb;
     abi_long ret;
 
+    ret = bsd_validate_msgsz(msgsz);
+    if (is_error(ret))
+        return ret;
     if (!lock_user_struct(VERIFY_READ, target_mb, msgp, 0)) {
         return -TARGET_EFAULT;
     }
@@ -314,13 +344,16 @@ static inline abi_long do_bsd_msgget(abi_long key, abi_long msgflag)
 
 /* msgrcv(2) */
 static inline abi_long do_bsd_msgrcv(int msqid, abi_long msgp,
-        unsigned int msgsz, abi_long msgtyp, int msgflg)
+        abi_ulong msgsz, abi_long msgtyp, int msgflg)
 {
     struct target_msgbuf *target_mb = NULL;
     char *target_mtext;
     struct kern_mymsg *host_mb;
     abi_long ret = 0;
 
+    ret = bsd_validate_msgsz(msgsz);
+    if (is_error(ret))
+        return ret;
     if (!lock_user_struct(VERIFY_WRITE, target_mb, msgp, 0)) {
         return -TARGET_EFAULT;
     }
