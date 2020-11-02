@@ -352,7 +352,7 @@ static inline abi_long do_freebsd_ktimer_create(abi_long arg1, abi_long arg2,
             }
         }
 
-        ret = get_errno(timer_create(clkid, phost_sevp, phtimer));
+        ret = get_errno(__sys_ktimer_create(clkid, phost_sevp, phtimer));
         if (ret) {
             phtimer = NULL;
         } else {
@@ -375,7 +375,7 @@ static inline abi_long do_freebsd_ktimer_delete(abi_long arg1)
         ret = timerid;
     } else {
         timer_t htimer = g_posix_timers[timerid];
-        ret = get_errno(timer_delete(htimer));
+        ret = get_errno(__sys_ktimer_delete(htimer));
         g_posix_timers[timerid] = 0;
     }
     return(ret);
@@ -402,7 +402,7 @@ static inline abi_long do_freebsd_ktimer_settime(abi_long arg1, abi_long arg2,
             return -TARGET_EFAULT;
         }
         ret = get_errno(
-                      timer_settime(htimer, arg2, &hspec_new, &hspec_old));
+                      __sys_ktimer_settime(htimer, arg2, &hspec_new, &hspec_old));
         if (arg4 && host_to_target_itimerspec(arg4, &hspec_old)) {
             return -TARGET_EFAULT;
         }
