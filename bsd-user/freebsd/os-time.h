@@ -30,6 +30,8 @@
 #include "qemu.h"
 #include "qemu-os.h"
 
+int safe_clock_nanosleep(clockid_t clock_id, int flags,
+     const struct timespec *rqtp, struct timespec *rmtp);
 int safe_nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
 
 #ifndef BSD_HAVE_KEVENT64
@@ -51,6 +53,28 @@ static inline abi_long do_freebsd_nanosleep(abi_long arg1, abi_long arg2)
         ret = get_errno(safe_nanosleep(&req, &rem));
         if (ret == -TARGET_EINTR && arg2) {
             h2t_freebsd_timespec(arg2, &rem);
+        }
+    }
+
+    return ret;
+}
+
+/* clock_nanosleep(2) */
+static inline abi_long do_freebsd_clock_nanosleep(abi_long arg1, abi_long arg2,
+    abi_long arg3, abi_long arg4)
+{
+    struct timespec req, rem;
+    abi_long ret;
+    int clkid, flags;
+
+    clkid = arg1;
+    /* XXX Translate? */
+    flags = arg2;
+    ret = t2h_freebsd_timespec(&req, arg3);
+    if (!is_error(ret)) {
+        ret = get_errno(safe_clock_nanosleep(clkid, flags, &req, &rem));
+        if (ret == -TARGET_EINTR && arg4) {
+            h2t_freebsd_timespec(arg4, &rem);
         }
     }
 

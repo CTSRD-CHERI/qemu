@@ -65,6 +65,8 @@ safe_syscall5(int, _umtx_op, void *, obj, int, op, unsigned long, val, void *,
 /* used in os-time */
 safe_syscall2(int, nanosleep, const struct timespec *, rqtp, struct timespec *,
     rmtp);
+safe_syscall4(int, clock_nanosleep, clockid_t, clock_id, int, flags,
+    const struct timespec *, rqtp, struct timespec *, rmtp);
 
 /* used in os-proc */
 safe_syscall4(pid_t, wait4, pid_t, wpid, int *, status, int, options,
@@ -1103,6 +1105,10 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
          */
     case TARGET_FREEBSD_NR_nanosleep: /* nanosleep(2) */
         ret = do_freebsd_nanosleep(arg1, arg2);
+        break;
+
+    case TARGET_FREEBSD_NR_clock_nanosleep: /* clock_nanosleep(2) */
+        ret = do_freebsd_clock_nanosleep(arg1, arg2, arg3, arg4);
         break;
 
     case TARGET_FREEBSD_NR_clock_gettime: /* clock_gettime(2) */
