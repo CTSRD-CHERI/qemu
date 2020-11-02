@@ -315,7 +315,7 @@ abi_long target_to_host_sigevent(struct sigevent *host_sevp,
      * using the 32 bit integer.
      */
     host_sevp->sigev_value.sival_ptr =
-        (void *)(uintptr_t)tswapal(target_sevp->sigev_value.sival_ptr);
+        (void *)(uintptr_t)target_sevp->sigev_value.sival_ptr;
     host_sevp->sigev_signo =
         target_to_host_signal(tswap32(target_sevp->sigev_signo));
     host_sevp->sigev_notify = tswap32(target_sevp->sigev_notify);
