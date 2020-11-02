@@ -303,6 +303,15 @@ static inline abi_long do_bsd_msgsnd(int msqid, abi_long msgp,
     return ret;
 }
 
+/* msgget(2) */
+static inline abi_long do_bsd_msgget(abi_long key, abi_long msgflag)
+{
+    abi_long ret;
+
+    ret = get_errno(msgget(key, msgflag));
+    return (ret);
+}
+
 /* msgrcv(2) */
 static inline abi_long do_bsd_msgrcv(int msqid, abi_long msgp,
         unsigned int msgsz, abi_long msgtyp, int msgflg)

@@ -1604,6 +1604,10 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         ret = do_bsd_msgctl(arg1, arg2, arg3);
         break;
 
+    case TARGET_FREEBSD_NR_msgget: /* msgget(2) */
+        ret = do_bsd_msgget(arg1, arg2);
+        break;
+
     case TARGET_FREEBSD_NR_msgsnd: /* msgsnd(2) */
         ret = do_bsd_msgsnd(arg1, arg2, arg3, arg4);
         break;
