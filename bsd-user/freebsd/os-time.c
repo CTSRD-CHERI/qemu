@@ -249,6 +249,18 @@ abi_int next_free_host_timer(void)
     return -1;
 }
 
+target_timer_t host_to_target_timerid(target_timer_t timerid)
+{
+    int k;
+
+    for (k = 0; k < ARRAY_SIZE(g_posix_timers); k++) {
+        if (g_posix_timers[k] == timerid)
+            return TIMER_MAGIC | k;
+    }
+
+    return -1;
+}
+
 abi_long target_to_host_itimerspec(struct itimerspec *host_itspec,
                                                  abi_ulong target_addr)
 {
