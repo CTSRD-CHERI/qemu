@@ -888,6 +888,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
         }
     } else {
         interp_load_addr = et_dyn_addr;
+        elf_entry += interp_load_addr;
     }
 
     free(elf_phdata);
