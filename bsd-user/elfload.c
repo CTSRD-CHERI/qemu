@@ -346,9 +346,9 @@ static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
          * In order to avoid hardcoding the interpreter load
          * address in qemu, we allocate a big enough memory zone.
          */
-        rebase = target_mmap(0, INTERP_MAP_SIZE, PROT_NONE,
+        rbase = target_mmap(0, INTERP_MAP_SIZE, PROT_NONE,
                 MAP_PRIVATE | MAP_ANON, -1, 0);
-        if (rebase == -1) {
+        if (rbase == -1) {
             perror("mmap");
             exit(-1);
         }
