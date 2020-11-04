@@ -20,6 +20,7 @@
 #include <sys/resource.h>
 #include "qemu/osdep.h"
 
+#include "os-time.h"
 #include "qemu.h"
 #include "linux-user/trace.h"
 

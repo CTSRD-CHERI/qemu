@@ -24,11 +24,14 @@
 #include <sys/event.h>
 #include <sys/select.h>
 #include <sys/timex.h>
+#include <poll.h>
 #include <signal.h>
 #include <time.h>
 
 #include "qemu.h"
 #include "qemu-os.h"
+
+#include "bsd-file.h"
 
 int safe_clock_nanosleep(clockid_t clock_id, int flags,
      const struct timespec *rqtp, struct timespec *rmtp);
