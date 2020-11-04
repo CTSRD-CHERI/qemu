@@ -26,7 +26,7 @@
 static inline abi_long do_freebsd_arch_sysarch(CPUARMState *env, int op,
         abi_ulong parms)
 {
-    int ret = 0;
+    int ret = -TARGET_EOPNOTSUPP;
 
     fprintf(stderr, "sysarch");
     return ret;
