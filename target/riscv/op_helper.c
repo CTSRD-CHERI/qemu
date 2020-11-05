@@ -56,7 +56,7 @@ static inline const char* exception_str(uint32_t exception)
 #ifdef TARGET_CHERI
 #ifndef TARGET_RISCV32
     case RISCV_EXCP_LOAD_CAP_PAGE_FAULT: return "Load capability page fault";
-    case RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT: return "Store/AMI capability page fault";
+    case RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT: return "Store/AMO capability page fault";
 #endif
     case RISCV_EXCP_CHERI: return "CHERI fault";
 #endif
