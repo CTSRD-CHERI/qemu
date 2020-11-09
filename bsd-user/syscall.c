@@ -68,6 +68,10 @@ safe_syscall2(int, nanosleep, const struct timespec *, rqtp, struct timespec *,
 safe_syscall4(int, clock_nanosleep, clockid_t, clock_id, int, flags,
     const struct timespec *, rqtp, struct timespec *, rmtp);
 
+safe_syscall6(int, kevent, int, kq, const struct kevent *, changelist,
+    int, nchanges, struct kevent *, eventlist, int, nevents,
+    const struct timespec *, timeout);
+
 /* used in os-proc */
 safe_syscall4(pid_t, wait4, pid_t, wpid, int *, status, int, options,
     struct rusage *, rusage);
