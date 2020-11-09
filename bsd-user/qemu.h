@@ -389,8 +389,40 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 /* These are usually used to access struct data members once the
  * struct has been locked - usually with lock_user_struct().
  */
+
+/*
+ * Tricky points:
+ * - Use __builtin_choose_expr to avoid type promotion from ?:,
+ * - Invalid sizes result in a compile time error stemming from
+ *   the fact that abort has no parameters.
+ * - It's easier to use the endian-specific unaligned load/store
+ *   functions than host-endian unaligned load/store plus tswapN.
+ * - The pragmas are necessary only to silence a clang false-positive
+ *   warning: see https://bugs.llvm.org/show_bug.cgi?id=39113 .
+ * - We have to disable -Wpragmas warnings to avoid a complaint about
+ *   an unknown warning type from older compilers that don't know about
+ *   -Waddress-of-packed-member.
+ * - gcc has bugs in its _Pragma() support in some versions, eg
+ *   https://gcc.gnu.org/bugzilla/show_bug.cgi?id=83256 -- so we only
+ *   include the warning-suppression pragmas for clang
+ */
+#ifdef __clang__
+#define PRAGMA_DISABLE_PACKED_WARNING                                   \
+    _Pragma("GCC diagnostic push");                                     \
+    _Pragma("GCC diagnostic ignored \"-Wpragmas\"");                    \
+    _Pragma("GCC diagnostic ignored \"-Waddress-of-packed-member\"")
+
+#define PRAGMA_REENABLE_PACKED_WARNING          \
+    _Pragma("GCC diagnostic pop")
+
+#else
+#define PRAGMA_DISABLE_PACKED_WARNING
+#define PRAGMA_REENABLE_PACKED_WARNING
+#endif
+
 #define __put_user(x, hptr)\
 ({\
+    PRAGMA_DISABLE_PACKED_WARNING;\
     int size = sizeof(*hptr);\
     switch(size) {\
     case 1:\
@@ -408,11 +440,13 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
     default:\
         abort();\
     }\
+    PRAGMA_REENABLE_PACKED_WARNING;\
     0;\
 })
 
 #define __get_user(x, hptr) \
 ({\
+    PRAGMA_DISABLE_PACKED_WARNING;\
     int size = sizeof(*hptr);\
     switch(size) {\
     case 1:\
@@ -432,6 +466,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
         x = 0;\
         abort();\
     }\
+    PRAGMA_REENABLE_PACKED_WARNING;\
     0;\
 })
 
