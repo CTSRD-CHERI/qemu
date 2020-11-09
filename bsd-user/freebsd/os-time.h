@@ -36,14 +36,8 @@
 int safe_clock_nanosleep(clockid_t clock_id, int flags,
      const struct timespec *rqtp, struct timespec *rmtp);
 int safe_nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
-
-#ifndef BSD_HAVE_KEVENT64
-#define	freebsd11_kevent	kevent
-#else
-int freebsd11_kevent(abi_long arg1, abi_ulong arg2,
-        abi_long arg3, abi_ulong arg4, abi_long arg5, abi_long arg6);
-__sym_compat(kevent, freebsd11_kevent, FBSD_1.0);
-#endif
+int safe_kevent(int, const struct kevent *, int, struct kevent *, int,
+     const struct timespec *);
 
 /* nanosleep(2) */
 static inline abi_long do_freebsd_nanosleep(abi_long arg1, abi_long arg2)
@@ -655,6 +649,7 @@ static inline abi_long do_freebsd_kqueue(void)
 }
 
 /* kevent(2) */
+/* XXX Maybe some day, consolidate these two... */
 static inline abi_long do_freebsd_freebsd11_kevent(abi_long arg1, abi_ulong arg2,
         abi_long arg3, abi_ulong arg4, abi_long arg5, abi_long arg6)
 {
@@ -666,12 +661,13 @@ static inline abi_long do_freebsd_freebsd11_kevent(abi_long arg1, abi_ulong arg2
 
     if (arg3 != 0) {
         target_changelist = lock_user(VERIFY_READ, arg2,
-                sizeof(struct target_freebsd11_kevent) * arg3, 1);
+                sizeof(*target_changelist) * arg3, 1);
         if (target_changelist == NULL) {
             return -TARGET_EFAULT;
         }
 
-        changelist = alloca(sizeof(struct kevent_freebsd11) * arg3);
+        changelist = alloca(sizeof(struct kevent) * arg3);
+        memset(changelist, '\0', sizeof(struct kevent) * arg3);
         for (i = 0; i < arg3; i++) {
             __get_user(changelist[i].ident, &target_changelist[i].ident);
             __get_user(changelist[i].filter, &target_changelist[i].filter);
@@ -687,18 +683,18 @@ static inline abi_long do_freebsd_freebsd11_kevent(abi_long arg1, abi_ulong arg2
             tswap64s((uint64_t *)&changelist[i].udata);
 #endif
         }
-        unlock_user(target_changelist, arg2, 0);
+        unlock_user(target_changelist, arg2, sizeof(*target_changelist) * arg3);
     }
 
     if (arg5 != 0) {
-        eventlist = alloca(sizeof(struct kevent_freebsd11) * arg5);
+        eventlist = alloca(sizeof(struct kevent) * arg5);
     }
     if (arg6 != 0) {
         if (t2h_freebsd_timespec(&ts, arg6)) {
             return -TARGET_EFAULT;
         }
     }
-    ret = get_errno(freebsd11_kevent(arg1, changelist, arg3, eventlist, arg5,
+    ret = get_errno(safe_kevent(arg1, changelist, arg3, eventlist, arg5,
                 arg6 != 0 ? &ts : NULL));
 
     if (arg5 == 0)
@@ -706,7 +702,7 @@ static inline abi_long do_freebsd_freebsd11_kevent(abi_long arg1, abi_ulong arg2
 
     if (!is_error(ret)) {
         target_eventlist = lock_user(VERIFY_WRITE, arg4,
-                sizeof(struct target_freebsd11_kevent) * arg5, 0);
+                sizeof(*target_eventlist) * arg5, 0);
         if (target_eventlist == NULL) {
                 return -TARGET_EFAULT;
         }
@@ -715,7 +711,8 @@ static inline abi_long do_freebsd_freebsd11_kevent(abi_long arg1, abi_ulong arg2
             __put_user(eventlist[i].filter, &target_eventlist[i].filter);
             __put_user(eventlist[i].flags, &target_eventlist[i].flags);
             __put_user(eventlist[i].fflags, &target_eventlist[i].fflags);
-            __put_user(eventlist[i].data, &target_eventlist[i].data);
+            __put_user(eventlist[i].data & 0xffffffff,
+                &target_eventlist[i].data);
             /* __put_user(eventlist[i].udata, &target_eventlist[i].udata);*/
 #if TARGET_ABI_BITS == 32
             tswap32s((uint32_t *)&eventlist[i].udata);
@@ -726,7 +723,7 @@ static inline abi_long do_freebsd_freebsd11_kevent(abi_long arg1, abi_ulong arg2
 #endif
         }
         unlock_user(target_eventlist, arg4,
-                sizeof(struct target_freebsd11_kevent) * arg5);
+                sizeof(*target_eventlist) * arg5);
     }
     return ret;
 }
@@ -780,7 +777,7 @@ static inline abi_long do_freebsd_kevent(abi_long arg1, abi_ulong arg2,
             return -TARGET_EFAULT;
         }
     }
-    ret = get_errno(kevent(arg1, changelist, arg3, eventlist, arg5,
+    ret = get_errno(safe_kevent(arg1, changelist, arg3, eventlist, arg5,
                 arg6 != 0 ? &ts : NULL));
 
     if (arg5 == 0)

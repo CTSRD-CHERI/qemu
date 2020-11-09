@@ -271,15 +271,6 @@ extern timer_t g_posix_timers[32];
 /*
  * sys/event.h
  */
-struct kevent_freebsd11 {
-    __uintptr_t     ident;
-    short           filter;
-    unsigned short  flags;
-    unsigned int    fflags;
-    __intptr_t      data;
-    void            *udata;
-};
-
 struct target_freebsd11_kevent {
     abi_ulong  ident;
     int16_t    filter;
