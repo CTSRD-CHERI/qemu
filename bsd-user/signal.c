@@ -633,6 +633,10 @@ int do_sigaction(int sig, const struct target_sigaction *act,
         return -EINVAL;
     }
 
+    if (block_signals()) {
+        return -TARGET_ERESTART;
+    }
+
     k = &sigact_table[sig - 1];
     if (oact) {
         oact->_sa_handler = tswapal(k->_sa_handler);
