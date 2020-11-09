@@ -129,14 +129,16 @@ static inline void target_sigemptyset(target_sigset_t *set)
 int
 qemu_sigorset(sigset_t *dest, const sigset_t *left, const sigset_t *right)
 {
+    sigset_t work;
     int i;
 
-    sigemptyset(dest);
+    sigemptyset(&work);
     for (i = 1; i < NSIG; ++i) {
         if (sigismember(left, i) || sigismember(right, i))
-            sigaddset(dest, i);
+            sigaddset(&work, i);
     }
 
+    *dest = work;
     return (0);
 }
 
