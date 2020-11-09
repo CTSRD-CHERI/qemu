@@ -40,6 +40,10 @@
 #define ELF_HWCAP 0
 #endif
 
+/* XXX Look at the other conflicting AT_* values. */
+#define FREEBSD_AT_HWCAP     25
+#define FREEBSD_AT_HWCAP2    26
+
 #ifdef TARGET_ABI32
 #undef ELF_CLASS
 #define ELF_CLASS ELFCLASS32
@@ -82,7 +86,7 @@ struct exec
 #define INTERPRETER_AOUT 1
 #define INTERPRETER_ELF 2
 
-#define DLINFO_ITEMS 12
+#define DLINFO_ITEMS 13
 
 static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
                                    abi_ulong stringp,
@@ -92,7 +96,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
                                    abi_ulong interp_load_addr, int ibcs,
                                    struct image_info *info)
 {
-        abi_ulong sp;
+        abi_ulong features, sp;
         int size;
         const int n = sizeof(elf_addr_t);
 
@@ -128,6 +132,17 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         NEW_AUX_ENT(AT_BASE, (abi_ulong)(interp_load_addr));
         NEW_AUX_ENT(AT_FLAGS, (abi_ulong)0);
         NEW_AUX_ENT(AT_ENTRY, load_bias + exec->e_entry);
+        features = ELF_HWCAP;
+#if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
+        {
+            ARMCPU *cpu = ARM_CPU(thread_cpu);
+            if (arm_feature(&cpu->env, ARM_FEATURE_VFP3))
+                features |= ARM_HWCAP_ARM_VFPv3;
+            if (arm_feature(&cpu->env, ARM_FEATURE_VFP4))
+                features |= ARM_HWCAP_ARM_VFPv4;
+        }
+#endif
+        NEW_AUX_ENT(FREEBSD_AT_HWCAP, features);
 #ifndef TARGET_PPC
         NEW_AUX_ENT(AT_UID, (abi_ulong) getuid());
         NEW_AUX_ENT(AT_EUID, (abi_ulong) geteuid());

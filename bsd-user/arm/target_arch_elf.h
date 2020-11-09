@@ -45,6 +45,8 @@ enum
   ARM_HWCAP_ARM_FPA       = 1 << 5,
   ARM_HWCAP_ARM_VFP       = 1 << 6,
   ARM_HWCAP_ARM_EDSP      = 1 << 7,
+  ARM_HWCAP_ARM_VFPv3     = 1 << 13,
+  ARM_HWCAP_ARM_VFPv4     = 1 << 16,
 };
 
 #define ELF_HWCAP (ARM_HWCAP_ARM_SWP | ARM_HWCAP_ARM_HALF              \
