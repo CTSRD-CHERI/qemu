@@ -27,11 +27,6 @@
 
 static uint64_t *idt_table;
 
-/* CPUX86 core interface */
-void cpu_smm_update(X86CPU *cpu)
-{
-}
-
 uint64_t cpu_get_tsc(CPUX86State *env)
 {
     return cpu_get_host_ticks();
