@@ -40,6 +40,8 @@
 #define	freebsd11_statfs	statfs
 #endif
 
+struct freebsd11_stat;
+
 /* os-time.c */
 abi_long t2h_freebsd_timeval(struct timeval *tv, abi_ulong target_tv_addr);
 abi_long h2t_freebsd_timeval(struct timeval *tv, abi_ulong target_tv_addr);
