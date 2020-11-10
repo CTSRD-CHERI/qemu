@@ -103,7 +103,7 @@ abi_long t2h_freebsd_umtx_time(abi_ulong target_ut_addr,
         if (!lock_user_struct(VERIFY_READ, target_ut, target_ut_addr, 0)) {
             return -TARGET_EFAULT;
         }
-        if (t2h_freebsd_timespec(&ut->_timeout, &target_ut->_timeout)) {
+        if (t2h_freebsd_timespec(&ut->_timeout, h2g(&target_ut->_timeout))) {
             return -TARGET_EFAULT;
         }
         __get_user(ut->_flags, &target_ut->_flags);
