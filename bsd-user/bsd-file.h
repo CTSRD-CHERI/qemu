@@ -901,7 +901,7 @@ static inline abi_long do_bsd_chroot(abi_long arg1)
 }
 
 /* flock(2) */
-static abi_long do_bsd_flock(abi_long arg1, abi_long arg2)
+static inline abi_long do_bsd_flock(abi_long arg1, abi_long arg2)
 {
 
     return get_errno(flock(arg1, arg2));
@@ -981,8 +981,8 @@ static inline abi_long do_bsd_undelete(abi_long arg1)
 }
 
 /* poll(2) */
-static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
-        abi_long arg3)
+static inline abi_long do_bsd_poll(CPUArchState *env, abi_long arg1,
+        abi_long arg2, abi_long arg3)
 {
     abi_long ret;
     nfds_t i, nfds = arg2;
@@ -1040,7 +1040,7 @@ static abi_long do_bsd_poll(CPUArchState *env, abi_long arg1, abi_long arg2,
 }
 
 /* lseek(2) */
-static abi_long do_bsd_lseek(void *cpu_env, abi_long arg1, abi_long arg2,
+static inline abi_long do_bsd_lseek(void *cpu_env, abi_long arg1, abi_long arg2,
         abi_long arg3, abi_long arg4, abi_long arg5)
 {
     abi_long ret;
@@ -1072,7 +1072,7 @@ static abi_long do_bsd_lseek(void *cpu_env, abi_long arg1, abi_long arg2,
 }
 
 /* pipe(2) */
-static abi_long do_bsd_pipe(void *cpu_env, abi_ulong pipedes)
+static inline abi_long do_bsd_pipe(void *cpu_env, abi_ulong pipedes)
 {
     abi_long ret;
     int host_pipe[2];
@@ -1095,7 +1095,7 @@ static abi_long do_bsd_pipe(void *cpu_env, abi_ulong pipedes)
 }
 
 /* swapon(2) */
-static abi_long do_bsd_swapon(abi_long arg1)
+static inline abi_long do_bsd_swapon(abi_long arg1)
 {
     abi_long ret;
     void *p;
@@ -1108,7 +1108,7 @@ static abi_long do_bsd_swapon(abi_long arg1)
 }
 
 /* swapoff(2) */
-static abi_long do_bsd_swapoff(abi_long arg1)
+static inline abi_long do_bsd_swapoff(abi_long arg1)
 {
     abi_long ret;
     void *p;
