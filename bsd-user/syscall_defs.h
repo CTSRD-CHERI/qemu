@@ -260,10 +260,8 @@ struct target_freebsd_timex {
     abi_long    stbcnt;
 };
 
-typedef int32_t target_timer_t;
-
 /* Maxiumum of 32 active POSIX timers allowed at any one time. */
-extern timer_t g_posix_timers[32];
+extern int g_posix_timers[32];
 
 #define TIMER_MAGIC 0x0caf0000
 #define TIMER_MAGIC_MASK 0xffff0000

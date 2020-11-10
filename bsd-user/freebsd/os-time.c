@@ -242,14 +242,14 @@ abi_int next_free_host_timer(void)
     /* FIXME: Does finding the next free slot require a lock? */
     for (k = 0; k < ARRAY_SIZE(g_posix_timers); k++) {
         if (g_posix_timers[k] == 0) {
-            g_posix_timers[k] = (timer_t) 1;
+            g_posix_timers[k] = 1;
             return k;
         }
     }
     return -1;
 }
 
-target_timer_t host_to_target_timerid(target_timer_t timerid)
+int host_to_target_timerid(int timerid)
 {
     int k;
 
@@ -301,9 +301,9 @@ abi_long host_to_target_itimerspec(abi_ulong target_addr,
 }
 
 /* Convert QEMU provided timer ID back to internal 16bit index format */
-target_timer_t get_timer_id(abi_long arg)
+int get_timer_id(abi_long arg)
 {
-    target_timer_t timerid = arg;
+    int timerid = arg;
 
     if ((timerid & TIMER_MAGIC_MASK) != TIMER_MAGIC) {
         return -TARGET_EINVAL;
