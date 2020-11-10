@@ -125,7 +125,6 @@ static inline void target_cpu_loop(CPURISCVState *env)
             info.si_code = TARGET_SEGV_MAPERR;
             break;
         case EXCP_DEBUG:
-        gdbstep:
             info.si_signo = TARGET_SIGTRAP;
             info.si_code = TARGET_TRAP_BRKPT;
             break;
