@@ -18,7 +18,6 @@
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 #include <sys/resource.h>
-#include "qemu/osdep.h"
 
 #include "os-time.h"
 #include "qemu.h"

@@ -29,6 +29,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "qemu/path.h"
+
 #define target_to_host_bitmask(x, tbl) (x)
 
 #define LOCK_PATH(p, arg)                   \
