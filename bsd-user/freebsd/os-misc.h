@@ -579,8 +579,8 @@ static inline abi_long do_freebsd_shm_open2(abi_ulong pathptr, abi_ulong flags,
 
 #ifdef SHM_ANON
 #define SHM_PATH(p) (p) == SHM_ANON ? (p) : path(p)
-    if (pathptr == SHM_ANON) {
-        upath = pathptr;
+    if (pathptr == (uintptr_t)SHM_ANON) {
+        upath = SHM_ANON;
     } else
 #else
 #define SHM_PATH(p) path(p)
@@ -593,7 +593,7 @@ static inline abi_long do_freebsd_shm_open2(abi_ulong pathptr, abi_ulong flags,
     }
 
     uname = NULL;
-    if (nameptr != NULL) {
+    if (nameptr != 0) {
         uname = lock_user_string(nameptr);
         if (uname == NULL) {
             unlock_user(upath, pathptr, 0);

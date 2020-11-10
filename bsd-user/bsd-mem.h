@@ -261,8 +261,8 @@ static inline abi_long do_bsd_shm_open(abi_ulong arg1, abi_long arg2,
 
 #ifdef SHM_ANON
 #define SHM_PATH(p) (p) == SHM_ANON ? (p) : path(p)
-    if (arg1 == SHM_ANON) {
-        p = arg1;
+    if (arg1 == (uintptr_t)SHM_ANON) {
+        p = SHM_ANON;
     } else
 #else
 #define SHM_PATH(p) path(p)
