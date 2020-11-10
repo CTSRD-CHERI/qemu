@@ -139,7 +139,7 @@ int is_error(abi_long ret)
     return (abi_ulong)ret >= (abi_ulong)(-4096);
 }
 
-static struct iovec *lock_iovec(int type, abi_ulong target_addr,
+struct iovec *lock_iovec(int type, abi_ulong target_addr,
         int count, int copy)
 {
     struct target_iovec *target_vec;
@@ -227,7 +227,7 @@ static struct iovec *lock_iovec(int type, abi_ulong target_addr,
     return NULL;
 }
 
-static void unlock_iovec(struct iovec *vec, abi_ulong target_addr,
+void unlock_iovec(struct iovec *vec, abi_ulong target_addr,
         int count, int copy)
 {
     struct target_iovec *target_vec;

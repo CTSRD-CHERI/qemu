@@ -76,9 +76,9 @@ struct target_pollfd {
     int16_t revents;    /* returned events */
 };
 
-static struct iovec *lock_iovec(int type, abi_ulong target_addr, int count,
+extern struct iovec *lock_iovec(int type, abi_ulong target_addr, int count,
         int copy);
-static void unlock_iovec(struct iovec *vec, abi_ulong target_addr, int count,
+extern void unlock_iovec(struct iovec *vec, abi_ulong target_addr, int count,
         int copy);
 extern int __getcwd(char *path, size_t len);
 
