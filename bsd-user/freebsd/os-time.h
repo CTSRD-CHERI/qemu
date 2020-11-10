@@ -32,6 +32,7 @@
 #include "qemu-os.h"
 
 #include "bsd-file.h"
+#include "bsd-socket.h"
 
 int safe_clock_nanosleep(clockid_t clock_id, int flags,
      const struct timespec *rqtp, struct timespec *rmtp);
