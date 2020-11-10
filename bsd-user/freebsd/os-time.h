@@ -328,7 +328,7 @@ static inline abi_long do_freebsd_futimesat(abi_long arg1, abi_long arg2,
 static inline abi_long do_freebsd_ktimer_create(abi_long arg1, abi_long arg2,
         abi_long arg3)
 {
-    /* args: clockid_t clockid, struct sigevent *sevp, timer_t *timerid */
+    /* args: clockid_t clockid, struct sigevent *sevp, int *timerid */
     abi_long ret;
 
     struct sigevent host_sevp = { {0}, }, *phost_sevp = NULL;
@@ -339,7 +339,7 @@ static inline abi_long do_freebsd_ktimer_create(abi_long arg1, abi_long arg2,
     if (timer_index < 0) {
         ret = -TARGET_EAGAIN;
     } else {
-        timer_t *phtimer = g_posix_timers  + timer_index;
+        int *phtimer = g_posix_timers  + timer_index;
 
         if (arg2) {
             phost_sevp = &host_sevp;
@@ -353,7 +353,7 @@ static inline abi_long do_freebsd_ktimer_create(abi_long arg1, abi_long arg2,
         if (ret) {
             phtimer = NULL;
         } else {
-            if (put_user(TIMER_MAGIC | timer_index, arg3, target_timer_t)) {
+            if (put_user(TIMER_MAGIC | timer_index, arg3, int)) {
                 ret = -TARGET_EFAULT;
             }
         }
@@ -364,14 +364,14 @@ static inline abi_long do_freebsd_ktimer_create(abi_long arg1, abi_long arg2,
 /* timer_delete(2) */
 static inline abi_long do_freebsd_ktimer_delete(abi_long arg1)
 {
-    /* args: timer_t timerid */
+    /* args: int timerid */
     abi_long ret;
-    target_timer_t timerid = get_timer_id(arg1);
+    int timerid = get_timer_id(arg1);
 
     if (timerid < 0) {
         ret = timerid;
     } else {
-        timer_t htimer = g_posix_timers[timerid];
+        int htimer = g_posix_timers[timerid];
         ret = get_errno(__sys_ktimer_delete(htimer));
         g_posix_timers[timerid] = 0;
     }
@@ -382,17 +382,17 @@ static inline abi_long do_freebsd_ktimer_delete(abi_long arg1)
 static inline abi_long do_freebsd_ktimer_settime(abi_long arg1, abi_long arg2,
         abi_long arg3, abi_long arg4)
 {
-    /* args: timer_t timerid, int flags, const struct itimerspec *new_value,
+    /* args: int timerid, int flags, const struct itimerspec *new_value,
      * struct itimerspec * old_value */
     abi_long ret;
-    target_timer_t timerid = get_timer_id(arg1);
+    int timerid = get_timer_id(arg1);
  
     if (timerid < 0) {
         ret = timerid;
     } else if (arg3 == 0) {
         ret = -TARGET_EINVAL;
     } else {
-        timer_t htimer = g_posix_timers[timerid];
+        int htimer = g_posix_timers[timerid];
         struct itimerspec hspec_new = {{0},}, hspec_old = {{0},};
  
         if (target_to_host_itimerspec(&hspec_new, arg3)) {
@@ -410,16 +410,16 @@ static inline abi_long do_freebsd_ktimer_settime(abi_long arg1, abi_long arg2,
 /* timer_gettime(2) */
 static inline abi_long do_freebsd_ktimer_gettime(abi_long arg1, abi_long arg2)
 {
-    /* args: timer_t timerid, struct itimerspec *curr_value */
+    /* args: int timerid, struct itimerspec *curr_value */
     abi_long ret;
-    target_timer_t timerid = get_timer_id(arg1);
+    int timerid = get_timer_id(arg1);
 
     if (timerid < 0) {
         ret = timerid;
     } else if (!arg2) {
         ret = -TARGET_EFAULT;
     } else {
-        timer_t htimer = g_posix_timers[timerid];
+        int htimer = g_posix_timers[timerid];
         struct itimerspec hspec;
         ret = get_errno(timer_gettime(htimer, &hspec));
 

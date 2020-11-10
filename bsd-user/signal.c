@@ -242,7 +242,7 @@ static inline void host_to_target_siginfo_noswap(target_siginfo_t *tinfo,
     }
 #endif
     if (SI_TIMER == code) {
-        timer_t timerid;
+        int timerid;
 
         timerid = info->_reason._timer._timerid;
 #ifdef __FreeBSD__
