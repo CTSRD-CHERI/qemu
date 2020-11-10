@@ -194,7 +194,7 @@ static inline abi_long do_freebsd_adjtime(abi_ulong target_delta_addr,
 }
 
 /* ntp_adjtime(2) */
-static abi_long do_freebsd_ntp_adjtime(abi_ulong target_tx_addr)
+static inline abi_long do_freebsd_ntp_adjtime(abi_ulong target_tx_addr)
 {
     abi_long ret;
     struct timex host_tx;
@@ -208,7 +208,7 @@ static abi_long do_freebsd_ntp_adjtime(abi_ulong target_tx_addr)
 }
 
 /* ntp_gettime(2) */
-static abi_long do_freebsd_ntp_gettime(abi_ulong target_ntv_addr)
+static inline abi_long do_freebsd_ntp_gettime(abi_ulong target_ntv_addr)
 {
     abi_long ret;
     struct ntptimeval host_ntv;
@@ -584,8 +584,8 @@ static inline abi_long do_freebsd_pselect(void *cpu_env, int n,
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
 /* ppoll(2) */
-static abi_long do_freebsd_ppoll(void *cpu_env, abi_long arg1, abi_long arg2,
-        abi_ulong arg3, abi_ulong arg4)
+static inline abi_long do_freebsd_ppoll(void *cpu_env, abi_long arg1,
+        abi_long arg2, abi_ulong arg3, abi_ulong arg4)
 {
     CPUState *cpu = ENV_GET_CPU(cpu_env);
     TaskState *tstate = cpu->opaque;
