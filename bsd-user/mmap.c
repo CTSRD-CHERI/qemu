@@ -540,10 +540,12 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
 	 * It can fail only on 64-bit host with 32-bit target.
 	 * On any other target/host host mmap() handles this error correctly.
 	 */
+#if TARGET_ABI_BITS == 32 && HOST_LONG_BITS == 64
         if ((unsigned long)start + len - 1 > (abi_ulong) -1) {
             errno = EINVAL;
             goto fail;
         }
+#endif
 
         /* worst case: we cannot map the file because the offset is not
            aligned, so we read it */
