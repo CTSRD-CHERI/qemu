@@ -264,7 +264,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         abi_ulong uaddr, abi_ulong target_time)
 {
     abi_long ret;
-    struct _umtx_time ut;
+    struct _umtx_time ut[2];
     struct timespec ts;
     size_t utsz;
     long tid;
@@ -276,7 +276,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
             return ret;
         }
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
             ret = freebsd_lock_umtx(obj, tid, utsz, &ut);
@@ -296,7 +296,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
     case TARGET_UMTX_OP_WAIT:
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
             ret = freebsd_umtx_wait(obj, tswapal(val), utsz, &ut);
@@ -316,10 +316,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
             return ret;
         }
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_lock_umutex(obj, tid, &ut, utsz, 0);
+            ret = freebsd_lock_umutex(obj, tid, ut, utsz, 0);
         } else {
             ret = freebsd_lock_umutex(obj, tid, NULL, 0, 0);
         }
@@ -347,10 +347,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
             return ret;
         }
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_lock_umutex(obj, tid, &ut, utsz, TARGET_UMUTEX_WAIT);
+            ret = freebsd_lock_umutex(obj, tid, ut, utsz, TARGET_UMUTEX_WAIT);
         } else {
             ret = freebsd_lock_umutex(obj, tid, NULL, 0, TARGET_UMUTEX_WAIT);
         }
@@ -408,7 +408,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         }
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
             ret = freebsd_umtx_wait_uint(obj, tswap32((uint32_t)val),
@@ -424,7 +424,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
         }
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
             ret = freebsd_umtx_wait_uint_private(obj, tswap32((uint32_t)val),
@@ -442,7 +442,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
 
     case TARGET_UMTX_OP_RW_RDLOCK:
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
             ret = freebsd_rw_rdlock(obj, val, utsz, &ut);
@@ -453,7 +453,7 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
 
     case TARGET_UMTX_OP_RW_WRLOCK:
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
             ret = freebsd_rw_wrlock(obj, val, utsz, &ut);
@@ -483,10 +483,21 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
     case TARGET_UMTX_OP_SEM2_WAIT:
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_umtx_sem2_wait(obj, utsz, &ut);
+            /* Kernel writes out the ut[1] if utsz >= _umtx_time + timespec. */
+            ret = freebsd_umtx_sem2_wait(obj, utsz, ut);
+            if (ret == -TARGET_EINTR && (ut[0]._flags & UMTX_ABSTIME) == 0 &&
+                utsz >= sizeof(struct target_freebsd__umtx_time) +
+                sizeof(struct target_freebsd_timespec)) {
+                abi_ulong cret;
+
+                cret = h2t_freebsd_timespec(target_time +
+                    sizeof(struct target_freebsd__umtx_time), &ut[1]._timeout);
+                if (is_error(cret))
+                    ret = cret;
+            }
         } else {
             ret = freebsd_umtx_sem2_wait(obj, 0, NULL);
         }
@@ -500,10 +511,10 @@ static inline abi_long do_freebsd__umtx_op(abi_ulong obj, int op, abi_ulong val,
     case TARGET_UMTX_OP_SEM_WAIT:
         /* args: obj *, val, (void *)sizeof(ut), ut * */
         if (target_time != 0) {
-            ret = t2h_freebsd_umtx_time(target_time, uaddr, &ut, &utsz);
+            ret = t2h_freebsd_umtx_time(target_time, uaddr, ut, &utsz);
             if (is_error(ret))
                 return ret;
-            ret = freebsd_umtx_sem_wait(obj, utsz, &ut);
+            ret = freebsd_umtx_sem_wait(obj, utsz, ut);
         } else {
             ret = freebsd_umtx_sem_wait(obj, 0, NULL);
         }

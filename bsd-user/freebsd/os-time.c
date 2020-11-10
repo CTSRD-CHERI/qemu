@@ -110,7 +110,10 @@ abi_long t2h_freebsd_umtx_time(abi_ulong target_ut_addr,
         __get_user(ut->_clockid, &target_ut->_clockid);
         unlock_user_struct(target_ut, target_ut_addr, 1);
 
-        *host_tsz = sizeof(struct _umtx_time);
+        if (target_ut_size > sizeof(struct target_freebsd__umtx_time))
+            *host_tsz = sizeof(struct _umtx_time) + sizeof(struct timespec);
+        else
+            *host_tsz = sizeof(struct _umtx_time);
 
         return 0;
     }
