@@ -897,6 +897,7 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
 {
     struct target_umutex *target_umutex;
     uint32_t count, owner, *addr;
+    uint16_t flags;
 
     if (!lock_user_struct(VERIFY_WRITE, target_umutex, target_addr, 0)) {
         return -TARGET_EFAULT;
@@ -911,11 +912,10 @@ abi_long freebsd_unlock_umutex(abi_ulong target_addr, uint32_t id)
     __get_user(count, &target_umutex->m_count);
 
     /* Unlock it; set the contested bit as needed. */
+    flags = TARGET_UMUTEX_UNOWNED;
     if (count > 1)
-        __put_user(TARGET_UMUTEX_CONTESTED | TARGET_UMUTEX_UNOWNED,
-                &target_umutex->m_owner);
-    else
-        __put_user(TARGET_UMUTEX_UNOWNED, &target_umutex->m_owner);
+        flags |= TARGET_UMUTEX_CONTESTED;
+    __put_user(flags, &target_umutex->m_owner);
     pthread_mutex_unlock(&umtx_wait_lck);
 
     addr = g2h((uintptr_t)&target_umutex->m_owner);
