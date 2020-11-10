@@ -23,6 +23,9 @@
 #include <sys/random.h>
 #include <sched.h>
 
+int shm_open2(const char *path, int flags, mode_t mode, int shmflags,
+    const char *);
+
 /* sched_setparam(2) */
 static inline abi_long do_freebsd_sched_setparam(pid_t pid,
         abi_ulong target_sp_addr)
