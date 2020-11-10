@@ -30,7 +30,7 @@ static inline void target_thread_set_upcall(CPURISCVState *regs, abi_ulong entry
         sizeof(struct target_trapframe)) & ~(16 - 1);
 
     regs->gpr[xSP] = sp;
-    regs->pc = entry & ~0x03;
+    regs->pc = entry;
     regs->gpr[xA0] = arg;
 }
 
