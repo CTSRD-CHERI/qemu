@@ -39,6 +39,13 @@ int safe_nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
 int safe_kevent(int, const struct kevent *, int, struct kevent *, int,
      const struct timespec *);
 
+int __sys_ktimer_create(clockid_t, struct sigevent *restrict,
+     int *restrict);
+int __sys_ktimer_gettime(int, struct itimerspec *);
+int __sys_ktimer_settime(int, int, const struct itimerspec * restrict,
+     struct itimerspec *restrict);
+int __sys_ktimer_delete(int);
+
 /* nanosleep(2) */
 static inline abi_long do_freebsd_nanosleep(abi_long arg1, abi_long arg2)
 {
@@ -421,7 +428,7 @@ static inline abi_long do_freebsd_ktimer_gettime(abi_long arg1, abi_long arg2)
     } else {
         int htimer = g_posix_timers[timerid];
         struct itimerspec hspec;
-        ret = get_errno(timer_gettime(htimer, &hspec));
+        ret = get_errno(__sys_ktimer_gettime(htimer, &hspec));
 
         if (host_to_target_itimerspec(arg2, &hspec)) {
             ret = -TARGET_EFAULT;
