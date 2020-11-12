@@ -322,19 +322,18 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                  ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
 #if !defined(TARGET_ALIGNED_ONLY) || defined(CHERI_UNALIGNED)
         // this can happen with unaligned stores
-        if (size == 2 || size == 4 || size == 8) {
-            warn_report("Got unaligned store in %d-byte store across page "
-                        "boundary at 0x" TARGET_FMT_lx "\r\n",
-                        size, vaddr);
-            size_t remaining_in_page =
-                TARGET_PAGE_SIZE - (vaddr & ~TARGET_PAGE_MASK);
-            cheri_debug_assert(remaining_in_page < (size_t)size);
-            // invalidate tags for both pages (two lookups required!)
-            cheri_tag_invalidate(env, vaddr, remaining_in_page, pc);
-            cheri_tag_invalidate(env, vaddr + remaining_in_page,
-                                 size - remaining_in_page, pc);
-            return;
-        }
+        warn_report("Got unaligned store in %d-byte store across page "
+                    "boundary at 0x" TARGET_FMT_lx "\r\n",
+                    size, vaddr);
+        assert(size == 2 || size == 4 || size == 8);
+        size_t remaining_in_page =
+            TARGET_PAGE_SIZE - (vaddr & ~TARGET_PAGE_MASK);
+        cheri_debug_assert(remaining_in_page < (size_t)size);
+        // invalidate tags for both pages (two lookups required!)
+        cheri_tag_invalidate(env, vaddr, remaining_in_page, pc);
+        cheri_tag_invalidate(env, vaddr + remaining_in_page,
+                             size - remaining_in_page, pc);
+        return;
 #else
         // Unaligned stores are not supported, this should never happen!
         qemu_log_flush();
