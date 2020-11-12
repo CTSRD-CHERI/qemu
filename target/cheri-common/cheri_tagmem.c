@@ -320,10 +320,10 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
     cheri_debug_assert(size > 0);
     if (unlikely((vaddr & TARGET_PAGE_MASK) !=
                  ((vaddr + size - 1) & TARGET_PAGE_MASK))) {
-#ifdef CHERI_UNALIGNED
+#if !defined(TARGET_ALIGNED_ONLY) || defined(CHERI_UNALIGNED)
         // this can happen with unaligned stores
         if (size == 2 || size == 4 || size == 8) {
-            warn_report("Got unaligned load in %d-byte store across page "
+            warn_report("Got unaligned store in %d-byte store across page "
                         "boundary at 0x" TARGET_FMT_lx "\r\n",
                         size, vaddr);
             size_t remaining_in_page =
@@ -335,7 +335,8 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                                  size - remaining_in_page, pc);
             return;
         }
-#endif
+#else
+        // Unaligned stores are not supported, this should never happen!
         qemu_log_flush();
         error_report("FATAL: %s: " TARGET_FMT_lx
                      "+%d crosses a page boundary\r",
@@ -350,6 +351,7 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
         buffer[sizeof(buffer) - 1] = '\0';
         error_report("%s", buffer);
         exit(1);
+#endif
     }
 
     /*
