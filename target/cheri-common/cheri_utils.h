@@ -188,6 +188,15 @@ static inline void cap_make_sealed_entry(cap_register_t* c) {
     c->cr_otype = CAP_OTYPE_SENTRY;
 }
 
+static inline bool cap_is_representable(const cap_register_t* c) {
+#ifdef CHERI_128
+    return cc128_is_representable_cap_exact(c);
+#else
+#error "!CHERI128 is not supported"
+    return true;
+#endif
+}
+
 
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {

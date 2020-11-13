@@ -463,17 +463,14 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
-    /*
-     * CCopyType: copy object type from untagged capability.
-     * XXXAM: Note this is experimental and may change.
-     */
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!cap_is_sealed_with_type(ctp)) {
+        // For reserved otypes we return a null-derived value.
         cap_register_t result;
-        update_capreg(env, cd, int_to_cap(-1, &result));
+        update_capreg(env, cd, int_to_cap(cap_get_otype(ctp), &result));
     } else if (ctp->cr_otype < cap_get_base(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (ctp->cr_otype >= cap_get_top(cbp)) {
@@ -481,6 +478,7 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else {
         cap_register_t result = *cbp;
         result._cr_cursor = ctp->cr_otype;
+        cheri_debug_assert(cap_is_representable(&result));
         update_capreg(env, cd, &result);
     }
 }
