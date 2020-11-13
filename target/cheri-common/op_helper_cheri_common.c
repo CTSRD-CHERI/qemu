@@ -358,8 +358,17 @@ static target_ulong crap_impl(target_ulong len) {
     cap_register_t tmpcap;
     set_max_perms_capability(&tmpcap, 0);
     cc128_setbounds(&tmpcap, 0, len);
-    // FIXME: should we return 0 for 1 << 64? instead?
-    return cap_get_length64(&tmpcap);
+    // Previously QEMU return (1<<64)-1 for a representable length of 1<<64
+    // (similar to CGetLen), but all other implementations just strip the
+    // high bit instead. Note: This allows a subsequent CSetBoundsExact to
+    // succeed instead of trapping.
+    // TODO: We may want to change CRRL to trap in this case. This could avoid
+    //  potential bugs caused by accientally returning a zero-length capability.
+    //  However, most code should already be guarding against large inputs so
+    //  it is unclear if this makes much of a difference, and knowing that the
+    //  instruction never traps could be useful for optimization purposes.
+    // See also https://github.com/CTSRD-CHERI/cheri-architecture/issues/32
+    return (target_ulong)cap_get_length65(&tmpcap);
 #else
     // For MAGIC128 and 256 everything is representable -> we can return len
   return len;
