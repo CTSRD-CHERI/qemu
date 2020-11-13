@@ -652,6 +652,10 @@ static int write_mscratch(CPURISCVState *env, int csrno, target_ulong val)
 static int read_mepc(CPURISCVState *env, int csrno, target_ulong *val)
 {
     *val = GET_SPECIAL_REG_ARCH(env, mepc, MEPCC);
+    // RISC-V privileged spec 3.1.15 Machine Exception Program Counter (mepc):
+    // "The low bit of mepc (mepc[0]) is always zero. [...] Whenever IALIGN=32,
+    // mepc[1] is masked on reads so that it appears to be 0."
+    *val &= ~(target_ulong)(riscv_has_ext(env, RVC) ? 1 : 3);
     return 0;
 }
 
@@ -792,6 +796,10 @@ static int write_sscratch(CPURISCVState *env, int csrno, target_ulong val)
 static int read_sepc(CPURISCVState *env, int csrno, target_ulong *val)
 {
     *val = GET_SPECIAL_REG_ARCH(env, sepc, SEPCC);
+    // RISC-V privileged spec 4.1.7 Supervisor Exception Program Counter (sepc)
+    // "The low bit of sepc (sepc[0]) is always zero. [...] Whenever IALIGN=32,
+    // sepc[1] is masked on reads so that it appears to be 0."
+    *val &= ~(target_ulong)(riscv_has_ext(env, RVC) ? 1 : 3);
     return 0;
 }
 
