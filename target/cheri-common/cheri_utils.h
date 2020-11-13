@@ -144,6 +144,12 @@ static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, uint
     return true;
 }
 
+static inline bool cap_cursor_in_bounds(const cap_register_t *c)
+{
+    return cap_get_cursor(c) >= cap_get_base(c) &&
+           cap_get_cursor(c) < cap_get_top65(c);
+}
+
 static inline bool cap_has_perms(const cap_register_t* reg, uint32_t perms)
 {
     return (reg->cr_perms & perms) == perms;

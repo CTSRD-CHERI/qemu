@@ -500,16 +500,19 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
             update_capreg(env, cd, csp);
         else
             raise_cheri_exception(env, CapEx_TagViolation, ct);
-    } else if (conditional && cap_get_cursor(ctp) == -1) {
+    } else if (conditional && !cap_is_unsealed(csp)) {
         update_capreg(env, cd, csp);
-    } else if (!cap_is_unsealed(csp)) {
+    } else if (conditional && !cap_cursor_in_bounds(ctp)) {
+        update_capreg(env, cd, csp);
+    } else if (conditional && cap_get_cursor(ctp) == CAP_OTYPE_UNSEALED_SIGNED) {
+        update_capreg(env, cd, csp);
+    } else if (!conditional && !cap_is_unsealed(csp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (!cap_is_unsealed(ctp)) {
         raise_cheri_exception(env, CapEx_SealViolation, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
         raise_cheri_exception(env, CapEx_PermitSealViolation, ct);
-    } else if (!cap_is_in_bounds(ctp, ct_base_plus_offset, /*num_bytes=*/1)) {
-        // Must be within bounds -> num_bytes=1
+    } else if (!conditional && !cap_cursor_in_bounds(ctp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (ct_base_plus_offset > (uint64_t)CAP_LAST_NONRESERVED_OTYPE) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
