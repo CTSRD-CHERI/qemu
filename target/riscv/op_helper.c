@@ -85,7 +85,7 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
                                       (uint8_t *)&opcode, sizeof(opcode),
                                       /*is_write=*/false);
         opcode = tswap32(opcode); // FIXME is this needed?
-        if (ret != 0) {
+        if (ret != 0 && PC_ADDR(env) != 0) {
             warn_report("RISCV_EXCP_ILLEGAL_INST: Could not read %zu bytes at "
                         "vaddr 0x" TARGET_FMT_lx "\r\n",
                         sizeof(opcode), PC_ADDR(env));

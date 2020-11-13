@@ -370,6 +370,10 @@ void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv)
 #endif
 }
 
+#ifdef CONFIG_RVFI_DII
+extern bool rvfi_debug_output;
+#endif
+
 /* get_physical_address - get the physical address for this virtual address
  *
  * Do a page table walk to obtain the physical address corresponding to a
@@ -413,8 +417,10 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
             *prot = PAGE_EXEC;
             return TRANSLATE_SUCCESS;
         } else if (addr < RVFI_DII_RAM_START || addr >= RVFI_DII_RAM_END) {
-            fprintf(stderr, "Rejecting memory access to " TARGET_FMT_lx
-                    " since it is outside the RVFI-DII range\n", addr);
+            if (rvfi_debug_output) {
+                fprintf(stderr, "Rejecting memory access to " TARGET_FMT_lx
+                        " since it is outside the RVFI-DII range\n", addr);
+            }
             return TRANSLATE_FAIL; // XXX: TRANSLATE_PMP_FAIL?
         }
     }
@@ -831,10 +837,10 @@ static inline int rvfi_dii_check_addr(CPURISCVState *env, int ret,
             *prot &= PAGE_EXEC;
         } else if (address < RVFI_DII_RAM_START ||
                    (address + size) > RVFI_DII_RAM_END) {
-            fprintf(stderr,
-                    "Rejecting memory access to " TARGET_FMT_plx
-                    " since it is outside the RVFI-DII range",
-                    address);
+            if (rvfi_debug_output) {
+                fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
+                        " since it is outside the RVFI-DII range", address);
+            }
             return TRANSLATE_FAIL;
         }
     }

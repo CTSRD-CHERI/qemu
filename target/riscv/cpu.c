@@ -386,7 +386,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
     env->rvfi_dii_trace.rvfi_dii_order++;
 
     // TestRIG expects a zero $pc after a trap:
-    if (env->rvfi_dii_trace.rvfi_dii_trap) {
+    if (env->rvfi_dii_trace.rvfi_dii_trap && rvfi_debug_output) {
         info_report("Got trap at " TARGET_FMT_lx, PC_ADDR(env));
     }
     env->rvfi_dii_have_injected_insn = false;
