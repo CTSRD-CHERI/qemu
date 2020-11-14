@@ -18,6 +18,10 @@
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+
 #include "qemu/osdep.h"
 #include "qemu-common.h"
 #include "qemu/units.h"
@@ -247,6 +251,22 @@ void gemu_log(const char *fmt, ...)
     va_end(ap);
 }
 
+static void
+adjust_ssize(void)
+{
+    struct rlimit rl;
+
+    if (getrlimit(RLIMIT_STACK, &rl) != 0)
+        return;
+
+    target_maxssiz = MIN(target_maxssiz, rl.rlim_max);
+    target_dflssiz = MIN(MAX(target_dflssiz, rl.rlim_cur), target_maxssiz);
+
+    rl.rlim_max = target_maxssiz;
+    rl.rlim_cur = target_dflssiz;
+    setrlimit(RLIMIT_STACK, &rl);
+}
+
 int main(int argc, char **argv)
 {
     const char *filename;
@@ -265,6 +285,8 @@ int main(int argc, char **argv)
     envlist_t *envlist = NULL;
     bsd_type = HOST_DEFAULT_BSD_TYPE;
     char * argv0 = NULL;
+
+    adjust_ssize();
 
     if (argc <= 1)
         usage();
