@@ -1235,7 +1235,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     }
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     env->rvfi_dii_trace.rvfi_dii_mem_addr = vaddr;
-    // env->rvfi_dii_trace.rvfi_dii_mem_wdata = cursor;
+    env->rvfi_dii_trace.rvfi_dii_mem_wdata = cursor;
     env->rvfi_dii_trace.rvfi_dii_mem_wmask = 0xff;
 #endif
 #if defined(CONFIG_TCG_LOG_INSTR)
