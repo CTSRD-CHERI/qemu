@@ -25,8 +25,8 @@
 #define TARGET_MAXTSIZ      (64UL*1024*1024)   /* max text size */
 #define TARGET_DFLDSIZ      (128UL*1024*1024)   /* initial data size limit */
 #define TARGET_MAXDSIZ      (512UL*1024*1024)    /* max data size */
-#define TARGET_DFLSSIZ      (2UL*1024*1024)     /* initial stack size limit */
-#define TARGET_MAXSSIZ      (8UL*1024*1024)    /* max stack size */
+#define TARGET_DFLSSIZ      (4UL*1024*1024)     /* initial stack size limit */
+#define TARGET_MAXSSIZ      (64UL*1024*1024)    /* max stack size */
 #define TARGET_SGROWSIZ     (128UL*1024)        /* amount to grow stack */
 
 #define TARGET_RESERVED_VA  0xf7000000
