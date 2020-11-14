@@ -466,6 +466,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
                     "injecting instruction %d '0x%08x' at " TARGET_FMT_lx,
                     cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, PC_ADDR(env));
             }
+            env->rvfi_dii_trace.rvfi_dii_pc_rdata = GET_SPECIAL_REG_ARCH(env, pc, PCC);
             // Ideally we would just completely disable caching of translated
             // blocks in RVFI-DII mode, but I can't figure out how to do this.
             // Instead let's just flush the entire TCG cache (which should have
