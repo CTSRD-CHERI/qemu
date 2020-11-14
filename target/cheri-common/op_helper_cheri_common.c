@@ -437,12 +437,13 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
         raise_cheri_exception(env, CapEx_TagViolation, cb_exc);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb_exc);
-    } else if (ctp->cr_base < cbp->cr_base) {
+    } else if (cap_get_base(ctp) < cap_get_base(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb_exc);
-    } else if (cap_get_top(ctp) > cap_get_top(cbp)) {
+    } else if (cap_get_top65(ctp) > cap_get_top65(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb_exc);
-        // } else if (ctp->cr_length < 0) {
-        //    raise_cheri_exception(env, CapEx_LengthViolation, ct);
+    } else if (cap_get_base(ctp) > cap_get_top65(ctp)) {
+        // check for length < 0 - possible because cs2 might be untagged
+        raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
     } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
