@@ -731,6 +731,12 @@ static void riscv_cpu_realize(DeviceState *dev, Error **errp)
             }
             set_vext_version(env, vext_version);
         }
+#ifdef TARGET_CHERI
+        if (cpu->cfg.ext_cheri) {
+            // Non-standard extensions present
+            target_misa |= RV('X');
+        }
+#endif
 
         set_misa(env, RVXLEN | target_misa);
     }
