@@ -528,6 +528,11 @@ static void riscv_cpu_reset(DeviceState *dev)
     env->priv = PRV_M;
     env->mstatus &= ~(MSTATUS_MIE | MSTATUS_MPRV);
     env->mcause = 0;
+    target_ulong mxl = get_field(env->misa, MISA_MXL);
+#if defined(TARGET_RISCV64)
+    env->mstatus = set_field(env->mstatus, MSTATUS64_SXL, mxl);
+    env->mstatus = set_field(env->mstatus, MSTATUS64_UXL, mxl);
+#endif
 #endif
 
     cs->exception_index = EXCP_NONE;
