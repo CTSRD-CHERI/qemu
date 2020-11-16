@@ -158,24 +158,12 @@ struct CPURISCVState {
     uint8_t cap_index;
 #endif
 
-    target_ulong priv_ver;
-    target_ulong vext_ver;
-    target_ulong misa;
-    target_ulong misa_mask;
-
-    uint32_t features;
-
-#ifdef CONFIG_USER_ONLY
-    uint32_t elf_flags;
-#endif
-
 #ifndef CONFIG_USER_ONLY
     target_ulong priv;
     /* This contains QEMU specific information about the virt state. */
     target_ulong virt;
     target_ulong resetvec;
 
-    target_ulong mhartid;
     target_ulong mstatus;
 
     target_ulong mip;
@@ -289,19 +277,12 @@ struct CPURISCVState {
     /* physical memory protection */
     pmp_table_t pmp_state;
 
-    /* machine specific rdtime callback */
-    uint64_t (*rdtime_fn)(void);
-
     /* True if in debugger mode.  */
     bool debugger;
 #endif
 
     float_status fp_status;
 
-#ifdef CONFIG_RVFI_DII
-    rvfi_dii_trace_t rvfi_dii_trace;
-    bool rvfi_dii_have_injected_insn;
-#endif
 #ifdef TARGET_CHERI
     // Some statcounters:
     uint64_t statcounters_cap_read;
@@ -313,6 +294,35 @@ struct CPURISCVState {
     uint64_t statcounters_unrepresentable_caps;
 
 #endif
+
+    /* Fields up to this point are cleared by a TestRIG reset */
+    struct {} end_testrig_reset_fields;
+
+    /* machine specific rdtime callback */
+    uint64_t (*rdtime_fn)(void);
+
+#ifdef CONFIG_RVFI_DII
+    rvfi_dii_trace_t rvfi_dii_trace;
+    bool rvfi_dii_have_injected_insn;
+#endif
+
+    target_ulong priv_ver;
+    target_ulong vext_ver;
+    // TODO: we should probably re-compute these instead of preserving
+    //  in case misa becomes writable
+    target_ulong misa;
+    target_ulong misa_mask;
+    target_ulong mhartid;
+
+    uint32_t features;
+
+#ifdef CONFIG_USER_ONLY
+    uint32_t elf_flags;
+#endif
+
+#ifndef CONFIG_USER_ONLY
+#endif
+
 
     /* Fields from here on are preserved across CPU reset. */
     QEMUTimer *timer; /* Internal timer */

@@ -416,6 +416,9 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
         case '\0': {
             env->rvfi_dii_trace.rvfi_dii_halt = 1;
             env->rvfi_dii_trace.rvfi_dii_order = 0;
+            // Clear all fields that can be zeroes: we want a defined reset
+            // state for TestRIG even if the RISC-V ISA does not guarantee it.
+            memset(env, 0, offsetof(CPURISCVState, end_testrig_reset_fields));
             // Overwrite the processor's resetvec as otherwise reset()
             // writes PC with default RSTVECTOR (0x10000)
             env->resetvec = RVFI_DII_RAM_START;
