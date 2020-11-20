@@ -693,6 +693,9 @@ extern TCGv ddc_interposition;
 #ifdef CONFIG_DEBUG_TCG
 extern TCGv _pc_is_current;
 #endif
+#ifdef CONFIG_RVFI_DII
+extern TCGv_i32 cpu_rvfi_available_fields;
+#endif
 
 static inline size_t temp_idx(TCGTemp *ts)
 {

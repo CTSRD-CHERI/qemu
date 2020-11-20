@@ -302,7 +302,18 @@ struct CPURISCVState {
     uint64_t (*rdtime_fn)(void);
 
 #ifdef CONFIG_RVFI_DII
-    rvfi_dii_trace_t rvfi_dii_trace;
+    struct {
+        struct rvfi_dii_instruction_metadata INST;
+        struct rvfi_dii_pc_data PC;
+        struct rvfi_dii_integer_data INTEGER;
+        struct rvfi_dii_memory_access_data MEM;
+        // TODO: struct rvfi_dii_csr_data CSR;
+        // TODO: struct rvfi_dii_fp_data FP;
+        // TODO: struct rvfi_dii_cheri_data CHERI;
+        // TODO: struct rvfi_dii_cheri_scr_data CHERI_SCR;
+        // TODO: struct rvfi_dii_trap_data TRAP;
+        uint32_t available_fields;
+    } rvfi_dii_trace;
     bool rvfi_dii_have_injected_insn;
 #endif
 
@@ -493,19 +504,25 @@ void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
 #define RVFI_DII_RAM_SIZE (8 * MiB)
 #define RVFI_DII_RAM_END (RVFI_DII_RAM_START + RVFI_DII_RAM_SIZE)
 void rvfi_dii_communicate(CPUState *cs, CPURISCVState *env);
-#define rvfi_dii_offset(field)                                                 \
-    offsetof(CPURISCVState, rvfi_dii_trace.rvfi_dii_##field)
-#define gen_rvfi_dii_set_field(field, arg)                                     \
-    tcg_gen_st_tl((TCGv)arg, cpu_env, rvfi_dii_offset(field))
-#define gen_rvfi_dii_set_field_const(field, constant)                          \
+#define rvfi_dii_offset(type, field)                                           \
+    offsetof(CPURISCVState, rvfi_dii_trace.type.rvfi_##field)
+#define gen_rvfi_dii_set_field(type, field, arg)                               \
+    do {                                                                       \
+        tcg_gen_st_tl((TCGv)arg, cpu_env, rvfi_dii_offset(type, field));       \
+        tcg_gen_ori_i32(cpu_rvfi_available_fields, cpu_rvfi_available_fields,  \
+                        RVFI_##type##_DATA);                                   \
+    } while (0)
+#define gen_rvfi_dii_set_field_const(type, field, constant)                    \
     do {                                                                       \
         TCGv_i64 rvfi_tc = tcg_const_i64(constant);                            \
-        tcg_gen_st_i64(rvfi_tc, cpu_env, rvfi_dii_offset(field));              \
+        tcg_gen_st_i64(rvfi_tc, cpu_env, rvfi_dii_offset(type, field));        \
+        tcg_gen_ori_i32(cpu_rvfi_available_fields, cpu_rvfi_available_fields,  \
+                        RVFI_##type##_DATA);                                   \
         tcg_temp_free_i64(rvfi_tc);                                            \
     } while (0)
 #else
-#define gen_rvfi_dii_set_field(value, field) ((void)0)
-#define gen_rvfi_dii_set_field_const(value, field) ((void)0)
+#define gen_rvfi_dii_set_field(type, value, field) ((void)0)
+#define gen_rvfi_dii_set_field_const(type, value, field) ((void)0)
 #endif
 
 void riscv_cpu_do_interrupt(CPUState *cpu);
