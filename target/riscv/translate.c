@@ -42,6 +42,9 @@ static TCGv cpu_pc;  // Note: this is PCC.cursor
 #else
 static TCGv cpu_gpr[32], cpu_pc;
 #endif
+#ifdef CONFIG_RVFI_DII
+TCGv_i32 cpu_rvfi_available_fields;
+#endif
 static TCGv cpu_vl;
 static TCGv_i64 cpu_fpr[32]; /* assume F and D extensions */
 static TCGv_cap_checked_ptr load_res;
@@ -246,8 +249,8 @@ static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t)
 #else
         tcg_gen_mov_tl(cpu_gpr[reg_num_dst], t);
 #endif
-        gen_rvfi_dii_set_field_const(rd_addr, reg_num_dst);
-        gen_rvfi_dii_set_field(rd_wdata, t);
+        gen_rvfi_dii_set_field_const(INTEGER, rd_addr, reg_num_dst);
+        gen_rvfi_dii_set_field(INTEGER, rd_wdata, t);
 #ifdef CONFIG_TCG_LOG_INSTR
         // Log GPR writes here
         if (unlikely(ctx->base.log_instr_enabled)) {
@@ -269,8 +272,8 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
 #else
         tcg_gen_movi_tl(cpu_gpr[reg_num_dst], value);
 #endif
-        gen_rvfi_dii_set_field_const(rd_addr, reg_num_dst);
-        gen_rvfi_dii_set_field_const(rd_wdata, value);
+        gen_rvfi_dii_set_field_const(INTEGER, rd_addr, reg_num_dst);
+        gen_rvfi_dii_set_field_const(INTEGER, rd_wdata, value);
 #ifdef CONFIG_TCG_LOG_INSTR
         // Log GPR writes here
         if (unlikely(ctx->base.log_instr_enabled)) {
@@ -950,15 +953,15 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
     // We have to avoid memory accesses for injected instructions since
     // the PC could point somewhere invalid.
     uint16_t opcode = env->rvfi_dii_have_injected_insn
-                          ? env->rvfi_dii_trace.rvfi_dii_insn
+                          ? env->rvfi_dii_trace.INST.rvfi_insn
                           : translator_lduw(env, ctx->base.pc_next);
-    gen_rvfi_dii_set_field_const(pc_rdata, ctx->base.pc_next);
+    gen_rvfi_dii_set_field_const(PC, pc_rdata, ctx->base.pc_next);
 #else
     uint16_t opcode = translator_lduw(env, ctx->base.pc_next);
 #endif
     /* check for compressed insn */
     if (extract16(opcode, 0, 2) != 3) {
-        gen_rvfi_dii_set_field_const(insn, opcode);
+        gen_rvfi_dii_set_field_const(INST, insn, opcode);
         gen_riscv_log_instr16(ctx, opcode);
         gen_check_pcc_bounds_next_inst(ctx, 2);
         if (!has_ext(ctx, RVC)) {
@@ -976,7 +979,7 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
         // We have to avoid memory accesses for injected instructions since
         // the PC could point somewhere invalid.
         uint16_t next_16 = env->rvfi_dii_have_injected_insn
-                          ? (env->rvfi_dii_trace.rvfi_dii_insn >> 16)
+                          ? (env->rvfi_dii_trace.INST.rvfi_insn >> 16)
                           : translator_lduw(env, ctx->base.pc_next + 2);
 #else
         uint16_t next_16 = translator_lduw(env, ctx->base.pc_next + 2);
@@ -986,7 +989,7 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
         gen_riscv_log_instr32(ctx, opcode32);
         gen_check_pcc_bounds_next_inst(ctx, 4);
         ctx->pc_succ_insn = ctx->base.pc_next + 4;
-        gen_rvfi_dii_set_field_const(insn, opcode32);
+        gen_rvfi_dii_set_field_const(INST, insn, opcode32);
         if (!decode_insn32(ctx, opcode32)) {
             gen_exception_illegal(ctx);
         }
@@ -1071,7 +1074,7 @@ static void riscv_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
 
     decode_opc(env, ctx);
     ctx->base.pc_next = ctx->pc_succ_insn;
-    gen_rvfi_dii_set_field_const(pc_wdata, ctx->base.pc_next);
+    gen_rvfi_dii_set_field_const(PC, pc_wdata, ctx->base.pc_next);
 
     if (ctx->base.is_jmp == DISAS_NEXT) {
         target_ulong page_start;
@@ -1110,7 +1113,7 @@ static void riscv_tr_disas_log(const DisasContextBase *dcbase, CPUState *cpu)
     if (env->rvfi_dii_have_injected_insn) {
         assert(dcbase->num_insns == 1);
         FILE *logfile = qemu_log_lock();
-        uint32_t insn = env->rvfi_dii_trace.rvfi_dii_insn;
+        uint32_t insn = env->rvfi_dii_trace.INST.rvfi_insn;
         if (logfile) {
             fprintf(logfile, "IN: %s\n", lookup_symbol(dcbase->pc_first));
             target_disas_buf(stderr, cpu, &insn, sizeof(insn), dcbase->pc_first, 1);
@@ -1175,7 +1178,11 @@ void riscv_translate_init(void)
         cpu_env, offsetof(CPURISCVState, gpcapregs.capreg_state),
         "capreg_state");
 #endif
-
+#ifdef CONFIG_RVFI_DII
+    cpu_rvfi_available_fields = tcg_global_mem_new_i32(
+        cpu_env, offsetof(CPURISCVState, rvfi_dii_trace.available_fields),
+        "rvfi_available_fields");
+#endif
 
     for (i = 0; i < 32; i++) {
         cpu_fpr[i] = tcg_global_mem_new_i64(cpu_env,

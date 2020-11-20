@@ -412,7 +412,7 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
         if (access_type == MMU_INST_FETCH) {
             // Pretend we have a 1:1 mapping and never fail for instruction
             // fetches since the instruction is injected directly via
-            // env->rvfi_dii_trace.rvfi_dii_insn
+            // env->rvfi_dii_trace.INST.rvfi_insn
             *physical = addr;
             *prot = PAGE_EXEC;
             return TRANSLATE_SUCCESS;
@@ -1279,7 +1279,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     if (unlikely(env->rvfi_dii_have_injected_insn)) {
         qemu_log_mask(CPU_LOG_INT, "%s: Got real exception %d\n", __func__,
                       cs->exception_index);
-        env->rvfi_dii_trace.rvfi_dii_trap = true;
+        env->rvfi_dii_trace.INST.rvfi_trap = true;
         rvfi_dii_communicate(env_cpu(env), env);
     }
 #endif
