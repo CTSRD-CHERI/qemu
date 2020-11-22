@@ -22,6 +22,8 @@
 #include "target_arch_elf.h"
 #include "elf.h"
 
+#include "bsd-proc.h"
+
 /* this flag is uneffective under linux too, should be deleted */
 #ifndef MAP_DENYWRITE
 #define MAP_DENYWRITE 0
@@ -41,6 +43,7 @@
 #endif
 
 /* XXX Look at the other conflicting AT_* values. */
+#define FREEBSD_AT_NCPUS     19
 #define FREEBSD_AT_HWCAP     25
 #define FREEBSD_AT_HWCAP2    26
 
@@ -86,7 +89,7 @@ struct exec
 #define INTERPRETER_AOUT 1
 #define INTERPRETER_ELF 2
 
-#define DLINFO_ITEMS 13
+#define DLINFO_ITEMS 14
 
 static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
                                    abi_ulong stringp,
@@ -131,6 +134,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         NEW_AUX_ENT(AT_PAGESZ, (abi_ulong)(TARGET_PAGE_SIZE));
         NEW_AUX_ENT(AT_BASE, (abi_ulong)(interp_load_addr));
         NEW_AUX_ENT(AT_FLAGS, (abi_ulong)0);
+        NEW_AUX_ENT(FREEBSD_AT_NCPUS, (abi_ulong)bsd_get_ncpu());
         NEW_AUX_ENT(AT_ENTRY, load_bias + exec->e_entry);
         features = ELF_HWCAP;
 #if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
