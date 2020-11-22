@@ -19,11 +19,16 @@
 
 #include <sys/param.h>
 #include <sys/types.h>
+#ifdef __FreeBSD__
+#include <sys/cpuset.h>
+#endif
 #include <sys/resource.h>
 #include <sys/wait.h>
 
 #include "qemu.h"
 #include "qemu-bsd.h"
+
+#include "bsd-proc.h"
 
 /*
  * resource/rusage conversion
@@ -180,5 +185,44 @@ int host_to_target_waitstatus(int status)
         return (host_to_target_signal(WSTOPSIG(status)) << 8) | (status & 0xff);
     }
     return status;
+}
+
+int
+bsd_get_ncpu(void)
+{
+    static int ncpu = -1;
+
+    if (ncpu != -1)
+        return (ncpu);
+#ifdef __FreeBSD__
+    if (ncpu == -1) {
+        cpuset_t mask;
+
+        CPU_ZERO(&mask);
+
+        if (cpuset_getaffinity(CPU_LEVEL_WHICH, CPU_WHICH_TID, -1, sizeof(mask),
+            &mask) == 0)
+            ncpu = CPU_COUNT(&mask);
+    }
+#endif
+#ifdef _SC_NPROCESSORS_ONLN
+    if (ncpu == -1)
+        ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
+#if defined(CTL_HW) && defined(HW_NCPU)
+    if (ncpu == -1) {
+        int mib[2] = {CTL_HW, HW_NCPU};
+        size_t sz;
+
+        sz = sizeof(ncpu);
+        if (sysctl(mib, 2, &ncpu, &sz, NULL, NULL) == -1)
+            ncpu = -1;
+    }
+#endif
+    if (ncpu == -1) {
+        gemu_log("XXX Missing bsd_get_ncpu() implementation\n");
+        ncpu = 1;
+    }
+    return (ncpu);
 }
 

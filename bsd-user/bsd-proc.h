@@ -470,4 +470,6 @@ static inline abi_long do_bsd_sched_get_priority_max(int policy)
 	return get_errno(sched_get_priority_max(policy));
 }
 
+int bsd_get_ncpu(void);
+
 #endif /* !__BSD_PROC_H_ */

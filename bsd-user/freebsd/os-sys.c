@@ -66,6 +66,8 @@
 #include "qemu.h"
 #include "qemu-bsd.h"
 
+#include "bsd-proc.h"
+
 #include "target_arch_sysarch.h"
 #include "target_os_vmparam.h"
 #include "target_os_user.h"
@@ -1314,15 +1316,13 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
             ret = 0;
             goto out;
         }
-#if defined(TARGET_AARCH64)
-        case HW_NCPU:           /* XXX AARCH64 is not SMP ready */
+        case HW_NCPU:
             if (oldlen) {
-                (*(int32_t *)holdp) = 1;
+                (*(int32_t *)holdp) = bsd_get_ncpu();
             }
             holdlen = sizeof(int32_t);
             ret = 0;
             goto out;
-#endif
 #if defined(TARGET_ARM)
     case HW_FLOATINGPT:
         if (oldlen) {
