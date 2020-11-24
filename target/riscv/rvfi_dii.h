@@ -166,9 +166,6 @@ _Static_assert(sizeof(struct rvfi_dii_integer_data) == 32, "");
 
 // Memory Access (basic, reports memory accesses up to 64 bits)
 struct rvfi_dii_memory_access_data {
-    //// For memory operations (rvfi_mem_rmask and/or rvfi_mem_wmask are
-    /// non-zero), rvfi_mem_addr holds the accessed memory location.
-    uint64_t rvfi_mem_addr; // output [NRET * XLEN   - 1 : 0] rvfi_mem_addr
     /// rvfi_mem_rdata is the pre-state data read from rvfi_mem_addr.
     /// rvfi_mem_rmask specifies which bytes are valid.
     /// CHERI-extension: widened to 32 bytes to allow reporting 129 bits
@@ -185,6 +182,9 @@ struct rvfi_dii_memory_access_data {
     /// rvfi_mem_wmask is a bitmask that specifies which bytes in rvfi_mem_wdata
     /// contain valid data that is written to rvfi_mem_addr.
     uint32_t rvfi_mem_wmask; // output [NRET * XLEN/8 - 1 : 0] rvfi_mem_wmask
+    //// For memory operations (rvfi_mem_rmask and/or rvfi_mem_wmask are
+    /// non-zero), rvfi_mem_addr holds the accessed memory location.
+    uint64_t rvfi_mem_addr; // output [NRET * XLEN   - 1 : 0] rvfi_mem_addr
 } QEMU_PACKED;
 _Static_assert(sizeof(struct rvfi_dii_memory_access_data) == 80, "");
 
