@@ -584,9 +584,8 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
         raise_cheri_exception(env, CapEx_TypeViolation, ct);
     } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
         raise_cheri_exception(env, CapEx_PermitUnsealViolation, ct);
-    } else if (!cap_is_in_bounds(ctp, ct_cursor, /*num_bytes=1*/ 1)) {
-        // Must be within bounds and not one past end (i.e. not equal to top ->
-        // num_bytes=1)
+    } else if (!cap_cursor_in_bounds(ctp)) {
+        // Must be within bounds and not one past end (i.e. not equal to top).
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (ct_cursor >= CAP_LAST_NONRESERVED_OTYPE) {
         // This should never happen due to the ct_cursor != csp->cr_otype check
@@ -1297,8 +1296,8 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     // It is useful to trap on branch rather than ifetch since it greatly
     // improves the debugging experience (exception pc points somewhere
     // helpful).
-    cheri_debug_assert(
-        !cap_is_in_bounds(cheri_get_current_pcc(env), addr, num_bytes));
+    cheri_debug_assert(!cap_is_in_bounds(cheri_get_current_pcc(env), addr,
+                                         num_bytes == 0 ? 1 : num_bytes));
     raise_pcc_fault(env, CapEx_LengthViolation);
 }
 

@@ -349,7 +349,7 @@ void restore_state_to_opc(CPURISCVState *env, TranslationBlock *tb,
                           target_ulong *data)
 {
 #ifdef TARGET_CHERI
-    assert(cap_is_in_bounds(&env->PCC, data[0], 0));
+    assert(cap_is_in_bounds(&env->PCC, data[0], 1));
     if (unlikely(env->PCC._cr_cursor != data[0])) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "%s: Updating pc from TB: " TARGET_FMT_lx " -> " TARGET_FMT_lx "\n",

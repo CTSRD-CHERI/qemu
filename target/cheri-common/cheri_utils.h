@@ -126,7 +126,8 @@ static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
 }
 
 // Check if num_bytes bytes at addr can be read using capability c
-static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, uint64_t num_bytes) {
+static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, size_t num_bytes) {
+    cheri_debug_assert(num_bytes != 0);
     if (addr < cap_get_base(c)) {
         return false;
     }
@@ -134,7 +135,7 @@ static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, uint
     uint64_t access_end_addr = 0;
     if (__builtin_add_overflow(addr, num_bytes, &access_end_addr)) {
         warn_report("Found capability access that wraps around: 0x%" PRIx64
-                    " + %" PRId64 ". Authorizing cap: " PRINT_CAP_FMTSTR,
+                    " + %zd. Authorizing cap: " PRINT_CAP_FMTSTR,
                     addr, num_bytes, PRINT_CAP_ARGS(c));
         return false;
     }

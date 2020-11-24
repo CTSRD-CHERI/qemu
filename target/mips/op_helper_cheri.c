@@ -229,7 +229,7 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
     } else if (cbp->cr_perms & CAP_PERM_EXECUTE && !allow_unsealed) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
-    } else if (!cap_is_in_bounds(csp, cap_get_cursor(csp), 1)) {
+    } else if (!cap_cursor_in_bounds(csp)) {
         // TODO: check for at least one instruction worth of data? Like cjr/cjalr?
         raise_cheri_exception(env, CapEx_LengthViolation, cs);
     } else {
