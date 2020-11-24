@@ -440,16 +440,17 @@ static void rvfi_dii_send_v2_trace(CPURISCVState *env)
     if (rvfi_debug_output) {
         fprintf(stderr,
             "Sending %u bytes: %jd PCWD: 0x%08jx, RD: %02d, RWD: 0x%08jx, MA: "
-            "0x%08jx, MWD: 0x%08jx, MWM: 0x%08x, I: 0x%016jx H:%u\n",
+            "0x%08jx, MWD: 0x%08jx, MWM: 0x%08x, I: 0x%016jx H:%u T:%u\n",
             buf->len, (uintmax_t)env->rvfi_dii_trace.INST.rvfi_order,
             (uintmax_t)env->rvfi_dii_trace.PC.rvfi_pc_wdata,
             env->rvfi_dii_trace.INTEGER.rvfi_rd_addr,
             (uintmax_t)env->rvfi_dii_trace.INTEGER.rvfi_rd_wdata,
             (uintmax_t)env->rvfi_dii_trace.MEM.rvfi_mem_addr,
-            (uintmax_t)env->rvfi_dii_trace.MEM.rvfi_mem_wdata,
+            (uintmax_t)env->rvfi_dii_trace.MEM.rvfi_mem_wdata[0],
             env->rvfi_dii_trace.MEM.rvfi_mem_wmask,
             (uintmax_t)env->rvfi_dii_trace.INST.rvfi_insn,
-            (unsigned)env->rvfi_dii_trace.INST.rvfi_halt);
+            (unsigned)env->rvfi_dii_trace.INST.rvfi_halt,
+            (unsigned)env->rvfi_dii_trace.INST.rvfi_trap);
     }
     send_rvfi_dii_packet(buf->data, buf->len);
     g_byte_array_free(buf, true);
@@ -467,7 +468,7 @@ static void rvfi_dii_send_trace(CPURISCVState *env, unsigned version)
     }
 }
 
-void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
+void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env, bool was_trap) {
     // needs to be global since this function is called for each instruction
     // that is executed.
     static bool rvfi_dii_started = false;
@@ -640,7 +641,7 @@ static void riscv_debug_excp_handler(CPUState *cs)
     struct RISCVCPU *cpu = RISCV_CPU(cs);
     struct CPURISCVState *env = &cpu->env;
     if (rvfi_client_fd && cs->singlestep_enabled) {
-        rvfi_dii_communicate(cs, env);
+        rvfi_dii_communicate(cs, env, false);
         return;
     }
 #endif
