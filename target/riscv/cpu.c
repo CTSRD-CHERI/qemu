@@ -600,6 +600,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             env->rvfi_dii_have_injected_insn = true;
             env->rvfi_dii_trace.PC.rvfi_pc_rdata = GET_SPECIAL_REG_ARCH(env, pc, PCC);
             env->rvfi_dii_trace.INST.rvfi_mode = env->priv;
+            env->rvfi_dii_trace.INST.rvfi_ixl = get_field(env->misa, MISA_MXL);
 
             if (rvfi_debug_output) {
                 target_disas_buf(stderr, cs, &cmd_buf.rvfi_dii_insn,
