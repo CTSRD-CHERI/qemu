@@ -1105,12 +1105,14 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             break;
 #ifdef TARGET_CHERI
         case RISCV_EXCP_CHERI:
-            tcg_debug_assert(env->cap_cause < 32);
-            tcg_debug_assert(env->cap_index < 64);
-            tval = env->cap_cause | env->cap_index << 5;
+            tcg_debug_assert(env->last_cap_cause < 32);
+            tcg_debug_assert(env->last_cap_index < 64);
+            tval = env->last_cap_cause | env->last_cap_index << 5;
             qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
                 "Got CHERI trap %s caused by register %d\n",
-                cheri_cause_str(env->cap_cause), env->cap_index);
+                cheri_cause_str(env->last_cap_cause), env->last_cap_index);
+            env->last_cap_cause = -1;
+            env->last_cap_index = -1;
             break;
 #endif
         case RISCV_EXCP_ILLEGAL_INST:

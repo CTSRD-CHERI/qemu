@@ -149,13 +149,13 @@ struct CPURISCVState {
     // The cause field reports the cause of the last capability exception,
     // following the encoding described in Table 3.9.2.
     // See enum CheriCapExc in cheri-archspecific.h
-    uint8_t cap_cause; //
+    uint8_t last_cap_cause; // Used to populate xtval
     // The cap idx field reports the index of the capability register that
-    // caused the last ex- ception. When the most significant bit is set, the 5
+    // caused the last exception. When the most significant bit is set, the 5
     // least significant bits are used to index the special purpose capability
     // register file described in Table 5.3, otherwise, they index the
     // general-purpose capability register file.
-    uint8_t cap_index;
+    uint8_t last_cap_index;  // Used to populate xtval
 #endif
 
 #ifndef CONFIG_USER_ONLY

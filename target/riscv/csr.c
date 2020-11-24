@@ -1237,11 +1237,6 @@ static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
     target_ulong ccsr = 0;
     ccsr = set_field(ccsr, CCSR_ENABLE, cpu->cfg.ext_cheri);
     ccsr = set_field(ccsr, CCSR_DIRTY, 1); /* Always report dirty */
-    // For backwards compat we also report cap cause and cap index
-    // However, this is the last value and is not separated by privilege mode!
-    // TODO: remove when CheriBSD has been updated to read xTVAL
-    ccsr |= env->cap_cause << 5;
-    ccsr |= env->cap_index << 10;
     qemu_log_mask(CPU_LOG_INT, "Reading xCCSR(%#x): %x\n", csrno, (int)ccsr);
     *val = ccsr;
     return 0;

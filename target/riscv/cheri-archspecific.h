@@ -42,8 +42,8 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     bool instavail, uintptr_t hostpc)
 {
-    env->cap_cause = cause;
-    env->cap_index = regnum;
+    env->last_cap_cause = cause;
+    env->last_cap_index = regnum;
     // Allow drop into debugger on first CHERI trap:
     // FIXME: allow c command to work by adding another boolean flag to skip
     // this breakpoint when GDB asks to continue
