@@ -194,7 +194,6 @@ DEF_HELPER_FLAGS_3(mips_log_instr32, TCG_CALL_NO_WG, void, env, tl, i32)
 DEF_HELPER_FLAGS_1(mips_log_instr_drop, TCG_CALL_NO_WG, void, env)
 /* Extra MIPS-only helpers */
 DEF_HELPER_2(cheri_debug_message, void, env, i64)
-DEF_HELPER_3(log_value, void, env, cptr, i64)
 #endif
 
 DEF_HELPER_2(magic_library_function, void, env, tl)

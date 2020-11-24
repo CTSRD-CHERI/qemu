@@ -186,11 +186,6 @@ void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
     }
 }
 
-void helper_log_value(CPUMIPSState *env, const void* ptr, uint64_t value)
-{
-    qemu_maybe_log_instr_extra(env, "%s: " TARGET_FMT_plx "\n", ptr, value);
-}
-
 #ifndef CONFIG_USER_ONLY
 
 void r4k_dump_tlb(CPUMIPSState *env, int idx)
