@@ -346,4 +346,5 @@ DEF_HELPER_FLAGS_4(qemu_log_instr_load64, TCG_CALL_NO_WG, void, env, cap_checked
 DEF_HELPER_FLAGS_4(qemu_log_instr_store64, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i64, memop)
 DEF_HELPER_FLAGS_4(qemu_log_instr_load32, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i32, memop)
 DEF_HELPER_FLAGS_4(qemu_log_instr_store32, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i32, memop)
+DEF_HELPER_FLAGS_3(log_value, TCG_CALL_NO_WG, void, env, cptr, i64)
 #endif

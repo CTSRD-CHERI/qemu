@@ -1175,6 +1175,11 @@ void helper_qemu_log_instr_store32(CPUArchState *env, target_ulong addr,
         qemu_log_instr_mem_int(env, addr, LMI_ST, op, (uint64_t)value);
 }
 
+void helper_log_value(CPUArchState *env, const void* ptr, uint64_t value)
+{
+    qemu_maybe_log_instr_extra(env, "%s: " TARGET_FMT_plx "\n", ptr, value);
+}
+
 static void emit_nop_start(CPUArchState *env, target_ulong pc) {}
 static void emit_nop_stop(CPUArchState *env, target_ulong pc) {}
 static void emit_nop_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo) {}
