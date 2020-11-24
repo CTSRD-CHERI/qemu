@@ -485,6 +485,10 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
         assert(cs->singlestep_enabled);
         rvfi_dii_command_t cmd_buf;
         _Static_assert(sizeof(cmd_buf) == 8, "Expected 8 bytes of data");
+        // Print the instruction now and skip the next commit() call that
+        // happens when we return to the translator loop.
+        qemu_log_instr_commit(env);
+        qemu_log_instr_drop(env); // Avoid an invalid instruction log
         if (rvfi_dii_started) {
             // Send previous state
             rvfi_dii_send_trace(env, rvfi_dii_version);
@@ -587,9 +591,14 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             rvfi_dii_started = true;
             cpu_single_step(cs, SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER);
             if (rvfi_debug_output) {
-                info_report(
-                    "injecting instruction %d '0x%08x' at " TARGET_FMT_lx,
-                    cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, PC_ADDR(env));
+                char buf[512];
+                FILE *tmp = fmemopen(buf, sizeof(buf), "w+");
+                target_disas_buf(tmp, cs, &cmd_buf.rvfi_dii_insn,
+                                 sizeof(cmd_buf.rvfi_dii_insn), PC_ADDR(env),
+                                 1);
+                fclose(tmp);
+                info_report("injecting instruction %d '0x%08x' at %s",
+                            cmd_buf.rvfi_dii_time, cmd_buf.rvfi_dii_insn, buf);
             }
             // Ideally we would just completely disable caching of translated
             // blocks in RVFI-DII mode, but I can't figure out how to do this.
@@ -601,12 +610,6 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env) {
             env->rvfi_dii_trace.PC.rvfi_pc_rdata = GET_SPECIAL_REG_ARCH(env, pc, PCC);
             env->rvfi_dii_trace.INST.rvfi_mode = env->priv;
             env->rvfi_dii_trace.INST.rvfi_ixl = get_field(env->misa, MISA_MXL);
-
-            if (rvfi_debug_output) {
-                target_disas_buf(stderr, cs, &cmd_buf.rvfi_dii_insn,
-                                 sizeof(cmd_buf.rvfi_dii_insn), PC_ADDR(env),
-                                 1);
-            }
             resume_all_vcpus();
             cpu_resume(cs);
             env->rvfi_dii_trace.PC.rvfi_pc_wdata = -1; // Will be set after single-step trap
