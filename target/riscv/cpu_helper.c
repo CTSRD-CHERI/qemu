@@ -1280,7 +1280,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         qemu_log_mask(CPU_LOG_INT, "%s: Got real exception %d\n", __func__,
                       cs->exception_index);
         env->rvfi_dii_trace.INST.rvfi_trap = true;
-        rvfi_dii_communicate(env_cpu(env), env);
+        rvfi_dii_communicate(env_cpu(env), env, true);
     }
 #endif
     /* NOTE: it is not necessary to yield load reservations here. It is only
