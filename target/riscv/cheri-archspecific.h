@@ -79,18 +79,23 @@ static inline void QEMU_NORETURN raise_unaligned_store_exception(
 
 }
 
-static inline bool validate_cjalr_target(CPUArchState *env,
-                                         const cap_register_t *new_pcc,
-                                         unsigned regnum,
-                                         uintptr_t retpc)
+static inline bool validate_jump_target(CPUArchState *env,
+                                        const cap_register_t *target,
+                                        unsigned regnum, uintptr_t retpc)
 {
-    target_ulong new_base = cap_get_base(new_pcc);
-    target_ulong new_addr = cap_get_cursor(new_pcc);
-    unsigned min_base_alignment = riscv_has_ext(env, RVC) ? 2 : 4;
-    if (!QEMU_IS_ALIGNED(new_base, min_base_alignment)) {
-        raise_cheri_exception_impl(env, CapEx_UnalignedBase, regnum, true, retpc);
+    target_ulong new_base = cap_get_base(target);
+    target_ulong new_addr = cap_get_cursor(target);
+    unsigned min_insn_size = riscv_has_ext(env, RVC) ? 2 : 4;
+    if (!cap_is_in_bounds(target, new_addr, min_insn_size)) {
+        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, true,
+                                   retpc);
     }
-    // XXX: Sail only checks bit 1 why not also bit zero? Is it because that is ignored?
+    if (!QEMU_IS_ALIGNED(new_base, min_insn_size)) {
+        raise_cheri_exception_impl(env, CapEx_UnalignedBase, regnum, true,
+                                   retpc);
+    }
+    // XXX: Sail only checks bit 1 why not also bit zero? Is it because that is
+    // ignored?
     if (!riscv_has_ext(env, RVC) && (new_addr & 0x2)) {
         riscv_raise_exception(env, RISCV_EXCP_INST_ADDR_MIS, retpc);
     }

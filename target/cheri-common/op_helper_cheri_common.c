@@ -227,9 +227,7 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
     } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_GlobalViolation, cb);
-    } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (!validate_cjalr_target(env, cbp, cb, _host_return_address)) {
+    } else if (!validate_jump_target(env, cbp, cb, _host_return_address)) {
         assert(false && "Should have raised an exception");
     }
 

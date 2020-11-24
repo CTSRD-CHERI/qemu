@@ -116,11 +116,15 @@ static inline void QEMU_NORETURN raise_unaligned_store_exception(
     do_raise_c0_exception_impl(env, EXCP_AdES, addr, retpc);
 }
 
-static inline bool validate_cjalr_target(CPUMIPSState *env,
-                                         const cap_register_t *target,
-                                         unsigned regnum,
-                                         uintptr_t retpc)
+static inline bool validate_jump_target(CPUMIPSState *env,
+                                        const cap_register_t *target,
+                                        unsigned regnum, uintptr_t retpc)
 {
+    target_ulong target_addr = cap_get_cursor(target);
+    if (!cap_is_in_bounds(target, target_addr, 4)) {
+        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, true,
+                                   retpc);
+    }
     if (!QEMU_IS_ALIGNED(cap_get_cursor(target), 4)) {
         do_raise_c0_exception_impl(env, EXCP_AdEL, cap_get_cursor(target),
                                    retpc);
