@@ -116,7 +116,7 @@ typedef enum CheriPermissions {
     CAP_PERM_STORE_CAP = (1 << 5),
     CAP_PERM_STORE_LOCAL = (1 << 6),
     CAP_PERM_SEAL = (1 << 7),
-    CAP_PERM_CCALL = (1 << 8),
+    CAP_PERM_CINVOKE = (1 << 8),
     CAP_PERM_UNSEAL = (1 << 9),
     CAP_ACCESS_SYS_REGS = (1 << 10),
     CAP_PERM_SETCID = (1 << 11),

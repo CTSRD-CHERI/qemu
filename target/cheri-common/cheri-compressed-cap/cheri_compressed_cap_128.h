@@ -98,7 +98,7 @@ enum {
 #define CC128_PERM_STORE_CAP (1 << 5)
 #define CC128_PERM_STORE_LOCAL (1 << 6)
 #define CC128_PERM_SEAL (1 << 7)
-#define CC128_PERM_CCALL (1 << 8)
+#define CC128_PERM_CINVOKE (1 << 8)
 #define CC128_PERM_UNSEAL (1 << 9)
 #define CC128_PERM_ACCESS_SYS_REGS (1 << 10)
 #define CC128_PERM_SETCID (1 << 11)

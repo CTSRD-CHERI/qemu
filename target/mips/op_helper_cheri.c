@@ -235,9 +235,9 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
     } else {
         if (selector == CCALL_SELECTOR_0) {
             raise_cheri_exception(env, CapEx_CallTrap, cs);
-        } else if (!(csp->cr_perms & CAP_PERM_CCALL) && !allow_unsealed){
+        } else if (!(csp->cr_perms & CAP_PERM_CINVOKE) && !allow_unsealed){
             raise_cheri_exception(env, CapEx_PermitCCallViolation, cs);
-        } else if (!(cbp->cr_perms & CAP_PERM_CCALL) && !allow_unsealed){
+        } else if (!(cbp->cr_perms & CAP_PERM_CINVOKE) && !allow_unsealed){
             raise_cheri_exception(env, CapEx_PermitCCallViolation, cb);
         } else {
             cap_register_t idc = *cbp;
