@@ -264,6 +264,22 @@ static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
     return true;
 }
 
+static inline bool trans_cinvoke(DisasContext *ctx, arg_cinvoke *a)
+{
+    TCGv_i32 code_regnum = tcg_const_i32(a->rs1);
+    TCGv_i32 data_regnum = tcg_const_i32(a->rs2);
+    TCGv target_addr = tcg_temp_new();
+    gen_helper_cinvoke(target_addr, cpu_env, code_regnum, data_regnum);
+    tcg_temp_free(target_addr);
+    tcg_temp_free_i32(code_regnum);
+    tcg_temp_free_i32(data_regnum);
+
+    lookup_and_goto_ptr(ctx);
+    // PC has been updated -> exit translation block
+    ctx->base.is_jmp = DISAS_NORETURN;
+    return true;
+}
+
 // Loads
 static bool gen_ddc_load(DisasContext *ctx, int rd, int rs1, MemOp memop)
 {

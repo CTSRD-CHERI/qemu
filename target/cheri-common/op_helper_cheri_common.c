@@ -270,6 +270,60 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     return cap_get_cursor(cbp);
 }
 
+target_ulong CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum, uint32_t data_regnum))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *code_cap = get_readonly_capreg(env, code_regnum);
+    const cap_register_t *data_cap = get_readonly_capreg(env, data_regnum);
+    /*
+     * CInvoke: Call into a new security domain (with matching otypes)
+     */
+    if (!code_cap->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, code_regnum);
+    } else if (!data_cap->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, data_regnum);
+    } else if (!cap_is_sealed_with_type(code_cap)) {
+        raise_cheri_exception(env, CapEx_SealViolation, code_regnum);
+    } else if (!cap_is_sealed_with_type(data_cap)) {
+        raise_cheri_exception(env, CapEx_SealViolation, data_regnum);
+    } else if ((code_cap->cr_otype != data_cap->cr_otype || code_cap->cr_otype > CAP_LAST_NONRESERVED_OTYPE)) {
+        raise_cheri_exception(env, CapEx_TypeViolation, code_regnum);
+    } else if (!cap_has_perms(code_cap, CAP_PERM_CINVOKE) ||
+               !cap_has_perms(data_cap, CAP_PERM_CINVOKE)) {
+        raise_cheri_exception(env, CapEx_PermitCCallViolation, code_regnum);
+    } else if (!cap_has_perms(code_cap, CAP_PERM_EXECUTE)) {
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, code_regnum);
+    } else if (cap_has_perms(data_cap, CAP_PERM_EXECUTE)) {
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, data_regnum);
+    } else if (!validate_jump_target(env, code_cap, code_regnum, _host_return_address)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, code_regnum);
+    } else {
+        // Unseal code and data cap now that the checks have succeeded.
+        cap_register_t idc = *data_cap;
+        cap_set_unsealed(&idc);
+        cap_register_t target = *code_cap;
+        cap_set_unsealed(&target);
+#ifdef TARGET_MIPS
+#define CINVOKE_DATA_REG CP2CAP_IDC
+        // The capability register is loaded into PCC during delay slot
+        env->active_tc.CapBranchTarget = target;
+#elif defined(TARGET_RISCV)
+#define CINVOKE_DATA_REG 31
+        // Update PCC now. On return to TCG we will jump there immediately, so
+        // updating it now should be fine.
+        env->PCC = target;
+#ifdef CONFIG_DEBUG_TCG
+        env->_pc_is_current = true;
+#endif
+#else
+#error "No CInvoke for this target"
+#endif
+        update_capreg(env, CINVOKE_DATA_REG, &idc);
+        // Return the branch target address
+        return cap_get_cursor(code_cap);
+    }
+}
+
 void CHERI_HELPER_IMPL(cmove(CPUArchState *env, uint32_t cd, uint32_t cb))
 {
     /*

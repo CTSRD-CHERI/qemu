@@ -91,7 +91,7 @@ csealentry  1111111  10001 ..... 000 ..... 1011011 @r2
 @r_2source ....... ..... .....   ... ..... ....... %rs2 %rs1
 
 ### Two operands (source1 and source2)
-# TODO: mapping clause encdec = CCall(cs, cb)           if (haveXcheri()) <-> 0b1111110 @ cb @ cs @ 0b000 @ 0b00001 @ 0b1011011 if (haveXcheri())
+cinvoke  1111110  ..... ..... 000 00001 1011011 @r_2source
 
 
 ### Instructions with 12-bit immediates:
