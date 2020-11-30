@@ -185,23 +185,6 @@ static inline bool use_goto_tb(DisasContext *ctx, target_ulong dest)
 #endif
 }
 
-static void gen_goto_tb(DisasContext *ctx, int n, target_ulong dest)
-{
-    if (use_goto_tb(ctx, dest)) {
-        /* chaining is only allowed when the jump is to the same page */
-        tcg_gen_goto_tb(n);
-        gen_update_cpu_pc(dest);
-
-        /* No need to check for single stepping here as use_goto_tb() will
-         * return false in case of single stepping.
-         */
-        tcg_gen_exit_tb(ctx->base.tb, n);
-    } else {
-        gen_update_cpu_pc(dest);
-        lookup_and_goto_ptr(ctx);
-    }
-}
-
 /* Wrapper for getting reg values - need to check of reg is zero since
  * cpu_gpr[0] is not actually allocated
  */
@@ -337,6 +320,27 @@ void cheri_tcg_prepare_for_unconditional_exception(DisasContextBase *db)
 {
     cheri_tcg_save_pc(db);
     db->is_jmp = DISAS_NORETURN;
+}
+
+static void gen_goto_tb(DisasContext *ctx, int n, target_ulong dest,
+                        bool bounds_check)
+{
+    if (bounds_check)
+        gen_check_branch_target(ctx, dest);
+
+    if (use_goto_tb(ctx, dest)) {
+        /* chaining is only allowed when the jump is to the same page */
+        tcg_gen_goto_tb(n);
+        gen_update_cpu_pc(dest);
+
+        /* No need to check for single stepping here as use_goto_tb() will
+         * return false in case of single stepping.
+         */
+        tcg_gen_exit_tb(ctx->base.tb, n);
+    } else {
+        gen_update_cpu_pc(dest);
+        lookup_and_goto_ptr(ctx);
+    }
 }
 
 static void gen_mulhsu(TCGv ret, TCGv arg1, TCGv arg2)
@@ -477,7 +481,7 @@ static void gen_jal(DisasContext *ctx, int rd, target_ulong imm)
     gen_set_gpr_const(rd, ctx->pc_succ_insn);
 
     gen_rvfi_dii_validate_jump(ctx);
-    gen_goto_tb(ctx, 0, ctx->base.pc_next + imm); /* must use this for safety */
+    gen_goto_tb(ctx, 0, ctx->base.pc_next + imm, /*bounds_check=*/true); /* must use this for safety */
     ctx->base.is_jmp = DISAS_NORETURN;
 }
 
@@ -1085,7 +1089,8 @@ static void riscv_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
 
     switch (ctx->base.is_jmp) {
     case DISAS_TOO_MANY:
-        gen_goto_tb(ctx, 0, ctx->base.pc_next);
+        /* CHERI PCC bounds check done on next ifetch. */
+        gen_goto_tb(ctx, 0, ctx->base.pc_next, /*bounds_check=*/false);
         break;
     case DISAS_NORETURN:
         break;

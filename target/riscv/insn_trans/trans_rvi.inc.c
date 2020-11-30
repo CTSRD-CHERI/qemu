@@ -112,7 +112,8 @@ static bool gen_branch(DisasContext *ctx, arg_b *a, TCGCond cond)
     gen_get_gpr(source2, a->rs2);
 
     tcg_gen_brcond_tl(cond, source1, source2, l);
-    gen_goto_tb(ctx, 1, ctx->pc_succ_insn);
+    /* Branch not taken, CHERI PCC bounds check done on next ifetch. */
+    gen_goto_tb(ctx, 1, ctx->pc_succ_insn, /*bounds_check=*/false);
     gen_set_label(l); /* branch taken */
 
     gen_rvfi_dii_validate_jump(ctx);
@@ -120,7 +121,8 @@ static bool gen_branch(DisasContext *ctx, arg_b *a, TCGCond cond)
         /* misaligned */
         gen_exception_inst_addr_mis(ctx);
     } else {
-        gen_goto_tb(ctx, 0, ctx->base.pc_next + a->imm);
+        /* Branch taken -> check if PCC bounds allow for this jump. */
+        gen_goto_tb(ctx, 0, ctx->base.pc_next + a->imm, /*bounds_check=*/true);
     }
     ctx->base.is_jmp = DISAS_NORETURN;
 

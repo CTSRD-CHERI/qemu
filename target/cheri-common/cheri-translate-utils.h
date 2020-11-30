@@ -236,7 +236,7 @@ static inline void gen_check_branch_target(DisasContext *ctx, target_ulong addr)
 #ifdef TARGET_CHERI
     if (unlikely(!in_pcc_bounds(&ctx->base, addr))) {
         cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
-        gen_raise_pcc_violation(&ctx->base, addr, 0);
+        gen_raise_pcc_violation(&ctx->base, addr, 1);
     }
 #endif
 }

@@ -72,7 +72,8 @@ static bool trans_vsetvli(DisasContext *ctx, arg_vsetvli *a)
     }
     gen_helper_vsetvl(dst, cpu_env, s1, s2);
     gen_set_gpr(a->rd, dst);
-    gen_goto_tb(ctx, 0, ctx->pc_succ_insn);
+    /* CHERI PCC bounds check done on next ifetch. */
+    gen_goto_tb(ctx, 0, ctx->pc_succ_insn, /*bounds_check=*/false);
     ctx->base.is_jmp = DISAS_NORETURN;
 
     tcg_temp_free(s1);
