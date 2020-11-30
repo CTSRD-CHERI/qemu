@@ -448,7 +448,9 @@ static int write_mstatus(CPURISCVState *env, int csrno, target_ulong val)
      * RV32: MPV and MTL are not in mstatus. The current plan is to
      * add them to mstatush. For now, we just don't support it.
      */
-    mask |= MSTATUS_MTL | MSTATUS_MPV;
+    if (riscv_has_ext(env, RVH)) {
+        mask |= MSTATUS_MTL | MSTATUS_MPV;
+    }
 #endif
 
     mstatus = (mstatus & ~mask) | (val & mask);
