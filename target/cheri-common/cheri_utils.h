@@ -69,18 +69,6 @@ static inline cap_offset_t cap_get_offset(const cap_register_t* c) {
     return (cap_offset_t)c->_cr_cursor - (cap_offset_t)c->cr_base;
 }
 
-static inline uint64_t cap_get_length64(const cap_register_t* c) {
-    // TODO: should handle last byte of address space properly
-    cheri_debug_assert((!c->cr_tag || c->_cr_top >= c->cr_base) &&
-                       "Tagged capabilities must be in bounds!");
-    unsigned __int128 length = c->_cr_top - c->cr_base;
-    if (unlikely(c->_cr_top < c->cr_base)) {
-        return (uint64_t)length; // negative length -> strip top bits
-    }
-    // Otherwise clamp the length to UINT64_MAX
-    return length > UINT64_MAX ? UINT64_MAX : (uint64_t)length;
-}
-
 // The top of the capability (exclusive -- i.e., one past the end)
 static inline uint64_t cap_get_top(const cap_register_t* c) {
     // TODO: should handle last byte of address space properly
@@ -90,6 +78,14 @@ static inline uint64_t cap_get_top(const cap_register_t* c) {
 
 static inline unsigned __int128 cap_get_length65(const cap_register_t* c) {
     return c->_cr_top - c->cr_base;
+}
+
+static inline uint64_t cap_get_length64(const cap_register_t* c) {
+    cheri_debug_assert((!c->cr_tag || c->_cr_top >= c->cr_base) &&
+        "Tagged capabilities must be in bounds!");
+    unsigned __int128 length = cap_get_length65(c);
+    // Clamp the length to UINT64_MAX
+    return length > UINT64_MAX ? UINT64_MAX : (uint64_t)length;
 }
 
 static inline unsigned __int128 cap_get_top65(const cap_register_t* c) {
