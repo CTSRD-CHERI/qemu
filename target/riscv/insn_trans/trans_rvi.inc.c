@@ -80,7 +80,6 @@ static bool trans_jalr(DisasContext *ctx, arg_jalr *a)
 
     // For CHERI the result is an offset relative to PCC.base
     gen_set_gpr_const(a->rd, ctx->pc_succ_insn - pcc_base(ctx));
-    gen_rvfi_dii_validate_jump(ctx);
     lookup_and_goto_ptr(ctx);
 
     if (misaligned) {
@@ -122,7 +121,6 @@ static bool gen_branch(DisasContext *ctx, arg_b *a, TCGCond cond)
     gen_goto_tb(ctx, 1, ctx->pc_succ_insn, /*bounds_check=*/false);
     gen_set_label(l); /* branch taken */
 
-    gen_rvfi_dii_validate_jump(ctx);
     if (!has_ext(ctx, RVC) && ((ctx->base.pc_next + a->imm) & 0x3)) {
         /* misaligned */
         gen_exception_inst_addr_mis(ctx);

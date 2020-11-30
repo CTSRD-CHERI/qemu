@@ -258,7 +258,6 @@ static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
     tcg_temp_free_i32(source_regnum);
     tcg_temp_free_i32(dest_regnum);
 
-    gen_rvfi_dii_validate_jump(ctx);
     lookup_and_goto_ptr(ctx);
     // PC has been updated -> exit translation block
     ctx->base.is_jmp = DISAS_NORETURN;

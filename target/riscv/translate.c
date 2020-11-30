@@ -221,18 +221,9 @@ static inline void gen_mark_gpr_as_integer(int reg_num_dst) {
 //        gen_rvfi_dii_set_field(field_prefix##_data, t);                        \
 //        gen_rvfi_dii_set_field_const(field_prefix##_addr, reg_num);            \
 //    } while (0)
-//static inline void gen_rvfi_dii_validate_jump(DisasContext* ctx)
-//{
-//    // We are doing a jump -> we have to validate the next MMU_INST_FETCH requests
-//    TCGv_i64 tmp_val = tcg_const_i64(1);
-//    tcg_gen_st8_i64(tmp_val, cpu_env,
-//                    offsetof(CPURISCVState, rvfi_dii_validate_ifetch));
-//    tcg_temp_free_i64(tmp_val);
-//}
 #else
 // #define gen_get_gpr(t, reg_num, field) _gen_get_gpr(t, reg_num)
 #endif
-#define gen_rvfi_dii_validate_jump(ctx) ((void)0)
 #define gen_get_gpr(t, reg_num) _gen_get_gpr(t, reg_num)
 
 /* Wrapper for setting reg values - need to check of reg is zero since
@@ -483,7 +474,6 @@ static void gen_jal(DisasContext *ctx, int rd, target_ulong imm)
     }
     gen_set_gpr_const(rd, ctx->pc_succ_insn);
 
-    gen_rvfi_dii_validate_jump(ctx);
     gen_goto_tb(ctx, 0, ctx->base.pc_next + imm, /*bounds_check=*/true); /* must use this for safety */
     ctx->base.is_jmp = DISAS_NORETURN;
 }
