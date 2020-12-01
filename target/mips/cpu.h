@@ -500,7 +500,6 @@ struct TCState {
     struct GPCapRegs gpcapregs;
     struct cheri_cap_hwregs CHWR;
 // #define CP2CAP_RCC  24  /* Return Code Capability */
-#define CP2CAP_IDC  26  /* Invoked Data Capability */
 // #define CP2CAP_EPCC_FAKE_OFFSET_VALUE 0xe9cce9cce9cce9cc /* cr_offset should not be used for EPCC */
 #endif /* TARGET_CHERI */
 

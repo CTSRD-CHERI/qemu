@@ -244,7 +244,7 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
             // Use of !allow_unsealed rather than !cap_is_unsealed used on purpose.
             // This should function like a jump and a move in the CCall2 case.
             if (!allow_unsealed) cap_set_unsealed(&idc);
-            update_capreg(env, CP2CAP_IDC, &idc);
+            update_capreg(env, CINVOKE_DATA_REGNUM, &idc);
             // The capability register is loaded into PCC during delay slot
             env->active_tc.CapBranchTarget = *csp;
             // XXXAR: clearing these fields is not strictly needed since they
