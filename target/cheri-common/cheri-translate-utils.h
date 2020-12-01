@@ -34,6 +34,8 @@
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
 #include "cheri-translate-utils-base.h"
+#include "cheri-lazy-capregs-types.h"
+#include "tcg-target.h"
 
 #ifdef TARGET_CHERI
 #define _gen_cap_check(type)                                                   \
@@ -63,6 +65,8 @@ _gen_cap_check(rmw)
 
 #ifdef TARGET_MIPS
 static inline void gen_load_gpr(TCGv t, int reg);
+#elif defined(TARGET_AARCH64)
+    TCGv_i64 cpu_reg(DisasContext *s, int reg);
 #endif
 
 static inline void generate_get_ddc_checked_gpr_plus_offset(
@@ -74,6 +78,10 @@ static inline void generate_get_ddc_checked_gpr_plus_offset(
     gen_get_gpr((TCGv)addr, reg_num);
 #elif defined(TARGET_MIPS)
     gen_load_gpr((TCGv)addr, reg_num);
+#elif defined(TARGET_AARCH64)
+    // LETODO Not sure this is the correct function. Also need to select between
+    // cpu_reg and cpu_reg_sp.
+    tcg_gen_mov_i64((TCGv)addr, cpu_reg(ctx, reg_num));
 #else
 #error "Don't know how to fetch a GPR value"
 #endif
@@ -88,30 +96,53 @@ static inline bool have_cheri_tb_flags(DisasContext *ctx, uint32_t flags)
     return (ctx->base.cheri_flags & flags) == flags;
 }
 
-static inline void _generate_ddc_checked_ptr(
-    DisasContext *ctx, CheriTbFlags tb_perm_flags, CheriPermissions req_perms,
-    TCGv_cap_checked_ptr checked_addr, TCGv ddc_offset, target_ulong num_bytes)
+// Checks an address against PCC or DDC.
+// Permissions are checked at translate time
+// Bounds checks can be skipped if CHERI flags indicate bounds would make checks
+// trivial.
+static inline void
+_generate_special_checked_ptr(DisasContext *ctx, CheriTbFlags tb_perm_flags,
+                              CheriPermissions req_perms,
+                              TCGv_cap_checked_ptr checked_addr,
+                              TCGv ddc_offset, target_ulong num_bytes, bool ddc)
 {
+    CheriTbFlags full_as_flags =
+        ddc ? TB_FLAG_CHERI_DDC_FULL_AS : TB_FLAG_PCC_FULL_AS;
+
     if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags))) {
-        // DDC is untagged, sealed, or missing PERM_STORE
+        // PCC/DDC is untagged, sealed, or missing PERM_STORE
         TCGv_i32 tperms = tcg_const_i32(req_perms);
         cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
         gen_helper_raise_exception_ddc_perms(cpu_env, tperms);
         tcg_temp_free_i32(tperms);
         return;
     }
-    const bool need_interposition =
-        !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_NO_INTERPOSE);
+
+    // pcc interpostion currently done mostly by the caller
+    bool need_interposition =
+        ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_NO_INTERPOSE);
+
+    // Would be nice to get rid of the ifdefs in this otherwise (mostly) target
+    // indepedent header. Probably a call in to somethging in cheri-archspecific
+    // for each use of an ifdef.
+#ifdef TARGET_AARCH64
+    // Recover cctlr stashed in flags, and check if we need a base offset
+    uint32_t cctlr = (ctx->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START)
+                     << CCTLR_DEFINED_START;
+    need_interposition &= (cctlr & CCTLR_DDCBO);
+#endif
     // We need DDC interposition since the base/cursor is not zero
     if (unlikely(need_interposition)) {
         tcg_gen_add_tl((TCGv)checked_addr, ddc_offset, ddc_interposition);
-    } else {
+    } else if ((TCGv)checked_addr != ddc_offset) {
         tcg_gen_mov_tl((TCGv)checked_addr, ddc_offset);
     }
-    if (unlikely(!have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_FULL_AS))) {
+    if (unlikely(!have_cheri_tb_flags(ctx, full_as_flags))) {
         // We need a bounds check since DDC is not full address space
         TCGv tbytes = tcg_const_tl(num_bytes);
-        gen_helper_ddc_check_bounds(cpu_env, (TCGv)checked_addr, tbytes);
+
+        (ddc ? &gen_helper_ddc_check_bounds : &gen_helper_pcc_check_bounds)(
+            cpu_env, (TCGv)checked_addr, tbytes);
         tcg_temp_free(tbytes);
     }
     // DDC has been checked now and checked_addr can be used directly.
@@ -121,26 +152,61 @@ generate_ddc_checked_load_ptr(TCGv_cap_checked_ptr checked_addr,
                               DisasContext *ctx, TCGv ddc_offset,
                               target_ulong num_bytes)
 {
-    _generate_ddc_checked_ptr(ctx, TB_FLAG_CHERI_DDC_READABLE, CAP_PERM_LOAD,
-                              checked_addr, ddc_offset, num_bytes);
+    _generate_special_checked_ptr(ctx, TB_FLAG_CHERI_DDC_READABLE,
+                                  CAP_PERM_LOAD, checked_addr, ddc_offset,
+                                  num_bytes, true);
 }
 static inline void
 generate_ddc_checked_store_ptr(TCGv_cap_checked_ptr checked_addr,
                                DisasContext *ctx, TCGv ddc_offset,
                                target_ulong num_bytes)
 {
-    _generate_ddc_checked_ptr(ctx, TB_FLAG_CHERI_DDC_WRITABLE, CAP_PERM_STORE,
-                              checked_addr, ddc_offset, num_bytes);
+    _generate_special_checked_ptr(ctx, TB_FLAG_CHERI_DDC_WRITABLE,
+                                  CAP_PERM_STORE, checked_addr, ddc_offset,
+                                  num_bytes, true);
 }
 static inline void
 generate_ddc_checked_rmw_ptr(TCGv_cap_checked_ptr checked_addr,
                              DisasContext *ctx, TCGv ddc_offset,
                              target_ulong num_bytes)
 {
-    _generate_ddc_checked_ptr(
+    _generate_special_checked_ptr(
         ctx, TB_FLAG_CHERI_DDC_READABLE | TB_FLAG_CHERI_DDC_WRITABLE,
-        CAP_PERM_LOAD | CAP_PERM_STORE, checked_addr, ddc_offset, num_bytes);
+        CAP_PERM_LOAD | CAP_PERM_STORE, checked_addr, ddc_offset, num_bytes,
+        true);
 }
+
+#define FLAG_READABLE(ddc)                                                     \
+    (ddc ? TB_FLAG_CHERI_DDC_READABLE : TB_FLAG_CHERI_PCC_READABLE)
+#define FLAG_WRITABLE(ddc)                                                     \
+    (ddc ? TB_FLAG_CHERI_DDC_WRITABLE : TB_FLAG_CHERI_PCC_WRITABLE)
+
+static inline void
+generate_special_checked_load_ptr(TCGv_cap_checked_ptr checked_addr,
+                                  DisasContext *ctx, TCGv ddc_offset,
+                                  target_ulong num_bytes, bool ddc)
+{
+    _generate_special_checked_ptr(ctx, FLAG_READABLE(ddc), CAP_PERM_LOAD,
+                                  checked_addr, ddc_offset, num_bytes, ddc);
+}
+static inline void
+generate_special_checked_store_ptr(TCGv_cap_checked_ptr checked_addr,
+                                   DisasContext *ctx, TCGv ddc_offset,
+                                   target_ulong num_bytes, bool ddc)
+{
+    _generate_special_checked_ptr(ctx, FLAG_WRITABLE(ddc), CAP_PERM_STORE,
+                                  checked_addr, ddc_offset, num_bytes, ddc);
+}
+static inline void
+generate_special_checked_rmw_ptr(TCGv_cap_checked_ptr checked_addr,
+                                 DisasContext *ctx, TCGv ddc_offset,
+                                 target_ulong num_bytes, bool ddc)
+{
+    _generate_special_checked_ptr(ctx, FLAG_READABLE(ddc) | FLAG_WRITABLE(ddc),
+                                  CAP_PERM_LOAD | CAP_PERM_STORE, checked_addr,
+                                  ddc_offset, num_bytes, ddc);
+}
+
 #else // !TARGET_CHERI
 #define generate_ddc_checked_load_ptr(checked_addr, ctx, offset, num_bytes)    \
     tcg_gen_mov_tl(checked_addr, offset)
@@ -148,57 +214,99 @@ generate_ddc_checked_rmw_ptr(TCGv_cap_checked_ptr checked_addr,
     tcg_gen_mov_tl(checked_addr, offset)
 #define generate_ddc_checked_rmw_ptr(checked_addr, ctx, offset, num_bytes)     \
     tcg_gen_mov_tl(checked_addr, offset)
+#define generate_special_checked_load_ptr(checked_addr, ctx, offset,           \
+                                          num_bytes, ddc)                      \
+    tcg_gen_mov_tl(checked_addr, offset)
+#define generate_special_checked_store_ptr(checked_addr, ctx, offset,          \
+                                           num_bytes, ddc)                     \
+    tcg_gen_mov_tl(checked_addr, offset)
+#define generate_special_checked_rmw_ptr(checked_addr, ctx, offset, num_bytes, \
+                                         ddc)                                  \
+    tcg_gen_mov_tl(checked_addr, offset)
 #endif // TARGET_CHERI
+
+static inline void
+gen_special_interposed_ld_i64(DisasContext *ctx, TCGv_i64 result,
+                              TCGv_cap_checked_ptr checked_addr,
+                              TCGv ddc_offset, TCGArg arg, MemOp op, bool ddc)
+{
+    if (checked_addr == NULL) {
+        checked_addr = (TCGv_cap_checked_ptr)ddc_offset;
+    }
+    generate_special_checked_load_ptr(checked_addr, ctx, ddc_offset,
+                                      memop_size(op), ddc);
+    tcg_gen_qemu_ld_i64_with_checked_addr(result, checked_addr, arg, op);
+}
+
+static inline void
+gen_special_interposed_ld_i32(DisasContext *ctx, TCGv_i32 result,
+                              TCGv_cap_checked_ptr checked_addr,
+                              TCGv ddc_offset, TCGArg arg, MemOp op, bool ddc)
+{
+    if (checked_addr == NULL) {
+        checked_addr = (TCGv_cap_checked_ptr)ddc_offset;
+    }
+    generate_special_checked_load_ptr(checked_addr, ctx, ddc_offset,
+                                      memop_size(op), ddc);
+    tcg_gen_qemu_ld_i32_with_checked_addr(result, checked_addr, arg, op);
+}
+
+static inline void
+gen_special_interposed_st_i64(DisasContext *ctx, TCGv_i64 value,
+                              TCGv_cap_checked_ptr checked_addr,
+                              TCGv ddc_offset, TCGArg arg, MemOp op, bool ddc)
+{
+    if (checked_addr == NULL) {
+        checked_addr = (TCGv_cap_checked_ptr)ddc_offset;
+    }
+    generate_special_checked_store_ptr(checked_addr, ctx, ddc_offset,
+                                       memop_size(op), ddc);
+    tcg_gen_qemu_st_i64_with_checked_addr(value, checked_addr, arg, op);
+}
+static inline void
+gen_special_interposed_st_i32(DisasContext *ctx, TCGv_i32 value,
+                              TCGv_cap_checked_ptr checked_addr,
+                              TCGv ddc_offset, TCGArg arg, MemOp op, bool ddc)
+{
+    if (checked_addr == NULL) {
+        checked_addr = (TCGv_cap_checked_ptr)ddc_offset;
+    }
+    generate_special_checked_store_ptr(checked_addr, ctx, ddc_offset,
+                                       memop_size(op), ddc);
+    tcg_gen_qemu_st_i32_with_checked_addr(value, checked_addr, arg, op);
+}
 
 static inline void gen_ddc_interposed_ld_i64(DisasContext *ctx, TCGv_i64 result,
                                              TCGv_cap_checked_ptr checked_addr,
                                              TCGv ddc_offset, TCGArg arg,
                                              MemOp op)
 {
-    if (checked_addr == NULL) {
-        checked_addr = (TCGv_cap_checked_ptr)ddc_offset;
-    }
-    generate_ddc_checked_load_ptr(checked_addr, ctx, ddc_offset,
-                                  memop_size(op));
-    tcg_gen_qemu_ld_i64_with_checked_addr(result, checked_addr, arg, op);
+    gen_special_interposed_ld_i64(ctx, result, checked_addr, ddc_offset, arg,
+                                  op, true);
 }
-
 static inline void gen_ddc_interposed_ld_i32(DisasContext *ctx, TCGv_i32 result,
                                              TCGv_cap_checked_ptr checked_addr,
                                              TCGv ddc_offset, TCGArg arg,
                                              MemOp op)
 {
-    if (checked_addr == NULL) {
-        checked_addr = (TCGv_cap_checked_ptr)ddc_offset;
-    }
-    generate_ddc_checked_load_ptr(checked_addr, ctx, ddc_offset,
-                                  memop_size(op));
-    tcg_gen_qemu_ld_i32_with_checked_addr(result, checked_addr, arg, op);
+    gen_special_interposed_ld_i32(ctx, result, checked_addr, ddc_offset, arg,
+                                  op, true);
 }
-
 static inline void gen_ddc_interposed_st_i64(DisasContext *ctx, TCGv_i64 value,
                                              TCGv_cap_checked_ptr checked_addr,
                                              TCGv ddc_offset, TCGArg arg,
                                              MemOp op)
 {
-    if (checked_addr == NULL) {
-        checked_addr = (TCGv_cap_checked_ptr)ddc_offset;
-    }
-    generate_ddc_checked_store_ptr(checked_addr, ctx, ddc_offset,
-                                   memop_size(op));
-    tcg_gen_qemu_st_i64_with_checked_addr(value, checked_addr, arg, op);
+    gen_special_interposed_st_i64(ctx, value, checked_addr, ddc_offset, arg, op,
+                                  true);
 }
 static inline void gen_ddc_interposed_st_i32(DisasContext *ctx, TCGv_i32 value,
                                              TCGv_cap_checked_ptr checked_addr,
                                              TCGv ddc_offset, TCGArg arg,
                                              MemOp op)
 {
-    if (checked_addr == NULL) {
-        checked_addr = (TCGv_cap_checked_ptr)ddc_offset;
-    }
-    generate_ddc_checked_store_ptr(checked_addr, ctx, ddc_offset,
-                                   memop_size(op));
-    tcg_gen_qemu_st_i32_with_checked_addr(value, checked_addr, arg, op);
+    gen_special_interposed_st_i32(ctx, value, checked_addr, ddc_offset, arg, op,
+                                  true);
 }
 
 #if TARGET_LONG_BITS == 32
