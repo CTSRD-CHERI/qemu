@@ -151,10 +151,15 @@ typedef enum CheriTbFlags {
     TB_FLAG_CHERI_DDC_NO_INTERPOSE =
         (TB_FLAG_CHERI_DDC_BASE_ZERO | TB_FLAG_CHERI_DDC_CURSOR_ZERO),
     /*
-     * PCC spans the full adddress space and has base zero. This means we do
+     * PCC spans the full address space and has base zero. This means we do
      * not need to perform bounds checks or subtract/add PCC.base
      */
     TB_FLAG_CHERI_PCC_FULL_AS = (1 << 7),
+    TB_FLAG_CHERI_PCC_READABLE = (1 << 8),
+
+    /* Useful for CHERI-specific flags on various platforms if the normal flags
+       overflowed */
+    TB_FLAG_CHERI_SPARE_INDEX_START = 16,
 } CheriTbFlags;
 
 #endif // TARGET_CHERI
