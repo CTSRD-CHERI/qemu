@@ -210,8 +210,8 @@ void CHERI_HELPER_IMPL(ccleartag(CPUArchState *env, uint32_t cd, uint32_t cb))
     update_capreg(env, cd, &result);
 }
 
-target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
-                                     uint32_t cb, target_ulong link_pc))
+void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd, uint32_t cb,
+                             target_ulong link_pc))
 {
     /*
      * CJALR: Jump and Link Capability Register
@@ -223,9 +223,9 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     } else if (cap_is_sealed_with_type(cbp)) {
         // Note: "sentry" caps can be called using cjalr
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_GlobalViolation, cb);
     } else if (!validate_jump_target(env, cbp, cb, _host_return_address)) {
         assert(false && "Should have raised an exception");
@@ -266,8 +266,6 @@ target_ulong CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
 #else
 #error "No CJALR for this target"
 #endif
-    // Return the branch target address
-    return cap_get_cursor(cbp);
 }
 
 target_ulong CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum, uint32_t data_regnum))

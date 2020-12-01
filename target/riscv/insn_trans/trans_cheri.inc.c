@@ -253,7 +253,7 @@ static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
     TCGv_i32 dest_regnum = tcg_const_i32(a->rd);
     TCGv_i32 source_regnum = tcg_const_i32(a->rs1);
     TCGv t0 = tcg_const_tl(ctx->pc_succ_insn); // Link addr + resulting $pc
-    gen_helper_cjalr(t0, cpu_env, dest_regnum, source_regnum, t0);
+    gen_helper_cjalr(cpu_env, dest_regnum, source_regnum, t0);
     tcg_temp_free(t0);
     tcg_temp_free_i32(source_regnum);
     tcg_temp_free_i32(dest_regnum);

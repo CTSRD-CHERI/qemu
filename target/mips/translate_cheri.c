@@ -192,7 +192,7 @@ static inline void generate_cjalr(DisasContext *ctx, int32_t cd, int32_t cb)
         TCGv_i32 tcb = tcg_const_i32(cb);
         /* Instruction size is always four bytes and so is the delay slot */
         TCGv link_addr = tcg_const_tl(ctx->base.pc_next + 8);
-        gen_helper_cjalr(btarget, cpu_env, tcd, tcb, link_addr);
+        gen_helper_cjalr(cpu_env, tcd, tcb, link_addr);
         /* Set branch and delay slot flags */
         ctx->hflags |= (MIPS_HFLAG_BRC | MIPS_HFLAG_BDS32);
         /* Save capability register index that is new PCC */
