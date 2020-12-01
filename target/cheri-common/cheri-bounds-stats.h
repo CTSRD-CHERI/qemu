@@ -52,7 +52,7 @@ _became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
     if (cheri_debugger_on_unrepresentable)
         riscv_raise_exception(env, EXCP_DEBUG, retpc);
 #else
-#error "Unknonwn CHERI target"
+#error "Unknown CHERI target"
 #endif
     if (cheri_c2e_on_unrepresentable)
         raise_cheri_exception_impl(env, CapEx_InexactBounds, reg, false, retpc);
@@ -195,6 +195,9 @@ DECLARE_CHERI_STAT(cfromptr)
 DECLARE_CHERI_STAT(cincoffset)
 DECLARE_CHERI_STAT(csetaddr)
 DECLARE_CHERI_STAT(csetoffset)
+DECLARE_CHERI_STAT(cgetpccsetoffset)
+DECLARE_CHERI_STAT(cgetpccincoffset)
+DECLARE_CHERI_STAT(cgetpccsetaddr)
 
 #else /* !defined(DO_CHERI_STATISTICS) */
 
