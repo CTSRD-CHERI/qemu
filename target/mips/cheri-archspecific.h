@@ -133,7 +133,7 @@ static inline bool validate_jump_target(CPUMIPSState *env,
                                         unsigned regnum, uintptr_t retpc)
 {
     if (!cap_is_in_bounds(cap, addr, 4)) {
-        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, true,
+        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, addr, true,
                                    retpc);
     }
     if (!QEMU_IS_ALIGNED(addr, 4)) {
@@ -143,7 +143,8 @@ static inline bool validate_jump_target(CPUMIPSState *env,
 }
 
 static inline void update_next_pcc_for_tcg(CPUMIPSState *env,
-                                           const cap_register_t *target)
+                                           const cap_register_t *target,
+                                           uint32_t cjalr_flags)
 {
     assert_valid_jump_target(target);
     // The capability register is loaded into PCC using the
