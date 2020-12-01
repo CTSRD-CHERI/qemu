@@ -214,7 +214,7 @@ extern const VMStateInfo vmstate_info_uint8;
 extern const VMStateInfo vmstate_info_uint16;
 extern const VMStateInfo vmstate_info_uint32;
 extern const VMStateInfo vmstate_info_uint64;
-extern const VMStateInfo vmstate_info_chericap;
+extern const VMStateInfo vmstate_info_cap_register;
 
 /** Put this in the stream when migrating a null pointer.*/
 #define VMS_NULLPTR_MARKER (0x30U) /* '0' */
@@ -888,6 +888,8 @@ extern const VMStateInfo vmstate_info_qlist;
     VMSTATE_SINGLE(_f, _s, _v, vmstate_info_uint32, uint32_t)
 #define VMSTATE_UINT64_V(_f, _s, _v)                                  \
     VMSTATE_SINGLE(_f, _s, _v, vmstate_info_uint64, uint64_t)
+#define VMSTATE_CAP_V(_f, _s, _v)                                              \
+    VMSTATE_SINGLE(_f, _s, _v, vmstate_info_cap_register, cap_register_t)
 
 #ifdef CONFIG_LINUX
 
@@ -922,6 +924,7 @@ extern const VMStateInfo vmstate_info_qlist;
     VMSTATE_UINT32_V(_f, _s, 0)
 #define VMSTATE_UINT64(_f, _s)                                        \
     VMSTATE_UINT64_V(_f, _s, 0)
+#define VMSTATE_CAP(_f, _s) VMSTATE_CAP_V(_f, _s, 0)
 
 #ifdef CONFIG_LINUX
 
@@ -1080,6 +1083,11 @@ extern const VMStateInfo vmstate_info_qlist;
 
 #define VMSTATE_UINT64_ARRAY(_f, _s, _n)                              \
     VMSTATE_UINT64_ARRAY_V(_f, _s, _n, 0)
+
+#define VMSTATE_CAP_ARRAY_V(_f, _s, _n, _v)                                    \
+    VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_cap_register, cap_register_t)
+
+#define VMSTATE_CAP_ARRAY(_f, _s, _n) VMSTATE_CAP_ARRAY_V(_f, _s, _n, 0)
 
 #define VMSTATE_UINT64_SUB_ARRAY(_f, _s, _start, _num)                \
     VMSTATE_SUB_ARRAY(_f, _s, _start, _num, 0, vmstate_info_uint64, uint64_t)
