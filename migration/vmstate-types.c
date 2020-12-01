@@ -313,6 +313,46 @@ const VMStateInfo vmstate_info_uint64 = {
     .put  = put_uint64,
 };
 
+/* 128 compressed capability */
+
+#include "../target/cheri-common/cheri-compressed-cap/cheri_compressed_cap_128.h"
+
+static int get_cap_register(QEMUFile *f, void *pv, size_t size,
+                      const VMStateField *field)
+{
+    cc128_cap_t *v = pv;
+    uint64_t cursor;
+    uint64_t pesbt;
+
+    qemu_get_be64s(f, &cursor);
+    qemu_get_be64s(f, &pesbt);
+
+    // TODO: If we ever want this to actually work the tag needs saving too
+    // TODO: For now just assume everything is tagged
+    cc128_decompress_mem(pesbt, cursor, 1, v);
+
+    return 0;
+}
+
+static int put_cap_register(QEMUFile *f, void *pv, size_t size,
+                      const VMStateField *field, QJSON *vmdesc)
+{
+    cc128_cap_t *v = pv;
+    uint64_t* cursor = &v->_cr_cursor;
+    uint64_t pesbt = cc128_compress_raw(v);
+
+    qemu_put_be64s(f, cursor);
+    qemu_put_be64s(f, &pesbt);
+
+    return 0;
+}
+
+const VMStateInfo vmstate_info_cap_register = {
+    .name = "cap_register",
+    .get = get_cap_register,
+    .put = put_cap_register,
+};
+
 static int get_nullptr(QEMUFile *f, void *pv, size_t size,
                        const VMStateField *field)
 
