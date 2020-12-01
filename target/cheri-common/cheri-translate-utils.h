@@ -63,10 +63,30 @@ _gen_cap_check(load)
 _gen_cap_check(store)
 _gen_cap_check(rmw)
 
+// TODO Move to target specific headers
 #ifdef TARGET_MIPS
+
 static inline void gen_load_gpr(TCGv t, int reg);
+#define target_get_gpr(ctx, t, reg) gen_load_gpr((TCGv)t, reg)
+#define MERGED_FILE 0
+
 #elif defined(TARGET_AARCH64)
+
 TCGv_i64 cpu_reg(DisasContext *s, int reg);
+#define target_get_gpr(ctx, t, reg)                                            \
+    if (reg == NULL_CAPREG_INDEX)                                              \
+        tcg_gen_movi_tl((TCGv)t, 0);                                           \
+    else                                                                       \
+        tcg_gen_mov_i64((TCGv)t, cpu_reg_sp(ctx, reg))
+#define MERGED_FILE 1
+
+#elif defined(TARGET_RISCV)
+
+#define target_get_gpr(ctx, t, reg) gen_get_gpr((TCGv)t, reg)
+#define MERGED_FILE 1
+
+#else
+#error "Don't know how to fetch a GPR value"
 #endif
 
 static inline void generate_get_ddc_checked_gpr_plus_offset(
@@ -74,17 +94,8 @@ static inline void generate_get_ddc_checked_gpr_plus_offset(
     target_long offset, MemOp mop,
     void (*check_ddc)(TCGv_cap_checked_ptr, DisasContext *, TCGv, target_ulong))
 {
-#if defined(TARGET_RISCV)
-    gen_get_gpr((TCGv)addr, reg_num);
-#elif defined(TARGET_MIPS)
-    gen_load_gpr((TCGv)addr, reg_num);
-#elif defined(TARGET_AARCH64)
-    // LETODO Not sure this is the correct function. Also need to select between
-    // cpu_reg and cpu_reg_sp.
-    tcg_gen_mov_i64((TCGv)addr, cpu_reg(ctx, reg_num));
-#else
-#error "Don't know how to fetch a GPR value"
-#endif
+    target_get_gpr(ctx, addr, reg_num);
+
     if (!__builtin_constant_p(offset) || offset != 0) {
         tcg_gen_addi_tl((TCGv)addr, (TCGv)addr, offset);
     }
@@ -412,3 +423,375 @@ static inline void gen_check_cond_branch_target(DisasContext *ctx,
     gen_set_label(skip_btarget_check); // skip helper call
 #endif
 }
+
+#if defined(TARGET_CHERI)
+
+// NOTE: I wrote all this for 128, but it may apply to other formats.
+
+// This function belongs in a target specific header
+static inline uint32_t gp_register_offset(int reg_num)
+{
+#ifdef TARGET_MIPS
+    return offsetof(CPUArchState, active_tc.gpcapregs.decompressed[reg_num]);
+#else
+    return offsetof(CPUArchState, gpcapregs.decompressed[reg_num]);
+#endif
+}
+
+// Copies some number of bytes between min_size and max_size.
+// max_size must be padded to make use of the most optimal vector op.
+static inline void gen_vector_copy(uint32_t dest_off, uint32_t source_off,
+                                   size_t min_size, size_t max_size)
+{
+    // Use largest chunk as possible
+    size_t copy_chunk =
+        (TCG_TARGET_HAS_v256 && (min_size >= 32))
+            ? 32
+            : ((TCG_TARGET_HAS_v128 && (min_size >= 16)) ? 16 : 8);
+    size_t mask = copy_chunk - 1;
+    size_t copy_size = (min_size + mask) & ~mask;
+    assert(copy_size <= max_size);
+
+    if (copy_chunk > 8) {
+
+        TCGv_vec tmp = tcg_temp_new_vec((copy_chunk == 32) ? TCG_TYPE_V256
+                                                           : TCG_TYPE_V128);
+        for (size_t i = 0; i != copy_size; i += copy_chunk) {
+            tcg_gen_ld_vec(tmp, cpu_env, source_off + i);
+            tcg_gen_st_vec(tmp, cpu_env, dest_off + i);
+        }
+        tcg_temp_free_vec(tmp);
+
+    } else {
+
+        TCGv_i64 tmp = tcg_temp_new_i64();
+        for (size_t i = 0; i != copy_size; i += copy_chunk) {
+            tcg_gen_ld_i64(tmp, cpu_env, source_off + i);
+            tcg_gen_st_i64(tmp, cpu_env, dest_off + i);
+        }
+        tcg_temp_free_i64(tmp);
+    }
+}
+
+// Generates a capability move of an entire padded cap.
+// WARNING: If using lazy cap regs you will need to modify the state of the
+// destination to match the source.
+static inline void gen_move_cap(uint32_t dest_off, uint32_t source_off)
+{
+    gen_vector_copy(dest_off, source_off, sizeof(cap_register_t),
+                    sizeof(cap_register_t));
+}
+
+// Generate a capability move of only the pesbt + cursor of a cap.
+// Again, you must also modify lazy state.
+static inline void gen_move_compressed_cap(uint32_t dest_off,
+                                           uint32_t source_off)
+{
+    gen_vector_copy(dest_off, source_off, 16, 16);
+}
+
+static inline void gen_lazy_cap_get_state(DisasContext *ctx, TCGv_i32 val,
+                                          int regnum);
+
+// Decompress if need be and set state to fully decompressed
+static inline void gen_lazy_cap_decompress(DisasContext *ctx, int regnum)
+{
+    TCGLabel *l1 = gen_new_label();
+
+    // If state[regnum] == CREG_FULLY_DECOMPRESSED goto l1
+    _Static_assert(CREG_FULLY_DECOMPRESSED == 0b11, "I like optimisation");
+    TCGv_i32 decompressed = tcg_const_i32(CREG_FULLY_DECOMPRESSED);
+    TCGv_i32 val = tcg_temp_new_i32();
+    gen_lazy_cap_get_state(ctx, val, regnum);
+    tcg_gen_brcond_i32(TCG_COND_EQ, val, decompressed, l1);
+
+    // Call decompress helper
+    TCGv_i32 reg = tcg_const_i32(regnum);
+    gen_helper_decompress_cap(cpu_env, reg);
+
+    // Label l1
+    gen_set_label(l1);
+
+    tcg_temp_free_i32(reg);
+    tcg_temp_free_i32(decompressed);
+    tcg_temp_free_i32(val);
+}
+
+// TODO: Gen some tracing for all of these
+
+// Set the state of a lazy register to a given constant
+static inline void gen_lazy_cap_set_state(DisasContext *ctx, int regnum,
+                                          CapRegState state)
+{
+    TCGv_i32 tcg_state = tcg_const_i32(state);
+#ifdef TARGET_MIPS
+    g_assert_not_reached(); // Not supported on MIPS
+#else
+    tcg_gen_st8_i32(tcg_state, cpu_env,
+                    offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
+#endif
+    tcg_temp_free_i32(tcg_state);
+}
+
+static inline void gen_lazy_cap_set_int(DisasContext *ctx, int regnum)
+{
+    gen_lazy_cap_set_state(ctx, regnum, CREG_INTEGER);
+    // Doing this keeps pesbt always up to date, which is good for stores and
+    // comparisons
+    TCGv_i64 null_pesbt = tcg_const_i64(CC128_NULL_PESBT);
+    tcg_gen_st_i64(null_pesbt, cpu_env,
+                   gp_register_offset(regnum) +
+                       offsetof(cap_register_t, cr_pesbt));
+    tcg_temp_free_i64(null_pesbt);
+}
+
+static inline void gen_lazy_cap_get_state(DisasContext *ctx, TCGv_i32 val,
+                                          int regnum)
+{
+#ifdef TARGET_MIPS
+    g_assert_not_reached(); // Not supported on MIPS
+#else
+    tcg_gen_ld8u_i32(val, cpu_env,
+                     offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
+    cheri_tcg_printf_verbose("cw", "Register %d lazy state get: %d\n", regnum,
+                             val);
+#endif
+}
+
+// Set a lazy GP to the state of a special purpose register in env
+static inline void gen_move_cap_gp_sp(DisasContext *ctx, int dest_num,
+                                      uint32_t source_off)
+{
+    if (dest_num == NULL_CAPREG_INDEX)
+        return;
+    gen_move_cap(gp_register_offset(dest_num), source_off);
+    gen_lazy_cap_set_state(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
+    // cheri_log_instr_changed_gp_capreg <- will this work?
+}
+
+// Set a special purpose register in env to the state of lazy capreg
+static inline void gen_move_cap_sp_gp(DisasContext *ctx, uint32_t dest_off,
+                                      int source_num)
+{
+    gen_lazy_cap_decompress(ctx, source_num);
+    gen_move_cap(dest_off, gp_register_offset(source_num));
+}
+
+// TODO Its probably only worth doing the whole move if decompressed. If
+// compressed just copy pesbt. Move a GP register to a GP register. Currently
+// decompresses before move.
+static inline void gen_move_cap_gp_gp(DisasContext *ctx, int dest_num,
+                                      int source_num)
+{
+    if (dest_num == NULL_CAPREG_INDEX)
+        return;
+    gen_lazy_cap_decompress(ctx, source_num);
+    gen_move_cap(gp_register_offset(dest_num), gp_register_offset(source_num));
+    gen_lazy_cap_set_state(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
+}
+
+// If sealed untag, otherwise mark unrepsentable if out of bounds
+static inline void gen_cap_modified(DisasContext *ctx, int regnum)
+{
+    assert(0 && "TODO");
+}
+
+// Set the tag bit of register to the lowest bit of tagbit
+static inline void gen_cap_set_tag(DisasContext *ctx, int regnum, TCGv tagbit)
+{
+    // TODO if I start using set_tag for basically every capability modification
+    // on CHERI then this is probably inneficient Just set the state of the lazy
+    // register. This will cause next decompression to set the tag. 0b01 is
+    // untagged, 0b10 is tagged. So do 0b01 + tagbit
+    TCGv one = tcg_const_tl(1);
+    tcg_gen_and_tl(tagbit, tagbit, one);
+    _Static_assert(CREG_UNTAGGED_CAP == 1 && CREG_TAGGED_CAP == 2,
+                   "Optimised for these values");
+    tcg_gen_add_tl(tagbit, tagbit, one);
+#ifdef TARGET_MIPS
+    tcg_gen_st8_i64(tagbit, cpu_env,
+                    offsetof(CPUArchState, active_tc.gpcapregs.capreg_state[regnum]));
+#else
+    tcg_gen_st8_i64(tagbit, cpu_env,
+                    offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
+#endif
+    tcg_temp_free(one);
+}
+
+static inline void gen_cap_get_tag_i32(DisasContext *ctx, int regnum,
+                                       TCGv_i32 tagged)
+{
+    // State == CREG_TAGGED_CAP || (State == CREG_FULLY_DECOMPRESSED && tag = 1)
+    tcg_gen_ld8u_i32(tagged, cpu_env,
+                     gp_register_offset(regnum) +
+                         offsetof(cap_register_t, cr_tag));
+
+    TCGv_i32 state = tcg_temp_new_i32();
+    gen_lazy_cap_get_state(ctx, state, regnum);
+
+    TCGv_i32 cmpv = tcg_const_i32(CREG_FULLY_DECOMPRESSED);
+    tcg_gen_setcond_i32(TCG_COND_EQ, cmpv, cmpv, state);
+    tcg_gen_and_i32(tagged, tagged, cmpv);
+
+    tcg_gen_movi_i32(cmpv, CREG_TAGGED_CAP);
+    tcg_gen_setcond_i32(TCG_COND_EQ, cmpv, cmpv, state);
+    tcg_gen_or_i32(tagged, tagged, cmpv);
+
+    tcg_temp_free_i32(state);
+    tcg_temp_free_i32(cmpv);
+}
+
+static inline void gen_cap_get_tag(DisasContext *ctx, int regnum,
+                                   TCGv_i64 tagged)
+{
+    TCGv_i32 tag32 = tcg_temp_new_i32();
+    gen_cap_get_tag_i32(ctx, regnum, tag32);
+    tcg_gen_extu_i32_i64(tagged, tag32);
+    tcg_temp_free_i32(tag32);
+}
+
+static inline void gen_cap_get_hi(DisasContext *ctx, int regnum, TCGv_i64 lim)
+{
+    size_t offset =
+        gp_register_offset(regnum) + offsetof(cap_register_t, cr_pesbt);
+    // The pesbt field has been XOR'd with a mask on load
+    // This will need to be undone again here.
+    // (I think it might be sensible to refactor everything to apply the mask at
+    // decompress time)
+    tcg_gen_ld_i64(lim, cpu_env, offset);
+    tcg_gen_xori_i64(lim, lim, CC128_NULL_PESBT);
+}
+
+// FIXME: assumes small endian order between two 64-bit halves in a 128-bit
+// integer.
+// FIXME: I have no idea GCC actually implements this across platforms. Might be
+// MAD/SAD for all I know.
+#define CAP_TOP_LOBYTES_OFFSET 0
+#define CAP_TOP_HIBYTES_OFFSET 8
+
+// Get top, clamping results to UINT64_T MAX
+static inline void gen_cap_get_top(DisasContext *ctx, int regnum, TCGv_i64 top)
+{
+    gen_lazy_cap_decompress(ctx, regnum);
+    size_t offset =
+        gp_register_offset(regnum) + offsetof(cap_register_t, _cr_top);
+    tcg_gen_ld_i64(top, cpu_env, offset + CAP_TOP_LOBYTES_OFFSET);
+    // Set to all ones if top bit of 65-bit top is set.
+    TCGv_i64 tmp = tcg_temp_new_i64();
+    tcg_gen_ld_i64(tmp, cpu_env, offset + CAP_TOP_HIBYTES_OFFSET);
+#ifdef TARGET_AARCH64
+    // AARCH could have any others bits in a top with a high bit set
+    tcg_gen_neg_i64(tmp, tmp);
+    tcg_gen_or_i64(top, top, tmp);
+#else
+    // Other platforms only top that needs clamping is 1<<64
+    tcg_gen_sub_i64(top, top, tmp);
+#endif
+    tcg_temp_free_i64(tmp);
+}
+
+static inline void gen_cap_get_base(DisasContext *ctx, int regnum,
+                                    TCGv_i64 base)
+{
+    gen_lazy_cap_decompress(ctx, regnum);
+    size_t offset =
+        gp_register_offset(regnum) + offsetof(cap_register_t, cr_base);
+    tcg_gen_ld_i64(base, cpu_env, offset);
+}
+
+// Get length, where LENGTH_MAX results in UINT64_T MAX
+static inline void gen_cap_get_length(DisasContext *ctx, int regnum,
+                                      TCGv_i64 length)
+{
+    gen_lazy_cap_decompress(ctx, regnum);
+    size_t top_offset =
+        gp_register_offset(regnum) + offsetof(cap_register_t, _cr_top);
+    size_t base_offset =
+        gp_register_offset(regnum) + offsetof(cap_register_t, cr_base);
+
+    TCGv_i64 tmp = tcg_temp_new_i64();
+    TCGv_i64 carry = tcg_temp_new_i64();
+    tcg_gen_ld_i64(length, cpu_env, top_offset + CAP_TOP_LOBYTES_OFFSET);
+    tcg_gen_ld_i64(tmp, cpu_env, base_offset);
+
+    // Carry of top - base
+    tcg_gen_setcond_i64(TCG_COND_LTU, carry, length, tmp);
+    // top - base
+    tcg_gen_sub_i64(length, length, tmp);
+    // 1 if we should clamp
+    tcg_gen_ld_i64(tmp, cpu_env, top_offset + CAP_TOP_HIBYTES_OFFSET);
+    tcg_gen_xor_i64(carry, carry, tmp);
+
+    tcg_gen_neg_i64(carry, carry);
+    tcg_gen_or_i64(length, length, carry);
+
+    tcg_temp_free_i64(carry);
+    tcg_temp_free_i64(tmp);
+}
+
+static inline void gen_cap_get_cursor(DisasContext *ctx, int regnum,
+                                      TCGv_i64 cursor)
+{
+    // On platforms with merged register file it is better to do the GPR loads
+    // as they will likely refer to globals.
+#if MERGED_FILE
+    target_get_gpr(ctx, cursor, regnum);
+#else
+    tcg_gen_ld_i64(cursor, cpu_env,
+                   gp_register_offset(regnum) +
+                       offsetof(cap_register_t, _cr_cursor));
+#endif
+}
+
+static inline void gen_cap_get_offset(DisasContext *ctx, int regnum,
+                                      TCGv_i64 offset)
+{
+    gen_cap_get_cursor(ctx, regnum, offset);
+    TCGv_i64 base = tcg_temp_new_i64();
+    gen_cap_get_base(ctx, regnum, base);
+    tcg_gen_sub_i64(offset, offset, base);
+    tcg_temp_free_i64(base);
+}
+
+// Returns a boolean if rx and ry have equal pesbt/tag/cursor.
+// You may be concerned about equivalent non-canonical capabilities not
+// comparing equal, but to this I say: 1) This is why we cant have nice things.
+// 2) Morello docs imply this is what would happen on hardware, other platforms
+// can write their own TCG.
+static inline void gen_cap_get_eq_i32(DisasContext *ctx, int rx, int ry,
+                                      TCGv_i32 eq)
+{
+    size_t offsetx = gp_register_offset(rx);
+    size_t offsety = gp_register_offset(ry);
+
+    TCGv_i64 tmp1 = tcg_temp_new_i64();
+    TCGv_i64 tmp2 = tcg_temp_new_i64();
+
+    TCGv_i32 tmp3 = tcg_temp_new_i32();
+
+    // Tags equal
+    gen_cap_get_tag_i32(ctx, rx, eq);
+    gen_cap_get_tag_i32(ctx, ry, tmp3);
+    tcg_gen_eqv_i32(eq, eq, tmp3);
+
+    // Cursor equal
+    tcg_gen_ld_i64(tmp1, cpu_env,
+                   offsetx + offsetof(cap_register_t, _cr_cursor));
+    tcg_gen_ld_i64(tmp2, cpu_env,
+                   offsety + offsetof(cap_register_t, _cr_cursor));
+    tcg_gen_setcond_i64(TCG_COND_EQ, tmp1, tmp1, tmp2);
+    tcg_gen_extrl_i64_i32(tmp3, tmp1);
+    tcg_gen_and_i32(eq, eq, tmp3);
+
+    // Pesbt equal
+    tcg_gen_ld_i64(tmp1, cpu_env, offsetx + offsetof(cap_register_t, cr_pesbt));
+    tcg_gen_ld_i64(tmp2, cpu_env, offsety + offsetof(cap_register_t, cr_pesbt));
+    tcg_gen_setcond_i64(TCG_COND_EQ, tmp1, tmp1, tmp2);
+    tcg_gen_extrl_i64_i32(tmp3, tmp1);
+    tcg_gen_and_i32(eq, eq, tmp3);
+
+    tcg_temp_free_i64(tmp1);
+    tcg_temp_free_i64(tmp2);
+    tcg_temp_free_i32(tmp3);
+}
+#endif // TARGET_CHERI
