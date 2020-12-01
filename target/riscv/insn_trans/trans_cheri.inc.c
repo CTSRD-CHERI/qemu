@@ -268,9 +268,7 @@ static inline bool trans_cinvoke(DisasContext *ctx, arg_cinvoke *a)
 {
     TCGv_i32 code_regnum = tcg_const_i32(a->rs1);
     TCGv_i32 data_regnum = tcg_const_i32(a->rs2);
-    TCGv target_addr = tcg_temp_new();
-    gen_helper_cinvoke(target_addr, cpu_env, code_regnum, data_regnum);
-    tcg_temp_free(target_addr);
+    gen_helper_cinvoke(cpu_env, code_regnum, data_regnum);
     tcg_temp_free_i32(code_regnum);
     tcg_temp_free_i32(data_regnum);
 

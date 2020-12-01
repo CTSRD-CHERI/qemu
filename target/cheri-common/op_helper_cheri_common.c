@@ -268,7 +268,8 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd, uint32_t cb,
 #endif
 }
 
-target_ulong CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum, uint32_t data_regnum))
+void CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum,
+                               uint32_t data_regnum))
 {
     GET_HOST_RETPC();
     const cap_register_t *code_cap = get_readonly_capreg(env, code_regnum);
@@ -315,8 +316,6 @@ target_ulong CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum, 
 #error "No CInvoke for this target"
 #endif
         update_capreg(env, CINVOKE_DATA_REGNUM, &idc);
-        // Return the branch target address
-        return cap_get_cursor(code_cap);
     }
 }
 
