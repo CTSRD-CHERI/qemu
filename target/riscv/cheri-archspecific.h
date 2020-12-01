@@ -32,6 +32,8 @@
  */
 #pragma once
 
+#define ZERO_REG_NUM 0
+
 #include "cpu.h"
 #include "cheri-lazy-capregs.h"
 #include "exec/log_instr.h"

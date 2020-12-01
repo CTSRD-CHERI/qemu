@@ -67,13 +67,22 @@ typedef enum CapRegState {
     /// The tag bit can be read from the cap_register_t structure.
     CREG_FULLY_DECOMPRESSED = 0b11
 } CapRegState;
+
+// Cap registers should be padded so they are easier to move.
+_Static_assert(sizeof(cap_register_t) == 64, "");
+// pesbt should come directly before reg._cr_cursor, so that the two can be
+// moved with a single 128bit vector op.
+_Static_assert((offsetof(cap_register_t, cached_pesbt) -
+                offsetof(cap_register_t, _cr_cursor)) == 8,
+               "");
+
 typedef struct GPCapRegs {
-#if QEMU_USE_COMPRESSED_CHERI_CAPS
-    target_ulong pesbt[32]; // permissions+exponent+sealing type+bottom+top
-#endif
-    uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
     // We cache the decompressed capregs here (to avoid constantly decompressing
+    // We use one of the padding fields as
     // values such as $csp which are used frequently)
-    cap_register_t decompressed[32];
-} GPCapRegs;
+    // 33 allows us to have an actual 0 register that is none of the others
+    cap_register_t decompressed[33];
+
+    uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
+} QEMU_ALIGNED(64) GPCapRegs;
 #endif
