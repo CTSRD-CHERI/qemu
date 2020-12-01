@@ -85,6 +85,16 @@ void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
               /*instavail=*/true, GETPC());
 }
 
+void CHERI_HELPER_IMPL(pcc_check_bounds(CPUArchState *env, target_ulong addr,
+        target_ulong num_bytes))
+{
+    const cap_register_t *pcc = cheri_get_recent_pcc(env);
+    cheri_debug_assert(pcc->cr_tag && cap_is_unsealed(pcc) &&
+                       "Should have been checked before bounds!");
+    check_cap(env, pcc, 0, addr, CHERI_EXC_REGNUM_PCC, num_bytes,
+            /*instavail=*/true, GETPC());
+}
+
 target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
                                               target_ulong pcc_offset,
                                               MemOp op))
