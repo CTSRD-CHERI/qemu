@@ -115,7 +115,8 @@ static inline bool validate_jump_target(CPUArchState *env,
 }
 
 static inline void update_next_pcc_for_tcg(CPUArchState *env,
-                                           const cap_register_t *target)
+                                           const cap_register_t *target,
+                                           uint32_t cjalr_flags)
 {
     assert_valid_jump_target(target);
     // On return to TCG we will jump there immediately, so update env->PCC now.

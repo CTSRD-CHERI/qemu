@@ -295,7 +295,11 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
 #undef MISSING_REQUIRED_PERM
 
     const target_ulong cursor = cap_get_cursor(cbp);
+#ifdef TARGET_AARCH64
+    const target_ulong addr = (target_long)offset;
+#else
     const target_ulong addr = cursor + (target_long)offset;
+#endif
     if (!cap_is_in_bounds(cbp, addr, size)) {
         qemu_log_instr_or_mask_msg(
             env, CPU_LOG_INT,
@@ -336,3 +340,10 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
     CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
     const cap_register_t *source, target_ulong vaddr, target_ulong retpc,
     hwaddr *physaddr, bool *raw_tag, int mmu_idx);
+
+void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
+                         target_ulong addr, uint32_t link_reg,
+                         target_ulong link_pc, uint32_t cjalr_flags);
+
+void squash_mutable_permissions(target_ulong *pesbt,
+                                const cap_register_t *source);

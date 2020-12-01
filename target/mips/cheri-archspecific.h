@@ -142,7 +142,8 @@ static inline bool validate_jump_target(CPUMIPSState *env,
 }
 
 static inline void update_next_pcc_for_tcg(CPUMIPSState *env,
-                                           const cap_register_t *target)
+                                           const cap_register_t *target,
+                                           uint32_t cjalr_flags)
 {
     assert_valid_jump_target(target);
     // The capability register is loaded into PCC using the
