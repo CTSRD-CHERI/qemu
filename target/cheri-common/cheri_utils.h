@@ -356,4 +356,19 @@ int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
 #define raise_cheri_exception(env, cause, reg)                                 \
     raise_cheri_exception_impl(env, cause, reg, true, _host_return_address)
 
+static inline void cap_set_cursor(cap_register_t *cap, uint64_t new_addr)
+{
+    if (!is_representable_cap_with_addr(cap, new_addr)) {
+        cap_mark_unrepresentable(new_addr, cap);
+    } else {
+        cap->_cr_cursor = new_addr;
+    }
+}
+
+static inline void cap_increment_offset(cap_register_t *cap, uint64_t offset)
+{
+    uint64_t new_addr = cap->_cr_cursor + offset;
+    return cap_set_cursor(cap, new_addr);
+}
+
 #endif /* TARGET_CHERI */
