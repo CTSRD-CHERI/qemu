@@ -123,6 +123,20 @@ typedef signed __int128 cap_offset_t;
 typedef unsigned __int128 cap_length_t;
 
 typedef enum CheriPermissions {
+#if defined(CHERI_128) || defined(CHERI_MAGIC128)
+    CAP_PERM_GLOBAL = CC128_PERM_GLOBAL,
+    CAP_PERM_EXECUTE = CC128_PERM_EXECUTE,
+    CAP_PERM_LOAD = CC128_PERM_LOAD,
+    CAP_PERM_STORE = CC128_PERM_STORE,
+    CAP_PERM_LOAD_CAP = CC128_PERM_LOAD_CAP,
+    CAP_PERM_STORE_CAP = CC128_PERM_STORE_CAP,
+    CAP_PERM_STORE_LOCAL = CC128_PERM_STORE_LOCAL,
+    CAP_PERM_SEAL = CC128_PERM_SEAL,
+    CAP_PERM_CINVOKE = CC128_PERM_CINVOKE,
+    CAP_PERM_UNSEAL = CC128_PERM_UNSEAL,
+    CAP_ACCESS_SYS_REGS = CC128_PERM_ACCESS_SYS_REGS,
+    CAP_PERM_SETCID = CC128_PERM_SETCID,
+#else // If there were a CC256_ prefix then a lot of the boilerplate in this file could go away
     CAP_PERM_GLOBAL = (1 << 0),
     CAP_PERM_EXECUTE = (1 << 1),
     CAP_PERM_LOAD = (1 << 2),
@@ -135,9 +149,15 @@ typedef enum CheriPermissions {
     CAP_PERM_UNSEAL = (1 << 9),
     CAP_ACCESS_SYS_REGS = (1 << 10),
     CAP_PERM_SETCID = (1 << 11),
+#endif
+#ifdef TARGET_AARCH64
+    CAP_PERM_EXECUTIVE = CC128_PERM_EXECUTIVE,
+#endif
+#if (defined(TARGET_MIPS) || defined(TARGET_RISCV)) && !defined(CHERI_64)
     CAP_RESERVED4 = (1 << 12),
     CAP_RESERVED5 = (1 << 13),
     CAP_RESERVED6 = (1 << 14),
+#endif
 } CheriPermissions;
 
 typedef enum CheriFlags {
@@ -173,6 +193,14 @@ typedef enum CheriTbFlags {
      * PCC spans the full adddress space and has base zero. This means we do
      * not need to perform bounds checks or subtract/add PCC.base
      */
-    TB_FLAG_PCC_FULL_AS = (1 << 7)
+
+    TB_FLAG_PCC_FULL_AS = (1 << 7),
+
+    TB_FLAG_CHERI_PCC_WRITABLE = (1 << 8),
+    TB_FLAG_CHERI_PCC_READABLE = (1 << 9),
+
+    /* Useful for CHERI-specific flags on various platforms if the normal flags overflowed */
+    TB_FLAG_CHERI_SPARE_INDEX_START = 16,
+
 } CheriTbFlags;
 #endif // TARGET_CHERI
