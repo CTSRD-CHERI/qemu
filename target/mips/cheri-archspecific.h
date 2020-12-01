@@ -38,6 +38,8 @@
  */
 #pragma once
 
+#define ZERO_REG_NUM 0
+
 #include "cheri_defs.h"
 #include "internal.h"
 
