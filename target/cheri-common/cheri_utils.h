@@ -200,6 +200,14 @@ static inline bool cap_is_representable(const cap_register_t* c) {
 #endif
 }
 
+static inline void assert_valid_jump_target(const cap_register_t *target)
+{
+    // All of these properties should have been checked in the helper:
+    cheri_debug_assert(cap_is_unsealed(target));
+    cheri_debug_assert(cap_has_perms(target, CAP_PERM_EXECUTE));
+    cheri_debug_assert(target->cr_tag);
+    cheri_debug_assert(cap_cursor_in_bounds(target));
+}
 
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {

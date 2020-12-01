@@ -131,3 +131,15 @@ static inline bool validate_jump_target(CPUMIPSState *env,
     }
     return true;
 }
+
+static inline void update_next_pcc_for_tcg(CPUMIPSState *env,
+                                           const cap_register_t *target)
+{
+    assert_valid_jump_target(target);
+    // The capability register is loaded into PCC using the
+    // copy_cap_btarget_to_pcc() helper. This helper is invoked after a
+    // potential delay slot (e.g. CJALR) or immediately after the instruction
+    // (e.g. CInvoke).
+    env->active_tc.CapBranchTarget = *target;
+    // Note: env->_pc_is_current is updated in copy_cap_btarget_to_pcc().
+}

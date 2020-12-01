@@ -252,20 +252,7 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd, uint32_t cb,
         cap_make_sealed_entry(&result);
         update_capreg(env, cd, &result);
     }
-
-#ifdef TARGET_MIPS
-    // The capability register is loaded into PCC during delay slot
-    env->active_tc.CapBranchTarget = next_pcc;
-#elif defined(TARGET_RISCV)
-    // Update PCC now. On return to TCG we will jump there immediately, so
-    // updating it now should be fine.
-    env->PCC = next_pcc;
-#ifdef CONFIG_DEBUG_TCG
-    env->_pc_is_current = true;
-#endif
-#else
-#error "No CJALR for this target"
-#endif
+    update_next_pcc_for_tcg(env, &next_pcc);
 }
 
 void CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum,
@@ -302,19 +289,7 @@ void CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum,
         cap_set_unsealed(&idc);
         cap_register_t target = *code_cap;
         cap_set_unsealed(&target);
-#ifdef TARGET_MIPS
-        // The capability register is loaded into PCC during delay slot
-        env->active_tc.CapBranchTarget = target;
-#elif defined(TARGET_RISCV)
-        // Update PCC now. On return to TCG we will jump there immediately, so
-        // updating it now should be fine.
-        env->PCC = target;
-#ifdef CONFIG_DEBUG_TCG
-        env->_pc_is_current = true;
-#endif
-#else
-#error "No CInvoke for this target"
-#endif
+        update_next_pcc_for_tcg(env, &target);
         update_capreg(env, CINVOKE_DATA_REGNUM, &idc);
     }
 }
