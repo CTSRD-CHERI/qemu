@@ -1394,3 +1394,8 @@ void CHERI_HELPER_IMPL(raise_exception_ddc_bounds(CPUArchState *env,
                  PRINT_CAP_ARGS(cheri_get_ddc(env)));
     tcg_abort();
 }
+
+void CHERI_HELPER_IMPL(decompress_cap(CPUArchState *env, uint32_t regndx))
+{
+    get_readonly_capreg(env, regndx);
+}
