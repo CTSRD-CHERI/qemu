@@ -175,19 +175,37 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
     tcg_abort();
 }
 
+// Return a CREG or DDC or PCC.
+static inline __attribute__((always_inline)) const cap_register_t *
+get_capreg_or_special(CPUArchState *env, unsigned regnum)
+{
+
+    if (unlikely(regnum == CHERI_EXC_REGNUM_PCC))
+        return _cheri_get_pcc_unchecked(env);
+    if (unlikely(regnum == CHERI_EXC_REGNUM_DDC))
+        return cheri_get_ddc(env);
+    else
+        return get_readonly_capreg(env, regnum);
+}
+
 /// return a read-only capability register with register number 0 meaning $ddc
 /// This is useful for cl*/cs*/cll*/csc*/cfromptr/cbuildcap since using $ddc as
 /// the address argument there will cause a trap We also use it for the cb
 /// argument to ctoptr/cbuildcap since using a ctoptr relative to $ddc make
 /// sense whereas using it relative to NULL is the same as just cmove $cN,
 /// $cnull
+/// 0 can only be DDC on mips/risv. On Morello 0 is always normal register.
+/// Having the switch here rather than in general code makes things slightly
+/// neater. We could always call this "0_is_maybe_ddc" to be less confusing.
 static inline __attribute__((always_inline)) const cap_register_t *
 get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 {
-    if (unlikely(regnum == 0)) {
-        return cheri_get_ddc(env);
-    }
-    return get_readonly_capreg(env, regnum);
+#ifdef TARGET_AARCH64
+    return get_capreg_or_special(env, regnum);
+#else
+    return get_capreg_or_special(env,
+                                 regnum == 0 ? CHERI_EXC_REGNUM_DDC : regnum);
+#endif
 }
 
 
@@ -237,6 +255,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     // writing to $c0/$cnull is a no-op
     if (unlikely(regnum == NULL_CAPREG_INDEX))
         return;
+
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     cap_register_t *target = get_cap_in_gpregs(gpcrs, regnum);
     *target = *newval;
