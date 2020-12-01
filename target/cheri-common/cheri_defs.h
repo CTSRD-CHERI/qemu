@@ -38,6 +38,10 @@
 # define cheri_debug_assert(X) ((void)0)
 #endif
 
+#ifdef TARGET_IS_MORELLO
+#define CC_IS_MORELLO TARGET_IS_MORELLO
+#endif
+
 #ifdef TARGET_CHERI
 
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
@@ -116,6 +120,9 @@ typedef enum CheriPermissions {
     CAP_PERM_UNSEAL = CAP_CC(PERM_UNSEAL),
     CAP_ACCESS_SYS_REGS = CAP_CC(PERM_ACCESS_SYS_REGS),
     CAP_PERM_SETCID = CAP_CC(PERM_SETCID),
+#ifdef TARGET_AARCH64
+    CAP_PERM_EXECUTIVE = CAP_CC(PERM_EXECUTIVE),
+#endif
 } CheriPermissions;
 
 typedef enum CheriFlags {

@@ -431,11 +431,7 @@ static inline void gen_check_cond_branch_target(DisasContext *ctx,
 // This function belongs in a target specific header
 static inline uint32_t gp_register_offset(int reg_num)
 {
-#ifdef TARGET_MIPS
-    return offsetof(CPUArchState, active_tc.gpcapregs.decompressed[reg_num]);
-#else
-    return offsetof(CPUArchState, gpcapregs.decompressed[reg_num]);
-#endif
+    return offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.decompressed[reg_num]);
 }
 
 // Copies some number of bytes between min_size and max_size.
@@ -548,14 +544,11 @@ static inline void gen_lazy_cap_set_int(DisasContext *ctx, int regnum)
 static inline void gen_lazy_cap_get_state(DisasContext *ctx, TCGv_i32 val,
                                           int regnum)
 {
-#ifdef TARGET_MIPS
-    g_assert_not_reached(); // Not supported on MIPS
-#else
-    tcg_gen_ld8u_i32(val, cpu_env,
-                     offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
-    cheri_tcg_printf_verbose("cw", "Register %d lazy state get: %d\n", regnum,
-                             val);
-#endif
+    tcg_gen_ld8u_i32(
+        val, cpu_env,
+        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+    // cheri_tcg_printf_verbose("cw", "Register %d lazy state get: %d\n",
+    // regnum, val);
 }
 
 // Set a lazy GP to the state of a special purpose register in env
@@ -590,6 +583,68 @@ static inline void gen_move_cap_gp_gp(DisasContext *ctx, int dest_num,
     gen_lazy_cap_set_state(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
 }
 
+// TCG templates to directly modify fields in PESBT. Hopefully we will
+// eventually delete most fields and use these. Until then, if a field is
+// modified (in decompressed state), then pesbt should be modified too so
+// comparisons works.
+
+// TODO: for things in integer state we can just return 0's without loads and
+// stores
+#define WRAP_PESBT_EXTRACT(name)                                               \
+    static inline void gen_cap_pesbt_extract_##name(DisasContext *ctx,         \
+                                                    int regnum, TCGv result)   \
+    {                                                                          \
+        tcg_gen_ld_tl(result, cpu_env,                                         \
+                      gp_register_offset(regnum) +                             \
+                          offsetof(cap_register_t, cr_pesbt));                 \
+        tcg_gen_extract_tl(result, result, CAP_CC(FIELD_##name##_START),       \
+                           CAP_CC(FIELD_##name##_SIZE));                       \
+    }
+
+#define WRAP_PESBT_X(name, X, clear, invert, op, ...)                          \
+    static inline void gen_cap_pesbt_##X##_##name(DisasContext *ctx,           \
+                                                  int regnum, TCGv value)      \
+    {                                                                          \
+        uint32_t offset =                                                      \
+            gp_register_offset(regnum) + offsetof(cap_register_t, cr_pesbt);   \
+        tcg_gen_shli_tl(value, value, CAP_CC(FIELD_##name##_START));           \
+        if (invert)                                                            \
+            tcg_gen_not_tl(value, value);                                      \
+        TCGv pesbt = tcg_temp_new();                                           \
+        tcg_gen_ld_tl(pesbt, cpu_env, offset);                                 \
+        if (clear)                                                             \
+            tcg_gen_andi_tl(pesbt, pesbt,                                      \
+                            ~(target_ulong)(CAP_CC(FIELD_##name##_MASK64)));   \
+        tcg_gen_##op##_tl(pesbt, pesbt, __VA_ARGS__);                          \
+        tcg_gen_st_tl(pesbt, cpu_env, offset);                                 \
+        tcg_temp_free(pesbt);                                                  \
+    }
+
+static inline void gen_cap_load_pesbt(DisasContext *ctx, int regnum, TCGv pesbt)
+{
+    tcg_gen_ld_tl(pesbt, cpu_env,
+                  gp_register_offset(regnum) +
+                      offsetof(cap_register_t, cr_pesbt));
+}
+
+#define WRAP_PESBT_DEPOSIT(name)                                               \
+    WRAP_PESBT_X(name, deposit, true, false, or, value)
+#define WRAP_PESBT_SET(name) WRAP_PESBT_X(name, set, false, false, or, value)
+#define WRAP_PESBT_CLEAR(name)                                                 \
+    WRAP_PESBT_X(name, clear, false, true, and, value)
+
+#define WRAP_PESBT_ALL(name)                                                   \
+    WRAP_PESBT_EXTRACT(name)                                                   \
+    WRAP_PESBT_DEPOSIT(name)                                                   \
+    WRAP_PESBT_SET(name)                                                       \
+    WRAP_PESBT_CLEAR(name)
+
+WRAP_PESBT_ALL(OTYPE)
+WRAP_PESBT_ALL(HWPERMS)
+#ifndef TARGET_ARRCH64
+WRAP_PESBT_ALL(FLAGS)
+#endif
+
 // If sealed untag, otherwise mark unrepsentable if out of bounds
 static inline void gen_cap_modified(DisasContext *ctx, int regnum)
 {
@@ -608,13 +663,9 @@ static inline void gen_cap_set_tag(DisasContext *ctx, int regnum, TCGv tagbit)
     _Static_assert(CREG_UNTAGGED_CAP == 1 && CREG_TAGGED_CAP == 2,
                    "Optimised for these values");
     tcg_gen_add_tl(tagbit, tagbit, one);
-#ifdef TARGET_MIPS
-    tcg_gen_st8_i64(tagbit, cpu_env,
-                    offsetof(CPUArchState, active_tc.gpcapregs.capreg_state[regnum]));
-#else
-    tcg_gen_st8_i64(tagbit, cpu_env,
-                    offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
-#endif
+    tcg_gen_st8_tl(
+        tagbit, cpu_env,
+        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
     tcg_temp_free(one);
 }
 
@@ -648,6 +699,34 @@ static inline void gen_cap_get_tag(DisasContext *ctx, int regnum,
     gen_cap_get_tag_i32(ctx, regnum, tag32);
     tcg_gen_extu_i32_i64(tagged, tag32);
     tcg_temp_free_i32(tag32);
+}
+
+static inline void gen_cap_get_type(DisasContext *ctx, int regnum, TCGv type)
+{
+    gen_cap_pesbt_extract_OTYPE(ctx, regnum, type);
+}
+
+static inline void gen_cap_get_sealed(DisasContext *ctx, int regnum,
+                                      TCGv sealed)
+{
+    gen_cap_get_type(ctx, regnum, sealed);
+    TCGv type_unsealed = tcg_const_tl(CAP_OTYPE_UNSEALED);
+    tcg_gen_setcond_tl(TCG_COND_NE, sealed, sealed, type_unsealed);
+    tcg_temp_free(type_unsealed);
+}
+
+static inline void gen_cap_get_sealed_i32(DisasContext *ctx, int regnum,
+                                          TCGv_i32 sealed)
+{
+    TCGv sealedv = tcg_temp_new();
+    gen_cap_get_sealed(ctx, regnum, sealedv);
+    tcg_gen_trunc_tl_i32(sealed, sealedv);
+    tcg_temp_free(sealedv);
+}
+
+static inline void gen_cap_get_perms(DisasContext *ctx, int regnum, TCGv perms)
+{
+    gen_cap_pesbt_extract_HWPERMS(ctx, regnum, perms);
 }
 
 static inline void gen_cap_get_hi(DisasContext *ctx, int regnum, TCGv_i64 lim)
@@ -751,6 +830,17 @@ static inline void gen_cap_get_offset(DisasContext *ctx, int regnum,
     gen_cap_get_base(ctx, regnum, base);
     tcg_gen_sub_i64(offset, offset, base);
     tcg_temp_free_i64(base);
+}
+
+static inline void gen_cap_get_flags(DisasContext *ctx, int regnum, TCGv flags)
+{
+#ifdef TARGET_AARCH64
+    // Morello flags are just different from CHERI flags.
+    gen_cap_get_cursor(ctx, regnum, flags);
+    tcg_gen_andi_i64(flags, flags, 0xFFULL << (64 - MORELLO_FLAG_BITS));
+#else
+    gen_cap_pesbt_extract_FLAGS(ctx, regnum, flags);
+#endif
 }
 
 // Returns a boolean if rx and ry have equal pesbt/tag/cursor.

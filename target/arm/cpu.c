@@ -40,13 +40,23 @@
 #include "disas/capstone.h"
 #include "fpu/softfloat.h"
 
+#ifdef TARGET_CHERI
+
+const char *const cheri_gp_regnames[32] = {
+    "c0",  "c1",  "c2",  "c3",  "c4",  "c5",  "c6",  "c7",
+    "c8",  "c9",  "c10", "c11", "c12", "c13", "c14", "c15",
+    "c16", "c17", "c18", "c19", "c20", "c21", "c22", "c23",
+    "c24", "c25", "c26", "c27", "c28", "c29", "c30", "csp/czr"};
+
+#endif
+
 static void arm_cpu_set_pc(CPUState *cs, vaddr value)
 {
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
 
     if (is_a64(env)) {
-        env->pc = value;
+        set_aarch_reg_value(&env->pc, value);
         env->thumb = 0;
     } else {
         env->regs[15] = value & ~1;
@@ -65,7 +75,8 @@ static void arm_cpu_synchronize_from_tb(CPUState *cs,
      * never possible for an AArch64 TB to chain to an AArch32 TB.
      */
     if (is_a64(env)) {
-        env->pc = tb->pc;
+        // LETODO: I dont know if this needs bounds checking
+        set_aarch_reg_value(&env->pc, tb->pc);
     } else {
         env->regs[15] = tb->pc;
     }
@@ -128,7 +139,12 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
         return;
     }
 
-    if (cpreg_field_is_64bit(ri)) {
+#ifdef TARGET_CHERI
+    if (cpreg_field_is_cap(ri)) {
+        CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
+    } else
+#endif
+        if (cpreg_field_is_64bit(ri)) {
         CPREG_FIELD64(&cpu->env, ri) = ri->resetvalue;
     } else {
         CPREG_FIELD32(&cpu->env, ri) = ri->resetvalue;
@@ -217,7 +233,14 @@ static void arm_cpu_reset(DeviceState *dev)
         } else {
             env->pstate = PSTATE_MODE_EL1h;
         }
+
+#ifdef TARGET_CHERI
+        reset_capregs(env);
+        env->pc.cap = cc128_make_max_perms_cap(0, cpu->rvbar, CAP_MAX_TOP);
+#else
         env->pc = cpu->rvbar;
+#endif
+
 #endif
     } else {
 #if defined(CONFIG_USER_ONLY)
@@ -787,12 +810,13 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     int el = arm_current_el(env);
     const char *ns_status;
 
-    qemu_fprintf(f, " PC=%016" PRIx64 " ", env->pc);
+    qemu_fprintf(f, " PC=%016" PRIx64 " ", get_aarch_reg_as_x(&env->pc));
     for (i = 0; i < 32; i++) {
+        target_ulong reg = arm_get_xreg(env, i);
         if (i == 31) {
-            qemu_fprintf(f, " SP=%016" PRIx64 "\n", env->xregs[i]);
+            qemu_fprintf(f, " SP=%016" PRIx64 "\n", reg);
         } else {
-            qemu_fprintf(f, "X%02d=%016" PRIx64 "%s", i, env->xregs[i],
+            qemu_fprintf(f, "X%02d=%016" PRIx64 "%s", i, reg,
                          (i + 2) % 3 ? " " : "\n");
         }
     }
