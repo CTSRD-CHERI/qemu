@@ -70,6 +70,9 @@ DEF_HELPER_3(cinvoke, void, env, i32, i32)
 
 // Two operands (cap int)
 DEF_HELPER_3(ccheckperm, void, env, i32, tl)
+DEF_HELPER_3(cgetpccsetoffset, void, env, i32, tl)
+DEF_HELPER_3(cgetpccincoffset, void, env, i32, tl)
+DEF_HELPER_3(cgetpccsetaddr, void, env, i32, tl)
 
 // Two operands (int int)
 DEF_HELPER_FLAGS_2(crap, TCG_CALL_NO_RWG_SE, tl, env, tl)

@@ -59,6 +59,14 @@
         (deprecated("Do not call the helper directly, it will crash at "       \
                     "runtime. Call the _impl variant instead"))) helper_##name
 
+#ifdef DO_CHERI_STATISTICS
+
+static DEFINE_CHERI_STAT(cgetpccsetoffset);
+static DEFINE_CHERI_STAT(cgetpccincoffset);
+static DEFINE_CHERI_STAT(cgetpccsetaddr);
+
+#endif
+
 static inline bool is_cap_sealed(const cap_register_t *cp)
 {
     // TODO: remove this function and update all callers to use the correct
@@ -86,6 +94,30 @@ target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
     check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
               memop_size(op), /*instavail=*/true, retpc);
     return addr;
+}
+
+void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd,
+                                        target_ulong rs))
+{
+    // PCC.cursor does not need to be up-to-date here since we only look at the
+    // base.
+    uint64_t new_addr = rs + cap_get_base(cheri_get_recent_pcc(env));
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
+}
+
+void CHERI_HELPER_IMPL(cgetpccincoffset(CPUArchState *env, uint32_t cd,
+                                        target_ulong rs))
+{
+    uint64_t new_addr = rs + PC_ADDR(env);
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
+}
+
+// LETODO: This is basically the riscv auipc again. Should probably refactor.
+void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd,
+                                      target_ulong rs))
+{
+    uint64_t new_addr = rs;
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
 void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
