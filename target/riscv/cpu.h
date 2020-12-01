@@ -545,6 +545,13 @@ void rvfi_dii_communicate(CPUState *cs, CPURISCVState *env, bool was_trap);
         gen_rvfi_dii_set_field(type, field, tmp);                              \
         tcg_temp_free_i64(tmp);                                                \
     } while (0)
+#if TARGET_LONG_BITS == 32
+#define gen_rvfi_dii_set_field_zext_tl(type, field, arg)                       \
+    gen_rvfi_dii_set_field_zext_i32(type, field, arg)
+#else
+#define gen_rvfi_dii_set_field_zext_tl(type, field, arg)                       \
+    gen_rvfi_dii_set_field(type, field, arg)
+#endif
 #define gen_rvfi_dii_set_field_zext_addr(type, field, arg)                     \
     do {                                                                       \
         CHECK_SAME_TYPE(TCGv_cap_checked_ptr, typeof(arg), "Expected addr");   \
@@ -557,6 +564,7 @@ void rvfi_dii_communicate(CPUState *cs, CPURISCVState *env, bool was_trap);
 #define gen_rvfi_dii_set_field(type, field, arg) ((void)0)
 #define gen_rvfi_dii_set_field_zext_i32(type, field, arg) ((void)0)
 #define gen_rvfi_dii_set_field_zext_addr(type, field, arg) ((void)0)
+#define gen_rvfi_dii_set_field_zext_tl(type, field, arg) ((void)0)
 #define gen_rvfi_dii_set_field_const_i8(type, field, constant) ((void)0)
 #define gen_rvfi_dii_set_field_const_i16(type, field, constant) ((void)0)
 #define gen_rvfi_dii_set_field_const_i32(type, field, constant) ((void)0)

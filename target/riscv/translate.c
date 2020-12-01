@@ -241,7 +241,7 @@ static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t)
         tcg_gen_mov_tl(cpu_gpr[reg_num_dst], t);
 #endif
         gen_rvfi_dii_set_field_const_i8(INTEGER, rd_addr, reg_num_dst);
-        gen_rvfi_dii_set_field(INTEGER, rd_wdata, t);
+        gen_rvfi_dii_set_field_zext_tl(INTEGER, rd_wdata, t);
 #ifdef CONFIG_TCG_LOG_INSTR
         // Log GPR writes here
         if (unlikely(ctx->base.log_instr_enabled)) {

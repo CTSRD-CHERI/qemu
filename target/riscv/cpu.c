@@ -24,6 +24,7 @@
 #include "qemu/main-loop.h"
 #include "cpu.h"
 #include "exec/exec-all.h"
+#include "exec/log_instr.h"
 #include "qapi/error.h"
 #include "qemu/error-report.h"
 #include "qemu-common.h"
@@ -486,10 +487,12 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env, bool was_trap) {
         assert(cs->singlestep_enabled);
         rvfi_dii_command_t cmd_buf;
         _Static_assert(sizeof(cmd_buf) == 8, "Expected 8 bytes of data");
+#ifdef CONFIG_TCG_LOG_INSTR
         // Print the instruction now and skip the next commit() call that
         // happens when we return to the translator loop.
         qemu_log_instr_commit(env);
         qemu_log_instr_drop(env); // Avoid an invalid instruction log
+#endif
         if (rvfi_dii_started) {
             // Send previous state
             rvfi_dii_send_trace(env, rvfi_dii_version);
