@@ -99,8 +99,14 @@ static inline target_long cap_get_otype(const cap_register_t* c) {
         assert(!c->cr_tag && "Capabilities with otype > max cannot be tagged!");
         return result;
     }
+
+#ifdef TARGET_AARCH64
+    // Morello does not sign extend like the rest of CHERI
+    return result;
+#else
     // "sign" extend to a 64-bit number by subtracting the maximum: e.g. 2^24-1 -> 2^64-1
     return result < CAP_LAST_NONRESERVED_OTYPE ? result : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
+#endif
 }
 
 static inline bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *ctp)
@@ -114,7 +120,12 @@ static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
     if (c->cr_tag) {
         cheri_debug_assert(c->cr_otype <= CAP_MAX_REPRESENTABLE_OTYPE);
     }
+#ifdef TARGET_AARCH64
+    // Morello has positive signed otypes
+    return c->cr_otype > CAP_LAST_NONRESERVED_OTYPE;
+#else
     return c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE;
+#endif
 }
 
 // Check if num_bytes bytes at addr can be read using capability c
@@ -158,18 +169,24 @@ static inline QEMU_ALWAYS_INLINE bool cap_has_perms(const cap_register_t *reg,
 static inline bool cap_is_unsealed(const cap_register_t* c) {
     // TODO: how should we treat the other reserved types? as sealed?
     // TODO: what about untagged capabilities with out-of-range otypes?
+#ifdef TARGET_AARCH64
+    return c->cr_otype == CAP_OTYPE_UNSEALED;
+#else
     _Static_assert(CAP_MAX_REPRESENTABLE_OTYPE == CAP_OTYPE_UNSEALED, "");
     if (c->cr_tag) {
         cheri_debug_assert(c->cr_otype <= CAP_MAX_REPRESENTABLE_OTYPE);
     }
     return c->cr_otype >= CAP_OTYPE_UNSEALED;
+#endif
 }
 
 static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
     assert(c->cr_tag);
     assert(c->cr_otype == CAP_OTYPE_UNSEALED && "should not use this on caps with reserved otypes");
     assert(type <= CAP_LAST_NONRESERVED_OTYPE);
+#ifndef TARGET_AARCH64
     _Static_assert(CAP_LAST_NONRESERVED_OTYPE < CAP_OTYPE_UNSEALED, "");
+#endif
     CAP_cc(cap_set_decompressed_cr_otype)(c, type);
 }
 
