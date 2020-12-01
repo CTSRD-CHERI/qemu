@@ -267,7 +267,7 @@ static void arm_semi_cb(CPUState *cs, target_ulong ret, target_ulong err)
 {
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
-    target_ulong reg0 = is_a64(env) ? env->xregs[0] : env->regs[0];
+    target_ulong reg0 = arm_get_xreg(env, 0);
 
     if (ret == (target_ulong)-1) {
         errno = err;
@@ -288,11 +288,8 @@ static void arm_semi_cb(CPUState *cs, target_ulong ret, target_ulong err)
             break;
         }
     }
-    if (is_a64(env)) {
-        env->xregs[0] = reg0;
-    } else {
-        env->regs[0] = reg0;
-    }
+
+    arm_set_xreg(env, 0, reg0);
 }
 
 static target_ulong arm_flen_buf(ARMCPU *cpu)
@@ -303,13 +300,7 @@ static target_ulong arm_flen_buf(ARMCPU *cpu)
      * We put this on the guest's stack just below SP.
      */
     CPUARMState *env = &cpu->env;
-    target_ulong sp;
-
-    if (is_a64(env)) {
-        sp = env->xregs[31];
-    } else {
-        sp = env->regs[13];
-    }
+    target_ulong sp = arm_get_xreg(env, 31);
 
     return sp - 64;
 }
@@ -323,11 +314,8 @@ static void arm_semi_flen_cb(CPUState *cs, target_ulong ret, target_ulong err)
     uint32_t size;
     cpu_memory_rw_debug(cs, arm_flen_buf(cpu) + 32, (uint8_t *)&size, 4, 0);
     size = be32_to_cpu(size);
-    if (is_a64(env)) {
-        env->xregs[0] = size;
-    } else {
-        env->regs[0] = size;
-    }
+    arm_set_xreg(env, 0, size);
+
     errno = err;
     set_swi_errno(env, -1);
 }
@@ -347,11 +335,7 @@ static void arm_semi_open_cb(CPUState *cs, target_ulong ret, target_ulong err)
         ret = arm_semi_open_guestfd;
     }
 
-    if (is_a64(env)) {
-        env->xregs[0] = ret;
-    } else {
-        env->regs[0] = ret;
-    }
+    arm_set_xreg(env, 0, ret);
 }
 
 static target_ulong arm_gdb_syscall(ARMCPU *cpu, gdb_syscall_complete_cb cb,
@@ -380,8 +364,7 @@ static target_ulong arm_gdb_syscall(ARMCPU *cpu, gdb_syscall_complete_cb cb,
      * do_arm_semihosting() return a value, so the mistake of
      * doing something with the return value is not possible to make.
      */
-
-    return is_a64(env) ? env->xregs[0] : env->regs[0];
+    return arm_get_xreg(env, 0);
 }
 
 /*
@@ -686,14 +669,9 @@ target_ulong do_arm_semihosting(CPUARMState *env)
     uint32_t len;
     GuestFD *gf;
 
-    if (is_a64(env)) {
-        /* Note that the syscall number is in W0, not X0 */
-        nr = env->xregs[0] & 0xffffffffU;
-        args = env->xregs[1];
-    } else {
-        nr = env->regs[0];
-        args = env->regs[1];
-    }
+    /* Note that the syscall number is in W0, not X0 */
+    nr = arm_get_xreg(env, 0) & 0xffffffffU;
+    args = arm_get_xreg(env, 1);
 
     switch (nr) {
     case TARGET_SYS_OPEN:
