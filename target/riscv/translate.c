@@ -37,7 +37,6 @@
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs.h"
 static TCGv _cpu_cursors_do_not_access_directly[32];
-static TCGv_i64 cpu_capreg_state; // 32 times 2 bits
 static TCGv cpu_pc;  // Note: this is PCC.cursor
 #else
 static TCGv cpu_gpr[32], cpu_pc;
