@@ -98,7 +98,7 @@ static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t 
         TCGv_i32 tcb = tcg_const_i32(cb);
 
         if (select == CCALL_SELECTOR_1)
-            gen_helper_ccall_notrap(btarget, cpu_env, tcs, tcb);
+            gen_helper_cinvoke(cpu_env, tcs, tcb);
         else if(select == CCALL_SELECTOR_2)
             gen_helper_ccall_notrap2(btarget, cpu_env, tcs, tcb);
         else
