@@ -149,6 +149,8 @@ GEN_ATOMIC_HELPERS(xchg)
 // have been checked before.
 DEF_HELPER_3(ddc_check_bounds, void, env, tl, tl)
 /* Same but relative to PCC */
+DEF_HELPER_3(pcc_check_bounds, void, env, tl, tl)
+/* Checks for loads relative to pcc */
 DEF_HELPER_3(pcc_check_load, cap_checked_ptr, env, tl, memop)
 /* Clear tags due to a store. Only calll this after the store succeeded. */
 DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop)
