@@ -37,6 +37,13 @@
 #include "trace-tcg.h"
 #include "exec/log.h"
 
+#ifdef TARGET_CHERI
+    // This doesnt have to work - only compile. All 64-bit loads and stores are in translate-a64.
+    #define tcg_gen_qemu_ld_i64(result, addr, index, opc) (void)result; (void)addr; (void)index; (void)opc; assert(0 && "unreachable")
+    #define tcg_gen_qemu_ld_i32(result, addr, index, opc) (void)result; (void)addr; (void)index; (void)opc; assert(0 && "unreachable")
+    #define tcg_gen_qemu_st_i64(result, addr, index, opc) (void)result; (void)addr; (void)index; (void)opc; assert(0 && "unreachable")
+    #define tcg_gen_qemu_st_i32(result, addr, index, opc) (void)result; (void)addr; (void)index; (void)opc; assert(0 && "unreachable")
+#endif
 
 #define ENABLE_ARCH_4T    arm_dc_feature(s, ARM_FEATURE_V4T)
 #define ENABLE_ARCH_5     arm_dc_feature(s, ARM_FEATURE_V5)
@@ -61,6 +68,9 @@
 static TCGv_i64 cpu_V0, cpu_V1, cpu_M0;
 /* These are TCG globals which alias CPUARMState fields */
 static TCGv_i32 cpu_R[16];
+// NF stores and VF have N and V as their highest bit.
+// ZF is zero if Z bit should be set.
+// CF has the lowest bit set if C is set.
 TCGv_i32 cpu_CF, cpu_NF, cpu_VF, cpu_ZF;
 TCGv_i64 cpu_exclusive_addr;
 TCGv_i64 cpu_exclusive_val;
@@ -5003,8 +5013,11 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
         }
         tcg_temp_free_i32(t2);
 
+        ASSERT_IF_CHERI();
+#ifndef TARGET_CHERI
         tcg_gen_atomic_cmpxchg_i64(o64, taddr, cpu_exclusive_val, n64,
                                    get_mem_index(s), opc);
+#endif
         tcg_temp_free_i64(n64);
 
         tcg_gen_setcond_i64(TCG_COND_NE, o64, o64, cpu_exclusive_val);
@@ -5014,7 +5027,10 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
     } else {
         t2 = tcg_temp_new_i32();
         tcg_gen_extrl_i64_i32(t2, cpu_exclusive_val);
+        ASSERT_IF_CHERI();
+#ifndef TARGET_CHERI
         tcg_gen_atomic_cmpxchg_i32(t0, taddr, t2, t1, get_mem_index(s), opc);
+#endif
         tcg_gen_setcond_i32(TCG_COND_NE, t0, t0, t2);
         tcg_temp_free_i32(t2);
     }
@@ -6709,7 +6725,10 @@ static bool op_swp(DisasContext *s, arg_SWP *a, MemOp opc)
     tcg_temp_free_i32(addr);
 
     tmp = load_reg(s, a->rt2);
+    ASSERT_IF_CHERI();
+#ifndef TARGET_CHERI
     tcg_gen_atomic_xchg_i32(tmp, taddr, tmp, get_mem_index(s), opc);
+#endif
     tcg_temp_free(taddr);
 
     store_reg(s, a->rt, tmp);
@@ -9278,6 +9297,10 @@ void gen_intermediate_code(CPUState *cpu, TranslationBlock *tb, int max_insns)
     if (FIELD_EX32(tb->flags, TBFLAG_ANY, AARCH64_STATE)) {
         ops = &aarch64_translator_ops;
     }
+#ifdef TARGET_CHERI
+    // THUMB has not been cheri-fied
+    else assert(0);
+#endif
 #endif
 
     translator_loop(ops, &dc.base, cpu, tb, max_insns);
@@ -9287,7 +9310,8 @@ void restore_state_to_opc(CPUARMState *env, TranslationBlock *tb,
                           target_ulong *data)
 {
     if (is_a64(env)) {
-        env->pc = data[0];
+        ASSERT_IF_CHERI();
+        set_aarch_reg_to_x(&env->pc,data[0]);
         env->condexec_bits = 0;
         env->exception.syndrome = data[2] << ARM_INSN_START_WORD2_SHIFT;
     } else {

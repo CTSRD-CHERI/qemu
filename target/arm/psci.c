@@ -35,7 +35,7 @@ bool arm_is_psci_call(ARMCPU *cpu, int excp_type)
      * to EL2 or to EL3).
      */
     CPUARMState *env = &cpu->env;
-    uint64_t param = is_a64(env) ? env->xregs[0] : env->regs[0];
+    uint64_t param = is_a64(env) ? arm_get_xreg(env, 0) : env->regs[0];
 
     switch (excp_type) {
     case EXCP_HVC:
@@ -98,7 +98,7 @@ void arm_handle_psci_call(ARMCPU *cpu)
          * arguments so we can simply zero-extend all arguments regardless
          * of which exact function we are about to call.
          */
-        param[i] = is_a64(env) ? env->xregs[i] : env->regs[i];
+        param[i] = is_a64(env) ? arm_get_xreg(env,i) : env->regs[i];
     }
 
     if ((param[0] & QEMU_PSCI_0_2_64BIT) && !is_a64(env)) {
@@ -186,7 +186,7 @@ void arm_handle_psci_call(ARMCPU *cpu)
         }
         /* Powerdown is not supported, we always go into WFI */
         if (is_a64(env)) {
-            env->xregs[0] = 0;
+            arm_set_xreg(env, 0, 0);
         } else {
             env->regs[0] = 0;
         }
@@ -202,7 +202,7 @@ void arm_handle_psci_call(ARMCPU *cpu)
 
 err:
     if (is_a64(env)) {
-        env->xregs[0] = ret;
+        arm_set_xreg(env, 0, ret);
     } else {
         env->regs[0] = ret;
     }

@@ -260,6 +260,8 @@ static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr,
     paddr = cpu_mips_translate_address_c2(env, vaddr, rw, reg, prot, pc);
 #elif defined(TARGET_RISCV)
     paddr = cpu_riscv_translate_address_tagmem(env, vaddr, rw, reg, prot, pc);
+#elif defined(TARGET_AARCH64)
+    paddr = cpu_arm_translate_address_tagmem(env, vaddr, rw, reg, prot, pc);
 #else
 #error "TODO: IMPLEMENT cpu_translate_address_tagmem"
 #endif

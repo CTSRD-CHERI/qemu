@@ -27,7 +27,7 @@
 # Since: 3.0
 ##
 { 'enum' : 'SysEmuTarget',
-  'data' : [ 'aarch64', 'alpha', 'arm', 'avr', 'cris', 'hppa', 'i386', 'lm32',
+  'data' : [ 'aarch64', 'morello', 'alpha', 'arm', 'avr', 'cris', 'hppa', 'i386', 'lm32',
              'm68k', 'microblaze', 'microblazeel', 'mips', 'mips64',
              'mips64cheri128', 'mips64cheri128magic',
              'mips64el', 'mipsel', 'moxie', 'nios2', 'or1k', 'ppc',
