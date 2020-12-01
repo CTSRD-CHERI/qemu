@@ -930,3 +930,7 @@ DEF_HELPER_FLAGS_5(neon_sqrdmulh_s, TCG_CALL_NO_RWG,
 #include "helper-a64.h"
 #include "helper-sve.h"
 #endif
+
+#ifdef TARGET_CHERI
+#include "helper-cheri.h"
+#endif

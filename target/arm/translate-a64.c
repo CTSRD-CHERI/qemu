@@ -39,8 +39,16 @@
 #include "translate-a64.h"
 #include "qemu/atomic128.h"
 
+#include "cheri-translate-utils.h"
+
+#ifdef TARGET_CHERI
+#include "cheri-lazy-capregs.h"
+static TCGv _cpu_cursors_do_not_access_directly[32];
+static TCGv cpu_pc; // Note: this is PCC.cursor
+#else
 static TCGv_i64 cpu_X[32];
 static TCGv_i64 cpu_pc;
+#endif
 
 /* Load/store exclusive handling */
 static TCGv_i64 cpu_exclusive_high;
@@ -75,17 +83,39 @@ void a64_translate_init(void)
 {
     int i;
 
-    cpu_pc = tcg_global_mem_new_i64(cpu_env,
-                                    offsetof(CPUARMState, pc),
-                                    "pc");
+#ifdef TARGET_CHERI
+    cpu_pc =
+        tcg_global_mem_new(cpu_env, offsetof(CPUARMState, pc._cr_cursor), "pc");
+    cpu_capreg_state = tcg_global_mem_new(
+        cpu_env, offsetof(CPUARMState, gpcapregs.capreg_state), "capreg_state");
+    // Morello sometimes interposes with base
+    ddc_interposition = tcg_global_mem_new(
+        cpu_env, offsetof(CPUARMState, DDC_current.cr_base), "ddc_base");
+
+#else
+    cpu_pc = tcg_global_mem_new_i64(cpu_env, offsetof(CPUARMState, pc), "pc");
+#endif
+
     for (i = 0; i < 32; i++) {
+#ifdef TARGET_CHERI
+        _cpu_cursors_do_not_access_directly[i] = tcg_global_mem_new(
+            cpu_env,
+            offsetof(CPUARMState, gpcapregs.decompressed[i]._cr_cursor),
+            regnames[i]);
+#else
         cpu_X[i] = tcg_global_mem_new_i64(cpu_env,
                                           offsetof(CPUARMState, xregs[i]),
                                           regnames[i]);
+#endif
     }
 
     cpu_exclusive_high = tcg_global_mem_new_i64(cpu_env,
         offsetof(CPUARMState, exclusive_high), "exclusive_high");
+
+#ifdef CONFIG_DEBUG_TCG
+    _pc_is_current = tcg_global_mem_new(
+        cpu_env, offsetof(CPUArchState, _pc_is_current), "_pc_is_current");
+#endif
 }
 
 /*
@@ -204,7 +234,7 @@ static void gen_a64_set_pc(DisasContext *s, TCGv_i64 src)
 }
 
 /*
- * Handle MTE and/or TBI.
+ * Handle MTE and/or TBI and CHERI checks.
  *
  * For TBI, ideally, we would do nothing.  Proper behaviour on fault is
  * for the tag to be present in the FAR_ELx register.  But for user-only
@@ -215,6 +245,122 @@ static void gen_a64_set_pc(DisasContext *s, TCGv_i64 src)
  * of the write-back address.
  */
 
+#ifdef TARGET_CHERI
+
+#define GET_FLAG(C, F)                                                         \
+    (C->base.cheri_flags &                                                     \
+     (1 << (R_TBFLAG_CHERI_##F##_SHIFT + TB_FLAG_CHERI_SPARE_INDEX_START)))
+
+#define IS_C64(ctx) !!GET_FLAG(ctx, PSTATE_C64)
+
+static inline TCGv_cap_checked_ptr
+gen_bounds_and_perms_checks(DisasContext *ctx, int regnum, TCGv addr,
+                            target_ulong size, bool load, bool store)
+{
+
+    assert(load || store);
+
+    TCGv_i32 tcg_regnum = tcg_const_i32(regnum);
+    TCGv_i32 tcg_size = tcg_const_i32(size);
+    ((load && store)
+         ? gen_helper_cap_rmw_check
+         : (load ? gen_helper_cap_load_check : gen_helper_cap_store_check))(
+        (TCGv_cap_checked_ptr)addr, cpu_env, tcg_regnum, addr, tcg_size);
+
+    tcg_temp_free_i32(tcg_regnum);
+    tcg_temp_free_i32(tcg_size);
+    // ignore result. Should not change on morello.
+    return (TCGv_cap_checked_ptr)addr;
+
+    /*
+    // TODO: finish this below and then dont use the helper
+    gen_lazy_cap_decompress(ctx, regnum);
+
+    size_t base_off = gp_register_offset(regnum)
+
+    TCGLabel *l1 = gen_new_label();
+    TCGv cond = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
+    TCGv t2 = tcg_temp_new();
+
+    // addr >= base
+    tcg_gen_ld_tl(t1, cpu_env, base_off);
+    tcg_gen_setcond_tl(TCG_COND_GEU, cond, addr, t1);
+
+    // addr+size <= top
+    tcg_gen_ld_tl(t1, cpu_env, top_off);
+    tcg_gen_andi_tl(t2, addr, size);
+    tcg_gen_setcond_tl(TCG_COND_LEU, t2, t2, t1);
+    if(sizeof(((cap_register_t*)(0))->_cr_top) == 16) {
+        // If the top bit is set, then obviously we are below top
+        tcg_gen_ld_tl(t1, cpu_env, top_off+8);
+        // do I need a not equal zero? I assume the lowest bit is the only thing
+    that could ever be set tcg_gen_or_tl(t2, t2, t1);
+    }
+    tcg_gen_and_tl(cond, cond, t2);
+
+    // perms, tagged, & not sealed LETODO
+    tcg_gen_movi_i64(t1, 0);
+
+
+
+    // if cond != 0, branch to label
+    tcg_gen_brcond_i64(TCG_COND_NE, cond, t1, l1);
+
+    // Throw an exception LETODO
+
+    // Label l1 (all checks pass)
+    gen_set_label(l1);
+
+    tcg_temp_free(cond);
+    tcg_temp_free(t1);
+    tcg_temp_free(t2);
+
+     */
+}
+
+static TCGv_cap_checked_ptr
+arm_bounds_checked(DisasContext *s, TCGv_i64 tcg_addr, int size, int base_reg,
+                   bool is_load, bool alternate_base, bool against_ddc)
+{
+    bool capability_base = against_ddc && (IS_C64(s) != alternate_base);
+    if (capability_base) {
+        return gen_bounds_and_perms_checks(s, base_reg, tcg_addr, size, is_load,
+                                           !is_load);
+    } else {
+        _generate_special_checked_ptr(
+            s,
+            is_load ? FLAG_READABLE(against_ddc) : FLAG_WRITABLE(against_ddc),
+            is_load ? CAP_PERM_LOAD : CAP_PERM_STORE,
+            (TCGv_cap_checked_ptr)tcg_addr, tcg_addr, size, against_ddc);
+    }
+    return (TCGv_cap_checked_ptr)tcg_addr;
+}
+#else
+#define arm_bounds_checked(s, tcg_addr, size, base_reg, is_load,               \
+                           alternate_base, against_ddc)                        \
+    tcg_addr
+#define IS_C64(ctx) false
+#endif
+
+// Untag / zero top of register as appropriate
+static void incremented_register_base(DisasContext *s, int regnum,
+                                      bool capability_base)
+{
+#ifdef TARGET_CHERI
+    if (capability_base) {
+        gen_cap_modified(s, regnum);
+    } else {
+        gen_lazy_cap_set_int(s, regnum);
+    }
+#endif
+}
+
+static void incremented_register(DisasContext *s, int regnum)
+{
+    incremented_register_base(s, regnum, IS_C64(s));
+}
+
 TCGv_i64 clean_data_tbi(DisasContext *s, TCGv_i64 addr)
 {
     TCGv_i64 clean = new_tmp_a64(s);
@@ -224,6 +370,16 @@ TCGv_i64 clean_data_tbi(DisasContext *s, TCGv_i64 addr)
     tcg_gen_mov_i64(clean, addr);
 #endif
     return clean;
+}
+
+TCGv_cap_checked_ptr clean_data_tbi_and_cheri(DisasContext *s, TCGv_i64 addr,
+                                              bool is_load, int size,
+                                              int base_reg, bool alternate_base,
+                                              bool ddc_base)
+{
+    TCGv_i64 clean = clean_data_tbi(s, addr);
+    return arm_bounds_checked(s, clean, size, base_reg, is_load, alternate_base,
+                              ddc_base);
 }
 
 /* Insert a zero tag into src, with the result at dst. */
@@ -251,10 +407,11 @@ static void gen_probe_access(DisasContext *s, TCGv_i64 ptr,
  * is not relevant to MTE, per se, but watchpoints do require the size,
  * and we want to recognize those before making any other changes to state.
  */
-static TCGv_i64 gen_mte_check1_mmuidx(DisasContext *s, TCGv_i64 addr,
-                                      bool is_write, bool tag_checked,
-                                      int log2_size, bool is_unpriv,
-                                      int core_idx)
+static TCGv_cap_checked_ptr
+gen_mte_and_cheri_check1_mmuidx(DisasContext *s, TCGv_i64 addr, bool is_write,
+                                bool tag_checked, int log2_size, bool is_unpriv,
+                                int core_idx, int base_reg, bool alternate_base,
+                                bool ddc_base)
 {
     if (tag_checked && s->mte_active[is_unpriv]) {
         TCGv_i32 tcg_desc;
@@ -272,23 +429,32 @@ static TCGv_i64 gen_mte_check1_mmuidx(DisasContext *s, TCGv_i64 addr,
         gen_helper_mte_check1(ret, cpu_env, tcg_desc, addr);
         tcg_temp_free_i32(tcg_desc);
 
-        return ret;
+        return arm_bounds_checked(s, ret, (1 << log2_size), base_reg, !is_write,
+                                  alternate_base, ddc_base);
     }
-    return clean_data_tbi(s, addr);
+    return clean_data_tbi_and_cheri(s, addr, !is_write, 1 << log2_size,
+                                    base_reg, alternate_base, ddc_base);
 }
 
-TCGv_i64 gen_mte_check1(DisasContext *s, TCGv_i64 addr, bool is_write,
-                        bool tag_checked, int log2_size)
+TCGv_cap_checked_ptr gen_mte_and_cheri_check1(DisasContext *s, TCGv_i64 addr,
+                                              bool is_write, bool tag_checked,
+                                              int log2_size, int base_reg,
+                                              bool alternate_base,
+                                              bool ddc_base)
 {
-    return gen_mte_check1_mmuidx(s, addr, is_write, tag_checked, log2_size,
-                                 false, get_mem_index(s));
+    return gen_mte_and_cheri_check1_mmuidx(s, addr, is_write, tag_checked,
+                                           log2_size, false, get_mem_index(s),
+                                           base_reg, alternate_base, ddc_base);
 }
 
 /*
  * For MTE, check multiple logical sequential accesses.
  */
-TCGv_i64 gen_mte_checkN(DisasContext *s, TCGv_i64 addr, bool is_write,
-                        bool tag_checked, int log2_esize, int total_size)
+TCGv_cap_checked_ptr gen_mte_and_cheri_checkN(DisasContext *s, TCGv_i64 addr,
+                                              bool is_write, bool tag_checked,
+                                              int log2_esize, int total_size,
+                                              int base_reg, bool alternate_base,
+                                              bool ddc_base)
 {
     if (tag_checked && s->mte_active[0] && total_size != (1 << log2_esize)) {
         TCGv_i32 tcg_desc;
@@ -307,9 +473,11 @@ TCGv_i64 gen_mte_checkN(DisasContext *s, TCGv_i64 addr, bool is_write,
         gen_helper_mte_checkN(ret, cpu_env, tcg_desc, addr);
         tcg_temp_free_i32(tcg_desc);
 
-        return ret;
+        return arm_bounds_checked(s, ret, total_size, base_reg, !is_write,
+                                  alternate_base, ddc_base);
     }
-    return gen_mte_check1(s, addr, is_write, tag_checked, log2_esize);
+    return gen_mte_and_cheri_check1(s, addr, is_write, tag_checked, log2_esize,
+                                    base_reg, alternate_base, ddc_base);
 }
 
 typedef struct DisasCompare64 {
@@ -489,47 +657,56 @@ TCGv_i64 new_tmp_a64_zero(DisasContext *s)
  * to cpu_X[31] and ZR accesses to a temporary which can be discarded.
  * This is the point of the _sp forms.
  */
+
+/* register access for when 31 == SP */
+TCGv_i64 cpu_reg_sp(DisasContext *s, int reg)
+{
+#ifdef TARGET_CHERI
+    return _cpu_cursors_do_not_access_directly[reg];
+#else
+    return cpu_X[reg];
+#endif
+}
+
 TCGv_i64 cpu_reg(DisasContext *s, int reg)
 {
     if (reg == 31) {
         return new_tmp_a64_zero(s);
     } else {
-        return cpu_X[reg];
+        return cpu_reg_sp(s, reg);
     }
-}
-
-/* register access for when 31 == SP */
-TCGv_i64 cpu_reg_sp(DisasContext *s, int reg)
-{
-    return cpu_X[reg];
 }
 
 /* read a cpu register in 32bit/64bit mode. Returns a TCGv_i64
  * representing the register contents. This TCGv is an auto-freed
  * temporary so it need not be explicitly freed, and may be modified.
  */
-TCGv_i64 read_cpu_reg(DisasContext *s, int reg, int sf)
-{
-    TCGv_i64 v = new_tmp_a64(s);
-    if (reg != 31) {
-        if (sf) {
-            tcg_gen_mov_i64(v, cpu_X[reg]);
-        } else {
-            tcg_gen_ext32u_i64(v, cpu_X[reg]);
-        }
-    } else {
-        tcg_gen_movi_i64(v, 0);
-    }
-    return v;
-}
 
 TCGv_i64 read_cpu_reg_sp(DisasContext *s, int reg, int sf)
 {
     TCGv_i64 v = new_tmp_a64(s);
+    TCGv_i64 *ptr;
+#ifdef TARGET_CHERI
+    ptr = &_cpu_cursors_do_not_access_directly[reg];
+#else
+    ptr = &cpu_X[reg];
+#endif
+
     if (sf) {
-        tcg_gen_mov_i64(v, cpu_X[reg]);
+        tcg_gen_mov_i64(v, *ptr);
     } else {
-        tcg_gen_ext32u_i64(v, cpu_X[reg]);
+        tcg_gen_ext32u_i64(v, *ptr);
+    }
+    return v;
+}
+
+TCGv_i64 read_cpu_reg(DisasContext *s, int reg, int sf)
+{
+    TCGv_i64 v = new_tmp_a64(s);
+    if (reg != 31) {
+        return read_cpu_reg_sp(s, reg, sf);
+    } else {
+        tcg_gen_movi_i64(v, 0);
     }
     return v;
 }
@@ -880,13 +1057,13 @@ static void gen_adc_CC(int sf, TCGv_i64 dest, TCGv_i64 t0, TCGv_i64 t1)
  * Store from GPR register to memory.
  */
 static void do_gpr_st_memidx(DisasContext *s, TCGv_i64 source,
-                             TCGv_i64 tcg_addr, int size, int memidx,
-                             bool iss_valid,
-                             unsigned int iss_srt,
+                             TCGv_cap_checked_ptr tcg_addr, int size,
+                             int memidx, bool iss_valid, unsigned int iss_srt,
                              bool iss_sf, bool iss_ar)
 {
     g_assert(size <= 3);
-    tcg_gen_qemu_st_i64(source, tcg_addr, memidx, s->be_data + size);
+    tcg_gen_qemu_st_i64_with_checked_addr(source, tcg_addr, memidx,
+                                          s->be_data + size);
 
     if (iss_valid) {
         uint32_t syn;
@@ -903,10 +1080,8 @@ static void do_gpr_st_memidx(DisasContext *s, TCGv_i64 source,
 }
 
 static void do_gpr_st(DisasContext *s, TCGv_i64 source,
-                      TCGv_i64 tcg_addr, int size,
-                      bool iss_valid,
-                      unsigned int iss_srt,
-                      bool iss_sf, bool iss_ar)
+                      TCGv_cap_checked_ptr tcg_addr, int size, bool iss_valid,
+                      unsigned int iss_srt, bool iss_sf, bool iss_ar)
 {
     do_gpr_st_memidx(s, source, tcg_addr, size, get_mem_index(s),
                      iss_valid, iss_srt, iss_sf, iss_ar);
@@ -915,12 +1090,11 @@ static void do_gpr_st(DisasContext *s, TCGv_i64 source,
 /*
  * Load from memory to GPR register
  */
-static void do_gpr_ld_memidx(DisasContext *s,
-                             TCGv_i64 dest, TCGv_i64 tcg_addr,
-                             int size, bool is_signed,
-                             bool extend, int memidx,
-                             bool iss_valid, unsigned int iss_srt,
-                             bool iss_sf, bool iss_ar)
+static void do_gpr_ld_memidx(DisasContext *s, TCGv_i64 dest,
+                             TCGv_cap_checked_ptr tcg_addr, int size,
+                             bool is_signed, bool extend, int memidx,
+                             bool iss_valid, unsigned int iss_srt, bool iss_sf,
+                             bool iss_ar)
 {
     MemOp memop = s->be_data + size;
 
@@ -930,7 +1104,14 @@ static void do_gpr_ld_memidx(DisasContext *s,
         memop += MO_SIGN;
     }
 
-    tcg_gen_qemu_ld_i64(dest, tcg_addr, memidx, memop);
+    tcg_gen_qemu_ld_i64_with_checked_addr(dest, tcg_addr, memidx, memop);
+
+    if (iss_srt == (unsigned int)-1)
+        iss_srt = 0;
+#ifdef TARGET_CHERI
+    else
+        gen_lazy_cap_set_int(s, iss_srt);
+#endif
 
     if (extend && is_signed) {
         g_assert(size < 3);
@@ -951,10 +1132,9 @@ static void do_gpr_ld_memidx(DisasContext *s,
     }
 }
 
-static void do_gpr_ld(DisasContext *s,
-                      TCGv_i64 dest, TCGv_i64 tcg_addr,
-                      int size, bool is_signed, bool extend,
-                      bool iss_valid, unsigned int iss_srt,
+static void do_gpr_ld(DisasContext *s, TCGv_i64 dest,
+                      TCGv_cap_checked_ptr tcg_addr, int size, bool is_signed,
+                      bool extend, bool iss_valid, unsigned int iss_srt,
                       bool iss_sf, bool iss_ar)
 {
     do_gpr_ld_memidx(s, dest, tcg_addr, size, is_signed, extend,
@@ -965,25 +1145,28 @@ static void do_gpr_ld(DisasContext *s,
 /*
  * Store from FP register to memory
  */
-static void do_fp_st(DisasContext *s, int srcidx, TCGv_i64 tcg_addr, int size)
+static void do_fp_st(DisasContext *s, int srcidx, TCGv_cap_checked_ptr tcg_addr,
+                     int size)
 {
     /* This writes the bottom N bits of a 128 bit wide vector to memory */
     TCGv_i64 tmp = tcg_temp_new_i64();
     tcg_gen_ld_i64(tmp, cpu_env, fp_reg_offset(s, srcidx, MO_64));
     if (size < 4) {
-        tcg_gen_qemu_st_i64(tmp, tcg_addr, get_mem_index(s),
-                            s->be_data + size);
+        tcg_gen_qemu_st_i64_with_checked_addr(tmp, tcg_addr, get_mem_index(s),
+                                              s->be_data + size);
     } else {
         bool be = s->be_data == MO_BE;
-        TCGv_i64 tcg_hiaddr = tcg_temp_new_i64();
+        TCGv_cap_checked_ptr tcg_hiaddr = tcg_temp_new_cap_checked();
 
-        tcg_gen_addi_i64(tcg_hiaddr, tcg_addr, 8);
-        tcg_gen_qemu_st_i64(tmp, be ? tcg_hiaddr : tcg_addr, get_mem_index(s),
-                            s->be_data | MO_Q);
+        tcg_gen_addi_i64((TCGv_i64)tcg_hiaddr, (TCGv_i64)tcg_addr, 8);
+        tcg_gen_qemu_st_i64_with_checked_addr(tmp, be ? tcg_hiaddr : tcg_addr,
+                                              get_mem_index(s),
+                                              s->be_data | MO_Q);
         tcg_gen_ld_i64(tmp, cpu_env, fp_reg_hi_offset(s, srcidx));
-        tcg_gen_qemu_st_i64(tmp, be ? tcg_addr : tcg_hiaddr, get_mem_index(s),
-                            s->be_data | MO_Q);
-        tcg_temp_free_i64(tcg_hiaddr);
+        tcg_gen_qemu_st_i64_with_checked_addr(tmp, be ? tcg_addr : tcg_hiaddr,
+                                              get_mem_index(s),
+                                              s->be_data | MO_Q);
+        tcg_temp_free_cap_checked(tcg_hiaddr);
     }
 
     tcg_temp_free_i64(tmp);
@@ -992,7 +1175,8 @@ static void do_fp_st(DisasContext *s, int srcidx, TCGv_i64 tcg_addr, int size)
 /*
  * Load from memory to FP register
  */
-static void do_fp_ld(DisasContext *s, int destidx, TCGv_i64 tcg_addr, int size)
+static void do_fp_ld(DisasContext *s, int destidx,
+                     TCGv_cap_checked_ptr tcg_addr, int size)
 {
     /* This always zero-extends and writes to a full 128 bit wide vector */
     TCGv_i64 tmplo = tcg_temp_new_i64();
@@ -1000,20 +1184,23 @@ static void do_fp_ld(DisasContext *s, int destidx, TCGv_i64 tcg_addr, int size)
 
     if (size < 4) {
         MemOp memop = s->be_data + size;
-        tcg_gen_qemu_ld_i64(tmplo, tcg_addr, get_mem_index(s), memop);
+        tcg_gen_qemu_ld_i64_with_checked_addr(tmplo, tcg_addr, get_mem_index(s),
+                                              memop);
     } else {
         bool be = s->be_data == MO_BE;
-        TCGv_i64 tcg_hiaddr;
+        TCGv_cap_checked_ptr tcg_hiaddr;
 
         tmphi = tcg_temp_new_i64();
-        tcg_hiaddr = tcg_temp_new_i64();
+        tcg_hiaddr = tcg_temp_new_cap_checked();
 
-        tcg_gen_addi_i64(tcg_hiaddr, tcg_addr, 8);
-        tcg_gen_qemu_ld_i64(tmplo, be ? tcg_hiaddr : tcg_addr, get_mem_index(s),
-                            s->be_data | MO_Q);
-        tcg_gen_qemu_ld_i64(tmphi, be ? tcg_addr : tcg_hiaddr, get_mem_index(s),
-                            s->be_data | MO_Q);
-        tcg_temp_free_i64(tcg_hiaddr);
+        tcg_gen_addi_i64((TCGv_i64)tcg_hiaddr, (TCGv_i64)tcg_addr, 8);
+        tcg_gen_qemu_ld_i64_with_checked_addr(tmplo, be ? tcg_hiaddr : tcg_addr,
+                                              get_mem_index(s),
+                                              s->be_data | MO_Q);
+        tcg_gen_qemu_ld_i64_with_checked_addr(tmphi, be ? tcg_addr : tcg_hiaddr,
+                                              get_mem_index(s),
+                                              s->be_data | MO_Q);
+        tcg_temp_free_cap_checked(tcg_hiaddr);
     }
 
     tcg_gen_st_i64(tmplo, cpu_env, fp_reg_offset(s, destidx, MO_64));
@@ -1141,23 +1328,25 @@ static void write_vec_element_i32(DisasContext *s, TCGv_i32 tcg_src,
 
 /* Store from vector register to memory */
 static void do_vec_st(DisasContext *s, int srcidx, int element,
-                      TCGv_i64 tcg_addr, int size, MemOp endian)
+                      TCGv_cap_checked_ptr tcg_addr, int size, MemOp endian)
 {
     TCGv_i64 tcg_tmp = tcg_temp_new_i64();
 
     read_vec_element(s, tcg_tmp, srcidx, element, size);
-    tcg_gen_qemu_st_i64(tcg_tmp, tcg_addr, get_mem_index(s), endian | size);
+    tcg_gen_qemu_st_i64_with_checked_addr(tcg_tmp, tcg_addr, get_mem_index(s),
+                                          endian | size);
 
     tcg_temp_free_i64(tcg_tmp);
 }
 
 /* Load from memory to vector register */
 static void do_vec_ld(DisasContext *s, int destidx, int element,
-                      TCGv_i64 tcg_addr, int size, MemOp endian)
+                      TCGv_cap_checked_ptr tcg_addr, int size, MemOp endian)
 {
     TCGv_i64 tcg_tmp = tcg_temp_new_i64();
 
-    tcg_gen_qemu_ld_i64(tcg_tmp, tcg_addr, get_mem_index(s), endian | size);
+    tcg_gen_qemu_ld_i64_with_checked_addr(tcg_tmp, tcg_addr, get_mem_index(s),
+                                          endian | size);
     write_vec_element(s, tcg_tmp, destidx, element, size);
 
     tcg_temp_free_i64(tcg_tmp);
@@ -1407,6 +1596,12 @@ static void disas_cond_b_imm(DisasContext *s, uint32_t insn)
         gen_goto_tb(s, 0, addr);
     }
 }
+// Its probably better to ensure people mean to access just the cursor
+// by having different names.
+// For now just use this define to avoid a further refactor.
+#ifdef TARGET_CHERI
+#define cpu_X _cpu_cursors_do_not_access_directly
+#endif
 
 /* HINT instruction group, including various allocated HINTs */
 static void handle_hint(DisasContext *s, uint32_t insn,
@@ -1781,6 +1976,20 @@ static void gen_set_nzcv(TCGv_i64 tcg_rt)
     tcg_temp_free_i32(nzcv);
 }
 
+#ifdef TARGET_CHERI
+static inline bool cheri_is_executive_ctx(DisasContext *s)
+{
+    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
+                      TBFLAG_CHERI, EXECUTIVE) != 0;
+}
+
+static inline bool cheri_is_system_ctx(DisasContext *s)
+{
+    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
+                      TBFLAG_CHERI, SYSTEM) != 0;
+}
+#endif
+
 /* MRS - move from system register
  * MSR (register) - move to system register
  * SYS
@@ -1815,6 +2024,19 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         unallocated_encoding(s);
         return;
     }
+
+#ifdef TARGET_CHERI
+    bool executive = cheri_is_executive_ctx(s);
+    if (((ri->access & PL_IN_EXECUTIVE) && !executive) ||
+        ((ri->access & PL_IN_RESTRICTED) && executive)) {
+        unallocated_encoding(s);
+        return;
+    }
+
+    if ((ri->access & PL_SYSREG) && !cheri_is_system_ctx(s)) {
+        assert(0); // should throw code 0x18
+    }
+#endif
 
     if (ri->accessfn) {
         /* Emit code to perform further access permissions checks at
@@ -1875,6 +2097,7 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             gen_helper_mte_check_zva(tcg_rt, cpu_env, t_desc, cpu_reg(s, rt));
             tcg_temp_free_i32(t_desc);
         } else {
+            // LETODO: Do CHERI checks for DC instructions
             tcg_rt = clean_data_tbi(s, cpu_reg(s, rt));
         }
         gen_helper_dc_zva(cpu_env, tcg_rt);
@@ -1933,7 +2156,42 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
 
     tcg_rt = cpu_reg(s, rt);
 
-    if (isread) {
+#ifdef CONFIG_TCG_LOG_INSTR
+    // LETODO would be nice to log the modifcation to the CSR
+#endif
+
+#ifdef TARGET_CHERI
+    // Morello versions target the entire capability sized register
+    bool is_morello = extract32(insn, 25, 4) == 0x1;
+
+    if (is_morello) {
+        // Morello instructions might be able to modify non-cap registers. But I
+        // don't know of any.
+        assert(cpreg_field_is_cap(ri));
+        // Existing readfn/writefn functions only apply to the cursor,
+        // it should be ensured they do not cause out of bounds.
+        if (isread) {
+            if (ri->type & ARM_CP_CONST) {
+                assert(0 && "TODO");
+            } else if (ri->readfn) {
+                assert(0 && "TODO");
+            } else {
+                gen_move_cap_gp_sp(s, rt, ri->fieldoffset);
+            }
+        } else {
+            if (ri->type & ARM_CP_CONST) {
+                return;
+            } else if (ri->writefn) {
+                // write cap part first
+                // then call helper to update cursor properly
+                assert(0 && "TODO");
+            } else {
+                gen_move_cap_sp_gp(s, ri->fieldoffset, rt);
+            }
+        }
+    } else
+#endif
+        if (isread) {
         if (ri->type & ARM_CP_CONST) {
             tcg_gen_movi_i64(tcg_rt, ri->resetvalue);
         } else if (ri->readfn) {
@@ -1955,6 +2213,13 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             tcg_temp_free_ptr(tmpptr);
         } else {
             tcg_gen_st_i64(tcg_rt, cpu_env, ri->fieldoffset);
+#ifdef TARGET_CHERI
+            // Writes should zero the rest of the cap register (done lazily)
+            _Static_assert(offsetof(cap_register_t, _cr_cursor) == 0, "");
+            if (cpreg_field_is_cap(ri)) {
+                gen_lazy_cap_set_int(s, rt);
+            }
+#endif
         }
     }
 
@@ -2367,7 +2632,8 @@ static void disas_b_exc_sys(DisasContext *s, uint32_t insn)
  * enabled.
  */
 static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
-                               TCGv_i64 addr, int size, bool is_pair)
+                               TCGv_cap_checked_ptr addr, int size,
+                               bool is_pair)
 {
     int idx = get_mem_index(s);
     MemOp memop = s->be_data;
@@ -2378,7 +2644,8 @@ static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
         if (size == 2) {
             /* The pair must be single-copy atomic for the doubleword.  */
             memop |= MO_64 | MO_ALIGN;
-            tcg_gen_qemu_ld_i64(cpu_exclusive_val, addr, idx, memop);
+            tcg_gen_qemu_ld_i64_with_checked_addr(cpu_exclusive_val, addr, idx,
+                                                  memop);
             if (s->be_data == MO_LE) {
                 tcg_gen_extract_i64(cpu_reg(s, rt), cpu_exclusive_val, 0, 32);
                 tcg_gen_extract_i64(cpu_reg(s, rt2), cpu_exclusive_val, 32, 32);
@@ -2390,27 +2657,34 @@ static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
             /* The pair must be single-copy atomic for *each* doubleword, not
                the entire quadword, however it must be quadword aligned.  */
             memop |= MO_64;
-            tcg_gen_qemu_ld_i64(cpu_exclusive_val, addr, idx,
-                                memop | MO_ALIGN_16);
+            tcg_gen_qemu_ld_i64_with_checked_addr(cpu_exclusive_val, addr, idx,
+                                                  memop | MO_ALIGN_16);
 
-            TCGv_i64 addr2 = tcg_temp_new_i64();
-            tcg_gen_addi_i64(addr2, addr, 8);
-            tcg_gen_qemu_ld_i64(cpu_exclusive_high, addr2, idx, memop);
-            tcg_temp_free_i64(addr2);
+            TCGv_cap_checked_ptr addr2 = tcg_temp_new_cap_checked();
+            tcg_gen_addi_i64((TCGv_i64)addr2, (TCGv_i64)addr, 8);
+            tcg_gen_qemu_ld_i64_with_checked_addr(cpu_exclusive_high, addr2,
+                                                  idx, memop);
+            tcg_temp_free_cap_checked(addr2);
 
             tcg_gen_mov_i64(cpu_reg(s, rt), cpu_exclusive_val);
             tcg_gen_mov_i64(cpu_reg(s, rt2), cpu_exclusive_high);
         }
     } else {
         memop |= size | MO_ALIGN;
-        tcg_gen_qemu_ld_i64(cpu_exclusive_val, addr, idx, memop);
+        tcg_gen_qemu_ld_i64_with_checked_addr(cpu_exclusive_val, addr, idx,
+                                              memop);
         tcg_gen_mov_i64(cpu_reg(s, rt), cpu_exclusive_val);
     }
-    tcg_gen_mov_i64(cpu_exclusive_addr, addr);
+    tcg_gen_mov_i64(cpu_exclusive_addr, (TCGv_i64)addr);
 }
 
+#ifdef TARGET_CHERI
+#include "translate-cheri.inc.c"
+#endif
+
 static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
-                                TCGv_i64 addr, int size, int is_pair)
+                                TCGv_cap_checked_ptr addr, int size,
+                                int is_pair)
 {
     /* if (env->exclusive_addr == addr && env->exclusive_val == [addr]
      *     && (!is_pair || env->exclusive_high == [addr + datasize])) {
@@ -2428,7 +2702,8 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
     TCGLabel *done_label = gen_new_label();
     TCGv_i64 tmp;
 
-    tcg_gen_brcond_i64(TCG_COND_NE, addr, cpu_exclusive_addr, fail_label);
+    tcg_gen_brcond_i64(TCG_COND_NE, (TCGv_i64)addr, cpu_exclusive_addr,
+                       fail_label);
 
     tmp = tcg_temp_new_i64();
     if (is_pair) {
@@ -2438,10 +2713,11 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
             } else {
                 tcg_gen_concat32_i64(tmp, cpu_reg(s, rt2), cpu_reg(s, rt));
             }
-            tcg_gen_atomic_cmpxchg_i64(tmp, cpu_exclusive_addr,
-                                       cpu_exclusive_val, tmp,
-                                       get_mem_index(s),
-                                       MO_64 | MO_ALIGN | s->be_data);
+
+            tcg_gen_atomic_cmpxchg_i64_with_checked_addr(
+                tmp, (TCGv_cap_checked_ptr)cpu_exclusive_addr,
+                cpu_exclusive_val, tmp, get_mem_index(s),
+                MO_64 | MO_ALIGN | s->be_data);
             tcg_gen_setcond_i64(TCG_COND_NE, tmp, tmp, cpu_exclusive_val);
         } else if (tb_cflags(s->base.tb) & CF_PARALLEL) {
             if (!HAVE_CMPXCHG128) {
@@ -2466,9 +2742,9 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
                                            cpu_reg(s, rt), cpu_reg(s, rt2));
         }
     } else {
-        tcg_gen_atomic_cmpxchg_i64(tmp, cpu_exclusive_addr, cpu_exclusive_val,
-                                   cpu_reg(s, rt), get_mem_index(s),
-                                   size | MO_ALIGN | s->be_data);
+        tcg_gen_atomic_cmpxchg_i64_with_checked_addr(
+            tmp, (TCGv_cap_checked_ptr)cpu_exclusive_addr, cpu_exclusive_val,
+            cpu_reg(s, rt), get_mem_index(s), size | MO_ALIGN | s->be_data);
         tcg_gen_setcond_i64(TCG_COND_NE, tmp, tmp, cpu_exclusive_val);
     }
     tcg_gen_mov_i64(cpu_reg(s, rd), tmp);
@@ -2487,14 +2763,16 @@ static void gen_compare_and_swap(DisasContext *s, int rs, int rt,
     TCGv_i64 tcg_rs = cpu_reg(s, rs);
     TCGv_i64 tcg_rt = cpu_reg(s, rt);
     int memidx = get_mem_index(s);
-    TCGv_i64 clean_addr;
+    TCGv_cap_checked_ptr clean_addr;
 
     if (rn == 31) {
         gen_check_sp_alignment(s);
     }
-    clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn), true, rn != 31, size);
-    tcg_gen_atomic_cmpxchg_i64(tcg_rs, clean_addr, tcg_rs, tcg_rt, memidx,
-                               size | MO_ALIGN | s->be_data);
+    clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), true, rn != 31,
+                                          size, rn, false, true);
+    tcg_gen_atomic_cmpxchg_i64_with_checked_addr(tcg_rs, clean_addr, tcg_rs,
+                                                 tcg_rt, memidx,
+                                                 size | MO_ALIGN | s->be_data);
 }
 
 static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
@@ -2504,7 +2782,7 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
     TCGv_i64 s2 = cpu_reg(s, rs + 1);
     TCGv_i64 t1 = cpu_reg(s, rt);
     TCGv_i64 t2 = cpu_reg(s, rt + 1);
-    TCGv_i64 clean_addr;
+    TCGv_cap_checked_ptr clean_addr;
     int memidx = get_mem_index(s);
 
     if (rn == 31) {
@@ -2512,7 +2790,8 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
     }
 
     /* This is a single atomic access, despite the "pair". */
-    clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn), true, rn != 31, size + 1);
+    clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), true, rn != 31,
+                                          size + 1, rn, false, true);
 
     if (size == 2) {
         TCGv_i64 cmp = tcg_temp_new_i64();
@@ -2526,8 +2805,8 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
             tcg_gen_concat32_i64(cmp, s2, s1);
         }
 
-        tcg_gen_atomic_cmpxchg_i64(cmp, clean_addr, cmp, val, memidx,
-                                   MO_64 | MO_ALIGN | s->be_data);
+        tcg_gen_atomic_cmpxchg_i64_with_checked_addr(
+            cmp, clean_addr, cmp, val, memidx, MO_64 | MO_ALIGN | s->be_data);
         tcg_temp_free_i64(val);
 
         if (s->be_data == MO_LE) {
@@ -2541,10 +2820,10 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
             TCGv_i32 tcg_rs = tcg_const_i32(rs);
             if (s->be_data == MO_LE) {
                 gen_helper_casp_le_parallel(cpu_env, tcg_rs,
-                                            clean_addr, t1, t2);
+                                            (TCGv_i64)clean_addr, t1, t2);
             } else {
                 gen_helper_casp_be_parallel(cpu_env, tcg_rs,
-                                            clean_addr, t1, t2);
+                                            (TCGv_i64)clean_addr, t1, t2);
             }
             tcg_temp_free_i32(tcg_rs);
         } else {
@@ -2560,10 +2839,11 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
         TCGv_i64 zero = tcg_const_i64(0);
 
         /* Load the two words, in memory order.  */
-        tcg_gen_qemu_ld_i64(d1, clean_addr, memidx,
-                            MO_64 | MO_ALIGN_16 | s->be_data);
-        tcg_gen_addi_i64(a2, clean_addr, 8);
-        tcg_gen_qemu_ld_i64(d2, a2, memidx, MO_64 | s->be_data);
+        tcg_gen_qemu_ld_i64_with_checked_addr(d1, clean_addr, memidx,
+                                              MO_64 | MO_ALIGN_16 | s->be_data);
+        tcg_gen_addi_i64(a2, (TCGv_i64)clean_addr, 8);
+        tcg_gen_qemu_ld_i64_with_checked_addr(d2, (TCGv_cap_checked_ptr)a2,
+                                              memidx, MO_64 | s->be_data);
 
         /* Compare the two words, also in memory order.  */
         tcg_gen_setcond_i64(TCG_COND_EQ, c1, d1, s1);
@@ -2573,8 +2853,10 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
         /* If compare equal, write back new data, else write back old data.  */
         tcg_gen_movcond_i64(TCG_COND_NE, c1, c2, zero, t1, d1);
         tcg_gen_movcond_i64(TCG_COND_NE, c2, c2, zero, t2, d2);
-        tcg_gen_qemu_st_i64(c1, clean_addr, memidx, MO_64 | s->be_data);
-        tcg_gen_qemu_st_i64(c2, a2, memidx, MO_64 | s->be_data);
+        tcg_gen_qemu_st_i64_with_checked_addr(c1, clean_addr, memidx,
+                                              MO_64 | s->be_data);
+        tcg_gen_qemu_st_i64_with_checked_addr(c2, (TCGv_cap_checked_ptr)a2,
+                                              memidx, MO_64 | s->be_data);
         tcg_temp_free_i64(a2);
         tcg_temp_free_i64(c1);
         tcg_temp_free_i64(c2);
@@ -2626,7 +2908,7 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
     int is_lasr = extract32(insn, 15, 1);
     int o2_L_o1_o0 = extract32(insn, 21, 3) * 2 | is_lasr;
     int size = extract32(insn, 30, 2);
-    TCGv_i64 clean_addr;
+    TCGv_cap_checked_ptr clean_addr;
 
     switch (o2_L_o1_o0) {
     case 0x0: /* STXR */
@@ -2637,8 +2919,8 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
         if (is_lasr) {
             tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
         }
-        clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn),
-                                    true, rn != 31, size);
+        clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), true,
+                                              rn != 31, size, rn, false, true);
         gen_store_exclusive(s, rs, rt, rt2, clean_addr, size, false);
         return;
 
@@ -2647,8 +2929,8 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
         if (rn == 31) {
             gen_check_sp_alignment(s);
         }
-        clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn),
-                                    false, rn != 31, size);
+        clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), false,
+                                              rn != 31, size, rn, false, true);
         s->is_ldex = true;
         gen_load_exclusive(s, rt, rt2, clean_addr, size, false);
         if (is_lasr) {
@@ -2668,8 +2950,8 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
             gen_check_sp_alignment(s);
         }
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
-        clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn),
-                                    true, rn != 31, size);
+        clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), true,
+                                              rn != 31, size, rn, false, true);
         do_gpr_st(s, cpu_reg(s, rt), clean_addr, size, true, rt,
                   disas_ldst_compute_iss_sf(size, false, 0), is_lasr);
         return;
@@ -2685,8 +2967,8 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
         if (rn == 31) {
             gen_check_sp_alignment(s);
         }
-        clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn),
-                                    false, rn != 31, size);
+        clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), false,
+                                              rn != 31, size, rn, false, true);
         do_gpr_ld(s, cpu_reg(s, rt), clean_addr, size, false, false, true, rt,
                   disas_ldst_compute_iss_sf(size, false, 0), is_lasr);
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_LDAQ);
@@ -2700,8 +2982,8 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
             if (is_lasr) {
                 tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
             }
-            clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn),
-                                        true, rn != 31, size);
+            clean_addr = gen_mte_and_cheri_check1(
+                s, cpu_reg_sp(s, rn), true, rn != 31, size, rn, false, true);
             gen_store_exclusive(s, rs, rt, rt2, clean_addr, size, true);
             return;
         }
@@ -2719,8 +3001,8 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
             if (rn == 31) {
                 gen_check_sp_alignment(s);
             }
-            clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn),
-                                        false, rn != 31, size);
+            clean_addr = gen_mte_and_cheri_check1(
+                s, cpu_reg_sp(s, rn), false, rn != 31, size, rn, false, true);
             s->is_ldex = true;
             gen_load_exclusive(s, rt, rt2, clean_addr, size, true);
             if (is_lasr) {
@@ -2771,7 +3053,8 @@ static void disas_ld_lit(DisasContext *s, uint32_t insn)
     int opc = extract32(insn, 30, 2);
     bool is_signed = false;
     int size = 2;
-    TCGv_i64 tcg_rt, clean_addr;
+    TCGv_i64 tcg_rt, dirty_addr;
+    TCGv_cap_checked_ptr clean_addr;
 
     if (is_vector) {
         if (opc == 3) {
@@ -2793,7 +3076,11 @@ static void disas_ld_lit(DisasContext *s, uint32_t insn)
 
     tcg_rt = cpu_reg(s, rt);
 
-    clean_addr = tcg_const_i64(s->pc_curr + imm);
+    dirty_addr = tcg_const_i64(s->pc_curr + imm);
+
+    clean_addr =
+        arm_bounds_checked(s, dirty_addr, 1 << size, 0, true, false, false);
+
     if (is_vector) {
         do_fp_ld(s, rt, clean_addr, size);
     } else {
@@ -2803,7 +3090,7 @@ static void disas_ld_lit(DisasContext *s, uint32_t insn)
         do_gpr_ld(s, tcg_rt, clean_addr, size, is_signed, false,
                   true, rt, iss_sf, false);
     }
-    tcg_temp_free_i64(clean_addr);
+    tcg_temp_free_i64(dirty_addr);
 }
 
 /*
@@ -2850,7 +3137,8 @@ static void disas_ldst_pair(DisasContext *s, uint32_t insn)
     bool wback = false;
     bool set_tag = false;
 
-    TCGv_i64 clean_addr, dirty_addr;
+    TCGv_cap_checked_ptr clean_addr;
+    TCGv_i64 dirty_addr;
 
     int size;
 
@@ -2934,9 +3222,9 @@ static void disas_ldst_pair(DisasContext *s, uint32_t insn)
         }
     }
 
-    clean_addr = gen_mte_checkN(s, dirty_addr, !is_load,
-                                (wback || rn != 31) && !set_tag,
-                                size, 2 << size);
+    clean_addr = gen_mte_and_cheri_checkN(s, dirty_addr, !is_load,
+                                          (wback || rn != 31) && !set_tag, size,
+                                          2 << size, rn, false, true);
 
     if (is_vector) {
         if (is_load) {
@@ -2944,7 +3232,7 @@ static void disas_ldst_pair(DisasContext *s, uint32_t insn)
         } else {
             do_fp_st(s, rt, clean_addr, size);
         }
-        tcg_gen_addi_i64(clean_addr, clean_addr, 1 << size);
+        tcg_gen_addi_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr, 1 << size);
         if (is_load) {
             do_fp_ld(s, rt2, clean_addr, size);
         } else {
@@ -2960,18 +3248,24 @@ static void disas_ldst_pair(DisasContext *s, uint32_t insn)
             /* Do not modify tcg_rt before recognizing any exception
              * from the second load.
              */
-            do_gpr_ld(s, tmp, clean_addr, size, is_signed, false,
-                      false, 0, false, false);
-            tcg_gen_addi_i64(clean_addr, clean_addr, 1 << size);
-            do_gpr_ld(s, tcg_rt2, clean_addr, size, is_signed, false,
-                      false, 0, false, false);
+            do_gpr_ld(s, tmp, clean_addr, size, is_signed, false, false,
+                      (unsigned int)-1, false, false);
+            tcg_gen_addi_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr,
+                             1 << size);
+            do_gpr_ld(s, tcg_rt2, clean_addr, size, is_signed, false, false,
+                      (unsigned int)-1, false, false);
 
+#ifdef TARGET_CHERI
+            gen_lazy_cap_set_int(s, rt);
+            gen_lazy_cap_set_int(s, rt2);
+#endif
             tcg_gen_mov_i64(tcg_rt, tmp);
             tcg_temp_free_i64(tmp);
         } else {
             do_gpr_st(s, tcg_rt, clean_addr, size,
                       false, 0, false, false);
-            tcg_gen_addi_i64(clean_addr, clean_addr, 1 << size);
+            tcg_gen_addi_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr,
+                             1 << size);
             do_gpr_st(s, tcg_rt2, clean_addr, size,
                       false, 0, false, false);
         }
@@ -2982,6 +3276,7 @@ static void disas_ldst_pair(DisasContext *s, uint32_t insn)
             tcg_gen_addi_i64(dirty_addr, dirty_addr, offset);
         }
         tcg_gen_mov_i64(cpu_reg_sp(s, rn), dirty_addr);
+        incremented_register(s, rn);
     }
 }
 
@@ -3019,7 +3314,8 @@ static void disas_ldst_reg_imm9(DisasContext *s, uint32_t insn,
     bool writeback;
     int memidx;
 
-    TCGv_i64 clean_addr, dirty_addr;
+    TCGv_cap_checked_ptr clean_addr;
+    TCGv_i64 dirty_addr;
 
     if (is_vector) {
         size |= (opc & 2) << 1;
@@ -3077,9 +3373,9 @@ static void disas_ldst_reg_imm9(DisasContext *s, uint32_t insn,
     }
 
     memidx = is_unpriv ? get_a64_user_mem_index(s) : get_mem_index(s);
-    clean_addr = gen_mte_check1_mmuidx(s, dirty_addr, is_store,
-                                       writeback || rn != 31,
-                                       size, is_unpriv, memidx);
+    clean_addr = gen_mte_and_cheri_check1_mmuidx(
+        s, dirty_addr, is_store, writeback || rn != 31, size, is_unpriv, memidx,
+        rn, false, true);
 
     if (is_vector) {
         if (is_store) {
@@ -3107,6 +3403,7 @@ static void disas_ldst_reg_imm9(DisasContext *s, uint32_t insn,
             tcg_gen_addi_i64(dirty_addr, dirty_addr, imm9);
         }
         tcg_gen_mov_i64(tcg_rn, dirty_addr);
+        incremented_register(s, rn);
     }
 }
 
@@ -3145,7 +3442,8 @@ static void disas_ldst_reg_roffset(DisasContext *s, uint32_t insn,
     bool is_store = false;
     bool is_extended = false;
 
-    TCGv_i64 tcg_rm, clean_addr, dirty_addr;
+    TCGv_cap_checked_ptr clean_addr;
+    TCGv_i64 tcg_rm, dirty_addr;
 
     if (extract32(opt, 1, 1) == 0) {
         unallocated_encoding(s);
@@ -3185,7 +3483,8 @@ static void disas_ldst_reg_roffset(DisasContext *s, uint32_t insn,
     ext_and_shift_reg(tcg_rm, tcg_rm, opt, shift ? size : 0);
 
     tcg_gen_add_i64(dirty_addr, dirty_addr, tcg_rm);
-    clean_addr = gen_mte_check1(s, dirty_addr, is_store, true, size);
+    clean_addr = gen_mte_and_cheri_check1(s, dirty_addr, is_store, true, size,
+                                          rn, false, true);
 
     if (is_vector) {
         if (is_store) {
@@ -3234,7 +3533,8 @@ static void disas_ldst_reg_unsigned_imm(DisasContext *s, uint32_t insn,
     unsigned int imm12 = extract32(insn, 10, 12);
     unsigned int offset;
 
-    TCGv_i64 clean_addr, dirty_addr;
+    TCGv_cap_checked_ptr clean_addr;
+    TCGv_i64 dirty_addr;
 
     bool is_store;
     bool is_signed = false;
@@ -3270,7 +3570,8 @@ static void disas_ldst_reg_unsigned_imm(DisasContext *s, uint32_t insn,
     dirty_addr = read_cpu_reg_sp(s, rn, 1);
     offset = imm12 << size;
     tcg_gen_addi_i64(dirty_addr, dirty_addr, offset);
-    clean_addr = gen_mte_check1(s, dirty_addr, is_store, rn != 31, size);
+    clean_addr = gen_mte_and_cheri_check1(s, dirty_addr, is_store, rn != 31,
+                                          size, rn, false, true);
 
     if (is_vector) {
         if (is_store) {
@@ -3313,7 +3614,8 @@ static void disas_ldst_atomic(DisasContext *s, uint32_t insn,
     int o3_opc = extract32(insn, 12, 4);
     bool r = extract32(insn, 22, 1);
     bool a = extract32(insn, 23, 1);
-    TCGv_i64 tcg_rs, clean_addr;
+    TCGv_i64 tcg_rs;
+    TCGv_cap_checked_ptr clean_addr;
     AtomicThreeOpFn *fn = NULL;
 
     if (is_vector || !dc_isar_feature(aa64_atomics, s)) {
@@ -3363,7 +3665,8 @@ static void disas_ldst_atomic(DisasContext *s, uint32_t insn,
     if (rn == 31) {
         gen_check_sp_alignment(s);
     }
-    clean_addr = gen_mte_check1(s, cpu_reg_sp(s, rn), false, rn != 31, size);
+    clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), false, rn != 31,
+                                          size, rn, false, true);
 
     if (o3_opc == 014) {
         /*
@@ -3414,7 +3717,8 @@ static void disas_ldst_pac(DisasContext *s, uint32_t insn,
     bool is_wback = extract32(insn, 11, 1);
     bool use_key_a = !extract32(insn, 23, 1);
     int offset;
-    TCGv_i64 clean_addr, dirty_addr, tcg_rt;
+    TCGv_cap_checked_ptr clean_addr;
+    TCGv_i64 dirty_addr, tcg_rt;
 
     if (size != 3 || is_vector || !dc_isar_feature(aa64_pauth, s)) {
         unallocated_encoding(s);
@@ -3442,8 +3746,8 @@ static void disas_ldst_pac(DisasContext *s, uint32_t insn,
     tcg_gen_addi_i64(dirty_addr, dirty_addr, offset);
 
     /* Note that "clean" and "dirty" here refer to TBI not PAC.  */
-    clean_addr = gen_mte_check1(s, dirty_addr, false,
-                                is_wback || rn != 31, size);
+    clean_addr = gen_mte_and_cheri_check1(
+        s, dirty_addr, false, is_wback || rn != 31, size, rn, false, true);
 
     tcg_rt = cpu_reg(s, rt);
     do_gpr_ld(s, tcg_rt, clean_addr, size, /* is_signed */ false,
@@ -3452,6 +3756,7 @@ static void disas_ldst_pac(DisasContext *s, uint32_t insn,
 
     if (is_wback) {
         tcg_gen_mov_i64(cpu_reg_sp(s, rn), dirty_addr);
+        incremented_register(s, rn);
     }
 }
 
@@ -3476,7 +3781,8 @@ static void disas_ldst_ldapr_stlr(DisasContext *s, uint32_t insn)
     int offset = sextract32(insn, 12, 9);
     int opc = extract32(insn, 22, 2);
     int size = extract32(insn, 30, 2);
-    TCGv_i64 clean_addr, dirty_addr;
+    TCGv_cap_checked_ptr clean_addr;
+    TCGv_i64 dirty_addr;
     bool is_store = false;
     bool is_signed = false;
     bool extend = false;
@@ -3518,9 +3824,11 @@ static void disas_ldst_ldapr_stlr(DisasContext *s, uint32_t insn)
         gen_check_sp_alignment(s);
     }
 
+    // TODO: I find the lack of an MTE check here highly suspicious
     dirty_addr = read_cpu_reg_sp(s, rn, 1);
     tcg_gen_addi_i64(dirty_addr, dirty_addr, offset);
-    clean_addr = clean_data_tbi(s, dirty_addr);
+    clean_addr = clean_data_tbi_and_cheri(s, dirty_addr, !is_store, 1 << size,
+                                          rn, false, true);
 
     if (is_store) {
         /* Store-Release semantics */
@@ -3602,7 +3910,8 @@ static void disas_ldst_multiple_struct(DisasContext *s, uint32_t insn)
     bool is_store = !extract32(insn, 22, 1);
     bool is_postidx = extract32(insn, 23, 1);
     bool is_q = extract32(insn, 30, 1);
-    TCGv_i64 clean_addr, tcg_rn, tcg_ebytes;
+    TCGv_cap_checked_ptr clean_addr;
+    TCGv_i64 tcg_rn, tcg_ebytes;
     MemOp endian = s->be_data;
 
     int total;    /* total bytes */
@@ -3682,8 +3991,9 @@ static void disas_ldst_multiple_struct(DisasContext *s, uint32_t insn)
      * Issue the MTE check vs the logical repeat count, before we
      * promote consecutive little-endian elements below.
      */
-    clean_addr = gen_mte_checkN(s, tcg_rn, is_store, is_postidx || rn != 31,
-                                size, total);
+    clean_addr =
+        gen_mte_and_cheri_checkN(s, tcg_rn, is_store, is_postidx || rn != 31,
+                                 size, total, rn, false, true);
 
     /*
      * Consecutive little-endian elements from a single register
@@ -3706,7 +4016,8 @@ static void disas_ldst_multiple_struct(DisasContext *s, uint32_t insn)
                 } else {
                     do_vec_ld(s, tt, e, clean_addr, size, endian);
                 }
-                tcg_gen_add_i64(clean_addr, clean_addr, tcg_ebytes);
+                tcg_gen_add_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr,
+                                tcg_ebytes);
             }
         }
     }
@@ -3775,7 +4086,8 @@ static void disas_ldst_single_struct(DisasContext *s, uint32_t insn)
     bool replicate = false;
     int index = is_q << 3 | S << 2 | size;
     int xs, total;
-    TCGv_i64 clean_addr, tcg_rn, tcg_ebytes;
+    TCGv_cap_checked_ptr clean_addr;
+    TCGv_i64 tcg_rn, tcg_ebytes;
 
     if (extract32(insn, 31, 1)) {
         unallocated_encoding(s);
@@ -3835,8 +4147,9 @@ static void disas_ldst_single_struct(DisasContext *s, uint32_t insn)
     total = selem << scale;
     tcg_rn = cpu_reg_sp(s, rn);
 
-    clean_addr = gen_mte_checkN(s, tcg_rn, !is_load, is_postidx || rn != 31,
-                                scale, total);
+    clean_addr =
+        gen_mte_and_cheri_checkN(s, tcg_rn, !is_load, is_postidx || rn != 31,
+                                 scale, total, rn, false, true);
 
     tcg_ebytes = tcg_const_i64(1 << scale);
     for (xs = 0; xs < selem; xs++) {
@@ -3844,8 +4157,8 @@ static void disas_ldst_single_struct(DisasContext *s, uint32_t insn)
             /* Load and replicate to all elements */
             TCGv_i64 tcg_tmp = tcg_temp_new_i64();
 
-            tcg_gen_qemu_ld_i64(tcg_tmp, clean_addr,
-                                get_mem_index(s), s->be_data + scale);
+            tcg_gen_qemu_ld_i64_with_checked_addr(
+                tcg_tmp, clean_addr, get_mem_index(s), s->be_data + scale);
             tcg_gen_gvec_dup_i64(scale, vec_full_reg_offset(s, rt),
                                  (is_q + 1) * 8, vec_full_reg_size(s),
                                  tcg_tmp);
@@ -3858,7 +4171,7 @@ static void disas_ldst_single_struct(DisasContext *s, uint32_t insn)
                 do_vec_st(s, rt, index, clean_addr, scale, s->be_data);
             }
         }
-        tcg_gen_add_i64(clean_addr, clean_addr, tcg_ebytes);
+        tcg_gen_add_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr, tcg_ebytes);
         rt = (rt + 1) % 32;
     }
     tcg_temp_free_i64(tcg_ebytes);
@@ -4051,16 +4364,20 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
     }
 
     if (is_zero) {
+        // DDC base on CHERI? MTE and Morello not yet composed
+        ASSERT_IF_CHERI();
         TCGv_i64 clean_addr = clean_data_tbi(s, addr);
         TCGv_i64 tcg_zero = tcg_const_i64(0);
         int mem_index = get_mem_index(s);
         int i, n = (1 + is_pair) << LOG2_TAG_GRANULE;
 
-        tcg_gen_qemu_st_i64(tcg_zero, clean_addr, mem_index,
-                            MO_Q | MO_ALIGN_16);
+        tcg_gen_qemu_st_i64_with_checked_addr(tcg_zero,
+                                              (TCGv_cap_checked_ptr)clean_addr,
+                                              mem_index, MO_Q | MO_ALIGN_16);
         for (i = 8; i < n; i += 8) {
             tcg_gen_addi_i64(clean_addr, clean_addr, 8);
-            tcg_gen_qemu_st_i64(tcg_zero, clean_addr, mem_index, MO_Q);
+            tcg_gen_qemu_st_i64_with_checked_addr(
+                tcg_zero, (TCGv_cap_checked_ptr)clean_addr, mem_index, MO_Q);
         }
         tcg_temp_free_i64(tcg_zero);
     }
@@ -4072,6 +4389,7 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
             tcg_gen_addi_i64(addr, addr, offset);
         }
         tcg_gen_mov_i64(cpu_reg_sp(s, rn), addr);
+        incremented_register(s, rn);
     }
 }
 
@@ -14589,6 +14907,23 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
 
     s->pc_curr = s->base.pc_next;
     insn = arm_ldl_code(env, s->base.pc_next, s->sctlr_b);
+
+#ifdef TARGET_CHERI
+
+    gen_check_pcc_bounds_next_inst(s, 4);
+
+#if defined(CONFIG_TCG_LOG_INSTR)
+    if (unlikely(s->base.log_instr_enabled)) {
+        TCGv pc = tcg_const_tl(s->base.pc_next);
+        TCGv_i32 opc = tcg_const_i32(insn);
+        gen_helper_arm_log_instr(cpu_env, pc, opc);
+        tcg_temp_free(pc);
+        tcg_temp_free_i32(opc);
+    }
+
+#endif
+#endif
+
     s->insn = insn;
     s->base.pc_next += 4;
 
@@ -14633,10 +14968,15 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
         }
     }
 
+    // Top 4 bits of op0
     switch (extract32(insn, 25, 4)) {
-    case 0x0: case 0x1: case 0x3: /* UNALLOCATED */
-        unallocated_encoding(s);
+    case 0x1: /* Morello Instructions */
+#ifdef TARGET_CHERI
+        disas_cheri(s, insn);
         break;
+#endif
+    case 0x0:
+    case 0x3: /* UNALLOCATED */ unallocated_encoding(s); break;
     case 0x2:
         if (!dc_isar_feature(aa64_sve, s) || !disas_sve(s, insn)) {
             unallocated_encoding(s);
@@ -14899,6 +15239,14 @@ static void aarch64_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
         }
         }
     }
+}
+
+void cheri_tcg_save_pc(DisasContextBase *db) { gen_a64_set_pc_im(db->pc_next); }
+
+void cheri_tcg_prepare_for_unconditional_exception(DisasContextBase *db)
+{
+    cheri_tcg_save_pc(db);
+    db->is_jmp = DISAS_NORETURN;
 }
 
 static void aarch64_tr_disas_log(const DisasContextBase *dcbase,

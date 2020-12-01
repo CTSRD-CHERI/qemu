@@ -48,6 +48,10 @@ arm_ss.add(when: 'TARGET_AARCH64', if_true: files(
   'translate-sve.c',
 ))
 
+arm_ss.add(when: 'TARGET_CHERI', if_true: files(
+  'cheri_helper.c'
+))
+
 arm_softmmu_ss = ss.source_set()
 arm_softmmu_ss.add(files(
   'arch_dump.c',
