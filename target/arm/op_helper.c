@@ -298,7 +298,7 @@ void HELPER(wfi)(CPUARMState *env, uint32_t insn_len)
 
     if (target_el) {
         if (env->aarch64) {
-            env->pc -= insn_len;
+            increment_aarch_reg(&env->pc, -insn_len);
         } else {
             env->regs[15] -= insn_len;
         }
@@ -556,9 +556,7 @@ void HELPER(msr_banked)(CPUARMState *env, uint32_t value, uint32_t tgtmode,
     case 16: /* SPSRs */
         env->banked_spsr[bank_number(tgtmode)] = value;
         break;
-    case 17: /* ELR_Hyp */
-        env->elr_el[2] = value;
-        break;
+    case 17: /* ELR_Hyp */ set_aarch_reg_to_x(&env->elr_el[2], value); break;
     case 13:
         env->banked_r13[bank_number(tgtmode)] = value;
         break;
@@ -589,8 +587,7 @@ uint32_t HELPER(mrs_banked)(CPUARMState *env, uint32_t tgtmode, uint32_t regno)
     switch (regno) {
     case 16: /* SPSRs */
         return env->banked_spsr[bank_number(tgtmode)];
-    case 17: /* ELR_Hyp */
-        return env->elr_el[2];
+    case 17: /* ELR_Hyp */ return get_aarch_reg_as_x(&env->elr_el[2]);
     case 13:
         return env->banked_r13[bank_number(tgtmode)];
     case 14:

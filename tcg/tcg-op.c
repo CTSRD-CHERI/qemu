@@ -3304,6 +3304,7 @@ void tcg_gen_atomic_cmpxchg_i64_with_checked_addr(
         }
     }
 #if defined(TARGET_MIPS) || defined(TARGET_RISCV)
+    // LETODO: Check what AARCH should do here
     TCGv_i32 op = tcg_const_i32(memop);
 #ifdef TARGET_CHERI
     // XXX: always clear the tag even on failure
