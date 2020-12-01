@@ -61,13 +61,7 @@
 #define CHERI_HELPER_IMPL(name) \
     __attribute__((deprecated("Do not call the helper directly, it will crash at runtime. Call the _impl variant instead"))) helper_##name
 
-#ifdef DO_CHERI_STATISTICS
 
-static DEFINE_CHERI_STAT(cgetpccsetoffset);
-static DEFINE_CHERI_STAT(cgetpccincoffset);
-static DEFINE_CHERI_STAT(cgetpccsetaddr);
-
-#endif
 
 void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags)
 {
@@ -337,26 +331,6 @@ void CHERI_HELPER_IMPL(cgetpcc(CPUArchState *env, uint32_t cd))
      * See Chapter 4 in CHERI Architecture manual.
      */
     update_capreg(env, cd, cheri_get_current_pcc(env));
-}
-
-void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
-{
-    // PCC.cursor does not need to be up-to-date here since we only look at the
-    // base.
-    uint64_t new_addr = rs + cap_get_base(cheri_get_recent_pcc(env));
-    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
-}
-
-void CHERI_HELPER_IMPL(cgetpccincoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
-{
-    uint64_t new_addr = rs + PC_ADDR(env);
-    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
-}
-
-void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd, target_ulong rs))
-{
-    uint64_t new_addr = rs;
-    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
 /* Note: not using CHERI_HELPER_IMPL since it cannot trap */
