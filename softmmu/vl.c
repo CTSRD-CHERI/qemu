@@ -1757,6 +1757,8 @@ static void version(void)
 #endif
 #elif defined(TARGET_RISCV64)
     printf("Compiled for RISCV64 (with CHERI)\n");
+#elif defined(TARGET_AARCH64)
+    printf("Compiled for AARCH64 (with CHERI)\n");
 #else
 #error "INVALID CHERI target"
 #endif

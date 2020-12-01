@@ -684,12 +684,12 @@ void HELPER(casp_le_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
     mem_idx = cpu_mmu_index(env, false);
     oi = make_memop_idx(MO_LEQ | MO_ALIGN_16, mem_idx);
 
-    cmpv = int128_make128(env->xregs[rs], env->xregs[rs + 1]);
+    cmpv = int128_make128(arm_get_xreg(env, rs), arm_get_xreg(env, rs + 1));
     newv = int128_make128(new_lo, new_hi);
     oldv = helper_atomic_cmpxchgo_le_mmu(env, addr, cmpv, newv, oi, ra);
 
-    env->xregs[rs] = int128_getlo(oldv);
-    env->xregs[rs + 1] = int128_gethi(oldv);
+    arm_set_xreg(env, rs, int128_getlo(oldv));
+    arm_set_xreg(env, rs + 1, int128_gethi(oldv));
 }
 
 void HELPER(casp_be_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
@@ -705,12 +705,12 @@ void HELPER(casp_be_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
     mem_idx = cpu_mmu_index(env, false);
     oi = make_memop_idx(MO_LEQ | MO_ALIGN_16, mem_idx);
 
-    cmpv = int128_make128(env->xregs[rs + 1], env->xregs[rs]);
+    cmpv = int128_make128(arm_get_xreg(env, rs + 1), arm_get_xreg(env, rs));
     newv = int128_make128(new_lo, new_hi);
     oldv = helper_atomic_cmpxchgo_be_mmu(env, addr, cmpv, newv, oi, ra);
 
-    env->xregs[rs + 1] = int128_getlo(oldv);
-    env->xregs[rs] = int128_gethi(oldv);
+    arm_set_xreg(env, rs + 1, int128_getlo(oldv));
+    arm_set_xreg(env, rs, int128_gethi(oldv));
 }
 
 /*
@@ -1049,11 +1049,15 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
                 new_pc = extract64(new_pc, 0, 56);
             }
         }
-        env->pc = new_pc;
 
-        qemu_log_mask(CPU_LOG_INT, "Exception return from AArch64 EL%d to "
+        // LETODO
+        ASSERT_IF_CHERI();
+        set_aarch_reg_to_x(&env->pc, new_pc);
+
+        qemu_log_mask(CPU_LOG_INT,
+                      "Exception return from AArch64 EL%d to "
                       "AArch64 EL%d PC 0x%" PRIx64 "\n",
-                      cur_el, new_el, env->pc);
+                      cur_el, new_el, get_aarch_reg_as_x(&env->pc));
     }
 
     /*
@@ -1077,15 +1081,19 @@ illegal_return:
      * no change to exception level, execution state or stack pointer
      */
     env->pstate |= PSTATE_IL;
-    env->pc = new_pc;
+    // LETODO
+    ASSERT_IF_CHERI();
+    set_aarch_reg_to_x(&env->pc, new_pc);
     spsr &= PSTATE_NZCV | PSTATE_DAIF;
     spsr |= pstate_read(env) & ~(PSTATE_NZCV | PSTATE_DAIF);
     pstate_write(env, spsr);
     if (!arm_singlestep_active(env)) {
         env->pstate &= ~PSTATE_SS;
     }
-    qemu_log_mask(LOG_GUEST_ERROR, "Illegal exception return at EL%d: "
-                  "resuming execution at 0x%" PRIx64 "\n", cur_el, env->pc);
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "Illegal exception return at EL%d: "
+                  "resuming execution at 0x%" PRIx64 "\n",
+                  cur_el, get_aarch_reg_as_x(&env->pc));
 }
 
 /*
