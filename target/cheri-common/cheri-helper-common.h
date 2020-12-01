@@ -88,8 +88,17 @@ DEF_HELPER_4(cunseal, void, env, i32, i32, i32)
 // Three operands (cap cap int)
 DEF_HELPER_4(candaddr, void, env, i32, i32, tl)
 DEF_HELPER_4(candperm, void, env, i32, i32, tl)
+// Rather than waste TCG vals on a few bits of flags, they can be played in the 32-bit register numbers
+#define HELPER_REG_MASK         0xFF
+// A value of zero should not give the null capability
+#define CFROMPTR_0_IS_NOT_NULL  (1 << 8)
+// Set the address, not the offset
+#define CFROMPTR_SET_ADDR       (1 << 9)
 DEF_HELPER_4(cfromptr, void, env, i32, i32, tl)
 DEF_HELPER_4(cincoffset, void, env, i32, i32, tl)
+#define CJALR_MUST_BE_SENTRY        (1 << 8)
+#define CJALR_CAN_BRANCH_RESTRICTED (1 << 9)
+#define CJALR_DONT_MAKE_SENTRY      (1 << 10)
 DEF_HELPER_4(cjalr, void, env, i32, i32, tl)
 DEF_HELPER_4(csetaddr, void, env, i32, i32, tl)
 DEF_HELPER_4(csetbounds, void, env, i32, i32, tl)
