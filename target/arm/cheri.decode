@@ -1,0 +1,84 @@
+# AUTO-GENERATED. DO NOT EDIT.
+@op_ADR     op:1  immlo:2 ..... P:1  immhi:18  Rd:5 
+@op_ADD_SUB    ........ A:1  sh:1  imm12:12  Cn:5  Cd:5 
+@op_ADD    ........... Rm:5  option_name:3  imm3:3  Cn:5  Cd:5 
+@op_ALD_ASTUR    ........ op1:2  V:1  imm9:9  op2:2  Rn:5  Rt:5 
+@op_ALIGN    ........... imm6:6  U:1 .... Cn:5  Cd:5 
+@op_FLGS    ........... imm8:8  op:2 . Cn:5  Cd:5 
+@op_FLGS_CTHI    ........... Rm:5  opc:2 .... Cn:5  Cd:5 
+@op_BLR_BR_RET_CHKD    ................. opc:2 ... Cn:5 ... op:2 
+@op_BRS_RETS_CHK    ........... Cm:5 . opc:2 ... Cn:5 .....
+@op_CAS    ......... L:1 . Cs:5  R:1 ..... Rn:5  Ct:5 
+@op_BUILD_CSEAL_CPYE    ........... Cm:5 . opc:2 ... Cn:5  Cd:5 
+@op_CLRPERM_SCG_CVT    ........... Rm:5 ...... Cn:5  Cd:5 
+@op_CLRTAG_CPY    ................. opc:2 ... Cn:5  Cd:5 
+@op_SEAL    ................. form:2 ... Cn:5  Cd:5 
+@op_SEAL_CHKSSU    ........... Cm:5  opc:2 .... Cn:5  Cd:5 
+@op_CSEL    ........... Cm:5  cond:4 .. Cn:5  Cd:5 
+@op_CFHI_GCL_CVT    ................. opc:2 ... Cn:5  Rd:5 
+@op_GC    ................ opc:3 ... Cn:5  Rd:5 
+@op_LDP_STP    . op2:2 ..... op1:1  L:1  imm7:7  Ct2:5  Rn:5  Ct:5 
+@op_LDPBR    ................. opc:2 ... Cn:5  Ct:5 
+@op_LDR    .......... imm17:17  Ct:5 
+@op_LDR_STR    ........ opc:2 . imm9:9  op:2  Rn:5  Ct:5 
+@op_LDR_STR1    ......... L:1  imm12:12  Rn:5  Ct:5 
+@op_LDR_STR2    ........ opc:2 . Rm:5  option_name:3  S:1 .. Rn:5  Ct:5 
+@op_MRS_MSR    ........... L:1  o0:1  op1:3  CRn:4  CRm:4  op2:3  Ct:5 
+@op_RR    ................. opc:2 ... Rn:5  Rd:5 
+@op_SCBNDS    ........... imm6:6  S:1 .... Cn:5  Cd:5 
+@op_SC    ........... Rm:5 . opc:2 ... Cn:5  Cd:5 
+@op_SUBS_CVT    ........... Cm:5 ...... Cn:5  Rd:5 
+@op_SWP    ........ A:1  R:1 . Cs:5 ...... Rn:5  Ct:5 
+@op_CVT    ................. opc:2 ... Rn:5  Cd:5 
+@op_CLRPERM    ................ perm:3 ... Cn:5  Cd:5 
+@op_BR_BLR    ............ imm7:7 ... Cn:5 .....
+@op_ASTRB_ALD    .......... L:1  imm9:9  op:2  Rn:5  Rt:5 
+@op_ASTR_ALD    ......... L:1  op:1  Rm:5  option_name:3  S:1  opc:2  Rn:5  Rt:5 
+
+ADR ...10000........................ @op_ADR
+{
+  ADD_SUB 00000010........................ @op_ADD_SUB
+  LDP_STP 0..00010........................ @op_LDP_STP
+}
+ADD1 11000010101..................... @op_ADD
+ALD_ASTUR 11100010........................ @op_ALD_ASTUR
+ALIGN 11000010110.......0110.......... @op_ALIGN
+{
+  FLGS 11000010111..........0.......... @op_FLGS
+  CVT 11000010111.....000110.......... @op_CLRPERM_SCG_CVT
+  CVT1 11000010111.....010110.......... @op_CLRPERM_SCG_CVT
+  SUBS 11000010111.....100110.......... @op_SUBS_CVT
+}
+FLGS_CTHI 11000010110.......1010.......... @op_FLGS_CTHI
+BLR_BR_RET_CHKD 11000010110000100..100.....000.. @op_BLR_BR_RET_CHKD
+BRS 11000010110.....1..001.....00000 @op_BRS_RETS_CHK
+CHK 11000010110.....1..001.....00001 @op_BRS_RETS_CHK
+CAS 101000101.1......11111.......... @op_CAS
+BUILD_CSEAL_CPYE 11000010110.....0..001.......... @op_BUILD_CSEAL_CPYE
+CLRPERM 11000010110.....101000.......... @op_CLRPERM_SCG_CVT
+SCG 11000010110.....100000.......... @op_CLRPERM_SCG_CVT
+SCG1 11000010110.....111000.......... @op_CLRPERM_SCG_CVT
+CLRTAG_CPY 11000010110000011..100.......... @op_CLRTAG_CPY
+SEAL 11000010110000110..100.......... @op_SEAL
+SEAL_CHKSSU 11000010110.......0010.......... @op_SEAL_CHKSSU
+CSEL 11000010110.........11.......... @op_CSEL
+CFHI 11000010110000010..100.......... @op_CFHI_GCL_CVT
+CVT2 11000010110001010..100.......... @op_CFHI_GCL_CVT
+GC 1100001011000000...100.......... @op_GC
+LDPBR 11000010110001000..100.......... @op_LDPBR
+LDR 1000001000...................... @op_LDR
+LDR_STR 10100010..0..................... @op_LDR_STR
+LDR_STR1 110000100....................... @op_LDR_STR1
+LDR_STR2 10100010..1.........10.......... @op_LDR_STR2
+MRS_MSR 11000010100..................... @op_MRS_MSR
+RR 11000010110001110..100.......... @op_RR
+SCBNDS 11000010110.......1110.......... @op_SCBNDS
+SC 11000010110.....0..000.......... @op_SC
+CVT3 11000010110.....110000.......... @op_SUBS_CVT
+SWP 10100010..1.....100000.......... @op_SWP
+CVT4 11000010110001011..100.......... @op_CVT
+CLRPERM1 1100001011000110...100.......... @op_CLRPERM
+BR 110000101101.......100.....00000 @op_BR_BLR
+BLR1 110000101101.......100.....00001 @op_BR_BLR
+ASTRB_ALD 1000001001...................... @op_ASTRB_ALD
+ASTR_ALD 100000101....................... @op_ASTR_ALD
