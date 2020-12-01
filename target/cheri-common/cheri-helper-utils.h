@@ -263,3 +263,9 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
                               target_ulong retpc, hwaddr *physaddr);
+
+void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
+                         target_ulong addr, uint32_t link_reg,
+                         target_ulong link_pc, uint32_t cjalr_flags);
+
+void squash_mutable_permissions(uint64_t *pesbt, const cap_register_t *source);
