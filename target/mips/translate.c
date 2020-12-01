@@ -3049,7 +3049,6 @@ static inline void restore_cpu_state(CPUMIPSState *env, DisasContext *ctx)
 #ifdef TARGET_CHERI
     case MIPS_HFLAG_BRCCALL:
     case MIPS_HFLAG_BRC:
-        // ctx->btcr = env->btcr;
         break;
 #endif
     case MIPS_HFLAG_BC:

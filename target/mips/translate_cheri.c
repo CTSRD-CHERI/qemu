@@ -84,8 +84,8 @@ static inline void generate_ccall(int32_t cs, int32_t cb)
 static inline void generate_ccall_notrap(DisasContext *ctx, int32_t cs, int32_t cb, int32_t select)
 {
     /*
-     * This version of ccall has a delay slot and also can not
-     * be used in a delay slot
+     * This version of ccall does not have a delay slot
+     * and also can not be used in a delay slot.
      */
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
 #ifdef MIPS_DEBUG_DISAS
