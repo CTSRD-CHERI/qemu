@@ -69,7 +69,6 @@ struct target_crypt_kop {
         struct target_crparam	crk_param[TARGET_CRK_MAXPARAM];
 };
 
-#define	TARGET_CRIOGET		TARGET_IOWR('c', 100, u_int32_t)
 #define TARGET_CRIOASYMFEAT	TARGET_CIOCASYMFEAT
 #define	TARGET_CRIOFINDDEV	TARGET_CIOCFINDDEV
 

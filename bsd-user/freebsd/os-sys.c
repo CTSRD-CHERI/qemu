@@ -429,7 +429,6 @@ host_to_target_kinfo_file(struct target_kinfo_file *tkif,
         break;
 
 
-    case KF_TYPE_CRYPTO:
     case KF_TYPE_KQUEUE:
     case KF_TYPE_MQUEUE:
     case KF_TYPE_NONE:
