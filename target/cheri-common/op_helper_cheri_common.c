@@ -274,9 +274,10 @@ void CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum,
         raise_cheri_exception(env, CapEx_SealViolation, data_regnum);
     } else if ((code_cap->cr_otype != data_cap->cr_otype || code_cap->cr_otype > CAP_LAST_NONRESERVED_OTYPE)) {
         raise_cheri_exception(env, CapEx_TypeViolation, code_regnum);
-    } else if (!cap_has_perms(code_cap, CAP_PERM_CINVOKE) ||
-               !cap_has_perms(data_cap, CAP_PERM_CINVOKE)) {
+    } else if (!cap_has_perms(code_cap, CAP_PERM_CINVOKE)) {
         raise_cheri_exception(env, CapEx_PermitCCallViolation, code_regnum);
+    } else if (!cap_has_perms(data_cap, CAP_PERM_CINVOKE)) {
+        raise_cheri_exception(env, CapEx_PermitCCallViolation, data_regnum);
     } else if (!cap_has_perms(code_cap, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, code_regnum);
     } else if (cap_has_perms(data_cap, CAP_PERM_EXECUTE)) {
