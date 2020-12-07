@@ -18,19 +18,20 @@ static inline abi_long setup_sigtramp(abi_ulong offset, unsigned sigf_uc,
     /*  7 */ 0x38610070 + sigf_uc,   /* addi r3,r1,112+SF_UC */
     /*  8 */ 0x38000000 + sys_sigreturn, /* li r0,SYS_sigreturn */
     /*  9 */ 0x44000002,   /* sc */
-    /* 10 */ 0x38000001,   /* li r0,1 */
+    /* 10 */ 0x38000001,   /* li r0,SYS_exit */
     /* 11 */ 0x44000002,   /* sc */
     /* 12 */ 0x60000000    /* nop */
     };
 #else
     uint32_t sigtramp_code[TARGET_SZSIGCODE/TARGET_INSN_SIZE] = {
-    /* 1 */ 0x3821FFEC,   /* addi r1,r1,-20 */
+    /* 1 */ 0x3821FFE0,   /* addi r1,r1,-32 */
     /* 2 */ 0x4E800021,   /* blrl */
-    /* 3 */ 0x38610014 + sigf_uc,   /* addi r3,r1,20+SF_UC */
+    /* 3 */ 0x38610020 + sigf_uc,   /* addi r3,r1,20+SF_UC */
     /* 4 */ 0x38000000 + sys_sigreturn, /* li r0,SYS_sigreturn */
     /* 5 */ 0x44000002,   /* sc */
-    /* 6 */ 0x38000001,   /* li r0,1 */
-    /* 7 */ 0x44000002    /* sc */
+    /* 6 */ 0x38000001,   /* li r0,SYS_exit */
+    /* 7 */ 0x44000002,   /* sc */
+    /* 8 */ 0x60000000    /* nop */
     };
 #endif
 
