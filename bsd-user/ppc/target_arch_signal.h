@@ -56,14 +56,13 @@ typedef struct target_trapframe {
 	abi_long srr0;
 	abi_long srr1;
 	abi_long exc;
+	abi_long dar; /* DAR filled in on DSI traps */
 	union {
 		struct {
-			/* dar & dsisr are only filled on a DSI trap */
-			abi_long dar;
+			/* dsisr only filled on a DSI trap */
 			abi_long dsisr;
 		} aim;
 		struct {
-			abi_long dear;
 			abi_long esr;
 			abi_long dbcr0;
 		} booke;
@@ -80,12 +79,13 @@ struct target_sigcontext {
 typedef struct target_mcontext {
 	int32_t     mc_vers;
 	int32_t     mc_flags;
-    int32_t     mc_onstack;     /* sigstack state to restore */
-    int32_t     mc_len;
-    uint64_t    mc_avec[32*2];
-    uint32_t    mc_av[2];
-    abi_long    mc_frame[42];    /* process regs 0 to 31 */
-    uint64_t    mc_fpreg[33];  /* fp regs 0 to 31  */
+	int32_t     mc_onstack;     /* sigstack state to restore */
+	int32_t     mc_len;
+	uint64_t    mc_avec[32*2];
+	uint32_t    mc_av[2];
+	abi_long    mc_frame[42];    /* process regs 0 to 31 */
+	uint64_t    mc_fpreg[33];  /* fp regs 0 to 31  */
+	uint64_t    mc_vsxfpreg[32]; /* low-order half of VSR0-31 */
 } target_mcontext_t;
 
 typedef struct target_ucontext {
