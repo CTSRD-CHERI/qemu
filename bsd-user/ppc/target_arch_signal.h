@@ -23,10 +23,10 @@
 #define TARGET_INSN_SIZE     4  /* powerpc instruction size */
 
 #if defined(TARGET_PPC64) && !defined(TARGET_ABI32)
-/* Size of the signal trampolin code placed on the stack. */
+/* Size of the signal trampoline code placed on the stack. */
 #define TARGET_SZSIGCODE    ((abi_ulong)(12 * TARGET_INSN_SIZE))
 #else
-#define TARGET_SZSIGCODE    ((abi_ulong)(7 * TARGET_INSN_SIZE))
+#define TARGET_SZSIGCODE    ((abi_ulong)(8 * TARGET_INSN_SIZE))
 #endif
 
 #define TARGET_MINSIGSTKSZ  (512 * 4)
