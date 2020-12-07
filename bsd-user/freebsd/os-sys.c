@@ -1139,7 +1139,7 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
         switch (snamep[1]) {
         case 1:    /* This should be documented elsewhere. */
             holdlen = sizeof(abi_ulong);
-            (*(abi_ulong *)holdp) = env->dcache_line_size;
+            (*(abi_ulong *)holdp) = tswapal(env->dcache_line_size);
             ret = 0;
             goto out;
         }
