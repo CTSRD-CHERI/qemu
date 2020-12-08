@@ -42,7 +42,6 @@
 #define TARGET_SIGLIBRT 33     /* reserved by the real-time library */
 #define TARGET_SIGRTMIN 65
 #define TARGET_SIGRTMAX 126
-#define TARGET_QEMU_ESIGRETURN  255 /* fake errno value for use by sigreturn */
 
 /*
  * Language spec says we must list exactly one parameter, even though we
