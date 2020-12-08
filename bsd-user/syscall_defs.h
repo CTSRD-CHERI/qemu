@@ -202,7 +202,7 @@ typedef abi_long target_freebsd_suseconds_t;
 struct target_freebsd_timespec {
     target_freebsd_time_t   tv_sec;     /* seconds */
     abi_long                tv_nsec;    /* and nanoseconds */
-#if (defined(TARGET_ARM) || defined(TARGET_MIPS)) && TARGET_ABI_BITS == 32
+#if !defined(TARGET_I386) && TARGET_ABI_BITS == 32
     abi_long _pad;
 #endif
 } __packed;
@@ -220,7 +220,7 @@ struct target_freebsd__umtx_time {
 struct target_freebsd_timeval {
     target_freebsd_time_t       tv_sec; /* seconds */
     target_freebsd_suseconds_t  tv_usec;/* and microseconds */
-#if (defined(TARGET_ARM) || defined(TARGET_MIPS)) && TARGET_ABI_BITS == 32
+#if !defined(TARGET_I386) && TARGET_ABI_BITS == 32
     abi_long _pad;
 #endif
 } __packed;
