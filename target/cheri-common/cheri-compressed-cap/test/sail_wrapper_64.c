@@ -69,3 +69,6 @@ struct cc64_bounds_bits sail_extract_bounds_bits_64(cc64_addr_t pesbt) {
 }
 cc64_addr_t sail_compress_64_raw(const cc64_cap_t* csp) { return sail_compress_common_raw(csp); }
 cc64_addr_t sail_compress_64_mem(const cc64_cap_t* csp) { return sail_compress_common_mem(csp); }
+
+cc64_addr_t sail_representable_mask_64(cc64_addr_t len) { return sailgen_getRepresentableAlignmentMask(len); }
+cc64_addr_t sail_representable_length_64(cc64_addr_t len) { return sailgen_getRepresentableLength(len); }

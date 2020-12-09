@@ -53,6 +53,23 @@ static void dump_cap_fields(const cap_register_t& result) {
     fprintf(stderr, "\n");
 }
 
+static inline void check_crrl_and_cram(uint64_t value) {
+    uint64_t sail_crrl = sail_representable_length_128(value);
+    uint64_t clib_crrl = cc128_get_representable_length(value);
+    if (sail_crrl != clib_crrl) {
+        fprintf(stderr, "CRRL(0x%" PRIx64 ") mismatch: sail=0x%" PRIx64 ", C lib=0x%" PRIx64 "\n", value, sail_crrl,
+                clib_crrl);
+        abort();
+    }
+    uint64_t sail_cram = sail_representable_mask_128(value);
+    uint64_t clib_cram = cc128_get_alignment_mask(value);
+    if (sail_cram != clib_cram) {
+        fprintf(stderr, "CRAM(0x%" PRIx64 ") mismatch: sail=0x%" PRIx64 ", C lib=0x%" PRIx64 "\n", value, sail_cram,
+                clib_cram);
+        abort();
+    }
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (size != 16) {
         return 0; // Need 128 bits of data
@@ -74,6 +91,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         dump_cap_fields(sail_result);
         abort();
     }
+
+    check_crrl_and_cram(pesbt);
+    check_crrl_and_cram(cursor);
 
     memset(&result, 0, sizeof(result));
     memset(&sail_result, 0, sizeof(sail_result));

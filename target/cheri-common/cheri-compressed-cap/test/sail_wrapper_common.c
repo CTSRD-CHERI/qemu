@@ -123,7 +123,7 @@ static _cc_bounds_bits sail_extract_bounds_bits_common(_cc_addr_t pesbt) {
     result.E = sail_result.zE;
     result.B = sail_result.zB;
     result.T = sail_result.zT;
-    result.IE = sail_result.zinternal_e;
+    result.IE = sail_result.zinternal_E;
     return result;
 }
 
@@ -137,12 +137,11 @@ static struct zCapability cap_t_to_sail_cap(const _cc_cap_t* c) {
     result.zuperms = c->cr_uperms;
     result.zotype = c->cr_otype;
     result.zflag_cap_mode = c->cr_flags;
-    result.zsealed = result.zotype != (uint64_t)zotype_unsealed;
 
     // Extract E,B,T,IE from the cr_ebt field:
     _cc_addr_t fake_pesbt = _CC_ENCODE_FIELD(c->cr_ebt, EBT);
     _cc_bounds_bits c_bounds = _cc_N(extract_bounds_bits)(fake_pesbt);
-    result.zinternal_e = c_bounds.IE;
+    result.zinternal_E = c_bounds.IE;
     result.zE = c_bounds.E;
     result.zT = c_bounds.T;
     result.zB = c_bounds.B;

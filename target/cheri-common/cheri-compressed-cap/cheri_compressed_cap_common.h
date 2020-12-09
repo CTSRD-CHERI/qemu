@@ -715,18 +715,10 @@ static inline _cc_addr_t _cc_N(get_alignment_mask)(_cc_addr_t req_length) {
     _cc_cap_t tmpcap;
     memset(&tmpcap, 0, sizeof(tmpcap));
     tmpcap.cr_tag = 1;
-    tmpcap.cr_base = 0;
     tmpcap._cr_top = _CC_MAX_TOP;
     tmpcap.cr_otype = _CC_N(OTYPE_UNSEALED);
     _cc_addr_t mask = 0;
-    // Ensure that the base always needs rounding down by making it all ones until
-    // one bit before the most significant bit in length
-    // _cc_addr_t req_base = UINT64_MAX & ~(UINT64_C(1) << _cc_N(idx_MSNZ)(req_length));
-    _cc_addr_t req_base = _CC_MAX_ADDR - req_length;
-    tmpcap._cr_cursor = req_base;
-    _cc_N(setbounds_impl)(&tmpcap, req_base, req_base + req_length, &mask);
-    // base should have been rounded down using this mask:
-    _cc_debug_assert((req_base & mask) == tmpcap.cr_base);
+    _cc_N(setbounds_impl)(&tmpcap, 0, req_length, &mask);
     return mask;
 }
 
@@ -788,5 +780,7 @@ public:
     static inline cap_t make_max_perms_cap(addr_t base, addr_t cursor, length_t top) {
         return _cc_N(make_max_perms_cap)(base, cursor, top);
     }
+    static inline addr_t representable_length(addr_t len) { return _cc_N(get_representable_length)(len); }
+    static inline addr_t representable_mask(addr_t len) { return _cc_N(get_alignment_mask)(len); }
 };
 #endif

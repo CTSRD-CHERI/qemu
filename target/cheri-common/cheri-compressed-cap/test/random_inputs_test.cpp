@@ -52,6 +52,22 @@ static bool check_fields_match(const typename Handler::cap_t& result, const test
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_reserved == result.cr_reserved);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_tag == result.cr_tag);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_uperms == result.cr_uperms);
+
+    // Since we are parsing arbitrary bit patterns, the length can be negative.
+    // For the CRRL/CRAM check we only look at the low 64 bits of length.
+    typename Handler::addr_t len_truncated = (typename Handler::addr_t)result.length();
+    typename Handler::addr_t rep_len = Handler::representable_length(len_truncated);
+    if (rep_len != 0) {
+        REQUIRE(rep_len >= len_truncated); // representable length wraps to 0 for >= 2^64
+    }
+    // Check that CRRL is idempotent:
+    CHECK_AND_SAVE_SUCCESS(rep_len == Handler::representable_length(rep_len));
+    // And equal to sail:
+    CHECK_AND_SAVE_SUCCESS(rep_len == Handler::sail_representable_length(len_truncated));
+    CHECK_AND_SAVE_SUCCESS(rep_len == Handler::sail_representable_length(rep_len));
+    // Finally check CRAM:
+    typename Handler::addr_t rep_mask = Handler::representable_mask(len_truncated);
+    CHECK_AND_SAVE_SUCCESS(rep_mask == Handler::sail_representable_mask(len_truncated));
     return success;
 }
 

@@ -27,5 +27,7 @@ function main () : unit -> unit = {
       flags = getCapFlags(TestCap);
       new_cap = setCapPerms(TestCap, ones()); /* rt_val[30..0] */
       cap_str = capToString(TestCap);
+      len = getRepresentableLength(TestAddr);
+      mask = getRepresentableAlignmentMask(TestAddr);
   /* } */
 }
