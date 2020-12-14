@@ -1317,7 +1317,7 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
         }
         case HW_NCPU:
             if (oldlen) {
-                (*(int32_t *)holdp) = bsd_get_ncpu();
+                (*(int32_t *)holdp) = tswap32(bsd_get_ncpu());
             }
             holdlen = sizeof(int32_t);
             ret = 0;
