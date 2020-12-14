@@ -27,7 +27,6 @@
 #include "qemu/atomic.h"
 #include "qemu/error-report.h"
 #include "hw/mips/cpudevs.h"
-#include "qapi/qapi-commands-machine-target.h"
 
 #ifdef TARGET_CHERI
 #include "cheri-helper-utils.h"
@@ -500,7 +499,7 @@ void cpu_mips_store_status(CPUMIPSState *env, target_ulong val)
         tlb_flush(env_cpu(env));
     }
 #endif
-    if (env->CP0_Config3 & (1 << CP0C3_MT)) {
+    if (ase_mt_available(env)) {
         sync_c0_status(env, env, env->current_tc);
     } else {
         compute_hflags(env);
@@ -959,8 +958,8 @@ refill:
             break;
         }
     }
-    pw_pagemask = m >> 12;
-    update_pagemask(env, pw_pagemask << 13, &pw_pagemask);
+    pw_pagemask = m >> TARGET_PAGE_BITS_MIN;
+    update_pagemask(env, pw_pagemask << CP0PM_MASK, &pw_pagemask);
     pw_entryhi = (address & ~0x1fff) |
                  (env->CP0_EntryHi & (0xFF | CP0EnHi_CLG_MASK));
     {
@@ -1097,6 +1096,7 @@ hwaddr cpu_mips_translate_address(CPUMIPSState *env, target_ulong address,
         return physical;
     }
 }
+#endif /* !CONFIG_USER_ONLY */
 
 static const char * const excp_names[EXCP_LAST + 1] = {
     [EXCP_RESET] = "reset",
@@ -1137,7 +1137,14 @@ static const char * const excp_names[EXCP_LAST + 1] = {
     [EXCP_MSADIS] = "MSA disabled",
     [EXCP_MSAFPE] = "MSA floating point",
 };
-#endif
+
+static const char *mips_exception_name(int32_t exception)
+{
+    if (exception < 0 || exception > EXCP_LAST) {
+        return "unknown";
+    }
+    return excp_names[exception];
+}
 
 target_ulong exception_resume_pc(CPUMIPSState *env)
 {
@@ -1223,20 +1230,16 @@ void mips_cpu_do_interrupt(CPUState *cs)
     bool update_badinstr = 0;
     target_ulong offset;
     int cause = -1;
-    const char *name = "";
 
     /* Log interrupt extra debug info */
     if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT) &&
         cs->exception_index != EXCP_EXT_INTERRUPT) {
-        if (cs->exception_index < 0 || cs->exception_index > EXCP_LAST) {
-            name = "unknown";
-        } else {
-            name = excp_names[cs->exception_index];
-        }
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+        qemu_log_instr_or_mask_msg(
+            env, CPU_LOG_INT,
             "%s enter: PC " TARGET_FMT_lx " EPC " TARGET_FMT_lx
             " %s exception, (hflags & MIPS_HFLAG_BMASK)=%x, hflags=%x\n",
-            __func__, PC_ADDR(env), get_CP0_EPC(env), name,
+            __func__, PC_ADDR(env), get_CP0_EPC(env),
+            mips_exception_name(cs->exception_index),
             env->hflags & MIPS_HFLAG_BMASK, env->hflags);
 #ifdef TARGET_CHERI
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
@@ -1738,44 +1741,12 @@ void QEMU_NORETURN do_raise_exception_err(CPUMIPSState *env, MipsExcp exception,
     }
 #endif
     if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "%s: %s %d\n", __func__, exception <= EXCP_LAST ?
-            excp_names[exception] : "unknown excp", error_code);
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT, "%s: %d (%s) %d\n",
+                                   __func__, exception,
+                                   mips_exception_name(exception), error_code);
     }
     cs->exception_index = exception;
     env->error_code = error_code;
 
     cpu_loop_exit_restore(cs, pc);
-}
-
-static void mips_cpu_add_definition(gpointer data, gpointer user_data)
-{
-    ObjectClass *oc = data;
-    CpuDefinitionInfoList **cpu_list = user_data;
-    CpuDefinitionInfoList *entry;
-    CpuDefinitionInfo *info;
-    const char *typename;
-
-    typename = object_class_get_name(oc);
-    info = g_malloc0(sizeof(*info));
-    info->name = g_strndup(typename,
-                           strlen(typename) - strlen("-" TYPE_MIPS_CPU));
-    info->q_typename = g_strdup(typename);
-
-    entry = g_malloc0(sizeof(*entry));
-    entry->value = info;
-    entry->next = *cpu_list;
-    *cpu_list = entry;
-}
-
-CpuDefinitionInfoList *qmp_query_cpu_definitions(Error **errp)
-{
-    CpuDefinitionInfoList *cpu_list = NULL;
-    GSList *list;
-
-    list = object_class_get_list(TYPE_MIPS_CPU, false);
-    g_slist_foreach(list, mips_cpu_add_definition, &cpu_list);
-    g_slist_free(list);
-
-    return cpu_list;
 }

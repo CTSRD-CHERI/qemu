@@ -19,22 +19,18 @@
  */
 
 #include "qemu/osdep.h"
-#include "qemu/main-loop.h"
 #include "cpu.h"
 #include "internal.h"
-#include "qemu/host-utils.h"
 #include "qemu/error-report.h"
 #include "exec/helper-proto.h"
 #include "exec/exec-all.h"
-#include "exec/cpu_ldst.h"
-#include "exec/ramblock.h"
-#include "exec/memop.h"
 #include "exec/log.h"
 #include "exec/log_instr.h"
 #ifdef TARGET_CHERI
 #include "cheri_tagmem.h"
 #include "cheri-helper-utils.h"
 #endif
+#include "exec/ramblock.h"
 #include "sysemu/kvm.h"
 
 
