@@ -227,6 +227,33 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           target_ulong retpc, hwaddr *physaddr);
+
+static inline bool cap_is_local(CPUArchState *env, uint32_t cs)
+{
+    return get_capreg_tag(env, cs) &&
+           !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL);
+}
+
+static inline uint32_t perms_for_load(void) { return CAP_PERM_LOAD; }
+
+static inline uint32_t perms_for_store(CPUArchState *env, uint32_t cs)
+{
+    // Probably should only need CAP_PERM_STORE_CAP if cs tagged
+    uint32_t perms = CAP_PERM_STORE | CAP_PERM_STORE_CAP;
+    if (cap_is_local(env, cs))
+        perms |= CAP_PERM_STORE_LOCAL;
+    return perms;
+}
+
+// Do all the permission and bounds checks for loads/stores on cbp.
+// Use perms_for_load() and perms_for_store() for required_perms.
+target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
+                                  uint32_t cb, target_ulong offset,
+                                  uint32_t size, uintptr_t _host_return_address,
+                                  const cap_register_t *cbp,
+                                  uint32_t alignment_required,
+                                  bool no_unaligned);
+
 // Helper for RISCV AMOSWAP
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,
