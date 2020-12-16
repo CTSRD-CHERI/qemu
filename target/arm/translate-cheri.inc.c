@@ -346,16 +346,18 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
     // Just special casing this for now until we get better TCG handling for
     // caps
     if (size == 4 && !vector) {
-        // Would need a different helper for this because we cannot take an
-        // exception half way
-        assert(rd2 == REG_NONE);
-
         uint32_t base_reg = capability_base ? rn
                                             : (pcc_base ? CHERI_EXC_REGNUM_PCC
                                                         : CHERI_EXC_REGNUM_DDC);
 
         TCGv_i32 tcg_base_reg = tcg_const_i32(base_reg);
         TCGv_i32 tcg_rd = tcg_const_i32(rd);
+
+        TCGv_i32 tcg_rd2 = NULL;
+
+        if (rd2 != REG_NONE) {
+            tcg_rd2 = tcg_const_i32(rd2);
+        }
 
         if (!capability_base) {
             // might have to add base of ppc / ddc
@@ -369,11 +371,22 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
             }
         }
 
-        (is_load ? gen_helper_load_cap_via_cap : gen_helper_store_cap_via_cap)(
-            cpu_env, tcg_rd, tcg_base_reg, addr);
+        if (rd2 == REG_NONE) {
+            (is_load ? gen_helper_load_cap_via_cap
+                     : gen_helper_store_cap_via_cap)(cpu_env, tcg_rd,
+                                                     tcg_base_reg, addr);
+        } else {
+            (is_load ? gen_helper_load_cap_pair_via_cap
+                     : gen_helper_store_cap_pair_via_cap)(
+                cpu_env, tcg_rd, tcg_rd2, tcg_base_reg, addr);
+        }
 
         tcg_temp_free_i32(tcg_base_reg);
         tcg_temp_free_i32(tcg_rd);
+
+        if (tcg_rd2 != NULL) {
+            tcg_temp_free_i32(tcg_rd2);
+        }
 
     } else {
         // Calculate src/dst registers and base
@@ -661,7 +674,7 @@ TRANS_F(BLR_BR_RET_CHKD)
         switch (a->opc) {
         case 0b00: // CHKSLD
             sealed = tcg_temp_new_i32();
-            gen_cap_get_sealed(ctx, a->opc, sealed);
+            gen_cap_get_sealed_i32(ctx, a->opc, sealed);
             break;
         case 0b01: // CHKTGD
             tag = tcg_temp_new_i32();
@@ -827,7 +840,43 @@ TRANS_F(CVT2)
         ctx, a->Rd, a->Cn, pcc ? CHERI_EXC_REGNUM_PCC : CHERI_EXC_REGNUM_DDC,
         pcc);
 }
-TRANSLATE_UNDEF(GC)
+
+TRANS_F(GC)
+{
+    int regnum = a->Cn;
+    TCGv_i64 result = cpu_reg(ctx, a->Rd);
+
+    switch (a->opc) {
+    case 0b000: // base
+        gen_cap_get_base(ctx, regnum, result);
+        break;
+    case 0b001: // len
+        gen_cap_get_length(ctx, regnum, result);
+        break;
+    case 0b010: // value
+        gen_cap_get_cursor(ctx, regnum, result);
+        break;
+    case 0b011: // off
+        gen_cap_get_offset(ctx, regnum, result);
+        break;
+    case 0b100: // tag
+        gen_cap_get_tag(ctx, regnum, result);
+        break;
+    case 0b101: // seal
+        gen_cap_get_sealed(ctx, regnum, result);
+        break;
+    case 0b110: // perm
+        gen_cap_get_perms(ctx, regnum, result);
+        break;
+    case 0b111: // type
+        gen_cap_get_type(ctx, regnum, result);
+        break;
+    }
+
+    gen_lazy_cap_set_int(ctx, a->Rd);
+
+    return true;
+}
 
 TRANSLATE_UNDEF(LDPBR)
 
