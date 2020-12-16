@@ -1013,23 +1013,29 @@ const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb)
 #endif
 }
 
-static inline target_ulong cap_check_common(uint32_t required_perms,
-                                            CPUArchState *env, uint32_t cb,
-                                            target_ulong offset, uint32_t size,
-                                            uintptr_t _host_return_address)
+target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
+                                  uint32_t cb, target_ulong offset,
+                                  uint32_t size, uintptr_t _host_return_address,
+                                  const cap_register_t *cbp,
+                                  uint32_t alignment_required,
+                                  bool no_unaligned)
 {
-    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
+#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cbp->cr_perms) & (X))
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if ((required_perms & CAP_PERM_LOAD) &&
-               !(cbp->cr_perms & CAP_PERM_LOAD)) {
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD)) {
         raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    } else if ((required_perms & CAP_PERM_STORE) &&
-               !(cbp->cr_perms & CAP_PERM_STORE)) {
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_CAP)) {
+        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_LOCAL)) {
+        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
     }
+#undef MISSING_REQUIRED_PERM
+
     const target_ulong cursor = cap_get_cursor(cbp);
     const target_ulong addr = cursor + (target_long)offset;
     if (!cap_is_in_bounds(cbp, addr, size)) {
@@ -1038,20 +1044,33 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
             " cursor=" TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n",
             offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    }
-#ifdef TARGET_MIPS
-    if (!QEMU_IS_ALIGNED(addr, size)) {
-#if defined(CHERI_UNALIGNED)
+    } else if (!QEMU_IS_ALIGNED(addr, alignment_required)) {
+        if (no_unaligned) {
+            raise_unaligned_load_exception(env, addr, _host_return_address);
+        }
+#if defined(TARGET_MIPS) && defined(CHERI_UNALIGNED)
         const char *access_type =
             (required_perms == (CAP_PERM_STORE | CAP_PERM_LOAD))
                 ? "RMW"
                 : ((required_perms == CAP_PERM_STORE) ? "store" : "load");
-        qemu_maybe_log_instr_extra(env, "Allowing unaligned %d-byte %s of "
-            "address 0x%" PRIx64 "\n", size, access_type, addr);
+        qemu_maybe_log_instr_extra(env,
+                                   "Allowing unaligned %d-byte %s of "
+                                   "address 0x%" PRIx64 "\n",
+                                   size, access_type, addr);
 #endif
     }
-#endif // TARGET_MIPS
     return addr;
+}
+
+static inline target_ulong cap_check_common(uint32_t required_perms,
+                                            CPUArchState *env, uint32_t cb,
+                                            target_ulong offset, uint32_t size,
+                                            uintptr_t _host_return_address)
+{
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
+    return cap_check_common_reg(required_perms, env, cb, offset, size,
+                                _host_return_address, cbp, size,
+                                /*no_unaligned=*/false);
 }
 
 /*
@@ -1089,24 +1108,10 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    }
+    const target_ulong addr = cap_check_common_reg(
+        perms_for_load(), env, cb, offset, CHERI_CAP_SIZE, _host_return_address,
+        cbp, CHERI_CAP_SIZE, /*no_unaligned=*/true);
 
-    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
-    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_lx " cursor="
-            TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n", offset,
-            cap_get_cursor(cbp), addr);
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
-        raise_unaligned_load_exception(env, addr, _host_return_address);
-    }
     load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address,
                          /*physaddr_out=*/NULL);
 }
@@ -1120,30 +1125,10 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
-        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
-        get_capreg_tag(env, cs) &&
-        !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL)) {
-        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
-    }
+    const uint64_t addr = cap_check_common_reg(
+        perms_for_store(env, cs), env, cb, offset, CHERI_CAP_SIZE,
+        _host_return_address, cbp, CHERI_CAP_SIZE, true);
 
-    const target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
-    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_lx " cursor="
-            TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n", offset,
-            cap_get_cursor(cbp), addr);
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
-        raise_unaligned_store_exception(env, addr, _host_return_address);
-    }
     store_cap_to_memory(env, cs, addr, _host_return_address);
 }
 
@@ -1263,7 +1248,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     }
 #endif
     bool tag = get_capreg_tag_filtered(env, cs);
-    if (cs == 0) {
+    if (cs == NULL_CAPREG_INDEX) {
         tcg_debug_assert(pesbt_for_mem == 0 && "Wrong value for cnull?");
         tcg_debug_assert(cursor == 0 && "Wrong value for cnull?");
         tcg_debug_assert(!tag && "Wrong value for cnull?");
