@@ -28,3 +28,45 @@
  * SUCH DAMAGE.
  */
 
+#include "qemu/osdep.h"
+#include "cpu.h"
+#include "exec/exec-all.h"
+#include "exec/helper-proto.h"
+#include "exec/memop.h"
+
+#include "cheri-helper-utils.h"
+
+void helper_load_cap_pair_via_cap(CPUArchState *env, uint32_t cd, uint32_t cd2,
+        uint32_t cb, target_ulong addr)
+{
+    GET_HOST_RETPC();
+
+    const cap_register_t *cbp = get_capreg_or_special(env, cb);
+
+    cap_check_common_reg(perms_for_load(), env, cb, addr,
+        CHERI_CAP_SIZE * 2, _host_return_address, cbp, CHERI_CAP_SIZE, true);
+
+    // We avoid using load_cap_from_memory for the first load as it will have side effects on the register file.
+    uint64_t pesbt;
+    uint64_t cursor;
+    bool tag = load_cap_from_memory_128(env, &pesbt, &cursor, cb, cbp, addr,
+                                        _host_return_address, NULL);
+
+    load_cap_from_memory(env, cd2, cb, cbp, addr + CHERI_CAP_SIZE, _host_return_address, NULL);
+    // Once the second load has finished, we can modify the register file.
+    update_compressed_capreg(env, cd, pesbt, tag, cursor);
+}
+
+void helper_store_cap_pair_via_cap(CPUArchState *env, uint32_t cd, uint32_t cd2,
+        uint32_t cb, target_ulong addr)
+{
+    GET_HOST_RETPC();
+
+    const cap_register_t *cbp = get_capreg_or_special(env, cb);
+
+    cap_check_common_reg(perms_for_store(env, cd) | perms_for_store(env, cd2), env, cb, addr,
+            CHERI_CAP_SIZE * 2, _host_return_address, cbp, CHERI_CAP_SIZE, true);
+
+    store_cap_to_memory(env, cd, addr, _host_return_address);
+    store_cap_to_memory(env, cd2, addr + CHERI_CAP_SIZE, _host_return_address);
+}
