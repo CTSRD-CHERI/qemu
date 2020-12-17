@@ -34,3 +34,8 @@ DEF_HELPER_FLAGS_3(arm_log_instr, TCG_CALL_NO_WG, void, env, tl, i32)
 
 DEF_HELPER_5(load_cap_pair_via_cap, void, env, i32, i32, i32, tl)
 DEF_HELPER_5(store_cap_pair_via_cap, void, env, i32, i32, i32, tl)
+
+#define KEEP_BRANCH_AND_LINK_BUG 1
+DEF_HELPER_6(load_pair_and_branch_and_link, void, env, i32, i32, i32, tl, i32)
+DEF_HELPER_6(load_and_branch_and_link, void, env, i32, i32, i32, tl, i32)
+DEF_HELPER_6(branch_sealed_pair, void, env, i32, i32, i32, tl, i32)
