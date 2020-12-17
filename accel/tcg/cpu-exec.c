@@ -247,9 +247,26 @@ static void cpu_exec_nocache(CPUState *cpu, int max_cycles,
 }
 #endif
 
-void cpu_exec_step_atomic(CPUState *cpu)
+static void cpu_exec_enter(CPUState *cpu)
 {
     CPUClass *cc = CPU_GET_CLASS(cpu);
+
+    if (cc->cpu_exec_enter) {
+        cc->cpu_exec_enter(cpu);
+    }
+}
+
+static void cpu_exec_exit(CPUState *cpu)
+{
+    CPUClass *cc = CPU_GET_CLASS(cpu);
+
+    if (cc->cpu_exec_exit) {
+        cc->cpu_exec_exit(cpu);
+    }
+}
+
+void cpu_exec_step_atomic(CPUState *cpu)
+{
     TranslationBlock *tb;
     target_ulong cs_base, cs_top = 0, pc;
     uint32_t cheri_flags = 0;
@@ -272,11 +289,11 @@ void cpu_exec_step_atomic(CPUState *cpu)
 
         /* Since we got here, we know that parallel_cpus must be true.  */
         parallel_cpus = false;
-        cc->cpu_exec_enter(cpu);
+        cpu_exec_enter(cpu);
         /* execute the generated code */
         trace_exec_tb(tb, pc);
         cpu_tb_exec(cpu, tb, &tb_exit);
-        cc->cpu_exec_exit(cpu);
+        cpu_exec_exit(cpu);
     } else {
         /*
          * The mmap_lock is dropped by tb_gen_code if it runs out of
@@ -489,7 +506,9 @@ static inline void cpu_handle_debug_exception(CPUState *cpu)
         }
     }
 
-    cc->debug_excp_handler(cpu);
+    if (cc->debug_excp_handler) {
+        cc->debug_excp_handler(cpu);
+    }
 }
 
 static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
@@ -631,7 +650,8 @@ static inline bool cpu_handle_interrupt(CPUState *cpu,
            True when it is, and we should restart on a new TB,
            and via longjmp via cpu_loop_exit.  */
         else {
-            if (cc->cpu_exec_interrupt(cpu, interrupt_request)) {
+            if (cc->cpu_exec_interrupt &&
+                cc->cpu_exec_interrupt(cpu, interrupt_request)) {
                 if (need_replay_interrupt(interrupt_request)) {
                     replay_interrupt();
                 }
@@ -735,7 +755,7 @@ int cpu_exec(CPUState *cpu)
 
     rcu_read_lock();
 
-    cc->cpu_exec_enter(cpu);
+    cpu_exec_enter(cpu);
 
     /* Calculate difference between guest clock and host clock.
      * This delay includes the delay of the last cycle, so
@@ -797,7 +817,7 @@ int cpu_exec(CPUState *cpu)
         }
     }
 
-    cc->cpu_exec_exit(cpu);
+    cpu_exec_exit(cpu);
     rcu_read_unlock();
 
     return ret;
