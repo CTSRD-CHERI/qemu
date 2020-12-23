@@ -152,6 +152,9 @@ static inline void target_cpu_loop(CPUARMState *env)
             cpu_exec_step_atomic(cs);
             break;
 
+        case EXCP_YIELD:
+            /* nothing to do here for user-mode, just resume guest code */
+            break;
         default:
             fprintf(stderr, "qemu: unhandled CPU exception 0x%x - aborting\n",
                     trapnr);
