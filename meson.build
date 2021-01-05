@@ -1966,7 +1966,6 @@ foreach target : target_dirs
         custom_target(exe['name'] + stp['ext'],
                       input: trace_events_all,
                       output: exe['name'] + stp['ext'],
-                      capture: true,
                       install: stp['install'],
                       install_dir: get_option('datadir') / 'systemtap/tapset',
                       command: [
@@ -1975,7 +1974,7 @@ foreach target : target_dirs
                         '--target-name=' + target_name,
                         '--target-type=' + target_type,
                         '--probe-prefix=qemu.' + target_type + '.' + target_name,
-                        '@INPUT@',
+                        '@INPUT@', '@OUTPUT@'
                       ])
       endforeach
     endif
