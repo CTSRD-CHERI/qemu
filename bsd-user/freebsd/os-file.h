@@ -163,4 +163,40 @@ static inline abi_long do_freebsd_close_range(unsigned int lowfd,
 
 #endif /* __FreeBSD_version >= 1300091 */
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300037
+ssize_t safe_copy_file_range(int, off_t *, int, off_t *, size_t, unsigned int);
+
+/* copy_file_range(2) */
+static inline abi_long do_freebsd_copy_file_range(int infd,
+    abi_ulong inofftp, int outfd, abi_ulong outofftp, size_t len,
+    unsigned int flags)
+{
+    off_t inoff, outoff, *inp, *outp;
+    abi_long ret;
+
+    inp = outp = NULL;
+    if (inofftp != 0 && !access_ok(VERIFY_WRITE, inofftp, sizeof(off_t))) {
+        return -TARGET_EFAULT;
+    } else if (inofftp != 0) {
+        inoff = tswap64(*(off_t *)g2h(inofftp));
+        inp = &inoff;
+    }
+    if (outofftp != 0 && !access_ok(VERIFY_WRITE, outofftp, sizeof(off_t))) {
+        return -TARGET_EFAULT;
+    } else if (outofftp != 0) {
+        outoff = tswap64(*(off_t *)g2h(outofftp));
+        outp = &outoff;
+    }
+
+    ret = get_errno(safe_copy_file_range(infd, &inoff, outfd, &outoff, len,
+        flags));
+
+    if (inofftp != 0)
+        *(off_t *)g2h(inofftp) = tswap64(inoff);
+    if (outofftp != 0)
+        *(off_t *)g2h(outofftp) = tswap64(outoff);
+    return ret;
+}
+#endif /* __FreeBSD_version >= 1300037 */
+
 #endif /* __FREEBSD_OS_FILE_H_ */

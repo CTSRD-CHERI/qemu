@@ -114,6 +114,11 @@ safe_syscall6(ssize_t, sendto, int, fd, const void *, buf, size_t, len, int,
 safe_syscall3(ssize_t, recvmsg, int, s, struct msghdr *, msg, int, flags);
 safe_syscall3(ssize_t, sendmsg, int, s, const struct msghdr *, msg, int, flags);
 
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300133
+safe_syscall6(ssize_t, copy_file_range, int, infd, off_t *, inoffp, int, outfd,
+    off_t *, outoffp, size_t, len, unsigned int, flags);
+#endif
+
 int g_posix_timers[32] = { 0, } ;
 
 /*
@@ -916,6 +921,12 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
     case TARGET_FREEBSD_NR___realpathat:
         /* __realpathat(2) (XXX no realpathat()) */
         ret = do_freebsd_realpathat(arg1, arg2, arg3, arg4, arg5);
+        break;
+#endif
+
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300037
+    case TARGET_FREEBSD_NR_copy_file_range:
+        ret = do_freebsd_copy_file_range(arg1, arg2, arg3, arg4, arg5, arg6);
         break;
 #endif
 
