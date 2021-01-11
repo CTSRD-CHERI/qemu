@@ -136,11 +136,12 @@ extern const char *qemu_uname_release;
 
 /* ??? See if we can avoid exposing so much of the loader internals.  */
 /*
- * MAX_ARG_PAGES defines the number of pages allocated for arguments
- * and envelope for the new program. 64 should suffice, this gives
- * a maximum env+arg of 256kB w/4KB pages!
+ * TARGET_ARG_MAX defines the number of bytes allocated for arguments
+ * and envelope for the new program. 256k should suffice for a reasonable
+ * maxiumum env+arg.
  */
-#define MAX_ARG_PAGES 64
+#define TARGET_ARG_MAX (256 * 1024)
+#define MAX_ARG_PAGES (TARGET_ARG_MAX / TARGET_PAGE_SIZE)
 
 /*
  * This structure is used to hold the arguments that are

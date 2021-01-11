@@ -3,8 +3,6 @@
 
 #include "target_arch_vmparam.h"
 
-#define TARGET_ARG_MAX          262144
-
 /* Compare to sys/exec.h */
 struct target_ps_strings {
     abi_ulong ps_argvstr;
