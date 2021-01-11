@@ -138,9 +138,14 @@ extern const char *qemu_uname_release;
 /*
  * TARGET_ARG_MAX defines the number of bytes allocated for arguments
  * and envelope for the new program. 256k should suffice for a reasonable
- * maxiumum env+arg.
+ * maxiumum env+arg in 32-bit environments, bump it up to 512k for !ILP32
+ * platforms.
  */
+#if TARGET_ABI_BITS > 32
+#define TARGET_ARG_MAX (512 * 1024)
+#else
 #define TARGET_ARG_MAX (256 * 1024)
+#endif
 #define MAX_ARG_PAGES (TARGET_ARG_MAX / TARGET_PAGE_SIZE)
 
 /*
