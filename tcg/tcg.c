@@ -1118,6 +1118,7 @@ void tcg_prologue_init(TCGContext *s)
     s->pool_labels = NULL;
 #endif
 
+    qemu_thread_jit_write();
     /* Generate the prologue.  */
     tcg_target_qemu_prologue(s);
 
