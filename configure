@@ -6018,6 +6018,7 @@ if test "$cpu" = "s390x" ; then
     # since it is using the libnet code from SLOF for network booting.
     if test -e "${source_path}/.git" ; then
       git_submodules="${git_submodules} roms/SLOF"
+    fi
   fi
 fi
 
