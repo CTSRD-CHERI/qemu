@@ -518,7 +518,7 @@ static inline abi_long do_freebsd_pselect(void *cpu_env, int n,
         abi_ulong rfd_addr, abi_ulong wfd_addr, abi_ulong efd_addr,
         abi_ulong ts_addr, abi_ulong set_addr)
 {
-    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    CPUState *cpu = env_cpu(cpu_env);
     TaskState *tstate = cpu->opaque;
     fd_set rfds, wfds, efds;
     fd_set *rfds_ptr, *wfds_ptr, *efds_ptr;
@@ -595,7 +595,7 @@ static inline abi_long do_freebsd_pselect(void *cpu_env, int n,
 static inline abi_long do_freebsd_ppoll(void *cpu_env, abi_long arg1,
         abi_long arg2, abi_ulong arg3, abi_ulong arg4)
 {
-    CPUState *cpu = ENV_GET_CPU(cpu_env);
+    CPUState *cpu = env_cpu(cpu_env);
     TaskState *tstate = cpu->opaque;
     abi_long ret;
     nfds_t i, nfds = arg2;
