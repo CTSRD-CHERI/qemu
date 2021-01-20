@@ -24,6 +24,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 
+#include "qemu-common.h"
 #include "qemu-bsd.h"
 
 ssize_t safe_recvfrom(int s, void *buf, size_t len, int flags,
