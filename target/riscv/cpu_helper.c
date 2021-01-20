@@ -1057,9 +1057,9 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                         MMUAccessType access_type, int mmu_idx,
                         bool probe, uintptr_t retaddr)
 {
-#ifndef CONFIG_USER_ONLY
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
+#ifndef CONFIG_USER_ONLY
     bool pmp_violation = false;
     bool first_stage_error = true;
     int prot = 0;
