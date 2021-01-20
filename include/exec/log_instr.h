@@ -35,6 +35,7 @@
 #include "hw/core/cpu.h"
 #include "qemu/log_instr.h"
 #include "cpu.h"
+#include "memop.h"
 
 /*
  * Instruction logging interface for targets.
