@@ -32,11 +32,14 @@
 
 #include <time.h>
 
+#include "qemu/osdep.h"
+#include "qemu-common.h"
 #include "qemu.h"
 #include "qemu-os.h"
 #include "target_arch_cpu.h"
 #include "target_arch_thread.h"
 #include "exec/exec-all.h"
+#include "tcg/tcg.h"
 
 #include "os-thread.h"
 
