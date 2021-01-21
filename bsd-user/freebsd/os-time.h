@@ -339,7 +339,7 @@ static inline abi_long do_freebsd_ktimer_create(abi_long arg1, abi_long arg2,
     /* args: clockid_t clockid, struct sigevent *sevp, int *timerid */
     abi_long ret;
 
-    struct sigevent host_sevp = { {0}, }, *phost_sevp = NULL;
+    struct sigevent host_sevp = {0}, *phost_sevp = NULL;
 
     int clkid = arg1;
     int timer_index = next_free_host_timer();
