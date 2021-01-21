@@ -294,7 +294,6 @@ struct kern_mymsg {
 
 static inline abi_long bsd_validate_msgsz(abi_ulong msgsz)
 {
-    abi_long ret;
 
     /* Fetch msgmax the first time we need it. */
     if (bsd_msgmax == 0) {
