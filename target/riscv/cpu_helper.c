@@ -882,6 +882,7 @@ void riscv_cpu_do_unaligned_access(CPUState *cs, vaddr addr,
 }
 #endif
 
+#ifndef CONFIG_USER_ONLY
 static inline int rvfi_dii_check_addr(CPURISCVState *env, int ret,
                                       vaddr address, int size, int *prot,
                                       MMUAccessType access_type)
@@ -909,7 +910,6 @@ static inline int rvfi_dii_check_addr(CPURISCVState *env, int ret,
     return ret;
 }
 
-#ifndef CONFIG_USER_ONLY
 // Do all of riscv_cpu_tlb_fill() except for filling the TLB/raising a trap
 static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
                                    MMUAccessType access_type, int mmu_idx,
