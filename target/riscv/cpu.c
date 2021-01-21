@@ -693,10 +693,12 @@ static void riscv_cpu_reset(DeviceState *dev)
     set_default_nan_mode(1, &env->fp_status);
 
 #if !defined(TARGET_CHERI)
+#ifndef CONFIG_USER_ONLY
     env->pc = env->resetvec;
     // Also reset mepc/sepc to zero for predicatable behaviour
     env->mepc = 0;
     env->sepc = 0;
+#endif
 #else
     if (!cpu->cfg.ext_cheri) {
         error_report("CHERI extension can't be disabled yet!");
