@@ -451,14 +451,10 @@ static inline abi_long do_freebsd_select(CPUArchState *env, int n,
 	abi_ulong rfd_addr, abi_ulong wfd_addr, abi_ulong efd_addr,
 	abi_ulong target_tv_addr)
 {
-    CPUState *cpu = env_cpu(env);
-    TaskState *ts = (TaskState *)cpu->opaque;
     fd_set rfds, wfds, efds;
     fd_set *rfds_ptr, *wfds_ptr, *efds_ptr;
     struct timeval tv, *tvp;
     abi_long ret, error;
-    sigset_t mask, omask;
-
 
     ret = copy_from_user_fdset_ptr(&rfds, &rfds_ptr, rfd_addr, n);
     if (ret != 0) {
