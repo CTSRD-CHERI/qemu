@@ -724,12 +724,20 @@ extern const char * const riscv_cpu_mode_names[];
 
 static inline bool cpu_in_user_mode(CPURISCVState *env)
 {
+#ifdef CONFIG_USER_ONLY
+    return true;
+#else
     return env->priv == PRV_U;
+#endif
 }
 
 static inline unsigned cpu_get_asid(CPURISCVState *env, target_ulong pc)
 {
+#ifdef CONFIG_USER_ONLY
+    return 0;
+#else
     return get_field(env->satp, SATP_ASID);
+#endif
 }
 
 static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode)
