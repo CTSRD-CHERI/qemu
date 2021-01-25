@@ -338,6 +338,7 @@ DEF_HELPER_FLAGS_5(gvec_bitsel, TCG_CALL_NO_RWG, void, ptr, ptr, ptr, ptr, i32)
 DEF_HELPER_FLAGS_2(qemu_log_instr_buffered_mode, TCG_CALL_NO_RWG, void, env, i32)
 DEF_HELPER_FLAGS_1(qemu_log_instr_buffer_flush, TCG_CALL_NO_RWG, void, env)
 DEF_HELPER_FLAGS_2(qemu_log_instr_start, TCG_CALL_NO_WG, void, env, tl)
+DEF_HELPER_FLAGS_1(qemu_log_printf_dump, TCG_CALL_NO_WG, void, env)
 DEF_HELPER_FLAGS_2(qemu_log_instr_user_start, TCG_CALL_NO_WG, void, env, tl)
 DEF_HELPER_FLAGS_2(qemu_log_instr_stop, TCG_CALL_NO_WG, void, env, tl)
 DEF_HELPER_FLAGS_0(qemu_log_instr_allcpu_start, TCG_CALL_NO_WG, void)
@@ -348,5 +349,9 @@ DEF_HELPER_FLAGS_4(qemu_log_instr_load64, TCG_CALL_NO_WG, void, env, cap_checked
 DEF_HELPER_FLAGS_4(qemu_log_instr_store64, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i64, memop)
 DEF_HELPER_FLAGS_4(qemu_log_instr_load32, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i32, memop)
 DEF_HELPER_FLAGS_4(qemu_log_instr_store32, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i32, memop)
+DEF_HELPER_FLAGS_3(qemu_log_instr_reg, TCG_CALL_NO_WG, void, env, cptr, tl)
+#ifdef TARGET_CHERI
+DEF_HELPER_FLAGS_3(qemu_log_instr_cap, TCG_CALL_NO_WG, void, env, cptr, cptr)
+#endif
 DEF_HELPER_FLAGS_3(log_value, TCG_CALL_NO_WG, void, env, cptr, i64)
 #endif

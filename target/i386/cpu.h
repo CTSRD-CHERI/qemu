@@ -25,6 +25,7 @@
 #include "hyperv-proto.h"
 #include "exec/cpu-defs.h"
 #include "qapi/qapi-types-common.h"
+#include "exec/log_instr_early.h"
 
 /* The x86 has a strong memory model with some store-after-load re-ordering */
 #define TCG_GUEST_DEFAULT_MO      (TCG_MO_ALL & ~TCG_MO_ST_LD)
@@ -1630,6 +1631,10 @@ typedef struct CPUX86State {
     TPRAccess tpr_access_type;
 
     unsigned nr_dies;
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_printf_buf_t qemu_log_printf_buf;
+#endif
 } CPUX86State;
 
 struct kvm_msrs;
