@@ -342,6 +342,11 @@ static inline void tcg_gen_discard_i32(TCGv_i32 arg)
     tcg_gen_op1_i32(INDEX_op_discard, arg);
 }
 
+static inline void tcg_gen_sync_i32(TCGv_i32 arg)
+{
+    tcg_gen_op1_i32(INDEX_op_sync, arg);
+}
+
 static inline void tcg_gen_mov_i32(TCGv_i32 ret, TCGv_i32 arg)
 {
     if (ret != arg) {
@@ -543,6 +548,11 @@ static inline void tcg_gen_discard_i64(TCGv_i64 arg)
     tcg_gen_op1_i64(INDEX_op_discard, arg);
 }
 
+static inline void tcg_gen_sync_i64(TCGv_i64 arg)
+{
+    tcg_gen_op1_i64(INDEX_op_sync, arg);
+}
+
 static inline void tcg_gen_mov_i64(TCGv_i64 ret, TCGv_i64 arg)
 {
     if (ret != arg) {
@@ -697,6 +707,7 @@ static inline void tcg_gen_sub_i64(TCGv_i64 ret, TCGv_i64 arg1, TCGv_i64 arg2)
 }
 
 void tcg_gen_discard_i64(TCGv_i64 arg);
+void tcg_gen_sync_i64(TCGv_i64 arg);
 void tcg_gen_mov_i64(TCGv_i64 ret, TCGv_i64 arg);
 void tcg_gen_movi_i64(TCGv_i64 ret, int64_t arg);
 void tcg_gen_ld8u_i64(TCGv_i64 ret, TCGv_ptr arg2, tcg_target_long offset);
@@ -1086,6 +1097,7 @@ void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 #define tcg_gen_divu_tl tcg_gen_divu_i64
 #define tcg_gen_remu_tl tcg_gen_remu_i64
 #define tcg_gen_discard_tl tcg_gen_discard_i64
+#define tcg_gen_sync_tl tcg_gen_sync_i64
 #define tcg_gen_trunc_tl_i32 tcg_gen_extrl_i64_i32
 #define tcg_gen_trunc_i64_tl tcg_gen_mov_i64
 #define tcg_gen_extu_i32_tl tcg_gen_extu_i32_i64
@@ -1202,6 +1214,7 @@ void tcg_gen_stl_vec(TCGv_vec r, TCGv_ptr base, TCGArg offset, TCGType t);
 #define tcg_gen_divu_tl tcg_gen_divu_i32
 #define tcg_gen_remu_tl tcg_gen_remu_i32
 #define tcg_gen_discard_tl tcg_gen_discard_i32
+#define tcg_gen_sync_tl tcg_gen_sync_i32
 #define tcg_gen_trunc_tl_i32 tcg_gen_mov_i32
 #define tcg_gen_trunc_i64_tl tcg_gen_extrl_i64_i32
 #define tcg_gen_extu_i32_tl tcg_gen_mov_i32
