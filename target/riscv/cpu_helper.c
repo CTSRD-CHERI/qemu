@@ -608,13 +608,22 @@ restart:
         } else if (ppn & ((1ULL << ptshift) - 1)) {
             /* Misaligned PPN */
             return TRANSLATE_FAIL;
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
         } else if ((access_type == MMU_DATA_LOAD ||
                     access_type == MMU_DATA_CAP_LOAD) &&
+#else
+        } else if (access_type == MMU_DATA_LOAD &&
+#endif
                    !((pte & PTE_R) || ((pte & PTE_X) && mxr))) {
             /* Read access check failed */
             return TRANSLATE_FAIL;
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
         } else if ((access_type == MMU_DATA_STORE ||
-                    access_type == MMU_DATA_CAP_STORE) && !(pte & PTE_W)) {
+                    access_type == MMU_DATA_CAP_STORE) &&
+#else
+        } else if (access_type == MMU_DATA_STORE &&
+#endif
+                   !(pte & PTE_W)) {
             /* Write access check failed */
             return TRANSLATE_FAIL;
         } else if (access_type == MMU_INST_FETCH && !(pte & PTE_X)) {
@@ -724,7 +733,9 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
         }
         break;
     case MMU_DATA_LOAD:
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
     case MMU_DATA_CAP_LOAD:
+#endif
         if (riscv_cpu_virt_enabled(env) && !first_stage) {
             cs->exception_index = RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
@@ -737,7 +748,9 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
         }
         break;
     case MMU_DATA_STORE:
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
     case MMU_DATA_CAP_STORE:
+#endif
         if (riscv_cpu_virt_enabled(env) && !first_stage) {
             cs->exception_index = RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
