@@ -127,3 +127,6 @@ DEF_HELPER_4(store_cap_via_cap, void, env, i32, i32, tl)
 
 // Misc
 DEF_HELPER_2(decompress_cap, void, env, i32)
+// Slightly different from normal tracing as it will not trigger decompression.
+// This is is helpful if there is a TCG bug that would go away with tracing.
+DEF_HELPER_2(debug_cap, void, env, i32)
