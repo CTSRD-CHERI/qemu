@@ -30,6 +30,7 @@
 #include "hw/registerfields.h"
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
+#include "exec/log_instr_early.h"
 #include "qapi/qapi-types-common.h"
 
 /* ARM processors have a weak memory model */
@@ -773,6 +774,10 @@ typedef struct CPUARMState {
     uint64_t statcounters_imprecise_setbounds;
     uint64_t statcounters_unrepresentable_caps;
 
+#endif
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_printf_buf_t qemu_log_printf_buf;
 #endif
 } CPUARMState;
 
