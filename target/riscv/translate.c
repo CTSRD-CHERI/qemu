@@ -233,16 +233,6 @@ static inline void _gen_get_gpr(TCGv t, int reg_num)
     }
 }
 
-#ifdef TARGET_CHERI
-static inline void gen_mark_gpr_as_integer(int reg_num_dst) {
-    /* Currently, the integer flag is 0, so we can mask the 64-bit value holding
-     * the capreg state appropriately to clear the bits for register N. */
-    tcg_gen_andi_i64(cpu_capreg_state, cpu_capreg_state, capreg_state_set_to_integer_mask(reg_num_dst));
-    /* TODO: maybe all ones is more efficient? We can just do an or and don't
-     *   have to negate? */
-}
-#endif
-
 #ifdef CONFIG_RVFI_DII
 //#define gen_get_gpr(t, reg_num, field_prefix)                                  \
 //    do {                                                                       \
@@ -255,16 +245,19 @@ static inline void gen_mark_gpr_as_integer(int reg_num_dst) {
 #endif
 #define gen_get_gpr(t, reg_num) _gen_get_gpr(t, reg_num)
 
+#include "cheri-translate-utils.h"
+
 /* Wrapper for setting reg values - need to check of reg is zero since
  * cpu_gpr[0] is not actually allocated. this is more for safety purposes,
  * since we usually avoid calling the OP_TYPE_gen function if we see a write to
  * $zero
  */
-static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t)
+static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t, bool clear_pesbt)
 {
     if (reg_num_dst != 0) {
 #ifdef TARGET_CHERI
-        gen_mark_gpr_as_integer(reg_num_dst); // Reset the register type to int.
+        if (clear_pesbt)
+            gen_lazy_cap_set_int(ctx, reg_num_dst); // Reset the register type to int.
         tcg_gen_mov_tl(_cpu_cursors_do_not_access_directly[reg_num_dst], t);
 #else
         tcg_gen_mov_tl(cpu_gpr[reg_num_dst], t);
@@ -287,7 +280,7 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
 {
     if (reg_num_dst != 0) {
 #ifdef TARGET_CHERI
-        gen_mark_gpr_as_integer(reg_num_dst); // Reset the register type to int.
+        gen_lazy_cap_set_int(ctx, reg_num_dst); // Reset the register type to int.
         tcg_gen_movi_tl(_cpu_cursors_do_not_access_directly[reg_num_dst], value);
 #else
         tcg_gen_movi_tl(cpu_gpr[reg_num_dst], value);
@@ -307,7 +300,7 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
     }
 }
 
-#define gen_set_gpr(reg_num_dst, t) _gen_set_gpr(ctx, reg_num_dst, t)
+#define gen_set_gpr(reg_num_dst, t) _gen_set_gpr(ctx, reg_num_dst, t, true)
 #define gen_set_gpr_const(reg_num_dst, t) _gen_set_gpr_const(ctx, reg_num_dst, t)
 
 #ifdef CONFIG_TCG_LOG_INSTR
@@ -335,7 +328,6 @@ static inline void gen_riscv_log_instr(DisasContext *ctx, uint32_t opcode,
 #define gen_riscv_log_instr32(ctx, opcode)              \
     gen_riscv_log_instr(ctx, opcode, sizeof(uint32_t))
 
-#include "cheri-translate-utils.h"
 void cheri_tcg_save_pc(DisasContextBase *db) { gen_update_cpu_pc(db->pc_next); }
 // We have to call gen_update_cpu_pc() before setting DISAS_NORETURN (see
 // generate_exception())
