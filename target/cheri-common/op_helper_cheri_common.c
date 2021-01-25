@@ -1433,3 +1433,19 @@ void CHERI_HELPER_IMPL(raise_exception_ddc_bounds(CPUArchState *env,
 void CHERI_HELPER_IMPL(decompress_cap(CPUArchState *env, uint32_t regndx)) {
     get_readonly_capreg(env, regndx);
 }
+
+void CHERI_HELPER_IMPL(debug_cap(CPUArchState *env, uint32_t regndx)) {
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    // Index manually in order not to decompress
+    const cap_register_t* cap = (regndx < 32) ? &gpcrs->decompressed[regndx] : get_capreg_or_special(env, regndx);
+    CapRegState state = regndx < 32 ? get_capreg_state(gpcrs, regndx) : CREG_FULLY_DECOMPRESSED;
+    bool stateMeansTagged = state == CREG_TAGGED_CAP;
+    bool decompressedMeansTagged = (state == CREG_FULLY_DECOMPRESSED) && cap->cr_tag;
+    uint64_t pesbt = cap->cached_pesbt;
+    printf("Debug Cap %2d: Cursor %lx. Pesbt %lx. Tagged %d (%d,%d). Type %lx. Perms %lx\n",
+            regndx, cap->_cr_cursor, pesbt ^ CC128_NULL_XOR_MASK, stateMeansTagged || decompressedMeansTagged,
+            state, cap->cr_tag, cc128_cap_pesbt_extract_OTYPE(pesbt), cc128_cap_pesbt_extract_HWPERMS(pesbt));
+    if(state == CREG_FULLY_DECOMPRESSED) {
+        printf("Base: %016lx. Top %lu%016lx.\n", cap->cr_base, (uint64_t)(cap->_cr_top >> 64), (uint64_t)cap->_cr_top);
+    }
+}
