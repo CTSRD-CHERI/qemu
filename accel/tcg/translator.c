@@ -84,6 +84,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     cheri_debug_assert(db->pcc_top ==
                        cap_get_top(cheri_get_recent_pcc(cpu->env_ptr)));
     db->cheri_flags = tb->cheri_flags;
+    disas_capreg_reset_all(db);
     // TODO: verify cheri_flags are correct?
 #endif
     ops->init_disas_context(db, cpu);
