@@ -64,7 +64,26 @@
 static DEFINE_CHERI_STAT(cgetpccsetoffset);
 static DEFINE_CHERI_STAT(cgetpccincoffset);
 static DEFINE_CHERI_STAT(cgetpccsetaddr);
+static DEFINE_CHERI_STAT(misc);
 
+#endif
+
+// To keep the refactor minimal we make use of a few ugly macros to change
+// exception behavior to tag clearing
+#ifdef TARGET_AARCH64
+
+#define DEFINE_RESULT_VALID bool _cap_valid = true
+#define RESULT_VALID _cap_valid
+#define raise_cheri_exception_or_invalidate(env, cause, reg) _cap_valid = false
+#define raise_cheri_exception_or_invalidate_impl(...) _cap_valid = false
+#else
+
+#define DEFINE_RESULT_VALID
+#define RESULT_VALID true
+#define raise_cheri_exception_or_invalidate(env, cause, reg)                   \
+    raise_cheri_exception(env, cause, reg)
+#define raise_cheri_exception_or_invalidate_impl(env, cause, reg, pc)          \
+    raise_cheri_exception_impl(env, cause, reg, true, pc)
 #endif
 
 static inline bool is_cap_sealed(const cap_register_t *cp)
@@ -72,6 +91,57 @@ static inline bool is_cap_sealed(const cap_register_t *cp)
     // TODO: remove this function and update all callers to use the correct
     // function
     return !cap_is_unsealed(cp);
+}
+
+// Try set cursor without changing bounds or modifying a sealed type
+// On some architectures this will be an exception, on others it will be allowed
+// but untag the result
+static inline QEMU_ALWAYS_INLINE bool
+try_set_cap_cursor(CPUArchState *env, const cap_register_t *cptr,
+                   int regnum_src, int regnum_dst, target_ulong new_addr,
+                   uintptr_t retpc,
+                   struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
+{
+    DEFINE_RESULT_VALID;
+#ifdef DO_CHERI_STATISTICS
+    oob_info->num_uses++;
+#endif
+
+    if (unlikely(cptr->cr_tag && is_cap_sealed(cptr))) {
+        raise_cheri_exception_or_invalidate_impl(env, CapEx_SealViolation,
+                                                 regnum_src, retpc);
+    }
+#ifndef TARGET_IS_MORELLO
+    /*
+     * For Morello we can't just check for in-bounds since changing the sign
+     * bit can affect representability. Additionally, the high bits are not
+     * included in the capability bounds. Therefore, we skip this fast-path
+     * optimzation for Morello and fall back to is_representable_cap_with_addr.
+     */
+    if (likely(addr_in_cap_bounds(cptr, new_addr))) {
+        /* Common case: updating an in-bounds capability. */
+        update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src, new_addr,
+                                  !RESULT_VALID);
+        return RESULT_VALID;
+    }
+    /* Result is out-of-bounds, check if it's representable. */
+#endif
+    if (unlikely(!is_representable_cap_with_addr(cptr, new_addr))) {
+        if (cptr->cr_tag) {
+            became_unrepresentable(env, regnum_dst, oob_info, retpc);
+        }
+        cap_register_t result = *cptr;
+        cap_mark_unrepresentable(new_addr, &result);
+        update_capreg(env, regnum_dst, &result);
+    } else {
+        /* (Possibly) out-of-bounds but still representable. */
+        update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src, new_addr,
+                                  !RESULT_VALID);
+        check_out_of_bounds_stat(env, oob_info,
+                                 get_readonly_capreg(env, regnum_dst),
+                                 _host_return_address);
+    }
+    return RESULT_VALID;
 }
 
 void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
@@ -277,6 +347,12 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
         cap_register_t result = *cheri_get_recent_pcc(env);
         // can never create an unrepresentable capability since PCC must be in
         // bounds
+#ifdef TARGET_AARCH64
+        // Encode C64 state here (we could also bake this in to the tcg, but
+        // would then need to remember to do it everywhere)
+        if (env->pstate & PSTATE_C64)
+            link_pc |= 1;
+#endif
         result._cr_cursor = link_pc;
         assert(is_representable_cap_with_addr(&result, link_pc) &&
                "Link addr must be representable");
@@ -711,40 +787,14 @@ DEFINE_CHERI_STAT(cfromptr);
 
 static inline QEMU_ALWAYS_INLINE void
 cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
-                uintptr_t retpc,
-                struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
+                uintptr_t retpc, struct oob_stats_info *oob_info)
 {
-#ifdef DO_CHERI_STATISTICS
-    oob_info->num_uses++;
-#endif
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
      * CIncOffset: Increase Offset
      */
-    if (unlikely(cbp->cr_tag && is_cap_sealed(cbp))) {
-        raise_cheri_exception_impl(env, CapEx_SealViolation, cb, true, retpc);
-    }
     target_ulong new_addr = cap_get_cursor(cbp) + rt;
-    if (likely(addr_in_cap_bounds(cbp, new_addr))) {
-        /* Common case: updating an in-bounds capability. */
-        update_capreg_cursor_from(env, cd, cbp, cb, new_addr);
-    } else {
-        /* Result is out-of-bounds, check if it's representable. */
-        if (unlikely(!is_representable_cap_with_addr(cbp, new_addr))) {
-            if (cbp->cr_tag) {
-                became_unrepresentable(env, cd, oob_info, retpc);
-            }
-            cap_register_t result = *cbp;
-            cap_mark_unrepresentable(new_addr, &result);
-            update_capreg(env, cd, &result);
-        } else {
-            /* out-of-bounds but still representable. */
-            update_capreg_cursor_from(env, cd, cbp, cb, new_addr);
-            check_out_of_bounds_stat(env, oob_info,
-                                     get_readonly_capreg(env, cd),
-                                     _host_return_address);
-        }
-    }
+    try_set_cap_cursor(env, cbp, cb, cd, new_addr, retpc, oob_info);
 }
 
 void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
@@ -851,31 +901,33 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     target_ulong cursor = cap_get_cursor(cbp);
     cap_length_t new_top = (cap_length_t)cursor + length; // 65 bits
+    DEFINE_RESULT_VALID;
     /*
      * CSetBounds: Set Bounds
      */
     if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
     } else if (cursor < cbp->cr_base) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
     } else if (new_top > cap_get_top_full(cbp)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else {
-        cap_register_t result = *cbp;
-        /*
-         * With compressed capabilities we may need to increase the range of
-         * memory addresses to be wider than requested so it is
-         * representable.
-         */
-        const bool exact = CAP_cc(setbounds)(&result, cursor, new_top);
-        if (!exact)
-            env->statcounters_imprecise_setbounds++;
-        if (must_be_exact && !exact) {
-            raise_cheri_exception(env, CapEx_InexactBounds, cb);
-            return;
-        }
+        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
+    }
+
+    cap_register_t result = *cbp;
+    /*
+     * With compressed capabilities we may need to increase the range of
+     * memory addresses to be wider than requested so it is
+     * representable.
+     */
+    const bool exact = CAP_cc(setbounds)(&result, cursor, new_top);
+    if (!exact)
+        env->statcounters_imprecise_setbounds++;
+    if (must_be_exact && !exact) {
+        raise_cheri_exception_or_invalidate(env, CapEx_InexactBounds, cb);
+    }
+    if (RESULT_VALID) {
         assert(cap_is_representable(&result) &&
                "CSetBounds must create a representable capability");
         assert(result.cr_base >= cbp->cr_base &&
@@ -884,8 +936,11 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
                "CSetBounds broke monotonicity (length)");
         assert(cap_get_top_full(&result) <= cap_get_top_full(cbp) &&
                "CSetBounds broke monotonicity (top)");
-        update_capreg(env, cd, &result);
+    } else {
+        result.cr_tag = 0;
     }
+
+    update_capreg(env, cd, &result);
 }
 
 void CHERI_HELPER_IMPL(csetbounds(CPUArchState *env, uint32_t cd, uint32_t cb,

@@ -271,7 +271,8 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
 static inline void update_capreg_cursor_from(CPUArchState *env, unsigned regnum,
                                              const cap_register_t *source_cap,
                                              unsigned source_regnum,
-                                             const target_ulong new_cursor)
+                                             const target_ulong new_cursor,
+                                             bool clear_tag)
 {
     if (unlikely(regnum == NULL_CAPREG_INDEX)) {
         return;
@@ -280,13 +281,17 @@ static inline void update_capreg_cursor_from(CPUArchState *env, unsigned regnum,
     cap_register_t *target = get_cap_in_gpregs(gpcrs, regnum);
     cheri_debug_assert(get_capreg_state(gpcrs, source_regnum) ==
                        CREG_FULLY_DECOMPRESSED);
-    cheri_debug_assert(is_representable_cap_with_addr(source_cap, new_cursor));
+    cheri_debug_assert(clear_tag ||
+                       is_representable_cap_with_addr(source_cap, new_cursor));
     if (regnum != source_regnum) {
         *target = *source_cap;
         set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     }
     /* When updating in-place, we can avoid copying. */
     target->_cr_cursor = new_cursor;
+    if (clear_tag) {
+        target->cr_tag = 0;
+    }
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, target->_cr_cursor);
     cheri_log_instr_changed_gp_capreg(env, regnum, target);
