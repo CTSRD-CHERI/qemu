@@ -81,6 +81,7 @@ typedef struct DisasContextBase {
     bool singlestep_enabled;
 #ifdef CONFIG_TCG_LOG_INSTR
     bool log_instr_enabled;
+    uint8_t printf_used_ptr;
 #endif
 } DisasContextBase;
 

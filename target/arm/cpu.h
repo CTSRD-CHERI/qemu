@@ -25,6 +25,7 @@
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
 #include "qapi/qapi-types-common.h"
+#include "exec/log_instr_early.h"
 
 /* ARM processors have a weak memory model */
 #define TCG_GUEST_DEFAULT_MO      (0)
@@ -765,6 +766,10 @@ typedef struct CPUARMState {
     uint64_t statcounters_imprecise_setbounds;
     uint64_t statcounters_unrepresentable_caps;
 
+#endif
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_printf_buf_t qemu_log_printf_buf;
 #endif
 } CPUARMState;
 

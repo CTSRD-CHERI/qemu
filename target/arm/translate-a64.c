@@ -132,6 +132,8 @@ void a64_translate_init(void)
         cpu_env, offsetof(CPUArchState, _pc_is_current),
         "_pc_is_current");
 #endif
+
+    qemu_log_printf_create_globals();
 }
 
 /*
