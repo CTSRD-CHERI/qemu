@@ -91,7 +91,12 @@ def patternMatch(p1, p2):
     return True
 
 ignore_ls = {
-    "STXP", "STLXP", "ALDUR", "ASTUR", "ASTR", "ALDR"
+    "STXP" : -1,
+    "STLXP" : -1,
+    "ALDUR": -1,
+    "ASTUR": -1,
+    "ASTR": [0,1,2,4,5,6,7],
+    "ALDR": [0]
 }
 
 extraOpts = {
@@ -100,6 +105,7 @@ extraOpts = {
     ("LDR", 8) : [("op", 12, 2)],
     ("LDP", 8) : [("op1", 24, 1), ("op2", 31, 2)],
     ("ASTR", 12) : [("op", 22, 1)],
+    ("BR", 2) : [("link", 1, 1)],
 }
 
 def finalise(file):
@@ -255,8 +261,22 @@ def finalise(file):
     file.write(result)
     return tot
 
+ignore_seen = {}
+
 def should_ignore(name):
-    return name in ignore_ls
+    if not name in ignore_ls:
+        return False
+    ns = ignore_ls[name]
+    if ns == -1:
+        return True
+    if not name in ignore_seen:
+        ignore_seen[name] = 0
+
+    found_n = ignore_seen[name]
+    print("Found   ", name, found_n)
+    ignore_seen[name] +=1
+
+    return found_n in ns
 
 def handle_fun(file, fun):
     # Grab the name of the function. Ignore those of the wrong form (probbaly not Morello instrs)
