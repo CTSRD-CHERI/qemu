@@ -43,7 +43,7 @@
 // This needs to be a separate header so that cpu.h can include it.
 // The rest of cheri-lazy-capregs.h depends on including cpu.h
 
-// We store capability registers in their compressed form an decompress
+// We store capability registers in their compressed form and decompress
 // on demand. To allow fast use of GPRs from TCG we expose the integer part
 // and maintain an array of the state for each capability register (integer,
 // capability with tag set, or with tag unset).
@@ -102,6 +102,20 @@ typedef struct GPCapRegs {
 static inline cap_register_t *get_cap_in_gpregs(GPCapRegs *gpcrs, size_t index)
 {
     return &gpcrs->decompressed[index].cap;
+}
+
+/*
+ * Whether this lazy capreg is special (and therefore always stored fully
+ * decompressed).
+ */
+static inline bool lazy_capreg_number_is_special(int reg)
+{
+    cheri_debug_assert(reg < NUM_LAZY_CAP_REGS);
+#ifdef SCRATCH_REG_NUM
+    if (reg == SCRATCH_REG_NUM)
+        return true;
+#endif
+    return reg == NULL_CAPREG_INDEX;
 }
 
 #endif

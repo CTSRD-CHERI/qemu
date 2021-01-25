@@ -45,16 +45,6 @@
 #include "qemu/log.h"
 #include "exec/log_instr.h"
 
-/*
- * Whether this lazy capreg is special (and therefore always stored fully
- * decompressed).
- */
-static inline bool lazy_capreg_number_is_special(int reg)
-{
-    cheri_debug_assert(reg < NUM_LAZY_CAP_REGS);
-    return (reg == NULL_CAPREG_INDEX);
-}
-
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
 
 static inline QEMU_ALWAYS_INLINE CapRegState
