@@ -31,8 +31,9 @@
 @op_SWP    ........ A:1  R:1 . Cs:5 ...... Rn:5  Ct:5 
 @op_CVT    ................. opc:2 ... Rn:5  Cd:5 
 @op_CLRPERM    ................ perm:3 ... Cn:5  Cd:5 
-@op_BR_BLR    ............ imm7:7 ... Cn:5 .....
+@op_BR_BLR    ............ imm7:7 ... Cn:5 .... link:1 
 @op_ASTRB_ALD    .......... L:1  imm9:9  op:2  Rn:5  Rt:5 
+@op_ASTR_ALDR    ........... Rm:5  option_name:3  S:1  L:1 . Rn:5  Ct:5 
 @op_ASTR_ALD    ......... L:1  op:1  Rm:5  option_name:3  S:1  opc:2  Rn:5  Rt:5 
 
 ADR ...10000........................ @op_ADR
@@ -78,7 +79,7 @@ CVT3 11000010110.....110000.......... @op_SUBS_CVT
 SWP 10100010..1.....100000.......... @op_SWP
 CVT4 11000010110001011..100.......... @op_CVT
 CLRPERM1 1100001011000110...100.......... @op_CLRPERM
-BR 110000101101.......100.....00000 @op_BR_BLR
-BLR1 110000101101.......100.....00001 @op_BR_BLR
+BR_BLR 110000101101.......100.....0000. @op_BR_BLR
 ASTRB_ALD 1000001001...................... @op_ASTRB_ALD
+ASTR_ALDR 11000010111..........1.......... @op_ASTR_ALDR
 ASTR_ALD 100000101....................... @op_ASTR_ALD
