@@ -64,7 +64,7 @@ static inline uint64_t capreg_state_set_to_integer_mask(unsigned reg)
 
 static inline CapRegState get_capreg_state(GPCapRegs *gpcrs, unsigned reg)
 {
-    if (reg == ZERO_REG_NUM)
+    if (reg == ZERO_REG_NUM || reg == SCRATCH_REG_NUM)
         return CREG_FULLY_DECOMPRESSED;
 
     cheri_debug_assert(reg < 32);
@@ -75,7 +75,7 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 {
 #ifdef CONFIG_DEBUG_TCG
     if (get_capreg_state(gpcrs, regnum) == CREG_FULLY_DECOMPRESSED) {
-        cheri_debug_assert(regnum < 33);
+        cheri_debug_assert(regnum < NUM_LAZY_CAP_REGS);
         cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
                            CREG_FULLY_DECOMPRESSED);
         const cap_register_t *c = &gpcrs->decompressed[regnum];
@@ -112,7 +112,7 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned regnum,
                                     CapRegState new_state)
 {
-    if (regnum == ZERO_REG_NUM) {
+    if (regnum == ZERO_REG_NUM || regnum == SCRATCH_REG_NUM) {
         cheri_debug_assert(new_state == CREG_FULLY_DECOMPRESSED &&
                            "NULL is always fully decompressed");
         return;

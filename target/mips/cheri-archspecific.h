@@ -38,8 +38,7 @@
  */
 #pragma once
 
-#define ZERO_REG_NUM 0
-
+#include "cheri-archspecific-early.h"
 #include "cheri_defs.h"
 #include "internal.h"
 
