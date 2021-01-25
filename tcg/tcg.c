@@ -1471,6 +1471,7 @@ bool tcg_op_supported(TCGOpcode op)
 
     switch (op) {
     case INDEX_op_discard:
+    case INDEX_op_sync:
     case INDEX_op_set_label:
     case INDEX_op_call:
     case INDEX_op_br:
@@ -2754,7 +2755,10 @@ static void liveness_pass_1(TCGContext *s)
             ts->state = TS_DEAD;
             la_reset_pref(ts);
             break;
-
+        case INDEX_op_sync:
+            /* Sync should never cause anything to be live as if a global is
+             * dead then it should not need syncing */
+            break;
         case INDEX_op_add2_i32:
             opc_new = INDEX_op_add_i32;
             goto do_addsub2;
@@ -4330,6 +4334,9 @@ int tcg_gen_code(TCGContext *s, TranslationBlock *tb)
             break;
         case INDEX_op_discard:
             temp_dead(s, arg_temp(op->args[0]));
+            break;
+        case INDEX_op_sync:
+            temp_sync(s, arg_temp(op->args[0]), s->reserved_regs, 0, 0);
             break;
         case INDEX_op_set_label:
             tcg_reg_alloc_bb_end(s, s->reserved_regs);
