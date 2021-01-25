@@ -131,6 +131,8 @@ void a64_translate_init(void)
     _pc_is_current = tcg_global_mem_new(
         cpu_env, offsetof(CPUArchState, _pc_is_current), "_pc_is_current");
 #endif
+
+    qemu_log_printf_create_globals();
 }
 
 /*
