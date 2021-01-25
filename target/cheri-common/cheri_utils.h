@@ -181,6 +181,9 @@ static inline bool cap_is_unsealed(const cap_register_t* c) {
 }
 
 static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
+#ifdef TARGET_AARCH64
+    type &= CC128_FIELD_OTYPE_MASK_NOT_SHIFTED;
+#endif
     assert(c->cr_tag);
     assert(c->cr_otype == CAP_OTYPE_UNSEALED && "should not use this on caps with reserved otypes");
     assert(type <= CAP_LAST_NONRESERVED_OTYPE);
@@ -192,8 +195,10 @@ static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
 
 static inline void cap_set_unsealed(cap_register_t* c) {
     assert(c->cr_tag);
+#ifndef TARGET_AARCH64
     assert(cap_is_sealed_with_type(c));
     assert(c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE && "should not use this to unsealed reserved types");
+#endif
     CAP_cc(cap_set_decompressed_cr_otype)(c, CAP_OTYPE_UNSEALED);
 }
 
@@ -279,12 +284,18 @@ static inline cap_register_t *cap_mark_unrepresentable(target_ulong addr, cap_re
     // Clear the tag and update the address:
     cr->_cr_cursor = addr;
     cr->cr_tag = false;
+#ifdef TARGET_AARCH64
+    // Morello never modifies pesbt if representability changes, instead bounds
+    // just change
+    CAP_cc(decompress_raw)(cr->cached_pesbt, addr, false, cr);
+#else
     // re-compute the compressed representation to ensure we have the same
     // resulting values for offset/base/top as the hardware:
     // TODO: this could go away if we used a cap_register_t representation
     // more like the hardware and sail.
     target_ulong pesbt = CAP_cc(compress_raw)(cr);
     CAP_cc(decompress_raw)(pesbt, addr, false, cr);
+#endif
     return cr;
 }
 
