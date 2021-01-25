@@ -27,6 +27,7 @@
 #include "fpu/softfloat-types.h"
 #include "qom/object.h"
 #include "rvfi_dii.h"
+#include "exec/log_instr_early.h"
 
 #define TCG_GUEST_DEFAULT_MO 0
 
@@ -341,6 +342,10 @@ struct CPURISCVState {
 
     /* Fields from here on are preserved across CPU reset. */
     QEMUTimer *timer; /* Internal timer */
+
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_printf_buf_t qemu_log_printf_buf;
+#endif
 };
 
 static inline bool pc_is_current(CPURISCVState *env)
