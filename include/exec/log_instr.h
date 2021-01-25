@@ -73,6 +73,14 @@
 
 #define _glue_args(...) , ## __VA_ARGS__
 
+#ifdef CONFIG_TCG_LOG_INSTR
+#define qemu_ctx_logging_enabled(ctx) unlikely(ctx->base.log_instr_enabled)
+#define qemu_base_logging_enabled(base) unlikely(base->log_instr_enabled)
+#else
+#define qemu_ctx_logging_enabled(ctx) false
+#define qemu_base_logging_enabled(base) false
+#endif
+
 /*
  * Helper to simplify checking for either instruction logging or
  * another loglevel enabled
@@ -128,6 +136,49 @@
     } while (0)
 
 #ifdef CONFIG_TCG_LOG_INSTR
+
+/* Format specifiers for TCGv and TCGv_ptr */
+#if TARGET_LONG_BITS == 64
+#define QLP_TCGV "d"
+#else
+#define QLP_TCGV "w"
+#endif
+#if UINTPTR_MAX == UINT32_MAX
+#define QLP_TCGP "w"
+#else
+#define QLP_TCGP "d"
+#endif
+
+/*
+ * Will generate TCG that will perform a printf to the extra logging info.
+ * Prints are batched until the end of an instruction
+ * TODO: This was actually designed to batch for an entire basic block, but
+ * sadly the string this would append to is cleared at the end of every
+ * instruction.
+ *
+ * The qemu_format is a string of the format ([c|w|d])*, The letter specifies
+ * whether the provided arguments are constant, words (TCGv_i32) or doubles
+ * (TCGv_i64). You should use provided macros QLP_ to deal with TCGv/TCGv_ptr.
+ * A NULL passed to a TCGv_* argument is interpreted as a constant 0.
+ * example usage: qemu_log_printf(ctx, QLP_TCGP QLP_TCGV "c", "%s, %c, %d\n",
+ * myTCGv_ptr, myTCGv, 7)
+ *
+ * WARN: Passed pointers MUST be const and live for the duration of the
+ * compiled basic block, as they are read when the prints are batched.
+ *
+ * WARN: This TCG should be reached either 0 or 1 times total for each
+ * invocation of the guest instruction. That is, you may have a TCG branch skip
+ * this generated TCG, but cannot have this in a TCG loop (although it may be
+ * part of a loop written in guest instructions, in which case you will get
+ * multiple prints as expected)
+ */
+
+struct DisasContextBase;
+void qemu_log_gen_printf(struct DisasContextBase *ctx, const char *qemu_format,
+                         const char *fmt, ...);
+struct TCGv_i64_d;
+extern struct TCGv_i64_d *qemu_log_printf_valid_entries;
+void qemu_log_printf_create_globals(void);
 
 /*
  * Request a flush of the TCG when changing loglevel outside of qemu_log_instr.
@@ -291,4 +342,6 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 #define	qemu_log_instr_env(...)
 #define	qemu_log_instr_extra(...)
 #define	qemu_log_instr_commit(...)
+#define qemu_log_gen_printf(...)
+#define qemu_log_printf_create_globals(...)
 #endif /* ! CONFIG_TCG_LOG_INSTR */

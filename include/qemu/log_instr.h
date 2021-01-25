@@ -1,4 +1,4 @@
-/*-
+/*
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2020 Alfredo Mazzinghi
@@ -39,6 +39,14 @@
  */
 
 #ifdef CONFIG_TCG_LOG_INSTR
+
+/* Max printf args. */
+#define QEMU_LOG_PRINTF_ARG_MAX 8
+/* Max printf's before flush. */
+#define QEMU_LOG_PRINTF_BUF_DEPTH 32
+/* Early flush if buffer gets this full. */
+#define QEMU_LOG_PRINTF_FLUSH_BARRIER 32
+
 /*
  * Instruction logging format
  */
@@ -92,6 +100,28 @@ static inline qemu_log_instr_fmt_t qemu_log_instr_get_format()
 
 struct cpu_log_instr_info;
 
+typedef union {
+    char charv;
+    short shortv;
+    unsigned short ushortv;
+    int intv;
+    unsigned int uintv;
+    long longv;
+    unsigned long ulongv;
+    long long longlongv;
+    unsigned long long ulonglongv;
+    float floatv;
+    double doublev;
+    void *ptrv;
+} qemu_log_arg_t;
+
+typedef struct {
+    /* arguments to printf calls */
+    qemu_log_arg_t args[QEMU_LOG_PRINTF_ARG_MAX * QEMU_LOG_PRINTF_BUF_DEPTH];
+    const char *fmts[QEMU_LOG_PRINTF_BUF_DEPTH]; /* the printf fmts */
+    uint64_t valid_entries; /* bitmap of which entries are valid */
+} qemu_log_printf_buf_t;
+
 /*
  * Per-cpu logging state.
  */
@@ -114,6 +144,8 @@ typedef struct {
     size_t ring_head;
     /* Ring buffer index of the first entry to dump */
     size_t ring_tail;
+
+    qemu_log_printf_buf_t qemu_log_printf_buf;
 } cpu_log_instr_state_t;
 
 /*
