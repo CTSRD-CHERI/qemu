@@ -198,6 +198,7 @@ DECLARE_CHERI_STAT(csetoffset)
 DECLARE_CHERI_STAT(cgetpccsetoffset)
 DECLARE_CHERI_STAT(cgetpccincoffset)
 DECLARE_CHERI_STAT(cgetpccsetaddr)
+DECLARE_CHERI_STAT(misc);
 
 #else /* !defined(DO_CHERI_STATISTICS) */
 
