@@ -66,6 +66,13 @@ typedef enum CapRegState {
     CREG_FULLY_DECOMPRESSED = 0b11
 } CapRegState;
 
+static inline const char *cap_reg_state_string(CapRegState state)
+{
+    const char *strings[] = {"Int", "Untagged Cap", "Tagged Cap",
+                             "Decompressed"};
+    return strings[(int)state];
+}
+
 // Cap registers should be padded so they are easier to move.
 #if TARGET_LONG_BITS == 32
 _Static_assert(sizeof(cap_register_t) == 40, "");
