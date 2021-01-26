@@ -718,6 +718,8 @@ static inline void gen_lazy_cap_set_state(DisasContext *ctx, int regnum,
 static inline void gen_lazy_cap_set_int_cond(DisasContext *ctx, int regnum,
                                              bool conditional)
 {
+    if (regnum == NULL_CAPREG_INDEX)
+        return;
     gen_lazy_cap_set_state_cond(ctx, regnum, CREG_INTEGER, conditional);
     // Doing this keeps pesbt always up to date, which is good for stores and
     // comparisons
@@ -984,11 +986,21 @@ static inline void gen_cap_get_type(DisasContext *ctx, int regnum, TCGv type)
     cheri_tcg_printf_verbose("cd", "Get reg %d type: %d\n", regnum, type);
 }
 
+// returns -1 for unsealed, rather than 0
+static inline void gen_cap_get_type_for_copytype(DisasContext *ctx, int regnum,
+                                                 TCGv type)
+{
+    gen_cap_get_type(ctx, regnum, type);
+    TCGv temp1 = tcg_const_tl(0);
+    tcg_gen_setcond_tl(TCG_COND_EQ, temp1, temp1, type);
+    tcg_gen_sub_tl(type, type, temp1);
+}
+
 static inline void gen_cap_set_type_unchecked(DisasContext *ctx, int regnum,
                                               TCGv type)
 {
-    gen_cap_pesbt_deposit_OTYPE(ctx, regnum, type);
     cheri_tcg_printf_verbose("cd", "Set reg %d type: %d\n", regnum, type);
+    gen_cap_pesbt_deposit_OTYPE(ctx, regnum, type);
 }
 
 static inline void gen_cap_get_sealed(DisasContext *ctx, int regnum,
@@ -1255,6 +1267,13 @@ static inline void gen_cap_in_bounds(DisasContext *ctx, int regnum, TCGv addr,
 #endif
     gen_cap_addr_below_top(ctx, regnum, addr_ext, base);
     tcg_gen_and_tl(result, result, base);
+#ifdef TARGET_AARCH64
+    // On Morello all invalid exponent caps are always out of bounds.
+    tcg_gen_ld8u_tl(base, cpu_env,
+                    gp_register_offset(regnum) +
+                        offsetof(cap_register_t, cr_bounds_valid));
+    tcg_gen_and_tl(result, result, base);
+#endif
     tcg_temp_free(base);
     cheri_tcg_printf_verbose("cd", "Get reg %d in bounds: %d\n", regnum,
                              result);
@@ -1499,10 +1518,9 @@ static inline void gen_cap_set_type_const(DisasContext *ctx, int regnum,
     tcg_temp_free(tmp);
 }
 
-static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum)
+static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
+                                bool conditional, TCGv success)
 {
-    bool conditional = false;
-    TCGv success = NULL;
     if (regnum == NULL_CAPREG_INDEX)
         return;
 
@@ -1526,8 +1544,16 @@ static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum)
 
     // Set type of regnum
     tcg_gen_movi_tl(temp0, CC128_FIELD_OTYPE_MASK_NOT_SHIFTED);
-    tcg_gen_and_tl(temp0, temp0, new_type);
-    gen_cap_set_type_unchecked(ctx, regnum, temp0);
+
+    if (!conditional) {
+        tcg_gen_and_tl(temp0, temp0, new_type);
+        gen_cap_set_type_unchecked(ctx, regnum, temp0);
+    } else {
+        // success = (type & CC128_FIELD_OTYPE_MASK_NOT_SHIFTED) ==
+        // CC128_FIELD_OTYPE_MASK_NOT_SHIFTED;
+        tcg_gen_and_tl(success, temp0, new_type);
+        tcg_gen_setcond_tl(TCG_COND_EQ, success, success, temp0);
+    }
 
     // type <= CAP_MAX_REPRESENTABLE_OTYPE
     tcg_gen_movi_tl(temp0, CAP_MAX_REPRESENTABLE_OTYPE);
