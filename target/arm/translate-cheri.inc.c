@@ -197,6 +197,15 @@ static void set_NZCV(DisasContext *ctx, TCGv_i32 N, TCGv_i32 Z, TCGv_i32 C,
 #define REG_NONE 0x77
 #define OPTION_NONE 0xff
 
+static inline TCGv_i64 cpu_reg_maybe_0(DisasContext *ctx, int regnum)
+{
+    if (regnum == ZERO_REG_NUM) {
+        return cpu_reg(ctx, regnum);
+    } else {
+        return cpu_reg_sp(ctx, regnum);
+    }
+}
+
 // Load/store common code
 // loads/stores pair rd/rd2, base rn, reg offset rm (or rs in some cases), imm
 // offset imm pre_inc / post_inc stores back to base. Most of these options
@@ -329,11 +338,11 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
         if (!vector) {
             MemOp memop = ctx->be_data + size;
 
-            TCGv_i64 tcg_rd = cpu_reg_sp(ctx, rd);
+            TCGv_i64 tcg_rd = cpu_reg_maybe_0(ctx, rd);
             TCGv_i64 tcg_rd2;
 
             if (rd2 != REG_NONE) {
-                tcg_rd2 = cpu_reg_sp(ctx, rd2);
+                tcg_rd2 = cpu_reg_maybe_0(ctx, rd2);
             }
 
             // Do the actual load / stores
@@ -1055,28 +1064,77 @@ TRANS_F(BUILD_CSEAL_CPYE)
         cd = AS_ZERO(cd);
     }
 
-    cheri_cap_cap_cap_helper *helper;
+    // Might need to move to a temp so cm is not clobbered
+    uint32_t cd_temp = cd == cm ? SCRATCH_REG_NUM : cd;
 
-    // LETODO: Just write TCG, have most of the groundwork already
+    gen_move_cap_gp_gp(ctx, cd_temp, cn);
+
     switch (a->opc) {
     case 0b00: // BUILD
-        // helper = &gen_helper_cbuildcap;
-        assert(0);
+    {
+        gen_ensure_cap_decompressed(ctx, cm);
+        // new_tag = (old_tag && !sealed) || (cm tagged && !cm sealed &&
+        // subset(d, cm) && !above_limit(data))
+        TCGv_i64 result = tcg_temp_new_i64();
+        TCGv_i64 temp0 = tcg_const_i64(0);
+        TCGv_i64 temp1 = tcg_temp_new_i64();
+
+        gen_cap_get_unsealed(ctx, cd_temp, result);
+        // Set type to unsealed
+        gen_cap_set_type_unchecked(ctx, cd_temp, temp0);
+
+        gen_cap_get_tag(ctx, cd_temp, temp0);
+        tcg_gen_and_i64(result, result, temp0);
+
+        gen_cap_get_tag(ctx, cm, temp1);
+
+        gen_cap_get_unsealed(ctx, cm, temp0);
+        tcg_gen_and_i64(temp1, temp1, temp0);
+
+        gen_cap_is_subset(ctx, cd_temp, cm, temp0);
+        tcg_gen_and_i64(temp1, temp1, temp0);
+
+        gen_cap_get_base_below_top(ctx, cd_temp, temp0);
+        tcg_gen_and_i64(temp1, temp1, temp0);
+        tcg_gen_or_i64(result, result, temp1);
+
+        gen_cap_set_tag(ctx, cd_temp, result, false);
+
+        tcg_temp_free_i64(result);
+        tcg_temp_free_i64(temp0);
+        tcg_temp_free_i64(temp1);
         break;
-    case 0b01: // CPYTYPE
-        // helper = &gen_helper_ccopytype;
-        assert(0);
-        break;
-    case 0b10: // CSEAL
-        // helper = &gen_helper_ccseal;
-        assert(0);
-        break;
-    case 0b11: // CPYVALUE
-        // LETODO: Replace with TCG?
-        assert(0);
     }
 
-    return gen_cheri_cap_cap_cap(ctx, cd, cn, cm, helper);
+    case 0b01: // CPYTYPE
+    {
+        TCGv_i64 type = tcg_temp_new_i64();
+        gen_cap_get_type_for_copytype(ctx, cm, type);
+        gen_cap_set_cursor(ctx, cd_temp, type, false);
+        tcg_temp_free_i64(type);
+        break;
+    }
+    case 0b10: // CSEAL
+    {
+        TCGv_i64 success = tcg_temp_new_i64();
+        gen_cap_seal(ctx, cd_temp, cm, true, success);
+        TCGv_i32 v = tcg_temp_new_i32();
+        tcg_gen_extrl_i64_i32(v, success);
+        set_NZCV(ctx, NULL, NULL, NULL, v);
+        tcg_temp_free_i32(v);
+        tcg_temp_free_i64(success);
+        break;
+    }
+    case 0b11: // CPYVALUE
+        gen_cap_set_cursor(ctx, cd_temp, read_cpu_reg(ctx, a->Cm, 1), false);
+        break;
+    }
+
+    if (cd == cm) {
+        gen_move_cap_gp_gp(ctx, cd, cd_temp);
+    }
+
+    return true;
 }
 
 TRANS_F(CLRPERM)
@@ -1170,7 +1228,7 @@ TRANS_F(SEAL_CHKSSU)
 
     switch (a->opc) {
     case 0b00: // SEAL
-        gen_cap_seal(ctx, cd_temp, AS_ZERO(a->Cm));
+        gen_cap_seal(ctx, cd_temp, AS_ZERO(a->Cm), false, NULL);
         break;
     case 0b01: // UNSEAL
         gen_cap_unseal(ctx, cd_temp, AS_ZERO(a->Cm));
