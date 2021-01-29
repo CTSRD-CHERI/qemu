@@ -5095,13 +5095,14 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      */
     { .name = "SP_EL0", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 0, .crn = 4, .crm = 1, .opc2 = 0,
-      .access = PL1_RW, .accessfn = sp_el0_access,
-      .type = ARM_CP_ALIAS,
+      .access = PL1_RW | PL_IN_EXECUTIVE, .accessfn = sp_el0_access,
+      .type = ARM_CP_ALIAS | ARM_CP_CAP_ON_MORELLO,
       .fieldoffset = offsetof(CPUARMState, sp_el[0]) },
     { .name = "SP_EL1", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 4, .crn = 4, .crm = 1, .opc2 = 0,
-      .access = PL2_RW, .type = ARM_CP_ALIAS,
-      .fieldoffset = offsetof(CPUARMState, sp_el[1]) },
+      .access = PL2_RW | PL_IN_EXECUTIVE, .type = ARM_CP_ALIAS,
+      .fieldoffset = offsetof(CPUARMState, sp_el[1]),
+      .type = ARM_CP_CAP_ON_MORELLO},
     { .name = "SPSel", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 0, .crn = 4, .crm = 2, .opc2 = 0,
       .type = ARM_CP_NO_RAW,
@@ -5502,8 +5503,9 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
       .resetvalue = 0 },
     { .name = "SP_EL2", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 6, .crn = 4, .crm = 1, .opc2 = 0,
-      .access = PL3_RW, .type = ARM_CP_ALIAS,
-      .fieldoffset = offsetof(CPUARMState, sp_el[2]) },
+      .access = PL_IN_EXECUTIVE | PL3_RW, .type = ARM_CP_ALIAS,
+      .fieldoffset = offsetof(CPUARMState, sp_el[2]),
+      .type = ARM_CP_CAP_ON_MORELLO},
     { .name = "CPTR_EL2", .state = ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 1, .opc2 = 2,
       .access = PL2_RW, .accessfn = cptr_access, .resetvalue = 0,
@@ -8230,6 +8232,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
 
 #ifdef TARGET_CHERI
     // LETODO: Stuff to do with CPACR_ELX.CEN / EN for stopping DDC access, also HCR controls a lot of these
+    // LETODO: Also have to pay attention to restricted for RDDC and RSP.
     cap_register_t null_cap;
     bzero(&null_cap, sizeof(null_cap));
     cap_register_t max_cap = cc128_make_max_perms_cap(0, 0, CAP_MAX_TOP);
@@ -8237,17 +8240,17 @@ void register_cp_regs_for_features(ARMCPU *cpu)
             // We swap the relevent DDC into this register, so it is always accessible
             {   .name = "DDC",
                 .opc0 = 3, .opc1 = 3, .crn = 4, .crm = 1, .opc2 = 1,
-                .access = PLALL_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
+                .access = PL0_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
                 .fieldoffset = offsetof(CPUARMState, DDC_current),
                 .capresetvalue = max_cap},
             {   .name = "DDC_EL0",
                 .opc0 = 3, .opc1 = 0, .crn = 4, .crm = 1, .opc2 = 1,
-                .access = PL1_RW | PL2_RW | PL3_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
+                .access = PL1_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
                 .fieldoffset = offsetof(CPUARMState, DDCs[0]),
                 .capresetvalue = max_cap},
             {   .name = "DDC_EL1",
                 .opc0 = 3, .opc1 = 4, .crn = 4, .crm = 1, .opc2 = 1,
-                .access = PL2_RW | PL3_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
+                .access = PL2_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
                 .fieldoffset = offsetof(CPUARMState, DDCs[1]),
                 .capresetvalue = max_cap},
             {   .name = "DDC_EL2",
@@ -8255,6 +8258,16 @@ void register_cp_regs_for_features(ARMCPU *cpu)
                 .access = PL3_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
                 .fieldoffset = offsetof(CPUARMState, DDCs[2]),
                 .capresetvalue = max_cap},
+            {   .name = "RDDC_EL0",
+                .opc0 = 3, .opc1 = 3, .crn = 4, .crm = 3, .opc2 = 1,
+                .access = PL0_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
+                .fieldoffset = offsetof(CPUARMState, DDCs[4]),
+                .capresetvalue = max_cap},
+            {   .name = "RSP_EL0", .state = ARM_CP_STATE_AA64,
+                .opc0 = 3, .opc1 = 7, .crn = 4, .crm = 1, .opc2 = 3,
+                .access = PL0_RW, .type = ARM_CP_CAP, .state = ARM_CP_STATE_AA64,
+                .fieldoffset = offsetof(CPUARMState, sp_el[4]),
+                .capresetvalue = null_cap},
             // TODO: bits in CPTR control access to these
             {   .name = "CHCR_EL2",
                 .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 2, .opc2 = 3,
@@ -8273,17 +8286,17 @@ void register_cp_regs_for_features(ARMCPU *cpu)
                 .resetvalue = 0},
             {   .name = "CCTLR_EL2",
                 .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 2, .opc2 = 2,
-                .access =  PL3_RW | PL2_RW, .type = 0, .state = ARM_CP_STATE_AA64,
+                .access =  PL2_RW, .type = 0, .state = ARM_CP_STATE_AA64,
                 .fieldoffset = offsetof(CPUARMState, CCTLR_el[3]),
                 .resetvalue = 0},
             {   .name = "CCTLR_EL1",
                 .opc0 = 3, .opc1 = 0, .crn = 1, .crm = 2, .opc2 = 2,
-                .access =  PL3_RW | PL2_RW | PL1_RW, .type = 0, .state = ARM_CP_STATE_AA64,
+                .access =  PL1_RW, .type = 0, .state = ARM_CP_STATE_AA64,
                 .fieldoffset = offsetof(CPUARMState, CCTLR_el[3]),
                 .resetvalue = 0},
             {   .name = "CCTLR_EL0",
                 .opc0 = 3, .opc1 = 3, .crn = 1, .crm = 2, .opc2 = 2,
-                .access =  PLALL_RW, .type = 0, .state = ARM_CP_STATE_AA64,
+                .access =  PL0_RW, .type = 0, .state = ARM_CP_STATE_AA64,
                 .fieldoffset = offsetof(CPUARMState, CCTLR_el[3]),
                 .resetvalue = 0},
             // TODO CCTLR_EL12
@@ -8614,8 +8627,9 @@ void define_one_arm_cp_reg_with_opaque(ARMCPU *cpu,
      * runtime check into our general permission check code, so check
      * here that the reginfo's specified permissions are strict enough
      * to encompass the generic architectural permission check.
+     * This seems to not be true for some morello registers, e.g. RSP_EL0
      */
-    if (r->state != ARM_CP_STATE_AA32) {
+    if (r->state != ARM_CP_STATE_AA32 && !cpreg_field_is_cap(r)) {
         int mask = 0;
         switch (r->opc1) {
         case 0:
@@ -8651,15 +8665,6 @@ void define_one_arm_cp_reg_with_opaque(ARMCPU *cpu,
         /* assert our permissions are not too lax (stricter is fine) */
         assert((r->access & ~(mask | PL_CHERI)) == 0);
     }
-
-    /*
-#if defined(TARGET_CHERI) && define(QEMU_USE_COMPRESSED_CHERI_CAPS)
-    if (r->type & ARM_CP_CAP) {
-        // Rather than have every caller bother calling compress to get a correct pesbt we do it here.
-        r->capresetvalue.cached_pesbt = cc128_compress_raw(&r->capresetvalue);
-    }
-#endif
-     */
 
     /* Check that the register definition has enough info to handle
      * reads and writes if they are permitted.
