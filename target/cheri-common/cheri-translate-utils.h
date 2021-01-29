@@ -1201,25 +1201,36 @@ static inline void gen_cap_get_base_below_top(DisasContext *ctx, int regnum,
 // value
 static inline void gen_reg_modified_cap(DisasContext *ctx, int regnum)
 {
-    gen_ensure_cap_decompressed(ctx, regnum);
-    TCGv_ptr name = tcg_const_ptr(cheri_gp_regnames + regnum);
-    TCGv_ptr reg = tcg_const_ptr(gp_register_offset(regnum));
-    tcg_gen_add_ptr(reg, reg, cpu_env);
-    gen_helper_qemu_log_instr_cap(cpu_env, name, reg);
-    tcg_temp_free_ptr(reg);
-    tcg_temp_free_ptr(name);
+    if (qemu_ctx_logging_enabled(ctx)) {
+        gen_ensure_cap_decompressed(ctx, regnum);
+        TCGv_ptr name = tcg_const_ptr(cheri_gp_regnames[regnum]);
+        TCGv_ptr reg = tcg_const_ptr(gp_register_offset(regnum));
+        tcg_gen_add_ptr(reg, reg, cpu_env);
+        gen_helper_qemu_log_instr_cap(cpu_env, name, reg);
+        tcg_temp_free_ptr(reg);
+        tcg_temp_free_ptr(name);
+    }
 }
 
 // Call this at the end of any instruction that modifies a capreg with a new int
 // value
 static inline void gen_reg_modified_int(DisasContext *ctx, int regnum)
 {
-    TCGv new_val = tcg_temp_new();
-    gen_cap_get_cursor(ctx, regnum, new_val);
-    TCGv_ptr name = tcg_const_ptr(cheri_gp_regnames + regnum);
-    gen_helper_qemu_log_instr_reg(cpu_env, name, new_val);
-    tcg_temp_free(new_val);
-    tcg_temp_free_ptr(name);
+    if (qemu_ctx_logging_enabled(ctx)) {
+        TCGv new_val = tcg_temp_new();
+        gen_cap_get_cursor(ctx, regnum, new_val);
+        const char *str_name =
+#ifdef TARGET_AARCH64
+            cheri_gp_int_regnames[regnum];
+#else
+            cheri_gp_regnames[regnum];
+        // TODO: Add some integer names to riscv/mips
+#endif
+        TCGv_ptr name = tcg_const_ptr(str_name);
+        gen_helper_qemu_log_instr_reg(cpu_env, name, new_val);
+        tcg_temp_free(new_val);
+        tcg_temp_free_ptr(name);
+    }
 }
 
 static inline void gen_cap_set_cursor_unsafe(DisasContext *ctx, int regnum,
