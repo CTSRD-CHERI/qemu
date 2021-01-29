@@ -241,6 +241,9 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
     cp->cached_pesbt = CAP_NULL_PESBT;
     cheri_debug_assert(cap_is_representable(cp));
+#ifdef TARGET_AARCH64
+    cp->cr_bounds_valid = 1;
+#endif
     return cp;
 }
 
