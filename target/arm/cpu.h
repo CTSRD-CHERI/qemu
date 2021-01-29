@@ -4202,6 +4202,55 @@ static inline bool isar_feature_any_tts2uxn(const ARMISARegisters *id)
     return isar_feature_aa64_tts2uxn(id) || isar_feature_aa32_tts2uxn(id);
 }
 
+#ifdef TARGET_CHERI
+static inline bool cheri_is_executive(CPUARMState *env)
+{
+    return FIELD_EX32(env->chflags, TBFLAG_CHERI, EXECUTIVE) != 0;
+}
+
+static inline bool cheri_is_system(CPUARMState *env)
+{
+    return FIELD_EX32(env->chflags, TBFLAG_CHERI, SYSTEM) != 0;
+}
+#endif
+
+static inline int aarch64_get_bank_index(CPUARMState *env, int el)
+{
+#ifdef TARGET_CHERI
+    if (!cheri_is_executive(env)) {
+        return 4;
+    }
+#endif
+    return ((env->pstate & PSTATE_SP) ? el : 0);
+}
+
+// DDC is always swapped at the times SP is, so it makes sense to have just one
+// function
+// TODO maybe rename these now they also control DDC.
+
+static inline void aarch64_save_sp(CPUARMState *env, int el)
+{
+    int index = aarch64_get_bank_index(env, el);
+    env->sp_el[index] =
+#ifdef TARGET_CHERI
+        *get_readonly_capreg(env, 31);
+    env->DDCs[index] = env->DDC_current;
+#else
+        env->xregs[31];
+#endif
+}
+
+static inline void aarch64_restore_sp(CPUARMState *env, int el)
+{
+    int index = aarch64_get_bank_index(env, el);
+#ifdef TARGET_CHERI
+    update_capreg(env, 31, &env->sp_el[index]);
+    env->DDC_current = env->DDCs[index];
+#else
+    env->xregs[31] = env->sp_el[index];
+#endif
+}
+
 /*
  * Forward to the above feature tests given an ARMCPU pointer.
  */
