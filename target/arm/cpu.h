@@ -2595,8 +2595,6 @@ static inline bool cptype_valid(int cptype)
 #define PL1_RW (PL1_R | PL1_W)
 #define PL0_RW (PL0_R | PL0_W)
 
-#define PLALL_RW (PL0_RW | PL1_RW | PL2_RW | PL3_RW)
-
 /* Return the highest implemented Exception Level */
 static inline int arm_highest_el(CPUARMState *env)
 {
