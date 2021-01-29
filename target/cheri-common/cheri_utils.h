@@ -261,6 +261,9 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->cached_pesbt = CC128_NULL_PESBT;
     cheri_debug_assert(cc128_is_representable_cap_exact(cp));
 #endif
+#ifdef TARGET_AARCH64
+    cp->cr_bounds_valid = 1;
+#endif
     return cp;
 }
 
