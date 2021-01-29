@@ -20,6 +20,7 @@
 #include "cheri-archspecific-early.h"
 
 extern const char *const cheri_gp_regnames[];
+extern const char *const cheri_gp_int_regnames[];
 
 // LETODO: All of these
 #include "stdio.h"
