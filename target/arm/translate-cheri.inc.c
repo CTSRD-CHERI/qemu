@@ -226,13 +226,16 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
 
 #if (TRACE_MEMOP_TRANSLATION)
     printf("CTX pc cur: %lx\n", ctx->pc_curr);
-    printf("Memop: %s vec:%d rd:%d rd2:%d size:%d extend:%d rn:%d rm:%d "
-           "imm:%ld. AB? %d. CB? %d. pcc_base? %d. pre %d. post %d.\n",
-           is_load ? "load" : "store", vector, rd, rd2, size, extend_size, rn,
-           rm, imm, alternate_base, capability_base, pcc_base, pre_inc,
-           post_inc);
+    printf(
+        "Memop: %s vec:%d rd:%d rd2:%d size:%d extend:%d rn:%d rm:%d imm:%ld. "
+        "AB? %d. CB? %d. pcc_base? %d. pre %d. post %d. opt: %d. shift %d.\n",
+        is_load ? "load" : "store", vector, rd, rd2, size, extend_size, rn, rm,
+        imm, alternate_base, capability_base, pcc_base, pre_inc, post_inc,
+        option, shift);
     if (rn != REG_NONE)
         gen_cap_debug(ctx, rn);
+    if (rm != REG_NONE)
+        gen_cap_debug(ctx, rm);
 #endif
     // Still got these to do
     // Exclusive is done by by remembering BOTH the value and address in a load
@@ -249,8 +252,6 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
     if (rn == 31)
         gen_check_sp_alignment(ctx);
 
-    // The reason we dont just use the base reg directly for pre/post inc is
-    // that we might otherwise add DDC to it.
     TCGv_i64 addr;
 
     // Get integer component of base
@@ -270,6 +271,14 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
         if (imm != 0 && !post_inc) {
             tcg_gen_addi_i64(addr, addr, imm);
         }
+    }
+
+    TCGv_i64 wb;
+    // There are too many places we might accidentally add DDC base, so if we
+    // are going to store back, take a copy
+    if ((pre_inc || post_inc)) {
+        wb = tcg_temp_new_i64();
+        tcg_gen_mov_i64(wb, addr);
     }
 
     // Now add register offset if any
@@ -408,11 +417,12 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
 
     // Add immediate afterwards if post incrementing
     if (post_inc && imm != 0) {
-        tcg_gen_addi_i64(addr, addr, imm);
+        tcg_gen_addi_i64(wb, wb, imm);
     }
 
     if (post_inc || pre_inc) {
-        set_gpr_reg_addr_base(ctx, rn, addr, capability_base);
+        set_gpr_reg_addr_base(ctx, rn, wb, capability_base);
+        tcg_temp_free_i64(wb);
     }
 
     if (rn == REG_NONE) {
@@ -583,10 +593,11 @@ TRANS_F(LDP_STP)
 
 TRANS_F(ADD1)
 {
+    gen_ensure_cap_decompressed(ctx, a->Cn);
+    TCGv_i64 extended = read_cpu_reg(ctx, a->Rm, 1);
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
 
     // extended int
-    TCGv_i64 extended = read_cpu_reg(ctx, a->Rm, 1);
     ext_and_shift_reg(extended, extended, a->option_name, a->imm3);
     tcg_gen_add_i64(extended, extended, cpu_reg(ctx, a->Cd));
 
@@ -643,8 +654,16 @@ static bool cvt_impl_ptr_to_cap(DisasContext *ctx, uint32_t cd, uint32_t cn,
     if (cd == NULL_CAPREG_INDEX)
         return true;
 
+    bool special_move =
+        cn == CHERI_EXC_REGNUM_DDC || cn == CHERI_EXC_REGNUM_PCC;
+
+    if (!special_move)
+        gen_ensure_cap_decompressed(ctx, cn);
+
+    TCGv_i64 tcg_rm = cd == rm ? read_cpu_reg(ctx, rm, 1) : cpu_reg(ctx, rm);
+
     // Move cap
-    if (cn == CHERI_EXC_REGNUM_DDC || cn == CHERI_EXC_REGNUM_PCC) {
+    if (special_move) {
         gen_move_cap_gp_sp(ctx, cd,
                            (cn == CHERI_EXC_REGNUM_DDC)
                                ? offsetof(CPUARMState, DDC_current)
@@ -656,7 +675,6 @@ static bool cvt_impl_ptr_to_cap(DisasContext *ctx, uint32_t cd, uint32_t cn,
     TCGv_i64 new_cursor = tcg_temp_local_new_i64();
 
     TCGv_i64 temp = tcg_temp_new_i64();
-    TCGv_i64 tcg_rm = cpu_reg(ctx, rm);
 
     // TODO PCC/DDC base known at translate time. Could do a better job.
     if (base_off) {
@@ -778,8 +796,8 @@ TRANS_F(SUBS)
 
     TCGv_i64 tag1 = tcg_temp_new_i64();
     TCGv_i64 tag2 = tcg_temp_new_i64();
-    gen_cap_get_tag(ctx, a->Cn, tag1);
-    gen_cap_get_tag(ctx, a->Cm, tag2);
+    gen_cap_get_tag(ctx, AS_ZERO(a->Cn), tag1);
+    gen_cap_get_tag(ctx, AS_ZERO(a->Cm), tag2);
     tcg_gen_shli_i64(tag1, tag1, 62);
     tcg_gen_shli_i64(tag2, tag2, 62);
 
@@ -795,22 +813,20 @@ TRANS_F(SUBS)
     tcg_gen_movcond_i64(TCG_COND_EQ, value2, tag1, tag2, cpu_reg(ctx, a->Cm),
                         tag2);
 
-    // negate value 2
-    tcg_gen_not_i64(value2, value2);
-    tcg_gen_movi_i64(tag2, 1);
-    tcg_gen_add_i64(value2, value2, tag2);
-
     tcg_temp_free_i64(tag1);
     tcg_temp_free_i64(tag2);
 
     TCGv_i64 result = cpu_reg(ctx, a->Rd);
 
+    // negate value 2 and set carry in to one
+    tcg_gen_not_i64(value2, value2);
+    tcg_gen_movi_i32(cpu_CF, 1);
     gen_adc_CC(1, result, value1, value2);
 
     // Shift result down again (if we were comparing tags)
     tcg_gen_shr_i64(result, result, shift);
 
-    gen_lazy_cap_set_int(ctx, a->Rd);
+    gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rd));
 
     tcg_temp_free_i64(shift);
     tcg_temp_free_i64(value1);
@@ -821,15 +837,17 @@ TRANS_F(SUBS)
 
 TRANS_F(FLGS_CTHI)
 {
-    if (a->opc == 0b11) {
-        gen_cap_set_pesbt(ctx, a->Cd, cpu_reg(ctx, a->Cn));
+    int cn = a->opc == 0b11 ? AS_ZERO(a->Cn) : a->Cn;
+    gen_ensure_cap_decompressed(ctx, cn);
+    TCGv_i64 rm = read_cpu_reg(ctx, a->Rm, 1);
+    gen_move_cap_gp_gp(ctx, a->Cd, cn);
+
+    if (a->opc == 0b11) { // cn/cm as zero
+        gen_cap_set_pesbt(ctx, a->Cd, rm);
         return true;
-    } else {
-        gen_ensure_cap_decompressed(ctx, a->Cn);
-        TCGv_i64 mask = read_cpu_reg(ctx, a->Rm, 1);
-        gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
-        tcg_gen_andi_i64(mask, mask, 0xFULL << 56);
-        return gen_cheri_addr_op_tcgval(ctx, a->Cd, mask, a->opc, true);
+    } else { // cm as zero
+        tcg_gen_andi_i64(rm, rm, 0xFFULL << 56);
+        return gen_cheri_addr_op_tcgval(ctx, a->Cd, rm, a->opc, true);
     }
 }
 
@@ -845,13 +863,22 @@ static TCGv_i32 get_link_reg(DisasContext *ctx, bool link)
     return tcg_const_i32(link ? 30 : NULL_CAPREG_INDEX);
 }
 
+static void should_be_executive(DisasContext *ctx)
+{
+    if (!GET_FLAG(ctx, EXECUTIVE)) {
+        unallocated_encoding(ctx);
+    }
+}
+
 static TCGv_i32 get_branch_flags(DisasContext *ctx, bool can_branch_restricted)
 {
     uint32_t flags = 0;
     if (!cctlr_set(ctx, CCTLR_SBL))
         flags |= CJALR_DONT_MAKE_SENTRY;
-    if (can_branch_restricted)
+    if (can_branch_restricted) {
         flags |= CJALR_CAN_BRANCH_RESTRICTED;
+        should_be_executive(ctx);
+    }
 
     return tcg_const_i32(flags);
 }
@@ -891,10 +918,8 @@ TRANS_F(BLR_BR_RET_CHKD)
         return true;
     }
 
-    bool executive = !!GET_FLAG(ctx, EXECUTIVE);
-
-    if (a->op == 0b11 && !executive) {
-        unallocated_encoding(ctx);
+    if (a->op == 0b11) {
+        should_be_executive(ctx);
     }
 
     if (a->opc == 0b11) {
@@ -992,7 +1017,7 @@ TRANS_F(BRS)
     if (a->opc == 0b11)
         return false;
 
-    TCGv_i32 flags = get_branch_flags(ctx, true);
+    TCGv_i32 flags = get_branch_flags(ctx, false);
 
     // Branch and link sealed
     bool link = a->opc == 0b01;
@@ -1139,8 +1164,10 @@ TRANS_F(BUILD_CSEAL_CPYE)
 
 TRANS_F(CLRPERM)
 {
+    gen_ensure_cap_decompressed(ctx, a->Cn);
+    TCGv_i64 rmv = read_cpu_reg(ctx, a->Rm, 1);
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
-    gen_cap_clear_perms(ctx, a->Cd, read_cpu_reg(ctx, a->Rm, 1), true);
+    gen_cap_clear_perms(ctx, a->Cd, rmv, true);
     gen_cap_untag_if_sealed(ctx, a->Cd);
     return true;
 }
@@ -1155,13 +1182,13 @@ static bool isTagSettingDisabled(DisasContext *ctx)
 TRANS_F(SCG)
 {
 
-    // First move to target
-    gen_move_compressed_cap(gp_register_offset(a->Cd),
-                            gp_register_offset(a->Cn));
+    gen_ensure_cap_decompressed(ctx, a->Cn);
+    TCGv_i64 tcgrm = read_cpu_reg(ctx, a->Rm, 1);
+
+    gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
 
     // Then set state
     if (!isTagSettingDisabled(ctx) && cheri_is_system_ctx(ctx)) {
-        TCGv_i64 tcgrm = read_cpu_reg(ctx, a->Rm, 1);
         gen_cap_set_tag(ctx, a->Cd, tcgrm, true);
     } else {
         gen_lazy_cap_set_state(ctx, a->Cd, CREG_UNTAGGED_CAP);
@@ -1174,9 +1201,9 @@ TRANS_F(SCG)
 // similar.
 TRANS_F(SCG1)
 {
-    gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
+    gen_ensure_cap_decompressed(ctx, a->Cn);
     TCGv_i64 flag_bits = read_cpu_reg(ctx, a->Rm, 1);
-
+    gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
     tcg_gen_andi_i64(flag_bits, flag_bits, 0xFFULL << 56);
 
     gen_cheri_addr_op_tcgval(ctx, a->Cd, flag_bits, OP_SET, true);
@@ -1224,7 +1251,7 @@ TRANS_F(SEAL_CHKSSU)
 
     int cd_temp = need_scratch ? SCRATCH_REG_NUM : cd;
 
-    gen_move_cap_gp_gp(ctx, cd_temp, a->Cn);
+    gen_move_cap_gp_gp(ctx, cd_temp, a->opc == 0b10 ? a->Cn : AS_ZERO(a->Cn));
 
     switch (a->opc) {
     case 0b00: // SEAL
@@ -1235,7 +1262,8 @@ TRANS_F(SEAL_CHKSSU)
         break;
     case 0b10: // CHKSSU
     {
-
+        gen_cap_debug(ctx, cd_temp);
+        gen_cap_debug(ctx, a->Cm);
         int cm = a->Cm;
         TCGv_i64 ss_and_tagged = tcg_temp_new_i64();
         gen_cap_is_subset_and_tag_eq(ctx, cd_temp, cm, ss_and_tagged);
@@ -1273,11 +1301,12 @@ TRANS_F(SEAL_CHKSSU)
 
 TRANS_F(CSEL)
 {
-    gen_ensure_cap_decompressed(ctx, a->Cn);
-    gen_ensure_cap_decompressed(ctx, a->Cm);
+    gen_ensure_cap_decompressed(ctx, AS_ZERO(a->Cn));
+    gen_ensure_cap_decompressed(ctx, AS_ZERO(a->Cm));
     DisasCompare cmp;
     arm_test_cc(&cmp, a->cond);
-    gen_move_cap_gp_select_gp(ctx, a->Cd, a->Cn, a->Cm, cmp.cond, cmp.value);
+    gen_move_cap_gp_select_gp(ctx, AS_ZERO(a->Cd), AS_ZERO(a->Cn),
+                              AS_ZERO(a->Cm), cmp.cond, cmp.value);
     arm_free_cc(&cmp);
     return true;
 }
@@ -1288,24 +1317,27 @@ TRANS_F(CFHI)
 
     switch (a->opc) {
     case 0b00: // GCLIM
-        gen_cap_get_top(ctx, a->Cn, dst);
-        return true;
+        gen_cap_get_top_clamped(ctx, a->Cn, dst);
+        break;
     case 0b01: // GCFLGS
         gen_cap_get_flags(ctx, a->Cn, dst);
-        return true;
+        break;
     case 0b10: // CFHI
         gen_cap_get_hi(ctx, a->Cn, dst);
-        return true;
+        break;
     default: return false;
     }
+
+    gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rd));
+    return true;
 }
 // CVT with PCC / DDC as a base, cap -> ptr
 TRANS_F(CVT2)
 {
     bool pcc = (a->opc & 1) != 0;
     return cvt_impl_cap_to_ptr(
-        ctx, a->Rd, AS_ZERO(a->Cn),
-        pcc ? CHERI_EXC_REGNUM_PCC : CHERI_EXC_REGNUM_DDC, pcc);
+        ctx, a->Rd, a->Cn, pcc ? CHERI_EXC_REGNUM_PCC : CHERI_EXC_REGNUM_DDC,
+        pcc);
 }
 
 TRANS_F(GC)
@@ -1340,8 +1372,8 @@ TRANS_F(GC)
         break;
     }
 
-    gen_lazy_cap_set_int(ctx, a->Rd);
-
+    gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rd));
+    gen_cap_debug(ctx, AS_ZERO(a->Rd));
     return true;
 }
 
@@ -1482,9 +1514,10 @@ TRANS_F(SC)
     } else {
         // opc 2 is set addr, opc 3 is setoffset
 
+        gen_ensure_cap_decompressed(ctx, a->Cn);
+        TCGv_i64 new_cursor = read_cpu_reg(ctx, a->Rm, 1);
         gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
 
-        TCGv_i64 new_cursor = read_cpu_reg(ctx, a->Rm, 1);
 
         if (a->opc == 3) {
             TCGv_i64 base = tcg_temp_new_i64();
@@ -1594,6 +1627,7 @@ TRANS_F(ASTR_ALD)
         size = 2;
         extend_size = 2;
         vector = true;
+        break;
     case 0b101:
         size = 3;
         extend_size = 3;
