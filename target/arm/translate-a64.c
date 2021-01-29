@@ -339,9 +339,11 @@ static void set_gpr_reg_addr_base(DisasContext *s, int regnum, TCGv_i64 new_valu
     if(regnum == ZERO_REG_NUM) return;
     if(capability_base) {
         gen_cap_set_cursor(s, regnum, new_value, false);
+        gen_reg_modified_cap(s, regnum);
     } else {
         gen_lazy_cap_set_int(s, regnum);
         tcg_gen_mov_i64(cpu_reg_sp(s, regnum), new_value);
+        gen_reg_modified_int(s, regnum);
     }
 #else
     tcg_gen_mov_i64(cpu_reg_sp(s, regnum), new_value);
