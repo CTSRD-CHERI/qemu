@@ -161,8 +161,8 @@ static void aarch64_morello_initfn(Object *obj) {
     cpu->isar.mvfr2 = 0x00000043;
     cpu->ctr = 0x8444c004;
     cpu->reset_sctlr = 0x00c50838;
-    cpu->id_pfr0 = 0x00000131;
-    cpu->id_pfr1 = 0x00011011;
+    cpu->isar.id_pfr0 = 0x00000131;
+    cpu->isar.id_pfr1 = 0x00011011;
     cpu->isar.id_dfr0 = 0x03010066;
     cpu->id_afr0 = 0x00000000;
     cpu->isar.id_mmfr0 = 0x10201105;
@@ -177,7 +177,7 @@ static void aarch64_morello_initfn(Object *obj) {
     cpu->isar.id_isar5 = 0x00011121;
     cpu->isar.id_aa64pfr0 = 0x00002222;
     cpu->isar.id_aa64dfr0 = 0x10305106;
-    cpu->isar.id_aa64isar0 = 0x00011120;
+    cpu->isar.id_aa64isar0 = 0x00211120;
     cpu->isar.id_aa64mmfr0 = 0x00001124;
     cpu->isar.id_aa64mmfr1 = R_ID_AA64MMFR1_LO_MASK;
     cpu->isar.dbgdidr = 0x3516d000;
