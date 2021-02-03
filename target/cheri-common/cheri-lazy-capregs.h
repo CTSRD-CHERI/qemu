@@ -177,6 +177,35 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
     tcg_abort();
 }
 
+static inline __attribute__((always_inline)) bool
+get_without_decompress_tag(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    CapRegState state = get_capreg_state(gpcrs, regnum);
+    bool tag = (state == CREG_FULLY_DECOMPRESSED) &&
+               gpcrs->decompressed[regnum].cr_tag;
+#if QEMU_USE_COMPRESSED_CHERI_CAPS
+    tag |= (state == CREG_TAGGED_CAP);
+#endif
+    return tag;
+}
+
+static inline __attribute__((always_inline)) target_ulong
+get_without_decompress_cursor(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    return gpcrs->decompressed[regnum]._cr_cursor;
+}
+
+#if QEMU_USE_COMPRESSED_CHERI_CAPS
+static inline __attribute__((always_inline)) target_ulong
+get_without_decompress_pesbt(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    return gpcrs->decompressed[regnum].cached_pesbt;
+}
+#endif
+
 // Return a CREG or DDC or PCC.
 static inline __attribute__((always_inline)) const cap_register_t *
 get_capreg_or_special(CPUArchState *env, unsigned regnum)
