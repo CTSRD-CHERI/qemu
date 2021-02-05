@@ -1,11 +1,21 @@
 // import the cheribuildProject() step
 @Library('ctsrd-jenkins-scripts') _
 
+def jobProperties = [
+    rateLimitBuilds(throttle: [count: 2, durationName: 'hour', userBoost: true]),
+    [$class: 'GithubProjectProperty', projectUrlStr: 'https://github.com/CTSRD-CHERI/qemu'],
+    copyArtifactPermission('*'), // Downstream jobs need QEMU
+]
+
+// Don't trigger for pull requests and non-default branches:
+def triggerBranches = ['qemu-cheri', 'dev']
+if (!env.CHANGE_ID && triggerBranches.contains(env.BRANCH_NAME)) {
+    jobProperties.add(pipelineTriggers([triggers: [[$class: 'jenkins.triggers.ReverseBuildTrigger',
+                                                    upstreamProjects: "BBL/cheri_purecap",
+                                                    threshold: hudson.model.Result.SUCCESS]]]))
+}
 // Set the default job properties (work around properties() not being additive but replacing)
-setDefaultJobProperties([rateLimitBuilds(throttle: [count: 2, durationName: 'hour', userBoost: true]),
-                         [$class: 'GithubProjectProperty', projectUrlStr: 'https://github.com/CTSRD-CHERI/qemu'],
-                         copyArtifactPermission('*'), // Downstream jobs need QEMU
-])
+setDefaultJobProperties(jobProperties)
 
 def archiveQEMU(String target) {
     return {
