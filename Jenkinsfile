@@ -30,20 +30,20 @@ setDefaultJobProperties(jobProperties)
 
 jobs = [:]
 
-def archiveQEMU(String target) {
+def archiveQEMU(String os) {
     return {
         stage("Archiving artifacts") {
-            sh "rm -rf \$WORKSPACE/qemu-${target} && mv \$WORKSPACE/tarball/usr \$WORKSPACE/qemu-${target}"
+            sh "rm -rf \$WORKSPACE/qemu-${os} && mv \$WORKSPACE/tarball/usr \$WORKSPACE/qemu-${os}"
             // Copy BBL binary for embedding
-            copyArtifacts projectName: "BBL/cheri_purecap", filter: "bbl-riscv64cheri-virt-fw_jump.bin", target: "qemu-${target}/share/qemu", fingerprintArtifacts: true
+            copyArtifacts projectName: "BBL/cheri_purecap", filter: "bbl-riscv64cheri-virt-fw_jump.bin", target: "qemu-${os}/share/qemu", fingerprintArtifacts: true
             // Add all the firmwares that are needed to boot CheriBSD
             def firmwareFiles = [
                 "efi-pcnet.rom", "vgabios-cirrus.bin", // MIPS
                 "bbl-riscv64cheri-virt-fw_jump.bin", // RISC-V
                 "bios-256k.bin", "efi-virtio.rom", "vgabios-stdvga.bin", // x86_64
                 "edk2-aarch64-code.fd"  // AArch64
-            ].collect { "qemu-${target}/share/qemu/$it" }.join(', ')
-            archiveArtifacts allowEmptyArchive: false, artifacts: "qemu-${target}/bin/qemu-system-*, ${firmwareFiles}", fingerprint: true, onlyIfSuccessful: true
+            ].collect { "qemu-${os}/share/qemu/$it" }.join(', ')
+            archiveArtifacts allowEmptyArchive: false, artifacts: "qemu-${os}/bin/qemu-system-*, ${firmwareFiles}", fingerprint: true, onlyIfSuccessful: true
         }
     }
 }
