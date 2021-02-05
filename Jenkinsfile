@@ -1,15 +1,20 @@
 // import the cheribuildProject() step
 @Library('ctsrd-jenkins-scripts') _
 
+class GlobalVars { // "Groovy"
+    public static boolean archiveArtifacts = false
+}
+
 def jobProperties = [
     rateLimitBuilds(throttle: [count: 2, durationName: 'hour', userBoost: true]),
     [$class: 'GithubProjectProperty', projectUrlStr: 'https://github.com/CTSRD-CHERI/qemu'],
     copyArtifactPermission('*'), // Downstream jobs need QEMU
 ]
 
-// Don't trigger for pull requests and non-default branches:
-def triggerBranches = ['qemu-cheri', 'dev']
-if (!env.CHANGE_ID && triggerBranches.contains(env.BRANCH_NAME)) {
+// Don't archive binaries for pull requests and non-default branches:
+def archiveBranches = ['qemu-cheri', 'dev']
+if (!env.CHANGE_ID && archiveBranches.contains(env.BRANCH_NAME)) {
+    GlobalVars.archiveArtifacts = true
     jobProperties.add(pipelineTriggers([triggers: [[$class: 'jenkins.triggers.ReverseBuildTrigger',
                                                     upstreamProjects: "BBL/cheri_purecap",
                                                     threshold: hudson.model.Result.SUCCESS]]]))
@@ -30,8 +35,8 @@ setDefaultJobProperties(jobProperties)
 
 jobs = [:]
 
-def archiveQEMU(String os) {
-    return {
+def maybeArchiveArtifacts(params, String os) {
+    if (GlobalVars.archiveArtifacts) {
         stage("Archiving artifacts") {
             sh "rm -rf \$WORKSPACE/qemu-${os} && mv \$WORKSPACE/tarball/usr \$WORKSPACE/qemu-${os}"
             // Copy BBL binary for embedding
@@ -67,7 +72,7 @@ selectedOSes.each { os ->
                     runTests: /* true */ false,
                     uniqueId: "qemu-build-${os}",
                     skipTarball: true,
-                    afterBuild: archiveQEMU(os))
+                    afterBuild: { params -> maybeArchiveArtifacts(params, os) })
 
             // Run the baremetal MIPS tests to check we didn't regress.
             if (os == "linux") {
