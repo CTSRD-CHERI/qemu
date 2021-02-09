@@ -27,7 +27,7 @@ InstrNamePrefix = "decode_"
 # Must have at least one occurance of this suffix to be a capability instruction
 IstrNameSuffix = "_C"
 # Or contain the following prefix (because one two instructions dont includes any caps but are cap instructions)
-InstrNamesInclude = "(ALD)|(AST)"
+InstrNamesInclude = "((ALD)|(AST)|(STCT)|(LDCT))"
 
 def print_usage():
     print("Usage: sail_parser [input_file] [output_file]")
@@ -90,13 +90,27 @@ def patternMatch(p1, p2):
             return False
     return True
 
+comments = True
+
 ignore_ls = {
     "STXP" : -1,
+    "STXR" : -1,
     "STLXP" : -1,
+    "STLXR" : -1,
     "ALDUR": -1,
     "ASTUR": -1,
     "ASTR": [0,1,2,4,5,6,7],
-    "ALDR": [0]
+    "ALDR": [0],
+    "LDAR": -1,
+    "STLR": -1,
+    "LDAXR" : -1,
+    "LDXP" : -1,
+    "LDAXP" : -1,
+    "ALDAR" : -1,
+    "ASTLR" : -1,
+    "LDXR" : -1,
+    "ALDARB" : -1,
+    "ASTLRB" : -1
 }
 
 extraOpts = {
@@ -144,15 +158,6 @@ def finalise(file):
                         varLS.append(extra)
 
         commonName = '_'.join(nameList)
-
-        i = 0
-        for (name, bits) in instrs:
-            print(name)
-            print(str(nameMap[i]))
-            print(nameList[nameMap[i]])
-            i+=1
-            print()
-        print("----")
 
         if commonName in ops_seen:
             ops_seen[commonName] +=1
@@ -211,9 +216,10 @@ def finalise(file):
                 lastEnd -=1
 
             if pattern in seen:
+                toOutput[seen[pattern]][2].append(instrName)
                 continue
 
-            seen[pattern] = 1
+            seen[pattern] = len(toOutput)
             useName = nameList[nameMap[ndx-1]]
 
             if useName in names_seen:
@@ -222,9 +228,10 @@ def finalise(file):
             else:
                 names_seen[useName] = 0
 
-            toOutput.append((useName, pattern))
+            toOutput.append((useName, pattern, [instrName]))
 
-        for (useName, pattern) in toOutput:
+        for (useName, pattern, allNames) in toOutput:
+            print(useName, allNames)
             if len(toOutput) == 1 and len(nameList) != 1:
                 useName = commonName
                 if useName in names_seen:
@@ -232,7 +239,12 @@ def finalise(file):
                     useName += str(names_seen[useName])
                 else:
                     names_seen[useName] = 0
-            instrStr = useName + " " + pattern + " @op_" + commonName + "\n"
+
+            instrStr = []
+            if comments:
+                instrStr += ["",("# " + ", ".join(allNames))]
+            instrStr.append(useName + " " + pattern + " @op_" + commonName)
+
             matched = False
             for (pats,instrStrs) in groups:
                 for pat in pats:
@@ -253,10 +265,10 @@ def finalise(file):
         if len(instrStrs) != 1:
             result+= "{\n"
             for instrStr in instrStrs:
-                result += "  " + instrStr
+                result += "  " + "\n  ".join(instrStr) + "\n";
             result += "}\n"
         else:
-            result += instrStrs[0]
+            result += "\n".join(instrStrs[0]) + "\n"
     # Now output to file
     file.write(result)
     return tot
@@ -273,7 +285,6 @@ def should_ignore(name):
         ignore_seen[name] = 0
 
     found_n = ignore_seen[name]
-    print("Found   ", name, found_n)
     ignore_seen[name] +=1
 
     return found_n in ns
@@ -289,7 +300,10 @@ def handle_fun(file, fun):
     instrName = instrMatch.group(1)
 
     if(should_ignore(instrName)):
+        print("Ignoring" + instrName)
         return
+
+    print("Procesing " + instrName)
 
     # Now grab the bit pattern
     bitsMatch = bitPatternExpr.search(fun)
@@ -298,6 +312,8 @@ def handle_fun(file, fun):
         return False
     bits = bitsMatch.group(1).split(',')
 
+    if (len(bits) != 32):
+        return False
 
     varLS = []
     for sliceMatch in sliceExpr.finditer(fun):
@@ -327,7 +343,7 @@ def main():
     with open (pathIn, 'r') as myfile:
         data = myfile.read()
 
-    expr = re.compile('function clause ' + DocodeFunName + '[^{]*{[^}]*}')
+    expr = re.compile('function clause ' + DocodeFunName + '.*?{.*?' + InstrNamePrefix + '.*?}', flags=re.DOTALL)
 
     total_success = 0
     total_found = 0
