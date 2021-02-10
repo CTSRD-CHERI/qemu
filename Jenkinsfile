@@ -35,12 +35,15 @@ setDefaultJobProperties(jobProperties)
 
 jobs = [:]
 
+def extraBuildSteps(params, String os) {
+    sh "rm -rf \$WORKSPACE/qemu-${os} && mv \$WORKSPACE/tarball/usr \$WORKSPACE/qemu-${os}"
+    // Embed BBL binary (currently only needed when archiving, but could be used for build-time testing in future).
+    copyArtifacts projectName: "BBL/cheri_purecap", filter: "bbl-riscv64cheri-virt-fw_jump.bin", target: "qemu-${os}/share/qemu", fingerprintArtifacts: true
+}
+
 def maybeArchiveArtifacts(params, String os) {
     if (GlobalVars.archiveArtifacts) {
         stage("Archiving artifacts") {
-            sh "rm -rf \$WORKSPACE/qemu-${os} && mv \$WORKSPACE/tarball/usr \$WORKSPACE/qemu-${os}"
-            // Copy BBL binary for embedding
-            copyArtifacts projectName: "BBL/cheri_purecap", filter: "bbl-riscv64cheri-virt-fw_jump.bin", target: "qemu-${os}/share/qemu", fingerprintArtifacts: true
             // Add all the firmwares that are needed to boot CheriBSD
             def firmwareFiles = [
                 "efi-pcnet.rom", "vgabios-cirrus.bin", // MIPS
@@ -72,7 +75,10 @@ selectedOSes.each { os ->
                     runTests: /* true */ false,
                     uniqueId: "qemu-build-${os}",
                     skipTarball: true,
-                    afterBuild: { params -> maybeArchiveArtifacts(params, os) })
+                    afterBuild: { params ->
+                        extraBuildSteps(params, os)
+                        maybeArchiveArtifacts(params, os)
+                    })
 
             // Run the baremetal MIPS tests to check we didn't regress.
             if (os == "linux") {
