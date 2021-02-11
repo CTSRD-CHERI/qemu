@@ -33,7 +33,9 @@
 // Register 32 will be zero, leaving 31 to be SP. Translation should covert 31
 // to 32 where appropriate
 #define NULL_CAPREG_INDEX 32
-
+// A register to indicate "no register" where it is inconvenient to have
+// different prototypes
+#define REG_NONE 0x77
 // LETODO Just copied from MIPS. Should generate from sail.
 typedef enum CheriCapExc {
     CapEx_None = 0x0,
