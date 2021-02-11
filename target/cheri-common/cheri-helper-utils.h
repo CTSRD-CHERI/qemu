@@ -261,6 +261,11 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
                               uint64_t *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
                               target_ulong retpc, hwaddr *physaddr);
+bool load_cap_from_memory_128_raw_tag(CPUArchState *env, uint64_t *pesbt,
+                                      uint64_t *cursor, uint32_t cb,
+                                      const cap_register_t *source,
+                                      target_ulong vaddr, target_ulong retpc,
+                                      hwaddr *physaddr, bool *raw_tag);
 
 void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
                          uint32_t link_reg, target_ulong link_pc,
