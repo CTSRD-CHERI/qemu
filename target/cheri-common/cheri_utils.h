@@ -107,8 +107,10 @@ static inline cap_length_t cap_get_length_full(const cap_register_t *c)
 
 static inline target_ulong cap_get_length_sat(const cap_register_t *c)
 {
+#ifndef TARGET_AARCH64
     cheri_debug_assert((!c->cr_tag || c->_cr_top >= c->cr_base) &&
                        "Tagged capabilities must be in bounds!");
+#endif
     cap_length_t length = cap_get_length_full(c);
     // Clamp the length to ~(target_ulong)0
     return length > ~(target_ulong)0 ? ~(target_ulong)0 : (target_ulong)length;
