@@ -580,4 +580,58 @@ static inline uint64_t half_unshuffle64(uint64_t x)
     return x;
 }
 
+/**
+ * byte_unpack_64:
+ * @x Any 8-bit value
+ * @return A 64-bit value where each byte contains a single bit from x.
+ */
+static inline uint64_t byte_unpack_64(uint8_t x)
+{
+    uint64_t unpacked = x & 0xFF;
+    unpacked = (unpacked << 28) | unpacked;
+    unpacked = (unpacked << 14) | unpacked;
+    unpacked = (unpacked << 7) | unpacked;
+    return (unpacked & 0x0101010101010101);
+}
+
+/**
+ * byte_pack_64:
+ * @x Any 64-bit value
+ * @return A byte that contains the lowest bit of each byte in x
+ */
+static inline uint8_t byte_pack_64(uint64_t x)
+{
+    x &= 0x0101010101010101;
+    x = (x >> 7) | x;
+    x = (x >> 14) | x;
+    x = (x >> 28) | x;
+    return (x & 0xFF);
+}
+
+/**
+ * byte_unpack_32:
+ * @x Any 8-bit value (top 4 bits ignored)
+ * @return A 32-bit value where each byte contains a single bit from x.
+ */
+static inline uint32_t byte_unpack_32(uint8_t x)
+{
+    uint32_t unpacked = x & 0xF;
+    unpacked = (unpacked << 14) | unpacked;
+    unpacked = (unpacked << 7) | unpacked;
+    return (unpacked & 0x01010101);
+}
+
+/**
+ * byte_pack_32:
+ * @x Any 32-bit value
+ * @return A byte that contains the lowest bit of each byte in x
+ */
+static inline uint8_t byte_pack_32(uint32_t x)
+{
+    x &= 0x01010101;
+    x = (x >> 7) | x;
+    x = (x >> 14) | x;
+    return (x & 0xF);
+}
+
 #endif
