@@ -1126,10 +1126,8 @@ static void do_gpr_ld_memidx(DisasContext *s, TCGv_i64 dest,
 
     if (iss_srt == (unsigned int)-1)
         iss_srt = 0;
-#ifdef TARGET_CHERI
-    else if (iss_srt != 31)
-        gen_lazy_cap_set_int(s, iss_srt);
-#endif
+    else
+        gpr_reg_modified(s, iss_srt, false);
 
     if (extend && is_signed) {
         g_assert(size < 3);
@@ -2695,18 +2693,16 @@ static void gen_load_exclusive(DisasContext *s, int rt, int rt2,
             tcg_gen_mov_i64(cpu_reg(s, rt), cpu_exclusive_val);
             tcg_gen_mov_i64(cpu_reg(s, rt2), cpu_exclusive_high);
         }
+        gpr_reg_modified(s, rt2, false);
     } else {
         memop |= size | MO_ALIGN;
         tcg_gen_qemu_ld_i64_with_checked_addr(cpu_exclusive_val, addr, idx,
                                               memop);
         tcg_gen_mov_i64(cpu_reg(s, rt), cpu_exclusive_val);
     }
+    gpr_reg_modified(s, rt, false);
     tcg_gen_mov_i64(cpu_exclusive_addr, (TCGv_i64)addr);
 }
-
-#ifdef TARGET_CHERI
-#include "translate-cheri.inc.c"
-#endif
 
 static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
                                 TCGv_cap_checked_ptr addr, int size,
@@ -2800,6 +2796,7 @@ static void gen_compare_and_swap(DisasContext *s, int rs, int rt,
     tcg_gen_atomic_cmpxchg_i64_with_checked_addr(tcg_rs, clean_addr, tcg_rs,
                                                  tcg_rt, memidx,
                                                  size | MO_ALIGN | s->be_data);
+    gpr_reg_modified(s, rs, false);
 }
 
 static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
@@ -2895,7 +2892,13 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
         tcg_temp_free_i64(d1);
         tcg_temp_free_i64(d2);
     }
+    gpr_reg_modified(s, rs, false);
+    gpr_reg_modified(s, rs + 1, false);
 }
+
+#ifdef TARGET_CHERI
+#include "translate-cheri.inc.c"
+#endif
 
 /* Update the Sixty-Four bit (SF) registersize. This logic is derived
  * from the ARMv8 specs for LDR (Shared decode for all encodings).
@@ -3282,12 +3285,8 @@ static void disas_ldst_pair(DisasContext *s, uint32_t insn)
             do_gpr_ld(s, tcg_rt2, clean_addr, size, is_signed, false, false,
                       (unsigned int)-1, false, false);
 
-#ifdef TARGET_CHERI
-            if (rt != 31)
-                gen_lazy_cap_set_int(s, rt);
-            if (rt2 != 31)
-                gen_lazy_cap_set_int(s, rt2);
-#endif
+            gpr_reg_modified(s, rt, false);
+            gpr_reg_modified(s, rt2, false);
             tcg_gen_mov_i64(tcg_rt, tmp);
             tcg_temp_free_i64(tmp);
         } else {
@@ -3719,6 +3718,8 @@ static void disas_ldst_atomic(DisasContext *s, uint32_t insn,
      */
     fn(cpu_reg(s, rt), clean_addr, tcg_rs, get_mem_index(s),
        s->be_data | size | MO_ALIGN);
+
+    gpr_reg_modified(s, rt, false);
 }
 
 /*
