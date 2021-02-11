@@ -9339,7 +9339,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .access = PL2_RW,
          .type = 0,
          .state = ARM_CP_STATE_AA64,
-         .fieldoffset = offsetof(CPUARMState, CCTLR_el[3]),
+         .fieldoffset = offsetof(CPUARMState, CCTLR_el[2]),
          .resetvalue = 0},
         {.name = "CCTLR_EL1",
          .opc0 = 3,
@@ -9350,7 +9350,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .access = PL1_RW,
          .type = 0,
          .state = ARM_CP_STATE_AA64,
-         .fieldoffset = offsetof(CPUARMState, CCTLR_el[3]),
+         .fieldoffset = offsetof(CPUARMState, CCTLR_el[1]),
          .resetvalue = 0},
         {.name = "CCTLR_EL0",
          .opc0 = 3,
@@ -9361,7 +9361,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .access = PL0_RW,
          .type = 0,
          .state = ARM_CP_STATE_AA64,
-         .fieldoffset = offsetof(CPUARMState, CCTLR_el[3]),
+         .fieldoffset = offsetof(CPUARMState, CCTLR_el[0]),
          .resetvalue = 0},
         // TODO CCTLR_EL12
         // DDC_EL3 only accessible through DDC so it doesn't get an entry.
@@ -11221,6 +11221,16 @@ static inline uint64_t regime_ttbr(CPUARMState *env, ARMMMUIdx mmu_idx,
     }
 }
 
+#ifdef TARGET_CHERI
+static inline uint64_t regime_cctlr(CPUARMState *env, ARMMMUIdx mmu_idx)
+{
+    // Note: vttbr_el2 really does not correspond to CCTLR_el2. But these bits
+    // will get masked out anyway.
+    return env
+        ->CCTLR_el[mmu_idx == ARMMMUIdx_Stage2 ? 2 : regime_el(env, mmu_idx)];
+}
+#endif
+
 #endif /* !CONFIG_USER_ONLY */
 
 /* Convert a possible stage1+2 MMU index into the appropriate
@@ -12027,6 +12037,23 @@ static int aa64_va_parameter_tcma(uint64_t tcr, ARMMMUIdx mmu_idx)
     }
 }
 
+static inline uint32_t aa64_effective_hwu(CPUARMState *env, ARMMMUIdx mmu_idx,
+                                          ARMVAParameters *params, uint64_t tcr)
+{
+    if (!params->hpd)
+        return 0;
+
+    uint32_t ndx;
+
+    if (regime_has_2_ranges(mmu_idx)) {
+        ndx = params->select ? 47 : 43;
+    } else {
+        ndx = 25;
+    }
+
+    return extract32(tcr, ndx, 4);
+}
+
 ARMVAParameters aa64_va_parameters(CPUARMState *env, uint64_t va,
                                    ARMMMUIdx mmu_idx, bool data)
 {
@@ -12162,7 +12189,8 @@ static ARMVAParameters aa32_va_parameters(CPUARMState *env, uint32_t va,
  *
  * @env: CPUARMState
  * @address: virtual address to get physical address for
- * @access_type: MMU_DATA_LOAD, MMU_DATA_STORE or MMU_INST_FETCH
+ * @access_type: MMU_DATA_LOAD, MMU_DATA_STORE or MMU_INST_FETCH (or
+ * MMU_DATA_CAP_LOAD, MMU_DATA_CAP_STORE on CHERI)
  * @mmu_idx: MMU index indicating required translation regime
  * @s1_is_el0: if @mmu_idx is ARMMMUIdx_Stage2 (so this is a stage 2 page table
  *             walk), must be true if this is stage 2 of a stage 1+2 walk for an
@@ -12408,6 +12436,40 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
     }
 
     fault_type = ARMFault_Permission;
+
+#ifdef TARGET_CHERI
+    uint32_t hwu = aa64_effective_hwu(env, mmu_idx, &param, tcr->raw_tcr);
+    hwu &= (attrs >> 17);
+
+    int lc = extract32(hwu, 2, 2);
+    int sc = extract32(hwu, 1, 1);
+    int cdbm = extract32(hwu, 0, 1);
+
+    // Cap stores can fault here as only tagged stores specify
+    // MMU_DATA_CAP_STORE
+    if (access_type == MMU_DATA_CAP_STORE) {
+        printf("cdbm: %d. sc %d. huwu %x\n", cdbm, sc, hwu);
+        if (!cdbm && !sc)
+            goto do_fault;
+        access_type = MMU_DATA_STORE;
+    }
+
+    // Cap loads just need normal load permission at this point, because traps /
+    // clears require the tag
+    if (access_type == MMU_DATA_CAP_LOAD) {
+        uint64_t cctlr = regime_cctlr(env, mmu_idx);
+        bool tgeny = param.select ? !!(cctlr & 2) : (cctlr & 1);
+        // (faults/clears indicated by prot)
+        if (lc == 0) {
+            *prot |= PAGE_LC_CLEAR;
+        } else if ((lc & 2) && (tgeny ^ (lc & 1))) {
+            *prot |= PAGE_LC_TRAP;
+        }
+        access_type = MMU_DATA_LOAD;
+    }
+
+#endif
+
     if (!(*prot & (1 << access_type))) {
         goto do_fault;
     }
@@ -14409,10 +14471,11 @@ hwaddr cpu_arm_translate_address_tagmem(CPUARMState *env, target_ulong address,
 {
     // Translate a virtual address to a physical one for tag memory
     hwaddr physical;
-    ARMMMUFaultInfo fi;
+    ARMMMUFaultInfo fi = {};
     target_ulong page_size;
-    MemTxAttrs attrs;
-    ARMCacheAttrs cacheattrs;
+    MemTxAttrs attrs = {};
+    ARMCacheAttrs cacheattrs = {};
+    *prot = 0;
 
     ARMMMUIdx idx = core_to_arm_mmu_idx(env, cpu_mmu_index(env, false));
 
@@ -14420,6 +14483,8 @@ hwaddr cpu_arm_translate_address_tagmem(CPUARMState *env, target_ulong address,
                               &page_size, &fi, &cacheattrs);
 
     if (fail) {
+        printf("prot: %x. fi type %d (perms is %d)\n", *prot, fi.type,
+               ARMFault_Permission);
         // LETODO raise an MMU exception
         assert(0);
     }
