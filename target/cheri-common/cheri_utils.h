@@ -96,8 +96,10 @@ static inline unsigned __int128 cap_get_length65(const cap_register_t* c) {
 }
 
 static inline uint64_t cap_get_length64(const cap_register_t* c) {
+#ifndef TARGET_AARCH64
     cheri_debug_assert((!c->cr_tag || c->_cr_top >= c->cr_base) &&
-        "Tagged capabilities must be in bounds!");
+                       "Tagged capabilities must be in bounds!");
+#endif
     unsigned __int128 length = cap_get_length65(c);
     // Clamp the length to UINT64_MAX
     return length > UINT64_MAX ? UINT64_MAX : (uint64_t)length;
