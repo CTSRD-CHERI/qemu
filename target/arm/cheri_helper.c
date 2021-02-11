@@ -35,6 +35,7 @@
 #include "exec/memop.h"
 
 #include "cheri-helper-utils.h"
+#include "cheri_tagmem.h"
 
 void helper_load_cap_pair_via_cap(CPUArchState *env, uint32_t cd, uint32_t cd2,
                                   uint32_t cb, target_ulong addr)
@@ -72,6 +73,152 @@ void helper_store_cap_pair_via_cap(CPUArchState *env, uint32_t cd, uint32_t cd2,
 
     store_cap_to_memory(env, cd, addr, _host_return_address);
     store_cap_to_memory(env, cd2, addr + CHERI_CAP_SIZE, _host_return_address);
+}
+
+void helper_load_exclusive_cap_via_cap(CPUArchState *env, uint32_t cd,
+                                       uint32_t cd2, uint32_t cb,
+                                       target_ulong addr)
+{
+    GET_HOST_RETPC();
+
+    env->exclusive_addr = addr;
+
+    const cap_register_t *cbp = get_capreg_or_special(env, cb);
+    uint32_t size = (cd2 == REG_NONE) ? CHERI_CAP_SIZE : (CHERI_CAP_SIZE * 2);
+
+    cap_check_common_reg(perms_for_load(), env, cb, addr, size,
+                         _host_return_address, cbp, CHERI_CAP_SIZE, true);
+
+    bool raw_tag;
+    bool tag1 = load_cap_from_memory_128_raw_tag(
+        env, &env->exclusive_high, &env->exclusive_val, cb, cbp, addr,
+        _host_return_address, NULL, &raw_tag);
+    env->exclusive_tag = raw_tag;
+
+    if (cd2 != REG_NONE) {
+        bool tag2 = load_cap_from_memory_128_raw_tag(
+            env, &env->exclusive_high2, &env->exclusive_val2, cb, cbp,
+            addr + CHERI_CAP_SIZE, _host_return_address, NULL, &raw_tag);
+        env->exclusive_tag2 = raw_tag;
+        update_compressed_capreg(env, cd2, env->exclusive_high2, tag2,
+                                 env->exclusive_val2);
+    }
+
+    // Must do the update AFTER the other load has not trapped
+    update_compressed_capreg(env, cd, env->exclusive_high, tag1,
+                             env->exclusive_val);
+}
+
+void helper_store_exclusive_cap_via_cap(CPUArchState *env, uint32_t rs,
+                                        uint32_t cd, uint32_t cd2, uint32_t cb,
+                                        target_ulong addr)
+{
+    GET_HOST_RETPC();
+
+    cap_register_t cbp = *get_capreg_or_special(env, cb);
+
+    uint32_t perms = perms_for_store(env, cd);
+    if (cd2 != REG_NONE)
+        perms |= perms_for_store(env, cd2);
+    uint32_t size = (cd2 == REG_NONE) ? CHERI_CAP_SIZE : (CHERI_CAP_SIZE * 2);
+
+    cap_check_common_reg(perms, env, cb, addr, size, _host_return_address, &cbp,
+                         CHERI_CAP_SIZE, true);
+
+    // Should be storing to same address as load exclusive
+    bool success = env->exclusive_addr == addr;
+
+    uint64_t pesbt;
+    uint64_t cursor;
+    bool tag;
+
+    // Fudge permissions so that no fault occur on load
+    cbp.cr_perms |= CAP_PERM_LOAD;
+    cbp.cr_perms &= ~CAP_PERM_LOAD_CAP;
+
+    // Check first cap value equal
+    if (success) {
+        load_cap_from_memory_128_raw_tag(env, &pesbt, &cursor, cb, &cbp, addr,
+                                         _host_return_address, NULL, &tag);
+
+        if ((cursor != env->exclusive_val) || (pesbt != env->exclusive_high) ||
+            (tag != env->exclusive_tag))
+            success = false;
+    }
+
+    // Check second value (if any)
+    if (success && cd2 != REG_NONE) {
+        load_cap_from_memory_128_raw_tag(env, &pesbt, &cursor, cb, &cbp,
+                                         addr + CHERI_CAP_SIZE,
+                                         _host_return_address, NULL, &tag);
+        if ((cursor != env->exclusive_val2) ||
+            (pesbt != env->exclusive_high2) || (tag != env->exclusive_tag2))
+            success = false;
+    }
+
+    if (success) {
+        store_cap_to_memory(env, cd, addr, _host_return_address);
+        if (cd2 != REG_NONE)
+            store_cap_to_memory(env, cd2, addr + CHERI_CAP_SIZE,
+                                _host_return_address);
+    }
+
+    env->exclusive_addr = -1;
+
+    update_capreg_to_intval(env, rs, success ? 0ULL : 1ULL);
+}
+
+static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
+                                  uint32_t cb, target_ulong addr, bool compare)
+{
+    GET_HOST_RETPC();
+
+    const cap_register_t *cbp = get_capreg_or_special(env, cb);
+
+    uint32_t perms = perms_for_store(env, cd) | perms_for_load();
+
+    // Capability checks for both the load and store
+    cap_check_common_reg(perms, env, cb, addr, CHERI_CAP_SIZE,
+                         _host_return_address, cbp, CHERI_CAP_SIZE, true);
+
+    // load (without modifying cs as we will need it for the comparison)
+
+    uint64_t pesbt;
+    uint64_t cursor;
+    bool tag = load_cap_from_memory_128(env, &pesbt, &cursor, cb, cbp, addr,
+                                        _host_return_address, NULL);
+
+    bool do_store = !compare;
+
+    if (compare) {
+        do_store = (cursor == get_without_decompress_cursor(env, cs)) &&
+                   (pesbt == get_without_decompress_pesbt(env, cs)) &&
+                   (tag == get_without_decompress_tag(env, cs));
+    }
+
+    // Store
+    if (do_store) {
+        store_cap_to_memory(env, cd, addr, _host_return_address);
+    }
+
+    printf("Updating cs %d from swap (%lx)\n", cs, cursor);
+
+    // Write back to cs
+    update_compressed_capreg(env, cs, pesbt, tag, cursor);
+}
+
+void helper_swap_cap_via_cap(CPUArchState *env, uint32_t cd, uint32_t cs,
+                             uint32_t cb, target_ulong addr)
+{
+    // Yes, I really meant to swap cs/cd here.
+    swap_cap_via_cap_impl(env, cs, cd, cb, addr, false);
+}
+
+void helper_compare_swap_cap_via_cap(CPUArchState *env, uint32_t cd,
+                                     uint32_t cs, uint32_t cb,
+                                     target_ulong addr)
+{
+    swap_cap_via_cap_impl(env, cd, cs, cb, addr, true);
 }
 
 // (possibly) unseal cn, load pair (data,target), branch to target, put data in
