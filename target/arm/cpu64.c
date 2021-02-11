@@ -143,6 +143,7 @@ static void aarch64_morello_initfn(Object *obj) {
     // LETODO: Copied now from a72, still need ot fix up any differences with morello
     // LETODO: Maybe stop using ifdef TARGET_CHERI and configure it from here
     ARMCPU *cpu = ARM_CPU(obj);
+    uint64_t t;
 
     cpu->dtb_compatible = "arm,morello";
     set_feature(&cpu->env, ARM_FEATURE_V8);
@@ -180,6 +181,10 @@ static void aarch64_morello_initfn(Object *obj) {
     cpu->isar.id_aa64isar0 = 0x00211120;
     cpu->isar.id_aa64mmfr0 = 0x00001124;
     cpu->isar.id_aa64mmfr1 = R_ID_AA64MMFR1_LO_MASK;
+
+    t = FIELD_DP64(0, ID_AA64ISAR1, LRCPC, 2); /* ARMv8.4-RCPC */
+    cpu->isar.id_aa64isar1 = t;
+
     cpu->isar.dbgdidr = 0x3516d000;
     cpu->clidr = 0x0a200023;
     cpu->ccsidr[0] = 0x701fe00a; /* 32KB L1 dcache */
