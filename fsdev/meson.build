@@ -6,7 +6,10 @@ fsdev_ss.add(when: ['CONFIG_FSDEV_9P'], if_true: files(
   '9p-marshal.c',
   'qemu-fsdev.c',
 ), if_false: files('qemu-fsdev-dummy.c'))
-softmmu_ss.add_all(when: 'CONFIG_LINUX', if_true: fsdev_ss)
+
+if host_machine.system() == 'darwin' or host_machine.system() == 'linux'
+  softmmu_ss.add_all(fsdev_ss)
+endif
 
 have_virtfs_proxy_helper = have_tools and libattr.found() and libcap_ng.found() and 'CONFIG_VIRTFS' in config_host
 if have_virtfs_proxy_helper

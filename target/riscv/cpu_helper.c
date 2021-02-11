@@ -869,13 +869,9 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
                                    int *prot, hwaddr *pa, uintptr_t retaddr)
 {
     vaddr im_address;
-    hwaddr pa = 0;
-    int prot, prot2;
-    bool pmp_violation = false;
-    bool first_stage_error = true;
+    int prot2;
     int ret = TRANSLATE_FAIL;
     int mode = mmu_idx;
-    target_ulong tlb_size = 0;
 
     env->guest_phys_fault_addr = 0;
 
@@ -984,6 +980,7 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     bool first_stage_error = true;
     int prot = 0;
     hwaddr pa = 0;
+    target_ulong tlb_size = 0;
     int ret = riscv_cpu_tlb_fill_impl(env, address, size, access_type, mmu_idx,
                                       &pmp_violation, &first_stage_error, &prot,
                                       &pa, retaddr);

@@ -374,7 +374,7 @@ extern bool rvfi_debug_output;
 static void send_rvfi_dii_packet(const void *data, size_t len)
 {
     if (rvfi_debug_output) {
-        qemu_hexdump(data, stderr, "PACKET", len);
+        qemu_hexdump(stderr, "PACKET", data, len);
     }
     ssize_t nbytes = write(rvfi_client_fd, data, len);
     if (nbytes != len) {

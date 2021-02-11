@@ -9,9 +9,13 @@ mips_ss.add(files(
   'lmmi_helper.c',
   'msa_helper.c',
   'op_helper.c',
+  'op_helper_beri.c',
   'translate.c',
 ))
 mips_ss.add(when: 'CONFIG_KVM', if_true: files('kvm.c'))
+
+mips_ss.add(when: 'TARGET_CHERI', if_true: files('op_helper_cheri.c'))
+mips_ss.add(when: ['CONFIG_TCG', 'CONFIG_TCG_LOG_INSTR'], if_true: files('op_helper_log_instr.c'))
 
 mips_softmmu_ss = ss.source_set()
 mips_softmmu_ss.add(files(

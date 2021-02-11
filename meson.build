@@ -998,6 +998,9 @@ foreach target : target_dirs
 
   config_target += config_host
   target_inc = [include_directories('target' / config_target['TARGET_BASE_ARCH'])]
+  # The headers from cheri-common are required in various files (even for
+  # !TARGET_CHERI), so just add the include path unconditionally.
+  target_inc += include_directories('target/cheri-common')
   if targetos == 'linux'
     target_inc += include_directories('linux-headers', is_system: true)
   endif

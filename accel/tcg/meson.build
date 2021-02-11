@@ -13,3 +13,4 @@ tcg_ss.add(when: 'CONFIG_PLUGIN', if_true: [files('plugin-gen.c'), libdl])
 specific_ss.add_all(when: 'CONFIG_TCG', if_true: tcg_ss)
 
 specific_ss.add(when: ['CONFIG_SOFTMMU', 'CONFIG_TCG'], if_true: files('tcg-all.c', 'cputlb.c'))
+specific_ss.add(when: ['CONFIG_TCG_LOG_INSTR', 'CONFIG_TCG'], if_true: files('log_instr.c'))
