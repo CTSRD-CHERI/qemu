@@ -323,3 +323,8 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
                               target_ulong retpc, hwaddr *physaddr);
+bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
+                                  target_ulong *cursor, uint32_t cb,
+                                  const cap_register_t *source,
+                                  target_ulong vaddr, target_ulong retpc,
+                                  hwaddr *physaddr, bool *raw_tag);
