@@ -46,6 +46,13 @@
 #define CHERI_REGNUM_IDC  26  /* Invoked Data Capability */
 #define CINVOKE_DATA_REGNUM CHERI_REGNUM_IDC
 
+/*
+ * QEMU currently tells the kernel that there are no caches installed
+ * (xref target/mips/translate_init.inc.c MIPS_CONFIG1 definition)
+ * so we're kind of free to make up a line size here.  For simplicity,
+ * we pretend that our cache lines always contain 8 capabilities.
+ */
+#define CAP_TAG_GET_MANY_SHFT 3
 
 typedef enum CheriCapExc {
     CapEx_None                          = 0x0,  /* None */
