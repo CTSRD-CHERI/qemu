@@ -13,6 +13,7 @@
 #include "exec/memory.h"
 #include "target/arm/cpu-qom.h"
 #include "hw/pcmcia.h"
+#include "qom/object.h"
 
 /* Interrupt numbers */
 # define PXA2XX_PIC_SSP3	0
@@ -86,16 +87,23 @@ PXA2xxLCDState *pxa2xx_lcdc_init(MemoryRegion *sysmem,
 void pxa2xx_lcd_vsync_notifier(PXA2xxLCDState *s, qemu_irq handler);
 
 /* pxa2xx_mmci.c */
+#define TYPE_PXA2XX_MMCI "pxa2xx-mmci"
 typedef struct PXA2xxMMCIState PXA2xxMMCIState;
+DECLARE_INSTANCE_CHECKER(PXA2xxMMCIState, PXA2XX_MMCI,
+                         TYPE_PXA2XX_MMCI)
+
 PXA2xxMMCIState *pxa2xx_mmci_init(MemoryRegion *sysmem,
                 hwaddr base,
-                BlockBackend *blk, qemu_irq irq,
-                qemu_irq rx_dma, qemu_irq tx_dma);
+                qemu_irq irq, qemu_irq rx_dma, qemu_irq tx_dma);
 void pxa2xx_mmci_handlers(PXA2xxMMCIState *s, qemu_irq readonly,
                 qemu_irq coverswitch);
 
 /* pxa2xx_pcmcia.c */
+#define TYPE_PXA2XX_PCMCIA "pxa2xx-pcmcia"
 typedef struct PXA2xxPCMCIAState PXA2xxPCMCIAState;
+DECLARE_INSTANCE_CHECKER(PXA2xxPCMCIAState, PXA2XX_PCMCIA,
+                         TYPE_PXA2XX_PCMCIA)
+
 PXA2xxPCMCIAState *pxa2xx_pcmcia_init(MemoryRegion *sysmem,
                                       hwaddr base);
 int pxa2xx_pcmcia_attach(void *opaque, PCMCIACardState *card);
@@ -120,8 +128,15 @@ PXA2xxI2CState *pxa2xx_i2c_init(hwaddr base,
                 qemu_irq irq, uint32_t page_size);
 I2CBus *pxa2xx_i2c_bus(PXA2xxI2CState *s);
 
+#define TYPE_PXA2XX_I2C "pxa2xx_i2c"
 typedef struct PXA2xxI2SState PXA2xxI2SState;
+DECLARE_INSTANCE_CHECKER(PXA2xxI2CState, PXA2XX_I2C,
+                         TYPE_PXA2XX_I2C)
+
+#define TYPE_PXA2XX_FIR "pxa2xx-fir"
 typedef struct PXA2xxFIrState PXA2xxFIrState;
+DECLARE_INSTANCE_CHECKER(PXA2xxFIrState, PXA2XX_FIR,
+                         TYPE_PXA2XX_FIR)
 
 typedef struct {
     ARMCPU *cpu;

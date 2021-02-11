@@ -45,6 +45,7 @@
 #include "migration/vmstate.h"
 #include "hw/core/cpu.h"
 #include "trace.h"
+#include "qom/object.h"
 
 #define GPE_BASE 0xafe0
 #define GPE_LEN 4
@@ -54,7 +55,7 @@ struct pci_status {
     uint32_t down;
 };
 
-typedef struct PIIX4PMState {
+struct PIIX4PMState {
     /*< private >*/
     PCIDevice parent_obj;
     /*< public >*/
@@ -78,6 +79,7 @@ typedef struct PIIX4PMState {
 
     AcpiPciHpState acpi_pci_hotplug;
     bool use_acpi_hotplug_bridge;
+    bool use_acpi_root_pci_hotplug;
 
     uint8_t disable_s3;
     uint8_t disable_s4;
@@ -88,10 +90,11 @@ typedef struct PIIX4PMState {
     CPUHotplugState cpuhp_state;
 
     MemHotplugState acpi_memory_hotplug;
-} PIIX4PMState;
+};
+typedef struct PIIX4PMState PIIX4PMState;
 
-#define PIIX4_PM(obj) \
-    OBJECT_CHECK(PIIX4PMState, (obj), TYPE_PIIX4_PM)
+DECLARE_INSTANCE_CHECKER(PIIX4PMState, PIIX4_PM,
+                         TYPE_PIIX4_PM)
 
 static void piix4_acpi_system_hot_add_init(MemoryRegion *parent,
                                            PCIBus *bus, PIIX4PMState *s);
@@ -324,7 +327,7 @@ static void piix4_pm_reset(DeviceState *dev)
         pci_conf[0x5B] = 0x02;
     }
     pm_io_space_update(s);
-    acpi_pcihp_reset(&s->acpi_pci_hotplug);
+    acpi_pcihp_reset(&s->acpi_pci_hotplug, !s->use_acpi_root_pci_hotplug);
 }
 
 static void piix4_pm_powerdown_req(Notifier *n, void *opaque)
@@ -635,6 +638,8 @@ static Property piix4_pm_properties[] = {
     DEFINE_PROP_UINT8(ACPI_PM_PROP_S4_VAL, PIIX4PMState, s4_val, 2),
     DEFINE_PROP_BOOL("acpi-pci-hotplug-with-bridge-support", PIIX4PMState,
                      use_acpi_hotplug_bridge, true),
+    DEFINE_PROP_BOOL("acpi-root-pci-hotplug", PIIX4PMState,
+                     use_acpi_root_pci_hotplug, true),
     DEFINE_PROP_BOOL("memory-hotplug-support", PIIX4PMState,
                      acpi_memory_hotplug.is_enabled, true),
     DEFINE_PROP_END_OF_LIST(),

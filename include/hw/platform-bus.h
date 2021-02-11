@@ -23,16 +23,13 @@
  */
 
 #include "hw/sysbus.h"
+#include "qom/object.h"
 
 typedef struct PlatformBusDevice PlatformBusDevice;
 
 #define TYPE_PLATFORM_BUS_DEVICE "platform-bus-device"
-#define PLATFORM_BUS_DEVICE(obj) \
-     OBJECT_CHECK(PlatformBusDevice, (obj), TYPE_PLATFORM_BUS_DEVICE)
-#define PLATFORM_BUS_DEVICE_CLASS(klass) \
-     OBJECT_CLASS_CHECK(PlatformBusDeviceClass, (klass), TYPE_PLATFORM_BUS_DEVICE)
-#define PLATFORM_BUS_DEVICE_GET_CLASS(obj) \
-     OBJECT_GET_CLASS(PlatformBusDeviceClass, (obj), TYPE_PLATFORM_BUS_DEVICE)
+DECLARE_INSTANCE_CHECKER(PlatformBusDevice, PLATFORM_BUS_DEVICE,
+                         TYPE_PLATFORM_BUS_DEVICE)
 
 struct PlatformBusDevice {
     /*< private >*/

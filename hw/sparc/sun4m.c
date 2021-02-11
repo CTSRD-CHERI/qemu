@@ -52,6 +52,7 @@
 #include "hw/loader.h"
 #include "elf.h"
 #include "trace.h"
+#include "qom/object.h"
 
 /*
  * Sun4m architecture was used in the following machines:
@@ -143,7 +144,7 @@ static void nvram_init(Nvram *nvram, uint8_t *macaddr,
     memset(image, '\0', sizeof(image));
 
     /* OpenBIOS nvram variables partition */
-    sysp_end = chrp_nvram_create_system_partition(image, 0);
+    sysp_end = chrp_nvram_create_system_partition(image, 0, 0x1fd0);
 
     /* Free space partition */
     chrp_nvram_create_free_partition(&image[sysp_end], 0x1fd0 - sysp_end);
@@ -218,22 +219,12 @@ static void dummy_cpu_set_irq(void *opaque, int irq, int level)
 {
 }
 
-static void main_cpu_reset(void *opaque)
+static void sun4m_cpu_reset(void *opaque)
 {
     SPARCCPU *cpu = opaque;
     CPUState *cs = CPU(cpu);
 
     cpu_reset(cs);
-    cs->halted = 0;
-}
-
-static void secondary_cpu_reset(void *opaque)
-{
-    SPARCCPU *cpu = opaque;
-    CPUState *cs = CPU(cpu);
-
-    cpu_reset(cs);
-    cs->halted = 1;
 }
 
 static void cpu_halt_signal(void *opaque, int irq, int level)
@@ -344,7 +335,7 @@ static void *sparc32_dma_init(hwaddr dma_base,
                                    OBJECT(dma), "espdma"));
     sysbus_connect_irq(SYS_BUS_DEVICE(espdma), 0, espdma_irq);
 
-    esp = ESP_STATE(object_resolve_path_component(OBJECT(espdma), "esp"));
+    esp = ESP(object_resolve_path_component(OBJECT(espdma), "esp"));
     sysbus_mmio_map(SYS_BUS_DEVICE(esp), 0, esp_base);
     scsi_bus_legacy_handle_cmdline(&esp->esp.bus);
 
@@ -591,14 +582,15 @@ static void idreg_init(hwaddr addr)
                             idreg_data, sizeof(idreg_data));
 }
 
-#define MACIO_ID_REGISTER(obj) \
-    OBJECT_CHECK(IDRegState, (obj), TYPE_MACIO_ID_REGISTER)
+typedef struct IDRegState IDRegState;
+DECLARE_INSTANCE_CHECKER(IDRegState, MACIO_ID_REGISTER,
+                         TYPE_MACIO_ID_REGISTER)
 
-typedef struct IDRegState {
+struct IDRegState {
     SysBusDevice parent_obj;
 
     MemoryRegion mem;
-} IDRegState;
+};
 
 static void idreg_realize(DeviceState *ds, Error **errp)
 {
@@ -633,13 +625,15 @@ static const TypeInfo idreg_info = {
 };
 
 #define TYPE_TCX_AFX "tcx_afx"
-#define TCX_AFX(obj) OBJECT_CHECK(AFXState, (obj), TYPE_TCX_AFX)
+typedef struct AFXState AFXState;
+DECLARE_INSTANCE_CHECKER(AFXState, TCX_AFX,
+                         TYPE_TCX_AFX)
 
-typedef struct AFXState {
+struct AFXState {
     SysBusDevice parent_obj;
 
     MemoryRegion mem;
-} AFXState;
+};
 
 /* SS-5 TCX AFX register */
 static void afx_init(hwaddr addr)
@@ -686,13 +680,15 @@ static const TypeInfo afx_info = {
 };
 
 #define TYPE_OPENPROM "openprom"
-#define OPENPROM(obj) OBJECT_CHECK(PROMState, (obj), TYPE_OPENPROM)
+typedef struct PROMState PROMState;
+DECLARE_INSTANCE_CHECKER(PROMState, OPENPROM,
+                         TYPE_OPENPROM)
 
-typedef struct PROMState {
+struct PROMState {
     SysBusDevice parent_obj;
 
     MemoryRegion prom;
-} PROMState;
+};
 
 /* Boot PROM (OpenBIOS) */
 static uint64_t translate_prom_address(void *opaque, uint64_t addr)
@@ -774,12 +770,14 @@ static const TypeInfo prom_info = {
 };
 
 #define TYPE_SUN4M_MEMORY "memory"
-#define SUN4M_RAM(obj) OBJECT_CHECK(RamDevice, (obj), TYPE_SUN4M_MEMORY)
+typedef struct RamDevice RamDevice;
+DECLARE_INSTANCE_CHECKER(RamDevice, SUN4M_RAM,
+                         TYPE_SUN4M_MEMORY)
 
-typedef struct RamDevice {
+struct RamDevice {
     SysBusDevice parent_obj;
     HostMemoryBackend *memdev;
-} RamDevice;
+};
 
 /* System RAM */
 static void ram_realize(DeviceState *dev, Error **errp)
@@ -819,21 +817,17 @@ static const TypeInfo ram_info = {
 static void cpu_devinit(const char *cpu_type, unsigned int id,
                         uint64_t prom_addr, qemu_irq **cpu_irqs)
 {
-    CPUState *cs;
     SPARCCPU *cpu;
     CPUSPARCState *env;
 
-    cpu = SPARC_CPU(cpu_create(cpu_type));
+    cpu = SPARC_CPU(object_new(cpu_type));
     env = &cpu->env;
 
     cpu_sparc_set_id(env, id);
-    if (id == 0) {
-        qemu_register_reset(main_cpu_reset, cpu);
-    } else {
-        qemu_register_reset(secondary_cpu_reset, cpu);
-        cs = CPU(cpu);
-        cs->halted = 1;
-    }
+    qemu_register_reset(sun4m_cpu_reset, cpu);
+    object_property_set_bool(OBJECT(cpu), "start-powered-off", id != 0,
+                             &error_fatal);
+    qdev_realize_and_unref(DEVICE(cpu), NULL, &error_fatal);
     *cpu_irqs = qemu_allocate_irqs(cpu_set_irq, cpu, MAX_PILS);
     env->prom_addr = prom_addr;
 }

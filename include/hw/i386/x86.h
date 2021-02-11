@@ -26,8 +26,9 @@
 #include "hw/nmi.h"
 #include "hw/isa/isa.h"
 #include "hw/i386/ioapic.h"
+#include "qom/object.h"
 
-typedef struct {
+struct X86MachineClass {
     /*< private >*/
     MachineClass parent;
 
@@ -37,9 +38,10 @@ typedef struct {
     bool save_tsc_khz;
     /* Enables contiguous-apic-ID mode */
     bool compat_apic_id_mode;
-} X86MachineClass;
+};
+typedef struct X86MachineClass X86MachineClass;
 
-typedef struct {
+struct X86MachineState {
     /*< private >*/
     MachineState parent;
 
@@ -63,32 +65,20 @@ typedef struct {
     OnOffAuto smm;
     OnOffAuto acpi;
 
-    /* Apic id specific handlers */
-    uint32_t (*apicid_from_cpu_idx)(X86CPUTopoInfo *topo_info,
-                                    unsigned cpu_index);
-    void (*topo_ids_from_apicid)(apic_id_t apicid, X86CPUTopoInfo *topo_info,
-                                 X86CPUTopoIDs *topo_ids);
-    apic_id_t (*apicid_from_topo_ids)(X86CPUTopoInfo *topo_info,
-                                      const X86CPUTopoIDs *topo_ids);
-    uint32_t (*apicid_pkg_offset)(X86CPUTopoInfo *topo_info);
-
     /*
      * Address space used by IOAPIC device. All IOAPIC interrupts
      * will be translated to MSI messages in the address space.
      */
     AddressSpace *ioapic_as;
-} X86MachineState;
+};
+typedef struct X86MachineState X86MachineState;
 
 #define X86_MACHINE_SMM              "smm"
 #define X86_MACHINE_ACPI             "acpi"
 
 #define TYPE_X86_MACHINE   MACHINE_TYPE_NAME("x86")
-#define X86_MACHINE(obj) \
-    OBJECT_CHECK(X86MachineState, (obj), TYPE_X86_MACHINE)
-#define X86_MACHINE_GET_CLASS(obj) \
-    OBJECT_GET_CLASS(X86MachineClass, obj, TYPE_X86_MACHINE)
-#define X86_MACHINE_CLASS(class) \
-    OBJECT_CLASS_CHECK(X86MachineClass, class, TYPE_X86_MACHINE)
+DECLARE_OBJ_CHECKERS(X86MachineState, X86MachineClass,
+                     X86_MACHINE, TYPE_X86_MACHINE)
 
 void init_topo_info(X86CPUTopoInfo *topo_info, const X86MachineState *x86ms);
 

@@ -21,16 +21,25 @@
 
 #include "hw/riscv/riscv_hart.h"
 #include "hw/sysbus.h"
+#include "qom/object.h"
 
-typedef struct {
+#define SPIKE_CPUS_MAX 8
+#define SPIKE_SOCKETS_MAX 8
+
+#define TYPE_SPIKE_MACHINE MACHINE_TYPE_NAME("spike")
+typedef struct SpikeState SpikeState;
+DECLARE_INSTANCE_CHECKER(SpikeState, SPIKE_MACHINE,
+                         TYPE_SPIKE_MACHINE)
+
+struct SpikeState {
     /*< private >*/
-    SysBusDevice parent_obj;
+    MachineState parent;
 
     /*< public >*/
-    RISCVHartArrayState soc;
+    RISCVHartArrayState soc[SPIKE_SOCKETS_MAX];
     void *fdt;
     int fdt_size;
-} SpikeState;
+};
 
 enum {
     SPIKE_MROM,

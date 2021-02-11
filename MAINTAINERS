@@ -171,6 +171,7 @@ AVR TCG CPUs
 M: Michael Rolnik <mrolnik@gmail.com>
 R: Sarah Harris <S.E.Harris@kent.ac.uk>
 S: Maintained
+F: docs/system/target-avr.rst
 F: gdb-xml/avr-cpu.xml
 F: target/avr/
 F: tests/acceptance/machine_avr6.py
@@ -894,7 +895,7 @@ F: hw/misc/zynq*
 F: include/hw/misc/zynq*
 X: hw/ssi/xilinx_*
 
-Xilinx ZynqMP
+Xilinx ZynqMP and Versal
 M: Alistair Francis <alistair@alistair23.me>
 M: Edgar E. Iglesias <edgar.iglesias@gmail.com>
 M: Peter Maydell <peter.maydell@linaro.org>
@@ -905,6 +906,7 @@ F: include/hw/*/xlnx*.h
 F: include/hw/ssi/xilinx_spips.h
 F: hw/display/dpcd.c
 F: include/hw/display/dpcd.h
+F: docs/system/arm/xlnx-versal-virt.rst
 
 ARM ACPI Subsystem
 M: Shannon Zhao <shannon.zhaosl@gmail.com>
@@ -1313,6 +1315,15 @@ F: hw/intc/ibex_plic.c
 F: include/hw/riscv/opentitan.h
 F: include/hw/char/ibex_uart.h
 F: include/hw/intc/ibex_plic.h
+
+Microchip PolarFire SoC Icicle Kit
+M: Bin Meng <bin.meng@windriver.com>
+L: qemu-riscv@nongnu.org
+S: Supported
+F: hw/riscv/microchip_pfsoc.c
+F: hw/char/mchp_pfsoc_mmuart.c
+F: include/hw/riscv/microchip_pfsoc.h
+F: include/hw/char/mchp_pfsoc_mmuart.h
 
 RX Machines
 -----------
@@ -1854,10 +1865,12 @@ F: include/hw/virtio/virtio-mem.h
 
 nvme
 M: Keith Busch <kbusch@kernel.org>
+M: Klaus Jensen <its@irrelevant.dk>
 L: qemu-block@nongnu.org
 S: Supported
 F: hw/block/nvme*
 F: tests/qtest/nvme-test.c
+T: git git://git.infradead.org/qemu-nvme.git nvme-next
 
 megasas
 M: Hannes Reinecke <hare@suse.com>
@@ -2419,6 +2432,11 @@ F: tests/check-qom-interface.c
 F: tests/check-qom-proplist.c
 F: tests/test-qdev-global-props.c
 
+QOM boilerplate conversion script
+M: Eduardo Habkost <ehabkost@redhat.com>
+S: Maintained
+F: scripts/codeconverter/
+
 QMP
 M: Markus Armbruster <armbru@redhat.com>
 S: Supported
@@ -2741,7 +2759,8 @@ M: Alex Bennée <alex.bennee@linaro.org>
 S: Maintained
 F: docs/devel/tcg-plugins.rst
 F: plugins/
-F: tests/plugin
+F: tests/plugin/
+F: contrib/plugins/
 
 AArch64 TCG target
 M: Richard Henderson <richard.henderson@linaro.org>
@@ -3067,6 +3086,7 @@ M: Alex Bennée <alex.bennee@linaro.org>
 R: Wainer dos Santos Moschetta <wainersm@redhat.com>
 S: Maintained
 F: .gitlab-ci.yml
+F: .gitlab-ci.d/crossbuilds.yml
 
 Guest Test Compilation Support
 M: Alex Bennée <alex.bennee@linaro.org>

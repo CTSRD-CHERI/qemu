@@ -18,6 +18,7 @@
 #include "qemu/event_notifier.h"
 #include "qemu/queue.h"
 #include "qemu/timer.h"
+#include "qom/object.h"
 
 #define PCI_ANY_ID (~0)
 
@@ -113,7 +114,12 @@ typedef struct VFIOMSIXInfo {
     unsigned long *pending;
 } VFIOMSIXInfo;
 
-typedef struct VFIOPCIDevice {
+#define TYPE_VFIO_PCI "vfio-pci"
+typedef struct VFIOPCIDevice VFIOPCIDevice;
+DECLARE_INSTANCE_CHECKER(VFIOPCIDevice, VFIO_PCI,
+                         TYPE_VFIO_PCI)
+
+struct VFIOPCIDevice {
     PCIDevice pdev;
     VFIODevice vbasedev;
     VFIOINTx intx;
@@ -170,7 +176,7 @@ typedef struct VFIOPCIDevice {
     VFIODisplay *dpy;
     Error *migration_blocker;
     Notifier irqchip_change_notifier;
-} VFIOPCIDevice;
+};
 
 /* Use uin32_t for vendor & device so PCI_ANY_ID expands and cannot match hw */
 static inline bool vfio_pci_is(VFIOPCIDevice *vdev, uint32_t vendor, uint32_t device)

@@ -18,6 +18,7 @@
 #include "hw/sd/sd.h"
 #include "qapi/error.h"
 #include "qemu/module.h"
+#include "qom/object.h"
 
 //#define DEBUG_SSI_SD 1
 
@@ -40,7 +41,7 @@ typedef enum {
     SSI_SD_DATA_READ,
 } ssi_sd_mode;
 
-typedef struct {
+struct ssi_sd_state {
     SSISlave ssidev;
     uint32_t mode;
     int cmd;
@@ -50,10 +51,12 @@ typedef struct {
     int32_t response_pos;
     int32_t stopping;
     SDBus sdbus;
-} ssi_sd_state;
+};
+typedef struct ssi_sd_state ssi_sd_state;
 
 #define TYPE_SSI_SD "ssi-sd"
-#define SSI_SD(obj) OBJECT_CHECK(ssi_sd_state, (obj), TYPE_SSI_SD)
+DECLARE_INSTANCE_CHECKER(ssi_sd_state, SSI_SD,
+                         TYPE_SSI_SD)
 
 /* State word bits.  */
 #define SSI_SDR_LOCKED          0x0001
@@ -190,7 +193,7 @@ static uint32_t ssi_sd_transfer(SSISlave *dev, uint32_t val)
         s->mode = SSI_SD_DATA_READ;
         return 0xfe;
     case SSI_SD_DATA_READ:
-        val = sdbus_read_data(&s->sdbus);
+        val = sdbus_read_byte(&s->sdbus);
         if (!sdbus_data_ready(&s->sdbus)) {
             DPRINTF("Data read end\n");
             s->mode = SSI_SD_CMD;

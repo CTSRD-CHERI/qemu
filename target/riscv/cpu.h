@@ -25,6 +25,7 @@
 #include "exec/cpu-defs.h"
 #include "qemu/units.h"
 #include "fpu/softfloat-types.h"
+#include "qom/object.h"
 #include "rvfi_dii.h"
 
 #define TCG_GUEST_DEFAULT_MO 0
@@ -299,7 +300,8 @@ struct CPURISCVState {
     struct {} end_testrig_reset_fields;
 
     /* machine specific rdtime callback */
-    uint64_t (*rdtime_fn)(void);
+    uint64_t (*rdtime_fn)(uint32_t);
+    uint32_t rdtime_fn_arg;
 
 #ifdef CONFIG_RVFI_DII
     struct {
@@ -359,12 +361,8 @@ static inline target_ulong cpu_get_recent_pc(CPURISCVState *env) {
 #endif
 }
 
-#define RISCV_CPU_CLASS(klass) \
-    OBJECT_CLASS_CHECK(RISCVCPUClass, (klass), TYPE_RISCV_CPU)
-#define RISCV_CPU(obj) \
-    OBJECT_CHECK(RISCVCPU, (obj), TYPE_RISCV_CPU)
-#define RISCV_CPU_GET_CLASS(obj) \
-    OBJECT_GET_CLASS(RISCVCPUClass, (obj), TYPE_RISCV_CPU)
+OBJECT_DECLARE_TYPE(RISCVCPU, RISCVCPUClass,
+                    riscv_cpu, RISCV_CPU)
 
 /**
  * RISCVCPUClass:
@@ -373,13 +371,13 @@ static inline target_ulong cpu_get_recent_pc(CPURISCVState *env) {
  *
  * A RISCV CPU model.
  */
-typedef struct RISCVCPUClass {
+struct RISCVCPUClass {
     /*< private >*/
     CPUClass parent_class;
     /*< public >*/
     DeviceRealize parent_realize;
     DeviceReset parent_reset;
-} RISCVCPUClass;
+};
 
 /**
  * RISCVCPU:
@@ -387,7 +385,7 @@ typedef struct RISCVCPUClass {
  *
  * A RISCV CPU.
  */
-typedef struct RISCVCPU {
+struct RISCVCPU {
     /*< private >*/
     CPUState parent_obj;
     /*< public >*/
@@ -422,8 +420,9 @@ typedef struct RISCVCPU {
         uint16_t elen;
         bool mmu;
         bool pmp;
+        uint64_t resetvec;
     } cfg;
-} RISCVCPU;
+};
 
 static inline int riscv_has_ext(CPURISCVState *env, target_ulong ext)
 {
@@ -571,6 +570,7 @@ void rvfi_dii_communicate(CPUState *cs, CPURISCVState *env, bool was_trap);
 #define gen_rvfi_dii_set_field_const_i64(type, field, constant) ((void)0)
 #endif
 
+const char *riscv_cpu_get_trap_name(target_ulong cause, bool async);
 void riscv_cpu_do_interrupt(CPUState *cpu);
 int riscv_cpu_gdb_read_register(CPUState *cpu, GByteArray *buf, int reg);
 int riscv_cpu_gdb_write_register(CPUState *cpu, uint8_t *buf, int reg);
@@ -580,6 +580,8 @@ bool riscv_cpu_virt_enabled(CPURISCVState *env);
 void riscv_cpu_set_virt_enabled(CPURISCVState *env, bool enable);
 bool riscv_cpu_force_hs_excep_enabled(CPURISCVState *env);
 void riscv_cpu_set_force_hs_excep(CPURISCVState *env, bool enable);
+bool riscv_cpu_two_stage_lookup(CPURISCVState *env);
+void riscv_cpu_set_two_stage_lookup(CPURISCVState *env, bool enable);
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch);
 hwaddr riscv_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
 #ifdef TARGET_CHERI
@@ -611,7 +613,8 @@ void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env, bool hs_mode_trap);
 int riscv_cpu_claim_interrupts(RISCVCPU *cpu, uint32_t interrupts);
 uint32_t riscv_cpu_update_mip(RISCVCPU *cpu, uint32_t mask, uint32_t value);
 #define BOOL_TO_MASK(x) (-!!(x)) /* helper for riscv_cpu_update_mip value */
-void riscv_cpu_set_rdtime_fn(CPURISCVState *env, uint64_t (*fn)(void));
+void riscv_cpu_set_rdtime_fn(CPURISCVState *env, uint64_t (*fn)(uint32_t),
+                             uint32_t arg);
 #endif
 void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv);
 

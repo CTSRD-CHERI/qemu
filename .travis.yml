@@ -138,7 +138,7 @@ jobs:
 
 
     # Just build tools and run minimal unit and softfloat checks
-    - name: "GCC check-softfloat (user)"
+    - name: "GCC check-unit and check-softfloat"
       env:
         - BASE_CONFIG="--enable-tools"
         - CONFIG="--disable-user --disable-system"
@@ -158,12 +158,6 @@ jobs:
       env:
         - CONFIG="--enable-debug-tcg --disable-system"
         - CACHE_NAME="${TRAVIS_BRANCH}-linux-gcc-debug-tcg"
-
-
-    - name: "GCC some libs disabled (main-softmmu)"
-      env:
-        - CONFIG="--disable-linux-aio --disable-cap-ng --disable-attr --disable-brlapi --disable-libusb --disable-replication --target-list=${MAIN_SOFTMMU_TARGETS}"
-
 
     # Module builds are mostly of interest to major distros
     - name: "GCC modules (main-softmmu)"

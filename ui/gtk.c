@@ -171,14 +171,16 @@ struct GtkDisplayState {
     DisplayOptions *opts;
 };
 
-typedef struct VCChardev {
+struct VCChardev {
     Chardev parent;
     VirtualConsole *console;
     bool echo;
-} VCChardev;
+};
+typedef struct VCChardev VCChardev;
 
 #define TYPE_CHARDEV_VC "chardev-vc"
-#define VC_CHARDEV(obj) OBJECT_CHECK(VCChardev, (obj), TYPE_CHARDEV_VC)
+DECLARE_INSTANCE_CHECKER(VCChardev, VC_CHARDEV,
+                         TYPE_CHARDEV_VC)
 
 bool gtk_use_gl_area;
 
@@ -744,6 +746,25 @@ static void gd_resize_event(GtkGLArea *area,
 
 #endif
 
+/*
+ * If available, return the refresh rate of the display in milli-Hertz,
+ * else return 0.
+ */
+static int gd_refresh_rate_millihz(GtkWidget *window)
+{
+#ifdef GDK_VERSION_3_22
+    GdkWindow *win = gtk_widget_get_window(window);
+
+    if (win) {
+        GdkDisplay *dpy = gtk_widget_get_display(window);
+        GdkMonitor *monitor = gdk_display_get_monitor_at_window(dpy, win);
+
+        return gdk_monitor_get_refresh_rate(monitor);
+    }
+#endif
+    return 0;
+}
+
 static gboolean gd_draw_event(GtkWidget *widget, cairo_t *cr, void *opaque)
 {
     VirtualConsole *vc = opaque;
@@ -751,6 +772,7 @@ static gboolean gd_draw_event(GtkWidget *widget, cairo_t *cr, void *opaque)
     int mx, my;
     int ww, wh;
     int fbw, fbh;
+    int refresh_rate_millihz;
 
 #if defined(CONFIG_OPENGL)
     if (vc->gfx.gls) {
@@ -769,6 +791,12 @@ static gboolean gd_draw_event(GtkWidget *widget, cairo_t *cr, void *opaque)
     }
     if (!vc->gfx.ds) {
         return FALSE;
+    }
+
+    refresh_rate_millihz = gd_refresh_rate_millihz(vc->window ?
+                                                   vc->window : s->window);
+    if (refresh_rate_millihz) {
+        vc->gfx.dcl.update_interval = MILLISEC_PER_SEC / refresh_rate_millihz;
     }
 
     fbw = surface_width(vc->gfx.ds);
@@ -1949,31 +1977,11 @@ static GtkWidget *gd_create_menu_machine(GtkDisplayState *s)
     return machine_menu;
 }
 
-/*
- * If available, return the refresh rate of the display in milli-Hertz,
- * else return 0.
- */
-static int gd_refresh_rate_millihz(GtkWidget *window)
-{
-#ifdef GDK_VERSION_3_22
-    GdkWindow *win = gtk_widget_get_window(window);
-
-    if (win) {
-        GdkDisplay *dpy = gtk_widget_get_display(window);
-        GdkMonitor *monitor = gdk_display_get_monitor_at_window(dpy, win);
-
-        return gdk_monitor_get_refresh_rate(monitor);
-    }
-#endif
-    return 0;
-}
-
 static GSList *gd_vc_gfx_init(GtkDisplayState *s, VirtualConsole *vc,
                               QemuConsole *con, int idx,
                               GSList *group, GtkWidget *view_menu)
 {
     bool zoom_to_fit = false;
-    int refresh_rate_millihz;
 
     vc->label = qemu_console_get_label(con);
     vc->s = s;
@@ -2030,12 +2038,6 @@ static GSList *gd_vc_gfx_init(GtkDisplayState *s, VirtualConsole *vc,
 
     vc->gfx.kbd = qkbd_state_init(con);
     vc->gfx.dcl.con = con;
-
-    refresh_rate_millihz = gd_refresh_rate_millihz(vc->window ?
-                                                   vc->window : s->window);
-    if (refresh_rate_millihz) {
-        vc->gfx.dcl.update_interval = MILLISEC_PER_SEC / refresh_rate_millihz;
-    }
 
     register_displaychangelistener(&vc->gfx.dcl);
 

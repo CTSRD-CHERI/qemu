@@ -33,6 +33,7 @@
 #include "qemu/error-report.h"
 #include "qapi/error.h"
 #include "trace.h"
+#include "qom/object.h"
 
 /* Fields for FlashPartInfo->flags */
 
@@ -217,8 +218,9 @@ static const FlashPartInfo known_devices[] = {
     { INFO("mx25l6405d",  0xc22017,      0,  64 << 10, 128, 0) },
     { INFO("mx25l12805d", 0xc22018,      0,  64 << 10, 256, 0) },
     { INFO("mx25l12855e", 0xc22618,      0,  64 << 10, 256, 0) },
-    { INFO("mx25l25635e", 0xc22019,      0,  64 << 10, 512, 0) },
+    { INFO6("mx25l25635e", 0xc22019,     0xc22019,  64 << 10, 512, 0) },
     { INFO("mx25l25655e", 0xc22619,      0,  64 << 10, 512, 0) },
+    { INFO("mx66l51235f", 0xc2201a,      0,  64 << 10, 1024, ER_4K | ER_32K) },
     { INFO("mx66u51235f", 0xc2253a,      0,  64 << 10, 1024, ER_4K | ER_32K) },
     { INFO("mx66u1g45g",  0xc2253b,      0,  64 << 10, 2048, ER_4K | ER_32K) },
     { INFO("mx66l1g45g",  0xc2201b,      0,  64 << 10, 2048, ER_4K | ER_32K) },
@@ -237,6 +239,8 @@ static const FlashPartInfo known_devices[] = {
     { INFO("n25q128",     0x20ba18,      0,  64 << 10, 256, 0) },
     { INFO("n25q256a",    0x20ba19,      0,  64 << 10, 512, ER_4K) },
     { INFO("n25q512a",    0x20ba20,      0,  64 << 10, 1024, ER_4K) },
+    { INFO("n25q512ax3",  0x20ba20,  0x1000,  64 << 10, 1024, ER_4K) },
+    { INFO("mt25ql512ab", 0x20ba20, 0x1044, 64 << 10, 1024, ER_4K | ER_32K) },
     { INFO_STACKED("n25q00",    0x20ba21, 0x1000, 64 << 10, 2048, ER_4K, 4) },
     { INFO_STACKED("n25q00a",   0x20bb21, 0x1000, 64 << 10, 2048, ER_4K, 4) },
     { INFO_STACKED("mt25ql01g", 0x20ba21, 0x1040, 64 << 10, 2048, ER_4K, 2) },
@@ -411,7 +415,7 @@ typedef enum {
 
 #define M25P80_INTERNAL_DATA_BUFFER_SZ 16
 
-typedef struct Flash {
+struct Flash {
     SSISlave parent_obj;
 
     BlockBackend *blk;
@@ -451,20 +455,18 @@ typedef struct Flash {
 
     const FlashPartInfo *pi;
 
-} Flash;
+};
+typedef struct Flash Flash;
 
-typedef struct M25P80Class {
+struct M25P80Class {
     SSISlaveClass parent_class;
     FlashPartInfo *pi;
-} M25P80Class;
+};
+typedef struct M25P80Class M25P80Class;
 
 #define TYPE_M25P80 "m25p80-generic"
-#define M25P80(obj) \
-     OBJECT_CHECK(Flash, (obj), TYPE_M25P80)
-#define M25P80_CLASS(klass) \
-     OBJECT_CLASS_CHECK(M25P80Class, (klass), TYPE_M25P80)
-#define M25P80_GET_CLASS(obj) \
-     OBJECT_GET_CLASS(M25P80Class, (obj), TYPE_M25P80)
+DECLARE_OBJ_CHECKERS(Flash, M25P80Class,
+                     M25P80, TYPE_M25P80)
 
 static inline Manufacturer get_man(Flash *s)
 {

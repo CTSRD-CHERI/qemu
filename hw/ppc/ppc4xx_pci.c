@@ -30,6 +30,7 @@
 #include "hw/pci/pci_host.h"
 #include "exec/address-spaces.h"
 #include "trace.h"
+#include "qom/object.h"
 
 struct PCIMasterMap {
     uint32_t la;
@@ -43,8 +44,9 @@ struct PCITargetMap {
     uint32_t la;
 };
 
-#define PPC4xx_PCI_HOST_BRIDGE(obj) \
-    OBJECT_CHECK(PPC4xxPCIState, (obj), TYPE_PPC4xx_PCI_HOST_BRIDGE)
+typedef struct PPC4xxPCIState PPC4xxPCIState;
+DECLARE_INSTANCE_CHECKER(PPC4xxPCIState, PPC4xx_PCI_HOST_BRIDGE,
+                         TYPE_PPC4xx_PCI_HOST_BRIDGE)
 
 #define PPC4xx_PCI_NR_PMMS 3
 #define PPC4xx_PCI_NR_PTMS 2
@@ -59,7 +61,6 @@ struct PPC4xxPCIState {
     MemoryRegion container;
     MemoryRegion iomem;
 };
-typedef struct PPC4xxPCIState PPC4xxPCIState;
 
 #define PCIC0_CFGADDR       0x0
 #define PCIC0_CFGDATA       0x4
@@ -256,10 +257,7 @@ static void ppc4xx_pci_set_irq(void *opaque, int irq_num, int level)
     qemu_irq *pci_irqs = opaque;
 
     trace_ppc4xx_pci_set_irq(irq_num);
-    if (irq_num < 0) {
-        fprintf(stderr, "%s: PCI irq %d\n", __func__, irq_num);
-        return;
-    }
+    assert(irq_num >= 0);
     qemu_set_irq(pci_irqs[irq_num], level);
 }
 
@@ -320,7 +318,8 @@ static void ppc4xx_pcihost_realize(DeviceState *dev, Error **errp)
 
     b = pci_register_root_bus(dev, NULL, ppc4xx_pci_set_irq,
                               ppc4xx_pci_map_irq, s->irq, get_system_memory(),
-                              get_system_io(), 0, 4, TYPE_PCI_BUS);
+                              get_system_io(), 0, ARRAY_SIZE(s->irq),
+                              TYPE_PCI_BUS);
     h->bus = b;
 
     pci_create_simple(b, 0, "ppc4xx-host-bridge");

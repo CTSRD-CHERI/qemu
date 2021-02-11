@@ -21,12 +21,8 @@
 
 #define TYPE_MACHINE "machine"
 #undef MACHINE  /* BSD defines it and QEMU does not use it */
-#define MACHINE(obj) \
-    OBJECT_CHECK(MachineState, (obj), TYPE_MACHINE)
-#define MACHINE_GET_CLASS(obj) \
-    OBJECT_GET_CLASS(MachineClass, (obj), TYPE_MACHINE)
-#define MACHINE_CLASS(klass) \
-    OBJECT_CLASS_CHECK(MachineClass, (klass), TYPE_MACHINE)
+DECLARE_OBJ_CHECKERS(MachineState, MachineClass,
+                     MACHINE, TYPE_MACHINE)
 
 extern MachineState *current_machine;
 
@@ -318,6 +314,9 @@ struct MachineState {
         type_register_static(&machine_initfn##_typeinfo); \
     } \
     type_init(machine_initfn##_register_types)
+
+extern GlobalProperty hw_compat_5_1[];
+extern const size_t hw_compat_5_1_len;
 
 extern GlobalProperty hw_compat_5_0[];
 extern const size_t hw_compat_5_0_len;

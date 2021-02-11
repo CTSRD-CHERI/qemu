@@ -8,6 +8,7 @@
 #include "hw/mem/pc-dimm.h"
 #include "hw/ppc/spapr_ovec.h"
 #include "hw/ppc/spapr_irq.h"
+#include "qom/object.h"
 #include "hw/ppc/spapr_xive.h"  /* For SpaprXive */
 #include "hw/ppc/xics.h"        /* For ICSState */
 #include "hw/ppc/spapr_tpm_proxy.h"
@@ -27,10 +28,10 @@ typedef struct SpaprPendingHpt SpaprPendingHpt;
 
 #define TYPE_SPAPR_RTC "spapr-rtc"
 
-#define SPAPR_RTC(obj)                                  \
-    OBJECT_CHECK(SpaprRtcState, (obj), TYPE_SPAPR_RTC)
-
 typedef struct SpaprRtcState SpaprRtcState;
+DECLARE_INSTANCE_CHECKER(SpaprRtcState, SPAPR_RTC,
+                         TYPE_SPAPR_RTC)
+
 struct SpaprRtcState {
     /*< private >*/
     DeviceState parent_obj;
@@ -41,12 +42,9 @@ typedef struct SpaprDimmState SpaprDimmState;
 typedef struct SpaprMachineClass SpaprMachineClass;
 
 #define TYPE_SPAPR_MACHINE      "spapr-machine"
-#define SPAPR_MACHINE(obj) \
-    OBJECT_CHECK(SpaprMachineState, (obj), TYPE_SPAPR_MACHINE)
-#define SPAPR_MACHINE_GET_CLASS(obj) \
-    OBJECT_GET_CLASS(SpaprMachineClass, obj, TYPE_SPAPR_MACHINE)
-#define SPAPR_MACHINE_CLASS(klass) \
-    OBJECT_CLASS_CHECK(SpaprMachineClass, klass, TYPE_SPAPR_MACHINE)
+typedef struct SpaprMachineState SpaprMachineState;
+DECLARE_OBJ_CHECKERS(SpaprMachineState, SpaprMachineClass,
+                     SPAPR_MACHINE, TYPE_SPAPR_MACHINE)
 
 typedef enum {
     SPAPR_RESIZE_HPT_DEFAULT = 0,
@@ -103,6 +101,21 @@ typedef enum {
 #define SPAPR_CAP_FIXED_NA              0x10 /* Lets leave a bit of a gap... */
 
 #define FDT_MAX_SIZE                    0x100000
+
+/*
+ * NUMA related macros. MAX_DISTANCE_REF_POINTS was taken
+ * from Linux kernel arch/powerpc/mm/numa.h. It represents the
+ * amount of associativity domains for non-CPU resources.
+ *
+ * NUMA_ASSOC_SIZE is the base array size of an ibm,associativity
+ * array for any non-CPU resource.
+ *
+ * VCPU_ASSOC_SIZE represents the size of ibm,associativity array
+ * for CPUs, which has an extra element (vcpu_id) in the end.
+ */
+#define MAX_DISTANCE_REF_POINTS    4
+#define NUMA_ASSOC_SIZE            (MAX_DISTANCE_REF_POINTS + 1)
+#define VCPU_ASSOC_SIZE            (NUMA_ASSOC_SIZE + 1)
 
 typedef struct SpaprCapabilities SpaprCapabilities;
 struct SpaprCapabilities {
@@ -229,6 +242,8 @@ struct SpaprMachineState {
 
     unsigned gpu_numa_id;
     SpaprTpmProxy *tpm_proxy;
+
+    uint32_t numa_assoc_array[MAX_NODES][NUMA_ASSOC_SIZE];
 
     Error *fwnmi_migration_blocker;
 };
@@ -772,12 +787,12 @@ static inline void spapr_dt_irq(uint32_t *intspec, int irq, bool is_lsi)
 typedef struct SpaprTceTable SpaprTceTable;
 
 #define TYPE_SPAPR_TCE_TABLE "spapr-tce-table"
-#define SPAPR_TCE_TABLE(obj) \
-    OBJECT_CHECK(SpaprTceTable, (obj), TYPE_SPAPR_TCE_TABLE)
+DECLARE_INSTANCE_CHECKER(SpaprTceTable, SPAPR_TCE_TABLE,
+                         TYPE_SPAPR_TCE_TABLE)
 
 #define TYPE_SPAPR_IOMMU_MEMORY_REGION "spapr-iommu-memory-region"
-#define SPAPR_IOMMU_MEMORY_REGION(obj) \
-        OBJECT_CHECK(IOMMUMemoryRegion, (obj), TYPE_SPAPR_IOMMU_MEMORY_REGION)
+DECLARE_INSTANCE_CHECKER(IOMMUMemoryRegion, SPAPR_IOMMU_MEMORY_REGION,
+                         TYPE_SPAPR_IOMMU_MEMORY_REGION)
 
 struct SpaprTceTable {
     DeviceState parent;

@@ -30,34 +30,33 @@
 #include "sysemu/qtest.h"
 #include "sysemu/device_tree.h"
 #include "hw/boards.h"
+#include "qom/object.h"
 
 /* Same address of GDB integrated simulator */
 #define SDRAM_BASE  EXT_CS_BASE
 
-typedef struct RxGdbSimMachineClass {
+struct RxGdbSimMachineClass {
     /*< private >*/
     MachineClass parent_class;
     /*< public >*/
     const char *mcu_name;
     uint32_t xtal_freq_hz;
-} RxGdbSimMachineClass;
+};
+typedef struct RxGdbSimMachineClass RxGdbSimMachineClass;
 
-typedef struct RxGdbSimMachineState {
+struct RxGdbSimMachineState {
     /*< private >*/
     MachineState parent_obj;
     /*< public >*/
     RX62NState mcu;
-} RxGdbSimMachineState;
+};
+typedef struct RxGdbSimMachineState RxGdbSimMachineState;
 
 #define TYPE_RX_GDBSIM_MACHINE MACHINE_TYPE_NAME("rx62n-common")
 
-#define RX_GDBSIM_MACHINE(obj) \
-    OBJECT_CHECK(RxGdbSimMachineState, (obj), TYPE_RX_GDBSIM_MACHINE)
+DECLARE_OBJ_CHECKERS(RxGdbSimMachineState, RxGdbSimMachineClass,
+                     RX_GDBSIM_MACHINE, TYPE_RX_GDBSIM_MACHINE)
 
-#define RX_GDBSIM_MACHINE_CLASS(klass) \
-    OBJECT_CLASS_CHECK(RxGdbSimMachineClass, (klass), TYPE_RX_GDBSIM_MACHINE)
-#define RX_GDBSIM_MACHINE_GET_CLASS(obj) \
-    OBJECT_GET_CLASS(RxGdbSimMachineClass, (obj), TYPE_RX_GDBSIM_MACHINE)
 
 static void rx_load_image(RXCPU *cpu, const char *filename,
                           uint32_t start, uint32_t size)
@@ -118,7 +117,7 @@ static void rx_gdbsim_init(MachineState *machine)
          * the latter half of the SDRAM space.
          */
         kernel_offset = machine->ram_size / 2;
-        rx_load_image(RXCPU(first_cpu), kernel_filename,
+        rx_load_image(RX_CPU(first_cpu), kernel_filename,
                       SDRAM_BASE + kernel_offset, kernel_offset);
         if (dtb_filename) {
             ram_addr_t dtb_offset;
@@ -141,7 +140,7 @@ static void rx_gdbsim_init(MachineState *machine)
             rom_add_blob_fixed("dtb", dtb, dtb_size,
                                SDRAM_BASE + dtb_offset);
             /* Set dtb address to R1 */
-            RXCPU(first_cpu)->env.regs[1] = SDRAM_BASE + dtb_offset;
+            RX_CPU(first_cpu)->env.regs[1] = SDRAM_BASE + dtb_offset;
         }
     }
 }

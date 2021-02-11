@@ -192,8 +192,8 @@
 #
 # Features:
 # @deprecated: This command is deprecated, because it interferes with
-#     the guest.  Use 'query-cpus-fast' instead to avoid the vCPU
-#     interruption.
+#              the guest.  Use 'query-cpus-fast' instead to avoid the vCPU
+#              interruption.
 #
 # Returns: a list of @CpuInfo for each virtual CPU
 #
@@ -317,7 +317,7 @@
 #
 # Features:
 # @deprecated: This command is deprecated.  Use `device_add` instead.
-#     See the `query-hotpluggable-cpus` command for details.
+#              See the `query-hotpluggable-cpus` command for details.
 #
 # Returns: Nothing on success
 #
@@ -358,13 +358,16 @@
 # @default-cpu-type: default CPU model typename if none is requested via
 #                    the -cpu argument. (since 4.2)
 #
+# @default-ram-id: the default ID of initial RAM memory backend (since 5.2)
+#
 # Since: 1.2.0
 ##
 { 'struct': 'MachineInfo',
   'data': { 'name': 'str', '*alias': 'str',
             '*is-default': 'bool', 'cpu-max': 'int',
             'hotpluggable-cpus': 'bool',  'numa-mem-supported': 'bool',
-            'deprecated': 'bool', '*default-cpu-type': 'str' } }
+            'deprecated': 'bool', '*default-cpu-type': 'str',
+            '*default-ram-id': 'str' } }
 
 ##
 # @query-machines:

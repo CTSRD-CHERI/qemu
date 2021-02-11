@@ -643,7 +643,7 @@ struct TCGContext {
     /* Track which vCPU triggers events */
     CPUState *cpu;                      /* *_trans */
 
-    /* These structures are private to tcg-target.inc.c.  */
+    /* These structures are private to tcg-target.c.inc.  */
 #ifdef TCG_TARGET_NEED_LDST_LABELS
     QSIMPLEQ_HEAD(, TCGLabelQemuLdst) ldst_labels;
 #endif
@@ -798,9 +798,24 @@ static inline TCGv_i32 TCGV_HIGH(TCGv_i64 t)
 }
 #endif
 
+static inline TCGArg tcg_get_insn_param(TCGOp *op, int arg)
+{
+    return op->args[arg];
+}
+
 static inline void tcg_set_insn_param(TCGOp *op, int arg, TCGArg v)
 {
     op->args[arg] = v;
+}
+
+static inline target_ulong tcg_get_insn_start_param(TCGOp *op, int arg)
+{
+#if TARGET_LONG_BITS <= TCG_TARGET_REG_BITS
+    return tcg_get_insn_param(op, arg);
+#else
+    return tcg_get_insn_param(op, arg * 2) |
+           ((uint64_t)tcg_get_insn_param(op, arg * 2 + 1) << 32);
+#endif
 }
 
 static inline void tcg_set_insn_start_param(TCGOp *op, int arg, target_ulong v)

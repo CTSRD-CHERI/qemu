@@ -28,12 +28,13 @@
 #include "sysemu/runstate.h"
 #include "trace.h"
 #include "migration/blocker.h"
+#include "qom/object.h"
 
 #define TYPE_SEV_GUEST "sev-guest"
-#define SEV_GUEST(obj)                                          \
-    OBJECT_CHECK(SevGuestState, (obj), TYPE_SEV_GUEST)
-
 typedef struct SevGuestState SevGuestState;
+DECLARE_INSTANCE_CHECKER(SevGuestState, SEV_GUEST,
+                         TYPE_SEV_GUEST)
+
 
 /**
  * SevGuestState:
@@ -500,6 +501,7 @@ sev_read_file_base64(const char *filename, guchar **data, gsize *len)
 
     if (!g_file_get_contents(filename, &base64, &sz, &error)) {
         error_report("failed to read '%s' (%s)", filename, error->message);
+        g_error_free(error);
         return -1;
     }
 

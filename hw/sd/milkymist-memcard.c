@@ -32,6 +32,7 @@
 #include "sysemu/blockdev.h"
 #include "hw/qdev-properties.h"
 #include "hw/sd/sd.h"
+#include "qom/object.h"
 
 enum {
     ENABLE_CMD_TX   = (1<<0),
@@ -63,8 +64,11 @@ enum {
 };
 
 #define TYPE_MILKYMIST_MEMCARD "milkymist-memcard"
-#define MILKYMIST_MEMCARD(obj) \
-    OBJECT_CHECK(MilkymistMemcardState, (obj), TYPE_MILKYMIST_MEMCARD)
+typedef struct MilkymistMemcardState MilkymistMemcardState;
+DECLARE_INSTANCE_CHECKER(MilkymistMemcardState, MILKYMIST_MEMCARD,
+                         TYPE_MILKYMIST_MEMCARD)
+
+#define TYPE_MILKYMIST_SDBUS "milkymist-sdbus"
 
 struct MilkymistMemcardState {
     SysBusDevice parent_obj;
@@ -81,7 +85,6 @@ struct MilkymistMemcardState {
     uint8_t response[17];
     uint32_t regs[R_MAX];
 };
-typedef struct MilkymistMemcardState MilkymistMemcardState;
 
 static void update_pending_bits(MilkymistMemcardState *s)
 {
@@ -149,11 +152,8 @@ static uint64_t memcard_read(void *opaque, hwaddr addr,
         if (!s->enabled) {
             r = 0xffffffff;
         } else {
-            r = 0;
-            r |= sdbus_read_data(&s->sdbus) << 24;
-            r |= sdbus_read_data(&s->sdbus) << 16;
-            r |= sdbus_read_data(&s->sdbus) << 8;
-            r |= sdbus_read_data(&s->sdbus);
+            sdbus_read_data(&s->sdbus, &r, sizeof(r));
+            be32_to_cpus(&r);
         }
         break;
     case R_CLK2XDIV:
@@ -179,6 +179,7 @@ static void memcard_write(void *opaque, hwaddr addr, uint64_t value,
                           unsigned size)
 {
     MilkymistMemcardState *s = opaque;
+    uint32_t val32;
 
     trace_milkymist_memcard_memory_write(addr, value);
 
@@ -207,10 +208,8 @@ static void memcard_write(void *opaque, hwaddr addr, uint64_t value,
         if (!s->enabled) {
             break;
         }
-        sdbus_write_data(&s->sdbus, (value >> 24) & 0xff);
-        sdbus_write_data(&s->sdbus, (value >> 16) & 0xff);
-        sdbus_write_data(&s->sdbus, (value >> 8) & 0xff);
-        sdbus_write_data(&s->sdbus, value & 0xff);
+        val32 = cpu_to_be32(value);
+        sdbus_write_data(&s->sdbus, &val32, sizeof(val32));
         break;
     case R_ENABLE:
         s->regs[addr] = value;
@@ -253,6 +252,19 @@ static void milkymist_memcard_reset(DeviceState *d)
     }
 }
 
+static void milkymist_memcard_set_readonly(DeviceState *dev, bool level)
+{
+    qemu_log_mask(LOG_UNIMP,
+                  "milkymist_memcard: read-only mode not supported\n");
+}
+
+static void milkymist_memcard_set_inserted(DeviceState *dev, bool level)
+{
+    MilkymistMemcardState *s = MILKYMIST_MEMCARD(dev);
+
+    s->enabled = !!level;
+}
+
 static void milkymist_memcard_init(Object *obj)
 {
     MilkymistMemcardState *s = MILKYMIST_MEMCARD(obj);
@@ -261,30 +273,9 @@ static void milkymist_memcard_init(Object *obj)
     memory_region_init_io(&s->regs_region, OBJECT(s), &memcard_mmio_ops, s,
             "milkymist-memcard", R_MAX * 4);
     sysbus_init_mmio(dev, &s->regs_region);
-}
-
-static void milkymist_memcard_realize(DeviceState *dev, Error **errp)
-{
-    MilkymistMemcardState *s = MILKYMIST_MEMCARD(dev);
-    DeviceState *carddev;
-    BlockBackend *blk;
-    DriveInfo *dinfo;
-    Error *err = NULL;
 
     qbus_create_inplace(&s->sdbus, sizeof(s->sdbus), TYPE_SD_BUS,
-                        dev, "sd-bus");
-
-    /* Create and plug in the sd card */
-    /* FIXME use a qdev drive property instead of drive_get_next() */
-    dinfo = drive_get_next(IF_SD);
-    blk = dinfo ? blk_by_legacy_dinfo(dinfo) : NULL;
-    carddev = qdev_new(TYPE_SD_CARD);
-    qdev_prop_set_drive(carddev, "drive", blk);
-    if (!qdev_realize_and_unref(carddev, BUS(&s->sdbus), &err)) {
-        error_propagate_prepend(errp, err, "failed to init SD card");
-        return;
-    }
-    s->enabled = blk && blk_is_inserted(blk);
+                        DEVICE(obj), "sd-bus");
 }
 
 static const VMStateDescription vmstate_milkymist_memcard = {
@@ -308,10 +299,9 @@ static void milkymist_memcard_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
-    dc->realize = milkymist_memcard_realize;
     dc->reset = milkymist_memcard_reset;
     dc->vmsd = &vmstate_milkymist_memcard;
-    /* Reason: init() method uses drive_get_next() */
+    /* Reason: output IRQs should be wired up */
     dc->user_creatable = false;
 }
 
@@ -323,9 +313,25 @@ static const TypeInfo milkymist_memcard_info = {
     .class_init    = milkymist_memcard_class_init,
 };
 
+static void milkymist_sdbus_class_init(ObjectClass *klass, void *data)
+{
+    SDBusClass *sbc = SD_BUS_CLASS(klass);
+
+    sbc->set_inserted = milkymist_memcard_set_inserted;
+    sbc->set_readonly = milkymist_memcard_set_readonly;
+}
+
+static const TypeInfo milkymist_sdbus_info = {
+    .name = TYPE_MILKYMIST_SDBUS,
+    .parent = TYPE_SD_BUS,
+    .instance_size = sizeof(SDBus),
+    .class_init = milkymist_sdbus_class_init,
+};
+
 static void milkymist_memcard_register_types(void)
 {
     type_register_static(&milkymist_memcard_info);
+    type_register_static(&milkymist_sdbus_info);
 }
 
 type_init(milkymist_memcard_register_types)
