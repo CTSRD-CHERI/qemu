@@ -405,6 +405,12 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     }
     // Now perform the "cmpxchg" operation by checking if the current values
     // in memory are the same as the ones that the load-reserved observed.
+    // FIXME: There is a bug here. If the MMU / Cap Permissions squash the tag,
+    // we may think the location has changed
+    // FIXME: when it has not. Use load_cap_from_memory_128_raw_tag to get the
+    // real tag, and strip the LOAD_CAP
+    // FIXME: permission to ensure no MMU load faults occur (this is not a real
+    // load).
     target_ulong current_pesbt;
     target_ulong current_cursor;
     bool current_tag =
