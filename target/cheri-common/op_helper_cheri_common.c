@@ -1102,10 +1102,11 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
     return tag;
 }
 
-bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
-                              target_ulong *cursor, uint32_t cb,
-                              const cap_register_t *source, target_ulong vaddr,
-                              target_ulong retpc, hwaddr *physaddr)
+bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
+                                  target_ulong *cursor, uint32_t cb,
+                                  const cap_register_t *source,
+                                  target_ulong vaddr, target_ulong retpc,
+                                  hwaddr *physaddr, bool *raw_tag)
 {
     cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
     /*
@@ -1142,6 +1143,9 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
     }
     int prot;
     bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
+    if (raw_tag) {
+        *raw_tag = tag;
+    }
     if (tag) {
         tag = cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
     }
@@ -1174,6 +1178,15 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
     }
 #endif
     return tag;
+}
+
+bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
+                              const cap_register_t *source, target_ulong vaddr,
+                              target_ulong retpc, hwaddr *physaddr)
+{
+    return load_cap_from_memory_raw_tag(env, pesbt, cursor, cb, source, vaddr,
+                                        retpc, physaddr, NULL);
 }
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
