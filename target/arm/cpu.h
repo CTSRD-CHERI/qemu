@@ -691,6 +691,15 @@ typedef struct CPUARMState {
     uint64_t exclusive_addr;
     uint64_t exclusive_val;
     uint64_t exclusive_high;
+#ifdef TARGET_CHERI
+    // For CAP sized atomics exclusive_high is used as a pesbt, but we also need
+    // a tag. We need a second set for store/load pair. None of these are
+    // currently need as globals because they are only used by helpers.
+    uint32_t exclusive_tag;
+    uint64_t exclusive_val2;
+    uint64_t exclusive_high2;
+    uint32_t exclusive_tag2;
+#endif
 
     /* iwMMXt coprocessor state.  */
     struct {

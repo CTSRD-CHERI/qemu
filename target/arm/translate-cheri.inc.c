@@ -43,6 +43,7 @@
 #define ONES(X) ((1ULL << (X)) - 1)
 
 #define AS_ZERO(X) ((X) == 31 ? 32 : (X))
+#define STANDARD_ZERO(X) ((X) == 32 ? 31 : (X))
 
 #define TRANS_F(NAME) static bool trans_##NAME(DisasContext *ctx, arg_##NAME *a)
 
@@ -217,28 +218,44 @@ static void set_NZCV(DisasContext *ctx, TCGv_i32 N, TCGv_i32 Z, TCGv_i32 C,
     set_flag(cpu_VF, V, 31, 0);
 }
 
-#define REG_NONE 0x77
 #define OPTION_NONE 0xff
 
 static inline TCGv_i64 cpu_reg_maybe_0(DisasContext *ctx, int regnum)
 {
     if (regnum == NULL_CAPREG_INDEX) {
-        return cpu_reg(ctx, regnum);
+        return cpu_reg(ctx, 31);
     } else {
         return cpu_reg_sp(ctx, regnum);
     }
 }
 
+static inline TCGv_i64 read_cpu_reg_maybe_0(DisasContext *ctx, int regnum)
+{
+    if (regnum == NULL_CAPREG_INDEX) {
+        return read_cpu_reg(ctx, 31, 1);
+    } else {
+        return read_cpu_reg_sp(ctx, regnum, 1);
+    }
+}
+
 // Load/store common code
-// loads/stores pair rd/rd2, base rn, reg offset rm (or rs in some cases), imm
-// offset imm pre_inc / post_inc stores back to base. Most of these options
-// should optimise away.
+// loads/stores pair rd/rd2, base rn, reg offset rm (extended by option and
+// shift), immediate offset imm Size is a logarithm of the number of bytes to
+// load/store. Loads are sign extended to extend_size. pre_inc / post_inc stores
+// back to base before / after offsetting. alternate_base swaps use of
+// capability / DDC base reg in C64 / non-C64 mode. pcc_base enforces use of PCC
+// as a base capability, regardless of C64 / alternate_base. exclusive will
+// perform an exclusive operation (arm version of load-link store-conditional),
+// result returned in rm. acquire_release will do either an load-acquire /
+// store-release, or both if set to 2. swap indicates the operation is a swap,
+// not a pair load/store. swap = 2 will do a CAS. Most of these options should
+// optimise away.
 static inline __attribute__((always_inline)) bool load_store_implementation(
     DisasContext *ctx, bool is_load, bool vector, uint32_t rd, uint32_t rd2,
     uint8_t size, uint8_t extend_size, uint32_t rn, uint32_t rm,
     target_ulong imm, bool pre_inc, bool post_inc, bool non_temporal_hint,
-    bool alternate_base, bool pcc_base, bool exclusive, bool acquire_release,
-    int option, unsigned int shift)
+    bool alternate_base, bool pcc_base, bool exclusive, int acquire_release,
+    int swap, int option, unsigned int shift)
 {
     // base on capability rn, otherwise ddc (or maybe even pcc) with rn as
     // value/offset In C64 base is the cap provided, or DDC/PCC otherwise.
@@ -260,10 +277,10 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
     if (rm != REG_NONE)
         gen_cap_debug(ctx, rm);
 #endif
-    // Still got these to do
-    // Exclusive is done by by remembering BOTH the value and address in a load
-    // (cpu_exclusive*) These are checked again on store using an atomic cmpxchg
-    assert(!exclusive);
+
+    // Some combinations not implemented
+    assert(!(exclusive && vector));
+    assert(!swap || (size == 4 && !vector));
 
     if (vector) {
         if (!fp_access_check(ctx)) {
@@ -290,7 +307,7 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
         addr = tcg_const_i64(addr_imm);
     } else {
         // Things with a base (still unchecked)
-        addr = read_cpu_reg_sp(ctx, rn, 1);
+        addr = read_cpu_reg_maybe_0(ctx, rn);
         if (imm != 0 && !post_inc) {
             tcg_gen_addi_i64(addr, addr, imm);
         }
@@ -305,16 +322,16 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
     }
 
     // Now add register offset if any
-    if (rm != REG_NONE) {
-        TCGv_i64 tcg_rm = read_cpu_reg_sp(ctx, rm, 1);
+    if (rm != REG_NONE && !exclusive) {
+        TCGv_i64 tcg_rm = read_cpu_reg_maybe_0(ctx, rm);
         if (option != OPTION_NONE) {
             ext_and_shift_reg(tcg_rm, tcg_rm, option, shift);
         }
         tcg_gen_add_i64(addr, addr, tcg_rm);
     }
 
-    // Just special casing this for now until we get better TCG handling for
-    // caps
+    // Just special casing capabilities for now until we get better TCG handling
+    // for caps
     if (size == 4 && !vector) {
         uint32_t base_reg = capability_base ? rn
                                             : (pcc_base ? CHERI_EXC_REGNUM_PCC
@@ -325,7 +342,8 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
 
         TCGv_i32 tcg_rd2 = NULL;
 
-        if (rd2 != REG_NONE) {
+        // Only one helper for exclusive, we just pass REG_NONE
+        if (rd2 != REG_NONE || exclusive) {
             tcg_rd2 = tcg_const_i32(rd2);
         }
 
@@ -336,23 +354,49 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
             }
         }
 
-        disas_capreg_state_set_unknown(ctx, rd);
+        if (is_load || swap) {
 
-        if (rd2 == REG_NONE) {
+            disas_capreg_state_set_unknown(ctx, rd);
+
+            if (rd2 != REG_NONE) {
+                disas_capreg_state_set_unknown(ctx, rd2);
+            }
+        }
+
+        if (exclusive) {
+            if (is_load) {
+                gen_helper_load_exclusive_cap_via_cap(cpu_env, tcg_rd, tcg_rd2,
+                                                      tcg_base_reg, addr);
+            } else {
+                TCGv_i32 tcg_rm = tcg_const_i32(rm);
+                disas_capreg_state_set(ctx, rm, CREG_INTEGER);
+                gen_helper_store_exclusive_cap_via_cap(
+                    cpu_env, tcg_rm, tcg_rd, tcg_rd2, tcg_base_reg, addr);
+                tcg_temp_free_i32(tcg_rm);
+            }
+        } else if (rd2 == REG_NONE) {
             (is_load ? gen_helper_load_cap_via_cap
                      : gen_helper_store_cap_via_cap)(cpu_env, tcg_rd,
                                                      tcg_base_reg, addr);
         } else {
-            disas_capreg_state_set_unknown(ctx, rd2);
-            (is_load ? gen_helper_load_cap_pair_via_cap
-                     : gen_helper_store_cap_pair_via_cap)(
-                cpu_env, tcg_rd, tcg_rd2, tcg_base_reg, addr);
+            void (*helper_fn)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv_i32, TCGv);
+
+            if (swap == 2)
+                helper_fn = &gen_helper_compare_swap_cap_via_cap;
+            else if (swap == 1)
+                helper_fn = &gen_helper_swap_cap_via_cap;
+            else if (is_load)
+                helper_fn = &gen_helper_load_cap_pair_via_cap;
+            else
+                helper_fn = &gen_helper_store_cap_pair_via_cap;
+
+            helper_fn(cpu_env, tcg_rd, tcg_rd2, tcg_base_reg, addr);
         }
 
         tcg_temp_free_i32(tcg_base_reg);
         tcg_temp_free_i32(tcg_rd);
 
-        if (tcg_rd2 != NULL) {
+        if (tcg_rd2 != NULL || exclusive) {
             tcg_temp_free_i32(tcg_rd2);
         }
 
@@ -367,7 +411,18 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
             ctx, addr, !is_load, false, (rd2 == REG_NONE) ? size : (size + 1),
             rn, alternate_base, !pcc_base);
 
-        if (!vector) {
+        if (exclusive) {
+            uint32_t rd_0 = STANDARD_ZERO(rd);
+            uint32_t rd2_0 = STANDARD_ZERO(rd2);
+
+            if (is_load) {
+                gen_load_exclusive(ctx, rd_0, rd2_0, checked, size,
+                                   rd2 != REG_NONE);
+            } else {
+                gen_store_exclusive(ctx, STANDARD_ZERO(rm), rd_0, rd2_0,
+                                    checked, size, rd2 != REG_NONE);
+            }
+        } else if (!vector) {
             MemOp memop = ctx->be_data + size;
 
             TCGv_i64 tcg_rd = cpu_reg_maybe_0(ctx, rd);
@@ -442,7 +497,12 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
     }
 
     if (acquire_release) {
-        tcg_gen_mb(TCG_MO_ALL | (is_load ? TCG_BAR_LDAQ : TCG_BAR_STRL));
+        TCGBar bar = TCG_MO_ALL;
+        if ((acquire_release == 2) || is_load)
+            bar |= TCG_BAR_LDAQ;
+        if ((acquire_release == 2) || !is_load)
+            bar |= TCG_BAR_STRL;
+        tcg_gen_mb(bar);
     }
 
     // Add immediate afterwards if post incrementing
@@ -451,6 +511,7 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
     }
 
     if (post_inc || pre_inc) {
+        assert(!exclusive); // otherwise this temp will have died
         set_gpr_reg_addr_base(ctx, rn, wb, capability_base);
         tcg_temp_free_i64(wb);
     }
@@ -542,6 +603,8 @@ TRANS_F(ADR)
         tcg_gen_mov_i64(cpu_reg(ctx, a->Rd), new_addr);
     }
 
+    tcg_temp_free_i64(new_addr);
+
     return true;
 }
 
@@ -588,7 +651,7 @@ TRANS_F(LDP_STP)
             return load_store_implementation(
                 ctx, load, false, AS_ZERO(a->Ct),
                 pair ? AS_ZERO(a->Ct2) : REG_NONE, 4, 4, a->Rn, AS_ZERO(rs), 0,
-                false, false, false, false, false, true, o2, OPTION_NONE, 0);
+                false, false, false, false, false, true, o2, 0, OPTION_NONE, 0);
         } else if (a->op2 == 2) {
             // acquire/release
             assert(rs == 0b11111);
@@ -598,7 +661,7 @@ TRANS_F(LDP_STP)
             return load_store_implementation(
                 ctx, load, false, AS_ZERO(a->Ct), REG_NONE, size, size, a->Rn,
                 REG_NONE, 0, false, false, false, alternate_base, false, false,
-                true, OPTION_NONE, 0);
+                true, 0, OPTION_NONE, 0);
         } else
             return false;
     } else if (a->op1 == 0b00 || a->op1 == 0b01) {
@@ -616,7 +679,7 @@ TRANS_F(LDP_STP)
         return load_store_implementation(
             ctx, a->L, false, AS_ZERO(a->Ct), AS_ZERO(a->Ct2), 4, 4, a->Rn,
             REG_NONE, imm, pre_inc, post_inc, non_temporal_hint, false, false,
-            false, false, OPTION_NONE, 0);
+            false, false, 0, OPTION_NONE, 0);
     } else
         return false;
 }
@@ -636,7 +699,7 @@ TRANS_F(ADD1)
 }
 
 // Load/Store unscaled immediate via alternate base
-TRANS_F(ALD_ASTUR)
+TRANS_F(AUR)
 {
     int size, extend_size;
     bool is_load;
@@ -655,7 +718,7 @@ TRANS_F(ALD_ASTUR)
     return load_store_implementation(
         ctx, is_load, a->V, a->V ? a->Rt : AS_ZERO(a->Rt), REG_NONE, size,
         extend_size, a->Rn, REG_NONE, SE_64(a->imm9, 9), false, false, false,
-        true, false, false, false, OPTION_NONE, 0);
+        true, false, false, false, 0, OPTION_NONE, 0);
 }
 
 TRANS_F(ALIGN)
@@ -1105,7 +1168,13 @@ TRANS_F(CHK)
     return true;
 }
 
-TRANSLATE_UNDEF(CAS)
+TRANS_F(CAS)
+{
+    return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct),
+                                     AS_ZERO(a->Cs), 4, 4, a->Rn, REG_NONE, 0,
+                                     false, false, false, false, false, false,
+                                     a->L + a->R, 2, OPTION_NONE, 0);
+}
 
 TRANS_F(BUILD_CSEAL_CPYE)
 {
@@ -1444,7 +1513,7 @@ TRANS_F(LDR)
     return load_store_implementation(
         ctx, true, false, AS_ZERO(a->Ct), REG_NONE, 4, 4, REG_NONE, REG_NONE,
         SE_64(a->imm17 << 4, 21), false, false, false, false, true, false,
-        false, OPTION_NONE, 0);
+        false, 0, OPTION_NONE, 0);
 }
 
 // op:  00 capsized
@@ -1479,7 +1548,7 @@ TRANS_F(LDR_STR)
 
     return load_store_implementation(
         ctx, a->opc & 1, false, AS_ZERO(a->Ct), REG_NONE, 4, 4, a->Rn, REG_NONE,
-        imm, pre, post, false, false, false, false, false, OPTION_NONE, 0);
+        imm, pre, post, false, false, false, false, false, 0, OPTION_NONE, 0);
 }
 
 // imm12
@@ -1488,7 +1557,7 @@ TRANS_F(LDR_STR1)
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct), REG_NONE,
                                      4, 4, a->Rn, REG_NONE, a->imm12 << 4,
                                      false, false, false, false, false, false,
-                                     false, OPTION_NONE, 0);
+                                     false, 0, OPTION_NONE, 0);
 }
 
 TRANS_F(LDR_STR2)
@@ -1496,7 +1565,7 @@ TRANS_F(LDR_STR2)
     return load_store_implementation(ctx, a->opc == 0b01, false, AS_ZERO(a->Ct),
                                      REG_NONE, 4, 4, a->Rn, AS_ZERO(a->Rm), 0,
                                      false, false, false, false, false, false,
-                                     false, a->option_name, a->S ? 4 : 0);
+                                     false, 0, a->option_name, a->S ? 4 : 0);
 }
 
 TRANS_F(MRS_MSR)
@@ -1575,7 +1644,13 @@ TRANS_F(CVT3)
     return cvt_impl_cap_to_ptr(ctx, a->Rd, a->Cn, AS_ZERO(a->Cm), false);
 }
 
-TRANSLATE_UNDEF(SWP)
+TRANS_F(SWP)
+{
+    return load_store_implementation(ctx, a->A, false, AS_ZERO(a->Ct),
+                                     AS_ZERO(a->Cs), 4, 4, a->Rn, REG_NONE, 0,
+                                     false, false, false, false, false, false,
+                                     a->A + a->R, 1, OPTION_NONE, 0);
+}
 
 // CVT with PCC / DDC as a base, ptr -> cap
 TRANS_F(CVT4)
@@ -1606,17 +1681,17 @@ TRANS_F(CLRPERM1)
 }
 
 // Load store via alternate base
-TRANS_F(ASTRB_ALD)
+TRANS_F(ARB_ALDR)
 {
     uint64_t log = size_log(a->op);
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Rt), REG_NONE,
                                      log, log, a->Rn, REG_NONE, a->imm9 << log,
                                      false, false, false, true, false, false,
-                                     false, OPTION_NONE, 0);
+                                     false, 0, OPTION_NONE, 0);
 }
 
 // Load store via alternate base register offset
-TRANS_F(ASTR_ALD)
+TRANS_F(ASTR_ALDR1)
 {
     bool is_load = a->L || (!a->op && (a->opc == 0b01 || a->opc == 0b10));
     // op,opc   0 00 byte
@@ -1673,7 +1748,7 @@ TRANS_F(ASTR_ALD)
     return load_store_implementation(
         ctx, is_load, vector, vector ? a->Rt : AS_ZERO(a->Rt), REG_NONE, size,
         extend_size, a->Rn, AS_ZERO(a->Rm), 0, false, false, false, true, false,
-        false, false, a->option_name, a->S ? size : 0);
+        false, false, 0, a->option_name, a->S ? size : 0);
 }
 
 // Load store capability via alternate base
@@ -1681,6 +1756,47 @@ TRANS_F(ASTR_ALDR)
 {
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct), REG_NONE,
                                      4, 4, a->Rn, AS_ZERO(a->Rm), 0, false,
-                                     false, false, true, false, false, false,
+                                     false, false, true, false, false, false, 0,
                                      a->option_name, a->S ? 4 : 0);
+}
+
+TRANS_F(CT)
+{
+    if (a->opc > 2)
+        return false;
+    if (!a->opc && (ctx->current_el == 0))
+        return false;
+
+    uint32_t reg = IS_C64(ctx) ? a->Rn : CHERI_EXC_REGNUM_DDC;
+    TCGv_i64 addr = read_cpu_reg_sp(ctx, a->Rn, 1);
+
+    if (!IS_C64(ctx) && cctlr_set(ctx, CCTLR_DDCBO)) {
+        tcg_gen_add_i64(addr, addr, ddc_interposition);
+    }
+
+    TCGv_i32 tcg_reg = tcg_const_i32(reg);
+
+    if (a->opc) {
+        gen_helper_load_tags(cpu_reg(ctx, a->Rt), cpu_env, tcg_reg, addr);
+        gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rt));
+        gen_reg_modified_int(ctx, AS_ZERO(a->Rt));
+    } else {
+        TCGv_i64 v = cpu_reg(
+            ctx, (!isTagSettingDisabled(ctx) && cheri_is_system_ctx(ctx))
+                     ? a->Rt
+                     : 31);
+        gen_helper_store_tags(cpu_env, v, tcg_reg, addr);
+    }
+
+    tcg_temp_free_i32(tcg_reg);
+
+    return true;
+}
+
+TRANS_F(LDAPR)
+{
+    // LDAPR is slightly weaker than LDAR, so we can just make LDAPR into LDAR.
+    return load_store_implementation(
+        ctx, true, false, AS_ZERO(a->Ct), REG_NONE, 4, 4, a->Rn, REG_NONE, 0,
+        false, false, false, false, false, false, true, false, OPTION_NONE, 0);
 }
