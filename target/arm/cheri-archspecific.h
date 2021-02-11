@@ -22,6 +22,8 @@
 extern const char * const cheri_gp_regnames[];
 extern const char * const cheri_gp_int_regnames[];
 
+#define CAP_TAG_GET_MANY_SHFT    2
+
 // LETODO: All of these
 #include "stdio.h"
 
