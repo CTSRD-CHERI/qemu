@@ -878,7 +878,6 @@ int cpu_watchpoint_address_matches(CPUState *cpu, vaddr addr, vaddr len)
     return ret;
 }
 
-#ifdef TARGET_CHERI
 /* Set a breakcount. */
 int cpu_breakcount(CPUState *cpu, uint64_t count)
 {
@@ -887,7 +886,6 @@ int cpu_breakcount(CPUState *cpu, uint64_t count)
 
     return 0;
 }
-#endif
 
 /* Called from RCU critical section */
 static RAMBlock *qemu_get_ram_block(ram_addr_t addr)

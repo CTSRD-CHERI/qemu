@@ -2971,10 +2971,8 @@ void qemu_init(int argc, char **argv, char **envp)
     FILE *vmstate_dump_file = NULL;
     Error *main_loop_err = NULL;
     Error *err = NULL;
-#if defined(TARGET_CHERI)
     uint64_t cl_breakpoint = 0L;
     uint64_t cl_breakcount = 0L;
-#endif
 #ifdef CONFIG_RVFI_DII
     int rvfi_dii_port = 0;
 #endif
@@ -3733,7 +3731,6 @@ void qemu_init(int argc, char **argv, char **envp)
                 warn_report("The -tb-size option is deprecated, use -accel tcg,tb-size instead");
                 object_register_sugar_prop(ACCEL_CLASS_NAME("tcg"), "tb-size", optarg);
                 break;
-#if defined(TARGET_CHERI)
             case QEMU_OPTION_breakpoint:
                 cl_breakpoint = strtoull(optarg, NULL, 0);
                 if (cl_breakpoint == 0 || cl_breakpoint == ULLONG_MAX) {
@@ -3760,7 +3757,6 @@ void qemu_init(int argc, char **argv, char **envp)
                 }
                 break;
 #endif /* CONFIG_TCG_LOG_INSTR */
-#endif /* TARGET_CHERI */
 
 #ifdef TARGET_CHERI
             case QEMU_OPTION_cheri_c2e_on_unrepresentable:
@@ -4528,7 +4524,6 @@ void qemu_init(int argc, char **argv, char **envp)
      */
     drive_mark_claimed_by_board();
 
-#if defined(TARGET_CHERI)
     if (cl_breakpoint) {
         CPUState *cs;
 
@@ -4543,7 +4538,6 @@ void qemu_init(int argc, char **argv, char **envp)
             cpu_breakcount(cs, cl_breakcount);
         }
     }
-#endif
 
     realtime_init();
 
