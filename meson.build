@@ -997,6 +997,8 @@ foreach target : target_dirs
       config_target_data.set('TARGET_' + v.to_upper(), 1)
     elif k == 'TARGET_NAME' or k == 'CONFIG_QEMU_INTERP_PREFIX'
       config_target_data.set_quoted(k, v)
+    elif v == 'n'
+      # do nothing
     elif v == 'y'
       config_target_data.set(k, 1)
     else
