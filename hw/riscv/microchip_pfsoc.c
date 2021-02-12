@@ -483,7 +483,7 @@ static void microchip_icicle_kit_machine_init(MachineState *machine)
                                 mem_high_alias);
 
     /* Load the firmware */
-    riscv_find_and_load_firmware(machine, BIOS_FILENAME, RESET_VECTOR, NULL);
+    (void)riscv_find_and_load_firmware(machine, BIOS_FILENAME, RESET_VECTOR, NULL);
 
     /* Attach an SD card */
     if (dinfo) {

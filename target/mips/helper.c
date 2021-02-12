@@ -550,7 +550,6 @@ static void raise_mmu_exception(CPUMIPSState *env, target_ulong address,
     if (rw == MMU_INST_FETCH) {
         error_code |= EXCP_INST_NOTAVAIL;
     }
-
     switch (tlb_error) {
     default:
     case TLBRET_BADADDR:

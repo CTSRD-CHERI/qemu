@@ -169,7 +169,6 @@ struct CPURISCVState {
     target_ulong virt;
     target_ulong resetvec;
 
-    target_ulong mhartid;
     /*
      * For RV32 this is 32-bit mstatus and 32-bit mstatush.
      * For RV64 this is a 64-bit mstatus.

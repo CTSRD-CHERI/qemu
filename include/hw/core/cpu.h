@@ -74,6 +74,9 @@ typedef enum MMUAccessType {
 #ifdef CONFIG_CHERI
     MMU_DATA_CAP_LOAD = 3,
     MMU_DATA_CAP_STORE = 4,
+#else
+    MMU_DATA_CAP_LOAD = MMU_DATA_LOAD,
+    MMU_DATA_CAP_STORE = MMU_DATA_STORE,
 #endif /* TARGET_CHERI */
 } MMUAccessType;
 

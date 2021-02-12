@@ -710,7 +710,9 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
         }
         break;
     case MMU_DATA_LOAD:
+#if defined(TARGET_CHERI)
     case MMU_DATA_CAP_LOAD:
+#endif
         if (two_stage && !first_stage) {
             cs->exception_index = RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
@@ -723,7 +725,9 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
         }
         break;
     case MMU_DATA_STORE:
+#if defined(TARGET_CHERI)
     case MMU_DATA_CAP_STORE:
+#endif
         if (two_stage && !first_stage) {
             cs->exception_index = RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
@@ -893,7 +897,7 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
             /* Second stage lookup */
             im_address = *pa;
 
-            ret = get_physical_address(env, pa, prot2, im_address, NULL,
+            ret = get_physical_address(env, pa, &prot2, im_address, NULL,
                                        access_type, mmu_idx, false, true);
 
             qemu_log_mask(CPU_LOG_MMU,
@@ -1146,7 +1150,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
     if (unlikely(log_inst && qemu_loglevel_mask(CPU_LOG_INT))) {
         FILE* logf = qemu_log_lock();
-        qemu_log("Trap (%s) was probably caused by: ", (async ? riscv_cpu_get_trap_name(cause, async) : get_exceriscv_excp_names)[cause]);
+        qemu_log("Trap (%s) was probably caused by: ", riscv_cpu_get_trap_name(cause, async));
         target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/-1);
         qemu_log_unlock(logf);
     }

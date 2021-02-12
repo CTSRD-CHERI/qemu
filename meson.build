@@ -951,6 +951,17 @@ foreach target : target_dirs
 
   actual_target_dirs += target
   config_target += keyval.load('default-configs/targets' / target + '.mak')
+  # Meson keyval does not support including other files, so do it manually (only 1 file right now)
+  if 'INCLUDE_WORKAROUND' in config_target
+    message('Loading base config ' + config_target['INCLUDE_WORKAROUND'])
+    base_config_target = keyval.load('default-configs/targets' / config_target['INCLUDE_WORKAROUND'])
+    config_target = base_config_target + config_target
+  endif
+  message('Loaded default-configs/targets' / target + '.mak')
+  foreach k, v: config_target
+    message(k + '=' + v)
+  endforeach
+
   config_target += { 'TARGET_' + config_target['TARGET_ARCH'].to_upper(): 'y' }
 
   if 'TARGET_NEED_FDT' in config_target

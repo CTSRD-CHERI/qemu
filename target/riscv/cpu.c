@@ -32,6 +32,7 @@
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
 #include "fpu/softfloat-helpers.h"
+#include "sysemu/cpus.h"
 #include "sysemu/runstate.h"
 #include "disas/disas.h"
 #include "monitor/monitor.h"

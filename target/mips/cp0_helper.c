@@ -30,6 +30,7 @@
 #include "exec/cpu_ldst.h"
 #include "exec/memop.h"
 #include "exec/log_instr.h"
+#include "sysemu/cpus.h"
 #include "sysemu/kvm.h"
 #include "sysemu/runstate.h"
 
