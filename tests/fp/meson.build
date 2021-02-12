@@ -35,6 +35,9 @@ tfcflags = [
   '-Wno-unused-function',
   '-Wno-error',
 ]
+if cc.get_id() == 'clang'
+  tfcflags += ['-Wno-error=incompatible-pointer-types-discards-qualifiers']
+endif
 
 tfgencases = [
   tfdir / 'genCases_ui32.c',
