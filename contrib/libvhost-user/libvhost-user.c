@@ -42,6 +42,7 @@
 
 #include "qemu/atomic.h"
 #include "qemu/osdep.h"
+#include "qemu/bswap.h"
 #include "qemu/memfd.h"
 
 #include "libvhost-user.h"
@@ -66,8 +67,6 @@
 
 /* The version of inflight buffer */
 #define INFLIGHT_VERSION 1
-
-#define VHOST_USER_HDR_SIZE offsetof(VhostUserMsg, payload.u64)
 
 /* The version of the protocol we support */
 #define VHOST_USER_VERSION 1
@@ -267,7 +266,7 @@ have_userfault(void)
 }
 
 static bool
-vu_message_read(VuDev *dev, int conn_fd, VhostUserMsg *vmsg)
+vu_message_read_default(VuDev *dev, int conn_fd, VhostUserMsg *vmsg)
 {
     char control[CMSG_SPACE(VHOST_MEMORY_BASELINE_NREGIONS * sizeof(int))] = {};
     struct iovec iov = {
@@ -415,7 +414,7 @@ vu_process_message_reply(VuDev *dev, const VhostUserMsg *vmsg)
         goto out;
     }
 
-    if (!vu_message_read(dev, dev->slave_fd, &msg_reply)) {
+    if (!vu_message_read_default(dev, dev->slave_fd, &msg_reply)) {
         goto out;
     }
 
@@ -448,7 +447,7 @@ static void
 vu_log_page(uint8_t *log_table, uint64_t page)
 {
     DPRINT("Logged dirty guest page: %"PRId64"\n", page);
-    atomic_or(&log_table[page / 8], 1 << (page % 8));
+    qatomic_or(&log_table[page / 8], 1 << (page % 8));
 }
 
 static void
@@ -539,6 +538,14 @@ vu_set_features_exec(VuDev *dev, VhostUserMsg *vmsg)
     DPRINT("u64: 0x%016"PRIx64"\n", vmsg->payload.u64);
 
     dev->features = vmsg->payload.u64;
+    if (!vu_has_feature(dev, VIRTIO_F_VERSION_1)) {
+        /*
+         * We only support devices conforming to VIRTIO 1.0 or
+         * later
+         */
+        vu_panic(dev, "virtio legacy devices aren't supported by libvhost-user");
+        return false;
+    }
 
     if (!(dev->features & VHOST_USER_F_PROTOCOL_FEATURES)) {
         vu_set_enable_all_rings(dev, true);
@@ -684,7 +691,7 @@ vu_add_mem_reg(VuDev *dev, VhostUserMsg *vmsg) {
 
     /*
      * If we are in postcopy mode and we receive a u64 payload with a 0 value
-     * we know all the postcopy client bases have been recieved, and we
+     * we know all the postcopy client bases have been received, and we
      * should start generating faults.
      */
     if (track_ramblocks &&
@@ -694,7 +701,7 @@ vu_add_mem_reg(VuDev *dev, VhostUserMsg *vmsg) {
         return false;
     }
 
-    DPRINT("Adding region: %d\n", dev->nregions);
+    DPRINT("Adding region: %u\n", dev->nregions);
     DPRINT("    guest_phys_addr: 0x%016"PRIx64"\n",
            msg_region->guest_phys_addr);
     DPRINT("    memory_size:     0x%016"PRIx64"\n",
@@ -841,7 +848,7 @@ vu_set_mem_table_exec_postcopy(VuDev *dev, VhostUserMsg *vmsg)
     VhostUserMemory m = vmsg->payload.memory, *memory = &m;
     dev->nregions = memory->nregions;
 
-    DPRINT("Nregions: %d\n", memory->nregions);
+    DPRINT("Nregions: %u\n", memory->nregions);
     for (i = 0; i < dev->nregions; i++) {
         void *mmap_addr;
         VhostUserMemoryRegion *msg_region = &memory->regions[i];
@@ -898,7 +905,7 @@ vu_set_mem_table_exec_postcopy(VuDev *dev, VhostUserMsg *vmsg)
     /* Wait for QEMU to confirm that it's registered the handler for the
      * faults.
      */
-    if (!vu_message_read(dev, dev->sock, vmsg) ||
+    if (!dev->read_msg(dev, dev->sock, vmsg) ||
         vmsg->size != sizeof(vmsg->payload.u64) ||
         vmsg->payload.u64 != 0) {
         vu_panic(dev, "failed to receive valid ack for postcopy set-mem-table");
@@ -931,7 +938,7 @@ vu_set_mem_table_exec(VuDev *dev, VhostUserMsg *vmsg)
         return vu_set_mem_table_exec_postcopy(dev, vmsg);
     }
 
-    DPRINT("Nregions: %d\n", memory->nregions);
+    DPRINT("Nregions: %u\n", memory->nregions);
     for (i = 0; i < dev->nregions; i++) {
         void *mmap_addr;
         VhostUserMemoryRegion *msg_region = &memory->regions[i];
@@ -973,7 +980,7 @@ vu_set_mem_table_exec(VuDev *dev, VhostUserMsg *vmsg)
     for (i = 0; i < dev->max_queues; i++) {
         if (dev->vq[i].vring.desc) {
             if (map_ring(dev, &dev->vq[i])) {
-                vu_panic(dev, "remaping queue %d during setmemtable", i);
+                vu_panic(dev, "remapping queue %d during setmemtable", i);
             }
         }
     }
@@ -1042,8 +1049,8 @@ vu_set_vring_num_exec(VuDev *dev, VhostUserMsg *vmsg)
     unsigned int index = vmsg->payload.state.index;
     unsigned int num = vmsg->payload.state.num;
 
-    DPRINT("State.index: %d\n", index);
-    DPRINT("State.num:   %d\n", num);
+    DPRINT("State.index: %u\n", index);
+    DPRINT("State.num:   %u\n", num);
     dev->vq[index].vring.num = num;
 
     return false;
@@ -1074,7 +1081,7 @@ vu_set_vring_addr_exec(VuDev *dev, VhostUserMsg *vmsg)
         return false;
     }
 
-    vq->used_idx = vq->vring.used->idx;
+    vq->used_idx = lduw_le_p(&vq->vring.used->idx);
 
     if (vq->last_avail_idx != vq->used_idx) {
         bool resume = dev->iface->queue_is_processed_in_order &&
@@ -1098,8 +1105,8 @@ vu_set_vring_base_exec(VuDev *dev, VhostUserMsg *vmsg)
     unsigned int index = vmsg->payload.state.index;
     unsigned int num = vmsg->payload.state.num;
 
-    DPRINT("State.index: %d\n", index);
-    DPRINT("State.num:   %d\n", num);
+    DPRINT("State.index: %u\n", index);
+    DPRINT("State.num:   %u\n", num);
     dev->vq[index].shadow_avail_idx = dev->vq[index].last_avail_idx = num;
 
     return false;
@@ -1110,7 +1117,7 @@ vu_get_vring_base_exec(VuDev *dev, VhostUserMsg *vmsg)
 {
     unsigned int index = vmsg->payload.state.index;
 
-    DPRINT("State.index: %d\n", index);
+    DPRINT("State.index: %u\n", index);
     vmsg->payload.state.num = dev->vq[index].last_avail_idx;
     vmsg->size = sizeof(vmsg->payload.state);
 
@@ -1191,7 +1198,7 @@ vu_check_queue_inflights(VuDev *dev, VuVirtq *vq)
         return 0;
     }
 
-    vq->used_idx = vq->vring.used->idx;
+    vq->used_idx = lduw_le_p(&vq->vring.used->idx);
     vq->resubmit_num = 0;
     vq->resubmit_list = NULL;
     vq->counter = 0;
@@ -1471,8 +1478,8 @@ vu_set_vring_enable_exec(VuDev *dev, VhostUserMsg *vmsg)
     unsigned int index = vmsg->payload.state.index;
     unsigned int enable = vmsg->payload.state.num;
 
-    DPRINT("State.index: %d\n", index);
-    DPRINT("State.enable:   %d\n", enable);
+    DPRINT("State.index: %u\n", index);
+    DPRINT("State.enable:   %u\n", enable);
 
     if (index >= dev->max_queues) {
         vu_panic(dev, "Invalid vring_enable index: %u", index);
@@ -1721,7 +1728,7 @@ vu_handle_vring_kick(VuDev *dev, VhostUserMsg *vmsg)
         return false;
     }
 
-    DPRINT("Got kick message: handler:%p idx:%d\n",
+    DPRINT("Got kick message: handler:%p idx:%u\n",
            dev->vq[index].handler, index);
 
     if (!dev->vq[index].started) {
@@ -1765,7 +1772,7 @@ vu_process_message(VuDev *dev, VhostUserMsg *vmsg)
     DPRINT("Request: %s (%d)\n", vu_request_to_string(vmsg->request),
            vmsg->request);
     DPRINT("Flags:   0x%x\n", vmsg->flags);
-    DPRINT("Size:    %d\n", vmsg->size);
+    DPRINT("Size:    %u\n", vmsg->size);
 
     if (vmsg->fd_num) {
         int i;
@@ -1860,7 +1867,7 @@ vu_dispatch(VuDev *dev)
     int reply_requested;
     bool need_reply, success = false;
 
-    if (!vu_message_read(dev, dev->sock, &vmsg)) {
+    if (!dev->read_msg(dev, dev->sock, &vmsg)) {
         goto end;
     }
 
@@ -1911,6 +1918,7 @@ vu_deinit(VuDev *dev)
         }
 
         if (vq->kick_fd != -1) {
+            dev->remove_watch(dev, vq->kick_fd);
             close(vq->kick_fd);
             vq->kick_fd = -1;
         }
@@ -1958,6 +1966,7 @@ vu_init(VuDev *dev,
         uint16_t max_queues,
         int socket,
         vu_panic_cb panic,
+        vu_read_msg_cb read_msg,
         vu_set_watch_cb set_watch,
         vu_remove_watch_cb remove_watch,
         const VuDevIface *iface)
@@ -1975,6 +1984,7 @@ vu_init(VuDev *dev,
 
     dev->sock = socket;
     dev->panic = panic;
+    dev->read_msg = read_msg ? read_msg : vu_message_read_default;
     dev->set_watch = set_watch;
     dev->remove_watch = remove_watch;
     dev->iface = iface;
@@ -2021,13 +2031,13 @@ vu_queue_started(const VuDev *dev, const VuVirtq *vq)
 static inline uint16_t
 vring_avail_flags(VuVirtq *vq)
 {
-    return vq->vring.avail->flags;
+    return lduw_le_p(&vq->vring.avail->flags);
 }
 
 static inline uint16_t
 vring_avail_idx(VuVirtq *vq)
 {
-    vq->shadow_avail_idx = vq->vring.avail->idx;
+    vq->shadow_avail_idx = lduw_le_p(&vq->vring.avail->idx);
 
     return vq->shadow_avail_idx;
 }
@@ -2035,7 +2045,7 @@ vring_avail_idx(VuVirtq *vq)
 static inline uint16_t
 vring_avail_ring(VuVirtq *vq, int i)
 {
-    return vq->vring.avail->ring[i];
+    return lduw_le_p(&vq->vring.avail->ring[i]);
 }
 
 static inline uint16_t
@@ -2123,12 +2133,12 @@ virtqueue_read_next_desc(VuDev *dev, struct vring_desc *desc,
                          int i, unsigned int max, unsigned int *next)
 {
     /* If this descriptor says it doesn't chain, we're done. */
-    if (!(desc[i].flags & VRING_DESC_F_NEXT)) {
+    if (!(lduw_le_p(&desc[i].flags) & VRING_DESC_F_NEXT)) {
         return VIRTQUEUE_READ_DESC_DONE;
     }
 
     /* Check they're not leading us off end of descriptors. */
-    *next = desc[i].next;
+    *next = lduw_le_p(&desc[i].next);
     /* Make sure compiler knows to grab that: we don't want it changing! */
     smp_wmb();
 
@@ -2171,8 +2181,8 @@ vu_queue_get_avail_bytes(VuDev *dev, VuVirtq *vq, unsigned int *in_bytes,
         }
         desc = vq->vring.desc;
 
-        if (desc[i].flags & VRING_DESC_F_INDIRECT) {
-            if (desc[i].len % sizeof(struct vring_desc)) {
+        if (lduw_le_p(&desc[i].flags) & VRING_DESC_F_INDIRECT) {
+            if (ldl_le_p(&desc[i].len) % sizeof(struct vring_desc)) {
                 vu_panic(dev, "Invalid size for indirect buffer table");
                 goto err;
             }
@@ -2185,8 +2195,8 @@ vu_queue_get_avail_bytes(VuDev *dev, VuVirtq *vq, unsigned int *in_bytes,
 
             /* loop over the indirect descriptor table */
             indirect = 1;
-            desc_addr = desc[i].addr;
-            desc_len = desc[i].len;
+            desc_addr = ldq_le_p(&desc[i].addr);
+            desc_len = ldl_le_p(&desc[i].len);
             max = desc_len / sizeof(struct vring_desc);
             read_len = desc_len;
             desc = vu_gpa_to_va(dev, &read_len, desc_addr);
@@ -2213,10 +2223,10 @@ vu_queue_get_avail_bytes(VuDev *dev, VuVirtq *vq, unsigned int *in_bytes,
                 goto err;
             }
 
-            if (desc[i].flags & VRING_DESC_F_WRITE) {
-                in_total += desc[i].len;
+            if (lduw_le_p(&desc[i].flags) & VRING_DESC_F_WRITE) {
+                in_total += ldl_le_p(&desc[i].len);
             } else {
-                out_total += desc[i].len;
+                out_total += ldl_le_p(&desc[i].len);
             }
             if (in_total >= max_in_bytes && out_total >= max_out_bytes) {
                 goto done;
@@ -2340,7 +2350,7 @@ static void _vu_queue_notify(VuDev *dev, VuVirtq *vq, bool sync)
 
         vu_message_write(dev, dev->slave_fd, &vmsg);
         if (ack) {
-            vu_message_read(dev, dev->slave_fd, &vmsg);
+            vu_message_read_default(dev, dev->slave_fd, &vmsg);
         }
         return;
     }
@@ -2367,7 +2377,7 @@ vring_used_flags_set_bit(VuVirtq *vq, int mask)
 
     flags = (uint16_t *)((char*)vq->vring.used +
                          offsetof(struct vring_used, flags));
-    *flags |= mask;
+    stw_le_p(flags, lduw_le_p(flags) | mask);
 }
 
 static inline void
@@ -2377,7 +2387,7 @@ vring_used_flags_unset_bit(VuVirtq *vq, int mask)
 
     flags = (uint16_t *)((char*)vq->vring.used +
                          offsetof(struct vring_used, flags));
-    *flags &= ~mask;
+    stw_le_p(flags, lduw_le_p(flags) & ~mask);
 }
 
 static inline void
@@ -2387,7 +2397,7 @@ vring_set_avail_event(VuVirtq *vq, uint16_t val)
         return;
     }
 
-    *((uint16_t *) &vq->vring.used->ring[vq->vring.num]) = val;
+    stw_le_p(&vq->vring.used->ring[vq->vring.num], val);
 }
 
 void
@@ -2407,7 +2417,7 @@ vu_queue_set_notification(VuDev *dev, VuVirtq *vq, int enable)
     }
 }
 
-static void
+static bool
 virtqueue_map_desc(VuDev *dev,
                    unsigned int *p_num_sg, struct iovec *iov,
                    unsigned int max_num_sg, bool is_write,
@@ -2419,7 +2429,7 @@ virtqueue_map_desc(VuDev *dev,
 
     if (!sz) {
         vu_panic(dev, "virtio: zero sized buffers are not allowed");
-        return;
+        return false;
     }
 
     while (sz) {
@@ -2427,13 +2437,13 @@ virtqueue_map_desc(VuDev *dev,
 
         if (num_sg == max_num_sg) {
             vu_panic(dev, "virtio: too many descriptors in indirect table");
-            return;
+            return false;
         }
 
         iov[num_sg].iov_base = vu_gpa_to_va(dev, &len, pa);
         if (iov[num_sg].iov_base == NULL) {
             vu_panic(dev, "virtio: invalid address for buffers");
-            return;
+            return false;
         }
         iov[num_sg].iov_len = len;
         num_sg++;
@@ -2442,6 +2452,7 @@ virtqueue_map_desc(VuDev *dev,
     }
 
     *p_num_sg = num_sg;
+    return true;
 }
 
 static void *
@@ -2476,14 +2487,15 @@ vu_queue_map_desc(VuDev *dev, VuVirtq *vq, unsigned int idx, size_t sz)
     struct vring_desc desc_buf[VIRTQUEUE_MAX_SIZE];
     int rc;
 
-    if (desc[i].flags & VRING_DESC_F_INDIRECT) {
-        if (desc[i].len % sizeof(struct vring_desc)) {
+    if (lduw_le_p(&desc[i].flags) & VRING_DESC_F_INDIRECT) {
+        if (ldl_le_p(&desc[i].len) % sizeof(struct vring_desc)) {
             vu_panic(dev, "Invalid size for indirect buffer table");
+            return NULL;
         }
 
         /* loop over the indirect descriptor table */
-        desc_addr = desc[i].addr;
-        desc_len = desc[i].len;
+        desc_addr = ldq_le_p(&desc[i].addr);
+        desc_len = ldl_le_p(&desc[i].len);
         max = desc_len / sizeof(struct vring_desc);
         read_len = desc_len;
         desc = vu_gpa_to_va(dev, &read_len, desc_addr);
@@ -2505,23 +2517,30 @@ vu_queue_map_desc(VuDev *dev, VuVirtq *vq, unsigned int idx, size_t sz)
 
     /* Collect all the descriptors */
     do {
-        if (desc[i].flags & VRING_DESC_F_WRITE) {
-            virtqueue_map_desc(dev, &in_num, iov + out_num,
+        if (lduw_le_p(&desc[i].flags) & VRING_DESC_F_WRITE) {
+            if (!virtqueue_map_desc(dev, &in_num, iov + out_num,
                                VIRTQUEUE_MAX_SIZE - out_num, true,
-                               desc[i].addr, desc[i].len);
+                               ldq_le_p(&desc[i].addr),
+                               ldl_le_p(&desc[i].len))) {
+                return NULL;
+            }
         } else {
             if (in_num) {
                 vu_panic(dev, "Incorrect order for descriptors");
                 return NULL;
             }
-            virtqueue_map_desc(dev, &out_num, iov,
+            if (!virtqueue_map_desc(dev, &out_num, iov,
                                VIRTQUEUE_MAX_SIZE, false,
-                               desc[i].addr, desc[i].len);
+                               ldq_le_p(&desc[i].addr),
+                               ldl_le_p(&desc[i].len))) {
+                return NULL;
+            }
         }
 
         /* If we've got too many, that implies a descriptor loop. */
         if ((in_num + out_num) > max) {
             vu_panic(dev, "Looped descriptor");
+            return NULL;
         }
         rc = virtqueue_read_next_desc(dev, desc, i, max, &i);
     } while (rc == VIRTQUEUE_READ_DESC_MORE);
@@ -2712,14 +2731,15 @@ vu_log_queue_fill(VuDev *dev, VuVirtq *vq,
     max = vq->vring.num;
     i = elem->index;
 
-    if (desc[i].flags & VRING_DESC_F_INDIRECT) {
-        if (desc[i].len % sizeof(struct vring_desc)) {
+    if (lduw_le_p(&desc[i].flags) & VRING_DESC_F_INDIRECT) {
+        if (ldl_le_p(&desc[i].len) % sizeof(struct vring_desc)) {
             vu_panic(dev, "Invalid size for indirect buffer table");
+            return;
         }
 
         /* loop over the indirect descriptor table */
-        desc_addr = desc[i].addr;
-        desc_len = desc[i].len;
+        desc_addr = ldq_le_p(&desc[i].addr);
+        desc_len = ldl_le_p(&desc[i].len);
         max = desc_len / sizeof(struct vring_desc);
         read_len = desc_len;
         desc = vu_gpa_to_va(dev, &read_len, desc_addr);
@@ -2745,9 +2765,9 @@ vu_log_queue_fill(VuDev *dev, VuVirtq *vq,
             return;
         }
 
-        if (desc[i].flags & VRING_DESC_F_WRITE) {
-            min = MIN(desc[i].len, len);
-            vu_log_write(dev, desc[i].addr, min);
+        if (lduw_le_p(&desc[i].flags) & VRING_DESC_F_WRITE) {
+            min = MIN(ldl_le_p(&desc[i].len), len);
+            vu_log_write(dev, ldq_le_p(&desc[i].addr), min);
             len -= min;
         }
 
@@ -2772,15 +2792,15 @@ vu_queue_fill(VuDev *dev, VuVirtq *vq,
 
     idx = (idx + vq->used_idx) % vq->vring.num;
 
-    uelem.id = elem->index;
-    uelem.len = len;
+    stl_le_p(&uelem.id, elem->index);
+    stl_le_p(&uelem.len, len);
     vring_used_write(dev, vq, &uelem, idx);
 }
 
 static inline
 void vring_used_idx_set(VuDev *dev, VuVirtq *vq, uint16_t val)
 {
-    vq->vring.used->idx = val;
+    stw_le_p(&vq->vring.used->idx, val);
     vu_log_write(dev,
                  vq->vring.log_guest_addr + offsetof(struct vring_used, idx),
                  sizeof(vq->vring.used->idx));

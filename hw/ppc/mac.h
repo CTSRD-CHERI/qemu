@@ -39,10 +39,8 @@
 /* SMP is not enabled, for now */
 #define MAX_CPUS 1
 
-#define BIOS_SIZE        (1 * MiB)
 #define NVRAM_SIZE        0x2000
 #define PROM_FILENAME    "openbios-ppc"
-#define PROM_ADDR         0xfff00000
 
 #define KERNEL_LOAD_ADDR 0x01000000
 #define KERNEL_GAP       0x00100000
@@ -92,9 +90,7 @@ struct Core99MachineState {
 
 /* Mac NVRAM */
 #define TYPE_MACIO_NVRAM "macio-nvram"
-typedef struct MacIONVRAMState MacIONVRAMState;
-DECLARE_INSTANCE_CHECKER(MacIONVRAMState, MACIO_NVRAM,
-                         TYPE_MACIO_NVRAM)
+OBJECT_DECLARE_SIMPLE_TYPE(MacIONVRAMState, MACIO_NVRAM)
 
 struct MacIONVRAMState {
     /*< private >*/

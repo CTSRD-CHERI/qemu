@@ -313,11 +313,11 @@ static void store_tag1(uint64_t ptr, uint8_t *mem, int tag)
 static void store_tag1_parallel(uint64_t ptr, uint8_t *mem, int tag)
 {
     int ofs = extract32(ptr, LOG2_TAG_GRANULE, 1) * 4;
-    uint8_t old = atomic_read(mem);
+    uint8_t old = qatomic_read(mem);
 
     while (1) {
         uint8_t new = deposit32(old, ofs, 4, tag);
-        uint8_t cmp = atomic_cmpxchg(mem, old, new);
+        uint8_t cmp = qatomic_cmpxchg(mem, old, new);
         if (likely(cmp == old)) {
             return;
         }
@@ -398,7 +398,7 @@ static inline void do_st2g(CPUARMState *env, uint64_t ptr, uint64_t xt,
                                   2 * TAG_GRANULE, MMU_DATA_STORE, 1, ra);
         if (mem1) {
             tag |= tag << 4;
-            atomic_set(mem1, tag);
+            qatomic_set(mem1, tag);
         }
     }
 }
@@ -525,14 +525,10 @@ static void mte_check_fail(CPUARMState *env, uint32_t desc,
     reg_el = regime_el(env, arm_mmu_idx);
     sctlr = env->cp15.sctlr_el[reg_el];
 
-    switch (arm_mmu_idx) {
-    case ARMMMUIdx_E10_0:
-    case ARMMMUIdx_E20_0:
-        el = 0;
+    el = arm_current_el(env);
+    if (el == 0) {
         tcf = extract64(sctlr, 38, 2);
-        break;
-    default:
-        el = reg_el;
+    } else {
         tcf = extract64(sctlr, 40, 2);
     }
 
@@ -563,8 +559,7 @@ static void mte_check_fail(CPUARMState *env, uint32_t desc,
 
     case 2:
         /* Tag check fail causes asynchronous flag set.  */
-        mmu_idx = arm_mmu_idx_el(env, el);
-        if (regime_has_2_ranges(mmu_idx)) {
+        if (regime_has_2_ranges(arm_mmu_idx)) {
             select = extract64(dirty_ptr, 55, 1);
         } else {
             select = 0;

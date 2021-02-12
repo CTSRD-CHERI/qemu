@@ -294,9 +294,7 @@ struct Exynos4210fimdWindow {
 };
 
 #define TYPE_EXYNOS4210_FIMD "exynos4210.fimd"
-typedef struct Exynos4210fimdState Exynos4210fimdState;
-DECLARE_INSTANCE_CHECKER(Exynos4210fimdState, EXYNOS4210_FIMD,
-                         TYPE_EXYNOS4210_FIMD)
+OBJECT_DECLARE_SIMPLE_TYPE(Exynos4210fimdState, EXYNOS4210_FIMD)
 
 struct Exynos4210fimdState {
     SysBusDevice parent_obj;
@@ -1277,12 +1275,14 @@ static void exynos4210_fimd_update(void *opaque)
     bool blend = false;
     uint8_t *host_fb_addr;
     bool is_dirty = false;
-    const int global_width = (s->vidtcon[2] & FIMD_VIDTCON2_SIZE_MASK) + 1;
+    int global_width;
 
     if (!s || !s->console || !s->enabled ||
         surface_bits_per_pixel(qemu_console_surface(s->console)) == 0) {
         return;
     }
+
+    global_width = (s->vidtcon[2] & FIMD_VIDTCON2_SIZE_MASK) + 1;
     exynos4210_update_resolution(s);
     surface = qemu_console_surface(s->console);
 

@@ -23,9 +23,7 @@
 #include "qom/object.h"
 
 #define TYPE_VHOST_USER_BLK "vhost-user-blk"
-typedef struct VHostUserBlk VHostUserBlk;
-DECLARE_INSTANCE_CHECKER(VHostUserBlk, VHOST_USER_BLK,
-                         TYPE_VHOST_USER_BLK)
+OBJECT_DECLARE_SIMPLE_TYPE(VHostUserBlk, VHOST_USER_BLK)
 
 #define VHOST_USER_BLK_AUTO_NUM_QUEUES UINT16_MAX
 
@@ -42,7 +40,17 @@ struct VHostUserBlk {
     VhostUserState vhost_user;
     struct vhost_virtqueue *vhost_vqs;
     VirtQueue **virtqs;
+
+    /*
+     * There are at least two steps of initialization of the
+     * vhost-user device. The first is a "connect" step and
+     * second is a "start" step. Make a separation between
+     * those initialization phases by using two fields.
+     */
+    /* vhost_user_blk_connect/vhost_user_blk_disconnect */
     bool connected;
+    /* vhost_user_blk_start/vhost_user_blk_stop */
+    bool started_vu;
 };
 
 #endif

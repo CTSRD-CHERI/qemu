@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,7 +25,7 @@
 
 #define TYPE_PNV_HOMER "pnv-homer"
 OBJECT_DECLARE_TYPE(PnvHomer, PnvHomerClass,
-                    pnv_homer, PNV_HOMER)
+                    PNV_HOMER)
 #define TYPE_PNV8_HOMER TYPE_PNV_HOMER "-POWER8"
 DECLARE_INSTANCE_CHECKER(PnvHomer, PNV8_HOMER,
                          TYPE_PNV8_HOMER)

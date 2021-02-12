@@ -27,13 +27,19 @@
 #
 # @vm-clock-nsec: fractional part in nano seconds to be used with vm-clock-sec
 #
+# @icount: Current instruction count. Appears when execution record/replay
+#          is enabled. Used for "time-traveling" to match the moment
+#          in the recorded execution with the snapshots. This counter may
+#          be obtained through @query-replay command (since 5.2)
+#
 # Since: 1.3
 #
 ##
 { 'struct': 'SnapshotInfo',
   'data': { 'id': 'str', 'name': 'str', 'vm-state-size': 'int',
             'date-sec': 'int', 'date-nsec': 'int',
-            'vm-clock-sec': 'int', 'vm-clock-nsec': 'int' } }
+            'vm-clock-sec': 'int', 'vm-clock-nsec': 'int',
+            '*icount': 'int' } }
 
 ##
 # @ImageInfoSpecificQCow2EncryptionBase:
@@ -238,17 +244,25 @@
 #
 # Mapping information from a virtual block range to a host file range
 #
-# @start: the start byte of the mapped virtual range
+# @start: virtual (guest) offset of the first byte described by this
+#         entry
 #
 # @length: the number of bytes of the mapped virtual range
 #
-# @data: whether the mapped range has data
+# @data: reading the image will actually read data from a file (in
+#        particular, if @offset is present this means that the sectors
+#        are not simply preallocated, but contain actual data in raw
+#        format)
 #
-# @zero: whether the virtual blocks are zeroed
+# @zero: whether the virtual blocks read as zeroes
 #
-# @depth: the depth of the mapping
+# @depth: number of layers (0 = top image, 1 = top image's backing
+#         file, ..., n - 1 = bottom image (where n is the number of
+#         images in the chain)) before reaching one for which the
+#         range is allocated
 #
-# @offset: the offset in file that the virtual sectors are mapped to
+# @offset: if present, the image file stores the data for this range
+#          in raw format at the given (host) offset
 #
 # @filename: filename that is referred to by @offset
 #
@@ -413,35 +427,6 @@
 { 'enum': 'BlockDeviceIoStatus', 'data': [ 'ok', 'failed', 'nospace' ] }
 
 ##
-# @BlockDeviceMapEntry:
-#
-# Entry in the metadata map of the device (returned by "qemu-img map")
-#
-# @start: Offset in the image of the first byte described by this entry
-#         (in bytes)
-#
-# @length: Length of the range described by this entry (in bytes)
-#
-# @depth: Number of layers (0 = top image, 1 = top image's backing file, etc.)
-#         before reaching one for which the range is allocated.  The value is
-#         in the range 0 to the depth of the image chain - 1.
-#
-# @zero: the sectors in this range read as zeros
-#
-# @data: reading the image will actually read data from a file (in particular,
-#        if @offset is present this means that the sectors are not simply
-#        preallocated, but contain actual data in raw format)
-#
-# @offset: if present, the image file stores the data for this range in
-#          raw format at the given offset.
-#
-# Since: 1.7
-##
-{ 'struct': 'BlockDeviceMapEntry',
-  'data': { 'start': 'int', 'length': 'int', 'depth': 'int', 'zero': 'bool',
-            'data': 'bool', '*offset': 'int' } }
-
-##
 # @DirtyBitmapStatus:
 #
 # An enumeration of possible states that a dirty bitmap can report to the user.
@@ -570,13 +555,15 @@
 #        For the example above, @bins may be something like [3, 1, 5, 2],
 #        and corresponding histogram looks like:
 #
-# |      5|           *
-# |      4|           *
-# |      3| *         *
-# |      2| *         *    *
-# |      1| *    *    *    *
-# |       +------------------
-# |           10   50   100
+# ::
+#
+#        5|           *
+#        4|           *
+#        3| *         *
+#        2| *         *    *
+#        1| *    *    *    *
+#         +------------------
+#             10   50   100
 #
 # Since: 4.0
 ##
@@ -940,6 +927,27 @@
       'discard-bytes-ok': 'uint64' } }
 
 ##
+# @BlockStatsSpecificNvme:
+#
+# NVMe driver statistics
+#
+# @completion-errors: The number of completion errors.
+#
+# @aligned-accesses: The number of aligned accesses performed by
+#                    the driver.
+#
+# @unaligned-accesses: The number of unaligned accesses performed by
+#                      the driver.
+#
+# Since: 5.2
+##
+{ 'struct': 'BlockStatsSpecificNvme',
+  'data': {
+      'completion-errors': 'uint64',
+      'aligned-accesses': 'uint64',
+      'unaligned-accesses': 'uint64' } }
+
+##
 # @BlockStatsSpecific:
 #
 # Block driver specific statistics
@@ -951,7 +959,8 @@
   'discriminator': 'driver',
   'data': {
       'file': 'BlockStatsSpecificFile',
-      'host_device': 'BlockStatsSpecificFile' } }
+      'host_device': 'BlockStatsSpecificFile',
+      'nvme': 'BlockStatsSpecificNvme' } }
 
 ##
 # @BlockStats:
@@ -1302,7 +1311,8 @@
 { 'command': 'block_resize',
   'data': { '*device': 'str',
             '*node-name': 'str',
-            'size': 'int' } }
+            'size': 'int' },
+  'coroutine': true }
 
 ##
 # @NewImageMode:
@@ -1795,7 +1805,7 @@
 #
 # @block-backend: corresponds to BlockBackend
 #
-# @block-job: corresonds to BlockJob
+# @block-job: corresponds to BlockJob
 #
 # @block-driver: corresponds to BlockDriverState
 #
@@ -2067,7 +2077,7 @@
 # @target: name of the destination dirty bitmap
 #
 # @bitmaps: name(s) of the source dirty bitmap(s) at @node and/or fully
-#           specifed BlockDirtyBitmap elements. The latter are supported
+#           specified BlockDirtyBitmap elements. The latter are supported
 #           since 4.1.
 #
 # Since: 4.0
@@ -3874,9 +3884,12 @@
 #
 # @tls-creds: TLS credentials ID
 #
-# @x-dirty-bitmap: A "qemu:dirty-bitmap:NAME" string to query in place of
+# @x-dirty-bitmap: A metadata context name such as "qemu:dirty-bitmap:NAME"
+#                  or "qemu:allocation-depth" to query in place of the
 #                  traditional "base:allocation" block status (see
-#                  NBD_OPT_LIST_META_CONTEXT in the NBD protocol) (since 3.0)
+#                  NBD_OPT_LIST_META_CONTEXT in the NBD protocol; and
+#                  yes, naming this option x-context would have made
+#                  more sense) (since 3.0)
 #
 # @reconnect-delay: On an unexpected disconnect, the nbd client tries to
 #                   connect again until succeeding or encountering a serious
@@ -4316,8 +4329,8 @@
 # @data-file-raw: True if the external data file must stay valid as a
 #                 standalone (read-only) raw image without looking at qcow2
 #                 metadata (default: false; since: 4.0)
-# @extended-l2      True to make the image have extended L2 entries
-#                   (default: false; since 5.2)
+# @extended-l2: True to make the image have extended L2 entries
+#               (default: false; since 5.2)
 # @size: Size of the virtual disk in bytes
 # @version: Compatibility level (default: v3)
 # @backing-file: File name of the backing file if a backing file
@@ -5193,172 +5206,6 @@
              '*force': 'bool' } }
 
 ##
-# @NbdServerOptions:
-#
-# @addr: Address on which to listen.
-# @tls-creds: ID of the TLS credentials object (since 2.6).
-# @tls-authz: ID of the QAuthZ authorization object used to validate
-#             the client's x509 distinguished name. This object is
-#             is only resolved at time of use, so can be deleted and
-#             recreated on the fly while the NBD server is active.
-#             If missing, it will default to denying access (since 4.0).
-#
-# Keep this type consistent with the nbd-server-start arguments. The only
-# intended difference is using SocketAddress instead of SocketAddressLegacy.
-#
-# Since: 4.2
-##
-{ 'struct': 'NbdServerOptions',
-  'data': { 'addr': 'SocketAddress',
-            '*tls-creds': 'str',
-            '*tls-authz': 'str'} }
-
-##
-# @nbd-server-start:
-#
-# Start an NBD server listening on the given host and port.  Block
-# devices can then be exported using @nbd-server-add.  The NBD
-# server will present them as named exports; for example, another
-# QEMU instance could refer to them as "nbd:HOST:PORT:exportname=NAME".
-#
-# Keep this type consistent with the NbdServerOptions type. The only intended
-# difference is using SocketAddressLegacy instead of SocketAddress.
-#
-# @addr: Address on which to listen.
-# @tls-creds: ID of the TLS credentials object (since 2.6).
-# @tls-authz: ID of the QAuthZ authorization object used to validate
-#             the client's x509 distinguished name. This object is
-#             is only resolved at time of use, so can be deleted and
-#             recreated on the fly while the NBD server is active.
-#             If missing, it will default to denying access (since 4.0).
-#
-# Returns: error if the server is already running.
-#
-# Since: 1.3.0
-##
-{ 'command': 'nbd-server-start',
-  'data': { 'addr': 'SocketAddressLegacy',
-            '*tls-creds': 'str',
-            '*tls-authz': 'str'} }
-
-##
-# @BlockExportNbd:
-#
-# An NBD block export.
-#
-# @device: The device name or node name of the node to be exported
-#
-# @name: Export name. If unspecified, the @device parameter is used as the
-#        export name. (Since 2.12)
-#
-# @description: Free-form description of the export, up to 4096 bytes.
-#               (Since 5.0)
-#
-# @writable: Whether clients should be able to write to the device via the
-#            NBD connection (default false).
-#
-# @bitmap: Also export the dirty bitmap reachable from @device, so the
-#          NBD client can use NBD_OPT_SET_META_CONTEXT with
-#          "qemu:dirty-bitmap:NAME" to inspect the bitmap. (since 4.0)
-#
-# Since: 5.0
-##
-{ 'struct': 'BlockExportNbd',
-  'data': {'device': 'str', '*name': 'str', '*description': 'str',
-           '*writable': 'bool', '*bitmap': 'str' } }
-
-##
-# @nbd-server-add:
-#
-# Export a block node to QEMU's embedded NBD server.
-#
-# Returns: error if the server is not running, or export with the same name
-#          already exists.
-#
-# Since: 1.3.0
-##
-{ 'command': 'nbd-server-add',
-  'data': 'BlockExportNbd', 'boxed': true }
-
-##
-# @NbdServerRemoveMode:
-#
-# Mode for removing an NBD export.
-#
-# @safe: Remove export if there are no existing connections, fail otherwise.
-#
-# @hard: Drop all connections immediately and remove export.
-#
-# Potential additional modes to be added in the future:
-#
-# hide: Just hide export from new clients, leave existing connections as is.
-# Remove export after all clients are disconnected.
-#
-# soft: Hide export from new clients, answer with ESHUTDOWN for all further
-# requests from existing clients.
-#
-# Since: 2.12
-##
-{'enum': 'NbdServerRemoveMode', 'data': ['safe', 'hard']}
-
-##
-# @nbd-server-remove:
-#
-# Remove NBD export by name.
-#
-# @name: Export name.
-#
-# @mode: Mode of command operation. See @NbdServerRemoveMode description.
-#        Default is 'safe'.
-#
-# Returns: error if
-#            - the server is not running
-#            - export is not found
-#            - mode is 'safe' and there are existing connections
-#
-# Since: 2.12
-##
-{ 'command': 'nbd-server-remove',
-  'data': {'name': 'str', '*mode': 'NbdServerRemoveMode'} }
-
-##
-# @nbd-server-stop:
-#
-# Stop QEMU's embedded NBD server, and unregister all devices previously
-# added via @nbd-server-add.
-#
-# Since: 1.3.0
-##
-{ 'command': 'nbd-server-stop' }
-
-##
-# @BlockExportType:
-#
-# An enumeration of block export types
-#
-# @nbd: NBD export
-#
-# Since: 4.2
-##
-{ 'enum': 'BlockExportType',
-  'data': [ 'nbd' ] }
-
-##
-# @BlockExport:
-#
-# Describes a block export, i.e. how single node should be exported on an
-# external interface.
-#
-# Since: 4.2
-##
-{ 'union': 'BlockExport',
-  'base': { 'type': 'BlockExportType' },
-  'discriminator': 'type',
-  'data': {
-      'nbd': 'BlockExportNbd'
-   } }
-
-##
 # @QuorumOpType:
 #
 # An enumeration of the quorum operation types
@@ -5527,7 +5374,8 @@
 #                    "date-sec": 1000012,
 #                    "date-nsec": 10,
 #                    "vm-clock-sec": 100,
-#                    "vm-clock-nsec": 20
+#                    "vm-clock-nsec": 20,
+#                    "icount": 220414
 #      }
 #    }
 #

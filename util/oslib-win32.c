@@ -106,7 +106,7 @@ void qemu_anon_ram_free(void *ptr, size_t size)
     }
 }
 
-#ifndef CONFIG_LOCALTIME_R
+#ifndef _POSIX_THREAD_SAFE_FUNCTIONS
 /* FIXME: add proper locking */
 struct tm *gmtime_r(const time_t *timep, struct tm *result)
 {
@@ -130,7 +130,7 @@ struct tm *localtime_r(const time_t *timep, struct tm *result)
     }
     return p;
 }
-#endif /* CONFIG_LOCALTIME_R */
+#endif /* _POSIX_THREAD_SAFE_FUNCTIONS */
 
 static int socket_error(void)
 {
@@ -315,7 +315,7 @@ void qemu_set_tty_echo(int fd, bool echo)
     }
 }
 
-static char exec_dir[PATH_MAX];
+static const char *exec_dir;
 
 void qemu_init_exec_dir(const char *argv0)
 {
@@ -323,6 +323,10 @@ void qemu_init_exec_dir(const char *argv0)
     char *p;
     char buf[MAX_PATH];
     DWORD len;
+
+    if (exec_dir) {
+        return;
+    }
 
     len = GetModuleFileName(NULL, buf, sizeof(buf) - 1);
     if (len == 0) {
@@ -336,13 +340,15 @@ void qemu_init_exec_dir(const char *argv0)
     }
     *p = 0;
     if (access(buf, R_OK) == 0) {
-        pstrcpy(exec_dir, sizeof(exec_dir), buf);
+        exec_dir = g_strdup(buf);
+    } else {
+        exec_dir = CONFIG_BINDIR;
     }
 }
 
-char *qemu_get_exec_dir(void)
+const char *qemu_get_exec_dir(void)
 {
-    return g_strdup(exec_dir);
+    return exec_dir;
 }
 
 #if !GLIB_CHECK_VERSION(2, 50, 0)
@@ -367,7 +373,7 @@ char *qemu_get_exec_dir(void)
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of

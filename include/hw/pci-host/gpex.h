@@ -20,20 +20,17 @@
 #ifndef HW_GPEX_H
 #define HW_GPEX_H
 
+#include "exec/hwaddr.h"
 #include "hw/sysbus.h"
 #include "hw/pci/pci.h"
 #include "hw/pci/pcie_host.h"
 #include "qom/object.h"
 
 #define TYPE_GPEX_HOST "gpex-pcihost"
-typedef struct GPEXHost GPEXHost;
-DECLARE_INSTANCE_CHECKER(GPEXHost, GPEX_HOST,
-                         TYPE_GPEX_HOST)
+OBJECT_DECLARE_SIMPLE_TYPE(GPEXHost, GPEX_HOST)
 
 #define TYPE_GPEX_ROOT_DEVICE "gpex-root"
-typedef struct GPEXRootState GPEXRootState;
-DECLARE_INSTANCE_CHECKER(GPEXRootState, GPEX_ROOT_DEVICE,
-                         TYPE_GPEX_ROOT_DEVICE)
+OBJECT_DECLARE_SIMPLE_TYPE(GPEXRootState, GPEX_ROOT_DEVICE)
 
 #define GPEX_NUM_IRQS 4
 
@@ -56,6 +53,16 @@ struct GPEXHost {
     int irq_num[GPEX_NUM_IRQS];
 };
 
+struct GPEXConfig {
+    MemMapEntry ecam;
+    MemMapEntry mmio32;
+    MemMapEntry mmio64;
+    MemMapEntry pio;
+    int         irq;
+};
+
 int gpex_set_irq_num(GPEXHost *s, int index, int gsi);
+
+void acpi_dsdt_add_gpex(Aml *scope, struct GPEXConfig *cfg);
 
 #endif /* HW_GPEX_H */

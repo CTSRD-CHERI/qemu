@@ -18,6 +18,7 @@
 
 #ifndef HW_SIFIVE_U_OTP_H
 #define HW_SIFIVE_U_OTP_H
+#include "qom/object.h"
 
 #define SIFIVE_U_OTP_PA         0x00
 #define SIFIVE_U_OTP_PAIO       0x04
@@ -35,6 +36,8 @@
 #define SIFIVE_U_OTP_PTRIM      0x34
 #define SIFIVE_U_OTP_PWE        0x38
 
+#define SIFIVE_U_OTP_PWE_EN     (1 << 0)
+
 #define SIFIVE_U_OTP_PCE_EN     (1 << 0)
 
 #define SIFIVE_U_OTP_PDSTB_EN   (1 << 0)
@@ -43,16 +46,18 @@
 
 #define SIFIVE_U_OTP_PA_MASK        0xfff
 #define SIFIVE_U_OTP_NUM_FUSES      0x1000
+#define SIFIVE_U_OTP_FUSE_WORD      4
 #define SIFIVE_U_OTP_SERIAL_ADDR    0xfc
 
 #define SIFIVE_U_OTP_REG_SIZE       0x1000
 
 #define TYPE_SIFIVE_U_OTP           "riscv.sifive.u.otp"
 
-#define SIFIVE_U_OTP(obj) \
-    OBJECT_CHECK(SiFiveUOTPState, (obj), TYPE_SIFIVE_U_OTP)
+typedef struct SiFiveUOTPState SiFiveUOTPState;
+DECLARE_INSTANCE_CHECKER(SiFiveUOTPState, SIFIVE_U_OTP,
+                         TYPE_SIFIVE_U_OTP)
 
-typedef struct SiFiveUOTPState {
+struct SiFiveUOTPState {
     /*< private >*/
     SysBusDevice parent_obj;
 
@@ -73,8 +78,10 @@ typedef struct SiFiveUOTPState {
     uint32_t ptrim;
     uint32_t pwe;
     uint32_t fuse[SIFIVE_U_OTP_NUM_FUSES];
+    uint32_t fuse_wo[SIFIVE_U_OTP_NUM_FUSES];
     /* config */
     uint32_t serial;
-} SiFiveUOTPState;
+    BlockBackend *blk;
+};
 
 #endif /* HW_SIFIVE_U_OTP_H */

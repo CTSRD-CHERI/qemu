@@ -27,52 +27,11 @@
 #include "cheri-helper-utils.h"
 #endif
 
-
-static inline const char* exception_str(uint32_t exception)
-{
-    // See Table 3.6 In privileged ISA spec (20190608-Priv-MSU-Ratified)
-    switch(exception) {
-    case RISCV_EXCP_INST_ADDR_MIS: return "Instruction address misaligned";
-    case RISCV_EXCP_INST_ACCESS_FAULT: return "Instruction access fault";
-    case RISCV_EXCP_ILLEGAL_INST: return "Illegal instruction";
-    case RISCV_EXCP_BREAKPOINT: return "Breakpoint";
-    case RISCV_EXCP_LOAD_ADDR_MIS: return "Load address misaligned";
-    case RISCV_EXCP_LOAD_ACCESS_FAULT: return "Load access fault";
-    case RISCV_EXCP_STORE_AMO_ADDR_MIS: return "Store/AMO address misaligned";
-    case RISCV_EXCP_STORE_AMO_ACCESS_FAULT: return "Store/AMO access fault";
-    case RISCV_EXCP_U_ECALL: return "Environment call from U-mode";
-    case RISCV_EXCP_S_ECALL: return "Environment call from S-mode";
-    case RISCV_EXCP_VS_ECALL: return "Environment call from H-mode";
-    case RISCV_EXCP_M_ECALL: return "Environment call from M-mode";
-    case RISCV_EXCP_INST_PAGE_FAULT: return "Instruction page fault";
-    case RISCV_EXCP_LOAD_PAGE_FAULT: return "Load page fault";
-    // 14 Reserved for future standard use
-    case RISCV_EXCP_STORE_PAGE_FAULT: return "Store/AMO page fault";
-    // 16–23 Reserved for future standard use
-    case RISCV_EXCP_INST_GUEST_PAGE_FAULT: return "Guest instruction page fault";
-    case RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT: return "Guest load page fault";
-    case RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT: return "Guest store/AMO page fault";
-    // 24-31 Reserved for custom use
-#ifdef TARGET_CHERI
-#ifndef TARGET_RISCV32
-    case RISCV_EXCP_LOAD_CAP_PAGE_FAULT: return "Load capability page fault";
-    case RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT: return "Store/AMO capability page fault";
-#endif
-    case RISCV_EXCP_CHERI: return "CHERI fault";
-#endif
-    // 32–47 Reserved for future standard use
-    // 48-63 Reserved for custom use
-    // >64 Reserved for future standard use
-    default: return "Unknown exception";
-    }
-}
-
 /* Exceptions processing helpers */
 void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
                                           uint32_t exception, uintptr_t pc)
 {
     CPUState *cs = env_cpu(env);
-    qemu_log_mask(CPU_LOG_INT, "%s: %s (%d)\n", __func__, exception_str(exception), exception);
     cs->exception_index = exception;
     // Expand this call to print debug info: cpu_loop_exit_restore(cs, pc);
     if (pc) {
@@ -141,7 +100,8 @@ target_ulong helper_csrrc(CPURISCVState *env, target_ulong src,
 
 target_ulong helper_sret(CPURISCVState *env, target_ulong cpu_pc_deb)
 {
-    target_ulong prev_priv, prev_virt, mstatus;
+    uint64_t mstatus;
+    target_ulong prev_priv, prev_virt;
 
     if (!(env->priv >= PRV_S)) {
         riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
@@ -224,18 +184,14 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
     // "This masking occurs also for the implicit read by the MRET instruction."
     retpc &= ~(target_ulong)(riscv_has_ext(env, RVC) ? 1 : 3);
 
-    target_ulong mstatus = env->mstatus;
+    uint64_t mstatus = env->mstatus;
     target_ulong prev_priv = get_field(mstatus, MSTATUS_MPP);
-    target_ulong prev_virt = MSTATUS_MPV_ISSET(env);
+    target_ulong prev_virt = get_field(env->mstatus, MSTATUS_MPV);
     mstatus = set_field(mstatus, MSTATUS_MIE,
                         get_field(mstatus, MSTATUS_MPIE));
     mstatus = set_field(mstatus, MSTATUS_MPIE, 1);
     mstatus = set_field(mstatus, MSTATUS_MPP, PRV_U);
-#ifdef TARGET_RISCV32
-    env->mstatush = set_field(env->mstatush, MSTATUS_MPV, 0);
-#else
     mstatus = set_field(mstatus, MSTATUS_MPV, 0);
-#endif
     env->mstatus = mstatus;
     riscv_cpu_set_mode(env, prev_priv);
 
@@ -317,130 +273,18 @@ void helper_hyp_gvma_tlb_flush(CPURISCVState *env)
     helper_hyp_tlb_flush(env);
 }
 
-target_ulong helper_hyp_load(CPURISCVState *env, target_ulong address,
-                             target_ulong attrs, target_ulong memop)
+target_ulong helper_hyp_hlvx_hu(CPURISCVState *env, target_ulong address)
 {
-    if (env->priv == PRV_M ||
-        (env->priv == PRV_S && !riscv_cpu_virt_enabled(env)) ||
-        (env->priv == PRV_U && !riscv_cpu_virt_enabled(env) &&
-            get_field(env->hstatus, HSTATUS_HU))) {
-        target_ulong pte;
+    int mmu_idx = cpu_mmu_index(env, true) | TB_FLAGS_PRIV_HYP_ACCESS_MASK;
 
-        riscv_cpu_set_two_stage_lookup(env, true);
-
-        switch (memop) {
-        case MO_SB:
-            pte = cpu_ldsb_data_ra(env, address, GETPC());
-            break;
-        case MO_UB:
-            pte = cpu_ldub_data_ra(env, address, GETPC());
-            break;
-        case MO_TESW:
-            pte = cpu_ldsw_data_ra(env, address, GETPC());
-            break;
-        case MO_TEUW:
-            pte = cpu_lduw_data_ra(env, address, GETPC());
-            break;
-        case MO_TESL:
-            pte = cpu_ldl_data_ra(env, address, GETPC());
-            break;
-        case MO_TEUL:
-            pte = cpu_ldl_data_ra(env, address, GETPC());
-            break;
-        case MO_TEQ:
-            pte = cpu_ldq_data_ra(env, address, GETPC());
-            break;
-        default:
-            g_assert_not_reached();
-        }
-
-        riscv_cpu_set_two_stage_lookup(env, false);
-
-        return pte;
-    }
-
-    if (riscv_cpu_virt_enabled(env)) {
-        riscv_raise_exception(env, RISCV_EXCP_VIRT_INSTRUCTION_FAULT, GETPC());
-    } else {
-        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
-    }
-    return 0;
+    return cpu_lduw_mmuidx_ra(env, address, mmu_idx, GETPC());
 }
 
-void helper_hyp_store(CPURISCVState *env, target_ulong address,
-                      target_ulong val, target_ulong attrs, target_ulong memop)
+target_ulong helper_hyp_hlvx_wu(CPURISCVState *env, target_ulong address)
 {
-    if (env->priv == PRV_M ||
-        (env->priv == PRV_S && !riscv_cpu_virt_enabled(env)) ||
-        (env->priv == PRV_U && !riscv_cpu_virt_enabled(env) &&
-            get_field(env->hstatus, HSTATUS_HU))) {
-        riscv_cpu_set_two_stage_lookup(env, true);
+    int mmu_idx = cpu_mmu_index(env, true) | TB_FLAGS_PRIV_HYP_ACCESS_MASK;
 
-        switch (memop) {
-        case MO_SB:
-        case MO_UB:
-            cpu_stb_data_ra(env, address, val, GETPC());
-            break;
-        case MO_TESW:
-        case MO_TEUW:
-            cpu_stw_data_ra(env, address, val, GETPC());
-            break;
-        case MO_TESL:
-        case MO_TEUL:
-            cpu_stl_data_ra(env, address, val, GETPC());
-            break;
-        case MO_TEQ:
-            cpu_stq_data_ra(env, address, val, GETPC());
-            break;
-        default:
-            g_assert_not_reached();
-        }
-
-        riscv_cpu_set_two_stage_lookup(env, false);
-
-        return;
-    }
-
-    if (riscv_cpu_virt_enabled(env)) {
-        riscv_raise_exception(env, RISCV_EXCP_VIRT_INSTRUCTION_FAULT, GETPC());
-    } else {
-        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
-    }
-}
-
-target_ulong helper_hyp_x_load(CPURISCVState *env, target_ulong address,
-                               target_ulong attrs, target_ulong memop)
-{
-    if (env->priv == PRV_M ||
-        (env->priv == PRV_S && !riscv_cpu_virt_enabled(env)) ||
-        (env->priv == PRV_U && !riscv_cpu_virt_enabled(env) &&
-            get_field(env->hstatus, HSTATUS_HU))) {
-        target_ulong pte;
-
-        riscv_cpu_set_two_stage_lookup(env, true);
-
-        switch (memop) {
-        case MO_TEUL:
-            pte = cpu_ldub_data_ra(env, address, GETPC());
-            break;
-        case MO_TEUW:
-            pte = cpu_lduw_data_ra(env, address, GETPC());
-            break;
-        default:
-            g_assert_not_reached();
-        }
-
-        riscv_cpu_set_two_stage_lookup(env, false);
-
-        return pte;
-    }
-
-    if (riscv_cpu_virt_enabled(env)) {
-        riscv_raise_exception(env, RISCV_EXCP_VIRT_INSTRUCTION_FAULT, GETPC());
-    } else {
-        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
-    }
-    return 0;
+    return cpu_ldl_mmuidx_ra(env, address, mmu_idx, GETPC());
 }
 
 #endif /* !CONFIG_USER_ONLY */

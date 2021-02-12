@@ -22,7 +22,7 @@
 
 #define TYPE_PC_DIMM "pc-dimm"
 OBJECT_DECLARE_TYPE(PCDIMMDevice, PCDIMMDeviceClass,
-                    pc_dimm, PC_DIMM)
+                    PC_DIMM)
 
 #define PC_DIMM_ADDR_PROP "addr"
 #define PC_DIMM_SLOT_PROP "slot"
@@ -72,6 +72,6 @@ struct PCDIMMDeviceClass {
 
 void pc_dimm_pre_plug(PCDIMMDevice *dimm, MachineState *machine,
                       const uint64_t *legacy_align, Error **errp);
-void pc_dimm_plug(PCDIMMDevice *dimm, MachineState *machine, Error **errp);
+void pc_dimm_plug(PCDIMMDevice *dimm, MachineState *machine);
 void pc_dimm_unplug(PCDIMMDevice *dimm, MachineState *machine);
 #endif

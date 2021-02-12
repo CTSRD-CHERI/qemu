@@ -23,6 +23,7 @@
 #include "qemu/log.h"
 #include "qemu/main-loop.h"
 #include "cpu.h"
+#include "internals.h"
 #include "exec/exec-all.h"
 #include "exec/log_instr.h"
 #include "qapi/error.h"
@@ -71,6 +72,7 @@ const char * const riscv_fpr_regnames[] = {
   "f30/ft10", "f31/ft11"
 };
 
+// See Table 3.6 In privileged ISA spec (20190608-Priv-MSU-Ratified)
 const char * const riscv_excp_names[] = {
     "misaligned_fetch",
     "fault_fetch",
@@ -86,8 +88,9 @@ const char * const riscv_excp_names[] = {
     "machine_ecall",
     "exec_page_fault",
     "load_page_fault",
-    "reserved",
+    "reserved",         // 14 Reserved for future standard use
     "store_page_fault",
+    // 16–23 Reserved for future standard use
     "reserved",
     "reserved",
     "reserved",
@@ -96,6 +99,7 @@ const char * const riscv_excp_names[] = {
     "guest_load_page_fault",
     "reserved",
     "guest_store_page_fault",
+    // 24-31 Reserved for custom use
 #ifdef TARGET_CHERI
 #ifndef TARGET_RISCV32
     [RISCV_EXCP_LOAD_CAP_PAGE_FAULT] = "load_cap_page_fault",
@@ -103,6 +107,9 @@ const char * const riscv_excp_names[] = {
 #endif
     [RISCV_EXCP_CHERI] = "cheri_fault"
 #endif
+    // 32–47 Reserved for future standard use
+    // 48-63 Reserved for custom use
+    // >64 Reserved for future standard use
 };
 
 const char * const riscv_intr_names[] = {
@@ -136,8 +143,10 @@ const char *riscv_cpu_get_trap_name(target_ulong cause, bool async)
         return (cause < ARRAY_SIZE(riscv_intr_names)) ?
                riscv_intr_names[cause] : "(unknown)";
     } else {
-        return (cause < ARRAY_SIZE(riscv_excp_names)) ?
-               riscv_excp_names[cause] : "(unknown)";
+        // Not all entries are filled, need to check for NULL
+        const char *ret = (cause < ARRAY_SIZE(riscv_excp_names))
+                              ? riscv_excp_names[cause] : "(unknown)";
+        return ret ? ret : "(unknown)";
     }
 }
 
@@ -253,13 +262,15 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 #endif
 #ifndef CONFIG_USER_ONLY
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mhartid ", env->mhartid);
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mstatus ", env->mstatus);
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mstatus ", (target_ulong)env->mstatus);
 #ifdef TARGET_RISCV32
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mstatush ", env->mstatush);
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mstatush ",
+                 (target_ulong)(env->mstatus >> 32));
 #endif
     if (riscv_has_ext(env, RVH)) {
         qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "hstatus ", env->hstatus);
-        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vsstatus ", env->vsstatus);
+        qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "vsstatus ",
+                     (target_ulong)env->vsstatus);
     }
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mip     ", env->mip);
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mie     ", env->mie);
@@ -901,13 +912,6 @@ static void riscv_cpu_init(Object *obj)
     cpu_set_cpustate_pointers(cpu);
 }
 
-#ifndef CONFIG_USER_ONLY
-static const VMStateDescription vmstate_riscv_cpu = {
-    .name = "cpu",
-    .unmigratable = 1,
-};
-#endif
-
 static Property riscv_cpu_properties[] = {
     DEFINE_PROP_BOOL("i", RISCVCPU, cfg.ext_i, true),
     DEFINE_PROP_BOOL("e", RISCVCPU, cfg.ext_e, false),
@@ -1038,6 +1042,7 @@ static const TypeInfo riscv_cpu_type_infos[] = {
         .name = TYPE_RISCV_CPU,
         .parent = TYPE_CPU,
         .instance_size = sizeof(RISCVCPU),
+        .instance_align = __alignof__(RISCVCPU),
         .instance_init = riscv_cpu_init,
         .abstract = true,
         .class_size = sizeof(RISCVCPUClass),

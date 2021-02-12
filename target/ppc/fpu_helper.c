@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -1804,7 +1804,7 @@ uint32_t helper_efdcmpeq(CPUPPCState *env, uint64_t op1, uint64_t op2)
 
 
 /*
- * VSX_ADD_SUB - VSX floating point add/subract
+ * VSX_ADD_SUB - VSX floating point add/subtract
  *   name  - instruction mnemonic
  *   op    - operation (add or sub)
  *   nels  - number of elements (1, 2 or 4)

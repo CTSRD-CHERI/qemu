@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -58,9 +58,7 @@ enum {
 };
 
 #define TYPE_MILKYMIST_UART "milkymist-uart"
-typedef struct MilkymistUartState MilkymistUartState;
-DECLARE_INSTANCE_CHECKER(MilkymistUartState, MILKYMIST_UART,
-                         TYPE_MILKYMIST_UART)
+OBJECT_DECLARE_SIMPLE_TYPE(MilkymistUartState, MILKYMIST_UART)
 
 struct MilkymistUartState {
     SysBusDevice parent_obj;

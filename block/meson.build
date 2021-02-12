@@ -7,7 +7,6 @@ block_ss.add(files(
   'backup-top.c',
   'blkdebug.c',
   'blklogwrites.c',
-  'blkreplay.c',
   'blkverify.c',
   'block-backend.c',
   'block-copy.c',
@@ -41,6 +40,8 @@ block_ss.add(files(
   'vpc.c',
   'write-threshold.c',
 ), zstd, zlib)
+
+softmmu_ss.add(when: 'CONFIG_TCG', if_true: files('blkreplay.c'))
 
 block_ss.add(when: 'CONFIG_QCOW1', if_true: files('qcow.c'))
 block_ss.add(when: 'CONFIG_VDI', if_true: files('vdi.c'))
@@ -107,9 +108,19 @@ module_block_h = custom_target('module_block.h',
                                command: [module_block_py, '@OUTPUT0@', modsrc])
 block_ss.add(module_block_h)
 
+wrapper_py = find_program('../scripts/block-coroutine-wrapper.py')
+block_gen_c = custom_target('block-gen.c',
+                            output: 'block-gen.c',
+                            input: files('../include/block/block.h',
+                                         'coroutines.h'),
+                            command: [wrapper_py, '@OUTPUT@', '@INPUT@'])
+block_ss.add(block_gen_c)
+
 block_ss.add(files('stream.c'))
 
 softmmu_ss.add(files('qapi-sysemu.c'))
+
+subdir('export')
 subdir('monitor')
 
 modules += {'block': block_modules}

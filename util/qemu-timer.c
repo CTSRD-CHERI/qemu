@@ -26,8 +26,10 @@
 #include "qemu/main-loop.h"
 #include "qemu/timer.h"
 #include "qemu/lockable.h"
+#include "sysemu/cpu-timers.h"
 #include "sysemu/replay.h"
 #include "sysemu/cpus.h"
+#include "sysemu/qtest.h"
 
 #ifdef CONFIG_POSIX
 #include <pthread.h>
@@ -134,7 +136,7 @@ static void qemu_clock_init(QEMUClockType type, QEMUTimerListNotifyCB *notify_cb
 
 bool qemu_clock_use_for_deadline(QEMUClockType type)
 {
-    return !(use_icount && (type == QEMU_CLOCK_VIRTUAL));
+    return !(icount_enabled() && (type == QEMU_CLOCK_VIRTUAL));
 }
 
 void qemu_clock_notify(QEMUClockType type)
@@ -170,7 +172,7 @@ void qemu_clock_enable(QEMUClockType type, bool enabled)
 
 bool timerlist_has_timers(QEMUTimerList *timer_list)
 {
-    return !!atomic_read(&timer_list->active_timers);
+    return !!qatomic_read(&timer_list->active_timers);
 }
 
 bool qemu_clock_has_timers(QEMUClockType type)
@@ -183,7 +185,7 @@ bool timerlist_expired(QEMUTimerList *timer_list)
 {
     int64_t expire_time;
 
-    if (!atomic_read(&timer_list->active_timers)) {
+    if (!qatomic_read(&timer_list->active_timers)) {
         return false;
     }
 
@@ -213,7 +215,7 @@ int64_t timerlist_deadline_ns(QEMUTimerList *timer_list)
     int64_t delta;
     int64_t expire_time;
 
-    if (!atomic_read(&timer_list->active_timers)) {
+    if (!qatomic_read(&timer_list->active_timers)) {
         return -1;
     }
 
@@ -385,7 +387,7 @@ static void timer_del_locked(QEMUTimerList *timer_list, QEMUTimer *ts)
         if (!t)
             break;
         if (t == ts) {
-            atomic_set(pt, t->next);
+            qatomic_set(pt, t->next);
             break;
         }
         pt = &t->next;
@@ -408,7 +410,7 @@ static bool timer_mod_ns_locked(QEMUTimerList *timer_list,
     }
     ts->expire_time = MAX(expire_time, 0);
     ts->next = *pt;
-    atomic_set(pt, ts);
+    qatomic_set(pt, ts);
 
     return pt == &timer_list->active_timers;
 }
@@ -416,8 +418,8 @@ static bool timer_mod_ns_locked(QEMUTimerList *timer_list,
 static void timerlist_rearm(QEMUTimerList *timer_list)
 {
     /* Interrupt execution to force deadline recalculation.  */
-    if (timer_list->clock->type == QEMU_CLOCK_VIRTUAL) {
-        qemu_start_warp_timer();
+    if (icount_enabled() && timer_list->clock->type == QEMU_CLOCK_VIRTUAL) {
+        icount_start_warp_timer();
     }
     timerlist_notify(timer_list);
 }
@@ -502,7 +504,7 @@ bool timerlist_run_timers(QEMUTimerList *timer_list)
     QEMUTimerCB *cb;
     void *opaque;
 
-    if (!atomic_read(&timer_list->active_timers)) {
+    if (!qatomic_read(&timer_list->active_timers)) {
         return false;
     }
 
@@ -633,11 +635,7 @@ int64_t qemu_clock_get_ns(QEMUClockType type)
         return get_clock();
     default:
     case QEMU_CLOCK_VIRTUAL:
-        if (use_icount) {
-            return (cpu_get_icount() << 4) | (cpu_get_clock() & 0xful);
-        } else {
-            return cpu_get_clock();
-        }
+        return cpus_get_virtual_clock();
     case QEMU_CLOCK_HOST:
         return REPLAY_CLOCK(REPLAY_CLOCK_HOST, get_clock_realtime());
     case QEMU_CLOCK_VIRTUAL_RT:

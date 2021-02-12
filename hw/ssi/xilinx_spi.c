@@ -79,9 +79,7 @@
 #define FIFO_CAPACITY 256
 
 #define TYPE_XILINX_SPI "xlnx.xps-spi"
-typedef struct XilinxSPI XilinxSPI;
-DECLARE_INSTANCE_CHECKER(XilinxSPI, XILINX_SPI,
-                         TYPE_XILINX_SPI)
+OBJECT_DECLARE_SIMPLE_TYPE(XilinxSPI, XILINX_SPI)
 
 struct XilinxSPI {
     SysBusDevice parent_obj;
@@ -144,7 +142,7 @@ static void xlx_spi_update_irq(XilinxSPI *s)
        irq chain unless things really changed.  */
     if (pending != s->irqline) {
         s->irqline = pending;
-        DB_PRINT("irq_change of state %d ISR:%x IER:%X\n",
+        DB_PRINT("irq_change of state %u ISR:%x IER:%X\n",
                     pending, s->regs[R_IPISR], s->regs[R_IPIER]);
         qemu_set_irq(s->irq, pending);
     }

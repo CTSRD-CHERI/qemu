@@ -13,7 +13,7 @@ static void virtio_vga_base_invalidate_display(void *opaque)
     VirtIOGPUBase *g = vvga->vgpu;
 
     if (g->enable) {
-        virtio_gpu_ops.invalidate(g);
+        g->hw_ops->invalidate(g);
     } else {
         vvga->vga.hw_ops->invalidate(&vvga->vga);
     }
@@ -25,7 +25,7 @@ static void virtio_vga_base_update_display(void *opaque)
     VirtIOGPUBase *g = vvga->vgpu;
 
     if (g->enable) {
-        virtio_gpu_ops.gfx_update(g);
+        g->hw_ops->gfx_update(g);
     } else {
         vvga->vga.hw_ops->gfx_update(&vvga->vga);
     }
@@ -37,8 +37,8 @@ static void virtio_vga_base_text_update(void *opaque, console_ch_t *chardata)
     VirtIOGPUBase *g = vvga->vgpu;
 
     if (g->enable) {
-        if (virtio_gpu_ops.text_update) {
-            virtio_gpu_ops.text_update(g, chardata);
+        if (g->hw_ops->text_update) {
+            g->hw_ops->text_update(g, chardata);
         }
     } else {
         if (vvga->vga.hw_ops->text_update) {
@@ -52,8 +52,8 @@ static int virtio_vga_base_ui_info(void *opaque, uint32_t idx, QemuUIInfo *info)
     VirtIOVGABase *vvga = opaque;
     VirtIOGPUBase *g = vvga->vgpu;
 
-    if (virtio_gpu_ops.ui_info) {
-        return virtio_gpu_ops.ui_info(g, idx, info);
+    if (g->hw_ops->ui_info) {
+        return g->hw_ops->ui_info(g, idx, info);
     }
     return -1;
 }
@@ -63,8 +63,8 @@ static void virtio_vga_base_gl_block(void *opaque, bool block)
     VirtIOVGABase *vvga = opaque;
     VirtIOGPUBase *g = vvga->vgpu;
 
-    if (virtio_gpu_ops.gl_block) {
-        virtio_gpu_ops.gl_block(g, block);
+    if (g->hw_ops->gl_block) {
+        g->hw_ops->gl_block(g, block);
     }
 }
 
@@ -168,6 +168,20 @@ static void virtio_vga_base_reset(DeviceState *dev)
     vga_dirty_log_start(&vvga->vga);
 }
 
+static bool virtio_vga_get_big_endian_fb(Object *obj, Error **errp)
+{
+    VirtIOVGABase *d = VIRTIO_VGA_BASE(obj);
+
+    return d->vga.big_endian_fb;
+}
+
+static void virtio_vga_set_big_endian_fb(Object *obj, bool value, Error **errp)
+{
+    VirtIOVGABase *d = VIRTIO_VGA_BASE(obj);
+
+    d->vga.big_endian_fb = value;
+}
+
 static Property virtio_vga_base_properties[] = {
     DEFINE_VIRTIO_GPU_PCI_PROPERTIES(VirtIOPCIProxy),
     DEFINE_PROP_END_OF_LIST(),
@@ -190,6 +204,11 @@ static void virtio_vga_base_class_init(ObjectClass *klass, void *data)
     k->realize = virtio_vga_base_realize;
     pcidev_k->romfile = "vgabios-virtio.bin";
     pcidev_k->class_id = PCI_CLASS_DISPLAY_VGA;
+
+    /* Expose framebuffer byteorder via QOM */
+    object_class_property_add_bool(klass, "big-endian-framebuffer",
+                                   virtio_vga_get_big_endian_fb,
+                                   virtio_vga_set_big_endian_fb);
 }
 
 static TypeInfo virtio_vga_base_info = {

@@ -1056,7 +1056,7 @@ bool fw_cfg_add_from_generator(FWCfgState *s, const char *filename,
         return false;
     }
     size = array->len;
-    fw_cfg_add_file(s, filename, g_byte_array_free(array, TRUE), size);
+    fw_cfg_add_file(s, filename, g_byte_array_free(array, FALSE), size);
 
     return true;
 }
@@ -1360,18 +1360,11 @@ static const TypeInfo fw_cfg_mem_info = {
     .class_init    = fw_cfg_mem_class_init,
 };
 
-static const TypeInfo fw_cfg_data_generator_interface_info = {
-    .parent = TYPE_INTERFACE,
-    .name = TYPE_FW_CFG_DATA_GENERATOR_INTERFACE,
-    .class_size = sizeof(FWCfgDataGeneratorClass),
-};
-
 static void fw_cfg_register_types(void)
 {
     type_register_static(&fw_cfg_info);
     type_register_static(&fw_cfg_io_info);
     type_register_static(&fw_cfg_mem_info);
-    type_register_static(&fw_cfg_data_generator_interface_info);
 }
 
 type_init(fw_cfg_register_types)

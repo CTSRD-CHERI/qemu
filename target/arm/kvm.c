@@ -71,7 +71,7 @@ bool kvm_arm_create_scratch_host_vcpu(const uint32_t *cpus_to_try,
 {
     int ret = 0, kvmfd = -1, vmfd = -1, cpufd = -1;
 
-    kvmfd = qemu_open("/dev/kvm", O_RDWR);
+    kvmfd = qemu_open_old("/dev/kvm", O_RDWR);
     if (kvmfd < 0) {
         goto err;
     }
@@ -192,6 +192,16 @@ static void kvm_no_adjvtime_set(Object *obj, bool value, Error **errp)
     ARM_CPU(obj)->kvm_adjvtime = !value;
 }
 
+static bool kvm_steal_time_get(Object *obj, Error **errp)
+{
+    return ARM_CPU(obj)->kvm_steal_time != ON_OFF_AUTO_OFF;
+}
+
+static void kvm_steal_time_set(Object *obj, bool value, Error **errp)
+{
+    ARM_CPU(obj)->kvm_steal_time = value ? ON_OFF_AUTO_ON : ON_OFF_AUTO_OFF;
+}
+
 /* KVM VCPU properties should be prefixed with "kvm-". */
 void kvm_arm_add_vcpu_properties(Object *obj)
 {
@@ -207,6 +217,12 @@ void kvm_arm_add_vcpu_properties(Object *obj)
                                         "the virtual counter. VM stopped time "
                                         "will be counted.");
     }
+
+    cpu->kvm_steal_time = ON_OFF_AUTO_AUTO;
+    object_property_add_bool(obj, "kvm-steal-time", kvm_steal_time_get,
+                             kvm_steal_time_set);
+    object_property_set_description(obj, "kvm-steal-time",
+                                    "Set off to disable KVM steal time.");
 }
 
 bool kvm_arm_pmu_supported(void)
@@ -918,22 +934,15 @@ int kvm_arch_process_async_events(CPUState *cs)
     return 0;
 }
 
-/* The #ifdef protections are until 32bit headers are imported and can
- * be removed once both 32 and 64 bit reach feature parity.
- */
 void kvm_arch_update_guest_debug(CPUState *cs, struct kvm_guest_debug *dbg)
 {
-#ifdef KVM_GUESTDBG_USE_SW_BP
     if (kvm_sw_breakpoints_active(cs)) {
         dbg->control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP;
     }
-#endif
-#ifdef KVM_GUESTDBG_USE_HW
     if (kvm_arm_hw_debug_active(cs)) {
         dbg->control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_HW;
         kvm_arm_copy_hw_debug_data(&dbg->arch);
     }
-#endif
 }
 
 void kvm_arch_init_irq_routing(KVMState *s)

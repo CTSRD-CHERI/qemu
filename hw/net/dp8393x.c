@@ -151,9 +151,7 @@ do { printf("sonic ERROR: %s: " fmt, __func__ , ## __VA_ARGS__); } while (0)
 #define SONIC_DESC_ADDR  0xFFFE
 
 #define TYPE_DP8393X "dp8393x"
-typedef struct dp8393xState dp8393xState;
-DECLARE_INSTANCE_CHECKER(dp8393xState, DP8393X,
-                         TYPE_DP8393X)
+OBJECT_DECLARE_SIMPLE_TYPE(dp8393xState, DP8393X)
 
 struct dp8393xState {
     SysBusDevice parent_obj;
@@ -497,6 +495,10 @@ static void dp8393x_do_transmit_packets(dp8393xState *s)
         } else {
             /* Remove existing FCS */
             tx_len -= 4;
+            if (tx_len < 0) {
+                SONIC_ERROR("tx_len is %d\n", tx_len);
+                break;
+            }
         }
 
         if (s->regs[SONIC_RCR] & (SONIC_RCR_LB1 | SONIC_RCR_LB0)) {

@@ -36,6 +36,8 @@
  */
 #define VHOST_USER_MAX_RAM_SLOTS 32
 
+#define VHOST_USER_HDR_SIZE offsetof(VhostUserMsg, payload.u64)
+
 typedef enum VhostSetConfigType {
     VHOST_SET_CONFIG_TYPE_MASTER = 0,
     VHOST_SET_CONFIG_TYPE_MIGRATION = 1,
@@ -134,7 +136,7 @@ typedef struct VhostUserMemory {
 } VhostUserMemory;
 
 typedef struct VhostUserMemRegMsg {
-    uint32_t padding;
+    uint64_t padding;
     VhostUserMemoryRegion region;
 } VhostUserMemRegMsg;
 
@@ -221,6 +223,7 @@ typedef uint64_t (*vu_get_features_cb) (VuDev *dev);
 typedef void (*vu_set_features_cb) (VuDev *dev, uint64_t features);
 typedef int (*vu_process_msg_cb) (VuDev *dev, VhostUserMsg *vmsg,
                                   int *do_reply);
+typedef bool (*vu_read_msg_cb) (VuDev *dev, int sock, VhostUserMsg *vmsg);
 typedef void (*vu_queue_set_started_cb) (VuDev *dev, int qidx, bool started);
 typedef bool (*vu_queue_is_processed_in_order_cb) (VuDev *dev, int qidx);
 typedef int (*vu_get_config_cb) (VuDev *dev, uint8_t *config, uint32_t len);
@@ -389,15 +392,37 @@ struct VuDev {
     bool broken;
     uint16_t max_queues;
 
-    /* @set_watch: add or update the given fd to the watch set,
-     * call cb when condition is met */
+    /*
+     * @read_msg: custom method to read vhost-user message
+     *
+     * Read data from vhost_user socket fd and fill up
+     * the passed VhostUserMsg *vmsg struct.
+     *
+     * If reading fails, it should close the received set of file
+     * descriptors as socket message's auxiliary data.
+     *
+     * For the details, please refer to vu_message_read in libvhost-user.c
+     * which will be used by default if not custom method is provided when
+     * calling vu_init
+     *
+     * Returns: true if vhost-user message successfully received,
+     *          otherwise return false.
+     *
+     */
+    vu_read_msg_cb read_msg;
+
+    /*
+     * @set_watch: add or update the given fd to the watch set,
+     * call cb when condition is met.
+     */
     vu_set_watch_cb set_watch;
 
     /* @remove_watch: remove the given fd from the watch set */
     vu_remove_watch_cb remove_watch;
 
-    /* @panic: encountered an unrecoverable error, you may try to
-     * re-initialize */
+    /*
+     * @panic: encountered an unrecoverable error, you may try to re-initialize
+     */
     vu_panic_cb panic;
     const VuDevIface *iface;
 
@@ -424,7 +449,7 @@ typedef struct VuVirtqElement {
  * @remove_watch: a remove_watch callback
  * @iface: a VuDevIface structure with vhost-user device callbacks
  *
- * Intializes a VuDev vhost-user context.
+ * Initializes a VuDev vhost-user context.
  *
  * Returns: true on success, false on failure.
  **/
@@ -432,6 +457,7 @@ bool vu_init(VuDev *dev,
              uint16_t max_queues,
              int socket,
              vu_panic_cb panic,
+             vu_read_msg_cb read_msg,
              vu_set_watch_cb set_watch,
              vu_remove_watch_cb remove_watch,
              const VuDevIface *iface);

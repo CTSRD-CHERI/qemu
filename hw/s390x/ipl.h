@@ -32,7 +32,7 @@ struct IPLBlockPV {
     uint32_t num_comp;          /* 0x74 */
     uint64_t pv_header_addr;    /* 0x78 */
     uint64_t pv_header_len;     /* 0x80 */
-    struct IPLBlockPVComp components[];
+    struct IPLBlockPVComp components[0];
 } QEMU_PACKED;
 typedef struct IPLBlockPV IPLBlockPV;
 
@@ -63,7 +63,7 @@ struct IplBlockFcp {
     uint64_t br_lba;
     uint32_t scp_data_len;
     uint8_t  reserved6[260];
-    uint8_t  scp_data[];
+    uint8_t  scp_data[0];
 } QEMU_PACKED;
 typedef struct IplBlockFcp IplBlockFcp;
 
@@ -153,9 +153,7 @@ struct QemuIplParameters {
 typedef struct QemuIplParameters QemuIplParameters;
 
 #define TYPE_S390_IPL "s390-ipl"
-typedef struct S390IPLState S390IPLState;
-DECLARE_INSTANCE_CHECKER(S390IPLState, S390_IPL,
-                         TYPE_S390_IPL)
+OBJECT_DECLARE_SIMPLE_TYPE(S390IPLState, S390_IPL)
 
 struct S390IPLState {
     /*< private >*/

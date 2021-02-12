@@ -20,6 +20,7 @@
 #include "hw/i2c/smbus_eeprom.h"
 #include "hw/misc/pca9552.h"
 #include "hw/misc/tmp105.h"
+#include "hw/misc/led.h"
 #include "hw/qdev-properties.h"
 #include "qemu/log.h"
 #include "sysemu/block-backend.h"
@@ -41,6 +42,8 @@ struct AspeedMachineState {
     MemoryRegion ram_container;
     MemoryRegion max_ram;
     bool mmio_exec;
+    char *fmc_model;
+    char *spi_model;
 };
 
 /* Palmetto hardware value: 0x120CE416 */
@@ -332,8 +335,10 @@ static void aspeed_machine_init(MachineState *machine)
                           "max_ram", max_ram_size  - ram_size);
     memory_region_add_subregion(&bmc->ram_container, ram_size, &bmc->max_ram);
 
-    aspeed_board_init_flashes(&bmc->soc.fmc, amc->fmc_model);
-    aspeed_board_init_flashes(&bmc->soc.spi[0], amc->spi_model);
+    aspeed_board_init_flashes(&bmc->soc.fmc, bmc->fmc_model ?
+                              bmc->fmc_model : amc->fmc_model);
+    aspeed_board_init_flashes(&bmc->soc.spi[0], bmc->spi_model ?
+                              bmc->spi_model : amc->spi_model);
 
     /* Install first FMC flash content as a boot rom. */
     if (drive0) {
@@ -521,9 +526,20 @@ static void sonorapass_bmc_i2c_init(AspeedMachineState *bmc)
 
 static void witherspoon_bmc_i2c_init(AspeedMachineState *bmc)
 {
+    static const struct {
+        unsigned gpio_id;
+        LEDColor color;
+        const char *description;
+        bool gpio_polarity;
+    } pca1_leds[] = {
+        {13, LED_COLOR_GREEN, "front-fault-4",  GPIO_POLARITY_ACTIVE_LOW},
+        {14, LED_COLOR_GREEN, "front-power-3",  GPIO_POLARITY_ACTIVE_LOW},
+        {15, LED_COLOR_GREEN, "front-id-5",     GPIO_POLARITY_ACTIVE_LOW},
+    };
     AspeedSoCState *soc = &bmc->soc;
     uint8_t *eeprom_buf = g_malloc0(8 * 1024);
     DeviceState *dev;
+    LEDState *led;
 
     /* Bus 3: TODO bmp280@77 */
     /* Bus 3: TODO max31785@52 */
@@ -534,6 +550,14 @@ static void witherspoon_bmc_i2c_init(AspeedMachineState *bmc)
                                 aspeed_i2c_get_bus(&soc->i2c, 3),
                                 &error_fatal);
 
+    for (size_t i = 0; i < ARRAY_SIZE(pca1_leds); i++) {
+        led = led_create_simple(OBJECT(bmc),
+                                pca1_leds[i].gpio_polarity,
+                                pca1_leds[i].color,
+                                pca1_leds[i].description);
+        qdev_connect_gpio_out(dev, pca1_leds[i].gpio_id,
+                              qdev_get_gpio_in(DEVICE(led), 0));
+    }
     i2c_slave_create_simple(aspeed_i2c_get_bus(&soc->i2c, 4), "tmp423", 0x4c);
     i2c_slave_create_simple(aspeed_i2c_get_bus(&soc->i2c, 5), "tmp423", 0x4c);
 
@@ -570,6 +594,34 @@ static void aspeed_machine_instance_init(Object *obj)
     ASPEED_MACHINE(obj)->mmio_exec = false;
 }
 
+static char *aspeed_get_fmc_model(Object *obj, Error **errp)
+{
+    AspeedMachineState *bmc = ASPEED_MACHINE(obj);
+    return g_strdup(bmc->fmc_model);
+}
+
+static void aspeed_set_fmc_model(Object *obj, const char *value, Error **errp)
+{
+    AspeedMachineState *bmc = ASPEED_MACHINE(obj);
+
+    g_free(bmc->fmc_model);
+    bmc->fmc_model = g_strdup(value);
+}
+
+static char *aspeed_get_spi_model(Object *obj, Error **errp)
+{
+    AspeedMachineState *bmc = ASPEED_MACHINE(obj);
+    return g_strdup(bmc->spi_model);
+}
+
+static void aspeed_set_spi_model(Object *obj, const char *value, Error **errp)
+{
+    AspeedMachineState *bmc = ASPEED_MACHINE(obj);
+
+    g_free(bmc->spi_model);
+    bmc->spi_model = g_strdup(value);
+}
+
 static void aspeed_machine_class_props_init(ObjectClass *oc)
 {
     object_class_property_add_bool(oc, "execute-in-place",
@@ -577,6 +629,15 @@ static void aspeed_machine_class_props_init(ObjectClass *oc)
                                    aspeed_set_mmio_exec);
     object_class_property_set_description(oc, "execute-in-place",
                            "boot directly from CE0 flash device");
+
+    object_class_property_add_str(oc, "fmc-model", aspeed_get_fmc_model,
+                                   aspeed_set_fmc_model);
+    object_class_property_set_description(oc, "fmc-model",
+                                          "Change the FMC Flash model");
+    object_class_property_add_str(oc, "spi-model", aspeed_get_spi_model,
+                                   aspeed_set_spi_model);
+    object_class_property_set_description(oc, "spi-model",
+                                          "Change the SPI Flash model");
 }
 
 static int aspeed_soc_num_cpus(const char *soc_name)

@@ -46,7 +46,7 @@
 #include "hw/hotplug.h"
 #include "hw/boards.h"
 #include "qapi/error.h"
-#include "qapi/qapi-commands-misc.h"
+#include "qapi/qapi-commands-pci.h"
 #include "qemu/cutils.h"
 
 //#define DEBUG_PCI
@@ -248,6 +248,14 @@ static inline void pci_set_irq_state(PCIDevice *d, int irq_num, int level)
         d->irq_state |= level << irq_num;
 }
 
+static void pci_bus_change_irq_level(PCIBus *bus, int irq_num, int change)
+{
+    assert(irq_num >= 0);
+    assert(irq_num < bus->nirq);
+    bus->irq_count[irq_num] += change;
+    bus->set_irq(bus->irq_opaque, irq_num, bus->irq_count[irq_num] != 0);
+}
+
 static void pci_change_irq_level(PCIDevice *pci_dev, int irq_num, int change)
 {
     PCIBus *bus;
@@ -258,8 +266,7 @@ static void pci_change_irq_level(PCIDevice *pci_dev, int irq_num, int change)
             break;
         pci_dev = bus->parent_dev;
     }
-    bus->irq_count[irq_num] += change;
-    bus->set_irq(bus->irq_opaque, irq_num, bus->irq_count[irq_num] != 0);
+    pci_bus_change_irq_level(bus, irq_num, change);
 }
 
 int pci_bus_get_irq_level(PCIBus *bus, int irq_num)
@@ -1036,7 +1043,7 @@ static PCIDevice *do_pci_register_device(PCIDevice *pci_dev,
         return NULL;
     } else if (dev->hotplugged &&
                pci_get_function_0(pci_dev)) {
-        error_setg(errp, "PCI: slot %d function 0 already ocuppied by %s,"
+        error_setg(errp, "PCI: slot %d function 0 already occupied by %s,"
                    " new func %s cannot be exposed to guest.",
                    PCI_SLOT(pci_get_function_0(pci_dev)->devfn),
                    pci_get_function_0(pci_dev)->name,
@@ -1141,14 +1148,16 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
     uint32_t addr; /* offset in pci config space */
     uint64_t wmask;
     pcibus_t size = memory_region_size(memory);
+    uint8_t hdr_type;
 
     assert(region_num >= 0);
     assert(region_num < PCI_NUM_REGIONS);
-    if (size & (size-1)) {
-        error_report("ERROR: PCI region size must be pow2 "
-                    "type=0x%x, size=0x%"FMT_PCIBUS"", type, size);
-        exit(1);
-    }
+    assert(is_power_of_2(size));
+
+    /* A PCI bridge device (with Type 1 header) may only have at most 2 BARs */
+    hdr_type =
+        pci_dev->config[PCI_HEADER_TYPE] & ~PCI_HEADER_TYPE_MULTI_FUNCTION;
+    assert(hdr_type != PCI_HEADER_TYPE_BRIDGE || region_num < 2);
 
     r = &pci_dev->io_regions[region_num];
     r->addr = PCI_BAR_UNMAPPED;
@@ -1900,7 +1909,7 @@ PCIDevice *pci_nic_init_nofail(NICInfo *nd, PCIBus *rootbus,
              * a temporary instance here to be able to check it.
              */
             Object *obj = object_new_with_class(OBJECT_CLASS(dc));
-            if (object_property_find(obj, "netdev", NULL)) {
+            if (object_property_find(obj, "netdev")) {
                 g_ptr_array_add(pci_nic_models, (gpointer)name);
             }
             object_unref(obj);

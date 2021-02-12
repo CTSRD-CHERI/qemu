@@ -26,17 +26,13 @@
 
 #define TYPE_VIRTIO_GPU_BASE "virtio-gpu-base"
 OBJECT_DECLARE_TYPE(VirtIOGPUBase, VirtIOGPUBaseClass,
-                    virtio_gpu_base, VIRTIO_GPU_BASE)
+                    VIRTIO_GPU_BASE)
 
 #define TYPE_VIRTIO_GPU "virtio-gpu-device"
-typedef struct VirtIOGPU VirtIOGPU;
-DECLARE_INSTANCE_CHECKER(VirtIOGPU, VIRTIO_GPU,
-                         TYPE_VIRTIO_GPU)
+OBJECT_DECLARE_SIMPLE_TYPE(VirtIOGPU, VIRTIO_GPU)
 
 #define TYPE_VHOST_USER_GPU "vhost-user-gpu"
-typedef struct VhostUserGPU VhostUserGPU;
-DECLARE_INSTANCE_CHECKER(VhostUserGPU, VHOST_USER_GPU,
-                         TYPE_VHOST_USER_GPU)
+OBJECT_DECLARE_SIMPLE_TYPE(VhostUserGPU, VHOST_USER_GPU)
 
 #define VIRTIO_ID_GPU 16
 
@@ -66,6 +62,7 @@ struct virtio_gpu_scanout {
 };
 
 struct virtio_gpu_requested_state {
+    uint16_t width_mm, height_mm;
     uint32_t width, height;
     int x, y;
 };
@@ -106,6 +103,7 @@ struct VirtIOGPUBase {
 
     struct virtio_gpu_base_conf conf;
     struct virtio_gpu_config virtio_config;
+    const GraphicHwOps *hw_ops;
 
     bool use_virgl_renderer;
     int renderer_blocked;
@@ -170,8 +168,6 @@ struct VhostUserGPU {
     QemuDmaBuf dmabuf[VIRTIO_GPU_MAX_SCANOUTS];
     bool backend_blocked;
 };
-
-extern const GraphicHwOps virtio_gpu_ops;
 
 #define VIRTIO_GPU_FILL_CMD(out) do {                                   \
         size_t s;                                                       \

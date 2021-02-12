@@ -16,19 +16,13 @@ qga_qapi_outputs = [
 ]
 
 qga_qapi_files = custom_target('QGA QAPI files',
-                               output: qga_qapi_outputs + ['qga-qapi-doc.texi'],
+                               output: qga_qapi_outputs,
                                input: 'qapi-schema.json',
                                command: [ qapi_gen, '-o', 'qga', '-p', 'qga-', '@INPUT0@' ],
                                depend_files: qapi_gen_depends)
 
 qga_ss = ss.source_set()
-i = 0
-foreach output: qga_qapi_outputs
-  qga_ss.add(qga_qapi_files[i])
-  i = i + 1
-endforeach
-qga_qapi_doc_texi = qga_qapi_files[i]
-
+qga_ss.add(qga_qapi_files.to_list())
 qga_ss.add(files(
   'commands.c',
   'guest-agent-command-state.c',
@@ -36,7 +30,9 @@ qga_ss.add(files(
 ))
 qga_ss.add(when: 'CONFIG_POSIX', if_true: files(
   'channel-posix.c',
-  'commands-posix.c'))
+  'commands-posix.c',
+  'commands-posix-ssh.c',
+))
 qga_ss.add(when: 'CONFIG_WIN32', if_true: files(
   'channel-win32.c',
   'commands-win32.c',
@@ -65,25 +61,56 @@ if targetos == 'windows'
     if 'CONFIG_QGA_VSS' in config_host and 'QEMU_GA_MSI_WITH_VSS' in config_host
       deps += qga_vss
     endif
-    qga_msi = custom_target('QGA MSI',
-                            input: files('installer/qemu-ga.wxs'),
-                            output: 'qemu-ga-@0@.msi'.format(config_host['ARCH']),
-                            depends: deps,
-                            command: [
-                              'QEMU_GA_VERSION=' + config_host['QEMU_GA_VERSION'],
-                              'QEMU_GA_MANUFACTURER=' + config_host['QEMU_GA_MANUFACTURER'],
-                              'QEMU_GA_DISTRO=' + config_host['QEMU_GA_DISTRO'],
-                              'BUILD_DIR=' + meson.build_root(),
-                              wixl, '-o', '@OUTPUT0@', '@INPUT0@',
-                              config_host['QEMU_GA_MSI_ARCH'].split(),
-                              config_host['QEMU_GA_MSI_WITH_VSS'].split(),
-                              config_host['QEMU_GA_MSI_MINGW_DLL_PATH'].split(),
-                            ])
-    all_qga += [qga_msi]
-    alias_target('msi', qga_msi)
+    if 'CONFIG_QGA_MSI' in config_host
+      qga_msi = custom_target('QGA MSI',
+                              input: files('installer/qemu-ga.wxs'),
+                              output: 'qemu-ga-@0@.msi'.format(config_host['ARCH']),
+                              depends: deps,
+                              command: [
+                                find_program('env'),
+                                'QEMU_GA_VERSION=' + config_host['QEMU_GA_VERSION'],
+                                'QEMU_GA_MANUFACTURER=' + config_host['QEMU_GA_MANUFACTURER'],
+                                'QEMU_GA_DISTRO=' + config_host['QEMU_GA_DISTRO'],
+                                'BUILD_DIR=' + meson.build_root(),
+                                wixl, '-o', '@OUTPUT0@', '@INPUT0@',
+                                config_host['QEMU_GA_MSI_ARCH'].split(),
+                                config_host['QEMU_GA_MSI_WITH_VSS'].split(),
+                                config_host['QEMU_GA_MSI_MINGW_DLL_PATH'].split(),
+                              ])
+      all_qga += [qga_msi]
+      alias_target('msi', qga_msi)
+    endif
   endif
 else
   install_subdir('run', install_dir: get_option('localstatedir'))
 endif
 
 alias_target('qemu-ga', all_qga)
+
+test_env = environment()
+test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
+test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
+
+# disable qga-ssh-test for now. glib's G_TEST_OPTION_ISOLATE_DIRS triggers
+# the leak detector in build-oss-fuzz Gitlab CI test. we should re-enable
+# this when an alternative is implemented or when the underlying glib
+# issue is identified/fix
+#if 'CONFIG_POSIX' in config_host
+if false
+  srcs = [files('commands-posix-ssh.c')]
+  i = 0
+  foreach output: qga_qapi_outputs
+    if output.startswith('qga-qapi-types') or output.startswith('qga-qapi-visit')
+      srcs += qga_qapi_files[i]
+    endif
+    i = i + 1
+  endforeach
+  qga_ssh_test = executable('qga-ssh-test', srcs,
+                            dependencies: [qemuutil],
+                            c_args: ['-DQGA_BUILD_UNIT_TEST'])
+
+  test('qga-ssh-test',
+       qga_ssh_test,
+       env: test_env,
+       suite: ['unit', 'qga'])
+endif

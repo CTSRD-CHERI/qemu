@@ -56,9 +56,7 @@
 #define TCX_THC_CURSBITS 0x980
 
 #define TYPE_TCX "SUNW,tcx"
-typedef struct TCXState TCXState;
-DECLARE_INSTANCE_CHECKER(TCXState, TCX,
-                         TYPE_TCX)
+OBJECT_DECLARE_SIMPLE_TYPE(TCXState, TCX)
 
 struct TCXState {
     SysBusDevice parent_obj;
@@ -551,9 +549,13 @@ static const MemoryRegionOps tcx_stip_ops = {
     .read = tcx_stip_readl,
     .write = tcx_stip_writel,
     .endianness = DEVICE_NATIVE_ENDIAN,
-    .valid = {
+    .impl = {
         .min_access_size = 4,
         .max_access_size = 4,
+    },
+    .valid = {
+        .min_access_size = 4,
+        .max_access_size = 8,
     },
 };
 
@@ -561,9 +563,13 @@ static const MemoryRegionOps tcx_rstip_ops = {
     .read = tcx_stip_readl,
     .write = tcx_rstip_writel,
     .endianness = DEVICE_NATIVE_ENDIAN,
-    .valid = {
+    .impl = {
         .min_access_size = 4,
         .max_access_size = 4,
+    },
+    .valid = {
+        .min_access_size = 4,
+        .max_access_size = 8,
     },
 };
 
@@ -643,9 +649,13 @@ static const MemoryRegionOps tcx_blit_ops = {
     .read = tcx_blit_readl,
     .write = tcx_blit_writel,
     .endianness = DEVICE_NATIVE_ENDIAN,
-    .valid = {
+    .impl = {
         .min_access_size = 4,
         .max_access_size = 4,
+    },
+    .valid = {
+        .min_access_size = 4,
+        .max_access_size = 8,
     },
 };
 
@@ -653,9 +663,13 @@ static const MemoryRegionOps tcx_rblit_ops = {
     .read = tcx_blit_readl,
     .write = tcx_rblit_writel,
     .endianness = DEVICE_NATIVE_ENDIAN,
-    .valid = {
+    .impl = {
         .min_access_size = 4,
         .max_access_size = 4,
+    },
+    .valid = {
+        .min_access_size = 4,
+        .max_access_size = 8,
     },
 };
 

@@ -817,9 +817,7 @@ static void failover_add_primary(VirtIONet *n, Error **errp)
             "sure primary device has parameter"
             " failover_pair_id=<virtio-net-id>\n");
 }
-    if (err) {
-        error_propagate(errp, err);
-    }
+    error_propagate(errp, err);
 }
 
 static int is_my_primary(void *opaque, QemuOpts *opts, Error **errp)
@@ -873,9 +871,7 @@ static DeviceState *virtio_connect_failover_devices(VirtIONet *n,
         n->primary_device_id = g_strdup(prim_dev->id);
         n->primary_device_opts = prim_dev->opts;
     } else {
-        if (err) {
-            error_propagate(errp, err);
-        }
+        error_propagate(errp, err);
     }
 
     return prim_dev;
@@ -933,7 +929,7 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint64_t features)
 
     if (virtio_has_feature(features, VIRTIO_NET_F_STANDBY)) {
         qapi_event_send_failover_negotiated(n->netclient_name);
-        atomic_set(&n->primary_should_be_hidden, false);
+        qatomic_set(&n->primary_should_be_hidden, false);
         failover_add_primary(n, &err);
         if (err) {
             n->primary_dev = virtio_connect_failover_devices(n, n->qdev, &err);
@@ -3142,7 +3138,7 @@ static bool failover_replug_primary(VirtIONet *n, Error **errp)
         error_setg(errp, "virtio_net: couldn't find primary bus");
         return false;
     }
-    qdev_set_parent_bus(n->primary_dev, n->primary_bus);
+    qdev_set_parent_bus(n->primary_dev, n->primary_bus, &error_abort);
     n->primary_should_be_hidden = false;
     if (!qemu_opt_set_bool(n->primary_device_opts,
                            "partially_hotplugged", true, errp)) {
@@ -3168,7 +3164,7 @@ static void virtio_net_handle_migration_primary(VirtIONet *n,
     bool should_be_hidden;
     Error *err = NULL;
 
-    should_be_hidden = atomic_read(&n->primary_should_be_hidden);
+    should_be_hidden = qatomic_read(&n->primary_should_be_hidden);
 
     if (!n->primary_dev) {
         n->primary_dev = virtio_connect_failover_devices(n, n->qdev, &err);
@@ -3183,7 +3179,7 @@ static void virtio_net_handle_migration_primary(VirtIONet *n,
                     qdev_get_vmsd(n->primary_dev),
                     n->primary_dev);
             qapi_event_send_unplug_primary(n->primary_device_id);
-            atomic_set(&n->primary_should_be_hidden, true);
+            qatomic_set(&n->primary_should_be_hidden, true);
         } else {
             warn_report("couldn't unplug primary device");
         }
@@ -3234,7 +3230,7 @@ static int virtio_net_primary_should_be_hidden(DeviceListener *listener,
     n->primary_device_opts = device_opts;
 
     /* primary_should_be_hidden is set during feature negotiation */
-    hide = atomic_read(&n->primary_should_be_hidden);
+    hide = qatomic_read(&n->primary_should_be_hidden);
 
     if (n->primary_device_dict) {
         g_free(n->primary_device_id);
@@ -3291,7 +3287,7 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
     if (n->failover) {
         n->primary_listener.should_be_hidden =
             virtio_net_primary_should_be_hidden;
-        atomic_set(&n->primary_should_be_hidden, true);
+        qatomic_set(&n->primary_should_be_hidden, true);
         device_listener_register(&n->primary_listener);
         n->migration_state.notify = virtio_net_migration_state_notifier;
         add_migration_state_change_notifier(&n->migration_state);
@@ -3399,6 +3395,12 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
     nc = qemu_get_queue(n->nic);
     nc->rxfilter_notify_enabled = 1;
 
+   if (nc->peer && nc->peer->info->type == NET_CLIENT_DRIVER_VHOST_VDPA) {
+        struct virtio_net_config netcfg = {};
+        memcpy(&netcfg.mac, &n->nic_conf.macaddr, ETH_ALEN);
+        vhost_net_set_config(get_vhost_net(nc->peer),
+            (uint8_t *)&netcfg, 0, ETH_ALEN, VHOST_SET_CONFIG_TYPE_MASTER);
+    }
     QTAILQ_INIT(&n->rsc_chains);
     n->qdev = dev;
 

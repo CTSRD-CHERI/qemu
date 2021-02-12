@@ -29,11 +29,9 @@ struct ADS7846State {
     int cycle;
     int output;
 };
-typedef struct ADS7846State ADS7846State;
 
 #define TYPE_ADS7846 "ads7846"
-DECLARE_INSTANCE_CHECKER(ADS7846State, ADS7846,
-                         TYPE_ADS7846)
+OBJECT_DECLARE_SIMPLE_TYPE(ADS7846State, ADS7846)
 
 /* Control-byte bitfields */
 #define CB_PD0		(1 << 0)
@@ -165,10 +163,12 @@ static void ads7846_realize(SSISlave *d, Error **errp)
 
 static void ads7846_class_init(ObjectClass *klass, void *data)
 {
+    DeviceClass *dc = DEVICE_CLASS(klass);
     SSISlaveClass *k = SSI_SLAVE_CLASS(klass);
 
     k->realize = ads7846_realize;
     k->transfer = ads7846_transfer;
+    set_bit(DEVICE_CATEGORY_INPUT, dc->categories);
 }
 
 static const TypeInfo ads7846_info = {

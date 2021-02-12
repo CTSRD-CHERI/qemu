@@ -13,6 +13,7 @@ import lzma
 import gzip
 import shutil
 
+from avocado import skip
 from avocado import skipUnless
 from avocado_qemu import Test
 from avocado_qemu import exec_command_and_wait_for_pattern
@@ -485,6 +486,8 @@ class BootLinuxConsole(LinuxKernelTest):
         self.wait_for_console_pattern('Boot successful.')
         # TODO user command, for now the uart is stuck
 
+    @skipUnless(os.getenv('ARMBIAN_ARTIFACTS_CACHED'),
+                'Test artifacts fetched from unreliable apt.armbian.com')
     def test_arm_cubieboard_initrd(self):
         """
         :avocado: tags=arch:arm
@@ -525,6 +528,8 @@ class BootLinuxConsole(LinuxKernelTest):
                                                 'system-control@1c00000')
         # cubieboard's reboot is not functioning; omit reboot test.
 
+    @skipUnless(os.getenv('ARMBIAN_ARTIFACTS_CACHED'),
+                'Test artifacts fetched from unreliable apt.armbian.com')
     def test_arm_cubieboard_sata(self):
         """
         :avocado: tags=arch:arm
@@ -568,6 +573,92 @@ class BootLinuxConsole(LinuxKernelTest):
                                                 'sda')
         # cubieboard's reboot is not functioning; omit reboot test.
 
+    @skipUnless(os.getenv('AVOCADO_TIMEOUT_EXPECTED'), 'Test might timeout')
+    def test_arm_quanta_gsj(self):
+        """
+        :avocado: tags=arch:arm
+        :avocado: tags=machine:quanta-gsj
+        """
+        # 25 MiB compressed, 32 MiB uncompressed.
+        image_url = (
+                'https://github.com/hskinnemoen/openbmc/releases/download/'
+                '20200711-gsj-qemu-0/obmc-phosphor-image-gsj.static.mtd.gz')
+        image_hash = '14895e634923345cb5c8776037ff7876df96f6b1'
+        image_path_gz = self.fetch_asset(image_url, asset_hash=image_hash)
+        image_name = 'obmc.mtd'
+        image_path = os.path.join(self.workdir, image_name)
+        archive.gzip_uncompress(image_path_gz, image_path)
+
+        self.vm.set_console()
+        drive_args = 'file=' + image_path + ',if=mtd,bus=0,unit=0'
+        self.vm.add_args('-drive', drive_args)
+        self.vm.launch()
+
+        # Disable drivers and services that stall for a long time during boot,
+        # to avoid running past the 90-second timeout. These may be removed
+        # as the corresponding device support is added.
+        kernel_command_line = self.KERNEL_COMMON_COMMAND_LINE + (
+                'console=${console} '
+                'mem=${mem} '
+                'initcall_blacklist=npcm_i2c_bus_driver_init '
+                'systemd.mask=systemd-random-seed.service '
+                'systemd.mask=dropbearkey.service '
+        )
+
+        self.wait_for_console_pattern('> BootBlock by Nuvoton')
+        self.wait_for_console_pattern('>Device: Poleg BMC NPCM730')
+        self.wait_for_console_pattern('>Skip DDR init.')
+        self.wait_for_console_pattern('U-Boot ')
+        interrupt_interactive_console_until_pattern(
+                self, 'Hit any key to stop autoboot:', 'U-Boot>')
+        exec_command_and_wait_for_pattern(
+                self, "setenv bootargs ${bootargs} " + kernel_command_line,
+                'U-Boot>')
+        exec_command_and_wait_for_pattern(
+                self, 'run romboot', 'Booting Kernel from flash')
+        self.wait_for_console_pattern('Booting Linux on physical CPU 0x0')
+        self.wait_for_console_pattern('CPU1: thread -1, cpu 1, socket 0')
+        self.wait_for_console_pattern('OpenBMC Project Reference Distro')
+        self.wait_for_console_pattern('gsj login:')
+
+    def test_arm_quanta_gsj_initrd(self):
+        """
+        :avocado: tags=arch:arm
+        :avocado: tags=machine:quanta-gsj
+        """
+        initrd_url = (
+                'https://github.com/hskinnemoen/openbmc/releases/download/'
+                '20200711-gsj-qemu-0/obmc-phosphor-initramfs-gsj.cpio.xz')
+        initrd_hash = '98fefe5d7e56727b1eb17d5c00311b1b5c945300'
+        initrd_path = self.fetch_asset(initrd_url, asset_hash=initrd_hash)
+        kernel_url = (
+                'https://github.com/hskinnemoen/openbmc/releases/download/'
+                '20200711-gsj-qemu-0/uImage-gsj.bin')
+        kernel_hash = 'fa67b2f141d56d39b3c54305c0e8a899c99eb2c7'
+        kernel_path = self.fetch_asset(kernel_url, asset_hash=kernel_hash)
+        dtb_url = (
+                'https://github.com/hskinnemoen/openbmc/releases/download/'
+                '20200711-gsj-qemu-0/nuvoton-npcm730-gsj.dtb')
+        dtb_hash = '18315f7006d7b688d8312d5c727eecd819aa36a4'
+        dtb_path = self.fetch_asset(dtb_url, asset_hash=dtb_hash)
+
+        self.vm.set_console()
+        kernel_command_line = (self.KERNEL_COMMON_COMMAND_LINE +
+                               'console=ttyS0,115200n8 '
+                               'earlycon=uart8250,mmio32,0xf0001000')
+        self.vm.add_args('-kernel', kernel_path,
+                         '-initrd', initrd_path,
+                         '-dtb', dtb_path,
+                         '-append', kernel_command_line)
+        self.vm.launch()
+
+        self.wait_for_console_pattern('Booting Linux on physical CPU 0x0')
+        self.wait_for_console_pattern('CPU1: thread -1, cpu 1, socket 0')
+        self.wait_for_console_pattern(
+                'Give root password for system maintenance')
+
+    @skipUnless(os.getenv('ARMBIAN_ARTIFACTS_CACHED'),
+                'Test artifacts fetched from unreliable apt.armbian.com')
     def test_arm_orangepi(self):
         """
         :avocado: tags=arch:arm
@@ -593,6 +684,8 @@ class BootLinuxConsole(LinuxKernelTest):
         console_pattern = 'Kernel command line: %s' % kernel_command_line
         self.wait_for_console_pattern(console_pattern)
 
+    @skipUnless(os.getenv('ARMBIAN_ARTIFACTS_CACHED'),
+                'Test artifacts fetched from unreliable apt.armbian.com')
     def test_arm_orangepi_initrd(self):
         """
         :avocado: tags=arch:arm
@@ -635,6 +728,8 @@ class BootLinuxConsole(LinuxKernelTest):
         # Wait for VM to shut down gracefully
         self.vm.wait()
 
+    @skipUnless(os.getenv('ARMBIAN_ARTIFACTS_CACHED'),
+                'Test artifacts fetched from unreliable apt.armbian.com')
     def test_arm_orangepi_sd(self):
         """
         :avocado: tags=arch:arm
@@ -686,6 +781,8 @@ class BootLinuxConsole(LinuxKernelTest):
         # Wait for VM to shut down gracefully
         self.vm.wait()
 
+    @skipUnless(os.getenv('ARMBIAN_ARTIFACTS_CACHED'),
+                'Test artifacts fetched from unreliable dl.armbian.com')
     @skipUnless(os.getenv('AVOCADO_ALLOW_LARGE_STORAGE'), 'storage limited')
     @skipUnless(P7ZIP_AVAILABLE, '7z not installed')
     def test_arm_orangepi_bionic(self):
@@ -794,6 +891,28 @@ class BootLinuxConsole(LinuxKernelTest):
         wait_for_console_pattern(self, 'NetBSD 9.0 (GENERIC)')
         # Wait for user-space
         wait_for_console_pattern(self, 'Starting root file system check')
+
+    def test_aarch64_raspi3_atf(self):
+        """
+        :avocado: tags=arch:aarch64
+        :avocado: tags=machine:raspi3
+        :avocado: tags=cpu:cortex-a53
+        :avocado: tags=device:pl011
+        :avocado: tags=atf
+        """
+        zip_url = ('https://github.com/pbatard/RPi3/releases/download/'
+                   'v1.15/RPi3_UEFI_Firmware_v1.15.zip')
+        zip_hash = '74b3bd0de92683cadb14e008a7575e1d0c3cafb9'
+        zip_path = self.fetch_asset(zip_url, asset_hash=zip_hash)
+
+        archive.extract(zip_path, self.workdir)
+        efi_fd = os.path.join(self.workdir, 'RPI_EFI.fd')
+
+        self.vm.set_console(console_index=1)
+        self.vm.add_args('-nodefaults',
+                         '-device', 'loader,file=%s,force-raw=true' % efi_fd)
+        self.vm.launch()
+        self.wait_for_console_pattern('version UEFI Firmware v1.15')
 
     def test_s390x_s390_ccw_virtio(self):
         """
@@ -907,6 +1026,7 @@ class BootLinuxConsole(LinuxKernelTest):
         tar_hash = 'ac688fd00561a2b6ce1359f9ff6aa2b98c9a570c'
         self.do_test_advcal_2018('07', tar_hash, 'sanity-clause.elf')
 
+    @skip("Test currently broken") # Console stuck as of 5.2-rc1
     def test_microblaze_s3adsp1800(self):
         """
         :avocado: tags=arch:microblaze

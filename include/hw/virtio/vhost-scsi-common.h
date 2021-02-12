@@ -20,9 +20,7 @@
 #include "qom/object.h"
 
 #define TYPE_VHOST_SCSI_COMMON "vhost-scsi-common"
-typedef struct VHostSCSICommon VHostSCSICommon;
-DECLARE_INSTANCE_CHECKER(VHostSCSICommon, VHOST_SCSI_COMMON,
-                         TYPE_VHOST_SCSI_COMMON)
+OBJECT_DECLARE_SIMPLE_TYPE(VHostSCSICommon, VHOST_SCSI_COMMON)
 
 struct VHostSCSICommon {
     VirtIOSCSICommon parent_obj;
@@ -37,6 +35,8 @@ struct VHostSCSICommon {
     int lun;
     uint64_t host_features;
     bool migratable;
+
+    struct vhost_inflight *inflight;
 };
 
 int vhost_scsi_common_start(VHostSCSICommon *vsc);

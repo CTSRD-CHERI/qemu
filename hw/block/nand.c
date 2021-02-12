@@ -90,8 +90,7 @@ struct NANDFlashState {
 
 #define TYPE_NAND "nand"
 
-DECLARE_INSTANCE_CHECKER(NANDFlashState, NAND,
-                         TYPE_NAND)
+OBJECT_DECLARE_SIMPLE_TYPE(NANDFlashState, NAND)
 
 static void mem_and(uint8_t *dest, const uint8_t *src, size_t n)
 {
@@ -450,6 +449,7 @@ static void nand_class_init(ObjectClass *klass, void *data)
     dc->reset = nand_reset;
     dc->vmsd = &vmstate_nand;
     device_class_set_props(dc, nand_properties);
+    set_bit(DEVICE_CATEGORY_STORAGE, dc->categories);
 }
 
 static const TypeInfo nand_info = {

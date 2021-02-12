@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -44,9 +44,7 @@ enum {
 };
 
 #define TYPE_MILKYMIST_HPDMC "milkymist-hpdmc"
-typedef struct MilkymistHpdmcState MilkymistHpdmcState;
-DECLARE_INSTANCE_CHECKER(MilkymistHpdmcState, MILKYMIST_HPDMC,
-                         TYPE_MILKYMIST_HPDMC)
+OBJECT_DECLARE_SIMPLE_TYPE(MilkymistHpdmcState, MILKYMIST_HPDMC)
 
 struct MilkymistHpdmcState {
     SysBusDevice parent_obj;

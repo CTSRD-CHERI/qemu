@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -56,9 +56,7 @@ enum {
 };
 
 #define TYPE_LM32_TIMER "lm32-timer"
-typedef struct LM32TimerState LM32TimerState;
-DECLARE_INSTANCE_CHECKER(LM32TimerState, LM32_TIMER,
-                         TYPE_LM32_TIMER)
+OBJECT_DECLARE_SIMPLE_TYPE(LM32TimerState, LM32_TIMER)
 
 struct LM32TimerState {
     SysBusDevice parent_obj;

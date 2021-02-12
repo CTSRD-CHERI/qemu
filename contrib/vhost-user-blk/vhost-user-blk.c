@@ -404,6 +404,8 @@ vub_get_config(VuDev *vu_dev, uint8_t *config, uint32_t len)
     VugDev *gdev;
     VubDev *vdev_blk;
 
+    g_return_val_if_fail(len <= sizeof(struct virtio_blk_config), -1);
+
     gdev = container_of(vu_dev, VugDev, parent);
     vdev_blk = container_of(gdev, VubDev, parent);
     memcpy(config, &vdev_blk->blkcfg, len);
@@ -474,7 +476,7 @@ static int unix_sock_new(char *unix_fn)
     assert(unix_fn);
 
     sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sock <= 0) {
+    if (sock < 0) {
         perror("socket");
         return -1;
     }

@@ -32,8 +32,8 @@
 
 #endif  /* CONFIG_KVM */
 
-bool kvm_allows_irq0_override(void);
 bool kvm_has_smm(void);
+bool kvm_has_adjust_clock(void);
 bool kvm_has_adjust_clock_stable(void);
 bool kvm_has_exception_payload(void);
 void kvm_synchronize_all_tsc(void);

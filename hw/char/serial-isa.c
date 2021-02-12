@@ -34,9 +34,7 @@
 #include "migration/vmstate.h"
 #include "qom/object.h"
 
-typedef struct ISASerialState ISASerialState;
-DECLARE_INSTANCE_CHECKER(ISASerialState, ISA_SERIAL,
-                         TYPE_ISA_SERIAL)
+OBJECT_DECLARE_SIMPLE_TYPE(ISASerialState, ISA_SERIAL)
 
 struct ISASerialState {
     ISADevice parent_obj;
@@ -118,8 +116,6 @@ static Property serial_isa_properties[] = {
     DEFINE_PROP_UINT32("index",  ISASerialState, index,   -1),
     DEFINE_PROP_UINT32("iobase",  ISASerialState, iobase,  -1),
     DEFINE_PROP_UINT32("irq",    ISASerialState, isairq,  -1),
-    DEFINE_PROP_CHR("chardev",   ISASerialState, state.chr),
-    DEFINE_PROP_UINT32("wakeup", ISASerialState, state.wakeup, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -140,6 +136,8 @@ static void serial_isa_initfn(Object *o)
     ISASerialState *self = ISA_SERIAL(o);
 
     object_initialize_child(o, "serial", &self->state, TYPE_SERIAL);
+
+    qdev_alias_all_properties(DEVICE(&self->state), o);
 }
 
 static const TypeInfo serial_isa_info = {

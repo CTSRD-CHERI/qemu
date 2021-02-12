@@ -61,9 +61,7 @@
 /* ------------------------------------------------------------------------ */
 
 #define TYPE_USB_HOST_DEVICE "usb-host"
-typedef struct USBHostDevice USBHostDevice;
-DECLARE_INSTANCE_CHECKER(USBHostDevice, USB_HOST_DEVICE,
-                         TYPE_USB_HOST_DEVICE)
+OBJECT_DECLARE_SIMPLE_TYPE(USBHostDevice, USB_HOST_DEVICE)
 
 typedef struct USBHostRequest USBHostRequest;
 typedef struct USBHostIsoXfer USBHostIsoXfer;
@@ -1147,7 +1145,7 @@ static void usb_host_realize(USBDevice *udev, Error **errp)
     if (s->hostdevice) {
         int fd;
         s->needs_autoscan = false;
-        fd = qemu_open(s->hostdevice, O_RDWR);
+        fd = qemu_open_old(s->hostdevice, O_RDWR);
         if (fd < 0) {
             error_setg_errno(errp, errno, "failed to open %s", s->hostdevice);
             return;

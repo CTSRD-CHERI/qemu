@@ -33,7 +33,7 @@
 #include "sysemu/sysemu.h"
 #include "hw/ppc/spapr_numa.h"
 
-void spapr_nvdimm_validate(HotplugHandler *hotplug_dev, NVDIMMDevice *nvdimm,
+bool spapr_nvdimm_validate(HotplugHandler *hotplug_dev, NVDIMMDevice *nvdimm,
                            uint64_t size, Error **errp)
 {
     const MachineClass *mc = MACHINE_GET_CLASS(hotplug_dev);
@@ -45,7 +45,7 @@ void spapr_nvdimm_validate(HotplugHandler *hotplug_dev, NVDIMMDevice *nvdimm,
 
     if (!mc->nvdimm_supported) {
         error_setg(errp, "NVDIMM hotplug not supported for this machine");
-        return;
+        return false;
     }
 
     /*
@@ -59,20 +59,20 @@ void spapr_nvdimm_validate(HotplugHandler *hotplug_dev, NVDIMMDevice *nvdimm,
      */
     if (!ms->nvdimms_state->is_enabled && nvdimm_opt) {
         error_setg(errp, "nvdimm device found but 'nvdimm=off' was set");
-        return;
+        return false;
     }
 
     if (object_property_get_int(OBJECT(nvdimm), NVDIMM_LABEL_SIZE_PROP,
                                 &error_abort) == 0) {
         error_setg(errp, "PAPR requires NVDIMM devices to have label-size set");
-        return;
+        return false;
     }
 
     if (size % SPAPR_MINIMUM_SCM_BLOCK_SIZE) {
         error_setg(errp, "PAPR requires NVDIMM memory size (excluding label)"
                    " to be a multiple of %" PRIu64 "MB",
                    SPAPR_MINIMUM_SCM_BLOCK_SIZE / MiB);
-        return;
+        return false;
     }
 
     uuidstr = object_property_get_str(OBJECT(nvdimm), NVDIMM_UUID_PROP,
@@ -82,41 +82,30 @@ void spapr_nvdimm_validate(HotplugHandler *hotplug_dev, NVDIMMDevice *nvdimm,
 
     if (qemu_uuid_is_null(&uuid)) {
         error_setg(errp, "NVDIMM device requires the uuid to be set");
-        return;
+        return false;
     }
+
+    return true;
 }
 
 
-void spapr_add_nvdimm(DeviceState *dev, uint64_t slot, Error **errp)
+bool spapr_add_nvdimm(DeviceState *dev, uint64_t slot, Error **errp)
 {
     SpaprDrc *drc;
     bool hotplugged = spapr_drc_hotplugged(dev);
-    Error *local_err = NULL;
 
     drc = spapr_drc_by_id(TYPE_SPAPR_DRC_PMEM, slot);
     g_assert(drc);
 
-    spapr_drc_attach(drc, dev, &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
-        return;
+    if (!spapr_drc_attach(drc, dev, errp)) {
+        return false;
     }
 
     if (hotplugged) {
         spapr_hotplug_req_add_by_index(drc);
     }
+    return true;
 }
-
-void spapr_create_nvdimm_dr_connectors(SpaprMachineState *spapr)
-{
-    MachineState *machine = MACHINE(spapr);
-    int i;
-
-    for (i = 0; i < machine->ram_slots; i++) {
-        spapr_dr_connector_new(OBJECT(spapr), TYPE_SPAPR_DRC_PMEM, i);
-    }
-}
-
 
 static int spapr_dt_nvdimm(SpaprMachineState *spapr, void *fdt,
                            int parent_offset, NVDIMMDevice *nvdimm)

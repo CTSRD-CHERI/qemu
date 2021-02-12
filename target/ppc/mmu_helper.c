@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -179,7 +179,7 @@ static inline int ppc6xx_tlb_pte_check(mmu_ctx_t *ctx, target_ulong pte0,
             }
             /* Compute access rights */
             access = pp_check(ctx->key, pp, ctx->nx);
-            /* Keep the matching PTE informations */
+            /* Keep the matching PTE information */
             ctx->raddr = pte1;
             ctx->prot = access;
             ret = check_prot(ctx->prot, rw, type);
@@ -2176,7 +2176,7 @@ void helper_store_sr(CPUPPCState *env, target_ulong srnum, target_ulong value)
         env->sr[srnum] = value;
         /*
          * Invalidating 256MB of virtual memory in 4kB pages is way
-         * longer than flusing the whole TLB.
+         * longer than flushing the whole TLB.
          */
 #if !defined(FLUSH_ALL_TLBS) && 0
         {

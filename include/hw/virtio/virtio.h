@@ -68,9 +68,7 @@ typedef struct VirtQueueElement
 #define VIRTIO_NO_VECTOR 0xffff
 
 #define TYPE_VIRTIO_DEVICE "virtio-device"
-typedef struct VirtioDeviceClass VirtioDeviceClass;
-DECLARE_OBJ_CHECKERS(VirtIODevice, VirtioDeviceClass,
-                     VIRTIO_DEVICE, TYPE_VIRTIO_DEVICE)
+OBJECT_DECLARE_TYPE(VirtIODevice, VirtioDeviceClass, VIRTIO_DEVICE)
 
 enum virtio_device_endian {
     VIRTIO_DEVICE_ENDIAN_UNKNOWN,
@@ -103,6 +101,7 @@ struct VirtIODevice
     bool use_started;
     bool started;
     bool start_on_kick; /* when virtio 1.0 feature has not been negotiated */
+    bool disable_legacy_check;
     VMChangeStateEntry *vmstate;
     char *bus_name;
     uint8_t device_endian;
@@ -396,5 +395,6 @@ static inline bool virtio_device_disabled(VirtIODevice *vdev)
 }
 
 bool virtio_legacy_allowed(VirtIODevice *vdev);
+bool virtio_legacy_check_disabled(VirtIODevice *vdev);
 
 #endif

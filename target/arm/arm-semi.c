@@ -36,6 +36,7 @@
 #else
 #include "exec/gdbstub.h"
 #include "qemu/cutils.h"
+#include "hw/arm/boot.h"
 #endif
 
 #define TARGET_SYS_OPEN        0x01
@@ -755,7 +756,7 @@ target_ulong do_arm_semihosting(CPUARMState *env)
         if (use_gdb_syscalls()) {
             arm_semi_open_guestfd = guestfd;
             ret = arm_gdb_syscall(cpu, arm_semi_open_cb, "open,%s,%x,1a4", arg0,
-                                  (int)arg2+1, gdb_open_modeflags[arg1]);
+                                  (int)arg2 + 1, gdb_open_modeflags[arg1]);
         } else {
             ret = set_swi_errno(env, open(s, open_modeflags[arg1], 0644));
             if (ret == (uint32_t)-1) {
@@ -852,7 +853,7 @@ target_ulong do_arm_semihosting(CPUARMState *env)
         GET_ARG(1);
         if (use_gdb_syscalls()) {
             ret = arm_gdb_syscall(cpu, arm_semi_cb, "unlink,%s",
-                                  arg0, (int)arg1+1);
+                                  arg0, (int)arg1 + 1);
         } else {
             s = lock_user_string(arg0);
             if (!s) {
@@ -870,7 +871,7 @@ target_ulong do_arm_semihosting(CPUARMState *env)
         GET_ARG(3);
         if (use_gdb_syscalls()) {
             return arm_gdb_syscall(cpu, arm_semi_cb, "rename,%s,%s",
-                                   arg0, (int)arg1+1, arg2, (int)arg3+1);
+                                   arg0, (int)arg1 + 1, arg2, (int)arg3 + 1);
         } else {
             char *s2;
             s = lock_user_string(arg0);
@@ -896,7 +897,7 @@ target_ulong do_arm_semihosting(CPUARMState *env)
         GET_ARG(1);
         if (use_gdb_syscalls()) {
             return arm_gdb_syscall(cpu, arm_semi_cb, "system,%s",
-                                   arg0, (int)arg1+1);
+                                   arg0, (int)arg1 + 1);
         } else {
             s = lock_user_string(arg0);
             if (!s) {
@@ -1014,6 +1015,9 @@ target_ulong do_arm_semihosting(CPUARMState *env)
             int i;
 #ifdef CONFIG_USER_ONLY
             TaskState *ts = cs->opaque;
+#else
+            const struct arm_boot_info *info = env->boot_info;
+            target_ulong rambase = info->loader_start;
 #endif
 
             GET_ARG(0);
@@ -1046,10 +1050,10 @@ target_ulong do_arm_semihosting(CPUARMState *env)
 #else
             limit = ram_size;
             /* TODO: Make this use the limit of the loaded application.  */
-            retvals[0] = limit / 2;
-            retvals[1] = limit;
-            retvals[2] = limit; /* Stack base */
-            retvals[3] = 0; /* Stack limit.  */
+            retvals[0] = rambase + limit / 2;
+            retvals[1] = rambase + limit;
+            retvals[2] = rambase + limit; /* Stack base */
+            retvals[3] = rambase; /* Stack limit.  */
 #endif
 
             for (i = 0; i < ARRAY_SIZE(retvals); i++) {

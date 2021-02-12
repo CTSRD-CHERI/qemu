@@ -85,9 +85,7 @@ typedef uint64_t vlan_bd_t;
 #define VLAN_MAX_BUFS        (VLAN_RX_BDS_LEN / 8)
 
 #define TYPE_VIO_SPAPR_VLAN_DEVICE "spapr-vlan"
-typedef struct SpaprVioVlan SpaprVioVlan;
-DECLARE_INSTANCE_CHECKER(SpaprVioVlan, VIO_SPAPR_VLAN_DEVICE,
-                         TYPE_VIO_SPAPR_VLAN_DEVICE)
+OBJECT_DECLARE_SIMPLE_TYPE(SpaprVioVlan, VIO_SPAPR_VLAN_DEVICE)
 
 #define RX_POOL_MAX_BDS 4096
 #define RX_MAX_POOLS 5
@@ -690,7 +688,8 @@ static target_ulong h_send_logical_lan(PowerPCCPU *cpu,
     SpaprVioDevice *sdev = spapr_vio_find_by_reg(spapr->vio_bus, reg);
     SpaprVioVlan *dev = VIO_SPAPR_VLAN_DEVICE(sdev);
     unsigned total_len;
-    uint8_t *lbuf, *p;
+    uint8_t *p;
+    g_autofree uint8_t *lbuf = NULL;
     int i, nbufs;
     int ret;
 
@@ -731,7 +730,7 @@ static target_ulong h_send_logical_lan(PowerPCCPU *cpu,
         return H_RESOURCE;
     }
 
-    lbuf = alloca(total_len);
+    lbuf = g_malloc(total_len);
     p = lbuf;
     for (i = 0; i < nbufs; i++) {
         ret = spapr_vio_dma_read(sdev, VLAN_BD_ADDR(bufs[i]),

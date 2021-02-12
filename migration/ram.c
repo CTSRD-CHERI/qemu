@@ -101,14 +101,16 @@ static struct {
 
 static void XBZRLE_cache_lock(void)
 {
-    if (migrate_use_xbzrle())
+    if (migrate_use_xbzrle()) {
         qemu_mutex_lock(&XBZRLE.lock);
+    }
 }
 
 static void XBZRLE_cache_unlock(void)
 {
-    if (migrate_use_xbzrle())
+    if (migrate_use_xbzrle()) {
         qemu_mutex_unlock(&XBZRLE.lock);
+    }
 }
 
 /**
@@ -158,20 +160,11 @@ out:
     return ret;
 }
 
-static bool ramblock_is_ignored(RAMBlock *block)
+bool ramblock_is_ignored(RAMBlock *block)
 {
     return !qemu_ram_is_migratable(block) ||
            (migrate_ignore_shared() && qemu_ram_is_shared(block));
 }
-
-/* Should be holding either ram_list.mutex, or the RCU lock. */
-#define RAMBLOCK_FOREACH_NOT_IGNORED(block)            \
-    INTERNAL_RAMBLOCK_FOREACH(block)                   \
-        if (ramblock_is_ignored(block)) {} else
-
-#define RAMBLOCK_FOREACH_MIGRATABLE(block)             \
-    INTERNAL_RAMBLOCK_FOREACH(block)                   \
-        if (!qemu_ram_is_migratable(block)) {} else
 
 #undef RAMBLOCK_FOREACH
 
@@ -256,7 +249,7 @@ int64_t ramblock_recv_bitmap_send(QEMUFile *file,
     /*
      * Always use little endian when sending the bitmap. This is
      * required that when source and destination VMs are not using the
-     * same endianess. (Note: big endian won't work.)
+     * same endianness. (Note: big endian won't work.)
      */
     bitmap_to_le(le_bitmap, block->receivedmap, nbits);
 
@@ -275,7 +268,7 @@ int64_t ramblock_recv_bitmap_send(QEMUFile *file,
     qemu_put_buffer(file, (const uint8_t *)le_bitmap, size);
     /*
      * Mark as an end, in case the middle part is screwed up due to
-     * some "misterious" reason.
+     * some "mysterious" reason.
      */
     qemu_put_be64(file, RAMBLOCK_RECV_BITMAP_ENDING);
     qemu_fflush(file);
@@ -718,7 +711,7 @@ static int save_xbzrle_page(RAMState *rs, uint8_t **current_data,
     /*
      * Reaching here means the page has hit the xbzrle cache, no matter what
      * encoding result it is (normal encoding, overflow or skipping the page),
-     * count the page as encoded. This is used to caculate the encoding rate.
+     * count the page as encoded. This is used to calculate the encoding rate.
      *
      * Example: 2 pages (8KB) being encoded, first page encoding generates 2KB,
      * 2nd page turns out to be skipped (i.e. no new bytes written to the
@@ -1572,7 +1565,7 @@ int ram_save_queue_pages(const char *rbname, ram_addr_t start, ram_addr_t len)
         rs->last_req_rb = ramblock;
     }
     trace_ram_save_queue_pages(ramblock->idstr, start, len);
-    if (start+len > ramblock->used_length) {
+    if (start + len > ramblock->used_length) {
         error_report("%s request overrun start=" RAM_ADDR_FMT " len="
                      RAM_ADDR_FMT " blocklen=" RAM_ADDR_FMT,
                      __func__, start, len, ramblock->used_length);
@@ -2750,7 +2743,7 @@ static int load_xbzrle(QEMUFile *f, ram_addr_t addr, void *host)
  */
 static inline RAMBlock *ram_block_from_stream(QEMUFile *f, int flags)
 {
-    static RAMBlock *block = NULL;
+    static RAMBlock *block;
     char id[256];
     uint8_t len;
 
@@ -3018,6 +3011,18 @@ static void decompress_data_with_multi_threads(QEMUFile *f,
     qemu_mutex_unlock(&decomp_done_lock);
 }
 
+ /*
+  * we must set ram_bulk_stage to false, otherwise in
+  * migation_bitmap_find_dirty the bitmap will be unused and
+  * all the pages in ram cache wil be flushed to the ram of
+  * secondary VM.
+  */
+static void colo_init_ram_state(void)
+{
+    ram_state_init(&ram_state);
+    ram_state->ram_bulk_stage = false;
+}
+
 /*
  * colo cache: this is for secondary VM, we cache the whole
  * memory of the secondary VM, it is need to hold the global lock
@@ -3061,7 +3066,7 @@ int colo_init_ram_cache(void)
         }
     }
 
-    ram_state_init(&ram_state);
+    colo_init_ram_state();
     return 0;
 }
 
@@ -3307,7 +3312,7 @@ static int ram_load_postcopy(QEMUFile *f)
             multifd_recv_sync_main();
             break;
         default:
-            error_report("Unknown combination of migration flags: %#x"
+            error_report("Unknown combination of migration flags: 0x%x"
                          " (postcopy mode)", flags);
             ret = -EINVAL;
             break;
@@ -3585,7 +3590,7 @@ static int ram_load_precopy(QEMUFile *f)
             if (flags & RAM_SAVE_FLAG_HOOK) {
                 ram_control_load_hook(f, RAM_CONTROL_HOOK, NULL);
             } else {
-                error_report("Unknown combination of migration flags: %#x",
+                error_report("Unknown combination of migration flags: 0x%x",
                              flags);
                 ret = -EINVAL;
             }
@@ -3705,7 +3710,7 @@ int ram_dirty_bitmap_reload(MigrationState *s, RAMBlock *block)
 
     /*
      * Note: see comments in ramblock_recv_bitmap_send() on why we
-     * need the endianess convertion, and the paddings.
+     * need the endianness conversion, and the paddings.
      */
     local_size = ROUND_UP(local_size, 8);
 
@@ -3736,14 +3741,14 @@ int ram_dirty_bitmap_reload(MigrationState *s, RAMBlock *block)
     }
 
     if (end_mark != RAMBLOCK_RECV_BITMAP_ENDING) {
-        error_report("%s: ramblock '%s' end mark incorrect: 0x%"PRIu64,
+        error_report("%s: ramblock '%s' end mark incorrect: 0x%"PRIx64,
                      __func__, block->idstr, end_mark);
         ret = -EINVAL;
         goto out;
     }
 
     /*
-     * Endianess convertion. We are during postcopy (though paused).
+     * Endianness conversion. We are during postcopy (though paused).
      * The dirty bitmap won't change. We can directly modify it.
      */
     bitmap_from_le(block->bmap, le_bitmap, nbits);

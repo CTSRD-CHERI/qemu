@@ -24,9 +24,7 @@
 #include "util.h"
 
 #define TYPE_FILTER_REWRITER "filter-rewriter"
-typedef struct RewriterState RewriterState;
-DECLARE_INSTANCE_CHECKER(RewriterState, FILTER_REWRITER,
-                         TYPE_FILTER_REWRITER)
+OBJECT_DECLARE_SIMPLE_TYPE(RewriterState, FILTER_REWRITER)
 
 #define FAILOVER_MODE_ON  true
 #define FAILOVER_MODE_OFF false
@@ -383,6 +381,8 @@ static void colo_rewriter_cleanup(NetFilterState *nf)
         filter_rewriter_flush(nf);
         g_free(s->incoming_queue);
     }
+
+    g_hash_table_destroy(s->connection_track_table);
 }
 
 static void colo_rewriter_setup(NetFilterState *nf, Error **errp)

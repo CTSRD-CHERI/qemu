@@ -11,7 +11,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -29,12 +29,10 @@
 
 #define TYPE_VIO_SPAPR_DEVICE "vio-spapr-device"
 OBJECT_DECLARE_TYPE(SpaprVioDevice, SpaprVioDeviceClass,
-                    vio_spapr_device, VIO_SPAPR_DEVICE)
+                    VIO_SPAPR_DEVICE)
 
 #define TYPE_SPAPR_VIO_BUS "spapr-vio-bus"
-typedef struct SpaprVioBus SpaprVioBus;
-DECLARE_INSTANCE_CHECKER(SpaprVioBus, SPAPR_VIO_BUS,
-                         TYPE_SPAPR_VIO_BUS)
+OBJECT_DECLARE_SIMPLE_TYPE(SpaprVioBus, SPAPR_VIO_BUS)
 
 #define TYPE_SPAPR_VIO_BRIDGE "spapr-vio-bridge"
 

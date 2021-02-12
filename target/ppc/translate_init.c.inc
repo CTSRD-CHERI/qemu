@@ -7,7 +7,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -792,7 +792,7 @@ static void gen_spr_generic(CPUPPCState *env)
                  &spr_read_xer, &spr_write_xer,
                  &spr_read_xer, &spr_write_xer,
                  0x00000000);
-    /* Branch contol */
+    /* Branch control */
     spr_register(env, SPR_LR, "LR",
                  &spr_read_lr, &spr_write_lr,
                  &spr_read_lr, &spr_write_lr,
@@ -10328,6 +10328,8 @@ static void ppc_cpu_unrealize(DeviceState *dev)
 
     pcc->parent_unrealize(dev);
 
+    cpu_remove_sync(CPU(cpu));
+
     for (i = 0; i < PPC_CPU_OPCODES_LEN; i++) {
         if (cpu->opcodes[i] == &invalid_handler) {
             continue;
@@ -10478,7 +10480,7 @@ static void ppc_cpu_parse_featurestr(const char *type, char *features,
         return;
     }
 
-    if (object_property_find(machine, "max-cpu-compat", NULL)) {
+    if (object_property_find(machine, "max-cpu-compat")) {
         int i;
         char **inpieces;
         char *s = features;
@@ -10960,6 +10962,7 @@ static const TypeInfo ppc_cpu_type_info = {
     .name = TYPE_POWERPC_CPU,
     .parent = TYPE_CPU,
     .instance_size = sizeof(PowerPCCPU),
+    .instance_align = __alignof__(PowerPCCPU),
     .instance_init = ppc_cpu_instance_init,
     .instance_finalize = ppc_cpu_instance_finalize,
     .abstract = true,

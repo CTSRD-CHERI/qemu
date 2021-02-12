@@ -42,6 +42,21 @@ typedef struct IOMMUMemoryRegionClass IOMMUMemoryRegionClass;
 DECLARE_OBJ_CHECKERS(IOMMUMemoryRegion, IOMMUMemoryRegionClass,
                      IOMMU_MEMORY_REGION, TYPE_IOMMU_MEMORY_REGION)
 
+#ifdef CONFIG_FUZZ
+void fuzz_dma_read_cb(size_t addr,
+                      size_t len,
+                      MemoryRegion *mr,
+                      bool is_write);
+#else
+static inline void fuzz_dma_read_cb(size_t addr,
+                                    size_t len,
+                                    MemoryRegion *mr,
+                                    bool is_write)
+{
+    /* Do Nothing */
+}
+#endif
+
 extern bool global_dirty_log;
 
 typedef struct MemoryRegionOps MemoryRegionOps;
@@ -228,8 +243,11 @@ enum IOMMUMemoryRegionAttr {
  * attributes and the output TLB entry depends on the transaction
  * attributes, we represent this using IOMMU indexes. Each index
  * selects a particular translation table that the IOMMU has:
+ *
  *   @attrs_to_index returns the IOMMU index for a set of transaction attributes
+ *
  *   @translate takes an input address and an IOMMU index
+ *
  * and the mapping returned can only depend on the input address and the
  * IOMMU index.
  *
@@ -238,10 +256,13 @@ enum IOMMUMemoryRegionAttr {
  * for secure transactions and one for non-secure transactions.
  */
 struct IOMMUMemoryRegionClass {
-    /* private */
+    /* private: */
     MemoryRegionClass parent_class;
 
-    /*
+    /* public: */
+    /**
+     * @translate:
+     *
      * Return a TLB entry that contains a given address.
      *
      * The IOMMUAccessFlags indicated via @flag are optional and may
@@ -262,26 +283,38 @@ struct IOMMUMemoryRegionClass {
      * information when the IOMMU mapping changes.
      *
      * @iommu: the IOMMUMemoryRegion
+     *
      * @hwaddr: address to be translated within the memory region
-     * @flag: requested access permissions
+     *
+     * @flag: requested access permission
+     *
      * @iommu_idx: IOMMU index for the translation
      */
     IOMMUTLBEntry (*translate)(IOMMUMemoryRegion *iommu, hwaddr addr,
                                IOMMUAccessFlags flag, int iommu_idx);
-    /* Returns minimum supported page size in bytes.
+    /**
+     * @get_min_page_size:
+     *
+     * Returns minimum supported page size in bytes.
+     *
      * If this method is not provided then the minimum is assumed to
      * be TARGET_PAGE_SIZE.
      *
      * @iommu: the IOMMUMemoryRegion
      */
     uint64_t (*get_min_page_size)(IOMMUMemoryRegion *iommu);
-    /* Called when IOMMU Notifier flag changes (ie when the set of
+    /**
+     * @notify_flag_changed:
+     *
+     * Called when IOMMU Notifier flag changes (ie when the set of
      * events which IOMMU users are requesting notification for changes).
      * Optional method -- need not be provided if the IOMMU does not
      * need to know exactly which events must be notified.
      *
      * @iommu: the IOMMUMemoryRegion
+     *
      * @old_flags: events which previously needed to be notified
+     *
      * @new_flags: events which now need to be notified
      *
      * Returns 0 on success, or a negative errno; in particular
@@ -293,7 +326,10 @@ struct IOMMUMemoryRegionClass {
                                IOMMUNotifierFlag old_flags,
                                IOMMUNotifierFlag new_flags,
                                Error **errp);
-    /* Called to handle memory_region_iommu_replay().
+    /**
+     * @replay:
+     *
+     * Called to handle memory_region_iommu_replay().
      *
      * The default implementation of memory_region_iommu_replay() is to
      * call the IOMMU translate method for every page in the address space
@@ -310,7 +346,10 @@ struct IOMMUMemoryRegionClass {
      */
     void (*replay)(IOMMUMemoryRegion *iommu, IOMMUNotifier *notifier);
 
-    /* Get IOMMU misc attributes. This is an optional method that
+    /**
+     * @get_attr:
+     *
+     * Get IOMMU misc attributes. This is an optional method that
      * can be used to allow users of the IOMMU to get implementation-specific
      * information. The IOMMU implements this method to handle calls
      * by IOMMU users to memory_region_iommu_get_attr() by filling in
@@ -319,7 +358,9 @@ struct IOMMUMemoryRegionClass {
      * memory_region_iommu_get_attr() will always return -EINVAL.
      *
      * @iommu: the IOMMUMemoryRegion
+     *
      * @attr: attribute being queried
+     *
      * @data: memory to fill in with the attribute data
      *
      * Returns 0 on success, or a negative errno; in particular
@@ -328,7 +369,10 @@ struct IOMMUMemoryRegionClass {
     int (*get_attr)(IOMMUMemoryRegion *iommu, enum IOMMUMemoryRegionAttr attr,
                     void *data);
 
-    /* Return the IOMMU index to use for a given set of transaction attributes.
+    /**
+     * @attrs_to_index:
+     *
+     * Return the IOMMU index to use for a given set of transaction attributes.
      *
      * Optional method: if an IOMMU only supports a single IOMMU index then
      * the default implementation of memory_region_iommu_attrs_to_index()
@@ -341,7 +385,10 @@ struct IOMMUMemoryRegionClass {
      */
     int (*attrs_to_index)(IOMMUMemoryRegion *iommu, MemTxAttrs attrs);
 
-    /* Return the number of IOMMU indexes this IOMMU supports.
+    /**
+     * @num_indexes:
+     *
+     * Return the number of IOMMU indexes this IOMMU supports.
      *
      * Optional method: if this method is not provided, then
      * memory_region_iommu_num_indexes() will return 1, indicating that
@@ -350,6 +397,32 @@ struct IOMMUMemoryRegionClass {
      * @iommu: the IOMMUMemoryRegion
      */
     int (*num_indexes)(IOMMUMemoryRegion *iommu);
+
+    /**
+     * @iommu_set_page_size_mask:
+     *
+     * Restrict the page size mask that can be supported with a given IOMMU
+     * memory region. Used for example to propagate host physical IOMMU page
+     * size mask limitations to the virtual IOMMU.
+     *
+     * Optional method: if this method is not provided, then the default global
+     * page mask is used.
+     *
+     * @iommu: the IOMMUMemoryRegion
+     *
+     * @page_size_mask: a bitmask of supported page sizes. At least one bit,
+     * representing the smallest page size, must be set. Additional set bits
+     * represent supported block sizes. For example a host physical IOMMU that
+     * uses page tables with a page size of 4kB, and supports 2MB and 4GB
+     * blocks, will set mask 0x40201000. A granule of 4kB with indiscriminate
+     * block sizes is specified with mask 0xfffffffffffff000.
+     *
+     * Returns 0 on success, or a negative error. In case of failure, the error
+     * object must be created.
+     */
+     int (*iommu_set_page_size_mask)(IOMMUMemoryRegion *iommu,
+                                     uint64_t page_size_mask,
+                                     Error **errp);
 };
 
 typedef struct CoalescedMemoryRange CoalescedMemoryRange;
@@ -372,7 +445,6 @@ struct MemoryRegion {
     bool nonvolatile;
     bool rom_device;
     bool flush_coalesced_mmio;
-    bool global_locking;
     uint8_t dirty_log_mask;
     bool is_iommu;
     RAMBlock *ram_block;
@@ -412,7 +484,7 @@ struct IOMMUMemoryRegion {
     QLIST_FOREACH((n), &(mr)->iommu_notify, node)
 
 /**
- * MemoryListener: callbacks structure for updates to the physical memory map
+ * struct MemoryListener: callbacks structure for updates to the physical memory map
  *
  * Allows a component to adjust to changes in the guest-visible memory map.
  * Use with memory_listener_register() and memory_listener_unregister().
@@ -650,7 +722,7 @@ struct MemoryListener {
 };
 
 /**
- * AddressSpace: describes a mapping of addresses to #MemoryRegion objects
+ * struct AddressSpace: describes a mapping of addresses to #MemoryRegion objects
  */
 struct AddressSpace {
     /* private: */
@@ -685,12 +757,17 @@ struct FlatView {
 
 static inline FlatView *address_space_to_flatview(AddressSpace *as)
 {
-    return atomic_rcu_read(&as->current_map);
+    return qatomic_rcu_read(&as->current_map);
 }
 
+typedef int (*flatview_cb)(Int128 start,
+                           Int128 len,
+                           const MemoryRegion*, void*);
+
+void flatview_for_each_range(FlatView *fv, flatview_cb cb , void *opaque);
 
 /**
- * MemoryRegionSection: describes a fragment of a #MemoryRegion
+ * struct MemoryRegionSection: describes a fragment of a #MemoryRegion
  *
  * @mr: the region, or %NULL if empty
  * @fv: the flat view of the address space the region is mapped in
@@ -1359,6 +1436,18 @@ int memory_region_iommu_attrs_to_index(IOMMUMemoryRegion *iommu_mr,
 int memory_region_iommu_num_indexes(IOMMUMemoryRegion *iommu_mr);
 
 /**
+ * memory_region_iommu_set_page_size_mask: set the supported page
+ * sizes for a given IOMMU memory region
+ *
+ * @iommu_mr: IOMMU memory region
+ * @page_size_mask: supported page size mask
+ * @errp: pointer to Error*, to store an error if it happens.
+ */
+int memory_region_iommu_set_page_size_mask(IOMMUMemoryRegion *iommu_mr,
+                                           uint64_t page_size_mask,
+                                           Error **errp);
+
+/**
  * memory_region_name: get a memory region's name
  *
  * Returns the string that was used to initialize the memory region.
@@ -1705,19 +1794,6 @@ void memory_region_set_flush_coalesced(MemoryRegion *mr);
  * @mr: the memory region to be updated.
  */
 void memory_region_clear_flush_coalesced(MemoryRegion *mr);
-
-/**
- * memory_region_clear_global_locking: Declares that access processing does
- *                                     not depend on the QEMU global lock.
- *
- * By clearing this property, accesses to the memory region will be processed
- * outside of QEMU's global lock (unless the lock is held on when issuing the
- * access request). In this case, the device model implementing the access
- * handlers is responsible for synchronization of concurrency.
- *
- * @mr: the memory region to be updated.
- */
-void memory_region_clear_global_locking(MemoryRegion *mr);
 
 /**
  * memory_region_add_eventfd: Request an eventfd to be triggered when a word
@@ -2424,6 +2500,7 @@ address_space_read_cached(MemoryRegionCache *cache, hwaddr addr,
                           void *buf, hwaddr len)
 {
     assert(addr < cache->len && len <= cache->len - addr);
+    fuzz_dma_read_cb(cache->xlat + addr, len, cache->mrs.mr, false);
     if (likely(cache->ptr)) {
         memcpy(buf, cache->ptr + addr, len);
         return MEMTX_OK;

@@ -19,9 +19,7 @@
 #include "qom/object.h"
 
 #define TYPE_TMP105 "tmp105"
-typedef struct TMP105State TMP105State;
-DECLARE_INSTANCE_CHECKER(TMP105State, TMP105,
-                         TYPE_TMP105)
+OBJECT_DECLARE_SIMPLE_TYPE(TMP105State, TMP105)
 
 /**
  * TMP105State:
@@ -45,6 +43,13 @@ struct TMP105State {
     int16_t limit[2];
     int faults;
     uint8_t alarm;
+    /*
+     * The TMP105 initially looks for a temperature rising above T_high;
+     * once this is detected, the condition it looks for next is the
+     * temperature falling below T_low. This flag is false when initially
+     * looking for T_high, true when looking for T_low.
+     */
+    bool detect_falling;
 };
 
 #endif

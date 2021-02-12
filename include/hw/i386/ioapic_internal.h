@@ -8,7 +8,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -82,12 +82,9 @@
 
 #define IOAPIC_VER_ENTRIES_SHIFT        16
 
-typedef struct IOAPICCommonState IOAPICCommonState;
 
 #define TYPE_IOAPIC_COMMON "ioapic-common"
-typedef struct IOAPICCommonClass IOAPICCommonClass;
-DECLARE_OBJ_CHECKERS(IOAPICCommonState, IOAPICCommonClass,
-                     IOAPIC_COMMON, TYPE_IOAPIC_COMMON)
+OBJECT_DECLARE_TYPE(IOAPICCommonState, IOAPICCommonClass, IOAPIC_COMMON)
 
 struct IOAPICCommonClass {
     SysBusDeviceClass parent_class;

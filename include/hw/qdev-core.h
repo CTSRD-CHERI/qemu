@@ -3,6 +3,8 @@
 
 #include "qemu/queue.h"
 #include "qemu/bitmap.h"
+#include "qemu/rcu.h"
+#include "qemu/rcu_queue.h"
 #include "qom/object.h"
 #include "hw/hotplug.h"
 #include "hw/resettable.h"
@@ -12,9 +14,7 @@ enum {
 };
 
 #define TYPE_DEVICE "device"
-typedef struct DeviceClass DeviceClass;
-DECLARE_OBJ_CHECKERS(DeviceState, DeviceClass,
-                     DEVICE, TYPE_DEVICE)
+OBJECT_DECLARE_TYPE(DeviceState, DeviceClass, DEVICE)
 
 typedef enum DeviceCategory {
     DEVICE_CATEGORY_BRIDGE,
@@ -163,6 +163,8 @@ struct NamedClockList {
 /**
  * DeviceState:
  * @realized: Indicates whether the device has been fully constructed.
+ *            When accessed outside big qemu lock, must be accessed with
+ *            qatomic_load_acquire()
  * @reset: ResettableState for the device; handled by Resettable interface.
  *
  * This structure should not be accessed directly.  We declare it here
@@ -212,13 +214,24 @@ struct BusClass {
     /* FIXME first arg should be BusState */
     void (*print_dev)(Monitor *mon, DeviceState *dev, int indent);
     char *(*get_dev_path)(DeviceState *dev);
+
     /*
      * This callback is used to create Open Firmware device path in accordance
      * with OF spec http://forthworks.com/standards/of1275.pdf. Individual bus
      * bindings can be found at http://playground.sun.com/1275/bindings/.
      */
     char *(*get_fw_dev_path)(DeviceState *dev);
+
     void (*reset)(BusState *bus);
+
+    /*
+     * Return whether the device can be added to @bus,
+     * based on the address that was set (via device properties)
+     * before realize.  If not, on return @errp contains the
+     * human-readable error message.
+     */
+    bool (*check_address)(BusState *bus, DeviceState *dev, Error **errp);
+
     BusRealize realize;
     BusUnrealize unrealize;
 
@@ -229,6 +242,7 @@ struct BusClass {
 };
 
 typedef struct BusChild {
+    struct rcu_head rcu;
     DeviceState *child;
     int index;
     QTAILQ_ENTRY(BusChild) sibling;
@@ -249,6 +263,12 @@ struct BusState {
     int max_index;
     bool realized;
     int num_children;
+
+    /*
+     * children is a RCU QTAILQ, thus readers must use RCU to access it,
+     * and writers must hold the big qemu lock
+     */
+
     QTAILQ_HEAD(, BusChild) children;
     QLIST_ENTRY(BusState) sibling;
     ResettableState reset;
@@ -422,6 +442,22 @@ void qdev_simple_device_unplug_cb(HotplugHandler *hotplug_dev,
                                   DeviceState *dev, Error **errp);
 void qdev_machine_creation_done(void);
 bool qdev_machine_modified(void);
+
+/**
+ * GpioPolarity: Polarity of a GPIO line
+ *
+ * GPIO lines use either positive (active-high) logic,
+ * or negative (active-low) logic.
+ *
+ * In active-high logic (%GPIO_POLARITY_ACTIVE_HIGH), a pin is
+ * active when the voltage on the pin is high (relative to ground);
+ * whereas in active-low logic (%GPIO_POLARITY_ACTIVE_LOW), a pin
+ * is active when the voltage on the pin is low (or grounded).
+ */
+typedef enum {
+    GPIO_POLARITY_ACTIVE_LOW,
+    GPIO_POLARITY_ACTIVE_HIGH
+} GpioPolarity;
 
 /**
  * qdev_get_gpio_in: Get one of a device's anonymous input GPIO lines
@@ -790,7 +826,7 @@ const char *qdev_fw_name(DeviceState *dev);
 Object *qdev_get_machine(void);
 
 /* FIXME: make this a link<> */
-void qdev_set_parent_bus(DeviceState *dev, BusState *bus);
+bool qdev_set_parent_bus(DeviceState *dev, BusState *bus, Error **errp);
 
 extern bool qdev_hotplug;
 extern bool qdev_hot_removed;

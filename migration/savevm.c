@@ -42,7 +42,6 @@
 #include "postcopy-ram.h"
 #include "qapi/error.h"
 #include "qapi/qapi-commands-migration.h"
-#include "qapi/qapi-commands-misc.h"
 #include "qapi/qmp/qerror.h"
 #include "qemu/error-report.h"
 #include "sysemu/cpus.h"
@@ -64,7 +63,7 @@
 #include "qemu/bitmap.h"
 #include "net/announce.h"
 
-const unsigned int postcopy_ram_discard_version = 0;
+const unsigned int postcopy_ram_discard_version;
 
 /* Subcommands for QEMU_VM_COMMAND */
 enum qemu_vm_cmd {
@@ -521,7 +520,7 @@ static const VMStateDescription vmstate_configuration = {
         VMSTATE_VBUFFER_ALLOC_UINT32(name, SaveState, 0, NULL, len),
         VMSTATE_END_OF_LIST()
     },
-    .subsections = (const VMStateDescription*[]) {
+    .subsections = (const VMStateDescription *[]) {
         &vmstate_target_page_bits,
         &vmstate_capabilites,
         &vmstate_uuid,
@@ -2011,6 +2010,49 @@ static int loadvm_postcopy_handle_run(MigrationIncomingState *mis)
     return LOADVM_QUIT;
 }
 
+/* We must be with page_request_mutex held */
+static gboolean postcopy_sync_page_req(gpointer key, gpointer value,
+                                       gpointer data)
+{
+    MigrationIncomingState *mis = data;
+    void *host_addr = (void *) key;
+    ram_addr_t rb_offset;
+    RAMBlock *rb;
+    int ret;
+
+    rb = qemu_ram_block_from_host(host_addr, true, &rb_offset);
+    if (!rb) {
+        /*
+         * This should _never_ happen.  However be nice for a migrating VM to
+         * not crash/assert.  Post an error (note: intended to not use *_once
+         * because we do want to see all the illegal addresses; and this can
+         * never be triggered by the guest so we're safe) and move on next.
+         */
+        error_report("%s: illegal host addr %p", __func__, host_addr);
+        /* Try the next entry */
+        return FALSE;
+    }
+
+    ret = migrate_send_rp_message_req_pages(mis, rb, rb_offset);
+    if (ret) {
+        /* Please refer to above comment. */
+        error_report("%s: send rp message failed for addr %p",
+                     __func__, host_addr);
+        return FALSE;
+    }
+
+    trace_postcopy_page_req_sync(host_addr);
+
+    return FALSE;
+}
+
+static void migrate_send_rp_req_pages_pending(MigrationIncomingState *mis)
+{
+    WITH_QEMU_LOCK_GUARD(&mis->page_request_mutex) {
+        g_tree_foreach(mis->page_requested, postcopy_sync_page_req, mis);
+    }
+}
+
 static int loadvm_postcopy_handle_resume(MigrationIncomingState *mis)
 {
     if (mis->state != MIGRATION_STATUS_POSTCOPY_RECOVER) {
@@ -2020,18 +2062,43 @@ static int loadvm_postcopy_handle_resume(MigrationIncomingState *mis)
     }
 
     /*
+     * Reset the last_rb before we resend any page req to source again, since
+     * the source should have it reset already.
+     */
+    mis->last_rb = NULL;
+
+    /*
      * This means source VM is ready to resume the postcopy migration.
-     * It's time to switch state and release the fault thread to
-     * continue service page faults.
      */
     migrate_set_state(&mis->state, MIGRATION_STATUS_POSTCOPY_RECOVER,
                       MIGRATION_STATUS_POSTCOPY_ACTIVE);
-    qemu_sem_post(&mis->postcopy_pause_sem_fault);
 
     trace_loadvm_postcopy_handle_resume();
 
     /* Tell source that "we are ready" */
     migrate_send_rp_resume_ack(mis, MIGRATION_RESUME_ACK_VALUE);
+
+    /*
+     * After a postcopy recovery, the source should have lost the postcopy
+     * queue, or potentially the requested pages could have been lost during
+     * the network down phase.  Let's re-sync with the source VM by re-sending
+     * all the pending pages that we eagerly need, so these threads won't get
+     * blocked too long due to the recovery.
+     *
+     * Without this procedure, the faulted destination VM threads (waiting for
+     * page requests right before the postcopy is interrupted) can keep hanging
+     * until the pages are sent by the source during the background copying of
+     * pages, or another thread faulted on the same address accidentally.
+     */
+    migrate_send_rp_req_pages_pending(mis);
+
+    /*
+     * It's time to switch state and release the fault thread to continue
+     * service page faults.  Note that this should be explicitly after the
+     * above call to migrate_send_rp_req_pages_pending().  In short:
+     * migrate_send_rp_message_req_pages() is not thread safe, yet.
+     */
+    qemu_sem_post(&mis->postcopy_pause_sem_fault);
 
     return 0;
 }
@@ -2723,6 +2790,11 @@ int save_snapshot(const char *name, Error **errp)
     sn->date_sec = tv.tv_sec;
     sn->date_nsec = tv.tv_usec * 1000;
     sn->vm_clock_nsec = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    if (replay_mode != REPLAY_MODE_NONE) {
+        sn->icount = replay_get_current_icount();
+    } else {
+        sn->icount = -1ULL;
+    }
 
     if (name) {
         ret = bdrv_snapshot_find(bs, old_sn, name);
@@ -2795,7 +2867,7 @@ void qmp_xen_save_devices_state(const char *filename, bool has_live, bool live,
 
     if (!has_live) {
         /* live default to true so old version of Xen tool stack can have a
-         * successfull live migration */
+         * successful live migration */
         live = true;
     }
 
@@ -2803,7 +2875,8 @@ void qmp_xen_save_devices_state(const char *filename, bool has_live, bool live,
     vm_stop(RUN_STATE_SAVE_VM);
     global_state_store_running();
 
-    ioc = qio_channel_file_new_path(filename, O_WRONLY | O_CREAT, 0660, errp);
+    ioc = qio_channel_file_new_path(filename, O_WRONLY | O_CREAT | O_TRUNC,
+                                    0660, errp);
     if (!ioc) {
         goto the_end;
     }
@@ -2818,7 +2891,7 @@ void qmp_xen_save_devices_state(const char *filename, bool has_live, bool live,
          * "xen-save-devices-state" and in case of migration failure, libxl
          * would call "cont".
          * So call bdrv_inactivate_all (release locks) here to let the other
-         * side of the migration take controle of the images.
+         * side of the migration take control of the images.
          */
         if (live && !saved_vm_running) {
             ret = bdrv_inactivate_all();
@@ -2875,12 +2948,6 @@ int load_snapshot(const char *name, Error **errp)
     AioContext *aio_context;
     MigrationIncomingState *mis = migration_incoming_get_current();
 
-    if (!replay_can_snapshot()) {
-        error_setg(errp, "Record/replay does not allow loading snapshot "
-                   "right now. Try once more later.");
-        return -EINVAL;
-    }
-
     if (!bdrv_all_can_snapshot(&bs)) {
         error_setg(errp,
                    "Device '%s' is writable but does not support snapshots",
@@ -2913,6 +2980,12 @@ int load_snapshot(const char *name, Error **errp)
                    " offline using qemu-img");
         return -EINVAL;
     }
+
+    /*
+     * Flush the record/replay queue. Now the VM state is going
+     * to change. Therefore we don't need to preserve its consistency
+     */
+    replay_flush_events();
 
     /* Flush all IO requests so they don't interfere with the new state.  */
     bdrv_drain_all_begin();

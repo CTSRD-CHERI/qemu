@@ -481,7 +481,7 @@ _syscall4(int, sys_prlimit64, pid_t, pid, int, resource,
 
 
 #if defined(TARGET_NR_timer_create)
-/* Maxiumum of 32 active POSIX timers allowed at any one time. */
+/* Maximum of 32 active POSIX timers allowed at any one time. */
 static timer_t g_posix_timers[32] = { 0, } ;
 
 static inline int next_free_host_timer(void)
@@ -3491,16 +3491,16 @@ static abi_long do_accept4(int fd, abi_ulong target_addr,
         return get_errno(safe_accept4(fd, NULL, NULL, host_flags));
     }
 
-    /* linux returns EINVAL if addrlen pointer is invalid */
+    /* linux returns EFAULT if addrlen pointer is invalid */
     if (get_user_u32(addrlen, target_addrlen_addr))
-        return -TARGET_EINVAL;
+        return -TARGET_EFAULT;
 
     if ((int)addrlen < 0) {
         return -TARGET_EINVAL;
     }
 
     if (!access_ok(VERIFY_WRITE, target_addr, addrlen))
-        return -TARGET_EINVAL;
+        return -TARGET_EFAULT;
 
     addr = alloca(addrlen);
 
@@ -7592,7 +7592,9 @@ static int do_futex_time64(target_ulong uaddr, int op, int val, target_ulong tim
     case FUTEX_WAIT_BITSET:
         if (timeout) {
             pts = &ts;
-            target_to_host_timespec64(pts, timeout);
+            if (target_to_host_timespec64(pts, timeout)) {
+                return -TARGET_EFAULT;
+            }
         } else {
             pts = NULL;
         }
@@ -8180,7 +8182,7 @@ static abi_long do_syscall1(void *cpu_env, int num, abi_long arg1,
     switch(num) {
     case TARGET_NR_exit:
         /* In old applications this may be used to implement _exit(2).
-           However in threaded applictions it is used for thread termination,
+           However in threaded applications it is used for thread termination,
            and _exit_group is used for application termination.
            Do thread termination if we have more then one thread.  */
 
@@ -9787,6 +9789,11 @@ static abi_long do_syscall1(void *cpu_env, int num, abi_long arg1,
             __put_user(stfs.f_fsid.__val[1], &target_stfs->f_fsid.val[1]);
             __put_user(stfs.f_namelen, &target_stfs->f_namelen);
             __put_user(stfs.f_frsize, &target_stfs->f_frsize);
+#ifdef _STATFS_F_FLAGS
+            __put_user(stfs.f_flags, &target_stfs->f_flags);
+#else
+            __put_user(0, &target_stfs->f_flags);
+#endif
             memset(target_stfs->f_spare, 0, sizeof(target_stfs->f_spare));
             unlock_user_struct(target_stfs, arg3, 1);
         }
@@ -10525,12 +10532,6 @@ static abi_long do_syscall1(void *cpu_env, int num, abi_long arg1,
     case TARGET_NR_fdatasync:
         return get_errno(fdatasync(arg1));
 #endif
-#ifdef TARGET_NR__sysctl
-    case TARGET_NR__sysctl:
-        /* We don't implement this, but ENOTDIR is always a safe
-           return value. */
-        return -TARGET_ENOTDIR;
-#endif
     case TARGET_NR_sched_getaffinity:
         {
             unsigned int mask_size;
@@ -10703,7 +10704,7 @@ static abi_long do_syscall1(void *cpu_env, int num, abi_long arg1,
             int deathsig;
             ret = get_errno(prctl(arg1, &deathsig, arg3, arg4, arg5));
             if (!is_error(ret) && arg2
-                && put_user_ual(deathsig, arg2)) {
+                && put_user_s32(deathsig, arg2)) {
                 return -TARGET_EFAULT;
             }
             return ret;
@@ -12589,17 +12590,25 @@ static abi_long do_syscall1(void *cpu_env, int num, abi_long arg1,
         struct epoll_event ep;
         struct epoll_event *epp = 0;
         if (arg4) {
-            struct target_epoll_event *target_ep;
-            if (!lock_user_struct(VERIFY_READ, target_ep, arg4, 1)) {
-                return -TARGET_EFAULT;
+            if (arg2 != EPOLL_CTL_DEL) {
+                struct target_epoll_event *target_ep;
+                if (!lock_user_struct(VERIFY_READ, target_ep, arg4, 1)) {
+                    return -TARGET_EFAULT;
+                }
+                ep.events = tswap32(target_ep->events);
+                /*
+                 * The epoll_data_t union is just opaque data to the kernel,
+                 * so we transfer all 64 bits across and need not worry what
+                 * actual data type it is.
+                 */
+                ep.data.u64 = tswap64(target_ep->data.u64);
+                unlock_user_struct(target_ep, arg4, 0);
             }
-            ep.events = tswap32(target_ep->events);
-            /* The epoll_data_t union is just opaque data to the kernel,
-             * so we transfer all 64 bits across and need not worry what
-             * actual data type it is.
+            /*
+             * before kernel 2.6.9, EPOLL_CTL_DEL operation required a
+             * non-null pointer, even though this argument is ignored.
+             *
              */
-            ep.data.u64 = tswap64(target_ep->data.u64);
-            unlock_user_struct(target_ep, arg4, 0);
             epp = &ep;
         }
         return get_errno(epoll_ctl(arg1, arg2, arg3, epp));

@@ -37,8 +37,6 @@
 #include "sysemu/block-backend.h"
 #include "qemu/error-report.h"
 #include "qemu/module.h"
-
-#include <xenguest.h>
 #include "qom/object.h"
 
 //#define DEBUG_PLATFORM
@@ -69,11 +67,9 @@ struct PCIXenPlatformState {
     char log_buffer[4096];
     int log_buffer_off;
 };
-typedef struct PCIXenPlatformState PCIXenPlatformState;
 
 #define TYPE_XEN_PLATFORM "xen-platform"
-DECLARE_INSTANCE_CHECKER(PCIXenPlatformState, XEN_PLATFORM,
-                         TYPE_XEN_PLATFORM)
+OBJECT_DECLARE_SIMPLE_TYPE(PCIXenPlatformState, XEN_PLATFORM)
 
 #define XEN_PLATFORM_IOPORT 0x10
 

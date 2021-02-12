@@ -9,7 +9,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -51,19 +51,15 @@ typedef struct AHCIState {
     AddressSpace *as;
 } AHCIState;
 
-typedef struct AHCIPCIState AHCIPCIState;
 
 #define TYPE_ICH9_AHCI "ich9-ahci"
-DECLARE_INSTANCE_CHECKER(AHCIPCIState, ICH9_AHCI,
-                         TYPE_ICH9_AHCI)
+OBJECT_DECLARE_SIMPLE_TYPE(AHCIPCIState, ICH9_AHCI)
 
 int32_t ahci_get_num_ports(PCIDevice *dev);
 void ahci_ide_create_devs(PCIDevice *dev, DriveInfo **hd);
 
 #define TYPE_SYSBUS_AHCI "sysbus-ahci"
-typedef struct SysbusAHCIState SysbusAHCIState;
-DECLARE_INSTANCE_CHECKER(SysbusAHCIState, SYSBUS_AHCI,
-                         TYPE_SYSBUS_AHCI)
+OBJECT_DECLARE_SIMPLE_TYPE(SysbusAHCIState, SYSBUS_AHCI)
 
 struct SysbusAHCIState {
     /*< private >*/
@@ -75,9 +71,7 @@ struct SysbusAHCIState {
 };
 
 #define TYPE_ALLWINNER_AHCI "allwinner-ahci"
-typedef struct AllwinnerAHCIState AllwinnerAHCIState;
-DECLARE_INSTANCE_CHECKER(AllwinnerAHCIState, ALLWINNER_AHCI,
-                         TYPE_ALLWINNER_AHCI)
+OBJECT_DECLARE_SIMPLE_TYPE(AllwinnerAHCIState, ALLWINNER_AHCI)
 
 #define ALLWINNER_AHCI_MMIO_OFF  0x80
 #define ALLWINNER_AHCI_MMIO_SIZE 0x80

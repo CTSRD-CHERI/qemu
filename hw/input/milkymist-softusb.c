@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -51,9 +51,7 @@ enum {
 #define COMLOC_KEVT_BASE     0x1143
 
 #define TYPE_MILKYMIST_SOFTUSB "milkymist-softusb"
-typedef struct MilkymistSoftUsbState MilkymistSoftUsbState;
-DECLARE_INSTANCE_CHECKER(MilkymistSoftUsbState, MILKYMIST_SOFTUSB,
-                         TYPE_MILKYMIST_SOFTUSB)
+OBJECT_DECLARE_SIMPLE_TYPE(MilkymistSoftUsbState, MILKYMIST_SOFTUSB)
 
 struct MilkymistSoftUsbState {
     SysBusDevice parent_obj;

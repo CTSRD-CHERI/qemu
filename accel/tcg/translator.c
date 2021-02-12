@@ -15,9 +15,10 @@
 #include "exec/exec-all.h"
 #include "exec/gen-icount.h"
 #include "exec/log.h"
+#include "exec/log_instr.h"
 #include "exec/translator.h"
 #include "exec/plugin-gen.h"
-#include "exec/log_instr.h"
+#include "sysemu/replay.h"
 
 #include "cheri-translate-utils-base.h"
 
@@ -44,7 +45,7 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
      * Cache whether we are logging instructions in this tb
      * This assumes that the TCG buffer will be flushed on instruction
      * log level changes.
-     */    
+     */
     const bool log_instr_enabled = qemu_log_instr_enabled(cpu->env_ptr);
 #endif
 

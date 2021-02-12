@@ -76,6 +76,7 @@ static const int syscall_whitelist[] = {
     SCMP_SYS(mremap),
     SCMP_SYS(munmap),
     SCMP_SYS(newfstatat),
+    SCMP_SYS(statx),
     SCMP_SYS(open),
     SCMP_SYS(openat),
     SCMP_SYS(ppoll),
@@ -93,6 +94,8 @@ static const int syscall_whitelist[] = {
     SCMP_SYS(rt_sigaction),
     SCMP_SYS(rt_sigprocmask),
     SCMP_SYS(rt_sigreturn),
+    SCMP_SYS(sched_getattr),
+    SCMP_SYS(sched_setattr),
     SCMP_SYS(sendmsg),
     SCMP_SYS(setresgid),
     SCMP_SYS(setresuid),
@@ -116,6 +119,7 @@ static const int syscall_whitelist[] = {
 
 /* Syscalls used when --syslog is enabled */
 static const int syscall_whitelist_syslog[] = {
+    SCMP_SYS(send),
     SCMP_SYS(sendto),
 };
 

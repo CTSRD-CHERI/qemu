@@ -20,13 +20,11 @@ static void test_panic(void)
     qts = qtest_init("-device pvpanic");
 
     val = qtest_inb(qts, 0x505);
-    g_assert_cmpuint(val, ==, 1);
+    g_assert_cmpuint(val, ==, 3);
 
     qtest_outb(qts, 0x505, 0x1);
 
-    response = qtest_qmp_receive(qts);
-    g_assert(qdict_haskey(response, "event"));
-    g_assert_cmpstr(qdict_get_str(response, "event"), ==, "GUEST_PANICKED");
+    response = qtest_qmp_eventwait_ref(qts, "GUEST_PANICKED");
     g_assert(qdict_haskey(response, "data"));
     data = qdict_get_qdict(response, "data");
     g_assert(qdict_haskey(data, "action"));

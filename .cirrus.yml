@@ -1,65 +1,135 @@
 env:
   CIRRUS_CLONE_DEPTH: 1
 
-freebsd_1st_task:
+freebsd_12_task:
   freebsd_instance:
     image_family: freebsd-12-1
-    cpu: 4
-    memory: 4G
-  install_script: ASSUME_ALWAYS_YES=yes pkg bootstrap -f ; pkg install -y
-    bash curl cyrus-sasl git glib gmake gnutls gsed
-    nettle perl5 pixman pkgconf png usbredir
+    cpu: 8
+    memory: 8G
+  install_script:
+    - ASSUME_ALWAYS_YES=yes pkg bootstrap -f ;
+    - pkg install -y bash curl cyrus-sasl git glib gmake gnutls gsed
+          nettle perl5 pixman pkgconf png usbredir ninja
   script:
     - mkdir build
     - cd build
-    - ../configure --disable-user --target-list-exclude='alpha-softmmu
-        ppc64-softmmu ppc-softmmu riscv32-softmmu riscv64-softmmu s390x-softmmu
-        sparc64-softmmu sparc-softmmu x86_64-softmmu i386-softmmu'
-        --enable-werror || { cat config.log; exit 1; }
+    - ../configure --enable-werror || { cat config.log meson-logs/meson-log.txt; exit 1; }
     - gmake -j$(sysctl -n hw.ncpu)
-    - gmake -j$(sysctl -n hw.ncpu) check
-
-freebsd_2nd_task:
-  freebsd_instance:
-    image_family: freebsd-12-1
-    cpu: 4
-    memory: 4G
-  install_script: ASSUME_ALWAYS_YES=yes pkg bootstrap -f ; pkg install -y
-    bash curl cyrus-sasl git glib gmake gnutls gtk3 gsed libepoxy mesa-libs
-    nettle perl5 pixman pkgconf png SDL2 usbredir
-  script:
-    - ./configure --enable-werror --target-list='alpha-softmmu ppc64-softmmu
-        ppc-softmmu riscv32-softmmu riscv64-softmmu s390x-softmmu
-        sparc64-softmmu sparc-softmmu x86_64-softmmu i386-softmmu
-        sparc-bsd-user sparc64-bsd-user x86_64-bsd-user i386-bsd-user'
-        || { cat config.log; exit 1; }
-    - gmake -j$(sysctl -n hw.ncpu)
-    - gmake -j$(sysctl -n hw.ncpu) check
+    - gmake -j$(sysctl -n hw.ncpu) check V=1
 
 macos_task:
+  timeout_in: 90m
   osx_instance:
     image: catalina-base
   install_script:
-    - brew install pkg-config python gnu-sed glib pixman make sdl2 bash
+    - brew install pkg-config python gnu-sed glib pixman make sdl2 bash ninja
   script:
     - mkdir build
     - cd build
     - ../configure --python=/usr/local/bin/python3 --enable-werror
                    --extra-cflags='-Wno-error=deprecated-declarations'
-                   || { cat config.log; exit 1; }
+                   || { cat config.log meson-logs/meson-log.txt; exit 1; }
     - gmake -j$(sysctl -n hw.ncpu)
-    - gmake check
+    - gmake check V=1
 
 macos_xcode_task:
+  timeout_in: 90m
   osx_instance:
     # this is an alias for the latest Xcode
     image: catalina-xcode
   install_script:
-    - brew install pkg-config gnu-sed glib pixman make sdl2 bash
+    - brew install pkg-config gnu-sed glib pixman make sdl2 bash ninja
   script:
     - mkdir build
     - cd build
-    - ../configure --extra-cflags='-Wno-error=deprecated-declarations'
-                   --enable-werror --cc=clang || { cat config.log; exit 1; }
+    - ../configure --extra-cflags='-Wno-error=deprecated-declarations' --enable-modules
+                   --enable-werror --cc=clang || { cat config.log meson-logs/meson-log.txt; exit 1; }
     - gmake -j$(sysctl -n hw.ncpu)
-    - gmake check
+    - gmake check V=1
+
+windows_msys2_task:
+  timeout_in: 90m
+  windows_container:
+    image: cirrusci/windowsservercore:2019
+    os_version: 2019
+    cpu: 8
+    memory: 8G
+  env:
+    CIRRUS_SHELL: powershell
+    MSYS: winsymlinks:nativestrict
+    MSYSTEM: MINGW64
+    CHERE_INVOKING: 1
+  setup_script:
+    - choco install -y --no-progress 7zip
+    - Write-Output $env:PATH
+  msys2_cache:
+    folder: C:\tools\archive
+    reupload_on_changes: false
+    fingerprint_script: cat .cirrus.yml
+    populate_script:
+      - |
+        md C:\tools
+        md C:\tools\archive
+        $start_time = Get-Date
+        cd C:\tools
+        bitsadmin /transfer msys_download /dynamic /download /priority FOREGROUND https://github.com/msys2/msys2-installer/releases/download/2020-09-03/msys2-base-x86_64-20200903.sfx.exe C:\tools\base.exe
+        Write-Output "Download time taken: $((Get-Date).Subtract($start_time).Seconds) second(s)"
+        C:\tools\base.exe -y
+        ((Get-Content -path C:\tools\msys64\etc\\post-install\\07-pacman-key.post -Raw) -replace '--refresh-keys', '--version') | Set-Content -Path C:\tools\msys64\etc\\post-install\\07-pacman-key.post
+        C:\tools\msys64\usr\bin\bash.exe -lc "sed -i 's/^CheckSpace/#CheckSpace/g' /etc/pacman.conf"
+        C:\tools\msys64\usr\bin\bash.exe -lc "export"
+        C:\tools\msys64\usr\bin\pacman.exe --noconfirm -Sy
+        echo Y | C:\tools\msys64\usr\bin\pacman.exe --noconfirm -Suu --overwrite=*
+        taskkill /F /FI "MODULES eq msys-2.0.dll"
+        tasklist
+        C:\tools\msys64\usr\bin\bash.exe -lc "mv -f /etc/pacman.conf.pacnew /etc/pacman.conf || true"
+        C:\tools\msys64\usr\bin\bash.exe -lc "pacman --noconfirm -Suu --overwrite=*"
+        C:\tools\msys64\usr\bin\bash.exe -lc "pacman --noconfirm -S --needed \
+          diffutils git grep make pkg-config sed \
+          mingw-w64-x86_64-python \
+          mingw-w64-x86_64-toolchain \
+          mingw-w64-x86_64-SDL2 \
+          mingw-w64-x86_64-SDL2_image \
+          mingw-w64-x86_64-gtk3 \
+          mingw-w64-x86_64-glib2 \
+          mingw-w64-x86_64-ninja \
+          mingw-w64-x86_64-jemalloc \
+          mingw-w64-x86_64-lzo2 \
+          mingw-w64-x86_64-zstd \
+          mingw-w64-x86_64-libjpeg-turbo \
+          mingw-w64-x86_64-pixman \
+          mingw-w64-x86_64-libgcrypt \
+          mingw-w64-x86_64-libpng \
+          mingw-w64-x86_64-libssh \
+          mingw-w64-x86_64-libxml2 \
+          mingw-w64-x86_64-snappy \
+          mingw-w64-x86_64-libusb \
+          mingw-w64-x86_64-usbredir \
+          mingw-w64-x86_64-libtasn1 \
+          mingw-w64-x86_64-nettle \
+          mingw-w64-x86_64-cyrus-sasl \
+          mingw-w64-x86_64-curl \
+          mingw-w64-x86_64-gnutls \
+          mingw-w64-x86_64-libnfs \
+          "
+        bitsadmin /transfer msys_download /dynamic /download /priority FOREGROUND `
+          https://repo.msys2.org/mingw/x86_64/mingw-w64-x86_64-python-sphinx-2.3.1-1-any.pkg.tar.xz `
+          C:\tools\mingw-w64-x86_64-python-sphinx-2.3.1-1-any.pkg.tar.xz
+        C:\tools\msys64\usr\bin\bash.exe -lc "pacman --noconfirm -U /c/tools/mingw-w64-x86_64-python-sphinx-2.3.1-1-any.pkg.tar.xz"
+        del C:\tools\mingw-w64-x86_64-python-sphinx-2.3.1-1-any.pkg.tar.xz
+        C:\tools\msys64\usr\bin\bash.exe -lc "rm -rf /var/cache/pacman/pkg/*"
+        cd C:\tools\msys64
+        echo "Start archive"
+        cmd /C "7z a -ttar . -so | 7z a -txz -simsys2-x86_64.tar C:\tools\archive\msys2-x86_64.tar.xz"
+  install_script:
+    - |
+      cd C:\tools
+      cmd /C "7z x C:\tools\archive\msys2-x86_64.tar.xz -so | 7z x -aoa -simsys2-x86_64.tar -ttar -omsys64"
+      C:\tools\msys64\usr\bin\bash.exe -lc "export"
+
+  script:
+    - C:\tools\msys64\usr\bin\bash.exe -lc "mkdir build"
+    - C:\tools\msys64\usr\bin\bash.exe -lc "cd build && ../configure --python=python3"
+    - C:\tools\msys64\usr\bin\bash.exe -lc "cd build && make -j8"
+  test_script:
+    - C:\tools\msys64\usr\bin\bash.exe -lc "cd build && make V=1 check"

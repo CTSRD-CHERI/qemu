@@ -23,9 +23,7 @@
 #include "qom/object.h"
 
 #define TYPE_IBEX_PLIC "ibex-plic"
-typedef struct IbexPlicState IbexPlicState;
-DECLARE_INSTANCE_CHECKER(IbexPlicState, IBEX_PLIC,
-                         TYPE_IBEX_PLIC)
+OBJECT_DECLARE_SIMPLE_TYPE(IbexPlicState, IBEX_PLIC)
 
 struct IbexPlicState {
     /*< private >*/
@@ -35,6 +33,7 @@ struct IbexPlicState {
     MemoryRegion mmio;
 
     uint32_t *pending;
+    uint32_t *hidden_pending;
     uint32_t *claimed;
     uint32_t *source;
     uint32_t *priority;

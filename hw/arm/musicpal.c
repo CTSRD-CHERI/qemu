@@ -27,6 +27,7 @@
 #include "ui/console.h"
 #include "hw/i2c/i2c.h"
 #include "hw/irq.h"
+#include "hw/or-irq.h"
 #include "hw/audio/wm8750.h"
 #include "sysemu/block-backend.h"
 #include "sysemu/runstate.h"
@@ -77,8 +78,7 @@
 #define MP_TIMER4_IRQ           7
 #define MP_EHCI_IRQ             8
 #define MP_ETH_IRQ              9
-#define MP_UART1_IRQ            11
-#define MP_UART2_IRQ            11
+#define MP_UART_SHARED_IRQ      11
 #define MP_GPIO_IRQ             12
 #define MP_RTC_IRQ              28
 #define MP_AUDIO_IRQ            30
@@ -155,9 +155,7 @@ typedef struct mv88w8618_rx_desc {
 } mv88w8618_rx_desc;
 
 #define TYPE_MV88W8618_ETH "mv88w8618_eth"
-typedef struct mv88w8618_eth_state mv88w8618_eth_state;
-DECLARE_INSTANCE_CHECKER(mv88w8618_eth_state, MV88W8618_ETH,
-                         TYPE_MV88W8618_ETH)
+OBJECT_DECLARE_SIMPLE_TYPE(mv88w8618_eth_state, MV88W8618_ETH)
 
 struct mv88w8618_eth_state {
     /*< private >*/
@@ -485,9 +483,7 @@ static const TypeInfo mv88w8618_eth_info = {
 #define MP_LCD_TEXTCOLOR        0xe0e0ff /* RRGGBB */
 
 #define TYPE_MUSICPAL_LCD "musicpal_lcd"
-typedef struct musicpal_lcd_state musicpal_lcd_state;
-DECLARE_INSTANCE_CHECKER(musicpal_lcd_state, MUSICPAL_LCD,
-                         TYPE_MUSICPAL_LCD)
+OBJECT_DECLARE_SIMPLE_TYPE(musicpal_lcd_state, MUSICPAL_LCD)
 
 struct musicpal_lcd_state {
     /*< private >*/
@@ -703,9 +699,7 @@ static const TypeInfo musicpal_lcd_info = {
 #define MP_PIC_ENABLE_CLR       0x0C
 
 #define TYPE_MV88W8618_PIC "mv88w8618_pic"
-typedef struct mv88w8618_pic_state mv88w8618_pic_state;
-DECLARE_INSTANCE_CHECKER(mv88w8618_pic_state, MV88W8618_PIC,
-                         TYPE_MV88W8618_PIC)
+OBJECT_DECLARE_SIMPLE_TYPE(mv88w8618_pic_state, MV88W8618_PIC)
 
 struct mv88w8618_pic_state {
     /*< private >*/
@@ -841,9 +835,7 @@ typedef struct mv88w8618_timer_state {
 } mv88w8618_timer_state;
 
 #define TYPE_MV88W8618_PIT "mv88w8618_pit"
-typedef struct mv88w8618_pit_state mv88w8618_pit_state;
-DECLARE_INSTANCE_CHECKER(mv88w8618_pit_state, MV88W8618_PIT,
-                         TYPE_MV88W8618_PIT)
+OBJECT_DECLARE_SIMPLE_TYPE(mv88w8618_pit_state, MV88W8618_PIT)
 
 struct mv88w8618_pit_state {
     /*< private >*/
@@ -1009,9 +1001,7 @@ static const TypeInfo mv88w8618_pit_info = {
 #define MP_FLASHCFG_CFGR0    0x04
 
 #define TYPE_MV88W8618_FLASHCFG "mv88w8618_flashcfg"
-typedef struct mv88w8618_flashcfg_state mv88w8618_flashcfg_state;
-DECLARE_INSTANCE_CHECKER(mv88w8618_flashcfg_state, MV88W8618_FLASHCFG,
-                         TYPE_MV88W8618_FLASHCFG)
+OBJECT_DECLARE_SIMPLE_TYPE(mv88w8618_flashcfg_state, MV88W8618_FLASHCFG)
 
 struct mv88w8618_flashcfg_state {
     /*< private >*/
@@ -1100,11 +1090,9 @@ struct MusicPalMiscState {
     SysBusDevice parent_obj;
     MemoryRegion iomem;
 };
-typedef struct MusicPalMiscState MusicPalMiscState;
 
 #define TYPE_MUSICPAL_MISC "musicpal-misc"
-DECLARE_INSTANCE_CHECKER(MusicPalMiscState, MUSICPAL_MISC,
-                         TYPE_MUSICPAL_MISC)
+OBJECT_DECLARE_SIMPLE_TYPE(MusicPalMiscState, MUSICPAL_MISC)
 
 static uint64_t musicpal_misc_read(void *opaque, hwaddr offset,
                                    unsigned size)
@@ -1209,9 +1197,7 @@ static void mv88w8618_wlan_realize(DeviceState *dev, Error **errp)
 #define MP_OE_LCD_BRIGHTNESS    0x0007
 
 #define TYPE_MUSICPAL_GPIO "musicpal_gpio"
-typedef struct musicpal_gpio_state musicpal_gpio_state;
-DECLARE_INSTANCE_CHECKER(musicpal_gpio_state, MUSICPAL_GPIO,
-                         TYPE_MUSICPAL_GPIO)
+OBJECT_DECLARE_SIMPLE_TYPE(musicpal_gpio_state, MUSICPAL_GPIO)
 
 struct musicpal_gpio_state {
     /*< private >*/
@@ -1460,9 +1446,7 @@ static const TypeInfo musicpal_gpio_info = {
 #define MP_KEY_BTN_NAVIGATION  (1 << 7)
 
 #define TYPE_MUSICPAL_KEY "musicpal_key"
-typedef struct musicpal_key_state musicpal_key_state;
-DECLARE_INSTANCE_CHECKER(musicpal_key_state, MUSICPAL_KEY,
-                         TYPE_MUSICPAL_KEY)
+OBJECT_DECLARE_SIMPLE_TYPE(musicpal_key_state, MUSICPAL_KEY)
 
 struct musicpal_key_state {
     /*< private >*/
@@ -1603,8 +1587,9 @@ static struct arm_boot_info musicpal_binfo = {
 static void musicpal_init(MachineState *machine)
 {
     ARMCPU *cpu;
-    qemu_irq pic[32];
     DeviceState *dev;
+    DeviceState *pic;
+    DeviceState *uart_orgate;
     DeviceState *i2c_dev;
     DeviceState *lcd_dev;
     DeviceState *key_dev;
@@ -1634,18 +1619,26 @@ static void musicpal_init(MachineState *machine)
                            &error_fatal);
     memory_region_add_subregion(address_space_mem, MP_SRAM_BASE, sram);
 
-    dev = sysbus_create_simple(TYPE_MV88W8618_PIC, MP_PIC_BASE,
+    pic = sysbus_create_simple(TYPE_MV88W8618_PIC, MP_PIC_BASE,
                                qdev_get_gpio_in(DEVICE(cpu), ARM_CPU_IRQ));
-    for (i = 0; i < 32; i++) {
-        pic[i] = qdev_get_gpio_in(dev, i);
-    }
-    sysbus_create_varargs(TYPE_MV88W8618_PIT, MP_PIT_BASE, pic[MP_TIMER1_IRQ],
-                          pic[MP_TIMER2_IRQ], pic[MP_TIMER3_IRQ],
-                          pic[MP_TIMER4_IRQ], NULL);
+    sysbus_create_varargs(TYPE_MV88W8618_PIT, MP_PIT_BASE,
+                          qdev_get_gpio_in(pic, MP_TIMER1_IRQ),
+                          qdev_get_gpio_in(pic, MP_TIMER2_IRQ),
+                          qdev_get_gpio_in(pic, MP_TIMER3_IRQ),
+                          qdev_get_gpio_in(pic, MP_TIMER4_IRQ), NULL);
 
-    serial_mm_init(address_space_mem, MP_UART1_BASE, 2, pic[MP_UART1_IRQ],
+    /* Logically OR both UART IRQs together */
+    uart_orgate = DEVICE(object_new(TYPE_OR_IRQ));
+    object_property_set_int(OBJECT(uart_orgate), "num-lines", 2, &error_fatal);
+    qdev_realize_and_unref(uart_orgate, NULL, &error_fatal);
+    qdev_connect_gpio_out(DEVICE(uart_orgate), 0,
+                          qdev_get_gpio_in(pic, MP_UART_SHARED_IRQ));
+
+    serial_mm_init(address_space_mem, MP_UART1_BASE, 2,
+                   qdev_get_gpio_in(uart_orgate, 0),
                    1825000, serial_hd(0), DEVICE_NATIVE_ENDIAN);
-    serial_mm_init(address_space_mem, MP_UART2_BASE, 2, pic[MP_UART2_IRQ],
+    serial_mm_init(address_space_mem, MP_UART2_BASE, 2,
+                   qdev_get_gpio_in(uart_orgate, 1),
                    1825000, serial_hd(1), DEVICE_NATIVE_ENDIAN);
 
     /* Register flash */
@@ -1681,14 +1674,15 @@ static void musicpal_init(MachineState *machine)
                              OBJECT(get_system_memory()), &error_fatal);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, MP_ETH_BASE);
-    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, pic[MP_ETH_IRQ]);
+    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+                       qdev_get_gpio_in(pic, MP_ETH_IRQ));
 
     sysbus_create_simple("mv88w8618_wlan", MP_WLAN_BASE, NULL);
 
     sysbus_create_simple(TYPE_MUSICPAL_MISC, MP_MISC_BASE, NULL);
 
     dev = sysbus_create_simple(TYPE_MUSICPAL_GPIO, MP_GPIO_BASE,
-                               pic[MP_GPIO_IRQ]);
+                               qdev_get_gpio_in(pic, MP_GPIO_IRQ));
     i2c_dev = sysbus_create_simple("gpio_i2c", -1, NULL);
     i2c = (I2CBus *)qdev_get_child_bus(i2c_dev, "i2c");
 
@@ -1720,7 +1714,7 @@ static void musicpal_init(MachineState *machine)
                              NULL);
     sysbus_realize_and_unref(s, &error_fatal);
     sysbus_mmio_map(s, 0, MP_AUDIO_BASE);
-    sysbus_connect_irq(s, 0, pic[MP_AUDIO_IRQ]);
+    sysbus_connect_irq(s, 0, qdev_get_gpio_in(pic, MP_AUDIO_IRQ));
 
     musicpal_binfo.ram_size = MP_RAM_DEFAULT_SIZE;
     arm_load_kernel(cpu, machine, &musicpal_binfo);

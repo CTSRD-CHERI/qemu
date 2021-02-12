@@ -44,6 +44,9 @@
 #include "qapi/qapi-types-common.h"
 #include "qapi/qapi-visit-common.h"
 #include "sysemu/reset.h"
+#include "qemu/guest-random.h"
+#include "sysemu/hw_accel.h"
+#include "kvm-cpus.h"
 
 #include "hw/boards.h"
 
@@ -378,7 +381,7 @@ err:
     return ret;
 }
 
-int kvm_destroy_vcpu(CPUState *cpu)
+static int do_kvm_destroy_vcpu(CPUState *cpu)
 {
     KVMState *s = kvm_state;
     long mmap_size;
@@ -412,6 +415,14 @@ err:
     return ret;
 }
 
+void kvm_destroy_vcpu(CPUState *cpu)
+{
+    if (do_kvm_destroy_vcpu(cpu) < 0) {
+        error_report("kvm_destroy_vcpu failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
 static int kvm_get_vcpu(KVMState *s, unsigned long vcpu_id)
 {
     struct KVMParkedVcpu *cpu;
@@ -430,17 +441,18 @@ static int kvm_get_vcpu(KVMState *s, unsigned long vcpu_id)
     return kvm_vm_ioctl(s, KVM_CREATE_VCPU, (void *)vcpu_id);
 }
 
-int kvm_init_vcpu(CPUState *cpu)
+int kvm_init_vcpu(CPUState *cpu, Error **errp)
 {
     KVMState *s = kvm_state;
     long mmap_size;
     int ret;
 
-    DPRINTF("kvm_init_vcpu\n");
+    trace_kvm_init_vcpu(cpu->cpu_index, kvm_arch_vcpu_id(cpu));
 
     ret = kvm_get_vcpu(s, kvm_arch_vcpu_id(cpu));
     if (ret < 0) {
-        DPRINTF("kvm_create_vcpu failed\n");
+        error_setg_errno(errp, -ret, "kvm_init_vcpu: kvm_get_vcpu failed (%lu)",
+                         kvm_arch_vcpu_id(cpu));
         goto err;
     }
 
@@ -451,7 +463,8 @@ int kvm_init_vcpu(CPUState *cpu)
     mmap_size = kvm_ioctl(s, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (mmap_size < 0) {
         ret = mmap_size;
-        DPRINTF("KVM_GET_VCPU_MMAP_SIZE failed\n");
+        error_setg_errno(errp, -mmap_size,
+                         "kvm_init_vcpu: KVM_GET_VCPU_MMAP_SIZE failed");
         goto err;
     }
 
@@ -459,7 +472,9 @@ int kvm_init_vcpu(CPUState *cpu)
                         cpu->kvm_fd, 0);
     if (cpu->kvm_run == MAP_FAILED) {
         ret = -errno;
-        DPRINTF("mmap'ing vcpu state failed\n");
+        error_setg_errno(errp, ret,
+                         "kvm_init_vcpu: mmap'ing vcpu state failed (%lu)",
+                         kvm_arch_vcpu_id(cpu));
         goto err;
     }
 
@@ -469,6 +484,11 @@ int kvm_init_vcpu(CPUState *cpu)
     }
 
     ret = kvm_arch_init_vcpu(cpu);
+    if (ret < 0) {
+        error_setg_errno(errp, -ret,
+                         "kvm_init_vcpu: kvm_arch_init_vcpu failed (%lu)",
+                         kvm_arch_vcpu_id(cpu));
+    }
 err:
     return ret;
 }
@@ -2013,7 +2033,7 @@ static int kvm_init(MachineState *ms)
 #endif
     QLIST_INIT(&s->kvm_parked_vcpus);
     s->vmfd = -1;
-    s->fd = qemu_open("/dev/kvm", O_RDWR);
+    s->fd = qemu_open_old("/dev/kvm", O_RDWR);
     if (s->fd == -1) {
         fprintf(stderr, "Could not access KVM kernel module: %m\n");
         ret = -errno;
@@ -2219,8 +2239,10 @@ static int kvm_init(MachineState *ms)
 
     kvm_memory_listener_register(s, &s->memory_listener,
                                  &address_space_memory, 0);
-    memory_listener_register(&kvm_io_listener,
-                             &address_space_io);
+    if (kvm_eventfds_allowed) {
+        memory_listener_register(&kvm_io_listener,
+                                 &address_space_io);
+    }
     memory_listener_register(&kvm_coalesced_pio_listener,
                              &address_space_io);
 
@@ -2232,6 +2254,7 @@ static int kvm_init(MachineState *ms)
         assert(!ret);
     }
 
+    cpus_register_accel(&kvm_cpus);
     return 0;
 
 err:
@@ -2379,7 +2402,7 @@ static __thread bool have_sigbus_pending;
 
 static void kvm_cpu_kick(CPUState *cpu)
 {
-    atomic_set(&cpu->kvm_run->immediate_exit, 1);
+    qatomic_set(&cpu->kvm_run->immediate_exit, 1);
 }
 
 static void kvm_cpu_kick_self(void)
@@ -2400,7 +2423,7 @@ static void kvm_eat_signals(CPUState *cpu)
     int r;
 
     if (kvm_immediate_exit) {
-        atomic_set(&cpu->kvm_run->immediate_exit, 0);
+        qatomic_set(&cpu->kvm_run->immediate_exit, 0);
         /* Write kvm_run->immediate_exit before the cpu->exit_request
          * write in kvm_cpu_exec.
          */
@@ -2434,7 +2457,7 @@ int kvm_cpu_exec(CPUState *cpu)
     DPRINTF("kvm_cpu_exec()\n");
 
     if (kvm_arch_process_async_events(cpu)) {
-        atomic_set(&cpu->exit_request, 0);
+        qatomic_set(&cpu->exit_request, 0);
         return EXCP_HLT;
     }
 
@@ -2450,7 +2473,7 @@ int kvm_cpu_exec(CPUState *cpu)
         }
 
         kvm_arch_pre_run(cpu, run);
-        if (atomic_read(&cpu->exit_request)) {
+        if (qatomic_read(&cpu->exit_request)) {
             DPRINTF("interrupt exit requested\n");
             /*
              * KVM requires us to reenter the kernel after IO exits to complete
@@ -2577,7 +2600,7 @@ int kvm_cpu_exec(CPUState *cpu)
         vm_stop(RUN_STATE_INTERNAL_ERROR);
     }
 
-    atomic_set(&cpu->exit_request, 0);
+    qatomic_set(&cpu->exit_request, 0);
     return ret;
 }
 
@@ -2994,7 +3017,7 @@ int kvm_on_sigbus_vcpu(CPUState *cpu, int code, void *addr)
     have_sigbus_pending = true;
     pending_sigbus_addr = addr;
     pending_sigbus_code = code;
-    atomic_set(&cpu->exit_request, 1);
+    qatomic_set(&cpu->exit_request, 1);
     return 0;
 #else
     return 1;

@@ -9,16 +9,14 @@
 #ifndef HW_RTC_MC146818RTC_H
 #define HW_RTC_MC146818RTC_H
 
-#include "qapi/qapi-types-misc.h"
+#include "qapi/qapi-types-machine.h"
 #include "qemu/queue.h"
 #include "qemu/timer.h"
 #include "hw/isa/isa.h"
 #include "qom/object.h"
 
 #define TYPE_MC146818_RTC "mc146818rtc"
-typedef struct RTCState RTCState;
-DECLARE_INSTANCE_CHECKER(RTCState, MC146818_RTC,
-                         TYPE_MC146818_RTC)
+OBJECT_DECLARE_SIMPLE_TYPE(RTCState, MC146818_RTC)
 
 struct RTCState {
     ISADevice parent_obj;

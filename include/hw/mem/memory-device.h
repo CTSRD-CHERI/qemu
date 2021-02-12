@@ -14,7 +14,7 @@
 #define MEMORY_DEVICE_H
 
 #include "hw/qdev-core.h"
-#include "qapi/qapi-types-misc.h"
+#include "qapi/qapi-types-machine.h"
 #include "qom/object.h"
 
 #define TYPE_MEMORY_DEVICE "memory-device"
@@ -87,6 +87,16 @@ struct MemoryDeviceClass {
      * memory region is required.
      */
     MemoryRegion *(*get_memory_region)(MemoryDeviceState *md, Error **errp);
+
+    /*
+     * Optional: Return the desired minimum alignment of the device in guest
+     * physical address space. The final alignment is computed based on this
+     * alignment and the alignment requirements of the memory region.
+     *
+     * Called when plugging the memory device to detect the required alignment
+     * during address assignment.
+     */
+    uint64_t (*get_min_alignment)(const MemoryDeviceState *md);
 
     /*
      * Translate the memory device into #MemoryDeviceInfo.

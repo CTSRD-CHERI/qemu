@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -991,8 +991,8 @@ typedef uint64_t FeatureWordArray[FEATURE_WORDS];
 #define HYPERV_FEAT_IPI                 13
 #define HYPERV_FEAT_STIMER_DIRECT       14
 
-#ifndef HYPERV_SPINLOCK_NEVER_RETRY
-#define HYPERV_SPINLOCK_NEVER_RETRY             0xFFFFFFFF
+#ifndef HYPERV_SPINLOCK_NEVER_NOTIFY
+#define HYPERV_SPINLOCK_NEVER_NOTIFY             0xFFFFFFFF
 #endif
 
 #define EXCP00_DIVZ	0
@@ -1492,6 +1492,7 @@ typedef struct CPUX86State {
     uint64_t wall_clock_msr;
     uint64_t steal_time_msr;
     uint64_t async_pf_en_msr;
+    uint64_t async_pf_int_msr;
     uint64_t pv_eoi_en_msr;
     uint64_t poll_control_msr;
 

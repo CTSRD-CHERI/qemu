@@ -13,6 +13,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qapi/qapi-events-run-state.h"
 #include "qapi/error.h"
 #include <sys/ioctl.h>
 #include <sys/utsname.h>
@@ -143,14 +144,14 @@ bool kvm_has_adjust_clock_stable(void)
     return (ret == KVM_CLOCK_TSC_STABLE);
 }
 
+bool kvm_has_adjust_clock(void)
+{
+    return kvm_check_extension(kvm_state, KVM_CAP_ADJUST_CLOCK);
+}
+
 bool kvm_has_exception_payload(void)
 {
     return has_exception_payload;
-}
-
-bool kvm_allows_irq0_override(void)
-{
-    return !kvm_irqchip_in_kernel() || kvm_has_gsi_routing();
 }
 
 static bool kvm_x2apic_api_set_flags(uint64_t flags)
@@ -279,29 +280,6 @@ static struct kvm_cpuid2 *get_supported_cpuid(KVMState *s)
     return cpuid;
 }
 
-static const struct kvm_para_features {
-    int cap;
-    int feature;
-} para_features[] = {
-    { KVM_CAP_CLOCKSOURCE, KVM_FEATURE_CLOCKSOURCE },
-    { KVM_CAP_NOP_IO_DELAY, KVM_FEATURE_NOP_IO_DELAY },
-    { KVM_CAP_PV_MMU, KVM_FEATURE_MMU_OP },
-    { KVM_CAP_ASYNC_PF, KVM_FEATURE_ASYNC_PF },
-};
-
-static int get_para_features(KVMState *s)
-{
-    int i, features = 0;
-
-    for (i = 0; i < ARRAY_SIZE(para_features); i++) {
-        if (kvm_check_extension(s, para_features[i].cap)) {
-            features |= (1 << para_features[i].feature);
-        }
-    }
-
-    return features;
-}
-
 static bool host_tsx_broken(void)
 {
     int family, model, stepping;\
@@ -361,13 +339,11 @@ uint32_t kvm_arch_get_supported_cpuid(KVMState *s, uint32_t function,
     struct kvm_cpuid2 *cpuid;
     uint32_t ret = 0;
     uint32_t cpuid_1_edx;
-    bool found = false;
 
     cpuid = get_supported_cpuid(s);
 
     struct kvm_cpuid_entry2 *entry = cpuid_find_entry(cpuid, function, index);
     if (entry) {
-        found = true;
         ret = cpuid_entry_get_reg(entry, reg);
     }
 
@@ -442,12 +418,6 @@ uint32_t kvm_arch_get_supported_cpuid(KVMState *s, uint32_t function,
         }
     } else if (function == KVM_CPUID_FEATURES && reg == R_EDX) {
         ret |= 1U << KVM_HINTS_REALTIME;
-        found = 1;
-    }
-
-    /* fallback for older kernels */
-    if ((function == KVM_CPUID_FEATURES) && !found) {
-        ret = get_para_features(s);
     }
 
     return ret;
@@ -575,8 +545,17 @@ static void kvm_mce_inject(X86CPU *cpu, hwaddr paddr, int code)
                        (MCM_ADDR_PHYS << 6) | 0xc, flags);
 }
 
+static void emit_hypervisor_memory_failure(MemoryFailureAction action, bool ar)
+{
+    MemoryFailureFlags mff = {.action_required = ar, .recursive = false};
+
+    qapi_event_send_memory_failure(MEMORY_FAILURE_RECIPIENT_HYPERVISOR, action,
+                                   &mff);
+}
+
 static void hardware_memory_error(void *host_addr)
 {
+    emit_hypervisor_memory_failure(MEMORY_FAILURE_ACTION_FATAL, true);
     error_report("QEMU got Hardware memory error at addr %p", host_addr);
     exit(1);
 }
@@ -631,7 +610,8 @@ void kvm_arch_on_sigbus_vcpu(CPUState *c, int code, void *addr)
         hardware_memory_error(addr);
     }
 
-    /* Hope we are lucky for AO MCE */
+    /* Hope we are lucky for AO MCE, just notify a event */
+    emit_hypervisor_memory_failure(MEMORY_FAILURE_ACTION_IGNORE, false);
 }
 
 static void kvm_reset_exception(CPUX86State *env)
@@ -730,7 +710,7 @@ static bool hyperv_enabled(X86CPU *cpu)
 {
     CPUState *cs = CPU(cpu);
     return kvm_check_extension(cs->kvm_state, KVM_CAP_HYPERV) > 0 &&
-        ((cpu->hyperv_spinlock_attempts != HYPERV_SPINLOCK_NEVER_RETRY) ||
+        ((cpu->hyperv_spinlock_attempts != HYPERV_SPINLOCK_NEVER_NOTIFY) ||
          cpu->hyperv_features || cpu->hyperv_passthrough);
 }
 
@@ -1229,14 +1209,14 @@ static int hyperv_handle_properties(CPUState *cs,
         if (c) {
             env->features[FEAT_HYPERV_EAX] = c->eax;
             env->features[FEAT_HYPERV_EBX] = c->ebx;
-            env->features[FEAT_HYPERV_EDX] = c->eax;
+            env->features[FEAT_HYPERV_EDX] = c->edx;
         }
         c = cpuid_find_entry(cpuid, HV_CPUID_ENLIGHTMENT_INFO, 0);
         if (c) {
             env->features[FEAT_HV_RECOMM_EAX] = c->eax;
 
             /* hv-spinlocks may have been overriden */
-            if (cpu->hyperv_spinlock_attempts != HYPERV_SPINLOCK_NEVER_RETRY) {
+            if (cpu->hyperv_spinlock_attempts != HYPERV_SPINLOCK_NEVER_NOTIFY) {
                 c->ebx = cpu->hyperv_spinlock_attempts;
             }
         }
@@ -1840,12 +1820,14 @@ int kvm_arch_init_vcpu(CPUState *cs)
 
             env->nested_state = g_malloc0(max_nested_state_len);
             env->nested_state->size = max_nested_state_len;
-            env->nested_state->format = KVM_STATE_NESTED_FORMAT_VMX;
 
             if (cpu_has_vmx(env)) {
-                    vmx_hdr = &env->nested_state->hdr.vmx;
-                    vmx_hdr->vmxon_pa = -1ull;
-                    vmx_hdr->vmcs12_pa = -1ull;
+                env->nested_state->format = KVM_STATE_NESTED_FORMAT_VMX;
+                vmx_hdr = &env->nested_state->hdr.vmx;
+                vmx_hdr->vmxon_pa = -1ull;
+                vmx_hdr->vmcs12_pa = -1ull;
+            } else {
+                env->nested_state->format = KVM_STATE_NESTED_FORMAT_SVM;
             }
         }
     }
@@ -2128,6 +2110,11 @@ int kvm_arch_init(MachineState *ms, KVMState *s)
     uint64_t shadow_mem;
     int ret;
     struct utsname utsname;
+
+    if (!kvm_check_extension(s, KVM_CAP_IRQ_ROUTING)) {
+        error_report("kvm: KVM_CAP_IRQ_ROUTING not supported by KVM");
+        return -ENOTSUP;
+    }
 
     has_xsave = kvm_check_extension(s, KVM_CAP_XSAVE);
     has_xcrs = kvm_check_extension(s, KVM_CAP_XCRS);
@@ -2818,6 +2805,9 @@ static int kvm_put_msrs(X86CPU *cpu, int level)
         kvm_msr_entry_add(cpu, MSR_IA32_TSC, env->tsc);
         kvm_msr_entry_add(cpu, MSR_KVM_SYSTEM_TIME, env->system_time_msr);
         kvm_msr_entry_add(cpu, MSR_KVM_WALL_CLOCK, env->wall_clock_msr);
+        if (env->features[FEAT_KVM] & (1 << KVM_FEATURE_ASYNC_PF_INT)) {
+            kvm_msr_entry_add(cpu, MSR_KVM_ASYNC_PF_INT, env->async_pf_int_msr);
+        }
         if (env->features[FEAT_KVM] & (1 << KVM_FEATURE_ASYNC_PF)) {
             kvm_msr_entry_add(cpu, MSR_KVM_ASYNC_PF_EN, env->async_pf_en_msr);
         }
@@ -3203,6 +3193,9 @@ static int kvm_get_msrs(X86CPU *cpu)
 #endif
     kvm_msr_entry_add(cpu, MSR_KVM_SYSTEM_TIME, 0);
     kvm_msr_entry_add(cpu, MSR_KVM_WALL_CLOCK, 0);
+    if (env->features[FEAT_KVM] & (1 << KVM_FEATURE_ASYNC_PF_INT)) {
+        kvm_msr_entry_add(cpu, MSR_KVM_ASYNC_PF_INT, 0);
+    }
     if (env->features[FEAT_KVM] & (1 << KVM_FEATURE_ASYNC_PF)) {
         kvm_msr_entry_add(cpu, MSR_KVM_ASYNC_PF_EN, 0);
     }
@@ -3445,6 +3438,9 @@ static int kvm_get_msrs(X86CPU *cpu)
             break;
         case MSR_KVM_ASYNC_PF_EN:
             env->async_pf_en_msr = msrs[i].data;
+            break;
+        case MSR_KVM_ASYNC_PF_INT:
+            env->async_pf_int_msr = msrs[i].data;
             break;
         case MSR_KVM_PV_EOI_EN:
             env->pv_eoi_en_msr = msrs[i].data;
@@ -4553,13 +4549,6 @@ bool kvm_arch_stop_on_emulation_error(CPUState *cs)
 
 void kvm_arch_init_irq_routing(KVMState *s)
 {
-    if (!kvm_check_extension(s, KVM_CAP_IRQ_ROUTING)) {
-        /* If kernel can't do irq routing, interrupt source
-         * override 0->2 cannot be set up as required by HPET.
-         * So we have to disable it.
-         */
-        no_hpet = 1;
-    }
     /* We know at this point that we're using the in-kernel
      * irqchip, so we can use irqfds, and on x86 we know
      * we can use msi via irqfd and GSI routing.

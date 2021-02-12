@@ -28,9 +28,7 @@ typedef struct SpaprPendingHpt SpaprPendingHpt;
 
 #define TYPE_SPAPR_RTC "spapr-rtc"
 
-typedef struct SpaprRtcState SpaprRtcState;
-DECLARE_INSTANCE_CHECKER(SpaprRtcState, SPAPR_RTC,
-                         TYPE_SPAPR_RTC)
+OBJECT_DECLARE_SIMPLE_TYPE(SpaprRtcState, SPAPR_RTC)
 
 struct SpaprRtcState {
     /*< private >*/
@@ -39,12 +37,9 @@ struct SpaprRtcState {
 };
 
 typedef struct SpaprDimmState SpaprDimmState;
-typedef struct SpaprMachineClass SpaprMachineClass;
 
 #define TYPE_SPAPR_MACHINE      "spapr-machine"
-typedef struct SpaprMachineState SpaprMachineState;
-DECLARE_OBJ_CHECKERS(SpaprMachineState, SpaprMachineClass,
-                     SPAPR_MACHINE, TYPE_SPAPR_MACHINE)
+OBJECT_DECLARE_TYPE(SpaprMachineState, SpaprMachineClass, SPAPR_MACHINE)
 
 typedef enum {
     SPAPR_RESIZE_HPT_DEFAULT = 0,
@@ -143,6 +138,7 @@ struct SpaprMachineClass {
     bool smp_threads_vsmt; /* set VSMT to smp_threads by default */
     hwaddr rma_limit;          /* clamp the RMA to this size */
     bool pre_5_1_assoc_refpoints;
+    bool pre_5_2_numa_associativity;
 
     void (*phb_placement)(SpaprMachineState *spapr, uint32_t index,
                           uint64_t *buid, hwaddr *pio, 
@@ -784,11 +780,9 @@ static inline void spapr_dt_irq(uint32_t *intspec, int irq, bool is_lsi)
     intspec[1] = is_lsi ? cpu_to_be32(1) : 0;
 }
 
-typedef struct SpaprTceTable SpaprTceTable;
 
 #define TYPE_SPAPR_TCE_TABLE "spapr-tce-table"
-DECLARE_INSTANCE_CHECKER(SpaprTceTable, SPAPR_TCE_TABLE,
-                         TYPE_SPAPR_TCE_TABLE)
+OBJECT_DECLARE_SIMPLE_TYPE(SpaprTceTable, SPAPR_TCE_TABLE)
 
 #define TYPE_SPAPR_IOMMU_MEMORY_REGION "spapr-iommu-memory-region"
 DECLARE_INSTANCE_CHECKER(IOMMUMemoryRegion, SPAPR_IOMMU_MEMORY_REGION,
@@ -852,14 +846,14 @@ void spapr_hotplug_req_add_by_count_indexed(SpaprDrcType drc_type,
 void spapr_hotplug_req_remove_by_count_indexed(SpaprDrcType drc_type,
                                                uint32_t count, uint32_t index);
 int spapr_hpt_shift_for_ramsize(uint64_t ramsize);
-void spapr_reallocate_hpt(SpaprMachineState *spapr, int shift,
-                          Error **errp);
+int spapr_reallocate_hpt(SpaprMachineState *spapr, int shift, Error **errp);
 void spapr_clear_pending_events(SpaprMachineState *spapr);
 void spapr_clear_pending_hotplug_events(SpaprMachineState *spapr);
 int spapr_max_server_number(SpaprMachineState *spapr);
 void spapr_store_hpte(PowerPCCPU *cpu, hwaddr ptex,
                       uint64_t pte0, uint64_t pte1);
 void spapr_mce_req_event(PowerPCCPU *cpu, bool recovered);
+bool spapr_machine_using_legacy_numa(SpaprMachineState *spapr);
 
 /* DRC callbacks. */
 void spapr_core_release(DeviceState *dev);
@@ -909,7 +903,7 @@ void spapr_do_system_reset_on_cpu(CPUState *cs, run_on_cpu_data arg);
 #define HTAB_SIZE(spapr)        (1ULL << ((spapr)->htab_shift))
 
 int spapr_get_vcpu_id(PowerPCCPU *cpu);
-void spapr_set_vcpu_id(PowerPCCPU *cpu, int cpu_index, Error **errp);
+bool spapr_set_vcpu_id(PowerPCCPU *cpu, int cpu_index, Error **errp);
 PowerPCCPU *spapr_find_cpu(int vcpu_id);
 
 int spapr_caps_pre_load(void *opaque);
@@ -941,7 +935,7 @@ void spapr_caps_cpu_apply(SpaprMachineState *spapr, PowerPCCPU *cpu);
 void spapr_caps_add_properties(SpaprMachineClass *smc);
 int spapr_caps_post_migration(SpaprMachineState *spapr);
 
-void spapr_check_pagesize(SpaprMachineState *spapr, hwaddr pagesize,
+bool spapr_check_pagesize(SpaprMachineState *spapr, hwaddr pagesize,
                           Error **errp);
 /*
  * XIVE definitions

@@ -9,7 +9,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -35,10 +35,7 @@
  */
 #define TYPE_CRYPTODEV_BACKEND_BUILTIN "cryptodev-backend-builtin"
 
-typedef struct CryptoDevBackendBuiltin
-                         CryptoDevBackendBuiltin;
-DECLARE_INSTANCE_CHECKER(CryptoDevBackendBuiltin, CRYPTODEV_BACKEND_BUILTIN,
-                         TYPE_CRYPTODEV_BACKEND_BUILTIN)
+OBJECT_DECLARE_SIMPLE_TYPE(CryptoDevBackendBuiltin, CRYPTODEV_BACKEND_BUILTIN)
 
 
 typedef struct CryptoDevBackendBuiltinSession {

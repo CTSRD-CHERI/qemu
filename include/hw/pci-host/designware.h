@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -29,14 +29,10 @@
 #include "qom/object.h"
 
 #define TYPE_DESIGNWARE_PCIE_HOST "designware-pcie-host"
-typedef struct DesignwarePCIEHost DesignwarePCIEHost;
-DECLARE_INSTANCE_CHECKER(DesignwarePCIEHost, DESIGNWARE_PCIE_HOST,
-                         TYPE_DESIGNWARE_PCIE_HOST)
+OBJECT_DECLARE_SIMPLE_TYPE(DesignwarePCIEHost, DESIGNWARE_PCIE_HOST)
 
 #define TYPE_DESIGNWARE_PCIE_ROOT "designware-pcie-root"
-typedef struct DesignwarePCIERoot DesignwarePCIERoot;
-DECLARE_INSTANCE_CHECKER(DesignwarePCIERoot, DESIGNWARE_PCIE_ROOT,
-                         TYPE_DESIGNWARE_PCIE_ROOT)
+OBJECT_DECLARE_SIMPLE_TYPE(DesignwarePCIERoot, DESIGNWARE_PCIE_ROOT)
 
 struct DesignwarePCIERoot;
 

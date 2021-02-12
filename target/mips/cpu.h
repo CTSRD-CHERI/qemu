@@ -4,6 +4,7 @@
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
 #include "fpu/softfloat-types.h"
+#include "hw/clock.h"
 #include "mips-defs.h"
 #include "exec/log.h"
 
@@ -682,6 +683,7 @@ struct CPUMIPSState {
  * CP0 Register 5
  */
     int32_t CP0_PageMask;
+#define CP0PM_MASK 13
     int32_t CP0_PageGrain_rw_bitmask;
     int32_t CP0_PageGrain;
 #define CP0PG_RIE 31
@@ -1274,11 +1276,15 @@ struct CPUMIPSState {
     MemoryRegion *itc_tag; /* ITC Configuration Tags */
 
     target_ulong exception_base; /* ExceptionBase input to the core */
+    uint64_t cp0_count_ns; /* CP0_Count clock period (in nanoseconds) */
 };
 
 /**
  * MIPSCPU:
  * @env: #CPUMIPSState
+ * @clock: this CPU input clock (may be connected
+ *         to an output clock from another device).
+ * @cp0_count_rate: rate at which the coprocessor 0 counter increments
  *
  * A MIPS CPU.
  */
@@ -1287,8 +1293,17 @@ struct MIPSCPU {
     CPUState parent_obj;
     /*< public >*/
 
+    Clock *clock;
     CPUNegativeOffsetState neg;
     CPUMIPSState env;
+    /*
+     * The Count register acts as a timer, incrementing at a constant rate,
+     * whether or not an instruction is executed, retired, or any forward
+     * progress is made through the pipeline. The rate at which the counter
+     * increments is implementation dependent, and is a function of the
+     * pipeline clock of the processor, not the issue width of the processor.
+     */
+    unsigned cp0_count_rate;
 };
 
 /* Register names for logging output */
@@ -1516,8 +1531,8 @@ static inline void mips_update_pc(CPUMIPSState *env, target_ulong pc_addr, bool 
 #define MIPS_LOG_INSTR_CPU_DEBUG QEMU_LOG_INSTR_CPU_DEBUG
 extern const char * const mips_cpu_mode_names[];
 
-/* 
- * Check whether the cpu is in user mode. 
+/*
+ * Check whether the cpu is in user mode.
  * TODO(am2419): this may be superseded by cpu-mode logging API.
  */
 static inline bool cpu_in_user_mode(CPUMIPSState *env)
@@ -1548,5 +1563,17 @@ hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address,
                                      MMUAccessType rw, int reg, int *prot,
                                      uintptr_t retpc);
 #endif /* TARGET_CHERI */
+
+/**
+ * mips_cpu_create_with_clock:
+ * @typename: a MIPS CPU type.
+ * @cpu_refclk: this cpu input clock (an output clock of another device)
+ *
+ * Instantiates a MIPS CPU, set the input clock of the CPU to @cpu_refclk,
+ * then realizes the CPU.
+ *
+ * Returns: A #CPUState or %NULL if an error occurred.
+ */
+MIPSCPU *mips_cpu_create_with_clock(const char *cpu_type, Clock *cpu_refclk);
 
 #endif /* MIPS_CPU_H */

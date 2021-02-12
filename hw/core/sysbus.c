@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -93,7 +93,7 @@ bool sysbus_has_irq(SysBusDevice *dev, int n)
     char *prop = g_strdup_printf("%s[%d]", SYSBUS_DEVICE_GPIO_IRQ, n);
     ObjectProperty *r;
 
-    r = object_property_find(OBJECT(dev), prop, NULL);
+    r = object_property_find(OBJECT(dev), prop);
     g_free(prop);
 
     return (r != NULL);

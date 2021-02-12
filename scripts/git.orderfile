@@ -12,12 +12,12 @@
 # Documentation
 docs/*
 *.rst
-*.texi
 
 # build system
 configure
 Makefile*
 *.mak
+meson.build
 
 # qapi schema
 qapi/*.json

@@ -26,6 +26,7 @@
 #include "qemu/log.h"
 #include "qemu/main-loop.h"
 #include "exec/log.h"
+#include "exec/cpu-common.h"
 #include "qemu/error-report.h"
 #include "qemu/qemu-print.h"
 #include "sysemu/tcg.h"
@@ -33,8 +34,7 @@
 #include "hw/qdev-properties.h"
 #include "trace/trace-root.h"
 #include "qemu/plugin.h"
-
-CPUInterruptHandler cpu_interrupt_handler;
+#include "sysemu/hw_accel.h"
 
 CPUState *cpu_by_arch_id(int64_t id)
 {
@@ -114,10 +114,10 @@ void cpu_reset_interrupt(CPUState *cpu, int mask)
 
 void cpu_exit(CPUState *cpu)
 {
-    atomic_set(&cpu->exit_request, 1);
+    qatomic_set(&cpu->exit_request, 1);
     /* Ensure cpu_exec will see the exit request after TCG has exited.  */
     smp_wmb();
-    atomic_set(&cpu->icount_decr_ptr->u16.high, -1);
+    qatomic_set(&cpu->icount_decr_ptr->u16.high, -1);
 }
 
 int cpu_write_elf32_qemunote(WriteCoreDumpFunction f, CPUState *cpu,
@@ -264,7 +264,7 @@ static void cpu_common_reset(DeviceState *dev)
     cpu->halted = cpu->start_powered_off;
     cpu->mem_io_pc = 0;
     cpu->icount_extra = 0;
-    atomic_set(&cpu->icount_decr_ptr->u32, 0);
+    qatomic_set(&cpu->icount_decr_ptr->u32, 0);
     cpu->can_do_io = 1;
     cpu->exception_index = -1;
     cpu->crash_occurred = false;
@@ -395,17 +395,6 @@ static vaddr cpu_adjust_watchpoint_address(CPUState *cpu, vaddr addr, int len)
 {
     return addr;
 }
-
-static void generic_handle_interrupt(CPUState *cpu, int mask)
-{
-    cpu->interrupt_request |= mask;
-
-    if (!qemu_cpu_is_self(cpu)) {
-        qemu_cpu_kick(cpu);
-    }
-}
-
-CPUInterruptHandler cpu_interrupt_handler = generic_handle_interrupt;
 
 static void cpu_class_init(ObjectClass *klass, void *data)
 {

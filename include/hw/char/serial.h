@@ -61,7 +61,7 @@ struct SerialState {
     uint32_t baudbase;
     uint32_t tsr_retry;
     guint watch_tag;
-    uint32_t wakeup;
+    bool wakeup;
 
     /* Time when the last byte was successfully sent out of the tsr */
     uint64_t last_xmit_ts;
@@ -89,14 +89,6 @@ struct SerialMM {
     uint8_t regshift;
     uint8_t endianness;
 };
-typedef struct SerialMM SerialMM;
-
-struct SerialIO {
-    SysBusDevice parent;
-
-    SerialState serial;
-};
-typedef struct SerialIO SerialIO;
 
 extern const VMStateDescription vmstate_serial;
 extern const MemoryRegionOps serial_io_ops;
@@ -104,16 +96,10 @@ extern const MemoryRegionOps serial_io_ops;
 void serial_set_frequency(SerialState *s, uint32_t frequency);
 
 #define TYPE_SERIAL "serial"
-DECLARE_INSTANCE_CHECKER(SerialState, SERIAL,
-                         TYPE_SERIAL)
+OBJECT_DECLARE_SIMPLE_TYPE(SerialState, SERIAL)
 
 #define TYPE_SERIAL_MM "serial-mm"
-DECLARE_INSTANCE_CHECKER(SerialMM, SERIAL_MM,
-                         TYPE_SERIAL_MM)
-
-#define TYPE_SERIAL_IO "serial-io"
-DECLARE_INSTANCE_CHECKER(SerialIO, SERIAL_IO,
-                         TYPE_SERIAL_IO)
+OBJECT_DECLARE_SIMPLE_TYPE(SerialMM, SERIAL_MM)
 
 SerialMM *serial_mm_init(MemoryRegion *address_space,
                          hwaddr base, int regshift,

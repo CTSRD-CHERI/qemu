@@ -8,7 +8,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -83,9 +83,7 @@ struct vertex {
 } QEMU_PACKED;
 
 #define TYPE_MILKYMIST_TMU2 "milkymist-tmu2"
-typedef struct MilkymistTMU2State MilkymistTMU2State;
-DECLARE_INSTANCE_CHECKER(MilkymistTMU2State, MILKYMIST_TMU2,
-                         TYPE_MILKYMIST_TMU2)
+OBJECT_DECLARE_SIMPLE_TYPE(MilkymistTMU2State, MILKYMIST_TMU2)
 
 struct MilkymistTMU2State {
     SysBusDevice parent_obj;

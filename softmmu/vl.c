@@ -75,6 +75,7 @@
 #include "hw/audio/soundhw.h"
 #include "audio/audio.h"
 #include "sysemu/cpus.h"
+#include "sysemu/cpu-timers.h"
 #include "migration/colo.h"
 #include "migration/postcopy-ram.h"
 #include "sysemu/kvm.h"
@@ -146,7 +147,6 @@ static Chardev **serial_hds;
 Chardev *parallel_hds[MAX_PARALLEL_PORTS];
 int win2k_install_hack = 0;
 int singlestep = 0;
-int no_hpet = 0;
 int fd_bootchk = 1;
 static int no_reboot;
 int no_shutdown = 0;
@@ -165,8 +165,9 @@ bool boot_strict;
 uint8_t *boot_splash_filedata;
 int only_migratable; /* turn it off unless user states otherwise */
 bool wakeup_suspend_enabled;
-
 int icount_align_option;
+static const char *qtest_chrdev;
+static const char *qtest_log;
 
 #ifdef CONFIG_CHERI
 bool cheri_c2e_on_unrepresentable = false;
@@ -686,6 +687,7 @@ static const RunStateTransition runstate_transitions_def[] = {
     { RUN_STATE_SHUTDOWN, RUN_STATE_PAUSED },
     { RUN_STATE_SHUTDOWN, RUN_STATE_FINISH_MIGRATE },
     { RUN_STATE_SHUTDOWN, RUN_STATE_PRELAUNCH },
+    { RUN_STATE_SHUTDOWN, RUN_STATE_COLO },
 
     { RUN_STATE_DEBUG, RUN_STATE_SUSPENDED },
     { RUN_STATE_RUNNING, RUN_STATE_SUSPENDED },
@@ -1375,7 +1377,7 @@ ShutdownCause qemu_reset_requested_get(void)
 
 static int qemu_shutdown_requested(void)
 {
-    return atomic_xchg(&shutdown_requested, SHUTDOWN_CAUSE_NONE);
+    return qatomic_xchg(&shutdown_requested, SHUTDOWN_CAUSE_NONE);
 }
 
 static void qemu_kill_report(void)
@@ -2085,7 +2087,7 @@ char *qemu_find_file(int type, const char *name)
     return NULL;
 }
 
-void qemu_add_data_dir(const char *path)
+void qemu_add_data_dir(char *path)
 {
     int i;
 
@@ -2097,10 +2099,11 @@ void qemu_add_data_dir(const char *path)
     }
     for (i = 0; i < data_dir_idx; i++) {
         if (strcmp(data_dir[i], path) == 0) {
-            return; /* duplicate */
+            g_free(path); /* duplicate */
+            return;
         }
     }
-    data_dir[data_dir_idx++] = g_strdup(path);
+    data_dir[data_dir_idx++] = path;
 }
 
 static inline bool nonempty_str(const char *str)
@@ -2617,6 +2620,10 @@ static bool object_create_initial(const char *type, QemuOpts *opts)
     }
 #endif
 
+    /* Reason: vhost-user-blk-server property "node-name" */
+    if (g_str_equal(type, "vhost-user-blk-server")) {
+        return false;
+    }
     /*
      * Reason: filter-* property "netdev" etc.
      */
@@ -2755,8 +2762,9 @@ static int global_init_func(void *opaque, QemuOpts *opts, Error **errp)
 static int qemu_read_default_config_file(void)
 {
     int ret;
+    g_autofree char *file = get_relocated_path(CONFIG_QEMU_CONFDIR "/qemu.conf");
 
-    ret = qemu_read_config_file(CONFIG_QEMU_CONFDIR "/qemu.conf");
+    ret = qemu_read_config_file(file);
     if (ret < 0 && ret != -ENOENT) {
         return ret;
     }
@@ -2772,7 +2780,7 @@ static void user_register_global_props(void)
 
 static int do_configure_icount(void *opaque, QemuOpts *opts, Error **errp)
 {
-    configure_icount(opts, errp);
+    icount_configure(opts, errp);
     return 0;
 }
 
@@ -2790,10 +2798,15 @@ static int do_configure_accelerator(void *opaque, QemuOpts *opts, Error **errp)
     AccelClass *ac = accel_find(acc);
     AccelState *accel;
     int ret;
+    bool qtest_with_kvm;
+
+    qtest_with_kvm = g_str_equal(acc, "kvm") && qtest_chrdev != NULL;
 
     if (!ac) {
         *p_init_failed = true;
-        error_report("invalid accelerator %s", acc);
+        if (!qtest_with_kvm) {
+            error_report("invalid accelerator %s", acc);
+        }
         return 0;
     }
     accel = ACCEL(object_new_with_class(OBJECT_CLASS(ac)));
@@ -2805,8 +2818,9 @@ static int do_configure_accelerator(void *opaque, QemuOpts *opts, Error **errp)
     ret = accel_init_machine(accel, current_machine);
     if (ret < 0) {
         *p_init_failed = true;
-        error_report("failed to initialize %s: %s",
-                     acc, strerror(-ret));
+        if (!qtest_with_kvm || ret != -ENOENT) {
+            error_report("failed to initialize %s: %s", acc, strerror(-ret));
+        }
         return 0;
     }
 
@@ -2877,12 +2891,12 @@ static void configure_accelerators(const char *progname)
         exit(1);
     }
 
-    if (init_failed) {
+    if (init_failed && !qtest_chrdev) {
         AccelClass *ac = ACCEL_GET_CLASS(current_accel());
         error_report("falling back to %s", ac->name);
     }
 
-    if (use_icount && !(tcg_enabled() || qtest_enabled())) {
+    if (icount_enabled() && !tcg_enabled()) {
         error_report("-icount is not allowed with hardware virtualization");
         exit(1);
     }
@@ -2909,6 +2923,26 @@ static void create_default_memdev(MachineState *ms, const char *path)
                             &error_fatal);
 }
 
+/*
+ * Find a likely location for support files using the location of the binary.
+ * When running from the build tree this will be "$bindir/pc-bios".
+ * Otherwise, this is CONFIG_QEMU_DATADIR (possibly relocated).
+ *
+ * The caller must use g_free() to free the returned data when it is
+ * no longer required.
+ */
+static char *find_datadir(void)
+{
+    g_autofree char *dir = NULL;
+
+    dir = g_build_filename(qemu_get_exec_dir(), "pc-bios", NULL);
+    if (g_file_test(dir, G_FILE_TEST_IS_DIR)) {
+        return g_steal_pointer(&dir);
+    }
+
+    return get_relocated_path(CONFIG_QEMU_DATADIR);
+}
+
 void qemu_init(int argc, char **argv, char **envp)
 {
     int i;
@@ -2927,15 +2961,12 @@ void qemu_init(int argc, char **argv, char **envp)
     MachineClass *machine_class;
     const char *cpu_option;
     const char *vga_model = NULL;
-    const char *qtest_chrdev = NULL;
-    const char *qtest_log = NULL;
     const char *incoming = NULL;
     bool userconfig = true;
     bool nographic = false;
     int display_remote = 0;
     const char *log_mask = NULL;
     const char *log_file = NULL;
-    char *trace_file = NULL;
     ram_addr_t maxram_size;
     uint64_t ram_slots = 0;
     FILE *vmstate_dump_file = NULL;
@@ -2949,7 +2980,7 @@ void qemu_init(int argc, char **argv, char **envp)
     int rvfi_dii_port = 0;
 #endif
     bool list_data_dirs = false;
-    char *dir, **dirs;
+    char **dirs;
     const char *mem_path = NULL;
     bool have_custom_ram_size;
     BlockdevOptionsQueue bdo_queue = QSIMPLEQ_HEAD_INITIALIZER(bdo_queue);
@@ -3282,7 +3313,7 @@ void qemu_init(int argc, char **argv, char **envp)
                 if (is_help_option(optarg)) {
                     list_data_dirs = true;
                 } else {
-                    qemu_add_data_dir(optarg);
+                    qemu_add_data_dir(g_strdup(optarg));
                 }
                 break;
             case QEMU_OPTION_bios:
@@ -3561,10 +3592,6 @@ void qemu_init(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-             case QEMU_OPTION_no_kvm:
-                olist = qemu_find_opts("machine");
-                qemu_opts_parse_noisily(olist, "accel=tcg", false);
-                break;
             case QEMU_OPTION_accel:
                 accel_opts = qemu_opts_parse_noisily(qemu_find_opts("accel"),
                                                      optarg, true);
@@ -3621,7 +3648,8 @@ void qemu_init(int argc, char **argv, char **envp)
                 qemu_opts_parse_noisily(olist, "acpi=off", false);
                 break;
             case QEMU_OPTION_no_hpet:
-                no_hpet = 1;
+                olist = qemu_find_opts("machine");
+                qemu_opts_parse_noisily(olist, "hpet=off", false);
                 break;
             case QEMU_OPTION_no_reboot:
                 no_reboot = 1;
@@ -3809,8 +3837,7 @@ void qemu_init(int argc, char **argv, char **envp)
                 xen_domid_restrict = true;
                 break;
             case QEMU_OPTION_trace:
-                g_free(trace_file);
-                trace_file = trace_opt_parse(optarg);
+                trace_opt_parse(optarg);
                 break;
             case QEMU_OPTION_plugin:
                 qemu_plugin_opt_parse(optarg, &plugin_list);
@@ -3826,7 +3853,11 @@ void qemu_init(int argc, char **argv, char **envp)
                     break;
                 }
             case QEMU_OPTION_spice:
-                olist = qemu_find_opts("spice");
+                olist = qemu_find_opts_err("spice", NULL);
+                if (!olist) {
+                    ui_module_load_one("spice-core");
+                    olist = qemu_find_opts("spice");
+                }
                 if (!olist) {
                     error_report("spice support is disabled");
                     exit(1);
@@ -4056,7 +4087,7 @@ void qemu_init(int argc, char **argv, char **envp)
     if (!trace_init_backends()) {
         exit(1);
     }
-    trace_init_file(trace_file);
+    trace_init_file();
 
     /* Open the logfile at this point and set the log mask if necessary.
      */
@@ -4076,17 +4107,12 @@ void qemu_init(int argc, char **argv, char **envp)
     /* add configured firmware directories */
     dirs = g_strsplit(CONFIG_QEMU_FIRMWAREPATH, G_SEARCHPATH_SEPARATOR_S, 0);
     for (i = 0; dirs[i] != NULL; i++) {
-        qemu_add_data_dir(dirs[i]);
+        qemu_add_data_dir(get_relocated_path(dirs[i]));
     }
     g_strfreev(dirs);
 
     /* try to find datadir relative to the executable path */
-    dir = os_find_datadir();
-    qemu_add_data_dir(dir);
-    g_free(dir);
-
-    /* add the datadir specified when building */
-    qemu_add_data_dir(CONFIG_QEMU_DATADIR);
+    qemu_add_data_dir(find_datadir());
 
     /* -L help lists the data directories and exits. */
     if (list_data_dirs) {
@@ -4095,18 +4121,6 @@ void qemu_init(int argc, char **argv, char **envp)
         }
         exit(0);
     }
-
-    /* machine_class: default to UP */
-    machine_class->max_cpus = machine_class->max_cpus ?: 1;
-    machine_class->min_cpus = machine_class->min_cpus ?: 1;
-    machine_class->default_cpus = machine_class->default_cpus ?: 1;
-
-    /* default to machine_class->default_cpus */
-    current_machine->smp.cpus = machine_class->default_cpus;
-    current_machine->smp.max_cpus = machine_class->default_cpus;
-    current_machine->smp.cores = 1;
-    current_machine->smp.threads = 1;
-    current_machine->smp.sockets = 1;
 
     machine_class->smp_parse(current_machine,
         qemu_opts_find(qemu_find_opts("smp-opts"), NULL));
@@ -4274,6 +4288,11 @@ void qemu_init(int argc, char **argv, char **envp)
                       user_creatable_add_opts_foreach,
                       object_create_initial, &error_fatal);
 
+    /* spice needs the timers to be initialized by this point */
+    /* spice must initialize before audio as it changes the default auiodev */
+    /* spice must initialize before chardevs (for spicevmc and spiceport) */
+    qemu_spice.init();
+
     qemu_opts_foreach(qemu_find_opts("chardev"),
                       chardev_init_func, NULL, &error_fatal);
 
@@ -4281,10 +4300,6 @@ void qemu_init(int argc, char **argv, char **envp)
     qemu_opts_foreach(qemu_find_opts("fsdev"),
                       fsdev_init_func, NULL, &error_fatal);
 #endif
-
-    /* spice needs the timers to be initialized by this point */
-    /* spice must initialize before audio as it changes the default auiodev */
-    qemu_spice_init();
 
     /*
      * Note: we need to create audio and block backends before
@@ -4386,7 +4401,8 @@ void qemu_init(int argc, char **argv, char **envp)
         semihosting_arg_fallback(kernel_filename, kernel_cmdline);
     }
 
-    cpu_ticks_init();
+    /* initialize cpu timers and VCPU throttle modules */
+    cpu_timers_init();
 
     if (default_net) {
         QemuOptsList *net = qemu_find_opts("net");
@@ -4420,9 +4436,6 @@ void qemu_init(int argc, char **argv, char **envp)
     qemu_opts_foreach(qemu_find_opts("mon"),
                       mon_init_func, NULL, &error_fatal);
 
-    /* connect semihosting console input if requested */
-    qemu_semihosting_console_init();
-
     if (foreach_device_config(DEV_SERIAL, serial_parse) < 0)
         exit(1);
     if (foreach_device_config(DEV_PARALLEL, parallel_parse) < 0)
@@ -4432,6 +4445,7 @@ void qemu_init(int argc, char **argv, char **envp)
 
     /* now chardevs have been created we may have semihosting to connect */
     qemu_semihosting_connect_chardevs();
+    qemu_semihosting_console_init();
 
     /* If no default VGA is requested, the default is "none".  */
     if (default_vga) {
@@ -4592,7 +4606,7 @@ void qemu_init(int argc, char **argv, char **envp)
 #endif
 
     if (using_spice) {
-        qemu_spice_display_init();
+        qemu_spice.display_init();
     }
 
     if (foreach_device_config(DEV_GDB, gdbserver_start) < 0) {

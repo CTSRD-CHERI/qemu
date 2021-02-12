@@ -28,7 +28,7 @@
 #include "qemu/error-report.h"
 #include "qemu/option.h"
 #include "qemu/qemu-print.h"
-#include "s390-pci-bus.h"
+#include "hw/s390x/s390-pci-bus.h"
 #include "sysemu/reset.h"
 #include "hw/s390x/storage-keys.h"
 #include "hw/s390x/storage-attributes.h"
@@ -101,6 +101,7 @@ static const char *const reset_dev_types[] = {
     "s390-sclp-event-facility",
     "s390-flic",
     "diag288",
+    TYPE_S390_PCI_HOST_BRIDGE,
 };
 
 static void subsystem_reset(void)
@@ -161,7 +162,6 @@ static void virtio_ccw_register_hcalls(void)
 static void s390_memory_init(MemoryRegion *ram)
 {
     MemoryRegion *sysmem = get_system_memory();
-    Error *local_err = NULL;
 
     /* allocate RAM for core */
     memory_region_add_subregion(sysmem, 0, ram);
@@ -170,11 +170,7 @@ static void s390_memory_init(MemoryRegion *ram)
      * Configure the maximum page size. As no memory devices were created
      * yet, this is the page size of initial memory only.
      */
-    s390_set_max_pagesize(qemu_maxrampagesize(), &local_err);
-    if (local_err) {
-        error_report_err(local_err);
-        exit(EXIT_FAILURE);
-    }
+    s390_set_max_pagesize(qemu_maxrampagesize(), &error_fatal);
     /* Initialize storage key device */
     s390_skeys_init();
     /* Initialize storage attributes device */
@@ -490,6 +486,10 @@ static void s390_machine_reset(MachineState *machine)
     default:
         g_assert_not_reached();
     }
+
+    CPU_FOREACH(t) {
+        run_on_cpu(t, s390_do_cpu_set_diag318, RUN_ON_CPU_HOST_ULONG(0));
+    }
     s390_ipl_clear_reset_request();
 }
 
@@ -553,17 +553,6 @@ static HotplugHandler *s390_get_hotplug_handler(MachineState *machine,
     return NULL;
 }
 
-static void s390_hot_add_cpu(MachineState *machine,
-                             const int64_t id, Error **errp)
-{
-    ObjectClass *oc;
-
-    g_assert(machine->possible_cpus->cpus[0].cpu);
-    oc = OBJECT_CLASS(CPU_GET_CLASS(machine->possible_cpus->cpus[0].cpu));
-
-    s390x_new_cpu(object_class_get_name(oc), id, errp);
-}
-
 static void s390_nmi(NMIState *n, int cpu_index, Error **errp)
 {
     CPUState *cs = qemu_get_cpu(cpu_index);
@@ -604,7 +593,6 @@ static void ccw_machine_class_init(ObjectClass *oc, void *data)
     s390mc->hpage_1m_allowed = true;
     mc->init = ccw_init;
     mc->reset = s390_machine_reset;
-    mc->hot_add_cpu = s390_hot_add_cpu;
     mc->block_default_type = IF_VIRTIO;
     mc->no_cdrom = 1;
     mc->no_floppy = 1;

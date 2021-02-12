@@ -15,13 +15,13 @@
 #define HW_VIRTIO_PMEM_H
 
 #include "hw/virtio/virtio.h"
-#include "qapi/qapi-types-misc.h"
+#include "qapi/qapi-types-machine.h"
 #include "qom/object.h"
 
 #define TYPE_VIRTIO_PMEM "virtio-pmem"
 
 OBJECT_DECLARE_TYPE(VirtIOPMEM, VirtIOPMEMClass,
-                    virtio_pmem, VIRTIO_PMEM)
+                    VIRTIO_PMEM)
 
 #define VIRTIO_PMEM_ADDR_PROP "memaddr"
 #define VIRTIO_PMEM_MEMDEV_PROP "memdev"

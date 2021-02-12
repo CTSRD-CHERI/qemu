@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -338,68 +338,13 @@ static void encode_cache_cpuid80000006(CPUCacheInfo *l2,
     }
 }
 
-/*
- * Definitions used for building CPUID Leaf 0x8000001D and 0x8000001E
- * Please refer to the AMD64 Architecture Programmer’s Manual Volume 3.
- * Define the constants to build the cpu topology. Right now, TOPOEXT
- * feature is enabled only on EPYC. So, these constants are based on
- * EPYC supported configurations. We may need to handle the cases if
- * these values change in future.
- */
-/* Maximum core complexes in a node */
-#define MAX_CCX 2
-/* Maximum cores in a core complex */
-#define MAX_CORES_IN_CCX 4
-/* Maximum cores in a node */
-#define MAX_CORES_IN_NODE 8
-/* Maximum nodes in a socket */
-#define MAX_NODES_PER_SOCKET 4
-
-/*
- * Figure out the number of nodes required to build this config.
- * Max cores in a node is 8
- */
-static int nodes_in_socket(int nr_cores)
-{
-    int nodes;
-
-    nodes = DIV_ROUND_UP(nr_cores, MAX_CORES_IN_NODE);
-
-   /* Hardware does not support config with 3 nodes, return 4 in that case */
-    return (nodes == 3) ? 4 : nodes;
-}
-
-/*
- * Decide the number of cores in a core complex with the given nr_cores using
- * following set constants MAX_CCX, MAX_CORES_IN_CCX, MAX_CORES_IN_NODE and
- * MAX_NODES_PER_SOCKET. Maintain symmetry as much as possible
- * L3 cache is shared across all cores in a core complex. So, this will also
- * tell us how many cores are sharing the L3 cache.
- */
-static int cores_in_core_complex(int nr_cores)
-{
-    int nodes;
-
-    /* Check if we can fit all the cores in one core complex */
-    if (nr_cores <= MAX_CORES_IN_CCX) {
-        return nr_cores;
-    }
-    /* Get the number of nodes required to build this config */
-    nodes = nodes_in_socket(nr_cores);
-
-    /*
-     * Divide the cores accros all the core complexes
-     * Return rounded up value
-     */
-    return DIV_ROUND_UP(nr_cores, nodes * MAX_CCX);
-}
-
 /* Encode cache info for CPUID[8000001D] */
-static void encode_cache_cpuid8000001d(CPUCacheInfo *cache, CPUState *cs,
-                                uint32_t *eax, uint32_t *ebx,
-                                uint32_t *ecx, uint32_t *edx)
+static void encode_cache_cpuid8000001d(CPUCacheInfo *cache,
+                                       X86CPUTopoInfo *topo_info,
+                                       uint32_t *eax, uint32_t *ebx,
+                                       uint32_t *ecx, uint32_t *edx)
 {
-    uint32_t l3_cores;
+    uint32_t l3_threads;
     assert(cache->size == cache->line_size * cache->associativity *
                           cache->partitions * cache->sets);
 
@@ -408,10 +353,10 @@ static void encode_cache_cpuid8000001d(CPUCacheInfo *cache, CPUState *cs,
 
     /* L3 is shared among multiple cores */
     if (cache->level == 3) {
-        l3_cores = cores_in_core_complex(cs->nr_cores);
-        *eax |= ((l3_cores * cs->nr_threads) - 1) << 14;
+        l3_threads = topo_info->cores_per_die * topo_info->threads_per_core;
+        *eax |= (l3_threads - 1) << 14;
     } else {
-        *eax |= ((cs->nr_threads - 1) << 14);
+        *eax |= ((topo_info->threads_per_core - 1) << 14);
     }
 
     assert(cache->line_size > 0);
@@ -431,107 +376,58 @@ static void encode_cache_cpuid8000001d(CPUCacheInfo *cache, CPUState *cs,
            (cache->complex_indexing ? CACHE_COMPLEX_IDX : 0);
 }
 
-/* Data structure to hold the configuration info for a given core index */
-struct core_topology {
-    /* core complex id of the current core index */
-    int ccx_id;
-    /*
-     * Adjusted core index for this core in the topology
-     * This can be 0,1,2,3 with max 4 cores in a core complex
-     */
-    int core_id;
-    /* Node id for this core index */
-    int node_id;
-    /* Number of nodes in this config */
-    int num_nodes;
-};
-
-/*
- * Build the configuration closely match the EPYC hardware. Using the EPYC
- * hardware configuration values (MAX_CCX, MAX_CORES_IN_CCX, MAX_CORES_IN_NODE)
- * right now. This could change in future.
- * nr_cores : Total number of cores in the config
- * core_id  : Core index of the current CPU
- * topo     : Data structure to hold all the config info for this core index
- */
-static void build_core_topology(int nr_cores, int core_id,
-                                struct core_topology *topo)
-{
-    int nodes, cores_in_ccx;
-
-    /* First get the number of nodes required */
-    nodes = nodes_in_socket(nr_cores);
-
-    cores_in_ccx = cores_in_core_complex(nr_cores);
-
-    topo->node_id = core_id / (cores_in_ccx * MAX_CCX);
-    topo->ccx_id = (core_id % (cores_in_ccx * MAX_CCX)) / cores_in_ccx;
-    topo->core_id = core_id % cores_in_ccx;
-    topo->num_nodes = nodes;
-}
-
 /* Encode cache info for CPUID[8000001E] */
-static void encode_topo_cpuid8000001e(CPUState *cs, X86CPU *cpu,
-                                       uint32_t *eax, uint32_t *ebx,
-                                       uint32_t *ecx, uint32_t *edx)
+static void encode_topo_cpuid8000001e(X86CPU *cpu, X86CPUTopoInfo *topo_info,
+                                      uint32_t *eax, uint32_t *ebx,
+                                      uint32_t *ecx, uint32_t *edx)
 {
-    struct core_topology topo = {0};
-    unsigned long nodes;
-    int shift;
+    X86CPUTopoIDs topo_ids;
 
-    build_core_topology(cs->nr_cores, cpu->core_id, &topo);
+    x86_topo_ids_from_apicid(cpu->apic_id, topo_info, &topo_ids);
+
     *eax = cpu->apic_id;
+
     /*
-     * CPUID_Fn8000001E_EBX
-     * 31:16 Reserved
-     * 15:8  Threads per core (The number of threads per core is
-     *       Threads per core + 1)
-     *  7:0  Core id (see bit decoding below)
-     *       SMT:
-     *           4:3 node id
-     *             2 Core complex id
-     *           1:0 Core id
-     *       Non SMT:
-     *           5:4 node id
-     *             3 Core complex id
-     *           1:0 Core id
+     * CPUID_Fn8000001E_EBX [Core Identifiers] (CoreId)
+     * Read-only. Reset: 0000_XXXXh.
+     * See Core::X86::Cpuid::ExtApicId.
+     * Core::X86::Cpuid::CoreId_lthree[1:0]_core[3:0]_thread[1:0];
+     * Bits Description
+     * 31:16 Reserved.
+     * 15:8 ThreadsPerCore: threads per core. Read-only. Reset: XXh.
+     *      The number of threads per core is ThreadsPerCore+1.
+     *  7:0 CoreId: core ID. Read-only. Reset: XXh.
+     *
+     *  NOTE: CoreId is already part of apic_id. Just use it. We can
+     *  use all the 8 bits to represent the core_id here.
      */
-    if (cs->nr_threads - 1) {
-        *ebx = ((cs->nr_threads - 1) << 8) | (topo.node_id << 3) |
-                (topo.ccx_id << 2) | topo.core_id;
-    } else {
-        *ebx = (topo.node_id << 4) | (topo.ccx_id << 3) | topo.core_id;
-    }
+    *ebx = ((topo_info->threads_per_core - 1) << 8) | (topo_ids.core_id & 0xFF);
+
     /*
-     * CPUID_Fn8000001E_ECX
-     * 31:11 Reserved
-     * 10:8  Nodes per processor (Nodes per processor is number of nodes + 1)
-     *  7:0  Node id (see bit decoding below)
-     *         2  Socket id
-     *       1:0  Node id
+     * CPUID_Fn8000001E_ECX [Node Identifiers] (NodeId)
+     * Read-only. Reset: 0000_0XXXh.
+     * Core::X86::Cpuid::NodeId_lthree[1:0]_core[3:0]_thread[1:0];
+     * Bits Description
+     * 31:11 Reserved.
+     * 10:8 NodesPerProcessor: Node per processor. Read-only. Reset: XXXb.
+     *      ValidValues:
+     *      Value Description
+     *      000b  1 node per processor.
+     *      001b  2 nodes per processor.
+     *      010b Reserved.
+     *      011b 4 nodes per processor.
+     *      111b-100b Reserved.
+     *  7:0 NodeId: Node ID. Read-only. Reset: XXh.
+     *
+     * NOTE: Hardware reserves 3 bits for number of nodes per processor.
+     * But users can create more nodes than the actual hardware can
+     * support. To genaralize we can use all the upper 8 bits for nodes.
+     * NodeId is combination of node and socket_id which is already decoded
+     * in apic_id. Just use it by shifting.
      */
-    if (topo.num_nodes <= 4) {
-        *ecx = ((topo.num_nodes - 1) << 8) | (cpu->socket_id << 2) |
-                topo.node_id;
-    } else {
-        /*
-         * Node id fix up. Actual hardware supports up to 4 nodes. But with
-         * more than 32 cores, we may end up with more than 4 nodes.
-         * Node id is a combination of socket id and node id. Only requirement
-         * here is that this number should be unique accross the system.
-         * Shift the socket id to accommodate more nodes. We dont expect both
-         * socket id and node id to be big number at the same time. This is not
-         * an ideal config but we need to to support it. Max nodes we can have
-         * is 32 (255/8) with 8 cores per node and 255 max cores. We only need
-         * 5 bits for nodes. Find the left most set bit to represent the total
-         * number of nodes. find_last_bit returns last set bit(0 based). Left
-         * shift(+1) the socket id to represent all the nodes.
-         */
-        nodes = topo.num_nodes - 1;
-        shift = find_last_bit(&nodes, 8);
-        *ecx = ((topo.num_nodes - 1) << 8) | (cpu->socket_id << (shift + 1)) |
-                topo.node_id;
-    }
+    *ecx = ((topo_info->dies_per_pkg - 1) << 8) |
+           ((cpu->apic_id >> apicid_die_offset(topo_info)) & 0xFF);
+
     *edx = 0;
 }
 
@@ -903,7 +799,7 @@ static FeatureWordInfo feature_word_info[FEATURE_WORDS] = {
             "kvmclock", "kvm-nopiodelay", "kvm-mmu", "kvmclock",
             "kvm-asyncpf", "kvm-steal-time", "kvm-pv-eoi", "kvm-pv-unhalt",
             NULL, "kvm-pv-tlb-flush", NULL, "kvm-pv-ipi",
-            "kvm-poll-control", "kvm-pv-sched-yield", NULL, NULL,
+            "kvm-poll-control", "kvm-pv-sched-yield", "kvm-asyncpf-int", NULL,
             NULL, NULL, NULL, NULL,
             NULL, NULL, NULL, NULL,
             "kvmclock-stable-bit", NULL, NULL, NULL,
@@ -1737,6 +1633,7 @@ typedef struct X86CPUDefinition {
      * If NULL, version 1 will be registered automatically.
      */
     const X86CPUVersionDefinition *versions;
+    const char *deprecation_note;
 } X86CPUDefinition;
 
 /* Reference to a specific CPU model version */
@@ -3461,10 +3358,13 @@ static X86CPUDefinition builtin_x86_defs[] = {
         .xlevel = 0x80000008,
         .model_id = "Intel Core Processor (Icelake)",
         .versions = (X86CPUVersionDefinition[]) {
-            { .version = 1 },
+            {
+                .version = 1,
+                .note = "deprecated"
+            },
             {
                 .version = 2,
-                .note = "no TSX",
+                .note = "no TSX, deprecated",
                 .alias = "Icelake-Client-noTSX",
                 .props = (PropValue[]) {
                     { "hle", "off" },
@@ -3473,7 +3373,8 @@ static X86CPUDefinition builtin_x86_defs[] = {
                 },
             },
             { /* end of list */ }
-        }
+        },
+        .deprecation_note = "use Icelake-Server instead"
     },
     {
         .name = "Icelake-Server",
@@ -4231,7 +4132,8 @@ static PropValue tcg_default_props[] = {
  * We resolve CPU model aliases using -v1 when using "-machine
  * none", but this is just for compatibility while libvirt isn't
  * adapted to resolve CPU model versions before creating VMs.
- * See "Runnability guarantee of CPU models" at * qemu-deprecated.texi.
+ * See "Runnability guarantee of CPU models" at
+ * docs/system/deprecated.rst.
  */
 X86CPUVersion default_cpu_version = 1;
 
@@ -4282,9 +4184,6 @@ void x86_cpu_change_kvm_default(const char *prop, const char *value)
      */
     assert(pv->prop);
 }
-
-static uint64_t x86_cpu_get_supported_feature_word(FeatureWord w,
-                                                   bool migratable_only);
 
 static bool lmce_supported(void)
 {
@@ -5096,6 +4995,11 @@ static void x86_cpu_definition_entry(gpointer data, gpointer user_data)
     info->migration_safe = cc->migration_safe;
     info->has_migration_safe = true;
     info->q_static = cc->static_model;
+    if (cc->model && cc->model->cpudef->deprecation_note) {
+        info->deprecated = true;
+    } else {
+        info->deprecated = false;
+    }
     /*
      * Old machine types won't report aliases, so that alias translation
      * doesn't break compatibility with previous QEMU versions.
@@ -5486,9 +5390,11 @@ static void x86_cpu_cpudef_class_init(ObjectClass *oc, void *data)
 {
     X86CPUModel *model = data;
     X86CPUClass *xcc = X86_CPU_CLASS(oc);
+    CPUClass *cc = CPU_CLASS(oc);
 
     xcc->model = model;
     xcc->migration_safe = true;
+    cc->deprecation_note = model->cpudef->deprecation_note;
 }
 
 static void x86_register_cpu_model_type(const char *name, X86CPUModel *model)
@@ -5995,20 +5901,20 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         }
         switch (count) {
         case 0: /* L1 dcache info */
-            encode_cache_cpuid8000001d(env->cache_info_amd.l1d_cache, cs,
-                                       eax, ebx, ecx, edx);
+            encode_cache_cpuid8000001d(env->cache_info_amd.l1d_cache,
+                                       &topo_info, eax, ebx, ecx, edx);
             break;
         case 1: /* L1 icache info */
-            encode_cache_cpuid8000001d(env->cache_info_amd.l1i_cache, cs,
-                                       eax, ebx, ecx, edx);
+            encode_cache_cpuid8000001d(env->cache_info_amd.l1i_cache,
+                                       &topo_info, eax, ebx, ecx, edx);
             break;
         case 2: /* L2 cache info */
-            encode_cache_cpuid8000001d(env->cache_info_amd.l2_cache, cs,
-                                       eax, ebx, ecx, edx);
+            encode_cache_cpuid8000001d(env->cache_info_amd.l2_cache,
+                                       &topo_info, eax, ebx, ecx, edx);
             break;
         case 3: /* L3 cache info */
-            encode_cache_cpuid8000001d(env->cache_info_amd.l3_cache, cs,
-                                       eax, ebx, ecx, edx);
+            encode_cache_cpuid8000001d(env->cache_info_amd.l3_cache,
+                                       &topo_info, eax, ebx, ecx, edx);
             break;
         default: /* end of info */
             *eax = *ebx = *ecx = *edx = 0;
@@ -6016,9 +5922,14 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         }
         break;
     case 0x8000001E:
-        assert(cpu->core_id <= 255);
-        encode_topo_cpuid8000001e(cs, cpu,
-                                  eax, ebx, ecx, edx);
+        if (cpu->core_id <= 255) {
+            encode_topo_cpuid8000001e(cpu, &topo_info, eax, ebx, ecx, edx);
+        } else {
+            *eax = 0;
+            *ebx = 0;
+            *ecx = 0;
+            *edx = 0;
+        }
         break;
     case 0xC0000000:
         *eax = env->cpuid_xlevel2;
@@ -6371,6 +6282,8 @@ static void x86_cpu_enable_xsave_components(X86CPU *cpu)
     uint64_t mask;
 
     if (!(env->features[FEAT_1_ECX] & CPUID_EXT_XSAVE)) {
+        env->features[FEAT_XSAVE_COMP_LO] = 0;
+        env->features[FEAT_XSAVE_COMP_HI] = 0;
         return;
     }
 
@@ -6932,7 +6845,7 @@ static void x86_cpu_register_bit_prop(X86CPU *cpu,
     ObjectProperty *op;
     uint64_t mask = (1ULL << bitnr);
 
-    op = object_property_find(OBJECT(cpu), prop_name, NULL);
+    op = object_property_find(OBJECT(cpu), prop_name);
     if (op) {
         fp = op->opaque;
         assert(fp->w == w);
@@ -7026,44 +6939,12 @@ static void x86_cpu_initfn(Object *obj)
     env->nr_dies = 1;
     cpu_set_cpustate_pointers(cpu);
 
-    object_property_add(obj, "family", "int",
-                        x86_cpuid_version_get_family,
-                        x86_cpuid_version_set_family, NULL, NULL);
-    object_property_add(obj, "model", "int",
-                        x86_cpuid_version_get_model,
-                        x86_cpuid_version_set_model, NULL, NULL);
-    object_property_add(obj, "stepping", "int",
-                        x86_cpuid_version_get_stepping,
-                        x86_cpuid_version_set_stepping, NULL, NULL);
-    object_property_add_str(obj, "vendor",
-                            x86_cpuid_get_vendor,
-                            x86_cpuid_set_vendor);
-    object_property_add_str(obj, "model-id",
-                            x86_cpuid_get_model_id,
-                            x86_cpuid_set_model_id);
-    object_property_add(obj, "tsc-frequency", "int",
-                        x86_cpuid_get_tsc_freq,
-                        x86_cpuid_set_tsc_freq, NULL, NULL);
     object_property_add(obj, "feature-words", "X86CPUFeatureWordInfo",
                         x86_cpu_get_feature_words,
                         NULL, NULL, (void *)env->features);
     object_property_add(obj, "filtered-features", "X86CPUFeatureWordInfo",
                         x86_cpu_get_feature_words,
                         NULL, NULL, (void *)cpu->filtered_features);
-    /*
-     * The "unavailable-features" property has the same semantics as
-     * CpuDefinitionInfo.unavailable-features on the "query-cpu-definitions"
-     * QMP command: they list the features that would have prevented the
-     * CPU from running if the "enforce" flag was set.
-     */
-    object_property_add(obj, "unavailable-features", "strList",
-                        x86_cpu_get_unavailable_features,
-                        NULL, NULL, NULL);
-
-#if !defined(CONFIG_USER_ONLY)
-    object_property_add(obj, "crash-information", "GuestPanicInformation",
-                        x86_cpu_get_crash_info_qom, NULL, NULL, NULL);
-#endif
 
     for (w = 0; w < FEATURE_WORDS; w++) {
         int bitnr;
@@ -7092,6 +6973,7 @@ static void x86_cpu_initfn(Object *obj)
     object_property_add_alias(obj, "kvm_nopiodelay", obj, "kvm-nopiodelay");
     object_property_add_alias(obj, "kvm_mmu", obj, "kvm-mmu");
     object_property_add_alias(obj, "kvm_asyncpf", obj, "kvm-asyncpf");
+    object_property_add_alias(obj, "kvm_asyncpf_int", obj, "kvm-asyncpf-int");
     object_property_add_alias(obj, "kvm_steal_time", obj, "kvm-steal-time");
     object_property_add_alias(obj, "kvm_pv_eoi", obj, "kvm-pv-eoi");
     object_property_add_alias(obj, "kvm_pv_unhalt", obj, "kvm-pv-unhalt");
@@ -7263,7 +7145,7 @@ static Property x86_cpu_properties[] = {
     DEFINE_PROP_BOOL("pmu", X86CPU, enable_pmu, false),
 
     DEFINE_PROP_UINT32("hv-spinlocks", X86CPU, hyperv_spinlock_attempts,
-                       HYPERV_SPINLOCK_NEVER_RETRY),
+                       HYPERV_SPINLOCK_NEVER_NOTIFY),
     DEFINE_PROP_BIT64("hv-relaxed", X86CPU, hyperv_features,
                       HYPERV_FEAT_RELAXED, 0),
     DEFINE_PROP_BIT64("hv-vapic", X86CPU, hyperv_features,
@@ -7412,6 +7294,40 @@ static void x86_cpu_common_class_init(ObjectClass *oc, void *data)
     cc->disas_set_info = x86_disas_set_info;
 
     dc->user_creatable = true;
+
+    object_class_property_add(oc, "family", "int",
+                              x86_cpuid_version_get_family,
+                              x86_cpuid_version_set_family, NULL, NULL);
+    object_class_property_add(oc, "model", "int",
+                              x86_cpuid_version_get_model,
+                              x86_cpuid_version_set_model, NULL, NULL);
+    object_class_property_add(oc, "stepping", "int",
+                              x86_cpuid_version_get_stepping,
+                              x86_cpuid_version_set_stepping, NULL, NULL);
+    object_class_property_add_str(oc, "vendor",
+                                  x86_cpuid_get_vendor,
+                                  x86_cpuid_set_vendor);
+    object_class_property_add_str(oc, "model-id",
+                                  x86_cpuid_get_model_id,
+                                  x86_cpuid_set_model_id);
+    object_class_property_add(oc, "tsc-frequency", "int",
+                              x86_cpuid_get_tsc_freq,
+                              x86_cpuid_set_tsc_freq, NULL, NULL);
+    /*
+     * The "unavailable-features" property has the same semantics as
+     * CpuDefinitionInfo.unavailable-features on the "query-cpu-definitions"
+     * QMP command: they list the features that would have prevented the
+     * CPU from running if the "enforce" flag was set.
+     */
+    object_class_property_add(oc, "unavailable-features", "strList",
+                              x86_cpu_get_unavailable_features,
+                              NULL, NULL, NULL);
+
+#if !defined(CONFIG_USER_ONLY)
+    object_class_property_add(oc, "crash-information", "GuestPanicInformation",
+                              x86_cpu_get_crash_info_qom, NULL, NULL, NULL);
+#endif
+
 }
 
 static const TypeInfo x86_cpu_type_info = {

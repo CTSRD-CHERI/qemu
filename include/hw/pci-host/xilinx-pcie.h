@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -27,14 +27,10 @@
 #include "qom/object.h"
 
 #define TYPE_XILINX_PCIE_HOST "xilinx-pcie-host"
-typedef struct XilinxPCIEHost XilinxPCIEHost;
-DECLARE_INSTANCE_CHECKER(XilinxPCIEHost, XILINX_PCIE_HOST,
-                         TYPE_XILINX_PCIE_HOST)
+OBJECT_DECLARE_SIMPLE_TYPE(XilinxPCIEHost, XILINX_PCIE_HOST)
 
 #define TYPE_XILINX_PCIE_ROOT "xilinx-pcie-root"
-typedef struct XilinxPCIERoot XilinxPCIERoot;
-DECLARE_INSTANCE_CHECKER(XilinxPCIERoot, XILINX_PCIE_ROOT,
-                         TYPE_XILINX_PCIE_ROOT)
+OBJECT_DECLARE_SIMPLE_TYPE(XilinxPCIERoot, XILINX_PCIE_ROOT)
 
 struct XilinxPCIERoot {
     PCIBridge parent_obj;

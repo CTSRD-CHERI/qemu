@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -42,7 +42,7 @@ int qemu_log(const char *fmt, ...)
     QemuLogFile *logfile;
 
     rcu_read_lock();
-    logfile = atomic_rcu_read(&qemu_logfile);
+    logfile = qatomic_rcu_read(&qemu_logfile);
     if (logfile) {
         va_list ap;
         va_start(ap, fmt);
@@ -106,7 +106,7 @@ void qemu_set_log_internal(int log_flags)
     QEMU_LOCK_GUARD(&qemu_logfile_mutex);
     if (qemu_logfile && !need_to_open_file) {
         logfile = qemu_logfile;
-        atomic_rcu_set(&qemu_logfile, NULL);
+        qatomic_rcu_set(&qemu_logfile, NULL);
         call_rcu(logfile, qemu_logfile_free, rcu);
     } else if (!qemu_logfile && need_to_open_file) {
         logfile = g_new0(QemuLogFile, 1);
@@ -144,7 +144,7 @@ void qemu_set_log_internal(int log_flags)
 #endif
             log_append = 1;
         }
-        atomic_rcu_set(&qemu_logfile, logfile);
+        qatomic_rcu_set(&qemu_logfile, logfile);
     }
 }
 
@@ -298,7 +298,7 @@ void qemu_log_flush(void)
     QemuLogFile *logfile;
 
     rcu_read_lock();
-    logfile = atomic_rcu_read(&qemu_logfile);
+    logfile = qatomic_rcu_read(&qemu_logfile);
     if (logfile) {
         fflush(logfile->fd);
     }
@@ -314,7 +314,7 @@ void qemu_log_close(void)
     logfile = qemu_logfile;
 
     if (logfile) {
-        atomic_rcu_set(&qemu_logfile, NULL);
+        qatomic_rcu_set(&qemu_logfile, NULL);
         call_rcu(logfile, qemu_logfile_free, rcu);
     }
     qemu_mutex_unlock(&qemu_logfile_mutex);

@@ -32,13 +32,10 @@
 #include "qom/object.h"
 
 #define TYPE_CAN_HOST "can-host"
-typedef struct CanHostClass CanHostClass;
-typedef struct CanHostState CanHostState;
-DECLARE_OBJ_CHECKERS(CanHostState, CanHostClass,
-                     CAN_HOST, TYPE_CAN_HOST)
+OBJECT_DECLARE_TYPE(CanHostState, CanHostClass, CAN_HOST)
 
 struct CanHostState {
-    ObjectClass oc;
+    Object oc;
 
     CanBusState *bus;
     CanBusClientState bus_client;

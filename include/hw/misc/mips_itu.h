@@ -6,7 +6,7 @@
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,9 +24,7 @@
 #include "qom/object.h"
 
 #define TYPE_MIPS_ITU "mips-itu"
-typedef struct MIPSITUState MIPSITUState;
-DECLARE_INSTANCE_CHECKER(MIPSITUState, MIPS_ITU,
-                         TYPE_MIPS_ITU)
+OBJECT_DECLARE_SIMPLE_TYPE(MIPSITUState, MIPS_ITU)
 
 #define ITC_CELL_DEPTH_SHIFT 2
 #define ITC_CELL_DEPTH (1u << ITC_CELL_DEPTH_SHIFT)

@@ -31,6 +31,9 @@ static int query_error_class(const char *cmd)
 #ifndef CONFIG_SPICE
         { "query-spice", ERROR_CLASS_COMMAND_NOT_FOUND },
 #endif
+#ifndef CONFIG_TCG
+        { "query-replay", ERROR_CLASS_COMMAND_NOT_FOUND },
+#endif
 #ifndef CONFIG_VNC
         { "query-vnc", ERROR_CLASS_GENERIC_ERROR },
         { "query-vnc-servers", ERROR_CLASS_GENERIC_ERROR },
@@ -82,9 +85,9 @@ static void test_query(const void *data)
     qtest_quit(qts);
 }
 
-static bool query_is_blacklisted(const char *cmd)
+static bool query_is_ignored(const char *cmd)
 {
-    const char *blacklist[] = {
+    const char *ignored[] = {
         /* Not actually queries: */
         "add-fd",
         /* Success depends on target arch: */
@@ -101,8 +104,8 @@ static bool query_is_blacklisted(const char *cmd)
     };
     int i;
 
-    for (i = 0; blacklist[i]; i++) {
-        if (!strcmp(cmd, blacklist[i])) {
+    for (i = 0; ignored[i]; i++) {
+        if (!strcmp(cmd, ignored[i])) {
             return true;
         }
     }
@@ -179,7 +182,7 @@ static void add_query_tests(QmpSchema *schema)
             continue;
         }
 
-        if (query_is_blacklisted(si->name)) {
+        if (query_is_ignored(si->name)) {
             continue;
         }
 

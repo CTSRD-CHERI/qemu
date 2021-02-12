@@ -57,18 +57,17 @@ struct XenDeviceClass {
     XenDeviceFrontendChanged frontend_changed;
     XenDeviceUnrealize unrealize;
 };
-typedef struct XenDeviceClass XenDeviceClass;
 
 #define TYPE_XEN_DEVICE "xen-device"
-DECLARE_OBJ_CHECKERS(XenDevice, XenDeviceClass,
-                     XEN_DEVICE, TYPE_XEN_DEVICE)
+OBJECT_DECLARE_TYPE(XenDevice, XenDeviceClass, XEN_DEVICE)
 
 struct XenBus {
     BusState qbus;
     domid_t backend_id;
     struct xs_handle *xsh;
     XenWatchList *watch_list;
-    XenWatch *backend_watch;
+    unsigned int backend_types;
+    XenWatch **backend_watch;
     QLIST_HEAD(, XenDevice) inactive_devices;
 };
 
@@ -79,7 +78,7 @@ struct XenBusClass {
 
 #define TYPE_XEN_BUS "xen-bus"
 OBJECT_DECLARE_TYPE(XenBus, XenBusClass,
-                    xen_bus, XEN_BUS)
+                    XEN_BUS)
 
 void xen_bus_init(void);
 

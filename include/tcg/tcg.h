@@ -997,23 +997,21 @@ int64_t tcg_cpu_exec_time(void);
 void tcg_dump_info(void);
 void tcg_dump_op_count(void);
 
-#define TCG_CT_ALIAS  0x80
-#define TCG_CT_IALIAS 0x40
-#define TCG_CT_NEWREG 0x20 /* output requires a new register */
-#define TCG_CT_REG    0x01
-#define TCG_CT_CONST  0x02 /* any constant of register size */
+#define TCG_CT_CONST  1 /* any constant of register size */
 
 typedef struct TCGArgConstraint {
-    uint16_t ct;
-    uint8_t alias_index;
-    union {
-        TCGRegSet regs;
-    } u;
+    unsigned ct : 16;
+    unsigned alias_index : 4;
+    unsigned sort_index : 4;
+    bool oalias : 1;
+    bool ialias : 1;
+    bool newreg : 1;
+    TCGRegSet regs;
 } TCGArgConstraint;
 
 #define TCG_MAX_OP_ARGS 16
 
-/* Bits for TCGOpDef->flags, 8 bits available.  */
+/* Bits for TCGOpDef->flags, 8 bits available, all used.  */
 enum {
     /* Instruction exits the translation block.  */
     TCG_OPF_BB_EXIT      = 0x01,
@@ -1031,6 +1029,8 @@ enum {
     TCG_OPF_NOT_PRESENT  = 0x20,
     /* Instruction operands are vectors.  */
     TCG_OPF_VECTOR       = 0x40,
+    /* Instruction is a conditional branch. */
+    TCG_OPF_COND_BRANCH  = 0x80
 };
 
 typedef struct TCGOpDef {
@@ -1038,10 +1038,6 @@ typedef struct TCGOpDef {
     uint8_t nb_oargs, nb_iargs, nb_cargs, nb_args;
     uint8_t flags;
     TCGArgConstraint *args_ct;
-    int *sorted_args;
-#if defined(CONFIG_DEBUG_TCG)
-    int used;
-#endif
 } TCGOpDef;
 
 extern TCGOpDef tcg_op_defs[];

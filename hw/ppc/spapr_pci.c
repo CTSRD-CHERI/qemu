@@ -1539,7 +1539,6 @@ static void spapr_pci_plug(HotplugHandler *plug_handler,
     PCIDevice *pdev = PCI_DEVICE(plugged_dev);
     PCIDeviceClass *pc = PCI_DEVICE_GET_CLASS(plugged_dev);
     SpaprDrc *drc = drc_from_dev(phb, pdev);
-    Error *local_err = NULL;
     PCIBus *bus = PCI_BUS(qdev_get_parent_bus(DEVICE(pdev)));
     uint32_t slotnr = PCI_SLOT(pdev->devfn);
 
@@ -1572,15 +1571,13 @@ static void spapr_pci_plug(HotplugHandler *plug_handler,
      */
     if (plugged_dev->hotplugged && bus->devices[PCI_DEVFN(slotnr, 0)] &&
         PCI_FUNC(pdev->devfn) != 0) {
-        error_setg(errp, "PCI: slot %d function 0 already ocuppied by %s,"
+        error_setg(errp, "PCI: slot %d function 0 already occupied by %s,"
                    " additional functions can no longer be exposed to guest.",
                    slotnr, bus->devices[PCI_DEVFN(slotnr, 0)]->name);
         return;
     }
 
-    spapr_drc_attach(drc, DEVICE(pdev), &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
+    if (!spapr_drc_attach(drc, DEVICE(pdev), errp)) {
         return;
     }
 
@@ -2464,7 +2461,9 @@ static int spapr_switch_one_vga(DeviceState *dev, void *opaque)
     bool be = *(bool *)opaque;
 
     if (object_dynamic_cast(OBJECT(dev), "VGA")
-        || object_dynamic_cast(OBJECT(dev), "secondary-vga")) {
+        || object_dynamic_cast(OBJECT(dev), "secondary-vga")
+        || object_dynamic_cast(OBJECT(dev), "bochs-display")
+        || object_dynamic_cast(OBJECT(dev), "virtio-vga")) {
         object_property_set_bool(OBJECT(dev), "big-endian-framebuffer", be,
                                  &error_abort);
     }

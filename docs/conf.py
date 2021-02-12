@@ -36,9 +36,9 @@ from sphinx.errors import ConfigError
 # In newer versions of Sphinx this will display nicely; in older versions
 # Sphinx will also produce a Python backtrace but at least the information
 # gets printed...
-if sys.version_info < (3,5):
+if sys.version_info < (3,6):
     raise ConfigError(
-        "QEMU requires a Sphinx that uses Python 3.5 or better\n")
+        "QEMU requires a Sphinx that uses Python 3.6 or better\n")
 
 # The per-manual conf.py will set qemu_docdir for a single-manual build;
 # otherwise set it here if this is an entire-manual-set build.
@@ -52,7 +52,10 @@ except NameError:
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use an absolute path starting from qemu_docdir.
 #
+# Our extensions are in docs/sphinx; the qapidoc extension requires
+# the QAPI modules from scripts/.
 sys.path.insert(0, os.path.join(qemu_docdir, "sphinx"))
+sys.path.insert(0, os.path.join(qemu_docdir, "../scripts"))
 
 
 # -- General configuration ------------------------------------------------
@@ -67,7 +70,7 @@ needs_sphinx = '1.6'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['kerneldoc', 'qmp_lexer', 'hxtool', 'depfile']
+extensions = ['kerneldoc', 'qmp_lexer', 'hxtool', 'depfile', 'qapidoc']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -174,6 +177,7 @@ html_theme_options = {
 html_sidebars = {
     '**': [
         'about.html',
+        'editpage.html',
         'navigation.html',
         'searchbox.html',
     ]
@@ -238,6 +242,7 @@ texinfo_documents = [
 # We use paths starting from qemu_docdir here so that you can run
 # sphinx-build from anywhere and the kerneldoc extension can still
 # find everything.
-kerneldoc_bin = os.path.join(qemu_docdir, '../scripts/kernel-doc')
+kerneldoc_bin = ['perl', os.path.join(qemu_docdir, '../scripts/kernel-doc')]
 kerneldoc_srctree = os.path.join(qemu_docdir, '..')
 hxtool_srctree = os.path.join(qemu_docdir, '..')
+qapidoc_srctree = os.path.join(qemu_docdir, '..')

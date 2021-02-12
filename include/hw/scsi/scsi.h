@@ -50,9 +50,7 @@ struct SCSIRequest {
 };
 
 #define TYPE_SCSI_DEVICE "scsi-device"
-typedef struct SCSIDeviceClass SCSIDeviceClass;
-DECLARE_OBJ_CHECKERS(SCSIDevice, SCSIDeviceClass,
-                     SCSI_DEVICE, TYPE_SCSI_DEVICE)
+OBJECT_DECLARE_TYPE(SCSIDevice, SCSIDeviceClass, SCSI_DEVICE)
 
 struct SCSIDeviceClass {
     DeviceClass parent_class;
@@ -134,8 +132,7 @@ struct SCSIBusInfo {
 };
 
 #define TYPE_SCSI_BUS "SCSI"
-DECLARE_INSTANCE_CHECKER(SCSIBus, SCSI_BUS,
-                         TYPE_SCSI_BUS)
+OBJECT_DECLARE_SIMPLE_TYPE(SCSIBus, SCSI_BUS)
 
 struct SCSIBus {
     BusState qbus;
@@ -193,6 +190,7 @@ int scsi_device_get_sense(SCSIDevice *dev, uint8_t *buf, int len, bool fixed);
 int scsi_SG_IO_FROM_DEV(BlockBackend *blk, uint8_t *cmd, uint8_t cmd_size,
                         uint8_t *buf, uint8_t buf_size);
 SCSIDevice *scsi_device_find(SCSIBus *bus, int channel, int target, int lun);
+SCSIDevice *scsi_device_get(SCSIBus *bus, int channel, int target, int lun);
 
 /* scsi-generic.c. */
 extern const SCSIReqOps scsi_generic_req_ops;

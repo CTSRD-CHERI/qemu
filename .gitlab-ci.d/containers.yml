@@ -8,7 +8,7 @@
     - export COMMON_TAG="$CI_REGISTRY/qemu-project/qemu/$NAME:latest"
     - apk add python3
     - docker info
-    - docker login registry.gitlab.com -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
+    - docker login $CI_REGISTRY -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
   script:
     - echo "TAG:$TAG"
     - echo "COMMON_TAG:$COMMON_TAG"
@@ -47,18 +47,6 @@ amd64-debian11-container:
   <<: *container_job_definition
   variables:
     NAME: debian11
-
-amd64-debian9-container:
-  <<: *container_job_definition
-  variables:
-    NAME: debian9
-
-amd64-debian9-mxe-container:
-  <<: *container_job_definition
-  stage: containers-layer2
-  needs: ['amd64-debian9-container']
-  variables:
-    NAME: debian9-mxe
 
 alpha-debian-cross-container:
   <<: *container_job_definition
@@ -210,23 +198,9 @@ sparc64-debian-cross-container:
 tricore-debian-cross-container:
   <<: *container_job_definition
   stage: containers-layer2
-  needs: ['amd64-debian9-container']
+  needs: ['amd64-debian10-container']
   variables:
     NAME: debian-tricore-cross
-
-win32-debian-cross-container:
-  <<: *container_job_definition
-  stage: containers-layer3
-  needs: ['amd64-debian9-mxe-container']
-  variables:
-    NAME: debian-win32-cross
-
-win64-debian-cross-container:
-  <<: *container_job_definition
-  stage: containers-layer3
-  needs: ['amd64-debian9-mxe-container']
-  variables:
-    NAME: debian-win64-cross
 
 xtensa-debian-cross-container:
   <<: *container_job_definition
@@ -247,6 +221,16 @@ i386-fedora-cross-container:
   <<: *container_job_definition
   variables:
     NAME: fedora-i386-cross
+
+win32-fedora-cross-container:
+  <<: *container_job_definition
+  variables:
+    NAME: fedora-win32-cross
+
+win64-fedora-cross-container:
+  <<: *container_job_definition
+  variables:
+    NAME: fedora-win64-cross
 
 amd64-ubuntu1804-container:
   <<: *container_job_definition

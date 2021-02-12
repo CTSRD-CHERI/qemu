@@ -66,11 +66,9 @@ struct ssd0323_state {
     uint32_t mode;
     uint8_t framebuffer[128 * 80 / 2];
 };
-typedef struct ssd0323_state ssd0323_state;
 
 #define TYPE_SSD0323 "ssd0323"
-DECLARE_INSTANCE_CHECKER(ssd0323_state, SSD0323,
-                         TYPE_SSD0323)
+OBJECT_DECLARE_SIMPLE_TYPE(ssd0323_state, SSD0323)
 
 
 static uint32_t ssd0323_transfer(SSISlave *dev, uint32_t data)
@@ -372,6 +370,7 @@ static void ssd0323_class_init(ObjectClass *klass, void *data)
     k->transfer = ssd0323_transfer;
     k->cs_polarity = SSI_CS_HIGH;
     dc->vmsd = &vmstate_ssd0323;
+    set_bit(DEVICE_CATEGORY_DISPLAY, dc->categories);
 }
 
 static const TypeInfo ssd0323_info = {

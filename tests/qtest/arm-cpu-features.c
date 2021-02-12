@@ -452,6 +452,7 @@ static void test_query_cpu_model_expansion(const void *data)
     assert_set_feature(qts, "max", "pmu", true);
 
     assert_has_not_feature(qts, "max", "kvm-no-adjvtime");
+    assert_has_not_feature(qts, "max", "kvm-steal-time");
 
     if (g_str_equal(qtest_get_arch(), "aarch64")) {
         assert_has_feature_enabled(qts, "max", "aarch64");
@@ -493,12 +494,17 @@ static void test_query_cpu_model_expansion_kvm(const void *data)
     assert_set_feature(qts, "host", "kvm-no-adjvtime", false);
 
     if (g_str_equal(qtest_get_arch(), "aarch64")) {
+        bool kvm_supports_steal_time;
         bool kvm_supports_sve;
         char max_name[8], name[8];
         uint32_t max_vq, vq;
         uint64_t vls;
         QDict *resp;
         char *error;
+
+        assert_error(qts, "cortex-a15",
+            "We cannot guarantee the CPU type 'cortex-a15' works "
+            "with KVM on this host", NULL);
 
         assert_has_feature_enabled(qts, "host", "aarch64");
 
@@ -507,20 +513,30 @@ static void test_query_cpu_model_expansion_kvm(const void *data)
         assert_set_feature(qts, "host", "pmu", false);
         assert_set_feature(qts, "host", "pmu", true);
 
-        assert_error(qts, "cortex-a15",
-            "We cannot guarantee the CPU type 'cortex-a15' works "
-            "with KVM on this host", NULL);
-
+        /*
+         * Some features would be enabled by default, but they're disabled
+         * because this instance of KVM doesn't support them. Test that the
+         * features are present, and, when enabled, issue further tests.
+         */
+        assert_has_feature(qts, "host", "kvm-steal-time");
         assert_has_feature(qts, "host", "sve");
+
         resp = do_query_no_props(qts, "host");
+        kvm_supports_steal_time = resp_get_feature(resp, "kvm-steal-time");
         kvm_supports_sve = resp_get_feature(resp, "sve");
         vls = resp_get_sve_vls(resp);
         qobject_unref(resp);
 
+        if (kvm_supports_steal_time) {
+            /* If we have steal-time then we should be able to toggle it. */
+            assert_set_feature(qts, "host", "kvm-steal-time", false);
+            assert_set_feature(qts, "host", "kvm-steal-time", true);
+        }
+
         if (kvm_supports_sve) {
             g_assert(vls != 0);
             max_vq = 64 - __builtin_clzll(vls);
-            sprintf(max_name, "sve%d", max_vq * 128);
+            sprintf(max_name, "sve%u", max_vq * 128);
 
             /* Enabling a supported length is of course fine. */
             assert_sve_vls(qts, "host", vls, "{ %s: true }", max_name);
@@ -540,7 +556,7 @@ static void test_query_cpu_model_expansion_kvm(const void *data)
                  * unless all larger, supported vector lengths are also
                  * disabled.
                  */
-                sprintf(name, "sve%d", vq * 128);
+                sprintf(name, "sve%u", vq * 128);
                 error = g_strdup_printf("cannot disable %s", name);
                 assert_error(qts, "host", error,
                              "{ %s: true, %s: false }",
@@ -553,7 +569,7 @@ static void test_query_cpu_model_expansion_kvm(const void *data)
              * we need at least one vector length enabled.
              */
             vq = __builtin_ffsll(vls);
-            sprintf(name, "sve%d", vq * 128);
+            sprintf(name, "sve%u", vq * 128);
             error = g_strdup_printf("cannot disable %s", name);
             assert_error(qts, "host", error, "{ %s: false }", name);
             g_free(error);
@@ -565,7 +581,7 @@ static void test_query_cpu_model_expansion_kvm(const void *data)
                 }
             }
             if (vq <= SVE_MAX_VQ) {
-                sprintf(name, "sve%d", vq * 128);
+                sprintf(name, "sve%u", vq * 128);
                 error = g_strdup_printf("cannot enable %s", name);
                 assert_error(qts, "host", error, "{ %s: true }", name);
                 g_free(error);
@@ -577,6 +593,7 @@ static void test_query_cpu_model_expansion_kvm(const void *data)
         assert_has_not_feature(qts, "host", "aarch64");
         assert_has_not_feature(qts, "host", "pmu");
         assert_has_not_feature(qts, "host", "sve");
+        assert_has_not_feature(qts, "host", "kvm-steal-time");
     }
 
     qtest_quit(qts);

@@ -1,7 +1,8 @@
-bzip2 = find_program('bzip2')
-
-install_blobs = 'INSTALL_BLOBS' in config_host
-if 'DECOMPRESS_EDK2_BLOBS' in config_host
+if 'arm-softmmu' in target_dirs or \
+    'aarch64-softmmu' in target_dirs or \
+    'i386-softmmu' in target_dirs or \
+    'x86_64-softmmu' in target_dirs
+  bzip2 = find_program('bzip2', required: true)
   fds = [
     'edk2-aarch64-code.fd',
     'edk2-arm-code.fd',
@@ -18,7 +19,7 @@ if 'DECOMPRESS_EDK2_BLOBS' in config_host
                   output: f,
                   input: '@0@.bz2'.format(f),
                   capture: true,
-                  install: install_blobs,
+                  install: get_option('install_blobs'),
                   install_dir: qemu_datadir,
                   command: [ bzip2, '-dc', '@INPUT0@' ])
   endforeach
@@ -28,6 +29,7 @@ blobs = files(
   'bios.bin',
   'bios-256k.bin',
   'bios-microvm.bin',
+  'qboot.rom',
   'sgabios.bin',
   'vgabios.bin',
   'vgabios-cirrus.bin',
@@ -81,10 +83,11 @@ blobs = files(
   'opensbi-riscv64-generic-fw_dynamic.bin',
   'opensbi-riscv32-generic-fw_dynamic.elf',
   'opensbi-riscv64-generic-fw_dynamic.elf',
+  'npcm7xx_bootrom.bin',
 )
 
-if install_blobs
-  install_data(blobs, install_dir: config_host['qemu_datadir'])
+if get_option('install_blobs')
+  install_data(blobs, install_dir: qemu_datadir)
 endif
 
 subdir('descriptors')

@@ -18,10 +18,7 @@
 #include "qom/object.h"
 
 #define TYPE_BCM283X "bcm283x"
-typedef struct BCM283XClass BCM283XClass;
-typedef struct BCM283XState BCM283XState;
-DECLARE_OBJ_CHECKERS(BCM283XState, BCM283XClass,
-                     BCM283X, TYPE_BCM283X)
+OBJECT_DECLARE_TYPE(BCM283XState, BCM283XClass, BCM283X)
 
 #define BCM283X_NCPUS 4
 
@@ -29,6 +26,7 @@ DECLARE_OBJ_CHECKERS(BCM283XState, BCM283XClass,
  * them, code using these devices should always handle them via the
  * BCM283x base class, so they have no BCM2836(obj) etc macros.
  */
+#define TYPE_BCM2835 "bcm2835"
 #define TYPE_BCM2836 "bcm2836"
 #define TYPE_BCM2837 "bcm2837"
 
@@ -45,13 +43,5 @@ struct BCM283XState {
     BCM2836ControlState control;
     BCM2835PeripheralState peripherals;
 };
-
-typedef struct BCM283XInfo BCM283XInfo;
-
-struct BCM283XClass {
-    DeviceClass parent_class;
-    const BCM283XInfo *info;
-};
-
 
 #endif /* BCM2836_H */

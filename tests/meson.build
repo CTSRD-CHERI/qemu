@@ -56,8 +56,18 @@ test_qapi_files = custom_target('Test QAPI files',
 # perhaps change qapi_gen to replace / with _, like Meson itself does?
 subdir('include')
 
-libtestqapi = static_library('testqapi', sources: [test_qapi_files, test_qapi_outputs_extra])
-testqapi = declare_dependency(link_with: libtestqapi)
+test_qapi_sources = []
+test_qapi_headers = []
+i = 0
+foreach o: test_qapi_files.to_list() + test_qapi_files_extra.to_list()
+  if o.full_path().endswith('.h')
+    test_qapi_headers += o
+  endif
+  test_qapi_sources += o
+endforeach
+
+libtestqapi = static_library('testqapi', sources: [genh, test_qapi_sources])
+testqapi = declare_dependency(link_with: libtestqapi, sources: [genh, test_qapi_headers])
 
 testblock = declare_dependency(dependencies: [block], sources: 'iothread.c')
 
@@ -145,7 +155,8 @@ if have_block
     'test-crypto-block': [io],
   }
   if 'CONFIG_GNUTLS' in config_host and \
-     'CONFIG_TASN1' in config_host
+     'CONFIG_TASN1' in config_host and \
+     'CONFIG_POSIX' in config_host
     tests += {
       'test-crypto-tlscredsx509': ['crypto-tls-x509-helpers.c', 'pkix_asn1_tab.c',
                                    tasn1, crypto],
@@ -168,6 +179,9 @@ if have_block
   endif
   if 'CONFIG_NETTLE' in config_host or 'CONFIG_GCRYPT' in config_host
     tests += {'test-crypto-pbkdf': [io]}
+  endif
+  if 'CONFIG_EPOLL_CREATE1' in config_host
+    tests += {'test-fdmon-epoll': [testblock]}
   endif
   benchs += {
      'benchmark-crypto-hash': [crypto],
@@ -195,8 +209,13 @@ if have_system
   # are not runnable under TSan due to a known issue.
   # https://github.com/google/sanitizers/issues/1116
   if 'CONFIG_TSAN' not in config_host
+    if 'CONFIG_POSIX' in config_host
+        tests += {
+          'test-char': ['socket-helpers.c', qom, io, chardev]
+        }
+    endif
+
     tests += {
-      'test-char': ['socket-helpers.c', qom, io, chardev],
       'test-qdev-global-props': [qom, hwcore, testqapi]
     }
   endif
@@ -223,7 +242,7 @@ foreach test_name, extra: tests
     src += test_ss.all_sources()
     deps += test_ss.all_dependencies()
   endif
-  exe = executable(test_name, src, dependencies: deps)
+  exe = executable(test_name, src, genh, dependencies: deps)
 
   test(test_name, exe,
        depends: test_deps.get(test_name, []),
@@ -242,12 +261,11 @@ foreach bench_name, deps: benchs
             suite: ['speed'])
 endforeach
 
-if have_tools and 'CONFIG_VHOST_USER' in config_host
+if have_tools and 'CONFIG_VHOST_USER' in config_host and 'CONFIG_LINUX' in config_host
   executable('vhost-user-bridge',
              sources: files('vhost-user-bridge.c'),
              link_with: [libvhost_user],
-             dependencies: [qemuutil],
-             build_by_default: false)
+             dependencies: [qemuutil])
 endif
 
 if have_system and 'CONFIG_POSIX' in config_host
@@ -261,7 +279,7 @@ test('decodetree', sh,
 
 subdir('fp')
 
-if 'CONFIG_TCG' in config_host
+if not get_option('tcg').disabled()
   if 'CONFIG_PLUGIN' in config_host
     subdir('plugin')
   endif

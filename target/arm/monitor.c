@@ -103,7 +103,7 @@ static const char *cpu_model_advertised_features[] = {
     "sve128", "sve256", "sve384", "sve512",
     "sve640", "sve768", "sve896", "sve1024", "sve1152", "sve1280",
     "sve1408", "sve1536", "sve1664", "sve1792", "sve1920", "sve2048",
-    "kvm-no-adjvtime",
+    "kvm-no-adjvtime", "kvm-steal-time",
     NULL
 };
 
@@ -214,7 +214,7 @@ CpuModelExpansionInfo *qmp_query_cpu_model_expansion(CpuModelExpansionType type,
 
     i = 0;
     while ((name = cpu_model_advertised_features[i++]) != NULL) {
-        ObjectProperty *prop = object_property_find(obj, name, NULL);
+        ObjectProperty *prop = object_property_find(obj, name);
         if (prop) {
             QObject *value;
 

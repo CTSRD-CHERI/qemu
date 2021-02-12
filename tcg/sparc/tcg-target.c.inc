@@ -325,28 +325,23 @@ static const char *target_parse_constraint(TCGArgConstraint *ct,
 {
     switch (*ct_str++) {
     case 'r':
-        ct->ct |= TCG_CT_REG;
-        ct->u.regs = 0xffffffff;
+        ct->regs = 0xffffffff;
         break;
     case 'R':
-        ct->ct |= TCG_CT_REG;
-        ct->u.regs = ALL_64;
+        ct->regs = ALL_64;
         break;
     case 'A': /* qemu_ld/st address constraint */
-        ct->ct |= TCG_CT_REG;
-        ct->u.regs = TARGET_LONG_BITS == 64 ? ALL_64 : 0xffffffff;
+        ct->regs = TARGET_LONG_BITS == 64 ? ALL_64 : 0xffffffff;
     reserve_helpers:
-        tcg_regset_reset_reg(ct->u.regs, TCG_REG_O0);
-        tcg_regset_reset_reg(ct->u.regs, TCG_REG_O1);
-        tcg_regset_reset_reg(ct->u.regs, TCG_REG_O2);
+        tcg_regset_reset_reg(ct->regs, TCG_REG_O0);
+        tcg_regset_reset_reg(ct->regs, TCG_REG_O1);
+        tcg_regset_reset_reg(ct->regs, TCG_REG_O2);
         break;
     case 's': /* qemu_st data 32-bit constraint */
-        ct->ct |= TCG_CT_REG;
-        ct->u.regs = 0xffffffff;
+        ct->regs = 0xffffffff;
         goto reserve_helpers;
     case 'S': /* qemu_st data 64-bit constraint */
-        ct->ct |= TCG_CT_REG;
-        ct->u.regs = ALL_64;
+        ct->regs = ALL_64;
         goto reserve_helpers;
     case 'I':
         ct->ct |= TCG_CT_CONST_S11;
@@ -1839,7 +1834,8 @@ void tb_target_set_jmp_target(uintptr_t tc_ptr, uintptr_t jmp_addr,
     tcg_debug_assert(br_disp == (int32_t)br_disp);
 
     if (!USE_REG_TB) {
-        atomic_set((uint32_t *)jmp_addr, deposit32(CALL, 0, 30, br_disp >> 2));
+        qatomic_set((uint32_t *)jmp_addr,
+		    deposit32(CALL, 0, 30, br_disp >> 2));
         flush_icache_range(jmp_addr, jmp_addr + 4);
         return;
     }
@@ -1863,6 +1859,6 @@ void tb_target_set_jmp_target(uintptr_t tc_ptr, uintptr_t jmp_addr,
               | INSN_IMM13((tb_disp & 0x3ff) | -0x400));
     }
 
-    atomic_set((uint64_t *)jmp_addr, deposit64(i2, 32, 32, i1));
+    qatomic_set((uint64_t *)jmp_addr, deposit64(i2, 32, 32, i1));
     flush_icache_range(jmp_addr, jmp_addr + 8);
 }

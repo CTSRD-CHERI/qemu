@@ -4,15 +4,8 @@
 stages:
   - containers
   - containers-layer2
-  - containers-layer3
   - build
   - test
-
-# We assume GitLab has it's own caching set up for RPM/APT repositories so we
-# just take care of avocado assets here.
-cache:
-  paths:
-    - $HOME/avocado/data/cache
 
 include:
   - local: '/.gitlab-ci.d/edk2.yml'
@@ -25,6 +18,7 @@ include:
   image: $CI_REGISTRY_IMAGE/qemu/$IMAGE:latest
   before_script:
     - JOBS=$(expr $(nproc) + 1)
+    - sed -i s,git.qemu.org/git,gitlab.com/qemu-project, .gitmodules
   script:
     - mkdir build
     - cd build
@@ -33,7 +27,7 @@ include:
         ../configure --enable-werror $CONFIGURE_ARGS --target-list="$TARGETS" ;
       else
         ../configure --enable-werror $CONFIGURE_ARGS ;
-      fi
+      fi || { cat config.log meson-logs/meson-log.txt && exit 1; }
     - make -j"$JOBS"
     - if test -n "$MAKE_CHECK_ARGS";
       then
@@ -54,6 +48,11 @@ include:
     paths:
       - ${CI_PROJECT_DIR}/avocado-cache
     policy: pull-push
+  artifacts:
+    paths:
+      - build/tests/results/latest/results.xml
+    reports:
+      junit: build/tests/results/latest/results.xml
   before_script:
     - mkdir -p ~/.config/avocado
     - echo "[datadir.paths]" > ~/.config/avocado/avocado.conf
@@ -62,9 +61,10 @@ include:
     - if [ -d ${CI_PROJECT_DIR}/avocado-cache ]; then
         du -chs ${CI_PROJECT_DIR}/avocado-cache ;
       fi
+    - export AVOCADO_ALLOW_UNTRUSTED_CODE=1
   after_script:
     - cd build
-    - python3 -c 'import json; r = json.load(open("tests/results/latest/results.json")); [print(t["logfile"]) for t in r["tests"] if t["status"] not in ("PASS", "SKIP")]' | xargs cat
+    - python3 -c 'import json; r = json.load(open("tests/results/latest/results.json")); [print(t["logfile"]) for t in r["tests"] if t["status"] not in ("PASS", "SKIP", "CANCEL")]' | xargs cat
     - du -chs ${CI_PROJECT_DIR}/avocado-cache
 
 build-system-ubuntu:
@@ -74,6 +74,7 @@ build-system-ubuntu:
     TARGETS: aarch64-softmmu alpha-softmmu cris-softmmu hppa-softmmu
       moxie-softmmu microblazeel-softmmu mips64el-softmmu
     MAKE_CHECK_ARGS: check-build
+    CONFIGURE_ARGS: --enable-docs
   artifacts:
     expire_in: 2 days
     paths:
@@ -105,6 +106,7 @@ build-system-debian:
     TARGETS: arm-softmmu avr-softmmu i386-softmmu mipsel-softmmu
       riscv64-softmmu sh4eb-softmmu sparc-softmmu xtensaeb-softmmu
     MAKE_CHECK_ARGS: check-build
+    CONFIGURE_ARGS: --enable-docs
   artifacts:
     expire_in: 2 days
     paths:
@@ -133,8 +135,8 @@ build-system-fedora:
   <<: *native_build_job_definition
   variables:
     IMAGE: fedora
-    CONFIGURE_ARGS: --disable-gcrypt --enable-nettle
-    TARGETS: tricore-softmmu unicore32-softmmu microblaze-softmmu mips-softmmu
+    CONFIGURE_ARGS: --disable-gcrypt --enable-nettle --enable-docs
+    TARGETS: tricore-softmmu microblaze-softmmu mips-softmmu
       xtensa-softmmu m68k-softmmu riscv32-softmmu ppc-softmmu sparc64-softmmu
     MAKE_CHECK_ARGS: check-build
   artifacts:
@@ -166,7 +168,7 @@ build-system-centos:
   variables:
     IMAGE: centos8
     CONFIGURE_ARGS: --disable-nettle --enable-gcrypt
-    TARGETS: ppc64-softmmu lm32-softmmu or1k-softmmu s390x-softmmu
+    TARGETS: ppc64-softmmu or1k-softmmu s390x-softmmu
       x86_64-softmmu rx-softmmu sh4-softmmu nios2-softmmu
     MAKE_CHECK_ARGS: check-build
   artifacts:
@@ -225,7 +227,7 @@ build-tcg-disabled:
   script:
     - mkdir build
     - cd build
-    - ../configure --disable-tcg --audio-drv-list=""
+    - ../configure --disable-tcg --audio-drv-list="" || { cat config.log meson-logs/meson-log.txt && exit 1; }
     - make -j"$JOBS"
     - make check-unit
     - make check-qapi-schema
@@ -233,7 +235,7 @@ build-tcg-disabled:
     - ./check -raw 001 002 003 004 005 008 009 010 011 012 021 025 032 033 048
             052 063 077 086 101 104 106 113 148 150 151 152 157 159 160 163
             170 171 183 184 192 194 197 208 215 221 222 226 227 236 253 277
-    - ./check -qcow2 028 051 056 057 058 065 067 068 082 085 091 095 096 102 122
+    - ./check -qcow2 028 051 056 057 058 065 068 082 085 091 095 096 102 122
             124 132 139 142 144 145 151 152 155 157 165 194 196 197 200 202
             208 209 215 216 218 222 227 234 246 247 248 250 254 255 257 258
             260 261 262 263 264 270 272 273 277 279
@@ -245,6 +247,34 @@ build-user:
     CONFIGURE_ARGS: --disable-tools --disable-system
     MAKE_CHECK_ARGS: check-tcg
 
+# Only build the softmmu targets we have check-tcg tests for
+build-some-softmmu:
+  <<: *native_build_job_definition
+  variables:
+    IMAGE: debian-all-test-cross
+    CONFIGURE_ARGS: --disable-tools --enable-debug-tcg
+    TARGETS: xtensa-softmmu arm-softmmu aarch64-softmmu alpha-softmmu
+    MAKE_CHECK_ARGS: check-tcg
+
+# Run check-tcg against linux-user (with plugins)
+# we skip sparc64-linux-user until it has been fixed somewhat
+# we skip cris-linux-user as it doesn't use the common run loop
+build-user-plugins:
+  <<: *native_build_job_definition
+  variables:
+    IMAGE: debian-all-test-cross
+    CONFIGURE_ARGS: --disable-tools --disable-system --enable-plugins --enable-debug-tcg --target-list-exclude=sparc64-linux-user,cris-linux-user
+    MAKE_CHECK_ARGS: check-tcg
+  timeout: 1h 30m
+
+build-some-softmmu-plugins:
+  <<: *native_build_job_definition
+  variables:
+    IMAGE: debian-all-test-cross
+    CONFIGURE_ARGS: --disable-tools --disable-user --enable-plugins --enable-debug-tcg
+    TARGETS: xtensa-softmmu arm-softmmu aarch64-softmmu alpha-softmmu
+    MAKE_CHECK_ARGS: check-tcg
+
 build-clang:
   <<: *native_build_job_definition
   variables:
@@ -253,6 +283,32 @@ build-clang:
     TARGETS: alpha-softmmu arm-softmmu m68k-softmmu mips64-softmmu
       ppc-softmmu s390x-softmmu arm-linux-user
     MAKE_CHECK_ARGS: check
+
+# These targets are on the way out
+build-deprecated:
+  <<: *native_build_job_definition
+  variables:
+    IMAGE: debian-all-test-cross
+    CONFIGURE_ARGS: --disable-docs --disable-tools
+    MAKE_CHECK_ARGS: build-tcg
+    TARGETS: ppc64abi32-linux-user tilegx-linux-user lm32-softmmu
+      unicore32-softmmu
+  artifacts:
+    expire_in: 2 days
+    paths:
+      - build
+
+# We split the check-tcg step as test failures are expected but we still
+# want to catch the build breaking.
+check-deprecated:
+  <<: *native_test_job_definition
+  needs:
+    - job: build-deprecated
+      artifacts: true
+  variables:
+    IMAGE: debian-all-test-cross
+    MAKE_CHECK_ARGS: check-tcg
+  allow_failure: true
 
 build-oss-fuzz:
   <<: *native_build_job_definition
@@ -267,7 +323,7 @@ build-oss-fuzz:
                       | grep -v slirp); do
         grep "LLVMFuzzerTestOneInput" ${fuzzer} > /dev/null 2>&1 || continue ;
         echo Testing ${fuzzer} ... ;
-        "${fuzzer}" -runs=1000 -seed=1 || exit 1 ;
+        "${fuzzer}" -runs=1 -seed=1 || exit 1 ;
       done
     # Unrelated to fuzzer: run some tests with -fsanitize=address
     - cd build-oss-fuzz && make check-qtest-i386 check-unit
@@ -281,7 +337,7 @@ build-tci:
     - mkdir build
     - cd build
     - ../configure --enable-tcg-interpreter
-        --target-list="$(for tg in $TARGETS; do echo -n ${tg}'-softmmu '; done)"
+        --target-list="$(for tg in $TARGETS; do echo -n ${tg}'-softmmu '; done)" || { cat config.log meson-logs/meson-log.txt && exit 1; }
     - make -j"$JOBS"
     - make run-tcg-tests-x86_64-softmmu
     - make tests/qtest/boot-serial-test tests/qtest/cdrom-test tests/qtest/pxe-test
@@ -358,3 +414,57 @@ check-crypto-only-gnutls:
   variables:
     IMAGE: centos7
     MAKE_CHECK_ARGS: check
+
+# We don't need to exercise every backend with every front-end
+build-trace-multi-user:
+  <<: *native_build_job_definition
+  variables:
+    IMAGE: ubuntu2004
+    CONFIGURE_ARGS: --enable-trace-backends=log,simple,syslog --disable-system
+
+build-trace-ftrace-system:
+  <<: *native_build_job_definition
+  variables:
+    IMAGE: ubuntu2004
+    CONFIGURE_ARGS: --enable-trace-backends=ftrace --target-list=x86_64-softmmu
+
+build-trace-ust-system:
+  <<: *native_build_job_definition
+  variables:
+    IMAGE: ubuntu2004
+    CONFIGURE_ARGS: --enable-trace-backends=ust --target-list=x86_64-softmmu
+
+check-patch:
+  stage: build
+  image: $CI_REGISTRY_IMAGE/qemu/centos8:latest
+  script: .gitlab-ci.d/check-patch.py
+  except:
+    variables:
+      - $CI_PROJECT_NAMESPACE == 'qemu-project' && $CI_COMMIT_BRANCH == 'master'
+  variables:
+    GIT_DEPTH: 1000
+  allow_failure: true
+
+check-dco:
+  stage: build
+  image: $CI_REGISTRY_IMAGE/qemu/centos8:latest
+  script: .gitlab-ci.d/check-dco.py
+  except:
+    variables:
+      - $CI_PROJECT_NAMESPACE == 'qemu-project' && $CI_COMMIT_BRANCH == 'master'
+  variables:
+    GIT_DEPTH: 1000
+
+pages:
+  image: $CI_REGISTRY_IMAGE/qemu/ubuntu2004:latest
+  stage: test
+  needs:
+    - job: build-system-ubuntu
+      artifacts: true
+  script:
+    - mkdir public
+    - mv build/docs/index.html public/
+    - for i in devel interop specs system tools user ; do mv build/docs/$i public/ ; done
+  artifacts:
+    paths:
+      - public

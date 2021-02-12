@@ -392,7 +392,7 @@ if ($chk_branch) {
 
 	close $HASH;
 
-	die "$P: no revisions returned for revlist '$chk_branch'\n"
+	die "$P: no revisions returned for revlist '$ARGV[0]'\n"
 	    unless @patches;
 
 	my $i = 1;
@@ -1659,7 +1659,7 @@ sub process {
 # tabs are only allowed in assembly source code, and in
 # some scripts we imported from other projects.
 		next if ($realfile =~ /\.(s|S)$/);
-		next if ($realfile =~ /(checkpatch|get_maintainer|texi2pod)\.pl$/);
+		next if ($realfile =~ /(checkpatch|get_maintainer)\.pl$/);
 
 		if ($rawline =~ /^\+.*\t/) {
 			my $herevet = "$here\n" . cat_vet($rawline) . "\n";
@@ -1870,7 +1870,7 @@ sub process {
 			substr($s, 0, length($c), '');
 
 			# Make sure we remove the line prefixes as we have
-			# none on the first line, and are going to readd them
+			# none on the first line, and are going to re-add them
 			# where necessary.
 			$s =~ s/\n./\n/gs;
 
@@ -2880,14 +2880,20 @@ sub process {
 				$herecurr);
 		}
 
-# check for %L{u,d,i} in strings
+# format strings checks
 		my $string;
 		while ($line =~ /(?:^|")([X\t]*)(?:"|$)/g) {
 			$string = substr($rawline, $-[1], $+[1] - $-[1]);
 			$string =~ s/%%/__/g;
+			# check for %L{u,d,i} in strings
 			if ($string =~ /(?<!%)%L[udi]/) {
 				ERROR("\%Ld/%Lu are not-standard C, use %lld/%llu\n" . $herecurr);
-				last;
+			}
+			# check for %# or %0# in printf-style format strings
+			if ($string =~ /(?<!%)%0?#/) {
+				ERROR("Don't use '#' flag of printf format " .
+				      "('%#') in format strings, use '0x' " .
+				      "prefix instead\n" . $herecurr);
 			}
 		}
 
@@ -3005,7 +3011,7 @@ sub process {
 		return 1;
 	}
 
-	if (!$is_patch) {
+	if (!$is_patch && $filename !~ /cover-letter\.patch$/) {
 		ERROR("Does not appear to be a unified-diff format patch\n");
 	}
 

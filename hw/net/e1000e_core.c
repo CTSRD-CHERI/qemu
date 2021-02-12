@@ -22,7 +22,7 @@
 * This library is free software; you can redistribute it and/or
 * modify it under the terms of the GNU Lesser General Public
 * License as published by the Free Software Foundation; either
-* version 2 of the License, or (at your option) any later version.
+* version 2.1 of the License, or (at your option) any later version.
 *
 * This library is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -1596,12 +1596,12 @@ e1000e_write_packet_to_guest(E1000ECore *core, struct NetRxPkt *pkt,
                           (const char *) &fcs_pad, e1000x_fcs_len(core->mac));
                 }
             }
-            desc_offset += desc_size;
-            if (desc_offset >= total_size) {
-                is_last = true;
-            }
         } else { /* as per intel docs; skip descriptors with null buf addr */
             trace_e1000e_rx_null_descriptor();
+        }
+        desc_offset += desc_size;
+        if (desc_offset >= total_size) {
+            is_last = true;
         }
 
         e1000e_write_rx_descr(core, desc, is_last ? core->rx_pkt : NULL,

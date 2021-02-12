@@ -54,6 +54,9 @@
 
 #define PPI(irq) ((irq) + 16)
 
+/* See Linux kernel arch/arm64/include/asm/pvclock-abi.h */
+#define PVTIME_SIZE_PER_CPU 64
+
 enum {
     VIRT_FLASH,
     VIRT_MEM,
@@ -81,6 +84,7 @@ enum {
     VIRT_PCDIMM_ACPI,
     VIRT_ACPI_GED,
     VIRT_NVDIMM_ACPI,
+    VIRT_PVTIME,
     VIRT_LOWMEMMAP_LAST,
 };
 
@@ -111,11 +115,6 @@ typedef enum VirtGICType {
     VIRT_GIC_VERSION_NOSEL,
 } VirtGICType;
 
-typedef struct MemMapEntry {
-    hwaddr base;
-    hwaddr size;
-} MemMapEntry;
-
 struct VirtMachineClass {
     MachineClass parent;
     bool disallow_affinity_adjustment;
@@ -126,9 +125,9 @@ struct VirtMachineClass {
     bool no_highmem_ecam;
     bool no_ged;   /* Machines < 4.2 has no support for ACPI GED device */
     bool kvm_no_adjvtime;
+    bool no_kvm_steal_time;
     bool acpi_expose_flash;
 };
-typedef struct VirtMachineClass VirtMachineClass;
 
 struct VirtMachineState {
     MachineState parent;
@@ -165,13 +164,11 @@ struct VirtMachineState {
     DeviceState *acpi_dev;
     Notifier powerdown_notifier;
 };
-typedef struct VirtMachineState VirtMachineState;
 
 #define VIRT_ECAM_ID(high) (high ? VIRT_HIGH_PCIE_ECAM : VIRT_PCIE_ECAM)
 
 #define TYPE_VIRT_MACHINE   MACHINE_TYPE_NAME("virt")
-DECLARE_OBJ_CHECKERS(VirtMachineState, VirtMachineClass,
-                     VIRT_MACHINE, TYPE_VIRT_MACHINE)
+OBJECT_DECLARE_TYPE(VirtMachineState, VirtMachineClass, VIRT_MACHINE)
 
 void virt_acpi_setup(VirtMachineState *vms);
 bool virt_is_acpi_enabled(VirtMachineState *vms);

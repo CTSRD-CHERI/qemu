@@ -337,7 +337,7 @@ static int cpu_post_load(void *opaque, int version_id)
 
     /*
      * If we're operating in compat mode, we should be ok as long as
-     * the destination supports the same compatiblity mode.
+     * the destination supports the same compatibility mode.
      *
      * Otherwise, however, we require that the destination has exactly
      * the same CPU model as the source.
@@ -347,18 +347,19 @@ static int cpu_post_load(void *opaque, int version_id)
     if (cpu->compat_pvr) {
         uint32_t compat_pvr = cpu->compat_pvr;
         Error *local_err = NULL;
+        int ret;
 
         cpu->compat_pvr = 0;
-        ppc_set_compat(cpu, compat_pvr, &local_err);
-        if (local_err) {
+        ret = ppc_set_compat(cpu, compat_pvr, &local_err);
+        if (ret < 0) {
             error_report_err(local_err);
-            return -1;
+            return ret;
         }
     } else
 #endif
     {
         if (!pvr_match(cpu, env->spr[SPR_PVR])) {
-            return -1;
+            return -EINVAL;
         }
     }
 

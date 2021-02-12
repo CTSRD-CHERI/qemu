@@ -15,6 +15,7 @@
 
 #include "qemu/osdep.h"
 #include "block/block.h"
+#include "qemu/main-loop.h"
 #include "qemu/rcu.h"
 #include "qemu/rcu_queue.h"
 #include "qemu/sockets.h"
@@ -27,7 +28,7 @@
 
 bool aio_poll_disabled(AioContext *ctx)
 {
-    return atomic_read(&ctx->poll_disable_cnt);
+    return qatomic_read(&ctx->poll_disable_cnt);
 }
 
 void aio_add_ready_handler(AioHandlerList *ready_list,
@@ -148,8 +149,8 @@ void aio_set_fd_handler(AioContext *ctx,
      * Changing handlers is a rare event, and a little wasted polling until
      * the aio_notify below is not an issue.
      */
-    atomic_set(&ctx->poll_disable_cnt,
-               atomic_read(&ctx->poll_disable_cnt) + poll_disable_change);
+    qatomic_set(&ctx->poll_disable_cnt,
+               qatomic_read(&ctx->poll_disable_cnt) + poll_disable_change);
 
     ctx->fdmon_ops->update(ctx, node, new_node);
     if (node) {
@@ -558,8 +559,13 @@ bool aio_poll(AioContext *ctx, bool blocking)
      * There cannot be two concurrent aio_poll calls for the same AioContext (or
      * an aio_poll concurrent with a GSource prepare/check/dispatch callback).
      * We rely on this below to avoid slow locked accesses to ctx->notify_me.
+     *
+     * aio_poll() may only be called in the AioContext's thread. iohandler_ctx
+     * is special in that it runs in the main thread, but that thread's context
+     * is qemu_aio_context.
      */
-    assert(in_aio_context_home_thread(ctx));
+    assert(in_aio_context_home_thread(ctx == iohandler_get_aio_context() ?
+                                      qemu_get_aio_context() : ctx));
 
     qemu_lockcnt_inc(&ctx->list_lock);
 
@@ -581,7 +587,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
      */
     use_notify_me = timeout != 0;
     if (use_notify_me) {
-        atomic_set(&ctx->notify_me, atomic_read(&ctx->notify_me) + 2);
+        qatomic_set(&ctx->notify_me, qatomic_read(&ctx->notify_me) + 2);
         /*
          * Write ctx->notify_me before reading ctx->notified.  Pairs with
          * smp_mb in aio_notify().
@@ -589,7 +595,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
         smp_mb();
 
         /* Don't block if aio_notify() was called */
-        if (atomic_read(&ctx->notified)) {
+        if (qatomic_read(&ctx->notified)) {
             timeout = 0;
         }
     }
@@ -603,8 +609,8 @@ bool aio_poll(AioContext *ctx, bool blocking)
 
     if (use_notify_me) {
         /* Finish the poll before clearing the flag.  */
-        atomic_store_release(&ctx->notify_me,
-                             atomic_read(&ctx->notify_me) - 2);
+        qatomic_store_release(&ctx->notify_me,
+                             qatomic_read(&ctx->notify_me) - 2);
     }
 
     aio_notify_accept(ctx);

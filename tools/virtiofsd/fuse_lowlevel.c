@@ -341,6 +341,8 @@ static void fill_entry(struct fuse_entry_out *arg,
         .attr_valid_nsec = calc_timeout_nsec(e->attr_timeout),
     };
     convert_stat(&e->attr, &arg->attr);
+
+    arg->attr.flags = e->attr_flags;
 }
 
 /*
@@ -1988,6 +1990,9 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid,
             bufsize = max_bufsize;
         }
     }
+    if (arg->flags & FUSE_SUBMOUNTS) {
+        se->conn.capable |= FUSE_CAP_SUBMOUNTS;
+    }
 #ifdef HAVE_SPLICE
 #ifdef HAVE_VMSPLICE
     se->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
@@ -2523,6 +2528,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
     LL_OPTION("--debug", debug, 1),
     LL_OPTION("allow_root", deny_others, 1),
     LL_OPTION("--socket-path=%s", vu_socket_path, 0),
+    LL_OPTION("--socket-group=%s", vu_socket_group, 0),
     LL_OPTION("--fd=%d", vu_listen_fd, 0),
     LL_OPTION("--thread-pool-size=%d", thread_pool_size, 0),
     FUSE_OPT_END
@@ -2628,6 +2634,11 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
     if (se->vu_socket_path && se->vu_listen_fd >= 0) {
         fuse_log(FUSE_LOG_ERR,
                  "fuse: --socket-path and --fd cannot be given together\n");
+        goto out4;
+    }
+    if (se->vu_socket_group && !se->vu_socket_path) {
+        fuse_log(FUSE_LOG_ERR,
+                 "fuse: --socket-group can only be used with --socket-path\n");
         goto out4;
     }
 
