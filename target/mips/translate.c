@@ -6438,7 +6438,6 @@ no_rd:
     tcg_temp_free_i64(t0);
     tcg_temp_free_i64(t1);
 }
-#endif /* ! TARGET_CHERI */
 
 static void gen_loongson_lswc2(DisasContext *ctx, int rt,
                                int rs, int rd)
@@ -6836,6 +6835,7 @@ static void gen_loongson_lsdc2(DisasContext *ctx, int rt,
 
     tcg_temp_free(t0);
 }
+#endif /* !defined(TARGET_CHERI) */
 
 /* Traps */
 static void gen_trap(DisasContext *ctx, uint32_t opc,

@@ -60,5 +60,10 @@
 #define VMSTATE_UINTTL_2DARRAY(_f, _s, _n1, _n2)                      \
     VMSTATE_UINTTL_2DARRAY_V(_f, _s, _n1, _n2, 0)
 
+#ifdef TARGET_CHERI
+#define VMSTATE_UINTTL_OR_CAP(_f, _cf, _s) VMSTATE_UINTTL(_cf._cr_cursor, _s)
+#else
+#define VMSTATE_UINTTL_OR_CAP(_f, _cf, _s) VMSTATE_UINTTL(_f, _s)
+#endif
 
 #endif

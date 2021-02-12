@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include CONFIG_TARGET
 
 #include "qemu/osdep.h"
 #include "qemu-common.h"
@@ -169,13 +170,11 @@ int icount_align_option;
 static const char *qtest_chrdev;
 static const char *qtest_log;
 
-#ifdef CONFIG_CHERI
+#ifdef TARGET_CHERI
+#include "target/cheri-common/cheri_defs.h"
 bool cheri_c2e_on_unrepresentable = false;
 bool cheri_debugger_on_unrepresentable = false;
 bool cheri_debugger_on_trap = false;
-#endif
-#if defined(CHERI_128) && defined(TARGET_MIPS)
-#include "target/cheri-common/cheri_defs.h"
 #endif
 
 #ifdef CONFIG_RVFI_DII
@@ -2972,7 +2971,7 @@ void qemu_init(int argc, char **argv, char **envp)
     FILE *vmstate_dump_file = NULL;
     Error *main_loop_err = NULL;
     Error *err = NULL;
-#if defined(CONFIG_CHERI)
+#if defined(TARGET_CHERI)
     uint64_t cl_breakpoint = 0L;
     uint64_t cl_breakcount = 0L;
 #endif
@@ -3734,7 +3733,7 @@ void qemu_init(int argc, char **argv, char **envp)
                 warn_report("The -tb-size option is deprecated, use -accel tcg,tb-size instead");
                 object_register_sugar_prop(ACCEL_CLASS_NAME("tcg"), "tb-size", optarg);
                 break;
-#if defined(CONFIG_CHERI)
+#if defined(TARGET_CHERI)
             case QEMU_OPTION_breakpoint:
                 cl_breakpoint = strtoull(optarg, NULL, 0);
                 if (cl_breakpoint == 0 || cl_breakpoint == ULLONG_MAX) {
@@ -3761,9 +3760,9 @@ void qemu_init(int argc, char **argv, char **envp)
                 }
                 break;
 #endif /* CONFIG_TCG_LOG_INSTR */
-#endif /* CONFIG_CHERI */
+#endif /* TARGET_CHERI */
 
-#ifdef CONFIG_CHERI
+#ifdef TARGET_CHERI
             case QEMU_OPTION_cheri_c2e_on_unrepresentable:
                 cheri_c2e_on_unrepresentable = true;
                 break;
@@ -3773,7 +3772,7 @@ void qemu_init(int argc, char **argv, char **envp)
             case QEMU_OPTION_cheri_debugger_on_trap:
                 cheri_debugger_on_trap = true;
                 break;
-#endif /* CONFIG_CHERI */
+#endif /* TARGET_CHERI */
 #ifdef CONFIG_RVFI_DII
             case QEMU_OPTION_rvfi_dii_debug:
                 rvfi_debug_output = true;
@@ -4410,8 +4409,8 @@ void qemu_init(int argc, char **argv, char **envp)
 #ifdef CONFIG_SLIRP
         qemu_opts_set(net, NULL, "type", "user", &error_abort);
 #else
-#ifdef CONFIG_CHERI
-#error "CONFIG_CHERI needs SLIRP support to be useful."
+#ifdef TARGET_CHERI
+#error "TARGET_CHERI needs SLIRP support to be useful."
 #endif
 #endif
     }
@@ -4529,7 +4528,7 @@ void qemu_init(int argc, char **argv, char **envp)
      */
     drive_mark_claimed_by_board();
 
-#if defined(CONFIG_CHERI)
+#if defined(TARGET_CHERI)
     if (cl_breakpoint) {
         CPUState *cs;
 

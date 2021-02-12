@@ -71,13 +71,8 @@ typedef enum MMUAccessType {
     MMU_DATA_LOAD  = 0,
     MMU_DATA_STORE = 1,
     MMU_INST_FETCH = 2,
-#ifdef CONFIG_CHERI
     MMU_DATA_CAP_LOAD = 3,
     MMU_DATA_CAP_STORE = 4,
-#else
-    MMU_DATA_CAP_LOAD = MMU_DATA_LOAD,
-    MMU_DATA_CAP_STORE = MMU_DATA_STORE,
-#endif /* TARGET_CHERI */
 } MMUAccessType;
 
 typedef struct CPUWatchpoint CPUWatchpoint;
@@ -1025,9 +1020,7 @@ void cpu_single_step(CPUState *cpu, int enabled);
 #define BP_WATCHPOINT_HIT_WRITE 0x80
 #define BP_WATCHPOINT_HIT (BP_WATCHPOINT_HIT_READ | BP_WATCHPOINT_HIT_WRITE)
 
-#ifdef CONFIG_CHERI
 int cpu_breakcount(CPUState *cpu, uint64_t count);
-#endif
 int cpu_breakpoint_insert(CPUState *cpu, vaddr pc, int flags,
                           CPUBreakpoint **breakpoint);
 int cpu_breakpoint_remove(CPUState *cpu, vaddr pc, int flags);

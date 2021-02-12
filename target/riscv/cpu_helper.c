@@ -1019,7 +1019,8 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
     bool pmp_violation = false;
     bool first_stage_error = true;
     hwaddr pa = 0;
-    int ret = riscv_cpu_tlb_fill_impl(env, address, 1, rw, cpu_mmu_index(env, false),
+    int mmu_idx = cpu_mmu_index(env, false);
+    int ret = riscv_cpu_tlb_fill_impl(env, address, 1, rw, mmu_idx,
                                       &pmp_violation, &first_stage_error, prot,
                                       &pa, retpc);
     if (ret != TRANSLATE_SUCCESS) {
@@ -1027,7 +1028,8 @@ hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
 #ifndef TARGET_RISCV32
                             ret == TRANSLATE_CHERI_FAIL,
 #endif
-                            first_stage_error);
+                            first_stage_error, riscv_cpu_virt_enabled(env) ||
+                                riscv_cpu_two_stage_lookup(mmu_idx));
         riscv_raise_exception(env, env_cpu(env)->exception_index, retpc);
     }
     tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (pa & ~TARGET_PAGE_MASK));

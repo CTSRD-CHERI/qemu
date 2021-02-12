@@ -116,9 +116,9 @@ static const VMStateDescription vmstate_hyper = {
         VMSTATE_UINT64(env.htimedelta, RISCVCPU),
 
         VMSTATE_UINT64(env.vsstatus, RISCVCPU),
-        VMSTATE_UINTTL(env.vstvec, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.vstvec, env.VSTCC, RISCVCPU),
         VMSTATE_UINTTL(env.vsscratch, RISCVCPU),
-        VMSTATE_UINTTL(env.vsepc, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.vsepc, env.VSEPCC, RISCVCPU),
         VMSTATE_UINTTL(env.vscause, RISCVCPU),
         VMSTATE_UINTTL(env.vstval, RISCVCPU),
         VMSTATE_UINTTL(env.vsatp, RISCVCPU),
@@ -126,9 +126,9 @@ static const VMStateDescription vmstate_hyper = {
         VMSTATE_UINTTL(env.mtval2, RISCVCPU),
         VMSTATE_UINTTL(env.mtinst, RISCVCPU),
 
-        VMSTATE_UINTTL(env.stvec_hs, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.stvec_hs, env.STCC_HS, RISCVCPU),
         VMSTATE_UINTTL(env.sscratch_hs, RISCVCPU),
-        VMSTATE_UINTTL(env.sepc_hs, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.sepc_hs, env.SEPCC_HS, RISCVCPU),
         VMSTATE_UINTTL(env.scause_hs, RISCVCPU),
         VMSTATE_UINTTL(env.stval_hs, RISCVCPU),
         VMSTATE_UINTTL(env.satp_hs, RISCVCPU),
@@ -143,9 +143,13 @@ const VMStateDescription vmstate_riscv_cpu = {
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
+#ifdef TARGET_CHERI
+#pragma message("TODO: VMSTATE_CAP_ARRAY")
+#else
         VMSTATE_UINTTL_ARRAY(env.gpr, RISCVCPU, 32),
+#endif
         VMSTATE_UINT64_ARRAY(env.fpr, RISCVCPU, 32),
-        VMSTATE_UINTTL(env.pc, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.pc, env.PCC, RISCVCPU),
         VMSTATE_UINTTL(env.load_res, RISCVCPU),
         VMSTATE_UINTTL(env.load_val, RISCVCPU),
         VMSTATE_UINTTL(env.frm, RISCVCPU),
@@ -170,11 +174,11 @@ const VMStateDescription vmstate_riscv_cpu = {
         VMSTATE_UINTTL(env.sbadaddr, RISCVCPU),
         VMSTATE_UINTTL(env.mbadaddr, RISCVCPU),
         VMSTATE_UINTTL(env.medeleg, RISCVCPU),
-        VMSTATE_UINTTL(env.stvec, RISCVCPU),
-        VMSTATE_UINTTL(env.sepc, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.stvec, env.STCC, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.sepc, env.SEPCC, RISCVCPU),
         VMSTATE_UINTTL(env.scause, RISCVCPU),
-        VMSTATE_UINTTL(env.mtvec, RISCVCPU),
-        VMSTATE_UINTTL(env.mepc, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.mtvec, env.MTCC, RISCVCPU),
+        VMSTATE_UINTTL_OR_CAP(env.mepc, env.MEPCC, RISCVCPU),
         VMSTATE_UINTTL(env.mcause, RISCVCPU),
         VMSTATE_UINTTL(env.mtval, RISCVCPU),
         VMSTATE_UINTTL(env.scounteren, RISCVCPU),

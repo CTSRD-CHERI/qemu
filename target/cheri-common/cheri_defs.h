@@ -38,13 +38,13 @@
 # define cheri_debug_assert(X) ((void)0)
 #endif
 
-// For CONFIG_CHERI128
+// For TARGET_CHERI128
 // TODO: remove this and change it to TARGET_CHERI128
 #include CONFIG_DEVICES
-#ifdef CONFIG_CHERI128
+#ifdef TARGET_CHERI128
 #define CHERI_128 1
 #endif
-#ifdef CONFIG_CHERI128_MAGIC
+#ifdef TARGET_CHERI128_MAGIC
 // TODO: delete the magic128 code
 #define CHERI_128 1
 #define CHERI_MAGIC128 1

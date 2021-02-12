@@ -4088,7 +4088,6 @@ SRST
     '\ ``-accel tcg,tb-size=n``\ ' instead.
 ERST
 
-#if defined(CONFIG_CHERI)
 DEF("bp", HAS_ARG, QEMU_OPTION_breakpoint, \
     "-bp <addr>      set breakpoint at <addr>\n", QEMU_ARCH_ALL)
 SRST
@@ -4130,8 +4129,6 @@ SRST
 ``-cheri-debugger-on-trap``
     Generate debugger exception when a capability fault is taken.
 ERST
-
-#endif
 
 #ifdef CONFIG_RVFI_DII
 DEF("rvfi-dii-port", HAS_ARG, QEMU_OPTION_rvfi_dii_port, \
