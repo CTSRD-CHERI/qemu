@@ -472,7 +472,7 @@ static inline abi_long do_freebsd_cap_ioctls_get(int arg1, abi_ulong arg2,
 	abi_ulong arg3)
 {
 
-    qemu_log("qemu: Unsupported syscall cap_ioctls_limit()\n");
+    qemu_log("qemu: Unsupported syscall cap_ioctls_get()\n");
     return -TARGET_ENOSYS;
 }
 

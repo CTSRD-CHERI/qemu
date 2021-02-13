@@ -289,7 +289,7 @@ static inline abi_long do_freebsd_cpuset_setdomain(cpulevel_t level,
         cpuwhich_t which, abi_ulong arg3, abi_ulong arg4, abi_ulong arg5,
         abi_long arg6)
 {
-    qemu_log("qemu: Unsupported syscall cpuset_getdomain()\n");
+    qemu_log("qemu: Unsupported syscall cpuset_setdomain()\n");
     return -TARGET_ENOSYS;
 }
 
@@ -447,7 +447,7 @@ static inline abi_long do_freebsd_kenv(abi_long what, abi_ulong target_name,
 static inline abi_long do_freebsd___mac_get_proc(abi_ulong target_mac)
 {
 
-    qemu_log("qemu: Unsupported syscall mac_get_proc()\n");
+    qemu_log("qemu: Unsupported syscall __mac_get_proc()\n");
     return -TARGET_ENOSYS;
 }
 
@@ -455,7 +455,7 @@ static inline abi_long do_freebsd___mac_get_proc(abi_ulong target_mac)
 static inline abi_long do_freebsd___mac_set_proc(abi_ulong target_mac)
 {
 
-    qemu_log("qemu: Unsupported syscall mac_set_proc()\n");
+    qemu_log("qemu: Unsupported syscall __mac_set_proc()\n");
     return -TARGET_ENOSYS;
 }
 
@@ -465,7 +465,7 @@ static inline abi_long do_freebsd___mac_get_fd(abi_long fd,
         abi_ulong target_mac)
 {
 
-    qemu_log("qemu: Unsupported syscall mac_get_fd()\n");
+    qemu_log("qemu: Unsupported syscall __mac_get_fd()\n");
     return -TARGET_ENOSYS;
 }
 
@@ -474,7 +474,7 @@ static inline abi_long do_freebsd___mac_set_fd(abi_long fd,
         abi_ulong target_mac)
 {
 
-    qemu_log("qemu: Unsupported syscall mac_set_fd()\n");
+    qemu_log("qemu: Unsupported syscall __mac_set_fd()\n");
     return -TARGET_ENOSYS;
 }
 
@@ -483,7 +483,7 @@ static inline abi_long do_freebsd___mac_get_file(abi_ulong target_path,
         abi_ulong target_mac)
 {
 
-    qemu_log("qemu: Unsupported syscall mac_get_file()\n");
+    qemu_log("qemu: Unsupported syscall __mac_get_file()\n");
     return -TARGET_ENOSYS;
 }
 
@@ -492,7 +492,7 @@ static inline abi_long do_freebsd___mac_set_file(abi_ulong target_path,
         abi_ulong target_mac)
 {
 
-    qemu_log("qemu: Unsupported syscall mac_set_file()\n");
+    qemu_log("qemu: Unsupported syscall __mac_set_file()\n");
     return -TARGET_ENOSYS;
 }
 
@@ -501,7 +501,7 @@ static inline abi_long do_freebsd___mac_get_link(abi_ulong target_path,
         abi_ulong target_mac)
 {
 
-    qemu_log("qemu: Unsupported syscall mac_get_link()\n");
+    qemu_log("qemu: Unsupported syscall __mac_get_link()\n");
     return -TARGET_ENOSYS;
 }
 
@@ -510,7 +510,7 @@ static inline abi_long do_freebsd___mac_set_link(abi_ulong target_path,
         abi_ulong target_mac)
 {
 
-    qemu_log("qemu: Unsupported syscall mac_set_link()\n");
+    qemu_log("qemu: Unsupported syscall __mac_set_link()\n");
     return -TARGET_ENOSYS;
 }
 
