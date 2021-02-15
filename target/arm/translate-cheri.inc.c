@@ -317,7 +317,7 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
     // There are too many places we might accidentally add DDC base, so if we
     // are going to store back, take a copy
     if ((pre_inc || post_inc)) {
-        wb = tcg_temp_new_i64();
+        wb = tcg_temp_local_new_i64();
         tcg_gen_mov_i64(wb, addr);
     }
 

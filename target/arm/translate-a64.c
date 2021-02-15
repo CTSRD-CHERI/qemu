@@ -293,45 +293,29 @@ static void gen_a64_set_pc(DisasContext *s, TCGv_i64 src)
 
 #ifdef TARGET_CHERI
 
-static inline TCGv_cap_checked_ptr
-gen_bounds_and_perms_checks(DisasContext *ctx, int regnum, TCGv addr,
-                            target_ulong size, bool load, bool store)
-{
-
-    assert(load || store);
-
-    TCGv_i32 tcg_regnum = tcg_const_i32(regnum);
-    TCGv_i32 tcg_size = tcg_const_i32(size);
-    ((load && store)
-         ? gen_helper_cap_rmw_check
-         : (load ? gen_helper_cap_load_check : gen_helper_cap_store_check))(
-        (TCGv_cap_checked_ptr)addr, cpu_env, tcg_regnum, addr, tcg_size);
-
-    tcg_temp_free_i32(tcg_regnum);
-    tcg_temp_free_i32(tcg_size);
-    // ignore result. Should not change on morello.
-    return (TCGv_cap_checked_ptr)addr;
-
-    // TODO: there is now some basic bounds checking logic in
-    // cheri-translate-utils used for setting the cursor
-    // TODO: could probably use that here as well.
-}
-
 static TCGv_cap_checked_ptr
 arm_bounds_checked(DisasContext *s, TCGv_i64 tcg_addr, int size, int base_reg,
                    bool is_load, bool alternate_base, bool against_ddc)
 {
+    // FIXME: Some instructions are loads and stores. Need an is_stote as well.
     bool capability_base = against_ddc && (IS_C64(s) != alternate_base);
-    if (capability_base) {
+    int perms = 0;
+    if (is_load)
+        perms |= CAP_PERM_LOAD;
+    if (!is_load)
+        perms |= CAP_PERM_STORE;
 
-        return gen_bounds_and_perms_checks(s, base_reg, tcg_addr, size, is_load,
-                                           !is_load);
+    if (capability_base) {
+        gen_cap_memop_checks(s, base_reg, tcg_addr, size, perms);
     } else {
-        _generate_special_checked_ptr(
-            s,
-            is_load ? FLAG_READABLE(against_ddc) : FLAG_WRITABLE(against_ddc),
-            is_load ? CAP_PERM_LOAD : CAP_PERM_STORE,
-            (TCGv_cap_checked_ptr)tcg_addr, tcg_addr, size, against_ddc);
+        CheriTbFlags flags = 0;
+        if (is_load)
+            flags |= FLAG_READABLE(against_ddc);
+        if (!is_load)
+            flags |= FLAG_WRITABLE(against_ddc);
+        _generate_special_checked_ptr(s, flags, perms,
+                                      (TCGv_cap_checked_ptr)tcg_addr, tcg_addr,
+                                      size, against_ddc);
     }
     return (TCGv_cap_checked_ptr)tcg_addr;
 }
@@ -392,8 +376,16 @@ TCGv_cap_checked_ptr clean_data_tbi_and_cheri(DisasContext *s, TCGv_i64 addr,
                                               bool ddc_base)
 {
     TCGv_i64 clean = clean_data_tbi(s, addr);
-    return arm_bounds_checked(s, clean, size, base_reg, is_load, alternate_base,
-                              ddc_base);
+    // Callers expect to be able to use addr again (for pre/post increment
+    // mostly), but arm_bounds_checked kills all temps Saving it here avoids
+    // refactoring callers
+    TCGv_i64 save = tcg_temp_local_new_i64();
+    tcg_gen_mov_i64(save, addr);
+    TCGv_cap_checked_ptr result = arm_bounds_checked(
+        s, clean, size, base_reg, is_load, alternate_base, ddc_base);
+    tcg_gen_mov_i64(addr, save);
+    tcg_temp_free_i64(save);
+    return result;
 }
 
 /* Insert a zero tag into src, with the result at dst. */
@@ -2779,8 +2771,6 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
 static void gen_compare_and_swap(DisasContext *s, int rs, int rt,
                                  int rn, int size)
 {
-    TCGv_i64 tcg_rs = cpu_reg(s, rs);
-    TCGv_i64 tcg_rt = cpu_reg(s, rt);
     int memidx = get_mem_index(s);
     TCGv_cap_checked_ptr clean_addr;
 
@@ -2789,6 +2779,10 @@ static void gen_compare_and_swap(DisasContext *s, int rs, int rt,
     }
     clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), true, rn != 31,
                                           size, rn, false, true);
+
+    TCGv_i64 tcg_rs = cpu_reg(s, rs);
+    TCGv_i64 tcg_rt = cpu_reg(s, rt);
+
     tcg_gen_atomic_cmpxchg_i64_with_checked_addr(tcg_rs, clean_addr, tcg_rs,
                                                  tcg_rt, memidx,
                                                  size | MO_ALIGN | s->be_data);
@@ -2798,10 +2792,6 @@ static void gen_compare_and_swap(DisasContext *s, int rs, int rt,
 static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
                                       int rn, int size)
 {
-    TCGv_i64 s1 = cpu_reg(s, rs);
-    TCGv_i64 s2 = cpu_reg(s, rs + 1);
-    TCGv_i64 t1 = cpu_reg(s, rt);
-    TCGv_i64 t2 = cpu_reg(s, rt + 1);
     TCGv_cap_checked_ptr clean_addr;
     int memidx = get_mem_index(s);
 
@@ -2812,6 +2802,11 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
     /* This is a single atomic access, despite the "pair". */
     clean_addr = gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), true, rn != 31,
                                           size + 1, rn, false, true);
+
+    TCGv_i64 s1 = cpu_reg(s, rs);
+    TCGv_i64 s2 = cpu_reg(s, rs + 1);
+    TCGv_i64 t1 = cpu_reg(s, rt);
+    TCGv_i64 t2 = cpu_reg(s, rt + 1);
 
     if (size == 2) {
         TCGv_i64 cmp = tcg_temp_new_i64();
