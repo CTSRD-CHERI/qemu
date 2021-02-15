@@ -158,8 +158,11 @@ typedef enum CheriTbFlags {
      * PCC spans the full address space and has base zero. This means we do
      * not need to perform bounds checks or subtract/add PCC.base
      */
-    TB_FLAG_CHERI_PCC_FULL_AS = (1 << 7),
-    TB_FLAG_CHERI_PCC_READABLE = (1 << 8),
+    TB_FLAG_CHERI_PCC_BASE_ZERO = (1 << 7),
+    TB_FLAG_CHERI_PCC_TOP_MAX = (1 << 8),
+    TB_FLAG_CHERI_PCC_FULL_AS =
+        TB_FLAG_CHERI_PCC_BASE_ZERO | TB_FLAG_CHERI_PCC_TOP_MAX,
+    TB_FLAG_CHERI_PCC_READABLE = (1 << 9),
 
     /* Useful for CHERI-specific flags on various platforms if the normal flags
        overflowed */
