@@ -80,17 +80,27 @@ _gen_cap_check(load)
 _gen_cap_check(store)
 _gen_cap_check(rmw)
 
+// FIXME: assumes small endian order between two 64-bit halves in a 128-bit integer.
+// FIXME: I have no idea GCC actually implements this across platforms. Might be MAD/SAD for all I know.
+#define CAP_TOP_LOBYTES_OFFSET 0
+#define CAP_TOP_HIBYTES_OFFSET 8
+
 // TODO Move to target specific headers
 #ifdef TARGET_MIPS
 
+#define DDC_ENV_OFFSET offsetof(CPUArchState, active_tc.CHWR.DDC)
 static inline void gen_load_gpr(TCGv t, int reg);
 #define target_get_gpr(ctx, t, reg) gen_load_gpr((TCGv)t, reg)
 #define MERGED_FILE 0
 
 #elif defined(TARGET_AARCH64)
 
+#define DDC_ENV_OFFSET offsetof(CPUArchState, DDC_current)
 // Other targets can only enable these once every call to a helper properly updates disas_capreg_state
-#define ENABLE_STATIC_CAP_OPTS 1
+#define ENABLE_STATIC_CAP_OPTS      1
+// Other targets need to check usages of _generate_special_checked_ptr as with TCG bounds checks a branch is generated
+#define DO_TCG_BOUNDS_CHECKS        1
+#define DDC_INTERPOSITION_IS_BASE   1
 TCGv_i64 cpu_reg(DisasContext *s, int reg);
 #define target_get_gpr_global(ctx, reg) cpu_reg_sp(ctx, reg)
 #define target_get_gpr(ctx, t, reg) \
@@ -102,6 +112,7 @@ TCGv_i64 cpu_reg(DisasContext *s, int reg);
 
 #elif defined(TARGET_RISCV)
 
+#define DDC_ENV_OFFSET offsetof(CPUArchState, DDC)
 #define target_get_gpr_global(ctx, reg) (assert(0),(TCGv_i64)NULL)
 #define target_get_gpr(ctx, t, reg) gen_get_gpr((TCGv)t, reg)
 static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t, bool clear_pesbt);
@@ -130,6 +141,19 @@ static inline bool have_cheri_tb_flags(DisasContext *ctx, uint32_t flags)
     return (ctx->base.cheri_flags & flags) == flags;
 }
 
+static inline void generate_get_ddc_base(DisasContext *ctx, TCGv base) {
+#ifdef DDC_INTERPOSITION_IS_BASE
+    // Should not use underlying memory if represented by a global
+    tcg_gen_mov_tl(base, ddc_interposition);
+#else
+    tcg_gen_ld_tl(base, cpu_env, DDC_ENV_OFFSET + offsetof(cap_register_t, cr_base));
+#endif
+}
+
+static inline void generate_get_ddc_top_lo(DisasContext *ctx, TCGv top) {
+    tcg_gen_ld_tl(top, cpu_env, DDC_ENV_OFFSET + offsetof(cap_register_t, _cr_top) + CAP_TOP_LOBYTES_OFFSET);
+}
+
 // Checks an address against PCC or DDC.
 // Permissions are checked at translate time
 // Bounds checks can be skipped if CHERI flags indicate bounds would make checks trivial.
@@ -143,6 +167,7 @@ static inline void _generate_special_checked_ptr(
         // PCC/DDC is untagged, sealed, or missing PERM_STORE
         TCGv_i32 tperms = tcg_const_i32(req_perms);
         cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
+        // FIXME: Should be pcc exception if !ddc
         gen_helper_raise_exception_ddc_perms(cpu_env, tperms);
         tcg_temp_free_i32(tperms);
         return;
@@ -166,11 +191,69 @@ static inline void _generate_special_checked_ptr(
     }
     if (unlikely(!have_cheri_tb_flags(ctx, full_as_flags))) {
         // We need a bounds check since DDC is not full address space
+#ifdef DO_TCG_BOUNDS_CHECKS
+        TCGv in_bounds = tcg_const_tl(1);
+        TCGv local_addr = tcg_temp_local_new();
+        // Save checked_addr to a local so it does not get clobbered.
+        tcg_gen_mov_tl(local_addr, ((TCGv)checked_addr));
+        // Then use checked_addr as a tmp.
+        TCGv tmp = (TCGv)checked_addr;
+        TCGv tmp2 = tcg_temp_new();
+
+        // Base
+        TCGv base = NULL;
+
+        if (ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_BASE_ZERO)) {
+            generate_get_ddc_base(ctx, tmp2);
+            base = tmp2;
+        } else if(!ddc && !have_cheri_tb_flags(ctx, TB_FLAG_PCC_BASE_ZERO)) {
+            tcg_gen_movi_tl(tmp2, ctx->base.pcc_base);
+            base = tmp2;
+        }
+
+        if (base) {
+           tcg_gen_setcond_tl(TCG_COND_GEU, tmp, (TCGv)checked_addr, base);
+           tcg_gen_and_tl(in_bounds, in_bounds, tmp);
+        }
+
+        // Because we check tb flags for the trival check, we only need 64 bit comparisons for top
+        TCGv top = NULL;
+
+        if(ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_TOP_MAX)) {
+            generate_get_ddc_top_lo(ctx, tmp2);
+            top = tmp2;
+        } else if(!ddc && !have_cheri_tb_flags(ctx, TB_FLAG_PCC_TOP_MAX)) {
+            tcg_gen_movi_tl(tmp2, (target_ulong)ctx->base.pcc_top);
+            top = tmp2;
+        }
+
+        if (top) {
+            if (num_bytes > 1) {
+                tcg_gen_addi_tl(tmp, (TCGv)checked_addr, num_bytes);
+                tcg_gen_setcond_tl(TCG_COND_LEU, tmp, tmp, top);
+            } else {
+                tcg_gen_setcond_tl(num_bytes ? TCG_COND_LTU : TCG_COND_LEU, tmp, (TCGv)checked_addr, top);
+            }
+            tcg_gen_and_tl(in_bounds, in_bounds, tmp);
+        }
+
+        TCGLabel *skip = gen_new_label();
+        tcg_gen_movi_tl(tmp, 0);
+        tcg_gen_brcond_tl(TCG_COND_NE, in_bounds, tmp, skip);
+        tcg_gen_mov_i64((TCGv)checked_addr, local_addr);
+#endif
         TCGv tbytes = tcg_const_tl(num_bytes);
 
         (ddc ? &gen_helper_ddc_check_bounds : &gen_helper_pcc_check_bounds)
             (cpu_env, (TCGv)checked_addr, tbytes);
         tcg_temp_free(tbytes);
+#ifdef DO_TCG_BOUNDS_CHECKS
+        gen_set_label(skip);
+        tcg_gen_mov_i64((TCGv)checked_addr, local_addr);
+        tcg_temp_free(in_bounds);
+        tcg_temp_free(local_addr);
+        tcg_temp_free(tmp2);
+#endif
     }
     // DDC has been checked now and checked_addr can be used directly.
 }
@@ -391,11 +474,11 @@ static inline void gen_check_branch_target_dynamic(DisasContext *ctx, TCGv addr)
     TCGLabel *bounds_violation = gen_new_label();
     // We can skip the check of pcc.base if it is zero (common case in
     // hybrid/non-CHERI  mode).
-    if (ctx->base.pcc_base > 0) {
+    if (!have_cheri_tb_flags(ctx, TB_FLAG_PCC_BASE_ZERO)) {
         tcg_gen_brcondi_tl(TCG_COND_LTU, addr, ctx->base.pcc_base,
                            bounds_violation);
     }
-    if (ctx->base.pcc_top != TYPE_MAXIMUM(target_ulong)) {
+    if (!have_cheri_tb_flags(ctx, TB_FLAG_PCC_TOP_MAX)) {
         tcg_gen_brcondi_tl(TCG_COND_GEU, addr, ctx->base.pcc_top,
                            bounds_violation);
     }
@@ -909,11 +992,6 @@ static inline void gen_cap_get_hi(DisasContext* ctx, int regnum, TCGv_i64 lim) {
     tcg_gen_xori_i64(lim, lim, CC128_NULL_PESBT);
     cheri_tcg_printf_verbose("cd","Get reg %d hi: %lx\n", regnum, lim);
 }
-
-// FIXME: assumes small endian order between two 64-bit halves in a 128-bit integer.
-// FIXME: I have no idea GCC actually implements this across platforms. Might be MAD/SAD for all I know.
-#define CAP_TOP_LOBYTES_OFFSET 0
-#define CAP_TOP_HIBYTES_OFFSET 8
 
 // Get top, clamping results to UINT64_T MAX
 static inline void gen_cap_get_top_clamped(DisasContext* ctx, int regnum, TCGv_i64 top) {
@@ -1509,5 +1587,53 @@ static inline void gen_cap_set_pesbt(DisasContext* ctx, int regnum, TCGv_i64 pes
     tcg_gen_st_i64(mem_pesbt, cpu_env, gp_register_offset(regnum) + offsetof(cap_register_t, cached_pesbt));
     tcg_temp_free_i64(mem_pesbt);
 }
+
+// Checks a cap is in bounds for a given size, has specified perms, is tagged, and not sealed. Or throws an exception.
+// Because of the branch, this will kill every temp. Addr is specially conserved as it will probably be used again.
+static inline void gen_cap_memop_checks(DisasContext* ctx, int regnum, TCGv addr, target_ulong size, int perms) {
+#ifdef DO_TCG_BOUNDS_CHECKS
+    // We use addr as a tmp, and tmp as address because we can ensure tmp is local
+    TCGv_i64 local_addr = tcg_temp_local_new_i64();
+    TCGv_i64 result = tcg_temp_new_i64();
+    tcg_gen_mov_i64(local_addr, addr);
+    TCGv_i64 tmp2 = addr;
+
+    // Bounds
+    gen_cap_in_bounds(ctx, regnum, local_addr, result, size);
+    // Perms
+    gen_cap_has_perms(ctx, regnum, perms, tmp2);
+    tcg_gen_and_i64(result, result, tmp2);
+    // Unsealed
+    gen_cap_get_unsealed(ctx, regnum, tmp2);
+    tcg_gen_and_i64(result, result, tmp2);
+    // Tagged
+    gen_cap_get_tag(ctx, regnum, tmp2);
+    tcg_gen_and_i64(result, result, tmp2);
+
+    /* If failure: */
+    TCGLabel *skip = gen_new_label();
+    tcg_gen_movi_i64(tmp2, 0);
+    tcg_gen_brcond_i64(TCG_COND_NE, result, tmp2, skip);
+    tcg_gen_mov_i64(addr, local_addr);
+#endif
+    // We just repeat the checks again in the helper to get the appropriate exception.
+    TCGv_i32 tcg_regnum = tcg_const_i32(regnum);
+    TCGv_i32 tcg_size = tcg_const_i32(size);
+    bool load = perms & CAP_PERM_LOAD;
+    bool store = perms & CAP_PERM_STORE;
+    // I dislike how there are different helpers for different permissions. Should Refactor.
+    ((load && store) ? gen_helper_cap_rmw_check : (load ? gen_helper_cap_load_check : gen_helper_cap_store_check))
+            ((TCGv_cap_checked_ptr)addr, cpu_env, tcg_regnum, addr, tcg_size);
+    tcg_temp_free_i32(tcg_regnum);
+    tcg_temp_free_i32(tcg_size);
+#ifdef DO_TCG_BOUNDS_CHECKS
+    /* Else */
+    gen_set_label(skip);
+    tcg_gen_mov_i64(addr, local_addr);
+    tcg_temp_free_i64(local_addr);
+    tcg_temp_free_i64(result);
+#endif
+}
+
 
 #endif // TARGET_CHERI

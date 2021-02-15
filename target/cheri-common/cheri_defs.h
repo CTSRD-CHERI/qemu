@@ -194,7 +194,9 @@ typedef enum CheriTbFlags {
      * not need to perform bounds checks or subtract/add PCC.base
      */
 
-    TB_FLAG_PCC_FULL_AS = (1 << 7),
+    TB_FLAG_PCC_BASE_ZERO = (1 << 7),
+    TB_FLAG_PCC_TOP_MAX = (1 << 10),
+    TB_FLAG_PCC_FULL_AS = TB_FLAG_PCC_BASE_ZERO | TB_FLAG_PCC_TOP_MAX,
 
     TB_FLAG_CHERI_PCC_WRITABLE = (1 << 8),
     TB_FLAG_CHERI_PCC_READABLE = (1 << 9),
