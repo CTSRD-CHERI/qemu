@@ -144,9 +144,11 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
     if (cap_has_perms(pcc, CAP_PERM_STORE))
         *cheri_flags |= TB_FLAG_CHERI_PCC_WRITABLE;
 
-    if (*cs_base == 0 && cap_get_top65(pcc) == CAP_MAX_TOP) {
-        *cheri_flags |= TB_FLAG_PCC_FULL_AS;
-    }
+    if (*cs_base == 0)
+        *cheri_flags |= TB_FLAG_PCC_BASE_ZERO;
+    if (cap_get_top65(pcc) == CAP_MAX_TOP)
+        *cheri_flags |= TB_FLAG_PCC_TOP_MAX;
+
     if (ddc->cr_tag && cap_is_unsealed(ddc)) {
         if (cap_has_perms(ddc, CAP_PERM_LOAD))
             *cheri_flags |= TB_FLAG_CHERI_DDC_READABLE;
