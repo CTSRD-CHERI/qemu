@@ -101,7 +101,19 @@ void tcg_gen_op6(TCGOpcode opc, TCGArg a1, TCGArg a2, TCGArg a3,
 
 void tcg_gen_mb(TCGBar mb_type)
 {
-    if (tcg_ctx->tb_cflags & CF_PARALLEL) {
+#ifdef CONFIG_USER_ONLY
+    bool parallel = tcg_ctx->tb_cflags & CF_PARALLEL;
+#else
+    /*
+     * It is tempting to elide the barrier in a uniprocessor context.
+     * However, even with a single cpu we have i/o threads running in
+     * parallel, and lack of memory order can result in e.g. virtio
+     * queue entries being read incorrectly.
+     */
+    bool parallel = true;
+#endif
+
+    if (parallel) {
         tcg_gen_op1(INDEX_op_mb, mb_type);
     }
 }
