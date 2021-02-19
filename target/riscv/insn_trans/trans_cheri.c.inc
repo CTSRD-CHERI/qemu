@@ -292,18 +292,25 @@ static bool gen_ddc_load(DisasContext *ctx, int rd, int rs1, MemOp memop)
     return true;
 }
 
-static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
-                                target_long offset, MemOp op)
+static inline bool gen_cap_load_mem_idx(DisasContext *ctx, int32_t rd,
+                                        int32_t cs, target_long offset,
+                                        int mem_idx, MemOp op)
 {
     // FIXME: just do everything in the helper
     TCGv value = tcg_temp_new();
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
     generate_cap_load_check_imm(vaddr, cs, offset, op);
-    tcg_gen_qemu_ld_tl_with_checked_addr(value, vaddr, ctx->mem_idx, op);
+    tcg_gen_qemu_ld_tl_with_checked_addr(value, vaddr, mem_idx, op);
     gen_set_gpr(rd, value);
     tcg_temp_free_cap_checked(vaddr);
     tcg_temp_free(value);
     return true;
+}
+
+static inline bool gen_cap_load(DisasContext *ctx, int32_t rd, int32_t cs,
+    target_long offset, MemOp op)
+{
+    return gen_cap_load_mem_idx(ctx, rd, cs, offset, ctx->mem_idx, op);
 }
 
 #define TRANSLATE_EXPLICIT_LOAD(name, op)                                      \
@@ -368,9 +375,9 @@ static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
 }
 
 /* Load Via Capability Register */
-static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
-                                 int32_t val_regnum, target_long offset,
-                                 MemOp op)
+static inline bool gen_cap_store_mem_idx(DisasContext *ctx, int32_t addr_regnum,
+                                         int32_t val_regnum, target_long offset,
+                                         int mem_idx, MemOp op)
 {
     // FIXME: just do everything in the helper
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
@@ -378,9 +385,18 @@ static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
 
     TCGv value = tcg_temp_new();
     gen_get_gpr(value, val_regnum);
-    tcg_gen_qemu_st_tl_with_checked_addr(value, vaddr, ctx->mem_idx, op);
+    tcg_gen_qemu_st_tl_with_checked_addr(value, vaddr, mem_idx, op);
     tcg_temp_free(value);
     tcg_temp_free_cap_checked(vaddr);
+    return true;
+}
+
+static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
+                                 int32_t val_regnum, target_long offset,
+                                 MemOp op)
+{
+    gen_cap_store_mem_idx(ctx, addr_regnum, val_regnum, offset, ctx->mem_idx,
+                          op);
     return true;
 }
 

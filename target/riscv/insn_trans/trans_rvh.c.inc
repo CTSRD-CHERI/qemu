@@ -33,13 +33,19 @@ static bool gen_hlv(DisasContext *ctx, int rs1, int rd, MemOp memop)
     REQUIRE_EXT(ctx, RVH);
 #ifndef CONFIG_USER_ONLY
     check_access(ctx);
+#ifdef TARGET_CHERI
+    if (ctx->capmode)
+        return gen_cap_load_mem_idx(ctx, rd, rs1, 0,
+            ctx->mem_idx | TB_FLAGS_PRIV_HYP_ACCESS_MASK, memop);
+#endif
 
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
 
     gen_get_gpr(t0, rs1);
 
-    tcg_gen_qemu_ld_tl(t1, t0, ctx->mem_idx | TB_FLAGS_PRIV_HYP_ACCESS_MASK, memop);
+    gen_ddc_interposed_ld_tl(ctx, t1, /* Update addr in-place */ NULL, t0,
+        ctx->mem_idx | TB_FLAGS_PRIV_HYP_ACCESS_MASK, memop);
     gen_set_gpr(rd, t1);
 
     tcg_temp_free(t0);
@@ -56,6 +62,11 @@ static bool gen_hsv(DisasContext *ctx, int rs1, int rs2, MemOp memop)
     REQUIRE_EXT(ctx, RVH);
 #ifndef CONFIG_USER_ONLY
     check_access(ctx);
+#ifdef TARGET_CHERI
+    if (ctx->capmode)
+        return gen_cap_store_mem_idx(ctx, rs1, rs2, 0,
+            ctx->mem_idx | TB_FLAGS_PRIV_HYP_ACCESS_MASK, memop);
+#endif
 
     TCGv t0 = tcg_temp_new();
     TCGv dat = tcg_temp_new();
@@ -63,7 +74,8 @@ static bool gen_hsv(DisasContext *ctx, int rs1, int rs2, MemOp memop)
     gen_get_gpr(t0, rs1);
     gen_get_gpr(dat, rs2);
 
-    tcg_gen_qemu_st_tl(dat, t0, ctx->mem_idx | TB_FLAGS_PRIV_HYP_ACCESS_MASK, memop);
+    gen_ddc_interposed_st_tl(ctx, dat, /* Update addr in-place */ NULL, t0,
+        ctx->mem_idx | TB_FLAGS_PRIV_HYP_ACCESS_MASK, memop);
 
     tcg_temp_free(t0);
     tcg_temp_free(dat);
