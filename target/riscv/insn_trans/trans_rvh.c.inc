@@ -32,10 +32,10 @@ static bool gen_hlv(DisasContext *ctx, int rs1, int rd, MemOp memop)
 {
     REQUIRE_EXT(ctx, RVH);
 #ifndef CONFIG_USER_ONLY
+    check_access(ctx);
+
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
-
-    check_access(ctx);
 
     gen_get_gpr(t0, rs1);
 
@@ -55,10 +55,10 @@ static bool gen_hsv(DisasContext *ctx, int rs1, int rs2, MemOp memop)
 {
     REQUIRE_EXT(ctx, RVH);
 #ifndef CONFIG_USER_ONLY
+    check_access(ctx);
+
     TCGv t0 = tcg_temp_new();
     TCGv dat = tcg_temp_new();
-
-    check_access(ctx);
 
     gen_get_gpr(t0, rs1);
     gen_get_gpr(dat, rs2);
@@ -134,10 +134,10 @@ static bool trans_hlvx_hu(DisasContext *ctx, arg_hlvx_hu *a)
 {
     REQUIRE_EXT(ctx, RVH);
 #ifndef CONFIG_USER_ONLY
+    check_access(ctx);
+
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
-
-    check_access(ctx);
 
     gen_get_gpr(t0, a->rs1);
 
@@ -156,10 +156,10 @@ static bool trans_hlvx_wu(DisasContext *ctx, arg_hlvx_wu *a)
 {
     REQUIRE_EXT(ctx, RVH);
 #ifndef CONFIG_USER_ONLY
+    check_access(ctx);
+
     TCGv t0 = tcg_temp_new();
     TCGv t1 = tcg_temp_new();
-
-    check_access(ctx);
 
     gen_get_gpr(t0, a->rs1);
 
