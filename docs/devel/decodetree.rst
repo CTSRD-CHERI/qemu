@@ -141,9 +141,10 @@ Patterns
 Syntax::
 
   pat_def      := identifier ( pat_elt )+
-  pat_elt      := fixedbit_elt | field_elt | field_ref | args_ref | fmt_ref | const_elt
+  pat_elt      := fixedbit_elt | field_elt | field_ref | args_ref | fmt_ref | const_elt | pred_elt
   fmt_ref      := '@' identifier
   const_elt    := identifier '=' number
+  pred_elt     := '?' ( '!' )? identifier
 
 The *fixedbit_elt* and *field_elt* specifiers are unchanged from formats.
 A pattern that does not specify a named format will have one inferred
@@ -152,6 +153,11 @@ from a referenced argument set (if present) and the set of fields.
 A *const_elt* allows a argument to be set to a constant value.  This may
 come in handy when fields overlap between patterns and one has to
 include the values in the *fixedbit_elt* instead.
+
+A *pred_elt* allows a pattern to depend on dynamic run-time state.  The
+decoder will call the specified boolean-returning function with the
+``DisasContext`` as the only argument, and can be optionally inverted by
+prefixing with ``!``.
 
 The decoder will call a translator function for each pattern matched.
 
