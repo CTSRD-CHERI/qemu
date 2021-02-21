@@ -356,6 +356,10 @@ class Format(General):
 class Pattern(General):
     """Class representing an instruction pattern"""
 
+    def __init__(self, name, lineno, base, fixb, fixm, udfm, fldm, flds, w, p):
+        super().__init__(name, lineno, base, fixb, fixm, udfm, fldm, flds, w)
+        self.preds = p
+
     def output_decl(self):
         global translate_scope
         global translate_prefix
@@ -369,13 +373,25 @@ class Pattern(General):
         ind = str_indent(i)
         arg = self.base.base.name
         output(ind, '/* ', self.file, ':', str(self.lineno), ' */\n')
+        if self.preds:
+            output(ind, 'if (')
+            prefix = ''
+            for pred in self.preds:
+                output(prefix, pred, '(ctx)')
+                prefix = ' && '
+            output(') {\n')
+            ind2 = str_indent(i + 4)
+        else:
+            ind2 = ind
         if not extracted:
-            output(ind, self.base.extract_name(),
+            output(ind2, self.base.extract_name(),
                    '(ctx, &u.f_', arg, ', insn);\n')
         for n, f in self.fields.items():
-            output(ind, 'u.f_', arg, '.', n, ' = ', f.str_extract(), ';\n')
-        output(ind, 'if (', translate_prefix, '_', self.name,
+            output(ind2, 'u.f_', arg, '.', n, ' = ', f.str_extract(), ';\n')
+        output(ind2, 'if (', translate_prefix, '_', self.name,
                '(ctx, &u.f_', arg, ')) return true;\n')
+        if self.preds:
+            output(ind, '}\n')
 
     # Normal patterns do not have children.
     def build_tree(self):
@@ -813,6 +829,7 @@ def parse_generic(lineno, parent_pat, name, toks):
     flds = {}
     arg = None
     fmt = None
+    preds = []
     for t in toks:
         # '&Foo' gives a format an explicit argument set.
         if re.fullmatch(re_arg_ident, t):
@@ -853,6 +870,12 @@ def parse_generic(lineno, parent_pat, name, toks):
             (fname, value) = t.split('=')
             value = int(value)
             flds = add_field(lineno, flds, fname, ConstField(value))
+            continue
+
+        # '?Foo' and '?!Foo' give a pattern a dynamic predicate.
+        if re.fullmatch('\?!?' + re_C_ident, t):
+            tt = t[1:]
+            preds.append(tt)
             continue
 
         # Pattern of 0s, 1s, dots and dashes indicate required zeros,
@@ -914,6 +937,8 @@ def parse_generic(lineno, parent_pat, name, toks):
         # Formats cannot reference formats.
         if fmt:
             error(lineno, 'format referencing format')
+        if preds:
+            error(lineno, 'format referencing predicates')
         # If an argument set is given, then there should be no fields
         # without a place to store it.
         if arg:
@@ -955,7 +980,7 @@ def parse_generic(lineno, parent_pat, name, toks):
             if f not in flds.keys() and f not in fmt.fields.keys():
                 error(lineno, 'field {0} not initialized'.format(f))
         pat = Pattern(name, lineno, fmt, fixedbits, fixedmask,
-                      undefmask, fieldmask, flds, width)
+                      undefmask, fieldmask, flds, width, preds)
         parent_pat.pats.append(pat)
         allpatterns.append(pat)
 
