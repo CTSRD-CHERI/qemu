@@ -85,11 +85,10 @@
 {
   # Opcode of all zeros is illegal; rd != 0, nzuimm == 0 is reserved.
   illegal         000  000 000 00 --- 00
-  addi            000  ... ... .. ... 00 @c_addi4spn
+  addi            000  ... ... .. ... 00 @c_addi4spn ?!pred_capmode
+  cincoffsetimm   000  ... ... .. ... 00 @c_addi4spn ?pred_capmode
 }
-fld               001  ... ... .. ... 00 @cl_d
 lw                010  ... ... .. ... 00 @cl_w
-fsd               101  ... ... .. ... 00 @cs_d
 sw                110  ... ... .. ... 00 @cs_w
 
 # *** RV32/64C Standard Extension (Quadrant 1) ***
@@ -97,7 +96,8 @@ addi              000 .  .....  ..... 01 @ci
 addi              010 .  .....  ..... 01 @c_li
 {
   illegal         011 0  -----  00000 01 # c.addi16sp and c.lui, RES nzimm=0
-  addi            011 .  00010  ..... 01 @c_addi16sp
+  addi            011 .  00010  ..... 01 @c_addi16sp ?!pred_capmode
+  cincoffsetimm   011 .  00010  ..... 01 @c_addi16sp ?pred_capmode
   lui             011 .  .....  ..... 01 @c_lui
 }
 srli              100 . 00 ...  ..... 01 @c_shift
@@ -113,20 +113,18 @@ bne               111  ... ...  ..... 01 @cb_z
 
 # *** RV32/64C Standard Extension (Quadrant 2) ***
 slli              000 .  .....  ..... 10 @c_shift2
-fld               001 .  .....  ..... 10 @c_ldsp
 {
   illegal         010 -  00000  ----- 10 # c.lwsp, RES rd=0
   lw              010 .  .....  ..... 10 @c_lwsp
 }
 {
   illegal         100 0  00000  00000 10 # c.jr, RES rs1=0
-  compr_jalr      100 0  .....  00000 10 @c_jalr rd=0  # C.JR
+  jalr            100 0  .....  00000 10 @c_jalr rd=0  # C.JR
   addi            100 0  .....  ..... 10 @c_mv
 }
 {
   ebreak          100 1  00000  00000 10
-  compr_jalr      100 1  .....  00000 10 @c_jalr rd=1  # C.JALR
+  jalr            100 1  .....  00000 10 @c_jalr rd=1  # C.JALR
   add             100 1  .....  ..... 10 @cr
 }
-fsd               101   ......  ..... 10 @c_sdsp
 sw                110 .  .....  ..... 10 @c_swsp

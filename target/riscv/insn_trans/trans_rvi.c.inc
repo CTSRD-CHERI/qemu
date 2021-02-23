@@ -49,63 +49,27 @@ static bool trans_auipc(DisasContext *ctx, arg_auipc *a)
 
 static bool trans_jal(DisasContext *ctx, arg_jal *a)
 {
+#ifdef TARGET_CHERI
+    if (ctx->capmode) {
+        gen_cjal(ctx, a->rd, a->imm);
+        return true;
+    }
+#endif
     gen_jal(ctx, a->rd, a->imm);
     return true;
 }
 
 static bool trans_jalr(DisasContext *ctx, arg_jalr *a)
 {
-    /* no chaining with JALR */
-    TCGLabel *misaligned = NULL;
-    // Note: We need to use tcg_temp_local_new() for t0 since
-    // gen_check_branch_target_dynamic() inserts branches.
-    TCGv t0 = tcg_temp_local_new();
-
-
-    gen_get_gpr(t0, a->rs1);
-    // For CHERI the jump destination is an offset relative to PCC.base
-    tcg_gen_addi_tl(t0, t0, a->imm + pcc_base(ctx));
-    tcg_gen_andi_tl(t0, t0, (target_ulong)-2);
-    gen_check_branch_target_dynamic(ctx, t0);
-    // Note: Only update cpu_pc after a successful bounds check to avoid
-    // representability issues caused by directly modifying PCC.cursor.
-    tcg_gen_mov_tl(cpu_pc, t0);
-    gen_mark_pc_updated();
-
-    if (!has_ext(ctx, RVC)) {
-        misaligned = gen_new_label();
-        tcg_gen_andi_tl(t0, cpu_pc, 0x2);
-        tcg_gen_brcondi_tl(TCG_COND_NE, t0, 0x0, misaligned);
-    }
-
-    // For CHERI the result is an offset relative to PCC.base
-    gen_set_gpr_const(a->rd, ctx->pc_succ_insn - pcc_base(ctx));
-    lookup_and_goto_ptr(ctx);
-
-    if (misaligned) {
-        gen_set_label(misaligned);
-        gen_exception_inst_addr_mis(ctx);
-    }
-    ctx->base.is_jmp = DISAS_NORETURN;
-
-    tcg_temp_free(t0);
-    return true;
-}
-
-static bool trans_compr_jalr(DisasContext *ctx, arg_jalr *a)
-{
 #ifdef TARGET_CHERI
-    // In capmode c.jalr is c.cjalr and uses capability registers
-    // TODO: this function could be removed if jalr was made mode-dependent
     if (ctx->capmode) {
-        tcg_debug_assert(a->imm == 0);
-        arg_cjalr cjalr_arg = {.rd = a->rd, .rs1 = a->rs1};
-        return trans_cjalr(ctx, &cjalr_arg);
+        gen_cjalr(ctx, a->rd, a->rs1, a->imm);
+        return true;
     }
 #endif
-    return trans_jalr(ctx, a);
+    gen_jalr(ctx, a->rd, a->rs1, a->imm);
+    return true;
 }
-
 
 static bool gen_branch(DisasContext *ctx, arg_b *a, TCGCond cond)
 {
