@@ -488,10 +488,48 @@ static void gen_jal(DisasContext *ctx, int rd, target_ulong imm)
             return;
         }
     }
-    gen_set_gpr_const(rd, ctx->pc_succ_insn);
+    // For CHERI the result is an offset relative to PCC.base
+    gen_set_gpr_const(rd, ctx->pc_succ_insn - pcc_base(ctx));
 
     gen_goto_tb(ctx, 0, ctx->base.pc_next + imm, /*bounds_check=*/true); /* must use this for safety */
     ctx->base.is_jmp = DISAS_NORETURN;
+}
+
+static void gen_jalr(DisasContext *ctx, int rd, int rs1, target_ulong imm)
+{
+    /* no chaining with JALR */
+    TCGLabel *misaligned = NULL;
+    // Note: We need to use tcg_temp_local_new() for t0 since
+    // gen_check_branch_target_dynamic() inserts branches.
+    TCGv t0 = tcg_temp_local_new();
+
+    gen_get_gpr(t0, rs1);
+    // For CHERI the jump destination is an offset relative to PCC.base
+    tcg_gen_addi_tl(t0, t0, imm + pcc_base(ctx));
+    tcg_gen_andi_tl(t0, t0, (target_ulong)-2);
+    gen_check_branch_target_dynamic(ctx, t0);
+    // Note: Only update cpu_pc after a successful bounds check to avoid
+    // representability issues caused by directly modifying PCC.cursor.
+    tcg_gen_mov_tl(cpu_pc, t0);
+    gen_mark_pc_updated();
+
+    if (!has_ext(ctx, RVC)) {
+        misaligned = gen_new_label();
+        tcg_gen_andi_tl(t0, cpu_pc, 0x2);
+        tcg_gen_brcondi_tl(TCG_COND_NE, t0, 0x0, misaligned);
+    }
+
+    // For CHERI the result is an offset relative to PCC.base
+    gen_set_gpr_const(rd, ctx->pc_succ_insn - pcc_base(ctx));
+    lookup_and_goto_ptr(ctx);
+
+    if (misaligned) {
+        gen_set_label(misaligned);
+        gen_exception_inst_addr_mis(ctx);
+    }
+    ctx->base.is_jmp = DISAS_NORETURN;
+
+    tcg_temp_free(t0);
 }
 
 #ifndef CONFIG_USER_ONLY
@@ -569,6 +607,15 @@ static int ex_rvc_shifti(DisasContext *ctx, int imm)
 {
     /* For RV128 a shamt of 0 means a shift by 64. */
     return imm ? imm : 64;
+}
+
+static bool pred_capmode(DisasContext *ctx)
+{
+#ifdef TARGET_CHERI
+    return ctx->capmode;
+#else
+    return false;
+#endif
 }
 
 /* Include the auto-generated decoder for 32 bit insn */
@@ -710,6 +757,29 @@ static bool gen_shift(DisasContext *ctx, arg_r *a,
 #ifdef TARGET_CHERI
 /* Must be included first since the helpers are used by trans_rvi.c.inc */
 #include "insn_trans/trans_cheri.c.inc"
+#else
+/* Stubs needed for mode-dependent compressed instructions */
+
+typedef arg_i arg_lc;
+static inline bool trans_lc(DisasContext *ctx, arg_lc *a)
+{
+    g_assert_not_reached();
+    return false;
+}
+
+typedef arg_s arg_sc;
+static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
+{
+    g_assert_not_reached();
+    return false;
+}
+
+typedef arg_i arg_cincoffsetimm;
+static inline bool trans_cincoffsetimm(DisasContext *ctx, arg_cincoffsetimm *a)
+{
+    g_assert_not_reached();
+    return false;
+}
 #endif
 // Helpers to generate a virtual address that has been checked by the CHERI
 // capability helpers: If ctx->capmode is set, the register number will be

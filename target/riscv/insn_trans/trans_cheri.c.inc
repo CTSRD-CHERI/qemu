@@ -250,12 +250,36 @@ static bool trans_csetboundsimm(DisasContext *ctx, arg_cincoffsetimm *a)
 }
 
 /// Control-flow instructions
-static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
+static void gen_cjal(DisasContext *ctx, int rd, target_ulong imm)
 {
-    TCGv_i32 dest_regnum = tcg_const_i32(a->rd);
-    TCGv_i32 source_regnum = tcg_const_i32(a->rs1);
+    target_ulong next_pc;
+
+    /* check misaligned: */
+    next_pc = ctx->base.pc_next + imm;
+    if (!has_ext(ctx, RVC)) {
+        if ((next_pc & 0x3) != 0) {
+            gen_exception_inst_addr_mis(ctx);
+            return;
+        }
+    }
+    TCGv_i32 dst = tcg_const_i32(rd);
+    TCGv new_cursor = tcg_const_tl(ctx->pc_succ_insn);
+    gen_helper_auipcc(cpu_env, dst, new_cursor);
+    tcg_temp_free(new_cursor);
+    tcg_temp_free_i32(dst);
+
+    gen_goto_tb(ctx, 0, ctx->base.pc_next + imm, /*bounds_check=*/true); /* must use this for safety */
+    ctx->base.is_jmp = DISAS_NORETURN;
+}
+
+static void gen_cjalr(DisasContext *ctx, int rd, int rs1, target_ulong imm)
+{
+    TCGv_i32 dest_regnum = tcg_const_i32(rd);
+    TCGv_i32 source_regnum = tcg_const_i32(rs1);
+    TCGv imm_value = tcg_const_tl(imm);
     TCGv t0 = tcg_const_tl(ctx->pc_succ_insn); // Link addr + resulting $pc
-    gen_helper_cjalr(cpu_env, dest_regnum, source_regnum, t0);
+    gen_helper_cjalr(cpu_env, dest_regnum, source_regnum, imm_value, t0);
+    tcg_temp_free(imm_value);
     tcg_temp_free(t0);
     tcg_temp_free_i32(source_regnum);
     tcg_temp_free_i32(dest_regnum);
@@ -263,6 +287,17 @@ static bool trans_cjalr(DisasContext *ctx, arg_cjalr *a)
     lookup_and_goto_ptr(ctx);
     // PC has been updated -> exit translation block
     ctx->base.is_jmp = DISAS_NORETURN;
+}
+
+static bool trans_jalr_cap(DisasContext *ctx, arg_jalr_cap *a)
+{
+    gen_cjalr(ctx, a->rd, a->rs1, 0);
+    return true;
+}
+
+static bool trans_jalr_pcc(DisasContext *ctx, arg_jalr_pcc *a)
+{
+    gen_jalr(ctx, a->rd, a->rs1, 0);
     return true;
 }
 

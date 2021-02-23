@@ -211,23 +211,28 @@ void CHERI_HELPER_IMPL(ccleartag(CPUArchState *env, uint32_t cd, uint32_t cb))
 }
 
 void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd, uint32_t cb,
-                             target_ulong link_pc))
+                             target_ulong offset, target_ulong link_pc))
 {
     /*
      * CJALR: Jump and Link Capability Register
      */
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    const target_ulong cursor = cap_get_cursor(cbp);
+    const target_ulong addr = cursor + (target_long)offset;
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (cap_is_sealed_with_type(cbp)) {
-        // Note: "sentry" caps can be called using cjalr
+    } else if (cap_is_sealed_with_type(cbp) ||
+               (offset != 0 && !cap_is_unsealed(cbp))) {
+        // Note: "sentry" caps can be called using cjalr, but only if the
+        // immediate offset is 0.
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!cap_has_perms(cbp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
     } else if (!cap_has_perms(cbp, CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_GlobalViolation, cb);
-    } else if (!validate_jump_target(env, cbp, cb, _host_return_address)) {
+    } else if (!validate_jump_target(env, cbp, addr, cb,
+                                     _host_return_address)) {
         assert(false && "Should have raised an exception");
     }
 
@@ -236,6 +241,14 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd, uint32_t cb,
     if (cap_is_sealed_entry(cbp)) {
         // If we are calling a "sentry" cap, remove the sealed flag
         cap_unseal_entry(&next_pcc);
+        assert(cap_get_cursor(&next_pcc) == addr &&
+               "Should have raised an exception");
+    } else {
+        // Can never create an unrepresentable capability since we
+        // bounds-checked the jump target.
+        assert(is_representable_cap_with_addr(&next_pcc, addr) &&
+               "Target addr must be representable");
+        next_pcc._cr_cursor = addr;
     }
     // Don't generate a link capability if cd == zero register
     if (cd != 0) {
@@ -243,11 +256,9 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd, uint32_t cb,
         // since we are writing a new cursor anyway.
         cap_register_t result = *cheri_get_recent_pcc(env);
         // can never create an unrepresentable capability since PCC must be in bounds
-        result._cr_cursor = link_pc;
-#if QEMU_USE_COMPRESSED_CHERI_CAPS == 1
-        assert(cc128_is_representable_with_addr(&result, link_pc) &&
+        assert(is_representable_cap_with_addr(&result, link_pc) &&
                "Link addr must be representable");
-#endif
+        result._cr_cursor = link_pc;
         // The return capability should always be a sentry
         cap_make_sealed_entry(&result);
         update_capreg(env, cd, &result);
@@ -282,7 +293,8 @@ void CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum,
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, code_regnum);
     } else if (cap_has_perms(data_cap, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, data_regnum);
-    } else if (!validate_jump_target(env, code_cap, code_regnum, _host_return_address)) {
+    } else if (!validate_jump_target(env, code_cap, cap_get_cursor(code_cap),
+                                     code_regnum, _host_return_address)) {
         raise_cheri_exception(env, CapEx_LengthViolation, code_regnum);
     } else {
         // Unseal code and data cap now that the checks have succeeded.
