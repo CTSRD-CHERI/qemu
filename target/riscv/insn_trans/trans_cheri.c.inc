@@ -530,7 +530,7 @@ static inline bool trans_amoswap_c(DisasContext *ctx, arg_amoswap_c *a)
 }
 
 // Explicit CAP/DDC atomic ops (no unsigned versions):
-// Reuses gen_lr_impl, defined in trans_rva.inc.c
+// Reuses gen_lr_impl, defined in trans_rva.c.inc
 static inline bool gen_lr_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
                                arg_atomic *a, MemOp mop);
 

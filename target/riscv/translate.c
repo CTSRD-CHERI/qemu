@@ -885,7 +885,7 @@ static bool gen_shift(DisasContext *ctx, arg_r *a,
 
 /* Include insn module translation function */
 #ifdef TARGET_CHERI
-/* Must be included first since the helpers are used by trans_rvi.inc.c */
+/* Must be included first since the helpers are used by trans_rvi.c.inc */
 #include "insn_trans/trans_cheri.c.inc"
 #endif
 // Helpers to generate a virtual address that has been checked by the CHERI
