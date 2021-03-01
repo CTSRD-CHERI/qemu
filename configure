@@ -2216,6 +2216,21 @@ if test -z "${target_list+xxx}" ; then
 else
     default_targets=no
     target_list=$(echo "$target_list" | sed -e 's/,/ /g')
+    new_target_list=""
+    for target in $target_list; do
+        # Remap cheri128 to mips64cheri128 etc for compatibility.
+        # Remove once no longer required.
+        case "$target" in
+            cheri*)
+                add_to new_target_list "mips64$target"
+                echo "Warning, '$target' is a deprecated name for 'mips64$target'."
+                ;;
+            *)
+                add_to new_target_list "$target"
+                ;;
+        esac
+    done
+    target_list="$new_target_list"
     for target in $target_list; do
         # Check that we recognised the target name; this allows a more
         # friendly error message than if we let it fall through.
