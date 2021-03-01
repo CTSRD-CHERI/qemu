@@ -1873,6 +1873,26 @@ foreach target : target_dirs
                gui_app: exe['gui'])
     }
 
+    # Add qemu-system-cheri128 -> qemu-system-mips64cheri128 etc symlinks for
+    # backwards compatibility. Remove once the old names are unused.
+    # NB: This is a defective language with no string.replace, so we hack one
+    # up using split+join. https://github.com/mesonbuild/meson/issues/4007.
+    # NB: No built-in symlink support, so we have to do it manually. Moreover,
+    # symlinks created in the build directory will be copied as their
+    # underlying file, not a symlink, wasting space and making it non-obvious
+    # it's a deprecated name. It also spits out a warning that the behaviour
+    # will change to the (sane) interpretation where symlinks are installed as
+    # symlinks, but we can't rely on that, so instead we create the symlink at
+    # install time.
+    if exe['name'].startswith('qemu-system-mips64cheri')
+      installbindir = get_option('prefix') / get_option('bindir')
+      exe_name_alias = ''.join(exe['name'].split('mips64'))
+      exe_path_alias = '$DESTDIR/@0@'.format(installbindir / exe_name_alias)
+      meson.add_install_script('sh', '-c',
+                               'ln -fs @0@ @1@'.format(exe['name'],
+                                                       exe_path_alias))
+    endif
+
     if 'CONFIG_TRACE_SYSTEMTAP' in config_host
       foreach stp: [
         {'ext': '.stp-build', 'fmt': 'stap', 'bin': meson.current_build_dir() / exe['name'], 'install': false},
