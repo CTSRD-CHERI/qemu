@@ -683,6 +683,10 @@ static void do_cpu_reset(void *opaque)
     const struct arm_boot_info *info = env->boot_info;
 
     cpu_reset(cs);
+#ifdef TARGET_CHERI
+    env->cp15.scr_el3 |= SCR_RW;
+#endif
+
     if (info) {
         if (!info->is_linux) {
             int i;

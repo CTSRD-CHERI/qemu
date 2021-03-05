@@ -37,6 +37,14 @@
 
 #include "cheri_defs.h"
 
+#ifdef TARGET_AARCH64
+#define PRINT_CAP_FMT_EXTRA " bv: %d"
+#define PRINT_CAP_ARGS_EXTRA(cr) , (cr)->cr_bounds_valid
+#else
+#define PRINT_CAP_FMT_EXTRA
+#define PRINT_CAP_ARGS_EXTRA(cr)
+#endif
+
 #define PRINT_CAP_FMTSTR_L1                                                    \
     "v:%d s:%d p:%08x f:%d b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
 #define COMBINED_PERMS_VALUE(cr)                                               \
@@ -44,10 +52,10 @@
                ((cr)->cr_perms & CAP_PERMS_ALL))
 #define PRINT_CAP_ARGS_L1(cr)                                                  \
     (cr)->cr_tag, cap_is_sealed_with_type(cr), COMBINED_PERMS_VALUE(cr),       \
-        (cr)->cr_flags, cap_get_base(cr), cap_get_length_sat(cr)
-#define PRINT_CAP_FMTSTR_L2 "o:" TARGET_FMT_lx " t:%x"
-#define PRINT_CAP_ARGS_L2(cr) (target_ulong)cap_get_offset(cr), (cr)->cr_otype
-
+    (cr)->cr_flags, cap_get_base(cr), cap_get_length_sat(cr)
+#define PRINT_CAP_FMTSTR_L2 "a:" TARGET_FMT_lx " t:%x" PRINT_CAP_FMT_EXTRA
+#define PRINT_CAP_ARGS_L2(cr)                                                  \
+    cap_get_cursor(cr), (cr)->cr_otype PRINT_CAP_ARGS_EXTRA(cr)
 
 #define PRINT_CAP_FMTSTR PRINT_CAP_FMTSTR_L1 " " PRINT_CAP_FMTSTR_L2
 #define PRINT_CAP_ARGS(cr) PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr)
@@ -331,7 +339,25 @@ int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
                                    unsigned regnum);
 
 #define raise_cheri_exception(env, cause, reg)                                 \
-    raise_cheri_exception_impl(env, cause, reg, true, _host_return_address)
+    raise_cheri_exception_impl(env, cause, reg, 0, true, _host_return_address)
+
+#define raise_cheri_exception_addr(env, cause, reg, addr)                      \
+    raise_cheri_exception_impl(env, cause, reg, addr, true,                    \
+                               _host_return_address)
+
+#ifdef TARGET_AARCH64
+#define raise_cheri_exception_if(env, cause, reg)                              \
+    raise_cheri_exception_impl_if_wnr(env, cause, reg, 0, true,                \
+                                      _host_return_address, true, false)
+#define raise_cheri_exception_addr_wnr(env, cause, reg, addr, is_write)        \
+    raise_cheri_exception_impl_if_wnr(env, cause, reg, addr, true,             \
+                                      _host_return_address, false, is_write)
+#else
+#define raise_cheri_exception_if(env, cause, reg)                              \
+    raise_cheri_exception(env, cause, reg)
+#define raise_cheri_exception_addr_wnr(env, cause, reg, addr, is_write)        \
+    raise_cheri_exception_addr(env, cause, reg, addr)
+#endif
 
 static inline void cap_set_cursor(cap_register_t *cap, uint64_t new_addr)
 {
