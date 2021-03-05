@@ -81,8 +81,9 @@ void helper_load_exclusive_cap_via_cap(CPUArchState *env, uint32_t cd, uint32_t 
     const cap_register_t *cbp = get_capreg_or_special(env, cb);
     uint32_t size = (cd2 == REG_NONE) ? CHERI_CAP_SIZE : (CHERI_CAP_SIZE * 2);
 
+    // Exclusives must be aligned to the entire size of the operation, not just one of the elements
     cap_check_common_reg(perms_for_load(), env, cb, addr,
-                         size, _host_return_address, cbp, CHERI_CAP_SIZE, true);
+                         size, _host_return_address, cbp, size, true);
 
     bool raw_tag;
     bool tag1 = load_cap_from_memory_128_raw_tag(env, &env->exclusive_high, &env->exclusive_val,
@@ -110,7 +111,7 @@ void helper_store_exclusive_cap_via_cap(CPUArchState *env, uint32_t rs, uint32_t
     if (cd2 != REG_NONE) perms |= perms_for_store(env, cd2);
     uint32_t size = (cd2 == REG_NONE) ? CHERI_CAP_SIZE : (CHERI_CAP_SIZE * 2);
 
-    cap_check_common_reg(perms, env, cb, addr, size, _host_return_address, &cbp, CHERI_CAP_SIZE, true);
+    cap_check_common_reg(perms, env, cb, addr, size, _host_return_address, &cbp, size, true);
 
     // Should be storing to same address as load exclusive
     bool success = env->exclusive_addr == addr;
@@ -181,8 +182,6 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
     if (do_store) {
         store_cap_to_memory(env, cd, addr, _host_return_address);
     }
-
-    printf("Updating cs %d from swap (%lx)\n", cs, cursor);
 
     // Write back to cs
     update_compressed_capreg(env, cs, pesbt, tag, cursor);
@@ -319,4 +318,10 @@ void helper_store_tags(CPUArchState *env, uint64_t tags, uint32_t cn, target_ulo
             MORELLO_TAGS_OPS_SIZE, true);
 
     cheri_tag_set_many(env, tags, addr, cn, NULL, GETPC());
+}
+
+void QEMU_NORETURN helper_check_capabilities_enabled_exception(CPUArchState *env) {
+    int el = get_cap_enabled_target_exception_level_el(env, arm_current_el(env));
+    assert(el != -1);
+    raise_exception(env, EXCP_UDEF, syn_aa64_capability_access(), el);
 }

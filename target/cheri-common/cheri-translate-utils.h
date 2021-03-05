@@ -101,6 +101,9 @@ static inline void gen_load_gpr(TCGv t, int reg);
 // Other targets need to check usages of _generate_special_checked_ptr as with TCG bounds checks a branch is generated
 #define DO_TCG_BOUNDS_CHECKS        1
 #define DDC_INTERPOSITION_IS_BASE   1
+#define BOUNDS_DO_NOT_WRAP
+#define TRACE_MODIFIED_REGISTERS
+
 TCGv_i64 cpu_reg(DisasContext *s, int reg);
 #define target_get_gpr_global(ctx, reg) cpu_reg_sp(ctx, reg)
 #define target_get_gpr(ctx, t, reg) \
@@ -167,8 +170,10 @@ static inline void _generate_special_checked_ptr(
         // PCC/DDC is untagged, sealed, or missing PERM_STORE
         TCGv_i32 tperms = tcg_const_i32(req_perms);
         cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
-        // FIXME: Should be pcc exception if !ddc
-        gen_helper_raise_exception_ddc_perms(cpu_env, tperms);
+        if(ddc)
+            gen_helper_raise_exception_ddc_perms(cpu_env, tperms);
+        else
+            gen_helper_raise_exception_pcc_perms_not_if(cpu_env, tperms);
         tcg_temp_free_i32(tperms);
         return;
     }
@@ -189,7 +194,11 @@ static inline void _generate_special_checked_ptr(
     } else if((TCGv)checked_addr != ddc_offset) {
         tcg_gen_mov_tl((TCGv)checked_addr, ddc_offset);
     }
-    if (unlikely(!have_cheri_tb_flags(ctx, full_as_flags))) {
+    bool do_checks = !have_cheri_tb_flags(ctx, full_as_flags);
+#ifdef BOUNDS_DO_NOT_WRAP
+    do_checks = true;
+#endif
+    if (unlikely(do_checks)) {
         // We need a bounds check since DDC is not full address space
 #ifdef DO_TCG_BOUNDS_CHECKS
         TCGv in_bounds = tcg_const_tl(1);
@@ -212,7 +221,7 @@ static inline void _generate_special_checked_ptr(
         }
 
         if (base) {
-           tcg_gen_setcond_tl(TCG_COND_GEU, tmp, (TCGv)checked_addr, base);
+           tcg_gen_setcond_tl(TCG_COND_GEU, tmp, (TCGv)local_addr, base);
            tcg_gen_and_tl(in_bounds, in_bounds, tmp);
         }
 
@@ -229,12 +238,20 @@ static inline void _generate_special_checked_ptr(
 
         if (top) {
             if (num_bytes > 1) {
-                tcg_gen_addi_tl(tmp, (TCGv)checked_addr, num_bytes);
+                tcg_gen_addi_tl(tmp, (TCGv)local_addr, num_bytes);
                 tcg_gen_setcond_tl(TCG_COND_LEU, tmp, tmp, top);
             } else {
-                tcg_gen_setcond_tl(num_bytes ? TCG_COND_LTU : TCG_COND_LEU, tmp, (TCGv)checked_addr, top);
+                tcg_gen_setcond_tl(num_bytes ? TCG_COND_LTU : TCG_COND_LEU, tmp, (TCGv)local_addr, top);
             }
             tcg_gen_and_tl(in_bounds, in_bounds, tmp);
+        } else {
+#ifdef BOUNDS_DO_NOT_WRAP
+            // If top is 1 << 64 then the only way to out of bounds is if addr + num_bytes wraps
+            // This is still technically wrong if top is greater than 1 << 64. But I don't really care.
+            tcg_gen_addi_tl(tmp, (TCGv)local_addr, num_bytes);
+            tcg_gen_setcond_tl(TCG_COND_LEU, tmp, (TCGv)local_addr, tmp);
+            tcg_gen_and_tl(in_bounds, in_bounds, tmp);
+#endif
         }
 
         TCGLabel *skip = gen_new_label();
@@ -244,8 +261,19 @@ static inline void _generate_special_checked_ptr(
 #endif
         TCGv tbytes = tcg_const_tl(num_bytes);
 
-        (ddc ? &gen_helper_ddc_check_bounds : &gen_helper_pcc_check_bounds)
-            (cpu_env, (TCGv)checked_addr, tbytes);
+        void (*bounds_check_helper)(TCGv_env, TCGv, TCGv);
+        if(ddc) {
+#ifdef TARGET_AARCH64
+            if (req_perms & CAP_PERM_STORE)
+                bounds_check_helper = &gen_helper_ddc_check_bounds_store;
+            else
+#endif
+                bounds_check_helper = &gen_helper_ddc_check_bounds;
+        } else {
+            assert(!(req_perms & CAP_PERM_STORE));
+            bounds_check_helper = &gen_helper_pcc_check_bounds;
+        }
+        bounds_check_helper(cpu_env, (TCGv)checked_addr, tbytes);
         tcg_temp_free(tbytes);
 #ifdef DO_TCG_BOUNDS_CHECKS
         gen_set_label(skip);
@@ -687,6 +715,68 @@ static void gen_ensure_cap_decompressed(DisasContext* ctx, int regnum) {
     disas_capreg_state_set(ctx, regnum, CREG_FULLY_DECOMPRESSED);
 }
 
+static inline void gen_cap_get_cursor(DisasContext* ctx, int regnum, TCGv_i64 cursor) {
+    // On platforms with merged register file it is better to do the GPR loads as they will likely refer to globals.
+    if(MERGED_FILE && !lazy_capreg_number_is_special(regnum)) {
+        target_get_gpr(ctx, cursor, regnum);
+    } else {
+        if(regnum == ZERO_REG_NUM) {
+            tcg_gen_movi_i64(cursor, 0);
+        } else {
+            tcg_gen_ld_i64(cursor, cpu_env, gp_register_offset(regnum) + offsetof(cap_register_t, _cr_cursor));
+        }
+    }
+    cheri_tcg_printf_verbose("cd","Get reg %d cursor: %lx\n", regnum, cursor);
+}
+
+static inline void gen_reg_modified_cap_base(DisasContext* ctx, const char* str_name, size_t env_offset) {
+    if(qemu_ctx_logging_enabled(ctx)) {
+        TCGv_ptr name = tcg_const_ptr(str_name);
+        TCGv_ptr reg = tcg_const_ptr(env_offset);
+        tcg_gen_add_ptr(reg, reg, cpu_env);
+        gen_helper_qemu_log_instr_cap(cpu_env, name, reg);
+        tcg_temp_free_ptr(reg);
+        tcg_temp_free_ptr(name);
+    }
+}
+
+// Call this at the end of any instruction that modifies a capreg with a new value
+static inline void gen_reg_modified_cap(DisasContext* ctx, int regnum) {
+    if (regnum == ZERO_REG_NUM)
+        return;
+    if(qemu_ctx_logging_enabled(ctx)) {
+        gen_ensure_cap_decompressed(ctx, regnum);
+        gen_reg_modified_cap_base(ctx, cheri_gp_regnames[regnum], gp_register_offset(regnum));
+    }
+}
+
+static inline void gen_reg_modified_int_base(DisasContext* ctx, const char* str_name, TCGv new_val) {
+    if(qemu_ctx_logging_enabled(ctx)) {
+        TCGv_ptr name = tcg_const_ptr(str_name);
+        gen_helper_qemu_log_instr_reg(cpu_env, name, new_val);
+        tcg_temp_free_ptr(name);
+    }
+}
+
+// Call this at the end of any instruction that modifies a capreg with a new int value
+static inline void gen_reg_modified_int(DisasContext* ctx, int regnum) {
+    if (regnum == ZERO_REG_NUM)
+        return;
+    if(qemu_ctx_logging_enabled(ctx)) {
+        TCGv new_val = tcg_temp_new();
+        gen_cap_get_cursor(ctx, regnum, new_val);
+        const char* str_name =
+#ifdef TARGET_AARCH64
+        cheri_gp_int_regnames[regnum];
+#else
+        cheri_gp_regnames[regnum];
+        // TODO: Add some integer names to riscv/mips
+#endif
+        gen_reg_modified_int_base(ctx, str_name, new_val);
+        tcg_temp_free(new_val);
+
+    }
+}
 // TODO: Gen some tracing for all of these
 
 // Set the state of a lazy register to a given constant.
@@ -718,6 +808,9 @@ static inline void gen_lazy_cap_set_state(DisasContext *ctx, int regnum, CapRegS
 static inline void gen_lazy_cap_set_int_cond(DisasContext *ctx, int regnum, bool conditional) {
     if (regnum == ZERO_REG_NUM)
         return;
+    if (disas_capreg_state_must_be(ctx, regnum, CREG_INTEGER))
+        return;
+
     gen_lazy_cap_set_state_cond(ctx, regnum, CREG_INTEGER, conditional);
     // Doing this keeps pesbt always up to date, which is good for stores and comparisons
     TCGv_i64 null_pesbt = tcg_const_i64(CC128_NULL_PESBT);
@@ -726,7 +819,34 @@ static inline void gen_lazy_cap_set_int_cond(DisasContext *ctx, int regnum, bool
 }
 
 static inline void gen_lazy_cap_set_int(DisasContext *ctx, int regnum) {
-    return gen_lazy_cap_set_int_cond(ctx, regnum, false);
+    gen_lazy_cap_set_int_cond(ctx, regnum, false);
+#ifdef TRACE_MODIFIED_REGISTERS
+    gen_reg_modified_int(ctx, regnum);
+#endif
+}
+
+// Null everything but cursor at some general offset. Use this for special purpose registers.
+// The GP register file can be handled lazily with gen_lazy_cap_set_int.
+static inline void gen_sp_set_decompressed_int(DisasContext *ctx, size_t offset) {
+    // PESBT
+    TCGv_i64 temp = tcg_const_i64(CC128_NULL_PESBT);
+    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, cached_pesbt));
+    // Type
+    tcg_gen_movi_i64(temp, CAP_OTYPE_UNSEALED);
+    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, cr_otype));
+    // Base + Perms
+    tcg_gen_movi_i64(temp, 0);
+    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, cr_base));
+    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, cr_perms));
+    // Top
+    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, _cr_top) + CAP_TOP_LOBYTES_OFFSET);
+    tcg_gen_movi_i64(temp, 1);
+    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, _cr_top) + CAP_TOP_HIBYTES_OFFSET);
+
+#ifdef TARGET_AARCH64
+    // Bounds valid
+    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, cr_bounds_valid));
+#endif
 }
 
 static inline void gen_lazy_cap_get_state_i32(DisasContext *ctx, int regnum, TCGv_i32 state) {
@@ -759,7 +879,6 @@ static inline void gen_move_cap_gp_sp(DisasContext* ctx, int dest_num, uint32_t 
     gen_move_cap(gp_register_offset(dest_num), source_off);
     gen_cap_invalidate_cursor(ctx, dest_num);
     gen_lazy_cap_set_state(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
-    //cheri_log_instr_changed_gp_capreg <- will this work?
 }
 
 // Set a special purpose register in env to the state of lazy capreg
@@ -1080,56 +1199,10 @@ static inline void gen_cap_get_length(DisasContext* ctx, int regnum, TCGv_i64 le
     cheri_tcg_printf_verbose("cd","Get reg %d length: %lx\n", regnum, length);
 }
 
-static inline void gen_cap_get_cursor(DisasContext* ctx, int regnum, TCGv_i64 cursor) {
-    // On platforms with merged register file it is better to do the GPR loads as they will likely refer to globals.
-    if(MERGED_FILE && !lazy_capreg_number_is_special(regnum)) {
-        target_get_gpr(ctx, cursor, regnum);
-    } else {
-        if(regnum == ZERO_REG_NUM) {
-            tcg_gen_movi_i64(cursor, 0);
-        } else {
-            tcg_gen_ld_i64(cursor, cpu_env, gp_register_offset(regnum) + offsetof(cap_register_t, _cr_cursor));
-        }
-    }
-    cheri_tcg_printf_verbose("cd","Get reg %d cursor: %lx\n", regnum, cursor);
-}
-
 static inline void gen_cap_get_base_below_top(DisasContext* ctx, int regnum, TCGv_i64 result) {
     // TODO: Is this possible for caps that are validly decoded? In which case this can be replaced with a single load.
     gen_cap_get_base(ctx, regnum, result);
     gen_cap_addr_below_top(ctx, regnum, result, result, 0);
-}
-
-// Call this at the end of any instruction that modifies a capreg with a new value
-static inline void gen_reg_modified_cap(DisasContext* ctx, int regnum) {
-    if(qemu_ctx_logging_enabled(ctx)) {
-        gen_ensure_cap_decompressed(ctx, regnum);
-        TCGv_ptr name = tcg_const_ptr(cheri_gp_regnames[regnum]);
-        TCGv_ptr reg = tcg_const_ptr(gp_register_offset(regnum));
-        tcg_gen_add_ptr(reg, reg, cpu_env);
-        gen_helper_qemu_log_instr_cap(cpu_env, name, reg);
-        tcg_temp_free_ptr(reg);
-        tcg_temp_free_ptr(name);
-    }
-}
-
-// Call this at the end of any instruction that modifies a capreg with a new int value
-static inline void gen_reg_modified_int(DisasContext* ctx, int regnum) {
-    if(qemu_ctx_logging_enabled(ctx)) {
-        TCGv new_val = tcg_temp_new();
-        gen_cap_get_cursor(ctx, regnum, new_val);
-        const char* str_name =
-#ifdef TARGET_AARCH64
-        cheri_gp_int_regnames[regnum];
-#else
-        cheri_gp_regnames[regnum];
-        // TODO: Add some integer names to riscv/mips
-#endif
-        TCGv_ptr name = tcg_const_ptr(str_name);
-        gen_helper_qemu_log_instr_reg(cpu_env, name, new_val);
-        tcg_temp_free(new_val);
-        tcg_temp_free_ptr(name);
-    }
 }
 
 static inline void gen_cap_set_cursor_unsafe(DisasContext* ctx, int regnum, TCGv_i64 new_cursor) {
@@ -1492,6 +1565,7 @@ static inline void gen_cap_unseal(DisasContext* ctx, int regnum, int auth_regnum
     gen_cap_set_type_unchecked(ctx, regnum, temp0);
 
     // auth in bounds
+    gen_cap_get_cursor(ctx, auth_regnum, temp1);
     gen_cap_in_bounds(ctx, auth_regnum, temp1, temp0, 1);
     tcg_gen_and_i64(tag_result, tag_result, temp0);
 

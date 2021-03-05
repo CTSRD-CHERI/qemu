@@ -90,7 +90,7 @@ static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, 
 
 
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
-    CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
+    CPUArchState *env, CheriCapExcCause cause, unsigned regnum, target_ulong addr,
     bool instavail, uintptr_t hostpc)
 {
     if (!instavail)
