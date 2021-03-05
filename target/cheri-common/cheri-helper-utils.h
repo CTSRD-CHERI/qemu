@@ -123,7 +123,13 @@ static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
     return;
 
 do_exception:
-    raise_cheri_exception_impl(env, cause, regnum, instavail, pc);
+#ifdef TARGET_AARCH64
+    raise_cheri_exception_impl_if_wnr(env, cause, regnum, addr, instavail, pc,
+                                      !!(perm & CAP_PERM_EXECUTE),
+                                      !!(perm & CAP_PERM_STORE));
+#else
+    raise_cheri_exception_impl(env, cause, regnum, addr, instavail, pc);
+#endif
 }
 
 static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,

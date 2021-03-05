@@ -83,7 +83,7 @@ static DEFINE_CHERI_STAT(misc);
 #define raise_cheri_exception_or_invalidate(env, cause, reg)                   \
     raise_cheri_exception(env, cause, reg)
 #define raise_cheri_exception_or_invalidate_impl(env, cause, reg, pc)          \
-    raise_cheri_exception_impl(env, cause, reg, true, pc)
+    raise_cheri_exception_impl(env, cause, reg, 0, true, pc)
 #endif
 
 static inline bool is_cap_sealed(const cap_register_t *cp)
@@ -135,6 +135,19 @@ void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
               /*instavail=*/true, GETPC());
 }
 
+#ifdef TARGET_AARCH64
+void CHERI_HELPER_IMPL(ddc_check_bounds_store(CPUArchState *env,
+                                              target_ulong addr,
+                                              target_ulong num_bytes))
+{
+    const cap_register_t *ddc = cheri_get_ddc(env);
+    cheri_debug_assert(ddc->cr_tag && cap_is_unsealed(ddc) &&
+                       "Should have been checked before bounds!");
+    check_cap(env, ddc, CAP_PERM_STORE, addr, CHERI_EXC_REGNUM_DDC, num_bytes,
+              /*instavail=*/true, GETPC());
+}
+#endif
+
 void CHERI_HELPER_IMPL(pcc_check_bounds(CPUArchState *env, target_ulong addr,
                                         target_ulong num_bytes))
 {
@@ -146,12 +159,11 @@ void CHERI_HELPER_IMPL(pcc_check_bounds(CPUArchState *env, target_ulong addr,
 }
 
 target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
-                                              target_ulong pcc_offset,
-                                              MemOp op))
+                                              target_ulong addr, MemOp op))
 {
     uintptr_t retpc = GETPC();
     const cap_register_t *pcc = cheri_get_current_pcc_fetch_from_tcg(env, retpc);
-    target_ulong addr = pcc_offset + cap_get_cursor(pcc);
+
     check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
               memop_size(op), /*instavail=*/true, retpc);
     return addr;
@@ -184,6 +196,16 @@ void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
                                              target_ulong vaddr, MemOp op))
 {
     cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC());
+}
+
+// Use this for conditional clear when needing to avoid a branch in the TCG
+// backend
+void CHERI_HELPER_IMPL(cheri_invalidate_tags_condition(CPUArchState *env,
+                                                       target_ulong vaddr,
+                                                       MemOp op, uint32_t cond))
+{
+    if (cond)
+        cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC());
 }
 
 /// Implementations of individual instructions start here
@@ -1109,40 +1131,64 @@ target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
                                   bool no_unaligned)
 {
 
-#define CHECK_PERM(X) ((required_perms & ~cbp->cr_perms) & (X))
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (CHECK_PERM(CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    } else if (CHECK_PERM(CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
-    } else if (CHECK_PERM(CAP_PERM_STORE_CAP)) {
-        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
-    } else if (CHECK_PERM(CAP_PERM_STORE_LOCAL)) {
-        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
-    }
-
-#undef CHECK_PERM
-
     const target_ulong cursor = cap_get_cursor(cbp);
 #ifdef TARGET_AARCH64
     const target_ulong addr = (target_long)offset;
 #else
     const target_ulong addr = cursor + (target_long)offset;
 #endif
-    if (!cap_is_in_bounds(cbp, addr, size)) {
+
+#define CHECK_PERM(X) ((required_perms & ~cbp->cr_perms) & (X))
+
+    // The check here is a little fiddly if this is a store and a load due to
+    // priorities. For either loads or stores, permissions fault > bounds fault.
+    // But: load bounds fault > store permissions fault. So all permissions
+    // should not be checked before bounds. It is also a bad idea to call this
+    // twice, once for load, once for store, because it performs alignment
+    // checks and Store permissions fault > load alignment fault
+
+    bool is_load = !!(required_perms & CAP_PERM_LOAD);
+    bool in_bounds = cap_is_in_bounds(cbp, addr, size);
+
+    if (!cbp->cr_tag) {
+        raise_cheri_exception_addr_wnr(env, CapEx_TagViolation, cb, offset,
+                                       !is_load);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, offset,
+                                       !is_load);
+    } else if (CHECK_PERM(CAP_PERM_LOAD)) {
+        raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadViolation, cb,
+                                       offset, false);
+    } else if (!is_load || in_bounds) {
+        if (CHECK_PERM(CAP_PERM_STORE)) {
+            raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreViolation, cb,
+                                           offset, true);
+        } else if (CHECK_PERM(CAP_PERM_STORE_CAP)) {
+            raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreCapViolation,
+                                           cb, offset, true);
+        } else if (CHECK_PERM(CAP_PERM_STORE_LOCAL)) {
+            raise_cheri_exception_addr_wnr(
+                env, CapEx_PermitStoreLocalCapViolation, cb, offset, true);
+        }
+    }
+
+#undef CHECK_PERM
+
+    if (!in_bounds) {
         qemu_log_instr_or_mask_msg(
             env, CPU_LOG_INT,
             "Failed capability bounds check: offset=" TARGET_FMT_plx
             " cursor=" TARGET_FMT_plx " addr=" TARGET_FMT_plx "\n",
             offset, cursor, addr);
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception_addr_wnr(env, CapEx_LengthViolation, cb, offset,
+                                       !is_load);
     } else if (!QEMU_IS_ALIGNED(addr, alignment_required)) {
         if (no_unaligned) {
-            raise_unaligned_load_exception(env, addr, _host_return_address);
+            if (is_load)
+                raise_unaligned_load_exception(env, addr, _host_return_address);
+            else
+                raise_unaligned_store_exception(env, addr,
+                                                _host_return_address);
         }
 #if defined(TARGET_MIPS) && defined(CHERI_UNALIGNED)
         else {
@@ -1430,11 +1476,11 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
                                                  CheriCapExcCause cause)
 {
+    GET_HOST_RETPC();
     cheri_debug_assert(pc_is_current(env));
     // Note: we set pc=0 since PC will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
-    raise_cheri_exception_impl(env, cause, CHERI_EXC_REGNUM_PCC,
-        /*instavail=*/true, 0);
+    raise_cheri_exception_if(env, cause, CHERI_EXC_REGNUM_PCC);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
@@ -1457,6 +1503,17 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
         tcg_abort();
     }
     raise_pcc_fault(env, cause);
+}
+
+void
+    CHERI_HELPER_IMPL(raise_exception_pcc_perms_not_if(CPUArchState *env,
+                                                       uint32_t required_perms))
+{
+    const cap_register_t *pcc = cheri_get_recent_pcc(env);
+    check_cap(env, pcc, required_perms, cap_get_base(pcc), CHERI_EXC_REGNUM_PCC,
+              0,
+              /*instavail=*/true, GETPC());
+    __builtin_unreachable();
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,

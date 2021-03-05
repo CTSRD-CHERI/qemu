@@ -41,7 +41,7 @@ extern bool cheri_debugger_on_trap;
 
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
-    bool instavail, uintptr_t hostpc)
+    target_ulong addr, bool instavail, uintptr_t hostpc)
 {
     env->last_cap_cause = cause;
     env->last_cap_index = regnum;
@@ -88,12 +88,12 @@ static inline bool validate_jump_target(CPUArchState *env,
     target_ulong new_addr = cap_get_cursor(target);
     unsigned min_insn_size = riscv_has_ext(env, RVC) ? 2 : 4;
     if (!cap_is_in_bounds(target, new_addr, min_insn_size)) {
-        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, true,
-                                   retpc);
+        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, new_addr,
+                                   true, retpc);
     }
     if (!QEMU_IS_ALIGNED(new_base, min_insn_size)) {
-        raise_cheri_exception_impl(env, CapEx_UnalignedBase, regnum, true,
-                                   retpc);
+        raise_cheri_exception_impl(env, CapEx_UnalignedBase, regnum, new_addr,
+                                   true, retpc);
     }
     // XXX: Sail only checks bit 1 why not also bit zero? Is it because that is
     // ignored?

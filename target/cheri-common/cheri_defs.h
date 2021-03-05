@@ -54,6 +54,7 @@
 #endif
 
 #ifdef TARGET_CHERI
+#define ASSERT_IF_CHERI() assert(0)
 #if (defined(CHERI_128) || defined(CHERI_64)) && !defined(CHERI_MAGIC128)
 #define QEMU_USE_COMPRESSED_CHERI_CAPS 1
 #else
@@ -207,4 +208,9 @@ typedef enum CheriTbFlags {
     TB_FLAG_CHERI_SPARE_INDEX_START = 16,
 
 } CheriTbFlags;
+
+#else // !TARGET_CHERI
+
+#define ASSERT_IF_CHERI()
+
 #endif // TARGET_CHERI
