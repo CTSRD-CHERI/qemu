@@ -145,7 +145,11 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
     if (cap_get_top_full(pcc) == CAP_MAX_TOP)
         *cheri_flags |= TB_FLAG_CHERI_PCC_TOP_MAX;
 
-    if (ddc->cr_tag && cap_is_unsealed(ddc)) {
+    if (ddc->cr_tag && cap_is_unsealed(ddc)
+#ifdef TARGET_AARCH64
+        && ddc->cr_bounds_valid
+#endif
+    ) {
         if (cap_has_perms(ddc, CAP_PERM_LOAD))
             *cheri_flags |= TB_FLAG_CHERI_DDC_READABLE;
         if (cap_has_perms(ddc, CAP_PERM_STORE))

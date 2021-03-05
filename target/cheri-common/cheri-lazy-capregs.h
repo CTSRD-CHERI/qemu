@@ -39,7 +39,7 @@
 #include "cheri_defs.h"
 #include "cheri_utils.h"
 #include "cheri-lazy-capregs-types.h"
-#include "cheri-archspecific.h"
+#include "cheri-archspecific-early.h"
 #include "cpu.h"
 #include "tcg/tcg.h"
 #include "qemu/log.h"

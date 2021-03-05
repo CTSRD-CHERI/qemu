@@ -228,18 +228,9 @@ typedef struct ARMPACKey {
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs-types.h"
 #define AARCH_REG_TYPE cap_register_t
-#define ASSERT_IF_CHERI() assert(0)
 #else
 #define AARCH_REG_TYPE uint64_t
-#define ASSERT_IF_CHERI()
 #endif
-
-// LETODO: FIXME: Accessing CSP is more complicated than just using EL.
-// LETODO: FIXME: It currently gets swapped on EL change, also needs swapping on
-// PSTATE.SP / RESTRICTED changes
-
-// LETODO: There are some other banked registers which might need thinking about
-// as well. LETODO: for example VBAR...
 
 typedef struct CPUARMState {
     /* Regs for current mode.  */
@@ -1291,9 +1282,15 @@ void pmu_init(ARMCPU *cpu);
 
 #define CPTR_TCPAC (1U << 31)
 #define CPTR_TTA_EL2 (1U << 28)
-#define CPTR_FPEN (1U << 20)
-#define CPTR_CEN (1U << 18)
-#define CPTR_ZEN (1U << 16)
+#define CPTR_FPEN (0b11U << 20)
+#define CPTR_FPEN_LO (1U << 20)
+#define CPTR_FPEN_HI (1U << 21)
+#define CPTR_CEN (0b11U << 18)
+#define CPTR_CEN_LO (1U << 18)
+#define CPTR_CEN_HI (1U << 19)
+#define CPTR_ZEN (0b11U << 16)
+#define CPTR_ZEN_LO (1U << 16)
+#define CPTR_ZEN_HI (1U << 17)
 #define CPTR_EC (1U << 9)
 
 #define MDCR_EPMAD    (1U << 21)
@@ -2156,6 +2153,10 @@ uint64_t arm_hcr_el2_eff(CPUARMState *env);
 /* Return true if the specified exception level is running in AArch64 state. */
 static inline bool arm_el_is_aa64(CPUARMState *env, int el)
 {
+#ifdef TARGET_CHERI
+    // Morello always a64
+    return true;
+#endif
     /* This isn't valid for EL0 (if we're in EL0, is_a64() is what you want,
      * and if we're not in EL0 then the state of EL0 isn't well defined.)
      */
@@ -3406,8 +3407,7 @@ static inline void set_aarch_reg_to_x(AARCH_REG_TYPE *aarch_reg,
                                       target_ulong val)
 {
 #ifdef TARGET_CHERI
-    bzero(aarch_reg, sizeof(AARCH_REG_TYPE));
-    aarch_reg->_cr_cursor = val;
+    int_to_cap(val, aarch_reg);
 #else
     *aarch_reg = val;
 #endif
@@ -3455,13 +3455,16 @@ FIELD(TBFLAG_ANY, DEBUG_TARGET_EL, 20, 2)
 
 #define CxCR_SETTAG (1 << 0)
 
+#define CCTLR_TGEN0 (1 << 0) // Only at EL > 0
+#define CCTLR_TGEN1 (1 << 1) // Only at 3 > EL > 0
+
 // Add DDC base to access
 #define CCTLR_DDCBO (1 << 2)
 // Add PCC base to access
 #define CCTLR_PCCBO (1 << 3)
 // Base for ADRDP (DDC vs C28)
 #define CCTLR_ADRDPB (1 << 4)
-#define CCTRL_RESERVED_0 (1 << 5)
+#define CCTRL_C64E (1 << 5) // Only at EL > 0
 #define CCTLR_PERMVCT (1 << 6)
 // If one then branch to sealed/restricted MUST be sentries
 #define CCTLR_SBL (1 << 7)
@@ -3469,13 +3472,18 @@ FIELD(TBFLAG_ANY, DEBUG_TARGET_EL, 20, 2)
 #define CCTLR_DEFINED_START 2
 #define CCTLR_DEFINED_LENGTH 6
 
-FIELD(TBFLAG_CHERI, CCTLR, 0, 6)      // The 6 defined bits from CCTLR
+FIELD(TBFLAG_CHERI, CCTLR, 0, 6) // The 6 defined bits from CCTLR at all levels
 FIELD(TBFLAG_CHERI, PSTATE_C64, 6, 1) // The PSTATE.C64 bit
 FIELD(TBFLAG_CHERI, EXECUTIVE, 7, 1)  // pcc.perms.executive
 FIELD(TBFLAG_CHERI, SYSTEM, 8, 1)     // pcc.perms.system
 FIELD(TBFLAG_CHERI, SETTAG, 9, 1)
-
-#define TBFLAG_CHERI_SIZE (CCTLR_DEFINED_LENGTH + 4)
+FIELD(TBFLAG_CHERI, CAP_ENABLED, 10,
+      1) // 1 if capability instructions are trapped
+// These flags really belongs in TBFLAG_ANY, but there is no room. If upstream
+// wants this feature, then they can move some bits around
+FIELD(TBFLAG_CHERI, SCTLRA, 11, 1)
+FIELD(TBFLAG_CHERI, SCTLRSA, 12, 1)
+#define TBFLAG_CHERI_SIZE (CCTLR_DEFINED_LENGTH + 6)
 _Static_assert(TBFLAG_CHERI_SIZE <= 32, "");
 
 #endif
@@ -4259,6 +4267,9 @@ static inline void aarch64_restore_sp(CPUARMState *env, int el)
 #ifdef TARGET_CHERI
     update_capreg(env, 31, &env->sp_el[index]);
     env->DDC_current = env->DDCs[index];
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_instr_dbg_cap(env, "DDC", &env->DDC_current);
+#endif
 #else
     env->xregs[31] = env->sp_el[index];
 #endif
@@ -4305,6 +4316,9 @@ static inline bool pc_is_current(CPUArchState *env)
 #endif
 
 #ifdef TARGET_CHERI
+
+#include "internals.h"
+
 static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
 {
     // Must also fit in the general cheri flags
@@ -4319,7 +4333,33 @@ static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SYSTEM, 1);
     if (((el < 2) ? env->chcr_el2 : env->cscr_el3) & CxCR_SETTAG)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SETTAG, 1);
+    if (get_cap_enabled_target_exception_level_el(env, el) == -1)
+        chflags = FIELD_DP32(chflags, TBFLAG_CHERI, CAP_ENABLED, 1);
+    uint64_t sctlr = arm_sctlr(env, el);
+    if (sctlr & SCTLR_A)
+        chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SCTLRA, 1);
+    if ((el == 0) ? (sctlr & SCTLR_SA0) : (sctlr & SCTLR_SA))
+        chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SCTLRSA, 1);
+
+    uint32_t chflags_changed = env->chflags ^ chflags;
     env->chflags = chflags;
+
+    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, PSTATE_C64))
+        qemu_maybe_log_instr_extra(env, "New C64 state: %s\n",
+                                   FIELD_EX32(chflags, TBFLAG_CHERI, PSTATE_C64)
+                                       ? "Enabled"
+                                       : "Disabled");
+    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, EXECUTIVE))
+        qemu_maybe_log_instr_extra(env, "New executive state: %s\n",
+                                   FIELD_EX32(chflags, TBFLAG_CHERI, EXECUTIVE)
+                                       ? "Enabled"
+                                       : "Disabled");
+    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, CAP_ENABLED))
+        qemu_maybe_log_instr_extra(
+            env, "New cap enabled state: %s\n",
+            FIELD_EX32(chflags, TBFLAG_CHERI, CAP_ENABLED) ? "Enabled"
+                                                           : "Disabled");
+
     return chflags;
 }
 
