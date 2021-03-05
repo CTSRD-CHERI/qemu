@@ -88,10 +88,9 @@ static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, 
     do_raise_c2_exception_impl(env, cause, 0xff, pc);
 }
 
-
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
-    bool instavail, uintptr_t hostpc)
+    target_ulong addr, bool instavail, uintptr_t hostpc)
 {
     if (!instavail)
         env->error_code |= EXCP_INST_NOTAVAIL;
