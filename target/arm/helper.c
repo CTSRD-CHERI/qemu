@@ -5543,7 +5543,7 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
                            offsetoflow32(CPUARMState, cp15.dacr_ns)}},
     {.name = "ELR_EL1",
      .state = ARM_CP_STATE_AA64,
-     .type = ARM_CP_ALIAS,
+     .type = ARM_CP_ALIAS | ARM_CP_CAP_ON_MORELLO,
      .opc0 = 3,
      .opc1 = 0,
      .crn = 4,
@@ -6037,7 +6037,7 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
      .resetvalue = 0},
     {.name = "ELR_EL2",
      .state = ARM_CP_STATE_AA64,
-     .type = ARM_CP_ALIAS,
+     .type = ARM_CP_ALIAS | ARM_CP_CAP_ON_MORELLO,
      .opc0 = 3,
      .opc1 = 4,
      .crn = 4,
@@ -6091,7 +6091,10 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
      .crm = 0,
      .opc2 = 0,
      .access = PL2_RW,
+#ifndef TARGET_CHERI
      .writefn = vbar_write,
+#endif
+     .type = ARM_CP_CAP_ON_MORELLO,
      .fieldoffset = offsetof(CPUARMState, cp15.vbar_el[2]),
      .resetvalue = 0},
     {.name = "SP_EL2",
@@ -6675,7 +6678,7 @@ static const ARMCPRegInfo el3_cp_reginfo[] = {
      .fieldoffset = offsetof(CPUARMState, cp15.tcr_el[3])},
     {.name = "ELR_EL3",
      .state = ARM_CP_STATE_AA64,
-     .type = ARM_CP_ALIAS,
+     .type = ARM_CP_ALIAS | ARM_CP_CAP_ON_MORELLO,
      .opc0 = 3,
      .opc1 = 6,
      .crn = 4,
@@ -9103,14 +9106,22 @@ void register_cp_regs_for_features(ARMCPU *cpu)
 
     if (arm_feature(env, ARM_FEATURE_VBAR)) {
         ARMCPRegInfo vbar_cp_reginfo[] = {
-            { .name = "VBAR", .state = ARM_CP_STATE_BOTH,
-              .opc0 = 3, .crn = 12, .crm = 0, .opc1 = 0, .opc2 = 0,
-              .access = PL1_RW, .writefn = vbar_write,
-              .bank_fieldoffsets = { offsetof(CPUARMState, cp15.vbar_s),
-                                     offsetof(CPUARMState, cp15.vbar_ns) },
-              .resetvalue = 0 },
-            REGINFO_SENTINEL
-        };
+            {.name = "VBAR",
+             .state = ARM_CP_STATE_BOTH,
+             .opc0 = 3,
+             .crn = 12,
+             .crm = 0,
+             .opc1 = 0,
+             .opc2 = 0,
+             .access = PL1_RW,
+#ifndef TARGET_CHERI
+             .writefn = vbar_write,
+#endif
+             .type = ARM_CP_CAP_ON_MORELLO,
+             .bank_fieldoffsets = {offsetof(CPUARMState, cp15.vbar_s),
+                                   offsetof(CPUARMState, cp15.vbar_ns)},
+             .resetvalue = 0},
+            REGINFO_SENTINEL};
         define_arm_cp_regs(cpu, vbar_cp_reginfo);
     }
 
@@ -10669,6 +10680,7 @@ static void arm_cpu_do_interrupt_aarch32_hyp(CPUState *cs)
 
 static void arm_cpu_do_interrupt_aarch32(CPUState *cs)
 {
+    ASSERT_IF_CHERI();
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
     uint32_t addr;
@@ -10806,7 +10818,6 @@ static void arm_cpu_do_interrupt_aarch32(CPUState *cs)
          * This register is only followed in non-monitor mode, and is banked.
          * Note: only bits 31:5 are valid.
          */
-        ASSERT_IF_CHERI();
 #ifndef TARGET_CHERI
         addr += A32_BANKED_CURRENT_REG_GET(env, vbar);
 #endif
@@ -10885,12 +10896,17 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
     unsigned int new_el = env->exception.target_el;
-    AARCH_REG_TYPE addr = env->cp15.vbar_el[new_el];
+    target_ulong addr = get_aarch_reg_as_x(&env->cp15.vbar_el[new_el]);
     unsigned int new_mode = aarch64_pstate_mode(new_el, true);
     unsigned int old_mode;
     unsigned int cur_el = arm_current_el(env);
     int rt;
 
+#ifdef TARGET_CHERI
+    bool cap_exception = is_access_to_capabilities_enabled_at_el(env, cur_el);
+    // The spec says [10:0] of vbar_elx should be treated as 0
+    addr &= ~0x7FF;
+#endif
     /*
      * Note that new_el can never be 0.  If cur_el is 0, then
      * el0_a64 is is_a64(), else el0_a64 is ignored.
@@ -10923,18 +10939,21 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
         }
 
         if (is_aa64) {
-            increment_aarch_reg(&addr, 0x400);
+            addr += 0x400;
         } else {
-            increment_aarch_reg(&addr, 0x600);
+            addr += 0x600;
         }
     } else if (pstate_read(env) & PSTATE_SP) {
-        increment_aarch_reg(&addr, 0x200);
+        addr += 0x200;
     }
 
     switch (cs->exception_index) {
     case EXCP_PREFETCH_ABORT:
     case EXCP_DATA_ABORT:
         env->cp15.far_el[new_el] = env->exception.vaddress;
+#ifdef CONFIG_TCG_LOG_INSTR
+        qemu_log_instr_dbg_reg(env, "FAR", env->cp15.far_el[new_el]);
+#endif
         qemu_log_mask(CPU_LOG_INT, "...with FAR 0x%" PRIx64 "\n",
                       env->cp15.far_el[new_el]);
         /* fall through */
@@ -10983,11 +11002,12 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
             break;
         }
         env->cp15.esr_el[new_el] = env->exception.syndrome;
+        qemu_log_instr_dbg_reg(env, "ESR", env->cp15.esr_el[new_el]);
         break;
     case EXCP_IRQ:
-    case EXCP_VIRQ: increment_aarch_reg(&addr, 0x80); break;
+    case EXCP_VIRQ: addr += 0x80; break;
     case EXCP_FIQ:
-    case EXCP_VFIQ: increment_aarch_reg(&addr, 0x100); break;
+    case EXCP_VFIQ: addr += 0x100; break;
     default:
         cpu_abort(cs, "Unhandled exception 0x%x\n", cs->exception_index);
     }
@@ -10995,8 +11015,15 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
     if (is_a64(env)) {
         old_mode = pstate_read(env);
         aarch64_save_sp(env, arm_current_el(env));
-        env->elr_el[new_el] = env->pc;
+#ifdef TARGET_CHERI
+        if (cap_exception)
+            env->elr_el[new_el] = env->pc;
+        else
+#endif
+            set_aarch_reg_to_x(&env->elr_el[new_el],
+                               get_aarch_reg_as_x(&env->pc));
     } else {
+        ASSERT_IF_CHERI();
 #ifndef TARGET_CHERI
         old_mode = cpsr_read(env);
         env->elr_el[new_el] = env->regs[15];
@@ -11008,8 +11035,17 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
     }
     env->banked_spsr[aarch64_banked_spsr_index(new_el)] = old_mode;
 
+#if defined(CONFIG_TCG_LOG_INSTR) && defined(TARGET_CHERI)
+    qemu_log_instr_dbg_cap(env, "ELR", &env->elr_el[new_el]);
+    qemu_log_instr_dbg_reg(env, "SPSR", old_mode);
+#endif
+
     qemu_log_mask(CPU_LOG_INT, "...with ELR 0x%" PRIx64 "\n",
                   get_aarch_reg_as_x(&env->elr_el[new_el]));
+
+    // NZCV is preserved on exception
+    new_mode |= (old_mode & PSTATE_NZCV);
+    new_mode |= PSTATE_DAIF;
 
     if (cpu_isar_feature(aa64_pan, cpu)) {
         /* The value of PSTATE.PAN is normally preserved, except when ... */
@@ -11035,13 +11071,30 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
         new_mode |= PSTATE_TCO;
     }
 
-    pstate_write(env, PSTATE_DAIF | new_mode);
+#ifdef TARGET_CHERI
+    env->pstate &= ~PSTATE_C64;
+    if (cap_exception && (env->CCTLR_el[new_el] & CCTRL_C64E))
+        env->pstate |= PSTATE_C64;
+#endif
+
+    pstate_write(env, new_mode);
+    qemu_log_instr_dbg_reg(env, "CPSR", new_mode);
     env->aarch64 = 1;
+
+#ifdef TARGET_CHERI
+    if (cap_exception) {
+        env->pc = env->cp15.vbar_el[new_el];
+    }
+    arm_rebuild_chflags_el(env, new_el);
+#endif
+
     aarch64_restore_sp(env, new_el);
     helper_rebuild_hflags_a64(env, new_el);
 
-    env->pc = addr;
+    set_aarch_reg_value(&env->pc, addr);
 
+    qemu_maybe_log_instr_extra(env, "Took exception to EL%d. PSTATE: 0x%x\n",
+                               new_el, pstate_read(env));
     qemu_log_mask(CPU_LOG_INT, "...to EL%d PC 0x%" PRIx64 " PSTATE 0x%x\n",
                   new_el, get_aarch_reg_as_x(&env->pc), pstate_read(env));
 }
@@ -12037,6 +12090,7 @@ static int aa64_va_parameter_tcma(uint64_t tcr, ARMMMUIdx mmu_idx)
     }
 }
 
+#ifdef TARGET_CHERI
 static inline uint32_t aa64_effective_hwu(CPUARMState *env, ARMMMUIdx mmu_idx,
                                           ARMVAParameters *params, uint64_t tcr)
 {
@@ -12051,8 +12105,9 @@ static inline uint32_t aa64_effective_hwu(CPUARMState *env, ARMMMUIdx mmu_idx,
         ndx = 25;
     }
 
-    return extract32(tcr, ndx, 4);
+    return extract64(tcr, ndx, 4);
 }
+#endif
 
 ARMVAParameters aa64_va_parameters(CPUARMState *env, uint64_t va,
                                    ARMMMUIdx mmu_idx, bool data)
@@ -12435,7 +12490,7 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
         *prot = get_S1prot(env, mmu_idx, aarch64, ap, ns, xn, pxn);
     }
 
-    fault_type = ARMFault_Permission;
+    fault_type = ARMFault_CapPagePerm;
 
 #ifdef TARGET_CHERI
     uint32_t hwu = aa64_effective_hwu(env, mmu_idx, &param, tcr->raw_tcr);
@@ -12448,7 +12503,6 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
     // Cap stores can fault here as only tagged stores specify
     // MMU_DATA_CAP_STORE
     if (access_type == MMU_DATA_CAP_STORE) {
-        printf("cdbm: %d. sc %d. huwu %x\n", cdbm, sc, hwu);
         if (!cdbm && !sc)
             goto do_fault;
         access_type = MMU_DATA_STORE;
@@ -12469,6 +12523,8 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
     }
 
 #endif
+
+    fault_type = ARMFault_Permission;
 
     if (!(*prot & (1 << access_type))) {
         goto do_fault;

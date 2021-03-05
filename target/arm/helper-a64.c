@@ -35,6 +35,7 @@
 #include "tcg/tcg.h"
 #include "fpu/softfloat.h"
 #include <zlib.h> /* For crc32 */
+#include "exec/log_instr.h"
 
 /* C2.4.7 Multiply and divide */
 /* special cases for 0 and LLONG_MIN are mandated by the standard */
@@ -999,6 +1000,8 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
     qemu_mutex_unlock_iothread();
 
     if (!return_to_aa64) {
+        ASSERT_IF_CHERI();
+
         env->aarch64 = 0;
         /* We do a raw CPSR write because aarch64_sync_64_to_32()
          * will sort the register banks out for us, and we've already
@@ -1023,12 +1026,29 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
     } else {
         int tbii;
 
+#ifdef TARGET_CHERI
+        bool cap_return = is_access_to_capabilities_enabled_at_el(env, cur_el);
+
+        if (!cap_return ||
+            !is_access_to_capabilities_enabled_at_el(env, new_el))
+            spsr &= ~PSTATE_C64;
+
+        if (cap_return) {
+            env->pc = env->elr_el[cur_el];
+        }
+#endif
+
         env->aarch64 = 1;
         spsr &= aarch64_pstate_valid_mask(&env_archcpu(env)->isar);
         pstate_write(env, spsr);
+        qemu_log_instr_dbg_reg(env, "CPSR", spsr);
         if (!arm_singlestep_active(env)) {
             env->pstate &= ~PSTATE_SS;
         }
+
+#ifdef TARGET_CHERI
+        arm_rebuild_chflags_el(env, new_el);
+#endif
         aarch64_restore_sp(env, new_el);
         helper_rebuild_hflags_a64(env, new_el);
 
@@ -1050,9 +1070,11 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
             }
         }
 
-        // LETODO
-        ASSERT_IF_CHERI();
-        set_aarch_reg_to_x(&env->pc, new_pc);
+        set_aarch_reg_value(&env->pc, new_pc);
+
+        qemu_maybe_log_instr_extra(
+            env, "Exception return from EL%d to EL%d. PSTATE: 0x%x\n", cur_el,
+            new_el, pstate_read(env));
 
         qemu_log_mask(CPU_LOG_INT,
                       "Exception return from AArch64 EL%d to "
@@ -1087,6 +1109,7 @@ illegal_return:
     spsr &= PSTATE_NZCV | PSTATE_DAIF;
     spsr |= pstate_read(env) & ~(PSTATE_NZCV | PSTATE_DAIF);
     pstate_write(env, spsr);
+    qemu_log_instr_dbg_reg(env, "CPSR", spsr);
     if (!arm_singlestep_active(env)) {
         env->pstate &= ~PSTATE_SS;
     }
@@ -1153,4 +1176,22 @@ void HELPER(dc_zva)(CPUARMState *env, uint64_t vaddr_in)
 #endif
 
     memset(mem, 0, blocklen);
+}
+
+void QEMU_NORETURN helper_alignment_fault_exception(CPUArchState *env,
+                                                    uint64_t addr)
+{
+    GET_HOST_RETPC();
+    arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_STORE,
+                                cpu_mmu_index(env, false),
+                                _host_return_address);
+}
+
+void QEMU_NORETURN helper_sp_alignment_exception(CPUArchState *env)
+{
+    env->exception.vaddress = 0;
+    uint32_t syn = syn_sp_alignment(false);
+    // Possibly should not use EXCP_DATA_ABORT, but alignment faults are handled
+    // very similarly.
+    raise_exception(env, EXCP_DATA_ABORT, syn, exception_target_el(env));
 }

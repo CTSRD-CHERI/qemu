@@ -44,6 +44,8 @@
 
 #ifdef TARGET_CHERI
 
+#define ASSERT_IF_CHERI() assert(0)
+
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
 
 #if TARGET_LONG_BITS == 32
@@ -168,5 +170,9 @@ typedef enum CheriTbFlags {
        overflowed */
     TB_FLAG_CHERI_SPARE_INDEX_START = 16,
 } CheriTbFlags;
+
+#else // !TARGET_CHERI
+
+#define ASSERT_IF_CHERI()
 
 #endif // TARGET_CHERI
