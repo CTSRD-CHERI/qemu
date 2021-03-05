@@ -83,7 +83,7 @@ static DEFINE_CHERI_STAT(misc);
 #define raise_cheri_exception_or_invalidate(env, cause, reg)                   \
     raise_cheri_exception(env, cause, reg)
 #define raise_cheri_exception_or_invalidate_impl(env, cause, reg, pc)          \
-    raise_cheri_exception_impl(env, cause, reg, true, pc)
+    raise_cheri_exception_impl(env, cause, reg, 0, true, pc)
 #endif
 
 static inline bool is_cap_sealed(const cap_register_t *cp)
@@ -154,6 +154,19 @@ void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
               /*instavail=*/true, GETPC());
 }
 
+#ifdef TARGET_AARCH64
+void CHERI_HELPER_IMPL(ddc_check_bounds_store(CPUArchState *env,
+                                              target_ulong addr,
+                                              target_ulong num_bytes))
+{
+    const cap_register_t *ddc = cheri_get_ddc(env);
+    cheri_debug_assert(ddc->cr_tag && cap_is_unsealed(ddc) &&
+                       "Should have been checked before bounds!");
+    check_cap(env, ddc, CAP_PERM_STORE, addr, CHERI_EXC_REGNUM_DDC, num_bytes,
+              /*instavail=*/true, GETPC());
+}
+#endif
+
 void CHERI_HELPER_IMPL(pcc_check_bounds(CPUArchState *env, target_ulong addr,
                                         target_ulong num_bytes))
 {
@@ -165,12 +178,11 @@ void CHERI_HELPER_IMPL(pcc_check_bounds(CPUArchState *env, target_ulong addr,
 }
 
 target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
-                                              target_ulong pcc_offset,
-                                              MemOp op))
+                                              target_ulong addr, MemOp op))
 {
     uintptr_t retpc = GETPC();
     const cap_register_t *pcc = cheri_get_current_pcc_fetch_from_tcg(env, retpc);
-    target_ulong addr = pcc_offset + cap_get_cursor(pcc);
+
     check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
               memop_size(op), /*instavail=*/true, retpc);
     return addr;
@@ -204,6 +216,16 @@ void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
                                              target_ulong vaddr, MemOp op))
 {
     cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC());
+}
+
+// Use this for conditional clear when needing to avoid a branch in the TCG
+// backend
+void CHERI_HELPER_IMPL(cheri_invalidate_tags_condition(CPUArchState *env,
+                                                       target_ulong vaddr,
+                                                       MemOp op, uint32_t cond))
+{
+    if (cond)
+        cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC());
 }
 
 /// Implementations of individual instructions start here
@@ -1387,8 +1409,7 @@ QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
     cheri_debug_assert(pc_is_current(env));
     // Note: we set pc=0 since PC will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
-    raise_cheri_exception_impl(env, cause, CHERI_EXC_REGNUM_PCC,
-        /*instavail=*/true, _host_return_address);
+    raise_cheri_exception_if(env, cause, CHERI_EXC_REGNUM_PCC);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
@@ -1411,6 +1432,17 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
         tcg_abort();
     }
     raise_pcc_fault(env, cause, GETPC());
+}
+
+void
+    CHERI_HELPER_IMPL(raise_exception_pcc_perms_not_if(CPUArchState *env,
+                                                       uint32_t required_perms))
+{
+    const cap_register_t *pcc = cheri_get_recent_pcc(env);
+    check_cap(env, pcc, required_perms, cap_get_base(pcc), CHERI_EXC_REGNUM_PCC,
+              0,
+              /*instavail=*/true, GETPC());
+    __builtin_unreachable();
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
