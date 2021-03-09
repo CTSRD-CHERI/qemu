@@ -396,9 +396,10 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
         // Perform bounds checks and do load / stores
         int memidx = get_mem_index(ctx);
 
-        TCGv_cap_checked_ptr checked = gen_mte_and_cheri_check1(
-            ctx, addr, !is_load, false, (rd2 == REG_NONE) ? size : (size + 1),
-            rn, alternate_base, !pcc_base);
+        TCGv_cap_checked_ptr checked =
+            gen_mte_and_cheri_check1(ctx, addr, is_load, !is_load, false,
+                                     (rd2 == REG_NONE) ? size : (size + 1), rn,
+                                     alternate_base, !pcc_base);
 
         if (exclusive) {
             uint32_t rd_0 = STANDARD_ZERO(rd);
