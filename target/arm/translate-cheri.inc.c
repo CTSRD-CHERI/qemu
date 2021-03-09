@@ -388,7 +388,7 @@ bool load_store_implementation(DisasContext* ctx,
         // Perform bounds checks and do load / stores
         int memidx = get_mem_index(ctx);
 
-        TCGv_cap_checked_ptr checked = gen_mte_and_cheri_check1(ctx, addr, !is_load,
+        TCGv_cap_checked_ptr checked = gen_mte_and_cheri_check1(ctx, addr, is_load, !is_load,
                 false, (rd2 == REG_NONE) ? size : (size+1), rn, alternate_base, !pcc_base);
 
         if (exclusive) {

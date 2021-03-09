@@ -264,7 +264,7 @@ static inline void _generate_special_checked_ptr(
         void (*bounds_check_helper)(TCGv_env, TCGv, TCGv);
         if(ddc) {
 #ifdef TARGET_AARCH64
-            if (req_perms & CAP_PERM_STORE)
+            if (!(req_perms & CAP_PERM_LOAD))
                 bounds_check_helper = &gen_helper_ddc_check_bounds_store;
             else
 #endif
