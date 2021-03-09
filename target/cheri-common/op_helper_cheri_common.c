@@ -391,6 +391,8 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const target_ulong cursor = cap_get_cursor(cbp);
     const target_ulong addr = cursor + (target_long)offset;
+    // AARCH64 takes the exception at the target
+#ifndef TARGET_AARCH64
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (cap_is_sealed_with_type(cbp) ||
@@ -406,6 +408,7 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
                                      _host_return_address)) {
         assert(false && "Should have raised an exception");
     }
+#endif
 
     cheri_jump_and_link(env, cbp, addr, cd, link_pc, cjalr_flags);
 }
@@ -1530,9 +1533,17 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
                                                  uint32_t required_perms))
 {
-    check_cap(env, cheri_get_ddc(env), required_perms,
-              cap_get_base(cheri_get_ddc(env)), CHERI_EXC_REGNUM_DDC, 0,
-              /*instavail=*/true, GETPC());
+    const cap_register_t *ddc = cheri_get_ddc(env);
+    // TODO: Make everything like aarch64 and just use address everywhere.
+    // Offset is silly.
+    target_ulong addr;
+#ifdef TARGET_AARCH64
+    addr = cap_get_base(ddc);
+#else
+    addr = cap_get_base(ddc) - cap_get_cursor(ddc);
+#endif
+    cap_check_common_reg(required_perms, env, CHERI_EXC_REGNUM_DDC, addr, 0,
+                         GETPC(), ddc, 1, NULL);
     error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,
                  PRINT_CAP_ARGS(cheri_get_ddc(env)));
     tcg_abort();
