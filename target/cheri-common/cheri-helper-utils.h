@@ -69,6 +69,9 @@ static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
     update_capreg(env, cd, &result);
 }
 
+// TODO: Delete this in favour of cap_check_common_reg. It gets things right
+// that this gets wrong.
+// TODO: Still using this in a couple places however.
 static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
                              uint32_t perm, target_ulong addr, uint16_t regnum,
                              uint32_t len, bool instavail, uintptr_t pc)
