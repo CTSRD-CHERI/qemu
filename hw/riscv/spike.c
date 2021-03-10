@@ -40,7 +40,6 @@
 #include "chardev/char.h"
 #include "sysemu/arch_init.h"
 #include "sysemu/device_tree.h"
-#include "sysemu/qtest.h"
 #include "sysemu/sysemu.h"
 #ifdef TARGET_CHERI
 #include "cheri_tagmem.h"
