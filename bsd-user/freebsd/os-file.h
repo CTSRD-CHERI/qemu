@@ -188,7 +188,7 @@ static inline abi_long do_freebsd_copy_file_range(int infd,
         outp = &outoff;
     }
 
-    ret = get_errno(safe_copy_file_range(infd, &inoff, outfd, &outoff, len,
+    ret = get_errno(safe_copy_file_range(infd, inp, outfd, outp, len,
         flags));
 
     if (inofftp != 0)
