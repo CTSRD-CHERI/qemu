@@ -159,11 +159,10 @@ target_ulong CHERI_HELPER_IMPL(cbez(CPUArchState *env, uint32_t cb, uint32_t off
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
      * CBEZ: Branch if NULL
+     *
+     * Note: Only compares the address part of the capability.
      */
-    /*
-     * Compare the only semantically meaningful fields of int_to_cap(0)
-     */
-    if (cap_get_base(cbp) == 0 && cbp->cr_tag == 0 && cap_get_cursor(cbp) == 0)
+    if (cap_get_cursor(cbp) == 0)
         return (target_ulong)1;
     else
         return (target_ulong)0;
@@ -173,12 +172,11 @@ target_ulong CHERI_HELPER_IMPL(cbnz(CPUArchState *env, uint32_t cb, uint32_t off
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
-     * CBEZ: Branch if not NULL
+     * CBEZ: Branch if not NULL.
+     *
+     * Note: Only compares the address part of the capability.
      */
-    /*
-     * Compare the only semantically meaningful fields of int_to_cap(0)
-     */
-    if (cap_get_base(cbp) == 0 && cbp->cr_tag == 0 && cap_get_cursor(cbp) == 0)
+    if (cap_get_cursor(cbp) == 0)
         return (target_ulong)0;
     else
         return (target_ulong)1;
