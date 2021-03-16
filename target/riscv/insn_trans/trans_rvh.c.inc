@@ -112,17 +112,17 @@ static bool trans_hlv_hu(DisasContext *ctx, arg_hlv_hu *a)
 
 static bool trans_hsv_b(DisasContext *ctx, arg_hsv_b *a)
 {
-    return gen_hlv(ctx, a->rs1, a->rs2, MO_SB);
+    return gen_hsv(ctx, a->rs1, a->rs2, MO_SB);
 }
 
 static bool trans_hsv_h(DisasContext *ctx, arg_hsv_h *a)
 {
-    return gen_hlv(ctx, a->rs1, a->rs2, MO_TESW);
+    return gen_hsv(ctx, a->rs1, a->rs2, MO_TESW);
 }
 
 static bool trans_hsv_w(DisasContext *ctx, arg_hsv_w *a)
 {
-    return gen_hlv(ctx, a->rs1, a->rs2, MO_TESL);
+    return gen_hsv(ctx, a->rs1, a->rs2, MO_TESL);
 }
 
 #ifdef TARGET_RISCV64
@@ -138,7 +138,7 @@ static bool trans_hlv_d(DisasContext *ctx, arg_hlv_d *a)
 
 static bool trans_hsv_d(DisasContext *ctx, arg_hsv_d *a)
 {
-    return gen_hlv(ctx, a->rs1, a->rs2, MO_TEQ);
+    return gen_hsv(ctx, a->rs1, a->rs2, MO_TEQ);
 }
 #endif
 
