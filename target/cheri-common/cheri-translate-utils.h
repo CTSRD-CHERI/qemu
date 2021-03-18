@@ -119,7 +119,7 @@ TCGv_i64 cpu_reg(DisasContext *s, int reg);
     else                                                                       \
         tcg_gen_mov_i64((TCGv)t, cpu_reg_sp(ctx, reg))
 #define target_set_gpr(ctx, reg, t)                                            \
-    if (reg != ZERO_REG_NUM)                                                   \
+    if (reg != NULL_CAPREG_INDEX)                                                   \
         tcg_gen_mov_i64(cpu_reg_sp(ctx, reg), (TCGv)t);
 
 #define MERGED_FILE 1
@@ -802,7 +802,7 @@ static inline void gen_cap_get_cursor(DisasContext *ctx, int regnum,
     if (MERGED_FILE && !lazy_capreg_number_is_special(regnum)) {
         target_get_gpr(ctx, cursor, regnum);
     } else {
-        if (regnum == ZERO_REG_NUM) {
+        if (regnum == NULL_CAPREG_INDEX) {
             tcg_gen_movi_i64(cursor, 0);
         } else {
             tcg_gen_ld_i64(cursor, cpu_env,
@@ -831,7 +831,7 @@ static inline void gen_reg_modified_cap_base(DisasContext *ctx,
 // value
 static inline void gen_reg_modified_cap(DisasContext *ctx, int regnum)
 {
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
     if (qemu_ctx_logging_enabled(ctx)) {
         gen_ensure_cap_decompressed(ctx, regnum);
@@ -854,7 +854,7 @@ static inline void gen_reg_modified_int_base(DisasContext *ctx,
 // value
 static inline void gen_reg_modified_int(DisasContext *ctx, int regnum)
 {
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
     if (qemu_ctx_logging_enabled(ctx)) {
         TCGv new_val = tcg_temp_new();
@@ -910,7 +910,7 @@ static inline void gen_lazy_cap_set_state(DisasContext *ctx, int regnum,
 static inline void gen_lazy_cap_set_int_cond(DisasContext *ctx, int regnum,
                                              bool conditional)
 {
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
     if (disas_capreg_state_must_be(ctx, regnum, CREG_INTEGER))
         return;
@@ -1040,7 +1040,7 @@ static inline void gen_move_cap_gp_select_gp(DisasContext *ctx, int dest_num,
                                              int false_source_num, TCGCond cond,
                                              TCGv_i32 value)
 {
-    if (dest_num == ZERO_REG_NUM)
+    if (dest_num == NULL_CAPREG_INDEX)
         return;
 
     const char *format =
@@ -1429,7 +1429,7 @@ static inline void gen_cap_get_base_below_top(DisasContext *ctx, int regnum,
 static inline void gen_cap_set_cursor_unsafe(DisasContext *ctx, int regnum,
                                              TCGv_i64 new_cursor)
 {
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
     if (MERGED_FILE && !lazy_capreg_number_is_special(regnum)) {
 #if MERGED_FILE
@@ -1699,7 +1699,7 @@ static inline void gen_cap_get_eq_i32(DisasContext *ctx, int rx, int ry,
 static inline void gen_cap_clear_perms(DisasContext *ctx, int regnum,
                                        TCGv_i64 mask, bool canon)
 {
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
 
     if (canon)
@@ -1724,7 +1724,7 @@ static inline void gen_cap_set_type_const(DisasContext *ctx, int regnum,
                                           target_ulong type, bool check_sealed)
 {
 
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
 
     if (check_sealed) {
@@ -1741,7 +1741,7 @@ static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
                                 bool conditional, TCGv_i64 success)
 {
 
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
 
     gen_ensure_cap_decompressed(ctx, auth_regnum);
@@ -1815,7 +1815,7 @@ static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
 static inline void gen_cap_unseal(DisasContext *ctx, int regnum,
                                   int auth_regnum)
 {
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
 
     gen_ensure_cap_decompressed(ctx, auth_regnum);
@@ -1946,7 +1946,7 @@ static inline void gen_cap_is_subset_and_tag_eq(DisasContext *ctx, int rega,
 static inline void gen_cap_set_pesbt(DisasContext *ctx, int regnum,
                                      TCGv_i64 pesbt)
 {
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
 
     gen_lazy_cap_set_state(ctx, regnum, CREG_UNTAGGED_CAP);
