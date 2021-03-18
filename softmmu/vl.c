@@ -1762,7 +1762,6 @@ static void version(void)
 #else
 #error "INVALID CHERI target"
 #endif
-    printf("Built with C0 as NULL register\n");
 #endif  // TARGET_CHERI
 #if defined(CONFIG_TCG_LOG_INSTR)
     printf("Built with instruction logging enabled\n");
