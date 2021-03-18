@@ -45,7 +45,8 @@
 #include "qemu/log.h"
 #include "exec/log_instr.h"
 
-#if !defined(CHERI_EXC_REGNUM_PCC) || !defined(CHERI_EXC_REGNUM_DDC) || !defined(ZERO_REG_NUM)
+#if !defined(CHERI_EXC_REGNUM_PCC) || !defined(CHERI_EXC_REGNUM_DDC) ||        \
+    !defined(ZERO_REG_NUM)
 #error "Special register numbers should be defined in archspecific-earlier.h"
 #endif
 
@@ -75,7 +76,8 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         const cap_register_t *c = &gpcrs->decompressed[regnum];
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
         // Check that the compressed and decompressed caps are in sync
-        cheri_debug_assert(cc128_compress_raw(c) == gpcrs->decompressed[regnum].cached_pesbt);
+        cheri_debug_assert(cc128_compress_raw(c) ==
+                           gpcrs->decompressed[regnum].cached_pesbt);
 #endif
         cheri_debug_assert((c->cr_tag == 0 || c->cr_tag == 1) &&
                            "Unitialized value used?");
@@ -92,7 +94,8 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
 
     if (regnum == ZERO_REG_NUM) {
-        cheri_debug_assert(gpcrs->decompressed[regnum].cached_pesbt == CC128_NULL_PESBT);
+        cheri_debug_assert(gpcrs->decompressed[regnum].cached_pesbt ==
+                           CC128_NULL_PESBT);
         cheri_debug_assert(gpcrs->decompressed[regnum]._cr_cursor == 0);
         cheri_debug_assert(cc128_compress_raw(&gpcrs->decompressed[regnum]) == CC128_NULL_PESBT);
         cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
@@ -170,26 +173,30 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
 }
 
 static inline __attribute__((always_inline)) bool
-get_without_decompress_tag(CPUArchState *env, unsigned regnum) {
+get_without_decompress_tag(CPUArchState *env, unsigned regnum)
+{
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     CapRegState state = get_capreg_state(gpcrs, regnum);
-    bool tag = (state == CREG_FULLY_DECOMPRESSED) && gpcrs->decompressed[regnum].cr_tag;
+    bool tag = (state == CREG_FULLY_DECOMPRESSED) &&
+               gpcrs->decompressed[regnum].cr_tag;
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
     tag |= (state == CREG_TAGGED_CAP);
 #endif
     return tag;
 }
 
-static inline __attribute__((always_inline))target_ulong
-get_without_decompress_cursor(CPUArchState *env, unsigned regnum) {
+static inline __attribute__((always_inline)) target_ulong
+get_without_decompress_cursor(CPUArchState *env, unsigned regnum)
+{
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     return gpcrs->decompressed[regnum]._cr_cursor;
 }
 
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
 static inline __attribute__((always_inline)) target_ulong
-get_without_decompress_pesbt(CPUArchState *env, unsigned regnum) {
-        GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+get_without_decompress_pesbt(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     return gpcrs->decompressed[regnum].cached_pesbt;
 }
 #endif
@@ -199,9 +206,12 @@ static inline __attribute__((always_inline)) const cap_register_t *
 get_capreg_or_special(CPUArchState *env, unsigned regnum)
 {
 
-    if (unlikely(regnum == CHERI_EXC_REGNUM_PCC)) return _cheri_get_pcc_unchecked(env);
-    if (unlikely(regnum == CHERI_EXC_REGNUM_DDC)) return cheri_get_ddc(env);
-    else return get_readonly_capreg(env, regnum);
+    if (unlikely(regnum == CHERI_EXC_REGNUM_PCC))
+        return _cheri_get_pcc_unchecked(env);
+    if (unlikely(regnum == CHERI_EXC_REGNUM_DDC))
+        return cheri_get_ddc(env);
+    else
+        return get_readonly_capreg(env, regnum);
 }
 
 /// return a read-only capability register with register number 0 meaning $ddc
@@ -211,15 +221,16 @@ get_capreg_or_special(CPUArchState *env, unsigned regnum)
 /// sense whereas using it relative to NULL is the same as just cmove $cN,
 /// $cnull
 /// 0 can only be DDC on mips/risv. On Morello 0 is always normal register.
-/// Having the switch here rather than in general code makes things slightly neater.
-/// We could always call this "0_is_maybe_ddc" to be less confusing.
+/// Having the switch here rather than in general code makes things slightly
+/// neater. We could always call this "0_is_maybe_ddc" to be less confusing.
 static inline __attribute__((always_inline)) const cap_register_t *
 get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 {
 #ifdef TARGET_AARCH64
     return get_capreg_or_special(env, regnum);
 #else
-    return get_capreg_or_special(env, regnum == 0 ? CHERI_EXC_REGNUM_DDC : regnum);
+    return get_capreg_or_special(env,
+                                 regnum == 0 ? CHERI_EXC_REGNUM_DDC : regnum);
 #endif
 }
 
@@ -406,7 +417,8 @@ static inline uint32_t get_capreg_hwperms(CPUArchState *env, unsigned regnum)
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
     case CREG_TAGGED_CAP:
     case CREG_UNTAGGED_CAP:
-        return (uint32_t)CC128_EXTRACT_FIELD(gpcrs->decompressed[regnum].cached_pesbt, HWPERMS);
+        return (uint32_t)CC128_EXTRACT_FIELD(
+            gpcrs->decompressed[regnum].cached_pesbt, HWPERMS);
 #endif
     default:
         __builtin_unreachable();
@@ -449,11 +461,13 @@ static inline void set_max_perms_capregs(CPUArchState* env)
     sanity_check_capreg(gpcrs, 0);
     for (size_t i = 0; i < ARRAY_SIZE(gpcrs->decompressed); i++) {
 
-        if (i == ZERO_REG_NUM) continue;
+        if (i == ZERO_REG_NUM)
+            continue;
 
         set_max_perms_capability(&gpcrs->decompressed[i], 0);
 #if QEMU_USE_COMPRESSED_CHERI_CAPS
-        gpcrs->decompressed[i].cached_pesbt = cc128_compress_raw(&gpcrs->decompressed[i]);
+        gpcrs->decompressed[i].cached_pesbt =
+            cc128_compress_raw(&gpcrs->decompressed[i]);
 #endif
         // Mark register as fully decompressed
         cheri_debug_assert(get_capreg_state(gpcrs, i) == CREG_FULLY_DECOMPRESSED);

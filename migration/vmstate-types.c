@@ -318,7 +318,7 @@ const VMStateInfo vmstate_info_uint64 = {
 #include "../target/cheri-common/cheri-compressed-cap/cheri_compressed_cap_128.h"
 
 static int get_cap_register(QEMUFile *f, void *pv, size_t size,
-                      const VMStateField *field)
+                            const VMStateField *field)
 {
     cc128_cap_t *v = pv;
     uint64_t cursor;
@@ -335,10 +335,10 @@ static int get_cap_register(QEMUFile *f, void *pv, size_t size,
 }
 
 static int put_cap_register(QEMUFile *f, void *pv, size_t size,
-                      const VMStateField *field, QJSON *vmdesc)
+                            const VMStateField *field, QJSON *vmdesc)
 {
     cc128_cap_t *v = pv;
-    uint64_t* cursor = &v->_cr_cursor;
+    uint64_t *cursor = &v->_cr_cursor;
     uint64_t pesbt = cc128_compress_raw(v);
 
     qemu_put_be64s(f, cursor);

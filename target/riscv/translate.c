@@ -252,12 +252,14 @@ static inline void _gen_get_gpr(TCGv t, int reg_num)
  * since we usually avoid calling the OP_TYPE_gen function if we see a write to
  * $zero
  */
-static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t, bool clear_pesbt)
+static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t,
+                                bool clear_pesbt)
 {
     if (reg_num_dst != 0) {
 #ifdef TARGET_CHERI
         if (clear_pesbt)
-            gen_lazy_cap_set_int(ctx, reg_num_dst); // Reset the register type to int.
+            gen_lazy_cap_set_int(
+                ctx, reg_num_dst); // Reset the register type to int.
         tcg_gen_mov_tl(_cpu_cursors_do_not_access_directly[reg_num_dst], t);
 #else
         tcg_gen_mov_tl(cpu_gpr[reg_num_dst], t);
@@ -280,7 +282,8 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
 {
     if (reg_num_dst != 0) {
 #ifdef TARGET_CHERI
-        gen_lazy_cap_set_int(ctx, reg_num_dst); // Reset the register type to int.
+        gen_lazy_cap_set_int(ctx,
+                             reg_num_dst); // Reset the register type to int.
         tcg_gen_movi_tl(_cpu_cursors_do_not_access_directly[reg_num_dst], value);
 #else
         tcg_gen_movi_tl(cpu_gpr[reg_num_dst], value);

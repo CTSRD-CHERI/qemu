@@ -46,7 +46,7 @@
  * so we're kind of free to make up a line size here.  For simplicity,
  * we pretend that our cache lines always contain 8 capabilities.
  */
-#define CAP_TAG_GET_MANY_SHFT    3
+#define CAP_TAG_GET_MANY_SHFT 3
 
 typedef enum CheriCapExc {
     CapEx_None                          = 0x0,  /* None */

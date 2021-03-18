@@ -39,7 +39,7 @@
 
 #ifdef TARGET_AARCH64
 #define PRINT_CAP_FMT_EXTRA " bv: %d"
-#define PRINT_CAP_ARGS_EXTRA(cr) ,(cr)->cr_bounds_valid
+#define PRINT_CAP_ARGS_EXTRA(cr) , (cr)->cr_bounds_valid
 #else
 #define PRINT_CAP_FMT_EXTRA
 #define PRINT_CAP_ARGS_EXTRA(cr)
@@ -54,8 +54,8 @@
     (cr)->cr_tag, cap_is_sealed_with_type(cr), COMBINED_PERMS_VALUE(cr),       \
         (cr)->cr_flags, cap_get_base(cr), cap_get_length64(cr)
 #define PRINT_CAP_FMTSTR_L2 "a:%016" PRIx64 " t:%x" PRINT_CAP_FMT_EXTRA
-#define PRINT_CAP_ARGS_L2(cr) (uint64_t)cap_get_cursor(cr), (cr)->cr_otype PRINT_CAP_ARGS_EXTRA(cr)
-
+#define PRINT_CAP_ARGS_L2(cr)                                                  \
+    (uint64_t) cap_get_cursor(cr), (cr)->cr_otype PRINT_CAP_ARGS_EXTRA(cr)
 
 #define PRINT_CAP_FMTSTR PRINT_CAP_FMTSTR_L1 " " PRINT_CAP_FMTSTR_L2
 #define PRINT_CAP_ARGS(cr) PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr)
@@ -323,7 +323,8 @@ static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_regist
     cr->_cr_cursor = addr;
     cr->cr_tag = false;
 #ifdef TARGET_AARCH64
-    // Morello never modifies pesbt if representability changes, instead bounds just change
+    // Morello never modifies pesbt if representability changes, instead bounds
+    // just change
     cc128_decompress_raw(cr->cached_pesbt, addr, false, cr);
 #else
 #ifdef CHERI_128
@@ -375,23 +376,26 @@ int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
 #define raise_cheri_exception(env, cause, reg)                                 \
     raise_cheri_exception_impl(env, cause, reg, 0, true, _host_return_address)
 
-#define raise_cheri_exception_addr(env, cause, reg, addr) \
-    raise_cheri_exception_impl(env, cause, reg, addr, true, _host_return_address)
+#define raise_cheri_exception_addr(env, cause, reg, addr)                      \
+    raise_cheri_exception_impl(env, cause, reg, addr, true,                    \
+                               _host_return_address)
 
 #ifdef TARGET_AARCH64
-    #define raise_cheri_exception_if(env, cause, reg) \
-        raise_cheri_exception_impl_if_wnr(env, cause, reg, 0, true, _host_return_address, true, false)
-    #define raise_cheri_exception_addr_wnr(env, cause, reg, addr, is_write) \
-        raise_cheri_exception_impl_if_wnr(env, cause, reg, addr, true, _host_return_address, false, is_write)
+#define raise_cheri_exception_if(env, cause, reg)                              \
+    raise_cheri_exception_impl_if_wnr(env, cause, reg, 0, true,                \
+                                      _host_return_address, true, false)
+#define raise_cheri_exception_addr_wnr(env, cause, reg, addr, is_write)        \
+    raise_cheri_exception_impl_if_wnr(env, cause, reg, addr, true,             \
+                                      _host_return_address, false, is_write)
 #else
-    #define raise_cheri_exception_if(env, cause, reg) \
-        raise_cheri_exception(env, cause, reg)
-    #define raise_cheri_exception_addr_wnr(env, cause, reg, addr, is_write) \
-        raise_cheri_exception_addr(env, cause, reg, addr)
+#define raise_cheri_exception_if(env, cause, reg)                              \
+    raise_cheri_exception(env, cause, reg)
+#define raise_cheri_exception_addr_wnr(env, cause, reg, addr, is_write)        \
+    raise_cheri_exception_addr(env, cause, reg, addr)
 #endif
 
-static inline void
-cap_set_cursor(cap_register_t* cap, uint64_t new_addr) {
+static inline void cap_set_cursor(cap_register_t *cap, uint64_t new_addr)
+{
     if (!is_representable_cap_with_addr(cap, new_addr)) {
         cap_mark_unrepresentable(new_addr, cap);
     } else {
@@ -399,8 +403,8 @@ cap_set_cursor(cap_register_t* cap, uint64_t new_addr) {
     }
 }
 
-static inline void
-cap_increment_offset(cap_register_t* cap, uint64_t offset) {
+static inline void cap_increment_offset(cap_register_t *cap, uint64_t offset)
+{
     uint64_t new_addr = cap->_cr_cursor + offset;
     return cap_set_cursor(cap, new_addr);
 }

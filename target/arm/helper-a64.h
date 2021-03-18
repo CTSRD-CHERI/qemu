@@ -120,7 +120,8 @@ DEF_HELPER_FLAGS_2(ldgm, TCG_CALL_NO_WG, i64, env, i64)
 DEF_HELPER_FLAGS_3(stgm, TCG_CALL_NO_WG, void, env, i64, i64)
 DEF_HELPER_FLAGS_3(stzgm_tags, TCG_CALL_NO_WG, void, env, i64, i64)
 
-DEF_HELPER_FLAGS_2(alignment_fault_exception, TCG_CALL_NO_RETURN, void, env, i64)
+DEF_HELPER_FLAGS_2(alignment_fault_exception, TCG_CALL_NO_RETURN, void, env,
+                   i64)
 DEF_HELPER_FLAGS_1(sp_alignment_exception, TCG_CALL_NO_RETURN, void, env)
 
 #if defined(TARGET_CHERI)

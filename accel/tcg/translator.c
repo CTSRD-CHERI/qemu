@@ -35,7 +35,8 @@ void translator_loop_temp_check(DisasContextBase *db)
     }
 }
 
-static void qemu_log_gen_printf_reset(DisasContextBase *base) {
+static void qemu_log_gen_printf_reset(DisasContextBase *base)
+{
 #ifdef CONFIG_TCG_LOG_INSTR
     tcg_gen_movi_i64(qemu_log_printf_valid_entries, 0);
     base->printf_used_ptr = 0;
@@ -43,11 +44,12 @@ static void qemu_log_gen_printf_reset(DisasContextBase *base) {
 }
 
 // Should only be called in a place it cannot be skipped by a branch!
-static void qemu_log_gen_printf_flush(DisasContextBase *base, bool force_flush) {
+static void qemu_log_gen_printf_flush(DisasContextBase *base, bool force_flush)
+{
 #ifdef CONFIG_TCG_LOG_INSTR
-    if ((base->printf_used_ptr != 0 ) &&
-    (force_flush ||
-    (base->printf_used_ptr >= (QEMU_LOG_PRINTF_FLUSH_BARRIER)))) {
+    if ((base->printf_used_ptr != 0) &&
+        (force_flush ||
+         (base->printf_used_ptr >= (QEMU_LOG_PRINTF_FLUSH_BARRIER)))) {
         gen_helper_qemu_log_printf_dump(cpu_env);
         qemu_log_gen_printf_reset(base);
     }
@@ -136,7 +138,8 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #ifdef CONFIG_TCG_LOG_INSTR
         /* Commit previous instruction */
         if (unlikely(log_instr_enabled)) {
-            // TODO: As long as the string stays around, we could delay this till the end of a BB
+            // TODO: As long as the string stays around, we could delay this
+            // till the end of a BB
             qemu_log_gen_printf_flush(db, true);
             gen_helper_qemu_log_instr_commit(cpu_env);
         }

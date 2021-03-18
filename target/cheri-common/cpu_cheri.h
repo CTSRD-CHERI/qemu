@@ -140,9 +140,9 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
         cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
 
     if (pcc->cr_tag && cap_is_unsealed(pcc)) {
-        if(cap_has_perms(pcc, CAP_PERM_LOAD))
+        if (cap_has_perms(pcc, CAP_PERM_LOAD))
             *cheri_flags |= TB_FLAG_CHERI_PCC_READABLE;
-        if(cap_has_perms(pcc, CAP_PERM_STORE))
+        if (cap_has_perms(pcc, CAP_PERM_STORE))
             *cheri_flags |= TB_FLAG_CHERI_PCC_WRITABLE;
     }
 
@@ -155,7 +155,7 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
 #ifdef TARGET_AARCH64
         && ddc->cr_bounds_valid
 #endif
-    ){
+    ) {
         if (cap_has_perms(ddc, CAP_PERM_LOAD))
             *cheri_flags |= TB_FLAG_CHERI_DDC_READABLE;
         if (cap_has_perms(ddc, CAP_PERM_STORE))

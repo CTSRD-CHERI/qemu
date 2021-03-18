@@ -40,8 +40,8 @@
 extern bool cheri_debugger_on_trap;
 
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
-    CPUArchState *env, CheriCapExcCause cause, unsigned regnum, target_ulong addr,
-    bool instavail, uintptr_t hostpc)
+    CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
+    target_ulong addr, bool instavail, uintptr_t hostpc)
 {
     env->last_cap_cause = cause;
     env->last_cap_index = regnum;
@@ -104,7 +104,8 @@ static inline bool validate_jump_target(CPUArchState *env,
 }
 
 static inline void update_next_pcc_for_tcg(CPUArchState *env,
-                                           const cap_register_t *target)
+                                           const cap_register_t *target,
+                                           uint32_t cjalr_flags)
 {
     assert_valid_jump_target(target);
     // On return to TCG we will jump there immediately, so update env->PCC now.

@@ -33,16 +33,19 @@
 
 #define NUM_LAZY_CAP_REGS 34
 
-// Register 32 will be zero, leaving 31 to be SP. Translation should covert 31 to 32 where appropriate
+// Register 32 will be zero, leaving 31 to be SP. Translation should covert 31
+// to 32 where appropriate
 #define ZERO_REG_NUM 32
-// A register to indicate "no register" where it is inconvenient to have different prototypes
-#define REG_NONE     0x77
+// A register to indicate "no register" where it is inconvenient to have
+// different prototypes
+#define REG_NONE 0x77
 // The register that is meant to be used for the data argument
 #define CINVOKE_DATA_REGNUM 29
-// A micro-architectural register to avoid side effects when decomposing instructions into micro-ops
+// A micro-architectural register to avoid side effects when decomposing
+// instructions into micro-ops
 #define SCRATCH_REG_NUM 33
 
 #define CHERI_EXC_REGNUM_PCC 0xfe
 #define CHERI_EXC_REGNUM_DDC 0xff
 
-#endif //QEMU_CHERI_ARCHSPECIFIC_EARLIER_H
+#endif // QEMU_CHERI_ARCHSPECIFIC_EARLIER_H

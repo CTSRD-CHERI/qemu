@@ -49,4 +49,5 @@ DEF_HELPER_6(branch_sealed_pair, void, env, i32, i32, i32, tl, i32)
 DEF_HELPER_3(load_tags, i64, env, i32, tl)
 DEF_HELPER_4(store_tags, void, env, i64, i32, tl)
 
-DEF_HELPER_FLAGS_1(check_capabilities_enabled_exception, TCG_CALL_NO_RETURN, void, env)
+DEF_HELPER_FLAGS_1(check_capabilities_enabled_exception, TCG_CALL_NO_RETURN,
+                   void, env)

@@ -134,10 +134,12 @@ static inline size_t num_tagblocks(RAMBlock* ram)
 #define TAGMEM_USE_BITMAP 1
 #define TAGMEM_BITMAP_SCALE (TAGMEM_USE_BITMAP ? 1 : 8)
 
-_Static_assert(CAP_TAG_GET_MANY_SHFT < 3 || sizeof(long) >= 8 || TAGMEM_USE_BITMAP, "Otherwise settags cannot be atomic");
+_Static_assert(CAP_TAG_GET_MANY_SHFT < 3 || sizeof(long) >= 8 ||
+                   TAGMEM_USE_BITMAP,
+               "Otherwise settags cannot be atomic");
 
 typedef struct CheriTagBlock {
-    DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE * TAGMEM_BITMAP_SCALE);
+    DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE *TAGMEM_BITMAP_SCALE);
 } CheriTagBlock;
 
 #define ALL_ZERO_TAGBLK ((void*)(uintptr_t)1)
@@ -180,19 +182,24 @@ static inline QEMU_ALWAYS_INLINE CheriTagBlock *cheri_tag_block(size_t tag_index
 static inline QEMU_ALWAYS_INLINE bool tagblock_get_tag(CheriTagBlock *block,
                                                        size_t block_index)
 {
-    return block ? test_bit(block_index * TAGMEM_BITMAP_SCALE, block->tag_bitmap) : false;
+    return block
+               ? test_bit(block_index * TAGMEM_BITMAP_SCALE, block->tag_bitmap)
+               : false;
 }
 
-// Given that many should always be well aligned, might as well use larger operations than on individual bits.
-// This also makes it easier to do an atomic version if desired
+// Given that many should always be well aligned, might as well use larger
+// operations than on individual bits. This also makes it easier to do an atomic
+// version if desired
 static inline QEMU_ALWAYS_INLINE int tagblock_get_tag_many(CheriTagBlock *block,
-size_t block_index)
+                                                           size_t block_index)
 {
-    if (!block) return 0;
+    if (!block)
+        return 0;
 
     block_index *= TAGMEM_BITMAP_SCALE;
 
-    long result = block->tag_bitmap[BIT_WORD(block_index)] >> (block_index & (BITS_PER_LONG-1));
+    long result = block->tag_bitmap[BIT_WORD(block_index)] >>
+                  (block_index & (BITS_PER_LONG - 1));
 
 #if !TAGMEM_USE_BITMAP
     result = byte_pack(result);
@@ -204,18 +211,19 @@ size_t block_index)
 static inline QEMU_ALWAYS_INLINE void tagblock_set_tag(CheriTagBlock *block,
                                                        size_t block_index)
 {
-    // FIXME: The point of supporting a byte per tag may have been to make atomic updates easier.
+    // FIXME: The point of supporting a byte per tag may have been to make
+    // atomic updates easier.
     // FIXME: In which case this can be re-written a little
     set_bit(block_index * TAGMEM_BITMAP_SCALE, block->tag_bitmap);
 }
 
-static inline QEMU_ALWAYS_INLINE void tagblock_set_tag_many(CheriTagBlock *block,
-                                                       size_t block_index, uint8_t tags)
+static inline QEMU_ALWAYS_INLINE void
+tagblock_set_tag_many(CheriTagBlock *block, size_t block_index, uint8_t tags)
 {
     block_index *= TAGMEM_BITMAP_SCALE;
 
     size_t hi = BIT_WORD(block_index);
-    size_t lo = block_index & (BITS_PER_LONG-1);
+    size_t lo = block_index & (BITS_PER_LONG - 1);
 
     long tags_shifted = tags;
 #if !TAGMEM_USE_BITMAP
@@ -629,7 +637,8 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
 static CheriTagBlock *cheri_tag_get_block(CPUArchState *env, target_ulong vaddr,
                                           MMUAccessType at, int reg, int xshift,
                                           uintptr_t pc, hwaddr *ret_paddr,
-                                          uint64_t *ret_tag_idx, int *prot, bool create)
+                                          uint64_t *ret_tag_idx, int *prot,
+                                          bool create)
 {
     hwaddr paddr;
 
@@ -658,8 +667,9 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
                   hwaddr *ret_paddr, int *prot, uintptr_t pc)
 {
     uint64_t tag;
-    CheriTagBlock *tagblk = cheri_tag_get_block(
-        env, vaddr, MMU_DATA_CAP_LOAD, reg, 0, pc, ret_paddr, &tag, prot, false);
+    CheriTagBlock *tagblk =
+        cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg, 0, pc,
+                            ret_paddr, &tag, prot, false);
     bool result = tagblock_get_tag(tagblk, CAP_TAGBLK_IDX(tag));
     // XXX: Not atomic w.r.t. writes to tag memory
     qemu_maybe_log_instr_extra(env, "    Cap Tag Read [" TARGET_FMT_lx "/"
@@ -672,16 +682,16 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 {
     uint64_t tag_index;
     int prot;
-    CheriTagBlock *tagblk =
-        cheri_tag_get_block(env, vaddr, MMU_DATA_CAP_LOAD, reg,
-                            CAP_TAG_GET_MANY_SHFT, pc, ret_paddr, &tag_index, &prot, false);
+    CheriTagBlock *tagblk = cheri_tag_get_block(
+        env, vaddr, MMU_DATA_CAP_LOAD, reg, CAP_TAG_GET_MANY_SHFT, pc,
+        ret_paddr, &tag_index, &prot, false);
 
     int result = tagblock_get_tag_many(tagblk, CAP_TAGBLK_IDX(tag_index));
 
     /*
-    * The Mips CLoadTags, can "see around" the TLB capability load inhibit.
-    * That should perhaps change?
-    */
+     * The Mips CLoadTags, can "see around" the TLB capability load inhibit.
+     * That should perhaps change?
+     */
 #ifndef TARGET_MIPS
     if (result && (prot & PAGE_LC_TRAP)) {
         raise_load_tag_exception(env, vaddr, reg, pc);
@@ -694,8 +704,9 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
     return result;
 }
 
-void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr, int reg,
-                        hwaddr *ret_paddr, uintptr_t pc) {
+void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
+                        int reg, hwaddr *ret_paddr, uintptr_t pc)
+{
     uint64_t tag_index;
     int prot;
 
@@ -704,8 +715,8 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr, in
     MMUAccessType accessType = tags ? MMU_DATA_CAP_STORE : MMU_DATA_STORE;
 
     CheriTagBlock *tagblk =
-            cheri_tag_get_block(env, vaddr, accessType, reg,
-                                CAP_TAG_GET_MANY_SHFT, pc, ret_paddr, &tag_index, &prot, tags != 0);
+        cheri_tag_get_block(env, vaddr, accessType, reg, CAP_TAG_GET_MANY_SHFT,
+                            pc, ret_paddr, &tag_index, &prot, tags != 0);
 
     if (tagblk) {
         tagblock_set_tag_many(tagblk, CAP_TAGBLK_IDX(tag_index), pc);

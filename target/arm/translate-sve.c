@@ -4274,7 +4274,8 @@ static void do_ldr(DisasContext *s, uint32_t vofs, int len, int rn, int imm)
 
     dirty_addr = tcg_temp_new_i64();
     tcg_gen_addi_i64(dirty_addr, cpu_reg_sp(s, rn), imm);
-    clean_addr = gen_mte_and_cheri_checkN(s, dirty_addr, true, false, rn != 31, len, MO_8, rn, false, true);
+    clean_addr = gen_mte_and_cheri_checkN(s, dirty_addr, true, false, rn != 31,
+                                          len, MO_8, rn, false, true);
     tcg_temp_free_i64(dirty_addr);
 
     /*
@@ -4331,14 +4332,16 @@ static void do_ldr(DisasContext *s, uint32_t vofs, int len, int rn, int imm)
         case 4:
         case 8:
             tcg_gen_qemu_ld_i64_with_checked_addr(t0, clean_addr, midx,
-                                MO_LE | ctz32(len_remain));
+                                                  MO_LE | ctz32(len_remain));
             break;
 
         case 6:
             t1 = tcg_temp_new_i64();
-            tcg_gen_qemu_ld_i64_with_checked_addr(t0, clean_addr, midx, MO_LEUL);
+            tcg_gen_qemu_ld_i64_with_checked_addr(t0, clean_addr, midx,
+                                                  MO_LEUL);
             tcg_gen_addi_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr, 4);
-            tcg_gen_qemu_ld_i64_with_checked_addr(t1, clean_addr, midx, MO_LEUW);
+            tcg_gen_qemu_ld_i64_with_checked_addr(t1, clean_addr, midx,
+                                                  MO_LEUW);
             tcg_gen_deposit_i64(t0, t0, t1, 32, 32);
             tcg_temp_free_i64(t1);
             break;
@@ -4363,7 +4366,8 @@ static void do_str(DisasContext *s, uint32_t vofs, int len, int rn, int imm)
 
     dirty_addr = tcg_temp_new_i64();
     tcg_gen_addi_i64(dirty_addr, cpu_reg_sp(s, rn), imm);
-    clean_addr = gen_mte_and_cheri_checkN(s, dirty_addr, false, true, rn != 31, len, MO_8, rn, false, true);
+    clean_addr = gen_mte_and_cheri_checkN(s, dirty_addr, false, true, rn != 31,
+                                          len, MO_8, rn, false, true);
     tcg_temp_free_i64(dirty_addr);
 
     /* Note that unpredicated load/store of vector/predicate registers
@@ -4420,14 +4424,16 @@ static void do_str(DisasContext *s, uint32_t vofs, int len, int rn, int imm)
         case 4:
         case 8:
             tcg_gen_qemu_st_i64_with_checked_addr(t0, clean_addr, midx,
-                                MO_LE | ctz32(len_remain));
+                                                  MO_LE | ctz32(len_remain));
             break;
 
         case 6:
-            tcg_gen_qemu_st_i64_with_checked_addr(t0, clean_addr, midx, MO_LEUL);
+            tcg_gen_qemu_st_i64_with_checked_addr(t0, clean_addr, midx,
+                                                  MO_LEUL);
             tcg_gen_addi_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr, 4);
             tcg_gen_shri_i64(t0, t0, 32);
-            tcg_gen_qemu_st_i64_with_checked_addr(t0, clean_addr, midx, MO_LEUW);
+            tcg_gen_qemu_st_i64_with_checked_addr(t0, clean_addr, midx,
+                                                  MO_LEUW);
             break;
 
         default:
@@ -5011,10 +5017,11 @@ static bool trans_LD1R_zpri(DisasContext *s, arg_rpri_load *a)
     /* Load the data.  */
     temp = tcg_temp_new_i64();
     tcg_gen_addi_i64(temp, cpu_reg_sp(s, a->rn), a->imm << msz);
-    clean_addr = gen_mte_and_cheri_check1(s, temp, true, false, true, msz, a->rn, false, true);
+    clean_addr = gen_mte_and_cheri_check1(s, temp, true, false, true, msz,
+                                          a->rn, false, true);
 
     tcg_gen_qemu_ld_i64_with_checked_addr(temp, clean_addr, get_mem_index(s),
-                        s->be_data | dtype_mop[a->dtype]);
+                                          s->be_data | dtype_mop[a->dtype]);
 
     /* Broadcast to *all* elements.  */
     tcg_gen_gvec_dup_i64(esz, vec_full_reg_offset(s, a->rd),

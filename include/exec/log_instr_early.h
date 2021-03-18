@@ -33,43 +33,44 @@
 
 // Format specifiers for TCGv and TCGv_ptr
 #if TARGET_LONG_BITS == 64
-#define QLP_TCGV    "d"
+#define QLP_TCGV "d"
 #else
-#define QLP_TCGV    "w"
+#define QLP_TCGV "w"
 #endif
 #if UINTPTR_MAX == UINT32_MAX
-#define QLP_TCGP    "w"
+#define QLP_TCGP "w"
 #else
-#define QLP_TCGP    "d"
+#define QLP_TCGP "d"
 #endif
 
 // Max printf args
-#define QEMU_LOG_PRINTF_ARG_MAX              8
+#define QEMU_LOG_PRINTF_ARG_MAX 8
 // Max printf's before flush
-#define QEMU_LOG_PRINTF_BUF_DEPTH            32
+#define QEMU_LOG_PRINTF_BUF_DEPTH 32
 // Early flush if buffer gets this full
-#define QEMU_LOG_PRINTF_FLUSH_BARRIER        32
+#define QEMU_LOG_PRINTF_FLUSH_BARRIER 32
 
 typedef union {
-    char                charv;
-    short               shortv;
-    unsigned short      ushortv;
-    int                 intv;
-    unsigned int        uintv;
-    long                longv;
-    unsigned long       ulongv;
-    long long           longlongv;
-    unsigned long long  ulonglongv;
-    float               floatv;
-    double              doublev;
-    void*               ptrv;
+    char charv;
+    short shortv;
+    unsigned short ushortv;
+    int intv;
+    unsigned int uintv;
+    long longv;
+    unsigned long ulongv;
+    long long longlongv;
+    unsigned long long ulonglongv;
+    float floatv;
+    double doublev;
+    void *ptrv;
 } qemu_log_arg_t;
 
 // Stick one of these in your CPUState.
 typedef struct {
-    qemu_log_arg_t args[QEMU_LOG_PRINTF_ARG_MAX*QEMU_LOG_PRINTF_BUF_DEPTH]; // arguments to printf calls
-    const char* fmts[QEMU_LOG_PRINTF_BUF_DEPTH]; // the printf fmts
+    qemu_log_arg_t args[QEMU_LOG_PRINTF_ARG_MAX *
+                        QEMU_LOG_PRINTF_BUF_DEPTH]; // arguments to printf calls
+    const char *fmts[QEMU_LOG_PRINTF_BUF_DEPTH];    // the printf fmts
     uint64_t valid_entries; // bitmap of which entries are valid
 } qemu_log_printf_buf_t;
 
-#endif //QEMU_LOG_INSTR_EARLY_H
+#endif // QEMU_LOG_INSTR_EARLY_H

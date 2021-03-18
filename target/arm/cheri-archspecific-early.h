@@ -32,7 +32,8 @@
 
 #include "cheri-archspecific-earlier.h"
 
-static inline const cap_register_t *cheri_get_ddc(CPUARMState *env) {
+static inline const cap_register_t *cheri_get_ddc(CPUARMState *env)
+{
     return &env->DDC_current;
 }
 
@@ -41,9 +42,10 @@ static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUARMState *env)
     return &env->pc;
 }
 
-static inline struct GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
+static inline struct GPCapRegs *cheri_get_gpcrs(CPUArchState *env)
+{
     return &env->gpcapregs;
 }
 
-extern const char * const cheri_gp_regnames[];
-extern const char * const cheri_gp_int_regnames[];
+extern const char *const cheri_gp_regnames[];
+extern const char *const cheri_gp_int_regnames[];

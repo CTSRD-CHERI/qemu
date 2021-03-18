@@ -137,7 +137,8 @@ typedef enum CheriPermissions {
     CAP_PERM_UNSEAL = CC128_PERM_UNSEAL,
     CAP_ACCESS_SYS_REGS = CC128_PERM_ACCESS_SYS_REGS,
     CAP_PERM_SETCID = CC128_PERM_SETCID,
-#else // If there were a CC256_ prefix then a lot of the boilerplate in this file could go away
+#else // If there were a CC256_ prefix then a lot of the boilerplate in this
+      // file could go away
     CAP_PERM_GLOBAL = (1 << 0),
     CAP_PERM_EXECUTE = (1 << 1),
     CAP_PERM_LOAD = (1 << 2),
@@ -202,7 +203,8 @@ typedef enum CheriTbFlags {
     TB_FLAG_CHERI_PCC_WRITABLE = (1 << 8),
     TB_FLAG_CHERI_PCC_READABLE = (1 << 9),
 
-    /* Useful for CHERI-specific flags on various platforms if the normal flags overflowed */
+    /* Useful for CHERI-specific flags on various platforms if the normal flags
+       overflowed */
     TB_FLAG_CHERI_SPARE_INDEX_START = 16,
 
 } CheriTbFlags;

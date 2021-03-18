@@ -93,10 +93,9 @@ static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, 
     do_raise_c2_exception_impl(env, cause, 0xff, pc);
 }
 
-
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
-    CPUArchState *env, CheriCapExcCause cause, unsigned regnum, target_ulong addr,
-    bool instavail, uintptr_t hostpc)
+    CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
+    target_ulong addr, bool instavail, uintptr_t hostpc)
 {
     if (!instavail)
         env->error_code |= EXCP_INST_NOTAVAIL;
@@ -128,8 +127,8 @@ static inline bool validate_jump_target(CPUMIPSState *env,
 {
     target_ulong target_addr = cap_get_cursor(target);
     if (!cap_is_in_bounds(target, target_addr, 4)) {
-        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, true,
-                                   retpc);
+        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum,
+                                   target_addr, true, retpc);
     }
     if (!QEMU_IS_ALIGNED(cap_get_cursor(target), 4)) {
         do_raise_c0_exception_impl(env, EXCP_AdEL, cap_get_cursor(target),
@@ -139,7 +138,8 @@ static inline bool validate_jump_target(CPUMIPSState *env,
 }
 
 static inline void update_next_pcc_for_tcg(CPUMIPSState *env,
-                                           const cap_register_t *target)
+                                           const cap_register_t *target,
+                                           uint32_t cjalr_flags)
 {
     assert_valid_jump_target(target);
     // The capability register is loaded into PCC using the

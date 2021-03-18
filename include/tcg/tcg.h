@@ -25,11 +25,11 @@
 #ifndef TCG_H
 #define TCG_H
 
-#define tcg_abort() \
-do {\
-    fprintf(stderr, "%s:%d: tcg fatal error\n", __FILE__, __LINE__);\
-    abort();\
-} while (0)
+#define tcg_abort()                                                            \
+    do {                                                                       \
+        fprintf(stderr, "%s:%d: tcg fatal error\n", __FILE__, __LINE__);       \
+        abort();                                                               \
+    } while (0)
 
 #include "cpu.h"
 #include "exec/memop.h"
@@ -444,30 +444,22 @@ typedef enum {
     TCG_COND_GTU    = 8 | 4 | 0 | 1,
 } TCGCond;
 
-static inline const char* tcg_cond_string(TCGCond c) {
+static inline const char *tcg_cond_string(TCGCond c)
+{
     switch (c) {
-        case TCG_COND_NEVER:
-            return "NEVER";
-        case TCG_COND_ALWAYS:
-            return "ALWAYS";
-        case TCG_COND_EQ:
-            return "==";
-        case TCG_COND_NE:
-            return "!=";
-        case TCG_COND_LT:
-        case TCG_COND_LTU:
-            return "<";
-        case TCG_COND_GE:
-        case TCG_COND_GEU:
-            return ">=";
-        case TCG_COND_LE:
-        case TCG_COND_LEU:
-            return "<=";
-        case TCG_COND_GT:
-        case TCG_COND_GTU:
-            return ">";
-        default:
-            return "?";
+    case TCG_COND_NEVER: return "NEVER";
+    case TCG_COND_ALWAYS: return "ALWAYS";
+    case TCG_COND_EQ: return "==";
+    case TCG_COND_NE: return "!=";
+    case TCG_COND_LT:
+    case TCG_COND_LTU: return "<";
+    case TCG_COND_GE:
+    case TCG_COND_GEU: return ">=";
+    case TCG_COND_LE:
+    case TCG_COND_LEU: return "<=";
+    case TCG_COND_GT:
+    case TCG_COND_GTU: return ">";
+    default: return "?";
     }
 }
 /* Invert the sense of the comparison.  */

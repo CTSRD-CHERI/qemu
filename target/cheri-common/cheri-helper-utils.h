@@ -69,7 +69,8 @@ static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
     update_capreg(env, cd, &result);
 }
 
-// TODO: Delete this in favour of cap_check_common_reg. It gets things right that this gets wrong.
+// TODO: Delete this in favour of cap_check_common_reg. It gets things right
+// that this gets wrong.
 // TODO: Still using this in a couple places however.
 static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
                              uint32_t perm, uint64_t addr, uint16_t regnum,
@@ -127,7 +128,8 @@ static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
 do_exception:
 #ifdef TARGET_AARCH64
     raise_cheri_exception_impl_if_wnr(env, cause, regnum, addr, instavail, pc,
-            !!(perm & CAP_PERM_EXECUTE), !!(perm & CAP_PERM_STORE));
+                                      !!(perm & CAP_PERM_EXECUTE),
+                                      !!(perm & CAP_PERM_STORE));
 #else
     raise_cheri_exception_impl(env, cause, regnum, addr, instavail, pc);
 #endif
@@ -235,31 +237,31 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           target_ulong retpc, hwaddr *physaddr);
 
-static inline bool cap_is_local(CPUArchState *env, uint32_t cs) {
+static inline bool cap_is_local(CPUArchState *env, uint32_t cs)
+{
     return get_capreg_tag(env, cs) &&
            !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL);
 }
 
-static inline uint32_t perms_for_load(void) {
-    return CAP_PERM_LOAD;
-}
+static inline uint32_t perms_for_load(void) { return CAP_PERM_LOAD; }
 
-static inline uint32_t perms_for_store(CPUArchState *env, uint32_t cs) {
+static inline uint32_t perms_for_store(CPUArchState *env, uint32_t cs)
+{
     // Probably should only need CAP_PERM_STORE_CAP if cs tagged
     uint32_t perms = CAP_PERM_STORE;
-    if(get_capreg_tag(env, cs))
+    if (get_capreg_tag(env, cs))
         perms |= CAP_PERM_STORE_CAP;
-    if(cap_is_local(env, cs)) perms |= CAP_PERM_STORE_LOCAL;
+    if (cap_is_local(env, cs))
+        perms |= CAP_PERM_STORE_LOCAL;
     return perms;
 }
 
 // Do all the permission and bounds checks for loads/stores on cbp.
 // Use perms_for_load() and perms_for_store() for required_perms.
-target_ulong cap_check_common_reg(uint32_t required_perms,
-                                  CPUArchState *env, uint32_t cb,
-                                  target_ulong offset, uint32_t size,
-                                  uintptr_t _host_return_address,
-                                  const cap_register_t* cbp,
+target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
+                                  uint32_t cb, target_ulong offset,
+                                  uint32_t size, uintptr_t _host_return_address,
+                                  const cap_register_t *cbp,
                                   uint32_t alignment_required,
                                   bool no_unaligned);
 
@@ -270,10 +272,12 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
                               target_ulong retpc, hwaddr *physaddr);
 bool load_cap_from_memory_128_raw_tag(CPUArchState *env, uint64_t *pesbt,
                                       uint64_t *cursor, uint32_t cb,
-                                      const cap_register_t *source, target_ulong vaddr,
-                                      target_ulong retpc, hwaddr *physaddr, bool* raw_tag);
+                                      const cap_register_t *source,
+                                      target_ulong vaddr, target_ulong retpc,
+                                      hwaddr *physaddr, bool *raw_tag);
 
-target_ulong cheri_jump_and_link(CPUArchState *env, const cap_register_t* target,
-                                 uint32_t link_reg, target_ulong link_pc, uint32_t cjalr_flags);
+void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
+                         uint32_t link_reg, target_ulong link_pc,
+                         uint32_t cjalr_flags);
 
 void squash_mutable_permissions(uint64_t *pesbt, const cap_register_t *source);

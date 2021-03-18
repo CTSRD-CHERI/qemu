@@ -685,12 +685,12 @@ void HELPER(casp_le_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
     mem_idx = cpu_mmu_index(env, false);
     oi = make_memop_idx(MO_LEQ | MO_ALIGN_16, mem_idx);
 
-    cmpv = int128_make128(arm_get_xreg(env,rs), arm_get_xreg(env,rs+1));
+    cmpv = int128_make128(arm_get_xreg(env, rs), arm_get_xreg(env, rs + 1));
     newv = int128_make128(new_lo, new_hi);
     oldv = helper_atomic_cmpxchgo_le_mmu(env, addr, cmpv, newv, oi, ra);
 
     arm_set_xreg(env, rs, int128_getlo(oldv));
-    arm_set_xreg(env, rs+1, int128_gethi(oldv));
+    arm_set_xreg(env, rs + 1, int128_gethi(oldv));
 }
 
 void HELPER(casp_be_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
@@ -706,11 +706,11 @@ void HELPER(casp_be_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
     mem_idx = cpu_mmu_index(env, false);
     oi = make_memop_idx(MO_LEQ | MO_ALIGN_16, mem_idx);
 
-    cmpv = int128_make128(arm_get_xreg(env,rs+1), arm_get_xreg(env,rs));
+    cmpv = int128_make128(arm_get_xreg(env, rs + 1), arm_get_xreg(env, rs));
     newv = int128_make128(new_lo, new_hi);
     oldv = helper_atomic_cmpxchgo_be_mmu(env, addr, cmpv, newv, oi, ra);
 
-    arm_set_xreg(env, rs+1, int128_getlo(oldv));
+    arm_set_xreg(env, rs + 1, int128_getlo(oldv));
     arm_set_xreg(env, rs, int128_gethi(oldv));
 }
 
@@ -1029,7 +1029,8 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
 #ifdef TARGET_CHERI
         bool cap_return = is_access_to_capabilities_enabled_at_el(env, cur_el);
 
-        if (!cap_return || !is_access_to_capabilities_enabled_at_el(env, new_el))
+        if (!cap_return ||
+            !is_access_to_capabilities_enabled_at_el(env, new_el))
             spsr &= ~PSTATE_C64;
 
         if (cap_return) {
@@ -1071,10 +1072,12 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
 
         set_aarch_reg_value(&env->pc, new_pc);
 
-        qemu_maybe_log_instr_extra(env, "Exception return from EL%d to EL%d. PSTATE: 0x%x\n",
-                cur_el, new_el, pstate_read(env));
+        qemu_maybe_log_instr_extra(
+            env, "Exception return from EL%d to EL%d. PSTATE: 0x%x\n", cur_el,
+            new_el, pstate_read(env));
 
-        qemu_log_mask(CPU_LOG_INT, "Exception return from AArch64 EL%d to "
+        qemu_log_mask(CPU_LOG_INT,
+                      "Exception return from AArch64 EL%d to "
                       "AArch64 EL%d PC 0x%" PRIx64 "\n",
                       cur_el, new_el, get_aarch_reg_as_x(&env->pc));
     }
@@ -1110,8 +1113,10 @@ illegal_return:
     if (!arm_singlestep_active(env)) {
         env->pstate &= ~PSTATE_SS;
     }
-    qemu_log_mask(LOG_GUEST_ERROR, "Illegal exception return at EL%d: "
-                  "resuming execution at 0x%" PRIx64 "\n", cur_el, get_aarch_reg_as_x(&env->pc));
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "Illegal exception return at EL%d: "
+                  "resuming execution at 0x%" PRIx64 "\n",
+                  cur_el, get_aarch_reg_as_x(&env->pc));
 }
 
 /*
@@ -1173,15 +1178,20 @@ void HELPER(dc_zva)(CPUARMState *env, uint64_t vaddr_in)
     memset(mem, 0, blocklen);
 }
 
-void QEMU_NORETURN helper_alignment_fault_exception(CPUArchState *env, uint64_t addr) {
+void QEMU_NORETURN helper_alignment_fault_exception(CPUArchState *env,
+                                                    uint64_t addr)
+{
     GET_HOST_RETPC();
     arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_STORE,
-            cpu_mmu_index(env, false), _host_return_address);
+                                cpu_mmu_index(env, false),
+                                _host_return_address);
 }
 
-void QEMU_NORETURN helper_sp_alignment_exception(CPUArchState *env) {
+void QEMU_NORETURN helper_sp_alignment_exception(CPUArchState *env)
+{
     env->exception.vaddress = 0;
     uint32_t syn = syn_sp_alignment(false);
-    // Possibly should not use EXCP_DATA_ABORT, but alignment faults are handled very similarly.
+    // Possibly should not use EXCP_DATA_ABORT, but alignment faults are handled
+    // very similarly.
     raise_exception(env, EXCP_DATA_ABORT, syn, exception_target_el(env));
 }

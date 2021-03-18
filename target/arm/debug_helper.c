@@ -123,7 +123,8 @@ static bool bp_wp_matches(ARMCPU *cpu, int n, bool is_wp)
             access_el = 0;
         }
     } else {
-        uint64_t pc = is_a64(env) ? get_aarch_reg_as_x(&env->pc) : env->regs[15];
+        uint64_t pc =
+            is_a64(env) ? get_aarch_reg_as_x(&env->pc) : env->regs[15];
 
         if (!env->cpu_breakpoint[n] || env->cpu_breakpoint[n]->pc != pc) {
             return false;
@@ -282,7 +283,8 @@ void arm_debug_excp_handler(CPUState *cs)
                     arm_debug_target_el(env));
         }
     } else {
-        uint64_t pc = is_a64(env) ? get_aarch_reg_as_x(&env->pc) : env->regs[15];
+        uint64_t pc =
+            is_a64(env) ? get_aarch_reg_as_x(&env->pc) : env->regs[15];
         bool same_el = (arm_debug_target_el(env) == arm_current_el(env));
 
         /*

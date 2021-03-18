@@ -31,9 +31,9 @@
 #ifndef QEMU_ARMTRICKBOX_H
 #define QEMU_ARMTRICKBOX_H
 
-#define ARM_TRICKBOX_ADDRESS    0x13000000
-#define ARM_TRICKBOX_EXIT_C     '\004'
+#define ARM_TRICKBOX_ADDRESS 0x13000000
+#define ARM_TRICKBOX_EXIT_C '\004'
 
 void arm_trickbox_mm_init_default(void);
 
-#endif //QEMU_ARMTRICKBOX_H
+#endif // QEMU_ARMTRICKBOX_H

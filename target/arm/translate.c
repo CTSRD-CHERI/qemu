@@ -38,11 +38,32 @@
 #include "exec/log.h"
 
 #ifdef TARGET_CHERI
-    // This doesnt have to work - only compile. All 64-bit loads and stores are in translate-a64.
-    #define tcg_gen_qemu_ld_i64(result, addr, index, opc) (void)result; (void)addr; (void)index; (void)opc; assert(0 && "unreachable")
-    #define tcg_gen_qemu_ld_i32(result, addr, index, opc) (void)result; (void)addr; (void)index; (void)opc; assert(0 && "unreachable")
-    #define tcg_gen_qemu_st_i64(result, addr, index, opc) (void)result; (void)addr; (void)index; (void)opc; assert(0 && "unreachable")
-    #define tcg_gen_qemu_st_i32(result, addr, index, opc) (void)result; (void)addr; (void)index; (void)opc; assert(0 && "unreachable")
+// This doesnt have to work - only compile. All 64-bit loads and stores are in
+// translate-a64.
+#define tcg_gen_qemu_ld_i64(result, addr, index, opc)                          \
+    (void)result;                                                              \
+    (void)addr;                                                                \
+    (void)index;                                                               \
+    (void)opc;                                                                 \
+    assert(0 && "unreachable")
+#define tcg_gen_qemu_ld_i32(result, addr, index, opc)                          \
+    (void)result;                                                              \
+    (void)addr;                                                                \
+    (void)index;                                                               \
+    (void)opc;                                                                 \
+    assert(0 && "unreachable")
+#define tcg_gen_qemu_st_i64(result, addr, index, opc)                          \
+    (void)result;                                                              \
+    (void)addr;                                                                \
+    (void)index;                                                               \
+    (void)opc;                                                                 \
+    assert(0 && "unreachable")
+#define tcg_gen_qemu_st_i32(result, addr, index, opc)                          \
+    (void)result;                                                              \
+    (void)addr;                                                                \
+    (void)index;                                                               \
+    (void)opc;                                                                 \
+    assert(0 && "unreachable")
 #endif
 
 #define ENABLE_ARCH_4T    arm_dc_feature(s, ARM_FEATURE_V4T)
@@ -9299,7 +9320,8 @@ void gen_intermediate_code(CPUState *cpu, TranslationBlock *tb, int max_insns)
     }
 #ifdef TARGET_CHERI
     // THUMB has not been cheri-fied
-    else assert(0);
+    else
+        assert(0);
 #endif
 #endif
 
@@ -9314,7 +9336,7 @@ void restore_state_to_opc(CPUARMState *env, TranslationBlock *tb,
         assert(cap_is_in_bounds(&env->pc, data[0], 4));
         env->pc._cr_cursor = data[0];
 #else
-        set_aarch_reg_to_x(&env->pc,data[0]);
+        set_aarch_reg_to_x(&env->pc, data[0]);
 #endif
         env->condexec_bits = 0;
         env->exception.syndrome = data[2] << ARM_INSN_START_WORD2_SHIFT;

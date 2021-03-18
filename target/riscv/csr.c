@@ -1453,7 +1453,8 @@ int riscv_csrrw(CPURISCVState *env, int csrno, target_ulong *ret_value,
         if (env->debugger) {
             return -1;
         }
-        raise_cheri_exception_impl(env, CapEx_AccessSystemRegsViolation, /*regnum=*/0, 0, true, retpc);
+        raise_cheri_exception_impl(env, CapEx_AccessSystemRegsViolation,
+                                   /*regnum=*/0, 0, true, retpc);
 #endif
     }
 #endif // TARGET_CHERI

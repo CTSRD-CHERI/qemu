@@ -256,7 +256,7 @@ int arm_cpu_write_elf64_note(WriteCoreDumpFunction f, CPUState *cs,
     }
 
     for (i = 0; i < 31; ++i) {
-        note.prstatus.pr_reg.regs[i] = cpu_to_dump64(s, arm_get_xreg(env,i));
+        note.prstatus.pr_reg.regs[i] = cpu_to_dump64(s, arm_get_xreg(env, i));
     }
     note.prstatus.pr_reg.sp = cpu_to_dump64(s, sp);
     note.prstatus.pr_reg.pc = cpu_to_dump64(s, get_aarch_reg_as_x(&env->pc));

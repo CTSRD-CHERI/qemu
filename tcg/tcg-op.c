@@ -2917,12 +2917,15 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
 #endif
 }
 
-static void handle_conditional_invalidate(TCGv_cap_checked_ptr checked_addr, MemOp memop, TCGv_i32 store_happens) {
+static void handle_conditional_invalidate(TCGv_cap_checked_ptr checked_addr,
+                                          MemOp memop, TCGv_i32 store_happens)
+{
 #if defined(TARGET_MIPS) || defined(TARGET_RISCV) || defined(TARGET_CHERI)
     TCGv_i32 op = tcg_const_i32(memop);
 #ifdef TARGET_CHERI
     // Condition handled in helper
-    gen_helper_cheri_invalidate_tags_condition(cpu_env, checked_addr, op, store_happens);
+    gen_helper_cheri_invalidate_tags_condition(cpu_env, checked_addr, op,
+                                               store_happens);
 #endif
 #if defined(TARGET_MIPS) || defined(TARGET_RISCV)
     gen_cheri_break_loadlink(checked_addr, op);
@@ -2931,7 +2934,9 @@ static void handle_conditional_invalidate(TCGv_cap_checked_ptr checked_addr, Mem
 #endif
 }
 
-static void tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(TCGv_i32 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop, bool invalidate)
+static void tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(
+    TCGv_i32 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop,
+    bool invalidate)
 {
     TCGv_i32 swap = NULL;
     uint16_t info = trace_mem_get_info(memop, idx, 1);
@@ -2943,15 +2948,12 @@ static void tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(TCGv_i32 val, 
     if (!TCG_TARGET_HAS_MEMORY_BSWAP && (memop & MO_BSWAP)) {
         swap = tcg_temp_new_i32();
         switch (memop & MO_SIZE) {
-            case MO_16:
-                tcg_gen_ext16u_i32(swap, val);
-                tcg_gen_bswap16_i32(swap, swap);
-                break;
-            case MO_32:
-                tcg_gen_bswap32_i32(swap, val);
-                break;
-            default:
-                g_assert_not_reached();
+        case MO_16:
+            tcg_gen_ext16u_i32(swap, val);
+            tcg_gen_bswap16_i32(swap, swap);
+            break;
+        case MO_32: tcg_gen_bswap32_i32(swap, val); break;
+        default: g_assert_not_reached();
         }
         val = swap;
         memop &= ~MO_BSWAP;
@@ -2964,7 +2966,8 @@ static void tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(TCGv_i32 val, 
     gen_rvfi_dii_set_field_const_i32(MEM, mem_wmask, memop_rvfi_mask(memop));
 
     plugin_gen_mem_callbacks(addr, info);
-#if defined(TARGET_MIPS) || defined(TARGET_RISCV) || defined(CONFIG_TCG_LOG_INSTR) || defined(TARGET_CHERI)
+#if defined(TARGET_MIPS) || defined(TARGET_RISCV) ||                           \
+    defined(CONFIG_TCG_LOG_INSTR) || defined(TARGET_CHERI)
     TCGv_i32 tcop = tcg_const_i32(memop);
 #if defined(CONFIG_TCG_LOG_INSTR)
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
@@ -2987,10 +2990,12 @@ static void tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(TCGv_i32 val, 
     }
 }
 
-
-void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop)
+void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val,
+                                           TCGv_cap_checked_ptr addr,
+                                           TCGArg idx, MemOp memop)
 {
-    tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(val, addr, idx, memop, true);
+    tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(val, addr, idx, memop,
+                                                          true);
 }
 
 void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop)
@@ -3073,13 +3078,16 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
 #endif
 }
 
-static void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(TCGv_i64 val, TCGv_cap_checked_ptr addr, TCGArg idx,
-        MemOp memop, bool invalidate) {
+static void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
+    TCGv_i64 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop,
+    bool invalidate)
+{
     TCGv_i64 swap = NULL;
     uint16_t info;
 
     if (TCG_TARGET_REG_BITS == 32 && (memop & MO_SIZE) < MO_64) {
-        tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(TCGV_LOW(val), addr, idx, memop, invalidate);
+        tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(
+            TCGV_LOW(val), addr, idx, memop, invalidate);
         return;
     }
 
@@ -3091,19 +3099,16 @@ static void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(TCGv_i64 val, 
     if (!TCG_TARGET_HAS_MEMORY_BSWAP && (memop & MO_BSWAP)) {
         swap = tcg_temp_new_i64();
         switch (memop & MO_SIZE) {
-            case MO_16:
-                tcg_gen_ext16u_i64(swap, val);
-                tcg_gen_bswap16_i64(swap, swap);
-                break;
-            case MO_32:
-                tcg_gen_ext32u_i64(swap, val);
-                tcg_gen_bswap32_i64(swap, swap);
-                break;
-            case MO_64:
-                tcg_gen_bswap64_i64(swap, val);
-                break;
-            default:
-                g_assert_not_reached();
+        case MO_16:
+            tcg_gen_ext16u_i64(swap, val);
+            tcg_gen_bswap16_i64(swap, swap);
+            break;
+        case MO_32:
+            tcg_gen_ext32u_i64(swap, val);
+            tcg_gen_bswap32_i64(swap, swap);
+            break;
+        case MO_64: tcg_gen_bswap64_i64(swap, val); break;
+        default: g_assert_not_reached();
         }
         val = swap;
         memop &= ~MO_BSWAP;
@@ -3116,7 +3121,8 @@ static void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(TCGv_i64 val, 
     gen_rvfi_dii_set_field_const_i32(MEM, mem_wmask, memop_rvfi_mask(memop));
 
     plugin_gen_mem_callbacks(addr, info);
-#if defined(TARGET_MIPS) || defined(TARGET_RISCV) || defined(CONFIG_TCG_LOG_INSTR) || defined(TARGET_CHERI)
+#if defined(TARGET_MIPS) || defined(TARGET_RISCV) ||                           \
+    defined(CONFIG_TCG_LOG_INSTR) || defined(TARGET_CHERI)
     TCGv_i32 tcop = tcg_const_i32(memop);
 #if defined(CONFIG_TCG_LOG_INSTR)
     if (unlikely(qemu_loglevel_mask(CPU_LOG_INSTR))) {
@@ -3139,9 +3145,12 @@ static void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(TCGv_i64 val, 
     }
 }
 
-void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop)
+void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val,
+                                           TCGv_cap_checked_ptr addr,
+                                           TCGArg idx, MemOp memop)
 {
-    tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(val, addr, idx, memop, true);
+    tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(val, addr, idx, memop,
+                                                          true);
 }
 
 static void tcg_gen_ext_i32(TCGv_i32 ret, TCGv_i32 val, MemOp opc)
@@ -3246,7 +3255,8 @@ void tcg_gen_atomic_cmpxchg_i32_with_checked_addr(
         tcg_temp_free_i32(equal);
 #endif
         tcg_gen_movcond_i32(TCG_COND_EQ, t2, t1, t2, newv, t1);
-        tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(t2, checked_addr, idx, memop, false);
+        tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(
+            t2, checked_addr, idx, memop, false);
         tcg_temp_free_i32(t2);
 
         if (memop & MO_SIGN) {
@@ -3303,7 +3313,8 @@ void tcg_gen_atomic_cmpxchg_i64_with_checked_addr(
         tcg_temp_free_i32(equal);
 #endif
         tcg_gen_movcond_i64(TCG_COND_EQ, t2, t1, t2, newv, t1);
-        tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(t2, checked_addr, idx, memop, false);
+        tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
+            t2, checked_addr, idx, memop, false);
         tcg_temp_free_i64(t2);
 
         if (memop & MO_SIGN) {
@@ -3364,11 +3375,15 @@ enum GEN_OP_SIGN {
 
 // The sign of an atomic operation need not match the sign of a memop.
 // For example, arm has a fetch minimum signed byte instruction.
-// This does NOT sign-extend the value loaded (and so no MO_SIGN), but expects the comparison to be signed.
-// AMOMINU.W on RISCV should be doing an unsigned min, but WILL sign-extend the value loaded after.
-// Best way of handling this is to do an appropriate load for the operation, then extend the result afterwards.
+// This does NOT sign-extend the value loaded (and so no MO_SIGN), but expects
+// the comparison to be signed. AMOMINU.W on RISCV should be doing an unsigned
+// min, but WILL sign-extend the value loaded after. Best way of handling this
+// is to do an appropriate load for the operation, then extend the result
+// afterwards.
 
-static MemOp get_memop_for_operation(MemOp base_memop, enum GEN_OP_SIGN gen_sign) {
+static MemOp get_memop_for_operation(MemOp base_memop,
+                                     enum GEN_OP_SIGN gen_sign)
+{
     if (((base_memop & MO_SIZE) == MO_Q) || gen_sign == GEN_OP_NO_SIGN)
         return base_memop;
     else if (gen_sign == GEN_OP_SIGNED)
@@ -3515,36 +3530,35 @@ static void do_atomic_op_i64(TCGv_i64 ret, TCGv_cap_checked_ptr checked_addr,
 #endif
 }
 
-#define GEN_ATOMIC_HELPER(NAME, OP, NEW, SIGNED)                        \
-static void * const table_##NAME[16] = {                                \
-    [MO_8] = gen_helper_atomic_##NAME##b,                               \
-    [MO_16 | MO_LE] = gen_helper_atomic_##NAME##w_le,                   \
-    [MO_16 | MO_BE] = gen_helper_atomic_##NAME##w_be,                   \
-    [MO_32 | MO_LE] = gen_helper_atomic_##NAME##l_le,                   \
-    [MO_32 | MO_BE] = gen_helper_atomic_##NAME##l_be,                   \
-    WITH_ATOMIC64([MO_64 | MO_LE] = gen_helper_atomic_##NAME##q_le)     \
-    WITH_ATOMIC64([MO_64 | MO_BE] = gen_helper_atomic_##NAME##q_be)     \
-};                                                                      \
-void tcg_gen_atomic_##NAME##_i32                                        \
-    (TCGv_i32 ret, TCGv_cap_checked_ptr addr, TCGv_i32 val, TCGArg idx, MemOp memop)    \
-{                                                                       \
-    if (tcg_ctx->tb_cflags & CF_PARALLEL) {                             \
-        do_atomic_op_i32(ret, addr, val, idx, memop, table_##NAME);     \
-    } else {                                                            \
-        do_nonatomic_op_i32(ret, addr, val, idx, memop, NEW,            \
-                            tcg_gen_##OP##_i32, SIGNED);                \
-    }                                                                   \
-}                                                                       \
-void tcg_gen_atomic_##NAME##_i64                                        \
-    (TCGv_i64 ret, TCGv_cap_checked_ptr addr, TCGv_i64 val, TCGArg idx, MemOp memop)    \
-{                                                                       \
-    if (tcg_ctx->tb_cflags & CF_PARALLEL) {                             \
-        do_atomic_op_i64(ret, addr, val, idx, memop, table_##NAME);     \
-    } else {                                                            \
-        do_nonatomic_op_i64(ret, addr, val, idx, memop, NEW,            \
-                            tcg_gen_##OP##_i64, SIGNED);                \
-    }                                                                   \
-}
+#define GEN_ATOMIC_HELPER(NAME, OP, NEW, SIGNED)                               \
+    static void *const table_##NAME[16] = {                                    \
+        [MO_8] = gen_helper_atomic_##NAME##b,                                  \
+        [MO_16 | MO_LE] = gen_helper_atomic_##NAME##w_le,                      \
+        [MO_16 | MO_BE] = gen_helper_atomic_##NAME##w_be,                      \
+        [MO_32 | MO_LE] = gen_helper_atomic_##NAME##l_le,                      \
+        [MO_32 | MO_BE] = gen_helper_atomic_##NAME##l_be,                      \
+        WITH_ATOMIC64([MO_64 | MO_LE] = gen_helper_atomic_##NAME##q_le)        \
+            WITH_ATOMIC64([MO_64 | MO_BE] = gen_helper_atomic_##NAME##q_be)};  \
+    void tcg_gen_atomic_##NAME##_i32(TCGv_i32 ret, TCGv_cap_checked_ptr addr,  \
+                                     TCGv_i32 val, TCGArg idx, MemOp memop)    \
+    {                                                                          \
+        if (tcg_ctx->tb_cflags & CF_PARALLEL) {                                \
+            do_atomic_op_i32(ret, addr, val, idx, memop, table_##NAME);        \
+        } else {                                                               \
+            do_nonatomic_op_i32(ret, addr, val, idx, memop, NEW,               \
+                                tcg_gen_##OP##_i32, SIGNED);                   \
+        }                                                                      \
+    }                                                                          \
+    void tcg_gen_atomic_##NAME##_i64(TCGv_i64 ret, TCGv_cap_checked_ptr addr,  \
+                                     TCGv_i64 val, TCGArg idx, MemOp memop)    \
+    {                                                                          \
+        if (tcg_ctx->tb_cflags & CF_PARALLEL) {                                \
+            do_atomic_op_i64(ret, addr, val, idx, memop, table_##NAME);        \
+        } else {                                                               \
+            do_nonatomic_op_i64(ret, addr, val, idx, memop, NEW,               \
+                                tcg_gen_##OP##_i64, SIGNED);                   \
+        }                                                                      \
+    }
 
 GEN_ATOMIC_HELPER(fetch_add, add, 0, GEN_OP_NO_SIGN)
 GEN_ATOMIC_HELPER(fetch_and, and, 0, GEN_OP_NO_SIGN)

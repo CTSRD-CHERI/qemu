@@ -139,9 +139,11 @@ static void aarch64_a57_initfn(Object *obj)
     define_arm_cp_regs(cpu, cortex_a72_a57_a53_cp_reginfo);
 }
 
-static void aarch64_morello_initfn(Object *obj) {
-    // LETODO: Copied now from a72, still need ot fix up any differences with morello
-    // LETODO: Maybe stop using ifdef TARGET_CHERI and configure it from here
+static void aarch64_morello_initfn(Object *obj)
+{
+    // LETODO: Copied now from a72, still need ot fix up any differences with
+    // morello LETODO: Maybe stop using ifdef TARGET_CHERI and configure it from
+    // here
     ARMCPU *cpu = ARM_CPU(obj);
     uint64_t t;
 
@@ -190,7 +192,7 @@ static void aarch64_morello_initfn(Object *obj) {
     cpu->ccsidr[0] = 0x701fe00a; /* 32KB L1 dcache */
     cpu->ccsidr[1] = 0x201fe012; /* 48KB L1 icache */
     cpu->ccsidr[2] = 0x707fe07a; /* 1MB L2 cache */
-    cpu->dcz_blocksize = 4; /* 64 bytes */
+    cpu->dcz_blocksize = 4;      /* 64 bytes */
     cpu->gic_num_lrs = 4;
     cpu->gic_vpribits = 5;
     cpu->gic_vprebits = 5;
@@ -786,11 +788,11 @@ static void aarch64_max_initfn(Object *obj)
 }
 
 static const ARMCPUInfo aarch64_cpus[] = {
-    { .name = "cortex-a57",         .initfn = aarch64_a57_initfn },
-    { .name = "cortex-a53",         .initfn = aarch64_a53_initfn },
-    { .name = "cortex-a72",         .initfn = aarch64_a72_initfn },
-    { .name = "morello",            .initfn = aarch64_morello_initfn },
-    { .name = "max",                .initfn = aarch64_max_initfn },
+    {.name = "cortex-a57", .initfn = aarch64_a57_initfn},
+    {.name = "cortex-a53", .initfn = aarch64_a53_initfn},
+    {.name = "cortex-a72", .initfn = aarch64_a72_initfn},
+    {.name = "morello", .initfn = aarch64_morello_initfn},
+    {.name = "max", .initfn = aarch64_max_initfn},
 };
 
 static bool aarch64_cpu_get_aarch64(Object *obj, Error **errp)

@@ -42,21 +42,17 @@
 
 #ifdef TARGET_CHERI
 
-const char * const cheri_gp_regnames[34] = {
-        "c0", "c1",  "c2",  "c3",  "c4",  "c5",   "c6",
-        "c7",   "c8",  "c9",  "c10", "c11", "c12",  "c13",
-        "c14",  "c15", "c16", "c17", "c18", "c19",  "c20",
-        "c21",  "c22", "c23", "c24", "c25", "c26", "c27",
-        "c28",  "c29", "c30", "csp", "czr", "ctmp(error)"
-};
+const char *const cheri_gp_regnames[34] = {
+    "c0",  "c1",  "c2",  "c3",  "c4",  "c5",  "c6",         "c7",  "c8",
+    "c9",  "c10", "c11", "c12", "c13", "c14", "c15",        "c16", "c17",
+    "c18", "c19", "c20", "c21", "c22", "c23", "c24",        "c25", "c26",
+    "c27", "c28", "c29", "c30", "csp", "czr", "ctmp(error)"};
 
-const char * const cheri_gp_int_regnames[34] = {
-        "x0", "x1",  "x2",  "x3",  "x4",  "x5",   "x6",
-        "x7",   "x8",  "x9",  "x10", "x11", "x12",  "x13",
-        "x14",  "x15", "x16", "x17", "x18", "x19",  "x20",
-        "x21",  "x22", "x23", "x24", "x25", "x26", "x27",
-        "x28",  "x29", "x30", "xsp", "xzr", "xtmp(error)"
-};
+const char *const cheri_gp_int_regnames[34] = {
+    "x0",  "x1",  "x2",  "x3",  "x4",  "x5",  "x6",         "x7",  "x8",
+    "x9",  "x10", "x11", "x12", "x13", "x14", "x15",        "x16", "x17",
+    "x18", "x19", "x20", "x21", "x22", "x23", "x24",        "x25", "x26",
+    "x27", "x28", "x29", "x30", "xsp", "xzr", "xtmp(error)"};
 
 #endif
 
@@ -66,7 +62,7 @@ static void arm_cpu_set_pc(CPUState *cs, vaddr value)
     CPUARMState *env = &cpu->env;
 
     if (is_a64(env)) {
-        set_aarch_reg_value(&env->pc,value);
+        set_aarch_reg_value(&env->pc, value);
         env->thumb = 0;
     } else {
         env->regs[15] = value & ~1;
@@ -154,7 +150,7 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
         CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
     } else
 #endif
-    if (cpreg_field_is_64bit(ri)) {
+        if (cpreg_field_is_64bit(ri)) {
         CPREG_FIELD64(&cpu->env, ri) = ri->resetvalue;
     } else {
         CPREG_FIELD32(&cpu->env, ri) = ri->resetvalue;
@@ -822,7 +818,7 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 
     qemu_fprintf(f, " PC=%016" PRIx64 " ", get_aarch_reg_as_x(&env->pc));
     for (i = 0; i < 32; i++) {
-        target_ulong reg = arm_get_xreg(env,i);
+        target_ulong reg = arm_get_xreg(env, i);
         if (i == 31) {
             qemu_fprintf(f, " SP=%016" PRIx64 "\n", reg);
         } else {

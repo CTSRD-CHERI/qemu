@@ -19,7 +19,7 @@
 
 #include "cheri-archspecific-early.h"
 
-#define CAP_TAG_GET_MANY_SHFT    2
+#define CAP_TAG_GET_MANY_SHFT 2
 
 #include "internals.h"
 
@@ -52,43 +52,38 @@ typedef enum CheriCapExc {
     CapEx_AccessSystemRegsViolation
 } CheriCapExcCause;
 
-static inline ARMFaultType cheri_cause_to_arm_fault(CheriCapExcCause cause) {
-    switch(cause) {
-        case CapEx_None:
-            return ARMFault_None;
-        case CapEx_LengthViolation:
-            return ARMFault_CapBounds;
-        case CapEx_TagViolation:
-            return ARMFault_CapTag;
-        case CapEx_SealViolation:
-        case CapEx_TypeViolation:
-            return ARMFault_CapSeal;
-        case CapEx_TLBNoStoreCap:
-            return ARMFault_CapPagePerm;
-        case CapEx_GlobalViolation:
-        case CapEx_PermitExecuteViolation:
-        case CapEx_PermitLoadViolation:
-        case CapEx_PermitStoreViolation:
-        case CapEx_PermitLoadCapViolation:
-        case CapEx_PermitStoreCapViolation:
-        case CapEx_PermitStoreLocalCapViolation:
-        case CapEx_PermitSealViolation:
-        case CapEx_PermitCCallViolation:
-        case CapEx_AccessCCallIDCViolation:
-        case CapEx_PermitUnsealViolation:
-        case CapEx_PermitSetCIDViolation:
-            return ARMFault_CapPerm;
-        default:
-            assert(0);
+static inline ARMFaultType cheri_cause_to_arm_fault(CheriCapExcCause cause)
+{
+    switch (cause) {
+    case CapEx_None: return ARMFault_None;
+    case CapEx_LengthViolation: return ARMFault_CapBounds;
+    case CapEx_TagViolation: return ARMFault_CapTag;
+    case CapEx_SealViolation:
+    case CapEx_TypeViolation: return ARMFault_CapSeal;
+    case CapEx_TLBNoStoreCap: return ARMFault_CapPagePerm;
+    case CapEx_GlobalViolation:
+    case CapEx_PermitExecuteViolation:
+    case CapEx_PermitLoadViolation:
+    case CapEx_PermitStoreViolation:
+    case CapEx_PermitLoadCapViolation:
+    case CapEx_PermitStoreCapViolation:
+    case CapEx_PermitStoreLocalCapViolation:
+    case CapEx_PermitSealViolation:
+    case CapEx_PermitCCallViolation:
+    case CapEx_AccessCCallIDCViolation:
+    case CapEx_PermitUnsealViolation:
+    case CapEx_PermitSetCIDViolation: return ARMFault_CapPerm;
+    default: assert(0);
     }
 }
 
 void QEMU_NORETURN raise_exception(CPUARMState *env, uint32_t excp,
-        uint32_t syndrome, uint32_t target_el);
+                                   uint32_t syndrome, uint32_t target_el);
 
 static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
-        CPUArchState *env, CheriCapExcCause cause, unsigned regnum, target_ulong addr,
-bool instavail, uintptr_t hostpc, bool instruction_fetch, bool is_write)
+    CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
+    target_ulong addr, bool instavail, uintptr_t hostpc, bool instruction_fetch,
+    bool is_write)
 {
     ARMFaultType arm_fault = cheri_cause_to_arm_fault(cause);
 
@@ -103,43 +98,93 @@ bool instavail, uintptr_t hostpc, bool instruction_fetch, bool is_write)
 
     env->exception.vaddress = addr;
     env->exception.fsr = fsr;
-    syn = instruction_fetch ? syn_insn_abort(current_el == target_el, 0, 0, fsc) :
-          syn_data_abort_no_iss(current_el == target_el, 0, 0, 0, 0, is_write ? 1 : 0, fsc);
-    raise_exception(env, instruction_fetch ? EXCP_PREFETCH_ABORT : EXCP_DATA_ABORT, syn, target_el);
+    syn = instruction_fetch
+              ? syn_insn_abort(current_el == target_el, 0, 0, fsc)
+              : syn_data_abort_no_iss(current_el == target_el, 0, 0, 0, 0,
+                                      is_write ? 1 : 0, fsc);
+    raise_exception(env,
+                    instruction_fetch ? EXCP_PREFETCH_ABORT : EXCP_DATA_ABORT,
+                    syn, target_el);
 }
 
-static inline const char* cheri_cause_str(CheriCapExcCause cause);
+static inline const char *cheri_cause_str(CheriCapExcCause cause);
 
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
-CPUArchState *env, CheriCapExcCause cause, unsigned regnum, target_ulong addr,
-bool instavail, uintptr_t hostpc)
+    CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
+    target_ulong addr, bool instavail, uintptr_t hostpc)
 {
-    raise_cheri_exception_impl_if_wnr(env, cause, regnum, addr, instavail, hostpc, false, false);
+    raise_cheri_exception_impl_if_wnr(env, cause, regnum, addr, instavail,
+                                      hostpc, false, false);
 }
 
-static inline void QEMU_NORETURN raise_load_tag_exception(
-        CPUArchState *env, target_ulong va, int cb, uintptr_t retpc)
+static inline void QEMU_NORETURN raise_load_tag_exception(CPUArchState *env,
+                                                          target_ulong va,
+                                                          int cb,
+                                                          uintptr_t retpc)
 {
     raise_cheri_exception_impl(env, CapEx_TagViolation, cb, va, false, retpc);
 }
 
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
-        CPUArchState *env, target_ulong addr, uintptr_t retpc)
+    CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
-    arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_LOAD, cpu_mmu_index(env, false), retpc);
+    arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_LOAD,
+                                cpu_mmu_index(env, false), retpc);
 }
 
 static inline void QEMU_NORETURN raise_unaligned_store_exception(
-        CPUArchState *env, target_ulong addr, uintptr_t retpc)
+    CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
-    arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_STORE, cpu_mmu_index(env, false), retpc);
+    arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_STORE,
+                                cpu_mmu_index(env, false), retpc);
 }
 
-static inline bool validate_cjalr_target(CPUARMState *env,
-                                         const cap_register_t *target,
-                                         unsigned regnum,
-                                         uintptr_t retpc)
+static inline bool validate_jump_target(CPUARMState *env,
+                                        const cap_register_t *target,
+                                        unsigned regnum, uintptr_t retpc)
 {
-    // I think arm is meant to take exceptions at the target, so just return true.
+    // I think arm is meant to take exceptions at the target, so just return
+    // true.
     return true;
+}
+
+#include "exec/helper-proto.h"
+
+static inline void update_next_pcc_for_tcg(CPUARMState *env,
+                                           const cap_register_t *target,
+                                           uint32_t cjalr_flags)
+{
+    bool system_changed =
+        ((env->pc.cr_perms ^ target->cr_perms) & CAP_ACCESS_SYS_REGS) != 0;
+    bool executive_changed =
+        ((env->pc.cr_perms ^ target->cr_perms) & CAP_PERM_EXECUTIVE) != 0;
+    bool c64_changed =
+        (target->_cr_cursor & 1) != ((env->pstate & PSTATE_C64) != 0);
+    bool was_executive = (env->pc.cr_perms & CAP_PERM_EXECUTIVE);
+
+    unsigned int cur_el;
+
+    env->pc = *target;
+    env->pc._cr_cursor &= ~1;
+
+    if (executive_changed) {
+        // Branches back to executive are allowed
+        if (!(cjalr_flags & CJALR_CAN_BRANCH_RESTRICTED) && was_executive) {
+            env->pc.cr_tag = 0;
+        }
+        cur_el = arm_current_el(env);
+        aarch64_save_sp(env, cur_el);
+    }
+
+    // Switch C64. Branches will have already ended a translation block.
+    if (c64_changed)
+        env->pstate ^= PSTATE_C64;
+
+    // Rebuild cached target-specific cheriflags if anything changed
+    if (system_changed || executive_changed || c64_changed)
+        arm_rebuild_chflags(env);
+
+    // Executive change can result in a change of stack / DDC
+    if (executive_changed)
+        aarch64_restore_sp(env, cur_el);
 }

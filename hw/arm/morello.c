@@ -62,16 +62,16 @@ typedef struct MorelloMachineClass {
 } MorelloMachineClass;
 
 #define TYPE_MORELLO_MACHINE MACHINE_TYPE_NAME("morello")
-#define MORELLO_MACHINE(obj) \
+#define MORELLO_MACHINE(obj)                                                   \
     OBJECT_CHECK(MorelloMachineState, (obj), TYPE_MORELLO_MACHINE)
 
-#define MORELLO_MACHINE_CLASS(klass) \
-     OBJECT_CLASS_CHECK(MorelloMachineClass, (klass), TYPE_MORELLO_MACHINE)
-#define MORELLO_MACHINE_GET_CLASS(obj) \
-     OBJECT_GET_CLASS(MorelloMachineClass, (obj), TYPE_MORELLO_MACHINE)
+#define MORELLO_MACHINE_CLASS(klass)                                           \
+    OBJECT_CLASS_CHECK(MorelloMachineClass, (klass), TYPE_MORELLO_MACHINE)
+#define MORELLO_MACHINE_GET_CLASS(obj)                                         \
+    OBJECT_GET_CLASS(MorelloMachineClass, (obj), TYPE_MORELLO_MACHINE)
 
-
-static void error_and_die(const char* message) {
+static void error_and_die(const char *message)
+{
     error_report("%s\n", message);
     assert(0);
     exit(1);
@@ -82,8 +82,8 @@ static struct arm_boot_info binfo;
 
 static void morello_machine_init(MachineState *machine)
 {
-    MorelloMachineState* morelloMachineState = MORELLO_MACHINE(machine);
-    Error * errp = NULL;
+    MorelloMachineState *morelloMachineState = MORELLO_MACHINE(machine);
+    Error *errp = NULL;
 
 #ifndef TARGET_CHERI
 #error "Morello board should be used with TARGET_CHERI"
@@ -98,15 +98,18 @@ static void morello_machine_init(MachineState *machine)
 #endif
 
     if (strcmp(machine->cpu_type, ARM_CPU_TYPE_NAME("morello")) != 0) {
-        error_and_die("Use the special 'morello' cpu type for the Morello board.");
+        error_and_die(
+            "Use the special 'morello' cpu type for the Morello board.");
     }
 
     /* Create CPUS */
 
-    for(size_t i = 0; i != machine->smp.cpus; i++) {
+    for (size_t i = 0; i != machine->smp.cpus; i++) {
         object_initialize_child(OBJECT(machine), "cpu[*]",
-                &morelloMachineState->cpus[i].core, machine->cpu_type);
-        if (!qdev_realize(DEVICE(&morelloMachineState->cpus[i].core), NULL, &errp)) {
+                                &morelloMachineState->cpus[i].core,
+                                machine->cpu_type);
+        if (!qdev_realize(DEVICE(&morelloMachineState->cpus[i].core), NULL,
+                          &errp)) {
             error_report_err(errp);
             assert(0);
         }
@@ -127,7 +130,8 @@ static void morello_machine_init(MachineState *machine)
     assert(binfo.entry < ram_size);
 }
 
-static void morello_machine_class_init(ObjectClass *oc, void *data) {
+static void morello_machine_class_init(ObjectClass *oc, void *data)
+{
     MachineClass *mc = MACHINE_CLASS(oc);
 
     mc->desc = "Morello Machine";
@@ -139,15 +143,12 @@ static void morello_machine_class_init(ObjectClass *oc, void *data) {
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("morello");
 }
 
-static const TypeInfo morello_machine_types[] = {
-        {
-            .name           = TYPE_MORELLO_MACHINE,
-            .parent         = TYPE_MACHINE,
-            .class_init     = morello_machine_class_init,
-            .instance_size  = sizeof(MorelloMachineState),
-            .class_size     = sizeof(MorelloMachineClass),
-        }
-};
+static const TypeInfo morello_machine_types[] = {{
+    .name = TYPE_MORELLO_MACHINE,
+    .parent = TYPE_MACHINE,
+    .class_init = morello_machine_class_init,
+    .instance_size = sizeof(MorelloMachineState),
+    .class_size = sizeof(MorelloMachineClass),
+}};
 
 DEFINE_TYPES(morello_machine_types)
-

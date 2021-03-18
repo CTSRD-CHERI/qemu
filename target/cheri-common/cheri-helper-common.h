@@ -93,11 +93,20 @@ DEF_HELPER_4(candaddr, void, env, i32, i32, tl)
 DEF_HELPER_4(candperm, void, env, i32, i32, tl)
 DEF_HELPER_4(cfromptr, void, env, i32, i32, tl)
 DEF_HELPER_4(cincoffset, void, env, i32, i32, tl)
-// Rather than waste TCG vals on a few bits of flags, they can be placed in the 32-bit register numbers
-#define HELPER_REG_MASK         0xFF
-#define CJALR_MUST_BE_SENTRY        (1 << 8)
+
+// Rather than waste TCG vals on a few bits of flags, they can be placed in the
+// 32-bit register numbers. Also has the benefit of optimising away when defined
+// to 0 for targets that do not support them.
+#define HELPER_REG_MASK 0xFF
+#ifdef TARGET_AARCH64
+#define CJALR_MUST_BE_SENTRY (1 << 8)
 #define CJALR_CAN_BRANCH_RESTRICTED (1 << 9)
-#define CJALR_DONT_MAKE_SENTRY      (1 << 10)
+#define CJALR_DONT_MAKE_SENTRY (1 << 10)
+#else
+#define CJALR_MUST_BE_SENTRY 0
+#define CJALR_CAN_BRANCH_RESTRICTED 0
+#define CJALR_DONT_MAKE_SENTRY 0
+#endif
 DEF_HELPER_4(cjalr, void, env, i32, i32, tl)
 DEF_HELPER_4(csetaddr, void, env, i32, i32, tl)
 DEF_HELPER_4(csetbounds, void, env, i32, i32, tl)

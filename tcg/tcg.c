@@ -2756,7 +2756,8 @@ static void liveness_pass_1(TCGContext *s)
             la_reset_pref(ts);
             break;
         case INDEX_op_sync:
-            /* Sync should never cause anything to be live as if a global is dead then it should not need syncing */
+            /* Sync should never cause anything to be live as if a global is
+             * dead then it should not need syncing */
             break;
         case INDEX_op_add2_i32:
             opc_new = INDEX_op_add_i32;
