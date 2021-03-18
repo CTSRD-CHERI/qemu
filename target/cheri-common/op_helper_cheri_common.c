@@ -1510,8 +1510,7 @@ void
 {
     const cap_register_t *pcc = cheri_get_recent_pcc(env);
     check_cap(env, pcc, required_perms, cap_get_base(pcc), CHERI_EXC_REGNUM_PCC,
-              0,
-              /*instavail=*/true, GETPC());
+              1, /*instavail=*/true, GETPC());
     __builtin_unreachable();
 }
 
@@ -1542,7 +1541,7 @@ void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
 #else
     addr = cap_get_base(ddc) - cap_get_cursor(ddc);
 #endif
-    cap_check_common_reg(required_perms, env, CHERI_EXC_REGNUM_DDC, addr, 0,
+    cap_check_common_reg(required_perms, env, CHERI_EXC_REGNUM_DDC, addr, 1,
                          GETPC(), ddc, 1, NULL);
     error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,
                  PRINT_CAP_ARGS(cheri_get_ddc(env)));
