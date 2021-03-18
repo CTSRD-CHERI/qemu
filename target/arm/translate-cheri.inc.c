@@ -200,7 +200,7 @@ static void set_NZCV(DisasContext *ctx, TCGv_i32 N, TCGv_i32 Z, TCGv_i32 C,
 
 static inline TCGv_i64 cpu_reg_maybe_0(DisasContext *ctx, int regnum)
 {
-    if (regnum == ZERO_REG_NUM) {
+    if (regnum == NULL_CAPREG_INDEX) {
         return cpu_reg(ctx, 31);
     } else {
         return cpu_reg_sp(ctx, regnum);
@@ -209,7 +209,7 @@ static inline TCGv_i64 cpu_reg_maybe_0(DisasContext *ctx, int regnum)
 
 static inline TCGv_i64 read_cpu_reg_maybe_0(DisasContext *ctx, int regnum)
 {
-    if (regnum == ZERO_REG_NUM) {
+    if (regnum == NULL_CAPREG_INDEX) {
         return read_cpu_reg(ctx, 31, 1);
     } else {
         return read_cpu_reg_sp(ctx, regnum, 1);
