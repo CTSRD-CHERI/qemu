@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2020 Lawrence Esswood
+ * Copyright (c) 2021 Lawrence Esswood
  *
  * This work was supported by Innovate UK project 105694, "Digital Security
  * by Design (DSbD) Technology Platform Prototype".
@@ -28,22 +28,21 @@
  * SUCH DAMAGE.
  */
 
-#pragma once
+#ifndef QEMU_CHERI_ARCHSPECIFIC_EARLIER_H
+#define QEMU_CHERI_ARCHSPECIFIC_EARLIER_H
 
-#include "cheri-archspecific-earlier.h"
+#define NUM_LAZY_CAP_REGS 34
 
-static inline const cap_register_t *cheri_get_ddc(CPUARMState *env) {
-    return &env->DDC_current;
-}
+// Register 32 will be zero, leaving 31 to be SP. Translation should covert 31 to 32 where appropriate
+#define ZERO_REG_NUM 32
+// A register to indicate "no register" where it is inconvenient to have different prototypes
+#define REG_NONE     0x77
+// The register that is meant to be used for the data argument
+#define CINVOKE_DATA_REGNUM 29
+// A micro-architectural register to avoid side effects when decomposing instructions into micro-ops
+#define SCRATCH_REG_NUM 33
 
-static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUARMState *env)
-{
-    return &env->pc;
-}
+#define CHERI_EXC_REGNUM_PCC 0xfe
+#define CHERI_EXC_REGNUM_DDC 0xff
 
-static inline struct GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
-    return &env->gpcapregs;
-}
-
-extern const char * const cheri_gp_regnames[];
-extern const char * const cheri_gp_int_regnames[];
+#endif //QEMU_CHERI_ARCHSPECIFIC_EARLIER_H
