@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2020 Lawrence Esswood
+ * Copyright (c) 2021 Lawrence Esswood
  *
  * This work was supported by Innovate UK project 105694, "Digital Security
  * by Design (DSbD) Technology Platform Prototype".
@@ -28,24 +28,15 @@
  * SUCH DAMAGE.
  */
 
-#pragma once
+#ifndef QEMU_CHERI_ARCHSPECIFIC_EARLIER_H
+#define QEMU_CHERI_ARCHSPECIFIC_EARLIER_H
 
-#include "cheri-archspecific-earlier.h"
+#define NUM_LAZY_CAP_REGS 32
+#define ZERO_REG_NUM 0
 
-static inline const cap_register_t *cheri_get_ddc(CPUARMState *env)
-{
-    return &env->DDC_current;
-}
+// A micro-architectural register to avoid side effects when decomposing
+// instructions into micro-ops NOTE: This needs to be defined, but if not used
+// should just be some value not used by a real register
+#define SCRATCH_REG_NUM 0xdd
 
-static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUARMState *env)
-{
-    return &env->pc;
-}
-
-static inline struct GPCapRegs *cheri_get_gpcrs(CPUArchState *env)
-{
-    return &env->gpcapregs;
-}
-
-extern const char *const cheri_gp_regnames[];
-extern const char *const cheri_gp_int_regnames[];
+#endif // QEMU_CHERI_ARCHSPECIFIC_EARLIER_H

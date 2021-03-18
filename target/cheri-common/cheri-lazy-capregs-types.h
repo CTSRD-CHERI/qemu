@@ -38,6 +38,8 @@
 #ifdef TARGET_CHERI
 
 #include "cheri_defs.h"
+#include "cheri-archspecific-earlier.h"
+
 // This needs to be a separate header so that cpu.h can include it.
 // The rest of cheri-lazy-capregs.h depends on including cpu.h
 
@@ -82,10 +84,6 @@ _Static_assert(sizeof(cap_register_t) == 64, "");
 _Static_assert((offsetof(cap_register_t, cached_pesbt) -
                 offsetof(cap_register_t, _cr_cursor)) == 8,
                "");
-
-#define NUM_LAZY_CAP_REGS 34
-
-#define SCRATCH_REG_NUM 33
 
 typedef struct GPCapRegs {
     // We cache the decompressed capregs here (to avoid constantly decompressing

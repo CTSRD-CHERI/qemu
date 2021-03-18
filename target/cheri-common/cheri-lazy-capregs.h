@@ -45,14 +45,9 @@
 #include "qemu/log.h"
 #include "exec/log_instr.h"
 
-#ifndef CHERI_EXC_REGNUM_PCC
-#define CHERI_EXC_REGNUM_PCC 0xff
-#endif
-#ifndef CHERI_EXC_REGNUM_DDC
-#define CHERI_EXC_REGNUM_DDC 0xfe
-#endif
-#ifndef ZERO_REG_NUM
-#define ZERO_REG_NUM 0x20
+#if !defined(CHERI_EXC_REGNUM_PCC) || !defined(CHERI_EXC_REGNUM_DDC) ||        \
+    !defined(ZERO_REG_NUM)
+#error "Special register numbers should be defined in archspecific-earlier.h"
 #endif
 
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
