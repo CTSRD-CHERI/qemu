@@ -51,6 +51,11 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
                                                             uint16_t reg,
                                                             uintptr_t hostpc)
 {
+
+    if (reg == CHERI_EXC_REGNUM_DDC) {
+        reg = CHERI_TRUE_EXC_REGNUM_DDC;
+    }
+
     if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=" PRINT_CAP_FMTSTR
