@@ -39,13 +39,7 @@
 #pragma once
 
 #include "cheri_defs.h"
-
-#define NULL_CAPREG_INDEX 0
-#define CHERI_EXC_REGNUM_DDC 0 /* TODO: 32 */
-#define CHERI_EXC_REGNUM_PCC 0xff
-#define CHERI_REGNUM_IDC  26  /* Invoked Data Capability */
-#define CINVOKE_DATA_REGNUM CHERI_REGNUM_IDC
-
+#include "cheri-archspecific-earlier.h"
 /*
  * QEMU currently tells the kernel that there are no caches installed
  * (xref target/mips/translate_init.inc.c MIPS_CONFIG1 definition)
