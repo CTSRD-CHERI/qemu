@@ -9333,6 +9333,7 @@ void restore_state_to_opc(CPUARMState *env, TranslationBlock *tb,
 {
     if (is_a64(env)) {
 #ifdef TARGET_CHERI
+        assert(cap_is_in_bounds(&env->pc.cap, data[0], 4));
         env->pc.cap._cr_cursor = data[0];
 #else
         set_aarch_reg_to_x(&env->pc, data[0]);
