@@ -376,7 +376,6 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     /*
      * CJALR: Jump and Link Capability Register
      */
-    GET_HOST_RETPC();
     uint32_t cjalr_flags = cb_with_flags;
     uint32_t cb = cb_with_flags & HELPER_REG_MASK;
 
@@ -384,6 +383,7 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
 
 // AARCH64 takes the exception at the target
 #ifndef TARGET_AARCH64
+    GET_HOST_RETPC();
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (cap_is_sealed_with_type(cbp)) {
@@ -1478,9 +1478,8 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 #endif
 
 QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
-                                                 CheriCapExcCause cause)
+                                                 CheriCapExcCause cause, uintptr_t _host_return_address)
 {
-    GET_HOST_RETPC();
     cheri_debug_assert(pc_is_current(env));
     // Note: we set pc=0 since PC will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
@@ -1506,7 +1505,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
                      __func__, PRINT_CAP_ARGS(pcc));
         tcg_abort();
     }
-    raise_pcc_fault(env, cause);
+    raise_pcc_fault(env, cause, GETPC());
 }
 
 void
@@ -1532,7 +1531,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     // helpful).
     cheri_debug_assert(!cap_is_in_bounds(cheri_get_current_pcc(env), addr,
                                          num_bytes == 0 ? 1 : num_bytes));
-    raise_pcc_fault(env, CapEx_LengthViolation);
+    raise_pcc_fault(env, CapEx_LengthViolation, GETPC());
 }
 
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
