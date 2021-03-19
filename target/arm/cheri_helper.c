@@ -174,9 +174,9 @@ void helper_store_exclusive_cap_via_cap(CPUArchState *env, uint32_t rs,
 }
 
 static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
-                                  uint32_t cb, target_ulong addr, bool compare)
+                                  uint32_t cb, target_ulong addr, bool compare,
+                                  uintptr_t _host_return_address)
 {
-    GET_HOST_RETPC();
 
     const cap_register_t *cbp = get_capreg_or_special(env, cb);
 
@@ -216,14 +216,16 @@ void helper_swap_cap_via_cap(CPUArchState *env, uint32_t cd, uint32_t cs,
                              uint32_t cb, target_ulong addr)
 {
     // Yes, I really meant to swap cs/cd here.
-    swap_cap_via_cap_impl(env, cs, cd, cb, addr, false);
+    GET_HOST_RETPC();
+    swap_cap_via_cap_impl(env, cs, cd, cb, addr, false, _host_return_address);
 }
 
 void helper_compare_swap_cap_via_cap(CPUArchState *env, uint32_t cd,
                                      uint32_t cs, uint32_t cb,
                                      target_ulong addr)
 {
-    swap_cap_via_cap_impl(env, cd, cs, cb, addr, true);
+    GET_HOST_RETPC();
+    swap_cap_via_cap_impl(env, cd, cs, cb, addr, true, _host_return_address);
 }
 
 // (possibly) unseal cn, load pair (data,target), branch to target, put data in
