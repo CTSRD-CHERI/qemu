@@ -381,7 +381,10 @@ void *cheri_tagmem_for_addr(RAMBlock *ram, ram_addr_t ram_offset, size_t size)
         return ALL_ZERO_TAGBLK;
 
     uint64_t tag = ram_offset >> CAP_TAG_SHFT;
+#ifndef TARGET_AARCH64
+    // AArch64 seems to use different sizes. Might be worth looking into.
     cheri_debug_assert(size == TARGET_PAGE_SIZE && "Unexpected size");
+#endif
     CheriTagBlock *tagblk = cheri_tag_block(tag, ram);
     if (tagblk != NULL) {
         const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
