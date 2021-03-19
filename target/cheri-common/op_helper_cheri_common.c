@@ -384,7 +384,6 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     /*
      * CJALR: Jump and Link Capability Register
      */
-    GET_HOST_RETPC();
     uint32_t cjalr_flags = cb_with_flags;
     uint32_t cb = cb_with_flags & HELPER_REG_MASK;
 
@@ -393,6 +392,7 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     const target_ulong addr = cursor + (target_long)offset;
     // AARCH64 takes the exception at the target
 #ifndef TARGET_AARCH64
+    GET_HOST_RETPC();
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (cap_is_sealed_with_type(cbp) ||
