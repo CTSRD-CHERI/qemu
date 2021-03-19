@@ -1321,13 +1321,14 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 }
 
 QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
-                                                 CheriCapExcCause cause)
+                                                 CheriCapExcCause cause,
+                                                 uintptr_t _host_return_address)
 {
     cheri_debug_assert(pc_is_current(env));
     // Note: we set pc=0 since PC will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
     raise_cheri_exception_impl(env, cause, CHERI_EXC_REGNUM_PCC,
-        /*instavail=*/true, 0);
+        /*instavail=*/true, _host_return_address);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
@@ -1349,7 +1350,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
                      __func__, PRINT_CAP_ARGS(pcc));
         tcg_abort();
     }
-    raise_pcc_fault(env, cause);
+    raise_pcc_fault(env, cause, GETPC());
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
@@ -1364,7 +1365,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     // helpful).
     cheri_debug_assert(!cap_is_in_bounds(cheri_get_current_pcc(env), addr,
                                          num_bytes == 0 ? 1 : num_bytes));
-    raise_pcc_fault(env, CapEx_LengthViolation);
+    raise_pcc_fault(env, CapEx_LengthViolation, GETPC());
 }
 
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
