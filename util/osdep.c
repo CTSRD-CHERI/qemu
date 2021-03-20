@@ -90,6 +90,17 @@ static int qemu_mprotect__osdep(void *addr, size_t size, int prot)
     return 0;
 #else
     if (mprotect(addr, size, prot)) {
+        /*
+         * macOS 12.2 on Apple Silicon strangely started returning EACCES when
+         * remapping RWX pages to PROT_NONE, so ignore the error and silently
+         * leave guard pages RWX.
+         *
+         * See: https://bugs.launchpad.net/qemu/+bug/1914849
+         */
+#if defined(__APPLE__) && defined(__aarch64__)
+        if (prot == PROT_NONE && errno == EACCES)
+            return 0;
+#endif
         error_report("%s: mprotect failed: %s", __func__, strerror(errno));
         return -1;
     }
