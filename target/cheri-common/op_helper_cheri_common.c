@@ -1572,7 +1572,7 @@ void CHERI_HELPER_IMPL(debug_cap(CPUArchState *env, uint32_t regndx))
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     // Index manually in order not to decompress
     const cap_register_t *cap = (regndx < 32)
-                                    ? &gpcrs->decompressed[regndx]
+                                    ? &gpcrs->decompressed[regndx].cap
                                     : get_capreg_or_special(env, regndx);
     CapRegState state =
         regndx < 32 ? get_capreg_state(gpcrs, regndx) : CREG_FULLY_DECOMPRESSED;

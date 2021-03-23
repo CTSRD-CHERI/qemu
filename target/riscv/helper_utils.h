@@ -57,7 +57,7 @@ static inline void gpr_set_int_value(CPUArchState *env, unsigned reg,
 
 static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
 #ifdef TARGET_CHERI
-    return env->gpcapregs.decompressed[reg]._cr_cursor;
+    return get_cap_in_gpregs(&env->gpcapregs, reg)->_cr_cursor;
 #else
     return env->gpr[reg];
 #endif
