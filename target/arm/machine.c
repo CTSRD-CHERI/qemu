@@ -770,8 +770,8 @@ static int cpu_post_load(void *opaque, int version_id)
 }
 
 #ifdef TARGET_CHERI
-#define VMSTATE_REG_ARRAY VMSTATE_CAP_ARRAY
-#define VMSTATE_REG VMSTATE_CAP
+#define VMSTATE_REG_ARRAY VMSTATE_ALIGN_CAP_ARRAY
+#define VMSTATE_REG(reg, ...) VMSTATE_CAP(reg.cap, __VA_ARGS__)
 #else
 #define VMSTATE_REG_ARRAY VMSTATE_UINT64_ARRAY
 #define VMSTATE_REG VMSTATE_UINT64
