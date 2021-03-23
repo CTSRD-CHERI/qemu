@@ -141,12 +141,12 @@ void a64_translate_init(void)
 
 #ifdef TARGET_CHERI
     cpu_pc =
-        tcg_global_mem_new(cpu_env, offsetof(CPUARMState, pc._cr_cursor), "pc");
+        tcg_global_mem_new(cpu_env, offsetof(CPUARMState, pc.cap._cr_cursor), "pc");
     cpu_capreg_state = tcg_global_mem_new(
         cpu_env, offsetof(CPUARMState, gpcapregs.capreg_state), "capreg_state");
     // Morello sometimes interposes with base
     ddc_interposition = tcg_global_mem_new(
-        cpu_env, offsetof(CPUARMState, DDC_current.cr_base), "ddc_base");
+        cpu_env, offsetof(CPUARMState, DDC_current.cap.cr_base), "ddc_base");
 
 #else
     cpu_pc = tcg_global_mem_new_i64(cpu_env, offsetof(CPUARMState, pc), "pc");
@@ -156,7 +156,7 @@ void a64_translate_init(void)
 #ifdef TARGET_CHERI
         _cpu_cursors_do_not_access_directly[i] = tcg_global_mem_new(
             cpu_env,
-            offsetof(CPUARMState, gpcapregs.decompressed[i]._cr_cursor),
+            offsetof(CPUARMState, gpcapregs.decompressed[i].cap._cr_cursor),
             regnames[i]);
 #else
         cpu_X[i] = tcg_global_mem_new_i64(cpu_env,

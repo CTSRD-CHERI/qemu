@@ -221,7 +221,7 @@ typedef struct ARMPACKey {
 
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs-types.h"
-#define AARCH_REG_TYPE cap_register_t
+#define AARCH_REG_TYPE aligned_cap_register_t
 #else
 #define AARCH_REG_TYPE uint64_t
 #endif
@@ -241,9 +241,9 @@ typedef struct CPUARMState {
      * DDCs, or we should cache the current one and change it on exception. SP
      * is swapped on exception, and doing so requires fewer global TCG vars, so
      * is what we are doing here. */
-    cap_register_t DDC_current;
+    AARCH_REG_TYPE DDC_current;
     // Holds DDCs 0 through 3 then restricted 0
-    cap_register_t DDCs[5];
+    AARCH_REG_TYPE DDCs[5];
 #else
     uint64_t xregs[32];
 #endif
@@ -3378,7 +3378,7 @@ static inline void increment_aarch_reg(AARCH_REG_TYPE *aarch_reg,
                                        target_ulong inc)
 {
 #ifdef TARGET_CHERI
-    cap_increment_offset(aarch_reg, inc);
+    cap_increment_offset(&aarch_reg->cap, inc);
 #else
     *aarch_reg += inc;
 #endif
@@ -3389,7 +3389,7 @@ static inline void set_aarch_reg_value(AARCH_REG_TYPE *aarch_reg,
                                        target_ulong val)
 {
 #ifdef TARGET_CHERI
-    cap_set_cursor(aarch_reg, val);
+    cap_set_cursor(&aarch_reg->cap, val);
 #else
     *aarch_reg = val;
 #endif
@@ -3401,7 +3401,7 @@ static inline void set_aarch_reg_to_x(AARCH_REG_TYPE *aarch_reg,
                                       target_ulong val)
 {
 #ifdef TARGET_CHERI
-    int_to_cap(val, aarch_reg);
+    int_to_cap(val, &aarch_reg->cap);
 #else
     *aarch_reg = val;
 #endif
@@ -3411,7 +3411,7 @@ static inline void set_aarch_reg_to_x(AARCH_REG_TYPE *aarch_reg,
 static inline target_ulong get_aarch_reg_as_x(AARCH_REG_TYPE *aarch_reg)
 {
 #ifdef TARGET_CHERI
-    return aarch_reg->_cr_cursor;
+    return aarch_reg->cap._cr_cursor;
 #else
     return *aarch_reg;
 #endif
@@ -4246,12 +4246,12 @@ static inline int aarch64_get_bank_index(CPUARMState *env, int el)
 static inline void aarch64_save_sp(CPUARMState *env, int el)
 {
     int index = aarch64_get_bank_index(env, el);
-    env->sp_el[index] =
+
 #ifdef TARGET_CHERI
-        *get_readonly_capreg(env, 31);
+    env->sp_el[index].cap = *get_readonly_capreg(env, 31);
     env->DDCs[index] = env->DDC_current;
 #else
-        env->xregs[31];
+    env->sp_el[index] = env->xregs[31];
 #endif
 }
 
@@ -4259,10 +4259,10 @@ static inline void aarch64_restore_sp(CPUARMState *env, int el)
 {
     int index = aarch64_get_bank_index(env, el);
 #ifdef TARGET_CHERI
-    update_capreg(env, 31, &env->sp_el[index]);
+    update_capreg(env, 31, &env->sp_el[index].cap);
     env->DDC_current = env->DDCs[index];
 #ifdef CONFIG_TCG_LOG_INSTR
-    qemu_log_instr_dbg_cap(env, "DDC", &env->DDC_current);
+    qemu_log_instr_dbg_cap(env, "DDC", &env->DDC_current.cap);
 #endif
 #else
     env->xregs[31] = env->sp_el[index];
@@ -4292,7 +4292,7 @@ static inline char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode) {
 static inline target_ulong cpu_get_recent_pc(CPUArchState *env)
 {
 #ifdef TARGET_CHERI
-    return env->pc._cr_cursor;
+    return env->pc.cap._cr_cursor;
 #else
     return env->pc;
 #endif
@@ -4321,9 +4321,9 @@ static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
     uint32_t chflags = (env->CCTLR_el[el] >> CCTLR_DEFINED_START);
     if (env->pstate & PSTATE_C64)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, PSTATE_C64, 1);
-    if (env->pc.cr_perms & CAP_PERM_EXECUTIVE)
+    if (env->pc.cap.cr_perms & CAP_PERM_EXECUTIVE)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, EXECUTIVE, 1);
-    if (env->pc.cr_perms & CAP_ACCESS_SYS_REGS)
+    if (env->pc.cap.cr_perms & CAP_ACCESS_SYS_REGS)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SYSTEM, 1);
     if (((el < 2) ? env->chcr_el2 : env->cscr_el3) & CxCR_SETTAG)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SETTAG, 1);

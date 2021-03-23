@@ -1094,6 +1094,11 @@ extern const VMStateInfo vmstate_info_qlist;
 
 #define VMSTATE_CAP_ARRAY(_f, _s, _n) VMSTATE_CAP_ARRAY_V(_f, _s, _n, 0)
 
+#define VMSTATE_ALIGN_CAP_ARRAY_V(_f, _s, _n, _v)                                    \
+    VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_cap_register, aligned_cap_register_t)
+
+#define VMSTATE_ALIGN_CAP_ARRAY(_f, _s, _n) VMSTATE_ALIGN_CAP_ARRAY_V(_f, _s, _n, 0)
+
 #define VMSTATE_UINT64_SUB_ARRAY(_f, _s, _start, _num)                \
     VMSTATE_SUB_ARRAY(_f, _s, _start, _num, 0, vmstate_info_uint64, uint64_t)
 

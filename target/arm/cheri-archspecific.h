@@ -155,22 +155,22 @@ static inline void update_next_pcc_for_tcg(CPUARMState *env,
                                            uint32_t cjalr_flags)
 {
     bool system_changed =
-        ((env->pc.cr_perms ^ target->cr_perms) & CAP_ACCESS_SYS_REGS) != 0;
+        ((env->pc.cap.cr_perms ^ target->cr_perms) & CAP_ACCESS_SYS_REGS) != 0;
     bool executive_changed =
-        ((env->pc.cr_perms ^ target->cr_perms) & CAP_PERM_EXECUTIVE) != 0;
+        ((env->pc.cap.cr_perms ^ target->cr_perms) & CAP_PERM_EXECUTIVE) != 0;
     bool c64_changed =
         (target->_cr_cursor & 1) != ((env->pstate & PSTATE_C64) != 0);
-    bool was_executive = (env->pc.cr_perms & CAP_PERM_EXECUTIVE);
+    bool was_executive = (env->pc.cap.cr_perms & CAP_PERM_EXECUTIVE);
 
     unsigned int cur_el;
 
-    env->pc = *target;
-    env->pc._cr_cursor &= ~1;
+    env->pc.cap = *target;
+    env->pc.cap._cr_cursor &= ~1;
 
     if (executive_changed) {
         // Branches back to executive are allowed
         if (!(cjalr_flags & CJALR_CAN_BRANCH_RESTRICTED) && was_executive) {
-            env->pc.cr_tag = 0;
+            env->pc.cap.cr_tag = 0;
         }
         cur_el = arm_current_el(env);
         aarch64_save_sp(env, cur_el);
