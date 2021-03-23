@@ -280,20 +280,10 @@ static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_regist
 
 static inline void set_max_perms_capability(cap_register_t *crp, uint64_t cursor)
 {
-    crp->cr_tag = 1;
-    crp->cr_perms = CAP_PERMS_ALL;
-    crp->cr_uperms = CAP_UPERMS_ALL;
-    // crp->cr_cursor = 0UL;
-    crp->cr_base = 0UL;
-    crp->_cr_cursor = cursor;
-    // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
-    crp->_cr_top = CAP_MAX_TOP;
-    crp->cr_otype = CAP_OTYPE_UNSEALED;
-    crp->cr_flags = 0;
-    crp->cr_reserved = 0;
-#ifdef CHERI_128
-    crp->cr_ebt = CC128_RESET_EBT;
-    cheri_debug_assert(cc128_is_representable_cap_exact(crp));
+#if defined(CHERI_128)
+    *crp = cc128_make_max_perms_cap(0, cursor, CAP_MAX_TOP);
+#else
+    *crp = cc64_make_max_perms_cap(0, cursor, CAP_MAX_TOP);
 #endif
 }
 
