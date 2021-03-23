@@ -4247,12 +4247,12 @@ static inline int aarch64_get_bank_index(CPUARMState *env, int el)
 static inline void aarch64_save_sp(CPUARMState *env, int el)
 {
     int index = aarch64_get_bank_index(env, el);
-    env->sp_el[index].cap =
+
 #ifdef TARGET_CHERI
-        *get_readonly_capreg(env, 31);
+    env->sp_el[index].cap = *get_readonly_capreg(env, 31);
     env->DDCs[index] = env->DDC_current;
 #else
-        env->xregs[31];
+    env->sp_el[index] = env->xregs[31];
 #endif
 }
 
