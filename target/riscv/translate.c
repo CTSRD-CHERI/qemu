@@ -1081,11 +1081,11 @@ void riscv_translate_init(void)
     for (i = 1; i < 32; i++) {
         _cpu_cursors_do_not_access_directly[i] = tcg_global_mem_new(
             cpu_env,
-            offsetof(CPURISCVState, gpcapregs.decompressed[i]._cr_cursor),
+            offsetof(CPURISCVState, gpcapregs.decompressed[i].cap._cr_cursor),
             riscv_int_regnames[i]);
         _cpu_pesbt_do_not_access_directly[i] = tcg_global_mem_new(
             cpu_env,
-            offsetof(CPURISCVState, gpcapregs.decompressed[i].cr_pesbt),
+            offsetof(CPURISCVState, gpcapregs.decompressed[i].cap.cr_pesbt),
             cheri_gp_regnames[i]);
     }
 #endif

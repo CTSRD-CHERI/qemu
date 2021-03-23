@@ -83,6 +83,10 @@ _Static_assert((offsetof(cap_register_t, cr_pesbt) -
                 offsetof(cap_register_t, _cr_cursor)) == sizeof(target_ulong),
                "");
 
+typedef struct aligned_cap_register_t {
+    cap_register_t cap;
+} QEMU_ALIGNED(32) aligned_cap_register_t;
+
 typedef struct GPCapRegs {
     /*
      * We cache the decompressed capregs here (to avoid constantly decompressing
@@ -91,7 +95,13 @@ typedef struct GPCapRegs {
      * 34'th is also used as a temporary when side-effect free scratch space is
      * needed. These special extra registers are always in state decompressed.
      */
-    cap_register_t decompressed[NUM_LAZY_CAP_REGS];
+    aligned_cap_register_t decompressed[NUM_LAZY_CAP_REGS];
     /* CapRegState */ uint8_t capreg_state[NUM_LAZY_CAP_REGS] QEMU_ALIGNED(64);
 } GPCapRegs;
+
+static inline cap_register_t *get_cap_in_gpregs(GPCapRegs *gpcrs, size_t index)
+{
+    return &gpcrs->decompressed[index].cap;
+}
+
 #endif
