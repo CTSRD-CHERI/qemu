@@ -34,12 +34,12 @@
 
 static inline const cap_register_t *cheri_get_ddc(CPUARMState *env)
 {
-    return &env->DDC_current;
+    return &env->DDC_current.cap;
 }
 
 static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUARMState *env)
 {
-    return &env->pc;
+    return &env->pc.cap;
 }
 
 static inline struct GPCapRegs *cheri_get_gpcrs(CPUArchState *env)

@@ -633,7 +633,7 @@ static inline void gen_vector_copy(TCGv_ptr dest_ptr, TCGv_ptr source_ptr,
 static inline void gen_move_cap(uint32_t dest_off, uint32_t source_off)
 {
     gen_vector_copy(cpu_env, cpu_env, dest_off, source_off,
-                    sizeof(cap_register_t), sizeof(cap_register_t));
+                    sizeof(cap_register_t), sizeof(aligned_cap_register_t));
 }
 
 // Generate a capability move of only the pesbt + cursor of a cap.
