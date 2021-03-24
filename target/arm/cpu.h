@@ -20,12 +20,18 @@
 #ifndef ARM_CPU_H
 #define ARM_CPU_H
 
+#ifdef TARGET_CHERI
+#ifndef TARGET_IS_MORELLO
+#error "Morello should be the only arm CHERI"
+#endif
+#endif
+
 #include "kvm-consts.h"
 #include "hw/registerfields.h"
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
-#include "qapi/qapi-types-common.h"
 #include "exec/log_instr_early.h"
+#include "qapi/qapi-types-common.h"
 
 /* ARM processors have a weak memory model */
 #define TCG_GUEST_DEFAULT_MO      (0)
