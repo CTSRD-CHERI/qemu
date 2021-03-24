@@ -53,6 +53,10 @@
 #error No longer supported
 #endif
 
+#ifdef TARGET_IS_MORELLO
+#define CC_IS_MORELLO TARGET_IS_MORELLO
+#endif
+
 #ifdef TARGET_CHERI
 #define ASSERT_IF_CHERI() assert(0)
 #if (defined(CHERI_128) || defined(CHERI_64)) && !defined(CHERI_MAGIC128)
