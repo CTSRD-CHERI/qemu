@@ -216,7 +216,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cp->_cr_top = CAP_MAX_TOP;
     cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
 #ifdef CHERI_128
-    cp->cr_ebt = CC128_RESET_EBT;
+    cp->cached_pesbt = CC128_NULL_PESBT;
     cheri_debug_assert(cc128_is_representable_cap_exact(cp));
 #endif
     return cp;
