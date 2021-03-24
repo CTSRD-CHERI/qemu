@@ -11,16 +11,12 @@ std::ostream& operator<<(std::ostream& os, cc128_length_t value) {
 }
 
 static const char* otype_suffix(uint32_t otype) {
-    // Two separate switches since if the number of otype bits is the same
-    // we cannot have both of the case statements in one switch
     switch (otype) {
-    case CC128_OTYPE_UNSEALED: return " (CC128_OTYPE_UNSEALED)";
-    case CC128_OTYPE_SENTRY: return " (CC128_OTYPE_SENTRY)";
-    case CC128_OTYPE_RESERVED2: return " (CC128_OTYPE_RESERVED2)";
-    case CC128_OTYPE_RESERVED3: return " (CC128_OTYPE_RESERVED3)";
-    default: break;
+#define OTYPE_CASE(Name, ...)                                                                                          \
+    case CC128_##Name: return " (CC128_" #Name ")";
+        LS_SPECIAL_OTYPES(OTYPE_CASE, )
+    default: return "";
     }
-    return "";
 }
 
 std::ostream& operator<<(std::ostream& os, const cc128_bounds_bits& value);
@@ -127,20 +123,7 @@ __attribute__((used)) static cap_register_t decompress_representable(uint64_t pe
 }
 
 inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_length_t length) {
-    cap_register_t creg;
-    memset(&creg, 0, sizeof(creg));
-    creg.cr_base = base;
-    creg._cr_cursor = base + offset;
-    creg._cr_top = base + length;
-    creg.cr_perms = CC128_PERMS_ALL;
-    creg.cr_uperms = CC128_UPERMS_ALL;
-    creg.cr_otype = CC128_OTYPE_UNSEALED;
-    creg.cr_tag = true;
-    bool exact_input = false;
-    creg.cr_ebt = cc128_compute_ebt(creg.cr_base, creg._cr_top, NULL, &exact_input);
-    assert(exact_input && "Invalid arguments");
-    assert(cc128_is_representable_cap_exact(&creg));
-    return creg;
+    return cc128_make_max_perms_cap(base, offset, length);
 }
 
 #define DO_STRINGIFY2(x) #x

@@ -42,7 +42,9 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifndef CC_IS_MORELLO
 #include "cheri_compressed_cap_64.h"
+#endif
 
 #include "cheri_compressed_cap_128.h"
 
@@ -64,7 +66,10 @@ typedef cc128_cap_t cap_register_t;
 #define CC256_PERMS_MEM_SHFT CC256_FLAGS_COUNT                /* flags bit comes first */
 #define CC256_UPERMS_MEM_SHFT (CC256_PERMS_MEM_SHFT + CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT)
 #define CC256_UPERMS_SHFT             (15)
+#ifndef CC_IS_MORELLO
+// Morello does not order permissions like this.
 _CC_STATIC_ASSERT(CC128_UPERMS_SHFT >=  CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT, "");
+#endif
 _CC_STATIC_ASSERT_SAME(CC256_PERMS_MEM_SHFT + CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT, CC256_UPERMS_MEM_SHFT);
 #define CC256_PERMS_ALL_BITS _CC_BITMASK64(CC256_HWPERMS_COUNT)                                         /* 12 bits */
 #define CC256_PERMS_ALL_BITS_UNTAGGED _CC_BITMASK64(CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT) /* 15 bits */
@@ -92,6 +97,25 @@ enum CC256_OTypes {
     CC256_SPECIAL_OTYPE(LAST_SPECIAL_OTYPE, 15),
     CC256_SPECIAL_OTYPE(LAST_NONRESERVED_OTYPE, 15),
 };
+
+#define LS_SPECIAL_OTYPES_COMMON(ITEM, ...)                                                                            \
+    ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
+    ITEM(OTYPE_SENTRY, __VA_ARGS__)
+
+#ifdef CC_IS_MORELLO
+
+#define LS_SPECIAL_OTYPES(ITEM, ...)                                                                                   \
+    LS_SPECIAL_OTYPES_COMMON(ITEM, __VA_ARGS__)                                                                        \
+    ITEM(OTYPE_LOAD_PAIR_BRANCH, __VA_ARGS__)                                                                          \
+    ITEM(OTYPE_LOAD_BRANCH, __VA_ARGS__)
+
+#else
+
+#define LS_SPECIAL_OTYPES(ITEM, ...)                                                                                   \
+    LS_SPECIAL_OTYPES_COMMON(ITEM, __VA_ARGS__)                                                                        \
+    ITEM(OTYPE_INDIRECT_PAIR, __VA_ARGS__)                                                                             \
+    ITEM(OTYPE_INDIRECT_SENTRY, __VA_ARGS__)
+#endif
 
 /* Also support decoding of the raw 256-bit capabilities */
 typedef union _inmemory_chericap256 {

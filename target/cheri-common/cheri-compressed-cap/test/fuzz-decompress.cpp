@@ -54,6 +54,7 @@ static void dump_cap_fields(const cap_register_t& result) {
 }
 
 static inline void check_crrl_and_cram(uint64_t value) {
+#ifndef CC_IS_MORELLO
     uint64_t sail_crrl = sail_representable_length_128(value);
     uint64_t clib_crrl = cc128_get_representable_length(value);
     if (sail_crrl != clib_crrl) {
@@ -68,6 +69,7 @@ static inline void check_crrl_and_cram(uint64_t value) {
                 clib_cram);
         abort();
     }
+#endif
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {

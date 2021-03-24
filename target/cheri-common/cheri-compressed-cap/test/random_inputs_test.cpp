@@ -10,9 +10,13 @@
 
 #include "decode_inputs.cpp"
 
+#ifndef CC_IS_MORELLO
+
 static_assert(CC128_FIELD_OTYPE_START == 27, "");
 static_assert(CC128_FIELD_OTYPE_SIZE == 18, "");
 static_assert(CC128_FIELD_OTYPE_LAST == 44, "");
+
+#endif
 
 #define CHECK_AND_SAVE_SUCCESS(expr)                                                                                   \
     do {                                                                                                               \
@@ -45,7 +49,7 @@ static bool check_fields_match(const typename Handler::cap_t& result, const test
     CHECK_AND_SAVE_SUCCESS(sail_result._cr_cursor == result._cr_cursor);
     CHECK_AND_SAVE_SUCCESS(sail_result._cr_top == result._cr_top);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_base == result.cr_base);
-    CHECK_AND_SAVE_SUCCESS(sail_result.cr_ebt == result.cr_ebt);
+    CHECK_AND_SAVE_SUCCESS(sail_result.cached_pesbt == result.cached_pesbt);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_flags == result.cr_flags);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_otype == result.cr_otype);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_perms == result.cr_perms);
@@ -55,6 +59,7 @@ static bool check_fields_match(const typename Handler::cap_t& result, const test
 
     // Since we are parsing arbitrary bit patterns, the length can be negative.
     // For the CRRL/CRAM check we only look at the low 64 bits of length.
+#ifndef CC_IS_MORELLO
     typename Handler::addr_t len_truncated = (typename Handler::addr_t)result.length();
     typename Handler::addr_t rep_len = Handler::representable_length(len_truncated);
     if (rep_len != 0) {
@@ -68,6 +73,8 @@ static bool check_fields_match(const typename Handler::cap_t& result, const test
     // Finally check CRAM:
     typename Handler::addr_t rep_mask = Handler::representable_mask(len_truncated);
     CHECK_AND_SAVE_SUCCESS(rep_mask == Handler::sail_representable_mask(len_truncated));
+#endif
+
     return success;
 }
 

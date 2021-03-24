@@ -90,8 +90,13 @@
 #define _CC_ENCODE_EBT_FIELD(value, name)                                                                              \
     ((uint64_t)((value)&_CC_N(FIELD_##name##_MAX_VALUE)) << (_CC_N(FIELD_##name##_START) + _CC_N(FIELD_EBT_START)))
 
+#ifdef CC_IS_MORELLO
+// Morello does not negate this field
+#define _CC_SPECIAL_OTYPE(name, val) _CC_N(name) = val, _CC_N(name##_SIGNED) = val
+#else
 #define _CC_SPECIAL_OTYPE(name, subtract)                                                                              \
     _CC_N(name) = (_CC_N(MAX_REPRESENTABLE_OTYPE) - subtract##u), _CC_N(name##_SIGNED) = (((int64_t)-1) - subtract##u)
+#endif
 
 #ifdef __cplusplus
 template <size_t a, size_t b> static constexpr bool check_same() {

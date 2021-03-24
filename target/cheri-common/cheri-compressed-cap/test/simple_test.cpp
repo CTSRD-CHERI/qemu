@@ -15,10 +15,10 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         memset(&null_cap, 0, sizeof(null_cap));
         null_cap.cr_otype = CC128_OTYPE_UNSEALED;
         null_cap._cr_top = CC128_NULL_TOP;
-        null_cap.cr_ebt = CC128_RESET_EBT;
+        null_cap.cached_pesbt = CC128_NULL_PESBT;
         bool ebt_exact = true;
         uint32_t computed_ebt = cc128_compute_ebt(null_cap.cr_base, null_cap._cr_top, NULL, &ebt_exact);
-        REQUIRE(computed_ebt == null_cap.cr_ebt);
+        REQUIRE((computed_ebt & CC128_FIELD_EBT_MASK64) == (null_cap.cached_pesbt & CC128_FIELD_EBT_MASK64));
         REQUIRE(ebt_exact);
         auto pesbt = cc128_compress_mem(&null_cap);
         auto pesbt_from_sail = sail_compress_128_mem(&null_cap);
@@ -36,7 +36,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         CHECK(decompressed.address() == 0);
         CHECK_FIELD(decompressed, software_permissions, 0);
         CHECK_FIELD(decompressed, permissions, 0);
-        CHECK(decompressed.cr_ebt == CC128_RESET_EBT);
+        CHECK((decompressed.cached_pesbt & CC128_FIELD_EBT_MASK64) == (CC128_NULL_PESBT & CC128_FIELD_EBT_MASK64));
         CHECK(decompressed.cr_reserved == 0); // reserved bits
         CHECK(decompressed.length() == CC128_NULL_LENGTH);
         CHECK(decompressed.top() == CC128_NULL_TOP);
@@ -79,7 +79,7 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     CHECK_FIELD(result128, offset, 0);
     CHECK_FIELD(result128, software_permissions, 0);
     CHECK_FIELD(result128, permissions, 0);
-    CHECK(result128.cr_ebt == CC128_RESET_EBT);
+    CHECK((result128.cached_pesbt & CC128_FIELD_EBT_MASK64) == (CC128_NULL_PESBT & CC128_FIELD_EBT_MASK64));
     CHECK(result128.cr_reserved == 0); // reserved bits
     CHECK_FIELD_RAW(result128.length(), CC128_NULL_LENGTH);
     CHECK_FIELD(result128, type, CC128_OTYPE_UNSEALED);
@@ -94,7 +94,7 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     CHECK_FIELD(result64, offset, 0);
     CHECK_FIELD(result64, software_permissions, 0);
     CHECK_FIELD(result64, permissions, 0);
-    CHECK(result64.cr_ebt == CC64_RESET_EBT);
+    CHECK((result64.cached_pesbt & CC64_FIELD_EBT_MASK64) == (CC64_NULL_PESBT & CC64_FIELD_EBT_MASK64));
     CHECK(result64.cr_reserved == 0); // reserved bits
     CHECK_FIELD_RAW(result64.length(), CC64_NULL_LENGTH);
     CHECK_FIELD(result64, type, CC64_OTYPE_UNSEALED);
@@ -131,7 +131,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     cap.cr_tag = true;
     cap.cr_otype = CC128_OTYPE_UNSEALED;
     bool exact_input = false;
-    cap.cr_ebt = cc128_compute_ebt(cap.cr_base, cap._cr_top, NULL, &exact_input);
+    cap.cached_pesbt = cc128_compute_ebt(cap.cr_base, cap._cr_top, NULL, &exact_input);
     REQUIRE(exact_input == should_work);
     uint64_t compressed = cc128_compress_mem(&cap);
     cap_register_t decompressed;
@@ -162,7 +162,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
 
 static inline bool check_repr(bool sealed, uint64_t base, uint64_t length, uint64_t offset) {
     (void)sealed;
-    auto cap = make_max_perms_cap(base, offset, length);
+    auto cap = make_max_perms_cap(base, base + offset, base + length);
     return cc128_is_representable_cap_exact(&cap);
 }
 
