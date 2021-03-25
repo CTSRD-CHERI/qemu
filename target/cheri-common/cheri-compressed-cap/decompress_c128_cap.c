@@ -68,6 +68,7 @@ static void dump_cap_fields(const cc128_cap_t* result) {
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
     fprintf(stderr, "Sealed:      %d\n", cc128_is_cap_sealed(result) ? 1 : 0);
     fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result->cr_otype, otype_suffix(result->cr_otype));
+    fprintf(stderr, "Stack Frame Bits: 0x%" PRIx8 "\n", result->cr_stack_frame_size);
     fprintf(stderr, "Flags:       0x%" PRIx8 "\n", result->cr_flags);
     fprintf(stderr, "Reserved:    0x%" PRIx8 "\n", result->cr_reserved);
     fprintf(stderr, "Valid decompress: %s", result->cr_bounds_valid ? "yes" : "no");
