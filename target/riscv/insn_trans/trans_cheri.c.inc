@@ -157,6 +157,7 @@ static inline bool gen_cheri_int_cap_cap(DisasContext *ctx, int rd, int cs1,
 TRANSLATE_INT_CAP(cgetaddr)
 TRANSLATE_INT_CAP(cgetbase)
 TRANSLATE_INT_CAP(cgetflags)
+TRANSLATE_INT_CAP(cgfs)
 TRANSLATE_INT_CAP(cgetlen)
 TRANSLATE_INT_CAP(cgetoffset)
 TRANSLATE_INT_CAP(cgetperm)
@@ -180,6 +181,7 @@ static inline bool trans_cram(DisasContext *ctx, arg_cram *a)
 TRANSLATE_CAP_CAP(ccleartag)
 TRANSLATE_CAP_CAP(cmove)
 TRANSLATE_CAP_CAP(csealentry)
+// TRANSLATE_CAP_CAP(cgetframebase)
 
 // Three operand (cap cap cap)
 TRANSLATE_CAP_CAP_CAP(cbuildcap)
@@ -247,6 +249,17 @@ static bool trans_csetboundsimm(DisasContext *ctx, arg_cincoffsetimm *a)
 {
     tcg_debug_assert(a->imm >= 0);
     return gen_cheri_cap_cap_imm(a->rd, a->rs1, a->imm, &gen_helper_csetbounds);
+}
+
+static bool trans_csfs(DisasContext *ctx, arg_cincoffsetimm *a)
+{
+    tcg_debug_assert(a->imm >= 0);
+    return gen_cheri_cap_cap_imm(a->rd, a->rs1, a->imm, &gen_helper_csfs);
+}
+
+static bool trans_cgetframebase(DisasContext *ctx, arg_cgetframebase *a)
+{
+    return gen_cheri_cap_cap(a->rd, a->rs1, &gen_helper_cgetframebase);
 }
 
 /// Control-flow instructions
@@ -479,6 +492,21 @@ static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
     }
     return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/a->imm,
                                  &gen_helper_store_cap_via_cap);
+}
+
+static inline bool trans_ccsc(DisasContext *ctx, arg_ccsc *a)
+{
+    // By design, uses the same operand structure as the csc instruction
+
+    // RS2 is the value, RS1 is the capability
+    if (!ctx->capmode) {
+        // Without capmode we store relative to DDC (sc instructions)
+        return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1,
+                                         a->imm, &gen_helper_check_store_cap_via_cap);
+    }
+
+    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/a->imm,
+                                 &gen_helper_check_store_cap_via_cap);
 }
 
 // Atomic ops

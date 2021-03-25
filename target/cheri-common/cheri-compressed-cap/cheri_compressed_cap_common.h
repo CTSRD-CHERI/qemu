@@ -88,8 +88,9 @@ enum {
 #define _CC_MAX_TOP _CC_N(MAX_TOP)
 #define _CC_CURSOR_MASK _CC_N(CURSOR_MASK)
 // Check that the sizes of the individual fields match up
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_SIZE) + _CC_N(FIELD_OTYPE_SIZE) + _CC_N(FIELD_FLAGS_SIZE) +
-                           _CC_N(FIELD_RESERVED_SIZE) + _CC_N(FIELD_HWPERMS_SIZE) + _CC_N(FIELD_UPERMS_SIZE),
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_SIZE) + _CC_N(FIELD_OTYPE_SIZE) + _CC_N(FIELD_STACK_FRAME_SIZE_SIZE) +
+                           _CC_N(FIELD_FLAGS_SIZE) + _CC_N(FIELD_RESERVED_SIZE) + _CC_N(FIELD_HWPERMS_SIZE) +
+                           _CC_N(FIELD_UPERMS_SIZE),
                        _CC_ADDR_WIDTH);
 _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_ZERO_TOP_SIZE) +
                            _CC_N(FIELD_EXP_ZERO_BOTTOM_SIZE),
@@ -152,6 +153,7 @@ struct _cc_N(cap) {
     inline uint32_t software_permissions() const { return _cc_N(get_uperms)(this); }
     inline uint32_t permissions() const { return _cc_N(get_perms)(this); }
     inline uint32_t type() const { return _cc_N(get_otype)(this); }
+    inline uint8_t stack_frame_size() const { return cr_stack_frame_size; }
     inline bool is_sealed() const { return type() != _CC_N(OTYPE_UNSEALED); }
     inline uint8_t reserved_bits() const { return _cc_N(get_reserved)(this); }
     inline uint8_t flags() const { return _cc_N(get_flags)(this); }
@@ -855,12 +857,22 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
 
     // TODO: find a faster way to compute top and bot:
     const _cc_addr_t pesbt = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) |
-                             _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) | _CC_ENCODE_FIELD(new_ebt, EBT);
+                             _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) |
+                             _CC_ENCODE_FIELD(cap->cr_stack_frame_size, STACK_FRAME_SIZE) |
+                             _CC_ENCODE_FIELD(new_ebt, EBT);
     _cc_cap_t new_cap;
     _cc_N(decompress_raw)(pesbt, cursor, cap->cr_tag, &new_cap);
     _cc_addr_t new_base = new_cap.cr_base;
     _cc_length_t new_top = new_cap._cr_top;
 
+#ifdef CC_IS_MORELLO
+    // On morello we may end up with a length that could have been exact, but has changed the flag bits.
+    // In this case just say the result is not exact.
+    if ((new_base ^ req_base) >> (64 - MORELLO_FLAG_BITS))
+        exact = false;
+#endif
+
+    uint8_t new_stack_frame_size = new_cap.cr_stack_frame_size;
     if (exact) {
 #ifndef CC_IS_MORELLO
         // Morello considers a setbounds that takes a capability from "large" (non-sign extended bounds) to "small"
@@ -890,6 +902,7 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
     }
 #endif
 
+    cap->cr_stack_frame_size = new_stack_frame_size;
     //  let newCap = {cap with address=base, E=to_bits(6, if incE then e + 1 else e), B=Bbits, T=Tbits, internal_e=ie};
     //  (exact, newCap)
     return exact;
@@ -931,6 +944,7 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     creg._cr_top = top;
     creg.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
                     _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
+    creg.cr_stack_frame_size = 0;
     creg.cr_tag = true;
     creg.cr_exp = _CC_N(NULL_EXP);
     bool exact_input = false;

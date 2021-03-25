@@ -67,6 +67,7 @@ enum {
     _CC_FIELD(HWPERMS, 63, 52),
     _CC_FIELD(FLAGS, 51, 51),
     _CC_FIELD(OTYPE, 50, 47),
+    _CC_FIELD(STACK_FRAME_SIZE, 46, 47),  // Exists only so that the macros work
     _CC_FIELD(EBT, 46, 32),
 
     _CC_FIELD(INTERNAL_EXPONENT, 46, 46),

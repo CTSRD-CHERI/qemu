@@ -460,6 +460,32 @@ static inline uint32_t get_capreg_hwperms(CPUArchState *env, unsigned regnum)
     return result;
 }
 
+static inline uint8_t get_capreg_stack_frame_size_bits(CPUArchState *env, unsigned regnum)
+{
+    const cap_register_t *reg = get_readonly_capreg(env, regnum);
+    return reg->cr_stack_frame_size;
+}
+
+static inline uint64_t get_capreg_implied_lifetime(CPUArchState *env, unsigned regnum)
+{
+    uint8_t frame_size_bits = get_capreg_stack_frame_size_bits(env, regnum);
+    uint64_t frame_start;
+    if (frame_size_bits == 0) {
+        // Heap address, so give it the maximal lifetime
+        frame_start = 0x7fffffffffffffff;
+    } else {
+        // Determine the bottom of the stack frame
+        uint64_t address = get_capreg_cursor(env, regnum);
+        uint64_t mask = 0xffffffffffffffff << (frame_size_bits + 5);
+        uint64_t masked = address & mask;
+        // Add the correction to find the top of the stack frame. If a large
+        // frame is followed by a small one, their ends may alias, but their
+        // beginnings never will.
+        frame_start = masked + (0x1 << (frame_size_bits + 4));
+    }
+    return frame_start;
+}
+
 static inline void nullify_capreg(CPUArchState *env, unsigned regnum)
 {
     cheri_debug_assert(regnum != NULL_CAPREG_INDEX);

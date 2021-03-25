@@ -45,6 +45,10 @@
 #include "cheri-helper-utils.h"
 #include "cheri_tagmem.h"
 
+// TODO: Remove
+#include <assert.h>
+#include <stdio.h>
+
 #ifndef TARGET_CHERI
 #error "This file should only be compiled for CHERI"
 #endif
@@ -249,6 +253,15 @@ target_ulong CHERI_HELPER_IMPL(cgetflags(CPUArchState *env, uint32_t cb))
      * CGetFlags: Move Flags to a General-Purpose Register.
      */
     return (target_ulong)cap_get_flags(get_readonly_capreg(env, cb));
+}
+
+target_ulong CHERI_HELPER_IMPL(cgfs(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGFS: Capability Get Frame Size - Move frame size bits to a
+     * General-Purpose Register.
+     */
+    return (target_ulong)get_readonly_capreg(env, cb)->cr_stack_frame_size;
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetlen(CPUArchState *env, uint32_t cb))
@@ -1013,6 +1026,38 @@ void CHERI_HELPER_IMPL(csetboundsexact(CPUArchState *env, uint32_t cd,
     do_setbounds(true, env, cd, cb, rt, GETPC());
 }
 
+void CHERI_HELPER_IMPL(csfs(CPUArchState *env, uint32_t cd,
+                            uint32_t cb, target_ulong size))
+{
+    /*
+     * CSFS: Capability Set Frame Size - sets the frame size bits of a
+     * capability.
+     */
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    cap_register_t new_cap = *cbp;
+    new_cap.cr_stack_frame_size = 0b111 & size;
+    update_capreg(env, cd, &new_cap);
+}
+
+void CHERI_HELPER_IMPL(cgetframebase(CPUArchState *env, uint32_t cd, uint32_t cs))
+{
+    /*
+     * CGetFrameBase: Capability Get [Stack] Frame Base - Obtain a capability
+     * to the beginning of a function's stack frame.
+     *
+     * Note: for non-stack capabilities this will simply point to the
+     * max address 0x7fffffffffffffff.
+     */
+
+    // Work out the new address
+    target_ulong new_address = get_capreg_implied_lifetime(env, cs);
+
+    // Update the cap (this is similar to the csetaddr implementation)
+    target_ulong cursor = get_capreg_cursor(env, cs);
+    target_ulong diff = new_address - cursor;
+    cincoffset_impl(env, cd, cs, diff, GETPC(), OOB_INFO(cgetframebase));
+}
+
 #ifndef TARGET_AARCH64
 /* Morello does not have flags in the capaibility metadata */
 void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
@@ -1201,6 +1246,19 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
                              CHERI_CAP_SIZE, raise_unaligned_store_exception);
 
     store_cap_to_memory(env, cs, addr, _host_return_address);
+}
+
+void CHERI_HELPER_IMPL(check_store_cap_via_cap(CPUArchState *env, uint32_t cs,
+                                               uint32_t cb, target_ulong offset))
+{
+    GET_HOST_RETPC();
+
+    uint64_t cs_lifetime = get_capreg_implied_lifetime(env, cs);
+    uint64_t cb_lifetime = get_capreg_implied_lifetime(env, cb);
+
+    if (cb_lifetime > cs_lifetime) {
+        raise_cheri_exception(env, CapEx_StackLifetimeViolation, cs);
+    }
 }
 
 static inline bool
