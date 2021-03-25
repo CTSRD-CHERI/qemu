@@ -479,7 +479,7 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else {
         cap_register_t result = *ctp;
 
-        result.cr_otype = CAP_OTYPE_UNSEALED;
+        cap_set_decompressed_cr_otype(&result, CAP_OTYPE_UNSEALED);
         result.cr_tag = 1;
 
         /*
@@ -697,8 +697,8 @@ void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
         uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
 
         cap_register_t result = *cbp;
-        result.cr_perms = cbp->cr_perms & rt_perms;
-        result.cr_uperms = cbp->cr_uperms & rt_uperms;
+        cap_set_decompressed_cr_perms(&result, cbp->cr_perms & rt_perms);
+        cap_set_decompressed_cr_uperms(&result, cbp->cr_uperms & rt_uperms);
         update_capreg(env, cd, &result);
     }
 }
@@ -857,7 +857,7 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     cap_register_t result = *cbp;
     flags &= CAP_FLAGS_ALL_BITS;
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
-    result.cr_flags = flags;
+    cap_set_decompressed_cr_flags(&result, flags);
     update_capreg(env, cd, &result);
 }
 

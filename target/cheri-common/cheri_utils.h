@@ -56,6 +56,21 @@
 
 #ifdef TARGET_CHERI
 
+// Import the appropriate functions from CC lib without namespacing
+#if defined(CHERI_128)
+#define CC_LIB_FN(X) cc128_##X
+#elif defined(CHERI_64)
+#define CC_LIB_FN(X) cc64_##X
+#else
+#error "Unknown compressed lib format required"
+#endif
+
+#define cap_set_decompressed_cr_otype CC_LIB_FN(cap_set_decompressed_cr_otype)
+#define cap_set_decompressed_cr_perms CC_LIB_FN(cap_set_decompressed_cr_perms)
+#define cap_set_decompressed_cr_uperms CC_LIB_FN(cap_set_decompressed_cr_uperms)
+#define cap_set_decompressed_cr_flags CC_LIB_FN(cap_set_decompressed_cr_flags)
+#define make_max_perms_cap CC_LIB_FN(make_max_perms_cap)
+
 static inline uint64_t cap_get_cursor(const cap_register_t* c) {
     return c->_cr_cursor;
 }
@@ -167,14 +182,14 @@ static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
     assert(c->cr_otype == CAP_OTYPE_UNSEALED && "should not use this on caps with reserved otypes");
     assert(type <= CAP_LAST_NONRESERVED_OTYPE);
     _Static_assert(CAP_LAST_NONRESERVED_OTYPE < CAP_OTYPE_UNSEALED, "");
-    c->cr_otype = type;
+    cap_set_decompressed_cr_otype(c, type);
 }
 
 static inline void cap_set_unsealed(cap_register_t* c) {
     assert(c->cr_tag);
     assert(cap_is_sealed_with_type(c));
     assert(c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE && "should not use this to unsealed reserved types");
-    c->cr_otype = CAP_OTYPE_UNSEALED;
+    cap_set_decompressed_cr_otype(c, CAP_OTYPE_UNSEALED);
 }
 
 static inline bool cap_is_sealed_entry(const cap_register_t* c) {
@@ -183,12 +198,12 @@ static inline bool cap_is_sealed_entry(const cap_register_t* c) {
 
 static inline void cap_unseal_entry(cap_register_t* c) {
     assert(c->cr_tag && cap_is_sealed_entry(c) && "Should only be used with sentry capabilities");
-    c->cr_otype = CAP_OTYPE_UNSEALED;
+    cap_set_decompressed_cr_otype(c, CAP_OTYPE_UNSEALED);
 }
 
 static inline void cap_make_sealed_entry(cap_register_t* c) {
     assert(c->cr_tag && cap_is_unsealed(c) && "Should only be used with unsealed capabilities");
-    c->cr_otype = CAP_OTYPE_SENTRY;
+    cap_set_decompressed_cr_otype(c, CAP_OTYPE_SENTRY);
 }
 
 static inline bool cap_is_representable(const cap_register_t* c) {
@@ -280,11 +295,7 @@ static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_regist
 
 static inline void set_max_perms_capability(cap_register_t *crp, uint64_t cursor)
 {
-#if defined(CHERI_128)
-    *crp = cc128_make_max_perms_cap(0, cursor, CAP_MAX_TOP);
-#else
-    *crp = cc64_make_max_perms_cap(0, cursor, CAP_MAX_TOP);
-#endif
+    *crp = make_max_perms_cap(0, cursor, CAP_MAX_TOP);
 }
 
 #if defined(CHERI_128) && !defined(CHERI_MAGIC128)
