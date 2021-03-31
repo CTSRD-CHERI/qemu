@@ -9332,8 +9332,11 @@ void restore_state_to_opc(CPUARMState *env, TranslationBlock *tb,
                           target_ulong *data)
 {
     if (is_a64(env)) {
-        ASSERT_IF_CHERI();
+#ifdef TARGET_CHERI
+        env->pc.cap._cr_cursor = data[0];
+#else
         set_aarch_reg_to_x(&env->pc, data[0]);
+#endif
         env->condexec_bits = 0;
         env->exception.syndrome = data[2] << ARM_INSN_START_WORD2_SHIFT;
     } else {
