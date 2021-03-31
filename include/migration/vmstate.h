@@ -214,12 +214,7 @@ extern const VMStateInfo vmstate_info_uint8;
 extern const VMStateInfo vmstate_info_uint16;
 extern const VMStateInfo vmstate_info_uint32;
 extern const VMStateInfo vmstate_info_uint64;
-// FIXME: It seems vmstate_info_chericap is the same thing.
-// FIXME: vmstate_info_cap_register is unfinished,
-// FIXME: but seems to have a little more implemented than
-// FIXME: vmstate_info_chericap.
 extern const VMStateInfo vmstate_info_cap_register;
-extern const VMStateInfo vmstate_info_chericap;
 
 /** Put this in the stream when migrating a null pointer.*/
 #define VMS_NULLPTR_MARKER (0x30U) /* '0' */
