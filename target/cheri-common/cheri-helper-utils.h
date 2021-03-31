@@ -239,7 +239,9 @@ static inline uint32_t perms_for_load(void) { return CAP_PERM_LOAD; }
 static inline uint32_t perms_for_store(CPUArchState *env, uint32_t cs)
 {
     // Probably should only need CAP_PERM_STORE_CAP if cs tagged
-    uint32_t perms = CAP_PERM_STORE | CAP_PERM_STORE_CAP;
+    uint32_t perms = CAP_PERM_STORE;
+    if (get_capreg_tag(env, cs))
+        perms |= CAP_PERM_STORE_CAP;
     if (cap_is_local(env, cs))
         perms |= CAP_PERM_STORE_LOCAL;
     return perms;
