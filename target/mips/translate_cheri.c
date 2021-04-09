@@ -1118,7 +1118,7 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
             break;
         case OPC_CSETFLAGS_NI: /* 0x0e */
             gen_cheri_cap_cap_int(ctx, r16, r11, r6, &gen_helper_csetflags);
-            opn = "candperm";
+            opn = "csetflags";
             break;
         case OPC_CSETOFFSET_NI: /* 0x0f */
             check_cop2x(ctx);
