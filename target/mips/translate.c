@@ -13540,6 +13540,8 @@ static void gen_cache_operation(DisasContext *ctx, uint32_t op, int base,
     TCGv t1 = tcg_temp_new();
     gen_base_offset_addr(ctx, t1, base, offset);
     gen_helper_cache(cpu_env, t1, t0);
+    tcg_temp_free(t1);
+    tcg_temp_free_i32(t0);
 }
 
 #ifndef TARGET_CHERI // No MIPS16 with TARGET_CHERI
