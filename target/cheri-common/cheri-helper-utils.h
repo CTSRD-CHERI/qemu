@@ -232,10 +232,10 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause) {
 
 const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb);
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
-                         target_ulong retpc);
+                         target_ulong retpc, bool take_lock);
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
-                          target_ulong retpc, hwaddr *physaddr);
+                          target_ulong retpc, hwaddr *physaddr, bool take_lock);
 
 static inline bool cap_is_local(CPUArchState *env, uint32_t cs)
 {
@@ -269,12 +269,14 @@ target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
 bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
                               uint64_t *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
-                              target_ulong retpc, hwaddr *physaddr);
+                              target_ulong retpc, hwaddr *physaddr,
+                              bool take_lock);
 bool load_cap_from_memory_128_raw_tag(CPUArchState *env, uint64_t *pesbt,
                                       uint64_t *cursor, uint32_t cb,
                                       const cap_register_t *source,
                                       target_ulong vaddr, target_ulong retpc,
-                                      hwaddr *physaddr, bool *raw_tag);
+                                      hwaddr *physaddr, bool *raw_tag,
+                                      bool take_lock);
 
 void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
                          uint32_t link_reg, target_ulong link_pc,

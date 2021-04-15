@@ -52,10 +52,10 @@ void helper_load_cap_pair_via_cap(CPUArchState *env, uint32_t cd, uint32_t cd2,
     uint64_t pesbt;
     uint64_t cursor;
     bool tag = load_cap_from_memory_128(env, &pesbt, &cursor, cb, cbp, addr,
-                                        _host_return_address, NULL);
+                                        _host_return_address, NULL, true);
 
     load_cap_from_memory(env, cd2, cb, cbp, addr + CHERI_CAP_SIZE,
-                         _host_return_address, NULL);
+                         _host_return_address, NULL, true);
     // Once the second load has finished, we can modify the register file.
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
 }
@@ -71,8 +71,9 @@ void helper_store_cap_pair_via_cap(CPUArchState *env, uint32_t cd, uint32_t cd2,
                          env, cb, addr, CHERI_CAP_SIZE * 2,
                          _host_return_address, cbp, CHERI_CAP_SIZE, true);
 
-    store_cap_to_memory(env, cd, addr, _host_return_address);
-    store_cap_to_memory(env, cd2, addr + CHERI_CAP_SIZE, _host_return_address);
+    store_cap_to_memory(env, cd, addr, _host_return_address, true);
+    store_cap_to_memory(env, cd2, addr + CHERI_CAP_SIZE, _host_return_address,
+                        true);
 }
 
 void helper_load_exclusive_cap_via_cap(CPUArchState *env, uint32_t cd,
@@ -91,16 +92,19 @@ void helper_load_exclusive_cap_via_cap(CPUArchState *env, uint32_t cd,
     cap_check_common_reg(perms_for_load(), env, cb, addr, size,
                          _host_return_address, cbp, size, true);
 
+    // I think it is OK that the two loads are not atomic, as the store should
+    // Take care of things.
+
     bool raw_tag;
     bool tag1 = load_cap_from_memory_128_raw_tag(
         env, &env->exclusive_high, &env->exclusive_val, cb, cbp, addr,
-        _host_return_address, NULL, &raw_tag);
+        _host_return_address, NULL, &raw_tag, true);
     env->exclusive_tag = raw_tag;
 
     if (cd2 != REG_NONE) {
         bool tag2 = load_cap_from_memory_128_raw_tag(
             env, &env->exclusive_high2, &env->exclusive_val2, cb, cbp,
-            addr + CHERI_CAP_SIZE, _host_return_address, NULL, &raw_tag);
+            addr + CHERI_CAP_SIZE, _host_return_address, NULL, &raw_tag, true);
         env->exclusive_tag2 = raw_tag;
         update_compressed_capreg(env, cd2, env->exclusive_high2, tag2,
                                  env->exclusive_val2);
@@ -138,10 +142,27 @@ void helper_store_exclusive_cap_via_cap(CPUArchState *env, uint32_t rs,
     cbp.cr_perms |= CAP_PERM_LOAD;
     cbp.cr_perms &= ~CAP_PERM_LOAD_CAP;
 
+    tag_writer_lock_t low_lock = NULL;
+    tag_writer_lock_t high_lock = NULL;
+
     // Check first cap value equal
     if (success) {
+
+        // Get both locks (for the strongest possible operation that might
+        // occur)
+        cheri_lock_for_tag_set(env, addr, cb, NULL, _host_return_address,
+                               &low_lock);
+        cheri_tag_writer_push_free_on_exception(env, low_lock);
+
+        if (cd2 != REG_NONE) {
+            cheri_lock_for_tag_set(env, addr + CHERI_CAP_SIZE, cb, NULL,
+                                   _host_return_address, &high_lock);
+            cheri_tag_writer_push_free_on_exception(env, high_lock);
+        }
+
         load_cap_from_memory_128_raw_tag(env, &pesbt, &cursor, cb, &cbp, addr,
-                                         _host_return_address, NULL, &tag);
+                                         _host_return_address, NULL, &tag,
+                                         false);
 
         if ((cursor != env->exclusive_val) || (pesbt != env->exclusive_high) ||
             (tag != env->exclusive_tag))
@@ -150,19 +171,29 @@ void helper_store_exclusive_cap_via_cap(CPUArchState *env, uint32_t rs,
 
     // Check second value (if any)
     if (success && cd2 != REG_NONE) {
-        load_cap_from_memory_128_raw_tag(env, &pesbt, &cursor, cb, &cbp,
-                                         addr + CHERI_CAP_SIZE,
-                                         _host_return_address, NULL, &tag);
+        load_cap_from_memory_128_raw_tag(
+            env, &pesbt, &cursor, cb, &cbp, addr + CHERI_CAP_SIZE,
+            _host_return_address, NULL, &tag, false);
         if ((cursor != env->exclusive_val2) ||
             (pesbt != env->exclusive_high2) || (tag != env->exclusive_tag2))
             success = false;
     }
 
     if (success) {
-        store_cap_to_memory(env, cd, addr, _host_return_address);
+        store_cap_to_memory(env, cd, addr, _host_return_address, false);
         if (cd2 != REG_NONE)
             store_cap_to_memory(env, cd2, addr + CHERI_CAP_SIZE,
-                                _host_return_address);
+                                _host_return_address, false);
+    }
+
+    if (high_lock) {
+        cheri_tag_reader_pop_free_on_exception(env);
+        cheri_tag_writer_release(high_lock);
+    }
+
+    if (low_lock) {
+        cheri_tag_reader_pop_free_on_exception(env);
+        cheri_tag_writer_release(low_lock);
     }
 
     env->exclusive_addr = -1;
@@ -182,12 +213,16 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
     cap_check_common_reg(perms, env, cb, addr, CHERI_CAP_SIZE,
                          _host_return_address, cbp, CHERI_CAP_SIZE, true);
 
+    tag_writer_lock_t lock = NULL;
+
+    cheri_lock_for_tag_set(env, addr, cb, NULL, _host_return_address, &lock);
+    cheri_tag_writer_push_free_on_exception(env, lock);
     // load (without modifying cs as we will need it for the comparison)
 
     uint64_t pesbt;
     uint64_t cursor;
     bool tag = load_cap_from_memory_128(env, &pesbt, &cursor, cb, cbp, addr,
-                                        _host_return_address, NULL);
+                                        _host_return_address, NULL, false);
 
     bool do_store = !compare;
 
@@ -199,8 +234,11 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
 
     // Store
     if (do_store) {
-        store_cap_to_memory(env, cd, addr, _host_return_address);
+        store_cap_to_memory(env, cd, addr, _host_return_address, false);
     }
+
+    cheri_tag_reader_pop_free_on_exception(env);
+    cheri_tag_writer_release(lock);
 
     // Write back to cs
     update_compressed_capreg(env, cs, pesbt, tag, cursor);
@@ -241,20 +279,23 @@ void helper_load_pair_and_branch_and_link(CPUArchState *env, uint32_t cn,
         base.cr_otype = CAP_OTYPE_UNSEALED;
     }
 
+    // Not atomic. I think this is OK?
+
     cap_check_common_reg(perms_for_load(), env, cn, addr, CHERI_CAP_SIZE * 2,
                          _host_return_address, &base, CHERI_CAP_SIZE, true);
 
     uint64_t target_pesbt, target_cursor;
     bool target_tag = load_cap_from_memory_128(
         env, &target_pesbt, &target_cursor, cn, &base, addr + CHERI_CAP_SIZE,
-        _host_return_address, NULL);
+        _host_return_address, NULL, true);
 
     cap_register_t target;
     target.cached_pesbt = target_pesbt;
     cc128_decompress_raw(target_pesbt, target_cursor, target_tag, &target);
 
     // We do this load SECOND as it has a register-file side effect.
-    load_cap_from_memory(env, ct, cn, &base, addr, _host_return_address, NULL);
+    load_cap_from_memory(env, ct, cn, &base, addr, _host_return_address, NULL,
+                         true);
 
     cheri_jump_and_link(env, &target, link, link_pc, flags);
 }
@@ -285,7 +326,7 @@ void helper_load_and_branch_and_link(CPUArchState *env, uint32_t cn,
     uint64_t target_pesbt, target_cursor;
     bool target_tag =
         load_cap_from_memory_128(env, &target_pesbt, &target_cursor, cn, &base,
-                                 addr, _host_return_address, NULL);
+                                 addr, _host_return_address, NULL, true);
 
     cap_register_t target;
     target.cached_pesbt = target_pesbt;

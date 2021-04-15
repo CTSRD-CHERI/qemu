@@ -712,7 +712,7 @@ target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, 
         vaddr, env->lladdr, env->CP0_LLAddr);
     if (env->lladdr != vaddr)
         return 0;
-    store_cap_to_memory(env, cs, vaddr, retpc);
+    store_cap_to_memory(env, cs, vaddr, retpc, true);
     env->lladdr = 1;
     return 1;
 }
@@ -742,7 +742,7 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
     }
     cheri_debug_assert(align_of(CHERI_CAP_SIZE, addr) == 0);
     load_cap_from_memory(env, cd, cb, cbp, /*addr=*/cap_get_cursor(cbp),
-                         _host_return_address, &env->CP0_LLAddr);
+                         _host_return_address, &env->CP0_LLAddr, true);
     env->lladdr = addr;
 }
 
@@ -780,7 +780,7 @@ static inline void dump_cap_store(uint64_t addr, uint64_t cursor, uint64_t base,
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
-                          target_ulong retpc, hwaddr *physaddr)
+                          target_ulong retpc, hwaddr *physaddr, bool take_lock)
 {
     int prot;
     cap_register_t ncd;
@@ -815,7 +815,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 }
 
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
-                         target_ulong retpc)
+                         target_ulong retpc, bool take_lock)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     inmemory_chericap256 mem_buffer;
@@ -918,7 +918,7 @@ static inline void dump_cap_store_length(uint64_t length)
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
-                          target_ulong retpc, hwaddr *physaddr)
+                          target_ulong retpc, hwaddr *physaddr, bool take_lock)
 {
     cap_register_t ncd;
     int prot;
@@ -932,7 +932,9 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     mem_buffer.u64s[2] = cpu_ldq_data_ra(env, vaddr + 16, retpc); /* base */
     mem_buffer.u64s[3] = cpu_ldq_data_ra(env, vaddr + 24, retpc); /* length */
 
-    bool tag = cheri_tag_get(env, vaddr, cd, physaddr, &prot, retpc);
+    cheri_tag_assert_not_mttcg();
+
+    bool tag = cheri_tag_get(env, vaddr, cd, physaddr, &prot, retpc, NULL);
     tag = cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
     env->statcounters_cap_read++;
     if (tag)
@@ -954,7 +956,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 }
 
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
-                         target_ulong retpc)
+                         target_ulong retpc, bool take_lock)
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     inmemory_chericap256 mem_buffer;
@@ -967,13 +969,14 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
      * accidentally tagging a shorn data write.  This, like the rest of the
      * tag logic, is not multi-TCG-thread safe.
      */
+    cheri_tag_assert_not_mttcg();
 
     env->statcounters_cap_write++;
     if (get_capreg_tag_filtered(env,cs)) {
         env->statcounters_cap_write_tagged++;
-        cheri_tag_set(env, vaddr, cs, NULL, retpc);
+        cheri_tag_set(env, vaddr, cs, NULL, retpc, NULL);
     } else {
-        cheri_tag_invalidate_aligned(env, vaddr, retpc);
+        cheri_tag_invalidate_aligned(env, vaddr, retpc, NULL);
     }
     env->lladdr = 1;
 

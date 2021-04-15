@@ -156,11 +156,27 @@ DEF_HELPER_3(pcc_check_bounds, void, env, tl, tl)
 /* Checks for loads relative to pcc (address is absolute, not relative) */
 DEF_HELPER_3(pcc_check_load, cap_checked_ptr, env, tl, memop)
 /* Clear tags due to a store. Only calll this after the store succeeded. */
+
+// TODO: Which of the following tag invalidates can be TCG_CALL_NO_RWG or
+// TCG_CALL_NO_WG
+// TODO: None tags are not globals, so it should be all of them?
+
 DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop)
 /* Clear tags due to a store, the last argument is whether the store succeeded
  */
 DEF_HELPER_4(cheri_invalidate_tags_condition, void, env, cap_checked_ptr, memop,
              i32)
+
+DEF_HELPER_3(cheri_invalidate_lock_tags_start, void, env, cap_checked_ptr,
+             memop)
+DEF_HELPER_3(cheri_invalidate_lock_tags_start_or_dummy, void, env,
+             cap_checked_ptr, memop)
+DEF_HELPER_3(cheri_invalidate_lock_tags_end, void, env, cap_checked_ptr, memop)
+DEF_HELPER_4(cheri_invalidate_lock_tags_end_condition, void, env,
+             cap_checked_ptr, memop, i32)
+
+DEF_HELPER_2(cheri_invalidate_lock_tags_assert_exist, void, env,
+             cap_checked_ptr)
 
 #endif
 
