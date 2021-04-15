@@ -691,7 +691,7 @@ target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, 
         vaddr, env->lladdr, env->CP0_LLAddr);
     if (env->lladdr != vaddr)
         return 0;
-    store_cap_to_memory(env, cs, vaddr, retpc);
+    store_cap_to_memory(env, cs, vaddr, retpc, true);
     env->lladdr = 1;
     return 1;
 }
@@ -721,7 +721,7 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
     }
     cheri_debug_assert(align_of(CHERI_CAP_SIZE, addr) == 0);
     load_cap_from_memory(env, cd, cb, cbp, /*addr=*/cap_get_cursor(cbp),
-                         _host_return_address, &env->CP0_LLAddr);
+                         _host_return_address, &env->CP0_LLAddr, true);
     env->lladdr = addr;
 }
 

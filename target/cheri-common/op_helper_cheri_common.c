@@ -130,10 +130,92 @@ void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd,
     derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
+// These two should only be used when locking is off
+
 void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
                                              target_ulong vaddr, MemOp op))
 {
-    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC());
+    tcg_debug_assert(!parallel_cpus);
+    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), NULL, NULL);
+}
+
+// Use this for conditional clear when needing to avoid a branch in the TCG
+// backend
+void CHERI_HELPER_IMPL(cheri_invalidate_tags_condition(CPUArchState *env,
+                                                       target_ulong vaddr,
+                                                       MemOp op, uint32_t cond))
+{
+    tcg_debug_assert(!parallel_cpus);
+    if (cond)
+        cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), NULL, NULL);
+}
+
+// These versions take (possibly two) locks, and also register them to be freed
+// On an exception
+
+void CHERI_HELPER_IMPL(cheri_invalidate_lock_tags_start(CPUArchState *env,
+                                                        target_ulong vaddr,
+                                                        MemOp op))
+{
+    tag_writer_lock_t low = NULL;
+    tag_writer_lock_t high = NULL;
+    cheri_lock_for_tag_invalidate(env, vaddr, memop_size(op), GETPC(), &low,
+                                  &high);
+    cheri_tag_writer_push_free_on_exception(env, low);
+    cheri_tag_writer_push_free_on_exception(env, high);
+}
+
+// If using the lock to protect a standard atomic, then we always need a lock
+void CHERI_HELPER_IMPL(cheri_invalidate_lock_tags_start_or_dummy(
+    CPUArchState *env, target_ulong vaddr, MemOp op))
+{
+    tag_writer_lock_t low = NULL;
+    tag_writer_lock_t high = NULL;
+    cheri_lock_for_tag_invalidate(env, vaddr, memop_size(op), GETPC(), &low,
+                                  &high);
+    if (low == TAG_LOCK_NONE || high == TAG_LOCK_NONE)
+        get_dummy_locks(vaddr, &low, &high);
+
+    cheri_tag_writer_push_free_on_exception(env, low);
+    cheri_tag_writer_push_free_on_exception(env, high);
+}
+
+void CHERI_HELPER_IMPL(cheri_invalidate_lock_tags_end(CPUArchState *env,
+                                                      target_ulong vaddr,
+                                                      MemOp op))
+{
+    tag_writer_lock_t high = cheri_tag_writer_pop_free_on_exception(env);
+    tag_writer_lock_t low = cheri_tag_writer_pop_free_on_exception(env);
+    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), &low, &high);
+}
+
+void CHERI_HELPER_IMPL(cheri_invalidate_lock_tags_end_condition(
+    CPUArchState *env, target_ulong vaddr, MemOp op, uint32_t cond))
+{
+    tag_writer_lock_t high = cheri_tag_writer_pop_free_on_exception(env);
+    tag_writer_lock_t low = cheri_tag_writer_pop_free_on_exception(env);
+    if (cond)
+        cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), &low, &high);
+    else {
+        cheri_tag_writer_release(high);
+        cheri_tag_writer_release(low);
+    }
+}
+
+// Assert that there is actually a tag here
+void CHERI_HELPER_IMPL(cheri_invalidate_lock_tags_assert_exist(
+    CPUArchState *env, target_ulong vaddr))
+{
+    tag_writer_lock_t high = cheri_tag_writer_pop_free_on_exception(env);
+    tag_writer_lock_t low = cheri_tag_writer_pop_free_on_exception(env);
+
+    if (!(low != NULL && low != TAG_LOCK_NONE)) {
+        printf("Addr: " TARGET_FMT_lx ". Low: %p. High %p\n", vaddr, low, high);
+        assert(0);
+    }
+
+    cheri_tag_writer_push_free_on_exception(env, low);
+    cheri_tag_writer_push_free_on_exception(env, high);
 }
 
 /// Implementations of individual instructions start here
@@ -1069,7 +1151,7 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
         cbp, CHERI_CAP_SIZE, raise_unaligned_load_exception);
 
     load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address,
-                         /*physaddr_out=*/NULL);
+                         /*physaddr_out=*/NULL, true);
 }
 
 void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
@@ -1086,7 +1168,7 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
                              CHERI_CAP_SIZE, _host_return_address, cbp,
                              CHERI_CAP_SIZE, raise_unaligned_store_exception);
 
-    store_cap_to_memory(env, cs, addr, _host_return_address);
+    store_cap_to_memory(env, cs, addr, _host_return_address, true);
 }
 
 static inline bool
@@ -1109,10 +1191,12 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
     return tag;
 }
 
-bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
-                              target_ulong *cursor, uint32_t cb,
-                              const cap_register_t *source, target_ulong vaddr,
-                              target_ulong retpc, hwaddr *physaddr)
+bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
+                                  target_ulong *cursor, uint32_t cb,
+                                  const cap_register_t *source,
+                                  target_ulong vaddr, target_ulong retpc,
+                                  hwaddr *physaddr, bool *raw_tag,
+                                  bool take_lock)
 {
     cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
     /*
@@ -1124,6 +1208,15 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
     /* No TLB fault possible, should be safe to get a host pointer now */
     void *host = probe_read(env, vaddr, CHERI_CAP_SIZE,
                             cpu_mmu_index(env, false), retpc);
+
+    tag_reader_lock_t read_lock = NULL;
+    int prot;
+
+    if (take_lock) {
+        cheri_lock_for_tag_get(env, vaddr, cb, physaddr, &prot, retpc,
+                               &read_lock);
+    }
+
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
@@ -1141,14 +1234,23 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
 #undef ld_cap_word_p
     } else {
         // Slow path for e.g. IO regions.
+        if (take_lock)
+            cheri_tag_reader_push_free_on_exception(env, read_lock);
         qemu_maybe_log_instr_extra(env, "Using slow path for load from guest "
             "address " TARGET_FMT_lx "\n", vaddr);
         *pesbt = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
                 CAP_NULL_XOR_MASK;
         *cursor = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
+        if (take_lock)
+            cheri_tag_reader_pop_free_on_exception(env);
     }
-    int prot;
-    bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
+
+    bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc,
+                             take_lock ? &read_lock : NULL);
+
+    if (raw_tag)
+        *raw_tag = tag;
+
     if (tag) {
         tag = cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
     }
@@ -1183,19 +1285,29 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
     return tag;
 }
 
+bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
+                              const cap_register_t *source, target_ulong vaddr,
+                              target_ulong retpc, hwaddr *physaddr,
+                              bool take_lock)
+{
+    return load_cap_from_memory_raw_tag(env, pesbt, cursor, cb, source, vaddr,
+                                        retpc, physaddr, NULL, take_lock);
+}
+
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
-                          target_ulong retpc, hwaddr *physaddr)
+                          target_ulong retpc, hwaddr *physaddr, bool take_lock)
 {
     target_ulong pesbt;
     target_ulong cursor;
     bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
-                                        retpc, physaddr);
+                                        retpc, physaddr, take_lock);
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
 }
 
-void store_cap_to_memory(CPUArchState *env, uint32_t cs,
-                         target_ulong vaddr, target_ulong retpc)
+void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
+                         target_ulong retpc, bool take_lock)
 {
     target_ulong cursor = get_capreg_cursor(env, cs);
     target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_NULL_XOR_MASK;
@@ -1217,13 +1329,15 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
      * accidentally tagging a shorn data write.  This, like the rest of the
      * tag logic, is not multi-TCG-thread safe.
      */
+    tag_writer_lock_t lock = NULL;
 
     env->statcounters_cap_write++;
     if (tag) {
         env->statcounters_cap_write_tagged++;
-        cheri_tag_set(env, vaddr, cs, NULL, retpc);
+        cheri_tag_set(env, vaddr, cs, NULL, retpc, take_lock ? &lock : NULL);
     } else {
-        cheri_tag_invalidate_aligned(env, vaddr, retpc);
+        cheri_tag_invalidate_aligned(env, vaddr, retpc,
+                                     take_lock ? &lock : NULL);
     }
     /* No TLB fault possible, should be safe to get a host pointer now */
     void* host = probe_write(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
@@ -1243,13 +1357,18 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 #undef st_cap_word_p
     } else {
         // Slow path for e.g. IO regions.
+        cheri_tag_writer_push_free_on_exception(env, lock);
         qemu_maybe_log_instr_extra(env, "Using slow path for store to guest "
             "address " TARGET_FMT_lx "\n", vaddr);
         cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
                            pesbt_for_mem, retpc);
         cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor,
                            retpc);
+        cheri_tag_writer_pop_free_on_exception(lock);
     }
+
+    cheri_tag_writer_release(lock);
+
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     env->rvfi_dii_trace.MEM.rvfi_mem_addr = vaddr;
     env->rvfi_dii_trace.MEM.rvfi_mem_wdata[0] = cursor;

@@ -40,6 +40,7 @@
 #include "exec/cpu-all.h"
 #include "sysemu/cpu-timers.h"
 #include "sysemu/replay.h"
+#include "cheri_tagmem.h"
 
 /* -icount align implementation. */
 
@@ -278,6 +279,7 @@ void cpu_exec_step_atomic(CPUState *cpu)
         cpu_tb_exec(cpu, tb, &tb_exit);
         cc->cpu_exec_exit(cpu);
     } else {
+        cheri_tag_locks_exception_thrown(cpu);
         /*
          * The mmap_lock is dropped by tb_gen_code if it runs out of
          * memory.
@@ -745,6 +747,9 @@ int cpu_exec(CPUState *cpu)
 
     /* prepare setjmp context for exception handling */
     if (sigsetjmp(cpu->jmp_env, 0) != 0) {
+
+        cheri_tag_locks_exception_thrown(cpu);
+
 #if defined(__clang__) || !QEMU_GNUC_PREREQ(4, 6)
         /* Some compilers wrongly smash all local variables after
          * siglongjmp. There were bug reports for gcc 4.5.0 and clang.

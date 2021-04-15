@@ -377,18 +377,20 @@ static inline target_ulong ccheck_store_right(CPUMIPSState *env, target_ulong of
     // return the actual address by adding the low bits (this is expected by translate.c
     return check_ddc(env, CAP_PERM_STORE, write_offset, stored_bytes, retpc) + low_bits;
 }
+
+// swr/sdr/swl/sdl will never invalidate more than one capability
+#define invalidate_tags_store_left_right_start(env, addr, retpc)               \
+    tag_writer_lock_t writer_lock = NULL;                                      \
+    cheri_lock_for_tag_invalidate(env, addr, 1, retpc, &writer_lock, NULL)
+#define invalidate_tags_store_left_right_end(env, addr, retpc)                 \
+    cheri_tag_invalidate(env, addr, 1, retpc, &writer_lock, NULL)
+
+#else // !TARGET_CHERI
+
+#define invalidate_tags_store_left_right_start(env, addr, retpc)
+#define invalidate_tags_store_left_right_end(env, addr, retpc)
+
 #endif
-
-static inline void invalidate_tags_store_left_right(CPUMIPSState *env,
-                                                    target_ulong addr,
-                                                    uintptr_t retpc) {
-#ifdef TARGET_CHERI
-    // swr/sdr/swl/sdl will never invalidate more than one capability
-    cheri_tag_invalidate(env, addr, 1, retpc);
-#endif
-}
-
-
 
 void helper_swl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
                 int mem_idx)
@@ -397,6 +399,8 @@ void helper_swl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
     const int num_bytes = 4 - GET_LMASK(arg2);
     arg2 = check_ddc(env, CAP_PERM_STORE, arg2, num_bytes, GETPC());
 #endif
+    invalidate_tags_store_left_right_start(env, arg2, GETPC());
+
     cpu_stb_mmuidx_ra(env, arg2, (uint8_t)(arg1 >> 24), mem_idx, GETPC());
 
     if (GET_LMASK(arg2) <= 2) {
@@ -413,7 +417,7 @@ void helper_swl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
         cpu_stb_mmuidx_ra(env, GET_OFFSET(arg2, 3), (uint8_t)arg1,
                           mem_idx, GETPC());
     }
-    invalidate_tags_store_left_right(env, arg2, GETPC());
+    invalidate_tags_store_left_right_end(env, arg2, GETPC());
 }
 
 void helper_swr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
@@ -421,6 +425,7 @@ void helper_swr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
 #ifdef TARGET_CHERI
     arg2 = ccheck_store_right(env, arg2, 4, GETPC());
 #endif
+    invalidate_tags_store_left_right_start(env, arg2, GETPC());
     cpu_stb_mmuidx_ra(env, arg2, (uint8_t)arg1, mem_idx, GETPC());
 
     if (GET_LMASK(arg2) >= 1) {
@@ -437,7 +442,7 @@ void helper_swr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
         cpu_stb_mmuidx_ra(env, GET_OFFSET(arg2, -3), (uint8_t)(arg1 >> 24),
                           mem_idx, GETPC());
     }
-    invalidate_tags_store_left_right(env, arg2, GETPC());
+    invalidate_tags_store_left_right_end(env, arg2, GETPC());
 }
 
 #if defined(TARGET_MIPS64)
@@ -455,9 +460,11 @@ void helper_sdl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
                 int mem_idx)
 {
 #ifdef TARGET_CHERI
-    const int num_bytes = 4 - GET_LMASK(arg2);
+    const int num_bytes = 8 - GET_LMASK(arg2);
     arg2 = check_ddc(env, CAP_PERM_STORE, arg2, num_bytes, GETPC());
 #endif
+    invalidate_tags_store_left_right_start(env, arg2, GETPC());
+
     cpu_stb_mmuidx_ra(env, arg2, (uint8_t)(arg1 >> 56), mem_idx, GETPC());
 
     if (GET_LMASK64(arg2) <= 6) {
@@ -494,7 +501,7 @@ void helper_sdl(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
         cpu_stb_mmuidx_ra(env, GET_OFFSET(arg2, 7), (uint8_t)arg1,
                           mem_idx, GETPC());
     }
-    invalidate_tags_store_left_right(env, arg2, GETPC());
+    invalidate_tags_store_left_right_end(env, arg2, GETPC());
 }
 
 void helper_sdr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
@@ -503,6 +510,8 @@ void helper_sdr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
 #ifdef TARGET_CHERI
     arg2 = ccheck_store_right(env, arg2, 8, GETPC());
 #endif
+    invalidate_tags_store_left_right_start(env, arg2, GETPC());
+
     cpu_stb_mmuidx_ra(env, arg2, (uint8_t)arg1, mem_idx, GETPC());
 
     if (GET_LMASK64(arg2) >= 1) {
@@ -539,7 +548,7 @@ void helper_sdr(CPUMIPSState *env, target_ulong arg1, target_ulong arg2,
         cpu_stb_mmuidx_ra(env, GET_OFFSET(arg2, -7), (uint8_t)(arg1 >> 56),
                           mem_idx, GETPC());
     }
-    invalidate_tags_store_left_right(env, arg2, GETPC());
+    invalidate_tags_store_left_right_end(env, arg2, GETPC());
 }
 #endif /* TARGET_MIPS64 */
 
@@ -1893,11 +1902,17 @@ static inline void
 store_byte_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint8_t val,
                          TCGMemOpIdx oi, uintptr_t retaddr)
 {
+#ifdef TARGET_CHERI
+    tag_writer_lock_t lock = NULL;
+    cheri_lock_for_tag_invalidate(env, vaddr, 1, retaddr, &lock, NULL);
+    cheri_tag_writer_push_free_on_exception(env, lock);
+#endif
     helper_ret_stb_mmu(env, vaddr, val, oi, retaddr);
 #ifdef TARGET_CHERI
+    cheri_tag_writer_pop_free_on_exception(env);
     // If we returned (i.e. write was successful) we also need to invalidate the
     // tags bit to ensure we are consistent with sb
-    cheri_tag_invalidate(env, vaddr, 1, retaddr);
+    cheri_tag_invalidate(env, vaddr, 1, retaddr, &lock, NULL);
 #endif
 }
 
@@ -1905,11 +1920,18 @@ static inline void
 store_u32_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint32_t val,
                          TCGMemOpIdx oi, uintptr_t retaddr)
 {
+#ifdef TARGET_CHERI
+    tag_writer_lock_t lock = NULL;
+    tag_writer_lock_t lock2 = NULL;
+    cheri_lock_for_tag_invalidate(env, vaddr, 4, retaddr, &lock, &lock2);
+    cheri_tag_writer_push_free_on_exception(env, lock);
+#endif
     helper_ret_stw_mmu(env, vaddr, val, oi, retaddr);
 #ifdef TARGET_CHERI
+    cheri_tag_writer_pop_free_on_exception(env);
     // If we returned (i.e. write was successful) we also need to invalidate the
     // tags bit to ensure we are consistent with sb
-    cheri_tag_invalidate(env, vaddr, 4, retaddr);
+    cheri_tag_invalidate(env, vaddr, 4, retaddr, &lock, &lock2);
 #endif
 }
 
