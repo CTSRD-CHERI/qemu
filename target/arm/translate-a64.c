@@ -3128,7 +3128,7 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
             tcg_gen_extr32_i64(s2, s1, cmp);
         }
         tcg_temp_free_i64(cmp);
-    } else if (tb_cflags(s->base.tb) & CF_PARALLEL) {
+    } else if ((tb_cflags(s->base.tb) & CF_PARALLEL) && !ALL_WRITES_ATOMIC) {
         if (HAVE_CMPXCHG128) {
             TCGv_i32 tcg_rs = tcg_const_i32(rs);
             if (s->be_data == MO_LE) {
@@ -3173,18 +3173,24 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
         TCGv_i32 store_happens = tcg_temp_new_i32();
         tcg_gen_extrl_i64_i32(store_happens, c2);
         tcg_gen_addi_i64(checked_addr, (TCGv_i64)clean_addr, 4);
-        handle_conditional_invalidate((TCGv_cap_checked_ptr)checked_addr, MO_64,
-                                      memidx, store_happens);
-        tcg_temp_free_i64(checked_addr);
-        tcg_temp_free_i32(store_happens);
+        TCGv_i32 tcoi = handle_conditional_invalidate_start(
+            (TCGv_cap_checked_ptr)checked_addr, MO_64, memidx);
 #endif
         /* If compare equal, write back new data, else write back old data.  */
         tcg_gen_movcond_i64(TCG_COND_NE, c1, c2, zero, t1, d1);
         tcg_gen_movcond_i64(TCG_COND_NE, c2, c2, zero, t2, d2);
         tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
-            c1, clean_addr, memidx, MO_64 | s->be_data, false);
+            c1, clean_addr, memidx, MO_64 | s->be_data, false, false);
         tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
-            c2, (TCGv_cap_checked_ptr)a2, memidx, MO_64 | s->be_data, false);
+            c2, (TCGv_cap_checked_ptr)a2, memidx, MO_64 | s->be_data, false,
+            false);
+
+#ifdef TARGET_CHERI
+        handle_conditional_invalidate_end((TCGv_cap_checked_ptr)checked_addr,
+                                          tcoi, store_happens);
+        tcg_temp_free_i64(checked_addr);
+        tcg_temp_free_i32(store_happens);
+#endif
         tcg_temp_free_i64(a2);
         tcg_temp_free_i64(c1);
         tcg_temp_free_i64(c2);
