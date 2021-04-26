@@ -84,7 +84,7 @@ cjalr       1111111  01100 ..... 000 ..... 1011011 @r2
 cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 # fpclear   1111111  10000 ..... 000 ..... 1011011 @r2
 csealentry  1111111  10001 ..... 000 ..... 1011011 @r2
-
+cloadtags   1111111  10010 ..... 000 ..... 1011011 @r2
 
 
 # There is an existing @sfence_vma format with rs1+rs2 fields, but let's define a new name
