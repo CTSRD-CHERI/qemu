@@ -39,9 +39,9 @@
         return gen_helper(__VA_ARGS__, &gen_helper_##name);                    \
     }
 
-typedef void(cheri_cget_helper)(TCGv, TCGv_env, TCGv_i32);
-static inline bool gen_cheri_get(DisasContext *ctx, int rd, int cs,
-                                 cheri_cget_helper *gen_func)
+typedef void(cheri_int_cap_helper)(TCGv, TCGv_env, TCGv_i32);
+static inline bool gen_cheri_int_cap(DisasContext *ctx, int rd, int cs,
+                                 cheri_int_cap_helper *gen_func)
 {
     TCGv_i32 source_regnum = tcg_const_i32(cs);
     TCGv result = tcg_temp_new();
@@ -52,8 +52,8 @@ static inline bool gen_cheri_get(DisasContext *ctx, int rd, int cs,
     return true;
 }
 
-#define TRANSLATE_CGET(name)                                                   \
-    DO_TRANSLATE(name, gen_cheri_get, ctx, a->rd, a->rs1)
+#define TRANSLATE_INT_CAP(name)                                                \
+    DO_TRANSLATE(name, gen_cheri_int_cap, ctx, a->rd, a->rs1)
 
 typedef void(cheri_cap_cap_helper)(TCGv_env, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_cap_cap(int cd, int cs,
@@ -154,15 +154,15 @@ static inline bool gen_cheri_int_cap_cap(DisasContext *ctx, int rd, int cs1,
 
 // TODO: all of these could be implemented in TCG without calling a helper
 // Two operand (int cap)
-TRANSLATE_CGET(cgetaddr)
-TRANSLATE_CGET(cgetbase)
-TRANSLATE_CGET(cgetflags)
-TRANSLATE_CGET(cgetlen)
-TRANSLATE_CGET(cgetoffset)
-TRANSLATE_CGET(cgetperm)
-TRANSLATE_CGET(cgettag)
-TRANSLATE_CGET(cgettype)
-TRANSLATE_CGET(cgetsealed)
+TRANSLATE_INT_CAP(cgetaddr)
+TRANSLATE_INT_CAP(cgetbase)
+TRANSLATE_INT_CAP(cgetflags)
+TRANSLATE_INT_CAP(cgetlen)
+TRANSLATE_INT_CAP(cgetoffset)
+TRANSLATE_INT_CAP(cgetperm)
+TRANSLATE_INT_CAP(cgettag)
+TRANSLATE_INT_CAP(cgettype)
+TRANSLATE_INT_CAP(cgetsealed)
 
 // Two operand (int int)
 static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)
