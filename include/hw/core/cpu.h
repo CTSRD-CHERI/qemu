@@ -73,6 +73,8 @@ typedef enum MMUAccessType {
     MMU_INST_FETCH = 2,
     MMU_DATA_CAP_LOAD = 3,
     MMU_DATA_CAP_STORE = 4,
+    MMU_VERSION_LOAD = 5, /* XXX not currently used because version loads use same perms as data (apparently MMU_DATA_CAP_LOAD is the same) */
+    MMU_VERSION_STORE = 6,
 } MMUAccessType;
 
 typedef struct CPUWatchpoint CPUWatchpoint;

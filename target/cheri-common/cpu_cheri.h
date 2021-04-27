@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -163,6 +164,8 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
             *cheri_flags |= TB_FLAG_CHERI_DDC_CURSOR_ZERO;
         if (cap_get_top_full(ddc) == CAP_MAX_TOP)
             *cheri_flags |= TB_FLAG_CHERI_DDC_TOP_MAX;
+        if (cap_get_version(ddc) == CAP_VERSION_UNVERSIONED)
+            *cheri_flags |= TB_FLAG_CHERI_DDC_UNVERSIONED;
     }
 }
 

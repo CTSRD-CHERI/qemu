@@ -106,7 +106,8 @@ const char * const riscv_excp_names[] = {
     [RISCV_EXCP_LOAD_CAP_PAGE_FAULT] = "load_cap_page_fault",
     [RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT] = "store_cap_page_fault",
 #endif
-    [RISCV_EXCP_CHERI] = "cheri_fault"
+    [RISCV_EXCP_CHERI] = "cheri_fault",
+    [RISCV_EXCP_VERSION] = "cheri_version_fault",
 #endif
     // 32–47 Reserved for future standard use
     // 48-63 Reserved for custom use

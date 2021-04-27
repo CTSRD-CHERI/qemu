@@ -2,6 +2,7 @@
  * common defines for all CPUs
  *
  * Copyright (c) 2003 Fabrice Bellard
+ * Copyright (c) 2021 Microsoft
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -178,6 +179,17 @@ typedef struct CPUIOTLBEntry {
     (TLBENTRYCAP_FLAG_TRAP | TLBENTRYCAP_FLAG_CLEAR)
 #define TLBENTRYCAP_INVALID_WRITE_VALUE (TLBENTRYCAP_FLAG_TRAP)
     uintptr_t tagmem_write;
+
+/* Similar to tagmem above but there is no clearing access */
+#define TLBENTRYVER_MASK    ((uintptr_t) 1)
+/* Trap if attempting to write version */
+#define TLBENTRYVER_TRAP    ((uintptr_t) 1)
+#define TLBENTRYVER_INVALID ((uintptr_t) (~0 & ~TLBENTRYVER_MASK))
+/* Entry that reads as all zeros, attempts allocation on write */
+#define ALL_ZERO_VERMEM     ((void *) TLBENTRYVER_INVALID)
+    /* Pointer to version memory for page. Will hopefully get away with single pointer
+       for both reads and writes. */
+    uintptr_t vermem;
 #endif
     MemTxAttrs attrs;
 } CPUIOTLBEntry;
@@ -189,6 +201,16 @@ typedef struct CPUIOTLBEntry {
     })
 #define IOTLB_GET_TAGMEM_FLAGS(iotlbentry, rw)                                 \
     ((uintptr_t)iotlbentry->tagmem_##rw & TLBENTRYCAP_MASK);
+
+#define IOTLB_GET_VERMEM(iotlbentry)                                       \
+    ({                                                                         \
+        cheri_debug_assert(iotlbentry->vermem != (uintptr_t)0);           \
+        (void *)((uintptr_t)iotlbentry->vermem & ~TLBENTRYVER_MASK);      \
+    })
+
+#define IOTLB_GET_VERMEM_FLAGS(iotlbentry)                                \
+    (iotlbentry->vermem & TLBENTRYVER_MASK)
+
 /*
  * Data elements that are per MMU mode, minus the bits accessed by
  * the TCG fast path.

@@ -91,6 +91,7 @@ enum {
     TRANSLATE_G_STAGE_FAIL,
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
     TRANSLATE_CHERI_FAIL,
+    TRANSLATE_VERSION_FAIL,
 #endif
 };
 
