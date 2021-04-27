@@ -11,9 +11,9 @@
  */
 
 #include "qemu/osdep.h"
+#include "cpu.h"
 #include <zlib.h>
 #include "qapi/error.h"
-#include "cpu.h"
 #include "exec/ramblock.h"
 #include "qemu/rcu_queue.h"
 #include "qapi/qapi-commands-migration.h"
