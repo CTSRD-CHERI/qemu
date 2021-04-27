@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -126,6 +127,7 @@ do_exception:
     raise_cheri_exception_impl(env, cause, regnum, instavail, pc);
 }
 
+#ifdef TARGET_MIPS
 static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
                                      uint64_t ddc_offset, uint32_t len,
                                      uintptr_t retpc)
@@ -134,8 +136,17 @@ static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
     target_ulong addr = ddc_offset + cap_get_cursor(ddc);
     check_cap(env, ddc, perm, addr, CHERI_EXC_REGNUM_DDC, len,
         /*instavail=*/true, retpc);
+    // if (ddc->cr_version != CAP_VERSION_UNVERSIONED) {
+    //     /* XXX I think this function is only used on MIPS so may not need version check here */
+    //     MMUAccessType rw = perm & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_CAP_LOAD;
+    //     if (!cheri_version_check(env, addr, len, rw, retpc, ddc->cr_version)) {
+    //         /* XXX should be fault */
+    //         raise_cheri_exception_impl(env, CapEx_VersionViolation, CHERI_EXC_REGNUM_DDC, true, retpc);
+    //     }
+    // }
     return addr;
 }
+#endif
 
 static inline bool cheri_have_access_sysregs(CPUArchState* env)
 {
@@ -215,6 +226,7 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause) {
     case CapEx_PermitCCallViolation: return "Permit_CCall Violation";
     case CapEx_PermitUnsealViolation: return "Permit_Unseal Violation";
     case CapEx_PermitSetCIDViolation: return "Permit_SetCID Violation";
+    case CapEx_VersionViolation: return "Version Violation";
     }
     // default: return "Unknown cause";
     __builtin_unreachable();

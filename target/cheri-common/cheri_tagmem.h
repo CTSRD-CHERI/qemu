@@ -4,6 +4,7 @@
  * Copyright (c) 2015-2016 Stacey Son <sson@FreeBSD.org>
  * Copyright (c) 2016-2018 Alfredo Mazzinghi <am2419@cl.cam.ac.uk>
  * Copyright (c) 2016-2018 Alex Richardson <Alexander.Richardson@cl.cam.ac.uk>
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -68,4 +69,28 @@ bool cheri_tag_get_m128(CPUArchState *env, target_ulong vaddr, int reg,
 void cheri_tag_set_m128(CPUArchState *env, target_ulong vaddr, int reg,
         uint8_t tag, uint64_t tps, uint64_t length, uintptr_t pc);
 #endif /* CHERI_MAGIC128 */
+
+/**
+ * Returns the version of the granule-aligned @vaddr
+ * @reg XXX is redundant on RISC-V
+ * @ret_paddr is used to return the physical address if non-NULL 
+ * @prot returns protection attributes form translation. Must not be NULL.
+ * May cause translation faults as for data loads.
+ */
+cap_version_t cheri_version_get_aligned(CPUArchState *env, target_ulong vaddr, int reg,
+                  hwaddr *ret_paddr, int *prot, uintptr_t pc);
+/**
+ * Sets the version of the granule-aligned @vaddr to @val.
+ * @reg XXX is redundant on RISC-V
+ * @ret_paddr is used to return the physical address fr
+ * May cause translation faults as for data stores.
+ */
+void cheri_version_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc, cap_version_t val);
+/**
+ * Returns true if the memory version matches the give @expected version for all
+ * granules in [vaddr, vaddr+size). May cause translation faults as per the 
+ * access type rw.
+ */
+bool cheri_version_check(CPUArchState *env, target_ulong vaddr, int32_t size,
+                         MMUAccessType rw, uintptr_t pc, cap_version_t expected);
 #endif /* TARGET_CHERI */

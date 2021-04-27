@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -92,8 +93,9 @@ static inline void _generate_ddc_checked_ptr(
     DisasContext *ctx, CheriTbFlags tb_perm_flags, CheriPermissions req_perms,
     TCGv_cap_checked_ptr checked_addr, TCGv ddc_offset, target_ulong num_bytes)
 {
-    if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags))) {
-        // DDC is untagged, sealed, or missing PERM_STORE
+    if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags | TB_FLAG_CHERI_DDC_UNVERSIONED))) {
+        // DDC is untagged, sealed, or missing required perms
+        // XXX for now we require that DDC be unversioned.
         TCGv_i32 tperms = tcg_const_i32(req_perms);
         cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
         gen_helper_raise_exception_ddc_perms(cpu_env, tperms);

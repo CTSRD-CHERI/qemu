@@ -4,6 +4,7 @@
  * Copyright (c) 2015-2016 Stacey Son <sson@FreeBSD.org>
  * Copyright (c) 2016-2018 Alfredo Mazzinghi <am2419@cl.cam.ac.uk>
  * Copyright (c) 2016-2020 Alex Richardson <Alexander.Richardson@cl.cam.ac.uk>
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -74,6 +75,13 @@ void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
                        "Should have been checked before bounds!");
     check_cap(env, ddc, 0, addr, CHERI_EXC_REGNUM_DDC, num_bytes,
               /*instavail=*/true, GETPC());
+    // if (ddc->cr_version != CAP_VERSION_UNVERSIONED) {
+    //     MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_CAP_LOAD;
+    //     if (!cheri_version_check(env, addr, len, rw, retpc, ddc->cr_version)) {
+    //         /* XXX should be fault */
+    //         raise_cheri_exception_impl(env, CapEx_VersionViolation, CHERI_EXC_REGNUM_DDC, true, retpc);
+    //     }
+    // }
 }
 
 target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
@@ -194,6 +202,130 @@ target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
         cheri_debug_assert(otype <= CAP_LAST_NONRESERVED_OTYPE);
     }
     return otype;
+}
+
+target_ulong CHERI_HELPER_IMPL(cgetversion(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetVersion: Move Version Field to a General-Purpose Register.
+     */
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    return (target_ulong) cbp->cr_version;
+}
+
+target_ulong CHERI_HELPER_IMPL(cloadversion(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CLoadVersion: Load Version for granule to a General-Purpose Register.
+     * TODO reduce code duplication with cap_check_common?
+     */
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (cbp->cr_version != CAP_VERSION_UNVERSIONED) {
+        raise_cheri_exception(env, CapEx_VersionViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
+    }
+    const target_ulong addr = cap_get_cursor(cbp);
+    if (!cap_is_in_bounds(cbp, addr, CHERI_VERSION_GRANULE_SIZE)) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "Failed capability bounds check: cursor=" TARGET_FMT_plx "\n", addr);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    }
+    if (!QEMU_IS_ALIGNED(addr, CHERI_VERSION_GRANULE_SIZE)) {
+        raise_unaligned_load_exception(env, addr, _host_return_address);
+    }
+    int prot;
+    cap_version_t ver = cheri_version_get_aligned(env, addr, cb, /*physaddr_out=*/NULL, &prot, _host_return_address);
+    /* XXX should we use prot? */
+    (void) prot;
+    return (target_ulong) ver;
+}
+
+void CHERI_HELPER_IMPL(cstoreversion(CPUArchState *env, uint32_t cb,
+                               target_ulong version))
+{
+    /*
+     * CStoreVersion: Set version of a granule in memory.
+     * TODO reduce code duplication with cap_check_common?
+     */
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (cbp->cr_version != CAP_VERSION_UNVERSIONED) {
+        raise_cheri_exception(env, CapEx_VersionViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+    }
+    const target_ulong addr = cap_get_cursor(cbp);
+    if (!cap_is_in_bounds(cbp, addr, CHERI_VERSION_GRANULE_SIZE)) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "Failed capability bounds check: cursor=" TARGET_FMT_plx "\n", addr);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    }
+    if (!QEMU_IS_ALIGNED(addr, CHERI_VERSION_GRANULE_SIZE)) {
+        raise_unaligned_load_exception(env, addr, _host_return_address);
+    }
+    cheri_version_set_aligned(env, addr, cb, NULL, _host_return_address, version & CAP_MAX_VERSION);
+}
+
+target_ulong CHERI_HELPER_IMPL(camocdecversion(CPUArchState *env, uint32_t cb,
+                               uint32_t cs2))
+{
+    /*
+     * CAmoCDecVersion: Atomically decrement version of a granule in memory,
+     * comparing with expected version in cs2.
+     * TODO reduce code duplication with cap_check_common?
+     * XXX should also check for PERMIT_LOAD?
+     */
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    const cap_register_t *cs2p = get_readonly_capreg(env, cs2);
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (!cs2p->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cs2);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (is_cap_sealed(cs2p)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cs2);
+    } else if (cbp->cr_version != CAP_VERSION_UNVERSIONED) {
+        raise_cheri_exception(env, CapEx_VersionViolation, cb);
+    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+    } else if (!(cs2p->cr_perms & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cs2);
+    }
+    const target_ulong addr = cap_get_cursor(cbp);
+    if (!cap_is_in_bounds(cbp, addr, CHERI_VERSION_GRANULE_SIZE)) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "Failed capability bounds check: cursor=" TARGET_FMT_plx "\n", addr);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    }
+    if (!QEMU_IS_ALIGNED(addr, CHERI_VERSION_GRANULE_SIZE)) {
+        raise_unaligned_load_exception(env, addr, _host_return_address);
+    }
+    
+    int prot;
+    cap_version_t expected_ver = cs2p->cr_version;
+    cap_version_t mem_ver = cheri_version_get_aligned(env, addr, cb, /*physaddr_out=*/NULL, &prot, _host_return_address);
+    /* XXX should we use prot? */
+    (void) prot;
+    if (expected_ver == mem_ver) {
+        cap_version_t new_ver = (expected_ver == 0) ? CAP_MAX_VERSION : (expected_ver - 1);
+        cheri_version_set_aligned(env, addr, cb, NULL, _host_return_address, new_ver);
+        return new_ver == CAP_VERSION_UNVERSIONED ? -1 : 1;
+    } else {
+        /* Version mismatch -- return failure */
+        return 0;
+    }
 }
 
 /// Two operands (both capabilities)
@@ -861,6 +993,28 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     update_capreg(env, cd, &result);
 }
 
+void CHERI_HELPER_IMPL(csetversion(CPUArchState *env, uint32_t cd, uint32_t cb,
+                                 target_ulong version))
+{
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    GET_HOST_RETPC();
+    /*
+     * CSetVersion: Set capability version
+     */
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (!cap_is_unsealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (cbp->cr_version != CAP_VERSION_UNVERSIONED) {
+        raise_cheri_exception(env, CapEx_VersionViolation, cb);
+    }
+    cap_register_t result = *cbp;
+    version &= CAP_MAX_VERSION;
+    _Static_assert(((CAP_MAX_VERSION + 1) & CAP_MAX_VERSION) == 0, "Expected power of two CAP_MAX_VERSION");
+    cap_set_decompressed_cr_version(&result, version);
+    update_capreg(env, cd, &result);
+}
+
 /// Three operands (int capability capability)
 
 // static inline bool cap_bounds_are_subset(const cap_register_t *first, const
@@ -1016,6 +1170,16 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
 #endif
     }
 #endif // TARGET_MIPS
+    cap_version_t ver = cbp->cr_version;
+    if (ver != CAP_VERSION_UNVERSIONED) 
+    {
+        /* This treats RMW as store */
+        MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
+        if (!cheri_version_check(env, addr, size, rw, _host_return_address, ver)) {
+            /* XXX should be version fault? */
+            raise_cheri_exception(env, CapEx_VersionViolation, cb);
+        }
+    }
     return addr;
 }
 
@@ -1071,6 +1235,10 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_load_exception(env, addr, _host_return_address);
+    } else if ((cbp->cr_version != CAP_VERSION_UNVERSIONED) &&
+        !cheri_version_check(env, addr, CHERI_CAP_SIZE, MMU_DATA_CAP_LOAD, _host_return_address, cbp->cr_version)) {
+        /* XXX should be version fault? */
+        raise_cheri_exception(env, CapEx_VersionViolation, cb);
     }
     load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address,
                          /*physaddr_out=*/NULL);
@@ -1108,6 +1276,10 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_store_exception(env, addr, _host_return_address);
+    } else if ((cbp->cr_version != CAP_VERSION_UNVERSIONED) &&
+        !cheri_version_check(env, addr, CHERI_CAP_SIZE, MMU_DATA_CAP_STORE, _host_return_address, cbp->cr_version)) {
+        /* XXX should be version fault? */
+        raise_cheri_exception(env, CapEx_VersionViolation, cb);
     }
     store_cap_to_memory(env, cs, addr, _host_return_address);
 }
@@ -1335,7 +1507,12 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
                                                  uint32_t required_perms))
 {
-    check_cap(env, cheri_get_ddc(env), required_perms,
+    const cap_register_t *ddc = cheri_get_ddc(env);
+    if (ddc->cr_version != CAP_VERSION_UNVERSIONED) {
+        GET_HOST_RETPC();
+        raise_cheri_exception(env, CapEx_VersionViolation, CHERI_EXC_REGNUM_DDC);
+    }
+    check_cap(env, ddc, required_perms,
               cap_get_base(cheri_get_ddc(env)), CHERI_EXC_REGNUM_DDC, 0,
               /*instavail=*/true, GETPC());
     error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,

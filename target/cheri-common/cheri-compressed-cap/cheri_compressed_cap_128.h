@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -55,6 +56,8 @@
  *
  * Morello embeds the user permissions in the middle of the hardware permissions.
  */
+
+#define CC_HAVE_VERSION 1
 
 // The following macros are expected to be defined
 #undef CC_BITS
@@ -125,7 +128,12 @@ enum {
     _CC_FIELD(HWPERMS, 123, 112),
     _CC_FIELD(RESERVED, 111, 110),
     _CC_FIELD(FLAGS, 109, 109),
+#ifdef CC_HAVE_VERSION
+    _CC_FIELD(VERSION, 108, 105),
+    _CC_FIELD(OTYPE, 104, 91),
+#else
     _CC_FIELD(OTYPE, 108, 91),
+#endif
     _CC_FIELD(EBT, 90, 64),
 
     _CC_FIELD(INTERNAL_EXPONENT, 90, 90),
@@ -149,6 +157,7 @@ enum {
 #define CC128_BOT_WIDTH CC128_FIELD_EXP_ZERO_BOTTOM_SIZE
 #define CC128_BOT_INTERNAL_EXP_WIDTH CC128_FIELD_EXP_NONZERO_BOTTOM_SIZE
 #define CC128_EXP_LOW_WIDTH CC128_FIELD_EXPONENT_LOW_PART_SIZE
+#define CC128_VERSION_BITS CC128_FIELD_VERSION_SIZE
 
 #ifdef CC_IS_MORELLO
 
@@ -237,6 +246,13 @@ enum _CC_N(OTypes) {
 #endif
 };
 
+#ifdef CC_HAVE_VERSION
+enum _CC_N(Versions) {
+    CC128_VERSION_UNVERSIONED = 0,
+    CC128_MAX_VERSION = ((1u << CC128_VERSION_BITS) - 1u),
+};
+#endif
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
@@ -257,6 +273,9 @@ enum {
         _CC_ENCODE_EBT_FIELD(CC128_RESET_EXP & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE, EXPONENT_LOW_PART),
     CC128_NULL_PESBT = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) | _CC_ENCODE_FIELD(0, RESERVED) |
                        _CC_ENCODE_FIELD(0, FLAGS) | _CC_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
+#ifdef CC_HAVE_VERSION
+                       _CC_ENCODE_FIELD(CC128_VERSION_UNVERSIONED, VERSION) |
+#endif
                        _CC_ENCODE_FIELD(CC128_OTYPE_UNSEALED, OTYPE) |
                        _CC_ENCODE_FIELD(CC128_RESET_TOP, EXP_NONZERO_TOP) | _CC_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
                        _CC_ENCODE_FIELD(CC128_RESET_EXP >> CC128_FIELD_EXPONENT_LOW_PART_SIZE, EXPONENT_HIGH_PART) |
@@ -269,7 +288,11 @@ enum {
 #ifdef CC_IS_MORELLO
 #define CC128_NULL_XOR_MASK (CC128_NULL_PESBT)
 #else
+#if CC_HAVE_VERSION
+#define CC128_NULL_XOR_MASK UINT64_C(0x000001fffc018004)
+#else
 #define CC128_NULL_XOR_MASK UINT64_C(0x00001ffffc018004)
+#endif
 #endif
 
 #pragma GCC diagnostic pop

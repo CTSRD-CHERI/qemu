@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2019 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -69,6 +70,7 @@
 #define cap_set_decompressed_cr_perms CC_LIB_FN(cap_set_decompressed_cr_perms)
 #define cap_set_decompressed_cr_uperms CC_LIB_FN(cap_set_decompressed_cr_uperms)
 #define cap_set_decompressed_cr_flags CC_LIB_FN(cap_set_decompressed_cr_flags)
+#define cap_set_decompressed_cr_version CC_LIB_FN(cap_set_decompressed_cr_version)
 #define make_max_perms_cap CC_LIB_FN(make_max_perms_cap)
 
 static inline uint64_t cap_get_cursor(const cap_register_t* c) {

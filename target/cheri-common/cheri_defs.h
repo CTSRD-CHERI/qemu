@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -83,6 +84,8 @@
 #    define CHERI_MEM_OFFSET_CURSOR 0
 #    define CHERI_MEM_OFFSET_METADATA 8
 #  endif
+#  define CAP_VERSION_UNVERSIONED CC128_VERSION_UNVERSIONED
+#  define CAP_MAX_VERSION CC128_MAX_VERSION
 #elif defined(CHERI_256)
 #  define CAP_PERMS_ALL CC256_PERMS_ALL_BITS
 #  define CAP_UPERMS_ALL CC256_UPERMS_ALL_BITS
@@ -107,6 +110,13 @@
 #else
 #  error "Unsupported capability type"
 #endif
+
+/* size of memory version granule. In principle this is independent of CAP_SIZE
+    but in practice it will probably be the same. */
+#  define CHERI_VERSION_GRANULE_SIZE (CHERI_CAP_SIZE)
+/* Integer type big enough to hold a memory granule version. The actually 
+   supported number of versions might be smaller e.g. 4-bits */
+typedef uint8_t cap_version_t;
 
 /* compressed capabilities use a 65-bit top, precise and magic 128 64-bits */
 #if defined(CHERI_128)
@@ -173,6 +183,8 @@ typedef enum CheriTbFlags {
      * PCC spans the full adddress space and has base zero. This means we do
      * not need to perform bounds checks or subtract/add PCC.base
      */
-    TB_FLAG_PCC_FULL_AS = (1 << 7)
+    TB_FLAG_PCC_FULL_AS = (1 << 7),
+    /* DDC is tagged, unsealed and unversioned */
+    TB_FLAG_CHERI_DDC_UNVERSIONED = (1 << 8),
 } CheriTbFlags;
 #endif // TARGET_CHERI

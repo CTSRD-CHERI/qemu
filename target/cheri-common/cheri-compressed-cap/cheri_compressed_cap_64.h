@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -84,6 +85,7 @@ enum {
     _CC_FIELD(EXPONENT_LOW_PART, 34, 32),
     _CC_FIELD(RESERVED, 31, 32), /* No reserved bits */
     _CC_FIELD(UPERMS, 31, 32), /* No uperms */
+    _CC_FIELD(VERSION, 31, 32), /* No version */
 };
 #pragma GCC diagnostic pop
 _CC_STATIC_ASSERT_SAME(CC64_FIELD_UPERMS_SIZE, 0);
