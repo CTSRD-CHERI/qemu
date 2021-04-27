@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2018 Lawrence Esswood
  * Copyright (c) 2018-2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -88,7 +89,7 @@ enum {
 #define _CC_MAX_TOP _CC_N(MAX_TOP)
 #define _CC_CURSOR_MASK _CC_N(CURSOR_MASK)
 // Check that the sizes of the individual fields match up
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_SIZE) + _CC_N(FIELD_OTYPE_SIZE) + _CC_N(FIELD_FLAGS_SIZE) +
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_SIZE) + _CC_N(FIELD_VERSION_SIZE) + _CC_N(FIELD_OTYPE_SIZE) + _CC_N(FIELD_FLAGS_SIZE) +
                            _CC_N(FIELD_RESERVED_SIZE) + _CC_N(FIELD_HWPERMS_SIZE) + _CC_N(FIELD_UPERMS_SIZE),
                        _CC_ADDR_WIDTH);
 _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_ZERO_TOP_SIZE) +
@@ -123,6 +124,7 @@ struct _cc_N(cap) {
     uint8_t cr_reserved; /* Remaining hardware-reserved bits to preserve */
     uint8_t cr_tag;      /* Tag */
     uint8_t cr_bounds_valid; /* Set if bounds decode was given an invalid cap */
+    uint8_t cr_version;
 #ifdef __cplusplus
     inline _cc_addr_t base() const { return cr_base; }
     inline _cc_addr_t address() const { return _cr_cursor; }
@@ -395,6 +397,9 @@ static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bo
     cdp->cr_otype = (uint32_t)_CC_EXTRACT_FIELD(pesbt, OTYPE);
     cdp->cr_flags = (uint8_t)_CC_EXTRACT_FIELD(pesbt, FLAGS);
     cdp->cr_reserved = (uint8_t)_CC_EXTRACT_FIELD(pesbt, RESERVED);
+#ifdef CC_HAVE_VERSION
+    cdp->cr_version = (uint8_t)_CC_EXTRACT_FIELD(pesbt, VERSION);
+#endif
     cdp->cached_pesbt = pesbt;
 
     _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(pesbt);
@@ -428,6 +433,9 @@ static inline void _cc_N(update_ebt)(_cc_cap_t* csp, _cc_addr_t new_ebt) {
 // Recompute non-ebt part of pesbt if multiple non-ebt fields are changed
 static inline _cc_addr_t _cc_N(recompute_pesbt_non_ebt)(const _cc_cap_t* csp) {
     return _CC_ENCODE_FIELD(csp->cr_uperms, UPERMS) | _CC_ENCODE_FIELD(csp->cr_perms, HWPERMS) |
+#ifdef CC_HAVE_VERSION
+           _CC_ENCODE_FIELD(csp->cr_version, VERSION) |
+#endif
            _CC_ENCODE_FIELD(csp->cr_otype, OTYPE) | _CC_ENCODE_FIELD(csp->cr_reserved, RESERVED) |
            _CC_ENCODE_FIELD(csp->cr_flags, FLAGS);
 }
@@ -440,6 +448,9 @@ static inline _cc_addr_t _cc_N(recompute_pesbt_non_ebt)(const _cc_cap_t* csp) {
 static inline _cc_addr_t _cc_N(compress_raw)(const _cc_cap_t* csp) {
     _cc_debug_assert(!(csp->cr_tag && csp->cr_reserved) && "Unknown reserved bits set it tagged capability");
     _cc_addr_t pesbt = _CC_ENCODE_FIELD(csp->cr_uperms, UPERMS) | _CC_ENCODE_FIELD(csp->cr_perms, HWPERMS) |
+#ifdef CC_HAVE_VERSION
+                       _CC_ENCODE_FIELD(csp->cr_version, VERSION) |
+#endif
                        _CC_ENCODE_FIELD(csp->cr_otype, OTYPE) | _CC_ENCODE_FIELD(csp->cr_reserved, RESERVED) |
                        _CC_ENCODE_FIELD(csp->cr_flags, FLAGS) | (csp->cached_pesbt & _CC_N(FIELD_EBT_MASK64));
     return pesbt;
@@ -491,6 +502,9 @@ static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
     _cc_debug_assert(decompressed_cap._cr_cursor == cap->_cr_cursor);
     _cc_debug_assert(decompressed_cap.cr_perms == cap->cr_perms);
     _cc_debug_assert(decompressed_cap.cr_uperms == cap->cr_uperms);
+#ifdef CC_HAVE_VERSION
+    _cc_debug_assert(decompressed_cap.cr_version == cap->cr_version);
+#endif
     _cc_debug_assert(decompressed_cap.cr_otype == cap->cr_otype);
     _cc_debug_assert((decompressed_cap.cached_pesbt & _CC_N(FIELD_EBT_MASK64)) ==
                      (cap->cached_pesbt & _CC_N(FIELD_EBT_MASK64)));
@@ -892,6 +906,9 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     creg.cr_perms = _CC_N(PERMS_ALL);
     creg.cr_uperms = _CC_N(UPERMS_ALL);
     creg.cr_otype = _CC_N(OTYPE_UNSEALED);
+#ifdef CC_HAVE_VERSION
+    creg.cr_version = _CC_N(VERSION_UNVERSIONED);
+#endif
     creg.cr_tag = true;
     bool exact_input = false;
     creg.cached_pesbt = _cc_N(recompute_pesbt_non_ebt)(&creg);
@@ -931,11 +948,17 @@ static inline _cc_addr_t _cc_N(get_representable_length)(_cc_addr_t req_length) 
 ALL_WRAPPERS(HWPERMS)
 ALL_WRAPPERS(UPERMS)
 ALL_WRAPPERS(OTYPE)
+#ifdef CC_HAVE_VERSION
+ALL_WRAPPERS(VERSION)
+#endif
 ALL_WRAPPERS(FLAGS)
 
 SET_DECOMPRESSED(HWPERMS, cr_perms)
 SET_DECOMPRESSED(UPERMS, cr_uperms)
 SET_DECOMPRESSED(OTYPE, cr_otype)
+#ifdef CC_HAVE_VERSION
+SET_DECOMPRESSED(VERSION, cr_version)
+#endif
 SET_DECOMPRESSED(FLAGS, cr_flags)
 
 #undef EXTRACT_WRAPPER

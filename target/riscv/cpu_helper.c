@@ -619,7 +619,8 @@ restart:
             /* Read access check failed */
             return TRANSLATE_FAIL;
         } else if ((access_type == MMU_DATA_STORE ||
-                    access_type == MMU_DATA_CAP_STORE) && !(pte & PTE_W)) {
+                    access_type == MMU_DATA_CAP_STORE ||
+                    access_type == MMU_VERSION_STORE ) && !(pte & PTE_W)) {
             /* Write access check failed */
             return TRANSLATE_FAIL;
         } else if (access_type == MMU_INST_FETCH && !(pte & PTE_X)) {
@@ -629,6 +630,9 @@ restart:
         } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_CW)) {
             /* CW inhibited */
             return TRANSLATE_CHERI_FAIL;
+        } else if (access_type == MMU_VERSION_STORE && !(pte & PTE_CWV)) {
+            /* XXX CWV inhibited: XXX should use special fault ? */
+            return TRANSLATE_VERSION_FAIL;
 #endif
 #if RISCV_PTE_TRAPPY & PTE_A
         } else if (!(pte & PTE_A)) {
@@ -642,8 +646,9 @@ restart:
 #endif
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
 #if RISCV_PTE_TRAPPY & PTE_D
-        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_D)) {
-            /* PTE not marked as dirty for cap store */
+        } else if ((access_type == MMU_DATA_CAP_STORE 
+                    access_type == MMU_VERSION_STORE ) && !(pte & PTE_D)) {
+            /* PTE not marked as dirty for cap / version store */
             return TRANSLATE_FAIL;
 #endif
 #if RISCV_PTE_TRAPPY & PTE_CD
@@ -660,6 +665,7 @@ restart:
             case MMU_DATA_CAP_STORE:
                 updated_pte |= PTE_CD;
                 /* FALLTHROUGH */
+            case MMU_VERSION_STORE:
 #endif
             case MMU_DATA_STORE:
                 updated_pte |= PTE_D;
@@ -720,7 +726,8 @@ restart:
                so that we TLB miss on later writes to update the dirty bit */
             if ((pte & PTE_W) &&
                 ((access_type == MMU_DATA_STORE) ||
-                 (access_type == MMU_DATA_CAP_STORE) || (pte & PTE_D))) {
+                 (access_type == MMU_DATA_CAP_STORE) || 
+                 (access_type == MMU_VERSION_STORE) || (pte & PTE_D))) {
                 *prot |= PAGE_WRITE;
             }
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
@@ -746,6 +753,9 @@ restart:
             if ((pte & PTE_CW) == 0) {
                 *prot |= PAGE_SC_TRAP;
             }
+            if ((pte & PTE_CWV) == 0) {
+                *prot |= PAGE_SV_TRAP;
+            }
 #endif
             return TRANSLATE_SUCCESS;
         }
@@ -756,12 +766,15 @@ restart:
 static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
                                 MMUAccessType access_type, bool pmp_violation,
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-                                bool cheri_violation,
+                                int failure_reason,
 #endif
                                 bool first_stage, bool two_stage)
 {
     CPUState *cs = env_cpu(env);
     int page_fault_exceptions;
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+    bool cheri_violation = failure_reason == TRANSLATE_CHERI_FAIL;
+#endif
     if (first_stage) {
         page_fault_exceptions =
             get_field(env->satp, SATP_MODE) != VM_1_10_MBARE &&
@@ -783,6 +796,7 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
     case MMU_DATA_LOAD:
 #if defined(TARGET_CHERI)
     case MMU_DATA_CAP_LOAD:
+    case MMU_VERSION_LOAD:
 #endif
         if (two_stage && !first_stage) {
             cs->exception_index = RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT;
@@ -798,12 +812,15 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
     case MMU_DATA_STORE:
 #if defined(TARGET_CHERI)
     case MMU_DATA_CAP_STORE:
+    case MMU_VERSION_STORE:
 #endif
         if (two_stage && !first_stage) {
             cs->exception_index = RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
         } else if (cheri_violation) {
             cs->exception_index = RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT;
+        } else if (failure_reason == TRANSLATE_VERSION_FAIL) {
+            cs->exception_index = RISCV_EXCP_VERSION;
 #endif
         } else {
             cs->exception_index = page_fault_exceptions ?
@@ -1071,7 +1088,10 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     if (ret == TRANSLATE_SUCCESS) {
         MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
 #ifdef TARGET_CHERI
-        attrs.tag_setting = access_type == MMU_DATA_CAP_STORE;
+        /* tag_setting is used to decide whether to allocate tag / version
+           storage. Fow now we allocate both if either is required. */
+        attrs.tag_setting = (access_type == MMU_DATA_CAP_STORE) || 
+            (access_type == MMU_VERSION_STORE);
 #endif
         if (pmp_is_range_in_tlb(env, pa & TARGET_PAGE_MASK, &tlb_size)) {
             tlb_set_page_with_attrs(cs, address & ~(tlb_size - 1),
@@ -1088,7 +1108,7 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     } else {
         raise_mmu_exception(env, address, access_type, pmp_violation,
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-                            ret == TRANSLATE_CHERI_FAIL,
+                            ret,
 #endif
                             first_stage_error,
                             riscv_cpu_virt_enabled(env) ||
@@ -1189,6 +1209,9 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         case RISCV_EXCP_LOAD_ACCESS_FAULT:
         case RISCV_EXCP_STORE_AMO_ACCESS_FAULT:
         case RISCV_EXCP_ILLEGAL_INST:
+#ifdef TARGET_CHERI
+        case RISCV_EXCP_VERSION:
+#endif
             write_tval  = true;
             tval = env->badaddr;
             break;

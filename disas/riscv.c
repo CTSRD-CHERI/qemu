@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2016-2017 Michael Clark <michaeljclark@mac.com>
  * Copyright (c) 2017-2018 SiFive, Inc.
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -517,6 +518,9 @@ typedef enum {
     rv_op_cgetaddr,
     rv_op_csealentry,
     rv_op_cloadtags,
+    rv_op_cgetversion,
+    rv_op_cloadversion,
+    rv_op_cstoreversion,
 
     // Three operand
     rv_op_cspecialrw,
@@ -537,6 +541,8 @@ typedef enum {
     rv_op_ccseal,
     rv_op_ctestsubset,
     rv_op_cseqx,
+    rv_op_csetversion,
+    rv_op_camocdecversion,
 
     // FP loads/store
     rv_op_cflw,
@@ -662,6 +668,7 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_cd_rs1                 "O\tC0,1"
 #define rv_fmt_rs1_offset             "O\t1,o"
 #define rv_fmt_rs2_offset             "O\t2,o"
+#define rv_fmt_cs1_rs2             "O\tC1,2"
 
 /* pseudo-instruction constraints */
 
@@ -1234,6 +1241,9 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_cgetaddr] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
     [rv_op_csealentry] = { "csealentry", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_cloadtags] = { "cloadtags", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetversion] = { "cgetversion", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cloadversion] = { "cloadversion", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cstoreversion] = { "cstoreversion", rv_codec_r, rv_fmt_cs1_rs2, NULL, 0, 0, 0 },
 
     // capmode loads:
     [rv_op_clb] = { "clb", rv_codec_i, rv_fmt_rd_offset_cs1, NULL, 0, 0, 0 },
@@ -1268,6 +1278,8 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_ccseal] = { "ccseal", rv_codec_r, rv_fmt_cd_cs1_cs2, NULL, 0, 0, 0 },
     [rv_op_ctestsubset] = { "ctestsubset", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
     [rv_op_cseqx] = { "cseqx", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
+    [rv_op_csetversion] = { "csetversion", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_camocdecversion] = { "camocdecversion", rv_codec_r, rv_fmt_rd_cs1_cs2, 0, 0, 0 },
 
     // FP load store
     [rv_op_cflw] = { "cflw", rv_codec_i, rv_fmt_frd_offset_cs1, NULL, 0, 0, 0 },
@@ -1503,6 +1515,17 @@ static rv_opcode decode_cheri_two_op(unsigned func) {
     case 0b01111: return rv_op_cgetaddr;
     case 0b10001: return rv_op_csealentry;
     case 0b10010: return rv_op_cloadtags;
+    case 0b10011: return rv_op_cgetversion;
+    // case 0b10101: return rv_op-cloadversions; // XXX not yet
+    case 0b10110: return rv_op_cloadversion;
+    default: return rv_op_illegal;
+    }
+}
+
+static rv_opcode decode_cheri_two_src_op(unsigned func) {
+    switch (func) {
+    //case 0b00001: return rv_op_cinvoke; TODO
+    case 0b00010: return rv_op_cstoreversion;
     default: return rv_op_illegal;
     }
 }
@@ -1517,7 +1540,9 @@ static rv_opcode decode_cheri_inst(rv_inst inst) {
     switch (func) {
     // 0000000, unused
     CHERI_THREEOP_CASE(cspecialrw,  0000001,  ..... ..... 000 ..... 1011011 @r)
-    // 0000010-0000111 unused
+    CHERI_THREEOP_CASE(csetversion, 0000010,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(camocdecversion, 0000011,  ..... ..... 000 ..... 1011011 @r)
+    // 0000100-0000111 unused
     CHERI_THREEOP_CASE(csetbounds,  0001000,  ..... ..... 000 ..... 1011011 @r)
     CHERI_THREEOP_CASE(csetboundsexact, 0001001,  ..... ..... 000 ..... 1011011 @r)
     // 0001010 unused
@@ -1540,7 +1565,9 @@ static rv_opcode decode_cheri_inst(rv_inst inst) {
     // 1111011 unused
     // TODO: 1111100 Used for Stores (see below)
     // TODO: 1111101 Used for Loads (see below)
-    // TODO: 1111110 Used for two source ops
+    // 1111110 Used for two source ops
+    case 0b111110:
+        return decode_cheri_two_src_op((inst >> 7) & 0b11111);
     // 1111111 Used for Source & Dest ops (see above)
     case 0b111111:
         return decode_cheri_two_op((inst >> 20) & 0b11111);

@@ -72,6 +72,7 @@ typedef enum CheriCapExc {
     CapEx_AccessCCallIDCViolation       = 0x1A,
     CapEx_PermitUnsealViolation         = 0x1B,
     CapEx_PermitSetCIDViolation         = 0x1C,
+    CapEx_VersionViolation              = 0x1D,
     // 0x1d - 0x1f reserved
 } CheriCapExcCause;
 

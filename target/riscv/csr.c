@@ -435,6 +435,7 @@ static const target_ulong delegable_excps =
     (1ULL << (RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT)) |
 #endif
     (1ULL << (RISCV_EXCP_CHERI)) |
+    (1ULL << (RISCV_EXCP_VERSION)) |
 #endif
     0;
 static const target_ulong sstatus_v1_10_mask = SSTATUS_SIE | SSTATUS_SPIE |

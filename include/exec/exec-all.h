@@ -402,6 +402,9 @@ void *probe_read(CPUArchState *env, target_ulong addr, int size, int mmu_idx,
 #ifdef TARGET_CHERI
 void *probe_cap_write(CPUArchState *env, target_ulong addr, int size,
                       int mmu_idx, uintptr_t retaddr);
+
+void *probe_ver_write(CPUArchState *env, target_ulong addr, int size,
+                      int mmu_idx, uintptr_t retaddr);
 #endif
 
 /**

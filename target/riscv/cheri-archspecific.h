@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2020 Alex Richardson <Alexander.Richardson@cl.cam.ac.uk>
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -78,6 +79,19 @@ static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
 #endif
 }
 
+static inline void QEMU_NORETURN raise_store_ver_exception(CPUArchState *env,
+                                                           target_ulong va,
+                                                           int reg,
+                                                           uintptr_t retpc)
+{
+#ifdef TARGET_RISCV32
+    g_assert_not_reached();
+#else
+    env->badaddr = va;
+    riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_VER_PAGE_FAULT, retpc);
+#endif
+}
+
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
@@ -92,6 +106,13 @@ static inline void QEMU_NORETURN raise_unaligned_store_exception(
     // Note: RISCV_EXCP_STORE_AMO_ADDR_MIS means "Store/AMO address misaligned"
     riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ADDR_MIS, retpc);
 
+}
+
+static inline void QEMU_NORETURN raise_version_exception (
+    CPUArchState *env, target_ulong addr, uintptr_t retpc)
+{
+    env->badaddr = addr;
+    riscv_raise_exception(env, RISCV_EXCP_VERSION, retpc);
 }
 
 static inline bool validate_jump_target(CPUArchState *env,

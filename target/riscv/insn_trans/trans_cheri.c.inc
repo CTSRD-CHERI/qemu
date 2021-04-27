@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2020 Alex Richardson <Alexander.Richardson@cl.cam.ac.uk>
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -165,6 +166,8 @@ TRANSLATE_INT_CAP(cgettype)
 TRANSLATE_INT_CAP(cgetsealed)
 
 TRANSLATE_INT_CAP(cloadtags)
+TRANSLATE_INT_CAP(cgetversion)
+TRANSLATE_INT_CAP(cloadversion)
 
 // Two operand (int int)
 static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)
@@ -214,12 +217,14 @@ TRANSLATE_CAP_CAP_INT(csetbounds)
 TRANSLATE_CAP_CAP_INT(csetboundsexact)
 TRANSLATE_CAP_CAP_INT(csetflags)
 TRANSLATE_CAP_CAP_INT(csetoffset)
+TRANSLATE_CAP_CAP_INT(csetversion)
 
 // Three operand (int cap cap)
 TRANSLATE_INT_CAP_CAP(csub)
 TRANSLATE_INT_CAP_CAP(ctestsubset)
 TRANSLATE_INT_CAP_CAP(cseqx)
 TRANSLATE_INT_CAP_CAP(ctoptr)
+TRANSLATE_INT_CAP_CAP(camocdecversion)
 
 // CIncOffsetImm/CSetBoundsImm:
 typedef void(cheri_cap_cap_imm_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv);
@@ -312,6 +317,17 @@ static inline bool trans_cinvoke(DisasContext *ctx, arg_cinvoke *a)
     lookup_and_goto_ptr(ctx);
     // PC has been updated -> exit translation block
     ctx->base.is_jmp = DISAS_NORETURN;
+    return true;
+}
+
+static inline bool trans_cstoreversion(DisasContext *ctx, arg_cstoreversion *a)
+{
+    TCGv_i32 base_regnum = tcg_const_i32(a->rs1);
+    TCGv gpr_value = tcg_temp_new();
+    gen_get_gpr(gpr_value, a->rs2);
+    gen_helper_cstoreversion(cpu_env, base_regnum, gpr_value);
+    tcg_temp_free_i32(base_regnum);
+    tcg_temp_free(gpr_value);
     return true;
 }
 
@@ -411,7 +427,7 @@ static bool gen_ddc_store(DisasContext *ctx, int rs1, int rs2, MemOp memop)
     return true;
 }
 
-/* Load Via Capability Register */
+/* Store Via Capability Register */
 static inline bool gen_cap_store_mem_idx(DisasContext *ctx, int32_t addr_regnum,
                                          int32_t val_regnum, target_long offset,
                                          int mem_idx, MemOp op)

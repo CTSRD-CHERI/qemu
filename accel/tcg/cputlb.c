@@ -2,6 +2,7 @@
  *  Common CPU TLB handling
  *
  *  Copyright (c) 2003 Fabrice Bellard
+ *  Copyright (c) 2021 Microsoft
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -1123,9 +1124,11 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
      * Getting tagmem can cause an invalidation, so best to do this before
      * any other entries are modified.
      */
+    uintptr_t vermem;
     uintptr_t tagmem = (uintptr_t)cheri_tagmem_for_addr(
-        env, vaddr, section->mr->ram_block, xlat, size, &prot, tag_setting);
+        env, vaddr, section->mr->ram_block, xlat, size, &prot, tag_setting, (void **) &vermem);
     assert((tagmem & TLBENTRYCAP_MASK) == 0);
+    assert((vermem & TLBENTRYVER_MASK) == 0);
 #endif
 
     address = vaddr_page;
@@ -1244,6 +1247,11 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
     }
     if (prot & PAGE_SC_TRAP) {
         desc->iotlb[index].tagmem_write |= TLBENTRYCAP_FLAG_TRAP;
+    }
+
+    desc->iotlb[index].vermem = vermem;
+    if (prot & PAGE_SV_TRAP) {
+        desc->iotlb[index].vermem |= TLBENTRYVER_TRAP;
     }
 
 #endif
@@ -1455,7 +1463,9 @@ static bool victim_tlb_hit(CPUArchState *env, size_t mmu_idx, size_t index,
 
 #ifdef TARGET_CHERI
         if (cap_write && (env_tlb(env)->d[mmu_idx].viotlb[vidx].tagmem_write ==
-                          TLBENTRYCAP_INVALID_WRITE)) {
+                          TLBENTRYCAP_INVALID_WRITE || 
+                          env_tlb(env)->d[mmu_idx].viotlb[vidx].vermem ==
+                          TLBENTRYVER_INVALID)) {
             continue;
         }
 #endif
@@ -1587,6 +1597,7 @@ probe_access_internal(CPUArchState *env, target_ulong addr, int fault_size,
          * done with a single probe.
          */
     case MMU_DATA_CAP_STORE:
+    case MMU_VERSION_STORE: // we don't currently need the address but treat the same wrt TLB_NOTDIRTY etc.
         elt_ofs = offsetof(CPUTLBEntry, addr_write);
         break;
     case MMU_INST_FETCH:
@@ -1608,11 +1619,18 @@ probe_access_internal(CPUArchState *env, target_ulong addr, int fault_size,
              .iotlb[tlb_index(env, mmu_idx, addr)]
              .tagmem_write == TLBENTRYCAP_INVALID_WRITE))
         tag_write_invalid = true;
+    if (access_type == MMU_VERSION_STORE &&
+        (env_tlb(env)
+             ->d[mmu_idx]
+             .iotlb[tlb_index(env, mmu_idx, addr)]
+             .vermem == TLBENTRYVER_INVALID))
+        tag_write_invalid = true;
 #endif
 
     if (!tlb_hit_page(tlb_addr, page_addr) || tag_write_invalid) {
         if (!victim_tlb_hit(env, mmu_idx, index, elt_ofs, page_addr,
-                            access_type == MMU_DATA_CAP_STORE)) {
+                            access_type == MMU_DATA_CAP_STORE ||
+                            access_type == MMU_VERSION_STORE)) {
             CPUState *cs = env_cpu(env);
             CPUClass *cc = CPU_GET_CLASS(cs);
 
@@ -1688,6 +1706,7 @@ probe_access_inlined(CPUArchState *env, target_ulong addr, int size,
             bool is_write =
 #ifdef TARGET_CHERI
                 access_type == MMU_DATA_CAP_STORE ||
+                access_type == MMU_VERSION_STORE ||
 #endif
                 access_type == MMU_DATA_STORE;
             int wp_access = is_write ? BP_MEM_WRITE : BP_MEM_READ;
