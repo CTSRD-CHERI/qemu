@@ -362,6 +362,17 @@ void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv)
 extern bool rvfi_debug_output;
 #endif
 
+#ifndef RISCV_PTE_TRAPPY
+/*
+ * The PTW logic below supports trapping on any subset of PTE_A, PTE_D, PTE_CD
+ * being clear during an access that would have them be set.  The RISC-V spec
+ * says that PTE_A and PTE_D always go together, and it's probably most sensible
+ * that PTE_CD implies PTE_A and PTE_D.  So, sensible values for this constant
+ * are 0, (PTE_A | PTE_D), or (PTE_A | PTE_D | PTE_CD).
+ */
+#define RISCV_PTE_TRAPPY 0
+#endif
+
 /* get_physical_address - get the physical address for this virtual address
  *
  * Do a page table walk to obtain the physical address corresponding to a
@@ -618,6 +629,28 @@ restart:
         } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_CW)) {
             /* CW inhibited */
             return TRANSLATE_CHERI_FAIL;
+#endif
+#if RISCV_PTE_TRAPPY & PTE_A
+        } else if (!(pte & PTE_A)) {
+            /* PTE not marked as accessed */
+            return TRANSLATE_FAIL;
+#endif
+#if RISCV_PTE_TRAPPY & PTE_D
+        } else if ((access_type == MMU_DATA_STORE) && !(pte & PTE_D)) {
+            /* PTE not marked as dirty */
+            return TRANSLATE_FAIL;
+#endif
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+#if RISCV_PTE_TRAPPY & PTE_D
+        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_D)) {
+            /* PTE not marked as dirty for cap store */
+            return TRANSLATE_FAIL;
+#endif
+#if RISCV_PTE_TRAPPY & PTE_CD
+        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_CD)) {
+            /* CD clear; force the software trap handler to get involved */
+            return TRANSLATE_CHERI_FAIL;
+#endif
 #endif
         } else {
             /* if necessary, set accessed and dirty bits. */
