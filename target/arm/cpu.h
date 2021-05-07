@@ -232,6 +232,12 @@ typedef struct ARMPACKey {
 #define AARCH_REG_TYPE uint64_t
 #endif
 
+#ifdef TARGET_CHERI
+#define N_BANK_WITH_RESTRICTED 5
+#else
+#define N_BANK_WITH_RESTRICTED 4
+#endif
+
 typedef struct CPUARMState {
     /* Regs for current mode.  */
     uint32_t regs[16];
@@ -249,7 +255,7 @@ typedef struct CPUARMState {
      * is what we are doing here. */
     AARCH_REG_TYPE DDC_current;
     // Holds DDCs 0 through 3 then restricted 0
-    AARCH_REG_TYPE DDCs[5];
+    AARCH_REG_TYPE DDCs[N_BANK_WITH_RESTRICTED];
 #else
     uint64_t xregs[32];
 #endif
@@ -310,10 +316,11 @@ typedef struct CPUARMState {
     uint64_t daif; /* exception masks, in the bits they are in PSTATE */
 
     AARCH_REG_TYPE elr_el[4]; /* AArch64 exception link regs  */
-    AARCH_REG_TYPE sp_el[5];  /* AArch64 banked stack pointers */
+    AARCH_REG_TYPE sp_el[N_BANK_WITH_RESTRICTED];  /* AArch64 banked stack pointers */
 
 #ifdef TARGET_CHERI
     uint64_t CCTLR_el[4];
+    AARCH_REG_TYPE cid_el0;
 #endif
 
     /* System control coprocessor (cp15) */
@@ -484,21 +491,24 @@ typedef struct CPUARMState {
         };
         union { /* User RW Thread register. */
             struct {
-                uint64_t tpidrurw_ns;
-                uint64_t tpidrprw_ns;
-                uint64_t htpidr;
-                uint64_t _tpidr_el3;
+                AARCH_REG_TYPE tpidrurw_ns;
+                AARCH_REG_TYPE tpidrprw_ns;
+                AARCH_REG_TYPE htpidr;
+                AARCH_REG_TYPE _tpidr_el3;
+#ifdef TARGET_CHERI
+                AARCH_REG_TYPE rtpidr_el0;
+#endif
             };
-            uint64_t tpidr_el[4];
+            AARCH_REG_TYPE tpidr_el[N_BANK_WITH_RESTRICTED];
         };
         /* The secure banks of these registers don't map anywhere */
-        uint64_t tpidrurw_s;
-        uint64_t tpidrprw_s;
-        uint64_t tpidruro_s;
+        AARCH_REG_TYPE tpidrurw_s;
+        AARCH_REG_TYPE tpidrprw_s;
+        AARCH_REG_TYPE tpidruro_s;
 
         union { /* User RO Thread register. */
-            uint64_t tpidruro_ns;
-            uint64_t tpidrro_el[1];
+            AARCH_REG_TYPE tpidruro_ns;
+            AARCH_REG_TYPE tpidrro_el[1];
         };
         uint64_t c14_cntfrq; /* Counter Frequency register */
         uint64_t c14_cntkctl; /* Timer Control register */
@@ -2760,6 +2770,8 @@ struct ARMCPRegInfo {
      */
     ptrdiff_t fieldoffset; /* offsetof(CPUARMState, field) */
 
+    /* This seems simpler than using multiple hash entries */
+    ptrdiff_t restricted_alias_offset;
     /* Offsets of the secure and non-secure fields in CPUARMState for the
      * register if it is banked.  These fields are only used during the static
      * registration of a register.  During hashing the bank associated
@@ -4348,11 +4360,29 @@ static inline bool pc_is_current(CPUArchState *env)
 #endif
 }
 
-#endif
+#endif // CONFIG_TCG_LOG_INSTR
 
 #ifdef TARGET_CHERI
 
 #include "internals.h"
+
+static bool is_el2_enabled(CPUARMState *env, int el) {
+    return arm_feature(env, ARM_FEATURE_EL2) &&
+        (!arm_feature(env, ARM_FEATURE_EL3) || (env->cp15.scr_el3 & SCR_NS));
+}
+
+static bool arm_is_tag_setting_disabled(CPUARMState *env, int el) {
+    if(el == 3)
+        return false;
+
+    target_ulong reg = 0;
+    if(el < 2 && is_el2_enabled(env, el))
+        reg = env->chcr_el2;
+    else if(arm_feature(env, ARM_FEATURE_EL3))
+        reg = env->cscr_el3;
+
+    return (reg & CxCR_SETTAG) ? true : false;
+}
 
 static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
 {
@@ -4366,7 +4396,7 @@ static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, EXECUTIVE, 1);
     if (env->pc.cap.cr_perms & CAP_ACCESS_SYS_REGS)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SYSTEM, 1);
-    if (((el < 2) ? env->chcr_el2 : env->cscr_el3) & CxCR_SETTAG)
+    if (arm_is_tag_setting_disabled(env, el))
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SETTAG, 1);
     if (get_cap_enabled_target_exception_level_el(env, el) == -1)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, CAP_ENABLED, 1);
