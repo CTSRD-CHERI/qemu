@@ -4284,15 +4284,50 @@ static inline void aarch64_restore_sp(CPUARMState *env, int el)
 #ifdef CONFIG_TCG_LOG_INSTR
 static inline bool cpu_in_user_mode(CPUArchState *env)
 {
-    return false; /* TODO: implement */
+    return arm_current_el(env) == 0;
 }
 
 static inline unsigned cpu_get_asid(CPUArchState *env) {
-    return 0; /* TODO: implement */
+
+    uint64_t ttbr;
+
+    // TODO: This is slightly broken because tbbrn is defaulting to 0
+    if (cpu_mmu_index(env, 0) == ARMMMUIdx_Stage2) {
+        ttbr = env->cp15.vttbr_el2;
+    } else if (1) {
+        return env->cp15.ttbr0_el[arm_current_el(env)];
+    } else {
+        return env->cp15.ttbr1_el[arm_current_el(env)];
+    }
+
+    return (ttbr >> 48) & 0xFF;
 }
 
-static inline char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode) {
-    return NULL; /* TODO: implement */
+#define AARCH_LOG_INSTR_CPU_EL0 QEMU_LOG_INSTR_CPU_USER
+#define AARCH_LOG_INSTR_CPU_EL1 QEMU_LOG_INSTR_CPU_SUPERVISOR
+#define AARCH_LOG_INSTR_CPU_EL2 QEMU_LOG_INSTR_CPU_HYPERVISOR
+#define AARCH_LOG_INSTR_CPU_EL3 QEMU_LOG_INSTR_CPU_TARGET1
+extern const char * const aarch_cpu_mode_names[];
+
+static inline qemu_log_instr_cpu_mode_t arm_el_to_logging_mode(CPUArchState *env, int el) {
+    switch(el) {
+    case 0:
+        return AARCH_LOG_INSTR_CPU_EL0;
+    case 1:
+        return AARCH_LOG_INSTR_CPU_EL1;
+    case 2:
+        return AARCH_LOG_INSTR_CPU_EL2;
+    case 3:
+        return AARCH_LOG_INSTR_CPU_EL3;
+    default:
+        return QEMU_LOG_INSTR_CPU_MODE_MAX - 1;
+    }
+}
+
+static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode) {
+    if (aarch_cpu_mode_names[mode])
+        return aarch_cpu_mode_names[mode];
+    return "<invalid>";
 }
 
 static inline target_ulong cpu_get_recent_pc(CPUArchState *env)
