@@ -1287,6 +1287,9 @@ static inline int exception_target_el(CPUARMState *env)
 static inline int get_cap_enabled_target_exception_level_el(CPUArchState *env,
                                                             int el)
 {
+    bool el2 = arm_feature(env, ARM_FEATURE_EL2);
+    bool el2_insecure = el2 && !arm_is_secure(env);
+
     if ((el == 0) || (el == 1)) {
         bool disabled;
         if (!(env->cp15.cpacr_el1 & CPTR_CEN_LO)) {
@@ -1297,15 +1300,19 @@ static inline int get_cap_enabled_target_exception_level_el(CPUArchState *env,
             disabled = el == 0;
         }
 
+        if (el2_insecure && (env->cp15.hcr_el2 & HCR_TGE) &&
+            (env->cp15.hcr_el2 & HCR_E2H))
+            disabled = false;
+
         if (disabled) {
-            if ((env->cp15.hcr_el2 & HCR_TGE))
+            if (el2 && (env->cp15.hcr_el2 & HCR_TGE))
                 return 2;
             else
                 return 1;
         }
     }
 
-    if (!arm_is_secure(env)) {
+    if (el2_insecure) {
         if (env->cp15.hcr_el2 & HCR_E2H) {
             bool disabled;
             if (!(env->cp15.cptr_el[2] & CPTR_CEN_LO)) {
@@ -1323,7 +1330,8 @@ static inline int get_cap_enabled_target_exception_level_el(CPUArchState *env,
         }
     }
 
-    if ((env->cp15.cptr_el[3] & CPTR_EC) == 0)
+    if (arm_feature(env, ARM_FEATURE_EL3) &&
+        (env->cp15.cptr_el[3] & CPTR_EC) == 0)
         return 3;
 
     return -1;
@@ -1331,14 +1339,15 @@ static inline int get_cap_enabled_target_exception_level_el(CPUArchState *env,
 
 static inline bool is_access_to_capabilities_disabled_el3(CPUARMState *env)
 {
-    return (env->cp15.cptr_el[3] & CPTR_EC) == 0;
+    return arm_feature(env, ARM_FEATURE_EL3) &&
+           ((env->cp15.cptr_el[3] & CPTR_EC) == 0);
 }
 
 static inline bool is_access_to_capabilities_disabled_el2(CPUARMState *env)
 {
     if (is_access_to_capabilities_disabled_el3(env))
         return true;
-    else if (!arm_is_secure(env)) {
+    else if (arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env)) {
         return ((env->cp15.hcr_el2 & HCR_E2H) &&
                 !(env->cp15.cptr_el[2] & CPTR_CEN_LO)) ||
                (!(env->cp15.hcr_el2 & HCR_E2H) &&
@@ -1351,24 +1360,27 @@ static inline bool is_access_to_capabilities_disabled_el1(CPUARMState *env)
 {
     if (is_access_to_capabilities_disabled_el2(env))
         return true;
-    else
-        return !(!arm_is_secure(env) && (env->cp15.hcr_el2 & HCR_E2H) &&
+    else {
+        return !(arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) &&
+                 (env->cp15.hcr_el2 & HCR_E2H) &&
                  (env->cp15.hcr_el2 & HCR_TGE)) &&
                !(env->cp15.cpacr_el1 & CPTR_CEN_LO);
+    }
 }
 
 static inline bool is_access_to_capabilities_disabled_el0(CPUARMState *env)
 {
     if (is_access_to_capabilities_disabled_el1(env))
         return true;
-    else if (!(!arm_is_secure(env) && (env->cp15.hcr_el2 & HCR_E2H) &&
+    else if (!(arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) &&
+               (env->cp15.hcr_el2 & HCR_E2H) &&
                (env->cp15.hcr_el2 & HCR_TGE)) &&
-             ((env->cp15.cpacr_el1 & CPTR_CEN) == CPTR_CEN_LO))
+             ((env->cp15.cpacr_el1 & CPTR_CEN) == CPTR_CEN_LO)) {
         return true;
-    else
-        return (!arm_is_secure(env) && (env->cp15.hcr_el2 & HCR_E2H) &&
-                (env->cp15.hcr_el2 & HCR_TGE)) &&
-               ((env->cp15.cpacr_el1 & CPTR_CEN) == CPTR_CEN_LO);
+    } else
+        return (arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) &&
+                (env->cp15.hcr_el2 & HCR_E2H)) &&
+               ((env->cp15.cptr_el[2] & CPTR_CEN) == CPTR_CEN_LO);
 }
 
 static inline bool is_access_to_capabilities_enabled_at_el(CPUARMState *env,
@@ -1393,7 +1405,7 @@ static inline bool is_access_to_capabilities_enabled_at_el(CPUARMState *env,
 static inline int exception_target_el_capability(CPUARMState *env)
 {
     // NOTE: HCR_EL2 is respected elsewhere
-    int highest_el = 3; // Should probably configure this somewhere
+    int highest_el = arm_highest_el(env);
 
     // The lowest el for which capabilities are enabled, or the highest el if
     // none are
