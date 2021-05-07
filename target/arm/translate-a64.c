@@ -2629,6 +2629,11 @@ static void disas_uncond_b_reg(DisasContext *s, uint32_t insn)
         }
 
         gen_helper_exception_return(cpu_env, dst);
+
+#ifdef TARGET_CHERI
+        disas_capreg_state_set(s, 31, CREG_FULLY_DECOMPRESSED);
+#endif
+
         tcg_temp_free_i64(dst);
         /* Must exit loop to check un-masked IRQs */
         s->base.is_jmp = DISAS_EXIT;
