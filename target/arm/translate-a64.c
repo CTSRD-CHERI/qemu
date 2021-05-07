@@ -1514,6 +1514,7 @@ static inline void gen_check_sp_alignment(DisasContext *s)
         tcg_gen_brcondi_i64(TCG_COND_EQ, align, 0, label_aligned);
         gen_helper_sp_alignment_exception(cpu_env);
         gen_set_label(label_aligned);
+        tcg_temp_free_i64(align);
     }
 }
 
