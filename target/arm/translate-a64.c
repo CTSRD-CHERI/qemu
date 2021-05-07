@@ -2235,8 +2235,12 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
 
     tcg_rt = cpu_reg(s, rt);
 
+    ptrdiff_t fieldoffset = ri->fieldoffset;
 
 #ifdef TARGET_CHERI
+    if (ri->restricted_alias_offset && !executive) {
+        fieldoffset = ri->restricted_alias_offset;
+    }
 
     if (is_morello) {
         // Morello instructions might be able to modify non-cap registers. But I
@@ -2250,7 +2254,7 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             } else if (ri->readfn) {
                 assert(0 && "TODO");
             } else {
-                gen_move_cap_gp_sp(s, rt, ri->fieldoffset);
+                gen_move_cap_gp_sp(s, rt, fieldoffset);
             }
             gen_reg_modified_cap(s, rt);
         } else {
@@ -2261,9 +2265,9 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
                 // then call helper to update cursor properly
                 assert(0 && "TODO");
             } else {
-                gen_move_cap_sp_gp(s, ri->fieldoffset, rt);
+                gen_move_cap_sp_gp(s, fieldoffset, rt);
             }
-            gen_reg_modified_cap_base(s, ri->name, ri->fieldoffset);
+            gen_reg_modified_cap_base(s, ri->name, fieldoffset);
         }
     } else
 #endif
@@ -2276,7 +2280,7 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             gen_helper_get_cp_reg64(tcg_rt, cpu_env, tmpptr);
             tcg_temp_free_ptr(tmpptr);
         } else {
-            tcg_gen_ld_i64(tcg_rt, cpu_env, ri->fieldoffset);
+            tcg_gen_ld_i64(tcg_rt, cpu_env, fieldoffset);
         }
         gpr_reg_modified(s, rt, false);
     } else {
@@ -2289,13 +2293,13 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             gen_helper_set_cp_reg64(cpu_env, tmpptr, tcg_rt);
             tcg_temp_free_ptr(tmpptr);
         } else {
-            tcg_gen_st_i64(tcg_rt, cpu_env, ri->fieldoffset);
+            tcg_gen_st_i64(tcg_rt, cpu_env, fieldoffset);
         }
 #ifdef TARGET_CHERI
         // Writes should zero the rest of the cap register (done lazily)
         _Static_assert(offsetof(cap_register_t, _cr_cursor) == 0, "");
-        if (cpreg_field_is_cap(ri) && rt != 31) {
-            gen_sp_set_decompressed_int(s, rt);
+        if (cpreg_field_is_cap(ri)) {
+            gen_sp_set_decompressed_int(s, fieldoffset);
         }
 #endif
         sp_modified(tcg_rt);

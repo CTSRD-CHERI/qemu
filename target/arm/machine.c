@@ -807,7 +807,7 @@ const VMStateDescription vmstate_arm_cpu = {
             VMSTATE_UINT32_ARRAY(env.usr_regs, ARMCPU, 5),
             VMSTATE_UINT32_ARRAY(env.fiq_regs, ARMCPU, 5),
             VMSTATE_REG_ARRAY(env.elr_el, ARMCPU, 4),
-            VMSTATE_REG_ARRAY(env.sp_el, ARMCPU, 5),
+            VMSTATE_REG_ARRAY(env.sp_el, ARMCPU, N_BANK_WITH_RESTRICTED),
             /* The length-check must come before the arrays to avoid
              * incoming data possibly overflowing the array.
              */
