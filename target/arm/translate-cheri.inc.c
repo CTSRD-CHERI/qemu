@@ -575,6 +575,8 @@ TRANS_F(ADR)
         // Derive a capability
 
         if (pcc || !adrdpb) {
+            if (!pcc)
+                tcg_gen_sync_i64(ddc_interposition);
             gen_move_cap_gp_sp(ctx, a->Rd,
                                pcc ? offsetof(CPUARMState, pc)
                                    : offsetof(CPUARMState, DDC_current));
@@ -746,6 +748,8 @@ static bool cvt_impl_ptr_to_cap(DisasContext *ctx, uint32_t cd, uint32_t cn,
 
     // Move cap
     if (special_move) {
+        if (cn == CHERI_EXC_REGNUM_DDC)
+            tcg_gen_sync_i64(ddc_interposition);
         gen_move_cap_gp_sp(ctx, cd,
                            (cn == CHERI_EXC_REGNUM_DDC)
                                ? offsetof(CPUARMState, DDC_current)
@@ -1667,7 +1671,7 @@ TRANS_F(CLRPERM1)
         perms |= CAP_PERM_LOAD;
 
     TCGv_i64 mask = tcg_const_i64(perms);
-    gen_cap_pesbt_clear_HWPERMS(ctx, a->Cd, mask);
+    gen_cap_clear_perms(ctx, a->Cd, mask, false);
     gen_cap_untag_if_sealed(ctx, a->Cd);
     tcg_temp_free_i64(mask);
 
