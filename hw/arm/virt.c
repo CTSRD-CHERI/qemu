@@ -79,6 +79,10 @@
 #include "hw/char/pl011.h"
 #include "qemu/guest-random.h"
 
+#ifdef TARGET_CHERI
+#include "cheri_tagmem.h"
+#endif
+
 #define DEFINE_VIRT_MACHINE_LATEST(major, minor, latest) \
     static void virt_##major##_##minor##_class_init(ObjectClass *oc, \
                                                     void *data) \
@@ -200,6 +204,7 @@ static const char *valid_cpus[] = {
     ARM_CPU_TYPE_NAME("cortex-a53"),
     ARM_CPU_TYPE_NAME("cortex-a57"),
     ARM_CPU_TYPE_NAME("cortex-a72"),
+    ARM_CPU_TYPE_NAME("morello"),
     ARM_CPU_TYPE_NAME("host"),
     ARM_CPU_TYPE_NAME("max"),
 };
@@ -1402,6 +1407,11 @@ static void create_secure_ram(VirtMachineState *vms,
 
     memory_region_init_ram(secram, NULL, "virt.secure-ram", size,
                            &error_fatal);
+
+#ifdef TARGET_CHERI
+    cheri_tag_init(secram, size);
+#endif
+
     memory_region_add_subregion(secure_sysmem, base, secram);
 
     nodename = g_strdup_printf("/secram@%" PRIx64, base);
@@ -1672,6 +1682,11 @@ static void virt_cpu_post_init(VirtMachineState *vms, int max_cpus,
 {
     bool aarch64, pmu, steal_time;
     CPUState *cpu;
+
+    /* Start logging */
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_instr_init(CPU(ARM_CPU(first_cpu)));
+#endif
 
     aarch64 = object_property_get_bool(OBJECT(first_cpu), "aarch64", NULL);
     pmu = object_property_get_bool(OBJECT(first_cpu), "pmu", NULL);
