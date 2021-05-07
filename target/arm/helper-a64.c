@@ -1078,8 +1078,8 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
 
         qemu_log_mask(CPU_LOG_INT,
                       "Exception return from AArch64 EL%d to "
-                      "AArch64 EL%d PC 0x%" PRIx64 "\n",
-                      cur_el, new_el, get_aarch_reg_as_x(&env->pc));
+                      "AArch64 EL%d PC 0x%" PRIx64 " CPSR %x\n",
+                      cur_el, new_el, get_aarch_reg_as_x(&env->pc), spsr);
     }
 
     /*
@@ -1087,6 +1087,9 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
      * el0_a64 is return_to_aa64, else el0_a64 is ignored.
      */
     aarch64_sve_change_el(env, cur_el, new_el, return_to_aa64);
+
+    qemu_log_instr_mode_switch(env, arm_el_to_logging_mode(env, new_el),
+                               get_aarch_reg_as_x(&env->pc));
 
     qemu_mutex_lock_iothread();
     arm_call_el_change_hook(env_archcpu(env));

@@ -56,6 +56,15 @@ const char *const cheri_gp_int_regnames[34] = {
 
 #endif
 
+#ifdef CONFIG_TCG_LOG_INSTR
+const char *const aarch_cpu_mode_names[QEMU_LOG_INSTR_CPU_MODE_MAX] = {
+    "EL0",
+    "EL1",
+    "EL2",
+    "EL3",
+};
+#endif
+
 static void arm_cpu_set_pc(CPUState *cs, vaddr value)
 {
     ARMCPU *cpu = ARM_CPU(cs);
