@@ -320,6 +320,12 @@ size_t host_memory_backend_pagesize(HostMemoryBackend *memdev)
 }
 #endif
 
+void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size);
+__attribute__((weak))
+void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size) {
+    assert(0 && "Cannot create tag memory for non-cheri targets");
+}
+
 static void
 host_memory_backend_memory_complete(UserCreatable *uc, Error **errp)
 {
@@ -396,6 +402,8 @@ host_memory_backend_memory_complete(UserCreatable *uc, Error **errp)
                 goto out;
             }
         }
+        if (backend->cheri_tags)
+            cheri_tag_init(&backend->mr, sz);
     }
 out:
     error_propagate(errp, local_err);
@@ -444,6 +452,23 @@ host_memory_backend_set_use_canonical_path(Object *obj, bool value,
     HostMemoryBackend *backend = MEMORY_BACKEND(obj);
 
     backend->use_canonical_path = value;
+}
+
+static bool
+host_memory_backend_get_cheri_tags(Object *obj, Error **errp)
+{
+    HostMemoryBackend *backend = MEMORY_BACKEND(obj);
+
+    return backend->cheri_tags;
+}
+
+static void
+host_memory_backend_set_cheri_tags(Object *obj, bool value,
+                                           Error **errp)
+{
+    HostMemoryBackend *backend = MEMORY_BACKEND(obj);
+
+    backend->cheri_tags = value;
 }
 
 static void
@@ -500,6 +525,9 @@ host_memory_backend_class_init(ObjectClass *oc, void *data)
     object_class_property_add_bool(oc, "x-use-canonical-path-for-ramblock-id",
         host_memory_backend_get_use_canonical_path,
         host_memory_backend_set_use_canonical_path);
+    object_class_property_add_bool(oc, "cheri-tags",
+       host_memory_backend_get_cheri_tags,
+       host_memory_backend_set_cheri_tags);
 }
 
 static const TypeInfo host_memory_backend_info = {
