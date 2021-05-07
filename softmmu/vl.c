@@ -2905,6 +2905,13 @@ static void create_default_memdev(MachineState *ms, const char *path)
         object_property_set_str(obj, "mem-path", path, &error_fatal);
     }
     object_property_set_int(obj, "size", ms->ram_size, &error_fatal);
+#ifdef TARGET_CHERI
+    // Possibly this should be inherited from ms, but I doubt any CHERI
+    // platform would not have a tagged default memdev
+    object_property_set_bool(obj, "cheri-tags", true, &error_fatal);
+#else
+    object_property_set_bool(obj, "cheri-tags", false, &error_fatal);
+#endif
     object_property_add_child(object_get_objects_root(), mc->default_ram_id,
                               obj);
     /* Ensure backend's memory region name is equal to mc->default_ram_id */
