@@ -219,7 +219,7 @@ static void cpu_exec_nocache(CPUState *cpu, int max_cycles,
                              TranslationBlock *orig_tb, bool ignore_icount)
 {
     TranslationBlock *tb;
-    uint32_t cflags = curr_cflags() | CF_NOCACHE;
+    uint32_t cflags = curr_cflags(cpu) | CF_NOCACHE;
     int tb_exit;
 
     if (ignore_icount) {
@@ -499,7 +499,8 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         if (replay_has_exception()
             && cpu_neg(cpu)->icount_decr.u16.low + cpu->icount_extra == 0) {
             /* try to cause an exception pending in the log */
-            cpu_exec_nocache(cpu, 1, tb_find(cpu, NULL, 0, curr_cflags()), true);
+            cpu_exec_nocache(cpu, 1, tb_find(cpu, NULL, 0, curr_cflags(cpu)),
+                             true);
         }
 #endif
         if (cpu->exception_index < 0) {
@@ -783,7 +784,7 @@ int cpu_exec(CPUState *cpu)
                have CF_INVALID set, -1 is a convenient invalid value that
                does not require tcg headers for cpu_common_reset.  */
             if (cflags == -1) {
-                cflags = curr_cflags();
+                cflags = curr_cflags(cpu);
             } else {
                 cpu->cflags_next_tb = -1;
             }

@@ -469,11 +469,13 @@ struct TranslationBlock {
 #define CF_USE_ICOUNT  0x00020000
 #define CF_INVALID     0x00040000 /* TB is stale. Set with @jmp_lock held */
 #define CF_PARALLEL    0x00080000 /* Generate code for a parallel context */
+#define CF_LOG_INSTR 0x00100000   /* Generate calls to instruction tracing */
 #define CF_CLUSTER_MASK 0xff000000 /* Top 8 bits are cluster ID */
 #define CF_CLUSTER_SHIFT 24
 /* cflags' mask for hashing/comparison */
-#define CF_HASH_MASK   \
-    (CF_COUNT_MASK | CF_LAST_IO | CF_USE_ICOUNT | CF_PARALLEL | CF_CLUSTER_MASK)
+#define CF_HASH_MASK                                                           \
+    (CF_COUNT_MASK | CF_LAST_IO | CF_USE_ICOUNT | CF_PARALLEL |                \
+     CF_CLUSTER_MASK | CF_LOG_INSTR)
 
     /* Per-vCPU dynamic tracing state used to generate this TB */
     uint32_t trace_vcpu_dstate;
@@ -547,10 +549,15 @@ static inline uint32_t tb_cflags(const TranslationBlock *tb)
 }
 
 /* current cflags for hashing/comparison */
-static inline uint32_t curr_cflags(void)
+static inline uint32_t curr_cflags(CPUState *cpu)
 {
-    return (parallel_cpus ? CF_PARALLEL : 0)
-         | (icount_enabled() ? CF_USE_ICOUNT : 0);
+    uint32_t flags = (parallel_cpus ? CF_PARALLEL : 0) |
+                     (icount_enabled() ? CF_USE_ICOUNT : 0);
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (cpu->log_state.loglevel_active && qemu_loglevel_mask(CPU_LOG_INSTR))
+        flags |= CF_LOG_INSTR;
+#endif
+    return flags;
 }
 
 /* TranslationBlock invalidate API */
