@@ -2464,32 +2464,49 @@ static const ARMCPRegInfo t2ee_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
+#ifdef TARGET_CHERI
+    #define ALIAS_RTPIDR .restricted_alias_offset = offsetof(CPUARMState, cp15.rtpidr_el0),
+#else
+    #define ALIAS_RTPIDR
+#endif
+
 static const ARMCPRegInfo v6k_cp_reginfo[] = {
     { .name = "TPIDR_EL0", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 3, .opc2 = 2, .crn = 13, .crm = 0,
       .access = PL0_RW,
-      .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[0]), .resetvalue = 0 },
+      .type = ARM_CP_CAP_ON_MORELLO,
+      .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[0]),
+      .resetvalue = 0,
+      ALIAS_RTPIDR
+    },
     { .name = "TPIDRURW", .cp = 15, .crn = 13, .crm = 0, .opc1 = 0, .opc2 = 2,
       .access = PL0_RW,
+      .type = ARM_CP_CAP_ON_MORELLO,
       .bank_fieldoffsets = { offsetoflow32(CPUARMState, cp15.tpidrurw_s),
                              offsetoflow32(CPUARMState, cp15.tpidrurw_ns) },
       .resetfn = arm_cp_reset_ignore },
     { .name = "TPIDRRO_EL0", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 3, .opc2 = 3, .crn = 13, .crm = 0,
       .access = PL0_R|PL1_W,
+      .type = ARM_CP_CAP_ON_MORELLO,
       .fieldoffset = offsetof(CPUARMState, cp15.tpidrro_el[0]),
       .resetvalue = 0},
     { .name = "TPIDRURO", .cp = 15, .crn = 13, .crm = 0, .opc1 = 0, .opc2 = 3,
       .access = PL0_R|PL1_W,
+      .type = ARM_CP_CAP_ON_MORELLO,
       .bank_fieldoffsets = { offsetoflow32(CPUARMState, cp15.tpidruro_s),
                              offsetoflow32(CPUARMState, cp15.tpidruro_ns) },
       .resetfn = arm_cp_reset_ignore },
     { .name = "TPIDR_EL1", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 0, .opc2 = 4, .crn = 13, .crm = 0,
+      .type = ARM_CP_CAP_ON_MORELLO,
       .access = PL1_RW,
-      .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[1]), .resetvalue = 0 },
+      .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[1]),
+      .resetvalue = 0,
+       ALIAS_RTPIDR},
     { .name = "TPIDRPRW", .opc1 = 0, .cp = 15, .crn = 13, .crm = 0, .opc2 = 4,
       .access = PL1_RW,
+      .type = ARM_CP_CAP_ON_MORELLO,
       .bank_fieldoffsets = { offsetoflow32(CPUARMState, cp15.tpidrprw_s),
                              offsetoflow32(CPUARMState, cp15.tpidrprw_ns) },
       .resetvalue = 0 },
@@ -5756,7 +5773,7 @@ static const ARMCPRegInfo el3_no_el2_cp_reginfo[] = {
       .access = PL2_RW, .type = ARM_CP_CONST, .resetvalue = 0 },
     { .name = "TPIDR_EL2", .state = ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 13, .crm = 0, .opc2 = 2,
-      .access = PL2_RW, .type = ARM_CP_CONST, .resetvalue = 0 },
+      .access = PL2_RW, .type = ARM_CP_CONST | ARM_CP_CAP_ON_MORELLO, .resetvalue = 0 },
     { .name = "TTBR0_EL2", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 4, .crn = 2, .crm = 0, .opc2 = 0,
       .access = PL2_RW, .type = ARM_CP_CONST, .resetvalue = 0 },
@@ -6255,8 +6272,10 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
      .crm = 0,
      .opc2 = 2,
      .access = PL2_RW,
+     .type = ARM_CP_CAP_ON_MORELLO,
      .resetvalue = 0,
-     .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[2])},
+     .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[2]),
+      ALIAS_RTPIDR},
     {.name = "TTBR0_EL2",
      .state = ARM_CP_STATE_AA64,
      .opc0 = 3,
@@ -6747,8 +6766,10 @@ static const ARMCPRegInfo el3_cp_reginfo[] = {
      .crm = 0,
      .opc2 = 2,
      .access = PL3_RW,
+     .type = ARM_CP_CAP_ON_MORELLO,
      .resetvalue = 0,
-     .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[3])},
+     .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[3]),
+     ALIAS_RTPIDR},
     {.name = "AMAIR_EL3",
      .state = ARM_CP_STATE_AA64,
      .opc0 = 3,
@@ -9376,6 +9397,24 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .resetvalue = 0},
         // TODO CCTLR_EL12
         // DDC_EL3 only accessible through DDC so it doesn't get an entry.
+        {.name = "CID_EL0",
+         .opc0 = 3,
+         .opc1 = 3,
+         .crn = 13,
+         .crm = 0,
+         .opc2 = 7,
+         .access = PL0_RW,
+         .type = ARM_CP_CAP,
+         .state = ARM_CP_STATE_AA64,
+         .fieldoffset = offsetof(CPUARMState, cid_el0),
+         .capresetvalue = null_cap
+        },
+        { .name = "TPIDRRO_EL0", .state = ARM_CP_STATE_AA64,
+          .opc0 = 3, .opc1 = 3, .opc2 = 4, .crn = 13, .crm = 0,
+          .access = PL0_RW | PL_IN_EXECUTIVE,
+          .type = ARM_CP_CAP_ON_MORELLO,
+          .fieldoffset = offsetof(CPUARMState, cp15.tpidrro_el[0]),
+          .resetvalue = 0},
         REGINFO_SENTINEL};
     define_arm_cp_regs(cpu, cheri_regs);
 #endif
@@ -12494,9 +12533,23 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
         *prot = get_S1prot(env, mmu_idx, aarch64, ap, ns, xn, pxn);
     }
 
-    fault_type = ARMFault_CapPagePerm;
+    fault_type = ARMFault_Permission;
+
+    MMUAccessType base_access_type = access_type;
 
 #ifdef TARGET_CHERI
+    if (base_access_type == MMU_DATA_CAP_STORE)
+        base_access_type = MMU_DATA_STORE;
+    else if (base_access_type == MMU_DATA_CAP_LOAD)
+        base_access_type = MMU_DATA_LOAD;
+#endif
+    if (!(*prot & (1 << base_access_type))) {
+        goto do_fault;
+    }
+
+#ifdef TARGET_CHERI
+    fault_type = ARMFault_CapPagePerm;
+
     uint32_t hwu = aa64_effective_hwu(env, mmu_idx, &param, tcr->raw_tcr);
     hwu &= (attrs >> 17);
 
@@ -12527,12 +12580,6 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
     }
 
 #endif
-
-    fault_type = ARMFault_Permission;
-
-    if (!(*prot & (1 << access_type))) {
-        goto do_fault;
-    }
 
     if (ns) {
         /* The NS bit will (as required by the architecture) have no effect if
