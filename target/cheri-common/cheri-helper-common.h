@@ -133,3 +133,6 @@ DEF_HELPER_2(cloadtags, tl, env, i32)
 // Slightly different from normal tracing as it will not trigger decompression.
 // This is helpful if there is a TCG bug that would go away with tracing.
 DEF_HELPER_2(debug_cap, void, env, i32)
+
+// Check that static optimisation is correct
+DEF_HELPER_4(capreg_state_debug, void, env, i32, i64, i64)
