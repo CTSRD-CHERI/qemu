@@ -963,6 +963,8 @@ static inline void gen_sp_set_decompressed_int(DisasContext *ctx, size_t offset)
     tcg_gen_st_i64(temp, cpu_env,
                    offset + offsetof(cap_register_t, cr_bounds_valid));
 #endif
+
+    tcg_temp_free_i64(temp);
 }
 
 static inline void gen_lazy_cap_get_state_i32(DisasContext *ctx, int regnum,
