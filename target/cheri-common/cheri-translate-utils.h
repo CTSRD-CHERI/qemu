@@ -883,7 +883,7 @@ static inline void gen_lazy_cap_set_state_cond(DisasContext *ctx, int regnum,
     if (disas_capreg_state_must_be(ctx, regnum, state))
         return;
 
-    assert(regnum < 32);
+    assert(!lazy_capreg_number_is_special(regnum));
 
     cheri_tcg_printf_verbose("cc", "Register %d lazy state set to %s\n", regnum,
                              cap_reg_state_string(state));
@@ -1058,9 +1058,14 @@ static inline void gen_move_cap_gp_select_gp(DisasContext *ctx, int dest_num,
     assert(disas_capreg_state_must_be(ctx, false_source_num,
                                       CREG_FULLY_DECOMPRESSED));
 
+    gen_cap_sync_cursor(ctx, true_source_num);
+
+    gen_cap_sync_cursor(ctx, false_source_num);
+
     gen_mov_cap_select(gp_register_offset(dest_num),
                        gp_register_offset(true_source_num),
                        gp_register_offset(false_source_num), cond, value);
+    gen_cap_invalidate_cursor(ctx, dest_num);
 
     gen_lazy_cap_set_state(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
 }
@@ -1516,8 +1521,10 @@ static inline void gen_cap_set_cursor(DisasContext *ctx, int regnum,
     // TODO: This is not correct on non-morello where this might be exceptional
     // behaviour
     if (disas_capreg_state_must_be2(ctx, regnum, CREG_INTEGER,
-                                    CREG_UNTAGGED_CAP))
+                                    CREG_UNTAGGED_CAP)) {
+        gen_cap_set_cursor_unsafe(ctx, regnum, new_val);
         return;
+    }
 
     // Use a local value to store new_val (as we branch later)
     // new_val can be used as a tmp
@@ -1673,10 +1680,9 @@ static inline void gen_cap_get_eq_i32(DisasContext *ctx, int rx, int ry,
     tcg_gen_eqv_i32(eq, eq, tmp3);
 
     // Cursor equal
-    tcg_gen_ld_i64(tmp1, cpu_env,
-                   offsetx + offsetof(cap_register_t, _cr_cursor));
-    tcg_gen_ld_i64(tmp2, cpu_env,
-                   offsety + offsetof(cap_register_t, _cr_cursor));
+    gen_cap_get_cursor(ctx, rx, tmp1);
+    gen_cap_get_cursor(ctx, ry, tmp2);
+
     tcg_gen_setcond_i64(TCG_COND_EQ, tmp1, tmp1, tmp2);
     tcg_gen_extrl_i64_i32(tmp3, tmp1);
     tcg_gen_and_i32(eq, eq, tmp3);
