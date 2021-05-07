@@ -1597,3 +1597,11 @@ void CHERI_HELPER_IMPL(debug_cap(CPUArchState *env, uint32_t regndx))
                (uint64_t)(cap->_cr_top >> 64), (uint64_t)cap->_cr_top);
     }
 }
+
+void helper_capreg_state_debug(CPUArchState *env, uint32_t regnum, uint64_t flags, uint64_t pc) {
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    CapRegState regstate = get_capreg_state(gpcrs, regnum);
+
+    // Should include the actual state
+    assert((flags & (1 << (uint64_t)regstate)) && pc);
+}
