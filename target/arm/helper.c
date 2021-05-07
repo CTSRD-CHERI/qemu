@@ -14525,32 +14525,6 @@ void aarch64_sve_change_el(CPUARMState *env, int old_el,
 #endif
 
 #ifdef TARGET_CHERI
-hwaddr cpu_arm_translate_address_tagmem(CPUARMState *env, target_ulong address,
-                                        MMUAccessType rw, int reg, int *prot,
-                                        uintptr_t retpc)
-{
-    // Translate a virtual address to a physical one for tag memory
-    hwaddr physical;
-    ARMMMUFaultInfo fi = {};
-    target_ulong page_size;
-    MemTxAttrs attrs = {};
-    ARMCacheAttrs cacheattrs = {};
-    *prot = 0;
-
-    ARMMMUIdx idx = core_to_arm_mmu_idx(env, cpu_mmu_index(env, false));
-
-    bool fail = get_phys_addr(env, address, rw, idx, &physical, &attrs, prot,
-                              &page_size, &fi, &cacheattrs);
-
-    if (fail) {
-        printf("prot: %x. fi type %d (perms is %d)\n", *prot, fi.type,
-               ARMFault_Permission);
-        // LETODO raise an MMU exception
-        assert(0);
-    }
-
-    return physical;
-}
 
 #ifdef CONFIG_TCG_LOG_INSTR
 

@@ -205,3 +205,38 @@ bool arm_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     }
 #endif
 }
+
+#ifdef TARGET_CHERI
+hwaddr cpu_arm_translate_address_tagmem(CPUARMState *env, target_ulong address,
+                                        MMUAccessType rw, int reg, int *prot,
+                                        uintptr_t retpc)
+{
+    // Translate a virtual address to a physical one for tag memory
+    hwaddr physical;
+    ARMMMUFaultInfo fi = {};
+    target_ulong page_size;
+    MemTxAttrs attrs = {};
+    ARMCacheAttrs cacheattrs = {};
+    *prot = 0;
+
+    int mmu_idx = cpu_mmu_index(env, false);
+    ARMMMUIdx idx = core_to_arm_mmu_idx(env, mmu_idx);
+
+    bool fail = get_phys_addr(env, address, rw, idx, &physical, &attrs, prot,
+                              &page_size, &fi, &cacheattrs);
+
+    if (fail) {
+        CPUState *cs = env_cpu(env);
+        ARMCPU *cpu = ARM_CPU(cs);
+        cpu_restore_state(cs, retpc, true);
+        // Turn fault types in appropriate sorts for arm_deliver_fault
+        if (rw == MMU_DATA_CAP_STORE)
+            rw = MMU_DATA_STORE;
+        if (rw == MMU_DATA_CAP_LOAD)
+            rw = MMU_DATA_LOAD;
+        arm_deliver_fault(cpu, address, rw, mmu_idx, &fi);
+    }
+
+    return physical;
+}
+#endif
