@@ -566,6 +566,7 @@
 #define RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT      0x1b
 #endif
 #define RISCV_EXCP_CHERI                         0x1c
+#define RISCV_EXCP_VERSION                       0x1d
 #endif
 
 #define RISCV_EXCP_INT_FLAG                0x80000000

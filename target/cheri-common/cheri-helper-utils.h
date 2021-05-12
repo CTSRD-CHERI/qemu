@@ -136,14 +136,7 @@ static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
     target_ulong addr = ddc_offset + cap_get_cursor(ddc);
     check_cap(env, ddc, perm, addr, CHERI_EXC_REGNUM_DDC, len,
         /*instavail=*/true, retpc);
-    // if (ddc->cr_version != CAP_VERSION_UNVERSIONED) {
-    //     /* XXX I think this function is only used on MIPS so may not need version check here */
-    //     MMUAccessType rw = perm & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_CAP_LOAD;
-    //     if (!cheri_version_check(env, addr, len, rw, retpc, ddc->cr_version)) {
-    //         /* XXX should be fault */
-    //         raise_cheri_exception_impl(env, CapEx_VersionViolation, CHERI_EXC_REGNUM_DDC, true, retpc);
-    //     }
-    // }
+    // NB since this function is used only on mips we don't need a version check
     return addr;
 }
 #endif

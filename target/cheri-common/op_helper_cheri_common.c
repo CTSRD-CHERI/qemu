@@ -75,11 +75,18 @@ void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
                        "Should have been checked before bounds!");
     check_cap(env, ddc, 0, addr, CHERI_EXC_REGNUM_DDC, num_bytes,
               /*instavail=*/true, GETPC());
+    // We don't currently support versioned DDC because:
+    // 1) because we're not sure of the exact semantics we want, is it useful?
+    // 2) we would need to pass the memory access type to this helper so we get the
+    //    correct MMU fault in cheri_version_check (not a big deal but not done
+    //    right now)
+    // Instead, currently we just generate an unconditional exception if DDC is 
+    // versioned (see _generate_ddc_checked_ptr).
+    // The check could look something like this:
     // if (ddc->cr_version != CAP_VERSION_UNVERSIONED) {
     //     MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_CAP_LOAD;
     //     if (!cheri_version_check(env, addr, len, rw, retpc, ddc->cr_version)) {
-    //         /* XXX should be fault */
-    //         raise_cheri_exception_impl(env, CapEx_VersionViolation, CHERI_EXC_REGNUM_DDC, true, retpc);
+    //         riscv_raise_exception(env, RISCV_EXCP_VERSION, _host_return_address);
     //     }
     // }
 }
@@ -1170,16 +1177,17 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
 #endif
     }
 #endif // TARGET_MIPS
+#if defined(TARGET_RISCV) && defined (CC_HAVE_VERSION)
     cap_version_t ver = cbp->cr_version;
     if (ver != CAP_VERSION_UNVERSIONED) 
     {
         /* This treats RMW as store */
         MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
         if (!cheri_version_check(env, addr, size, rw, _host_return_address, ver)) {
-            /* XXX should be version fault? */
-            raise_cheri_exception(env, CapEx_VersionViolation, cb);
+            riscv_raise_exception(env, RISCV_EXCP_VERSION, _host_return_address);
         }
     }
+#endif
     return addr;
 }
 
@@ -1235,11 +1243,13 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_load_exception(env, addr, _host_return_address);
-    } else if ((cbp->cr_version != CAP_VERSION_UNVERSIONED) &&
-        !cheri_version_check(env, addr, CHERI_CAP_SIZE, MMU_DATA_CAP_LOAD, _host_return_address, cbp->cr_version)) {
-        /* XXX should be version fault? */
-        raise_cheri_exception(env, CapEx_VersionViolation, cb);
     }
+#if defined(TARGET_RISCV) && defined(CC_HAVE_VERSION)
+    else if ((cbp->cr_version != CAP_VERSION_UNVERSIONED) &&
+        !cheri_version_check(env, addr, CHERI_CAP_SIZE, MMU_DATA_CAP_LOAD, _host_return_address, cbp->cr_version)) {
+        riscv_raise_exception(env, RISCV_EXCP_VERSION, _host_return_address);
+    }
+#endif
     load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address,
                          /*physaddr_out=*/NULL);
 }
@@ -1276,11 +1286,13 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_store_exception(env, addr, _host_return_address);
-    } else if ((cbp->cr_version != CAP_VERSION_UNVERSIONED) &&
+    } 
+#if defined(TARGET_RISCV) && defined(CC_HAVE_VERSION)
+    else if ((cbp->cr_version != CAP_VERSION_UNVERSIONED) &&
         !cheri_version_check(env, addr, CHERI_CAP_SIZE, MMU_DATA_CAP_STORE, _host_return_address, cbp->cr_version)) {
-        /* XXX should be version fault? */
-        raise_cheri_exception(env, CapEx_VersionViolation, cb);
+        riscv_raise_exception(env, RISCV_EXCP_VERSION, _host_return_address);
     }
+#endif
     store_cap_to_memory(env, cs, addr, _host_return_address);
 }
 
