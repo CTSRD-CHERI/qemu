@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -60,6 +61,8 @@ DEF_HELPER_FLAGS_2(cgetoffset, TCG_CALL_NO_WG, tl, env, i32)
 DEF_HELPER_FLAGS_2(cgetsealed, TCG_CALL_NO_WG, tl, env, i32)
 DEF_HELPER_FLAGS_2(cgettag, TCG_CALL_NO_WG, tl, env, i32)
 DEF_HELPER_FLAGS_2(cgettype, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetversion, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_2(cloadversion, tl, env, i32)
 
 // Two operands (cap cap)
 DEF_HELPER_3(ccleartag, void, env, i32, i32)
@@ -70,6 +73,7 @@ DEF_HELPER_3(cinvoke, void, env, i32, i32)
 
 // Two operands (cap int)
 DEF_HELPER_3(ccheckperm, void, env, i32, tl)
+DEF_HELPER_3(cstoreversion, void, env, i32, tl)
 
 // Two operands (int int)
 DEF_HELPER_FLAGS_2(crap, TCG_CALL_NO_RWG_SE, tl, env, tl)
@@ -93,12 +97,14 @@ DEF_HELPER_4(csetbounds, void, env, i32, i32, tl)
 DEF_HELPER_4(csetboundsexact, void, env, i32, i32, tl)
 DEF_HELPER_4(csetflags, void, env, i32, i32, tl)
 DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
+DEF_HELPER_4(csetversion, void, env, i32, i32, tl)
 
 // Three operands (int cap cap)
 DEF_HELPER_FLAGS_3(csub, TCG_CALL_NO_WG, tl, env, i32, i32)
 DEF_HELPER_FLAGS_3(ctestsubset, TCG_CALL_NO_WG, tl, env, i32, i32)
 DEF_HELPER_FLAGS_3(cseqx, TCG_CALL_NO_WG, tl, env, i32, i32)
 DEF_HELPER_FLAGS_3(ctoptr, TCG_CALL_NO_WG, tl, env, i32, i32)
+DEF_HELPER_3(camocdecversion, tl, env, i32, i32)
 
 // Loads+Stores
 DEF_HELPER_4(cap_load_check, cap_checked_ptr, env, i32, tl, i32)

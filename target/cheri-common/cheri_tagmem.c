@@ -4,6 +4,7 @@
  * Copyright (c) 2015-2016 Stacey Son <sson@FreeBSD.org>
  * Copyright (c) 2016-2018 Alfredo Mazzinghi <am2419@cl.cam.ac.uk>
  * Copyright (c) 2016-2018 Alex Richardson <Alexander.Richardson@cl.cam.ac.uk>
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -117,6 +118,7 @@ static inline size_t num_tagblocks(RAMBlock* ram)
 // Use one bit per tag:
 typedef struct CheriTagBlock {
     DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE);
+    cap_version_t mem_versions[CAP_TAGBLK_SIZE];
 } CheriTagBlock;
 #else
 // Use one byte per tag:
@@ -127,6 +129,10 @@ typedef struct CheriTagBlock {
 
 #define ALL_ZERO_TAGBLK ((void*)(uintptr_t)1)
 
+/**
+ * Creates a new zero initialised CheriTagBlock for given ram and tagidx and
+ * sets the pointer in the ram->cheri_tags first-level array.
+ */
 static CheriTagBlock *cheri_tag_new_tagblk(RAMBlock *ram, uint64_t tagidx)
 {
     CheriTagBlock *tagblk, *old;
@@ -152,6 +158,10 @@ static CheriTagBlock *cheri_tag_new_tagblk(RAMBlock *ram, uint64_t tagidx)
     }
 }
 
+/**
+ * Returns the CheriTagBlock for given tag_index in RAMBlock. May return NULL if
+ * not yet allocated.
+ */
 static inline QEMU_ALWAYS_INLINE CheriTagBlock *cheri_tag_block(size_t tag_index,
                                                                 RAMBlock *ram)
 {
@@ -192,6 +202,18 @@ static inline QEMU_ALWAYS_INLINE void tagblock_clear_tag(CheriTagBlock *block,
 #endif
 }
 
+static inline QEMU_ALWAYS_INLINE cap_version_t tagblock_get_version(CheriTagBlock *block,
+                                                       size_t block_index)
+{
+    return block ? block->mem_versions[block_index] : CAP_VERSION_UNVERSIONED;
+}
+
+static inline QEMU_ALWAYS_INLINE void tagblock_set_version(CheriTagBlock *block,
+                                                       size_t block_index, cap_version_t v)
+{
+    block->mem_versions[block_index] = v;
+}
+
 static inline QEMU_ALWAYS_INLINE bool tag_bit_get(size_t index, RAMBlock *ram)
 {
     return tagblock_get_tag(cheri_tag_block(index, ram), CAP_TAGBLK_IDX(index));
@@ -214,6 +236,23 @@ static inline QEMU_ALWAYS_INLINE void tag_bit_clear(size_t index, RAMBlock *ram)
         tagblock_clear_tag(block, CAP_TAGBLK_IDX(index));
     }
 }
+
+static inline QEMU_ALWAYS_INLINE cap_version_t get_version(size_t index, RAMBlock *ram)
+{
+    return tagblock_get_version(cheri_tag_block(index, ram), CAP_TAGBLK_IDX(index));
+}
+
+static inline QEMU_ALWAYS_INLINE void set_version(size_t index, RAMBlock *ram,
+                                                  bool *allocated, cap_version_t val)
+{
+    CheriTagBlock *block = cheri_tag_block(index, ram);
+    if (!block) {
+        block = cheri_tag_new_tagblk(ram, index);
+        *allocated = true;
+    }
+    tagblock_set_version(block, CAP_TAGBLK_IDX(index), val);
+}
+
 //static inline QEMU_ALWAYS_INLINE void
 //tag_bit_range_clear(RAMBlock *ram, size_t start, size_t count)
 //{
@@ -250,6 +289,12 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
     }
 }
 
+/**
+ * Translate a target virtual @vaddr to target physical address (not using Soft TLB)
+ * using acccess type rw. Will not return if a translation or protection fault occurs. 
+ * @reg is used on MIPS for TLBNoStoreCap but could probably go away. 
+ * @prot returns the protection protection attributes
+ */
 static inline hwaddr v2p_addr(CPUArchState *env, target_ulong vaddr,
                               MMUAccessType rw, int reg, uintptr_t pc,
                               int *prot)
@@ -580,6 +625,16 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     }
 }
 
+/**
+ * Returns a tagblock for given vaddr. MMU translation will take place for 
+ * access type @at and may cause a fault in which case this function will not 
+ * return. If non-NULL @ret_paddr is used to store the resolved target physical 
+ * address. The index of the tag within the tag block is stored at
+ * @ret_tag_index which must not be NULL.
+ * @prot is used to return MMU protection flags.
+ * @xshift is used to round down additional least significant bits of vaddr to 
+ *         increase the alignment for get_tags_many. Most calls use 0.
+ */
 static CheriTagBlock *cheri_tag_get_block(CPUArchState *env, target_ulong vaddr,
                                           MMUAccessType at, int reg, int xshift,
                                           uintptr_t pc, hwaddr *ret_paddr,
@@ -696,3 +751,103 @@ bool cheri_tag_get_m128(CPUArchState *env, target_ulong vaddr, int reg,
     return tag;
 }
 #endif /* CHERI_MAGIC128 */
+
+cap_version_t cheri_version_get_aligned(CPUArchState *env, target_ulong vaddr, int reg,
+                  hwaddr *ret_paddr, int *prot, uintptr_t pc)
+{
+    uint64_t tag;
+    CheriTagBlock *tagblk = cheri_tag_get_block(
+        /* XXX should probably make a new MMU_VERSION_LOAD */
+        env, vaddr, MMU_DATA_LOAD, reg, 0, pc, ret_paddr, &tag, prot);
+    cap_version_t result = tagblock_get_version(tagblk, CAP_TAGBLK_IDX(tag));
+    // XXX: Not atomic w.r.t. writes to tag memory
+    qemu_maybe_log_instr_extra(env, "    Cap Version Read [" TARGET_FMT_lx "/"
+        RAM_ADDR_FMT "] -> %d\n", vaddr, (ram_addr_t)(tag << CAP_TAG_SHFT), result);
+    return result;
+}
+
+void cheri_version_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc, cap_version_t val)
+{
+    /*
+     * XXX modelled on cheri_tag_set. Not 100% sure about TLB stuff.
+     */
+    ram_addr_t ram_offset;
+    /* XXX should probably make a new MMU_VERSION_STORE */
+    RAMBlock *ram = v2r_addr(env, vaddr, ret_paddr, &ram_offset, MMU_DATA_STORE, reg, pc);
+    if (!ram)
+        return;
+    /* Get the tag number and tag block ptr. */
+    cap_version_t old_ver = get_version(ram_offset >> CAP_TAG_SHFT, ram);
+    qemu_maybe_log_instr_extra(env, "    Cap Version Write [" TARGET_FMT_lx "/"
+        RAM_ADDR_FMT "] %d -> %d\n", vaddr, ram_offset,
+        old_ver, val);
+    bool allocated_new_block = false;
+    set_version(ram_offset >> CAP_TAG_SHFT, ram, &allocated_new_block, val);
+    if (allocated_new_block) {
+        // new tag block allocated, flush the TCG tlb so that the magic zero
+        // value is removed from the iotlb.
+        // Note: each tag block contains tags for multiple pages
+        const size_t covered_bytes = CAP_TAGBLK_SIZE * CHERI_CAP_SIZE;
+        const target_ulong start = QEMU_ALIGN_DOWN(vaddr, covered_bytes);
+        const target_ulong end = start + covered_bytes;
+        cheri_debug_assert(is_power_of_2(covered_bytes));
+        cheri_debug_assert(covered_bytes / TARGET_PAGE_SIZE > 1);
+        cheri_debug_assert(is_power_of_2(covered_bytes / TARGET_PAGE_SIZE));
+        CPUState *cpu = env_cpu(env);
+        for (target_ulong page_addr = start; page_addr < end; page_addr += TARGET_PAGE_SIZE) {
+            qemu_maybe_log_instr_extra(env,
+                                       "Allocated new tag block -> flushing "
+                                       "TCG tlb for " TARGET_FMT_plx "\n",
+                                       page_addr);
+            tlb_flush_page_all_cpus_synced(cpu, page_addr);
+        }
+        // We have to exit the current TCG block so that QEMU refills the TLB
+        allocated_new_block = false;
+        set_version(ram_offset >> CAP_TAG_SHFT, ram, &allocated_new_block, old_ver);
+        assert(!allocated_new_block /* should have just allocated*/);
+        qemu_maybe_log_instr_extra(env,
+                                   "    Resetting Version [" TARGET_FMT_lx
+                                   "/" RAM_ADDR_FMT
+                                   "] to allow restarting instruction\n",
+                                   vaddr, ram_offset);
+        cpu_restore_state(cpu, pc, true);
+        cpu_loop_exit_noexc(cpu);
+    }
+}
+
+// bool cheri_version_check(CPUArchState 8env, target_ulong vaddr, int reg, hwaddr *ret_addr, int *prot, uintptr_t pc)
+
+static bool cheri_version_check_one(CPUArchState *env, target_ulong vaddr, 
+        MMUAccessType rw, uintptr_t pc, cap_version_t expected)
+{
+    uint64_t tag;
+    int prot;
+    CheriTagBlock *tagblk = cheri_tag_get_block(env, vaddr, rw, 0 /* reg only for MIPS */, 
+        0, pc, NULL, &tag, &prot);
+    cap_version_t result = tagblock_get_version(tagblk, CAP_TAGBLK_IDX(tag));
+    return result == expected;
+}
+
+bool cheri_version_check(CPUArchState *env, target_ulong vaddr, int32_t size,
+                         MMUAccessType rw, uintptr_t pc, cap_version_t expected)
+{
+    cheri_debug_assert(size > 0);
+    target_ulong first_addr = vaddr;
+    target_ulong last_addr = (vaddr + size - 1);
+    TagOffset tag_start = addr_to_tag_offset(first_addr);
+    TagOffset tag_end = addr_to_tag_offset(last_addr);
+    if (likely(tag_start.value == tag_end.value)) {
+        // Common case, only one granule (i.e. aligned load / store)
+        return cheri_version_check_one(env, vaddr, rw, pc, expected);
+    }
+    // Unaligned -> can cross a capabiblity alignment boundary and
+    // therefore invalidate two tags. It can also cross pages
+    size_t ntags = tag_end.value - tag_start.value + 1;
+    assert(ntags == 2 && "Should check at most two version granules here");
+    bool success = true;
+    for (target_ulong addr = tag_offset_to_addr(tag_start);
+         addr <= tag_offset_to_addr(tag_end); addr += CHERI_CAP_SIZE) {
+        success &= cheri_version_check_one(env, addr, rw, pc, expected);
+    }
+    return success;
+}
