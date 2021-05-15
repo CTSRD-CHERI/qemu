@@ -1633,7 +1633,7 @@ void *probe_access(CPUArchState *env, target_ulong addr, int size,
         /* Handle watchpoints.  */
         if (flags & TLB_WATCHPOINT) {
             bool is_write =
-#ifdef CONFIG_CHERI
+#ifdef TARGET_CHERI
                 access_type == MMU_DATA_CAP_STORE ||
 #endif
                 access_type == MMU_DATA_STORE;
