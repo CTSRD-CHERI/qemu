@@ -38,90 +38,70 @@
 # define cheri_debug_assert(X) ((void)0)
 #endif
 
-// For TARGET_CHERI128
-// TODO: remove this and change it to TARGET_CHERI128
-#include CONFIG_DEVICES
-#ifdef TARGET_CHERI128
-#define CHERI_128 1
-#endif
-#ifdef TARGET_CHERI128_MAGIC
-// TODO: delete the magic128 code
-#define CHERI_128 1
-#define CHERI_MAGIC128 1
-#endif
-#ifdef CONFIG_CHERI256
-#error No longer supported
-#endif
-
 #ifdef TARGET_CHERI
-#if (defined(CHERI_128) || defined(CHERI_64)) && !defined(CHERI_MAGIC128)
-#define QEMU_USE_COMPRESSED_CHERI_CAPS 1
-#else
-#define QEMU_USE_COMPRESSED_CHERI_CAPS 0
-#endif
 
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
-#if defined(CHERI_128) || defined(CHERI_MAGIC128)
-/* Magic 128 has the same set of permissions/types as 128 */
-#  define CAP_PERMS_ALL CC128_PERMS_ALL
-#  define CAP_UPERMS_ALL CC128_UPERMS_ALL
-#  define CAP_UPERMS_SHFT CC128_UPERMS_SHFT
-#  define CAP_MAX_UPERM CC128_MAX_UPERM
-#  define CAP_MAX_REPRESENTABLE_OTYPE CC128_MAX_REPRESENTABLE_OTYPE
-#  define CAP_LAST_NONRESERVED_OTYPE CC128_LAST_NONRESERVED_OTYPE
-#  define CAP_OTYPE_UNSEALED CC128_OTYPE_UNSEALED
-#  define CAP_OTYPE_UNSEALED_SIGNED CC128_OTYPE_UNSEALED_SIGNED
-#  define CAP_OTYPE_SENTRY CC128_OTYPE_SENTRY
-#  define CAP_FIRST_SPECIAL_OTYPE_SIGNED CC128_FIRST_SPECIAL_OTYPE_SIGNED
-#  define CAP_LAST_SPECIAL_OTYPE_SIGNED CC128_LAST_SPECIAL_OTYPE_SIGNED
-#  define CAP_FLAGS_ALL_BITS CC128_FIELD_FLAGS_MASK_NOT_SHIFTED
-#  define CHERI_CAP_SIZE  16
-#  ifdef TARGET_WORDS_BIGENDIAN
-#    define CHERI_MEM_OFFSET_CURSOR 8
-#    define CHERI_MEM_OFFSET_METADATA 0
-#  else
-#    define CHERI_MEM_OFFSET_CURSOR 0
-#    define CHERI_MEM_OFFSET_METADATA 8
-#  endif
-#elif defined(CHERI_256)
-#  define CAP_PERMS_ALL CC256_PERMS_ALL_BITS
-#  define CAP_UPERMS_ALL CC256_UPERMS_ALL_BITS
-#  define CAP_UPERMS_SHFT CC256_UPERMS_SHFT
-#  define CAP_MAX_UPERM CC256_MAX_UPERM
-#  define CAP_MAX_REPRESENTABLE_OTYPE CC256_MAX_REPRESENTABLE_OTYPE
-#  define CAP_LAST_NONRESERVED_OTYPE CC256_LAST_NONRESERVED_OTYPE
-#  define CAP_OTYPE_UNSEALED CC256_OTYPE_UNSEALED
-#  define CAP_OTYPE_SENTRY CC256_OTYPE_SENTRY
-#  define CAP_FIRST_SPECIAL_OTYPE_SIGNED CC256_FIRST_SPECIAL_OTYPE_SIGNED
-#  define CAP_LAST_SPECIAL_OTYPE_SIGNED CC256_LAST_SPECIAL_OTYPE_SIGNED
-#  define CAP_FLAGS_ALL_BITS CC256_FLAGS_ALL_BITS
-#  define CHERI_CAP_SIZE  32
-#  ifdef TARGET_WORDS_BIGENDIAN
-#    define CHERI_MEM_OFFSET_METADATA 0
-#    define CHERI_MEM_OFFSET_CURSOR 8
-#    define CHERI_MEM_OFFSET_BASE 16
-#    define CHERI_MEM_OFFSET_LENGTH 24
-#  else
-#    error no little endian CHERI256
-#  endif
+
+#if TARGET_LONG_BITS == 32
+#  define CHERI_CAP_SIZE 8
+#  define CHERI_CAP_BITS 64
+#elif TARGET_LONG_BITS == 64
+#  define CHERI_CAP_SIZE 16
+#  define CHERI_CAP_BITS 128
 #else
-#  error "Unsupported capability type"
+#  error "Unknown CHERI capability format"
 #endif
 
-/* compressed capabilities use a 65-bit top, precise and magic 128 64-bits */
-#if defined(CHERI_128)
-#  define CAP_MAX_LENGTH CC128_MAX_LENGTH
-#  define CAP_MAX_TOP CC128_MAX_TOP
-#elif defined(CHERI_256) || defined(CHERI_MAGIC128)
-#  define CAP_MAX_LENGTH CC256_NULL_LENGTH
-#  define CAP_MAX_TOP CC256_NULL_TOP
+#ifdef TARGET_WORDS_BIGENDIAN
+#  define CHERI_MEM_OFFSET_CURSOR TARGET_LONG_SIZE
+#  define CHERI_MEM_OFFSET_METADATA 0
 #else
-#  error "Unsupported capability type"
+#  define CHERI_MEM_OFFSET_CURSOR 0
+#  define CHERI_MEM_OFFSET_METADATA TARGET_LONG_SIZE
 #endif
 
-typedef cc128_cap_t cap_register_t;
-typedef signed __int128 cap_offset_t;
-typedef unsigned __int128 cap_length_t;
+/*
+ * Optional suffix intended for Morello to differentiate its 128-bit
+ * compression format from the CHERI-MIPS and CHERI-RISC-V CHERI-128 format,
+ * allowing e.g. cc128 and cc128m to coexist. Unused for now.
+ */
+#define CHERI_CAP_VARIANT_LOWER
+#define CHERI_CAP_VARIANT_UPPER
+
+#define _CHERI_CAP_FORMAT(size, variant) size ## variant
+#define _XCHERI_CAP_FORMAT(size, variant) _CHERI_CAP_FORMAT(size, variant)
+#define CHERI_CAP_FORMAT(case) _XCHERI_CAP_FORMAT(CHERI_CAP_BITS, CHERI_CAP_VARIANT ## _ ## case)
+
+#define _CAP_NAMESPACED(prefix, format, id) prefix ## format ## _ ## id
+#define _XCAP_NAMESPACED(prefix, format, id) _CAP_NAMESPACED(prefix, format, id)
+#define CAP_NAMESPACED(case, prefix, id) _XCAP_NAMESPACED(prefix, CHERI_CAP_FORMAT(case), id)
+
+#define CAP_cc(id) CAP_NAMESPACED(LOWER, cc, id)
+#define CAP_CC(id) CAP_NAMESPACED(UPPER, CC, id)
+
+#define CAP_PERMS_ALL CAP_CC(PERMS_ALL)
+#define CAP_UPERMS_ALL CAP_CC(UPERMS_ALL)
+#define CAP_UPERMS_SHFT CAP_CC(UPERMS_SHFT)
+#define CAP_MAX_UPERM CAP_CC(MAX_UPERM)
+#define CAP_MAX_REPRESENTABLE_OTYPE CAP_CC(MAX_REPRESENTABLE_OTYPE)
+#define CAP_LAST_NONRESERVED_OTYPE CAP_CC(LAST_NONRESERVED_OTYPE)
+#define CAP_OTYPE_UNSEALED CAP_CC(OTYPE_UNSEALED)
+#define CAP_OTYPE_UNSEALED_SIGNED CAP_CC(OTYPE_UNSEALED_SIGNED)
+#define CAP_OTYPE_SENTRY CAP_CC(OTYPE_SENTRY)
+#define CAP_FIRST_SPECIAL_OTYPE_SIGNED CAP_CC(FIRST_SPECIAL_OTYPE_SIGNED)
+#define CAP_LAST_SPECIAL_OTYPE_SIGNED CAP_CC(LAST_SPECIAL_OTYPE_SIGNED)
+#define CAP_FLAGS_ALL_BITS CAP_CC(FIELD_FLAGS_MASK_NOT_SHIFTED)
+
+/* compressed capabilities use an (XLEN+1)-bit top */
+#define CAP_MAX_LENGTH CAP_CC(MAX_LENGTH)
+#define CAP_MAX_TOP CAP_CC(MAX_TOP)
+
+#define CAP_NULL_PESBT CAP_CC(NULL_PESBT)
+#define CAP_NULL_XOR_MASK CAP_CC(NULL_XOR_MASK)
+
+typedef CAP_cc(cap_t) cap_register_t;
+typedef CAP_cc(offset_t) cap_offset_t;
+typedef CAP_cc(length_t) cap_length_t;
 
 typedef enum CheriPermissions {
     CAP_PERM_GLOBAL = (1 << 0),
@@ -176,4 +156,5 @@ typedef enum CheriTbFlags {
      */
     TB_FLAG_PCC_FULL_AS = (1 << 7)
 } CheriTbFlags;
+
 #endif // TARGET_CHERI

@@ -38,8 +38,6 @@
 #include "cheri_utils.h"
 #include "qemu/qemu-print.h"
 
-#if QEMU_USE_COMPRESSED_CHERI_CAPS
-
 extern bool cheri_c2e_on_unrepresentable;
 extern bool cheri_debugger_on_unrepresentable;
 
@@ -59,15 +57,6 @@ _became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
     if (cheri_c2e_on_unrepresentable)
         raise_cheri_exception_impl(env, CapEx_InexactBounds, reg, false, retpc);
 }
-
-#else
-static inline void
-_became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
-{
-    assert(false && "THIS SHOULD NOT BE CALLED");
-}
-
-#endif /* ! 128-bit capabilities */
 
 #ifdef DO_CHERI_STATISTICS
 
@@ -103,17 +92,17 @@ struct oob_stats_info {
         return 0;  // We don't care about arithmetic on untagged things
 
     const cap_offset_t offset = cap_get_offset(cr);
-    const uint64_t addr = cap_get_cursor(cr);
-    if (addr == cap_get_top65(cr)) {
+    const target_ulong addr = cap_get_cursor(cr);
+    if (addr == cap_get_top_full(cr)) {
         // This case is very common so we should not print a message here
         return 1;
-    } else if (offset < 0 || offset > cap_get_length65(cr)) {
+    } else if (offset < 0 || offset > cap_get_length_full(cr)) {
         // handle negative offsets:
         int64_t howmuch;
         if (offset < 0)
             howmuch = (int64_t)offset;
         else
-            howmuch = offset - cap_get_length65(cr) + 1;
+            howmuch = offset - cap_get_length_full(cr) + 1;
         qemu_log_instr_or_mask_msg(env, CPU_LOG_CHERI_BOUNDS,
             "BOUNDS: Out of bounds capability (by %" PRId64
             ") created using %s: " PRINT_CAP_FMTSTR ", pc=%016" PRIx64

@@ -2219,9 +2219,20 @@ uint64_t cpu_ldq_le_data_ra(CPUArchState *env, target_ulong ptr,
  * TODO(am2419): Ugly hack to avoid logging memory accesses that load capability
  * components as normal memory accesses. The caller is responsible for logging.
  */
-uint64_t cpu_ldq_cap_data_ra(CPUArchState *env, target_ulong ptr,
-                             uintptr_t retaddr)
+target_ulong cpu_ld_cap_word_ra(CPUArchState *env, target_ulong ptr,
+                                uintptr_t retaddr)
 {
+    FullLoadHelper *full_load;
+    MemOp op;
+#if TARGET_LONG_BITS == 32
+    op = MO_TEUW;
+    full_load = MO_TE == MO_LE ? helper_le_lduw_mmu : helper_be_lduw_mmu;
+#elif TARGET_LONG_BITS == 64
+    op = MO_TEQ;
+    full_load = MO_TE == MO_LE ? helper_le_ldq_mmu : helper_be_ldq_mmu;
+#else
+#error "Unhandled target long width"
+#endif
     return cpu_load_helper_no_log(
         env, ptr, cpu_mmu_index(env, false), retaddr, MO_TEQ,
         MO_TE == MO_LE ? helper_le_ldq_mmu : helper_be_ldq_mmu);
@@ -2654,10 +2665,18 @@ void cpu_stq_le_data_ra(CPUArchState *env, target_ulong ptr,
  * TODO(am2419): Ugly hack to avoid logging memory accesses that store capability
  * components as normal memory accesses. The caller is responsible for logging.
  */
-void cpu_stq_cap_data_ra(CPUArchState *env, target_ulong ptr,
-                         uint64_t val, uintptr_t retaddr)
+void cpu_st_cap_word_ra(CPUArchState *env, target_ulong ptr,
+                        target_ulong val, uintptr_t retaddr)
 {
-    cpu_store_helper_no_log(env, ptr, val, cpu_mmu_index(env, false), retaddr, MO_TEQ);
+    MemOp op;
+#if TARGET_LONG_BITS == 32
+    op = MO_TEUW;
+#elif TARGET_LONG_BITS == 64
+    op = MO_TEQ;
+#else
+#error "Unhandled target long width"
+#endif
+    cpu_store_helper_no_log(env, ptr, val, cpu_mmu_index(env, false), retaddr, op);
 }
 #endif
 

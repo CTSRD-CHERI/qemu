@@ -266,7 +266,7 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, val_reg);
     }
 
-    uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
+    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
@@ -282,10 +282,10 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
     }
     // Load the value to store from the register file now in case the
     // load_cap_from_memory call overwrites that register
-    uint64_t loaded_pesbt;
-    uint64_t loaded_cursor;
+    target_ulong loaded_pesbt;
+    target_ulong loaded_cursor;
     bool loaded_tag =
-        load_cap_from_memory_128(env, &loaded_pesbt, &loaded_cursor, addr_reg,
+        load_cap_from_memory_raw(env, &loaded_pesbt, &loaded_cursor, addr_reg,
                                  cbp, addr, _host_return_address, NULL);
     // The store may still trap, so we must only update the dest register after
     // the store succeeded.
@@ -310,7 +310,7 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
         raise_cheri_exception(env, CapEx_PermitLoadViolation, addr_reg);
     }
 
-    uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
+    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
@@ -323,7 +323,7 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
     }
     target_ulong pesbt;
     target_ulong cursor;
-    bool tag = load_cap_from_memory_128(env, &pesbt, &cursor, addr_reg, cbp,
+    bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, addr_reg, cbp,
                                         addr, _host_return_address, NULL);
     // If this didn't trap, update the lr state:
     env->load_res = addr;
@@ -333,7 +333,7 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
     log_changed_special_reg(env, "load_res", env->load_res);
     log_changed_special_reg(env, "load_val", env->load_val);
     log_changed_special_reg(env, "load_pesbt", env->load_pesbt);
-    log_changed_special_reg(env, "load_tag", (uint64_t)env->load_tag);
+    log_changed_special_reg(env, "load_tag", (target_ulong)env->load_tag);
     update_compressed_capreg(env, dest_reg, pesbt, tag, cursor);
 }
 
@@ -382,7 +382,7 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, val_reg);
     }
 
-    uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
+    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
@@ -409,7 +409,7 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     target_ulong current_pesbt;
     target_ulong current_cursor;
     bool current_tag =
-        load_cap_from_memory_128(env, &current_pesbt, &current_cursor, addr_reg,
+        load_cap_from_memory_raw(env, &current_pesbt, &current_cursor, addr_reg,
                                  cbp, addr, _host_return_address, NULL);
     if (current_cursor != env->load_val || current_pesbt != env->load_pesbt ||
         current_tag != env->load_tag) {

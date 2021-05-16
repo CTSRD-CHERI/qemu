@@ -270,7 +270,7 @@ static inline void emit_text_ldst(log_meminfo_t *minfo, const char *direction)
         qemu_log("    Cap Memory %s [" TARGET_FMT_lx "] = v:%d PESBT:"
                  TARGET_FMT_lx " Cursor:" TARGET_FMT_lx "\n",
                  direction, minfo->addr, minfo->cap.cr_tag,
-                 cc128_compress_mem(&minfo->cap),
+                 CAP_cc(compress_mem)(&minfo->cap),
                  cap_get_cursor(&minfo->cap));
     } else
 #endif
@@ -489,15 +489,16 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
                 cr = null_capability(&intcap);
             }
             uint64_t metadata = (
-                ((uint64_t)cr->cr_tag << 63) | (cap_get_otype(cr) << 32) |
-                (COMBINED_PERMS_VALUE(cr) << 1) |
+                ((uint64_t)cr->cr_tag << 63) |
+                ((uint64_t)cap_get_otype(cr) << 32) |
+                ((uint64_t)COMBINED_PERMS_VALUE(cr) << 1) |
                 (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
 
             entry.entry_type = CTE_CAP;
             entry.val2 = cpu_to_be64(metadata);
             entry.val3 = cpu_to_be64(cap_get_cursor(cr));
             entry.val4 = cpu_to_be64(cap_get_base(cr));
-            entry.val5 = cpu_to_be64(cap_get_length64(cr));
+            entry.val5 = cpu_to_be64(cap_get_length_sat(cr));
         } else
 #endif
         {
