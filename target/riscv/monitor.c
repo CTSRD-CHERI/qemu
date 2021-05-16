@@ -111,7 +111,7 @@ static void walk_pte(Monitor *mon, hwaddr base, target_ulong start,
         cpu_physical_memory_read(pte_addr, &pte, ptesize);
 
         paddr = (hwaddr)(pte >> PTE_PPN_SHIFT) << PGSHIFT;
-#ifdef TARGET_CHERI
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
         attr = pte & (PTE_LC | PTE_SC | 0xff);
 #else
         attr = pte & 0xff;
