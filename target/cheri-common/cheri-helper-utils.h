@@ -70,7 +70,7 @@ static inline void derive_cap_from_pcc(CPUArchState *env, uint32_t cd,
 }
 
 static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
-                             uint32_t perm, uint64_t addr, uint16_t regnum,
+                             uint32_t perm, target_ulong addr, uint16_t regnum,
                              uint32_t len, bool instavail, uintptr_t pc)
 {
     CheriCapExcCause cause;
@@ -127,7 +127,7 @@ do_exception:
 }
 
 static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
-                                     uint64_t ddc_offset, uint32_t len,
+                                     target_ulong ddc_offset, uint32_t len,
                                      uintptr_t retpc)
 {
     const cap_register_t *ddc = cheri_get_ddc(env);
@@ -228,7 +228,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           target_ulong retpc, hwaddr *physaddr);
 // Helper for RISCV AMOSWAP
-bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
-                              uint64_t *cursor, uint32_t cb,
+bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
                               target_ulong retpc, hwaddr *physaddr);

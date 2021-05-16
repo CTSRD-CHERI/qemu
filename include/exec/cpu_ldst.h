@@ -153,10 +153,10 @@ void cpu_stq_le_data_ra(CPUArchState *env, abi_ptr ptr,
                         uint64_t val, uintptr_t ra);
 
 #ifdef TARGET_CHERI
-uint64_t cpu_ldq_cap_data_ra(CPUArchState *env, target_ulong ptr,
-                             uintptr_t retaddr);
-void cpu_stq_cap_data_ra(CPUArchState *env, target_ulong ptr,
-                         uint64_t val, uintptr_t retaddr);
+target_ulong cpu_ld_cap_word_ra(CPUArchState *env, target_ulong ptr,
+                                uintptr_t retaddr);
+void cpu_st_cap_word_ra(CPUArchState *env, target_ulong ptr,
+                        target_ulong val, uintptr_t retaddr);
 #endif
 
 #if defined(CONFIG_USER_ONLY)

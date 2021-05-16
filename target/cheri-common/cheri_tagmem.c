@@ -35,7 +35,7 @@
 #include "exec/exec-all.h"
 #include "exec/log.h"
 #include "exec/ramblock.h"
-#include "cheri_tagmem.h"
+#include "cheri_defs.h"
 #include "cheri-helper-utils.h"
 // XXX: use hbitmap? Or a different data structure?
 #include "qemu/bitmap.h"
@@ -82,33 +82,17 @@
  * FIXME: rewrite using somethign more like the upcoming MTE changes (https://github.com/rth7680/qemu/commits/tgt-arm-mte-user)
  */
 
-#if defined(CHERI_MAGIC128) || defined(CHERI_128)
-#define CAP_TAG_SHFT        4           // 5 for 256-bit caps, 4 for 128-bit
-#else /* !(CHERI_MAGIC128 || CHERI_128) */
-#define CAP_TAG_SHFT        5           // 5 for 256-bit caps, 4 for 128-bit
-#endif /* !(CHERI_MAGIC128 || CHERI_128) */
-#define CAP_SIZE            (1 << CAP_TAG_SHFT)
-#define CAP_MASK            ((1 << CAP_TAG_SHFT) - 1)
 #define CAP_TAGBLK_SHFT     12          // 2^12 or 4096 tags per block
 #define CAP_TAGBLK_MSK      ((1 << CAP_TAGBLK_SHFT) - 1)
 #define CAP_TAGBLK_SIZE       (1 << CAP_TAGBLK_SHFT)
 #define CAP_TAGBLK_IDX(tag_idx) ((tag_idx) & CAP_TAGBLK_MSK)
 #define TAGS_PER_PAGE        (TARGET_PAGE_SIZE / CHERI_CAP_SIZE)
-#ifdef CHERI_MAGIC128
-// "Magic" table to store the additional 128 metadata bits for the magic128
-// configuration of QEMU
-static GHashTable *magic128_table;
-struct Magic128Data {
-    uint64_t tps;    // type, permissions, sealed
-    uint64_t length; // length of capability
-};
-#endif
 
 static inline size_t num_tagblocks(RAMBlock* ram)
 {
     uint64_t memory_size = memory_region_size(ram->mr);
     size_t result = DIV_ROUND_UP(memory_size, CHERI_CAP_SIZE * CAP_TAGBLK_SIZE);
-    assert(result == (memory_size >> CAP_TAG_SHFT) >> CAP_TAGBLK_SHFT);
+    assert(result == (memory_size / CHERI_CAP_SIZE) >> CAP_TAGBLK_SHFT);
     return result;
 }
 
@@ -237,11 +221,6 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
         error_report("%s: Can't allocated tag memory", __func__);
         exit(-1);
     }
-#ifdef CHERI_MAGIC128
-    if (!magic128_table) {
-        magic128_table = g_hash_table_new(g_int64_hash, NULL);
-    }
-#endif
     if (qemu_tcg_mttcg_enabled()) {
         warn_report("The CHERI tagged memory implementation is not thread-safe "
                     "and therefore not compatible with MTTCG. Capability tags "
@@ -326,7 +305,7 @@ void *cheri_tagmem_for_addr(RAMBlock *ram, ram_addr_t ram_offset, size_t size)
     if (!ram || !ram->cheri_tags)
         return ALL_ZERO_TAGBLK;
 
-    uint64_t tag = ram_offset >> CAP_TAG_SHFT;
+    uint64_t tag = ram_offset / CHERI_CAP_SIZE;
     cheri_debug_assert(size == TARGET_PAGE_SIZE && "Unexpected size");
     CheriTagBlock *tagblk = cheri_tag_block(tag, ram);
     if (tagblk != NULL) {
@@ -361,12 +340,12 @@ typedef struct TagOffset {
 
 static QEMU_ALWAYS_INLINE TagOffset addr_to_tag_offset(target_ulong addr)
 {
-    return (struct TagOffset){.value = addr >> CAP_TAG_SHFT};
+    return (struct TagOffset){.value = addr / CHERI_CAP_SIZE};
 }
 
 static QEMU_ALWAYS_INLINE target_ulong tag_offset_to_addr(TagOffset offset)
 {
-    return offset.value << CAP_TAG_SHFT;
+    return offset.value * CHERI_CAP_SIZE;
 }
 
 static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
@@ -476,7 +455,7 @@ static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
 #ifdef CONFIG_DEBUG_TCG
     ram_addr_t offset;
     RAMBlock *block = qemu_ram_block_from_host(host_addr, false, &offset);
-    uint64_t tag = offset >> CAP_TAG_SHFT;
+    uint64_t tag = offset / CHERI_CAP_SIZE;
     CheriTagBlock *tagblk = cheri_tag_block(tag, block);
     const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
     unsigned long *p_old = tagblk->tag_bitmap + BIT_WORD(tagblk_index);
@@ -503,16 +482,16 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
                        !memory_region_is_romd(ram->mr));
 
     ram_addr_t endaddr = (uint64_t)(ram_offset + len);
-    ram_addr_t startaddr = QEMU_ALIGN_DOWN(ram_offset, CAP_SIZE);
+    ram_addr_t startaddr = QEMU_ALIGN_DOWN(ram_offset, CHERI_CAP_SIZE);
 
-    for(ram_addr_t addr = startaddr; addr < endaddr; addr += CAP_SIZE) {
-        uint64_t tag = addr >> CAP_TAG_SHFT;
+    for(ram_addr_t addr = startaddr; addr < endaddr; addr += CHERI_CAP_SIZE) {
+        uint64_t tag = addr / CHERI_CAP_SIZE;
         CheriTagBlock *tagblk = cheri_tag_block(tag, ram);
         if (tagblk != NULL) {
             const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
             if (unlikely(env && vaddr && qemu_log_instr_enabled(env))) {
                 target_ulong write_vaddr =
-                    QEMU_ALIGN_DOWN(*vaddr, CAP_SIZE) + (addr - startaddr);
+                    QEMU_ALIGN_DOWN(*vaddr, CHERI_CAP_SIZE) + (addr - startaddr);
                 qemu_log_instr_extra(env, "    Cap Tag Write [" TARGET_FMT_lx
                     "/" RAM_ADDR_FMT "] %d -> 0\n", write_vaddr, addr,
                     tagblock_get_tag(tagblk, tagblk_index));
@@ -547,9 +526,9 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     /* Get the tag number and tag block ptr. */
     qemu_maybe_log_instr_extra(env, "    Cap Tag Write [" TARGET_FMT_lx "/"
         RAM_ADDR_FMT "] %d -> 1\n", vaddr, ram_offset,
-        tag_bit_get(ram_offset >> CAP_TAG_SHFT, ram));
+        tag_bit_get(ram_offset / CHERI_CAP_SIZE, ram));
     bool allocated_new_block = false;
-    tag_bit_set(ram_offset >> CAP_TAG_SHFT, ram, &allocated_new_block);
+    tag_bit_set(ram_offset / CHERI_CAP_SIZE, ram, &allocated_new_block);
     if (allocated_new_block) {
         // new tag block allocated, flush the TCG tlb so that the magic zero
         // value is removed from the iotlb.
@@ -569,7 +548,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
             tlb_flush_page_all_cpus_synced(cpu, page_addr);
         }
         // We have to exit the current TCG block so that QEMU refills the TLB
-        tag_bit_clear(ram_offset >> CAP_TAG_SHFT, ram);
+        tag_bit_clear(ram_offset / CHERI_CAP_SIZE, ram);
         qemu_maybe_log_instr_extra(env,
                                    "    Clearing Tag [" TARGET_FMT_lx
                                    "/" RAM_ADDR_FMT
@@ -598,7 +577,7 @@ static CheriTagBlock *cheri_tag_get_block(CPUArchState *env, target_ulong vaddr,
         return NULL;
 
     /* Get the tag number and tag block ptr. */
-    *ret_tag_idx = (ram_offset >> (CAP_TAG_SHFT + xshift)) << xshift;
+    *ret_tag_idx = ((ram_offset / CHERI_CAP_SIZE) >> xshift) << xshift;
     return cheri_tag_block(*ret_tag_idx, ram);
 }
 
@@ -611,7 +590,7 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
     bool result = tagblock_get_tag(tagblk, CAP_TAGBLK_IDX(tag));
     // XXX: Not atomic w.r.t. writes to tag memory
     qemu_maybe_log_instr_extra(env, "    Cap Tag Read [" TARGET_FMT_lx "/"
-        RAM_ADDR_FMT "] -> %d\n", vaddr, (ram_addr_t)(tag << CAP_TAG_SHFT), result);
+        RAM_ADDR_FMT "] -> %d\n", vaddr, (ram_addr_t)(tag * CHERI_CAP_SIZE), result);
     return result;
 }
 
@@ -654,45 +633,3 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 #undef TAG_BYTE_TO_BIT
     }
 }
-
-#ifdef CHERI_MAGIC128
-void cheri_tag_set_m128(CPUArchState *env, target_ulong vaddr, int reg,
-                        uint8_t tagbit, uint64_t tps, uint64_t length,
-                        uintptr_t pc)
-{
-    // We index the "magic" table by physical address:
-    hwaddr paddr;
-    cheri_tag_set(env, vaddr, reg, &paddr, pc);
-    gpointer htable_key = GINT_TO_POINTER(paddr);
-    struct Magic128Data *data = g_hash_table_lookup(magic128_table, htable_key);
-    if (!data) {
-        data = g_malloc(sizeof(struct Magic128Data));
-        g_hash_table_insert(magic128_table, htable_key, data);
-    }
-    data->tps = tps;
-    data->length = length;
-}
-
-bool cheri_tag_get_m128(CPUArchState *env, target_ulong vaddr, int reg,
-                        uint64_t *ret_tps, uint64_t *ret_length,
-                        hwaddr *ret_paddr, int *prot, uintptr_t pc)
-{
-    hwaddr paddr;
-    bool tag = cheri_tag_get(env, vaddr, reg, &paddr, prot, pc);
-    // Only fetch the extra data if the value is tagged
-    struct Magic128Data *data = NULL;
-    if (tag) {
-        data = g_hash_table_lookup(magic128_table, GINT_TO_POINTER(paddr));
-    }
-    if (data) {
-        *ret_tps = data->tps;
-        *ret_length = data->length;
-    } else {
-        *ret_tps = 0ULL;
-        *ret_length = 0ULL;
-    }
-    if (ret_paddr)
-        *ret_paddr = paddr;
-    return tag;
-}
-#endif /* CHERI_MAGIC128 */

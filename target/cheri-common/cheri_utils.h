@@ -38,15 +38,15 @@
 #include "cheri_defs.h"
 
 #define PRINT_CAP_FMTSTR_L1                                                    \
-    "v:%d s:%d p:%08x f:%d b:%016" PRIx64 " l:%016" PRIx64
+    "v:%d s:%d p:%08x f:%d b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
 #define COMBINED_PERMS_VALUE(cr)                                               \
     (unsigned)((((cr)->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |       \
                ((cr)->cr_perms & CAP_PERMS_ALL))
 #define PRINT_CAP_ARGS_L1(cr)                                                  \
     (cr)->cr_tag, cap_is_sealed_with_type(cr), COMBINED_PERMS_VALUE(cr),       \
-        (cr)->cr_flags, cap_get_base(cr), cap_get_length64(cr)
-#define PRINT_CAP_FMTSTR_L2 "o:%016" PRIx64 " t:%x"
-#define PRINT_CAP_ARGS_L2(cr) (uint64_t)cap_get_offset(cr), (cr)->cr_otype
+        (cr)->cr_flags, cap_get_base(cr), cap_get_length_sat(cr)
+#define PRINT_CAP_FMTSTR_L2 "o:" TARGET_FMT_lx " t:%x"
+#define PRINT_CAP_ARGS_L2(cr) (target_ulong)cap_get_offset(cr), (cr)->cr_otype
 
 
 #define PRINT_CAP_FMTSTR PRINT_CAP_FMTSTR_L1 " " PRINT_CAP_FMTSTR_L2
@@ -56,27 +56,12 @@
 
 #ifdef TARGET_CHERI
 
-// Import the appropriate functions from CC lib without namespacing
-#if defined(CHERI_128)
-#define CC_LIB_FN(X) cc128_##X
-#elif defined(CHERI_64)
-#define CC_LIB_FN(X) cc64_##X
-#else
-#error "Unknown compressed lib format required"
-#endif
-
-#define cap_set_decompressed_cr_otype CC_LIB_FN(cap_set_decompressed_cr_otype)
-#define cap_set_decompressed_cr_perms CC_LIB_FN(cap_set_decompressed_cr_perms)
-#define cap_set_decompressed_cr_uperms CC_LIB_FN(cap_set_decompressed_cr_uperms)
-#define cap_set_decompressed_cr_flags CC_LIB_FN(cap_set_decompressed_cr_flags)
-#define make_max_perms_cap CC_LIB_FN(make_max_perms_cap)
-
-static inline uint64_t cap_get_cursor(const cap_register_t* c) {
+static inline target_ulong cap_get_cursor(const cap_register_t* c) {
     return c->_cr_cursor;
 }
 
 // Getters to allow future changes to the cap_register_t struct layout:
-static inline uint64_t cap_get_base(const cap_register_t* c) {
+static inline target_ulong cap_get_base(const cap_register_t* c) {
     return c->cr_base;
 }
 
@@ -85,46 +70,42 @@ static inline cap_offset_t cap_get_offset(const cap_register_t* c) {
 }
 
 // The top of the capability (exclusive -- i.e., one past the end)
-static inline uint64_t cap_get_top(const cap_register_t* c) {
+static inline target_ulong cap_get_top(const cap_register_t* c) {
     // TODO: should handle last byte of address space properly
-    unsigned __int128 top = c->_cr_top;
-    return top > UINT64_MAX ? UINT64_MAX : (uint64_t)top;
+    cap_length_t top = c->_cr_top;
+    return top > ~(target_ulong)0 ? ~(target_ulong)0 : (target_ulong)top;
 }
 
-static inline unsigned __int128 cap_get_length65(const cap_register_t* c) {
+static inline cap_length_t cap_get_length_full(const cap_register_t* c) {
     return c->_cr_top - c->cr_base;
 }
 
-static inline uint64_t cap_get_length64(const cap_register_t* c) {
+static inline target_ulong cap_get_length_sat(const cap_register_t* c) {
     cheri_debug_assert((!c->cr_tag || c->_cr_top >= c->cr_base) &&
         "Tagged capabilities must be in bounds!");
-    unsigned __int128 length = cap_get_length65(c);
-    // Clamp the length to UINT64_MAX
-    return length > UINT64_MAX ? UINT64_MAX : (uint64_t)length;
+    cap_length_t length = cap_get_length_full(c);
+    // Clamp the length to ~(target_ulong)0
+    return length > ~(target_ulong)0 ? ~(target_ulong)0 : (target_ulong)length;
 }
 
-static inline unsigned __int128 cap_get_top65(const cap_register_t* c) {
+static inline cap_length_t cap_get_top_full(const cap_register_t* c) {
     return c->_cr_top;
 }
 
-static inline int64_t cap_get_otype(const cap_register_t* c) {
-    uint64_t result = c->cr_otype;
+static inline target_long cap_get_otype(const cap_register_t* c) {
+    target_ulong result = c->cr_otype;
     if (result > CAP_MAX_REPRESENTABLE_OTYPE) {
         // raw bits loaded from memory
         assert(!c->cr_tag && "Capabilities with otype > max cannot be tagged!");
         return result;
     }
-    // "sign" extend to a 64-bit number by subtracting the maximum: 2^24-1 -> 2^64-1
+    // "sign" extend to a 64-bit number by subtracting the maximum: e.g. 2^24-1 -> 2^64-1
     return result < CAP_LAST_NONRESERVED_OTYPE ? result : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 }
 
 static inline bool cap_exactly_equal(const cap_register_t *cbp, const cap_register_t *ctp)
 {
-#ifdef CHERI_128
-    return cc128_exactly_equal(cbp, ctp);
-#else
-    return cc256_exactly_equal(cbp, ctp);
-#endif
+    return CAP_cc(exactly_equal)(cbp, ctp);
 }
 
 static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
@@ -137,15 +118,15 @@ static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
 }
 
 // Check if num_bytes bytes at addr can be read using capability c
-static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, size_t num_bytes) {
+static inline bool cap_is_in_bounds(const cap_register_t* c, target_ulong addr, size_t num_bytes) {
     cheri_debug_assert(num_bytes != 0);
     if (addr < cap_get_base(c)) {
         return false;
     }
     // Use __builtin_add_overflow to avoid wrapping around the end of the addres space
-    uint64_t access_end_addr = 0;
+    target_ulong access_end_addr = 0;
     if (__builtin_add_overflow(addr, num_bytes, &access_end_addr)) {
-        warn_report("Found capability access that wraps around: 0x%" PRIx64
+        warn_report("Found capability access that wraps around: 0x" TARGET_FMT_lx
                     " + %zd. Authorizing cap: " PRINT_CAP_FMTSTR,
                     addr, num_bytes, PRINT_CAP_ARGS(c));
         return false;
@@ -159,7 +140,7 @@ static inline bool cap_is_in_bounds(const cap_register_t* c, uint64_t addr, size
 static inline bool cap_cursor_in_bounds(const cap_register_t *c)
 {
     return cap_get_cursor(c) >= cap_get_base(c) &&
-           cap_get_cursor(c) < cap_get_top65(c);
+           cap_get_cursor(c) < cap_get_top_full(c);
 }
 
 static inline bool cap_has_perms(const cap_register_t* reg, uint32_t perms)
@@ -182,14 +163,14 @@ static inline void cap_set_sealed(cap_register_t* c, uint32_t type) {
     assert(c->cr_otype == CAP_OTYPE_UNSEALED && "should not use this on caps with reserved otypes");
     assert(type <= CAP_LAST_NONRESERVED_OTYPE);
     _Static_assert(CAP_LAST_NONRESERVED_OTYPE < CAP_OTYPE_UNSEALED, "");
-    cap_set_decompressed_cr_otype(c, type);
+    CAP_cc(cap_set_decompressed_cr_otype)(c, type);
 }
 
 static inline void cap_set_unsealed(cap_register_t* c) {
     assert(c->cr_tag);
     assert(cap_is_sealed_with_type(c));
     assert(c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE && "should not use this to unsealed reserved types");
-    cap_set_decompressed_cr_otype(c, CAP_OTYPE_UNSEALED);
+    CAP_cc(cap_set_decompressed_cr_otype)(c, CAP_OTYPE_UNSEALED);
 }
 
 static inline bool cap_is_sealed_entry(const cap_register_t* c) {
@@ -198,21 +179,16 @@ static inline bool cap_is_sealed_entry(const cap_register_t* c) {
 
 static inline void cap_unseal_entry(cap_register_t* c) {
     assert(c->cr_tag && cap_is_sealed_entry(c) && "Should only be used with sentry capabilities");
-    cap_set_decompressed_cr_otype(c, CAP_OTYPE_UNSEALED);
+    CAP_cc(cap_set_decompressed_cr_otype)(c, CAP_OTYPE_UNSEALED);
 }
 
 static inline void cap_make_sealed_entry(cap_register_t* c) {
     assert(c->cr_tag && cap_is_unsealed(c) && "Should only be used with unsealed capabilities");
-    cap_set_decompressed_cr_otype(c, CAP_OTYPE_SENTRY);
+    CAP_cc(cap_set_decompressed_cr_otype)(c, CAP_OTYPE_SENTRY);
 }
 
 static inline bool cap_is_representable(const cap_register_t* c) {
-#ifdef CHERI_128
-    return cc128_is_representable_cap_exact(c);
-#else
-#error "!CHERI128 is not supported"
-    return true;
-#endif
+    return CAP_cc(is_representable_cap_exact)(c);
 }
 
 static inline void assert_valid_jump_target(const cap_register_t *target)
@@ -227,13 +203,10 @@ static inline void assert_valid_jump_target(const cap_register_t *target)
 static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
-    // For CHERI128 max length is 1 << 64 (__int128) for CHERI256 UINT64_MAX
     cp->_cr_top = CAP_MAX_TOP;
     cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
-#ifdef CHERI_128
-    cp->cached_pesbt = CC128_NULL_PESBT;
-    cheri_debug_assert(cc128_is_representable_cap_exact(cp));
-#endif
+    cp->cached_pesbt = CAP_NULL_PESBT;
+    cheri_debug_assert(cap_is_representable(cp));
     return cp;
 }
 
@@ -259,7 +232,7 @@ static inline bool is_null_capability(const cap_register_t *cp)
  * should not rely on it having any particular value.
  */
 static inline const cap_register_t*
-int_to_cap(uint64_t x, cap_register_t *cr)
+int_to_cap(target_ulong x, cap_register_t *cr)
 {
 
     (void)null_capability(cr);
@@ -277,51 +250,36 @@ int_to_cap(uint64_t x, cap_register_t *cr)
  * Previous behaviour was to use int_to_cap instead
  *
  */
-static inline cap_register_t *cap_mark_unrepresentable(uint64_t addr, cap_register_t *cr)
+static inline cap_register_t *cap_mark_unrepresentable(target_ulong addr, cap_register_t *cr)
 {
     // Clear the tag and update the address:
     cr->_cr_cursor = addr;
     cr->cr_tag = false;
-#ifdef CHERI_128
     // re-compute the compressed representation to ensure we have the same
     // resulting values for offset/base/top as the hardware:
     // TODO: this could go away if we used a cap_register_t representation
     // more like the hardware and sail.
-    uint64_t pesbt = cc128_compress_raw(cr);
-    cc128_decompress_raw(pesbt, addr, false, cr);
-#endif
+    target_ulong pesbt = CAP_cc(compress_raw)(cr);
+    CAP_cc(decompress_raw)(pesbt, addr, false, cr);
     return cr;
 }
 
-static inline void set_max_perms_capability(cap_register_t *crp, uint64_t cursor)
+static inline void set_max_perms_capability(cap_register_t *crp, target_ulong cursor)
 {
-    *crp = make_max_perms_cap(0, cursor, CAP_MAX_TOP);
+    *crp = CAP_cc(make_max_perms_cap)(0, cursor, CAP_MAX_TOP);
 }
 
-#if defined(CHERI_128) && !defined(CHERI_MAGIC128)
 static inline bool
-is_representable_cap_with_addr(const cap_register_t* cap, uint64_t new_addr)
+is_representable_cap_with_addr(const cap_register_t* cap, target_ulong new_addr)
 {
-    return cc128_is_representable_with_addr(cap, new_addr);
+    return CAP_cc(is_representable_with_addr)(cap, new_addr);
 }
 static inline bool
-is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t new_addr)
+is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, target_ulong new_addr)
 {
     cheri_debug_assert(cap_is_unsealed(cap));
-    return cc128_is_representable_new_addr(true, cap_get_base(cap), cap_get_length65(cap), cap_get_cursor(cap), new_addr);
+    return CAP_cc(is_representable_new_addr)(true, cap_get_base(cap), cap_get_length_full(cap), cap_get_cursor(cap), new_addr);
 }
-#else
-static inline bool
-is_representable_cap_with_addr(const cap_register_t* cap, uint64_t new_offset)
-{
-    return true;
-}
-static inline bool
-is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, uint64_t new_offset)
-{
-    return true;
-}
-#endif
 
 int gdb_get_capreg(GByteArray *buf, const cap_register_t *cap);
 int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,

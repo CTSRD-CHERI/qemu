@@ -57,20 +57,16 @@ typedef enum CapRegState {
     /// This capability register holds an integer value, therefore
     /// the PESBT bits are ignored and assumed to be those of a NULL capability.
     CREG_INTEGER = 0b0,
-#if QEMU_USE_COMPRESSED_CHERI_CAPS
     /// This capability register holds a capability with the tag cleared (not decompressed yet)
     CREG_UNTAGGED_CAP = 0b01,
     /// This capability register holds a capability with the tag set (not decompressed yet)
     CREG_TAGGED_CAP = 0b10,
-#endif
     /// This capability register holds a fully decompressed capability.
     /// The tag bit can be read from the cap_register_t structure.
     CREG_FULLY_DECOMPRESSED = 0b11
 } CapRegState;
 typedef struct GPCapRegs {
-#if QEMU_USE_COMPRESSED_CHERI_CAPS
     target_ulong pesbt[32]; // permissions+exponent+sealing type+bottom+top
-#endif
     uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
     // We cache the decompressed capregs here (to avoid constantly decompressing
     // values such as $csp which are used frequently)

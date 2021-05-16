@@ -1744,17 +1744,10 @@ static void version(void)
     printf("Built with support for unaligned loads/stores\n");
 #endif
 #ifdef TARGET_CHERI
-#ifdef TARGET_MIPS
-#ifdef CHERI_128
-    printf("Compiled for CHERI128\n");
-    printf("CHERI-CC base width is %d\n", CC128_BOT_WIDTH);
-#elif defined(CHERI_MAGIC128)
-    printf("Compiled for CHERI128 (magic)\n");
-#elif defined(CHERI_256)
-    printf("Compiled for CHERI256\n");
-#else
-#error "INVALID CHERI-MIPS target"
-#endif
+#ifdef TARGET_MIPS64
+    printf("Compiled for MIPS64 (with CHERI)\n");
+#elif defined(TARGET_RISCV32)
+    printf("Compiled for RISCV32 (with CHERI)\n");
 #elif defined(TARGET_RISCV64)
     printf("Compiled for RISCV64 (with CHERI)\n");
 #else

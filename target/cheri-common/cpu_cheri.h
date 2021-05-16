@@ -85,7 +85,6 @@ static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
     // unrpresentable value here.
     cheri_debug_assert(!pcc->cr_tag || cap_is_unsealed(pcc) ||
                        pcc->_cr_cursor == pc_addr);
-#if QEMU_USE_COMPRESSED_CHERI_CAPS
     if (can_be_unrepresenable) {
         if (pcc->cr_tag && !is_representable_cap_with_addr(pcc, pc_addr)) {
             error_report(
@@ -99,7 +98,6 @@ static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
         // that the value is in-bounds.
         cheri_debug_assert(is_representable_cap_with_addr(pcc, pc_addr));
     }
-#endif
     pcc->_cr_cursor = pc_addr;
 }
 
@@ -138,7 +136,7 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
     *cs_top = cap_get_top(pcc);
     *cheri_flags |=
         cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
-    if (*cs_base == 0 && cap_get_top65(pcc) == CAP_MAX_TOP) {
+    if (*cs_base == 0 && cap_get_top_full(pcc) == CAP_MAX_TOP) {
         *cheri_flags |= TB_FLAG_PCC_FULL_AS;
     }
     if (ddc->cr_tag && cap_is_unsealed(ddc)) {
@@ -150,7 +148,7 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
             *cheri_flags |= TB_FLAG_CHERI_DDC_BASE_ZERO;
         if (cap_get_cursor(ddc) == 0)
             *cheri_flags |= TB_FLAG_CHERI_DDC_CURSOR_ZERO;
-        if (cap_get_top65(ddc) == CAP_MAX_TOP)
+        if (cap_get_top_full(ddc) == CAP_MAX_TOP)
             *cheri_flags |= TB_FLAG_CHERI_DDC_TOP_MAX;
     }
 }

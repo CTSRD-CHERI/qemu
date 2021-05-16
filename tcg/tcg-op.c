@@ -2765,7 +2765,7 @@ static void gen_ldst_i32(TCGOpcode opc, TCGv_i32 val, TCGv_cap_checked_ptr addr,
 {
     TCGMemOpIdx oi = make_memop_idx(memop, idx);
 #if TARGET_LONG_BITS == 32
-    tcg_gen_op3i_i32(opc, val, addr, oi);
+    tcg_gen_op3i_i32(opc, val, (TCGv)addr, oi);
 #else
     if (TCG_TARGET_REG_BITS == 32) {
         tcg_gen_op4i_i32(opc, val, TCGV_LOW((TCGv)addr), TCGV_HIGH((TCGv)addr), oi);
@@ -2781,9 +2781,9 @@ static void gen_ldst_i64(TCGOpcode opc, TCGv_i64 val, TCGv_cap_checked_ptr addr,
     TCGMemOpIdx oi = make_memop_idx(memop, idx);
 #if TARGET_LONG_BITS == 32
     if (TCG_TARGET_REG_BITS == 32) {
-        tcg_gen_op4i_i32(opc, TCGV_LOW(val), TCGV_HIGH(val), addr, oi);
+        tcg_gen_op4i_i32(opc, TCGV_LOW(val), TCGV_HIGH(val), (TCGv)addr, oi);
     } else {
-        tcg_gen_op3(opc, tcgv_i64_arg(val), tcgv_i32_arg(addr), oi);
+        tcg_gen_op3(opc, tcgv_i64_arg(val), tcgv_i32_arg((TCGv)addr), oi);
     }
 #else
     if (TCG_TARGET_REG_BITS == 32) {

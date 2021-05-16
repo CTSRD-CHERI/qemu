@@ -2,16 +2,6 @@ config MALTA
     bool
     select ISA_SUPERIO
 
-
-config CHERI128
-    bool
-
-config CHERI256
-    bool
-
-config CHERI128_MAGIC
-    bool
-
 config MIPSSIM
     bool
     select ISA_BUS

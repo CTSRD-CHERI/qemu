@@ -129,9 +129,9 @@ target_ulong CHERI_HELPER_IMPL(cgetlen(CPUArchState *env, uint32_t cb))
      * CGetLen: Move Length to a General-Purpose Register.
      *
      * Note: For 128-bit Capabilities we must handle len >= 2^64:
-     * cap_get_length64() converts 1 << 64 to UINT64_MAX
+     * cap_get_length_sat() converts 1 << 64 to UINT64_MAX
      */
-    return (target_ulong)cap_get_length64(get_readonly_capreg(env, cb));
+    return (target_ulong)cap_get_length_sat(get_readonly_capreg(env, cb));
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
@@ -184,7 +184,7 @@ target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
      * CGetType: Move Object Type Field to a General-Purpose Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const int64_t otype = cap_get_otype(cbp);
+    const target_long otype = cap_get_otype(cbp);
     // Must be either a valid positive type < maximum or one of the special
     // hardware-interpreted otypes
     if (otype < 0) {
@@ -375,12 +375,11 @@ void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
 /// Two operands (int int)
 
 static target_ulong crap_impl(target_ulong len) {
-#ifdef CHERI_128
     // In QEMU we do this by performing a csetbounds on a maximum permissions
     // capability and returning the resulting length
     cap_register_t tmpcap;
     set_max_perms_capability(&tmpcap, 0);
-    cc128_setbounds(&tmpcap, 0, len);
+    CAP_cc(setbounds)(&tmpcap, 0, len);
     // Previously QEMU return (1<<64)-1 for a representable length of 1<<64
     // (similar to CGetLen), but all other implementations just strip the
     // high bit instead. Note: This allows a subsequent CSetBoundsExact to
@@ -391,11 +390,7 @@ static target_ulong crap_impl(target_ulong len) {
     //  it is unclear if this makes much of a difference, and knowing that the
     //  instruction never traps could be useful for optimization purposes.
     // See also https://github.com/CTSRD-CHERI/cheri-architecture/issues/32
-    return (target_ulong)cap_get_length65(&tmpcap);
-#else
-    // For MAGIC128 and 256 everything is representable -> we can return len
-  return len;
-#endif
+    return (target_ulong)cap_get_length_full(&tmpcap);
 }
 
 target_ulong CHERI_HELPER_IMPL(crap(CPUArchState *env, target_ulong len))
@@ -413,10 +408,9 @@ target_ulong CHERI_HELPER_IMPL(cram(CPUArchState *env, target_ulong len))
     // rt is set to a mask that can be used to align down addresses to a value
     // that is sufficiently aligned to set precise bounds for the nearest
     // representable length of rs (as obtained by CRoundArchitecturalPrecision).
-#ifdef CHERI_128
     // The mask used to align down is all ones followed by (required exponent
     // for compressed representation) zeroes
-    target_ulong result = cc128_get_alignment_mask(len);
+    target_ulong result = CAP_cc(get_alignment_mask)(len);
     target_ulong rounded_with_crap = crap_impl(len);
     target_ulong rounded_with_cram = (len + ~result) & result;
     qemu_maybe_log_instr_extra(env, "cram(" TARGET_FMT_lx ") rounded="
@@ -430,10 +424,6 @@ target_ulong CHERI_HELPER_IMPL(cram(CPUArchState *env, target_ulong len))
             len, rounded_with_crap, rounded_with_cram);
     }
     return result;
-#else
-    // For MAGIC128 and 256 everything is representable -> we can return all ones
-    return UINT64_MAX;
-#endif
 }
 
 /// Three operands (capability capability capability)
@@ -462,9 +452,9 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
         raise_cheri_exception(env, CapEx_SealViolation, cb_exc);
     } else if (cap_get_base(ctp) < cap_get_base(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb_exc);
-    } else if (cap_get_top65(ctp) > cap_get_top65(cbp)) {
+    } else if (cap_get_top_full(ctp) > cap_get_top_full(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb_exc);
-    } else if (cap_get_base(ctp) > cap_get_top65(ctp)) {
+    } else if (cap_get_base(ctp) > cap_get_top_full(ctp)) {
         // check for length < 0 - possible because cs2 might be untagged
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
@@ -479,7 +469,7 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else {
         cap_register_t result = *ctp;
 
-        cap_set_decompressed_cr_otype(&result, CAP_OTYPE_UNSEALED);
+        CAP_cc(cap_set_decompressed_cr_otype)(&result, CAP_OTYPE_UNSEALED);
         result.cr_tag = 1;
 
         /*
@@ -527,7 +517,7 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
 {
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
-    uint64_t ct_base_plus_offset = cap_get_cursor(ctp);
+    target_ulong ct_base_plus_offset = cap_get_cursor(ctp);
     /*
      * CSeal: Seal a capability
      */
@@ -552,7 +542,7 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
         raise_cheri_exception(env, CapEx_PermitSealViolation, ct);
     } else if (!conditional && !cap_cursor_in_bounds(ctp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if (ct_base_plus_offset > (uint64_t)CAP_LAST_NONRESERVED_OTYPE) {
+    } else if (ct_base_plus_offset > (target_ulong)CAP_LAST_NONRESERVED_OTYPE) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (!is_representable_cap_when_sealed_with_addr(
                    csp, cap_get_cursor(csp))) {
@@ -588,7 +578,7 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
     GET_HOST_RETPC();
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
-    const uint64_t ct_cursor = cap_get_cursor(ctp);
+    const target_ulong ct_cursor = cap_get_cursor(ctp);
     /*
      * CUnseal: Unseal a sealed capability
      */
@@ -664,7 +654,7 @@ static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
     if (cbp->cr_tag && is_cap_sealed(cbp)) {
         raise_cheri_exception_impl(env, CapEx_SealViolation, cb, true, retpc);
     } else {
-        uint64_t new_addr = cap_get_cursor(cbp) + rt;
+        target_ulong new_addr = cap_get_cursor(cbp) + rt;
         cap_register_t result = *cbp;
         if (unlikely(!is_representable_cap_with_addr(cbp, new_addr))) {
             if (cbp->cr_tag) {
@@ -697,8 +687,8 @@ void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
         uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
 
         cap_register_t result = *cbp;
-        cap_set_decompressed_cr_perms(&result, cbp->cr_perms & rt_perms);
-        cap_set_decompressed_cr_uperms(&result, cbp->cr_uperms & rt_uperms);
+        CAP_cc(cap_set_decompressed_cr_perms)(&result, cbp->cr_perms & rt_perms);
+        CAP_cc(cap_set_decompressed_cr_uperms)(&result, cbp->cr_uperms & rt_uperms);
         update_capreg(env, cd, &result);
     }
 }
@@ -763,7 +753,7 @@ void CHERI_HELPER_IMPL(cfromptr(CPUArchState *env, uint32_t cd, uint32_t cb,
         raise_cheri_exception(env, CapEx_SealViolation, cb_exc);
     } else {
         cap_register_t result = *cbp;
-        uint64_t new_addr = cbp->cr_base + rt;
+        target_ulong new_addr = cbp->cr_base + rt;
         if (!is_representable_cap_with_addr(cbp, new_addr)) {
             became_unrepresentable(env, cd, OOB_INFO(cfromptr),
                                    _host_return_address);
@@ -782,8 +772,8 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
                          uintptr_t _host_return_address)
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    uint64_t cursor = cap_get_cursor(cbp);
-    unsigned __int128 new_top = (unsigned __int128)cursor + length; // 65 bits
+    target_ulong cursor = cap_get_cursor(cbp);
+    cap_length_t new_top = (cap_length_t)cursor + length; // 65 bits
     /*
      * CSetBounds: Set Bounds
      */
@@ -793,38 +783,29 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (cursor < cbp->cr_base) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (new_top > cap_get_top65(cbp)) {
+    } else if (new_top > cap_get_top_full(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else {
         cap_register_t result = *cbp;
-#if QEMU_USE_COMPRESSED_CHERI_CAPS
-        _Static_assert(CHERI_CAP_SIZE == 16, "");
         /*
          * With compressed capabilities we may need to increase the range of
          * memory addresses to be wider than requested so it is
          * representable.
          */
-        const bool exact = cc128_setbounds(&result, cursor, new_top);
+        const bool exact = CAP_cc(setbounds)(&result, cursor, new_top);
         if (!exact)
             env->statcounters_imprecise_setbounds++;
         if (must_be_exact && !exact) {
             raise_cheri_exception(env, CapEx_InexactBounds, cb);
             return;
         }
-        assert(cc128_is_representable_cap_exact(&result) &&
+        assert(cap_is_representable(&result) &&
                "CSetBounds must create a representable capability");
-#else
-        (void)must_be_exact;
-        /* Capabilities are precise -> can just set the values here */
-        result.cr_base = cursor;
-        result._cr_top = new_top;
-        result._cr_cursor = cursor;
-#endif
         assert(result.cr_base >= cbp->cr_base &&
                "CSetBounds broke monotonicity (base)");
-        assert(cap_get_length65(&result) <= cap_get_length65(cbp) &&
+        assert(cap_get_length_full(&result) <= cap_get_length_full(cbp) &&
                "CSetBounds broke monotonicity (length)");
-        assert(cap_get_top65(&result) <= cap_get_top65(cbp) &&
+        assert(cap_get_top_full(&result) <= cap_get_top_full(cbp) &&
                "CSetBounds broke monotonicity (top)");
         update_capreg(env, cd, &result);
     }
@@ -857,7 +838,7 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     cap_register_t result = *cbp;
     flags &= CAP_FLAGS_ALL_BITS;
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
-    cap_set_decompressed_cr_flags(&result, flags);
+    CAP_cc(cap_set_decompressed_cr_flags)(&result, flags);
     update_capreg(env, cd, &result);
 }
 
@@ -936,7 +917,7 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
     // cfromptr/ctoptr
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_capreg_0_is_ddc(env, ct);
-    uint64_t cb_cursor = cap_get_cursor(cbp);
+    target_ulong cb_cursor = cap_get_cursor(cbp);
 #ifdef TARGET_RISCV
     uint32_t ct_exc = ct == 0 ? CHERI_EXC_REGNUM_DDC : ct;
 #else
@@ -999,8 +980,8 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
     const target_ulong addr = cursor + (target_long)offset;
     if (!cap_is_in_bounds(cbp, addr, size)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_plx
-            " cursor=" TARGET_FMT_plx " addr=" TARGET_FMT_plx "\n",
+            "Failed capability bounds check: offset=" TARGET_FMT_lx
+            " cursor=" TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n",
             offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     }
@@ -1062,11 +1043,11 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
         raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     }
 
-    uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
+    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_plx " cursor="
-            TARGET_FMT_plx " addr=" TARGET_FMT_plx "\n", offset,
+            "Failed capability bounds check: offset=" TARGET_FMT_lx " cursor="
+            TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n", offset,
             cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
@@ -1099,11 +1080,11 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
     }
 
-    const uint64_t addr = (uint64_t)(cap_get_cursor(cbp) + (target_long)offset);
+    const target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_plx " cursor="
-            TARGET_FMT_plx " addr=" TARGET_FMT_plx "\n", offset,
+            "Failed capability bounds check: offset=" TARGET_FMT_lx " cursor="
+            TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n", offset,
             cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
@@ -1132,10 +1113,8 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
     return tag;
 }
 
-#if defined(CHERI_128) && QEMU_USE_COMPRESSED_CHERI_CAPS
-
-bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
-                              uint64_t *cursor, uint32_t cb,
+bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
                               target_ulong retpc, hwaddr *physaddr)
 {
@@ -1153,16 +1132,24 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
         // Fast path, host address in TLB
-        *pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
-                CC128_NULL_XOR_MASK;
-        *cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
+#if TARGET_LONG_BITS == 32
+#define ld_cap_word_p ldl_p
+#elif TARGET_LONG_BITS == 64
+#define ld_cap_word_p ldq_p
+#else
+#error "Unhandled target long width"
+#endif
+        *pesbt = ld_cap_word_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
+                CAP_NULL_XOR_MASK;
+        *cursor = ld_cap_word_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
+#undef ld_cap_word_p
     } else {
         // Slow path for e.g. IO regions.
         qemu_maybe_log_instr_extra(env, "Using slow path for load from guest "
-            "address " TARGET_FMT_plx "\n", vaddr);
-        *pesbt = cpu_ldq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
-                CC128_NULL_XOR_MASK;
-        *cursor = cpu_ldq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
+            "address " TARGET_FMT_lx "\n", vaddr);
+        *pesbt = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
+                CAP_NULL_XOR_MASK;
+        *cursor = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
     int prot;
     bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
@@ -1193,7 +1180,7 @@ bool load_cap_from_memory_128(CPUArchState *env, uint64_t *pesbt,
          * assume a 128-bit format and be less generic?
          */
         cap_register_t ncd;
-        cc128_decompress_raw(*pesbt, *cursor, tag, &ncd);
+        CAP_cc(decompress_raw)(*pesbt, *cursor, tag, &ncd);
         qemu_log_instr_ld_cap(env, vaddr, &ncd);
     }
 #endif
@@ -1204,9 +1191,9 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           target_ulong retpc, hwaddr *physaddr)
 {
-    uint64_t pesbt;
-    uint64_t cursor;
-    bool tag = load_cap_from_memory_128(env, &pesbt, &cursor, cb, source, vaddr,
+    target_ulong pesbt;
+    target_ulong cursor;
+    bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
                                         retpc, physaddr);
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
 }
@@ -1214,8 +1201,8 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 void store_cap_to_memory(CPUArchState *env, uint32_t cs,
                          target_ulong vaddr, target_ulong retpc)
 {
-    uint64_t cursor = get_capreg_cursor(env, cs);
-    uint64_t pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CC128_NULL_XOR_MASK;
+    target_ulong cursor = get_capreg_cursor(env, cs);
+    target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_NULL_XOR_MASK;
 #ifdef CONFIG_DEBUG_TCG
     if (get_capreg_state(cheri_get_gpcrs(env), cs) == CREG_INTEGER) {
         tcg_debug_assert(pesbt_for_mem == 0 && "Integer values should have NULL PESBT");
@@ -1247,17 +1234,25 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
+#if TARGET_LONG_BITS == 32
+#define st_cap_word_p stl_p
+#elif TARGET_LONG_BITS == 64
+#define st_cap_word_p stq_p
+#else
+#error "Unhandled target long width"
+#endif
         // Fast path, host address in TLB
-        stq_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
-        stq_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
+        st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
+        st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
+#undef st_cap_word_p
     } else {
         // Slow path for e.g. IO regions.
         qemu_maybe_log_instr_extra(env, "Using slow path for store to guest "
-            "address " TARGET_FMT_plx "\n", vaddr);
-        cpu_stq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
-                            pesbt_for_mem, retpc);
-        cpu_stq_cap_data_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor,
-                            retpc);
+            "address " TARGET_FMT_lx "\n", vaddr);
+        cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
+                           pesbt_for_mem, retpc);
+        cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor,
+                           retpc);
     }
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     env->rvfi_dii_trace.MEM.rvfi_mem_addr = vaddr;
@@ -1276,14 +1271,13 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
          * TODO(am2419): see notes on the load path on compression.
          */
         cap_register_t stored_cap;
-        const uint64_t pesbt = pesbt_for_mem ^ CC128_NULL_XOR_MASK;
-        cc128_decompress_raw(pesbt, cursor, tag, &stored_cap);
+        const target_ulong pesbt = pesbt_for_mem ^ CAP_NULL_XOR_MASK;
+        CAP_cc(decompress_raw)(pesbt, cursor, tag, &stored_cap);
         cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
         qemu_log_instr_st_cap(env, vaddr, &stored_cap);
     }
 #endif
 }
-#endif
 
 QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
                                                  CheriCapExcCause cause)
