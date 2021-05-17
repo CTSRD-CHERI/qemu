@@ -40,7 +40,6 @@
 #include "cheri_tagmem.h"
 #include "sysemu/sysemu.h"
 #include "hw/arm/armtrickbox.h"
-#include "error.h"
 
 #define RAM_SIZE 0x13000000
 
