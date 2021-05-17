@@ -672,6 +672,8 @@ static inline bool _cc_N(cap_sign_change)(_cc_addr_t addr1, _cc_addr_t addr2) {
 #ifdef CC_IS_MORELLO
     return ((addr1 ^ addr2) & (1ULL << (63 - MORELLO_FLAG_BITS)));
 #else
+    (void)addr1;
+    (void)addr2;
     return false;
 #endif
 }

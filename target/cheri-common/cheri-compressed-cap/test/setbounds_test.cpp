@@ -63,17 +63,27 @@ static typename Handler::cap_t do_csetbounds(const typename Handler::cap_t& init
     CHECK(sail_exact == exact);
     check_csetbounds_invariants<Handler>(initial_cap, with_bounds, exact, requested_base, requested_top);
 
+    // Check that the cached_pesbt is updated correctly and matches sail
+    CHECK(with_bounds.cached_pesbt == Handler::compress_raw(&with_bounds));
+    CHECK(with_bounds.cached_pesbt == Handler::sail_compress_raw(&with_bounds));
+    // Re-create the bounded capability and assert that the current pesbt values matches that one.
+    auto new_cap = Handler::make_max_perms_cap(with_bounds.base(), with_bounds.address(), with_bounds.top());
+    CHECK(new_cap == with_bounds);
+    CHECK(new_cap.cached_pesbt == with_bounds.cached_pesbt);
+    CHECK(new_cap.cached_pesbt == Handler::compress_raw(&with_bounds));
+    CHECK(new_cap.cached_pesbt == Handler::sail_compress_raw(&with_bounds));
+
     if (was_exact)
         *was_exact = exact;
     return with_bounds;
 }
 
 template <typename Handler>
-static cap_register_t check_bounds_exact(const typename Handler::cap_t& initial_cap,
+static cc128_cap_t check_bounds_exact(const typename Handler::cap_t& initial_cap,
                                          typename Handler::length_t requested_length, bool should_be_exact) {
     typename Handler::length_t req_top = initial_cap.address() + (typename Handler::length_t)requested_length;
     bool exact = false;
-    cap_register_t with_bounds = do_csetbounds<Handler>(initial_cap, req_top, &exact);
+    cc128_cap_t with_bounds = do_csetbounds<Handler>(initial_cap, req_top, &exact);
     CHECK(exact == should_be_exact);
     return with_bounds;
 }
@@ -97,8 +107,8 @@ TEST_CASE("regression from cheritest", "[bounds]") {
     //    Write C01|v:1 s:0 p:00078fff b:ffffffffff000000 l:0000000000ffffff
     //             |o:0000000000000000 t:3ffff
 
-    cap_register_t initial = make_max_perms_cap(0, 0xFFFFFFFFFF000000, CC128_MAX_LENGTH);
-    cap_register_t with_bounds = check_bounds_exact<TestAPI128>(initial, 0xffffff, false);
+    cc128_cap_t initial = make_max_perms_cap(0, 0xFFFFFFFFFF000000, CC128_MAX_LENGTH);
+    cc128_cap_t with_bounds = check_bounds_exact<TestAPI128>(initial, 0xffffff, false);
     CHECK(with_bounds.cr_base == 0xFFFFFFFFFF000000);
     CHECK(with_bounds.offset() == 0x0000000000000000);
     CHECK(with_bounds.length() == 0x00000000001000000);
@@ -114,7 +124,7 @@ TEST_CASE("Old format setbounds regression with new format", "[old]") {
     //  -> crash
     auto cap = make_max_perms_cap(0, 7, CC128_MAX_LENGTH);
     uint64_t requested_length = 0x0000000010000000;
-    cap_register_t with_bounds = check_bounds_exact<TestAPI128>(cap, requested_length, false);
+    cc128_cap_t with_bounds = check_bounds_exact<TestAPI128>(cap, requested_length, false);
     CHECK(with_bounds.cr_base == 0x0000000000000000);
     CHECK(with_bounds.offset() == 0x0000000000000007);
     // Higher precision in old format -> more exact bounds
@@ -129,7 +139,7 @@ TEST_CASE("Cheritest regression case", "[regression]") {
     // dli	$t1, 0x300000
     // csetbounds $c1, $c1, $t1
     auto cap = make_max_perms_cap(0, 0x160600000, CC128_MAX_LENGTH);
-    cap_register_t with_bounds = check_bounds_exact<TestAPI128>(cap, 0x300000, true);
+    cc128_cap_t with_bounds = check_bounds_exact<TestAPI128>(cap, 0x300000, true);
     CHECK(with_bounds.cr_base == 0x160600000);
     CHECK(with_bounds.offset() == 0);
     CHECK(with_bounds.length() == 0x300000);
@@ -145,8 +155,8 @@ static inline cc128_length_t round_up_with_cram_mask(cc128_length_t value, cc128
     return (value + ~round_down_mask) & (round_down_mask);
 }
 
-static inline void check_cram_matches_setbounds(cc128_length_t req_top, const cap_register_t& cap_to_bound,
-                                                const cap_register_t& setbounds_result) {
+static inline void check_cram_matches_setbounds(cc128_length_t req_top, const cc128_cap_t& cap_to_bound,
+                                                const cc128_cap_t& setbounds_result) {
     // Check that rounding with cram is equivalent to setbounds rounding:
     uint64_t cram_value = cc128_get_alignment_mask((uint64_t)(req_top - cap_to_bound.address()));
     CAPTURE(cram_value);
@@ -187,7 +197,7 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         REQUIRE(first_input.base() == 0);
         REQUIRE(first_input.top() == CC128_MAX_LENGTH);
         bool first_exact = false;
-        const cap_register_t first_bounds = do_csetbounds<Handler>(first_input, input.top1, &first_exact);
+        const cc128_cap_t first_bounds = do_csetbounds<Handler>(first_input, input.top1, &first_exact);
         CHECK(first_bounds.base() == input.sail_cc_base1);
         CHECK(first_bounds.top() == input.sail_cc_top1);
         // Check CRAP/CRAM:
@@ -195,7 +205,7 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
 
         // Check that calling setbounds with the same target top yields the same result
         bool first_again_exact = false;
-        const cap_register_t first_bounds_again = do_csetbounds<Handler>(first_bounds, input.top1, &first_again_exact);
+        const cc128_cap_t first_bounds_again = do_csetbounds<Handler>(first_bounds, input.top1, &first_again_exact);
         CHECK(first_again_exact == first_exact);
         CHECK(first_bounds.base() == first_bounds_again.base());
         CHECK(first_bounds.top() == first_bounds_again.top());
@@ -204,11 +214,11 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         check_cram_matches_setbounds(input.top1, first_bounds, first_bounds_again);
 
         // Check the second csetbounds:
-        cap_register_t second_input = first_bounds;
+        cc128_cap_t second_input = first_bounds;
         second_input._cr_cursor += input.base2 - second_input.address();
         REQUIRE(second_input.address() == input.base2);
         bool second_exact = false;
-        const cap_register_t second_bounds = do_csetbounds<Handler>(second_input, input.top2, &second_exact);
+        const cc128_cap_t second_bounds = do_csetbounds<Handler>(second_input, input.top2, &second_exact);
         CHECK(second_bounds.base() == input.sail_cc_base2);
         CHECK(second_bounds.top() == input.sail_cc_top2);
         // Check CRAP/CRAM:
@@ -220,7 +230,7 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         }
         // Check that calling setbounds with the same target top yields the same result
         bool second_again_exact = false;
-        const cap_register_t second_bounds_again =
+        const cc128_cap_t second_bounds_again =
             do_csetbounds<Handler>(second_bounds, input.top2, &second_again_exact);
         CHECK(second_again_exact == second_exact);
         CHECK(second_bounds.base() == second_bounds_again.base());

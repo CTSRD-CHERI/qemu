@@ -110,8 +110,8 @@ template <class Cap> static void dump_cap_fields(const Cap& result) {
     fprintf(stderr, "\n");
 }
 
-__attribute__((used)) static cap_register_t decompress_representable(uint64_t pesbt_already_xored, uint64_t cursor) {
-    cap_register_t result;
+__attribute__((used)) static cc128_cap_t decompress_representable(uint64_t pesbt_already_xored, uint64_t cursor) {
+    cc128_cap_t result;
     printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt_already_xored, cursor);
     cc128_decompress_raw(pesbt_already_xored, cursor, false, &result);
     dump_cap_fields(result);
@@ -122,7 +122,7 @@ __attribute__((used)) static cap_register_t decompress_representable(uint64_t pe
     return result;
 }
 
-inline cap_register_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_length_t length) {
+inline cc128_cap_t make_max_perms_cap(uint64_t base, uint64_t offset, cc128_length_t length) {
     return cc128_make_max_perms_cap(base, offset, length);
 }
 

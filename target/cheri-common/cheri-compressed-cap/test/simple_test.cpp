@@ -11,7 +11,7 @@
 
 TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
     {
-        cap_register_t null_cap;
+        cc128_cap_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
         null_cap.cr_otype = CC128_OTYPE_UNSEALED;
         null_cap._cr_top = CC128_NULL_TOP;
@@ -29,7 +29,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         fprintf(stderr, "NULL ENCODED: 0x%llx\n", (long long)pesbt_without_xor);
         CHECK(pesbt_without_xor == CC128_NULL_XOR_MASK);
         check(pesbt, (uint64_t)0, "compressing NULL should result in zero pesbt");
-        cap_register_t decompressed;
+        cc128_cap_t decompressed;
         memset(&decompressed, 'b', sizeof(decompressed));
         cc128_decompress_mem(pesbt, 0, false, &decompressed);
         CHECK_FIELD(decompressed, base, 0);
@@ -44,7 +44,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
     }
     {
         // Same for CHERI256
-        cap_register_t null_cap;
+        cc128_cap_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
         null_cap.cr_otype = CC256_OTYPE_UNSEALED;
         null_cap._cr_top = CC256_NULL_TOP;
@@ -56,7 +56,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         check(buffer.u64s[3], (uint64_t)0, "compressing NULL should result in zero[3]");
 
         // compressing this result should give 0 again
-        cap_register_t decompressed;
+        cc128_cap_t decompressed;
         memset(&decompressed, 'b', sizeof(decompressed));
         decompress_256cap(buffer, &decompressed, false);
         CHECK_FIELD(decompressed, base, 0);
@@ -123,7 +123,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     // INFO("Length = " << length);
     // INFO("Expected to work = " << should_work);
     CAPTURE(base, length, should_work, ctx);
-    cap_register_t cap;
+    cc128_cap_t cap;
     memset(&cap, 0, sizeof(cap));
     cap.cr_base = base;
     cap._cr_cursor = base + offset;
@@ -134,7 +134,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     cap.cached_pesbt = cc128_compute_ebt(cap.cr_base, cap._cr_top, NULL, &exact_input);
     REQUIRE(exact_input == should_work);
     uint64_t compressed = cc128_compress_mem(&cap);
-    cap_register_t decompressed;
+    cc128_cap_t decompressed;
     memset(&decompressed, 0, sizeof(decompressed));
 
     cc128_decompress_mem(compressed, cap.cr_base + cap.offset(), cap.cr_tag, &decompressed);

@@ -48,13 +48,14 @@
 
 #include "cheri_compressed_cap_128.h"
 
-// QEMU already provides cap_register_t but if used in other programs
-// we want to define it here:
-#ifndef HAVE_CAP_REGISTER_T
-typedef cc128_cap_t cap_register_t;
-#endif
-
 /* Legacy CHERI256 things: */
+
+/*
+ * XXX: We've always just reused the 128-bit capability struct, but not all
+ * fields make sense. Add a proper 256-bit one or just delete CHERI-256 support
+ * entirely.
+ */
+typedef cc128_cap_t cc256_cap_t;
 
 /* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
 #define CC256_HWPERMS_COUNT (12)
@@ -124,9 +125,9 @@ typedef union _inmemory_chericap256 {
     uint64_t u64s[4];
 } inmemory_chericap256;
 
-static inline bool cc256_is_cap_sealed(const cap_register_t* cp) { return cp->cr_otype != CC256_OTYPE_UNSEALED; }
+static inline bool cc256_is_cap_sealed(const cc256_cap_t* cp) { return cp->cr_otype != CC256_OTYPE_UNSEALED; }
 
-static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* cdp, bool tagged) {
+static inline void decompress_256cap(inmemory_chericap256 mem, cc256_cap_t* cdp, bool tagged) {
     /* See CHERI ISA: Figure 3.1: 256-bit memory representation of a capability */
     uint32_t hwperms_mask = tagged ? CC256_PERMS_ALL_BITS : CC256_PERMS_ALL_BITS_UNTAGGED;
     cdp->cr_flags = mem.u64s[0] & CC256_FLAGS_ALL_BITS;
@@ -143,7 +144,7 @@ static inline void decompress_256cap(inmemory_chericap256 mem, cap_register_t* c
     _cc_debug_assert(!(cdp->cr_tag && cdp->cr_reserved) && "Unknown reserved bits set it tagged capability");
 }
 
-static inline void compress_256cap(inmemory_chericap256* buffer, const cap_register_t* csp) {
+static inline void compress_256cap(inmemory_chericap256* buffer, const cc256_cap_t* csp) {
     _cc_debug_assert(!(csp->cr_tag && csp->cr_reserved) && "Unknown reserved bits set it tagged capability");
     bool flags_bits = csp->cr_flags & CC256_FLAGS_ALL_BITS;
     // When writing an untagged value, just write back the bits that were loaded (including the reserved HWPERMS)

@@ -37,7 +37,7 @@
 #include "sail_wrapper.h"
 #include "FuzzedDataProvider.h"
 
-static void dump_cap_fields(const cap_register_t& result) {
+static void dump_cap_fields(const cc128_cap_t& result) {
     fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.cr_perms); // TODO: decode perms
     fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
     fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result.cr_base);
@@ -79,8 +79,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     FuzzedDataProvider fuzzData(data, size);
     uint64_t pesbt = fuzzData.ConsumeIntegral<uint64_t>();
     uint64_t cursor = fuzzData.ConsumeIntegral<uint64_t>();
-    cap_register_t result;
-    cap_register_t sail_result;
+    cc128_cap_t result;
+    cc128_cap_t sail_result;
     memset(&result, 0, sizeof(result));
     memset(&sail_result, 0, sizeof(sail_result));
     cc128_decompress_mem(pesbt, cursor, false, &result);
