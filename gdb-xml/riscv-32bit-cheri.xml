@@ -48,5 +48,4 @@
     <reg name="ddc" bitsize="64" type="data_ptr"/>
 
     <reg name="cap_valid" bitsize="64"/>
-
 </feature>
