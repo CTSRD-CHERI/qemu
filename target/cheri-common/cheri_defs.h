@@ -119,6 +119,7 @@
 #  error "Unsupported capability type"
 #endif
 
+typedef cc128_cap_t cap_register_t;
 typedef signed __int128 cap_offset_t;
 typedef unsigned __int128 cap_length_t;
 
