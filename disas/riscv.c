@@ -3192,7 +3192,7 @@ print_insn_riscv(bfd_vma memaddr, struct disassemble_info *info, rv_isa isa)
                 break;
             }
             (*info->memory_error_func)(status, memaddr, info);
-            return status;
+            return -1;
         }
         inst |= ((rv_inst) bfd_getl16(packet)) << (8 * n);
         if (n == 0) {
