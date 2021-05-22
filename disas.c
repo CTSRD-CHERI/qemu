@@ -265,6 +265,7 @@ void target_disas_buf(FILE *out, CPUState *cpu, void *code, unsigned long size,
     CPUDebug s;
 
     initialize_debug_target(&s, cpu);
+    s.info.read_memory_func = host_read_memory;
     s.info.fprintf_func = fprintf;
     s.info.stream = out;
     s.info.buffer = code;
