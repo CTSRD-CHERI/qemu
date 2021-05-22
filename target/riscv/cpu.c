@@ -742,7 +742,6 @@ static void riscv_cpu_disas_set_info(CPUState *s, disassemble_info *info)
     info->flags |= RISCV_DIS_FLAG_CHERI;
     if (cheri_in_capmode(&cpu->env)) {
         info->flags |= RISCV_DIS_FLAG_CAPMODE;
-        info->print_insn = print_insn_riscv64;
     }
 #endif
 }
