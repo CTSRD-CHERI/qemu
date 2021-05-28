@@ -37,6 +37,11 @@
 #include <zlib.h> /* For crc32 */
 #include "exec/log_instr.h"
 
+#ifdef TARGET_CHERI
+#include "cheri-archspecific.h"
+#include "cheri_tagmem.h"
+#endif
+
 /* C2.4.7 Multiply and divide */
 /* special cases for 0 and LLONG_MIN are mandated by the standard */
 uint64_t HELPER(udiv64)(uint64_t num, uint64_t den)
@@ -1135,7 +1140,7 @@ uint32_t HELPER(sqrt_f16)(uint32_t a, void *fpstp)
     return float16_sqrt(a, s);
 }
 
-void HELPER(dc_zva)(CPUARMState *env, uint64_t vaddr_in)
+void HELPER(dc_zva)(CPUARMState *env, target_ulong vaddr_in)
 {
     /*
      * Implement DC ZVA, which zeroes a fixed-length block of memory.
@@ -1178,6 +1183,14 @@ void HELPER(dc_zva)(CPUARMState *env, uint64_t vaddr_in)
             return;
         }
     }
+#endif
+
+#ifdef TARGET_CHERI
+    assert(blocklen == ((1 << CAP_TAG_GET_MANY_SHFT) * CHERI_CAP_SIZE));
+    // NB: Because this isn't setting any tags, no exception should be possible.
+    // The only reason for passing the register number is for exceptions,
+    // so the fact we pass -1 here should be fine.
+    cheri_tag_set_many(env, 0, vaddr, -1, NULL, GETPC());
 #endif
 
     memset(mem, 0, blocklen);

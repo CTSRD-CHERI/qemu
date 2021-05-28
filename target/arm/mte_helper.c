@@ -821,7 +821,7 @@ uint64_t HELPER(mte_checkN)(CPUARMState *env, uint32_t desc, uint64_t ptr)
 /*
  * Perform an MTE checked access for DC_ZVA.
  */
-uint64_t HELPER(mte_check_zva)(CPUARMState *env, uint32_t desc, uint64_t ptr)
+target_ulong HELPER(mte_check_zva)(CPUARMState *env, uint32_t desc, uint64_t ptr)
 {
     uintptr_t ra = GETPC();
     int log2_dcz_bytes, log2_tag_bytes;
