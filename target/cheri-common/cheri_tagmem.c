@@ -104,7 +104,7 @@ _Static_assert(CAP_TAG_GET_MANY_SHFT <= 3, "");
 #define byte_pack byte_pack_32
 #endif
 
-#define CAP_TAG_GET_MANY_MASK ((1 << (1ULL << CAP_TAG_GET_MANY_SHFT)) - 1ULL)
+#define CAP_TAG_GET_MANY_MASK ((1 << (1UL << CAP_TAG_GET_MANY_SHFT)) - 1UL)
 
 static inline size_t num_tagblocks(RAMBlock* ram)
 {
@@ -697,6 +697,6 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
                             pc, ret_paddr, &tag_index, &prot, tags != 0);
 
     if (tagblk) {
-        tagblock_set_tag_many(tagblk, CAP_TAGBLK_IDX(tag_index), pc);
+        tagblock_set_tag_many(tagblk, CAP_TAGBLK_IDX(tag_index), tags);
     }
 }
