@@ -45,6 +45,9 @@
 #define STRICT_ALIGNMENT_CHECKS
 
 #ifdef TARGET_CHERI
+
+#include "cheri-archspecific.h"
+
 #define GET_FLAG(C, F)                                                         \
     (C->base.cheri_flags &                                                     \
      (1 << (R_TBFLAG_CHERI_##F##_SHIFT + TB_FLAG_CHERI_SPARE_INDEX_START)))
@@ -417,6 +420,8 @@ TCGv_i64 clean_data_tbi(DisasContext *s, TCGv_i64 addr)
     return clean;
 }
 
+#ifdef TARGET_CHERI
+
 TCGv_cap_checked_ptr clean_data_tbi_and_cheri(DisasContext *s, TCGv_i64 addr,
                                               bool is_load, bool is_store,
                                               int size, int base_reg,
@@ -436,13 +441,17 @@ TCGv_cap_checked_ptr clean_data_tbi_and_cheri(DisasContext *s, TCGv_i64 addr,
     return result;
 }
 
+#else
+#define clean_data_tbi_and_cheri(s, addr, ...) (TCGv_cap_checked_ptr)clean_data_tbi(s, addr)
+#endif
+
 /* Insert a zero tag into src, with the result at dst. */
 static void gen_address_with_allocation_tag0(TCGv_i64 dst, TCGv_i64 src)
 {
     tcg_gen_andi_i64(dst, src, ~MAKE_64BIT_MASK(56, 4));
 }
 
-static void gen_probe_access(DisasContext *s, TCGv_i64 ptr,
+static void gen_probe_access(DisasContext *s, TCGv_cap_checked_ptr ptr,
                              MMUAccessType acc, int log2_size)
 {
     TCGv_i32 t_acc = tcg_const_i32(acc);
@@ -2109,6 +2118,13 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         assert(0); // should throw code EC_SYSTEMREGISTERTRAP or
                    // EC_CAPABILITY_SYSREGTRAP
     }
+
+#define ZVA_SIZE ((1 << CAP_TAG_GET_MANY_SHFT) * CHERI_CAP_SIZE)
+
+#else
+
+#define ZVA_SIZE 0
+
 #endif
 
     if (ri->accessfn) {
@@ -2138,6 +2154,8 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
 
     if (isread)
         qemu_log_gen_printf(&s->base, "c", "    CSR %s read\n", ri->name);
+
+    TCGv_cap_checked_ptr clean_addr;
 
     /* Handle special cases first */
     switch (ri->type & ~(ARM_CP_FLAG_MASK & ~ARM_CP_SPECIAL)) {
@@ -2172,25 +2190,24 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             desc = FIELD_DP32(desc, MTEDESC, TCMA, s->tcma);
             t_desc = tcg_const_i32(desc);
 
-            tcg_rt = new_tmp_a64(s);
-            gen_helper_mte_check_zva(tcg_rt, cpu_env, t_desc, cpu_reg(s, rt));
+            clean_addr = (TCGv_cap_checked_ptr)new_tmp_a64(s);
+            gen_helper_mte_check_zva(clean_addr, cpu_env, t_desc, cpu_reg(s, rt));
             tcg_temp_free_i32(t_desc);
         } else {
-            // LETODO: Do CHERI checks for DC instructions
-            tcg_rt = clean_data_tbi(s, cpu_reg(s, rt));
+            clean_addr = clean_data_tbi_and_cheri(s, cpu_reg(s, rt), false, true, ZVA_SIZE, rt, false, true);
         }
-        gen_helper_dc_zva(cpu_env, tcg_rt);
+        gen_helper_dc_zva(cpu_env, clean_addr);
         return;
     case ARM_CP_DC_GVA:
         {
-            TCGv_i64 clean_addr, tag;
+            TCGv_i64 tag;
 
             /*
              * DC_GVA, like DC_ZVA, requires that we supply the original
              * pointer for an invalid page.  Probe that address first.
              */
             tcg_rt = cpu_reg(s, rt);
-            clean_addr = clean_data_tbi(s, tcg_rt);
+            clean_addr = clean_data_tbi_and_cheri(s, tcg_rt, false, true, ZVA_SIZE, rt, false, true);
             gen_probe_access(s, clean_addr, MMU_DATA_STORE, MO_8);
 
             if (s->ata) {
@@ -2204,11 +2221,11 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         return;
     case ARM_CP_DC_GZVA:
         {
-            TCGv_i64 clean_addr, tag;
+            TCGv_i64 tag;
 
             /* For DC_GZVA, we can rely on DC_ZVA for the proper fault. */
             tcg_rt = cpu_reg(s, rt);
-            clean_addr = clean_data_tbi(s, tcg_rt);
+            clean_addr = clean_data_tbi_and_cheri(s, tcg_rt, false, true, ZVA_SIZE, rt, false, true);
             gen_helper_dc_zva(cpu_env, clean_addr);
 
             if (s->ata) {
@@ -4314,8 +4331,8 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
     int op1 = extract32(insn, 22, 2);
     bool is_load = false, is_pair = false, is_zero = false, is_mult = false;
     int index = 0;
-    TCGv_i64 addr, clean_addr, tcg_rt;
-
+    TCGv_i64 addr, tcg_rt;
+    TCGv_cap_checked_ptr clean_addr;
     /* We checked insn bits [29:24,21] in the caller.  */
     if (extract32(insn, 30, 2) != 3) {
         goto do_unallocated;
@@ -4389,6 +4406,10 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
         goto do_unallocated;
     }
 
+    // I have made this DDC base, but currently there is no documentation on how
+    // MTE should compose with CHERI.
+    ASSERT_IF_CHERI();
+
     if (rn == 31) {
         gen_check_sp_alignment(s);
     }
@@ -4405,15 +4426,19 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
         if (is_zero) {
             int size = 4 << s->dcz_blocksize;
 
+            if (!s->ata) {
+                tcg_gen_andi_i64(addr, addr, -size);
+            }
+
+            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load, size, rt, false, true);
+
             if (s->ata) {
-                gen_helper_stzgm_tags(cpu_env, addr, tcg_rt);
+                gen_helper_stzgm_tags(cpu_env, clean_addr, tcg_rt);
             }
             /*
              * The non-tags portion of STZGM is mostly like DC_ZVA,
              * except the alignment happens before the access.
              */
-            clean_addr = clean_data_tbi(s, addr);
-            tcg_gen_andi_i64(clean_addr, clean_addr, -size);
             gen_helper_dc_zva(cpu_env, clean_addr);
         } else if (s->ata) {
             if (is_load) {
@@ -4425,8 +4450,8 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
             MMUAccessType acc = is_load ? MMU_DATA_LOAD : MMU_DATA_STORE;
             int size = 4 << GMID_EL1_BS;
 
-            clean_addr = clean_data_tbi(s, addr);
-            tcg_gen_andi_i64(clean_addr, clean_addr, -size);
+            tcg_gen_andi_i64(addr, addr, -size);
+            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load, size, rt, false, true);
             gen_probe_access(s, clean_addr, acc, size);
 
             if (is_load) {
@@ -4443,7 +4468,7 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
         if (s->ata) {
             gen_helper_ldg(tcg_rt, cpu_env, addr, tcg_rt);
         } else {
-            clean_addr = clean_data_tbi(s, addr);
+            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load, TAG_GRANULE, rt, false, true);
             gen_probe_access(s, clean_addr, MMU_DATA_LOAD, MO_8);
             gen_address_with_allocation_tag0(tcg_rt, addr);
         }
@@ -4476,18 +4501,16 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
     }
 
     if (is_zero) {
-        // DDC base on CHERI? MTE and Morello not yet composed
-        ASSERT_IF_CHERI();
-        TCGv_i64 clean_addr = clean_data_tbi(s, addr);
+        int i, n = (1 + is_pair) << LOG2_TAG_GRANULE;
+        TCGv_cap_checked_ptr clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load, n, rt, false, true);
         TCGv_i64 tcg_zero = tcg_const_i64(0);
         int mem_index = get_mem_index(s);
-        int i, n = (1 + is_pair) << LOG2_TAG_GRANULE;
 
         tcg_gen_qemu_st_i64_with_checked_addr(tcg_zero,
-                                              (TCGv_cap_checked_ptr)clean_addr,
+                                              clean_addr,
                                               mem_index, MO_Q | MO_ALIGN_16);
         for (i = 8; i < n; i += 8) {
-            tcg_gen_addi_i64(clean_addr, clean_addr, 8);
+            tcg_gen_addi_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr, 8);
             tcg_gen_qemu_st_i64_with_checked_addr(
                 tcg_zero, (TCGv_cap_checked_ptr)clean_addr, mem_index, MO_Q);
         }
