@@ -109,6 +109,14 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
               ? syn_insn_abort(current_el == target_el, 0, 0, fsc)
               : syn_data_abort_no_iss(current_el == target_el, 0, 0, 0, 0,
                                       is_write ? 1 : 0, fsc);
+
+    if (hostpc) {
+        // AARCH's cpu_restore_state will reset syndrome, so don't use
+        // raise_exception_ra here.
+        CPUState *cs = env_cpu(env);
+        cpu_restore_state(cs, hostpc, true);
+    }
+
     raise_exception(env,
                     instruction_fetch ? EXCP_PREFETCH_ABORT : EXCP_DATA_ABORT,
                     syn, target_el);
