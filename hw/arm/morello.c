@@ -140,6 +140,7 @@ static void morello_machine_class_init(ObjectClass *oc, void *data)
     mc->default_ram_size = RAM_SIZE;
     mc->default_ram_id = "ram";
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("morello");
+    mc->minimum_page_bits = 12;
 }
 
 static const TypeInfo morello_machine_types[] = {{
