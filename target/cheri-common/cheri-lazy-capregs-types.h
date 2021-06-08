@@ -65,11 +65,23 @@ typedef enum CapRegState {
     /// The tag bit can be read from the cap_register_t structure.
     CREG_FULLY_DECOMPRESSED = 0b11
 } CapRegState;
+
+// Cap registers should be padded so they are easier to move.
+#if TARGET_LONG_BITS == 32
+_Static_assert(sizeof(cap_register_t) == 40, "");
+#else
+_Static_assert(sizeof(cap_register_t) == 64, "");
+#endif
+// pesbt should come directly before reg._cr_cursor, so that the two can be
+// moved with a single 128bit vector op.
+_Static_assert((offsetof(cap_register_t, cached_pesbt) -
+                offsetof(cap_register_t, _cr_cursor)) == sizeof(target_ulong),
+               "");
+
 typedef struct GPCapRegs {
-    target_ulong pesbt[32]; // permissions+exponent+sealing type+bottom+top
-    uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
     // We cache the decompressed capregs here (to avoid constantly decompressing
     // values such as $csp which are used frequently)
     cap_register_t decompressed[32];
+    uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
 } GPCapRegs;
 #endif
