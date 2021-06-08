@@ -38,6 +38,8 @@
  */
 #pragma once
 
+#define NULL_CAPREG_INDEX 0
+
 #include "cheri_defs.h"
 #include "internal.h"
 
