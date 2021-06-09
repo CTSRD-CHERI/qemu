@@ -104,21 +104,18 @@ typedef CAP_cc(offset_t) cap_offset_t;
 typedef CAP_cc(length_t) cap_length_t;
 
 typedef enum CheriPermissions {
-    CAP_PERM_GLOBAL = (1 << 0),
-    CAP_PERM_EXECUTE = (1 << 1),
-    CAP_PERM_LOAD = (1 << 2),
-    CAP_PERM_STORE = (1 << 3),
-    CAP_PERM_LOAD_CAP = (1 << 4),
-    CAP_PERM_STORE_CAP = (1 << 5),
-    CAP_PERM_STORE_LOCAL = (1 << 6),
-    CAP_PERM_SEAL = (1 << 7),
-    CAP_PERM_CINVOKE = (1 << 8),
-    CAP_PERM_UNSEAL = (1 << 9),
-    CAP_ACCESS_SYS_REGS = (1 << 10),
-    CAP_PERM_SETCID = (1 << 11),
-    CAP_RESERVED4 = (1 << 12),
-    CAP_RESERVED5 = (1 << 13),
-    CAP_RESERVED6 = (1 << 14),
+    CAP_PERM_GLOBAL = CAP_CC(PERM_GLOBAL),
+    CAP_PERM_EXECUTE = CAP_CC(PERM_EXECUTE),
+    CAP_PERM_LOAD = CAP_CC(PERM_LOAD),
+    CAP_PERM_STORE = CAP_CC(PERM_STORE),
+    CAP_PERM_LOAD_CAP = CAP_CC(PERM_LOAD_CAP),
+    CAP_PERM_STORE_CAP = CAP_CC(PERM_STORE_CAP),
+    CAP_PERM_STORE_LOCAL = CAP_CC(PERM_STORE_LOCAL),
+    CAP_PERM_SEAL = CAP_CC(PERM_SEAL),
+    CAP_PERM_CINVOKE = CAP_CC(PERM_CINVOKE),
+    CAP_PERM_UNSEAL = CAP_CC(PERM_UNSEAL),
+    CAP_ACCESS_SYS_REGS = CAP_CC(PERM_ACCESS_SYS_REGS),
+    CAP_PERM_SETCID = CAP_CC(PERM_SETCID),
 } CheriPermissions;
 
 typedef enum CheriFlags {
