@@ -137,7 +137,7 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
     *cheri_flags |=
         cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_VALID : 0;
     if (*cs_base == 0 && cap_get_top_full(pcc) == CAP_MAX_TOP) {
-        *cheri_flags |= TB_FLAG_PCC_FULL_AS;
+        *cheri_flags |= TB_FLAG_CHERI_PCC_FULL_AS;
     }
     if (ddc->cr_tag && cap_is_unsealed(ddc)) {
         if (cap_has_perms(ddc, CAP_PERM_LOAD))

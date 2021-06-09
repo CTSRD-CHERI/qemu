@@ -154,7 +154,7 @@ typedef enum CheriTbFlags {
      * PCC spans the full adddress space and has base zero. This means we do
      * not need to perform bounds checks or subtract/add PCC.base
      */
-    TB_FLAG_PCC_FULL_AS = (1 << 7)
+    TB_FLAG_CHERI_PCC_FULL_AS = (1 << 7),
 } CheriTbFlags;
 
 #endif // TARGET_CHERI
