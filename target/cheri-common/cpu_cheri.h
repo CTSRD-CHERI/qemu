@@ -130,13 +130,13 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
                                               target_ulong *cs_top,
                                               uint32_t *cheri_flags)
 {
-    cheri_debug_assert(*cheri_flags == 0);
-    *cheri_flags |= cap_has_capmode_flag(pcc) ? TB_FLAG_CHERI_CAPMODE : 0;
     *cs_base = cap_get_base(pcc);
     *cs_top = cap_get_top(pcc);
-    *cheri_flags |=
-        cheri_cap_perms_valid_for_exec(pcc) ? TB_FLAG_CHERI_PCC_EXECUTABLE : 0;
-
+    cheri_debug_assert(*cheri_flags == 0);
+    if (cap_has_capmode_flag(pcc))
+        *cheri_flags |= TB_FLAG_CHERI_CAPMODE;
+    if (cheri_cap_perms_valid_for_exec(pcc))
+        *cheri_flags |= TB_FLAG_CHERI_PCC_EXECUTABLE;
     if (cap_has_perms(pcc, CAP_PERM_LOAD))
         *cheri_flags |= TB_FLAG_CHERI_PCC_READABLE;
 
