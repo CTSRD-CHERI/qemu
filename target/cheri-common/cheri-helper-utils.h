@@ -246,6 +246,9 @@ static inline uint32_t perms_for_store(CPUArchState *env, uint32_t cs)
     return perms;
 }
 
+typedef void QEMU_NORETURN (*unaligned_memaccess_handler)(CPUArchState *env,
+                                                          target_ulong addr,
+                                                          uintptr_t retpc);
 // Do all the permission and bounds checks for loads/stores on cbp.
 // Use perms_for_load() and perms_for_store() for required_perms.
 target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
@@ -253,7 +256,7 @@ target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
                                   uint32_t size, uintptr_t _host_return_address,
                                   const cap_register_t *cbp,
                                   uint32_t alignment_required,
-                                  bool no_unaligned);
+                                  unaligned_memaccess_handler unaligned_handler);
 
 // Helper for RISCV AMOSWAP
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
