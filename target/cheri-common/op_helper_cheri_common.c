@@ -1018,7 +1018,7 @@ target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
                                   uint32_t size, uintptr_t _host_return_address,
                                   const cap_register_t *cbp,
                                   uint32_t alignment_required,
-                                  bool no_unaligned)
+                                  unaligned_memaccess_handler unaligned_handler)
 {
 #define MISSING_REQUIRED_PERM(X) ((required_perms & ~cbp->cr_perms) & (X))
     if (!cbp->cr_tag) {
@@ -1045,8 +1045,8 @@ target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
             offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (!QEMU_IS_ALIGNED(addr, alignment_required)) {
-        if (no_unaligned) {
-            raise_unaligned_load_exception(env, addr, _host_return_address);
+        if (unaligned_handler) {
+            unaligned_handler(env, addr, _host_return_address);
         }
 #if defined(TARGET_MIPS) && defined(CHERI_UNALIGNED)
         const char *access_type =
@@ -1070,14 +1070,15 @@ static inline target_ulong cap_check_common(uint32_t required_perms,
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
     return cap_check_common_reg(required_perms, env, cb, offset, size,
                                 _host_return_address, cbp, size,
-                                /*no_unaligned=*/false);
+                                /*unaligned_handler=*/NULL);
 }
 
 /*
  * Load Via Capability Register
  */
 target_ulong CHERI_HELPER_IMPL(cap_load_check(CPUArchState *env, uint32_t cb,
-                                           target_ulong offset, uint32_t size))
+                                              target_ulong offset,
+                                              uint32_t size))
 {
     return cap_check_common(CAP_PERM_LOAD, env, cb, offset, size, GETPC());
 }
@@ -1110,7 +1111,7 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
 
     const target_ulong addr = cap_check_common_reg(
         perms_for_load(), env, cb, offset, CHERI_CAP_SIZE, _host_return_address,
-        cbp, CHERI_CAP_SIZE, /*no_unaligned=*/true);
+        cbp, CHERI_CAP_SIZE, raise_unaligned_load_exception);
 
     load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address,
                          /*physaddr_out=*/NULL);
@@ -1125,9 +1126,10 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
-    const uint64_t addr = cap_check_common_reg(
-        perms_for_store(env, cs), env, cb, offset, CHERI_CAP_SIZE,
-        _host_return_address, cbp, CHERI_CAP_SIZE, true);
+    const uint64_t addr =
+        cap_check_common_reg(perms_for_store(env, cs), env, cb, offset,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
 
     store_cap_to_memory(env, cs, addr, _host_return_address);
 }
