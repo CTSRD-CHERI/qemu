@@ -124,7 +124,7 @@ typedef enum CheriFlags {
 
 typedef enum CheriTbFlags {
     /* CHERI PCC is tagged, executable and unsealed */
-    TB_FLAG_CHERI_PCC_VALID = (1 << 0),
+    TB_FLAG_CHERI_PCC_EXECUTABLE = (1 << 0),
     /* PCC.cr_flags == capmode */
     TB_FLAG_CHERI_CAPMODE = (1 << 1),
     /* DDC is tagged, unsealed and has PERM_LOAD */
