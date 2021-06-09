@@ -93,8 +93,8 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
 #ifdef TARGET_CHERI
     // Check PCC permissions and tag once on TB entry.
     // Each target must reserve one bit in tb->flags as the "PCC valid" flag.
-    if (unlikely((tb->cheri_flags & TB_FLAG_CHERI_PCC_VALID) !=
-                 TB_FLAG_CHERI_PCC_VALID)) {
+    if (unlikely((tb->cheri_flags & TB_FLAG_CHERI_PCC_EXECUTABLE) !=
+                 TB_FLAG_CHERI_PCC_EXECUTABLE)) {
         gen_helper_raise_exception_pcc_perms(cpu_env);
     } else if (unlikely(!in_pcc_bounds(db, db->pc_next))) {
         gen_raise_pcc_violation(db, db->pc_next, 0);
