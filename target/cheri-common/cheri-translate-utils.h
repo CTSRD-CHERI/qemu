@@ -213,7 +213,7 @@ static inline void gen_check_pcc_bounds_next_inst(DisasContext *ctx,
                                                   uint32_t num_bytes)
 {
 #ifdef TARGET_CHERI
-    if (have_cheri_tb_flags(ctx, TB_FLAG_PCC_FULL_AS)) {
+    if (have_cheri_tb_flags(ctx, TB_FLAG_CHERI_PCC_FULL_AS)) {
         return; // PCC spans the full address space, no need to check
     }
 
@@ -221,7 +221,7 @@ static inline void gen_check_pcc_bounds_next_inst(DisasContext *ctx,
     // for pc_next < pcc.base should not be needed. Add a debug assertion in
     // case this assumption no longer holds in the future.
     // Note: we don't have to check for wraparound here since this case is
-    // already handled by the TB_FLAG_PCC_FULL_AS check above. Wraparound is
+    // already handled by the TB_FLAG_CHERI_PCC_FULL_AS check above. Wraparound is
     // permitted to avoid any differences with non-CHERI enabled CPUs.
     tcg_debug_assert(ctx->base.pc_next >= ctx->base.pc_first);
     if (unlikely(ctx->base.pc_next + num_bytes > ctx->base.pcc_top)) {
@@ -264,7 +264,7 @@ static inline void gen_check_branch_target_dynamic(DisasContext *ctx, TCGv addr)
     //        call    raise_bounds_violation
     // Note: JR/JALR will often be used in hybrid/non-CHERI cases, so we can
     // skip the less than check if pcc.base is zero and top is MAX:
-    if (have_cheri_tb_flags(ctx, TB_FLAG_PCC_FULL_AS)) {
+    if (have_cheri_tb_flags(ctx, TB_FLAG_CHERI_PCC_FULL_AS)) {
         return; // PCC spans the full address space, no need to check
     }
 
