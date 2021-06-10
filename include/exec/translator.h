@@ -77,7 +77,7 @@ typedef struct DisasContextBase {
     // Keeps track of all compression states a cap could be at TRANSLATATION
     // TIME. Within a basic block, this is possible to track for any runtime
     // use.
-    uint8_t cap_compression_states[33];
+    uint8_t cap_compression_states[NUM_LAZY_CAP_REGS];
 #endif
     DisasJumpType is_jmp;
     int num_insns;
