@@ -77,7 +77,7 @@ static inline void gen_raise_pcc_violation(DisasContextBase *db,
 
 static inline bool lazy_capreg_number_is_special(int reg)
 {
-    return (reg >= NUM_LAZY_CAP_REGS) || (reg == ZERO_REG_NUM) ||
+    return (reg >= NUM_LAZY_CAP_REGS) || (reg == NULL_CAPREG_INDEX) ||
            (reg == SCRATCH_REG_NUM);
 }
 
