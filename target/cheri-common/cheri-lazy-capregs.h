@@ -366,7 +366,7 @@ static inline void nullify_capreg(CPUArchState *env, unsigned regnum)
     cheri_log_instr_changed_gp_capreg(env, regnum, newval);
 }
 
-static inline void reset_capregs(CPUArchState* env)
+static inline void reset_capregs(CPUArchState *env)
 {
     // Reset all to NULL:
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
@@ -374,13 +374,14 @@ static inline void reset_capregs(CPUArchState* env)
     for (size_t i = 0; i < ARRAY_SIZE(gpcrs->decompressed); i++) {
         const cap_register_t* newval = null_capability(&gpcrs->decompressed[i]);
         // Register should be fully decompressed
-        cheri_debug_assert(get_capreg_state(gpcrs, i) == CREG_FULLY_DECOMPRESSED);
+        cheri_debug_assert(get_capreg_state(gpcrs, i) ==
+                           CREG_FULLY_DECOMPRESSED);
         sanity_check_capreg(gpcrs, i);
         cheri_log_instr_changed_gp_capreg(env, i, newval);
     }
 }
 
-static inline void set_max_perms_capregs(CPUArchState* env)
+static inline void set_max_perms_capregs(CPUArchState *env)
 {
     // Reset all to max perms (except NULL of course):
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
@@ -395,7 +396,8 @@ static inline void set_max_perms_capregs(CPUArchState* env)
         gpcrs->decompressed[i].cached_pesbt =
             CAP_cc(compress_raw)(&gpcrs->decompressed[i]);
         // Mark register as fully decompressed
-        cheri_debug_assert(get_capreg_state(gpcrs, i) == CREG_FULLY_DECOMPRESSED);
+        cheri_debug_assert(get_capreg_state(gpcrs, i) ==
+                           CREG_FULLY_DECOMPRESSED);
         sanity_check_capreg(gpcrs, i);
         cheri_log_instr_changed_gp_capreg(env, i, &gpcrs->decompressed[i]);
     }
