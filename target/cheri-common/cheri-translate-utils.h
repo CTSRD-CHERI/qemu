@@ -1249,6 +1249,7 @@ static inline void gen_cap_get_type_for_copytype(DisasContext *ctx, int regnum,
     TCGv temp1 = tcg_const_tl(0);
     tcg_gen_setcond_tl(TCG_COND_EQ, temp1, temp1, type);
     tcg_gen_sub_tl(type, type, temp1);
+    tcg_temp_free(temp1);
 }
 
 static inline void gen_cap_set_type_unchecked(DisasContext *ctx, int regnum,
