@@ -351,7 +351,7 @@ static void set_gpr_reg_addr_base(DisasContext *s, int regnum,
                                   TCGv_i64 new_value, bool capability_base)
 {
 #ifdef TARGET_CHERI
-    if (regnum == ZERO_REG_NUM)
+    if (regnum == NULL_CAPREG_INDEX)
         return;
     if (capability_base) {
         gen_cap_set_cursor(s, regnum, new_value, false);

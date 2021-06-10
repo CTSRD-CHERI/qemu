@@ -54,7 +54,9 @@ static inline uint64_t capreg_state_set_to_integer_mask(unsigned reg)
 
 static inline CapRegState get_capreg_state(const GPCapRegs *gpcrs, unsigned reg)
 {
-    if (reg == NULL_CAPREG_INDEX)
+    // Only 32 registers are decompressed lazily, any additional ones (e.g.
+    // the Morello NULL register or a scratch one) are always decompressed.
+    if (reg == NULL_CAPREG_INDEX || reg == SCRATCH_REG_NUM)
         return CREG_FULLY_DECOMPRESSED;
 
     cheri_debug_assert(reg < 32);
@@ -65,7 +67,7 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 {
 #ifdef CONFIG_DEBUG_TCG
     if (get_capreg_state(gpcrs, regnum) == CREG_FULLY_DECOMPRESSED) {
-        cheri_debug_assert(regnum < 33);
+        cheri_debug_assert(regnum < NUM_LAZY_CAP_REGS);
         cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
                            CREG_FULLY_DECOMPRESSED);
         const cap_register_t *c = &gpcrs->decompressed[regnum];
@@ -107,9 +109,9 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned regnum,
                                     CapRegState new_state)
 {
-    if (regnum == NULL_CAPREG_INDEX) {
+    if (regnum == NULL_CAPREG_INDEX || regnum == SCRATCH_REG_NUM) {
         cheri_debug_assert(new_state == CREG_FULLY_DECOMPRESSED &&
-                           "NULL is always fully decompressed");
+                           "NULL/scratch is always fully decompressed");
         return;
     }
 
@@ -149,6 +151,7 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
         const cap_register_t *result =
             int_to_cap(gpcrs->decompressed[regnum]._cr_cursor,
                        &gpcrs->decompressed[regnum]);
+        cheri_debug_assert(result->cached_pesbt == CAP_NULL_PESBT);
         set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
         return result;
     }
