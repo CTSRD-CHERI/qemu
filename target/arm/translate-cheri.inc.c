@@ -631,7 +631,7 @@ static bool cvt_impl_ptr_to_cap(DisasContext *ctx, uint32_t cd, uint32_t cn,
     bool base_off = (pcc_bo && cctlr_set(ctx, CCTLR_PCCBO)) ||
                     (!pcc_bo && cctlr_set(ctx, CCTLR_DDCBO));
 
-    if (cd == ZERO_REG_NUM)
+    if (cd == NULL_CAPREG_INDEX)
         return true;
 
     // Move cap
@@ -833,7 +833,7 @@ static TCGv_i32 get_link_reg(DisasContext *ctx, bool link)
 {
     if (link)
         disas_capreg_state_set(ctx, 30, CREG_FULLY_DECOMPRESSED);
-    return tcg_const_i32(link ? 30 : ZERO_REG_NUM);
+    return tcg_const_i32(link ? 30 : NULL_CAPREG_INDEX);
 }
 
 static TCGv_i32 get_branch_flags(DisasContext *ctx, bool can_branch_restricted)
@@ -1162,7 +1162,7 @@ TRANS_F(SEAL_CHKSSU)
     int cd = AS_ZERO(a->Cd);
 
     // These instructions may actually need a temp unlike the rest
-    bool need_scratch = (a->Cd == a->Cm) || (cd == ZERO_REG_NUM);
+    bool need_scratch = (a->Cd == a->Cm) || (cd == NULL_CAPREG_INDEX);
 
     int cd_temp = need_scratch ? SCRATCH_REG_NUM : cd;
 
