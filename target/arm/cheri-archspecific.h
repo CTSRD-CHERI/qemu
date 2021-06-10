@@ -17,11 +17,9 @@
 
 #pragma once
 
-extern const char *const cheri_gp_regnames[];
+#include "cheri-archspecific-early.h"
 
-// Register 32 will be zero, leaving 31 to be SP. Translation should covert 31
-// to 32 where appropriate
-#define NULL_CAPREG_INDEX 32
+extern const char *const cheri_gp_regnames[];
 
 // LETODO: All of these
 #include "stdio.h"

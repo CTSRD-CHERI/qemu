@@ -99,7 +99,7 @@ enum CheriSCR {
 #define CHERI_EXC_REGNUM_PCC (32 + CheriSCR_PCC)
 #define CHERI_EXC_REGNUM_DDC (32 + CheriSCR_DDC)
 #define CINVOKE_DATA_REGNUM 31
-
+#define NULL_CAPREG_INDEX 0
 
 static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {
     return &env->DDC;

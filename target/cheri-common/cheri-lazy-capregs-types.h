@@ -85,10 +85,17 @@ _Static_assert((offsetof(cap_register_t, cached_pesbt) -
                 offsetof(cap_register_t, _cr_cursor)) == sizeof(target_ulong),
                "");
 
+#define NUM_LAZY_CAP_REGS 34
+
+#define SCRATCH_REG_NUM 33
+
 typedef struct GPCapRegs {
     // We cache the decompressed capregs here (to avoid constantly decompressing
     // values such as $csp which are used frequently)
-    cap_register_t decompressed[32];
+    // 33 allows us to have an actual 0 register that is none of the others. A
+    // 34'th is also used as a temporary when side-effect free scratch space is
+    // needed. These special extra registers are always in state decompressed.
+    cap_register_t decompressed[NUM_LAZY_CAP_REGS];
     uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
 } GPCapRegs;
 #endif
