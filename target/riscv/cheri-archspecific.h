@@ -32,8 +32,7 @@
  */
 #pragma once
 
-#define NULL_CAPREG_INDEX 0
-
+#include "cheri-archspecific-early.h"
 #include "cpu.h"
 #include "cheri-lazy-capregs.h"
 #include "exec/log_instr.h"

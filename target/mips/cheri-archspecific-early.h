@@ -40,6 +40,7 @@
 
 #include "cheri_defs.h"
 
+#define NULL_CAPREG_INDEX 0
 #define CHERI_EXC_REGNUM_DDC 0 /* TODO: 32 */
 #define CHERI_EXC_REGNUM_PCC 0xff
 #define CHERI_REGNUM_IDC  26  /* Invoked Data Capability */
