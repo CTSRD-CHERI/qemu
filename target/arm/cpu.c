@@ -812,6 +812,10 @@ static void arm_disas_set_info(CPUState *cpu, disassemble_info *info)
         info->flags |= INSN_ARM_BE32;
     }
 #endif
+#ifdef TARGET_CHERI
+    if (env->pstate & PSTATE_C64)
+        info->flags |= INSN_ARM_C64;
+#endif
 }
 
 #ifdef TARGET_AARCH64
