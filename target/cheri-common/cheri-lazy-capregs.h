@@ -95,7 +95,8 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         // integer registers always hold CAP_NULL_PESBT. This is not currently
         // true since we don't update PESBT when changing a register from
         // capability to integer.
-        // cheri_debug_assert(gpcrs->decompressed[regnum].cached_pesbt == CAP_NULL_PESBT);
+        cheri_debug_assert(gpcrs->decompressed[regnum].cached_pesbt ==
+                           CAP_NULL_PESBT);
     }
 #endif // CONFIG_DEBUG_TCG
 }
