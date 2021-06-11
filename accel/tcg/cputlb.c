@@ -1816,7 +1816,12 @@ load_memop(const void *haddr, MemOp op)
     case MO_LEQ:
         return ldq_le_p(haddr);
     default:
+#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
+        // ASAN + -O1 doesn't always optimize out the default case.
+        g_assert_not_reached();
+#else
         qemu_build_not_reached();
+#endif
     }
 }
 
@@ -2319,7 +2324,12 @@ store_memop(void *haddr, uint64_t val, MemOp op)
         stq_le_p(haddr, val);
         break;
     default:
+#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
+        // ASAN + -O1 doesn't always optimize out the default case.
+        g_assert_not_reached();
+#else
         qemu_build_not_reached();
+#endif
     }
 }
 
