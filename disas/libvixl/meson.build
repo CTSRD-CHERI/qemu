@@ -1,7 +1,7 @@
 libvixl_ss.add(files(
-  'vixl/a64/decoder-a64.cc',
-  'vixl/a64/disasm-a64.cc',
-  'vixl/a64/instructions-a64.cc',
-  'vixl/compiler-intrinsics.cc',
-  'vixl/utils.cc',
+  'vixl/aarch64/decoder-aarch64.cc',
+  'vixl/aarch64/disasm-aarch64.cc',
+  'vixl/aarch64/instructions-aarch64.cc',
+  'vixl/compiler-intrinsics-vixl.cc',
+  'vixl/utils-vixl.cc',
 ))
