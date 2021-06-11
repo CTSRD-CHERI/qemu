@@ -27,11 +27,11 @@
 #ifndef VIXL_A64_DISASM_A64_H
 #define VIXL_A64_DISASM_A64_H
 
-#include "vixl/globals.h"
-#include "vixl/utils.h"
-#include "vixl/a64/instructions-a64.h"
-#include "vixl/a64/decoder-a64.h"
-#include "vixl/a64/assembler-a64.h"
+#include "vixl/globals-vixl.h"
+#include "vixl/utils-vixl.h"
+#include "vixl/aarch64/instructions-aarch64.h"
+#include "vixl/aarch64/decoder-aarch64.h"
+#include "vixl/aarch64/assembler-aarch64.h"
 
 namespace vixl {
 
