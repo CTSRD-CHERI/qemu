@@ -1126,7 +1126,7 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
-    const uint64_t addr =
+    const target_ulong addr =
         cap_check_common_reg(perms_for_store(env, cs), env, cb, offset,
                              CHERI_CAP_SIZE, _host_return_address, cbp,
                              CHERI_CAP_SIZE, raise_unaligned_store_exception);
