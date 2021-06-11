@@ -6,7 +6,7 @@ import sys
 import typing
 from pathlib import Path
 
-qemu_args = "-machine morello -nographic -kernel".split()
+qemu_args = "-machine morello -nographic -serial none -monitor none -kernel".split()
 
 @pytest.fixture
 def qemu_binary(request) -> Path:
@@ -72,7 +72,8 @@ def test_morello_elf_file(elf_file, should_print_failed: bool, qemu_binary):
     sp = subprocess.run(command, capture_output=True, timeout=5)
     code = sp.returncode
     result = sp.stdout
-    print(sp)
+    result_str = result.decode("utf-8")
+    result_err = sp.stderr.decode("utf-8")
     lines = result.split(b'\n')
     status = None
     if len(lines) > 0:
@@ -82,11 +83,11 @@ def test_morello_elf_file(elf_file, should_print_failed: bool, qemu_binary):
         if line.endswith(b'FAILED'):
             status = False
     if status is None:
-        pytest.fail("Did not get a result from the test")
+        pytest.fail("Did not get a result from the test.\nstdout:\n" + result_str + "\n\nstderr:\n" + result_err)
     elif status is True and should_print_failed:
-        pytest.fail("Did not get a failure message from the test")
+        pytest.fail("Did not get a failure message from the test.\nstdout:\n" + result_str + "\n\nstderr:\n" + result_err)
     elif status is False and not should_print_failed:
-        pytest.fail("Got an unexpected failure message from the test")
+        pytest.fail("Got an unexpected failure message from the test.\nstdout:\n" + result_str + "\n\nstderr:\n" + result_err)
     assert code != 0 or status is True
     return status
 
