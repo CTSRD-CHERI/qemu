@@ -390,8 +390,8 @@ static inline void set_max_perms_capregs(CPUArchState *env)
     // Reset all to max perms (except NULL of course):
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     gpcrs->capreg_state = UINT64_MAX; // All decompressed values
-    null_capability(&gpcrs->decompressed[0]);
-    sanity_check_capreg(gpcrs, 0);
+    null_capability(&gpcrs->decompressed[NULL_CAPREG_INDEX]);
+    sanity_check_capreg(gpcrs, NULL_CAPREG_INDEX);
     for (size_t i = 0; i < ARRAY_SIZE(gpcrs->decompressed); i++) {
         if (i == NULL_CAPREG_INDEX)
             continue;
