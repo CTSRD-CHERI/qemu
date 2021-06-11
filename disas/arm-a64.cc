@@ -22,7 +22,7 @@ extern "C" {
 #include "disas/dis-asm.h"
 }
 
-#include "vixl/a64/disasm-a64.h"
+#include "vixl/aarch64/disasm-aarch64.h"
 
 using namespace vixl;
 
