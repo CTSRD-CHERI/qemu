@@ -1,4 +1,4 @@
-// Copyright 2015, ARM Limited
+// Copyright 2015, VIXL authors
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -24,33 +24,42 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef VIXL_A64_DISASM_A64_H
-#define VIXL_A64_DISASM_A64_H
+#ifndef VIXL_AARCH64_DISASM_AARCH64_H
+#define VIXL_AARCH64_DISASM_AARCH64_H
 
-#include "vixl/globals-vixl.h"
-#include "vixl/utils-vixl.h"
-#include "vixl/aarch64/instructions-aarch64.h"
-#include "vixl/aarch64/decoder-aarch64.h"
-#include "vixl/aarch64/assembler-aarch64.h"
+#include <utility>
+
+#include "../globals-vixl.h"
+#include "../utils-vixl.h"
+
+#include "cpu-features-auditor-aarch64.h"
+#include "decoder-aarch64.h"
+#include "instructions-aarch64.h"
+#include "isa-aarch64.h"
+#include "operands-aarch64.h"
 
 namespace vixl {
+namespace aarch64 {
 
-class Disassembler: public DecoderVisitor {
+class Disassembler : public DecoderVisitor {
  public:
   Disassembler();
   Disassembler(char* text_buffer, int buffer_size);
   virtual ~Disassembler();
   char* GetOutput();
 
-  // Declare all Visitor functions.
-  #define DECLARE(A) virtual void Visit##A(const Instruction* instr);
+// Declare all Visitor functions.
+#define DECLARE(A) \
+  virtual void Visit##A(const Instruction* instr) VIXL_OVERRIDE;
   VISITOR_LIST(DECLARE)
-  #undef DECLARE
+#undef DECLARE
+
+  virtual void VisitData(const Instruction* instr) VIXL_OVERRIDE;
 
  protected:
   virtual void ProcessOutput(const Instruction* instr);
 
-  // Default output functions.  The functions below implement a default way of
+  // Default output functions. The functions below implement a default way of
   // printing elements in the disassembly. A sub-class can override these to
   // customize the disassembly output.
 
@@ -106,39 +115,51 @@ class Disassembler: public DecoderVisitor {
   int64_t CodeRelativeAddress(const void* instr);
 
  private:
-  void Format(
-      const Instruction* instr, const char* mnemonic, const char* format);
+  void Format(const Instruction* instr,
+              const char* mnemonic,
+              const char* format0 = NULL,
+              const char* format1 = NULL);
   void Substitute(const Instruction* instr, const char* string);
   int SubstituteField(const Instruction* instr, const char* format);
   int SubstituteRegisterField(const Instruction* instr, const char* format);
+  int SubstitutePredicateRegisterField(const Instruction* instr,
+                                       const char* format);
   int SubstituteImmediateField(const Instruction* instr, const char* format);
   int SubstituteLiteralField(const Instruction* instr, const char* format);
-  int SubstituteBitfieldImmediateField(
-      const Instruction* instr, const char* format);
+  int SubstituteBitfieldImmediateField(const Instruction* instr,
+                                       const char* format);
   int SubstituteShiftField(const Instruction* instr, const char* format);
   int SubstituteExtendField(const Instruction* instr, const char* format);
   int SubstituteConditionField(const Instruction* instr, const char* format);
-  int SubstitutePCRelAddressField(const Instruction* instr, const char* format);
+  int SubstituteRelAddressField(const Instruction* instr, const char* format);
   int SubstituteBranchTargetField(const Instruction* instr, const char* format);
   int SubstituteLSRegOffsetField(const Instruction* instr, const char* format);
   int SubstitutePrefetchField(const Instruction* instr, const char* format);
   int SubstituteBarrierField(const Instruction* instr, const char* format);
   int SubstituteSysOpField(const Instruction* instr, const char* format);
   int SubstituteCrField(const Instruction* instr, const char* format);
+  int SubstituteIntField(const Instruction* instr, const char* format);
+  int SubstituteSVESize(const Instruction* instr, const char* format);
+  int SubstituteTernary(const Instruction* instr, const char* format);
+
+  std::pair<unsigned, unsigned> GetRegNumForField(const Instruction* instr,
+                                                  char reg_prefix,
+                                                  const char* field);
+
   bool RdIsZROrSP(const Instruction* instr) const {
-    return (instr->Rd() == kZeroRegCode);
+    return (instr->GetRd() == kZeroRegCode);
   }
 
   bool RnIsZROrSP(const Instruction* instr) const {
-    return (instr->Rn() == kZeroRegCode);
+    return (instr->GetRn() == kZeroRegCode);
   }
 
   bool RmIsZROrSP(const Instruction* instr) const {
-    return (instr->Rm() == kZeroRegCode);
+    return (instr->GetRm() == kZeroRegCode);
   }
 
   bool RaIsZROrSP(const Instruction* instr) const {
-    return (instr->Ra() == kZeroRegCode);
+    return (instr->GetRa() == kZeroRegCode);
   }
 
   bool IsMovzMovnImm(unsigned reg_size, uint64_t value);
@@ -162,16 +183,77 @@ class Disassembler: public DecoderVisitor {
 };
 
 
-class PrintDisassembler: public Disassembler {
+class PrintDisassembler : public Disassembler {
  public:
-  explicit PrintDisassembler(FILE* stream) : stream_(stream) { }
+  explicit PrintDisassembler(FILE* stream)
+      : cpu_features_auditor_(NULL),
+        cpu_features_prefix_("// Needs: "),
+        cpu_features_suffix_(""),
+        signed_addresses_(false),
+        stream_(stream),
+        last_printed_isa_(ISA::Data) {}
+
+  // Convenience helpers for quick disassembly, without having to manually
+  // create a decoder. If a map is provided, offset 0 must correspond with
+  // `start`.
+  void DisassembleBuffer(const Instruction* start,
+                         uint64_t size,
+                         const ISAMap* map = nullptr);
+  void DisassembleBuffer(const Instruction* start,
+                         const Instruction* end,
+                         const ISAMap* map = nullptr);
+  void Disassemble(const Instruction* instr, ISA isa = ISA::A64);
+
+  // If a CPUFeaturesAuditor is specified, it will be used to annotate
+  // disassembly. The CPUFeaturesAuditor is expected to visit the instructions
+  // _before_ the disassembler, such that the CPUFeatures information is
+  // available when the disassembler is called.
+  void RegisterCPUFeaturesAuditor(CPUFeaturesAuditor* auditor) {
+    cpu_features_auditor_ = auditor;
+  }
+
+  // Set the prefix to appear before the CPU features annotations.
+  void SetCPUFeaturesPrefix(const char* prefix) {
+    VIXL_ASSERT(prefix != NULL);
+    cpu_features_prefix_ = prefix;
+  }
+
+  // Set the suffix to appear after the CPU features annotations.
+  void SetCPUFeaturesSuffix(const char* suffix) {
+    VIXL_ASSERT(suffix != NULL);
+    cpu_features_suffix_ = suffix;
+  }
+
+  // Print a banner when the ISA is changed.
+  virtual void SetISA(ISA isa) VIXL_OVERRIDE;
+
+  // By default, addresses are printed as simple, unsigned 64-bit hex values.
+  //
+  // With `PrintSignedAddresses(true)`:
+  //  - negative addresses are printed as "-0x1234...",
+  //  - positive addresses have a leading space, like " 0x1234...", to maintain
+  //    alignment.
+  //
+  // This is most useful in combination with Disassembler::MapCodeAddress(...).
+  void PrintSignedAddresses(bool s) { signed_addresses_ = s; }
 
  protected:
-  virtual void ProcessOutput(const Instruction* instr);
+  virtual void ProcessOutput(const Instruction* instr) VIXL_OVERRIDE;
+
+  CPUFeaturesAuditor* cpu_features_auditor_;
+  const char* cpu_features_prefix_;
+  const char* cpu_features_suffix_;
+  bool signed_addresses_;
 
  private:
-  FILE *stream_;
+  FILE* stream_;
+
+  // Sometimes we SetISA(...) with different ISAs before actually decoding
+  // something. Rather than print the ISA on SetISA, we do it lazily, when
+  // last_printed_isa_ doesn't match the current ISA.
+  ISA last_printed_isa_;
 };
+}  // namespace aarch64
 }  // namespace vixl
 
-#endif  // VIXL_A64_DISASM_A64_H
+#endif  // VIXL_AARCH64_DISASM_AARCH64_H
