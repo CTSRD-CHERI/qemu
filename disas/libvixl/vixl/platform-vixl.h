@@ -1,4 +1,4 @@
-// Copyright 2014, ARM Limited
+// Copyright 2014, VIXL authors
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,9 @@
 #define PLATFORM_H
 
 // Define platform specific functionalities.
+extern "C" {
 #include <signal.h>
+}
 
 namespace vixl {
 inline void HostBreakpoint() { raise(SIGINT); }
