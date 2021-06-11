@@ -52,7 +52,7 @@ static inline uint64_t capreg_state_set_to_integer_mask(unsigned reg)
     return ~(UINT64_C(3) << (reg * 2));
 }
 
-static inline CapRegState get_capreg_state(GPCapRegs *gpcrs, unsigned reg)
+static inline CapRegState get_capreg_state(const GPCapRegs *gpcrs, unsigned reg)
 {
     cheri_debug_assert(reg < 32);
     return (CapRegState)extract64(gpcrs->capreg_state, reg * 2, 2);
@@ -91,8 +91,11 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
                                CREG_FULLY_DECOMPRESSED &&
                            "Null should always be fully decompressed");
     } else if (get_capreg_state(gpcrs, regnum) == CREG_INTEGER) {
-        // Set pesbt to a known marker flag
-        gpcrs->decompressed[regnum].cached_pesbt = 0xdeadbeef;
+        // TODO: Once we access pebst directly from TCG we should assert that
+        // integer registers always hold CAP_NULL_PESBT. This is not currently
+        // true since we don't update PESBT when changing a register from
+        // capability to integer.
+        // cheri_debug_assert(gpcrs->decompressed[regnum].cached_pesbt == CAP_NULL_PESBT);
     }
 #endif // CONFIG_DEBUG_TCG
 }
