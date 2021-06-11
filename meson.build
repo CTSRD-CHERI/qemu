@@ -1,5 +1,5 @@
 project('qemu', ['c'], meson_version: '>=0.55.0',
-        default_options: ['warning_level=1', 'c_std=gnu99', 'cpp_std=gnu++11', 'b_colorout=auto'] +
+        default_options: ['warning_level=1', 'c_std=gnu99', 'cpp_std=gnu++14', 'b_colorout=auto'] +
                          (meson.version().version_compare('>=0.56.0') ? [ 'b_staticpic=false' ] : []),
         version: run_command('head', meson.source_root() / 'VERSION').stdout().strip())
 
@@ -1734,6 +1734,7 @@ common_ss.add_all(when: 'CONFIG_USER_ONLY', if_true: user_ss)
 common_all = common_ss.apply(config_all, strict: false)
 common_all = static_library('common',
                             build_by_default: false,
+                            override_options : ['cpp_std=gnu++14'],
                             sources: common_all.sources() + genh,
                             implicit_include_directories: false,
                             dependencies: common_all.dependencies(),
