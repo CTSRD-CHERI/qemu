@@ -52,6 +52,9 @@ _became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
 #elif defined(TARGET_RISCV)
     if (cheri_debugger_on_unrepresentable)
         riscv_raise_exception(env, EXCP_DEBUG, retpc);
+#elif defined(TARGET_AARCH64)
+    if (cheri_debugger_on_unrepresentable)
+        HELPER(exception_internal)(env, EXCP_DEBUG);
 #else
 #error "Unknown CHERI target"
 #endif
