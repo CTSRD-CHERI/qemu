@@ -1,4 +1,4 @@
-// Copyright 2015, ARM Limited
+// Copyright 2015, VIXL authors
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -24,14 +24,17 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef VIXL_A64_INSTRUCTIONS_A64_H_
-#define VIXL_A64_INSTRUCTIONS_A64_H_
+#ifndef VIXL_AARCH64_INSTRUCTIONS_AARCH64_H_
+#define VIXL_AARCH64_INSTRUCTIONS_AARCH64_H_
 
-#include "vixl/globals-vixl.h"
-#include "vixl/utils-vixl.h"
-#include "vixl/aarch64/constants-aarch64.h"
+#include "../globals-vixl.h"
+#include "../utils-vixl.h"
+
+#include "constants-aarch64.h"
+#include "isa-aarch64.h"
 
 namespace vixl {
+namespace aarch64 {
 // ISA constants. --------------------------------------------------------------
 
 typedef uint32_t Instr;
@@ -62,6 +65,10 @@ const unsigned kXRegSize = 64;
 const unsigned kXRegSizeLog2 = 6;
 const unsigned kXRegSizeInBytes = kXRegSize / 8;
 const unsigned kXRegSizeInBytesLog2 = kXRegSizeLog2 - 3;
+const unsigned kCRegSize = 128;
+const unsigned kCRegSizeLog2 = 7;
+const unsigned kCRegSizeInBytes = kCRegSize / 8;
+const unsigned kCRegSizeInBytesLog2 = kCRegSizeLog2 - 3;
 const unsigned kSRegSize = 32;
 const unsigned kSRegSizeLog2 = 5;
 const unsigned kSRegSizeInBytes = kSRegSize / 8;
@@ -76,8 +83,10 @@ const unsigned kQRegSizeInBytes = kQRegSize / 8;
 const unsigned kQRegSizeInBytesLog2 = kQRegSizeLog2 - 3;
 const uint64_t kWRegMask = UINT64_C(0xffffffff);
 const uint64_t kXRegMask = UINT64_C(0xffffffffffffffff);
+const uint64_t kHRegMask = UINT64_C(0xffff);
 const uint64_t kSRegMask = UINT64_C(0xffffffff);
 const uint64_t kDRegMask = UINT64_C(0xffffffffffffffff);
+const uint64_t kHSignMask = UINT64_C(0x8000);
 const uint64_t kSSignMask = UINT64_C(0x80000000);
 const uint64_t kDSignMask = UINT64_C(0x8000000000000000);
 const uint64_t kWSignMask = UINT64_C(0x80000000);
@@ -87,142 +96,343 @@ const uint64_t kHalfWordMask = UINT64_C(0xffff);
 const uint64_t kWordMask = UINT64_C(0xffffffff);
 const uint64_t kXMaxUInt = UINT64_C(0xffffffffffffffff);
 const uint64_t kWMaxUInt = UINT64_C(0xffffffff);
+const uint64_t kHMaxUInt = UINT64_C(0xffff);
+// Define k*MinInt with "-k*MaxInt - 1", because the hexadecimal representation
+// (e.g. "INT32_C(0x80000000)") has implementation-defined behaviour.
 const int64_t kXMaxInt = INT64_C(0x7fffffffffffffff);
-const int64_t kXMinInt = INT64_C(0x8000000000000000);
+const int64_t kXMinInt = -kXMaxInt - 1;
 const int32_t kWMaxInt = INT32_C(0x7fffffff);
-const int32_t kWMinInt = INT32_C(0x80000000);
+const int32_t kWMinInt = -kWMaxInt - 1;
+const int16_t kHMaxInt = INT16_C(0x7fff);
+const int16_t kHMinInt = -kHMaxInt - 1;
+const unsigned kFpRegCode = 29;
 const unsigned kLinkRegCode = 30;
+const unsigned kSpRegCode = 31;
 const unsigned kZeroRegCode = 31;
 const unsigned kSPRegInternalCode = 63;
 const unsigned kRegCodeMask = 0x1f;
 
+const unsigned kAtomicAccessGranule = 16;
+
 const unsigned kAddressTagOffset = 56;
 const unsigned kAddressTagWidth = 8;
-const uint64_t kAddressTagMask =
-    ((UINT64_C(1) << kAddressTagWidth) - 1) << kAddressTagOffset;
+const uint64_t kAddressTagMask = ((UINT64_C(1) << kAddressTagWidth) - 1)
+                                 << kAddressTagOffset;
 VIXL_STATIC_ASSERT(kAddressTagMask == UINT64_C(0xff00000000000000));
 
-// AArch64 floating-point specifics. These match IEEE-754.
-const unsigned kDoubleMantissaBits = 52;
-const unsigned kDoubleExponentBits = 11;
-const unsigned kFloatMantissaBits = 23;
-const unsigned kFloatExponentBits = 8;
-const unsigned kFloat16MantissaBits = 10;
-const unsigned kFloat16ExponentBits = 5;
+const uint64_t kTTBRMask = UINT64_C(1) << 55;
 
-// Floating-point infinity values.
-extern const float16 kFP16PositiveInfinity;
-extern const float16 kFP16NegativeInfinity;
-extern const float kFP32PositiveInfinity;
-extern const float kFP32NegativeInfinity;
-extern const double kFP64PositiveInfinity;
-extern const double kFP64NegativeInfinity;
+// We can't define a static kZRegSize because the size depends on the
+// implementation. However, it is sometimes useful to know the minimum and
+// maxmimum possible sizes.
+const unsigned kZRegMinSize = 128;
+const unsigned kZRegMinSizeLog2 = 7;
+const unsigned kZRegMinSizeInBytes = kZRegMinSize / 8;
+const unsigned kZRegMinSizeInBytesLog2 = kZRegMinSizeLog2 - 3;
+const unsigned kZRegMaxSize = 2048;
+const unsigned kZRegMaxSizeLog2 = 11;
+const unsigned kZRegMaxSizeInBytes = kZRegMaxSize / 8;
+const unsigned kZRegMaxSizeInBytesLog2 = kZRegMaxSizeLog2 - 3;
 
-// The default NaN values (for FPCR.DN=1).
-extern const float16 kFP16DefaultNaN;
-extern const float kFP32DefaultNaN;
-extern const double kFP64DefaultNaN;
+// The P register size depends on the Z register size.
+const unsigned kZRegBitsPerPRegBit = kBitsPerByte;
+const unsigned kZRegBitsPerPRegBitLog2 = 3;
+const unsigned kPRegMinSize = kZRegMinSize / kZRegBitsPerPRegBit;
+const unsigned kPRegMinSizeLog2 = kZRegMinSizeLog2 - 3;
+const unsigned kPRegMinSizeInBytes = kPRegMinSize / 8;
+const unsigned kPRegMinSizeInBytesLog2 = kPRegMinSizeLog2 - 3;
+const unsigned kPRegMaxSize = kZRegMaxSize / kZRegBitsPerPRegBit;
+const unsigned kPRegMaxSizeLog2 = kZRegMaxSizeLog2 - 3;
+const unsigned kPRegMaxSizeInBytes = kPRegMaxSize / 8;
+const unsigned kPRegMaxSizeInBytesLog2 = kPRegMaxSizeLog2 - 3;
+
+// Make these moved float constants backwards compatible
+// with explicit vixl::aarch64:: namespace references.
+using vixl::kDoubleMantissaBits;
+using vixl::kDoubleExponentBits;
+using vixl::kFloatMantissaBits;
+using vixl::kFloatExponentBits;
+using vixl::kFloat16MantissaBits;
+using vixl::kFloat16ExponentBits;
+
+using vixl::kFP16PositiveInfinity;
+using vixl::kFP16NegativeInfinity;
+using vixl::kFP32PositiveInfinity;
+using vixl::kFP32NegativeInfinity;
+using vixl::kFP64PositiveInfinity;
+using vixl::kFP64NegativeInfinity;
+
+using vixl::kFP16DefaultNaN;
+using vixl::kFP32DefaultNaN;
+using vixl::kFP64DefaultNaN;
 
 unsigned CalcLSDataSize(LoadStoreOp op);
 unsigned CalcLSPairDataSize(LoadStorePairOp op);
 
 enum ImmBranchType {
   UnknownBranchType = 0,
-  CondBranchType    = 1,
-  UncondBranchType  = 2,
+  CondBranchType = 1,
+  UncondBranchType = 2,
   CompareBranchType = 3,
-  TestBranchType    = 4
+  TestBranchType = 4,
+  MorelloBXType = 5,
 };
 
-enum AddrMode {
-  Offset,
-  PreIndex,
-  PostIndex
-};
+enum AddrMode { Offset, PreIndex, PostIndex };
 
-enum FPRounding {
-  // The first four values are encodable directly by FPCR<RMode>.
-  FPTieEven = 0x0,
-  FPPositiveInfinity = 0x1,
-  FPNegativeInfinity = 0x2,
-  FPZero = 0x3,
+enum Reg31Mode { Reg31IsStackPointer, Reg31IsZeroRegister };
 
-  // The final rounding modes are only available when explicitly specified by
-  // the instruction (such as with fcvta). It cannot be set in FPCR.
-  FPTieAway,
-  FPRoundOdd
-};
+enum VectorFormat {
+  kFormatUndefined = 0xffffffff,
+  kFormat8B = NEON_8B,
+  kFormat16B = NEON_16B,
+  kFormat4H = NEON_4H,
+  kFormat8H = NEON_8H,
+  kFormat2S = NEON_2S,
+  kFormat4S = NEON_4S,
+  kFormat1D = NEON_1D,
+  kFormat2D = NEON_2D,
 
-enum Reg31Mode {
-  Reg31IsStackPointer,
-  Reg31IsZeroRegister
+  // Scalar formats. We add the scalar bit to distinguish between scalar and
+  // vector enumerations; the bit is always set in the encoding of scalar ops
+  // and always clear for vector ops. Although kFormatD and kFormat1D appear
+  // to be the same, their meaning is subtly different. The first is a scalar
+  // operation, the second a vector operation that only affects one lane.
+  kFormatB = NEON_B | NEONScalar,
+  kFormatH = NEON_H | NEONScalar,
+  kFormatS = NEON_S | NEONScalar,
+  kFormatD = NEON_D | NEONScalar,
+
+  // An artificial value, used to distinguish from NEON format category.
+  kFormatSVE = 0x0000fffd,
+  // An artificial value. Q lane size isn't encoded in the usual size field.
+  kFormatSVEQ = 0x000f0000,
+  // Vector element width of SVE register with the unknown lane count since
+  // the vector length is implementation dependent.
+  kFormatVnB = SVE_B | kFormatSVE,
+  kFormatVnH = SVE_H | kFormatSVE,
+  kFormatVnS = SVE_S | kFormatSVE,
+  kFormatVnD = SVE_D | kFormatSVE,
+  kFormatVnQ = kFormatSVEQ | kFormatSVE,
+
+  // An artificial value, used by simulator trace tests and a few oddball
+  // instructions (such as FMLAL).
+  kFormat2H = 0xfffffffe
 };
 
 // Instructions. ---------------------------------------------------------------
 
+// An `Instruction` can represent either an A64 or a C64 instruction. The
+// encodings are identical in almost all cases.
 class Instruction {
  public:
-  Instr InstructionBits() const {
+  Instr GetInstructionBits() const {
     return *(reinterpret_cast<const Instr*>(this));
+  }
+  VIXL_DEPRECATED("GetInstructionBits", Instr InstructionBits() const) {
+    return GetInstructionBits();
   }
 
   void SetInstructionBits(Instr new_instr) {
     *(reinterpret_cast<Instr*>(this)) = new_instr;
   }
 
-  int Bit(int pos) const {
-    return (InstructionBits() >> pos) & 1;
+  int ExtractBit(int pos) const { return (GetInstructionBits() >> pos) & 1; }
+  VIXL_DEPRECATED("ExtractBit", int Bit(int pos) const) {
+    return ExtractBit(pos);
   }
 
-  uint32_t Bits(int msb, int lsb) const {
-    return unsigned_bitextract_32(msb, lsb, InstructionBits());
+  uint32_t ExtractBits(int msb, int lsb) const {
+    return ExtractUnsignedBitfield32(msb, lsb, GetInstructionBits());
+  }
+  VIXL_DEPRECATED("ExtractBits", uint32_t Bits(int msb, int lsb) const) {
+    return ExtractBits(msb, lsb);
   }
 
-  int32_t SignedBits(int msb, int lsb) const {
+  // Compress bit extraction operation from Hacker's Delight.
+  // https://github.com/hcs0/Hackers-Delight/blob/master/compress.c.txt
+  uint32_t Compress(uint32_t mask) const {
+    uint32_t mk, mp, mv, t;
+    uint32_t x = GetInstructionBits() & mask;  // Clear irrelevant bits.
+    mk = ~mask << 1;                           // We will count 0's to right.
+    for (int i = 0; i < 5; i++) {
+      mp = mk ^ (mk << 1);  // Parallel suffix.
+      mp = mp ^ (mp << 2);
+      mp = mp ^ (mp << 4);
+      mp = mp ^ (mp << 8);
+      mp = mp ^ (mp << 16);
+      mv = mp & mask;                         // Bits to move.
+      mask = (mask ^ mv) | (mv >> (1 << i));  // Compress mask.
+      t = x & mv;
+      x = (x ^ t) | (t >> (1 << i));  // Compress x.
+      mk = mk & ~mp;
+    }
+    return x;
+  }
+
+  template <uint32_t M>
+  uint32_t ExtractBits() const {
+    return Compress(M);
+  }
+
+  template <uint32_t M, uint32_t V>
+  uint32_t IsMaskedValue() const {
+    return (Mask(M) == V) ? 1 : 0;
+  }
+
+  int32_t ExtractSignedBits(int msb, int lsb) const {
     int32_t bits = *(reinterpret_cast<const int32_t*>(this));
-    return signed_bitextract_32(msb, lsb, bits);
+    return ExtractSignedBitfield32(msb, lsb, bits);
+  }
+  VIXL_DEPRECATED("ExtractSignedBits",
+                  int32_t SignedBits(int msb, int lsb) const) {
+    return ExtractSignedBits(msb, lsb);
   }
 
   Instr Mask(uint32_t mask) const {
-    return InstructionBits() & mask;
+    VIXL_ASSERT(mask != 0);
+    return GetInstructionBits() & mask;
   }
 
-  #define DEFINE_GETTER(Name, HighBit, LowBit, Func)             \
-  int32_t Name() const { return Func(HighBit, LowBit); }
+#define DEFINE_GETTER(Name, HighBit, LowBit, Func)                  \
+  int32_t Get##Name() const { return this->Func(HighBit, LowBit); } \
+  VIXL_DEPRECATED("Get" #Name, int32_t Name() const) { return Get##Name(); }
   INSTRUCTION_FIELDS_LIST(DEFINE_GETTER)
-  #undef DEFINE_GETTER
+#undef DEFINE_GETTER
+
+  template <int msb, int lsb>
+  int32_t GetRx() const {
+    // We don't have any register fields wider than five bits, so the result
+    // will always fit into an int32_t.
+    VIXL_ASSERT((msb - lsb + 1) <= 5);
+    return this->ExtractBits(msb, lsb);
+  }
+
+  VectorFormat GetSVEVectorFormat() const {
+    switch (Mask(SVESizeFieldMask)) {
+      case SVE_B:
+        return kFormatVnB;
+      case SVE_H:
+        return kFormatVnH;
+      case SVE_S:
+        return kFormatVnS;
+      case SVE_D:
+        return kFormatVnD;
+    }
+    VIXL_UNREACHABLE();
+    return kFormatUndefined;
+  }
 
   // ImmPCRel is a compound field (not present in INSTRUCTION_FIELDS_LIST),
   // formed from ImmPCRelLo and ImmPCRelHi.
-  int ImmPCRel() const {
-    int offset =
-        static_cast<int>((ImmPCRelHi() << ImmPCRelLo_width) | ImmPCRelLo());
-    int width = ImmPCRelLo_width + ImmPCRelHi_width;
-    return signed_bitextract_32(width - 1, 0, offset);
+  int32_t GetImmPCRel() const {
+    int32_t lo = static_cast<int32_t>(GetImmPCRelLo());
+    return (GetImmPCRelHi() * (1 << ImmPCRelLo_width)) + lo;
+  }
+  VIXL_DEPRECATED("GetImmPCRel", int ImmPCRel() const) { return GetImmPCRel(); }
+
+  // As GetImmPCRel, but the top bit of ImmPCRelHi is used to indicate whether
+  // the lower bits are to be signed and PCC-based, or unsigned and DDC-based.
+  int32_t GetImmC64RelPage() const {
+    int32_t hi = GetImmC64RelP() ? GetImmC64RelHiADRP() : GetImmC64RelHiADRDP();
+    int32_t lo = static_cast<int32_t>(GetImmPCRelLo());
+    return (hi * (1 << ImmPCRelLo_width)) + lo;
   }
 
-  uint64_t ImmLogical() const;
-  unsigned ImmNEONabcdefgh() const;
-  float ImmFP32() const;
-  double ImmFP64() const;
-  float ImmNEONFP32() const;
-  double ImmNEONFP64() const;
+  // op0 is always 0b1x, and op0<1> is not encoded.
+  int GetSysOp0() const {
+    int op0_0 = GetSysO0();
+    VIXL_ASSERT((op0_0 == 0) || (op0_0 == 1));
+    return op0_0 | 0b10;
+  }
 
-  unsigned SizeLS() const {
+  // ImmLSPAC is a compound field (not present in INSTRUCTION_FIELDS_LIST),
+  // formed from ImmLSPACLo and ImmLSPACHi.
+  int GetImmLSPAC() const {
+    uint32_t hi = static_cast<uint32_t>(GetImmLSPACHi());
+    uint32_t lo = GetImmLSPACLo();
+    uint32_t offset = (hi << ImmLSPACLo_width) | lo;
+    int width = ImmLSPACLo_width + ImmLSPACHi_width;
+    return ExtractSignedBitfield32(width - 1, 0, offset) << 3;
+  }
+
+  uint64_t GetImmLogical() const;
+  VIXL_DEPRECATED("GetImmLogical", uint64_t ImmLogical() const) {
+    return GetImmLogical();
+  }
+  uint64_t GetSVEImmLogical() const;
+  int GetSVEBitwiseImmLaneSizeInBytesLog2() const;
+  uint64_t DecodeImmBitMask(int32_t n,
+                            int32_t imm_s,
+                            int32_t imm_r,
+                            int32_t size) const;
+
+  std::pair<int, int> GetSVEPermuteIndexAndLaneSizeLog2() const;
+
+  std::pair<int, int> GetSVEImmShiftAndLaneSizeLog2(bool is_predicated) const;
+
+  int GetSVEMsizeFromDtype(bool is_signed, int dtype_h_lsb = 23) const;
+
+  int GetSVEEsizeFromDtype(bool is_signed, int dtype_l_lsb = 21) const;
+
+  unsigned GetImmNEONabcdefgh() const;
+  VIXL_DEPRECATED("GetImmNEONabcdefgh", unsigned ImmNEONabcdefgh() const) {
+    return GetImmNEONabcdefgh();
+  }
+
+  Float16 GetImmFP16() const;
+
+  float GetImmFP32() const;
+  VIXL_DEPRECATED("GetImmFP32", float ImmFP32() const) { return GetImmFP32(); }
+
+  double GetImmFP64() const;
+  VIXL_DEPRECATED("GetImmFP64", double ImmFP64() const) { return GetImmFP64(); }
+
+  Float16 GetImmNEONFP16() const;
+
+  float GetImmNEONFP32() const;
+  VIXL_DEPRECATED("GetImmNEONFP32", float ImmNEONFP32() const) {
+    return GetImmNEONFP32();
+  }
+
+  double GetImmNEONFP64() const;
+  VIXL_DEPRECATED("GetImmNEONFP64", double ImmNEONFP64() const) {
+    return GetImmNEONFP64();
+  }
+
+  Float16 GetSVEImmFP16() const { return Imm8ToFloat16(ExtractBits(12, 5)); }
+
+  float GetSVEImmFP32() const { return Imm8ToFP32(ExtractBits(12, 5)); }
+
+  double GetSVEImmFP64() const { return Imm8ToFP64(ExtractBits(12, 5)); }
+
+  static Float16 Imm8ToFloat16(uint32_t imm8);
+  static float Imm8ToFP32(uint32_t imm8);
+  static double Imm8ToFP64(uint32_t imm8);
+
+  unsigned GetSizeLS() const {
     return CalcLSDataSize(static_cast<LoadStoreOp>(Mask(LoadStoreMask)));
   }
+  VIXL_DEPRECATED("GetSizeLS", unsigned SizeLS() const) { return GetSizeLS(); }
 
-  unsigned SizeLSPair() const {
+  unsigned GetSizeLSPair() const {
     return CalcLSPairDataSize(
         static_cast<LoadStorePairOp>(Mask(LoadStorePairMask)));
   }
+  VIXL_DEPRECATED("GetSizeLSPair", unsigned SizeLSPair() const) {
+    return GetSizeLSPair();
+  }
 
-  int NEONLSIndex(int access_size_shift) const {
-    int64_t q = NEONQ();
-    int64_t s = NEONS();
-    int64_t size = NEONLSSize();
+  int GetNEONLSIndex(int access_size_shift) const {
+    int64_t q = GetNEONQ();
+    int64_t s = GetNEONS();
+    int64_t size = GetNEONLSSize();
     int64_t index = (q << 3) | (s << 2) | size;
     return static_cast<int>(index >> access_size_shift);
+  }
+  VIXL_DEPRECATED("GetNEONLSIndex",
+                  int NEONLSIndex(int access_size_shift) const) {
+    return GetNEONLSIndex(access_size_shift);
   }
 
   // Helpers.
@@ -238,13 +448,13 @@ class Instruction {
     return Mask(CompareBranchFMask) == CompareBranchFixed;
   }
 
-  bool IsTestBranch() const {
-    return Mask(TestBranchFMask) == TestBranchFixed;
+  bool IsTestBranch() const { return Mask(TestBranchFMask) == TestBranchFixed; }
+
+  bool IsMorelloBX() const {
+    return Mask(MorelloBranchBxFMask) == MorelloBranchBxFixed;
   }
 
-  bool IsImmBranch() const {
-    return BranchType() != UnknownBranchType;
-  }
+  bool IsImmBranch() const { return GetBranchType() != UnknownBranchType; }
 
   bool IsPCRelAddressing() const {
     return Mask(PCRelAddressingFMask) == PCRelAddressingFixed;
@@ -266,6 +476,9 @@ class Instruction {
     return Mask(LoadStoreAnyFMask) == LoadStoreAnyFixed;
   }
 
+  // True if `this` is valid immediately after the provided movprfx instruction.
+  bool CanTakeSVEMovprfx(Instruction const* movprfx) const;
+
   bool IsLoad() const;
   bool IsStore() const;
 
@@ -279,13 +492,43 @@ class Instruction {
            (Mask(MoveWideImmediateMask) == MOVN_w);
   }
 
-  static int ImmBranchRangeBitwidth(ImmBranchType branch_type);
-  static int32_t ImmBranchForwardRange(ImmBranchType branch_type);
+  bool IsException() const { return Mask(ExceptionFMask) == ExceptionFixed; }
+
+  bool IsPAuth() const { return Mask(SystemPAuthFMask) == SystemPAuthFixed; }
+
+  bool IsBti() const {
+    if (Mask(SystemHintFMask) == SystemHintFixed) {
+      int imm_hint = GetImmHint();
+      switch (imm_hint) {
+        case BTI:
+        case BTI_c:
+        case BTI_j:
+        case BTI_jc:
+          return true;
+      }
+    }
+    return false;
+  }
+
+  static int GetImmBranchRangeBitwidth(ImmBranchType branch_type);
+  VIXL_DEPRECATED(
+      "GetImmBranchRangeBitwidth",
+      static int ImmBranchRangeBitwidth(ImmBranchType branch_type)) {
+    return GetImmBranchRangeBitwidth(branch_type);
+  }
+
+  static int32_t GetImmBranchForwardRange(ImmBranchType branch_type);
+  VIXL_DEPRECATED(
+      "GetImmBranchForwardRange",
+      static int32_t ImmBranchForwardRange(ImmBranchType branch_type)) {
+    return GetImmBranchForwardRange(branch_type);
+  }
+
   static bool IsValidImmPCOffset(ImmBranchType branch_type, int64_t offset);
 
   // Indicate whether Rd can be the stack pointer or the zero register. This
   // does not check that the instruction actually has an Rd field.
-  Reg31Mode RdMode() const {
+  Reg31Mode GetRdMode() const {
     // The following instructions use sp or wsp as Rd:
     //  Add/sub (immediate) when not setting the flags.
     //  Add/sub (extended) when not setting the flags.
@@ -311,10 +554,11 @@ class Instruction {
     }
     return Reg31IsZeroRegister;
   }
+  VIXL_DEPRECATED("GetRdMode", Reg31Mode RdMode() const) { return GetRdMode(); }
 
   // Indicate whether Rn can be the stack pointer or the zero register. This
   // does not check that the instruction actually has an Rn field.
-  Reg31Mode RnMode() const {
+  Reg31Mode GetRnMode() const {
     // The following instructions use sp or wsp as Rn:
     //  All loads and stores.
     //  Add/sub (immediate).
@@ -325,8 +569,9 @@ class Instruction {
     }
     return Reg31IsZeroRegister;
   }
+  VIXL_DEPRECATED("GetRnMode", Reg31Mode RnMode() const) { return GetRnMode(); }
 
-  ImmBranchType BranchType() const {
+  ImmBranchType GetBranchType() const {
     if (IsCondBranchImm()) {
       return CondBranchType;
     } else if (IsUncondBranchImm()) {
@@ -335,18 +580,33 @@ class Instruction {
       return CompareBranchType;
     } else if (IsTestBranch()) {
       return TestBranchType;
+    } else if (IsMorelloBX()) {
+      return MorelloBXType;
     } else {
       return UnknownBranchType;
     }
   }
+  VIXL_DEPRECATED("GetBranchType", ImmBranchType BranchType() const) {
+    return GetBranchType();
+  }
 
   // Find the target of this instruction. 'this' may be a branch or a
   // PC-relative addressing instruction.
-  const Instruction* ImmPCOffsetTarget() const;
+  const Instruction* GetImmPCOffsetTarget() const;
+  VIXL_DEPRECATED("GetImmPCOffsetTarget",
+                  const Instruction* ImmPCOffsetTarget() const) {
+    return GetImmPCOffsetTarget();
+  }
 
   // Patch a PC-relative offset to refer to 'target'. 'this' may be a branch or
   // a PC-relative addressing instruction.
-  void SetImmPCOffsetTarget(const Instruction* target);
+  //  - The `source_isa` must be known because C64 has a different
+  //    interpretation of the ADRP encoding.
+  //  - The `target_isa` is used to set bit 0 for interworking (currently only
+  //    used by ADR).
+  void SetImmPCOffsetTarget(const Instruction* target,
+                            ISA source_isa,
+                            ISA target_isa);
   // Patch a literal load instruction to load from 'source'.
   void SetImmLLiteral(const Instruction* source);
 
@@ -363,9 +623,16 @@ class Instruction {
   // The literal itself is safely mutable only if the backing buffer is safely
   // mutable.
   template <typename T>
-  T LiteralAddress() const {
-    uint64_t base_raw = reinterpret_cast<uint64_t>(this);
-    int64_t offset = ImmLLiteral() << kLiteralEntrySizeLog2;
+  T GetLiteralAddress() const {
+    uint64_t base_raw;
+    int64_t offset;
+    if (Mask(MorelloLDRMask) == LDR_c_i) {
+      base_raw = AlignDown(reinterpret_cast<uint64_t>(this), kCRegSizeInBytes);
+      offset = ExtractSignedBits(21, 5) * static_cast<int>(kCRegSizeInBytes);
+    } else {
+      base_raw = reinterpret_cast<uint64_t>(this);
+      offset = GetImmLLiteral() * static_cast<int>(kLiteralEntrySize);
+    }
     uint64_t address_raw = base_raw + offset;
 
     // Cast the address using a C-style cast. A reinterpret_cast would be
@@ -377,87 +644,98 @@ class Instruction {
 
     return address;
   }
+  template <typename T>
+  VIXL_DEPRECATED("GetLiteralAddress", T LiteralAddress() const) {
+    return GetLiteralAddress<T>();
+  }
 
-  uint32_t Literal32() const {
+  uint32_t GetLiteral32() const {
     uint32_t literal;
-    memcpy(&literal, LiteralAddress<const void*>(), sizeof(literal));
+    memcpy(&literal, GetLiteralAddress<const void*>(), sizeof(literal));
     return literal;
   }
+  VIXL_DEPRECATED("GetLiteral32", uint32_t Literal32() const) {
+    return GetLiteral32();
+  }
 
-  uint64_t Literal64() const {
+  uint64_t GetLiteral64() const {
     uint64_t literal;
-    memcpy(&literal, LiteralAddress<const void*>(), sizeof(literal));
+    memcpy(&literal, GetLiteralAddress<const void*>(), sizeof(literal));
     return literal;
   }
-
-  float LiteralFP32() const {
-    return rawbits_to_float(Literal32());
+  VIXL_DEPRECATED("GetLiteral64", uint64_t Literal64() const) {
+    return GetLiteral64();
   }
 
-  double LiteralFP64() const {
-    return rawbits_to_double(Literal64());
+  float GetLiteralFP32() const { return RawbitsToFloat(GetLiteral32()); }
+  VIXL_DEPRECATED("GetLiteralFP32", float LiteralFP32() const) {
+    return GetLiteralFP32();
   }
 
-  const Instruction* NextInstruction() const {
+  double GetLiteralFP64() const { return RawbitsToDouble(GetLiteral64()); }
+  VIXL_DEPRECATED("GetLiteralFP64", double LiteralFP64() const) {
+    return GetLiteralFP64();
+  }
+
+  Instruction* GetNextInstruction() { return this + kInstructionSize; }
+  const Instruction* GetNextInstruction() const {
     return this + kInstructionSize;
   }
+  VIXL_DEPRECATED("GetNextInstruction",
+                  const Instruction* NextInstruction() const) {
+    return GetNextInstruction();
+  }
 
-  const Instruction* InstructionAtOffset(int64_t offset) const {
+  const Instruction* GetInstructionAtOffset(int64_t offset) const {
     VIXL_ASSERT(IsWordAligned(this + offset));
     return this + offset;
   }
+  VIXL_DEPRECATED("GetInstructionAtOffset",
+                  const Instruction* InstructionAtOffset(int64_t offset)
+                      const) {
+    return GetInstructionAtOffset(offset);
+  }
 
-  template<typename T> static Instruction* Cast(T src) {
+  template <typename T>
+  static Instruction* Cast(T src) {
     return reinterpret_cast<Instruction*>(src);
   }
 
-  template<typename T> static const Instruction* CastConst(T src) {
+  template <typename T>
+  static const Instruction* CastConst(T src) {
     return reinterpret_cast<const Instruction*>(src);
   }
 
  private:
-  int ImmBranch() const;
+  int GetImmBranch() const;
 
-  static float Imm8ToFP32(uint32_t imm8);
-  static double Imm8ToFP64(uint32_t imm8);
-
-  void SetPCRelImmTarget(const Instruction* target);
-  void SetBranchImmTarget(const Instruction* target);
+  void SetPCRelImmTarget(const Instruction* target,
+                         ISA source_isa,
+                         ISA target_isa);
+  void SetBranchImmTarget(const Instruction* target,
+                          ISA source_isa,
+                          ISA target_isa);
 };
 
 
-// Functions for handling NEON vector format information.
-enum VectorFormat {
-  kFormatUndefined = 0xffffffff,
-  kFormat8B  = NEON_8B,
-  kFormat16B = NEON_16B,
-  kFormat4H  = NEON_4H,
-  kFormat8H  = NEON_8H,
-  kFormat2S  = NEON_2S,
-  kFormat4S  = NEON_4S,
-  kFormat1D  = NEON_1D,
-  kFormat2D  = NEON_2D,
+// Functions for handling NEON and SVE vector format information.
 
-  // Scalar formats. We add the scalar bit to distinguish between scalar and
-  // vector enumerations; the bit is always set in the encoding of scalar ops
-  // and always clear for vector ops. Although kFormatD and kFormat1D appear
-  // to be the same, their meaning is subtly different. The first is a scalar
-  // operation, the second a vector operation that only affects one lane.
-  kFormatB = NEON_B | NEONScalar,
-  kFormatH = NEON_H | NEONScalar,
-  kFormatS = NEON_S | NEONScalar,
-  kFormatD = NEON_D | NEONScalar
-};
+const int kMaxLanesPerVector = 16;
 
-VectorFormat VectorFormatHalfWidth(const VectorFormat vform);
-VectorFormat VectorFormatDoubleWidth(const VectorFormat vform);
-VectorFormat VectorFormatDoubleLanes(const VectorFormat vform);
-VectorFormat VectorFormatHalfLanes(const VectorFormat vform);
-VectorFormat ScalarFormatFromLaneSize(int lanesize);
-VectorFormat VectorFormatHalfWidthDoubleLanes(const VectorFormat vform);
-VectorFormat VectorFormatFillQ(const VectorFormat vform);
+VectorFormat VectorFormatHalfWidth(VectorFormat vform);
+VectorFormat VectorFormatDoubleWidth(VectorFormat vform);
+VectorFormat VectorFormatDoubleLanes(VectorFormat vform);
+VectorFormat VectorFormatHalfLanes(VectorFormat vform);
+VectorFormat ScalarFormatFromLaneSize(int lane_size_in_bits);
+VectorFormat VectorFormatHalfWidthDoubleLanes(VectorFormat vform);
+VectorFormat VectorFormatFillQ(VectorFormat vform);
+VectorFormat ScalarFormatFromFormat(VectorFormat vform);
+VectorFormat SVEFormatFromLaneSizeInBits(int lane_size_in_bits);
+VectorFormat SVEFormatFromLaneSizeInBytes(int lane_size_in_bytes);
+VectorFormat SVEFormatFromLaneSizeInBytesLog2(int lane_size_in_bytes_log_2);
 unsigned RegisterSizeInBitsFromFormat(VectorFormat vform);
 unsigned RegisterSizeInBytesFromFormat(VectorFormat vform);
+bool IsSVEFormat(VectorFormat vform);
 // TODO: Make the return types of these functions consistent.
 unsigned LaneSizeInBitsFromFormat(VectorFormat vform);
 int LaneSizeInBytesFromFormat(VectorFormat vform);
@@ -470,6 +748,7 @@ int64_t MinIntFromFormat(VectorFormat vform);
 uint64_t MaxUintFromFormat(VectorFormat vform);
 
 
+// clang-format off
 enum NEONFormat {
   NF_UNDEF = 0,
   NF_8B    = 1,
@@ -485,6 +764,7 @@ enum NEONFormat {
   NF_S     = 11,
   NF_D     = 12
 };
+// clang-format on
 
 static const unsigned kNEONFormatMaxBits = 6;
 
@@ -498,34 +778,30 @@ struct NEONFormatMap {
 
 class NEONFormatDecoder {
  public:
-  enum SubstitutionMode {
-    kPlaceholder,
-    kFormat
-  };
+  enum SubstitutionMode { kPlaceholder, kFormat };
 
   // Construct a format decoder with increasingly specific format maps for each
   // subsitution. If no format map is specified, the default is the integer
   // format map.
   explicit NEONFormatDecoder(const Instruction* instr) {
-    instrbits_ = instr->InstructionBits();
+    instrbits_ = instr->GetInstructionBits();
     SetFormatMaps(IntegerFormatMap());
   }
-  NEONFormatDecoder(const Instruction* instr,
-                    const NEONFormatMap* format) {
-    instrbits_ = instr->InstructionBits();
+  NEONFormatDecoder(const Instruction* instr, const NEONFormatMap* format) {
+    instrbits_ = instr->GetInstructionBits();
     SetFormatMaps(format);
   }
   NEONFormatDecoder(const Instruction* instr,
                     const NEONFormatMap* format0,
                     const NEONFormatMap* format1) {
-    instrbits_ = instr->InstructionBits();
+    instrbits_ = instr->GetInstructionBits();
     SetFormatMaps(format0, format1);
   }
   NEONFormatDecoder(const Instruction* instr,
                     const NEONFormatMap* format0,
                     const NEONFormatMap* format1,
                     const NEONFormatMap* format2) {
-    instrbits_ = instr->InstructionBits();
+    instrbits_ = instr->GetInstructionBits();
     SetFormatMaps(format0, format1, format2);
   }
 
@@ -539,7 +815,7 @@ class NEONFormatDecoder {
     formats_[2] = (format2 == NULL) ? formats_[1] : format2;
   }
   void SetFormatMap(unsigned index, const NEONFormatMap* format) {
-    VIXL_ASSERT(index <= (sizeof(formats_) / sizeof(formats_[0])));
+    VIXL_ASSERT(index <= ArrayLength(formats_));
     VIXL_ASSERT(format != NULL);
     formats_[index] = format;
   }
@@ -556,7 +832,9 @@ class NEONFormatDecoder {
                          SubstitutionMode mode0 = kFormat,
                          SubstitutionMode mode1 = kFormat,
                          SubstitutionMode mode2 = kFormat) {
-    snprintf(form_buffer_, sizeof(form_buffer_), string,
+    snprintf(form_buffer_,
+             sizeof(form_buffer_),
+             string,
              GetSubstitute(0, mode0),
              GetSubstitute(1, mode1),
              GetSubstitute(2, mode2));
@@ -577,13 +855,20 @@ class NEONFormatDecoder {
   }
 
   VectorFormat GetVectorFormat(const NEONFormatMap* format_map) {
-    static const VectorFormat vform[] = {
-      kFormatUndefined,
-      kFormat8B, kFormat16B, kFormat4H, kFormat8H,
-      kFormat2S, kFormat4S, kFormat1D, kFormat2D,
-      kFormatB, kFormatH, kFormatS, kFormatD
-    };
-    VIXL_ASSERT(GetNEONFormat(format_map) < (sizeof(vform) / sizeof(vform[0])));
+    static const VectorFormat vform[] = {kFormatUndefined,
+                                         kFormat8B,
+                                         kFormat16B,
+                                         kFormat4H,
+                                         kFormat8H,
+                                         kFormat2S,
+                                         kFormat4S,
+                                         kFormat1D,
+                                         kFormat2D,
+                                         kFormatB,
+                                         kFormatH,
+                                         kFormatS,
+                                         kFormatD};
+    VIXL_ASSERT(GetNEONFormat(format_map) < ArrayLength(vform));
     return vform[GetNEONFormat(format_map)];
   }
 
@@ -592,10 +877,9 @@ class NEONFormatDecoder {
   // The integer format map uses three bits (Q, size<1:0>) to encode the
   // "standard" set of NEON integer vector formats.
   static const NEONFormatMap* IntegerFormatMap() {
-    static const NEONFormatMap map = {
-      {23, 22, 30},
-      {NF_8B, NF_16B, NF_4H, NF_8H, NF_2S, NF_4S, NF_UNDEF, NF_2D}
-    };
+    static const NEONFormatMap map =
+        {{23, 22, 30},
+         {NF_8B, NF_16B, NF_4H, NF_8H, NF_2S, NF_4S, NF_UNDEF, NF_2D}};
     return &map;
   }
 
@@ -603,9 +887,7 @@ class NEONFormatDecoder {
   // long set of NEON integer vector formats. These are used in narrow, wide
   // and long operations.
   static const NEONFormatMap* LongIntegerFormatMap() {
-    static const NEONFormatMap map = {
-      {23, 22}, {NF_8H, NF_4S, NF_2D}
-    };
+    static const NEONFormatMap map = {{23, 22}, {NF_8H, NF_4S, NF_2D}};
     return &map;
   }
 
@@ -614,28 +896,31 @@ class NEONFormatDecoder {
   static const NEONFormatMap* FPFormatMap() {
     // The FP format map assumes two bits (Q, size<0>) are used to encode the
     // NEON FP vector formats: NF_2S, NF_4S, NF_2D.
-    static const NEONFormatMap map = {
-      {22, 30}, {NF_2S, NF_4S, NF_UNDEF, NF_2D}
-    };
+    static const NEONFormatMap map = {{22, 30},
+                                      {NF_2S, NF_4S, NF_UNDEF, NF_2D}};
+    return &map;
+  }
+
+  // The FP16 format map uses one bit (Q) to encode the NEON vector format:
+  // NF_4H, NF_8H.
+  static const NEONFormatMap* FP16FormatMap() {
+    static const NEONFormatMap map = {{30}, {NF_4H, NF_8H}};
     return &map;
   }
 
   // The load/store format map uses three bits (Q, 11, 10) to encode the
   // set of NEON vector formats.
   static const NEONFormatMap* LoadStoreFormatMap() {
-    static const NEONFormatMap map = {
-      {11, 10, 30},
-      {NF_8B, NF_16B, NF_4H, NF_8H, NF_2S, NF_4S, NF_1D, NF_2D}
-    };
+    static const NEONFormatMap map =
+        {{11, 10, 30},
+         {NF_8B, NF_16B, NF_4H, NF_8H, NF_2S, NF_4S, NF_1D, NF_2D}};
     return &map;
   }
 
   // The logical format map uses one bit (Q) to encode the NEON vector format:
   // NF_8B, NF_16B.
   static const NEONFormatMap* LogicalFormatMap() {
-    static const NEONFormatMap map = {
-      {30}, {NF_8B, NF_16B}
-    };
+    static const NEONFormatMap map = {{30}, {NF_8B, NF_16B}};
     return &map;
   }
 
@@ -644,40 +929,40 @@ class NEONFormatDecoder {
   // xxx10->8B, xxx11->16B, xx100->4H, xx101->8H
   // x1000->2S, x1001->4S,  10001->2D, all others undefined.
   static const NEONFormatMap* TriangularFormatMap() {
-    static const NEONFormatMap map = {
-      {19, 18, 17, 16, 30},
-      {NF_UNDEF, NF_UNDEF, NF_8B, NF_16B, NF_4H, NF_8H, NF_8B, NF_16B, NF_2S,
-       NF_4S, NF_8B, NF_16B, NF_4H, NF_8H, NF_8B, NF_16B, NF_UNDEF, NF_2D,
-       NF_8B, NF_16B, NF_4H, NF_8H, NF_8B, NF_16B, NF_2S, NF_4S, NF_8B, NF_16B,
-       NF_4H, NF_8H, NF_8B, NF_16B}
-    };
+    static const NEONFormatMap map =
+        {{19, 18, 17, 16, 30},
+         {NF_UNDEF, NF_UNDEF, NF_8B, NF_16B, NF_4H, NF_8H, NF_8B, NF_16B,
+          NF_2S,    NF_4S,    NF_8B, NF_16B, NF_4H, NF_8H, NF_8B, NF_16B,
+          NF_UNDEF, NF_2D,    NF_8B, NF_16B, NF_4H, NF_8H, NF_8B, NF_16B,
+          NF_2S,    NF_4S,    NF_8B, NF_16B, NF_4H, NF_8H, NF_8B, NF_16B}};
     return &map;
   }
 
   // The scalar format map uses two bits (size<1:0>) to encode the NEON scalar
   // formats: NF_B, NF_H, NF_S, NF_D.
   static const NEONFormatMap* ScalarFormatMap() {
-    static const NEONFormatMap map = {
-      {23, 22}, {NF_B, NF_H, NF_S, NF_D}
-    };
+    static const NEONFormatMap map = {{23, 22}, {NF_B, NF_H, NF_S, NF_D}};
     return &map;
   }
 
   // The long scalar format map uses two bits (size<1:0>) to encode the longer
   // NEON scalar formats: NF_H, NF_S, NF_D.
   static const NEONFormatMap* LongScalarFormatMap() {
-    static const NEONFormatMap map = {
-      {23, 22}, {NF_H, NF_S, NF_D}
-    };
+    static const NEONFormatMap map = {{23, 22}, {NF_H, NF_S, NF_D}};
     return &map;
   }
 
   // The FP scalar format map assumes one bit (size<0>) is used to encode the
   // NEON FP scalar formats: NF_S, NF_D.
   static const NEONFormatMap* FPScalarFormatMap() {
-    static const NEONFormatMap map = {
-      {22}, {NF_S, NF_D}
-    };
+    static const NEONFormatMap map = {{22}, {NF_S, NF_D}};
+    return &map;
+  }
+
+  // The FP scalar pairwise format map assumes two bits (U, size<0>) are used to
+  // encode the NEON FP scalar formats: NF_H, NF_S, NF_D.
+  static const NEONFormatMap* FPScalarPairwiseFormatMap() {
+    static const NEONFormatMap map = {{29, 22}, {NF_H, NF_UNDEF, NF_S, NF_D}};
     return &map;
   }
 
@@ -685,11 +970,23 @@ class NEONFormatDecoder {
   // the NEON FP scalar formats:
   // xxx1->B, xx10->H, x100->S, 1000->D, all others undefined.
   static const NEONFormatMap* TriangularScalarFormatMap() {
-    static const NEONFormatMap map = {
-      {19, 18, 17, 16},
-      {NF_UNDEF, NF_B, NF_H, NF_B, NF_S, NF_B, NF_H, NF_B,
-       NF_D,     NF_B, NF_H, NF_B, NF_S, NF_B, NF_H, NF_B}
-    };
+    static const NEONFormatMap map = {{19, 18, 17, 16},
+                                      {NF_UNDEF,
+                                       NF_B,
+                                       NF_H,
+                                       NF_B,
+                                       NF_S,
+                                       NF_B,
+                                       NF_H,
+                                       NF_B,
+                                       NF_D,
+                                       NF_B,
+                                       NF_H,
+                                       NF_B,
+                                       NF_S,
+                                       NF_B,
+                                       NF_H,
+                                       NF_B}};
     return &map;
   }
 
@@ -712,26 +1009,29 @@ class NEONFormatDecoder {
 
   // Convert a NEONFormat into a string.
   static const char* NEONFormatAsString(NEONFormat format) {
+    // clang-format off
     static const char* formats[] = {
       "undefined",
       "8b", "16b", "4h", "8h", "2s", "4s", "1d", "2d",
       "b", "h", "s", "d"
     };
-    VIXL_ASSERT(format < (sizeof(formats) / sizeof(formats[0])));
+    // clang-format on
+    VIXL_ASSERT(format < ArrayLength(formats));
     return formats[format];
   }
 
   // Convert a NEONFormat into a register placeholder string.
   static const char* NEONFormatAsPlaceholder(NEONFormat format) {
-    VIXL_ASSERT((format == NF_B) || (format == NF_H) ||
-                (format == NF_S) || (format == NF_D) ||
-                (format == NF_UNDEF));
+    VIXL_ASSERT((format == NF_B) || (format == NF_H) || (format == NF_S) ||
+                (format == NF_D) || (format == NF_UNDEF));
+    // clang-format off
     static const char* formats[] = {
       "undefined",
       "undefined", "undefined", "undefined", "undefined",
       "undefined", "undefined", "undefined", "undefined",
       "'B", "'H", "'S", "'D"
     };
+    // clang-format on
     return formats[format];
   }
 
@@ -752,6 +1052,7 @@ class NEONFormatDecoder {
   char form_buffer_[64];
   char mne_buffer_[16];
 };
+}  // namespace aarch64
 }  // namespace vixl
 
-#endif  // VIXL_A64_INSTRUCTIONS_A64_H_
+#endif  // VIXL_AARCH64_INSTRUCTIONS_AARCH64_H_
