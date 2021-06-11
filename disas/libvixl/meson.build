@@ -1,7 +1,9 @@
 libvixl_ss.add(files(
+  'vixl/aarch64/cpu-features-auditor-aarch64.cc',
   'vixl/aarch64/decoder-aarch64.cc',
   'vixl/aarch64/disasm-aarch64.cc',
   'vixl/aarch64/instructions-aarch64.cc',
   'vixl/compiler-intrinsics-vixl.cc',
+  'vixl/cpu-features.cc',
   'vixl/utils-vixl.cc',
 ))
