@@ -1630,7 +1630,7 @@ TRANS_F(RR)
         return false;
     }
 
-    helper(cpu_reg(ctx, AS_ZERO(a->Rd)), cpu_env, cpu_reg(ctx, AS_ZERO(a->Rn)));
+    helper(cpu_reg(ctx, a->Rd), cpu_env, cpu_reg(ctx, a->Rn));
     gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rd));
 
     return true;

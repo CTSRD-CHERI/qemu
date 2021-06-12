@@ -729,6 +729,7 @@ TCGv_i64 new_tmp_a64_zero(DisasContext *s)
 /* register access for when 31 == SP */
 TCGv_i64 cpu_reg_sp(DisasContext *s, int reg)
 {
+    tcg_debug_assert(reg >= 0 && reg <= 31);
 #ifdef TARGET_CHERI
     return _cpu_cursors_do_not_access_directly[reg];
 #else
