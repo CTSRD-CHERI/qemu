@@ -65,6 +65,8 @@ _gen_cap_check(rmw)
 
 #ifdef TARGET_MIPS
 static inline void gen_load_gpr(TCGv t, int reg);
+#elif defined(TARGET_AARCH64)
+TCGv_i64 cpu_reg(DisasContext *s, int reg);
 #endif
 
 static inline void generate_get_ddc_checked_gpr_plus_offset(
@@ -76,6 +78,10 @@ static inline void generate_get_ddc_checked_gpr_plus_offset(
     gen_get_gpr((TCGv)addr, reg_num);
 #elif defined(TARGET_MIPS)
     gen_load_gpr((TCGv)addr, reg_num);
+#elif defined(TARGET_AARCH64)
+    // LETODO Not sure this is the correct function. Also need to select between
+    // cpu_reg and cpu_reg_sp.
+    tcg_gen_mov_i64((TCGv)addr, cpu_reg(ctx, reg_num));
 #else
 #error "Don't know how to fetch a GPR value"
 #endif
