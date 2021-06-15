@@ -270,8 +270,8 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-            " addr=" TARGET_FMT_plx "\n",
+            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
+            " addr=" TARGET_FMT_lx "\n",
             offset, cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
@@ -314,8 +314,8 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-            " addr=" TARGET_FMT_plx "\n",
+            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
+            " addr=" TARGET_FMT_lx "\n",
             offset, cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
@@ -386,8 +386,8 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-            " addr=" TARGET_FMT_plx "\n",
+            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
+            " addr=" TARGET_FMT_lx "\n",
             offset, cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
