@@ -1214,7 +1214,7 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
     return tag;
 }
 
-void squash_mutable_permissions(uint64_t *pesbt, const cap_register_t *source)
+void squash_mutable_permissions(target_ulong *pesbt, const cap_register_t *source)
 {
 #ifdef TARGET_AARCH64
     if (!(source->cr_perms & CC128_PERM_MUTABLE_LOAD) &&
@@ -1304,8 +1304,8 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
     return tag;
 }
 
-bool load_cap_from_memory_raw(CPUArchState *env, uint64_t *pesbt,
-                              uint64_t *cursor, uint32_t cb,
+bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
                               target_ulong retpc, hwaddr *physaddr)
 {
@@ -1512,14 +1512,14 @@ void CHERI_HELPER_IMPL(debug_cap(CPUArchState *env, uint32_t regndx))
     bool stateMeansTagged = state == CREG_TAGGED_CAP;
     bool decompressedMeansTagged =
         (state == CREG_FULLY_DECOMPRESSED) && cap->cr_tag;
-    uint64_t pesbt = cap->cached_pesbt;
+    target_ulong pesbt = cap->cached_pesbt;
     printf("Debug Cap %2d: Cursor " TARGET_FMT_lx ". Pesbt " TARGET_FMT_lx
            ". Tagged %d (%d,%d). Type " TARGET_FMT_lx ". "
            "Perms " TARGET_FMT_lx "\n",
-           regndx, cap->_cr_cursor, pesbt ^ CC128_NULL_XOR_MASK,
+           regndx, cap->_cr_cursor, pesbt ^ CAP_NULL_XOR_MASK,
            stateMeansTagged || decompressedMeansTagged, state, cap->cr_tag,
-           cc128_cap_pesbt_extract_OTYPE(pesbt),
-           cc128_cap_pesbt_extract_HWPERMS(pesbt));
+           CAP_cc(cap_pesbt_extract_OTYPE)(pesbt),
+           CAP_cc(cap_pesbt_extract_HWPERMS)(pesbt));
     if (state == CREG_FULLY_DECOMPRESSED) {
         printf("Base: " TARGET_FMT_lx ". Top " TARGET_FMT_lu TARGET_FMT_lx
                ".\n",
