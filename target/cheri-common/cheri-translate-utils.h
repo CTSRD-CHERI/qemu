@@ -579,8 +579,6 @@ static inline void gen_check_cond_branch_target(DisasContext *ctx,
 
 #if defined(TARGET_CHERI)
 
-// NOTE: I wrote all this for 128, but it may apply to other formats.
-
 // This function belongs in a target specific header
 static inline uint32_t gp_register_offset(int reg_num)
 {
@@ -795,7 +793,7 @@ static void gen_ensure_cap_decompressed(DisasContext *ctx, int regnum)
 }
 
 static inline void gen_cap_get_cursor(DisasContext *ctx, int regnum,
-                                      TCGv_i64 cursor)
+                                      TCGv cursor)
 {
     // On platforms with merged register file it is better to do the GPR loads
     // as they will likely refer to globals.
@@ -803,11 +801,11 @@ static inline void gen_cap_get_cursor(DisasContext *ctx, int regnum,
         target_get_gpr(ctx, cursor, regnum);
     } else {
         if (regnum == NULL_CAPREG_INDEX) {
-            tcg_gen_movi_i64(cursor, 0);
+            tcg_gen_movi_tl(cursor, 0);
         } else {
-            tcg_gen_ld_i64(cursor, cpu_env,
-                           gp_register_offset(regnum) +
-                               offsetof(cap_register_t, _cr_cursor));
+            tcg_gen_ld_tl(cursor, cpu_env,
+                          gp_register_offset(regnum) +
+                              offsetof(cap_register_t, _cr_cursor));
         }
     }
     cheri_tcg_printf_verbose("cd", "Get reg %d cursor: %lx\n", regnum, cursor);
@@ -917,12 +915,12 @@ static inline void gen_lazy_cap_set_int_cond(DisasContext *ctx, int regnum,
 
     gen_lazy_cap_set_state_cond(ctx, regnum, CREG_INTEGER, conditional);
     // Doing this keeps pesbt always up to date, which is good for stores and
-    // comparisons
-    TCGv_i64 null_pesbt = tcg_const_i64(CC128_NULL_PESBT);
-    tcg_gen_st_i64(null_pesbt, cpu_env,
-                   gp_register_offset(regnum) +
-                       offsetof(cap_register_t, cached_pesbt));
-    tcg_temp_free_i64(null_pesbt);
+    // comparisons.
+    TCGv null_pesbt = tcg_const_tl(CAP_NULL_PESBT);
+    tcg_gen_st_tl(null_pesbt, cpu_env,
+                  gp_register_offset(regnum) +
+                      offsetof(cap_register_t, cached_pesbt));
+    tcg_temp_free(null_pesbt);
 }
 
 static inline void gen_lazy_cap_set_int(DisasContext *ctx, int regnum)
@@ -932,6 +930,10 @@ static inline void gen_lazy_cap_set_int(DisasContext *ctx, int regnum)
     gen_reg_modified_int(ctx, regnum);
 #endif
 }
+
+#endif // defined(TARGET_CHERI)
+#if defined(TARGET_CHERI) && TARGET_LONG_BITS == 64
+// NOTE: I wrote all this for 128, but it may apply to other formats.
 
 // Null everything but cursor at some general offset. Use this for special
 // purpose registers. The GP register file can be handled lazily with
