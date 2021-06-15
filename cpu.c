@@ -36,6 +36,7 @@
 #include "sysemu/replay.h"
 #include "translate-all.h"
 #include "exec/log.h"
+#include "exec/log_instr.h"
 
 uintptr_t qemu_host_page_size;
 intptr_t qemu_host_page_mask;
@@ -181,6 +182,7 @@ void cpu_exec_realizefn(CPUState *cpu, Error **errp)
     if (tcg_enabled() && !tcg_target_initialized) {
         tcg_target_initialized = true;
         cc->tcg_initialize();
+        qemu_log_printf_create_globals();
     }
     tlb_init(cpu);
 
