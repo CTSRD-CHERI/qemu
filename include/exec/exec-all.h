@@ -405,6 +405,14 @@ static inline void *probe_read(CPUArchState *env, target_ulong addr, int size,
     return probe_access(env, addr, size, MMU_DATA_LOAD, mmu_idx, retaddr);
 }
 
+#ifdef TARGET_CHERI
+static inline void *probe_cap_write(CPUArchState *env, target_ulong addr,
+                                    int size, int mmu_idx, uintptr_t retaddr)
+{
+    return probe_access(env, addr, size, MMU_DATA_CAP_STORE, mmu_idx, retaddr);
+}
+#endif
+
 /**
  * probe_access_flags:
  * @env: CPUArchState
