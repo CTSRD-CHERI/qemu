@@ -145,7 +145,7 @@ static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
                                                            int reg,
                                                            uintptr_t retpc)
 {
-    g_assert_not_reached();
+    raise_cheri_exception_impl(env, CapEx_TagViolation, reg, va, false, retpc);
 }
 
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
