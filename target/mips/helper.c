@@ -144,6 +144,10 @@ int r4k_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
                     return TLBRET_S;
                 }
             }
+
+            if (n ? tlb->S1 : tlb->S0) {
+                *prot |= PAGE_SC_TRAP;
+            }
 #else
             if (rw == MMU_INST_FETCH && (n ? tlb->XI1 : tlb->XI0)) {
                 return TLBRET_XI;
@@ -1000,6 +1004,10 @@ bool mips_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 
     /* data access */
 #if !defined(CONFIG_USER_ONLY)
+    MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
+#ifdef TARGET_CHERI
+    attrs.tag_setting = access_type == MMU_DATA_CAP_STORE;
+#endif
     /* XXX: put correct access by using cpu_restore_state() correctly */
     mips_access_type = ACCESS_INT;
     ret = get_physical_address(env, &physical, &prot, address,
@@ -1017,9 +1025,9 @@ bool mips_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
         break;
     }
     if (ret == TLBRET_MATCH) {
-        tlb_set_page(cs, address & TARGET_PAGE_MASK,
-                     physical & TARGET_PAGE_MASK, prot,
-                     mmu_idx, TARGET_PAGE_SIZE);
+        tlb_set_page_with_attrs(cs, address & TARGET_PAGE_MASK,
+                                physical & TARGET_PAGE_MASK, attrs, prot,
+                                mmu_idx, TARGET_PAGE_SIZE);
         return true;
     }
 #if !defined(TARGET_MIPS64)
@@ -1037,9 +1045,9 @@ bool mips_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
             ret = get_physical_address(env, &physical, &prot, address,
                                        access_type, mips_access_type, mmu_idx);
             if (ret == TLBRET_MATCH) {
-                tlb_set_page(cs, address & TARGET_PAGE_MASK,
-                             physical & TARGET_PAGE_MASK, prot,
-                             mmu_idx, TARGET_PAGE_SIZE);
+                tlb_set_page_with_attrs(cs, address & TARGET_PAGE_MASK,
+                                        physical & TARGET_PAGE_MASK, attrs,
+                                        prot, mmu_idx, TARGET_PAGE_SIZE);
                 return true;
             }
         }
@@ -1051,6 +1059,9 @@ bool mips_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 #endif
 
 #ifdef TARGET_CHERI
+    // NOTE: The register for the exception has possibly already been set.
+    // An extra reg argument might have been preferable, but this interferes
+    // less with the other targets, which don't pass a register number here.
     raise_mmu_exception(env, address, access_type, ret, 0xff);
 #else
     raise_mmu_exception(env, address, access_type, ret);
@@ -1082,28 +1093,6 @@ hwaddr cpu_mips_translate_address(CPUMIPSState *env, target_ulong address,
         return physical;
     }
 }
-
-#ifdef TARGET_CHERI
-hwaddr cpu_mips_translate_address_c2(CPUMIPSState *env, target_ulong address,
-                                     MMUAccessType rw, int reg, int *prot,
-                                     uintptr_t retpc)
-{
-    hwaddr physical;
-    int access_type;
-    int ret = 0;
-
-    /* data access */
-    access_type = ACCESS_INT;
-    ret = get_physical_address(env, &physical, prot,
-                               address, rw, access_type,
-                               cpu_mmu_index(env, false));
-    if (ret != TLBRET_MATCH) {
-        raise_mmu_exception(env, address, rw, ret, reg);
-        do_raise_exception_err(env, env_cpu(env)->exception_index, env->error_code, retpc);
-    }
-    return physical;
-}
-#endif /* TARGET_CHERI */
 
 static const char * const excp_names[EXCP_LAST + 1] = {
     [EXCP_RESET] = "reset",

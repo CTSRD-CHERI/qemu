@@ -64,6 +64,19 @@ static inline void QEMU_NORETURN raise_load_tag_exception(
 #endif
 }
 
+static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
+                                                           target_ulong va,
+                                                           int reg,
+                                                           uintptr_t retpc)
+{
+#ifdef TARGET_RISCV32
+    g_assert_not_reached();
+#else
+    env->badaddr = va;
+    riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT, retpc);
+#endif
+}
+
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
