@@ -89,7 +89,7 @@ cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 csealentry  1111111  10001 ..... 000 ..... 1011011 @r2
 # cloadtags 1111111  10010 ..... 000 ..... 1011011 @r2
 cgetversion 1111111  10011 ..... 000 ..... 1011011 @r2
-cloadversion 1111111  10100 ..... 000 ..... 1011011 @r2
+cloadversion 1111111  10110 ..... 000 ..... 1011011 @r2
 # cloadversions 1111111  10101 ..... 000 ..... 1011011 @r2
 
 # There is an existing @sfence_vma format with rs1+rs2 fields, but let's define a new name

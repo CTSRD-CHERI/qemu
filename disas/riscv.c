@@ -1513,7 +1513,7 @@ static rv_opcode decode_cheri_two_op(unsigned func) {
     case 0b01111: return rv_op_cgetaddr;
     case 0b10001: return rv_op_csealentry;
     case 0b10011: return rv_op_cgetversion;
-    case 0b10100: return rv_op_cloadversion;
+    case 0b10110: return rv_op_cloadversion;
     default: return rv_op_illegal;
     }
 }
