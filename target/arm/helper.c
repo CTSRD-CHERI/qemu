@@ -689,7 +689,8 @@ static void dacr_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
     tlb_flush(CPU(cpu)); /* Flush TLB as domain not tracked in TLB */
 }
 
-static void fcse_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
+static void tlb_effecting_write(CPUARMState *env, const ARMCPRegInfo *ri,
+                                uint64_t value)
 {
     ARMCPU *cpu = env_archcpu(env);
 
@@ -701,6 +702,9 @@ static void fcse_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t value)
         raw_write(env, ri, value);
     }
 }
+
+#define fcse_write tlb_effecting_write
+#define cctlr_write tlb_effecting_write
 
 static void contextidr_write(CPUARMState *env, const ARMCPRegInfo *ri,
                              uint64_t value)
@@ -9361,7 +9365,8 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .type = 0,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, CCTLR_el[3]),
-         .resetvalue = 0},
+         .resetvalue = 0,
+         .writefn = cctlr_write},
         {.name = "CCTLR_EL2",
          .opc0 = 3,
          .opc1 = 4,
@@ -9372,7 +9377,8 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .type = 0,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, CCTLR_el[2]),
-         .resetvalue = 0},
+         .resetvalue = 0,
+         .writefn = cctlr_write},
         {.name = "CCTLR_EL1",
          .opc0 = 3,
          .opc1 = 0,
@@ -9383,7 +9389,8 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .type = 0,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, CCTLR_el[1]),
-         .resetvalue = 0},
+         .resetvalue = 0,
+         .writefn = cctlr_write},
         {.name = "CCTLR_EL0",
          .opc0 = 3,
          .opc1 = 3,
@@ -9394,7 +9401,8 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .type = 0,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, CCTLR_el[0]),
-         .resetvalue = 0},
+         .resetvalue = 0,
+         .writefn = cctlr_write},
         // TODO CCTLR_EL12
         // DDC_EL3 only accessible through DDC so it doesn't get an entry.
         {.name = "CID_EL0",
@@ -9407,14 +9415,18 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .type = ARM_CP_CAP,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, cid_el0),
-         .capresetvalue = null_cap
-        },
-        { .name = "TPIDRRO_EL0", .state = ARM_CP_STATE_AA64,
-          .opc0 = 3, .opc1 = 3, .opc2 = 4, .crn = 13, .crm = 0,
-          .access = PL0_RW | PL_IN_EXECUTIVE,
-          .type = ARM_CP_CAP_ON_MORELLO,
-          .fieldoffset = offsetof(CPUARMState, cp15.tpidrro_el[0]),
-          .resetvalue = 0},
+         .capresetvalue = null_cap},
+        {.name = "TPIDRRO_EL0",
+         .state = ARM_CP_STATE_AA64,
+         .opc0 = 3,
+         .opc1 = 3,
+         .opc2 = 4,
+         .crn = 13,
+         .crm = 0,
+         .access = PL0_RW | PL_IN_EXECUTIVE,
+         .type = ARM_CP_CAP_ON_MORELLO,
+         .fieldoffset = offsetof(CPUARMState, cp15.tpidrro_el[0]),
+         .resetvalue = 0},
         REGINFO_SENTINEL};
     define_arm_cp_regs(cpu, cheri_regs);
 #endif
@@ -12559,26 +12571,26 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
 
     // Cap stores can fault here as only tagged stores specify
     // MMU_DATA_CAP_STORE
-    if (access_type == MMU_DATA_CAP_STORE) {
-        if (!cdbm && !sc)
+    if (!cdbm && !sc) {
+        *prot |= PAGE_SC_TRAP;
+        if (access_type == MMU_DATA_CAP_STORE) {
+            access_type = base_access_type;
             goto do_fault;
-        access_type = MMU_DATA_STORE;
+        }
     }
 
     // Cap loads just need normal load permission at this point, because traps /
     // clears require the tag
-    if (access_type == MMU_DATA_CAP_LOAD) {
-        uint64_t cctlr = regime_cctlr(env, mmu_idx);
-        bool tgeny = param.select ? !!(cctlr & 2) : (cctlr & 1);
-        // (faults/clears indicated by prot)
-        if (lc == 0) {
-            *prot |= PAGE_LC_CLEAR;
-        } else if ((lc & 2) && (tgeny ^ (lc & 1))) {
-            *prot |= PAGE_LC_TRAP;
-        }
-        access_type = MMU_DATA_LOAD;
+    uint64_t cctlr = regime_cctlr(env, mmu_idx);
+    bool tgeny = param.select ? !!(cctlr & 2) : (cctlr & 1);
+    // (faults/clears indicated by prot)
+    if (lc == 0) {
+        *prot |= PAGE_LC_CLEAR;
+    } else if ((lc & 2) && (tgeny ^ (lc & 1))) {
+        *prot |= PAGE_LC_TRAP;
     }
 
+    access_type = base_access_type;
 #endif
 
     if (ns) {

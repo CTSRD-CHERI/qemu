@@ -3360,12 +3360,6 @@ typedef ARMCPU ArchCPU;
 #include "cpu_cheri.h"
 #include "cheri-lazy-capregs.h"
 
-#ifdef TARGET_CHERI
-hwaddr cpu_arm_translate_address_tagmem(CPUARMState *env, target_ulong address,
-                                        MMUAccessType rw, int reg, int *prot,
-                                        uintptr_t retpc);
-#endif
-
 // Get an integer register by number in any mode.
 static inline target_ulong arm_get_xreg(CPUARMState *env, int regnum)
 {

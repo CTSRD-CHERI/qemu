@@ -134,6 +134,14 @@ static inline void QEMU_NORETURN raise_load_tag_exception(CPUArchState *env,
     raise_cheri_exception_impl(env, CapEx_TagViolation, cb, va, false, retpc);
 }
 
+static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
+                                                           target_ulong va,
+                                                           int reg,
+                                                           uintptr_t retpc)
+{
+    raise_cheri_exception_impl(env, CapEx_TagViolation, reg, va, false, retpc);
+}
+
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
