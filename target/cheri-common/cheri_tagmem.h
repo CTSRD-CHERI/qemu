@@ -65,4 +65,8 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
 
 void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
                    hwaddr *ret_paddr, uintptr_t pc);
+
+void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
+                            RAMBlock *ram, ram_addr_t ram_offset, size_t size,
+                            int *prot, bool tag_write);
 #endif /* TARGET_CHERI */

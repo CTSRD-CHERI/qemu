@@ -547,7 +547,22 @@ static inline void cpu_mips_store_capcause(CPUMIPSState *env, uint16_t reg_num,
         uint16_t exc_code)
 {
 
-    env->CP2_CapCause = (exc_code << 8) | (reg_num & 0xff);
+    env->CP2_CapCause =
+        (exc_code << 8) | (env->capcause_reg_already_set ? env->reg_if_exception
+                                                         : (reg_num & 0xff));
+    env->capcause_reg_already_set = false;
+}
+
+static inline void cpu_mips_store_capcause_reg(CPUMIPSState *env,
+                                               uint16_t reg_num)
+{
+    env->reg_if_exception = reg_num & 0xff;
+    env->capcause_reg_already_set = true;
+}
+
+static inline void cpu_mips_clear_capcause_reg(CPUMIPSState *env)
+{
+    env->capcause_reg_already_set = false;
 }
 
 static inline QEMU_NORETURN void do_raise_c0_exception_impl(CPUMIPSState *env,

@@ -1240,6 +1240,8 @@ struct CPUMIPSState {
      */
     uint16_t CP2_CapCause; /* Upper 8 bits exception code; lower reg# */
     /* See cheri-archspecific.h */
+    uint8_t reg_if_exception;
+    bool capcause_reg_already_set;
 
     target_ulong cheri_capfilter_lo;
     target_ulong cheri_capfilter_hi;

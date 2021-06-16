@@ -193,6 +193,9 @@ bool arm_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
             arm_tlb_mte_tagged(&attrs) = true;
         }
 
+#ifdef TARGET_CHERI
+        attrs.tag_setting = access_type == MMU_DATA_CAP_STORE;
+#endif
         tlb_set_page_with_attrs(cs, address, phys_addr, attrs,
                                 prot, mmu_idx, page_size);
         return true;
@@ -201,6 +204,10 @@ bool arm_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     } else {
         /* now we have a real cpu fault */
         cpu_restore_state(cs, retaddr, true);
+        if (access_type == MMU_DATA_CAP_STORE)
+            access_type = MMU_DATA_STORE;
+        if (access_type == MMU_DATA_CAP_LOAD)
+            access_type = MMU_DATA_LOAD;
         arm_deliver_fault(cpu, address, access_type, mmu_idx, &fi);
     }
 #endif
