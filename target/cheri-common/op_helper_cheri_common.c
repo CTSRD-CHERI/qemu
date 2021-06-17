@@ -1044,7 +1044,8 @@ target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
             " cursor=" TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n",
             offset, cursor, addr);
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (!QEMU_IS_ALIGNED(addr, alignment_required)) {
+    } else if (alignment_required &&
+               !QEMU_IS_ALIGNED_P2(addr, alignment_required)) {
         if (unaligned_handler) {
             unaligned_handler(env, addr, _host_return_address);
         }
