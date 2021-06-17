@@ -310,6 +310,14 @@ extern int daemon(int, int);
 
 /* Check if n is a multiple of m */
 #define QEMU_IS_ALIGNED(n, m) (((n) % (m)) == 0)
+/* Check if n is a multiple of m (m must be a power of two).
+ * This can be use to generate more efficient code if the alignment argument
+ * is not a constant. */
+#if __has_builtin(__builtin_is_aligned)
+#define QEMU_IS_ALIGNED_P2(n, m) __builtin_is_aligned(n, m)
+#else
+#define QEMU_IS_ALIGNED_P2(n, m) (((n) & ((m) - 1)) == 0)
+#endif
 
 /* n-byte align pointer down */
 #define QEMU_ALIGN_PTR_DOWN(p, n) \
