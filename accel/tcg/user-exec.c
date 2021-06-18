@@ -190,9 +190,9 @@ static inline int handle_cpu_signal(uintptr_t pc, siginfo_t *info,
     g_assert_not_reached();
 }
 
-static int probe_access_internal(CPUArchState *env, target_ulong addr,
-                                 int fault_size, MMUAccessType access_type,
-                                 bool nonfault, uintptr_t ra)
+static QEMU_ALWAYS_INLINE int
+probe_access_internal(CPUArchState *env, target_ulong addr, int fault_size,
+                      MMUAccessType access_type, bool nonfault, uintptr_t ra)
 {
     int flags;
 
@@ -235,8 +235,9 @@ int probe_access_flags(CPUArchState *env, target_ulong addr,
     return flags;
 }
 
-void *probe_access(CPUArchState *env, target_ulong addr, int size,
-                   MMUAccessType access_type, int mmu_idx, uintptr_t ra)
+static inline QEMU_ALWAYS_INLINE void *
+probe_access_inlined(CPUArchState *env, target_ulong addr, int size,
+                     MMUAccessType access_type, int mmu_idx, uintptr_t ra)
 {
     int flags;
 
@@ -246,6 +247,8 @@ void *probe_access(CPUArchState *env, target_ulong addr, int size,
 
     return size ? g2h(addr) : NULL;
 }
+
+#include "probe-access.inc.c"
 
 #if defined(__i386__)
 
