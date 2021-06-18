@@ -199,7 +199,7 @@ tagblock_set_tag_many_tagmem(void *tagmem, size_t block_index, uint8_t tags)
 
     tags_shifted = (tags & CAP_TAG_GET_MANY_MASK) << lo;
 
-    // FIXME Again, this could trivially be made atomic
+    /* FIXME: Again, this could trivially be made atomic */
     unsigned long result = bitmap[hi];
     result = (result & ~(CAP_TAG_GET_MANY_MASK << lo)) | tags_shifted;
     bitmap[BIT_WORD(block_index)] = result;
@@ -263,9 +263,10 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 {
 
     if (!ram || !ram->cheri_tags) {
-        // Tags stored here are effectively cleared (unless they should trap)
-        if (!(*prot & PAGE_SC_TRAP))
+        /* Tags stored here are effectively cleared (unless they should trap) */
+        if (!(*prot & PAGE_SC_TRAP)) {
             *prot |= PAGE_SC_CLEAR;
+        }
         return ALL_ZERO_TAGBLK;
     }
 
@@ -276,11 +277,15 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
     if (tag_write && !tagblk) {
         cheri_tag_new_tagblk(ram, tag);
         CPUState *cpu = env_cpu(env);
-        // A vaddr based shootdown is insufficient as multiple mappings may
-        // exist Short of an inverted table, a complete shootdown is required.
+        /*
+         * A vaddr-based shootdown is insufficient as multiple mappings may
+         * exist. Short of an inverted table, a complete shootdown is required.
+         */
         tlb_flush_all_cpus_synced(cpu);
-        // An un-synced flush the current cpu is required as we want to complete
-        // this instruction and THEN exit.
+        /*
+         * An un-synced flush the current cpu is required as we want to complete
+         * this instruction and THEN exit.
+         */
         tlb_flush(cpu);
         tagblk = cheri_tag_block(tag, ram);
         cheri_debug_assert(tagblk);
@@ -482,13 +487,18 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
     }
 }
 
-// TODO: Basically nothing uses this physical address. Tag set probably should
-// TODO: not have to return it.
+/*
+ * TODO: Basically nothing uses this physical address. Tag set probably should
+ * not have to return it.
+ */
 #define handle_paddr_return(rw)                                                \
-    if (ret_paddr)                                                             \
-    *ret_paddr =                                                               \
-        (vaddr & ~TARGET_PAGE_MASK) |                                          \
-        (tlb_entry(env, mmu_idx, vaddr)->addr_##rw & TARGET_PAGE_MASK)
+    do {                                                                       \
+        if (ret_paddr) {                                                       \
+            *ret_paddr = (vaddr & ~TARGET_PAGE_MASK) |                         \
+                         (tlb_entry(env, mmu_idx, vaddr)->addr_##rw &          \
+                          TARGET_PAGE_MASK);                                   \
+        }                                                                      \
+    } while (0)
 
 #ifdef TARGET_MIPS
 #define store_capcause_reg(env, reg) cpu_mips_store_capcause_reg(env, reg)
@@ -523,10 +533,10 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     }
 
     uintptr_t tagmem_flags;
-    void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags);
+    void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
+                                               /*write=*/true, &tagmem_flags);
 
-    // Clear + ALL_ZERO_TAGBLK means no tags can be stored here
+    /* Clear + ALL_ZERO_TAGBLK means no tags can be stored here. */
     if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
         (tagmem == ALL_ZERO_TAGBLK)) {
         return;
@@ -539,10 +549,11 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
         raise_store_tag_exception(env, vaddr, reg, pc);
     }
 
-    // probe_cap_write should have ensured there was a tagmem for this location
-    // A NULL ram should have been indicated via TLBENTRYCAPFLAG_CLEAR or
-    // TLBENTRYCAPFLAG_TRAP
-
+    /*
+     * probe_cap_write() should have ensured there was a tagmem for this
+     * location. A NULL ram should have been indicated via
+     * TLBENTRYCAPFLAG_CLEAR or TLBENTRYCAPFLAG_TRAP.
+     */
     cheri_debug_assert(tagmem != ALL_ZERO_TAGBLK);
 
     target_ulong tag_offset = page_vaddr_to_tag_offset(vaddr);
@@ -564,19 +575,23 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
-    void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, false, &tagmem_flags);
+    void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
+                                               /*write=*/false, &tagmem_flags);
 
     if (prot) {
         *prot = 0;
-        if (tagmem_flags & TLBENTRYCAP_FLAG_CLEAR)
+        if (tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) {
             *prot |= PAGE_LC_CLEAR;
-        if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)
+        }
+        if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP) {
             *prot |= PAGE_LC_TRAP;
+        }
     }
 
-    // Squash happens in the caller, so read the tagblk even if
-    // TLBENTRYCAP_FLAG_CLEAR
+    /*
+     * Squash happens in the caller, so read the tagblk even if
+     * TLBENTRYCAP_FLAG_CLEAR
+     */
     bool result =
         (tagmem == ALL_ZERO_TAGBLK)
             ? 0
@@ -598,8 +613,8 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
-    void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, false, &tagmem_flags);
+    void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
+                                               /*write=*/false, &tagmem_flags);
 
     int result =
         ((tagmem == ALL_ZERO_TAGBLK) || (tagmem_flags & TLBENTRYCAP_FLAG_CLEAR))
@@ -612,8 +627,10 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
      * That should perhaps change?
      */
 #ifndef TARGET_MIPS
-    // FIXME: Should there be a load trap if this instruction is used and no
-    // tags returned?
+    /*
+     * FIXME: Should there be a load trap if this instruction is used and no
+     * tags returned?
+     */
     if ((tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
         raise_load_tag_exception(env, vaddr, reg, pc);
     }
@@ -640,11 +657,14 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     void *tagmem =
         get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, tags, &tagmem_flags);
 
-    if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) && (tagmem == ALL_ZERO_TAGBLK))
+    if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
+        (tagmem == ALL_ZERO_TAGBLK)) {
         return;
+    }
 
-    if (!tags && tagmem == ALL_ZERO_TAGBLK)
+    if (!tags && tagmem == ALL_ZERO_TAGBLK) {
         return;
+    }
 
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
                        "Unimplemented");
