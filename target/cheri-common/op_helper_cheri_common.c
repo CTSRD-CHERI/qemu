@@ -690,14 +690,15 @@ DEFINE_CHERI_STAT(csetaddr);
 DEFINE_CHERI_STAT(candaddr);
 DEFINE_CHERI_STAT(cfromptr);
 
-static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
-                            target_ulong rt, uintptr_t retpc,
-                            struct oob_stats_info *oob_info)
+static inline QEMU_ALWAYS_INLINE void
+cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
+                uintptr_t retpc, struct oob_stats_info *oob_info)
 {
     oob_info->num_uses++;
 #else
-static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
-                            target_ulong rt, uintptr_t retpc, void *dummy_arg)
+static inline QEMU_ALWAYS_INLINE void
+cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
+                uintptr_t retpc, void *dummy_arg)
 {
     (void)dummy_arg;
 #endif
@@ -705,22 +706,29 @@ static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
     /*
      * CIncOffset: Increase Offset
      */
-    if (cbp->cr_tag && is_cap_sealed(cbp)) {
+    if (unlikely(cbp->cr_tag && is_cap_sealed(cbp))) {
         raise_cheri_exception_impl(env, CapEx_SealViolation, cb, true, retpc);
+    }
+    target_ulong new_addr = cap_get_cursor(cbp) + rt;
+    if (likely(addr_in_cap_bounds(cbp, new_addr))) {
+        /* Common case: updating an in-bounds capability. */
+        update_capreg_cursor_from(env, cd, cbp, cb, new_addr);
     } else {
-        target_ulong new_addr = cap_get_cursor(cbp) + rt;
-        cap_register_t result = *cbp;
+        /* Result is out-of-bounds, check if it's representable. */
         if (unlikely(!is_representable_cap_with_addr(cbp, new_addr))) {
             if (cbp->cr_tag) {
                 became_unrepresentable(env, cd, oob_info, retpc);
             }
+            cap_register_t result = *cbp;
             cap_mark_unrepresentable(new_addr, &result);
+            update_capreg(env, cd, &result);
         } else {
-            result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, oob_info, &result,
+            /* out-of-bounds but still representable. */
+            update_capreg_cursor_from(env, cd, cbp, cb, new_addr);
+            check_out_of_bounds_stat(env, oob_info,
+                                     get_readonly_capreg(env, cd),
                                      _host_return_address);
         }
-        update_capreg(env, cd, &result);
     }
 }
 

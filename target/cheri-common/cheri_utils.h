@@ -137,13 +137,20 @@ static inline bool cap_is_in_bounds(const cap_register_t* c, target_ulong addr, 
     return true;
 }
 
-static inline bool cap_cursor_in_bounds(const cap_register_t *c)
+static inline QEMU_ALWAYS_INLINE bool
+addr_in_cap_bounds(const cap_register_t *c, target_ulong addr)
 {
-    return cap_get_cursor(c) >= cap_get_base(c) &&
-           cap_get_cursor(c) < cap_get_top_full(c);
+    return addr >= cap_get_base(c) && addr < cap_get_top_full(c);
 }
 
-static inline bool cap_has_perms(const cap_register_t* reg, uint32_t perms)
+static inline QEMU_ALWAYS_INLINE bool
+cap_cursor_in_bounds(const cap_register_t *c)
+{
+    return addr_in_cap_bounds(c, cap_get_cursor(c));
+}
+
+static inline QEMU_ALWAYS_INLINE bool cap_has_perms(const cap_register_t *reg,
+                                                    uint32_t perms)
 {
     return (reg->cr_perms & perms) == perms;
 }
@@ -269,12 +276,12 @@ static inline void set_max_perms_capability(cap_register_t *crp, target_ulong cu
     *crp = CAP_cc(make_max_perms_cap)(0, cursor, CAP_MAX_TOP);
 }
 
-static inline bool
+static inline QEMU_ALWAYS_INLINE bool
 is_representable_cap_with_addr(const cap_register_t* cap, target_ulong new_addr)
 {
     return CAP_cc(is_representable_with_addr)(cap, new_addr);
 }
-static inline bool
+static inline QEMU_ALWAYS_INLINE bool
 is_representable_cap_when_sealed_with_addr(const cap_register_t* cap, target_ulong new_addr)
 {
     cheri_debug_assert(cap_is_unsealed(cap));
