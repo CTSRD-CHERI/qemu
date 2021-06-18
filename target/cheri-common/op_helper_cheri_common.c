@@ -689,18 +689,15 @@ DEFINE_CHERI_STAT(csetoffset);
 DEFINE_CHERI_STAT(csetaddr);
 DEFINE_CHERI_STAT(candaddr);
 DEFINE_CHERI_STAT(cfromptr);
+#endif
 
 static inline QEMU_ALWAYS_INLINE void
 cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
-                uintptr_t retpc, struct oob_stats_info *oob_info)
+                uintptr_t retpc,
+                struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
 {
+#ifdef DO_CHERI_STATISTICS
     oob_info->num_uses++;
-#else
-static inline QEMU_ALWAYS_INLINE void
-cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
-                uintptr_t retpc, void *dummy_arg)
-{
-    (void)dummy_arg;
 #endif
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
