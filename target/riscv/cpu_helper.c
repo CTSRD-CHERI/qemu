@@ -674,10 +674,12 @@ restart:
                 *prot |= PAGE_WRITE;
             }
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-            if ((pte & PTE_LC) == 0)
+            if ((pte & PTE_LC) == 0) {
                 *prot |= PAGE_LC_CLEAR;
-            if (!(pte & PTE_SC))
+            }
+            if ((pte & PTE_SC) == 0) {
                 *prot |= PAGE_SC_TRAP;
+            }
 #endif
             return TRANSLATE_SUCCESS;
         }

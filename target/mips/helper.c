@@ -1059,9 +1059,11 @@ bool mips_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 #endif
 
 #ifdef TARGET_CHERI
-    // NOTE: The register for the exception has possibly already been set.
-    // An extra reg argument might have been preferable, but this interferes
-    // less with the other targets, which don't pass a register number here.
+    /*
+     * NOTE: The register for the exception has possibly already been set.
+     * An extra reg argument might have been preferable, but this interferes
+     * less with the other targets, which don't pass a register number here.
+     */
     raise_mmu_exception(env, address, access_type, ret, 0xff);
 #else
     raise_mmu_exception(env, address, access_type, ret);
