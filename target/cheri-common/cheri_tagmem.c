@@ -611,11 +611,17 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
 {
     tags &= CAP_TAG_GET_MANY_MASK;
 
-    MMUAccessType accessType = tags ? MMU_DATA_CAP_STORE : MMU_DATA_STORE;
-
     const int mmu_idx = cpu_mmu_index(env, false);
     store_capcause_reg(env, reg);
-    probe_access(env, vaddr, 1, accessType, mmu_idx, pc);
+    /*
+     * We call probe_(cap)_write rather than probe_access since the branches
+     * checking access_type can be eliminated.
+     */
+    if (tags) {
+        probe_cap_write(env, vaddr, 1, mmu_idx, pc);
+    } else {
+        probe_write(env, vaddr, 1, mmu_idx, pc);
+    }
     clear_capcause_reg(env);
 
     handle_paddr_return(write);
