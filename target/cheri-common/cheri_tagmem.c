@@ -238,34 +238,20 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
     }
 }
 
-// FIXME: Does this wants calling in cheri_tagmem_for_addr? Or is it now just
-// FIXME: Dead code?
-static inline void check_tagmem_writable(CPUArchState *env, target_ulong vaddr,
-                                         hwaddr paddr, ram_addr_t ram_offset,
-                                         MemoryRegion *mr, uintptr_t pc)
-{
-    if (memory_region_is_rom(mr) || memory_region_is_romd(mr)) {
-        error_report(
-            "QEMU ERROR: attempting change tag bit on read-only memory:");
-        error_report("%s: vaddr=0x%jx -> %s+0x%jx (paddr=0x%jx)", __func__,
-                     (uintmax_t)vaddr, memory_region_name(mr),
-                     (uintmax_t)ram_offset, (uintmax_t)paddr);
-        cpu_transaction_failed(env_cpu(env), paddr, vaddr, CHERI_CAP_SIZE,
-                               MMU_DATA_STORE, // TODO: MMU_DATA_CAP_STORE
-                               cpu_mmu_index(env, false),
-                               MEMTXATTRS_UNSPECIFIED, MEMTX_ERROR, pc);
-    }
-}
-
 void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                             RAMBlock *ram, ram_addr_t ram_offset, size_t size,
                             int *prot, bool tag_write)
 {
 
-    if (!ram || !ram->cheri_tags) {
+    if (unlikely(!ram || !ram->cheri_tags)) {
         /* Tags stored here are effectively cleared (unless they should trap) */
         if (!(*prot & PAGE_SC_TRAP)) {
             *prot |= PAGE_SC_CLEAR;
+        }
+        if (tag_write) {
+            error_report("Attempting change tag bit on memory without tags:");
+            error_report("%s: vaddr=0x%jx -> %s+0x%jx", __func__,
+                         (uintmax_t)vaddr, ram->idstr, (uintmax_t)ram_offset);
         }
         return ALL_ZERO_TAGBLK;
     }
