@@ -96,40 +96,50 @@ static inline bool is_cap_sealed(const cap_register_t *cp)
 // Try set cursor without changing bounds or modifying a sealed type
 // On some architectures this will be an exception, on others it will be allowed
 // but untag the result
-static inline bool try_set_cap_cursor(CPUArchState *env,
-                                      const cap_register_t *cptr,
-                                      int regnum_src, int regnum_dst,
-                                      target_ulong new_addr, uintptr_t retpc,
-                                      struct oob_stats_info *oob_info)
+static inline QEMU_ALWAYS_INLINE bool
+try_set_cap_cursor(CPUArchState *env, const cap_register_t *cptr,
+                   int regnum_src, int regnum_dst, target_ulong new_addr,
+                   uintptr_t retpc,
+                   struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
 {
     DEFINE_RESULT_VALID;
+#ifdef DO_CHERI_STATISTICS
+    oob_info->num_uses++;
+#endif
 
     if (unlikely(cptr->cr_tag && is_cap_sealed(cptr))) {
         raise_cheri_exception_or_invalidate_impl(env, CapEx_SealViolation,
                                                  regnum_src, retpc);
     }
-
+#ifndef TARGET_IS_MORELLO
+    /*
+     * For Morello we can't just check for in-bounds since changing the sign
+     * bit can affect representability. Additionally, the high bits are not
+     * included in the capability bounds. Therefore, we skip this fast-path
+     * optimzation for Morello and fall back to is_representable_cap_with_addr.
+     */
     if (likely(addr_in_cap_bounds(cptr, new_addr))) {
         /* Common case: updating an in-bounds capability. */
         update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src, new_addr,
                                   !RESULT_VALID);
-    } else {
-        /* Result is out-of-bounds, check if it's representable. */
-        if (unlikely(!is_representable_cap_with_addr(cptr, new_addr))) {
-            if (cptr->cr_tag) {
-                became_unrepresentable(env, regnum_dst, oob_info, retpc);
-            }
-            cap_register_t result = *cptr;
-            cap_mark_unrepresentable(new_addr, &result);
-            update_capreg(env, regnum_dst, &result);
-        } else {
-            /* out-of-bounds but still representable. */
-            update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src,
-                                      new_addr, !RESULT_VALID);
-            check_out_of_bounds_stat(env, oob_info,
-                                     get_readonly_capreg(env, regnum_dst),
-                                     _host_return_address);
+        return RESULT_VALID;
+    }
+    /* Result is out-of-bounds, check if it's representable. */
+#endif
+    if (unlikely(!is_representable_cap_with_addr(cptr, new_addr))) {
+        if (cptr->cr_tag) {
+            became_unrepresentable(env, regnum_dst, oob_info, retpc);
         }
+        cap_register_t result = *cptr;
+        cap_mark_unrepresentable(new_addr, &result);
+        update_capreg(env, regnum_dst, &result);
+    } else {
+        /* (Possibly) out-of-bounds but still representable. */
+        update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src,
+                                  new_addr, !RESULT_VALID);
+        check_out_of_bounds_stat(env, oob_info,
+                                 get_readonly_capreg(env, regnum_dst),
+                                 _host_return_address);
     }
     return RESULT_VALID;
 }
@@ -807,12 +817,8 @@ DEFINE_CHERI_STAT(cfromptr);
 
 static inline QEMU_ALWAYS_INLINE void
 cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
-                uintptr_t retpc,
-                struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
+                uintptr_t retpc, struct oob_stats_info *oob_info)
 {
-#ifdef DO_CHERI_STATISTICS
-    oob_info->num_uses++;
-#endif
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
      * CIncOffset: Increase Offset
