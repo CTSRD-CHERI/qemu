@@ -2154,13 +2154,15 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
             do_raise_exception(env, EXCP_RI, ra);
         }
     }
+
+    if (len_nitems == 0) {
+        goto success; // nothing to do
+    }
+
     dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, dest, len_nitems * pattern_length, ra);
     const target_ulong original_dest = CHECK_AND_ADD_DDC(env, CAP_PERM_STORE, original_dest_ddc_offset, original_len_nitems, ra);
 
     tcg_debug_assert(dest + (len_nitems * pattern_length) == original_dest + original_len_bytes && "continuation broken?");
-    if (len_nitems == 0) {
-        goto success; // nothing to do
-    }
 
     CPUState *cs = env_cpu(env);
 

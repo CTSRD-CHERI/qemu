@@ -96,32 +96,41 @@ static inline bool is_cap_sealed(const cap_register_t *cp)
 // Try set cursor without changing bounds or modifying a sealed type
 // On some architectures this will be an exception, on others it will be allowed
 // but untag the result
-static inline bool try_set_cap_cursor(CPUArchState *env, cap_register_t *cptr,
-                                      int regnum_exception, int regnum_ctr,
+static inline bool try_set_cap_cursor(CPUArchState *env,
+                                      const cap_register_t *cptr,
+                                      int regnum_src, int regnum_dst,
                                       target_ulong new_addr, uintptr_t retpc,
                                       struct oob_stats_info *oob_info)
 {
     DEFINE_RESULT_VALID;
 
-    if (cptr->cr_tag && is_cap_sealed(cptr)) {
+    if (unlikely(cptr->cr_tag && is_cap_sealed(cptr))) {
         raise_cheri_exception_or_invalidate_impl(env, CapEx_SealViolation,
-                                                 regnum_exception, retpc);
+                                                 regnum_src, retpc);
     }
 
-    if (unlikely(!is_representable_cap_with_addr(cptr, new_addr))) {
-        if (cptr->cr_tag) {
-            became_unrepresentable(env, regnum_ctr, oob_info, retpc);
-        }
-        cap_mark_unrepresentable(new_addr, cptr);
+    if (likely(addr_in_cap_bounds(cptr, new_addr))) {
+        /* Common case: updating an in-bounds capability. */
+        update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src, new_addr,
+                                  !RESULT_VALID);
     } else {
-        cptr->_cr_cursor = new_addr;
-        check_out_of_bounds_stat(env, oob_info, cptr, _host_return_address);
+        /* Result is out-of-bounds, check if it's representable. */
+        if (unlikely(!is_representable_cap_with_addr(cptr, new_addr))) {
+            if (cptr->cr_tag) {
+                became_unrepresentable(env, regnum_dst, oob_info, retpc);
+            }
+            cap_register_t result = *cptr;
+            cap_mark_unrepresentable(new_addr, &result);
+            update_capreg(env, regnum_dst, &result);
+        } else {
+            /* out-of-bounds but still representable. */
+            update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src,
+                                      new_addr, !RESULT_VALID);
+            check_out_of_bounds_stat(env, oob_info,
+                                     get_readonly_capreg(env, regnum_dst),
+                                     _host_return_address);
+        }
     }
-
-    if (!RESULT_VALID) {
-        cptr->cr_tag = 0;
-    }
-
     return RESULT_VALID;
 }
 
@@ -794,29 +803,22 @@ DEFINE_CHERI_STAT(csetoffset);
 DEFINE_CHERI_STAT(csetaddr);
 DEFINE_CHERI_STAT(candaddr);
 DEFINE_CHERI_STAT(cfromptr);
+#endif
 
-static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
-                            target_ulong rt, uintptr_t retpc,
-                            struct oob_stats_info *oob_info)
+static inline QEMU_ALWAYS_INLINE void
+cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
+                uintptr_t retpc,
+                struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
 {
+#ifdef DO_CHERI_STATISTICS
     oob_info->num_uses++;
-#else
-static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
-                            target_ulong rt, uintptr_t retpc, void *oob_info)
-{
-    (void)oob_info;
 #endif
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
      * CIncOffset: Increase Offset
      */
-
     target_ulong new_addr = cap_get_cursor(cbp) + rt;
-    cap_register_t result = *cbp;
-
-    try_set_cap_cursor(env, &result, cb, cd, new_addr, retpc, oob_info);
-
-    update_capreg(env, cd, &result);
+    try_set_cap_cursor(env, cbp, cb, cd, new_addr, retpc, oob_info);
 }
 
 void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
@@ -1115,84 +1117,9 @@ const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb)
 #endif
 }
 
-target_ulong cap_check_common_reg(uint32_t required_perms, CPUArchState *env,
-                                  uint32_t cb, target_ulong offset,
-                                  uint32_t size, uintptr_t _host_return_address,
-                                  const cap_register_t *cbp,
-                                  uint32_t alignment_required,
-                                  unaligned_memaccess_handler unaligned_handler)
-{
-
-    const target_ulong cursor = cap_get_cursor(cbp);
-#ifdef TARGET_AARCH64
-    const target_ulong addr = (target_long)offset;
-#else
-    const target_ulong addr = cursor + (target_long)offset;
-#endif
-
-#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cbp->cr_perms) & (X))
-    // The check here is a little fiddly if this is a store and a load due to
-    // priorities. For either loads or stores, permissions fault > bounds fault.
-    // But: load bounds fault > store permissions fault. So all permissions
-    // should not be checked before bounds. It is also a bad idea to call this
-    // twice, once for load, once for store, because it performs alignment
-    // checks and Store permissions fault > load alignment fault
-
-    bool is_load = !!(required_perms & CAP_PERM_LOAD);
-    bool in_bounds = cap_is_in_bounds(cbp, addr, size);
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception_addr_wnr(env, CapEx_TagViolation, cb, offset,
-                                       !is_load);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, offset,
-                                       !is_load);
-    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD)) {
-        raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadViolation, cb,
-                                       offset, false);
-    } else if (!is_load || in_bounds) {
-        if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
-            raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreViolation, cb,
-                                           offset, true);
-        } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_CAP)) {
-            raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreCapViolation,
-                                           cb, offset, true);
-        } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_LOCAL)) {
-            raise_cheri_exception_addr_wnr(
-                env, CapEx_PermitStoreLocalCapViolation, cb, offset, true);
-        }
-    }
-#undef MISSING_REQUIRED_PERM
-
-    if (!in_bounds) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_lx
-            " cursor=" TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n",
-            offset, cursor, addr);
-        raise_cheri_exception_addr_wnr(env, CapEx_LengthViolation, cb, offset,
-                                       !is_load);
-    } else if (!QEMU_IS_ALIGNED(addr, alignment_required)) {
-        if (unaligned_handler) {
-            unaligned_handler(env, addr, _host_return_address);
-        }
-#if defined(TARGET_MIPS) && defined(CHERI_UNALIGNED)
-        const char *access_type =
-            (required_perms == (CAP_PERM_STORE | CAP_PERM_LOAD))
-                ? "RMW"
-                : ((required_perms == CAP_PERM_STORE) ? "store" : "load");
-        qemu_maybe_log_instr_extra(env,
-                                   "Allowing unaligned %d-byte %s of "
-                                   "address 0x%" PRIx64 "\n",
-                                   size, access_type, addr);
-#endif
-    }
-    return addr;
-}
-
-static inline target_ulong cap_check_common(uint32_t required_perms,
-                                            CPUArchState *env, uint32_t cb,
-                                            target_ulong offset, uint32_t size,
-                                            uintptr_t _host_return_address)
+static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common(
+    uint32_t required_perms, CPUArchState *env, uint32_t cb,
+    target_ulong offset, uint32_t size, uintptr_t _host_return_address)
 {
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
     return cap_check_common_reg(required_perms, env, cb, offset, size,

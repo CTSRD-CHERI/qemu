@@ -233,20 +233,22 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 /*
  * Log instruction update to the given capability register.
  */
-#define cheri_log_instr_changed_capreg(env, name, newval) do {          \
-        if (qemu_log_instr_enabled(env)) {                              \
-            qemu_log_instr_cap(env, name, newval);                      \
-        }                                                               \
+#define cheri_log_instr_changed_capreg(env, name, newval)                      \
+    do {                                                                       \
+        if (qemu_log_instr_enabled(env)) {                                     \
+            qemu_log_instr_cap(env, name, newval);                             \
+        }                                                                      \
     } while (0)
 
 /*
  * Log instruction update to the given capability register with
  * integer value.
  */
-#define cheri_log_instr_changed_capreg_int(env, name, newval) do {      \
-        if (qemu_log_instr_enabled(env)) {                              \
-            qemu_log_instr_cap_int(env, name, newval);                  \
-        }                                                               \
+#define cheri_log_instr_changed_capreg_int(env, name, newval)                  \
+    do {                                                                       \
+        if (qemu_log_instr_enabled(env)) {                                     \
+            qemu_log_instr_cap_int(env, name, newval);                         \
+        }                                                                      \
     } while (0)
 
 #else
@@ -254,8 +256,9 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 #define cheri_log_instr_changed_capreg_int(env, name, newval) ((void)0)
 #endif
 
-/* Note: cheri_gp_regnames should be declared in cpu.h or cheri-archspecific.h */
-#define cheri_log_instr_changed_gp_capreg(env, regnum, newval)          \
+/* Note: cheri_gp_regnames should be declared in cpu.h or cheri-archspecific.h
+ */
+#define cheri_log_instr_changed_gp_capreg(env, regnum, newval)                 \
     cheri_log_instr_changed_capreg(env, cheri_gp_regnames[regnum], newval)
 
 static inline void rvfi_changed_capreg(CPUArchState *env, unsigned regnum,
@@ -281,10 +284,46 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     // Update the compressed values for fast access from TCG
     // NOTE: This is only needed if pesbt has fallen out of sync.
     // We should find occurrences of this and get rid of them.
-    get_cap_in_gpregs(gpcrs, regnum)->cached_pesbt = CAP_cc(compress_raw)(target);
+    get_cap_in_gpregs(gpcrs, regnum)->cached_pesbt =
+        CAP_cc(compress_raw)(target);
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, newval->_cr_cursor);
+    cheri_log_instr_changed_gp_capreg(env, regnum, target);
+}
+
+/*
+ * This function can be called to avoid copying a full cap_register_t when
+ * updating a capability register inplace.
+ * Note: new_cursor must be representable given the bounds of source_cap;
+ * see addr_in_cap_bounds()/is_representable_cap_with_addr().
+ */
+static inline void update_capreg_cursor_from(CPUArchState *env, unsigned regnum,
+                                             const cap_register_t *source_cap,
+                                             unsigned source_regnum,
+                                             const target_ulong new_cursor,
+                                             bool clear_tag)
+{
+    if (unlikely(regnum == NULL_CAPREG_INDEX)) {
+        return;
+    }
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    cap_register_t *target = get_cap_in_gpregs(gpcrs, regnum);
+    cheri_debug_assert(get_capreg_state(gpcrs, source_regnum) ==
+                       CREG_FULLY_DECOMPRESSED);
+    cheri_debug_assert(clear_tag ||
+                       is_representable_cap_with_addr(source_cap, new_cursor));
+    if (regnum != source_regnum) {
+        *target = *source_cap;
+        set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
+    }
+    /* When updating in-place, we can avoid copying. */
+    target->_cr_cursor = new_cursor;
+    if (clear_tag) {
+        target->cr_tag = 0;
+    }
+    sanity_check_capreg(gpcrs, regnum);
+    rvfi_changed_capreg(env, regnum, target->_cr_cursor);
     cheri_log_instr_changed_gp_capreg(env, regnum, target);
 }
 
@@ -368,20 +407,24 @@ static inline target_ulong get_capreg_tag(CPUArchState *env, unsigned regnum)
     tcg_abort();
 }
 
-static inline target_ulong get_capreg_tag_filtered(CPUArchState *env, unsigned regnum) {
+static inline target_ulong get_capreg_tag_filtered(CPUArchState *env,
+                                                   unsigned regnum)
+{
 #ifdef TARGET_MIPS
     target_ulong tagged = get_capreg_tag(env, regnum);
 
     // Try avoid decompress if at all possible
-    if (!tagged || env->cheri_capfilter_hi == 0) return tagged;
+    if (!tagged || env->cheri_capfilter_hi == 0)
+        return tagged;
 
     const cap_register_t *csp = get_readonly_capreg(env, regnum);
 
-    // TODO: Also revoke if (lo <= type < hi) && (csp->cr_perms & MAGIC_REVOKE_TYPE)
+    // TODO: Also revoke if (lo <= type < hi) && (csp->cr_perms &
+    // MAGIC_REVOKE_TYPE)
     if (csp->cr_base >= env->cheri_capfilter_lo &&
         csp->_cr_top <= env->cheri_capfilter_hi &&
         (csp->cr_perms & env->cheri_capfilter_perms) == csp->cr_perms)
-      return 0;
+        return 0;
 
     return tagged;
 #else

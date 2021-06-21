@@ -237,47 +237,16 @@ enum _CC_N(OTypes) {
 #endif
 };
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-enum {
-#ifdef CC_IS_MORELLO
-    CC128_RESET_EXP = CC128_MAX_ENCODABLE_EXPONENT,
-    CC128_RESET_TOP = 0,
-#else
-    CC128_RESET_EXP = 52, // bit 12 in top is set -> shift by 52 to get 1 << 64
-    // For a NULL capability we use the internal exponent and need bit 12 in top set
-    // to get to 2^65
-    // let resetT = 0b01 @ 0x000 /* bit 12 set */
-    CC128_RESET_TOP = 1u << (12 - CC128_FIELD_EXPONENT_HIGH_PART_SIZE),
-#endif
-    CC128_RESET_EBT =
-        _CC_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(CC128_RESET_TOP, EXP_NONZERO_TOP) |
-        _CC_ENCODE_EBT_FIELD(0, EXP_NONZERO_BOTTOM) |
-        _CC_ENCODE_EBT_FIELD(CC128_RESET_EXP >> CC128_FIELD_EXPONENT_LOW_PART_SIZE, EXPONENT_HIGH_PART) |
-        _CC_ENCODE_EBT_FIELD(CC128_RESET_EXP & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE, EXPONENT_LOW_PART),
-    CC128_NULL_PESBT = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) | _CC_ENCODE_FIELD(0, RESERVED) |
-                       _CC_ENCODE_FIELD(0, FLAGS) | _CC_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
-                       _CC_ENCODE_FIELD(CC128_OTYPE_UNSEALED, OTYPE) |
-                       _CC_ENCODE_FIELD(CC128_RESET_TOP, EXP_NONZERO_TOP) | _CC_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
-                       _CC_ENCODE_FIELD(CC128_RESET_EXP >> CC128_FIELD_EXPONENT_LOW_PART_SIZE, EXPONENT_HIGH_PART) |
-                       _CC_ENCODE_FIELD(CC128_RESET_EXP & CC128_FIELD_EXPONENT_LOW_PART_MAX_VALUE, EXPONENT_LOW_PART)
-};
-// Whatever NULL would encode to is this constant. We mask on store/load so this
-// invisibly keeps null 0 whatever we choose it to be.
-// #define CC128_NULL_XOR_MASK 0x1ffff8000000
-
-#ifdef CC_IS_MORELLO
-#define CC128_NULL_XOR_MASK (CC128_NULL_PESBT)
-#else
-#define CC128_NULL_XOR_MASK UINT64_C(0x00001ffffc018004)
-#endif
-
-#pragma GCC diagnostic pop
-
-_CC_STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, CC128_NULL_PESBT);
 _CC_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
 #include "cheri_compressed_cap_common.h"
+
+// Sanity-check mask is the expected NULL encoding
+#ifdef CC_IS_MORELLO
+_CC_STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, UINT64_C(0x0000000040070007));
+#else
+_CC_STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, UINT64_C(0x00001ffffc018004));
+#endif
 
 __attribute__((deprecated("Use cc128_compress_raw"))) static inline uint64_t
 compress_128cap_without_xor(const cc128_cap_t* csp) {
