@@ -599,19 +599,9 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
             : tagblock_get_tag_many_tagmem(tagmem,
                                            page_vaddr_to_tag_offset(vaddr));
 
-    /*
-     * The Mips CLoadTags, can "see around" the TLB capability load inhibit.
-     * That should perhaps change?
-     */
-#ifndef TARGET_MIPS
-    /*
-     * FIXME: Should there be a load trap if this instruction is used and no
-     * tags returned?
-     */
-    if ((tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
+    if (result && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
         raise_load_tag_exception(env, vaddr, reg, pc);
     }
-#endif
 
     return result;
 }
