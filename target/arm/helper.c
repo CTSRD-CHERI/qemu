@@ -4254,17 +4254,17 @@ static const ARMCPRegInfo cache_block_ops_cp_reginfo[] = {
       .resetvalue = 0 },
     /* The cache ops themselves: these all NOP for QEMU */
     { .name = "IICR", .cp = 15, .crm = 5, .opc1 = 0,
-      .access = PL1_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
+      .access = PL1_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
     { .name = "IDCR", .cp = 15, .crm = 6, .opc1 = 0,
-      .access = PL1_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
+      .access = PL1_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
     { .name = "CDCR", .cp = 15, .crm = 12, .opc1 = 0,
-      .access = PL0_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
+      .access = PL0_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
     { .name = "PIR", .cp = 15, .crm = 12, .opc1 = 1,
-      .access = PL0_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
+      .access = PL0_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
     { .name = "PDR", .cp = 15, .crm = 12, .opc1 = 2,
-      .access = PL0_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
+      .access = PL0_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
     { .name = "CIDCR", .cp = 15, .crm = 14, .opc1 = 0,
-      .access = PL1_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
+      .access = PL1_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
     REGINFO_SENTINEL
 };
 
@@ -4273,10 +4273,10 @@ static const ARMCPRegInfo cache_test_clean_cp_reginfo[] = {
      * to indicate that there are no dirty cache lines.
      */
     { .name = "TC_DCACHE", .cp = 15, .crn = 7, .crm = 10, .opc1 = 0, .opc2 = 3,
-      .access = PL0_R, .type = ARM_CP_CONST | ARM_CP_NO_RAW,
+      .access = PL0_R, .type = ARM_CP_IC_OR_DC | ARM_CP_CONST | ARM_CP_NO_RAW,
       .resetvalue = (1 << 30) },
     { .name = "TCI_DCACHE", .cp = 15, .crn = 7, .crm = 14, .opc1 = 0, .opc2 = 3,
-      .access = PL0_R, .type = ARM_CP_CONST | ARM_CP_NO_RAW,
+      .access = PL0_R, .type = ARM_CP_IC_OR_DC | ARM_CP_CONST | ARM_CP_NO_RAW,
       .resetvalue = (1 << 30) },
     REGINFO_SENTINEL
 };

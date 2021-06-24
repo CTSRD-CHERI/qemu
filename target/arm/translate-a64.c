@@ -2183,6 +2183,19 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         tcg_gen_movi_i64(tcg_rt, s->current_el << 2);
         gpr_reg_modified(s, rt, false);
         return;
+#ifdef TARGET_CHERI
+    case ARM_CP_IC_OR_DC:
+        // Although we have no caches, we still need to do permission checks
+        // FIXME: This currently checks for both load AND store. This may
+        // FIXME: be more than real morello checks for.
+        clean_addr = clean_data_tbi_and_cheri(s, cpu_reg(s, rt), true, true,
+                                              ZVA_SIZE, rt, false, true);
+        // Consts still need to return the appropriate value
+        if (ri->type & ARM_CP_CONST)
+            break;
+        return;
+#endif
+
     case ARM_CP_DC_ZVA:
         /* Writes clear the aligned block of memory which rt points into. */
         if (s->mte_active[0]) {
