@@ -114,9 +114,6 @@ static inline size_t num_tagblocks(RAMBlock* ram)
     return result;
 }
 
-_Static_assert(CAP_TAG_GET_MANY_SHFT < 3 || sizeof(long) >= 8,
-               "Otherwise settags cannot be atomic");
-
 typedef struct CheriTagBlock {
     DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE);
 } CheriTagBlock;
@@ -287,7 +284,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 
 static inline void *get_tagmem_from_iotlb_entry(CPUArchState *env,
                                                 target_ulong vaddr, int mmu_idx,
-                                                bool write,
+                                                bool isWrite,
                                                 uintptr_t *flags_out)
 {
     /* XXXAR: see mte_helper.c */
@@ -303,7 +300,7 @@ static inline void *get_tagmem_from_iotlb_entry(CPUArchState *env,
 #endif
     CPUIOTLBEntry *iotlbentry =
         &env_tlb(env)->d[mmu_idx].iotlb[tlb_index(env, mmu_idx, vaddr)];
-    if (write) {
+    if (isWrite) {
         *flags_out = IOTLB_GET_TAGMEM_FLAGS(iotlbentry, write);
         return IOTLB_GET_TAGMEM(iotlbentry, write);
     } else {
@@ -499,14 +496,8 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     /*
      * This attempt to resolve a virtual address may cause both a data store
      * TLB fault (entry missing or D bit clear) and a capability store TLB
-     * fault (SC bit set).  v2r_addr bypasses the generic QEMU TCG soft-TLB
-     * (env->tlb_table and friends) but will populate the MIPS-specific TLB
-     * (env->tlb->mmu.r4k.tlb).  Therefore, while a data store to vaddr
-     * after a tag has been set might miss in the QEMU TCG soft-TLB, it
-     * won't miss in the MIPS model and therefore won't raise a processor
-     * exception (and will populate the QEMU TCG soft-TLB for subsequent
-     * data stores).
-     */
+     * fault (SC bit set). */
+
     const int mmu_idx = cpu_mmu_index(env, false);
     store_capcause_reg(env, reg);
     void *host_addr = probe_cap_write(env, vaddr, 1, mmu_idx, pc);
