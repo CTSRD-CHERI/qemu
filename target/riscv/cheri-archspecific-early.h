@@ -35,10 +35,13 @@
 #include "cheri_defs.h"
 
 /*
- * TODO: this controls how many tags are fetched with cgettags/csettags. Check
- * what the proper value is for RISCV.
+ * This controls how many tags are fetched with cgettags/csettags
  */
+#ifdef TARGET_RISCV32
 #define CAP_TAG_GET_MANY_SHFT 3
+#else
+#define CAP_TAG_GET_MANY_SHFT 2
+#endif
 
 /* Table 3.3: Capability Exception Codes */
 typedef enum CheriCapExc {
