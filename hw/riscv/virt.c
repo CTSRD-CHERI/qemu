@@ -75,7 +75,8 @@ static const struct MemmapEntry {
     [VIRT_FLASH] =       { 0x20000000,     0x4000000 },
     [VIRT_PCIE_ECAM] =   { 0x30000000,    0x10000000 },
     [VIRT_PCIE_MMIO] =   { 0x40000000,    0x40000000 },
-    [VIRT_VDEV] =        { 0x50000000,         0x100 },
+    [VIRT_VDEV] =        { 0x50000000,        0x3000 },
+    [VIRT_VDEV_WINDOW] = { 0x60000000,    0x10000000 },
     [VIRT_DRAM] =        { 0x80000000,           0x0 },
 };
 
@@ -711,7 +712,7 @@ static void virt_machine_init(MachineState *machine)
                          memmap[VIRT_PCIE_PIO].base,
                          DEVICE(pcie_plic), true);
 
-    vdev_create(system_memory, memmap[VIRT_VDEV].base);
+    vdev_create(system_memory, memmap[VIRT_VDEV].base, memmap[VIRT_VDEV_WINDOW].base);
 
     serial_mm_init(system_memory, memmap[VIRT_UART0].base,
         0, qdev_get_gpio_in(DEVICE(mmio_plic), UART0_IRQ), 399193,

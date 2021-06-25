@@ -61,6 +61,7 @@ enum {
     VIRT_PCIE_PIO,
     VIRT_PCIE_ECAM,
     VIRT_VDEV,
+    VIRT_VDEV_WINDOW,
 };
 
 enum {
