@@ -281,6 +281,9 @@ extern intptr_t qemu_host_page_mask;
 #define PAGE_LC_TRAP	0x4000
 #define PAGE_SC_TRAP 0x10000
 #define PAGE_SC_CLEAR 0x20000
+#define PAGE_C_BITS (PAGE_LC_CLEAR | PAGE_LC_TRAP | PAGE_LC_TRAP | PAGE_SC_CLEAR)
+#else
+#define PAGE_C_BITS 0
 #endif
 
 #if defined(CONFIG_USER_ONLY)
