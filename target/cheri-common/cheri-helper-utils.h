@@ -233,6 +233,10 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause) {
 const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb);
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
                          target_ulong retpc);
+void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
+                                   target_ulong vaddr, target_ulong retpc,
+                                   int mmu_idx);
+
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           target_ulong retpc, hwaddr *physaddr);
@@ -362,6 +366,11 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
                                   const cap_register_t *source,
                                   target_ulong vaddr, target_ulong retpc,
                                   hwaddr *physaddr, bool *raw_tag);
+bool load_cap_from_memory_raw_tag_mmu_idx(CPUArchState *env, target_ulong *pesbt,
+                                          target_ulong *cursor, uint32_t cb,
+                                          const cap_register_t *source,
+                                          target_ulong vaddr, target_ulong retpc,
+                                          hwaddr *physaddr, bool *raw_tag, int mmu_idx);
 
 void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
                          target_ulong addr, uint32_t link_reg,
