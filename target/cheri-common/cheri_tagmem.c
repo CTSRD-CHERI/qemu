@@ -299,7 +299,7 @@ static inline void *get_tagmem_from_iotlb_entry(CPUArchState *env,
      */
 #ifdef CONFIG_DEBUG_TCG
     CPUTLBEntry *entry = tlb_entry(env, mmu_idx, vaddr);
-    g_assert(tlb_hit(write ? tlb_addr_write(entry) : entry->addr_read, vaddr));
+    g_assert(tlb_hit(isWrite ? tlb_addr_write(entry) : entry->addr_read, vaddr));
 #endif
     CPUIOTLBEntry *iotlbentry =
         &env_tlb(env)->d[mmu_idx].iotlb[tlb_index(env, mmu_idx, vaddr)];
