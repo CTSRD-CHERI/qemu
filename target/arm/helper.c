@@ -11123,9 +11123,9 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
     }
 
 #ifdef TARGET_CHERI
-    env->pstate &= ~PSTATE_C64;
+    new_mode &= ~PSTATE_C64;
     if (cap_exception && (env->CCTLR_el[new_el] & CCTRL_C64E))
-        env->pstate |= PSTATE_C64;
+        new_mode |= PSTATE_C64;
 #endif
 
     pstate_write(env, new_mode);
