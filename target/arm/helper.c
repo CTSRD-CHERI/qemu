@@ -12586,7 +12586,8 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
     // (faults/clears indicated by prot)
     if (lc == 0) {
         *prot |= PAGE_LC_CLEAR;
-    } else if ((lc & 2) && (tgeny ^ (lc & 1))) {
+    } else if ((mmu_idx != ARMMMUIdx_Stage2) &&
+               ((lc & 2) && (tgeny ^ (lc & 1)))) {
         *prot |= PAGE_LC_TRAP;
     }
 
@@ -13467,7 +13468,8 @@ bool get_phys_addr(CPUARMState *env, target_ulong address,
                                      page_size, fi, &cacheattrs2);
             fi->s2addr = ipa;
             /* Combine the S1 and S2 perms.  */
-            *prot &= s2_prot;
+            // LC_CLEAR and LC_TRAP are sadly inverted as they DISALLOW behavior
+            *prot = (s2_prot ^ PAGE_C_BITS) & (*prot ^ PAGE_C_BITS);
 
             /* If S2 fails, return early.  */
             if (ret) {
