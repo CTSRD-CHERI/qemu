@@ -152,6 +152,10 @@ DEF_HELPER_3(ddc_check_bounds, void, env, tl, tl)
 DEF_HELPER_3(pcc_check_bounds, void, env, tl, tl)
 /* Clear tags due to a store. Only calll this after the store succeeded. */
 DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop)
+/* Clear tags with a different mmu_idx than what would be returned by
+ * cpu_mmu_index. */
+DEF_HELPER_4(cheri_invalidate_tags_mmu_idx, void, env, cap_checked_ptr, memop,
+             i32)
 #endif
 
 DEF_HELPER_FLAGS_3(gvec_mov, TCG_CALL_NO_RWG, void, ptr, ptr, i32)

@@ -2829,9 +2829,25 @@ static inline void plugin_gen_mem_callbacks(TCGv_cap_checked_ptr vaddr, uint16_t
 #endif
 }
 
+#ifdef TARGET_AARCH64
+#define CHERI_INVALIDATE_RESPECT_IDX
+#endif
+
 #ifdef TARGET_CHERI
-static inline void gen_cheri_invalidate_tags(TCGv_cap_checked_ptr out_addr, TCGv_i32 memop) {
+static inline void gen_cheri_invalidate_tags(TCGv_cap_checked_ptr out_addr,
+                                             TCGv_i32 memop, TCGArg idx)
+{
+#ifndef CHERI_INVALIDATE_RESPECT_IDX
+    /*
+     * If idx always matches whatever would be used by calling cpu_mmu_index(),
+     * there is no point of including the extra argument on this hot path.
+     */
     gen_helper_cheri_invalidate_tags(cpu_env, out_addr, memop);
+#else
+    TCGv_i32 tcg_idx = tcg_const_i32(idx);
+    gen_helper_cheri_invalidate_tags_mmu_idx(cpu_env, out_addr, memop, tcg_idx);
+    tcg_temp_free_i32(tcg_idx);
+#endif
 }
 #endif
 
@@ -2951,7 +2967,7 @@ void tcg_gen_qemu_st_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
     }
 #endif
 #ifdef TARGET_CHERI
-    gen_cheri_invalidate_tags(addr, tcop);
+    gen_cheri_invalidate_tags(addr, tcop, idx);
 #endif
 #if defined(TARGET_MIPS) || defined(TARGET_RISCV)
     gen_cheri_break_loadlink(addr, tcop);
@@ -3095,7 +3111,7 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     }
 #endif
 #if defined(TARGET_CHERI)
-    gen_cheri_invalidate_tags(addr, tcop);
+    gen_cheri_invalidate_tags(addr, tcop, idx);
 #endif
 #if defined(TARGET_MIPS) || defined(TARGET_RISCV)
     gen_cheri_break_loadlink(addr, tcop);
@@ -3234,7 +3250,7 @@ void tcg_gen_atomic_cmpxchg_i32_with_checked_addr(
     TCGv_i32 op = tcg_const_i32(memop);
 #ifdef TARGET_CHERI
     // XXX: always clear the tag even on failure
-    gen_cheri_invalidate_tags(checked_addr, op);
+    gen_cheri_invalidate_tags(checked_addr, op, idx);
 #endif
     gen_cheri_break_loadlink(checked_addr, op);
     tcg_temp_free_i32(op);
@@ -3307,7 +3323,7 @@ void tcg_gen_atomic_cmpxchg_i64_with_checked_addr(
     TCGv_i32 op = tcg_const_i32(memop);
 #ifdef TARGET_CHERI
     // XXX: always clear the tag even on failure
-    gen_cheri_invalidate_tags(checked_addr, op);
+    gen_cheri_invalidate_tags(checked_addr, op, idx);
 #endif
     gen_cheri_break_loadlink(checked_addr, op);
     tcg_temp_free_i32(op);
@@ -3358,7 +3374,7 @@ static void do_atomic_op_i32(TCGv_i32 ret, TCGv_cap_checked_ptr checked_addr,
 #if defined(TARGET_MIPS) || defined(TARGET_RISCV)
     TCGv_i32 op = tcg_const_i32(memop);
 #ifdef TARGET_CHERI
-    gen_cheri_invalidate_tags(checked_addr, op);
+    gen_cheri_invalidate_tags(checked_addr, op, idx);
 #endif
     gen_cheri_break_loadlink(checked_addr, op);
     tcg_temp_free_i32(op);
@@ -3435,7 +3451,7 @@ static void do_atomic_op_i64(TCGv_i64 ret, TCGv_cap_checked_ptr checked_addr,
 #if defined(TARGET_MIPS) || defined(TARGET_RISCV)
     TCGv_i32 op = tcg_const_i32(memop);
 #ifdef TARGET_CHERI
-    gen_cheri_invalidate_tags(checked_addr, op);
+    gen_cheri_invalidate_tags(checked_addr, op, idx);
 #endif
     gen_cheri_break_loadlink(checked_addr, op);
     tcg_temp_free_i32(op);

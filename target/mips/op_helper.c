@@ -384,7 +384,7 @@ static inline void invalidate_tags_store_left_right(CPUMIPSState *env,
                                                     uintptr_t retpc) {
 #ifdef TARGET_CHERI
     // swr/sdr/swl/sdl will never invalidate more than one capability
-    cheri_tag_invalidate(env, addr, 1, retpc);
+    cheri_tag_invalidate(env, addr, 1, retpc, cpu_mmu_index(env, false));
 #endif
 }
 
@@ -1896,7 +1896,7 @@ store_byte_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint8_t val,
 #ifdef TARGET_CHERI
     // If we returned (i.e. write was successful) we also need to invalidate the
     // tags bit to ensure we are consistent with sb
-    cheri_tag_invalidate(env, vaddr, 1, retaddr);
+    cheri_tag_invalidate(env, vaddr, 1, retaddr, cpu_mmu_index(env, false));
 #endif
 }
 
@@ -1908,7 +1908,7 @@ store_u32_and_clear_tag(CPUMIPSState *env, target_ulong vaddr, uint32_t val,
 #ifdef TARGET_CHERI
     // If we returned (i.e. write was successful) we also need to invalidate the
     // tags bit to ensure we are consistent with sb
-    cheri_tag_invalidate(env, vaddr, 4, retaddr);
+    cheri_tag_invalidate(env, vaddr, 4, retaddr, cpu_mmu_index(env, false));
 #endif
 }
 
