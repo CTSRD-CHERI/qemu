@@ -141,9 +141,14 @@ static void aarch64_a57_initfn(Object *obj)
 
 static void aarch64_morello_initfn(Object *obj)
 {
-    // LETODO: Copied now from a72, still need ot fix up any differences with
-    // morello LETODO: Maybe stop using ifdef TARGET_CHERI and configure it from
-    // here
+    // Can I just remove the a32 registers?
+    // LETODO: Maybe stop using ifdef TARGET_CHERI and configure it from here
+    // LETODO: Some registers have been fixed now, but this is still reporting
+    // as an a72
+
+    // It is unclear how closely this wants to match the real morello board
+    //#define MATCH_MORELLO_CLOSELY
+
     ARMCPU *cpu = ARM_CPU(obj);
     uint64_t t;
 
@@ -178,14 +183,85 @@ static void aarch64_morello_initfn(Object *obj)
     cpu->isar.id_isar3 = 0x01112131;
     cpu->isar.id_isar4 = 0x00011142;
     cpu->isar.id_isar5 = 0x00011121;
-    cpu->isar.id_aa64pfr0 = 0x00002222;
-    cpu->isar.id_aa64dfr0 = 0x10305106;
-    cpu->isar.id_aa64isar0 = 0x00211120;
-    cpu->isar.id_aa64mmfr0 = 0x00001124;
-    cpu->isar.id_aa64mmfr1 = R_ID_AA64MMFR1_LO_MASK;
 
-    t = FIELD_DP64(0, ID_AA64ISAR1, LRCPC, 2); /* ARMv8.4-RCPC */
+    /* These are enabled on morello but not yet implemented in QEMU */
+    // t = FIELD_DP64(t, ID_AA64MMFR2, IESB, 1);
+    // t = FIELD_DP64(t, ID_AA64PFR1, SBSS, 2);
+    // t = FIELD_DP64(t, ID_AA64MMFR2, EVT, 2);
+
+    // Processor Features
+    t = cpu->isar.id_aa64pfr0;
+    t = FIELD_DP64(t, ID_AA64PFR0, FP, 1);
+    t = FIELD_DP64(t, ID_AA64PFR0, ADVSIMD, 1);
+    t = FIELD_DP64(t, ID_AA64PFR0, RAS, 1);
+    t = FIELD_DP64(t, ID_AA64PFR0, EL0, 1);
+    t = FIELD_DP64(t, ID_AA64PFR0, EL1, 1);
+    t = FIELD_DP64(t, ID_AA64PFR0, EL2, 1);
+    t = FIELD_DP64(t, ID_AA64PFR0, EL3, 1);
+#ifdef MATCH_MORELLO_CLOSELY
+    t = FIELD_DP64(t, ID_AA64PFR0, CSV2, 1);
+    t = FIELD_DP64(t, ID_AA64PFR0, CSV3, 1);
+#endif
+    cpu->isar.id_aa64pfr0 = t;
+
+    t = cpu->isar.id_aa64pfr1;
+    t = FIELD_DP64(t, ID_AA64PFR1, CE, 1);
+    cpu->isar.id_aa64pfr1 = t;
+
+    t = cpu->isar.id_aa64dfr0;
+    t = FIELD_DP64(t, ID_AA64DFR0, PMUVER, 5); /* v8.4-PMU */
+    cpu->isar.id_aa64dfr0 = t;
+
+    // Instruction Set Attributes
+    t = cpu->isar.id_aa64isar0;
+    t = FIELD_DP64(t, ID_AA64ISAR0, AES, 2); /* AES + PMULL */
+    t = FIELD_DP64(t, ID_AA64ISAR0, SHA1, 1);
+    t = FIELD_DP64(t, ID_AA64ISAR0, SHA2, 2); /* SHA512 */
+    t = FIELD_DP64(t, ID_AA64ISAR0, CRC32, 1);
+    t = FIELD_DP64(t, ID_AA64ISAR0, ATOMIC, 2);
+    t = FIELD_DP64(t, ID_AA64ISAR0, RDM, 1);
+    t = FIELD_DP64(t, ID_AA64ISAR0, DP, 1);
+    cpu->isar.id_aa64isar0 = t;
+
+    t = cpu->isar.id_aa64isar1;
+    t = FIELD_DP64(t, ID_AA64ISAR1, DPB, 1);
+    t = FIELD_DP64(t, ID_AA64ISAR1, LRCPC, 1); /* ARMv8.3-RCPC */
     cpu->isar.id_aa64isar1 = t;
+
+    // Memory model features
+    t = cpu->isar.id_aa64mmfr0;
+#ifdef MATCH_MORELLO_CLOSELY
+    t = FIELD_DP64(t, ID_AA64MMFR0, SNSMEM, 1);
+    t = FIELD_DP64(t, ID_AA64MMFR0, TGRAN16, 1);
+    t = FIELD_DP64(t, ID_AA64MMFR0, TGRAN64, 0);
+#else
+    t = FIELD_DP64(t, ID_AA64MMFR0, TGRAN16, 0);
+    t = FIELD_DP64(t, ID_AA64MMFR0, TGRAN64, 0b1111);
+#endif
+    t = FIELD_DP64(t, ID_AA64MMFR0, TGRAN4, 0);
+    t = FIELD_DP64(t, ID_AA64MMFR0, PARANGE, 5); /* PARange: 48 bits */
+    t = FIELD_DP64(t, ID_AA64MMFR0, ASIDBITS, 2);
+
+
+    cpu->isar.id_aa64mmfr0 = t;
+
+    t = cpu->isar.id_aa64mmfr1;
+    // 2 would be HAF + DS, which would be useful, but tricky to implement.
+    // Morello has it set.
+    t = FIELD_DP64(t, ID_AA64MMFR1, HAFDBS, 0) /**/;
+    t = FIELD_DP64(t, ID_AA64MMFR1, HPDS, 2); /* HPD+TTPBHA*/
+    t = FIELD_DP64(t, ID_AA64MMFR1, LO, 1);
+    t = FIELD_DP64(t, ID_AA64MMFR1, VH, 1);
+    t = FIELD_DP64(t, ID_AA64MMFR1, PAN, 2); /* PAN + ATS1E1 */
+    t = FIELD_DP64(t, ID_AA64MMFR1, VMIDBITS, 2); /* VMID16 */
+    t = FIELD_DP64(t, ID_AA64MMFR1, XNX, 1); /* TTS2UXN */
+    cpu->isar.id_aa64mmfr1 = t;
+
+    t = cpu->isar.id_aa64mmfr2;
+    t = FIELD_DP64(t, ID_AA64MMFR2, CCIDX, 0);
+    t = FIELD_DP64(t, ID_AA64MMFR2, UAO, 1);
+    t = FIELD_DP64(t, ID_AA64MMFR2, CNP, 1); /* TTCNP */
+    cpu->isar.id_aa64mmfr2 = t;
 
     cpu->isar.dbgdidr = 0x3516d000;
     cpu->clidr = 0x0a200023;
