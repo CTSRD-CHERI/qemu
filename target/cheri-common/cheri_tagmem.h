@@ -48,23 +48,27 @@ void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size);
  * for a unaligned store that crosses a CHERI_CAP_SIZE alignment boundary).
  */
 void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
-                          uintptr_t pc);
+                          uintptr_t pc, int mmu_idx);
 /**
  * Like cheri_tag_invalidate, but the address must be aligned and it will only
  * invalidate a single tag (i.e. no unaligned accesses). A bit faster since it
  * can avoid some branches.
  */
 void cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
-                                  uintptr_t pc);
+                                  uintptr_t pc, int mmu_idx);
 bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
-                   hwaddr *ret_paddr, int *prot, uintptr_t pc);
+                   hwaddr *ret_paddr, int *prot, uintptr_t pc, int mmu_idx);
+/*
+ * Get/set many currently don't have an mmu_idx because no targets currently
+ * require it.
+ */
 int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
                        hwaddr *ret_paddr, uintptr_t pc);
 void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
                         int reg, hwaddr *ret_paddr, uintptr_t pc);
 
 void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
-                   hwaddr *ret_paddr, uintptr_t pc);
+                   hwaddr *ret_paddr, uintptr_t pc, int mmu_idx);
 
 void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                             RAMBlock *ram, ram_addr_t ram_offset, size_t size,

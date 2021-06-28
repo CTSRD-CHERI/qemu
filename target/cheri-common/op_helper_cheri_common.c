@@ -121,7 +121,15 @@ void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd,
 void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
                                              target_ulong vaddr, MemOp op))
 {
-    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC());
+    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(),
+                         cpu_mmu_index(env, false));
+}
+
+void CHERI_HELPER_IMPL(cheri_invalidate_tags_mmu_idx(CPUArchState *env,
+                                                     target_ulong vaddr,
+                                                     MemOp op, uint32_t idx))
+{
+    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), idx);
 }
 
 /// Implementations of individual instructions start here
@@ -1102,11 +1110,10 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
     return tag;
 }
 
-bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
-                                  target_ulong *cursor, uint32_t cb,
-                                  const cap_register_t *source,
-                                  target_ulong vaddr, target_ulong retpc,
-                                  hwaddr *physaddr, bool *raw_tag)
+bool load_cap_from_memory_raw_tag_mmu_idx(
+    CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
+    const cap_register_t *source, target_ulong vaddr, target_ulong retpc,
+    hwaddr *physaddr, bool *raw_tag, int mmu_idx)
 {
     cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
     /*
@@ -1116,8 +1123,7 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
      * NULL capabilities have an all zeroes representation.
      */
     /* No TLB fault possible, should be safe to get a host pointer now */
-    void *host = probe_read(env, vaddr, CHERI_CAP_SIZE,
-                            cpu_mmu_index(env, false), retpc);
+    void *host = probe_read(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
@@ -1142,7 +1148,7 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
         *cursor = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
     int prot;
-    bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc);
+    bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc, mmu_idx);
     if (raw_tag) {
         *raw_tag = tag;
     }
@@ -1180,6 +1186,17 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
     return tag;
 }
 
+bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
+                                  target_ulong *cursor, uint32_t cb,
+                                  const cap_register_t *source,
+                                  target_ulong vaddr, target_ulong retpc,
+                                  hwaddr *physaddr, bool *raw_tag)
+{
+    return load_cap_from_memory_raw_tag_mmu_idx(env, pesbt, cursor, cb, source,
+                                                vaddr, retpc, physaddr, raw_tag,
+                                                cpu_mmu_index(env, false));
+}
+
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
@@ -1200,8 +1217,9 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
 }
 
-void store_cap_to_memory(CPUArchState *env, uint32_t cs,
-                         target_ulong vaddr, target_ulong retpc)
+void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
+                                   target_ulong vaddr, target_ulong retpc,
+                                   int mmu_idx)
 {
     target_ulong cursor = get_capreg_cursor(env, cs);
     target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_NULL_XOR_MASK;
@@ -1227,12 +1245,12 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     env->statcounters_cap_write++;
     if (tag) {
         env->statcounters_cap_write_tagged++;
-        cheri_tag_set(env, vaddr, cs, NULL, retpc);
+        cheri_tag_set(env, vaddr, cs, NULL, retpc, mmu_idx);
     } else {
-        cheri_tag_invalidate_aligned(env, vaddr, retpc);
+        cheri_tag_invalidate_aligned(env, vaddr, retpc, mmu_idx);
     }
     /* No TLB fault possible, should be safe to get a host pointer now */
-    void* host = probe_write(env, vaddr, CHERI_CAP_SIZE, cpu_mmu_index(env, false), retpc);
+    void *host = probe_write(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
@@ -1279,6 +1297,13 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
         qemu_log_instr_st_cap(env, vaddr, &stored_cap);
     }
 #endif
+}
+
+void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
+                         target_ulong retpc)
+{
+    return store_cap_to_memory_mmu_index(env, cs, vaddr, retpc,
+                                         cpu_mmu_index(env, false));
 }
 
 target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
