@@ -41,6 +41,9 @@ DEF_HELPER_6(store_exclusive_cap_via_cap, void, env, i32, i32, i32, i32, tl)
 DEF_HELPER_5(swap_cap_via_cap, void, env, i32, i32, i32, tl)
 DEF_HELPER_5(compare_swap_cap_via_cap, void, env, i32, i32, i32, tl)
 
+DEF_HELPER_5(load_cap_via_cap_mmu_idx, void, env, i32, i32, tl, i32)
+DEF_HELPER_5(store_cap_via_cap_mmu_idx, void, env, i32, i32, tl, i32)
+
 #define KEEP_BRANCH_AND_LINK_BUG 1
 DEF_HELPER_6(load_pair_and_branch_and_link, void, env, i32, i32, i32, tl, i32)
 DEF_HELPER_6(load_and_branch_and_link, void, env, i32, i32, i32, tl, i32)
