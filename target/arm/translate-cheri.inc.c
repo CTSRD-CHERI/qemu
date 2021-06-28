@@ -245,7 +245,7 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
     uint8_t size, uint8_t extend_size, uint32_t rn, uint32_t rm,
     target_ulong imm, bool pre_inc, bool post_inc, bool non_temporal_hint,
     bool alternate_base, bool pcc_base, bool exclusive, int acquire_release,
-    int swap, int option, unsigned int shift)
+    int swap, int option, unsigned int shift, bool unpriv)
 {
     // base on capability rn, otherwise ddc (or maybe even pcc) with rn as
     // value/offset In C64 base is the cap provided, or DDC/PCC otherwise.
@@ -353,6 +353,7 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
         }
 
         if (exclusive) {
+            tcg_debug_assert(!unpriv);
             if (is_load) {
                 gen_helper_load_exclusive_cap_via_cap(cpu_env, tcg_rd, tcg_rd2,
                                                       tcg_base_reg, addr);
@@ -364,10 +365,20 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
                 tcg_temp_free_i32(tcg_rm);
             }
         } else if (rd2 == REG_NONE) {
-            (is_load ? gen_helper_load_cap_via_cap
-                     : gen_helper_store_cap_via_cap)(cpu_env, tcg_rd,
-                                                     tcg_base_reg, addr);
+            if (unpriv) {
+                TCGv_i32 tcg_idx = tcg_const_i32(get_a64_user_mem_index(ctx));
+                (is_load ? gen_helper_load_cap_via_cap_mmu_idx
+                         : gen_helper_store_cap_via_cap_mmu_idx)(cpu_env, tcg_rd,
+                                                         tcg_base_reg, addr, tcg_idx);
+                tcg_temp_free_i32(tcg_idx);
+            } else {
+                (is_load ? gen_helper_load_cap_via_cap
+                         : gen_helper_store_cap_via_cap)(cpu_env, tcg_rd,
+                                                         tcg_base_reg, addr);
+            }
+
         } else {
+            tcg_debug_assert(!unpriv);
             void (*helper_fn)(TCGv_ptr, TCGv_i32, TCGv_i32, TCGv_i32, TCGv);
 
             if (swap == 2)
@@ -394,7 +405,7 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
         assert(rd != REG_NONE);
 
         // Perform bounds checks and do load / stores
-        int memidx = get_mem_index(ctx);
+        int memidx = unpriv ? get_a64_user_mem_index(ctx) : get_mem_index(ctx);
 
         TCGv_cap_checked_ptr checked =
             gen_mte_and_cheri_check1(ctx, addr, is_load, !is_load, false,
@@ -641,7 +652,8 @@ TRANS_F(LDP_STP)
             return load_store_implementation(
                 ctx, load, false, AS_ZERO(a->Ct),
                 pair ? AS_ZERO(a->Ct2) : REG_NONE, 4, 4, a->Rn, AS_ZERO(rs), 0,
-                false, false, false, false, false, true, o2, 0, OPTION_NONE, 0);
+                false, false, false, false, false, true, o2, 0, OPTION_NONE, 0,
+                false);
         } else if (a->op2 == 2) {
             // acquire/release
             assert(rs == 0b11111);
@@ -651,7 +663,7 @@ TRANS_F(LDP_STP)
             return load_store_implementation(
                 ctx, load, false, AS_ZERO(a->Ct), REG_NONE, size, size, a->Rn,
                 REG_NONE, 0, false, false, false, alternate_base, false, false,
-                true, 0, OPTION_NONE, 0);
+                true, 0, OPTION_NONE, 0, false);
         } else
             return false;
     } else if (a->op1 == 0b00 || a->op1 == 0b01) {
@@ -669,7 +681,7 @@ TRANS_F(LDP_STP)
         return load_store_implementation(
             ctx, a->L, false, AS_ZERO(a->Ct), AS_ZERO(a->Ct2), 4, 4, a->Rn,
             REG_NONE, imm, pre_inc, post_inc, non_temporal_hint, false, false,
-            false, false, 0, OPTION_NONE, 0);
+            false, false, 0, OPTION_NONE, 0, false);
     } else
         return false;
 }
@@ -709,7 +721,7 @@ TRANS_F(AUR)
     return load_store_implementation(
         ctx, is_load, a->V, a->V ? a->Rt : AS_ZERO(a->Rt), REG_NONE, size,
         extend_size, a->Rn, REG_NONE, SE_64(a->imm9, 9), false, false, false,
-        true, false, false, false, 0, OPTION_NONE, 0);
+        true, false, false, false, 0, OPTION_NONE, 0, false);
 }
 
 TRANS_F(ALIGN)
@@ -1167,7 +1179,7 @@ TRANS_F(CAS)
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct),
                                      AS_ZERO(a->Cs), 4, 4, a->Rn, REG_NONE, 0,
                                      false, false, false, false, false, false,
-                                     a->L + a->R, 2, OPTION_NONE, 0);
+                                     a->L + a->R, 2, OPTION_NONE, 0, false);
 }
 
 TRANS_F(BUILD_CSEAL_CPYE)
@@ -1514,7 +1526,7 @@ TRANS_F(LDR)
     return load_store_implementation(
         ctx, true, false, AS_ZERO(a->Ct), REG_NONE, 4, 4, REG_NONE, REG_NONE,
         SE_64(a->imm17 << 4, 21), false, false, false, false, true, false,
-        false, 0, OPTION_NONE, 0);
+        false, 0, OPTION_NONE, 0, false);
 }
 
 // op:  00 capsized
@@ -1538,6 +1550,7 @@ TRANS_F(LDR_STR)
 
     bool pre = (a->op == 0b11);
     bool post = (a->op == 0b01);
+    bool unpriv = (a->op == 0b10);
     bool scale = (a->op != 0b00);
 
     assert((a->opc & 2) == 0);
@@ -1549,7 +1562,7 @@ TRANS_F(LDR_STR)
 
     return load_store_implementation(
         ctx, a->opc & 1, false, AS_ZERO(a->Ct), REG_NONE, 4, 4, a->Rn, REG_NONE,
-        imm, pre, post, false, false, false, false, false, 0, OPTION_NONE, 0);
+        imm, pre, post, false, false, false, false, false, 0, OPTION_NONE, 0, unpriv);
 }
 
 // imm12
@@ -1558,7 +1571,7 @@ TRANS_F(LDR_STR1)
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct), REG_NONE,
                                      4, 4, a->Rn, REG_NONE, a->imm12 << 4,
                                      false, false, false, false, false, false,
-                                     false, 0, OPTION_NONE, 0);
+                                     false, 0, OPTION_NONE, 0, false);
 }
 
 TRANS_F(LDR_STR2)
@@ -1566,7 +1579,7 @@ TRANS_F(LDR_STR2)
     return load_store_implementation(ctx, a->opc == 0b01, false, AS_ZERO(a->Ct),
                                      REG_NONE, 4, 4, a->Rn, AS_ZERO(a->Rm), 0,
                                      false, false, false, false, false, false,
-                                     false, 0, a->option_name, a->S ? 4 : 0);
+                                     false, 0, a->option_name, a->S ? 4 : 0, false);
 }
 
 TRANS_F(MRS_MSR)
@@ -1649,7 +1662,7 @@ TRANS_F(SWP)
     return load_store_implementation(ctx, a->A, false, AS_ZERO(a->Ct),
                                      AS_ZERO(a->Cs), 4, 4, a->Rn, REG_NONE, 0,
                                      false, false, false, false, false, false,
-                                     a->A + a->R, 1, OPTION_NONE, 0);
+                                     a->A + a->R, 1, OPTION_NONE, 0, false);
 }
 
 // CVT with PCC / DDC as a base, ptr -> cap
@@ -1689,7 +1702,7 @@ TRANS_F(ARB_ALDR)
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Rt), REG_NONE,
                                      log, log, a->Rn, REG_NONE, a->imm9 << log,
                                      false, false, false, true, false, false,
-                                     false, 0, OPTION_NONE, 0);
+                                     false, 0, OPTION_NONE, 0, false);
 }
 
 // Load store via alternate base register offset
@@ -1749,7 +1762,7 @@ TRANS_F(ASTR_ALDR1)
     return load_store_implementation(
         ctx, is_load, vector, vector ? a->Rt : AS_ZERO(a->Rt), REG_NONE, size,
         extend_size, a->Rn, AS_ZERO(a->Rm), 0, false, false, false, true, false,
-        false, false, 0, a->option_name, a->S ? size : 0);
+        false, false, 0, a->option_name, a->S ? size : 0, false);
 }
 
 // Load store capability via alternate base
@@ -1758,7 +1771,7 @@ TRANS_F(ASTR_ALDR)
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct), REG_NONE,
                                      4, 4, a->Rn, AS_ZERO(a->Rm), 0, false,
                                      false, false, true, false, false, false, 0,
-                                     a->option_name, a->S ? 4 : 0);
+                                     a->option_name, a->S ? 4 : 0, false);
 }
 
 TRANS_F(CT)
@@ -1798,5 +1811,5 @@ TRANS_F(LDAPR)
     // LDAPR is slightly weaker than LDAR, so we can just make LDAPR into LDAR.
     return load_store_implementation(
         ctx, true, false, AS_ZERO(a->Ct), REG_NONE, 4, 4, a->Rn, REG_NONE, 0,
-        false, false, false, false, false, false, true, false, OPTION_NONE, 0);
+        false, false, false, false, false, false, true, false, OPTION_NONE, 0, false);
 }
