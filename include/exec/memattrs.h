@@ -46,6 +46,8 @@ typedef struct MemTxAttrs {
      * and has unused bits.  These fields will be read by target-specific
      * helpers using env->iotlb[mmu_idx][tlb_index()].attrs.target_tlb_bitN.
      */
+    /* This operation is also writing a tag */
+    unsigned int tag_setting : 1;
     unsigned int target_tlb_bit0 : 1;
     unsigned int target_tlb_bit1 : 1;
     unsigned int target_tlb_bit2 : 1;

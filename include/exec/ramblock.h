@@ -67,6 +67,4 @@ struct RAMBlock {
 };
 #endif
 
-void *cheri_tagmem_for_addr(RAMBlock *ram, ram_addr_t ram_offset, size_t size);
-
 #endif

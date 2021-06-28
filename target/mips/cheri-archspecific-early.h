@@ -40,6 +40,7 @@
 
 #include "cheri_defs.h"
 #include "cheri-archspecific-earlier.h"
+
 /*
  * QEMU currently tells the kernel that there are no caches installed
  * (xref target/mips/translate_init.inc.c MIPS_CONFIG1 definition)
