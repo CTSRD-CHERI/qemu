@@ -290,27 +290,6 @@ void CHERI_HELPER_IMPL(creturn(CPUArchState *env)) {
     do_raise_c2_exception_noreg(env, CapEx_ReturnTrap, GETPC());
 }
 
-target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb, uint64_t cbcursor))
-{
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
-        raise_cheri_exception(env, CapEx_PermitLoadCapViolation, cb);
-    } else if ((cbcursor & (8 * CHERI_CAP_SIZE - 1)) != 0) {
-        do_raise_c0_exception(env, EXCP_AdEL, cbcursor);
-    } else {
-       return (target_ulong)cheri_tag_get_many(env, cbcursor, cb, NULL, GETPC());
-    }
-    return 0;
-}
-
 target_ulong CHERI_HELPER_IMPL(cgetcause(CPUArchState *env))
 {
     /*

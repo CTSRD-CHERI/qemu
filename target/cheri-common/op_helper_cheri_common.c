@@ -1275,6 +1275,22 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 #endif
 }
 
+target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
+{
+    static const uint32_t perms = CAP_PERM_LOAD | CAP_PERM_LOAD_CAP;
+    static const size_t ncaps = 1 << CAP_TAG_GET_MANY_SHFT;
+    static const uint32_t sizealign = ncaps * CHERI_CAP_SIZE;
+
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+
+    const target_ulong addr = cap_check_common_reg(
+        perms, env, cb, 0, sizealign, _host_return_address, cbp, sizealign,
+        raise_unaligned_load_exception);
+
+    return (target_ulong)cheri_tag_get_many(env, addr, cb, NULL, GETPC());
+}
+
 QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
                                                  CheriCapExcCause cause,
                                                  uintptr_t _host_return_address)

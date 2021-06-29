@@ -112,3 +112,4 @@ DEF_HELPER_4(store_cap_via_cap, void, env, i32, i32, tl)
 
 // Misc
 DEF_HELPER_2(decompress_cap, void, env, i32)
+DEF_HELPER_2(cloadtags, tl, env, i32)
