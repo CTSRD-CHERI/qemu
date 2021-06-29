@@ -279,6 +279,8 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD)) {
         raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD_CAP)) {
+        raise_cheri_exception(env, CapEx_PermitLoadCapViolation, cb);
     } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
     } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_CAP)) {
