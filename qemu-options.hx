@@ -4109,6 +4109,13 @@ SRST
     Set GDB breakpoint in <count> instructions after start.
 ERST
 
+DEF("cheri-trace-buffer-size", HAS_ARG, QEMU_OPTION_cheri_trace_buffer_size, \
+"-cheri-trace-buffer-size <size>     Set new per-cpu instruction trace buffer size.\n", QEMU_ARCH_ALL)
+SRST
+``-cheri-trace-buffer-size size``
+    Set CHERI instruction trace buffer size to the given number of entries
+ERST
+
 DEF("cheri-trace-format", HAS_ARG, QEMU_OPTION_cheri_trace_format, \
 "-cheri-trace-format [text|cvtrace]     Select CHERI trace mode.\n", QEMU_ARCH_ALL)
 SRST
