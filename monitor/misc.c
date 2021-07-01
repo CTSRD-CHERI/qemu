@@ -78,6 +78,7 @@
 #include "sysemu/cpus.h"
 #include "qemu/cutils.h"
 #include "tcg/tcg.h"
+#include "qemu/log_instr.h"
 
 #if defined(TARGET_S390X)
 #include "hw/s390x/storage-keys.h"
@@ -448,6 +449,15 @@ void qmp_client_migrate_info(const char *protocol, const char *hostname,
     }
 
     error_setg(errp, QERR_INVALID_PARAMETER_VALUE, "protocol", "spice");
+}
+
+static void hmp_cheri_log_buffer(Monitor *mon, const QDict *qdict)
+{
+#if defined(CONFIG_TCG_LOG_INSTR)
+    qemu_log_instr_set_buffer_size(qdict_get_int(qdict, "buffer_size"));
+#else
+    warn_report("The CHERI trace buffer requires CONFIG_TCG_LOG_INSTR");
+#endif
 }
 
 static void hmp_logfile(Monitor *mon, const QDict *qdict)
