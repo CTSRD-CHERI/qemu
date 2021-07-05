@@ -142,20 +142,21 @@ static const MemoryRegionOps vdev_window_ops = {
 };
 
 vdevState *
-vdev_create(MemoryRegion *address_space, hwaddr base, hwaddr window)
+vdev_create(MemoryRegion *address_space, hwaddr base, hwaddr base_size,
+    hwaddr window, hwaddr window_size)
 {
 	vdevState *s, *w;
 
 	s = g_malloc0(sizeof(vdevState));
 	vdev_init(s);
 	memory_region_init_io(&s->mmio, NULL, &vdev_ops,
-	    s, TYPE_VIRTUAL_DEVICE, 32);
+	    s, TYPE_VIRTUAL_DEVICE, base_size);
 	memory_region_add_subregion(address_space, base, &s->mmio);
 
 	w = g_malloc0(sizeof(vdevState));
 	vdev_init(w);
 	memory_region_init_io(&w->mmio, NULL, &vdev_window_ops,
-	    w, TYPE_VIRTUAL_DEVICE, 0x10000000);
+	    w, TYPE_VIRTUAL_DEVICE, window_size);
 	memory_region_add_subregion(address_space, window, &w->mmio);
 
 	return (s);

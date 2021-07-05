@@ -739,7 +739,8 @@ static void virt_machine_init(MachineState *machine)
                          memmap[VIRT_PCIE_PIO].base,
                          DEVICE(pcie_plic), true);
 
-    vdev_create(system_memory, memmap[VIRT_VDEV].base, memmap[VIRT_VDEV_WINDOW].base);
+    vdev_create(system_memory, memmap[VIRT_VDEV].base, memmap[VIRT_VDEV].size,
+        memmap[VIRT_VDEV_WINDOW].base, memmap[VIRT_VDEV_WINDOW].size);
 
     serial_mm_init(system_memory, memmap[VIRT_UART0].base,
         0, qdev_get_gpio_in(DEVICE(mmio_plic), UART0_IRQ), 399193,

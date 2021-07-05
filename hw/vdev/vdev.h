@@ -16,6 +16,6 @@ struct vdevState
     unsigned char reg[6];
 };
 
-vdevState *vdev_create(MemoryRegion *address_space, hwaddr base, hwaddr window);
+vdevState *vdev_create(MemoryRegion *address_space, hwaddr base, hwaddr base_size, hwaddr window, hwaddr window_size);
 
 #endif /* !_HW_VDEV_ */
