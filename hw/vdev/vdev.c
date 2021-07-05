@@ -52,6 +52,8 @@ vdev_read(void *opaque, hwaddr addr, unsigned int size)
 	qemu_log_mask(LOG_GUEST_ERROR, "%s: read: addr=0x%x size=%d\n",
 	    __func__, (int)addr,size);
 
+	while (1);
+
 	CPU_FOREACH(cpu) {
 		//fprintf(stderr, "CPU #%d:\n", cpu->cpu_index);
 		if (cpu->cpu_index == 0)
@@ -82,11 +84,17 @@ vdev_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 
 	qemu_log_mask(LOG_GUEST_ERROR, "%s: write: addr=0x%x v=0x%x\n",
 	    __func__, (int)addr, (int)value);
+
+	while (1);
 }
 
 static uint64_t
 vdev_window_read(void *opaque, hwaddr addr, unsigned int size)
 {
+
+	fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr, size);
+
+	while (1);
 
 	return (0);
 }
@@ -95,6 +103,10 @@ static void
 vdev_window_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 {
 
+	fprintf(stderr, "%s\n", __func__);
+	printf("%s\n", __func__);
+
+	while (1);
 }
 
 static void
@@ -115,7 +127,7 @@ static const MemoryRegionOps vdev_ops = {
 	.endianness = DEVICE_NATIVE_ENDIAN,
 	.valid = {
 		.min_access_size = 1,
-		.max_access_size = 6
+		.max_access_size = 8
 	}
 };
 
@@ -125,7 +137,7 @@ static const MemoryRegionOps vdev_window_ops = {
 	.endianness = DEVICE_NATIVE_ENDIAN,
 	.valid = {
 		.min_access_size = 1,
-		.max_access_size = 6
+		.max_access_size = 8
 	}
 };
 
@@ -143,7 +155,7 @@ vdev_create(MemoryRegion *address_space, hwaddr base, hwaddr window)
 	w = g_malloc0(sizeof(vdevState));
 	vdev_init(w);
 	memory_region_init_io(&w->mmio, NULL, &vdev_window_ops,
-	    w, TYPE_VIRTUAL_DEVICE, 32);
+	    w, TYPE_VIRTUAL_DEVICE, 0x10000000);
 	memory_region_add_subregion(address_space, window, &w->mmio);
 
 	return (s);

@@ -77,6 +77,8 @@ static const struct MemmapEntry {
     [VIRT_PCIE_MMIO] =   { 0x40000000,    0x40000000 },
     [VIRT_VDEV] =        { 0x50000000,        0x3000 },
     [VIRT_VDEV_WINDOW] = { 0x60000000,    0x10000000 },
+    [VIRT_VDEV_PCI] =    { 0x60010000,    0x00050000 }, /* within WINDOW */
+    [VIRT_VDEV_AHCI] =   { 0x60050000,    0x00010000 }, /* within PCI */
     [VIRT_DRAM] =        { 0x80000000,           0x0 },
 };
 
@@ -397,6 +399,31 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
         2, memmap[VIRT_PCIE_MMIO].base, 2, memmap[VIRT_PCIE_MMIO].size);
     create_pcie_irq_map(fdt, name, plic_pcie_phandle);
     g_free(name);
+
+#if 1
+    name = g_strdup_printf("/soc/pci@%lx",
+        (long) memmap[VIRT_VDEV_PCI].base);
+    qemu_fdt_add_subnode(fdt, name);
+    qemu_fdt_setprop_cell(fdt, name, "#address-cells", FDT_PCI_ADDR_CELLS);
+    qemu_fdt_setprop_cell(fdt, name, "#interrupt-cells", FDT_PCI_INT_CELLS);
+    qemu_fdt_setprop_cell(fdt, name, "#size-cells", 0x2);
+    qemu_fdt_setprop_string(fdt, name, "compatible", "pci-host-ecam-generic");
+    qemu_fdt_setprop_string(fdt, name, "device_type", "pci");
+#if 0
+    qemu_fdt_setprop_cell(fdt, name, "linux,pci-domain", 0);
+    qemu_fdt_setprop_cells(fdt, name, "bus-range", 0,
+        memmap[VIRT_PCIE_ECAM].size / PCIE_MMCFG_SIZE_MIN - 1);
+#endif
+    qemu_fdt_setprop(fdt, name, "dma-coherent", NULL, 0);
+    qemu_fdt_setprop_cells(fdt, name, "reg", 0,
+        memmap[VIRT_VDEV_PCI].base, 0, memmap[VIRT_VDEV_PCI].size);
+    qemu_fdt_setprop_sized_cells(fdt, name, "ranges",
+        1, FDT_PCI_RANGE_MMIO,
+        2, memmap[VIRT_VDEV_AHCI].base,
+        2, memmap[VIRT_VDEV_AHCI].base, 2, memmap[VIRT_VDEV_AHCI].size);
+    create_pcie_irq_map(fdt, name, plic_pcie_phandle);
+    g_free(name);
+#endif
 
     test_phandle = phandle++;
     name = g_strdup_printf("/soc/test@%lx",
