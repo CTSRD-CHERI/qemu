@@ -2277,8 +2277,12 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         if (isread) {
             if (ri->type & ARM_CP_CONST) {
                 assert(0 && "TODO");
-            } else if (ri->readfn) {
-                assert(0 && "TODO");
+            } else if (ri->readfn_cap) {
+                TCGv_ptr tmpptr = tcg_const_ptr(ri);
+                TCGv_i32 regno = tcg_const_i32(rt);
+                gen_helper_get_cp_cap(tcg_rt, cpu_env, tmpptr, regno);
+                tcg_temp_free_i32(regno);
+                tcg_temp_free_ptr(tmpptr);
             } else {
                 gen_move_cap_gp_sp(s, rt, fieldoffset);
             }
@@ -2286,15 +2290,20 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         } else {
             if (ri->type & ARM_CP_CONST) {
                 return;
-            } else if (ri->writefn) {
-                // write cap part first
-                // then call helper to update cursor properly
-                assert(0 && "TODO");
+            } else if (ri->writefn_cap) {
+                TCGv_ptr tmpptr = tcg_const_ptr(ri);
+                TCGv_i32 regno = tcg_const_i32(rt);
+                gen_helper_set_cp_cap(cpu_env, tmpptr, tcg_rt, regno);
+                tcg_temp_free_i32(regno);
+                tcg_temp_free_ptr(tmpptr);
             } else {
                 gen_move_cap_sp_gp(s, fieldoffset, rt);
             }
             gen_reg_modified_cap_base(s, ri->name, fieldoffset);
         }
+        // CP registers are always decompressed, so regardless of read/write
+        // the GPR will be decompressed
+        disas_capreg_state_set(s, rt, CREG_FULLY_DECOMPRESSED);
     } else
 #endif
         if (isread) {
