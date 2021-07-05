@@ -1377,8 +1377,6 @@ TRANS_F(SEAL_CHKSSU)
         break;
     case 0b10: // CHKSSU
     {
-        gen_cap_debug(ctx, cd_temp);
-        gen_cap_debug(ctx, a->Cm);
         int cm = a->Cm;
         TCGv_i64 ss_and_tagged = tcg_temp_new_i64();
         gen_cap_is_subset_and_tag_eq(ctx, cd_temp, cm, ss_and_tagged);
