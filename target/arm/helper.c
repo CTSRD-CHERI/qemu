@@ -148,7 +148,24 @@ static int aarch64_fpu_gdb_set_reg(CPUARMState *env, uint8_t *buf, int reg)
     }
 }
 
-// TODO: Might need a cap_register_t version
+#ifdef TARGET_CHERI
+static void raw_read_cap(CPUARMState *env, const ARMCPRegInfo *ri,
+                         cap_register_t *cap_out)
+{
+    assert(ri->fieldoffset);
+    assert(cpreg_field_is_cap(ri));
+    *cap_out = CPREG_FIELDCAP(env, ri);
+}
+
+static void raw_write_cap(CPUARMState *env, const ARMCPRegInfo *ri,
+                      uint64_t value, const cap_register_t* cap)
+{
+    assert(ri->fieldoffset);
+    assert(cpreg_field_is_cap(ri));
+    CPREG_FIELDCAP(env, ri) = *cap;
+    CPREG_FIELDCAP(env, ri)._cr_cursor = value;
+}
+#endif
 
 static uint64_t raw_read(CPUARMState *env, const ARMCPRegInfo *ri)
 {
@@ -183,8 +200,6 @@ static void raw_write(CPUARMState *env, const ARMCPRegInfo *ri,
     }
 }
 
-// TODO: Probably want a raw_read/write_cap variant
-
 static void *raw_ptr(CPUARMState *env, const ARMCPRegInfo *ri)
 {
     return (char *)env + ri->fieldoffset;
@@ -193,6 +208,7 @@ static void *raw_ptr(CPUARMState *env, const ARMCPRegInfo *ri)
 uint64_t read_raw_cp_reg(CPUARMState *env, const ARMCPRegInfo *ri)
 {
     /* Raw read of a coprocessor register (as needed for migration, etc). */
+    // This will need a cap version to migrate CHERI CPUs
     if (ri->type & ARM_CP_CONST) {
 #ifdef TARGET_CHERI
         if (ri->type & ARM_CP_CAP) {
@@ -6873,6 +6889,46 @@ static bool redirect_for_e2h(CPUARMState *env)
     return arm_current_el(env) == 2 && (arm_hcr_el2_eff(env) & HCR_E2H);
 }
 
+#ifdef TARGET_CHERI
+
+static void el2_e2h_read_cap(CPUARMState *env, const ARMCPRegInfo *ri,
+                             cap_register_t* cap_out) {
+    CPReadFnCap *readfn;
+
+    if (redirect_for_e2h(env)) {
+        /* Switch to the saved EL2 version of the register.  */
+        ri = ri->opaque;
+        readfn = ri->readfn_cap;
+    } else {
+        readfn = ri->orig_readfn_cap;
+    }
+    if (readfn == NULL) {
+        readfn = raw_read_cap;
+    }
+
+    readfn(env, ri, cap_out);
+}
+
+static void el2_e2h_write_cap(CPUARMState *env, const ARMCPRegInfo *ri,
+                       uint64_t value, const cap_register_t* cap)
+{
+    CPWriteFnCap *writefn;
+
+    if (redirect_for_e2h(env)) {
+        /* Switch to the saved EL2 version of the register.  */
+        ri = ri->opaque;
+        writefn = ri->writefn_cap;
+    } else {
+        writefn = ri->orig_writefn_cap;
+    }
+    if (writefn == NULL) {
+        writefn = raw_write_cap;
+    }
+    writefn(env, ri, value, cap);
+}
+
+#endif
+
 static uint64_t el2_e2h_read(CPUARMState *env, const ARMCPRegInfo *ri)
 {
     CPReadFn *readfn;
@@ -7007,6 +7063,17 @@ static void define_arm_vh_e2h_redirects_aliases(ARMCPU *cpu)
         }
 
         src_reg->opaque = dst_reg;
+#ifdef TARGET_CHERI
+        g_assert((src_reg->type & ARM_CP_CAP) == (dst_reg->type & ARM_CP_CAP));
+        if (src_reg->type & ARM_CP_CAP) {
+
+            src_reg->orig_readfn_cap = src_reg->readfn_cap ?: raw_read_cap;
+            src_reg->orig_writefn_cap = src_reg->writefn_cap ?: raw_write_cap;
+
+            src_reg->readfn_cap = el2_e2h_read_cap;
+            src_reg->writefn_cap = el2_e2h_write_cap;
+        }
+#endif
         src_reg->orig_readfn = src_reg->readfn ?: raw_read;
         src_reg->orig_writefn = src_reg->writefn ?: raw_write;
         if (!src_reg->raw_readfn) {
