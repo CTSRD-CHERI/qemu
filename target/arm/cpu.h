@@ -2706,6 +2706,12 @@ typedef enum CPAccessResult {
 typedef uint64_t CPReadFn(CPUARMState *env, const ARMCPRegInfo *opaque);
 typedef void CPWriteFn(CPUARMState *env, const ARMCPRegInfo *opaque,
                        uint64_t value);
+#ifdef TARGET_CHERI
+typedef void CPReadFnCap(CPUARMState *env, const ARMCPRegInfo *opaque,
+                         cap_register_t *cap_out);
+typedef void CPWriteFnCap(CPUARMState *env, const ARMCPRegInfo *opaque,
+                          uint64_t value, const cap_register_t *cap);
+#endif
 /* Access permission check functions for coprocessor registers. */
 typedef CPAccessResult CPAccessFn(CPUARMState *env,
                                   const ARMCPRegInfo *opaque,
@@ -2800,11 +2806,18 @@ struct ARMCPRegInfo {
      * by fieldoffset.
      */
     CPReadFn *readfn;
+#ifdef TARGET_CHERI
+    CPReadFnCap *readfn_cap;
+#endif
+
     /* Function for handling writes of this register. If NULL, then writes
      * will be done by writing to the offset into CPUARMState specified
      * by fieldoffset.
      */
     CPWriteFn *writefn;
+#ifdef TARGET_CHERI
+    CPWriteFnCap *writefn_cap;
+#endif
     /* Function for doing a "raw" read; used when we need to copy
      * coprocessor state to the kernel for KVM or out for
      * migration. This only needs to be provided if there is also a
@@ -2836,6 +2849,10 @@ struct ARMCPRegInfo {
      */
     CPReadFn *orig_readfn;
     CPWriteFn *orig_writefn;
+#ifdef TARGET_CHERI
+    CPWriteFnCap *orig_writefn_cap;
+    CPReadFnCap *orig_readfn_cap;
+#endif
 };
 
 /* Macros which are lvalues for the field in CPUARMState for the
