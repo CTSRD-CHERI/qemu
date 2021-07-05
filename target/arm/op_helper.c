@@ -733,6 +733,43 @@ void HELPER(set_cp_reg64)(CPUARMState *env, void *rip, uint64_t value)
     }
 }
 
+#ifdef TARGET_CHERI
+
+void HELPER(set_cp_cap)(CPUARMState *env, void *rip, uint64_t value,
+                        uint32_t src_reg)
+{
+    const ARMCPRegInfo *ri = rip;
+    assert(cpreg_field_is_cap(ri));
+    const cap_register_t *cap = get_readonly_capreg(env, src_reg);
+    if (ri->type & ARM_CP_IO) {
+        qemu_mutex_lock_iothread();
+        ri->writefn_cap(env, ri, value, cap);
+        qemu_mutex_unlock_iothread();
+    } else {
+        ri->writefn_cap(env, ri, value, cap);
+    }
+}
+
+uint64_t HELPER(get_cp_cap)(CPUARMState *env, void *rip, uint32_t dest_reg)
+{
+    const ARMCPRegInfo *ri = rip;
+    assert(cpreg_field_is_cap(ri));
+    cap_register_t result;
+
+    if (ri->type & ARM_CP_IO) {
+        qemu_mutex_lock_iothread();
+        ri->readfn_cap(env, ri, &result);
+        qemu_mutex_unlock_iothread();
+    } else {
+        ri->readfn_cap(env, ri, &result);
+    }
+
+    update_capreg(env, dest_reg, &result);
+    return result._cr_cursor;
+}
+
+#endif
+
 uint64_t HELPER(get_cp_reg64)(CPUARMState *env, void *rip)
 {
     const ARMCPRegInfo *ri = rip;
