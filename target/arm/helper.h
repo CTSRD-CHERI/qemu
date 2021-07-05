@@ -81,6 +81,11 @@ DEF_HELPER_2(get_cp_reg, i32, env, ptr)
 DEF_HELPER_3(set_cp_reg64, void, env, ptr, i64)
 DEF_HELPER_2(get_cp_reg64, i64, env, ptr)
 
+#ifdef TARGET_CHERI
+DEF_HELPER_4(set_cp_cap, void, env, ptr, i64, i32)
+DEF_HELPER_3(get_cp_cap, i64, env, ptr, i32)
+#endif
+
 DEF_HELPER_2(get_r13_banked, i32, env, i32)
 DEF_HELPER_3(set_r13_banked, void, env, i32, i32)
 
