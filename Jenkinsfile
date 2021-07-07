@@ -71,7 +71,7 @@ selectedOSes.each { os ->
         node(nodeLabel) {
             def qemuResult = cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
                     nodeLabel: null,
-                    extraArgs: '--without-sdk --install-prefix=/usr',
+                    extraArgs: '--without-sdk --install-prefix=/usr --qemu/targets morello-softmmu,aarch64-softmmu',
                     runTests: /* true */ false,
                     uniqueId: "qemu-build-${os}",
                     skipTarball: true,
@@ -79,21 +79,6 @@ selectedOSes.each { os ->
                         extraBuildSteps(params, os)
                         maybeArchiveArtifacts(params, os)
                     })
-
-            // Run the baremetal MIPS tests to check we didn't regress.
-            if (os == "linux") {
-                cheribuildProject(target: 'cheritest-qemu', architecture: 'native',
-                        customGitCheckoutDir: 'cheritest', scmOverride: gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/cheritest.git'),
-                        nodeLabel: null,
-                        // Ensure we test failures don't prevent creation of the junit file
-                        extraArgs: '--install-prefix=/ --cheritest-qemu/no-run-tests-with-build',
-                        runTests: true,
-                        // Set the status message on the QEMU repo not the cheritest one
-                        gitHubStatusArgs: qemuResult.gitInfo,
-                        sdkCompilerOnly: true, skipTarball: true,
-                        uniqueId: 'mips-baremetal-testsuite',
-                        junitXmlFiles: 'cheritest/nosetests_qemu*.xml')
-            }
         }
     }
 }
