@@ -77,7 +77,7 @@ static const struct MemmapEntry {
     [VIRT_PCIE_MMIO] =   { 0x40000000,    0x40000000 },
     [VIRT_VDEV] =        { 0x50000000,        0x3000 },
     [VIRT_VDEV_WINDOW] = { 0x60000000,    0x10000000 },
-    [VIRT_VDEV_PCI] =    { 0x60010000,    0x00050000 }, /* within WINDOW */
+    [VIRT_VDEV_PCI] =    { 0x60010000,    0x00500000 }, /* within WINDOW */
     [VIRT_VDEV_AHCI] =   { 0x60050000,    0x00010000 }, /* within PCI */
     [VIRT_DRAM] =        { 0x80000000,           0x0 },
 };
