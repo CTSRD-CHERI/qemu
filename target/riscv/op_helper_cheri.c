@@ -450,28 +450,3 @@ target_ulong HELPER(sc_c_cap)(CPUArchState *env, uint32_t addr_reg, uint32_t val
 {
     return sc_c_impl(env, addr_reg, val_reg, /*offset=*/0, GETPC());
 }
-
-target_ulong HELPER(cloadtags)(CPUArchState *env, uint32_t cb)
-{
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-    target_ulong cursor = cap_get_cursor(cbp);
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (!cap_is_unsealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
-        /* CLoadTags raises an exception rather than report 0 */
-        raise_cheri_exception(env, CapEx_PermitLoadCapViolation, cb);
-    } else if (!cap_is_in_bounds(cbp, cursor, 8 * CHERI_CAP_SIZE)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if ((cursor & (8 * CHERI_CAP_SIZE - 1)) != 0) {
-        raise_unaligned_load_exception(env, cursor, GETPC());
-    } else {
-       return (target_ulong)cheri_tag_get_many(env, cursor, cb, NULL, GETPC());
-    }
-    return 0;
-}

@@ -713,7 +713,6 @@ extern uintptr_t tcg_splitwx_diff;
 extern TCGv_env cpu_env;
 #ifdef TARGET_CHERI
 extern TCGv ddc_interposition;
-extern TCGv_i64 cpu_capreg_state; // 32 times 2 bits
 #endif
 #ifdef CONFIG_DEBUG_TCG
 extern TCGv _pc_is_current;

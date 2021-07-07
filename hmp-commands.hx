@@ -1866,3 +1866,15 @@ ERST
         .flags      = "p",
     },
 
+    {
+        .name       = "cheri_trace_buffer_size",
+        .args_type  = "buffer_size:i",
+        .params     = "buffer_size",
+        .help       = "set instruction trace buffer size",
+        .cmd        = hmp_cheri_log_buffer,
+    },
+
+SRST
+``cheri_trace_buffer_size`` *buffer_size*
+  Set the instruction trace buffer size to the given number of entries..
+ERST

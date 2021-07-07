@@ -65,7 +65,8 @@ typedef enum CapRegState {
     CREG_TAGGED_CAP = 0b10,
     /// This capability register holds a fully decompressed capability.
     /// The tag bit can be read from the cap_register_t structure.
-    CREG_FULLY_DECOMPRESSED = 0b11
+    CREG_FULLY_DECOMPRESSED = 0b11,
+    CREG_STATE_MASK = 0b11,
 } CapRegState;
 
 static inline const char *cap_reg_state_string(CapRegState state)
@@ -91,8 +92,8 @@ typedef struct GPCapRegs {
     // 33 allows us to have an actual 0 register that is none of the others. A
     // 34'th is also used as a temporary when side-effect free scratch space is
     // needed. These special extra registers are always in state decompressed.
-    aligned_cap_register_t decompressed[NUM_LAZY_CAP_REGS];
-    uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
+    cap_register_t decompressed[NUM_LAZY_CAP_REGS];
+    /* CapRegState */ uint8_t capreg_state[NUM_LAZY_CAP_REGS] QEMU_ALIGNED(64);
 } GPCapRegs;
 
 static inline cap_register_t *get_cap_in_gpregs(GPCapRegs *gpcrs, size_t index)

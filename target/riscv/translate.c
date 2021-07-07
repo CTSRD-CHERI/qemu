@@ -1070,9 +1070,6 @@ void riscv_translate_init(void)
             offsetof(CPURISCVState, gpcapregs.decompressed[i].cap._cr_cursor),
             riscv_int_regnames[i]);
     }
-    cpu_capreg_state = tcg_global_mem_new_i64(
-        cpu_env, offsetof(CPURISCVState, gpcapregs.capreg_state),
-        "capreg_state");
 #endif
 #ifdef CONFIG_RVFI_DII
     cpu_rvfi_available_fields = tcg_global_mem_new_i32(

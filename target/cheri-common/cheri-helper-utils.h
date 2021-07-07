@@ -308,6 +308,9 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
     } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD)) {
         raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadViolation, cb,
                                        offset, false);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD_CAP)) {
+        raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadCapViolation, cb,
+            offset, false);
     } else if (!is_load || in_bounds) {
         if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
             raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreViolation, cb,
