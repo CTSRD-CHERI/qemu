@@ -228,18 +228,29 @@ static inline bool capabilities_enabled_exception(DisasContext *ctx)
     return false;
 }
 
-// Load/store common code
-// loads/stores pair rd/rd2, base rn, reg offset rm (extended by option and
-// shift), immediate offset imm Size is a logarithm of the number of bytes to
-// load/store. Loads are sign extended to extend_size. pre_inc / post_inc stores
-// back to base before / after offsetting. alternate_base swaps use of
-// capability / DDC base reg in C64 / non-C64 mode. pcc_base enforces use of PCC
-// as a base capability, regardless of C64 / alternate_base. exclusive will
-// perform an exclusive operation (arm version of load-link store-conditional),
-// result returned in rm. acquire_release will do either an load-acquire /
-// store-release, or both if set to 2. swap indicates the operation is a swap,
-// not a pair load/store. swap = 2 will do a CAS. Most of these options should
-// optimise away.
+/**
+ * Load/store common code. Most of these options should optimise away.
+ *
+ * @rd: first register to load/store
+ * @rd2: second register to load/store
+ * @rn: base register
+ * @rm: offset register (extended by option and shift). Also the result register
+ *      for an exclusive operation.
+ * @imm: immediate offset
+ * @size: log2 of number of bytes to load/store
+ * @extend_size: extend the result to this size after load (also log2)
+ * @pre_inc: pre-increment base register
+ * @post_inc: post-increment base register
+ * @alternate_base: swaps use of capability / DDC base reg in C64 / non-C64 mode
+ * @exclusive: perform an exclusive operation (arm version of load-link
+ *             store-conditional)
+ * @pcc_base: enforce use of PCC, regardless of C64 / alternate_base
+ * @acquire_release: will do either an load-acquire / store-release, or both
+ *                   if set to 2
+ * @swap: indicates the operation is a swap, not a pair load/store. swap = 2
+ *        performs a CAS
+ * @unpriv: Perform an unprivileged load/store (i.e. as EL0)
+ */
 static inline __attribute__((always_inline)) bool load_store_implementation(
     DisasContext *ctx, bool is_load, bool vector, uint32_t rd, uint32_t rd2,
     uint8_t size, uint8_t extend_size, uint32_t rn, uint32_t rm,
