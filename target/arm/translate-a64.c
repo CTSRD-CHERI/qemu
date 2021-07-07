@@ -4640,7 +4640,6 @@ static void disas_add_sub_imm(DisasContext *s, uint32_t insn)
 
     TCGv_i64 tcg_rn = cpu_reg_sp(s, rn);
     TCGv_i64 tcg_rd = setflags ? cpu_reg(s, rd) : cpu_reg_sp(s, rd);
-
     TCGv_i64 tcg_result;
 
     if (shift) {
@@ -5459,7 +5458,6 @@ static void disas_data_proc_3src(DisasContext *s, uint32_t insn)
         return;
     }
 
-
     if (is_high) {
         TCGv_i64 low_bits = tcg_temp_new_i64(); /* low bits discarded */
         TCGv_i64 tcg_rd = cpu_reg(s, rd);
@@ -5903,7 +5901,6 @@ static void handle_rev16(DisasContext *s, unsigned int sf,
                          unsigned int rn, unsigned int rd)
 {
     TCGv_i64 tcg_rd = cpu_reg(s, rd);
-
     TCGv_i64 tcg_tmp = tcg_temp_new_i64();
     TCGv_i64 tcg_rn = read_cpu_reg(s, rn, sf);
     TCGv_i64 mask = tcg_const_i64(sf ? 0x00ff00ff00ff00ffull : 0x00ff00ff);
@@ -6160,7 +6157,6 @@ static void handle_shift_reg(DisasContext *s,
 {
     TCGv_i64 tcg_shift = tcg_temp_new_i64();
     TCGv_i64 tcg_rd = cpu_reg(s, rd);
-
     TCGv_i64 tcg_rn = read_cpu_reg(s, rn, sf);
 
     tcg_gen_andi_i64(tcg_shift, cpu_reg(s, rm), sf ? 63 : 31);
