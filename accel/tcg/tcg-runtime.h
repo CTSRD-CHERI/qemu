@@ -159,8 +159,7 @@ DEF_HELPER_3(pcc_check_load, cap_checked_ptr, env, tl, memop)
 DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop)
 /* Clear tags with a different mmu_idx than what would be returned by cpu_mmu_index */
 DEF_HELPER_4(cheri_invalidate_tags_mmu_idx, void, env, cap_checked_ptr, memop, i32)
-/* Clear tags due to a store, the last argument is whether the store succeeded
- */
+/* Clear tags due to a store, the last argument is whether the store succeeded */
 DEF_HELPER_4(cheri_invalidate_tags_condition, void, env, cap_checked_ptr, memop,
              i32)
 

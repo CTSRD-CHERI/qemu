@@ -142,7 +142,7 @@ static inline bool cap_is_sealed_with_type(const cap_register_t* c) {
 static inline bool cap_is_in_bounds(const cap_register_t* c, target_ulong addr, size_t num_bytes) {
     cheri_debug_assert(num_bytes != 0);
 #ifdef TARGET_AARCH64
-    // Invalid exponant caps are always considered out of bounds.
+    // Invalid exponent caps are always considered out of bounds.
     if (!c->cr_bounds_valid)
         return false;
 #endif
