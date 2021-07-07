@@ -47,15 +47,20 @@
 
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
 
-static inline uint64_t capreg_state_set_to_integer_mask(unsigned reg)
+static inline QEMU_ALWAYS_INLINE uint64_t
+capreg_state_set_to_integer_mask(unsigned reg)
 {
-    return ~(UINT64_C(3) << (reg * 2));
+    return ~(((uint64_t)CREG_STATE_MASK) << (reg * 2));
 }
 
 static inline CapRegState get_capreg_state(const GPCapRegs *gpcrs, unsigned reg)
 {
     cheri_debug_assert(reg < 32);
-    return (CapRegState)extract64(gpcrs->capreg_state, reg * 2, 2);
+    /*
+     * Note: QEMU's extract64 has assertions enabled (even in release mode).
+     * Since this is a hot path, we re-implement it without assertions here.
+     */
+    return (CapRegState)((gpcrs->capreg_state >> (reg * 2)) & CREG_STATE_MASK);
 }
 
 static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
@@ -101,8 +106,9 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 #endif // CONFIG_DEBUG_TCG
 }
 
-static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned regnum,
-                                    CapRegState new_state)
+/* Marked as always_inline to avoid the |= if called with CREG_INTEGER. */
+static inline QEMU_ALWAYS_INLINE void
+set_capreg_state(GPCapRegs *gpcrs, unsigned regnum, CapRegState new_state)
 {
     if (regnum == NULL_CAPREG_INDEX) {
         cheri_debug_assert(new_state == CREG_FULLY_DECOMPRESSED &&
@@ -111,8 +117,14 @@ static inline void set_capreg_state(GPCapRegs *gpcrs, unsigned regnum,
     }
 
     cheri_debug_assert(regnum < 32);
-    gpcrs->capreg_state =
-        deposit64(gpcrs->capreg_state, regnum * 2, 2, new_state);
+    /*
+     * Note: QEMU's deposit64 has assertions enabled (even in release mode).
+     * Since this is a hot path, we re-implement it without assertions here.
+     */
+    gpcrs->capreg_state &= capreg_state_set_to_integer_mask(regnum);
+    if (!__builtin_constant_p(new_state) || new_state != 0) {
+        gpcrs->capreg_state |= (((uint64_t)new_state) << (regnum * 2));
+    }
     // Check that the compressed and decompressed caps are in sync
     sanity_check_capreg(gpcrs, regnum);
 }
