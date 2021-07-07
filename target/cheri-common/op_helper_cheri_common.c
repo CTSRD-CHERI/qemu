@@ -1316,7 +1316,7 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
                                   hwaddr *physaddr, bool *raw_tag)
 {
     return load_cap_from_memory_raw_tag_mmu_idx(env, pesbt, cursor, cb, source, vaddr,
-                                         retpc, physaddr, NULL,
+                                         retpc, physaddr, raw_tag,
                                          cpu_mmu_index(env, false));
 }
 
