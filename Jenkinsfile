@@ -12,7 +12,7 @@ def jobProperties = [
 ]
 
 // Don't archive binaries for pull requests and non-default branches:
-def archiveBranches = ['qemu-cheri', 'dev']
+def archiveBranches = ['qemu-cheri', 'dev', 'qemu-morello-merged']
 if (!env.CHANGE_ID && archiveBranches.contains(env.BRANCH_NAME)) {
     GlobalVars.archiveArtifacts = true
     jobProperties.add(pipelineTriggers([triggers: [[$class: 'jenkins.triggers.ReverseBuildTrigger',
