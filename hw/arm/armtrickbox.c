@@ -39,6 +39,7 @@
 #include "qemu/module.h"
 #include "qapi/error.h"
 #include "hw/qdev-properties.h"
+#include "qemu/qemu-print.h"
 
 #define BUF_SIZE 100
 
@@ -56,8 +57,7 @@ typedef struct {
 static void empty_buffer(arm_trickbox_state *tb)
 {
     tb->buf[tb->ndx] = '\0';
-    // Again, is there a QEMU way of doing this?
-    fprintf(stdout, "%s", tb->buf);
+    qemu_printf("%s", tb->buf);
     tb->ndx = 0;
 }
 
