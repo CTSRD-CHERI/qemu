@@ -300,7 +300,7 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
     // twice, once for load, once for store, because it performs alignment
     // checks and Store permissions fault > load alignment fault
 
-    bool is_load = !!(required_perms & CAP_PERM_LOAD);
+    bool is_load = (required_perms & CAP_PERM_LOAD) != 0;
     bool in_bounds = cap_is_in_bounds(cbp, addr, size);
 
     if (!cbp->cr_tag) {
@@ -314,7 +314,7 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
                                        offset, false);
     } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD_CAP)) {
         raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadCapViolation, cb,
-            offset, false);
+                                       offset, false);
     } else if (!is_load || in_bounds) {
         if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
             raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreViolation, cb,
@@ -338,7 +338,7 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
         raise_cheri_exception_addr_wnr(env, CapEx_LengthViolation, cb, offset,
                                        !is_load);
     } else if (alignment_required &&
-    !QEMU_IS_ALIGNED_P2(addr, alignment_required)) {
+               !QEMU_IS_ALIGNED_P2(addr, alignment_required)) {
         if (unaligned_handler) {
             unaligned_handler(env, addr, _host_return_address);
         }

@@ -409,8 +409,9 @@ static inline target_ulong get_capreg_tag_filtered(CPUArchState *env,
     target_ulong tagged = get_capreg_tag(env, regnum);
 
     // Try avoid decompress if at all possible
-    if (!tagged || env->cheri_capfilter_hi == 0)
+    if (!tagged || env->cheri_capfilter_hi == 0) {
         return tagged;
+    }
 
     const cap_register_t *csp = get_readonly_capreg(env, regnum);
 
