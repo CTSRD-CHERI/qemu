@@ -739,6 +739,9 @@ static inline void disas_capreg_state_remove(DisasContext *ctx, int reg,
 #endif
 }
 
+static inline void gen_lazy_cap_get_state(DisasContext *ctx, TCGv_i32 val,
+                                          int regnum);
+
 // Decompress only if not fully decompressed
 static inline void gen_conditional_cap_decompress(DisasContext *ctx, int regnum)
 {
@@ -750,10 +753,10 @@ static inline void gen_conditional_cap_decompress(DisasContext *ctx, int regnum)
 
     // If state[regnum] == CREG_FULLY_DECOMPRESSED goto l1
     _Static_assert(CREG_FULLY_DECOMPRESSED == 0b11, "I like optimisation");
-    TCGv_i64 mask = tcg_const_i64(0b11ULL << (regnum * 2));
-    TCGv_i64 val = tcg_temp_new_i64();
-    tcg_gen_and_i64(val, cpu_capreg_state, mask);
-    tcg_gen_brcond_i64(TCG_COND_EQ, val, mask, l1);
+    TCGv_i32 decompressed = tcg_const_i32(CREG_FULLY_DECOMPRESSED);
+    TCGv_i32 val = tcg_temp_new_i32();
+    gen_lazy_cap_get_state(ctx, val, regnum);
+    tcg_gen_brcond_i32(TCG_COND_EQ, val, decompressed, l1);
 
     // Call decompress helper
     TCGv_i32 reg = tcg_const_i32(regnum);
@@ -763,8 +766,8 @@ static inline void gen_conditional_cap_decompress(DisasContext *ctx, int regnum)
     gen_set_label(l1);
 
     tcg_temp_free_i32(reg);
-    tcg_temp_free_i64(mask);
-    tcg_temp_free_i64(val);
+    tcg_temp_free_i32(decompressed);
+    tcg_temp_free_i32(val);
 }
 
 // Unconditionally call decompression helper
@@ -886,13 +889,14 @@ static inline void gen_lazy_cap_set_state_cond(DisasContext *ctx, int regnum,
     cheri_tcg_printf_verbose("cc", "Register %d lazy state set to %s\n", regnum,
                              cap_reg_state_string(state));
 
-    if (state != 0b11)
-        tcg_gen_andi_i64(cpu_capreg_state, cpu_capreg_state,
-                         ~((0b11ULL) << (regnum * 2)));
-    if (state != 0)
-        tcg_gen_ori_i64(cpu_capreg_state, cpu_capreg_state,
-                        (((uint64_t)state) << (regnum * 2)));
-
+    TCGv_i32 tcg_state = tcg_const_i32(state);
+#ifdef TARGET_MIPS
+    g_assert_not_reached(); // Not supported on MIPS
+#else
+    tcg_gen_st8_i32(tcg_state, cpu_env,
+                    offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
+#endif
+    tcg_temp_free_i32(tcg_state);
     if (conditional)
         disas_capreg_state_include(ctx, regnum, state);
     else
@@ -903,6 +907,19 @@ static inline void gen_lazy_cap_set_state(DisasContext *ctx, int regnum,
                                           CapRegState state)
 {
     return gen_lazy_cap_set_state_cond(ctx, regnum, state, false);
+}
+
+static inline void gen_lazy_cap_get_state(DisasContext *ctx, TCGv_i32 val,
+                                          int regnum)
+{
+#ifdef TARGET_MIPS
+    g_assert_not_reached(); // Not supported on MIPS
+#else
+    tcg_gen_ld8u_i32(val, cpu_env,
+                     offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
+    cheri_tcg_printf_verbose("cw", "Register %d lazy state get: %d\n", regnum,
+                             val);
+#endif
 }
 
 static inline void gen_lazy_cap_set_int_cond(DisasContext *ctx, int regnum,
@@ -967,17 +984,6 @@ static inline void gen_sp_set_decompressed_int(DisasContext *ctx, size_t offset)
 #endif
 
     tcg_temp_free_i64(temp);
-}
-
-static inline void gen_lazy_cap_get_state_i32(DisasContext *ctx, int regnum,
-                                              TCGv_i32 state)
-{
-    TCGv_i64 state64 = tcg_temp_new_i64();
-    tcg_gen_extract_i64(state64, cpu_capreg_state, 2 * regnum, 2);
-    tcg_gen_extrl_i64_i32(state, state64);
-    tcg_temp_free_i64(state64);
-    cheri_tcg_printf_verbose("cw", "Register %d lazy state get: %d\n", regnum,
-                             state);
 }
 
 // In a merged register file, cursors are also globals. If backing is to also be
@@ -1149,18 +1155,20 @@ static inline void gen_cap_set_tag(DisasContext *ctx, int regnum, TCGv tagbit,
                        gp_register_offset(regnum) +
                            offsetof(cap_register_t, cr_tag));
     } else {
-        // Just set the state of the lazy register. This will cause next
-        // decompression to set the tag. 0b01 is untagged, 0b10 is tagged. So do
-        // 0b01 + tagbit
-
+        /*
+         * Just set the state of the lazy register. This will cause next
+         * decompression to set the tag. 0b01 is untagged, 0b10 is tagged.
+         * So do 0b01 + tagbit to convert.
+         */
         _Static_assert(CREG_UNTAGGED_CAP == 1 && CREG_TAGGED_CAP == 2,
                        "Optimised for these values");
         tcg_gen_add_tl(tagbit, tagbit, one);
-        tcg_gen_shli_tl(tagbit, tagbit, regnum * 2);
-        tcg_gen_andi_i64(cpu_capreg_state, cpu_capreg_state,
-                         ~((0b11) << (regnum * 2)));
-        tcg_gen_or_i64(cpu_capreg_state, cpu_capreg_state, tagbit);
-
+#ifdef TARGET_MIPS
+        g_assert_not_reached(); // Not supported on MIPS
+#else
+        tcg_gen_st8_i64(tagbit, cpu_env,
+                        offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
+#endif
         disas_capreg_state_set(ctx, regnum, CREG_UNTAGGED_CAP);
         disas_capreg_state_include(ctx, regnum, CREG_TAGGED_CAP);
     }
@@ -1204,7 +1212,7 @@ static inline void gen_cap_get_tag_i32(DisasContext *ctx, int regnum,
             // State == CREG_TAGGED_CAP || (State == CREG_FULLY_DECOMPRESSED &&
             // tag = 1)
             TCGv_i32 state = tcg_temp_new_i32();
-            gen_lazy_cap_get_state_i32(ctx, regnum, state);
+            gen_lazy_cap_get_state(ctx, state, regnum);
 
             TCGv_i32 cmpv = tcg_const_i32(CREG_FULLY_DECOMPRESSED);
             tcg_gen_setcond_i32(TCG_COND_EQ, cmpv, cmpv, state);
