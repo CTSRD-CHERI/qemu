@@ -83,6 +83,6 @@ typedef struct GPCapRegs {
     // We cache the decompressed capregs here (to avoid constantly decompressing
     // values such as $csp which are used frequently)
     cap_register_t decompressed[32];
-    uint64_t capreg_state; // 32 times CapRegState compressed to one uint64_t
+    uint8_t capreg_state[32] QEMU_ALIGNED(64); /* 32 times CapRegState */
 } GPCapRegs;
 #endif
