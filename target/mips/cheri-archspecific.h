@@ -38,8 +38,7 @@
  */
 #pragma once
 
-#define NULL_CAPREG_INDEX 0
-
+#include "cheri-archspecific-early.h"
 #include "cheri_defs.h"
 #include "internal.h"
 
@@ -52,6 +51,11 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
                                                             uint16_t reg,
                                                             uintptr_t hostpc)
 {
+
+    if (reg == CHERI_EXC_REGNUM_DDC) {
+        reg = CHERI_TRUE_EXC_REGNUM_DDC;
+    }
+
     if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=" PRINT_CAP_FMTSTR
@@ -89,10 +93,9 @@ static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, 
     do_raise_c2_exception_impl(env, cause, 0xff, pc);
 }
 
-
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
-    bool instavail, uintptr_t hostpc)
+    target_ulong addr, bool instavail, uintptr_t hostpc)
 {
     if (!instavail)
         env->error_code |= EXCP_INST_NOTAVAIL;
@@ -133,7 +136,7 @@ static inline bool validate_jump_target(CPUMIPSState *env,
                                         unsigned regnum, uintptr_t retpc)
 {
     if (!cap_is_in_bounds(cap, addr, 4)) {
-        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, true,
+        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, addr, true,
                                    retpc);
     }
     if (!QEMU_IS_ALIGNED(addr, 4)) {
@@ -143,7 +146,8 @@ static inline bool validate_jump_target(CPUMIPSState *env,
 }
 
 static inline void update_next_pcc_for_tcg(CPUMIPSState *env,
-                                           const cap_register_t *target)
+                                           const cap_register_t *target,
+                                           uint32_t cjalr_flags)
 {
     assert_valid_jump_target(target);
     // The capability register is loaded into PCC using the

@@ -120,7 +120,7 @@ typedef struct {
  * Initialize instruction logging for a cpu.
  */
 void qemu_log_instr_init(CPUState *env);
-void qemu_log_instr_global_switch(bool request_stop);
+int qemu_log_instr_global_switch(int log_flags);
 
 /*
  * Update the ring buffer size.

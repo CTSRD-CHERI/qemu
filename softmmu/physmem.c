@@ -65,7 +65,7 @@
 #include "exec/memory-internal.h"
 #include "exec/ram_addr.h"
 #include "exec/log.h"
-
+#include "exec/log_instr.h"
 #include "qemu/pmem.h"
 
 #include "migration/vmstate.h"
@@ -2425,7 +2425,7 @@ void cpu_check_watchpoint(CPUState *cpu, vaddr addr, vaddr len,
                     cpu_loop_exit_restore(cpu, ra);
                 } else {
                     /* Force execution of one insn next time.  */
-                    cpu->cflags_next_tb = 1 | curr_cflags();
+                    cpu->cflags_next_tb = 1 | curr_cflags(cpu);
                     mmap_unlock();
                     if (ra) {
                         cpu_restore_state(cpu, ra, true);

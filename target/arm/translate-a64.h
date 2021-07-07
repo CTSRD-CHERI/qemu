@@ -41,10 +41,23 @@ bool logic_imm_decode_wmask(uint64_t *result, unsigned int immn,
                             unsigned int imms, unsigned int immr);
 bool sve_access_check(DisasContext *s);
 TCGv_i64 clean_data_tbi(DisasContext *s, TCGv_i64 addr);
-TCGv_i64 gen_mte_check1(DisasContext *s, TCGv_i64 addr, bool is_write,
-                        bool tag_checked, int log2_size);
-TCGv_i64 gen_mte_checkN(DisasContext *s, TCGv_i64 addr, bool is_write,
-                        bool tag_checked, int count, int log2_esize);
+TCGv_cap_checked_ptr clean_data_tbi_and_cheri(DisasContext *s, TCGv_i64 addr,
+                                              bool is_load, bool is_store,
+                                              int size, int base_reg,
+                                              bool alternate_base,
+                                              bool ddc_base);
+
+TCGv_cap_checked_ptr gen_mte_and_cheri_check1(DisasContext *s, TCGv_i64 addr,
+                                              bool is_read, bool is_write,
+                                              bool tag_checked, int log2_size,
+                                              int base_reg, bool alternate_base,
+                                              bool ddc_base);
+TCGv_cap_checked_ptr gen_mte_and_cheri_checkN(DisasContext *s, TCGv_i64 addr,
+                                              bool is_read, bool is_write,
+                                              bool tag_checked, int log2_esize,
+                                              int total_size, int base_reg,
+                                              bool alternate_base,
+                                              bool ddc_base);
 
 /* We should have at some point before trying to access an FP register
  * done the necessary access check, so assert that

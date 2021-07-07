@@ -38,6 +38,8 @@
 #ifdef TARGET_CHERI
 
 #include "cheri_defs.h"
+#include "cheri-archspecific-earlier.h"
+
 // This needs to be a separate header so that cpu.h can include it.
 // The rest of cheri-lazy-capregs.h depends on including cpu.h
 
@@ -67,22 +69,36 @@ typedef enum CapRegState {
     CREG_STATE_MASK = 0b11,
 } CapRegState;
 
-// Cap registers should be padded so they are easier to move.
-#if TARGET_LONG_BITS == 32
-_Static_assert(sizeof(cap_register_t) == 40, "");
-#else
-_Static_assert(sizeof(cap_register_t) == 64, "");
-#endif
+static inline const char *cap_reg_state_string(CapRegState state)
+{
+    const char *strings[] = {"Int", "Untagged Cap", "Tagged Cap",
+                             "Decompressed"};
+    return strings[(int)state];
+}
+
 // pesbt should come directly before reg._cr_cursor, so that the two can be
 // moved with a single 128bit vector op.
 _Static_assert((offsetof(cap_register_t, cached_pesbt) -
                 offsetof(cap_register_t, _cr_cursor)) == sizeof(target_ulong),
                "");
 
+typedef struct aligned_cap_register_t {
+    cap_register_t cap;
+} QEMU_ALIGNED(32) aligned_cap_register_t;
+
 typedef struct GPCapRegs {
     // We cache the decompressed capregs here (to avoid constantly decompressing
     // values such as $csp which are used frequently)
-    cap_register_t decompressed[32];
-    uint8_t capreg_state[32] QEMU_ALIGNED(64); /* 32 times CapRegState */
+    // 33 allows us to have an actual 0 register that is none of the others. A
+    // 34'th is also used as a temporary when side-effect free scratch space is
+    // needed. These special extra registers are always in state decompressed.
+    aligned_cap_register_t decompressed[NUM_LAZY_CAP_REGS];
+    /* CapRegState */ uint8_t capreg_state[NUM_LAZY_CAP_REGS] QEMU_ALIGNED(64);
 } GPCapRegs;
+
+static inline cap_register_t *get_cap_in_gpregs(GPCapRegs *gpcrs, size_t index)
+{
+    return &gpcrs->decompressed[index].cap;
+}
+
 #endif

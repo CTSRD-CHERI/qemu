@@ -38,7 +38,13 @@
 # define cheri_debug_assert(X) ((void)0)
 #endif
 
+#ifdef TARGET_IS_MORELLO
+#define CC_IS_MORELLO TARGET_IS_MORELLO
+#endif
+
 #ifdef TARGET_CHERI
+
+#define ASSERT_IF_CHERI() assert(0)
 
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
 
@@ -116,6 +122,9 @@ typedef enum CheriPermissions {
     CAP_PERM_UNSEAL = CAP_CC(PERM_UNSEAL),
     CAP_ACCESS_SYS_REGS = CAP_CC(PERM_ACCESS_SYS_REGS),
     CAP_PERM_SETCID = CAP_CC(PERM_SETCID),
+#ifdef TARGET_AARCH64
+    CAP_PERM_EXECUTIVE = CAP_CC(PERM_EXECUTIVE),
+#endif
 } CheriPermissions;
 
 typedef enum CheriFlags {
@@ -151,12 +160,19 @@ typedef enum CheriTbFlags {
      * PCC spans the full address space and has base zero. This means we do
      * not need to perform bounds checks or subtract/add PCC.base
      */
-    TB_FLAG_CHERI_PCC_FULL_AS = (1 << 7),
-    TB_FLAG_CHERI_PCC_READABLE = (1 << 8),
+    TB_FLAG_CHERI_PCC_BASE_ZERO = (1 << 7),
+    TB_FLAG_CHERI_PCC_TOP_MAX = (1 << 8),
+    TB_FLAG_CHERI_PCC_FULL_AS =
+        TB_FLAG_CHERI_PCC_BASE_ZERO | TB_FLAG_CHERI_PCC_TOP_MAX,
+    TB_FLAG_CHERI_PCC_READABLE = (1 << 9),
 
     /* Useful for CHERI-specific flags on various platforms if the normal flags
        overflowed */
     TB_FLAG_CHERI_SPARE_INDEX_START = 16,
 } CheriTbFlags;
+
+#else // !TARGET_CHERI
+
+#define ASSERT_IF_CHERI()
 
 #endif // TARGET_CHERI

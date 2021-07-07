@@ -270,8 +270,8 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-            " addr=" TARGET_FMT_plx "\n",
+            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
+            " addr=" TARGET_FMT_lx "\n",
             offset, cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
@@ -314,8 +314,8 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-            " addr=" TARGET_FMT_plx "\n",
+            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
+            " addr=" TARGET_FMT_lx "\n",
             offset, cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
@@ -386,8 +386,8 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check:"
-            "offset=" TARGET_FMT_plx " cursor=" TARGET_FMT_plx
-            " addr=" TARGET_FMT_plx "\n",
+            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
+            " addr=" TARGET_FMT_lx "\n",
             offset, cap_get_cursor(cbp), addr);
         raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
@@ -406,6 +406,11 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     }
     // Now perform the "cmpxchg" operation by checking if the current values
     // in memory are the same as the ones that the load-reserved observed.
+    // FIXME: There is a bug here. If the MMU / Cap Permissions squash the tag,
+    // we may think the location has changed when it has not.
+    // Use load_cap_from_memory_128_raw_tag to get the real tag, and strip the
+    // LOAD_CAP permission to ensure no MMU load faults occur
+    // (this is not a real load).
     target_ulong current_pesbt;
     target_ulong current_cursor;
     bool current_tag =

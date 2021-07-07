@@ -1750,10 +1750,11 @@ static void version(void)
     printf("Compiled for RISCV32 (with CHERI)\n");
 #elif defined(TARGET_RISCV64)
     printf("Compiled for RISCV64 (with CHERI)\n");
+#elif defined(TARGET_AARCH64)
+    printf("Compiled for AARCH64 (with CHERI)\n");
 #else
 #error "INVALID CHERI target"
 #endif
-    printf("Built with C0 as NULL register\n");
 #endif  // TARGET_CHERI
 #if defined(CONFIG_TCG_LOG_INSTR)
     printf("Built with instruction logging enabled\n");
@@ -2904,6 +2905,13 @@ static void create_default_memdev(MachineState *ms, const char *path)
         object_property_set_str(obj, "mem-path", path, &error_fatal);
     }
     object_property_set_int(obj, "size", ms->ram_size, &error_fatal);
+#ifdef TARGET_CHERI
+    // Possibly this should be inherited from ms, but I doubt any CHERI
+    // platform would not have a tagged default memdev
+    object_property_set_bool(obj, "cheri-tags", true, &error_fatal);
+#else
+    object_property_set_bool(obj, "cheri-tags", false, &error_fatal);
+#endif
     object_property_add_child(object_get_objects_root(), mc->default_ram_id,
                               obj);
     /* Ensure backend's memory region name is equal to mc->default_ram_id */
@@ -4090,9 +4098,9 @@ void qemu_init(int argc, char **argv, char **envp)
             qemu_print_log_usage(stdout);
             exit(1);
         }
-        qemu_set_log_internal(mask);
+        qemu_set_log(mask);
     } else {
-        qemu_set_log_internal(0);
+        qemu_set_log(0);
     }
 
     /* add configured firmware directories */
