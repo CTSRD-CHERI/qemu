@@ -63,7 +63,8 @@ typedef enum CapRegState {
     CREG_TAGGED_CAP = 0b10,
     /// This capability register holds a fully decompressed capability.
     /// The tag bit can be read from the cap_register_t structure.
-    CREG_FULLY_DECOMPRESSED = 0b11
+    CREG_FULLY_DECOMPRESSED = 0b11,
+    CREG_STATE_MASK = 0b11,
 } CapRegState;
 
 // Cap registers should be padded so they are easier to move.
