@@ -168,7 +168,6 @@ TCGv _pc_is_current = 0;
 #endif
 #ifdef TARGET_CHERI
 TCGv ddc_interposition;
-TCGv_i64 cpu_capreg_state; // 32 times 2 bits
 #endif
 
 #ifndef CONFIG_TCG_INTERPRETER
