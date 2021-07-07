@@ -4933,6 +4933,8 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      .access = PL1_R,
      .type = ARM_CP_CURRENTEL},
     /* Cache ops: all NOPs since we don't emulate caches */
+    // FIXME: some of these need to be ARM_CP_IC_OR_DC, or otherwise
+    //  aa64_cacheop_pou_access needs modifying.
     {.name = "IC_IALLUIS",
      .state = ARM_CP_STATE_AA64,
      .opc0 = 1,
