@@ -300,7 +300,7 @@ static target_ulong arm_flen_buf(ARMCPU *cpu)
      * We put this on the guest's stack just below SP.
      */
     CPUARMState *env = &cpu->env;
-    target_ulong sp = arm_get_xreg(env, 31);
+    target_ulong sp = arm_get_xreg(env, is_a64(env) ? 31 : 13);
 
     return sp - 64;
 }
