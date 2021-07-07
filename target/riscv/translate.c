@@ -225,8 +225,11 @@ static inline void gen_mark_gpr_as_integer(int reg_num_dst)
 {
     /* Currently, the integer flag is 0, so we can mask the 64-bit value holding
      * the capreg state appropriately to clear the bits for register N. */
-    tcg_gen_andi_i64(cpu_capreg_state, cpu_capreg_state,
-                     capreg_state_set_to_integer_mask(reg_num_dst));
+    TCGv_i32 integer_state = tcg_const_i32(CREG_INTEGER);
+    tcg_gen_st8_i32(
+        integer_state, cpu_env,
+        offsetof(CPURISCVState, gpcapregs.capreg_state[reg_num_dst]));
+    tcg_temp_free_i32(integer_state);
     tcg_gen_movi_tl(_cpu_pesbt_do_not_access_directly[reg_num_dst],
                     CAP_NULL_PESBT);
     /* TODO: maybe all ones is more efficient? We can just do an or and don't
@@ -1085,9 +1088,6 @@ void riscv_translate_init(void)
             offsetof(CPURISCVState, gpcapregs.decompressed[i].cached_pesbt),
             cheri_gp_regnames[i]);
     }
-    cpu_capreg_state = tcg_global_mem_new_i64(
-        cpu_env, offsetof(CPURISCVState, gpcapregs.capreg_state),
-        "capreg_state");
 #endif
 #ifdef CONFIG_RVFI_DII
     cpu_rvfi_available_fields = tcg_global_mem_new_i32(
