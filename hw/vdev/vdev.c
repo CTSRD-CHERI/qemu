@@ -8,6 +8,7 @@
 #include "hw/core/cpu.h"
 #include "hw/vdev/vdev.h"
 #include "sysemu/cpus.h"
+#include "qemu/main-loop.h" /* iothread mutex */
 
 #define	EPW_READ_ADDRESS		0x0000	/* read only */
 #define	EPW_READ_FLIT_SIZE		0x0008	/* read only */
@@ -124,10 +125,19 @@ vdev_window_read(void *opaque, hwaddr addr, unsigned int size)
 	req.addr = addr;
 	req.pending = 1;
 
+	int locked;
+	locked = qemu_mutex_iothread_locked();
+	printf("locked %d\n", locked);
+	qemu_mutex_unlock_iothread();
+	locked = qemu_mutex_iothread_locked();
+	printf("locked %d\n", locked);
+
 	while (1) {
-		printf(".");
+		fprintf(stderr, "sleeping for 1 sec\n");
 		usleep(1000000);
 	}
+
+	qemu_mutex_lock_iothread();
 
 	return (0);
 }
