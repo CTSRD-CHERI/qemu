@@ -145,8 +145,6 @@ void a64_translate_init(void)
 #ifdef TARGET_CHERI
     cpu_pc = tcg_global_mem_new(cpu_env,
                                 offsetof(CPUARMState, pc.cap._cr_cursor), "pc");
-    cpu_capreg_state = tcg_global_mem_new(
-        cpu_env, offsetof(CPUARMState, gpcapregs.capreg_state), "capreg_state");
     // Morello sometimes interposes with base
     ddc_interposition = tcg_global_mem_new(
         cpu_env, offsetof(CPUARMState, DDC_current.cap.cr_base), "ddc_base");
