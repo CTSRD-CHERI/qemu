@@ -1365,6 +1365,14 @@ static int write_ccsr(CPURISCVState *env, int csrno, target_ulong val)
         static const target_ulong gclgmask = (SCCSR_SGCLG | SCCSR_UGCLG);
         /* Take the GCLG bits from the store and update state bits */
         env->sccsr = set_field(env->sccsr, gclgmask, get_field(val, gclgmask));
+
+        /*
+         * Our TLB effectively caches whether the PTE and CCSR bits match at the
+         * time the PTE is copied up into the TLB.  While PTE updates use
+         * SFENCE.VMA to ensure visibility in the TLB, the CCSR writes must
+         * implicitly cause TLB invalidation.
+         */
+        tlb_flush(env_cpu(env));
         break;
       }
 #endif
