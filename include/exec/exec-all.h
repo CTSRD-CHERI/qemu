@@ -393,17 +393,16 @@ tlb_flush_page_bits_by_mmuidx_all_cpus_synced(CPUState *cpu, target_ulong addr,
 void *probe_access(CPUArchState *env, target_ulong addr, int size,
                    MMUAccessType access_type, int mmu_idx, uintptr_t retaddr);
 
-static inline void *probe_write(CPUArchState *env, target_ulong addr, int size,
-                                int mmu_idx, uintptr_t retaddr)
-{
-    return probe_access(env, addr, size, MMU_DATA_STORE, mmu_idx, retaddr);
-}
+void *probe_write(CPUArchState *env, target_ulong addr, int size, int mmu_idx,
+                  uintptr_t retaddr);
 
-static inline void *probe_read(CPUArchState *env, target_ulong addr, int size,
-                               int mmu_idx, uintptr_t retaddr)
-{
-    return probe_access(env, addr, size, MMU_DATA_LOAD, mmu_idx, retaddr);
-}
+void *probe_read(CPUArchState *env, target_ulong addr, int size, int mmu_idx,
+                 uintptr_t retaddr);
+
+#ifdef TARGET_CHERI
+void *probe_cap_write(CPUArchState *env, target_ulong addr, int size,
+                      int mmu_idx, uintptr_t retaddr);
+#endif
 
 /**
  * probe_access_flags:

@@ -227,6 +227,97 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           target_ulong retpc, hwaddr *physaddr);
+
+static inline bool cap_is_local(CPUArchState *env, uint32_t cs)
+{
+    return get_capreg_tag(env, cs) &&
+           !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL);
+}
+
+static inline uint32_t perms_for_load(void) { return CAP_PERM_LOAD; }
+
+static inline uint32_t perms_for_store(CPUArchState *env, uint32_t cs)
+{
+    uint32_t perms = CAP_PERM_STORE;
+    if (get_capreg_tag(env, cs))
+        perms |= CAP_PERM_STORE_CAP;
+    if (cap_is_local(env, cs))
+        perms |= CAP_PERM_STORE_LOCAL;
+    return perms;
+}
+
+typedef void QEMU_NORETURN (*unaligned_memaccess_handler)(CPUArchState *env,
+                                                          target_ulong addr,
+                                                          uintptr_t retpc);
+/* Do all the permission and bounds checks for loads/stores on cbp.
+ * Use perms_for_load() and perms_for_store() for required_perms.
+ *
+ * Note: This is marked as QEMU_ALWAYS_INLINE since profiling indicates that
+ * it has a large impact on overall QEMU speed (since it is called for every
+ * capability-based load/store). Not removing dead branches/propagating the
+ * constant alignment argument has a noticeable performance impact:
+ * Initially this function uses a modulo operation to check the alignment.
+ * This resulted in an x86 div instruction since the constant value was not
+ * known inside the function. Changing it to a bitwise-and (QEMU_IS_ALIGNED_P2)
+ * sped up the CheriBSD purecap kernel multi-user boot from ~314s to ~288s.
+ * However, without QEMU_ALWAYS_INLINE this function was still not being
+ * inlined so the alignment check was still using a non-constant argument
+ * and dead required_perms checks were still being performed every time.
+ * Adding QEMU_ALWAYS_INLINE seed up the boot from ~288s to ~278s.
+ */
+static inline QEMU_ALWAYS_INLINE target_ulong
+cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
+                     target_ulong offset, uint32_t size,
+                     uintptr_t _host_return_address, const cap_register_t *cbp,
+                     uint32_t alignment_required,
+                     unaligned_memaccess_handler unaligned_handler)
+{
+#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cbp->cr_perms) & (X))
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (!cap_is_unsealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD)) {
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD_CAP)) {
+        raise_cheri_exception(env, CapEx_PermitLoadCapViolation, cb);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_CAP)) {
+        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_LOCAL)) {
+        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
+    }
+#undef MISSING_REQUIRED_PERM
+
+    const target_ulong cursor = cap_get_cursor(cbp);
+    const target_ulong addr = cursor + (target_long)offset;
+    if (!cap_is_in_bounds(cbp, addr, size)) {
+        qemu_log_instr_or_mask_msg(
+            env, CPU_LOG_INT,
+            "Failed capability bounds check: offset=" TARGET_FMT_lx
+            " cursor=" TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n",
+            offset, cursor, addr);
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    } else if (alignment_required &&
+               !QEMU_IS_ALIGNED_P2(addr, alignment_required)) {
+        if (unaligned_handler) {
+            unaligned_handler(env, addr, _host_return_address);
+        }
+#if defined(TARGET_MIPS) && defined(CHERI_UNALIGNED)
+        const char *access_type =
+            (required_perms == (CAP_PERM_STORE | CAP_PERM_LOAD))
+                ? "RMW"
+                : ((required_perms == CAP_PERM_STORE) ? "store" : "load");
+        qemu_maybe_log_instr_extra(env,
+                                   "Allowing unaligned %d-byte %s of "
+                                   "address 0x%" PRIx64 "\n",
+                                   size, access_type, addr);
+#endif
+    }
+    return addr;
+}
+
 // Helper for RISCV AMOSWAP
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,

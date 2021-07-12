@@ -295,16 +295,10 @@ static inline void generate_cloadtags(DisasContext *ctx, int32_t rd, int32_t cb)
     TCGv_i32 tcb = tcg_const_i32(cb);
     TCGv_cap_checked_ptr tcbc  = tcg_temp_new_cap_checked();
     TCGv ttags = tcg_temp_new();
-    TCGv toffset = tcg_const_tl(0);
-    TCGv_i32 tlen = tcg_const_i32(128); // XXX cache line width
-
-    gen_helper_cap_load_check(tcbc, cpu_env, tcb, toffset, tlen);
-    tcg_temp_free_i32(tlen);
-    tcg_temp_free(toffset);
 
     tcg_gen_mb(TCG_MO_LD_LD | TCG_MO_ST_LD | TCG_BAR_SC);
 
-    gen_helper_cloadtags(ttags, cpu_env, tcb, tcbc);
+    gen_helper_cloadtags(ttags, cpu_env, tcb);
     tcg_gen_movi_i32(tcb, MO_TEQ);
 #ifdef CONFIG_TCG_LOG_INSTR
     gen_helper_qemu_log_instr_load64(cpu_env, tcbc, ttags, tcb); // FIXME: not really correct

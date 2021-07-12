@@ -34,7 +34,16 @@
 
 #include "cheri_defs.h"
 
-// Table 3.3: Capability Exception Codes
+/*
+ * This controls how many tags are fetched with cgettags/csettags
+ */
+#ifdef TARGET_RISCV32
+#define CAP_TAG_GET_MANY_SHFT 3
+#else
+#define CAP_TAG_GET_MANY_SHFT 2
+#endif
+
+/* Table 3.3: Capability Exception Codes */
 typedef enum CheriCapExc {
     CapEx_None                          = 0x0,
     CapEx_LengthViolation               = 0x1,

@@ -38,6 +38,41 @@
 
 #include <stdbool.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+enum {
+    // For the reset capability we use an internal exponent and need
+    // 2^ADDR_WIDTH, which uses the max exponent.
+    _CC_N(RESET_EXP) = _CC_N(MAX_EXPONENT),
+    _CC_N(RESET_T) = 1u << (_CC_N(ADDR_WIDTH) - _CC_N(RESET_EXP) - _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE)),
+#ifdef CC_IS_MORELLO
+    // Due to magic constant XOR aversion (i.e. fields are either entirely
+    // inverted or not at all, rather than select bits within them like in
+    // normal CHERI Concentrate), NULL is special in Morello.
+    _CC_N(NULL_EXP) = _CC_N(MAX_ENCODABLE_EXPONENT),
+    _CC_N(NULL_T) = 0,
+#else
+    // NULL uses identical bounds encoding to the reset capability.
+    _CC_N(NULL_EXP) = _CC_N(RESET_EXP),
+    _CC_N(NULL_T) = _CC_N(RESET_T),
+#endif
+    _CC_N(RESET_EBT) =
+        _CC_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(_CC_N(RESET_T), EXP_NONZERO_TOP) |
+        _CC_ENCODE_EBT_FIELD(0, EXP_NONZERO_BOTTOM) |
+        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
+        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
+    _CC_N(NULL_PESBT) = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) | _CC_ENCODE_FIELD(0, RESERVED) |
+                        _CC_ENCODE_FIELD(0, FLAGS) | _CC_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
+                        _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) |
+                        _CC_ENCODE_FIELD(_CC_N(NULL_T), EXP_NONZERO_TOP) | _CC_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
+                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
+                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
+    // We mask on store/load so this invisibly keeps null 0 whatever we choose
+    // it to be.
+    _CC_N(NULL_XOR_MASK) = _CC_N(NULL_PESBT),
+};
+#pragma GCC diagnostic pop
+
 #define _cc_length_t _cc_N(length_t)
 #define _cc_offset_t _cc_N(offset_t)
 #define _cc_addr_t _cc_N(addr_t)

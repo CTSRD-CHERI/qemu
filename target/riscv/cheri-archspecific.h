@@ -32,6 +32,8 @@
  */
 #pragma once
 
+#define NULL_CAPREG_INDEX 0
+
 #include "cpu.h"
 #include "cheri-lazy-capregs.h"
 #include "exec/log_instr.h"
@@ -60,6 +62,19 @@ static inline void QEMU_NORETURN raise_load_tag_exception(
 #else
     env->badaddr = va;
     riscv_raise_exception(env, RISCV_EXCP_LOAD_CAP_PAGE_FAULT, retpc);
+#endif
+}
+
+static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
+                                                           target_ulong va,
+                                                           int reg,
+                                                           uintptr_t retpc)
+{
+#ifdef TARGET_RISCV32
+    g_assert_not_reached();
+#else
+    env->badaddr = va;
+    riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT, retpc);
 #endif
 }
 

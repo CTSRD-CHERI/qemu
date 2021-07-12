@@ -61,13 +61,7 @@
 #define CHERI_HELPER_IMPL(name) \
     __attribute__((deprecated("Do not call the helper directly, it will crash at runtime. Call the _impl variant instead"))) helper_##name
 
-#ifdef DO_CHERI_STATISTICS
 
-static DEFINE_CHERI_STAT(cgetpccsetoffset);
-static DEFINE_CHERI_STAT(cgetpccincoffset);
-static DEFINE_CHERI_STAT(cgetpccsetaddr);
-
-#endif
 
 void cheri_cpu_dump_statistics_f(CPUState *cs, FILE* f, int flags)
 {
@@ -296,27 +290,6 @@ void CHERI_HELPER_IMPL(creturn(CPUArchState *env)) {
     do_raise_c2_exception_noreg(env, CapEx_ReturnTrap, GETPC());
 }
 
-target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb, uint64_t cbcursor))
-{
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
-        raise_cheri_exception(env, CapEx_PermitLoadCapViolation, cb);
-    } else if ((cbcursor & (8 * CHERI_CAP_SIZE - 1)) != 0) {
-        do_raise_c0_exception(env, EXCP_AdEL, cbcursor);
-    } else {
-       return (target_ulong)cheri_tag_get_many(env, cbcursor, cb, NULL, GETPC());
-    }
-    return 0;
-}
-
 target_ulong CHERI_HELPER_IMPL(cgetcause(CPUArchState *env))
 {
     /*
@@ -337,26 +310,6 @@ void CHERI_HELPER_IMPL(cgetpcc(CPUArchState *env, uint32_t cd))
      * See Chapter 4 in CHERI Architecture manual.
      */
     update_capreg(env, cd, cheri_get_current_pcc(env));
-}
-
-void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
-{
-    // PCC.cursor does not need to be up-to-date here since we only look at the
-    // base.
-    uint64_t new_addr = rs + cap_get_base(cheri_get_recent_pcc(env));
-    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
-}
-
-void CHERI_HELPER_IMPL(cgetpccincoffset(CPUArchState *env, uint32_t cd, target_ulong rs))
-{
-    uint64_t new_addr = rs + PC_ADDR(env);
-    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
-}
-
-void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd, target_ulong rs))
-{
-    uint64_t new_addr = rs;
-    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
 /* Note: not using CHERI_HELPER_IMPL since it cannot trap */

@@ -669,12 +669,17 @@ restart:
             /* add write permission on stores or if the page is already dirty,
                so that we TLB miss on later writes to update the dirty bit */
             if ((pte & PTE_W) &&
-                    (access_type == MMU_DATA_STORE || (pte & PTE_D))) {
+                ((access_type == MMU_DATA_STORE) ||
+                 (access_type == MMU_DATA_CAP_STORE) || (pte & PTE_D))) {
                 *prot |= PAGE_WRITE;
             }
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-            if ((pte & PTE_LC) == 0)
+            if ((pte & PTE_LC) == 0) {
                 *prot |= PAGE_LC_CLEAR;
+            }
+            if ((pte & PTE_SC) == 0) {
+                *prot |= PAGE_SC_TRAP;
+            }
 #endif
             return TRANSLATE_SUCCESS;
         }
@@ -968,12 +973,18 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                                       &pmp_violation, &first_stage_error, &prot,
                                       &pa, retaddr);
     if (ret == TRANSLATE_SUCCESS) {
+        MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
+#ifdef TARGET_CHERI
+        attrs.tag_setting = access_type == MMU_DATA_CAP_STORE;
+#endif
         if (pmp_is_range_in_tlb(env, pa & TARGET_PAGE_MASK, &tlb_size)) {
-            tlb_set_page(cs, address & ~(tlb_size - 1), pa & ~(tlb_size - 1),
-                         prot, mmu_idx, tlb_size);
+            tlb_set_page_with_attrs(cs, address & ~(tlb_size - 1),
+                                    pa & ~(tlb_size - 1), attrs, prot, mmu_idx,
+                                    tlb_size);
         } else {
-            tlb_set_page(cs, address & TARGET_PAGE_MASK, pa & TARGET_PAGE_MASK,
-                         prot, mmu_idx, TARGET_PAGE_SIZE);
+            tlb_set_page_with_attrs(cs, address & TARGET_PAGE_MASK,
+                                    pa & TARGET_PAGE_MASK, attrs, prot, mmu_idx,
+                                    TARGET_PAGE_SIZE);
         }
         return true;
     } else if (probe) {
@@ -1011,30 +1022,6 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 }
 
 #ifdef TARGET_CHERI
-hwaddr cpu_riscv_translate_address_tagmem(CPUArchState *env,
-                                          target_ulong address,
-                                          MMUAccessType rw, int reg, int *prot,
-                                          uintptr_t retpc)
-{
-    bool pmp_violation = false;
-    bool first_stage_error = true;
-    hwaddr pa = 0;
-    int mmu_idx = cpu_mmu_index(env, false);
-    int ret = riscv_cpu_tlb_fill_impl(env, address, 1, rw, mmu_idx,
-                                      &pmp_violation, &first_stage_error, prot,
-                                      &pa, retpc);
-    if (ret != TRANSLATE_SUCCESS) {
-        raise_mmu_exception(env, address, rw, pmp_violation,
-#ifndef TARGET_RISCV32
-                            ret == TRANSLATE_CHERI_FAIL,
-#endif
-                            first_stage_error, riscv_cpu_virt_enabled(env) ||
-                                riscv_cpu_two_stage_lookup(mmu_idx));
-        riscv_raise_exception(env, env_cpu(env)->exception_index, retpc);
-    }
-    tcg_debug_assert((address & ~TARGET_PAGE_MASK) == (pa & ~TARGET_PAGE_MASK));
-    return pa;
-}
 /* TODO(am2419): do we log PCC as a changed register? */
 #define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)           \
     do {                                                                \

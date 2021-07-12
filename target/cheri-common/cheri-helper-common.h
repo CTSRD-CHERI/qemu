@@ -44,6 +44,9 @@
  * target/mips/op_helper_cheri.c or target/riscv/op_helper_cheri.c.
  */
 
+// Lazy capreg state is a global, and so anything that might
+// cause a decompression can write global.
+
 // PCC bounds checks:
 DEF_HELPER_1(raise_exception_pcc_perms, noreturn, env)
 DEF_HELPER_3(raise_exception_pcc_bounds, noreturn, env, tl, i32)
@@ -52,14 +55,14 @@ DEF_HELPER_3(raise_exception_ddc_bounds, noreturn, env, tl, i32)
 
 // Two-operand capability inspection
 DEF_HELPER_FLAGS_2(cgetaddr, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetbase, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetflags, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetlen, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetperm, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetoffset, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetsealed, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgettag, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgettype, TCG_CALL_NO_WG, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetbase, 0, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetflags, 0, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetlen, 0, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetperm, 0, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetoffset, 0, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgetsealed, 0, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgettag, 0, tl, env, i32)
+DEF_HELPER_FLAGS_2(cgettype, 0, tl, env, i32)
 
 // Two operands (cap cap)
 DEF_HELPER_3(ccleartag, void, env, i32, i32)
@@ -70,6 +73,9 @@ DEF_HELPER_3(cinvoke, void, env, i32, i32)
 
 // Two operands (cap int)
 DEF_HELPER_3(ccheckperm, void, env, i32, tl)
+DEF_HELPER_3(cgetpccsetoffset, void, env, i32, tl)
+DEF_HELPER_3(cgetpccincoffset, void, env, i32, tl)
+DEF_HELPER_3(cgetpccsetaddr, void, env, i32, tl)
 
 // Two operands (int int)
 DEF_HELPER_FLAGS_2(crap, TCG_CALL_NO_RWG_SE, tl, env, tl)
@@ -95,10 +101,10 @@ DEF_HELPER_4(csetflags, void, env, i32, i32, tl)
 DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 
 // Three operands (int cap cap)
-DEF_HELPER_FLAGS_3(csub, TCG_CALL_NO_WG, tl, env, i32, i32)
-DEF_HELPER_FLAGS_3(ctestsubset, TCG_CALL_NO_WG, tl, env, i32, i32)
-DEF_HELPER_FLAGS_3(cseqx, TCG_CALL_NO_WG, tl, env, i32, i32)
-DEF_HELPER_FLAGS_3(ctoptr, TCG_CALL_NO_WG, tl, env, i32, i32)
+DEF_HELPER_FLAGS_3(csub, 0, tl, env, i32, i32)
+DEF_HELPER_FLAGS_3(ctestsubset, 0, tl, env, i32, i32)
+DEF_HELPER_FLAGS_3(cseqx, 0, tl, env, i32, i32)
+DEF_HELPER_FLAGS_3(ctoptr, 0, tl, env, i32, i32)
 
 // Loads+Stores
 DEF_HELPER_4(cap_load_check, cap_checked_ptr, env, i32, tl, i32)
@@ -106,3 +112,7 @@ DEF_HELPER_4(cap_store_check, cap_checked_ptr, env, i32, tl, i32)
 DEF_HELPER_4(cap_rmw_check, cap_checked_ptr, env, i32, tl, i32)
 DEF_HELPER_4(load_cap_via_cap, void, env, i32, i32, tl)
 DEF_HELPER_4(store_cap_via_cap, void, env, i32, i32, tl)
+
+// Misc
+DEF_HELPER_2(decompress_cap, void, env, i32)
+DEF_HELPER_2(cloadtags, tl, env, i32)

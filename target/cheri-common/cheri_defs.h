@@ -104,21 +104,18 @@ typedef CAP_cc(offset_t) cap_offset_t;
 typedef CAP_cc(length_t) cap_length_t;
 
 typedef enum CheriPermissions {
-    CAP_PERM_GLOBAL = (1 << 0),
-    CAP_PERM_EXECUTE = (1 << 1),
-    CAP_PERM_LOAD = (1 << 2),
-    CAP_PERM_STORE = (1 << 3),
-    CAP_PERM_LOAD_CAP = (1 << 4),
-    CAP_PERM_STORE_CAP = (1 << 5),
-    CAP_PERM_STORE_LOCAL = (1 << 6),
-    CAP_PERM_SEAL = (1 << 7),
-    CAP_PERM_CINVOKE = (1 << 8),
-    CAP_PERM_UNSEAL = (1 << 9),
-    CAP_ACCESS_SYS_REGS = (1 << 10),
-    CAP_PERM_SETCID = (1 << 11),
-    CAP_RESERVED4 = (1 << 12),
-    CAP_RESERVED5 = (1 << 13),
-    CAP_RESERVED6 = (1 << 14),
+    CAP_PERM_GLOBAL = CAP_CC(PERM_GLOBAL),
+    CAP_PERM_EXECUTE = CAP_CC(PERM_EXECUTE),
+    CAP_PERM_LOAD = CAP_CC(PERM_LOAD),
+    CAP_PERM_STORE = CAP_CC(PERM_STORE),
+    CAP_PERM_LOAD_CAP = CAP_CC(PERM_LOAD_CAP),
+    CAP_PERM_STORE_CAP = CAP_CC(PERM_STORE_CAP),
+    CAP_PERM_STORE_LOCAL = CAP_CC(PERM_STORE_LOCAL),
+    CAP_PERM_SEAL = CAP_CC(PERM_SEAL),
+    CAP_PERM_CINVOKE = CAP_CC(PERM_CINVOKE),
+    CAP_PERM_UNSEAL = CAP_CC(PERM_UNSEAL),
+    CAP_ACCESS_SYS_REGS = CAP_CC(PERM_ACCESS_SYS_REGS),
+    CAP_PERM_SETCID = CAP_CC(PERM_SETCID),
 } CheriPermissions;
 
 typedef enum CheriFlags {
@@ -127,7 +124,7 @@ typedef enum CheriFlags {
 
 typedef enum CheriTbFlags {
     /* CHERI PCC is tagged, executable and unsealed */
-    TB_FLAG_CHERI_PCC_VALID = (1 << 0),
+    TB_FLAG_CHERI_PCC_EXECUTABLE = (1 << 0),
     /* PCC.cr_flags == capmode */
     TB_FLAG_CHERI_CAPMODE = (1 << 1),
     /* DDC is tagged, unsealed and has PERM_LOAD */
@@ -151,10 +148,15 @@ typedef enum CheriTbFlags {
     TB_FLAG_CHERI_DDC_NO_INTERPOSE =
         (TB_FLAG_CHERI_DDC_BASE_ZERO | TB_FLAG_CHERI_DDC_CURSOR_ZERO),
     /*
-     * PCC spans the full adddress space and has base zero. This means we do
+     * PCC spans the full address space and has base zero. This means we do
      * not need to perform bounds checks or subtract/add PCC.base
      */
-    TB_FLAG_PCC_FULL_AS = (1 << 7)
+    TB_FLAG_CHERI_PCC_FULL_AS = (1 << 7),
+    TB_FLAG_CHERI_PCC_READABLE = (1 << 8),
+
+    /* Useful for CHERI-specific flags on various platforms if the normal flags
+       overflowed */
+    TB_FLAG_CHERI_SPARE_INDEX_START = 16,
 } CheriTbFlags;
 
 #endif // TARGET_CHERI

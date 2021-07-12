@@ -151,11 +151,36 @@ typedef struct CPUIOTLBEntry {
      */
     hwaddr addr;
 #ifdef TARGET_CHERI
-    void *tagmem;
+#define TLBENTRYCAP_MASK (uintptr_t)0x3
+    /* Trap if a non-zero tag is read/written. */
+#define TLBENTRYCAP_FLAG_TRAP (uintptr_t)0x1
+    /* Clear any tag read/written. */
+#define TLBENTRYCAP_FLAG_CLEAR (uintptr_t)0x2
+    /* This page contains only zero tag bits. */
+#define ALL_ZERO_TAGBLK ((void *)(uintptr_t)(~0 & ~TLBENTRYCAP_MASK))
+    /*
+     * Just as with CPUTLBEntry we split this via read/write for simpler logic
+     * generation. Eventually it will be moved there for fast TCG access.
+     * The lowest two bits of each address stash trapping/clearing.
+     */
+    uintptr_t tagmem_read;
+    /*
+     * ALL_ZERO_TAGBLK without either trapping or zero-ing is an invalid entry
+     * for tagmem_write and should cause a TLB miss if setting a tag to 1.
+     */
+#define TLBENTRYCAP_INVALID_WRITE ((uintptr_t)ALL_ZERO_TAGBLK)
+    uintptr_t tagmem_write;
 #endif
     MemTxAttrs attrs;
 } CPUIOTLBEntry;
 
+#define IOTLB_GET_TAGMEM(iotlbentry, rw)                                       \
+    ({                                                                         \
+        cheri_debug_assert(iotlbentry->tagmem_##rw != (uintptr_t)0);           \
+        (void *)((uintptr_t)iotlbentry->tagmem_##rw & ~TLBENTRYCAP_MASK);      \
+    })
+#define IOTLB_GET_TAGMEM_FLAGS(iotlbentry, rw)                                 \
+    ((uintptr_t)iotlbentry->tagmem_##rw & TLBENTRYCAP_MASK);
 /*
  * Data elements that are per MMU mode, minus the bits accessed by
  * the TCG fast path.

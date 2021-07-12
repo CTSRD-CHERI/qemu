@@ -233,7 +233,9 @@ typedef struct {
 #define CTE_QEMU_MAGIC      "CheriTraceV03"
 
 /* Number of per-cpu ring buffer entries for ring-buffer tracing mode */
-#define QEMU_LOG_INSTR_CPU_BUF_ENTRIES (1 << 16)
+#define MIN_ENTRY_BUFFER_SIZE (1 << 16)
+
+static unsigned long reset_entry_buffer_size = MIN_ENTRY_BUFFER_SIZE;
 
 /*
  * Fetch the log state for a cpu.
@@ -754,9 +756,12 @@ void qemu_log_instr_global_switch(bool request_stop)
  */
 static void qemu_log_instr_info_init(cpu_log_instr_info_t *iinfo)
 {
-    iinfo->txt_buffer = g_string_new(NULL);
-    iinfo->regs = g_array_new(false, true, sizeof(log_reginfo_t));
-    iinfo->mem = g_array_new(false, true, sizeof(log_meminfo_t));
+    if (iinfo->txt_buffer == NULL)
+        iinfo->txt_buffer = g_string_new(NULL);
+    if (iinfo->regs == NULL)
+        iinfo->regs = g_array_new(false, true, sizeof(log_reginfo_t));
+    if (iinfo->mem == NULL)
+        iinfo->mem = g_array_new(false, true, sizeof(log_meminfo_t));
 }
 
 /*
@@ -782,11 +787,11 @@ void qemu_log_instr_init(CPUState *cpu)
 {
     cpu_log_instr_state_t *cpulog = &cpu->log_state;
     GArray *iinfo_ring = g_array_sized_new(FALSE, TRUE,
-        sizeof(cpu_log_instr_info_t), QEMU_LOG_INSTR_CPU_BUF_ENTRIES);
+        sizeof(cpu_log_instr_info_t), reset_entry_buffer_size);
     cpu_log_instr_info_t *iinfo;
     int i;
 
-    g_array_set_size(iinfo_ring, QEMU_LOG_INSTR_CPU_BUF_ENTRIES);
+    g_array_set_size(iinfo_ring, reset_entry_buffer_size);
     g_array_set_clear_func(iinfo_ring, qemu_log_instr_info_destroy);
 
     for (i = 0; i < iinfo_ring->len; i++) {
@@ -813,6 +818,46 @@ void qemu_log_instr_init(CPUState *cpu)
     if (qemu_loglevel_mask(CPU_LOG_INSTR))
         do_cpu_loglevel_switch(cpu,
             RUN_ON_CPU_HOST_INT(QEMU_LOG_INSTR_LOGLEVEL_ALL));
+}
+
+static void
+do_log_buffer_resize(CPUState *cpu, run_on_cpu_data data)
+{
+    unsigned long new_size = data.host_ulong;
+    cpu_log_instr_state_t *cpulog = get_cpu_log_state(cpu->env_ptr);
+    cpu_log_instr_info_t *iinfo;
+    int i;
+
+    g_array_set_size(cpulog->instr_info, new_size);
+    cpulog->ring_head = 0;
+    cpulog->ring_tail = 0;
+    for (i = 0; i < cpulog->instr_info->len; i++) {
+        /*
+         * Clear and reinitialize all the entries,
+         * a bit overkill but should not be a frequent operation.
+         */
+        iinfo = &g_array_index(cpulog->instr_info, cpu_log_instr_info_t, i);
+        qemu_log_instr_info_init(iinfo);
+        reset_log_buffer(cpulog, iinfo);
+    }
+}
+
+void qemu_log_instr_set_buffer_size(unsigned long new_size)
+{
+    CPUState *cpu;
+
+    if (new_size < MIN_ENTRY_BUFFER_SIZE) {
+        warn_report("New trace entry buffer size is too small < %zu, ignored.\n",
+                    (size_t)MIN_ENTRY_BUFFER_SIZE);
+        return;
+    }
+
+    /* Set this in case this is called from qemu option parsing */
+    reset_entry_buffer_size = new_size;
+    CPU_FOREACH(cpu) {
+        async_safe_run_on_cpu(cpu, do_log_buffer_resize,
+            RUN_ON_CPU_HOST_ULONG(new_size));
+    }
 }
 
 /*

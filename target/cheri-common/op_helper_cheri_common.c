@@ -59,6 +59,14 @@
         (deprecated("Do not call the helper directly, it will crash at "       \
                     "runtime. Call the _impl variant instead"))) helper_##name
 
+#ifdef DO_CHERI_STATISTICS
+
+static DEFINE_CHERI_STAT(cgetpccsetoffset);
+static DEFINE_CHERI_STAT(cgetpccincoffset);
+static DEFINE_CHERI_STAT(cgetpccsetaddr);
+
+#endif
+
 static inline bool is_cap_sealed(const cap_register_t *cp)
 {
     // TODO: remove this function and update all callers to use the correct
@@ -76,6 +84,16 @@ void CHERI_HELPER_IMPL(ddc_check_bounds(CPUArchState *env, target_ulong addr,
               /*instavail=*/true, GETPC());
 }
 
+void CHERI_HELPER_IMPL(pcc_check_bounds(CPUArchState *env, target_ulong addr,
+                                        target_ulong num_bytes))
+{
+    const cap_register_t *pcc = cheri_get_recent_pcc(env);
+    cheri_debug_assert(pcc->cr_tag && cap_is_unsealed(pcc) &&
+                       "Should have been checked before bounds!");
+    check_cap(env, pcc, 0, addr, CHERI_EXC_REGNUM_PCC, num_bytes,
+              /*instavail=*/true, GETPC());
+}
+
 target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
                                               target_ulong pcc_offset,
                                               MemOp op))
@@ -86,6 +104,30 @@ target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
     check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
               memop_size(op), /*instavail=*/true, retpc);
     return addr;
+}
+
+void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd,
+                                        target_ulong rs))
+{
+    // PCC.cursor does not need to be up-to-date here since we only look at the
+    // base.
+    uint64_t new_addr = rs + cap_get_base(cheri_get_recent_pcc(env));
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetoffset));
+}
+
+void CHERI_HELPER_IMPL(cgetpccincoffset(CPUArchState *env, uint32_t cd,
+                                        target_ulong rs))
+{
+    uint64_t new_addr = rs + PC_ADDR(env);
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccincoffset));
+}
+
+// TODO: This is basically the riscv auipc again. Should probably refactor.
+void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd,
+                                      target_ulong rs))
+{
+    uint64_t new_addr = rs;
+    derive_cap_from_pcc(env, cd, new_addr, GETPC(), OOB_INFO(cgetpccsetaddr));
 }
 
 void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
@@ -647,38 +689,43 @@ DEFINE_CHERI_STAT(csetoffset);
 DEFINE_CHERI_STAT(csetaddr);
 DEFINE_CHERI_STAT(candaddr);
 DEFINE_CHERI_STAT(cfromptr);
+#endif
 
-static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
-                            target_ulong rt, uintptr_t retpc,
-                            struct oob_stats_info *oob_info)
+static inline QEMU_ALWAYS_INLINE void
+cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
+                uintptr_t retpc,
+                struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
 {
+#ifdef DO_CHERI_STATISTICS
     oob_info->num_uses++;
-#else
-static void cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb,
-                            target_ulong rt, uintptr_t retpc, void *dummy_arg)
-{
-    (void)dummy_arg;
 #endif
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     /*
      * CIncOffset: Increase Offset
      */
-    if (cbp->cr_tag && is_cap_sealed(cbp)) {
+    if (unlikely(cbp->cr_tag && is_cap_sealed(cbp))) {
         raise_cheri_exception_impl(env, CapEx_SealViolation, cb, true, retpc);
+    }
+    target_ulong new_addr = cap_get_cursor(cbp) + rt;
+    if (likely(addr_in_cap_bounds(cbp, new_addr))) {
+        /* Common case: updating an in-bounds capability. */
+        update_capreg_cursor_from(env, cd, cbp, cb, new_addr);
     } else {
-        target_ulong new_addr = cap_get_cursor(cbp) + rt;
-        cap_register_t result = *cbp;
+        /* Result is out-of-bounds, check if it's representable. */
         if (unlikely(!is_representable_cap_with_addr(cbp, new_addr))) {
             if (cbp->cr_tag) {
                 became_unrepresentable(env, cd, oob_info, retpc);
             }
+            cap_register_t result = *cbp;
             cap_mark_unrepresentable(new_addr, &result);
+            update_capreg(env, cd, &result);
         } else {
-            result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, oob_info, &result,
+            /* out-of-bounds but still representable. */
+            update_capreg_cursor_from(env, cd, cbp, cb, new_addr);
+            check_out_of_bounds_stat(env, oob_info,
+                                     get_readonly_capreg(env, cd),
                                      _host_return_address);
         }
-        update_capreg(env, cd, &result);
     }
 }
 
@@ -971,52 +1018,22 @@ const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb)
 #endif
 }
 
-static inline target_ulong cap_check_common(uint32_t required_perms,
-                                            CPUArchState *env, uint32_t cb,
-                                            target_ulong offset, uint32_t size,
-                                            uintptr_t _host_return_address)
+static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common(
+    uint32_t required_perms, CPUArchState *env, uint32_t cb,
+    target_ulong offset, uint32_t size, uintptr_t _host_return_address)
 {
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if ((required_perms & CAP_PERM_LOAD) &&
-               !(cbp->cr_perms & CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    } else if ((required_perms & CAP_PERM_STORE) &&
-               !(cbp->cr_perms & CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
-    }
-    const target_ulong cursor = cap_get_cursor(cbp);
-    const target_ulong addr = cursor + (target_long)offset;
-    if (!cap_is_in_bounds(cbp, addr, size)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_lx
-            " cursor=" TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n",
-            offset, cursor, addr);
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    }
-#ifdef TARGET_MIPS
-    if (!QEMU_IS_ALIGNED(addr, size)) {
-#if defined(CHERI_UNALIGNED)
-        const char *access_type =
-            (required_perms == (CAP_PERM_STORE | CAP_PERM_LOAD))
-                ? "RMW"
-                : ((required_perms == CAP_PERM_STORE) ? "store" : "load");
-        qemu_maybe_log_instr_extra(env, "Allowing unaligned %d-byte %s of "
-            "address 0x%" PRIx64 "\n", size, access_type, addr);
-#endif
-    }
-#endif // TARGET_MIPS
-    return addr;
+    return cap_check_common_reg(required_perms, env, cb, offset, size,
+                                _host_return_address, cbp, size,
+                                /*unaligned_handler=*/NULL);
 }
 
 /*
  * Load Via Capability Register
  */
 target_ulong CHERI_HELPER_IMPL(cap_load_check(CPUArchState *env, uint32_t cb,
-                                           target_ulong offset, uint32_t size))
+                                              target_ulong offset,
+                                              uint32_t size))
 {
     return cap_check_common(CAP_PERM_LOAD, env, cb, offset, size, GETPC());
 }
@@ -1047,24 +1064,10 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    }
+    const target_ulong addr = cap_check_common_reg(
+        perms_for_load(), env, cb, offset, CHERI_CAP_SIZE, _host_return_address,
+        cbp, CHERI_CAP_SIZE, raise_unaligned_load_exception);
 
-    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
-    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_lx " cursor="
-            TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n", offset,
-            cap_get_cursor(cbp), addr);
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
-        raise_unaligned_load_exception(env, addr, _host_return_address);
-    }
     load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address,
                          /*physaddr_out=*/NULL);
 }
@@ -1078,30 +1081,11 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
     // in the hybrid ABI (and also for backwards compat with old binaries).
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
-        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
-        get_capreg_tag(env, cs) &&
-        !(get_capreg_hwperms(env, cs) & CAP_PERM_GLOBAL)) {
-        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
-    }
+    const target_ulong addr =
+        cap_check_common_reg(perms_for_store(env, cs), env, cb, offset,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
 
-    const target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
-    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_lx " cursor="
-            TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n", offset,
-            cap_get_cursor(cbp), addr);
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
-        raise_unaligned_store_exception(env, addr, _host_return_address);
-    }
     store_cap_to_memory(env, cs, addr, _host_return_address);
 }
 
@@ -1221,7 +1205,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
     }
 #endif
     bool tag = get_capreg_tag_filtered(env, cs);
-    if (cs == 0) {
+    if (cs == NULL_CAPREG_INDEX) {
         tcg_debug_assert(pesbt_for_mem == 0 && "Wrong value for cnull?");
         tcg_debug_assert(cursor == 0 && "Wrong value for cnull?");
         tcg_debug_assert(!tag && "Wrong value for cnull?");
@@ -1291,14 +1275,31 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs,
 #endif
 }
 
+target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
+{
+    static const uint32_t perms = CAP_PERM_LOAD | CAP_PERM_LOAD_CAP;
+    static const size_t ncaps = 1 << CAP_TAG_GET_MANY_SHFT;
+    static const uint32_t sizealign = ncaps * CHERI_CAP_SIZE;
+
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+
+    const target_ulong addr = cap_check_common_reg(
+        perms, env, cb, 0, sizealign, _host_return_address, cbp, sizealign,
+        raise_unaligned_load_exception);
+
+    return (target_ulong)cheri_tag_get_many(env, addr, cb, NULL, GETPC());
+}
+
 QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
-                                                 CheriCapExcCause cause)
+                                                 CheriCapExcCause cause,
+                                                 uintptr_t _host_return_address)
 {
     cheri_debug_assert(pc_is_current(env));
     // Note: we set pc=0 since PC will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
     raise_cheri_exception_impl(env, cause, CHERI_EXC_REGNUM_PCC,
-        /*instavail=*/true, 0);
+        /*instavail=*/true, _host_return_address);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
@@ -1320,7 +1321,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
                      __func__, PRINT_CAP_ARGS(pcc));
         tcg_abort();
     }
-    raise_pcc_fault(env, cause);
+    raise_pcc_fault(env, cause, GETPC());
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
@@ -1335,7 +1336,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     // helpful).
     cheri_debug_assert(!cap_is_in_bounds(cheri_get_current_pcc(env), addr,
                                          num_bytes == 0 ? 1 : num_bytes));
-    raise_pcc_fault(env, CapEx_LengthViolation);
+    raise_pcc_fault(env, CapEx_LengthViolation, GETPC());
 }
 
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
@@ -1361,4 +1362,9 @@ void CHERI_HELPER_IMPL(raise_exception_ddc_bounds(CPUArchState *env,
     error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,
                  PRINT_CAP_ARGS(cheri_get_ddc(env)));
     tcg_abort();
+}
+
+void CHERI_HELPER_IMPL(decompress_cap(CPUArchState *env, uint32_t regndx))
+{
+    get_readonly_capreg(env, regndx);
 }
