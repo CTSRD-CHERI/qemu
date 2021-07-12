@@ -54,7 +54,9 @@ vdev_read(void *opaque, hwaddr addr, unsigned int size)
 
 	s = opaque;
 
-	fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr, size);
+	if (addr != EPW_REQUEST_LEVEL_SEND_RESPONSE)
+		fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr,
+		    size);
 
 	switch (addr) {
 	case EPW_REQUEST_LEVEL_SEND_RESPONSE:
@@ -62,6 +64,7 @@ vdev_read(void *opaque, hwaddr addr, unsigned int size)
 	case EPW_REQUEST_IS_WRITE:
 		return (req.is_write);
 	case EPW_WRITE_ADDRESS:
+		return (req.write_addr);
 	case EPW_READ_ADDRESS:
 		return (req.read_addr);
 	case EPW_READ_SIZE:
@@ -197,10 +200,10 @@ vdev_window_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 		return;
 
 	req.is_write = 1;
-	req.byte_enable = size;
 	req.write_addr = addr + w->base;
 	req.write_size = size;
 	req.data64 = val64;
+	//req.byte_enable = size;
 	req.pending = 1;
 
 	qemu_mutex_unlock_iothread();
