@@ -14,6 +14,8 @@ struct vdevState
 {
     MemoryRegion mmio;
     unsigned char reg[6];
+    hwaddr base;
+    hwaddr size;
 };
 
 vdevState *vdev_create(MemoryRegion *address_space, hwaddr base, hwaddr base_size, hwaddr window, hwaddr window_size);
