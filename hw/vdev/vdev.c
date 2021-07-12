@@ -54,9 +54,9 @@ vdev_read(void *opaque, hwaddr addr, unsigned int size)
 
 	s = opaque;
 
-	if (addr != EPW_REQUEST_LEVEL_SEND_RESPONSE)
-		fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr,
-		    size);
+	//if (addr != EPW_REQUEST_LEVEL_SEND_RESPONSE)
+	//	fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr,
+	//	    size);
 
 	switch (addr) {
 	case EPW_REQUEST_LEVEL_SEND_RESPONSE:
@@ -115,8 +115,8 @@ vdev_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 	value = val64;
 	ch = value;
 
-	fprintf(stderr, "%s: addr %jx val %jx size %x\n",
-	    __func__, addr, val64, size);
+	//fprintf(stderr, "%s: addr %jx val %jx size %x\n",
+	//    __func__, addr, val64, size);
 
 	switch (addr) {
 	case EPW_ENABLE_DEVICE_EMULATION:
@@ -151,7 +151,7 @@ vdev_window_read(void *opaque, hwaddr addr, unsigned int size)
 
 	w = opaque;
 
-	fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr, size);
+	//fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr, size);
 
 #if 0
 	StatusInfo *info;
@@ -178,7 +178,7 @@ vdev_window_read(void *opaque, hwaddr addr, unsigned int size)
 
 	qemu_mutex_unlock_iothread();
 	while (req.pending != 0) {
-		fprintf(stderr, "%s: sleeping for 1 sec\n", __func__);
+		//fprintf(stderr, "%s: sleeping for 1 sec\n", __func__);
 		usleep(100000);
 	}
 	qemu_mutex_lock_iothread();
@@ -193,8 +193,8 @@ vdev_window_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 
 	w = opaque;
 
-	fprintf(stderr, "%s: addr %jx val %jx size %x\n",
-	    __func__, addr, val64, size);
+	//fprintf(stderr, "%s: addr %jx val %jx size %x\n",
+	//    __func__, addr, val64, size);
 
 	if (req.enabled == 0)
 		return;
@@ -208,7 +208,7 @@ vdev_window_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 
 	qemu_mutex_unlock_iothread();
 	while (req.pending != 0) {
-		fprintf(stderr, "%s: sleeping for 1 sec\n", __func__);
+		//fprintf(stderr, "%s: sleeping for 1 sec\n", __func__);
 		usleep(100000);
 	}
 	qemu_mutex_lock_iothread();
