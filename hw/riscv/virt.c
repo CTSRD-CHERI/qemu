@@ -301,6 +301,7 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
         }
 
         addr = memmap[VIRT_DRAM].base + riscv_socket_mem_offset(mc, socket);
+        /* Reserve 128MB of memory for device-model. */
         size = riscv_socket_mem_size(mc, socket) - 128 * 1024 * 1024;
         mem_name = g_strdup_printf("/memory@%lx", (long)addr);
         qemu_fdt_add_subnode(fdt, mem_name);
@@ -400,7 +401,7 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     create_pcie_irq_map(fdt, name, plic_pcie_phandle);
     g_free(name);
 
-#if 1
+    /* Device-model PCI adapter */
     name = g_strdup_printf("/soc/pci@%lx",
         (long) memmap[VIRT_VDEV_PCI].base);
     qemu_fdt_add_subnode(fdt, name);
@@ -409,11 +410,6 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_setprop_cell(fdt, name, "#size-cells", 0x2);
     qemu_fdt_setprop_string(fdt, name, "compatible", "pci-host-ecam-generic");
     qemu_fdt_setprop_string(fdt, name, "device_type", "pci");
-#if 0
-    qemu_fdt_setprop_cell(fdt, name, "linux,pci-domain", 0);
-    qemu_fdt_setprop_cells(fdt, name, "bus-range", 0,
-        memmap[VIRT_PCIE_ECAM].size / PCIE_MMCFG_SIZE_MIN - 1);
-#endif
     qemu_fdt_setprop(fdt, name, "dma-coherent", NULL, 0);
     qemu_fdt_setprop_cells(fdt, name, "reg", 0,
         memmap[VIRT_VDEV_PCI].base, 0, memmap[VIRT_VDEV_PCI].size);
@@ -423,7 +419,6 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
         2, memmap[VIRT_VDEV_AHCI].base, 2, memmap[VIRT_VDEV_AHCI].size);
     create_pcie_irq_map(fdt, name, plic_pcie_phandle);
     g_free(name);
-#endif
 
     test_phandle = phandle++;
     name = g_strdup_printf("/soc/test@%lx",
@@ -480,6 +475,10 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_setprop_cell(fdt, name, "interrupt-parent", plic_mmio_phandle);
     qemu_fdt_setprop_cell(fdt, name, "interrupts", UART1_IRQ);
 
+    /*
+     * A device that allows to put device-model binary to shared memory
+     * and to start secondary CPU.
+     */
     name = g_strdup_printf("/soc/berimgr");
     qemu_fdt_add_subnode(fdt, name);
 #if 0
