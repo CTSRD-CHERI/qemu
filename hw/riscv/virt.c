@@ -481,11 +481,9 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
      */
     name = g_strdup_printf("/soc/berimgr");
     qemu_fdt_add_subnode(fdt, name);
-#if 0
     qemu_fdt_setprop_cells(fdt, name, "reg",
         0x0, 0xf8000000,
         0x0, 0x08000000);
-#endif
     qemu_fdt_setprop_string(fdt, name, "compatible", "beri,mgr");
 
     name = g_strdup_printf("/soc/rtc@%lx", (long)memmap[VIRT_RTC].base);
