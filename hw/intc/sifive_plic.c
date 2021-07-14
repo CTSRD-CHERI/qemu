@@ -296,6 +296,13 @@ static void sifive_plic_write(void *opaque, hwaddr addr, uint64_t value,
         qemu_log_mask(LOG_GUEST_ERROR,
                       "%s: invalid pending write: 0x%" HWADDR_PRIx "",
                       __func__, addr);
+        uint32_t irq;
+        int i;
+        irq = ((addr - plic->pending_base) << 3);
+        for (i = 0; i < 32; i++)
+            if (value & (1 << i))
+                sifive_plic_set_pending(plic, irq + i, 1);
+        sifive_plic_update(plic);
         return;
     } else if (addr >= plic->enable_base && /* 1 bit per source */
         addr < plic->enable_base + plic->num_addrs * plic->enable_stride)
