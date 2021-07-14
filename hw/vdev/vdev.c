@@ -179,7 +179,7 @@ vdev_window_read(void *opaque, hwaddr addr, unsigned int size)
 	qemu_mutex_unlock_iothread();
 	while (req.pending != 0) {
 		//fprintf(stderr, "%s: sleeping for 1 sec\n", __func__);
-		usleep(100000);
+		usleep(1000);
 	}
 	qemu_mutex_lock_iothread();
 
@@ -209,7 +209,7 @@ vdev_window_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 	qemu_mutex_unlock_iothread();
 	while (req.pending != 0) {
 		//fprintf(stderr, "%s: sleeping for 1 sec\n", __func__);
-		usleep(100000);
+		usleep(1000);
 	}
 	qemu_mutex_lock_iothread();
 }
