@@ -1,3 +1,36 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2021 Ruslan Bukin <br@bsdpad.com>
+ * All rights reserved.
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory (Department of Computer Science and
+ * Technology) under DARPA contract HR0011-18-C-0016 ("ECATS"), as part of the
+ * DARPA SSITH research programme.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qemu/log.h"
@@ -8,7 +41,7 @@
 #include "hw/core/cpu.h"
 #include "hw/vdev/vdev.h"
 #include "sysemu/cpus.h"
-#include "qemu/main-loop.h" /* iothread mutex */
+#include "qemu/main-loop.h"
 
 #define	EPW_READ_ADDRESS		0x0000	/* read only */
 #define	EPW_READ_FLIT_SIZE		0x0008	/* read only */
@@ -29,34 +62,24 @@ struct epw_request {
 	uint64_t read_addr;
 	uint64_t write_addr;
 	uint8_t is_write;
-	uint64_t flit_size;
-	uint32_t burst_count;
-	uint32_t byte_enable;
-	//uint8_t data[32];
-	uint64_t data64;
-	uint8_t data_len;
+	uint64_t data;
 	uint8_t pending;
-	uint8_t done;
 	uint8_t enabled;
 	uint32_t read_size;
 	uint32_t write_size;
 };
 
 static struct epw_request req;
-StatusInfo *qmp_query_status(Error **errp);
 
 static uint64_t
 vdev_read(void *opaque, hwaddr addr, unsigned int size)
 {
-	CPUState *cpu;
 	vdevState *s;
-	//uint8_t *v;
 
 	s = opaque;
 
-	//if (addr != EPW_REQUEST_LEVEL_SEND_RESPONSE)
-	//	fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr,
-	//	    size);
+	qemu_log_mask(LOG_GUEST_ERROR, "%s: read: addr=0x%jx size=%d\n",
+		__func__, addr, size);
 
 	switch (addr) {
 	case EPW_REQUEST_LEVEL_SEND_RESPONSE:
@@ -71,119 +94,62 @@ vdev_read(void *opaque, hwaddr addr, unsigned int size)
 		return (req.read_size);
 	case EPW_WRITE_SIZE:
 		return (req.write_size);
-	case EPW_READ_FLIT_SIZE:
-		return (req.flit_size);
-	case EPW_READ_BURST_COUNT:
-		return (req.burst_count);
-	case EPW_WRITE_BYTE_ENABLE:
-		return (req.byte_enable);
 	case EPW_WRITE_DATA:
-		return (req.data64);
-#if 0
-	case EPW_WRITE_DATA ... (EPW_WRITE_DATA + 0x8):
-		v = (uint8_t *)&req.data64;
-		return (v[addr - 0x1040] & 0xff);
-#endif
+		return (req.data);
+	default:
+		return (0);
 	};
 
-	qemu_log_mask(LOG_GUEST_ERROR, "%s: read: addr=0x%x size=%d\n",
-	    __func__, (int)addr,size);
-
-	while (1);
-
-	CPU_FOREACH(cpu) {
-		//fprintf(stderr, "CPU #%d:\n", cpu->cpu_index);
-		if (cpu->cpu_index == 0)
-			cpu->stop = true;
-	};
-
-	cpu = current_cpu;
-
-	return s->reg[addr];
+	return (0);
 }
 
 static void
 vdev_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 {
-	unsigned char ch;
-	uint32_t value;
 	vdevState *s;
-	uint8_t *v;
 
-	/* dummy code for future development */
 	s = opaque;
-	value = val64;
-	ch = value;
 
-	//fprintf(stderr, "%s: addr %jx val %jx size %x\n",
-	//    __func__, addr, val64, size);
+	qemu_log_mask(LOG_GUEST_ERROR, "%s: write: addr=0x%jx v=0x%jx\n",
+	    __func__, addr, val64);
 
 	switch (addr) {
 	case EPW_ENABLE_DEVICE_EMULATION:
 		req.enabled = 1;
 		break;
 	case EPW_READ_RESPONSE_DATA:
-		req.data64 = val64;
+		req.data = val64;
 		break;
-#if 0
-	case EPW_READ_RESPONSE_DATA ... (EPW_READ_RESPONSE_DATA + 0x8):
-		v = (uint8_t *)&req.data64;
-		v[addr - 0x40] = val64 & 0xff;
-		break;
-#endif
 	case EPW_REQUEST_LEVEL_SEND_RESPONSE:
 		req.pending = 0;
 		break;
 	default:
-		printf("unknown req: addr %jx\n", addr);
-		while (1);
+		printf("%s: unknown req: addr %jx\n", __func__, addr);
+		break;
 	};
-
-	qemu_log_mask(LOG_GUEST_ERROR, "%s: write: addr=0x%x v=0x%x\n",
-	    __func__, (int)addr, (int)value);
 }
 
 static uint64_t
 vdev_window_read(void *opaque, hwaddr addr, unsigned int size)
 {
-	CPUState *cpu;
 	vdevState *w;
 
 	w = opaque;
-
-	//fprintf(stderr, "%s: addr %jx size %x\n", __func__, addr, size);
-
-#if 0
-	StatusInfo *info;
-	info = qmp_query_status(NULL);
-
-	fprintf(stderr,
-	    "%s: current_run_state %x\n", __func__, info->status);
-
-	CPU_FOREACH(cpu) {
-		fprintf(stderr, "CPU #%d: stopped %d\n", cpu->cpu_index,
-		    cpu->stop);
-	};
-#endif
 
 	if (req.enabled == 0)
 		return (0);
 
 	req.is_write = 0;
-	req.flit_size = 1;
-	req.burst_count = 4;
 	req.read_addr = addr + w->base;
 	req.read_size = size;
 	req.pending = 1;
 
 	qemu_mutex_unlock_iothread();
-	while (req.pending != 0) {
-		//fprintf(stderr, "%s: sleeping for 1 sec\n", __func__);
+	while (req.pending != 0)
 		usleep(1000);
-	}
 	qemu_mutex_lock_iothread();
 
-	return (req.data64);
+	return (req.data);
 }
 
 static void
@@ -193,24 +159,18 @@ vdev_window_write(void *opaque, hwaddr addr, uint64_t val64, unsigned int size)
 
 	w = opaque;
 
-	//fprintf(stderr, "%s: addr %jx val %jx size %x\n",
-	//    __func__, addr, val64, size);
-
 	if (req.enabled == 0)
 		return;
 
 	req.is_write = 1;
 	req.write_addr = addr + w->base;
 	req.write_size = size;
-	req.data64 = val64;
-	//req.byte_enable = size;
+	req.data = val64;
 	req.pending = 1;
 
 	qemu_mutex_unlock_iothread();
-	while (req.pending != 0) {
-		//fprintf(stderr, "%s: sleeping for 1 sec\n", __func__);
+	while (req.pending != 0)
 		usleep(1000);
-	}
 	qemu_mutex_lock_iothread();
 }
 
@@ -218,12 +178,6 @@ static void
 vdev_init(vdevState *s)
 {
 
-	s->reg[0]='B';
-	s->reg[1]='U';
-	s->reg[2]='T';
-	s->reg[3]='T';
-	s->reg[4]='E';
-	s->reg[5]='R';
 }
 
 static const MemoryRegionOps vdev_ops = {
