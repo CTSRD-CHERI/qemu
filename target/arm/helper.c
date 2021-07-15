@@ -9414,7 +9414,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .resetvalue = 0},
         {.name = "CSCR_EL3",
          .opc0 = 3,
-         .opc1 = 5,
+         .opc1 = 6,
          .crn = 1,
          .crm = 2,
          .opc2 = 3,
