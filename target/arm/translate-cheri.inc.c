@@ -1828,6 +1828,10 @@ TRANS_F(CT)
         return false;
 
     uint32_t reg = IS_C64(ctx) ? a->Rn : CHERI_EXC_REGNUM_DDC;
+
+    if (reg == 31)
+        gen_check_sp_alignment(ctx);
+
     TCGv_i64 addr = read_cpu_reg_sp(ctx, a->Rn, 1);
 
     if (!IS_C64(ctx) && cctlr_set(ctx, CCTLR_DDCBO)) {
