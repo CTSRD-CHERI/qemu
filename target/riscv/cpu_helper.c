@@ -362,6 +362,17 @@ void riscv_cpu_set_mode(CPURISCVState *env, target_ulong newpriv)
 extern bool rvfi_debug_output;
 #endif
 
+#ifndef RISCV_PTE_TRAPPY
+/*
+ * The PTW logic below supports trapping on any subset of PTE_A, PTE_D, PTE_CD
+ * being clear during an access that would have them be set.  The RISC-V spec
+ * says that PTE_A and PTE_D always go together, and it's probably most sensible
+ * that PTE_CD implies PTE_A and PTE_D.  So, sensible values for this constant
+ * are 0, (PTE_A | PTE_D), or (PTE_A | PTE_D | PTE_CD).
+ */
+#define RISCV_PTE_TRAPPY 0
+#endif
+
 /* get_physical_address - get the physical address for this virtual address
  *
  * Do a page table walk to obtain the physical address corresponding to a
@@ -583,6 +594,14 @@ restart:
         } else if ((pte & (PTE_R | PTE_W | PTE_X)) == (PTE_W | PTE_X)) {
             /* Reserved leaf PTE flags: PTE_W + PTE_X */
             return TRANSLATE_FAIL;
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+        } else if ((pte & (PTE_CR | PTE_CRG)) == PTE_CRG) {
+            /* Reserved CHERI-extended PTE flags: no CR but CRG */
+            return TRANSLATE_CHERI_FAIL;
+        } else if ((pte & (PTE_CR | PTE_CRM | PTE_CRG)) == (PTE_CR | PTE_CRG)) {
+            /* Reserved CHERI-extended PTE flags: CR and no CRM but CRG */
+            return TRANSLATE_CHERI_FAIL;
+#endif
         } else if ((pte & PTE_U) && ((mode != PRV_U) &&
                    (!sum || access_type == MMU_INST_FETCH))) {
             /* User PTE flags when not U mode and mstatus.SUM is not set,
@@ -607,14 +626,45 @@ restart:
             /* Fetch access check failed */
             return TRANSLATE_FAIL;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_SC)) {
-            /* SC inhibited */
+        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_CW)) {
+            /* CW inhibited */
             return TRANSLATE_CHERI_FAIL;
+#endif
+#if RISCV_PTE_TRAPPY & PTE_A
+        } else if (!(pte & PTE_A)) {
+            /* PTE not marked as accessed */
+            return TRANSLATE_FAIL;
+#endif
+#if RISCV_PTE_TRAPPY & PTE_D
+        } else if ((access_type == MMU_DATA_STORE) && !(pte & PTE_D)) {
+            /* PTE not marked as dirty */
+            return TRANSLATE_FAIL;
+#endif
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+#if RISCV_PTE_TRAPPY & PTE_D
+        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_D)) {
+            /* PTE not marked as dirty for cap store */
+            return TRANSLATE_FAIL;
+#endif
+#if RISCV_PTE_TRAPPY & PTE_CD
+        } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_CD)) {
+            /* CD clear; force the software trap handler to get involved */
+            return TRANSLATE_CHERI_FAIL;
+#endif
 #endif
         } else {
             /* if necessary, set accessed and dirty bits. */
-            target_ulong updated_pte = pte | PTE_A |
-                (access_type == MMU_DATA_STORE ? PTE_D : 0);
+            target_ulong updated_pte = pte | PTE_A;
+            switch (access_type) {
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+            case MMU_DATA_CAP_STORE:
+                updated_pte |= PTE_CD;
+                /* FALLTHROUGH */
+#endif
+            case MMU_DATA_STORE:
+                updated_pte |= PTE_D;
+                break;
+            }
 
             /* Page table updates need to be atomic with MTTCG enabled */
             if (updated_pte != pte) {
@@ -674,10 +724,26 @@ restart:
                 *prot |= PAGE_WRITE;
             }
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
-            if ((pte & PTE_LC) == 0) {
-                *prot |= PAGE_LC_CLEAR;
+            if ((pte & PTE_CR) == 0) {
+                if ((pte & PTE_CRM) == 0) {
+                    *prot |= PAGE_LC_CLEAR;
+                } else {
+                    *prot |= PAGE_LC_TRAP;
+                }
+            } else {
+                if (pte & PTE_CRM) {
+                    /* Cap-loads checked against [SU]GCLG in CCSR using PTE_U */
+                    target_ulong gclgmask =
+                        (pte & PTE_U) ? SCCSR_UGCLG : SCCSR_SGCLG;
+                    bool gclg = (env->sccsr & gclgmask) != 0;
+                    bool lclg = (pte & PTE_CRG) != 0;
+
+                    if (gclg != lclg) {
+                        *prot |= PAGE_LC_TRAP;
+                    }
+                }
             }
-            if ((pte & PTE_SC) == 0) {
+            if ((pte & PTE_CW) == 0) {
                 *prot |= PAGE_SC_TRAP;
             }
 #endif
@@ -910,6 +976,36 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
                     TARGET_FMT_plx " prot %d\n",
                     __func__, im_address, ret, *pa, prot2);
 
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+            /*
+             * CHERI's load-side caveats are enforced only on the guest
+             * tables at the moment.  Because we are about to AND the two
+             * prot words together, *set* both caveats in prot2 so that
+             * either bit will be preserved from prot.
+             */
+            prot2 |= PAGE_LC_TRAP | PAGE_LC_CLEAR;
+
+            /*
+             * XXX Eventually we probably want to permit the hypervisor to be
+             * able to force tag clearing or trapping.  That probably looks
+             * something like this (but details are subject to change):
+             *
+             *   Host     Guest    Action on tagged load
+             *   -------- -------- ---------------------
+             *
+             *   Clear    _        Clear tag
+             *   _        Clear    Clear tag
+             *
+             *   Accept   Accept   Accept
+             *   Accept   Trap     Supervisor (VS/S) fault
+             *
+             *   Trap     _        Hypervisor (HS) fault
+             *
+             * The rest of the bits are AND-ed together as before, and
+             * get_physical_address already handles the store-side CHERI
+             * extensions.
+             */
+#endif
             *prot &= prot2;
 
             if (riscv_feature(env, RISCV_FEATURE_PMP) &&

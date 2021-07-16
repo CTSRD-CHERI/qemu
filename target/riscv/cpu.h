@@ -188,6 +188,10 @@ struct CPURISCVState {
     target_ulong mbadaddr;
     target_ulong medeleg;
 
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+    target_ulong sccsr;
+#endif
+
 #ifdef TARGET_CHERI
     // XXX: not implemented properly
     cap_register_t UTCC; // SCR 4 User trap code cap. (UTCC)
