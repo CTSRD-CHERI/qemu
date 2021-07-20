@@ -240,9 +240,6 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
                          uint32_t addr_reg, uint32_t val_reg)
 {
     uintptr_t _host_return_address = GETPC();
-    assert(!qemu_tcg_mttcg_enabled() ||
-           (cpu_in_exclusive_context(env_cpu(env)) &&
-            "Should have raised EXCP_ATOMIC"));
     target_long offset = 0;
     if (!cheri_in_capmode(env)) {
         offset = get_capreg_cursor(env, addr_reg);
@@ -308,9 +305,6 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
 static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
                       target_long offset, uintptr_t _host_return_address)
 {
-    assert(!qemu_tcg_mttcg_enabled() ||
-           (cpu_in_exclusive_context(env_cpu(env)) &&
-            "Should have raised EXCP_ATOMIC"));
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
@@ -377,9 +371,6 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
                               uint32_t val_reg, target_ulong offset,
                               uintptr_t _host_return_address)
 {
-    assert(!qemu_tcg_mttcg_enabled() ||
-        (cpu_in_exclusive_context(env_cpu(env)) &&
-            "Should have raised EXCP_ATOMIC"));
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
 
     if (!cbp->cr_tag) {
