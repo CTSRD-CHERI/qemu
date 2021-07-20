@@ -37,6 +37,7 @@
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "exec/cpu-common.h"
+#include "exec/exec-all.h"
 #include "exec/memory.h"
 #include "cheri_tagmem_ex_locks.h"
 
@@ -63,16 +64,6 @@
  */
 
 #define UNSAFE_SINGLE_CORE true
-
-static bool tagmem_use_locking(void)
-{
-    /* return constant true here to always be correct, but slower than needed
-     * on single core */
-    if (UNSAFE_SINGLE_CORE)
-        return qemu_tcg_mttcg_enabled();
-    else
-        return true;
-}
 
 /*
  * Usage notes:
@@ -122,6 +113,26 @@ extern tag_writer_lock_t notag_lock_high;
 void cheri_tag_reader_lock_impl(tag_reader_lock_t lock);
 void cheri_tag_writer_lock_impl(tag_writer_lock_t lock);
 
+extern bool _need_concurrent_tags;
+extern bool _need_concurrent_tags_initialized;
+
+static inline QEMU_ALWAYS_INLINE bool need_concurrent_tags(void)
+{
+    if (!UNSAFE_SINGLE_CORE)
+        return true;
+
+    cheri_debug_assert(_need_concurrent_tags_initialized);
+    /*
+     * TODO: can parallel_cpus change at runtime? If not we don't need the
+     * separate variable.
+     */
+    cheri_debug_assert(_need_concurrent_tags == parallel_cpus);
+    /* return constant true here to always be correct, but slower than needed
+     * on single core */
+
+    return _need_concurrent_tags;
+}
+
 static inline void cheri_tag_reader_release(tag_reader_lock_t lock)
 {
     if (lock != TAG_LOCK_NONE && lock != NULL)
@@ -143,7 +154,7 @@ cheri_get_exception_locks(CPUArchState *env)
 static inline void cheri_tag_push_free_on_exception(CPUArchState *env,
                                                     tag_lock_t lock)
 {
-    if (tagmem_use_locking()) {
+    if (need_concurrent_tags()) {
         cheri_exception_locks_t *locks = cheri_get_exception_locks(env);
         assert(locks->fill != MAX_CHERI_EXCEPTION_LOCKS);
         locks->locks[locks->fill++] = lock;
@@ -152,7 +163,7 @@ static inline void cheri_tag_push_free_on_exception(CPUArchState *env,
 
 static inline tag_lock_t cheri_tag_pop_on_exception(CPUArchState *env)
 {
-    if (tagmem_use_locking()) {
+    if (need_concurrent_tags()) {
         cheri_exception_locks_t *locks = cheri_get_exception_locks(env);
         assert(locks->fill != 0);
         tag_lock_t lock = locks->locks[--locks->fill];
@@ -166,7 +177,7 @@ void cheri_tag_free_lock(tag_lock_t lock);
 
 static inline void cheri_tag_locks_exception_thrown(CPUState *cpu)
 {
-    if (!tagmem_use_locking())
+    if (!need_concurrent_tags())
         return;
     cheri_exception_locks_t *locks = &cpu->cheri_exception_locks;
     for (size_t i = 0; i != MAX_CHERI_EXCEPTION_LOCKS; i++) {
@@ -203,7 +214,7 @@ cheri_tag_writer_pop_free_on_exception(CPUArchState *env)
     return (tag_writer_lock_t)cheri_tag_pop_on_exception(env);
 }
 
-#define cheri_tag_assert_not_mttcg() assert(!qemu_tcg_mttcg_enabled());
+#define cheri_tag_assert_not_mttcg() assert(!need_concurrent_tags());
 
 /* Note: for cheri_tag_phys_invalidate, env may be NULL */
 void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
@@ -234,7 +245,7 @@ static inline void cheri_lock_for_tag_invalidate(
     CPUArchState *env, target_ulong vaddr, int32_t size, uintptr_t pc,
     int mmu_idx, tag_writer_lock_t *first, tag_writer_lock_t *second)
 {
-    if (!tagmem_use_locking()) {
+    if (!need_concurrent_tags()) {
         if (first)
             *first = NULL;
         if (second)
@@ -275,7 +286,7 @@ cheri_lock_for_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
                                       uintptr_t pc, int mmu_idx,
                                       tag_writer_lock_t *lock)
 {
-    if (!tagmem_use_locking()) {
+    if (!need_concurrent_tags()) {
         *lock = NULL;
         return NULL;
     } else {
@@ -296,7 +307,7 @@ static inline void cheri_lock_for_tag_get(CPUArchState *env, target_ulong vaddr,
                                           void *host_addr,
                                           tag_reader_lock_t *lock)
 {
-    if (!tagmem_use_locking()) {
+    if (!need_concurrent_tags()) {
         *lock = NULL;
     } else {
         cheri_tag_get(env, vaddr, reg, ret_paddr, prot, pc, mmu_idx, host_addr,
@@ -328,7 +339,7 @@ static inline void cheri_lock_for_tag_set(CPUArchState *env, target_ulong vaddr,
                                           uintptr_t pc, int mmu_idx,
                                           tag_writer_lock_t *lock)
 {
-    if (!tagmem_use_locking()) {
+    if (!need_concurrent_tags()) {
         *lock = NULL;
     } else {
         cheri_tag_set_impl(env, vaddr, reg, ret_paddr, pc, mmu_idx, lock, true);
