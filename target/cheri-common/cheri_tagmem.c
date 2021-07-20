@@ -36,6 +36,7 @@
 #include "exec/exec-all.h"
 #include "exec/log.h"
 #include "exec/ramblock.h"
+#include "hw/boards.h"
 #include "cheri_defs.h"
 #include "cheri-helper-utils.h"
 // XXX: use hbitmap? Or a different data structure?
@@ -72,6 +73,9 @@
  * up to a byte per tag. See cheri_tagmem.h for how the interface should be
  * used.
  */
+
+bool _need_concurrent_tags = false;
+bool _need_concurrent_tags_initialized = false;
 
 // Define to do some extra checks around spinlocks
 //#define DEBUG_SPIN_LOCKS
@@ -290,7 +294,7 @@ static void lock_tag_write_tag_and_release(lock_tag *lock, bool tag)
 static bool lock_tag_read(lock_tag *lock)
 {
 #ifdef CONFIG_DEBUG_TCG
-    assert(!parallel_cpus ||
+    assert(!need_concurrent_tags() ||
            (lock->as_int & (LOCKTAG_MASK_READERS | LOCKTAG_MASK_WRITE_LOCKED)));
 #endif
     return lock->as_int & LOCKTAG_MASK_TAG;
@@ -300,7 +304,7 @@ static bool lock_tag_write(lock_tag *lock, bool tag, bool check_locked)
 {
 #ifdef CONFIG_DEBUG_TCG
     if (check_locked)
-        assert(!parallel_cpus || (lock->as_int & LOCKTAG_MASK_WRITE_LOCKED));
+        assert(!need_concurrent_tags() || (lock->as_int & LOCKTAG_MASK_WRITE_LOCKED));
 #endif
     bool old = lock->as_int & LOCKTAG_MASK_TAG;
     lock->as_int = (lock->as_int & ~LOCKTAG_MASK_TAG) | tag;
@@ -309,9 +313,9 @@ static bool lock_tag_write(lock_tag *lock, bool tag, bool check_locked)
 
 typedef struct CheriTagBlock {
     // It would be silly to use locks for non-mttcg. So support both formats and
-    // use one or the other depending on qemu_tcg_mttcg_enabled()
+    // use one or the other depending on need_concurrent_tags()
     // It looks like single stepping can be turned on/off, no probably best
-    // not to use parallel_cpus.
+    // not to use need_concurrent_tags().
     union {
         DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE);
         lock_tag locked_tags[CAP_TAGBLK_SIZE];
@@ -323,7 +327,7 @@ static CheriTagBlock *cheri_tag_new_tagblk(RAMBlock *ram, uint64_t tagidx)
 {
     CheriTagBlock *tagblk, *old;
 
-    size_t size = qemu_tcg_mttcg_enabled()
+    size_t size = need_concurrent_tags()
                       ? sizeof(((CheriTagBlock *)0)->locked_tags)
                       : sizeof(((CheriTagBlock *)0)->tag_bitmap);
 
@@ -361,7 +365,7 @@ static inline QEMU_ALWAYS_INLINE CheriTagBlock *cheri_tag_block(size_t tag_index
 static inline QEMU_ALWAYS_INLINE bool tagmem_get_tag(void *tagmem, size_t index,
                                                      tag_reader_lock_t *lock)
 {
-    if (qemu_tcg_mttcg_enabled()) {
+    if (need_concurrent_tags()) {
         lock_tag *locktag = (lock_tag *)tagmem + index;
         if (lock) {
             *lock = (tag_reader_lock_t)locktag;
@@ -405,7 +409,7 @@ static inline QEMU_ALWAYS_INLINE int
 tagmem_get_tag_many(void *tagmem, size_t index, bool take_lock)
 {
     unsigned long result;
-    if (qemu_tcg_mttcg_enabled()) {
+    if (need_concurrent_tags()) {
         lock_tag *lock = ((lock_tag *)tagmem) + index;
         if (!take_lock) {
             // If we don't need the lock we can just read a whole bunch of
@@ -436,7 +440,7 @@ static inline QEMU_ALWAYS_INLINE void tagmem_set_tag(void *tagmem, size_t index,
                                                      tag_writer_lock_t *lock,
                                                      bool lock_only)
 {
-    if (qemu_tcg_mttcg_enabled()) {
+    if (need_concurrent_tags()) {
         lock_tag *lockTag = (lock_tag *)tagmem + index;
         if (lock) {
             *lock = (tag_writer_lock_t)(lockTag);
@@ -457,7 +461,7 @@ static inline QEMU_ALWAYS_INLINE void tagmem_set_tag(void *tagmem, size_t index,
 static inline QEMU_ALWAYS_INLINE void
 tagmem_set_tag_many(void *tagmem, size_t index, uint8_t tags, bool take_lock)
 {
-    if (qemu_tcg_mttcg_enabled()) {
+    if (need_concurrent_tags()) {
         lock_tag *lock = ((lock_tag *)tagmem) + index;
 
         // TODO: This is only used by morello, but when I merged this I did
@@ -515,7 +519,7 @@ static inline QEMU_ALWAYS_INLINE void tagmem_clear_tag(void *tagmem,
                                                        tag_writer_lock_t *lock,
                                                        bool lock_only)
 {
-    if (qemu_tcg_mttcg_enabled()) {
+    if (need_concurrent_tags()) {
         lock_tag *lockTag = (lock_tag *)tagmem + index;
         if (lock) {
             *lock = (tag_writer_lock_t)lockTag;
@@ -555,6 +559,17 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
     assert(memory_region_size(mr) == memory_size &&
            "Incorrect tag mem size passed?");
 
+    if (!_need_concurrent_tags_initialized) {
+        _need_concurrent_tags =
+            qemu_tcg_mttcg_enabled() && current_machine->smp.max_cpus > 1;
+        _need_concurrent_tags_initialized = true;
+    } else {
+        assert(_need_concurrent_tags ==
+               (qemu_tcg_mttcg_enabled() && current_machine->smp.max_cpus > 1));
+    }
+    info_report("%s: need_concurrent_tags()=%d, mttcg=%d, max_cpus=%d",
+                __func__, need_concurrent_tags(), qemu_tcg_mttcg_enabled(),
+                current_machine->smp.max_cpus);
     size_t cheri_ntagblks = num_tagblocks(mr->ram_block);
     mr->ram_block->cheri_tags =
         g_malloc0(cheri_ntagblks * sizeof(CheriTagBlock *));
@@ -605,7 +620,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 
     if (tagblk != NULL) {
         const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
-        if (qemu_tcg_mttcg_enabled()) {
+        if (need_concurrent_tags()) {
             return tagblk->locked_tags + tagblk_index;
         } else {
             return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
@@ -834,7 +849,7 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
             const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
             if (unlikely(env && qemu_log_instr_enabled(env))) {
                 bool old_tag =
-                    qemu_tcg_mttcg_enabled()
+                    need_concurrent_tags()
                         ? tagblock_get_locktag(tagblk, tagblk_index, NULL)
                         : tagblock_get_tag(tagblk, tagblk_index);
                 if (vaddr) {
@@ -854,7 +869,7 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
                 }
             }
 
-            if (qemu_tcg_mttcg_enabled()) {
+            if (need_concurrent_tags()) {
                 tagblock_clear_locktag(tagblk, tagblk_index, false, false);
             } else {
                 tagblock_clear_tag(tagblk, tagblk_index);
