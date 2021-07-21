@@ -7022,6 +7022,11 @@ static void define_arm_vh_e2h_redirects_aliases(ARMCPU *cpu)
 
         /* TODO: ARMv8.2-SPE -- PMSCR_EL2 */
         /* TODO: ARMv8.4-Trace -- TRFCR_EL2 */
+#ifdef TARGET_CHERI
+        { K(3, 0, 1, 2, 2), K(3, 4, 1, 2, 2), K(3, 5, 1, 2, 2),
+          "CCTLR_EL1", "CCTLR_EL2", "CCTLR_EL12" },
+#endif
+
     };
 #undef K
 
@@ -9312,16 +9317,6 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         define_arm_cp_regs(cpu, ccsidr2_reginfo);
     }
 
-#ifndef CONFIG_USER_ONLY
-    /*
-     * Register redirections and aliases must be done last,
-     * after the registers from the other extensions have been defined.
-     */
-    if (arm_feature(env, ARM_FEATURE_EL2) && cpu_isar_feature(aa64_vh, cpu)) {
-        define_arm_vh_e2h_redirects_aliases(cpu);
-    }
-#endif
-
 #ifdef TARGET_CHERI
     // LETODO: Stuff to do with CPACR_ELX.CEN / EN for stopping DDC access, also
     // HCR controls a lot of these LETODO: Also have to pay attention to
@@ -9470,7 +9465,6 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .fieldoffset = offsetof(CPUARMState, CCTLR_el[0]),
          .resetvalue = 0,
          .writefn = cctlr_write},
-        // TODO CCTLR_EL12
         // DDC_EL3 only accessible through DDC so it doesn't get an entry.
         {.name = "CID_EL0",
          .opc0 = 3,
@@ -9496,6 +9490,16 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .resetvalue = 0},
         REGINFO_SENTINEL};
     define_arm_cp_regs(cpu, cheri_regs);
+#endif
+
+#ifndef CONFIG_USER_ONLY
+    /*
+     * Register redirections and aliases must be done last,
+     * after the registers from the other extensions have been defined.
+     */
+    if (arm_feature(env, ARM_FEATURE_EL2) && cpu_isar_feature(aa64_vh, cpu)) {
+        define_arm_vh_e2h_redirects_aliases(cpu);
+    }
 #endif
 }
 
