@@ -247,7 +247,8 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
         if (tag_write) {
             error_report("Attempting change tag bit on memory without tags:");
             error_report("%s: vaddr=0x%jx -> %s+0x%jx", __func__,
-                         (uintmax_t)vaddr, ram->idstr, (uintmax_t)ram_offset);
+                         (uintmax_t)vaddr, ram ? ram->idstr : NULL,
+                         (uintmax_t)ram_offset);
         }
         return ALL_ZERO_TAGBLK;
     }
