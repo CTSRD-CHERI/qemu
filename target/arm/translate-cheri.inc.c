@@ -1335,6 +1335,9 @@ static bool isTagSettingDisabled(DisasContext *ctx)
 TRANS_F(SCG)
 {
 
+    if (ctx->current_el == 0)
+        return false;
+
     gen_ensure_cap_decompressed(ctx, a->Cn);
     TCGv_i64 tcgrm = read_cpu_reg(ctx, a->Rm, 1);
 
