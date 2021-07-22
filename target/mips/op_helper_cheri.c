@@ -217,9 +217,9 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if ((csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) && !allow_unsealed) {
         raise_cheri_exception(env, CapEx_TypeViolation, cs);
-    } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
-    } else if (cbp->cr_perms & CAP_PERM_EXECUTE && !allow_unsealed) {
+    } else if (cap_has_perms(cbp, CAP_PERM_EXECUTE) && !allow_unsealed) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
     } else if (!cap_cursor_in_bounds(csp)) {
         // TODO: check for at least one instruction worth of data? Like cjr/cjalr?
@@ -227,9 +227,9 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
     } else {
         if (selector == CCALL_SELECTOR_0) {
             raise_cheri_exception(env, CapEx_CallTrap, cs);
-        } else if (!(csp->cr_perms & CAP_PERM_CINVOKE) && !allow_unsealed){
+        } else if (!cap_has_perms(csp, CAP_PERM_CINVOKE) && !allow_unsealed) {
             raise_cheri_exception(env, CapEx_PermitCCallViolation, cs);
-        } else if (!(cbp->cr_perms & CAP_PERM_CINVOKE) && !allow_unsealed){
+        } else if (!cap_has_perms(cbp, CAP_PERM_CINVOKE) && !allow_unsealed) {
             raise_cheri_exception(env, CapEx_PermitCCallViolation, cb);
         } else {
             cap_register_t idc = *cbp;
@@ -342,9 +342,9 @@ target_ulong CHERI_HELPER_IMPL(cjr(CPUArchState *env, uint32_t cb))
     } else if (cap_is_sealed_with_type(cbp)) {
         // Note: "sentry" caps can be called using cjalr
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_GlobalViolation, cb);
     } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
@@ -594,7 +594,7 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint3
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_LOAD)) {
         raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, size)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
@@ -625,7 +625,7 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, size)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
@@ -660,14 +660,14 @@ static inline target_ulong get_cscc_addr(CPUArchState *env, uint32_t cs, uint32_
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE_CAP)) {
         raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) && csp->cr_tag &&
-            !(csp->cr_perms & CAP_PERM_GLOBAL)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE_LOCAL) && csp->cr_tag &&
+               !cap_has_perms(csp, CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
         return (target_ulong)0;
     } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
@@ -712,7 +712,7 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_LOAD)) {
         raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
