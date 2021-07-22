@@ -102,25 +102,28 @@ _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_NON
                            _CC_N(FIELD_EXPONENT_LOW_PART_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
 
+// Forward-declare the accessors since we use them inside the struct body:
+struct _cc_N(cap);
+static inline uint8_t _cc_N(get_flags)(const struct _cc_N(cap)* cap);
+static inline uint32_t _cc_N(get_otype)(const struct _cc_N(cap)* cap);
+static inline uint32_t _cc_N(get_perms)(const struct _cc_N(cap)* cap);
+static inline uint8_t _cc_N(get_reserved)(const struct _cc_N(cap)* cap);
+static inline uint32_t _cc_N(get_uperms)(const struct _cc_N(cap)* cap);
+
 // In order to allow vector loads and store from memory we can optionally reverse the first two fields.
 struct _cc_N(cap) {
     /* offset = cursor - base */
 #ifdef _CC_REVERSE_PESBT_CURSOR_ORDER
     /* Original PESBT from the decompressed capability. If you modify
      * other fields, you must be sure to either recalculate this field to match */
-    _cc_addr_t cached_pesbt;
+    _cc_addr_t cr_pesbt;
     _cc_addr_t _cr_cursor; /* Capability cursor */
 #else
     _cc_addr_t _cr_cursor;
-    _cc_addr_t cached_pesbt;
+    _cc_addr_t cr_pesbt;
 #endif
     _cc_length_t _cr_top;  /* Capability top */
     _cc_addr_t cr_base;    /* Capability base addr */
-    uint32_t cr_perms;     /* Permissions */
-    uint32_t cr_uperms;    /* User Permissions */
-    uint32_t cr_otype;     /* Object Type, 24/16 bits */
-    uint8_t cr_flags;    /* Flags */
-    uint8_t cr_reserved; /* Remaining hardware-reserved bits to preserve */
     uint8_t cr_tag;      /* Tag */
     uint8_t cr_bounds_valid; /* Set if bounds decode was given an invalid cap */
 #ifdef __cplusplus
@@ -137,18 +140,20 @@ struct _cc_N(cap) {
         const _cc_length_t l = length();
         return l > _CC_MAX_ADDR ? _CC_MAX_ADDR : (_cc_addr_t)l;
     }
-    inline uint32_t software_permissions() const { return cr_uperms; }
-    inline uint32_t permissions() const { return cr_perms; }
-    inline uint32_t type() const { return cr_otype; }
-    inline bool is_sealed() const { return cr_otype != _CC_N(OTYPE_UNSEALED); }
+    inline uint32_t software_permissions() const { return _cc_N(get_uperms)(this); }
+    inline uint32_t permissions() const { return _cc_N(get_perms)(this); }
+    inline uint32_t type() const { return _cc_N(get_otype)(this); }
+    inline bool is_sealed() const { return type() != _CC_N(OTYPE_UNSEALED); }
+    inline uint8_t reserved_bits() const { return _cc_N(get_reserved)(this); }
+    inline uint8_t flags() const { return _cc_N(get_flags)(this); }
     inline bool operator==(const _cc_N(cap) & other) const;
 #endif
 };
 typedef struct _cc_N(cap) _cc_N(cap_t);
 #define _cc_cap_t _cc_N(cap_t)
 
-static inline bool _cc_N(exactly_equal)(struct _cc_N(cap) const* a, struct _cc_N(cap) const* b) {
-    return a->cr_tag == b->cr_tag && a->_cr_cursor == b->_cr_cursor && a->cached_pesbt == b->cached_pesbt;
+static inline bool _cc_N(exactly_equal)(const _cc_cap_t* a, const _cc_cap_t* b) {
+    return a->cr_tag == b->cr_tag && a->_cr_cursor == b->_cr_cursor && a->cr_pesbt == b->cr_pesbt;
 }
 
 /* Returns the index of the most significant bit set in x */
@@ -223,6 +228,23 @@ struct _cc_N(bounds_bits) {
     bool IE;    // internal exponent flag
 };
 #define _cc_bounds_bits struct _cc_N(bounds_bits)
+
+#define ALL_WRAPPERS(X, FN, type)                                                                                      \
+    static inline _cc_addr_t _cc_N(cap_pesbt_extract_##FN)(_cc_addr_t pesbt) { return _CC_EXTRACT_FIELD(pesbt, X); }   \
+    static inline _cc_addr_t _cc_N(cap_pesbt_encode_##FN)(type value) { return _CC_ENCODE_FIELD(value, X); }           \
+    static inline _cc_addr_t _cc_N(cap_pesbt_deposit_##FN)(_cc_addr_t pesbt, type value) {                             \
+        return (pesbt & ~_CC_N(FIELD_##X##_MASK64)) | _CC_ENCODE_FIELD(value, X);                                      \
+    }                                                                                                                  \
+    static inline type _cc_N(get_##FN)(const _cc_cap_t* cap) { return _cc_N(cap_pesbt_extract_##FN)(cap->cr_pesbt); }  \
+    static inline void _cc_N(update_##FN)(_cc_cap_t * cap, _cc_addr_t value) {                                         \
+        cap->cr_pesbt = _cc_N(cap_pesbt_deposit_##FN)(cap->cr_pesbt, value);                                           \
+    }
+ALL_WRAPPERS(HWPERMS, perms, uint32_t)
+ALL_WRAPPERS(UPERMS, uperms, uint32_t)
+ALL_WRAPPERS(OTYPE, otype, uint32_t)
+ALL_WRAPPERS(FLAGS, flags, uint8_t)
+ALL_WRAPPERS(RESERVED, reserved, uint8_t)
+#undef ALL_WRAPPERS
 
 /// Extract the bits used for bounds and infer the top two bits of T
 static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
@@ -390,12 +412,7 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
 static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
     cdp->cr_tag = tag;
     cdp->_cr_cursor = cursor;
-    cdp->cr_perms = (uint32_t)_CC_EXTRACT_FIELD(pesbt, HWPERMS);
-    cdp->cr_uperms = (uint32_t)_CC_EXTRACT_FIELD(pesbt, UPERMS);
-    cdp->cr_otype = (uint32_t)_CC_EXTRACT_FIELD(pesbt, OTYPE);
-    cdp->cr_flags = (uint8_t)_CC_EXTRACT_FIELD(pesbt, FLAGS);
-    cdp->cr_reserved = (uint8_t)_CC_EXTRACT_FIELD(pesbt, RESERVED);
-    cdp->cached_pesbt = pesbt;
+    cdp->cr_pesbt = pesbt;
 
     _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(pesbt);
     bool valid = _cc_N(compute_base_top)(bounds, cursor, &cdp->cr_base, &cdp->_cr_top);
@@ -407,7 +424,7 @@ static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bo
         _cc_debug_assert(cdp->_cr_top <= _CC_N(MAX_TOP));
         _cc_debug_assert(cdp->cr_base <= cdp->_cr_top);
 #endif
-        _cc_debug_assert(cdp->cr_reserved == 0);
+        _cc_debug_assert(_CC_EXTRACT_FIELD(pesbt, RESERVED) == 0);
     }
 }
 
@@ -418,31 +435,22 @@ static inline void _cc_N(decompress_mem)(uint64_t pesbt, uint64_t cursor, bool t
     _cc_N(decompress_raw)(pesbt ^ _CC_N(NULL_XOR_MASK), cursor, tag, cdp);
 }
 
-static inline bool _cc_N(is_cap_sealed)(const _cc_cap_t* cp) { return cp->cr_otype != _CC_N(OTYPE_UNSEALED); }
+static inline bool _cc_N(is_cap_sealed)(const _cc_cap_t* cp) { return _cc_N(get_otype)(cp) != _CC_N(OTYPE_UNSEALED); }
 
 // Update ebt bits in pesbt
 static inline void _cc_N(update_ebt)(_cc_cap_t* csp, _cc_addr_t new_ebt) {
-    csp->cached_pesbt = (csp->cached_pesbt & ~_CC_N(FIELD_EBT_MASK64)) | new_ebt;
-}
-
-// Recompute non-ebt part of pesbt if multiple non-ebt fields are changed
-static inline _cc_addr_t _cc_N(recompute_pesbt_non_ebt)(const _cc_cap_t* csp) {
-    return _CC_ENCODE_FIELD(csp->cr_uperms, UPERMS) | _CC_ENCODE_FIELD(csp->cr_perms, HWPERMS) |
-           _CC_ENCODE_FIELD(csp->cr_otype, OTYPE) | _CC_ENCODE_FIELD(csp->cr_reserved, RESERVED) |
-           _CC_ENCODE_FIELD(csp->cr_flags, FLAGS);
+    csp->cr_pesbt = (csp->cr_pesbt & ~_CC_N(FIELD_EBT_MASK64)) | new_ebt;
 }
 
 /*
  * Compress a capability to 128 bits.
- * Note: if you have not been manually modifying fields, just access csp->cached_pesbt.
+ * Note: if you have not been manually modifying fields, just access csp->cr_pesbt.
  * cap_set_decompressed_X will set fields and keep pesbt in sync.
  */
 static inline _cc_addr_t _cc_N(compress_raw)(const _cc_cap_t* csp) {
-    _cc_debug_assert(!(csp->cr_tag && csp->cr_reserved) && "Unknown reserved bits set it tagged capability");
-    _cc_addr_t pesbt = _CC_ENCODE_FIELD(csp->cr_uperms, UPERMS) | _CC_ENCODE_FIELD(csp->cr_perms, HWPERMS) |
-                       _CC_ENCODE_FIELD(csp->cr_otype, OTYPE) | _CC_ENCODE_FIELD(csp->cr_reserved, RESERVED) |
-                       _CC_ENCODE_FIELD(csp->cr_flags, FLAGS) | (csp->cached_pesbt & _CC_N(FIELD_EBT_MASK64));
-    return pesbt;
+    _cc_debug_assert((!csp->cr_tag || _cc_N(get_reserved)(csp) == 0) &&
+                     "Unknown reserved bits set it tagged capability");
+    return csp->cr_pesbt;
 }
 
 static inline _cc_addr_t _cc_N(compress_mem)(const _cc_cap_t* csp) {
@@ -489,13 +497,7 @@ static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
     _cc_N(decompress_raw)(pesbt, cap->_cr_cursor, cap->cr_tag, &decompressed_cap);
     // These fields must not change:
     _cc_debug_assert(decompressed_cap._cr_cursor == cap->_cr_cursor);
-    _cc_debug_assert(decompressed_cap.cr_perms == cap->cr_perms);
-    _cc_debug_assert(decompressed_cap.cr_uperms == cap->cr_uperms);
-    _cc_debug_assert(decompressed_cap.cr_otype == cap->cr_otype);
-    _cc_debug_assert((decompressed_cap.cached_pesbt & _CC_N(FIELD_EBT_MASK64)) ==
-                     (cap->cached_pesbt & _CC_N(FIELD_EBT_MASK64)));
-    _cc_debug_assert(decompressed_cap.cr_flags == cap->cr_flags);
-    _cc_debug_assert(decompressed_cap.cr_reserved == cap->cr_reserved);
+    _cc_debug_assert(decompressed_cap.cr_pesbt == cap->cr_pesbt);
     // If any of these fields changed then the capability is not representable:
     if (decompressed_cap.cr_base != cap->cr_base || decompressed_cap._cr_top != cap->_cr_top) {
         return false;
@@ -681,10 +683,11 @@ static inline bool _cc_N(is_representable_new_addr)(bool sealed, _cc_addr_t base
         c.cr_base = base;
         c._cr_top = top;
         c._cr_cursor = cursor;
-        c.cr_otype = sealed ? 42 : _CC_N(OTYPE_UNSEALED); // important to set as compress assumes this is in bounds
+        // important to set as compress assumes this is in bounds
+        c.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
+                     _CC_ENCODE_FIELD(sealed ? 42 : _CC_N(OTYPE_UNSEALED), OTYPE);
         /* Get an EBT */
         bool exact_input = false;
-        c.cached_pesbt = _cc_N(recompute_pesbt_non_ebt)(&c);
         _cc_N(update_ebt)(&c, _cc_N(compute_ebt)(base, top, NULL, &exact_input));
         // Looks like this assert gets hit by negative length capabilities. Probably the "exact input" return is wrong.
         if (top > (_cc_length_t)base)
@@ -699,7 +702,7 @@ static inline bool _cc_N(is_representable_new_addr)(bool sealed, _cc_addr_t base
 }
 
 static inline bool _cc_N(cap_bounds_uses_value)(const _cc_cap_t* cap) {
-    _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(cap->cached_pesbt);
+    _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(cap->cr_pesbt);
     return bounds.E + _CC_N(FIELD_BOTTOM_ENCODED_SIZE) < (sizeof(_cc_addr_t) * 8);
 }
 
@@ -840,7 +843,8 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
     }
 
     _cc_debug_assert(new_top >= new_base);
-    _cc_debug_assert(!(cap->cr_tag && cap->cr_reserved) && "Unknown reserved bits set in tagged capability");
+    _cc_debug_assert((!cap->cr_tag || _cc_N(get_reserved)(cap) == 0) &&
+                     "Unknown reserved bits set in tagged capability");
     cap->cr_base = new_base;
     cap->_cr_top = new_top;
     _cc_N(update_ebt)(cap, new_ebt);
@@ -872,7 +876,8 @@ static inline _cc_addr_t _cc_N(get_alignment_mask)(_cc_addr_t req_length) {
     memset(&tmpcap, 0, sizeof(tmpcap));
     tmpcap.cr_tag = 1;
     tmpcap._cr_top = _CC_MAX_TOP;
-    tmpcap.cr_otype = _CC_N(OTYPE_UNSEALED);
+    _cc_N(update_otype)(&tmpcap, _CC_N(OTYPE_UNSEALED));
+    _cc_N(update_ebt)(&tmpcap, _CC_N(RESET_EBT));
     _cc_addr_t mask = 0;
     _cc_N(setbounds_impl)(&tmpcap, 0, req_length, &mask);
     return mask;
@@ -885,16 +890,11 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     creg.cr_base = base;
     creg._cr_cursor = cursor;
     creg.cr_bounds_valid = true;
-#ifdef CC_IS_MORELLO
-    creg.cr_flags = 0;
-#endif
     creg._cr_top = top;
-    creg.cr_perms = _CC_N(PERMS_ALL);
-    creg.cr_uperms = _CC_N(UPERMS_ALL);
-    creg.cr_otype = _CC_N(OTYPE_UNSEALED);
+    creg.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
+                    _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
     creg.cr_tag = true;
     bool exact_input = false;
-    creg.cached_pesbt = _cc_N(recompute_pesbt_non_ebt)(&creg);
     _cc_N(update_ebt)(&creg, _cc_N(compute_ebt)(creg.cr_base, creg._cr_top, NULL, &exact_input));
     assert(exact_input && "Invalid arguments");
     assert(_cc_N(is_representable_cap_exact)(&creg));
@@ -911,38 +911,6 @@ static inline _cc_addr_t _cc_N(get_representable_length)(_cc_addr_t req_length) 
     _cc_addr_t mask = _cc_N(get_alignment_mask)(req_length);
     return (req_length + ~mask) & mask;
 }
-
-#define EXTRACT_WRAPPER(X)                                                                                             \
-    static inline _cc_addr_t _cc_N(cap_pesbt_extract_##X)(_cc_addr_t pesbt) { return _CC_EXTRACT_FIELD(pesbt, X); }
-#define ENCODE_WRAPPER(X)                                                                                              \
-    static inline _cc_addr_t _cc_N(cap_pesbt_encode_##X)(_cc_addr_t value) { return _CC_ENCODE_FIELD(value, X); }
-#define DEPOSIT_WRAPPER(X)                                                                                             \
-    static inline _cc_addr_t _cc_N(cap_pesbt_deposit_##X)(_cc_addr_t pesbt, _cc_addr_t value) {                        \
-        return (pesbt & ~_CC_N(FIELD_##X##_MASK64)) | _CC_ENCODE_FIELD(value, X);                                      \
-    }
-#define SET_DECOMPRESSED(X, FN)                                                                                        \
-    static inline void _cc_N(cap_set_decompressed_##FN)(_cc_cap_t * cap, _cc_addr_t value) {                           \
-        cap->cached_pesbt = _cc_N(cap_pesbt_deposit_##X)(cap->cached_pesbt, value);                                    \
-        cap->FN = value;                                                                                               \
-    }
-
-#define ALL_WRAPPERS(X) EXTRACT_WRAPPER(X) ENCODE_WRAPPER(X) DEPOSIT_WRAPPER(X)
-
-ALL_WRAPPERS(HWPERMS)
-ALL_WRAPPERS(UPERMS)
-ALL_WRAPPERS(OTYPE)
-ALL_WRAPPERS(FLAGS)
-
-SET_DECOMPRESSED(HWPERMS, cr_perms)
-SET_DECOMPRESSED(UPERMS, cr_uperms)
-SET_DECOMPRESSED(OTYPE, cr_otype)
-SET_DECOMPRESSED(FLAGS, cr_flags)
-
-#undef EXTRACT_WRAPPER
-#undef ENCODE_WRAPPER
-#undef DEPOSIT_WRAPPER
-#undef SET_DECOMPRESSED
-#undef ALL_WRAPPERS
 
 /// Provide a C++ class with the same function names
 /// to simplify writing code that handles both 128 and 64-bit capabilities

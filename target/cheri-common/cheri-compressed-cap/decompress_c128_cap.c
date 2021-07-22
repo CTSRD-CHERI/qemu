@@ -32,7 +32,6 @@
 #include <err.h>
 #include <errno.h>
 #include <inttypes.h>
-#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,8 +54,8 @@ static const char* otype_suffix(uint32_t otype) {
 }
 
 static void dump_cap_fields(const cc128_cap_t* result) {
-    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result->cr_perms); // TODO: decode perms
-    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result->cr_uperms);
+    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", cc128_get_perms(result)); // TODO: decode perms
+    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", cc128_get_uperms(result));
     fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result->cr_base);
     fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result->_cr_cursor - result->cr_base);
     fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", result->_cr_cursor);
@@ -67,9 +66,10 @@ static void dump_cap_fields(const cc128_cap_t* result) {
     fprintf(stderr, "Top:        0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
     fprintf(stderr, "Sealed:      %d\n", cc128_is_cap_sealed(result) ? 1 : 0);
-    fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result->cr_otype, otype_suffix(result->cr_otype));
-    fprintf(stderr, "Flags:       0x%" PRIx8 "\n", result->cr_flags);
-    fprintf(stderr, "Reserved:    0x%" PRIx8 "\n", result->cr_reserved);
+    uint32_t otype = cc128_get_otype(result);
+    fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", otype, otype_suffix(otype));
+    fprintf(stderr, "Flags:       0x%" PRIx8 "\n", cc128_get_flags(result));
+    fprintf(stderr, "Reserved:    0x%" PRIx8 "\n", cc128_get_reserved(result));
     fprintf(stderr, "Valid decompress: %s", result->cr_bounds_valid ? "yes" : "no");
     fprintf(stderr, "\n");
 }

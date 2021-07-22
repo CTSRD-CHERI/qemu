@@ -50,13 +50,6 @@
 
 /* Legacy CHERI256 things: */
 
-/*
- * XXX: We've always just reused the 128-bit capability struct, but not all
- * fields make sense. Add a proper 256-bit one or just delete CHERI-256 support
- * entirely.
- */
-typedef cc128_cap_t cc256_cap_t;
-
 /* For CHERI256 all permissions are shifted by one since the sealed bit comes first */
 #define CC256_HWPERMS_COUNT (12)
 #define CC256_HWPERMS_RESERVED_COUNT (3)
@@ -118,6 +111,36 @@ enum CC256_OTypes {
     ITEM(OTYPE_INDIRECT_SENTRY, __VA_ARGS__)
 #endif
 
+typedef struct cc256_cap {
+    uint64_t cr_cursor;
+    uint64_t cr_base;
+    uint64_t cr_length;
+    uint32_t cr_otype;
+    uint16_t cr_perms;
+    uint16_t cr_uperms;
+    uint8_t cr_tag;
+    uint8_t cr_flags;
+    uint8_t cr_reserved;
+#ifdef __cplusplus
+    inline uint64_t base() const { return cr_base; }
+    inline uint64_t address() const { return cr_cursor; }
+    inline int64_t offset() const { return cr_cursor - cr_base; }
+    inline cc128_length_t top() const { return (cc128_length_t)cr_base + cr_length; }
+    inline _cc_addr_t top64() const {
+        const _cc_length_t t = top();
+        return t > _CC_MAX_ADDR ? _CC_MAX_ADDR : (_cc_addr_t)t;
+    }
+    inline uint64_t length() const { return cr_length; }
+    inline uint64_t length64() const { return cr_length; }
+    inline uint32_t software_permissions() const { return cr_uperms; }
+    inline uint32_t permissions() const { return cr_perms; }
+    inline uint32_t type() const { return cr_otype; }
+    inline bool is_sealed() const { return type() != CC256_OTYPE_UNSEALED; }
+    inline uint8_t flags() const { return cr_flags; }
+    inline uint8_t reserved_bits() const { return cr_reserved; }
+#endif
+} cc256_cap_t;
+
 /* Also support decoding of the raw 256-bit capabilities */
 typedef union _inmemory_chericap256 {
     uint8_t bytes[32];
@@ -138,8 +161,8 @@ static inline void decompress_256cap(inmemory_chericap256 mem, cc256_cap_t* cdp,
     cdp->cr_base = mem.u64s[2];
     /* Length is xor'ed with -1 to ensure that NULL is all zeroes in memory */
     uint64_t length = mem.u64s[3] ^ CC256_NULL_LENGTH;
-    cdp->_cr_top = (cc128_length_t)cdp->cr_base + (cc128_length_t)length;
-    cdp->_cr_cursor = mem.u64s[1];
+    cdp->cr_length = length;
+    cdp->cr_cursor = mem.u64s[1];
     cdp->cr_tag = tagged;
     _cc_debug_assert(!(cdp->cr_tag && cdp->cr_reserved) && "Unknown reserved bits set it tagged capability");
 }
@@ -154,11 +177,9 @@ static inline void compress_256cap(inmemory_chericap256* buffer, const cc256_cap
         ((csp->cr_uperms & CC256_UPERMS_ALL_BITS) << CC256_UPERMS_MEM_SHFT) |
         ((uint64_t)((csp->cr_otype ^ CC256_OTYPE_UNSEALED) & CC256_OTYPE_ALL_BITS) << CC256_OTYPE_MEM_SHFT) |
         ((uint64_t)(csp->cr_reserved & CC256_RESERVED_ALL_BITS) << CC256_RESERVED_MEM_SHFT);
-    buffer->u64s[1] = csp->_cr_cursor;
+    buffer->u64s[1] = csp->cr_cursor;
     buffer->u64s[2] = csp->cr_base;
-    cc128_length_t length65 = csp->_cr_top - csp->cr_base;
-    uint64_t length64 = length65 > UINT64_MAX ? UINT64_MAX : (uint64_t)length65;
-    buffer->u64s[3] = length64 ^ CC256_NULL_LENGTH;
+    buffer->u64s[3] = csp->cr_length ^ CC256_NULL_LENGTH;
 }
 
 #endif /* CHERI_COMPRESSED_CAP_H */
