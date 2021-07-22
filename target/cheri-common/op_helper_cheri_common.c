@@ -393,7 +393,7 @@ void CHERI_HELPER_IMPL(csealentry(CPUArchState *env, uint32_t cd, uint32_t cs))
         raise_cheri_exception(env, CapEx_TagViolation, cs);
     } else if (!cap_is_unsealed(csp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cs);
-    } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
         // Capability must be executable otherwise csealentry doesn't make sense
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
     } else {
@@ -592,7 +592,7 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (!cap_is_unsealed(ctp)) {
         raise_cheri_exception(env, CapEx_SealViolation, ct);
-    } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
+    } else if (!cap_has_perms(ctp, CAP_PERM_SEAL)) {
         raise_cheri_exception(env, CapEx_PermitSealViolation, ct);
     } else if (!conditional && !cap_cursor_in_bounds(ctp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
@@ -649,7 +649,7 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
                               cs); /* Reserved otypes */
     } else if (ct_cursor != csp->cr_otype) {
         raise_cheri_exception(env, CapEx_TypeViolation, ct);
-    } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
+    } else if (!cap_has_perms(ctp, CAP_PERM_UNSEAL)) {
         raise_cheri_exception(env, CapEx_PermitUnsealViolation, ct);
     } else if (!cap_cursor_in_bounds(ctp)) {
         // Must be within bounds and not one past end (i.e. not equal to top).
@@ -660,8 +660,8 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else {
         cap_register_t result = *csp;
-        if ((csp->cr_perms & CAP_PERM_GLOBAL) &&
-            (ctp->cr_perms & CAP_PERM_GLOBAL)) {
+        if (cap_has_perms(csp, CAP_PERM_GLOBAL) &&
+            cap_has_perms(ctp, CAP_PERM_GLOBAL)) {
             result.cr_perms |= CAP_PERM_GLOBAL;
         } else {
             result.cr_perms &= ~CAP_PERM_GLOBAL;
@@ -1099,7 +1099,7 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
             " due to MMU permissions\n", va);
         return 0;
     }
-    if (tag && !(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
+    if (tag && !cap_has_perms(cbp, CAP_PERM_LOAD_CAP)) {
         qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
             " due to missing CAP_PERM_LOAD_CAP\n", va);
         return 0;
