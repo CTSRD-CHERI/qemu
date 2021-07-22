@@ -12224,7 +12224,7 @@ static int aa64_va_parameter_tcma(uint64_t tcr, ARMMMUIdx mmu_idx)
 static inline uint32_t aa64_effective_hwu(CPUARMState *env, ARMMMUIdx mmu_idx,
                                           ARMVAParameters *params, uint64_t tcr)
 {
-    if (!params->hpd)
+    if (!params->hpd && (mmu_idx != ARMMMUIdx_Stage2))
         return 0;
 
     uint32_t ndx;
@@ -13544,7 +13544,8 @@ bool get_phys_addr(CPUARMState *env, target_ulong address,
             fi->s2addr = ipa;
             /* Combine the S1 and S2 perms.  */
             // LC_CLEAR and LC_TRAP are sadly inverted as they DISALLOW behavior
-            *prot = (s2_prot ^ PAGE_C_BITS) & (*prot ^ PAGE_C_BITS);
+            *prot =
+                ((s2_prot ^ PAGE_C_BITS) & (*prot ^ PAGE_C_BITS)) ^ PAGE_C_BITS;
 
             /* If S2 fails, return early.  */
             if (ret) {
