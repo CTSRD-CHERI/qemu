@@ -15143,6 +15143,7 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
         gen_set_exception_far(s, s->pc_curr);
         gen_exception_insn(s, s->pc_curr, EXCP_PREFETCH_ABORT,
                            syn_pc_alignment(false), default_exception_el(s));
+        return;
     }
 
     s->insn = insn;

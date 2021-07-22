@@ -3515,7 +3515,7 @@ FIELD(TBFLAG_CHERI, CAP_ENABLED, 10,
 // wants this feature, then they can move some bits around
 FIELD(TBFLAG_CHERI, SCTLRA, 11, 1)
 FIELD(TBFLAG_CHERI, SCTLRSA, 12, 1)
-#define TBFLAG_CHERI_SIZE (CCTLR_DEFINED_LENGTH + 6)
+#define TBFLAG_CHERI_SIZE (CCTLR_DEFINED_LENGTH + 7)
 _Static_assert(TBFLAG_CHERI_SIZE <= 32, "");
 
 #endif
