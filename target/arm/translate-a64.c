@@ -597,6 +597,13 @@ static void gen_exception_insn(DisasContext *s, uint64_t pc, int excp,
     s->base.is_jmp = DISAS_NORETURN;
 }
 
+static void gen_set_exception_far(DisasContext *s, uint64_t far)
+{
+    TCGv_i64 tfar = tcg_const_i64(far);
+    tcg_gen_st_i64(tfar, cpu_env, offsetof(CPUArchState, exception.vaddress));
+    tcg_temp_free_i64(tfar);
+}
+
 static void gen_exception_bkpt_insn(DisasContext *s, uint32_t syndrome)
 {
     TCGv_i32 tcg_syn;
@@ -15144,6 +15151,12 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
 
 #endif
 #endif
+
+    if (s->pc_curr & 0b11) {
+        gen_set_exception_far(s, s->pc_curr);
+        gen_exception_insn(s, s->pc_curr, EXCP_PREFETCH_ABORT,
+                           syn_pc_alignment(false), default_exception_el(s));
+    }
 
     s->insn = insn;
     s->base.pc_next += 4;

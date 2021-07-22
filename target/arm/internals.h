@@ -488,6 +488,11 @@ static inline uint32_t syn_sp_alignment(bool is_16bit)
     return (EC_SPALIGNMENT << ARM_EL_EC_SHIFT) | (is_16bit ? 0 : ARM_EL_IL);
 }
 
+static inline uint32_t syn_pc_alignment(bool is_16bit)
+{
+    return (EC_PCALIGNMENT << ARM_EL_EC_SHIFT) | (is_16bit ? 0 : ARM_EL_IL);
+}
+
 static inline uint32_t syn_swstep(int same_el, int isv, int ex)
 {
     return (EC_SOFTWARESTEP << ARM_EL_EC_SHIFT) | (same_el << ARM_EL_EC_SHIFT)
