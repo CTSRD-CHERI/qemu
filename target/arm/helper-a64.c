@@ -1041,6 +1041,10 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
         if (cap_return) {
             env->pc = env->elr_el[cur_el];
         }
+
+        if (env->pc.cap.cr_otype) {
+            env->pc.cap.cr_tag = 0;
+        }
 #endif
 
         env->aarch64 = 1;
