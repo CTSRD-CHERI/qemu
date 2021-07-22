@@ -64,7 +64,7 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         const cap_register_t *c = &gpcrs->decompressed[regnum];
         // Check that the compressed and decompressed caps are in sync
         cheri_debug_assert(CAP_cc(compress_raw)(c) ==
-                           gpcrs->decompressed[regnum].cached_pesbt);
+                           gpcrs->decompressed[regnum].cr_pesbt);
         cheri_debug_assert((c->cr_tag == 0 || c->cr_tag == 1) &&
                            "Unitialized value used?");
     } else {
@@ -72,13 +72,13 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         // accessed. However, the cursor and pesbt must remain valid.
         cap_register_t *decompressed = &gpcrs->decompressed[regnum];
         target_ulong cursor = decompressed->_cr_cursor;
-        target_ulong pesbt = decompressed->cached_pesbt;
+        target_ulong pesbt = decompressed->cr_pesbt;
         memset(decompressed, 0xaa, sizeof(*decompressed));
         decompressed->_cr_cursor = cursor;
-        decompressed->cached_pesbt = pesbt;
+        decompressed->cr_pesbt = pesbt;
     }
     if (regnum == NULL_CAPREG_INDEX) {
-        cheri_debug_assert(gpcrs->decompressed[regnum].cached_pesbt ==
+        cheri_debug_assert(gpcrs->decompressed[regnum].cr_pesbt ==
                            CAP_NULL_PESBT);
         cheri_debug_assert(gpcrs->decompressed[regnum]._cr_cursor == 0);
         cheri_debug_assert(CAP_cc(compress_raw)(&gpcrs->decompressed[regnum]) ==
@@ -91,7 +91,7 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         // integer registers always hold CAP_NULL_PESBT. This is not currently
         // true since we don't update PESBT when changing a register from
         // capability to integer.
-        cheri_debug_assert(gpcrs->decompressed[regnum].cached_pesbt ==
+        cheri_debug_assert(gpcrs->decompressed[regnum].cr_pesbt ==
                            CAP_NULL_PESBT);
     }
 #endif // CONFIG_DEBUG_TCG
@@ -116,7 +116,7 @@ static inline const cap_register_t *
 _update_from_compressed(GPCapRegs *gpcrs, unsigned regnum, bool tag)
 {
     // Note: The _cr_cusor field is always valid. All others are lazy.
-    CAP_cc(decompress_raw)(gpcrs->decompressed[regnum].cached_pesbt,
+    CAP_cc(decompress_raw)(gpcrs->decompressed[regnum].cr_pesbt,
                            gpcrs->decompressed[regnum]._cr_cursor, tag,
                            &gpcrs->decompressed[regnum]);
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
@@ -136,7 +136,7 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
     switch (get_capreg_state(gpcrs, regnum)) {
     case CREG_INTEGER: {
         // Update capreg to a decompressed integer value and clear pesbt
-        cheri_debug_assert(gpcrs->decompressed[regnum].cached_pesbt ==
+        cheri_debug_assert(gpcrs->decompressed[regnum].cr_pesbt ==
                            CAP_NULL_PESBT);
         const cap_register_t *result =
             int_to_cap(gpcrs->decompressed[regnum]._cr_cursor,
@@ -224,7 +224,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     cap_register_t *target = &gpcrs->decompressed[regnum];
     *target = *newval;
     // Update the compressed values for fast access from TCG
-    gpcrs->decompressed[regnum].cached_pesbt = CAP_cc(compress_raw)(target);
+    gpcrs->decompressed[regnum].cr_pesbt = CAP_cc(compress_raw)(target);
     set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, newval->_cr_cursor);
@@ -272,7 +272,7 @@ static inline void update_compressed_capreg(CPUArchState *env, unsigned regnum,
 
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     gpcrs->decompressed[regnum]._cr_cursor = cursor;
-    gpcrs->decompressed[regnum].cached_pesbt = pesbt;
+    gpcrs->decompressed[regnum].cr_pesbt = pesbt;
     CapRegState new_state = tag ? CREG_TAGGED_CAP : CREG_UNTAGGED_CAP;
     set_capreg_state(gpcrs, regnum, new_state);
     cheri_debug_assert(get_capreg_state(gpcrs, regnum) == new_state);
@@ -294,7 +294,7 @@ static inline target_ulong get_capreg_pesbt(CPUArchState *env, unsigned regnum)
     if (get_capreg_state(gpcrs, regnum) == CREG_INTEGER) {
         return CAP_NULL_PESBT;
     }
-    return gpcrs->decompressed[regnum].cached_pesbt;
+    return gpcrs->decompressed[regnum].cr_pesbt;
 }
 
 static inline void update_capreg_to_intval(CPUArchState *env, unsigned regnum,
@@ -306,7 +306,7 @@ static inline void update_capreg_to_intval(CPUArchState *env, unsigned regnum,
 
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     gpcrs->decompressed[regnum]._cr_cursor = newval;
-    gpcrs->decompressed[regnum].cached_pesbt = CAP_NULL_PESBT;
+    gpcrs->decompressed[regnum].cr_pesbt = CAP_NULL_PESBT;
     set_capreg_state(gpcrs, regnum, CREG_INTEGER);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, newval);
@@ -352,7 +352,8 @@ static inline target_ulong get_capreg_tag_filtered(CPUArchState *env, unsigned r
 
     const cap_register_t *csp = get_readonly_capreg(env, regnum);
 
-    // TODO: Also revoke if (lo <= type < hi) && (csp->cr_perms & MAGIC_REVOKE_TYPE)
+    // TODO: Also revoke if (lo <= type < hi) && (csp->cr_perms &
+    // MAGIC_REVOKE_TYPE)
     if (csp->cr_base >= env->cheri_capfilter_lo &&
         csp->_cr_top <= env->cheri_capfilter_hi &&
         (cap_get_perms(csp) & env->cheri_capfilter_perms) == cap_get_perms(csp))
@@ -368,22 +369,12 @@ static inline uint32_t get_capreg_hwperms(CPUArchState *env, unsigned regnum)
 {
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     sanity_check_capreg(gpcrs, regnum);
-    // We can determine the value of the tag by looking at the current state:
-    // Three of them directly encode the tag value and in the fully decompressed
-    // state we simply read the cr_tag member.
-    switch (get_capreg_state(gpcrs, regnum)) {
-    case CREG_FULLY_DECOMPRESSED:
-        return cap_get_perms(&gpcrs->decompressed[regnum]);
-    case CREG_INTEGER:
-        return 0; /* No permissions */
-    case CREG_TAGGED_CAP:
-    case CREG_UNTAGGED_CAP:
-        return (uint32_t)CAP_CC(EXTRACT_FIELD)(
-            gpcrs->decompressed[regnum].cached_pesbt, HWPERMS);
-    default:
-        __builtin_unreachable();
+    // Permissions can be read directly from pebst, no need to decompress
+    uint32_t result = cap_get_perms(&gpcrs->decompressed[regnum]);
+    if (get_capreg_state(gpcrs, regnum) == CREG_INTEGER) {
+        cheri_debug_assert(result == 0);
     }
-    tcg_abort();
+    return result;
 }
 
 static inline void nullify_capreg(CPUArchState *env, unsigned regnum)
@@ -428,7 +419,7 @@ static inline void set_max_perms_capregs(CPUArchState *env)
             continue;
 
         set_max_perms_capability(&gpcrs->decompressed[i], 0);
-        gpcrs->decompressed[i].cached_pesbt =
+        gpcrs->decompressed[i].cr_pesbt =
             CAP_cc(compress_raw)(&gpcrs->decompressed[i]);
         // Mark register as fully decompressed
         cheri_debug_assert(get_capreg_state(gpcrs, i) ==

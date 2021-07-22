@@ -527,7 +527,7 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else {
         cap_register_t result = *ctp;
 
-        CAP_cc(cap_set_decompressed_cr_otype)(&result, CAP_OTYPE_UNSEALED);
+        CAP_cc(update_otype)(&result, CAP_OTYPE_UNSEALED);
         result.cr_tag = 1;
 
         /*
@@ -663,12 +663,14 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else {
         cap_register_t result = *csp;
+        target_ulong new_perms = cap_get_perms(&result);
         if (cap_has_perms(csp, CAP_PERM_GLOBAL) &&
             cap_has_perms(ctp, CAP_PERM_GLOBAL)) {
-            result.cr_perms |= CAP_PERM_GLOBAL;
+            new_perms |= CAP_PERM_GLOBAL;
         } else {
-            result.cr_perms &= ~CAP_PERM_GLOBAL;
+            new_perms &= ~CAP_PERM_GLOBAL;
         }
+        CAP_cc(update_perms)(&result, new_perms);
         cap_set_unsealed(&result);
         update_capreg(env, cd, &result);
     }
@@ -749,10 +751,8 @@ void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
         uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
 
         cap_register_t result = *cbp;
-        CAP_cc(cap_set_decompressed_cr_perms)(&result,
-                                              cap_get_perms(cbp) & rt_perms);
-        CAP_cc(cap_set_decompressed_cr_uperms)(&result,
-                                               cap_get_uperms(cbp) & rt_uperms);
+        CAP_cc(update_perms)(&result, cap_get_perms(cbp) & rt_perms);
+        CAP_cc(update_uperms)(&result, cap_get_uperms(cbp) & rt_uperms);
         update_capreg(env, cd, &result);
     }
 }
@@ -902,7 +902,7 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     cap_register_t result = *cbp;
     flags &= CAP_FLAGS_ALL_BITS;
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
-    CAP_cc(cap_set_decompressed_cr_flags)(&result, flags);
+    CAP_cc(update_flags)(&result, flags);
     update_capreg(env, cd, &result);
 }
 

@@ -1,3 +1,4 @@
+#include <cinttypes>
 #include <iostream>
 #include <ostream>
 #include <string>
@@ -43,12 +44,15 @@ std::ostream& operator<<(std::ostream& os, const cc128_cap_t& value) {
              "\tOffset:      0x%016" PRIx64 "\n"
              "\tLength:      0x%" PRIx64 "%016" PRIx64 " %s\n"
              "\tTop:         0x%" PRIx64 "%016" PRIx64 " %s\n"
+             "\tFlags:       %d\n"
+             "\tReserved:    %d\n"
              "\tSealed:      %d\n"
              "\tOType:       0x%" PRIx32 "%s\n",
-             value.cr_perms, value.cr_uperms, value.cr_base, (uint64_t)value.offset(), (uint64_t)(value.length() >> 64),
-             (uint64_t)value.length(), value.length() > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
-             (uint64_t)(top_full >> 64), (uint64_t)top_full, top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "",
-             (int)(value.is_sealed()), value.cr_otype, otype_suffix(value.cr_otype));
+             value.permissions(), value.software_permissions(), value.base(), (uint64_t)value.offset(),
+             (uint64_t)(value.length() >> 64), (uint64_t)value.length(),
+             value.length() > UINT64_MAX ? " (greater than UINT64_MAX)" : "", (uint64_t)(top_full >> 64),
+             (uint64_t)top_full, top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "", (int)value.flags(),
+             (int)value.reserved_bits(), (int)(value.is_sealed()), value.type(), otype_suffix(value.type()));
     os << "{\n" << buffer << "}";
     return os;
 }
@@ -62,12 +66,14 @@ std::ostream& operator<<(std::ostream& os, const cc64_cap_t& value) {
              "\tOffset:      0x%08" PRIx32 "\n"
              "\tLength:      0x%08" PRIx64 " %s\n"
              "\tTop:         0x%08" PRIx64 " %s\n"
+             "\tFlags:       %d\n"
+             "\tReserved:    %d\n"
              "\tSealed:      %d\n"
              "\tOType:       0x%" PRIx32 "%s\n",
-             value.cr_perms, value.cr_uperms, value.base(), (uint32_t)value.offset(), (uint64_t)value.length(),
-             value.length() > UINT32_MAX ? " (greater than UINT32_MAX)" : "", (uint64_t)value.top(),
-             value.top() > UINT32_MAX ? " (greater than UINT32_MAX)" : "", (int)(value.is_sealed()), value.cr_otype,
-             otype_suffix(value.cr_otype));
+             value.permissions(), value.software_permissions(), value.base(), (uint32_t)value.offset(),
+             (uint64_t)value.length(), value.length() > UINT32_MAX ? " (greater than UINT32_MAX)" : "",
+             (uint64_t)value.top(), value.top() > UINT32_MAX ? " (greater than UINT32_MAX)" : "", (int)value.flags(),
+             (int)value.reserved_bits(), (int)(value.is_sealed()), value.type(), otype_suffix(value.type()));
     os << "{\n" << buffer << "}";
     return os;
 }
@@ -94,8 +100,8 @@ template <typename T> static inline bool check(T expected, T actual, const std::
 template <class T, std::size_t N> constexpr inline size_t array_lengthof(T (&)[N]) { return N; }
 
 template <class Cap> static void dump_cap_fields(const Cap& result) {
-    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.cr_perms); // TODO: decode perms
-    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
+    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.permissions()); // TODO: decode perms
+    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.software_permissions());
     fprintf(stderr, "Base:        0x%016" PRIx64 "\n", (uint64_t)result.base());
     fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", (uint64_t)result.offset());
     fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", (uint64_t)result.address());
@@ -105,6 +111,8 @@ template <class Cap> static void dump_cap_fields(const Cap& result) {
     cc128_length_t top_full = result.top();
     fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
+    fprintf(stderr, "Flags:       %d\n", (int)result.flags());
+    fprintf(stderr, "Reserved:    %d\n", (int)result.reserved_bits());
     fprintf(stderr, "Sealed:      %d\n", (int)result.is_sealed());
     fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result.type(), otype_suffix(result.type()));
     fprintf(stderr, "\n");

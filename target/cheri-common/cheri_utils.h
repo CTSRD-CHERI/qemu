@@ -74,22 +74,22 @@ static inline cap_offset_t cap_get_offset(const cap_register_t *c)
 
 static inline uint32_t cap_get_uperms(const cap_register_t *c)
 {
-    return c->cr_uperms;
+    return CAP_cc(get_uperms)(c);
 }
 
 static inline uint32_t cap_get_perms(const cap_register_t *c)
 {
-    return c->cr_perms;
+    return CAP_cc(get_perms)(c);
 }
 
 static inline uint8_t cap_get_flags(const cap_register_t *c)
 {
-    return c->cr_flags;
+    return CAP_cc(get_flags)(c);
 }
 
 static inline bool cap_has_reserved_bits_set(const cap_register_t *c)
 {
-    return c->cr_reserved != 0;
+    return CAP_cc(get_reserved)(c) != 0;
 }
 
 // The top of the capability (exclusive -- i.e., one past the end)
@@ -121,7 +121,7 @@ static inline cap_length_t cap_get_top_full(const cap_register_t *c)
 
 static inline target_ulong cap_get_otype_unsigned(const cap_register_t *c)
 {
-    return (target_ulong)c->cr_otype;
+    return CAP_cc(get_otype)(c);
 }
 
 static inline target_long cap_get_otype_signext(const cap_register_t *c)
@@ -217,7 +217,7 @@ static inline void cap_set_sealed(cap_register_t *c, uint32_t type)
            "should not use this on caps with reserved otypes");
     assert(type <= CAP_LAST_NONRESERVED_OTYPE);
     _Static_assert(CAP_LAST_NONRESERVED_OTYPE < CAP_OTYPE_UNSEALED, "");
-    CAP_cc(cap_set_decompressed_cr_otype)(c, type);
+    CAP_cc(update_otype)(c, type);
 }
 
 static inline void cap_set_unsealed(cap_register_t *c)
@@ -226,7 +226,7 @@ static inline void cap_set_unsealed(cap_register_t *c)
     assert(cap_is_sealed_with_type(c));
     assert(cap_get_otype_unsigned(c) <= CAP_LAST_NONRESERVED_OTYPE &&
            "should not use this to unsealed reserved types");
-    CAP_cc(cap_set_decompressed_cr_otype)(c, CAP_OTYPE_UNSEALED);
+    CAP_cc(update_otype)(c, CAP_OTYPE_UNSEALED);
 }
 
 static inline bool cap_is_sealed_entry(const cap_register_t *c)
@@ -238,14 +238,14 @@ static inline void cap_unseal_entry(cap_register_t *c)
 {
     assert(c->cr_tag && cap_is_sealed_entry(c) &&
            "Should only be used with sentry capabilities");
-    CAP_cc(cap_set_decompressed_cr_otype)(c, CAP_OTYPE_UNSEALED);
+    CAP_cc(update_otype)(c, CAP_OTYPE_UNSEALED);
 }
 
 static inline void cap_make_sealed_entry(cap_register_t *c)
 {
     assert(c->cr_tag && cap_is_unsealed(c) &&
            "Should only be used with unsealed capabilities");
-    CAP_cc(cap_set_decompressed_cr_otype)(c, CAP_OTYPE_SENTRY);
+    CAP_cc(update_otype)(c, CAP_OTYPE_SENTRY);
 }
 
 static inline bool cap_is_representable(const cap_register_t *c)
@@ -266,8 +266,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
 {
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
     cp->_cr_top = CAP_MAX_TOP;
-    cp->cr_otype = CAP_OTYPE_UNSEALED; // and otype should be unsealed
-    cp->cached_pesbt = CAP_NULL_PESBT;
+    cp->cr_pesbt = CAP_NULL_PESBT;
     cheri_debug_assert(cap_is_representable(cp));
     return cp;
 }

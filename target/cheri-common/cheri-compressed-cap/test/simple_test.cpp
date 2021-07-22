@@ -1,8 +1,4 @@
 #include "../cheri_compressed_cap.h"
-#include <cinttypes>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
 #include <unistd.h>
 
 #define CATCH_CONFIG_MAIN // This tells Catch to provide a main() - only do this in one cpp file
@@ -13,12 +9,12 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
     {
         cc128_cap_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
-        null_cap.cr_otype = CC128_OTYPE_UNSEALED;
+        cc128_update_otype(&null_cap, CC128_OTYPE_UNSEALED);
         null_cap._cr_top = CC128_NULL_TOP;
-        null_cap.cached_pesbt = CC128_NULL_PESBT;
+        null_cap.cr_pesbt = CC128_NULL_PESBT;
         bool ebt_exact = true;
         uint32_t computed_ebt = cc128_compute_ebt(null_cap.cr_base, null_cap._cr_top, NULL, &ebt_exact);
-        REQUIRE((computed_ebt & CC128_FIELD_EBT_MASK64) == (null_cap.cached_pesbt & CC128_FIELD_EBT_MASK64));
+        REQUIRE((computed_ebt & CC128_FIELD_EBT_MASK64) == (null_cap.cr_pesbt & CC128_FIELD_EBT_MASK64));
         REQUIRE(ebt_exact);
         auto pesbt = cc128_compress_mem(&null_cap);
         auto pesbt_from_sail = sail_compress_128_mem(&null_cap);
@@ -36,18 +32,18 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         CHECK(decompressed.address() == 0);
         CHECK_FIELD(decompressed, software_permissions, 0);
         CHECK_FIELD(decompressed, permissions, 0);
-        CHECK((decompressed.cached_pesbt & CC128_FIELD_EBT_MASK64) == (CC128_NULL_PESBT & CC128_FIELD_EBT_MASK64));
-        CHECK(decompressed.cr_reserved == 0); // reserved bits
+        CHECK((decompressed.cr_pesbt & CC128_FIELD_EBT_MASK64) == (CC128_NULL_PESBT & CC128_FIELD_EBT_MASK64));
+        CHECK(cc128_get_reserved(&decompressed) == 0); // reserved bits
         CHECK(decompressed.length() == CC128_NULL_LENGTH);
         CHECK(decompressed.top() == CC128_NULL_TOP);
         CHECK_FIELD(decompressed, type, CC128_OTYPE_UNSEALED);
     }
     {
         // Same for CHERI256
-        cc128_cap_t null_cap;
+        cc256_cap_t null_cap;
         memset(&null_cap, 0, sizeof(null_cap));
         null_cap.cr_otype = CC256_OTYPE_UNSEALED;
-        null_cap._cr_top = CC256_NULL_TOP;
+        null_cap.cr_length = CC256_NULL_LENGTH;
         inmemory_chericap256 buffer;
         compress_256cap(&buffer, &null_cap);
         check(buffer.u64s[0], (uint64_t)0, "compressing NULL should result in zero[0]");
@@ -56,7 +52,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
         check(buffer.u64s[3], (uint64_t)0, "compressing NULL should result in zero[3]");
 
         // compressing this result should give 0 again
-        cc128_cap_t decompressed;
+        cc256_cap_t decompressed;
         memset(&decompressed, 'b', sizeof(decompressed));
         decompress_256cap(buffer, &decompressed, false);
         CHECK_FIELD(decompressed, base, 0);
@@ -79,8 +75,9 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     CHECK_FIELD(result128, offset, 0);
     CHECK_FIELD(result128, software_permissions, 0);
     CHECK_FIELD(result128, permissions, 0);
-    CHECK((result128.cached_pesbt & CC128_FIELD_EBT_MASK64) == (CC128_NULL_PESBT & CC128_FIELD_EBT_MASK64));
-    CHECK(result128.cr_reserved == 0); // reserved bits
+    CHECK_FIELD(result128, flags, 0);
+    CHECK_FIELD(result128, reserved_bits, 0);
+    CHECK((result128.cr_pesbt & CC128_FIELD_EBT_MASK64) == (CC128_NULL_PESBT & CC128_FIELD_EBT_MASK64));
     CHECK_FIELD_RAW(result128.length(), CC128_NULL_LENGTH);
     CHECK_FIELD(result128, type, CC128_OTYPE_UNSEALED);
 
@@ -94,14 +91,15 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     CHECK_FIELD(result64, offset, 0);
     CHECK_FIELD(result64, software_permissions, 0);
     CHECK_FIELD(result64, permissions, 0);
-    CHECK((result64.cached_pesbt & CC64_FIELD_EBT_MASK64) == (CC64_NULL_PESBT & CC64_FIELD_EBT_MASK64));
-    CHECK(result64.cr_reserved == 0); // reserved bits
+    CHECK_FIELD(result64, flags, 0);
+    CHECK_FIELD(result64, reserved_bits, 0);
+    CHECK((result64.cr_pesbt & CC64_FIELD_EBT_MASK64) == (CC64_NULL_PESBT & CC64_FIELD_EBT_MASK64));
     CHECK_FIELD_RAW(result64.length(), CC64_NULL_LENGTH);
     CHECK_FIELD(result64, type, CC64_OTYPE_UNSEALED);
 
     // Same for CHERI256
     inmemory_chericap256 buffer;
-    cc128_cap_t result;
+    cc256_cap_t result;
     memset(&buffer.bytes, 0, sizeof(buffer));
     memset(&result, 'a', sizeof(result));
     decompress_256cap(buffer, &result, false);
@@ -112,6 +110,8 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, software_permissions, 0);
     CHECK_FIELD(result, permissions, 0);
+    CHECK_FIELD(result64, flags, 0);
+    CHECK_FIELD(result64, reserved_bits, 0);
     CHECK_FIELD_RAW(result.length(), CC256_NULL_LENGTH);
     CHECK_FIELD(result, type, CC256_OTYPE_UNSEALED);
 }
@@ -129,9 +129,9 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     cap._cr_cursor = base + offset;
     cap._cr_top = base + length;
     cap.cr_tag = true;
-    cap.cr_otype = CC128_OTYPE_UNSEALED;
     bool exact_input = false;
-    cap.cached_pesbt = cc128_compute_ebt(cap.cr_base, cap._cr_top, NULL, &exact_input);
+    cap.cr_pesbt = cc128_compute_ebt(cap.cr_base, cap._cr_top, NULL, &exact_input);
+    cc128_update_otype(&cap, CC128_OTYPE_UNSEALED);
     REQUIRE(exact_input == should_work);
     uint64_t compressed = cc128_compress_mem(&cap);
     cc128_cap_t decompressed;
@@ -147,7 +147,7 @@ static void check_representable(uint64_t base, cc128_length_t length, uint64_t o
     CHECK(unsealed_roundtrip == unsealed_representable);
     // TODO: CHECK(fast_representable == unsealed_representable);
     auto cap_sealed = cap;
-    cap_sealed.cr_otype = 22;
+    cc128_update_otype(&cap_sealed, 22);
     bool sealed_representable = cc128_is_representable_cap_exact(&cap_sealed);
     cc128_decompress_mem(compressed, cap.cr_base + cap.offset(), cap.cr_tag, &decompressed);
     bool sealed_roundtrip = cap.cr_base == decompressed.cr_base && cap.length() == decompressed.length() &&

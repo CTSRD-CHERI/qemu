@@ -1085,7 +1085,7 @@ void riscv_translate_init(void)
             riscv_int_regnames[i]);
         _cpu_pesbt_do_not_access_directly[i] = tcg_global_mem_new(
             cpu_env,
-            offsetof(CPURISCVState, gpcapregs.decompressed[i].cached_pesbt),
+            offsetof(CPURISCVState, gpcapregs.decompressed[i].cr_pesbt),
             cheri_gp_regnames[i]);
     }
 #endif
