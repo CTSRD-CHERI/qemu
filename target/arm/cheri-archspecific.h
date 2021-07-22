@@ -169,9 +169,16 @@ static inline bool validate_jump_target(CPUARMState *env,
 #include "exec/helper-proto.h"
 
 static inline void update_next_pcc_for_tcg(CPUARMState *env,
-                                           const cap_register_t *target,
+                                           cap_register_t *target,
                                            uint32_t cjalr_flags)
 {
+    if (target->cr_otype) {
+        target->cr_tag = 0;
+    }
+
+    // TODO: Reading BranchAddr in the arm ARM it looks like there is some
+    // top byte sign extending not being respected here
+
     bool system_changed =
         ((env->pc.cap.cr_perms ^ target->cr_perms) & CAP_ACCESS_SYS_REGS) != 0;
     bool executive_changed =
