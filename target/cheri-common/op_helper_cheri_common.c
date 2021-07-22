@@ -1439,8 +1439,8 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
     return (target_ulong)cheri_tag_get_many(env, addr, cb, NULL, GETPC());
 }
 
-QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
-                                                 CheriCapExcCause cause)
+QEMU_NORETURN static inline void
+raise_pcc_fault(CPUArchState *env, CheriCapExcCause cause, target_ulong addr)
 {
     cheri_debug_assert(pc_is_current(env));
     /*
@@ -1449,7 +1449,7 @@ QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
      * The PC fetched from the generated code will often be out-of-bounds, so
      * fetching it will trigger an assertion.
      */
-    raise_cheri_exception_if(env, cause, CHERI_EXC_REGNUM_PCC);
+    raise_cheri_exception_if(env, cause, addr, CHERI_EXC_REGNUM_PCC);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
@@ -1471,7 +1471,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
                      __func__, PRINT_CAP_ARGS(pcc));
         tcg_abort();
     }
-    raise_pcc_fault(env, cause);
+    raise_pcc_fault(env, cause, PC_ADDR(env));
 }
 
 void
@@ -1496,7 +1496,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     // helpful).
     cheri_debug_assert(!cap_is_in_bounds(cheri_get_current_pcc(env), addr,
                                          num_bytes == 0 ? 1 : num_bytes));
-    raise_pcc_fault(env, CapEx_LengthViolation);
+    raise_pcc_fault(env, CapEx_LengthViolation, addr);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
