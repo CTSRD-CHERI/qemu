@@ -350,7 +350,7 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
     cheri_debug_assert(cap_is_unsealed(target) || cap_is_sealed_entry(target));
     cap_register_t next_pcc = *target;
 
-    if (cap_is_sealed_entry(target)) {
+    if (target->cr_tag && cap_is_sealed_entry(target)) {
         // If we are calling a "sentry" cap, remove the sealed flag
         cap_unseal_entry(&next_pcc);
         assert(cap_get_cursor(&next_pcc) == addr &&
