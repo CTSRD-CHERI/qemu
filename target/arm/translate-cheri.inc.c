@@ -1659,7 +1659,9 @@ TRANS_F(SC)
     }
     if (helper)
         return gen_cheri_cap_cap_int(ctx, a->Cd, a->Cn, a->Rm, helper);
-
+    else {
+        gen_reg_modified_cap(ctx, a->Cd);
+    }
     return true;
 }
 
