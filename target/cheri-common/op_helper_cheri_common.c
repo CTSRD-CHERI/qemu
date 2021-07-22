@@ -1446,12 +1446,13 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
 
 QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
                                                  CheriCapExcCause cause,
+                                                 target_ulong addr,
                                                  uintptr_t _host_return_address)
 {
     cheri_debug_assert(pc_is_current(env));
     // Note: we set pc=0 since PC will have been saved prior to calling the
     // helper and we don't need to recompute it from the generated code.
-    raise_cheri_exception_if(env, cause, CHERI_EXC_REGNUM_PCC);
+    raise_cheri_exception_if(env, cause, addr, CHERI_EXC_REGNUM_PCC);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
@@ -1473,7 +1474,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
                      __func__, PRINT_CAP_ARGS(pcc));
         tcg_abort();
     }
-    raise_pcc_fault(env, cause, GETPC());
+    raise_pcc_fault(env, cause, pcc->_cr_cursor, GETPC());
 }
 
 void
@@ -1498,7 +1499,7 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     // helpful).
     cheri_debug_assert(!cap_is_in_bounds(cheri_get_current_pcc(env), addr,
                                          num_bytes == 0 ? 1 : num_bytes));
-    raise_pcc_fault(env, CapEx_LengthViolation, GETPC());
+    raise_pcc_fault(env, CapEx_LengthViolation, addr, GETPC());
 }
 
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
