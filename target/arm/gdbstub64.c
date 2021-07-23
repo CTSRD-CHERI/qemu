@@ -20,8 +20,6 @@
 #include "cpu.h"
 #include "exec/gdbstub.h"
 
-// TODO: CHERI-fy
-
 int aarch64_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
 {
     ARMCPU *cpu = ARM_CPU(cs);

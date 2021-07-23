@@ -370,6 +370,87 @@ static int arm_gdb_set_svereg(CPUARMState *env, uint8_t *buf, int reg)
 
     return 0;
 }
+
+#ifdef TARGET_CHERI
+static int aarch64_gdb_get_cheri_reg(CPUARMState *env, GByteArray *buf, int n)
+{
+    if (n < 31) {
+        /* Core capability register.  */
+        return gdb_get_general_purpose_capreg(buf, env, n);
+    }
+    switch (n) {
+    case 31:
+        return gdb_get_general_purpose_capreg(buf, env, n);
+    case 32:
+        return gdb_get_capreg(buf, cheri_get_current_pcc(env));
+    case 33:
+        return gdb_get_capreg(buf, cheri_get_ddc(env));
+    case 34:
+    case 35:
+    case 36:
+    case 37:
+    case 38:
+    case 39: {
+        /*
+         * TODO: Support system registers. The current GDB XML file only makes
+         * sense for EL0 but we really want to expose all the ELn registers.
+         */
+        cap_register_t null;
+        null_capability(&null);
+        return gdb_get_capreg(buf, &null);
+    }
+    case 40: {
+        /* tag_map */
+        uint64_t tag_map;
+        int i;
+
+        tag_map = 0;
+        for (i = 0; i < 32; i++) {
+            if (get_capreg_tag(env, i))
+                tag_map |= ((uint64_t)1 << i);
+        }
+        if (cheri_get_recent_pcc(env)->cr_tag)
+            tag_map |= ((uint64_t)1 << 32);
+        if (cheri_get_ddc(env)->cr_tag)
+            tag_map |= ((uint64_t)1 << 33);
+        return gdb_get_regl(buf, tag_map);
+    }
+    }
+    return 0;
+}
+
+static int aarch64_gdb_set_cheri_reg(CPUARMState *env, uint8_t *mem_buf, int n)
+{
+    /* All CHERI registers are read-only currently.  */
+    if (n < 31) {
+        /* Core capability register.  */
+        return CHERI_CAP_SIZE;
+    }
+    switch (n) {
+    case 31:
+        return CHERI_CAP_SIZE;
+    case 32:
+        return CHERI_CAP_SIZE;
+    case 33:
+        return CHERI_CAP_SIZE;
+    case 34:
+    case 35:
+    case 36:
+    case 37:
+    case 38:
+    case 39:
+        /*
+         * TODO: Support system registers. The current GDB XML file only makes
+         * sense for EL0 but we really want to expose all the ELn registers.
+         */
+        return 0;
+    case 40:
+        /* tag_map */
+        return 8;
+    }
+    return 0;
+}
+#endif
 #endif /* TARGET_AARCH64 */
 
 static bool raw_accessors_invalid(const ARMCPRegInfo *ri)
@@ -9091,6 +9172,13 @@ void arm_cpu_register_gdb_regs_for_features(ARMCPU *cpu)
                              arm_gen_dynamic_sysreg_xml(cs, cs->gdb_num_regs),
                              "system-registers.xml", 0);
 
+#if defined(TARGET_CHERI)
+    if (arm_feature(env, ARM_FEATURE_AARCH64)) {
+        gdb_register_coprocessor(cs, aarch64_gdb_get_cheri_reg,
+                                 aarch64_gdb_set_cheri_reg, 41,
+                                 "aarch64-cheri.xml", 0);
+    }
+#endif
 }
 
 /* Sort alphabetically by type name, except for "any". */
