@@ -40,7 +40,7 @@
 #define PRINT_CAP_FMTSTR_L1                                                    \
     "v:%d s:%d p:%08x f:%d b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
 #define COMBINED_PERMS_VALUE(cr)                                               \
-    (unsigned)((((cr)->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |       \
+    (unsigned)(((cap_get_uperms(cr) & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |    \
                ((cr)->cr_perms & CAP_PERMS_ALL))
 #define PRINT_CAP_ARGS_L1(cr)                                                  \
     (cr)->cr_tag, cap_is_sealed_with_type(cr), COMBINED_PERMS_VALUE(cr),       \
@@ -67,6 +67,11 @@ static inline target_ulong cap_get_base(const cap_register_t* c) {
 
 static inline cap_offset_t cap_get_offset(const cap_register_t* c) {
     return (cap_offset_t)c->_cr_cursor - (cap_offset_t)c->cr_base;
+}
+
+static inline uint32_t cap_get_uperms(const cap_register_t *c)
+{
+    return c->cr_uperms;
 }
 
 // The top of the capability (exclusive -- i.e., one past the end)
