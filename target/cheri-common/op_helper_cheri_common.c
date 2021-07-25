@@ -188,8 +188,7 @@ target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
     cheri_debug_assert((cbp->cr_uperms & CAP_UPERMS_ALL) == cbp->cr_uperms &&
                        "Unknown SW perms bits set!");
 
-    return (target_ulong)cbp->cr_perms |
-           ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
+    return COMBINED_PERMS_VALUE(cbp);
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUArchState *env, uint32_t cb))
