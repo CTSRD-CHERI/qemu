@@ -92,7 +92,8 @@ static inline cap_length_t cap_get_top_full(const cap_register_t* c) {
     return c->_cr_top;
 }
 
-static inline target_long cap_get_otype(const cap_register_t* c) {
+static inline target_long cap_get_otype_signext(const cap_register_t *c)
+{
     target_ulong result = c->cr_otype;
     if (result > CAP_MAX_REPRESENTABLE_OTYPE) {
         // raw bits loaded from memory

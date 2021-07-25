@@ -493,11 +493,10 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
                 // cvtrace expects a null capability in the integer case
                 cr = null_capability(&intcap);
             }
-            uint64_t metadata = (
-                ((uint64_t)cr->cr_tag << 63) |
-                ((uint64_t)cap_get_otype(cr) << 32) |
-                ((uint64_t)COMBINED_PERMS_VALUE(cr) << 1) |
-                (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
+            uint64_t metadata = (((uint64_t)cr->cr_tag << 63) |
+                                 ((uint64_t)cap_get_otype_signext(cr) << 32) |
+                                 ((uint64_t)COMBINED_PERMS_VALUE(cr) << 1) |
+                                 (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
 
             entry.entry_type = CTE_CAP;
             entry.val2 = cpu_to_be64(metadata);
