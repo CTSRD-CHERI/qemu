@@ -215,7 +215,9 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (cap_is_sealed_with_type(cbp) == allow_unsealed) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if ((csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) && !allow_unsealed) {
+    } else if ((cap_get_otype_unsigned(csp) != cap_get_otype_unsigned(cbp) ||
+                cap_get_otype_unsigned(csp) > CAP_LAST_NONRESERVED_OTYPE) &&
+               !allow_unsealed) {
         raise_cheri_exception(env, CapEx_TypeViolation, cs);
     } else if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
