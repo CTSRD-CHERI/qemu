@@ -114,16 +114,26 @@ static inline cap_length_t cap_get_top_full(const cap_register_t *c)
     return c->_cr_top;
 }
 
+static inline target_ulong cap_get_otype_unsigned(const cap_register_t *c)
+{
+    return (target_ulong)c->cr_otype;
+}
+
 static inline target_long cap_get_otype_signext(const cap_register_t *c)
 {
-    target_ulong result = c->cr_otype;
+    target_ulong result = cap_get_otype_unsigned(c);
     if (result > CAP_MAX_REPRESENTABLE_OTYPE) {
         // raw bits loaded from memory
         assert(!c->cr_tag && "Capabilities with otype > max cannot be tagged!");
         return result;
     }
-    // "sign" extend to a 64-bit number by subtracting the maximum: e.g. 2^24-1 -> 2^64-1
-    return result < CAP_LAST_NONRESERVED_OTYPE ? result : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
+    /*
+     * We "sign" extend to a 64-bit number by subtracting the maximum:
+     * e.g. for 64-bit CHERI-RISC-V unsigned 2^18-1 maps to 2^64-1
+     */
+    return result < CAP_LAST_NONRESERVED_OTYPE
+               ? result
+               : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 }
 
 static inline bool cap_exactly_equal(const cap_register_t *cbp,
@@ -137,9 +147,10 @@ static inline bool cap_is_sealed_with_type(const cap_register_t *c)
     // TODO: how should we treat the other reserved types? as sealed?
     // TODO: what about untagged capabilities with out-of-range otypes?
     if (c->cr_tag) {
-        cheri_debug_assert(c->cr_otype <= CAP_MAX_REPRESENTABLE_OTYPE);
+        cheri_debug_assert(cap_get_otype_unsigned(c) <=
+                           CAP_MAX_REPRESENTABLE_OTYPE);
     }
-    return c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE;
+    return cap_get_otype_unsigned(c) <= CAP_LAST_NONRESERVED_OTYPE;
 }
 
 // Check if num_bytes bytes at addr can be read using capability c
@@ -188,15 +199,16 @@ static inline bool cap_is_unsealed(const cap_register_t *c)
     // TODO: what about untagged capabilities with out-of-range otypes?
     _Static_assert(CAP_MAX_REPRESENTABLE_OTYPE == CAP_OTYPE_UNSEALED, "");
     if (c->cr_tag) {
-        cheri_debug_assert(c->cr_otype <= CAP_MAX_REPRESENTABLE_OTYPE);
+        cheri_debug_assert(cap_get_otype_unsigned(c) <=
+                           CAP_MAX_REPRESENTABLE_OTYPE);
     }
-    return c->cr_otype >= CAP_OTYPE_UNSEALED;
+    return cap_get_otype_unsigned(c) >= CAP_OTYPE_UNSEALED;
 }
 
 static inline void cap_set_sealed(cap_register_t *c, uint32_t type)
 {
     assert(c->cr_tag);
-    assert(c->cr_otype == CAP_OTYPE_UNSEALED &&
+    assert(cap_get_otype_unsigned(c) == CAP_OTYPE_UNSEALED &&
            "should not use this on caps with reserved otypes");
     assert(type <= CAP_LAST_NONRESERVED_OTYPE);
     _Static_assert(CAP_LAST_NONRESERVED_OTYPE < CAP_OTYPE_UNSEALED, "");
@@ -207,14 +219,14 @@ static inline void cap_set_unsealed(cap_register_t *c)
 {
     assert(c->cr_tag);
     assert(cap_is_sealed_with_type(c));
-    assert(c->cr_otype <= CAP_LAST_NONRESERVED_OTYPE &&
+    assert(cap_get_otype_unsigned(c) <= CAP_LAST_NONRESERVED_OTYPE &&
            "should not use this to unsealed reserved types");
     CAP_cc(cap_set_decompressed_cr_otype)(c, CAP_OTYPE_UNSEALED);
 }
 
 static inline bool cap_is_sealed_entry(const cap_register_t *c)
 {
-    return c->cr_otype == CAP_OTYPE_SENTRY;
+    return cap_get_otype_unsigned(c) == CAP_OTYPE_SENTRY;
 }
 
 static inline void cap_unseal_entry(cap_register_t *c)
