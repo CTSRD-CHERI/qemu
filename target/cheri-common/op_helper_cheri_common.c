@@ -225,7 +225,7 @@ target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
      * CGetType: Move Object Type Field to a General-Purpose Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const target_long otype = cap_get_otype(cbp);
+    const target_long otype = cap_get_otype_signext(cbp);
     // Must be either a valid positive type < maximum or one of the special
     // hardware-interpreted otypes
     if (otype < 0) {
@@ -551,7 +551,7 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (!cap_is_sealed_with_type(ctp)) {
         // For reserved otypes we return a null-derived value.
         cap_register_t result;
-        update_capreg(env, cd, int_to_cap(cap_get_otype(ctp), &result));
+        update_capreg(env, cd, int_to_cap(cap_get_otype_signext(ctp), &result));
     } else if (ctp->cr_otype < cap_get_base(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (ctp->cr_otype >= cap_get_top(cbp)) {
