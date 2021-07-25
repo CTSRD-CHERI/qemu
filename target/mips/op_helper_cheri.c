@@ -817,27 +817,29 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
     /*
     cpu_fprintf(f, "DEBUG %s: v:%d s:%d p:%08x b:%016lx l:%016lx o:%016lx t:%08x\n",
             name, crp->cr_tag, is_cap_sealed(crp) ? 1 : 0,
-            ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-            (crp->cr_perms & CAP_PERMS_ALL), crp->cr_base, crp->cr_length,
+            COMBINED_PERMS_VALUE(crp), crp->cr_base, crp->cr_length,
             crp->cr_offset, crp->cr_otype);
     */
 
 /* #define OLD_DEBUG_CAP */
 
 #ifdef OLD_DEBUG_CAP
-    cpu_fprintf(f, "DEBUG CAP %s u:%d perms:0x%08x type:0x%06x "
-            "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
-            name, is_cap_sealed(crp),
+    cpu_fprintf(f,
+                "DEBUG CAP %s u:%d perms:0x%08x type:0x%06x "
+                "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
+                name, is_cap_sealed(crp),
 #else
-    cpu_fprintf(f, "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%016" PRIx64 " "
-            "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
-            name, crp->cr_tag, is_cap_sealed(crp),
+    cpu_fprintf(f,
+                "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%016" PRIx64 " "
+                "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
+                name, crp->cr_tag, is_cap_sealed(crp),
 #endif
-            ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-            (crp->cr_perms & CAP_PERMS_ALL),
-            (uint64_t)cap_get_otype(crp), /* testsuite wants -1 for unsealed */
-            (uint64_t)cap_get_offset(crp), cap_get_base(crp),
-            cap_get_length_sat(crp) /* testsuite expects UINT64_MAX for 1 << 64) */);
+                COMBINED_PERMS_VALUE(crp),
+                /* testsuite wants -1 for unsealed */
+                (uint64_t)cap_get_otype_signext(crp),
+                (uint64_t)cap_get_offset(crp), cap_get_base(crp),
+                /* testsuite expects UINT64_MAX for 1 << 64) */
+                cap_get_length_sat(crp));
 #endif
 }
 
