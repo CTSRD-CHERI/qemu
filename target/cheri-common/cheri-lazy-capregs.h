@@ -347,15 +347,16 @@ static inline target_ulong get_capreg_tag_filtered(CPUArchState *env, unsigned r
     target_ulong tagged = get_capreg_tag(env, regnum);
 
     // Try avoid decompress if at all possible
-    if (!tagged || env->cheri_capfilter_hi == 0) return tagged;
+    if (!tagged || env->cheri_capfilter_hi == 0)
+        return tagged;
 
     const cap_register_t *csp = get_readonly_capreg(env, regnum);
 
     // TODO: Also revoke if (lo <= type < hi) && (csp->cr_perms & MAGIC_REVOKE_TYPE)
     if (csp->cr_base >= env->cheri_capfilter_lo &&
         csp->_cr_top <= env->cheri_capfilter_hi &&
-        (csp->cr_perms & env->cheri_capfilter_perms) == csp->cr_perms)
-      return 0;
+        (cap_get_perms(csp) & env->cheri_capfilter_perms) == cap_get_perms(csp))
+        return 0;
 
     return tagged;
 #else
@@ -372,7 +373,7 @@ static inline uint32_t get_capreg_hwperms(CPUArchState *env, unsigned regnum)
     // state we simply read the cr_tag member.
     switch (get_capreg_state(gpcrs, regnum)) {
     case CREG_FULLY_DECOMPRESSED:
-        return gpcrs->decompressed[regnum].cr_perms;
+        return cap_get_perms(&gpcrs->decompressed[regnum]);
     case CREG_INTEGER:
         return 0; /* No permissions */
     case CREG_TAGGED_CAP:
