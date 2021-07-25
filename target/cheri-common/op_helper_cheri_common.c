@@ -518,7 +518,7 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if ((cap_get_uperms(ctp) & cap_get_uperms(cbp)) !=
                cap_get_uperms(ctp)) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
-    } else if (ctp->cr_reserved) {
+    } else if (cap_has_reserved_bits_set(ctp)) {
         // TODO: It would be nice to use a different exception code for this
         //  case but this should match Flute.
         // See also https://github.com/CTSRD-CHERI/cheri-architecture/issues/48

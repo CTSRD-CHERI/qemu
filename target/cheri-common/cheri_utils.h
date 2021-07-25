@@ -82,6 +82,11 @@ static inline uint32_t cap_get_perms(const cap_register_t *c)
     return c->cr_perms;
 }
 
+static inline bool cap_has_reserved_bits_set(const cap_register_t *c)
+{
+    return c->cr_reserved != 0;
+}
+
 // The top of the capability (exclusive -- i.e., one past the end)
 static inline target_ulong cap_get_top(const cap_register_t *c)
 {
