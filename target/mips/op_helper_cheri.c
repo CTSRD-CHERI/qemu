@@ -783,64 +783,20 @@ static const char *cheri_cap_reg[] = {
   "RCC",  "", "IDC", "KR1C", "KR2C", "KCC", "KDC", "EPCC"  /* C24 - C31 */
 };
 
-
 static void cheri_dump_creg(const cap_register_t *crp, const char *name,
-        const char *alias, FILE *f, fprintf_function cpu_fprintf)
+                            const char *alias, FILE *f,
+                            fprintf_function cpu_fprintf)
 {
-
-#if 0
-    if (crp->cr_tag) {
-        cpu_fprintf(f, "%s: bas=%016lx len=%016lx cur=%016lx\n", name,
-            // crp->cr_base, crp->cr_length, crp->cr_cursor);
-            crp->cr_base, crp->cr_length, cap_get_cursor(crp));
-        cpu_fprintf(f, "%-4s off=%016lx otype=%06x seal=%d "
-		    "perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
-            // alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
-            alias, (uint64_t)cap_get_offset(crp), crp->cr_otype,
-            is_cap_sealed(crp) ? 1 : 0,
-            (crp->cr_perms & CAP_PERM_GLOBAL) ? 'G' : '-',
-            (crp->cr_perms & CAP_PERM_EXECUTE) ? 'e' : '-',
-            (crp->cr_perms & CAP_PERM_LOAD) ? 'l' : '-',
-            (crp->cr_perms & CAP_PERM_STORE) ? 's' : '-',
-            (crp->cr_perms & CAP_PERM_LOAD_CAP) ? 'L' : '-',
-            (crp->cr_perms & CAP_PERM_STORE_CAP) ? 'S' : '-',
-            (crp->cr_perms & CAP_PERM_STORE_LOCAL) ? '&' : '-',
-            (crp->cr_perms & CAP_PERM_SEAL) ? '$' : '-',
-            (crp->cr_perms & CAP_RESERVED1) ? 'R' : '-',
-            (crp->cr_perms & CAP_RESERVED2) ? 'R' : '-',
-            (crp->cr_perms & CAP_ACCESS_SYS_REGS) ? 'r' : '-');
-    } else {
-        cpu_fprintf(f, "%s: (not valid - tag not set)\n");
-        cpu_fprintf(f, "%-4s\n", alias);
-    }
-#else
-    /*
-    cpu_fprintf(f, "DEBUG %s: v:%d s:%d p:%08x b:%016lx l:%016lx o:%016lx t:%08x\n",
-            name, crp->cr_tag, is_cap_sealed(crp) ? 1 : 0,
-            COMBINED_PERMS_VALUE(crp), crp->cr_base, crp->cr_length,
-            crp->cr_offset, crp->cr_otype);
-    */
-
-/* #define OLD_DEBUG_CAP */
-
-#ifdef OLD_DEBUG_CAP
-    cpu_fprintf(f,
-                "DEBUG CAP %s u:%d perms:0x%08x type:0x%06x "
-                "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
-                name, is_cap_sealed(crp),
-#else
     cpu_fprintf(f,
                 "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%016" PRIx64 " "
                 "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
                 name, crp->cr_tag, is_cap_sealed(crp),
-#endif
                 COMBINED_PERMS_VALUE(crp),
                 /* testsuite wants -1 for unsealed */
                 (uint64_t)cap_get_otype_signext(crp),
                 (uint64_t)cap_get_offset(crp), cap_get_base(crp),
                 /* testsuite expects UINT64_MAX for 1 << 64) */
                 cap_get_length_sat(crp));
-#endif
 }
 
 void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int flags)
