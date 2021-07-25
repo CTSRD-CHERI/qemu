@@ -41,7 +41,7 @@
     "v:%d s:%d p:%08x f:%d b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
 #define COMBINED_PERMS_VALUE(cr)                                               \
     (unsigned)(((cap_get_uperms(cr) & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |    \
-               ((cr)->cr_perms & CAP_PERMS_ALL))
+               (cap_get_perms(cr) & CAP_PERMS_ALL))
 #define PRINT_CAP_ARGS_L1(cr)                                                  \
     (cr)->cr_tag, cap_is_sealed_with_type(cr), COMBINED_PERMS_VALUE(cr),       \
         (cr)->cr_flags, cap_get_base(cr), cap_get_length_sat(cr)
@@ -72,6 +72,11 @@ static inline cap_offset_t cap_get_offset(const cap_register_t* c) {
 static inline uint32_t cap_get_uperms(const cap_register_t *c)
 {
     return c->cr_uperms;
+}
+
+static inline uint32_t cap_get_perms(const cap_register_t *c)
+{
+    return c->cr_perms;
 }
 
 // The top of the capability (exclusive -- i.e., one past the end)
@@ -158,7 +163,7 @@ cap_cursor_in_bounds(const cap_register_t *c)
 static inline QEMU_ALWAYS_INLINE bool cap_has_perms(const cap_register_t *reg,
                                                     uint32_t perms)
 {
-    return (reg->cr_perms & perms) == perms;
+    return (cap_get_perms(reg) & perms) == perms;
 }
 
 static inline bool cap_is_unsealed(const cap_register_t* c) {

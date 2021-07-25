@@ -183,7 +183,8 @@ target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
      * Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    cheri_debug_assert((cbp->cr_perms & CAP_PERMS_ALL) == cbp->cr_perms &&
+    cheri_debug_assert((cap_get_perms(cbp) & CAP_PERMS_ALL) ==
+                           cap_get_perms(cbp) &&
                        "Unknown HW perms bits set!");
     cheri_debug_assert((cap_get_uperms(cbp) & CAP_UPERMS_ALL) ==
                            cap_get_uperms(cbp) &&
@@ -417,7 +418,7 @@ void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
      */
     if (!csp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cs);
-    } else if ((csp->cr_perms & rt_perms) != rt_perms) {
+    } else if ((cap_get_perms(csp) & rt_perms) != rt_perms) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
     } else if ((cap_get_uperms(csp) & rt_uperms) != rt_uperms) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
@@ -511,7 +512,8 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (cap_get_base(ctp) > cap_get_top_full(ctp)) {
         // check for length < 0 - possible because cs2 might be untagged
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
+    } else if ((cap_get_perms(ctp) & cap_get_perms(cbp)) !=
+               cap_get_perms(ctp)) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
     } else if ((cap_get_uperms(ctp) & cap_get_uperms(cbp)) !=
                cap_get_uperms(ctp)) {
@@ -747,7 +749,8 @@ void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
         uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
 
         cap_register_t result = *cbp;
-        CAP_cc(cap_set_decompressed_cr_perms)(&result, cbp->cr_perms & rt_perms);
+        CAP_cc(cap_set_decompressed_cr_perms)(&result,
+                                              cap_get_perms(cbp) & rt_perms);
         CAP_cc(cap_set_decompressed_cr_uperms)(&result,
                                                cap_get_uperms(cbp) & rt_uperms);
         update_capreg(env, cd, &result);
@@ -952,7 +955,7 @@ target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUArchState *env, uint32_t cb,
         /* is_cap_sealed(cbp) == is_cap_sealed(ctp) && */
         cap_get_base(cbp) <= cap_get_base(ctp) &&
         cap_get_top(ctp) <= cap_get_top(cbp) &&
-        (cbp->cr_perms & ctp->cr_perms) == ctp->cr_perms &&
+        (cap_get_perms(cbp) & cap_get_perms(ctp)) == cap_get_perms(ctp) &&
         (cap_get_uperms(cbp) & cap_get_uperms(ctp)) == cap_get_uperms(ctp)) {
         is_subset = true;
     }
