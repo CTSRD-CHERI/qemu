@@ -193,12 +193,13 @@ static void aarch64_morello_initfn(Object *obj)
     t = cpu->isar.id_aa64pfr0;
     t = FIELD_DP64(t, ID_AA64PFR0, FP, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, ADVSIMD, 1);
-    t = FIELD_DP64(t, ID_AA64PFR0, RAS, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, EL0, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, EL1, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, EL2, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, EL3, 1);
 #ifdef MATCH_MORELLO_CLOSELY
+    // RAS not actually implemented in QEMU
+    // t = FIELD_DP64(t, ID_AA64PFR0, RAS, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, CSV2, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, CSV3, 1);
 #endif
