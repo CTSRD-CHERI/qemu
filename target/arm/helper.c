@@ -11024,8 +11024,12 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
     unsigned int cur_el = arm_current_el(env);
     int rt;
 
+    const char *ESR_NAMES[] = {"ESR_EL0", "ESR_EL1", "ESR_EL2", "ESR_EL3"};
+    const char *FAR_NAMES[] = {"FAR_EL0", "FAR_EL1", "FAR_EL2", "FAR_EL3"};
 #ifdef TARGET_CHERI
-    bool cap_exception = is_access_to_capabilities_enabled_at_el(env, cur_el);
+    const char *ELR_NAMES[] = {"ELR_EL0", "ELR_EL1", "ELR_EL2", "ELR_EL3"};
+    const char *SPSR_NAMES[] = {"SPSR_EL0", "SPSR_EL1", "SPSR_EL2", "SPSR_EL3"};
+    bool cap_exception = is_access_to_capabilities_enabled_at_el(env, new_el);
     // The spec says [10:0] of vbar_elx should be treated as 0
     addr &= ~0x7FF;
 #endif
@@ -11074,7 +11078,8 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
     case EXCP_DATA_ABORT:
         env->cp15.far_el[new_el] = env->exception.vaddress;
 #ifdef CONFIG_TCG_LOG_INSTR
-        qemu_log_instr_dbg_reg(env, "FAR", env->cp15.far_el[new_el]);
+        qemu_log_instr_dbg_reg(env, FAR_NAMES[new_el],
+                               env->cp15.far_el[new_el]);
 #endif
         qemu_log_mask(CPU_LOG_INT, "...with FAR 0x%" PRIx64 "\n",
                       env->cp15.far_el[new_el]);
@@ -11124,7 +11129,8 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
             break;
         }
         env->cp15.esr_el[new_el] = env->exception.syndrome;
-        qemu_log_instr_dbg_reg(env, "ESR", env->cp15.esr_el[new_el]);
+        qemu_log_instr_dbg_reg(env, ESR_NAMES[new_el],
+                               env->cp15.esr_el[new_el]);
         break;
     case EXCP_IRQ:
     case EXCP_VIRQ: addr += 0x80; break;
@@ -11158,8 +11164,8 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
     env->banked_spsr[aarch64_banked_spsr_index(new_el)] = old_mode;
 
 #if defined(CONFIG_TCG_LOG_INSTR) && defined(TARGET_CHERI)
-    qemu_log_instr_dbg_cap(env, "ELR", &env->elr_el[new_el].cap);
-    qemu_log_instr_dbg_reg(env, "SPSR", old_mode);
+    qemu_log_instr_dbg_cap(env, ELR_NAMES[new_el], &env->elr_el[new_el].cap);
+    qemu_log_instr_dbg_reg(env, SPSR_NAMES[new_el], old_mode);
 #endif
 
     qemu_log_mask(CPU_LOG_INT, "...with ELR 0x%" PRIx64 "\n",
