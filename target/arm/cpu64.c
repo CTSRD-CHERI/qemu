@@ -210,6 +210,9 @@ static void aarch64_morello_initfn(Object *obj)
 
     t = cpu->isar.id_aa64dfr0;
     t = FIELD_DP64(t, ID_AA64DFR0, PMUVER, 5); /* v8.4-PMU */
+    // 4 breakpoints and watchpoints (field stores x - 1)
+    t = FIELD_DP64(t, ID_AA64DFR0, BRPS, 8 - 1); /* v8.4-PMU */
+    t = FIELD_DP64(t, ID_AA64DFR0, WRPS, 8 - 1); /* v8.4-PMU */
     cpu->isar.id_aa64dfr0 = t;
 
     // Instruction Set Attributes
