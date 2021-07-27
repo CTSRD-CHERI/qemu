@@ -1477,13 +1477,12 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
     raise_pcc_fault(env, cause, pcc->_cr_cursor, GETPC());
 }
 
-void
-    CHERI_HELPER_IMPL(raise_exception_pcc_perms_not_if(CPUArchState *env,
-                                                       uint32_t required_perms))
+void CHERI_HELPER_IMPL(raise_exception_pcc_perms_not_if(
+    CPUArchState *env, target_ulong addr, uint32_t required_perms))
 {
     const cap_register_t *pcc = cheri_get_recent_pcc(env);
-    check_cap(env, pcc, required_perms, cap_get_base(pcc), CHERI_EXC_REGNUM_PCC,
-              1, /*instavail=*/true, GETPC());
+    check_cap(env, pcc, required_perms, addr, CHERI_EXC_REGNUM_PCC, 1,
+              /*instavail=*/true, GETPC());
     __builtin_unreachable();
 }
 
@@ -1503,17 +1502,11 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
 }
 
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
+                                                 target_ulong addr,
                                                  uint32_t required_perms))
 {
     const cap_register_t *ddc = cheri_get_ddc(env);
-    // TODO: Make everything like aarch64 and just use address everywhere.
-    // Offset is silly.
-    target_ulong addr;
-#ifdef TARGET_AARCH64
-    addr = cap_get_base(ddc);
-#else
-    addr = cap_get_base(ddc) - cap_get_cursor(ddc);
-#endif
+
     cap_check_common_reg(required_perms, env, CHERI_EXC_REGNUM_DDC, addr, 1,
                          GETPC(), ddc, 1, NULL);
     error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,

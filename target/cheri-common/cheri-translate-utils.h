@@ -182,17 +182,6 @@ static inline void _generate_special_checked_ptr(
     TCGv_cap_checked_ptr checked_addr, TCGv integer_addr,
     target_ulong num_bytes, bool use_ddc)
 {
-    if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags))) {
-        // PCC/DDC is untagged, sealed, or missing permissions
-        TCGv_i32 tperms = tcg_const_i32(req_perms);
-        cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
-        if (use_ddc)
-            gen_helper_raise_exception_ddc_perms(cpu_env, tperms);
-        else
-            gen_helper_raise_exception_pcc_perms_not_if(cpu_env, tperms);
-        tcg_temp_free_i32(tperms);
-        return;
-    }
     // PCC interposition currently done mostly by the caller.
     bool need_interposition =
         use_ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_NO_INTERPOSE);
@@ -213,6 +202,21 @@ static inline void _generate_special_checked_ptr(
     } else if ((TCGv)checked_addr != integer_addr) {
         tcg_gen_mov_tl((TCGv)checked_addr, integer_addr);
     }
+
+    if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags))) {
+        // PCC/DDC is untagged, sealed, or missing permissions
+        TCGv_i32 tperms = tcg_const_i32(req_perms);
+        cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
+        if (use_ddc)
+            gen_helper_raise_exception_ddc_perms(
+                cpu_env, (TCGv_i64)checked_addr, tperms);
+        else
+            gen_helper_raise_exception_pcc_perms_not_if(
+                cpu_env, (TCGv_i64)checked_addr, tperms);
+        tcg_temp_free_i32(tperms);
+        return;
+    }
+
     CheriTbFlags full_as_flags =
         use_ddc ? TB_FLAG_CHERI_DDC_FULL_AS : TB_FLAG_CHERI_PCC_FULL_AS;
     bool do_checks = !have_cheri_tb_flags(ctx, full_as_flags);
