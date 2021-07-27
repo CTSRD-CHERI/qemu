@@ -4778,13 +4778,23 @@ static CPAccessResult sp_el0_access(CPUARMState *env, const ARMCPRegInfo *ri,
     return CP_ACCESS_OK;
 }
 
+// Morello note: R_RGKSN For a PE in Restricted, SPSel is RAZ/WI.
+
 static uint64_t spsel_read(CPUARMState *env, const ARMCPRegInfo *ri)
 {
+#ifdef TARGET_CHERI
+    if (cheri_is_restricted(env))
+        return 0;
+#endif
     return env->pstate & PSTATE_SP;
 }
 
 static void spsel_write(CPUARMState *env, const ARMCPRegInfo *ri, uint64_t val)
 {
+#ifdef TARGET_CHERI
+    if (cheri_is_restricted(env))
+        return;
+#endif
     update_spsel(env, val);
 }
 

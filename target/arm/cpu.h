@@ -4261,6 +4261,13 @@ static inline bool cheri_is_executive(CPUARMState *env)
     return FIELD_EX32(env->chflags, TBFLAG_CHERI, EXECUTIVE) != 0;
 }
 
+// restricted is not executive. Decided it might make things more readable to
+// have this.
+static inline bool cheri_is_restricted(CPUARMState *env)
+{
+    return !cheri_is_executive(env);
+}
+
 static inline bool cheri_is_system(CPUARMState *env)
 {
     return FIELD_EX32(env->chflags, TBFLAG_CHERI, SYSTEM) != 0;
