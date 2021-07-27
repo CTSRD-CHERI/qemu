@@ -57,8 +57,11 @@ const char *const cheri_gp_int_regnames[34] = {
 #endif
 
 #ifdef CONFIG_TCG_LOG_INSTR
-const char * const aarch_cpu_mode_names[QEMU_LOG_INSTR_CPU_MODE_MAX] = {
-    "EL0", "EL1", "EL2", "EL3",
+const char *const aarch_cpu_mode_names[QEMU_LOG_INSTR_CPU_MODE_MAX] = {
+    [AARCH_LOG_INSTR_CPU_EL0] = "EL0",
+    [AARCH_LOG_INSTR_CPU_EL1] = "EL1",
+    [AARCH_LOG_INSTR_CPU_EL2] = "EL2",
+    [AARCH_LOG_INSTR_CPU_EL3] = "EL3",
 };
 #endif
 
