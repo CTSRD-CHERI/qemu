@@ -52,8 +52,8 @@
 DEF_HELPER_1(raise_exception_pcc_perms, noreturn, env)
 DEF_HELPER_3(raise_exception_pcc_bounds, noreturn, env, tl, i32)
 // And these for loads/stores
-DEF_HELPER_2(raise_exception_pcc_perms_not_if, noreturn, env, i32)
-DEF_HELPER_2(raise_exception_ddc_perms, noreturn, env, i32)
+DEF_HELPER_3(raise_exception_pcc_perms_not_if, noreturn, env, tl, i32)
+DEF_HELPER_3(raise_exception_ddc_perms, noreturn, env, tl, i32)
 DEF_HELPER_3(raise_exception_ddc_bounds, noreturn, env, tl, i32)
 
 // Two-operand capability inspection
