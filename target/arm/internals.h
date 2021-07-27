@@ -1319,7 +1319,7 @@ static inline int get_cap_enabled_target_exception_level_el(CPUArchState *env,
             if (disabled)
                 return 2;
         } else {
-            if ((env->cp15.cptr_el[2] & CPTR_TCPAC))
+            if ((env->cp15.cptr_el[2] & CPTR_TC))
                 return 2;
         }
     }
@@ -1343,7 +1343,7 @@ static inline bool is_access_to_capabilities_disabled_el2(CPUARMState *env)
         return ((env->cp15.hcr_el2 & HCR_E2H) &&
                 !(env->cp15.cptr_el[2] & CPTR_CEN_LO)) ||
                (!(env->cp15.hcr_el2 & HCR_E2H) &&
-                (env->cp15.cptr_el[2] & CPTR_TCPAC));
+                (env->cp15.cptr_el[2] & CPTR_TC));
     } else
         return false;
 }
