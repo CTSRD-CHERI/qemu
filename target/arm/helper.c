@@ -11070,7 +11070,11 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
         } else {
             addr += 0x600;
         }
-    } else if (pstate_read(env) & PSTATE_SP) {
+    } else if ((pstate_read(env) & PSTATE_SP)
+#ifdef TARGET_CHERI
+               && cheri_is_executive(env)
+#endif
+    ) {
         addr += 0x200;
     }
 
