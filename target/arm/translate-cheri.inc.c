@@ -245,6 +245,7 @@ static inline bool capabilities_enabled_exception(DisasContext *ctx)
     // will do that.
     if (!GET_FLAG(ctx, CAP_ENABLED)) {
         ctx->base.is_jmp = DISAS_NORETURN;
+        gen_a64_set_pc_im(ctx->pc_curr);
         gen_helper_check_capabilities_enabled_exception(cpu_env);
         return true;
     }
