@@ -379,7 +379,7 @@ static inline uint32_t syn_aa64_sysregtrap(int op0, int op1, int op2,
 
 static inline uint32_t syn_aa64_capability_access(void)
 {
-    return (EC_CAPABILITY_ACCESS << ARM_EL_EC_SHIFT);
+    return (EC_CAPABILITY_ACCESS << ARM_EL_EC_SHIFT) | ARM_EL_IL;
 }
 
 static inline uint32_t syn_cp14_rt_trap(int cv, int cond, int opc1, int opc2,
