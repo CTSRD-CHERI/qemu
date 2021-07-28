@@ -1367,9 +1367,12 @@ static inline bool is_access_to_capabilities_disabled_el0(CPUARMState *env)
                (env->cp15.hcr_el2 & HCR_TGE)) &&
              ((env->cp15.cpacr_el1 & CPTR_CEN) == CPTR_CEN_LO)) {
         return true;
-    } else
-        return (arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) && (env->cp15.hcr_el2 & HCR_E2H)) &&
+    } else {
+        return (arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) &&
+                (env->cp15.hcr_el2 & HCR_E2H) &&
+                (env->cp15.hcr_el2 & HCR_TGE)) &&
                ((env->cp15.cptr_el[2] & CPTR_CEN) == CPTR_CEN_LO);
+    }
 }
 
 static inline bool is_access_to_capabilities_enabled_at_el(CPUARMState *env,
