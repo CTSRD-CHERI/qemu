@@ -1528,6 +1528,7 @@ static inline void gen_check_sp_alignment(DisasContext *s)
         TCGv_i64 align = tcg_const_i64(16 - 1);
         tcg_gen_and_i64(align, align, cpu_reg_sp(s, 31));
         tcg_gen_brcondi_i64(TCG_COND_EQ, align, 0, label_aligned);
+        gen_a64_set_pc_im(s->pc_curr);
         gen_helper_sp_alignment_exception(cpu_env);
         gen_set_label(label_aligned);
         tcg_temp_free_i64(align);
