@@ -592,7 +592,7 @@ static void gen_exception_insn(DisasContext *s, uint64_t pc, int excp,
     s->base.is_jmp = DISAS_NORETURN;
 }
 
-static void gen_set_exception_far(DisasContext *s, uint64_t far)
+static void gen_set_exception_far(uint64_t far)
 {
     TCGv_i64 tfar = tcg_const_i64(far);
     tcg_gen_st_i64(tfar, cpu_env, offsetof(CPUArchState, exception.vaddress));
@@ -15145,13 +15145,6 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
 #endif
 #endif
 
-    if (s->pc_curr & 0b11) {
-        gen_set_exception_far(s, s->pc_curr);
-        gen_exception_insn(s, s->pc_curr, EXCP_PREFETCH_ABORT,
-                           syn_pc_alignment(false), default_exception_el(s));
-        return;
-    }
-
     s->insn = insn;
     s->base.pc_next += 4;
 
@@ -15345,6 +15338,13 @@ static void aarch64_tr_init_disas_context(DisasContextBase *dcbase,
 
 static void aarch64_tr_tb_start(DisasContextBase *db, CPUState *cpu)
 {
+    DisasContext *s = container_of(db, DisasContext, base);
+    if (db->pc_next & 0b11) {
+        gen_set_exception_far(db->pc_next);
+        gen_exception_insn(s, db->pc_next, EXCP_PREFETCH_ABORT,
+                           syn_pc_alignment(false), default_exception_el(s));
+        return;
+    }
 }
 
 static void aarch64_tr_insn_start(DisasContextBase *dcbase, CPUState *cpu)
