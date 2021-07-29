@@ -1517,7 +1517,8 @@ static inline void gen_check_sp_alignment(DisasContext *s)
      * or SCTLR bits) there is a check that SP is 16-aligned on every
      * SP-relative load or store (with an exception generated if it is not).
      * In line with general QEMU practice regarding misaligned accesses,
-     * we omit these checks for the sake of guest program performance.
+     * we omit these checks for the sake of guest program performance,
+     * _unless_ STRICT_ALIGNMENT_CHECKS is defined.
      * This function is provided as a hook so we can more easily add these
      * checks in future (possibly as a "favour catching guest program bugs
      * over speed" user selectable option).
