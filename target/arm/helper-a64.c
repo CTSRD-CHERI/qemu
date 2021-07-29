@@ -1033,6 +1033,7 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
 
 #ifdef TARGET_CHERI
         bool cap_return = is_access_to_capabilities_enabled_at_el(env, cur_el);
+        bool no_system = !cap_has_perms(&env->pc.cap, CAP_ACCESS_SYS_REGS);
 
         if (!cap_return ||
             !is_access_to_capabilities_enabled_at_el(env, new_el))
@@ -1040,6 +1041,8 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
 
         if (cap_return) {
             env->pc = env->elr_el[cur_el];
+            if (no_system)
+                env->pc.cap.cr_tag = 0;
         }
 
         if (!cap_is_unsealed(&env->pc.cap)) {
