@@ -1903,6 +1903,23 @@ static void gen_axflag(void)
     tcg_gen_movi_i32(cpu_VF, 0);
 }
 
+#ifdef TARGET_CHERI
+static inline bool cheri_is_executive_ctx(DisasContext *s)
+{
+    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
+                      TBFLAG_CHERI, EXECUTIVE) != 0;
+}
+
+static inline bool cheri_is_system_ctx(DisasContext *s)
+{
+    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
+                      TBFLAG_CHERI, SYSTEM) != 0;
+}
+#define sp_modified(val) gen_reg_modified_int_base(s, ri->name, val)
+#else
+#define sp_modified(...)
+#endif
+
 /* MSR (immediate) - move immediate to processor state field */
 static void handle_msr_i(DisasContext *s, uint32_t insn,
                          unsigned int op1, unsigned int op2, unsigned int crm)
@@ -1970,6 +1987,10 @@ static void handle_msr_i(DisasContext *s, uint32_t insn,
         if (s->current_el == 0) {
             goto do_unallocated;
         }
+#ifdef TARGET_CHERI
+        if (!cheri_is_executive_ctx(s))
+            return;
+#endif
         t1 = tcg_const_i32(crm & PSTATE_SP);
         gen_helper_msr_i_spsel(cpu_env, t1);
         tcg_temp_free_i32(t1);
@@ -2059,23 +2080,6 @@ static void gen_set_nzcv(TCGv_i64 tcg_rt)
     tcg_gen_shli_i32(cpu_VF, cpu_VF, 3);
     tcg_temp_free_i32(nzcv);
 }
-
-#ifdef TARGET_CHERI
-static inline bool cheri_is_executive_ctx(DisasContext *s)
-{
-    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
-                      TBFLAG_CHERI, EXECUTIVE) != 0;
-}
-
-static inline bool cheri_is_system_ctx(DisasContext *s)
-{
-    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
-                      TBFLAG_CHERI, SYSTEM) != 0;
-}
-#define sp_modified(val) gen_reg_modified_int_base(s, ri->name, val)
-#else
-#define sp_modified(...)
-#endif
 
 /* MRS - move from system register
  * MSR (register) - move to system register
