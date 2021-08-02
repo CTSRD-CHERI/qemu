@@ -2511,10 +2511,12 @@ static inline uint64_t cpreg_to_kvm_id(uint32_t cpregid)
 #define ARM_CP_RAISES_EXC        0x8000
 #define ARM_CP_NEWEL             0x10000
 #define ARM_CP_CAP               0x20000
+#define ARM_CP_CAP_ONLY (ARM_CP_CAP | 0x40000)
+
 /* Used only as a terminator for ARMCPRegInfo lists */
 #define ARM_CP_SENTINEL          0xfffff
 /* Mask of only the flag bits in a type field */
-#define ARM_CP_FLAG_MASK 0x3f0ff
+#define ARM_CP_FLAG_MASK 0x7f0ff
 
 #ifdef TARGET_CHERI
 #define ARM_CP_CAP_ON_MORELLO ARM_CP_CAP
@@ -2928,6 +2930,15 @@ static inline bool cpreg_field_is_cap(const ARMCPRegInfo *ri)
 {
 #ifdef TARGET_CHERI
     return !!(ri->type & ARM_CP_CAP);
+#else
+    return false;
+#endif
+}
+
+static inline bool cpreg_field_is_cap_only(const ARMCPRegInfo *ri)
+{
+#ifdef TARGET_CHERI
+    return (ri->type & ARM_CP_CAP_ONLY) == ARM_CP_CAP_ONLY;
 #else
     return false;
 #endif

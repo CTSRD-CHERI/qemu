@@ -239,18 +239,6 @@ static inline TCGv_i64 read_cpu_reg_maybe_0(DisasContext *ctx, int regnum)
     }
 }
 
-static inline bool capabilities_enabled_exception(DisasContext *ctx)
-{
-    // Flag bits only encode an exception is needed, not which one. The helper
-    // will do that.
-    if (!GET_FLAG(ctx, CAP_ENABLED)) {
-        ctx->base.is_jmp = DISAS_NORETURN;
-        gen_a64_set_pc_im(ctx->pc_curr);
-        gen_helper_check_capabilities_enabled_exception(cpu_env);
-        return true;
-    }
-    return false;
-}
 
 /**
  * Load/store common code. Most of these options should optimise away.
@@ -570,6 +558,8 @@ TRANS_F(ADR)
     if (a->Rd == 31)
         return true;
 
+    // The lack of a capabilities enabled check here is intentional
+
     bool c64 = IS_C64(ctx);
     bool P_in_immediate = (!a->op) || !c64;
     bool page_align = a->op;
@@ -652,6 +642,9 @@ TRANS_F(ADR)
 
 TRANS_F(ADD_SUB)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     uint64_t imm = a->imm12;
     if (a->sh)
         imm <<= 12;
@@ -687,10 +680,15 @@ TRANS_F(LDP_STP)
             // CT all 1's when only single register
             // Rs (status) all 1's for loads
             bool pair = op;
-            if (load)
-                assert(rs == 0b11111);
-            if (!pair)
-                assert(a->Ct2 == 0b11111);
+            if (load && rs != 0b11111)
+                return false;
+
+            if (!pair && a->Ct2 != 0b11111)
+                return false;
+
+            if (capabilities_enabled_exception(ctx))
+                return true;
+
             return load_store_implementation(ctx, load, false, AS_ZERO(a->Ct),
                                              pair ? AS_ZERO(a->Ct2) : REG_NONE,
                                              4, 4, a->Rn, AS_ZERO(rs), 0, false,
@@ -698,8 +696,14 @@ TRANS_F(LDP_STP)
                                              o2, 0, OPTION_NONE, 0, false);
         } else if (a->op2 == 2) {
             // acquire/release
-            assert(rs == 0b11111);
-            assert(a->Ct2 == 0b11111);
+            if (rs != 0b11111)
+                return false;
+            if (a->Ct2 != 0b11111)
+                return false;
+
+            if (capabilities_enabled_exception(ctx))
+                return true;
+
             bool alternate_base = op || !o2;
             uint64_t size = op == 0 ? 4 : (o2 ? 2 : 0);
             return load_store_implementation(
@@ -716,7 +720,12 @@ TRANS_F(LDP_STP)
 
         bool non_temporal_hint = a->op1 == 0b00;
         if (non_temporal_hint)
-            assert(a->op2 == 0b11);
+            if (a->op2 != 0b11)
+                return false;
+
+        if (capabilities_enabled_exception(ctx))
+            return true;
+
         bool pre_inc = !non_temporal_hint && (a->op2 == 0b11);
         bool post_inc = !non_temporal_hint && (a->op2 == 0b01);
         uint64_t imm = SE_64((a->imm7 << 4), 11);
@@ -730,6 +739,12 @@ TRANS_F(LDP_STP)
 
 TRANS_F(ADD1)
 {
+    if (a->imm3 > 4)
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_ensure_cap_decompressed(ctx, a->Cn);
     TCGv_i64 extended = read_cpu_reg(ctx, a->Rm, 1);
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
@@ -748,6 +763,15 @@ TRANS_F(AUR)
 {
     int size, extend_size;
     bool is_load;
+
+    if (a->V && a->op1 && (a->op2 > 1))
+        return false;
+
+    if ((a->op1 == 0b11) && (!a->V) && (a->op2 == 0b10))
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
 
     if (!a->V) {
         size = ((a->op2 == 0b11) && (a->op1 >= 0b10)) ? 4 : a->op1;
@@ -768,6 +792,9 @@ TRANS_F(AUR)
 
 TRANS_F(ALIGN)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
     return gen_cheri_addr_op_imm(ctx, a->Cd, ONES(a->imm6),
                                  a->U ? OP_ALIGN_UP : OP_ALIGN_DOWN, false);
@@ -777,6 +804,9 @@ TRANS_F(FLGS)
 {
     if (a->op == 0b11)
         return false;
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
     return gen_cheri_addr_op_imm(ctx, a->Cd, (uint64_t)a->imm8 << 56ULL,
                                  (enum ADDR_OPS)a->op, true);
@@ -922,15 +952,22 @@ static bool cvt_impl_cap_to_ptr(DisasContext *ctx, uint32_t rd, uint32_t cn,
 
 TRANS_F(CVT)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
     return cvt_impl_ptr_to_cap(ctx, AS_ZERO(a->Cd), a->Cn, a->Rm, false, false);
 }
 TRANS_F(CVT1)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
     return cvt_impl_ptr_to_cap(ctx, AS_ZERO(a->Cd), a->Cn, a->Rm, true, false);
 }
 
 TRANS_F(SUBS)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     // We want to use the same add with carry logic regardless of whether
     // comparing tags or value gen_adc_CC expects a 64-bit value to add.
     // Comparing tags use two 2-bit values, so we can shift them up 62 places,
@@ -979,6 +1016,9 @@ TRANS_F(SUBS)
 
 TRANS_F(FLGS_CTHI)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     int cn = a->opc == 0b11 ? AS_ZERO(a->Cn) : a->Cn;
     gen_ensure_cap_decompressed(ctx, cn);
     TCGv_i64 rm = read_cpu_reg(ctx, a->Rm, 1);
@@ -1006,11 +1046,13 @@ static TCGv_i32 get_link_reg(DisasContext *ctx, bool link)
     return tcg_const_i32(link ? 30 : NULL_CAPREG_INDEX);
 }
 
-static void should_be_executive(DisasContext *ctx)
+static bool should_be_executive(DisasContext *ctx)
 {
     if (!GET_FLAG(ctx, EXECUTIVE)) {
         unallocated_encoding(ctx);
+        return true;
     }
+    return false;
 }
 
 static TCGv_i32 get_branch_flags(DisasContext *ctx, bool can_branch_restricted)
@@ -1028,6 +1070,11 @@ static TCGv_i32 get_branch_flags(DisasContext *ctx, bool can_branch_restricted)
 
 TRANS_F(BLR_BR_RET_CHKD)
 {
+    // Some instructions are undef due in restricted mode _before_ caps enabled
+    // is checked:
+    // RETR, BRR, BLRR
+    // Others this is reversed.
+
     // op:
     //  00 is branch indirect
     //  01 are checks
@@ -1040,6 +1087,11 @@ TRANS_F(BLR_BR_RET_CHKD)
     //  11: BX (requires CN = 0b11111, op == 0b00)
 
     if (a->op == 0b01) {
+        if (a->opc > 0b01)
+            return false;
+        if (capabilities_enabled_exception(ctx))
+            return true;
+
         TCGv_i32 tag = NULL;
         TCGv_i32 sealed = NULL;
         switch (a->opc) {
@@ -1052,7 +1104,7 @@ TRANS_F(BLR_BR_RET_CHKD)
             gen_cap_get_tag_i32(ctx, a->Cn, tag);
             break;
         default:
-            assert(0);
+            g_assert_not_reached();
         }
         set_NZCV(ctx, NULL, NULL, tag, sealed);
         if (tag)
@@ -1065,6 +1117,12 @@ TRANS_F(BLR_BR_RET_CHKD)
     if (a->op == 0b11) {
         should_be_executive(ctx);
     }
+
+    if (a->opc == 0b11 && a->Cn != 0b11111)
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
 
     if (a->opc == 0b11) {
         // BX is not _really_ a branch, just a mode switch.
@@ -1126,6 +1184,8 @@ TRANS_F(BR_BLR)
     // This instruction has really weird treatment of C31 in the ASL.
     // For the purposes of loading, C31 is CSP. For storing it is 0.
     // This special behaviour will be handled by the helper.
+    if (capabilities_enabled_exception(ctx))
+        return true;
 
     TCGv_i32 cn = tcg_const_i32(a->Cn);
     TCGv_i32 offset = tcg_const_i32(SE_32(a->imm7 << 4, 11));
@@ -1161,6 +1221,9 @@ TRANS_F(BRS)
     if (a->opc == 0b11)
         return false;
 
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     TCGv_i32 flags = get_branch_flags(ctx, false);
 
     // Branch and link sealed
@@ -1189,6 +1252,12 @@ TRANS_F(BRS)
 
 TRANS_F(CHK)
 {
+    if (a->opc > 0b01)
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     TCGv_i32 n = NULL;
     TCGv_i32 z = NULL;
     switch (a->opc) {
@@ -1206,7 +1275,7 @@ TRANS_F(CHK)
         gen_cap_get_eq_i32(ctx, a->Cn, AS_ZERO(a->Cm), z);
         break;
     default:
-        return false;
+        g_assert_not_reached();
     }
 
     set_NZCV(ctx, n, z, NULL, NULL);
@@ -1220,6 +1289,9 @@ TRANS_F(CHK)
 
 TRANS_F(CAS)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct),
                                      AS_ZERO(a->Cs), 4, 4, a->Rn, REG_NONE, 0,
                                      false, false, false, false, false, false,
@@ -1228,6 +1300,9 @@ TRANS_F(CAS)
 
 TRANS_F(BUILD_CSEAL_CPYE)
 {
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
 
     uint32_t cn = a->Cn;
     uint32_t cm = a->Cm;
@@ -1317,6 +1392,9 @@ TRANS_F(BUILD_CSEAL_CPYE)
 
 TRANS_F(CLRPERM)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_ensure_cap_decompressed(ctx, a->Cn);
     TCGv_i64 rmv = read_cpu_reg(ctx, a->Rm, 1);
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
@@ -1339,6 +1417,9 @@ TRANS_F(SCG)
     if (ctx->current_el == 0)
         return false;
 
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_ensure_cap_decompressed(ctx, a->Cn);
     TCGv_i64 tcgrm = read_cpu_reg(ctx, a->Rm, 1);
 
@@ -1360,6 +1441,9 @@ TRANS_F(SCG)
 // similar.
 TRANS_F(SCG1)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_ensure_cap_decompressed(ctx, a->Cn);
     TCGv_i64 flag_bits = read_cpu_reg(ctx, a->Rm, 1);
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
@@ -1378,6 +1462,9 @@ TRANS_F(CLRTAG_CPY)
     if (a->opc & 1)
         return false;
 
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
     if (!(a->opc))
         gen_cap_clear_tag(ctx, a->Cd);
@@ -1392,6 +1479,10 @@ TRANS_F(SEAL)
 {
     if (a->form == 0)
         return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     target_ulong types[] = {0, CC128_OTYPE_SENTRY, CC128_OTYPE_LOAD_PAIR_BRANCH,
                             CC128_OTYPE_LOAD_BRANCH};
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
@@ -1405,6 +1496,9 @@ TRANS_F(SEAL_CHKSSU)
 
     if (a->opc == 0b11)
         return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
 
     int cd = AS_ZERO(a->Cd);
 
@@ -1451,7 +1545,7 @@ TRANS_F(SEAL_CHKSSU)
         break;
     }
     default:
-        assert(0);
+        g_assert_not_reached();
     }
 
     if (need_scratch)
@@ -1464,6 +1558,9 @@ TRANS_F(SEAL_CHKSSU)
 
 TRANS_F(CSEL)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_ensure_cap_decompressed(ctx, AS_ZERO(a->Cn));
     gen_ensure_cap_decompressed(ctx, AS_ZERO(a->Cm));
     DisasCompare cmp;
@@ -1476,6 +1573,12 @@ TRANS_F(CSEL)
 
 TRANS_F(CFHI)
 {
+    if (a->opc == 0b11)
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     TCGv_i64 dst = cpu_reg(ctx, a->Rd);
 
     switch (a->opc) {
@@ -1489,7 +1592,7 @@ TRANS_F(CFHI)
         gen_cap_get_hi(ctx, a->Cn, dst);
         break;
     default:
-        return false;
+        g_assert_not_reached();
     }
 
     gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rd));
@@ -1498,6 +1601,12 @@ TRANS_F(CFHI)
 // CVT with PCC / DDC as a base, cap -> ptr
 TRANS_F(CVT2)
 {
+    if (a->opc > 0b01)
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     bool pcc = (a->opc & 1) != 0;
     return cvt_impl_cap_to_ptr(
         ctx, a->Rd, a->Cn, pcc ? CHERI_EXC_REGNUM_PCC : CHERI_EXC_REGNUM_DDC,
@@ -1506,6 +1615,9 @@ TRANS_F(CVT2)
 
 TRANS_F(GC)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     int regnum = a->Cn;
     TCGv_i64 result = cpu_reg(ctx, a->Rd);
 
@@ -1545,6 +1657,9 @@ TRANS_F(LDPBR)
     if (a->opc >= 2)
         return false;
 
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     bool link = a->opc == 0b01;
     TCGv_i32 link_regnum = get_link_reg(ctx, link);
     TCGv_i32 pair_regnum = tcg_const_i32(a->Cn);
@@ -1570,6 +1685,9 @@ TRANS_F(LDPBR)
 
 TRANS_F(LDR)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     return load_store_implementation(
         ctx, true, false, AS_ZERO(a->Ct), REG_NONE, 4, 4, REG_NONE, REG_NONE,
         SE_64(a->imm17 << 4, 21), false, false, false, false, true, false,
@@ -1594,13 +1712,16 @@ TRANS_F(LDR_STR)
     //          00 unscaled immediate
 
     // opc:     0L
+    if (a->opc & 2)
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
 
     bool pre = (a->op == 0b11);
     bool post = (a->op == 0b01);
     bool unpriv = (a->op == 0b10);
     bool scale = (a->op != 0b00);
-
-    assert((a->opc & 2) == 0);
 
     uint64_t imm = a->imm9;
     if (scale)
@@ -1616,6 +1737,9 @@ TRANS_F(LDR_STR)
 // imm12
 TRANS_F(LDR_STR1)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct), REG_NONE,
                                      4, 4, a->Rn, REG_NONE, a->imm12 << 4,
                                      false, false, false, false, false, false,
@@ -1624,6 +1748,12 @@ TRANS_F(LDR_STR1)
 
 TRANS_F(LDR_STR2)
 {
+    if (!(a->option_name & 0b10))
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     return load_store_implementation(
         ctx, a->opc == 0b01, false, AS_ZERO(a->Ct), REG_NONE, 4, 4, a->Rn,
         AS_ZERO(a->Rm), 0, false, false, false, false, false, false, false, 0,
@@ -1644,6 +1774,12 @@ TRANS_F(MRS_MSR)
 
 TRANS_F(RR)
 {
+    if (a->opc > 0b01)
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     void (*helper)(TCGv, TCGv_env, TCGv);
 
     switch (a->opc) {
@@ -1654,7 +1790,7 @@ TRANS_F(RR)
         helper = &gen_helper_cram;
         break;
     default:
-        return false;
+        g_assert_not_reached();
     }
 
     helper(cpu_reg(ctx, a->Rd), cpu_env, cpu_reg(ctx, a->Rn));
@@ -1665,6 +1801,9 @@ TRANS_F(RR)
 
 TRANS_F(SCBNDS)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     uint64_t length = a->S ? (a->imm6 << 4) : a->imm6;
     gen_cheri_cap_cap_imm(ctx, a->Cd, a->Cn, length, &gen_helper_csetbounds);
     return true;
@@ -1672,6 +1811,9 @@ TRANS_F(SCBNDS)
 
 TRANS_F(SC)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     cheri_cap_cap_int_helper *helper = NULL;
     if (a->opc == 0) {
         helper = &gen_helper_csetbounds;
@@ -1705,11 +1847,17 @@ TRANS_F(SC)
 // CVT cap -> ptr
 TRANS_F(CVT3)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     return cvt_impl_cap_to_ptr(ctx, a->Rd, a->Cn, AS_ZERO(a->Cm), false);
 }
 
 TRANS_F(SWP)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     return load_store_implementation(ctx, a->A, false, AS_ZERO(a->Ct),
                                      AS_ZERO(a->Cs), 4, 4, a->Rn, REG_NONE, 0,
                                      false, false, false, false, false, false,
@@ -1719,6 +1867,9 @@ TRANS_F(SWP)
 // CVT with PCC / DDC as a base, ptr -> cap
 TRANS_F(CVT4)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     bool pcc = (a->opc & 1) == 1;
     bool zero_is_null = (a->opc & 2) == 2;
     uint32_t reg = pcc ? CHERI_EXC_REGNUM_PCC : CHERI_EXC_REGNUM_DDC;
@@ -1728,6 +1879,9 @@ TRANS_F(CVT4)
 
 TRANS_F(CLRPERM1)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
     int64_t perms = 0;
     if (a->perm & 1)
@@ -1749,6 +1903,9 @@ TRANS_F(CLRPERM1)
 // Load store via alternate base
 TRANS_F(ARB_ALDR)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     uint64_t log = size_log(a->op);
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Rt), REG_NONE,
                                      log, log, a->Rn, REG_NONE, a->imm9 << log,
@@ -1759,6 +1916,12 @@ TRANS_F(ARB_ALDR)
 // Load store via alternate base register offset
 TRANS_F(ASTR_ALDR1)
 {
+    if (!(a->option_name & 0b10))
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     bool is_load = a->L || (!a->op && (a->opc == 0b01 || a->opc == 0b10));
     // op,opc   0 00 byte
     //          0 01 signed byte (extend to word if L, otherwise double)
@@ -1809,7 +1972,7 @@ TRANS_F(ASTR_ALDR1)
         extend_size = 3;
         break;
     default:
-        assert(0);
+        g_assert_not_reached();
     }
     return load_store_implementation(
         ctx, is_load, vector, vector ? a->Rt : AS_ZERO(a->Rt), REG_NONE, size,
@@ -1820,6 +1983,12 @@ TRANS_F(ASTR_ALDR1)
 // Load store capability via alternate base
 TRANS_F(ASTR_ALDR)
 {
+    if (!(a->option_name & 0b10))
+        return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     return load_store_implementation(ctx, a->L, false, AS_ZERO(a->Ct), REG_NONE,
                                      4, 4, a->Rn, AS_ZERO(a->Rm), 0, false,
                                      false, false, true, false, false, false, 0,
@@ -1828,10 +1997,13 @@ TRANS_F(ASTR_ALDR)
 
 TRANS_F(CT)
 {
-    if (a->opc > 2)
+    if (a->opc > 1)
         return false;
     if (!a->opc && (ctx->current_el == 0))
         return false;
+
+    if (capabilities_enabled_exception(ctx))
+        return true;
 
     uint32_t reg = IS_C64(ctx) ? a->Rn : CHERI_EXC_REGNUM_DDC;
 
@@ -1864,6 +2036,9 @@ TRANS_F(CT)
 
 TRANS_F(LDAPR)
 {
+    if (capabilities_enabled_exception(ctx))
+        return true;
+
     // LDAPR is slightly weaker than LDAR, so we can just make LDAPR into LDAR.
     return load_store_implementation(ctx, true, false, AS_ZERO(a->Ct), REG_NONE,
                                      4, 4, a->Rn, REG_NONE, 0, false, false,
