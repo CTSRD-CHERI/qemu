@@ -4332,6 +4332,12 @@ static uint64_t mpidr_read_val(CPUARMState *env)
         if (cpu->mp_is_up) {
             mpidr |= (1u << 30);
         }
+#define SUPPORT_ACK
+#ifdef SUPPORT_ACK
+        // MT = 1 Performance of processors at the lowest affinity level is
+        // very interdependent.
+        mpidr |= (1U << 24);
+#endif
     }
     return mpidr;
 }
@@ -9353,7 +9359,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .crm = 1,
          .opc2 = 1,
          .access = PL0_RW,
-         .type = ARM_CP_CAP,
+         .type = ARM_CP_CAP_ONLY,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, DDC_current),
          .capresetvalue = max_cap},
@@ -9364,7 +9370,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .crm = 1,
          .opc2 = 1,
          .access = PL1_RW,
-         .type = ARM_CP_CAP,
+         .type = ARM_CP_CAP_ONLY,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, DDCs[0]),
          .capresetvalue = max_cap},
@@ -9375,7 +9381,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .crm = 1,
          .opc2 = 1,
          .access = PL2_RW,
-         .type = ARM_CP_CAP,
+         .type = ARM_CP_CAP_ONLY,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, DDCs[1]),
          .capresetvalue = max_cap},
@@ -9386,7 +9392,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .crm = 1,
          .opc2 = 1,
          .access = PL3_RW,
-         .type = ARM_CP_CAP,
+         .type = ARM_CP_CAP_ONLY,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, DDCs[2]),
          .capresetvalue = max_cap},
@@ -9397,7 +9403,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .crm = 3,
          .opc2 = 1,
          .access = PL0_RW,
-         .type = ARM_CP_CAP,
+         .type = ARM_CP_CAP_ONLY,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, DDCs[4]),
          .capresetvalue = max_cap},

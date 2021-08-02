@@ -2081,6 +2081,21 @@ static void gen_set_nzcv(TCGv_i64 tcg_rt)
     tcg_temp_free_i32(nzcv);
 }
 
+#ifdef TARGET_CHERI
+static inline bool capabilities_enabled_exception(DisasContext *ctx)
+{
+    // Flag bits only encode an exception is needed, not which one. The helper
+    // will do that.
+    if (!GET_FLAG(ctx, CAP_ENABLED)) {
+        ctx->base.is_jmp = DISAS_NORETURN;
+        gen_a64_set_pc_im(ctx->pc_curr);
+        gen_helper_check_capabilities_enabled_exception(cpu_env);
+        return true;
+    }
+    return false;
+}
+#endif
+
 /* MRS - move from system register
  * MSR (register) - move to system register
  * SYS
@@ -2122,6 +2137,21 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
     bool executive = cheri_is_executive_ctx(s);
     if (((ri->access & PL_IN_EXECUTIVE) && !executive) ||
         ((ri->access & PL_IN_RESTRICTED) && executive)) {
+        unallocated_encoding(s);
+        return;
+    }
+
+    if (is_morello) {
+        if (!cpreg_field_is_cap(ri)) {
+            // Morello encodings might target non-cap registers
+            // but I don't know of any.
+            unallocated_encoding(s);
+            return;
+        }
+        if (capabilities_enabled_exception(s)) {
+            return;
+        }
+    } else if (cpreg_field_is_cap_only(ri)) {
         unallocated_encoding(s);
         return;
     }
@@ -2284,9 +2314,6 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
     }
 
     if (is_morello) {
-        // Morello instructions might be able to modify non-cap registers. But I
-        // don't know of any.
-        assert(cpreg_field_is_cap(ri));
         // Existing readfn/writefn functions only apply to the cursor,
         // it should be ensured they do not cause out of bounds.
         if (isread) {
@@ -15193,11 +15220,8 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
     switch (extract32(insn, 25, 4)) {
     case 0x1: /* Morello Instructions */
 #ifdef TARGET_CHERI
-        // FIXME: This reverses the priority of exceptions in restricted mode.
-        if (!capabilities_enabled_exception(s)) {
-            if (!disas_cheri(s, insn)) {
-                unallocated_encoding(s);
-            }
+        if (!disas_cheri(s, insn)) {
+            unallocated_encoding(s);
         }
         break;
 #endif
