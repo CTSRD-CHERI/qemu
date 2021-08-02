@@ -78,7 +78,10 @@ static const struct MemmapEntry {
     [VIRT_VDEV] =        { 0x50000000,        0x3000 },
     [VIRT_VDEV_WINDOW] = { 0x60000000,    0x10000000 },
     [VIRT_VDEV_PCI] =    { 0x60010000,    0x00500000 }, /* within WINDOW */
+    [VIRT_VDEV_E1000] =  { 0x60020000,    0x00020000 }, /* within PCI */
+    [VIRT_VDEV_E1000_BAR1] = { 0x60040000,0x00010000 }, /* within PCI */
     [VIRT_VDEV_AHCI] =   { 0x60050000,    0x00010000 }, /* within PCI */
+    [VIRT_VDEV_E1000_BAR2] = { 0x60060000,0x00010000 }, /* within PCI */
     [VIRT_DRAM] =        { 0x80000000,           0x0 },
 };
 
@@ -416,7 +419,18 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_setprop_sized_cells(fdt, name, "ranges",
         1, FDT_PCI_RANGE_MMIO,
         2, memmap[VIRT_VDEV_AHCI].base,
-        2, memmap[VIRT_VDEV_AHCI].base, 2, memmap[VIRT_VDEV_AHCI].size);
+        2, memmap[VIRT_VDEV_AHCI].base, 2, memmap[VIRT_VDEV_AHCI].size,
+        /* e1000 bar 0 */
+        1, FDT_PCI_RANGE_MMIO,
+        2, memmap[VIRT_VDEV_E1000].base,
+        2, memmap[VIRT_VDEV_E1000].base, 2, memmap[VIRT_VDEV_E1000].size,
+        /* e1000 bar 1 */
+        1, FDT_PCI_RANGE_PREFETCHABLE | FDT_PCI_RANGE_MMIO,
+        2, memmap[VIRT_VDEV_E1000_BAR1].base,
+        2, memmap[VIRT_VDEV_E1000_BAR1].base, 2, memmap[VIRT_VDEV_E1000_BAR1].size,
+        /* e1000 bar 2 */
+        1, FDT_PCI_RANGE_IOPORT, 2, 0,
+        2, memmap[VIRT_VDEV_E1000_BAR2].base, 2, memmap[VIRT_VDEV_E1000_BAR2].size);
     create_pcie_irq_map(fdt, name, plic_pcie_phandle);
     g_free(name);
 
