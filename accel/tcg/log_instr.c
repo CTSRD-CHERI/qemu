@@ -43,6 +43,9 @@
 #include "exec/log_instr.h"
 #include "exec/memop.h"
 #include "disas/disas.h"
+#include "exec/translator.h"
+#include "tcg/tcg.h"
+#include "tcg/tcg-op.h"
 
 /*
  * CHERI common instruction logging.
@@ -490,11 +493,10 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
                 // cvtrace expects a null capability in the integer case
                 cr = null_capability(&intcap);
             }
-            uint64_t metadata = (
-                ((uint64_t)cr->cr_tag << 63) |
-                ((uint64_t)cap_get_otype(cr) << 32) |
-                ((uint64_t)COMBINED_PERMS_VALUE(cr) << 1) |
-                (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
+            uint64_t metadata = (((uint64_t)cr->cr_tag << 63) |
+                                 ((uint64_t)cap_get_otype_signext(cr) << 32) |
+                                 ((uint64_t)COMBINED_PERMS_VALUE(cr) << 1) |
+                                 (uint64_t)(cap_is_unsealed(cr) ? 0 : 1));
 
             entry.entry_type = CTE_CAP;
             entry.val2 = cpu_to_be64(metadata);
@@ -936,6 +938,12 @@ void qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong va
     g_array_append_val(iinfo->regs, r);
 }
 
+void helper_qemu_log_instr_reg(CPUArchState *env, const void *reg_name,
+                               target_ulong value)
+{
+    qemu_log_instr_reg(env, (const char *)reg_name, value);
+}
+
 #ifdef TARGET_CHERI
 void qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
                          const cap_register_t *cr)
@@ -947,6 +955,13 @@ void qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
     r.name = reg_name;
     r.cap = *cr;
     g_array_append_val(iinfo->regs, r);
+}
+
+void helper_qemu_log_instr_cap(CPUArchState *env, const void *reg_name,
+                               const void *cr)
+{
+    if (qemu_log_instr_check_enabled(env))
+        qemu_log_instr_cap(env, reg_name, cr);
 }
 
 void qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
@@ -1081,6 +1096,359 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...)
     va_end(va);
 }
 
+/*
+ *  A printf that takes an array of argments unioned of all possible argument
+ * types. Because we cant edit a VA_LIST, and we don't want the exponential blow
+ * up of handling all combinations of types, we will bounce individual string
+ * sections split in the fmt string to another buffer, then switch on all
+ * possible types.
+ */
+static void g_string_append_printf_union_args(GString *string, const char *fmt,
+                                              qemu_log_arg_t *args)
+{
+
+/* So Clang will not complain about the non-literal format. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic ignored "-Wformat-security"
+
+    char bounce_buf[256];
+
+    size_t i = 0;
+    bool format = false;
+    char c;
+    bool is_short, is_long, is_long_long;
+    while ((c = bounce_buf[i++] = *fmt++)) {
+        assert(i != sizeof(bounce_buf));
+        if (!format) {
+            /*
+             * A safe amount under the maximum size. An (illegally) wrong format
+             * will cause the assert to be hit, but is a bug on the caller's
+             * part.
+             */
+            if (i >= (sizeof(bounce_buf) - 10)) {
+                bounce_buf[i] = '\0';
+                g_string_append_printf(string, bounce_buf);
+                i = 0;
+            }
+            format = c == '%';
+            is_short = is_long = is_long_long = false;
+            continue;
+        }
+        bounce_buf[i] = '\0';
+        switch (c) {
+        case 'c':
+            g_string_append_printf(string, bounce_buf, (args++)->charv);
+            format = false;
+            i = 0;
+            break;
+        case 'd':
+        case 'i':
+            if (is_long_long) {
+                g_string_append_printf(string, bounce_buf, (args++)->longlongv);
+            } else if (is_long) {
+                g_string_append_printf(string, bounce_buf, (args++)->longv);
+            } else if (is_short) {
+                g_string_append_printf(string, bounce_buf, (args++)->shortv);
+            } else {
+                g_string_append_printf(string, bounce_buf, (args++)->intv);
+            }
+            format = false;
+            i = 0;
+            break;
+        case 'u':
+        case 'x':
+        case 'X':
+        case 'o':
+            if (is_long_long) {
+                g_string_append_printf(string, bounce_buf,
+                                       (args++)->ulonglongv);
+            } else if (is_long) {
+                g_string_append_printf(string, bounce_buf, (args++)->ulongv);
+            } else if (is_short) {
+                g_string_append_printf(string, bounce_buf, (args++)->ushortv);
+            } else {
+                g_string_append_printf(string, bounce_buf, (args++)->uintv);
+            }
+            format = false;
+            i = 0;
+            break;
+        case 'e':
+        case 'E':
+        case 'f':
+        case 'g':
+        case 'G':
+            if (is_long) {
+                g_string_append_printf(string, bounce_buf, (args++)->doublev);
+            } else {
+                g_string_append_printf(string, bounce_buf, (args++)->floatv);
+            }
+            format = false;
+            i = 0;
+            break;
+        case 's':
+        case 'p':
+            g_string_append_printf(string, bounce_buf, (args++)->ptrv);
+            format = false;
+            i = 0;
+            break;
+        case '%':
+            format = false;
+            break;
+        case 'h':
+            is_short = true;
+            break;
+        case 'l':
+            if (is_long) {
+                is_long_long = true;
+            }
+            is_long = true;
+            break;
+        default:
+            break;
+        }
+    }
+
+    g_string_append_printf(string, bounce_buf);
+
+#pragma clang diagnostic pop
+}
+
+TCGv_i64 qemu_log_printf_valid_entries;
+
+#define QEMU_PRINTF_LOG_OFFSET                                                 \
+    ((offsetof(ArchCPU, parent_obj) - offsetof(ArchCPU, env)) +                \
+     offsetof(struct CPUState, log_state.qemu_log_printf_buf))
+
+void qemu_log_printf_create_globals(void)
+{
+    qemu_log_printf_valid_entries = tcg_global_mem_new_i64(
+        cpu_env,
+        QEMU_PRINTF_LOG_OFFSET + offsetof(qemu_log_printf_buf_t, valid_entries),
+        "log_valids");
+}
+
+void qemu_log_gen_printf(DisasContextBase *base, const char *qemu_format,
+                         const char *fmt, ...)
+{
+
+    if (!qemu_base_logging_enabled(base)) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, fmt);
+
+    size_t ndx = base->printf_used_ptr++;
+    assert(
+        ndx < QEMU_LOG_PRINTF_BUF_DEPTH &&
+        "Increase QEMU_LOG_PRINTF_FLUSH_BARRIER or QEMU_LOG_PRINTF_BUF_DEPTH");
+
+    size_t offset = QEMU_PRINTF_LOG_OFFSET +
+                    (sizeof(qemu_log_arg_t) * (QEMU_LOG_PRINTF_ARG_MAX * ndx));
+
+    int nargs = 0;
+    char t;
+
+    TCGv_i64 temp64 = tcg_temp_new_i64();
+    TCGv_i32 temp32 = tcg_temp_new_i32();
+
+    /* Store the format string out. */
+    size_t fmt_offset = QEMU_PRINTF_LOG_OFFSET +
+                        offsetof(qemu_log_printf_buf_t, fmts) +
+                        (sizeof(const char *) * ndx);
+
+#if UINTPTR_MAX == UINT32_MAX
+    tcg_gen_movi_i32(temp32, (uintptr_t)fmt);
+    tcg_gen_st_i32(temp32, cpu_env, fmt_offset);
+#else
+    tcg_gen_movi_i64(temp64, (uintptr_t)fmt);
+    tcg_gen_st_i64(temp64, cpu_env, fmt_offset);
+#endif
+
+    /* Mark this entry as valid. */
+    tcg_gen_movi_i64(temp64, (1ULL << ndx));
+    tcg_gen_or_i64(qemu_log_printf_valid_entries, qemu_log_printf_valid_entries,
+                   temp64);
+
+    /*
+     * Now process the qemu_format string and fmt string to generate tcg loads
+     * and stores.
+     */
+    while ((t = *qemu_format++)) {
+        assert(nargs != QEMU_LOG_PRINTF_ARG_MAX);
+        /*
+         * va_arg arguments are promoted according to standard promotion rules.
+         * floats promote to doubles, types shorter than int promote to int.
+         * Accessing va_arg with the wrong sign (but correct size) for
+         * everything else is dancing with UB. The spec says its is OK if both
+         * types could represent the value passed at runtime. However, as I am
+         * only going to _store_ the value, I'm 99% certain I am still fine just
+         * doing everything with one sign even when large magnitude values as
+         * passed.
+         */
+        char c;
+        bool format = false;
+        bool is_short, is_long, is_long_long, is_signed;
+
+        while ((c = *fmt++)) {
+            if (!format) {
+                format = c == '%';
+                if (format) {
+                    is_short = is_long = is_long_long = is_signed = false;
+                }
+                continue;
+            }
+            size_t arg_size = 0;
+            uint64_t arg_const;
+            switch (c) {
+            case 'c':
+                arg_size = sizeof(char);
+                if (t == 'c') {
+                    arg_const = (uint64_t)va_arg(args, int);
+                }
+                break;
+            case 'd':
+            case 'i':
+                is_signed = true;
+            case 'u':
+            case 'x':
+            case 'X':
+            case 'o':
+                if (is_long_long) {
+                    arg_size = sizeof(long long);
+                    if (t == 'c') {
+                        arg_const = (uint64_t)va_arg(args, long long);
+                    }
+                } else if (is_long) {
+                    arg_size = sizeof(long);
+                    if (t == 'c') {
+                        arg_const = (uint64_t)va_arg(args, long);
+                    }
+                } else if (is_short) {
+                    arg_size = sizeof(short);
+                    if (t == 'c') {
+                        arg_const = (uint64_t)va_arg(args, int);
+                    }
+                } else {
+                    arg_size = sizeof(int);
+                    if (t == 'c') {
+                        arg_const = (uint64_t)va_arg(args, int);
+                    }
+                }
+                format = false;
+                break;
+            case 'e':
+            case 'E':
+            case 'f':
+            case 'g':
+            case 'G':
+                if (is_long) {
+                    if (t == 'c') {
+                        arg_const = (uint64_t)va_arg(args, double);
+                    }
+                    arg_size = sizeof(double);
+                } else {
+                    if (t == 'c') {
+                        arg_const = (uint64_t)(float)va_arg(args, double);
+                    }
+                    arg_size = sizeof(float);
+                }
+                format = false;
+                break;
+            case 's':
+            case 'p':
+                arg_size = sizeof(void *);
+                /*
+                 * This does not break strict aliasing as long as only void*
+                 * and char* is passed.
+                 */
+                if (t == 'c') {
+                    arg_const = (uint64_t)va_arg(args, void *);
+                }
+            case '%':
+                format = false;
+                break;
+            case 'h':
+                is_short = true;
+                break;
+            case 'l':
+                if (is_long) {
+                    is_long_long = true;
+                }
+                is_long = true;
+                break;
+            default:
+                break;
+            }
+            if (arg_size != 0) {
+                /* Use 32-bit ops. */
+                if (arg_size <= 4) {
+                    TCGv_i32 t32;
+                    if (t == 'c') {
+                        t32 = temp32;
+                        tcg_gen_movi_i32(t32, (uint32_t)arg_const);
+                    } else if (t == 'w') {
+                        t32 = va_arg(args, TCGv_i32);
+                    } else {
+                        assert((t == 'd') && "bad QEMU format string");
+                        t32 = temp32;
+                        tcg_gen_extrl_i64_i32(t32, va_arg(args, TCGv_i64));
+                    }
+                    if (!t32) {
+                        t32 = temp32;
+                        tcg_gen_movi_i32(t32, 0);
+                    }
+                    switch (arg_size) {
+                    case 1:
+                        tcg_gen_st8_i32(t32, cpu_env, offset);
+                        break;
+                    case 2:
+                        tcg_gen_st16_i32(t32, cpu_env, offset);
+                        break;
+                    case 4:
+                        tcg_gen_st_i32(t32, cpu_env, offset);
+                        break;
+                    default:
+                        g_assert_not_reached();
+                    }
+                } else {
+                    assert(arg_size <= 8);
+                    /* Use 64-bit ops. */
+                    TCGv_i64 t64;
+                    if (t == 'c') {
+                        t64 = temp64;
+                        tcg_gen_movi_i64(t64, arg_const);
+                    } else if (t == 'w') {
+                        t64 = temp64;
+                        if (is_signed) {
+                            tcg_gen_ext_i32_i64(t64, va_arg(args, TCGv_i32));
+                        } else {
+                            tcg_gen_extu_i32_i64(t64, va_arg(args, TCGv_i32));
+                        }
+                    } else {
+                        assert((t == 'd') && "bad QEMU format string");
+                        t64 = va_arg(args, TCGv_i64);
+                    }
+                    if (!t64) {
+                        t64 = temp64;
+                        tcg_gen_movi_i64(t64, 0);
+                    }
+                    tcg_gen_st_i64(t64, cpu_env, offset);
+                }
+                offset += sizeof(qemu_log_arg_t);
+                break;
+            }
+        }
+        assert(c != 0 && "Format strings do not match");
+    }
+
+    va_end(args);
+
+    tcg_temp_free_i64(temp64);
+    tcg_temp_free_i32(temp32);
+}
+
 void qemu_log_instr_flush(CPUArchState *env)
 {
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
@@ -1100,6 +1468,32 @@ void qemu_log_instr_flush(CPUArchState *env)
 
 /* Instruction logging helpers */
 
+/* Dump out all the accumalated printf's */
+void helper_qemu_log_printf_dump(CPUArchState *env)
+{
+
+    tcg_debug_assert((QEMU_PRINTF_LOG_OFFSET + ((uintptr_t)env)) ==
+                     (uintptr_t)(&get_cpu_log_state(env)->qemu_log_printf_buf));
+
+    if (!qemu_log_instr_enabled(env)) {
+        return;
+    }
+
+    uint64_t valid = get_cpu_log_state(env)->qemu_log_printf_buf.valid_entries;
+
+    cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
+
+    while (valid) {
+        size_t ndx = ctz64(valid);
+        valid ^= (1 << ndx);
+        qemu_log_arg_t *args =
+            get_cpu_log_state(env)->qemu_log_printf_buf.args +
+            (ndx * QEMU_LOG_PRINTF_ARG_MAX);
+        const char *fmt = get_cpu_log_state(env)->qemu_log_printf_buf.fmts[ndx];
+        g_string_append_printf_union_args(iinfo->txt_buffer, fmt, args);
+    }
+}
+
 /*
  * Enable or disable buffered logging that is triggered by the target
  * via qemu_log_instr_flush().
@@ -1108,10 +1502,11 @@ void helper_qemu_log_instr_buffered_mode(CPUArchState *env, uint32_t enable)
 {
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
 
-    if (enable) 
+    if (enable) {
         cpulog->flags |= QEMU_LOG_INSTR_FLAG_BUFFERED;
-    else
+    } else {
         cpulog->flags &= ~QEMU_LOG_INSTR_FLAG_BUFFERED;
+    }
 }
 
 /* Helper version of qemu_log_instr_flush */

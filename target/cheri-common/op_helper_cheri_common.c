@@ -162,7 +162,7 @@ target_ulong CHERI_HELPER_IMPL(cgetflags(CPUArchState *env, uint32_t cb))
     /*
      * CGetFlags: Move Flags to a General-Purpose Register.
      */
-    return (target_ulong)get_readonly_capreg(env, cb)->cr_flags;
+    return (target_ulong)cap_get_flags(get_readonly_capreg(env, cb));
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetlen(CPUArchState *env, uint32_t cb))
@@ -183,13 +183,14 @@ target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
      * Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    cheri_debug_assert((cbp->cr_perms & CAP_PERMS_ALL) == cbp->cr_perms &&
+    cheri_debug_assert((cap_get_perms(cbp) & CAP_PERMS_ALL) ==
+                           cap_get_perms(cbp) &&
                        "Unknown HW perms bits set!");
-    cheri_debug_assert((cbp->cr_uperms & CAP_UPERMS_ALL) == cbp->cr_uperms &&
+    cheri_debug_assert((cap_get_uperms(cbp) & CAP_UPERMS_ALL) ==
+                           cap_get_uperms(cbp) &&
                        "Unknown SW perms bits set!");
 
-    return (target_ulong)cbp->cr_perms |
-           ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
+    return COMBINED_PERMS_VALUE(cbp);
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUArchState *env, uint32_t cb))
@@ -226,7 +227,7 @@ target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
      * CGetType: Move Object Type Field to a General-Purpose Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const target_long otype = cap_get_otype(cbp);
+    const target_long otype = cap_get_otype_signext(cbp);
     // Must be either a valid positive type < maximum or one of the special
     // hardware-interpreted otypes
     if (otype < 0) {
@@ -325,7 +326,8 @@ void CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum,
         raise_cheri_exception(env, CapEx_SealViolation, code_regnum);
     } else if (!cap_is_sealed_with_type(data_cap)) {
         raise_cheri_exception(env, CapEx_SealViolation, data_regnum);
-    } else if ((code_cap->cr_otype != data_cap->cr_otype || code_cap->cr_otype > CAP_LAST_NONRESERVED_OTYPE)) {
+    } else if (cap_get_otype_unsigned(code_cap) != cap_get_otype_unsigned(data_cap) ||
+               cap_get_otype_unsigned(code_cap) > CAP_LAST_NONRESERVED_OTYPE) {
         raise_cheri_exception(env, CapEx_TypeViolation, code_regnum);
     } else if (!cap_has_perms(code_cap, CAP_PERM_CINVOKE)) {
         raise_cheri_exception(env, CapEx_PermitCCallViolation, code_regnum);
@@ -375,8 +377,8 @@ void CHERI_HELPER_IMPL(cchecktype(CPUArchState *env, uint32_t cs, uint32_t cb))
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (cap_is_unsealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (csp->cr_otype != cbp->cr_otype ||
-               csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
+    } else if (cap_get_otype_unsigned(csp) != cap_get_otype_unsigned(cbp) ||
+               cap_get_otype_unsigned(csp) > CAP_LAST_NONRESERVED_OTYPE) {
         raise_cheri_exception(env, CapEx_TypeViolation, cs);
     }
 }
@@ -393,7 +395,7 @@ void CHERI_HELPER_IMPL(csealentry(CPUArchState *env, uint32_t cd, uint32_t cs))
         raise_cheri_exception(env, CapEx_TagViolation, cs);
     } else if (!cap_is_unsealed(csp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cs);
-    } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
         // Capability must be executable otherwise csealentry doesn't make sense
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
     } else {
@@ -417,9 +419,9 @@ void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
      */
     if (!csp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cs);
-    } else if ((csp->cr_perms & rt_perms) != rt_perms) {
+    } else if ((cap_get_perms(csp) & rt_perms) != rt_perms) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
-    } else if ((csp->cr_uperms & rt_uperms) != rt_uperms) {
+    } else if ((cap_get_uperms(csp) & rt_uperms) != rt_uperms) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
     } else if ((rt >> (16 + CAP_MAX_UPERM)) != 0UL) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
@@ -511,11 +513,13 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (cap_get_base(ctp) > cap_get_top_full(ctp)) {
         // check for length < 0 - possible because cs2 might be untagged
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
+    } else if ((cap_get_perms(ctp) & cap_get_perms(cbp)) !=
+               cap_get_perms(ctp)) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
-    } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
+    } else if ((cap_get_uperms(ctp) & cap_get_uperms(cbp)) !=
+               cap_get_uperms(ctp)) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
-    } else if (ctp->cr_reserved) {
+    } else if (cap_has_reserved_bits_set(ctp)) {
         // TODO: It would be nice to use a different exception code for this
         //  case but this should match Flute.
         // See also https://github.com/CTSRD-CHERI/cheri-architecture/issues/48
@@ -552,14 +556,14 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (!cap_is_sealed_with_type(ctp)) {
         // For reserved otypes we return a null-derived value.
         cap_register_t result;
-        update_capreg(env, cd, int_to_cap(cap_get_otype(ctp), &result));
-    } else if (ctp->cr_otype < cap_get_base(cbp)) {
+        update_capreg(env, cd, int_to_cap(cap_get_otype_signext(ctp), &result));
+    } else if (cap_get_otype_unsigned(ctp) < cap_get_base(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (ctp->cr_otype >= cap_get_top(cbp)) {
+    } else if (cap_get_otype_unsigned(ctp) >= cap_get_top(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else {
         cap_register_t result = *cbp;
-        result._cr_cursor = ctp->cr_otype;
+        result._cr_cursor = cap_get_otype_unsigned(ctp);
         cheri_debug_assert(cap_is_representable(&result));
         update_capreg(env, cd, &result);
     }
@@ -592,7 +596,7 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (!cap_is_unsealed(ctp)) {
         raise_cheri_exception(env, CapEx_SealViolation, ct);
-    } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
+    } else if (!cap_has_perms(ctp, CAP_PERM_SEAL)) {
         raise_cheri_exception(env, CapEx_PermitSealViolation, ct);
     } else if (!conditional && !cap_cursor_in_bounds(ctp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
@@ -647,21 +651,20 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
     } else if (!cap_is_sealed_with_type(csp)) {
         raise_cheri_exception(env, CapEx_TypeViolation,
                               cs); /* Reserved otypes */
-    } else if (ct_cursor != csp->cr_otype) {
+    } else if (ct_cursor != cap_get_otype_unsigned(csp)) {
         raise_cheri_exception(env, CapEx_TypeViolation, ct);
-    } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
+    } else if (!cap_has_perms(ctp, CAP_PERM_UNSEAL)) {
         raise_cheri_exception(env, CapEx_PermitUnsealViolation, ct);
     } else if (!cap_cursor_in_bounds(ctp)) {
         // Must be within bounds and not one past end (i.e. not equal to top).
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (ct_cursor >= CAP_LAST_NONRESERVED_OTYPE) {
-        // This should never happen due to the ct_cursor != csp->cr_otype check
-        // above that should never succeed for
+        // This should never happen due to the ct_cursor != cs_otype check.
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else {
         cap_register_t result = *csp;
-        if ((csp->cr_perms & CAP_PERM_GLOBAL) &&
-            (ctp->cr_perms & CAP_PERM_GLOBAL)) {
+        if (cap_has_perms(csp, CAP_PERM_GLOBAL) &&
+            cap_has_perms(ctp, CAP_PERM_GLOBAL)) {
             result.cr_perms |= CAP_PERM_GLOBAL;
         } else {
             result.cr_perms &= ~CAP_PERM_GLOBAL;
@@ -746,8 +749,10 @@ void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
         uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
 
         cap_register_t result = *cbp;
-        CAP_cc(cap_set_decompressed_cr_perms)(&result, cbp->cr_perms & rt_perms);
-        CAP_cc(cap_set_decompressed_cr_uperms)(&result, cbp->cr_uperms & rt_uperms);
+        CAP_cc(cap_set_decompressed_cr_perms)(&result,
+                                              cap_get_perms(cbp) & rt_perms);
+        CAP_cc(cap_set_decompressed_cr_uperms)(&result,
+                                               cap_get_uperms(cbp) & rt_uperms);
         update_capreg(env, cd, &result);
     }
 }
@@ -950,8 +955,8 @@ target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUArchState *env, uint32_t cb,
         /* is_cap_sealed(cbp) == is_cap_sealed(ctp) && */
         cap_get_base(cbp) <= cap_get_base(ctp) &&
         cap_get_top(ctp) <= cap_get_top(cbp) &&
-        (cbp->cr_perms & ctp->cr_perms) == ctp->cr_perms &&
-        (cbp->cr_uperms & ctp->cr_uperms) == ctp->cr_uperms) {
+        (cap_get_perms(cbp) & cap_get_perms(ctp)) == cap_get_perms(ctp) &&
+        (cap_get_uperms(cbp) & cap_get_uperms(ctp)) == cap_get_uperms(ctp)) {
         is_subset = true;
     }
     return (target_ulong)is_subset;
@@ -1099,7 +1104,7 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
             " due to MMU permissions\n", va);
         return 0;
     }
-    if (tag && !(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
+    if (tag && !cap_has_perms(cbp, CAP_PERM_LOAD_CAP)) {
         qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
             " due to missing CAP_PERM_LOAD_CAP\n", va);
         return 0;

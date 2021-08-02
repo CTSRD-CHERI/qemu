@@ -820,6 +820,10 @@ struct CPUMIPSState {
 #define CP0EnHi_CLGK 61
 #define CP0EnHi_CLGS 60
 #define CP0EnHi_CLGU 59
+#define CP0EnHi_CLG_MASK \
+    ((1ULL << CP0EnHi_CLGK) | (1ULL << CP0EnHi_CLGS) | (1UL << CP0EnHi_CLGU))
+#else
+#define CP0EnHi_CLG_MASK 0
 #endif
     target_ulong CP0_EntryHi_ASID_mask;
 /*

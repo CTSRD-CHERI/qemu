@@ -215,11 +215,13 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (cap_is_sealed_with_type(cbp) == allow_unsealed) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if ((csp->cr_otype != cbp->cr_otype || csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) && !allow_unsealed) {
+    } else if ((cap_get_otype_unsigned(csp) != cap_get_otype_unsigned(cbp) ||
+                cap_get_otype_unsigned(csp) > CAP_LAST_NONRESERVED_OTYPE) &&
+               !allow_unsealed) {
         raise_cheri_exception(env, CapEx_TypeViolation, cs);
-    } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
-    } else if (cbp->cr_perms & CAP_PERM_EXECUTE && !allow_unsealed) {
+    } else if (cap_has_perms(cbp, CAP_PERM_EXECUTE) && !allow_unsealed) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
     } else if (!cap_cursor_in_bounds(csp)) {
         // TODO: check for at least one instruction worth of data? Like cjr/cjalr?
@@ -227,9 +229,9 @@ static target_ulong ccall_common(CPUArchState *env, uint32_t cs, uint32_t cb, ui
     } else {
         if (selector == CCALL_SELECTOR_0) {
             raise_cheri_exception(env, CapEx_CallTrap, cs);
-        } else if (!(csp->cr_perms & CAP_PERM_CINVOKE) && !allow_unsealed){
+        } else if (!cap_has_perms(csp, CAP_PERM_CINVOKE) && !allow_unsealed) {
             raise_cheri_exception(env, CapEx_PermitCCallViolation, cs);
-        } else if (!(cbp->cr_perms & CAP_PERM_CINVOKE) && !allow_unsealed){
+        } else if (!cap_has_perms(cbp, CAP_PERM_CINVOKE) && !allow_unsealed) {
             raise_cheri_exception(env, CapEx_PermitCCallViolation, cb);
         } else {
             cap_register_t idc = *cbp;
@@ -342,9 +344,9 @@ target_ulong CHERI_HELPER_IMPL(cjr(CPUArchState *env, uint32_t cb))
     } else if (cap_is_sealed_with_type(cbp)) {
         // Note: "sentry" caps can be called using cjalr
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_GLOBAL)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_GlobalViolation, cb);
     } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
@@ -594,7 +596,7 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint3
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_LOAD)) {
         raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, size)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
@@ -625,7 +627,7 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, size)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
@@ -660,14 +662,14 @@ static inline target_ulong get_cscc_addr(CPUArchState *env, uint32_t cs, uint32_
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE_CAP)) {
         raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
         return (target_ulong)0;
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) && csp->cr_tag &&
-            !(csp->cr_perms & CAP_PERM_GLOBAL)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE_LOCAL) && csp->cr_tag &&
+               !cap_has_perms(csp, CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
         return (target_ulong)0;
     } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
@@ -712,7 +714,7 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_LOAD)) {
         raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
     } else if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
@@ -783,62 +785,20 @@ static const char *cheri_cap_reg[] = {
   "RCC",  "", "IDC", "KR1C", "KR2C", "KCC", "KDC", "EPCC"  /* C24 - C31 */
 };
 
-
 static void cheri_dump_creg(const cap_register_t *crp, const char *name,
-        const char *alias, FILE *f, fprintf_function cpu_fprintf)
+                            const char *alias, FILE *f,
+                            fprintf_function cpu_fprintf)
 {
-
-#if 0
-    if (crp->cr_tag) {
-        cpu_fprintf(f, "%s: bas=%016lx len=%016lx cur=%016lx\n", name,
-            // crp->cr_base, crp->cr_length, crp->cr_cursor);
-            crp->cr_base, crp->cr_length, cap_get_cursor(crp));
-        cpu_fprintf(f, "%-4s off=%016lx otype=%06x seal=%d "
-		    "perms=%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
-            // alias, (crp->cr_cursor - crp->cr_base), crp->cr_otype,
-            alias, (uint64_t)cap_get_offset(crp), crp->cr_otype,
-            is_cap_sealed(crp) ? 1 : 0,
-            (crp->cr_perms & CAP_PERM_GLOBAL) ? 'G' : '-',
-            (crp->cr_perms & CAP_PERM_EXECUTE) ? 'e' : '-',
-            (crp->cr_perms & CAP_PERM_LOAD) ? 'l' : '-',
-            (crp->cr_perms & CAP_PERM_STORE) ? 's' : '-',
-            (crp->cr_perms & CAP_PERM_LOAD_CAP) ? 'L' : '-',
-            (crp->cr_perms & CAP_PERM_STORE_CAP) ? 'S' : '-',
-            (crp->cr_perms & CAP_PERM_STORE_LOCAL) ? '&' : '-',
-            (crp->cr_perms & CAP_PERM_SEAL) ? '$' : '-',
-            (crp->cr_perms & CAP_RESERVED1) ? 'R' : '-',
-            (crp->cr_perms & CAP_RESERVED2) ? 'R' : '-',
-            (crp->cr_perms & CAP_ACCESS_SYS_REGS) ? 'r' : '-');
-    } else {
-        cpu_fprintf(f, "%s: (not valid - tag not set)\n");
-        cpu_fprintf(f, "%-4s\n", alias);
-    }
-#else
-    /*
-    cpu_fprintf(f, "DEBUG %s: v:%d s:%d p:%08x b:%016lx l:%016lx o:%016lx t:%08x\n",
-            name, crp->cr_tag, is_cap_sealed(crp) ? 1 : 0,
-            ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-            (crp->cr_perms & CAP_PERMS_ALL), crp->cr_base, crp->cr_length,
-            crp->cr_offset, crp->cr_otype);
-    */
-
-/* #define OLD_DEBUG_CAP */
-
-#ifdef OLD_DEBUG_CAP
-    cpu_fprintf(f, "DEBUG CAP %s u:%d perms:0x%08x type:0x%06x "
-            "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
-            name, is_cap_sealed(crp),
-#else
-    cpu_fprintf(f, "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%016" PRIx64 " "
-            "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
-            name, crp->cr_tag, is_cap_sealed(crp),
-#endif
-            ((crp->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |
-            (crp->cr_perms & CAP_PERMS_ALL),
-            (uint64_t)cap_get_otype(crp), /* testsuite wants -1 for unsealed */
-            (uint64_t)cap_get_offset(crp), cap_get_base(crp),
-            cap_get_length_sat(crp) /* testsuite expects UINT64_MAX for 1 << 64) */);
-#endif
+    cpu_fprintf(f,
+                "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%016" PRIx64 " "
+                "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
+                name, crp->cr_tag, is_cap_sealed(crp),
+                COMBINED_PERMS_VALUE(crp),
+                /* testsuite wants -1 for unsealed */
+                (uint64_t)cap_get_otype_signext(crp),
+                (uint64_t)cap_get_offset(crp), cap_get_base(crp),
+                /* testsuite expects UINT64_MAX for 1 << 64) */
+                cap_get_length_sat(crp));
 }
 
 void cheri_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf, int flags)

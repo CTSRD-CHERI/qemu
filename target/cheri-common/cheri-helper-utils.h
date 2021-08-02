@@ -94,7 +94,7 @@ static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
         // qemu_log("CAP Seal VIOLATION: ");
         goto do_exception;
     }
-    if ((cr->cr_perms & perm) != perm) {
+    if ((cap_get_perms(cr) & perm) != perm) {
         if (perm & CAP_PERM_EXECUTE) {
             cause = CapEx_PermitExecuteViolation;
             // qemu_log("CAP Exe VIOLATION: ");
@@ -272,7 +272,7 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
                      uint32_t alignment_required,
                      unaligned_memaccess_handler unaligned_handler)
 {
-#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cbp->cr_perms) & (X))
+#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cap_get_perms(cbp)) & (X))
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (!cap_is_unsealed(cbp)) {
