@@ -770,6 +770,9 @@ typedef struct CPUARMState {
     /* Store GICv3CPUState to access from this struct */
     void *gicv3state;
 
+    // Debug CLAIM tag bits
+    uint64_t claim;
+
 #ifdef TARGET_CHERI
     uint64_t chcr_el2;
     uint64_t cscr_el3;
