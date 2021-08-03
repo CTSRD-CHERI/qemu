@@ -240,6 +240,14 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
     // Store
     if (do_store) {
         store_cap_to_memory(env, cd, addr, _host_return_address);
+    } else {
+        bool cd_tagged = get_without_decompress_tag(env, cd);
+        int mmu_index = cpu_mmu_index(env, false);
+        // Even if there is no store, we possibly need an MMU permission fault
+        if (cd_tagged)
+            probe_cap_write(env, addr, 1, mmu_index, _host_return_address);
+        else
+            probe_write(env, addr, 1, mmu_index, _host_return_address);
     }
 
     // Write back to cs
