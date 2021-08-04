@@ -103,6 +103,7 @@ _Static_assert(CAP_TAG_GET_MANY_SHFT <= 3, "");
 #endif
 
 #define CAP_TAG_GET_MANY_MASK ((1 << (1UL << CAP_TAG_GET_MANY_SHFT)) - 1UL)
+#define CAP_TAG_MANY_DATA_SIZE (CHERI_CAP_SIZE << CAP_TAG_GET_MANY_SHFT)
 
 static inline size_t num_tagblocks(RAMBlock* ram)
 {
@@ -588,7 +589,7 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 {
 
     const int mmu_idx = cpu_mmu_index(env, false);
-    probe_read(env, vaddr, 1, mmu_idx, pc);
+    probe_read(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
@@ -620,9 +621,9 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
      * checking access_type can be eliminated.
      */
     if (tags) {
-        probe_cap_write(env, vaddr, 1, mmu_idx, pc);
+        probe_cap_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     } else {
-        probe_write(env, vaddr, 1, mmu_idx, pc);
+        probe_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     }
     clear_capcause_reg(env);
 
