@@ -347,10 +347,15 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
     // have the exception occur at the target.
     // FIXME: I am still not entirely sure of where morello takes its
     // exceptions.
-    cheri_debug_assert(cap_is_unsealed(target) || cap_is_sealed_entry(target));
     cap_register_t next_pcc = *target;
 
-    if (target->cr_tag && cap_is_sealed_entry(target)) {
+#ifdef TARGET_AARCH64
+    update_target_for_jump(env, &next_pcc, cjalr_flags);
+#else
+    cheri_debug_assert(cap_is_unsealed(target) || cap_is_sealed_entry(target));
+#endif
+
+    if (next_pcc.cr_tag && cap_is_sealed_entry(&next_pcc)) {
         // If we are calling a "sentry" cap, remove the sealed flag
         cap_unseal_entry(&next_pcc);
         assert(cap_get_cursor(&next_pcc) == addr &&
