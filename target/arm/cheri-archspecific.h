@@ -168,6 +168,18 @@ static inline bool validate_jump_target(CPUARMState *env,
 
 #include "exec/helper-proto.h"
 
+static inline void update_target_for_jump(CPUARMState *env,
+                                          cap_register_t *target,
+                                          uint32_t cjalr_flags)
+{
+    // Branches back to executive are allowed
+    if (!(cjalr_flags & CJALR_CAN_BRANCH_RESTRICTED) &&
+        (env->pc.cap.cr_perms & CAP_PERM_EXECUTIVE) &&
+        !(target->cr_perms & CAP_PERM_EXECUTIVE)) {
+        target->cr_tag = 0;
+    }
+}
+
 static inline void update_next_pcc_for_tcg(CPUARMState *env,
                                            cap_register_t *target,
                                            uint32_t cjalr_flags)
@@ -185,7 +197,6 @@ static inline void update_next_pcc_for_tcg(CPUARMState *env,
         ((env->pc.cap.cr_perms ^ target->cr_perms) & CAP_PERM_EXECUTIVE) != 0;
     bool c64_changed =
         (target->_cr_cursor & 1) != ((env->pstate & PSTATE_C64) != 0);
-    bool was_executive = (env->pc.cap.cr_perms & CAP_PERM_EXECUTIVE);
 
     unsigned int cur_el;
 
@@ -193,10 +204,6 @@ static inline void update_next_pcc_for_tcg(CPUARMState *env,
     env->pc.cap._cr_cursor &= ~1;
 
     if (executive_changed) {
-        // Branches back to executive are allowed
-        if (!(cjalr_flags & CJALR_CAN_BRANCH_RESTRICTED) && was_executive) {
-            env->pc.cap.cr_tag = 0;
-        }
         cur_el = arm_current_el(env);
         aarch64_save_sp(env, cur_el);
     }
