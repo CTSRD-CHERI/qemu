@@ -14118,7 +14118,9 @@ int fp_exception_el(CPUARMState *env, int cur_el)
      * 3    : trap no accesses
      * This register is ignored if E2H+TGE are both set.
      */
-    if ((arm_hcr_el2_eff(env) & (HCR_E2H | HCR_TGE)) != (HCR_E2H | HCR_TGE)) {
+    uint64_t hcr = arm_hcr_el2_eff(env);
+    if (((hcr & (HCR_E2H | HCR_TGE)) != (HCR_E2H | HCR_TGE)) || (cur_el == 1)) {
+
         int fpen = extract32(env->cp15.cpacr_el1, 20, 2);
 
         switch (fpen) {
@@ -14164,14 +14166,31 @@ int fp_exception_el(CPUARMState *env, int cur_el)
      */
 
     /* CPTR_EL2 : present in v7VE or v8 */
-    if (cur_el <= 2 && extract32(env->cp15.cptr_el[2], 10, 1)
-        && !arm_is_secure_below_el3(env)) {
+    if (cur_el <= 2) {
         /* Trap FP ops at EL2, NS-EL1 or NS-EL0 to EL2 */
-        return 2;
+        if (hcr & HCR_E2H) {
+            int fpen = extract32(env->cp15.cptr_el[2], 20, 2);
+            switch (fpen) {
+            case 0:
+            case 2:
+                if (!(cur_el == 1 && (hcr & HCR_TGE)))
+                    return 2;
+                break;
+            case 1:
+                if (cur_el == 0 && (hcr & HCR_TGE))
+                    return 2;
+            case 3:
+                break;
+            default:
+                g_assert_not_reached();
+            }
+        } else if ((env->cp15.cptr_el[2] & CPTR_TFP) &&
+                   !arm_is_secure_below_el3(env))
+            return 2;
     }
 
     /* CPTR_EL3 : present in v8 */
-    if (extract32(env->cp15.cptr_el[3], 10, 1)) {
+    if (env->cp15.cptr_el[3] & CPTR_TFP) {
         /* Trap all FP ops to EL3 */
         return 3;
     }
