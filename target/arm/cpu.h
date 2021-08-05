@@ -4413,16 +4413,19 @@ static bool is_el2_enabled(CPUARMState *env, int el) {
 }
 
 static bool arm_is_tag_setting_disabled(CPUARMState *env, int el) {
-    if(el == 3)
-        return false;
 
-    target_ulong reg = 0;
-    if(el < 2 && is_el2_enabled(env, el))
-        reg = env->chcr_el2;
-    else if(arm_feature(env, ARM_FEATURE_EL3))
-        reg = env->cscr_el3;
+    if (el < 2) {
+        if (is_el2_enabled(env, el) && (env->chcr_el2 & CxCR_SETTAG))
+            return true;
+        else if (arm_feature(env, ARM_FEATURE_EL3) &&
+                 (env->cscr_el3 & CxCR_SETTAG))
+            return true;
+    } else if (el == 2) {
+        if (arm_feature(env, ARM_FEATURE_EL3) && (env->cscr_el3 & CxCR_SETTAG))
+            return true;
+    }
 
-    return (reg & CxCR_SETTAG) ? true : false;
+    return false;
 }
 
 static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
