@@ -1784,10 +1784,12 @@ static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
         tcg_gen_and_i64(temp0, temp0, new_type);
         gen_cap_set_type_unchecked(ctx, regnum, temp0);
     } else {
-        // success = (type & CC128_FIELD_OTYPE_MASK_NOT_SHIFTED) ==
-        // CC128_FIELD_OTYPE_MASK_NOT_SHIFTED;
-        tcg_gen_and_i64(success, temp0, new_type);
-        tcg_gen_setcond_i64(TCG_COND_EQ, success, success, temp0);
+        // This handles the CAP_NO_SEALING case
+        // success == type == CAP_NO_SEALING
+        // TODO: This belongs in another header
+#define CAP_NO_SEALING -1
+        tcg_gen_movi_i64(temp0, CAP_NO_SEALING);
+        tcg_gen_setcond_i64(TCG_COND_EQ, success, new_type, temp0);
     }
 
     // type <= CAP_MAX_REPRESENTABLE_OTYPE
