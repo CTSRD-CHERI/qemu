@@ -414,6 +414,11 @@ void helper_store_tags(CPUArchState *env, uint64_t tags, uint32_t cn,
     cheri_tag_set_many(env, tags, addr, cn, NULL, GETPC());
 }
 
+void helper_set_pcc(CPUArchState *env, target_ulong addr)
+{
+    set_aarch_reg_value(&env->pc, addr);
+}
+
 void QEMU_NORETURN
 helper_check_capabilities_enabled_exception(CPUArchState *env)
 {
