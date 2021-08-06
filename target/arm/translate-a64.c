@@ -246,6 +246,31 @@ void gen_a64_set_pc_im(uint64_t val)
     tcg_gen_movi_i64(cpu_pc, val);
 }
 
+/*
+ * We can assume* that setting an in-bounds PC will not cause
+ * an untagging of PCC, and so can use a direct write to offset. An arbitrary
+ * write of dest to pcc.offset could cause an untagging of PCC.
+ * This is a checked version that will do the untagging.
+ *
+ * (*) there are some corner cases where in in-bounds capabilities can lose
+ * their tag. For example, when the 56-th bit changes.
+ * This is either impossible in practice, or so infeasible, that its worth
+ * ignoring for the sake of speed.
+ */
+
+static void gen_a64_set_pc_im_safe(DisasContext *s, uint64_t val)
+{
+#ifdef TARGET_CHERI
+    if (!in_pcc_bounds(&s->base, val)) {
+        TCGv_i64 tcgval = tcg_const_i64(val);
+        gen_helper_set_pcc(cpu_env, tcgval);
+        tcg_temp_free_i64(tcgval);
+        return;
+    }
+#endif
+    gen_a64_set_pc_im(val);
+}
+
 // Set the link register (30) to point the next instruction
 static void gen_a64_set_link_register(DisasContext *s)
 {
@@ -329,7 +354,49 @@ static void gen_a64_set_pc(DisasContext *s, TCGv_i64 src)
      * If address tagging is enabled for instructions via the TCR TBI bits,
      * then loading an address into the PC will clear out any tag.
      */
+#ifdef TARGET_CHERI
+
+    if (have_cheri_tb_flags(s, TB_FLAG_CHERI_PCC_FULL_AS)) {
+        // PCC spans full address space, just set PC
+        gen_top_byte_ignore(s, cpu_pc, src, s->tbii);
+    } else {
+        // Otherwise skip the relatively expensive
+        // gen_helper_set_pcc if in bounds.
+        TCGv_i64 tbi_dst = tcg_temp_local_new_i64();
+        TCGv_i64 skip_rep_check = tcg_temp_new_i64();
+
+        gen_top_byte_ignore(s, tbi_dst, src, s->tbii);
+
+        bool need_and = false;
+
+        if (!have_cheri_tb_flags(s, TB_FLAG_CHERI_PCC_BASE_ZERO)) {
+            tcg_gen_setcondi_i64(TCG_COND_GEU, skip_rep_check, tbi_dst,
+                                 s->base.pcc_base);
+            need_and = true;
+        }
+
+        if (!have_cheri_tb_flags(s, TB_FLAG_CHERI_PCC_TOP_MAX)) {
+            TCGv_i64 tmp = need_and ? tcg_temp_new_i64() : NULL;
+            tcg_gen_setcondi_i64(TCG_COND_LEU, need_and ? tmp : skip_rep_check,
+                                 tbi_dst, s->base.pcc_top);
+            if (need_and) {
+                tcg_gen_and_i64(skip_rep_check, skip_rep_check, tmp);
+                tcg_temp_free_i64(tmp);
+            }
+        }
+
+        TCGLabel *skip_representability_check_lbl = gen_new_label();
+        tcg_gen_brcondi_tl(TCG_COND_NE, skip_rep_check, 0,
+                           skip_representability_check_lbl);
+        gen_helper_set_pcc(cpu_env, tbi_dst);
+        gen_set_label(skip_representability_check_lbl);
+        tcg_gen_mov_i64(cpu_pc, tbi_dst);
+        tcg_temp_free_i64(tbi_dst);
+        tcg_temp_free_i64(skip_rep_check);
+    }
+#else
     gen_top_byte_ignore(s, cpu_pc, src, s->tbii);
+#endif
 }
 
 /*
@@ -658,11 +725,11 @@ static inline void gen_goto_tb(DisasContext *s, int n, uint64_t dest)
     tb = s->base.tb;
     if (use_goto_tb(s, n, dest)) {
         tcg_gen_goto_tb(n);
-        gen_a64_set_pc_im(dest);
+        gen_a64_set_pc_im_safe(s, dest);
         tcg_gen_exit_tb(tb, n);
         s->base.is_jmp = DISAS_NORETURN;
     } else {
-        gen_a64_set_pc_im(dest);
+        gen_a64_set_pc_im_safe(s, dest);
         if (s->ss_active) {
             gen_step_complete_exception(s);
         } else if (s->base.singlestep_enabled) {

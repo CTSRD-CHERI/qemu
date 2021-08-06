@@ -54,3 +54,5 @@ DEF_HELPER_4(store_tags, void, env, i64, i32, tl)
 
 DEF_HELPER_FLAGS_1(check_capabilities_enabled_exception, TCG_CALL_NO_RETURN,
                    void, env)
+
+DEF_HELPER_2(set_pcc, void, env, tl)
