@@ -1218,12 +1218,14 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
     return tag;
 }
 
-void squash_mutable_permissions(target_ulong *pesbt,
+void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
                                 const cap_register_t *source)
 {
 #ifdef TARGET_AARCH64
     if (!cap_has_perms(source, CC128_PERM_MUTABLE_LOAD) &&
         (CAP_cc(cap_pesbt_extract_otype)(*pesbt) == CAP_OTYPE_UNSEALED)) {
+        qemu_maybe_log_instr_extra(env,
+                                   "Squashing mutable load related perms\n");
         *pesbt &= ~cc128_cap_pesbt_encode_perms(
             CC128_PERM_MUTABLE_LOAD | CC128_PERM_STORE_LOCAL |
             CC128_PERM_STORE_CAP | CC128_PERM_STORE);
@@ -1275,7 +1277,8 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
     }
     if (tag) {
         tag = cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
-        squash_mutable_permissions(pesbt, source);
+        if (tag)
+            squash_mutable_permissions(env, pesbt, source);
     }
 
     env->statcounters_cap_read++;
