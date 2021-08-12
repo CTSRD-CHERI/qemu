@@ -12776,6 +12776,18 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
     }
     cacheattrs->shareability = extract32(attrs, 6, 2);
 
+#ifdef TARGET_CHERI
+    // TODO: I wonder if this needs doing in the caller. If one stage marks the
+    // location as device, and the other as trapping loads, this should still
+    // happen?
+
+    // RQDKBL: If a location is marked as Device and as faulting loads
+    // of valid capabilities, a load of a capability from that location
+    // causes a Capability access fault, and the location is not read.
+    if ((*prot & PAGE_LC_TRAP) && ((cacheattrs->attrs & 0xf0) == 0))
+        *prot |= PAGE_LC_TRAP_ANY;
+#endif
+
     *phys_ptr = descaddr;
     *page_size_ptr = page_size;
     return false;
