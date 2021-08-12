@@ -1213,7 +1213,7 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
             " due to missing CAP_PERM_LOAD_CAP\n", va);
         return 0;
     }
-    if (tag && (prot & PAGE_LC_TRAP))
+    if ((tag && (prot & PAGE_LC_TRAP)) || (prot & PAGE_LC_TRAP_ANY))
         raise_load_tag_exception(env, va, cb, retpc);
     return tag;
 }
@@ -1275,11 +1275,10 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
     if (raw_tag) {
         *raw_tag = tag;
     }
-    if (tag) {
-        tag = cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
-        if (tag)
-            squash_mutable_permissions(env, pesbt, source);
-    }
+    tag =
+        cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
+    if (tag)
+        squash_mutable_permissions(env, pesbt, source);
 
     env->statcounters_cap_read++;
     if (tag)

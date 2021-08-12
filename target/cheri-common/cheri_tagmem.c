@@ -566,6 +566,9 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
         if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP) {
             *prot |= PAGE_LC_TRAP;
         }
+        if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP_ANY) {
+            *prot |= PAGE_LC_TRAP_ANY;
+        }
     }
 
     /*
@@ -602,7 +605,8 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
             : tagblock_get_tag_many_tagmem(tagmem,
                                            page_vaddr_to_tag_offset(vaddr));
 
-    if (result && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
+    if ((result && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) ||
+        (tagmem_flags & TLBENTRYCAP_FLAG_TRAP_ANY)) {
         raise_load_tag_exception(env, vaddr, reg, pc);
     }
 

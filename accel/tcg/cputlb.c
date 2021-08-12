@@ -1239,6 +1239,9 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
     if (prot & PAGE_LC_TRAP) {
         desc->iotlb[index].tagmem_read |= TLBENTRYCAP_FLAG_TRAP;
     }
+    if (prot & PAGE_LC_TRAP_ANY) {
+        desc->iotlb[index].tagmem_read |= TLBENTRYCAP_FLAG_TRAP_ANY;
+    }
     if (prot & PAGE_SC_CLEAR) {
         desc->iotlb[index].tagmem_write |= TLBENTRYCAP_FLAG_CLEAR;
     }

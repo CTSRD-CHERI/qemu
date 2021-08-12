@@ -151,9 +151,11 @@ typedef struct CPUIOTLBEntry {
      */
     hwaddr addr;
 #ifdef TARGET_CHERI
-#define TLBENTRYCAP_MASK (uintptr_t)0x3
+#define TLBENTRYCAP_MASK (uintptr_t)0x7
     /* Trap if a non-zero tag is read/written. */
 #define TLBENTRYCAP_FLAG_TRAP (uintptr_t)0x1
+    /* Trap if any tag is read/written */
+#define TLBENTRYCAP_FLAG_TRAP_ANY (uintptr_t)0x4
     /* Clear any tag read/written. */
 #define TLBENTRYCAP_FLAG_CLEAR (uintptr_t)0x2
     /* This page contains only zero tag bits. */
