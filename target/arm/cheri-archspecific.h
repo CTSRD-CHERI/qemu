@@ -103,12 +103,15 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
     fsr = arm_fi_to_lfsc(&fi);
     fsc = extract32(fsr, 0, 6);
 
+    int cm = env->exception.cm ? 1 : 0;
+    env->exception.cm = 0;
+
     env->exception.vaddress = addr;
     env->exception.fsr = fsr;
     syn = instruction_fetch
               ? syn_insn_abort(current_el == target_el, 0, 0, fsc)
-              : syn_data_abort_no_iss(current_el == target_el, 0, 0, 0, 0,
-                                      is_write ? 1 : 0, fsc);
+              : syn_data_abort_no_iss(current_el == target_el, 0, 0, cm, 0,
+                                      (is_write || cm) ? 1 : 0, fsc);
 
     if (hostpc) {
         // AARCH's cpu_restore_state will reset syndrome, so don't use

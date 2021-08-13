@@ -614,6 +614,10 @@ typedef struct CPUARMState {
         /* If we implement EL2 we will also need to store information
          * about the intermediate physical address for stage 2 faults.
          */
+#ifdef TARGET_CHERI
+        // Set if a capabilty fault was caused by a cache instruction
+        uint8_t cm;
+#endif
     } exception;
 
     /* Information associated with an SError */
@@ -2503,9 +2507,11 @@ static inline uint64_t cpreg_to_kvm_id(uint32_t cpregid)
 #define ARM_CP_DC_GZVA           (ARM_CP_SPECIAL | 0x0700)
 #ifdef TARGET_CHERI
 #define ARM_CP_IC_OR_DC          (ARM_CP_SPECIAL | 0x0800)
-#define ARM_LAST_SPECIAL         ARM_CP_IC_OR_DC
+#define ARM_CP_IC_OR_DC_STORE (ARM_CP_SPECIAL | 0x0900)
+#define ARM_LAST_SPECIAL ARM_CP_IC_OR_DC_STORE
 #else
 #define ARM_CP_IC_OR_DC          ARM_CP_NOP
+#define ARM_CP_IC_OR_DC_STORE ARM_CP_NOP
 #define ARM_LAST_SPECIAL         ARM_CP_DC_GZVA
 #endif
 #define ARM_CP_FPU               0x1000
