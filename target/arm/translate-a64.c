@@ -2161,6 +2161,41 @@ static inline bool capabilities_enabled_exception(DisasContext *ctx)
     }
     return false;
 }
+
+#define ZVA_SIZE ((1 << CAP_TAG_GET_MANY_SHFT) * CHERI_CAP_SIZE)
+
+static TCGv_cap_checked_ptr bounds_check_cache_op(DisasContext *s,
+                                                  TCGv_i64 addr, int base_reg,
+                                                  bool read, bool write,
+                                                  bool is_zva)
+{
+    // Consumers of clean_addr will also align it, but we need bounds checks
+    // for the aligned value.
+    TCGv_i64 aligned = new_tmp_a64(s);
+    tcg_gen_andi_i64(aligned, addr, ~(ZVA_SIZE - 1));
+
+    // zva is not actually classified as a cache maintenance instruction
+    TCGv_i32 tmp32;
+    if (!is_zva) {
+        // Too awkward to pass through cm so store directly to cpu_env and clear
+        // after
+        tmp32 = tcg_const_i32(1);
+        tcg_gen_st8_i32(tmp32, cpu_env, offsetof(CPUARMState, exception.cm));
+    }
+
+    TCGv_cap_checked_ptr clean_addr = clean_data_tbi_and_cheri(
+        s, aligned, read, write, ZVA_SIZE, base_reg, false, true);
+    if (!is_zva) {
+        tcg_gen_movi_i32(tmp32, 0);
+        tcg_gen_st8_i32(tmp32, cpu_env, offsetof(CPUARMState, exception.cm));
+        tcg_temp_free_i32(tmp32);
+    }
+
+    return clean_addr;
+}
+#else
+#define ZVA_SIZE 0
+#define bounds_check_cache_op(s, addr, ...) addr
 #endif
 
 /* MRS - move from system register
@@ -2227,13 +2262,6 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         assert(0); // should throw code EC_SYSTEMREGISTERTRAP or
                    // EC_CAPABILITY_SYSREGTRAP
     }
-
-#define ZVA_SIZE ((1 << CAP_TAG_GET_MANY_SHFT) * CHERI_CAP_SIZE)
-
-#else
-
-#define ZVA_SIZE 0
-
 #endif
 
     if (ri->accessfn) {
@@ -2289,15 +2317,18 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         gpr_reg_modified(s, rt, false);
         return;
 #ifdef TARGET_CHERI
-    case ARM_CP_IC_OR_DC:
-        // Although we have no caches, we still need to do permission checks
-        // FIXME: This currently checks for both load AND store. This may
-        // FIXME: be more than real morello checks for.
-        clean_addr = clean_data_tbi_and_cheri(s, cpu_reg(s, rt), true, true, ZVA_SIZE, rt, false, true);
+    case ARM_CP_IC_OR_DC_STORE:
+    case ARM_CP_IC_OR_DC: {
+        // FIXME: We need to align  address to ZVA_SIZE _before_ bounds checks
+        bool write =
+            (ri->type & ARM_CP_IC_OR_DC_STORE) == ARM_CP_IC_OR_DC_STORE;
+        bounds_check_cache_op(s, cpu_reg(s, rt), rt, !write, write, false);
         // Consts still need to return the appropriate value
         if (ri->type & ARM_CP_CONST)
             break;
+
         return;
+    }
 #endif
 
     case ARM_CP_DC_ZVA:
@@ -2315,7 +2346,8 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             gen_helper_mte_check_zva(clean_addr, cpu_env, t_desc, cpu_reg(s, rt));
             tcg_temp_free_i32(t_desc);
         } else {
-            clean_addr = clean_data_tbi_and_cheri(s, cpu_reg(s, rt), false, true, ZVA_SIZE, rt, false, true);
+            clean_addr =
+                bounds_check_cache_op(s, cpu_reg(s, rt), rt, false, true, true);
         }
         gen_helper_dc_zva(cpu_env, clean_addr);
         return;
