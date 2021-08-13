@@ -2913,9 +2913,9 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
 #endif
 }
 
-static void handle_conditional_invalidate(TCGv_cap_checked_ptr checked_addr,
-                                          MemOp memop, TCGArg mmu_idx,
-                                          TCGv_i32 store_happens)
+void handle_conditional_invalidate(TCGv_cap_checked_ptr checked_addr,
+                                   MemOp memop, TCGArg mmu_idx,
+                                   TCGv_i32 store_happens)
 {
 #if defined(TARGET_CHERI)
     TCGv_i32 oi = tcg_const_i32(make_memop_idx(memop, mmu_idx));
@@ -3077,7 +3077,7 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
 #endif
 }
 
-static void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
+void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
     TCGv_i64 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop,
     bool invalidate)
 {

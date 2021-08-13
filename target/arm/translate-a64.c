@@ -3140,13 +3140,28 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
         tcg_gen_setcond_i64(TCG_COND_EQ, c2, d2, s2);
         tcg_gen_and_i64(c2, c2, c1);
 
+#ifdef TARGET_CHERI
+        /* This is a horrible hack. Sadly, there is no MO_128, and two MO_64's
+           might trap half way. However, because we know the
+           alignment of clean_addr, clean_addr + 4 with MO_64 will
+           cross enough tag boundaries to work.
+        */
+        TCGv_i64 checked_addr = tcg_temp_new_i64();
+        TCGv_i32 store_happens = tcg_temp_new_i32();
+        tcg_gen_extrl_i64_i32(store_happens, c2);
+        tcg_gen_addi_i64(checked_addr, (TCGv_i64)clean_addr, 4);
+        handle_conditional_invalidate((TCGv_cap_checked_ptr)checked_addr, MO_64,
+                                      memidx, store_happens);
+        tcg_temp_free_i64(checked_addr);
+        tcg_temp_free_i32(store_happens);
+#endif
         /* If compare equal, write back new data, else write back old data.  */
         tcg_gen_movcond_i64(TCG_COND_NE, c1, c2, zero, t1, d1);
         tcg_gen_movcond_i64(TCG_COND_NE, c2, c2, zero, t2, d2);
-        tcg_gen_qemu_st_i64_with_checked_addr(c1, clean_addr, memidx,
-                                              MO_64 | s->be_data);
-        tcg_gen_qemu_st_i64_with_checked_addr(c2, (TCGv_cap_checked_ptr)a2,
-                                              memidx, MO_64 | s->be_data);
+        tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
+            c1, clean_addr, memidx, MO_64 | s->be_data, false);
+        tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
+            c2, (TCGv_cap_checked_ptr)a2, memidx, MO_64 | s->be_data, false);
         tcg_temp_free_i64(a2);
         tcg_temp_free_i64(c1);
         tcg_temp_free_i64(c2);

@@ -923,6 +923,17 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 ret,
 void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 ret,
                                            TCGv_cap_checked_ptr checked_addr,
                                            TCGArg mem_index, MemOp op);
+// The same as tcg_gen_qemu_st_i64_with_checked_addr but takes a boolean option
+// as to whether a tag clear should take place.
+void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
+    TCGv_i64 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop,
+    bool invalidate);
+// To be used in conjunction with
+// tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate to manually clear a
+// tag
+void handle_conditional_invalidate(TCGv_cap_checked_ptr checked_addr,
+                                   MemOp memop, TCGArg mmu_idx,
+                                   TCGv_i32 store_happens);
 
 TCG_LD_HELPER(ld8u, MO_UB)
 TCG_LD_HELPER(ld8s, MO_SB)
