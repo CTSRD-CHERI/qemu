@@ -284,6 +284,12 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
         return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
     }
 
+    if (!(*prot & PAGE_SC_CLEAR)) {
+        // Add in a (fake) SC_TRAP to prompt a TLB refill if a tag is stored
+        // to this location. See the comment around TLBENTRYCAP_INVALID_WRITE_*.
+        *prot |= PAGE_SC_TRAP;
+    }
+
     return ALL_ZERO_TAGBLK;
 }
 
@@ -504,6 +510,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
      * fault (SC bit set).
      */
     store_capcause_reg(env, reg);
+    // Note: this probe will handle any store cap faults
     void *host_addr = probe_cap_write(env, vaddr, 1, mmu_idx, pc);
     clear_capcause_reg(env);
 
@@ -526,9 +533,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
                        "Unimplemented");
 
-    if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP) {
-        raise_store_tag_exception(env, vaddr, reg, pc);
-    }
+    cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_TRAP));
 
     /*
      * probe_cap_write() should have ensured there was a tagmem for this
@@ -625,6 +630,7 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
      * checking access_type can be eliminated.
      */
     if (tags) {
+        // Note: this probe will handle any store cap faults
         probe_cap_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     } else {
         probe_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
@@ -649,9 +655,7 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
                        "Unimplemented");
 
-    if (tags && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
-        raise_store_tag_exception(env, vaddr, reg, pc);
-    }
+    cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_TRAP));
 
     cheri_debug_assert(tagmem);
 
