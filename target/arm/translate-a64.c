@@ -4341,11 +4341,14 @@ static void disas_ldst_multiple_struct(DisasContext *s, uint32_t insn)
     }
 
     if (is_postidx) {
+        TCGv_i64 tmp = tcg_temp_new_i64();
         if (rm == 31) {
-            tcg_gen_addi_i64(tcg_rn, tcg_rn, total);
+            tcg_gen_addi_i64(tmp, tcg_rn, total);
         } else {
-            tcg_gen_add_i64(tcg_rn, tcg_rn, cpu_reg(s, rm));
+            tcg_gen_add_i64(tmp, tcg_rn, cpu_reg(s, rm));
         }
+        set_gpr_reg_addr(s, rn, tmp);
+        tcg_temp_free_i64(tmp);
     }
 }
 
@@ -4480,11 +4483,14 @@ static void disas_ldst_single_struct(DisasContext *s, uint32_t insn)
     tcg_temp_free_i64(tcg_ebytes);
 
     if (is_postidx) {
+        TCGv_i64 tmp = tcg_temp_new_i64();
         if (rm == 31) {
-            tcg_gen_addi_i64(tcg_rn, tcg_rn, total);
+            tcg_gen_addi_i64(tmp, tcg_rn, total);
         } else {
-            tcg_gen_add_i64(tcg_rn, tcg_rn, cpu_reg(s, rm));
+            tcg_gen_add_i64(tmp, tcg_rn, cpu_reg(s, rm));
         }
+        set_gpr_reg_addr(s, rn, tmp);
+        tcg_temp_free_i64(tmp);
     }
 }
 
