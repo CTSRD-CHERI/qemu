@@ -635,7 +635,7 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
 
     uintptr_t tagmem_flags;
     void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, tags, &tagmem_flags);
+        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags);
 
     if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
         (tagmem == ALL_ZERO_TAGBLK)) {
