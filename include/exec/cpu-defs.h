@@ -167,10 +167,16 @@ typedef struct CPUIOTLBEntry {
      */
     uintptr_t tagmem_read;
     /*
-     * ALL_ZERO_TAGBLK without either trapping or zero-ing is an invalid entry
-     * for tagmem_write and should cause a TLB miss if setting a tag to 1.
+     * There are two reasons to trap on writng a tag: first, if MMU protection
+     * bits indicate that stores should trap. The second is that no tag block
+     * has been allocated. In order to align these cases, when there is no
+     * block allocated yet (and tags are not being clared), we add in the
+     * trap flag so tlb_fill will be called. It will then allocate a tagblock
+     * (and the suprious FLAG_TRAP will be removed), or will throw an exception.
      */
-#define TLBENTRYCAP_INVALID_WRITE ((uintptr_t)ALL_ZERO_TAGBLK)
+#define TLBENTRYCAP_INVALID_WRITE_MASK                                         \
+    (TLBENTRYCAP_FLAG_TRAP | TLBENTRYCAP_FLAG_CLEAR)
+#define TLBENTRYCAP_INVALID_WRITE_VALUE (TLBENTRYCAP_FLAG_TRAP)
     uintptr_t tagmem_write;
 #endif
     MemTxAttrs attrs;
