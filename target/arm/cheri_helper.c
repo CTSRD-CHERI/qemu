@@ -223,6 +223,15 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
                          _host_return_address, cbp, CHERI_CAP_SIZE,
                          raise_unaligned_load_exception);
 
+    // Now do a probe early, so that we get the store fault with priority
+    // (LC/SC MMU fault priority) is the reverse of cap permissions)
+    bool cd_tagged = get_without_decompress_tag(env, cd);
+    int mmu_index = cpu_mmu_index(env, false);
+
+    if (cd_tagged)
+        probe_cap_write(env, addr, CHERI_CAP_SIZE, mmu_index,
+                        _host_return_address);
+
     // load (without modifying cs as we will need it for the comparison)
 
     uint64_t pesbt;
@@ -243,12 +252,8 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
         store_cap_to_memory(env, cd, addr, _host_return_address);
     } else {
         bool cd_tagged = get_without_decompress_tag(env, cd);
-        int mmu_index = cpu_mmu_index(env, false);
         // Even if there is no store, we possibly need an MMU permission fault
-        if (cd_tagged)
-            probe_cap_write(env, addr, CHERI_CAP_SIZE, mmu_index,
-                            _host_return_address);
-        else
+        if (!cd_tagged)
             probe_write(env, addr, CHERI_CAP_SIZE, mmu_index,
                         _host_return_address);
     }
