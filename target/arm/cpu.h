@@ -3379,7 +3379,11 @@ static inline bool arm_cpu_data_is_big_endian_a32(CPUARMState *env,
 
 static inline bool arm_cpu_data_is_big_endian_a64(int el, uint64_t sctlr)
 {
+#ifdef TARGET_CHERI
+    return false;
+#else
     return sctlr & (el ? SCTLR_EE : SCTLR_E0E);
+#endif
 }
 
 /* Return true if the processor is in big-endian mode. */
