@@ -42,6 +42,7 @@
 #include "sysemu/sysemu.h"
 #include "hw/pci/pci.h"
 #include "hw/pci-host/gpex.h"
+#include "hw/vdev/vdev.h"
 
 #if defined(TARGET_CHERI)
 /*
@@ -69,10 +70,18 @@ static const struct MemmapEntry {
     [VIRT_PCIE_PIO] =    {  0x3000000,       0x10000 },
     [VIRT_PLIC] =        {  0xc000000, VIRT_PLIC_SIZE(VIRT_CPUS_MAX * 2) },
     [VIRT_UART0] =       { 0x10000000,         0x100 },
+    [VIRT_UART1] =       { 0x10000100,         0x100 },
     [VIRT_VIRTIO] =      { 0x10001000,        0x1000 },
     [VIRT_FLASH] =       { 0x20000000,     0x4000000 },
     [VIRT_PCIE_ECAM] =   { 0x30000000,    0x10000000 },
     [VIRT_PCIE_MMIO] =   { 0x40000000,    0x40000000 },
+    [VIRT_VDEV] =        { 0x50000000,        0x3000 },
+    [VIRT_VDEV_WINDOW] = { 0x60000000,    0x10000000 },
+    [VIRT_VDEV_PCI] =    { 0x60010000,    0x00500000 }, /* within WINDOW */
+    [VIRT_VDEV_E1000] =  { 0x60020000,    0x00020000 }, /* within PCI */
+    [VIRT_VDEV_E1000_BAR1] = { 0x60040000,0x00010000 }, /* within PCI */
+    [VIRT_VDEV_AHCI] =   { 0x60050000,    0x00010000 }, /* within PCI */
+    [VIRT_VDEV_E1000_BAR2] = { 0x60060000,0x00010000 }, /* within PCI */
     [VIRT_DRAM] =        { 0x80000000,           0x0 },
 };
 
@@ -295,7 +304,8 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
         }
 
         addr = memmap[VIRT_DRAM].base + riscv_socket_mem_offset(mc, socket);
-        size = riscv_socket_mem_size(mc, socket);
+        /* Reserve 128MB of memory for device-model. */
+        size = riscv_socket_mem_size(mc, socket) - 128 * 1024 * 1024;
         mem_name = g_strdup_printf("/memory@%lx", (long)addr);
         qemu_fdt_add_subnode(fdt, mem_name);
         qemu_fdt_setprop_cells(fdt, mem_name, "reg",
@@ -394,6 +404,36 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     create_pcie_irq_map(fdt, name, plic_pcie_phandle);
     g_free(name);
 
+    /* Device-model PCI adapter */
+    name = g_strdup_printf("/soc/pci@%lx",
+        (long) memmap[VIRT_VDEV_PCI].base);
+    qemu_fdt_add_subnode(fdt, name);
+    qemu_fdt_setprop_cell(fdt, name, "#address-cells", FDT_PCI_ADDR_CELLS);
+    qemu_fdt_setprop_cell(fdt, name, "#interrupt-cells", FDT_PCI_INT_CELLS);
+    qemu_fdt_setprop_cell(fdt, name, "#size-cells", 0x2);
+    qemu_fdt_setprop_string(fdt, name, "compatible", "pci-host-ecam-generic");
+    qemu_fdt_setprop_string(fdt, name, "device_type", "pci");
+    qemu_fdt_setprop(fdt, name, "dma-coherent", NULL, 0);
+    qemu_fdt_setprop_cells(fdt, name, "reg", 0,
+        memmap[VIRT_VDEV_PCI].base, 0, memmap[VIRT_VDEV_PCI].size);
+    qemu_fdt_setprop_sized_cells(fdt, name, "ranges",
+        1, FDT_PCI_RANGE_MMIO,
+        2, memmap[VIRT_VDEV_AHCI].base,
+        2, memmap[VIRT_VDEV_AHCI].base, 2, memmap[VIRT_VDEV_AHCI].size,
+        /* e1000 bar 0 */
+        1, FDT_PCI_RANGE_MMIO,
+        2, memmap[VIRT_VDEV_E1000].base,
+        2, memmap[VIRT_VDEV_E1000].base, 2, memmap[VIRT_VDEV_E1000].size,
+        /* e1000 bar 1 */
+        1, FDT_PCI_RANGE_PREFETCHABLE | FDT_PCI_RANGE_MMIO,
+        2, memmap[VIRT_VDEV_E1000_BAR1].base,
+        2, memmap[VIRT_VDEV_E1000_BAR1].base, 2, memmap[VIRT_VDEV_E1000_BAR1].size,
+        /* e1000 bar 2 */
+        1, FDT_PCI_RANGE_IOPORT, 2, 0,
+        2, memmap[VIRT_VDEV_E1000_BAR2].base, 2, memmap[VIRT_VDEV_E1000_BAR2].size);
+    create_pcie_irq_map(fdt, name, plic_pcie_phandle);
+    g_free(name);
+
     test_phandle = phandle++;
     name = g_strdup_printf("/soc/test@%lx",
         (long)memmap[VIRT_TEST].base);
@@ -438,6 +478,27 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_add_subnode(fdt, "/chosen");
     qemu_fdt_setprop_string(fdt, "/chosen", "stdout-path", name);
     g_free(name);
+
+    name = g_strdup_printf("/soc/uart@%lx", (long)memmap[VIRT_UART1].base);
+    qemu_fdt_add_subnode(fdt, name);
+    qemu_fdt_setprop_string(fdt, name, "compatible", "ns16550a");
+    qemu_fdt_setprop_cells(fdt, name, "reg",
+        0x0, memmap[VIRT_UART1].base,
+        0x0, memmap[VIRT_UART1].size);
+    qemu_fdt_setprop_cell(fdt, name, "clock-frequency", 3686400);
+    qemu_fdt_setprop_cell(fdt, name, "interrupt-parent", plic_mmio_phandle);
+    qemu_fdt_setprop_cell(fdt, name, "interrupts", UART1_IRQ);
+
+    /*
+     * A device that allows to put device-model binary to shared memory
+     * and to start secondary CPU.
+     */
+    name = g_strdup_printf("/soc/berimgr");
+    qemu_fdt_add_subnode(fdt, name);
+    qemu_fdt_setprop_cells(fdt, name, "reg",
+        0x0, 0xf8000000,
+        0x0, 0x08000000);
+    qemu_fdt_setprop_string(fdt, name, "compatible", "beri,mgr");
 
     name = g_strdup_printf("/soc/rtc@%lx", (long)memmap[VIRT_RTC].base);
     qemu_fdt_add_subnode(fdt, name);
@@ -689,9 +750,16 @@ static void virt_machine_init(MachineState *machine)
                          memmap[VIRT_PCIE_PIO].base,
                          DEVICE(pcie_plic), true);
 
+    vdev_create(system_memory, memmap[VIRT_VDEV].base, memmap[VIRT_VDEV].size,
+        memmap[VIRT_VDEV_WINDOW].base, memmap[VIRT_VDEV_WINDOW].size);
+
     serial_mm_init(system_memory, memmap[VIRT_UART0].base,
         0, qdev_get_gpio_in(DEVICE(mmio_plic), UART0_IRQ), 399193,
         serial_hd(0), DEVICE_LITTLE_ENDIAN);
+
+    serial_mm_init(system_memory, memmap[VIRT_UART1].base,
+        0, qdev_get_gpio_in(DEVICE(mmio_plic), UART1_IRQ), 399193,
+        serial_hd(1), DEVICE_LITTLE_ENDIAN);
 
     sysbus_create_simple("goldfish_rtc", memmap[VIRT_RTC].base,
         qdev_get_gpio_in(DEVICE(mmio_plic), RTC_IRQ));

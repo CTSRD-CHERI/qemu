@@ -53,17 +53,26 @@ enum {
     VIRT_CLINT,
     VIRT_PLIC,
     VIRT_UART0,
+    VIRT_UART1,
     VIRT_VIRTIO,
     VIRT_FLASH,
     VIRT_DRAM,
     VIRT_PCIE_MMIO,
     VIRT_PCIE_PIO,
-    VIRT_PCIE_ECAM
+    VIRT_PCIE_ECAM,
+    VIRT_VDEV,
+    VIRT_VDEV_WINDOW,
+    VIRT_VDEV_PCI,
+    VIRT_VDEV_AHCI,
+    VIRT_VDEV_E1000,
+    VIRT_VDEV_E1000_BAR1,
+    VIRT_VDEV_E1000_BAR2,
 };
 
 enum {
     UART0_IRQ = 10,
-    RTC_IRQ = 11,
+    UART1_IRQ = 11,
+    RTC_IRQ = 12,
     VIRTIO_IRQ = 1, /* 1 to 8 */
     VIRTIO_COUNT = 8,
     PCIE_IRQ = 0x20, /* 32 to 35 */
