@@ -11469,7 +11469,11 @@ static inline bool regime_translation_disabled(CPUARMState *env,
 static inline bool regime_translation_big_endian(CPUARMState *env,
                                                  ARMMMUIdx mmu_idx)
 {
+#ifdef TARGET_CHERI
+    return false;
+#else
     return (regime_sctlr(env, mmu_idx) & SCTLR_EE) != 0;
+#endif
 }
 
 /* Return the TTBR associated with this translation regime */
