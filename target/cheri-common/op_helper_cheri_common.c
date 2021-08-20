@@ -361,8 +361,7 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
         assert(cap_get_cursor(&next_pcc) == addr &&
                "Should have raised an exception");
     } else if (cjalr_flags & CJALR_MUST_BE_SENTRY) {
-        // LETODO
-        assert(0);
+        next_pcc.cr_tag = 0;
     } else {
         // Can never create an unrepresentable capability since we
         // bounds-checked the jump target.
