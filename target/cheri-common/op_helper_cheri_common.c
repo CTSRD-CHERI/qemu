@@ -939,8 +939,14 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
                          uintptr_t _host_return_address)
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    target_ulong cursor = cap_get_cursor(cbp);
-    cap_length_t new_top = (cap_length_t)cursor + length; // 65 bits
+    target_ulong new_base = cap_get_cursor(cbp);
+
+#ifdef TARGET_AARCH64
+    if (CAP_cc(cap_bounds_uses_value)(cbp))
+        new_base = CAP_cc(cap_bounds_address)(cbp);
+#endif
+
+    cap_length_t new_top = (cap_length_t)new_base + length; // 65 bits
     DEFINE_RESULT_VALID;
     /*
      * CSetBounds: Set Bounds
@@ -949,24 +955,36 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
         raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
-    } else if (cursor < cbp->cr_base) {
+    } else
+#ifdef TARGET_AARCH64
+        // On morello this check needs doing later as the resulting bounds may
+        // not be exact, but then break monotonicity.
+        if (new_base < cbp->cr_base) {
         raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
     } else if (new_top > cap_get_top_full(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
     }
-
+#endif
     cap_register_t result = *cbp;
     /*
      * With compressed capabilities we may need to increase the range of
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    const bool exact = CAP_cc(setbounds)(&result, cursor, new_top);
+    const bool exact = CAP_cc(setbounds)(&result, new_base, new_top);
     if (!exact)
         env->statcounters_imprecise_setbounds++;
     if (must_be_exact && !exact) {
         raise_cheri_exception_or_invalidate(env, CapEx_InexactBounds, cb);
     }
+
+#ifdef TARGET_AARCH64
+    if ((result.cr_base < cbp->cr_base) ||
+        (cap_get_top_full(&result) > cap_get_top_full(cbp))) {
+        RESULT_VALID = false;
+    }
+#endif
+
     if (RESULT_VALID) {
         assert(cap_is_representable(&result) &&
                "CSetBounds must create a representable capability");
