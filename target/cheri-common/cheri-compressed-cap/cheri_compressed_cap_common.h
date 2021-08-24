@@ -701,6 +701,15 @@ static inline bool _cc_N(is_representable_new_addr)(bool sealed, _cc_addr_t base
     }
 }
 
+static inline _cc_addr_t _cc_N(cap_bounds_address)(const _cc_cap_t* cap) {
+    // Remove flags bits
+    _cc_addr_t cursor = cap->_cr_cursor & _CC_CURSOR_MASK;
+    // Sign extend
+    if (cursor & ((_CC_CURSOR_MASK >> 1) + 1))
+        cursor |= ~_CC_CURSOR_MASK;
+    return cursor;
+}
+
 static inline bool _cc_N(cap_bounds_uses_value)(const _cc_cap_t* cap) {
     _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(cap->cr_pesbt);
     return bounds.E + _CC_N(FIELD_BOTTOM_ENCODED_SIZE) < (sizeof(_cc_addr_t) * 8);
@@ -793,6 +802,7 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
     if (!cap->cr_bounds_valid) {
         cap->cr_tag = 0;
     }
+    bool from_large = !_cc_N(cap_bounds_uses_value)(cap);
 #else
     // Morello allows setbounds to do weird things and will just result in untagged results
     _cc_debug_assert((cap->cr_tag) && "Cannot be used on untagged capabilities");
@@ -804,7 +814,7 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    const _cc_addr_t cursor = cap->_cr_cursor & _CC_CURSOR_MASK;
+    const _cc_addr_t cursor = cap->_cr_cursor;
 #ifndef CC_IS_MORELLO
     _cc_debug_assert(((cap->_cr_top - cap->cr_base) >> _CC_ADDR_WIDTH) <= 1 && "Length must be smaller than 1 << 65");
     _cc_debug_assert((req_top >> _CC_ADDR_WIDTH) <= 1 && "New top must be smaller than 1 << 65");
@@ -827,16 +837,14 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
     _cc_addr_t new_base = new_cap.cr_base;
     _cc_length_t new_top = new_cap._cr_top;
 
-#ifdef CC_IS_MORELLO
-    // On morello we may end up with a length that could have been exact, but has changed the flag bits.
-    // In this case just say the result is not exact.
-    if ((new_base ^ req_base) >> (64 - MORELLO_FLAG_BITS))
-        exact = false;
-#endif
-
     if (exact) {
+#ifndef CC_IS_MORELLO
+        // Morello considers a setbounds that takes a capability from "large" (non-sign extended bounds) to "small"
+        // to still be exact, even if this results in a change in requested bounds. The exact assert would be tedious
+        // to express so I have turned it off for morello.
         _cc_debug_assert(new_base == req_base && "Should be exact");
         _cc_debug_assert(new_top == req_top && "Should be exact");
+#endif
     } else {
         _cc_debug_assert((new_base != req_base || new_top != req_top) &&
                          "Was inexact, but neither base nor top different?");
@@ -850,6 +858,11 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
     _cc_N(update_ebt)(cap, new_ebt);
 #ifdef CC_IS_MORELLO
     cap->cr_bounds_valid = new_cap.cr_bounds_valid;
+    bool to_small = _cc_N(cap_bounds_uses_value)(cap);
+    // On morello we may end up with a length that could have been exact, but has changed the flag bits.
+    if ((from_large && to_small) && ((new_base ^ req_base) >> (64 - MORELLO_FLAG_BITS))) {
+        cap->cr_tag = 0;
+    }
 #endif
 
     //  let newCap = {cap with address=base, E=to_bits(6, if incE then e + 1 else e), B=Bbits, T=Tbits, internal_e=ie};
