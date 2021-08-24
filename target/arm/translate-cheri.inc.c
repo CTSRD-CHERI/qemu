@@ -1774,7 +1774,8 @@ TRANS_F(SCBNDS)
         return true;
 
     uint64_t length = a->S ? (a->imm6 << 4) : a->imm6;
-    gen_cheri_cap_cap_imm(ctx, a->Cd, a->Cn, length, &gen_helper_csetbounds);
+    gen_cheri_cap_cap_imm(ctx, a->Cd, a->Cn, length,
+                          &gen_helper_csetboundsexact);
     return true;
 }
 
