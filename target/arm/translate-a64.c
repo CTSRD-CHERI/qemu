@@ -2250,18 +2250,26 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             unallocated_encoding(s);
             return;
         }
-        if (capabilities_enabled_exception(s)) {
-            return;
-        }
     } else if (cpreg_field_is_cap_only(ri)) {
         unallocated_encoding(s);
         return;
     }
 
-    if ((ri->access & PL_SYSREG) && !cheri_is_system_ctx(s)) {
-        assert(0); // should throw code EC_SYSTEMREGISTERTRAP or
-                   // EC_CAPABILITY_SYSREGTRAP
+    if (!(ri->access & PL_NO_SYSREG) && !cheri_is_system_ctx(s)) {
+        s->base.is_jmp = DISAS_NORETURN;
+        gen_a64_set_pc_im(s->pc_curr);
+        TCGv_i32 syndrome = tcg_const_i32(syn_aa64_sysregtrap_impl(
+            op0, op1, op2, crn, crm, rt, isread, is_morello));
+        gen_helper_sys_not_accessible_exception(cpu_env, syndrome);
+        tcg_temp_free_i32(syndrome);
+        return;
     }
+
+    if (is_morello && capabilities_enabled_exception(s)) {
+        return;
+    }
+#else
+    bool is_morello = false;
 #endif
 
     if (ri->accessfn) {
@@ -2274,7 +2282,8 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
 
         gen_a64_set_pc_im(s->pc_curr);
         tmpptr = tcg_const_ptr(ri);
-        syndrome = syn_aa64_sysregtrap(op0, op1, op2, crn, crm, rt, isread);
+        syndrome = syn_aa64_sysregtrap_impl(op0, op1, op2, crn, crm, rt, isread,
+                                            is_morello);
         tcg_syn = tcg_const_i32(syndrome);
         tcg_isread = tcg_const_i32(isread);
         gen_helper_access_check_cp_reg(cpu_env, tmpptr, tcg_syn, tcg_isread);

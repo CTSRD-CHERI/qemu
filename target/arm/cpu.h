@@ -2600,14 +2600,16 @@ static inline bool cptype_valid(int cptype)
 #ifdef TARGET_CHERI
 #define PL_IN_RESTRICTED 0x400
 #define PL_IN_EXECUTIVE 0x200
-#define PL_SYSREG 0x100
+// Requiring the system access bit is the default.
+// Anything that can be accessed without it needs this flag.
+#define PL_NO_SYSREG 0x100
 #else
 #define PL_IN_RESTRICTED 0
 #define PL_IN_EXECUTIVE 0
-#define PL_SYSREG 0
+#define PL_NO_SYSREG 0
 #endif
 
-#define PL_CHERI (PL_IN_RESTRICTED | PL_IN_EXECUTIVE | PL_SYSREG)
+#define PL_CHERI (PL_IN_RESTRICTED | PL_IN_EXECUTIVE | PL_NO_SYSREG)
 
 #define PL3_R 0x80
 #define PL3_W 0x40

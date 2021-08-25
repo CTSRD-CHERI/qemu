@@ -2493,7 +2493,7 @@ static const ARMCPRegInfo t2ee_cp_reginfo[] = {
 static const ARMCPRegInfo v6k_cp_reginfo[] = {
     { .name = "TPIDR_EL0", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 3, .opc2 = 2, .crn = 13, .crm = 0,
-      .access = PL0_RW,
+      .access = PL0_RW | PL_NO_SYSREG,
       .type = ARM_CP_CAP_ON_MORELLO,
       .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[0]),
       .resetvalue = 0,
@@ -2520,7 +2520,7 @@ static const ARMCPRegInfo v6k_cp_reginfo[] = {
     { .name = "TPIDR_EL1", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 0, .opc2 = 4, .crn = 13, .crm = 0,
       .type = ARM_CP_CAP_ON_MORELLO,
-      .access = PL1_RW,
+      .access = PL1_RW | PL_NO_SYSREG,
       .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[1]),
       .resetvalue = 0,
        ALIAS_RTPIDR},
@@ -2582,6 +2582,21 @@ static CPAccessResult gt_counter_access(CPUARMState *env, int timeridx,
     unsigned int cur_el = arm_current_el(env);
     bool secure = arm_is_secure(env);
     uint64_t hcr = arm_hcr_el2_eff(env);
+
+#ifdef TARGET_CHERI
+    if (!(env->CCTLR_el[cur_el] & CCTLR_PERMVCT) && !cheri_is_system(env)) {
+        switch (exception_target_el_capability(env)) {
+        case 1:
+            return CP_ACCESS_TRAP;
+        case 2:
+            return CP_ACCESS_TRAP_EL2;
+        case 3:
+            return CP_ACCESS_TRAP_EL3;
+        default:
+            g_assert_not_reached();
+        }
+    }
+#endif
 
     switch (cur_el) {
     case 0:
@@ -3302,7 +3317,7 @@ static const ARMCPRegInfo generic_timer_cp_reginfo[] = {
     },
     { .name = "CNTVCT_EL0", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 3, .crn = 14, .crm = 0, .opc2 = 2,
-      .access = PL0_R, .type = ARM_CP_NO_RAW | ARM_CP_IO,
+      .access = PL0_R | PL_NO_SYSREG, .type = ARM_CP_NO_RAW | ARM_CP_IO,
       .accessfn = gt_vct_access, .readfn = gt_virt_cnt_read,
     },
     /* Comparison value, indicating when the timer goes off */
@@ -3413,7 +3428,7 @@ static const ARMCPRegInfo generic_timer_cp_reginfo[] = {
     },
     { .name = "CNTVCT_EL0", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 3, .crn = 14, .crm = 0, .opc2 = 2,
-      .access = PL0_R, .type = ARM_CP_NO_RAW | ARM_CP_IO,
+      .access = PL0_R | PL_NO_SYSREG, .type = ARM_CP_NO_RAW | ARM_CP_IO,
       .readfn = gt_virt_cnt_read,
     },
     REGINFO_SENTINEL
@@ -4971,7 +4986,7 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      .opc2 = 7,
      .crn = 0,
      .crm = 0,
-     .access = PL0_R,
+     .access = PL0_R | PL_NO_SYSREG,
      .type = ARM_CP_NO_RAW,
      .readfn = aa64_dczid_read},
     {
@@ -5026,7 +5041,7 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      .crn = 7,
      .crm = 5,
      .opc2 = 1,
-     .access = PL0_W,
+     .access = PL0_W | PL_NO_SYSREG,
      .type = ARM_CP_IC_OR_DC,
      .accessfn = aa64_cacheop_pou_access},
     {.name = "DC_IVAC",
@@ -5036,7 +5051,7 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      .crn = 7,
      .crm = 6,
      .opc2 = 1,
-     .access = PL1_W,
+     .access = PL1_W | PL_NO_SYSREG,
      .accessfn = aa64_cacheop_poc_access,
      .type = ARM_CP_IC_OR_DC_STORE},
     {.name = "DC_ISW",
@@ -5056,7 +5071,7 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      .crn = 7,
      .crm = 10,
      .opc2 = 1,
-     .access = PL0_W,
+     .access = PL0_W | PL_NO_SYSREG,
      .type = ARM_CP_IC_OR_DC,
      .accessfn = aa64_cacheop_poc_access},
     {.name = "DC_CSW",
@@ -5076,7 +5091,7 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      .crn = 7,
      .crm = 11,
      .opc2 = 1,
-     .access = PL0_W,
+     .access = PL0_W | PL_NO_SYSREG,
      .type = ARM_CP_IC_OR_DC,
      .accessfn = aa64_cacheop_pou_access},
     {.name = "DC_CIVAC",
@@ -5086,7 +5101,7 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
      .crn = 7,
      .crm = 14,
      .opc2 = 1,
-     .access = PL0_W,
+     .access = PL0_W | PL_NO_SYSREG,
      .type = ARM_CP_IC_OR_DC,
      .accessfn = aa64_cacheop_poc_access},
     {.name = "DC_CISW",
@@ -5858,7 +5873,7 @@ static const ARMCPRegInfo el3_no_el2_cp_reginfo[] = {
       .access = PL2_RW, .type = ARM_CP_CONST, .resetvalue = 0 },
     { .name = "TPIDR_EL2", .state = ARM_CP_STATE_BOTH,
       .opc0 = 3, .opc1 = 4, .crn = 13, .crm = 0, .opc2 = 2,
-      .access = PL2_RW, .type = ARM_CP_CONST | ARM_CP_CAP_ON_MORELLO, .resetvalue = 0 },
+      .access = PL2_RW | PL_NO_SYSREG, .type = ARM_CP_CONST | ARM_CP_CAP_ON_MORELLO, .resetvalue = 0 },
     { .name = "TTBR0_EL2", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 4, .crn = 2, .crm = 0, .opc2 = 0,
       .access = PL2_RW, .type = ARM_CP_CONST, .resetvalue = 0 },
@@ -6355,11 +6370,11 @@ static const ARMCPRegInfo el2_cp_reginfo[] = {
      .crn = 13,
      .crm = 0,
      .opc2 = 2,
-     .access = PL2_RW,
+     .access = PL2_RW | PL_NO_SYSREG,
      .type = ARM_CP_CAP_ON_MORELLO,
      .resetvalue = 0,
      .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[2]),
-      ALIAS_RTPIDR},
+     ALIAS_RTPIDR},
     {.name = "TTBR0_EL2",
      .state = ARM_CP_STATE_AA64,
      .opc0 = 3,
@@ -6824,7 +6839,7 @@ static const ARMCPRegInfo el3_cp_reginfo[] = {
      .crn = 12,
      .crm = 0,
      .opc2 = 0,
-     .access = PL3_RW | PL_SYSREG,
+     .access = PL3_RW,
 #ifndef TARGET_CHERI
      .writefn = vbar_write,
 #endif
@@ -6849,7 +6864,7 @@ static const ARMCPRegInfo el3_cp_reginfo[] = {
      .crn = 13,
      .crm = 0,
      .opc2 = 2,
-     .access = PL3_RW,
+     .access = PL3_RW | PL_NO_SYSREG,
      .type = ARM_CP_CAP_ON_MORELLO,
      .resetvalue = 0,
      .fieldoffset = offsetof(CPUARMState, cp15.tpidr_el[3]),
@@ -9114,7 +9129,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
               .type = ARM_CP_CONST, .resetvalue = cpu->ctr },
             { .name = "CTR_EL0", .state = ARM_CP_STATE_AA64,
               .opc0 = 3, .opc1 = 3, .opc2 = 1, .crn = 0, .crm = 0,
-              .access = PL0_R, .accessfn = ctr_el0_access,
+              .access = PL0_R | PL_NO_SYSREG, .accessfn = ctr_el0_access,
               .type = ARM_CP_CONST, .resetvalue = cpu->ctr },
             /* TCMTR and TLBTR exist in v8 but have no 64-bit versions */
             { .name = "TCMTR",
@@ -9548,7 +9563,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .crn = 13,
          .crm = 0,
          .opc2 = 7,
-         .access = PL0_RW,
+         .access = PL0_RW | PL_NO_SYSREG,
          .type = ARM_CP_CAP,
          .state = ARM_CP_STATE_AA64,
          .fieldoffset = offsetof(CPUARMState, cid_el0),
@@ -9560,7 +9575,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
          .opc2 = 4,
          .crn = 13,
          .crm = 0,
-         .access = PL0_RW | PL_IN_EXECUTIVE,
+         .access = PL0_RW | PL_IN_EXECUTIVE | PL_NO_SYSREG,
          .type = ARM_CP_CAP_ON_MORELLO,
          .fieldoffset = offsetof(CPUARMState, cp15.tpidrro_el[0]),
          .resetvalue = 0},

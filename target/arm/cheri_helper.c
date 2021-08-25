@@ -432,3 +432,10 @@ helper_check_capabilities_enabled_exception(CPUArchState *env)
     assert(el != -1);
     raise_exception(env, EXCP_UDEF, syn_aa64_capability_access(), el);
 }
+
+void QEMU_NORETURN helper_sys_not_accessible_exception(CPUArchState *env,
+                                                       uint32_t syndrome)
+{
+    int el = exception_target_el_capability(env);
+    raise_exception(env, EXCP_UDEF, syndrome, el);
+}
