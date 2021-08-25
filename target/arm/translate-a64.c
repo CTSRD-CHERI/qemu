@@ -590,25 +590,30 @@ TCGv_cap_checked_ptr gen_mte_and_cheri_checkN(DisasContext *s, TCGv_i64 addr,
                                               bool alternate_base,
                                               bool ddc_base)
 {
-    if (tag_checked && s->mte_active[0] && total_size != (1 << log2_esize)) {
-        TCGv_i32 tcg_desc;
-        TCGv_i64 ret;
-        int desc = 0;
+    if (total_size != (1 << log2_esize)) {
+        if (tag_checked && s->mte_active[0]) {
+            TCGv_i32 tcg_desc;
+            TCGv_i64 ret;
+            int desc = 0;
 
-        desc = FIELD_DP32(desc, MTEDESC, MIDX, get_mem_index(s));
-        desc = FIELD_DP32(desc, MTEDESC, TBI, s->tbid);
-        desc = FIELD_DP32(desc, MTEDESC, TCMA, s->tcma);
-        desc = FIELD_DP32(desc, MTEDESC, WRITE, is_write);
-        desc = FIELD_DP32(desc, MTEDESC, ESIZE, 1 << log2_esize);
-        desc = FIELD_DP32(desc, MTEDESC, TSIZE, total_size);
-        tcg_desc = tcg_const_i32(desc);
+            desc = FIELD_DP32(desc, MTEDESC, MIDX, get_mem_index(s));
+            desc = FIELD_DP32(desc, MTEDESC, TBI, s->tbid);
+            desc = FIELD_DP32(desc, MTEDESC, TCMA, s->tcma);
+            desc = FIELD_DP32(desc, MTEDESC, WRITE, is_write);
+            desc = FIELD_DP32(desc, MTEDESC, ESIZE, 1 << log2_esize);
+            desc = FIELD_DP32(desc, MTEDESC, TSIZE, total_size);
+            tcg_desc = tcg_const_i32(desc);
 
-        ret = new_tmp_a64(s);
-        gen_helper_mte_checkN(ret, cpu_env, tcg_desc, addr);
-        tcg_temp_free_i32(tcg_desc);
+            ret = new_tmp_a64(s);
+            gen_helper_mte_checkN(ret, cpu_env, tcg_desc, addr);
+            tcg_temp_free_i32(tcg_desc);
 
-        return arm_bounds_checked(s, ret, total_size, base_reg, is_read,
-                                  is_write, alternate_base, ddc_base);
+            return arm_bounds_checked(s, ret, total_size, base_reg, is_read,
+                                      is_write, alternate_base, ddc_base);
+        } else {
+            clean_data_tbi_and_cheri(s, addr, is_read, is_write, total_size,
+                                     base_reg, alternate_base, ddc_base);
+        }
     }
     return gen_mte_and_cheri_check1(s, addr, is_read, is_write, tag_checked,
                                     log2_esize, base_reg, alternate_base,
