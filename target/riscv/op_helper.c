@@ -32,6 +32,13 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
                                           uint32_t exception, uintptr_t pc)
 {
     CPUState *cs = env_cpu(env);
+#ifdef TARGET_CHERI
+    if (exception == RISCV_EXCP_CHERI) {
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "Got CHERI trap %s caused by register %d\n",
+            cheri_cause_str(env->last_cap_cause), env->last_cap_index);
+    }
+#endif
     cs->exception_index = exception;
     // Expand this call to print debug info: cpu_loop_exit_restore(cs, pc);
     if (pc) {
