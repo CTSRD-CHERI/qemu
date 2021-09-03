@@ -60,10 +60,12 @@ enum SCRAccessMode {
     M_ASR = M_Always | ASR_Flag,
 };
 
+#ifndef CONFIG_USER_ONLY
 static inline int scr_min_priv(enum SCRAccessMode mode)
 {
     return ((int)mode >> 1) - 1;
 }
+#endif
 static inline int scr_needs_asr(enum SCRAccessMode mode)
 {
     return (mode & ASR_Flag) == ASR_Flag;
@@ -119,6 +121,7 @@ static inline cap_register_t *get_scr(CPUArchState *env, uint32_t index)
     case CheriSCR_PCC: return &env->PCC;
     case CheriSCR_DDC: return &env->DDC;
 
+#ifndef CONFIG_USER_ONLY
     case CheriSCR_UTCC: return &env->UTCC;
     case CheriSCR_UTDC: return &env->UTDC;
     case CheriSCR_UScratchC: return &env->UScratchC;
@@ -138,6 +141,7 @@ static inline cap_register_t *get_scr(CPUArchState *env, uint32_t index)
     case CheriSCR_BSTDC: return &env->VSTDC;
     case CheriSCR_BSScratchC: return &env->VSScratchC;
     case CheriSCR_BSEPCC: return &env->VSEPCC;
+#endif
     default: assert(false && "Should have raised an invalid inst trap!");
     }
 }
@@ -173,9 +177,11 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
     if (scr_needs_asr(mode) && !can_access_sysregs) {
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, 32 + index);
     }
+#ifndef CONFIG_USER_ONLY
     if (scr_min_priv(mode) > env->priv) {
         raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, 32 + index);
     }
+#endif
     cap_register_t *scr = get_scr(env, index);
     // Make a copy of the write value in case cd == cs
     cap_register_t new_val = *get_readonly_capreg(env, cs);
