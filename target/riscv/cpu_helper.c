@@ -1164,6 +1164,7 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 #endif
 }
 
+#ifndef CONFIG_USER_ONLY
 #ifdef TARGET_CHERI
 /* TODO(am2419): do we log PCC as a changed register? */
 #define riscv_update_pc_for_exc_handler(env, src_cap, new_pc)           \
@@ -1183,6 +1184,7 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
         qemu_log_instr_dbg_reg(env, "pc", new_pc);                      \
     } while (false)
 #endif /* TARGET_CHERI */
+#endif /* CONFIG_USER_ONLY */
 
 /*
  * Handle Traps
