@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.10)
 project(cheri_compressed_cap C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 14)
-if(APPLE)
+if(APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"))
     # XXX: ugly hack, would be nice if llvm could find this
-    include_directories(/Library/Developer/CommandLineTools/usr/include/c++/v1)
+    include_directories(SYSTEM /Library/Developer/CommandLineTools/usr/include/c++/v1)
 endif()
 
 include(CheckCXXCompilerFlag)
@@ -17,8 +17,8 @@ set(CMAKE_REQUIRED_LIBRARIES -fsanitize=memory)
 check_cxx_compiler_flag(-fsanitize=memory HAVE_MSAN)
 # XXX: needs instrumented system libraries
 set(HAVE_MSAN FALSE)
-set(CMAKE_REQUIRED_LIBRARIES -fsanitize=fuzzer-no-link)
-check_cxx_compiler_flag(-fsanitize=fuzzer-no-link HAVE_LIBFUZZER)
+set(CMAKE_REQUIRED_LIBRARIES -fsanitize=fuzzer)
+check_cxx_compiler_flag(-fsanitize=fuzzer HAVE_LIBFUZZER)
 
 if (HAVE_UBSAN)
     add_compile_options(-fsanitize=undefined)
