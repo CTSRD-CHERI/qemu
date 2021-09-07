@@ -40,13 +40,16 @@
 #include "qemu/qemu-print.h"
 #include "cheri-archspecific.h"
 
+#ifndef CONFIG_USER_ONLY
 extern bool cheri_c2e_on_unrepresentable;
 extern bool cheri_debugger_on_unrepresentable;
+#endif
 
 static inline void
 _became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
 {
     env->statcounters_unrepresentable_caps++;
+#ifndef CONFIG_USER_ONLY
 #ifdef TARGET_MIPS
     if (cheri_debugger_on_unrepresentable)
         do_raise_exception(env, EXCP_DEBUG, retpc);
@@ -62,6 +65,7 @@ _became_unrepresentable(CPUArchState *env, uint16_t reg, uintptr_t retpc)
     if (cheri_c2e_on_unrepresentable)
         raise_cheri_exception_impl(env, CapEx_InexactBounds, reg, 0, false,
                                    retpc);
+#endif /* CONFIG_USER_ONLY */
 }
 
 #ifdef DO_CHERI_STATISTICS
