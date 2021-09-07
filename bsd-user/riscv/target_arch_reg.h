@@ -44,42 +44,42 @@ typedef struct target_fpreg {
 static inline void target_copy_regs(target_reg_t *regs, const CPURISCVState *env)
 {
 
-    regs->ra = tswapreg(env->gpr[1]);
-    regs->sp = tswapreg(env->gpr[2]);
-    regs->gp = tswapreg(env->gpr[3]);
-    regs->tp = tswapreg(env->gpr[4]);
+    regs->ra = tswapreg(gpr_int_value(env, xRA));
+    regs->sp = tswapreg(gpr_int_value(env, xSP));
+    regs->gp = tswapreg(gpr_int_value(env, xGP));
+    regs->tp = tswapreg(gpr_int_value(env, xTP));
 
-    regs->t[0] = tswapreg(env->gpr[5]);
-    regs->t[1] = tswapreg(env->gpr[6]);
-    regs->t[2] = tswapreg(env->gpr[7]);
-    regs->t[3] = tswapreg(env->gpr[28]);
-    regs->t[4] = tswapreg(env->gpr[29]);
-    regs->t[5] = tswapreg(env->gpr[30]);
-    regs->t[6] = tswapreg(env->gpr[31]);
+    regs->t[0] = tswapreg(gpr_int_value(env, xT0));
+    regs->t[1] = tswapreg(gpr_int_value(env, xT1));
+    regs->t[2] = tswapreg(gpr_int_value(env, xT2));
+    regs->t[3] = tswapreg(gpr_int_value(env, xT3));
+    regs->t[4] = tswapreg(gpr_int_value(env, xT4));
+    regs->t[5] = tswapreg(gpr_int_value(env, xT5));
+    regs->t[6] = tswapreg(gpr_int_value(env, xT6));
 
-    regs->s[0] = tswapreg(env->gpr[8]);
-    regs->s[1] = tswapreg(env->gpr[9]);
-    regs->s[2] = tswapreg(env->gpr[18]);
-    regs->s[3] = tswapreg(env->gpr[19]);
-    regs->s[4] = tswapreg(env->gpr[20]);
-    regs->s[5] = tswapreg(env->gpr[21]);
-    regs->s[6] = tswapreg(env->gpr[22]);
-    regs->s[7] = tswapreg(env->gpr[23]);
-    regs->s[8] = tswapreg(env->gpr[24]);
-    regs->s[9] = tswapreg(env->gpr[25]);
-    regs->s[10] = tswapreg(env->gpr[26]);
-    regs->s[11] = tswapreg(env->gpr[27]);
+    regs->s[0] = tswapreg(gpr_int_value(env, xS0));
+    regs->s[1] = tswapreg(gpr_int_value(env, xS1));
+    regs->s[2] = tswapreg(gpr_int_value(env, xS2));
+    regs->s[3] = tswapreg(gpr_int_value(env, xS3));
+    regs->s[4] = tswapreg(gpr_int_value(env, xS4));
+    regs->s[5] = tswapreg(gpr_int_value(env, xS5));
+    regs->s[6] = tswapreg(gpr_int_value(env, xS6));
+    regs->s[7] = tswapreg(gpr_int_value(env, xS7));
+    regs->s[8] = tswapreg(gpr_int_value(env, xS8));
+    regs->s[9] = tswapreg(gpr_int_value(env, xS9));
+    regs->s[10] = tswapreg(gpr_int_value(env, xS10));
+    regs->s[11] = tswapreg(gpr_int_value(env, xS11));
 
-    regs->a[0] = tswapreg(env->gpr[10]);
-    regs->a[1] = tswapreg(env->gpr[11]);
-    regs->a[2] = tswapreg(env->gpr[12]);
-    regs->a[3] = tswapreg(env->gpr[13]);
-    regs->a[4] = tswapreg(env->gpr[14]);
-    regs->a[5] = tswapreg(env->gpr[15]);
-    regs->a[6] = tswapreg(env->gpr[16]);
-    regs->a[7] = tswapreg(env->gpr[17]);
+    regs->a[0] = tswapreg(gpr_int_value(env, xA0));
+    regs->a[1] = tswapreg(gpr_int_value(env, xA1));
+    regs->a[2] = tswapreg(gpr_int_value(env, xA2));
+    regs->a[3] = tswapreg(gpr_int_value(env, xA3));
+    regs->a[4] = tswapreg(gpr_int_value(env, xA4));
+    regs->a[5] = tswapreg(gpr_int_value(env, xA5));
+    regs->a[6] = tswapreg(gpr_int_value(env, xA6));
+    regs->a[7] = tswapreg(gpr_int_value(env, xA7));
 
-    regs->sepc = tswapreg(env->pc);
+    regs->sepc = tswapreg(riscv_fetch_pc(env));
 }
 
 #undef tswapreg
