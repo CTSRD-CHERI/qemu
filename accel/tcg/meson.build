@@ -16,5 +16,4 @@ specific_ss.add(when: ['CONFIG_SOFTMMU', 'CONFIG_TCG'], if_true: files('tcg-all.
 specific_ss.add(when: ['CONFIG_TCG_LOG_INSTR', 'CONFIG_TCG'], if_true: files('log_instr.c'))
 specific_ss.add(when: ['CONFIG_TCG_LOG_INSTR', 'CONFIG_TCG'], if_true: files('log_instr_text.c'))
 specific_ss.add(when: ['CONFIG_TCG_LOG_INSTR', 'CONFIG_TCG'], if_true: files('log_instr_cvtrace.c'))
-specific_ss.add(when: ['CONFIG_TRACE_STATS', 'CONFIG_TCG_LOG_INSTR', 'CONFIG_TCG'], if_true: files('log_instr_stats.c'))
 specific_ss.add(when: ['CONFIG_TRACE_PERFETTO', 'CONFIG_TCG_LOG_INSTR', 'CONFIG_TCG'], if_true: files('log_instr_perfetto.c'))
