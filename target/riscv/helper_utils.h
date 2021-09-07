@@ -55,7 +55,7 @@ static inline void gpr_set_int_value(CPUArchState *env, unsigned reg,
 #endif
 }
 
-static inline target_ulong gpr_int_value(CPURISCVState* env, unsigned reg) {
+static inline target_ulong gpr_int_value(const CPURISCVState* env, unsigned reg) {
 #ifdef TARGET_CHERI
     return get_cap_in_gpregs(&env->gpcapregs, reg)->_cr_cursor;
 #else
@@ -73,5 +73,14 @@ static inline void riscv_update_pc(CPURISCVState *env, target_ulong pc_addr,
 #endif
 #ifdef CONFIG_DEBUG_TCG
     env->_pc_is_current = true;
+#endif
+}
+
+static inline target_ulong riscv_fetch_pc(const CPURISCVState *env)
+{
+#ifdef TARGET_CHERI
+    return cheri_get_current_pcc(env)->_cr_cursor;
+#else
+    return env->pc;
 #endif
 }

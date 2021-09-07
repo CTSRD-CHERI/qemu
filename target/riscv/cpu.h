@@ -348,7 +348,7 @@ struct CPURISCVState {
     QEMUTimer *timer; /* Internal timer */
 };
 
-static inline bool pc_is_current(CPURISCVState *env)
+static inline bool pc_is_current(const CPURISCVState *env)
 {
 #ifdef CONFIG_DEBUG_TCG
     return env->_pc_is_current;
