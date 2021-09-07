@@ -40,11 +40,11 @@
 #include "cheri_utils.h"
 
 bool cpu_restore_state(CPUState *cpu, uintptr_t host_pc, bool will_exit);
-static inline bool pc_is_current(CPUArchState *env);
+static inline bool pc_is_current(const CPUArchState *env);
 static inline target_ulong cpu_get_recent_pc(CPUArchState *env);
 
 #ifdef TARGET_CHERI
-static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUArchState *env);
+static inline const cap_register_t *_cheri_get_pcc_unchecked(const CPUArchState *env);
 #include "cheri-archspecific-early.h"
 // Returns a recent PCC value. This means that the cursor field may be out of
 // date (possibly pointing to the beginning of the translation block). However,
@@ -61,7 +61,7 @@ static inline const cap_register_t *cheri_get_recent_pcc(CPUArchState *env)
     return _cheri_get_pcc_unchecked(env);
 }
 // This function can be called if the pcc.cursor value must be accurate.
-static inline const cap_register_t *cheri_get_current_pcc(CPUArchState *env)
+static inline const cap_register_t *cheri_get_current_pcc(const CPUArchState *env)
 {
     cheri_debug_assert(pc_is_current(env));
     return _cheri_get_pcc_unchecked(env);
