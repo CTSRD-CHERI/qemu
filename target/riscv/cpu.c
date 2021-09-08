@@ -743,6 +743,7 @@ static void riscv_cpu_reset(DeviceState *dev)
      */
     set_max_perms_capability(&env->PCC, env->resetvec);
     set_max_perms_capability(&env->DDC, 0);
+#ifndef CONFIG_USER_ONLY
     // User mode trap handling:
     set_max_perms_capability(&env->UTCC, 0);
     null_capability(&env->UTDC);
@@ -758,6 +759,7 @@ static void riscv_cpu_reset(DeviceState *dev)
     null_capability(&env->MTDC);
     null_capability(&env->MScratchC);
     set_max_perms_capability(&env->MEPCC, 0);
+#endif /* !CONFIG_USER_ONLY */
 #endif /* TARGET_CHERI */
 #ifdef CONFIG_DEBUG_TCG
     env->_pc_is_current = true;
