@@ -246,6 +246,29 @@ static ObjectClass *riscv_cpu_class_by_name(const char *cpu_model)
     return oc;
 }
 
+#ifdef TARGET_CHERI
+static void riscv_cpu_dump_cap_register(FILE *f, const char *capname,
+    const cap_register_t *capreg)
+{
+
+    qemu_fprintf(f, " %8s  0x%016" PRIx64 "%016" PRIx64 "  0x%" PRIx64 " [%s%s%s%s%s,0x%" PRIx64 "-0x%" PRIx64 "]%s\n",
+        capname,
+        cc128_compress_raw(capreg) ^ CC128_NULL_XOR_MASK,
+        capreg->_cr_cursor,
+        capreg->_cr_cursor,
+        capreg->cr_perms & CC128_PERM_LOAD ? "r" : "",
+        capreg->cr_perms & CC128_PERM_STORE ? "w" : "",
+        capreg->cr_perms & CC128_PERM_EXECUTE ? "x" : "",
+        capreg->cr_perms & CC128_PERM_LOAD_CAP ? "R" : "",
+        capreg->cr_perms & CC128_PERM_STORE_CAP ? "W" : "",
+        capreg->cr_base,
+        capreg->_cr_top > UINT64_MAX ? UINT64_MAX : (uint64_t)capreg->_cr_top,
+        capreg->cr_otype == CC128_OTYPE_SENTRY
+            ? " (sentry)"
+            : (cc128_is_cap_sealed(capreg) ? " (sealed)" : ""));
+}
+#endif
+
 static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
@@ -257,9 +280,11 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
         qemu_fprintf(f, " %s %d\n", "V      =  ", riscv_cpu_virt_enabled(env));
     }
 #endif
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc      ", PC_ADDR(env));
 #ifdef TARGET_CHERI
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc (offset) ", GET_SPECIAL_REG_ARCH(env, pc, PCC));
+    riscv_cpu_dump_cap_register(f, "pcc", cheri_get_current_pcc(env));
+    riscv_cpu_dump_cap_register(f, "ddc", cheri_get_ddc(env));
+#else
+    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc      ", PC_ADDR(env));
 #endif
 #ifndef CONFIG_USER_ONLY
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "mhartid ", env->mhartid);
@@ -306,6 +331,12 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     }
 #endif
 
+#ifdef TARGET_CHERI
+    for (i = 0; i < 32; i++) {
+        riscv_cpu_dump_cap_register(f, cheri_gp_regnames[i],
+            get_readonly_capreg(env, i));
+    }
+#else
     for (i = 0; i < 32; i++) {
         qemu_fprintf(f, " %s " TARGET_FMT_lx,
                      riscv_int_regnames[i], gpr_int_value(env, i));
@@ -313,6 +344,7 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
             qemu_fprintf(f, "\n");
         }
     }
+#endif
     if (flags & CPU_DUMP_FPU) {
         for (i = 0; i < 32; i++) {
             qemu_fprintf(f, " %s %016" PRIx64,
