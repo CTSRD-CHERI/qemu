@@ -1353,6 +1353,9 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
      */
     /* No TLB fault possible, should be safe to get a host pointer now */
     void *host = probe_read(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
+#ifdef CONFIG_USER_ONLY
+    assert(host && "TLB fault cannot occur in the user mode");
+#endif
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
@@ -1368,6 +1371,7 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
                 CAP_NULL_XOR_MASK;
         *cursor = ld_cap_word_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
 #undef ld_cap_word_p
+#ifndef CONFIG_USER_ONLY
     } else {
         // Slow path for e.g. IO regions.
         qemu_maybe_log_instr_extra(env, "Using slow path for load from guest "
@@ -1375,6 +1379,7 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
         *pesbt = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
                 CAP_NULL_XOR_MASK;
         *cursor = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
+#endif
     }
 #ifndef CHERI_USER_NO_TAGS
     int prot;
@@ -1506,6 +1511,9 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         host = g2h(vaddr);
 #endif
     }
+#ifdef CONFIG_USER_ONLY
+    assert(host && "TLB fault cannot occur in the user mode");
+#endif
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
@@ -1520,6 +1528,7 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
         st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
 #undef st_cap_word_p
+#ifndef CONFIG_USER_ONLY
     } else {
         // Slow path for e.g. IO regions.
         qemu_maybe_log_instr_extra(env, "Using slow path for store to guest "
@@ -1528,6 +1537,7 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
                            pesbt_for_mem, retpc);
         cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor,
                            retpc);
+#endif
     }
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     env->rvfi_dii_trace.MEM.rvfi_mem_addr = vaddr;
