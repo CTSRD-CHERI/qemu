@@ -1333,6 +1333,7 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
 #endif
 
 #ifdef TARGET_CHERI
+#ifndef CONFIG_USER_ONLY
 static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
 {
     // We report the same values for all modes and don't perform dirty tracking
@@ -1382,6 +1383,7 @@ static int write_ccsr(CPURISCVState *env, int csrno, target_ulong val)
 
     return 0;
 }
+#endif
 
 static inline bool csr_needs_asr(CPURISCVState *env, int csrno) {
     switch (csrno) {
