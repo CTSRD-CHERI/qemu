@@ -43,10 +43,16 @@
 #include "exec/memop.h"
 
 #include "cheri-helper-utils.h"
+#ifndef CHERI_USER_NO_TAGS
 #include "cheri_tagmem.h"
+#endif
 
 #ifndef TARGET_CHERI
 #error "This file should only be compiled for CHERI"
+#endif
+
+#if defined(CONFIG_USER_ONLY) && !defined(CHERI_USER_NO_TAGS)
+#error "Tags must not be validated nor invalidated in the user mode"
 #endif
 
 #ifdef __clang__
@@ -212,8 +218,10 @@ void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
                                              target_ulong vaddr,
                                              TCGMemOpIdx oi))
 {
+#ifndef CHERI_USER_NO_TAGS
     cheri_tag_invalidate(env, vaddr, memop_size(get_memop(oi)), GETPC(),
                          get_mmuidx(oi));
+#endif
 }
 
 /*
@@ -223,10 +231,12 @@ void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
 void CHERI_HELPER_IMPL(cheri_invalidate_tags_condition(
     CPUArchState *env, target_ulong vaddr, TCGMemOpIdx oi, uint32_t cond))
 {
+#ifndef CHERI_USER_NO_TAGS
     if (cond) {
         cheri_tag_invalidate(env, vaddr, memop_size(get_memop(oi)), GETPC(),
                              get_mmuidx(oi));
     }
+#endif
 }
 
 /// Implementations of individual instructions start here
@@ -1292,6 +1302,7 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
     store_cap_to_memory(env, cs, addr, _host_return_address);
 }
 
+#ifndef CHERI_USER_NO_TAGS
 static inline bool
 cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
                              int cb, const cap_register_t* cbp,
@@ -1311,6 +1322,7 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
         raise_load_tag_exception(env, va, cb, retpc);
     return tag;
 }
+#endif
 
 void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
                                 const cap_register_t *source)
@@ -1364,6 +1376,7 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
                 CAP_NULL_XOR_MASK;
         *cursor = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
+#ifndef CHERI_USER_NO_TAGS
     int prot;
     bool tag =
         cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc, mmu_idx, host);
@@ -1372,6 +1385,9 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
     }
     tag =
         cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
+#else
+    bool tag = true;
+#endif
     if (tag)
         squash_mutable_permissions(env, pesbt, source);
 
@@ -1478,9 +1494,17 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
     void *host = NULL;
     if (tag) {
         env->statcounters_cap_write_tagged++;
+#ifndef CHERI_USER_NO_TAGS
         host = cheri_tag_set(env, vaddr, cs, NULL, retpc, mmu_idx);
+#else
+        host = g2h(vaddr);
+#endif
     } else {
+#ifndef CHERI_USER_NO_TAGS
         host = cheri_tag_invalidate_aligned(env, vaddr, retpc, mmu_idx);
+#else
+        host = g2h(vaddr);
+#endif
     }
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.

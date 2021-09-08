@@ -50,6 +50,10 @@
 #error "Should only be included for TARGET_CHERI"
 #endif
 
+#if defined(CONFIG_USER_ONLY) || defined(CHERI_USER_NO_TAGS)
+#error "Should not be included in the user mode or when tag validation is disabled"
+#endif
+
 // XXX: use secure/target_tlb_bit0/target_tlb_bit1 for cheri TLB permissions?
 
 /*

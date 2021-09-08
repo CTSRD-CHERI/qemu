@@ -38,6 +38,15 @@
 
 #include <stdbool.h>
 
+#if defined(CONFIG_USER_ONLY) && !defined(CHERI_USER_NO_TAGS)
+/*
+ * Tagged Memory Emulation depends on SoftMMU that is unavailable in the user
+ * mode. Since we don't have tags for capabilities stored in memory, we cannot
+ * validate nor invalidate them at the moment.
+ */
+#define CHERI_USER_NO_TAGS
+#endif
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
@@ -434,6 +443,7 @@ static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bo
     bool valid = _cc_N(compute_base_top)(bounds, cursor, &cdp->cr_base, &cdp->_cr_top);
     cdp->cr_bounds_valid = valid;
     cdp->cr_exp = bounds.E;
+#ifndef CHERI_USER_NO_TAGS
     if (tag) {
         _cc_debug_assert(cdp->cr_base <= _CC_N(MAX_ADDR));
 #ifndef CC_IS_MORELLO
@@ -443,6 +453,7 @@ static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bo
 #endif
         _cc_debug_assert(_CC_EXTRACT_FIELD(pesbt, RESERVED) == 0);
     }
+#endif
 }
 
 /*
@@ -466,8 +477,10 @@ static inline void _cc_N(update_ebt)(_cc_cap_t* csp, _cc_addr_t new_ebt) {
  * cap_set_decompressed_X will set fields and keep pesbt in sync.
  */
 static inline _cc_addr_t _cc_N(compress_raw)(const _cc_cap_t* csp) {
+#ifndef CHERI_USER_NO_TAGS
     _cc_debug_assert((!csp->cr_tag || _cc_N(get_reserved)(csp) == 0) &&
                      "Unknown reserved bits set it tagged capability");
+#endif
     return csp->cr_pesbt;
 }
 
