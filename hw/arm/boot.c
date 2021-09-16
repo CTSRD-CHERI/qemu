@@ -913,9 +913,9 @@ static int64_t arm_load_elf(struct arm_boot_info *info, uint64_t *pentry,
         }
     }
 
-    ret = load_elf_as(info->kernel_filename, NULL, NULL, NULL,
-                      pentry, lowaddr, highaddr, NULL, big_endian, elf_machine,
-                      1, data_swab, as);
+    ret = load_elf_ram_sym(info->kernel_filename, NULL, NULL, NULL, pentry,
+                           lowaddr, highaddr, NULL, big_endian, elf_machine, 1,
+                           data_swab, as, true, info->sym_cb);
     if (ret <= 0) {
         /* The header loaded but the image didn't */
         exit(1);
