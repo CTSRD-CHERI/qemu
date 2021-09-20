@@ -3301,7 +3301,7 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
             }
             clean_addr =
                 gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), false, true,
-                                         rn != 31, size, rn, false, true);
+                                         rn != 31, size+1, rn, false, true);
             gen_store_exclusive(s, rs, rt, rt2, clean_addr, size, true);
             return;
         }
@@ -3321,7 +3321,7 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
             }
             clean_addr =
                 gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), true, false,
-                                         rn != 31, size, rn, false, true);
+                                         rn != 31, size+1, rn, false, true);
             s->is_ldex = true;
             gen_load_exclusive(s, rt, rt2, clean_addr, size, true);
             if (is_lasr) {
