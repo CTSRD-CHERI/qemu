@@ -102,12 +102,14 @@ void helper_store_cap_pair_via_cap(CPUArchState *env, uint32_t cd, uint32_t cd2,
 
     const cap_register_t *cbp = get_capreg_or_special(env, cb);
 
-    cap_check_common_reg(perms_for_store(env, cd) | perms_for_store(env, cd2),
-                         env, cb, addr, CHERI_CAP_SIZE * 2,
+    cap_check_common_reg(perms_for_store(env, cd), env, cb, addr,
+                         CHERI_CAP_SIZE, _host_return_address, cbp,
+                         CHERI_CAP_SIZE, raise_unaligned_store_exception);
+    store_cap_to_memory(env, cd, addr, _host_return_address);
+    cap_check_common_reg(perms_for_store(env, cd2), env, cb,
+                         addr + CHERI_CAP_SIZE, CHERI_CAP_SIZE,
                          _host_return_address, cbp, CHERI_CAP_SIZE,
                          raise_unaligned_store_exception);
-
-    store_cap_to_memory(env, cd, addr, _host_return_address);
     store_cap_to_memory(env, cd2, addr + CHERI_CAP_SIZE, _host_return_address);
 }
 
@@ -156,14 +158,25 @@ void helper_store_exclusive_cap_via_cap(CPUArchState *env, uint32_t rs,
 
     cap_register_t cbp = *get_capreg_or_special(env, cb);
 
-    uint32_t perms = perms_for_store(env, cd);
-    if (cd2 != REG_NONE)
-        perms |= perms_for_store(env, cd2);
-    uint32_t size = (cd2 == REG_NONE) ? CHERI_CAP_SIZE : (CHERI_CAP_SIZE * 2);
+    // In order to match hardware when storing two caps we need two cap perms and
+    // bounds checks and _then_ an alignment check.
+    // So have no alignment requirement if storing two caps, then do the
+    // check manually.
+    uint32_t size_align =
+        (cd2 == REG_NONE) ? CHERI_CAP_SIZE : 0;
 
-    cap_check_common_reg(perms, env, cb, addr, size, _host_return_address, &cbp,
-                         size, raise_unaligned_store_exception);
-
+    cap_check_common_reg(perms_for_store(env, cd), env, cb, addr,
+                         CHERI_CAP_SIZE, _host_return_address, &cbp, size_align,
+                         raise_unaligned_store_exception);
+    if (cd2 != REG_NONE) {
+        cap_check_common_reg(perms_for_store(env, cd2), env, cb,
+                             addr + CHERI_CAP_SIZE, CHERI_CAP_SIZE,
+                             _host_return_address, &cbp, 0,
+                             raise_unaligned_store_exception);
+        if (!QEMU_IS_ALIGNED_P2(addr, (CHERI_CAP_SIZE * 2))) {
+            raise_unaligned_store_exception(env, addr, _host_return_address);
+        }
+    }
     // Should be storing to same address as load exclusive
     bool success = env->exclusive_addr == addr;
 
