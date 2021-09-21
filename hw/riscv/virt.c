@@ -509,7 +509,7 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
     qemu_fdt_setprop_cells(fdt, name, "reg",
         0x0, memmap[VIRT_VDEV_IOMMU].base,
         0x0, memmap[VIRT_VDEV_IOMMU].size);
-    qemu_fdt_setprop_string(fdt, name, "compatible", "vdev,iommu");
+    qemu_fdt_setprop_string(fdt, name, "compatible", "dm,iommu");
 
     name = g_strdup_printf("/soc/rtc@%lx", (long)memmap[VIRT_RTC].base);
     qemu_fdt_add_subnode(fdt, name);
