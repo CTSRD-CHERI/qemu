@@ -12726,8 +12726,10 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
 
     // Cap stores can fault here as only tagged stores specify
     // MMU_DATA_CAP_STORE
-    if (!cdbm && !sc) {
-        *prot |= PAGE_SC_TRAP;
+    // Software capability dirty tracking means we fault on !sc
+    if (!sc) {
+        if (!cdbm)
+            *prot |= PAGE_SC_TRAP;
         if (access_type == MMU_DATA_CAP_STORE) {
             access_type = base_access_type;
             goto do_fault;
