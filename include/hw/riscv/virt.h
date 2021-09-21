@@ -67,6 +67,7 @@ enum {
     VIRT_VDEV_E1000,
     VIRT_VDEV_E1000_BAR1,
     VIRT_VDEV_E1000_BAR2,
+    VIRT_VDEV_IOMMU,
 };
 
 enum {
