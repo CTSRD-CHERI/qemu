@@ -82,6 +82,7 @@ static const struct MemmapEntry {
     [VIRT_VDEV_E1000_BAR1] = { 0x60040000,0x00010000 }, /* within PCI */
     [VIRT_VDEV_AHCI] =   { 0x60050000,    0x00010000 }, /* within PCI */
     [VIRT_VDEV_E1000_BAR2] = { 0x60060000,0x00010000 }, /* within PCI */
+    [VIRT_VDEV_IOMMU] =  { 0x60510000,    0x00010000 }, /* within WINDOW */
     [VIRT_DRAM] =        { 0x80000000,           0x0 },
 };
 
@@ -499,6 +500,16 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
         0x0, 0xf8000000,
         0x0, 0x08000000);
     qemu_fdt_setprop_string(fdt, name, "compatible", "beri,mgr");
+
+    /*
+     * Virtual IOMMU, emulated by device-model.
+     */
+    name = g_strdup_printf("/soc/iommu");
+    qemu_fdt_add_subnode(fdt, name);
+    qemu_fdt_setprop_cells(fdt, name, "reg",
+        0x0, memmap[VIRT_VDEV_IOMMU].base,
+        0x0, memmap[VIRT_VDEV_IOMMU].size);
+    qemu_fdt_setprop_string(fdt, name, "compatible", "vdev,iommu");
 
     name = g_strdup_printf("/soc/rtc@%lx", (long)memmap[VIRT_RTC].base);
     qemu_fdt_add_subnode(fdt, name);
