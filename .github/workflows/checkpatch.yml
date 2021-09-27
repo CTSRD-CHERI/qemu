@@ -6,11 +6,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: checkpatch.pl
+        run: ./scripts/checkpatch.pl --no-signoff --branch origin/dev..dev
       - name: Check clang-format
         uses: wolletd/clang-format-checker@v1
         with:
           target-ref: "${{ github.base_ref }}" # required, merge target
           clang-version: 12     # optional, default: 12
-      - name: checkpatch.pl
-        run: ./scripts/checkpatch.pl --no-signoff --branch origin/dev..dev
           
