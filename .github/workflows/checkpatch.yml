@@ -4,10 +4,13 @@ jobs:
   check-format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: wolletd/clang-format-checker@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Check clang-format
+        uses: wolletd/clang-format-checker@v1
         with:
           target-ref: "${{ github.base_ref }}" # required, merge target
           clang-version: 12     # optional, default: 12
-      - run: ./scripts/checkpatch.pl --no-signoff --branch origin/dev..dev
+      - name: checkpatch.pl
+        run: ./scripts/checkpatch.pl --no-signoff --branch origin/dev..dev
           
