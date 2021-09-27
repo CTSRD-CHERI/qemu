@@ -2426,7 +2426,7 @@ static bool trans_vmpopc_m(DisasContext *s, arg_rmr *a)
         tcg_gen_addi_ptr(mask, cpu_env, vreg_ofs(s, 0));
 
         gen_helper_vmpopc_m(dst, mask, src2, cpu_env, desc);
-        _gen_set_gpr(s, a->rd, dst, false);
+        _gen_set_gpr(s, a->rd, dst, true);
 
         tcg_temp_free_ptr(mask);
         tcg_temp_free_ptr(src2);
@@ -2458,7 +2458,7 @@ static bool trans_vmfirst_m(DisasContext *s, arg_rmr *a)
         tcg_gen_addi_ptr(mask, cpu_env, vreg_ofs(s, 0));
 
         gen_helper_vmfirst_m(dst, mask, src2, cpu_env, desc);
-        _gen_set_gpr(s, a->rd, dst, false);
+        _gen_set_gpr(s, a->rd, dst, true);
 
         tcg_temp_free_ptr(mask);
         tcg_temp_free_ptr(src2);
@@ -2661,7 +2661,7 @@ static bool trans_vext_x_v(DisasContext *s, arg_r *a)
         tcg_temp_free(trs1);
     }
     tcg_gen_trunc_i64_tl(dest, tmp);
-    _gen_set_gpr(s, a->rd, dest, false);
+    _gen_set_gpr(s, a->rd, dest, true);
 
     tcg_temp_free(dest);
     tcg_temp_free_i64(tmp);

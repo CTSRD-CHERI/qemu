@@ -37,7 +37,6 @@
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs.h"
 static TCGv _cpu_cursors_do_not_access_directly[32];
-static TCGv _cpu_pesbt_do_not_access_directly[32];
 static TCGv cpu_pc;  // Note: this is PCC.cursor
 #else
 static TCGv cpu_gpr[32], cpu_pc;
@@ -219,23 +218,6 @@ static inline void _gen_get_gpr(TCGv t, int reg_num)
 #endif
     }
 }
-
-#ifdef TARGET_CHERI
-static inline void gen_mark_gpr_as_integer(int reg_num_dst)
-{
-    /* Currently, the integer flag is 0, so we can mask the 64-bit value holding
-     * the capreg state appropriately to clear the bits for register N. */
-    TCGv_i32 integer_state = tcg_const_i32(CREG_INTEGER);
-    tcg_gen_st8_i32(
-        integer_state, cpu_env,
-        offsetof(CPURISCVState, gpcapregs.capreg_state[reg_num_dst]));
-    tcg_temp_free_i32(integer_state);
-    tcg_gen_movi_tl(_cpu_pesbt_do_not_access_directly[reg_num_dst],
-                    CAP_NULL_PESBT);
-    /* TODO: maybe all ones is more efficient? We can just do an or and don't
-     *   have to negate? */
-}
-#endif
 
 #ifdef CONFIG_RVFI_DII
 //#define gen_get_gpr(t, reg_num, field_prefix)                                  \
@@ -1077,7 +1059,6 @@ void riscv_translate_init(void)
 #else
     /* CNULL cursor should never be written! */
     _cpu_cursors_do_not_access_directly[0] = NULL;
-    _cpu_pesbt_do_not_access_directly[0] = NULL;
     /*
      * Provide fast access to integer part of capability registers using
      * gen_get_gpr() and get_set_gpr(). But don't expose the cpu_gprs TCGv
@@ -1088,10 +1069,6 @@ void riscv_translate_init(void)
             cpu_env,
             offsetof(CPURISCVState, gpcapregs.decompressed[i].cap._cr_cursor),
             riscv_int_regnames[i]);
-        _cpu_pesbt_do_not_access_directly[i] = tcg_global_mem_new(
-            cpu_env,
-            offsetof(CPURISCVState, gpcapregs.decompressed[i].cap.cr_pesbt),
-            cheri_gp_regnames[i]);
     }
 #endif
 #ifdef CONFIG_RVFI_DII
