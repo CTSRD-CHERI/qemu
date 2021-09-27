@@ -670,7 +670,7 @@ static inline void gen_mov_cap_select(uint32_t dest_off, uint32_t true_off,
     // Using an offset of true_off + (0, false_off - true_off) = (true_off,
     // false_off)
     gen_vector_copy(cpu_env, source_ptr, dest_off, true_off,
-                    sizeof(cap_register_t), sizeof(cap_register_t));
+                    sizeof(cap_register_t), sizeof(aligned_cap_register_t));
     tcg_temp_free_ptr(source_ptr);
     tcg_temp_free_i32(offset_i32);
     tcg_temp_free_i32(diff);
