@@ -39,18 +39,35 @@
 #include "cheri_defs.h"
 #include "cheri_utils.h"
 #include "cheri-lazy-capregs-types.h"
-#include "cheri-archspecific.h"
+#include "cheri-archspecific-early.h"
 #include "cpu.h"
 #include "tcg/tcg.h"
 #include "qemu/log.h"
 #include "exec/log_instr.h"
+
+/*
+ * Whether this lazy capreg is special (and therefore always stored fully
+ * decompressed).
+ */
+static inline bool lazy_capreg_number_is_special(int reg)
+{
+    cheri_debug_assert(reg < NUM_LAZY_CAP_REGS);
+    return (reg == NULL_CAPREG_INDEX);
+}
 
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
 
 static inline QEMU_ALWAYS_INLINE CapRegState
 get_capreg_state(const GPCapRegs *gpcrs, unsigned reg)
 {
-    cheri_debug_assert(reg < 32);
+    cheri_debug_assert(reg < NUM_LAZY_CAP_REGS);
+    /*
+     * Only 31/32 registers are decompressed lazily, any additional ones (e.g.
+     * the NULL register or a scratch one) are always decompressed.
+     */
+    if (lazy_capreg_number_is_special(reg)) {
+        return CREG_FULLY_DECOMPRESSED;
+    }
     return (CapRegState)gpcrs->capreg_state[reg];
 }
 
@@ -58,7 +75,7 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 {
 #ifdef CONFIG_DEBUG_TCG
     if (get_capreg_state(gpcrs, regnum) == CREG_FULLY_DECOMPRESSED) {
-        cheri_debug_assert(regnum < 32);
+        cheri_debug_assert(regnum < NUM_LAZY_CAP_REGS);
         cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
                            CREG_FULLY_DECOMPRESSED);
         const cap_register_t *c = &gpcrs->decompressed[regnum];
@@ -100,13 +117,12 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
 static inline QEMU_ALWAYS_INLINE void
 set_capreg_state(GPCapRegs *gpcrs, unsigned regnum, CapRegState new_state)
 {
-    if (regnum == NULL_CAPREG_INDEX) {
+    cheri_debug_assert(regnum < NUM_LAZY_CAP_REGS);
+    if (lazy_capreg_number_is_special(regnum)) {
         cheri_debug_assert(new_state == CREG_FULLY_DECOMPRESSED &&
-                           "NULL is always fully decompressed");
+                           "NULL/scratch is always fully decompressed");
         return;
     }
-
-    cheri_debug_assert(regnum < 32);
     gpcrs->capreg_state[regnum] = new_state;
     // Check that the compressed and decompressed caps are in sync
     sanity_check_capreg(gpcrs, regnum);
@@ -141,6 +157,7 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
         const cap_register_t *result =
             int_to_cap(gpcrs->decompressed[regnum]._cr_cursor,
                        &gpcrs->decompressed[regnum]);
+        cheri_debug_assert(result->cr_pesbt == CAP_NULL_PESBT);
         set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
         return result;
     }

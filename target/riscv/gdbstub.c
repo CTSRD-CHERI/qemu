@@ -22,7 +22,6 @@
 #include "cpu.h"
 #include "helper_utils.h"
 #ifdef TARGET_CHERI
-#include "cheri-lazy-capregs.h"
 #include "cheri-helper-utils.h"
 #endif
 

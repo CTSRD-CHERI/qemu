@@ -46,8 +46,6 @@
 #include "internal.h"
 #endif
 
-#include "cheri-archspecific.h"
-
 #if !defined(TARGET_CHERI)
 #error "Should only be included for TARGET_CHERI"
 #endif

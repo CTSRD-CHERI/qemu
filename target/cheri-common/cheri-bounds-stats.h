@@ -36,6 +36,7 @@
  */
 #pragma once
 #include "cheri_utils.h"
+#include "cheri-archspecific.h"
 #include "qemu/qemu-print.h"
 
 extern bool cheri_c2e_on_unrepresentable;
