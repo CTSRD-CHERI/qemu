@@ -7,7 +7,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: checkpatch.pl
-        run: ./scripts/checkpatch.pl --no-signoff --branch "${{ github.base_ref }}..${{ github.ref }}"
+        run: ./scripts/checkpatch.pl --no-signoff --branch "${{ github.base_ref }}..${{ github.head_ref }}"
       - name: Check clang-format
         uses: wolletd/clang-format-checker@v1
         with:
