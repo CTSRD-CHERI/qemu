@@ -76,7 +76,7 @@ def test_morello_elf_file(elf_file, should_print_failed: bool, qemu_binary):
     result_err = sp.stderr.decode("utf-8")
     lines = result.split(b'\n')
     status = None
-    if len(lines) > 0:
+    if len(lines) > 1:
         line = lines[-2]
         if line.endswith(b'OK'):
             status = True
