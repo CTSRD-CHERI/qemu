@@ -39,6 +39,7 @@
 #pragma once
 
 #include "cheri_defs.h"
+#include "cheri-archspecific-earlier.h"
 
 #define CHERI_EXC_REGNUM_DDC 0 /* TODO: 32 */
 #define CHERI_EXC_REGNUM_PCC 0xff
