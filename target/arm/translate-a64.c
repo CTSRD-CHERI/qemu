@@ -450,7 +450,7 @@ static void set_gpr_reg_addr_base(DisasContext *s, int regnum,
     if (regnum == NULL_CAPREG_INDEX)
         return;
     if (capability_base) {
-        gen_cap_set_cursor(s, regnum, new_value, false);
+        gen_cap_set_cursor_fast(s, regnum, new_value);
         gen_reg_modified_cap(s, regnum);
     } else {
         tcg_gen_mov_i64(cpu_reg_sp(s, regnum), new_value);
