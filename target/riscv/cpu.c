@@ -251,11 +251,11 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
     int i;
-
+    
+// CODING STYLE VIOLATION
 #if !defined(CONFIG_USER_ONLY)
-    if (riscv_has_ext(env, RVH)) {
+    if (riscv_has_ext(env, RVH))
         qemu_fprintf(f, " %s %d\n", "V      =  ", riscv_cpu_virt_enabled(env));
-    }
 #endif
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc      ", PC_ADDR(env));
 #ifdef TARGET_CHERI
