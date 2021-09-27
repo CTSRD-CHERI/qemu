@@ -4,6 +4,9 @@ jobs:
   check-format:
     runs-on: ubuntu-latest
     steps:
+      - run: echo "base_ref=${{ github.base_ref }}"
+      - run: echo "ref=${{ github.ref }}"
+      - run: echo "head_ref=${{ github.head_ref }}"
       - name: Checkout
         uses: actions/checkout@v2
       - name: Try to fetch required commits
