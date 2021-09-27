@@ -7,10 +7,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - run: git --no-pager log --oneline -100
-      - run: git show --stat "${{ github.base_ref }}"
-      - run: git show --stat "${{ github.sha }}"
+      - run: git remote -v
+      - run: git show --stat "${{ github.sha }}" || true
+      - run: git show --stat "${{ github.base_ref }}" || true
+      - run: git show --stat "origin/${{ github.base_ref }}" || true
       - name: checkpatch.pl
-        run: ./scripts/checkpatch.pl --no-signoff --branch "${{ github.base_ref }}..${{ github.sha }}"
+        run: ./scripts/checkpatch.pl --no-signoff --branch "origin/${{ github.base_ref }}..${{ github.sha }}"
       - name: Check clang-format
         uses: wolletd/clang-format-checker@v1
         with:
