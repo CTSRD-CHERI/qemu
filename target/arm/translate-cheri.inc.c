@@ -141,6 +141,7 @@ static inline bool gen_cheri_addr_op_imm(DisasContext *ctx, int cd,
     }
 
     gen_cap_set_cursor(ctx, cd, result, flags_only);
+    gen_reg_modified_cap(ctx, cd);
     return true;
 }
 
@@ -170,7 +171,7 @@ static inline bool gen_cheri_addr_op_tcgval(DisasContext *ctx, int cd,
     }
 
     gen_cap_set_cursor(ctx, cd, result, flags_only);
-
+    gen_reg_modified_cap(ctx, cd);
     return true;
 }
 
@@ -238,6 +239,18 @@ static inline TCGv_i64 read_cpu_reg_maybe_0(DisasContext *ctx, int regnum)
     }
 }
 
+static inline bool capabilities_enabled_exception(DisasContext *ctx)
+{
+    // Flag bits only encode an exception is needed, not which one. The helper
+    // will do that.
+    if (!GET_FLAG(ctx, CAP_ENABLED)) {
+        ctx->base.is_jmp = DISAS_NORETURN;
+        gen_helper_check_capabilities_enabled_exception(cpu_env);
+        return true;
+    }
+    return false;
+}
+
 // Load/store common code
 // loads/stores pair rd/rd2, base rn, reg offset rm (extended by option and
 // shift), immediate offset imm Size is a logarithm of the number of bytes to
@@ -284,8 +297,7 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
 
     if (vector) {
         if (!fp_access_check(ctx)) {
-            // What am I meant to do here?
-            assert(0);
+            return true;
         }
     }
 
@@ -424,6 +436,10 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
             }
         } else if (!vector) {
             MemOp memop = ctx->be_data + size;
+
+            bool fault_unaligned = exclusive || acquire_release;
+            if (fault_unaligned || memop_align_sctlr(ctx))
+                memop |= MO_ALIGN;
 
             TCGv_i64 tcg_rd = cpu_reg_maybe_0(ctx, rd);
             TCGv_i64 tcg_rd2;
@@ -599,8 +615,8 @@ TRANS_F(ADR)
 
     } else {
         // Derive an integer
-        gen_lazy_cap_set_int(ctx, a->Rd);
         tcg_gen_mov_i64(cpu_reg(ctx, a->Rd), new_addr);
+        gen_lazy_cap_set_int(ctx, a->Rd);
     }
 
     tcg_temp_free_i64(new_addr);
@@ -625,6 +641,7 @@ TRANS_F(ADD_SUB)
     gen_cap_set_cursor(ctx, a->Cd, new, false);
 
     tcg_temp_free_i64(new);
+    gen_reg_modified_cap(ctx, a->Cd);
     return true;
 }
 
@@ -692,9 +709,10 @@ TRANS_F(ADD1)
 
     // extended int
     ext_and_shift_reg(extended, extended, a->option_name, a->imm3);
-    tcg_gen_add_i64(extended, extended, cpu_reg(ctx, a->Cd));
+    tcg_gen_add_i64(extended, extended, cpu_reg_sp(ctx, a->Cn));
 
     gen_cap_set_cursor(ctx, a->Cd, extended, false);
+    gen_reg_modified_cap(ctx, a->Cd);
     return true;
 }
 
@@ -801,6 +819,8 @@ static bool cvt_impl_ptr_to_cap(DisasContext *ctx, uint32_t cd, uint32_t cn,
 
     tcg_temp_free_i64(new_cursor);
     tcg_temp_free_i64(temp);
+
+    gen_reg_modified_cap(ctx, cd);
 
     return true;
 }
@@ -937,6 +957,7 @@ TRANS_F(FLGS_CTHI)
 
     if (a->opc == 0b11) { // cn/cm as zero
         gen_cap_set_pesbt(ctx, a->Cd, rm);
+        gen_reg_modified_cap(ctx, a->Cd);
         return true;
     } else { // cm as zero
         tcg_gen_andi_i64(rm, rm, 0xFFULL << 56);
@@ -1260,6 +1281,8 @@ TRANS_F(BUILD_CSEAL_CPYE)
         gen_move_cap_gp_gp(ctx, cd, cd_temp);
     }
 
+    gen_reg_modified_cap(ctx, cd);
+
     return true;
 }
 
@@ -1270,6 +1293,7 @@ TRANS_F(CLRPERM)
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
     gen_cap_clear_perms(ctx, a->Cd, rmv, true);
     gen_cap_untag_if_sealed(ctx, a->Cd);
+    gen_reg_modified_cap(ctx, a->Cd);
     return true;
 }
 
@@ -1295,6 +1319,8 @@ TRANS_F(SCG)
         gen_lazy_cap_set_state(ctx, a->Cd, CREG_UNTAGGED_CAP);
     }
 
+    gen_reg_modified_cap(ctx, a->Cd);
+
     return true;
 }
 
@@ -1308,6 +1334,8 @@ TRANS_F(SCG1)
     tcg_gen_andi_i64(flag_bits, flag_bits, 0xFFULL << 56);
 
     gen_cheri_addr_op_tcgval(ctx, a->Cd, flag_bits, OP_SET, true);
+
+    gen_reg_modified_cap(ctx, a->Cd);
 
     return true;
 }
@@ -1336,6 +1364,7 @@ TRANS_F(SEAL)
                             CC128_OTYPE_LOAD_BRANCH};
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
     gen_cap_set_type_const(ctx, a->Cd, types[a->form], true);
+    gen_reg_modified_cap(ctx, a->Cd);
     return true;
 }
 
@@ -1397,6 +1426,8 @@ TRANS_F(SEAL_CHKSSU)
 
     if (need_scratch)
         gen_move_cap_gp_gp(ctx, cd, cd_temp);
+
+    gen_reg_modified_cap(ctx, cd);
 
     return true;
 }
@@ -1476,7 +1507,6 @@ TRANS_F(GC)
     }
 
     gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rd));
-    gen_cap_debug(ctx, AS_ZERO(a->Rd));
     return true;
 }
 
@@ -1595,8 +1625,8 @@ TRANS_F(RR)
         return false;
     }
 
-    gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rd));
     helper(cpu_reg(ctx, AS_ZERO(a->Rd)), cpu_env, cpu_reg(ctx, AS_ZERO(a->Rn)));
+    gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rd));
 
     return true;
 }
@@ -1677,6 +1707,8 @@ TRANS_F(CLRPERM1)
     gen_cap_pesbt_clear_HWPERMS(ctx, a->Cd, mask);
     gen_cap_untag_if_sealed(ctx, a->Cd);
     tcg_temp_free_i64(mask);
+
+    gen_reg_modified_cap(ctx, a->Cd);
     return true;
 }
 
@@ -1779,7 +1811,6 @@ TRANS_F(CT)
     if (a->opc) {
         gen_helper_load_tags(cpu_reg(ctx, a->Rt), cpu_env, tcg_reg, addr);
         gen_lazy_cap_set_int(ctx, AS_ZERO(a->Rt));
-        gen_reg_modified_int(ctx, AS_ZERO(a->Rt));
     } else {
         TCGv_i64 v = cpu_reg(
             ctx, (!isTagSettingDisabled(ctx) && cheri_is_system_ctx(ctx))

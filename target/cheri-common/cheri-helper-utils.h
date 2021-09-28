@@ -123,7 +123,13 @@ static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
     return;
 
 do_exception:
-    raise_cheri_exception_impl(env, cause, regnum, instavail, pc);
+#ifdef TARGET_AARCH64
+    raise_cheri_exception_impl_if_wnr(env, cause, regnum, addr, instavail, pc,
+                                      !!(perm & CAP_PERM_EXECUTE),
+                                      !!(perm & CAP_PERM_STORE));
+#else
+    raise_cheri_exception_impl(env, cause, regnum, addr, instavail, pc);
+#endif
 }
 
 static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
@@ -276,37 +282,58 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
                      uint32_t alignment_required,
                      unaligned_memaccess_handler unaligned_handler)
 {
-#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cap_get_perms(cbp)) & (X))
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (!cap_is_unsealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, cb);
-    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD_CAP)) {
-        raise_cheri_exception(env, CapEx_PermitLoadCapViolation, cb);
-    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
-    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_CAP)) {
-        raise_cheri_exception(env, CapEx_PermitStoreCapViolation, cb);
-    } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_LOCAL)) {
-        raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, cb);
-    }
-#undef MISSING_REQUIRED_PERM
-
     const target_ulong cursor = cap_get_cursor(cbp);
 #ifdef TARGET_AARCH64
     const target_ulong addr = (target_long)offset;
 #else
     const target_ulong addr = cursor + (target_long)offset;
 #endif
-    if (!cap_is_in_bounds(cbp, addr, size)) {
+
+#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cap_get_perms(cbp)) & (X))
+    // The check here is a little fiddly if this is a store and a load due to
+    // priorities. For either loads or stores, permissions fault > bounds fault.
+    // But: load bounds fault > store permissions fault. So all permissions
+    // should not be checked before bounds. It is also a bad idea to call this
+    // twice, once for load, once for store, because it performs alignment
+    // checks and Store permissions fault > load alignment fault
+
+    bool is_load = (required_perms & CAP_PERM_LOAD) != 0;
+    bool in_bounds = cap_is_in_bounds(cbp, addr, size);
+
+    if (!cbp->cr_tag) {
+        raise_cheri_exception_addr_wnr(env, CapEx_TagViolation, cb, offset,
+                                       !is_load);
+    } else if (!cap_is_unsealed(cbp)) {
+        raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, offset,
+                                       !is_load);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD)) {
+        raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadViolation, cb,
+                                       offset, false);
+    } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD_CAP)) {
+        raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadCapViolation, cb,
+                                       offset, false);
+    } else if (!is_load || in_bounds) {
+        if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
+            raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreViolation, cb,
+                                           offset, true);
+        } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_CAP)) {
+            raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreCapViolation,
+                                           cb, offset, true);
+        } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_LOCAL)) {
+            raise_cheri_exception_addr_wnr(
+                env, CapEx_PermitStoreLocalCapViolation, cb, offset, true);
+        }
+    }
+#undef MISSING_REQUIRED_PERM
+
+    if (!in_bounds) {
         qemu_log_instr_or_mask_msg(
             env, CPU_LOG_INT,
             "Failed capability bounds check: offset=" TARGET_FMT_lx
             " cursor=" TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n",
             offset, cursor, addr);
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception_addr_wnr(env, CapEx_LengthViolation, cb, offset,
+                                       !is_load);
     } else if (alignment_required &&
                !QEMU_IS_ALIGNED_P2(addr, alignment_required)) {
         if (unaligned_handler) {

@@ -88,8 +88,11 @@ void helper_load_exclusive_cap_via_cap(CPUArchState *env, uint32_t cd,
     const cap_register_t *cbp = get_capreg_or_special(env, cb);
     uint32_t size = (cd2 == REG_NONE) ? CHERI_CAP_SIZE : (CHERI_CAP_SIZE * 2);
 
+    // Exclusives must be aligned to the entire size of the operation, not just
+    // one of the elements
     cap_check_common_reg(perms_for_load(), env, cb, addr, size,
-                         _host_return_address, cbp, CHERI_CAP_SIZE, true);
+                         _host_return_address, cbp, size,
+                         raise_unaligned_load_exception);
 
     bool raw_tag;
     bool tag1 = load_cap_from_memory_raw_tag(
@@ -125,7 +128,7 @@ void helper_store_exclusive_cap_via_cap(CPUArchState *env, uint32_t rs,
     uint32_t size = (cd2 == REG_NONE) ? CHERI_CAP_SIZE : (CHERI_CAP_SIZE * 2);
 
     cap_check_common_reg(perms, env, cb, addr, size, _host_return_address, &cbp,
-                         CHERI_CAP_SIZE, true);
+                         size, raise_unaligned_store_exception);
 
     // Should be storing to same address as load exclusive
     bool success = env->exclusive_addr == addr;
@@ -205,8 +208,6 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
     if (do_store) {
         store_cap_to_memory(env, cd, addr, _host_return_address);
     }
-
-    printf("Updating cs %d from swap (%lx)\n", cs, cursor);
 
     // Write back to cs
     update_compressed_capreg(env, cs, pesbt, tag, cursor);
