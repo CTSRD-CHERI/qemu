@@ -248,7 +248,7 @@ static inline bool cap_is_unsealed(const cap_register_t *c)
 static inline void cap_set_sealed(cap_register_t *c, uint32_t type)
 {
 #ifdef TARGET_AARCH64
-    type &= CC128_FIELD_OTYPE_MASK_NOT_SHIFTED;
+    type &= CAP_CC(FIELD_OTYPE_MASK_NOT_SHIFTED);
 #endif
     assert(c->cr_tag);
     assert(cap_get_otype_unsigned(c) == CAP_OTYPE_UNSEALED &&

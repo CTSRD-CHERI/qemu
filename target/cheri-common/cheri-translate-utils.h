@@ -975,14 +975,14 @@ static inline void gen_sp_set_decompressed_int(DisasContext *ctx, size_t offset)
     tcg_gen_st8_tl(temp, cpu_env,
                    offset + offsetof(cap_register_t, cr_bounds_valid));
 #endif
-    // Exponent
-    tcg_gen_movi_tl(temp, CC128_NULL_EXP);
-    tcg_gen_st8_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_exp));
 #else
     TCGv_i64 temp64 = tcg_const_i64(CC64_NULL_TOP);
     tcg_gen_st_i64(temp64, cpu_env, offset + offsetof(cap_register_t, _cr_top));
     tcg_temp_free_i64(temp64);
 #endif
+    // Exponent
+    tcg_gen_movi_tl(temp, CAP_CC(NULL_EXP));
+    tcg_gen_st8_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_exp));
     tcg_temp_free(temp);
 }
 
@@ -1719,12 +1719,13 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
     gen_cap_set_cursor_unsafe(ctx, regnum, tmp0);
     // xor new and old cursor. If 57th bit changes and address depends on
     tcg_gen_xor_i64(tmp0, tmp1, tmp0);
-    tcg_gen_shri_i64(tmp0, tmp0, (63 - MORELLO_FLAG_BITS));
+    tcg_gen_shri_i64(tmp0, tmp0, (CAP_CC(ADDR_WIDTH) - 1 - MORELLO_FLAG_BITS));
     gen_cap_get_exponent(ctx, regnum, tmp2);
     cheri_tcg_printf_verbose("d", "Fast add: exp: %d\n", tmp2);
     // exp < CAP_VALUE_NUM_BITS - CAP_MW;
     tcg_gen_setcondi_i64(TCG_COND_LTU, tmp3, tmp2,
-                         64 - CC128_FIELD_BOTTOM_ENCODED_SIZE);
+                         CAP_CC(ADDR_WIDTH) -
+                             CAP_CC(FIELD_BOTTOM_ENCODED_SIZE));
     // bounds_uses_value & bit 57 changed
     tcg_gen_and_i64(tmp0, tmp0, tmp3);
     tcg_gen_not_i64(tmp0, tmp0);
@@ -1733,7 +1734,7 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
                              new_tag);
 
     // Is representable fast (tmp2 is still holding exp, tmp1 old cursor)
-    TCGv_i64 fast_rep = tcg_const_i64(CC128_MAX_EXPONENT - 2);
+    TCGv_i64 fast_rep = tcg_const_i64(CAP_CC(MAX_EXPONENT) - 2);
     // if exp >= (CAP_MAX_EXPONENT - 2) then return TRUE;
     tcg_gen_setcond_i64(TCG_COND_GEU, fast_rep, tmp2, fast_rep);
     cheri_tcg_printf_verbose("d", "Fast add: rep check (big exp): %d\n",
@@ -1746,7 +1747,7 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
 
     // Some of these fields should be CAP_MW wide
     // we will just use the _top_ CAP_MW bits of the 64 bit field so
-    int field_shift = 64 - CC128_FIELD_BOTTOM_ENCODED_SIZE;
+    int field_shift = CAP_CC(ADDR_WIDTH) - CAP_CC(FIELD_BOTTOM_ENCODED_SIZE);
     // additions/subtractions/comparisons just work
     // i_mid (tmp3) = LSR(increment,exp)<CAP_MW-1:0>;
     tcg_gen_shr_i64(tmp3, increment, tmp2);
@@ -1755,16 +1756,16 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
     tcg_gen_shr_i64(tmp1, tmp1, tmp2);
     tcg_gen_shli_i64(tmp1, tmp1, field_shift);
     // i_top (increment) = ASR(increment,exp+CAP_MW);
-    tcg_gen_addi_i64(tmp2, tmp2, CC128_FIELD_BOTTOM_ENCODED_SIZE);
+    tcg_gen_addi_i64(tmp2, tmp2, CAP_CC(FIELD_BOTTOM_ENCODED_SIZE));
     tcg_gen_sar_i64(increment, increment, tmp2);
     // B3 = CapGetBottom(c)<CAP_MW-1:CAP_MW-3>;
     // R3 = B3 - '001';
     // R (tmp2) = R3:Zeros(CAP_MW-3);
     gen_cap_load_pesbt(ctx, regnum, tmp2);
-    tcg_gen_shri_i64(
-        tmp2, tmp2,
-        (CC128_FIELD_BOTTOM_ENCODED_START + CC128_FIELD_BOTTOM_ENCODED_SIZE) -
-            3);
+    tcg_gen_shri_i64(tmp2, tmp2,
+                     (CAP_CC(FIELD_BOTTOM_ENCODED_START) +
+                      CAP_CC(FIELD_BOTTOM_ENCODED_SIZE)) -
+                         3);
     tcg_gen_subi_i64(tmp2, tmp2, 0b001);
     tcg_gen_shli_i64(tmp2, tmp2, 61);
     // diff (tmp0) = R - a_mid;
@@ -1992,7 +1993,7 @@ static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
     tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // Set type of regnum
-    tcg_gen_movi_tl(temp0, CC128_FIELD_OTYPE_MASK_NOT_SHIFTED);
+    tcg_gen_movi_tl(temp0, CAP_CC(FIELD_OTYPE_MASK_NOT_SHIFTED));
 
     if (!conditional) {
         tcg_gen_and_tl(temp0, temp0, new_type);
@@ -2130,7 +2131,7 @@ static inline void gen_cap_is_subset(DisasContext *ctx, int rega, int regb,
     gen_cap_load_pesbt(ctx, regb, tempb);
 
     tcg_gen_andc_i64(tempa, tempa, tempb);
-    tcg_gen_movi_i64(tempb, CC128_FIELD_HWPERMS_MASK64);
+    tcg_gen_movi_i64(tempb, CAP_CC(FIELD_HWPERMS_MASK64));
     tcg_gen_and_i64(tempa, tempa, tempb);
     tcg_gen_movi_i64(tempb, 0);
     tcg_gen_setcond_i64(TCG_COND_EQ, tempa, tempa, tempb);
