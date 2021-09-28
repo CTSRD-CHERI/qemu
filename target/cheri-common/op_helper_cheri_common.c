@@ -955,16 +955,16 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
         raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
+#ifndef TARGET_AARCH64
     } else
-#ifdef TARGET_AARCH64
         // On morello this check needs doing later as the resulting bounds may
         // not be exact, but then break monotonicity.
         if (new_base < cbp->cr_base) {
         raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
     } else if (new_top > cap_get_top_full(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
-    }
 #endif
+    }
     cap_register_t result = *cbp;
     /*
      * With compressed capabilities we may need to increase the range of
