@@ -975,6 +975,9 @@ static inline void gen_sp_set_decompressed_int(DisasContext *ctx, size_t offset)
     tcg_gen_st8_tl(temp, cpu_env,
                    offset + offsetof(cap_register_t, cr_bounds_valid));
 #endif
+    // Exponent
+    tcg_gen_movi_tl(temp, CC128_NULL_EXP);
+    tcg_gen_st8_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_exp));
 #else
     TCGv_i64 temp64 = tcg_const_i64(CC64_NULL_TOP);
     tcg_gen_st_i64(temp64, cpu_env, offset + offsetof(cap_register_t, _cr_top));
@@ -1485,6 +1488,14 @@ static inline void gen_cap_get_offset(DisasContext *ctx, int regnum,
     cheri_tcg_printf_verbose("cd", "Get reg %d offset: %lx\n", regnum, offset);
 }
 
+static inline void gen_cap_load_bounds_valid(DisasContext *ctx, int regnum,
+                                             TCGv_i64 result)
+{
+    tcg_gen_ld8u_i64(result, cpu_env,
+                     gp_register_offset(regnum) +
+                         offsetof(cap_register_t, cr_bounds_valid));
+}
+
 static inline void gen_cap_in_bounds(DisasContext *ctx, int regnum, TCGv addr,
                                      TCGv result, uint32_t size)
 {
@@ -1502,10 +1513,8 @@ static inline void gen_cap_in_bounds(DisasContext *ctx, int regnum, TCGv addr,
     tcg_gen_and_tl(result, result, base);
 #ifdef TARGET_AARCH64
     // On Morello all invalid exponent caps are always out of bounds.
-    tcg_gen_ld8u_tl(base, cpu_env,
-                    gp_register_offset(regnum) +
-                        offsetof(cap_register_t, cr_bounds_valid));
-    tcg_gen_and_tl(result, result, base);
+    gen_cap_load_bounds_valid(ctx, regnum, base);
+    tcg_gen_and_i64(result, result, base);
 #endif
     tcg_temp_free(base);
     cheri_tcg_printf_verbose("cd", "Get reg %d in bounds: %d\n", regnum,
@@ -1577,6 +1586,12 @@ static inline void gen_cap_set_cursor(DisasContext *ctx, int regnum,
                        temp1);
 
 #ifdef TARGET_AARCH64
+        // Also, invalidly decoded bounds also cause unrepresentability
+        gen_cap_load_bounds_valid(ctx, regnum, temp1);
+        cheri_tcg_printf_verbose("d", "Quick check: bounds valid: %d\n", temp1);
+        // A || !B is the same as B <= A
+        tcg_gen_setcond_i64(TCG_COND_LEU, possible_bad_modification, temp1,
+                            possible_bad_modification);
         // On morello the top non-flag bit changing can cause problems.
         // If it does it is best to go to the more complicated check.
         gen_cap_get_cursor(ctx, regnum, temp1);
@@ -1689,9 +1704,7 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
     cheri_tcg_printf_verbose("d", "Fast add: old tag: %d\n", new_tag);
     // Check exponant out of range (decode will have set bounds invalid if it
     // was)
-    tcg_gen_ld8u_i64(tmp1, cpu_env,
-                     gp_register_offset(regnum) +
-                         offsetof(cap_register_t, cr_bounds_valid));
+    gen_cap_load_bounds_valid(ctx, regnum, tmp1);
     tcg_gen_and_i64(new_tag, new_tag, tmp1);
     cheri_tcg_printf_verbose("d", "Fast add: after exp check: %d\n", new_tag);
     // Check sealed
@@ -2124,12 +2137,8 @@ static inline void gen_cap_is_subset(DisasContext *ctx, int rega, int regb,
     tcg_gen_and_i64(result, result, tempa);
 
     // Finally that both caps have valid bounds
-    tcg_gen_ld8u_i64(tempa, cpu_env,
-                     gp_register_offset(rega) +
-                         offsetof(cap_register_t, cr_bounds_valid));
-    tcg_gen_ld8u_i64(tempb, cpu_env,
-                     gp_register_offset(regb) +
-                         offsetof(cap_register_t, cr_bounds_valid));
+    gen_cap_load_bounds_valid(ctx, rega, tempa);
+    gen_cap_load_bounds_valid(ctx, regb, tempb);
     tcg_gen_and_i64(result, result, tempa);
     tcg_gen_and_i64(result, result, tempb);
 
