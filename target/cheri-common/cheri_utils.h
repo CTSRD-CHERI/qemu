@@ -253,6 +253,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cheri_debug_assert(cap_is_representable(cp));
 #ifdef TARGET_AARCH64
     cp->cr_bounds_valid = 1;
+    cp->cr_exp = CC128_NULL_EXP;
 #endif
     return cp;
 }
