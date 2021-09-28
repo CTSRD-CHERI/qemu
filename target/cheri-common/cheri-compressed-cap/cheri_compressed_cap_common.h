@@ -126,6 +126,7 @@ struct _cc_N(cap) {
     _cc_addr_t cr_base;    /* Capability base addr */
     uint8_t cr_tag;      /* Tag */
     uint8_t cr_bounds_valid; /* Set if bounds decode was given an invalid cap */
+    uint8_t cr_exp;          /* Exponent */
 #ifdef __cplusplus
     inline _cc_addr_t base() const { return cr_base; }
     inline _cc_addr_t address() const { return _cr_cursor; }
@@ -417,6 +418,7 @@ static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bo
     _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(pesbt);
     bool valid = _cc_N(compute_base_top)(bounds, cursor, &cdp->cr_base, &cdp->_cr_top);
     cdp->cr_bounds_valid = valid;
+    cdp->cr_exp = bounds.E;
     if (tag) {
         _cc_debug_assert(cdp->cr_base <= _CC_N(MAX_ADDR));
 #ifndef CC_IS_MORELLO
@@ -710,9 +712,9 @@ static inline _cc_addr_t _cc_N(cap_bounds_address)(const _cc_cap_t* cap) {
     return cursor;
 }
 
+// This should only be used on decompressed caps, as it relies on the exp field
 static inline bool _cc_N(cap_bounds_uses_value)(const _cc_cap_t* cap) {
-    _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(cap->cr_pesbt);
-    return bounds.E + _CC_N(FIELD_BOTTOM_ENCODED_SIZE) < (sizeof(_cc_addr_t) * 8);
+    return cap->cr_exp < (sizeof(_cc_addr_t) * 8) - _CC_N(FIELD_BOTTOM_ENCODED_SIZE);
 }
 
 static inline bool _cc_N(cap_sign_change)(_cc_addr_t addr1, _cc_addr_t addr2) {
@@ -855,6 +857,7 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
                      "Unknown reserved bits set in tagged capability");
     cap->cr_base = new_base;
     cap->_cr_top = new_top;
+    cap->cr_exp = new_cap.cr_exp;
     _cc_N(update_ebt)(cap, new_ebt);
 #ifdef CC_IS_MORELLO
     cap->cr_bounds_valid = new_cap.cr_bounds_valid;
@@ -907,6 +910,7 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     creg.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
                     _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
     creg.cr_tag = true;
+    creg.cr_exp = _CC_N(NULL_EXP);
     bool exact_input = false;
     _cc_N(update_ebt)(&creg, _cc_N(compute_ebt)(creg.cr_base, creg._cr_top, NULL, &exact_input));
     assert(exact_input && "Invalid arguments");
