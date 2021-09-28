@@ -175,9 +175,15 @@ static inline bool validate_jump_target(CPUARMState *env,
 #include "exec/helper-proto.h"
 
 static inline void update_next_pcc_for_tcg(CPUARMState *env,
-                                           const cap_register_t *target,
+                                           cap_register_t *target,
                                            uint32_t cjalr_flags)
 {
+    if (!cap_is_unsealed(target)) {
+        target->cr_tag = 0;
+    }
+
+    // TODO: Reading BranchAddr in the arm ARM it looks like there is some
+    // top byte sign extending not being respected here
     uint32_t old_perms = cap_get_perms(&env->pc.cap);
     uint32_t new_perms = cap_get_perms(target);
 
