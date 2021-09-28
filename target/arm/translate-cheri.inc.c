@@ -1156,7 +1156,7 @@ TRANS_F(BLR_BR_RET_CHKD)
         TCGv link_addr = get_link_addr(ctx);
         TCGv cjalr_imm = tcg_const_tl(0);
 
-        disas_capreg_state_set_unknown(ctx, source);
+        disas_capreg_state_set_unknown(ctx, AS_ZERO(a->Cn));
         gen_helper_cjalr(cpu_env, link_regnum, target_regnum, cjalr_imm,
                          link_addr);
 
