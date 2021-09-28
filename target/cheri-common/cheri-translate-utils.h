@@ -1100,12 +1100,33 @@ static inline void gen_cap_get_top_hi(DisasContext *ctx, int regnum,
     tcg_gen_ld_i64(top_hi, cpu_env, offset + CAP_TOP_HIBYTES_OFFSET);
 }
 
+// Does addr + offset <= top. If offset non zero, Addr MUST be a multiple of
+// offset.
 static inline void gen_cap_addr_below_top(DisasContext *ctx, int regnum,
-                                          TCGv_i64 addr, TCGv result)
+                                          TCGv_i64 addr, TCGv result,
+                                          int offset)
 {
+    // Because of the above invariant,
     TCGv_i64 temp = tcg_temp_new_i64();
+    // Offsets of less than one can be folded into the comparison
+    if (offset > 1) {
+        TCGv_i64 addrtmp = tcg_temp_new_i64();
+        tcg_gen_movi_i64(addrtmp, offset);
+        tcg_gen_add_i64(addrtmp, addrtmp, addr);
+        addr = addrtmp;
+    }
     gen_cap_get_top_lo(ctx, regnum, temp);
-    tcg_gen_setcond_i64(TCG_COND_LEU, result, addr, temp);
+    tcg_gen_setcond_i64(offset == 1 ? TCG_COND_LTU : TCG_COND_LEU, result, addr,
+                        temp);
+    if (offset > 1) {
+        // The only overflow that can occur will make address exactly 0.
+        tcg_gen_movi_i64(temp, 0);
+        tcg_gen_setcond_i64(TCG_COND_NE, temp, addr, temp);
+        // doing this before the or below will make full length caps still work
+        // properly
+        tcg_gen_and_i64(result, result, temp);
+        tcg_temp_free_i64(addr);
+    }
     gen_cap_get_top_hi(ctx, regnum, temp);
     tcg_gen_or_i64(result, result, temp);
     tcg_temp_free_i64(temp);
@@ -1143,24 +1164,35 @@ static inline void gen_cap_get_length(DisasContext *ctx, int regnum,
 }
 
 static inline void gen_cap_get_base_below_top(DisasContext *ctx, int regnum,
-                                              TCGv result)
+                                              TCGv_i64 result)
 {
     // TODO: Is this possible for caps that are validly decoded? In which case
     // this can be replaced with a single load.
     gen_cap_get_base(ctx, regnum, result);
-    gen_cap_addr_below_top(ctx, regnum, result, result);
+    gen_cap_addr_below_top(ctx, regnum, result, result, 0);
 }
 #else  /* CHERI_CAP_BITS == 64 */
 static inline void gen_cap_addr_below_top(DisasContext *ctx, int regnum,
-                                          TCGv_i64 addr_ext, TCGv result)
+                                          TCGv_i64 addr_ext, TCGv result,
+                                          unsigned addr_offset)
 {
     gen_ensure_cap_decompressed(ctx, regnum);
     TCGv_i64 top = tcg_temp_new_i64();
     TCGv_i64 temp = tcg_temp_new_i64();
-    size_t offset =
+    size_t top_offset =
         gp_register_offset(regnum) + offsetof(cap_register_t, _cr_top);
-    tcg_gen_ld_i64(top, cpu_env, offset);
-    tcg_gen_setcond_i64(TCG_COND_LTU, temp, addr_ext, top);
+    tcg_gen_ld_i64(top, cpu_env, top_offset);
+    // Offsets of less than one can be folded into the comparison
+    TCGv_i64 addrtmp = NULL;
+    if (addr_offset > 1) {
+        addrtmp = tcg_temp_new_i64();
+        tcg_gen_movi_i64(addrtmp, addr_offset);
+        tcg_gen_add_i64(addrtmp, addrtmp, addr_ext);
+        tcg_gen_setcond_i64(TCG_COND_LEU, temp, addrtmp, top);
+        tcg_temp_free_i64(addrtmp);
+    } else {
+        tcg_gen_setcond_i64(TCG_COND_LTU, temp, addr_ext, top);
+    }
     tcg_gen_trunc_i64_tl(result, temp);
     tcg_temp_free_i64(top);
     tcg_temp_free_i64(temp);
@@ -1264,7 +1296,7 @@ static inline void gen_cap_get_offset(DisasContext *ctx, int regnum,
 }
 
 static inline void gen_cap_in_bounds(DisasContext *ctx, int regnum, TCGv addr,
-                                     TCGv result)
+                                     TCGv result, uint32_t size)
 {
     gen_ensure_cap_decompressed(ctx, regnum);
     TCGv base = tcg_temp_new();
@@ -1276,7 +1308,7 @@ static inline void gen_cap_in_bounds(DisasContext *ctx, int regnum, TCGv addr,
 #else
     TCGv_i64 addr_ext = addr;
 #endif
-    gen_cap_addr_below_top(ctx, regnum, addr_ext, base);
+    gen_cap_addr_below_top(ctx, regnum, addr_ext, base, size);
     tcg_gen_and_tl(result, result, base);
 #ifdef TARGET_AARCH64
     // On Morello all invalid exponent caps are always out of bounds.
@@ -1572,7 +1604,7 @@ static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
     tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // auth in bounds
-    gen_cap_in_bounds(ctx, auth_regnum, new_type, temp0);
+    gen_cap_in_bounds(ctx, auth_regnum, new_type, temp0, 1);
     tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // regnum tagged
@@ -1636,7 +1668,7 @@ static inline void gen_cap_unseal(DisasContext *ctx, int regnum,
     gen_cap_set_type_unchecked(ctx, regnum, temp0);
 
     // auth in bounds
-    gen_cap_in_bounds(ctx, auth_regnum, temp1, temp0);
+    gen_cap_in_bounds(ctx, auth_regnum, temp1, temp0, 1);
     tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // auth tagged
