@@ -739,6 +739,8 @@ static inline bool _cc_N(is_representable_with_addr)(const _cc_cap_t* cap, _cc_a
     if (_cc_N(cap_sign_change_causes_unrepresentability)(cap, new_addr, cap->_cr_cursor)) {
         return false;
     }
+    if (!cap->cr_bounds_valid)
+        return false;
 #endif
     // in-bounds capabilities are otherwise always representable
     if (__builtin_expect(new_addr >= cap->cr_base && new_addr < cap->_cr_top, true)) {
