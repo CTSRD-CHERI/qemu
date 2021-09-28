@@ -627,7 +627,7 @@ TRANS_F(ADR)
             gen_move_cap_gp_gp(ctx, a->Rd, 28);
         }
 
-        gen_cap_set_cursor(ctx, a->Rd, new_addr, false);
+        gen_cap_set_cursor_fast(ctx, a->Rd, new_addr);
 
     } else {
         // Derive an integer
@@ -653,13 +653,11 @@ TRANS_F(ADD_SUB)
 
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
 
-    TCGv_i64 new = tcg_temp_new_i64();
-    gen_cap_get_cursor(ctx, a->Cd, new);
-    tcg_gen_addi_i64(new, new, imm);
+    TCGv_i64 increment = tcg_const_i64(imm);
 
-    gen_cap_set_cursor(ctx, a->Cd, new, false);
+    gen_cap_add_fast(ctx, a->Cd, increment);
 
-    tcg_temp_free_i64(new);
+    tcg_temp_free_i64(increment);
     gen_reg_modified_cap(ctx, a->Cd);
     return true;
 }
@@ -751,9 +749,8 @@ TRANS_F(ADD1)
 
     // extended int
     ext_and_shift_reg(extended, extended, a->option_name, a->imm3);
-    tcg_gen_add_i64(extended, extended, cpu_reg_sp(ctx, a->Cn));
 
-    gen_cap_set_cursor(ctx, a->Cd, extended, false);
+    gen_cap_add_fast(ctx, a->Cd, extended);
     gen_reg_modified_cap(ctx, a->Cd);
     return true;
 }

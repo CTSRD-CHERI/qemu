@@ -1526,8 +1526,7 @@ static inline void gen_cap_has_perms(DisasContext *ctx, int regnum,
 }
 
 #if CHERI_CAP_BITS == 128
-// TODO: handle the slightly different semantics around precise and im-precise
-// checks Handles sealed and unrepresentable caps when the cursor is changed. If
+// Handles sealed and unrepresentable caps when the cursor is changed. If
 // you are only changing flag bits, specify flag_bits_only. Do NOT modify cursor
 // before calling this, as the old cursor may be used for the check. WARN:
 // calling this will kill any temps
@@ -1621,6 +1620,209 @@ static inline void gen_cap_set_cursor(DisasContext *ctx, int regnum,
     tcg_temp_free_i64(possible_bad_modification);
 }
 
+#endif
+
+static inline void gen_cap_get_exponent(DisasContext *ctx, int regnum,
+                                        TCGv_i64 exp)
+{
+    gen_ensure_cap_decompressed(ctx, regnum);
+    tcg_gen_ld8u_i64(exp, cpu_env,
+                     gp_register_offset(regnum) +
+                         offsetof(cap_register_t, cr_exp));
+}
+
+// TODO this is slightly different than other CHERI platforms.
+#ifdef TARGET_AARCH64
+
+// Sign extend an address
+static inline void gen_cap_bounds_address(TCGv_i64 address, TCGv_i64 result)
+{
+    TCGv_i64 amt = tcg_const_i64(MORELLO_FLAG_BITS);
+    tcg_gen_shl_i64(result, address, amt);
+    tcg_gen_sar_i64(result, result, amt);
+    tcg_temp_free_i64(amt);
+}
+
+// This is the 'fast' version of setting the cursor that untags with false
+// positives. Also handles untagging sealed caps.
+static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
+                                    TCGv_i64 increment)
+{
+
+    TCGv_i64 tmp0;
+    bool untagged = disas_capreg_state_must_be2(ctx, regnum, CREG_INTEGER,
+                                                CREG_UNTAGGED_CAP);
+
+    if (!untagged) {
+        // Make cocal copy of increment as decompress will kill temps
+        TCGv_i64 increment_local = tcg_temp_local_new_i64();
+        tcg_gen_mov_i64(increment_local, increment);
+        tmp0 = increment;
+        gen_ensure_cap_decompressed(ctx, regnum);
+        increment = increment_local;
+    } else {
+        tmp0 = tcg_temp_new_i64();
+    }
+
+    gen_cap_get_cursor(ctx, regnum, tmp0);
+    cheri_tcg_printf_verbose(
+        "dd", "Fast add: Old cursor %lx\n. Increment %lx\n", tmp0, increment);
+    tcg_gen_add_i64(tmp0, tmp0, increment);
+
+    // If already untagged no need for any further detagging
+    if (untagged) {
+        cheri_tcg_printf_verbose("", "Fast add: already untagged\n");
+        gen_cap_set_cursor_unsafe(ctx, regnum, tmp0);
+        tcg_temp_free_i64(tmp0);
+        return;
+    }
+
+    TCGv_i64 tmp1 = tcg_temp_new_i64();
+    TCGv_i64 tmp2 = tcg_temp_new_i64();
+    TCGv_i64 tmp3 = tcg_temp_new_i64();
+
+    // Get old tag
+    TCGv_i64 new_tag = tcg_temp_new_i64();
+    tcg_gen_ld8u_i64(new_tag, cpu_env,
+                     gp_register_offset(regnum) +
+                         offsetof(cap_register_t, cr_tag));
+    cheri_tcg_printf_verbose("d", "Fast add: old tag: %d\n", new_tag);
+    // Check exponant out of range (decode will have set bounds invalid if it
+    // was)
+    tcg_gen_ld8u_i64(tmp1, cpu_env,
+                     gp_register_offset(regnum) +
+                         offsetof(cap_register_t, cr_bounds_valid));
+    tcg_gen_and_i64(new_tag, new_tag, tmp1);
+    cheri_tcg_printf_verbose("d", "Fast add: after exp check: %d\n", new_tag);
+    // Check sealed
+    gen_cap_get_unsealed(ctx, regnum, tmp1);
+    tcg_gen_and_i64(new_tag, new_tag, tmp1);
+    cheri_tcg_printf_verbose("d", "Fast add: after sealed check: %d\n",
+                             new_tag);
+
+    // Check sign extention
+    gen_cap_get_cursor(ctx, regnum, tmp1);
+    // Now is as good a time as any to set the cursor
+    gen_cap_set_cursor_unsafe(ctx, regnum, tmp0);
+    // xor new and old cursor. If 57th bit changes and address depends on
+    tcg_gen_xor_i64(tmp0, tmp1, tmp0);
+    tcg_gen_shri_i64(tmp0, tmp0, (63 - MORELLO_FLAG_BITS));
+    gen_cap_get_exponent(ctx, regnum, tmp2);
+    cheri_tcg_printf_verbose("d", "Fast add: exp: %d\n", tmp2);
+    // exp < CAP_VALUE_NUM_BITS - CAP_MW;
+    tcg_gen_setcondi_i64(TCG_COND_LTU, tmp3, tmp2,
+                         64 - CC128_FIELD_BOTTOM_ENCODED_SIZE);
+    // bounds_uses_value & bit 57 changed
+    tcg_gen_and_i64(tmp0, tmp0, tmp3);
+    tcg_gen_not_i64(tmp0, tmp0);
+    tcg_gen_and_i64(new_tag, new_tag, tmp0);
+    cheri_tcg_printf_verbose("d", "Fast add: after sign change check: %d\n",
+                             new_tag);
+
+    // Is representable fast (tmp2 is still holding exp, tmp1 old cursor)
+    TCGv_i64 fast_rep = tcg_const_i64(CC128_MAX_EXPONENT - 2);
+    // if exp >= (CAP_MAX_EXPONENT - 2) then return TRUE;
+    tcg_gen_setcond_i64(TCG_COND_GEU, fast_rep, tmp2, fast_rep);
+    cheri_tcg_printf_verbose("d", "Fast add: rep check (big exp): %d\n",
+                             fast_rep);
+
+    // a = CapBoundsAddress(a);
+    gen_cap_bounds_address(tmp1, tmp1);
+    // increment = CapBoundsAddress(increment);
+    gen_cap_bounds_address(increment, increment);
+
+    // Some of these fields should be CAP_MW wide
+    // we will just use the _top_ CAP_MW bits of the 64 bit field so
+    int field_shift = 64 - CC128_FIELD_BOTTOM_ENCODED_SIZE;
+    // additions/subtractions/comparisons just work
+    // i_mid (tmp3) = LSR(increment,exp)<CAP_MW-1:0>;
+    tcg_gen_shr_i64(tmp3, increment, tmp2);
+    tcg_gen_shli_i64(tmp3, tmp3, field_shift);
+    // a_mid (tmp1) = LSR(a,exp)<CAP_MW-1:0>;
+    tcg_gen_shr_i64(tmp1, tmp1, tmp2);
+    tcg_gen_shli_i64(tmp1, tmp1, field_shift);
+    // i_top (increment) = ASR(increment,exp+CAP_MW);
+    tcg_gen_addi_i64(tmp2, tmp2, CC128_FIELD_BOTTOM_ENCODED_SIZE);
+    tcg_gen_sar_i64(increment, increment, tmp2);
+    // B3 = CapGetBottom(c)<CAP_MW-1:CAP_MW-3>;
+    // R3 = B3 - '001';
+    // R (tmp2) = R3:Zeros(CAP_MW-3);
+    gen_cap_load_pesbt(ctx, regnum, tmp2);
+    tcg_gen_shri_i64(
+        tmp2, tmp2,
+        (CC128_FIELD_BOTTOM_ENCODED_START + CC128_FIELD_BOTTOM_ENCODED_SIZE) -
+            3);
+    tcg_gen_subi_i64(tmp2, tmp2, 0b001);
+    tcg_gen_shli_i64(tmp2, tmp2, 61);
+    // diff (tmp0) = R - a_mid;
+    tcg_gen_sub_i64(tmp0, tmp2, tmp1);
+
+    cheri_tcg_printf_verbose("ddddd",
+                             "Fast add: i_top: %lx, i_mid: %lx, a_mid: %lx, "
+                             "R: %lx, diff %lx",
+                             increment, tmp3, tmp1, tmp2, tmp0);
+
+    // representable |= ((i_top == -1) && i_mid >= diff && (R != a_mid)
+    tcg_gen_setcond_i64(TCG_COND_NE, tmp2, tmp2, tmp1);
+    tcg_gen_setcond_i64(TCG_COND_GEU, tmp1, tmp3, tmp0);
+    tcg_gen_and_i64(tmp2, tmp2, tmp1);
+    tcg_gen_setcondi_i64(TCG_COND_EQ, tmp1, increment, -1);
+    tcg_gen_and_i64(tmp2, tmp2, tmp1);
+    tcg_gen_or_i64(fast_rep, fast_rep, tmp2);
+
+    // diff1 = diff - 1;
+    tcg_gen_subi_i64(tmp0, tmp0, 1ULL << field_shift);
+    cheri_tcg_printf_verbose("d", ", diff1: %lx\n", tmp0);
+    // representable |= ((i_top == 0) && (i_mid < diff1))
+    tcg_gen_setcond_i64(TCG_COND_LTU, tmp2, tmp3, tmp0);
+    tcg_gen_setcondi_i64(TCG_COND_EQ, tmp1, increment, 0);
+    tcg_gen_and_i64(tmp2, tmp2, tmp1);
+    tcg_gen_or_i64(fast_rep, fast_rep, tmp2);
+    cheri_tcg_printf_verbose("d", "Fast add: rep check (increment check): %d\n",
+                             fast_rep);
+
+    // Finally, write back the tag
+    tcg_gen_and_i64(new_tag, new_tag, fast_rep);
+    cheri_tcg_printf_verbose(
+        "d", "Fast add: after representability check: %d\n", new_tag);
+    tcg_gen_st8_i64(new_tag, cpu_env,
+                    gp_register_offset(regnum) +
+                        offsetof(cap_register_t, cr_tag));
+
+    /* If a tag of zero was stored, it is possible that bounds have changed.
+     * This means that the register would no longer be correctly decompressed.
+     * Here we will set it to CREG_UNTAGGED_CAP to handle that case. So:
+     * tagged -> CREG_FULLY_DECOMPRESSED
+     * untagged -> CREG_UNTAGGED_CAP
+     */
+
+    _Static_assert(CREG_FULLY_DECOMPRESSED == (CREG_UNTAGGED_CAP + 2), "");
+    tcg_gen_movi_i64(tmp0, 1);
+    tcg_gen_shl_i64(new_tag, new_tag, tmp0);
+    tcg_gen_add_i64(new_tag, new_tag, tmp0);
+    tcg_gen_st8_i64(
+        new_tag, cpu_env,
+        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+    disas_capreg_state_include(ctx, regnum, CREG_UNTAGGED_CAP);
+
+    // Dont need to free tmp0, it is freed by the caller
+    tcg_temp_free_i64(tmp1);
+    tcg_temp_free_i64(tmp2);
+    tcg_temp_free_i64(tmp3);
+    tcg_temp_free_i64(increment);
+    tcg_temp_free_i64(fast_rep);
+    tcg_temp_free_i64(new_tag);
+}
+
+static inline void gen_cap_set_cursor_fast(DisasContext *ctx, int regnum,
+                                           TCGv_i64 new_cursor)
+{
+    TCGv_i64 increment = tcg_temp_new_i64();
+    gen_cap_get_cursor(ctx, regnum, increment);
+    tcg_gen_sub_i64(increment, new_cursor, increment);
+    gen_cap_add_fast(ctx, regnum, increment);
+    tcg_temp_free_i64(increment);
+}
 #endif
 
 // Clear tag bit if sealed
