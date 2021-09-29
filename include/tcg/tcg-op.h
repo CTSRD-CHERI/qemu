@@ -1366,7 +1366,7 @@ static inline void tcg_gen_trunc_ptr_i32(TCGv_i32 r, TCGv_ptr a)
 #undef NAT
 
 #if defined(TARGET_MIPS) || defined(TARGET_RISCV)
-void gen_cheri_break_loadlink(TCGv_cap_checked_ptr out_addr, TCGv_i32 memop);
+void gen_cheri_break_loadlink(TCGv_cap_checked_ptr out_addr);
 #endif
 
 #endif /* TCG_TCG_OP_H */
