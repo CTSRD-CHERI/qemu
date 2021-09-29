@@ -305,7 +305,7 @@ static inline void _generate_special_checked_ptr(
 #endif
                 bounds_check_helper = &gen_helper_ddc_check_bounds;
         } else {
-            assert(!(req_perms & CAP_PERM_STORE));
+            cheri_debug_assert(!(req_perms & CAP_PERM_STORE));
             bounds_check_helper = &gen_helper_pcc_check_bounds;
         }
         bounds_check_helper(cpu_env, (TCGv)checked_addr, tbytes);
@@ -353,7 +353,8 @@ generate_ddc_checked_rmw_ptr(TCGv_cap_checked_ptr checked_addr,
     (use_ddc ? TB_FLAG_CHERI_DDC_READABLE : TB_FLAG_CHERI_PCC_READABLE)
 static inline CheriTbFlags FLAG_WRITABLE(bool use_ddc)
 {
-    assert(use_ddc && "Writable flag should only be checked for DDC");
+    cheri_debug_assert(use_ddc &&
+                       "Writable flag should only be checked for DDC");
     return TB_FLAG_CHERI_DDC_WRITABLE;
 }
 
@@ -611,7 +612,7 @@ static inline void gen_vector_copy(TCGv_ptr dest_ptr, TCGv_ptr source_ptr,
             : ((TCG_TARGET_HAS_v128 && (min_size >= 16)) ? 16 : 8);
     size_t mask = copy_chunk - 1;
     size_t copy_size = (min_size + mask) & ~mask;
-    assert(copy_size <= max_size);
+    cheri_debug_assert(copy_size <= max_size);
 
     if (copy_chunk > 8) {
 
@@ -900,7 +901,7 @@ static inline void gen_lazy_cap_set_state_cond(DisasContext *ctx, int regnum,
     if (disas_capreg_state_must_be(ctx, regnum, state))
         return;
 
-    assert(!lazy_capreg_number_is_special(regnum));
+    cheri_debug_assert(!lazy_capreg_number_is_special(regnum));
 
     cheri_tcg_printf_verbose("cc", "Register %d lazy state set to %s\n", regnum,
                              cap_reg_state_string(state));
@@ -1061,10 +1062,10 @@ static inline void gen_move_cap_gp_select_gp(DisasContext *ctx, int dest_num,
                              tcg_cond_string(cond), true_source_num,
                              false_source_num);
 
-    assert(disas_capreg_state_must_be(ctx, true_source_num,
-                                      CREG_FULLY_DECOMPRESSED));
-    assert(disas_capreg_state_must_be(ctx, false_source_num,
-                                      CREG_FULLY_DECOMPRESSED));
+    cheri_debug_assert(disas_capreg_state_must_be(ctx, true_source_num,
+                                                  CREG_FULLY_DECOMPRESSED));
+    cheri_debug_assert(disas_capreg_state_must_be(ctx, false_source_num,
+                                                  CREG_FULLY_DECOMPRESSED));
 
     gen_cap_sync_cursor(ctx, true_source_num);
 
