@@ -94,18 +94,6 @@ void CHERI_HELPER_IMPL(pcc_check_bounds(CPUArchState *env, target_ulong addr,
               /*instavail=*/true, GETPC());
 }
 
-target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
-                                              target_ulong pcc_offset,
-                                              MemOp op))
-{
-    uintptr_t retpc = GETPC();
-    const cap_register_t *pcc = cheri_get_current_pcc_fetch_from_tcg(env, retpc);
-    target_ulong addr = pcc_offset + cap_get_cursor(pcc);
-    check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
-              memop_size(op), /*instavail=*/true, retpc);
-    return addr;
-}
-
 void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd,
                                         target_ulong rs))
 {
