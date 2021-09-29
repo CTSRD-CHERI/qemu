@@ -230,7 +230,6 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause) {
     abort();
 }
 
-const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb);
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
                          target_ulong retpc);
 void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,

@@ -1127,25 +1127,6 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
 
 /// Loads and stores
 
-const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb)
-{
-#ifdef TARGET_MIPS
-    // CLC/CSC and the integer variants trap on cbp == NULL so we use reg0 as
-    // $ddc to save encoding space and increase code density since loading
-    // relative to $ddc is common in the hybrid ABI (and also for backwards
-    // compat with old binaries).
-    return get_capreg_0_is_ddc(env, cb);
-#elif defined(TARGET_RISCV) || defined(TARGET_AARCH64)
-    // However, RISCV does not use this encoding and uses zero for the
-    // null register (i.e. always trap).
-    // The helpers can also be invoked from the explicitly DDC-relative
-    // instructions with cb == CHERI_EXC_REGNUM_DDC which means DDC:
-    return get_capreg_or_special(env, cb);
-#else
-#error "Wrong arch?"
-#endif
-}
-
 static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common(
     uint32_t required_perms, CPUArchState *env, uint32_t cb,
     target_ulong offset, uint32_t size, uintptr_t _host_return_address)

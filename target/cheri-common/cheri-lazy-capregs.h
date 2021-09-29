@@ -212,7 +212,7 @@ get_capreg_or_special(CPUArchState *env, unsigned regnum)
 /// 0 can only be DDC on mips/risv. On Morello 0 is always normal register.
 /// Having the switch here rather than in general code makes things slightly
 /// neater. We could always call this "0_is_maybe_ddc" to be less confusing.
-static inline __attribute__((always_inline)) const cap_register_t *
+static inline QEMU_ALWAYS_INLINE const cap_register_t *
 get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 {
 #ifdef TARGET_AARCH64
@@ -220,6 +220,26 @@ get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 #else
     return get_capreg_or_special(env,
                                  regnum == 0 ? CHERI_EXC_REGNUM_DDC : regnum);
+#endif
+}
+
+static inline QEMU_ALWAYS_INLINE const cap_register_t *
+get_load_store_base_cap(CPUArchState *env, uint32_t cb)
+{
+#ifdef TARGET_MIPS
+    // CLC/CSC and the integer variants trap on cbp == NULL so we use reg0 as
+    // $ddc to save encoding space and increase code density since loading
+    // relative to $ddc is common in the hybrid ABI (and also for backwards
+    // compat with old binaries).
+    return get_capreg_0_is_ddc(env, cb);
+#elif defined(TARGET_RISCV) || defined(TARGET_AARCH64)
+    // However, RISCV does not use this encoding and uses zero for the
+    // null register (i.e. always trap).
+    // The helpers can also be invoked from the explicitly DDC-relative
+    // instructions with cb == CHERI_EXC_REGNUM_DDC which means DDC:
+    return get_capreg_or_special(env, cb);
+#else
+#error "Wrong arch?"
 #endif
 }
 
