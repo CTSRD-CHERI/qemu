@@ -1764,7 +1764,7 @@ TRANS_F(MRS_MSR)
     // FIXME: Bit of a hack doing this here
     tcg_gen_sync_i64(ddc_interposition);
     handle_sys(ctx, 0x1 << 25, a->L, a->o0 + 2, a->op1, a->op2, a->CRn, a->CRm,
-               AS_ZERO(a->Ct));
+               a->Ct);
     tcg_gen_discard_i64(ddc_interposition);
     return true;
 }
