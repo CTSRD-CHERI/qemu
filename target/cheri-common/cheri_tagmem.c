@@ -217,6 +217,7 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
     assert(memory_region_is_ram(mr));
     assert(memory_region_size(mr) == memory_size &&
            "Incorrect tag mem size passed?");
+    assert(mr->ram_block->cheri_tags == NULL && "Already initialized?");
 
     size_t cheri_ntagblks = num_tagblocks(mr->ram_block);
     mr->ram_block->cheri_tags =
