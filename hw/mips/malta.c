@@ -1292,10 +1292,6 @@ void mips_malta_init(MachineState *machine)
     /* register RAM at high address where it is undisturbed by IO */
     memory_region_add_subregion(system_memory, 0x80000000, machine->ram);
 
-#ifdef TARGET_CHERI
-    cheri_tag_init(machine->ram, memory_region_size(machine->ram));
-#endif /* TARGET_CHERI */
-
     /* alias for pre IO hole access */
     memory_region_init_alias(ram_low_preio, NULL, "mips_malta_low_preio.ram",
                              machine->ram, 0, MIN(ram_size, 256 * MiB));
