@@ -33,6 +33,7 @@
 #define dh_alias_cptr ptr
 #define dh_alias_void void
 #define dh_alias_memop i32
+#define dh_alias_memop_idx i32
 #define dh_alias_noreturn noreturn
 #define dh_alias(t) glue(dh_alias_, t)
 
@@ -48,6 +49,8 @@
 #define dh_ctype_cptr const void *
 #define dh_ctype_void void
 #define dh_ctype_memop MemOp
+/* Can't use TCGMemOpIdx here due to include ordering. */
+#define dh_ctype_memop_idx uint32_t /* TCGMemOpIdx */
 #define dh_ctype_noreturn void QEMU_NORETURN
 #define dh_ctype(t) dh_ctype_##t
 
@@ -94,6 +97,7 @@
 
 #define dh_is_64bit_void 0
 #define dh_is_64bit_memop 0
+#define dh_is_64bit_memop_idx 0
 #define dh_is_64bit_noreturn 0
 #define dh_is_64bit_i32 0
 #define dh_is_64bit_i64 1
@@ -104,6 +108,7 @@
 
 #define dh_is_signed_void 0
 #define dh_is_signed_memop 0
+#define dh_is_signed_memop_idx 0
 #define dh_is_signed_noreturn 0
 #define dh_is_signed_i32 0
 #define dh_is_signed_s32 1
@@ -135,6 +140,7 @@
 #define dh_callflag_cptr dh_callflag_ptr
 #define dh_callflag_void 0
 #define dh_callflag_memop 0
+#define dh_callflag_memop_idx 0
 #define dh_callflag_cap_checked_ptr 0
 #define dh_callflag_noreturn TCG_CALL_NO_RETURN
 #define dh_callflag(t) glue(dh_callflag_, dh_alias(t))

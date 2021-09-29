@@ -977,30 +977,30 @@ void qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
 }
 #endif
 
-static inline void qemu_log_instr_mem_int(
-    CPUArchState *env, target_ulong addr, int flags,
-    MemOp op, target_ulong value)
+static inline void qemu_log_instr_mem_int(CPUArchState *env, target_ulong addr,
+                                          int flags, TCGMemOpIdx oi,
+                                          target_ulong value)
 {
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
     log_meminfo_t m;
 
     m.flags = flags;
-    m.op = op;
+    m.op = get_memop(oi);
     m.addr = addr;
     m.value = value;
     g_array_append_val(iinfo->mem, m);
 }
 
-void qemu_log_instr_ld_int(CPUArchState *env, target_ulong addr, MemOp op,
+void qemu_log_instr_ld_int(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                            target_ulong value)
 {
-    qemu_log_instr_mem_int(env, addr, LMI_LD, op, value);
+    qemu_log_instr_mem_int(env, addr, LMI_LD, oi, value);
 }
 
-void qemu_log_instr_st_int(CPUArchState *env, target_ulong addr, MemOp op,
+void qemu_log_instr_st_int(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                            target_ulong value)
 {
-    qemu_log_instr_mem_int(env, addr, LMI_ST, op, value);
+    qemu_log_instr_mem_int(env, addr, LMI_ST, oi, value);
 }
 
 #ifdef TARGET_CHERI
@@ -1589,31 +1589,31 @@ void helper_qemu_log_instr_commit(CPUArchState *env)
 }
 
 void helper_qemu_log_instr_load64(CPUArchState *env, target_ulong addr,
-                                  uint64_t value, MemOp op)
+                                  uint64_t value, TCGMemOpIdx oi)
 {
     if (qemu_log_instr_enabled(env))
-        qemu_log_instr_mem_int(env, addr, LMI_LD, op, value);
+        qemu_log_instr_mem_int(env, addr, LMI_LD, oi, value);
 }
 
 void helper_qemu_log_instr_store64(CPUArchState *env, target_ulong addr,
-                                   uint64_t value, MemOp op)
+                                   uint64_t value, TCGMemOpIdx oi)
 {
     if (qemu_log_instr_enabled(env))
-        qemu_log_instr_mem_int(env, addr, LMI_ST, op, value);
+        qemu_log_instr_mem_int(env, addr, LMI_ST, oi, value);
 }
 
 void helper_qemu_log_instr_load32(CPUArchState *env, target_ulong addr,
-                                  uint32_t value, MemOp op)
+                                  uint32_t value, TCGMemOpIdx oi)
 {
     if (qemu_log_instr_enabled(env))
-        qemu_log_instr_mem_int(env, addr, LMI_LD, op, (uint64_t)value);
+        qemu_log_instr_mem_int(env, addr, LMI_LD, oi, (uint64_t)value);
 }
 
 void helper_qemu_log_instr_store32(CPUArchState *env, target_ulong addr,
-                                   uint32_t value, MemOp op)
+                                   uint32_t value, TCGMemOpIdx oi)
 {
     if (qemu_log_instr_enabled(env))
-        qemu_log_instr_mem_int(env, addr, LMI_ST, op, (uint64_t)value);
+        qemu_log_instr_mem_int(env, addr, LMI_ST, oi, (uint64_t)value);
 }
 
 void helper_log_value(CPUArchState *env, const void* ptr, uint64_t value)

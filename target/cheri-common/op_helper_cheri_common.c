@@ -119,17 +119,11 @@ void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd,
 }
 
 void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
-                                             target_ulong vaddr, MemOp op))
+                                             target_ulong vaddr,
+                                             TCGMemOpIdx oi))
 {
-    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(),
-                         cpu_mmu_index(env, false));
-}
-
-void CHERI_HELPER_IMPL(cheri_invalidate_tags_mmu_idx(CPUArchState *env,
-                                                     target_ulong vaddr,
-                                                     MemOp op, uint32_t idx))
-{
-    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), idx);
+    cheri_tag_invalidate(env, vaddr, memop_size(get_memop(oi)), GETPC(),
+                         get_mmuidx(oi));
 }
 
 /// Implementations of individual instructions start here
