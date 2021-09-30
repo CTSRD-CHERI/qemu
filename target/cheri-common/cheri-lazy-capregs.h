@@ -160,9 +160,8 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
     case CREG_UNTAGGED_CAP:
         return _update_from_compressed(gpcrs, regnum, /*tag=*/false);
     default:
-        __builtin_unreachable();
+        g_assert_not_reached();
     }
-    tcg_abort();
 }
 
 static inline __attribute__((always_inline)) bool
@@ -416,9 +415,8 @@ static inline target_ulong get_capreg_tag(CPUArchState *env, unsigned regnum)
     case CREG_UNTAGGED_CAP:
         return false;
     default:
-        __builtin_unreachable();
+        g_assert_not_reached();
     }
-    tcg_abort();
 }
 
 static inline target_ulong get_capreg_tag_filtered(CPUArchState *env, unsigned regnum) {

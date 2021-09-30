@@ -25,12 +25,6 @@
 #ifndef TCG_H
 #define TCG_H
 
-#define tcg_abort()                                                            \
-    do {                                                                       \
-        fprintf(stderr, "%s:%d: tcg fatal error\n", __FILE__, __LINE__);       \
-        abort();                                                               \
-    } while (0)
-
 #include "cpu.h"
 #include "exec/memop.h"
 #include "exec/tb-context.h"
@@ -1106,6 +1100,12 @@ typedef struct TCGTargetOpDef {
     TCGOpcode op;
     const char *args_ct_str[TCG_MAX_OP_ARGS];
 } TCGTargetOpDef;
+
+#define tcg_abort() \
+do {\
+    fprintf(stderr, "%s:%d: tcg fatal error\n", __FILE__, __LINE__);\
+    abort();\
+} while (0)
 
 bool tcg_op_supported(TCGOpcode op);
 
