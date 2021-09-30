@@ -1008,6 +1008,8 @@ void CHERI_HELPER_IMPL(csetboundsexact(CPUArchState *env, uint32_t cd,
     do_setbounds(true, env, cd, cb, rt, GETPC());
 }
 
+#ifndef TARGET_AARCH64
+/* Morello does not have flags in the capaibility metadata */
 void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  target_ulong flags))
 {
@@ -1022,13 +1024,11 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     // FIXME: should we trap instead of masking?
     cap_register_t result = *cbp;
     flags &= CAP_FLAGS_ALL_BITS;
-#ifndef TARGET_AARCH64
-    // Morello thinks flags are something slightly different
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
-#endif
     CAP_cc(update_flags)(&result, flags);
     update_capreg(env, cd, &result);
 }
+#endif
 
 /// Three operands (int capability capability)
 
