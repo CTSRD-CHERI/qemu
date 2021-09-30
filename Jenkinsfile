@@ -75,6 +75,9 @@ selectedConfigs.each { config ->
             if (isDebug) {
                 extraQemuArgs = '--qemu/configure-options=--enable-rvfi-dii --qemu/build-type=Debug --qemu/use-asan'
             }
+            if (os == "linux") {
+               extraQemuArgs += ' --qemu/configure-options=--enable-perfetto-log-instr'
+            }
             def qemuResult = cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
                     nodeLabel: null,
                     extraArgs: "--without-sdk --install-prefix=/usr $extraQemuArgs",
