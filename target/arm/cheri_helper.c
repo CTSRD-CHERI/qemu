@@ -341,10 +341,7 @@ void helper_load_and_branch_and_link(CPUArchState *env, uint32_t cn,
         CAP_cc(update_otype)(&base, CAP_OTYPE_UNSEALED);
     }
 
-#if (KEEP_BRANCH_AND_LINK_BUG)
-    if (cn != 31)
-#endif
-        update_capreg(env, cn, &base);
+    update_capreg(env, cn, &base);
 
     uint64_t addr = base._cr_cursor + (int64_t)(int32_t)im;
 

@@ -1190,13 +1190,7 @@ TRANS_F(BR_BLR)
     TCGv link_addr = get_link_addr(ctx);
     TCGv_i32 flags = get_branch_flags(ctx, false);
 
-#if (KEEP_BRANCH_AND_LINK_BUG)
-    uint32_t store_reg = AS_ZERO(a->Cn);
-#else
-    uint32_t store_reg = a->Cn;
-#endif
-
-    disas_capreg_state_set(ctx, store_reg, CREG_FULLY_DECOMPRESSED);
+    disas_capreg_state_set(ctx, a->Cn, CREG_FULLY_DECOMPRESSED);
     gen_helper_load_and_branch_and_link(cpu_env, cn, offset, link, link_addr,
                                         flags);
 
