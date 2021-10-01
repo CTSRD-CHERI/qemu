@@ -4354,9 +4354,9 @@ static inline unsigned cpu_get_asid(CPUArchState *env) {
     if (cpu_mmu_index(env, 0) == ARMMMUIdx_Stage2) {
         ttbr = env->cp15.vttbr_el2;
     } else if (1) {
-        return env->cp15.ttbr0_el[arm_current_el(env)];
+        ttbr = env->cp15.ttbr0_el[arm_current_el(env)];
     } else {
-        return env->cp15.ttbr1_el[arm_current_el(env)];
+        ttbr = env->cp15.ttbr1_el[arm_current_el(env)];
     }
 
     return (ttbr >> 48) & 0xFF;
