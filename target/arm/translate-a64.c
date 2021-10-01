@@ -286,11 +286,11 @@ static void gen_a64_set_link_register(DisasContext *s)
         gen_move_cap_gp_sp(s, 30, offsetof(struct CPUARMState, pc));
         if (cctlr_set(s, CCTLR_SBL)) {
             // Need to seal as well
-            gen_cap_set_type_const(s, 30, CC128_OTYPE_SENTRY, false);
+            gen_cap_set_type_const(s, 30, CAP_OTYPE_SENTRY, false);
         }
         // Low bit set because of C64 mode
         addr |= 1;
-        if (cc128_cap_sign_change(addr, s->pc_curr)) {
+        if (CAP_cc(cap_sign_change)(addr, s->pc_curr)) {
             assert(0); // Only if cap_bounds_uses_value does this need untagging
             gen_cap_clear_tag(s, 30);
         }

@@ -1218,13 +1218,13 @@ void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
                                 const cap_register_t *source)
 {
 #ifdef TARGET_AARCH64
-    if (!cap_has_perms(source, CC128_PERM_MUTABLE_LOAD) &&
+    if (!cap_has_perms(source, CAP_PERM_MUTABLE_LOAD) &&
         (CAP_cc(cap_pesbt_extract_otype)(*pesbt) == CAP_OTYPE_UNSEALED)) {
         qemu_maybe_log_instr_extra(env,
                                    "Squashing mutable load related perms\n");
-        *pesbt &= ~cc128_cap_pesbt_encode_perms(
-            CC128_PERM_MUTABLE_LOAD | CC128_PERM_STORE_LOCAL |
-            CC128_PERM_STORE_CAP | CC128_PERM_STORE);
+        *pesbt &= ~CAP_cc(cap_pesbt_encode_perms)(
+            CAP_PERM_MUTABLE_LOAD | CAP_PERM_STORE_LOCAL |
+            CAP_PERM_STORE_CAP | CAP_PERM_STORE);
     }
 #endif
 }

@@ -1474,8 +1474,8 @@ TRANS_F(SEAL)
     if (capabilities_enabled_exception(ctx))
         return true;
 
-    target_ulong types[] = {0, CC128_OTYPE_SENTRY, CC128_OTYPE_LOAD_PAIR_BRANCH,
-                            CC128_OTYPE_LOAD_BRANCH};
+    target_ulong types[] = {0, CAP_OTYPE_SENTRY, CAP_OTYPE_LOAD_PAIR_BRANCH,
+                            CAP_OTYPE_LOAD_BRANCH};
     gen_move_cap_gp_gp(ctx, a->Cd, a->Cn);
     gen_cap_set_type_const(ctx, a->Cd, types[a->form], true);
     gen_reg_modified_cap(ctx, a->Cd);

@@ -251,7 +251,7 @@ static void arm_cpu_reset(DeviceState *dev)
 
 #ifdef TARGET_CHERI
         reset_capregs(env);
-        env->pc.cap = cc128_make_max_perms_cap(0, cpu->rvbar, CAP_MAX_TOP);
+        env->pc.cap = CAP_cc(make_max_perms_cap)(0, cpu->rvbar, CAP_MAX_TOP);
 #else
         env->pc = cpu->rvbar;
 #endif

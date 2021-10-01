@@ -304,7 +304,7 @@ void helper_load_pair_and_branch_and_link(CPUArchState *env, uint32_t cn,
     target_ulong addr = base._cr_cursor;
 
     if (base.cr_tag && ct == CINVOKE_DATA_REGNUM &&
-        cap_get_otype_unsigned(&base) == CC128_OTYPE_LOAD_PAIR_BRANCH) {
+        cap_get_otype_unsigned(&base) == CAP_OTYPE_LOAD_PAIR_BRANCH) {
         CAP_cc(update_otype)(&base, CAP_OTYPE_UNSEALED);
     }
 
@@ -319,7 +319,7 @@ void helper_load_pair_and_branch_and_link(CPUArchState *env, uint32_t cn,
 
     cap_register_t target;
     target.cr_pesbt = target_pesbt;
-    cc128_decompress_raw(target_pesbt, target_cursor, target_tag, &target);
+    CAP_cc(decompress_raw)(target_pesbt, target_cursor, target_tag, &target);
 
     // We do this load SECOND as it has a register-file side effect.
     load_cap_from_memory(env, ct, cn, &base, addr, _host_return_address, NULL);
@@ -337,7 +337,7 @@ void helper_load_and_branch_and_link(CPUArchState *env, uint32_t cn,
     cap_register_t base = *get_capreg_or_special(env, cn);
 
     if (base.cr_tag && cn == CINVOKE_DATA_REGNUM &&
-        cap_get_otype_unsigned(&base) == CC128_OTYPE_LOAD_BRANCH) {
+        cap_get_otype_unsigned(&base) == CAP_OTYPE_LOAD_BRANCH) {
         CAP_cc(update_otype)(&base, CAP_OTYPE_UNSEALED);
     }
 
@@ -356,7 +356,7 @@ void helper_load_and_branch_and_link(CPUArchState *env, uint32_t cn,
 
     cap_register_t target;
     target.cr_pesbt = target_pesbt;
-    cc128_decompress_raw(target_pesbt, target_cursor, target_tag, &target);
+    CAP_cc(decompress_raw)(target_pesbt, target_cursor, target_tag, &target);
 
     cheri_jump_and_link(env, &target, cap_get_cursor(&target), link, link_pc,
                         flags);
@@ -373,8 +373,8 @@ void helper_branch_sealed_pair(CPUArchState *env, uint32_t cn, uint32_t cm,
     if (target.cr_tag && data.cr_tag && cap_is_sealed_with_type(&target) &&
         cap_is_sealed_with_type(&data) &&
         (cap_get_otype_unsigned(&target) == cap_get_otype_unsigned(&data)) &&
-        cap_has_perms(&target, CC128_PERM_BRANCH_SEALED_PAIR) &&
-        cap_has_perms(&data, CC128_PERM_BRANCH_SEALED_PAIR) &&
+        cap_has_perms(&target, CAP_PERM_BRANCH_SEALED_PAIR) &&
+        cap_has_perms(&data, CAP_PERM_BRANCH_SEALED_PAIR) &&
         cap_has_perms(&target, CAP_PERM_EXECUTE) &&
         !cap_has_perms(&data, CAP_PERM_EXECUTE)) {
         cap_set_unsealed(&target);
