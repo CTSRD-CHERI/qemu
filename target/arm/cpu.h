@@ -226,9 +226,9 @@ typedef struct ARMPACKey {
 
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs-types.h"
-#define AARCH_REG_TYPE aligned_cap_register_t
+typedef aligned_cap_register_t AARCH_REG_TYPE;
 #else
-#define AARCH_REG_TYPE uint64_t
+typedef uint64_t AARCH_REG_TYPE;
 #endif
 
 #ifdef TARGET_CHERI
