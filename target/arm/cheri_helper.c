@@ -417,6 +417,9 @@ void helper_store_tags(CPUArchState *env, uint64_t tags, uint32_t cn,
 
     tags &= (1 << 4) - 1;
 
+    assert(!tags || (cheri_is_system(env) &&
+                     !arm_is_tag_setting_disabled(env, arm_current_el(env))));
+
     uint32_t perms = CAP_PERM_STORE;
     if (tags)
         perms |= CAP_PERM_STORE_CAP;
