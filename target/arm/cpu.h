@@ -3529,8 +3529,8 @@ FIELD(TBFLAG_CHERI, PSTATE_C64, 6, 1) // The PSTATE.C64 bit
 FIELD(TBFLAG_CHERI, EXECUTIVE, 7, 1)  // pcc.perms.executive
 FIELD(TBFLAG_CHERI, SYSTEM, 8, 1)     // pcc.perms.system
 FIELD(TBFLAG_CHERI, SETTAG, 9, 1)
-FIELD(TBFLAG_CHERI, CAP_ENABLED, 10,
-      1) // 1 if capability instructions are trapped
+// 1 if capability instructions are trapped
+FIELD(TBFLAG_CHERI, CAP_ENABLED, 10, 1)
 // These flags really belongs in TBFLAG_ANY, but there is no room. If upstream
 // wants this feature, then they can move some bits around
 FIELD(TBFLAG_CHERI, SCTLRA, 11, 1)
