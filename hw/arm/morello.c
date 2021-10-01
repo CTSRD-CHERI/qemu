@@ -91,11 +91,6 @@ static void morello_machine_init(MachineState *machine)
     /* Add RAM */
     memory_region_add_subregion(get_system_memory(), 0, machine->ram);
 
-#ifdef TARGET_CHERI
-    /* Then tag it all */
-    cheri_tag_init(machine->ram, machine->ram_size);
-#endif
-
     if (strcmp(machine->cpu_type, ARM_CPU_TYPE_NAME("morello")) != 0) {
         error_and_die(
             "Use the special 'morello' cpu type for the Morello board.");
