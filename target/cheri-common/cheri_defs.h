@@ -38,8 +38,8 @@
 # define cheri_debug_assert(X) ((void)0)
 #endif
 
-#ifdef TARGET_IS_MORELLO
-#define CC_IS_MORELLO TARGET_IS_MORELLO
+#ifdef TARGET_MORELLO
+#define CC_IS_MORELLO 1
 #endif
 
 #ifdef TARGET_CHERI

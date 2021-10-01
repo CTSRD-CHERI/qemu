@@ -111,7 +111,7 @@ try_set_cap_cursor(CPUArchState *env, const cap_register_t *cptr,
         raise_cheri_exception_or_invalidate_impl(env, CapEx_SealViolation,
                                                  regnum_src, retpc);
     }
-#ifndef TARGET_IS_MORELLO
+#ifndef TARGET_MORELLO
     /*
      * For Morello we can't just check for in-bounds since changing the sign
      * bit can affect representability. Additionally, the high bits are not

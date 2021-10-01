@@ -21,7 +21,7 @@
 #define ARM_CPU_H
 
 #ifdef TARGET_CHERI
-#ifndef TARGET_IS_MORELLO
+#ifndef TARGET_MORELLO
 #error "Morello should be the only arm CHERI"
 #endif
 #endif
