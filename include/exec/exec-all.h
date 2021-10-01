@@ -475,7 +475,7 @@ struct TranslationBlock {
 /* cflags' mask for hashing/comparison */
 #define CF_HASH_MASK                                                           \
     (CF_COUNT_MASK | CF_LAST_IO | CF_USE_ICOUNT | CF_PARALLEL |                \
-     CF_CLUSTER_MASK | CF_LOG_INSTR)
+     CF_LOG_INSTR | CF_CLUSTER_MASK)
 
     /* Per-vCPU dynamic tracing state used to generate this TB */
     uint32_t trace_vcpu_dstate;
