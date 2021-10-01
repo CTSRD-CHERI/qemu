@@ -102,6 +102,8 @@ static void morello_machine_init(MachineState *machine)
         object_initialize_child(OBJECT(machine), "cpu[*]",
                                 &morelloMachineState->cpus[i].core,
                                 machine->cpu_type);
+        object_property_set_bool(OBJECT(&morelloMachineState->cpus[i].core),
+                                 "mpidr_mt", true, NULL);
         if (!qdev_realize(DEVICE(&morelloMachineState->cpus[i].core), NULL,
                           &errp)) {
             error_report_err(errp);

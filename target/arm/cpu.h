@@ -950,6 +950,11 @@ struct ARMCPU {
     /* Uniprocessor system with MP extensions */
     bool mp_is_up;
 
+    /* Performance of processors at the lowest affinity level is
+     * very interdependent.
+     */
+    bool mpidr_mt;
+
     /* True if we tried kvm_arm_host_cpu_features() during CPU instance_init
      * and the probe failed (so we need to report the error in realize)
      */

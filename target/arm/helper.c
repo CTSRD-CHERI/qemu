@@ -4474,12 +4474,11 @@ static uint64_t mpidr_read_val(CPUARMState *env)
         if (cpu->mp_is_up) {
             mpidr |= (1u << 30);
         }
-#define SUPPORT_ACK
-#ifdef SUPPORT_ACK
-        // MT = 1 Performance of processors at the lowest affinity level is
-        // very interdependent.
-        mpidr |= (1U << 24);
-#endif
+
+        if (cpu->mpidr_mt) {
+            // MT = 1
+            mpidr |= (1U << 24);
+        }
     }
     return mpidr;
 }
