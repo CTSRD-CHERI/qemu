@@ -167,10 +167,10 @@ typedef struct CPUIOTLBEntry {
      */
     uintptr_t tagmem_read;
     /*
-     * There are two reasons to trap on writng a tag: first, if MMU protection
-     * bits indicate that stores should trap. The second is that no tag block
-     * has been allocated. In order to align these cases, when there is no
-     * block allocated yet (and tags are not being clared), we add in the
+     * There are two reasons to trap on writing a tag. The first is if MMU
+     * protection bits indicate that stores should trap. The second is that no
+     * tag block has been allocated. In order to align these cases, when there
+     * is no block allocated yet (and tags are not being clared), we add in the
      * trap flag so tlb_fill will be called. It will then allocate a tagblock
      * (and the suprious FLAG_TRAP will be removed), or will throw an exception.
      */

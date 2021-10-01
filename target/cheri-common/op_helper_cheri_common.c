@@ -343,10 +343,6 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
                          target_ulong addr, uint32_t link_reg,
                          target_ulong link_pc, uint32_t cjalr_flags)
 {
-    // FIXME: I am concerned that morello will want to jump to sealed things and
-    // have the exception occur at the target.
-    // FIXME: I am still not entirely sure of where morello takes its
-    // exceptions.
     cap_register_t next_pcc = *target;
 
 #ifdef TARGET_AARCH64
