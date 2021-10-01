@@ -284,7 +284,7 @@ extern intptr_t qemu_host_page_mask;
 // Like PAGE_LC_TRAP but will also trap loads of untagged values
 #define PAGE_LC_TRAP_ANY 0x40000
 #define PAGE_C_BITS                                                            \
-    (PAGE_LC_CLEAR | PAGE_LC_TRAP | PAGE_LC_TRAP | PAGE_SC_CLEAR |             \
+    (PAGE_LC_CLEAR | PAGE_LC_TRAP | PAGE_SC_TRAP | PAGE_SC_CLEAR |             \
      PAGE_LC_TRAP_ANY)
 #else
 #define PAGE_C_BITS 0
