@@ -2171,7 +2171,7 @@ static inline bool arm_el_is_aa64(CPUARMState *env, int el)
 #ifdef TARGET_CHERI
     // Morello always a64
     return true;
-#endif
+#else
     /* This isn't valid for EL0 (if we're in EL0, is_a64() is what you want,
      * and if we're not in EL0 then the state of EL0 isn't well defined.)
      */
@@ -2199,6 +2199,7 @@ static inline bool arm_el_is_aa64(CPUARMState *env, int el)
     }
 
     return aa64;
+#endif
 }
 
 /* Function for determing whether guest cp register reads and writes should
