@@ -275,12 +275,13 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
     update_compressed_capreg(env, cs, pesbt, tag, cursor);
 }
 
-void helper_swap_cap_via_cap(CPUArchState *env, uint32_t cd, uint32_t cs,
+void helper_swap_cap_via_cap(CPUArchState *env, uint32_t ct, uint32_t cs,
                              uint32_t cb, target_ulong addr)
 {
-    // Yes, I really meant to swap cs/cd here.
+    // The first two arguments are backwards here as compared to compare and
+    // swap.
     GET_HOST_RETPC();
-    swap_cap_via_cap_impl(env, cs, cd, cb, addr, false, _host_return_address);
+    swap_cap_via_cap_impl(env, cs, ct, cb, addr, false, _host_return_address);
 }
 
 void helper_compare_swap_cap_via_cap(CPUArchState *env, uint32_t cd,
