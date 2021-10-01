@@ -450,17 +450,21 @@ static inline const char *tcg_cond_string(TCGCond c)
     case TCG_COND_NE:
         return "!=";
     case TCG_COND_LT:
+        return "<_s";
     case TCG_COND_LTU:
-        return "<";
+        return "<_u";
     case TCG_COND_GE:
+        return ">=_s";
     case TCG_COND_GEU:
-        return ">=";
+        return ">=_u";
     case TCG_COND_LE:
+        return "<=_s";
     case TCG_COND_LEU:
-        return "<=";
+        return "<=_u";
     case TCG_COND_GT:
+        return ">_s";
     case TCG_COND_GTU:
-        return ">";
+        return ">_u";
     default:
         return "?";
     }
