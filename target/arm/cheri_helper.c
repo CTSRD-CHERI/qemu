@@ -250,12 +250,14 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
     bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, cb, cbp, addr,
                                         _host_return_address, NULL);
 
-    bool do_store = !compare;
+    bool do_store;
 
     if (compare) {
         do_store = (cursor == get_without_decompress_cursor(env, cs)) &&
                    (pesbt == get_without_decompress_pesbt(env, cs)) &&
                    (tag == get_without_decompress_tag(env, cs));
+    } else {
+        do_store = true;
     }
 
     // Store
