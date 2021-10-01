@@ -1287,23 +1287,23 @@ void pmu_init(ARMCPU *cpu);
 #define SCTLR_DSSBS   (1ULL << 44) /* v8.5 */
 
 #define CPTR_TCPAC    (1U << 31)
-#define CPTR_TTA (1U << 20) /* CPTR_EL3 */
+#define CPTR_TTA      (1U << 20) /* CPTR_EL3 */
 #define CPTR_TFP      (1U << 10)
 #define CPTR_TZ       (1U << 8)   /* CPTR_EL2 */
 #define CPTR_EZ       (1U << 8)   /* CPTR_EL3 */
 
-#define CPTR_TTA_EL2 (1U << 28)
-#define CPTR_FPEN (0b11U << 20)
-#define CPTR_FPEN_LO (1U << 20)
-#define CPTR_FPEN_HI (1U << 21)
-#define CPTR_CEN (0b11U << 18)
-#define CPTR_CEN_LO (1U << 18)
-#define CPTR_CEN_HI (1U << 19)
-#define CPTR_ZEN (0b11U << 16)
-#define CPTR_ZEN_LO (1U << 16)
-#define CPTR_ZEN_HI (1U << 17)
-#define CPTR_EC (1U << 9)
-#define CPTR_TC (1U << 9)
+#define CPTR_TTA_EL2  (1U << 28)
+#define CPTR_FPEN     (0b11U << 20)
+#define CPTR_FPEN_LO  (1U << 20)
+#define CPTR_FPEN_HI  (1U << 21)
+#define CPTR_CEN      (0b11U << 18)
+#define CPTR_CEN_LO   (1U << 18)
+#define CPTR_CEN_HI   (1U << 19)
+#define CPTR_ZEN      (0b11U << 16)
+#define CPTR_ZEN_LO   (1U << 16)
+#define CPTR_ZEN_HI   (1U << 17)
+#define CPTR_EC       (1U << 9)
+#define CPTR_TC       (1U << 9)
 
 #define MDCR_EPMAD    (1U << 21)
 #define MDCR_EDAD     (1U << 20)
@@ -1400,8 +1400,6 @@ void pmu_init(ARMCPU *cpu);
 #define PSTATE_PAN (1U << 22)
 #define PSTATE_UAO (1U << 23)
 #define PSTATE_TCO (1U << 25)
-// Morello documentation seems to indicate this was the correct bit in SPSR for
-// PSTATE.C64
 #define PSTATE_C64 (1U << 26)
 #define PSTATE_V (1U << 28)
 #define PSTATE_C (1U << 29)
