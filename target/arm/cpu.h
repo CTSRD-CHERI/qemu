@@ -2940,7 +2940,7 @@ static inline bool cpreg_field_is_64bit(const ARMCPRegInfo *ri)
 static inline bool cpreg_field_is_cap(const ARMCPRegInfo *ri)
 {
 #ifdef TARGET_CHERI
-    return !!(ri->type & ARM_CP_CAP);
+    return (ri->type & ARM_CP_CAP) == ARM_CP_CAP;
 #else
     return false;
 #endif
