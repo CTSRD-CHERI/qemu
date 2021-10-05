@@ -993,7 +993,7 @@ static inline void gen_cap_sync_cursor(DisasContext *ctx, int regnum)
 {
 #if MERGED_FILE
     if (!lazy_capreg_number_is_special(regnum))
-        tcg_gen_sync_i64(target_get_gpr_global(ctx, regnum));
+        tcg_gen_sync_tl(target_get_gpr_global(ctx, regnum));
 #endif
 }
 
@@ -1001,7 +1001,7 @@ static inline void gen_cap_invalidate_cursor(DisasContext *ctx, int regnum)
 {
 #if MERGED_FILE
     if (!lazy_capreg_number_is_special(regnum))
-        tcg_gen_discard_i64(target_get_gpr_global(ctx, regnum));
+        tcg_gen_discard_tl(target_get_gpr_global(ctx, regnum));
 #endif
 }
 
@@ -2199,28 +2199,28 @@ static inline void gen_cap_memop_checks(DisasContext *ctx, int regnum,
 #ifdef DO_TCG_BOUNDS_CHECKS
     // We use addr as a tmp, and tmp as address because we can ensure tmp is
     // local
-    TCGv_i64 local_addr = tcg_temp_local_new_i64();
-    TCGv_i64 result = tcg_temp_new_i64();
-    tcg_gen_mov_i64(local_addr, addr);
-    TCGv_i64 tmp2 = addr;
+    TCGv local_addr = tcg_temp_local_new();
+    TCGv result = tcg_temp_new_i64();
+    tcg_gen_mov_tl(local_addr, addr);
+    TCGv tmp2 = addr;
 
     // Bounds
     gen_cap_in_bounds(ctx, regnum, local_addr, result, size);
     // Perms
     gen_cap_has_perms(ctx, regnum, perms, tmp2);
-    tcg_gen_and_i64(result, result, tmp2);
+    tcg_gen_and_tl(result, result, tmp2);
     // Unsealed
     gen_cap_get_unsealed(ctx, regnum, tmp2);
-    tcg_gen_and_i64(result, result, tmp2);
+    tcg_gen_and_tl(result, result, tmp2);
     // Tagged
     gen_cap_get_tag(ctx, regnum, tmp2);
-    tcg_gen_and_i64(result, result, tmp2);
+    tcg_gen_and_tl(result, result, tmp2);
 
     /* If failure: */
     TCGLabel *skip = gen_new_label();
-    tcg_gen_movi_i64(tmp2, 0);
-    tcg_gen_brcond_i64(TCG_COND_NE, result, tmp2, skip);
-    tcg_gen_mov_i64(addr, local_addr);
+    tcg_gen_movi_tl(tmp2, 0);
+    tcg_gen_brcond_tl(TCG_COND_NE, result, tmp2, skip);
+    tcg_gen_mov_tl(addr, local_addr);
 #endif
     // We just repeat the checks again in the helper to get the appropriate
     // exception.
@@ -2239,9 +2239,9 @@ static inline void gen_cap_memop_checks(DisasContext *ctx, int regnum,
 #ifdef DO_TCG_BOUNDS_CHECKS
     /* Else */
     gen_set_label(skip);
-    tcg_gen_mov_i64(addr, local_addr);
-    tcg_temp_free_i64(local_addr);
-    tcg_temp_free_i64(result);
+    tcg_gen_mov_tl(addr, local_addr);
+    tcg_temp_free(local_addr);
+    tcg_temp_free(result);
 #endif
 }
 
