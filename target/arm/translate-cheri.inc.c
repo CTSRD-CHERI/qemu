@@ -1800,11 +1800,14 @@ TRANS_F(SC)
     if (capabilities_enabled_exception(ctx))
         return true;
 
-    cheri_cap_cap_int_helper *helper = NULL;
-    if (a->opc == 0) {
-        helper = &gen_helper_csetbounds;
-    } else if (a->opc == 1) {
-        helper = &gen_helper_csetboundsexact;
+    if (!(a->opc & 2)) {
+        cheri_cap_cap_int_helper *helper = NULL;
+        if (a->opc == 0) {
+            helper = &gen_helper_csetbounds;
+        } else if (a->opc == 1) {
+            helper = &gen_helper_csetboundsexact;
+        }
+        return gen_cheri_cap_cap_int(ctx, a->Cd, a->Cn, a->Rm, helper);
     } else {
         // opc 2 is set addr, opc 3 is setoffset
 
@@ -1822,11 +1825,8 @@ TRANS_F(SC)
 
         gen_cap_set_cursor(ctx, a->Cd, new_cursor, false);
     }
-    if (helper)
-        return gen_cheri_cap_cap_int(ctx, a->Cd, a->Cn, a->Rm, helper);
-    else {
-        gen_reg_modified_cap(ctx, a->Cd);
-    }
+
+    gen_reg_modified_cap(ctx, a->Cd);
     return true;
 }
 
