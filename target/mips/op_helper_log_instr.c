@@ -88,7 +88,7 @@ void helper_mips_log_instr_hilo(CPUArchState *env, uint32_t sel, uint32_t index,
 void helper_mips_log_instr32(CPUMIPSState *env, target_ulong pc,
                              uint32_t opcode)
 {
-    uint8_t asid = cpu_get_asid(env);
+    uint8_t asid = cpu_get_asid(env, pc);
     uint32_t target_opcode = cpu_to_be32(opcode);
 
     qemu_log_instr_asid(env, asid);

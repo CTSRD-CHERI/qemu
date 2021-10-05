@@ -4349,17 +4349,21 @@ static inline bool cpu_in_user_mode(CPUArchState *env)
     return arm_current_el(env) == 0;
 }
 
-static inline unsigned cpu_get_asid(CPUArchState *env) {
+static inline unsigned cpu_get_asid(CPUArchState *env, target_ulong pc)
+{
 
     uint64_t ttbr;
 
-    // TODO: This is slightly broken because tbbrn is defaulting to 0
     if (cpu_mmu_index(env, 0) == ARMMMUIdx_Stage2) {
         ttbr = env->cp15.vttbr_el2;
-    } else if (1) {
-        ttbr = env->cp15.ttbr0_el[arm_current_el(env)];
     } else {
-        ttbr = env->cp15.ttbr1_el[arm_current_el(env)];
+        int el = arm_current_el(env);
+        TCR *tcr = &env->cp15.tcr_el[el];
+        if (!(pc & tcr->mask)) {
+            ttbr = env->cp15.ttbr0_el[el];
+        } else {
+            ttbr = env->cp15.ttbr1_el[el];
+        }
     }
 
     return (ttbr >> 48) & 0xFF;

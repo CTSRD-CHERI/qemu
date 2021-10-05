@@ -43,8 +43,8 @@
  * The following functions must be defined by the target and declared in cpu.h:
  * - bool cpu_in_user_mode(env)
  *   return whether the cpu is in user mode
- * - uint16_t cpu_get_asid(env)
- *   return the hardware address space identifier
+ * - uint16_t cpu_get_asid(env, pc)
+ *   return the hardware address space identifier for a particular address
  * - const char *cpu_get_mode_name(mode)
  *   return the mode name associated with a qemu_log_instr_cpu_mode_t for printing.
  *

@@ -726,7 +726,7 @@ static inline bool cpu_in_user_mode(CPURISCVState *env)
     return env->priv == PRV_U;
 }
 
-static inline unsigned cpu_get_asid(CPURISCVState *env)
+static inline unsigned cpu_get_asid(CPURISCVState *env, target_ulong pc)
 {
     return get_field(env->satp, SATP_ASID);
 }

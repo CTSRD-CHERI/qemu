@@ -407,12 +407,12 @@ static void emit_text_start(CPUArchState *env, target_ulong pc)
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
 
     if (cpulog->loglevel == QEMU_LOG_INSTR_LOGLEVEL_USER) {
-        qemu_log("[%u:%u] Requested user-mode only instruction logging @ "
-                 TARGET_FMT_lx " \n", env_cpu(env)->cpu_index,
-                 cpu_get_asid(env), pc);
+        qemu_log("[%u:%u] Requested user-mode only instruction logging "
+                 "@ " TARGET_FMT_lx " \n",
+                 env_cpu(env)->cpu_index, cpu_get_asid(env, pc), pc);
     } else {
         qemu_log("[%u:%u] Requested instruction logging @ " TARGET_FMT_lx " \n",
-                 env_cpu(env)->cpu_index, cpu_get_asid(env), pc);
+                 env_cpu(env)->cpu_index, cpu_get_asid(env, pc), pc);
     }
 }
 
@@ -424,12 +424,12 @@ static void emit_text_stop(CPUArchState *env, target_ulong pc)
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
 
     if (cpulog->loglevel == QEMU_LOG_INSTR_LOGLEVEL_USER) {
-        qemu_log("[%u:%u] Disabled user-mode only instruction logging @ "
-                 TARGET_FMT_lx " \n", env_cpu(env)->cpu_index,
-                 cpu_get_asid(env), pc);
+        qemu_log("[%u:%u] Disabled user-mode only instruction logging "
+                 "@ " TARGET_FMT_lx " \n",
+                 env_cpu(env)->cpu_index, cpu_get_asid(env, pc), pc);
     } else {
         qemu_log("[%u:%u] Disabled instruction logging @ " TARGET_FMT_lx " \n",
-                 env_cpu(env)->cpu_index, cpu_get_asid(env), pc);
+                 env_cpu(env)->cpu_index, cpu_get_asid(env, pc), pc);
     }
 }
 

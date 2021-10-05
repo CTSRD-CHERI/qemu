@@ -14351,7 +14351,7 @@ void aarch64_sve_change_el(CPUARMState *env, int old_el,
 void HELPER(arm_log_instr)(CPUARMState *env, target_ulong pc, uint32_t opcode)
 {
     if (qemu_log_instr_enabled(env)) {
-        qemu_log_instr_asid(env, cpu_get_asid(env));
+        qemu_log_instr_asid(env, cpu_get_asid(env, pc));
         qemu_log_instr(env, pc, (char *)&opcode, sizeof(opcode));
     }
 }
