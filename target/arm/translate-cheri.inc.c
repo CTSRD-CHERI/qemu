@@ -1165,9 +1165,6 @@ TRANS_F(BLR_BR_RET_CHKD)
         tcg_temp_free_i32(target_regnum);
         tcg_temp_free_i32(link_regnum);
 
-        // LETODO: Check this.
-        // Hopefully this jump will rebuild flags? Otherwise will have to make
-        // it happen in cjalr.
         ctx->base.is_jmp = DISAS_JUMP;
     }
 
@@ -1178,9 +1175,6 @@ TRANS_F(BLR_BR_RET_CHKD)
 TRANS_F(BR_BLR)
 {
 
-    // This instruction has really weird treatment of C31 in the ASL.
-    // For the purposes of loading, C31 is CSP. For storing it is 0.
-    // This special behaviour will be handled by the helper.
     if (capabilities_enabled_exception(ctx))
         return true;
 
