@@ -1167,17 +1167,15 @@ int fp_exception_el(CPUARMState *env, int cur_el);
 int sve_exception_el(CPUARMState *env, int cur_el);
 uint32_t sve_zcr_len_for_el(CPUARMState *env, int el);
 
-#ifdef TARGET_CHERI
-// Morello does not support 32-bit, so might as well optimise everything away
-#define is_a64(env) 1
-#else
-
 static inline bool is_a64(CPUARMState *env)
 {
+#ifdef TARGET_CHERI
+    // Morello does not support 32-bit, so might as well optimise everything away
+    return 1;
+#else
     return env->aarch64;
-}
-
 #endif
+}
 
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero
