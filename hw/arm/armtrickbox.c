@@ -137,7 +137,7 @@ static void arm_trickbox_register(void)
 
 type_init(arm_trickbox_register)
 
-    static void arm_trickbox_mm_init(hwaddr base)
+static void arm_trickbox_mm_init(hwaddr base)
 {
     DeviceState *dev;
     dev = qdev_new(TYPE_ARM_TRICKBOX);
