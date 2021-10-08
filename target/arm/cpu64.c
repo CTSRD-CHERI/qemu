@@ -866,13 +866,15 @@ static void aarch64_max_initfn(Object *obj)
                         cpu_max_set_sve_max_vq, NULL, NULL);
 }
 
+/* clang-format off */
 static const ARMCPUInfo aarch64_cpus[] = {
-    {.name = "cortex-a57", .initfn = aarch64_a57_initfn},
-    {.name = "cortex-a53", .initfn = aarch64_a53_initfn},
-    {.name = "cortex-a72", .initfn = aarch64_a72_initfn},
-    {.name = "morello", .initfn = aarch64_morello_initfn},
-    {.name = "max", .initfn = aarch64_max_initfn},
+    { .name = "cortex-a57",         .initfn = aarch64_a57_initfn },
+    { .name = "cortex-a53",         .initfn = aarch64_a53_initfn },
+    { .name = "cortex-a72",         .initfn = aarch64_a72_initfn },
+    { .name = "morello",            .initfn = aarch64_morello_initfn },
+    { .name = "max",                .initfn = aarch64_max_initfn },
 };
+/* clang-format on */
 
 static bool aarch64_cpu_get_aarch64(Object *obj, Error **errp)
 {
