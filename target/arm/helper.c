@@ -2609,6 +2609,7 @@ static const ARMCPRegInfo v6k_cp_reginfo[] = {
       .resetvalue = 0 },
     REGINFO_SENTINEL
 };
+/* clang-format on */
 
 #ifndef CONFIG_USER_ONLY
 
@@ -4994,10 +4995,10 @@ static void sdcr_write(CPUARMState *env, const ARMCPRegInfo *ri,
     env->cp15.mdcr_el3 = value & SDCR_VALID_MASK;
 }
 
+/* clang-format off */
 static const ARMCPRegInfo v8_cp_reginfo[] = {
     /* Minimal set of EL0-visible registers. This will need to be expanded
      * significantly for system emulation of AArch64 CPUs.
-     * clang-format off
      */
     { .name = "NZCV", .state = ARM_CP_STATE_AA64,
       .opc0 = 3, .opc1 = 3, .opc2 = 0, .crn = 4, .crm = 2,
