@@ -3527,35 +3527,36 @@ static void do_atomic_op_i64(TCGv_i64 ret, TCGv_cap_checked_ptr checked_addr,
 #endif
 }
 
-#define GEN_ATOMIC_HELPER(NAME, OP, NEW, SIGNED)                               \
-    static void *const table_##NAME[16] = {                                    \
-        [MO_8] = gen_helper_atomic_##NAME##b,                                  \
-        [MO_16 | MO_LE] = gen_helper_atomic_##NAME##w_le,                      \
-        [MO_16 | MO_BE] = gen_helper_atomic_##NAME##w_be,                      \
-        [MO_32 | MO_LE] = gen_helper_atomic_##NAME##l_le,                      \
-        [MO_32 | MO_BE] = gen_helper_atomic_##NAME##l_be,                      \
-        WITH_ATOMIC64([MO_64 | MO_LE] = gen_helper_atomic_##NAME##q_le)        \
-            WITH_ATOMIC64([MO_64 | MO_BE] = gen_helper_atomic_##NAME##q_be)};  \
-    void tcg_gen_atomic_##NAME##_i32(TCGv_i32 ret, TCGv_cap_checked_ptr addr,  \
-                                     TCGv_i32 val, TCGArg idx, MemOp memop)    \
-    {                                                                          \
-        if (tcg_ctx->tb_cflags & CF_PARALLEL) {                                \
-            do_atomic_op_i32(ret, addr, val, idx, memop, table_##NAME);        \
-        } else {                                                               \
-            do_nonatomic_op_i32(ret, addr, val, idx, memop, NEW,               \
-                                tcg_gen_##OP##_i32, SIGNED);                   \
-        }                                                                      \
-    }                                                                          \
-    void tcg_gen_atomic_##NAME##_i64(TCGv_i64 ret, TCGv_cap_checked_ptr addr,  \
-                                     TCGv_i64 val, TCGArg idx, MemOp memop)    \
-    {                                                                          \
-        if (tcg_ctx->tb_cflags & CF_PARALLEL) {                                \
-            do_atomic_op_i64(ret, addr, val, idx, memop, table_##NAME);        \
-        } else {                                                               \
-            do_nonatomic_op_i64(ret, addr, val, idx, memop, NEW,               \
-                                tcg_gen_##OP##_i64, SIGNED);                   \
-        }                                                                      \
-    }
+#define GEN_ATOMIC_HELPER(NAME, OP, NEW, SIGNED)                        \
+static void * const table_##NAME[16] = {                                \
+    [MO_8] = gen_helper_atomic_##NAME##b,                               \
+    [MO_16 | MO_LE] = gen_helper_atomic_##NAME##w_le,                   \
+    [MO_16 | MO_BE] = gen_helper_atomic_##NAME##w_be,                   \
+    [MO_32 | MO_LE] = gen_helper_atomic_##NAME##l_le,                   \
+    [MO_32 | MO_BE] = gen_helper_atomic_##NAME##l_be,                   \
+    WITH_ATOMIC64([MO_64 | MO_LE] = gen_helper_atomic_##NAME##q_le)     \
+    WITH_ATOMIC64([MO_64 | MO_BE] = gen_helper_atomic_##NAME##q_be)     \
+};                                                                      \
+void tcg_gen_atomic_##NAME##_i32                                        \
+    (TCGv_i32 ret, TCGv_cap_checked_ptr addr, TCGv_i32 val, TCGArg idx, MemOp memop)    \
+{                                                                       \
+    if (tcg_ctx->tb_cflags & CF_PARALLEL) {                             \
+        do_atomic_op_i32(ret, addr, val, idx, memop, table_##NAME);     \
+    } else {                                                            \
+        do_nonatomic_op_i32(ret, addr, val, idx, memop, NEW,            \
+                            tcg_gen_##OP##_i32, SIGNED);                \
+    }                                                                   \
+}                                                                       \
+void tcg_gen_atomic_##NAME##_i64                                        \
+    (TCGv_i64 ret, TCGv_cap_checked_ptr addr, TCGv_i64 val, TCGArg idx, MemOp memop)    \
+{                                                                       \
+    if (tcg_ctx->tb_cflags & CF_PARALLEL) {                             \
+        do_atomic_op_i64(ret, addr, val, idx, memop, table_##NAME);     \
+    } else {                                                            \
+        do_nonatomic_op_i64(ret, addr, val, idx, memop, NEW,            \
+                            tcg_gen_##OP##_i64, SIGNED);                \
+    }                                                                   \
+}
 
 GEN_ATOMIC_HELPER(fetch_add, add, 0, GEN_OP_NO_SIGN)
 GEN_ATOMIC_HELPER(fetch_and, and, 0, GEN_OP_NO_SIGN)
