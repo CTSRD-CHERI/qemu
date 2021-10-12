@@ -243,27 +243,27 @@ static inline bool cap_is_unsealed(const cap_register_t *c)
 
 static inline void cap_set_sealed(cap_register_t *c, uint32_t type)
 {
-#ifdef TARGET_AARCH64
-    assert(0);
+#ifdef TARGET_MORELLO
+    assert(0 && "Morello should be using generated TCG!");
+#else
+    _Static_assert(CAP_LAST_NONRESERVED_OTYPE < CAP_OTYPE_UNSEALED, "");
 #endif
     assert(c->cr_tag);
     assert(cap_get_otype_unsigned(c) == CAP_OTYPE_UNSEALED &&
            "should not use this on caps with reserved otypes");
     assert(type <= CAP_LAST_NONRESERVED_OTYPE);
-#ifndef TARGET_AARCH64
-    _Static_assert(CAP_LAST_NONRESERVED_OTYPE < CAP_OTYPE_UNSEALED, "");
-#endif
     CAP_cc(update_otype)(c, type);
 }
 
 static inline void cap_set_unsealed(cap_register_t *c)
 {
+#ifdef TARGET_MORELLO
+    assert(0 && "Morello should be using generated TCG!");
+#endif
     assert(c->cr_tag);
     assert(cap_is_sealed_with_type(c));
-#ifndef TARGET_AARCH64
     assert(cap_get_otype_unsigned(c) <= CAP_LAST_NONRESERVED_OTYPE &&
            "should not use this to unsealed reserved types");
-#endif
     CAP_cc(update_otype)(c, CAP_OTYPE_UNSEALED);
 }
 
