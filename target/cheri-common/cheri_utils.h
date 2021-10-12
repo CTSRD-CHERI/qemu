@@ -133,6 +133,8 @@ static inline cap_length_t cap_get_top_full(const cap_register_t *c)
 
 static inline bool cap_otype_is_reserved(target_ulong otype)
 {
+    cheri_debug_assert(otype <= CAP_MAX_REPRESENTABLE_OTYPE &&
+                       "Should only be called for in-range otypes!");
     return otype >= CAP_CC(FIRST_SPECIAL_OTYPE) &&
            otype <= CAP_CC(LAST_SPECIAL_OTYPE);
 }
@@ -166,7 +168,7 @@ static inline target_long cap_get_otype_signext(const cap_register_t *c)
      * We "sign" extend to a 64-bit number by subtracting the maximum:
      * e.g. for 64-bit CHERI-RISC-V unsigned 2^18-1 maps to 2^64-1
      */
-    return result <= CAP_LAST_NONRESERVED_OTYPE
+    return result < CAP_CC(LAST_SPECIAL_OTYPE)
                ? result
                : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 #endif
@@ -184,7 +186,7 @@ static inline bool cap_is_sealed_with_type(const cap_register_t *c)
     return !cap_otype_is_reserved(cap_get_otype_unsigned(c));
 }
 
-static inline bool cap_is_sealed_with_reserved_otype(cap_register_t *c)
+static inline bool cap_is_sealed_with_reserved_otype(const cap_register_t *c)
 {
     target_ulong otype = cap_get_otype_unsigned(c);
     return cap_otype_is_reserved(otype) && otype != CAP_OTYPE_UNSEALED;

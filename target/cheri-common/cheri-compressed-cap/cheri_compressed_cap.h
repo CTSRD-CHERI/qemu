@@ -89,7 +89,6 @@ enum CC256_OTypes {
     CC256_SPECIAL_OTYPE(OTYPE_UNSEALED, 0),
     CC256_SPECIAL_OTYPE(OTYPE_SENTRY, 1),
     CC256_SPECIAL_OTYPE(LAST_SPECIAL_OTYPE, 15),
-    CC256_SPECIAL_OTYPE(LAST_NONRESERVED_OTYPE, 16),
 };
 
 #define LS_SPECIAL_OTYPES_COMMON(ITEM, ...)                                                                            \
