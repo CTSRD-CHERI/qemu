@@ -61,18 +61,11 @@
 
 #define _CC_BITMASK64(nbits) ((UINT64_C(1) << (nbits)) - UINT64_C(1))
 
-#define _CC_MIN(a, b)                                                                                                  \
-    ({                                                                                                                 \
-        __typeof__(a) _a = (a);                                                                                        \
-        __typeof__(b) _b = (b);                                                                                        \
-        _a < _b ? _a : _b;                                                                                             \
-    })
-#define _CC_MAX(a, b)                                                                                                  \
-    ({                                                                                                                 \
-        __typeof__(a) _a = (a);                                                                                        \
-        __typeof__(b) _b = (b);                                                                                        \
-        _a > _b ? _a : _b;                                                                                             \
-    })
+// NB: Do not use GNU statement expressions as this is used by LLVM which warns
+// on any uses during its build. These are therefore unsafe if any arguments
+// have side-effects.
+#define _CC_MIN(a, b) ((a) < (b) ? (a) : (b))
+#define _CC_MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #define _CC_FIELD(name, last, start)                                                                                   \
     _CC_N(FIELD_##name##_START) = (start - _CC_N(ADDR_WIDTH)),                                                         \
