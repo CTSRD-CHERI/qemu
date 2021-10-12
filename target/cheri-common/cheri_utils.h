@@ -166,7 +166,7 @@ static inline target_long cap_get_otype_signext(const cap_register_t *c)
      * We "sign" extend to a 64-bit number by subtracting the maximum:
      * e.g. for 64-bit CHERI-RISC-V unsigned 2^18-1 maps to 2^64-1
      */
-    return result < CAP_LAST_NONRESERVED_OTYPE
+    return result <= CAP_LAST_NONRESERVED_OTYPE
                ? result
                : result - CAP_MAX_REPRESENTABLE_OTYPE - 1;
 #endif

@@ -776,7 +776,7 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
     } else if (!cap_cursor_in_bounds(ctp)) {
         // Must be within bounds and not one past end (i.e. not equal to top).
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if (ct_cursor >= CAP_LAST_NONRESERVED_OTYPE) {
+    } else if (ct_cursor > CAP_LAST_NONRESERVED_OTYPE) {
         // This should never happen due to the ct_cursor != cs_otype check.
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else {
