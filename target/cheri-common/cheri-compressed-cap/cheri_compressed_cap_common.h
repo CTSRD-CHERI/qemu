@@ -102,6 +102,13 @@ _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_NON
                            _CC_N(FIELD_EXPONENT_LOW_PART_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
 
+// Sanity-check the min/max otype macros:
+_CC_STATIC_ASSERT(_CC_N(MIN_RESERVED_OTYPE) >= 0, "MIN_RESERVED_OTYPE is signed?");
+_CC_STATIC_ASSERT(_CC_N(MIN_RESERVED_OTYPE) < _CC_N(MAX_RESERVED_OTYPE),
+                  "MIN_RESERVED_OTYPE greater than MAX_RESERVED_OTYPE?");
+_CC_STATIC_ASSERT(_CC_N(MIN_RESERVED_OTYPE) <= _CC_N(MAX_REPRESENTABLE_OTYPE), "MIN_RESERVED_OTYPE out of range?");
+_CC_STATIC_ASSERT(_CC_N(MAX_RESERVED_OTYPE) <= _CC_N(MAX_REPRESENTABLE_OTYPE), "MAX_RESERVED_OTYPE out of range?");
+
 // Forward-declare the accessors since we use them inside the struct body:
 struct _cc_N(cap);
 static inline uint8_t _cc_N(get_flags)(const struct _cc_N(cap)* cap);
