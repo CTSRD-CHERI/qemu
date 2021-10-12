@@ -272,6 +272,20 @@ static inline bool cap_is_sealed_entry(const cap_register_t *c)
     return cap_get_otype_unsigned(c) == CAP_OTYPE_SENTRY;
 }
 
+static inline bool cap_is_sealed_with_reserved_otype(cap_register_t *c)
+{
+    target_ulong otype = cap_get_otype_unsigned(c);
+    return otype >= CAP_CC(FIRST_SPECIAL_OTYPE) &&
+           otype <= CAP_CC(LAST_SPECIAL_OTYPE) && otype != CAP_OTYPE_UNSEALED;
+}
+
+static inline void cap_unseal_reserved_otype(cap_register_t *c)
+{
+    assert(c->cr_tag && cap_is_sealed_with_reserved_otype(c) &&
+           "Should only be used with reserved object types");
+    CAP_cc(update_otype)(c, CAP_OTYPE_UNSEALED);
+}
+
 static inline void cap_unseal_entry(cap_register_t *c)
 {
     assert(c->cr_tag && cap_is_sealed_entry(c) &&

@@ -308,7 +308,7 @@ void helper_load_pair_and_branch_and_link(CPUArchState *env, uint32_t cn,
 
     if (base.cr_tag && ct == CINVOKE_DATA_REGNUM &&
         cap_get_otype_unsigned(&base) == CAP_OTYPE_LOAD_PAIR_BRANCH) {
-        CAP_cc(update_otype)(&base, CAP_OTYPE_UNSEALED);
+        cap_unseal_reserved_otype(&base);
     }
 
     cap_check_common_reg(perms_for_load(), env, cn, addr, CHERI_CAP_SIZE * 2,
@@ -341,7 +341,7 @@ void helper_load_and_branch_and_link(CPUArchState *env, uint32_t cn,
 
     if (base.cr_tag && cn == CINVOKE_DATA_REGNUM &&
         cap_get_otype_unsigned(&base) == CAP_OTYPE_LOAD_BRANCH) {
-        CAP_cc(update_otype)(&base, CAP_OTYPE_UNSEALED);
+        cap_unseal_reserved_otype(&base);
     }
 
     update_capreg(env, cn, &base);
