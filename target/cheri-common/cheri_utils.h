@@ -133,7 +133,13 @@ static inline cap_length_t cap_get_top_full(const cap_register_t *c)
 
 static inline target_ulong cap_get_otype_unsigned(const cap_register_t *c)
 {
-    return CAP_cc(get_otype)(c);
+    target_ulong otype = CAP_cc(get_otype)(c);
+    /*
+     * It is impossible to have out-of-range otypes in all targets for the
+     * currently used capability compression schemes.
+     */
+    cheri_debug_assert(otype <= CAP_MAX_REPRESENTABLE_OTYPE);
+    return otype;
 }
 
 static inline target_long cap_get_otype_signext(const cap_register_t *c)
@@ -231,18 +237,8 @@ static inline QEMU_ALWAYS_INLINE bool cap_has_perms(const cap_register_t *reg,
 
 static inline bool cap_is_unsealed(const cap_register_t *c)
 {
-    // TODO: how should we treat the other reserved types? as sealed?
-    // TODO: what about untagged capabilities with out-of-range otypes?
-#ifdef TARGET_AARCH64
-    return cap_get_otype_unsigned(c) == CAP_OTYPE_UNSEALED;
-#else
-    _Static_assert(CAP_MAX_REPRESENTABLE_OTYPE == CAP_OTYPE_UNSEALED, "");
-    if (c->cr_tag) {
-        cheri_debug_assert(cap_get_otype_unsigned(c) <=
-                           CAP_MAX_REPRESENTABLE_OTYPE);
-    }
-    return cap_get_otype_unsigned(c) >= CAP_OTYPE_UNSEALED;
-#endif
+    target_ulong otype = cap_get_otype_unsigned(c);
+    return otype == CAP_OTYPE_UNSEALED;
 }
 
 static inline void cap_set_sealed(cap_register_t *c, uint32_t type)
