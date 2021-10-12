@@ -37,7 +37,6 @@
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs.h"
 static TCGv _cpu_cursors_do_not_access_directly[32];
-static TCGv _cpu_pesbt_do_not_access_directly[32];
 static TCGv cpu_pc;  // Note: this is PCC.cursor
 #else
 static TCGv cpu_gpr[32], cpu_pc;
@@ -220,23 +219,6 @@ static inline void _gen_get_gpr(TCGv t, int reg_num)
     }
 }
 
-#ifdef TARGET_CHERI
-static inline void gen_mark_gpr_as_integer(int reg_num_dst)
-{
-    /* Currently, the integer flag is 0, so we can mask the 64-bit value holding
-     * the capreg state appropriately to clear the bits for register N. */
-    TCGv_i32 integer_state = tcg_const_i32(CREG_INTEGER);
-    tcg_gen_st8_i32(
-        integer_state, cpu_env,
-        offsetof(CPURISCVState, gpcapregs.capreg_state[reg_num_dst]));
-    tcg_temp_free_i32(integer_state);
-    tcg_gen_movi_tl(_cpu_pesbt_do_not_access_directly[reg_num_dst],
-                    CAP_NULL_PESBT);
-    /* TODO: maybe all ones is more efficient? We can just do an or and don't
-     *   have to negate? */
-}
-#endif
-
 #ifdef CONFIG_RVFI_DII
 //#define gen_get_gpr(t, reg_num, field_prefix)                                  \
 //    do {                                                                       \
@@ -249,16 +231,21 @@ static inline void gen_mark_gpr_as_integer(int reg_num_dst)
 #endif
 #define gen_get_gpr(t, reg_num) _gen_get_gpr(t, reg_num)
 
+#include "cheri-translate-utils.h"
+
 /* Wrapper for setting reg values - need to check of reg is zero since
  * cpu_gpr[0] is not actually allocated. this is more for safety purposes,
  * since we usually avoid calling the OP_TYPE_gen function if we see a write to
  * $zero
  */
-static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t)
+static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t,
+                                bool clear_pesbt)
 {
     if (reg_num_dst != 0) {
 #ifdef TARGET_CHERI
-        gen_mark_gpr_as_integer(reg_num_dst); // Reset the register type to int.
+        if (clear_pesbt)
+            gen_lazy_cap_set_int(
+                ctx, reg_num_dst); // Reset the register type to int.
         tcg_gen_mov_tl(_cpu_cursors_do_not_access_directly[reg_num_dst], t);
 #else
         tcg_gen_mov_tl(cpu_gpr[reg_num_dst], t);
@@ -281,7 +268,8 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
 {
     if (reg_num_dst != 0) {
 #ifdef TARGET_CHERI
-        gen_mark_gpr_as_integer(reg_num_dst); // Reset the register type to int.
+        gen_lazy_cap_set_int(ctx,
+                             reg_num_dst); // Reset the register type to int.
         tcg_gen_movi_tl(_cpu_cursors_do_not_access_directly[reg_num_dst], value);
 #else
         tcg_gen_movi_tl(cpu_gpr[reg_num_dst], value);
@@ -301,7 +289,7 @@ static inline void _gen_set_gpr_const(DisasContext *ctx, int reg_num_dst,
     }
 }
 
-#define gen_set_gpr(reg_num_dst, t) _gen_set_gpr(ctx, reg_num_dst, t)
+#define gen_set_gpr(reg_num_dst, t) _gen_set_gpr(ctx, reg_num_dst, t, true)
 #define gen_set_gpr_const(reg_num_dst, t) _gen_set_gpr_const(ctx, reg_num_dst, t)
 
 #ifdef CONFIG_TCG_LOG_INSTR
@@ -329,7 +317,6 @@ static inline void gen_riscv_log_instr(DisasContext *ctx, uint32_t opcode,
 #define gen_riscv_log_instr32(ctx, opcode)              \
     gen_riscv_log_instr(ctx, opcode, sizeof(uint32_t))
 
-#include "cheri-translate-utils.h"
 void cheri_tcg_save_pc(DisasContextBase *db) { gen_update_cpu_pc(db->pc_next); }
 // We have to call gen_update_cpu_pc() before setting DISAS_NORETURN (see
 // generate_exception())
@@ -1072,7 +1059,6 @@ void riscv_translate_init(void)
 #else
     /* CNULL cursor should never be written! */
     _cpu_cursors_do_not_access_directly[0] = NULL;
-    _cpu_pesbt_do_not_access_directly[0] = NULL;
     /*
      * Provide fast access to integer part of capability registers using
      * gen_get_gpr() and get_set_gpr(). But don't expose the cpu_gprs TCGv
@@ -1083,10 +1069,6 @@ void riscv_translate_init(void)
             cpu_env,
             offsetof(CPURISCVState, gpcapregs.decompressed[i].cap._cr_cursor),
             riscv_int_regnames[i]);
-        _cpu_pesbt_do_not_access_directly[i] = tcg_global_mem_new(
-            cpu_env,
-            offsetof(CPURISCVState, gpcapregs.decompressed[i].cap.cr_pesbt),
-            cheri_gp_regnames[i]);
     }
 #endif
 #ifdef CONFIG_RVFI_DII

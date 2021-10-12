@@ -27,13 +27,13 @@ int aarch64_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
 
     if (n < 31) {
         /* Core integer register.  */
-        return gdb_get_reg64(mem_buf, env->xregs[n]);
+        return gdb_get_reg64(mem_buf, arm_get_xreg(env, n));
     }
     switch (n) {
     case 31:
-        return gdb_get_reg64(mem_buf, env->xregs[31]);
+        return gdb_get_reg64(mem_buf, arm_get_xreg(env, n));
     case 32:
-        return gdb_get_reg64(mem_buf, env->pc);
+        return gdb_get_reg64(mem_buf, get_aarch_reg_as_x(&env->pc));
     case 33:
         return gdb_get_reg32(mem_buf, pstate_read(env));
     }
@@ -51,15 +51,15 @@ int aarch64_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
 
     if (n < 31) {
         /* Core integer register.  */
-        env->xregs[n] = tmp;
+        arm_set_xreg(env, n, tmp);
         return 8;
     }
     switch (n) {
     case 31:
-        env->xregs[31] = tmp;
+        arm_set_xreg(env, n, tmp);
         return 8;
     case 32:
-        env->pc = tmp;
+        set_aarch_reg_to_x(&env->pc, tmp);
         return 8;
     case 33:
         /* CPSR */

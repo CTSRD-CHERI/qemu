@@ -74,6 +74,10 @@ typedef struct DisasContextBase {
     target_ulong pcc_base;
     target_ulong pcc_top;
     uint32_t cheri_flags;
+    // Keeps track of all compression states a cap could be at TRANSLATATION
+    // TIME. Within a basic block, this is possible to track for any runtime
+    // use.
+    uint8_t cap_compression_states[NUM_LAZY_CAP_REGS];
 #endif
     DisasJumpType is_jmp;
     int num_insns;

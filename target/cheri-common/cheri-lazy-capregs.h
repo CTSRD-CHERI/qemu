@@ -45,16 +45,6 @@
 #include "qemu/log.h"
 #include "exec/log_instr.h"
 
-/*
- * Whether this lazy capreg is special (and therefore always stored fully
- * decompressed).
- */
-static inline bool lazy_capreg_number_is_special(int reg)
-{
-    cheri_debug_assert(reg < NUM_LAZY_CAP_REGS);
-    return (reg == NULL_CAPREG_INDEX);
-}
-
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
 
 static inline QEMU_ALWAYS_INLINE CapRegState
@@ -170,9 +160,46 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
     case CREG_UNTAGGED_CAP:
         return _update_from_compressed(gpcrs, regnum, /*tag=*/false);
     default:
-        __builtin_unreachable();
+        g_assert_not_reached();
     }
-    tcg_abort();
+}
+
+static inline __attribute__((always_inline)) bool
+get_without_decompress_tag(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    CapRegState state = get_capreg_state(gpcrs, regnum);
+    bool tag = (state == CREG_FULLY_DECOMPRESSED) &&
+               get_cap_in_gpregs(gpcrs, regnum)->cr_tag;
+    tag |= (state == CREG_TAGGED_CAP);
+    return tag;
+}
+
+static inline __attribute__((always_inline)) target_ulong
+get_without_decompress_cursor(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    return get_cap_in_gpregs(gpcrs, regnum)->_cr_cursor;
+}
+
+static inline __attribute__((always_inline)) target_ulong
+get_without_decompress_pesbt(CPUArchState *env, unsigned regnum)
+{
+    GPCapRegs *gpcrs = cheri_get_gpcrs(env);
+    return get_cap_in_gpregs(gpcrs, regnum)->cr_pesbt;
+}
+
+// Return a CREG or DDC or PCC.
+static inline __attribute__((always_inline)) const cap_register_t *
+get_capreg_or_special(CPUArchState *env, unsigned regnum)
+{
+
+    if (unlikely(regnum == CHERI_EXC_REGNUM_PCC))
+        return _cheri_get_pcc_unchecked(env);
+    if (unlikely(regnum == CHERI_EXC_REGNUM_DDC))
+        return cheri_get_ddc(env);
+    else
+        return get_readonly_capreg(env, regnum);
 }
 
 /// return a read-only capability register with register number 0 meaning $ddc
@@ -181,15 +208,39 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
 /// argument to ctoptr/cbuildcap since using a ctoptr relative to $ddc make
 /// sense whereas using it relative to NULL is the same as just cmove $cN,
 /// $cnull
-static inline __attribute__((always_inline)) const cap_register_t *
+/// 0 can only be DDC on mips/risv. On Morello 0 is always normal register.
+/// Having the switch here rather than in general code makes things slightly
+/// neater. We could always call this "0_is_maybe_ddc" to be less confusing.
+static inline QEMU_ALWAYS_INLINE const cap_register_t *
 get_capreg_0_is_ddc(CPUArchState *env, unsigned regnum)
 {
-    if (unlikely(regnum == 0)) {
-        return cheri_get_ddc(env);
-    }
-    return get_readonly_capreg(env, regnum);
+#ifdef TARGET_AARCH64
+    return get_capreg_or_special(env, regnum);
+#else
+    return get_capreg_or_special(env,
+                                 regnum == 0 ? CHERI_EXC_REGNUM_DDC : regnum);
+#endif
 }
 
+static inline QEMU_ALWAYS_INLINE const cap_register_t *
+get_load_store_base_cap(CPUArchState *env, uint32_t cb)
+{
+#ifdef TARGET_MIPS
+    // CLC/CSC and the integer variants trap on cbp == NULL so we use reg0 as
+    // $ddc to save encoding space and increase code density since loading
+    // relative to $ddc is common in the hybrid ABI (and also for backwards
+    // compat with old binaries).
+    return get_capreg_0_is_ddc(env, cb);
+#elif defined(TARGET_RISCV) || defined(TARGET_AARCH64)
+    // However, RISCV does not use this encoding and uses zero for the
+    // null register (i.e. always trap).
+    // The helpers can also be invoked from the explicitly DDC-relative
+    // instructions with cb == CHERI_EXC_REGNUM_DDC which means DDC:
+    return get_capreg_or_special(env, cb);
+#else
+#error "Wrong arch?"
+#endif
+}
 
 #ifdef CONFIG_TCG_LOG_INSTR
 
@@ -237,6 +288,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     // writing to $c0/$cnull is a no-op
     if (unlikely(regnum == NULL_CAPREG_INDEX))
         return;
+
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     cap_register_t *target = get_cap_in_gpregs(gpcrs, regnum);
     *target = *newval;
@@ -262,7 +314,8 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
 static inline void update_capreg_cursor_from(CPUArchState *env, unsigned regnum,
                                              const cap_register_t *source_cap,
                                              unsigned source_regnum,
-                                             const target_ulong new_cursor)
+                                             const target_ulong new_cursor,
+                                             bool clear_tag)
 {
     if (unlikely(regnum == NULL_CAPREG_INDEX)) {
         return;
@@ -271,13 +324,17 @@ static inline void update_capreg_cursor_from(CPUArchState *env, unsigned regnum,
     cap_register_t *target = get_cap_in_gpregs(gpcrs, regnum);
     cheri_debug_assert(get_capreg_state(gpcrs, source_regnum) ==
                        CREG_FULLY_DECOMPRESSED);
-    cheri_debug_assert(is_representable_cap_with_addr(source_cap, new_cursor));
+    cheri_debug_assert(clear_tag ||
+                       is_representable_cap_with_addr(source_cap, new_cursor));
     if (regnum != source_regnum) {
         *target = *source_cap;
         set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     }
     /* When updating in-place, we can avoid copying. */
     target->_cr_cursor = new_cursor;
+    if (clear_tag) {
+        target->cr_tag = 0;
+    }
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, target->_cr_cursor);
     cheri_log_instr_changed_gp_capreg(env, regnum, target);
@@ -358,9 +415,8 @@ static inline target_ulong get_capreg_tag(CPUArchState *env, unsigned regnum)
     case CREG_UNTAGGED_CAP:
         return false;
     default:
-        __builtin_unreachable();
+        g_assert_not_reached();
     }
-    tcg_abort();
 }
 
 static inline target_ulong get_capreg_tag_filtered(CPUArchState *env, unsigned regnum) {

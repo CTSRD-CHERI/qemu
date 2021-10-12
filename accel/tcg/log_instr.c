@@ -407,12 +407,12 @@ static void emit_text_start(CPUArchState *env, target_ulong pc)
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
 
     if (cpulog->loglevel == QEMU_LOG_INSTR_LOGLEVEL_USER) {
-        qemu_log("[%u:%u] Requested user-mode only instruction logging @ "
-                 TARGET_FMT_lx " \n", env_cpu(env)->cpu_index,
-                 cpu_get_asid(env), pc);
+        qemu_log("[%u:%u] Requested user-mode only instruction logging "
+                 "@ " TARGET_FMT_lx " \n",
+                 env_cpu(env)->cpu_index, cpu_get_asid(env, pc), pc);
     } else {
         qemu_log("[%u:%u] Requested instruction logging @ " TARGET_FMT_lx " \n",
-                 env_cpu(env)->cpu_index, cpu_get_asid(env), pc);
+                 env_cpu(env)->cpu_index, cpu_get_asid(env, pc), pc);
     }
 }
 
@@ -424,12 +424,12 @@ static void emit_text_stop(CPUArchState *env, target_ulong pc)
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
 
     if (cpulog->loglevel == QEMU_LOG_INSTR_LOGLEVEL_USER) {
-        qemu_log("[%u:%u] Disabled user-mode only instruction logging @ "
-                 TARGET_FMT_lx " \n", env_cpu(env)->cpu_index,
-                 cpu_get_asid(env), pc);
+        qemu_log("[%u:%u] Disabled user-mode only instruction logging "
+                 "@ " TARGET_FMT_lx " \n",
+                 env_cpu(env)->cpu_index, cpu_get_asid(env, pc), pc);
     } else {
         qemu_log("[%u:%u] Disabled instruction logging @ " TARGET_FMT_lx " \n",
-                 env_cpu(env)->cpu_index, cpu_get_asid(env), pc);
+                 env_cpu(env)->cpu_index, cpu_get_asid(env, pc), pc);
     }
 }
 
@@ -646,8 +646,6 @@ static void do_cpu_loglevel_switch(CPUState *cpu, run_on_cpu_data data)
     qemu_log_instr_loglevel_t next_level = data.host_int;
     bool next_level_active;
 
-    log_assert(qemu_loglevel_mask(CPU_LOG_INSTR));
-
     /* Decide whether we have to pause/resume logging */
     switch (next_level) {
     case QEMU_LOG_INSTR_LOGLEVEL_NONE:
@@ -679,7 +677,10 @@ static void do_cpu_loglevel_switch(CPUState *cpu, run_on_cpu_data data)
     /* Check if this was a no-op */
     if (next_level == prev_level && prev_level_active == next_level_active)
         return;
-    tb_flush(cpu);
+
+    /* Flushing all translations makes things incredibly slow. Instead,
+     * we put whether tracing is currently enabled into cflags */
+
     /* Emit start/stop events */
     if (prev_level_active) {
         if (cpulog->starting) {
@@ -739,18 +740,26 @@ static void do_global_loglevel_switch(CPUState *cpu, run_on_cpu_data data)
  * the current TB is finished. If we clear the global flag immediately
  * we will end up emitting stale instructions.
  */
-void qemu_log_instr_global_switch(bool request_stop)
+int qemu_log_instr_global_switch(int log_flags)
 {
     CPUState *cpu;
     qemu_log_instr_loglevel_t level;
 
-    level = (request_stop) ? QEMU_LOG_INSTR_LOGLEVEL_NONE :
-        QEMU_LOG_INSTR_LOGLEVEL_ALL;
+    if (log_flags & CPU_LOG_INSTR_U) {
+        level = QEMU_LOG_INSTR_LOGLEVEL_USER;
+        log_flags |= CPU_LOG_INSTR;
+    } else if (log_flags & CPU_LOG_INSTR) {
+        level = QEMU_LOG_INSTR_LOGLEVEL_ALL;
+    } else {
+        level = QEMU_LOG_INSTR_LOGLEVEL_NONE;
+    }
 
     CPU_FOREACH(cpu) {
         async_safe_run_on_cpu(cpu, do_global_loglevel_switch,
             RUN_ON_CPU_HOST_INT(level));
     }
+
+    return log_flags;
 }
 
 /*
@@ -817,7 +826,10 @@ void qemu_log_instr_init(CPUState *cpu)
     }
 
     /* If we are starting with instruction logging enabled, switch it on now */
-    if (qemu_loglevel_mask(CPU_LOG_INSTR))
+    if (qemu_loglevel_mask(CPU_LOG_INSTR_U))
+        do_cpu_loglevel_switch(
+            cpu, RUN_ON_CPU_HOST_INT(QEMU_LOG_INSTR_LOGLEVEL_USER));
+    else if (qemu_loglevel_mask(CPU_LOG_INSTR))
         do_cpu_loglevel_switch(cpu,
             RUN_ON_CPU_HOST_INT(QEMU_LOG_INSTR_LOGLEVEL_ALL));
 }
@@ -941,7 +953,8 @@ void qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong va
 void helper_qemu_log_instr_reg(CPUArchState *env, const void *reg_name,
                                target_ulong value)
 {
-    qemu_log_instr_reg(env, (const char *)reg_name, value);
+    if (qemu_log_instr_check_enabled(env))
+        qemu_log_instr_reg(env, (const char *)reg_name, value);
 }
 
 #ifdef TARGET_CHERI

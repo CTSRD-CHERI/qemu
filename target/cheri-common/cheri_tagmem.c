@@ -103,6 +103,7 @@ _Static_assert(CAP_TAG_GET_MANY_SHFT <= 3, "");
 #endif
 
 #define CAP_TAG_GET_MANY_MASK ((1 << (1UL << CAP_TAG_GET_MANY_SHFT)) - 1UL)
+#define CAP_TAG_MANY_DATA_SIZE (CHERI_CAP_SIZE << CAP_TAG_GET_MANY_SHFT)
 
 static inline size_t num_tagblocks(RAMBlock* ram)
 {
@@ -254,7 +255,10 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
     }
 
     uint64_t tag = ram_offset / CHERI_CAP_SIZE;
+#ifndef TARGET_AARCH64
+    // AArch64 seems to use different sizes. Might be worth looking into.
     cheri_debug_assert(size == TARGET_PAGE_SIZE && "Unexpected size");
+#endif
     CheriTagBlock *tagblk = cheri_tag_block(tag, ram);
 
     if (tag_write && !tagblk) {
@@ -277,6 +281,12 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
     if (tagblk != NULL) {
         const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
         return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
+    }
+
+    if (!(*prot & PAGE_SC_CLEAR)) {
+        // Add in a (fake) SC_TRAP to prompt a TLB refill if a tag is stored
+        // to this location. See the comment around TLBENTRYCAP_INVALID_WRITE_*.
+        *prot |= PAGE_SC_TRAP;
     }
 
     return ALL_ZERO_TAGBLK;
@@ -500,6 +510,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
      * fault (SC bit set).
      */
     store_capcause_reg(env, reg);
+    // Note: this probe will handle any store cap faults
     void *host_addr = probe_cap_write(env, vaddr, 1, mmu_idx, pc);
     clear_capcause_reg(env);
 
@@ -522,9 +533,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
                        "Unimplemented");
 
-    if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP) {
-        raise_store_tag_exception(env, vaddr, reg, pc);
-    }
+    cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_TRAP));
 
     /*
      * probe_cap_write() should have ensured there was a tagmem for this
@@ -562,6 +571,9 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
         if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP) {
             *prot |= PAGE_LC_TRAP;
         }
+        if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP_ANY) {
+            *prot |= PAGE_LC_TRAP_ANY;
+        }
     }
 
     /*
@@ -585,7 +597,7 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 {
 
     const int mmu_idx = cpu_mmu_index(env, false);
-    probe_read(env, vaddr, 1, mmu_idx, pc);
+    probe_read(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
@@ -598,7 +610,8 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
             : tagblock_get_tag_many_tagmem(tagmem,
                                            page_vaddr_to_tag_offset(vaddr));
 
-    if (result && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
+    if ((result && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) ||
+        (tagmem_flags & TLBENTRYCAP_FLAG_TRAP_ANY)) {
         raise_load_tag_exception(env, vaddr, reg, pc);
     }
 
@@ -617,9 +630,10 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
      * checking access_type can be eliminated.
      */
     if (tags) {
-        probe_cap_write(env, vaddr, 1, mmu_idx, pc);
+        // Note: this probe will handle any store cap faults
+        probe_cap_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     } else {
-        probe_write(env, vaddr, 1, mmu_idx, pc);
+        probe_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     }
     clear_capcause_reg(env);
 
@@ -641,9 +655,7 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
                        "Unimplemented");
 
-    if (tags && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
-        raise_store_tag_exception(env, vaddr, reg, pc);
-    }
+    cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_TRAP));
 
     cheri_debug_assert(tagmem);
 

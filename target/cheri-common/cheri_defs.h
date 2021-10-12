@@ -38,7 +38,13 @@
 # define cheri_debug_assert(X) ((void)0)
 #endif
 
+#ifdef TARGET_MORELLO
+#define CC_IS_MORELLO 1
+#endif
+
 #ifdef TARGET_CHERI
+
+#define ASSERT_IF_CHERI() assert(0)
 
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
 
@@ -84,12 +90,15 @@
 #define CAP_UPERMS_SHFT CAP_CC(UPERMS_SHFT)
 #define CAP_MAX_UPERM CAP_CC(MAX_UPERM)
 #define CAP_MAX_REPRESENTABLE_OTYPE CAP_CC(MAX_REPRESENTABLE_OTYPE)
-#define CAP_LAST_NONRESERVED_OTYPE CAP_CC(LAST_NONRESERVED_OTYPE)
 #define CAP_OTYPE_UNSEALED CAP_CC(OTYPE_UNSEALED)
 #define CAP_OTYPE_UNSEALED_SIGNED CAP_CC(OTYPE_UNSEALED_SIGNED)
 #define CAP_OTYPE_SENTRY CAP_CC(OTYPE_SENTRY)
-#define CAP_FIRST_SPECIAL_OTYPE_SIGNED CAP_CC(FIRST_SPECIAL_OTYPE_SIGNED)
-#define CAP_LAST_SPECIAL_OTYPE_SIGNED CAP_CC(LAST_SPECIAL_OTYPE_SIGNED)
+
+#ifdef TARGET_AARCH64
+#define CAP_OTYPE_LOAD_PAIR_BRANCH CAP_CC(OTYPE_LOAD_PAIR_BRANCH)
+#define CAP_OTYPE_LOAD_BRANCH CAP_CC(OTYPE_LOAD_BRANCH)
+#endif
+
 #define CAP_FLAGS_ALL_BITS CAP_CC(FIELD_FLAGS_MASK_NOT_SHIFTED)
 
 /* compressed capabilities use an (XLEN+1)-bit top */
@@ -116,6 +125,11 @@ typedef enum CheriPermissions {
     CAP_PERM_UNSEAL = CAP_CC(PERM_UNSEAL),
     CAP_ACCESS_SYS_REGS = CAP_CC(PERM_ACCESS_SYS_REGS),
     CAP_PERM_SETCID = CAP_CC(PERM_SETCID),
+#ifdef TARGET_AARCH64
+    CAP_PERM_EXECUTIVE = CAP_CC(PERM_EXECUTIVE),
+    CAP_PERM_MUTABLE_LOAD = CAP_CC(PERM_MUTABLE_LOAD),
+    CAP_PERM_BRANCH_SEALED_PAIR = CAP_CC(PERM_BRANCH_SEALED_PAIR),
+#endif
 } CheriPermissions;
 
 typedef enum CheriFlags {
@@ -151,12 +165,19 @@ typedef enum CheriTbFlags {
      * PCC spans the full address space and has base zero. This means we do
      * not need to perform bounds checks or subtract/add PCC.base
      */
-    TB_FLAG_CHERI_PCC_FULL_AS = (1 << 7),
-    TB_FLAG_CHERI_PCC_READABLE = (1 << 8),
+    TB_FLAG_CHERI_PCC_BASE_ZERO = (1 << 7),
+    TB_FLAG_CHERI_PCC_TOP_MAX = (1 << 8),
+    TB_FLAG_CHERI_PCC_FULL_AS =
+        TB_FLAG_CHERI_PCC_BASE_ZERO | TB_FLAG_CHERI_PCC_TOP_MAX,
+    TB_FLAG_CHERI_PCC_READABLE = (1 << 9),
 
     /* Useful for CHERI-specific flags on various platforms if the normal flags
        overflowed */
     TB_FLAG_CHERI_SPARE_INDEX_START = 16,
 } CheriTbFlags;
+
+#else // !TARGET_CHERI
+
+#define ASSERT_IF_CHERI()
 
 #endif // TARGET_CHERI

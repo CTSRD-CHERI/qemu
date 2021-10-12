@@ -769,6 +769,15 @@ static int cpu_post_load(void *opaque, int version_id)
     return 0;
 }
 
+#ifdef TARGET_CHERI
+#define VMSTATE_REG_ARRAY VMSTATE_ALIGN_CAP_ARRAY
+#define VMSTATE_REG(reg, ...) VMSTATE_CAP(reg.cap, __VA_ARGS__)
+#else
+#define VMSTATE_REG_ARRAY VMSTATE_UINT64_ARRAY
+#define VMSTATE_REG VMSTATE_UINT64
+#endif
+
+/* clang-format off */
 const VMStateDescription vmstate_arm_cpu = {
     .name = "cpu",
     .version_id = 22,
@@ -779,8 +788,10 @@ const VMStateDescription vmstate_arm_cpu = {
     .post_load = cpu_post_load,
     .fields = (VMStateField[]) {
         VMSTATE_UINT32_ARRAY(env.regs, ARMCPU, 16),
+#ifndef TARGET_CHERI
         VMSTATE_UINT64_ARRAY(env.xregs, ARMCPU, 32),
-        VMSTATE_UINT64(env.pc, ARMCPU),
+#endif
+        VMSTATE_REG(env.pc, ARMCPU),
         {
             .name = "cpsr",
             .version_id = 0,
@@ -795,8 +806,8 @@ const VMStateDescription vmstate_arm_cpu = {
         VMSTATE_UINT32_ARRAY(env.banked_r14, ARMCPU, 8),
         VMSTATE_UINT32_ARRAY(env.usr_regs, ARMCPU, 5),
         VMSTATE_UINT32_ARRAY(env.fiq_regs, ARMCPU, 5),
-        VMSTATE_UINT64_ARRAY(env.elr_el, ARMCPU, 4),
-        VMSTATE_UINT64_ARRAY(env.sp_el, ARMCPU, 4),
+        VMSTATE_REG_ARRAY(env.elr_el, ARMCPU, 4),
+        VMSTATE_REG_ARRAY(env.sp_el, ARMCPU, N_BANK_WITH_RESTRICTED),
         /* The length-check must come before the arrays to avoid
          * incoming data possibly overflowing the array.
          */
@@ -847,3 +858,4 @@ const VMStateDescription vmstate_arm_cpu = {
         NULL
     }
 };
+/* clang-format on */

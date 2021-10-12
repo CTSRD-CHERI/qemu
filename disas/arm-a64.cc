@@ -22,12 +22,14 @@ extern "C" {
 #include "disas/dis-asm.h"
 }
 
-#include "vixl/a64/disasm-a64.h"
+#include "vixl/aarch64/disasm-aarch64.h"
 
-using namespace vixl;
+using namespace vixl::aarch64;
+
+class QEMUDisassembler;
 
 static Decoder *vixl_decoder = NULL;
-static Disassembler *vixl_disasm = NULL;
+static QEMUDisassembler *vixl_disasm = NULL;
 
 /* We don't use libvixl's PrintDisassembler because its output
  * is a little unhelpful (trailing newlines, for example).
@@ -49,8 +51,8 @@ public:
 
 protected:
     virtual void ProcessOutput(const Instruction *instr) {
-        printf_(stream_, "%08" PRIx32 "      %s",
-                instr->InstructionBits(), GetOutput());
+        printf_(stream_, "%08" PRIx32 "      %s", instr->GetInstructionBits(),
+                GetOutput());
     }
 
 private:
@@ -91,13 +93,13 @@ int print_insn_arm_a64(uint64_t addr, disassemble_info *info)
         vixl_init();
     }
 
-    ((QEMUDisassembler *)vixl_disasm)->SetPrintf(info->fprintf_func);
-    ((QEMUDisassembler *)vixl_disasm)->SetStream(info->stream);
+    vixl_disasm->SetPrintf(info->fprintf_func);
+    vixl_disasm->SetStream(info->stream);
 
     instrval = bytes[0] | bytes[1] << 8 | bytes[2] << 16 | bytes[3] << 24;
     instr = reinterpret_cast<const Instruction *>(&instrval);
     vixl_disasm->MapCodeAddress(addr, instr);
-    vixl_decoder->Decode(instr);
-
+    vixl_decoder->Decode(instr,
+                         info->flags & ARM_DIS_FLAG_C64 ? ISA::C64 : ISA::A64);
     return INSN_SIZE;
 }

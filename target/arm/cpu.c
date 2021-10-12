@@ -40,13 +40,38 @@
 #include "disas/capstone.h"
 #include "fpu/softfloat.h"
 
+#ifdef TARGET_CHERI
+
+const char *const cheri_gp_regnames[34] = {
+    "c0",  "c1",  "c2",  "c3",  "c4",  "c5",  "c6",         "c7",  "c8",
+    "c9",  "c10", "c11", "c12", "c13", "c14", "c15",        "c16", "c17",
+    "c18", "c19", "c20", "c21", "c22", "c23", "c24",        "c25", "c26",
+    "c27", "c28", "c29", "c30", "csp", "czr", "ctmp(error)"};
+
+const char *const cheri_gp_int_regnames[34] = {
+    "x0",  "x1",  "x2",  "x3",  "x4",  "x5",  "x6",         "x7",  "x8",
+    "x9",  "x10", "x11", "x12", "x13", "x14", "x15",        "x16", "x17",
+    "x18", "x19", "x20", "x21", "x22", "x23", "x24",        "x25", "x26",
+    "x27", "x28", "x29", "x30", "xsp", "xzr", "xtmp(error)"};
+
+#endif
+
+#ifdef CONFIG_TCG_LOG_INSTR
+const char *const aarch_cpu_mode_names[QEMU_LOG_INSTR_CPU_MODE_MAX] = {
+    [AARCH_LOG_INSTR_CPU_EL0] = "EL0",
+    [AARCH_LOG_INSTR_CPU_EL1] = "EL1",
+    [AARCH_LOG_INSTR_CPU_EL2] = "EL2",
+    [AARCH_LOG_INSTR_CPU_EL3] = "EL3",
+};
+#endif
+
 static void arm_cpu_set_pc(CPUState *cs, vaddr value)
 {
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
 
     if (is_a64(env)) {
-        env->pc = value;
+        set_aarch_reg_value(&env->pc, value);
         env->thumb = 0;
     } else {
         env->regs[15] = value & ~1;
@@ -65,7 +90,8 @@ static void arm_cpu_synchronize_from_tb(CPUState *cs,
      * never possible for an AArch64 TB to chain to an AArch32 TB.
      */
     if (is_a64(env)) {
-        env->pc = tb->pc;
+        // LETODO: I dont know if this needs bounds checking
+        set_aarch_reg_value(&env->pc, tb->pc);
     } else {
         env->regs[15] = tb->pc;
     }
@@ -128,7 +154,12 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
         return;
     }
 
-    if (cpreg_field_is_64bit(ri)) {
+#ifdef TARGET_CHERI
+    if (cpreg_field_is_cap(ri)) {
+        CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
+    } else
+#endif
+        if (cpreg_field_is_64bit(ri)) {
         CPREG_FIELD64(&cpu->env, ri) = ri->resetvalue;
     } else {
         CPREG_FIELD32(&cpu->env, ri) = ri->resetvalue;
@@ -217,7 +248,14 @@ static void arm_cpu_reset(DeviceState *dev)
         } else {
             env->pstate = PSTATE_MODE_EL1h;
         }
+
+#ifdef TARGET_CHERI
+        reset_capregs(env);
+        env->pc.cap = CAP_cc(make_max_perms_cap)(0, cpu->rvbar, CAP_MAX_TOP);
+#else
         env->pc = cpu->rvbar;
+#endif
+
 #endif
     } else {
 #if defined(CONFIG_USER_ONLY)
@@ -774,6 +812,10 @@ static void arm_disas_set_info(CPUState *cpu, disassemble_info *info)
         info->flags |= INSN_ARM_BE32;
     }
 #endif
+#ifdef TARGET_CHERI
+    if (env->pstate & PSTATE_C64)
+        info->flags |= ARM_DIS_FLAG_C64;
+#endif
 }
 
 #ifdef TARGET_AARCH64
@@ -787,12 +829,13 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     int el = arm_current_el(env);
     const char *ns_status;
 
-    qemu_fprintf(f, " PC=%016" PRIx64 " ", env->pc);
+    qemu_fprintf(f, " PC=%016" PRIx64 " ", get_aarch_reg_as_x(&env->pc));
     for (i = 0; i < 32; i++) {
+        target_ulong reg = arm_get_xreg(env, i);
         if (i == 31) {
-            qemu_fprintf(f, " SP=%016" PRIx64 "\n", env->xregs[i]);
+            qemu_fprintf(f, " SP=%016" PRIx64 "\n", reg);
         } else {
-            qemu_fprintf(f, "X%02d=%016" PRIx64 "%s", i, env->xregs[i],
+            qemu_fprintf(f, "X%02d=%016" PRIx64 "%s", i, reg,
                          (i + 2) % 3 ? " " : "\n");
         }
     }
@@ -1101,6 +1144,9 @@ static Property arm_cpu_has_dsp_property =
 static Property arm_cpu_has_mpu_property =
             DEFINE_PROP_BOOL("has-mpu", ARMCPU, has_mpu, true);
 
+static Property arm_cpu_mpidr_mt_property =
+            DEFINE_PROP_BOOL("mpidr_mt", ARMCPU, mpidr_mt, false);
+
 /* This is like DEFINE_PROP_UINT32 but it doesn't set the default value,
  * because the CPU initfn will have already set cpu->pmsav7_dregion to
  * the right value for that particular CPU type, and we don't want
@@ -1264,6 +1310,8 @@ void arm_cpu_post_init(Object *obj)
     if (kvm_enabled()) {
         kvm_arm_add_vcpu_properties(obj);
     }
+
+    qdev_property_add_static(DEVICE(obj), &arm_cpu_mpidr_mt_property);
 
 #ifndef CONFIG_USER_ONLY
     if (arm_feature(&cpu->env, ARM_FEATURE_AARCH64) &&

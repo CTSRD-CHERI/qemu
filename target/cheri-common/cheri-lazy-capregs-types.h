@@ -43,7 +43,7 @@
 // This needs to be a separate header so that cpu.h can include it.
 // The rest of cheri-lazy-capregs.h depends on including cpu.h
 
-// We store capability registers in their compressed form an decompress
+// We store capability registers in their compressed form and decompress
 // on demand. To allow fast use of GPRs from TCG we expose the integer part
 // and maintain an array of the state for each capability register (integer,
 // capability with tag set, or with tag unset).
@@ -69,6 +69,13 @@ typedef enum CapRegState {
     CREG_STATE_MASK = 0b11,
 } CapRegState;
 
+static inline const char *cap_reg_state_string(CapRegState state)
+{
+    const char *strings[] = {"Int", "Untagged Cap", "Tagged Cap",
+                             "Decompressed"};
+    return strings[(int)state];
+}
+
 // Cap registers should be padded so they are easier to move.
 #if TARGET_LONG_BITS == 32
 _Static_assert(sizeof(cap_register_t) == 24, "");
@@ -86,6 +93,10 @@ _Static_assert((offsetof(cap_register_t, cr_pesbt) -
 typedef struct aligned_cap_register_t {
     cap_register_t cap;
 } QEMU_ALIGNED(32) aligned_cap_register_t;
+_Static_assert(sizeof(aligned_cap_register_t) % 32 == 0,
+               "QEMU_ALIGNED() broken?");
+_Static_assert(offsetof(aligned_cap_register_t, cap) == 0,
+               "QEMU_ALIGNED() broken?");
 
 typedef struct GPCapRegs {
     /*
@@ -102,6 +113,20 @@ typedef struct GPCapRegs {
 static inline cap_register_t *get_cap_in_gpregs(GPCapRegs *gpcrs, size_t index)
 {
     return &gpcrs->decompressed[index].cap;
+}
+
+/*
+ * Whether this lazy capreg is special (and therefore always stored fully
+ * decompressed).
+ */
+static inline bool lazy_capreg_number_is_special(int reg)
+{
+    cheri_debug_assert(reg < NUM_LAZY_CAP_REGS);
+#ifdef SCRATCH_REG_NUM
+    if (reg == SCRATCH_REG_NUM)
+        return true;
+#endif
+    return reg == NULL_CAPREG_INDEX;
 }
 
 #endif

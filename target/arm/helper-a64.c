@@ -35,6 +35,12 @@
 #include "tcg/tcg.h"
 #include "fpu/softfloat.h"
 #include <zlib.h> /* For crc32 */
+#include "exec/log_instr.h"
+
+#ifdef TARGET_CHERI
+#include "cheri-archspecific.h"
+#include "cheri_tagmem.h"
+#endif
 
 /* C2.4.7 Multiply and divide */
 /* special cases for 0 and LLONG_MIN are mandated by the standard */
@@ -684,12 +690,12 @@ void HELPER(casp_le_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
     mem_idx = cpu_mmu_index(env, false);
     oi = make_memop_idx(MO_LEQ | MO_ALIGN_16, mem_idx);
 
-    cmpv = int128_make128(env->xregs[rs], env->xregs[rs + 1]);
+    cmpv = int128_make128(arm_get_xreg(env, rs), arm_get_xreg(env, rs + 1));
     newv = int128_make128(new_lo, new_hi);
     oldv = helper_atomic_cmpxchgo_le_mmu(env, addr, cmpv, newv, oi, ra);
 
-    env->xregs[rs] = int128_getlo(oldv);
-    env->xregs[rs + 1] = int128_gethi(oldv);
+    arm_set_xreg(env, rs, int128_getlo(oldv));
+    arm_set_xreg(env, rs + 1, int128_gethi(oldv));
 }
 
 void HELPER(casp_be_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
@@ -705,12 +711,12 @@ void HELPER(casp_be_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
     mem_idx = cpu_mmu_index(env, false);
     oi = make_memop_idx(MO_LEQ | MO_ALIGN_16, mem_idx);
 
-    cmpv = int128_make128(env->xregs[rs + 1], env->xregs[rs]);
+    cmpv = int128_make128(arm_get_xreg(env, rs + 1), arm_get_xreg(env, rs));
     newv = int128_make128(new_lo, new_hi);
     oldv = helper_atomic_cmpxchgo_be_mmu(env, addr, cmpv, newv, oi, ra);
 
-    env->xregs[rs + 1] = int128_getlo(oldv);
-    env->xregs[rs] = int128_gethi(oldv);
+    arm_set_xreg(env, rs + 1, int128_getlo(oldv));
+    arm_set_xreg(env, rs, int128_gethi(oldv));
 }
 
 /*
@@ -999,6 +1005,8 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
     qemu_mutex_unlock_iothread();
 
     if (!return_to_aa64) {
+        ASSERT_IF_CHERI();
+
         env->aarch64 = 0;
         /* We do a raw CPSR write because aarch64_sync_64_to_32()
          * will sort the register banks out for us, and we've already
@@ -1023,12 +1031,36 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
     } else {
         int tbii;
 
+#ifdef TARGET_CHERI
+        bool cap_return = is_access_to_capabilities_enabled_at_el(env, cur_el);
+        bool no_system = !cap_has_perms(&env->pc.cap, CAP_ACCESS_SYS_REGS);
+
+        if (!cap_return ||
+            !is_access_to_capabilities_enabled_at_el(env, new_el))
+            spsr &= ~PSTATE_C64;
+
+        if (cap_return) {
+            env->pc = env->elr_el[cur_el];
+            if (no_system)
+                env->pc.cap.cr_tag = 0;
+        }
+
+        if (!cap_is_unsealed(&env->pc.cap)) {
+            env->pc.cap.cr_tag = 0;
+        }
+#endif
+
         env->aarch64 = 1;
         spsr &= aarch64_pstate_valid_mask(&env_archcpu(env)->isar);
         pstate_write(env, spsr);
+        qemu_log_instr_dbg_reg(env, "CPSR", spsr);
         if (!arm_singlestep_active(env)) {
             env->pstate &= ~PSTATE_SS;
         }
+
+#ifdef TARGET_CHERI
+        arm_rebuild_chflags_el(env, new_el);
+#endif
         aarch64_restore_sp(env, new_el);
         helper_rebuild_hflags_a64(env, new_el);
 
@@ -1049,11 +1081,17 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
                 new_pc = extract64(new_pc, 0, 56);
             }
         }
-        env->pc = new_pc;
 
-        qemu_log_mask(CPU_LOG_INT, "Exception return from AArch64 EL%d to "
-                      "AArch64 EL%d PC 0x%" PRIx64 "\n",
-                      cur_el, new_el, env->pc);
+        set_aarch_reg_value(&env->pc, new_pc);
+
+        qemu_maybe_log_instr_extra(
+            env, "Exception return from EL%d to EL%d. PSTATE: 0x%x\n", cur_el,
+            new_el, pstate_read(env));
+
+        qemu_log_mask(CPU_LOG_INT,
+                      "Exception return from AArch64 EL%d to "
+                      "AArch64 EL%d PC 0x%" PRIx64 " CPSR %x\n",
+                      cur_el, new_el, get_aarch_reg_as_x(&env->pc), spsr);
     }
 
     /*
@@ -1061,6 +1099,9 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
      * el0_a64 is return_to_aa64, else el0_a64 is ignored.
      */
     aarch64_sve_change_el(env, cur_el, new_el, return_to_aa64);
+
+    qemu_log_instr_mode_switch(env, arm_el_to_logging_mode(env, new_el),
+                               get_aarch_reg_as_x(&env->pc));
 
     qemu_mutex_lock_iothread();
     arm_call_el_change_hook(env_archcpu(env));
@@ -1077,15 +1118,20 @@ illegal_return:
      * no change to exception level, execution state or stack pointer
      */
     env->pstate |= PSTATE_IL;
-    env->pc = new_pc;
+    // LETODO
+    ASSERT_IF_CHERI();
+    set_aarch_reg_to_x(&env->pc, new_pc);
     spsr &= PSTATE_NZCV | PSTATE_DAIF;
     spsr |= pstate_read(env) & ~(PSTATE_NZCV | PSTATE_DAIF);
     pstate_write(env, spsr);
+    qemu_log_instr_dbg_reg(env, "CPSR", spsr);
     if (!arm_singlestep_active(env)) {
         env->pstate &= ~PSTATE_SS;
     }
-    qemu_log_mask(LOG_GUEST_ERROR, "Illegal exception return at EL%d: "
-                  "resuming execution at 0x%" PRIx64 "\n", cur_el, env->pc);
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "Illegal exception return at EL%d: "
+                  "resuming execution at 0x%" PRIx64 "\n",
+                  cur_el, get_aarch_reg_as_x(&env->pc));
 }
 
 /*
@@ -1099,7 +1145,7 @@ uint32_t HELPER(sqrt_f16)(uint32_t a, void *fpstp)
     return float16_sqrt(a, s);
 }
 
-void HELPER(dc_zva)(CPUARMState *env, uint64_t vaddr_in)
+void HELPER(dc_zva)(CPUARMState *env, target_ulong vaddr_in)
 {
     /*
      * Implement DC ZVA, which zeroes a fixed-length block of memory.
@@ -1144,5 +1190,31 @@ void HELPER(dc_zva)(CPUARMState *env, uint64_t vaddr_in)
     }
 #endif
 
+#ifdef TARGET_CHERI
+    assert(blocklen == ((1 << CAP_TAG_GET_MANY_SHFT) * CHERI_CAP_SIZE));
+    // NB: Because this isn't setting any tags, no exception should be possible.
+    // The only reason for passing the register number is for exceptions,
+    // so the fact we pass -1 here should be fine.
+    cheri_tag_set_many(env, 0, vaddr, -1, NULL, GETPC());
+#endif
+
     memset(mem, 0, blocklen);
+}
+
+void QEMU_NORETURN helper_alignment_fault_exception(CPUArchState *env,
+                                                    uint64_t addr)
+{
+    GET_HOST_RETPC();
+    arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_STORE,
+                                cpu_mmu_index(env, false),
+                                _host_return_address);
+}
+
+void QEMU_NORETURN helper_sp_alignment_exception(CPUArchState *env)
+{
+    env->exception.vaddress = 0;
+    uint32_t syn = syn_sp_alignment(false);
+    // Possibly should not use EXCP_DATA_ABORT, but alignment faults are handled
+    // very similarly.
+    raise_exception(env, EXCP_DATA_ABORT, syn, exception_target_el(env));
 }

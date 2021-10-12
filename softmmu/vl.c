@@ -1750,10 +1750,11 @@ static void version(void)
     printf("Compiled for RISCV32 (with CHERI)\n");
 #elif defined(TARGET_RISCV64)
     printf("Compiled for RISCV64 (with CHERI)\n");
+#elif defined(TARGET_AARCH64)
+    printf("Compiled for AARCH64 (with CHERI)\n");
 #else
 #error "INVALID CHERI target"
 #endif
-    printf("Built with C0 as NULL register\n");
 #endif  // TARGET_CHERI
 #if defined(CONFIG_TCG_LOG_INSTR)
     printf("Built with instruction logging enabled\n");
@@ -4097,9 +4098,9 @@ void qemu_init(int argc, char **argv, char **envp)
             qemu_print_log_usage(stdout);
             exit(1);
         }
-        qemu_set_log_internal(mask);
+        qemu_set_log(mask);
     } else {
-        qemu_set_log_internal(0);
+        qemu_set_log(0);
     }
 
     /* add configured firmware directories */
