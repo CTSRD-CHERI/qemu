@@ -100,6 +100,6 @@ int print_insn_arm_a64(uint64_t addr, disassemble_info *info)
     instr = reinterpret_cast<const Instruction *>(&instrval);
     vixl_disasm->MapCodeAddress(addr, instr);
     vixl_decoder->Decode(instr,
-                         info->flags & INSN_ARM_C64 ? ISA::C64 : ISA::A64);
+                         info->flags & ARM_DIS_FLAG_C64 ? ISA::C64 : ISA::A64);
     return INSN_SIZE;
 }

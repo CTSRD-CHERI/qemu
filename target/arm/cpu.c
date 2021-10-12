@@ -814,7 +814,7 @@ static void arm_disas_set_info(CPUState *cpu, disassemble_info *info)
 #endif
 #ifdef TARGET_CHERI
     if (env->pstate & PSTATE_C64)
-        info->flags |= INSN_ARM_C64;
+        info->flags |= ARM_DIS_FLAG_C64;
 #endif
 }
 

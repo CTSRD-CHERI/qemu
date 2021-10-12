@@ -320,7 +320,6 @@ typedef struct disassemble_info {
   unsigned long flags;
 #define INSN_HAS_RELOC	0x80000000
 #define INSN_ARM_BE32	0x00010000
-#define INSN_ARM_C64	0x00000100
   PTR private_data;
 
   /* Function used to get bytes to disassemble.  MEMADDR is the
@@ -424,6 +423,7 @@ int print_insn_h8300h           (bfd_vma, disassemble_info*);
 int print_insn_h8300s           (bfd_vma, disassemble_info*);
 int print_insn_h8500            (bfd_vma, disassemble_info*);
 int print_insn_arm_a64          (bfd_vma, disassemble_info*);
+#define ARM_DIS_FLAG_C64 1
 int print_insn_alpha            (bfd_vma, disassemble_info*);
 disassembler_ftype arc_get_disassembler (int, int);
 int print_insn_arm              (bfd_vma, disassemble_info*);
