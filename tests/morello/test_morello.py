@@ -33,9 +33,9 @@ def find_morello_tests():
         "2020-10-07-test5/test42.elf",
         # These use different sizes/registers/addresses for LDX/STX
         "2020-11-10-generated-tests/test-03-012.elf",
-        "2020-11-10/test-03-012.elf",
+        "2020-11-10-tests/test-03-012.elf",
         "2020-11-10-generated-tests/test-04-023.elf",
-        "2020-11-10/test-04-023.elf",
+        "2020-11-10-tests/test-04-023.elf",
         "2020-11-26-test-bundle/new-tests/test-ldxp-stlxp_r_cr_c-002.elf",
     ]
     # noinspection PyUnresolvedReferences
