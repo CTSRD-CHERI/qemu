@@ -29,15 +29,13 @@
  */
 
 /*
- * The 'trickbox' device used by the test suite for Morello is an infinitely
- * deep memory mapped fifo that will kill QEMU if \004 is sent or otherwise
- * print to the terminal There may be some other magic numbers this accepts,
- * I have not really reverse engineered the test cases yet.
+ * This is not an official implementation of any arm technology.
+ * The 'trickbox' device (and some parts of ETMv4) used for testing Morello.
  */
 
-#include "hw/arm/armtrickbox.h"
 #include "qemu/osdep.h"
 #include "hw/sysbus.h"
+#include "hw/arm/armtrickbox.h"
 #include "qemu/module.h"
 #include "qapi/error.h"
 #include "hw/qdev-properties.h"
@@ -45,16 +43,104 @@
 
 #define BUF_SIZE 100
 
+/* 0: none. 1: warn. 2: info */
+#define TRICKBOX_LOG_LEVEL 2
+
+/* It is quite useful when debugging to stop tracing on first failure. Just set
+ * this to an appropriate string. */
+const char *const exit_string = NULL; /* "FAIL"; */
+
+#define LOG_ERROR 0
+#define LOG_WARN  1
+#define LOG_INFO  2
+static const char *const levels[] = { "ERROR:", "WARN:", "INFO:" };
+
+#define TRICKBOX_LOG(lvl, fmt, ...)                                            \
+    if (TRICKBOX_LOG_LEVEL >= (lvl))                                           \
+        printf("TRICKBOX: %s" fmt, levels[lvl], ##__VA_ARGS__)
+
+/*
+ * List of registers to handle just by getting/setting a field in
+ * arm_trickbox_state. Also optionally call a helper after any update.
+ * ITEM(name, reset_value, read_mask, write_mask, write_helper, [alias])
+ */
+
+#define IGNORE(...)
+#define REGISTER_LIST(ITEM, ALIAS)                                             \
+    ITEM(Configuration, 0x00004002, 0xFFFFFFFE, 0xFFFFFFFF, NULL)              \
+    ITEM(TargetCPU, 0xF, 0xF, 0xF, NULL)                                       \
+    ITEM(abortrgnlo1, 0x40000000, 0xFFFFFFFF, 0xFFFFFFFF,                      \
+         axi_abort_range_changed, ALIAS(AbortRgn64Lo1))                        \
+    ITEM(abortrgnhi1, 0x50000000, 0xFFFFFFFF, 0xFFFFFFFF,                      \
+         axi_abort_range_changed, ALIAS(AbortRgn64Hi1))                        \
+    ITEM(abortrgnlo2, 0x3F000000, 0xFFFFFFFF, 0xFFFFFFFF,                      \
+         axi_abort_range_changed, ALIAS(AbortRgn64Lo2))                        \
+    ITEM(abortrgnhi2, 0x3F080000, 0xFFFFFFFF, 0xFFFFFFFF,                      \
+         axi_abort_range_changed, ALIAS(AbortRgn64Hi2))                        \
+    ITEM(AbortRgn64Lo1_Hi, 0x0, 0xFFFFFFFF, 0xFFFFFFFF,                        \
+         axi_abort_range_changed)                                              \
+    ITEM(AbortRgn64Hi1_Hi, 0x0, 0xFFFFFFFF, 0xFFFFFFFF,                        \
+         axi_abort_range_changed)                                              \
+    ITEM(AbortRgn64Lo2_Hi, 0x0, 0xFFFFFFFF, 0xFFFFFFFF,                        \
+         axi_abort_range_changed)                                              \
+    ITEM(AbortRgn64Hi2_Hi, 0x0, 0xFFFFFFFF, 0xFFFFFFFF,                        \
+         axi_abort_range_changed)                                              \
+    ITEM(AXIAbortCtl, 0x0, 0xFFFFFFFF, 0xFFFFFFFF, axi_abort_changed)          \
+    ITEM(DBGControl, 0x00000181, 0xFFFFFFFF, 0xC1, NULL)
+
 typedef struct {
     SysBusDevice parent_obj;
     MemoryRegion iomem;
+    MemoryRegion iomem_secure;
+    /* Buffer for 'Tube' to give a more readable output. This was not originally
+     * specified. */
     char buf[BUF_SIZE + 1];
     size_t ndx;
+    /* Registers that are simply backed */
+#define DECLARE_BACKING(name, ...) uint32_t name;
+    REGISTER_LIST(DECLARE_BACKING, IGNORE)
 } arm_trickbox_state;
 
 #define TYPE_ARM_TRICKBOX "arm-trickbox"
 #define ARM_TRICKBOX(obj)                                                      \
     OBJECT_CHECK(arm_trickbox_state, (obj), TYPE_ARM_TRICKBOX)
+
+typedef void write_helper_fn(arm_trickbox_state *tb, hwaddr addr, uint32_t *v,
+                             uint32_t old);
+
+static void axi_abort_changed(arm_trickbox_state *tb, hwaddr addr, uint32_t *v,
+                              uint32_t old)
+{
+    if (~*v & (ARM_TRICKBOX_AXIAbortCtl_Rgn1_Rd_Disable |
+               ARM_TRICKBOX_AXIAbortCtl_Rgn1_Wr_Disable |
+               ARM_TRICKBOX_AXIAbortCtl_Rgn2_Rd_Disable |
+               ARM_TRICKBOX_AXIAbortCtl_Rgn2_Wr_Disable)) {
+        TRICKBOX_LOG(
+            LOG_WARN,
+            "Some AXI aborts are enabled but this is not yet implemented: %x\n",
+            *v);
+    } else {
+        TRICKBOX_LOG(LOG_INFO, "AXI aborts disabled\n");
+    }
+}
+
+static void axi_abort_range_changed(arm_trickbox_state *tb, hwaddr addr,
+                                    uint32_t *v, uint32_t old)
+{
+    /* Writes to the 32-bit registers zero extend */
+    if (addr == ARM_TRICKBOX_REGISTER_abortrgnlo1) {
+        tb->AbortRgn64Lo1_Hi = 0;
+    } else if (addr == ARM_TRICKBOX_REGISTER_abortrgnhi1) {
+        tb->AbortRgn64Hi1_Hi = 0;
+    } else if (addr == ARM_TRICKBOX_REGISTER_abortrgnlo2) {
+        tb->AbortRgn64Lo2_Hi = 0;
+    } else if (addr == ARM_TRICKBOX_REGISTER_abortrgnhi2) {
+        tb->AbortRgn64Hi2_Hi = 0;
+    }
+
+    axi_abort_changed(tb, ARM_TRICKBOX_REGISTER_AXIAbortCtl, &tb->AXIAbortCtl,
+                      tb->AXIAbortCtl);
+}
 
 static void empty_buffer(arm_trickbox_state *tb)
 {
@@ -63,21 +149,34 @@ static void empty_buffer(arm_trickbox_state *tb)
     tb->ndx = 0;
 }
 
-static void arm_trickbox_write(void *opaque, hwaddr addr, uint64_t val,
-                               unsigned size)
+const char *progress = exit_string;
+static void exit_on_string(char c)
 {
-    arm_trickbox_state *tb = ARM_TRICKBOX(opaque);
-
-    assert(size == 1);
+    if (exit_string) {
+        if (*progress != c) {
+            progress = exit_string;
+        }
+        if (*progress == c) {
+            progress++;
+        }
+        if (!*progress) {
+            exit(1);
+        }
+    }
+}
+static void tube_write(arm_trickbox_state *tb, hwaddr addr, uint64_t val,
+                       unsigned size)
+{
     char c = (val & 0xFF);
 
+    exit_on_string(c);
+
     switch (c) {
-    case ARM_TRICKBOX_EXIT_C:
+    case ARM_TRICKBOX_TUBE_EXIT:
         if (tb->ndx != 0)
             empty_buffer(tb);
         exit(0);
     default:
-        // Is there are QEMU specific way to do this?
         tb->buf[tb->ndx++] = c;
     }
 
@@ -85,12 +184,76 @@ static void arm_trickbox_write(void *opaque, hwaddr addr, uint64_t val,
         empty_buffer(tb);
 }
 
-static uint64_t arm_trickbox_read(void *opaque, hwaddr addr, unsigned size)
+static void arm_trickbox_write(void *opaque, hwaddr addr, uint64_t val,
+                               unsigned size)
 {
-    return 0;
+    arm_trickbox_state *tb = ARM_TRICKBOX(opaque);
+
+    /* Most registers are aligned to 4 bytes */
+    hwaddr register_addr = (addr) & ~(4 - 1);
+
+    uint32_t old;
+
+    switch (register_addr) {
+
+#define CASE_HANDLE(name) case ARM_TRICKBOX_REGISTER_##name:
+#define HANDLE_WRITE(name, resetv, readmask, writemask, writefn, ...)          \
+    CASE_HANDLE(name)                                                          \
+    __VA_ARGS__                                                                \
+    old = tb->name;                                                            \
+    tb->name = (tb->name & ~writemask) | (val & writemask);                    \
+    if (writefn) {                                                             \
+        ((write_helper_fn *)writefn)(tb, addr, &tb->name, old);                \
+    }                                                                          \
+    break;                                                                     \
+
+    REGISTER_LIST(HANDLE_WRITE, CASE_HANDLE)
+
+    case ARM_TRICKBOX_REGISTER_Tube:
+        tube_write(tb, addr, val, size);
+        break;
+    default:
+        TRICKBOX_LOG(LOG_ERROR, "Unexpected write at %lx\n", register_addr);
+        /* TODO: Once most functionality is implemented, make this just a log */
+        assert(0);
+    }
 }
 
-static void arm_trickbox_reset(DeviceState *dev) {}
+static uint64_t arm_trickbox_read(void *opaque, hwaddr addr, unsigned size)
+{
+    arm_trickbox_state *tb = ARM_TRICKBOX(opaque);
+
+    /* Most registers are aligned to 4 bytes */
+    hwaddr register_addr = (addr) & ~(4 - 1);
+
+    switch (register_addr) {
+
+#define HANDLE_READ(name, resetv, readmask, writemask, writefn, ...)           \
+    CASE_HANDLE(name)                                                          \
+    __VA_ARGS__                                                                \
+    return tb->name & readmask;
+
+    REGISTER_LIST(HANDLE_READ, CASE_HANDLE)
+
+    case ARM_TRICKBOX_REGISTER_Tube:
+        return 0;
+    default:
+        TRICKBOX_LOG(LOG_ERROR, "Unexpected read at %lx\n", register_addr);
+        /* TODO: Once most functionality is implemented, make this a log. */
+        assert(0);
+    }
+}
+
+static void arm_trickbox_reset(DeviceState *dev)
+{
+    arm_trickbox_state *tb = ARM_TRICKBOX(dev);
+
+#define RESET_REG(name, resetv, ...) tb->name = resetv;
+    REGISTER_LIST(RESET_REG, IGNORE)
+
+    axi_abort_changed(tb, ARM_TRICKBOX_REGISTER_AXIAbortCtl, &tb->AXIAbortCtl,
+                      tb->AXIAbortCtl);
+}
 
 static const MemoryRegionOps arm_trickbox_ops = {
     .read = arm_trickbox_read,
@@ -102,8 +265,12 @@ static void arm_trickbox_instance_init(Object *obj)
 {
     SysBusDevice *dev = SYS_BUS_DEVICE(obj);
     arm_trickbox_state *s = ARM_TRICKBOX(dev);
-    memory_region_init_io(&s->iomem, obj, &arm_trickbox_ops, s, "trickbox", 1);
+    memory_region_init_io(&s->iomem, obj, &arm_trickbox_ops, s, "trickbox",
+                          ARM_TRICKBOX_SIZE);
+    memory_region_init_io(&s->iomem_secure, obj, &arm_trickbox_ops, s,
+                          "trickbox_sec", ARM_TRICKBOX_SIZE);
     sysbus_init_mmio(dev, &s->iomem);
+    sysbus_init_mmio(dev, &s->iomem_secure);
 }
 
 static void arm_trickbox_realize(DeviceState *dev, Error **errp) {}
@@ -137,15 +304,16 @@ static void arm_trickbox_register(void)
 
 type_init(arm_trickbox_register)
 
-static void arm_trickbox_mm_init(hwaddr base)
+static SysBusDevice *arm_trickbox_mm_init(hwaddr base)
 {
     DeviceState *dev;
     dev = qdev_new(TYPE_ARM_TRICKBOX);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, base);
+    return SYS_BUS_DEVICE(dev);
 }
 
-void arm_trickbox_mm_init_default(void)
+SysBusDevice *arm_trickbox_mm_init_default(void)
 {
-    arm_trickbox_mm_init(ARM_TRICKBOX_ADDRESS);
+    return arm_trickbox_mm_init(ARM_TRICKBOX_ADDRESS);
 }
