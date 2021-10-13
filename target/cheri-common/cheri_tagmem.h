@@ -56,8 +56,13 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
  */
 void cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
                                   uintptr_t pc, int mmu_idx);
+/**
+ * If probe_read() has already been called, the result can be passed as the
+ * @p host_addr argument to avoid another (expensive) probe_read() call.
+ */
 bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
-                   hwaddr *ret_paddr, int *prot, uintptr_t pc, int mmu_idx);
+                   hwaddr *ret_paddr, int *prot, uintptr_t pc, int mmu_idx,
+                   void *host_addr);
 /*
  * Get/set many currently don't have an mmu_idx because no targets currently
  * require it.
