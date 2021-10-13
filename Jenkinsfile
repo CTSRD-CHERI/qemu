@@ -78,7 +78,7 @@ selectedConfigs.each { config ->
                     nodeLabel: null,
                     extraArgs: "--without-sdk --install-prefix=/usr $extraQemuArgs",
                     runTests: /* true */ false,
-                    uniqueId: "qemu-build-${os}",
+                    uniqueId: "qemu-build-${config}",
                     skipTarball: true,
                     afterBuild: { params ->
                         extraBuildSteps(params, os)
@@ -86,7 +86,7 @@ selectedConfigs.each { config ->
                     })
 
             // Run the baremetal MIPS tests to check we didn't regress.
-            if (os.startsWith('linux')) {
+            if (os == 'linux') {
                 cheribuildProject(target: 'cheritest-qemu', architecture: 'native',
                         customGitCheckoutDir: 'cheritest', scmOverride: gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/cheritest.git'),
                         nodeLabel: null,
@@ -96,7 +96,7 @@ selectedConfigs.each { config ->
                         // Set the status message on the QEMU repo not the cheritest one
                         gitHubStatusArgs: qemuResult.gitInfo,
                         sdkCompilerOnly: true, skipTarball: true,
-                        uniqueId: 'mips-baremetal-testsuite',
+                        uniqueId: "mips-baremetal-testsuite-${config}",
                         junitXmlFiles: 'cheritest/nosetests_qemu*.xml')
             }
         }
