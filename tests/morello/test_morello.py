@@ -86,7 +86,8 @@ def find_morello_tests():
 def test_morello_elf_file(elf_file, should_print_failed: bool, qemu_binary):
     command = [str(qemu_binary), *qemu_args, elf_file]
     # Timeout will fail the test
-    sp = subprocess.run(command, capture_output=True, timeout=5)
+    sp = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        timeout=5)
     code = sp.returncode
     result = sp.stdout
     result_str = result.decode("utf-8")
