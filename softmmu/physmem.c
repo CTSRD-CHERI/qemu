@@ -65,7 +65,7 @@
 #include "exec/memory-internal.h"
 #include "exec/ram_addr.h"
 #include "exec/log.h"
-#include "exec/log_instr.h"
+
 #include "qemu/pmem.h"
 
 #include "migration/vmstate.h"

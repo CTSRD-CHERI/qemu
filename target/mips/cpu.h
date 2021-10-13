@@ -7,7 +7,6 @@
 #include "hw/clock.h"
 #include "mips-defs.h"
 #include "exec/log.h"
-#include "exec/log_instr_early.h"
 
 #ifdef TARGET_CHERI
 #include "cheri_defs.h"
@@ -1265,7 +1264,6 @@ struct CPUMIPSState {
 #define TRACE_MODE_USER "User mode"
     const char *last_mode;
 #define IN_USERSPACE(env) ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM)
-    qemu_log_printf_buf_t qemu_log_printf_buf;
 #endif /* CONFIG_TCG_LOG_INSTR */
 
     /* Fields up to this point are cleared by a CPU reset */
