@@ -3,7 +3,7 @@ ColumnLimit: 80
 IndentWidth: 4
 UseTab: Never
 BreakBeforeBraces: Linux
-AlignConsecutiveMacros: Consecutive
+AlignConsecutiveMacros: true
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortBlocksOnASingleLine: Empty
@@ -13,7 +13,9 @@ AllowShortLambdasOnASingleLine: Inline
 AlwaysBreakBeforeMultilineStrings: false
 BreakStringLiterals: true
 IndentCaseLabels: false
-IndentCaseBlocks: true
+#IndentCaseBlocks: true <-- not supported on older clang-formats
 Cpp11BracedListStyle: false
 PointerAlignment: Right
 SortIncludes: false
+StatementMacros:
+  - type_init
