@@ -339,14 +339,14 @@ static QEMU_ALWAYS_INLINE target_ulong tag_offset_to_addr(TagOffset offset)
     return offset.value * CHERI_CAP_SIZE;
 }
 
-static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
-                                     uintptr_t pc, int mmu_idx);
+static void *cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
+                                      uintptr_t pc, int mmu_idx);
 
-void cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
-                                  uintptr_t pc, int mmu_idx)
+void *cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
+                                   uintptr_t pc, int mmu_idx)
 {
     cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
-    cheri_tag_invalidate_one(env, vaddr, pc, mmu_idx);
+    return cheri_tag_invalidate_one(env, vaddr, pc, mmu_idx);
 }
 
 void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
@@ -399,8 +399,8 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
     }
 }
 
-static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
-                                     uintptr_t pc, int mmu_idx)
+static void *cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
+                                      uintptr_t pc, int mmu_idx)
 {
     /*
      * When resolving this address in the TLB, treat it like a data store
@@ -411,8 +411,9 @@ static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
     void *host_addr = probe_write(env, vaddr, 1, mmu_idx, pc);
     // Only RAM and ROM regions are backed by host addresses so if
     // probe_write() returns NULL we know that we can't write the tagmem.
-    if (unlikely(!host_addr))
-        return;
+    if (unlikely(!host_addr)) {
+        return NULL;
+    }
 
     uintptr_t tagmem_flags;
     void *tagmem =
@@ -422,7 +423,7 @@ static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
         // All tags for this page are zero -> no need to invalidate. We also
         // couldn't invalidate if we wanted to since ALL_ZERO_TAGBLK is not a
         // valid pointer but a magic constant.
-        return;
+        return host_addr;
     }
 
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
@@ -442,6 +443,7 @@ static void cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
     }
 
     tagblock_clear_tag_tagmem(tagmem, tag_offset);
+    return host_addr;
 }
 
 void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
@@ -501,8 +503,8 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
 #define clear_capcause_reg(env)
 #endif
 
-void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
-                   hwaddr *ret_paddr, uintptr_t pc, int mmu_idx)
+void *cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
+                    hwaddr *ret_paddr, uintptr_t pc, int mmu_idx)
 {
     /*
      * This attempt to resolve a virtual address may cause both a data store
@@ -517,7 +519,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
     handle_paddr_return(write);
 
     if (unlikely(!host_addr)) {
-        return;
+        return NULL;
     }
 
     uintptr_t tagmem_flags;
@@ -527,7 +529,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
     /* Clear + ALL_ZERO_TAGBLK means no tags can be stored here. */
     if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
         (tagmem == ALL_ZERO_TAGBLK)) {
-        return;
+        return host_addr;
     }
 
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
@@ -550,6 +552,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
         tagblock_get_tag_tagmem(tagmem, tag_offset));
 
     tagblock_set_tag_tagmem(tagmem, tag_offset);
+    return host_addr;
 }
 
 bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,

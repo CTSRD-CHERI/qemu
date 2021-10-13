@@ -53,9 +53,10 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
  * Like cheri_tag_invalidate, but the address must be aligned and it will only
  * invalidate a single tag (i.e. no unaligned accesses). A bit faster since it
  * can avoid some branches.
+ * @return the host address as returned by probe_write().
  */
-void cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
-                                  uintptr_t pc, int mmu_idx);
+void *cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
+                                   uintptr_t pc, int mmu_idx);
 /**
  * If probe_read() has already been called, the result can be passed as the
  * @p host_addr argument to avoid another (expensive) probe_read() call.
@@ -72,8 +73,12 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
                         int reg, hwaddr *ret_paddr, uintptr_t pc);
 
-void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
-                   hwaddr *ret_paddr, uintptr_t pc, int mmu_idx);
+/**
+ * Update a tag for virtual address @vaddr.
+ * @return the host address as returned by probe_cap_write()
+ */
+void *cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
+                    hwaddr *ret_paddr, uintptr_t pc, int mmu_idx);
 
 void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                             RAMBlock *ram, ram_addr_t ram_offset, size_t size,
