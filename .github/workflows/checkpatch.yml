@@ -1,5 +1,8 @@
 name: Check coding style
 on: [pull_request]
+defaults:
+  run:
+    shell: bash
 jobs:
   check-format:
     runs-on: ubuntu-latest
