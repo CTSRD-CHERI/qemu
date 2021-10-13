@@ -1276,7 +1276,8 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
         *cursor = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
     int prot;
-    bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc, mmu_idx);
+    bool tag =
+        cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc, mmu_idx, host);
     if (raw_tag) {
         *raw_tag = tag;
     }

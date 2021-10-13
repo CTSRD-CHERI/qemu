@@ -553,10 +553,13 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
 }
 
 bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
-                   hwaddr *ret_paddr, int *prot, uintptr_t pc, int mmu_idx)
+                   hwaddr *ret_paddr, int *prot, uintptr_t pc, int mmu_idx,
+                   void *host_addr)
 {
 
-    void *host_addr = probe_read(env, vaddr, 1, mmu_idx, pc);
+    if (host_addr == NULL) {
+        host_addr = probe_read(env, vaddr, 1, mmu_idx, pc);
+    }
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
