@@ -52,8 +52,8 @@
 DEF_HELPER_1(raise_exception_pcc_perms, noreturn, env)
 DEF_HELPER_3(raise_exception_pcc_bounds, noreturn, env, tl, i32)
 // And these for loads/stores
-DEF_HELPER_2(raise_exception_pcc_perms_not_if, noreturn, env, i32)
-DEF_HELPER_2(raise_exception_ddc_perms, noreturn, env, i32)
+DEF_HELPER_3(raise_exception_pcc_perms_not_if, noreturn, env, tl, i32)
+DEF_HELPER_3(raise_exception_ddc_perms, noreturn, env, tl, i32)
 DEF_HELPER_3(raise_exception_ddc_bounds, noreturn, env, tl, i32)
 
 // Two-operand capability inspection
@@ -114,7 +114,9 @@ DEF_HELPER_5(cjalr, void, env, i32, i32, tl, tl)
 DEF_HELPER_4(csetaddr, void, env, i32, i32, tl)
 DEF_HELPER_4(csetbounds, void, env, i32, i32, tl)
 DEF_HELPER_4(csetboundsexact, void, env, i32, i32, tl)
+#ifndef TARGET_AARCH64
 DEF_HELPER_4(csetflags, void, env, i32, i32, tl)
+#endif
 DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 
 // Three operands (int cap cap)

@@ -1958,6 +1958,12 @@ static void machvirt_init(MachineState *machine)
         }
 
         qdev_realize(DEVICE(cpuobj), NULL, &error_fatal);
+
+        /* Start logging */
+#ifdef CONFIG_TCG_LOG_INSTR
+        qemu_log_instr_init(cs);
+#endif
+
         object_unref(cpuobj);
     }
     fdt_add_timer_nodes(vms);

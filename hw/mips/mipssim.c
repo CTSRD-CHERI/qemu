@@ -177,9 +177,6 @@ mips_mipssim_init(MachineState *machine)
                            &error_fatal);
 
     memory_region_add_subregion(address_space_mem, 0, machine->ram);
-#ifdef TARGET_CHERI
-    cheri_tag_init(machine->ram, machine->ram_size);
-#endif
     /* Map the BIOS / boot exception handler. */
     memory_region_add_subregion(address_space_mem, 0x1fc00000LL, bios);
     /* Load a BIOS / boot exception handler image. */

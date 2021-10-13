@@ -122,3 +122,5 @@ static inline const cap_register_t *_cheri_get_pcc_unchecked(CPURISCVState *env)
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
     return &env->gpcapregs;
 }
+
+#define CHERI_GPCAPREGS_MEMBER gpcapregs

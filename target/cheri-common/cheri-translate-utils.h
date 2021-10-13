@@ -83,12 +83,14 @@ _gen_cap_check(load)
 _gen_cap_check(store)
 _gen_cap_check(rmw)
 
+#if CHERI_CAP_BITS == 128
 // FIXME: assumes small endian order between two 64-bit halves in a 128-bit
 // integer.
 // FIXME: I have no idea GCC actually implements this across platforms. Might be
 // MAD/SAD for all I know.
 #define CAP_TOP_LOBYTES_OFFSET 0
 #define CAP_TOP_HIBYTES_OFFSET 8
+#endif
 
 // TODO Move to target specific headers
 #ifdef TARGET_MIPS
@@ -119,7 +121,7 @@ TCGv_i64 cpu_reg(DisasContext *s, int reg);
     else                                                                       \
         tcg_gen_mov_i64((TCGv)t, cpu_reg_sp(ctx, reg))
 #define target_set_gpr(ctx, reg, t)                                            \
-    if (reg != NULL_CAPREG_INDEX)                                                   \
+    if (reg != NULL_CAPREG_INDEX)                                              \
         tcg_gen_mov_i64(cpu_reg_sp(ctx, reg), (TCGv)t);
 
 #define MERGED_FILE 1
@@ -127,7 +129,7 @@ TCGv_i64 cpu_reg(DisasContext *s, int reg);
 #elif defined(TARGET_RISCV)
 
 #define DDC_ENV_OFFSET offsetof(CPUArchState, DDC)
-#define target_get_gpr_global(ctx, reg) (assert(0), (TCGv_i64)NULL)
+#define target_get_gpr_global(ctx, reg) (assert(0), (TCGv)NULL)
 #define target_get_gpr(ctx, t, reg) gen_get_gpr((TCGv)t, reg)
     static inline void _gen_set_gpr(DisasContext *ctx, int reg_num_dst, TCGv t,
                                     bool clear_pesbt);
@@ -167,12 +169,14 @@ static inline void generate_get_ddc_base(DisasContext *ctx, TCGv base)
 #endif
 }
 
+#if CHERI_CAP_BITS == 128
 static inline void generate_get_ddc_top_lo(DisasContext *ctx, TCGv top)
 {
     tcg_gen_ld_tl(top, cpu_env,
                   DDC_ENV_OFFSET + offsetof(cap_register_t, _cr_top) +
                       CAP_TOP_LOBYTES_OFFSET);
 }
+#endif
 
 // Checks an address against PCC or DDC.
 // Permissions are checked at translate time, bounds checks can be skipped if
@@ -182,17 +186,6 @@ static inline void _generate_special_checked_ptr(
     TCGv_cap_checked_ptr checked_addr, TCGv integer_addr,
     target_ulong num_bytes, bool use_ddc)
 {
-    if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags))) {
-        // PCC/DDC is untagged, sealed, or missing permissions
-        TCGv_i32 tperms = tcg_const_i32(req_perms);
-        cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
-        if (use_ddc)
-            gen_helper_raise_exception_ddc_perms(cpu_env, tperms);
-        else
-            gen_helper_raise_exception_pcc_perms_not_if(cpu_env, tperms);
-        tcg_temp_free_i32(tperms);
-        return;
-    }
     // PCC interposition currently done mostly by the caller.
     bool need_interposition =
         use_ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_NO_INTERPOSE);
@@ -213,6 +206,22 @@ static inline void _generate_special_checked_ptr(
     } else if ((TCGv)checked_addr != integer_addr) {
         tcg_gen_mov_tl((TCGv)checked_addr, integer_addr);
     }
+
+    if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags))) {
+        // PCC/DDC is untagged, sealed, or missing permissions
+        TCGv_i32 tperms = tcg_const_i32(req_perms);
+        cheri_tcg_prepare_for_unconditional_exception(&ctx->base);
+        if (use_ddc) {
+            gen_helper_raise_exception_ddc_perms(cpu_env, (TCGv)checked_addr,
+                                                 tperms);
+        } else {
+            gen_helper_raise_exception_pcc_perms_not_if(
+                cpu_env, (TCGv)checked_addr, tperms);
+        }
+        tcg_temp_free_i32(tperms);
+        return;
+    }
+
     CheriTbFlags full_as_flags =
         use_ddc ? TB_FLAG_CHERI_DDC_FULL_AS : TB_FLAG_CHERI_PCC_FULL_AS;
     bool do_checks = !have_cheri_tb_flags(ctx, full_as_flags);
@@ -236,7 +245,8 @@ static inline void _generate_special_checked_ptr(
         if (use_ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_BASE_ZERO)) {
             generate_get_ddc_base(ctx, tmp2);
             base = tmp2;
-        } else if (!use_ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_PCC_BASE_ZERO)) {
+        } else if (!use_ddc &&
+                   !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_PCC_BASE_ZERO)) {
             tcg_gen_movi_tl(tmp2, ctx->base.pcc_base);
             base = tmp2;
         }
@@ -253,7 +263,8 @@ static inline void _generate_special_checked_ptr(
         if (use_ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_TOP_MAX)) {
             generate_get_ddc_top_lo(ctx, tmp2);
             top = tmp2;
-        } else if (!use_ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_PCC_TOP_MAX)) {
+        } else if (!use_ddc &&
+                   !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_PCC_TOP_MAX)) {
             tcg_gen_movi_tl(tmp2, (target_ulong)ctx->base.pcc_top);
             top = tmp2;
         }
@@ -294,7 +305,7 @@ static inline void _generate_special_checked_ptr(
 #endif
                 bounds_check_helper = &gen_helper_ddc_check_bounds;
         } else {
-            assert(!(req_perms & CAP_PERM_STORE));
+            cheri_debug_assert(!(req_perms & CAP_PERM_STORE));
             bounds_check_helper = &gen_helper_pcc_check_bounds;
         }
         bounds_check_helper(cpu_env, (TCGv)checked_addr, tbytes);
@@ -342,7 +353,8 @@ generate_ddc_checked_rmw_ptr(TCGv_cap_checked_ptr checked_addr,
     (use_ddc ? TB_FLAG_CHERI_DDC_READABLE : TB_FLAG_CHERI_PCC_READABLE)
 static inline CheriTbFlags FLAG_WRITABLE(bool use_ddc)
 {
-    assert(use_ddc && "Writable flag should only be checked for DDC");
+    cheri_debug_assert(use_ddc &&
+                       "Writable flag should only be checked for DDC");
     return TB_FLAG_CHERI_DDC_WRITABLE;
 }
 
@@ -579,14 +591,12 @@ static inline void gen_check_cond_branch_target(DisasContext *ctx,
 
 #if defined(TARGET_CHERI)
 
+// NOTE: I wrote all this for 128, but it may apply to other formats.
+
 // This function belongs in a target specific header
 static inline uint32_t gp_register_offset(int reg_num)
 {
-#ifdef TARGET_MIPS
-    return offsetof(CPUArchState, active_tc.gpcapregs.decompressed[reg_num]);
-#else
-    return offsetof(CPUArchState, gpcapregs.decompressed[reg_num]);
-#endif
+    return offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.decompressed[reg_num]);
 }
 
 // Copies some number of bytes between min_size and max_size.
@@ -602,7 +612,7 @@ static inline void gen_vector_copy(TCGv_ptr dest_ptr, TCGv_ptr source_ptr,
             : ((TCG_TARGET_HAS_v128 && (min_size >= 16)) ? 16 : 8);
     size_t mask = copy_chunk - 1;
     size_t copy_size = (min_size + mask) & ~mask;
-    assert(copy_size <= max_size);
+    cheri_debug_assert(copy_size <= max_size);
 
     if (copy_chunk > 8) {
 
@@ -661,10 +671,20 @@ static inline void gen_mov_cap_select(uint32_t dest_off, uint32_t true_off,
     // Using an offset of true_off + (0, false_off - true_off) = (true_off,
     // false_off)
     gen_vector_copy(cpu_env, source_ptr, dest_off, true_off,
-                    sizeof(cap_register_t), sizeof(cap_register_t));
+                    sizeof(cap_register_t), sizeof(aligned_cap_register_t));
     tcg_temp_free_ptr(source_ptr);
     tcg_temp_free_i32(offset_i32);
     tcg_temp_free_i32(diff);
+}
+
+static inline void gen_lazy_cap_get_state_i32(DisasContext *ctx, int regnum,
+                                              TCGv_i32 state)
+{
+    tcg_gen_ld8u_i32(
+        state, cpu_env,
+        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+    cheri_tcg_printf_verbose("cw", "Register %d lazy state get: %d\n", regnum,
+                             state);
 }
 
 static inline bool disas_capreg_state_could_be(DisasContext *ctx, int reg,
@@ -739,9 +759,6 @@ static inline void disas_capreg_state_remove(DisasContext *ctx, int reg,
 #endif
 }
 
-static inline void gen_lazy_cap_get_state(DisasContext *ctx, TCGv_i32 val,
-                                          int regnum);
-
 // Decompress only if not fully decompressed
 static inline void gen_conditional_cap_decompress(DisasContext *ctx, int regnum)
 {
@@ -755,7 +772,7 @@ static inline void gen_conditional_cap_decompress(DisasContext *ctx, int regnum)
     _Static_assert(CREG_FULLY_DECOMPRESSED == 0b11, "I like optimisation");
     TCGv_i32 decompressed = tcg_const_i32(CREG_FULLY_DECOMPRESSED);
     TCGv_i32 val = tcg_temp_new_i32();
-    gen_lazy_cap_get_state(ctx, val, regnum);
+    gen_lazy_cap_get_state_i32(ctx, regnum, val);
     tcg_gen_brcond_i32(TCG_COND_EQ, val, decompressed, l1);
 
     // Call decompress helper
@@ -884,19 +901,17 @@ static inline void gen_lazy_cap_set_state_cond(DisasContext *ctx, int regnum,
     if (disas_capreg_state_must_be(ctx, regnum, state))
         return;
 
-    assert(!lazy_capreg_number_is_special(regnum));
+    cheri_debug_assert(!lazy_capreg_number_is_special(regnum));
 
     cheri_tcg_printf_verbose("cc", "Register %d lazy state set to %s\n", regnum,
                              cap_reg_state_string(state));
 
     TCGv_i32 tcg_state = tcg_const_i32(state);
-#ifdef TARGET_MIPS
-    g_assert_not_reached(); // Not supported on MIPS
-#else
-    tcg_gen_st8_i32(tcg_state, cpu_env,
-                    offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
-#endif
+    tcg_gen_st8_i32(
+        tcg_state, cpu_env,
+        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
     tcg_temp_free_i32(tcg_state);
+
     if (conditional)
         disas_capreg_state_include(ctx, regnum, state);
     else
@@ -909,19 +924,6 @@ static inline void gen_lazy_cap_set_state(DisasContext *ctx, int regnum,
     return gen_lazy_cap_set_state_cond(ctx, regnum, state, false);
 }
 
-static inline void gen_lazy_cap_get_state(DisasContext *ctx, TCGv_i32 val,
-                                          int regnum)
-{
-#ifdef TARGET_MIPS
-    g_assert_not_reached(); // Not supported on MIPS
-#else
-    tcg_gen_ld8u_i32(val, cpu_env,
-                     offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
-    cheri_tcg_printf_verbose("cw", "Register %d lazy state get: %d\n", regnum,
-                             val);
-#endif
-}
-
 static inline void gen_lazy_cap_set_int_cond(DisasContext *ctx, int regnum,
                                              bool conditional)
 {
@@ -932,11 +934,11 @@ static inline void gen_lazy_cap_set_int_cond(DisasContext *ctx, int regnum,
 
     gen_lazy_cap_set_state_cond(ctx, regnum, CREG_INTEGER, conditional);
     // Doing this keeps pesbt always up to date, which is good for stores and
-    // comparisons.
+    // comparisons
     TCGv null_pesbt = tcg_const_tl(CAP_NULL_PESBT);
     tcg_gen_st_tl(null_pesbt, cpu_env,
                   gp_register_offset(regnum) +
-                      offsetof(cap_register_t, cached_pesbt));
+                      offsetof(cap_register_t, cr_pesbt));
     tcg_temp_free(null_pesbt);
 }
 
@@ -948,27 +950,20 @@ static inline void gen_lazy_cap_set_int(DisasContext *ctx, int regnum)
 #endif
 }
 
-#endif // defined(TARGET_CHERI)
-#if defined(TARGET_CHERI) && TARGET_LONG_BITS == 64
-// NOTE: I wrote all this for 128, but it may apply to other formats.
-
 // Null everything but cursor at some general offset. Use this for special
 // purpose registers. The GP register file can be handled lazily with
 // gen_lazy_cap_set_int.
 static inline void gen_sp_set_decompressed_int(DisasContext *ctx, size_t offset)
 {
     // PESBT
-    TCGv_i64 temp = tcg_const_i64(CC128_NULL_PESBT);
-    tcg_gen_st_i64(temp, cpu_env,
-                   offset + offsetof(cap_register_t, cached_pesbt));
-    // Type
-    tcg_gen_movi_i64(temp, CAP_OTYPE_UNSEALED);
-    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, cr_otype));
-    // Base + Perms
-    tcg_gen_movi_i64(temp, 0);
-    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, cr_base));
-    tcg_gen_st_i64(temp, cpu_env, offset + offsetof(cap_register_t, cr_perms));
+    TCGv temp = tcg_const_tl(CAP_NULL_PESBT);
+    tcg_gen_st_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_pesbt));
+    // Base
+    tcg_gen_movi_tl(temp, 0);
+    tcg_gen_st8_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_tag));
+    tcg_gen_st_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_base));
     // Top
+#if CHERI_CAP_BITS == 128
     tcg_gen_st_i64(temp, cpu_env,
                    offset + offsetof(cap_register_t, _cr_top) +
                        CAP_TOP_LOBYTES_OFFSET);
@@ -976,14 +971,20 @@ static inline void gen_sp_set_decompressed_int(DisasContext *ctx, size_t offset)
     tcg_gen_st_i64(temp, cpu_env,
                    offset + offsetof(cap_register_t, _cr_top) +
                        CAP_TOP_HIBYTES_OFFSET);
-
 #ifdef TARGET_AARCH64
     // Bounds valid
-    tcg_gen_st_i64(temp, cpu_env,
+    tcg_gen_st8_tl(temp, cpu_env,
                    offset + offsetof(cap_register_t, cr_bounds_valid));
 #endif
-
-    tcg_temp_free_i64(temp);
+#else
+    TCGv_i64 temp64 = tcg_const_i64(CC64_NULL_TOP);
+    tcg_gen_st_i64(temp64, cpu_env, offset + offsetof(cap_register_t, _cr_top));
+    tcg_temp_free_i64(temp64);
+#endif
+    // Exponent
+    tcg_gen_movi_tl(temp, CAP_CC(NULL_EXP));
+    tcg_gen_st8_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_exp));
+    tcg_temp_free(temp);
 }
 
 // In a merged register file, cursors are also globals. If backing is to also be
@@ -992,7 +993,7 @@ static inline void gen_cap_sync_cursor(DisasContext *ctx, int regnum)
 {
 #if MERGED_FILE
     if (!lazy_capreg_number_is_special(regnum))
-        tcg_gen_sync_i64(target_get_gpr_global(ctx, regnum));
+        tcg_gen_sync_tl(target_get_gpr_global(ctx, regnum));
 #endif
 }
 
@@ -1000,7 +1001,7 @@ static inline void gen_cap_invalidate_cursor(DisasContext *ctx, int regnum)
 {
 #if MERGED_FILE
     if (!lazy_capreg_number_is_special(regnum))
-        tcg_gen_discard_i64(target_get_gpr_global(ctx, regnum));
+        tcg_gen_discard_tl(target_get_gpr_global(ctx, regnum));
 #endif
 }
 
@@ -1061,10 +1062,10 @@ static inline void gen_move_cap_gp_select_gp(DisasContext *ctx, int dest_num,
                              tcg_cond_string(cond), true_source_num,
                              false_source_num);
 
-    assert(disas_capreg_state_must_be(ctx, true_source_num,
-                                      CREG_FULLY_DECOMPRESSED));
-    assert(disas_capreg_state_must_be(ctx, false_source_num,
-                                      CREG_FULLY_DECOMPRESSED));
+    cheri_debug_assert(disas_capreg_state_must_be(ctx, true_source_num,
+                                                  CREG_FULLY_DECOMPRESSED));
+    cheri_debug_assert(disas_capreg_state_must_be(ctx, false_source_num,
+                                                  CREG_FULLY_DECOMPRESSED));
 
     gen_cap_sync_cursor(ctx, true_source_num);
 
@@ -1086,40 +1087,40 @@ static inline void gen_move_cap_gp_select_gp(DisasContext *ctx, int dest_num,
 // TODO: for things in integer state we can just return 0's without loads and
 // stores
 #define WRAP_PESBT_EXTRACT(name)                                               \
-    static inline void gen_cap_pesbt_extract_##name(                           \
-        DisasContext *ctx, int regnum, TCGv_i64 result)                        \
+    static inline void gen_cap_pesbt_extract_##name(DisasContext *ctx,         \
+                                                    int regnum, TCGv result)   \
     {                                                                          \
-        tcg_gen_ld_i64(result, cpu_env,                                        \
-                       gp_register_offset(regnum) +                            \
-                           offsetof(cap_register_t, cached_pesbt));            \
-        tcg_gen_extract_i64(result, result, CC128_FIELD_##name##_START,        \
-                            CC128_FIELD_##name##_SIZE);                        \
+        tcg_gen_ld_tl(result, cpu_env,                                         \
+                      gp_register_offset(regnum) +                             \
+                          offsetof(cap_register_t, cr_pesbt));                 \
+        tcg_gen_extract_tl(result, result, CAP_CC(FIELD_##name##_START),       \
+                           CAP_CC(FIELD_##name##_SIZE));                       \
     }
 
 #define WRAP_PESBT_X(name, X, clear, invert, op, ...)                          \
     static inline void gen_cap_pesbt_##X##_##name(DisasContext *ctx,           \
-                                                  int regnum, TCGv_i64 value)  \
+                                                  int regnum, TCGv value)      \
     {                                                                          \
-        uint32_t offset = gp_register_offset(regnum) +                         \
-                          offsetof(cap_register_t, cached_pesbt);              \
-        tcg_gen_shli_i64(value, value, CC128_FIELD_##name##_START);            \
+        uint32_t offset =                                                      \
+            gp_register_offset(regnum) + offsetof(cap_register_t, cr_pesbt);   \
+        tcg_gen_shli_tl(value, value, CAP_CC(FIELD_##name##_START));           \
         if (invert)                                                            \
-            tcg_gen_not_i64(value, value);                                     \
-        TCGv_i64 pesbt = tcg_temp_new_i64();                                   \
-        tcg_gen_ld_i64(pesbt, cpu_env, offset);                                \
+            tcg_gen_not_tl(value, value);                                      \
+        TCGv pesbt = tcg_temp_new();                                           \
+        tcg_gen_ld_tl(pesbt, cpu_env, offset);                                 \
         if (clear)                                                             \
-            tcg_gen_andi_i64(pesbt, pesbt, ~(CC128_FIELD_##name##_MASK64));    \
-        tcg_gen_##op##_i64(pesbt, pesbt, __VA_ARGS__);                         \
-        tcg_gen_st_i64(pesbt, cpu_env, offset);                                \
-        tcg_temp_free_i64(pesbt);                                              \
+            tcg_gen_andi_tl(pesbt, pesbt,                                      \
+                            ~(target_ulong)(CAP_CC(FIELD_##name##_MASK64)));   \
+        tcg_gen_##op##_tl(pesbt, pesbt, __VA_ARGS__);                          \
+        tcg_gen_st_tl(pesbt, cpu_env, offset);                                 \
+        tcg_temp_free(pesbt);                                                  \
     }
 
-static inline void gen_cap_load_pesbt(DisasContext *ctx, int regnum,
-                                      TCGv_i64 pesbt)
+static inline void gen_cap_load_pesbt(DisasContext *ctx, int regnum, TCGv pesbt)
 {
-    tcg_gen_ld_i64(pesbt, cpu_env,
-                   gp_register_offset(regnum) +
-                       offsetof(cap_register_t, cached_pesbt));
+    tcg_gen_ld_tl(pesbt, cpu_env,
+                  gp_register_offset(regnum) +
+                      offsetof(cap_register_t, cr_pesbt));
 }
 
 #define WRAP_PESBT_DEPOSIT(name)                                               \
@@ -1155,20 +1156,16 @@ static inline void gen_cap_set_tag(DisasContext *ctx, int regnum, TCGv tagbit,
                        gp_register_offset(regnum) +
                            offsetof(cap_register_t, cr_tag));
     } else {
-        /*
-         * Just set the state of the lazy register. This will cause next
-         * decompression to set the tag. 0b01 is untagged, 0b10 is tagged.
-         * So do 0b01 + tagbit to convert.
-         */
+        // Just set the state of the lazy register. This will cause next
+        // decompression to set the tag. 0b01 is untagged, 0b10 is tagged. So do
+        // 0b01 + tagbit
         _Static_assert(CREG_UNTAGGED_CAP == 1 && CREG_TAGGED_CAP == 2,
                        "Optimised for these values");
         tcg_gen_add_tl(tagbit, tagbit, one);
-#ifdef TARGET_MIPS
-        g_assert_not_reached(); // Not supported on MIPS
-#else
-        tcg_gen_st8_i64(tagbit, cpu_env,
-                        offsetof(CPUArchState, gpcapregs.capreg_state[regnum]));
-#endif
+        tcg_gen_st8_tl(tagbit, cpu_env,
+                       offsetof(CPUArchState,
+                                CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+
         disas_capreg_state_set(ctx, regnum, CREG_UNTAGGED_CAP);
         disas_capreg_state_include(ctx, regnum, CREG_TAGGED_CAP);
     }
@@ -1212,7 +1209,7 @@ static inline void gen_cap_get_tag_i32(DisasContext *ctx, int regnum,
             // State == CREG_TAGGED_CAP || (State == CREG_FULLY_DECOMPRESSED &&
             // tag = 1)
             TCGv_i32 state = tcg_temp_new_i32();
-            gen_lazy_cap_get_state(ctx, state, regnum);
+            gen_lazy_cap_get_state_i32(ctx, regnum, state);
 
             TCGv_i32 cmpv = tcg_const_i32(CREG_FULLY_DECOMPRESSED);
             tcg_gen_setcond_i32(TCG_COND_EQ, cmpv, cmpv, state);
@@ -1230,24 +1227,17 @@ static inline void gen_cap_get_tag_i32(DisasContext *ctx, int regnum,
     cheri_tcg_printf_verbose("cw", "Get reg %d tag: %d\n", regnum, tagged);
 }
 
-static inline void gen_cap_get_tag(DisasContext *ctx, int regnum,
-                                   TCGv_i64 tagged)
+static inline void gen_cap_get_tag(DisasContext *ctx, int regnum, TCGv tagged)
 {
     TCGv_i32 tag32 = tcg_temp_new_i32();
     gen_cap_get_tag_i32(ctx, regnum, tag32);
-    tcg_gen_extu_i32_i64(tagged, tag32);
+    tcg_gen_extu_i32_tl(tagged, tag32);
     tcg_temp_free_i32(tag32);
 }
 
 static inline void gen_cap_get_type(DisasContext *ctx, int regnum, TCGv type)
 {
-    if (disas_capreg_state_must_be(ctx, regnum, CREG_FULLY_DECOMPRESSED)) {
-        tcg_gen_ld32u_tl(type, cpu_env,
-                         gp_register_offset(regnum) +
-                             offsetof(cap_register_t, cr_otype));
-    } else {
-        gen_cap_pesbt_extract_OTYPE(ctx, regnum, type);
-    }
+    gen_cap_pesbt_extract_OTYPE(ctx, regnum, type);
     cheri_tcg_printf_verbose("cd", "Get reg %d type: %d\n", regnum, type);
 }
 
@@ -1266,11 +1256,6 @@ static inline void gen_cap_set_type_unchecked(DisasContext *ctx, int regnum,
                                               TCGv type)
 {
     cheri_tcg_printf_verbose("cd", "Set reg %d type: %d\n", regnum, type);
-    if (disas_capreg_state_could_be(ctx, regnum, CREG_FULLY_DECOMPRESSED)) {
-        tcg_gen_st32_tl(type, cpu_env,
-                        gp_register_offset(regnum) +
-                            offsetof(cap_register_t, cr_otype));
-    }
     gen_cap_pesbt_deposit_OTYPE(ctx, regnum, type);
 }
 
@@ -1297,35 +1282,37 @@ static inline void gen_cap_get_sealed_i32(DisasContext *ctx, int regnum,
 {
     TCGv sealedv = tcg_temp_new();
     gen_cap_get_sealed(ctx, regnum, sealedv);
-    tcg_gen_extrl_i64_i32(sealed, sealedv);
+    tcg_gen_trunc_tl_i32(sealed, sealedv);
     tcg_temp_free(sealedv);
 }
 
 static inline void gen_cap_get_perms(DisasContext *ctx, int regnum, TCGv perms)
 {
-    if (disas_capreg_state_must_be(ctx, regnum, CREG_FULLY_DECOMPRESSED)) {
-        tcg_gen_ld32u_tl(perms, cpu_env,
-                         gp_register_offset(regnum) +
-                             offsetof(cap_register_t, cr_perms));
-    } else {
-        gen_cap_pesbt_extract_HWPERMS(ctx, regnum, perms);
-    }
+    gen_cap_pesbt_extract_HWPERMS(ctx, regnum, perms);
     cheri_tcg_printf_verbose("cd", "Ge reg %d perms: %x\n", regnum, perms);
 }
 
-static inline void gen_cap_get_hi(DisasContext *ctx, int regnum, TCGv_i64 lim)
+static inline void gen_cap_get_hi(DisasContext *ctx, int regnum, TCGv lim)
 {
-    size_t offset =
-        gp_register_offset(regnum) + offsetof(cap_register_t, cached_pesbt);
     // The pesbt field has been XOR'd with a mask on load
     // This will need to be undone again here.
     // (I think it might be sensible to refactor everything to apply the mask at
     // decompress time)
-    tcg_gen_ld_i64(lim, cpu_env, offset);
-    tcg_gen_xori_i64(lim, lim, CC128_NULL_PESBT);
+    gen_cap_load_pesbt(ctx, regnum, lim);
+    tcg_gen_xori_tl(lim, lim, CAP_NULL_PESBT);
     cheri_tcg_printf_verbose("cd", "Get reg %d hi: %lx\n", regnum, lim);
 }
 
+static inline void gen_cap_get_base(DisasContext *ctx, int regnum, TCGv base)
+{
+    gen_ensure_cap_decompressed(ctx, regnum);
+    size_t offset =
+        gp_register_offset(regnum) + offsetof(cap_register_t, cr_base);
+    tcg_gen_ld_tl(base, cpu_env, offset);
+    cheri_tcg_printf_verbose("cd", "Get reg %d base: %lx\n", regnum, base);
+}
+
+#if CHERI_CAP_BITS == 128 // TODO: make it work for CHERI-64
 // Get top, clamping results to UINT64_T MAX
 static inline void gen_cap_get_top_clamped(DisasContext *ctx, int regnum,
                                            TCGv_i64 top)
@@ -1365,7 +1352,7 @@ static inline void gen_cap_get_top_hi(DisasContext *ctx, int regnum,
 // Does addr + offset <= top. If offset non zero, Addr MUST be a multiple of
 // offset.
 static inline void gen_cap_addr_below_top(DisasContext *ctx, int regnum,
-                                          TCGv_i64 addr, TCGv_i64 result,
+                                          TCGv_i64 addr, TCGv result,
                                           int offset)
 {
     // Because of the above invariant,
@@ -1394,19 +1381,9 @@ static inline void gen_cap_addr_below_top(DisasContext *ctx, int regnum,
     tcg_temp_free_i64(temp);
 }
 
-static inline void gen_cap_get_base(DisasContext *ctx, int regnum,
-                                    TCGv_i64 base)
-{
-    gen_ensure_cap_decompressed(ctx, regnum);
-    size_t offset =
-        gp_register_offset(regnum) + offsetof(cap_register_t, cr_base);
-    tcg_gen_ld_i64(base, cpu_env, offset);
-    cheri_tcg_printf_verbose("cd", "Get reg %d base: %lx\n", regnum, base);
-}
-
 // Get length, where LENGTH_MAX results in UINT64_T MAX
 static inline void gen_cap_get_length(DisasContext *ctx, int regnum,
-                                      TCGv_i64 length)
+                                      TCGv length)
 {
     gen_ensure_cap_decompressed(ctx, regnum);
     size_t top_offset =
@@ -1443,9 +1420,36 @@ static inline void gen_cap_get_base_below_top(DisasContext *ctx, int regnum,
     gen_cap_get_base(ctx, regnum, result);
     gen_cap_addr_below_top(ctx, regnum, result, result, 0);
 }
+#else  /* CHERI_CAP_BITS == 64 */
+static inline void gen_cap_addr_below_top(DisasContext *ctx, int regnum,
+                                          TCGv_i64 addr_ext, TCGv result,
+                                          unsigned addr_offset)
+{
+    gen_ensure_cap_decompressed(ctx, regnum);
+    TCGv_i64 top = tcg_temp_new_i64();
+    TCGv_i64 temp = tcg_temp_new_i64();
+    size_t top_offset =
+        gp_register_offset(regnum) + offsetof(cap_register_t, _cr_top);
+    tcg_gen_ld_i64(top, cpu_env, top_offset);
+    // Offsets of less than one can be folded into the comparison
+    TCGv_i64 addrtmp = NULL;
+    if (addr_offset > 1) {
+        addrtmp = tcg_temp_new_i64();
+        tcg_gen_movi_i64(addrtmp, addr_offset);
+        tcg_gen_add_i64(addrtmp, addrtmp, addr_ext);
+        tcg_gen_setcond_i64(TCG_COND_LEU, temp, addrtmp, top);
+        tcg_temp_free_i64(addrtmp);
+    } else {
+        tcg_gen_setcond_i64(TCG_COND_LTU, temp, addr_ext, top);
+    }
+    tcg_gen_trunc_i64_tl(result, temp);
+    tcg_temp_free_i64(top);
+    tcg_temp_free_i64(temp);
+}
+#endif /* CHERI_CAP_BITS == 128 */
 
 static inline void gen_cap_set_cursor_unsafe(DisasContext *ctx, int regnum,
-                                             TCGv_i64 new_cursor)
+                                             TCGv new_cursor)
 {
     if (regnum == NULL_CAPREG_INDEX)
         return;
@@ -1454,72 +1458,85 @@ static inline void gen_cap_set_cursor_unsafe(DisasContext *ctx, int regnum,
         target_set_gpr(ctx, regnum, new_cursor);
 #endif
     } else {
-        tcg_gen_st_i64(new_cursor, cpu_env,
-                       gp_register_offset(regnum) +
-                           offsetof(cap_register_t, _cr_cursor));
+        tcg_gen_st_tl(new_cursor, cpu_env,
+                      gp_register_offset(regnum) +
+                          offsetof(cap_register_t, _cr_cursor));
     }
 }
 
 // Gets the address part of the capability cursor (on morello this is different
 // from the cursor)
-static inline void gen_cap_get_cursor_addr(DisasContext *ctx,
-                                           TCGv_i64 cursor_addr,
-                                           TCGv_i64 cursor)
+static inline void gen_cap_get_cursor_addr(DisasContext *ctx, TCGv cursor_addr,
+                                           TCGv cursor)
 {
 #ifdef TARGET_AARCH64
     // Remove top 8 bits then sign extend
-    tcg_gen_shli_i64(cursor_addr, cursor, MORELLO_FLAG_BITS);
-    tcg_gen_sari_i64(cursor_addr, cursor_addr, MORELLO_FLAG_BITS);
+    tcg_gen_shli_tl(cursor_addr, cursor, MORELLO_FLAG_BITS);
+    tcg_gen_sari_tl(cursor_addr, cursor_addr, MORELLO_FLAG_BITS);
 #else
-    tcg_gen_mov_i64(cursor_addr, cursor);
+    tcg_gen_mov_tl(cursor_addr, cursor);
 #endif
 }
 
 static inline void gen_cap_get_offset(DisasContext *ctx, int regnum,
-                                      TCGv_i64 offset)
+                                      TCGv offset)
 {
-    TCGv_i64 base = tcg_temp_new_i64();
+    TCGv base = tcg_temp_new();
     gen_cap_get_base(ctx, regnum, base);
     gen_cap_get_cursor(ctx, regnum, offset);
-    tcg_gen_sub_i64(offset, offset, base);
-    tcg_temp_free_i64(base);
+    tcg_gen_sub_tl(offset, offset, base);
+    tcg_temp_free(base);
     cheri_tcg_printf_verbose("cd", "Get reg %d offset: %lx\n", regnum, offset);
 }
 
-static inline void gen_cap_in_bounds(DisasContext *ctx, int regnum,
-                                     TCGv_i64 addr, TCGv_i64 result,
-                                     uint32_t size)
+static inline void gen_cap_load_bounds_valid(DisasContext *ctx, int regnum,
+                                             TCGv_i64 result)
 {
-    gen_ensure_cap_decompressed(ctx, regnum);
-    TCGv_i64 temp = tcg_temp_new_i64();
-    gen_cap_get_base(ctx, regnum, temp);
-    tcg_gen_setcond_i64(TCG_COND_GEU, result, addr, temp);
-    gen_cap_addr_below_top(ctx, regnum, addr, temp, size);
-    tcg_gen_and_i64(result, result, temp);
-#ifdef TARGET_AARCH64
-    // On Morello all invalid exponant caps are always out of bounds.
-    tcg_gen_ld8u_i64(temp, cpu_env,
+    tcg_gen_ld8u_i64(result, cpu_env,
                      gp_register_offset(regnum) +
                          offsetof(cap_register_t, cr_bounds_valid));
-    tcg_gen_and_i64(result, result, temp);
+}
+
+static inline void gen_cap_in_bounds(DisasContext *ctx, int regnum, TCGv addr,
+                                     TCGv result, uint32_t size)
+{
+    gen_ensure_cap_decompressed(ctx, regnum);
+    TCGv base = tcg_temp_new();
+    gen_cap_get_base(ctx, regnum, base);
+    tcg_gen_setcond_tl(TCG_COND_GEU, result, addr, base);
+#if TARGET_LONG_BITS == 32
+    TCGv_i64 addr_ext = tcg_temp_new_i64();
+    tcg_gen_extu_tl_i64(addr_ext, addr);
+#else
+    TCGv_i64 addr_ext = addr;
 #endif
-    tcg_temp_free_i64(temp);
+    gen_cap_addr_below_top(ctx, regnum, addr_ext, base, size);
+    tcg_gen_and_tl(result, result, base);
+#ifdef TARGET_AARCH64
+    // On Morello all invalid exponent caps are always out of bounds.
+    gen_cap_load_bounds_valid(ctx, regnum, base);
+    tcg_gen_and_i64(result, result, base);
+#endif
+    tcg_temp_free(base);
     cheri_tcg_printf_verbose("cd", "Get reg %d in bounds: %d\n", regnum,
                              result);
+#if TARGET_LONG_BITS == 32
+    tcg_temp_free_i64(addr_ext);
+#endif
 }
 
 static inline void gen_cap_has_perms(DisasContext *ctx, int regnum,
-                                     uint32_t perms, TCGv_i64 result)
+                                     uint32_t perms, TCGv result)
 {
     gen_cap_load_pesbt(ctx, regnum, result);
-    TCGv_i64 compare = tcg_const_i64(cc128_cap_pesbt_encode_HWPERMS(perms));
-    tcg_gen_and_i64(result, result, compare);
-    tcg_gen_setcond_i64(TCG_COND_EQ, result, result, compare);
-    tcg_temp_free_i64(compare);
+    TCGv compare = tcg_const_tl(CAP_cc(cap_pesbt_encode_perms)(perms));
+    tcg_gen_and_tl(result, result, compare);
+    tcg_gen_setcond_tl(TCG_COND_EQ, result, result, compare);
+    tcg_temp_free(compare);
 }
 
-// TODO: handle the slightly different semantics around precise and im-precise
-// checks Handles sealed and unrepresentable caps when the cursor is changed. If
+#if CHERI_CAP_BITS == 128
+// Handles sealed and unrepresentable caps when the cursor is changed. If
 // you are only changing flag bits, specify flag_bits_only. Do NOT modify cursor
 // before calling this, as the old cursor may be used for the check. WARN:
 // calling this will kill any temps
@@ -1570,6 +1587,12 @@ static inline void gen_cap_set_cursor(DisasContext *ctx, int regnum,
                        temp1);
 
 #ifdef TARGET_AARCH64
+        // Also, invalidly decoded bounds also cause unrepresentability
+        gen_cap_load_bounds_valid(ctx, regnum, temp1);
+        cheri_tcg_printf_verbose("d", "Quick check: bounds valid: %d\n", temp1);
+        // A || !B is the same as B <= A
+        tcg_gen_setcond_i64(TCG_COND_LEU, possible_bad_modification, temp1,
+                            possible_bad_modification);
         // On morello the top non-flag bit changing can cause problems.
         // If it does it is best to go to the more complicated check.
         gen_cap_get_cursor(ctx, regnum, temp1);
@@ -1612,6 +1635,210 @@ static inline void gen_cap_set_cursor(DisasContext *ctx, int regnum,
     tcg_temp_free_i64(new_val_local);
     tcg_temp_free_i64(possible_bad_modification);
 }
+
+#endif
+
+static inline void gen_cap_get_exponent(DisasContext *ctx, int regnum,
+                                        TCGv_i64 exp)
+{
+    gen_ensure_cap_decompressed(ctx, regnum);
+    tcg_gen_ld8u_i64(exp, cpu_env,
+                     gp_register_offset(regnum) +
+                         offsetof(cap_register_t, cr_exp));
+}
+
+// TODO this is slightly different than other CHERI platforms.
+#ifdef TARGET_AARCH64
+
+// Sign extend an address
+static inline void gen_cap_bounds_address(TCGv_i64 address, TCGv_i64 result)
+{
+    TCGv_i64 amt = tcg_const_i64(MORELLO_FLAG_BITS);
+    tcg_gen_shl_i64(result, address, amt);
+    tcg_gen_sar_i64(result, result, amt);
+    tcg_temp_free_i64(amt);
+}
+
+// This is the 'fast' version of setting the cursor that untags with false
+// positives. Also handles untagging sealed caps.
+static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
+                                    TCGv_i64 increment)
+{
+
+    TCGv_i64 tmp0;
+    bool untagged = disas_capreg_state_must_be2(ctx, regnum, CREG_INTEGER,
+                                                CREG_UNTAGGED_CAP);
+
+    if (!untagged) {
+        // Make cocal copy of increment as decompress will kill temps
+        TCGv_i64 increment_local = tcg_temp_local_new_i64();
+        tcg_gen_mov_i64(increment_local, increment);
+        tmp0 = increment;
+        gen_ensure_cap_decompressed(ctx, regnum);
+        increment = increment_local;
+    } else {
+        tmp0 = tcg_temp_new_i64();
+    }
+
+    gen_cap_get_cursor(ctx, regnum, tmp0);
+    cheri_tcg_printf_verbose(
+        "dd", "Fast add: Old cursor %lx\n. Increment %lx\n", tmp0, increment);
+    tcg_gen_add_i64(tmp0, tmp0, increment);
+
+    // If already untagged no need for any further detagging
+    if (untagged) {
+        cheri_tcg_printf_verbose("", "Fast add: already untagged\n");
+        gen_cap_set_cursor_unsafe(ctx, regnum, tmp0);
+        tcg_temp_free_i64(tmp0);
+        return;
+    }
+
+    TCGv_i64 tmp1 = tcg_temp_new_i64();
+    TCGv_i64 tmp2 = tcg_temp_new_i64();
+    TCGv_i64 tmp3 = tcg_temp_new_i64();
+
+    // Get old tag
+    TCGv_i64 new_tag = tcg_temp_new_i64();
+    tcg_gen_ld8u_i64(new_tag, cpu_env,
+                     gp_register_offset(regnum) +
+                         offsetof(cap_register_t, cr_tag));
+    cheri_tcg_printf_verbose("d", "Fast add: old tag: %d\n", new_tag);
+    // Check exponant out of range (decode will have set bounds invalid if it
+    // was)
+    gen_cap_load_bounds_valid(ctx, regnum, tmp1);
+    tcg_gen_and_i64(new_tag, new_tag, tmp1);
+    cheri_tcg_printf_verbose("d", "Fast add: after exp check: %d\n", new_tag);
+    // Check sealed
+    gen_cap_get_unsealed(ctx, regnum, tmp1);
+    tcg_gen_and_i64(new_tag, new_tag, tmp1);
+    cheri_tcg_printf_verbose("d", "Fast add: after sealed check: %d\n",
+                             new_tag);
+
+    // Check sign extention
+    gen_cap_get_cursor(ctx, regnum, tmp1);
+    // Now is as good a time as any to set the cursor
+    gen_cap_set_cursor_unsafe(ctx, regnum, tmp0);
+    // xor new and old cursor. If 57th bit changes and address depends on
+    tcg_gen_xor_i64(tmp0, tmp1, tmp0);
+    tcg_gen_shri_i64(tmp0, tmp0, (CAP_CC(ADDR_WIDTH) - 1 - MORELLO_FLAG_BITS));
+    gen_cap_get_exponent(ctx, regnum, tmp2);
+    cheri_tcg_printf_verbose("d", "Fast add: exp: %d\n", tmp2);
+    // exp < CAP_VALUE_NUM_BITS - CAP_MW;
+    tcg_gen_setcondi_i64(TCG_COND_LTU, tmp3, tmp2,
+                         CAP_CC(ADDR_WIDTH) -
+                             CAP_CC(FIELD_BOTTOM_ENCODED_SIZE));
+    // bounds_uses_value & bit 57 changed
+    tcg_gen_and_i64(tmp0, tmp0, tmp3);
+    tcg_gen_not_i64(tmp0, tmp0);
+    tcg_gen_and_i64(new_tag, new_tag, tmp0);
+    cheri_tcg_printf_verbose("d", "Fast add: after sign change check: %d\n",
+                             new_tag);
+
+    // Is representable fast (tmp2 is still holding exp, tmp1 old cursor)
+    TCGv_i64 fast_rep = tcg_const_i64(CAP_CC(MAX_EXPONENT) - 2);
+    // if exp >= (CAP_MAX_EXPONENT - 2) then return TRUE;
+    tcg_gen_setcond_i64(TCG_COND_GEU, fast_rep, tmp2, fast_rep);
+    cheri_tcg_printf_verbose("d", "Fast add: rep check (big exp): %d\n",
+                             fast_rep);
+
+    // a = CapBoundsAddress(a);
+    gen_cap_bounds_address(tmp1, tmp1);
+    // increment = CapBoundsAddress(increment);
+    gen_cap_bounds_address(increment, increment);
+
+    // Some of these fields should be CAP_MW wide
+    // we will just use the _top_ CAP_MW bits of the 64 bit field so
+    int field_shift = CAP_CC(ADDR_WIDTH) - CAP_CC(FIELD_BOTTOM_ENCODED_SIZE);
+    // additions/subtractions/comparisons just work
+    // i_mid (tmp3) = LSR(increment,exp)<CAP_MW-1:0>;
+    tcg_gen_shr_i64(tmp3, increment, tmp2);
+    tcg_gen_shli_i64(tmp3, tmp3, field_shift);
+    // a_mid (tmp1) = LSR(a,exp)<CAP_MW-1:0>;
+    tcg_gen_shr_i64(tmp1, tmp1, tmp2);
+    tcg_gen_shli_i64(tmp1, tmp1, field_shift);
+    // i_top (increment) = ASR(increment,exp+CAP_MW);
+    tcg_gen_addi_i64(tmp2, tmp2, CAP_CC(FIELD_BOTTOM_ENCODED_SIZE));
+    tcg_gen_sar_i64(increment, increment, tmp2);
+    // B3 = CapGetBottom(c)<CAP_MW-1:CAP_MW-3>;
+    // R3 = B3 - '001';
+    // R (tmp2) = R3:Zeros(CAP_MW-3);
+    gen_cap_load_pesbt(ctx, regnum, tmp2);
+    tcg_gen_shri_i64(tmp2, tmp2,
+                     (CAP_CC(FIELD_BOTTOM_ENCODED_START) +
+                      CAP_CC(FIELD_BOTTOM_ENCODED_SIZE)) -
+                         3);
+    tcg_gen_subi_i64(tmp2, tmp2, 0b001);
+    tcg_gen_shli_i64(tmp2, tmp2, 61);
+    // diff (tmp0) = R - a_mid;
+    tcg_gen_sub_i64(tmp0, tmp2, tmp1);
+
+    cheri_tcg_printf_verbose("ddddd",
+                             "Fast add: i_top: %lx, i_mid: %lx, a_mid: %lx, "
+                             "R: %lx, diff %lx",
+                             increment, tmp3, tmp1, tmp2, tmp0);
+
+    // representable |= ((i_top == -1) && i_mid >= diff && (R != a_mid)
+    tcg_gen_setcond_i64(TCG_COND_NE, tmp2, tmp2, tmp1);
+    tcg_gen_setcond_i64(TCG_COND_GEU, tmp1, tmp3, tmp0);
+    tcg_gen_and_i64(tmp2, tmp2, tmp1);
+    tcg_gen_setcondi_i64(TCG_COND_EQ, tmp1, increment, -1);
+    tcg_gen_and_i64(tmp2, tmp2, tmp1);
+    tcg_gen_or_i64(fast_rep, fast_rep, tmp2);
+
+    // diff1 = diff - 1;
+    tcg_gen_subi_i64(tmp0, tmp0, 1ULL << field_shift);
+    cheri_tcg_printf_verbose("d", ", diff1: %lx\n", tmp0);
+    // representable |= ((i_top == 0) && (i_mid < diff1))
+    tcg_gen_setcond_i64(TCG_COND_LTU, tmp2, tmp3, tmp0);
+    tcg_gen_setcondi_i64(TCG_COND_EQ, tmp1, increment, 0);
+    tcg_gen_and_i64(tmp2, tmp2, tmp1);
+    tcg_gen_or_i64(fast_rep, fast_rep, tmp2);
+    cheri_tcg_printf_verbose("d", "Fast add: rep check (increment check): %d\n",
+                             fast_rep);
+
+    // Finally, write back the tag
+    tcg_gen_and_i64(new_tag, new_tag, fast_rep);
+    cheri_tcg_printf_verbose(
+        "d", "Fast add: after representability check: %d\n", new_tag);
+    tcg_gen_st8_i64(new_tag, cpu_env,
+                    gp_register_offset(regnum) +
+                        offsetof(cap_register_t, cr_tag));
+
+    /* If a tag of zero was stored, it is possible that bounds have changed.
+     * This means that the register would no longer be correctly decompressed.
+     * Here we will set it to CREG_UNTAGGED_CAP to handle that case. So:
+     * tagged -> CREG_FULLY_DECOMPRESSED
+     * untagged -> CREG_UNTAGGED_CAP
+     */
+
+    _Static_assert(CREG_FULLY_DECOMPRESSED == (CREG_UNTAGGED_CAP + 2), "");
+    tcg_gen_movi_i64(tmp0, 1);
+    tcg_gen_shl_i64(new_tag, new_tag, tmp0);
+    tcg_gen_add_i64(new_tag, new_tag, tmp0);
+    tcg_gen_st8_i64(
+        new_tag, cpu_env,
+        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+    disas_capreg_state_include(ctx, regnum, CREG_UNTAGGED_CAP);
+
+    // Dont need to free tmp0, it is freed by the caller
+    tcg_temp_free_i64(tmp1);
+    tcg_temp_free_i64(tmp2);
+    tcg_temp_free_i64(tmp3);
+    tcg_temp_free_i64(increment);
+    tcg_temp_free_i64(fast_rep);
+    tcg_temp_free_i64(new_tag);
+}
+
+static inline void gen_cap_set_cursor_fast(DisasContext *ctx, int regnum,
+                                           TCGv_i64 new_cursor)
+{
+    TCGv_i64 increment = tcg_temp_new_i64();
+    gen_cap_get_cursor(ctx, regnum, increment);
+    tcg_gen_sub_i64(increment, new_cursor, increment);
+    gen_cap_add_fast(ctx, regnum, increment);
+    tcg_temp_free_i64(increment);
+}
+#endif
 
 // Clear tag bit if sealed
 // WARN: calling this will kill any temps
@@ -1657,8 +1884,7 @@ static inline void gen_cap_untag_if_sealed(DisasContext *ctx, int regnum)
     tcg_temp_free(type_unsealed);
 }
 
-static inline void gen_cap_get_flags(DisasContext *ctx, int regnum,
-                                     TCGv_i64 flags)
+static inline void gen_cap_get_flags(DisasContext *ctx, int regnum, TCGv flags)
 {
 #ifdef TARGET_AARCH64
     // Morello flags are just different from CHERI flags.
@@ -1680,8 +1906,8 @@ static inline void gen_cap_get_eq_i32(DisasContext *ctx, int rx, int ry,
     size_t offsetx = gp_register_offset(rx);
     size_t offsety = gp_register_offset(ry);
 
-    TCGv_i64 tmp1 = tcg_temp_new_i64();
-    TCGv_i64 tmp2 = tcg_temp_new_i64();
+    TCGv tmp1 = tcg_temp_new();
+    TCGv tmp2 = tcg_temp_new();
 
     TCGv_i32 tmp3 = tcg_temp_new_i32();
 
@@ -1694,46 +1920,33 @@ static inline void gen_cap_get_eq_i32(DisasContext *ctx, int rx, int ry,
     gen_cap_get_cursor(ctx, rx, tmp1);
     gen_cap_get_cursor(ctx, ry, tmp2);
 
-    tcg_gen_setcond_i64(TCG_COND_EQ, tmp1, tmp1, tmp2);
-    tcg_gen_extrl_i64_i32(tmp3, tmp1);
+    tcg_gen_setcond_tl(TCG_COND_EQ, tmp1, tmp1, tmp2);
+    tcg_gen_trunc_tl_i32(tmp3, tmp1);
     tcg_gen_and_i32(eq, eq, tmp3);
 
     // Pesbt equal
-    tcg_gen_ld_i64(tmp1, cpu_env,
-                   offsetx + offsetof(cap_register_t, cached_pesbt));
-    tcg_gen_ld_i64(tmp2, cpu_env,
-                   offsety + offsetof(cap_register_t, cached_pesbt));
-    tcg_gen_setcond_i64(TCG_COND_EQ, tmp1, tmp1, tmp2);
-    tcg_gen_extrl_i64_i32(tmp3, tmp1);
+    tcg_gen_ld_tl(tmp1, cpu_env, offsetx + offsetof(cap_register_t, cr_pesbt));
+    tcg_gen_ld_tl(tmp2, cpu_env, offsety + offsetof(cap_register_t, cr_pesbt));
+    tcg_gen_setcond_tl(TCG_COND_EQ, tmp1, tmp1, tmp2);
+    tcg_gen_trunc_tl_i32(tmp3, tmp1);
     tcg_gen_and_i32(eq, eq, tmp3);
 
-    tcg_temp_free_i64(tmp1);
-    tcg_temp_free_i64(tmp2);
+    tcg_temp_free(tmp1);
+    tcg_temp_free(tmp2);
     tcg_temp_free_i32(tmp3);
 
     cheri_tcg_printf_verbose("ccw", "Get reg %d equal reg %d: %d\n", rx, ry,
                              eq);
 }
 
-static inline void gen_cap_clear_perms(DisasContext *ctx, int regnum,
-                                       TCGv_i64 mask, bool canon)
+static inline void gen_cap_clear_perms(DisasContext *ctx, int regnum, TCGv mask,
+                                       bool canon)
 {
     if (regnum == NULL_CAPREG_INDEX)
         return;
 
     if (canon)
-        tcg_gen_andi_i64(mask, mask, CC128_FIELD_HWPERMS_MASK_NOT_SHIFTED);
-
-    // Could get rid of this by removing cr_perms completely
-    if (disas_capreg_state_could_be(ctx, regnum, CREG_FULLY_DECOMPRESSED)) {
-        TCGv_i64 tmp = tcg_temp_new_i64();
-        int offset =
-            gp_register_offset(regnum) + offsetof(cap_register_t, cr_perms);
-        tcg_gen_ld32u_i64(tmp, cpu_env, offset);
-        tcg_gen_andc_i64(tmp, tmp, mask);
-        tcg_gen_st32_i64(tmp, cpu_env, offset);
-        tcg_temp_free_i64(tmp);
-    }
+        tcg_gen_andi_tl(mask, mask, CAP_CC(FIELD_HWPERMS_MASK_NOT_SHIFTED));
 
     gen_cap_pesbt_clear_HWPERMS(ctx, regnum, mask);
 }
@@ -1751,15 +1964,14 @@ static inline void gen_cap_set_type_const(DisasContext *ctx, int regnum,
     }
 
     // Now set the type
-    TCGv_i64 tmp = tcg_const_i64(type);
+    TCGv tmp = tcg_const_tl(type);
     gen_cap_set_type_unchecked(ctx, regnum, tmp);
-    tcg_temp_free_i64(tmp);
+    tcg_temp_free(tmp);
 }
 
 static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
-                                bool conditional, TCGv_i64 success)
+                                bool conditional, TCGv success)
 {
-
     if (regnum == NULL_CAPREG_INDEX)
         return;
 
@@ -1768,9 +1980,9 @@ static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
     // Copy low bits of auth_regnum to regnum's type, clearing regnums tag if
     // conditions not met
 
-    TCGv_i64 tag_result = tcg_temp_new_i64();
-    TCGv_i64 temp0 = tcg_temp_new_i64();
-    TCGv_i64 new_type = tcg_temp_new_i64();
+    TCGv tag_result = tcg_temp_new();
+    TCGv temp0 = tcg_temp_new();
+    TCGv new_type = tcg_temp_new();
 
     gen_cap_get_cursor(ctx, auth_regnum, new_type);
 
@@ -1779,56 +1991,58 @@ static inline void gen_cap_seal(DisasContext *ctx, int regnum, int auth_regnum,
 
     // auth_regnum unsealed
     gen_cap_get_unsealed(ctx, auth_regnum, temp0);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // Set type of regnum
-    tcg_gen_movi_i64(temp0, CC128_FIELD_OTYPE_MASK_NOT_SHIFTED);
+    tcg_gen_movi_tl(temp0, CAP_CC(FIELD_OTYPE_MASK_NOT_SHIFTED));
 
     if (!conditional) {
-        tcg_gen_and_i64(temp0, temp0, new_type);
+        tcg_gen_and_tl(temp0, temp0, new_type);
         gen_cap_set_type_unchecked(ctx, regnum, temp0);
     } else {
-        // success = (type & CC128_FIELD_OTYPE_MASK_NOT_SHIFTED) ==
-        // CC128_FIELD_OTYPE_MASK_NOT_SHIFTED;
-        tcg_gen_and_i64(success, temp0, new_type);
-        tcg_gen_setcond_i64(TCG_COND_EQ, success, success, temp0);
+        // This handles the CAP_NO_SEALING case
+        // success == type == CAP_NO_SEALING
+        // TODO: This belongs in another header
+#define CAP_NO_SEALING -1l
+        tcg_gen_movi_tl(temp0, CAP_NO_SEALING);
+        tcg_gen_setcond_tl(TCG_COND_EQ, success, new_type, temp0);
     }
 
     // type <= CAP_MAX_REPRESENTABLE_OTYPE
-    tcg_gen_movi_i64(temp0, CAP_MAX_REPRESENTABLE_OTYPE);
-    tcg_gen_setcond_i64(TCG_COND_LEU, temp0, new_type, temp0);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_movi_tl(temp0, CAP_MAX_REPRESENTABLE_OTYPE);
+    tcg_gen_setcond_tl(TCG_COND_LEU, temp0, new_type, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // auth in bounds
     gen_cap_in_bounds(ctx, auth_regnum, new_type, temp0, 1);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // regnum tagged
     gen_cap_get_tag(ctx, regnum, temp0);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // auth tagged
     gen_cap_get_tag(ctx, auth_regnum, temp0);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // auth has perm
     gen_cap_has_perms(ctx, auth_regnum, CAP_PERM_SEAL, temp0);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     if (conditional) {
         gen_cap_get_type(ctx, regnum, temp0);
         // type = tag_result && ~success ? new_type : old_type
-        tcg_gen_movcond_i64(TCG_COND_LTU, temp0, success, tag_result, new_type,
-                            temp0);
+        tcg_gen_movcond_tl(TCG_COND_LTU, temp0, success, tag_result, new_type,
+                           temp0);
         gen_cap_set_type_unchecked(ctx, regnum, temp0);
-        tcg_gen_or_i64(success, success, tag_result);
+        tcg_gen_or_tl(success, success, tag_result);
     } else {
         gen_cap_set_tag(ctx, regnum, tag_result, false);
     }
 
-    tcg_temp_free_i64(tag_result);
-    tcg_temp_free_i64(temp0);
-    tcg_temp_free_i64(new_type);
+    tcg_temp_free(tag_result);
+    tcg_temp_free(temp0);
+    tcg_temp_free(new_type);
 }
 
 static inline void gen_cap_unseal(DisasContext *ctx, int regnum,
@@ -1839,26 +2053,26 @@ static inline void gen_cap_unseal(DisasContext *ctx, int regnum,
 
     gen_ensure_cap_decompressed(ctx, auth_regnum);
 
-    TCGv_i64 tag_result = tcg_temp_new_i64();
-    TCGv_i64 temp0 = tcg_temp_new_i64();
-    TCGv_i64 temp1 = tcg_temp_new_i64();
+    TCGv tag_result = tcg_temp_new();
+    TCGv temp0 = tcg_temp_new();
+    TCGv temp1 = tcg_temp_new();
 
     // Clear global if auth does not have it set
 
     gen_cap_get_perms(ctx, auth_regnum, temp0);
-    tcg_gen_movi_i64(temp1, CAP_PERM_GLOBAL);
-    tcg_gen_andc_i64(temp0, temp1, temp0);
+    tcg_gen_movi_tl(temp1, CAP_PERM_GLOBAL);
+    tcg_gen_andc_tl(temp0, temp1, temp0);
     gen_cap_clear_perms(ctx, regnum, temp0, false);
 
     // Cursor == type
     gen_cap_get_cursor(ctx, auth_regnum, temp0);
     gen_cap_get_type(ctx, regnum, temp1);
-    tcg_gen_setcond_i64(TCG_COND_EQ, tag_result, temp0, temp1);
+    tcg_gen_setcond_tl(TCG_COND_EQ, tag_result, temp0, temp1);
 
     // type != 0
-    tcg_gen_movi_i64(temp0, CAP_OTYPE_UNSEALED);
-    tcg_gen_setcond_i64(TCG_COND_NE, temp1, temp0, temp1);
-    tcg_gen_and_i64(tag_result, tag_result, temp1);
+    tcg_gen_movi_tl(temp0, CAP_OTYPE_UNSEALED);
+    tcg_gen_setcond_tl(TCG_COND_NE, temp1, temp0, temp1);
+    tcg_gen_and_tl(tag_result, tag_result, temp1);
 
     // set unsealed
     gen_cap_set_type_unchecked(ctx, regnum, temp0);
@@ -1866,27 +2080,28 @@ static inline void gen_cap_unseal(DisasContext *ctx, int regnum,
     // auth in bounds
     gen_cap_get_cursor(ctx, auth_regnum, temp1);
     gen_cap_in_bounds(ctx, auth_regnum, temp1, temp0, 1);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // auth tagged
     gen_cap_get_tag(ctx, auth_regnum, temp0);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // regnum tagged
     gen_cap_get_tag(ctx, regnum, temp0);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     // auth has perm
     gen_cap_has_perms(ctx, auth_regnum, CAP_PERM_UNSEAL, temp0);
-    tcg_gen_and_i64(tag_result, tag_result, temp0);
+    tcg_gen_and_tl(tag_result, tag_result, temp0);
 
     gen_cap_set_tag(ctx, regnum, tag_result, false);
 
-    tcg_temp_free_i64(tag_result);
-    tcg_temp_free_i64(temp0);
-    tcg_temp_free_i64(temp1);
+    tcg_temp_free(tag_result);
+    tcg_temp_free(temp0);
+    tcg_temp_free(temp1);
 }
 
+#if CHERI_CAP_BITS == 128
 static inline void gen_cap_is_subset(DisasContext *ctx, int rega, int regb,
                                      TCGv_i64 result)
 {
@@ -1917,19 +2132,15 @@ static inline void gen_cap_is_subset(DisasContext *ctx, int rega, int regb,
     gen_cap_load_pesbt(ctx, regb, tempb);
 
     tcg_gen_andc_i64(tempa, tempa, tempb);
-    tcg_gen_movi_i64(tempb, CC128_FIELD_HWPERMS_MASK64);
+    tcg_gen_movi_i64(tempb, CAP_CC(FIELD_HWPERMS_MASK64));
     tcg_gen_and_i64(tempa, tempa, tempb);
     tcg_gen_movi_i64(tempb, 0);
     tcg_gen_setcond_i64(TCG_COND_EQ, tempa, tempa, tempb);
     tcg_gen_and_i64(result, result, tempa);
 
     // Finally that both caps have valid bounds
-    tcg_gen_ld8u_i64(tempa, cpu_env,
-                     gp_register_offset(rega) +
-                         offsetof(cap_register_t, cr_bounds_valid));
-    tcg_gen_ld8u_i64(tempb, cpu_env,
-                     gp_register_offset(regb) +
-                         offsetof(cap_register_t, cr_bounds_valid));
+    gen_cap_load_bounds_valid(ctx, rega, tempa);
+    gen_cap_load_bounds_valid(ctx, regb, tempb);
     tcg_gen_and_i64(result, result, tempa);
     tcg_gen_and_i64(result, result, tempb);
 
@@ -1961,9 +2172,9 @@ static inline void gen_cap_is_subset_and_tag_eq(DisasContext *ctx, int rega,
     tcg_temp_free_i64(tempa);
     tcg_temp_free_i64(tempb);
 }
+#endif
 
-static inline void gen_cap_set_pesbt(DisasContext *ctx, int regnum,
-                                     TCGv_i64 pesbt)
+static inline void gen_cap_set_pesbt(DisasContext *ctx, int regnum, TCGv pesbt)
 {
     if (regnum == NULL_CAPREG_INDEX)
         return;
@@ -1971,12 +2182,12 @@ static inline void gen_cap_set_pesbt(DisasContext *ctx, int regnum,
     gen_lazy_cap_set_state(ctx, regnum, CREG_UNTAGGED_CAP);
     // Again, once I bother to change where we apply this mask this should go
     // away
-    TCGv_i64 mem_pesbt = tcg_const_i64(CC128_NULL_PESBT);
-    tcg_gen_xor_i64(mem_pesbt, mem_pesbt, pesbt);
-    tcg_gen_st_i64(mem_pesbt, cpu_env,
-                   gp_register_offset(regnum) +
-                       offsetof(cap_register_t, cached_pesbt));
-    tcg_temp_free_i64(mem_pesbt);
+    TCGv mem_pesbt = tcg_const_tl(CAP_NULL_XOR_MASK);
+    tcg_gen_xor_tl(mem_pesbt, mem_pesbt, pesbt);
+    tcg_gen_st_tl(mem_pesbt, cpu_env,
+                  gp_register_offset(regnum) +
+                      offsetof(cap_register_t, cr_pesbt));
+    tcg_temp_free(mem_pesbt);
 }
 
 // Checks a cap is in bounds for a given size, has specified perms, is tagged,
@@ -1988,28 +2199,28 @@ static inline void gen_cap_memop_checks(DisasContext *ctx, int regnum,
 #ifdef DO_TCG_BOUNDS_CHECKS
     // We use addr as a tmp, and tmp as address because we can ensure tmp is
     // local
-    TCGv_i64 local_addr = tcg_temp_local_new_i64();
-    TCGv_i64 result = tcg_temp_new_i64();
-    tcg_gen_mov_i64(local_addr, addr);
-    TCGv_i64 tmp2 = addr;
+    TCGv local_addr = tcg_temp_local_new();
+    TCGv result = tcg_temp_new_i64();
+    tcg_gen_mov_tl(local_addr, addr);
+    TCGv tmp2 = addr;
 
     // Bounds
     gen_cap_in_bounds(ctx, regnum, local_addr, result, size);
     // Perms
     gen_cap_has_perms(ctx, regnum, perms, tmp2);
-    tcg_gen_and_i64(result, result, tmp2);
+    tcg_gen_and_tl(result, result, tmp2);
     // Unsealed
     gen_cap_get_unsealed(ctx, regnum, tmp2);
-    tcg_gen_and_i64(result, result, tmp2);
+    tcg_gen_and_tl(result, result, tmp2);
     // Tagged
     gen_cap_get_tag(ctx, regnum, tmp2);
-    tcg_gen_and_i64(result, result, tmp2);
+    tcg_gen_and_tl(result, result, tmp2);
 
     /* If failure: */
     TCGLabel *skip = gen_new_label();
-    tcg_gen_movi_i64(tmp2, 0);
-    tcg_gen_brcond_i64(TCG_COND_NE, result, tmp2, skip);
-    tcg_gen_mov_i64(addr, local_addr);
+    tcg_gen_movi_tl(tmp2, 0);
+    tcg_gen_brcond_tl(TCG_COND_NE, result, tmp2, skip);
+    tcg_gen_mov_tl(addr, local_addr);
 #endif
     // We just repeat the checks again in the helper to get the appropriate
     // exception.
@@ -2028,9 +2239,9 @@ static inline void gen_cap_memop_checks(DisasContext *ctx, int regnum,
 #ifdef DO_TCG_BOUNDS_CHECKS
     /* Else */
     gen_set_label(skip);
-    tcg_gen_mov_i64(addr, local_addr);
-    tcg_temp_free_i64(local_addr);
-    tcg_temp_free_i64(result);
+    tcg_gen_mov_tl(addr, local_addr);
+    tcg_temp_free(local_addr);
+    tcg_temp_free(result);
 #endif
 }
 

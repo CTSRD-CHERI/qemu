@@ -32,15 +32,16 @@
  * SUCH DAMAGE.
  */
 
-#include <cinttypes>
 #include "../cheri_compressed_cap.h"
-#include "sail_wrapper.h"
 #include "FuzzedDataProvider.h"
+#include "sail_wrapper.h"
+#include <cinttypes>
+#include <cstdio>
 
 static void dump_cap_fields(const cc128_cap_t& result) {
-    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.cr_perms); // TODO: decode perms
-    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.cr_uperms);
-    fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result.cr_base);
+    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.permissions()); // TODO: decode perms
+    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.software_permissions());
+    fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result.base());
     fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", (uint64_t)result.offset());
     fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", result.address());
     fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(result.length() >> 64),
@@ -48,8 +49,8 @@ static void dump_cap_fields(const cc128_cap_t& result) {
     cc128_length_t top_full = result.top();
     fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
         top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    fprintf(stderr, "Sealed:      %d\n", (int)cc128_is_cap_sealed(&result));
-    fprintf(stderr, "OType:       0x%" PRIx32 "\n", result.cr_otype);
+    fprintf(stderr, "Sealed:      %d\n", (int)result.is_sealed());
+    fprintf(stderr, "OType:       0x%" PRIx32 "\n", result.type());
     fprintf(stderr, "\n");
 }
 

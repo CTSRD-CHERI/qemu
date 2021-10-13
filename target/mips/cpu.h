@@ -821,6 +821,10 @@ struct CPUMIPSState {
 #define CP0EnHi_CLGK 61
 #define CP0EnHi_CLGS 60
 #define CP0EnHi_CLGU 59
+#define CP0EnHi_CLG_MASK \
+    ((1ULL << CP0EnHi_CLGK) | (1ULL << CP0EnHi_CLGS) | (1UL << CP0EnHi_CLGU))
+#else
+#define CP0EnHi_CLG_MASK 0
 #endif
     target_ulong CP0_EntryHi_ASID_mask;
 /*
@@ -1544,7 +1548,8 @@ static inline bool cpu_in_user_mode(CPUMIPSState *env)
     return ((env->hflags & MIPS_HFLAG_UM) == MIPS_HFLAG_UM);
 }
 
-static inline unsigned cpu_get_asid(CPUMIPSState *env) {
+static inline unsigned cpu_get_asid(CPUMIPSState *env, target_ulong pc)
+{
     uint16_t ASID = env->CP0_EntryHi & env->CP0_EntryHi_ASID_mask;
     return ASID;
 }

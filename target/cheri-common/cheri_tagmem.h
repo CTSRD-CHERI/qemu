@@ -58,8 +58,10 @@ void cheri_tag_invalidate_aligned(CPUArchState *env, target_ulong vaddr,
                                   uintptr_t pc, int mmu_idx);
 bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
                    hwaddr *ret_paddr, int *prot, uintptr_t pc, int mmu_idx);
-// Get/set many currently don't have an mmu_idx because no targets currently
-// require it.
+/*
+ * Get/set many currently don't have an mmu_idx because no targets currently
+ * require it.
+ */
 int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
                        hwaddr *ret_paddr, uintptr_t pc);
 void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,

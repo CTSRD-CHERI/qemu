@@ -91,11 +91,6 @@ static void morello_machine_init(MachineState *machine)
     /* Add RAM */
     memory_region_add_subregion(get_system_memory(), 0, machine->ram);
 
-#ifdef TARGET_CHERI
-    /* Then tag it all */
-    cheri_tag_init(machine->ram, machine->ram_size);
-#endif
-
     if (strcmp(machine->cpu_type, ARM_CPU_TYPE_NAME("morello")) != 0) {
         error_and_die(
             "Use the special 'morello' cpu type for the Morello board.");
@@ -107,6 +102,8 @@ static void morello_machine_init(MachineState *machine)
         object_initialize_child(OBJECT(machine), "cpu[*]",
                                 &morelloMachineState->cpus[i].core,
                                 machine->cpu_type);
+        object_property_set_bool(OBJECT(&morelloMachineState->cpus[i].core),
+                                 "mpidr_mt", true, NULL);
         if (!qdev_realize(DEVICE(&morelloMachineState->cpus[i].core), NULL,
                           &errp)) {
             error_report_err(errp);

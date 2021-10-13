@@ -46,8 +46,6 @@
 #include "internal.h"
 #endif
 
-#include "cheri-archspecific.h"
-
 #if !defined(TARGET_CHERI)
 #error "Should only be included for TARGET_CHERI"
 #endif
@@ -105,6 +103,7 @@ _Static_assert(CAP_TAG_GET_MANY_SHFT <= 3, "");
 #endif
 
 #define CAP_TAG_GET_MANY_MASK ((1 << (1UL << CAP_TAG_GET_MANY_SHFT)) - 1UL)
+#define CAP_TAG_MANY_DATA_SIZE (CHERI_CAP_SIZE << CAP_TAG_GET_MANY_SHFT)
 
 static inline size_t num_tagblocks(RAMBlock* ram)
 {
@@ -219,6 +218,7 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
     assert(memory_region_is_ram(mr));
     assert(memory_region_size(mr) == memory_size &&
            "Incorrect tag mem size passed?");
+    assert(mr->ram_block->cheri_tags == NULL && "Already initialized?");
 
     size_t cheri_ntagblks = num_tagblocks(mr->ram_block);
     mr->ram_block->cheri_tags =
@@ -248,7 +248,8 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
         if (tag_write) {
             error_report("Attempting change tag bit on memory without tags:");
             error_report("%s: vaddr=0x%jx -> %s+0x%jx", __func__,
-                         (uintmax_t)vaddr, ram->idstr, (uintmax_t)ram_offset);
+                         (uintmax_t)vaddr, ram ? ram->idstr : NULL,
+                         (uintmax_t)ram_offset);
         }
         return ALL_ZERO_TAGBLK;
     }
@@ -280,6 +281,12 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
     if (tagblk != NULL) {
         const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
         return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
+    }
+
+    if (!(*prot & PAGE_SC_CLEAR)) {
+        // Add in a (fake) SC_TRAP to prompt a TLB refill if a tag is stored
+        // to this location. See the comment around TLBENTRYCAP_INVALID_WRITE_*.
+        *prot |= PAGE_SC_TRAP;
     }
 
     return ALL_ZERO_TAGBLK;
@@ -494,7 +501,8 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
 #define clear_capcause_reg(env)
 #endif
 
-void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc, int mmu_idx)
+void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
+                   hwaddr *ret_paddr, uintptr_t pc, int mmu_idx)
 {
     /*
      * This attempt to resolve a virtual address may cause both a data store
@@ -502,6 +510,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
      * fault (SC bit set).
      */
     store_capcause_reg(env, reg);
+    // Note: this probe will handle any store cap faults
     void *host_addr = probe_cap_write(env, vaddr, 1, mmu_idx, pc);
     clear_capcause_reg(env);
 
@@ -524,9 +533,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
                        "Unimplemented");
 
-    if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP) {
-        raise_store_tag_exception(env, vaddr, reg, pc);
-    }
+    cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_TRAP));
 
     /*
      * probe_cap_write() should have ensured there was a tagmem for this
@@ -546,7 +553,7 @@ void cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_p
 }
 
 bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
-                  hwaddr *ret_paddr, int *prot, uintptr_t pc, int mmu_idx)
+                   hwaddr *ret_paddr, int *prot, uintptr_t pc, int mmu_idx)
 {
 
     void *host_addr = probe_read(env, vaddr, 1, mmu_idx, pc);
@@ -563,6 +570,9 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
         }
         if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP) {
             *prot |= PAGE_LC_TRAP;
+        }
+        if (tagmem_flags & TLBENTRYCAP_FLAG_TRAP_ANY) {
+            *prot |= PAGE_LC_TRAP_ANY;
         }
     }
 
@@ -587,7 +597,7 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 {
 
     const int mmu_idx = cpu_mmu_index(env, false);
-    probe_read(env, vaddr, 1, mmu_idx, pc);
+    probe_read(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
@@ -600,7 +610,8 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
             : tagblock_get_tag_many_tagmem(tagmem,
                                            page_vaddr_to_tag_offset(vaddr));
 
-    if (result && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
+    if ((result && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) ||
+        (tagmem_flags & TLBENTRYCAP_FLAG_TRAP_ANY)) {
         raise_load_tag_exception(env, vaddr, reg, pc);
     }
 
@@ -619,9 +630,10 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
      * checking access_type can be eliminated.
      */
     if (tags) {
-        probe_cap_write(env, vaddr, 1, mmu_idx, pc);
+        // Note: this probe will handle any store cap faults
+        probe_cap_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     } else {
-        probe_write(env, vaddr, 1, mmu_idx, pc);
+        probe_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     }
     clear_capcause_reg(env);
 
@@ -629,7 +641,7 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
 
     uintptr_t tagmem_flags;
     void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, tags, &tagmem_flags);
+        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags);
 
     if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
         (tagmem == ALL_ZERO_TAGBLK)) {
@@ -643,9 +655,7 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
                        "Unimplemented");
 
-    if (tags && (tagmem_flags & TLBENTRYCAP_FLAG_TRAP)) {
-        raise_store_tag_exception(env, vaddr, reg, pc);
-    }
+    cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_TRAP));
 
     cheri_debug_assert(tagmem);
 

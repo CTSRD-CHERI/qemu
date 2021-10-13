@@ -76,7 +76,8 @@ static void qemu_logfile_free(QemuLogFile *logfile)
 static bool log_uses_own_buffers;
 
 __attribute__((weak)) int qemu_log_instr_global_switch(int log_flags);
-__attribute__((weak)) int qemu_log_instr_global_switch(int log_flags) {
+__attribute__((weak)) int qemu_log_instr_global_switch(int log_flags)
+{
     // Real implementation in accel/tcg/log_instr.c
     warn_report("Calling no-op %s\r", __func__);
     return log_flags;
@@ -316,6 +317,7 @@ void qemu_log_close(void)
     qemu_mutex_unlock(&qemu_logfile_mutex);
 }
 
+/* clang-format off */
 const QEMULogItem qemu_log_items[] = {
     { CPU_LOG_TB_OUT_ASM, "out_asm",
       "show generated host assembly code for each compiled TB" },
@@ -366,6 +368,7 @@ const QEMULogItem qemu_log_items[] = {
       "log every user-mode syscall, its input, and its result" },
     { 0, NULL, NULL },
 };
+/* clang-format on */
 
 /* takes a comma separated list of log masks. Return 0 if error. */
 int qemu_str_to_log_mask(const char *str)

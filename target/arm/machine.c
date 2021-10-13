@@ -777,6 +777,7 @@ static int cpu_post_load(void *opaque, int version_id)
 #define VMSTATE_REG VMSTATE_UINT64
 #endif
 
+/* clang-format off */
 const VMStateDescription vmstate_arm_cpu = {
     .name = "cpu",
     .version_id = 22,
@@ -785,66 +786,76 @@ const VMStateDescription vmstate_arm_cpu = {
     .post_save = cpu_post_save,
     .pre_load = cpu_pre_load,
     .post_load = cpu_post_load,
-    .fields =
-        (VMStateField[]){
-            VMSTATE_UINT32_ARRAY(env.regs, ARMCPU, 16),
+    .fields = (VMStateField[]) {
+        VMSTATE_UINT32_ARRAY(env.regs, ARMCPU, 16),
 #ifndef TARGET_CHERI
-            VMSTATE_UINT64_ARRAY(env.xregs, ARMCPU, 32),
+        VMSTATE_UINT64_ARRAY(env.xregs, ARMCPU, 32),
 #endif
-            VMSTATE_REG(env.pc, ARMCPU),
-            {
-                .name = "cpsr",
-                .version_id = 0,
-                .size = sizeof(uint32_t),
-                .info = &vmstate_cpsr,
-                .flags = VMS_SINGLE,
-                .offset = 0,
-            },
-            VMSTATE_UINT32(env.spsr, ARMCPU),
-            VMSTATE_UINT64_ARRAY(env.banked_spsr, ARMCPU, 8),
-            VMSTATE_UINT32_ARRAY(env.banked_r13, ARMCPU, 8),
-            VMSTATE_UINT32_ARRAY(env.banked_r14, ARMCPU, 8),
-            VMSTATE_UINT32_ARRAY(env.usr_regs, ARMCPU, 5),
-            VMSTATE_UINT32_ARRAY(env.fiq_regs, ARMCPU, 5),
-            VMSTATE_REG_ARRAY(env.elr_el, ARMCPU, 4),
-            VMSTATE_REG_ARRAY(env.sp_el, ARMCPU, N_BANK_WITH_RESTRICTED),
-            /* The length-check must come before the arrays to avoid
-             * incoming data possibly overflowing the array.
-             */
-            VMSTATE_INT32_POSITIVE_LE(cpreg_vmstate_array_len, ARMCPU),
-            VMSTATE_VARRAY_INT32(cpreg_vmstate_indexes, ARMCPU,
-                                 cpreg_vmstate_array_len, 0,
-                                 vmstate_info_uint64, uint64_t),
-            VMSTATE_VARRAY_INT32(cpreg_vmstate_values, ARMCPU,
-                                 cpreg_vmstate_array_len, 0,
-                                 vmstate_info_uint64, uint64_t),
-            VMSTATE_UINT64(env.exclusive_addr, ARMCPU),
-            VMSTATE_UINT64(env.exclusive_val, ARMCPU),
-            VMSTATE_UINT64(env.exclusive_high, ARMCPU),
-            VMSTATE_UINT64(env.features, ARMCPU),
-            VMSTATE_UINT32(env.exception.syndrome, ARMCPU),
-            VMSTATE_UINT32(env.exception.fsr, ARMCPU),
-            VMSTATE_UINT64(env.exception.vaddress, ARMCPU),
-            VMSTATE_TIMER_PTR(gt_timer[GTIMER_PHYS], ARMCPU),
-            VMSTATE_TIMER_PTR(gt_timer[GTIMER_VIRT], ARMCPU),
-            {
-                .name = "power_state",
-                .version_id = 0,
-                .size = sizeof(bool),
-                .info = &vmstate_powered_off,
-                .flags = VMS_SINGLE,
-                .offset = 0,
-            },
-            VMSTATE_END_OF_LIST()},
-    .subsections = (const VMStateDescription *[]){
-        &vmstate_vfp, &vmstate_iwmmxt, &vmstate_m, &vmstate_thumb2ee,
+        VMSTATE_REG(env.pc, ARMCPU),
+        {
+            .name = "cpsr",
+            .version_id = 0,
+            .size = sizeof(uint32_t),
+            .info = &vmstate_cpsr,
+            .flags = VMS_SINGLE,
+            .offset = 0,
+        },
+        VMSTATE_UINT32(env.spsr, ARMCPU),
+        VMSTATE_UINT64_ARRAY(env.banked_spsr, ARMCPU, 8),
+        VMSTATE_UINT32_ARRAY(env.banked_r13, ARMCPU, 8),
+        VMSTATE_UINT32_ARRAY(env.banked_r14, ARMCPU, 8),
+        VMSTATE_UINT32_ARRAY(env.usr_regs, ARMCPU, 5),
+        VMSTATE_UINT32_ARRAY(env.fiq_regs, ARMCPU, 5),
+        VMSTATE_REG_ARRAY(env.elr_el, ARMCPU, 4),
+        VMSTATE_REG_ARRAY(env.sp_el, ARMCPU, N_BANK_WITH_RESTRICTED),
+        /* The length-check must come before the arrays to avoid
+         * incoming data possibly overflowing the array.
+         */
+        VMSTATE_INT32_POSITIVE_LE(cpreg_vmstate_array_len, ARMCPU),
+        VMSTATE_VARRAY_INT32(cpreg_vmstate_indexes, ARMCPU,
+                             cpreg_vmstate_array_len,
+                             0, vmstate_info_uint64, uint64_t),
+        VMSTATE_VARRAY_INT32(cpreg_vmstate_values, ARMCPU,
+                             cpreg_vmstate_array_len,
+                             0, vmstate_info_uint64, uint64_t),
+        VMSTATE_UINT64(env.exclusive_addr, ARMCPU),
+        VMSTATE_UINT64(env.exclusive_val, ARMCPU),
+        VMSTATE_UINT64(env.exclusive_high, ARMCPU),
+        VMSTATE_UINT64(env.features, ARMCPU),
+        VMSTATE_UINT32(env.exception.syndrome, ARMCPU),
+        VMSTATE_UINT32(env.exception.fsr, ARMCPU),
+        VMSTATE_UINT64(env.exception.vaddress, ARMCPU),
+        VMSTATE_TIMER_PTR(gt_timer[GTIMER_PHYS], ARMCPU),
+        VMSTATE_TIMER_PTR(gt_timer[GTIMER_VIRT], ARMCPU),
+        {
+            .name = "power_state",
+            .version_id = 0,
+            .size = sizeof(bool),
+            .info = &vmstate_powered_off,
+            .flags = VMS_SINGLE,
+            .offset = 0,
+        },
+        VMSTATE_END_OF_LIST()
+    },
+    .subsections = (const VMStateDescription*[]) {
+        &vmstate_vfp,
+        &vmstate_iwmmxt,
+        &vmstate_m,
+        &vmstate_thumb2ee,
         /* pmsav7_rnr must come before pmsav7 so that we have the
          * region number before we test it in the VMSTATE_VALIDATE
          * in vmstate_pmsav7.
          */
-        &vmstate_pmsav7_rnr, &vmstate_pmsav7, &vmstate_pmsav8,
+        &vmstate_pmsav7_rnr,
+        &vmstate_pmsav7,
+        &vmstate_pmsav8,
         &vmstate_m_security,
 #ifdef TARGET_AARCH64
         &vmstate_sve,
 #endif
-        &vmstate_serror, &vmstate_irq_line_state, NULL}};
+        &vmstate_serror,
+        &vmstate_irq_line_state,
+        NULL
+    }
+};
+/* clang-format on */

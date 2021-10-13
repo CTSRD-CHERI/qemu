@@ -25,12 +25,6 @@
 #ifndef TCG_H
 #define TCG_H
 
-#define tcg_abort()                                                            \
-    do {                                                                       \
-        fprintf(stderr, "%s:%d: tcg fatal error\n", __FILE__, __LINE__);       \
-        abort();                                                               \
-    } while (0)
-
 #include "cpu.h"
 #include "exec/memop.h"
 #include "exec/tb-context.h"
@@ -447,19 +441,32 @@ typedef enum {
 static inline const char *tcg_cond_string(TCGCond c)
 {
     switch (c) {
-    case TCG_COND_NEVER: return "NEVER";
-    case TCG_COND_ALWAYS: return "ALWAYS";
-    case TCG_COND_EQ: return "==";
-    case TCG_COND_NE: return "!=";
+    case TCG_COND_NEVER:
+        return "NEVER";
+    case TCG_COND_ALWAYS:
+        return "ALWAYS";
+    case TCG_COND_EQ:
+        return "==";
+    case TCG_COND_NE:
+        return "!=";
     case TCG_COND_LT:
-    case TCG_COND_LTU: return "<";
+        return "<_s";
+    case TCG_COND_LTU:
+        return "<_u";
     case TCG_COND_GE:
-    case TCG_COND_GEU: return ">=";
+        return ">=_s";
+    case TCG_COND_GEU:
+        return ">=_u";
     case TCG_COND_LE:
-    case TCG_COND_LEU: return "<=";
+        return "<=_s";
+    case TCG_COND_LEU:
+        return "<=_u";
     case TCG_COND_GT:
-    case TCG_COND_GTU: return ">";
-    default: return "?";
+        return ">_s";
+    case TCG_COND_GTU:
+        return ">_u";
+    default:
+        return "?";
     }
 }
 /* Invert the sense of the comparison.  */
@@ -1097,6 +1104,12 @@ typedef struct TCGTargetOpDef {
     TCGOpcode op;
     const char *args_ct_str[TCG_MAX_OP_ARGS];
 } TCGTargetOpDef;
+
+#define tcg_abort() \
+do {\
+    fprintf(stderr, "%s:%d: tcg fatal error\n", __FILE__, __LINE__);\
+    abort();\
+} while (0)
 
 bool tcg_op_supported(TCGOpcode op);
 

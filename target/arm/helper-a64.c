@@ -1033,6 +1033,7 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
 
 #ifdef TARGET_CHERI
         bool cap_return = is_access_to_capabilities_enabled_at_el(env, cur_el);
+        bool no_system = !cap_has_perms(&env->pc.cap, CAP_ACCESS_SYS_REGS);
 
         if (!cap_return ||
             !is_access_to_capabilities_enabled_at_el(env, new_el))
@@ -1040,6 +1041,12 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
 
         if (cap_return) {
             env->pc = env->elr_el[cur_el];
+            if (no_system)
+                env->pc.cap.cr_tag = 0;
+        }
+
+        if (!cap_is_unsealed(&env->pc.cap)) {
+            env->pc.cap.cr_tag = 0;
         }
 #endif
 
@@ -1085,7 +1092,6 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
                       "Exception return from AArch64 EL%d to "
                       "AArch64 EL%d PC 0x%" PRIx64 " CPSR %x\n",
                       cur_el, new_el, get_aarch_reg_as_x(&env->pc), spsr);
-
     }
 
     /*
@@ -1094,8 +1100,7 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
      */
     aarch64_sve_change_el(env, cur_el, new_el, return_to_aa64);
 
-    qemu_log_instr_mode_switch(env,
-                               arm_el_to_logging_mode(env, new_el),
+    qemu_log_instr_mode_switch(env, arm_el_to_logging_mode(env, new_el),
                                get_aarch_reg_as_x(&env->pc));
 
     qemu_mutex_lock_iothread();

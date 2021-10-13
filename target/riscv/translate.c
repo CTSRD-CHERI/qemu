@@ -1102,7 +1102,7 @@ void riscv_translate_init(void)
                              "load_val");
 }
 
-void gen_cheri_break_loadlink(TCGv_cap_checked_ptr out_addr, TCGv_i32 memop)
+void gen_cheri_break_loadlink(TCGv_cap_checked_ptr out_addr)
 {
     // The SC implementation uses load_res directly, and apparently this helper
     // can be called from inside the addr==load_res check and the cmpxchg being

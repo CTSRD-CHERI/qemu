@@ -138,14 +138,15 @@ static const VMStateDescription vmstate_hyper = {
     }
 };
 
+#ifdef TARGET_CHERI
+#pragma message("TODO: VMSTATE_CAP_ARRAY")
+#endif
 const VMStateDescription vmstate_riscv_cpu = {
     .name = "cpu",
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-#ifdef TARGET_CHERI
-#pragma message("TODO: VMSTATE_CAP_ARRAY")
-#else
+#ifndef TARGET_CHERI
         VMSTATE_UINTTL_ARRAY(env.gpr, RISCVCPU, 32),
 #endif
         VMSTATE_UINT64_ARRAY(env.fpr, RISCVCPU, 32),

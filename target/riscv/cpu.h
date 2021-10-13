@@ -189,6 +189,10 @@ struct CPURISCVState {
     target_ulong mbadaddr;
     target_ulong medeleg;
 
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+    target_ulong sccsr;
+#endif
+
 #ifdef TARGET_CHERI
     // XXX: not implemented properly
     cap_register_t UTCC; // SCR 4 User trap code cap. (UTCC)
@@ -727,7 +731,7 @@ static inline bool cpu_in_user_mode(CPURISCVState *env)
     return env->priv == PRV_U;
 }
 
-static inline unsigned cpu_get_asid(CPURISCVState *env)
+static inline unsigned cpu_get_asid(CPURISCVState *env, target_ulong pc)
 {
     return get_field(env->satp, SATP_ASID);
 }

@@ -48,7 +48,7 @@ void HELPER(riscv_log_instr)(CPURISCVState *env, target_ulong pc,
                              uint32_t opcode, uint32_t opcode_size)
 {
     if (qemu_log_instr_enabled(env)) {
-        qemu_log_instr_asid(env, cpu_get_asid(env));
+        qemu_log_instr_asid(env, cpu_get_asid(env, pc));
         qemu_log_instr(env, pc, (char *)&opcode, opcode_size);
     }
 }

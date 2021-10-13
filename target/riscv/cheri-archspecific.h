@@ -32,10 +32,8 @@
  */
 #pragma once
 
-#include "cheri-archspecific-early.h"
 #include "cpu.h"
 #include "cheri-lazy-capregs.h"
-#include "exec/log_instr.h"
 
 extern bool cheri_debugger_on_trap;
 
@@ -101,8 +99,8 @@ static inline bool validate_jump_target(CPUArchState *env,
     target_ulong base = cap_get_base(cap);
     unsigned min_insn_size = riscv_has_ext(env, RVC) ? 2 : 4;
     if (!cap_is_in_bounds(cap, addr, min_insn_size)) {
-        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, addr, true,
-                                   retpc);
+        raise_cheri_exception_impl(env, CapEx_LengthViolation, regnum, addr,
+                                   true, retpc);
     }
     if (!QEMU_IS_ALIGNED(base, min_insn_size)) {
         raise_cheri_exception_impl(env, CapEx_UnalignedBase, regnum, addr, true,
@@ -117,7 +115,7 @@ static inline bool validate_jump_target(CPUArchState *env,
 }
 
 static inline void update_next_pcc_for_tcg(CPUArchState *env,
-                                           const cap_register_t *target,
+                                           cap_register_t *target,
                                            uint32_t cjalr_flags)
 {
     assert_valid_jump_target(target);

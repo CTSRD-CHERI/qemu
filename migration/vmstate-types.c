@@ -313,37 +313,53 @@ const VMStateInfo vmstate_info_uint64 = {
     .put  = put_uint64,
 };
 
-/* 128 compressed capability */
+/* 128/64-bit compressed capability */
 
-#include "../target/cheri-common/cheri-compressed-cap/cheri_compressed_cap_128.h"
+#include "../target/cheri-common/cheri-compressed-cap/cheri_compressed_cap.h"
 
 static int get_cap_register(QEMUFile *f, void *pv, size_t size,
                             const VMStateField *field)
 {
-    cc128_cap_t *v = pv;
-    uint64_t cursor;
-    uint64_t pesbt;
-
-    qemu_get_be64s(f, &cursor);
-    qemu_get_be64s(f, &pesbt);
-
     // TODO: If we ever want this to actually work the tag needs saving too
     // TODO: For now just assume everything is tagged
-    cc128_decompress_mem(pesbt, cursor, 1, v);
-
+    if (field->size == sizeof(cc128_cap_t)) {
+        cc128_cap_t *v = pv;
+        uint64_t cursor;
+        uint64_t pesbt;
+        qemu_get_be64s(f, &cursor);
+        qemu_get_be64s(f, &pesbt);
+        cc128_decompress_mem(pesbt, cursor, 1, v);
+    } else {
+        assert(field->size == sizeof(cc64_cap_t));
+        cc64_cap_t *v = pv;
+        uint32_t cursor;
+        uint32_t pesbt;
+        qemu_get_be32s(f, &cursor);
+        qemu_get_be32s(f, &pesbt);
+        cc64_decompress_mem(pesbt, cursor, 1, v);
+    }
     return 0;
 }
 
 static int put_cap_register(QEMUFile *f, void *pv, size_t size,
                             const VMStateField *field, QJSON *vmdesc)
 {
-    cc128_cap_t *v = pv;
-    uint64_t *cursor = &v->_cr_cursor;
-    uint64_t pesbt = cc128_compress_raw(v);
+    if (field->size == sizeof(cc128_cap_t)) {
+        cc128_cap_t *v = pv;
+        uint64_t *cursor = &v->_cr_cursor;
+        uint64_t pesbt = cc128_compress_raw(v);
 
-    qemu_put_be64s(f, cursor);
-    qemu_put_be64s(f, &pesbt);
+        qemu_put_be64s(f, cursor);
+        qemu_put_be64s(f, &pesbt);
+    } else {
+        assert(field->size == sizeof(cc64_cap_t));
+        cc64_cap_t *v = pv;
+        uint32_t *cursor = &v->_cr_cursor;
+        uint32_t pesbt = cc64_compress_raw(v);
 
+        qemu_put_be32s(f, cursor);
+        qemu_put_be32s(f, &pesbt);
+    }
     return 0;
 }
 

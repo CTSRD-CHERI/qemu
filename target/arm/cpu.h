@@ -21,7 +21,7 @@
 #define ARM_CPU_H
 
 #ifdef TARGET_CHERI
-#ifndef TARGET_IS_MORELLO
+#ifndef TARGET_MORELLO
 #error "Morello should be the only arm CHERI"
 #endif
 #endif
@@ -30,7 +30,6 @@
 #include "hw/registerfields.h"
 #include "cpu-qom.h"
 #include "exec/cpu-defs.h"
-#include "exec/log_instr_early.h"
 #include "qapi/qapi-types-common.h"
 
 /* ARM processors have a weak memory model */
@@ -227,9 +226,9 @@ typedef struct ARMPACKey {
 
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs-types.h"
-#define AARCH_REG_TYPE aligned_cap_register_t
+typedef aligned_cap_register_t AARCH_REG_TYPE;
 #else
-#define AARCH_REG_TYPE uint64_t
+typedef uint64_t AARCH_REG_TYPE;
 #endif
 
 #ifdef TARGET_CHERI
@@ -615,6 +614,10 @@ typedef struct CPUARMState {
         /* If we implement EL2 we will also need to store information
          * about the intermediate physical address for stage 2 faults.
          */
+#ifdef TARGET_CHERI
+        // Set if a capabilty fault was caused by a cache instruction
+        uint8_t cm;
+#endif
     } exception;
 
     /* Information associated with an SError */
@@ -771,6 +774,9 @@ typedef struct CPUARMState {
     /* Store GICv3CPUState to access from this struct */
     void *gicv3state;
 
+    // Debug CLAIM tag bits
+    uint64_t claim;
+
 #ifdef TARGET_CHERI
     uint64_t chcr_el2;
     uint64_t cscr_el3;
@@ -784,10 +790,6 @@ typedef struct CPUARMState {
     uint64_t statcounters_imprecise_setbounds;
     uint64_t statcounters_unrepresentable_caps;
 
-#endif
-
-#ifdef CONFIG_TCG_LOG_INSTR
-    qemu_log_printf_buf_t qemu_log_printf_buf;
 #endif
 } CPUARMState;
 
@@ -947,6 +949,11 @@ struct ARMCPU {
 
     /* Uniprocessor system with MP extensions */
     bool mp_is_up;
+
+    /* Performance of processors at the lowest affinity level is
+     * very interdependent.
+     */
+    bool mpidr_mt;
 
     /* True if we tried kvm_arm_host_cpu_features() during CPU instance_init
      * and the probe failed (so we need to report the error in realize)
@@ -1160,17 +1167,15 @@ int fp_exception_el(CPUARMState *env, int cur_el);
 int sve_exception_el(CPUARMState *env, int cur_el);
 uint32_t sve_zcr_len_for_el(CPUARMState *env, int el);
 
-#ifdef TARGET_CHERI
-// Morello does not support 32-bit, so might as well optimise everything away
-#define is_a64(env) 1
-#else
-
 static inline bool is_a64(CPUARMState *env)
 {
+#ifdef TARGET_CHERI
+    // Morello does not support 32-bit, so might as well optimise everything away
+    return 1;
+#else
     return env->aarch64;
-}
-
 #endif
+}
 
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero
@@ -1285,23 +1290,23 @@ void pmu_init(ARMCPU *cpu);
 #define SCTLR_DSSBS   (1ULL << 44) /* v8.5 */
 
 #define CPTR_TCPAC    (1U << 31)
-#define CPTR_TTA (1U << 20) /* CPTR_EL3 */
+#define CPTR_TTA      (1U << 20) /* CPTR_EL3 */
 #define CPTR_TFP      (1U << 10)
 #define CPTR_TZ       (1U << 8)   /* CPTR_EL2 */
 #define CPTR_EZ       (1U << 8)   /* CPTR_EL3 */
 
-#define CPTR_TCPAC (1U << 31)
-#define CPTR_TTA_EL2 (1U << 28)
-#define CPTR_FPEN (0b11U << 20)
-#define CPTR_FPEN_LO (1U << 20)
-#define CPTR_FPEN_HI (1U << 21)
-#define CPTR_CEN (0b11U << 18)
-#define CPTR_CEN_LO (1U << 18)
-#define CPTR_CEN_HI (1U << 19)
-#define CPTR_ZEN (0b11U << 16)
-#define CPTR_ZEN_LO (1U << 16)
-#define CPTR_ZEN_HI (1U << 17)
-#define CPTR_EC (1U << 9)
+#define CPTR_TTA_EL2  (1U << 28)
+#define CPTR_FPEN     (0b11U << 20)
+#define CPTR_FPEN_LO  (1U << 20)
+#define CPTR_FPEN_HI  (1U << 21)
+#define CPTR_CEN      (0b11U << 18)
+#define CPTR_CEN_LO   (1U << 18)
+#define CPTR_CEN_HI   (1U << 19)
+#define CPTR_ZEN      (0b11U << 16)
+#define CPTR_ZEN_LO   (1U << 16)
+#define CPTR_ZEN_HI   (1U << 17)
+#define CPTR_EC       (1U << 9)
+#define CPTR_TC       (1U << 9)
 
 #define MDCR_EPMAD    (1U << 21)
 #define MDCR_EDAD     (1U << 20)
@@ -1398,8 +1403,6 @@ void pmu_init(ARMCPU *cpu);
 #define PSTATE_PAN (1U << 22)
 #define PSTATE_UAO (1U << 23)
 #define PSTATE_TCO (1U << 25)
-// Morello documentation seems to indicate this was the correct bit in SPSR for
-// PSTATE.C64
 #define PSTATE_C64 (1U << 26)
 #define PSTATE_V (1U << 28)
 #define PSTATE_C (1U << 29)
@@ -2169,7 +2172,7 @@ static inline bool arm_el_is_aa64(CPUARMState *env, int el)
 #ifdef TARGET_CHERI
     // Morello always a64
     return true;
-#endif
+#else
     /* This isn't valid for EL0 (if we're in EL0, is_a64() is what you want,
      * and if we're not in EL0 then the state of EL0 isn't well defined.)
      */
@@ -2197,6 +2200,7 @@ static inline bool arm_el_is_aa64(CPUARMState *env, int el)
     }
 
     return aa64;
+#endif
 }
 
 /* Function for determing whether guest cp register reads and writes should
@@ -2505,9 +2509,11 @@ static inline uint64_t cpreg_to_kvm_id(uint32_t cpregid)
 #define ARM_CP_DC_GZVA           (ARM_CP_SPECIAL | 0x0700)
 #ifdef TARGET_CHERI
 #define ARM_CP_IC_OR_DC          (ARM_CP_SPECIAL | 0x0800)
-#define ARM_LAST_SPECIAL         ARM_CP_IC_OR_DC
+#define ARM_CP_IC_OR_DC_STORE (ARM_CP_SPECIAL | 0x0900)
+#define ARM_LAST_SPECIAL ARM_CP_IC_OR_DC_STORE
 #else
 #define ARM_CP_IC_OR_DC          ARM_CP_NOP
+#define ARM_CP_IC_OR_DC_STORE ARM_CP_NOP
 #define ARM_LAST_SPECIAL         ARM_CP_DC_GZVA
 #endif
 #define ARM_CP_FPU               0x1000
@@ -2516,10 +2522,12 @@ static inline uint64_t cpreg_to_kvm_id(uint32_t cpregid)
 #define ARM_CP_RAISES_EXC        0x8000
 #define ARM_CP_NEWEL             0x10000
 #define ARM_CP_CAP               0x20000
+#define ARM_CP_CAP_ONLY (ARM_CP_CAP | 0x40000)
+
 /* Used only as a terminator for ARMCPRegInfo lists */
 #define ARM_CP_SENTINEL          0xfffff
 /* Mask of only the flag bits in a type field */
-#define ARM_CP_FLAG_MASK 0x3f0ff
+#define ARM_CP_FLAG_MASK 0x7f0ff
 
 #ifdef TARGET_CHERI
 #define ARM_CP_CAP_ON_MORELLO ARM_CP_CAP
@@ -2589,14 +2597,16 @@ static inline bool cptype_valid(int cptype)
 #ifdef TARGET_CHERI
 #define PL_IN_RESTRICTED 0x400
 #define PL_IN_EXECUTIVE 0x200
-#define PL_SYSREG 0x100
+// Requiring the system access bit is the default.
+// Anything that can be accessed without it needs this flag.
+#define PL_NO_SYSREG 0x100
 #else
 #define PL_IN_RESTRICTED 0
 #define PL_IN_EXECUTIVE 0
-#define PL_SYSREG 0
+#define PL_NO_SYSREG 0
 #endif
 
-#define PL_CHERI (PL_IN_RESTRICTED | PL_IN_EXECUTIVE | PL_SYSREG)
+#define PL_CHERI (PL_IN_RESTRICTED | PL_IN_EXECUTIVE | PL_NO_SYSREG)
 
 #define PL3_R 0x80
 #define PL3_W 0x40
@@ -2713,9 +2723,9 @@ typedef void CPWriteFn(CPUARMState *env, const ARMCPRegInfo *opaque,
                        uint64_t value);
 #ifdef TARGET_CHERI
 typedef void CPReadFnCap(CPUARMState *env, const ARMCPRegInfo *opaque,
-                         cap_register_t* cap_out);
+                         cap_register_t *cap_out);
 typedef void CPWriteFnCap(CPUARMState *env, const ARMCPRegInfo *opaque,
-                       uint64_t value, const cap_register_t* cap);
+                          uint64_t value, const cap_register_t *cap);
 #endif
 /* Access permission check functions for coprocessor registers. */
 typedef CPAccessResult CPAccessFn(CPUARMState *env,
@@ -2932,7 +2942,16 @@ static inline bool cpreg_field_is_64bit(const ARMCPRegInfo *ri)
 static inline bool cpreg_field_is_cap(const ARMCPRegInfo *ri)
 {
 #ifdef TARGET_CHERI
-    return !!(ri->type & ARM_CP_CAP);
+    return (ri->type & ARM_CP_CAP) == ARM_CP_CAP;
+#else
+    return false;
+#endif
+}
+
+static inline bool cpreg_field_is_cap_only(const ARMCPRegInfo *ri)
+{
+#ifdef TARGET_CHERI
+    return (ri->type & ARM_CP_CAP_ONLY) == ARM_CP_CAP_ONLY;
 #else
     return false;
 #endif
@@ -3364,7 +3383,11 @@ static inline bool arm_cpu_data_is_big_endian_a32(CPUARMState *env,
 
 static inline bool arm_cpu_data_is_big_endian_a64(int el, uint64_t sctlr)
 {
+#ifdef TARGET_CHERI
+    return false;
+#else
     return sctlr & (el ? SCTLR_EE : SCTLR_E0E);
+#endif
 }
 
 /* Return true if the processor is in big-endian mode. */
@@ -3509,13 +3532,13 @@ FIELD(TBFLAG_CHERI, PSTATE_C64, 6, 1) // The PSTATE.C64 bit
 FIELD(TBFLAG_CHERI, EXECUTIVE, 7, 1)  // pcc.perms.executive
 FIELD(TBFLAG_CHERI, SYSTEM, 8, 1)     // pcc.perms.system
 FIELD(TBFLAG_CHERI, SETTAG, 9, 1)
-FIELD(TBFLAG_CHERI, CAP_ENABLED, 10,
-      1) // 1 if capability instructions are trapped
+// 1 if capability instructions are trapped
+FIELD(TBFLAG_CHERI, CAP_ENABLED, 10, 1)
 // These flags really belongs in TBFLAG_ANY, but there is no room. If upstream
 // wants this feature, then they can move some bits around
 FIELD(TBFLAG_CHERI, SCTLRA, 11, 1)
 FIELD(TBFLAG_CHERI, SCTLRSA, 12, 1)
-#define TBFLAG_CHERI_SIZE (CCTLR_DEFINED_LENGTH + 6)
+#define TBFLAG_CHERI_SIZE (CCTLR_DEFINED_LENGTH + 7)
 _Static_assert(TBFLAG_CHERI_SIZE <= 32, "");
 
 #endif
@@ -4261,6 +4284,13 @@ static inline bool cheri_is_executive(CPUARMState *env)
     return FIELD_EX32(env->chflags, TBFLAG_CHERI, EXECUTIVE) != 0;
 }
 
+// restricted is not executive. Decided it might make things more readable to
+// have this.
+static inline bool cheri_is_restricted(CPUARMState *env)
+{
+    return !cheri_is_executive(env);
+}
+
 static inline bool cheri_is_system(CPUARMState *env)
 {
     return FIELD_EX32(env->chflags, TBFLAG_CHERI, SYSTEM) != 0;
@@ -4319,17 +4349,21 @@ static inline bool cpu_in_user_mode(CPUArchState *env)
     return arm_current_el(env) == 0;
 }
 
-static inline unsigned cpu_get_asid(CPUArchState *env) {
+static inline unsigned cpu_get_asid(CPUArchState *env, target_ulong pc)
+{
 
     uint64_t ttbr;
 
-    // TODO: This is slightly broken because tbbrn is defaulting to 0
     if (cpu_mmu_index(env, 0) == ARMMMUIdx_Stage2) {
         ttbr = env->cp15.vttbr_el2;
-    } else if (1) {
-        return env->cp15.ttbr0_el[arm_current_el(env)];
     } else {
-        return env->cp15.ttbr1_el[arm_current_el(env)];
+        int el = arm_current_el(env);
+        TCR *tcr = &env->cp15.tcr_el[el];
+        if (!(pc & tcr->mask)) {
+            ttbr = env->cp15.ttbr0_el[el];
+        } else {
+            ttbr = env->cp15.ttbr1_el[el];
+        }
     }
 
     return (ttbr >> 48) & 0xFF;
@@ -4339,10 +4373,12 @@ static inline unsigned cpu_get_asid(CPUArchState *env) {
 #define AARCH_LOG_INSTR_CPU_EL1 QEMU_LOG_INSTR_CPU_SUPERVISOR
 #define AARCH_LOG_INSTR_CPU_EL2 QEMU_LOG_INSTR_CPU_HYPERVISOR
 #define AARCH_LOG_INSTR_CPU_EL3 QEMU_LOG_INSTR_CPU_TARGET1
-extern const char * const aarch_cpu_mode_names[];
+extern const char *const aarch_cpu_mode_names[];
 
-static inline qemu_log_instr_cpu_mode_t arm_el_to_logging_mode(CPUArchState *env, int el) {
-    switch(el) {
+static inline qemu_log_instr_cpu_mode_t
+arm_el_to_logging_mode(CPUArchState *env, int el)
+{
+    switch (el) {
     case 0:
         return AARCH_LOG_INSTR_CPU_EL0;
     case 1:
@@ -4356,7 +4392,8 @@ static inline qemu_log_instr_cpu_mode_t arm_el_to_logging_mode(CPUArchState *env
     }
 }
 
-static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode) {
+static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode)
+{
     if (aarch_cpu_mode_names[mode])
         return aarch_cpu_mode_names[mode];
     return "<invalid>";
@@ -4386,22 +4423,27 @@ static inline bool pc_is_current(CPUArchState *env)
 
 #include "internals.h"
 
-static bool is_el2_enabled(CPUARMState *env, int el) {
+static bool is_el2_enabled(CPUARMState *env, int el)
+{
     return arm_feature(env, ARM_FEATURE_EL2) &&
-        (!arm_feature(env, ARM_FEATURE_EL3) || (env->cp15.scr_el3 & SCR_NS));
+           (!arm_feature(env, ARM_FEATURE_EL3) || (env->cp15.scr_el3 & SCR_NS));
 }
 
-static bool arm_is_tag_setting_disabled(CPUARMState *env, int el) {
-    if(el == 3)
-        return false;
+static bool arm_is_tag_setting_disabled(CPUARMState *env, int el)
+{
 
-    target_ulong reg = 0;
-    if(el < 2 && is_el2_enabled(env, el))
-        reg = env->chcr_el2;
-    else if(arm_feature(env, ARM_FEATURE_EL3))
-        reg = env->cscr_el3;
+    if (el < 2) {
+        if (is_el2_enabled(env, el) && (env->chcr_el2 & CxCR_SETTAG))
+            return true;
+        else if (arm_feature(env, ARM_FEATURE_EL3) &&
+                 (env->cscr_el3 & CxCR_SETTAG))
+            return true;
+    } else if (el == 2) {
+        if (arm_feature(env, ARM_FEATURE_EL3) && (env->cscr_el3 & CxCR_SETTAG))
+            return true;
+    }
 
-    return (reg & CxCR_SETTAG) ? true : false;
+    return false;
 }
 
 static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
@@ -4412,9 +4454,9 @@ static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
     uint32_t chflags = (env->CCTLR_el[el] >> CCTLR_DEFINED_START);
     if (env->pstate & PSTATE_C64)
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, PSTATE_C64, 1);
-    if (env->pc.cap.cr_perms & CAP_PERM_EXECUTIVE)
+    if (cap_has_perms(&env->pc.cap, CAP_PERM_EXECUTIVE))
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, EXECUTIVE, 1);
-    if (env->pc.cap.cr_perms & CAP_ACCESS_SYS_REGS)
+    if (cap_has_perms(&env->pc.cap, CAP_ACCESS_SYS_REGS))
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SYSTEM, 1);
     if (arm_is_tag_setting_disabled(env, el))
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SETTAG, 1);

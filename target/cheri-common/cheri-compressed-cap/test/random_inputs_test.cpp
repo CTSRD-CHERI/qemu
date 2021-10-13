@@ -1,7 +1,6 @@
 #include "../cheri_compressed_cap.h"
 #include <cinttypes>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 
 #define CATCH_CONFIG_MAIN // This tells Catch to provide a main() - only do this in one cpp file
@@ -49,13 +48,13 @@ static bool check_fields_match(const typename Handler::cap_t& result, const test
     CHECK_AND_SAVE_SUCCESS(sail_result._cr_cursor == result._cr_cursor);
     CHECK_AND_SAVE_SUCCESS(sail_result._cr_top == result._cr_top);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_base == result.cr_base);
-    CHECK_AND_SAVE_SUCCESS(sail_result.cached_pesbt == result.cached_pesbt);
-    CHECK_AND_SAVE_SUCCESS(sail_result.cr_flags == result.cr_flags);
-    CHECK_AND_SAVE_SUCCESS(sail_result.cr_otype == result.cr_otype);
-    CHECK_AND_SAVE_SUCCESS(sail_result.cr_perms == result.cr_perms);
-    CHECK_AND_SAVE_SUCCESS(sail_result.cr_reserved == result.cr_reserved);
+    CHECK_AND_SAVE_SUCCESS(sail_result.cr_pesbt == result.cr_pesbt);
+    CHECK_AND_SAVE_SUCCESS(sail_result.flags() == result.flags());
+    CHECK_AND_SAVE_SUCCESS(sail_result.type() == result.type());
+    CHECK_AND_SAVE_SUCCESS(sail_result.permissions() == result.permissions());
+    CHECK_AND_SAVE_SUCCESS(sail_result.reserved_bits() == result.reserved_bits());
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_tag == result.cr_tag);
-    CHECK_AND_SAVE_SUCCESS(sail_result.cr_uperms == result.cr_uperms);
+    CHECK_AND_SAVE_SUCCESS(sail_result.software_permissions() == result.software_permissions());
 
     // Since we are parsing arbitrary bit patterns, the length can be negative.
     // For the CRRL/CRAM check we only look at the low 64 bits of length.

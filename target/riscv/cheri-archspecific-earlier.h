@@ -1,4 +1,4 @@
-/*-
+/*
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2021 Lawrence Esswood
@@ -34,9 +34,4 @@
 #define NUM_LAZY_CAP_REGS 32
 #define NULL_CAPREG_INDEX 0
 
-// A micro-architectural register to avoid side effects when decomposing
-// instructions into micro-ops NOTE: This needs to be defined, but if not used
-// should just be some value not used by a real register
-#define SCRATCH_REG_NUM 0xdd
-
-#endif // QEMU_CHERI_ARCHSPECIFIC_EARLIER_H
+#endif /* QEMU_CHERI_ARCHSPECIFIC_EARLIER_H */

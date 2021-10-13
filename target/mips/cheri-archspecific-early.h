@@ -40,6 +40,22 @@
 
 #include "cheri_defs.h"
 #include "cheri-archspecific-earlier.h"
+
+// This needs a refactor. It is helpful to give special purpose registers
+// numbers as then common code paths can be used for both general purpose and
+// special purpose registers. For RISCV, the exception number was used for this
+// purpose, and so arm followed suit in using CHERI_EXC_REGNUM_DDC. However, on
+// mips, the actual exception number for DDC is 0. This is not helpful, as 0 is
+// the zero register in some contexts. We should really have a DDC_REGNUM
+// distinct from NULL_CAPREG_INDEX (which is what CHERI_EXC_REGNUM_DDC currently
+// is) and CHERI_EXC_REGNUM_DDC which is only used for exceptions and nothing
+// else.
+#define CHERI_EXC_REGNUM_DDC 32
+#define CHERI_TRUE_EXC_REGNUM_DDC 0
+#define CHERI_EXC_REGNUM_PCC 0xff
+#define CHERI_REGNUM_IDC  26  /* Invoked Data Capability */
+#define CINVOKE_DATA_REGNUM CHERI_REGNUM_IDC
+
 /*
  * QEMU currently tells the kernel that there are no caches installed
  * (xref target/mips/translate_init.inc.c MIPS_CONFIG1 definition)
@@ -91,3 +107,5 @@ static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUMIPSState *env)
 static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env) {
     return &env->active_tc.gpcapregs;
 }
+
+#define CHERI_GPCAPREGS_MEMBER active_tc.gpcapregs

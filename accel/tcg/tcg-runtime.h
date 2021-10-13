@@ -153,15 +153,11 @@ DEF_HELPER_3(ddc_check_bounds_store, void, env, tl, tl)
 #endif
 /* Same but relative to PCC */
 DEF_HELPER_3(pcc_check_bounds, void, env, tl, tl)
-/* Checks for loads relative to pcc (address is absolute, not relative) */
-DEF_HELPER_3(pcc_check_load, cap_checked_ptr, env, tl, memop)
-/* Clear tags due to a store. Only calll this after the store succeeded. */
-DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop)
-/* Clear tags with a different mmu_idx than what would be returned by cpu_mmu_index */
-DEF_HELPER_4(cheri_invalidate_tags_mmu_idx, void, env, cap_checked_ptr, memop, i32)
-/* Clear tags due to a store, the last argument is whether the store succeeded */
-DEF_HELPER_4(cheri_invalidate_tags_condition, void, env, cap_checked_ptr, memop,
-             i32)
+/* Clear tags due to a store. Only call this after the store succeeded. */
+DEF_HELPER_3(cheri_invalidate_tags, void, env, cap_checked_ptr, memop_idx)
+/* Clear tags due to a store, last argument is whether the store succeeded. */
+DEF_HELPER_4(cheri_invalidate_tags_condition, void, env, cap_checked_ptr,
+             memop_idx, i32)
 
 #endif
 
@@ -354,10 +350,14 @@ DEF_HELPER_FLAGS_0(qemu_log_instr_allcpu_start, TCG_CALL_NO_WG, void)
 DEF_HELPER_FLAGS_0(qemu_log_instr_allcpu_user_start, TCG_CALL_NO_WG, void)
 DEF_HELPER_FLAGS_0(qemu_log_instr_allcpu_stop, TCG_CALL_NO_WG, void)
 DEF_HELPER_FLAGS_1(qemu_log_instr_commit, TCG_CALL_NO_WG, void, env)
-DEF_HELPER_FLAGS_4(qemu_log_instr_load64, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i64, memop)
-DEF_HELPER_FLAGS_4(qemu_log_instr_store64, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i64, memop)
-DEF_HELPER_FLAGS_4(qemu_log_instr_load32, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i32, memop)
-DEF_HELPER_FLAGS_4(qemu_log_instr_store32, TCG_CALL_NO_WG, void, env, cap_checked_ptr, i32, memop)
+DEF_HELPER_FLAGS_4(qemu_log_instr_load64, TCG_CALL_NO_WG, void, env,
+                   cap_checked_ptr, i64, memop_idx)
+DEF_HELPER_FLAGS_4(qemu_log_instr_store64, TCG_CALL_NO_WG, void, env,
+                   cap_checked_ptr, i64, memop_idx)
+DEF_HELPER_FLAGS_4(qemu_log_instr_load32, TCG_CALL_NO_WG, void, env,
+                   cap_checked_ptr, i32, memop_idx)
+DEF_HELPER_FLAGS_4(qemu_log_instr_store32, TCG_CALL_NO_WG, void, env,
+                   cap_checked_ptr, i32, memop_idx)
 DEF_HELPER_FLAGS_3(qemu_log_instr_reg, TCG_CALL_NO_WG, void, env, cptr, tl)
 #ifdef TARGET_CHERI
 DEF_HELPER_FLAGS_3(qemu_log_instr_cap, TCG_CALL_NO_WG, void, env, cptr, cptr)

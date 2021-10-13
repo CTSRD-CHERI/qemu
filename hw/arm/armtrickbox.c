@@ -28,10 +28,12 @@
  * SUCH DAMAGE.
  */
 
-// The 'trickbox' device used by the test suite for Morello
-// Is an infinitely deep memory mapped fifo that will kill QEMU if \004 is sent
-// or otherwise print to the terminal There may be some other magic numbers this
-// accepts, I have not really reverse engineered the test cases yet.
+/*
+ * The 'trickbox' device used by the test suite for Morello is an infinitely
+ * deep memory mapped fifo that will kill QEMU if \004 is sent or otherwise
+ * print to the terminal There may be some other magic numbers this accepts,
+ * I have not really reverse engineered the test cases yet.
+ */
 
 #include "hw/arm/armtrickbox.h"
 #include "qemu/osdep.h"
@@ -135,7 +137,7 @@ static void arm_trickbox_register(void)
 
 type_init(arm_trickbox_register)
 
-    static void arm_trickbox_mm_init(hwaddr base)
+static void arm_trickbox_mm_init(hwaddr base)
 {
     DeviceState *dev;
     dev = qdev_new(TYPE_ARM_TRICKBOX);

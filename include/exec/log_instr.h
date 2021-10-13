@@ -35,7 +35,6 @@
 #include "hw/core/cpu.h"
 #include "qemu/log_instr.h"
 #include "cpu.h"
-#include "log_instr_early.h"
 
 /*
  * Instruction logging interface for targets.
@@ -44,8 +43,8 @@
  * The following functions must be defined by the target and declared in cpu.h:
  * - bool cpu_in_user_mode(env)
  *   return whether the cpu is in user mode
- * - uint16_t cpu_get_asid(env)
- *   return the hardware address space identifier
+ * - uint16_t cpu_get_asid(env, pc)
+ *   return the hardware address space identifier for a particular address
  * - const char *cpu_get_mode_name(mode)
  *   return the mode name associated with a qemu_log_instr_cpu_mode_t for printing.
  *
@@ -138,22 +137,41 @@
 
 #ifdef CONFIG_TCG_LOG_INSTR
 
-/* Will generate TCG that will perform a printf to the extra logging info.
+/* Format specifiers for TCGv and TCGv_ptr */
+#if TARGET_LONG_BITS == 64
+#define QLP_TCGV "d"
+#else
+#define QLP_TCGV "w"
+#endif
+#if UINTPTR_MAX == UINT32_MAX
+#define QLP_TCGP "w"
+#else
+#define QLP_TCGP "d"
+#endif
+
+/*
+ * Will generate TCG that will perform a printf to the extra logging info.
  * Prints are batched until the end of an instruction
  * TODO: This was actually designed to batch for an entire basic block, but
- * sadly the string this would append to is
- * TODO: cleared at the end of every instruction.
+ * sadly the string this would append to is cleared at the end of every
+ * instruction.
+ *
  * The qemu_format is a string of the format ([c|w|d])*, The letter specifies
  * whether the provided arguments are constant, words (TCGv_i32) or doubles
  * (TCGv_i64). You should use provided macros QLP_ to deal with TCGv/TCGv_ptr.
  * A NULL passed to a TCGv_* argument is interpreted as a constant 0.
  * example usage: qemu_log_printf(ctx, QLP_TCGP QLP_TCGV "c", "%s, %c, %d\n",
- * myTCGv_ptr, myTCGv, 7) WARN: Passed pointers MUST be const and live for the
- * duration of the compiled basic block. WARN: This TCG should be reached either
- * 0 or 1 times total for each invocation of the guest instruction. That is,
- * WARN: you may have a TCG branch skip this generated TCG, but cannot have this
- * in a TCG loop (although it may be part WARN: of a loop written in guest
- * instructions, in which case you will get multiple prints as expected) */
+ * myTCGv_ptr, myTCGv, 7)
+ *
+ * WARN: Passed pointers MUST be const and live for the duration of the
+ * compiled basic block, as they are read when the prints are batched.
+ *
+ * WARN: This TCG should be reached either 0 or 1 times total for each
+ * invocation of the guest instruction. That is, you may have a TCG branch skip
+ * this generated TCG, but cannot have this in a TCG loop (although it may be
+ * part of a loop written in guest instructions, in which case you will get
+ * multiple prints as expected)
+ */
 
 struct DisasContextBase;
 void qemu_log_gen_printf(struct DisasContextBase *ctx, const char *qemu_format,

@@ -36,6 +36,7 @@
  */
 #pragma once
 #include "cheri_utils.h"
+#include "cheri-archspecific.h"
 #include "qemu/qemu-print.h"
 #include "cheri-archspecific.h"
 
@@ -108,11 +109,14 @@ struct oob_stats_info {
             howmuch = (int64_t)offset;
         else
             howmuch = offset - cap_get_length_full(cr) + 1;
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_CHERI_BOUNDS,
+        qemu_log_instr_or_mask_msg(
+            env, CPU_LOG_CHERI_BOUNDS,
             "BOUNDS: Out of bounds capability (by %" PRId64
             ") created using %s: " PRINT_CAP_FMTSTR ", pc=%016" PRIx64
-            " ASID=%u\n", howmuch, name, PRINT_CAP_ARGS(cr),
-            cpu_get_current_pc(env, retpc, false), cpu_get_asid(env));
+            " ASID=%u\n",
+            howmuch, name, PRINT_CAP_ARGS(cr),
+            cpu_get_current_pc(env, retpc, false),
+            cpu_get_asid(env, cpu_get_current_pc(env, retpc, false)));
         return howmuch;
     }
     return 0;
@@ -151,7 +155,7 @@ static inline void became_unrepresentable(CPUArchState *env, uint16_t reg,
     qemu_log_instr_or_mask_msg(env, CPU_LOG_CHERI_BOUNDS,
         "BOUNDS: Unrepresentable capability created using %s, pc=%016" PRIx64
         " ASID=%u\n", info->operation, cheri_get_current_pc(env, retpc)),
-        cpu_get_asid(env));
+        cpu_get_asid(env, cheri_get_current_pc(env, retpc)));
     _became_unrepresentable(env, reg, retpc);
 }
 

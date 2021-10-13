@@ -97,7 +97,7 @@ static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
         // qemu_log("CAP Seal VIOLATION: ");
         goto do_exception;
     }
-    if ((cr->cr_perms & perm) != perm) {
+    if ((cap_get_perms(cr) & perm) != perm) {
         if (perm & CAP_PERM_EXECUTE) {
             cause = CapEx_PermitExecuteViolation;
             // qemu_log("CAP Exe VIOLATION: ");
@@ -230,7 +230,6 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause) {
     abort();
 }
 
-const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb);
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
                          target_ulong retpc);
 void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
@@ -292,7 +291,7 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
     const target_ulong addr = cursor + (target_long)offset;
 #endif
 
-#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cbp->cr_perms) & (X))
+#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cap_get_perms(cbp)) & (X))
     // The check here is a little fiddly if this is a store and a load due to
     // priorities. For either loads or stores, permissions fault > bounds fault.
     // But: load bounds fault > store permissions fault. So all permissions
@@ -366,14 +365,14 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
                                   const cap_register_t *source,
                                   target_ulong vaddr, target_ulong retpc,
                                   hwaddr *physaddr, bool *raw_tag);
-bool load_cap_from_memory_raw_tag_mmu_idx(CPUArchState *env, target_ulong *pesbt,
-                                          target_ulong *cursor, uint32_t cb,
-                                          const cap_register_t *source,
-                                          target_ulong vaddr, target_ulong retpc,
-                                          hwaddr *physaddr, bool *raw_tag, int mmu_idx);
+bool load_cap_from_memory_raw_tag_mmu_idx(
+    CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
+    const cap_register_t *source, target_ulong vaddr, target_ulong retpc,
+    hwaddr *physaddr, bool *raw_tag, int mmu_idx);
 
 void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
                          target_ulong addr, uint32_t link_reg,
                          target_ulong link_pc, uint32_t cjalr_flags);
 
-void squash_mutable_permissions(target_ulong *pesbt, const cap_register_t *source);
+void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
+                                const cap_register_t *source);

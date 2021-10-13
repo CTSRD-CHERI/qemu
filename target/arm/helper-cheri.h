@@ -44,7 +44,6 @@ DEF_HELPER_5(compare_swap_cap_via_cap, void, env, i32, i32, i32, tl)
 DEF_HELPER_5(load_cap_via_cap_mmu_idx, void, env, i32, i32, tl, i32)
 DEF_HELPER_5(store_cap_via_cap_mmu_idx, void, env, i32, i32, tl, i32)
 
-#define KEEP_BRANCH_AND_LINK_BUG 1
 DEF_HELPER_6(load_pair_and_branch_and_link, void, env, i32, i32, i32, tl, i32)
 DEF_HELPER_6(load_and_branch_and_link, void, env, i32, i32, i32, tl, i32)
 DEF_HELPER_6(branch_sealed_pair, void, env, i32, i32, i32, tl, i32)
@@ -54,3 +53,7 @@ DEF_HELPER_4(store_tags, void, env, i64, i32, tl)
 
 DEF_HELPER_FLAGS_1(check_capabilities_enabled_exception, TCG_CALL_NO_RETURN,
                    void, env)
+DEF_HELPER_FLAGS_2(sys_not_accessible_exception, TCG_CALL_NO_RETURN, void, env,
+                   i32)
+
+DEF_HELPER_2(set_pcc, void, env, tl)

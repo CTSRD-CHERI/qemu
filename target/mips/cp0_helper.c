@@ -1281,11 +1281,7 @@ void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
     mask &= env->SEGMask;
 #endif
 
-#if defined(TARGET_CHERI)
-    mask |= (1UL << CP0EnHi_CLGU)
-            | (1UL << CP0EnHi_CLGS)
-            | (1UL << CP0EnHi_CLGK);
-#endif
+    mask |= CP0EnHi_CLG_MASK;
 
     old = env->CP0_EntryHi;
     val = (arg1 & mask) | (old & ~mask);
@@ -1293,9 +1289,9 @@ void helper_mtc0_entryhi(CPUMIPSState *env, target_ulong arg1)
     if (env->CP0_Config3 & (1 << CP0C3_MT)) {
         sync_c0_entryhi(env, env->current_tc);
     }
-    /* If the ASID changes, flush qemu's TLB.  */
-    if ((old & env->CP0_EntryHi_ASID_mask) !=
-        (val & env->CP0_EntryHi_ASID_mask)) {
+    /* If the ASID or CLG changes, flush qemu's TLB.  */
+    target_ulong tlb_flush_mask = env->CP0_EntryHi_ASID_mask | CP0EnHi_CLG_MASK;
+    if ((old & tlb_flush_mask) != (val & tlb_flush_mask)) {
         tlb_flush(env_cpu(env));
     }
     log_instr_cop0_update(env, CP0_REGISTER_10, 0, env->CP0_EntryHi);

@@ -239,52 +239,55 @@ static inline bool extended_addresses_enabled(CPUARMState *env)
            (arm_feature(env, ARM_FEATURE_LPAE) && (tcr->raw_tcr & TTBCR_EAE));
 }
 
+/* clang-format off */
 /* Valid Syndrome Register EC field values */
 enum arm_exception_class {
-    EC_UNCATEGORIZED = 0x00,
-    EC_WFX_TRAP = 0x01,
-    EC_CP15RTTRAP = 0x03,
-    EC_CP15RRTTRAP = 0x04,
-    EC_CP14RTTRAP = 0x05,
-    EC_CP14DTTRAP = 0x06,
-    EC_ADVSIMDFPACCESSTRAP = 0x07,
-    EC_FPIDTRAP = 0x08,
-    EC_PACTRAP = 0x09,
-    EC_CP14RRTTRAP = 0x0c,
-    EC_BTITRAP = 0x0d,
-    EC_ILLEGALSTATE = 0x0e,
-    EC_AA32_SVC = 0x11,
-    EC_AA32_HVC = 0x12,
-    EC_AA32_SMC = 0x13,
-    EC_AA64_SVC = 0x15,
-    EC_AA64_HVC = 0x16,
-    EC_AA64_SMC = 0x17,
-    EC_SYSTEMREGISTERTRAP = 0x18,
-    EC_SVEACCESSTRAP = 0x19,
-    EC_INSNABORT = 0x20,
-    EC_INSNABORT_SAME_EL = 0x21,
-    EC_PCALIGNMENT = 0x22,
-    EC_DATAABORT = 0x24,
-    EC_DATAABORT_SAME_EL = 0x25,
-    EC_SPALIGNMENT = 0x26,
-    EC_AA32_FPTRAP = 0x28,
-    EC_AA64_FPTRAP = 0x2c,
-    EC_SERROR = 0x2f,
-    EC_BREAKPOINT = 0x30,
-    EC_BREAKPOINT_SAME_EL = 0x31,
-    EC_SOFTWARESTEP = 0x32,
-    EC_SOFTWARESTEP_SAME_EL = 0x33,
-    EC_WATCHPOINT = 0x34,
-    EC_WATCHPOINT_SAME_EL = 0x35,
-    EC_AA32_BKPT = 0x38,
-    EC_VECTORCATCH = 0x3a,
-    EC_AA64_BKPT = 0x3c,
+    EC_UNCATEGORIZED          = 0x00,
+    EC_WFX_TRAP               = 0x01,
+    EC_CP15RTTRAP             = 0x03,
+    EC_CP15RRTTRAP            = 0x04,
+    EC_CP14RTTRAP             = 0x05,
+    EC_CP14DTTRAP             = 0x06,
+    EC_ADVSIMDFPACCESSTRAP    = 0x07,
+    EC_FPIDTRAP               = 0x08,
+    EC_PACTRAP                = 0x09,
+    EC_CP14RRTTRAP            = 0x0c,
+    EC_BTITRAP                = 0x0d,
+    EC_ILLEGALSTATE           = 0x0e,
+    EC_AA32_SVC               = 0x11,
+    EC_AA32_HVC               = 0x12,
+    EC_AA32_SMC               = 0x13,
+    EC_AA64_SVC               = 0x15,
+    EC_AA64_HVC               = 0x16,
+    EC_AA64_SMC               = 0x17,
+    EC_SYSTEMREGISTERTRAP     = 0x18,
+    EC_SVEACCESSTRAP          = 0x19,
+    EC_INSNABORT              = 0x20,
+    EC_INSNABORT_SAME_EL      = 0x21,
+    EC_PCALIGNMENT            = 0x22,
+    EC_DATAABORT              = 0x24,
+    EC_DATAABORT_SAME_EL      = 0x25,
+    EC_SPALIGNMENT            = 0x26,
+    EC_AA32_FPTRAP            = 0x28,
+    EC_AA64_FPTRAP            = 0x2c,
+    EC_SERROR                 = 0x2f,
+    EC_BREAKPOINT             = 0x30,
+    EC_BREAKPOINT_SAME_EL     = 0x31,
+    EC_SOFTWARESTEP           = 0x32,
+    EC_SOFTWARESTEP_SAME_EL   = 0x33,
+    EC_WATCHPOINT             = 0x34,
+    EC_WATCHPOINT_SAME_EL     = 0x35,
+    EC_AA32_BKPT              = 0x38,
+    EC_VECTORCATCH            = 0x3a,
+    EC_AA64_BKPT              = 0x3c,
 
-    // See aarch64/exceptions/exceptions/AArch64.ExceptionClass
-    EC_CAPABILITY_ACCESS = 0x29, // Trapped access to Capability functionality
-    EC_CAPABILITY_SYSREGTRAP =
-        0x2a, // Trapped MRS or MSR access to Capability system register
+    /* See aarch64/exceptions/exceptions/AArch64.ExceptionClass */
+    /* Trapped access to Capability functionality */
+    EC_CAPABILITY_ACCESS      = 0x29,
+    /* Trapped MRS or MSR access to Capability system register */
+    EC_CAPABILITY_SYSREGTRAP  = 0x2a,
 };
+/* clang-format on */
 
 #define ARM_EL_EC_SHIFT 26
 #define ARM_EL_IL_SHIFT 25
@@ -379,7 +382,7 @@ static inline uint32_t syn_aa64_sysregtrap(int op0, int op1, int op2,
 
 static inline uint32_t syn_aa64_capability_access(void)
 {
-    return (EC_CAPABILITY_ACCESS << ARM_EL_EC_SHIFT);
+    return (EC_CAPABILITY_ACCESS << ARM_EL_EC_SHIFT) | ARM_EL_IL;
 }
 
 static inline uint32_t syn_cp14_rt_trap(int cv, int cond, int opc1, int opc2,
@@ -486,6 +489,11 @@ static inline uint32_t syn_data_abort_with_iss(int same_el,
 static inline uint32_t syn_sp_alignment(bool is_16bit)
 {
     return (EC_SPALIGNMENT << ARM_EL_EC_SHIFT) | (is_16bit ? 0 : ARM_EL_IL);
+}
+
+static inline uint32_t syn_pc_alignment(bool is_16bit)
+{
+    return (EC_PCALIGNMENT << ARM_EL_EC_SHIFT) | (is_16bit ? 0 : ARM_EL_IL);
 }
 
 static inline uint32_t syn_swstep(int same_el, int isv, int ex)
@@ -764,11 +772,21 @@ static inline uint32_t arm_fi_to_lfsc(ARMMMUFaultInfo *fi)
     case ARMFault_Exclusive:
         fsc = 0x35;
         break;
-    case ARMFault_CapBounds: fsc = 0b101010; break;
-    case ARMFault_CapTag: fsc = 0b101000; break;
-    case ARMFault_CapSeal: fsc = 0b101001; break;
-    case ARMFault_CapPerm: fsc = 0b101011; break;
-    case ARMFault_CapPagePerm: fsc = 0b101100; break;
+    case ARMFault_CapBounds:
+        fsc = 0b101010;
+        break;
+    case ARMFault_CapTag:
+        fsc = 0b101000;
+        break;
+    case ARMFault_CapSeal:
+        fsc = 0b101001;
+        break;
+    case ARMFault_CapPerm:
+        fsc = 0b101011;
+        break;
+    case ARMFault_CapPagePerm:
+        fsc = 0b101100;
+        break;
     default:
         /* Other faults can't occur in a context that requires a
          * long-format status code.
@@ -1290,7 +1308,8 @@ static inline int get_cap_enabled_target_exception_level_el(CPUArchState *env,
             disabled = el == 0;
         }
 
-        if (el2_insecure && (env->cp15.hcr_el2 & HCR_TGE) && (env->cp15.hcr_el2 & HCR_E2H))
+        if (el2_insecure && (env->cp15.hcr_el2 & HCR_TGE) &&
+            (env->cp15.hcr_el2 & HCR_E2H))
             disabled = false;
 
         if (disabled) {
@@ -1314,12 +1333,13 @@ static inline int get_cap_enabled_target_exception_level_el(CPUArchState *env,
             if (disabled)
                 return 2;
         } else {
-            if ((env->cp15.cptr_el[2] & CPTR_TCPAC))
+            if ((env->cp15.cptr_el[2] & CPTR_TC))
                 return 2;
         }
     }
 
-    if (arm_feature(env, ARM_FEATURE_EL3) && (env->cp15.cptr_el[3] & CPTR_EC) == 0)
+    if (arm_feature(env, ARM_FEATURE_EL3) &&
+        (env->cp15.cptr_el[3] & CPTR_EC) == 0)
         return 3;
 
     return -1;
@@ -1327,7 +1347,8 @@ static inline int get_cap_enabled_target_exception_level_el(CPUArchState *env,
 
 static inline bool is_access_to_capabilities_disabled_el3(CPUARMState *env)
 {
-    return arm_feature(env, ARM_FEATURE_EL3) && ((env->cp15.cptr_el[3] & CPTR_EC) == 0);
+    return arm_feature(env, ARM_FEATURE_EL3) &&
+           ((env->cp15.cptr_el[3] & CPTR_EC) == 0);
 }
 
 static inline bool is_access_to_capabilities_disabled_el2(CPUARMState *env)
@@ -1338,7 +1359,7 @@ static inline bool is_access_to_capabilities_disabled_el2(CPUARMState *env)
         return ((env->cp15.hcr_el2 & HCR_E2H) &&
                 !(env->cp15.cptr_el[2] & CPTR_CEN_LO)) ||
                (!(env->cp15.hcr_el2 & HCR_E2H) &&
-                (env->cp15.cptr_el[2] & CPTR_TCPAC));
+                (env->cp15.cptr_el[2] & CPTR_TC));
     } else
         return false;
 }
@@ -1348,7 +1369,8 @@ static inline bool is_access_to_capabilities_disabled_el1(CPUARMState *env)
     if (is_access_to_capabilities_disabled_el2(env))
         return true;
     else {
-        return !(arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) && (env->cp15.hcr_el2 & HCR_E2H) &&
+        return !(arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) &&
+                 (env->cp15.hcr_el2 & HCR_E2H) &&
                  (env->cp15.hcr_el2 & HCR_TGE)) &&
                !(env->cp15.cpacr_el1 & CPTR_CEN_LO);
     }
@@ -1358,24 +1380,33 @@ static inline bool is_access_to_capabilities_disabled_el0(CPUARMState *env)
 {
     if (is_access_to_capabilities_disabled_el1(env))
         return true;
-    else if (!(arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) && (env->cp15.hcr_el2 & HCR_E2H) &&
+    else if (!(arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) &&
+               (env->cp15.hcr_el2 & HCR_E2H) &&
                (env->cp15.hcr_el2 & HCR_TGE)) &&
              ((env->cp15.cpacr_el1 & CPTR_CEN) == CPTR_CEN_LO)) {
         return true;
-    } else
-        return (arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) && (env->cp15.hcr_el2 & HCR_E2H)) &&
+    } else {
+        return (arm_feature(env, ARM_FEATURE_EL2) && !arm_is_secure(env) &&
+                (env->cp15.hcr_el2 & HCR_E2H) &&
+                (env->cp15.hcr_el2 & HCR_TGE)) &&
                ((env->cp15.cptr_el[2] & CPTR_CEN) == CPTR_CEN_LO);
+    }
 }
 
 static inline bool is_access_to_capabilities_enabled_at_el(CPUARMState *env,
                                                            int el)
 {
     switch (el) {
-    case 0: return !is_access_to_capabilities_disabled_el0(env);
-    case 1: return !is_access_to_capabilities_disabled_el1(env);
-    case 2: return !is_access_to_capabilities_disabled_el2(env);
-    case 3: return !is_access_to_capabilities_disabled_el3(env);
-    default: g_assert_not_reached();
+    case 0:
+        return !is_access_to_capabilities_disabled_el0(env);
+    case 1:
+        return !is_access_to_capabilities_disabled_el1(env);
+    case 2:
+        return !is_access_to_capabilities_disabled_el2(env);
+    case 3:
+        return !is_access_to_capabilities_disabled_el3(env);
+    default:
+        g_assert_not_reached();
     }
 }
 

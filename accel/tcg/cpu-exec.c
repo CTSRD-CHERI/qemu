@@ -499,7 +499,8 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         if (replay_has_exception()
             && cpu_neg(cpu)->icount_decr.u16.low + cpu->icount_extra == 0) {
             /* try to cause an exception pending in the log */
-            cpu_exec_nocache(cpu, 1, tb_find(cpu, NULL, 0, curr_cflags(cpu)), true);
+            cpu_exec_nocache(cpu, 1, tb_find(cpu, NULL, 0, curr_cflags(cpu)),
+                             true);
         }
 #endif
         if (cpu->exception_index < 0) {

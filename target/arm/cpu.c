@@ -57,8 +57,11 @@ const char *const cheri_gp_int_regnames[34] = {
 #endif
 
 #ifdef CONFIG_TCG_LOG_INSTR
-const char * const aarch_cpu_mode_names[QEMU_LOG_INSTR_CPU_MODE_MAX] = {
-    "EL0", "EL1", "EL2", "EL3",
+const char *const aarch_cpu_mode_names[QEMU_LOG_INSTR_CPU_MODE_MAX] = {
+    [AARCH_LOG_INSTR_CPU_EL0] = "EL0",
+    [AARCH_LOG_INSTR_CPU_EL1] = "EL1",
+    [AARCH_LOG_INSTR_CPU_EL2] = "EL2",
+    [AARCH_LOG_INSTR_CPU_EL3] = "EL3",
 };
 #endif
 
@@ -248,7 +251,7 @@ static void arm_cpu_reset(DeviceState *dev)
 
 #ifdef TARGET_CHERI
         reset_capregs(env);
-        env->pc.cap = cc128_make_max_perms_cap(0, cpu->rvbar, CAP_MAX_TOP);
+        env->pc.cap = CAP_cc(make_max_perms_cap)(0, cpu->rvbar, CAP_MAX_TOP);
 #else
         env->pc = cpu->rvbar;
 #endif
@@ -811,7 +814,7 @@ static void arm_disas_set_info(CPUState *cpu, disassemble_info *info)
 #endif
 #ifdef TARGET_CHERI
     if (env->pstate & PSTATE_C64)
-        info->flags |= INSN_ARM_C64;
+        info->flags |= ARM_DIS_FLAG_C64;
 #endif
 }
 
@@ -1141,6 +1144,9 @@ static Property arm_cpu_has_dsp_property =
 static Property arm_cpu_has_mpu_property =
             DEFINE_PROP_BOOL("has-mpu", ARMCPU, has_mpu, true);
 
+static Property arm_cpu_mpidr_mt_property =
+            DEFINE_PROP_BOOL("mpidr_mt", ARMCPU, mpidr_mt, false);
+
 /* This is like DEFINE_PROP_UINT32 but it doesn't set the default value,
  * because the CPU initfn will have already set cpu->pmsav7_dregion to
  * the right value for that particular CPU type, and we don't want
@@ -1304,6 +1310,8 @@ void arm_cpu_post_init(Object *obj)
     if (kvm_enabled()) {
         kvm_arm_add_vcpu_properties(obj);
     }
+
+    qdev_property_add_static(DEVICE(obj), &arm_cpu_mpidr_mt_property);
 
 #ifndef CONFIG_USER_ONLY
     if (arm_feature(&cpu->env, ARM_FEATURE_AARCH64) &&

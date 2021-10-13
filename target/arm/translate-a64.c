@@ -98,14 +98,20 @@ static TCGv_i64 cpu_pc;
 
 // These really should be available to non-cheri as well. See comment in cpu.h.
 
-static inline MemOp memop_align_sctlr(DisasContext *ctx) { return 0; }
+static inline MemOp memop_align_sctlr(DisasContext *ctx)
+{
+    return 0;
+}
 
 static inline MemOp memop_align_sctlr_size(DisasContext *ctx, int size)
 {
     return 0;
 }
 
-static inline bool get_sctlr_sa(DisasContext *ctx) { return false; }
+static inline bool get_sctlr_sa(DisasContext *ctx)
+{
+    return false;
+}
 
 #endif
 
@@ -240,6 +246,31 @@ void gen_a64_set_pc_im(uint64_t val)
     tcg_gen_movi_i64(cpu_pc, val);
 }
 
+/*
+ * We can assume* that setting an in-bounds PC will not cause
+ * an untagging of PCC, and so can use a direct write to offset. An arbitrary
+ * write of dest to pcc.offset could cause an untagging of PCC.
+ * This is a checked version that will do the untagging.
+ *
+ * (*) there are some corner cases where in in-bounds capabilities can lose
+ * their tag. For example, when the 56-th bit changes.
+ * This is either impossible in practice, or so infeasible, that its worth
+ * ignoring for the sake of speed.
+ */
+
+static void gen_a64_set_pc_im_safe(DisasContext *s, uint64_t val)
+{
+#ifdef TARGET_CHERI
+    if (!in_pcc_bounds(&s->base, val)) {
+        TCGv_i64 tcgval = tcg_const_i64(val);
+        gen_helper_set_pcc(cpu_env, tcgval);
+        tcg_temp_free_i64(tcgval);
+        return;
+    }
+#endif
+    gen_a64_set_pc_im(val);
+}
+
 // Set the link register (30) to point the next instruction
 static void gen_a64_set_link_register(DisasContext *s)
 {
@@ -255,11 +286,11 @@ static void gen_a64_set_link_register(DisasContext *s)
         gen_move_cap_gp_sp(s, 30, offsetof(struct CPUARMState, pc));
         if (cctlr_set(s, CCTLR_SBL)) {
             // Need to seal as well
-            gen_cap_set_type_const(s, 30, CC128_OTYPE_SENTRY, false);
+            gen_cap_set_type_const(s, 30, CAP_OTYPE_SENTRY, false);
         }
         // Low bit set because of C64 mode
         addr |= 1;
-        if (cc128_cap_sign_change(addr, s->pc_curr)) {
+        if (CAP_cc(cap_sign_change)(addr, s->pc_curr)) {
             assert(0); // Only if cap_bounds_uses_value does this need untagging
             gen_cap_clear_tag(s, 30);
         }
@@ -323,7 +354,49 @@ static void gen_a64_set_pc(DisasContext *s, TCGv_i64 src)
      * If address tagging is enabled for instructions via the TCR TBI bits,
      * then loading an address into the PC will clear out any tag.
      */
+#ifdef TARGET_CHERI
+
+    if (have_cheri_tb_flags(s, TB_FLAG_CHERI_PCC_FULL_AS)) {
+        // PCC spans full address space, just set PC
+        gen_top_byte_ignore(s, cpu_pc, src, s->tbii);
+    } else {
+        // Otherwise skip the relatively expensive
+        // gen_helper_set_pcc if in bounds.
+        TCGv_i64 tbi_dst = tcg_temp_local_new_i64();
+        TCGv_i64 skip_rep_check = tcg_temp_new_i64();
+
+        gen_top_byte_ignore(s, tbi_dst, src, s->tbii);
+
+        bool need_and = false;
+
+        if (!have_cheri_tb_flags(s, TB_FLAG_CHERI_PCC_BASE_ZERO)) {
+            tcg_gen_setcondi_i64(TCG_COND_GEU, skip_rep_check, tbi_dst,
+                                 s->base.pcc_base);
+            need_and = true;
+        }
+
+        if (!have_cheri_tb_flags(s, TB_FLAG_CHERI_PCC_TOP_MAX)) {
+            TCGv_i64 tmp = need_and ? tcg_temp_new_i64() : NULL;
+            tcg_gen_setcondi_i64(TCG_COND_LEU, need_and ? tmp : skip_rep_check,
+                                 tbi_dst, s->base.pcc_top);
+            if (need_and) {
+                tcg_gen_and_i64(skip_rep_check, skip_rep_check, tmp);
+                tcg_temp_free_i64(tmp);
+            }
+        }
+
+        TCGLabel *skip_representability_check_lbl = gen_new_label();
+        tcg_gen_brcondi_tl(TCG_COND_NE, skip_rep_check, 0,
+                           skip_representability_check_lbl);
+        gen_helper_set_pcc(cpu_env, tbi_dst);
+        gen_set_label(skip_representability_check_lbl);
+        tcg_gen_mov_i64(cpu_pc, tbi_dst);
+        tcg_temp_free_i64(tbi_dst);
+        tcg_temp_free_i64(skip_rep_check);
+    }
+#else
     gen_top_byte_ignore(s, cpu_pc, src, s->tbii);
+#endif
 }
 
 /*
@@ -381,7 +454,7 @@ static void set_gpr_reg_addr_base(DisasContext *s, int regnum,
     if (regnum == NULL_CAPREG_INDEX)
         return;
     if (capability_base) {
-        gen_cap_set_cursor(s, regnum, new_value, false);
+        gen_cap_set_cursor_fast(s, regnum, new_value);
         gen_reg_modified_cap(s, regnum);
     } else {
         tcg_gen_mov_i64(cpu_reg_sp(s, regnum), new_value);
@@ -438,7 +511,8 @@ TCGv_cap_checked_ptr clean_data_tbi_and_cheri(DisasContext *s, TCGv_i64 addr,
 }
 
 #else
-#define clean_data_tbi_and_cheri(s, addr, ...) (TCGv_cap_checked_ptr)clean_data_tbi(s, addr)
+#define clean_data_tbi_and_cheri(s, addr, ...)                                 \
+    (TCGv_cap_checked_ptr) clean_data_tbi(s, addr)
 #endif
 
 /* Insert a zero tag into src, with the result at dst. */
@@ -516,25 +590,30 @@ TCGv_cap_checked_ptr gen_mte_and_cheri_checkN(DisasContext *s, TCGv_i64 addr,
                                               bool alternate_base,
                                               bool ddc_base)
 {
-    if (tag_checked && s->mte_active[0] && total_size != (1 << log2_esize)) {
-        TCGv_i32 tcg_desc;
-        TCGv_i64 ret;
-        int desc = 0;
+    if (total_size != (1 << log2_esize)) {
+        if (tag_checked && s->mte_active[0]) {
+            TCGv_i32 tcg_desc;
+            TCGv_i64 ret;
+            int desc = 0;
 
-        desc = FIELD_DP32(desc, MTEDESC, MIDX, get_mem_index(s));
-        desc = FIELD_DP32(desc, MTEDESC, TBI, s->tbid);
-        desc = FIELD_DP32(desc, MTEDESC, TCMA, s->tcma);
-        desc = FIELD_DP32(desc, MTEDESC, WRITE, is_write);
-        desc = FIELD_DP32(desc, MTEDESC, ESIZE, 1 << log2_esize);
-        desc = FIELD_DP32(desc, MTEDESC, TSIZE, total_size);
-        tcg_desc = tcg_const_i32(desc);
+            desc = FIELD_DP32(desc, MTEDESC, MIDX, get_mem_index(s));
+            desc = FIELD_DP32(desc, MTEDESC, TBI, s->tbid);
+            desc = FIELD_DP32(desc, MTEDESC, TCMA, s->tcma);
+            desc = FIELD_DP32(desc, MTEDESC, WRITE, is_write);
+            desc = FIELD_DP32(desc, MTEDESC, ESIZE, 1 << log2_esize);
+            desc = FIELD_DP32(desc, MTEDESC, TSIZE, total_size);
+            tcg_desc = tcg_const_i32(desc);
 
-        ret = new_tmp_a64(s);
-        gen_helper_mte_checkN(ret, cpu_env, tcg_desc, addr);
-        tcg_temp_free_i32(tcg_desc);
+            ret = new_tmp_a64(s);
+            gen_helper_mte_checkN(ret, cpu_env, tcg_desc, addr);
+            tcg_temp_free_i32(tcg_desc);
 
-        return arm_bounds_checked(s, ret, total_size, base_reg, is_read,
-                                  is_write, alternate_base, ddc_base);
+            return arm_bounds_checked(s, ret, total_size, base_reg, is_read,
+                                      is_write, alternate_base, ddc_base);
+        } else {
+            clean_data_tbi_and_cheri(s, addr, is_read, is_write, total_size,
+                                     base_reg, alternate_base, ddc_base);
+        }
     }
     return gen_mte_and_cheri_check1(s, addr, is_read, is_write, tag_checked,
                                     log2_esize, base_reg, alternate_base,
@@ -588,6 +667,13 @@ static void gen_exception_insn(DisasContext *s, uint64_t pc, int excp,
     gen_a64_set_pc_im(pc);
     gen_exception(excp, syndrome, target_el);
     s->base.is_jmp = DISAS_NORETURN;
+}
+
+static void gen_set_exception_far(uint64_t far)
+{
+    TCGv_i64 tfar = tcg_const_i64(far);
+    tcg_gen_st_i64(tfar, cpu_env, offsetof(CPUArchState, exception.vaddress));
+    tcg_temp_free_i64(tfar);
 }
 
 static void gen_exception_bkpt_insn(DisasContext *s, uint32_t syndrome)
@@ -644,11 +730,11 @@ static inline void gen_goto_tb(DisasContext *s, int n, uint64_t dest)
     tb = s->base.tb;
     if (use_goto_tb(s, n, dest)) {
         tcg_gen_goto_tb(n);
-        gen_a64_set_pc_im(dest);
+        gen_a64_set_pc_im_safe(s, dest);
         tcg_gen_exit_tb(tb, n);
         s->base.is_jmp = DISAS_NORETURN;
     } else {
-        gen_a64_set_pc_im(dest);
+        gen_a64_set_pc_im_safe(s, dest);
         if (s->ss_active) {
             gen_step_complete_exception(s);
         } else if (s->base.singlestep_enabled) {
@@ -1508,7 +1594,8 @@ static inline void gen_check_sp_alignment(DisasContext *s)
      * or SCTLR bits) there is a check that SP is 16-aligned on every
      * SP-relative load or store (with an exception generated if it is not).
      * In line with general QEMU practice regarding misaligned accesses,
-     * we omit these checks for the sake of guest program performance.
+     * we omit these checks for the sake of guest program performance,
+     * _unless_ STRICT_ALIGNMENT_CHECKS is defined.
      * This function is provided as a hook so we can more easily add these
      * checks in future (possibly as a "favour catching guest program bugs
      * over speed" user selectable option).
@@ -1518,6 +1605,7 @@ static inline void gen_check_sp_alignment(DisasContext *s)
         TCGv_i64 align = tcg_const_i64(16 - 1);
         tcg_gen_and_i64(align, align, cpu_reg_sp(s, 31));
         tcg_gen_brcondi_i64(TCG_COND_EQ, align, 0, label_aligned);
+        gen_a64_set_pc_im(s->pc_curr);
         gen_helper_sp_alignment_exception(cpu_env);
         gen_set_label(label_aligned);
         tcg_temp_free_i64(align);
@@ -1892,6 +1980,23 @@ static void gen_axflag(void)
     tcg_gen_movi_i32(cpu_VF, 0);
 }
 
+#ifdef TARGET_CHERI
+static inline bool cheri_is_executive_ctx(DisasContext *s)
+{
+    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
+                      TBFLAG_CHERI, EXECUTIVE) != 0;
+}
+
+static inline bool cheri_is_system_ctx(DisasContext *s)
+{
+    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
+                      TBFLAG_CHERI, SYSTEM) != 0;
+}
+#define sp_modified(val) gen_reg_modified_int_base(s, ri->name, val)
+#else
+#define sp_modified(...)
+#endif
+
 /* MSR (immediate) - move immediate to processor state field */
 static void handle_msr_i(DisasContext *s, uint32_t insn,
                          unsigned int op1, unsigned int op2, unsigned int crm)
@@ -1959,6 +2064,10 @@ static void handle_msr_i(DisasContext *s, uint32_t insn,
         if (s->current_el == 0) {
             goto do_unallocated;
         }
+#ifdef TARGET_CHERI
+        if (!cheri_is_executive_ctx(s))
+            return;
+#endif
         t1 = tcg_const_i32(crm & PSTATE_SP);
         gen_helper_msr_i_spsel(cpu_env, t1);
         tcg_temp_free_i32(t1);
@@ -2050,20 +2159,53 @@ static void gen_set_nzcv(TCGv_i64 tcg_rt)
 }
 
 #ifdef TARGET_CHERI
-static inline bool cheri_is_executive_ctx(DisasContext *s)
+static inline bool capabilities_enabled_exception(DisasContext *ctx)
 {
-    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
-                      TBFLAG_CHERI, EXECUTIVE) != 0;
+    // Flag bits only encode an exception is needed, not which one. The helper
+    // will do that.
+    if (!GET_FLAG(ctx, CAP_ENABLED)) {
+        ctx->base.is_jmp = DISAS_NORETURN;
+        gen_a64_set_pc_im(ctx->pc_curr);
+        gen_helper_check_capabilities_enabled_exception(cpu_env);
+        return true;
+    }
+    return false;
 }
 
-static inline bool cheri_is_system_ctx(DisasContext *s)
+#define ZVA_SIZE ((1 << CAP_TAG_GET_MANY_SHFT) * CHERI_CAP_SIZE)
+
+static TCGv_cap_checked_ptr bounds_check_cache_op(DisasContext *s,
+                                                  TCGv_i64 addr, int base_reg,
+                                                  bool read, bool write,
+                                                  bool is_zva)
 {
-    return FIELD_EX32(s->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START,
-                      TBFLAG_CHERI, SYSTEM) != 0;
+    // Consumers of clean_addr will also align it, but we need bounds checks
+    // for the aligned value.
+    TCGv_i64 aligned = new_tmp_a64(s);
+    tcg_gen_andi_i64(aligned, addr, ~(ZVA_SIZE - 1));
+
+    // zva is not actually classified as a cache maintenance instruction
+    TCGv_i32 tmp32;
+    if (!is_zva) {
+        // Too awkward to pass through cm so store directly to cpu_env and clear
+        // after
+        tmp32 = tcg_const_i32(1);
+        tcg_gen_st8_i32(tmp32, cpu_env, offsetof(CPUARMState, exception.cm));
+    }
+
+    TCGv_cap_checked_ptr clean_addr = clean_data_tbi_and_cheri(
+        s, aligned, read, write, ZVA_SIZE, base_reg, false, true);
+    if (!is_zva) {
+        tcg_gen_movi_i32(tmp32, 0);
+        tcg_gen_st8_i32(tmp32, cpu_env, offsetof(CPUARMState, exception.cm));
+        tcg_temp_free_i32(tmp32);
+    }
+
+    return clean_addr;
 }
-#define sp_modified(val) gen_reg_modified_int_base(s, ri->name, val)
 #else
-#define sp_modified(...)
+#define ZVA_SIZE                            0
+#define bounds_check_cache_op(s, addr, ...) addr
 #endif
 
 /* MRS - move from system register
@@ -2111,17 +2253,33 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         return;
     }
 
-    if ((ri->access & PL_SYSREG) && !cheri_is_system_ctx(s)) {
-        assert(0); // should throw code EC_SYSTEMREGISTERTRAP or
-                   // EC_CAPABILITY_SYSREGTRAP
+    if (is_morello) {
+        if (!cpreg_field_is_cap(ri)) {
+            // Morello encodings might target non-cap registers
+            // but I don't know of any.
+            unallocated_encoding(s);
+            return;
+        }
+    } else if (cpreg_field_is_cap_only(ri)) {
+        unallocated_encoding(s);
+        return;
     }
 
-#define ZVA_SIZE ((1 << CAP_TAG_GET_MANY_SHFT) * CHERI_CAP_SIZE)
+    if (!(ri->access & PL_NO_SYSREG) && !cheri_is_system_ctx(s)) {
+        s->base.is_jmp = DISAS_NORETURN;
+        gen_a64_set_pc_im(s->pc_curr);
+        TCGv_i32 syndrome = tcg_const_i32(syn_aa64_sysregtrap_impl(
+            op0, op1, op2, crn, crm, rt, isread, is_morello));
+        gen_helper_sys_not_accessible_exception(cpu_env, syndrome);
+        tcg_temp_free_i32(syndrome);
+        return;
+    }
 
+    if (is_morello && capabilities_enabled_exception(s)) {
+        return;
+    }
 #else
-
-#define ZVA_SIZE 0
-
+    bool is_morello = false;
 #endif
 
     if (ri->accessfn) {
@@ -2134,7 +2292,8 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
 
         gen_a64_set_pc_im(s->pc_curr);
         tmpptr = tcg_const_ptr(ri);
-        syndrome = syn_aa64_sysregtrap(op0, op1, op2, crn, crm, rt, isread);
+        syndrome = syn_aa64_sysregtrap_impl(op0, op1, op2, crn, crm, rt, isread,
+                                            is_morello);
         tcg_syn = tcg_const_i32(syndrome);
         tcg_isread = tcg_const_i32(isread);
         gen_helper_access_check_cp_reg(cpu_env, tmpptr, tcg_syn, tcg_isread);
@@ -2177,15 +2336,20 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         gpr_reg_modified(s, rt, false);
         return;
 #ifdef TARGET_CHERI
+    case ARM_CP_IC_OR_DC_STORE:
     case ARM_CP_IC_OR_DC:
-        // Although we have no caches, we still need to do permission checks
-        // FIXME: This currently checks for both load AND store. This may
-        // FIXME: be more than real morello checks for.
-        clean_addr = clean_data_tbi_and_cheri(s, cpu_reg(s, rt), true, true, ZVA_SIZE, rt, false, true);
-        // Consts still need to return the appropriate value
-        if (ri->type & ARM_CP_CONST)
-            break;
-        return;
+        {
+            // FIXME: We need to align  address to ZVA_SIZE _before_ bounds
+            // checks
+            bool write =
+                (ri->type & ARM_CP_IC_OR_DC_STORE) == ARM_CP_IC_OR_DC_STORE;
+            bounds_check_cache_op(s, cpu_reg(s, rt), rt, !write, write, false);
+            // Consts still need to return the appropriate value
+            if (ri->type & ARM_CP_CONST)
+                break;
+
+            return;
+        }
 #endif
 
     case ARM_CP_DC_ZVA:
@@ -2200,10 +2364,12 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
             t_desc = tcg_const_i32(desc);
 
             clean_addr = (TCGv_cap_checked_ptr)new_tmp_a64(s);
-            gen_helper_mte_check_zva(clean_addr, cpu_env, t_desc, cpu_reg(s, rt));
+            gen_helper_mte_check_zva(clean_addr, cpu_env, t_desc,
+                                     cpu_reg(s, rt));
             tcg_temp_free_i32(t_desc);
         } else {
-            clean_addr = clean_data_tbi_and_cheri(s, cpu_reg(s, rt), false, true, ZVA_SIZE, rt, false, true);
+            clean_addr =
+                bounds_check_cache_op(s, cpu_reg(s, rt), rt, false, true, true);
         }
         gen_helper_dc_zva(cpu_env, clean_addr);
         return;
@@ -2216,7 +2382,8 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
              * pointer for an invalid page.  Probe that address first.
              */
             tcg_rt = cpu_reg(s, rt);
-            clean_addr = clean_data_tbi_and_cheri(s, tcg_rt, false, true, ZVA_SIZE, rt, false, true);
+            clean_addr = clean_data_tbi_and_cheri(s, tcg_rt, false, true,
+                                                  ZVA_SIZE, rt, false, true);
             gen_probe_access(s, clean_addr, MMU_DATA_STORE, MO_8);
 
             if (s->ata) {
@@ -2234,7 +2401,8 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
 
             /* For DC_GZVA, we can rely on DC_ZVA for the proper fault. */
             tcg_rt = cpu_reg(s, rt);
-            clean_addr = clean_data_tbi_and_cheri(s, tcg_rt, false, true, ZVA_SIZE, rt, false, true);
+            clean_addr = clean_data_tbi_and_cheri(s, tcg_rt, false, true,
+                                                  ZVA_SIZE, rt, false, true);
             gen_helper_dc_zva(cpu_env, clean_addr);
 
             if (s->ata) {
@@ -2269,9 +2437,6 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
     }
 
     if (is_morello) {
-        // Morello instructions might be able to modify non-cap registers. But I
-        // don't know of any.
-        assert(cpreg_field_is_cap(ri));
         // Existing readfn/writefn functions only apply to the cursor,
         // it should be ensured they do not cause out of bounds.
         if (isread) {
@@ -2991,13 +3156,28 @@ static void gen_compare_and_swap_pair(DisasContext *s, int rs, int rt,
         tcg_gen_setcond_i64(TCG_COND_EQ, c2, d2, s2);
         tcg_gen_and_i64(c2, c2, c1);
 
+#ifdef TARGET_CHERI
+        /* This is a horrible hack. Sadly, there is no MO_128, and two MO_64's
+           might trap half way. However, because we know the
+           alignment of clean_addr, clean_addr + 4 with MO_64 will
+           cross enough tag boundaries to work.
+        */
+        TCGv_i64 checked_addr = tcg_temp_new_i64();
+        TCGv_i32 store_happens = tcg_temp_new_i32();
+        tcg_gen_extrl_i64_i32(store_happens, c2);
+        tcg_gen_addi_i64(checked_addr, (TCGv_i64)clean_addr, 4);
+        handle_conditional_invalidate((TCGv_cap_checked_ptr)checked_addr, MO_64,
+                                      memidx, store_happens);
+        tcg_temp_free_i64(checked_addr);
+        tcg_temp_free_i32(store_happens);
+#endif
         /* If compare equal, write back new data, else write back old data.  */
         tcg_gen_movcond_i64(TCG_COND_NE, c1, c2, zero, t1, d1);
         tcg_gen_movcond_i64(TCG_COND_NE, c2, c2, zero, t2, d2);
-        tcg_gen_qemu_st_i64_with_checked_addr(c1, clean_addr, memidx,
-                                              MO_64 | s->be_data);
-        tcg_gen_qemu_st_i64_with_checked_addr(c2, (TCGv_cap_checked_ptr)a2,
-                                              memidx, MO_64 | s->be_data);
+        tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
+            c1, clean_addr, memidx, MO_64 | s->be_data, false);
+        tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
+            c2, (TCGv_cap_checked_ptr)a2, memidx, MO_64 | s->be_data, false);
         tcg_temp_free_i64(a2);
         tcg_temp_free_i64(c1);
         tcg_temp_free_i64(c2);
@@ -3131,7 +3311,7 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
             }
             clean_addr =
                 gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), false, true,
-                                         rn != 31, size, rn, false, true);
+                                         rn != 31, size + 1, rn, false, true);
             gen_store_exclusive(s, rs, rt, rt2, clean_addr, size, true);
             return;
         }
@@ -3151,7 +3331,7 @@ static void disas_ldst_excl(DisasContext *s, uint32_t insn)
             }
             clean_addr =
                 gen_mte_and_cheri_check1(s, cpu_reg_sp(s, rn), true, false,
-                                         rn != 31, size, rn, false, true);
+                                         rn != 31, size + 1, rn, false, true);
             s->is_ldex = true;
             gen_load_exclusive(s, rt, rt2, clean_addr, size, true);
             if (is_lasr) {
@@ -4185,11 +4365,14 @@ static void disas_ldst_multiple_struct(DisasContext *s, uint32_t insn)
     }
 
     if (is_postidx) {
+        TCGv_i64 tmp = tcg_temp_new_i64();
         if (rm == 31) {
-            tcg_gen_addi_i64(tcg_rn, tcg_rn, total);
+            tcg_gen_addi_i64(tmp, tcg_rn, total);
         } else {
-            tcg_gen_add_i64(tcg_rn, tcg_rn, cpu_reg(s, rm));
+            tcg_gen_add_i64(tmp, tcg_rn, cpu_reg(s, rm));
         }
+        set_gpr_reg_addr(s, rn, tmp);
+        tcg_temp_free_i64(tmp);
     }
 }
 
@@ -4324,11 +4507,14 @@ static void disas_ldst_single_struct(DisasContext *s, uint32_t insn)
     tcg_temp_free_i64(tcg_ebytes);
 
     if (is_postidx) {
+        TCGv_i64 tmp = tcg_temp_new_i64();
         if (rm == 31) {
-            tcg_gen_addi_i64(tcg_rn, tcg_rn, total);
+            tcg_gen_addi_i64(tmp, tcg_rn, total);
         } else {
-            tcg_gen_add_i64(tcg_rn, tcg_rn, cpu_reg(s, rm));
+            tcg_gen_add_i64(tmp, tcg_rn, cpu_reg(s, rm));
         }
+        set_gpr_reg_addr(s, rn, tmp);
+        tcg_temp_free_i64(tmp);
     }
 }
 
@@ -4448,7 +4634,8 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
                 tcg_gen_andi_i64(addr, addr, -size);
             }
 
-            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load, size, rt, false, true);
+            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load,
+                                                  size, rt, false, true);
 
             if (s->ata) {
                 gen_helper_stzgm_tags(cpu_env, clean_addr, tcg_rt);
@@ -4469,7 +4656,8 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
             int size = 4 << GMID_EL1_BS;
 
             tcg_gen_andi_i64(addr, addr, -size);
-            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load, size, rt, false, true);
+            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load,
+                                                  size, rt, false, true);
             gen_probe_access(s, clean_addr, acc, size);
 
             if (is_load) {
@@ -4486,7 +4674,8 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
         if (s->ata) {
             gen_helper_ldg(tcg_rt, cpu_env, addr, tcg_rt);
         } else {
-            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load, TAG_GRANULE, rt, false, true);
+            clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load,
+                                                  TAG_GRANULE, rt, false, true);
             gen_probe_access(s, clean_addr, MMU_DATA_LOAD, MO_8);
             gen_address_with_allocation_tag0(tcg_rt, addr);
         }
@@ -4520,13 +4709,13 @@ static void disas_ldst_tag(DisasContext *s, uint32_t insn)
 
     if (is_zero) {
         int i, n = (1 + is_pair) << LOG2_TAG_GRANULE;
-        TCGv_cap_checked_ptr clean_addr = clean_data_tbi_and_cheri(s, addr, is_load, !is_load, n, rt, false, true);
+        TCGv_cap_checked_ptr clean_addr = clean_data_tbi_and_cheri(
+            s, addr, is_load, !is_load, n, rt, false, true);
         TCGv_i64 tcg_zero = tcg_const_i64(0);
         int mem_index = get_mem_index(s);
 
-        tcg_gen_qemu_st_i64_with_checked_addr(tcg_zero,
-                                              clean_addr,
-                                              mem_index, MO_Q | MO_ALIGN_16);
+        tcg_gen_qemu_st_i64_with_checked_addr(tcg_zero, clean_addr, mem_index,
+                                              MO_Q | MO_ALIGN_16);
         for (i = 8; i < n; i += 8) {
             tcg_gen_addi_i64((TCGv_i64)clean_addr, (TCGv_i64)clean_addr, 8);
             tcg_gen_qemu_st_i64_with_checked_addr(
@@ -15178,16 +15367,15 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
     switch (extract32(insn, 25, 4)) {
     case 0x1: /* Morello Instructions */
 #ifdef TARGET_CHERI
-        // FIXME: This reverses the priority of exceptions in restricted mode.
-        if (!capabilities_enabled_exception(s)) {
-            if (!disas_cheri(s, insn)) {
-                unallocated_encoding(s);
-            }
+        if (!disas_cheri(s, insn)) {
+            unallocated_encoding(s);
         }
         break;
 #endif
     case 0x0:
-    case 0x3: /* UNALLOCATED */ unallocated_encoding(s); break;
+    case 0x3: /* UNALLOCATED */
+        unallocated_encoding(s);
+        break;
     case 0x2:
         if (!dc_isar_feature(aa64_sve, s) || !disas_sve(s, insn)) {
             unallocated_encoding(s);
@@ -15323,6 +15511,13 @@ static void aarch64_tr_init_disas_context(DisasContextBase *dcbase,
 
 static void aarch64_tr_tb_start(DisasContextBase *db, CPUState *cpu)
 {
+    DisasContext *s = container_of(db, DisasContext, base);
+    if (db->pc_next & 0b11) {
+        gen_set_exception_far(db->pc_next);
+        gen_exception_insn(s, db->pc_next, EXCP_PREFETCH_ABORT,
+                           syn_pc_alignment(false), default_exception_el(s));
+        return;
+    }
 }
 
 static void aarch64_tr_insn_start(DisasContextBase *dcbase, CPUState *cpu)
@@ -15458,7 +15653,10 @@ static void aarch64_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
     }
 }
 
-void cheri_tcg_save_pc(DisasContextBase *db) { gen_a64_set_pc_im(db->pc_next); }
+void cheri_tcg_save_pc(DisasContextBase *db)
+{
+    gen_a64_set_pc_im(db->pc_next);
+}
 
 void cheri_tcg_prepare_for_unconditional_exception(DisasContextBase *db)
 {

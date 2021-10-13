@@ -111,7 +111,7 @@ try_set_cap_cursor(CPUArchState *env, const cap_register_t *cptr,
         raise_cheri_exception_or_invalidate_impl(env, CapEx_SealViolation,
                                                  regnum_src, retpc);
     }
-#ifndef TARGET_IS_MORELLO
+#ifndef TARGET_MORELLO
     /*
      * For Morello we can't just check for in-bounds since changing the sign
      * bit can affect representability. Additionally, the high bits are not
@@ -135,8 +135,8 @@ try_set_cap_cursor(CPUArchState *env, const cap_register_t *cptr,
         update_capreg(env, regnum_dst, &result);
     } else {
         /* (Possibly) out-of-bounds but still representable. */
-        update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src,
-                                  new_addr, !RESULT_VALID);
+        update_capreg_cursor_from(env, regnum_dst, cptr, regnum_src, new_addr,
+                                  !RESULT_VALID);
         check_out_of_bounds_stat(env, oob_info,
                                  get_readonly_capreg(env, regnum_dst),
                                  _host_return_address);
@@ -177,17 +177,6 @@ void CHERI_HELPER_IMPL(pcc_check_bounds(CPUArchState *env, target_ulong addr,
               /*instavail=*/true, GETPC());
 }
 
-target_ulong CHERI_HELPER_IMPL(pcc_check_load(CPUArchState *env,
-                                              target_ulong addr, MemOp op))
-{
-    uintptr_t retpc = GETPC();
-    const cap_register_t *pcc = cheri_get_current_pcc_fetch_from_tcg(env, retpc);
-
-    check_cap(env, pcc, CAP_PERM_LOAD, addr, CHERI_EXC_REGNUM_PCC,
-              memop_size(op), /*instavail=*/true, retpc);
-    return addr;
-}
-
 void CHERI_HELPER_IMPL(cgetpccsetoffset(CPUArchState *env, uint32_t cd,
                                         target_ulong rs))
 {
@@ -213,25 +202,24 @@ void CHERI_HELPER_IMPL(cgetpccsetaddr(CPUArchState *env, uint32_t cd,
 }
 
 void CHERI_HELPER_IMPL(cheri_invalidate_tags(CPUArchState *env,
-                                             target_ulong vaddr, MemOp op))
+                                             target_ulong vaddr,
+                                             TCGMemOpIdx oi))
 {
-    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), cpu_mmu_index(env, false));
+    cheri_tag_invalidate(env, vaddr, memop_size(get_memop(oi)), GETPC(),
+                         get_mmuidx(oi));
 }
 
-void CHERI_HELPER_IMPL(cheri_invalidate_tags_mmu_idx(CPUArchState *env,
-                                             target_ulong vaddr, MemOp op, uint32_t idx))
+/*
+ * Use this for conditional clear when needing to avoid a branch in the TCG
+ * backend.
+ */
+void CHERI_HELPER_IMPL(cheri_invalidate_tags_condition(
+    CPUArchState *env, target_ulong vaddr, TCGMemOpIdx oi, uint32_t cond))
 {
-    cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), idx);
-}
-
-// Use this for conditional clear when needing to avoid a branch in the TCG
-// backend
-void CHERI_HELPER_IMPL(cheri_invalidate_tags_condition(CPUArchState *env,
-                                                       target_ulong vaddr,
-                                                       MemOp op, uint32_t cond))
-{
-    if (cond)
-        cheri_tag_invalidate(env, vaddr, memop_size(op), GETPC(), cpu_mmu_index(env, false));
+    if (cond) {
+        cheri_tag_invalidate(env, vaddr, memop_size(get_memop(oi)), GETPC(),
+                             get_mmuidx(oi));
+    }
 }
 
 /// Implementations of individual instructions start here
@@ -260,7 +248,7 @@ target_ulong CHERI_HELPER_IMPL(cgetflags(CPUArchState *env, uint32_t cb))
     /*
      * CGetFlags: Move Flags to a General-Purpose Register.
      */
-    return (target_ulong)get_readonly_capreg(env, cb)->cr_flags;
+    return (target_ulong)cap_get_flags(get_readonly_capreg(env, cb));
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetlen(CPUArchState *env, uint32_t cb))
@@ -281,13 +269,14 @@ target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
      * Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    cheri_debug_assert((cbp->cr_perms & CAP_PERMS_ALL) == cbp->cr_perms &&
+    cheri_debug_assert((cap_get_perms(cbp) & CAP_PERMS_ALL) ==
+                           cap_get_perms(cbp) &&
                        "Unknown HW perms bits set!");
-    cheri_debug_assert((cbp->cr_uperms & CAP_UPERMS_ALL) == cbp->cr_uperms &&
+    cheri_debug_assert((cap_get_uperms(cbp) & CAP_UPERMS_ALL) ==
+                           cap_get_uperms(cbp) &&
                        "Unknown SW perms bits set!");
 
-    return (target_ulong)cbp->cr_perms |
-           ((target_ulong)cbp->cr_uperms << CAP_UPERMS_SHFT);
+    return COMBINED_PERMS_VALUE(cbp);
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUArchState *env, uint32_t cb))
@@ -324,15 +313,22 @@ target_ulong CHERI_HELPER_IMPL(cgettype(CPUArchState *env, uint32_t cb))
      * CGetType: Move Object Type Field to a General-Purpose Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    const target_long otype = cap_get_otype(cbp);
+    const target_long otype = cap_get_otype_signext(cbp);
+#ifdef TARGET_MORELLO
+    cheri_debug_assert(otype == cap_get_otype_unsigned(cbp));
+#else
     // Must be either a valid positive type < maximum or one of the special
     // hardware-interpreted otypes
     if (otype < 0) {
-        cheri_debug_assert(otype <= CAP_FIRST_SPECIAL_OTYPE_SIGNED);
-        cheri_debug_assert(otype >= CAP_LAST_SPECIAL_OTYPE_SIGNED);
+        cheri_debug_assert(
+            (cap_is_unsealed(cbp) || cap_is_sealed_with_reserved_otype(cbp)) &&
+            "all negative return values are used for reserved otypes.");
     } else {
-        cheri_debug_assert(otype <= CAP_LAST_NONRESERVED_OTYPE);
+        cheri_debug_assert(
+            cap_is_sealed_with_type(cbp) &&
+            "non-negative return values are used for non-reserved otypes");
     }
+#endif
     return otype;
 }
 
@@ -354,21 +350,21 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
                          target_ulong addr, uint32_t link_reg,
                          target_ulong link_pc, uint32_t cjalr_flags)
 {
-    // FIXME: I am concerned that morello will want to jump to sealed things and
-    // have the exception occur at the target.
-    // FIXME: I am still not entirely sure of where morello takes its
-    // exceptions.
-    cheri_debug_assert(cap_is_unsealed(target) || cap_is_sealed_entry(target));
     cap_register_t next_pcc = *target;
 
-    if (cap_is_sealed_entry(target)) {
+#ifdef TARGET_AARCH64
+    update_target_for_jump(env, &next_pcc, cjalr_flags);
+#else
+    cheri_debug_assert(cap_is_unsealed(target) || cap_is_sealed_entry(target));
+#endif
+
+    if (next_pcc.cr_tag && cap_is_sealed_entry(&next_pcc)) {
         // If we are calling a "sentry" cap, remove the sealed flag
         cap_unseal_entry(&next_pcc);
         assert(cap_get_cursor(&next_pcc) == addr &&
                "Should have raised an exception");
     } else if (cjalr_flags & CJALR_MUST_BE_SENTRY) {
-        // LETODO
-        assert(0);
+        next_pcc.cr_tag = 0;
     } else {
         // Can never create an unrepresentable capability since we
         // bounds-checked the jump target.
@@ -455,7 +451,8 @@ void CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum,
         raise_cheri_exception(env, CapEx_SealViolation, code_regnum);
     } else if (!cap_is_sealed_with_type(data_cap)) {
         raise_cheri_exception(env, CapEx_SealViolation, data_regnum);
-    } else if ((code_cap->cr_otype != data_cap->cr_otype || code_cap->cr_otype > CAP_LAST_NONRESERVED_OTYPE)) {
+    } else if (cap_get_otype_unsigned(code_cap) != cap_get_otype_unsigned(data_cap) ||
+               !cap_is_sealed_with_type(code_cap)) {
         raise_cheri_exception(env, CapEx_TypeViolation, code_regnum);
     } else if (!cap_has_perms(code_cap, CAP_PERM_CINVOKE)) {
         raise_cheri_exception(env, CapEx_PermitCCallViolation, code_regnum);
@@ -505,8 +502,8 @@ void CHERI_HELPER_IMPL(cchecktype(CPUArchState *env, uint32_t cs, uint32_t cb))
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (cap_is_unsealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (csp->cr_otype != cbp->cr_otype ||
-               csp->cr_otype > CAP_LAST_NONRESERVED_OTYPE) {
+    } else if (cap_get_otype_unsigned(csp) != cap_get_otype_unsigned(cbp) ||
+               !cap_is_sealed_with_type(csp)) {
         raise_cheri_exception(env, CapEx_TypeViolation, cs);
     }
 }
@@ -523,7 +520,7 @@ void CHERI_HELPER_IMPL(csealentry(CPUArchState *env, uint32_t cd, uint32_t cs))
         raise_cheri_exception(env, CapEx_TagViolation, cs);
     } else if (!cap_is_unsealed(csp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cs);
-    } else if (!(csp->cr_perms & CAP_PERM_EXECUTE)) {
+    } else if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
         // Capability must be executable otherwise csealentry doesn't make sense
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
     } else {
@@ -547,9 +544,9 @@ void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
      */
     if (!csp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cs);
-    } else if ((csp->cr_perms & rt_perms) != rt_perms) {
+    } else if ((cap_get_perms(csp) & rt_perms) != rt_perms) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
-    } else if ((csp->cr_uperms & rt_uperms) != rt_uperms) {
+    } else if ((cap_get_uperms(csp) & rt_uperms) != rt_uperms) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
     } else if ((rt >> (16 + CAP_MAX_UPERM)) != 0UL) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
@@ -641,11 +638,13 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (cap_get_base(ctp) > cap_get_top_full(ctp)) {
         // check for length < 0 - possible because cs2 might be untagged
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if ((ctp->cr_perms & cbp->cr_perms) != ctp->cr_perms) {
+    } else if ((cap_get_perms(ctp) & cap_get_perms(cbp)) !=
+               cap_get_perms(ctp)) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
-    } else if ((ctp->cr_uperms & cbp->cr_uperms) != ctp->cr_uperms) {
+    } else if ((cap_get_uperms(ctp) & cap_get_uperms(cbp)) !=
+               cap_get_uperms(ctp)) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cb_exc);
-    } else if (ctp->cr_reserved) {
+    } else if (cap_has_reserved_bits_set(ctp)) {
         // TODO: It would be nice to use a different exception code for this
         //  case but this should match Flute.
         // See also https://github.com/CTSRD-CHERI/cheri-architecture/issues/48
@@ -653,7 +652,7 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else {
         cap_register_t result = *ctp;
 
-        CAP_cc(cap_set_decompressed_cr_otype)(&result, CAP_OTYPE_UNSEALED);
+        CAP_cc(update_otype)(&result, CAP_OTYPE_UNSEALED);
         result.cr_tag = 1;
 
         /*
@@ -682,14 +681,14 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (!cap_is_sealed_with_type(ctp)) {
         // For reserved otypes we return a null-derived value.
         cap_register_t result;
-        update_capreg(env, cd, int_to_cap(cap_get_otype(ctp), &result));
-    } else if (ctp->cr_otype < cap_get_base(cbp)) {
+        update_capreg(env, cd, int_to_cap(cap_get_otype_signext(ctp), &result));
+    } else if (cap_get_otype_unsigned(ctp) < cap_get_base(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (ctp->cr_otype >= cap_get_top(cbp)) {
+    } else if (cap_get_otype_unsigned(ctp) >= cap_get_top(cbp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else {
         cap_register_t result = *cbp;
-        result._cr_cursor = ctp->cr_otype;
+        result._cr_cursor = cap_get_otype_unsigned(ctp);
         cheri_debug_assert(cap_is_representable(&result));
         update_capreg(env, cd, &result);
     }
@@ -722,11 +721,12 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
         raise_cheri_exception(env, CapEx_SealViolation, cs);
     } else if (!cap_is_unsealed(ctp)) {
         raise_cheri_exception(env, CapEx_SealViolation, ct);
-    } else if (!(ctp->cr_perms & CAP_PERM_SEAL)) {
+    } else if (!cap_has_perms(ctp, CAP_PERM_SEAL)) {
         raise_cheri_exception(env, CapEx_PermitSealViolation, ct);
     } else if (!conditional && !cap_cursor_in_bounds(ctp)) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if (ct_base_plus_offset > (target_ulong)CAP_LAST_NONRESERVED_OTYPE) {
+    } else if (ct_base_plus_offset > CAP_MAX_REPRESENTABLE_OTYPE ||
+               cap_otype_is_reserved(ct_base_plus_offset)) {
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else if (!is_representable_cap_when_sealed_with_addr(
                    csp, cap_get_cursor(csp))) {
@@ -777,25 +777,27 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
     } else if (!cap_is_sealed_with_type(csp)) {
         raise_cheri_exception(env, CapEx_TypeViolation,
                               cs); /* Reserved otypes */
-    } else if (ct_cursor != csp->cr_otype) {
+    } else if (ct_cursor != cap_get_otype_unsigned(csp)) {
         raise_cheri_exception(env, CapEx_TypeViolation, ct);
-    } else if (!(ctp->cr_perms & CAP_PERM_UNSEAL)) {
+    } else if (!cap_has_perms(ctp, CAP_PERM_UNSEAL)) {
         raise_cheri_exception(env, CapEx_PermitUnsealViolation, ct);
     } else if (!cap_cursor_in_bounds(ctp)) {
         // Must be within bounds and not one past end (i.e. not equal to top).
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if (ct_cursor >= CAP_LAST_NONRESERVED_OTYPE) {
-        // This should never happen due to the ct_cursor != csp->cr_otype check
-        // above that should never succeed for
+    } else if (ct_cursor > CAP_MAX_REPRESENTABLE_OTYPE ||
+               cap_otype_is_reserved(ct_cursor)) {
+        // This should never happen due to the ct_cursor != cs_otype check.
         raise_cheri_exception(env, CapEx_LengthViolation, ct);
     } else {
         cap_register_t result = *csp;
-        if ((csp->cr_perms & CAP_PERM_GLOBAL) &&
-            (ctp->cr_perms & CAP_PERM_GLOBAL)) {
-            result.cr_perms |= CAP_PERM_GLOBAL;
+        target_ulong new_perms = cap_get_perms(&result);
+        if (cap_has_perms(csp, CAP_PERM_GLOBAL) &&
+            cap_has_perms(ctp, CAP_PERM_GLOBAL)) {
+            new_perms |= CAP_PERM_GLOBAL;
         } else {
-            result.cr_perms &= ~CAP_PERM_GLOBAL;
+            new_perms &= ~CAP_PERM_GLOBAL;
         }
+        CAP_cc(update_perms)(&result, new_perms);
         cap_set_unsealed(&result);
         update_capreg(env, cd, &result);
     }
@@ -850,8 +852,8 @@ void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
         uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
 
         cap_register_t result = *cbp;
-        CAP_cc(cap_set_decompressed_cr_perms)(&result, cbp->cr_perms & rt_perms);
-        CAP_cc(cap_set_decompressed_cr_uperms)(&result, cbp->cr_uperms & rt_uperms);
+        CAP_cc(update_perms)(&result, cap_get_perms(cbp) & rt_perms);
+        CAP_cc(update_uperms)(&result, cap_get_uperms(cbp) & rt_uperms);
         update_capreg(env, cd, &result);
     }
 }
@@ -935,8 +937,14 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
                          uintptr_t _host_return_address)
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    target_ulong cursor = cap_get_cursor(cbp);
-    cap_length_t new_top = (cap_length_t)cursor + length; // 65 bits
+    target_ulong new_base = cap_get_cursor(cbp);
+
+#ifdef TARGET_AARCH64
+    if (CAP_cc(cap_bounds_uses_value)(cbp))
+        new_base = CAP_cc(cap_bounds_address)(cbp);
+#endif
+
+    cap_length_t new_top = (cap_length_t)new_base + length; // 65 bits
     DEFINE_RESULT_VALID;
     /*
      * CSetBounds: Set Bounds
@@ -945,24 +953,38 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
         raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
-    } else if (cursor < cbp->cr_base) {
+    }
+#ifndef TARGET_AARCH64
+    /*
+     * On morello this check needs doing later as the resulting bounds may
+     * not be exact, but then break monotonicity.
+     */
+    else if (new_base < cbp->cr_base) {
         raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
     } else if (new_top > cap_get_top_full(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
     }
-
+#endif
     cap_register_t result = *cbp;
     /*
      * With compressed capabilities we may need to increase the range of
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    const bool exact = CAP_cc(setbounds)(&result, cursor, new_top);
+    const bool exact = CAP_cc(setbounds)(&result, new_base, new_top);
     if (!exact)
         env->statcounters_imprecise_setbounds++;
     if (must_be_exact && !exact) {
         raise_cheri_exception_or_invalidate(env, CapEx_InexactBounds, cb);
     }
+
+#ifdef TARGET_AARCH64
+    if ((result.cr_base < cbp->cr_base) ||
+        (cap_get_top_full(&result) > cap_get_top_full(cbp))) {
+        RESULT_VALID = false;
+    }
+#endif
+
     if (RESULT_VALID) {
         assert(cap_is_representable(&result) &&
                "CSetBounds must create a representable capability");
@@ -991,6 +1013,8 @@ void CHERI_HELPER_IMPL(csetboundsexact(CPUArchState *env, uint32_t cd,
     do_setbounds(true, env, cd, cb, rt, GETPC());
 }
 
+#ifndef TARGET_AARCH64
+/* Morello does not have flags in the capaibility metadata */
 void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  target_ulong flags))
 {
@@ -1005,13 +1029,11 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     // FIXME: should we trap instead of masking?
     cap_register_t result = *cbp;
     flags &= CAP_FLAGS_ALL_BITS;
-#ifndef TARGET_AARCH64
-    // Morello thinks flags are something slightly different
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
-#endif
-    CAP_cc(cap_set_decompressed_cr_flags)(&result, flags);
+    CAP_cc(update_flags)(&result, flags);
     update_capreg(env, cd, &result);
 }
+#endif
 
 /// Three operands (int capability capability)
 
@@ -1062,8 +1084,8 @@ target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUArchState *env, uint32_t cb,
         /* is_cap_sealed(cbp) == is_cap_sealed(ctp) && */
         cap_get_base(cbp) <= cap_get_base(ctp) &&
         cap_get_top(ctp) <= cap_get_top(cbp) &&
-        (cbp->cr_perms & ctp->cr_perms) == ctp->cr_perms &&
-        (cbp->cr_uperms & ctp->cr_uperms) == ctp->cr_uperms) {
+        (cap_get_perms(cbp) & cap_get_perms(ctp)) == cap_get_perms(ctp) &&
+        (cap_get_uperms(cbp) & cap_get_uperms(ctp)) == cap_get_uperms(ctp)) {
         is_subset = true;
     }
     return (target_ulong)is_subset;
@@ -1109,25 +1131,6 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
 }
 
 /// Loads and stores
-
-const cap_register_t *get_load_store_base_cap(CPUArchState *env, uint32_t cb)
-{
-#ifdef TARGET_MIPS
-    // CLC/CSC and the integer variants trap on cbp == NULL so we use reg0 as
-    // $ddc to save encoding space and increase code density since loading
-    // relative to $ddc is common in the hybrid ABI (and also for backwards
-    // compat with old binaries).
-    return get_capreg_0_is_ddc(env, cb);
-#elif defined(TARGET_RISCV) || defined(TARGET_AARCH64)
-    // However, RISCV does not use this encoding and uses zero for the
-    // null register (i.e. always trap).
-    // The helpers can also be invoked from the explicitly DDC-relative
-    // instructions with cb == CHERI_EXC_REGNUM_DDC which means DDC:
-    return get_capreg_or_special(env, cb);
-#else
-#error "Wrong arch?"
-#endif
-}
 
 static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common(
     uint32_t required_perms, CPUArchState *env, uint32_t cb,
@@ -1210,33 +1213,35 @@ cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
             " due to MMU permissions\n", va);
         return 0;
     }
-    if (tag && !(cbp->cr_perms & CAP_PERM_LOAD_CAP)) {
+    if (tag && !cap_has_perms(cbp, CAP_PERM_LOAD_CAP)) {
         qemu_maybe_log_instr_extra(env, "Clearing tag loaded from " TARGET_FMT_lx
             " due to missing CAP_PERM_LOAD_CAP\n", va);
         return 0;
     }
-    if (tag && (prot & PAGE_LC_TRAP))
+    if ((tag && (prot & PAGE_LC_TRAP)) || (prot & PAGE_LC_TRAP_ANY))
         raise_load_tag_exception(env, va, cb, retpc);
     return tag;
 }
 
-void squash_mutable_permissions(target_ulong *pesbt, const cap_register_t *source)
+void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
+                                const cap_register_t *source)
 {
 #ifdef TARGET_AARCH64
-    if (!(source->cr_perms & CC128_PERM_MUTABLE_LOAD) &&
-        (cc128_cap_pesbt_extract_OTYPE(*pesbt) == CAP_OTYPE_UNSEALED)) {
-        *pesbt &= ~cc128_cap_pesbt_encode_HWPERMS(
-            CC128_PERM_MUTABLE_LOAD | CC128_PERM_STORE_LOCAL |
-            CC128_PERM_STORE_CAP | CC128_PERM_STORE);
+    if (!cap_has_perms(source, CAP_PERM_MUTABLE_LOAD) &&
+        (CAP_cc(cap_pesbt_extract_otype)(*pesbt) == CAP_OTYPE_UNSEALED)) {
+        qemu_maybe_log_instr_extra(env,
+                                   "Squashing mutable load related perms\n");
+        *pesbt &= ~CAP_cc(cap_pesbt_encode_perms)(
+            CAP_PERM_MUTABLE_LOAD | CAP_PERM_STORE_LOCAL |
+            CAP_PERM_STORE_CAP | CAP_PERM_STORE);
     }
 #endif
 }
 
-bool load_cap_from_memory_raw_tag_mmu_idx(CPUArchState *env, target_ulong *pesbt,
-                                  target_ulong *cursor, uint32_t cb,
-                                  const cap_register_t *source,
-                                  target_ulong vaddr, target_ulong retpc,
-                                  hwaddr *physaddr, bool *raw_tag, int mmu_idx)
+bool load_cap_from_memory_raw_tag_mmu_idx(
+    CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
+    const cap_register_t *source, target_ulong vaddr, target_ulong retpc,
+    hwaddr *physaddr, bool *raw_tag, int mmu_idx)
 {
     cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
     /*
@@ -1272,12 +1277,13 @@ bool load_cap_from_memory_raw_tag_mmu_idx(CPUArchState *env, target_ulong *pesbt
     }
     int prot;
     bool tag = cheri_tag_get(env, vaddr, cb, physaddr, &prot, retpc, mmu_idx);
-    if (raw_tag)
+    if (raw_tag) {
         *raw_tag = tag;
-    if (tag) {
-        tag = cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
-        squash_mutable_permissions(pesbt, source);
     }
+    tag =
+        cheri_tag_prot_clear_or_trap(env, vaddr, cb, source, prot, retpc, tag);
+    if (tag)
+        squash_mutable_permissions(env, pesbt, source);
 
     env->statcounters_cap_read++;
     if (tag)
@@ -1315,9 +1321,9 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
                                   target_ulong vaddr, target_ulong retpc,
                                   hwaddr *physaddr, bool *raw_tag)
 {
-    return load_cap_from_memory_raw_tag_mmu_idx(env, pesbt, cursor, cb, source, vaddr,
-                                         retpc, physaddr, raw_tag,
-                                         cpu_mmu_index(env, false));
+    return load_cap_from_memory_raw_tag_mmu_idx(env, pesbt, cursor, cb, source,
+                                                vaddr, retpc, physaddr, raw_tag,
+                                                cpu_mmu_index(env, false));
 }
 
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
@@ -1341,7 +1347,8 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 }
 
 void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
-                         target_ulong vaddr, target_ulong retpc, int mmu_idx)
+                                   target_ulong vaddr, target_ulong retpc,
+                                   int mmu_idx)
 {
     target_ulong cursor = get_capreg_cursor(env, cs);
     target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_NULL_XOR_MASK;
@@ -1372,7 +1379,7 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         cheri_tag_invalidate_aligned(env, vaddr, retpc, mmu_idx);
     }
     /* No TLB fault possible, should be safe to get a host pointer now */
-    void* host = probe_write(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
+    void *host = probe_write(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
@@ -1421,8 +1428,8 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
 #endif
 }
 
-void store_cap_to_memory(CPUArchState *env, uint32_t cs,
-                                   target_ulong vaddr, target_ulong retpc)
+void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
+                         target_ulong retpc)
 {
     return store_cap_to_memory_mmu_index(env, cs, vaddr, retpc,
                                          cpu_mmu_index(env, false));
@@ -1444,14 +1451,17 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
     return (target_ulong)cheri_tag_get_many(env, addr, cb, NULL, GETPC());
 }
 
-QEMU_NORETURN static inline void raise_pcc_fault(CPUArchState *env,
-                                                 CheriCapExcCause cause,
-                                                 uintptr_t _host_return_address)
+QEMU_NORETURN static inline void
+raise_pcc_fault(CPUArchState *env, CheriCapExcCause cause, target_ulong addr)
 {
     cheri_debug_assert(pc_is_current(env));
-    // Note: we set pc=0 since PC will have been saved prior to calling the
-    // helper and we don't need to recompute it from the generated code.
-    raise_cheri_exception_if(env, cause, CHERI_EXC_REGNUM_PCC);
+    /*
+     * Note: we set pc=0 since PC will have been saved prior to calling the
+     * helper. Therefore, we don't need to recompute it from the generated code.
+     * The PC fetched from the generated code will often be out-of-bounds, so
+     * fetching it will trigger an assertion.
+     */
+    raise_cheri_exception_if(env, cause, addr, CHERI_EXC_REGNUM_PCC);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
@@ -1473,16 +1483,15 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_perms(CPUArchState *env))
                      __func__, PRINT_CAP_ARGS(pcc));
         tcg_abort();
     }
-    raise_pcc_fault(env, cause, GETPC());
+    raise_pcc_fault(env, cause, PC_ADDR(env));
 }
 
-void
-    CHERI_HELPER_IMPL(raise_exception_pcc_perms_not_if(CPUArchState *env,
-                                                       uint32_t required_perms))
+void CHERI_HELPER_IMPL(raise_exception_pcc_perms_not_if(
+    CPUArchState *env, target_ulong addr, uint32_t required_perms))
 {
     const cap_register_t *pcc = cheri_get_recent_pcc(env);
-    check_cap(env, pcc, required_perms, cap_get_base(pcc), CHERI_EXC_REGNUM_PCC,
-              1, /*instavail=*/true, GETPC());
+    check_cap(env, pcc, required_perms, addr, CHERI_EXC_REGNUM_PCC, 1,
+              /*instavail=*/true, GETPC());
     __builtin_unreachable();
 }
 
@@ -1498,21 +1507,15 @@ void CHERI_HELPER_IMPL(raise_exception_pcc_bounds(CPUArchState *env,
     // helpful).
     cheri_debug_assert(!cap_is_in_bounds(cheri_get_current_pcc(env), addr,
                                          num_bytes == 0 ? 1 : num_bytes));
-    raise_pcc_fault(env, CapEx_LengthViolation, GETPC());
+    raise_pcc_fault(env, CapEx_LengthViolation, addr);
 }
 
 void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
+                                                 target_ulong addr,
                                                  uint32_t required_perms))
 {
     const cap_register_t *ddc = cheri_get_ddc(env);
-    // TODO: Make everything like aarch64 and just use address everywhere.
-    // Offset is silly.
-    target_ulong addr;
-#ifdef TARGET_AARCH64
-    addr = cap_get_base(ddc);
-#else
-    addr = cap_get_base(ddc) - cap_get_cursor(ddc);
-#endif
+
     cap_check_common_reg(required_perms, env, CHERI_EXC_REGNUM_DDC, addr, 1,
                          GETPC(), ddc, 1, NULL);
     error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,
@@ -1544,21 +1547,21 @@ void CHERI_HELPER_IMPL(debug_cap(CPUArchState *env, uint32_t regndx))
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     // Index manually in order not to decompress
     const cap_register_t *cap = (regndx < 32)
-                                    ? &gpcrs->decompressed[regndx].cap
+                                    ? get_cap_in_gpregs(gpcrs, regndx)
                                     : get_capreg_or_special(env, regndx);
     CapRegState state =
         regndx < 32 ? get_capreg_state(gpcrs, regndx) : CREG_FULLY_DECOMPRESSED;
     bool stateMeansTagged = state == CREG_TAGGED_CAP;
     bool decompressedMeansTagged =
         (state == CREG_FULLY_DECOMPRESSED) && cap->cr_tag;
-    target_ulong pesbt = cap->cached_pesbt;
+    target_ulong pesbt = cap->cr_pesbt;
     printf("Debug Cap %2d: Cursor " TARGET_FMT_lx ". Pesbt " TARGET_FMT_lx
            ". Tagged %d (%d,%d). Type " TARGET_FMT_lx ". "
            "Perms " TARGET_FMT_lx "\n",
            regndx, cap->_cr_cursor, pesbt ^ CAP_NULL_XOR_MASK,
            stateMeansTagged || decompressedMeansTagged, state, cap->cr_tag,
-           CAP_cc(cap_pesbt_extract_OTYPE)(pesbt),
-           CAP_cc(cap_pesbt_extract_HWPERMS)(pesbt));
+           CAP_cc(cap_pesbt_extract_otype)(pesbt),
+           CAP_cc(cap_pesbt_extract_perms)(pesbt));
     if (state == CREG_FULLY_DECOMPRESSED) {
         printf("Base: " TARGET_FMT_lx ". Top " TARGET_FMT_lu TARGET_FMT_lx
                ".\n",
@@ -1567,7 +1570,9 @@ void CHERI_HELPER_IMPL(debug_cap(CPUArchState *env, uint32_t regndx))
     }
 }
 
-void helper_capreg_state_debug(CPUArchState *env, uint32_t regnum, uint64_t flags, uint64_t pc) {
+void helper_capreg_state_debug(CPUArchState *env, uint32_t regnum,
+                               uint64_t flags, uint64_t pc)
+{
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     CapRegState regstate = get_capreg_state(gpcrs, regnum);
 

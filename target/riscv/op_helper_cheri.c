@@ -254,13 +254,13 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
         raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
     } else if (!cap_is_unsealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, addr_reg);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_LOAD)) {
         raise_cheri_exception(env, CapEx_PermitLoadViolation, addr_reg);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, addr_reg);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE_CAP)) {
         raise_cheri_exception(env, CapEx_PermitStoreCapViolation, addr_reg);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE_LOCAL) &&
                get_capreg_tag(env, val_reg) &&
                !(get_capreg_hwperms(env, val_reg) & CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, val_reg);
@@ -306,7 +306,7 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
         raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
     } else if (!cap_is_unsealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, addr_reg);
-    } else if (!(cbp->cr_perms & CAP_PERM_LOAD)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_LOAD)) {
         raise_cheri_exception(env, CapEx_PermitLoadViolation, addr_reg);
     }
 
@@ -372,11 +372,11 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
         raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
     } else if (!cap_is_unsealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, addr_reg);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, addr_reg);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_CAP)) {
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE_CAP)) {
         raise_cheri_exception(env, CapEx_PermitStoreCapViolation, addr_reg);
-    } else if (!(cbp->cr_perms & CAP_PERM_STORE_LOCAL) &&
+    } else if (!cap_has_perms(cbp, CAP_PERM_STORE_LOCAL) &&
                get_capreg_tag(env, val_reg) &&
                !(get_capreg_hwperms(env, val_reg) & CAP_PERM_GLOBAL)) {
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, val_reg);

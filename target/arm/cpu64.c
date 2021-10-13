@@ -193,12 +193,13 @@ static void aarch64_morello_initfn(Object *obj)
     t = cpu->isar.id_aa64pfr0;
     t = FIELD_DP64(t, ID_AA64PFR0, FP, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, ADVSIMD, 1);
-    t = FIELD_DP64(t, ID_AA64PFR0, RAS, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, EL0, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, EL1, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, EL2, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, EL3, 1);
 #ifdef MATCH_MORELLO_CLOSELY
+    // RAS not actually implemented in QEMU
+    // t = FIELD_DP64(t, ID_AA64PFR0, RAS, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, CSV2, 1);
     t = FIELD_DP64(t, ID_AA64PFR0, CSV3, 1);
 #endif
@@ -210,6 +211,9 @@ static void aarch64_morello_initfn(Object *obj)
 
     t = cpu->isar.id_aa64dfr0;
     t = FIELD_DP64(t, ID_AA64DFR0, PMUVER, 5); /* v8.4-PMU */
+    // 4 breakpoints and watchpoints (field stores x - 1)
+    t = FIELD_DP64(t, ID_AA64DFR0, BRPS, 8 - 1); /* v8.4-PMU */
+    t = FIELD_DP64(t, ID_AA64DFR0, WRPS, 8 - 1); /* v8.4-PMU */
     cpu->isar.id_aa64dfr0 = t;
 
     // Instruction Set Attributes
@@ -242,7 +246,6 @@ static void aarch64_morello_initfn(Object *obj)
     t = FIELD_DP64(t, ID_AA64MMFR0, PARANGE, 5); /* PARange: 48 bits */
     t = FIELD_DP64(t, ID_AA64MMFR0, ASIDBITS, 2);
 
-
     cpu->isar.id_aa64mmfr0 = t;
 
     t = cpu->isar.id_aa64mmfr1;
@@ -252,9 +255,9 @@ static void aarch64_morello_initfn(Object *obj)
     t = FIELD_DP64(t, ID_AA64MMFR1, HPDS, 2); /* HPD+TTPBHA*/
     t = FIELD_DP64(t, ID_AA64MMFR1, LO, 1);
     t = FIELD_DP64(t, ID_AA64MMFR1, VH, 1);
-    t = FIELD_DP64(t, ID_AA64MMFR1, PAN, 2); /* PAN + ATS1E1 */
+    t = FIELD_DP64(t, ID_AA64MMFR1, PAN, 2);      /* PAN + ATS1E1 */
     t = FIELD_DP64(t, ID_AA64MMFR1, VMIDBITS, 2); /* VMID16 */
-    t = FIELD_DP64(t, ID_AA64MMFR1, XNX, 1); /* TTS2UXN */
+    t = FIELD_DP64(t, ID_AA64MMFR1, XNX, 1);      /* TTS2UXN */
     cpu->isar.id_aa64mmfr1 = t;
 
     t = cpu->isar.id_aa64mmfr2;
@@ -863,13 +866,15 @@ static void aarch64_max_initfn(Object *obj)
                         cpu_max_set_sve_max_vq, NULL, NULL);
 }
 
+/* clang-format off */
 static const ARMCPUInfo aarch64_cpus[] = {
-    {.name = "cortex-a57", .initfn = aarch64_a57_initfn},
-    {.name = "cortex-a53", .initfn = aarch64_a53_initfn},
-    {.name = "cortex-a72", .initfn = aarch64_a72_initfn},
-    {.name = "morello", .initfn = aarch64_morello_initfn},
-    {.name = "max", .initfn = aarch64_max_initfn},
+    { .name = "cortex-a57",         .initfn = aarch64_a57_initfn },
+    { .name = "cortex-a53",         .initfn = aarch64_a53_initfn },
+    { .name = "cortex-a72",         .initfn = aarch64_a72_initfn },
+    { .name = "morello",            .initfn = aarch64_morello_initfn },
+    { .name = "max",                .initfn = aarch64_max_initfn },
 };
+/* clang-format on */
 
 static bool aarch64_cpu_get_aarch64(Object *obj, Error **errp)
 {

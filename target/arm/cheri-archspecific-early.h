@@ -47,5 +47,7 @@ static inline struct GPCapRegs *cheri_get_gpcrs(CPUArchState *env)
     return &env->gpcapregs;
 }
 
+#define CHERI_GPCAPREGS_MEMBER gpcapregs
+
 extern const char *const cheri_gp_regnames[];
 extern const char *const cheri_gp_int_regnames[];

@@ -1239,6 +1239,9 @@ void tlb_set_page_with_attrs(CPUState *cpu, target_ulong vaddr,
     if (prot & PAGE_LC_TRAP) {
         desc->iotlb[index].tagmem_read |= TLBENTRYCAP_FLAG_TRAP;
     }
+    if (prot & PAGE_LC_TRAP_ANY) {
+        desc->iotlb[index].tagmem_read |= TLBENTRYCAP_FLAG_TRAP_ANY;
+    }
     if (prot & PAGE_SC_CLEAR) {
         desc->iotlb[index].tagmem_write |= TLBENTRYCAP_FLAG_CLEAR;
     }
@@ -1454,8 +1457,9 @@ static bool victim_tlb_hit(CPUArchState *env, size_t mmu_idx, size_t index,
 #endif
 
 #ifdef TARGET_CHERI
-        if (cap_write && (env_tlb(env)->d[mmu_idx].viotlb[vidx].tagmem_write ==
-                          TLBENTRYCAP_INVALID_WRITE)) {
+        if (cap_write && ((env_tlb(env)->d[mmu_idx].viotlb[vidx].tagmem_write &
+                           TLBENTRYCAP_INVALID_WRITE_MASK) ==
+                          TLBENTRYCAP_INVALID_WRITE_VALUE)) {
             continue;
         }
 #endif
@@ -1603,10 +1607,11 @@ probe_access_internal(CPUArchState *env, target_ulong addr, int fault_size,
 
 #ifdef TARGET_CHERI
     if (access_type == MMU_DATA_CAP_STORE &&
-        (env_tlb(env)
-             ->d[mmu_idx]
-             .iotlb[tlb_index(env, mmu_idx, addr)]
-             .tagmem_write == TLBENTRYCAP_INVALID_WRITE))
+        ((env_tlb(env)
+              ->d[mmu_idx]
+              .iotlb[tlb_index(env, mmu_idx, addr)]
+              .tagmem_write &
+          TLBENTRYCAP_INVALID_WRITE_MASK) == TLBENTRYCAP_INVALID_WRITE_VALUE))
         tag_write_invalid = true;
 #endif
 

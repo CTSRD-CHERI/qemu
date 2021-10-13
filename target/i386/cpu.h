@@ -2263,7 +2263,8 @@ static inline bool cpu_in_user_mode(CPUArchState *env)
     return false; /* TODO: implement */
 }
 
-static inline unsigned cpu_get_asid(CPUArchState *env) {
+static inline unsigned cpu_get_asid(CPUArchState *env, target_ulong pc)
+{
     return 0; /* TODO: implement */
 }
 

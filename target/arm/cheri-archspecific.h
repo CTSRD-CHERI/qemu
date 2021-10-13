@@ -55,12 +55,17 @@ typedef enum CheriCapExc {
 static inline ARMFaultType cheri_cause_to_arm_fault(CheriCapExcCause cause)
 {
     switch (cause) {
-    case CapEx_None: return ARMFault_None;
-    case CapEx_LengthViolation: return ARMFault_CapBounds;
-    case CapEx_TagViolation: return ARMFault_CapTag;
+    case CapEx_None:
+        return ARMFault_None;
+    case CapEx_LengthViolation:
+        return ARMFault_CapBounds;
+    case CapEx_TagViolation:
+        return ARMFault_CapTag;
     case CapEx_SealViolation:
-    case CapEx_TypeViolation: return ARMFault_CapSeal;
-    case CapEx_TLBNoStoreCap: return ARMFault_CapPagePerm;
+    case CapEx_TypeViolation:
+        return ARMFault_CapSeal;
+    case CapEx_TLBNoStoreCap:
+        return ARMFault_CapPagePerm;
     case CapEx_GlobalViolation:
     case CapEx_PermitExecuteViolation:
     case CapEx_PermitLoadViolation:
@@ -72,8 +77,10 @@ static inline ARMFaultType cheri_cause_to_arm_fault(CheriCapExcCause cause)
     case CapEx_PermitCCallViolation:
     case CapEx_AccessCCallIDCViolation:
     case CapEx_PermitUnsealViolation:
-    case CapEx_PermitSetCIDViolation: return ARMFault_CapPerm;
-    default: assert(0);
+    case CapEx_PermitSetCIDViolation:
+        return ARMFault_CapPerm;
+    default:
+        assert(0);
     }
 }
 
@@ -96,13 +103,15 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
     fsr = arm_fi_to_lfsc(&fi);
     fsc = extract32(fsr, 0, 6);
 
+    int cm = env->exception.cm ? 1 : 0;
+    env->exception.cm = 0;
+
     env->exception.vaddress = addr;
     env->exception.fsr = fsr;
     syn = instruction_fetch
               ? syn_insn_abort(current_el == target_el, 0, 0, fsc)
-              : syn_data_abort_no_iss(current_el == target_el, 0, 0, 0, 0,
-                                      is_write ? 1 : 0, fsc);
-
+              : syn_data_abort_no_iss(current_el == target_el, 0, 0, cm, 0,
+                                      (is_write || cm) ? 1 : 0, fsc);
 
     if (hostpc) {
         // AARCH's cpu_restore_state will reset syndrome, so don't use
@@ -131,7 +140,8 @@ static inline void QEMU_NORETURN raise_load_tag_exception(CPUArchState *env,
                                                           int cb,
                                                           uintptr_t retpc)
 {
-    raise_cheri_exception_impl(env, CapEx_TagViolation, cb, va, false, retpc);
+    raise_cheri_exception_impl_if_wnr(env, CapEx_TLBNoStoreCap, cb, va, false,
+                                      retpc, false, false);
 }
 
 static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
@@ -139,7 +149,8 @@ static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
                                                            int reg,
                                                            uintptr_t retpc)
 {
-    raise_cheri_exception_impl(env, CapEx_TagViolation, reg, va, false, retpc);
+    raise_cheri_exception_impl_if_wnr(env, CapEx_TLBNoStoreCap, reg, va, false,
+                                      retpc, false, true);
 }
 
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
@@ -168,17 +179,36 @@ static inline bool validate_jump_target(CPUARMState *env,
 
 #include "exec/helper-proto.h"
 
+static inline void update_target_for_jump(CPUARMState *env,
+                                          cap_register_t *target,
+                                          uint32_t cjalr_flags)
+{
+    // Branches back to executive are allowed
+    if (!(cjalr_flags & CJALR_CAN_BRANCH_RESTRICTED) &&
+        cap_has_perms(_cheri_get_pcc_unchecked(env), CAP_PERM_EXECUTIVE) &&
+        !cap_has_perms(target, CAP_PERM_EXECUTIVE)) {
+        target->cr_tag = 0;
+    }
+}
+
 static inline void update_next_pcc_for_tcg(CPUARMState *env,
-                                           const cap_register_t *target,
+                                           cap_register_t *target,
                                            uint32_t cjalr_flags)
 {
-    bool system_changed =
-        ((env->pc.cap.cr_perms ^ target->cr_perms) & CAP_ACCESS_SYS_REGS) != 0;
+    if (!cap_is_unsealed(target)) {
+        target->cr_tag = 0;
+    }
+
+    // TODO: Reading BranchAddr in the arm ARM it looks like there is some
+    // top byte sign extending not being respected here
+    uint32_t old_perms = cap_get_perms(&env->pc.cap);
+    uint32_t new_perms = cap_get_perms(target);
+
+    bool system_changed = ((old_perms ^ new_perms) & CAP_ACCESS_SYS_REGS) != 0;
     bool executive_changed =
-        ((env->pc.cap.cr_perms ^ target->cr_perms) & CAP_PERM_EXECUTIVE) != 0;
+        ((old_perms ^ new_perms) & CAP_PERM_EXECUTIVE) != 0;
     bool c64_changed =
         (target->_cr_cursor & 1) != ((env->pstate & PSTATE_C64) != 0);
-    bool was_executive = (env->pc.cap.cr_perms & CAP_PERM_EXECUTIVE);
 
     unsigned int cur_el;
 
@@ -186,10 +216,6 @@ static inline void update_next_pcc_for_tcg(CPUARMState *env,
     env->pc.cap._cr_cursor &= ~1;
 
     if (executive_changed) {
-        // Branches back to executive are allowed
-        if (!(cjalr_flags & CJALR_CAN_BRANCH_RESTRICTED) && was_executive) {
-            env->pc.cap.cr_tag = 0;
-        }
         cur_el = arm_current_el(env);
         aarch64_save_sp(env, cur_el);
     }
