@@ -1373,14 +1373,13 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
      */
 
     env->statcounters_cap_write++;
+    void *host = NULL;
     if (tag) {
         env->statcounters_cap_write_tagged++;
-        cheri_tag_set(env, vaddr, cs, NULL, retpc, mmu_idx);
+        host = cheri_tag_set(env, vaddr, cs, NULL, retpc, mmu_idx);
     } else {
-        cheri_tag_invalidate_aligned(env, vaddr, retpc, mmu_idx);
+        host = cheri_tag_invalidate_aligned(env, vaddr, retpc, mmu_idx);
     }
-    /* No TLB fault possible, should be safe to get a host pointer now */
-    void *host = probe_write(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
     // When writing back pesbt we have to XOR with the NULL mask to ensure that
     // NULL capabilities have an all-zeroes representation.
     if (likely(host)) {
