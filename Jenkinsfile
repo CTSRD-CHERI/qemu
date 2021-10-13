@@ -86,6 +86,7 @@ selectedConfigs.each { config ->
                     })
 
             // Run the generated Morello tests
+            if (os == 'linux') { // temporary, virtualenv needs to be installed on FreeBSD builders
             stage("Run Morello tests") {
                 if (!fileExists("qemu-${os}/bin/qemu-system-morello")) {
                     error("Didn't build qemu-system-morello?")
@@ -106,6 +107,7 @@ pytest qemu/tests/morello \
 --junit-xml=\$WORKSPACE/morello-generated-tests-result.xml || echo "Some tests failed"
 """
                 junit allowEmptyResults: false, keepLongStdio: true, testResults: 'morello-generated-tests-result.xml'
+            }
             }
             // Run the baremetal MIPS tests to check we didn't regress.
             if (os == 'linux') {
