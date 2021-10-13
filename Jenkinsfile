@@ -72,7 +72,7 @@ selectedConfigs.each { config ->
         node(nodeLabel) {
             def extraQemuArgs = ''
             if (config.endsWith('-debug')) {
-                extraQemuArgs = '--qemu/configure-options=--enable-rvfi-dii --qemu/build-type Debug --qemu/use-asan'
+                extraQemuArgs = '--qemu/configure-options=--enable-rvfi-dii --qemu/build-type=Debug --qemu/use-asan'
             }
             def qemuResult = cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
                     nodeLabel: null,
