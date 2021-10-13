@@ -264,7 +264,7 @@ static void swap_cap_via_cap_impl(CPUArchState *env, uint32_t cd, uint32_t cs,
     if (do_store) {
         store_cap_to_memory(env, cd, addr, _host_return_address);
     } else {
-        bool cd_tagged = get_without_decompress_tag(env, cd);
+        cd_tagged = get_without_decompress_tag(env, cd);
         // Even if there is no store, we possibly need an MMU permission fault
         if (!cd_tagged)
             probe_write(env, addr, CHERI_CAP_SIZE, mmu_index,
