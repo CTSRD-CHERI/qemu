@@ -68,7 +68,7 @@ selectedConfigs.each { config ->
         // Build on the oldest supported Ubuntu version so the binaries also run there
         nodeLabel = "${nodeLabel}-baseline"
     }
-    jobs[os] = { ->
+    jobs[config] = { ->
         node(nodeLabel) {
             def extraQemuArgs = ''
             if (config.endsWith('-debug')) {
