@@ -3,6 +3,7 @@ import pytest
 import os
 import subprocess
 import sys
+import stat
 import typing
 from pathlib import Path
 
@@ -32,12 +33,15 @@ def find_morello_tests():
         "2020-10-07-test5/test42.elf",
         # These use different sizes/registers/addresses for LDX/STX
         "2020-11-10-generated-tests/test-03-012.elf",
+        "2020-11-10/test-03-012.elf",
         "2020-11-10-generated-tests/test-04-023.elf",
+        "2020-11-10/test-04-023.elf",
         "2020-11-26-test-bundle/new-tests/test-ldxp-stlxp_r_cr_c-002.elf",
     ]
     # noinspection PyUnresolvedReferences
     tests_dir = pytest.morello_tests_dir  # type: Path
     assert tests_dir.is_dir()
+
     for root, dirs, files in os.walk(str(tests_dir)):
         # Only walk dirs that are named "*test*"
         # However, there is also "2021-02-06-exn-tests/bad-tests/" which
@@ -47,23 +51,36 @@ def find_morello_tests():
         if dirs:
             print("Test dirs=", dirs)
 
-        for file in sorted(files):
-            if file.endswith('.elf'):
-                path = Path(root, file)
-                fullpath = str(path)
-                dirname = path.parent.name
-                should_print_failed = dirname == "failing-tests"
-                marks = ()  # type: typing.Any
-                if dirname in ("failing-tests", "bad-tests"):
-                    # TODO: see which ones should pass
-                    marks = (pytest.mark.skip(reason="Inside " + dirname + "folder"),)
-                elif any(fullpath.endswith(name) for name in ignore_list):
-                    marks = (pytest.mark.skip(),)
-                elif any(fullpath.endswith(name) for name in should_fail_list):
-                    marks = (pytest.mark.xfail(strict=True),)
-                yield pytest.param(path, should_print_failed,
-                                   id=os.path.relpath(fullpath[:-4], tests_dir),
-                                   marks=marks)
+        # First, we ensure that all compressed .elf files are decompressed
+        elf_files = []  # type: list[Path]
+        for file in files:
+            if file.endswith('.elf.gz'):
+                elf_path = Path(root, file[:-3])
+                compressed_path = Path(root, file)
+                # If the .elf doesn't exist or is older than the .gz, we extract the .elf.gz
+                if not elf_path.exists() or elf_path.stat()[stat.ST_MTIME] < compressed_path.stat()[stat.ST_MTIME]:
+                    if not elf_path.exists():
+                        # Ensure that we add a testcase the newly-created file.
+                        elf_files.append(elf_path)
+                    subprocess.check_call(["gunzip", "-k", str(compressed_path)])
+            elif file.endswith('.elf'):
+                elf_files.append(Path(root, file))
+
+        for elf_path in sorted(elf_files):
+            fullpath = str(elf_path.absolute())
+            dirname = elf_path.parent.name
+            should_print_failed = dirname == "failing-tests"
+            marks = ()  # type: typing.Any
+            if dirname in ("failing-tests", "bad-tests"):
+                # TODO: see which ones should pass
+                marks = (pytest.mark.skip(reason="Inside " + dirname + "folder"),)
+            elif any(fullpath.endswith(name) for name in ignore_list):
+                marks = (pytest.mark.skip(),)
+            elif any(fullpath.endswith(name) for name in should_fail_list):
+                marks = (pytest.mark.xfail(strict=True),)
+            yield pytest.param(elf_path, should_print_failed,
+                               id=os.path.relpath(fullpath[:-4], tests_dir),
+                               marks=marks)
 
 @pytest.mark.parametrize("elf_file,should_print_failed", find_morello_tests())
 def test_morello_elf_file(elf_file, should_print_failed: bool, qemu_binary):
