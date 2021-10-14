@@ -40,6 +40,7 @@
 #define TARGET_SIGTHR 32       /* reserved by thread library */
 #define TARGET_SIGLWP SIGTHR   /* compatibility */
 #define TARGET_SIGLIBRT 33     /* reserved by the real-time library */
+#define TARGET_SIGPROT 34      /* in-address space security exception. */
 #define TARGET_SIGRTMIN 65
 #define TARGET_SIGRTMAX 126
 
