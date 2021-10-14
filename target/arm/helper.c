@@ -4042,6 +4042,7 @@ static const ARMCPRegInfo pmsav5_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 
+#ifdef TARGET_CHERI
 static uint64_t claim_read(CPUARMState *env, const ARMCPRegInfo *ri)
 {
     return (uint64_t)env->claim;
@@ -4078,6 +4079,7 @@ static const ARMCPRegInfo claim_cp_reginfo[] = {
     REGINFO_SENTINEL
 };
 /* clang-format on */
+#endif
 
 static void vmsa_ttbcr_raw_write(CPUARMState *env, const ARMCPRegInfo *ri,
                                  uint64_t value)
