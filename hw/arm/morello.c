@@ -91,7 +91,7 @@ static void find_rvbar_exec(const char *st_name, int st_info, uint64_t st_value,
 {
     if (strcmp(st_name, "__RVBAR_ENTRY") == 0) {
         RVBAR_exec = st_value;
-        printf("%lx\n", RVBAR_exec);
+        printf("%" PRIx64 "\n", RVBAR_exec);
     }
 }
 

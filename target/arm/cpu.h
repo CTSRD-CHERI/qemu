@@ -2508,12 +2508,12 @@ static inline uint64_t cpreg_to_kvm_id(uint32_t cpregid)
 #define ARM_CP_DC_GVA            (ARM_CP_SPECIAL | 0x0600)
 #define ARM_CP_DC_GZVA           (ARM_CP_SPECIAL | 0x0700)
 #ifdef TARGET_CHERI
-#define ARM_CP_IC_OR_DC          (ARM_CP_SPECIAL | 0x0800)
-#define ARM_CP_IC_OR_DC_STORE (ARM_CP_SPECIAL | 0x0900)
-#define ARM_LAST_SPECIAL ARM_CP_IC_OR_DC_STORE
+#define ARM_CP_IC_OR_DC_VA       (ARM_CP_SPECIAL | 0x0800)
+#define ARM_CP_IC_OR_DC_VA_STORE (ARM_CP_SPECIAL | 0x0900)
+#define ARM_LAST_SPECIAL         ARM_CP_IC_OR_DC_VA_STORE
 #else
-#define ARM_CP_IC_OR_DC          ARM_CP_NOP
-#define ARM_CP_IC_OR_DC_STORE ARM_CP_NOP
+#define ARM_CP_IC_OR_DC_VA       ARM_CP_NOP
+#define ARM_CP_IC_OR_DC_VA_STORE ARM_CP_NOP
 #define ARM_LAST_SPECIAL         ARM_CP_DC_GZVA
 #endif
 #define ARM_CP_FPU               0x1000
