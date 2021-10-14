@@ -2336,13 +2336,13 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
         gpr_reg_modified(s, rt, false);
         return;
 #ifdef TARGET_CHERI
-    case ARM_CP_IC_OR_DC_STORE:
-    case ARM_CP_IC_OR_DC:
+    case ARM_CP_IC_OR_DC_VA_STORE:
+    case ARM_CP_IC_OR_DC_VA:
         {
             // FIXME: We need to align  address to ZVA_SIZE _before_ bounds
             // checks
-            bool write =
-                (ri->type & ARM_CP_IC_OR_DC_STORE) == ARM_CP_IC_OR_DC_STORE;
+            bool write = (ri->type & ARM_CP_IC_OR_DC_VA_STORE) ==
+                         ARM_CP_IC_OR_DC_VA_STORE;
             bounds_check_cache_op(s, cpu_reg(s, rt), rt, !write, write, false);
             // Consts still need to return the appropriate value
             if (ri->type & ARM_CP_CONST)

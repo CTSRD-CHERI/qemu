@@ -4401,18 +4401,22 @@ static const ARMCPRegInfo cache_block_ops_cp_reginfo[] = {
       .access = PL0_R, .type = ARM_CP_CONST | ARM_CP_NO_RAW,
       .resetvalue = 0 },
     /* The cache ops themselves: these all NOP for QEMU */
+    /*
+     * XXX: These take Rn=start VA, Rt=end VA so should bounds check if
+     * supporting A32 with CHERI
+     */
     { .name = "IICR", .cp = 15, .crm = 5, .opc1 = 0,
-      .access = PL1_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
+      .access = PL1_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
     { .name = "IDCR", .cp = 15, .crm = 6, .opc1 = 0,
-      .access = PL1_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
+      .access = PL1_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
     { .name = "CDCR", .cp = 15, .crm = 12, .opc1 = 0,
-      .access = PL0_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
+      .access = PL0_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
     { .name = "PIR", .cp = 15, .crm = 12, .opc1 = 1,
-      .access = PL0_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
+      .access = PL0_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
     { .name = "PDR", .cp = 15, .crm = 12, .opc1 = 2,
-      .access = PL0_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
+      .access = PL0_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
     { .name = "CIDCR", .cp = 15, .crm = 14, .opc1 = 0,
-      .access = PL1_W, .type = ARM_CP_IC_OR_DC | ARM_CP_64BIT },
+      .access = PL1_W, .type = ARM_CP_NOP|ARM_CP_64BIT },
     REGINFO_SENTINEL
 };
 
@@ -4421,10 +4425,10 @@ static const ARMCPRegInfo cache_test_clean_cp_reginfo[] = {
      * to indicate that there are no dirty cache lines.
      */
     { .name = "TC_DCACHE", .cp = 15, .crn = 7, .crm = 10, .opc1 = 0, .opc2 = 3,
-      .access = PL0_R, .type = ARM_CP_IC_OR_DC | ARM_CP_CONST | ARM_CP_NO_RAW,
+      .access = PL0_R, .type = ARM_CP_CONST | ARM_CP_NO_RAW,
       .resetvalue = (1 << 30) },
     { .name = "TCI_DCACHE", .cp = 15, .crn = 7, .crm = 14, .opc1 = 0, .opc2 = 3,
-      .access = PL0_R, .type = ARM_CP_IC_OR_DC | ARM_CP_CONST | ARM_CP_NO_RAW,
+      .access = PL0_R, .type = ARM_CP_CONST | ARM_CP_NO_RAW,
       .resetvalue = (1 << 30) },
     REGINFO_SENTINEL
 };
@@ -5037,37 +5041,37 @@ static const ARMCPRegInfo v8_cp_reginfo[] = {
     /* Cache ops: all NOPs since we don't emulate caches */
     { .name = "IC_IALLUIS", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 0, .crn = 7, .crm = 1, .opc2 = 0,
-      .access = PL1_W, .type = ARM_CP_IC_OR_DC,
+      .access = PL1_W, .type = ARM_CP_NOP,
       .accessfn = aa64_cacheop_pou_access },
     { .name = "IC_IALLU", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 0, .crn = 7, .crm = 5, .opc2 = 0,
-      .access = PL1_W, .type = ARM_CP_IC_OR_DC,
+      .access = PL1_W, .type = ARM_CP_NOP,
       .accessfn = aa64_cacheop_pou_access },
     { .name = "IC_IVAU", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 3, .crn = 7, .crm = 5, .opc2 = 1,
-      .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_IC_OR_DC,
+      .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_IC_OR_DC_VA,
       .accessfn = aa64_cacheop_pou_access },
     { .name = "DC_IVAC", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 0, .crn = 7, .crm = 6, .opc2 = 1,
       .access = PL1_W | PL_NO_SYSREG, .accessfn = aa64_cacheop_poc_access,
-      .type = ARM_CP_IC_OR_DC_STORE },
+      .type = ARM_CP_IC_OR_DC_VA_STORE },
     { .name = "DC_ISW", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 0, .crn = 7, .crm = 6, .opc2 = 2,
       .access = PL1_W, .accessfn = access_tsw, .type = ARM_CP_NOP },
     { .name = "DC_CVAC", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 3, .crn = 7, .crm = 10, .opc2 = 1,
-      .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_IC_OR_DC,
+      .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_IC_OR_DC_VA,
       .accessfn = aa64_cacheop_poc_access },
     { .name = "DC_CSW", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 0, .crn = 7, .crm = 10, .opc2 = 2,
       .access = PL1_W, .accessfn = access_tsw, .type = ARM_CP_NOP },
     { .name = "DC_CVAU", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 3, .crn = 7, .crm = 11, .opc2 = 1,
-      .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_IC_OR_DC,
+      .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_IC_OR_DC_VA,
       .accessfn = aa64_cacheop_pou_access },
     { .name = "DC_CIVAC", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 3, .crn = 7, .crm = 14, .opc2 = 1,
-      .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_IC_OR_DC,
+      .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_IC_OR_DC_VA,
       .accessfn = aa64_cacheop_poc_access },
     { .name = "DC_CISW", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 0, .crn = 7, .crm = 14, .opc2 = 2,
@@ -7160,7 +7164,7 @@ static const ARMCPRegInfo dcpop_reg[] = {
     { .name = "DC_CVAP", .state = ARM_CP_STATE_AA64,
       .opc0 = 1, .opc1 = 3, .crn = 7, .crm = 12, .opc2 = 1,
       .access = PL0_W | PL_NO_SYSREG, .type = ARM_CP_NO_RAW | ARM_CP_SUPPRESS_TB_END,
-      .type = ARM_CP_IC_OR_DC,
+      .type = ARM_CP_IC_OR_DC_VA,
       .accessfn = aa64_cacheop_poc_access, .writefn = dccvap_writefn },
     REGINFO_SENTINEL
 };
