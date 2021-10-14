@@ -41,7 +41,10 @@
 #include "sysemu/sysemu.h"
 #include "hw/arm/armtrickbox.h"
 
-#define RAM_SIZE 0x13000000
+/* A basic morello board. There is no need to use this if only a morello CPU
+ * is required (use the virt board instead). This board is designed to be a
+ * minimal platform for testing, with optional support for the ARM ACK.
+ */
 
 #define MORELLO_MAX_CPUS 4
 
@@ -52,6 +55,7 @@ typedef struct MorelloMachineState {
     struct {
         ARMCPU core;
     } cpus[MORELLO_MAX_CPUS];
+    bool is_ack;
 } MorelloMachineState;
 
 typedef struct MorelloMachineClass {
@@ -76,8 +80,49 @@ static void error_and_die(const char *message)
     exit(1);
 }
 
-// Lifetime is for the lifetime of the program
+/* Lifetime is for the lifetime of the program */
 static struct arm_boot_info binfo;
+
+/* ACK test ELSs do not define an entry point. Instead, look for this symbol and
+ * jump there. */
+uint64_t RVBAR_exec;
+static void find_rvbar_exec(const char *st_name, int st_info, uint64_t st_value,
+                            uint64_t st_size)
+{
+    if (strcmp(st_name, "__RVBAR_ENTRY") == 0) {
+        RVBAR_exec = st_value;
+        printf("%lx\n", RVBAR_exec);
+    }
+}
+
+struct mem_region {
+    uint64_t start, end;
+    bool alias_sec;
+    const char *name;
+    const char *name_sec;
+};
+
+static MemoryRegion *create_mem_from_desc(MemoryRegion *parent,
+                                          struct mem_region *el, bool sec,
+                                          MemoryRegion *alias)
+{
+    MemoryRegion *mem = g_new(MemoryRegion, 1);
+
+    if (alias) {
+        memory_region_init_alias(mem, NULL, sec ? el->name_sec : el->name,
+                                 alias, 0, el->end - el->start);
+    } else {
+        memory_region_init_ram(mem, NULL, sec ? el->name_sec : el->name,
+                               el->end - el->start, &error_fatal);
+#ifdef TARGET_CHERI
+        cheri_tag_init(mem, el->end - el->start);
+#endif
+    }
+
+    memory_region_add_subregion(parent, el->start, mem);
+
+    return mem;
+}
 
 static void morello_machine_init(MachineState *machine)
 {
@@ -88,8 +133,41 @@ static void morello_machine_init(MachineState *machine)
 #error "Morello board should be used with TARGET_CHERI"
 #endif
 
+    /* Set to true to get separate physical address spaces for regions specified
+     * below with secure aliases with non secure = false. */
+    bool seperate_s_ns = false;
+
+    /* This map was decided on just by running ACK. It would be good to have a
+     * better idea of what the actual memory map is. It also suffices for the
+     * other test suites we have so we don't change it based on ACK support.
+     */
+#define NAME(N) N, N "_sec"
+    struct mem_region mem_map[] = {
+        /* {start, end, secure aliases with non secure, name} */
+        { 0x0, 0x13000000, true,
+          NAME("LOW") }, /* The trickbox goes between LOW and HIGH */
+        { 0x13200000, 0x100000000, true, NAME("HIGH") },
+        { 0x800000000000, 0x800010000000, true, NAME("HIGHEST") },
+        { 0xfffffffe0000, 0x1000000000000, true, NAME("mem.NORMAL_MAX_PA") },
+    };
+
+    MemoryRegion *secure_memory = NULL;
+    if (seperate_s_ns) {
+        secure_memory = g_new(MemoryRegion, 1);
+        memory_region_init(secure_memory, NULL, "cpu-secure-memory",
+                           UINT64_MAX);
+    }
+
     /* Add RAM */
-    memory_region_add_subregion(get_system_memory(), 0, machine->ram);
+    for (struct mem_region *el = mem_map;
+         el != (struct mem_region *)((char *)mem_map + sizeof(mem_map)); el++) {
+        MemoryRegion *ns =
+            create_mem_from_desc(get_system_memory(), el, false, NULL);
+        if (seperate_s_ns) {
+            create_mem_from_desc(secure_memory, el, true,
+                                 el->alias_sec ? ns : NULL);
+        }
+    }
 
     if (strcmp(machine->cpu_type, ARM_CPU_TYPE_NAME("morello")) != 0) {
         error_and_die(
@@ -104,6 +182,7 @@ static void morello_machine_init(MachineState *machine)
                                 machine->cpu_type);
         object_property_set_bool(OBJECT(&morelloMachineState->cpus[i].core),
                                  "mpidr_mt", true, NULL);
+        morelloMachineState->cpus[i].core.secure_memory = secure_memory;
         if (!qdev_realize(DEVICE(&morelloMachineState->cpus[i].core), NULL,
                           &errp)) {
             error_report_err(errp);
@@ -112,18 +191,59 @@ static void morello_machine_init(MachineState *machine)
     }
 
     /* Create the trickbox used for testing */
-    arm_trickbox_mm_init_default();
+    SysBusDevice *trickbox = arm_trickbox_mm_init_default();
+
+    if (seperate_s_ns) {
+        /* Put the trickbox in the secure space as well  */
+        trickbox->mmio[1].addr = trickbox->mmio[0].addr;
+        memory_region_add_subregion(secure_memory, trickbox->mmio[1].addr,
+                                    trickbox->mmio[1].memory);
+    }
 
     /* Start logging */
 #ifdef CONFIG_TCG_LOG_INSTR
     qemu_log_instr_init(CPU(ARM_CPU(first_cpu)));
 #endif
 
-    binfo.ram_size = ram_size;
+    /* The real memory map is specified above. This is just to make
+     * arm_load_kernel happy,
+     * as it will assert if ram_size is not large enough to hold the ELF */
+
+    binfo.ram_size = 0x13000000;
     binfo.nb_cpus = machine->smp.cpus;
+    binfo.secure_boot = seperate_s_ns;
+
+    if (morelloMachineState->is_ack) {
+        binfo.sym_cb = &find_rvbar_exec;
+    }
+
     arm_load_kernel(ARM_CPU(first_cpu), machine, &binfo);
 
-    assert(binfo.entry < ram_size);
+    if (morelloMachineState->is_ack) {
+        assert(RVBAR_exec != 0);
+        binfo.entry = RVBAR_exec;
+    }
+}
+
+static bool morello_get_ack(Object *obj, Error **errp)
+{
+    MorelloMachineState *morelloMachineState = MORELLO_MACHINE(obj);
+    return morelloMachineState->is_ack;
+}
+
+static void morello_set_ack(Object *obj, bool value, Error **errp)
+{
+    MorelloMachineState *morelloMachineState = MORELLO_MACHINE(obj);
+    morelloMachineState->is_ack = value;
+}
+
+static void morello_instance_init(Object *obj)
+{
+    MorelloMachineState *morelloMachineState = MORELLO_MACHINE(obj);
+    morelloMachineState->is_ack = false;
+    object_property_add_bool(obj, "ack", morello_get_ack, morello_set_ack);
+    object_property_set_description(
+        obj, "ack", "Set on/off to enable/disable support for the ACK");
 }
 
 static void morello_machine_class_init(ObjectClass *oc, void *data)
@@ -134,18 +254,17 @@ static void morello_machine_class_init(ObjectClass *oc, void *data)
     mc->init = morello_machine_init;
     mc->default_cpus = mc->min_cpus = 1;
     mc->max_cpus = MORELLO_MAX_CPUS;
-    mc->default_ram_size = RAM_SIZE;
-    mc->default_ram_id = "ram";
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("morello");
     mc->minimum_page_bits = 12;
 }
 
-static const TypeInfo morello_machine_types[] = {{
+static const TypeInfo morello_machine_types[] = { {
     .name = TYPE_MORELLO_MACHINE,
     .parent = TYPE_MACHINE,
     .class_init = morello_machine_class_init,
+    .instance_init = morello_instance_init,
     .instance_size = sizeof(MorelloMachineState),
     .class_size = sizeof(MorelloMachineClass),
-}};
+} };
 
 DEFINE_TYPES(morello_machine_types)

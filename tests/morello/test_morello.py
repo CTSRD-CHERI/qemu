@@ -33,9 +33,9 @@ def find_morello_tests():
         "2020-10-07-test5/test42.elf",
         # These use different sizes/registers/addresses for LDX/STX
         "2020-11-10-generated-tests/test-03-012.elf",
-        "2020-11-10/test-03-012.elf",
+        "2020-11-10-tests/test-03-012.elf",
         "2020-11-10-generated-tests/test-04-023.elf",
-        "2020-11-10/test-04-023.elf",
+        "2020-11-10-tests/test-04-023.elf",
         "2020-11-26-test-bundle/new-tests/test-ldxp-stlxp_r_cr_c-002.elf",
     ]
     # noinspection PyUnresolvedReferences
@@ -52,21 +52,15 @@ def find_morello_tests():
             print("Test dirs=", dirs)
 
         # First, we ensure that all compressed .elf files are decompressed
-        elf_files = []  # type: list[Path]
+        elf_files = set()  # type: set[Path]
         for file in files:
             if file.endswith('.elf.gz'):
-                elf_path = Path(root, file[:-3])
-                compressed_path = Path(root, file)
-                # If the .elf doesn't exist or is older than the .gz, we extract the .elf.gz
-                if not elf_path.exists() or elf_path.stat()[stat.ST_MTIME] < compressed_path.stat()[stat.ST_MTIME]:
-                    if not elf_path.exists():
-                        # Ensure that we add a testcase the newly-created file.
-                        elf_files.append(elf_path)
-                    subprocess.check_call(["gunzip", "-k", str(compressed_path)])
+                elf_files.add(Path(root, file[:-3]))
             elif file.endswith('.elf'):
-                elf_files.append(Path(root, file))
+                elf_files.add(Path(root, file))
 
-        for elf_path in sorted(elf_files):
+        for elf_path in sorted(list(elf_files)):
+            assert elf_path.name.endswith('.elf')
             fullpath = str(elf_path.absolute())
             dirname = elf_path.parent.name
             should_print_failed = dirname == "failing-tests"
@@ -83,10 +77,16 @@ def find_morello_tests():
                                marks=marks)
 
 @pytest.mark.parametrize("elf_file,should_print_failed", find_morello_tests())
-def test_morello_elf_file(elf_file, should_print_failed: bool, qemu_binary):
-    command = [str(qemu_binary), *qemu_args, elf_file]
+def test_morello_elf_file(elf_file: Path, should_print_failed: bool, qemu_binary):
+    compressed_elf_file = elf_file.with_name(elf_file.name + ".gz")
+    # If the .elf doesn't exist or is older than the .gz, we extract the .elf.gz
+    if not elf_file.exists() or elf_file.stat()[stat.ST_MTIME] < compressed_elf_file.stat()[stat.ST_MTIME]:
+        subprocess.check_call(["gunzip", "-k", str(compressed_elf_file)])
+    command = [str(qemu_binary), *qemu_args, str(elf_file)]
+    assert elf_file.exists(), elf_file
     # Timeout will fail the test
-    sp = subprocess.run(command, capture_output=True, timeout=5)
+    sp = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        timeout=5)
     code = sp.returncode
     result = sp.stdout
     result_str = result.decode("utf-8")
