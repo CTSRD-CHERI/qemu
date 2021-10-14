@@ -85,6 +85,29 @@ selectedConfigs.each { config ->
                         maybeArchiveArtifacts(params, os)
                     })
 
+            // Run the generated Morello tests
+            stage("Run Morello tests") {
+                if (!fileExists("qemu-${os}/bin/qemu-system-morello")) {
+                    error("Didn't build qemu-system-morello?")
+                }
+                sh "qemu-${os}/bin/qemu-system-morello --version"
+                dir('morello-generated-tests') {
+                    cloneGitRepoWithReference(url: 'https://github.com/rems-project/morello-generated-tests.git',
+                                              branch: 'main', credentialsId: 'ctsrd-jenkins-new-github-api-key')
+                }
+                sh """#!/usr/bin/env bash
+set -xe
+virtualenv -p python3 venv
+source venv/bin/activate
+pip install pytest-xdist
+# The pytest.ini configuration ensures that pytest-xdist autodetects the number of CPUs used for running tests.
+pytest qemu/tests/morello \
+--morello-tests-dir=\$WORKSPACE/morello-generated-tests \
+--qemu=\$WORKSPACE/qemu-${os}/bin/qemu-system-morello \
+--junit-xml=\$WORKSPACE/morello-generated-tests-result.xml || echo "Some tests failed"
+"""
+                junit allowEmptyResults: false, keepLongStdio: true, testResults: 'morello-generated-tests-result.xml'
+            }
             // Run the baremetal MIPS tests to check we didn't regress.
             if (os == 'linux') {
                 cheribuildProject(target: 'cheritest-qemu', architecture: 'native',
