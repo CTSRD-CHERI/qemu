@@ -167,7 +167,7 @@ static int gdb_signal_table[] = {
     -1,
 #endif
     -1, /* SIGPOLL */
-    -1,
+    TARGET_SIGPROT,
     -1,
     -1,
     -1,
