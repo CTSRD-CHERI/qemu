@@ -8499,8 +8499,9 @@ void register_cp_regs_for_features(ARMCPU *cpu)
     // HCR controls a lot of these LETODO: Also have to pay attention to
     // restricted for RDDC and RSP.
     cap_register_t null_cap;
-    bzero(&null_cap, sizeof(null_cap));
-    cap_register_t max_cap = cc128_make_max_perms_cap(0, 0, CAP_MAX_TOP);
+    null_capability(&null_cap);
+    cap_register_t max_cap;
+    set_max_perms_capability(&max_cap, 0);
     /* clang-format off */
     ARMCPRegInfo cheri_regs[] = {
         // We swap the relevent DDC into this register, so it is always
