@@ -22,6 +22,8 @@
 
 #include "cpu.h"
 
+#include "helper_utils.h"
+
 /* Compare with riscv/include/vmparam.h */
 #define TARGET_MAXTSIZ      (1*1024UL*1024*1024)   /* max text size */
 #define TARGET_DFLDSIZ      (128UL*1024*1024)   /* initial data size limit */
@@ -37,12 +39,12 @@
 
 static inline abi_ulong get_sp_from_cpustate(CPURISCVState *state)
 {
-    return state->gpr[xSP];
+    return gpr_int_value(state, xSP);
 }
 
 static inline void set_second_rval(CPURISCVState *state, abi_ulong retval2)
 {
-    state->gpr[xA1] = retval2;
+    gpr_set_int_value(state, xA1, retval2);
 }
 
 #endif  /* ! _TARGET_ARCH_VMPARAM_H_ */

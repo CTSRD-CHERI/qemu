@@ -32,10 +32,18 @@ static inline void target_cpu_init(CPURISCVState *env,
 {
     int i;
     
-    for (i = 0; i < 32; i++)
-        env->gpr[i] = regs->regs[i];
+#ifdef TARGET_CHERI
+    for (i = 1; i < 32; i++)
+	update_capreg(env, i, &regs->regs[i]);
 
-    env->pc = regs->sepc;
+    env->PCC = regs->sepc;
+#else
+    for (i = 0; i < 32; i++)
+        gpr_set_int_value(env, i, regs->regs[i]);
+
+    riscv_update_pc(env, regs->sepc, true);
+#endif
+
 }
 
 static inline void target_cpu_loop(CPURISCVState *env)
@@ -146,11 +154,11 @@ static inline void target_cpu_loop(CPURISCVState *env)
 static inline void target_cpu_clone_regs(CPURISCVState *env, target_ulong newsp)
 {
     if (newsp) {
-        env->gpr[xSP] = newsp;
+        gpr_set_int_value(env, xSP, newsp);
     }
 
-    env->gpr[xA0] = 0; /* a0 */
-    env->gpr[5] = 0;   /* t0 */
+    gpr_set_int_value(env, xA0, 0);
+    gpr_set_int_value(env, xT0, 0);
 }
 
 static inline void target_cpu_reset(CPUArchState *cpu)
