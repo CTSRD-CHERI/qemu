@@ -29,9 +29,9 @@ static inline void target_thread_set_upcall(CPURISCVState *regs, abi_ulong entry
     sp = (abi_ulong)((stack_base + stack_size) -
         sizeof(struct target_trapframe)) & ~(16 - 1);
 
-    regs->gpr[xSP] = sp;
-    regs->pc = entry;
-    regs->gpr[xA0] = arg;
+    gpr_set_int_value(regs, xSP, sp);
+    riscv_update_pc(regs, entry, true);
+    gpr_set_int_value(regs, xA0, arg);
 }
 
 /* Compare with exec_setregs() in riscv/riscv/machdep.c */
