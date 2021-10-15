@@ -315,15 +315,8 @@ void helper_load_pair_and_branch_and_link(CPUArchState *env, uint32_t cn,
                          _host_return_address, &base, CHERI_CAP_SIZE,
                          raise_unaligned_load_exception);
 
-    uint64_t target_pesbt, target_cursor;
-    bool target_tag = load_cap_from_memory_raw(
-        env, &target_pesbt, &target_cursor, cn, &base, addr + CHERI_CAP_SIZE,
-        _host_return_address, NULL);
-
-    cap_register_t target;
-    target.cr_pesbt = target_pesbt;
-    CAP_cc(decompress_raw)(target_pesbt, target_cursor, target_tag, &target);
-
+    cap_register_t target = load_and_decompress_cap_from_memory_raw(
+        env, cn, &base, addr + CHERI_CAP_SIZE, _host_return_address, NULL);
     // We do this load SECOND as it has a register-file side effect.
     load_cap_from_memory(env, ct, cn, &base, addr, _host_return_address, NULL);
 
@@ -352,15 +345,8 @@ void helper_load_and_branch_and_link(CPUArchState *env, uint32_t cn,
                          _host_return_address, &base, CHERI_CAP_SIZE,
                          raise_unaligned_load_exception);
 
-    uint64_t target_pesbt, target_cursor;
-    bool target_tag =
-        load_cap_from_memory_raw(env, &target_pesbt, &target_cursor, cn, &base,
-                                 addr, _host_return_address, NULL);
-
-    cap_register_t target;
-    target.cr_pesbt = target_pesbt;
-    CAP_cc(decompress_raw)(target_pesbt, target_cursor, target_tag, &target);
-
+    cap_register_t target = load_and_decompress_cap_from_memory_raw(
+        env, cn, &base, addr, _host_return_address, NULL);
     cheri_jump_and_link(env, &target, cap_get_cursor(&target), link, link_pc,
                         flags);
 }
