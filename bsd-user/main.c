@@ -64,7 +64,11 @@ bool ras_thread_set = false;
 int singlestep;
 static const char *cpu_model;
 static const char *cpu_type;
+#ifdef TARGET_CHERI
+unsigned long guest_base = CHERI_CAP_USER_MMAP_BASE;
+#else
 unsigned long guest_base;
+#endif
 bool have_guest_base;
 #if (TARGET_LONG_BITS == 32) && (HOST_LONG_BITS == 64)
 /*
