@@ -165,6 +165,13 @@ static void raw_write_cap(CPUARMState *env, const ARMCPRegInfo *ri,
     CPREG_FIELDCAP(env, ri) = *cap;
     CPREG_FIELDCAP(env, ri)._cr_cursor = value;
 }
+
+cap_register_t read_raw_cp_reg_cap(CPUARMState *env, const ARMCPRegInfo *ri)
+{
+    cap_register_t result;
+    raw_read_cap(env, ri, &result);
+    return result;
+}
 #endif
 
 static uint64_t raw_read(CPUARMState *env, const ARMCPRegInfo *ri)
@@ -210,11 +217,8 @@ uint64_t read_raw_cp_reg(CPUARMState *env, const ARMCPRegInfo *ri)
     /* Raw read of a coprocessor register (as needed for migration, etc). */
     // This will need a cap version to migrate CHERI CPUs
     if (ri->type & ARM_CP_CONST) {
-#ifdef TARGET_CHERI
-        if (ri->type & ARM_CP_CAP) {
-            return ri->capresetvalue._cr_cursor;
-        }
-#endif
+        assert(!cpreg_field_is_cap(ri) &&
+               "There are no constant cap cpregs (yet?).");
         return ri->resetvalue;
     } else if (ri->raw_readfn) {
         return ri->raw_readfn(env, ri);
@@ -8498,8 +8502,6 @@ void register_cp_regs_for_features(ARMCPU *cpu)
     // LETODO: Stuff to do with CPACR_ELX.CEN / EN for stopping DDC access, also
     // HCR controls a lot of these LETODO: Also have to pay attention to
     // restricted for RDDC and RSP.
-    cap_register_t null_cap;
-    null_capability(&null_cap);
     cap_register_t max_cap;
     set_max_perms_capability(&max_cap, 0);
     /* clang-format off */
@@ -8510,32 +8512,31 @@ void register_cp_regs_for_features(ARMCPU *cpu)
           .opc0 = 3, .opc1 = 3, .crn = 4, .crm = 1, .opc2 = 1,
           .access = PL0_RW | PL_NO_SYSREG, .type = ARM_CP_CAP_ONLY,
           .fieldoffset = offsetof(CPUARMState, DDC_current),
-          .capresetvalue = max_cap },
+          CAPRESETVALUE(max_cap) },
         { .name = "DDC_EL0", .state = ARM_CP_STATE_AA64,
           .opc0 = 3, .opc1 = 0, .crn = 4, .crm = 1, .opc2 = 1,
           .access = PL1_RW | PL_NO_SYSREG, .type = ARM_CP_CAP_ONLY,
           .fieldoffset = offsetof(CPUARMState, DDCs[0]),
-          .capresetvalue = max_cap },
+          CAPRESETVALUE(max_cap) },
         { .name = "DDC_EL1", .state = ARM_CP_STATE_AA64,
           .opc0 = 3, .opc1 = 4, .crn = 4, .crm = 1, .opc2 = 1,
           .access = PL2_RW | PL_NO_SYSREG, .type = ARM_CP_CAP_ONLY,
           .fieldoffset = offsetof(CPUARMState, DDCs[1]),
-          .capresetvalue = max_cap },
+          CAPRESETVALUE(max_cap) },
         { .name = "DDC_EL2", .state = ARM_CP_STATE_AA64,
           .opc0 = 3, .opc1 = 6, .crn = 4, .crm = 1, .opc2 = 1,
           .access = PL3_RW | PL_NO_SYSREG, .type = ARM_CP_CAP_ONLY,
           .fieldoffset = offsetof(CPUARMState, DDCs[2]),
-          .capresetvalue = max_cap },
+          CAPRESETVALUE(max_cap) },
         { .name = "RDDC_EL0", .state = ARM_CP_STATE_AA64,
           .opc0 = 3, .opc1 = 3, .crn = 4, .crm = 3, .opc2 = 1,
           .access = PL0_RW | PL_NO_SYSREG, .type = ARM_CP_CAP_ONLY,
           .fieldoffset = offsetof(CPUARMState, DDCs[4]),
-          .capresetvalue = max_cap },
+          CAPRESETVALUE(max_cap) },
         { .name = "RSP_EL0", .state = ARM_CP_STATE_AA64,
           .opc0 = 3, .opc1 = 7, .crn = 4, .crm = 1, .opc2 = 3,
           .access = PL0_RW | PL_NO_SYSREG, .type = ARM_CP_CAP,
-          .fieldoffset = offsetof(CPUARMState, sp_el[4]),
-          .capresetvalue = null_cap },
+          .fieldoffset = offsetof(CPUARMState, sp_el[4]) },
         // TODO: bits in CPTR control access to these
         { .name = "CHCR_EL2", .state = ARM_CP_STATE_AA64,
           .opc0 = 3, .opc1 = 4, .crn = 1, .crm = 2, .opc2 = 3,
@@ -8571,8 +8572,7 @@ void register_cp_regs_for_features(ARMCPU *cpu)
         { .name = "CID_EL0", .state = ARM_CP_STATE_AA64,
           .opc0 = 3, .opc1 = 3, .crn = 13, .crm = 0, .opc2 = 7,
           .access = PL0_RW | PL_NO_SYSREG, .type = ARM_CP_CAP,
-          .fieldoffset = offsetof(CPUARMState, cid_el0),
-          .capresetvalue = null_cap },
+          .fieldoffset = offsetof(CPUARMState, cid_el0) },
         { .name = "TPIDRRO_EL0", .state = ARM_CP_STATE_AA64,
           .opc0 = 3, .opc1 = 3, .opc2 = 4, .crn = 13, .crm = 0,
           .access = PL0_RW | PL_IN_EXECUTIVE | PL_NO_SYSREG,

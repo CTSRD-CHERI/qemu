@@ -2785,6 +2785,11 @@ struct ARMCPRegInfo {
      * cap registers. A special value of resetfn selects this for use */
 #ifdef TARGET_CHERI
     cap_register_t capresetvalue;
+    bool has_special_capresetvalue;
+#define CAPRESETVALUE(cap)                                                     \
+    .capresetvalue = (cap), .has_special_capresetvalue = true
+#else
+#define CAPRESETVALUE(cap) /* ignored */
 #endif
 
     /* Offset of the field in CPUARMState for this register.
@@ -2965,6 +2970,9 @@ static inline bool cp_access_ok(int current_el,
 
 /* Raw read of a coprocessor register (as needed for migration, etc) */
 uint64_t read_raw_cp_reg(CPUARMState *env, const ARMCPRegInfo *ri);
+#ifdef TARGET_CHERI
+cap_register_t read_raw_cp_reg_cap(CPUARMState *env, const ARMCPRegInfo *ri);
+#endif
 
 /**
  * write_list_to_cpustate
@@ -4317,7 +4325,11 @@ static inline void aarch64_save_sp(CPUARMState *env, int el)
 
 #ifdef TARGET_CHERI
     env->sp_el[index].cap = *get_readonly_capreg(env, 31);
+    cheri_debug_assert(env->sp_el[index].cap.cr_extra ==
+                       CREG_FULLY_DECOMPRESSED);
     env->DDCs[index] = env->DDC_current;
+    cheri_debug_assert(env->DDCs[index].cap.cr_extra ==
+                       CREG_FULLY_DECOMPRESSED);
 #else
     env->sp_el[index] = env->xregs[31];
 #endif
@@ -4327,6 +4339,8 @@ static inline void aarch64_restore_sp(CPUARMState *env, int el)
 {
     int index = aarch64_get_bank_index(env, el);
 #ifdef TARGET_CHERI
+    cheri_debug_assert(env->sp_el[index].cap.cr_extra ==
+                       CREG_FULLY_DECOMPRESSED);
     update_capreg(env, 31, &env->sp_el[index].cap);
     env->DDC_current = env->DDCs[index];
 #ifdef CONFIG_TCG_LOG_INSTR
