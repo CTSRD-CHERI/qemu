@@ -126,6 +126,13 @@ typedef struct TaskState {
     sigset_t signal_mask;
     sigset_t sigsuspend_mask;
 
+#ifdef TARGET_CHERI
+    cap_register_t cheri_mmap_cap;
+#ifdef TARGET_RISCV
+    cap_register_t cheri_sigcode_cap;
+#endif
+#endif
+
     uint8_t stack[];
 } __attribute__((aligned(16))) TaskState;
 
@@ -167,12 +174,19 @@ struct bsd_binprm {
         int (*core_dump)(int, CPUArchState *);
 };
 
-void do_init_thread(struct target_pt_regs *regs, struct image_info *infop);
+void do_init_thread(struct target_pt_regs *regs,
+#ifdef TARGET_CHERI
+    cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
+#endif
+    struct image_info *infop);
 abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
                               abi_ulong stringp, int push_ptr);
 int loader_exec(const char *filename, char **argv, char **envp,
-             struct target_pt_regs *regs, struct image_info *infop,
-             struct bsd_binprm *bprm);
+             struct target_pt_regs *regs,
+#ifdef TARGET_CHERI
+             cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
+#endif
+             struct image_info *infop, struct bsd_binprm *bprm);
 
 int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
                     struct image_info *info);

@@ -2261,8 +2261,16 @@ static int load_aout_interp(void * exptr, int interp_fd)
     return(0);
 }
 
-void do_init_thread(struct target_pt_regs *regs, struct image_info *infop)
+void do_init_thread(struct target_pt_regs *regs,
+#ifdef TARGET_CHERI
+    cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
+#endif
+    struct image_info *infop)
 {
 
+#ifdef TARGET_CHERI
+    target_thread_init(regs, mmapcapp, sigcodecapp, infop);
+#else
     target_thread_init(regs, infop);
+#endif
 }
