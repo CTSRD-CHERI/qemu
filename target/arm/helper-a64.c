@@ -38,7 +38,7 @@
 #include "exec/log_instr.h"
 
 #ifdef TARGET_CHERI
-#include "cheri-archspecific.h"
+#include "cheri-helper-utils.h"
 #include "cheri_tagmem.h"
 #endif
 
@@ -1033,7 +1033,7 @@ void HELPER(exception_return)(CPUARMState *env, uint64_t new_pc)
 
 #ifdef TARGET_CHERI
         bool cap_return = is_access_to_capabilities_enabled_at_el(env, cur_el);
-        bool no_system = !cap_has_perms(&env->pc.cap, CAP_ACCESS_SYS_REGS);
+        bool no_system = !cheri_have_access_sysregs(env);
 
         if (!cap_return ||
             !is_access_to_capabilities_enabled_at_el(env, new_el))
