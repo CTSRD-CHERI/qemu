@@ -24,5 +24,5 @@
 /* Compare with cpu_set_user_tls() in riscv/riscv/vm_machdep.c */
 void target_cpu_set_tls(CPURISCVState *env, target_ulong newtls)
 {
-    env->gpr[xTP] = newtls + TP_OFFSET;
+    gpr_set_int_value(env, xTP, newtls + TP_OFFSET);
 }
