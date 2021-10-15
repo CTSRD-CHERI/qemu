@@ -278,7 +278,7 @@ int main(int argc, char **argv)
     TaskState *ts;
     CPUArchState *env;
     CPUState *cpu;
-    int optind;
+    int ii, optind;
     const char *r;
     const char *gdbstub = NULL;
     char **target_environ, **wrk;
@@ -442,7 +442,7 @@ int main(int argc, char **argv)
     trace_init_file();
 
     /* Zero out regs */
-    memset(regs, 0, sizeof(struct target_pt_regs));
+    memset(regs, 0, sizeof(*regs));
 
     memset(&bprm, 0, sizeof(bprm));
 
@@ -482,7 +482,22 @@ int main(int argc, char **argv)
      */
     guest_base = HOST_PAGE_ALIGN(guest_base);
 
-    if (loader_exec(filename, argv+optind, target_environ, regs, info, &bprm)) {
+    /* build Task State */
+    ts = g_new0(TaskState, 1);
+    init_task_state(ts);
+
+#ifdef TARGET_CHERI
+    for (ii = 0; ii < 32; ii++) {
+        regs->regs[ii] = *cheri_get_ddc(env);
+    }
+    cheri_init_capabilities(cheri_get_ddc(env));
+#endif
+
+    if (loader_exec(filename, argv+optind, target_environ, regs,
+#ifdef TARGET_CHERI
+        &ts->cheri_mmap_cap, &ts->cheri_sigcode_cap,
+#endif
+        info, &bprm)) {
         printf("Error loading %s\n", filename);
         _exit(1);
     }
@@ -510,9 +525,6 @@ int main(int argc, char **argv)
         qemu_log("entry       0x" TARGET_ABI_FMT_lx "\n", info->entry);
     }
 
-    /* build Task State */
-    ts = g_new0(TaskState, 1);
-    init_task_state(ts);
     ts->info = info;
     ts->bprm = &bprm;
     cpu->opaque = ts;
