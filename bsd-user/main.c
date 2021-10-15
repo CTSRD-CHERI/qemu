@@ -48,6 +48,13 @@
 #include "host_os.h"
 #include "target_arch_cpu.h"
 
+#ifdef TARGET_CHERI
+#include "cheri/cherireg.h"
+
+#include "machine/vmparam.h"
+#include "machine/cheri.h"
+#endif
+
 #ifdef __FreeBSD__
 pthread_mutex_t ras_mtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t ras_cond = PTHREAD_COND_INITIALIZER;
