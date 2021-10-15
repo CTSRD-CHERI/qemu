@@ -35,7 +35,11 @@ struct target_pt_regs {
 #endif
 };
 
+#ifdef TARGET_CHERI
+#define UNAME_MACHINE "riscv64c"
+#else
 #define UNAME_MACHINE "riscv64"
+#endif
 
 #define TARGET_HW_MACHINE       "riscv64"
 #define TARGET_HW_MACHINE_ARCH  UNAME_MACHINE
