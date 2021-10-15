@@ -22,3 +22,10 @@ bsd_user_ss.add(files(
   targetos / 'os-sys.c',
   targetos / 'os-thread.c',
 ))
+
+bsd_user_ss.add(when: 'TARGET_CHERI', if_true: files(
+  'cheri/cheri_exec.c',
+  'cheri/cheri_usercap.c',
+  'cheri/cheric.c',
+  abi / 'cheri/cheri_machdep.c',
+))
