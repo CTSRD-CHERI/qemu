@@ -213,6 +213,7 @@ static inline void update_next_pcc_for_tcg(CPUARMState *env,
     unsigned int cur_el;
 
     env->pc.cap = *target;
+    cheri_debug_assert(env->pc.cap.cr_extra == CREG_FULLY_DECOMPRESSED);
     env->pc.cap._cr_cursor &= ~1;
 
     if (executive_changed) {
