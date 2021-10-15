@@ -34,11 +34,14 @@
 
 static inline const cap_register_t *cheri_get_ddc(CPUARMState *env)
 {
+    cheri_debug_assert(env->DDC_current.cap.cr_extra ==
+                       CREG_FULLY_DECOMPRESSED);
     return &env->DDC_current.cap;
 }
 
 static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUARMState *env)
 {
+    cheri_debug_assert(env->pc.cap.cr_extra == CREG_FULLY_DECOMPRESSED);
     return &env->pc.cap;
 }
 

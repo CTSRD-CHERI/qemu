@@ -682,7 +682,8 @@ static inline void gen_lazy_cap_get_state_i32(DisasContext *ctx, int regnum,
 {
     tcg_gen_ld8u_i32(
         state, cpu_env,
-        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+        offsetof(CPUArchState,
+                 CHERI_GPCAPREGS_MEMBER.decompressed[regnum].cap.cr_extra));
     cheri_tcg_printf_verbose("cw", "Register %d lazy state get: %d\n", regnum,
                              state);
 }
@@ -909,7 +910,8 @@ static inline void gen_lazy_cap_set_state_cond(DisasContext *ctx, int regnum,
     TCGv_i32 tcg_state = tcg_const_i32(state);
     tcg_gen_st8_i32(
         tcg_state, cpu_env,
-        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+        offsetof(CPUArchState,
+                 CHERI_GPCAPREGS_MEMBER.decompressed[regnum].cap.cr_extra));
     tcg_temp_free_i32(tcg_state);
 
     if (conditional)
@@ -961,6 +963,8 @@ static inline void gen_sp_set_decompressed_int(DisasContext *ctx, size_t offset)
     // Base
     tcg_gen_movi_tl(temp, 0);
     tcg_gen_st8_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_tag));
+    _Static_assert(CREG_INTEGER == 0, "About to store zero to set CREG_INT");
+    tcg_gen_st8_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_extra));
     tcg_gen_st_tl(temp, cpu_env, offset + offsetof(cap_register_t, cr_base));
     // Top
 #if CHERI_CAP_BITS == 128
@@ -1013,7 +1017,8 @@ static inline void gen_move_cap_gp_sp(DisasContext *ctx, int dest_num,
         return;
     gen_move_cap(gp_register_offset(dest_num), source_off);
     gen_cap_invalidate_cursor(ctx, dest_num);
-    gen_lazy_cap_set_state(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
+    /* All special purpose registers are always fully decompressed. */
+    disas_capreg_state_set(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
 }
 
 // Set a special purpose register in env to the state of lazy capreg
@@ -1041,7 +1046,7 @@ static inline void gen_move_cap_gp_gp(DisasContext *ctx, int dest_num,
     gen_cap_sync_cursor(ctx, source_num);
     gen_move_cap(gp_register_offset(dest_num), gp_register_offset(source_num));
     gen_cap_invalidate_cursor(ctx, dest_num);
-    gen_lazy_cap_set_state(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
+    disas_capreg_state_set(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
 }
 
 // Does GP register file operation of dest_reg = (value cond 0) ? true_reg :
@@ -1061,7 +1066,6 @@ static inline void gen_move_cap_gp_select_gp(DisasContext *ctx, int dest_num,
     cheri_tcg_printf_verbose("cwccc", format, dest_num, value,
                              tcg_cond_string(cond), true_source_num,
                              false_source_num);
-
     cheri_debug_assert(disas_capreg_state_must_be(ctx, true_source_num,
                                                   CREG_FULLY_DECOMPRESSED));
     cheri_debug_assert(disas_capreg_state_must_be(ctx, false_source_num,
@@ -1075,8 +1079,7 @@ static inline void gen_move_cap_gp_select_gp(DisasContext *ctx, int dest_num,
                        gp_register_offset(true_source_num),
                        gp_register_offset(false_source_num), cond, value);
     gen_cap_invalidate_cursor(ctx, dest_num);
-
-    gen_lazy_cap_set_state(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
+    disas_capreg_state_set(ctx, dest_num, CREG_FULLY_DECOMPRESSED);
 }
 
 // TCG templates to directly modify fields in PESBT. Hopefully we will
@@ -1162,9 +1165,10 @@ static inline void gen_cap_set_tag(DisasContext *ctx, int regnum, TCGv tagbit,
         _Static_assert(CREG_UNTAGGED_CAP == 1 && CREG_TAGGED_CAP == 2,
                        "Optimised for these values");
         tcg_gen_add_tl(tagbit, tagbit, one);
-        tcg_gen_st8_tl(tagbit, cpu_env,
-                       offsetof(CPUArchState,
-                                CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+        tcg_gen_st8_tl(
+            tagbit, cpu_env,
+            offsetof(CPUArchState,
+                     CHERI_GPCAPREGS_MEMBER.decompressed[regnum].cap.cr_extra));
 
         disas_capreg_state_set(ctx, regnum, CREG_UNTAGGED_CAP);
         disas_capreg_state_include(ctx, regnum, CREG_TAGGED_CAP);
@@ -1817,7 +1821,8 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
     tcg_gen_add_i64(new_tag, new_tag, tmp0);
     tcg_gen_st8_i64(
         new_tag, cpu_env,
-        offsetof(CPUArchState, CHERI_GPCAPREGS_MEMBER.capreg_state[regnum]));
+        offsetof(CPUArchState,
+                 CHERI_GPCAPREGS_MEMBER.decompressed[regnum].cap.cr_extra));
     disas_capreg_state_include(ctx, regnum, CREG_UNTAGGED_CAP);
 
     // Dont need to free tmp0, it is freed by the caller

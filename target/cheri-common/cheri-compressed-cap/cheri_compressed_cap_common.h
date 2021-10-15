@@ -129,11 +129,12 @@ struct _cc_N(cap) {
     _cc_addr_t _cr_cursor;
     _cc_addr_t cr_pesbt;
 #endif
-    _cc_length_t _cr_top;  /* Capability top */
-    _cc_addr_t cr_base;    /* Capability base addr */
-    uint8_t cr_tag;      /* Tag */
+    _cc_length_t _cr_top;    /* Capability top */
+    _cc_addr_t cr_base;      /* Capability base addr */
+    uint8_t cr_tag;          /* Tag */
     uint8_t cr_bounds_valid; /* Set if bounds decode was given an invalid cap */
     uint8_t cr_exp;          /* Exponent */
+    uint8_t cr_extra;        /* Additional data stored by the caller */
 #ifdef __cplusplus
     inline _cc_addr_t base() const { return cr_base; }
     inline _cc_addr_t address() const { return _cr_cursor; }

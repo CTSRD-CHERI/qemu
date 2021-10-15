@@ -308,6 +308,7 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     cheri_debug_assert(cap_is_representable(cp));
     cp->cr_bounds_valid = 1;
     cp->cr_exp = CAP_CC(NULL_EXP);
+    cp->cr_extra = CREG_FULLY_DECOMPRESSED;
     return cp;
 }
 
@@ -376,6 +377,7 @@ static inline void set_max_perms_capability(cap_register_t *crp,
                                             target_ulong cursor)
 {
     *crp = CAP_cc(make_max_perms_cap)(0, cursor, CAP_MAX_TOP);
+    crp->cr_extra = CREG_FULLY_DECOMPRESSED;
 }
 
 static inline QEMU_ALWAYS_INLINE bool

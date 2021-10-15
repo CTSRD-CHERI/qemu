@@ -1345,6 +1345,7 @@ cap_register_t load_and_decompress_cap_from_memory_raw(
                                         retpc, physaddr);
     cap_register_t result;
     CAP_cc(decompress_raw)(pesbt, cursor, tag, &result);
+    result.cr_extra = CREG_FULLY_DECOMPRESSED;
     return result;
 }
 

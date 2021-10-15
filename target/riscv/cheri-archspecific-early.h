@@ -111,11 +111,13 @@ enum CheriSCR {
 #define CINVOKE_DATA_REGNUM 31
 
 static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {
+    cheri_debug_assert(env->DDC.cr_extra == CREG_FULLY_DECOMPRESSED);
     return &env->DDC;
 }
 
 static inline const cap_register_t *_cheri_get_pcc_unchecked(CPURISCVState *env)
 {
+    cheri_debug_assert(env->PCC.cr_extra == CREG_FULLY_DECOMPRESSED);
     return &env->PCC;
 }
 
