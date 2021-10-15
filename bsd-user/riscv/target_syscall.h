@@ -26,8 +26,13 @@
  */
 
 struct target_pt_regs {
+#ifdef TARGET_CHERI
+    cap_register_t regs[32];
+    cap_register_t sepc;
+#else
     abi_ulong regs[32];
     abi_ulong sepc;
+#endif
 };
 
 #define UNAME_MACHINE "riscv64"
