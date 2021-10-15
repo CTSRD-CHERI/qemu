@@ -136,6 +136,26 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
     ARMCPRegInfo *ri = value;
     ARMCPU *cpu = opaque;
 
+#ifdef TARGET_CHERI
+    if (cpreg_field_is_cap(ri)) {
+        assert(ri->fieldoffset && "Unexpected capability cpreg without offset");
+        /*
+         * We ensure that all cap_register_t values are reset to a canonical
+         * capability rather than all zeroes. This ensures that values such
+         * as pesbt and capreg_state are initialized correctly.
+         * The default reset value is null unless has_special_capresetvalue is
+         * set. We do this even for (ARM_CP_SPECIAL | ARM_CP_ALIAS) since
+         * not doing that causing registers such elr_elN and sp_elN to be
+         * invalid (which triggers assertions later on).
+         */
+        if (ri->has_special_capresetvalue) {
+            CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
+        } else {
+            null_capability(&CPREG_FIELDCAP(&cpu->env, ri));
+        }
+    }
+#endif
+
     if (ri->type & (ARM_CP_SPECIAL | ARM_CP_ALIAS)) {
         return;
     }
@@ -153,13 +173,9 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
     if (!ri->fieldoffset) {
         return;
     }
-
-#ifdef TARGET_CHERI
     if (cpreg_field_is_cap(ri)) {
-        CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
-    } else
-#endif
-        if (cpreg_field_is_64bit(ri)) {
+        /* Initialized above. */
+    } else if (cpreg_field_is_64bit(ri)) {
         CPREG_FIELD64(&cpu->env, ri) = ri->resetvalue;
     } else {
         CPREG_FIELD32(&cpu->env, ri) = ri->resetvalue;
@@ -177,9 +193,34 @@ static void cp_reg_check_reset(gpointer key, gpointer value,  gpointer opaque)
     ARMCPU *cpu = opaque;
     uint64_t oldvalue, newvalue;
 
+#ifdef TARGET_CHERI
+    /*
+     * Check that all capaility register were initialized to a valid capability
+     * rather than just memset() to zero.
+     */
+    if (cpreg_field_is_cap(ri)) {
+        cap_register_t creg_value = read_raw_cp_reg_cap(&cpu->env, ri);
+        _Static_assert(CREG_FULLY_DECOMPRESSED != 0, "need nonzero value");
+        if (creg_value.cr_extra != CREG_FULLY_DECOMPRESSED) {
+            error_report("Register %s was not initialized to a valid state",
+                         ri->name);
+            abort();
+        }
+    }
+#endif
+
     if (ri->type & (ARM_CP_SPECIAL | ARM_CP_ALIAS | ARM_CP_NO_RAW)) {
         return;
     }
+#ifdef TARGET_CHERI
+    if (cpreg_field_is_cap(ri)) {
+        cap_register_t creg_old = read_raw_cp_reg_cap(&cpu->env, ri);
+        cp_reg_reset(key, value, opaque);
+        cap_register_t creg_new = read_raw_cp_reg_cap(&cpu->env, ri);
+        assert(memcmp(&creg_old, &creg_new, sizeof(creg_old)) == 0);
+        return;
+    }
+#endif
 
     oldvalue = read_raw_cp_reg(&cpu->env, ri);
     cp_reg_reset(key, value, opaque);
