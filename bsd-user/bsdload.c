@@ -20,6 +20,10 @@
 #include "qemu.h"
 #include "qemu/error-report.h"
 
+#ifdef TARGET_CHERI
+#include "cheri/cheric.h"
+#endif
+
 #define TARGET_NGROUPS 32
 
 /* ??? This should really be somewhere else.  */
@@ -102,41 +106,62 @@ static int prepare_binprm(struct bsd_binprm *bprm)
 abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
                               abi_ulong stringp, int push_ptr)
 {
-    int n = sizeof(abi_ulong);
     abi_ulong envp;
     abi_ulong argv;
+    size_t len;
 
-    sp -= (envc + 1) * n;
+    assert((sp % ABI_PTR_SIZE) == 0);
+
+    sp -= (envc + 1) * ABI_PTR_SIZE;
     envp = sp;
-    sp -= (argc + 1) * n;
+    sp -= (argc + 1) * ABI_PTR_SIZE;
     argv = sp;
+
     if (push_ptr) {
         /* FIXME - handle put_user() failures */
-        sp -= n;
-        put_user_ual(envp, sp);
-        sp -= n;
-        put_user_ual(argv, sp);
+        sp -= ABI_PTR_SIZE;
+        put_user_p(envp, sp);
     }
-    sp -= n;
+    sp -= ABI_PTR_SIZE;
+    /* FIXME - handle put_user() failures */
+    put_user_ual(envc, sp);
+
+    if (push_ptr) {
+        /* FIXME - handle put_user() failures */
+        sp -= ABI_PTR_SIZE;
+        put_user_p(argv, sp);
+    }
+    sp -= ABI_PTR_SIZE;
     /* FIXME - handle put_user() failures */
     put_user_ual(argc, sp);
 
     while (argc-- > 0) {
+        len = target_strlen(stringp) + 1;
         /* FIXME - handle put_user() failures */
-        put_user_ual(stringp, argv);
-        argv += n;
-        stringp += target_strlen(stringp) + 1;
+#ifdef TARGET_CHERI
+        put_user_c(cheri_ptr((void *)(intptr_t)stringp, len), argv);
+#else
+        put_user_p(stringp, argv);
+#endif
+        argv += ABI_PTR_SIZE;
+        stringp += len;
     }
     /* FIXME - handle put_user() failures */
-    put_user_ual(0, argv);
+    put_user_p(0, argv);
+
     while (envc-- > 0) {
+        len = target_strlen(stringp) + 1;
         /* FIXME - handle put_user() failures */
-        put_user_ual(stringp, envp);
-        envp += n;
-        stringp += target_strlen(stringp) + 1;
+#ifdef TARGET_CHERI
+        put_user_c(cheri_ptr((void *)(intptr_t)stringp, len), envp);
+#else
+        put_user_p(stringp, envp);
+#endif
+        envp += ABI_PTR_SIZE;
+        stringp += len;
     }
     /* FIXME - handle put_user() failures */
-    put_user_ual(0, envp);
+    put_user_p(0, envp);
 
     return sp;
 }
