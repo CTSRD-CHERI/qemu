@@ -43,7 +43,8 @@ target_long __cheri_round_representable_length(target_ulong len);
 /*
  * Programmer-friendly helpers for C code emulating CHERI-aware code.
  */
-cap_register_t    *cheri_ptr(void *ptr, size_t len);
+cap_register_t    *cheri_zerocap(void);
+cap_register_t    *cheri_ptr(const void *ptr, size_t len);
 
 cap_register_t    *cheri_load(cap_register_t *cap, const abi_uintcap_t *value);
 void               cheri_store(void *ptr, const cap_register_t *cap);
