@@ -73,6 +73,9 @@ struct image_info {
     abi_ulong end_data;
     abi_ulong start_brk;
     abi_ulong brk;
+    abi_ulong start_addr;
+    abi_ulong end_addr;
+    abi_ulong interp_end;
     abi_ulong start_mmap;
     abi_ulong mmap;
     abi_ulong rss;
@@ -82,8 +85,12 @@ struct image_info {
     abi_ulong data_offset;
     abi_ulong arg_start;
     abi_ulong arg_end;
+    abi_ulong reloc_base;
     int       personality;
 };
+
+extern abi_ulong target_auxents;   /* Where the AUX entries are in target */
+extern size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
 
 #define MAX_SIGQUEUE_SIZE 1024
 
@@ -443,19 +450,19 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define __put_user(x, hptr)\
 ({\
     PRAGMA_DISABLE_PACKED_WARNING;\
-    int size = sizeof(*hptr);\
+    int size = sizeof(*(hptr));\
     switch(size) {\
     case 1:\
-        *(uint8_t *)(hptr) = (uint8_t)(typeof(*hptr))(x);\
+        *(uint8_t *)(hptr) = (uint8_t)(typeof(*(hptr)))(x);\
         break;\
     case 2:\
-        *(uint16_t *)(hptr) = tswap16((typeof(*hptr))(x));\
+        *(uint16_t *)(hptr) = tswap16((typeof(*(hptr)))(x));\
         break;\
     case 4:\
-        *(uint32_t *)(hptr) = tswap32((typeof(*hptr))(x));\
+        *(uint32_t *)(hptr) = tswap32((typeof(*(hptr)))(x));\
         break;\
     case 8:\
-        *(uint64_t *)(hptr) = tswap64((typeof(*hptr))(x));\
+        *(uint64_t *)(hptr) = tswap64((typeof(*(hptr)))(x));\
         break;\
     default:\
         abort();\
@@ -534,6 +541,33 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define put_user_s16(x, gaddr) put_user((x), (gaddr), int16_t)
 #define put_user_u8(x, gaddr)  put_user((x), (gaddr), uint8_t)
 #define put_user_s8(x, gaddr)  put_user((x), (gaddr), int8_t)
+#ifdef TARGET_CHERI
+#define put_user_c(x, gaddr)                                            \
+({                                                                      \
+    abi_ulong __gaddr = (gaddr);                                        \
+    uint8_t *__hptr;                                                    \
+    abi_long __ret;                                                     \
+    if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, CHERI_CAP_SIZE, 0))) { \
+        __ret = __put_user(cc128_compress_raw(x) ^ CC128_NULL_XOR_MASK, \
+            (uint64_t *)(__hptr + CHERI_MEM_OFFSET_METADATA));          \
+        if (__ret == 0) {                                               \
+            __ret = __put_user((x)->_cr_cursor,                         \
+               (uint64_t *)(__hptr + CHERI_MEM_OFFSET_CURSOR));         \
+        }                                                               \
+        unlock_user(__hptr, __gaddr, CHERI_CAP_SIZE);                   \
+    } else                                                              \
+        __ret = -TARGET_EFAULT;                                         \
+    __ret;                                                              \
+})
+#define put_user_p(x, gaddr)                                            \
+({                                                                      \
+                                                                        \
+    assert(((gaddr) % ABI_PTR_SIZE) == 0);                              \
+    put_user_c(cheri_setaddress(cheri_zerocap(), (x)), (gaddr));        \
+})
+#else
+#define put_user_p(x, gaddr) put_user_ual(x, gaddr)
+#endif
 
 #define get_user_ual(x, gaddr) get_user((x), (gaddr), abi_ulong)
 #define get_user_sal(x, gaddr) get_user((x), (gaddr), abi_long)

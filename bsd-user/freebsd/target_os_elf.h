@@ -23,6 +23,11 @@
 #include "elf.h"
 
 #include "bsd-proc.h"
+#ifdef TARGET_CHERI
+#include "cheri/cherireg.h"
+#include "cheri/cheric.h"
+#include "cheri/cheri.h"
+#endif
 
 /* this flag is uneffective under linux too, should be deleted */
 #ifndef MAP_DENYWRITE
@@ -91,6 +96,54 @@ struct exec
 
 #define DLINFO_ITEMS 14
 
+#ifdef TARGET_CHERI
+/*
+ * prog_cap() is ported from sys/kern/imgact_elf.c in CTSRD-CHERI/CheriBSD.
+ */
+static cap_register_t *prog_cap(struct image_info *info, uint64_t perms)
+{
+    cap_register_t cap;
+    abi_ulong prog_base;
+    ssize_t prog_len;
+
+    cap = *cheri_zerocap();
+
+    prog_base = info->start_addr;
+    prog_len = info->end_addr - prog_base;
+
+    /* Ensure program base and length are representable. */
+    prog_base = CHERI_REPRESENTABLE_BASE(prog_base, prog_len);
+    prog_len = CHERI_REPRESENTABLE_LENGTH(prog_len);
+    assert(prog_len != 0);
+    return (cheri_capability_build_user_rwx(&cap, perms, prog_base, prog_len,
+        info->start_addr - prog_base));
+}
+
+/*
+ * interp_cap() is ported from sys/kern/imgact_elf.c in CTSRD-CHERI/CheriBSD.
+ */
+static cap_register_t *
+interp_cap(struct image_info *info, target_ulong base, uint64_t perms)
+{
+    cap_register_t cap;
+    target_ulong interp_base;
+    ssize_t interp_len;
+
+    cap = *cheri_zerocap();
+
+    interp_base = base;
+    interp_len = info->interp_end - interp_base;
+
+    /* Ensure rtld base and length are representable. */
+    interp_base = CHERI_REPRESENTABLE_BASE(interp_base, interp_len);
+    interp_len = CHERI_REPRESENTABLE_LENGTH(interp_len);
+    assert(interp_len != 0);
+
+    return (cheri_capability_build_user_rwx(&cap, perms, interp_base,
+        interp_len, base - interp_base));
+}
+#endif
+
 static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
                                    abi_ulong stringp,
                                    struct elfhdr * exec,
@@ -101,7 +154,23 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
 {
         abi_ulong features, sp;
         int size;
-        const int n = sizeof(elf_addr_t);
+        int typesize, valsize;
+#ifdef TARGET_CHERI
+        cap_register_t cap;
+        target_ulong dstauxents;
+#endif
+
+#ifdef TARGET_CHERI
+        assert(ibcs);
+        /*
+         * Elf64C_Auxinfo.a_type with padding because Elf64C_Auxinfo.a_un is
+         * aligned to an 128-bit address as it can store a capability.
+         */
+        typesize = sizeof(int64_t) * 2;
+#else
+        typesize = sizeof(int64_t);
+#endif
+        valsize = ABI_PTR_SIZE;
 
 	target_auxents_sz = 0;
         sp = p;
@@ -109,33 +178,72 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
          * Force 16 byte _final_ alignment here for generality.
          */
         sp = sp &~ (abi_ulong)15;
-        size = (DLINFO_ITEMS + 1) * 2;
-        size += envc + argc + 2;
-        size += (!ibcs ? 3 : 1);        /* argc itself */
-        size *= n;
+        size = (DLINFO_ITEMS + 1) * (typesize + valsize);
+        size += (envc + argc + 2) * ABI_PTR_SIZE;
+        size += (!ibcs ? 3 : 1) * ABI_PTR_SIZE;        /* argc itself */
         if (size & 15)
             sp -= 16 - (size & 15);
 
-        /* This is correct because Linux defines
-         * elf_addr_t as Elf32_Off / Elf64_Off
-         */
-#define NEW_AUX_ENT(id, val) do {               \
-            sp -= n; put_user_ual(val, sp);     \
-            sp -= n; put_user_ual(id, sp);      \
-            target_auxents_sz += 2 * n;         \
+#ifdef TARGET_CHERI
+#define NEW_AUX_ENT(type, val) do {                                          \
+            sp -= valsize; put_user_s64(val, sp); put_user_u64(0, sp + 8);   \
+            sp -= typesize; put_user_s64(type, sp); put_user_u64(0, sp + 8); \
+            target_auxents_sz += typesize + valsize;                         \
           } while(0)
+#define NEW_AUX_ENT_PTR(type, ptr) do {                                      \
+            sp -= valsize;                                                   \
+            put_user_c(ptr, sp);                                             \
+            sp -= typesize;                                                  \
+            put_user_s64(type, sp);                                          \
+            put_user_u64(0, sp + 8);                                         \
+            target_auxents_sz += typesize + valsize;                         \
+          } while(0)
+#else
+#define NEW_AUX_ENT(type, val) do {                  \
+            sp -= valsize; put_user_s64(val, sp);    \
+            sp -= typesize; put_user_s64(type, sp);  \
+            target_auxents_sz += typesize + valsize; \
+          } while(0)
+#endif
 
         NEW_AUX_ENT (AT_NULL, 0);
 
         /* There must be exactly DLINFO_ITEMS entries here.  */
+
+#ifdef TARGET_CHERI
+        NEW_AUX_ENT_PTR(AT_PHDR, cheri_setaddress(prog_cap(info,
+            CHERI_CAP_USER_DATA_PERMS), load_addr + exec->e_phoff));
+#else
         NEW_AUX_ENT(AT_PHDR, (abi_ulong)(load_addr + exec->e_phoff));
+#endif
         NEW_AUX_ENT(AT_PHENT, (abi_ulong)(sizeof (struct elf_phdr)));
         NEW_AUX_ENT(AT_PHNUM, (abi_ulong)(exec->e_phnum));
         NEW_AUX_ENT(AT_PAGESZ, (abi_ulong)(TARGET_PAGE_SIZE));
+#ifdef TARGET_CHERI
+        if (info->interp_end == 0) {
+            if (exec->e_type != ET_DYN) {
+                cap = *cheri_zerocap();
+            } else {
+                cap = *prog_cap(info, CHERI_CAP_USER_DATA_PERMS |
+                    CHERI_CAP_USER_CODE_PERMS);
+            }
+        } else {
+            cap = *interp_cap(info, interp_load_addr,
+                CHERI_CAP_USER_DATA_PERMS | CHERI_CAP_USER_CODE_PERMS);
+        }
+        NEW_AUX_ENT_PTR(AT_BASE, cheri_setaddress(&cap, interp_load_addr));
+#else
         NEW_AUX_ENT(AT_BASE, (abi_ulong)(interp_load_addr));
+#endif
         NEW_AUX_ENT(AT_FLAGS, (abi_ulong)0);
         NEW_AUX_ENT(FREEBSD_AT_NCPUS, (abi_ulong)bsd_get_ncpu());
+#ifdef TARGET_CHERI
+        NEW_AUX_ENT_PTR(AT_ENTRY, cheri_setflags(cheri_setaddress(
+            prog_cap(info, CHERI_CAP_USER_CODE_PERMS),
+            load_bias + exec->e_entry), CHERI_FLAGS_CAP_MODE));
+#else
         NEW_AUX_ENT(AT_ENTRY, load_bias + exec->e_entry);
+#endif
         features = ELF_HWCAP;
 #if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
         {
@@ -147,12 +255,23 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         }
 #endif
         NEW_AUX_ENT(FREEBSD_AT_HWCAP, features);
+#ifdef TARGET_CHERI
+        dstauxents = sp - 4 * (typesize + valsize);
+        NEW_AUX_ENT(AT_ARGC, (target_ulong)argc);
+        NEW_AUX_ENT_PTR(AT_ARGV, cheri_ptr((void *)(dstauxents -
+            (envc + 1) * ABI_PTR_SIZE - (argc + 1) * ABI_PTR_SIZE),
+            (argc + 1) * ABI_PTR_SIZE));
+        NEW_AUX_ENT(AT_ENVC, (target_ulong)envc);
+        NEW_AUX_ENT_PTR(AT_ENVV, cheri_ptr((void *)(dstauxents -
+            (envc + 1) * ABI_PTR_SIZE), (envc + 1) * ABI_PTR_SIZE));
+#else
 #ifndef TARGET_PPC
         NEW_AUX_ENT(AT_UID, (abi_ulong) getuid());
         NEW_AUX_ENT(AT_EUID, (abi_ulong) geteuid());
         NEW_AUX_ENT(AT_GID, (abi_ulong) getgid());
         NEW_AUX_ENT(AT_EGID, (abi_ulong) getegid());
 #endif
+#endif /* TARGET_CHERI */
 	target_auxents = sp; /* Note where the aux entries are in the target */
 #ifdef ARCH_DLINFO
         /*
@@ -160,6 +279,9 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
          * special alignment requirements on the AUXV if necessary (eg. PPC).
          */
         ARCH_DLINFO;
+#endif
+#ifdef TARGET_CHERI
+#undef NEW_AUX_ENT_PTR
 #endif
 #undef NEW_AUX_ENT
 

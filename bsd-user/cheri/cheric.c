@@ -51,13 +51,21 @@ __cheri_round_representable_length(target_ulong len)
 }
 
 cap_register_t *
-cheri_ptr(void *ptr, size_t len)
+cheri_zerocap(void)
 {
     static cap_register_t cap;
 
     null_capability(&cap);
-    set_max_perms_capability(&cap, (intptr_t)ptr);
-    return (cheri_setbounds(&cap, len));
+    set_max_perms_capability(&cap, 0);
+    return (&cap);
+}
+
+cap_register_t *
+cheri_ptr(const void *ptr, size_t len)
+{
+
+    return (cheri_setbounds(cheri_setaddress(cheri_zerocap(), (intptr_t)ptr),
+        len));
 }
 
 cap_register_t *

@@ -28,8 +28,8 @@
 #include "disas/disas.h"
 #include "qemu/path.h"
 
-static abi_ulong target_auxents;   /* Where the AUX entries are in target */
-static size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
+abi_ulong target_auxents;   /* Where the AUX entries are in target */
+size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
 
 #include "target_arch_reg.h"
 #include "target_os_elf.h"
@@ -61,7 +61,7 @@ static size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
 
 static int elf_core_dump(int signr, CPUArchState *env);
 static int load_elf_sections(const struct elfhdr *hdr, struct elf_phdr *phdr,
-    int fd, abi_ulong rbase, abi_ulong *baddrp);
+    int fd, abi_ulong rbase, abi_ulong *baddrp, abi_ulong *max_addrp);
 
 abi_ulong target_stksiz;
 abi_ulong target_stkbas;
@@ -288,16 +288,21 @@ static void padzero(abi_ulong elf_bss, abi_ulong last_bss)
     }
 }
 
+/*
+ * load_elf_interp() is based on __elfN(load_interp) and __elfN(load_file) from
+ * sys/kern/imgact_elf.c in FreeBSD.
+ */
 static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
-        int interpreter_fd, abi_ulong *interp_load_addr)
+        int interpreter_fd, abi_ulong *interp_load_addr, abi_ulong *interp_end_addr)
 {
     struct elf_phdr *elf_phdata  =  NULL;
     abi_ulong rbase;
     int retval;
-    abi_ulong baddr, last_bss, elf_bss, error;
+    abi_ulong last_bss, elf_bss, error, max_addr;
 
     elf_bss = 0;
     last_bss = 0;
+    max_addr = 0;
     error = 0;
 
     bswap_ehdr(interp_elf_ex);
@@ -355,17 +360,17 @@ static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
     }
 
     error = load_elf_sections(interp_elf_ex, elf_phdata, interpreter_fd, rbase,
-        &baddr);
+        interp_load_addr, &max_addr);
     if (error != 0) {
         perror("load_elf_sections");
         exit(-1);
     }
+    *interp_end_addr = *interp_load_addr + max_addr;
 
     /* Now use mmap to map the library into memory. */
     close(interpreter_fd);
     free(elf_phdata);
 
-    *interp_load_addr = baddr;
     return ((abi_ulong) interp_elf_ex->e_entry) + rbase;
 }
 
@@ -540,21 +545,27 @@ int is_target_elf_binary(int fd)
     }
 }
 
+/*
+ * load_elf_sections() is based on __elfN(load_sections) from
+ * sys/kern/imgact_elf.c in FreeBSD.
+ */
 static int
 load_elf_sections(const struct elfhdr *hdr, struct elf_phdr *phdr, int fd,
-    abi_ulong rbase, abi_ulong *baddrp)
+    abi_ulong rbase, abi_ulong *baddrp, abi_ulong *max_addrp)
 {
     struct elf_phdr *elf_ppnt;
-    abi_ulong baddr;
+    abi_ulong baddr, max_addr;
     int i;
     bool first;
+
+    max_addr = 0;
+    first = true;
 
     /* Now we do a little grungy work by mmaping the ELF image into
      * the correct location in memory.  At this point, we assume that
      * the image should be loaded at fixed address, not at a variable
      * address.
      */
-    first = true;
     for (i = 0, elf_ppnt = phdr; i < hdr->e_phnum; i++, elf_ppnt++) {
         int elf_prot = 0;
         abi_ulong error;
@@ -596,10 +607,14 @@ load_elf_sections(const struct elfhdr *hdr, struct elf_phdr *phdr, int fd,
             baddr = TARGET_ELF_PAGESTART(rbase + elf_ppnt->p_vaddr);
             first = false;
         }
+        max_addr = MAX(max_addr, elf_ppnt->p_vaddr + elf_ppnt->p_memsz);
     }
 
     if (baddrp != NULL)
         *baddrp = baddr;
+    if (max_addrp != NULL)
+        *max_addrp = max_addr;
+
     return (0);
 }
 
@@ -616,11 +631,10 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     int i;
     struct elf_phdr * elf_ppnt;
     struct elf_phdr *elf_phdata;
-    abi_ulong elf_bss, elf_brk;
     int error, retval;
     char * elf_interpreter;
-    abi_ulong baddr, elf_entry, et_dyn_addr, interp_load_addr = 0;
-    abi_ulong reloc_func_desc = 0;
+    abi_ulong baddr, elf_entry, end_addr, et_dyn_addr, interp_load_addr;
+    abi_ulong reloc_func_desc, seg_size, seg_addr;
     char passed_fileno[6];
 
     ibcs2_interpreter = 0;
@@ -665,18 +679,16 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     bswap_phdr(elf_phdata, elf_ex.e_phnum);
     elf_ppnt = elf_phdata;
 
-    elf_bss = 0;
-    elf_brk = 0;
-
-
     elf_interpreter = NULL;
-#if 0
-    start_code = ~((abi_ulong)0UL);
-    end_code = 0;
-    start_data = 0;
-    end_data = 0;
-#endif
+    interp_load_addr = 0;
+    info->start_addr = ~((abi_ulong)0UL);
+    info->end_addr = 0;
+    info->start_code = ~((abi_ulong)0UL);
+    info->end_code = 0;
+    info->start_data = ~((abi_ulong)0UL);
+    info->end_data = 0;
     interp_ex.a_info = 0;
+    reloc_func_desc = 0;
 
     for (i = 0; i < elf_ex.e_phnum; i++) {
         if (elf_ppnt->p_type == PT_INTERP) {
@@ -719,6 +731,17 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
             if (strcmp(elf_interpreter, "/usr/lib/libc.so.1") == 0 ||
                     strcmp(elf_interpreter, "/usr/lib/ld-elf.so.1") == 0) {
                 ibcs2_interpreter = 1;
+#ifdef TARGET_CHERI
+	    } else if (strcmp(elf_interpreter, "/libexec/ld-elf.so.1") == 0) {
+                /*
+		 * XXXKW: In order to support multi-ABI environments, use the
+		 * ABI-explicit ld-cheri-elf.so.1 rtld.
+		 *
+		 * Instead, we should implement a QEMU user-mode option to
+		 * set an ELF interpreter.
+		 */
+                (void)strcpy(elf_interpreter, "/libexec/ld-cheri-elf.so.1");
+#endif
             }
 
 #if 0
@@ -831,40 +854,42 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     info->start_stack = bprm->p;
 
     error = load_elf_sections(&elf_ex, elf_phdata, bprm->fd, et_dyn_addr,
-        &load_addr);
-    for (i = 0, elf_ppnt = elf_phdata; i < elf_ex.e_phnum; i++, elf_ppnt++) {
-        if (elf_ppnt->p_type != PT_LOAD)
-            continue;
-        if (elf_ppnt->p_memsz > elf_ppnt->p_filesz)
-            elf_brk = MAX(elf_brk, et_dyn_addr + elf_ppnt->p_vaddr +
-                elf_ppnt->p_memsz);
-    }
+        &load_addr, NULL);
     if (error != 0) {
         perror("load_elf_sections");
         exit(-1);
     }
-        /* XXX Move this out? */
-#if 0
-        if ((elf_ppnt->p_flags & PF_X)) {
-            start_code = MAX(elf_ppnt->p_vaddr, start_code);
-            end_code = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_filesz, end_code);
+
+    /*
+     * This loop is based on __elfN(enforce_limits) from sys/kern/imgact_elf.c
+     * in FreeBSD
+     */
+    for (i = 0, elf_ppnt = elf_phdata; i < elf_ex.e_phnum; i++, elf_ppnt++) {
+        if (elf_ppnt->p_type != PT_LOAD || elf_ppnt->p_memsz == 0)
+            continue;
+
+        seg_addr = trunc_page(elf_ppnt->p_vaddr + et_dyn_addr);
+        seg_size = round_page(elf_ppnt->p_memsz + elf_ppnt->p_vaddr +
+            et_dyn_addr - seg_addr);
+
+        info->start_addr = MIN(info->start_addr, seg_addr);
+        end_addr = seg_addr + seg_size;
+        info->end_addr = MAX(info->end_addr, end_addr);
+
+        if ((elf_ppnt->p_flags & PF_X) != 0 &&
+            info->end_code - info->start_code < seg_size) {
+            info->start_code = seg_addr;
+            info->end_code = end_addr;
         } else {
-            start_data = MAX(elf_ppnt->p_vaddr, start_data);
-            end_data = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_filesz, end_data);
+            info->start_data = seg_addr;
+            info->end_data = end_addr;
         }
-
-        elf_bss = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_filesz, elf_bss);
-        elf_brk = MAX(elf_ppnt->p_vaddr + elf_ppnt->p_memsz, elf_brk);
-#endif
-
-#if 0
-    elf_bss += load_bias;
-    elf_brk += load_bias;
-    start_code += load_bias;
-    end_code += load_bias;
-    start_data += load_bias;
-    end_data += load_bias;
-#endif
+    }
+    info->start_brk += et_dyn_addr;
+    info->brk = info->start_brk;
+    /* XXXKW: Detect code offset for GDB. */
+    info->code_offset = info->start_code - 0xff00;
+    info->data_offset = info->start_data;
 
     if (elf_interpreter) {
         if (interpreter_type & 1) {
@@ -872,7 +897,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
         }
         else if (interpreter_type & 2) {
             elf_entry = load_elf_interp(&interp_elf_ex, interpreter_fd,
-                                            &interp_load_addr);
+                                            &interp_load_addr, &info->interp_end);
         }
         reloc_func_desc = interp_load_addr;
 
@@ -889,6 +914,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
         interp_load_addr = et_dyn_addr;
         elf_entry += interp_load_addr;
     }
+    info->reloc_base = interp_load_addr;
 
     free(elf_phdata);
 
@@ -908,13 +934,6 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
                     (interpreter_type == INTERPRETER_AOUT ? 0 : 1),
                     info);
     info->load_addr = reloc_func_desc;
-    info->start_brk = info->brk = elf_brk;
-#if 0
-    info->end_code = end_code;
-    info->start_code = start_code;
-    info->start_data = start_data;
-    info->end_data = end_data;
-#endif
     info->start_stack = bprm->p;
     info->load_bias = 0; //load_bias;
 
@@ -1051,12 +1070,12 @@ static abi_long fill_prpsinfo(TaskState *ts, target_prpsinfo_t **prpsinfo)
         len = strlen(argv[i]);
         p += len;
         sz -= len;
-        if (sz >= 0)
+        if (sz <= 0)
             break;
         strncat(p, " ", sz);
         p += 1;
         sz -= 1;
-        if (sz >= 0)
+        if (sz <= 0)
             break;
     }
 

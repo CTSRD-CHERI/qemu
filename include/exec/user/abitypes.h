@@ -9,6 +9,12 @@
 #define TARGET_ABI_BITS TARGET_LONG_BITS
 #endif
 
+#ifdef TARGET_CHERI
+#define ABI_PTR_SIZE    CHERI_CAP_SIZE
+#else
+#define ABI_PTR_SIZE    (TARGET_ABI_BITS / 8)
+#endif
+
 #ifdef TARGET_M68K
 #define ABI_INT_ALIGNMENT 2
 #define ABI_LONG_ALIGNMENT 2
