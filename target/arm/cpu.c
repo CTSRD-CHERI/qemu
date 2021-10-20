@@ -159,6 +159,7 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
         } else {
             null_capability(&CPREG_FIELDCAP(&cpu->env, ri));
         }
+        return;
     }
 #endif
 
@@ -170,9 +171,7 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
     if (!ri->fieldoffset) {
         return;
     }
-    if (cpreg_field_is_cap(ri)) {
-        /* Initialized above. */
-    } else if (cpreg_field_is_64bit(ri)) {
+    if (cpreg_field_is_64bit(ri)) {
         CPREG_FIELD64(&cpu->env, ri) = ri->resetvalue;
     } else {
         CPREG_FIELD32(&cpu->env, ri) = ri->resetvalue;
