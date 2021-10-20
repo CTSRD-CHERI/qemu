@@ -136,26 +136,6 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
     ARMCPRegInfo *ri = value;
     ARMCPU *cpu = opaque;
 
-#ifdef TARGET_CHERI
-    if (cpreg_field_is_cap(ri)) {
-        assert(ri->fieldoffset && "Unexpected capability cpreg without offset");
-        /*
-         * We ensure that all cap_register_t values are reset to a canonical
-         * capability rather than all zeroes. This ensures that values such
-         * as pesbt and capreg_state are initialized correctly.
-         * The default reset value is null unless has_special_capresetvalue is
-         * set. We do this even for (ARM_CP_SPECIAL | ARM_CP_ALIAS) since
-         * not doing that causing registers such elr_elN and sp_elN to be
-         * invalid (which triggers assertions later on).
-         */
-        if (ri->has_special_capresetvalue) {
-            CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
-        } else {
-            null_capability(&CPREG_FIELDCAP(&cpu->env, ri));
-        }
-    }
-#endif
-
     if (ri->type & (ARM_CP_SPECIAL | ARM_CP_ALIAS)) {
         return;
     }
@@ -164,6 +144,23 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
         ri->resetfn(&cpu->env, ri);
         return;
     }
+
+#ifdef TARGET_CHERI
+    if (cpreg_field_is_cap(ri)) {
+        assert(ri->fieldoffset && "Unexpected capability cpreg without offset");
+        /*
+         * We ensure that all cap_register_t values are reset to a canonical
+         * capability rather than all zeroes. This ensures that values such
+         * as pesbt and capreg_state are initialized correctly. The default
+         * reset value is null unless has_special_capresetvalue is set.
+         */
+        if (ri->has_special_capresetvalue) {
+            CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
+        } else {
+            null_capability(&CPREG_FIELDCAP(&cpu->env, ri));
+        }
+    }
+#endif
 
     /* A zero offset is never possible as it would be regs[0]
      * so we use it to indicate that reset is being handled elsewhere.
@@ -238,6 +235,29 @@ static void arm_cpu_reset(DeviceState *dev)
     acc->parent_reset(dev);
 
     memset(env, 0, offsetof(CPUARMState, end_reset_fields));
+#ifdef TARGET_CHERI
+    /*
+     * Reset the capability registers that are marked as ARM_CP_ALIAS to
+     * a canonical null capability.
+     */
+    for (size_t i = 0; i < ARRAY_SIZE(env->sp_el); i++) {
+        null_capability(&env->sp_el[i].cap);
+    }
+    for (size_t i = 0; i < ARRAY_SIZE(env->elr_el); i++) {
+        null_capability(&env->elr_el[i].cap);
+    }
+    /*
+     * The following are marked as arm_cp_reset_ignore. However, they are before
+     * end_reset_fields, so we should ensure that the value is canonical NULL
+     * instead of all zeroes.
+     */
+    null_capability(&env->cp15.tpidrurw_s.cap);
+    null_capability(&env->cp15.tpidrurw_ns.cap);
+    null_capability(&env->cp15.tpidruro_s.cap);
+    null_capability(&env->cp15.tpidruro_ns.cap);
+    null_capability(&env->cp15.tpidrprw_s.cap);
+    null_capability(&env->cp15.tpidrprw_ns.cap);
+#endif
 
     g_hash_table_foreach(cpu->cp_regs, cp_reg_reset, cpu);
     g_hash_table_foreach(cpu->cp_regs, cp_reg_check_reset, cpu);
