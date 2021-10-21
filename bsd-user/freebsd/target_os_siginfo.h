@@ -42,9 +42,9 @@ struct target_sigaction {
 
 typedef union target_sigval {
     int32_t sival_int;
-    abi_ulong sival_ptr;
+    abi_uintptr_t sival_ptr;
     int32_t sigval_int;
-    abi_ulong sigval_ptr;
+    abi_uintptr_t sigval_ptr;
 } target_sigval_t;
 
 typedef struct target_siginfo {
@@ -54,11 +54,14 @@ typedef struct target_siginfo {
     int32_t si_pid;     /* sending process */
     int32_t si_uid;     /* sender's ruid */
     int32_t si_status;  /* exit value */
-    abi_ulong si_addr;  /* faulting instruction */
+    abi_uintptr_t si_addr;  /* faulting instruction */
     union target_sigval si_value;   /* signal value */
     union {
         struct {
             int32_t _trapno;    /* machine specific trap code */
+#ifdef TARGET_CHERI
+            int32_t _capreg;
+#endif
         } _fault;
 
         /* POSIX.1b timers */
@@ -107,6 +110,10 @@ struct target_sigevent {
 #define target_si_code      si_code
 #define target_si_errno     si_errno
 #define target_si_addr      si_addr
+#ifdef TARGET_CHERI
+#define target_si_capreg    _reason._fault._capreg
+#endif
+#define target_si_trapno    _reason._fault._trapno
 
 /* SIGILL si_codes */
 #define TARGET_ILL_ILLOPC   (1) /* Illegal opcode. */

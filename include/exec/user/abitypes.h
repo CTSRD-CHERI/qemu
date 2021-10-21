@@ -78,10 +78,31 @@ typedef struct {
     uint64_t pesbt;
 } abi_uintcap_t __attribute__ ((aligned(CHERI_CAP_SIZE)));
 typedef abi_uintcap_t abi_uintptr_t;
+
+#if defined(CHERI_128) && !defined(TARGET_WORDS_BIGENDIAN)
+typedef const cap_register_t * abi_syscallarg_t;
+typedef cap_register_t * abi_syscallret_t;
+#else
+#error abi_syscallarg_t and abi_syscallret_t are defined only for little endian CHERI128
+#endif
 #else /* !TARGET_CHERI */
 typedef abi_long abi_uintptr_t __attribute__((aligned(ABI_LONG_ALIGNMENT)));
 typedef abi_uintptr_t abi_uintcap_t;
+
+typedef abi_long abi_syscallarg_t;
+typedef abi_long abi_syscallret_t;
 #endif /* TARGET_CHERI */
+
+#ifdef TARGET_CHERI
+/*
+ * XXXKW: QEMU uses NULL for a non-existing system call argument.
+ */
+#define syscallarg_value(sa) ((abi_long)((sa != NULL) ? (sa)->_cr_cursor : 0))
+#define syscallret_value(sa) ((abi_long)(sa)->_cr_cursor)
+#else
+#define syscallarg_value(sa) sa
+#define syscallret_value(sa) sa
+#endif
 
 static inline abi_ulong tswapal(abi_ulong v)
 {
