@@ -600,6 +600,31 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define get_user_s16(x, gaddr) get_user((x), (gaddr), int16_t)
 #define get_user_u8(x, gaddr)  get_user((x), (gaddr), uint8_t)
 #define get_user_s8(x, gaddr)  get_user((x), (gaddr), int8_t)
+#ifdef TARGET_CHERI
+#define get_user_uintptr(x, gaddr)                                      \
+({                                                                      \
+    abi_ulong __gaddr = (gaddr);                                        \
+    uint8_t *__hptr;                                                    \
+    abi_long __ret;                                                     \
+    if ((__hptr = lock_user(VERIFY_READ, __gaddr, CHERI_CAP_SIZE, 1))) { \
+        __ret = __get_user((x).cursor, (uint64_t *)(__hptr +            \
+            CHERI_MEM_OFFSET_CURSOR));                                  \
+        if (__ret == 0) {                                               \
+            __ret = __get_user((x).pesbt, (uint64_t *)(__hptr +         \
+                CHERI_MEM_OFFSET_METADATA));                            \
+        }                                                               \
+        unlock_user(__hptr, __gaddr, 0);                                \
+    } else {                                                            \
+        /* avoid warning */                                             \
+        (x).cursor = 0;                                                 \
+        (x).pesbt = 0;                                                  \
+        __ret = -TARGET_EFAULT;                                         \
+    }                                                                   \
+    __ret;                                                              \
+})
+#else
+#define get_user_uintptr(x, gaddr)  get_user_ual((x), (gaddr))
+#endif
 
 /* copy_from_user() and copy_to_user() are usually used to copy data
  * buffers between the target and host.  These internally perform
