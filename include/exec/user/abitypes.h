@@ -68,10 +68,39 @@ typedef target_long abi_long __attribute__((aligned(ABI_LONG_ALIGNMENT)));
 #define TARGET_ABI32 1
 #endif
 
+#ifdef TARGET_CHERI
+/*
+ * XXXKW: abi_uintcap_t should reorder fields depending on
+ * CHERI_MEM_OFFSET_METADATA and CHERI_MEM_OFFSET_CURSOR.
+ */
+typedef struct {
+    uint64_t cursor;
+    uint64_t pesbt;
+} abi_uintcap_t __attribute__ ((aligned(CHERI_CAP_SIZE)));
+typedef abi_uintcap_t abi_uintptr_t;
+#else /* !TARGET_CHERI */
+typedef abi_long abi_uintptr_t __attribute__((aligned(ABI_LONG_ALIGNMENT)));
+typedef abi_uintptr_t abi_uintcap_t;
+#endif /* TARGET_CHERI */
+
 static inline abi_ulong tswapal(abi_ulong v)
 {
     return tswapl(v);
 }
+
+#ifdef TARGET_CHERI
+static inline abi_uintptr_t
+tswapuintptr(abi_uintptr_t v)
+{
+
+    v.cursor = tswapal(v.cursor);
+    v.pesbt = tswapal(v.pesbt);
+
+    return (v);
+}
+#else
+#define tswapuintptr tswapal
+#endif
 
 #endif
 #endif

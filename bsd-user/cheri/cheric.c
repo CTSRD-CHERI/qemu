@@ -68,6 +68,15 @@ cheri_ptr(const void *ptr, size_t len)
         len));
 }
 
+abi_uintptr_t
+cheri_uintptr(const cap_register_t *cap)
+{
+    abi_uintptr_t uintptr;
+
+    cheri_store(&uintptr, cap);
+    return (uintptr);
+}
+
 cap_register_t *
 cheri_load(cap_register_t *cap, const abi_uintcap_t *value)
 {
