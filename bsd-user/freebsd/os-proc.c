@@ -155,28 +155,28 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
     char **argp, **envp, **qargp, **qarg1, **qarg0, **qargend;
     int argc, envc;
     abi_ulong gp;
-    abi_ulong addr;
+    abi_uintptr_t addr;
     char **q;
     int total_size = 0;
     void *p;
     abi_long ret;
 
     argc = 0;
-    for (gp = guest_argp; gp; gp += sizeof(abi_ulong)) {
-        if (get_user_ual(addr, gp)) {
+    for (gp = guest_argp; gp; gp += sizeof(addr)) {
+        if (get_user_uintptr(addr, gp)) {
             return -TARGET_EFAULT;
         }
-        if (!addr) {
+        if (!uintptr_vaddr(addr)) {
             break;
         }
         argc++;
     }
     envc = 0;
-    for (gp = guest_envp; gp; gp += sizeof(abi_ulong)) {
-        if (get_user_ual(addr, gp)) {
+    for (gp = guest_envp; gp; gp += sizeof(addr)) {
+        if (get_user_uintptr(addr, gp)) {
             return -TARGET_EFAULT;
         }
-        if (!addr) {
+        if (!uintptr_vaddr(addr)) {
             break;
         }
         envc++;
@@ -189,15 +189,15 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
     *argp++ = (char *)getprogname();
     qarg1 = argp;
     envp = g_new0(char *, envc + 1);
-    for (gp = guest_argp, q = argp; gp; gp += sizeof(abi_ulong), q++) {
-        if (get_user_ual(addr, gp)) {
+    for (gp = guest_argp, q = argp; gp; gp += sizeof(addr), q++) {
+        if (get_user_uintptr(addr, gp)) {
             ret = -TARGET_EFAULT;
             goto execve_end;
         }
-        if (!addr) {
+        if (!uintptr_vaddr(addr)) {
             break;
         }
-        *q = lock_user_string(addr);
+        *q = lock_user_string(uintptr_vaddr(addr));
         if (*q == NULL) {
             ret = -TARGET_EFAULT;
             goto execve_end;
@@ -207,15 +207,15 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
     *q++ = NULL;
     qargend = q;
 
-    for (gp = guest_envp, q = envp; gp; gp += sizeof(abi_ulong), q++) {
-        if (get_user_ual(addr, gp)) {
+    for (gp = guest_envp, q = envp; gp; gp += sizeof(addr), q++) {
+        if (get_user_uintptr(addr, gp)) {
             ret = -TARGET_EFAULT;
             goto execve_end;
         }
-        if (!addr) {
+        if (!uintptr_vaddr(addr)) {
             break;
         }
-        *q = lock_user_string(addr);
+        *q = lock_user_string(uintptr_vaddr(addr));
         if (*q == NULL) {
             ret = -TARGET_EFAULT;
             goto execve_end;
@@ -357,18 +357,24 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
     }
 
 execve_end:
-    for (gp = guest_argp, q = argp; *q; gp += sizeof(abi_ulong), q++) {
-        if (get_user_ual(addr, gp) || !addr) {
+    for (gp = guest_argp, q = argp; *q; gp += sizeof(abi_uintptr_t), q++) {
+        if (get_user_uintptr(addr, gp)) {
             break;
         }
-        unlock_user(*q, addr, 0);
+        if (!uintptr_vaddr(addr)) {
+            break;
+        }
+        unlock_user(*q, uintptr_vaddr(addr), 0);
     }
 
-    for (gp = guest_envp, q = envp; *q; gp += sizeof(abi_ulong), q++) {
-        if (get_user_ual(addr, gp) || !addr) {
+    for (gp = guest_envp, q = envp; *q; gp += sizeof(abi_uintptr_t), q++) {
+        if (get_user_uintptr(addr, gp)) {
             break;
         }
-        unlock_user(*q, addr, 0);
+        if (!uintptr_vaddr(addr)) {
+            break;
+        }
+        unlock_user(*q, uintptr_vaddr(addr), 0);
     }
 
     g_free(qarg0);
