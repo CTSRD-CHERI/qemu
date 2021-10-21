@@ -50,13 +50,17 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
     abi_ulong stack_hi_addr;
     size_t execpath_len, stringspace;
     abi_ulong destp, argvp, envp, p;
+    abi_uintptr_t destuintp;
     struct target_ps_strings ps_strs;
     char canary[sizeof(abi_long) * 8];
 
     stack_hi_addr = p = target_stkbas + target_stksiz;
+    assert((stack_hi_addr % ABI_PTR_SIZE) == 0);
+
+    memset(&ps_strs, 0, sizeof(ps_strs));
 
     /* Save some space for ps_strings. */
-    p -= sizeof(struct target_ps_strings);
+    p -= sizeof(ps_strs);
 
 #ifdef TARGET_SZSIGCODE
     /* Add machine depedent sigcode. */
@@ -110,8 +114,8 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
        return -1;
     }
     /* Make room for the argv and envp strings */
-    destp = rounddown(p - stringspace, sizeof(abi_ulong));
-    p = argvp = destp - (bprm->argc + bprm->envc + 2) * sizeof(abi_ulong);
+    destp = rounddown(p - stringspace, ABI_PTR_SIZE);
+    p = argvp = destp - (bprm->argc + bprm->envc + 2) * ABI_PTR_SIZE;
     /* Remember the strings pointer */
     if (stringp)
         *stringp = destp;
@@ -120,7 +124,13 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
      * loader_build_argptr()
      */
     /* XXX need to make room for auxargs */
-    ps_strs.ps_argvstr = tswapl(argvp);
+#ifdef TARGET_CHERI
+    ps_strs.ps_argvstr = cheri_uintptr(cheri_ptr((void *)(uintptr_t)argvp,
+      (bprm->argc + 1) * sizeof(uintptr_t)));
+#else
+    ps_strs.ps_argvstr = (uintptr_t)argvp;
+#endif
+    ps_strs.ps_argvstr = tswapuintptr(ps_strs.ps_argvstr);
     ps_strs.ps_nargvstr = tswap32(bprm->argc);
     for (i = 0; i < bprm->argc; ++i) {
         size_t len = strlen(bprm->argv[i]) + 1;
@@ -129,14 +139,24 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
             errno = EFAULT;
             return -1;
         }
-        if (put_user_ual(destp, argvp)) {
+#ifdef TARGET_CHERI
+        destuintp = cheri_uintptr(cheri_ptr((void *)(uintptr_t)destp, len));
+#else
+        destuintp = (uintptr_t)destp;
+#endif
+        if (put_user_uintptr(destuintp, argvp)) {
             errno = EFAULT;
             return -1;
         }
-        argvp += sizeof(abi_ulong);
+        argvp += ABI_PTR_SIZE;
         destp += len;
     }
-    if (put_user_ual(0, argvp)) {
+#ifdef TARGET_CHERI
+    destuintp = cheri_uintptr(cheri_zerocap());
+#else
+    destuintp = (uintptr_t)0;
+#endif
+    if (put_user_uintptr(destuintp, argvp)) {
         errno = EFAULT;
         return -1;
     }
@@ -144,8 +164,14 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
      * Add env strings. Note that the envp[] vectors are added by
      * loader_build_argptr().
      */
-    envp = argvp + sizeof(abi_ulong);
-    ps_strs.ps_envstr = tswapl(envp);
+    envp = argvp + ABI_PTR_SIZE;
+#ifdef TARGET_CHERI
+    ps_strs.ps_envstr = cheri_uintptr(cheri_ptr((void *)(uintptr_t)envp,
+      (bprm->envc + 1) * sizeof(uintptr_t)));
+#else
+    ps_strs.ps_envstr = (uintptr_t)envp;
+#endif
+    ps_strs.ps_envstr = tswapuintptr(ps_strs.ps_envstr);
     ps_strs.ps_nenvstr = tswap32(bprm->envc);
     for (i = 0; i < bprm->envc; ++i) {
         size_t len = strlen(bprm->envp[i]) + 1;
@@ -154,14 +180,24 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
             errno = EFAULT;
             return -1;
         }
-        if (put_user_ual(destp, envp)) {
+#ifdef TARGET_CHERI
+        destuintp = cheri_uintptr(cheri_ptr((void *)(uintptr_t)destp, len));
+#else
+        destuintp = (uintptr_t)destp;
+#endif
+        if (put_user_uintptr(destuintp, envp)) {
             errno = EFAULT;
             return -1;
         }
-        envp += sizeof(abi_ulong);
+        envp += ABI_PTR_SIZE;
         destp += len;
     }
-    if (put_user_ual(0, envp)) {
+#ifdef TARGET_CHERI
+    destuintp = cheri_uintptr(cheri_zerocap());
+#else
+    destuintp = (uintptr_t)0;
+#endif
+    if (put_user_uintptr(destuintp, envp)) {
         errno = EFAULT;
         return -1;
     }

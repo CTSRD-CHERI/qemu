@@ -5,9 +5,9 @@
 
 /* Compare to sys/exec.h */
 struct target_ps_strings {
-    abi_ulong ps_argvstr;
+    abi_uintptr_t ps_argvstr;
     uint32_t ps_nargvstr;
-    abi_ulong ps_envstr;
+    abi_uintptr_t ps_envstr;
     uint32_t ps_nenvstr;
 };
 

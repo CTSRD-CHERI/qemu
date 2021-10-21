@@ -568,6 +568,27 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #else
 #define put_user_p(x, gaddr) put_user_ual(x, gaddr)
 #endif
+#ifdef TARGET_CHERI
+#define put_user_uintptr(x, gaddr)                                      \
+({                                                                      \
+    abi_ulong __gaddr = (gaddr);                                        \
+    uint8_t *__hptr;                                                    \
+    abi_long __ret;                                                     \
+    if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, CHERI_CAP_SIZE, 0))) { \
+        __ret = __put_user((x).pesbt, \
+            (uint64_t *)(__hptr + CHERI_MEM_OFFSET_METADATA));          \
+        if (__ret == 0) {                                               \
+            __ret = __put_user((x).cursor,                              \
+               (uint64_t *)(__hptr + CHERI_MEM_OFFSET_CURSOR));         \
+        }                                                               \
+        unlock_user(__hptr, __gaddr, CHERI_CAP_SIZE);                   \
+    } else                                                              \
+        __ret = -TARGET_EFAULT;                                         \
+    __ret;                                                              \
+})
+#else
+#define put_user_uintptr(x, gaddr) put_user_ual(x, gaddr)
+#endif
 
 #define get_user_ual(x, gaddr) get_user((x), (gaddr), abi_ulong)
 #define get_user_sal(x, gaddr) get_user((x), (gaddr), abi_long)
