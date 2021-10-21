@@ -43,7 +43,17 @@ static inline void target_cpu_init(CPURISCVState *env,
 
     riscv_update_pc(env, regs->sepc, true);
 #endif
+}
 
+static abi_syscallarg_t
+target_syscallarg(CPURISCVState *env, unsigned regnum)
+{
+
+#ifdef TARGET_CHERI
+    return (get_readonly_capreg(env, regnum));
+#else
+    return (gpr_int_value(env, regnum));
+#endif
 }
 
 static inline void target_cpu_loop(CPURISCVState *env)
@@ -51,7 +61,8 @@ static inline void target_cpu_loop(CPURISCVState *env)
     CPUState *cs = env_cpu(env);
     int trapnr;
     target_siginfo_t info;
-    abi_long ret;
+    abi_long error;
+    abi_syscallret_t retval;
     unsigned int syscall_num;
 
     for (;;) {
@@ -62,7 +73,11 @@ static inline void target_cpu_loop(CPURISCVState *env)
 
         info.si_signo = 0;
         info.si_errno = 0;
-        info.si_addr = 0;
+#ifdef TARGET_CHERI
+        info.si_addr = cheri_uintptr(cheri_zerocap());
+#else
+        info.si_addr = (uintptr_t)0;
+#endif
         
         switch (trapnr) {
         case EXCP_INTERRUPT:
@@ -73,44 +88,55 @@ static inline void target_cpu_loop(CPURISCVState *env)
             break;
         case RISCV_EXCP_U_ECALL:
             if (bsd_type == target_freebsd) {
-                syscall_num = env->gpr[5]; /* t0 */
-                env->pc += TARGET_INSN_SIZE;
-                /* Compare to cpu_fetch_syscall_args() in riscv/riscv/trap.c */
+                syscall_num = gpr_int_value(env, xT0);
+                riscv_update_pc(env, riscv_fetch_pc(env) + TARGET_INSN_SIZE,
+                    false);
+                /*
+                 * Compare to cpu_fetch_syscall_args() in riscv/riscv/trap.c.
+                 * */
                 if (TARGET_FREEBSD_NR___syscall == syscall_num ||
                             TARGET_FREEBSD_NR_syscall == syscall_num) {
-                    ret = do_freebsd_syscall(env,
-                            env->gpr[xA0], /* a0 */
-                            env->gpr[xA1], /* a1 */
-                            env->gpr[xA2], /* a2 */
-                            env->gpr[xA3], /* a3 */
-                            env->gpr[xA4], /* a4 */
-                            env->gpr[xA5], /* a5 */
-                            env->gpr[xA6], /* a6 */
-                            env->gpr[xA7], /* a7 */
-                            0);
+                    syscall_num = syscallarg_value(target_syscallarg(env, xA0));
+                    error = do_freebsd_syscall(env, &retval, syscall_num,
+                        target_syscallarg(env, xA1),
+                        target_syscallarg(env, xA2),
+                        target_syscallarg(env, xA3),
+                        target_syscallarg(env, xA4),
+                        target_syscallarg(env, xA5),
+                        target_syscallarg(env, xA6),
+                        target_syscallarg(env, xA7),
+                        NULL);
                 } else {
-                    ret = do_freebsd_syscall(env,
-                            syscall_num,
-                            env->gpr[xA0], /* a0 */
-                            env->gpr[xA1], /* a1 */
-                            env->gpr[xA2], /* a2 */
-                            env->gpr[xA3], /* a3 */
-                            env->gpr[xA4], /* a4 */
-                            env->gpr[xA5], /* a5 */
-                            env->gpr[xA6], /* a6 */
-                            env->gpr[xA7]  /* a7 */
-                            );
+                    error = do_freebsd_syscall(env, &retval, syscall_num,
+                        target_syscallarg(env, xA0),
+                        target_syscallarg(env, xA1),
+                        target_syscallarg(env, xA2),
+                        target_syscallarg(env, xA3),
+                        target_syscallarg(env, xA4),
+                        target_syscallarg(env, xA5),
+                        target_syscallarg(env, xA6),
+                        target_syscallarg(env, xA7));
                 }
                 
-                /* Compare to cpu_set_syscall_retval() in riscv/riscv/vm_machdep.c */
-                if (ret >= 0) {
-                    env->gpr[xA0] = ret; /* a0 */
-                    env->gpr[5] = 0;     /* t0 */
-                } else if (ret == -TARGET_ERESTART) {
-                    env->pc -= TARGET_INSN_SIZE;
-                } else if (ret != -TARGET_EJUSTRETURN) {
-                    env->gpr[xA0] = -ret; /* a0 */
-                    env->gpr[5] = 1;      /* t0 */
+                /*
+                 * Compare to cpu_set_syscall_retval() in
+                 * riscv/riscv/vm_machdep.c.
+                 */
+                if (error >= 0) {
+                    if (retval != NULL) {
+                        update_capreg(env, xA0, retval);
+                    } else {
+                        gpr_set_int_value(env, xA0, error);
+                    }
+                    /* XXXKW: xA1 should be set as well. */
+                    gpr_set_int_value(env, xA1, 0);
+                    gpr_set_int_value(env, xT0, 0);
+                } else if (error == -TARGET_ERESTART) {
+                    riscv_update_pc(env, riscv_fetch_pc(env) - TARGET_INSN_SIZE,
+                        false);
+                } else if (error != -TARGET_EJUSTRETURN) {
+                    gpr_set_int_value(env, xA0, -error);
+                    gpr_set_int_value(env, xT0, 1);
                 }
             } else {
                 fprintf(stderr, "qemu: bsd_type (= %d) syscall not supported\n",
@@ -124,7 +150,11 @@ static inline void target_cpu_loop(CPURISCVState *env)
         case RISCV_EXCP_BREAKPOINT:
             info.si_signo = TARGET_SIGTRAP;
             info.si_code = TARGET_TRAP_BRKPT;
-            info.si_addr = env->pc;
+#ifdef TARGET_CHERI
+            info.si_addr = cheri_uintptr(cheri_get_current_pcc(env));
+#else
+            info.si_addr = riscv_fetch_pc(env);
+#endif
             break;
         case RISCV_EXCP_INST_PAGE_FAULT:
         case RISCV_EXCP_LOAD_PAGE_FAULT:
@@ -136,6 +166,15 @@ static inline void target_cpu_loop(CPURISCVState *env)
             info.si_signo = TARGET_SIGTRAP;
             info.si_code = TARGET_TRAP_BRKPT;
             break;
+#ifdef TARGET_CHERI
+        case RISCV_EXCP_CHERI:
+            info.target_si_signo = TARGET_SIGPROT;
+            info.target_si_code = env->last_cap_cause;
+            info.target_si_addr = cheri_uintptr(cheri_get_current_pcc(env));
+            info.target_si_capreg = env->last_cap_index;
+            info.target_si_trapno = trapnr;
+            break;
+#endif
         default:
             fprintf(stderr, "qemu: unhandled CPU exception "
                 "0x%x - aborting\n", trapnr);

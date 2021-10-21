@@ -260,13 +260,27 @@ abi_long do_brk(abi_ulong new_brk)
 /* do_syscall() should always have a single exit point at the end so
    that actions, such as logging of syscall results, can be performed.
    All errnos that do_syscall() returns must be -TARGET_<errcode>. */
-abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
-                            abi_long arg2, abi_long arg3, abi_long arg4,
-                            abi_long arg5, abi_long arg6, abi_long arg7,
-                            abi_long arg8)
+abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
+    abi_syscallarg_t sa1, abi_syscallarg_t sa2, abi_syscallarg_t sa3,
+    abi_syscallarg_t sa4, abi_syscallarg_t sa5, abi_syscallarg_t sa6,
+    abi_syscallarg_t sa7, abi_syscallarg_t sa8)
 {
     CPUState *cpu = env_cpu(cpu_env);
-    abi_long ret;
+    abi_long arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ret;
+    static cap_register_t retcap;
+    abi_syscallret_t retval;
+
+    assert(retvalp != NULL);
+
+    retval = NULL;
+    arg1 = syscallarg_value(sa1);
+    arg2 = syscallarg_value(sa2);
+    arg3 = syscallarg_value(sa3);
+    arg4 = syscallarg_value(sa4);
+    arg5 = syscallarg_value(sa5);
+    arg6 = syscallarg_value(sa6);
+    arg7 = syscallarg_value(sa7);
+    arg8 = syscallarg_value(sa8);
 
 #ifdef DEBUG
     gemu_log("freebsd syscall %d\n", num);
@@ -1893,9 +1907,11 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
         print_freebsd_syscall_ret(num, ret);
 
     record_syscall_return(cpu, num, ret);
+    *retvalp = retval;
     return ret;
 }
 
+#ifndef TARGET_CHERI
 abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
                            abi_long arg2, abi_long arg3, abi_long arg4,
                            abi_long arg5, abi_long arg6)
@@ -2007,6 +2023,7 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
     record_syscall_return(cpu, num, ret);
     return ret;
 }
+#endif /* !TARGET_CHERI */
 
 void syscall_init(void)
 {
