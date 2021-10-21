@@ -68,6 +68,7 @@ typedef target_long abi_long __attribute__((aligned(ABI_LONG_ALIGNMENT)));
 #define TARGET_ABI32 1
 #endif
 
+typedef target_ulong abi_vaddr_t;
 #ifdef TARGET_CHERI
 /*
  * XXXKW: abi_uintcap_t should reorder fields depending on
@@ -94,12 +95,16 @@ typedef abi_long abi_syscallret_t;
 #endif /* TARGET_CHERI */
 
 #ifdef TARGET_CHERI
+#define uintptr_vaddr(x) ((abi_vaddr_t)(x).cursor)
+
 /*
  * XXXKW: QEMU uses NULL for a non-existing system call argument.
  */
 #define syscallarg_value(sa) ((abi_long)((sa != NULL) ? (sa)->_cr_cursor : 0))
 #define syscallret_value(sa) ((abi_long)(sa)->_cr_cursor)
 #else
+#define uintptr_vaddr(x) ((abi_vaddr_t)(x))
+
 #define syscallarg_value(sa) sa
 #define syscallret_value(sa) sa
 #endif
