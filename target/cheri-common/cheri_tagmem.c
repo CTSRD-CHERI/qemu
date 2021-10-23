@@ -80,6 +80,14 @@
  * blocks can be deallocated when no longer used maybe.
  *
  * FIXME: rewrite using somethign more like the upcoming MTE changes (https://github.com/rth7680/qemu/commits/tgt-arm-mte-user)
+ *
+ * XXX: I/O threads still exist even without MTTCG and need to have tag
+ * clearing be atomic with their writes. Currently various places just write to
+ * guest memory directly and then we tag clear in invalidate_and_set_dirty.
+ * Well-behaved guests should not be touching memory handed off to DMA-capable
+ * devices but a malicious guest could repeatedly DMA powerful capability bit
+ * patterns on top of valid capabilities and try to race to read in between the
+ * DMA write and the tag invalidate.
  */
 
 #define CAP_TAGBLK_SHFT     12          // 2^12 or 4096 tags per block
@@ -156,7 +164,11 @@ static inline QEMU_ALWAYS_INLINE CheriTagBlock *cheri_tag_block(size_t tag_index
 static inline QEMU_ALWAYS_INLINE bool tagblock_get_tag_tagmem(void *tagmem,
                                                               size_t index)
 {
-    return test_bit(index, (unsigned long *)tagmem);
+    unsigned long *p = (unsigned long *)tagmem + BIT_WORD(index);
+    unsigned long word;
+
+    word = qatomic_read(p);
+    return (word & BIT_MASK(index)) != 0;
 }
 
 static inline QEMU_ALWAYS_INLINE bool tagblock_get_tag(CheriTagBlock *block,
@@ -169,42 +181,48 @@ static inline QEMU_ALWAYS_INLINE bool tagblock_get_tag(CheriTagBlock *block,
 static inline QEMU_ALWAYS_INLINE int
 tagblock_get_tag_many_tagmem(void *tagmem, size_t block_index)
 {
-    unsigned long *bitmap = (unsigned long *)tagmem;
+    unsigned long *p = (unsigned long *)tagmem + BIT_WORD(block_index);
+    unsigned long word;
 
-    unsigned long result =
-        bitmap[BIT_WORD(block_index)] >> (block_index & (BITS_PER_LONG - 1));
-
-    return result & CAP_TAG_GET_MANY_MASK;
+    word = qatomic_read(p);
+    return (word >> (block_index % BITS_PER_LONG)) & CAP_TAG_GET_MANY_MASK;
 }
 
 static inline QEMU_ALWAYS_INLINE void
 tagblock_set_tag_tagmem(void *tagmem, size_t block_index)
 {
-    set_bit(block_index, (unsigned long *)tagmem);
+    unsigned long *p = (unsigned long *)tagmem + BIT_WORD(block_index);
+
+    qatomic_or(p, BIT_MASK(block_index));
 }
 
 static inline QEMU_ALWAYS_INLINE void
 tagblock_set_tag_many_tagmem(void *tagmem, size_t block_index, uint8_t tags)
 {
-    unsigned long *bitmap = (unsigned long *)tagmem;
+    unsigned long *p = (unsigned long *)tagmem + BIT_WORD(block_index);
+    size_t shift = block_index % BITS_PER_LONG;
+    unsigned long mask = CAP_TAG_GET_MANY_MASK << shift;
+    unsigned long tags_shifted = ((unsigned long)tags << shift) & mask;
 
-    size_t hi = BIT_WORD(block_index);
-    size_t lo = block_index & (BITS_PER_LONG - 1);
-
-    unsigned long tags_shifted = tags;
-
-    tags_shifted = (tags & CAP_TAG_GET_MANY_MASK) << lo;
-
-    /* FIXME: Again, this could trivially be made atomic */
-    unsigned long result = bitmap[hi];
-    result = (result & ~(CAP_TAG_GET_MANY_MASK << lo)) | tags_shifted;
-    bitmap[BIT_WORD(block_index)] = result;
+    if (likely(tags_shifted == 0)) {
+        qatomic_and(p, ~mask);
+    } else {
+        unsigned long old, new, cmp;
+        cmp = qatomic_read(p);
+        do {
+            old = cmp;
+            new = (old & ~mask) | tags_shifted;
+            cmp = qatomic_cmpxchg(p, old, new);
+        } while (cmp != old);
+    }
 }
 
 static inline QEMU_ALWAYS_INLINE void tagblock_clear_tag_tagmem(void *tagmem,
                                                                 size_t index)
 {
-    clear_bit(index, (unsigned long *)tagmem);
+    unsigned long *p = (unsigned long *)tagmem + BIT_WORD(index);
+
+    qatomic_and(p, ~BIT_MASK(index));
 }
 
 static inline QEMU_ALWAYS_INLINE void tagblock_clear_tag(CheriTagBlock *block,
