@@ -256,6 +256,8 @@ static void arm_cpu_reset(DeviceState *dev)
     null_capability(&env->cp15.tpidruro_ns.cap);
     null_capability(&env->cp15.tpidrprw_s.cap);
     null_capability(&env->cp15.tpidrprw_ns.cap);
+    null_capability(&env->cp15.vbar_s.cap);
+    null_capability(&env->cp15.vbar_ns.cap);
 #endif
 
     g_hash_table_foreach(cpu->cp_regs, cp_reg_reset, cpu);
