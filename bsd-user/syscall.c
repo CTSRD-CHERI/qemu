@@ -1249,7 +1249,8 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
         break;
 
     case TARGET_FREEBSD_NR_sigaction: /* sigaction(2) */
-        ret = do_bsd_sigaction(arg1, arg2, arg3);
+        ret = do_bsd_sigaction(&retcap, sa1, sa2, sa3);
+        retval = &retcap;
         break;
 
     case TARGET_FREEBSD_NR_sigprocmask: /* sigprocmask(2) */
@@ -1277,11 +1278,13 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
         break;
 
     case TARGET_FREEBSD_NR_sigqueue: /* sigqueue(2) */
-        ret = do_bsd_sigqueue(arg1, arg2, arg3);
+        ret = do_bsd_sigqueue(&retcap, sa1, sa2, sa3);
+        retval = &retcap;
         break;
 
     case TARGET_FREEBSD_NR_sigaltstack: /* sigaltstack(2) */
-        ret = do_bsd_sigaltstack(cpu_env, arg1, arg2);
+        ret = do_bsd_sigaltstack(cpu_env, &retcap, sa1, sa2);
+        retval = &retcap;
         break;
 
     case TARGET_FREEBSD_NR_kill: /* kill(2) */

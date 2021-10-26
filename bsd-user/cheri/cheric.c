@@ -51,13 +51,22 @@ __cheri_round_representable_length(target_ulong len)
 }
 
 cap_register_t *
-cheri_zerocap(void)
+cheri_nullcap(void)
 {
     static cap_register_t cap;
 
     null_capability(&cap);
-    set_max_perms_capability(&cap, 0);
     return (&cap);
+}
+
+cap_register_t *
+cheri_zerocap(void)
+{
+    cap_register_t *cap;
+
+    cap = cheri_nullcap();
+    set_max_perms_capability(cap, 0);
+    return (cap);
 }
 
 cap_register_t *
@@ -195,4 +204,11 @@ cheri_sealentry(cap_register_t *cap)
 
     cap->cr_otype = CAP_OTYPE_SENTRY;
     return (cap);
+}
+
+cap_register_t *
+cheri_fromint(abi_int value)
+{
+
+    return (cheri_incoffset(cheri_nullcap(), value));
 }

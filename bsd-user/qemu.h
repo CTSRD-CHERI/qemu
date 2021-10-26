@@ -53,8 +53,8 @@ extern enum BSDType bsd_type;
 #include "target_arch.h"
 #include "syscall_defs.h"
 #include "target_syscall.h"
+#include "target_os_siginfo.h"
 #include "target_os_vmparam.h"
-#include "target_os_signal.h"
 #include "hostdep.h"
 #include "exec/gdbstub.h"
 
@@ -93,6 +93,10 @@ extern abi_ulong target_auxents;   /* Where the AUX entries are in target */
 extern size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
 
 #define MAX_SIGQUEUE_SIZE 1024
+
+#if defined(TARGET_CHERI) && !defined(SIGPROT)
+#define SIGPROT 34 /* in-address space security exception. */
+#endif
 
 struct qemu_sigqueue {
     struct qemu_sigqueue *next;
@@ -142,6 +146,11 @@ typedef struct TaskState {
 
     uint8_t stack[];
 } __attribute__((aligned(16))) TaskState;
+
+/*
+ * target_os_signal.h depends on TaskState.
+ */
+#include "target_os_signal.h"
 
 void init_task_state(TaskState *ts);
 void stop_all_tasks(void);
@@ -276,7 +285,8 @@ int host_to_target_signal(int sig);
 void host_to_target_sigset(target_sigset_t *d, const sigset_t *s);
 void target_to_host_sigset(sigset_t *d, const target_sigset_t *s);
 long do_sigreturn(CPUArchState *env, abi_ulong addr);
-abi_long do_sigaltstack(abi_ulong uss_addr, abi_ulong uoss_addr, abi_ulong sp);
+abi_long do_sigaltstack(abi_syscallret_t retval, abi_syscallarg_t ua_ss,
+    abi_syscallarg_t ua_oss, abi_ulong sp);
 int do_sigaction(int sig, const struct target_sigaction *act,
                 struct target_sigaction *oact);
 void QEMU_NORETURN force_sig(int target_sig);

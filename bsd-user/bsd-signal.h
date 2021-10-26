@@ -22,35 +22,50 @@
 
 #include <signal.h>
 
+#include "target_os__types.h"
+
+struct target_sigaction_args {
+    abi_int       sig;
+    abi_uintptr_t act;
+    abi_uintptr_t oact;
+};
+
 /* sigaction(2) */
-static inline abi_long do_bsd_sigaction(abi_long arg1, abi_long arg2,
-        abi_long arg3)
+static inline abi_long do_bsd_sigaction(abi_syscallret_t retval,
+    abi_syscallarg_t ua_sig, abi_syscallarg_t ua_act, abi_syscallarg_t ua_oact)
 {
     abi_long ret;
+    struct target_sigaction_args ua;
     struct target_sigaction *old_act, act, oact, *pact;
 
-    if (arg2) {
-        if (!lock_user_struct(VERIFY_READ, old_act, arg2, 1)) {
+    ua.sig = syscallarg_int(ua_sig);
+    ua.act = syscallarg_uintptr(ua_act);
+    ua.oact = syscallarg_uintptr(ua_oact);
+
+    if (uintptr_vaddr(ua.act)) {
+        if (!lock_user_struct(VERIFY_READ, old_act, uintptr_vaddr(ua.act), 1)) {
             return -TARGET_EFAULT;
         }
         act._sa_handler = old_act->_sa_handler;
         act.sa_flags = old_act->sa_flags;
         memcpy(&act.sa_mask, &old_act->sa_mask, sizeof(target_sigset_t));
-        unlock_user_struct(old_act, arg2, 0);
+        unlock_user_struct(old_act, uintptr_vaddr(ua.act), 0);
         pact = &act;
     } else {
         pact = NULL;
     }
-    ret = get_errno(do_sigaction(arg1, pact, &oact));
-    if (!is_error(ret) && arg3) {
-        if (!lock_user_struct(VERIFY_WRITE, old_act, arg3, 0)) {
+    ret = get_errno(do_sigaction(ua.sig, pact, &oact));
+    if (!is_error(ret) && uintptr_vaddr(ua.oact)) {
+        if (!lock_user_struct(VERIFY_WRITE, old_act, uintptr_vaddr(ua.oact),
+                              0)) {
             return -TARGET_EFAULT;
         }
         old_act->_sa_handler = oact._sa_handler;
         old_act->sa_flags = oact.sa_flags;
         memcpy(&old_act->sa_mask, &oact.sa_mask, sizeof(target_sigset_t));
-        unlock_user_struct(old_act, arg3, 1);
+        unlock_user_struct(old_act, uintptr_vaddr(ua.oact), 1);
     }
+    *retval = *cheri_fromint(ret);
     return ret;
 }
 
@@ -226,25 +241,41 @@ static inline abi_long do_bsd_sigwaitinfo(abi_ulong arg1, abi_ulong arg2)
     return ret;
 }
 
+struct target_sigqueue_args {
+    abi_pid_t     pid;
+    abi_int       signum;
+    abi_uintptr_t value;
+};
+
 /* sigqueue(2) */
-static inline abi_long do_bsd_sigqueue(abi_long arg1, abi_long arg2,
-        abi_ulong arg3)
+static inline abi_long do_bsd_sigqueue(abi_syscallret_t retval,
+    abi_syscallarg_t ua_pid, abi_syscallarg_t ua_signum,
+    abi_syscallarg_t ua_value)
 {
     union sigval value;
-    target_sigval_t *tvalue = (target_sigval_t *)&arg3;
-    abi_ulong sival_ptr;
+    struct target_sigqueue_args ua;
+    target_sigval_t *tvalue;
+    abi_uintptr_t sival_ptr;
+    abi_long ret;
 
-    __get_user(sival_ptr, &tvalue->sival_ptr);
-    value.sival_ptr = (void *)(uintptr_t)sival_ptr;
-    return get_errno(sigqueue(arg1, target_to_host_signal(arg2), value));
+    ua.pid = syscallarg_value(ua_pid);
+    ua.signum = syscallarg_int(ua_signum);
+    ua.value = syscallarg_uintptr(ua_value);
+
+    tvalue = (target_sigval_t *)uintptr_vaddr(ua.value);
+    get_user_uintptr(sival_ptr, uintptr_vaddr(tvalue->sival_ptr));
+    value.sival_ptr = (void *)(uintptr_t)uintptr_vaddr(sival_ptr);
+    ret = get_errno(sigqueue(ua.pid, target_to_host_signal(ua.signum), value));
+    *retval = *cheri_fromint(ret);
+    return (ret);
 }
 
 /* sigaltstck(2) */
-static inline abi_long do_bsd_sigaltstack(void *cpu_env, abi_ulong arg1,
-        abi_ulong arg2)
+static inline abi_long do_bsd_sigaltstack(void *cpu_env,
+    abi_syscallret_t retval, abi_syscallarg_t ua_ss, abi_syscallarg_t ua_oss)
 {
 
-    return do_sigaltstack(arg1, arg2, get_sp_from_cpustate(cpu_env));
+    return do_sigaltstack(retval, ua_ss, ua_oss, get_sp_from_cpustate(cpu_env));
 }
 
 /* kill(2) */

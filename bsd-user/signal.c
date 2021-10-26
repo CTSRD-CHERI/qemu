@@ -23,8 +23,14 @@
 #include "qemu.h"
 #include "linux-user/trace.h"
 
+#include <cheri/cheric.h>
+
+/*
+ * XXXKW: target_sigaltstack_used must be a user object as it is copied out
+ * in sigaltstack(2).
+ */
 static target_stack_t target_sigaltstack_used = {
-    .ss_sp = 0,
+    .ss_sp = {},
     .ss_size = 0,
     .ss_flags = TARGET_SS_DISABLE,
 };
@@ -68,6 +74,9 @@ static uint8_t host_to_target_signal_table[TARGET_NSIG] = {
 #ifdef SIGLIBRT
     [SIGLIBRT]  =   TARGET_SIGLIBRT,
 #endif
+#ifdef SIGPROT
+    [SIGPROT]   =   TARGET_SIGPROT,
+#endif
 
     /*
      * The following signals stay the same.
@@ -86,15 +95,16 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc);
 static void target_to_host_sigset_internal(sigset_t *d,
         const target_sigset_t *s);
 
-static inline int on_sig_stack(unsigned long sp)
+static inline int on_sig_stack(abi_long sp)
 {
-    return sp - target_sigaltstack_used.ss_sp < target_sigaltstack_used.ss_size;
+    return (sp - uintptr_vaddr(target_sigaltstack_used.ss_sp) <
+        target_sigaltstack_used.ss_size);
 }
 
-static inline int sas_ss_flags(unsigned long sp)
+static inline int sas_ss_flags(abi_long sp)
 {
-    return target_sigaltstack_used.ss_size == 0 ? SS_DISABLE : on_sig_stack(sp)
-        ? SS_ONSTACK : 0;
+    return (target_sigaltstack_used.ss_size == 0 ? SS_DISABLE :
+        (on_sig_stack(sp) ? SS_ONSTACK : 0));
 }
 
 int host_to_target_signal(int sig)
@@ -227,19 +237,27 @@ static inline void host_to_target_siginfo_noswap(target_siginfo_t *tinfo,
     tinfo->si_pid = info->si_pid;
     tinfo->si_uid = info->si_uid;
     tinfo->si_status = info->si_status;
-    tinfo->si_addr = (abi_ulong)(unsigned long)info->si_addr;
+    tinfo->si_addr = vaddr_uintptr((abi_vaddr_t)info->si_addr);
     /* si_value is opaque to kernel */
     tinfo->si_value.sival_ptr =
-        (abi_ulong)(unsigned long)info->si_value.sival_ptr;
-    if (SIGILL == sig || SIGFPE == sig || SIGSEGV == sig || SIGBUS == sig ||
-            SIGTRAP == sig) {
-        tinfo->_reason._fault._trapno = info->_reason._fault._trapno;
-    }
-#ifdef SIGPOLL
-    if (SIGPOLL == sig) {
-        tinfo->_reason._poll._band = info->_reason._poll._band;
-    }
+        vaddr_uintptr((abi_vaddr_t)info->si_value.sival_ptr);
+    switch (sig) {
+    case SIGILL:
+    case SIGFPE:
+    case SIGSEGV:
+    case SIGBUS:
+    case SIGTRAP:
+#ifdef SIGPROT
+    case SIGPROT:
 #endif
+        tinfo->_reason._fault._trapno = info->_reason._fault._trapno;
+        break;
+#ifdef SIGPOLL
+    case SIGPOLL:
+        tinfo->_reason._poll._band = info->_reason._poll._band;
+        break;
+#endif
+    }
     if (SI_TIMER == code) {
         int timerid;
 
@@ -264,21 +282,29 @@ static void tswap_siginfo(target_siginfo_t *tinfo, const target_siginfo_t *info)
     tinfo->si_pid = tswap32(info->si_pid);
     tinfo->si_uid = tswap32(info->si_uid);
     tinfo->si_status = tswap32(info->si_status);
-    tinfo->si_addr = tswapal(info->si_addr);
+    tinfo->si_addr = tswapuintptr(info->si_addr);
     /* Unswapped, because we passed it through mostly untouched.  si_value is
      * opaque to the kernel, so we didn't bother with potentially wasting cycles
      * to swap it into host byte order.
      */
     tinfo->si_value.sival_ptr = info->si_value.sival_ptr;
-    if (SIGILL == sig || SIGFPE == sig || SIGSEGV == sig || SIGBUS == sig ||
-            SIGTRAP == sig) {
-        tinfo->_reason._fault._trapno = tswap32(info->_reason._fault._trapno);
-    }
-#ifdef SIGPOLL
-    if (SIGPOLL == sig) {
-        tinfo->_reason._poll._band = tswap32(info->_reason._poll._band);
-    }
+    switch (sig) {
+    case SIGILL:
+    case SIGFPE:
+    case SIGSEGV:
+    case SIGBUS:
+    case SIGTRAP:
+#ifdef SIGPROT
+    case SIGPROT:
 #endif
+        tinfo->_reason._fault._trapno = tswap32(info->_reason._fault._trapno);
+        break;
+#ifdef SIGPOLL
+    case SIGPOLL:
+        tinfo->_reason._poll._band = tswap32(info->_reason._poll._band);
+        break;
+#endif
+    }
     if (SI_TIMER == code) {
         tinfo->_reason._timer._timerid = tswap32(info->_reason._timer._timerid);
         tinfo->_reason._timer._overrun = tswap32(info->_reason._timer._overrun);
@@ -323,7 +349,7 @@ abi_long target_to_host_sigevent(struct sigevent *host_sevp,
      * using the 32 bit integer.
      */
     host_sevp->sigev_value.sival_ptr =
-        (void *)(uintptr_t)target_sevp->sigev_value.sival_ptr;
+        (void *)(uintptr_t)uintptr_vaddr(target_sevp->sigev_value.sival_ptr);
     host_sevp->sigev_signo =
         target_to_host_signal(tswap32(target_sevp->sigev_signo));
     host_sevp->sigev_notify = tswap32(target_sevp->sigev_notify);
@@ -532,67 +558,95 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
     }
 }
 
+struct target_sigaltstack_args {
+    abi_uintptr_t ss;
+    abi_uintptr_t oss;
+};
+
 /* do_sigaltstack() returns target values and errnos. */
 /* compare to kern/kern_sig.c sys_sigaltstack() and kern_sigaltstack() */
-abi_long do_sigaltstack(abi_ulong uss_addr, abi_ulong uoss_addr, abi_ulong sp)
+abi_long do_sigaltstack(abi_syscallret_t retval, abi_syscallarg_t ua_ss,
+    abi_syscallarg_t ua_oss, abi_ulong sp)
 {
     int ret;
-    target_stack_t oss;
+    struct target_sigaltstack_args ua;
+    target_stack_t uoss;
 
-    if (uoss_addr) {
-        /* Save current signal stack params */
-        oss.ss_sp = tswapl(target_sigaltstack_used.ss_sp);
-        oss.ss_size = tswapl(target_sigaltstack_used.ss_size);
-        oss.ss_flags = tswapl(sas_ss_flags(sp));
+    /* Reconstruct a system call arguments structure. */
+    ua.ss = syscallarg_uintptr(ua_ss);
+    ua.oss = syscallarg_uintptr(ua_oss);
+
+    if (uintptr_vaddr(ua.oss)) {
+        /*
+         * Store the current target object with stack parameters as the previous
+         * target object.
+         */
+        uoss.ss_sp = tswapuintptr(target_sigaltstack_used.ss_sp);
+        uoss.ss_size = tswapl(target_sigaltstack_used.ss_size);
+        uoss.ss_flags = tswapl(sas_ss_flags(sp));
     }
 
-    if(uss_addr)
-    {
-        target_stack_t *uss;
-        target_stack_t ss;
+    if (uintptr_vaddr(ua.ss)) {
+        target_stack_t uss;
+        stack_t ss;
         size_t minstacksize = TARGET_MINSIGSTKSZ;
 
-	ret = -TARGET_EFAULT;
-        if (!lock_user_struct(VERIFY_READ, uss, uss_addr, 1)) {
+        ret = -TARGET_EFAULT;
+        /* Copy the target object. */
+        if (copy_from_user(&uss, uintptr_vaddr(ua.ss), sizeof(uss)) != 0) {
             goto out;
         }
-        __get_user(ss.ss_sp, &uss->ss_sp);
-        __get_user(ss.ss_size, &uss->ss_size);
-        __get_user(ss.ss_flags, &uss->ss_flags);
-        unlock_user_struct(uss, uss_addr, 0);
 
-	ret = -TARGET_EPERM;
-	if (on_sig_stack(sp))
+        /* Translate the target object to a host object. */
+        ss.ss_sp = (void *)(uintptr_t)uintptr_vaddr(uss.ss_sp);
+        ss.ss_size = tswapl(uss.ss_size);
+        ss.ss_flags = tswapl(uss.ss_flags);
+
+        ret = -TARGET_EPERM;
+        if (on_sig_stack(sp))
             goto out;
 
-	ret = -TARGET_EINVAL;
-	if (ss.ss_flags != TARGET_SS_DISABLE
-            && ss.ss_flags != TARGET_SS_ONSTACK
-            && ss.ss_flags != 0)
+        /* Modify the host object. */
+        ret = -TARGET_EINVAL;
+        if (ss.ss_flags != TARGET_SS_DISABLE &&
+            ss.ss_flags != TARGET_SS_ONSTACK &&
+            ss.ss_flags != 0) {
             goto out;
-
-	if (ss.ss_flags == TARGET_SS_DISABLE) {
+        }
+        if (ss.ss_flags == TARGET_SS_DISABLE) {
             ss.ss_size = 0;
             ss.ss_sp = 0;
-	} else {
+        } else {
             ret = -TARGET_ENOMEM;
             if (ss.ss_size < minstacksize) {
                 goto out;
             }
-	}
+        }
 
-        target_sigaltstack_used.ss_sp = ss.ss_sp;
+        /*
+         * Store the modified host object as the current target object with
+         * stack parameters.
+         */
         target_sigaltstack_used.ss_size = ss.ss_size;
+#ifdef TARGET_CHERI
+        target_sigaltstack_used.ss_sp = cheri_uintptr(cheri_ptr(ss.ss_sp,
+            target_sigaltstack_used.ss_size));
+#else
+        target_sigaltstack_used.ss_sp = ss.ss_sp;
+#endif
     }
 
-    if (uoss_addr) {
+    if (uintptr_vaddr(ua.oss)) {
         ret = -TARGET_EFAULT;
-        if (copy_to_user(uoss_addr, &oss, sizeof(oss)))
+        /* Copy the previous target object with stack parameters out. */
+        if (copy_to_user(uintptr_vaddr(ua.oss), &uoss, sizeof(uoss))) {
             goto out;
+        }
     }
 
     ret = 0;
 out:
+    *retval = *cheri_fromint(ret);
     return ret;
 }
 
@@ -638,13 +692,13 @@ int do_sigaction(int sig, const struct target_sigaction *act,
 
     k = &sigact_table[sig - 1];
     if (oact) {
-        oact->_sa_handler = tswapal(k->_sa_handler);
+        oact->_sa_handler = tswapuintptr(k->_sa_handler);
         oact->sa_flags = tswap32(k->sa_flags);
         oact->sa_mask = k->sa_mask;
     }
     if (act) {
         /* XXX: this is most likely not threadsafe. */
-        k->_sa_handler = tswapal(act->_sa_handler);
+        k->_sa_handler = tswapuintptr(act->_sa_handler);
         k->sa_flags = tswap32(act->sa_flags);
         k->sa_mask = act->sa_mask;
 
@@ -661,9 +715,9 @@ int do_sigaction(int sig, const struct target_sigaction *act,
              *  Note: It is important to update the host kernel signal mask to
              *  avoid getting unexpected interrupted system calls.
              */
-            if (k->_sa_handler == TARGET_SIG_IGN) {
+            if (uintptr_vaddr(k->_sa_handler) == TARGET_SIG_IGN) {
                 act1.sa_sigaction = (void *)SIG_IGN;
-            } else if (k->_sa_handler == TARGET_SIG_DFL) {
+            } else if (uintptr_vaddr(k->_sa_handler) == TARGET_SIG_DFL) {
                 if (fatal_signal(sig)) {
                     act1.sa_sigaction = host_signal_handler;
                 } else {
@@ -687,7 +741,7 @@ static inline abi_ulong get_sigframe(struct target_sigaction *ka,
     sp = get_sp_from_cpustate(regs);
 
     if ((ka->sa_flags & TARGET_SA_ONSTACK) && (sas_ss_flags(sp) == 0)) {
-        sp = target_sigaltstack_used.ss_sp +
+        sp = uintptr_vaddr(target_sigaltstack_used.ss_sp) +
             target_sigaltstack_used.ss_size;
     }
 
@@ -740,10 +794,17 @@ static void setup_frame(int sig, int code, struct target_sigaction *ka,
         frame->sf_si.si_status = tinfo->si_status;
         frame->sf_si.si_addr = tinfo->si_addr;
 
-        if (TARGET_SIGILL == sig || TARGET_SIGFPE == sig ||
-                TARGET_SIGSEGV == sig || TARGET_SIGBUS == sig ||
-                TARGET_SIGTRAP == sig) {
+        switch (sig) {
+	case TARGET_SIGILL:
+	case TARGET_SIGFPE:
+	case TARGET_SIGSEGV:
+	case TARGET_SIGBUS:
+	case TARGET_SIGTRAP:
+#ifdef TARGET_SIGPROT
+	case TARGET_SIGPROT:
+#endif
             frame->sf_si._reason._fault._trapno = tinfo->_reason._fault._trapno;
+            break;
         }
 
         /*
@@ -772,7 +833,8 @@ static void setup_frame(int sig, int code, struct target_sigaction *ka,
 
     }
 
-    if (set_sigtramp_args(regs, sig, frame, frame_addr, ka)) {
+    if (set_sigtramp_args(regs, thread_cpu->opaque, sig, frame, frame_addr,
+			  ka)) {
         goto give_sigsegv;
     }
 
@@ -876,9 +938,11 @@ void signal_init(void)
         host_sig = target_to_host_signal(i);
         sigaction(host_sig, NULL, &oact);
         if (oact.sa_sigaction == (void *)SIG_IGN) {
-            sigact_table[i - 1]._sa_handler = TARGET_SIG_IGN;
+            sigact_table[i - 1]._sa_handler =
+                vaddr_uintptr((abi_vaddr_t)TARGET_SIG_IGN);
         } else if (oact.sa_sigaction == (void *)SIG_DFL) {
-            sigact_table[i - 1]._sa_handler = TARGET_SIG_DFL;
+            sigact_table[i - 1]._sa_handler =
+                vaddr_uintptr((abi_vaddr_t)TARGET_SIG_DFL);
         }
         /*
          * If there's already a handler installed then something has
@@ -903,7 +967,7 @@ static void handle_pending_signal(CPUArchState *cpu_env, int sig,
     struct target_sigaction *sa;
     int code;
     sigset_t set;
-    abi_ulong handler;
+    abi_vaddr_t handler;
     target_siginfo_t tinfo;
     target_sigset_t target_old_set;
 
@@ -922,7 +986,7 @@ static void handle_pending_signal(CPUArchState *cpu_env, int sig,
         handler = TARGET_SIG_IGN;
     } else {
         sa = &sigact_table[sig - 1];
-        handler = sa->_sa_handler;
+        handler = uintptr_vaddr(sa->_sa_handler);
     }
 
     if (do_strace) {
@@ -992,7 +1056,7 @@ static void handle_pending_signal(CPUArchState *cpu_env, int sig,
             setup_frame(sig, code, sa, &target_old_set, NULL, cpu_env);
         }
         if (sa->sa_flags & TARGET_SA_RESETHAND) {
-            sa->_sa_handler = TARGET_SIG_DFL;
+            sa->_sa_handler = vaddr_uintptr((abi_vaddr_t)TARGET_SIG_DFL);
         }
     }
     if (q != &k->info) {
