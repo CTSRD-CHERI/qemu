@@ -1,12 +1,9 @@
-#include "../cheri_compressed_cap.h"
 #include <cinttypes>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 
-#define CATCH_CONFIG_MAIN // This tells Catch to provide a main() - only do this in one cpp file
-#include "sail_wrapper.h"
-#include "test_util.h"
+#include "test_common.cpp"
 
 #if 0
 struct setbounds_regressions {
@@ -28,7 +25,7 @@ struct setbounds_regressions {
 template <typename Handler>
 static inline void check_csetbounds_invariants(const typename Handler::cap_t& initial_cap,
                                                const typename Handler::cap_t& with_bounds, bool was_exact,
-                                               uint64_t requested_base, typename Handler::length_t requested_top) {
+                                               _cc_addr_t requested_base, typename Handler::length_t requested_top) {
     CAPTURE(initial_cap, with_bounds, was_exact);
     // Address should be the same!
     REQUIRE(with_bounds.address() == initial_cap.address());
@@ -79,86 +76,28 @@ static typename Handler::cap_t do_csetbounds(const typename Handler::cap_t& init
 }
 
 template <typename Handler>
-static cc128_cap_t check_bounds_exact(const typename Handler::cap_t& initial_cap,
-                                         typename Handler::length_t requested_length, bool should_be_exact) {
+static _cc_cap_t check_bounds_exact(const typename Handler::cap_t& initial_cap,
+                                    typename Handler::length_t requested_length, bool should_be_exact) {
     typename Handler::length_t req_top = initial_cap.address() + (typename Handler::length_t)requested_length;
     bool exact = false;
-    cc128_cap_t with_bounds = do_csetbounds<Handler>(initial_cap, req_top, &exact);
+    _cc_cap_t with_bounds = do_csetbounds<Handler>(initial_cap, req_top, &exact);
     CHECK(exact == should_be_exact);
     return with_bounds;
 }
 
 // check_monotonic
 
-TEST_CASE("regression from cheritest", "[bounds]") {
-    // The length of 0x0000000000ffffff should not be representable since it uses more than 14/23 bits
-    // Therefore it should be rounded up but we were was not doing it correctly.
-    // sail log:
-    // 1 <-  t:1 s:0 perms:0x00078FFF type:0xFFFFFFFFFFFFFFFF offset:0xFFFFFFFFFF000000 base:0x0000000000000000
-    // length:0x10000000000000000
-    // PC: 0x900000004000114C op:0x48010848 (csetbounds)
-    // 1 <-  t:1 s:0 perms:0x00078FFF type:0xFFFFFFFFFFFFFFFF offset:0x0000000000000000 base:0xFFFFFFFFFF000000
-    // length:0x00000000001000000
-    // qemu log:
-    // 0x9000000040001148:  csetoffset	c1,c1,t0
-    //    Write C01|v:1 s:0 p:00078fff b:0000000000000000 l:ffffffffffffffff
-    //             |o:ffffffffff000000 t:3ffff
-    // 0x900000004000114c:  csetbounds	c1,c1,at
-    //    Write C01|v:1 s:0 p:00078fff b:ffffffffff000000 l:0000000000ffffff
-    //             |o:0000000000000000 t:3ffff
-
-    cc128_cap_t initial = make_max_perms_cap(0, 0xFFFFFFFFFF000000, CC128_MAX_LENGTH);
-    cc128_cap_t with_bounds = check_bounds_exact<TestAPI128>(initial, 0xffffff, false);
-    CHECK(with_bounds.cr_base == 0xFFFFFFFFFF000000);
-    CHECK(with_bounds.offset() == 0x0000000000000000);
-    CHECK(with_bounds.length() == 0x00000000001000000);
-}
-
-TEST_CASE("Old format setbounds regression with new format", "[old]") {
-    // 0x9000000040000fdc:  cincoffsetimm	c3,c1,7
-    //    Write C03|v:1 s:0 p:00078fff b:0000000000000000 l:ffffffffffffffff
-    //             |o:0000000000000007 t:ffffff
-    // 0x9000000040000fe0:  lui	a0,0x1000
-    //    Write a0 = 0000000010000000
-    // 0x9000000040000fe4:  csetbounds	c3,c3,a0
-    //  -> crash
-    auto cap = make_max_perms_cap(0, 7, CC128_MAX_LENGTH);
-    uint64_t requested_length = 0x0000000010000000;
-    cc128_cap_t with_bounds = check_bounds_exact<TestAPI128>(cap, requested_length, false);
-    CHECK(with_bounds.cr_base == 0x0000000000000000);
-    CHECK(with_bounds.offset() == 0x0000000000000007);
-    // Higher precision in old format -> more exact bounds
-    uint64_t expected_length = TESTING_OLD_FORMAT ? 0x0000000010000400 : 0x00000000010080000;
-    CHECK(with_bounds.length() == expected_length);
-}
-
-TEST_CASE("Cheritest regression case", "[regression]") {
-    // dli	$t0, 0x160600000
-    // cgetdefault $c1
-    // csetoffset $c1, $c1, $t0
-    // dli	$t1, 0x300000
-    // csetbounds $c1, $c1, $t1
-    auto cap = make_max_perms_cap(0, 0x160600000, CC128_MAX_LENGTH);
-    cc128_cap_t with_bounds = check_bounds_exact<TestAPI128>(cap, 0x300000, true);
-    CHECK(with_bounds.cr_base == 0x160600000);
-    CHECK(with_bounds.offset() == 0);
-    CHECK(with_bounds.length() == 0x300000);
-    CHECK(with_bounds.address() == cap.address());
-}
-
-#include "setbounds_inputs.cpp"
-
-static inline cc128_length_t round_up_with_cram_mask(cc128_length_t value, cc128_length_t round_down_mask) {
+static inline _cc_length_t round_up_with_cram_mask(_cc_length_t value, _cc_length_t round_down_mask) {
     // mask has all ones in the top
-    REQUIRE(cc128_idx_MSNZ((uint64_t)round_down_mask) == 63);
+    REQUIRE(_cc_N(idx_MSNZ)((_cc_addr_t)round_down_mask) == sizeof(_cc_addr_t) * 8 - 1);
     // Round up using by adding ~mask to go over boundary and then round down with & mask
     return (value + ~round_down_mask) & (round_down_mask);
 }
 
-static inline void check_cram_matches_setbounds(cc128_length_t req_top, const cc128_cap_t& cap_to_bound,
-                                                const cc128_cap_t& setbounds_result) {
+static inline void check_cram_matches_setbounds(_cc_length_t req_top, const _cc_cap_t& cap_to_bound,
+                                                const _cc_cap_t& setbounds_result) {
     // Check that rounding with cram is equivalent to setbounds rounding:
-    uint64_t cram_value = cc128_get_alignment_mask((uint64_t)(req_top - cap_to_bound.address()));
+    _cc_addr_t cram_value = _cc_N(get_alignment_mask)((_cc_addr_t)(req_top - cap_to_bound.address()));
     CAPTURE(cram_value);
     CAPTURE(cap_to_bound);
     CAPTURE(setbounds_result);
@@ -184,20 +123,20 @@ void test_zero_length_one_past_end() { // Create an out-of-bounds capability and
     CHECK(result == same_again);
 }
 
-TEST_CASE("setbounds128 with req_top == top", "[bounds 128]") { test_zero_length_one_past_end<TestAPI128>(); }
-TEST_CASE("setbounds64 with req_top == top", "[bounds 64]") { test_zero_length_one_past_end<TestAPI64>(); }
+TEST_CASE("setbounds with req_top == top", "[bounds]") { test_zero_length_one_past_end<TestAPICC>(); }
 
+#ifdef HAVE_SAIL_SETBOUNDS_TEST_CASES
 TEST_CASE("setbounds test cases from sail", "[bounds]") {
-    using Handler = TestAPI128;
+    using Handler = TestAPICC;
     for (size_t index = 0; index < array_lengthof(setbounds_inputs); index++) {
         CAPTURE(index);
         const setbounds_input& input = setbounds_inputs[index];
-        auto first_input = make_max_perms_cap(0, input.base1, CC128_MAX_LENGTH);
+        auto first_input = make_max_perms_cap(0, input.base1, _CC_N(MAX_LENGTH));
         REQUIRE(first_input.address() == input.base1);
         REQUIRE(first_input.base() == 0);
-        REQUIRE(first_input.top() == CC128_MAX_LENGTH);
+        REQUIRE(first_input.top() == _CC_N(MAX_LENGTH));
         bool first_exact = false;
-        const cc128_cap_t first_bounds = do_csetbounds<Handler>(first_input, input.top1, &first_exact);
+        const _cc_cap_t first_bounds = do_csetbounds<Handler>(first_input, input.top1, &first_exact);
         CHECK(first_bounds.base() == input.sail_cc_base1);
         CHECK(first_bounds.top() == input.sail_cc_top1);
         // Check CRAP/CRAM:
@@ -205,7 +144,7 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
 
         // Check that calling setbounds with the same target top yields the same result
         bool first_again_exact = false;
-        const cc128_cap_t first_bounds_again = do_csetbounds<Handler>(first_bounds, input.top1, &first_again_exact);
+        const _cc_cap_t first_bounds_again = do_csetbounds<Handler>(first_bounds, input.top1, &first_again_exact);
         CHECK(first_again_exact == first_exact);
         CHECK(first_bounds.base() == first_bounds_again.base());
         CHECK(first_bounds.top() == first_bounds_again.top());
@@ -214,11 +153,11 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         check_cram_matches_setbounds(input.top1, first_bounds, first_bounds_again);
 
         // Check the second csetbounds:
-        cc128_cap_t second_input = first_bounds;
+        _cc_cap_t second_input = first_bounds;
         second_input._cr_cursor += input.base2 - second_input.address();
         REQUIRE(second_input.address() == input.base2);
         bool second_exact = false;
-        const cc128_cap_t second_bounds = do_csetbounds<Handler>(second_input, input.top2, &second_exact);
+        const _cc_cap_t second_bounds = do_csetbounds<Handler>(second_input, input.top2, &second_exact);
         CHECK(second_bounds.base() == input.sail_cc_base2);
         CHECK(second_bounds.top() == input.sail_cc_top2);
         // Check CRAP/CRAM:
@@ -230,7 +169,7 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         }
         // Check that calling setbounds with the same target top yields the same result
         bool second_again_exact = false;
-        const cc128_cap_t second_bounds_again =
+        const _cc_cap_t second_bounds_again =
             do_csetbounds<Handler>(second_bounds, input.top2, &second_again_exact);
         CHECK(second_again_exact == second_exact);
         CHECK(second_bounds.base() == second_bounds_again.base());
@@ -239,3 +178,4 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         check_cram_matches_setbounds(input.top2, second_bounds, second_bounds_again);
     }
 }
+#endif

@@ -36,8 +36,8 @@
  */
 
 // The following macros are expected to be defined
-#undef CC_BITS
-#define CC_BITS 64
+#define CC_FORMAT_LOWER 64
+#define CC_FORMAT_UPPER 64
 /* These should match the definitions in sail! */
 #define CC64_CAP_SIZE 8
 #define CC64_CAP_BITS 64
@@ -53,6 +53,9 @@
 #define CC64_MAX_LENGTH CC64_MAX_ADDRESS_PLUS_ONE
 #define CC64_MAX_TOP CC64_MAX_ADDRESS_PLUS_ONE
 #define CC64_MAX_ADDR UINT32_MAX
+/* Special otypes are allocated downwards from -1 */
+#define CC64_SPECIAL_OTYPE_VAL(subtract) (CC64_MAX_REPRESENTABLE_OTYPE - subtract##u)
+#define CC64_SPECIAL_OTYPE_VAL_SIGNED(subtract) (((int64_t)-1) - subtract##u)
 
 /* Use uint64_t to represent 33 bit length */
 typedef uint64_t cc64_length_t;
@@ -124,6 +127,10 @@ enum _CC_N(OTypes) {
     _CC_N(MAX_RESERVED_OTYPE) = _CC_N(OTYPE_UNSEALED),
 };
 
+#define CC64_LS_SPECIAL_OTYPES(ITEM, ...)                                                                              \
+    ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
+    ITEM(OTYPE_SENTRY, __VA_ARGS__)
+
 _CC_STATIC_ASSERT_SAME(CC64_MANTISSA_WIDTH, CC64_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
 #include "cheri_compressed_cap_common.h"
@@ -135,3 +142,6 @@ _CC_STATIC_ASSERT_SAME(CC64_NULL_XOR_MASK, UINT32_C(0x7c302));
 #define CC64_ENCODE_FIELD(value, name) _CC_ENCODE_FIELD(value, name)
 #define CC64_EXTRACT_FIELD(value, name) _CC_EXTRACT_FIELD(value, name)
 #define CC64_ENCODE_EBT_FIELD(value, name) _CC_ENCODE_EBT_FIELD(value, name)
+
+#undef CC_FORMAT_LOWER
+#undef CC_FORMAT_UPPER

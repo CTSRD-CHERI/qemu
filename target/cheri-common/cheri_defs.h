@@ -38,15 +38,24 @@
 # define cheri_debug_assert(X) ((void)0)
 #endif
 
-#ifdef TARGET_MORELLO
-#define CC_IS_MORELLO 1
-#endif
-
 #ifdef TARGET_CHERI
 
 #define ASSERT_IF_CHERI() assert(0)
 
 #include "cheri-compressed-cap/cheri_compressed_cap.h"
+
+#define CHERI_DECLARE_ALIGNED_CC_CAP_T(suffix) \
+    typedef struct cc##suffix##_aligned_cap_t {                       \
+        cc##suffix##_cap_t cap;                                       \
+    } QEMU_ALIGNED(32) cc##suffix##_aligned_cap_t;                    \
+    _Static_assert(sizeof(cc##suffix##_aligned_cap_t) % 32 == 0,      \
+                   "QEMU_ALIGNED() broken?");                         \
+    _Static_assert(offsetof(cc##suffix##_aligned_cap_t, cap) == 0,    \
+                   "QEMU_ALIGNED() broken?");
+
+CHERI_DECLARE_ALIGNED_CC_CAP_T(64)
+CHERI_DECLARE_ALIGNED_CC_CAP_T(128)
+CHERI_DECLARE_ALIGNED_CC_CAP_T(128m)
 
 #if TARGET_LONG_BITS == 32
 #  define CHERI_CAP_SIZE 8
@@ -67,12 +76,16 @@
 #endif
 
 /*
- * Optional suffix intended for Morello to differentiate its 128-bit
- * compression format from the CHERI-MIPS and CHERI-RISC-V CHERI-128 format,
- * allowing e.g. cc128 and cc128m to coexist. Unused for now.
+ * Morello's encoding scheme differs from CHERI-128 and is implemented by
+ * cheri-compressed-cap under the name cc128m/CC128M
  */
+#ifdef TARGET_MORELLO
+#define CHERI_CAP_VARIANT_LOWER m
+#define CHERI_CAP_VARIANT_UPPER M
+#else
 #define CHERI_CAP_VARIANT_LOWER
 #define CHERI_CAP_VARIANT_UPPER
+#endif
 
 #define _CHERI_CAP_FORMAT(size, variant) size ## variant
 #define _XCHERI_CAP_FORMAT(size, variant) _CHERI_CAP_FORMAT(size, variant)
@@ -111,6 +124,8 @@
 typedef CAP_cc(cap_t) cap_register_t;
 typedef CAP_cc(offset_t) cap_offset_t;
 typedef CAP_cc(length_t) cap_length_t;
+
+typedef CAP_cc(aligned_cap_t) aligned_cap_register_t;
 
 typedef enum CheriPermissions {
     CAP_PERM_GLOBAL = CAP_CC(PERM_GLOBAL),
