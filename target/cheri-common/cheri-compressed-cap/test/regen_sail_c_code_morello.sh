@@ -19,5 +19,5 @@ extract_fns="CapGetBounds CapGetValue CapGetPermissions CapGetObjectType CapGetT
 output_dir=${SCRIPT_DIR}
 
 cd "$SAIL_MORELLO_DIR"
-printf ":rewrites c\n:slice_roots $extract_fns\n:slice\n:compile c\n:quit\n" | "${SAIL_DIR}/sail" -i -c_no_main -static -c_prefix sailgen_ -c_specialize -no_effects -memo_z3  -non_lexical_flow -no_warn -o "$output_dir/sail_compression_morello" $sail128_srcs
+printf ":rewrites c\n:slice_roots $extract_fns\n:slice\n:compile c\n:quit\n" | "${SAIL_DIR}/sail" -i -c_no_main -static -c_prefix sailgen_ -c_specialize -no_effects -memo_z3  -non_lexical_flow -no_warn -o "$output_dir/sail_compression_128m" $sail128_srcs
 cd "$output_dir"

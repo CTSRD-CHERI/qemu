@@ -313,60 +313,109 @@ const VMStateInfo vmstate_info_uint64 = {
     .put  = put_uint64,
 };
 
-/* 128/64-bit compressed capability */
+/*
+ * 64/128-bit compressed capability
+ *
+ * TODO: If we ever want this to actually work the tag needs saving too. For
+ * now just assume everything is tagged.
+ */
 
 #include "../target/cheri-common/cheri-compressed-cap/cheri_compressed_cap.h"
 
-static int get_cap_register(QEMUFile *f, void *pv, size_t size,
-                            const VMStateField *field)
+static int get_cap64_register(QEMUFile *f, void *pv, size_t size,
+                              const VMStateField *field)
 {
-    // TODO: If we ever want this to actually work the tag needs saving too
-    // TODO: For now just assume everything is tagged
-    if (field->size == sizeof(cc128_cap_t)) {
-        cc128_cap_t *v = pv;
-        uint64_t cursor;
-        uint64_t pesbt;
-        qemu_get_be64s(f, &cursor);
-        qemu_get_be64s(f, &pesbt);
-        cc128_decompress_mem(pesbt, cursor, 1, v);
-    } else {
-        assert(field->size == sizeof(cc64_cap_t));
-        cc64_cap_t *v = pv;
-        uint32_t cursor;
-        uint32_t pesbt;
-        qemu_get_be32s(f, &cursor);
-        qemu_get_be32s(f, &pesbt);
-        cc64_decompress_mem(pesbt, cursor, 1, v);
-    }
+    assert(field->size == sizeof(cc64_cap_t));
+    cc64_cap_t *v = pv;
+    uint32_t cursor;
+    uint32_t pesbt;
+    qemu_get_be32s(f, &cursor);
+    qemu_get_be32s(f, &pesbt);
+    cc64_decompress_mem(pesbt, cursor, 1, v);
     return 0;
 }
 
-static int put_cap_register(QEMUFile *f, void *pv, size_t size,
+static int put_cap64_register(QEMUFile *f, void *pv, size_t size,
                             const VMStateField *field, QJSON *vmdesc)
 {
-    if (field->size == sizeof(cc128_cap_t)) {
-        cc128_cap_t *v = pv;
-        uint64_t *cursor = &v->_cr_cursor;
-        uint64_t pesbt = cc128_compress_raw(v);
+    assert(field->size == sizeof(cc64_cap_t));
+    cc64_cap_t *v = pv;
+    uint32_t *cursor = &v->_cr_cursor;
+    uint32_t pesbt = cc64_compress_raw(v);
 
-        qemu_put_be64s(f, cursor);
-        qemu_put_be64s(f, &pesbt);
-    } else {
-        assert(field->size == sizeof(cc64_cap_t));
-        cc64_cap_t *v = pv;
-        uint32_t *cursor = &v->_cr_cursor;
-        uint32_t pesbt = cc64_compress_raw(v);
-
-        qemu_put_be32s(f, cursor);
-        qemu_put_be32s(f, &pesbt);
-    }
+    qemu_put_be32s(f, cursor);
+    qemu_put_be32s(f, &pesbt);
     return 0;
 }
 
-const VMStateInfo vmstate_info_cap_register = {
-    .name = "cap_register",
-    .get = get_cap_register,
-    .put = put_cap_register,
+const VMStateInfo vmstate_info_cap64_register = {
+    .name = "cap64_register",
+    .get = get_cap64_register,
+    .put = put_cap64_register,
+};
+
+static int get_cap128_register(QEMUFile *f, void *pv, size_t size,
+                              const VMStateField *field)
+{
+    assert(field->size == sizeof(cc128_cap_t));
+    cc128_cap_t *v = pv;
+    uint64_t cursor;
+    uint64_t pesbt;
+    qemu_get_be64s(f, &cursor);
+    qemu_get_be64s(f, &pesbt);
+    cc128_decompress_mem(pesbt, cursor, 1, v);
+    return 0;
+}
+
+static int put_cap128_register(QEMUFile *f, void *pv, size_t size,
+                            const VMStateField *field, QJSON *vmdesc)
+{
+    assert(field->size == sizeof(cc128_cap_t));
+    cc128_cap_t *v = pv;
+    uint64_t *cursor = &v->_cr_cursor;
+    uint64_t pesbt = cc128_compress_raw(v);
+
+    qemu_put_be64s(f, cursor);
+    qemu_put_be64s(f, &pesbt);
+    return 0;
+}
+
+const VMStateInfo vmstate_info_cap128_register = {
+    .name = "cap128_register",
+    .get = get_cap128_register,
+    .put = put_cap128_register,
+};
+
+static int get_cap128m_register(QEMUFile *f, void *pv, size_t size,
+                              const VMStateField *field)
+{
+    assert(field->size == sizeof(cc128m_cap_t));
+    cc128m_cap_t *v = pv;
+    uint64_t cursor;
+    uint64_t pesbt;
+    qemu_get_be64s(f, &cursor);
+    qemu_get_be64s(f, &pesbt);
+    cc128m_decompress_mem(pesbt, cursor, 1, v);
+    return 0;
+}
+
+static int put_cap128m_register(QEMUFile *f, void *pv, size_t size,
+                            const VMStateField *field, QJSON *vmdesc)
+{
+    assert(field->size == sizeof(cc128m_cap_t));
+    cc128m_cap_t *v = pv;
+    uint64_t *cursor = &v->_cr_cursor;
+    uint64_t pesbt = cc128m_compress_raw(v);
+
+    qemu_put_be64s(f, cursor);
+    qemu_put_be64s(f, &pesbt);
+    return 0;
+}
+
+const VMStateInfo vmstate_info_cap128m_register = {
+    .name = "cap128m_register",
+    .get = get_cap128m_register,
+    .put = put_cap128m_register,
 };
 
 static int get_nullptr(QEMUFile *f, void *pv, size_t size,

@@ -288,7 +288,7 @@ static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
         // Also allow nonsense values over 64 - BWidth + 2: this is expected by sail-generated tests
         // E = MIN(64 - BWidth + 2, E);
 #ifdef CC_IS_MORELLO
-        if (result.E == CC128_MAX_ENCODABLE_EXPONENT) {
+        if (result.E == _CC_N(MAX_ENCODABLE_EXPONENT)) {
             result.B = 0;
             // This isn't top, its T. We just special case again when top is calculated.
             result.T = 0;
@@ -341,9 +341,9 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
                                            _cc_length_t* top_out) {
 #ifdef CC_IS_MORELLO
     if (bounds.E > _CC_MAX_EXPONENT) {
-        bool valid = bounds.E == CC128_MAX_ENCODABLE_EXPONENT;
+        bool valid = bounds.E == _CC_N(MAX_ENCODABLE_EXPONENT);
         *base_out = 0;
-        *top_out = CC128_MAX_TOP;
+        *top_out = _CC_N(MAX_TOP);
         return valid;
     }
 
@@ -530,11 +530,11 @@ static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
 static inline uint32_t _cc_N(compute_ebt)(_cc_addr_t req_base, _cc_length_t req_top, _cc_addr_t* alignment_mask,
                                           bool* exact) {
 #ifdef CC_IS_MORELLO
-    if (req_base == 0 && req_top == CC128_MAX_TOP) {
+    if (req_base == 0 && req_top == _CC_N(MAX_TOP)) {
         *exact = true;
         if (alignment_mask)
             *alignment_mask = _CC_MAX_ADDR;
-        return CC128_RESET_EBT;
+        return _CC_N(RESET_EBT);
     }
 #else
     _cc_debug_assert(req_base <= req_top && "Cannot invert base and top");
@@ -956,7 +956,7 @@ static inline _cc_addr_t _cc_N(get_representable_length)(_cc_addr_t req_length) 
 #ifdef __cplusplus
 inline bool _cc_N(cap)::operator==(const _cc_N(cap) & other) const { return _cc_N(exactly_equal)(this, &other); }
 
-class _CC_CONCAT(CompressedCap, CC_BITS) {
+class _CC_CONCAT(CompressedCap, CC_FORMAT_LOWER) {
 public:
     using length_t = _cc_length_t;
     using offset_t = _cc_offset_t;
@@ -983,4 +983,5 @@ public:
     static inline addr_t representable_length(addr_t len) { return _cc_N(get_representable_length)(len); }
     static inline addr_t representable_mask(addr_t len) { return _cc_N(get_alignment_mask)(len); }
 };
+#define CompressedCapCC _CC_CONCAT(CompressedCap, CC_FORMAT_LOWER)
 #endif

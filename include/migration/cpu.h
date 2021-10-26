@@ -61,6 +61,21 @@
     VMSTATE_UINTTL_2DARRAY_V(_f, _s, _n1, _n2, 0)
 
 #ifdef TARGET_CHERI
+#define VMSTATE_CAP_V(_f, _s, _v)                                     \
+    CAP_NAMESPACED(UPPER, VMSTATE_CAP, V)(_f, _s, _v)
+#define VMSTATE_CAP_ARRAY_V(_f, _s, _n, _v)                           \
+    CAP_NAMESPACED(UPPER, VMSTATE_CAP, ARRAY_V)(_f, _s, _n, _v)
+#define VMSTATE_ALIGN_CAP_ARRAY_V(_f, _s, _n, _v)                     \
+    CAP_NAMESPACED(UPPER, VMSTATE_ALIGN_CAP, ARRAY_V)(_f, _s, _n, _v)
+
+#define VMSTATE_CAP(_f, _s)                                           \
+    VMSTATE_CAP_V(_f, _s, 0)
+#define VMSTATE_CAP_ARRAY(_f, _s, _n)                                 \
+    VMSTATE_CAP_ARRAY_V(_f, _s, _n, 0)
+#define VMSTATE_ALIGN_CAP_ARRAY(_f, _s, _n)                           \
+    VMSTATE_ALIGN_CAP_ARRAY_V(_f, _s, _n, 0)
+
+/* TODO: Use VMSTATE_CAP? */
 #define VMSTATE_UINTTL_OR_CAP(_f, _cf, _s) VMSTATE_UINTTL(_cf._cr_cursor, _s)
 #else
 #define VMSTATE_UINTTL_OR_CAP(_f, _cf, _s) VMSTATE_UINTTL(_f, _s)
