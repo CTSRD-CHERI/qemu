@@ -1492,8 +1492,14 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
 
     case TARGET_FREEBSD_NR_syscall: /* syscall(2) */
     case TARGET_FREEBSD_NR___syscall: /* __syscall(2) */
-        ret = do_freebsd_syscall(cpu_env, arg1 & 0xffff, arg2, arg3, arg4,
-                arg5, arg6, arg7, arg8, 0);
+#ifdef TARGET_CHERI
+	/*
+	 * XXXKW: syscall(2) and __syscall(2) the arguments are on the stack.
+	 */
+#endif
+        ret = do_freebsd_syscall(cpu_env, retvalp, arg1 & 0xffff, sa2, sa3, sa4,
+                sa5, sa6, sa7, sa8, 0);
+        retval = *retvalp;
         break;
 
         /*
