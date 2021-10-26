@@ -24,10 +24,10 @@
 #define TARGET_NSIG_WORDS   (TARGET_NSIG / TARGET_NSIG_BPW)
 
 /* this struct defines a stack used during syscall handling */
-typedef struct target_sigaltstack {
-    abi_long    ss_sp;
-    abi_ulong   ss_size;
-    abi_long    ss_flags;
+typedef struct target_stack {
+    abi_uintptr_t ss_sp;
+    abi_ulong     ss_size;
+    abi_int       ss_flags;
 } target_stack_t;
 
 typedef struct {
@@ -35,15 +35,15 @@ typedef struct {
 } target_sigset_t;
 
 struct target_sigaction {
-    abi_ulong   _sa_handler;
-    int32_t     sa_flags;
+    abi_uintptr_t   _sa_handler;
+    abi_int         sa_flags;
     target_sigset_t sa_mask;
 };
 
 typedef union target_sigval {
-    int32_t sival_int;
+    abi_int       sival_int;
     abi_uintptr_t sival_ptr;
-    int32_t sigval_int;
+    abi_int       sigval_int;
     abi_uintptr_t sigval_ptr;
 } target_sigval_t;
 

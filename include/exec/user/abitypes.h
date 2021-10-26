@@ -96,18 +96,25 @@ typedef abi_long abi_syscallret_t;
 
 #ifdef TARGET_CHERI
 #define uintptr_vaddr(x) ((abi_vaddr_t)(x).cursor)
+#define vaddr_uintptr(x) (cheri_uintptr(cheri_setaddress(cheri_zerocap(), (x))))
 
 /*
  * XXXKW: QEMU uses NULL for a non-existing system call argument.
  */
-#define syscallarg_value(sa) ((abi_long)((sa != NULL) ? (sa)->_cr_cursor : 0))
-#define syscallret_value(sa) ((abi_long)(sa)->_cr_cursor)
+#define syscallarg_value(sa)   ((abi_long)((sa != NULL) ? (sa)->_cr_cursor : 0))
+#define syscallret_value(sa)   ((abi_long)(sa)->_cr_cursor)
+
+#define syscallarg_uintptr(sa) (cheri_uintptr(sa))
 #else
 #define uintptr_vaddr(x) ((abi_vaddr_t)(x))
+#define vaddr_uintptr(x) ((abi_uintptr_t)(x))
 
 #define syscallarg_value(sa) sa
 #define syscallret_value(sa) sa
+
+#define syscallarg_uintptr(sa) ((abi_uintptr_t)(sa))
 #endif
+#define syscallarg_int(sa)     ((abi_long)syscallarg_value(sa))
 
 static inline abi_ulong tswapal(abi_ulong v)
 {

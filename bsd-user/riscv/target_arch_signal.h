@@ -20,8 +20,11 @@
 #ifndef _TARGET_ARCH_SIGNAL_H_
 #define _TARGET_ARCH_SIGNAL_H_
 
+#include "qemu.h"
+#include "qemu-common.h"
 #include "cpu.h"
 
+#include <cheri/cheric.h>
 
 #define TARGET_INSN_SIZE     4  /* riscv instruction size */
 
@@ -38,6 +41,21 @@ struct target_sigcontext {
     int32_t     _dummy;
 };
 
+#ifdef TARGET_CHERI
+struct target_capregs {
+    abi_uintcap_t    cp_cra;
+    abi_uintcap_t    cp_csp;
+    abi_uintcap_t    cp_cgp;
+    abi_uintcap_t    cp_ctp;
+    abi_uintcap_t    cp_ct[7];
+    abi_uintcap_t    cp_cs[12];
+    abi_uintcap_t    cp_ca[8];
+    abi_uintcap_t    cp_sepcc;
+    abi_uintcap_t    cp_ddc;
+    uint64_t         cp_sstatus;
+    uint64_t         cp_pad;
+};
+#else
 struct target_gpregs {
     uint64_t    gp_ra;
     uint64_t    gp_sp;
@@ -49,6 +67,7 @@ struct target_gpregs {
     uint64_t    gp_sepc;
     uint64_t    gp_sstatus;
 };
+#endif
 
 struct target_fpregs {
     uint64_t        fp_x[32][2];
@@ -59,18 +78,27 @@ struct target_fpregs {
 
 
 typedef struct target_mcontext {
+#ifdef TARGET_CHERI
+    struct target_capregs  mc_capregs;
+#else
     struct target_gpregs   mc_gpregs;
+#endif
     struct target_fpregs   mc_fpregs;
     uint32_t               mc_flags;
 #define TARGET_MC_FP_VALID 0x01
     uint32_t               mc_pad;
+#ifdef TARGET_CHERI
     uint64_t               mc_spare[8];
+#else
+    uint64_t               mc_capregs;
+    uint64_t               mc_spare[7];
+#endif
 } target_mcontext_t;
 
 typedef struct target_ucontext {
     target_sigset_t   uc_sigmask;
     target_mcontext_t uc_mcontext;
-    abi_ulong         uc_link;
+    abi_uintptr_t     uc_link;
     target_stack_t    uc_stack;
     int32_t           uc_flags;
     int32_t         __spare__[4];
@@ -82,6 +110,17 @@ struct target_sigframe {
 };
 
 struct target_trapframe {
+#ifdef TARGET_CHERI
+    cap_register_t tf_ra;
+    cap_register_t tf_sp;
+    cap_register_t tf_gp;
+    cap_register_t tf_tp;
+    cap_register_t tf_t[7];
+    cap_register_t tf_s[12];
+    cap_register_t tf_a[8];
+    cap_register_t tf_sepc;
+    cap_register_t tf_ddc;
+#else
     uint64_t tf_ra;
     uint64_t tf_sp;
     uint64_t tf_gp;
@@ -90,6 +129,7 @@ struct target_trapframe {
     uint64_t tf_s[12];
     uint64_t tf_a[8];
     uint64_t tf_sepc;
+#endif
     uint64_t tf_sstatus;
     uint64_t tf_stval;
     uint64_t tf_scause;
@@ -100,9 +140,11 @@ struct target_trapframe {
  * Assumes that target stack frame memory is locked.
  */
 static inline abi_long
-set_sigtramp_args(CPURISCVState *regs, int sig, struct target_sigframe *frame,
-    abi_ulong frame_addr, struct target_sigaction *ka)
+set_sigtramp_args(CPURISCVState *regs, TaskState *ts, int sig,
+    struct target_sigframe *frame, abi_ulong frame_addr,
+    struct target_sigaction *ka)
 {
+
     /*
      * Arguments to signal handler:
      *  a0 (10) = signal number
@@ -112,16 +154,53 @@ set_sigtramp_args(CPURISCVState *regs, int sig, struct target_sigframe *frame,
      *  sp (2)  = sigframe pointer
      *  ra (1)  = sigtramp at base of user stack
      */
+#ifdef TARGET_CHERI
+    update_capreg_to_intval(regs, xA0, sig);
+    update_capreg(regs, xA1, cheri_ptr((void *)(uintptr_t)(frame_addr +
+        offsetof(typeof(*frame), sf_si)), sizeof(frame->sf_si)));
+    update_capreg(regs, xA2, cheri_ptr((void *)(uintptr_t)(frame_addr +
+        offsetof(typeof(*frame), sf_uc)), sizeof(frame->sf_uc)));
+    cheri_load(&regs->PCC, &ka->_sa_handler);
+    /* XXXKW: Why unseal? */
+    regs->PCC.cr_otype = CC128_OTYPE_UNSEALED;
+    update_capreg(regs, xSP, cheri_setaddress(cheri_zerocap(),
+        (uintptr_t)frame_addr));
+    update_capreg(regs, xRA, &ts->cheri_sigcode_cap);
+#else
+    regs->gpr[xA0] = sig;
+    regs->gpr[xA1] = frame_addr +
+        offsetof(struct target_sigframe, sf_si);
+    regs->gpr[xA2] = frame_addr +
+        offsetof(struct target_sigframe, sf_uc);
+    regs->pc = ka->_sa_handler;
+    regs->gpr[xSP] = frame_addr;
+    regs->gpr[xRA] = TARGET_PS_STRINGS - TARGET_SZSIGCODE;
+#endif
+    return 0;
+}
 
-     regs->gpr[10] = sig;
-     regs->gpr[11] = frame_addr +
-         offsetof(struct target_sigframe, sf_si);
-     regs->gpr[12] = frame_addr +
-         offsetof(struct target_sigframe, sf_uc);
-     regs->pc = ka->_sa_handler;
-     regs->gpr[2] = frame_addr;
-     regs->gpr[1] = TARGET_PS_STRINGS - TARGET_SZSIGCODE;
-     return 0;
+static inline void get_mcontext_regs(CPURISCVState *regs,
+#ifdef TARGET_CHERI
+    abi_uintcap_t dstregs[],
+#else
+    uint64_t dstregs[],
+#endif
+    size_t nregs, ...)
+{
+    va_list ap;
+    size_t ii;
+    int regnum;
+
+    va_start(ap, nregs);
+    for (ii = 0; ii < nregs; ii++) {
+        regnum = va_arg(ap, int);
+#ifdef TARGET_CHERI
+        cheri_store(&dstregs[ii], get_readonly_capreg(regs, regnum));
+#else
+        dstregs[ii] = tswap64(regs->gpr[regnum]);
+#endif
+    }
+    va_end(ap);
 }
 
 /*
@@ -132,92 +211,122 @@ static inline abi_long get_mcontext(CPURISCVState *regs, target_mcontext_t *mcp,
         int flags)
 {
 
-    mcp->mc_gpregs.gp_t[0] = tswap64(regs->gpr[5]);
-    mcp->mc_gpregs.gp_t[1] = tswap64(regs->gpr[6]);
-    mcp->mc_gpregs.gp_t[2] = tswap64(regs->gpr[7]);
-    mcp->mc_gpregs.gp_t[3] = tswap64(regs->gpr[28]);
-    mcp->mc_gpregs.gp_t[4] = tswap64(regs->gpr[29]);
-    mcp->mc_gpregs.gp_t[5] = tswap64(regs->gpr[30]);
-    mcp->mc_gpregs.gp_t[6] = tswap64(regs->gpr[31]);
-
-    mcp->mc_gpregs.gp_s[0] = tswap64(regs->gpr[8]);
-    mcp->mc_gpregs.gp_s[1] = tswap64(regs->gpr[9]);
-    mcp->mc_gpregs.gp_s[2] = tswap64(regs->gpr[18]);
-    mcp->mc_gpregs.gp_s[3] = tswap64(regs->gpr[19]);
-    mcp->mc_gpregs.gp_s[4] = tswap64(regs->gpr[20]);
-    mcp->mc_gpregs.gp_s[5] = tswap64(regs->gpr[21]);
-    mcp->mc_gpregs.gp_s[6] = tswap64(regs->gpr[22]);
-    mcp->mc_gpregs.gp_s[7] = tswap64(regs->gpr[23]);
-    mcp->mc_gpregs.gp_s[8] = tswap64(regs->gpr[24]);
-    mcp->mc_gpregs.gp_s[9] = tswap64(regs->gpr[25]);
-    mcp->mc_gpregs.gp_s[10] = tswap64(regs->gpr[26]);
-    mcp->mc_gpregs.gp_s[11] = tswap64(regs->gpr[27]);
-
-    mcp->mc_gpregs.gp_a[0] = tswap64(regs->gpr[10]);
-    mcp->mc_gpregs.gp_a[1] = tswap64(regs->gpr[11]);
-    mcp->mc_gpregs.gp_a[2] = tswap64(regs->gpr[12]);
-    mcp->mc_gpregs.gp_a[3] = tswap64(regs->gpr[13]);
-    mcp->mc_gpregs.gp_a[4] = tswap64(regs->gpr[14]);
-    mcp->mc_gpregs.gp_a[5] = tswap64(regs->gpr[15]);
-    mcp->mc_gpregs.gp_a[6] = tswap64(regs->gpr[16]);
-    mcp->mc_gpregs.gp_a[7] = tswap64(regs->gpr[17]);
+#ifdef TARGET_CHERI
+    get_mcontext_regs(regs, mcp->mc_capregs.cp_ct,
+        nitems(mcp->mc_capregs.cp_ct), xT0, xT1, xT2, xT3, xT4, xT5, xT6);
+    get_mcontext_regs(regs, mcp->mc_capregs.cp_cs,
+        nitems(mcp->mc_capregs.cp_cs), xS0, xS1, xS2, xS3, xS4, xS5, xS6, xS7,
+        xS8, xS9, xS10, xS11);
+    get_mcontext_regs(regs, mcp->mc_capregs.cp_ca,
+        nitems(mcp->mc_capregs.cp_ca), xA0, xA1, xA2, xA3, xA4, xA5, xA6, xA7);
 
     if (flags & TARGET_MC_GET_CLEAR_RET) {
-        mcp->mc_gpregs.gp_a[0] = 0; /* a0 */        
-        mcp->mc_gpregs.gp_a[1] = 0; /* a1 */        
-        mcp->mc_gpregs.gp_t[0] = 0; /* clear syscall error */
+        cheri_store(&mcp->mc_capregs.cp_ca[0], cheri_nullcap());
+        cheri_store(&mcp->mc_capregs.cp_ct[0], cheri_nullcap());
     }
 
-    mcp->mc_gpregs.gp_ra = tswap64(regs->gpr[1]);
-    mcp->mc_gpregs.gp_sp = tswap64(regs->gpr[2]);
-    mcp->mc_gpregs.gp_gp = tswap64(regs->gpr[3]);
-    mcp->mc_gpregs.gp_tp = tswap64(regs->gpr[4]);
+    cheri_store(&mcp->mc_capregs.cp_cra, get_readonly_capreg(regs, xRA));
+    cheri_store(&mcp->mc_capregs.cp_csp, get_readonly_capreg(regs, xSP));
+    cheri_store(&mcp->mc_capregs.cp_cgp, get_readonly_capreg(regs, xGP));
+    cheri_store(&mcp->mc_capregs.cp_ctp, get_readonly_capreg(regs, xTP));
+    cheri_store(&mcp->mc_capregs.cp_sepcc, cheri_get_current_pcc(regs));
+    cheri_store(&mcp->mc_capregs.cp_ddc, cheri_get_ddc(regs));
+    /*
+     * The sstatus register is unavailable in the user mode.
+     */
+    mcp->mc_capregs.cp_sstatus = 0;
+#else
+    get_mcontext_regs(regs, mcp->mc_gpregs.gp_t,
+        nitems(mcp->mc_gpregs.gp_t), xT0, xT1, xT2, xT3, xT4, xT5, xT6);
+    get_mcontext_regs(regs, mcp->mc_gpregs.gp_s,
+        nitems(mcp->mc_gpregs.gp_s), xS0, xS1, xS2, xS3, xS4, xS5, xS6, xS7,
+        xS8, xS9, xS10, xS11);
+    get_mcontext_regs(regs, mcp->mc_gpregs.gp_a,
+        nitems(mcp->mc_gpregs.gp_a), xA0, xA1, xA2, xA3, xA4, xA5, xA6, xA7);
+
+    if (flags & TARGET_MC_GET_CLEAR_RET) {
+        mcp->mc_gpregs.gp_a[0] = 0;
+        mcp->mc_gpregs.gp_t[0] = 0;
+    }
+
+    mcp->mc_gpregs.gp_ra = tswap64(regs->gpr[xRA]);
+    mcp->mc_gpregs.gp_sp = tswap64(regs->gpr[xSP]);
+    mcp->mc_gpregs.gp_gp = tswap64(regs->gpr[xGP]);
+    mcp->mc_gpregs.gp_tp = tswap64(regs->gpr[xTP]);
     mcp->mc_gpregs.gp_sepc = tswap64(regs->pc);
+    /*
+     * The sstatus register is unavailable in the user mode.
+     */
+    mcp->mc_gpregs.gp_sstatus = 0;
+#endif
 
     return 0;
+}
+
+static inline void set_mcontext_regs(CPURISCVState *regs,
+#ifdef TARGET_CHERI
+    abi_uintcap_t srcregs[],
+#else
+    uint64_t srcregs[],
+#endif
+    int nregs, ...)
+{
+    va_list ap;
+    size_t ii;
+    int regnum;
+#ifdef TARGET_CHERI
+    static cap_register_t cap;
+#endif
+
+    va_start(ap, nregs);
+    for (ii = 0; ii < nregs; ii++) {
+        regnum = va_arg(ap, int);
+#ifdef TARGET_CHERI
+        update_capreg(regs, regnum, cheri_load(&cap, &srcregs[ii]));
+#else
+        regs->gpr[xT0] = tswap64(srcregs[ii]);
+#endif
+    }
+    va_end(ap);
 }
 
 /* Compare with set_mcontext() in riscv/riscv/machdep.c */
 static inline abi_long set_mcontext(CPURISCVState *regs, target_mcontext_t *mcp,
         int srflag)
 {
+#ifdef TARGET_CHERI
+    cap_register_t cap;
 
-    regs->gpr[5] = tswap64(mcp->mc_gpregs.gp_t[0]);
-    regs->gpr[6] = tswap64(mcp->mc_gpregs.gp_t[1]);
-    regs->gpr[7] = tswap64(mcp->mc_gpregs.gp_t[2]);
-    regs->gpr[28] = tswap64(mcp->mc_gpregs.gp_t[3]);
-    regs->gpr[29] = tswap64(mcp->mc_gpregs.gp_t[4]);
-    regs->gpr[30] = tswap64(mcp->mc_gpregs.gp_t[5]);
-    regs->gpr[31] = tswap64(mcp->mc_gpregs.gp_t[6]);
+    set_mcontext_regs(regs, mcp->mc_capregs.cp_ct,
+        nitems(mcp->mc_capregs.cp_ct), xT0, xT1, xT2, xT3, xT4, xT5, xT6);
+    set_mcontext_regs(regs, mcp->mc_capregs.cp_cs,
+        nitems(mcp->mc_capregs.cp_cs), xS0, xS1, xS2, xS3, xS4, xS5, xS6, xS7,
+        xS8, xS9, xS10, xS11);
+    set_mcontext_regs(regs, mcp->mc_capregs.cp_ca,
+        nitems(mcp->mc_capregs.cp_ca), xA0, xA1, xA2, xA3, xA4, xA5, xA6, xA7);
 
-    regs->gpr[8] = tswap64(mcp->mc_gpregs.gp_s[0]);
-    regs->gpr[9] = tswap64(mcp->mc_gpregs.gp_s[1]);
-    regs->gpr[18] = tswap64(mcp->mc_gpregs.gp_s[2]);
-    regs->gpr[19] = tswap64(mcp->mc_gpregs.gp_s[3]);
-    regs->gpr[20] = tswap64(mcp->mc_gpregs.gp_s[4]);
-    regs->gpr[21] = tswap64(mcp->mc_gpregs.gp_s[5]);
-    regs->gpr[22] = tswap64(mcp->mc_gpregs.gp_s[6]);
-    regs->gpr[23] = tswap64(mcp->mc_gpregs.gp_s[7]);
-    regs->gpr[24] = tswap64(mcp->mc_gpregs.gp_s[8]);
-    regs->gpr[25] = tswap64(mcp->mc_gpregs.gp_s[9]);
-    regs->gpr[26] = tswap64(mcp->mc_gpregs.gp_s[10]);
-    regs->gpr[27] = tswap64(mcp->mc_gpregs.gp_s[11]);
+    update_capreg(regs, xRA, cheri_load(&cap, &mcp->mc_capregs.cp_cra));
+    update_capreg(regs, xSP, cheri_load(&cap, &mcp->mc_capregs.cp_csp));
+    update_capreg(regs, xGP, cheri_load(&cap, &mcp->mc_capregs.cp_cgp));
+    update_capreg(regs, xTP, cheri_load(&cap, &mcp->mc_capregs.cp_ctp));
+    cheri_load(&regs->PCC, &mcp->mc_capregs.cp_sepcc);
+    /* XXXKW: Why unseal? */
+    regs->PCC.cr_otype = CC128_OTYPE_UNSEALED;
+#else
+    set_mcontext_regs(regs, mcp->mc_gpregs.gp_t,
+        nitems(mcp->mc_gpregs.gp_t), xT0, xT1, xT2, xT3, xT4, xT5, xT6);
+    set_mcontext_regs(regs, mcp->mc_gpregs.gp_s,
+        nitems(mcp->mc_gpregs.gp_s), xS0, xS1, xS2, xS3, xS4, xS5, xS6, xS7,
+        xS8, xS9, xS10, xS11);
+    set_mcontext_regs(regs, mcp->mc_gpregs.gp_a,
+        nitems(mcp->mc_gpregs.gp_a), xA0, xA1, xA2, xA3, xA4, xA5, xA6, xA7);
 
-    regs->gpr[10] = tswap64(mcp->mc_gpregs.gp_a[0]);
-    regs->gpr[11] = tswap64(mcp->mc_gpregs.gp_a[1]);
-    regs->gpr[12] = tswap64(mcp->mc_gpregs.gp_a[2]);
-    regs->gpr[13] = tswap64(mcp->mc_gpregs.gp_a[3]);
-    regs->gpr[14] = tswap64(mcp->mc_gpregs.gp_a[4]);
-    regs->gpr[15] = tswap64(mcp->mc_gpregs.gp_a[5]);
-    regs->gpr[16] = tswap64(mcp->mc_gpregs.gp_a[6]);
-    regs->gpr[17] = tswap64(mcp->mc_gpregs.gp_a[7]);
-
-
-    regs->gpr[1] = tswap64(mcp->mc_gpregs.gp_ra);
-    regs->gpr[2] = tswap64(mcp->mc_gpregs.gp_sp);
-    regs->gpr[3] = tswap64(mcp->mc_gpregs.gp_gp);
-    regs->gpr[4] = tswap64(mcp->mc_gpregs.gp_tp);
+    regs->gpr[xRA] = tswap64(mcp->mc_gpregs.gp_ra);
+    regs->gpr[xSP] = tswap64(mcp->mc_gpregs.gp_sp);
+    regs->gpr[xGP] = tswap64(mcp->mc_gpregs.gp_gp);
+    regs->gpr[xTP] = tswap64(mcp->mc_gpregs.gp_tp);
     regs->pc = tswap64(mcp->mc_gpregs.gp_sepc);
+#endif
 
     return 0;
 }

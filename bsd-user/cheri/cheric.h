@@ -43,6 +43,7 @@ target_long __cheri_round_representable_length(target_ulong len);
 /*
  * Programmer-friendly helpers for C code emulating CHERI-aware code.
  */
+cap_register_t    *cheri_nullcap(void);
 cap_register_t    *cheri_zerocap(void);
 cap_register_t    *cheri_ptr(const void *ptr, size_t len);
 abi_uintptr_t      cheri_uintptr(const cap_register_t *cap);
@@ -68,6 +69,8 @@ cap_register_t    *cheri_setaddress(cap_register_t *cap, target_ulong addr);
 cap_register_t    *cheri_setflags(cap_register_t *cap, target_ulong flags);
 
 cap_register_t    *cheri_sealentry(cap_register_t *cap);
+
+cap_register_t    *cheri_fromint(abi_int value);
 
 /* Get the top of a capability (i.e. one byte past the last accessible one) */
 static inline abi_ulong
