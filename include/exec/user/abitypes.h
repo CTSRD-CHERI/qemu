@@ -91,7 +91,7 @@ typedef abi_long abi_uintptr_t __attribute__((aligned(ABI_LONG_ALIGNMENT)));
 typedef abi_uintptr_t abi_uintcap_t;
 
 typedef abi_long abi_syscallarg_t;
-typedef abi_long abi_syscallret_t;
+typedef abi_long * abi_syscallret_t;
 #endif /* TARGET_CHERI */
 
 #ifdef TARGET_CHERI
