@@ -1028,8 +1028,9 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
          * Memory management system calls.
          */
     case TARGET_FREEBSD_NR_mmap: /* mmap(2) */
-        ret = do_bsd_mmap(cpu_env, arg1, arg2, arg3, arg4, arg5, arg6, arg7,
-           arg8);
+        ret = do_bsd_mmap(cpu_env, &retcap, sa1, sa2, sa3, sa4, sa5, sa6, sa7,
+          sa8);
+        retval = &retcap;
         break;
 
     case TARGET_FREEBSD_NR_munmap: /* munmap(2) */

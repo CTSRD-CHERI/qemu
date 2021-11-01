@@ -312,8 +312,21 @@ int block_signals(void); /* Returns non zero if signal pending */
 
 /* mmap.c */
 int target_mprotect(abi_ulong start, abi_ulong len, int prot);
+/*
+ * target_mmap() is an emulated mmap() system call handler for a host.
+ *
+ * This function can be used by a host to call mmap() without an ABI-specific
+ * interface.
+ */
 abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
                      int flags, int fd, off_t offset);
+/*
+ * target_sys_mmap() is an emulated mmap() system call handler for an emulated
+ * process.
+ */
+abi_long target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
+    abi_syscallarg_t ua_addr, abi_syscallarg_t ua_len, abi_syscallarg_t ua_prot,
+    abi_syscallarg_t ua_flags, abi_syscallarg_t ua_fd, abi_syscallarg_t ua_pos);
 int target_munmap(abi_ulong start, abi_ulong len);
 abi_long target_mremap(abi_ulong old_addr, abi_ulong old_size,
                        abi_ulong new_size, unsigned long flags,

@@ -63,18 +63,27 @@ extern abi_ulong bsd_target_original_brk;
 extern abi_ulong brk_page;
 
 /* mmap(2) */
-static inline abi_long do_bsd_mmap(void *cpu_env, abi_long arg1, abi_long arg2,
-    abi_long arg3, abi_long arg4, abi_long arg5, abi_long arg6, abi_long arg7,
-    abi_long arg8)
+static inline abi_long do_bsd_mmap(void *cpu_env, abi_syscallret_t retval,
+    abi_syscallarg_t sa1, abi_syscallarg_t sa2, abi_syscallarg_t sa3,
+    abi_syscallarg_t sa4, abi_syscallarg_t sa5, abi_syscallarg_t sa6,
+    abi_syscallarg_t sa7, abi_syscallarg_t sa8)
 {
+    CPUState *cpu;
+
+    cpu = env_cpu(cpu_env);
 
     if (regpairs_aligned(cpu_env) != 0) {
-       arg6 = arg7;
-       arg7 = arg8;
+       sa6 = sa7;
+       sa7 = sa8;
     }
-    return get_errno(target_mmap(arg1, arg2, arg3,
-                target_to_host_bitmask(arg4, mmap_flags_tbl), arg5,
-                target_arg64(arg6, arg7)));
+#ifdef TARGET_CHERI
+    assert(TARGET_ABI_BITS == 64);
+#else
+    sa6 = (abi_syscallarg_t)target_arg64(sa6, sa7);
+#endif
+
+    return (get_errno(target_sys_mmap(cpu->opaque, retval, sa1, sa2, sa3, sa4,
+        sa5, sa6)));
 }
 
 /* munmap(2) */
