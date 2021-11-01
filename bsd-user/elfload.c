@@ -954,8 +954,10 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
                and some applications "depend" upon this behavior.
                Since we do not have the power to recompile these, we
                emulate the SVr4 behavior.  Sigh.  */
-            target_mmap(0, qemu_host_page_size, PROT_READ | PROT_EXEC,
-                                      MAP_FIXED | MAP_PRIVATE, -1, 0);
+            if (target_mmap(0, qemu_host_page_size, PROT_READ | PROT_EXEC,
+                            MAP_FIXED | MAP_PRIVATE, -1, 0) == -1) {
+                return -1;
+            }
     }
 
     info->entry = elf_entry;
