@@ -24,6 +24,19 @@
 #include "qemu-common.h"
 #include "translate-all.h"
 
+#include "target_os_errno.h"
+#include "target_os_syscallsubr.h"
+#include "target_os_mman.h"
+
+#include "machine/vmparam.h"
+#include "target_arch_param.h"
+#include "target_arch_vmparam.h"
+
+#ifdef TARGET_CHERI
+#include "cheri/cherireg.h"
+#include "cheri/cheric.h"
+#endif
+
 //#define DEBUG_MMAP
 #ifndef	MAP_ALIGNMENT_MASK
 #define	MAP_ALIGNMENT_MASK	0
@@ -70,6 +83,96 @@ void mmap_fork_end(int child)
     else
         pthread_mutex_unlock(&mmap_mutex);
 }
+
+#ifdef TARGET_CHERI
+#define PERM_READ  (CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP)
+#define PERM_WRITE (CHERI_PERM_STORE | CHERI_PERM_STORE_CAP | \
+                    CHERI_PERM_STORE_LOCAL_CAP)
+#define PERM_EXEC  CHERI_PERM_EXECUTE
+#define PERM_RWX   (PERM_READ | PERM_WRITE | PERM_EXEC)
+/*
+ * Given a starting set of CHERI permissions (operms), set (not AND) the load,
+ * store, and execute permissions based on the mmap permissions (prot).
+ *
+ * This function is intended to be used when creating a capability to a
+ * new region or rederiving a capability when upgrading a sub-region.
+ */
+static register_t
+mmap_prot2perms(int prot)
+{
+    register_t perms = 0;
+
+    if (prot & PROT_READ)
+        perms |= CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP;
+    if (prot & PROT_WRITE)
+        perms |= CHERI_PERM_STORE | CHERI_PERM_STORE_CAP |
+        CHERI_PERM_STORE_LOCAL_CAP;
+    if (prot & PROT_EXEC)
+        perms |= CHERI_PERM_EXECUTE;
+
+    return (perms);
+}
+
+static cap_register_t
+mmap_retcap(vm_offset_t addr, const struct mmap_req *mrp)
+{
+    cap_register_t newcap;
+    size_t cap_base, cap_len;
+    register_t perms, cap_prot;
+
+    /*
+     * Return the original capability when MAP_CHERI_NOSETBOUNDS is set.
+     *
+     * NB: This means no permission changes.
+     * The assumption is that the larger capability has the correct
+     * permissions and we're only intrested in adjusting page mappings.
+     */
+    if (mrp->mr_flags & MAP_CHERI_NOSETBOUNDS)
+        return (mrp->mr_source_cap);
+
+    newcap = mrp->mr_source_cap;
+    perms = cheri_getperm(&newcap);
+    /*
+     * If PROT_MAX() was not passed, use the prot value to derive
+     * capability permissions.
+     */
+    cap_prot = PROT_MAX_EXTRACT(mrp->mr_prot);
+    if (cap_prot == 0)
+        cap_prot = PROT_EXTRACT(mrp->mr_prot);
+    /*
+     * Set the permissions to PROT_MAX to allow a full
+     * range of access subject to page permissions.
+     */
+    (void)cheri_andperm(&newcap, ~PERM_RWX | mmap_prot2perms(cap_prot));
+
+    if (mrp->mr_flags & MAP_FIXED) {
+        /*
+         * If hint was under aligned, we need to return a
+         * capability to the whole, properly aligned region
+         * with the offset pointing to hint.
+         */
+        cap_base = cheri_getbase(&newcap);
+        /* TODO: use cheri_setaddress? */
+        /* Set offset to vaddr of page */
+        (void)cheri_setoffset(&newcap, rounddown2(addr, TARGET_PAGE_SIZE) -
+            cap_base);
+        (void)cheri_setbounds(&newcap,
+            roundup2(mrp->mr_len + (addr - rounddown2(addr, TARGET_PAGE_SIZE)),
+            TARGET_PAGE_SIZE));
+        /* Shift offset up if required */
+        cap_base = cheri_getbase(&newcap);
+        (void)cheri_setoffset(&newcap, cap_base - addr);
+    } else {
+        cap_base = cheri_getbase(&newcap);
+        cap_len = cheri_getlen(&newcap);
+        assert(addr >= cap_base && addr + mrp->mr_len <= cap_base + cap_len);
+        (void)cheri_setbounds(cheri_setoffset(&newcap, addr - cap_base),
+            roundup2(mrp->mr_len, TARGET_PAGE_SIZE));
+    }
+
+    return (newcap);
+}
+#endif
 
 /* NOTE: all the constants are the HOST ones, but addresses are target. */
 int target_mprotect(abi_ulong start, abi_ulong len, int prot)
@@ -200,11 +303,15 @@ static int mmap_frag(abi_ulong real_start,
     return 0;
 }
 
+#ifdef TARGET_CHERI
+# define TASK_UNMAPPED_BASE  CHERI_CAP_USER_MMAP_BASE
+#else /* !TARGET_CHERI */
 #if HOST_LONG_BITS == 64 && TARGET_ABI_BITS == 64
 # define TASK_UNMAPPED_BASE  (1ul << 38)
 #else
 # define TASK_UNMAPPED_BASE  0x40000000
 #endif
+#endif /* TARGET_CHERI */
 abi_ulong mmap_next_start = TASK_UNMAPPED_BASE;
 
 unsigned long last_brk;
@@ -380,11 +487,249 @@ abi_ulong mmap_find_vma(abi_ulong start, abi_ulong size)
     return mmap_find_vma_aligned(start, size, 0);
 }
 
-/* NOTE: all the constants are the HOST ones */
-abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
-                     int flags, int fd, off_t offset)
+abi_long
+target_mmap(abi_ulong addr0, abi_ulong len, int prot, int flags, int fd,
+    off_t pos)
 {
-    abi_ulong addr, ret, end, real_start, real_end, retaddr, host_offset, host_len;
+#ifdef TARGET_CHERI
+    cap_register_t retvalm;
+#else
+    abi_long retvalm;
+#endif
+    abi_long error;
+    struct mmap_req mr;
+    abi_syscallret_t retval;
+
+    memset(&mr, 0, sizeof(mr));
+    mr.mr_hint = addr0;
+    mr.mr_len = len;
+    mr.mr_prot = prot;
+    mr.mr_flags = flags;
+    mr.mr_fd = fd;
+    mr.mr_pos = pos;
+
+    retval = &retvalm;
+    error = target_mmap_req(NULL, retval, &mr);
+    return (error >= 0 ? syscallret_value(retval) : -1);
+}
+
+struct target_mmap_args {
+    abi_uintptr_t addr;
+    abi_ulong     len;
+    abi_int       prot;
+    abi_int       flags;
+    abi_int       fd;
+    abi_long      pad;
+    abi_long      pos;
+};
+
+/*
+ * See sys_mmap() in vm/vm_mmap.c.
+ */
+abi_long
+target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
+    abi_syscallarg_t ua_addr, abi_syscallarg_t ua_len, abi_syscallarg_t ua_prot,
+    abi_syscallarg_t ua_flags, abi_syscallarg_t ua_fd, abi_syscallarg_t ua_pos)
+{
+    struct target_mmap_args ua;
+#ifdef TARGET_CHERI
+    int flags;
+    const cap_register_t *source_cap;
+    uint64_t perms, reqperms;
+    vm_offset_t hint;
+    struct mmap_req mr;
+#else
+    abi_long error;
+#endif
+
+    ua.addr = syscallarg_uintptr(ua_addr);
+    ua.len = syscallarg_value(ua_len);
+    ua.prot = syscallarg_int(ua_prot);
+    ua.flags = syscallarg_int(ua_flags);
+    ua.fd = syscallarg_int(ua_fd);
+    ua.pos = syscallarg_value(ua_pos);
+
+#ifndef TARGET_CHERI
+    error = target_mmap(ua.addr, ua.len, ua.prot, ua.flags, ua.fd, ua.pos);
+    if (error != -1) {
+        *retval = error;
+    }
+    return (error);
+#else
+    flags = ua.flags;
+
+    if (flags & MAP_32BIT) {
+        qemu_log("MAP_32BIT not supported in CheriABI\n");
+        return (EINVAL);
+    }
+
+    /*
+     * Allow existing mapping to be replaced using the MAP_FIXED
+     * flag IFF the addr argument is a valid capability with the
+     * VMMAP user permission.  In this case, the new capability is
+     * derived from the passed capability.  In all other cases, the
+     * new capability is derived from the per-thread mmap capability.
+     *
+     * If MAP_FIXED specified and addr does not meet the above
+     * requirements, then MAP_EXCL is implied to prevent changing
+     * page contents without permission.
+     *
+     * XXXBD: The fact that using valid a capability to a currently
+     * unmapped region with and without the VMMAP permission will
+     * yield different results (and even failure modes) is potentially
+     * confusing and incompatible with non-CHERI code.  One could
+     * potentially check if the region contains any mappings and
+     * switch to using the per-thread mmap capability as the source
+     * capability if this pattern proves common.
+     */
+    hint = cheri_getaddress(ua_addr);
+    if (cheri_gettag(ua_addr) &&
+        (cheri_getperm(ua_addr) & CHERI_PERM_CHERIABI_VMMAP) &&
+        (flags & MAP_FIXED)) {
+        source_cap = ua_addr;
+    } else {
+        if (flags & MAP_FIXED)
+            flags |= MAP_EXCL;
+
+        if (flags & MAP_CHERI_NOSETBOUNDS) {
+            qemu_log("MAP_CHERI_NOSETBOUNDS without a valid addr capability\n");
+            return (EINVAL);
+        }
+
+        /* Allocate from the per-thread capability. */
+        source_cap = &ts->cheri_mmap_cap;
+    }
+    assert(cheri_gettag(source_cap) &&
+        ("ts->cheri_mmap_cap is untagged!"));
+
+    /*
+     * If MAP_FIXED is specified, make sure that that the reqested
+     * address range fits within the source capability.
+     */
+    /*
+     * XXXKW: Use cheri_getbase() instead of cheri_getaddress()?
+     */
+    if ((flags & MAP_FIXED) &&
+        (rounddown2(hint, TARGET_PAGE_SIZE) < cheri_getbase(source_cap) ||
+        roundup2(hint + ua.len, TARGET_PAGE_SIZE) >
+        cheri_getbase(source_cap) + cheri_getlen(source_cap))) {
+        qemu_log("MAP_FIXED and too little space in "
+            "capablity (0x%zx > 0x%zx)\n",
+            roundup2(hint + ua.len, TARGET_PAGE_SIZE),
+            cheri_getbase(source_cap) + cheri_getlen(source_cap));
+        return (EPROT);
+    }
+
+    perms = cheri_getperm(source_cap);
+    reqperms = mmap_prot2perms(ua.prot);
+    if ((perms & reqperms) != reqperms) {
+        qemu_log("capability has insufficient perms (0x%lx)"
+            "for request (0x%lx)\n", perms, reqperms);
+        return (EPROT);
+    }
+
+    /*
+     * If alignment is specified, check that it is sufficent and
+     * increase as required.  If not, assume data alignment.
+     */
+    switch (flags & MAP_ALIGNMENT_MASK) {
+    case MAP_ALIGNED(0):
+        flags &= ~MAP_ALIGNMENT_MASK;
+        /*
+         * Request CHERI data alignment when no other request is made.
+         * However, do not request alignment if both MAP_FIXED and
+         * MAP_CHERI_NOSETBOUNDS is set since that means we are filling
+         * in reserved address space from a file or MAP_ANON memory.
+         */
+        if (!((flags & MAP_FIXED) && (flags & MAP_CHERI_NOSETBOUNDS))) {
+            flags |= MAP_ALIGNED_CHERI;
+        }
+        break;
+    case MAP_ALIGNED_CHERI:
+    case MAP_ALIGNED_CHERI_SEAL:
+        break;
+    case MAP_ALIGNED_SUPER:
+#if TARGET_VM_NRESERVLEVEL > 0
+        /*
+         * pmap_align_superpage() is a no-op for allocations
+         * less than a super page so request data alignment
+         * in that case.
+         *
+         * In practice this is a no-op as super-pages are
+         * precisely representable.
+         */
+        if (ua.len < (1UL << (TARGET_VM_LEVEL_0_ORDER + TARGET_PAGE_SHIFT)) &&
+            CHERI_REPRESENTABLE_ALIGNMENT(ua.len) >
+            (1UL << TARGET_PAGE_SHIFT)) {
+            flags &= ~MAP_ALIGNMENT_MASK;
+            flags |= MAP_ALIGNED_CHERI;
+        }
+#endif
+        break;
+    default:
+        /* Reject nonsensical sub-page alignment requests */
+        if ((flags >> MAP_ALIGNMENT_SHIFT) < TARGET_PAGE_SHIFT) {
+            qemu_log("subpage alignment request\n");
+            return (EINVAL);
+        }
+
+        /*
+         * Honor the caller's alignment request, if any unless
+         * it is too small.  If is, promote the request to
+         * MAP_ALIGNED_CHERI.
+         *
+         * However, do not request alignment if both MAP_FIXED and
+         * MAP_CHERI_NOSETBOUNDS is set since that means we are filling
+         * in reserved address space from a file or MAP_ANON memory.
+         */
+        if (!((flags & MAP_FIXED) && (flags & MAP_CHERI_NOSETBOUNDS))) {
+            if ((1UL << (flags >> MAP_ALIGNMENT_SHIFT)) <
+                CHERI_REPRESENTABLE_ALIGNMENT(ua.len)) {
+                flags &= ~MAP_ALIGNMENT_MASK;
+                flags |= MAP_ALIGNED_CHERI;
+            }
+        }
+        break;
+    }
+    /*
+     * NOTE: If this architecture requires an alignment constraint, it is
+     * set at this point.  A simple assert is not easy to contruct...
+     */
+
+    memset(&mr, 0, sizeof(mr));
+    mr.mr_hint = hint;
+    mr.mr_max_addr = cheri_gettop(source_cap);
+    mr.mr_len = ua.len;
+    mr.mr_prot = ua.prot;
+    mr.mr_flags = flags;
+    mr.mr_fd = ua.fd;
+    mr.mr_pos = ua.pos;
+    mr.mr_source_cap = *source_cap;
+
+    return (target_mmap_req(ts, retval, &mr));
+#endif
+}
+
+/* NOTE: all the constants are the HOST ones */
+abi_long
+target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
+{
+    abi_ulong addr, ret, end, real_start, real_end, host_offset, host_len;
+    abi_ulong start, len, size;
+    int prot, flags, fd;
+    off_t offset;
+    vm_offset_t addr_mask = ~TARGET_PAGE_MASK;
+#ifdef TARGET_CHERI
+    vm_size_t padded_size = 0;
+#endif
+    int align;
+
+    start = mrp->mr_hint;
+    len = mrp->mr_len;
+    prot = PROT_EXTRACT(mrp->mr_prot);
+    flags = mrp->mr_flags;
+    fd = mrp->mr_fd;
+    offset = mrp->mr_pos;
 
     mmap_lock();
 #ifdef DEBUG_MMAP
@@ -440,23 +785,125 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
     if ((flags & MAP_GUARD) && (prot != PROT_NONE || fd != -1 ||
         offset != 0 || (flags & (MAP_SHARED | MAP_PRIVATE | /* MAP_PREFAULT | */ /* MAP_PREFAULT not in mman.h */
         MAP_PREFAULT_READ | MAP_ANON | MAP_STACK)) != 0)) {
+        qemu_log("%s: Invalid arguments with MAP_GUARD\n", __func__);
         errno = EINVAL;
         goto fail;
     }
 #endif
+
+#ifdef TARGET_CHERI
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1200035
+    /*
+     * Disable MAP_GUARD for the forward compatibility.
+     *
+     * XXXKW: This is experimental and requires proper MAP_GUARD emulation
+     * if it's not supported by a host.
+     */
+    flags &= ~MAP_GUARD;
+#endif
+#endif /* TARGET_CHERI */
 
     if (offset & ~TARGET_PAGE_MASK) {
         errno = EINVAL;
         goto fail;
     }
 
-    len = TARGET_PAGE_ALIGN(len);
-    if (len == 0) {
+    size = TARGET_PAGE_ALIGN(len);
+    if (size == 0) {
         errno = EINVAL;
         goto fail;
     }
     real_start = start & qemu_host_page_mask;
     host_offset = offset & qemu_host_page_mask;
+
+    align = flags & MAP_ALIGNMENT_MASK;
+#ifndef TARGET_CHERI
+    /* In the non-CHERI case, remove the alignment request. */
+    if (align == MAP_ALIGNED_CHERI || align == MAP_ALIGNED_CHERI_SEAL) {
+        flags &= ~MAP_ALIGNMENT_MASK;
+        align = 0;
+    }
+#else /* TARGET_CHERI */
+    /*
+     * Convert MAP_ALIGNED_CHERI(_SEAL) into explicit alignment
+     * requests and pad lengths.  The combination of alignment (via
+     * the updated, explicit alignment flags) and padding is required
+     * for any request that would otherwise be unrepresentable due
+     * to compressed capability bounds.
+     *
+     * XXX: With CHERI Concentrate, there is no difference in
+     * precision between sealed and unsealed capabilities.  We
+     * retain the duplicate code paths in case other otype tradeoffs
+     * are made at a later date.
+     */
+    if (align == MAP_ALIGNED_CHERI) {
+        flags &= ~MAP_ALIGNMENT_MASK;
+        if (CHERI_REPRESENTABLE_ALIGNMENT(size) > TARGET_PAGE_SIZE) {
+            flags |= MAP_ALIGNED(CHERI_ALIGN_SHIFT(size));
+
+            if (size != CHERI_REPRESENTABLE_LENGTH(size))
+                padded_size = CHERI_REPRESENTABLE_LENGTH(size);
+
+            if (CHERI_ALIGN_MASK(size) != 0)
+                addr_mask = CHERI_ALIGN_MASK(size);
+        }
+        align = flags & MAP_ALIGNMENT_MASK;
+    } else if (align == MAP_ALIGNED_CHERI_SEAL) {
+        flags &= ~MAP_ALIGNMENT_MASK;
+        if (CHERI_SEALABLE_ALIGNMENT(size) > (1UL << TARGET_PAGE_SHIFT)) {
+            flags |= MAP_ALIGNED(CHERI_SEAL_ALIGN_SHIFT(size));
+
+            if (size != CHERI_SEALABLE_LENGTH(size))
+                padded_size = CHERI_SEALABLE_LENGTH(size);
+
+            if (CHERI_SEAL_ALIGN_MASK(size) != 0)
+                addr_mask = CHERI_SEAL_ALIGN_MASK(size);
+        }
+        align = flags & MAP_ALIGNMENT_MASK;
+    }
+    if ((flags & MAP_STACK) != 0 && padded_size != 0) {
+        qemu_log("%s: MAP_STACK request requires padding to "
+            "be representable (%#lx -> %#lx)\n", __func__, size, padded_size);
+        goto fail;
+    }
+#endif /* !TARGET_CHERI */
+
+    /* Ensure alignment is at least a page and fits in a pointer. */
+    if (align != 0 && align != MAP_ALIGNED_SUPER &&
+        (align >> MAP_ALIGNMENT_SHIFT >= sizeof(ABI_PTR_SIZE) * NBBY ||
+        align >> MAP_ALIGNMENT_SHIFT < TARGET_PAGE_SHIFT)) {
+        qemu_log("%s: nonsensical alignment (2^%d)\n",
+            __func__, align >> MAP_ALIGNMENT_SHIFT);
+        goto fail;
+    }
+
+    if (flags & MAP_FIXED) {
+        /*
+         * The specified address must have the same remainder
+         * as the file offset taken modulo TARGET_PAGE_SIZE, so it
+         * should be aligned after adjustment by offset.
+         */
+        if ((start - offset) & addr_mask) {
+            qemu_log("%s: addr (%p) is underaligned "
+                "(mask 0x%zx)\n", __func__, (void *)(start - offset),
+                addr_mask);
+            goto fail;
+        }
+    }
+
+#ifdef TARGET_CHERI
+    if (padded_size != 0) {
+        assert(size != padded_size);
+        /*
+         * Request a padded mapping instead of the original one.
+         *
+         * CheriBSD makes a reservation in this place before requesting an
+         * actual mapping for a system call. We do not have to worry about that
+         * as each emulated process interacts with a kernel itself.
+         */
+        len = padded_size;
+    }
+#endif
 
     /* If the user is asking for the kernel to find a location, do that
        before we truncate the length for mapping files below.  */
@@ -551,6 +998,8 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
            aligned, so we read it */
         if (fd != -1 &&
             (offset & ~qemu_host_page_mask) != (start & ~qemu_host_page_mask)) {
+            struct mmap_req mr;
+
             /* msync() won't work here, so we return an error if write is
                possible while it is a shared mapping */
             if ((flags & TARGET_BSD_MAP_FLAGMASK) == MAP_SHARED &&
@@ -558,10 +1007,15 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
                 errno = EINVAL;
                 goto fail;
             }
-            retaddr = target_mmap(start, len, prot | PROT_WRITE,
-                                  MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
-                                  -1, 0);
-            if (retaddr == -1)
+
+            memset(&mr, 0, sizeof(mr));
+            mr.mr_hint = start;
+            mr.mr_len = len;
+            mr.mr_prot = prot | PROT_WRITE;
+            mr.mr_flags = MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS;
+            mr.mr_fd = -1;
+            mr.mr_pos = 0;
+            if (target_mmap_req(ts, retval, &mr) == -1)
                 goto fail;
             if (pread(fd, g2h(start), len, offset) == -1)
                 goto fail;
@@ -632,6 +1086,21 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
 #endif
     tb_invalidate_phys_range(start, start + len);
     mmap_unlock();
+#ifdef TARGET_CHERI
+    if (ts != NULL) {
+        /*
+         * An emulated process called mmap(2).
+         *
+         * XXXKW: We should check SV_CHERI instead as in CheriBSD.
+         */
+        *retval = mmap_retcap(start, mrp);
+    } else {
+        /*
+         * The QEMU user mode called mmap(2), e.g. to build a stack.
+         */
+        *retval = *cheri_ptr((void *)(uintptr_t)start, len);
+    }
+#endif
     return start;
 fail:
     mmap_unlock();

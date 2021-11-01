@@ -24,6 +24,14 @@
 
 #include "helper_utils.h"
 
+#ifndef TARGET_VM_NRESERVLEVEL
+#define TARGET_VM_NRESERVLEVEL  1
+#endif
+
+#ifndef TARGET_VM_LEVEL_0_ORDER
+#define TARGET_VM_LEVEL_0_ORDER 9
+#endif
+
 /* Compare with riscv/include/vmparam.h */
 #define TARGET_MAXTSIZ      (1*1024UL*1024*1024)   /* max text size */
 #define TARGET_DFLDSIZ      (128UL*1024*1024)   /* initial data size limit */
