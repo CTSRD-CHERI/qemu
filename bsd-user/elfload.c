@@ -28,6 +28,8 @@
 #include "disas/disas.h"
 #include "qemu/path.h"
 
+extern const char *interp_path;
+
 abi_ulong target_auxents;   /* Where the AUX entries are in target */
 size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
 
@@ -727,6 +729,16 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
 
     /* Some simple consistency checks for the interpreter */
     if (elf_interpreter){
+        if (interp_path != NULL) {
+            free(elf_interpreter);
+            elf_interpreter = strdup(interp_path);
+            if (elf_interpreter == NULL) {
+                free(elf_phdata);
+                close(bprm->fd);
+                return (-ENOMEM);
+            }
+        }
+
         /* If the program interpreter is one of these two,
            then assume an iBCS2 image. Otherwise assume
            a native linux image. */
@@ -736,17 +748,6 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
         if (strcmp(elf_interpreter, "/usr/lib/libc.so.1") == 0 ||
                 strcmp(elf_interpreter, "/usr/lib/ld-elf.so.1") == 0) {
             ibcs2_interpreter = 1;
-#ifdef TARGET_CHERI
-        } else if (strcmp(elf_interpreter, "/libexec/ld-elf.so.1") == 0) {
-            /*
-             * XXXKW: In order to support multi-ABI environments, use the
-             * ABI-explicit ld-cheri-elf.so.1 rtld.
-             *
-             * Instead, we should implement a QEMU user-mode option to
-             * set an ELF interpreter.
-             */
-            (void)strcpy(elf_interpreter, "/libexec/ld-cheri-elf.so.1");
-#endif
         }
 
 #if 0

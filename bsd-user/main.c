@@ -91,6 +91,7 @@ unsigned long reserved_va;
 #endif
 
 const char *interp_prefix = CONFIG_QEMU_INTERP_PREFIX;
+const char *interp_path = NULL;
 const char *qemu_uname_release;
 extern char **environ;
 enum BSDType bsd_type;
@@ -155,7 +156,8 @@ static void usage(void)
            "Standard options:\n"
            "-h                print this help\n"
            "-g port           wait gdb connection to port\n"
-           "-L path           set the elf interpreter prefix (default=%s)\n"
+           "-L path           set the ELF interpreter prefix (default=%s)\n"
+           "-interpreter path set the ELF interpreter path relative to the ELF interpreter prefix\n"
            "-s size           set the stack size in bytes (default=%ld)\n"
            "-cpu model        select CPU (-cpu help for list)\n"
            "-drop-ld-preload  drop LD_PRELOAD for target process\n"
@@ -417,6 +419,8 @@ int main(int argc, char **argv)
             do_strace = 1;
         } else if (!strcmp(r, "trace")) {
             trace_opt_parse(optarg);
+        } else if (!strcmp(r, "interpreter")) {
+            interp_path = argv[optind++];
         } else if (!strcmp(r, "0")) {
             argv0 = argv[optind++];    
         } else {
