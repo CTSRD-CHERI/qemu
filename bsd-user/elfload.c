@@ -721,68 +721,68 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
                 perror("load_elf_binary2");
                 exit(-1);
             }
-
-            /* If the program interpreter is one of these two,
-               then assume an iBCS2 image. Otherwise assume
-               a native linux image. */
-
-            /* JRP - Need to add X86 lib dir stuff here... */
-
-            if (strcmp(elf_interpreter, "/usr/lib/libc.so.1") == 0 ||
-                    strcmp(elf_interpreter, "/usr/lib/ld-elf.so.1") == 0) {
-                ibcs2_interpreter = 1;
-#ifdef TARGET_CHERI
-	    } else if (strcmp(elf_interpreter, "/libexec/ld-elf.so.1") == 0) {
-                /*
-		 * XXXKW: In order to support multi-ABI environments, use the
-		 * ABI-explicit ld-cheri-elf.so.1 rtld.
-		 *
-		 * Instead, we should implement a QEMU user-mode option to
-		 * set an ELF interpreter.
-		 */
-                (void)strcpy(elf_interpreter, "/libexec/ld-cheri-elf.so.1");
-#endif
-            }
-
-#if 0
-            printf("Using ELF interpreter %s\n", path(elf_interpreter));
-#endif
-            if (retval >= 0) {
-                retval = open(path(elf_interpreter), O_RDONLY);
-                if(retval >= 0) {
-                    interpreter_fd = retval;
-                }
-                else {
-                    perror(elf_interpreter);
-                    exit(-1);
-                    /* retval = -errno; */
-                }
-            }
-
-            if (retval >= 0) {
-                retval = lseek(interpreter_fd, 0, SEEK_SET);
-                if(retval >= 0) {
-                    retval = read(interpreter_fd,bprm->buf,128);
-                }
-            }
-            if (retval >= 0) {
-                interp_ex = *((struct exec *) bprm->buf); /* aout exec-header */
-                interp_elf_ex = *((struct elfhdr *) bprm->buf); /* elf exec-header */
-            }
-            if (retval < 0) {
-                perror("load_elf_binary3");
-                exit(-1);
-                free (elf_phdata);
-                free(elf_interpreter);
-                close(bprm->fd);
-                return retval;
-            }
         }
         elf_ppnt++;
     }
 
     /* Some simple consistency checks for the interpreter */
     if (elf_interpreter){
+        /* If the program interpreter is one of these two,
+           then assume an iBCS2 image. Otherwise assume
+           a native linux image. */
+
+        /* JRP - Need to add X86 lib dir stuff here... */
+
+        if (strcmp(elf_interpreter, "/usr/lib/libc.so.1") == 0 ||
+                strcmp(elf_interpreter, "/usr/lib/ld-elf.so.1") == 0) {
+            ibcs2_interpreter = 1;
+#ifdef TARGET_CHERI
+        } else if (strcmp(elf_interpreter, "/libexec/ld-elf.so.1") == 0) {
+            /*
+             * XXXKW: In order to support multi-ABI environments, use the
+             * ABI-explicit ld-cheri-elf.so.1 rtld.
+             *
+             * Instead, we should implement a QEMU user-mode option to
+             * set an ELF interpreter.
+             */
+            (void)strcpy(elf_interpreter, "/libexec/ld-cheri-elf.so.1");
+#endif
+        }
+
+#if 0
+        printf("Using ELF interpreter %s\n", path(elf_interpreter));
+#endif
+        if (retval >= 0) {
+            retval = open(path(elf_interpreter), O_RDONLY);
+            if(retval >= 0) {
+                interpreter_fd = retval;
+            }
+            else {
+                perror(elf_interpreter);
+                exit(-1);
+                /* retval = -errno; */
+            }
+        }
+
+        if (retval >= 0) {
+            retval = lseek(interpreter_fd, 0, SEEK_SET);
+            if(retval >= 0) {
+                retval = read(interpreter_fd,bprm->buf,128);
+            }
+        }
+        if (retval >= 0) {
+            interp_ex = *((struct exec *) bprm->buf); /* aout exec-header */
+            interp_elf_ex = *((struct elfhdr *) bprm->buf); /* elf exec-header */
+        }
+        if (retval < 0) {
+            perror("load_elf_binary3");
+            exit(-1);
+            free (elf_phdata);
+            free(elf_interpreter);
+            close(bprm->fd);
+            return retval;
+        }
+
         interpreter_type = INTERPRETER_ELF | INTERPRETER_AOUT;
 
         /* Now figure out which format our binary is */
