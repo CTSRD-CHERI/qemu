@@ -570,7 +570,7 @@ load_elf_sections(const struct elfhdr *hdr, struct elf_phdr *phdr, int fd,
      */
     for (i = 0, elf_ppnt = phdr; i < hdr->e_phnum; i++, elf_ppnt++) {
         int elf_prot = 0;
-        abi_ulong error;
+        abi_long error;
 
         /* XXX Skip memsz == 0. */
         if (elf_ppnt->p_type != PT_LOAD)
