@@ -354,8 +354,14 @@ int qemu_log_instr_global_switch(int log_flags)
     CPUState *cpu;
     qemu_log_next_level_arg_t *arg = g_new(qemu_log_next_level_arg_t, 1);
 
-    arg->next_level = (request_stop) ? QEMU_LOG_INSTR_LOGLEVEL_NONE
-                                     : QEMU_LOG_INSTR_LOGLEVEL_ALL;
+    if (log_flags & CPU_LOG_INSTR_U) {
+        arg->next_level = QEMU_LOG_INSTR_LOGLEVEL_USER;
+        log_flags |= CPU_LOG_INSTR;
+    } else if (log_flags & CPU_LOG_INSTR) {
+        arg->next_level = QEMU_LOG_INSTR_LOGLEVEL_ALL;
+    } else {
+        arg->next_level = QEMU_LOG_INSTR_LOGLEVEL_NONE;
+    }
     arg->global = true;
 
     CPU_FOREACH(cpu)
@@ -447,8 +453,14 @@ void qemu_log_instr_init(CPUState *cpu)
     }
 
     /* If we are starting with instruction logging enabled, switch it on now */
-    if (qemu_loglevel_mask(CPU_LOG_INSTR)) {
-        start_level.next_level = QEMU_LOG_INSTR_LOGLEVEL_ALL;
+    if (qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_INSTR_U)) {
+        if (qemu_loglevel_mask(CPU_LOG_INSTR_U)) {
+            assert(qemu_loglevel_mask(CPU_LOG_INSTR) &&
+                   "CPU_LOG_INSTR_U implies CPU_LOG_INSTR broken");
+            start_level.next_level = QEMU_LOG_INSTR_LOGLEVEL_USER;
+        } else {
+            start_level.next_level = QEMU_LOG_INSTR_LOGLEVEL_ALL;
+        }
         start_level.global = true;
         do_cpu_loglevel_switch(cpu, RUN_ON_CPU_HOST_PTR(&start_level));
     }
@@ -1249,7 +1261,7 @@ void helper_qemu_log_instr_stop(CPUArchState *env, target_ulong pc)
 }
 
 /* Start logging all instructions on all CPUs */
-void helper_qemu_log_instr_allcpu_start()
+void helper_qemu_log_instr_allcpu_start(void)
 {
     CPUState *cpu;
 
@@ -1261,7 +1273,7 @@ void helper_qemu_log_instr_allcpu_start()
 }
 
 /* Start logging user-only instructions on all CPUs */
-void helper_qemu_log_instr_allcpu_user_start()
+void helper_qemu_log_instr_allcpu_user_start(void)
 {
     CPUState *cpu;
 
@@ -1273,7 +1285,7 @@ void helper_qemu_log_instr_allcpu_user_start()
 }
 
 /* Stop logging instructions on all CPUs */
-void helper_qemu_log_instr_allcpu_stop()
+void helper_qemu_log_instr_allcpu_stop(void)
 {
     CPUState *cpu;
 
