@@ -102,7 +102,7 @@ struct exec
  */
 static cap_register_t *prog_cap(struct image_info *info, uint64_t perms)
 {
-    cap_register_t cap;
+    static cap_register_t cap;
     abi_ulong prog_base;
     ssize_t prog_len;
 
@@ -125,7 +125,7 @@ static cap_register_t *prog_cap(struct image_info *info, uint64_t perms)
 static cap_register_t *
 interp_cap(struct image_info *info, target_ulong base, uint64_t perms)
 {
-    cap_register_t cap;
+    static cap_register_t cap;
     target_ulong interp_base;
     ssize_t interp_len;
 
