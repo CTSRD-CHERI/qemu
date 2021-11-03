@@ -1519,7 +1519,8 @@ qemuutil = declare_dependency(link_with: libqemuutil,
 
 decodetree = generator(find_program('scripts/decodetree.py'),
                        output: 'decode-@BASENAME@.c.inc',
-                       arguments: ['@INPUT@', '@EXTRA_ARGS@', '-o', '@OUTPUT@'])
+                       depfile: 'decode-@BASENAME@.c.inc.dep',
+                       arguments: ['@INPUT@', '@EXTRA_ARGS@', '-o', '@OUTPUT@', '--depfile', '@OUTPUT@.dep'])
 
 subdir('audio')
 subdir('io')
