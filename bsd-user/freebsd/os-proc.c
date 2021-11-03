@@ -38,7 +38,7 @@ struct kinfo_proc;
  * The maximum number of additional program arguments added by the emulator
  * to argv in an execve(2) or an fexecve(2) call.
  */
-#define MAX_ARGV_EXTRA  7
+#define MAX_ARGV_EXTRA  9
 
 /*
  * Get the filename for the given file descriptor.
@@ -368,6 +368,10 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
      */
     argv[ii++] = "-L";
     argv[ii++] = interp_prefix;
+    if (interp_path != NULL) {
+        argv[ii++] = "-interpreter";
+        argv[ii++] = interp_path;
+    }
 
 #if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
     if (isscript) {
