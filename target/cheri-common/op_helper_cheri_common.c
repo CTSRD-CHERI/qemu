@@ -1186,6 +1186,25 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
                          /*physaddr_out=*/NULL);
 }
 
+void CHERI_HELPER_IMPL(load_cap_via_cap_user(CPUArchState *env, uint32_t cd,
+                                             uint32_t cb, target_ulong offset))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
+
+    const target_ulong addr = cap_check_common_reg(
+        perms_for_load(), env, cb, offset, CHERI_CAP_SIZE, _host_return_address,
+        cbp, CHERI_CAP_SIZE, raise_unaligned_load_exception);
+
+    target_ulong pesbt;
+    target_ulong cursor;
+    bool tag = load_cap_from_memory_raw_tag_mmu_idx(
+        env, &pesbt, &cursor, cb, cbp, addr, _host_return_address,
+        /*physaddr_out=*/NULL,
+        /*raw_tag=*/NULL, MMU_USER_IDX);
+    update_compressed_capreg(env, cd, pesbt, tag, cursor);
+}
+
 void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
                                          uint32_t cb, target_ulong offset))
 {

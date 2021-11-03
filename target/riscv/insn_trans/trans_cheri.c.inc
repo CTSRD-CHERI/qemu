@@ -405,6 +405,13 @@ static inline bool trans_ld_c_cap(DisasContext *ctx, arg_ld_c_cap *a)
                                  &gen_helper_load_cap_via_cap);
 }
 
+static inline bool trans_ld_c_u_cap(DisasContext *ctx, arg_ld_c_u_cap *a)
+{
+    // No immediate available for lccap
+    return gen_cheri_cap_cap_imm(a->rd, a->rs1, 0,
+                                 &gen_helper_load_cap_via_cap_user);
+}
+
 static inline bool trans_lc(DisasContext *ctx, arg_lc *a)
 {
     if (!ctx->capmode) {
