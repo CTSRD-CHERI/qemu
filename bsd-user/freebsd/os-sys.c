@@ -1434,23 +1434,46 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
     if (!ret && (holdp != 0)) {
 
         /*
-         * In case we are retrieving the argument vectors with kvm_getargv,
-         * remove the interpreter name and the interpreter prefix from the argument vectors
+         * In case we are retrieving an argument vector with kvm_getargv(3),
+         * remove the emulator name, the interpreter prefix and the interpreter
+         * path from it.
          */
         if (snamep[0] == CTL_KERN && snamep[1] == KERN_PROC && snamep[2] == KERN_PROC_ARGS) {
-            int len;
+            size_t len;
 
-            /* remove the interpreter name (1st arg: /usr/local/bin/qemu-xxx-static) */
+            /*
+             * Remove the 1st argument (an emulator name).
+             */
             len = strlen(holdp);
             memcpy(holdp, holdp + len + 1, holdlen - len - 1);
             holdlen = holdlen - len - 1;
 
-            /* if the 2nd arg is "-L" remove it and
-             * remove the 3rd arg (interpreter prefix: /usr/gnemul/qemu-xxx)
+            /*
+             * XXXKW: Specific argument locations should not be assumed.
              */
-            if (strncmp(holdp, "-L", 2) == 0) {
-                memcpy(holdp, holdp + 3, holdlen - 3);
-                holdlen = holdlen - 3;
+
+            /*
+             * Remove the 2nd ("-L") and the 3rd (an interpreter prefix)
+             * arguments, if they exist.
+             */
+            len = sizeof("-L");
+            if (strncmp(holdp, "-L", len - 1) == 0) {
+                memcpy(holdp, holdp + len, holdlen - len);
+                holdlen = holdlen - len;
+
+                len = strlen(holdp);
+                memcpy(holdp, holdp + len + 1, holdlen - len - 1);
+                holdlen = holdlen - len - 1;
+            }
+
+            /*
+             * Remove the 4th ("-interpreter") and the 5th (an interpreter path)
+             * arguments, if they exist.
+             */
+            len = sizeof("-interpreter");
+            if (strncmp(holdp, "-interpreter", len - 1) == 0) {
+                memcpy(holdp, holdp + len, holdlen - len);
+                holdlen = holdlen - len;
 
                 len = strlen(holdp);
                 memcpy(holdp, holdp + len + 1, holdlen - len - 1);
