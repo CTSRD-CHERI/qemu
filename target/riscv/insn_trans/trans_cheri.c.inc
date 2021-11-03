@@ -599,7 +599,7 @@ TRANSLATE_LR_EXPLICIT(lr_d, MO_Q);
 #endif
 
 static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
-                               arg_atomic *a, MemOp mop);
+                               arg_atomic *a, int mmu_idx, MemOp mop);
 
 #define TRANSLATE_SC_EXPLICIT(name, op)                                        \
     static bool trans_##name##_ddc(DisasContext *ctx, arg_##name##_ddc *a)     \
@@ -609,7 +609,7 @@ static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
         generate_get_ddc_checked_gpr_plus_offset(                              \
             addr, ctx, a->rs1, 0, op, &generate_ddc_checked_load_ptr);         \
         a->rd = a->rs2; /* Not enough encoding space for explicit rd */        \
-        bool result = gen_sc_impl(ctx, addr, a, op);                           \
+        bool result = gen_sc_impl(ctx, addr, a, ctx->mem_idx, op);             \
         tcg_temp_free_cap_checked(addr);                                       \
         return result;                                                         \
     }                                                                          \
@@ -619,7 +619,7 @@ static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
         TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
         generate_cap_load_check_imm(addr, a->rs1, 0, op);                      \
         a->rd = a->rs2; /* Not enough encoding space for explicit rd */        \
-        bool result = gen_sc_impl(ctx, addr, a, op);                           \
+        bool result = gen_sc_impl(ctx, addr, a, ctx->mem_idx, op);             \
         tcg_temp_free_cap_checked(addr);                                       \
         return result;                                                         \
     }
