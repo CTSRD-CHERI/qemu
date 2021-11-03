@@ -463,3 +463,10 @@ target_ulong HELPER(sc_c_cap)(CPUArchState *env, uint32_t addr_reg, uint32_t val
     return sc_c_impl(env, addr_reg, val_reg, /*offset=*/0,
                      cpu_mmu_index(env, false), GETPC());
 }
+
+target_ulong HELPER(sc_c_u_cap)(CPUArchState *env, uint32_t addr_reg,
+                                uint32_t val_reg)
+{
+    return sc_c_impl(env, addr_reg, val_reg, /*offset=*/0, MMU_USER_IDX,
+                     GETPC());
+}
