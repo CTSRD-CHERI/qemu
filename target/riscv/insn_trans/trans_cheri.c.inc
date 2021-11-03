@@ -372,6 +372,25 @@ TRANSLATE_EXPLICIT_LOAD(ld_hu, MO_UW)
 TRANSLATE_EXPLICIT_LOAD(ld_wu, MO_UL)
 #endif
 
+#define TRANSLATE_EXPLICIT_LOAD_USER(name, op)                                 \
+    static bool trans_##name##_u_cap(DisasContext *ctx, arg_##name##_u_cap *a) \
+    {                                                                          \
+        return gen_cap_load_mem_idx(ctx, a->rd, a->rs1, /*offset=*/0,          \
+            MMU_USER_IDX, op);                                                 \
+    }
+
+TRANSLATE_EXPLICIT_LOAD_USER(ld_b, MO_SB)
+TRANSLATE_EXPLICIT_LOAD_USER(ld_h, MO_SW)
+TRANSLATE_EXPLICIT_LOAD_USER(ld_w, MO_SL)
+#ifdef TARGET_RISCV64
+TRANSLATE_EXPLICIT_LOAD_USER(ld_d, MO_Q)
+#endif
+TRANSLATE_EXPLICIT_LOAD_USER(ld_bu, MO_UB)
+TRANSLATE_EXPLICIT_LOAD_USER(ld_hu, MO_UW)
+#ifdef TARGET_RISCV64
+TRANSLATE_EXPLICIT_LOAD_USER(ld_wu, MO_UL)
+#endif
+
 static inline bool trans_ld_c_ddc(DisasContext *ctx, arg_ld_c_ddc *a)
 {
     // always uses DDC as the base register
