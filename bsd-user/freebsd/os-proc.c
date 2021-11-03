@@ -35,6 +35,12 @@ struct kinfo_proc;
 #include "qemu.h"
 
 /*
+ * The maximum number of additional program arguments added by the emulator
+ * to argv in an execve(2) or an fexecve(2) call.
+ */
+#define MAX_ARGV_EXTRA  7
+
+/*
  * Get the filename for the given file descriptor.
  * Note that this may return NULL (fail) if no longer cached in the kernel.
  */
@@ -152,15 +158,26 @@ is_target_shell_script(int fd, char *interp, size_t size, char **interp_args)
 abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         abi_ulong guest_envp, int do_fexec)
 {
-    char **argp, **envp, **qargp, **qarg1, **qarg0, **qargend;
-    int argc, envc;
+    size_t argc, envc, ii;
+    const char **argv; 
+    char **envp, **guestargs, **q;
+    char filepath[PATH_MAX];
+    bool iself, isscript;
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
+    char shebangpath[PATH_MAX], *shebangargs;
+#endif
     abi_ulong gp;
     abi_uintptr_t addr;
-    char **q;
-    int total_size = 0;
+    int fd, total_size;
     void *p;
     abi_long ret;
 
+    argv = NULL;
+    total_size = 0;
+
+    /*
+     * Calculate argc.
+     */
     argc = 0;
     for (gp = guest_argp; gp; gp += sizeof(addr)) {
         if (get_user_uintptr(addr, gp)) {
@@ -171,6 +188,10 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         }
         argc++;
     }
+
+    /*
+     * Calculate envc.
+     */
     envc = 0;
     for (gp = guest_envp; gp; gp += sizeof(addr)) {
         if (get_user_uintptr(addr, gp)) {
@@ -182,14 +203,11 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         envc++;
     }
 
-    qarg0 = argp = g_new0(char *, argc + 9);
-    /* save the first agrument for the emulator */
-    *argp++ = (char *)getprogname();
-    qargp = argp;
-    *argp++ = (char *)getprogname();
-    qarg1 = argp;
-    envp = g_new0(char *, envc + 1);
-    for (gp = guest_argp, q = argp; gp; gp += sizeof(addr), q++) {
+    /*
+     * Copy a guest argv and lock its content.
+     */
+    guestargs = g_new0(char *, argc);
+    for (gp = guest_argp, q = guestargs; gp; gp += sizeof(addr), q++) {
         if (get_user_uintptr(addr, gp)) {
             ret = -TARGET_EFAULT;
             goto execve_end;
@@ -205,8 +223,11 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         total_size += strlen(*q) + 1;
     }
     *q++ = NULL;
-    qargend = q;
 
+    /*
+     * Copy a guest envp and lock its content.
+     */
+    envp = g_new0(char *, envc + 1);
     for (gp = guest_envp, q = envp; gp; gp += sizeof(addr), q++) {
         if (get_user_uintptr(addr, gp)) {
             ret = -TARGET_EFAULT;
@@ -233,131 +254,187 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         goto execve_end;
     }
 
+
+    /*
+     * Determine a file descriptor and a file path.
+     */
     if (do_fexec) {
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
-        char execpath[PATH_MAX], *scriptargs;
-#endif /* __FreeBSD_version < 1100000 */
+        fd = (int)path_or_fd;
 
-        if (((int)path_or_fd > 0 &&
-            is_target_elf_binary((int)path_or_fd)) == 1) {
-            char execpath[PATH_MAX];
-
-            /*
-             * The executable is an elf binary for the target
-             * arch.  execve() it using the emulator if we can
-             * determine the filename path from the fd.
-             */
-            if (get_filename_from_fd(getpid(), (int)path_or_fd, execpath,
-                        sizeof(execpath)) != NULL) {
-                memmove(qarg1 + 2, qarg1, (qargend-qarg1) * sizeof(*qarg1));
-		qarg1[1] = qarg1[0];
-		qarg1[0] = (char *)"-0";
-		qarg1 += 2;
-		qargend += 2;
-                *qarg1 = execpath;
-#ifndef DONT_INHERIT_INTERP_PREFIX
-                memmove(qarg1 + 2, qarg1, (qargend-qarg1) * sizeof(*qarg1));
-                *qarg1++ = (char *)"-L";
-                *qarg1++ = (char *)interp_prefix;
-#endif
-                ret = get_errno(execve(qemu_proc_pathname, qargp, envp));
-            } else {
-                /* Getting the filename path failed. */
-                ret = -TARGET_EBADF;
-                goto execve_end;
-            }
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
-        } else if (is_target_shell_script((int)path_or_fd, execpath,
-                    sizeof(execpath), &scriptargs) != 0) {
-            char scriptpath[PATH_MAX];
-
-            /* execve() as a target script using emulator. */
-            if (get_filename_from_fd(getpid(), (int)path_or_fd, scriptpath,
-                        sizeof(scriptpath)) != NULL) {
-                *qargp = execpath;
-                *qarg1 = scriptpath;
-#ifndef DONT_INHERIT_INTERP_PREFIX
-                memmove(qargp + 2, qargp, (qargend-qargp) * sizeof(*qargp));
-                qargp[0] = (char *)"-L";
-                qargp[1] = (char *)interp_prefix;
-                qarg1 += 2;
-                qargend += 2;
-#endif
-                if (scriptargs) {
-                    memmove(qarg1 + 1, qarg1, (qargend-qarg1) * sizeof(*qarg1));
-                    *qarg1 = scriptargs;
-                }
-                ret = get_errno(execve(qemu_proc_pathname, qarg0, envp));
-            } else {
-                ret = -TARGET_EBADF;
-                goto execve_end;
-            }
-#endif
-        } else {
-            ret = get_errno(fexecve((int)path_or_fd, argp, envp));
+        if (get_filename_from_fd(getpid(), fd, filepath,
+                                 sizeof(filepath)) == NULL) {
+            ret = -TARGET_EBADF;
+            goto execve_end;
         }
     } else {
-        int fd;
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
-        char execpath[PATH_MAX], *scriptargs;
-#endif
-
         p = lock_user_string(path_or_fd);
         if (p == NULL) {
             ret = -TARGET_EFAULT;
             goto execve_end;
         }
-
-        /*
-         * Check the header and see if it a target elf binary.  If so
-         * then execute using qemu user mode emulator.
-         */
-        fd = open(p, O_RDONLY | O_CLOEXEC);
-        if (fd > 0 && is_target_elf_binary(fd) == 1) {
-            close(fd);
-            /* execve() as a target binary using emulator. */
-            memmove(qarg1 + 2, qarg1, (qargend-qarg1) * sizeof(*qarg1));
-            qarg1[1] = qarg1[0];
-            qarg1[0] = (char *)"-0";
-            qarg1 += 2;
-	    qargend += 2;
-            *qarg1 = (char *)p;
-#ifndef DONT_INHERIT_INTERP_PREFIX
-            memmove(qarg1 + 2, qarg1, (qargend-qarg1) * sizeof(*qarg1));
-            *qarg1++ = (char *)"-L";
-            *qarg1++ = (char *)interp_prefix;
-#endif
-            ret = get_errno(execve(qemu_proc_pathname, qargp, envp));
-#if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
-        } else if (is_target_shell_script(fd, execpath,
-                    sizeof(execpath), &scriptargs) != 0) {
-            close(fd);
-            /* execve() as a target script using emulator. */
-            *qargp = execpath;
-            *qarg1 = (char *)p;
-#ifndef DONT_INHERIT_INTERP_PREFIX
-            memmove(qargp + 2, qargp, (qargend-qargp) * sizeof(*qargp));
-            qargp[0] = (char *)"-L";
-            qargp[1] = (char *)interp_prefix;
-            qarg1 += 2;
-            qargend += 2;
-#endif
-            if (scriptargs) {
-                memmove(qarg1 + 1, qarg1, (qargend-qarg1) * sizeof(*qarg1));
-                *qarg1 = scriptargs;
-            }
-            ret = get_errno(execve(qemu_proc_pathname, qarg0, envp));
-#endif
-        } else {
-            close(fd);
-            /* Execve() as a host native binary. */
-            ret = get_errno(execve(p, argp, envp));
-        }
+        strncpy(filepath, p, sizeof(filepath));
         unlock_user(p, path_or_fd, 0);
+
+        fd = open(filepath, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) {
+            ret = -TARGET_EBADF;
+            goto execve_end;
+        }
+    }
+    assert(fd >= 0);
+    /*
+     * Determine if the file is an ELF binary or a script.
+     */
+    iself = (is_target_elf_binary(fd) == 1);
+    isscript = false;
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
+    /*
+     * The FreeBSD host version doesn't have the imgact_binmisc kernel module.
+     *
+     * In case the file is a script, we must explicitly execute it with the
+     * emulator.
+     *
+     * XXKW: In fact, the imgact_binmisc kernel module was merged into FreeBSD
+     * 10.1. Also, it's insufficient to determine if the imgact_binmisc is
+     * available based on a FreeBSD version. Instead, the check should verify
+     * if the module is loaded.
+     */
+    if (!iself) {
+        isscript = (is_target_shell_script(fd, shebangpath, sizeof(shebangpath),
+                                           &shebangargs) != 0);
+        /*
+         * If shebangargs exists, then it must be a script.
+         */
+        assert(shebangargs == NULL || isscript);
+    }
+#endif
+    if (!do_fexec) {
+        close(fd);
+    }
+
+    if (!iself && !isscript) {
+        /*
+         * The file is not an ELF binary not it's a script on a host without the
+         * imgact_binmisc kernel module.
+         *
+         * Execute a system call with the original guest arguments.
+         */
+        if (do_fexec) {
+            ret = get_errno(fexecve(fd, guestargs, envp));
+        } else {
+            ret = get_errno(execve(p, guestargs, envp));
+        }
+        goto execve_end;
+    }
+
+    /*
+     * The emulator recognizes the file.
+     *
+     * We are going to execute the file explicitly with the emulator because of
+     * two reasons:
+     * - fexecve(2) could result in executing the file without the emulator;
+     * - A host might not support or might not have loaded the imgact_binmisc
+     *   kernel module.
+     *
+     * XXXKW: The above list might be incomplete. Any other reasons should be
+     * appended to it.
+     */
+    assert(iself || isscript);
+
+    /*
+     * Construct argv.
+     *
+     * For a list of possible argv values, see below execve(2) and fexecve(2)
+     * calls.
+     */
+    argv = g_new0(const char *, argc + MAX_ARGV_EXTRA);
+    ii = 0;
+
+    /*
+     * Use the user mode to execute the file.
+     */
+    argv[ii++] = getprogname();
+
+    if (iself) {
+        /*
+         * Pass the original program name as a QEMU argument.
+         */
+        argv[ii++] = "-0";
+        argv[ii++] = guestargs[0];
+    }
+
+    /*
+     * Add QEMU arguments required to correctly execute the file.
+     */
+    argv[ii++] = "-L";
+    argv[ii++] = interp_prefix;
+
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
+    if (isscript) {
+        /*
+         * Use an interpreter found in the file with its optional arguments to
+         * execute the script.
+         */
+        argv[ii++] = shebangpath;
+        if (shebangargs != NULL) {
+            argv[ii++] = shebangargs;
+        }
+    }
+#endif
+
+    /*
+     * Add the file path to be executed.
+     */
+    argv[ii++] = filepath;
+
+    /*
+     * Finally, copy all guest arguments except for a command name as it
+     * could've been replaced.
+     */
+    if (argc > 1) {
+        (void)memcpy(&argv[ii], &guestargs[1], (argc - 1) * sizeof(*guestargs));
+    }
+
+    if (iself) {
+        /*
+         * In case of an ELF binary, argv includes:
+         * 0: getprogname()
+         * 1: -0
+         * 2: guestargs[0]
+         * 3: -L
+         * 4: interp_prefix
+         * 5: filepath
+         * 6: guestargs[1]
+         * 7: guestargs[2]
+         * ...
+         */
+        ret = get_errno(execve(qemu_proc_pathname, (char * const *)argv, envp));
+#if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
+    } else if (isscript) {
+        /*
+         * In case of a script, argv includes (shebangsargs is optional):
+         * 0: getprogname()
+         * 1: -L
+         * 2: interp_prefix
+         * 3: shebangpath
+         * 4: shebangargs
+         * 5: filepath
+         * 6: guestargs[1]
+         * 7: guestargs[2]
+         * ...
+         */
+        ret = get_errno(execve(qemu_proc_pathname, (char * const *)argv, envp));
+#endif
+    } else {
+        /* Unreachable. */
+        abort();
     }
 
 execve_end:
-    for (gp = guest_argp, q = argp; *q; gp += sizeof(abi_uintptr_t), q++) {
+    /*
+     * Unlock the guest argv.
+     */
+    for (gp = guest_argp, q = guestargs; *q; gp += sizeof(abi_uintptr_t), q++) {
         if (get_user_uintptr(addr, gp)) {
             break;
         }
@@ -367,6 +444,9 @@ execve_end:
         unlock_user(*q, uintptr_vaddr(addr), 0);
     }
 
+    /*
+     * Unlock the guest envp.
+     */
     for (gp = guest_envp, q = envp; *q; gp += sizeof(abi_uintptr_t), q++) {
         if (get_user_uintptr(addr, gp)) {
             break;
@@ -377,7 +457,8 @@ execve_end:
         unlock_user(*q, uintptr_vaddr(addr), 0);
     }
 
-    g_free(qarg0);
+    g_free(guestargs);
+    g_free(argv);
     g_free(envp);
 
     return ret;
