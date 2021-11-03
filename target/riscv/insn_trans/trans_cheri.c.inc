@@ -480,6 +480,20 @@ TRANSLATE_EXPLICIT_STORE(st_w, MO_UL)
 TRANSLATE_EXPLICIT_STORE(st_d, MO_Q)
 #endif
 
+#define TRANSLATE_EXPLICIT_STORE_USER(name, op)                                \
+    static bool trans_##name##_u_cap(DisasContext *ctx, arg_##name##_u_cap *a) \
+    {                                                                          \
+        return gen_cap_store_mem_idx(ctx, a->rs1, a->rs2, /*offset=*/0,        \
+            MMU_USER_IDX, op);                                                 \
+    }
+
+TRANSLATE_EXPLICIT_STORE_USER(st_b, MO_UB)
+TRANSLATE_EXPLICIT_STORE_USER(st_h, MO_UW)
+TRANSLATE_EXPLICIT_STORE_USER(st_w, MO_UL)
+#ifdef TARGET_RISCV64
+TRANSLATE_EXPLICIT_STORE_USER(st_d, MO_Q)
+#endif
+
 // RS2 is the value, RS1 is the capability/ddc offset
 static inline bool trans_st_c_ddc(DisasContext *ctx, arg_st_c_ddc *a)
 {
