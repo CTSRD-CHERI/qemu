@@ -70,11 +70,17 @@ cheri_zerocap(void)
 }
 
 cap_register_t *
+cheri_ptr_to_unbounded_cap(const void *ptr)
+{
+
+    return (cheri_setaddress(cheri_zerocap(), (intptr_t)ptr));
+}
+
+cap_register_t *
 cheri_ptr(const void *ptr, size_t len)
 {
 
-    return (cheri_setbounds(cheri_setaddress(cheri_zerocap(), (intptr_t)ptr),
-        len));
+    return (cheri_setbounds(cheri_ptr_to_unbounded_cap(ptr), len));
 }
 
 abi_uintptr_t
