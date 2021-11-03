@@ -563,6 +563,11 @@ static inline bool trans_lr_c_cap(DisasContext *ctx, arg_lr_c_cap *a)
     return trans_lr_c_impl(ctx, a, &gen_helper_lr_c_cap);
 }
 
+static inline bool trans_lr_c_u_cap(DisasContext *ctx, arg_lr_c_u_cap *a)
+{
+    return trans_lr_c_impl(ctx, a, &gen_helper_lr_c_u_cap);
+}
+
 static inline bool trans_sc_c_impl(DisasContext *ctx, arg_atomic *a,
                                    cheri_int_cap_cap_helper *helper)
 {

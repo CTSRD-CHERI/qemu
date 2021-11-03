@@ -363,6 +363,11 @@ void HELPER(lr_c_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
               GETPC());
 }
 
+void HELPER(lr_c_u_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
+{
+    lr_c_impl(env, dest_reg, addr_reg, /*offset=*/0, MMU_USER_IDX, GETPC());
+}
+
 // SC returns zero on success, one on failure
 static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
                               uint32_t val_reg, target_ulong offset,
