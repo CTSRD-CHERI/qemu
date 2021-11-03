@@ -388,19 +388,20 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
     argv[ii++] = filepath;
 
     /*
-     * Terminate argv with a NULL pointer.
-     */
-    /* The original command name is replaced with filepath. */
-    assert(ii <= argc + MAX_ARGV_EXTRA);
-    argv[ii] = NULL;
-
-    /*
      * Finally, copy all guest arguments except for a command name as it
      * could've been replaced.
      */
     if (argc > 1) {
         (void)memcpy(&argv[ii], &guestargs[1], (argc - 1) * sizeof(*guestargs));
+        ii += argc - 1;
     }
+
+    /*
+     * Terminate argv with a NULL pointer.
+     */
+    /* The original command name is replaced with filepath. */
+    assert(ii <= argc + MAX_ARGV_EXTRA);
+    argv[ii] = NULL;
 
     if (iself) {
         /*
