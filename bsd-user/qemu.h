@@ -155,6 +155,7 @@ typedef struct TaskState {
 void init_task_state(TaskState *ts);
 void stop_all_tasks(void);
 extern const char *interp_prefix;
+extern const char *interp_path;
 extern const char *qemu_uname_release;
 
 /* ??? See if we can avoid exposing so much of the loader internals.  */
