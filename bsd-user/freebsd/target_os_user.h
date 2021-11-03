@@ -20,6 +20,10 @@
 #ifndef _TARGET_OS_USER_H_
 #define _TARGET_OS_USER_H_
 
+/* For kinfo_proc.ki_tracep. */
+#define _KVM_VNODE
+#include <sys/vnode.h>
+
 /*
  * from sys/priority.h
  */
@@ -71,7 +75,11 @@ struct target_sockaddr_storage {
 #define TARGET_KI_NSPARE_INT        9
 #endif /* ! __FreeBSD_version >= 1000000 */
 #define TARGET_KI_NSPARE_LONG       12
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300130
+#define TARGET_KI_NSPARE_PTR        5
+#else
 #define TARGET_KI_NSPARE_PTR        6
+#endif
 
 #define TARGET_WMESGLEN             8
 #define TARGET_LOCKNAMELEN          8
@@ -83,117 +91,117 @@ struct target_sockaddr_storage {
 #define TARGET_LOGINCLASSLEN        17
 
 struct target_kinfo_proc {
-    int32_t     ki_structsize;      /* size of this structure */
-    int32_t     ki_layout;          /* reserved: layout identifier */
-    abi_ulong   ki_args;            /* address of command arguments */
-    abi_ulong   ki_paddr;           /* address of proc */
-    abi_ulong   ki_addr;            /* kernel virtual addr of u-area */
-    abi_ulong   ki_tracep;          /* pointer to trace file */
-    abi_ulong   ki_textvp;          /* pointer to executable file */
-    abi_ulong   ki_fd;              /* pointer to open file info */
-    abi_ulong   ki_vmspace;         /* pointer to kernel vmspace struct */
-    abi_ulong   ki_wchan;           /* sleep address */
-    int32_t     ki_pid;             /* Process identifier */
-    int32_t     ki_ppid;            /* parent process id */
-    int32_t     ki_pgid;            /* process group id */
-    int32_t     ki_tpgid;           /* tty process group id */
-    int32_t     ki_sid;             /* Process session ID */
-    int32_t     ki_tsid;            /* Terminal session ID */
-    int16_t     ki_jobc;            /* job control counter */
-    int16_t     ki_spare_short1;    /* unused (just here for alignment) */
+    abi_int         ki_structsize;      /* size of this structure */
+    abi_int         ki_layout;          /* reserved: layout identifier */
+    abi_uintptr_t   ki_args;            /* address of command arguments */
+    abi_uintptr_t   ki_paddr;           /* address of proc */
+    abi_uintptr_t   ki_addr;            /* kernel virtual addr of u-area */
+    abi_uintptr_t   ki_tracep;          /* pointer to trace file */
+    abi_uintptr_t   ki_textvp;          /* pointer to executable file */
+    abi_uintptr_t   ki_fd;              /* pointer to open file info */
+    abi_uintptr_t   ki_vmspace;         /* pointer to kernel vmspace struct */
+    abi_uintptr_t   ki_wchan;           /* sleep address */
+    pid_t           ki_pid;             /* Process identifier */
+    pid_t           ki_ppid;            /* parent process id */
+    pid_t           ki_pgid;            /* process group id */
+    pid_t           ki_tpgid;           /* tty process group id */
+    pid_t           ki_sid;             /* Process session ID */
+    pid_t           ki_tsid;            /* Terminal session ID */
+    abi_short       ki_jobc;            /* job control counter */
+    abi_short       ki_spare_short1;    /* unused (just here for alignment) */
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
-    int32_t     ki_tdev__freebsd11; /* controlling tty dev */
+    uint32_t        ki_tdev__freebsd11; /* controlling tty dev */
 #else
-    int32_t     ki_tdev;            /* controlling tty dev */
+    uint32_t        ki_tdev;            /* controlling tty dev */
 #endif
-    target_sigset_t ki_siglist;     /* Signals arrived but not delivered */
-    target_sigset_t ki_sigmask;     /* Current signal mask */
-    target_sigset_t ki_sigignore;   /* Signals being ignored */
-    target_sigset_t ki_sigcatch;    /* Signals being caught by user */
+    target_sigset_t ki_siglist;         /* Signals arrived but not delivered */
+    target_sigset_t ki_sigmask;         /* Current signal mask */
+    target_sigset_t ki_sigignore;       /* Signals being ignored */
+    target_sigset_t ki_sigcatch;        /* Signals being caught by user */
 
-    int32_t     ki_uid;             /* effective user id */
-    int32_t     ki_ruid;            /* Real user id */
-    int32_t     ki_svuid;           /* Saved effective user id */
-    int32_t     ki_rgid;            /* Real group id */
-    int32_t     ki_svgid;           /* Saved effective group id */
-    int16_t     ki_ngroups;         /* number of groups */
-    int16_t     ki_spare_short2;    /* unused (just here for alignment) */
-    int32_t     ki_groups[TARGET_KI_NGROUPS];  /* groups */
+    uid_t           ki_uid;             /* effective user id */
+    uid_t           ki_ruid;            /* Real user id */
+    uid_t           ki_svuid;           /* Saved effective user id */
+    gid_t           ki_rgid;            /* Real group id */
+    gid_t           ki_svgid;           /* Saved effective group id */
+    abi_short       ki_ngroups;         /* number of groups */
+    abi_short       ki_spare_short2;    /* unused (just here for alignment) */
+    gid_t           ki_groups[TARGET_KI_NGROUPS];  /* groups */
 
-    abi_long    ki_size;            /* virtual size */
+    vm_size_t       ki_size;            /* virtual size */
 
-    abi_long    ki_rssize;          /* current resident set size in pages */
-    abi_long    ki_swrss;           /* resident set size before last swap */
-    abi_long    ki_tsize;           /* text size (pages) XXX */
-    abi_long    ki_dsize;           /* data size (pages) XXX */
-    abi_long    ki_ssize;           /* stack size (pages) */
+    segsz_t         ki_rssize;          /* current resident set size in pages */
+    segsz_t         ki_swrss;           /* resident set size before last swap */
+    segsz_t         ki_tsize;           /* text size (pages) XXX */
+    segsz_t         ki_dsize;           /* data size (pages) XXX */
+    segsz_t         ki_ssize;           /* stack size (pages) */
 
-    uint16_t    ki_xstat;           /* Exit status for wait & stop signal */
-    uint16_t    ki_acflag;          /* Accounting flags */
+    abi_ushort      ki_xstat;           /* Exit status for wait & stop signal */
+    abi_ushort      ki_acflag;          /* Accounting flags */
 
-    uint32_t    ki_pctcpu;          /* %cpu for process during ki_swtime */
+    fixpt_t         ki_pctcpu;          /* %cpu for process during ki_swtime */
 
-    uint32_t    ki_estcpu;          /* Time averaged value of ki_cpticks */
-    uint32_t    ki_slptime;         /* Time since last blocked */
-    uint32_t    ki_swtime;          /* Time swapped in or out */
-    uint32_t    ki_cow;             /* number of copy-on-write faults */
-    uint64_t    ki_runtime;         /* Real time in microsec */
+    abi_uint        ki_estcpu;          /* Time averaged value of ki_cpticks */
+    abi_uint        ki_slptime;         /* Time since last blocked */
+    abi_uint        ki_swtime;          /* Time swapped in or out */
+    abi_uint        ki_cow;             /* number of copy-on-write faults */
+    u_int64_t       ki_runtime;         /* Real time in microsec */
 
     struct  target_freebsd_timeval ki_start;  /* starting time */
     struct  target_freebsd_timeval ki_childtime; /* time used by process
                                                     children */
 
-    abi_long    ki_flag;            /* P_* flags */
-    abi_long    ki_kiflag;          /* KI_* flags (below) */
-    int32_t     ki_traceflag;       /* Kernel trace points */
-    char        ki_stat;            /* S* process status */
-    int8_t      ki_nice;            /* Process "nice" value */
-    char        ki_lock;            /* Process lock (prevent swap) count */
-    char        ki_rqindex;         /* Run queue index */
+    abi_long        ki_flag;            /* P_* flags */
+    abi_long        ki_kiflag;          /* KI_* flags (below) */
+    abi_int         ki_traceflag;       /* Kernel trace points */
+    char            ki_stat;            /* S* process status */
+    signed char     ki_nice;            /* Process "nice" value */
+    char            ki_lock;            /* Process lock (prevent swap) count */
+    char            ki_rqindex;         /* Run queue index */
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
-    u_char      ki_oncpu_old;       /* Which cpu we are on (legacy) */
-    u_char      ki_lastcpu_old;     /* Last cpu we were on (legacy) */
+    u_char          ki_oncpu_old;       /* Which cpu we are on (legacy) */
+    u_char          ki_lastcpu_old;     /* Last cpu we were on (legacy) */
 #else
-    u_char      ki_oncpu;           /* Which cpu we are on */
-    u_char      ki_lastcpu;         /* Last cpu we were on */
+    u_char          ki_oncpu;           /* Which cpu we are on */
+    u_char          ki_lastcpu;         /* Last cpu we were on */
 #endif /* ! __FreeBSD_version >= 1100000 */
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
-    char        ki_tdname[TARGET_TDNAMLEN+1];  /* thread name */
+    char            ki_tdname[TARGET_TDNAMLEN+1];  /* thread name */
 #else
-    char        ki_ocomm[TARGET_TDNAMLEN+1];   /* thread name */
+    char            ki_ocomm[TARGET_TDNAMLEN+1];   /* thread name */
 #endif /* ! __FreeBSD_version >= 900000 */
-    char        ki_wmesg[TARGET_WMESGLEN+1];   /* wchan message */
-    char        ki_login[TARGET_LOGNAMELEN+1]; /* setlogin name */
-    char        ki_lockname[TARGET_LOCKNAMELEN+1]; /* lock name */
-    char        ki_comm[TARGET_COMMLEN+1];     /* command name */
-    char        ki_emul[TARGET_KI_EMULNAMELEN+1];  /* emulation name */
+    char            ki_wmesg[TARGET_WMESGLEN+1];   /* wchan message */
+    char            ki_login[TARGET_LOGNAMELEN+1]; /* setlogin name */
+    char            ki_lockname[TARGET_LOCKNAMELEN+1]; /* lock name */
+    char            ki_comm[TARGET_COMMLEN+1];     /* command name */
+    char            ki_emul[TARGET_KI_EMULNAMELEN+1];  /* emulation name */
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
-    char        ki_loginclass[TARGET_LOGINCLASSLEN+1]; /* login class */
+    char            ki_loginclass[TARGET_LOGINCLASSLEN+1]; /* login class */
 #endif /* ! __FreeBSD_version >= 900000 */
 
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
-    char        ki_sparestrings[50];    /* spare string space */
+    char            ki_sparestrings[50];    /* spare string space */
 #else
-    char        ki_sparestrings[68];    /* spare string space */
+    char            ki_sparestrings[68];    /* spare string space */
 #endif /* ! __FreeBSD_version >= 900000 */
-    int32_t     ki_spareints[TARGET_KI_NSPARE_INT]; /* spare room for growth */
+    abi_int         ki_spareints[TARGET_KI_NSPARE_INT]; /* spare room for growth */
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
-	uint64_t ki_tdev;		/* controlling tty dev */
+    uint64_t        ki_tdev;            /* controlling tty dev */
 #endif
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1100000
-    int32_t     ki_oncpu;           /* Which cpu we are on */
-    int32_t     ki_lastcpu;         /* Last cpu we were on */
-    int32_t     ki_tracer;          /* Pid of tracing process */
+    abi_int         ki_oncpu;           /* Which cpu we are on */
+    abi_int         ki_lastcpu;         /* Last cpu we were on */
+    abi_int         ki_tracer;          /* Pid of tracing process */
 #endif /* __FreeBSD_version >= 1100000 */
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 900000
-    int32_t     ki_flag2;           /* P2_* flags */
-    int32_t     ki_fibnum;          /* Default FIB number */
+    abi_int         ki_flag2;           /* P2_* flags */
+    abi_int         ki_fibnum;          /* Default FIB number */
 #endif /* ! __FreeBSD_version >= 900000 */
-    uint32_t    ki_cr_flags;        /* Credential flags */
-    int32_t     ki_jid;             /* Process jail ID */
-    int32_t     ki_numthreads;      /* XXXKSE number of threads in total */
+    abi_uint        ki_cr_flags;        /* Credential flags */
+    abi_int         ki_jid;             /* Process jail ID */
+    abi_int         ki_numthreads;      /* XXXKSE number of threads in total */
 
-    int32_t     ki_tid;             /* XXXKSE thread id */
+    lwpid_t         ki_tid;             /* XXXKSE thread id */
 
     struct  target_priority ki_pri; /* process priority */
     struct  target_freebsd_rusage ki_rusage;  /* process rusage statistics */
@@ -202,15 +210,18 @@ struct target_kinfo_proc {
                                                    processes */
 
 
-    abi_ulong   ki_pcb;             /* kernel virtual addr of pcb */
-    abi_ulong   ki_kstack;          /* kernel virtual addr of stack */
-    abi_ulong   ki_udata;           /* User convenience pointer */
-    abi_ulong   ki_tdaddr;          /* address of thread */
+    abi_uintptr_t   ki_pcb;             /* kernel virtual addr of pcb */
+    abi_uintptr_t   ki_kstack;          /* kernel virtual addr of stack */
+    abi_uintptr_t   ki_udata;           /* User convenience pointer */
+    abi_uintptr_t   ki_tdaddr;          /* address of thread */
 
-    abi_ulong   ki_spareptrs[TARGET_KI_NSPARE_PTR];  /* spare room for growth */
-    abi_long    ki_sparelongs[TARGET_KI_NSPARE_LONG];/* spare room for growth */
-    abi_long    ki_sflag;           /* PS_* flags */
-    abi_long    ki_tdflags;         /* XXXKSE kthread flag */
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300130
+    abi_uintptr_t   ki_pd; /* pointer to process paths info */
+#endif
+    abi_uintptr_t   ki_spareptrs[TARGET_KI_NSPARE_PTR];  /* spare room for growth */
+    abi_long        ki_sparelongs[TARGET_KI_NSPARE_LONG];/* spare room for growth */
+    abi_long        ki_sflag;           /* PS_* flags */
+    abi_long        ki_tdflags;         /* XXXKSE kthread flag */
 };
 
 struct target_kinfo_file {

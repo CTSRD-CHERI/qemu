@@ -145,6 +145,24 @@ host_to_target_kinfo_proc(struct target_kinfo_proc *tki, struct kinfo_proc *hki)
     __put_user(hki->ki_layout, &tki->ki_layout);
 
     /* Some of these are used as flags (e.g. ki_fd == NULL in procstat). */
+#ifdef TARGET_CHERI
+    tki->ki_args = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_args)));
+    tki->ki_paddr = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_paddr)));
+    tki->ki_addr = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_addr)));
+    tki->ki_tracep = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_tracep)));
+    tki->ki_textvp = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_textvp)));
+    tki->ki_fd = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_fd)));
+    tki->ki_vmspace = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_vmspace)));
+    tki->ki_wchan = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_wchan)));
+#else
     tki->ki_args = tswapal((abi_ulong)(uintptr_t)hki->ki_args);
     tki->ki_paddr = tswapal((abi_ulong)(uintptr_t)hki->ki_paddr);
     tki->ki_addr = tswapal((abi_ulong)(uintptr_t)hki->ki_addr);
@@ -153,6 +171,7 @@ host_to_target_kinfo_proc(struct target_kinfo_proc *tki, struct kinfo_proc *hki)
     tki->ki_fd = tswapal((abi_ulong)(uintptr_t)hki->ki_fd);
     tki->ki_vmspace = tswapal((abi_ulong)(uintptr_t)hki->ki_vmspace);
     tki->ki_wchan = tswapal((abi_ulong)(uintptr_t)hki->ki_wchan);
+#endif
 
     __put_user(hki->ki_pid, &tki->ki_pid);
     __put_user(hki->ki_ppid, &tki->ki_ppid);
@@ -251,10 +270,30 @@ host_to_target_kinfo_proc(struct target_kinfo_proc *tki, struct kinfo_proc *hki)
     h2t_rusage(&hki->ki_rusage, &tki->ki_rusage);
     h2t_rusage(&hki->ki_rusage_ch, &tki->ki_rusage_ch);
 
+#ifdef TARGET_CHERI
+    tki->ki_pcb = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_pcb)));
+    tki->ki_kstack = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_unbounded_cap(hki->ki_kstack)));
+    tki->ki_udata = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_unbounded_cap(hki->ki_udata)));
+    tki->ki_tdaddr = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_tdaddr)));
+#else
     __put_user(((uintptr_t)hki->ki_pcb), &tki->ki_pcb);
     __put_user(((uintptr_t)hki->ki_kstack), &tki->ki_kstack);
     __put_user(((uintptr_t)hki->ki_udata), &tki->ki_udata);
     __put_user(((uintptr_t)hki->ki_tdaddr), &tki->ki_tdaddr);
+#endif
+
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1300130
+#ifdef TARGET_CHERI
+    tki->ki_pd = tswapuintptr(cheri_uintptr(
+        cheri_ptr_to_bounded_cap(hki->ki_pd)));
+#else
+    __put_user(((uintptr_t)hki->ki_pd), &tki->ki_pd);
+#endif
+#endif
 
     __put_user(hki->ki_sflag, &tki->ki_sflag);
     __put_user(hki->ki_tdflags, &tki->ki_tdflags);
