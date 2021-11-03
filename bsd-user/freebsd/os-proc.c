@@ -206,7 +206,7 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
     /*
      * Copy a guest argv and lock its content.
      */
-    guestargs = g_new0(char *, argc);
+    guestargs = g_new0(char *, argc + 1);
     for (gp = guest_argp, q = guestargs; gp; gp += sizeof(addr), q++) {
         if (get_user_uintptr(addr, gp)) {
             ret = -TARGET_EFAULT;
@@ -347,7 +347,7 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
      * For a list of possible argv values, see below execve(2) and fexecve(2)
      * calls.
      */
-    argv = g_new0(const char *, argc + MAX_ARGV_EXTRA);
+    argv = g_new0(const char *, argc + MAX_ARGV_EXTRA + 1);
     ii = 0;
 
     /*
@@ -386,6 +386,13 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
      * Add the file path to be executed.
      */
     argv[ii++] = filepath;
+
+    /*
+     * Terminate argv with a NULL pointer.
+     */
+    /* The original command name is replaced with filepath. */
+    assert(ii <= argc + MAX_ARGV_EXTRA);
+    argv[ii] = NULL;
 
     /*
      * Finally, copy all guest arguments except for a command name as it
