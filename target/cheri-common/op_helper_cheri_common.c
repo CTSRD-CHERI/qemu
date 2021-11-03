@@ -1222,6 +1222,26 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
     store_cap_to_memory(env, cs, addr, _host_return_address);
 }
 
+void CHERI_HELPER_IMPL(store_cap_via_cap_user(CPUArchState *env, uint32_t cs,
+                                              uint32_t cb, target_ulong offset))
+{
+    GET_HOST_RETPC();
+    /*
+     * CSC traps on cbp == NULL so we use reg0 as $ddc to save encoding
+     * space and increase code density since storing relative to $ddc is common
+     * in the hybrid ABI (and also for backwards compat with old binaries).
+     */
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
+
+    const target_ulong addr =
+        cap_check_common_reg(perms_for_store(env, cs), env, cb, offset,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
+
+    store_cap_to_memory_mmu_index(env, cs, addr, _host_return_address,
+                                  MMU_USER_IDX);
+}
+
 static inline bool
 cheri_tag_prot_clear_or_trap(CPUArchState *env, target_ulong va,
                              int cb, const cap_register_t* cbp,

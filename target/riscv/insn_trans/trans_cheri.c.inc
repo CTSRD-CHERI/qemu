@@ -509,6 +509,13 @@ static inline bool trans_st_c_cap(DisasContext *ctx, arg_st_c_cap *a)
                                  &gen_helper_store_cap_via_cap);
 }
 
+static inline bool trans_st_c_u_cap(DisasContext *ctx, arg_st_c_u_cap *a)
+{
+    // No immediate available for sccap
+    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0,
+                                 &gen_helper_store_cap_via_cap_user);
+}
+
 static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
 {
     // RS2 is the value, RS1 is the capability
