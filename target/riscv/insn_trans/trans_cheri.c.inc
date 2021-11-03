@@ -645,6 +645,24 @@ TRANSLATE_LR_EXPLICIT(lr_w, MO_SL);
 TRANSLATE_LR_EXPLICIT(lr_d, MO_Q);
 #endif
 
+#define TRANSLATE_LR_EXPLICIT_USER(name, op)                                   \
+    static bool trans_##name##_u_cap(DisasContext *ctx, arg_##name##_u_cap *a) \
+    {                                                                          \
+        REQUIRE_EXT(ctx, RVA);                                                 \
+        TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
+        generate_cap_load_check_imm(addr, a->rs1, 0, op);                      \
+        bool result = gen_lr_impl(ctx, addr, a, MMU_USER_IDX, op);             \
+        tcg_temp_free_cap_checked(addr);                                       \
+        return result;                                                         \
+    }
+TRANSLATE_LR_EXPLICIT_USER(lr_b, MO_SB);
+TRANSLATE_LR_EXPLICIT_USER(lr_h, MO_SW);
+TRANSLATE_LR_EXPLICIT_USER(lr_w, MO_SL);
+#ifdef TARGET_RISCV64
+TRANSLATE_LR_EXPLICIT_USER(lr_d, MO_Q);
+#endif
+
+
 static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
                                arg_atomic *a, int mmu_idx, MemOp mop);
 
