@@ -699,3 +699,21 @@ TRANSLATE_SC_EXPLICIT(sc_w, MO_SL);
 #ifdef TARGET_RISCV64
 TRANSLATE_SC_EXPLICIT(sc_d, MO_Q);
 #endif
+
+#define TRANSLATE_SC_EXPLICIT_USER(name, op)                                   \
+    static bool trans_##name##_u_cap(DisasContext *ctx, arg_##name##_u_cap *a) \
+    {                                                                          \
+        REQUIRE_EXT(ctx, RVA);                                                 \
+        TCGv_cap_checked_ptr addr = tcg_temp_new_cap_checked();                \
+        generate_cap_load_check_imm(addr, a->rs1, 0, op);                      \
+        a->rd = a->rs2; /* Not enough encoding space for explicit rd */        \
+        bool result = gen_sc_impl(ctx, addr, a, MMU_USER_IDX, op);             \
+        tcg_temp_free_cap_checked(addr);                                       \
+        return result;                                                         \
+    }
+TRANSLATE_SC_EXPLICIT_USER(sc_b, MO_SB);
+TRANSLATE_SC_EXPLICIT_USER(sc_h, MO_SW);
+TRANSLATE_SC_EXPLICIT_USER(sc_w, MO_SL);
+#ifdef TARGET_RISCV64
+TRANSLATE_SC_EXPLICIT_USER(sc_d, MO_Q);
+#endif
