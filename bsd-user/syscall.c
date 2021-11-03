@@ -1222,7 +1222,8 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
 
 #ifdef BSD_HAVE_KEVENT64
     case TARGET_FREEBSD_NR_kevent: /* kevent(2) */
-        ret = do_freebsd_kevent(arg1, arg2, arg3, arg4, arg5, arg6);
+        ret = do_freebsd_kevent(&retcap, sa1, sa2, sa3, sa4, sa5, sa6);
+        retval = &retcap;
         break;
 #endif
 

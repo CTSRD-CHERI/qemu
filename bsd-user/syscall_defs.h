@@ -279,13 +279,13 @@ struct target_freebsd11_kevent {
 };
 
 struct target_freebsd_kevent {
-    abi_ulong  ident;
-    int16_t    filter;
-    uint16_t   flags;
-    uint32_t   fflags;
-    int64_t data;
-    abi_ulong  udata;
-    uint64_t  ext[4];
+    abi_uintptr_t ident;
+    abi_short     filter;
+    abi_ushort    flags;
+    abi_uint      fflags;
+    int64_t       data;
+    abi_uintptr_t udata;
+    uint64_t      ext[4];
 };
 
 /*
