@@ -65,7 +65,7 @@ selectedOSes.each { os ->
     def nodeLabel = os
     if (os == "linux") {
         // Build on the oldest supported Ubuntu version so the binaries also run there
-        nodeLabel = "${nodeLabel}-baseline"
+        nodeLabel = "linuxd1"
     }
     jobs[os] = { ->
         node(nodeLabel) {
