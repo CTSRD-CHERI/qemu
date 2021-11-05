@@ -70,7 +70,7 @@ cheri_exec_stack_pointer(cap_register_t *cap, abi_ulong stack)
     assert(stackbase == CHERI_REPRESENTABLE_BASE(stackbase, stacklen));
     csp = cheri_setaddress(cap, stackbase);
     csp = cheri_setbounds(csp, stacklen);
-    return (cheri_incoffset(cap, stacklen));
+    return (cheri_incoffset(csp, stacklen));
 }
 
 /*

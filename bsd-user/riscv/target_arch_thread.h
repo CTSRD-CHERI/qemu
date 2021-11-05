@@ -21,6 +21,7 @@
 #define _TARGET_ARCH_THREAD_H_
 
 #ifdef TARGET_CHERI
+#include "cheri/cherireg.h"
 #include "cheri/cheri.h"
 #endif
 
@@ -49,7 +50,8 @@ static inline void target_thread_init(struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
     /* XXXKW: Check SV_CHERI. */
     (void)cheri_auxv_capability(&regs->regs[xA0]);
-    (void)cheri_exec_stack_pointer(&regs->regs[xSP], infop->start_stack);
+    (void)cheri_exec_stack_pointer(cheri_andperm(&regs->regs[xSP],
+        CHERI_CAP_USER_DATA_PERMS), infop->start_stack);
     cheri_set_mmap_capability(mmapcapp, infop, &regs->regs[xSP]);
 
     (void)cheri_exec_pcc(&regs->sepc, infop);
