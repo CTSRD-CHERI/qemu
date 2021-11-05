@@ -52,5 +52,5 @@ cheri_init_capabilities(const cap_register_t *kroot)
     (void)cheri_setaddress(&userspace_cap, CHERI_CAP_USER_DATA_BASE);
     (void)cheri_setbounds(&userspace_cap, CHERI_CAP_USER_DATA_LENGTH);
     (void)cheri_andperm(&userspace_cap, CHERI_CAP_USER_DATA_PERMS |
-        CHERI_CAP_USER_CODE_PERMS);
+        CHERI_CAP_USER_CODE_PERMS | CHERI_PERM_CHERIABI_VMMAP);
 }
