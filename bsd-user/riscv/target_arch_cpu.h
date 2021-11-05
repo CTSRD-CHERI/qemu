@@ -22,6 +22,8 @@
 
 #include "target_arch.h"
 
+#include "machine/cheri.h"
+
 #define TARGET_DEFAULT_CPU_MODEL "any"
 
 /* TODO Don't know whether this needs to point to cpu_reset or not. */
@@ -169,7 +171,7 @@ static inline void target_cpu_loop(CPURISCVState *env)
 #ifdef TARGET_CHERI
         case RISCV_EXCP_CHERI:
             info.target_si_signo = TARGET_SIGPROT;
-            info.target_si_code = env->last_cap_cause;
+            info.target_si_code = cheri_exccode_to_sicode(env->last_cap_cause);
             info.target_si_addr = cheri_uintptr(cheri_get_current_pcc(env));
             info.target_si_capreg = env->last_cap_index;
             info.target_si_trapno = trapnr;

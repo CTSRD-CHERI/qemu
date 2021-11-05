@@ -44,6 +44,18 @@
 #define TARGET_SIGRTMIN 65
 #define TARGET_SIGRTMAX 126
 
+/* codes for SIGPROT */
+#define PROT_CHERI_BOUNDS     1     /* Capability bounds fault          */
+#define PROT_CHERI_TAG        2     /* Capability tag fault             */
+#define PROT_CHERI_SEALED     3     /* Capability sealed fault          */
+#define PROT_CHERI_TYPE       4     /* Type mismatch fault              */
+#define PROT_CHERI_PERM       5     /* Capability permission fault      */
+#define PROT_CHERI_IMPRECISE  7     /* Imprecise bounds fault           */
+#define PROT_CHERI_STORELOCAL 8     /* Store-local fault                */
+#define PROT_CHERI_CCALL      9     /* CCall fault                      */
+#define PROT_CHERI_CRETURN    10    /* CReturn fault                    */
+#define PROT_CHERI_SYSREG     11    /* Capability system register fault */
+
 /*
  * Language spec says we must list exactly one parameter, even though we
  * actually supply three.  Ugh!

@@ -40,6 +40,7 @@
 /*
  * CHERI-RISC-V-specific kernel utility functions.
  */
-void	cheri_init_capabilities(const cap_register_t *kroot);
+void cheri_init_capabilities(const cap_register_t *kroot);
+int  cheri_exccode_to_sicode(uint8_t exccode);
 
 #endif /* !_MACHINE_CHERI_H_ */

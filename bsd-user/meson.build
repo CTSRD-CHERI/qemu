@@ -15,12 +15,13 @@ bsd_user_ss.add(files(
   'uaccess.c',
   abi / 'target_arch_cpu.c',
   targetos / 'os-extattr.c',
-  targetos / 'os-time.c',
+  targetos / 'os-kbounce.c',
   targetos / 'os-proc.c',
   targetos / 'os-socket.c',
   targetos / 'os-stat.c',
   targetos / 'os-sys.c',
   targetos / 'os-thread.c',
+  targetos / 'os-time.c',
 ))
 
 bsd_user_ss.add(when: 'TARGET_CHERI', if_true: files(
