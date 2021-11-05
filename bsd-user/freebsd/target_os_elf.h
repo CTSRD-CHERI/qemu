@@ -212,7 +212,8 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
 
 #ifdef TARGET_CHERI
         NEW_AUX_ENT_PTR(AT_PHDR, cheri_setaddress(prog_cap(info,
-            CHERI_CAP_USER_DATA_PERMS), load_addr + exec->e_phoff));
+            CHERI_CAP_USER_DATA_PERMS | CHERI_PERM_CHERIABI_VMMAP),
+            load_addr + exec->e_phoff));
 #else
         NEW_AUX_ENT(AT_PHDR, (abi_ulong)(load_addr + exec->e_phoff));
 #endif
