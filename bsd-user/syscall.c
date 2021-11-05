@@ -1904,6 +1904,11 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
 	ret = do_freebsd_aio_mlock(arg1);
 	break;
 
+    case TARGET_FREEBSD_NR_kbounce:
+        ret = do_freebsd_kbounce(&retcap, sa1, sa2, sa3, sa4);
+        retval = *retvalp;
+        break;
+
     default:
 	gemu_log("qemu: unsupported syscall: %d (calling anyway)\n", num);
         ret = get_errno(syscall(num, arg1, arg2, arg3, arg4, arg5, arg6, arg7,

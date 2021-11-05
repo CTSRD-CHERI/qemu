@@ -359,6 +359,11 @@ abi_long get_errno(abi_long ret);
 int is_error(abi_long ret);
 int host_to_target_errno(int err);
 
+/* os-kbounce.c */
+abi_long do_freebsd_kbounce(abi_syscallret_t retval, abi_syscallarg_t ua_src,
+    abi_syscallarg_t ua_dst, abi_syscallarg_t ua_len,
+    abi_syscallarg_t ua_flags);
+
 /* os-proc.c */
 abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
         abi_ulong guest_envp, int do_fexec);
