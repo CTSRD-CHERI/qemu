@@ -146,7 +146,8 @@ uint32_t
 cheri_getperm(const cap_register_t *cap)
 {
 
-    return (cap->cr_perms | (cap->cr_uperms << CAP_UPERMS_SHFT));
+    return ((cap->cr_perms & CAP_PERMS_ALL) |
+        ((cap->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT));
 }
 
 bool
@@ -160,7 +161,8 @@ cap_register_t *
 cheri_andperm(cap_register_t *cap, uint32_t perms)
 {
 
-    cap->cr_perms &= perms;
+    cap->cr_perms &= perms & CAP_PERMS_ALL;
+    cap->cr_uperms &= (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     return (cap);
 }
 
