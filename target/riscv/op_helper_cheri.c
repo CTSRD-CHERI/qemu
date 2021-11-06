@@ -296,7 +296,8 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
 }
 
 static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
-                      target_long offset, uintptr_t _host_return_address)
+                      target_long offset, int mmu_idx,
+                      uintptr_t _host_return_address)
 {
     assert(!qemu_tcg_mttcg_enabled() ||
            (cpu_in_exclusive_context(env_cpu(env)) &&
@@ -323,8 +324,9 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
     }
     target_ulong pesbt;
     target_ulong cursor;
-    bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, addr_reg, cbp,
-                                        addr, _host_return_address, NULL);
+    bool tag = load_cap_from_memory_raw_tag_mmu_idx(
+        env, &pesbt, &cursor, addr_reg, cbp, addr, _host_return_address, NULL,
+        NULL, mmu_idx);
     // If this didn't trap, update the lr state:
     env->load_res = addr;
     env->load_val = cursor;
@@ -344,18 +346,21 @@ void HELPER(lr_c_modedep)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_re
         offset = get_capreg_cursor(env, addr_reg);
         addr_reg = CHERI_EXC_REGNUM_DDC;
     }
-    lr_c_impl(env, dest_reg, addr_reg, offset, GETPC());
+    lr_c_impl(env, dest_reg, addr_reg, offset, cpu_mmu_index(env, false),
+              GETPC());
 }
 
 void HELPER(lr_c_ddc)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
 {
     target_long offset = get_capreg_cursor(env, addr_reg);
-    lr_c_impl(env, dest_reg, CHERI_EXC_REGNUM_DDC, offset, GETPC());
+    lr_c_impl(env, dest_reg, CHERI_EXC_REGNUM_DDC, offset,
+              cpu_mmu_index(env, false), GETPC());
 }
 
 void HELPER(lr_c_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
 {
-    lr_c_impl(env, dest_reg, addr_reg, /*offset=*/0, GETPC());
+    lr_c_impl(env, dest_reg, addr_reg, /*offset=*/0, cpu_mmu_index(env, false),
+              GETPC());
 }
 
 // SC returns zero on success, one on failure
