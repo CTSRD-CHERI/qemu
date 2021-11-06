@@ -366,7 +366,7 @@ void HELPER(lr_c_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
 // SC returns zero on success, one on failure
 static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
                               uint32_t val_reg, target_ulong offset,
-                              uintptr_t _host_return_address)
+                              int mmu_idx, uintptr_t _host_return_address)
 {
     assert(!qemu_tcg_mttcg_enabled() ||
         (cpu_in_exclusive_context(env_cpu(env)) &&
@@ -418,15 +418,16 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     // (this is not a real load).
     target_ulong current_pesbt;
     target_ulong current_cursor;
-    bool current_tag =
-        load_cap_from_memory_raw(env, &current_pesbt, &current_cursor, addr_reg,
-                                 cbp, addr, _host_return_address, NULL);
+    bool current_tag = load_cap_from_memory_raw_tag_mmu_idx(
+        env, &current_pesbt, &current_cursor, addr_reg, cbp, addr,
+        _host_return_address, NULL, NULL, mmu_idx);
     if (current_cursor != env->load_val || current_pesbt != env->load_pesbt ||
         current_tag != env->load_tag) {
         goto sc_failed;
     }
     // This store may still trap, so we should update env->load_res before
-    store_cap_to_memory(env, val_reg, addr, _host_return_address);
+    store_cap_to_memory_mmu_index(env, val_reg, addr, _host_return_address,
+                                  mmu_idx);
     tcg_debug_assert(env->load_res == -1);
     return 0; // success
 sc_failed:
@@ -441,16 +442,19 @@ target_ulong HELPER(sc_c_modedep)(CPUArchState *env, uint32_t addr_reg, uint32_t
         offset = get_capreg_cursor(env, addr_reg);
         addr_reg = CHERI_EXC_REGNUM_DDC;
     }
-    return sc_c_impl(env, addr_reg, val_reg, offset, GETPC());
+    return sc_c_impl(env, addr_reg, val_reg, offset, cpu_mmu_index(env, false),
+                     GETPC());
 }
 
 target_ulong HELPER(sc_c_ddc)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)
 {
     target_long offset = get_capreg_cursor(env, addr_reg);
-    return sc_c_impl(env, CHERI_EXC_REGNUM_DDC, val_reg, offset, GETPC());
+    return sc_c_impl(env, CHERI_EXC_REGNUM_DDC, val_reg, offset,
+                     cpu_mmu_index(env, false), GETPC());
 }
 
 target_ulong HELPER(sc_c_cap)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)
 {
-    return sc_c_impl(env, addr_reg, val_reg, /*offset=*/0, GETPC());
+    return sc_c_impl(env, addr_reg, val_reg, /*offset=*/0,
+                     cpu_mmu_index(env, false), GETPC());
 }
