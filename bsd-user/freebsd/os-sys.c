@@ -68,9 +68,18 @@
 
 #include "bsd-proc.h"
 
+#include "cheri/cheri.h"
+
 #include "target_arch_sysarch.h"
 #include "target_os_vmparam.h"
 #include "target_os_user.h"
+
+#ifdef TARGET_CHERI
+#define CTL_SECURITY_CHERI         (CTL_AUTO_START - 1)
+#define CTL_SECURITY_CHERI_SEALCAP (CTL_AUTO_START - 1)
+
+static int oid_security_cheri_sealcap[3];
+#endif
 
 #ifdef TARGET_ARM
 /* For reading target arch */
@@ -1155,6 +1164,170 @@ static inline void sysctl_oidfmt(uint32_t *holdp)
     holdp[0] = tswap32(holdp[0]);
 }
 
+static abi_long do_freebsd_sysctl_nametomib(CPUArchState *env, const char *name,
+    int *mibp, size_t *sizep)
+{
+#ifdef TARGET_CHERI
+    char tmpstr[255];
+    int sysctlmib[5];
+    size_t sysctlsize;
+#endif
+    int error;
+
+    error = sysctlnametomib(name, mibp, sizep);
+#ifdef TARGET_CHERI
+    if (error == 0 || errno != ENOENT) {
+        goto out;
+    }
+
+    error = -1;
+    if (name == NULL || mibp == NULL || sizep == NULL) {
+        errno = EFAULT;
+        goto out;
+    }
+
+    if (oid_security_cheri_sealcap[0] == 0 &&
+        strncmp(name, "security.", sizeof("security.") - 1) == 0) {
+        if (*sizep < 1) {
+            errno = EINVAL;
+            goto out;
+        }
+
+        /*
+         * Detect a MIB for security.
+         */
+        error = sysctlnametomib("security", sysctlmib, &sysctlsize);
+        if (error != 0) {
+            goto out;
+        }
+
+        oid_security_cheri_sealcap[0] = sysctlmib[0];
+    }
+    if (oid_security_cheri_sealcap[1] == 0 &&
+        strncmp(name, "security.cheri.", sizeof("security.cheri.") - 1) == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
+            goto out;
+        }
+
+        /*
+         * Try to use CTL_SECURITY_CHERI as a MIB for security.cheri.
+         */
+        oid_security_cheri_sealcap[1] = CTL_SECURITY_CHERI;
+
+        /*
+         * Make sure no MIB is conflicting with our choice.
+         */
+        sysctlmib[0] = CTL_SYSCTL;
+        sysctlmib[1] = CTL_SYSCTL_OIDFMT;
+        sysctlmib[2] = oid_security_cheri_sealcap[0];
+        sysctlmib[3] = oid_security_cheri_sealcap[1];
+        sysctlsize = sizeof(tmpstr);
+        error = sysctl(sysctlmib, 4, tmpstr, &sysctlsize, 0, 0);
+        if (error == 0) {
+            qemu_log("Conflicting value for security.cheri: %d.%d\n",
+                oid_security_cheri_sealcap[0], oid_security_cheri_sealcap[1]);
+            error = -1;
+            errno = EFAULT;
+            goto out;
+        } else if (errno != ENOENT) {
+            goto out;
+        }
+    }
+    if (oid_security_cheri_sealcap[2] == 0 &&
+        strcmp(name, "security.cheri.sealcap") == 0) {
+        if (*sizep < 3) {
+            errno = EINVAL;
+            goto out;
+        }
+
+        /*
+         * Try to use CTL_SECURITY_CHERI_SEALCAP as a MIB for
+         * security.cheri.sealcap.
+         */
+        oid_security_cheri_sealcap[2] = CTL_SECURITY_CHERI_SEALCAP;
+
+        /*
+         * Make sure no MIB is conflicting with our choice.
+         */
+        sysctlmib[0] = CTL_SYSCTL;
+        sysctlmib[1] = CTL_SYSCTL_OIDFMT;
+        sysctlmib[2] = oid_security_cheri_sealcap[0];
+        sysctlmib[3] = oid_security_cheri_sealcap[1];
+        sysctlmib[4] = oid_security_cheri_sealcap[2];
+        sysctlsize = sizeof(tmpstr);
+        error = sysctl(sysctlmib, 5, tmpstr, &sysctlsize, 0, 0);
+        if (error == 0) {
+            qemu_log("Conflicting value for security.cheri.sealcap: %d.%d.%d\n",
+                oid_security_cheri_sealcap[0], oid_security_cheri_sealcap[1],
+                oid_security_cheri_sealcap[2]);
+            error = -1;
+            errno = EFAULT;
+            goto out;
+        } else if (errno != ENOENT) {
+            goto out;
+        }
+
+        /*
+         * We found a free MIB. Use it for security.cheri.sealcap.
+         */
+        mibp[0] = oid_security_cheri_sealcap[0];
+        mibp[1] = oid_security_cheri_sealcap[1];
+        mibp[2] = oid_security_cheri_sealcap[2];
+        *sizep = 3;
+        error = 0;
+    }
+
+    if (error == -1) {
+        /*
+         * No substitution was found.
+         */
+        errno = ENOENT;
+    }
+out:
+#endif
+    return (error);
+}
+
+#ifdef TARGET_CHERI
+static abi_long
+do_freebsd_sysctl_oid_handle_security_cheri_sealcap(CPUArchState *env,
+    void *holdp, size_t *holdlenp, void *hnewp, size_t newlen)
+{
+    abi_uintptr_t sealcap;
+
+    if (hnewp != NULL) {
+        errno = EPERM;
+        return (-1);
+    }
+    if (holdp == NULL || holdlenp == NULL || *holdlenp < sizeof(sealcap)) {
+        errno = EINVAL;
+        return (-1);
+    }
+
+    sealcap = tswapuintptr(cheri_uintptr(&userspace_sealcap));
+    *holdlenp = sizeof(sealcap);
+    (void)memcpy(holdp, &sealcap, *holdlenp);
+
+    return (0);
+}
+
+static bool
+do_freebsd_sysctl_oid_handle(CPUArchState *env, abi_long *retp, int32_t *snamep,
+    int32_t namelen, void *holdp, size_t *holdlenp, void *hnewp, size_t newlen)
+{
+
+    if (namelen >= nitems(oid_security_cheri_sealcap) &&
+        memcmp(snamep, oid_security_cheri_sealcap,
+               sizeof(oid_security_cheri_sealcap)) == 0) {
+        *retp = do_freebsd_sysctl_oid_handle_security_cheri_sealcap(env, holdp,
+            holdlenp, hnewp, newlen);
+        return (true);
+    }
+    return (false);
+}
+#endif
+
 static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
         int32_t namelen, void *holdp, size_t *holdlenp, void *hnewp,
         size_t newlen)
@@ -1167,6 +1340,14 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
     size_t holdlen, oldlen;
     CPUState *cpu = env_cpu(env);
     TaskState *ts = (TaskState *)cpu->opaque;
+
+#ifdef TARGET_CHERI
+    if (do_freebsd_sysctl_oid_handle(env, &ret, snamep, namelen, holdp,
+                                     holdlenp, hnewp, namelen)) {
+        holdlen = *holdlenp;
+        goto out;
+    }
+#endif
 
     holdlen = oldlen = *holdlenp;
     oidfmt(snamep, namelen, NULL, &kind);
@@ -1590,7 +1771,7 @@ abi_long do_freebsd_sysctlbyname(CPUArchState *env, abi_ulong namep,
     holdlen = oldlen;
 
     oidplen = sizeof(oid) / sizeof(int);
-    if (sysctlnametomib(snamep, oid, &oidplen) != 0) {
+    if (do_freebsd_sysctl_nametomib(env, snamep, oid, &oidplen) != 0) {
         return -TARGET_EINVAL;
     }
 

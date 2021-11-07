@@ -41,6 +41,7 @@
 #include "machine/cherireg.h"
 
 cap_register_t userspace_cap;
+cap_register_t userspace_sealcap;
 
 /*
  * Build a new userspace capability derived from userspace_cap.
