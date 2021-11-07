@@ -359,6 +359,22 @@ abi_long get_errno(abi_long ret);
 int is_error(abi_long ret);
 int host_to_target_errno(int err);
 
+/* os-flag.c */
+abi_long do_freebsd_sysctl_oid_handle_security__flags_captured(
+    CPUArchState *env, void *holdp, size_t *holdlenp, void *hnewp,
+    size_t newlen);
+abi_long do_freebsd_sysctl_oid_handle_security__flags_captured_key(
+    CPUArchState *env, void *holdp, size_t *holdlenp, void *hnewp,
+    size_t newlen);
+abi_long do_freebsd_sysctl_oid_handle_security__kernel_flags_captured(
+    CPUArchState *env, void *holdp, size_t *holdlenp, void *hnewp,
+    size_t newlen);
+abi_long do_freebsd_sysctl_oid_handle_security__kernel_flags_captured_key(
+    CPUArchState *env, void *holdp, size_t *holdlenp, void *hnewp,
+    size_t newlen);
+abi_long do_freebsd_flag_captured(abi_syscallret_t retval,
+    abi_syscallarg_t ua_message, abi_syscallarg_t ua_key, const char *source);
+
 /* os-kbounce.c */
 abi_long do_freebsd_kbounce(abi_syscallret_t retval, abi_syscallarg_t ua_src,
     abi_syscallarg_t ua_dst, abi_syscallarg_t ua_len,
