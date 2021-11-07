@@ -50,6 +50,7 @@ cap_register_t *cheri_capability_build_user_rwx(cap_register_t *cap,
 
 /* Root of all unsealed userspace capabilities. */
 extern cap_register_t userspace_cap;
+extern cap_register_t userspace_sealcap;
 
 /*
  * Functions to create capabilities used in exec.
