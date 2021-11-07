@@ -234,6 +234,7 @@
 #define	TARGET_FREEBSD_NR_aio_write	256
 #define	TARGET_FREEBSD_NR_lio_listio	257
 #define	TARGET_FREEBSD_NR_kbounce	258
+#define	TARGET_FREEBSD_NR_flag_captured	259
 #define	TARGET_FREEBSD_NR_freebsd11_getdents	272
 #define	TARGET_FREEBSD_NR_lchmod	274
 #define	TARGET_FREEBSD_NR_netbsd_lchown	275

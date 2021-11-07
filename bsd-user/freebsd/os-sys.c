@@ -75,10 +75,50 @@
 #include "target_os_user.h"
 
 #ifdef TARGET_CHERI
-#define CTL_SECURITY_CHERI         (CTL_AUTO_START - 1)
-#define CTL_SECURITY_CHERI_SEALCAP (CTL_AUTO_START - 1)
+/*
+ * The following sysctl(8) identifiers are emulated by QEMU, if they are not
+ * handled by a host.
+ *
+ * These identifiers are defined in upstream as OID_AUTO. It means, we must
+ * identify what identifiers are not used by a host and use them for our
+ * emulated sysctl(8) MIB entries.
+ *
+ * The starting number for dynamically-assigned entries is CTL_AUTO_START.
+ * Numbers lower than this value are static and cannot be assigned in run-time.
+ * The starting number for statically-assigned entries is 0. In order to
+ * introduce emulated MIBs, we can try to reserve numbers lower than
+ * CTL_AUTO_START starting with CTL_AUTO_START - 1 as it is less likely that the
+ * space of statically-assigned numbers is fully exhausted.
+ *
+ * Each group of identifiers having the same parent must use unique numbers
+ * within its nodes.
+ */
 
-static int oid_security_cheri_sealcap[3];
+/*
+ * CTL_SECURITY identifiers.
+ */
+#define SECURITY_CHERI                     (CTL_AUTO_START - 1)
+#define SECURITY_FLAGS_CAPTURED            (CTL_AUTO_START - 2)
+#define SECURITY_FLAGS_CAPTURED_KEY        (CTL_AUTO_START - 3)
+#define SECURITY_KERNEL_FLAGS_CAPTURED     (CTL_AUTO_START - 4)
+#define SECURITY_KERNEL_FLAGS_CAPTURED_KEY (CTL_AUTO_START - 5)
+
+/*
+ * SECURITY_CHERI identifiers.
+ */
+#define CHERI_SEALCAP                      (CTL_AUTO_START - 1)
+
+/*
+ * In order to prevent ambiguous names, use "__" in place of "." in symbolic
+ * MIB names.
+ */
+static int oid_security;
+static int oid_security__cheri;
+static int oid_security__cheri__sealcap;
+static int oid_security__flags_captured;
+static int oid_security__flags_captured_key;
+static int oid_security__kernel_flags_captured;
+static int oid_security__kernel_flags_captured_key;
 #endif
 
 #ifdef TARGET_ARM
@@ -1164,14 +1204,77 @@ static inline void sysctl_oidfmt(uint32_t *holdp)
     holdp[0] = tswap32(holdp[0]);
 }
 
+#ifdef TARGET_CHERI
+static int
+sysctl_detect_mib(int *mibp, const char *name)
+{
+    int error, sysctlmib[1];
+    size_t sysctlsize;
+
+    sysctlsize = nitems(sysctlmib);
+    error = sysctlnametomib(name, sysctlmib, &sysctlsize);
+    if (error == 0) {
+        *mibp = sysctlmib[sysctlsize - 1];
+    }
+    return (error);
+}
+
+static int
+sysctl_emulate_mib(int *mibp, const char *name, size_t noids, ...)
+{
+    va_list ap;
+    int error, oid;
+    size_t ii, oidstrlen, sysctlmibsize, tmpstrsize;
+    /*
+     * oidstr is a null-terminated string including integers separated with ".".
+     */
+    char oidstr[3 * sizeof(__STRING(INT_MAX))];
+    char tmpstr[255];
+    int sysctlmib[CTL_MAXNAME+2];
+
+    assert(noids > 0);
+    assert(noids <= 3);
+
+    sysctlmibsize = 0;
+    sysctlmib[sysctlmibsize++] = CTL_SYSCTL;
+    sysctlmib[sysctlmibsize++] = CTL_SYSCTL_OIDFMT;
+
+    va_start(ap, noids);
+    oidstrlen = 0;
+    for (ii = 0; ii < noids; ii++) {
+        oid = va_arg(ap, int);
+        sysctlmib[sysctlmibsize++] = oid;
+        if (oidstrlen == 0) {
+            error = snprintf(oidstr + oidstrlen, sizeof(oidstr) - oidstrlen,
+                "%d", oid);
+        } else {
+            error = snprintf(oidstr + oidstrlen, sizeof(oidstr) - oidstrlen,
+                ".%d", oid);
+        }
+        assert(error > 0);
+        assert(oidstrlen + error <= sizeof(oidstr) - 1);
+        oidstrlen += error;
+    }
+    va_end(ap);
+
+    tmpstrsize = sizeof(tmpstr);
+    error = sysctl(sysctlmib, sysctlmibsize, tmpstr, &tmpstrsize, 0, 0);
+    if (error == 0) {
+        qemu_log("Conflicting value for %s: %s.\n", name, oidstr);
+        error = -1;
+        errno = EFAULT;
+    } else if (errno == ENOENT) {
+        error = 0;
+        *mibp = sysctlmib[sysctlmibsize - 1];
+    }
+
+    return (error);
+}
+#endif
+
 static abi_long do_freebsd_sysctl_nametomib(CPUArchState *env, const char *name,
     int *mibp, size_t *sizep)
 {
-#ifdef TARGET_CHERI
-    char tmpstr[255];
-    int sysctlmib[5];
-    size_t sysctlsize;
-#endif
     int error;
 
     error = sysctlnametomib(name, mibp, sizep);
@@ -1180,101 +1283,135 @@ static abi_long do_freebsd_sysctl_nametomib(CPUArchState *env, const char *name,
         goto out;
     }
 
-    error = -1;
     if (name == NULL || mibp == NULL || sizep == NULL) {
+        error = -1;
         errno = EFAULT;
         goto out;
     }
 
-    if (oid_security_cheri_sealcap[0] == 0 &&
+    /*
+     * Detect or emulate MIBs.
+     */
+    error = 0;
+    if (oid_security == 0 &&
         strncmp(name, "security.", sizeof("security.") - 1) == 0) {
         if (*sizep < 1) {
             errno = EINVAL;
             goto out;
         }
-
-        /*
-         * Detect a MIB for security.
-         */
-        error = sysctlnametomib("security", sysctlmib, &sysctlsize);
-        if (error != 0) {
-            goto out;
-        }
-
-        oid_security_cheri_sealcap[0] = sysctlmib[0];
+        error = sysctl_detect_mib(&oid_security, "security");
     }
-    if (oid_security_cheri_sealcap[1] == 0 &&
+    if (oid_security__cheri == 0 &&
         strncmp(name, "security.cheri.", sizeof("security.cheri.") - 1) == 0) {
         if (*sizep < 2) {
             errno = EINVAL;
             goto out;
         }
-
-        /*
-         * Try to use CTL_SECURITY_CHERI as a MIB for security.cheri.
-         */
-        oid_security_cheri_sealcap[1] = CTL_SECURITY_CHERI;
-
-        /*
-         * Make sure no MIB is conflicting with our choice.
-         */
-        sysctlmib[0] = CTL_SYSCTL;
-        sysctlmib[1] = CTL_SYSCTL_OIDFMT;
-        sysctlmib[2] = oid_security_cheri_sealcap[0];
-        sysctlmib[3] = oid_security_cheri_sealcap[1];
-        sysctlsize = sizeof(tmpstr);
-        error = sysctl(sysctlmib, 4, tmpstr, &sysctlsize, 0, 0);
-        if (error == 0) {
-            qemu_log("Conflicting value for security.cheri: %d.%d\n",
-                oid_security_cheri_sealcap[0], oid_security_cheri_sealcap[1]);
-            error = -1;
-            errno = EFAULT;
-            goto out;
-        } else if (errno != ENOENT) {
-            goto out;
-        }
+        error = sysctl_emulate_mib(&oid_security__cheri, "security.cheri", 2,
+            oid_security, SECURITY_CHERI);
     }
-    if (oid_security_cheri_sealcap[2] == 0 &&
+    if (oid_security__cheri__sealcap == 0 &&
         strcmp(name, "security.cheri.sealcap") == 0) {
         if (*sizep < 3) {
             errno = EINVAL;
             goto out;
         }
-
-        /*
-         * Try to use CTL_SECURITY_CHERI_SEALCAP as a MIB for
-         * security.cheri.sealcap.
-         */
-        oid_security_cheri_sealcap[2] = CTL_SECURITY_CHERI_SEALCAP;
-
-        /*
-         * Make sure no MIB is conflicting with our choice.
-         */
-        sysctlmib[0] = CTL_SYSCTL;
-        sysctlmib[1] = CTL_SYSCTL_OIDFMT;
-        sysctlmib[2] = oid_security_cheri_sealcap[0];
-        sysctlmib[3] = oid_security_cheri_sealcap[1];
-        sysctlmib[4] = oid_security_cheri_sealcap[2];
-        sysctlsize = sizeof(tmpstr);
-        error = sysctl(sysctlmib, 5, tmpstr, &sysctlsize, 0, 0);
-        if (error == 0) {
-            qemu_log("Conflicting value for security.cheri.sealcap: %d.%d.%d\n",
-                oid_security_cheri_sealcap[0], oid_security_cheri_sealcap[1],
-                oid_security_cheri_sealcap[2]);
-            error = -1;
-            errno = EFAULT;
-            goto out;
-        } else if (errno != ENOENT) {
+        error = sysctl_emulate_mib(&oid_security__cheri__sealcap,
+            "security.cheri.sealcap", 3, oid_security, oid_security__cheri,
+            CHERI_SEALCAP);
+    }
+    if (oid_security__flags_captured == 0 &&
+        strcmp(name, "security.flags_captured") == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
             goto out;
         }
+        error = sysctl_emulate_mib(&oid_security__flags_captured,
+            "security.flags_captured", 2, oid_security,
+            SECURITY_FLAGS_CAPTURED);
+    }
+    if (oid_security__flags_captured_key == 0 &&
+        strcmp(name, "security.flags_captured_key") == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
+            goto out;
+        }
+        error = sysctl_emulate_mib(&oid_security__flags_captured_key,
+            "security.flags_captured_key", 2, oid_security,
+            SECURITY_FLAGS_CAPTURED_KEY);
+    }
+    if (oid_security__kernel_flags_captured == 0 &&
+        strcmp(name, "security.kernel_flags_captured") == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
+            goto out;
+        }
+        error = sysctl_emulate_mib(&oid_security__kernel_flags_captured,
+            "security.kernel_flags_captured", 2, oid_security,
+            SECURITY_KERNEL_FLAGS_CAPTURED);
+    }
+    if (oid_security__kernel_flags_captured_key == 0 &&
+        strcmp(name, "security.kernel_flags_captured_key") == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
+            goto out;
+        }
+        error = sysctl_emulate_mib(&oid_security__kernel_flags_captured_key,
+            "security.kernel_flags_captured_key", 2, oid_security,
+            SECURITY_KERNEL_FLAGS_CAPTURED_KEY);
+    }
+    if (error == -1) {
+        goto out;
+    }
 
-        /*
-         * We found a free MIB. Use it for security.cheri.sealcap.
-         */
-        mibp[0] = oid_security_cheri_sealcap[0];
-        mibp[1] = oid_security_cheri_sealcap[1];
-        mibp[2] = oid_security_cheri_sealcap[2];
+    /*
+     * Return emulated MIBs.
+     */
+    if (strcmp(name, "security.cheri.sealcap") == 0) {
+        if (*sizep < 3) {
+            errno = EINVAL;
+            goto out;
+        }
+        mibp[0] = oid_security;
+        mibp[1] = oid_security__cheri;
+        mibp[2] = oid_security__cheri__sealcap;
         *sizep = 3;
+        error = 0;
+    } else if (strcmp(name, "security.flags_captured") == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
+            goto out;
+        }
+        mibp[0] = oid_security;
+        mibp[1] = oid_security__flags_captured;
+        *sizep = 2;
+        error = 0;
+    } else if (strcmp(name, "security.flags_captured_key") == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
+            goto out;
+        }
+        mibp[0] = oid_security;
+        mibp[1] = oid_security__flags_captured_key;
+        *sizep = 2;
+        error = 0;
+    } else if (strcmp(name, "security.kernel_flags_captured") == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
+            goto out;
+        }
+        mibp[0] = oid_security;
+        mibp[1] = oid_security__kernel_flags_captured;
+        *sizep = 2;
+        error = 0;
+    } else if (strcmp(name, "security.kernel_flags_captured_key") == 0) {
+        if (*sizep < 2) {
+            errno = EINVAL;
+            goto out;
+        }
+        mibp[0] = oid_security;
+        mibp[1] = oid_security__kernel_flags_captured_key;
+        *sizep = 2;
         error = 0;
     }
 
@@ -1291,7 +1428,7 @@ out:
 
 #ifdef TARGET_CHERI
 static abi_long
-do_freebsd_sysctl_oid_handle_security_cheri_sealcap(CPUArchState *env,
+do_freebsd_sysctl_oid_handle_security__cheri__sealcap(CPUArchState *env,
     void *holdp, size_t *holdlenp, void *hnewp, size_t newlen)
 {
     abi_uintptr_t sealcap;
@@ -1317,12 +1454,53 @@ do_freebsd_sysctl_oid_handle(CPUArchState *env, abi_long *retp, int32_t *snamep,
     int32_t namelen, void *holdp, size_t *holdlenp, void *hnewp, size_t newlen)
 {
 
-    if (namelen >= nitems(oid_security_cheri_sealcap) &&
-        memcmp(snamep, oid_security_cheri_sealcap,
-               sizeof(oid_security_cheri_sealcap)) == 0) {
-        *retp = do_freebsd_sysctl_oid_handle_security_cheri_sealcap(env, holdp,
-            holdlenp, hnewp, newlen);
-        return (true);
+    if (namelen < 1) {
+        return (false);
+    }
+    if (snamep[0] == oid_security) {
+        if (namelen < 2) {
+            return (false);
+        }
+        if (snamep[1] == oid_security__cheri) {
+            if (namelen < 3) {
+                return (false);
+            }
+            if (snamep[2] == oid_security__cheri__sealcap) {
+                *retp = do_freebsd_sysctl_oid_handle_security__cheri__sealcap(
+                    env, holdp, holdlenp, hnewp, newlen);
+                return (true);
+            }
+        } else if (snamep[1] == oid_security__flags_captured) {
+            if (namelen < 2) {
+                return (false);
+            }
+            *retp = do_freebsd_sysctl_oid_handle_security__flags_captured(
+                env, holdp, holdlenp, hnewp, newlen);
+            return (true);
+        } else if (snamep[1] == oid_security__flags_captured_key) {
+            if (namelen < 2) {
+                return (false);
+            }
+            *retp = do_freebsd_sysctl_oid_handle_security__flags_captured_key(
+                env, holdp, holdlenp, hnewp, newlen);
+            return (true);
+        } else if (snamep[1] == oid_security__kernel_flags_captured) {
+            if (namelen < 2) {
+                return (false);
+            }
+            *retp =
+                do_freebsd_sysctl_oid_handle_security__kernel_flags_captured(
+                env, holdp, holdlenp, hnewp, newlen);
+            return (true);
+        } else if (snamep[1] == oid_security__kernel_flags_captured_key) {
+            if (namelen < 2) {
+                return (false);
+            }
+            *retp =
+                do_freebsd_sysctl_oid_handle_security__kernel_flags_captured_key(
+                env, holdp, holdlenp, hnewp, newlen);
+            return (true);
+        }
     }
     return (false);
 }

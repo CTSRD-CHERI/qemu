@@ -15,6 +15,7 @@ bsd_user_ss.add(files(
   'uaccess.c',
   abi / 'target_arch_cpu.c',
   targetos / 'os-extattr.c',
+  targetos / 'os-flag.c',
   targetos / 'os-kbounce.c',
   targetos / 'os-proc.c',
   targetos / 'os-socket.c',
