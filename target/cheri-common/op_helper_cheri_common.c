@@ -1336,6 +1336,19 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                                         retpc, physaddr, NULL);
 }
 
+cap_register_t load_and_decompress_cap_from_memory_raw(
+    CPUArchState *env, uint32_t cb, const cap_register_t *source,
+    target_ulong vaddr, target_ulong retpc, hwaddr *physaddr)
+{
+    target_ulong pesbt, cursor;
+    bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
+                                        retpc, physaddr);
+    cap_register_t result;
+    CAP_cc(decompress_raw)(pesbt, cursor, tag, &result);
+    result.cr_extra = CREG_FULLY_DECOMPRESSED;
+    return result;
+}
+
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           target_ulong retpc, hwaddr *physaddr)

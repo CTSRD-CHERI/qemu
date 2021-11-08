@@ -145,6 +145,24 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
         return;
     }
 
+#ifdef TARGET_CHERI
+    if (cpreg_field_is_cap(ri)) {
+        assert(ri->fieldoffset && "Unexpected capability cpreg without offset");
+        /*
+         * We ensure that all cap_register_t values are reset to a canonical
+         * capability rather than all zeroes. This ensures that values such
+         * as pesbt and capreg_state are initialized correctly. The default
+         * reset value is null unless has_special_capresetvalue is set.
+         */
+        if (ri->has_special_capresetvalue) {
+            CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
+        } else {
+            null_capability(&CPREG_FIELDCAP(&cpu->env, ri));
+        }
+        return;
+    }
+#endif
+
     /* A zero offset is never possible as it would be regs[0]
      * so we use it to indicate that reset is being handled elsewhere.
      * This is basically only used for fields in non-core coprocessors
@@ -153,13 +171,7 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
     if (!ri->fieldoffset) {
         return;
     }
-
-#ifdef TARGET_CHERI
-    if (cpreg_field_is_cap(ri)) {
-        CPREG_FIELDCAP(&cpu->env, ri) = ri->capresetvalue;
-    } else
-#endif
-        if (cpreg_field_is_64bit(ri)) {
+    if (cpreg_field_is_64bit(ri)) {
         CPREG_FIELD64(&cpu->env, ri) = ri->resetvalue;
     } else {
         CPREG_FIELD32(&cpu->env, ri) = ri->resetvalue;
@@ -177,9 +189,34 @@ static void cp_reg_check_reset(gpointer key, gpointer value,  gpointer opaque)
     ARMCPU *cpu = opaque;
     uint64_t oldvalue, newvalue;
 
+#ifdef TARGET_CHERI
+    /*
+     * Check that all capaility register were initialized to a valid capability
+     * rather than just memset() to zero.
+     */
+    if (cpreg_field_is_cap(ri)) {
+        cap_register_t creg_value = read_raw_cp_reg_cap(&cpu->env, ri);
+        _Static_assert(CREG_FULLY_DECOMPRESSED != 0, "need nonzero value");
+        if (creg_value.cr_extra != CREG_FULLY_DECOMPRESSED) {
+            error_report("Register %s was not initialized to a valid state",
+                         ri->name);
+            abort();
+        }
+    }
+#endif
+
     if (ri->type & (ARM_CP_SPECIAL | ARM_CP_ALIAS | ARM_CP_NO_RAW)) {
         return;
     }
+#ifdef TARGET_CHERI
+    if (cpreg_field_is_cap(ri)) {
+        cap_register_t creg_old = read_raw_cp_reg_cap(&cpu->env, ri);
+        cp_reg_reset(key, value, opaque);
+        cap_register_t creg_new = read_raw_cp_reg_cap(&cpu->env, ri);
+        assert(memcmp(&creg_old, &creg_new, sizeof(creg_old)) == 0);
+        return;
+    }
+#endif
 
     oldvalue = read_raw_cp_reg(&cpu->env, ri);
     cp_reg_reset(key, value, opaque);
@@ -197,6 +234,31 @@ static void arm_cpu_reset(DeviceState *dev)
     acc->parent_reset(dev);
 
     memset(env, 0, offsetof(CPUARMState, end_reset_fields));
+#ifdef TARGET_CHERI
+    /*
+     * Reset the capability registers that are marked as ARM_CP_ALIAS to
+     * a canonical null capability.
+     */
+    for (size_t i = 0; i < ARRAY_SIZE(env->sp_el); i++) {
+        null_capability(&env->sp_el[i].cap);
+    }
+    for (size_t i = 0; i < ARRAY_SIZE(env->elr_el); i++) {
+        null_capability(&env->elr_el[i].cap);
+    }
+    /*
+     * The following are marked as arm_cp_reset_ignore. However, they are before
+     * end_reset_fields, so we should ensure that the value is canonical NULL
+     * instead of all zeroes.
+     */
+    null_capability(&env->cp15.tpidrurw_s.cap);
+    null_capability(&env->cp15.tpidrurw_ns.cap);
+    null_capability(&env->cp15.tpidruro_s.cap);
+    null_capability(&env->cp15.tpidruro_ns.cap);
+    null_capability(&env->cp15.tpidrprw_s.cap);
+    null_capability(&env->cp15.tpidrprw_ns.cap);
+    null_capability(&env->cp15.vbar_s.cap);
+    null_capability(&env->cp15.vbar_ns.cap);
+#endif
 
     g_hash_table_foreach(cpu->cp_regs, cp_reg_reset, cpu);
     g_hash_table_foreach(cpu->cp_regs, cp_reg_check_reset, cpu);
@@ -251,7 +313,7 @@ static void arm_cpu_reset(DeviceState *dev)
 
 #ifdef TARGET_CHERI
         reset_capregs(env);
-        env->pc.cap = CAP_cc(make_max_perms_cap)(0, cpu->rvbar, CAP_MAX_TOP);
+        set_max_perms_capability(&env->pc.cap, cpu->rvbar);
 #else
         env->pc = cpu->rvbar;
 #endif

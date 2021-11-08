@@ -2785,6 +2785,11 @@ struct ARMCPRegInfo {
      * cap registers. A special value of resetfn selects this for use */
 #ifdef TARGET_CHERI
     cap_register_t capresetvalue;
+    bool has_special_capresetvalue;
+#define CAPRESETVALUE(cap)                                                     \
+    .capresetvalue = (cap), .has_special_capresetvalue = true
+#else
+#define CAPRESETVALUE(cap) /* ignored */
 #endif
 
     /* Offset of the field in CPUARMState for this register.
@@ -2965,6 +2970,9 @@ static inline bool cp_access_ok(int current_el,
 
 /* Raw read of a coprocessor register (as needed for migration, etc) */
 uint64_t read_raw_cp_reg(CPUARMState *env, const ARMCPRegInfo *ri);
+#ifdef TARGET_CHERI
+cap_register_t read_raw_cp_reg_cap(CPUARMState *env, const ARMCPRegInfo *ri);
+#endif
 
 /**
  * write_list_to_cpustate
@@ -4317,7 +4325,11 @@ static inline void aarch64_save_sp(CPUARMState *env, int el)
 
 #ifdef TARGET_CHERI
     env->sp_el[index].cap = *get_readonly_capreg(env, 31);
+    cheri_debug_assert(env->sp_el[index].cap.cr_extra ==
+                       CREG_FULLY_DECOMPRESSED);
     env->DDCs[index] = env->DDC_current;
+    cheri_debug_assert(env->DDCs[index].cap.cr_extra ==
+                       CREG_FULLY_DECOMPRESSED);
 #else
     env->sp_el[index] = env->xregs[31];
 #endif
@@ -4327,6 +4339,8 @@ static inline void aarch64_restore_sp(CPUARMState *env, int el)
 {
     int index = aarch64_get_bank_index(env, el);
 #ifdef TARGET_CHERI
+    cheri_debug_assert(env->sp_el[index].cap.cr_extra ==
+                       CREG_FULLY_DECOMPRESSED);
     update_capreg(env, 31, &env->sp_el[index].cap);
     env->DDC_current = env->DDCs[index];
 #ifdef CONFIG_TCG_LOG_INSTR
@@ -4452,41 +4466,50 @@ static inline uint32_t arm_rebuild_chflags_el(CPUARMState *env, int el)
     _Static_assert(TBFLAG_CHERI_SIZE + TB_FLAG_CHERI_SPARE_INDEX_START + 1 < 32,
                    "");
     uint32_t chflags = (env->CCTLR_el[el] >> CCTLR_DEFINED_START);
-    if (env->pstate & PSTATE_C64)
+    if (env->pstate & PSTATE_C64) {
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, PSTATE_C64, 1);
-    if (cap_has_perms(&env->pc.cap, CAP_PERM_EXECUTIVE))
+    }
+    if (cap_has_perms(_cheri_get_pcc_unchecked(env), CAP_PERM_EXECUTIVE)) {
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, EXECUTIVE, 1);
-    if (cap_has_perms(&env->pc.cap, CAP_ACCESS_SYS_REGS))
+    }
+    if (cap_has_perms(_cheri_get_pcc_unchecked(env), CAP_ACCESS_SYS_REGS)) {
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SYSTEM, 1);
-    if (arm_is_tag_setting_disabled(env, el))
+    }
+    if (arm_is_tag_setting_disabled(env, el)) {
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SETTAG, 1);
-    if (get_cap_enabled_target_exception_level_el(env, el) == -1)
+    }
+    if (get_cap_enabled_target_exception_level_el(env, el) == -1) {
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, CAP_ENABLED, 1);
+    }
     uint64_t sctlr = arm_sctlr(env, el);
-    if (sctlr & SCTLR_A)
+    if (sctlr & SCTLR_A) {
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SCTLRA, 1);
-    if ((el == 0) ? (sctlr & SCTLR_SA0) : (sctlr & SCTLR_SA))
+    }
+    if ((el == 0) ? (sctlr & SCTLR_SA0) : (sctlr & SCTLR_SA)) {
         chflags = FIELD_DP32(chflags, TBFLAG_CHERI, SCTLRSA, 1);
+    }
 
     uint32_t chflags_changed = env->chflags ^ chflags;
     env->chflags = chflags;
 
-    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, PSTATE_C64))
+    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, PSTATE_C64)) {
         qemu_maybe_log_instr_extra(env, "New C64 state: %s\n",
                                    FIELD_EX32(chflags, TBFLAG_CHERI, PSTATE_C64)
                                        ? "Enabled"
                                        : "Disabled");
-    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, EXECUTIVE))
+    }
+    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, EXECUTIVE)) {
         qemu_maybe_log_instr_extra(env, "New executive state: %s\n",
                                    FIELD_EX32(chflags, TBFLAG_CHERI, EXECUTIVE)
                                        ? "Enabled"
                                        : "Disabled");
-    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, CAP_ENABLED))
+    }
+    if (FIELD_EX32(chflags_changed, TBFLAG_CHERI, CAP_ENABLED)) {
         qemu_maybe_log_instr_extra(
             env, "New cap enabled state: %s\n",
             FIELD_EX32(chflags, TBFLAG_CHERI, CAP_ENABLED) ? "Enabled"
                                                            : "Disabled");
-
+    }
     return chflags;
 }
 

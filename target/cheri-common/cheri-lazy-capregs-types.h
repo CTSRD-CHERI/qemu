@@ -107,7 +107,6 @@ typedef struct GPCapRegs {
      * needed. These special extra registers are always in state decompressed.
      */
     aligned_cap_register_t decompressed[NUM_LAZY_CAP_REGS];
-    /* CapRegState */ uint8_t capreg_state[NUM_LAZY_CAP_REGS] QEMU_ALIGNED(64);
 } GPCapRegs;
 
 static inline cap_register_t *get_cap_in_gpregs(GPCapRegs *gpcrs, size_t index)

@@ -369,6 +369,10 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
     CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
     const cap_register_t *source, target_ulong vaddr, target_ulong retpc,
     hwaddr *physaddr, bool *raw_tag, int mmu_idx);
+/* Useful for the load+branch capability helpers. */
+cap_register_t load_and_decompress_cap_from_memory_raw(
+    CPUArchState *env, uint32_t cb, const cap_register_t *source,
+    target_ulong vaddr, target_ulong retpc, hwaddr *physaddr);
 
 void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
                          target_ulong addr, uint32_t link_reg,

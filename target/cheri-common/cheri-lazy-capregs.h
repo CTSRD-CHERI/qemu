@@ -58,7 +58,9 @@ get_capreg_state(const GPCapRegs *gpcrs, unsigned reg)
     if (lazy_capreg_number_is_special(reg)) {
         return CREG_FULLY_DECOMPRESSED;
     }
-    return (CapRegState)gpcrs->capreg_state[reg];
+    cheri_debug_assert(gpcrs->decompressed[reg].cap.cr_extra <=
+                       CREG_STATE_MASK);
+    return (CapRegState)gpcrs->decompressed[reg].cap.cr_extra;
 }
 
 static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
@@ -75,14 +77,15 @@ static inline void sanity_check_capreg(GPCapRegs *gpcrs, unsigned regnum)
         cheri_debug_assert((c->cr_tag == 0 || c->cr_tag == 1) &&
                            "Unitialized value used?");
     } else {
-        // Reset decompressed values to invalid data to check they aren't
-        // accessed. However, the cursor and pesbt must remain valid.
+        /*
+         * Reset decompressed bounds to invalid data to check they aren't
+         * accessed. However, the remaining fields must remain valid.
+         */
         cap_register_t *decompressed = get_cap_in_gpregs(gpcrs, regnum);
-        target_ulong cursor = decompressed->_cr_cursor;
-        target_ulong pesbt = decompressed->cr_pesbt;
-        memset(decompressed, 0xaa, sizeof(*decompressed));
-        decompressed->_cr_cursor = cursor;
-        decompressed->cr_pesbt = pesbt;
+        memset(&decompressed->cr_base, 0xaa, sizeof(decompressed->cr_base));
+        memset(&decompressed->_cr_top, 0xaa, sizeof(decompressed->_cr_top));
+        memset(&decompressed->cr_exp, 0xaa, sizeof(decompressed->cr_exp));
+        decompressed->cr_bounds_valid = false;
     }
     if (regnum == NULL_CAPREG_INDEX) {
         cheri_debug_assert(get_cap_in_gpregs(gpcrs, regnum)->cr_pesbt ==
@@ -113,7 +116,7 @@ set_capreg_state(GPCapRegs *gpcrs, unsigned regnum, CapRegState new_state)
                            "NULL/scratch is always fully decompressed");
         return;
     }
-    gpcrs->capreg_state[regnum] = new_state;
+    gpcrs->decompressed[regnum].cap.cr_extra = new_state;
     // Check that the compressed and decompressed caps are in sync
     sanity_check_capreg(gpcrs, regnum);
 }
@@ -148,7 +151,8 @@ get_readonly_capreg(CPUArchState *env, unsigned regnum)
             int_to_cap(get_cap_in_gpregs(gpcrs, regnum)->_cr_cursor,
                        get_cap_in_gpregs(gpcrs, regnum));
         cheri_debug_assert(result->cr_pesbt == CAP_NULL_PESBT);
-        set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
+        cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
+                           CREG_FULLY_DECOMPRESSED);
         return result;
     }
     case CREG_FULLY_DECOMPRESSED:
@@ -298,7 +302,8 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
      * We should find occurrences of this and get rid of them.
      */
     get_cap_in_gpregs(gpcrs, regnum)->cr_pesbt = CAP_cc(compress_raw)(target);
-    set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
+    cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
+                       CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, newval->_cr_cursor);
     cheri_log_instr_changed_gp_capreg(env, regnum, target);
@@ -328,13 +333,14 @@ static inline void update_capreg_cursor_from(CPUArchState *env, unsigned regnum,
                        is_representable_cap_with_addr(source_cap, new_cursor));
     if (regnum != source_regnum) {
         *target = *source_cap;
-        set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
     }
     /* When updating in-place, we can avoid copying. */
     target->_cr_cursor = new_cursor;
     if (clear_tag) {
         target->cr_tag = 0;
     }
+    cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
+                       CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, target->_cr_cursor);
     cheri_log_instr_changed_gp_capreg(env, regnum, target);
@@ -461,7 +467,8 @@ static inline void nullify_capreg(CPUArchState *env, unsigned regnum)
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     const cap_register_t *newval =
         null_capability(get_cap_in_gpregs(gpcrs, regnum));
-    set_capreg_state(gpcrs, regnum, CREG_FULLY_DECOMPRESSED);
+    cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
+                       CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
     cheri_log_instr_changed_gp_capreg(env, regnum, newval);
 }
@@ -470,9 +477,6 @@ static inline void reset_capregs(CPUArchState *env)
 {
     // Reset all to NULL:
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
-    for (size_t i = 0; i < ARRAY_SIZE(gpcrs->capreg_state); i++) {
-        gpcrs->capreg_state[i] = CREG_FULLY_DECOMPRESSED;
-    }
     for (size_t i = 0; i < ARRAY_SIZE(gpcrs->decompressed); i++) {
         const cap_register_t *newval =
             null_capability(get_cap_in_gpregs(gpcrs, i));
@@ -486,11 +490,8 @@ static inline void reset_capregs(CPUArchState *env)
 
 static inline void set_max_perms_capregs(CPUArchState *env)
 {
-    // Reset all to max perms (except NULL of course):
+    /* Reset all to max perms (except NULL of course): */
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
-    for (size_t i = 0; i < ARRAY_SIZE(gpcrs->capreg_state); i++) {
-        gpcrs->capreg_state[i] = CREG_FULLY_DECOMPRESSED;
-    }
     null_capability(get_cap_in_gpregs(gpcrs, NULL_CAPREG_INDEX));
     sanity_check_capreg(gpcrs, NULL_CAPREG_INDEX);
     for (size_t i = 0; i < ARRAY_SIZE(gpcrs->decompressed); i++) {
@@ -498,9 +499,7 @@ static inline void set_max_perms_capregs(CPUArchState *env)
             continue;
 
         set_max_perms_capability(get_cap_in_gpregs(gpcrs, i), 0);
-        get_cap_in_gpregs(gpcrs, i)->cr_pesbt =
-            CAP_cc(compress_raw)(get_cap_in_gpregs(gpcrs, i));
-        // Mark register as fully decompressed
+        /* Ensure register was marked as fully decompressed */
         cheri_debug_assert(get_capreg_state(gpcrs, i) ==
                            CREG_FULLY_DECOMPRESSED);
         sanity_check_capreg(gpcrs, i);

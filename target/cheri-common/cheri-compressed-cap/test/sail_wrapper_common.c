@@ -35,6 +35,9 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsometimes-uninitialized"
+#ifdef HAVE_UNUSED_BUT_SET_VARIABLE
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
+#endif
 #include SAIL_COMPRESSION_GENERATED_C_FILE
 #pragma clang diagnostic pop
 #undef CC_BITS

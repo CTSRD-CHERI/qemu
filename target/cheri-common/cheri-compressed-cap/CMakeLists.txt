@@ -20,6 +20,12 @@ set(HAVE_MSAN FALSE)
 set(CMAKE_REQUIRED_LIBRARIES -fsanitize=fuzzer)
 check_cxx_compiler_flag(-fsanitize=fuzzer HAVE_LIBFUZZER)
 
+include(CheckCCompilerFlag)
+check_c_compiler_flag(-Wunused-but-set-variable HAVE_UNUSED_BUT_SET_VARIABLE)
+if (HAVE_UNUSED_BUT_SET_VARIABLE)
+    add_compile_options(-DHAVE_UNUSED_BUT_SET_VARIABLE)
+endif()
+
 if (HAVE_UBSAN)
     add_compile_options(-fsanitize=undefined)
     if (${CMAKE_VERSION} VERSION_GREATER 3.12)

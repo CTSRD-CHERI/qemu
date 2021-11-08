@@ -1584,6 +1584,9 @@ sub process {
 # ignore files that are being periodically imported from Linux
 		next if ($realfile =~ /^(linux-headers|include\/standard-headers)\//);
 
+# ignore files that are imported from cheri-compressed-cap
+		next if ($realfile =~ /^target\/cheri-common\/cheri-compressed-cap\//);
+
 #trailing whitespace
 		if ($line =~ /^\+.*\015/) {
 			my $herevet = "$here\n" . cat_vet($rawline) . "\n";

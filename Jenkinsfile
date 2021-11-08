@@ -71,7 +71,8 @@ selectedConfigs.each { config ->
     jobs[config] = { ->
         node(nodeLabel) {
             def extraQemuArgs = ''
-            if (config.endsWith('-debug')) {
+            boolean isDebug = config.endsWith('-debug')
+            if (isDebug) {
                 extraQemuArgs = '--qemu/configure-options=--enable-rvfi-dii --qemu/build-type=Debug --qemu/use-asan'
             }
             def qemuResult = cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
@@ -82,14 +83,14 @@ selectedConfigs.each { config ->
                     skipTarball: true,
                     afterBuild: { params ->
                         extraBuildSteps(params, os)
-                        maybeArchiveArtifacts(params, os)
+                        // Don't archive the Debug+ASAN artifacts
+                        if (!isDebug) {
+                            maybeArchiveArtifacts(params, os)
+                        }
                     })
 
             // Run the generated Morello tests
             stage("Run Morello tests") {
-                if (!fileExists("qemu-${os}/bin/qemu-system-morello")) {
-                    error("Didn't build qemu-system-morello?")
-                }
                 sh "qemu-${os}/bin/qemu-system-morello --version"
                 dir('morello-generated-tests') {
                     cloneGitRepoWithReference(url: 'https://github.com/rems-project/morello-generated-tests.git',
