@@ -94,7 +94,7 @@ enum {
 #endif
 };
 
-#define MMU_USER_IDX 3
+#define MMU_USER_IDX (PRV_U)
 
 #define MAX_RISCV_PMPS (16)
 
