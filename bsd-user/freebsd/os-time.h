@@ -734,15 +734,6 @@ static inline abi_long do_freebsd_freebsd11_kevent(abi_long arg1, abi_ulong arg2
 
 #ifdef BSD_HAVE_KEVENT64
 
-struct target_kevent_args {
-    abi_int       fd;
-    abi_uintptr_t changelist;
-    abi_int       nchanges;
-    abi_uintptr_t eventlist;
-    abi_int       nevents;
-    abi_uintptr_t timeout;
-};
-
 /* kevent(2) */
 static inline abi_long do_freebsd_kevent(abi_syscallret_t retval,
     abi_syscallarg_t ua_fd, abi_syscallarg_t ua_changelist,

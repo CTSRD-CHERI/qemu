@@ -24,12 +24,6 @@
 
 #include "target_os__types.h"
 
-struct target_sigaction_args {
-    abi_int       sig;
-    abi_uintptr_t act;
-    abi_uintptr_t oact;
-};
-
 /* sigaction(2) */
 static inline abi_long do_bsd_sigaction(abi_syscallret_t retval,
     abi_syscallarg_t ua_sig, abi_syscallarg_t ua_act, abi_syscallarg_t ua_oact)
@@ -240,12 +234,6 @@ static inline abi_long do_bsd_sigwaitinfo(abi_ulong arg1, abi_ulong arg2)
     }
     return ret;
 }
-
-struct target_sigqueue_args {
-    abi_pid_t     pid;
-    abi_int       signum;
-    abi_uintptr_t value;
-};
 
 /* sigqueue(2) */
 static inline abi_long do_bsd_sigqueue(abi_syscallret_t retval,

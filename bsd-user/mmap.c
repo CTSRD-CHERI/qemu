@@ -513,16 +513,6 @@ target_mmap(abi_ulong addr0, abi_ulong len, int prot, int flags, int fd,
     return (error >= 0 ? syscallret_value(retval) : -1);
 }
 
-struct target_mmap_args {
-    abi_uintptr_t addr;
-    abi_ulong     len;
-    abi_int       prot;
-    abi_int       flags;
-    abi_int       fd;
-    abi_long      pad;
-    abi_long      pos;
-};
-
 /*
  * See sys_mmap() in vm/vm_mmap.c.
  */
