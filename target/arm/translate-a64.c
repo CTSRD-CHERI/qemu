@@ -54,6 +54,11 @@
 
 #define IS_C64(ctx) !!GET_FLAG(ctx, PSTATE_C64)
 
+/* Cheri helpers expect a different register number for register 0 */
+#define AS_ZERO(X) ((X) == 31 ? 32 : (X))
+/* But most of this file does not, and I should use standard 31 for zero */
+#define STANDARD_ZERO(X) ((X) == 32 ? 31 : (X))
+
 // Get a cctlr bit cached in CHERI flags.
 static inline bool cctlr_set(DisasContext *ctx, uint32_t bits)
 {
@@ -2193,8 +2198,10 @@ static TCGv_cap_checked_ptr bounds_check_cache_op(DisasContext *s,
         tcg_gen_st8_i32(tmp32, cpu_env, offsetof(CPUARMState, exception.cm));
     }
 
+    /* base_reg 31 is ZERO not CSP unlike in other places */
+
     TCGv_cap_checked_ptr clean_addr = clean_data_tbi_and_cheri(
-        s, aligned, read, write, ZVA_SIZE, base_reg, false, true);
+        s, aligned, read, write, ZVA_SIZE, AS_ZERO(base_reg), false, true);
     if (!is_zva) {
         tcg_gen_movi_i32(tmp32, 0);
         tcg_gen_st8_i32(tmp32, cpu_env, offsetof(CPUARMState, exception.cm));
@@ -2382,8 +2389,8 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
              * pointer for an invalid page.  Probe that address first.
              */
             tcg_rt = cpu_reg(s, rt);
-            clean_addr = clean_data_tbi_and_cheri(s, tcg_rt, false, true,
-                                                  ZVA_SIZE, rt, false, true);
+            clean_addr = clean_data_tbi_and_cheri(
+                s, tcg_rt, false, true, ZVA_SIZE, AS_ZERO(rt), false, true);
             gen_probe_access(s, clean_addr, MMU_DATA_STORE, MO_8);
 
             if (s->ata) {
@@ -2401,8 +2408,8 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
 
             /* For DC_GZVA, we can rely on DC_ZVA for the proper fault. */
             tcg_rt = cpu_reg(s, rt);
-            clean_addr = clean_data_tbi_and_cheri(s, tcg_rt, false, true,
-                                                  ZVA_SIZE, rt, false, true);
+            clean_addr = clean_data_tbi_and_cheri(
+                s, tcg_rt, false, true, ZVA_SIZE, AS_ZERO(rt), false, true);
             gen_helper_dc_zva(cpu_env, clean_addr);
 
             if (s->ata) {
@@ -2449,9 +2456,9 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
                 tcg_temp_free_i32(regno);
                 tcg_temp_free_ptr(tmpptr);
             } else {
-                gen_move_cap_gp_sp(s, rt, fieldoffset);
+                gen_move_cap_gp_sp(s, AS_ZERO(rt), fieldoffset);
             }
-            gen_reg_modified_cap(s, rt);
+            gen_reg_modified_cap(s, AS_ZERO(rt));
         } else {
             if (ri->type & ARM_CP_CONST) {
                 return;
@@ -2462,7 +2469,7 @@ static void handle_sys(DisasContext *s, uint32_t insn, bool isread,
                 tcg_temp_free_i32(regno);
                 tcg_temp_free_ptr(tmpptr);
             } else {
-                gen_move_cap_sp_gp(s, fieldoffset, rt);
+                gen_move_cap_sp_gp(s, fieldoffset, AS_ZERO(rt));
             }
             gen_reg_modified_cap_base(s, ri->name, fieldoffset);
         }
