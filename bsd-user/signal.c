@@ -558,11 +558,6 @@ static void host_signal_handler(int host_signum, siginfo_t *info, void *puc)
     }
 }
 
-struct target_sigaltstack_args {
-    abi_uintptr_t ss;
-    abi_uintptr_t oss;
-};
-
 /* do_sigaltstack() returns target values and errnos. */
 /* compare to kern/kern_sig.c sys_sigaltstack() and kern_sigaltstack() */
 abi_long do_sigaltstack(abi_syscallret_t retval, abi_syscallarg_t ua_ss,

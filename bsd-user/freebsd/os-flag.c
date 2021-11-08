@@ -102,11 +102,6 @@ do_freebsd_sysctl_oid_handle_security__kernel_flags_captured_key(
         security__kernel_flags_captured_key, holdp, holdlenp, hnewp, newlen));
 }
 
-struct target_flag_captured_args {
-    abi_uintptr_t message;
-    uint32_t      key;
-};
-
 abi_long
 do_freebsd_flag_captured(abi_syscallret_t retval, abi_syscallarg_t ua_message,
     abi_syscallarg_t ua_key, const char *source)

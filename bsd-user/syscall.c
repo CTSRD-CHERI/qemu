@@ -639,7 +639,7 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
         ret = do_bsd_fsync(arg1);
         break;
 
-    case TARGET_FREEBSD_NR_closefrom: /* closefrom(2) */
+    case TARGET_FREEBSD_NR_freebsd12_closefrom: /* closefrom(2) */
         ret = do_bsd_closefrom(arg1);
         break;
 
@@ -1073,7 +1073,7 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
         ret = do_bsd_mincore(arg1, arg2, arg3);
         break;
 
-    case TARGET_FREEBSD_NR_shm_open: /* shm_open(2) */
+    case TARGET_FREEBSD_NR_freebsd12_shm_open: /* shm_open(2) */
         ret = do_bsd_shm_open(arg1, arg2, arg3);
         break;
 
@@ -1109,7 +1109,7 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
         ret = do_bsd_shmdt(arg1);
         break;
 
-    case TARGET_FREEBSD_NR_vadvise:
+    case TARGET_FREEBSD_NR_freebsd11_vadvise:
         ret = do_bsd_vadvise();
         break;
 

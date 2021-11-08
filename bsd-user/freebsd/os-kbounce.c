@@ -40,13 +40,6 @@
 
 #include "target_os_systm.h"
 
-struct target_kbounce_args {
-    abi_uintptr_t src;
-    abi_uintptr_t dst;
-    size_t        len;
-    abi_int       flags;
-};
-
 abi_long
 do_freebsd_kbounce(abi_syscallret_t retval, abi_syscallarg_t ua_src,
     abi_syscallarg_t ua_dst, abi_syscallarg_t ua_len, abi_syscallarg_t ua_flags)
