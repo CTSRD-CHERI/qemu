@@ -42,9 +42,6 @@
 
 #define ONES(X) ((1ULL << (X)) - 1)
 
-#define AS_ZERO(X) ((X) == 31 ? 32 : (X))
-#define STANDARD_ZERO(X) ((X) == 32 ? 31 : (X))
-
 #define TRANS_F(NAME) static bool trans_##NAME(DisasContext *ctx, arg_##NAME *a)
 
 typedef void(cheri_cap_cap_imm_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv);
