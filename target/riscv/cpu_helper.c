@@ -424,6 +424,9 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
                 fprintf(stderr, "Rejecting memory access to " TARGET_FMT_lx
                         " since it is outside the RVFI-DII range\n", addr);
             }
+            qemu_log_mask(CPU_LOG_MMU,
+                          "%s Translate fail: outside the RVFI-DII range\n",
+                          __func__);
             return TRANSLATE_FAIL; // XXX: TRANSLATE_PMP_FAIL?
         }
     }
@@ -513,6 +516,9 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
     masked_msbs = (addr >> (va_bits - 1)) & mask;
 
     if (masked_msbs != 0 && masked_msbs != mask) {
+        qemu_log_mask(CPU_LOG_MMU,
+                      "%s Translate fail: top bits not a sign extension\n",
+                      __func__);
         return TRANSLATE_FAIL;
     }
 
@@ -568,6 +574,10 @@ restart:
         target_ulong pte = address_space_ldq(cs->as, pte_addr, attrs, &res);
 #endif
         if (res != MEMTX_OK) {
+            qemu_log_mask(
+                CPU_LOG_MMU,
+                "%s Translate fail: could not load pte at " TARGET_FMT_plx "\n",
+                __func__, pte_addr);
             return TRANSLATE_FAIL;
         }
 
@@ -584,15 +594,21 @@ restart:
 
         if (!(pte & PTE_V)) {
             /* Invalid PTE */
+            qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: V not set\n",
+                          __func__);
             return TRANSLATE_FAIL;
         } else if (!(pte & (PTE_R | PTE_W | PTE_X))) {
             /* Inner PTE, continue walking */
             base = ppn << PGSHIFT;
         } else if ((pte & (PTE_R | PTE_W | PTE_X)) == PTE_W) {
             /* Reserved leaf PTE flags: PTE_W */
+            qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: Reserved WRX 100\n",
+                          __func__);
             return TRANSLATE_FAIL;
         } else if ((pte & (PTE_R | PTE_W | PTE_X)) == (PTE_W | PTE_X)) {
             /* Reserved leaf PTE flags: PTE_W + PTE_X */
+            qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: Reserved WRX 011\n",
+                          __func__);
             return TRANSLATE_FAIL;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
         } else if ((pte & (PTE_CR | PTE_CRG)) == PTE_CRG) {
@@ -606,24 +622,40 @@ restart:
                    (!sum || access_type == MMU_INST_FETCH))) {
             /* User PTE flags when not U mode and mstatus.SUM is not set,
                or the access type is an instruction fetch */
+            qemu_log_mask(CPU_LOG_MMU,
+                          "%s Translate fail: U set but no SUM in S/M mode\n",
+                          __func__);
             return TRANSLATE_FAIL;
         } else if (!(pte & PTE_U) && (mode != PRV_S)) {
             /* Supervisor PTE flags when not S mode */
+            qemu_log_mask(CPU_LOG_MMU,
+                          "%s Translate fail: user accessing non user page\n",
+                          __func__);
             return TRANSLATE_FAIL;
         } else if (ppn & ((1ULL << ptshift) - 1)) {
             /* Misaligned PPN */
+            qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: misaligned PPN\n",
+                          __func__);
             return TRANSLATE_FAIL;
         } else if ((access_type == MMU_DATA_LOAD ||
                     access_type == MMU_DATA_CAP_LOAD) &&
                    !((pte & PTE_R) || ((pte & PTE_X) && mxr))) {
             /* Read access check failed */
+            qemu_log_mask(CPU_LOG_MMU,
+                          "%s Translate fail: read access check failed\n",
+                          __func__);
             return TRANSLATE_FAIL;
         } else if ((access_type == MMU_DATA_STORE ||
                     access_type == MMU_DATA_CAP_STORE) && !(pte & PTE_W)) {
             /* Write access check failed */
+            qemu_log_mask(CPU_LOG_MMU,
+                          "%s Translate fail: write access check failed\n",
+                          __func__);
             return TRANSLATE_FAIL;
         } else if (access_type == MMU_INST_FETCH && !(pte & PTE_X)) {
             /* Fetch access check failed */
+            qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: X bit not set\n",
+                          __func__);
             return TRANSLATE_FAIL;
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
         } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_CW)) {
@@ -633,17 +665,23 @@ restart:
 #if RISCV_PTE_TRAPPY & PTE_A
         } else if (!(pte & PTE_A)) {
             /* PTE not marked as accessed */
+            qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: A not set\n",
+                          __func__);
             return TRANSLATE_FAIL;
 #endif
 #if RISCV_PTE_TRAPPY & PTE_D
         } else if ((access_type == MMU_DATA_STORE) && !(pte & PTE_D)) {
             /* PTE not marked as dirty */
+            qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: D not set\n",
+                          __func__);
             return TRANSLATE_FAIL;
 #endif
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
 #if RISCV_PTE_TRAPPY & PTE_D
         } else if (access_type == MMU_DATA_CAP_STORE && !(pte & PTE_D)) {
             /* PTE not marked as dirty for cap store */
+            qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: D not set (cap)\n",
+                          __func__);
             return TRANSLATE_FAIL;
 #endif
 #if RISCV_PTE_TRAPPY & PTE_CD
@@ -699,6 +737,9 @@ restart:
                 } else {
                     /* misconfigured PTE in ROM (AD bits are not preset) or
                      * PTE is in IO space and can't be updated atomically */
+                    qemu_log_mask(CPU_LOG_MMU,
+                                  "%s Translate fail: PTE in IO space\n",
+                                  __func__);
                     return TRANSLATE_FAIL;
                 }
             }
@@ -750,6 +791,7 @@ restart:
             return TRANSLATE_SUCCESS;
         }
     }
+    qemu_log_mask(CPU_LOG_MMU, "%s Translate fail: fall through?\n", __func__);
     return TRANSLATE_FAIL;
 }
 
