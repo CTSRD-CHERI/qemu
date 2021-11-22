@@ -614,7 +614,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define put_user_p(x, gaddr) put_user_ual(x, gaddr)
 #endif
 #ifdef TARGET_CHERI
-#define put_user_uintptr(x, gaddr)                                      \
+#define put_user_uintcap(x, gaddr)                                      \
 ({                                                                      \
     abi_ulong __gaddr = (gaddr);                                        \
     uint8_t *__hptr;                                                    \
@@ -631,6 +631,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
         __ret = -TARGET_EFAULT;                                         \
     __ret;                                                              \
 })
+#define put_user_uintptr(x, gaddr) put_user_uintcap(x, gaddr)
 #else
 #define put_user_uintptr(x, gaddr) put_user_ual(x, gaddr)
 #endif
@@ -646,7 +647,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define get_user_u8(x, gaddr)  get_user((x), (gaddr), uint8_t)
 #define get_user_s8(x, gaddr)  get_user((x), (gaddr), int8_t)
 #ifdef TARGET_CHERI
-#define get_user_uintptr(x, gaddr)                                      \
+#define get_user_uintcap(x, gaddr)                                      \
 ({                                                                      \
     abi_ulong __gaddr = (gaddr);                                        \
     uint8_t *__hptr;                                                    \
@@ -667,6 +668,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
     }                                                                   \
     __ret;                                                              \
 })
+#define get_user_uintptr(x, gaddr)  get_user_uintcap(x, gaddr)
 #else
 #define get_user_uintptr(x, gaddr)  get_user_ual((x), (gaddr))
 #endif
