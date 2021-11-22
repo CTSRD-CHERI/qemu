@@ -257,6 +257,13 @@ abi_long do_brk(abi_ulong new_brk)
     return do_obreak(new_brk);
 }
 
+int
+do_bsd_nosys(struct thread *td, struct target_nosys_args *args)
+{
+
+    return (ENOSYS);
+}
+
 /* do_syscall() should always have a single exit point at the end so
    that actions, such as logging of syscall results, can be performed.
    All errnos that do_syscall() returns must be -TARGET_<errcode>. */

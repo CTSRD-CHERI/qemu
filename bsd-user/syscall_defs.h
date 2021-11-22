@@ -21,7 +21,9 @@
 #define _SYSCALL_DEFS_H_
 
 #include <sys/syscall.h>
+#include <sys/sysent.h>
 
+#include "qemu.h"
 #include "errno_defs.h"
 
 /*
@@ -36,8 +38,13 @@
 #endif
 #include "freebsd/compat/qemu/target_os_syscall.h"
 #include "freebsd/compat/qemu/target_os_proto.h"
+#include "freebsd/compat/qemu/target_os_sysargmap.h"
 #include "netbsd/syscall_nr.h"
 #include "openbsd/syscall_nr.h"
+
+extern struct sysent target_sysent[];
+
+int do_bsd_nosys(struct thread *td, struct target_nosys_args *args);
 
 /*
  * machine/_types.h
