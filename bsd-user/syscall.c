@@ -56,6 +56,8 @@
 #include "os-stat.h"
 #include "os-thread.h"
 
+#include "machine/proc.h"
+
 /* #define DEBUG */
 /* Used in os-thread */
 safe_syscall1(int, thr_suspend, struct timespec *, timeout);
@@ -267,10 +269,8 @@ do_bsd_nosys(struct thread *td, struct target_nosys_args *args)
 /* do_syscall() should always have a single exit point at the end so
    that actions, such as logging of syscall results, can be performed.
    All errnos that do_syscall() returns must be -TARGET_<errcode>. */
-abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
-    abi_syscallarg_t sa1, abi_syscallarg_t sa2, abi_syscallarg_t sa3,
-    abi_syscallarg_t sa4, abi_syscallarg_t sa5, abi_syscallarg_t sa6,
-    abi_syscallarg_t sa7, abi_syscallarg_t sa8)
+abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
+    struct target_syscall_args *sa)
 {
     CPUState *cpu = env_cpu(cpu_env);
     abi_long arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ret;
@@ -280,24 +280,25 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
     assert(retvalp != NULL);
 
     retval = NULL;
-    arg1 = syscallarg_value(sa1);
-    arg2 = syscallarg_value(sa2);
-    arg3 = syscallarg_value(sa3);
-    arg4 = syscallarg_value(sa4);
-    arg5 = syscallarg_value(sa5);
-    arg6 = syscallarg_value(sa6);
-    arg7 = syscallarg_value(sa7);
-    arg8 = syscallarg_value(sa8);
+    arg1 = syscallarg_value(&sa->args[0]);
+    arg2 = syscallarg_value(&sa->args[1]);
+    arg3 = syscallarg_value(&sa->args[2]);
+    arg4 = syscallarg_value(&sa->args[3]);
+    arg5 = syscallarg_value(&sa->args[4]);
+    arg6 = syscallarg_value(&sa->args[5]);
+    arg7 = syscallarg_value(&sa->args[6]);
+    arg8 = syscallarg_value(&sa->args[7]);
 
 #ifdef DEBUG
-    gemu_log("freebsd syscall %d\n", num);
+    gemu_log("freebsd syscall %d\n", sa->code);
 #endif
-    record_syscall_start(cpu, num, arg1, arg2, arg3, arg4, arg5, arg6, 0, 0);
+    record_syscall_start(cpu, sa->code, arg1, arg2, arg3, arg4, arg5, arg6, 0,
+        0);
 
     if(do_strace)
-        print_freebsd_syscall(num, arg1, arg2, arg3, arg4, arg5, arg6);
+        print_freebsd_syscall(sa->code, arg1, arg2, arg3, arg4, arg5, arg6);
 
-    switch(num) {
+    switch (sa->code) {
         /*
          * process system calls
          */
@@ -1035,8 +1036,9 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
          * Memory management system calls.
          */
     case TARGET_FREEBSD_NR_mmap: /* mmap(2) */
-        ret = do_bsd_mmap(cpu_env, &retcap, sa1, sa2, sa3, sa4, sa5, sa6, sa7,
-          sa8);
+        ret = do_bsd_mmap(cpu_env, &retcap, &sa->args[0], &sa->args[1],
+            &sa->args[2], &sa->args[3], &sa->args[4], &sa->args[5], &sa->args[6],
+            &sa->args[7]);
         retval = &retcap;
         break;
 
@@ -1229,7 +1231,8 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
 
 #ifdef BSD_HAVE_KEVENT64
     case TARGET_FREEBSD_NR_kevent: /* kevent(2) */
-        ret = do_freebsd_kevent(&retcap, sa1, sa2, sa3, sa4, sa5, sa6);
+        ret = do_freebsd_kevent(&retcap, &sa->args[0], &sa->args[1], &sa->args[2],
+            &sa->args[3], &sa->args[4], &sa->args[5]);
         retval = &retcap;
         break;
 #endif
@@ -1258,7 +1261,7 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
         break;
 
     case TARGET_FREEBSD_NR_sigaction: /* sigaction(2) */
-        ret = do_bsd_sigaction(&retcap, sa1, sa2, sa3);
+        ret = do_bsd_sigaction(&retcap, &sa->args[0], &sa->args[1], &sa->args[2]);
         retval = &retcap;
         break;
 
@@ -1287,12 +1290,12 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
         break;
 
     case TARGET_FREEBSD_NR_sigqueue: /* sigqueue(2) */
-        ret = do_bsd_sigqueue(&retcap, sa1, sa2, sa3);
+        ret = do_bsd_sigqueue(&retcap, &sa->args[0], &sa->args[1], &sa->args[2]);
         retval = &retcap;
         break;
 
     case TARGET_FREEBSD_NR_sigaltstack: /* sigaltstack(2) */
-        ret = do_bsd_sigaltstack(cpu_env, &retcap, sa1, sa2);
+        ret = do_bsd_sigaltstack(cpu_env, &retcap, &sa->args[0], &sa->args[1]);
         retval = &retcap;
         break;
 
@@ -1497,18 +1500,6 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
 
     case TARGET_FREEBSD_NR_sysarch: /* sysarch(2) */
         ret = do_freebsd_sysarch(cpu_env, arg1, arg2);
-        break;
-
-    case TARGET_FREEBSD_NR_syscall: /* syscall(2) */
-    case TARGET_FREEBSD_NR___syscall: /* __syscall(2) */
-#ifdef TARGET_CHERI
-	/*
-	 * XXXKW: syscall(2) and __syscall(2) the arguments are on the stack.
-	 */
-#endif
-        ret = do_freebsd_syscall(cpu_env, retvalp, arg1 & 0xffff, sa2, sa3, sa4,
-                sa5, sa6, sa7, sa8, 0);
-        retval = *retvalp;
         break;
 
         /*
@@ -1912,19 +1903,21 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
 	break;
 
     case TARGET_FREEBSD_NR_kbounce:
-        ret = do_freebsd_kbounce(&retcap, sa1, sa2, sa3, sa4);
+        ret = do_freebsd_kbounce(&retcap, &sa->args[0], &sa->args[1], &sa->args[2],
+            &sa->args[3]);
         retval = *retvalp;
         break;
 
     case TARGET_FREEBSD_NR_flag_captured:
-        ret = do_freebsd_flag_captured(&retcap, sa1, sa2, __func__);
+        ret = do_freebsd_flag_captured(&retcap, &sa->args[0], &sa->args[1],
+            __func__);
         retval = *retvalp;
         break;
 
     default:
-	gemu_log("qemu: unsupported syscall: %d (calling anyway)\n", num);
-        ret = get_errno(syscall(num, arg1, arg2, arg3, arg4, arg5, arg6, arg7,
-                    arg8));
+	gemu_log("qemu: unsupported syscall: %d (calling anyway)\n", sa->code);
+        ret = get_errno(syscall(sa->code, arg1, arg2, arg3, arg4, arg5, arg6,
+            arg7, arg8));
         break;
     }
 
@@ -1932,9 +1925,9 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp, int num,
     gemu_log(" = %ld\n", ret);
 #endif
     if (do_strace)
-        print_freebsd_syscall_ret(num, ret);
+        print_freebsd_syscall_ret(sa->code, ret);
 
-    record_syscall_return(cpu, num, ret);
+    record_syscall_return(cpu, sa->code, ret);
     *retvalp = retval;
     return ret;
 }
