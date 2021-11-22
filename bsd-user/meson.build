@@ -14,6 +14,7 @@ bsd_user_ss.add(files(
   'syscall.c',
   'uaccess.c',
   abi / 'target_arch_cpu.c',
+  targetos / 'compat/qemu/target_os_sysent.c',
   targetos / 'os-extattr.c',
   targetos / 'os-flag.c',
   targetos / 'os-kbounce.c',

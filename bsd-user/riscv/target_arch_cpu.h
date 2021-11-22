@@ -22,6 +22,7 @@
 
 #include "target_arch.h"
 
+#include "target_arch_proc.h"
 #include "machine/cheri.h"
 
 #define TARGET_DEFAULT_CPU_MODEL "any"
@@ -58,6 +59,80 @@ target_syscallarg(CPURISCVState *env, unsigned regnum)
 #endif
 }
 
+static abi_long
+target_cpu_fetch_syscall_args(CPURISCVState *env,
+    struct target_syscall_args *sa)
+{
+#ifdef TARGET_CHERI
+    target_ulong stack_args;
+    abi_long error;
+#endif
+    uint8_t i;
+
+    sa->code = gpr_int_value(env, xT0);
+#ifdef TARGET_CHERI
+    stack_args = 0;
+#endif
+
+    if (sa->code == TARGET_FREEBSD_NR_syscall ||
+        sa->code == TARGET_FREEBSD_NR___syscall) {
+        sa->code = syscallarg_value(target_syscallarg(env, xA0));
+
+#ifdef TARGET_CHERI
+        stack_args = gpr_int_value(env, xSP);
+#endif
+    }
+
+    /*
+     * XXXKW: target_syscall_args.callp isn't currently used to call a system
+     * call. We should refactor the user mode to handle system calls easier
+     * using the target_sysent system call table.
+     */
+    if (__predict_false(sa->code >= TARGET_FREEBSD_NR_MAXSYSCALL))
+        sa->callp = &target_sysent[0];
+    else
+        sa->callp = &target_sysent[sa->code];
+
+    assert(sa->callp->sy_narg <= nitems(sa->args));
+
+    memset(&sa->args, 0, sizeof(sa->args));
+#ifdef TARGET_CHERI
+    if (__predict_false(stack_args != 0)) {
+        abi_uintcap_t capval;
+        int64_t intval;
+        int offset, ptrmask;
+
+        if (sa->code >= nitems(target_sysargmask))
+            ptrmask = 0;
+        else
+            ptrmask = target_sysargmask[sa->code];
+
+        offset = 0;
+        for (i = 0; i < sa->callp->sy_narg; i++) {
+            if (ptrmask & (1 << i)) {
+                offset = roundup2(offset, sizeof(abi_uintcap_t));
+                error = get_user_uintcap(capval, stack_args + offset);
+                cheri_load(&sa->args[i], &capval);
+                offset += sizeof(abi_uintcap_t);
+            } else {
+                error = get_user_s64(intval, stack_args + offset);
+                sa->args[i] = *cheri_fromint(intval);
+                offset += sizeof(intval);
+            }
+            if (error)
+                return (error);
+        }
+    } else
+#endif
+    {
+        for (i = 0; i < sa->callp->sy_narg; i++) {
+            sa->args[i] = *target_syscallarg(env, xA0 + i);
+        }
+    }
+
+    return (0);
+}
+
 static inline void target_cpu_loop(CPURISCVState *env)
 {
     CPUState *cs = env_cpu(env);
@@ -65,7 +140,7 @@ static inline void target_cpu_loop(CPURISCVState *env)
     target_siginfo_t info;
     abi_long error;
     abi_syscallret_t retval;
-    unsigned int syscall_num;
+    struct target_syscall_args sa;
 
     for (;;) {
         cpu_exec_start(cs);
@@ -90,36 +165,12 @@ static inline void target_cpu_loop(CPURISCVState *env)
             break;
         case RISCV_EXCP_U_ECALL:
             if (bsd_type == target_freebsd) {
-                syscall_num = gpr_int_value(env, xT0);
-                riscv_update_pc(env, riscv_fetch_pc(env) + TARGET_INSN_SIZE,
-                    false);
-                /*
-                 * Compare to cpu_fetch_syscall_args() in riscv/riscv/trap.c.
-                 * */
-                if (TARGET_FREEBSD_NR___syscall == syscall_num ||
-                            TARGET_FREEBSD_NR_syscall == syscall_num) {
-                    syscall_num = syscallarg_value(target_syscallarg(env, xA0));
-                    error = do_freebsd_syscall(env, &retval, syscall_num,
-                        target_syscallarg(env, xA1),
-                        target_syscallarg(env, xA2),
-                        target_syscallarg(env, xA3),
-                        target_syscallarg(env, xA4),
-                        target_syscallarg(env, xA5),
-                        target_syscallarg(env, xA6),
-                        target_syscallarg(env, xA7),
-                        NULL);
-                } else {
-                    error = do_freebsd_syscall(env, &retval, syscall_num,
-                        target_syscallarg(env, xA0),
-                        target_syscallarg(env, xA1),
-                        target_syscallarg(env, xA2),
-                        target_syscallarg(env, xA3),
-                        target_syscallarg(env, xA4),
-                        target_syscallarg(env, xA5),
-                        target_syscallarg(env, xA6),
-                        target_syscallarg(env, xA7));
+                error = target_cpu_fetch_syscall_args(env, &sa);
+                if (error == 0) {
+                    riscv_update_pc(env, riscv_fetch_pc(env) + TARGET_INSN_SIZE,
+                        false);
+                    error = do_freebsd_syscall(env, &retval, &sa);
                 }
-                
                 /*
                  * Compare to cpu_set_syscall_retval() in
                  * riscv/riscv/vm_machdep.c.
