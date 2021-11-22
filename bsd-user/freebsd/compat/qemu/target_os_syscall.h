@@ -13,7 +13,7 @@
 #define	TARGET_FREEBSD_NR_open	5
 #define	TARGET_FREEBSD_NR_close	6
 #define	TARGET_FREEBSD_NR_wait4	7
-				/* 8 is old creat */
+				/* 8 is obsolete ocreat */
 #define	TARGET_FREEBSD_NR_link	9
 #define	TARGET_FREEBSD_NR_unlink	10
 				/* 11 is obsolete execv */
@@ -23,8 +23,8 @@
 #define	TARGET_FREEBSD_NR_chmod	15
 #define	TARGET_FREEBSD_NR_chown	16
 #define	TARGET_FREEBSD_NR_break	17
-				/* 18 is freebsd4 getfsstat */
-				/* 19 is old lseek */
+				/* 18 is obsolete freebsd4_getfsstat */
+				/* 19 is obsolete olseek */
 #define	TARGET_FREEBSD_NR_getpid	20
 #define	TARGET_FREEBSD_NR_mount	21
 #define	TARGET_FREEBSD_NR_unmount	22
@@ -43,21 +43,21 @@
 #define	TARGET_FREEBSD_NR_fchflags	35
 #define	TARGET_FREEBSD_NR_sync	36
 #define	TARGET_FREEBSD_NR_kill	37
-				/* 38 is old stat */
+				/* 38 is obsolete ostat */
 #define	TARGET_FREEBSD_NR_getppid	39
-				/* 40 is old lstat */
+				/* 40 is obsolete olstat */
 #define	TARGET_FREEBSD_NR_dup	41
 #define	TARGET_FREEBSD_NR_freebsd10_pipe	42
 #define	TARGET_FREEBSD_NR_getegid	43
 #define	TARGET_FREEBSD_NR_profil	44
 #define	TARGET_FREEBSD_NR_ktrace	45
-				/* 46 is old sigaction */
+				/* 46 is obsolete osigaction */
 #define	TARGET_FREEBSD_NR_getgid	47
-				/* 48 is old sigprocmask */
+				/* 48 is obsolete osigprocmask */
 #define	TARGET_FREEBSD_NR_getlogin	49
 #define	TARGET_FREEBSD_NR_setlogin	50
 #define	TARGET_FREEBSD_NR_acct	51
-				/* 52 is old sigpending */
+				/* 52 is obsolete osigpending */
 #define	TARGET_FREEBSD_NR_sigaltstack	53
 #define	TARGET_FREEBSD_NR_ioctl	54
 #define	TARGET_FREEBSD_NR_reboot	55
@@ -67,16 +67,16 @@
 #define	TARGET_FREEBSD_NR_execve	59
 #define	TARGET_FREEBSD_NR_umask	60
 #define	TARGET_FREEBSD_NR_chroot	61
-				/* 62 is old fstat */
-				/* 63 is old getkerninfo */
-				/* 64 is old getpagesize */
+				/* 62 is obsolete ofstat */
+				/* 63 is obsolete ogetkerninfo */
+				/* 64 is obsolete ogetpagesize */
 #define	TARGET_FREEBSD_NR_msync	65
 #define	TARGET_FREEBSD_NR_vfork	66
 				/* 67 is obsolete vread */
 				/* 68 is obsolete vwrite */
 #define	TARGET_FREEBSD_NR_sbrk	69
 #define	TARGET_FREEBSD_NR_sstk	70
-				/* 71 is old mmap */
+				/* 71 is obsolete ommap */
 #define	TARGET_FREEBSD_NR_freebsd11_vadvise	72
 #define	TARGET_FREEBSD_NR_munmap	73
 #define	TARGET_FREEBSD_NR_mprotect	74
@@ -89,11 +89,11 @@
 #define	TARGET_FREEBSD_NR_getpgrp	81
 #define	TARGET_FREEBSD_NR_setpgid	82
 #define	TARGET_FREEBSD_NR_setitimer	83
-				/* 84 is old wait */
+				/* 84 is obsolete owait */
 #define	TARGET_FREEBSD_NR_swapon	85
 #define	TARGET_FREEBSD_NR_getitimer	86
-				/* 87 is old gethostname */
-				/* 88 is old sethostname */
+				/* 87 is obsolete ogethostname */
+				/* 88 is obsolete osethostname */
 #define	TARGET_FREEBSD_NR_getdtablesize	89
 #define	TARGET_FREEBSD_NR_dup2	90
 #define	TARGET_FREEBSD_NR_fcntl	92
@@ -102,22 +102,22 @@
 #define	TARGET_FREEBSD_NR_setpriority	96
 #define	TARGET_FREEBSD_NR_socket	97
 #define	TARGET_FREEBSD_NR_connect	98
-				/* 99 is old accept */
+				/* 99 is obsolete oaccept */
 #define	TARGET_FREEBSD_NR_getpriority	100
-				/* 101 is old send */
-				/* 102 is old recv */
-				/* 103 is old sigreturn */
+				/* 101 is obsolete osend */
+				/* 102 is obsolete orecv */
+				/* 103 is obsolete osigreturn */
 #define	TARGET_FREEBSD_NR_bind	104
 #define	TARGET_FREEBSD_NR_setsockopt	105
 #define	TARGET_FREEBSD_NR_listen	106
 				/* 107 is obsolete vtimes */
-				/* 108 is old sigvec */
-				/* 109 is old sigblock */
-				/* 110 is old sigsetmask */
-				/* 111 is old sigsuspend */
-				/* 112 is old sigstack */
-				/* 113 is old recvmsg */
-				/* 114 is old sendmsg */
+				/* 108 is obsolete osigvec */
+				/* 109 is obsolete osigblock */
+				/* 110 is obsolete osigsetmask */
+				/* 111 is obsolete osigsuspend */
+				/* 112 is obsolete osigstack */
+				/* 113 is obsolete orecvmsg */
+				/* 114 is obsolete osendmsg */
 				/* 115 is obsolete vtrace */
 #define	TARGET_FREEBSD_NR_gettimeofday	116
 #define	TARGET_FREEBSD_NR_getrusage	117
@@ -127,12 +127,12 @@
 #define	TARGET_FREEBSD_NR_settimeofday	122
 #define	TARGET_FREEBSD_NR_fchown	123
 #define	TARGET_FREEBSD_NR_fchmod	124
-				/* 125 is old recvfrom */
+				/* 125 is obsolete orecvfrom */
 #define	TARGET_FREEBSD_NR_setreuid	126
 #define	TARGET_FREEBSD_NR_setregid	127
 #define	TARGET_FREEBSD_NR_rename	128
-				/* 129 is old truncate */
-				/* 130 is old ftruncate */
+				/* 129 is obsolete otruncate */
+				/* 130 is obsolete oftruncate */
 #define	TARGET_FREEBSD_NR_flock	131
 #define	TARGET_FREEBSD_NR_mkfifo	132
 #define	TARGET_FREEBSD_NR_sendto	133
@@ -143,33 +143,33 @@
 #define	TARGET_FREEBSD_NR_utimes	138
 				/* 139 is obsolete 4.2 sigreturn */
 #define	TARGET_FREEBSD_NR_adjtime	140
-				/* 141 is old getpeername */
-				/* 142 is old gethostid */
-				/* 143 is old sethostid */
-				/* 144 is old getrlimit */
-				/* 145 is old setrlimit */
-				/* 146 is old killpg */
+				/* 141 is obsolete ogetpeername */
+				/* 142 is obsolete ogethostid */
+				/* 143 is obsolete osethostid */
+				/* 144 is obsolete ogetrlimit */
+				/* 145 is obsolete osetrlimit */
+				/* 146 is obsolete okillpg */
 #define	TARGET_FREEBSD_NR_setsid	147
 #define	TARGET_FREEBSD_NR_quotactl	148
-				/* 149 is old quota */
-				/* 150 is old getsockname */
+				/* 149 is obsolete oquota */
+				/* 150 is obsolete ogetsockname */
 #define	TARGET_FREEBSD_NR_nlm_syscall	154
 #define	TARGET_FREEBSD_NR_nfssvc	155
-				/* 156 is old getdirentries */
-				/* 157 is freebsd4 statfs */
-				/* 158 is freebsd4 fstatfs */
+				/* 156 is obsolete ogetdirentries */
+				/* 157 is obsolete freebsd4_statfs */
+				/* 158 is obsolete freebsd4_fstatfs */
 #define	TARGET_FREEBSD_NR_lgetfh	160
 #define	TARGET_FREEBSD_NR_getfh	161
-				/* 162 is freebsd4 getdomainname */
-				/* 163 is freebsd4 setdomainname */
-				/* 164 is freebsd4 uname */
+				/* 162 is obsolete freebsd4_getdomainname */
+				/* 163 is obsolete freebsd4_setdomainname */
+				/* 164 is obsolete freebsd4_uname */
 #define	TARGET_FREEBSD_NR_sysarch	165
 #define	TARGET_FREEBSD_NR_rtprio	166
 #define	TARGET_FREEBSD_NR_semsys	169
 #define	TARGET_FREEBSD_NR_msgsys	170
 #define	TARGET_FREEBSD_NR_shmsys	171
-				/* 173 is freebsd6 pread */
-				/* 174 is freebsd6 pwrite */
+				/* 173 is obsolete freebsd6_pread */
+				/* 174 is obsolete freebsd6_pwrite */
 #define	TARGET_FREEBSD_NR_setfib	175
 #define	TARGET_FREEBSD_NR_ntp_adjtime	176
 #define	TARGET_FREEBSD_NR_setgid	181
@@ -187,11 +187,11 @@
 #define	TARGET_FREEBSD_NR_getrlimit	194
 #define	TARGET_FREEBSD_NR_setrlimit	195
 #define	TARGET_FREEBSD_NR_freebsd11_getdirentries	196
-				/* 197 is freebsd6 mmap */
+				/* 197 is obsolete freebsd6_mmap */
 #define	TARGET_FREEBSD_NR___syscall	198
-				/* 199 is freebsd6 lseek */
-				/* 200 is freebsd6 truncate */
-				/* 201 is freebsd6 ftruncate */
+				/* 199 is obsolete freebsd6_lseek */
+				/* 200 is obsolete freebsd6_truncate */
+				/* 201 is obsolete freebsd6_ftruncate */
 #define	TARGET_FREEBSD_NR___sysctl	202
 #define	TARGET_FREEBSD_NR_mlock	203
 #define	TARGET_FREEBSD_NR_munlock	204
@@ -199,16 +199,16 @@
 #define	TARGET_FREEBSD_NR_futimes	206
 #define	TARGET_FREEBSD_NR_getpgid	207
 #define	TARGET_FREEBSD_NR_poll	209
-#define	TARGET_FREEBSD_NR_freebsd7___semctl	220
+				/* 220 is obsolete freebsd7___semctl */
 #define	TARGET_FREEBSD_NR_semget	221
 #define	TARGET_FREEBSD_NR_semop	222
 				/* 223 is obsolete semconfig */
-#define	TARGET_FREEBSD_NR_freebsd7_msgctl	224
+				/* 224 is obsolete freebsd7_msgctl */
 #define	TARGET_FREEBSD_NR_msgget	225
 #define	TARGET_FREEBSD_NR_msgsnd	226
 #define	TARGET_FREEBSD_NR_msgrcv	227
 #define	TARGET_FREEBSD_NR_shmat	228
-#define	TARGET_FREEBSD_NR_freebsd7_shmctl	229
+				/* 229 is obsolete freebsd7_shmctl */
 #define	TARGET_FREEBSD_NR_shmdt	230
 #define	TARGET_FREEBSD_NR_shmget	231
 #define	TARGET_FREEBSD_NR_clock_gettime	232
@@ -246,7 +246,7 @@
 #define	TARGET_FREEBSD_NR_freebsd11_nlstat	280
 #define	TARGET_FREEBSD_NR_preadv	289
 #define	TARGET_FREEBSD_NR_pwritev	290
-				/* 297 is freebsd4 fhstatfs */
+				/* 297 is obsolete freebsd4_fhstatfs */
 #define	TARGET_FREEBSD_NR_fhopen	298
 #define	TARGET_FREEBSD_NR_freebsd11_fhstat	299
 #define	TARGET_FREEBSD_NR_modnext	300
@@ -267,9 +267,9 @@
 #define	TARGET_FREEBSD_NR_aio_suspend	315
 #define	TARGET_FREEBSD_NR_aio_cancel	316
 #define	TARGET_FREEBSD_NR_aio_error	317
-				/* 318 is freebsd6 aio_read */
-				/* 319 is freebsd6 aio_write */
-				/* 320 is freebsd6 lio_listio */
+				/* 318 is obsolete freebsd6_aio_read */
+				/* 319 is obsolete freebsd6_aio_write */
+				/* 320 is obsolete freebsd6_lio_listio */
 #define	TARGET_FREEBSD_NR_yield	321
 				/* 322 is obsolete thr_sleep */
 				/* 323 is obsolete thr_wakeup */
@@ -285,15 +285,15 @@
 #define	TARGET_FREEBSD_NR_sched_get_priority_min	333
 #define	TARGET_FREEBSD_NR_sched_rr_get_interval	334
 #define	TARGET_FREEBSD_NR_utrace	335
-				/* 336 is freebsd4 sendfile */
+				/* 336 is obsolete freebsd4_sendfile */
 #define	TARGET_FREEBSD_NR_kldsym	337
 #define	TARGET_FREEBSD_NR_jail	338
 #define	TARGET_FREEBSD_NR_nnpfs_syscall	339
 #define	TARGET_FREEBSD_NR_sigprocmask	340
 #define	TARGET_FREEBSD_NR_sigsuspend	341
-				/* 342 is freebsd4 sigaction */
+				/* 342 is obsolete freebsd4_sigaction */
 #define	TARGET_FREEBSD_NR_sigpending	343
-				/* 344 is freebsd4 sigreturn */
+				/* 344 is obsolete freebsd4_sigreturn */
 #define	TARGET_FREEBSD_NR_sigtimedwait	345
 #define	TARGET_FREEBSD_NR_sigwaitinfo	346
 #define	TARGET_FREEBSD_NR___acl_get_file	347
