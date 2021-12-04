@@ -330,7 +330,7 @@ int block_signals(void)
     sigfillset(&set);
     sigprocmask(SIG_SETMASK, &set, 0);
 
-    return atomic_xchg(&ts->signal_pending, 1);
+    return qatomic_xchg(&ts->signal_pending, 1);
 }
 
 abi_long target_to_host_sigevent(struct sigevent *host_sevp,
@@ -1067,7 +1067,7 @@ void process_pending_signals(CPUArchState *cpu_env)
     struct emulated_sigtable *k;
     TaskState *ts = cpu->opaque;
 
-    while (atomic_read(&ts->signal_pending)) {
+    while (qatomic_read(&ts->signal_pending)) {
         /* FIXME: This is not threadsafe. */
 
         sigfillset(&set);
@@ -1086,7 +1086,7 @@ void process_pending_signals(CPUArchState *cpu_env)
         /* unblock signals and check one more time. Unblocking signals may cause
          * us to take anothe rhost signal, which will set signal_pending again.
          */
-        atomic_set(&ts->signal_pending, 0);
+        qatomic_set(&ts->signal_pending, 0);
         ts->in_sigsuspend = false;
         set = ts->signal_mask;
         sigdelset(&set, SIGSEGV);
