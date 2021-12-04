@@ -42,7 +42,9 @@
 #include "exec/log.h"
 #include "exec/helper-proto.h"
 #include "cheri-helper-utils.h"
+#ifndef CHERI_USER_NO_TAGS
 #include "cheri_tagmem.h"
+#endif
 #ifndef TARGET_CHERI
 #error TARGET_CHERI must be set
 #endif

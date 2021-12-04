@@ -1484,6 +1484,7 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
 
 target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
 {
+#ifndef CHERI_USER_NO_TAGS
     static const uint32_t perms = CAP_PERM_LOAD | CAP_PERM_LOAD_CAP;
     static const size_t ncaps = 1 << CAP_TAG_GET_MANY_SHFT;
     static const uint32_t sizealign = ncaps * CHERI_CAP_SIZE;
@@ -1496,6 +1497,9 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
         raise_unaligned_load_exception);
 
     return (target_ulong)cheri_tag_get_many(env, addr, cb, NULL, GETPC());
+#else
+    return 0;
+#endif
 }
 
 QEMU_NORETURN static inline void
