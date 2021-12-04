@@ -80,7 +80,7 @@ typedef struct {
 } abi_uintcap_t __attribute__ ((aligned(CHERI_CAP_SIZE)));
 typedef abi_uintcap_t abi_uintptr_t;
 
-#if defined(CHERI_128) && !defined(TARGET_WORDS_BIGENDIAN)
+#if CHERI_CAP_BITS == 128 && !defined(TARGET_WORDS_BIGENDIAN)
 typedef const cap_register_t * abi_syscallarg_t;
 typedef cap_register_t * abi_syscallret_t;
 #else

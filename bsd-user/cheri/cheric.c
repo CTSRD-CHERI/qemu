@@ -38,7 +38,7 @@
 target_long
 __cheri_round_representable_length(target_ulong len)
 {
-#ifdef CHERI_128
+#if CHERI_CAP_BITS == 128
     cap_register_t tmpcap;
 
     set_max_perms_capability(&tmpcap, 0);
