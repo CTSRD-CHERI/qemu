@@ -256,16 +256,16 @@ static void riscv_cpu_dump_cap_register(FILE *f, const char *capname,
     qemu_fprintf(f, " %8s  0x%016" PRIx64 "%016" PRIx64 "  0x%" PRIx64 " [%s%s%s%s%s,0x%" PRIx64 "-0x%" PRIx64 "]%s\n",
         capname,
         cc128_compress_raw(capreg) ^ CC128_NULL_XOR_MASK,
-        capreg->_cr_cursor,
-        capreg->_cr_cursor,
-        capreg->cr_perms & CC128_PERM_LOAD ? "r" : "",
-        capreg->cr_perms & CC128_PERM_STORE ? "w" : "",
-        capreg->cr_perms & CC128_PERM_EXECUTE ? "x" : "",
-        capreg->cr_perms & CC128_PERM_LOAD_CAP ? "R" : "",
-        capreg->cr_perms & CC128_PERM_STORE_CAP ? "W" : "",
-        capreg->cr_base,
-        capreg->_cr_top > UINT64_MAX ? UINT64_MAX : (uint64_t)capreg->_cr_top,
-        capreg->cr_otype == CC128_OTYPE_SENTRY
+        cap_get_cursor(capreg),
+        cap_get_cursor(capreg),
+        cap_get_perms(capreg) & CC128_PERM_LOAD ? "r" : "",
+        cap_get_perms(capreg) & CC128_PERM_STORE ? "w" : "",
+        cap_get_perms(capreg) & CC128_PERM_EXECUTE ? "x" : "",
+        cap_get_perms(capreg) & CC128_PERM_LOAD_CAP ? "R" : "",
+        cap_get_perms(capreg) & CC128_PERM_STORE_CAP ? "W" : "",
+        cap_get_base(capreg),
+        cap_get_top(capreg),
+        cap_get_otype_unsigned(capreg) == CC128_OTYPE_SENTRY
             ? " (sentry)"
             : (cc128_is_cap_sealed(capreg) ? " (sealed)" : ""));
 }

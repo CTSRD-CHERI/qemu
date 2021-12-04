@@ -435,4 +435,28 @@ static inline void cap_increment_offset(cap_register_t *cap, uint64_t offset)
     return cap_set_cursor(cap, new_addr);
 }
 
+static inline void cap_and_perms(cap_register_t *cap, uint32_t andperms)
+{
+    uint32_t perms, uperms;
+
+    perms = (uint32_t)andperms & (CAP_PERMS_ALL);
+    uperms = ((uint32_t)andperms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
+
+    CAP_cc(update_perms)(cap, cap_get_perms(cap) & perms);
+    CAP_cc(update_uperms)(cap, cap_get_uperms(cap) & uperms);
+}
+
+static inline void cap_set_flags(cap_register_t *cap, target_ulong flags)
+{
+
+    flags &= CAP_FLAGS_ALL_BITS;
+    CAP_cc(update_flags)(cap, flags);
+}
+
+static inline void cap_set_state(cap_register_t *cap, CapRegState state)
+{
+
+    cap->cr_extra = state;
+}
+
 #endif /* TARGET_CHERI */
