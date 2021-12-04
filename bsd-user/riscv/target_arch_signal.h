@@ -161,8 +161,10 @@ set_sigtramp_args(CPURISCVState *regs, TaskState *ts, int sig,
     update_capreg(regs, xA2, cheri_ptr((void *)(uintptr_t)(frame_addr +
         offsetof(typeof(*frame), sf_uc)), sizeof(frame->sf_uc)));
     cheri_load(&regs->PCC, &ka->_sa_handler);
-    /* XXXKW: Why unseal? */
-    regs->PCC.cr_otype = CC128_OTYPE_UNSEALED;
+    if (cap_is_sealed_with_reserved_otype(&regs->PCC)) {
+        /* XXXKW: Why unseal? */
+        cap_unseal_reserved_otype(&regs->PCC);
+    }
     update_capreg(regs, xSP, cheri_setaddress(cheri_zerocap(),
         (uintptr_t)frame_addr));
     update_capreg(regs, xRA, &ts->cheri_sigcode_cap);
@@ -310,8 +312,10 @@ static inline abi_long set_mcontext(CPURISCVState *regs, target_mcontext_t *mcp,
     update_capreg(regs, xGP, cheri_load(&cap, &mcp->mc_capregs.cp_cgp));
     update_capreg(regs, xTP, cheri_load(&cap, &mcp->mc_capregs.cp_ctp));
     cheri_load(&regs->PCC, &mcp->mc_capregs.cp_sepcc);
-    /* XXXKW: Why unseal? */
-    regs->PCC.cr_otype = CC128_OTYPE_UNSEALED;
+    if (cap_is_sealed_with_reserved_otype(&regs->PCC)) {
+        /* XXXKW: Why unseal? */
+        cap_unseal_reserved_otype(&regs->PCC);
+    }
 #else
     set_mcontext_regs(regs, mcp->mc_gpregs.gp_t,
         nitems(mcp->mc_gpregs.gp_t), xT0, xT1, xT2, xT3, xT4, xT5, xT6);

@@ -30,6 +30,8 @@
 
 #include "qemu.h"
 
+#include "target/cheri-common/cheri_utils.h"
+
 #include "cheri/cheric.h"
 
 /*
@@ -43,7 +45,7 @@ __cheri_round_representable_length(target_ulong len)
 
     set_max_perms_capability(&tmpcap, 0);
     cc128_setbounds(&tmpcap, 0, len);
-    return ((target_ulong)cap_get_length65(&tmpcap));
+    return ((target_ulong)cap_get_length_full(&tmpcap));
 #else
 
     return (len);
@@ -56,6 +58,7 @@ cheri_nullcap(void)
     static cap_register_t cap;
 
     null_capability(&cap);
+    cap_set_state(&cap, CREG_FULLY_DECOMPRESSED);
     return (&cap);
 }
 
@@ -102,6 +105,7 @@ cheri_load(cap_register_t *cap, const abi_uintcap_t *value)
     cursor = ldq_p((const uint8_t *)value + CHERI_MEM_OFFSET_CURSOR);
 
     cc128_decompress_raw(pesbt, cursor, true, cap);
+    cap_set_state(cap, CREG_FULLY_DECOMPRESSED);
     return (cap);
 }
 
@@ -110,15 +114,16 @@ cheri_store(void *ptr, const cap_register_t *cap)
 {
 
     *(uint64_t *)(ptr + CHERI_MEM_OFFSET_METADATA) = cc128_compress_raw(cap) ^
-      CC128_NULL_XOR_MASK;
-    *(uint64_t *)((uint8_t *)ptr + CHERI_MEM_OFFSET_CURSOR) = cap->_cr_cursor;
+        CC128_NULL_XOR_MASK;
+    *(uint64_t *)((uint8_t *)ptr + CHERI_MEM_OFFSET_CURSOR) =
+        cap_get_cursor(cap);
 }
 
 abi_ulong
 cheri_getlen(const cap_register_t *cap)
 {
 
-    return ((target_ulong)cap_get_length64(cap));
+    return ((target_ulong)cap_get_length_sat(cap));
 }
 
 abi_ulong
@@ -146,8 +151,8 @@ uint32_t
 cheri_getperm(const cap_register_t *cap)
 {
 
-    return ((cap->cr_perms & CAP_PERMS_ALL) |
-        ((cap->cr_uperms & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT));
+    return ((cap_get_perms(cap) & CAP_PERMS_ALL) |
+        ((cap_get_uperms(cap) & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT));
 }
 
 bool
@@ -161,8 +166,7 @@ cap_register_t *
 cheri_andperm(cap_register_t *cap, uint32_t perms)
 {
 
-    cap->cr_perms &= perms & CAP_PERMS_ALL;
-    cap->cr_uperms &= (perms >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
+    cap_and_perms(cap, perms);
     return (cap);
 }
 
@@ -170,8 +174,8 @@ cap_register_t *
 cheri_setbounds(cap_register_t *cap, size_t length)
 {
 
-    cc128_setbounds(cap, cap->_cr_cursor, (unsigned __int128)cap->_cr_cursor +
-        length);
+    cc128_setbounds(cap, cap_get_cursor(cap),
+        (unsigned __int128)cap_get_cursor(cap) + length);
     return (cap);
 }
 
@@ -179,7 +183,7 @@ cap_register_t *
 cheri_incoffset(cap_register_t *cap, off_t diff)
 {
 
-    cap->_cr_cursor = cap->_cr_cursor + diff;
+    cap_set_cursor(cap, cap_get_cursor(cap) + diff);
     return (cap);
 }
 
@@ -194,15 +198,14 @@ cap_register_t *
 cheri_setaddress(cap_register_t *cap, target_ulong addr)
 {
 
-    return (cheri_incoffset(cap, addr - cap->_cr_cursor));
+    return (cheri_incoffset(cap, addr - cap_get_cursor(cap)));
 }
 
 cap_register_t *
 cheri_setflags(cap_register_t *cap, target_ulong flags)
 {
 
-    flags &= CAP_FLAGS_ALL_BITS;
-    cap->cr_flags = flags;
+    cap_set_flags(cap, flags);
     return (cap);
 }
 
@@ -210,7 +213,7 @@ cap_register_t *
 cheri_sealentry(cap_register_t *cap)
 {
 
-    cap->cr_otype = CAP_OTYPE_SENTRY;
+    cap_make_sealed_entry(cap);
     return (cap);
 }
 
