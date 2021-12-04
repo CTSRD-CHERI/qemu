@@ -744,7 +744,7 @@ FreeBSD)
   audio_drv_list="oss try-sdl"
   audio_possible_drivers="oss sdl pa"
   # needed for kinfo_getvmmap(3) in libutil.h
-  LIBS="-lprocstat -lkvm -lelf -lutil $LIBS"
+  QEMU_LDFLAGS="-lprocstat -lkvm -lelf -lutil $QEMU_LDFLAGS"
   # needed for kinfo_getproc
   libs_qga="-lutil $libs_qga"
   netmap=""  # enable netmap autodetect
