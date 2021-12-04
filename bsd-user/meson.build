@@ -13,7 +13,6 @@ bsd_user_ss.add(files(
   'strace.c',
   'syscall.c',
   'uaccess.c',
-  abi / 'target_arch_cpu.c',
   targetos / 'compat/qemu/target_os_sysent.c',
   targetos / 'os-extattr.c',
   targetos / 'os-flag.c',
@@ -24,11 +23,12 @@ bsd_user_ss.add(files(
   targetos / 'os-sys.c',
   targetos / 'os-thread.c',
   targetos / 'os-time.c',
+  config_target['TARGET_ABI_DIR'] / 'target_arch_cpu.c',
 ))
 
 bsd_user_ss.add(when: 'TARGET_CHERI', if_true: files(
   'cheri/cheri_exec.c',
   'cheri/cheri_usercap.c',
   'cheri/cheric.c',
-  abi / 'cheri/cheri_machdep.c',
+  config_target['TARGET_ABI_DIR'] / 'cheri/cheri_machdep.c',
 ))
