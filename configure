@@ -814,6 +814,7 @@ esac
 if [ "$bsd" = "yes" ] ; then
   if [ "$darwin" != "yes" ] ; then
     bsd_user="yes"
+    QEMU_CFLAGS="-D_WANT_SEMUN $QEMU_CFLAGS"
   fi
 fi
 
