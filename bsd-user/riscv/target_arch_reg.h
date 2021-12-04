@@ -41,7 +41,7 @@ typedef struct target_fpreg {
 #define tswapreg(ptr)   tswapal(ptr)
 
 /* Compare with struct trapframe in riscv/include/frame.h */
-static inline void target_copy_regs(target_reg_t *regs, const CPURISCVState *env)
+static inline void target_copy_regs(target_reg_t *regs, CPURISCVState *env)
 {
 
     regs->ra = tswapreg(gpr_int_value(env, xRA));
