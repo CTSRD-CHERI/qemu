@@ -32,6 +32,7 @@
 #include "exec/tb-hash.h"
 #include "exec/tb-lookup.h"
 #include "exec/log.h"
+#include "exec/log_instr.h"
 #include "qemu/main-loop.h"
 #if defined(TARGET_I386) && !defined(CONFIG_USER_ONLY)
 #include "hw/i386/apic.h"
@@ -488,7 +489,12 @@ static inline void cpu_handle_debug_exception(CPUState *cpu)
             wp->flags &= ~BP_WATCHPOINT_HIT;
         }
     }
-
+    /* Print the current (aborted) instruction. */
+    if (qemu_log_instr_enabled(cpu->env_ptr)) {
+      qemu_log_instr_commit(cpu->env_ptr);
+      /* Add a "fake" instruction for the exception side effects. */
+      qemu_log_instr(cpu->env_ptr, ~(target_ulong)0, "<exception>", 0);
+    }
     cc->debug_excp_handler(cpu);
 }
 
@@ -532,6 +538,12 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         if (replay_exception()) {
             CPUClass *cc = CPU_GET_CLASS(cpu);
             qemu_mutex_lock_iothread();
+            if (qemu_log_instr_enabled(cpu->env_ptr)) {
+              /* Print the current (aborted) instruction. */
+              qemu_log_instr_commit(cpu->env_ptr);
+              /* Add a "fake" instruction for the exception side effects. */
+              qemu_log_instr(cpu->env_ptr, ~(target_ulong)0, "<exception>", 0);
+            }
             cc->do_interrupt(cpu);
             qemu_mutex_unlock_iothread();
             cpu->exception_index = -1;
