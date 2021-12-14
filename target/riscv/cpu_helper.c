@@ -1190,7 +1190,6 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 void riscv_cpu_do_interrupt(CPUState *cs)
 {
 #if !defined(CONFIG_USER_ONLY)
-
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
     tcg_debug_assert(pc_is_current(env));
@@ -1224,10 +1223,10 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         case RISCV_EXCP_LOAD_CAP_PAGE_FAULT:
         case RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT:
 #endif
-            log_inst = false;
-            /* fallthrough */
         case RISCV_EXCP_INST_ADDR_MIS:
         case RISCV_EXCP_INST_ACCESS_FAULT:
+            log_inst = false;
+            /* fallthrough */
         case RISCV_EXCP_LOAD_ADDR_MIS:
         case RISCV_EXCP_STORE_AMO_ADDR_MIS:
         case RISCV_EXCP_LOAD_ACCESS_FAULT:
@@ -1279,7 +1278,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
     if (unlikely(log_inst && qemu_loglevel_mask(CPU_LOG_INT))) {
         FILE* logf = qemu_log_lock();
-        qemu_log("Trap (%s) was probably caused by: ", riscv_cpu_get_trap_name(cause, async));
+        fprintf(logf, "Trap (%s) was probably caused by: ", riscv_cpu_get_trap_name(cause, async));
         target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/-1);
         qemu_log_unlock(logf);
     }
