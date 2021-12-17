@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2019 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -95,6 +96,11 @@ static inline uint32_t cap_get_perms(const cap_register_t *c)
 static inline uint8_t cap_get_flags(const cap_register_t *c)
 {
     return CAP_cc(get_flags)(c);
+}
+
+static inline cap_version_t cap_get_version(const cap_register_t *c)
+{
+    return CAP_cc(get_version)(c);
 }
 
 static inline bool cap_has_reserved_bits_set(const cap_register_t *c)

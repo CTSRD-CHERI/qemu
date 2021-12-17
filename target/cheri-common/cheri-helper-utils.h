@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -39,6 +40,7 @@
 #include "cheri_utils.h"
 #include "cheri-lazy-capregs.h"
 #include "cheri-bounds-stats.h"
+#include "cheri_tagmem.h"
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
 #include "exec/exec-all.h"
@@ -135,6 +137,7 @@ do_exception:
 #endif
 }
 
+#ifdef TARGET_MIPS
 static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
                                      target_ulong ddc_offset, uint32_t len,
                                      uintptr_t retpc)
@@ -143,8 +146,10 @@ static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
     target_ulong addr = ddc_offset + cap_get_cursor(ddc);
     check_cap(env, ddc, perm, addr, CHERI_EXC_REGNUM_DDC, len,
         /*instavail=*/true, retpc);
+    // NB since this function is used only on mips we don't need a version check
     return addr;
 }
+#endif
 
 static inline bool cheri_have_access_sysregs(CPUArchState* env)
 {
@@ -224,6 +229,7 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause) {
     case CapEx_PermitCCallViolation: return "Permit_CCall Violation";
     case CapEx_PermitUnsealViolation: return "Permit_Unseal Violation";
     case CapEx_PermitSetCIDViolation: return "Permit_SetCID Violation";
+    case CapEx_VersionViolation: return "Version Violation";
     }
     // default: return "Unknown cause";
     __builtin_unreachable();
@@ -352,6 +358,16 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
                                    size, access_type, addr);
 #endif
     }
+#if defined(TARGET_RISCV) && defined (CC_HAVE_VERSION)
+    cap_version_t ver = cap_get_version(cbp);
+    if (ver != CAP_VERSION_UNVERSIONED) {
+        /* This treats RMW as store */
+        MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
+        if (!cheri_version_check(env, addr, size, rw, _host_return_address, ver)) {
+            raise_version_exception(env, addr, _host_return_address);
+        }
+    }
+#endif
     return addr;
 }
 

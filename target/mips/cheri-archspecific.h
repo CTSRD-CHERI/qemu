@@ -118,6 +118,15 @@ static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
     do_raise_c2_exception_impl(env, CapEx_TLBNoStoreCap, cb, retpc);
 }
 
+static inline void QEMU_NORETURN raise_store_ver_exception(CPUArchState *env,
+                                                           target_ulong va,
+                                                           int cb,
+                                                           uintptr_t retpc)
+{
+    env->CP0_BadVAddr = va;
+    do_raise_c2_exception_impl(env, CapEx_TLBNoStoreCap, cb, retpc);
+}
+
 static inline void QEMU_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {

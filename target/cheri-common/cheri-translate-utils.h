@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -207,7 +208,7 @@ static inline void _generate_special_checked_ptr(
         tcg_gen_mov_tl((TCGv)checked_addr, integer_addr);
     }
 
-    if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags))) {
+    if (unlikely(!have_cheri_tb_flags(ctx, tb_perm_flags | (use_ddc ? TB_FLAG_CHERI_DDC_UNVERSIONED : 0)))) {
         // PCC/DDC is untagged, sealed, or missing permissions
         TCGv_i32 tperms = tcg_const_i32(req_perms);
         cheri_tcg_prepare_for_unconditional_exception(&ctx->base);

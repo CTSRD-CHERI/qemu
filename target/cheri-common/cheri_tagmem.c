@@ -4,6 +4,7 @@
  * Copyright (c) 2015-2016 Stacey Son <sson@FreeBSD.org>
  * Copyright (c) 2016-2018 Alfredo Mazzinghi <am2419@cl.cam.ac.uk>
  * Copyright (c) 2016-2018 Alex Richardson <Alexander.Richardson@cl.cam.ac.uk>
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -123,9 +124,14 @@ static inline size_t num_tagblocks(RAMBlock* ram)
 
 typedef struct CheriTagBlock {
     DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE);
+    cap_version_t mem_versions[CAP_TAGBLK_SIZE];
 } CheriTagBlock;
 
 
+/**
+ * Creates a new zero initialised CheriTagBlock for given ram and tagidx and
+ * sets the pointer in the ram->cheri_tags first-level array.
+ */
 static CheriTagBlock *cheri_tag_new_tagblk(RAMBlock *ram, uint64_t tagidx)
 {
     CheriTagBlock *tagblk, *old;
@@ -151,6 +157,10 @@ static CheriTagBlock *cheri_tag_new_tagblk(RAMBlock *ram, uint64_t tagidx)
     }
 }
 
+/**
+ * Returns the CheriTagBlock for given tag_index in RAMBlock. May return NULL if
+ * not yet allocated.
+ */
 static inline QEMU_ALWAYS_INLINE CheriTagBlock *cheri_tag_block(size_t tag_index,
                                                                 RAMBlock *ram)
 {
@@ -196,6 +206,18 @@ tagblock_set_tag_tagmem(void *tagmem, size_t block_index)
     qatomic_or(p, BIT_MASK(block_index));
 }
 
+static inline QEMU_ALWAYS_INLINE cap_version_t tagblock_get_version(CheriTagBlock *block,
+                                                       size_t block_index)
+{
+    return block ? block->mem_versions[block_index] : CAP_VERSION_UNVERSIONED;
+}
+
+static inline QEMU_ALWAYS_INLINE void tagblock_set_version(CheriTagBlock *block,
+                                                       size_t block_index, cap_version_t v)
+{
+    block->mem_versions[block_index] = v;
+}
+
 static inline QEMU_ALWAYS_INLINE void
 tagblock_set_tag_many_tagmem(void *tagmem, size_t block_index, uint8_t tags)
 {
@@ -231,6 +253,22 @@ static inline QEMU_ALWAYS_INLINE void tagblock_clear_tag(CheriTagBlock *block,
     tagblock_clear_tag_tagmem(block->tag_bitmap, block_index);
 }
 
+static inline QEMU_ALWAYS_INLINE cap_version_t get_version(size_t index, RAMBlock *ram)
+{
+    return tagblock_get_version(cheri_tag_block(index, ram), CAP_TAGBLK_IDX(index));
+}
+
+static inline QEMU_ALWAYS_INLINE void set_version(size_t index, RAMBlock *ram,
+                                                  bool *allocated, cap_version_t val)
+{
+    CheriTagBlock *block = cheri_tag_block(index, ram);
+    if (!block) {
+        block = cheri_tag_new_tagblk(ram, index);
+        *allocated = true;
+    }
+    tagblock_set_version(block, CAP_TAGBLK_IDX(index), val);
+}
+
 void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
 {
     assert(memory_region_is_ram(mr));
@@ -255,13 +293,15 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
 
 void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                             RAMBlock *ram, ram_addr_t ram_offset, size_t size,
-                            int *prot, bool tag_write)
+                            int *prot, bool tag_write, void **vermem_out)
 {
 
     if (unlikely(!ram || !ram->cheri_tags)) {
         /* Tags stored here are effectively cleared (unless they should trap) */
         if (!(*prot & PAGE_SC_TRAP)) {
             *prot |= PAGE_SC_CLEAR;
+            /* Attempting to set versions here is a guest bug -- trap*/
+            *prot |= PAGE_SV_TRAP;
         }
         if (tag_write) {
             error_report("Attempting change tag bit on memory without tags:");
@@ -269,6 +309,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                          (uintmax_t)vaddr, ram ? ram->idstr : NULL,
                          (uintmax_t)ram_offset);
         }
+        *vermem_out = ALL_ZERO_VERMEM;
         return ALL_ZERO_TAGBLK;
     }
 
@@ -298,6 +339,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 
     if (tagblk != NULL) {
         const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
+        *vermem_out = &(tagblk->mem_versions[tagblk_index]);
         return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
     }
 
@@ -306,7 +348,9 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
         // to this location. See the comment around TLBENTRYCAP_INVALID_WRITE_*.
         *prot |= PAGE_SC_TRAP;
     }
-
+    // similarly trap any attempts to write zero version pages
+    *prot |= PAGE_SV_TRAP;
+    *vermem_out = ALL_ZERO_VERMEM;
     return ALL_ZERO_TAGBLK;
 }
 
@@ -684,4 +728,156 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     cheri_debug_assert(tagmem);
 
     tagblock_set_tag_many_tagmem(tagmem, page_vaddr_to_tag_offset(vaddr), tags);
+}
+
+/**
+ * Returns the version associated with given index in vermem. Vermem is the 
+ * version memory cached in the iotlb and index is the tag index in page. Note
+ * we might use this abstraction to make version storage more efficient in future
+ * (e.g. one version per nibble iso one per byte)
+ */
+static inline QEMU_ALWAYS_INLINE cap_version_t vermem_get_ver(void *vermem, size_t index)
+{
+    if (vermem  == ALL_ZERO_VERMEM)
+        return 0;
+    cap_version_t *varray = (cap_version_t *) vermem;
+    return varray[index];
+}
+
+/**
+ * As above vermem_get_ver but sets the version at index in vermem to v. 
+ */
+static inline QEMU_ALWAYS_INLINE void
+vermem_set_ver(void *vermem, size_t index, cap_version_t v)
+{
+    g_assert(vermem != ALL_ZERO_VERMEM); // should have allocated vermem before reaching here
+    cap_version_t *varray = (cap_version_t *) vermem;
+    varray[index] = v;
+}
+
+static inline void *get_vermem_from_iotlb_entry(CPUArchState *env,
+                                                target_ulong vaddr, int mmu_idx,
+                                                uintptr_t *flags_out)
+{
+    /* XXXAR: see mte_helper.c */
+    /*
+     * Find the iotlbentry for ptr.  This *must* be present in the TLB
+     * because we just found the mapping.
+     * TODO: Perhaps there should be a cputlb helper that returns a
+     * matching tlb entry + iotlb entry.
+     */
+#ifdef CONFIG_DEBUG_TCG
+    CPUTLBEntry *entry = tlb_entry(env, mmu_idx, vaddr);
+    g_assert(tlb_hit(isWrite ? tlb_addr_write(entry) : entry->addr_read, vaddr));
+#endif
+    CPUIOTLBEntry *iotlbentry =
+        &env_tlb(env)->d[mmu_idx].iotlb[tlb_index(env, mmu_idx, vaddr)];
+    if (flags_out != NULL)
+        *flags_out = IOTLB_GET_VERMEM_FLAGS(iotlbentry);
+    return IOTLB_GET_VERMEM(iotlbentry);
+}
+
+cap_version_t cheri_version_get_aligned(CPUArchState *env, target_ulong vaddr, int reg,
+                  hwaddr *ret_paddr, int *prot, uintptr_t pc)
+{
+    const int mmu_idx = cpu_mmu_index(env, false);
+    /* XXX caller needs to ensure read MMUAccesType is apporpriate */
+    void *host_addr = probe_read(env, vaddr, 1, mmu_idx, pc);
+    handle_paddr_return(read); /* XXX ret_paddr may not be neeeded. */
+
+    uintptr_t vermem_flags;
+    void *vermem = get_vermem_from_iotlb_entry(env, vaddr, mmu_idx, &vermem_flags);
+
+    /* XXX prot is probably not needed either */
+    if (prot) {
+        *prot = 0;
+        if (vermem_flags & TLBENTRYVER_TRAP) {
+            *prot |= PAGE_SV_TRAP;
+        }
+    }
+
+    cap_version_t result = vermem_get_ver(vermem, page_vaddr_to_tag_offset(vaddr));
+
+    // XXX: Not atomic w.r.t. writes to tag memory
+    qemu_maybe_log_instr_extra(
+        env, "    Cap Version Read [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] -> %d\n",
+        vaddr, qemu_ram_addr_from_host(host_addr), result);
+    return result;
+}
+
+void cheri_version_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc, cap_version_t val)
+{
+    const int mmu_idx = cpu_mmu_index(env, false);
+    store_capcause_reg(env, reg);
+    // XXX FIXME should be probe_ver_write but that results in page fault loop!
+    void *host_addr = probe_ver_write(env, vaddr, 1, mmu_idx, pc);
+    clear_capcause_reg(env);
+
+    handle_paddr_return(write); /* is ret_paddr needed? */
+
+    if (unlikely(!host_addr)) {
+        /* Guest bug? Warn? */
+        warn_report("Attempt to set version on non-RAM "
+                    "via vaddr 0x" TARGET_FMT_lx "\r\n", vaddr);
+        return;
+    }
+
+    uintptr_t vermem_flags;
+    void *vermem = get_vermem_from_iotlb_entry(env, vaddr, mmu_idx, &vermem_flags);
+
+    if (vermem_flags & TLBENTRYVER_TRAP) {
+        raise_store_ver_exception(env, vaddr, reg, pc);
+    }
+
+    /*
+     * probe_ver_write() should have ensured there was a tagmem for this
+     * location. A NULL ram should have been indicated via
+     * TLBENTRYVER_TRAP.
+     */
+    cheri_debug_assert(vermem != ALL_ZERO_VERMEM);
+
+    target_ulong tag_offset = page_vaddr_to_tag_offset(vaddr);
+
+    qemu_maybe_log_instr_extra(
+        env, "    Cap Version Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] %d -> %d\n",
+        vaddr, qemu_ram_addr_from_host(host_addr),
+        vermem_get_ver(vermem, tag_offset), val);
+
+    vermem_set_ver(vermem, tag_offset, val);
+}
+
+static bool cheri_version_check_one(CPUArchState *env, target_ulong vaddr, 
+        MMUAccessType rw, uintptr_t pc, cap_version_t expected)
+{
+    const int mmu_idx = cpu_mmu_index(env, false);
+    probe_access(env, vaddr, 1, rw, mmu_idx, pc);
+
+    void *vermem = get_vermem_from_iotlb_entry(env, vaddr, mmu_idx, NULL);
+    target_ulong tag_offset = page_vaddr_to_tag_offset(vaddr);
+    cap_version_t result = vermem_get_ver(vermem, tag_offset);
+    return result == expected;
+}
+
+bool cheri_version_check(CPUArchState *env, target_ulong vaddr, int32_t size,
+                         MMUAccessType rw, uintptr_t pc, cap_version_t expected)
+{
+    cheri_debug_assert(size > 0);
+    target_ulong first_addr = vaddr;
+    target_ulong last_addr = (vaddr + size - 1);
+    TagOffset tag_start = addr_to_tag_offset(first_addr);
+    TagOffset tag_end = addr_to_tag_offset(last_addr);
+    if (likely(tag_start.value == tag_end.value)) {
+        // Common case, only one granule (i.e. aligned load / store)
+        return cheri_version_check_one(env, vaddr, rw, pc, expected);
+    }
+    // Unaligned -> can cross a capabiblity alignment boundary and
+    // therefore invalidate two tags. It can also cross pages
+    size_t ntags = tag_end.value - tag_start.value + 1;
+    assert(ntags == 2 && "Should check at most two version granules here");
+    bool success = true;
+    for (target_ulong addr = tag_offset_to_addr(tag_start);
+         addr <= tag_offset_to_addr(tag_end); addr += CHERI_CAP_SIZE) {
+        success &= cheri_version_check_one(env, addr, rw, pc, expected);
+    }
+    return success;
 }

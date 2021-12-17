@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # Copyright (c) 2020 Alex Richardson
+# Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
 # All rights reserved.
 #
 # This software was developed by SRI International and the University of
@@ -37,7 +38,9 @@
 ### Three operand instructions
 # 0000000 unused
 cspecialrw  0000001  ..... ..... 000 ..... 1011011 @r
-# 0000010-0000111 unused
+csetversion 0000010  ..... ..... 000 ..... 1011011 @r
+camocdecversion 0000011  ..... ..... 000 ..... 1011011 @r
+# 0000100-0000111 unused
 csetbounds  0001000  ..... ..... 000 ..... 1011011 @r
 csetboundsexact 0001001  ..... ..... 000 ..... 1011011 @r
 # 0001010 unused
@@ -85,7 +88,10 @@ cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 # fpclear   1111111  10000 ..... 000 ..... 1011011 @r2
 csealentry  1111111  10001 ..... 000 ..... 1011011 @r2
 cloadtags   1111111  10010 ..... 000 ..... 1011011 @r2
+cgetversion 1111111  10011 ..... 000 ..... 1011011 @r2
 jalr_pcc    1111111  10100 ..... 000 ..... 1011011 @r2
+# cloadversions 1111111  10101 ..... 000 ..... 1011011 @r2
+cloadversion 1111111  10110 ..... 000 ..... 1011011 @r2
 
 
 
@@ -93,7 +99,8 @@ jalr_pcc    1111111  10100 ..... 000 ..... 1011011 @r2
 @r_2source ....... ..... .....   ... ..... ....... %rs2 %rs1
 
 ### Two operands (source1 and source2)
-cinvoke  1111110  ..... ..... 000 00001 1011011 @r_2source
+cinvoke        1111110  ..... ..... 000 00001 1011011 @r_2source
+cstoreversion  1111110  ..... ..... 000 00010 1011011 @r_2source
 
 
 ### Instructions with 12-bit immediates:

@@ -92,6 +92,7 @@ typedef enum CheriCapExc {
     CapEx_AccessCCallIDCViolation       = 0x1A,  /* Access IDC in a CCall delay slot */
     CapEx_PermitUnsealViolation         = 0x1B,  /* Permit_Unseal violation */
     CapEx_PermitSetCIDViolation         = 0x1C,  /* Permit_SetCID violation */
+    CapEx_VersionViolation              = 0x1D,  /* Version violation */
     // 0x1d-0x1f Reserved
 } CheriCapExcCause;
 

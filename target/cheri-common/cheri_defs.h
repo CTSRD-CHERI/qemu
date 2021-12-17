@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -108,6 +109,15 @@
 #define CAP_NULL_PESBT CAP_CC(NULL_PESBT)
 #define CAP_NULL_XOR_MASK CAP_CC(NULL_XOR_MASK)
 
+#define CAP_VERSION_UNVERSIONED CAP_CC(VERSION_UNVERSIONED)
+#define CAP_MAX_VERSION CAP_CC(MAX_VERSION)
+/* size of memory version granule. In principle this is independent of CAP_SIZE
+    but in practice it will probably be the same. */
+#  define CHERI_VERSION_GRANULE_SIZE (CHERI_CAP_SIZE)
+/* Integer type big enough to hold a memory granule version. The actually 
+   supported number of versions might be smaller e.g. 4-bits */
+typedef uint8_t cap_version_t;
+
 typedef CAP_cc(cap_t) cap_register_t;
 typedef CAP_cc(offset_t) cap_offset_t;
 typedef CAP_cc(length_t) cap_length_t;
@@ -170,6 +180,8 @@ typedef enum CheriTbFlags {
     TB_FLAG_CHERI_PCC_FULL_AS =
         TB_FLAG_CHERI_PCC_BASE_ZERO | TB_FLAG_CHERI_PCC_TOP_MAX,
     TB_FLAG_CHERI_PCC_READABLE = (1 << 9),
+    /* DDC is tagged, unsealed and unversioned */
+    TB_FLAG_CHERI_DDC_UNVERSIONED = (1 << 10),
 
     /* Useful for CHERI-specific flags on various platforms if the normal flags
        overflowed */

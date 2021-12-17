@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2018 Lawrence Esswood
  * Copyright (c) 2018-2020 Alex Richardson
+ * Copyright (c) 2021 Microsoft <robert.norton@microsoft.com>
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -64,6 +65,9 @@ enum {
     _CC_N(NULL_PESBT) = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) | _CC_ENCODE_FIELD(0, RESERVED) |
                         _CC_ENCODE_FIELD(0, FLAGS) | _CC_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
                         _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) |
+#ifdef CC_HAVE_VERSION
+                        _CC_ENCODE_FIELD(_CC_N(VERSION_UNVERSIONED), VERSION) |
+#endif
                         _CC_ENCODE_FIELD(_CC_N(NULL_T), EXP_NONZERO_TOP) | _CC_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
                         _CC_ENCODE_FIELD(_CC_N(NULL_EXP) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
                         _CC_ENCODE_FIELD(_CC_N(NULL_EXP) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
@@ -88,7 +92,7 @@ enum {
 #define _CC_MAX_TOP _CC_N(MAX_TOP)
 #define _CC_CURSOR_MASK _CC_N(CURSOR_MASK)
 // Check that the sizes of the individual fields match up
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_SIZE) + _CC_N(FIELD_OTYPE_SIZE) + _CC_N(FIELD_FLAGS_SIZE) +
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_SIZE) + _CC_N(FIELD_VERSION_SIZE) + _CC_N(FIELD_OTYPE_SIZE) + _CC_N(FIELD_FLAGS_SIZE) +
                            _CC_N(FIELD_RESERVED_SIZE) + _CC_N(FIELD_HWPERMS_SIZE) + _CC_N(FIELD_UPERMS_SIZE),
                        _CC_ADDR_WIDTH);
 _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_ZERO_TOP_SIZE) +
@@ -113,6 +117,9 @@ _CC_STATIC_ASSERT(_CC_N(MAX_RESERVED_OTYPE) <= _CC_N(MAX_REPRESENTABLE_OTYPE), "
 struct _cc_N(cap);
 static inline uint8_t _cc_N(get_flags)(const struct _cc_N(cap)* cap);
 static inline uint32_t _cc_N(get_otype)(const struct _cc_N(cap)* cap);
+#ifdef CC_HAVE_VERSION
+static inline uint8_t _cc_N(get_version)(const struct _cc_N(cap)* cap);
+#endif
 static inline uint32_t _cc_N(get_perms)(const struct _cc_N(cap)* cap);
 static inline uint8_t _cc_N(get_reserved)(const struct _cc_N(cap)* cap);
 static inline uint32_t _cc_N(get_uperms)(const struct _cc_N(cap)* cap);
@@ -265,6 +272,9 @@ ALL_WRAPPERS(UPERMS, uperms, uint32_t)
 ALL_WRAPPERS(OTYPE, otype, uint32_t)
 ALL_WRAPPERS(FLAGS, flags, uint8_t)
 ALL_WRAPPERS(RESERVED, reserved, uint8_t)
+#ifdef CC_HAVE_VERSION
+ALL_WRAPPERS(VERSION, version, uint8_t)
+#endif
 #undef ALL_WRAPPERS
 
 /// Extract the bits used for bounds and infer the top two bits of T
@@ -707,7 +717,7 @@ static inline bool _cc_N(is_representable_new_addr)(bool sealed, _cc_addr_t base
         c._cr_cursor = cursor;
         // important to set as compress assumes this is in bounds
         c.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
-                     _CC_ENCODE_FIELD(sealed ? 42 : _CC_N(OTYPE_UNSEALED), OTYPE);
+                     _CC_ENCODE_FIELD(sealed ? 42 : _CC_N(OTYPE_UNSEALED), OTYPE); /* XXX should set version too? seems redundant */
         /* Get an EBT */
         bool exact_input = false;
         _cc_N(update_ebt)(&c, _cc_N(compute_ebt)(base, top, NULL, &exact_input));
@@ -855,6 +865,9 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
 
     // TODO: find a faster way to compute top and bot:
     const _cc_addr_t pesbt = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) |
+#ifdef CC_HAVE_VERSION
+                             _CC_ENCODE_FIELD(_CC_N(VERSION_UNVERSIONED), VERSION) | /* I think setting this here is redundant but zero anyway... */
+#endif
                              _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) | _CC_ENCODE_FIELD(new_ebt, EBT);
     _cc_cap_t new_cap;
     _cc_N(decompress_raw)(pesbt, cursor, cap->cr_tag, &new_cap);
@@ -929,8 +942,12 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     creg._cr_cursor = cursor;
     creg.cr_bounds_valid = true;
     creg._cr_top = top;
-    creg.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
-                    _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
+    creg.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS)
+                     | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS)
+#ifdef CC_HAVE_VERSION
+                     | _CC_ENCODE_FIELD(_CC_N(VERSION_UNVERSIONED), VERSION)
+#endif
+                     | _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
     creg.cr_tag = true;
     creg.cr_exp = _CC_N(NULL_EXP);
     bool exact_input = false;
