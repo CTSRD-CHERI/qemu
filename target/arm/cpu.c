@@ -213,7 +213,7 @@ static void cp_reg_check_reset(gpointer key, gpointer value,  gpointer opaque)
         cap_register_t creg_old = read_raw_cp_reg_cap(&cpu->env, ri);
         cp_reg_reset(key, value, opaque);
         cap_register_t creg_new = read_raw_cp_reg_cap(&cpu->env, ri);
-        assert(memcmp(&creg_old, &creg_new, sizeof(creg_old)) == 0);
+        assert(CAP_cc(raw_equal)(&creg_old, &creg_new));
         return;
     }
 #endif
