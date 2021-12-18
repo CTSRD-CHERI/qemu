@@ -2182,6 +2182,7 @@ if config_all.has_key('CONFIG_TCG')
   summary_info += {'TCG interpreter':   config_host.has_key('CONFIG_TCG_INTERPRETER')}
   summary_info += {'TCG instruction logging': config_host.has_key('CONFIG_TCG_LOG_INSTR')}
   summary_info += {'TCG instruction logging with google-perfetto': config_host.has_key('CONFIG_TRACE_PERFETTO')}
+  summary_info += {'TCG instruction logging with protobuf backend': config_host.has_key('CONFIG_TRACE_PROTOBUF')}
 endif
 summary_info += {'RVFI-DII':            config_host.has_key('CONFIG_RVFI_DII')}
 summary_info += {'malloc trim support': has_malloc_trim}
