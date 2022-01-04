@@ -398,7 +398,10 @@ struct target_kinfo_vmentry {
 	uint16_t kve_vn_mode;			/* File mode. */
 	uint16_t kve_status;			/* Status flags. */
 #if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
-	uint64_t kve_vn_fsid;			/* dev_t of vnode location */
+	union {
+		uint64_t _kve_vn_fsid;		/* dev_t of vnode location */
+		uint64_t _kve_obj;		/* handle of anon obj */
+	} kve_type_spec;
 	uint64_t kve_vn_rdev;			/* Device id if device. */
 	int	 _kve_ispare[8];		/* Space for more stuff. */
 #else
@@ -411,5 +414,14 @@ struct target_kinfo_vmentry {
 	/* Truncated before copyout in sysctl */
 	char	 kve_path[PATH_MAX];		/* Path to VM obj, if any. */
 };
+
+#if defined(__FreeBSD_version) && __FreeBSD_version >= 1200031
+#ifndef kve_vn_fsid
+#define	kve_vn_fsid	kve_type_spec._kve_vn_fsid
+#endif
+#ifndef kve_obj
+#define	kve_obj		kve_type_spec._kve_obj
+#endif
+#endif
 
 #endif /* ! _TARGET_OS_USER_H_ */
