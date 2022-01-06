@@ -46,7 +46,7 @@ static inline void target_cpu_init(CPUARMState *env,
 
 static inline void target_cpu_loop(CPUARMState *env)
 {
-    CPUState *cs = CPU(arm_env_get_cpu(env));
+    CPUState *cs = env_cpu(env);
     int trapnr;
     target_siginfo_t info;
     uint64_t code, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8;
