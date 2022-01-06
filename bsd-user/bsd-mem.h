@@ -69,6 +69,9 @@ static inline abi_long do_bsd_mmap(void *cpu_env, abi_syscallret_t retval,
     abi_syscallarg_t sa7, abi_syscallarg_t sa8)
 {
     CPUState *cpu;
+#ifndef TARGET_CHERI
+    abi_long reg6;
+#endif
 
     cpu = env_cpu(cpu_env);
 
@@ -79,7 +82,8 @@ static inline abi_long do_bsd_mmap(void *cpu_env, abi_syscallret_t retval,
 #ifdef TARGET_CHERI
     assert(TARGET_ABI_BITS == 64);
 #else
-    sa6 = (abi_syscallarg_t)target_arg64(sa6, sa7);
+    reg6 = target_arg64(syscallarg_value(sa6), syscallarg_value(sa7));
+    sa6 = &reg6;
 #endif
 
     return (get_errno(target_sys_mmap(cpu->opaque, retval, sa1, sa2, sa3, sa4,
