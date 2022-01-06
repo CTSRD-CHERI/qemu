@@ -4422,7 +4422,7 @@ static inline target_ulong cpu_get_recent_pc(CPUArchState *env)
 #endif
 }
 
-static inline bool pc_is_current(CPUArchState *env)
+static inline bool pc_is_current(const CPUArchState *env)
 {
 #ifdef CONFIG_DEBUG_TCG
     return env->_pc_is_current;
