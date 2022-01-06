@@ -90,7 +90,7 @@ typedef cap_register_t * abi_syscallret_t;
 typedef abi_long abi_uintptr_t __attribute__((aligned(ABI_LONG_ALIGNMENT)));
 typedef abi_uintptr_t abi_uintcap_t;
 
-typedef abi_long abi_syscallarg_t;
+typedef abi_long * abi_syscallarg_t;
 typedef abi_long * abi_syscallret_t;
 #endif /* TARGET_CHERI */
 
@@ -109,8 +109,8 @@ typedef abi_long * abi_syscallret_t;
 #define uintptr_vaddr(x) ((abi_vaddr_t)(x))
 #define vaddr_uintptr(x) ((abi_uintptr_t)(x))
 
-#define syscallarg_value(sa) sa
-#define syscallret_value(sa) sa
+#define syscallarg_value(sa) ((abi_long)(sa != NULL) ? *(sa) : 0)
+#define syscallret_value(sa) (*(sa))
 
 #define syscallarg_uintptr(sa) ((abi_uintptr_t)(sa))
 #endif
