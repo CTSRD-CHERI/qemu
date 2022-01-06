@@ -1723,9 +1723,7 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
 #if defined(TARGET_ARM)
     case HW_FLOATINGPT:
         if (oldlen) {
-          if (env->features & ((1ULL << ARM_FEATURE_VFP)|
-              (1ULL << ARM_FEATURE_VFP3)|
-              (1ULL << ARM_FEATURE_VFP4)))
+          if (cpu_isar_feature(aa32_vfp, env_archcpu(env)))
               *(int32_t *)holdp = 1;
           else
               *(int32_t *)holdp = 0;
