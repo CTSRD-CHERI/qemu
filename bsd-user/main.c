@@ -291,7 +291,10 @@ int main(int argc, char **argv)
     TaskState *ts;
     CPUArchState *env;
     CPUState *cpu;
-    int ii, optind;
+#ifdef TARGET_CHERI
+    int ii;
+#endif
+    int optind;
     const char *r;
     const char *gdbstub = NULL;
     char **target_environ, **wrk;
