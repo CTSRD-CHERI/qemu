@@ -44,14 +44,59 @@ static inline void target_cpu_init(CPUARMState *env,
     env->xregs[31] = regs->sp;
 }
 
+static abi_long
+target_syscallarg_value(CPUARMState *env, unsigned regnum)
+{
+
+    return (arm_get_xreg(env, regnum));
+}
+
+static abi_long
+target_cpu_fetch_syscall_args(CPUARMState *env,
+    struct target_syscall_args *sa)
+{
+    uint8_t aii;
+
+    aii = 0;
+
+    sa->code = arm_get_xreg(env, 8);
+    memset(&sa->args, 0, sizeof(sa->args));
+
+    if (sa->code == TARGET_FREEBSD_NR_syscall ||
+        sa->code == TARGET_FREEBSD_NR___syscall) {
+        sa->code = target_syscallarg_value(env, aii++);
+    } else {
+        sa->args[0] = target_syscallarg_value(env, aii++);
+    }
+
+    /*
+     * XXXKW: target_syscall_args.callp isn't currently used to call a system
+     * call. We should refactor the user mode to handle system calls easier
+     * using the target_sysent system call table.
+     */
+    if (__predict_false(sa->code >= TARGET_FREEBSD_NR_MAXSYSCALL))
+        sa->callp = &target_sysent[0];
+    else
+        sa->callp = &target_sysent[sa->code];
+
+    assert(sa->callp->sy_narg <= nitems(sa->args));
+
+    for (; aii < TARGET_MAXARGS - 1; aii++) {
+        sa->args[aii] = target_syscallarg_value(env, aii);
+    }
+
+    return (0);
+}
+
 static inline void target_cpu_loop(CPUARMState *env)
 {
     CPUState *cs = env_cpu(env);
     int trapnr;
     target_siginfo_t info;
-    uint64_t code, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8;
     uint32_t pstate;
     abi_long ret;
+    abi_syscallret_t retval;
+    struct target_syscall_args sa;
 
     for (;;) {
         cpu_exec_start(cs);
@@ -62,43 +107,10 @@ static inline void target_cpu_loop(CPUARMState *env)
         switch (trapnr) {
         case EXCP_SWI:
             /* See arm/arm/trap.c cpu_fetch_syscall_args() */
-            code = env->xregs[8];
-            if (code == TARGET_FREEBSD_NR_syscall) {
-                code = env->xregs[0];
-                arg1 = env->xregs[1];
-                arg2 = env->xregs[2];
-                arg3 = env->xregs[3];
-                arg4 = env->xregs[4];
-                arg5 = env->xregs[5];
-                arg6 = env->xregs[6];
-                arg7 = env->xregs[7];
-                arg8 = 0;
-            } else if (code == TARGET_FREEBSD_NR___syscall) {
-#ifdef TARGET_WORDS_BIGENDIAN
-                code = env->xregs[1];
-#else
-                code = env->xregs[0];
-#endif
-                arg1 = env->xregs[2];
-                arg2 = env->xregs[3];
-                arg3 = env->xregs[4];
-                arg4 = env->xregs[5];
-                arg5 = env->xregs[6];
-                arg6 = env->xregs[7];
-                arg7 = 0;
-                arg8 = 0;
-            } else {
-                arg1 = env->xregs[0];
-                arg2 = env->xregs[1];
-                arg3 = env->xregs[2];
-                arg4 = env->xregs[3];
-                arg5 = env->xregs[4];
-                arg6 = env->xregs[5];
-                arg7 = env->xregs[6];
-                arg8 = env->xregs[7];
+            ret = target_cpu_fetch_syscall_args(env, &sa);
+            if (ret == 0) {
+                ret = do_freebsd_syscall(env, &retval, &sa);
             }
-            ret = do_freebsd_syscall(env, code, arg1, arg2, arg3,
-                    arg4, arg5, arg6, arg7, arg8);
             /*
              * The carry bit is cleared for no error; set for error.
              * See arm64/arm64/vm_machdep.c cpu_set_syscall_retval()
