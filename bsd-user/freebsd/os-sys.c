@@ -68,7 +68,9 @@
 
 #include "bsd-proc.h"
 
+#ifdef TARGET_CHERI
 #include "cheri/cheri.h"
+#endif
 
 #include "target_arch_sysarch.h"
 #include "target_os_vmparam.h"
