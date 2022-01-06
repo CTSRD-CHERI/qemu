@@ -1932,7 +1932,11 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
     return ret;
 }
 
-#ifndef TARGET_CHERI
+#if 0
+/*
+ * XXXKW: See bsd-user/qemu.h.
+ */
+
 abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
                            abi_long arg2, abi_long arg3, abi_long arg4,
                            abi_long arg5, abi_long arg6)
@@ -2044,7 +2048,7 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
     record_syscall_return(cpu, num, ret);
     return ret;
 }
-#endif /* !TARGET_CHERI */
+#endif
 
 void syscall_init(void)
 {
