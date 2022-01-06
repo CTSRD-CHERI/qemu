@@ -219,12 +219,18 @@ abi_long do_brk(abi_ulong new_brk);
 void syscall_init(void);
 abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
     struct target_syscall_args *sa);
+#if 0
+/*
+ * XXXKW: do_{netbsd,openbsd}_syscall must be adapted to the current system
+ * call interface to work with the current BSD user mode.
+ */
 abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
                            abi_long arg2, abi_long arg3, abi_long arg4,
                            abi_long arg5, abi_long arg6);
 abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
                             abi_long arg2, abi_long arg3, abi_long arg4,
                             abi_long arg5, abi_long arg6);
+#endif
 void gemu_log(const char *fmt, ...) GCC_FMT_ATTR(1, 2);
 extern THREAD CPUState *thread_cpu;
 void cpu_loop(CPUArchState *env);
