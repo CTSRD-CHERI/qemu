@@ -274,7 +274,11 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
 {
     CPUState *cpu = env_cpu(cpu_env);
     abi_long arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ret;
-    static cap_register_t retcap;
+#ifdef TARGET_CHERI
+    static cap_register_t retreg;
+#else
+    static abi_long retreg;
+#endif
     abi_syscallret_t retval;
 
     assert(retvalp != NULL);
@@ -1036,10 +1040,10 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
          * Memory management system calls.
          */
     case TARGET_FREEBSD_NR_mmap: /* mmap(2) */
-        ret = do_bsd_mmap(cpu_env, &retcap, &sa->args[0], &sa->args[1],
+        ret = do_bsd_mmap(cpu_env, &retreg, &sa->args[0], &sa->args[1],
             &sa->args[2], &sa->args[3], &sa->args[4], &sa->args[5], &sa->args[6],
             &sa->args[7]);
-        retval = &retcap;
+        retval = &retreg;
         break;
 
     case TARGET_FREEBSD_NR_munmap: /* munmap(2) */
@@ -1231,9 +1235,9 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
 
 #ifdef BSD_HAVE_KEVENT64
     case TARGET_FREEBSD_NR_kevent: /* kevent(2) */
-        ret = do_freebsd_kevent(&retcap, &sa->args[0], &sa->args[1], &sa->args[2],
+        ret = do_freebsd_kevent(&retreg, &sa->args[0], &sa->args[1], &sa->args[2],
             &sa->args[3], &sa->args[4], &sa->args[5]);
-        retval = &retcap;
+        retval = &retreg;
         break;
 #endif
 
@@ -1261,8 +1265,9 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
         break;
 
     case TARGET_FREEBSD_NR_sigaction: /* sigaction(2) */
-        ret = do_bsd_sigaction(&retcap, &sa->args[0], &sa->args[1], &sa->args[2]);
-        retval = &retcap;
+        ret = do_bsd_sigaction(&retreg, &sa->args[0], &sa->args[1],
+            &sa->args[2]);
+        retval = &retreg;
         break;
 
     case TARGET_FREEBSD_NR_sigprocmask: /* sigprocmask(2) */
@@ -1290,13 +1295,13 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
         break;
 
     case TARGET_FREEBSD_NR_sigqueue: /* sigqueue(2) */
-        ret = do_bsd_sigqueue(&retcap, &sa->args[0], &sa->args[1], &sa->args[2]);
-        retval = &retcap;
+        ret = do_bsd_sigqueue(&retreg, &sa->args[0], &sa->args[1], &sa->args[2]);
+        retval = &retreg;
         break;
 
     case TARGET_FREEBSD_NR_sigaltstack: /* sigaltstack(2) */
-        ret = do_bsd_sigaltstack(cpu_env, &retcap, &sa->args[0], &sa->args[1]);
-        retval = &retcap;
+        ret = do_bsd_sigaltstack(cpu_env, &retreg, &sa->args[0], &sa->args[1]);
+        retval = &retreg;
         break;
 
     case TARGET_FREEBSD_NR_kill: /* kill(2) */
@@ -1903,15 +1908,15 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
 	break;
 
     case TARGET_FREEBSD_NR_kbounce:
-        ret = do_freebsd_kbounce(&retcap, &sa->args[0], &sa->args[1], &sa->args[2],
-            &sa->args[3]);
-        retval = *retvalp;
+        ret = do_freebsd_kbounce(&retreg, &sa->args[0], &sa->args[1],
+            &sa->args[2], &sa->args[3]);
+        retval = &retreg;
         break;
 
     case TARGET_FREEBSD_NR_flag_captured:
-        ret = do_freebsd_flag_captured(&retcap, &sa->args[0], &sa->args[1],
+        ret = do_freebsd_flag_captured(&retreg, &sa->args[0], &sa->args[1],
             __func__);
-        retval = *retvalp;
+        retval = &retreg;
         break;
 
     default:
