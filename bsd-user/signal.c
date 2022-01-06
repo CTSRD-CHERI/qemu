@@ -641,7 +641,11 @@ abi_long do_sigaltstack(abi_syscallret_t retval, abi_syscallarg_t ua_ss,
 
     ret = 0;
 out:
+#ifdef TARGET_CHERI
     *retval = *cheri_fromint(ret);
+#else
+    *retval = ret;
+#endif
     return ret;
 }
 

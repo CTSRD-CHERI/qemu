@@ -90,6 +90,10 @@ do_freebsd_kbounce(abi_syscallret_t retval, abi_syscallarg_t ua_src,
     error = copy_to_user(uintptr_vaddr(ua.dst), bounce, ua.len);
 error:
     free(bounce);
+#ifdef TARGET_CHERI
     *retval = *cheri_fromint(error);
+#else
+    *retval = error;
+#endif
     return (error);
 }
