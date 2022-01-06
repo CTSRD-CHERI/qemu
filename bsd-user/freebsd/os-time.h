@@ -844,7 +844,11 @@ static inline abi_long do_freebsd_kevent(abi_syscallret_t retval,
                 sizeof(*target_eventlist) * ua.nevents);
     }
 out:
+#ifdef TARGET_CHERI
     *retval = *cheri_fromint(ret);
+#else
+    *retval = ret;
+#endif
     return (ret);
 }
 #endif

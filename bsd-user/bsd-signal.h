@@ -59,7 +59,11 @@ static inline abi_long do_bsd_sigaction(abi_syscallret_t retval,
         memcpy(&old_act->sa_mask, &oact.sa_mask, sizeof(target_sigset_t));
         unlock_user_struct(old_act, uintptr_vaddr(ua.oact), 1);
     }
+#ifdef TARGET_CHERI
     *retval = *cheri_fromint(ret);
+#else
+    *retval = 0;
+#endif
     return ret;
 }
 
@@ -254,7 +258,11 @@ static inline abi_long do_bsd_sigqueue(abi_syscallret_t retval,
     get_user_uintptr(sival_ptr, uintptr_vaddr(tvalue->sival_ptr));
     value.sival_ptr = (void *)(uintptr_t)uintptr_vaddr(sival_ptr);
     ret = get_errno(sigqueue(ua.pid, target_to_host_signal(ua.signum), value));
+#ifdef TARGET_CHERI
     *retval = *cheri_fromint(ret);
+#else
+    *retval = 0;
+#endif
     return (ret);
 }
 

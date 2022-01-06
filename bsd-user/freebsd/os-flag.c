@@ -147,6 +147,10 @@ do_freebsd_flag_captured(abi_syscallret_t retval, abi_syscallarg_t ua_message,
     qemu_log("captured flag source: (%s) message: (%s) key: %s\n",
         src_buf, msg_buf, key_buf);
 
+#ifdef TARGET_CHERI
     *retval = *cheri_fromint(0);
+#else
+    *retval = 0;
+#endif
     return (0);
 }

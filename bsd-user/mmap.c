@@ -1090,6 +1090,8 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
          */
         *retval = *cheri_ptr((void *)(uintptr_t)start, len);
     }
+#else
+    *retval = start;
 #endif
     return start;
 fail:
