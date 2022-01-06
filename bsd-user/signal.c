@@ -23,7 +23,9 @@
 #include "qemu.h"
 #include "linux-user/trace.h"
 
+#ifdef TARGET_CHERI
 #include <cheri/cheric.h>
+#endif
 
 /*
  * XXXKW: target_sigaltstack_used must be a user object as it is copied out
