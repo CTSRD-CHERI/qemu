@@ -32,7 +32,11 @@
  * in sigaltstack(2).
  */
 static target_stack_t target_sigaltstack_used = {
+#ifdef TARGET_CHERI
     .ss_sp = {},
+#else
+    .ss_sp = 0,
+#endif
     .ss_size = 0,
     .ss_flags = TARGET_SS_DISABLE,
 };
@@ -629,7 +633,7 @@ abi_long do_sigaltstack(abi_syscallret_t retval, abi_syscallarg_t ua_ss,
         target_sigaltstack_used.ss_sp = cheri_uintptr(cheri_ptr(ss.ss_sp,
             target_sigaltstack_used.ss_size));
 #else
-        target_sigaltstack_used.ss_sp = ss.ss_sp;
+        target_sigaltstack_used.ss_sp = (uintptr_t)ss.ss_sp;
 #endif
     }
 
