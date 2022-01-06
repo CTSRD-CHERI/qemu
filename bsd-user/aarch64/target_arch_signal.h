@@ -22,6 +22,8 @@
 
 #include "cpu.h"
 
+#include "errno_defs.h"
+
 #define TARGET_REG_X0   0
 #define TARGET_REG_X30  30
 #define TARGET_REG_X31  31
