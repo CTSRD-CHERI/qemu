@@ -106,8 +106,9 @@ struct target_trapframe {
  * Assumes that target stack frame memory is locked.
  */
 static inline abi_long
-set_sigtramp_args(CPUARMState *regs, int sig, struct target_sigframe *frame,
-    abi_ulong frame_addr, struct target_sigaction *ka)
+set_sigtramp_args(CPUARMState *regs, TaskState *ts, int sig,
+    struct target_sigframe *frame, abi_ulong frame_addr,
+    struct target_sigaction *ka)
 {
     /*
      * Arguments to signal handler:
