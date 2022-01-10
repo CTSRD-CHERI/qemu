@@ -821,7 +821,7 @@ void cheri_version_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, h
         return;
     }
 
-    uintptr_t vermem_flags;
+    uintptr_t vermem_flags = 0;
     void *vermem = get_vermem_from_iotlb_entry(env, vaddr, mmu_idx, &vermem_flags);
 
     if (vermem_flags & TLBENTRYVER_TRAP) {
