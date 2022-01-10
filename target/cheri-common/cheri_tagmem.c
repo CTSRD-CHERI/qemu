@@ -809,7 +809,6 @@ void cheri_version_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, h
 {
     const int mmu_idx = cpu_mmu_index(env, false);
     store_capcause_reg(env, reg);
-    // XXX FIXME should be probe_ver_write but that results in page fault loop!
     void *host_addr = probe_ver_write(env, vaddr, 1, mmu_idx, pc);
     clear_capcause_reg(env);
 
