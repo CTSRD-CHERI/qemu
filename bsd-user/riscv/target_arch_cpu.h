@@ -179,7 +179,11 @@ static inline void target_cpu_loop(CPURISCVState *env)
                  */
                 if (error >= 0) {
                     if (retval != NULL) {
+#ifdef TARGET_CHERI
                         update_capreg(env, xA0, retval);
+#else
+                        gpr_set_int_value(env, xA0, *retval);
+#endif
                     } else {
                         gpr_set_int_value(env, xA0, error);
                     }
