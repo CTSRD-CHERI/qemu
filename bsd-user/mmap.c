@@ -131,7 +131,7 @@ mmap_retcap(vm_offset_t addr, const struct mmap_req *mrp)
         return (mrp->mr_source_cap);
 
     newcap = mrp->mr_source_cap;
-    perms = cheri_getperm(&newcap);
+
     /*
      * If PROT_MAX() was not passed, use the prot value to derive
      * capability permissions.
@@ -143,7 +143,8 @@ mmap_retcap(vm_offset_t addr, const struct mmap_req *mrp)
      * Set the permissions to PROT_MAX to allow a full
      * range of access subject to page permissions.
      */
-    (void)cheri_andperm(&newcap, ~PERM_RWX | mmap_prot2perms(cap_prot));
+    perms = ~PERM_RWX | mmap_prot2perms(cap_prot);
+    (void)cheri_andperm(&newcap, perms);
 
     if (mrp->mr_flags & MAP_FIXED) {
         /*
