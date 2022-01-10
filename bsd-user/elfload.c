@@ -298,10 +298,8 @@ static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
     struct elf_phdr *elf_phdata  =  NULL;
     abi_ulong rbase;
     int retval;
-    abi_ulong last_bss, elf_bss, error, max_addr;
+    abi_ulong error, max_addr;
 
-    elf_bss = 0;
-    last_bss = 0;
     max_addr = 0;
     error = 0;
 
