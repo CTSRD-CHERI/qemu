@@ -43,7 +43,7 @@ static inline void target_cpu_init(CPURISCVState *env,
 
     env->PCC = regs->sepc;
 #else
-    for (i = 0; i < 32; i++)
+    for (i = 1; i < 32; i++)
         gpr_set_int_value(env, i, regs->regs[i]);
 
     riscv_update_pc(env, regs->sepc, true);
