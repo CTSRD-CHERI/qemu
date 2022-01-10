@@ -288,7 +288,7 @@ static inline void set_mcontext_regs(CPURISCVState *regs,
 #ifdef TARGET_CHERI
         update_capreg(regs, regnum, cheri_load(&cap, &srcregs[ii]));
 #else
-        regs->gpr[xT0] = tswap64(srcregs[ii]);
+        regs->gpr[regnum] = tswap64(srcregs[ii]);
 #endif
     }
     va_end(ap);
