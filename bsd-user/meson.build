@@ -23,15 +23,13 @@ bsd_user_ss.add(files(
   targetos / 'os-sys.c',
   targetos / 'os-thread.c',
   targetos / 'os-time.c',
-  config_target['TARGET_ABI_DIR'] / 'target_arch_cpu.c',
 ))
 
-if 'TARGET_CHERI' in config_target
-  bsd_user_ss.add(files(
-    'cheri/cheri_exec.c',
-    'cheri/cheri_usercap.c',
-    'cheri/cheric.c',
-    config_target['TARGET_ABI_DIR'] / 'cheri/cheri_exception.c',
-    config_target['TARGET_ABI_DIR'] / 'cheri/cheri_machdep.c',
-  ))
-endif
+bsd_user_ss.add(when: 'TARGET_CHERI', if_true: files(
+  'cheri/cheri_exec.c',
+  'cheri/cheri_usercap.c',
+  'cheri/cheric.c',
+))
+
+subdir('aarch64')
+subdir('riscv')
