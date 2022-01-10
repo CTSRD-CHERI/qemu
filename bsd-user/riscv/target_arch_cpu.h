@@ -50,12 +50,12 @@ static inline void target_cpu_init(CPURISCVState *env,
 #endif
 }
 
-static abi_syscallarg_t
-target_syscallarg(CPURISCVState *env, unsigned regnum)
+static abi_long
+target_syscallarg_value(CPURISCVState *env, unsigned regnum)
 {
 
 #ifdef TARGET_CHERI
-    return (get_readonly_capreg(env, regnum));
+    return (syscallarg_value(get_readonly_capreg(env, regnum)));
 #else
     return (gpr_int_value(env, regnum));
 #endif
@@ -78,7 +78,7 @@ target_cpu_fetch_syscall_args(CPURISCVState *env,
 
     if (sa->code == TARGET_FREEBSD_NR_syscall ||
         sa->code == TARGET_FREEBSD_NR___syscall) {
-        sa->code = syscallarg_value(target_syscallarg(env, xA0));
+        sa->code = target_syscallarg_value(env, xA0);
 
 #ifdef TARGET_CHERI
         stack_args = gpr_int_value(env, xSP);
@@ -128,7 +128,11 @@ target_cpu_fetch_syscall_args(CPURISCVState *env,
 #endif
     {
         for (i = 0; i < sa->callp->sy_narg; i++) {
-            sa->args[i] = *target_syscallarg(env, xA0 + i);
+#ifdef TARGET_CHERI
+            sa->args[i] = *get_readonly_capreg(env, xA0 + i);
+#else
+            sa->args[i] = target_syscallarg_value(env, xA0 + i);
+#endif
         }
     }
 
