@@ -300,9 +300,9 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
         /* Tags stored here are effectively cleared (unless they should trap) */
         if (!(*prot & PAGE_SC_TRAP)) {
             *prot |= PAGE_SC_CLEAR;
-            /* Attempting to set versions here is a guest bug -- trap*/
-            *prot |= PAGE_SV_TRAP;
         }
+        /* Attempting to set versions here is a guest bug -- trap*/
+        *prot |= PAGE_SV_TRAP;
         if (tag_write) {
             error_report("Attempting change tag bit on memory without tags:");
             error_report("%s: vaddr=0x%jx -> %s+0x%jx", __func__,
