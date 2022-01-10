@@ -1467,8 +1467,9 @@ static bool victim_tlb_hit(CPUArchState *env, size_t mmu_idx, size_t index,
 #ifdef TARGET_CHERI
         if (cap_write && ((env_tlb(env)->d[mmu_idx].viotlb[vidx].tagmem_write &
                            TLBENTRYCAP_INVALID_WRITE_MASK) ==
-                           TLBENTRYCAP_INVALID_WRITE_VALUE || 
-                           env_tlb(env)->d[mmu_idx].viotlb[vidx].vermem ==
+                           TLBENTRYCAP_INVALID_WRITE_VALUE ||
+                           (env_tlb(env)->d[mmu_idx].viotlb[vidx].vermem &
+                           TLBENTRYVER_MASK) ==
                            TLBENTRYVER_INVALID)) {
             continue;
         }
@@ -1625,10 +1626,10 @@ probe_access_internal(CPUArchState *env, target_ulong addr, int fault_size,
           TLBENTRYCAP_INVALID_WRITE_MASK) == TLBENTRYCAP_INVALID_WRITE_VALUE))
         tag_write_invalid = true;
     if (access_type == MMU_VERSION_STORE &&
-        (env_tlb(env)
+        ((env_tlb(env)
              ->d[mmu_idx]
              .iotlb[tlb_index(env, mmu_idx, addr)]
-             .vermem == TLBENTRYVER_INVALID))
+             .vermem & TLBENTRYVER_MASK) == TLBENTRYVER_INVALID))
         tag_write_invalid = true;
 #endif
 

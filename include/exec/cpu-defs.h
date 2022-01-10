@@ -184,9 +184,12 @@ typedef struct CPUIOTLBEntry {
 #define TLBENTRYVER_MASK    ((uintptr_t) 1)
 /* Trap if attempting to write version */
 #define TLBENTRYVER_TRAP    ((uintptr_t) 1)
-#define TLBENTRYVER_INVALID ((uintptr_t) (~0 & ~TLBENTRYVER_MASK))
+/* Similar to above we reuse the TRAP flag when testing for an invalid entry
+   that cannot be written because of unallocated tag memory. The difference
+   is that there is no clearing mode. */
+#define TLBENTRYVER_INVALID ((uintptr_t) TLBENTRYVER_TRAP)
 /* Entry that reads as all zeros, attempts allocation on write */
-#define ALL_ZERO_VERMEM     ((void *) TLBENTRYVER_INVALID)
+#define ALL_ZERO_VERMEM     ((void *) (~0 & ~TLBENTRYVER_MASK))
     /* Pointer to version memory for page. Will hopefully get away with single pointer
        for both reads and writes. */
     uintptr_t vermem;
