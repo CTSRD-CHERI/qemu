@@ -24,7 +24,9 @@
 #include "qemu-common.h"
 #include "cpu.h"
 
+#ifdef TARGET_CHERI
 #include <cheri/cheric.h>
+#endif
 
 #define TARGET_INSN_SIZE     4  /* riscv instruction size */
 

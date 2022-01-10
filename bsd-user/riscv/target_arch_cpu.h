@@ -21,9 +21,11 @@
 #define _TARGET_ARCH_CPU_H_
 
 #include "target_arch.h"
-
 #include "target_arch_proc.h"
+
+#ifdef TARGET_CHERI
 #include "machine/cheri.h"
+#endif
 
 #define TARGET_DEFAULT_CPU_MODEL "any"
 
