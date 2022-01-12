@@ -112,7 +112,7 @@ typedef abi_long * abi_syscallret_t;
 #define syscallarg_value(sa) ((abi_long)(sa != NULL) ? *(sa) : 0)
 #define syscallret_value(sa) (*(sa))
 
-#define syscallarg_uintptr(sa) ((abi_uintptr_t)(sa))
+#define syscallarg_uintptr(sa) ((abi_uintptr_t)(*(sa)))
 #endif
 #define syscallarg_int(sa)     ((abi_long)syscallarg_value(sa))
 
