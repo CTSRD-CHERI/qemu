@@ -39,7 +39,9 @@
 
 #ifdef TARGET_CHERI
 #include "cheri-helper-utils.h"
+#ifndef CHERI_USER_NO_TAGS
 #include "cheri_tagmem.h"
+#endif
 #endif
 
 /* C2.4.7 Multiply and divide */
@@ -1195,7 +1197,9 @@ void HELPER(dc_zva)(CPUARMState *env, target_ulong vaddr_in)
     // NB: Because this isn't setting any tags, no exception should be possible.
     // The only reason for passing the register number is for exceptions,
     // so the fact we pass -1 here should be fine.
+#ifndef CHERI_USER_NO_TAGS
     cheri_tag_set_many(env, 0, vaddr, -1, NULL, GETPC());
+#endif
 #endif
 
     memset(mem, 0, blocklen);

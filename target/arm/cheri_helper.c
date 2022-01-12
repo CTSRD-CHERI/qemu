@@ -35,7 +35,9 @@
 #include "exec/memop.h"
 
 #include "cheri-helper-utils.h"
+#ifndef CHERI_USER_NO_TAGS
 #include "cheri_tagmem.h"
+#endif
 
 void helper_load_cap_via_cap_mmu_idx(CPUArchState *env, uint32_t cd,
                                      uint32_t cb, target_ulong addr,
@@ -383,6 +385,7 @@ void helper_branch_sealed_pair(CPUArchState *env, uint32_t cn, uint32_t cm,
 uint64_t helper_load_tags(CPUArchState *env, uint32_t cn, target_ulong addr)
 {
 
+#ifndef CHERI_USER_NO_TAGS
     GET_HOST_RETPC();
 
     cap_register_t base = *get_capreg_or_special(env, cn);
@@ -394,6 +397,9 @@ uint64_t helper_load_tags(CPUArchState *env, uint32_t cn, target_ulong addr)
     uint32_t result = cheri_tag_get_many(env, addr, cn, NULL, GETPC());
 
     return cap_has_perms(&base, CAP_PERM_LOAD_CAP) ? result : 0;
+#else
+    return 0;
+#endif
 }
 
 void helper_store_tags(CPUArchState *env, uint64_t tags, uint32_t cn,
@@ -417,7 +423,9 @@ void helper_store_tags(CPUArchState *env, uint64_t tags, uint32_t cn,
                          _host_return_address, &base, MORELLO_TAGS_OPS_SIZE,
                          raise_unaligned_store_exception);
 
+#ifndef CHERI_USER_NO_TAGS
     cheri_tag_set_many(env, tags, addr, cn, NULL, GETPC());
+#endif
 }
 
 void helper_set_pcc(CPUArchState *env, target_ulong addr)
