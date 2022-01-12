@@ -121,16 +121,11 @@ abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
         /* FIXME - handle put_user() failures */
         sp -= ABI_PTR_SIZE;
         put_user_p(envp, sp);
-    }
-    sp -= ABI_PTR_SIZE;
-    /* FIXME - handle put_user() failures */
-    put_user_ual(envc, sp);
-
-    if (push_ptr) {
         /* FIXME - handle put_user() failures */
         sp -= ABI_PTR_SIZE;
         put_user_p(argv, sp);
     }
+
     sp -= ABI_PTR_SIZE;
     /* FIXME - handle put_user() failures */
     put_user_ual(argc, sp);
