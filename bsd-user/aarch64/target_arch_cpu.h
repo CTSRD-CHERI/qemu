@@ -75,7 +75,11 @@ target_cpu_fetch_syscall_args(CPUARMState *env,
         sa->code == TARGET_FREEBSD_NR___syscall) {
         sa->code = target_syscallarg_value(env, aii++);
     } else {
+#ifdef TARGET_CHERI
+        sa->args[0] = *get_readonly_capreg(env, aii++);
+#else
         sa->args[0] = target_syscallarg_value(env, aii++);
+#endif
     }
 
     /*
@@ -91,7 +95,11 @@ target_cpu_fetch_syscall_args(CPUARMState *env,
     assert(sa->callp->sy_narg <= nitems(sa->args));
 
     for (; aii < TARGET_MAXARGS - 1; aii++) {
+#ifdef TARGET_CHERI
+        sa->args[aii] = *get_readonly_capreg(env, aii);
+#else
         sa->args[aii] = target_syscallarg_value(env, aii);
+#endif
     }
 
     return (0);
@@ -127,13 +135,21 @@ static inline void target_cpu_loop(CPUARMState *env)
             pstate = pstate_read(env);
             if (ret >= 0) {
                 pstate &= ~PSTATE_C;
-                env->xregs[0] = ret;
+                if (retval != NULL) {
+#ifdef TARGET_CHERI
+                    update_capreg(env, 0, retval);
+#else
+                    arm_set_xreg(env, 0, *retval);
+#endif
+                } else {
+                    arm_set_xreg(env, 0, ret);
+                }
             } else if (ret == -TARGET_ERESTART) {
-                env->pc -= 4;
+                arm_update_pc(env, arm_fetch_pc(env) - 4, false);
                 break;
             } else if (ret != -TARGET_EJUSTRETURN) {
                 pstate |= PSTATE_C;
-                env->xregs[0] = -ret;
+                arm_set_xreg(env, 0, -ret);
             }
             pstate_write(env, pstate);
             break;
