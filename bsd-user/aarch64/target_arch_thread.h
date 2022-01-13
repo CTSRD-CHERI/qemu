@@ -40,7 +40,11 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
     /* sp = stack base */
     arm_set_xreg(regs, 31, sp);
     /* pc = start function entry */
+#ifdef TARGET_CHERI
+    cheri_update_pcc(&regs->pc.cap, entry, false);
+#else
     regs->pc = entry &  ~0x3ULL;
+#endif
     /* r0 = arg */
     arm_set_xreg(regs, 0, arg);
 
