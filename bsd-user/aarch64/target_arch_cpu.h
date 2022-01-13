@@ -162,7 +162,11 @@ static inline void target_cpu_loop(CPUARMState *env)
             info.si_signo = TARGET_SIGILL;
             info.si_errno = 0;
             info.si_code = TARGET_ILL_ILLOPN;
-            info.si_addr = env->pc;
+#ifdef TARGET_CHERI
+            info.si_addr = cheri_uintptr(cheri_get_current_pcc(env));
+#else
+            info.si_addr = arm_fetch_pc(env);
+#endif
             queue_signal(env, info.si_signo, &info);
             break;
 
@@ -173,7 +177,12 @@ static inline void target_cpu_loop(CPUARMState *env)
             info.si_errno = 0;
             /* XXX: check env->error_code */
             info.si_code = TARGET_SEGV_MAPERR;
+#ifdef TARGET_CHERI
+            info.si_addr = cheri_uintptr(cheri_ptr_to_unbounded_cap(
+                (const void *)(uintptr_t)env->exception.vaddress));
+#else
             info.si_addr = env->exception.vaddress;
+#endif
             queue_signal(env, info.si_signo, &info);
             break;
 
