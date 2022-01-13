@@ -24,6 +24,10 @@
 
 #include "errno_defs.h"
 
+#ifdef TARGET_CHERI
+#include <cheri/cheric.h>
+#endif
+
 #define TARGET_REG_X0   0
 #define TARGET_REG_X30  30
 #define TARGET_REG_X31  31
@@ -66,13 +70,33 @@ struct target_fpregs {
     uint32_t	fp_pad;
 };
 
+#ifdef TARGET_CHERI
+struct target_capregs {
+    abi_uintcap_t   cap_x[30];
+    abi_uintcap_t   cap_lr;
+    abi_uintcap_t   cap_sp;
+    abi_uintcap_t   cap_elr;
+    abi_uintcap_t   cap_ddc;
+};
+#endif
+
 struct target__mcontext {
-    struct target_gpregs mc_gpregs;
-    struct target_fpregs mc_fpregs;
+#ifdef TARGET_CHERI
+    struct target_capregs mc_capregs;
+#else
+    struct target_gpregs  mc_gpregs;
+#endif
+    struct target_fpregs  mc_fpregs;
     uint32_t    mc_flags;
 #define TARGET_MC_FP_VALID  0x1
-    uint32_t	mc_pad;
-    uint64_t	mc_spare[8];
+#ifdef TARGET_CHERI
+    uint32_t    mc_spsr;
+    uint64_t    mc_spare[8];
+#else
+    uint32_t    mc_pad;
+    uint64_t    mc_spare[7];
+    uint64_t    mc_capregs;
+#endif
 };
 
 typedef struct target__mcontext target_mcontext_t;
@@ -120,6 +144,18 @@ set_sigtramp_args(CPUARMState *regs, TaskState *ts, int sig,
      *  lr = sigtramp at base of user stack
      */
 
+#ifdef TARGET_CHERI
+    update_capreg_to_intval(regs, 0, sig);
+    update_capreg(regs, 1, cheri_ptr((void *)(uintptr_t)(frame_addr +
+        offsetof(typeof(*frame), sf_si)), sizeof(frame->sf_si)));
+    update_capreg(regs, 2, cheri_ptr((void *)(uintptr_t)(frame_addr +
+        offsetof(typeof(*frame), sf_uc)), sizeof(frame->sf_uc)));
+
+    cheri_load(&regs->pc.cap, &ka->_sa_handler);
+    update_capreg(regs, TARGET_REG_SP, cheri_setaddress(cheri_zerocap(),
+        (uintptr_t)frame_addr));
+    update_capreg(regs, TARGET_REG_LR, &ts->cheri_sigcode_cap);
+#else
     regs->xregs[0] = sig;
     regs->xregs[1] = frame_addr +
         offsetof(struct target_sigframe, sf_si);
@@ -129,10 +165,71 @@ set_sigtramp_args(CPUARMState *regs, TaskState *ts, int sig,
     regs->pc = ka->_sa_handler;
     regs->xregs[TARGET_REG_SP] = frame_addr;
     regs->xregs[TARGET_REG_LR] = TARGET_PS_STRINGS - TARGET_SZSIGCODE;
+#endif
 
     return 0;
 }
 
+#ifdef TARGET_CHERI
+static inline abi_long get_mcontext(CPUARMState *regs, target_mcontext_t *mcp,
+    int flags)
+{
+    int ii;
+
+    if (flags & TARGET_MC_GET_CLEAR_RET) {
+        cheri_store(&mcp->mc_capregs.cap_x[0], cheri_nullcap());
+        mcp->mc_spsr = pstate_read(regs) & ~CPSR_C;
+    } else {
+        cheri_store(&mcp->mc_capregs.cap_x[0], get_readonly_capreg(regs, 0));
+        mcp->mc_spsr = pstate_read(regs);
+    }
+
+    for (ii = 1; ii < 30; ii++) {
+        cheri_store(&mcp->mc_capregs.cap_x[ii], get_readonly_capreg(regs, ii));
+    }
+
+    cheri_store(&mcp->mc_capregs.cap_sp, get_readonly_capreg(regs,
+        TARGET_REG_SP));
+    cheri_store(&mcp->mc_capregs.cap_lr, get_readonly_capreg(regs,
+        TARGET_REG_LR));
+    cheri_store(&mcp->mc_capregs.cap_elr, cheri_get_current_pcc(regs));
+    cheri_store(&mcp->mc_capregs.cap_ddc, cheri_get_ddc(regs));
+
+    /* XXX FP? */
+
+    return (0);
+}
+
+static inline abi_long set_mcontext(CPUARMState *regs, target_mcontext_t *mcp,
+        int srflag)
+{
+    int ii;
+    uint32_t spsr;
+    cap_register_t cap;
+
+    spsr = mcp->mc_spsr;
+    if ((spsr & PSTATE_M) != PSTATE_MODE_EL0t ||
+        (spsr & PSTATE_nRW) != 0 ||
+        (spsr & PSTATE_DAIF) != (pstate_read(regs) & PSTATE_DAIF)) {
+        return (-TARGET_EINVAL);
+    }
+
+    for (ii = 0; ii < 30; ii++) {
+        update_capreg(regs, ii, cheri_load(&cap, &mcp->mc_capregs.cap_x[ii]));
+    }
+
+    update_capreg(regs, TARGET_REG_SP, cheri_load(&cap,
+        &mcp->mc_capregs.cap_sp));
+    update_capreg(regs, TARGET_REG_LR, cheri_load(&cap,
+        &mcp->mc_capregs.cap_lr));
+    cheri_load(&regs->pc.cap, &mcp->mc_capregs.cap_elr);
+    pstate_write(regs, mcp->mc_spsr);
+
+    /* XXX FP? */
+
+    return (0);
+}
+#else
 /*
  * Compare to get_mcontext() in arm64/arm64/machdep.c
  * Assumes that the memory is locked if mcp points to user memory.
@@ -182,6 +279,7 @@ static inline abi_long set_mcontext(CPUARMState *regs, target_mcontext_t *mcp,
 
     return err;
 }
+#endif
 
 /* Compare to sys_sigreturn() in  arm64/arm64/machdep.c */
 static inline abi_long get_ucontext_sigreturn(CPUARMState *regs,
