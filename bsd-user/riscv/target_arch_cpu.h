@@ -39,7 +39,7 @@ static inline void target_cpu_init(CPURISCVState *env,
     
 #ifdef TARGET_CHERI
     for (i = 1; i < 32; i++)
-	update_capreg(env, i, &regs->regs[i]);
+        update_capreg(env, i, &regs->regs[i]);
 
     env->PCC = regs->sepc;
 #else
