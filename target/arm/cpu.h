@@ -4431,6 +4431,28 @@ static inline bool pc_is_current(const CPUArchState *env)
 #endif
 }
 
+static inline void arm_update_pc(CPUArchState *env, target_ulong pc_addr,
+                                 bool can_be_unrepresentable)
+{
+#ifdef TARGET_CHERI
+    cheri_update_pcc(&env->pc.cap, pc_addr, can_be_unrepresentable);
+#else
+    env->pc = pc_addr;
+#endif
+#ifdef CONFIG_DEBUG_TCG
+    env->_pc_is_current = true;
+#endif
+}
+
+static inline target_ulong arm_fetch_pc(CPUArchState *env)
+{
+#ifdef TARGET_CHERI
+    return cheri_get_current_pcc(env)->_cr_cursor;
+#else
+    return env->pc;
+#endif
+}
+
 #endif // CONFIG_TCG_LOG_INSTR
 
 #ifdef TARGET_CHERI
