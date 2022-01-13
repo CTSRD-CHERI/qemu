@@ -188,9 +188,9 @@ static inline void target_cpu_loop(CPUARMState *env)
 static inline void target_cpu_clone_regs(CPUARMState *env, target_ulong newsp)
 {
     if (newsp)
-        env->xregs[31] = newsp;
-    env->regs[0] = 0;
-    env->regs[1] = 0;
+        arm_set_xreg(env, 31, newsp);
+    arm_set_xreg(env, 0, 0);
+    arm_set_xreg(env, 1, 0);
     pstate_write(env, 0);
 }
 

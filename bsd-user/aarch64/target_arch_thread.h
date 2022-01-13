@@ -33,11 +33,11 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
         sizeof(struct target_trapframe)) & ~(16 - 1);
 
     /* sp = stack base */
-    regs->xregs[31] = sp;
+    arm_set_xreg(regs, 31, sp);
     /* pc = start function entry */
     regs->pc = entry &  ~0x3ULL;
     /* r0 = arg */
-    regs->xregs[0] = arg;
+    arm_set_xreg(regs, 0, arg);
 
     pstate_write(regs, PSTATE_MODE_EL0t);
 }

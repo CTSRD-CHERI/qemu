@@ -24,11 +24,11 @@
 void target_cpu_set_tls(CPUARMState *env, target_ulong newtls)
 {
 
-    env->cp15.tpidr_el[0] = newtls;
+    set_aarch_reg_to_x(&env->cp15.tpidr_el[0], newtls);
 }
 
 target_ulong target_cpu_get_tls(CPUARMState *env)
 {
 
-    return (env->cp15.tpidr_el[0]);
+    return get_aarch_reg_as_x(&env->cp15.tpidr_el[0]);
 }
