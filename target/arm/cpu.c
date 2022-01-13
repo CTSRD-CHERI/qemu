@@ -301,7 +301,11 @@ static void arm_cpu_reset(DeviceState *dev)
          * Do not modify this without other changes.
          */
         env->cp15.tcr_el[1].raw_tcr = (3ULL << 37);
-#else
+
+#ifdef TARGET_CHERI
+        set_max_perms_capability(&env->pc.cap, 0);
+#endif
+#else /* !defined(CONFIG_USER_ONLY) */
         /* Reset into the highest available EL */
         if (arm_feature(env, ARM_FEATURE_EL3)) {
             env->pstate = PSTATE_MODE_EL3h;
@@ -312,12 +316,14 @@ static void arm_cpu_reset(DeviceState *dev)
         }
 
 #ifdef TARGET_CHERI
-        reset_capregs(env);
         set_max_perms_capability(&env->pc.cap, cpu->rvbar);
 #else
         env->pc = cpu->rvbar;
 #endif
+#endif /* defined(CONFIG_USER_ONLY) */
 
+#ifdef TARGET_CHERI
+        reset_capregs(env);
 #endif
     } else {
 #if defined(CONFIG_USER_ONLY)
