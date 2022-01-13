@@ -37,11 +37,20 @@ static inline void target_cpu_init(CPUARMState *env,
         fprintf(stderr, "The selected ARM CPU does not support 64 bit mode\n");
         exit(1);
     }
+#ifdef TARGET_CHERI
+    for (i = 0; i < 31; i++) {
+        update_capreg(env, i, &regs->regs[i]);
+    }
+
+    env->pc.cap = regs->pc;
+    update_capreg(env, 31, &regs->sp);
+#else
     for (i = 0; i < 31; i++) {
         env->xregs[i] = regs->regs[i];
     }
     env->pc = regs->pc;
     env->xregs[31] = regs->sp;
+#endif
 }
 
 static abi_long
