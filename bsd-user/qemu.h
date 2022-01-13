@@ -140,7 +140,7 @@ typedef struct TaskState {
 
 #ifdef TARGET_CHERI
     cap_register_t cheri_mmap_cap;
-#ifdef TARGET_RISCV
+#if defined(TARGET_AARCH64) || defined(TARGET_RISCV)
     cap_register_t cheri_sigcode_cap;
 #endif
 #endif

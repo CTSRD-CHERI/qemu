@@ -19,6 +19,11 @@
 #ifndef _TARGET_ARCH_THREAD_H_
 #define _TARGET_ARCH_THREAD_H_
 
+#ifdef TARGET_CHERI
+#include "cheri/cherireg.h"
+#include "cheri/cheri.h"
+#endif
+
 /* Compare to arm64/arm64/vm_machdep.c cpu_set_upcall_kse() */
 static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
     abi_ulong arg, abi_ulong stack_base, abi_ulong stack_size)
@@ -43,27 +48,26 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
 }
 
 static inline void target_thread_init(struct target_pt_regs *regs,
+#ifdef TARGET_CHERI
+        cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
+#endif
         struct image_info *infop)
 {
-    abi_long stack = infop->start_stack;
-
-    /*
-     * Make sure the stack is properly aligned.
-     * arm64/include/param.h (STACKLIGN() macro)
-     */
 
     memset(regs, 0, sizeof(*regs));
+#ifdef TARGET_CHERI
+    /* XXXKW: Check SV_CHERI. */
+    (void)cheri_auxv_capability(&regs->regs[0]);
+    (void)cheri_exec_stack_pointer(cheri_andperm(&regs->sp,
+        CHERI_CAP_USER_DATA_PERMS), infop->start_stack);
+    cheri_set_mmap_capability(mmapcapp, infop, &regs->sp);
+
+    (void)cheri_exec_pcc(&regs->regs[30], infop);
+    (void)cheri_sigcode_capability(sigcodecapp);
+#else
     regs->regs[0] = infop->start_stack;
     regs->pc = infop->entry &  ~0x3ULL;
-    regs->sp = stack & ~(16 - 1);
-
-#if 0
-    if (bsd_type == target_freebsd) {
-        regs->ARM_lr = infop->entry & 0xfffffffe;
-    }
-    /* FIXME - what to for failure of get_user()? */
-    get_user_ual(regs->ARM_r2, stack + 8); /* envp */
-    get_user_ual(regs->ARM_r1, stack + 4); /* envp */
+    regs->sp = infop->start_stack & ~(16 - 1);
 #endif
 }
 
