@@ -156,7 +156,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         int size;
         int typesize, valsize;
 #ifdef TARGET_CHERI
-        cap_register_t cap;
+        cap_register_t *entryp, exec_base;
         target_ulong dstauxents;
 #endif
 
@@ -223,25 +223,33 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
 #ifdef TARGET_CHERI
         if (info->interp_end == 0) {
             if (exec->e_type != ET_DYN) {
-                cap = *cheri_zerocap();
+                exec_base = *cheri_zerocap();
             } else {
-                cap = *prog_cap(info, CHERI_CAP_USER_DATA_PERMS |
+                exec_base = *prog_cap(info, CHERI_CAP_USER_DATA_PERMS |
                     CHERI_CAP_USER_CODE_PERMS);
             }
         } else {
-            cap = *interp_cap(info, interp_load_addr,
+            exec_base = *interp_cap(info, interp_load_addr,
                 CHERI_CAP_USER_DATA_PERMS | CHERI_CAP_USER_CODE_PERMS);
         }
-        NEW_AUX_ENT_PTR(AT_BASE, cheri_setaddress(&cap, interp_load_addr));
+        NEW_AUX_ENT_PTR(AT_BASE, cheri_setaddress(&exec_base,
+            interp_load_addr));
 #else
         NEW_AUX_ENT(AT_BASE, (abi_ulong)(interp_load_addr));
 #endif
         NEW_AUX_ENT(AT_FLAGS, (abi_ulong)0);
         NEW_AUX_ENT(FREEBSD_AT_NCPUS, (abi_ulong)bsd_get_ncpu());
 #ifdef TARGET_CHERI
-        NEW_AUX_ENT_PTR(AT_ENTRY, cheri_setflags(cheri_setaddress(
-            prog_cap(info, CHERI_CAP_USER_CODE_PERMS),
-            load_bias + exec->e_entry), CHERI_FLAGS_CAP_MODE));
+        entryp = cheri_setaddress(prog_cap(info, CHERI_CAP_USER_CODE_PERMS),
+            load_bias + exec->e_entry);
+#ifdef CHERI_FLAGS_CAP_MODE
+        /*
+         * On architectures with a mode flag bit, we must ensure the flag is set
+         * in AT_ENTRY for RTLD to be able to jump to it.
+         */
+        (void)cheri_setflags(entryp, CHERI_FLAGS_CAP_MODE);
+#endif
+        NEW_AUX_ENT_PTR(AT_ENTRY, entryp);
 #else
         NEW_AUX_ENT(AT_ENTRY, load_bias + exec->e_entry);
 #endif
