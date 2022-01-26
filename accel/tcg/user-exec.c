@@ -198,9 +198,15 @@ probe_access_internal(CPUArchState *env, target_ulong addr, int fault_size,
 
     switch (access_type) {
     case MMU_DATA_STORE:
+#ifdef TARGET_CHERI
+    case MMU_DATA_CAP_STORE:
+#endif
         flags = PAGE_WRITE;
         break;
     case MMU_DATA_LOAD:
+#ifdef TARGET_CHERI
+    case MMU_DATA_CAP_LOAD:
+#endif
         flags = PAGE_READ;
         break;
     case MMU_INST_FETCH:
