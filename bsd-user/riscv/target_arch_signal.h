@@ -113,15 +113,15 @@ struct target_sigframe {
 
 struct target_trapframe {
 #ifdef TARGET_CHERI
-    cap_register_t tf_ra;
-    cap_register_t tf_sp;
-    cap_register_t tf_gp;
-    cap_register_t tf_tp;
-    cap_register_t tf_t[7];
-    cap_register_t tf_s[12];
-    cap_register_t tf_a[8];
-    cap_register_t tf_sepc;
-    cap_register_t tf_ddc;
+    abi_uintcap_t tf_ra;
+    abi_uintcap_t tf_sp;
+    abi_uintcap_t tf_gp;
+    abi_uintcap_t tf_tp;
+    abi_uintcap_t tf_t[7];
+    abi_uintcap_t tf_s[12];
+    abi_uintcap_t tf_a[8];
+    abi_uintcap_t tf_sepc;
+    abi_uintcap_t tf_ddc;
 #else
     uint64_t tf_ra;
     uint64_t tf_sp;
