@@ -37,6 +37,10 @@
 #ifndef _TARGET_ARCH_PARAM_H_
 #define _TARGET_ARCH_PARAM_H_
 
+#define TARGET_STACKALIGNBYTES  (16 - 1)
+#define TARGET_STACKALIGN(p)                                                \
+        (__builtin_align_down((p), TARGET_STACKALIGNBYTES + 1))
+
 #define TARGET_PAGE_SHIFT TARGET_PAGE_BITS
 
 #endif /* !_TARGET_ARCH_PARAM_H_ */

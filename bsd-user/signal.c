@@ -27,6 +27,8 @@
 #include <cheri/cheric.h>
 #endif
 
+#include "target_arch_param.h"
+
 /*
  * XXXKW: target_sigaltstack_used must be a user object as it is copied out
  * in sigaltstack(2).
@@ -740,7 +742,7 @@ int do_sigaction(int sig, const struct target_sigaction *act,
 static inline abi_ulong get_sigframe(struct target_sigaction *ka,
         CPUArchState *regs, size_t frame_size)
 {
-    abi_ulong sp;
+    abi_ulong frame_addr, sp;
 
     /* Use default user stack */
     sp = get_sp_from_cpustate(regs);
@@ -750,12 +752,13 @@ static inline abi_ulong get_sigframe(struct target_sigaction *ka,
             target_sigaltstack_used.ss_size;
     }
 
+    frame_addr = sp - frame_size;
 #if defined(TARGET_MIPS) || defined(TARGET_ARM)
-    return (sp - frame_size) & ~7;
-#elif defined(TARGET_AARCH64)
-    return (sp - frame_size) & ~15;
+    return (frame_addr) & ~7;
+#elif defined(TARGET_AARCH64) || defined(TARGET_RISCV)
+    return TARGET_STACKALIGN(frame_addr);
 #else
-    return sp - frame_size;
+    return (frame_addr);
 #endif
 }
 
