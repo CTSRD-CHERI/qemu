@@ -303,6 +303,11 @@ static void arm_cpu_reset(DeviceState *dev)
         env->cp15.tcr_el[1].raw_tcr = (3ULL << 37);
 
 #ifdef TARGET_CHERI
+        /*
+         * Set CPACR_EL1.CEN to b11 not to trap Morello instructions
+         * (CAP_ENABLED).
+         */
+        env->cp15.cpacr_el1 = deposit64(env->cp15.cpacr_el1, 18, 2, 3);
         set_max_perms_capability(&env->pc.cap, 0);
 #endif
 #else /* !defined(CONFIG_USER_ONLY) */
