@@ -42,6 +42,13 @@
  * The upper region for the kernel, and the lower region for userland.
  */
 
+#ifndef TARGET_VM_NRESERVLEVEL
+#define TARGET_VM_NRESERVLEVEL  1
+#endif
+
+#ifndef TARGET_VM_LEVEL_0_ORDER
+#define TARGET_VM_LEVEL_0_ORDER 9
+#endif
 
 /* compare to sys/arm64/include/vmparam.h */
 #define TARGET_MAXTSIZ      (1*1024UL*1024*1024)    /* max text size */
