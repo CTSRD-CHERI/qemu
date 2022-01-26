@@ -104,7 +104,7 @@ typedef struct target__mcontext target_mcontext_t;
 typedef struct target_ucontext {
     target_sigset_t     uc_sigmask;
     target_mcontext_t   uc_mcontext;
-    abi_ulong           uc_link;
+    abi_uintptr_t       uc_link;
     target_stack_t      uc_stack;
     int32_t             uc_flags;
     int32_t             __spare__[4];
@@ -118,11 +118,24 @@ struct target_sigframe {
 
 /* compare to struct trapframe in sys/arm64/include/frame.h */
 struct target_trapframe {
-        uint64_t    tf_sp;
-        uint64_t    tf_lr;
-        uint64_t    tf_elr;
-        uint64_t    tf_spsr;
-        uint64_t    tf_x[30];
+#ifdef TARGET_CHERI
+    abi_uintcap_t tf_sp;
+    abi_uintcap_t tf_lr;
+    abi_uintcap_t tf_elr;
+    abi_uintcap_t tf_ddc;
+#else
+    uint64_t      tf_sp;
+    uint64_t      tf_lr;
+    uint64_t      tf_elr;
+#endif
+    uint32_t      tf_spsr;
+    uint32_t      tf_esr;
+#ifdef TARGET_CHERI
+    uint64_t      tf_pad;
+    abi_uintcap_t tf_x[30];
+#else
+    uint64_t      tf_x[30];
+#endif
 };
 
 /*
