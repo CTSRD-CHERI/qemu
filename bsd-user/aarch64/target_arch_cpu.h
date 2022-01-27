@@ -21,6 +21,10 @@
 
 #include "target_arch.h"
 
+#ifdef TARGER_CHERI
+#include "machine/cheri.h"
+#endif
+
 // #define DEBUG_PRINTF(...) fprintf(stderr, __VA_ARGS__)
 #define DEBUG_PRINTF(...)
 
@@ -38,11 +42,14 @@ static inline void target_cpu_init(CPUARMState *env,
         exit(1);
     }
 #ifdef TARGET_CHERI
+    pstate_write(env, pstate_read(env) | PSTATE_C64);
+    arm_rebuild_chflags(env);
+
     for (i = 0; i < 31; i++) {
         update_capreg(env, i, &regs->regs[i]);
     }
 
-    env->pc.cap = regs->pc;
+    cheri_prepare_pcc(&regs->pc, env);
     update_capreg(env, 31, &regs->sp);
 #else
     for (i = 0; i < 31; i++) {
@@ -152,6 +159,9 @@ static inline void target_cpu_loop(CPUARMState *env)
                 arm_set_xreg(env, 0, -ret);
             }
             pstate_write(env, pstate);
+#ifdef TARGET_CHERI
+            cheri_prepare_pcc(&env->pc.cap, env);
+#endif
             break;
 
 		case EXCP_INTERRUPT:
@@ -221,11 +231,18 @@ static inline void target_cpu_loop(CPUARMState *env)
 /* See arm64/arm64/vm_machdep.c cpu_fork() */
 static inline void target_cpu_clone_regs(CPUARMState *env, target_ulong newsp)
 {
+    uint32_t pstate;
+
+    pstate = 0;
+#ifdef TARGET_CHERI
+    pstate |= PSTATE_C64;
+#endif
+
     if (newsp)
         arm_set_xreg(env, 31, newsp);
     arm_set_xreg(env, 0, 0);
     arm_set_xreg(env, 1, 0);
-    pstate_write(env, 0);
+    pstate_write(env, pstate);
 }
 
 static inline void target_cpu_reset(CPUArchState *cpu)

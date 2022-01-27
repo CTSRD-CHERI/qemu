@@ -25,7 +25,8 @@
 #include "errno_defs.h"
 
 #ifdef TARGET_CHERI
-#include <cheri/cheric.h>
+#include "cheri/cheric.h"
+#include "machine/cheri.h"
 #endif
 
 #define TARGET_REG_X0   0
@@ -147,6 +148,10 @@ set_sigtramp_args(CPUARMState *regs, TaskState *ts, int sig,
     struct target_sigframe *frame, abi_ulong frame_addr,
     struct target_sigaction *ka)
 {
+#ifdef TARGET_CHERI
+    cap_register_t cap;
+#endif
+
     /*
      * Arguments to signal handler:
      *  x0 = signal number
@@ -163,8 +168,8 @@ set_sigtramp_args(CPUARMState *regs, TaskState *ts, int sig,
         offsetof(typeof(*frame), sf_si)), sizeof(frame->sf_si)));
     update_capreg(regs, 2, cheri_ptr((void *)(uintptr_t)(frame_addr +
         offsetof(typeof(*frame), sf_uc)), sizeof(frame->sf_uc)));
-
-    cheri_load(&regs->pc.cap, &ka->_sa_handler);
+    cheri_load(&cap, &ka->_sa_handler);
+    cheri_prepare_pcc(&cap, regs);
     update_capreg(regs, TARGET_REG_SP, cheri_setaddress(cheri_zerocap(),
         (uintptr_t)frame_addr));
     update_capreg(regs, TARGET_REG_LR, &ts->cheri_sigcode_cap);
@@ -227,6 +232,12 @@ static inline abi_long set_mcontext(CPUARMState *regs, target_mcontext_t *mcp,
         return (-TARGET_EINVAL);
     }
 
+    /*
+     * Update PSTATE before preparing PCC as it might require rebuilding CPU
+     * flags.
+     */
+    pstate_write(regs, mcp->mc_spsr);
+
     for (ii = 0; ii < 30; ii++) {
         update_capreg(regs, ii, cheri_load(&cap, &mcp->mc_capregs.cap_x[ii]));
     }
@@ -235,8 +246,8 @@ static inline abi_long set_mcontext(CPUARMState *regs, target_mcontext_t *mcp,
         &mcp->mc_capregs.cap_sp));
     update_capreg(regs, TARGET_REG_LR, cheri_load(&cap,
         &mcp->mc_capregs.cap_lr));
-    cheri_load(&regs->pc.cap, &mcp->mc_capregs.cap_elr);
-    pstate_write(regs, mcp->mc_spsr);
+    cheri_load(&cap, &mcp->mc_capregs.cap_elr);
+    cheri_prepare_pcc(&cap, regs);
 
     /* XXX FP? */
 

@@ -38,9 +38,14 @@
 #define _MACHINE_CHERI_H_
 
 /*
- * Morello specific kernel utility functions.
+ * Morello-specific kernel utility functions.
  */
 void cheri_init_capabilities(const cap_register_t *kroot);
 int  cheri_esr_to_sicode(uint64_t esr);
+
+/*
+ * Morello-specific QEMU utility functions.
+ */
+void cheri_prepare_pcc(cap_register_t *pcc, CPUArchState *env);
 
 #endif /* _MACHINE_CHERI_H_ */
