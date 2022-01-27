@@ -29,6 +29,7 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
     abi_ulong arg, abi_ulong stack_base, abi_ulong stack_size)
 {
     abi_ulong sp;
+    uint32_t pstate;
 
     /*
      * Make sure the stack is properly aligned.
@@ -37,18 +38,27 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
     sp = (abi_ulong)((stack_base + stack_size) -
         sizeof(struct target_trapframe)) & ~(16 - 1);
 
+    pstate = PSTATE_MODE_EL0t;
+#ifdef TARGET_CHERI
+    pstate |= PSTATE_C64;
+#endif
+    /*
+     * Update PSTATE before preparing PCC as it might require rebuilding CPU
+     * flags.
+     */
+    pstate_write(regs, pstate);
+
     /* sp = stack base */
     arm_set_xreg(regs, 31, sp);
     /* pc = start function entry */
 #ifdef TARGET_CHERI
     cheri_update_pcc(&regs->pc.cap, entry, false);
+    cheri_prepare_pcc(&regs->pc.cap, regs);
 #else
     regs->pc = entry &  ~0x3ULL;
 #endif
     /* r0 = arg */
     arm_set_xreg(regs, 0, arg);
-
-    pstate_write(regs, PSTATE_MODE_EL0t);
 }
 
 static inline void target_thread_init(struct target_pt_regs *regs,

@@ -37,6 +37,8 @@
 
 #include "qemu.h"
 
+#include "cheri-archspecific.h"
+
 #include "machine/vmparam.h"
 #include "machine/cheri.h"
 
@@ -58,4 +60,14 @@ cheri_init_capabilities(const cap_register_t *kroot)
     (void)cheri_setaddress(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_BASE);
     (void)cheri_setbounds(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_LENGTH);
     (void)cheri_andperm(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_PERMS);
+}
+
+void
+cheri_prepare_pcc(cap_register_t *pcc, CPURISCVState *env)
+{
+
+    if (cap_is_sealed_entry(pcc)) {
+        cap_unseal_entry(pcc);
+    }
+    update_next_pcc_for_tcg(env, pcc, 0);
 }

@@ -41,7 +41,7 @@ static inline void target_cpu_init(CPURISCVState *env,
     for (i = 1; i < 32; i++)
         update_capreg(env, i, &regs->regs[i]);
 
-    env->PCC = regs->sepc;
+    cheri_prepare_pcc(&regs->sepc, env);
 #else
     for (i = 1; i < 32; i++)
         gpr_set_int_value(env, i, regs->regs[i]);
@@ -205,6 +205,9 @@ static inline void target_cpu_loop(CPURISCVState *env)
                 fprintf(stderr, "qemu: bsd_type (= %d) syscall not supported\n",
                         bsd_type);
             }
+#ifdef TARGET_CHERI
+            cheri_prepare_pcc(&env->PCC, env);
+#endif
             break;
         case RISCV_EXCP_ILLEGAL_INST:
             info.si_signo = TARGET_SIGILL;

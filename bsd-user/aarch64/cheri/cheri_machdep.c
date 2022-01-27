@@ -32,6 +32,8 @@
 
 #include "qemu.h"
 
+#include "cheri-archspecific.h"
+
 #include "machine/vmparam.h"
 #include "machine/cheri.h"
 
@@ -53,4 +55,26 @@ cheri_init_capabilities(const cap_register_t *kroot)
     (void)cheri_setaddress(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_BASE);
     (void)cheri_setbounds(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_LENGTH);
     (void)cheri_andperm(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_PERMS);
+}
+
+void
+cheri_prepare_pcc(cap_register_t *pcc, CPUARMState *env)
+{
+
+    if (env->pstate & PSTATE_C64) {
+        /*
+         * Encode C64 state as required by TCG.
+         */
+        pcc->_cr_cursor |= 1;
+    }
+    if (cap_is_sealed_entry(pcc)) {
+        cap_unseal_entry(pcc);
+    }
+    /*
+     * XXXKW: We shouln't have to forcefully rebuild chflags here but for some
+     * reason TCG flips PSTATE_C64 which results in a TCG cheriflags mismatch.
+     * This needs to be further investigated.
+     */
+    arm_rebuild_chflags(env);
+    update_next_pcc_for_tcg(env, pcc, 0);
 }

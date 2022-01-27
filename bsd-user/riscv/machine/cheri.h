@@ -43,4 +43,9 @@
 void cheri_init_capabilities(const cap_register_t *kroot);
 int  cheri_exccode_to_sicode(uint8_t exccode);
 
+/*
+ * CHERI-RISC-V-specific QEMU utility functions.
+ */
+void cheri_prepare_pcc(cap_register_t *pcc, CPURISCVState *env);
+
 #endif /* !_MACHINE_CHERI_H_ */
