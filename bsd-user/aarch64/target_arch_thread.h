@@ -71,7 +71,6 @@ static inline void target_thread_init(struct target_pt_regs *regs,
         struct image_info *infop)
 {
 
-    memset(regs, 0, sizeof(*regs));
 #ifdef TARGET_CHERI
     /* XXXKW: Check SV_CHERI. */
     (void)cheri_auxv_capability(&regs->regs[0]);
