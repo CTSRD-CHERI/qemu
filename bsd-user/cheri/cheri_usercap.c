@@ -64,8 +64,12 @@ cheri_capability_build_user_code(cap_register_t *cap, uint32_t perms,
     cap = cheri_setflags(cap, CHERI_FLAGS_CAP_MODE);
 #endif
 
+#ifdef TARGET_AARCH64
+    return (cheri_sealentry(cap));
+#else
     /* XXXKW: Seal the capability. */
     return (cap);
+#endif
 }
 
 /*

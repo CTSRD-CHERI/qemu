@@ -154,8 +154,8 @@ cheri_sigcode_capability(cap_register_t *cap)
 
     sigcode_base = TARGET_PS_STRINGS - TARGET_SZSIGCODE;
     assert(sigcode_base != 0);
-    return (cheri_sealentry(cheri_capability_build_user_code(cap,
-        CHERI_CAP_USER_CODE_PERMS, sigcode_base, TARGET_SZSIGCODE, 0)));
+    return (cheri_capability_build_user_code(cap,
+        CHERI_CAP_USER_CODE_PERMS, sigcode_base, TARGET_SZSIGCODE, 0));
 }
 
 cap_register_t *
