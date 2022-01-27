@@ -1041,9 +1041,12 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
     /*
      * CSetBounds: Set Bounds
      */
+#ifndef CHERI_USER_NO_TAGS
     if (!cbp->cr_tag) {
         raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
+    } else
+#endif
+    if (is_cap_sealed(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
     }
 #ifndef TARGET_AARCH64
