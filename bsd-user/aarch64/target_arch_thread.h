@@ -61,6 +61,9 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
     arm_set_xreg(regs, 0, arg);
 }
 
+/*
+ * See exec_setregs() from sys/arm64/arm64/machdep.c.
+ */
 static inline void target_thread_init(struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
         cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
