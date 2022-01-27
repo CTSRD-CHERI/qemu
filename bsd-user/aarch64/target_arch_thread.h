@@ -79,6 +79,7 @@ static inline void target_thread_init(struct target_pt_regs *regs,
     cheri_set_mmap_capability(mmapcapp, infop, &regs->sp);
 
     (void)cheri_exec_pcc(&regs->regs[30], infop);
+    regs->pc = regs->regs[30];
     (void)cheri_sigcode_capability(sigcodecapp);
 #else
     regs->regs[0] = infop->start_stack;
