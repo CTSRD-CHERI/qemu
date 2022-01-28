@@ -154,7 +154,9 @@ static inline void target_cpu_loop(CPUARMState *env)
             } else if (ret == -TARGET_ERESTART) {
                 increment_aarch_reg(&env->pc, -TARGET_INSN_SIZE);
                 break;
-            } else if (ret != -TARGET_EJUSTRETURN) {
+            } else if (ret == -TARGET_EJUSTRETURN) {
+                /* Nothing to do. */
+            } else {
                 pstate |= PSTATE_C;
                 arm_set_xreg(env, 0, -ret);
             }
