@@ -152,7 +152,7 @@ static inline void target_cpu_loop(CPUARMState *env)
                     arm_set_xreg(env, 0, ret);
                 }
             } else if (ret == -TARGET_ERESTART) {
-                arm_update_pc(env, arm_fetch_pc(env) - 4, false);
+                increment_aarch_reg(&env->pc, -TARGET_INSN_SIZE);
                 break;
             } else if (ret != -TARGET_EJUSTRETURN) {
                 pstate |= PSTATE_C;
