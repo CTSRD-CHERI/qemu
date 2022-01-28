@@ -386,7 +386,10 @@ static int aarch64_gdb_get_cheri_reg(CPUARMState *env, GByteArray *buf, int n)
     case 31:
         return gdb_get_general_purpose_capreg(buf, env, n);
     case 32:
-        return gdb_get_capreg(buf, cheri_get_current_pcc(env));
+        /*
+         * XXXKW: How can we synchronize PCC to make sure it's current?
+         */
+        return gdb_get_capreg(buf, _cheri_get_pcc_unchecked(env));
     case 33:
         return gdb_get_capreg(buf, cheri_get_ddc(env));
     case 34:
