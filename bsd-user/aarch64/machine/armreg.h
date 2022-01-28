@@ -43,4 +43,7 @@
 #define	 ISS_DATA_DFSC_CAP_BOUND (0x2a << 0)
 #define	 ISS_DATA_DFSC_CAP_PERM	(0x2b << 0)
 
+#define  TARGET_EXCP_INSN_ABORT_L   0x20 /* Instruction abort, from lower EL */
+#define  TARGET_EXCP_DATA_ABORT_L   0x24 /* Data abort, from lower EL */
+
 #endif /* !_MACHINE_ARMREG_H_ */
