@@ -211,7 +211,7 @@ static int find_in_path(char *path, const char *filename, char *retpath,
 int loader_exec(const char * filename, char ** argv, char ** envp,
              struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-             cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
+             cap_register_t *sigcodecapp,
 #endif
              struct image_info *infop, struct bsd_binprm *bprm)
 {
@@ -283,7 +283,7 @@ int loader_exec(const char * filename, char ** argv, char ** envp,
     if(retval>=0) {
         /* success.  Initialize important registers */
 #ifdef TARGET_CHERI
-        do_init_thread(regs, mmapcapp, sigcodecapp, infop);
+        do_init_thread(regs, sigcodecapp, infop);
 #else
         do_init_thread(regs, infop);
 #endif

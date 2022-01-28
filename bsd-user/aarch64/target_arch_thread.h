@@ -66,7 +66,7 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
  */
 static inline void target_thread_init(struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-        cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
+        cap_register_t *sigcodecapp,
 #endif
         struct image_info *infop)
 {
@@ -76,7 +76,6 @@ static inline void target_thread_init(struct target_pt_regs *regs,
     (void)cheri_auxv_capability(&regs->regs[0]);
     (void)cheri_exec_stack_pointer(cheri_andperm(&regs->sp,
         CHERI_CAP_USER_DATA_PERMS), infop->start_stack);
-    cheri_set_mmap_capability(mmapcapp, infop, &regs->sp);
 
     (void)cheri_exec_pcc(&regs->regs[30], infop);
     regs->pc = regs->regs[30];
