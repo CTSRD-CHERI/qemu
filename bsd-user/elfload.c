@@ -33,9 +33,15 @@ size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
 
 #include "target_arch_reg.h"
 #include "target_os_elf.h"
+#include "target_os_mman.h"
 #include "target_os_stack.h"
 #include "target_os_thread.h"
 #include "target_os_user.h"
+
+#ifdef TARGET_CHERI
+#include "cheri/cherireg.h"
+#include "machine/cheri.h"
+#endif
 
 #ifndef ELF_NOTE_ROUNDSIZE
 #define ELF_NOTE_ROUNDSIZE  4
@@ -208,16 +214,24 @@ static abi_ulong copy_elf_strings(int argc,char ** argv, void **page,
 static void setup_arg_pages(struct bsd_binprm *bprm, struct image_info *info,
                             abi_ulong *stackp, abi_ulong *stringp)
 {
-    abi_ulong stack_base, size;
+    abi_ulong stack_base, size, size_guard;
     abi_long addr;
+    int flags;
 
     /* Create enough stack to hold everything.  If we don't use
      * it for args, we'll use it for something else...
      */
     size = target_dflssiz;
+    size_guard = size + qemu_host_page_size;
     stack_base = TARGET_USRSTACK - size;
-    addr = target_mmap(stack_base , size + qemu_host_page_size,
-            PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    flags = MAP_PRIVATE | MAP_ANON;
+#ifdef TARGET_CHERI
+    size_guard = CHERI_REPRESENTABLE_LENGTH(size_guard);
+    stack_base = CHERI_REPRESENTABLE_BASE(stack_base, size);
+    flags |= MAP_ALIGNED_CHERI;
+#endif
+    addr = target_mmap(stack_base, size_guard, PROT_READ | PROT_WRITE, flags,
+        -1, 0);
     if (addr == -1) {
         perror("stk mmap");
         exit(-1);
@@ -227,6 +241,10 @@ static void setup_arg_pages(struct bsd_binprm *bprm, struct image_info *info,
 
     target_stksiz = size;
     target_stkbas = addr;
+#ifdef TARGET_CHERI
+    assert(target_stkbas == CHERI_REPRESENTABLE_BASE(target_stkbas,
+        target_stksiz));
+#endif
 
     if (setup_initial_stack(bprm, stackp, stringp) != 0) {
         perror("stk setup");
