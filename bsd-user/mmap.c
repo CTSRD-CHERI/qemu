@@ -35,6 +35,7 @@
 #ifdef TARGET_CHERI
 #include "cheri/cherireg.h"
 #include "cheri/cheric.h"
+#include "cheri/cheri.h"
 #endif
 
 //#define DEBUG_MMAP
@@ -583,8 +584,7 @@ target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
             return (EINVAL);
         }
 
-        /* Allocate from the per-thread capability. */
-        source_cap = &ts->cheri_mmap_cap;
+        source_cap = &userspace_cap;
     }
     assert(cheri_gettag(source_cap) &&
         ("ts->cheri_mmap_cap is untagged!"));

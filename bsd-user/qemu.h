@@ -139,7 +139,6 @@ typedef struct TaskState {
     sigset_t sigsuspend_mask;
 
 #ifdef TARGET_CHERI
-    cap_register_t cheri_mmap_cap;
 #if defined(TARGET_AARCH64) || defined(TARGET_RISCV)
     cap_register_t cheri_sigcode_cap;
 #endif
@@ -194,7 +193,7 @@ struct bsd_binprm {
 
 void do_init_thread(struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-    cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
+    cap_register_t *sigcodecapp,
 #endif
     struct image_info *infop);
 abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
@@ -202,7 +201,7 @@ abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
 int loader_exec(const char *filename, char **argv, char **envp,
              struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-             cap_register_t *mmapcapp, cap_register_t *sigcodecapp,
+             cap_register_t *sigcodecapp,
 #endif
              struct image_info *infop, struct bsd_binprm *bprm);
 

@@ -73,51 +73,6 @@ cheri_exec_stack_pointer(cap_register_t *cap, abi_ulong stack)
     return (cheri_incoffset(csp, stacklen));
 }
 
-/*
- * Build a capability to describe the MMAP'able space from the end of
- * the program's heap to the bottom of the stack.
- *
- * XXX: We could probably use looser bounds and rely on the VM system
- * to manage the address space via vm_map instead of the more complex
- * calculations here.
- */
-void
-cheri_set_mmap_capability(cap_register_t *mmapcapp, struct image_info *info,
-    const cap_register_t *csp)
-{
-    vm_offset_t map_base, stack_base, text_end;
-    size_t map_length;
-
-    stack_base = cheri_getbase(csp);
-    text_end = roundup2(info->end_addr,
-        CHERI_SEALABLE_ALIGNMENT(info->end_addr - info->start_addr));
-
-    /*
-     * Less confusing rounded up to a page and 256-bit
-     * requires no other rounding.
-     */
-    text_end = roundup2(text_end, PAGE_SIZE);
-    assert(text_end <= stack_base);
-
-    map_base = (text_end == stack_base) ?
-        CHERI_CAP_USER_MMAP_BASE :
-        roundup2(text_end,
-        CHERI_REPRESENTABLE_ALIGNMENT(stack_base - text_end));
-    assert(map_base < stack_base);
-    map_length = stack_base - map_base;
-    map_length = rounddown2(map_length,
-        CHERI_REPRESENTABLE_ALIGNMENT(map_length));
-
-    /*
-     * Use cheri_capability_build_user_rwx so mmap() can return
-     * appropriate permissions derived from a single capability.
-     */
-    (void)cheri_capability_build_user_rwx(
-        mmapcapp, CHERI_CAP_USER_MMAP_PERMS, map_base, map_length,
-        CHERI_CAP_USER_MMAP_OFFSET);
-    assert(cheri_getperm(mmapcapp) & CHERI_PERM_CHERIABI_VMMAP);
-}
-
 cap_register_t *
 cheri_exec_pcc(cap_register_t *cap, struct image_info *info)
 {
