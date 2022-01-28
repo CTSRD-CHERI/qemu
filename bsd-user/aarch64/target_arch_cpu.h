@@ -21,6 +21,7 @@
 
 #include "target_arch.h"
 
+#include "machine/armreg.h"
 #ifdef TARGER_CHERI
 #include "machine/cheri.h"
 #endif
@@ -188,18 +189,42 @@ static inline void target_cpu_loop(CPUARMState *env)
 
 	case EXCP_PREFETCH_ABORT:
 	case EXCP_DATA_ABORT:
-            info.si_signo = TARGET_SIGSEGV;
+        {
+            uint32_t fsc;
+
             info.si_errno = 0;
-            /* XXX: check env->error_code */
-            info.si_code = TARGET_SEGV_MAPERR;
+            fsc = env->exception.fsr & ISS_DATA_DFSC_MASK;
+            switch (fsc) {
 #ifdef TARGET_CHERI
-            info.si_addr = cheri_uintptr(cheri_ptr_to_unbounded_cap(
+            case ISS_DATA_DFSC_CAP_TAG:
+            case ISS_DATA_DFSC_CAP_SEALED:
+            case ISS_DATA_DFSC_CAP_BOUND:
+            case ISS_DATA_DFSC_CAP_PERM:
+                info.target_si_signo = TARGET_SIGPROT;
+                info.target_si_code = cheri_esr_to_sicode(fsc);
+                if (trapnr == EXCP_PREFETCH_ABORT) {
+                    info.target_si_trapno = TARGET_EXCP_INSN_ABORT_L;
+                } else {
+                    info.target_si_trapno = TARGET_EXCP_DATA_ABORT_L;
+                }
+                break;
+#endif
+            default:
+                info.target_si_signo = TARGET_SIGSEGV;
+                /* XXX: check env->error_code */
+                info.target_si_code = TARGET_SEGV_MAPERR;
+                info.target_si_trapno = trapnr;
+                break;
+            }
+#ifdef TARGET_CHERI
+            info.target_si_addr = cheri_uintptr(cheri_ptr_to_unbounded_cap(
                 (const void *)(uintptr_t)env->exception.vaddress));
 #else
-            info.si_addr = env->exception.vaddress;
+            info.target_si_addr = env->exception.vaddress;
 #endif
             queue_signal(env, info.si_signo, &info);
             break;
+        }
 
 	case EXCP_DEBUG:
         case EXCP_BKPT:
