@@ -210,7 +210,10 @@ static inline abi_long get_mcontext(CPUARMState *regs, target_mcontext_t *mcp,
         TARGET_REG_SP));
     cheri_store(&mcp->mc_capregs.cap_lr, get_readonly_capreg(regs,
         TARGET_REG_LR));
-    cheri_store(&mcp->mc_capregs.cap_elr, cheri_get_current_pcc(regs));
+    /*
+     * XXXKW: How can we synchronize PCC to make sure it's current?
+     */
+    cheri_store(&mcp->mc_capregs.cap_elr, _cheri_get_pcc_unchecked(regs));
     cheri_store(&mcp->mc_capregs.cap_ddc, cheri_get_ddc(regs));
 
     /* XXX FP? */

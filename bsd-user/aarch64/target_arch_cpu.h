@@ -173,9 +173,12 @@ static inline void target_cpu_loop(CPUARMState *env)
             info.si_errno = 0;
             info.si_code = TARGET_ILL_ILLOPN;
 #ifdef TARGET_CHERI
-            info.si_addr = cheri_uintptr(cheri_get_current_pcc(env));
+            /*
+             * XXXKW: How can we synchronize PCC to make sure it's current?
+             */
+            info.si_addr = cheri_uintptr(_cheri_get_pcc_unchecked(env));
 #else
-            info.si_addr = arm_fetch_pc(env);
+            info.si_addr = env->pc;
 #endif
             queue_signal(env, info.si_signo, &info);
             break;
