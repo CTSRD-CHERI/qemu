@@ -57,7 +57,13 @@ struct target_pt_regs {
 #define TARGET_FREEBSD_ARM_SET_TP       2
 #define TARGET_FREEBSD_ARM_GET_TP       3
 
+#ifdef TARGET_CHERI
+#define UNAME_MACHINE "aarch64c"
+#else
+#define UNAME_MACHINE "aarch64"
+#endif
+
 #define TARGET_HW_MACHINE       "arm64"
-#define TARGET_HW_MACHINE_ARCH  "aarch64"
+#define TARGET_HW_MACHINE_ARCH  UNAME_MACHINE
 
 #endif /* !__ARCH_SYSCALL_H_ */
