@@ -1116,7 +1116,11 @@ static inline abi_long do_bsd_swapoff(abi_long arg1)
     void *p;
 
     LOCK_PATH(p, arg1);
+#if __FreeBSD_version >= 1400044
+    ret = get_errno(swapoff(path(p), 0));
+#else
     ret = get_errno(swapoff(path(p)));
+#endif
     UNLOCK_PATH(p, arg1);
 
     return ret;
