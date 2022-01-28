@@ -304,15 +304,11 @@ static int mmap_frag(abi_ulong real_start,
     return 0;
 }
 
-#ifdef TARGET_CHERI
-# define TASK_UNMAPPED_BASE  CHERI_CAP_USER_MMAP_BASE
-#else /* !TARGET_CHERI */
 #if HOST_LONG_BITS == 64 && TARGET_ABI_BITS == 64
 # define TASK_UNMAPPED_BASE  (1ul << 38)
 #else
 # define TASK_UNMAPPED_BASE  0x40000000
 #endif
-#endif /* TARGET_CHERI */
 abi_ulong mmap_next_start = TASK_UNMAPPED_BASE;
 
 unsigned long last_brk;
