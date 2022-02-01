@@ -261,9 +261,7 @@ ALL_WRAPPERS(UPERMS, uperms, uint32_t)
 ALL_WRAPPERS(OTYPE, otype, uint32_t)
 ALL_WRAPPERS(FLAGS, flags, uint8_t)
 ALL_WRAPPERS(RESERVED, reserved, uint8_t)
-#ifdef CC_HAVE_VERSION
 ALL_WRAPPERS(VERSION, version, uint8_t)
-#endif
 #undef ALL_WRAPPERS
 
 /// Extract the bits used for bounds and infer the top two bits of T

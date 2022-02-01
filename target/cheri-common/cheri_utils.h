@@ -98,10 +98,12 @@ static inline uint8_t cap_get_flags(const cap_register_t *c)
     return CAP_cc(get_flags)(c);
 }
 
+#ifdef CC_HAVE_VERSION
 static inline cap_version_t cap_get_version(const cap_register_t *c)
 {
     return CAP_cc(get_version)(c);
 }
+#endif
 
 static inline bool cap_has_reserved_bits_set(const cap_register_t *c)
 {

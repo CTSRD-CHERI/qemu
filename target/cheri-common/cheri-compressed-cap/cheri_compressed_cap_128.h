@@ -57,7 +57,9 @@
  * Morello embeds the user permissions in the middle of the hardware permissions.
  */
 
+#ifndef CC_IS_MORELLO
 #define CC_HAVE_VERSION 1
+#endif
 
 // The following macros are expected to be defined
 #undef CC_BITS
@@ -109,6 +111,7 @@ enum {
 #define MORELLO_FLAG_BITS 8
     _CC_FIELD(FLAGS, 64, 65),
     _CC_FIELD(RESERVED, 64, 65),
+    _CC_FIELD(VERSION, 64, 65),
 
     _CC_FIELD(INTERNAL_EXPONENT, 94, 94),
     _CC_FIELD(TOP_ENCODED, 93, 80),
@@ -132,6 +135,8 @@ enum {
     _CC_FIELD(VERSION, 108, 105),
     _CC_FIELD(OTYPE, 104, 91),
 #else
+    // No Version
+    _CC_FIELD(VERSION, 64, 65),
     _CC_FIELD(OTYPE, 108, 91),
 #endif
     _CC_FIELD(EBT, 90, 64),
@@ -253,12 +258,10 @@ enum _CC_N(OTypes) {
 
 _CC_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
-#ifdef CC_HAVE_VERSION
 enum _CC_N(Versions) {
     CC128_VERSION_UNVERSIONED = 0,
     CC128_MAX_VERSION = ((1u << CC128_VERSION_BITS) - 1u),
 };
-#endif
 
 #include "cheri_compressed_cap_common.h"
 

@@ -49,7 +49,8 @@ typedef enum CheriCapExc {
     CapEx_AccessCCallIDCViolation,
     CapEx_PermitUnsealViolation,
     CapEx_PermitSetCIDViolation,
-    CapEx_AccessSystemRegsViolation
+    CapEx_AccessSystemRegsViolation,
+    CapEx_VersionViolation,
 } CheriCapExcCause;
 
 static inline ARMFaultType cheri_cause_to_arm_fault(CheriCapExcCause cause)
@@ -150,6 +151,15 @@ static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
                                                            uintptr_t retpc)
 {
     raise_cheri_exception_impl_if_wnr(env, CapEx_TLBNoStoreCap, reg, va, false,
+                                      retpc, false, true);
+}
+
+static inline void QEMU_NORETURN raise_store_ver_exception(CPUArchState *env,
+                                                           target_ulong va,
+                                                           int reg,
+                                                           uintptr_t retpc)
+{
+    raise_cheri_exception_impl_if_wnr(env, CapEx_VersionViolation, reg, va, false, // XXX
                                       retpc, false, true);
 }
 

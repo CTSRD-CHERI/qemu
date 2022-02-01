@@ -164,8 +164,10 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
             *cheri_flags |= TB_FLAG_CHERI_DDC_CURSOR_ZERO;
         if (cap_get_top_full(ddc) == CAP_MAX_TOP)
             *cheri_flags |= TB_FLAG_CHERI_DDC_TOP_MAX;
+#ifdef CC_HAVE_VERSION
         if (cap_get_version(ddc) == CAP_VERSION_UNVERSIONED)
             *cheri_flags |= TB_FLAG_CHERI_DDC_UNVERSIONED;
+#endif
     }
 }
 

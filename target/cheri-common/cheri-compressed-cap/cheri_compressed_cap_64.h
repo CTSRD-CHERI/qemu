@@ -126,6 +126,11 @@ enum _CC_N(OTypes) {
     _CC_N(MAX_RESERVED_OTYPE) = _CC_N(OTYPE_UNSEALED),
 };
 
+enum _CC_N(Versions) {
+    CC64_VERSION_UNVERSIONED = 0,
+    CC64_MAX_VERSION = 0,
+};
+
 _CC_STATIC_ASSERT_SAME(CC64_MANTISSA_WIDTH, CC64_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
 #include "cheri_compressed_cap_common.h"

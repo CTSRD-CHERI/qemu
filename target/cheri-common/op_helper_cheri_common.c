@@ -352,12 +352,17 @@ target_ulong CHERI_HELPER_IMPL(cgetversion(CPUArchState *env, uint32_t cb))
     /*
      * CGetVersion: Move Version Field to a General-Purpose Register.
      */
+#ifdef CC_HAVE_VERSION
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     return (target_ulong) cap_get_version(cbp);
+#else
+    return 0;
+#endif
 }
 
 target_ulong CHERI_HELPER_IMPL(cloadversion(CPUArchState *env, uint32_t cb))
 {
+#ifdef CC_HAVE_VERSION
     /*
      * CLoadVersion: Load Version for granule to a General-Purpose Register.
      * TODO reduce code duplication with cap_check_common?
@@ -387,11 +392,15 @@ target_ulong CHERI_HELPER_IMPL(cloadversion(CPUArchState *env, uint32_t cb))
     /* XXX should we use prot? */
     (void) prot;
     return (target_ulong) ver;
+#else
+    return 0;
+#endif
 }
 
 void CHERI_HELPER_IMPL(cstoreversion(CPUArchState *env, uint32_t cb,
                                target_ulong version))
 {
+#ifdef CC_HAVE_VERSION
     /*
      * CStoreVersion: Set version of a granule in memory.
      * TODO reduce code duplication with cap_check_common?
@@ -417,11 +426,13 @@ void CHERI_HELPER_IMPL(cstoreversion(CPUArchState *env, uint32_t cb,
         raise_unaligned_load_exception(env, addr, _host_return_address);
     }
     cheri_version_set_aligned(env, addr, cb, NULL, _host_return_address, version & CAP_MAX_VERSION);
+#endif
 }
 
 target_ulong CHERI_HELPER_IMPL(camocdecversion(CPUArchState *env, uint32_t cb,
                                uint32_t cs2))
 {
+#ifdef CC_HAVE_VERSION
     /*
      * CAmoCDecVersion: Atomically decrement version of a granule in memory,
      * comparing with expected version in cs2.
@@ -469,6 +480,9 @@ target_ulong CHERI_HELPER_IMPL(camocdecversion(CPUArchState *env, uint32_t cb,
         /* Version mismatch -- return failure */
         return 0;
     }
+#else
+    return -1;
+#endif
 }
 
 /// Two operands (both capabilities)
@@ -1177,6 +1191,7 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
 void CHERI_HELPER_IMPL(csetversion(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  target_ulong version))
 {
+#ifdef CC_HAVE_VERSION
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     GET_HOST_RETPC();
     /*
@@ -1194,6 +1209,7 @@ void CHERI_HELPER_IMPL(csetversion(CPUArchState *env, uint32_t cd, uint32_t cb,
     _Static_assert(((CAP_MAX_VERSION + 1) & CAP_MAX_VERSION) == 0, "Expected power of two CAP_MAX_VERSION");
     CAP_cc(update_version)(&result, version);
     update_capreg(env, cd, &result);
+#endif
 }
 
 /// Three operands (int capability capability)
@@ -1689,10 +1705,12 @@ void CHERI_HELPER_IMPL(raise_exception_ddc_perms(CPUArchState *env,
                                                  uint32_t required_perms))
 {
     const cap_register_t *ddc = cheri_get_ddc(env);
+#ifdef CC_HAVE_VERSION
     if (cap_get_version(ddc) != CAP_VERSION_UNVERSIONED) {
         GET_HOST_RETPC();
         raise_cheri_exception(env, CapEx_VersionViolation, CHERI_EXC_REGNUM_DDC);
     }
+#endif
     cap_check_common_reg(required_perms, env, CHERI_EXC_REGNUM_DDC, addr, 1,
                          GETPC(), ddc, 1, NULL);
     error_report("%s should not return! DDC= " PRINT_CAP_FMTSTR, __func__,
