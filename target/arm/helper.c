@@ -13806,9 +13806,9 @@ void aarch64_sve_change_el(CPUARMState *env, int old_el,
 }
 #endif
 
-#ifdef TARGET_CHERI
-
 #ifdef CONFIG_TCG_LOG_INSTR
+
+#ifdef TARGET_CHERI
 
 void HELPER(arm_log_instr)(CPUARMState *env, target_ulong pc, uint32_t opcode)
 {
@@ -13819,4 +13819,10 @@ void HELPER(arm_log_instr)(CPUARMState *env, target_ulong pc, uint32_t opcode)
 }
 
 #endif
+
+bool cpu_log_instr_event_regdump(CPUARMState *env, log_event_t *event)
+{
+    return true;
+}
+
 #endif
