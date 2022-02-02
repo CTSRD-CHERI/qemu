@@ -38,15 +38,6 @@
 #include "cheri/cheri.h"
 #endif
 
-//#define DEBUG_MMAP
-#ifndef	MAP_ALIGNMENT_MASK
-#define	MAP_ALIGNMENT_MASK	0
-#endif
-#ifndef	MAP_ALIGNMENT_SHIFT
-/* Nop */
-#define	MAP_ALIGNMENT_SHIFT	0
-#endif
-
 static pthread_mutex_t mmap_mutex = PTHREAD_MUTEX_INITIALIZER;
 static __thread int mmap_lock_count;
 
@@ -394,12 +385,8 @@ static abi_ulong mmap_find_vma_aligned(abi_ulong start, abi_ulong size, abi_ulon
     wrapped = repeat = 0;
     prev = 0;
     flags = MAP_ANONYMOUS|MAP_PRIVATE;
-#ifdef MAP_ALIGNED
     if (alignment != 0)
 		flags |= MAP_ALIGNED(alignment);
-#else
-    /* XXX TODO */
-#endif
 
     for (;; prev = ptr) {
         /*
