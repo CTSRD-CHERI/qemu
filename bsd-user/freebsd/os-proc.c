@@ -38,7 +38,7 @@ struct kinfo_proc;
  * The maximum number of additional program arguments added by the emulator
  * to argv in an execve(2) or an fexecve(2) call.
  */
-#define MAX_ARGV_EXTRA  9
+#define MAX_ARGV_EXTRA  11
 
 /*
  * Get the filename for the given file descriptor.
@@ -163,12 +163,13 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
     char **envp, **guestargs, **q;
     char filepath[PATH_MAX];
     bool iself, isscript;
+    char guestbasestr[21 /* ULONG_MAX + '\0' */];
 #if defined(__FreeBSD_version) && __FreeBSD_version < 1100000
     char shebangpath[PATH_MAX], *shebangargs;
 #endif
     abi_ulong gp;
     abi_uintptr_t addr;
-    int fd, total_size;
+    int error, fd, total_size;
     void *p;
     abi_long ret;
 
@@ -366,6 +367,19 @@ abi_long freebsd_exec_common(abi_ulong path_or_fd, abi_ulong guest_argp,
     /*
      * Add QEMU arguments required to correctly execute the file.
      */
+    if (have_guest_base) {
+        ret = get_errno(snprintf(guestbasestr, sizeof(guestbasestr), "%lu",
+            guest_base));
+        if (ret <= 0 || ret >= sizeof(guestbasestr)) {
+            if (ret >= 0) {
+                errno = EOVERFLOW;
+                ret = -host_to_target_errno(errno);
+            }
+            goto execve_end;
+        }
+        argv[ii++] = "-B";
+        argv[ii++] = guestbasestr;
+    }
     argv[ii++] = "-L";
     argv[ii++] = interp_prefix;
     if (interp_path != NULL) {
