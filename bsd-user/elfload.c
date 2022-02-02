@@ -214,7 +214,7 @@ static abi_ulong copy_elf_strings(int argc,char ** argv, void **page,
 static void setup_arg_pages(struct bsd_binprm *bprm, struct image_info *info,
                             abi_ulong *stackp, abi_ulong *stringp)
 {
-    abi_ulong stack_base, size, size_guard;
+    abi_ulong size, size_guard;
     abi_long addr;
     int flags;
 
@@ -223,15 +223,12 @@ static void setup_arg_pages(struct bsd_binprm *bprm, struct image_info *info,
      */
     size = target_dflssiz;
     size_guard = size + qemu_host_page_size;
-    stack_base = TARGET_USRSTACK - size;
     flags = MAP_PRIVATE | MAP_ANON;
 #ifdef TARGET_CHERI
     size_guard = CHERI_REPRESENTABLE_LENGTH(size_guard);
-    stack_base = CHERI_REPRESENTABLE_BASE(stack_base, size);
     flags |= MAP_ALIGNED_CHERI;
 #endif
-    addr = target_mmap(stack_base, size_guard, PROT_READ | PROT_WRITE, flags,
-        -1, 0);
+    addr = target_mmap(0, size_guard, PROT_READ | PROT_WRITE, flags, -1, 0);
     if (addr == -1) {
         perror("stk mmap");
         exit(-1);
