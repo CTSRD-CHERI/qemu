@@ -208,9 +208,10 @@ static inline bool cap_is_in_bounds(const cap_register_t *c, target_ulong addr,
     // Use __builtin_add_overflow to avoid wrapping around the end of the addres space
     target_ulong access_end_addr = 0;
     if (__builtin_add_overflow(addr, num_bytes, &access_end_addr)) {
-        warn_report("Found capability access that wraps around: 0x" TARGET_FMT_lx
-                    " + %zd. Authorizing cap: " PRINT_CAP_FMTSTR,
-                    addr, num_bytes, PRINT_CAP_ARGS(c));
+        if (c->cr_tag)
+            warn_report("Found capability access that wraps around: 0x" TARGET_FMT_lx
+                        " + %zd. Authorizing cap: " PRINT_CAP_FMTSTR,
+                        addr, num_bytes, PRINT_CAP_ARGS(c));
         return false;
     }
     if (access_end_addr > cap_get_top(c)) {
