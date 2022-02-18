@@ -179,7 +179,7 @@ struct iovec *lock_iovec(int type, abi_ulong target_addr,
     total_len = 0;
 
     for (i = 0; i < count; i++) {
-        abi_ulong base = tswapal(target_vec[i].iov_base);
+        abi_vaddr_t base = uintptr_vaddr(tswapuintptr(target_vec[i].iov_base));
         abi_long len = tswapal(target_vec[i].iov_len);
 
         if (len < 0) {
@@ -219,7 +219,8 @@ struct iovec *lock_iovec(int type, abi_ulong target_addr,
  fail:
     while (--i >= 0) {
         if (tswapal(target_vec[i].iov_len) > 0) {
-            unlock_user(vec[i].iov_base, tswapal(target_vec[i].iov_base), 0);
+            unlock_user(vec[i].iov_base,
+                uintptr_vaddr(tswapuintptr(target_vec[i].iov_base)), 0);
         }
     }
     unlock_user(target_vec, target_addr, 0);
@@ -239,7 +240,8 @@ void unlock_iovec(struct iovec *vec, abi_ulong target_addr,
                            count * sizeof(struct target_iovec), 1);
     if (target_vec) {
         for (i = 0; i < count; i++) {
-            abi_ulong base = tswapal(target_vec[i].iov_base);
+            abi_vaddr_t base =
+                uintptr_vaddr(tswapuintptr(target_vec[i].iov_base));
             abi_long len = tswapal(target_vec[i].iov_len);
             if (len < 0) {
                 break;
