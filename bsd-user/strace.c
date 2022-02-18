@@ -184,11 +184,18 @@ static void print_syscall(int num, const struct syscallname *scnames,
                 scnames[i].call(&scnames[i], arg1, arg2, arg3, arg4, arg5,
                         arg6);
             } else {
+#if 0
+                /*
+                 * XXXKW: Since the format strings for strace are broken,
+                 * don't use them as they result in SIGSEGV and disallow
+                 * debugging, in most cases.
+                 */
                 /* XXX: this format system is broken because it uses
                    host types and host pointers for strings */
                 if (scnames[i].format != NULL) {
                     format = scnames[i].format;
                 }
+#endif
                 gemu_log(format, scnames[i].name, arg1, arg2, arg3, arg4, arg5,
                         arg6);
             }
