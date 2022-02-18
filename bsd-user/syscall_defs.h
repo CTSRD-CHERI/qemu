@@ -68,8 +68,8 @@ typedef int32_t target_freebsd_time_t;
 #endif
 
 struct target_iovec {
-    abi_long iov_base;   /* Starting address */
-    abi_long iov_len;   /* Number of bytes */
+    abi_uintptr_t iov_base;   /* Starting address */
+    abi_long iov_len;         /* Number of bytes */
 };
 
 /*
