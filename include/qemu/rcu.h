@@ -28,6 +28,7 @@
 #include "qemu/queue.h"
 #include "qemu/atomic.h"
 #include "qemu/sys_membarrier.h"
+#include "qemu/coroutine-tls.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,11 +69,11 @@ struct rcu_reader_data {
     QLIST_ENTRY(rcu_reader_data) node;
 };
 
-extern __thread struct rcu_reader_data rcu_reader;
+QEMU_DECLARE_CO_TLS(struct rcu_reader_data, rcu_reader)
 
 static inline void rcu_read_lock(void)
 {
-    struct rcu_reader_data *p_rcu_reader = &rcu_reader;
+    struct rcu_reader_data *p_rcu_reader = get_ptr_rcu_reader();
     unsigned ctr;
 
     if (p_rcu_reader->depth++ > 0) {
@@ -88,7 +89,7 @@ static inline void rcu_read_lock(void)
 
 static inline void rcu_read_unlock(void)
 {
-    struct rcu_reader_data *p_rcu_reader = &rcu_reader;
+    struct rcu_reader_data *p_rcu_reader = get_ptr_rcu_reader();
 
     assert(p_rcu_reader->depth != 0);
     if (--p_rcu_reader->depth > 0) {
