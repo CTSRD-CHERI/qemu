@@ -42,8 +42,6 @@
 
 #ifdef TARGET_CHERI
 #include "cheri-lazy-capregs.h"
-
-#include "cheri/cheric.h"
 #endif
 
 /* RISC-V CPU definitions */
@@ -745,7 +743,7 @@ static void riscv_cpu_reset(DeviceState *dev)
      */
 #ifdef CONFIG_USER_ONLY
     set_max_perms_capability(&env->PCC, 0);
-    cheri_setflags(&env->PCC, CHERI_FLAG_CAPMODE);
+    cap_set_flags(&env->PCC, CHERI_FLAG_CAPMODE);
 #else
     set_max_perms_capability(&env->PCC, env->resetvec);
 #endif
