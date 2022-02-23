@@ -86,6 +86,17 @@ struct SCRInfo {
     [CheriSCR_PCC] = {.r = true, .w = false, .access = U_Always, .name = "PCC"},
     [CheriSCR_DDC] = {.r = true, .w = true, .access = U_Always, .name = "DDC"},
 
+#ifdef CONFIG_USER_ONLY
+    /*
+     * Other Special Capability Registers are not available in the QEMU user
+     * mode now. UTCC, UTDC, UScratchC, UEPCC could be made available as they
+     * are defined for the user mode by the ISA.
+     *
+     * Note that scr_info still stores entries for the unavailable SCRs but
+     * their access is set to SCR_Invalid by default. It means their information
+     * can be still read but access to them should be disallowed.
+     */
+#else
     [CheriSCR_UTCC] = {.r = true, .w = true, .access = U_ASR, .name = "UTCC"},
     [CheriSCR_UTDC] = {.r = true, .w = true, .access = U_ASR, .name = "UTDC"},
     [CheriSCR_UScratchC] = {.r = true,
@@ -115,6 +126,7 @@ struct SCRInfo {
     [CheriSCR_BSScratchC] = {.r = true, .w = true, .access = H_ASR,
                              .name= "BSTCC"},
     [CheriSCR_BSEPCC] = {.r = true, .w = true, .access = H_ASR, .name= "BSTCC"},
+#endif
 };
 
 static inline cap_register_t *get_scr(CPUArchState *env, uint32_t index)
