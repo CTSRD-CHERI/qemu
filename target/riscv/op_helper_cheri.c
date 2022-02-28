@@ -408,7 +408,7 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     log_changed_special_reg(env, "load_res", env->load_res);
     bool store_fails;
     if (addr != expected_addr) {
-        store_fails = 1;
+        store_fails = true;
         goto sc_failed;
     }
     // Now perform the "cmpxchg" operation by checking if the current values

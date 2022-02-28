@@ -56,11 +56,10 @@
  * developers want a "fast but not precise" singlecore, we could have locks off.
  *
  * If we want to throw caution to wind and really optimise the single thread
- * case, it should be noted qemu_tcg_mttcg_enabled is dynamic and so will
- * still be generating an extra branch. TARGET_SUPPORTS_MTTCG is the
- * static thing. Although qemu_tcg_mttcg_enabled will default to false if
- * TARGET_SUPPORTS_MTTCG is undefined, it can be still be overridden on the
- * command line.
+ * case, it should be noted need_concurrent_tags is dynamic and so will
+ * still be generating a few extra branchs. TARGET_SUPPORTS_MTTCG is the
+ * static thing we could use if we want to compile an extra fast but single-core
+ * only binary.
  */
 
 #define UNSAFE_SINGLE_CORE true
