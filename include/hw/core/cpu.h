@@ -479,9 +479,8 @@ struct CPUState {
     cpu_log_instr_state_t log_state;
 #endif
 
-    // TARGET_CHERI is poison in this context, so I guess we get these locks
-    // taking up space even if non CHERI. Yay C.
-    CHERI_EXCEPTION_LOCKS
+    /* TARGET_CHERI is poison in this context. This structure is small. */
+    cheri_exception_locks_t cheri_exception_locks;
 };
 
 typedef QTAILQ_HEAD(CPUTailQ, CPUState) CPUTailQ;

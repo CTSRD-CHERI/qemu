@@ -47,6 +47,4 @@ typedef struct cheri_exception_locks_t {
     int fill;
 } cheri_exception_locks_t;
 
-#define CHERI_EXCEPTION_LOCKS cheri_exception_locks_t cheri_exception_locks;
-
 #endif // QEMU_CHERI_TAGMEM_EX_LOCKS_H
