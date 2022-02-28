@@ -1133,12 +1133,12 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     tagmem_set_tag_many(tagmem, page_vaddr_to_tag_offset(vaddr), tags, false);
 }
 
-void cheri_tag_reader_lock_impl(tag_reader_lock_t lock)
+void cheri_tag_reader_lock_release_impl(tag_reader_lock_t lock)
 {
     lock_tag *lockTag = (lock_tag *)lock;
     lock_tag_release_read(lockTag);
 }
-void cheri_tag_writer_lock_impl(tag_writer_lock_t lock)
+void cheri_tag_writer_lock_release_impl(tag_writer_lock_t lock)
 {
     lock_tag *lockTag = (lock_tag *)lock;
     lock_tag_release_write(lockTag);

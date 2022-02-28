@@ -110,8 +110,8 @@ void get_dummy_locks(target_ulong vaddr, tag_writer_lock_t *low,
 
 extern tag_writer_lock_t notag_lock_high;
 
-void cheri_tag_reader_lock_impl(tag_reader_lock_t lock);
-void cheri_tag_writer_lock_impl(tag_writer_lock_t lock);
+void cheri_tag_reader_lock_release_impl(tag_reader_lock_t lock);
+void cheri_tag_writer_lock_release_impl(tag_writer_lock_t lock);
 
 extern bool _need_concurrent_tags;
 extern bool _need_concurrent_tags_initialized;
@@ -136,13 +136,13 @@ static inline QEMU_ALWAYS_INLINE bool need_concurrent_tags(void)
 static inline void cheri_tag_reader_release(tag_reader_lock_t lock)
 {
     if (lock != TAG_LOCK_NONE && lock != NULL)
-        cheri_tag_reader_lock_impl(lock);
+        cheri_tag_reader_lock_release_impl(lock);
 }
 
 static inline void cheri_tag_writer_release(tag_writer_lock_t lock)
 {
     if (lock != TAG_LOCK_NONE && lock != NULL)
-        cheri_tag_writer_lock_impl(lock);
+        cheri_tag_writer_lock_release_impl(lock);
 }
 
 static inline cheri_exception_locks_t *
