@@ -8573,11 +8573,11 @@ void register_cp_regs_for_features(ARMCPU *cpu)
           .opc0 = 3, .opc1 = 3, .crn = 13, .crm = 0, .opc2 = 7,
           .access = PL0_RW | PL_NO_SYSREG, .type = ARM_CP_CAP,
           .fieldoffset = offsetof(CPUARMState, cid_el0) },
-        { .name = "TPIDRRO_EL0", .state = ARM_CP_STATE_AA64,
-          .opc0 = 3, .opc1 = 3, .opc2 = 4, .crn = 13, .crm = 0,
+        { .name = "RTPIDR_EL0", .state = ARM_CP_STATE_AA64,
+          .opc0 = 3, .opc1 = 3, .crn = 13, .crm = 0, .opc2 = 4,
           .access = PL0_RW | PL_IN_EXECUTIVE | PL_NO_SYSREG,
           .type = ARM_CP_CAP_ON_MORELLO,
-          .fieldoffset = offsetof(CPUARMState, cp15.tpidrro_el[0]),
+          .fieldoffset = offsetof(CPUARMState, cp15.rtpidr_el0),
           .resetvalue = 0 },
         REGINFO_SENTINEL
     };
