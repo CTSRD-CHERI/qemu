@@ -352,7 +352,7 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
 {
     cap_register_t next_pcc = *target;
 
-#ifdef TARGET_AARCH64
+#if CHERI_CONTROLFLOW_CHECK_AT_TARGET
     update_target_for_jump(env, &next_pcc, cjalr_flags);
 #else
     cheri_debug_assert(cap_is_unsealed(target) || cap_is_sealed_entry(target));
@@ -366,11 +366,17 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
     } else if (cjalr_flags & CJALR_MUST_BE_SENTRY) {
         next_pcc.cr_tag = 0;
     } else {
-        // Can never create an unrepresentable capability since we
-        // bounds-checked the jump target.
+        /*
+         * For RISC-V This can never create an unrepresentable capability since
+         * we bounds-checked the jump target. However, Morello performs the
+         * checks after the jump, so we can't unconditionally assert that the
+         * result is representable.
+         */
+#if !CHERI_CONTROLFLOW_CHECK_AT_TARGET
         assert(is_representable_cap_with_addr(&next_pcc, addr) &&
                "Target addr must be representable");
-        next_pcc._cr_cursor = addr;
+#endif
+        cap_set_cursor(&next_pcc, addr);
     }
 
     // Don't generate a link capability if link_reg == zero register
@@ -411,8 +417,8 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const target_ulong cursor = cap_get_cursor(cbp);
     const target_ulong addr = cursor + (target_long)offset;
-    // AARCH64 takes the exception at the target
-#ifndef TARGET_AARCH64
+    /* Morello takes the exception at the target. */
+#if CHERI_CONTROLFLOW_CHECK_AT_TARGET
     GET_HOST_RETPC();
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
