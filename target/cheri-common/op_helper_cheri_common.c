@@ -418,7 +418,7 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
     const target_ulong cursor = cap_get_cursor(cbp);
     const target_ulong addr = cursor + (target_long)offset;
     /* Morello takes the exception at the target. */
-#if CHERI_CONTROLFLOW_CHECK_AT_TARGET
+#if !CHERI_CONTROLFLOW_CHECK_AT_TARGET
     GET_HOST_RETPC();
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
