@@ -32,6 +32,8 @@
 
 #include "cheri-archspecific-earlier.h"
 
+#define CHERI_CONTROLFLOW_CHECK_AT_TARGET 1
+
 static inline const cap_register_t *cheri_get_ddc(CPUARMState *env)
 {
     cheri_debug_assert(env->DDC_current.cap.cr_extra ==
