@@ -144,7 +144,7 @@ static inline void target_cpu_loop(CPURISCVState *env)
     CPUState *cs = env_cpu(env);
     int trapnr;
     target_siginfo_t info;
-    abi_long error;
+    abi_long ret;
     abi_syscallret_t retval;
     struct target_syscall_args sa;
 
@@ -171,17 +171,17 @@ static inline void target_cpu_loop(CPURISCVState *env)
             break;
         case RISCV_EXCP_U_ECALL:
             if (bsd_type == target_freebsd) {
-                error = target_cpu_fetch_syscall_args(env, &sa);
-                if (error == 0) {
+                ret = target_cpu_fetch_syscall_args(env, &sa);
+                if (ret == 0) {
                     riscv_update_pc(env, riscv_fetch_pc(env) + TARGET_INSN_SIZE,
                         false);
-                    error = do_freebsd_syscall(env, &retval, &sa);
+                    ret = do_freebsd_syscall(env, &retval, &sa);
                 }
                 /*
                  * Compare to cpu_set_syscall_retval() in
                  * riscv/riscv/vm_machdep.c.
                  */
-                if (error >= 0) {
+                if (ret >= 0) {
                     if (retval != NULL) {
 #ifdef TARGET_CHERI
                         update_capreg(env, xA0, retval);
@@ -189,16 +189,16 @@ static inline void target_cpu_loop(CPURISCVState *env)
                         gpr_set_int_value(env, xA0, *retval);
 #endif
                     } else {
-                        gpr_set_int_value(env, xA0, error);
+                        gpr_set_int_value(env, xA0, ret);
                     }
                     /* XXXKW: xA1 should be set as well. */
                     gpr_set_int_value(env, xA1, 0);
                     gpr_set_int_value(env, xT0, 0);
-                } else if (error == -TARGET_ERESTART) {
+                } else if (ret == -TARGET_ERESTART) {
                     riscv_update_pc(env, riscv_fetch_pc(env) - TARGET_INSN_SIZE,
                         false);
-                } else if (error != -TARGET_EJUSTRETURN) {
-                    gpr_set_int_value(env, xA0, -error);
+                } else if (ret != -TARGET_EJUSTRETURN) {
+                    gpr_set_int_value(env, xA0, -ret);
                     gpr_set_int_value(env, xT0, 1);
                 }
             } else {
