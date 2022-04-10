@@ -181,7 +181,7 @@ static inline void target_cpu_loop(CPURISCVState *env)
                  * Compare to cpu_set_syscall_retval() in
                  * riscv/riscv/vm_machdep.c.
                  */
-                if (ret >= 0) {
+                if (!is_error(ret)) {
                     if (retval != NULL) {
 #ifdef TARGET_CHERI
                         update_capreg(env, xA0, retval);
