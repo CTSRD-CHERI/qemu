@@ -495,7 +495,7 @@ target_mmap(abi_ulong addr0, abi_ulong len, int prot, int flags, int fd,
 
     retval = &retvalm;
     error = target_mmap_req(NULL, retval, &mr);
-    return (error >= 0 ? syscallret_value(retval) : -1);
+    return (error == -1 ? -1 : syscallret_value(retval));
 }
 
 /*
