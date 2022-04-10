@@ -697,7 +697,7 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
 {
     abi_ulong addr, ret, end, real_start, real_end, host_offset, host_len;
     abi_ulong start, len, size;
-    int prot, flags, fd;
+    int error, fd, flags, prot;
     off_t offset;
     vm_offset_t addr_mask = ~TARGET_PAGE_MASK;
 #ifdef TARGET_CHERI
@@ -1086,7 +1086,9 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
 #endif
     return start;
 fail:
+    error = errno;
     mmap_unlock();
+    errno = error;
     return -1;
 }
 
