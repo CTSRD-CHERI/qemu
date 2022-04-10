@@ -535,7 +535,8 @@ target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
 
     if (flags & MAP_32BIT) {
         qemu_log("MAP_32BIT not supported in CheriABI\n");
-        return (EINVAL);
+        errno = EINVAL;
+        goto fail;
     }
 
     /*
@@ -568,7 +569,8 @@ target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
 
         if (flags & MAP_CHERI_NOSETBOUNDS) {
             qemu_log("MAP_CHERI_NOSETBOUNDS without a valid addr capability\n");
-            return (EINVAL);
+            errno = EINVAL;
+            goto fail;
         }
 
         source_cap = &userspace_cap;
@@ -591,7 +593,8 @@ target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
             "capablity (0x%zx > 0x%zx)\n",
             roundup2(hint + ua.len, TARGET_PAGE_SIZE),
             cheri_getbase(source_cap) + cheri_getlen(source_cap));
-        return (EPROT);
+        errno = EPROT;
+        goto fail;
     }
 
     perms = cheri_getperm(source_cap);
@@ -599,7 +602,8 @@ target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
     if ((perms & reqperms) != reqperms) {
         qemu_log("capability has insufficient perms (0x%lx)"
             "for request (0x%lx)\n", perms, reqperms);
-        return (EPROT);
+        errno = EPROT;
+        goto fail;
     }
 
     /*
@@ -644,7 +648,8 @@ target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
         /* Reject nonsensical sub-page alignment requests */
         if ((flags >> MAP_ALIGNMENT_SHIFT) < TARGET_PAGE_SHIFT) {
             qemu_log("subpage alignment request\n");
-            return (EINVAL);
+            errno = EINVAL;
+            goto fail;
         }
 
         /*
@@ -681,6 +686,8 @@ target_sys_mmap(TaskState *ts, abi_syscallret_t retval,
     mr.mr_source_cap = *source_cap;
 
     return (target_mmap_req(ts, retval, &mr));
+fail:
+    return (-1);
 #endif
 }
 
