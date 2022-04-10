@@ -141,7 +141,7 @@ static inline void target_cpu_loop(CPUARMState *env)
              * See arm64/arm64/vm_machdep.c cpu_set_syscall_retval()
              */
             pstate = pstate_read(env);
-            if (ret >= 0) {
+            if (!is_error(ret)) {
                 pstate &= ~PSTATE_C;
                 if (retval != NULL) {
 #ifdef TARGET_CHERI
