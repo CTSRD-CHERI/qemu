@@ -1361,6 +1361,8 @@ static Property riscv_cpu_properties[] = {
     DEFINE_PROP_BOOL("zbc", RISCVCPU, cfg.ext_zbc, true),
     DEFINE_PROP_BOOL("zbs", RISCVCPU, cfg.ext_zbs, true),
 
+    DEFINE_PROP_BOOL("zbkb", RISCVCPU, cfg.ext_zbkb, false),
+
     DEFINE_PROP_BOOL("zca", RISCVCPU, cfg.ext_zca, false),
     DEFINE_PROP_BOOL("zcb", RISCVCPU, cfg.ext_zcb, false),
     DEFINE_PROP_BOOL("zcd", RISCVCPU, cfg.ext_zcd, false),
