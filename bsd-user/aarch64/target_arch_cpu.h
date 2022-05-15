@@ -72,16 +72,27 @@ static abi_long
 target_cpu_fetch_syscall_args(CPUARMState *env,
     struct target_syscall_args *sa)
 {
+#ifdef TARGET_CHERI
+    target_ulong stack_args;
+    abi_long error;
+#endif
     uint8_t aii;
 
     aii = 0;
 
     sa->code = arm_get_xreg(env, 8);
     memset(&sa->args, 0, sizeof(sa->args));
+#ifdef TARGET_CHERI
+    stack_args = 0;
+#endif
 
     if (sa->code == TARGET_FREEBSD_NR_syscall ||
         sa->code == TARGET_FREEBSD_NR___syscall) {
         sa->code = target_syscallarg_value(env, aii++);
+
+#ifdef TARGET_CHERI
+        stack_args = arm_get_xreg(env, 9);
+#endif
     } else {
 #ifdef TARGET_CHERI
         sa->args[0] = *get_readonly_capreg(env, aii++);
@@ -102,12 +113,30 @@ target_cpu_fetch_syscall_args(CPUARMState *env,
 
     assert(sa->callp->sy_narg <= nitems(sa->args));
 
-    for (; aii < TARGET_MAXARGS - 1; aii++) {
 #ifdef TARGET_CHERI
-        sa->args[aii] = *get_readonly_capreg(env, aii);
-#else
-        sa->args[aii] = target_syscallarg_value(env, aii);
+    if (__predict_false(stack_args != 0)) {
+        abi_uintcap_t capval;
+        int offset;
+
+        offset = 0;
+        for (aii = 0; aii < sa->callp->sy_narg; aii++) {
+            offset = roundup2(offset, sizeof(abi_uintcap_t));
+            error = get_user_uintcap(capval, stack_args + offset);
+            if (error)
+                return (error);
+            cheri_load(&sa->args[aii], &capval);
+            offset += sizeof(abi_uintcap_t);
+        }
+    } else
 #endif
+    {
+        for (; aii < TARGET_MAXARGS - 1; aii++) {
+#ifdef TARGET_CHERI
+            sa->args[aii] = *get_readonly_capreg(env, aii);
+#else
+            sa->args[aii] = target_syscallarg_value(env, aii);
+#endif
+        }
     }
 
     return (0);
