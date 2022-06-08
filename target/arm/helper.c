@@ -393,8 +393,7 @@ static int aarch64_gdb_get_cheri_reg(CPUARMState *env, GByteArray *buf, int n)
     case 35:
     case 36:
     case 37:
-    case 38:
-    case 39: {
+    case 38: {
         /*
          * TODO: Support system registers. The current GDB XML file only makes
          * sense for EL0 but we really want to expose all the ELn registers.
@@ -403,7 +402,7 @@ static int aarch64_gdb_get_cheri_reg(CPUARMState *env, GByteArray *buf, int n)
         null_capability(&null);
         return gdb_get_capreg(buf, &null);
     }
-    case 40: {
+    case 39: {
         /* tag_map */
         uint64_t tag_map;
         int i;
@@ -419,6 +418,9 @@ static int aarch64_gdb_get_cheri_reg(CPUARMState *env, GByteArray *buf, int n)
             tag_map |= ((uint64_t)1 << 33);
         return gdb_get_regl(buf, tag_map);
     }
+    case 40:
+        /* cctlr */
+        return gdb_get_regl(buf, env->CCTLR_el[0]);
     }
     return 0;
 }
@@ -442,14 +444,16 @@ static int aarch64_gdb_set_cheri_reg(CPUARMState *env, uint8_t *mem_buf, int n)
     case 36:
     case 37:
     case 38:
-    case 39:
         /*
          * TODO: Support system registers. The current GDB XML file only makes
          * sense for EL0 but we really want to expose all the ELn registers.
          */
         return 0;
-    case 40:
+    case 39:
         /* tag_map */
+        return 8;
+    case 40:
+        /* cctlr */
         return 8;
     }
     return 0;
@@ -8636,7 +8640,7 @@ void arm_cpu_register_gdb_regs_for_features(ARMCPU *cpu)
     if (arm_feature(env, ARM_FEATURE_AARCH64)) {
         gdb_register_coprocessor(cs, aarch64_gdb_get_cheri_reg,
                                  aarch64_gdb_set_cheri_reg, 41,
-                                 "aarch64-cheri.xml", 0);
+                                 "aarch64-capability.xml", 0);
     }
 #endif
 }
