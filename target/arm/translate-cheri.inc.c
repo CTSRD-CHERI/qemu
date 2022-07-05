@@ -625,6 +625,7 @@ TRANS_F(ADR)
         }
 
         gen_cap_set_cursor_fast(ctx, a->Rd, new_addr);
+        gen_reg_modified_cap(ctx, a->Rd);
 
     } else {
         // Derive an integer
