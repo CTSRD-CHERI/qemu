@@ -91,6 +91,13 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     }
 #endif
     ops->tb_start(db, cpu);
+#ifdef CONFIG_TCG_LOG_INSTR
+    /* Commit previous instruction */
+    if (unlikely(log_instr_enabled)) {
+        qemu_log_gen_printf_flush(db, true, true);
+        gen_helper_qemu_log_instr_commit(cpu_env);
+    }
+#endif
 #ifdef TARGET_CHERI
     // Check PCC permissions and tag once on TB entry.
     // Each target must reserve one bit in tb->flags as the "PCC valid" flag.
@@ -114,17 +121,6 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
         }
 #endif
         ops->insn_start(db, cpu);
-#ifdef CONFIG_TCG_LOG_INSTR
-        /* Commit previous instruction */
-        if (unlikely(log_instr_enabled)) {
-            /*
-             * TODO: As long as the string stays around, we could delay this
-             * till the end of a BB.
-             */
-            qemu_log_gen_printf_flush(db, true, db->num_insns == 1);
-            gen_helper_qemu_log_instr_commit(cpu_env);
-        }
-#endif
         tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
 
         if (plugin_enabled) {
@@ -184,12 +180,27 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
             db->is_jmp = DISAS_TOO_MANY;
             break;
         }
+
+#ifdef CONFIG_TCG_LOG_INSTR
+        /* Commit this instruction */
+        if (unlikely(log_instr_enabled)) {
+            /*
+             * TODO: As long as the string stays around, we could delay this
+             * till the end of a BB.
+             */
+            qemu_log_gen_printf_flush(db, true, false);
+            gen_helper_qemu_log_instr_commit(cpu_env);
+        }
+#endif
     }
 
 #ifdef CONFIG_TCG_LOG_INSTR
-    /* Commit previous instruction */
+    /*
+     * Flush buffers for last instruction. Committing itself is done in the
+     * next TB in order to capture results of exception handling.
+     */
     if (unlikely(log_instr_enabled)) {
-        qemu_log_gen_printf_flush(db, true, db->num_insns == 1);
+        qemu_log_gen_printf_flush(db, true, false);
     }
 #endif
 
