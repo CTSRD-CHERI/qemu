@@ -305,7 +305,9 @@ static void gen_a64_set_link_register(DisasContext *s)
     }
     // Need to correct address
     tcg_gen_movi_i64(cpu_reg(s, 30), addr);
-    if (!c64)
+    if (c64)
+        gen_reg_modified_cap(s, 30);
+    else
         gen_lazy_cap_set_int(s, 30);
 #else
     tcg_gen_movi_i64(cpu_reg(s, 30), s->base.pc_next);
