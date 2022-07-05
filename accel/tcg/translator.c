@@ -35,28 +35,6 @@ void translator_loop_temp_check(DisasContextBase *db)
     }
 }
 
-static void qemu_log_gen_printf_reset(DisasContextBase *base)
-{
-#ifdef CONFIG_TCG_LOG_INSTR
-    tcg_gen_movi_i64(qemu_log_printf_valid_entries, 0);
-    base->printf_used_ptr = 0;
-#endif
-}
-
-/* Should only be called in a place it cannot be skipped by a branch! */
-static void qemu_log_gen_printf_flush(DisasContextBase *base, bool flush_early,
-                                      bool force_flush)
-{
-#ifdef CONFIG_TCG_LOG_INSTR
-    if (force_flush || ((base->printf_used_ptr != 0) &&
-                        (flush_early || (base->printf_used_ptr >=
-                                         (QEMU_LOG_PRINTF_FLUSH_BARRIER))))) {
-        gen_helper_qemu_log_printf_dump(cpu_env);
-        qemu_log_gen_printf_reset(base);
-    }
-#endif
-}
-
 void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
                      CPUState *cpu, TranslationBlock *tb, int max_insns)
 {

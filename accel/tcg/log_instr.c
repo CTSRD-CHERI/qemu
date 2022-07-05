@@ -1227,7 +1227,7 @@ static void g_string_append_printf_union_args(GString *string, const char *fmt,
 #pragma clang diagnostic pop
 }
 
-TCGv_i64 qemu_log_printf_valid_entries;
+static TCGv_i64 qemu_log_printf_valid_entries;
 
 #define QEMU_PRINTF_LOG_OFFSET                                                 \
     ((offsetof(ArchCPU, parent_obj) - offsetof(ArchCPU, env)) +                \
@@ -1462,6 +1462,17 @@ void qemu_log_gen_printf(DisasContextBase *base, const char *qemu_format,
     tcg_temp_free_i32(temp32);
 }
 
+void qemu_log_gen_printf_flush(DisasContextBase *base, bool flush_early,
+                               bool force_flush)
+{
+    if (force_flush || ((base->printf_used_ptr != 0) &&
+                        (flush_early || (base->printf_used_ptr >=
+                                         (QEMU_LOG_PRINTF_FLUSH_BARRIER))))) {
+        gen_helper_qemu_log_printf_dump(cpu_env);
+        base->printf_used_ptr = 0;
+    }
+}
+
 void qemu_log_instr_flush(CPUArchState *env)
 {
     cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
@@ -1484,15 +1495,17 @@ void qemu_log_instr_flush(CPUArchState *env)
 /* Dump out all the accumalated printf's */
 void helper_qemu_log_printf_dump(CPUArchState *env)
 {
+    cpu_log_instr_state_t *cpulog = get_cpu_log_state(env);
 
     tcg_debug_assert((QEMU_PRINTF_LOG_OFFSET + ((uintptr_t)env)) ==
-                     (uintptr_t)(&get_cpu_log_state(env)->qemu_log_printf_buf));
+                     (uintptr_t)(&cpulog->qemu_log_printf_buf));
+
+    uint64_t valid = cpulog->qemu_log_printf_buf.valid_entries;
+    cpulog->qemu_log_printf_buf.valid_entries = 0;
 
     if (!qemu_log_instr_enabled(env)) {
         return;
     }
-
-    uint64_t valid = get_cpu_log_state(env)->qemu_log_printf_buf.valid_entries;
 
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
 
@@ -1500,9 +1513,9 @@ void helper_qemu_log_printf_dump(CPUArchState *env)
         size_t ndx = ctz64(valid);
         valid ^= (1 << ndx);
         qemu_log_arg_t *args =
-            get_cpu_log_state(env)->qemu_log_printf_buf.args +
+            cpulog->qemu_log_printf_buf.args +
             (ndx * QEMU_LOG_PRINTF_ARG_MAX);
-        const char *fmt = get_cpu_log_state(env)->qemu_log_printf_buf.fmts[ndx];
+        const char *fmt = cpulog->qemu_log_printf_buf.fmts[ndx];
         g_string_append_printf_union_args(iinfo->txt_buffer, fmt, args);
     }
 }
