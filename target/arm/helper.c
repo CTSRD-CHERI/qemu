@@ -423,9 +423,6 @@ static int aarch64_gdb_set_cheri_reg(CPUARMState *env, uint8_t *mem_buf, int n)
     case 37:
     case 38:
         return CHERI_CAP_SIZE + 1;
-    case 39:
-        /* cctlr */
-        return 8;
     }
     return 0;
 }
