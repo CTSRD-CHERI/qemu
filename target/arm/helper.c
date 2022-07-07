@@ -402,23 +402,7 @@ static int aarch64_gdb_get_cheri_reg(CPUARMState *env, GByteArray *buf, int n)
         null_capability(&null);
         return gdb_get_capreg(buf, &null);
     }
-    case 39: {
-        /* tag_map */
-        uint64_t tag_map;
-        int i;
-
-        tag_map = 0;
-        for (i = 0; i < 32; i++) {
-            if (get_capreg_tag(env, i))
-                tag_map |= ((uint64_t)1 << i);
-        }
-        if (cheri_get_recent_pcc(env)->cr_tag)
-            tag_map |= ((uint64_t)1 << 32);
-        if (cheri_get_ddc(env)->cr_tag)
-            tag_map |= ((uint64_t)1 << 33);
-        return gdb_get_regl(buf, tag_map);
-    }
-    case 40:
+    case 39:
         /* cctlr */
         return gdb_get_regl(buf, env->CCTLR_el[0]);
     }
@@ -450,9 +434,6 @@ static int aarch64_gdb_set_cheri_reg(CPUARMState *env, uint8_t *mem_buf, int n)
          */
         return 0;
     case 39:
-        /* tag_map */
-        return 8;
-    case 40:
         /* cctlr */
         return 8;
     }
