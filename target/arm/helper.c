@@ -390,18 +390,15 @@ static int aarch64_gdb_get_cheri_reg(CPUARMState *env, GByteArray *buf, int n)
     case 33:
         return gdb_get_capreg(buf, cheri_get_ddc(env));
     case 34:
+        return gdb_get_capreg(buf, &env->cp15.tpidr_el[0].cap);
     case 35:
+        return gdb_get_capreg(buf, &env->sp_el[4].cap);
     case 36:
+        return gdb_get_capreg(buf, &env->DDCs[4].cap);
     case 37:
-    case 38: {
-        /*
-         * TODO: Support system registers. The current GDB XML file only makes
-         * sense for EL0 but we really want to expose all the ELn registers.
-         */
-        cap_register_t null;
-        null_capability(&null);
-        return gdb_get_capreg(buf, &null);
-    }
+        return gdb_get_capreg(buf, &env->cp15.rtpidr_el0.cap);
+    case 38:
+        return gdb_get_capreg(buf, &env->cid_el0.cap);
     case 39:
         /* cctlr */
         return gdb_get_regl(buf, env->CCTLR_el[0]);
@@ -414,25 +411,18 @@ static int aarch64_gdb_set_cheri_reg(CPUARMState *env, uint8_t *mem_buf, int n)
     /* All CHERI registers are read-only currently.  */
     if (n < 31) {
         /* Core capability register.  */
-        return CHERI_CAP_SIZE;
+        return CHERI_CAP_SIZE + 1;
     }
     switch (n) {
     case 31:
-        return CHERI_CAP_SIZE;
     case 32:
-        return CHERI_CAP_SIZE;
     case 33:
-        return CHERI_CAP_SIZE;
     case 34:
     case 35:
     case 36:
     case 37:
     case 38:
-        /*
-         * TODO: Support system registers. The current GDB XML file only makes
-         * sense for EL0 but we really want to expose all the ELn registers.
-         */
-        return 0;
+        return CHERI_CAP_SIZE + 1;
     case 39:
         /* cctlr */
         return 8;
