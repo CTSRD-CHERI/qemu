@@ -45,11 +45,17 @@ static inline void append(GByteArray *buf, target_ulong value)
     g_byte_array_append(buf, (uint8_t *)&tmp, TARGET_LONG_SIZE);
 }
 
+static inline void append_tag(GByteArray *buf, uint8_t tag)
+{
+    g_byte_array_append(buf, &tag, 1);
+}
+
 int gdb_get_capreg(GByteArray *buf, const cap_register_t *cap)
 {
     // If the capability has a valid tag bit we must recompress since the
     // pesbt value might not match the current value (csetbounds could have
     // changed the bounds).
+    append_tag(buf, cap->cr_tag);
 #if CHERI_MEM_OFFSET_METADATA == 0
     append(buf, CAP_cc(compress_mem)(cap));
     append(buf, cap_get_cursor(cap));
@@ -58,7 +64,7 @@ int gdb_get_capreg(GByteArray *buf, const cap_register_t *cap)
     append(buf, cap_get_cursor(cap));
     append(buf, CAP_cc(compress_mem)(cap));
 #endif
-    return CHERI_CAP_SIZE;
+    return CHERI_CAP_SIZE + 1;
 }
 
 int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
@@ -67,6 +73,7 @@ int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
     // No need to decompress:
     target_ulong pesbt_for_mem =
         get_capreg_pesbt(env, regnum) ^ CAP_NULL_XOR_MASK;
+    append_tag(buf, get_capreg_tag(env, regnum));
 #if CHERI_MEM_OFFSET_METADATA == 0
     append(buf, pesbt_for_mem);
     append(buf, get_capreg_cursor(env, regnum));
@@ -75,5 +82,5 @@ int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
     append(buf, get_capreg_cursor(env, regnum));
     append(buf, pesbt_for_mem);
 #endif
-    return CHERI_CAP_SIZE;
+    return CHERI_CAP_SIZE + 1;
 }
