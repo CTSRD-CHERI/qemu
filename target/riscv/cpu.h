@@ -515,6 +515,7 @@ struct RISCVCPUConfig {
     bool ext_zcf;
     bool ext_counters;
     bool ext_ifencei;
+    bool ext_zihintpause;
     bool ext_icsr;
     bool ext_svinval;
 #if !defined(TARGET_CHERI_RISCV_V9)
