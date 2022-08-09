@@ -11755,11 +11755,14 @@ static bool get_phys_addr_lpae(CPUARMState *env, uint64_t address,
 
     int lc = extract32(hwu, 2, 2);
     int sc = extract32(hwu, 1, 1);
-    int cdbm = extract32(hwu, 0, 1);
 
-    // Cap stores can fault here as only tagged stores specify
-    // MMU_DATA_CAP_STORE
-    if (!cdbm && !sc) {
+    /*
+     * Cap stores can fault here as only tagged stores specify
+     * MMU_DATA_CAP_STORE.  QEMU lacks FEAT_HAFDBS support, so we trap on based
+     * on SC alone.  Morello hardware interprets CDBM -- extract32(hwu, 0, 1) --
+     * and a set CDBM will cause it to set SC via CAS in the PTW on cap store.
+     */
+    if (!sc) {
         *prot |= PAGE_SC_TRAP;
         if (access_type == MMU_DATA_CAP_STORE) {
             access_type = base_access_type;
