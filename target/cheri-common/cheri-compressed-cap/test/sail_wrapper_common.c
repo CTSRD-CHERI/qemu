@@ -40,8 +40,9 @@
 #endif
 #include SAIL_COMPRESSION_GENERATED_C_FILE
 #pragma clang diagnostic pop
-#undef CC_BITS
-#define CC_BITS SAIL_WRAPPER_CC_BITS
+
+#define CC_FORMAT_LOWER SAIL_WRAPPER_CC_FORMAT_LOWER
+#define CC_FORMAT_UPPER SAIL_WRAPPER_CC_FORMAT_UPPER
 
 __attribute__((constructor, used)) static void sail_startup(void) { model_init(); }
 __attribute__((destructor, used)) static void sail_cleanup(void) { model_fini(); }
@@ -61,7 +62,7 @@ static inline uint64_t extract_bits(lbits op, uint64_t start, uint64_t len) {
     return result;
 }
 
-#ifdef CC_IS_MORELLO
+#ifdef SAIL_WRAPPER_CC_IS_MORELLO
 
 static inline uint64_t extract_low_bits(lbits bits) {
     fbits bits_low = CONVERT_OF(fbits, lbits)(bits, true);
@@ -81,7 +82,7 @@ static inline void check_length(lbits bits, uint64_t length) {
 }
 
 /* Exported API */
-void sail_decode_common_mem(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, cc128_cap_t* cdp) {
+void sail_decode_common_mem(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, cc128m_cap_t* cdp) {
     // The Morello cap is just all the bits slammed together with no extra decode
 
     lbits cap_without_tag;
@@ -109,7 +110,7 @@ void sail_decode_common_mem(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, c
     cdp->cr_base = extract_bits(bounds.ztup0, 0, 64);
     uint64_t top_hi = extract_bits(bounds.ztup1, 64, 1);
     uint64_t top_lo = extract_low_bits(bounds.ztup1);
-    cdp->_cr_top = (((cc128_length_t)top_hi) << 64) | (cc128_length_t)top_lo;
+    cdp->_cr_top = (((cc128m_length_t)top_hi) << 64) | (cc128m_length_t)top_lo;
     _CC_CONCAT(kill_, sail_bounds_tuple)(&bounds);
 
     cdp->cr_bounds_valid = bounds.ztup2;
@@ -130,14 +131,14 @@ void sail_decode_common_mem(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, c
     KILL(lbits)(&capbits);
 }
 
-void sail_decode_common_raw(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, cc128_cap_t* cdp) {
+void sail_decode_common_raw(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, cc128m_cap_t* cdp) {
     // Morello RAW has no mask. If this has been masked, undo it.
     sail_decode_common_mem(mem_pesbt ^ CC128_NULL_XOR_MASK, mem_cursor, tag, cdp);
 }
 
-uint64_t sail_compress_common_raw(const cc128_cap_t* csp) { assert(0); }
+uint64_t sail_compress_common_raw(const cc128m_cap_t* csp) { assert(0); }
 
-uint64_t sail_compress_common_mem(const cc128_cap_t* csp) { assert(0); }
+uint64_t sail_compress_common_mem(const cc128m_cap_t* csp) { assert(0); }
 
 static _cc_bounds_bits sail_extract_bounds_bits_common(_cc_addr_t pesbt) { assert(0); }
 
@@ -157,7 +158,7 @@ static inline uint64_t extract_sail_cap_bits(sail_cap_bits* bits, uint64_t start
 static _cc_addr_t _compress_sailcap_raw(struct zCapability sailcap) {
     sail_cap_bits sailbits;
     CREATE(sail_cap_bits)(&sailbits);
-#if SAIL_WRAPPER_CC_BITS == 128
+#ifdef SAIL_COMPRESSION_INDIRECT_BITS
     sailgen_capToBits(&sailbits, sailcap);
 #else
     sailbits = sailgen_capToBits(sailcap);
@@ -244,7 +245,7 @@ static _cc_addr_t sail_compress_common_mem(const _cc_cap_t* csp) {
     struct zCapability sailcap = cap_t_to_sail_cap(csp);
     sail_cap_bits sailbits;
     CREATE(sail_cap_bits)(&sailbits);
-#if SAIL_WRAPPER_CC_BITS == 128
+#ifdef SAIL_COMPRESSION_INDIRECT_BITS
     sailgen_capToMemBits(&sailbits, sailcap);
 #else
     sailbits = sailgen_capToMemBits(sailcap);
@@ -254,15 +255,15 @@ static _cc_addr_t sail_compress_common_mem(const _cc_cap_t* csp) {
     return result;
 }
 
-_cc_addr_t _CC_CONCAT(sail_null_pesbt_, SAIL_WRAPPER_CC_BITS)(void) {
+_cc_addr_t _CC_CONCAT(sail_null_pesbt_, SAIL_WRAPPER_CC_FORMAT_LOWER)(void) {
     // NULL CAP BITS:
     _cc_addr_t null_pesbt = _compress_sailcap_raw(znull_cap);
     sail_dump_cap("null cap", znull_cap);
-    fprintf(stderr, "Sail%d null pesbt 0x%jx\n", SAIL_WRAPPER_CC_BITS, (uintmax_t)null_pesbt);
+    fprintf(stderr, "Sail%d null pesbt 0x%jx\n", SAIL_WRAPPER_CC_FORMAT_LOWER, (uintmax_t)null_pesbt);
     return null_pesbt;
 }
 
-bool _CC_CONCAT(sail_setbounds_, SAIL_WRAPPER_CC_BITS)(_cc_cap_t* cap, _cc_addr_t req_base, _cc_length_t req_top) {
+bool _CC_CONCAT(sail_setbounds_, SAIL_WRAPPER_CC_FORMAT_LOWER)(_cc_cap_t* cap, _cc_addr_t req_base, _cc_length_t req_top) {
     struct zCapability sailcap = cap_t_to_sail_cap(cap);
     sail_cap_bits sailtop;
     CREATE(sail_cap_bits)(&sailtop);

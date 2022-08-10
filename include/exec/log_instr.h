@@ -176,8 +176,9 @@
 struct DisasContextBase;
 void qemu_log_gen_printf(struct DisasContextBase *ctx, const char *qemu_format,
                          const char *fmt, ...);
-struct TCGv_i64_d;
-extern struct TCGv_i64_d *qemu_log_printf_valid_entries;
+/* Should only be called in a place it cannot be skipped by a branch! */
+void qemu_log_gen_printf_flush(struct DisasContextBase *base, bool flush_early,
+                               bool force_flush);
 void qemu_log_printf_create_globals(void);
 
 /*
@@ -343,5 +344,6 @@ void qemu_log_instr_extra(CPUArchState *env, const char *msg, ...);
 #define	qemu_log_instr_extra(...)
 #define	qemu_log_instr_commit(...)
 #define qemu_log_gen_printf(...)
+#define qemu_log_gen_printf_flush(base, flush_early, force_flush)
 #define qemu_log_printf_create_globals(...)
 #endif /* ! CONFIG_TCG_LOG_INSTR */

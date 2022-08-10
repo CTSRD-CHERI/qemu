@@ -90,14 +90,6 @@ _Static_assert((offsetof(cap_register_t, cr_pesbt) -
                 offsetof(cap_register_t, _cr_cursor)) == sizeof(target_ulong),
                "");
 
-typedef struct aligned_cap_register_t {
-    cap_register_t cap;
-} QEMU_ALIGNED(32) aligned_cap_register_t;
-_Static_assert(sizeof(aligned_cap_register_t) % 32 == 0,
-               "QEMU_ALIGNED() broken?");
-_Static_assert(offsetof(aligned_cap_register_t, cap) == 0,
-               "QEMU_ALIGNED() broken?");
-
 typedef struct GPCapRegs {
     /*
      * We cache the decompressed capregs here (to avoid constantly decompressing

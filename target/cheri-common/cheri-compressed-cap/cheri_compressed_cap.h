@@ -38,15 +38,17 @@
 #ifndef CHERI_COMPRESSED_CAP_H
 #define CHERI_COMPRESSED_CAP_H
 
+#ifdef CC_IS_MORELLO
+#error "Use new cc128m/CC128M definitions instead of defining CC_IS_MORELLO"
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
-#ifndef CC_IS_MORELLO
 #include "cheri_compressed_cap_64.h"
-#endif
-
 #include "cheri_compressed_cap_128.h"
+#include "cheri_compressed_cap_128m.h"
 
 /* Legacy CHERI256 things: */
 
@@ -60,10 +62,7 @@
 #define CC256_PERMS_MEM_SHFT CC256_FLAGS_COUNT                /* flags bit comes first */
 #define CC256_UPERMS_MEM_SHFT (CC256_PERMS_MEM_SHFT + CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT)
 #define CC256_UPERMS_SHFT             (15)
-#ifndef CC_IS_MORELLO
-// Morello does not order permissions like this.
 _CC_STATIC_ASSERT(CC128_UPERMS_SHFT >=  CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT, "");
-#endif
 _CC_STATIC_ASSERT_SAME(CC256_PERMS_MEM_SHFT + CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT, CC256_UPERMS_MEM_SHFT);
 #define CC256_PERMS_ALL_BITS _CC_BITMASK64(CC256_HWPERMS_COUNT)                                         /* 12 bits */
 #define CC256_PERMS_ALL_BITS_UNTAGGED _CC_BITMASK64(CC256_HWPERMS_COUNT + CC256_HWPERMS_RESERVED_COUNT) /* 15 bits */
@@ -91,24 +90,9 @@ enum CC256_OTypes {
     CC256_SPECIAL_OTYPE(MIN_RESERVED_OTYPE, 15),
 };
 
-#define LS_SPECIAL_OTYPES_COMMON(ITEM, ...)                                                                            \
+#define CC256_LS_SPECIAL_OTYPES(ITEM, ...)                                                                             \
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)
-
-#ifdef CC_IS_MORELLO
-
-#define LS_SPECIAL_OTYPES(ITEM, ...)                                                                                   \
-    LS_SPECIAL_OTYPES_COMMON(ITEM, __VA_ARGS__)                                                                        \
-    ITEM(OTYPE_LOAD_PAIR_BRANCH, __VA_ARGS__)                                                                          \
-    ITEM(OTYPE_LOAD_BRANCH, __VA_ARGS__)
-
-#else
-
-#define LS_SPECIAL_OTYPES(ITEM, ...)                                                                                   \
-    LS_SPECIAL_OTYPES_COMMON(ITEM, __VA_ARGS__)                                                                        \
-    ITEM(OTYPE_INDIRECT_PAIR, __VA_ARGS__)                                                                             \
-    ITEM(OTYPE_INDIRECT_SENTRY, __VA_ARGS__)
-#endif
 
 typedef struct cc256_cap {
     uint64_t cr_cursor;
@@ -125,9 +109,9 @@ typedef struct cc256_cap {
     inline uint64_t address() const { return cr_cursor; }
     inline int64_t offset() const { return cr_cursor - cr_base; }
     inline cc128_length_t top() const { return (cc128_length_t)cr_base + cr_length; }
-    inline _cc_addr_t top64() const {
-        const _cc_length_t t = top();
-        return t > _CC_MAX_ADDR ? _CC_MAX_ADDR : (_cc_addr_t)t;
+    inline cc128_addr_t top64() const {
+        const cc128_length_t t = top();
+        return t > CC128_MAX_ADDR ? CC128_MAX_ADDR : (cc128_addr_t)t;
     }
     inline uint64_t length() const { return cr_length; }
     inline uint64_t length64() const { return cr_length; }

@@ -29,13 +29,16 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+
 #include "sail.h"
 
 /* Provide the 64-specific APIs for sail_wrapper_common.c */
 #define SAIL_COMPRESSION_GENERATED_C_FILE "sail_compression_64.c"
 // Would be nice to have a stable name for this tuple:
 #define sail_bounds_tuple ztuple_z8z5bv32zCz0z5bv33z9
-#define SAIL_WRAPPER_CC_BITS 64
+
+#define SAIL_WRAPPER_CC_FORMAT_LOWER 64
+#define SAIL_WRAPPER_CC_FORMAT_UPPER 64
 
 /* CHERI-64 uses uint64_t, CHERI-128 uses lbits */
 typedef uint64_t sail_cap_bits;
