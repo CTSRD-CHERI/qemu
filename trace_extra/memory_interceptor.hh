@@ -46,6 +46,7 @@ class DynamorioTraceInterceptor
 
   public:
     static io::filtering_ostream mem_logfile;
+    static uint64_t instr_count;
     ~DynamorioTraceInterceptor() override = default;
 
     struct ThreadLocalState

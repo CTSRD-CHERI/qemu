@@ -71,7 +71,10 @@ std::unique_ptr<perfetto::TracingSession> session;
 fs::path logfile("qemu_trace.pb");
 
 /* perfetto interceptor trace file */
-string mem_logfile_name = "mem_access.trace.gz";
+string mem_logfile = "mem_trace.gz";
+
+/* instrcution count file */
+string instr_count_file;
 
 /* enable perfetto interceptor */
 bool enable_interceptor = false;
@@ -134,9 +137,15 @@ bool perfetto_start_tracing(void)
     perfetto::TrackEvent::Register();
 
     if (enable_interceptor) {
+        // hardcode instr_path for now
+        fs::path mem_logfile_path(mem_logfile);
+        instr_count_file =
+            mem_logfile_path.parent_path().parent_path().string() +
+            "/instr_count.txt";
+
         DynamorioTraceInterceptor::mem_logfile.push(io::gzip_compressor());
         DynamorioTraceInterceptor::mem_logfile.push(
-            io::file_descriptor_sink(mem_logfile_name));
+            io::file_descriptor_sink(mem_logfile));
 
         // drcachesim needs a header in the file, so we create it here
         trace_entry_t header{ .type = TRACE_TYPE_HEADER,
@@ -229,6 +238,12 @@ void perfetto_tracing_stop(void)
         DynamorioTraceInterceptor::mem_logfile.write((char *)&footer,
                                                      sizeof(footer));
         io::close(DynamorioTraceInterceptor::mem_logfile);
+
+        // store the number of instructions executed
+        ofstream outfile;
+        outfile.open(instr_count_file);
+        outfile << DynamorioTraceInterceptor::instr_count << std::endl;
+        outfile.close();
     }
 }
 
@@ -513,7 +528,7 @@ qemu_log_instr_perfetto_conf_categories(const char *category_str)
 
 extern "C" void qemu_log_instr_perfetto_interceptor_logfile(const char *name)
 {
-    mem_logfile_name = name;
+    mem_logfile = name;
 }
 
 extern "C" void qemu_log_instr_perfetto_enable_interceptor()
