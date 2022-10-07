@@ -325,8 +325,11 @@ const VMStateInfo vmstate_info_uint64 = {
  * are defined since that's a layering violation and vmstate is part of a
  * target-independent library that gets reused for each target.
  *
- * TODO: If we ever want this to actually work the tag needs saving too. For
- * now just assume everything is tagged.
+ * TODO: We probably shouldn't be serialising cr_extra, since that's not
+ * architectural state, and should instead always be creating fully
+ * decompressed capabilities, but using knowledge of the lazy capregs
+ * implementation would be a layering violation if the states aren't factored
+ * out to somewhere else.
  */
 
 #include "../target/cheri-common/cheri-compressed-cap/cheri_compressed_cap.h"
@@ -338,9 +341,17 @@ static int get_cap64_register(QEMUFile *f, void *pv, size_t size,
     cc64_cap_t *v = pv;
     uint32_t cursor;
     uint32_t pesbt;
+    uint8_t extra;
+    uint8_t tag;
+
     qemu_get_be32s(f, &cursor);
     qemu_get_be32s(f, &pesbt);
-    cc64_decompress_mem(pesbt, cursor, 1, v);
+    qemu_get_8s(f, &extra);
+    qemu_get_8s(f, &tag);
+
+    cc64_decompress_mem(pesbt, cursor, tag, v);
+    v->cr_extra = extra;
+
     return 0;
 }
 
@@ -349,11 +360,16 @@ static int put_cap64_register(QEMUFile *f, void *pv, size_t size,
 {
     assert(field->size >= sizeof(cc64_cap_t));
     cc64_cap_t *v = pv;
-    uint32_t *cursor = &v->_cr_cursor;
-    uint32_t pesbt = cc64_compress_raw(v);
+    uint32_t cursor = v->_cr_cursor;
+    uint32_t pesbt = cc64_compress_mem(v);
+    uint8_t extra = v->cr_extra;
+    uint8_t tag = v->cr_tag;
 
-    qemu_put_be32s(f, cursor);
+    qemu_put_be32s(f, &cursor);
     qemu_put_be32s(f, &pesbt);
+    qemu_put_8s(f, &extra);
+    qemu_put_8s(f, &tag);
+
     return 0;
 }
 
@@ -370,9 +386,17 @@ static int get_cap128_register(QEMUFile *f, void *pv, size_t size,
     cc128_cap_t *v = pv;
     uint64_t cursor;
     uint64_t pesbt;
+    uint8_t extra;
+    uint8_t tag;
+
     qemu_get_be64s(f, &cursor);
     qemu_get_be64s(f, &pesbt);
-    cc128_decompress_mem(pesbt, cursor, 1, v);
+    qemu_get_8s(f, &extra);
+    qemu_get_8s(f, &tag);
+
+    cc128_decompress_mem(pesbt, cursor, tag, v);
+    v->cr_extra = extra;
+
     return 0;
 }
 
@@ -381,11 +405,16 @@ static int put_cap128_register(QEMUFile *f, void *pv, size_t size,
 {
     assert(field->size >= sizeof(cc128_cap_t));
     cc128_cap_t *v = pv;
-    uint64_t *cursor = &v->_cr_cursor;
-    uint64_t pesbt = cc128_compress_raw(v);
+    uint64_t cursor = v->_cr_cursor;
+    uint64_t pesbt = cc128_compress_mem(v);
+    uint8_t extra = v->cr_extra;
+    uint8_t tag = v->cr_tag;
 
-    qemu_put_be64s(f, cursor);
+    qemu_put_be64s(f, &cursor);
     qemu_put_be64s(f, &pesbt);
+    qemu_put_8s(f, &extra);
+    qemu_put_8s(f, &tag);
+
     return 0;
 }
 
@@ -402,9 +431,17 @@ static int get_cap128m_register(QEMUFile *f, void *pv, size_t size,
     cc128m_cap_t *v = pv;
     uint64_t cursor;
     uint64_t pesbt;
+    uint8_t extra;
+    uint8_t tag;
+
     qemu_get_be64s(f, &cursor);
     qemu_get_be64s(f, &pesbt);
-    cc128m_decompress_mem(pesbt, cursor, 1, v);
+    qemu_get_8s(f, &extra);
+    qemu_get_8s(f, &tag);
+
+    cc128m_decompress_mem(pesbt, cursor, tag, v);
+    v->cr_extra = extra;
+
     return 0;
 }
 
@@ -413,11 +450,16 @@ static int put_cap128m_register(QEMUFile *f, void *pv, size_t size,
 {
     assert(field->size >= sizeof(cc128m_cap_t));
     cc128m_cap_t *v = pv;
-    uint64_t *cursor = &v->_cr_cursor;
-    uint64_t pesbt = cc128m_compress_raw(v);
+    uint64_t cursor = v->_cr_cursor;
+    uint64_t pesbt = cc128m_compress_mem(v);
+    uint8_t extra = v->cr_extra;
+    uint8_t tag = v->cr_tag;
 
-    qemu_put_be64s(f, cursor);
+    qemu_put_be64s(f, &cursor);
     qemu_put_be64s(f, &pesbt);
+    qemu_put_8s(f, &extra);
+    qemu_put_8s(f, &tag);
+
     return 0;
 }
 
