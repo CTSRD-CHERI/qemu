@@ -788,7 +788,11 @@ const VMStateDescription vmstate_arm_cpu = {
     .post_load = cpu_post_load,
     .fields = (VMStateField[]) {
         VMSTATE_UINT32_ARRAY(env.regs, ARMCPU, 16),
-#ifndef TARGET_CHERI
+#ifdef TARGET_CHERI
+        VMSTATE_REG_ARRAY(env.gpcapregs.decompressed, ARMCPU, NUM_LAZY_CAP_REGS),
+        VMSTATE_REG(env.DDC_current, ARMCPU),
+        VMSTATE_REG_ARRAY(env.DDCs, ARMCPU, N_BANK_WITH_RESTRICTED),
+#else
         VMSTATE_UINT64_ARRAY(env.xregs, ARMCPU, 32),
 #endif
         VMSTATE_REG(env.pc, ARMCPU),
@@ -808,6 +812,10 @@ const VMStateDescription vmstate_arm_cpu = {
         VMSTATE_UINT32_ARRAY(env.fiq_regs, ARMCPU, 5),
         VMSTATE_REG_ARRAY(env.elr_el, ARMCPU, 4),
         VMSTATE_REG_ARRAY(env.sp_el, ARMCPU, N_BANK_WITH_RESTRICTED),
+#ifdef TARGET_CHERI
+        VMSTATE_UINT64_ARRAY(env.CCTLR_el, ARMCPU, 4),
+        VMSTATE_REG(env.cid_el0, ARMCPU),
+#endif
         /* The length-check must come before the arrays to avoid
          * incoming data possibly overflowing the array.
          */
