@@ -316,6 +316,15 @@ const VMStateInfo vmstate_info_uint64 = {
 /*
  * 64/128-bit compressed capability
  *
+ * NB: The size assertions aren't strict to allow for ccX_aligned_cap_t arrays
+ * where field->size will be greater than an individual capability to ensure
+ * the right stride is used. Whilst we're happy to peek into the header-only
+ * library in target/cheri-common/cheri-compressed-cap to get the compression
+ * routines (which at this point means it probably belongs somewhere more like
+ * contrib) we shouldn't be pulling in cheri_defs.h where the aligned versions
+ * are defined since that's a layering violation and vmstate is part of a
+ * target-independent library that gets reused for each target.
+ *
  * TODO: If we ever want this to actually work the tag needs saving too. For
  * now just assume everything is tagged.
  */
@@ -325,7 +334,7 @@ const VMStateInfo vmstate_info_uint64 = {
 static int get_cap64_register(QEMUFile *f, void *pv, size_t size,
                               const VMStateField *field)
 {
-    assert(field->size == sizeof(cc64_cap_t));
+    assert(field->size >= sizeof(cc64_cap_t));
     cc64_cap_t *v = pv;
     uint32_t cursor;
     uint32_t pesbt;
@@ -338,7 +347,7 @@ static int get_cap64_register(QEMUFile *f, void *pv, size_t size,
 static int put_cap64_register(QEMUFile *f, void *pv, size_t size,
                             const VMStateField *field, QJSON *vmdesc)
 {
-    assert(field->size == sizeof(cc64_cap_t));
+    assert(field->size >= sizeof(cc64_cap_t));
     cc64_cap_t *v = pv;
     uint32_t *cursor = &v->_cr_cursor;
     uint32_t pesbt = cc64_compress_raw(v);
@@ -357,7 +366,7 @@ const VMStateInfo vmstate_info_cap64_register = {
 static int get_cap128_register(QEMUFile *f, void *pv, size_t size,
                               const VMStateField *field)
 {
-    assert(field->size == sizeof(cc128_cap_t));
+    assert(field->size >= sizeof(cc128_cap_t));
     cc128_cap_t *v = pv;
     uint64_t cursor;
     uint64_t pesbt;
@@ -370,7 +379,7 @@ static int get_cap128_register(QEMUFile *f, void *pv, size_t size,
 static int put_cap128_register(QEMUFile *f, void *pv, size_t size,
                             const VMStateField *field, QJSON *vmdesc)
 {
-    assert(field->size == sizeof(cc128_cap_t));
+    assert(field->size >= sizeof(cc128_cap_t));
     cc128_cap_t *v = pv;
     uint64_t *cursor = &v->_cr_cursor;
     uint64_t pesbt = cc128_compress_raw(v);
@@ -389,7 +398,7 @@ const VMStateInfo vmstate_info_cap128_register = {
 static int get_cap128m_register(QEMUFile *f, void *pv, size_t size,
                               const VMStateField *field)
 {
-    assert(field->size == sizeof(cc128m_cap_t));
+    assert(field->size >= sizeof(cc128m_cap_t));
     cc128m_cap_t *v = pv;
     uint64_t cursor;
     uint64_t pesbt;
@@ -402,7 +411,7 @@ static int get_cap128m_register(QEMUFile *f, void *pv, size_t size,
 static int put_cap128m_register(QEMUFile *f, void *pv, size_t size,
                             const VMStateField *field, QJSON *vmdesc)
 {
-    assert(field->size == sizeof(cc128m_cap_t));
+    assert(field->size >= sizeof(cc128m_cap_t));
     cc128m_cap_t *v = pv;
     uint64_t *cursor = &v->_cr_cursor;
     uint64_t pesbt = cc128m_compress_raw(v);
