@@ -83,4 +83,10 @@ void *cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
 void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                             RAMBlock *ram, ram_addr_t ram_offset, size_t size,
                             int *prot, bool tag_write);
+
+/**
+ * Fetch a single tag for use by the debug stub.
+ */
+bool cheri_tag_get_debug(RAMBlock *ram, ram_addr_t ram_offset);
+
 #endif /* TARGET_CHERI */

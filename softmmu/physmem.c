@@ -2875,6 +2875,57 @@ MemTxResult flatview_read_continue(FlatView *fv, hwaddr addr,
     return result;
 }
 
+#ifdef TARGET_CHERI
+static MemTxResult flatview_readcap_continue(FlatView *fv, hwaddr addr,
+                                             MemTxAttrs attrs, void *ptr,
+                                             hwaddr len, hwaddr addr1, hwaddr l,
+                                             MemoryRegion *mr)
+{
+    uint8_t *ram_ptr;
+    MemTxResult result = MEMTX_OK;
+    uint8_t *buf = ptr;
+    ram_addr_t ram_offset;
+
+    for (;;) {
+        if (!memory_access_is_direct(mr, false)) {
+            /* I/O case */
+            result = MEMTX_ERROR;
+            break;
+        } else {
+            /* RAM case */
+            fuzz_dma_read_cb(addr, len, mr, false);
+            ram_ptr = qemu_ram_ptr_length(mr->ram_block, addr1, &l, false);
+            if (l % CHERI_CAP_SIZE != 0) {
+                result = MEMTX_ERROR;
+                break;
+            }
+            ram_offset = qemu_ram_block_host_offset(mr->ram_block, ram_ptr);
+            while (l > 0) {
+                buf[0] = cheri_tag_get_debug(mr->ram_block, ram_offset);
+                memcpy(buf + 1, ram_ptr, CHERI_CAP_SIZE);
+
+                l -= CHERI_CAP_SIZE;
+                ram_offset += CHERI_CAP_SIZE;
+                ram_ptr += CHERI_CAP_SIZE;
+
+                len -= CHERI_CAP_SIZE;
+                buf += CHERI_CAP_SIZE + 1;
+                addr += CHERI_CAP_SIZE;
+            }
+        }
+
+        if (!len) {
+            break;
+        }
+
+        l = len;
+        mr = flatview_translate(fv, addr, &addr1, &l, false, attrs);
+    }
+
+    return result;
+}
+#endif
+
 /* Called from RCU critical section.  */
 static MemTxResult flatview_read(FlatView *fv, hwaddr addr,
                                  MemTxAttrs attrs, void *buf, hwaddr len)
@@ -2888,6 +2939,21 @@ static MemTxResult flatview_read(FlatView *fv, hwaddr addr,
     return flatview_read_continue(fv, addr, attrs, buf, len,
                                   addr1, l, mr);
 }
+
+#ifdef TARGET_CHERI
+static MemTxResult flatview_readcap(FlatView *fv, hwaddr addr,
+                                    MemTxAttrs attrs, void *buf, hwaddr len)
+{
+    hwaddr l;
+    hwaddr addr1;
+    MemoryRegion *mr;
+
+    l = len;
+    mr = flatview_translate(fv, addr, &addr1, &l, false, attrs);
+    return flatview_readcap_continue(fv, addr, attrs, buf, len,
+                                     addr1, l, mr);
+}
+#endif
 
 MemTxResult address_space_read_full(AddressSpace *as, hwaddr addr,
                                     MemTxAttrs attrs, void *buf, hwaddr len)
@@ -2903,6 +2969,24 @@ MemTxResult address_space_read_full(AddressSpace *as, hwaddr addr,
 
     return result;
 }
+
+#ifdef TARGET_CHERI
+static MemTxResult address_space_readcap(AddressSpace *as, hwaddr addr,
+                                         MemTxAttrs attrs, void *buf,
+                                         hwaddr len)
+{
+    MemTxResult result = MEMTX_OK;
+    FlatView *fv;
+
+    if (len > 0) {
+        RCU_READ_LOCK_GUARD();
+        fv = address_space_to_flatview(as);
+        result = flatview_readcap(fv, addr, attrs, buf, len);
+    }
+
+    return result;
+}
+#endif
 
 MemTxResult address_space_write(AddressSpace *as, hwaddr addr,
                                 MemTxAttrs attrs,
@@ -3448,6 +3532,48 @@ int cpu_memory_rw_debug(CPUState *cpu, target_ulong addr,
     }
     return 0;
 }
+
+#ifdef TARGET_CHERI
+int cpu_memory_readcap_debug(CPUState *cpu, target_ulong addr, void *ptr,
+                             target_ulong len)
+{
+    hwaddr phys_addr;
+    target_ulong l, page, tagged_l;
+    uint8_t *buf = ptr;
+
+    cpu_synchronize_state(cpu);
+    while (len > 0) {
+        int asidx;
+        MemTxAttrs attrs;
+        MemTxResult res;
+
+        page = addr & TARGET_PAGE_MASK;
+        phys_addr = cpu_get_phys_page_attrs_debug(cpu, page, &attrs);
+        asidx = cpu_asidx_from_attrs(cpu, attrs);
+        /* if no physical page mapped, return an error */
+        if (phys_addr == -1) {
+            return -1;
+        }
+        l = (page + TARGET_PAGE_SIZE) - addr;
+        if (l > len) {
+            l = len;
+        }
+        phys_addr += (addr & ~TARGET_PAGE_MASK);
+        res = address_space_readcap(cpu->cpu_ases[asidx].as, phys_addr,
+                                    attrs, buf, l);
+        if (res != MEMTX_OK) {
+            return -1;
+        }
+        /* extra byte for each tag */
+        tagged_l = l + l / CHERI_CAP_SIZE;
+
+        len -= l;
+        buf += tagged_l;
+        addr += l;
+    }
+    return 0;
+}
+#endif
 
 /*
  * Allows code that needs to deal with migration bitmaps etc to still be built
