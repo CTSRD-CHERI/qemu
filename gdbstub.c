@@ -86,6 +86,14 @@ static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
     return cpu_memory_rw_debug(cpu, addr, buf, len, is_write);
 }
 
+#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+static inline int target_memory_readcap_debug(CPUState *cpu, target_ulong addr,
+                                              uint8_t *buf, int len)
+{
+    return cpu_memory_readcap_debug(cpu, addr, buf, len);
+}
+#endif
+
 /* Return the GDB index for a given vCPU state.
  *
  * For user mode this is simply the thread id. In system mode GDB
@@ -2177,6 +2185,10 @@ static void handle_query_supported(GdbCmdContext *gdb_ctx, void *user_ctx)
         gdbserver_state.multiprocess = true;
     }
 
+#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+    g_string_append(gdbserver_state.str_buf, ";qXfer:capa:read+");
+#endif
+
     g_string_append(gdbserver_state.str_buf, ";vContSupported+;multiprocess+");
     put_strbuf();
 }
@@ -2232,6 +2244,56 @@ static void handle_query_xfer_features(GdbCmdContext *gdb_ctx, void *user_ctx)
     put_packet_binary(gdbserver_state.str_buf->str,
                       gdbserver_state.str_buf->len, true);
 }
+
+#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+static void handle_query_xfer_capa_read(GdbCmdContext *gdb_ctx, void *user_ctx)
+{
+    uint8_t capbuf[CHERI_CAP_SIZE + 1];
+    uint64_t addr;
+    unsigned long len, offset;
+
+    if (gdb_ctx->num_params != 3) {
+        put_packet("E22");
+        return;
+    }
+
+    addr = gdb_ctx->params[0].val_ull;
+    if (addr % CHERI_CAP_SIZE != 0) {
+        put_packet("E22");
+        return;
+    }
+
+    offset = gdb_ctx->params[1].val_ul;
+    if (offset > sizeof(capbuf)) {
+        put_packet("E22");
+        return;
+    }
+    if (offset == sizeof(capbuf)) {
+        put_packet("l");
+        return;
+    }
+
+    if (target_memory_readcap_debug(gdbserver_state.g_cpu, addr, capbuf,
+                                    sizeof(capbuf) - 1)) {
+        put_packet("E14");
+        return;
+    }
+
+    len = gdb_ctx->params[2].val_ul;
+    if (len > sizeof(capbuf) - offset) {
+        len = sizeof(capbuf) - offset;
+    }
+    if (offset + len < sizeof(capbuf)) {
+        g_string_assign(gdbserver_state.str_buf, "m");
+    } else {
+        g_string_assign(gdbserver_state.str_buf, "l");
+    }
+    memtox(gdbserver_state.str_buf, (void *)(capbuf + offset), len);
+
+    put_packet_binary(gdbserver_state.str_buf->str,
+                      gdbserver_state.str_buf->len, true);
+}
+#endif
 
 static void handle_query_attached(GdbCmdContext *gdb_ctx, void *user_ctx)
 {
@@ -2338,6 +2400,14 @@ static GdbCmdParseEntry gdb_gen_query_table[] = {
         .cmd_startswith = 1,
         .schema = "s:l,l0"
     },
+#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+    {
+        .handler = handle_query_xfer_capa_read,
+        .cmd = "Xfer:capa:read:",
+        .cmd_startswith = 1,
+        .schema = "L:l,l0"
+    },
+#endif
     {
         .handler = handle_query_attached,
         .cmd = "Attached:",

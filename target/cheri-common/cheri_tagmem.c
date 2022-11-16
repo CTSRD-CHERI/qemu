@@ -685,3 +685,21 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
 
     tagblock_set_tag_many_tagmem(tagmem, page_vaddr_to_tag_offset(vaddr), tags);
 }
+
+bool cheri_tag_get_debug(RAMBlock *ram, ram_addr_t ram_offset)
+{
+    /* Return zero tag for ROM, etc. */
+    if (!ram->cheri_tags) {
+        return false;
+    }
+    cheri_debug_assert(!memory_region_is_rom(ram->mr) &&
+                       !memory_region_is_romd(ram->mr));
+
+    cheri_debug_assert(QEMU_ALIGN_DOWN(ram_offset, CHERI_CAP_SIZE) ==
+                       ram_offset);
+
+    uint64_t tag = ram_offset / CHERI_CAP_SIZE;
+    CheriTagBlock *tagblk = cheri_tag_block(tag, ram);
+    const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
+    return tagblock_get_tag(tagblk, tagblk_index);
+}
