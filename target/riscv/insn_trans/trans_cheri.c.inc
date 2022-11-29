@@ -528,7 +528,7 @@ static inline bool trans_sc_c_impl(DisasContext *ctx, arg_atomic *a,
         ctx->base.is_jmp = DISAS_NORETURN;
     } else {
         // Note: we ignore the Acquire/release flags since using
-        // helper_exit_atomic forces exlusive execution so we get SC semantics.
+        // helper_exit_atomic forces exclusive execution so we get SC semantics.
         gen_cheri_int_cap_cap(ctx, a->rd, a->rs1, a->rs2, helper);
     }
     return true;
@@ -625,9 +625,9 @@ static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
         tcg_temp_free_cap_checked(addr);                                       \
         return result;                                                         \
     }
-TRANSLATE_SC_EXPLICIT(sc_b, MO_SB);
-TRANSLATE_SC_EXPLICIT(sc_h, MO_SW);
-TRANSLATE_SC_EXPLICIT(sc_w, MO_SL);
+TRANSLATE_SC_EXPLICIT(sc_b, MO_ALIGN | MO_SB);
+TRANSLATE_SC_EXPLICIT(sc_h, MO_ALIGN | MO_SW);
+TRANSLATE_SC_EXPLICIT(sc_w, MO_ALIGN | MO_SL);
 #ifdef TARGET_RISCV64
-TRANSLATE_SC_EXPLICIT(sc_d, MO_Q);
+TRANSLATE_SC_EXPLICIT(sc_d, MO_ALIGN | MO_Q);
 #endif

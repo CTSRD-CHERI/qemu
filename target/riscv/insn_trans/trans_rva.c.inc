@@ -116,6 +116,7 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
 {
     TCGv_cap_checked_ptr addr =
         get_capmode_dependent_load_addr(ctx, a->rs1, 0, mop);
+    cheri_debug_assert((mop & MO_ALIGN) && "store-conditional must be aligned");
     bool result = gen_sc_impl(ctx, addr, a, mop);
     tcg_temp_free_cap_checked(addr);
     return result;
