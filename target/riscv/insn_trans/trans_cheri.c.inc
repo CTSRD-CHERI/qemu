@@ -593,11 +593,11 @@ static inline bool gen_lr_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
         tcg_temp_free_cap_checked(addr);                                       \
         return result;                                                         \
     }
-TRANSLATE_LR_EXPLICIT(lr_b, MO_SB);
-TRANSLATE_LR_EXPLICIT(lr_h, MO_SW);
-TRANSLATE_LR_EXPLICIT(lr_w, MO_SL);
+TRANSLATE_LR_EXPLICIT(lr_b, MO_ALIGN | MO_SB);
+TRANSLATE_LR_EXPLICIT(lr_h, MO_ALIGN | MO_SW);
+TRANSLATE_LR_EXPLICIT(lr_w, MO_ALIGN | MO_SL);
 #ifdef TARGET_RISCV64
-TRANSLATE_LR_EXPLICIT(lr_d, MO_Q);
+TRANSLATE_LR_EXPLICIT(lr_d, MO_ALIGN | MO_Q);
 #endif
 
 static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
