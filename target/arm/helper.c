@@ -6756,15 +6756,6 @@ static void dbgbcr_write(CPUARMState *env, const ARMCPRegInfo *ri,
     hw_breakpoint_update(cpu, i);
 }
 
-// Create a new string with an N at the end (no more than two characters)
-static char *with_n(const char *name, int n)
-{
-    size_t len = strlen(name) + 3;
-    char *new = malloc(len);
-    snprintf(new, len, "%s%d\n", name, n);
-    return new;
-}
-
 static void define_debug_regs(ARMCPU *cpu)
 {
     /* Define v7 and v8 architectural debug registers.
@@ -6794,13 +6785,13 @@ static void define_debug_regs(ARMCPU *cpu)
 
     for (i = 0; i < brps; i++) {
         ARMCPRegInfo dbgregs[] = {
-            { .name = with_n("DBGBVR", i), .state = ARM_CP_STATE_BOTH,
+            { .name = "DBGBVR", .state = ARM_CP_STATE_BOTH,
               .cp = 14, .opc0 = 2, .opc1 = 0, .crn = 0, .crm = i, .opc2 = 4,
               .access = PL1_RW, .accessfn = access_tda,
               .fieldoffset = offsetof(CPUARMState, cp15.dbgbvr[i]),
               .writefn = dbgbvr_write, .raw_writefn = raw_write
             },
-            { .name = with_n("DBGBCR", i), .state = ARM_CP_STATE_BOTH,
+            { .name = "DBGBCR", .state = ARM_CP_STATE_BOTH,
               .cp = 14, .opc0 = 2, .opc1 = 0, .crn = 0, .crm = i, .opc2 = 5,
               .access = PL1_RW, .accessfn = access_tda,
               .fieldoffset = offsetof(CPUARMState, cp15.dbgbcr[i]),
@@ -6813,13 +6804,13 @@ static void define_debug_regs(ARMCPU *cpu)
 
     for (i = 0; i < wrps; i++) {
         ARMCPRegInfo dbgregs[] = {
-            { .name = with_n("DBGWVR", i), .state = ARM_CP_STATE_BOTH,
+            { .name = "DBGWVR", .state = ARM_CP_STATE_BOTH,
               .cp = 14, .opc0 = 2, .opc1 = 0, .crn = 0, .crm = i, .opc2 = 6,
               .access = PL1_RW, .accessfn = access_tda,
               .fieldoffset = offsetof(CPUARMState, cp15.dbgwvr[i]),
               .writefn = dbgwvr_write, .raw_writefn = raw_write
             },
-            { .name = with_n("DBGWCR", i), .state = ARM_CP_STATE_BOTH,
+            { .name = "DBGWCR", .state = ARM_CP_STATE_BOTH,
               .cp = 14, .opc0 = 2, .opc1 = 0, .crn = 0, .crm = i, .opc2 = 7,
               .access = PL1_RW, .accessfn = access_tda,
               .fieldoffset = offsetof(CPUARMState, cp15.dbgwcr[i]),
