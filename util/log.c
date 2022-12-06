@@ -78,8 +78,7 @@ static bool log_uses_own_buffers;
 __attribute__((weak)) int qemu_log_instr_global_switch(int log_flags);
 __attribute__((weak)) int qemu_log_instr_global_switch(int log_flags)
 {
-    // Real implementation in accel/tcg/log_instr.c
-    warn_report("Calling no-op %s\r", __func__);
+    /* Real implementation in accel/tcg/log_instr.c. */
     return log_flags;
 }
 
