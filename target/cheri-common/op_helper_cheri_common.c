@@ -80,6 +80,7 @@ static DEFINE_CHERI_STAT(misc);
 #define RESULT_VALID _cap_valid
 #define raise_cheri_exception_or_invalidate(env, cause, reg) _cap_valid = false
 #define raise_cheri_exception_or_invalidate_impl(...) _cap_valid = false
+#define GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH()
 #else
 
 #define DEFINE_RESULT_VALID
@@ -88,6 +89,7 @@ static DEFINE_CHERI_STAT(misc);
     raise_cheri_exception(env, cause, reg)
 #define raise_cheri_exception_or_invalidate_impl(env, cause, reg, pc)          \
     raise_cheri_exception_impl(env, cause, reg, 0, true, pc)
+#define GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH() GET_HOST_RETPC()
 #endif
 
 static inline bool is_cap_sealed(const cap_register_t *cp)
@@ -901,6 +903,7 @@ void CHERI_HELPER_IMPL(cfromptr(CPUArchState *env, uint32_t cd, uint32_t cb,
                                 target_ulong rt))
 {
     GET_HOST_RETPC();
+    DEFINE_RESULT_VALID;
 #ifdef DO_CHERI_STATISTICS
     OOB_INFO(cfromptr)->num_uses++;
 #endif
@@ -909,35 +912,35 @@ void CHERI_HELPER_IMPL(cfromptr(CPUArchState *env, uint32_t cd, uint32_t cb,
     // Note: This is also still required for new binaries since clang assumes it
     // can use zero as $ddc in cfromptr/ctoptr
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
-#ifdef TARGET_RISCV
-    uint32_t cb_exc = cb == 0 ? CHERI_EXC_REGNUM_DDC : cb;
-#else
-    uint32_t cb_exc = cb;
-#endif
     /*
      * CFromPtr: Create capability from pointer
      */
     if (rt == (target_ulong)0) {
         cap_register_t result;
         update_capreg(env, cd, null_capability(&result));
+        return;
     } else if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb_exc);
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb_exc);
-    } else {
-        cap_register_t result = *cbp;
-        target_ulong new_addr = cbp->cr_base + rt;
-        if (!is_representable_cap_with_addr(cbp, new_addr)) {
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
+    }
+    cap_register_t result = *cbp;
+    if (!RESULT_VALID) {
+        result.cr_tag = 0; /* Detag sealed inputs  */
+    }
+    target_ulong new_addr = cbp->cr_base + rt;
+    if (!is_representable_cap_with_addr(cbp, new_addr)) {
+        if (cbp->cr_tag) {
             became_unrepresentable(env, cd, OOB_INFO(cfromptr),
                                    _host_return_address);
-            cap_mark_unrepresentable(new_addr, &result);
-        } else {
-            result._cr_cursor = new_addr;
-            check_out_of_bounds_stat(env, OOB_INFO(cfromptr), &result,
-                                     _host_return_address);
         }
-        update_capreg(env, cd, &result);
+        cap_mark_unrepresentable(new_addr, &result);
+    } else {
+        result._cr_cursor = new_addr;
+        check_out_of_bounds_stat(env, OOB_INFO(cfromptr), &result,
+                                 _host_return_address);
     }
+    update_capreg(env, cd, &result);
 }
 
 static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
