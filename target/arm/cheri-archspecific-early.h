@@ -33,6 +33,7 @@
 #include "cheri-archspecific-earlier.h"
 
 #define CHERI_CONTROLFLOW_CHECK_AT_TARGET 1
+#define CHERI_TAG_CLEAR_ON_INVALID        1
 
 static inline const cap_register_t *cheri_get_ddc(CPUARMState *env)
 {

@@ -68,9 +68,11 @@ static DEFINE_CHERI_STAT(misc);
 
 #endif
 
-// To keep the refactor minimal we make use of a few ugly macros to change
-// exception behavior to tag clearing
-#ifdef TARGET_AARCH64
+/*
+ * To keep the refactor minimal we make use of a few ugly macros to change
+ * exception behavior to tag clearing.
+ */
+#if CHERI_TAG_CLEAR_ON_INVALID
 
 #define DEFINE_RESULT_VALID bool _cap_valid = true
 #define RESULT_VALID _cap_valid
