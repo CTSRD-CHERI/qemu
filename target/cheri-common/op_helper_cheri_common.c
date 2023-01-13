@@ -71,6 +71,8 @@ static DEFINE_CHERI_STAT(misc);
 /*
  * To keep the refactor minimal we make use of a few ugly macros to change
  * exception behavior to tag clearing.
+ * These semantics are used for Morello and CHERI-RISC-V, whereas (legacy)
+ * CHERI-MIPS raises exceptions on invalid modifications.
  */
 #if CHERI_TAG_CLEAR_ON_INVALID
 
