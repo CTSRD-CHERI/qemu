@@ -704,6 +704,7 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
                          uint32_t ct, bool conditional,
                          uintptr_t _host_return_address)
 {
+    DEFINE_RESULT_VALID;
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
     target_ulong ct_base_plus_offset = cap_get_cursor(ctp);
@@ -711,37 +712,45 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
      * CSeal: Seal a capability
      */
     if (!csp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cs);
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cs);
     } else if (!ctp->cr_tag) {
-        if (conditional)
+        if (conditional) {
             update_capreg(env, cd, csp);
-        else
-            raise_cheri_exception(env, CapEx_TagViolation, ct);
+            return;
+        }
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, ct);
     } else if (conditional && !cap_is_unsealed(csp)) {
         update_capreg(env, cd, csp);
+        return;
     } else if (conditional && !cap_cursor_in_bounds(ctp)) {
         update_capreg(env, cd, csp);
-    } else if (conditional && cap_get_cursor(ctp) == CAP_OTYPE_UNSEALED_SIGNED) {
+        return;
+    } else if (conditional &&
+               cap_get_cursor(ctp) == CAP_OTYPE_UNSEALED_SIGNED) {
         update_capreg(env, cd, csp);
+        return;
     } else if (!conditional && !cap_is_unsealed(csp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cs);
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cs);
     } else if (!cap_is_unsealed(ctp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, ct);
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, ct);
     } else if (!cap_has_perms(ctp, CAP_PERM_SEAL)) {
-        raise_cheri_exception(env, CapEx_PermitSealViolation, ct);
+        raise_cheri_exception_or_invalidate(env, CapEx_PermitSealViolation, ct);
     } else if (!conditional && !cap_cursor_in_bounds(ctp)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, ct);
+        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, ct);
     } else if (ct_base_plus_offset > CAP_MAX_REPRESENTABLE_OTYPE ||
                cap_otype_is_reserved(ct_base_plus_offset)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else if (!is_representable_cap_when_sealed_with_addr(
-                   csp, cap_get_cursor(csp))) {
-        raise_cheri_exception(env, CapEx_InexactBounds, cs);
-    } else {
-        cap_register_t result = *csp;
-        cap_set_sealed(&result, (uint32_t)ct_base_plus_offset);
-        update_capreg(env, cd, &result);
+        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, ct);
+    } else if (!is_representable_cap_with_addr(csp, cap_get_cursor(csp))) {
+        raise_cheri_exception_or_invalidate(env, CapEx_InexactBounds, cs);
     }
+    cap_register_t result = *csp;
+    if (!RESULT_VALID) {
+        result.cr_tag = false;
+        CAP_cc(update_otype)(&result, (uint32_t)ct_base_plus_offset);
+    } else {
+        cap_set_sealed(&result, (uint32_t)ct_base_plus_offset);
+    }
+    update_capreg(env, cd, &result);
 }
 
 void CHERI_HELPER_IMPL(ccseal(CPUArchState *env, uint32_t cd, uint32_t cs,
