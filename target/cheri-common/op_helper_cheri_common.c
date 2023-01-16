@@ -1125,7 +1125,7 @@ target_ulong CHERI_HELPER_IMPL(cseqx(CPUArchState *env, uint32_t cb,
 target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
                                       uint32_t ct))
 {
-    GET_HOST_RETPC();
+    GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH();
     // CToPtr traps on ctp == NULL so we use reg0 as $ddc there. This means we
     // can have a CToPtr relative to $ddc as one instruction instead of two and
     // is required since clang still assumes it can use zero as $ddc in
@@ -1133,23 +1133,19 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_capreg_0_is_ddc(env, ct);
     target_ulong cb_cursor = cap_get_cursor(cbp);
-#ifdef TARGET_RISCV
-    uint32_t ct_exc = ct == 0 ? CHERI_EXC_REGNUM_DDC : ct;
-#else
-    uint32_t ct_exc = ct;
-#endif
     /*
      * CToPtr: Capability to Pointer
      */
+#if !CHERI_TAG_CLEAR_ON_INVALID
     if (!ctp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, ct_exc);
-    } else if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, ct);
+    }
+#endif
+    if (!cbp->cr_tag) {
         return (target_ulong)0;
     } else {
         return (target_ulong)(cb_cursor - ctp->cr_base);
     }
-
-    return (target_ulong)0;
 }
 
 /// Loads and stores
