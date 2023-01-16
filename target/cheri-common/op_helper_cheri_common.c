@@ -524,21 +524,26 @@ void CHERI_HELPER_IMPL(csealentry(CPUArchState *env, uint32_t cd, uint32_t cs))
      * CSealEntry: Seal a code capability so it is only callable with cjr/cjalr
      * (all other permissions are ignored so it can't be used for loads, etc)
      */
-    GET_HOST_RETPC();
+    GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH();
+    DEFINE_RESULT_VALID;
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     if (!csp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cs);
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cs);
     } else if (!cap_is_unsealed(csp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cs);
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cs);
     } else if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
-        // Capability must be executable otherwise csealentry doesn't make sense
-        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
-    } else {
-        cap_register_t result = *csp;
-        // capability can now only be used in cjr/cjalr
-        cap_make_sealed_entry(&result);
-        update_capreg(env, cd, &result);
+        /* Must be executable otherwise csealentry doesn't make sense. */
+        raise_cheri_exception_or_invalidate(env, CapEx_PermitExecuteViolation,
+                                            cs);
     }
+    cap_register_t result = *csp;
+    if (!RESULT_VALID) {
+        result.cr_tag = 0;
+    }
+    /* NB: Not using `cap_make_sealed_entry` since the input can be untagged. */
+    CAP_cc(update_otype)(&result, CAP_OTYPE_SENTRY);
+    /* Capability can now only be used in cjr/cjalr (or rederived). */
+    update_capreg(env, cd, &result);
 }
 
 /// Two operands (capability and int)
