@@ -1089,7 +1089,7 @@ target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUArchState *env, uint32_t cb,
     if (cbp->cr_tag == ctp->cr_tag &&
         /* is_cap_sealed(cbp) == is_cap_sealed(ctp) && */
         cap_get_base(cbp) <= cap_get_base(ctp) &&
-        cap_get_top(ctp) <= cap_get_top(cbp) &&
+        cap_get_top_full(ctp) <= cap_get_top_full(cbp) &&
         (cap_get_perms(cbp) & cap_get_perms(ctp)) == cap_get_perms(ctp) &&
         (cap_get_uperms(cbp) & cap_get_uperms(ctp)) == cap_get_uperms(ctp)) {
         is_subset = true;
