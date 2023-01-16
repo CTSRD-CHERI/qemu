@@ -769,7 +769,8 @@ void CHERI_HELPER_IMPL(cseal(CPUArchState *env, uint32_t cd, uint32_t cs,
 void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
                                uint32_t ct))
 {
-    GET_HOST_RETPC();
+    GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH();
+    DEFINE_RESULT_VALID;
     const cap_register_t *csp = get_readonly_capreg(env, cs);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
     const target_ulong ct_cursor = cap_get_cursor(ctp);
@@ -777,40 +778,46 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
      * CUnseal: Unseal a sealed capability
      */
     if (!csp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cs);
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cs);
     } else if (!ctp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, ct);
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, ct);
     } else if (cap_is_unsealed(csp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cs);
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cs);
     } else if (!cap_is_unsealed(ctp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, ct);
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, ct);
     } else if (!cap_is_sealed_with_type(csp)) {
-        raise_cheri_exception(env, CapEx_TypeViolation,
-                              cs); /* Reserved otypes */
+        /* Reserved otypes are not allowed. */
+        raise_cheri_exception_or_invalidate(env, CapEx_TypeViolation, cs);
     } else if (ct_cursor != cap_get_otype_unsigned(csp)) {
-        raise_cheri_exception(env, CapEx_TypeViolation, ct);
+        raise_cheri_exception_or_invalidate(env, CapEx_TypeViolation, ct);
     } else if (!cap_has_perms(ctp, CAP_PERM_UNSEAL)) {
-        raise_cheri_exception(env, CapEx_PermitUnsealViolation, ct);
+        raise_cheri_exception_or_invalidate(env, CapEx_PermitUnsealViolation,
+                                            ct);
     } else if (!cap_cursor_in_bounds(ctp)) {
-        // Must be within bounds and not one past end (i.e. not equal to top).
-        raise_cheri_exception(env, CapEx_LengthViolation, ct);
+        /* Must be in bounds and not one past end (i.e. not equal to top). */
+        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, ct);
     } else if (ct_cursor > CAP_MAX_REPRESENTABLE_OTYPE ||
                cap_otype_is_reserved(ct_cursor)) {
-        // This should never happen due to the ct_cursor != cs_otype check.
-        raise_cheri_exception(env, CapEx_LengthViolation, ct);
-    } else {
-        cap_register_t result = *csp;
-        target_ulong new_perms = cap_get_perms(&result);
-        if (cap_has_perms(csp, CAP_PERM_GLOBAL) &&
-            cap_has_perms(ctp, CAP_PERM_GLOBAL)) {
-            new_perms |= CAP_PERM_GLOBAL;
-        } else {
-            new_perms &= ~CAP_PERM_GLOBAL;
-        }
-        CAP_cc(update_perms)(&result, new_perms);
-        cap_set_unsealed(&result);
-        update_capreg(env, cd, &result);
+        /* This should never happen due to the ct_cursor != cs_otype check. */
+        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, ct);
     }
+
+    cap_register_t result = *csp;
+    target_ulong new_perms = cap_get_perms(&result);
+    if (cap_has_perms(csp, CAP_PERM_GLOBAL) &&
+        cap_has_perms(ctp, CAP_PERM_GLOBAL)) {
+        new_perms |= CAP_PERM_GLOBAL;
+    } else {
+        new_perms &= ~CAP_PERM_GLOBAL;
+    }
+    CAP_cc(update_perms)(&result, new_perms);
+    if (RESULT_VALID) {
+        cap_set_unsealed(&result);
+    } else {
+        result.cr_tag = 0; /* Detag on invalid input/argument. */
+        CAP_cc(update_otype)(&result, CAP_OTYPE_UNSEALED);
+    }
+    update_capreg(env, cd, &result);
 }
 
 /// Three operands (capability capability int)
