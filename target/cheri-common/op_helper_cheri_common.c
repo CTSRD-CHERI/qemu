@@ -677,27 +677,33 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
 void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  uint32_t ct))
 {
-    GET_HOST_RETPC();
+    GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH();
+    DEFINE_RESULT_VALID;
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const cap_register_t *ctp = get_readonly_capreg(env, ct);
     if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!cap_is_sealed_with_type(ctp)) {
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
+    }
+    if (!cap_is_sealed_with_type(ctp)) {
         // For reserved otypes we return a null-derived value.
         cap_register_t result;
         update_capreg(env, cd, int_to_cap(cap_get_otype_signext(ctp), &result));
-    } else if (cap_get_otype_unsigned(ctp) < cap_get_base(cbp)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else if (cap_get_otype_unsigned(ctp) >= cap_get_top(cbp)) {
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    } else {
-        cap_register_t result = *cbp;
-        result._cr_cursor = cap_get_otype_unsigned(ctp);
-        cheri_debug_assert(cap_is_representable(&result));
-        update_capreg(env, cd, &result);
+        return;
     }
+    if (cap_get_otype_unsigned(ctp) < cap_get_base(cbp)) {
+        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
+    } else if (cap_get_otype_unsigned(ctp) >= cap_get_top(cbp)) {
+        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
+    }
+    cap_register_t result = *cbp;
+    if (!RESULT_VALID) {
+        result.cr_tag = 0;
+    }
+    result._cr_cursor = cap_get_otype_unsigned(ctp);
+    cheri_debug_assert(cap_is_representable(&result));
+    update_capreg(env, cd, &result);
 }
 
 static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
