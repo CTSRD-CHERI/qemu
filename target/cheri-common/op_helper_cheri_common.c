@@ -531,11 +531,19 @@ void CHERI_HELPER_IMPL(csealentry(CPUArchState *env, uint32_t cd, uint32_t cs))
         raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cs);
     } else if (!cap_is_unsealed(csp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cs);
-    } else if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
-        /* Must be executable otherwise csealentry doesn't make sense. */
-        raise_cheri_exception_or_invalidate(env, CapEx_PermitExecuteViolation,
-                                            cs);
     }
+#ifdef TARGET_MIPS
+    /*
+     * The legacy MIPS testsuite expects traps when attempting to seal
+     * non-executable capabilities with CSealEntry.
+     * Keep this code rather than fixing the MIPS testsuite. We can GC this
+     * workaround once we completely drop MIPS support (most likely once we
+     * have a CHERI-RISC-V testsuite).
+     */
+    if (!cap_has_perms(csp, CAP_PERM_EXECUTE)) {
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cs);
+    }
+#endif
     cap_register_t result = *csp;
     if (!RESULT_VALID) {
         result.cr_tag = 0;
@@ -672,8 +680,8 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
      * subject to their construction conditions.  Otherwise, the result is
      * unsealed.
      */
-    if (cap_is_sealed_entry(ctp) && cap_has_perms(ctp, CAP_PERM_EXECUTE)) {
-        cap_make_sealed_entry(&result);
+    if (cap_is_sealed_entry(ctp)) {
+        CAP_cc(update_otype)(&result, CAP_OTYPE_SENTRY);
     }
 
     update_capreg(env, cd, &result);
