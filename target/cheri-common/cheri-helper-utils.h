@@ -170,9 +170,17 @@ static inline void cheri_update_pcc_for_exc_return(cap_register_t *pcc,
                                                    cap_register_t *src_cap,
                                                    target_ulong new_cursor)
 {
+    /*
+     * Morello does not require ASR when executing ERET, it will just detag
+     * the result. However, this helper is only used for MIPS/RISC-V.
+     */
+    assert(cap_has_perms(pcc, CAP_ACCESS_SYS_REGS) &&
+           "Attempting to return from exception without ASR in PCC");
     *pcc = *src_cap;
-    // On exception return we unseal sentry capabilities (if the address
-    // matches)
+    /*
+     * On exception return we unseal sentry capabilities (if the address
+     * matches).
+     */
     if (pcc->cr_tag && cap_is_sealed_entry(pcc)) {
         if (new_cursor == cap_get_cursor(pcc)) {
             cap_unseal_entry(pcc);
