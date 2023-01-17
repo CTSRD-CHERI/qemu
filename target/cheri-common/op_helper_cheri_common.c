@@ -758,14 +758,14 @@ static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
     /*
      * CSeal: Seal a capability
      */
-    if (!csp->cr_tag) {
-        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cs);
-    } else if (!ctp->cr_tag) {
+    if (!ctp->cr_tag) {
         if (conditional) {
             update_capreg(env, cd, csp);
             return;
         }
         raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, ct);
+    } else if (!csp->cr_tag) {
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cs);
     } else if (conditional && !cap_is_unsealed(csp)) {
         update_capreg(env, cd, csp);
         return;
