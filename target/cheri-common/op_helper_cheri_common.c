@@ -879,24 +879,27 @@ cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
 void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
                                 target_ulong rt))
 {
+    GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH();
+    DEFINE_RESULT_VALID;
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    GET_HOST_RETPC();
     /*
      * CAndPerm: Restrict Permissions
      */
     if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
     } else if (!cap_is_unsealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else {
-        uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
-        uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
-
-        cap_register_t result = *cbp;
-        CAP_cc(update_perms)(&result, cap_get_perms(cbp) & rt_perms);
-        CAP_cc(update_uperms)(&result, cap_get_uperms(cbp) & rt_uperms);
-        update_capreg(env, cd, &result);
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
     }
+
+    uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
+    uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
+    cap_register_t result = *cbp;
+    if (!RESULT_VALID) {
+        result.cr_tag = 0;
+    }
+    CAP_cc(update_perms)(&result, cap_get_perms(cbp) & rt_perms);
+    CAP_cc(update_uperms)(&result, cap_get_uperms(cbp) & rt_uperms);
+    update_capreg(env, cd, &result);
 }
 
 void CHERI_HELPER_IMPL(cincoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
