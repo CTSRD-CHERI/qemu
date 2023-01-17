@@ -106,6 +106,12 @@ target_ulong helper_sret(CPURISCVState *env, target_ulong cpu_pc_deb)
     if (!(env->priv >= PRV_S)) {
         riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
     }
+#ifdef TARGET_CHERI
+    if (!cheri_have_access_sysregs(env)) {
+        raise_cheri_exception_impl(env, CapEx_AccessSystemRegsViolation,
+                                   CHERI_EXC_REGNUM_PCC, 0, true, GETPC());
+    }
+#endif
 
     target_ulong retpc = GET_SPECIAL_REG_ADDR(env, sepc, SEPCC);
     // We have to clear the low bit of the address since that is defined as zero
@@ -174,6 +180,12 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
     if (!(env->priv >= PRV_M)) {
         riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
     }
+#ifdef TARGET_CHERI
+    if (!cheri_have_access_sysregs(env)) {
+        raise_cheri_exception_impl(env, CapEx_AccessSystemRegsViolation,
+                                   CHERI_EXC_REGNUM_PCC, 0, true, GETPC());
+    }
+#endif
 
     target_ulong retpc = GET_SPECIAL_REG_ADDR(env, mepc, MEPCC);
     // We have to clear the low bit of the address since that is defined as zero
