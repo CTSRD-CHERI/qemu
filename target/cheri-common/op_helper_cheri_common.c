@@ -1073,16 +1073,19 @@ void CHERI_HELPER_IMPL(csetboundsexact(CPUArchState *env, uint32_t cd,
 void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  target_ulong flags))
 {
+    GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH();
+    DEFINE_RESULT_VALID;
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    GET_HOST_RETPC();
     /*
      * CSetFlags: Set Flags
      */
     if (cbp->cr_tag && !cap_is_unsealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
     }
-    // FIXME: should we trap instead of masking?
     cap_register_t result = *cbp;
+    if (!RESULT_VALID) {
+        result.cr_tag = 0;
+    }
     flags &= CAP_FLAGS_ALL_BITS;
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
     CAP_cc(update_flags)(&result, flags);
