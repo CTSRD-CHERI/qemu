@@ -673,8 +673,6 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     cap_register_t result = *ctp;
 
     CAP_cc(update_otype)(&result, CAP_OTYPE_UNSEALED);
-    result.cr_tag = RESULT_VALID;
-
     /*
      * cbuildcap is allowed to seal at any ambiently-available otype,
      * subject to their construction conditions.  Otherwise, the result is
@@ -683,7 +681,37 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     if (cap_is_sealed_entry(ctp)) {
         CAP_cc(update_otype)(&result, CAP_OTYPE_SENTRY);
     }
-
+    if (!RESULT_VALID) {
+        result.cr_tag = 0; /* Not a valid subset. */
+    } else {
+        /* Check if the capability bounds are canonical by deriving. */
+        cap_register_t derived = *cbp;
+        if (is_cap_sealed(&derived)) {
+            derived.cr_tag = 0;
+        }
+        cap_set_cursor(&derived, cap_get_cursor(&result));
+        CAP_cc(setbounds)(&derived, cap_get_base(&result),
+                          cap_get_top_full(&result));
+        cap_set_cursor(&derived, cap_get_cursor(&result));
+        CAP_cc(update_perms)(&derived, cap_get_perms(cbp) & cap_get_perms(ctp));
+        CAP_cc(update_uperms)(&derived,
+                              cap_get_uperms(cbp) & cap_get_uperms(ctp));
+        CAP_cc(update_flags)(&derived, cap_get_flags(ctp));
+        if (cap_is_sealed_entry(ctp)) {
+            CAP_cc(update_otype)(&derived, CAP_OTYPE_SENTRY);
+        }
+        result.cr_tag = 1; /* Set tag to true for comparison with derived. */
+        if (cap_exactly_equal(&result, &derived)) {
+            /*
+             * If this was a valid derivation sequence return that to ensure
+             * canonical bounds encoding.
+             */
+            result = derived;
+        } else {
+            /* Valid subset but not canonical -> return the untagged input. */
+            result.cr_tag = 0;
+        }
+    }
     update_capreg(env, cd, &result);
 }
 
