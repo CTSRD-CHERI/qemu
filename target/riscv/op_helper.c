@@ -37,6 +37,12 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
     if (pc) {
         cpu_restore_state(cs, pc, true);
     }
+#ifdef CONFIG_RVFI_DII
+    if (exception == RISCV_EXCP_ILLEGAL_INST &&
+        env->rvfi_dii_have_injected_insn) {
+        env->badaddr = env->rvfi_dii_trace.INST.rvfi_insn;
+    } else
+#endif
     if (exception == RISCV_EXCP_ILLEGAL_INST) {
         // Try to fetch the faulting instruction and store it in badaddr
         uint32_t opcode = 0;
