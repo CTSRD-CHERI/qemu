@@ -423,7 +423,13 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
 
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const target_ulong cursor = cap_get_cursor(cbp);
+#ifdef TARGET_RISCV
+    /* On RISC-V we mask the LSB of the target to match JALR behaviour. */
+    const target_ulong addr = (cursor + (target_long)offset) & ~(target_ulong)1;
+#else
     const target_ulong addr = cursor + (target_long)offset;
+#endif
+
     /* Morello takes the exception at the target. */
 #if !CHERI_CONTROLFLOW_CHECK_AT_TARGET
     GET_HOST_RETPC();
