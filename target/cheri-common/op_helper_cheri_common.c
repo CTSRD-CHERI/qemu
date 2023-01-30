@@ -1382,7 +1382,7 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     env->rvfi_dii_trace.MEM.rvfi_mem_addr = vaddr;
     env->rvfi_dii_trace.MEM.rvfi_mem_rdata[0] = *cursor;
-    env->rvfi_dii_trace.MEM.rvfi_mem_rdata[1] = *pesbt;
+    env->rvfi_dii_trace.MEM.rvfi_mem_rdata[1] = *pesbt ^ CAP_NULL_XOR_MASK;
     env->rvfi_dii_trace.MEM.rvfi_mem_rdata[2] = tag;
     env->rvfi_dii_trace.MEM.rvfi_mem_rmask = (1 << CHERI_CAP_SIZE) - 1;
     // TODO: Add one extra bit to include the tag?
