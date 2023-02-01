@@ -1550,7 +1550,15 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
         perms, env, cb, 0, sizealign, _host_return_address, cbp, sizealign,
         raise_unaligned_load_exception);
 
-    return (target_ulong)cheri_tag_get_many(env, addr, cb, NULL, GETPC());
+    target_ulong result = cheri_tag_get_many(env, addr, cb, NULL, GETPC());
+#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+    /* For RVFI tracing, sail reports the valu of th last capability read. */
+    target_ulong unused1, unused2;
+    (void)load_cap_from_memory_raw(env, &unused1, &unused2, cb, cbp,
+                                   addr + sizealign - CHERI_CAP_SIZE,
+                                   _host_return_address, NULL);
+#endif
+    return result;
 }
 
 QEMU_NORETURN static inline void
