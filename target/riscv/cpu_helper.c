@@ -407,30 +407,15 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
     int mode = mmu_idx & TB_FLAGS_PRIV_MMU_MASK;
     bool use_background = false;
 #ifdef CONFIG_RVFI_DII
-    // For RVFI-DII we have to reject all memory accesses outside of the RAM
-    // region (even if there is a valid ROM there)
-    // However, we still have to allow MMU_INST_FETCH accesess since they are
-    // triggered by tb_find().
-    if (env->rvfi_dii_have_injected_insn) {
-        if (access_type == MMU_INST_FETCH) {
-            /*
-             * Pretend we have a 1:1 mapping and never fail for instruction
-             * fetches since the instruction is injected directly via
-             * env->rvfi_dii_injected_insn.
-             */
-            *physical = addr;
-            *prot = PAGE_EXEC;
-            return TRANSLATE_SUCCESS;
-        } else if (addr < RVFI_DII_RAM_START || addr >= RVFI_DII_RAM_END) {
-            if (rvfi_debug_output) {
-                fprintf(stderr, "Rejecting memory access to " TARGET_FMT_lx
-                        " since it is outside the RVFI-DII range\n", addr);
-            }
-            qemu_log_mask(CPU_LOG_MMU,
-                          "%s Translate fail: outside the RVFI-DII range\n",
-                          __func__);
-            return TRANSLATE_FAIL; // XXX: TRANSLATE_PMP_FAIL?
-        }
+    if (env->rvfi_dii_have_injected_insn && access_type == MMU_INST_FETCH) {
+        /*
+         * Pretend we have a 1:1 mapping and never fail for instruction
+         * fetches since the instruction is injected directly via
+         * env->rvfi_dii_injected_insn.
+         */
+        *physical = addr;
+        *prot = PAGE_EXEC;
+        return TRANSLATE_SUCCESS;
     }
 #endif
 
@@ -926,7 +911,7 @@ void riscv_cpu_do_unaligned_access(CPUState *cs, vaddr addr,
 }
 #endif
 
-static inline int rvfi_dii_check_addr(CPURISCVState *env, int ret,
+static inline int rvfi_dii_check_addr(CPURISCVState *env, int ret, hwaddr *pa,
                                       vaddr address, int size, int *prot,
                                       MMUAccessType access_type)
 {
@@ -940,13 +925,20 @@ static inline int rvfi_dii_check_addr(CPURISCVState *env, int ret,
             // Avoid filling the QEMU guest->host TLB with read/write entries
             // for the faked instr fetch translation
             *prot &= PAGE_EXEC;
-        } else if (address < RVFI_DII_RAM_START ||
-                   (address + size) > RVFI_DII_RAM_END) {
+        } else if (*pa < RVFI_DII_RAM_START ||
+                   (*pa + size) > RVFI_DII_RAM_END) {
             if (rvfi_debug_output) {
-                fprintf(stderr, "Rejecting memory access to " TARGET_FMT_plx
-                        " since it is outside the RVFI-DII range", address);
+                fprintf(stderr,
+                        "Rejecting memory access to " TARGET_FMT_plx
+                        " since it is outside the RVFI-DII range",
+                        address);
             }
-            return TRANSLATE_FAIL;
+            qemu_log_mask(CPU_LOG_MMU,
+                          "%s Translate fail: va=" TARGET_FMT_plx
+                          " pa=" TARGET_FMT_plx
+                          " is outside the RVFI-DII range\n",
+                          __func__, address, *pa);
+            return TRANSLATE_PMP_FAIL;
         }
     }
 #endif
@@ -1006,7 +998,7 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
                       "%s 1st-stage address=%" VADDR_PRIx " ret %d physical "
                       TARGET_FMT_plx " prot %d\n",
                       __func__, address, ret, *pa, *prot);
-        ret = rvfi_dii_check_addr(env, ret, address, size, prot, access_type);
+        ret = rvfi_dii_check_addr(env, ret, pa, address, size, prot, access_type);
 
         if (ret == TRANSLATE_SUCCESS) {
             /* Second stage lookup */
@@ -1075,7 +1067,7 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
         /* Single stage lookup */
         ret = get_physical_address(env, pa, prot, address, NULL,
                                    access_type, mmu_idx, true, false);
-        ret = rvfi_dii_check_addr(env, ret, address, size, prot, access_type);
+        ret = rvfi_dii_check_addr(env, ret, pa, address, size, prot, access_type);
 
         qemu_log_mask(CPU_LOG_MMU,
                       "%s address=%" VADDR_PRIx " ret %d physical "
@@ -1093,6 +1085,17 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
         *pmp_violation = true;
     }
 
+#ifdef CONFIG_RVFI_DII
+    /*
+     * For non-ifetch, we log the mem_addr here to match sail which logs it
+     * for all accesses that go down to the physical level (i.e. the ones
+     * that passed CHERI and MMU checks).
+     */
+    if (access_type != MMU_INST_FETCH && ret != TRANSLATE_FAIL) {
+        env->rvfi_dii_trace.MEM.rvfi_mem_addr = address;
+        env->rvfi_dii_trace.available_fields |= RVFI_MEM_DATA;
+    }
+#endif
     return ret;
 }
 #endif
@@ -1280,7 +1283,16 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     if (unlikely(log_inst && qemu_loglevel_mask(CPU_LOG_INT))) {
         FILE* logf = qemu_log_lock();
         qemu_log("Trap (%s) was probably caused by: ", riscv_cpu_get_trap_name(cause, async));
-        target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/-1);
+#ifdef CONFIG_RVFI_DII
+        if (env->rvfi_dii_have_injected_insn) {
+            target_disas_buf(stderr, cs, &env->rvfi_dii_injected_insn,
+                             sizeof(env->rvfi_dii_injected_insn), PC_ADDR(env),
+                             1);
+        } else
+#endif
+        {
+            target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/ -1);
+        }
         qemu_log_unlock(logf);
     }
 
