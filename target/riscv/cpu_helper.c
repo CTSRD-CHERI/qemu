@@ -413,9 +413,11 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
     // triggered by tb_find().
     if (env->rvfi_dii_have_injected_insn) {
         if (access_type == MMU_INST_FETCH) {
-            // Pretend we have a 1:1 mapping and never fail for instruction
-            // fetches since the instruction is injected directly via
-            // env->rvfi_dii_trace.INST.rvfi_insn
+            /*
+             * Pretend we have a 1:1 mapping and never fail for instruction
+             * fetches since the instruction is injected directly via
+             * env->rvfi_dii_injected_insn.
+             */
             *physical = addr;
             *prot = PAGE_EXEC;
             return TRANSLATE_SUCCESS;

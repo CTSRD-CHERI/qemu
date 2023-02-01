@@ -860,7 +860,7 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
     // We have to avoid memory accesses for injected instructions since
     // the PC could point somewhere invalid.
     uint16_t opcode = env->rvfi_dii_have_injected_insn
-                          ? env->rvfi_dii_trace.INST.rvfi_insn
+                          ? env->rvfi_dii_injected_insn
                           : translator_lduw(env, ctx->base.pc_next);
     gen_rvfi_dii_set_field_const_i64(PC, pc_rdata, ctx->base.pc_next);
 #else
@@ -868,9 +868,9 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
 #endif
     /* check for compressed insn */
     if (extract16(opcode, 0, 2) != 3) {
-        gen_rvfi_dii_set_field_const_i64(INST, insn, opcode);
         gen_riscv_log_instr16(ctx, opcode);
         gen_check_pcc_bounds_next_inst(ctx, 2);
+        gen_rvfi_dii_set_field_const_i64(INST, insn, opcode);
         if (!has_ext(ctx, RVC)) {
             gen_exception_illegal(ctx);
         } else {
@@ -884,7 +884,7 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx)
         // We have to avoid memory accesses for injected instructions since
         // the PC could point somewhere invalid.
         uint16_t next_16 = env->rvfi_dii_have_injected_insn
-                          ? (env->rvfi_dii_trace.INST.rvfi_insn >> 16)
+                          ? (env->rvfi_dii_injected_insn >> 16)
                           : translator_lduw(env, ctx->base.pc_next + 2);
 #else
         uint16_t next_16 = translator_lduw(env, ctx->base.pc_next + 2);
@@ -1009,7 +1009,7 @@ static void riscv_tr_disas_log(const DisasContextBase *dcbase, CPUState *cpu)
     if (env->rvfi_dii_have_injected_insn) {
         assert(dcbase->num_insns == 1);
         FILE *logfile = qemu_log_lock();
-        uint32_t insn = env->rvfi_dii_trace.INST.rvfi_insn;
+        uint32_t insn = env->rvfi_dii_injected_insn;
         if (logfile) {
             fprintf(logfile, "IN: %s\n", lookup_symbol(dcbase->pc_first));
             target_disas_buf(stderr, cpu, &insn, sizeof(insn), dcbase->pc_first, 1);

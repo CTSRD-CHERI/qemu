@@ -628,7 +628,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env, bool was_trap) {
             // Instead let's just flush the entire TCG cache (which should have
             // the same effect).
             tb_flush(cs); // flush TCG state
-            env->rvfi_dii_trace.INST.rvfi_insn = cmd_buf.rvfi_dii_insn;
+            env->rvfi_dii_injected_insn = cmd_buf.rvfi_dii_insn;
             env->rvfi_dii_have_injected_insn = true;
             env->rvfi_dii_trace.PC.rvfi_pc_rdata = GET_SPECIAL_REG_ARCH(env, pc, PCC);
             env->rvfi_dii_trace.INST.rvfi_mode = env->priv;

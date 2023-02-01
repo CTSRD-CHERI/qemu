@@ -40,7 +40,7 @@ void QEMU_NORETURN riscv_raise_exception(CPURISCVState *env,
 #ifdef CONFIG_RVFI_DII
     if (exception == RISCV_EXCP_ILLEGAL_INST &&
         env->rvfi_dii_have_injected_insn) {
-        env->badaddr = env->rvfi_dii_trace.INST.rvfi_insn;
+        env->badaddr = env->rvfi_dii_injected_insn;
     } else
 #endif
     if (exception == RISCV_EXCP_ILLEGAL_INST) {

@@ -323,6 +323,7 @@ struct CPURISCVState {
         uint32_t available_fields;
     } rvfi_dii_trace;
     bool rvfi_dii_have_injected_insn;
+    uint32_t rvfi_dii_injected_insn;
 #endif
 
     target_ulong priv_ver;
