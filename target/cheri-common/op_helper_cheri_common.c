@@ -728,11 +728,16 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
     }
-    if (!cap_is_sealed_with_type(ctp)) {
-        // For reserved otypes we return a null-derived value.
-        cap_register_t result;
-        update_capreg(env, cd, int_to_cap(cap_get_otype_signext(ctp), &result));
-        return;
+    if (cap_is_sealed_with_reserved_otype(ctp)) {
+        if (CHERI_TAG_CLEAR_ON_INVALID(env)) {
+            RESULT_VALID = false;
+        } else {
+            // For reserved otypes we return a null-derived value.
+            cap_register_t result;
+            update_capreg(env, cd,
+                          int_to_cap(cap_get_otype_signext(ctp), &result));
+            return;
+        }
     }
     if (cap_get_otype_unsigned(ctp) < cap_get_base(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
@@ -743,9 +748,9 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     if (!RESULT_VALID) {
         result.cr_tag = 0;
     }
-    result._cr_cursor = cap_get_otype_unsigned(ctp);
-    cheri_debug_assert(cap_is_representable(&result));
-    update_capreg(env, cd, &result);
+    try_set_cap_cursor(env, cbp, cb, cd, cap_get_otype_signext(ctp),
+                       /*precise_repr_check=*/true, GETPC(),
+                       OOB_INFO(ccopytype));
 }
 
 static void cseal_common(CPUArchState *env, uint32_t cd, uint32_t cs,
