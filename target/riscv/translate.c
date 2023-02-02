@@ -854,6 +854,11 @@ get_capmode_dependent_rmw_addr(DisasContext *ctx, int reg_num,
 /* Include the auto-generated decoder for 16 bit insn */
 #include "decode-insn16.c.inc"
 
+static bool trans_c_hint(DisasContext *ctx, arg_c_hint *a)
+{
+    return true;
+}
+
 static void decode_opc(CPURISCVState *env, DisasContext *ctx)
 {
 #ifdef CONFIG_RVFI_DII
