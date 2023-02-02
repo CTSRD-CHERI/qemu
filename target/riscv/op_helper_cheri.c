@@ -236,6 +236,14 @@ void HELPER(auipcc)(CPUArchState *env, uint32_t cd, target_ulong new_cursor)
     derive_cap_from_pcc(env, cd, new_cursor, GETPC(), OOB_INFO(auipcc));
 }
 
+void HELPER(cjal)(CPUArchState *env, uint32_t cd, target_ulong target_addr,
+                  target_ulong link_addr)
+{
+    cheri_jump_and_link_checked(env, cd, link_addr, CHERI_EXC_REGNUM_PCC,
+                                cheri_get_recent_pcc(env), target_addr,
+                                0, GETPC());
+}
+
 void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
                          uint32_t addr_reg, uint32_t val_reg)
 {
