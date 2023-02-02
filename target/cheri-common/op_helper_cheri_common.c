@@ -417,6 +417,40 @@ void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
     update_next_pcc_for_tcg(env, &next_pcc, cjalr_flags);
 }
 
+void cheri_jump_and_link_checked(CPUArchState *env, uint32_t link_reg,
+                                 target_ulong link_pc, uint32_t target_reg,
+                                 const cap_register_t *target,
+                                 target_ulong target_addr, uint32_t flags,
+                                 uintptr_t _host_return_address)
+{
+#ifdef TARGET_RISCV
+    /* On RISC-V we mask the LSB of the target to match JALR behaviour. */
+    target_addr &= ~(target_ulong)1;
+#endif
+    /* Morello takes the exception at the target. */
+#if !CHERI_CONTROLFLOW_CHECK_AT_TARGET
+    if (!target->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, target_reg);
+    } else if (cap_is_sealed_with_type(target) ||
+               (!cap_is_unsealed(target) &&
+                target_addr != cap_get_cursor(target))) {
+        /*
+         * Note: "sentry" caps can be called using cjalr, but only if the
+         * immediate offset is 0, i.e. target_addr==target.address.
+         */
+        raise_cheri_exception(env, CapEx_SealViolation, target_reg);
+    } else if (!cap_has_perms(target, CAP_PERM_EXECUTE)) {
+        raise_cheri_exception(env, CapEx_PermitExecuteViolation, target_reg);
+    } else if (!cap_has_perms(target, CAP_PERM_GLOBAL)) {
+        raise_cheri_exception(env, CapEx_GlobalViolation, target_reg);
+    } else if (!validate_jump_target(env, target, target_addr, target_reg,
+                                     _host_return_address)) {
+        assert(false && "Should have raised an exception");
+    }
+#endif
+    cheri_jump_and_link(env, target, target_addr, link_reg, link_pc, flags);
+}
+
 void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
                              uint32_t cb_with_flags, target_ulong offset,
                              target_ulong link_pc))
@@ -429,32 +463,9 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
 
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     const target_ulong cursor = cap_get_cursor(cbp);
-#ifdef TARGET_RISCV
-    /* On RISC-V we mask the LSB of the target to match JALR behaviour. */
-    const target_ulong addr = (cursor + (target_long)offset) & ~(target_ulong)1;
-#else
-    const target_ulong addr = cursor + (target_long)offset;
-#endif
-
-    /* Morello takes the exception at the target. */
-#if !CHERI_CONTROLFLOW_CHECK_AT_TARGET
-    GET_HOST_RETPC();
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (cap_is_sealed_with_type(cbp) ||
-               (offset != 0 && !cap_is_unsealed(cbp))) {
-        // Note: "sentry" caps can be called using cjalr, but only if the
-        // immediate offset is 0.
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!cap_has_perms(cbp, CAP_PERM_EXECUTE)) {
-        raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
-    } else if (!validate_jump_target(env, cbp, addr, cb,
-                                     _host_return_address)) {
-        assert(false && "Should have raised an exception");
-    }
-#endif
-
-    cheri_jump_and_link(env, cbp, addr, cd, link_pc, cjalr_flags);
+    const target_ulong target_addr = cursor + (target_long)offset;
+    cheri_jump_and_link_checked(env, cd, link_pc, cb, cbp, target_addr,
+                                cjalr_flags, GETPC());
 }
 
 void CHERI_HELPER_IMPL(cinvoke(CPUArchState *env, uint32_t code_regnum,
