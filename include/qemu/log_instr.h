@@ -93,7 +93,7 @@ static inline void qemu_log_instr_set_format(qemu_log_instr_fmt_t fmt)
     qemu_log_instr_format = fmt;
 }
 
-static inline qemu_log_instr_fmt_t qemu_log_instr_get_format()
+static inline qemu_log_instr_fmt_t qemu_log_instr_get_format(void)
 {
     return qemu_log_instr_format;
 }

@@ -706,7 +706,7 @@ static void cpu_loglevel_switch(CPUArchState *env,
 }
 
 /* Start global logging flag if it was disabled */
-static void global_loglevel_enable()
+static void global_loglevel_enable(void)
 {
     if (!qemu_loglevel_mask(CPU_LOG_INSTR))
         qemu_set_log_internal(qemu_loglevel | CPU_LOG_INSTR);
@@ -1580,7 +1580,7 @@ void helper_qemu_log_instr_stop(CPUArchState *env, target_ulong pc)
 }
 
 /* Start logging all instructions on all CPUs */
-void helper_qemu_log_instr_allcpu_start()
+void helper_qemu_log_instr_allcpu_start(void)
 {
     CPUState *cpu;
 
@@ -1590,7 +1590,7 @@ void helper_qemu_log_instr_allcpu_start()
 }
 
 /* Start logging user-only instructions on all CPUs */
-void helper_qemu_log_instr_allcpu_user_start()
+void helper_qemu_log_instr_allcpu_user_start(void)
 {
     CPUState *cpu;
 
@@ -1600,7 +1600,7 @@ void helper_qemu_log_instr_allcpu_user_start()
 }
 
 /* Stop logging instructions on all CPUs */
-void helper_qemu_log_instr_allcpu_stop()
+void helper_qemu_log_instr_allcpu_stop(void)
 {
     CPUState *cpu;
 
