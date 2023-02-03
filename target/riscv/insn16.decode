@@ -106,7 +106,10 @@ addi              010 .  .....  ..... 01 @c_li
   cincoffsetimm   011 .  00010  ..... 01 @c_addi16sp ?pred_capmode
   lui             011 .  .....  ..... 01 @c_lui
 }
-srli              100 . 00 ...  ..... 01 @c_shift
+{
+  c_hint          100 0 00 ...  00000 01 @c_hintshift  # c.srli64 is a HINT for rv32/64
+  srli            100 . 00 ...  ..... 01 @c_shift
+}
 {
   c_hint          100 0 01 ...  00000 01 @c_hintshift  # c.srai64 is a HINT for rv32/64
   srai            100 . 01 ...  ..... 01 @c_shift
