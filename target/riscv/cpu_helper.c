@@ -1106,7 +1106,6 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     bool first_stage_error = true;
     int prot = 0;
     hwaddr pa = 0;
-    target_ulong tlb_size = 0;
     int ret = riscv_cpu_tlb_fill_impl(env, address, size, access_type, mmu_idx,
                                       &pmp_violation, &first_stage_error, &prot,
                                       &pa, retaddr);
@@ -1115,15 +1114,18 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 #ifdef TARGET_CHERI
         attrs.tag_setting = access_type == MMU_DATA_CAP_STORE;
 #endif
-        if (pmp_is_range_in_tlb(env, pa & TARGET_PAGE_MASK, &tlb_size)) {
-            tlb_set_page_with_attrs(cs, address & ~(tlb_size - 1),
-                                    pa & ~(tlb_size - 1), attrs, prot, mmu_idx,
-                                    tlb_size);
-        } else {
-            tlb_set_page_with_attrs(cs, address & TARGET_PAGE_MASK,
-                                    pa & TARGET_PAGE_MASK, attrs, prot, mmu_idx,
-                                    TARGET_PAGE_SIZE);
+        // The check we just did covers only "size" bytes. However, MMU checks
+        // covered a whole page. If the PMP entry also covers a page, we can
+        // cache a larger entry.
+
+        if (pmp_covers_page(env, pa, mmu_idx)) {
+            address &= TARGET_PAGE_MASK;
+            pa &= TARGET_PAGE_MASK;
+            size = TARGET_PAGE_SIZE;
         }
+
+        tlb_set_page_with_attrs(cs, address, pa, attrs, prot, mmu_idx, size);
+
         return true;
     } else if (probe) {
         return false;
