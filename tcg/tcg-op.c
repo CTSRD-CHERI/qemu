@@ -2821,7 +2821,7 @@ static inline TCGv_cap_checked_ptr plugin_prep_mem_callbacks(TCGv_cap_checked_pt
     if (tcg_ctx->plugin_insn != NULL) {
         /* Save a copy of the vaddr for use after a load.  */
         TCGv_cap_checked_ptr temp = tcg_temp_new_cap_checked();
-        tcg_gen_mov_tl(temp, vaddr);
+        tcg_gen_mov_cap_checked(temp, vaddr);
         return temp;
     }
 #endif
