@@ -118,7 +118,7 @@ sw                110  ... ... .. ... 00 @cs_w
   ld              011  ... ... .. ... 00 @cl_d
   # RV32C
   lc              011  ... ... .. ... 00 @cl_d ?pred_capmode
-  flw             011  ... ... .. ... 00 @cl_w ?!pred_capmode
+  c_flw             011  ... ... .. ... 00 @cl_w ?!pred_capmode
 }
 {
   sq              101  ... ... .. ... 00 @cs_q ?!pred_rv64_capmode
@@ -130,7 +130,7 @@ sw                110  ... ... .. ... 00 @cs_w
   sd              111  ... ... .. ... 00 @cs_d
   # RV32C
   sc              111  ... ... .. ... 00 @cs_d ?pred_capmode
-  fsw             111  ... ... .. ... 00 @cs_w ?!pred_capmode
+  c_fsw             111  ... ... .. ... 00 @cs_w ?!pred_capmode
 }
 
 # *** RV32/64C Standard Extension (Quadrant 1) ***
@@ -206,7 +206,7 @@ sw                110 .  .....  ..... 10 @c_swsp
   c64_illegal     011 -  00000  ----- 10 # c.ldsp, RES rd=0
   ld              011 .  .....  ..... 10 @c_ldsp
   # RV32C
-  flw             011 .  .....  ..... 10 @c_lwsp ?!pred_capmode
+  c_flw             011 .  .....  ..... 10 @c_lwsp ?!pred_capmode
   illegal         011 -  00000  ----- 10         ?pred_capmode # RES rd=0
   lc              011 .  .....  ..... 10 @c_ldsp ?pred_capmode
 }
@@ -219,6 +219,6 @@ sw                110 .  .....  ..... 10 @c_swsp
   # RV64C
   sd              111 .  .....  ..... 10 @c_sdsp
   # RV32C
-  fsw             111 .  .....  ..... 10 @c_swsp ?!pred_capmode
+  c_fsw             111 .  .....  ..... 10 @c_swsp ?!pred_capmode
   sc              111 .  .....  ..... 10 @c_sdsp ?pred_capmode
 }
