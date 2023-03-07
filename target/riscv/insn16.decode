@@ -110,7 +110,7 @@ sw                110  ... ... .. ... 00 @cs_w
 # *** RV32C and RV64C specific Standard Extension (Quadrant 0) ***
 {
   lq              001  ... ... .. ... 00 @cl_q ?!pred_rv64_capmode
-  fld             001  ... ... .. ... 00 @cl_d ?!pred_rv64_capmode
+  c_fld           001  ... ... .. ... 00 @cl_d ?!pred_rv64_capmode
   lc              001  ... ... .. ... 00 @cl_q ?pred_rv64_capmode
 }
 {
@@ -122,7 +122,7 @@ sw                110  ... ... .. ... 00 @cs_w
 }
 {
   sq              101  ... ... .. ... 00 @cs_q ?!pred_rv64_capmode
-  fsd             101  ... ... .. ... 00 @cs_d ?!pred_rv64_capmode
+  c_fsd           101  ... ... .. ... 00 @cs_d ?!pred_rv64_capmode
   sc              101  ... ... .. ... 00 @cs_q ?pred_rv64_capmode
 }
 {
@@ -197,7 +197,7 @@ sw                110 .  .....  ..... 10 @c_swsp
 # *** RV32C and RV64C specific Standard Extension (Quadrant 2) ***
 {
   lq              001  ... ... .. ... 10 @c_lqsp ?!pred_rv64_capmode
-  fld             001 .  .....  ..... 10 @c_ldsp ?!pred_rv64_capmode
+  c_fld           001 .  .....  ..... 10 @c_ldsp ?!pred_rv64_capmode
   c64_illegal     001 -  00000  ----- 10         ?pred_rv64_capmode # RES rd=0
   lc              001 .  .....  ..... 10 @c_lqsp ?pred_rv64_capmode
 }
@@ -212,7 +212,7 @@ sw                110 .  .....  ..... 10 @c_swsp
 }
 {
   sq              101  ... ... .. ... 10 @c_sqsp ?!pred_rv64_capmode
-  fsd             101   ......  ..... 10 @c_sdsp ?!pred_rv64_capmode
+  c_fsd           101   ......  ..... 10 @c_sdsp ?!pred_rv64_capmode
   sc              101   ......  ..... 10 @c_sqsp ?pred_rv64_capmode
 }
 {
