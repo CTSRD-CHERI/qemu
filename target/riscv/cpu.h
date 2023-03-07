@@ -508,6 +508,10 @@ struct RISCVCPUConfig {
     bool ext_zbb;
     bool ext_zbc;
     bool ext_zbs;
+    bool ext_zca;
+    bool ext_zcb;
+    bool ext_zcd;
+    bool ext_zcf;
     bool ext_counters;
     bool ext_ifencei;
     bool ext_icsr;
