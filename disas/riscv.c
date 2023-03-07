@@ -157,7 +157,11 @@ typedef enum {
     rv_codec_css_sdsp,
     rv_codec_css_sqsp,
     rv_codec_scbndsi,
-    rv_codec_cbo_rs1
+    rv_codec_cbo_rs1,
+    rv_codec_zcb_ext,
+    rv_codec_zcb_mul,
+    rv_codec_zcb_lb,
+    rv_codec_zcb_lh,
 } rv_codec;
 
 typedef enum {
@@ -523,8 +527,21 @@ typedef enum {
     rv_op_bclr = 359,
     rv_op_binv = 360,
     rv_op_bext = 361,
+// zc Compressed instructions
+    rv_op_c_zext_b = 362,
+    rv_op_c_sext_b = 363,
+    rv_op_c_zext_h = 364,
+    rv_op_c_sext_h = 365,
+    rv_op_c_zext_w = 366,
+    rv_op_c_not = 367,
+    rv_op_c_mul = 368,
+    rv_op_c_lbu = 369,
+    rv_op_c_lhu = 370,
+    rv_op_c_lh = 371,
+    rv_op_c_sb = 372,
+    rv_op_c_sh = 373,
     // CHERI:
-    rv_op_auipcc = 362,
+    rv_op_auipcc = 374,
     rv_op_lc,
     rv_op_clc,
     rv_op_clb,
@@ -778,6 +795,7 @@ static const char rv_freg_name_sym[32][5] = {
 #define rv_fmt_cbo_rs1                "O\t1"
 #define rv_fmt_cbo_cs1                "O\tC1"
 
+#define rv_fmt_rs1_rs2_zce_ldst       "O\t2,i(1)"
 /* pseudo-instruction constraints */
 
 static const rvc_constraint rvcc_jal[] = { rvc_rd_eq_ra, rvc_end };
@@ -1366,6 +1384,19 @@ const rv_opcode_data opcode_data[] = {
     { "binv", rv_codec_r, rv_fmt_rd_rs1_rs2, NULL, 0, 0, 0 },
     { "bext", rv_codec_r, rv_fmt_rd_rs1_rs2, NULL, 0, 0, 0 },
 
+    { "c.zext.b", rv_codec_zcb_ext, rv_fmt_rd, NULL, 0 },
+    { "c.sext.b", rv_codec_zcb_ext, rv_fmt_rd, NULL, 0 },
+    { "c.zext.h", rv_codec_zcb_ext, rv_fmt_rd, NULL, 0 },
+    { "c.sext.h", rv_codec_zcb_ext, rv_fmt_rd, NULL, 0 },
+    { "c.zext.w", rv_codec_zcb_ext, rv_fmt_rd, NULL, 0 },
+    { "c.not", rv_codec_zcb_ext, rv_fmt_rd, NULL, 0 },
+    { "c.mul", rv_codec_zcb_mul, rv_fmt_rd_rs2, NULL, 0, 0 },
+    { "c.lbu", rv_codec_zcb_lb, rv_fmt_rs1_rs2_zce_ldst, NULL, 0, 0, 0 },
+    { "c.lhu", rv_codec_zcb_lh, rv_fmt_rs1_rs2_zce_ldst, NULL, 0, 0, 0 },
+    { "c.lh", rv_codec_zcb_lh, rv_fmt_rs1_rs2_zce_ldst, NULL, 0, 0, 0 },
+    { "c.sb", rv_codec_zcb_lb, rv_fmt_rs1_rs2_zce_ldst, NULL, 0, 0, 0 },
+    { "c.sh", rv_codec_zcb_lh, rv_fmt_rs1_rs2_zce_ldst, NULL, 0, 0, 0 },
+
     // CHERI extensions
     [rv_op_auipcc] = { "auipcc", rv_codec_u, rv_fmt_cd_offset, NULL, 0, 0, 0 },
     [rv_op_lc] = { "lc", rv_codec_i, rv_fmt_cd_offset_rs1, NULL, 0, 0, 0 },
@@ -1814,6 +1845,24 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
                 op = rv_op_c_ld;
             }
             break;
+        case 4:
+            switch ((inst >> 10) & 0b111) {
+            case 0: op = rv_op_c_lbu; break;
+            case 1:
+                if (((inst >> 6) & 1) == 0) {
+                    op = rv_op_c_lhu;
+                } else {
+                    op = rv_op_c_lh;
+                }
+                break;
+            case 2: op = rv_op_c_sb; break;
+            case 3:
+                if (((inst >> 6) & 1) == 0) {
+                    op = rv_op_c_sh;
+                }
+                break;
+            }
+            break;
         case 5:
             if (isa == rv128) {
                 op = rv_op_c_sq;
@@ -1871,6 +1920,17 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
                 case 3: op = rv_op_c_and; break;
                 case 4: op = rv_op_c_subw; break;
                 case 5: op = rv_op_c_addw; break;
+                case 6: op = rv_op_c_mul; break;
+                case 7:
+                    switch ((inst >> 2) & 0b111) {
+                    case 0: op = rv_op_c_zext_b; break;
+                    case 1: op = rv_op_c_sext_b; break;
+                    case 2: op = rv_op_c_zext_h; break;
+                    case 3: op = rv_op_c_sext_h; break;
+                    case 4: op = rv_op_c_zext_w; break;
+                    case 5: op = rv_op_c_not; break;
+                    }
+                    break;
                 }
                 break;
             }
@@ -2889,6 +2949,18 @@ static uint32_t operand_uimm20(rv_inst inst)
     return (inst << 39) >> 59;
 }
 
+static uint32_t operand_uimm_c_lb(rv_inst inst)
+{
+    return (((inst << 58) >> 63) << 1) |
+        ((inst << 57) >> 63);
+}
+
+static uint32_t operand_uimm_c_lh(rv_inst inst)
+{
+    return (((inst << 58) >> 63) << 1);
+}
+
+
 /* decode operands */
 
 static void decode_inst_operands(rv_decode *dec)
@@ -3176,6 +3248,23 @@ static void decode_inst_operands(rv_decode *dec)
         break;
     case rv_codec_cbo_rs1:
         dec->rs1 = operand_rs1(inst);
+        break;
+    case rv_codec_zcb_lb:
+        dec->rs1 = operand_crs1q(inst) + 8;
+        dec->rs2 = operand_crs2q(inst) + 8;
+        dec->imm = operand_uimm_c_lb(inst);
+        break;
+    case rv_codec_zcb_lh:
+        dec->rs1 = operand_crs1q(inst) + 8;
+        dec->rs2 = operand_crs2q(inst) + 8;
+        dec->imm = operand_uimm_c_lh(inst);
+        break;
+    case rv_codec_zcb_ext:
+        dec->rd = operand_crs1q(inst) + 8;
+        break;
+    case rv_codec_zcb_mul:
+        dec->rd = operand_crs1rdq(inst) + 8;
+        dec->rs2 = operand_crs2q(inst) + 8;
         break;
     };
 }
