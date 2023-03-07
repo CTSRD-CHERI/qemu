@@ -1310,6 +1310,7 @@ get_capmode_dependent_rmw_addr(DisasContext *ctx, int reg_num,
 
 /* Include the auto-generated decoder for 16 bit insn */
 #include "decode-insn16.c.inc"
+#include "insn_trans/trans_rvzce.c.inc"
 /* Include decoders for factored-out extensions */
 #include "decode-XVentanaCondOps.c.inc"
 
