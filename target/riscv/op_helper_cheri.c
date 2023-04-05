@@ -453,3 +453,11 @@ target_ulong HELPER(sc_c_cap)(CPUArchState *env, uint32_t addr_reg, uint32_t val
 {
     return sc_c_impl(env, addr_reg, val_reg, /*offset=*/0, GETPC());
 }
+
+/* Helpers for experimental instructions. */
+target_ulong HELPER(ctestdereferenceable)(CPUArchState *env, uint32_t addr_reg)
+{
+    const cap_register_t *cbp = get_readonly_capreg(env, addr_reg);
+
+    return cbp->cr_tag && cap_is_unsealed(cbp) && cap_cursor_in_bounds(cbp);
+}
