@@ -61,9 +61,6 @@ unsigned long gen_track_uuid();
 perfetto::protos::pbzero::QEMULogEntryModeSwitch
 qemu_cpu_mode_to_trace(qemu_log_instr_cpu_mode_t mode);
 
-extern const std::array<const std::string, QEMU_LOG_INSTR_DBG_MAX>
-    debug_counter_names;
-
 /*
  * Custom track representing a QEMU guest context.
  */
@@ -214,13 +211,6 @@ struct qemu_fallback_state : public qemu_tracker_state {
     ~qemu_fallback_state()
     {
         perfetto::TrackEvent::EraseTrackDescriptor(track);
-    }
-
-    perfetto::CounterTrack
-    get_debug_counter_track(QEMUDebugCounter counter_index)
-    {
-        return perfetto::CounterTrack(
-            debug_counter_names[counter_index].c_str(), track);
     }
 
     perfetto::Track *get_track()
