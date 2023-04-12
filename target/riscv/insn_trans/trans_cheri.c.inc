@@ -209,12 +209,11 @@ static inline bool trans_candpermuserdata(DisasContext *ctx,
 {
     TCGv_i32 source_regnum = tcg_const_i32(a->rs1);
     TCGv_i32 dest_regnum = tcg_const_i32(a->rd);
-    TCGv gpr = tcg_temp_new();
-    gen_set_gpr(gpr, CAP_PERMS_USERSPACE_DATA & ~CAP_PERM_SW_VMEM);
-    gen_helper_candperm(cpu_env, dest_regnum, source_regnum, gpr);
-    tcg_temp_free(gpr);
+    TCGv perms = tcg_const_tl(CAP_PERMS_USERSPACE_DATA & ~CAP_PERM_SW_VMEM);
+    gen_helper_candperm(cpu_env, dest_regnum, source_regnum, perms);
     tcg_temp_free_i32(dest_regnum);
     tcg_temp_free_i32(source_regnum);
+    tcg_temp_free(perms);
     return true;
 }
 
