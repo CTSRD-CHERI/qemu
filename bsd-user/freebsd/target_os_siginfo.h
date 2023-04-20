@@ -35,7 +35,7 @@ typedef struct {
 } target_sigset_t;
 
 struct target_sigaction {
-    abi_uintptr_t   _sa_handler;
+    abi_uintcap_t   _sa_handler;
     abi_int         sa_flags;
     target_sigset_t sa_mask;
 };

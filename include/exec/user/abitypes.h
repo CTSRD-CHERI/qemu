@@ -9,7 +9,7 @@
 #define TARGET_ABI_BITS TARGET_LONG_BITS
 #endif
 
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 #define ABI_PTR_SIZE    CHERI_CAP_SIZE
 #else
 #define ABI_PTR_SIZE    (TARGET_ABI_BITS / 8)
@@ -78,42 +78,50 @@ typedef struct {
     uint64_t cursor;
     uint64_t pesbt;
 } abi_uintcap_t __attribute__ ((aligned(CHERI_CAP_SIZE)));
-typedef abi_uintcap_t abi_uintptr_t;
+#define uintcap_vaddr(x) ((abi_vaddr_t)(x).cursor)
+#define vaddr_uintcap(x) (cheri_uintcap(cheri_setaddress(cheri_zerocap(), (x))))
+#endif
 
+#ifdef TARGET_CHERI_PURE_CAPABILITY
+typedef abi_uintcap_t abi_uintptr_t;
+#define uintptr_vaddr uintcap_vaddr
+#define vaddr_uintptr vaddr_uintcap
+#else
+typedef abi_long abi_uintptr_t __attribute__((aligned(ABI_LONG_ALIGNMENT)));
+#define uintptr_vaddr(x) ((abi_vaddr_t)(x))
+#define vaddr_uintptr(x) ((abi_uintptr_t)(x))
+#endif
+
+#ifdef TARGET_CHERI
 #if CHERI_CAP_BITS == 128 && !defined(TARGET_WORDS_BIGENDIAN)
+/* XXXKW: should these define to cap_register_t for the hybrid ABI? */
 typedef const cap_register_t * abi_syscallarg_t;
 typedef cap_register_t * abi_syscallret_t;
 #else
 #error abi_syscallarg_t and abi_syscallret_t are defined only for little endian CHERI128
 #endif
 #else /* !TARGET_CHERI */
-typedef abi_long abi_uintptr_t __attribute__((aligned(ABI_LONG_ALIGNMENT)));
-typedef abi_uintptr_t abi_uintcap_t;
-
 typedef abi_long * abi_syscallarg_t;
 typedef abi_long * abi_syscallret_t;
 #endif /* TARGET_CHERI */
 
 #ifdef TARGET_CHERI
-#define uintptr_vaddr(x) ((abi_vaddr_t)(x).cursor)
-#define vaddr_uintptr(x) (cheri_uintptr(cheri_setaddress(cheri_zerocap(), (x))))
-
 /*
  * XXXKW: QEMU uses NULL for a non-existing system call argument.
  */
 #define syscallarg_value(sa)   ((abi_long)((sa != NULL) ? (sa)->_cr_cursor : 0))
 #define syscallret_value(sa)   ((abi_long)(sa)->_cr_cursor)
-
-#define syscallarg_uintptr(sa) (cheri_uintptr(sa))
 #else
-#define uintptr_vaddr(x) ((abi_vaddr_t)(x))
-#define vaddr_uintptr(x) ((abi_uintptr_t)(x))
-
 #define syscallarg_value(sa) ((abi_long)(sa != NULL) ? *(sa) : 0)
 #define syscallret_value(sa) (*(sa))
-
-#define syscallarg_uintptr(sa) ((abi_uintptr_t)(*(sa)))
 #endif
+
+#ifdef TARGET_CHERI_PURE_CAPABILITY
+#define syscallarg_uintptr(sa) (cheri_uintptr(sa))
+#else
+#define syscallarg_uintptr(sa) ((abi_uintptr_t)syscallarg_value(sa))
+#endif
+
 #define syscallarg_int(sa)     ((abi_long)syscallarg_value(sa))
 
 static inline abi_ulong tswapal(abi_ulong v)
@@ -122,8 +130,8 @@ static inline abi_ulong tswapal(abi_ulong v)
 }
 
 #ifdef TARGET_CHERI
-static inline abi_uintptr_t
-tswapuintptr(abi_uintptr_t v)
+static inline abi_uintcap_t
+tswapuintcap(abi_uintcap_t v)
 {
 
     v.cursor = tswapal(v.cursor);
@@ -131,6 +139,10 @@ tswapuintptr(abi_uintptr_t v)
 
     return (v);
 }
+#endif
+
+#ifdef TARGET_CHERI_PURE_CAPABILITY
+#define tswapuintptr(v) ((abi_uintptr_t)tswapuintcap(v))
 #else
 #define tswapuintptr tswapal
 #endif

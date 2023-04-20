@@ -42,8 +42,10 @@ static inline void target_cpu_init(CPUARMState *env,
         fprintf(stderr, "The selected ARM CPU does not support 64 bit mode\n");
         exit(1);
     }
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     pstate_write(env, pstate_read(env) | PSTATE_C64);
+#endif
+#ifdef TARGET_CHERI
     arm_rebuild_chflags(env);
 
     for (i = 0; i < 31; i++) {
@@ -90,7 +92,7 @@ target_cpu_fetch_syscall_args(CPUARMState *env,
         sa->code == TARGET_FREEBSD_NR___syscall) {
         sa->code = target_syscallarg_value(env, aii++);
 
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         stack_args = arm_get_xreg(env, 9);
 #endif
     } else {
@@ -293,7 +295,7 @@ static inline void target_cpu_clone_regs(CPUARMState *env, target_ulong newsp)
     uint32_t pstate;
 
     pstate = 0;
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     pstate |= PSTATE_C64;
 #endif
 

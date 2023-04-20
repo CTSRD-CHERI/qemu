@@ -509,7 +509,7 @@ int main(int argc, char **argv)
 
     if (loader_exec(filename, argv+optind, target_environ, regs,
 #ifdef TARGET_CHERI
-        &ts->cheri_sigcode_cap,
+        cheri_get_ddc(env), &ts->cheri_sigcode_cap,
 #endif
         info, &bprm)) {
         printf("Error loading %s\n", filename);

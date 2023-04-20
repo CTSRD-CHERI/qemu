@@ -2296,13 +2296,13 @@ static int load_aout_interp(void * exptr, int interp_fd)
 
 void do_init_thread(struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-    cap_register_t *sigcodecapp,
+    const cap_register_t *ddc, cap_register_t *sigcodecapp,
 #endif
     struct image_info *infop)
 {
 
 #ifdef TARGET_CHERI
-    target_thread_init(regs, sigcodecapp, infop);
+    target_thread_init(regs, ddc, sigcodecapp, infop);
 #else
     target_thread_init(regs, infop);
 #endif

@@ -48,6 +48,7 @@ cap_register_t    *cheri_zerocap(void);
 cap_register_t    *cheri_ptr(const void *ptr, size_t len);
 #define cheri_ptr_to_bounded_cap(ptr) cheri_ptr((ptr), sizeof(*(ptr)))
 cap_register_t    *cheri_ptr_to_unbounded_cap(const void *ptr);
+abi_uintcap_t      cheri_uintcap(const cap_register_t *cap);
 abi_uintptr_t      cheri_uintptr(const cap_register_t *cap);
 
 cap_register_t    *cheri_load(cap_register_t *cap, const abi_uintcap_t *value);
@@ -72,6 +73,7 @@ cap_register_t    *cheri_setflags(cap_register_t *cap, target_ulong flags);
 
 cap_register_t    *cheri_sealentry(cap_register_t *cap);
 
+cap_register_t    *cheri_fromddc(const cap_register_t *ddc, abi_ulong ptr);
 cap_register_t    *cheri_fromint(abi_int value);
 
 /* Get the top of a capability (i.e. one byte past the last accessible one) */

@@ -86,14 +86,30 @@ cheri_ptr(const void *ptr, size_t len)
     return (cheri_setbounds(cheri_ptr_to_unbounded_cap(ptr), len));
 }
 
+abi_uintcap_t
+cheri_uintcap(const cap_register_t *cap)
+{
+    abi_uintcap_t uintcap;
+
+    cheri_store(&uintcap, cap);
+    return (uintcap);
+}
+
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 abi_uintptr_t
 cheri_uintptr(const cap_register_t *cap)
 {
-    abi_uintptr_t uintptr;
 
-    cheri_store(&uintptr, cap);
-    return (uintptr);
+    return ((abi_uintptr_t)cheri_uintcap(cap));
 }
+#else
+abi_uintptr_t
+cheri_uintptr(const cap_register_t *cap)
+{
+
+    return ((abi_uintptr_t)cap_get_cursor(cap));
+}
+#endif
 
 cap_register_t *
 cheri_load(cap_register_t *cap, const abi_uintcap_t *value)
@@ -215,6 +231,15 @@ cheri_sealentry(cap_register_t *cap)
 
     cap_make_sealed_entry(cap);
     return (cap);
+}
+
+cap_register_t *
+cheri_fromddc(const cap_register_t *ddc, abi_ulong ptr)
+{
+    static cap_register_t cap;
+
+    cap = *ddc;
+    return (cheri_setaddress(&cap, (intptr_t)ptr));
 }
 
 cap_register_t *

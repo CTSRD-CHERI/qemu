@@ -172,7 +172,12 @@ set_sigtramp_args(CPUARMState *regs, TaskState *ts, int sig,
     cheri_prepare_pcc(&cap, regs);
     update_capreg(regs, TARGET_REG_SP, cheri_setaddress(cheri_zerocap(),
         (uintptr_t)frame_addr));
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     update_capreg(regs, TARGET_REG_LR, &ts->cheri_sigcode_cap);
+#else
+    update_capreg(regs, TARGET_REG_LR, cheri_setaddress(cheri_zerocap(),
+        (uintptr_t)(TARGET_PS_STRINGS - TARGET_SZSIGCODE)));
+#endif
 #else
     regs->xregs[0] = sig;
     regs->xregs[1] = frame_addr +

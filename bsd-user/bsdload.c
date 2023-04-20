@@ -20,7 +20,7 @@
 #include "qemu.h"
 #include "qemu/error-report.h"
 
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 #include "cheri/cheric.h"
 #endif
 
@@ -133,7 +133,7 @@ abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
     while (argc-- > 0) {
         len = target_strlen(stringp) + 1;
         /* FIXME - handle put_user() failures */
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         put_user_c(cheri_ptr((void *)(intptr_t)stringp, len), argv);
 #else
         put_user_p(stringp, argv);
@@ -147,7 +147,7 @@ abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
     while (envc-- > 0) {
         len = target_strlen(stringp) + 1;
         /* FIXME - handle put_user() failures */
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         put_user_c(cheri_ptr((void *)(intptr_t)stringp, len), envp);
 #else
         put_user_p(stringp, envp);
@@ -211,7 +211,7 @@ static int find_in_path(char *path, const char *filename, char *retpath,
 int loader_exec(const char * filename, char ** argv, char ** envp,
              struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-             cap_register_t *sigcodecapp,
+             const cap_register_t *ddc, cap_register_t *sigcodecapp,
 #endif
              struct image_info *infop, struct bsd_binprm *bprm)
 {
@@ -283,7 +283,7 @@ int loader_exec(const char * filename, char ** argv, char ** envp,
     if(retval>=0) {
         /* success.  Initialize important registers */
 #ifdef TARGET_CHERI
-        do_init_thread(regs, sigcodecapp, infop);
+        do_init_thread(regs, ddc, sigcodecapp, infop);
 #else
         do_init_thread(regs, infop);
 #endif

@@ -34,7 +34,7 @@
  * in sigaltstack(2).
  */
 static target_stack_t target_sigaltstack_used = {
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     .ss_sp = {},
 #else
     .ss_sp = 0,
@@ -699,13 +699,13 @@ int do_sigaction(int sig, const struct target_sigaction *act,
 
     k = &sigact_table[sig - 1];
     if (oact) {
-        oact->_sa_handler = tswapuintptr(k->_sa_handler);
+        oact->_sa_handler = tswapuintcap(k->_sa_handler);
         oact->sa_flags = tswap32(k->sa_flags);
         oact->sa_mask = k->sa_mask;
     }
     if (act) {
         /* XXX: this is most likely not threadsafe. */
-        k->_sa_handler = tswapuintptr(act->_sa_handler);
+        k->_sa_handler = tswapuintcap(act->_sa_handler);
         k->sa_flags = tswap32(act->sa_flags);
         k->sa_mask = act->sa_mask;
 
@@ -722,9 +722,9 @@ int do_sigaction(int sig, const struct target_sigaction *act,
              *  Note: It is important to update the host kernel signal mask to
              *  avoid getting unexpected interrupted system calls.
              */
-            if (uintptr_vaddr(k->_sa_handler) == TARGET_SIG_IGN) {
+            if (uintcap_vaddr(k->_sa_handler) == TARGET_SIG_IGN) {
                 act1.sa_sigaction = (void *)SIG_IGN;
-            } else if (uintptr_vaddr(k->_sa_handler) == TARGET_SIG_DFL) {
+            } else if (uintcap_vaddr(k->_sa_handler) == TARGET_SIG_DFL) {
                 if (fatal_signal(sig)) {
                     act1.sa_sigaction = host_signal_handler;
                 } else {
@@ -947,10 +947,10 @@ void signal_init(void)
         sigaction(host_sig, NULL, &oact);
         if (oact.sa_sigaction == (void *)SIG_IGN) {
             sigact_table[i - 1]._sa_handler =
-                vaddr_uintptr((abi_vaddr_t)TARGET_SIG_IGN);
+                vaddr_uintcap((abi_vaddr_t)TARGET_SIG_IGN);
         } else if (oact.sa_sigaction == (void *)SIG_DFL) {
             sigact_table[i - 1]._sa_handler =
-                vaddr_uintptr((abi_vaddr_t)TARGET_SIG_DFL);
+                vaddr_uintcap((abi_vaddr_t)TARGET_SIG_DFL);
         }
         /*
          * If there's already a handler installed then something has
@@ -994,7 +994,7 @@ static void handle_pending_signal(CPUArchState *cpu_env, int sig,
         handler = TARGET_SIG_IGN;
     } else {
         sa = &sigact_table[sig - 1];
-        handler = uintptr_vaddr(sa->_sa_handler);
+        handler = uintcap_vaddr(sa->_sa_handler);
     }
 
     if (do_strace) {
@@ -1064,7 +1064,7 @@ static void handle_pending_signal(CPUArchState *cpu_env, int sig,
             setup_frame(sig, code, sa, &target_old_set, NULL, cpu_env);
         }
         if (sa->sa_flags & TARGET_SA_RESETHAND) {
-            sa->_sa_handler = vaddr_uintptr((abi_vaddr_t)TARGET_SIG_DFL);
+            sa->_sa_handler = vaddr_uintcap((abi_vaddr_t)TARGET_SIG_DFL);
         }
     }
     if (q != &k->info) {

@@ -50,7 +50,11 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
     abi_ulong stack_hi_addr;
     size_t execpath_len, stringspace;
     abi_ulong destp, argvp, envp, p;
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     abi_uintptr_t destuintp;
+#else
+    uintptr_t destuintp;
+#endif
     struct target_ps_strings ps_strs;
     char canary[sizeof(abi_long) * 8];
 
@@ -139,7 +143,7 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
             errno = EFAULT;
             return -1;
         }
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         destuintp = cheri_uintptr(cheri_ptr((void *)(uintptr_t)destp, len));
 #else
         destuintp = (uintptr_t)destp;
@@ -151,7 +155,7 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
         argvp += ABI_PTR_SIZE;
         destp += len;
     }
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     destuintp = cheri_uintptr(cheri_zerocap());
 #else
     destuintp = (uintptr_t)0;
@@ -180,7 +184,7 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
             errno = EFAULT;
             return -1;
         }
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         destuintp = cheri_uintptr(cheri_ptr((void *)(uintptr_t)destp, len));
 #else
         destuintp = (uintptr_t)destp;
@@ -192,7 +196,7 @@ static inline int setup_initial_stack(struct bsd_binprm *bprm,
         envp += ABI_PTR_SIZE;
         destp += len;
     }
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     destuintp = cheri_uintptr(cheri_zerocap());
 #else
     destuintp = (uintptr_t)0;

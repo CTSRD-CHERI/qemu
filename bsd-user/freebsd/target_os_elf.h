@@ -23,7 +23,7 @@
 #include "elf.h"
 
 #include "bsd-proc.h"
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 #include "cheri/cherireg.h"
 #include "cheri/cheric.h"
 #include "cheri/cheri.h"
@@ -96,7 +96,7 @@ struct exec
 
 #define DLINFO_ITEMS 14
 
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 /*
  * prog_cap() is ported from sys/kern/imgact_elf.c in CTSRD-CHERI/CheriBSD.
  */
@@ -155,12 +155,12 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         abi_ulong features, sp;
         int size;
         int typesize, valsize;
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         cap_register_t *entryp, exec_base;
         target_ulong dstauxents;
 #endif
 
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         assert(ibcs);
         /*
          * Elf64C_Auxinfo.a_type with padding because Elf64C_Auxinfo.a_un is
@@ -184,7 +184,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         if (size & 15)
             sp -= 16 - (size & 15);
 
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 #define NEW_AUX_ENT(type, val) do {                                          \
             sp -= valsize; put_user_s64(val, sp); put_user_u64(0, sp + 8);   \
             sp -= typesize; put_user_s64(type, sp); put_user_u64(0, sp + 8); \
@@ -210,7 +210,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
 
         /* There must be exactly DLINFO_ITEMS entries here.  */
 
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         NEW_AUX_ENT_PTR(AT_PHDR, cheri_setaddress(prog_cap(info,
             CHERI_CAP_USER_DATA_PERMS | CHERI_PERM_CHERIABI_VMMAP),
             load_addr + exec->e_phoff));
@@ -220,7 +220,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         NEW_AUX_ENT(AT_PHENT, (abi_ulong)(sizeof (struct elf_phdr)));
         NEW_AUX_ENT(AT_PHNUM, (abi_ulong)(exec->e_phnum));
         NEW_AUX_ENT(AT_PAGESZ, (abi_ulong)(TARGET_PAGE_SIZE));
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         if (info->interp_end == 0) {
             if (exec->e_type != ET_DYN) {
                 exec_base = *cheri_zerocap();
@@ -239,7 +239,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
 #endif
         NEW_AUX_ENT(AT_FLAGS, (abi_ulong)0);
         NEW_AUX_ENT(FREEBSD_AT_NCPUS, (abi_ulong)bsd_get_ncpu());
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         entryp = cheri_setaddress(prog_cap(info, CHERI_CAP_USER_CODE_PERMS),
             load_bias + exec->e_entry);
 #ifdef CHERI_FLAGS_CAP_MODE
@@ -264,7 +264,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         }
 #endif
         NEW_AUX_ENT(FREEBSD_AT_HWCAP, features);
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
         dstauxents = sp - 4 * (typesize + valsize);
         NEW_AUX_ENT(AT_ARGC, (target_ulong)argc);
         NEW_AUX_ENT_PTR(AT_ARGV, cheri_ptr((void *)(dstauxents -
@@ -280,7 +280,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
         NEW_AUX_ENT(AT_GID, (abi_ulong) getgid());
         NEW_AUX_ENT(AT_EGID, (abi_ulong) getegid());
 #endif
-#endif /* TARGET_CHERI */
+#endif /* TARGET_CHERI_PURE_CAPABILITY */
 	target_auxents = sp; /* Note where the aux entries are in the target */
 #ifdef ARCH_DLINFO
         /*
@@ -289,7 +289,7 @@ static abi_ulong target_create_elf_tables(abi_ulong p, int argc, int envc,
          */
         ARCH_DLINFO;
 #endif
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 #undef NEW_AUX_ENT_PTR
 #endif
 #undef NEW_AUX_ENT

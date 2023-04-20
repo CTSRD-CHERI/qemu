@@ -39,7 +39,7 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
         sizeof(struct target_trapframe)) & ~(16 - 1);
 
     pstate = PSTATE_MODE_EL0t;
-#ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     pstate |= PSTATE_C64;
 #endif
     /*
@@ -66,13 +66,13 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
  */
 static inline void target_thread_init(struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-        cap_register_t *sigcodecapp,
+        const cap_register_t *ddc, cap_register_t *sigcodecapp,
 #endif
         struct image_info *infop)
 {
 
 #ifdef TARGET_CHERI
-    /* XXXKW: Check SV_CHERI. */
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     (void)cheri_auxv_capability(&regs->regs[0]);
     (void)cheri_exec_stack_pointer(cheri_andperm(&regs->sp,
         CHERI_CAP_USER_DATA_PERMS), infop->start_stack);
@@ -80,11 +80,17 @@ static inline void target_thread_init(struct target_pt_regs *regs,
     (void)cheri_exec_pcc(&regs->regs[30], infop);
     regs->pc = regs->regs[30];
     (void)cheri_sigcode_capability(sigcodecapp);
-#else
+#else /* TARGET_CHERI_PURE_CAPABILITY */
+    regs->regs[0] = *cheri_fromddc(ddc, infop->start_stack);
+    regs->sp = *cheri_fromddc(ddc, infop->start_stack & ~(16 - 1));
+    (void)cheri_exec_pcc(&regs->regs[30], infop);
+    regs->pc = regs->regs[30];
+#endif /* !TARGET_CHERI_PURE_CAPABILITY */
+#else /* TARGET_CHERI */
     regs->regs[0] = infop->start_stack;
     regs->pc = infop->entry &  ~0x3ULL;
     regs->sp = infop->start_stack & ~(16 - 1);
-#endif
+#endif /* !TARGET_CHERI */
 }
 
 #endif /* !_TARGET_ARCH_THREAD_H_ */

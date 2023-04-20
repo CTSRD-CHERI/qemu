@@ -1068,6 +1068,7 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
     tb_invalidate_phys_range(start, start + len);
     mmap_unlock();
 #ifdef TARGET_CHERI
+#ifdef TARGET_CHERI_PURE_CAPABILITY
     if (ts != NULL) {
         /*
          * An emulated process called mmap(2).
@@ -1075,7 +1076,9 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
          * XXXKW: We should check SV_CHERI instead as in CheriBSD.
          */
         *retval = mmap_retcap(start, mrp);
-    } else {
+    } else
+#endif
+    {
         /*
          * The QEMU user mode called mmap(2), e.g. to build a stack.
          */

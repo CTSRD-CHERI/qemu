@@ -193,7 +193,7 @@ struct bsd_binprm {
 
 void do_init_thread(struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-    cap_register_t *sigcodecapp,
+    const cap_register_t *ddc, cap_register_t *sigcodecapp,
 #endif
     struct image_info *infop);
 abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
@@ -201,7 +201,7 @@ abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
 int loader_exec(const char *filename, char **argv, char **envp,
              struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
-             cap_register_t *sigcodecapp,
+             const cap_register_t *ddc, cap_register_t *sigcodecapp,
 #endif
              struct image_info *infop, struct bsd_binprm *bprm);
 
@@ -590,7 +590,8 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define put_user_s16(x, gaddr) put_user((x), (gaddr), int16_t)
 #define put_user_u8(x, gaddr)  put_user((x), (gaddr), uint8_t)
 #define put_user_s8(x, gaddr)  put_user((x), (gaddr), int8_t)
-#ifdef TARGET_CHERI
+
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 #define put_user_c(x, gaddr)                                            \
 ({                                                                      \
     abi_ulong __gaddr = (gaddr);                                        \
@@ -617,6 +618,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #else
 #define put_user_p(x, gaddr) put_user_ual(x, gaddr)
 #endif
+
 #ifdef TARGET_CHERI
 #define put_user_uintcap(x, gaddr)                                      \
 ({                                                                      \
@@ -635,6 +637,9 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
         __ret = -TARGET_EFAULT;                                         \
     __ret;                                                              \
 })
+#endif
+
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 #define put_user_uintptr(x, gaddr) put_user_uintcap(x, gaddr)
 #else
 #define put_user_uintptr(x, gaddr) put_user_ual(x, gaddr)
@@ -650,6 +655,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define get_user_s16(x, gaddr) get_user((x), (gaddr), int16_t)
 #define get_user_u8(x, gaddr)  get_user((x), (gaddr), uint8_t)
 #define get_user_s8(x, gaddr)  get_user((x), (gaddr), int8_t)
+
 #ifdef TARGET_CHERI
 #define get_user_uintcap(x, gaddr)                                      \
 ({                                                                      \
@@ -672,6 +678,9 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
     }                                                                   \
     __ret;                                                              \
 })
+#endif
+
+#ifdef TARGET_CHERI_PURE_CAPABILITY
 #define get_user_uintptr(x, gaddr)  get_user_uintcap(x, gaddr)
 #else
 #define get_user_uintptr(x, gaddr)  get_user_ual((x), (gaddr))
