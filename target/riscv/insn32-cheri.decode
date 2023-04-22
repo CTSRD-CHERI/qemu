@@ -57,6 +57,8 @@ ccopytype   0011110  ..... ..... 000 ..... 1011011 @r
 ccseal      0011111  ..... ..... 000 ..... 1011011 @r
 ctestsubset 0100000  ..... ..... 000 ..... 1011011 @r
 cseqx       0100001  ..... ..... 000 ..... 1011011 @r
+candaddr    0100010  ..... ..... 000 ..... 1011011 @r
+
 # 1111011 unused
 # 1111100 Used for Stores (see below)
 # 1111101 Used for Loads (see below)
@@ -85,9 +87,9 @@ cgetaddr    1111111  01111 ..... 000 ..... 1011011 @r2
 # fpclear   1111111  10000 ..... 000 ..... 1011011 @r2
 csealentry  1111111  10001 ..... 000 ..... 1011011 @r2
 cloadtags   1111111  10010 ..... 000 ..... 1011011 @r2
+ctestdereferenceable 1111111  10011 ..... 000 ..... 1011011 @r2
 jalr_pcc    1111111  10100 ..... 000 ..... 1011011 @r2
-
-
+candpermuserdata 1111111  10101 ..... 000 ..... 1011011 @r2
 
 # There is an existing @sfence_vma format with rs1+rs2 fields, but let's define a new name
 @r_2source ....... ..... .....   ... ..... ....... %rs2 %rs1

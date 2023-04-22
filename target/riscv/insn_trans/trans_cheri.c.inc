@@ -166,6 +166,9 @@ TRANSLATE_INT_CAP(cgetsealed)
 
 TRANSLATE_INT_CAP(cloadtags)
 
+// experimental ctestdereferenceable
+TRANSLATE_INT_CAP(ctestdereferenceable)
+
 // Two operand (int int)
 static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)
 {
@@ -180,6 +183,39 @@ static inline bool trans_cram(DisasContext *ctx, arg_cram *a)
 TRANSLATE_CAP_CAP(ccleartag)
 TRANSLATE_CAP_CAP(cmove)
 TRANSLATE_CAP_CAP(csealentry)
+
+// experimental candpermuserdata
+
+/* User-defined permission bits. */
+#define CAP_PERM_SW0     (1 << 15) /* 0x00008000 */
+#define CAP_PERM_SW1     (1 << 16) /* 0x00010000 */
+#define CAP_PERM_SW2     (1 << 17) /* 0x00020000 */
+#define CAP_PERM_SW3     (1 << 18) /* 0x00040000 */
+#define CAP_PERM_SW_VMEM CAP_PERM_SW1
+
+#define CAP_PERMS_SWALL                                                        \
+    (CAP_PERM_SW0 | CAP_PERM_SW1 | CAP_PERM_SW2 | CAP_PERM_SW3)
+
+#define CAP_PERMS_USERSPACE                                                    \
+    (CAP_PERM_GLOBAL | CAP_PERM_LOAD | CAP_PERM_LOAD_CAP | CAP_PERM_CINVOKE |  \
+     (CAP_PERMS_SWALL & ~CAP_PERM_SW_VMEM))
+
+#define CAP_PERMS_USERSPACE_DATA                                               \
+    (CAP_PERMS_USERSPACE | CAP_PERM_STORE | CAP_PERM_STORE_CAP |               \
+     CAP_PERM_STORE_LOCAL)
+
+static inline bool trans_candpermuserdata(DisasContext *ctx,
+                                          arg_candpermuserdata *a)
+{
+    TCGv_i32 source_regnum = tcg_const_i32(a->rs1);
+    TCGv_i32 dest_regnum = tcg_const_i32(a->rd);
+    TCGv perms = tcg_const_tl(CAP_PERMS_USERSPACE_DATA & ~CAP_PERM_SW_VMEM);
+    gen_helper_candperm(cpu_env, dest_regnum, source_regnum, perms);
+    tcg_temp_free_i32(dest_regnum);
+    tcg_temp_free_i32(source_regnum);
+    tcg_temp_free(perms);
+    return true;
+}
 
 // Three operand (cap cap cap)
 TRANSLATE_CAP_CAP_CAP(cbuildcap)
@@ -214,6 +250,9 @@ TRANSLATE_CAP_CAP_INT(csetbounds)
 TRANSLATE_CAP_CAP_INT(csetboundsexact)
 TRANSLATE_CAP_CAP_INT(csetflags)
 TRANSLATE_CAP_CAP_INT(csetoffset)
+
+// Add experimental CAndAddr instruction
+TRANSLATE_CAP_CAP_INT(candaddr)
 
 // Three operand (int cap cap)
 TRANSLATE_INT_CAP_CAP(csub)

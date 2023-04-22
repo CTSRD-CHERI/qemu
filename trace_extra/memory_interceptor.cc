@@ -38,6 +38,7 @@ DynamorioTraceInterceptor::ThreadLocalState::ThreadLocalState(
 }
 
 io::filtering_ostream DynamorioTraceInterceptor::mem_logfile;
+uint64_t DynamorioTraceInterceptor::instr_count = 0;
 
 void DynamorioTraceInterceptor::OnTracePacket(InterceptorContext context)
 {
@@ -57,6 +58,7 @@ void DynamorioTraceInterceptor::OnTracePacket(InterceptorContext context)
                     perfetto::protos::pbzero::Opcode::Decoder opcode(
                         instr.opcode_obj());
                     if (opcode.has_size()) {
+                        ++instr_count;
                         trace_entry_t entry;
                         entry.type = TRACE_TYPE_INSTR;
                         entry.addr = reinterpret_cast<addr_t>(instr.pc());
