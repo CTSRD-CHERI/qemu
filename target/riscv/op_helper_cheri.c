@@ -459,5 +459,5 @@ target_ulong HELPER(ctestdereferenceable)(CPUArchState *env, uint32_t addr_reg)
 {
     const cap_register_t *cbp = get_readonly_capreg(env, addr_reg);
 
-    return cbp->cr_tag && cap_is_unsealed(cbp) && cap_cursor_in_bounds(cbp);
+    return cbp->cr_tag && cap_is_unsealed(cbp) && cap_get_offset(cbp) == 0;
 }
