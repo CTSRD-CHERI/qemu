@@ -340,6 +340,9 @@ pvrdma=""
 gprof="no"
 debug_tcg="no"
 tcg_log_instr="yes"
+tcg_log_instr_perfetto="no"
+tcg_log_instr_protobuf="no"
+tcg_log_instr_json="no"
 rvfi_dii="no"
 debug="no"
 sanitizers="no"
@@ -1035,6 +1038,18 @@ for opt do
   --enable-tcg-log-instr) tcg_log_instr="yes"
   ;;
   --disable-tcg-log-instr) tcg_log_instr="no"
+  ;;
+  --enable-perfetto-log-instr) tcg_log_instr_perfetto="yes"
+  ;;
+  --disable-perfetto-log-instr) tcg_log_instr_perfetto="no"
+  ;;
+  --enable-protobuf-log-instr) tcg_log_instr_protobuf="yes"
+  ;;
+  --disable-protobuf-log-instr) tcg_log_instr_protobuf="no"
+  ;;
+  --enable-json-log-instr) tcg_log_instr_json="yes"
+  ;;
+  --disable-json-log-instr) tcg_log_instr_json="no"
   ;;
   --enable-rvfi-dii) rvfi_dii="yes"
   ;;
@@ -5967,6 +5982,15 @@ if test "$debug_tcg" = "yes" ; then
 fi
 if test "$tcg_log_instr" = "yes" ; then
   echo "CONFIG_TCG_LOG_INSTR=y" >> $config_host_mak
+fi
+if test "$tcg_log_instr_perfetto" = "yes" ; then
+    echo "CONFIG_TRACE_PERFETTO=y" >> $config_host_mak
+fi
+if test "$tcg_log_instr_protobuf" = "yes" ; then
+    echo "CONFIG_TRACE_PROTOBUF=y" >> $config_host_mak
+fi
+if test "$tcg_log_instr_json" = "yes" ; then
+    echo "CONFIG_TRACE_JSON=y" >> $config_host_mak
 fi
 if test "$rvfi_dii" = "yes" ; then
   echo "CONFIG_RVFI_DII=y" >> $config_host_mak

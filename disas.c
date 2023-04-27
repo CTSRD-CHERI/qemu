@@ -355,6 +355,90 @@ char *plugin_disas(CPUState *cpu, uint64_t addr, size_t size)
     return g_string_free(ds, false);
 }
 
+static inline void do_disas_one(CPUState *cpu, void *code, unsigned long size, target_ulong vma, fprintf_function dump_fn, void *dump_arg)
+{
+    CPUClass *cc = CPU_GET_CLASS(cpu);
+    CPUDebug s;
+
+    initialize_debug_target(&s, cpu);
+    s.info.read_memory_func = host_read_memory;
+    s.info.fprintf_func = dump_fn;
+    s.info.stream = (FILE *)dump_arg;  /* abuse this slot */
+    s.info.buffer = code;
+    s.info.buffer_vma = vma;
+    s.info.buffer_length = size;
+
+#ifdef TARGET_WORDS_BIGENDIAN
+    s.info.endian = BFD_ENDIAN_BIG;
+#else
+    s.info.endian = BFD_ENDIAN_LITTLE;
+#endif
+
+    if (cc->disas_set_info) {
+        cc->disas_set_info(cpu, &s.info);
+    }
+
+    if (s.info.cap_arch >= 0 && cap_disas_target(&s.info, vma, size)) {
+        ; /* done */
+    } else if (s.info.print_insn) {
+        s.info.print_insn(vma, &s.info);
+    } else {
+        ; /* cannot disassemble -- return empty string */
+    }
+}
+
+/*
+ * Disassemble one instruction to a buffer.
+ * The string returned must be freed by the caller with g_free().
+ */
+char *disas_one_str(CPUState *cpu, void *code, unsigned long size,
+                    target_ulong vma)
+{
+    GString *ds = g_string_new(NULL);
+
+    do_disas_one(cpu, code, size, vma, plugin_printf, ds);
+
+    /* Return the buffer, freeing the GString container.  */
+    return g_string_free(ds, false);
+}
+
+struct disas_one_args {
+    char *buf;
+    int maxlen;
+};
+
+static int strbuf_printf(FILE *stream, const char *fmt, ...)
+{
+    struct disas_one_args *args = (struct disas_one_args *)stream;
+    va_list va;
+    int n;
+
+    va_start(va, fmt);
+    n = vsnprintf(args->buf, args->maxlen, fmt, va);
+    va_end(va);
+
+    /* Update args for append behaviour */
+    if (n >= args->maxlen) {
+        n = args->maxlen;
+        args->maxlen = 0;
+    } else {
+        args->buf += n;
+        args->maxlen -= n;
+    }
+
+    return n;
+}
+
+/*
+ * Disassemble one instruction to an existing, fixed size, string buffer.
+ */
+void disas_one_strbuf(CPUState *cpu, void *code, unsigned long size,
+                       target_ulong vma, char *buf, int bufsize)
+{
+    struct disas_one_args args = {buf, bufsize};
+    do_disas_one(cpu, code, size, vma, strbuf_printf, &args);
+}
+
 /* Disassemble this for me please... (debugging). */
 void disas(FILE *out, const void *code, unsigned long size)
 {

@@ -4116,11 +4116,63 @@ SRST
     Set CHERI instruction trace buffer size to the given number of entries
 ERST
 
-DEF("cheri-trace-format", HAS_ARG, QEMU_OPTION_cheri_trace_format, \
-"-cheri-trace-format [text|cvtrace]     Select CHERI trace mode.\n", QEMU_ARCH_ALL)
+DEF("cheri-trace-backend", HAS_ARG, QEMU_OPTION_cheri_trace_backend, \
+"-cheri-trace-backend [text|cvtrace|perfetto]     Select CHERI trace mode.\n", QEMU_ARCH_ALL)
 SRST
-``-cheri-trace-format type``
-    Set CHERI trace format to <type> (text or cvtrace)
+``-cheri-trace-backend type``
+    Set CHERI trace backend to <type> (text, cvtrace or perfetto)
+ERST
+
+DEF("cheri-trace-logfile", HAS_ARG, QEMU_OPTION_trace_logfile, \
+"-cheri-trace-logfile [logfile]     \
+ Set log file for TCG instruction traces, defaults to qemu_trace.txt.\n", QEMU_ARCH_ALL)
+SRST
+``-cheri-trace-logfile [logfile]``
+    Set trace output file.
+ERST
+
+DEF("cheri-trace-perfetto-categories", HAS_ARG, QEMU_OPTION_trace_perfetto_categories, \
+"-cheri-trace-perfetto-categories category[,...]     Select categories to trace.\n", QEMU_ARCH_ALL)
+SRST
+``-cheri-trace-perfetto-categories category[,...]``
+    Select categories of messages to include in the trace (instructions, stats)
+ERST
+
+DEF("cheri-trace-perfetto-interceptor-logfile", HAS_ARG, QEMU_OPTION_trace_perfetto_interceptor_logfile, \
+"-cheri-trace-perfetto-categories category[,...]     \
+ Set log file for perfetto interceptor, defaults to mem_access.trace.\n", QEMU_ARCH_ALL)
+SRST
+``-cheri-trace-perfetto-interceptor-logfile [logfile]``
+    Set perfetto interceptor trace output file.
+ERST
+
+DEF("cheri-trace-perfetto-enable-interceptor", 0, QEMU_OPTION_trace_perfetto_enable_interceptor, \
+"-cheri-trace-perfetto-enable-interceptor     Enable perfetto interceptor.\n", QEMU_ARCH_ALL)
+SRST
+``-cheri-trace-perfetto-enable-interceptor ``
+    Enable perfetto interceptor, skips normal perfetto tracing service.
+ERST
+
+DEF("cheri-trace-protobuf-logfile", HAS_ARG, QEMU_OPTION_trace_protobuf_logfile, \
+"-cheri-trace-protobuf-logfile [logfile]     \
+ Set log file for protobuf traces, defaults to qemu_trace.pb.\n", QEMU_ARCH_ALL)
+SRST
+``-cheri-trace-protobuf-logfile [logfile]``
+    Set protobuf trace output file.
+ERST
+
+DEF("cheri-trace-filters", HAS_ARG, QEMU_OPTION_cheri_trace_filters, \
+"-cheri-trace-filters [event]     Select trace filters to use.\n", QEMU_ARCH_ALL)
+SRST
+``-cheri-trace-filters name[,...]``
+    Set CHERI trace filters to use. Available filters are: events.
+ERST
+
+DEF("cheri-trace-debug", 0, QEMU_OPTION_cheri_trace_debug, \
+"-cheri-trace-debug     Enable debug stats.\n", QEMU_ARCH_ALL)
+SRST
+``-cheri-trace-debug ``
+    Enable CHERI instruction tracing debugging statistics.
 ERST
 
 DEF("cheri-c2e-on-unrepresentable", 0, QEMU_OPTION_cheri_c2e_on_unrepresentable, \

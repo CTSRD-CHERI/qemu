@@ -1331,7 +1331,7 @@ qapi_gen_depends = [ meson.source_root() / 'scripts/qapi/__init__.py',
 
 tracetool = [
   python, files('scripts/tracetool.py'),
-   '--backend=' + config_host['TRACE_BACKENDS']
+  '--backend=' + config_host['TRACE_BACKENDS']
 ]
 
 qemu_version_cmd = [find_program('scripts/qemu-version.sh'),
@@ -1514,7 +1514,11 @@ util_ss = util_ss.apply(config_all, strict: false)
 libqemuutil = static_library('qemuutil',
                              sources: util_ss.sources() + stub_ss.sources() + genh,
                              dependencies: [util_ss.dependencies(), m, glib, socket, malloc])
-qemuutil = declare_dependency(link_with: libqemuutil,
+
+qemuutil_libs = [libqemuutil]
+subdir('trace_extra')
+
+qemuutil = declare_dependency(link_with: qemuutil_libs,
                               sources: genh + version_res)
 
 decodetree = generator(find_program('scripts/decodetree.py'),
@@ -2177,6 +2181,9 @@ if config_all.has_key('CONFIG_TCG')
   summary_info += {'TCG debug enabled': config_host.has_key('CONFIG_DEBUG_TCG')}
   summary_info += {'TCG interpreter':   config_host.has_key('CONFIG_TCG_INTERPRETER')}
   summary_info += {'TCG instruction logging': config_host.has_key('CONFIG_TCG_LOG_INSTR')}
+  summary_info += {'TCG instruction logging with google-perfetto': config_host.has_key('CONFIG_TRACE_PERFETTO')}
+  summary_info += {'TCG instruction logging with protobuf backend': config_host.has_key('CONFIG_TRACE_PROTOBUF')}
+  summary_info += {'TCG instruction logging with json backend': config_host.has_key('CONFIG_TRACE_JSON')}
 endif
 summary_info += {'RVFI-DII':            config_host.has_key('CONFIG_RVFI_DII')}
 summary_info += {'malloc trim support': has_malloc_trim}

@@ -26,12 +26,21 @@
 #include "qapi/error.h"
 #include "qemu/module.h"
 #include "qemu/option.h"
+#include "qemu/error-report.h"
+#include "qemu/log_instr.h"
 #include "chardev/char.h"
 #include "sysemu/block-backend.h"
 #include "sysemu/sysemu.h"
 #include "chardev-internal.h"
 
 /* MUX driver for serial I/O splitting */
+#ifdef CONFIG_TCG_LOG_INSTR
+__attribute__((weak)) void qemu_log_instr_sync_buffers()
+{
+    /* Real implementation in accel/tcg/log_instr.c */
+    warn_report("Calling no-op %s\r", __func__);
+}
+#endif
 
 /* Called with chr_write_lock held.  */
 static int mux_chr_write(Chardev *chr, const uint8_t *buf, int len)
@@ -149,6 +158,9 @@ static int mux_proc_byte(Chardev *chr, MuxChardev *d, int ch)
             break;
         case 'x':
             {
+#ifdef CONFIG_TCG_LOG_INSTR
+                 qemu_log_instr_sync_buffers();
+#endif
                  const char *term =  "QEMU: Terminated\n\r";
                  qemu_chr_write_all(chr, (uint8_t *)term, strlen(term));
                  exit(0);

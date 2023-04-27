@@ -1619,6 +1619,9 @@ void qemu_system_killed(int signal, pid_t pid)
 
 void qemu_system_shutdown_request(ShutdownCause reason)
 {
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_instr_sync_buffers();
+#endif
     trace_qemu_system_shutdown_request(reason);
     replay_shutdown_request(reason);
     shutdown_requested = reason;
@@ -3747,18 +3750,53 @@ void qemu_init(int argc, char **argv, char **envp)
                 }
                 break;
 #if defined(CONFIG_TCG_LOG_INSTR)
-            case QEMU_OPTION_cheri_trace_format:
+            case QEMU_OPTION_cheri_trace_backend:
                 if (strcmp(optarg, "text") == 0) {
-                    qemu_log_instr_set_format(QLI_FMT_TEXT);
+                    qemu_log_instr_set_backend(QEMU_LOG_INSTR_BACKEND_TEXT);
+#ifdef CONFIG_TRACE_CVTRACE
                 } else if (strcmp(optarg, "cvtrace") == 0) {
-                    qemu_log_instr_set_format(QLI_FMT_CVTRACE);
+                    qemu_log_instr_set_backend(QEMU_LOG_INSTR_BACKEND_CVTRACE);
+#endif
+                } else if (strcmp(optarg, "nop") == 0) {
+                    qemu_log_instr_set_backend(QEMU_LOG_INSTR_BACKEND_NOP);
+#ifdef CONFIG_TRACE_PERFETTO
+                } else if (strcmp(optarg, "perfetto") == 0) {
+                    qemu_log_instr_set_backend(QEMU_LOG_INSTR_BACKEND_PERFETTO);
+#endif
+#ifdef CONFIG_TRACE_PROTOBUF
+                } else if (strcmp(optarg, "protobuf") == 0) {
+                    qemu_log_instr_set_backend(QEMU_LOG_INSTR_BACKEND_PROTOBUF);
+#endif
+#ifdef CONFIG_TRACE_JSON
+                } else if (strcmp(optarg, "json") == 0) {
+                    qemu_log_instr_set_backend(QEMU_LOG_INSTR_BACKEND_JSON);
+#endif
                 } else {
                     printf("Invalid choice for cheri-trace-format: '%s'\n", optarg);
                     exit(1);
                 }
                 break;
+            case QEMU_OPTION_trace_logfile:
+                qemu_log_instr_conf_logfile(optarg);
+                break;
+#ifdef CONFIG_TRACE_PERFETTO
+            case QEMU_OPTION_trace_perfetto_categories:
+                qemu_log_instr_perfetto_conf_categories(optarg);
+                break;
+            case QEMU_OPTION_trace_perfetto_enable_interceptor:
+                qemu_log_instr_perfetto_enable_interceptor();
+                break;
+            case QEMU_OPTION_trace_perfetto_interceptor_logfile:
+                qemu_log_instr_perfetto_interceptor_logfile(optarg);
+#endif
             case QEMU_OPTION_cheri_trace_buffer_size:
                 qemu_log_instr_set_buffer_size(strtoul(optarg, NULL, 0));
+                break;
+            case QEMU_OPTION_cheri_trace_filters:
+                qemu_log_instr_set_cli_filters(optarg, &error_fatal);
+                break;
+            case QEMU_OPTION_cheri_trace_debug:
+                qemu_log_instr_enable_trace_debug();
                 break;
 #endif /* CONFIG_TCG_LOG_INSTR */
 

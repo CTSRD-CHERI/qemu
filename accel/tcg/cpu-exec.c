@@ -32,6 +32,7 @@
 #include "exec/tb-hash.h"
 #include "exec/tb-lookup.h"
 #include "exec/log.h"
+#include "exec/log_instr.h"
 #include "qemu/main-loop.h"
 #if defined(TARGET_I386) && !defined(CONFIG_USER_ONLY)
 #include "hw/i386/apic.h"
@@ -703,6 +704,7 @@ static inline void cpu_loop_exec_tb(CPUState *cpu, TranslationBlock *tb,
 #ifndef CONFIG_USER_ONLY
     /* Ensure global icount has gone forward */
     icount_update(cpu);
+
     /* Refill decrementer and continue execution.  */
     insns_left = MIN(0xffff, cpu->icount_budget);
     cpu_neg(cpu)->icount_decr.u16.low = insns_left;
