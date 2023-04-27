@@ -70,7 +70,17 @@ static void dump_cap_fields(const _cc_cap_t& result) {
     fprintf(stderr, "Reserved:    %d\n", (int)result.reserved_bits());
     fprintf(stderr, "Sealed:      %d\n", (int)result.is_sealed());
     fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result.type(), otype_suffix(result.type()));
+    fprintf(stderr, "Exponent:    %d\n", result.cr_exp);
     fprintf(stderr, "\n");
+}
+
+static bool compare_caps(const char* context, const _cc_cap_t& result, const _cc_cap_t& sail_result) {
+    if (memcmp(&result, &sail_result, sizeof(result)) == 0)
+        return true;
+    fprintf(stderr, "%s FAILED\n", context);
+    dump_cap_fields(result);
+    dump_cap_fields(sail_result);
+    return false;
 }
 
 // TODO: Implement for Morello
@@ -91,27 +101,38 @@ static inline void check_crrl_and_cram(_cc_addr_t value) {
         abort();
     }
 }
+
+void fuzz_setbounds(const cc128_cap_t& input_cap, _cc_addr_t req_base, _cc_addr_t req_len) {
+    _cc_cap_t new_result = input_cap;
+    new_result.cr_tag = false;
+    _cc_cap_t new_sail_result = new_result;
+    _cc_N(setbounds)(&new_result, req_base, (_cc_length_t)req_base + req_len);
+    _cc_sail_setbounds(&new_sail_result, req_base, (_cc_length_t)req_base + req_len);
+    if (!compare_caps("SETBOUNDS", new_result, new_sail_result)) {
+        fprintf(stderr, "with req_base=%" PRIx64 " and req_len=%" PRIx64 "\n", (uint64_t)req_base, (uint64_t)req_len);
+        dump_cap_fields(input_cap);
+        abort();
+    }
+}
 #endif
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-    if (size != 2 * sizeof(_cc_addr_t)) {
-        return 0; // Need two words of data
+    if (size < 2 * sizeof(_cc_addr_t) || size > 4 * sizeof(_cc_addr_t)) {
+        return 0; // Need two to four words of data
     }
     FuzzedDataProvider fuzzData(data, size);
     _cc_addr_t pesbt = fuzzData.ConsumeIntegral<_cc_addr_t>();
     _cc_addr_t cursor = fuzzData.ConsumeIntegral<_cc_addr_t>();
+    _cc_addr_t new_len = fuzzData.ConsumeIntegral<_cc_addr_t>();
+    _cc_addr_t random_base = fuzzData.ConsumeIntegral<_cc_addr_t>();
+
     _cc_cap_t result;
     _cc_cap_t sail_result;
     memset(&result, 0, sizeof(result));
     memset(&sail_result, 0, sizeof(sail_result));
     _cc_N(decompress_mem)(pesbt, cursor, false, &result);
     _cc_sail_decode_mem(pesbt, cursor, false, &sail_result);
-    if (memcmp(&result, &sail_result, sizeof(result)) != 0) {
-        fprintf(stderr, "DECODE FROM MEM FAILED\n");
-        fprintf(stderr, "PESBT  0x%016" PRIx64 "\n", (uint64_t)pesbt);
-        fprintf(stderr, "Cursor 0x%016" PRIx64 "\n", (uint64_t)cursor);
-        dump_cap_fields(result);
-        dump_cap_fields(sail_result);
+    if (!compare_caps("DECODE FROM MEM", result, sail_result)) {
         abort();
     }
 
@@ -124,14 +145,16 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     memset(&sail_result, 0, sizeof(sail_result));
     _cc_N(decompress_raw)(pesbt, cursor, false, &result);
     _cc_sail_decode_raw(pesbt, cursor, false, &sail_result);
-    if (memcmp(&result, &sail_result, sizeof(result)) != 0) {
-        fprintf(stderr, "DECODE ALREADY XORED FAILED\n");
-        fprintf(stderr, "PESBT  0x%016" PRIx64 "\n", (uint64_t)pesbt);
-        fprintf(stderr, "Cursor 0x%016" PRIx64 "\n", (uint64_t)cursor);
-        dump_cap_fields(result);
-        dump_cap_fields(sail_result);
+    if (!compare_caps("DECODE ALREADY XORED", result, sail_result)) {
         abort();
     }
 
+// TODO: Implement for Morello
+#ifndef TEST_CC_IS_MORELLO
+    // Try running setbounds (on an untagged capability) and compare to sail.
+    fuzz_setbounds(result, /*req_base=*/result.base(), /*req_len=*/new_len);
+    fuzz_setbounds(result, /*req_base=*/result.address(), /*req_len=*/new_len);
+    fuzz_setbounds(result, /*req_base=*/random_base, /*req_len=*/new_len);
+#endif
     return 0;  // Non-zero return values are reserved for future use.
 }

@@ -32,7 +32,7 @@ static inline bool operator==(const _cc_N(bounds_bits)& a, const _cc_N(bounds_bi
 }
 #endif
 
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 
 static bool failed = false;
 

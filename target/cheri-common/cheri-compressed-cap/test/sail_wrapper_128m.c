@@ -87,3 +87,7 @@ struct cc128m_bounds_bits sail_extract_bounds_bits_128m(uint64_t pesbt) {
 }
 uint64_t sail_compress_128m_raw(const cc128m_cap_t* csp) { return sail_compress_common_raw(csp); }
 uint64_t sail_compress_128m_mem(const cc128m_cap_t* csp) { return sail_compress_common_mem(csp); }
+
+bool sail_setbounds_128m(cc128m_cap_t* cap, cc128m_addr_t req_base, cc128m_length_t req_top) {
+    abort(); // TODO: call sailgen_CapSetBounds();
+}

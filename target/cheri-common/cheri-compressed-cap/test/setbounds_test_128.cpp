@@ -61,3 +61,79 @@ TEST_CASE("Cheritest regression case", "[regression]") {
     CHECK(with_bounds.length() == 0x300000);
     CHECK(with_bounds.address() == cap.address());
 }
+
+TEST_CASE("Fuzzer assertion exact untagged", "[fuzz]") {
+    // Regression test for an assertion found by fuzzing setbounds.
+    constexpr uint64_t pesbt = UINT64_C(0x00f58dffffffffff);
+    constexpr uint64_t base = UINT64_C(0xff80000000000000);
+    constexpr uint64_t addr = UINT64_C(0xf806ffffffff3e0a);
+    constexpr TestAPICC::length_t top = base;
+    TestAPICC::cap_t decoded;
+    TestAPICC::decompress_raw(pesbt, addr, false, &decoded);
+    REQUIRE(decoded.base() == base);
+    REQUIRE(decoded.top() == top);
+    REQUIRE(decoded.address() == addr);
+    {
+        auto sail_setbounds_base_top = decoded;
+        auto cc_setbounds_base_top = decoded;
+        TestAPICC::sail_setbounds(&sail_setbounds_base_top, base, top);
+        TestAPICC::setbounds(&cc_setbounds_base_top, base, top);
+        CHECK(sail_setbounds_base_top == cc_setbounds_base_top);
+    }
+    {
+        auto sail_setbounds_addr_top = decoded;
+        auto cc_setbounds_addr_top = decoded;
+        TestAPICC::sail_setbounds(&sail_setbounds_addr_top, addr, top);
+        TestAPICC::setbounds(&cc_setbounds_addr_top, addr, top);
+        CHECK(cc_setbounds_addr_top == cc_setbounds_addr_top);
+    }
+
+    do_csetbounds<TestAPICC>(decoded, decoded.top(), nullptr);
+    decoded._cr_cursor = base;
+    do_csetbounds<TestAPICC>(decoded, decoded.top(), nullptr);
+}
+
+TEST_CASE("TestRIG assertion untagged max cap", "[fuzz]") {
+    // Regression test for an assertion found by fuzzing QEMU vs sail using testrig.
+    // The length is too large, but this should be fine for untagged values.
+    const TestAPICC::cap_t cap = TestAPICC::make_null_derived_cap(0xfffffffffa119000);
+    constexpr uint64_t req_len = UINT64_C(0xfffffffffa119000);
+    CHECK(cap.address() == req_len);
+
+    auto sail_setbounds_result = cap;
+    auto cc_setbounds_result = cap;
+    const TestAPICC::length_t req_top = (TestAPICC::length_t)cap.address() + req_len;
+    TestAPICC::sail_setbounds(&sail_setbounds_result, cap.address(), req_top);
+    TestAPICC::setbounds(&cc_setbounds_result, cap.address(), req_top);
+    CHECK(sail_setbounds_result == cc_setbounds_result);
+
+    do_csetbounds<TestAPICC>(cap, req_len, nullptr);
+    auto cap2 = cap;
+    cap2._cr_cursor = cap.base();
+    do_csetbounds<TestAPICC>(cap2, req_len, nullptr);
+}
+
+TEST_CASE("TestRIG setbounds result mismatch", "[fuzz]") {
+    // [0] [M]: 0x0000000080000000 (0x93420093) addi ra, tp, 2356
+    // x1 <-  t:0 s:0 perms:0x00000 type:0xFFFFFFFFFFFFFFFF offset:0xFFFFFFFFFFFFF934 base:0x0000000000000000
+    //        top:0b10000000000000000000000000000000000000000000000000000000000000000 length:0x10000000000000000
+    // [1] [M]: 0x0000000080000004 (0xCB10A85B) csetboundsimm ca6, cra, 3249
+    // x16 <-  t:0 s:0 perms:0x00000 type:0xFFFFFFFFFFFFFFFF offset:0x0000000000000000 base:0xFFFFFFFFFFFFF934
+    //         top:0b10000000000000000000000000000000000000000000000000000010111100101 length:0x00000000000000CB1
+    const TestAPICC::cap_t cap = TestAPICC::make_null_derived_cap(UINT64_C(0xFFFFFFFFFFFFF934));
+    constexpr uint64_t req_len = 3249;
+    REQUIRE(cap.address() == 0xFFFFFFFFFFFFF934);
+
+    auto sail_setbounds_result = cap;
+    auto cc_setbounds_result = cap;
+    const TestAPICC::length_t req_top = (TestAPICC::length_t)cap.address() + req_len;
+    TestAPICC::sail_setbounds(&sail_setbounds_result, cap.address(), req_top);
+    TestAPICC::setbounds(&cc_setbounds_result, cap.address(), req_top);
+    CHECK(sail_setbounds_result == cc_setbounds_result);
+    REQUIRE(cc_setbounds_result.base() == UINT64_C(0xFFFFFFFFFFFFF934));
+    REQUIRE(cc_setbounds_result.address() == UINT64_C(0xFFFFFFFFFFFFF934));
+    REQUIRE(cc_setbounds_result.top() == CC128_MAX_TOP + 0b10111100101);
+    REQUIRE(cc_setbounds_result.length() == req_len);
+
+    check_csetbounds_invariants<TestAPICC>(cap, cc_setbounds_result, true, cap.address(), req_top);
+}

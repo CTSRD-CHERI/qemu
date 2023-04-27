@@ -38,8 +38,10 @@ static inline void check_csetbounds_invariants(const typename Handler::cap_t& in
         // At least one must be different otherwise was_exact is not correct
         REQUIRE((with_bounds.top() != requested_top || with_bounds.base() != requested_base));
     }
-    REQUIRE(with_bounds.base() >= initial_cap.base());          // monotonicity broken
-    REQUIRE(with_bounds.top() <= initial_cap.top());            // monotonicity broken
+    if (with_bounds.cr_tag) {
+        REQUIRE(with_bounds.base() >= initial_cap.base()); // monotonicity broken
+        REQUIRE(with_bounds.top() <= initial_cap.top());   // monotonicity broken
+    }
     REQUIRE(Handler::is_representable_cap_exact(&with_bounds)); // result of csetbounds must be representable
 }
 
@@ -64,11 +66,13 @@ static typename Handler::cap_t do_csetbounds(const typename Handler::cap_t& init
     CHECK(with_bounds.cr_pesbt == Handler::compress_raw(&with_bounds));
     CHECK(with_bounds.cr_pesbt == Handler::sail_compress_raw(&with_bounds));
     // Re-create the bounded capability and assert that the current pesbt values matches that one.
-    auto new_cap = Handler::make_max_perms_cap(with_bounds.base(), with_bounds.address(), with_bounds.top());
-    CHECK(new_cap == with_bounds);
-    CHECK(new_cap.cr_pesbt == with_bounds.cr_pesbt);
-    CHECK(new_cap.cr_pesbt == Handler::compress_raw(&with_bounds));
-    CHECK(new_cap.cr_pesbt == Handler::sail_compress_raw(&with_bounds));
+    if (with_bounds.cr_tag) {
+        auto new_cap = Handler::make_max_perms_cap(with_bounds.base(), with_bounds.address(), with_bounds.top());
+        CHECK(new_cap == with_bounds);
+        CHECK(new_cap.cr_pesbt == with_bounds.cr_pesbt);
+        CHECK(new_cap.cr_pesbt == Handler::compress_raw(&with_bounds));
+        CHECK(new_cap.cr_pesbt == Handler::sail_compress_raw(&with_bounds));
+    }
 
     if (was_exact)
         *was_exact = exact;

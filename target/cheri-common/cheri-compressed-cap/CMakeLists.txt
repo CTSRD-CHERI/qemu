@@ -1,26 +1,51 @@
 cmake_minimum_required(VERSION 3.10)
 project(cheri_compressed_cap C CXX)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_C_STANDARD_REQUIRED 11)
+set(CMAKE_CXX_STANDARD_REQUIRED 14)
 if(APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"))
     # XXX: ugly hack, would be nice if llvm could find this
     include_directories(SYSTEM /Library/Developer/CommandLineTools/usr/include/c++/v1)
 endif()
 
+include(CMakePushCheckState)
+include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
-# CMAKE_REQUIRED_LINK_OPTIONS needs cmake 3.13
-set(CMAKE_REQUIRED_LIBRARIES -fsanitize=undefined)
-check_cxx_compiler_flag(-fsanitize=undefined HAVE_UBSAN)
-set(CMAKE_REQUIRED_LIBRARIES -fsanitize=address)
-check_cxx_compiler_flag(-fsanitize=address HAVE_ASAN)
-set(CMAKE_REQUIRED_LIBRARIES -fsanitize=memory)
-check_cxx_compiler_flag(-fsanitize=memory HAVE_MSAN)
+
+macro(check_sanitizer_flag _flag _var)
+    cmake_push_check_state()
+    set(CMAKE_REQUIRED_LIBRARIES ${_flag})
+    # CMAKE_REQUIRED_LINK_OPTIONS needs cmake 3.13
+    set(CMAKE_REQUIRED_LINK_OPTIONS ${_flag})
+    set(CMAKE_REQUIRED_DEFINITIONS ${_flag})
+    set(CMAKE_REQUIRED_FLAGS ${_flag})
+    check_cxx_compiler_flag(${_flag} ${_var})
+    cmake_pop_check_state()
+endmacro()
+
+cmake_push_check_state()
+check_sanitizer_flag(-fsanitize=undefined HAVE_UBSAN)
+check_sanitizer_flag(-fsanitize=address HAVE_ASAN)
+check_sanitizer_flag(-fsanitize=memory HAVE_MSAN)
 # XXX: needs instrumented system libraries
 set(HAVE_MSAN FALSE)
+# Check for libfuzzer compiler support and runtime libraries.
+cmake_push_check_state()
 set(CMAKE_REQUIRED_LIBRARIES -fsanitize=fuzzer)
-check_cxx_compiler_flag(-fsanitize=fuzzer HAVE_LIBFUZZER)
+set(CMAKE_REQUIRED_DEFINITIONS -fsanitize=fuzzer)
+set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=fuzzer)
+set(CMAKE_REQUIRED_FLAGS -fsanitize=fuzzer)
+check_cxx_source_compiles([=[
+#include <stddef.h>
+#include <stdint.h>
 
-include(CheckCCompilerFlag)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  (void)Data;
+  (void)Size;
+  return 0;
+}
+]=] HAVE_LIBFUZZER)
+cmake_pop_check_state()
+
 check_c_compiler_flag(-Wunused-but-set-variable HAVE_UNUSED_BUT_SET_VARIABLE)
 if (HAVE_UNUSED_BUT_SET_VARIABLE)
     add_compile_options(-DHAVE_UNUSED_BUT_SET_VARIABLE)
@@ -35,10 +60,17 @@ if (HAVE_UBSAN)
     endif()
 endif()
 
-add_compile_options(-Wno-gnu-statement-expression)
 add_compile_options(-fno-common)
+add_compile_options(-Wall -Wextra -Wno-c11-extensions -Wno-padded -Wno-gnu-statement-expression)
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-old-style-cast>
+                    $<$<COMPILE_LANGUAGE:CXX>:-Wno-c++98-compat-pedantic>
+                    $<$<COMPILE_LANGUAGE:CXX>:-Wno-c++98-c++11-compat-binary-literal>)
 
-add_compile_options(-pedantic -Wall -Wextra -Wno-old-style-cast -Wno-c++98-compat-pedantic -Wno-c++98-c++11-compat-binary-literal -Wno-c11-extensions -Wno-padded)
+# Cannot use -Wpedantic with GCC since that flags use of __int128, so only add it for Clang
+if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+    add_compile_options(-Wpedantic)
+endif()
+
 # TODO: -Weverything
 add_library(cheri_compressed_cap14 cheri_compressed_cap.c cheri_compressed_cap.h)
 
@@ -83,7 +115,7 @@ function(add_sail_wrapper _format _suffix _sanitizer_flags)
         target_link_libraries(sail_wrapper_${_format}${_suffix} PRIVATE "${_sanitizer_flags}")
     endif()
     target_link_libraries(sail_wrapper_${_format}${_suffix} PUBLIC GMP::GMP)  # needs GMP, should propagate to all users
-    target_compile_options(sail_wrapper_${_format}${_suffix} PRIVATE -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-label -Wno-extra-semi -Wno-gnu-binary-literal)
+    target_compile_options(sail_wrapper_${_format}${_suffix} PRIVATE -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-label -Wno-gnu-binary-literal)
 endfunction()
 
 function(add_sail_wrappers _format)
@@ -114,6 +146,17 @@ add_test_sail_wrapper(128m)
 
 enable_testing()
 
+# See https://github.com/catchorg/Catch2/blob/devel/docs/cmake-integration.md
+Include(FetchContent)
+FetchContent_Declare(Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.2.1
+)
+FetchContent_MakeAvailable(Catch2)
+list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
+include(CTest)
+include(Catch)
+
 function(add_cc_test _format _target _suffix _sanitizer_flags)
     add_executable(${_target}_${_format}${_suffix} test/${_target}_${_format}.cpp)
     if (_sanitizer_flags)
@@ -123,6 +166,8 @@ function(add_cc_test _format _target _suffix _sanitizer_flags)
     if (NOT _format STREQUAL "256")
         target_link_libraries(${_target}_${_format}${_suffix} PRIVATE sail_wrapper_${_format}${_suffix})
     endif()
+    target_link_libraries(${_target}_${_format}${_suffix} PRIVATE Catch2::Catch2WithMain)
+    catch_discover_tests(${_target}_${_format}${_suffix})
     add_test(NAME test-${_target}_${_format}${_suffix} COMMAND ${_target}_${_format}${_suffix})
 endfunction()
 

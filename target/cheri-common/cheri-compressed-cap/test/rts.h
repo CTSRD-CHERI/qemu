@@ -9,4 +9,4 @@ void setup_rts(void);
 void cleanup_rts(void);
 
 // this is needed for some reason:
-static bool have_exception = false;
+extern bool have_exception;

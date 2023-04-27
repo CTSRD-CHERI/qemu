@@ -829,8 +829,7 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
     bool from_large = !_cc_N(cap_bounds_uses_value)(cap);
 #else
     // Morello allows setbounds to do weird things and will just result in untagged results
-    _cc_debug_assert((cap->cr_tag) && "Cannot be used on untagged capabilities");
-    _cc_debug_assert((!_cc_N(is_cap_sealed)(cap)) && "Cannot be used on sealed capabilities");
+    _cc_debug_assert(!(cap->cr_tag && _cc_N(is_cap_sealed)(cap)) && "Cannot be used on tagged sealed capabilities");
 #endif
     _cc_debug_assert(req_base <= req_top && "Cannot invert base and top");
     /*
@@ -838,15 +837,18 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    const _cc_addr_t cursor = cap->_cr_cursor;
 #ifndef CC_IS_MORELLO
-    _cc_debug_assert(((cap->_cr_top - cap->cr_base) >> _CC_ADDR_WIDTH) <= 1 && "Length must be smaller than 1 << 65");
-    _cc_debug_assert((req_top >> _CC_ADDR_WIDTH) <= 1 && "New top must be smaller than 1 << 65");
-    _cc_debug_assert(req_base >= cap->cr_base && "Cannot decrease base");
-    _cc_debug_assert(req_top <= cap->_cr_top && "Cannot increase top");
-    assert((cursor < cap->_cr_top || (cursor == cap->_cr_top && req_base == cap->_cr_top && req_base == req_top)) &&
-           "Must be used on inbounds caps or request zero-length cap at top");
-    assert((cursor >= cap->cr_base) && "Must be used on inbounds caps");
+    if (cap->cr_tag) {
+        _cc_debug_assert(((cap->_cr_top - cap->cr_base) >> _CC_ADDR_WIDTH) <= 1 &&
+                         "Length must be smaller than 1 << 65");
+        _cc_debug_assert((req_top >> _CC_ADDR_WIDTH) <= 1 && "New top must be smaller than 1 << 65");
+        _cc_debug_assert(req_base >= cap->cr_base && "Cannot decrease base");
+        _cc_debug_assert(req_top <= cap->_cr_top && "Cannot increase top");
+        assert((cap->_cr_cursor < cap->_cr_top ||
+                (cap->_cr_cursor == cap->_cr_top && req_base == cap->_cr_top && req_base == req_top)) &&
+               "Must be used on inbounds caps or request zero-length cap at top");
+        assert((cap->_cr_cursor >= cap->cr_base) && "Must be used on inbounds caps");
+    }
 #endif
     _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 3, "expected 3 bits to be used by");  // expected 3 bits to
     _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 3, "expected 3 bits to be used by"); // expected 3 bits to
@@ -857,7 +859,7 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
     const _cc_addr_t pesbt = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) |
                              _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) | _CC_ENCODE_FIELD(new_ebt, EBT);
     _cc_cap_t new_cap;
-    _cc_N(decompress_raw)(pesbt, cursor, cap->cr_tag, &new_cap);
+    _cc_N(decompress_raw)(pesbt, req_base, cap->cr_tag, &new_cap);
     _cc_addr_t new_base = new_cap.cr_base;
     _cc_length_t new_top = new_cap._cr_top;
 
@@ -874,15 +876,21 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
                          "Was inexact, but neither base nor top different?");
     }
 
-    _cc_debug_assert(new_top >= new_base);
-    _cc_debug_assert((!cap->cr_tag || _cc_N(get_reserved)(cap) == 0) &&
-                     "Unknown reserved bits set in tagged capability");
+    if (cap->cr_tag) {
+        // For invalid inputs, new_top could have been larger than max_top and if it is sufficiently larger, it
+        // will be truncated to zero, so we can only assert that we get top > base for tagged, valid inputs.
+        // See https://github.com/CTSRD-CHERI/sail-cheri-riscv/pull/36 for a decoding change that guarantees
+        // this invariant for any input.
+        _cc_debug_assert(new_top >= new_base);
+        _cc_debug_assert(_cc_N(get_reserved)(cap) == 0 && "Unknown reserved bits set in tagged capability");
+    }
+    cap->_cr_cursor = req_base;
     cap->cr_base = new_base;
     cap->_cr_top = new_top;
     cap->cr_exp = new_cap.cr_exp;
     _cc_N(update_ebt)(cap, new_ebt);
-#ifdef CC_IS_MORELLO
     cap->cr_bounds_valid = new_cap.cr_bounds_valid;
+#ifdef CC_IS_MORELLO
     bool to_small = _cc_N(cap_bounds_uses_value)(cap);
     // On morello we may end up with a length that could have been exact, but has changed the flag bits.
     if ((from_large && to_small) && ((new_base ^ req_base) >> (64 - MORELLO_FLAG_BITS))) {
@@ -940,6 +948,18 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     return creg;
 }
 
+static inline _cc_cap_t _cc_N(make_null_derived_cap)(_cc_addr_t addr) {
+    _cc_cap_t creg;
+    memset(&creg, 0, sizeof(creg));
+    creg._cr_cursor = addr;
+    creg._cr_top = _CC_N(MAX_TOP);
+    creg.cr_pesbt = _CC_N(NULL_PESBT);
+    creg.cr_bounds_valid = 1;
+    creg.cr_exp = _CC_N(NULL_EXP);
+    _cc_debug_assert(_cc_N(is_representable_cap_exact)(&creg));
+    return creg;
+}
+
 static inline _cc_addr_t _cc_N(get_required_alignment)(_cc_addr_t req_length) {
     // To get the required alignment from the CRAM mask we can just invert
     // the bits and add one to get a power-of-two
@@ -979,6 +999,9 @@ public:
     static inline bool is_representable_cap_exact(const cap_t* cap) { return _cc_N(is_representable_cap_exact)(cap); }
     static inline cap_t make_max_perms_cap(addr_t base, addr_t cursor, length_t top) {
         return _cc_N(make_max_perms_cap)(base, cursor, top);
+    }
+    static inline cap_t make_null_derived_cap(addr_t addr) {
+        return _cc_N(make_null_derived_cap)(addr);
     }
     static inline addr_t representable_length(addr_t len) { return _cc_N(get_representable_length)(len); }
     static inline addr_t representable_mask(addr_t len) { return _cc_N(get_alignment_mask)(len); }

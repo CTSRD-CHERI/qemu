@@ -33,13 +33,26 @@
 #include "sail_failure.h"
 #include "sail_wrapper.h"
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsometimes-uninitialized"
 #ifdef HAVE_UNUSED_BUT_SET_VARIABLE
 #pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #endif
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#ifdef HAVE_UNUSED_BUT_SET_VARIABLE
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#endif
+#endif
 #include SAIL_COMPRESSION_GENERATED_C_FILE
+#ifdef __clang__
 #pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #define CC_FORMAT_LOWER SAIL_WRAPPER_CC_FORMAT_LOWER
 #define CC_FORMAT_UPPER SAIL_WRAPPER_CC_FORMAT_UPPER
@@ -136,11 +149,11 @@ void sail_decode_common_raw(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, c
     sail_decode_common_mem(mem_pesbt ^ CC128_NULL_XOR_MASK, mem_cursor, tag, cdp);
 }
 
-uint64_t sail_compress_common_raw(const cc128m_cap_t* csp) { assert(0); }
+uint64_t sail_compress_common_raw(const cc128m_cap_t* csp) { abort(); }
 
-uint64_t sail_compress_common_mem(const cc128m_cap_t* csp) { assert(0); }
+uint64_t sail_compress_common_mem(const cc128m_cap_t* csp) { abort(); }
 
-static _cc_bounds_bits sail_extract_bounds_bits_common(_cc_addr_t pesbt) { assert(0); }
+static _cc_bounds_bits sail_extract_bounds_bits_common(_cc_addr_t pesbt) {  abort(); }
 
 #else
 
@@ -178,6 +191,8 @@ static void sail_cap_to_cap_t(const struct zCapability* sail, _cc_cap_t* c) {
     _cc_N(update_flags)(c, sailgen_getCapFlags(*sail));
     _cc_N(update_reserved)(c, sail->zreserved);
     c->cr_tag = sail->ztag;
+    c->cr_exp = sail->zE;
+    c->cr_bounds_valid = true; // This field is only ever false for Morello.
     // extract cc128 EBT field:
     // TODO: avoid roundtrip via sailgen_capToBits?
     uint64_t sail_pesbt = _compress_sailcap_raw(*sail);
