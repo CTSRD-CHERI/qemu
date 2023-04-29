@@ -214,6 +214,7 @@ TRANSLATE_CAP_CAP_INT(csetaddr)
 TRANSLATE_CAP_CAP_INT(csetbounds)
 TRANSLATE_CAP_CAP_INT(csetboundsexact)
 TRANSLATE_CAP_CAP_INT(csetflags)
+TRANSLATE_CAP_CAP_INT(csethigh)
 TRANSLATE_CAP_CAP_INT(csetoffset)
 
 // Three operand (int cap cap)

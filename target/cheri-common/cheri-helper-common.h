@@ -113,6 +113,7 @@ DEF_HELPER_4(cincoffset, void, env, i32, i32, tl)
 #endif
 DEF_HELPER_5(cjalr, void, env, i32, i32, tl, tl)
 DEF_HELPER_4(csetaddr, void, env, i32, i32, tl)
+DEF_HELPER_4(csethigh, void, env, i32, i32, tl)
 DEF_HELPER_4(csetbounds, void, env, i32, i32, tl)
 DEF_HELPER_4(csetboundsexact, void, env, i32, i32, tl)
 #ifndef TARGET_AARCH64
