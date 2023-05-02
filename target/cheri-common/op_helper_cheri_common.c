@@ -429,8 +429,6 @@ void CHERI_HELPER_IMPL(cjalr(CPUArchState *env, uint32_t cd,
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!cap_has_perms(cbp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
-    } else if (!cap_has_perms(cbp, CAP_PERM_GLOBAL)) {
-        raise_cheri_exception(env, CapEx_GlobalViolation, cb);
     } else if (!validate_jump_target(env, cbp, addr, cb,
                                      _host_return_address)) {
         assert(false && "Should have raised an exception");
