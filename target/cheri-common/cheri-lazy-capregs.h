@@ -293,6 +293,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
     if (unlikely(regnum == NULL_CAPREG_INDEX))
         return;
 
+    cheri_debug_assert(newval->cr_extra == CREG_FULLY_DECOMPRESSED);
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     cap_register_t *target = get_cap_in_gpregs(gpcrs, regnum);
     *target = *newval;
