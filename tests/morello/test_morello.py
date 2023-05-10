@@ -76,6 +76,7 @@ def find_morello_tests():
                                id=os.path.relpath(fullpath[:-4], tests_dir),
                                marks=marks)
 
+
 @pytest.mark.parametrize("elf_file,should_print_failed", find_morello_tests())
 def test_morello_elf_file(elf_file: Path, should_print_failed: bool, qemu_binary):
     compressed_elf_file = elf_file.with_name(elf_file.name + ".gz")
@@ -106,7 +107,6 @@ def test_morello_elf_file(elf_file: Path, should_print_failed: bool, qemu_binary
     elif status is False and not should_print_failed:
         pytest.fail("Got an unexpected failure message from the test.\nstdout:\n" + result_str + "\n\nstderr:\n" + result_err)
     assert code != 0 or status is True
-    return status
 
 
 if __name__ == "__main__":
