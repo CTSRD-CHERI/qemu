@@ -646,8 +646,7 @@ static void gen_jal(DisasContext *ctx, int rd, target_ulong imm)
     /* check misaligned: */
     next_pc = ctx->base.pc_next + imm;
     gen_check_branch_target(ctx, next_pc);
-
-    if ((!ctx->cfg_ptr->ext_zca) && (!has_ext(ctx, RVC))) {
+    if (!has_ext(ctx, RVC) && !ctx->cfg_ptr->ext_zca) {
         if ((next_pc & 0x3) != 0) {
             gen_exception_inst_addr_mis(ctx);
             return;
@@ -677,7 +676,7 @@ static void gen_jalr(DisasContext *ctx, int rd, int rs1, target_ulong imm)
     // representability issues caused by directly modifying PCC.cursor.
     gen_set_pc(ctx, t0);
 
-    if ((!ctx->cfg_ptr->ext_zca) && (!has_ext(ctx, RVC))) {
+    if (!has_ext(ctx, RVC) && !ctx->cfg_ptr->ext_zca) {
         misaligned = gen_new_label();
         tcg_gen_andi_tl(t0, cpu_pc, 0x2);
         tcg_gen_brcondi_tl(TCG_COND_NE, t0, 0x0, misaligned);
@@ -1359,11 +1358,11 @@ static void decode_opc(CPURISCVState *env, DisasContext *ctx, uint16_t opcode)
         gen_riscv_log_instr16(ctx, opcode);
         gen_check_pcc_bounds_next_inst(ctx, 2);
         gen_rvfi_dii_set_field_const_i64(INST, insn, opcode);
-        if ((!ctx->cfg_ptr->ext_zca) && (!has_ext(ctx, RVC))) {
         /*
-         * The Zca extension is added as a way to refer to instructions in the C
+         * The Zca extension is added as way to refer to instructions in the C
          * extension that do not include the floating-point loads and stores
          */
+        if (!has_ext(ctx, RVC) || !ctx->cfg_ptr->ext_zca) {
             gen_exception_illegal(ctx);
         } else {
             ctx->opcode = opcode;
