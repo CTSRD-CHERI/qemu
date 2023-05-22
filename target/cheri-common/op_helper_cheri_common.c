@@ -987,6 +987,14 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
         (cap_get_top_full(&result) > cap_get_top_full(cbp))) {
         RESULT_VALID = false;
     }
+    /*
+     * Work around bug introduced in cheri-compressed-cap commit
+     *1a3898fa066e9f7e0560ccc95731d5b7f3a7c882 that resulted in the high
+     * bits of the cursor incorrectly being cleared for Morello.
+     * FIXME: remove once we have updatedd cheri-compressed-cap to include
+     * https://github.com/CTSRD-CHERI/cheri-compressed-cap/pull/14
+     */
+    result._cr_cursor = cbp->_cr_cursor;
 #endif
 
     if (RESULT_VALID) {
