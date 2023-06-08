@@ -102,10 +102,18 @@ def bootCheriBSD(params, String qemuConfig, String stageSuffix, String archSuffi
     ./cheribuild/jenkins-cheri-build.py --test run-${archSuffix} '--test-extra-args=${testExtraArgs.join(" ")}' \
         --test-ssh-key \$WORKSPACE/id_ed25519.pub ${extraCheribuildArgs.join(" ")} || echo Boot test failed
     """
-        def summary = junit allowEmptyResults: false, keepLongStdio: true,
-                            testResults: "test-results/${stageSuffix}/test-results.xml"
+        def summary = junitReturnCurrentSummary allowEmptyResults: false, keepLongStdio: true,
+                                                testResults: "test-results/${stageSuffix}/test-results.xml"
+        def testResultMessage = "Test summary: ${summary.totalCount}, Failures: ${summary.failCount}, Skipped: ${summary.skipCount}, Passed: ${summary.passCount}"
+        echo("${stageSuffix}: ${testResultMessage}")
         if (summary.passCount == 0 || summary.totalCount == 0) {
             params.statusFailure("No tests successful?")
+        } else if (summary.failCount != 0) {
+            // Note: Junit set should have set stage/build status to unstable already, but we still need to set
+            // the per-configuration status, since Jenkins doesn't have a build result for each parallel branch.
+            params.statusUnstable("Unstable test results: ${testResultMessage}")
+            // If there were test failures, we archive the JUnitXML file to simplify debugging
+            archiveArtifacts allowEmptyArchive: true, artifacts: "test-results/${stageSuffix}/*.xml", onlyIfSuccessful: false
         }
     } finally {
         dir (stageSuffix) {
