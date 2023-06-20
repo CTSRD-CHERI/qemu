@@ -23,6 +23,7 @@ function main () : unit -> unit = {
       cap2 = memBitsToCapability(TestCap.tag, bits2);
       rep = fastRepCheck(TestCap, TestAddr);
       let (exact, cap) = setCapBounds(TestCap, TestAddr, TestLen);
+      let (representable, cap) = setCapAddr(TestCap, TestAddr);
       let (base, top) = getCapBounds(TestCap);
       flags = getCapFlags(TestCap);
       new_cap = setCapPerms(TestCap, ones()); /* rt_val[30..0] */

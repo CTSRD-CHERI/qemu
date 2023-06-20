@@ -84,6 +84,7 @@
 __extension__ typedef unsigned __int128 cc128m_length_t;
 __extension__ typedef signed __int128 cc128m_offset_t;
 typedef uint64_t cc128m_addr_t;
+typedef int64_t cc128m_saddr_t;
 #include "cheri_compressed_cap_macros.h"
 
 /* ignore ISO C restricts enumerator values to range of 'int' */

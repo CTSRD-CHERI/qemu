@@ -35,6 +35,7 @@
 #include "../cheri_compressed_cap.h"
 #include "FuzzedDataProvider.h"
 #include "sail_wrapper.h"
+#include "test_util.h"
 #include <cinttypes>
 #include <cstdio>
 
@@ -45,34 +46,7 @@
 #define DO_STRINGIFY1(x) DO_STRINGIFY2(x)
 #define STRINGIFY(x) DO_STRINGIFY1(x)
 
-static const char* otype_suffix(uint32_t otype) {
-    switch (otype) {
-#define OTYPE_CASE(Name, ...)                                                                                          \
-    case _CC_N(Name): return " (" STRINGIFY(_CC_N(Name)) ")";
-        _CC_N(LS_SPECIAL_OTYPES)(OTYPE_CASE, )
-    default: return "";
-    }
-}
-
-static void dump_cap_fields(const _cc_cap_t& result) {
-    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.permissions()); // TODO: decode perms
-    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.software_permissions());
-    fprintf(stderr, "Base:        0x%016" PRIx64 "\n", (uint64_t)result.base());
-    fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", (uint64_t)result.offset());
-    fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", (uint64_t)result.address());
-    unsigned __int128 len_full = result.length();
-    fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(len_full >> 64), (uint64_t)len_full,
-            len_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    unsigned __int128 top_full = result.top();
-    fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
-            top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    fprintf(stderr, "Flags:       %d\n", (int)result.flags());
-    fprintf(stderr, "Reserved:    %d\n", (int)result.reserved_bits());
-    fprintf(stderr, "Sealed:      %d\n", (int)result.is_sealed());
-    fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result.type(), otype_suffix(result.type()));
-    fprintf(stderr, "Exponent:    %d\n", result.cr_exp);
-    fprintf(stderr, "\n");
-}
+static void dump_cap_fields(const _cc_cap_t& result) { dump_cap_fields(stderr, result); }
 
 static bool compare_caps(const char* context, const _cc_cap_t& result, const _cc_cap_t& sail_result) {
     if (memcmp(&result, &sail_result, sizeof(result)) == 0)
@@ -86,28 +60,28 @@ static bool compare_caps(const char* context, const _cc_cap_t& result, const _cc
 // TODO: Implement for Morello
 #ifndef TEST_CC_IS_MORELLO
 static inline void check_crrl_and_cram(_cc_addr_t value) {
-    _cc_addr_t sail_crrl = _cc_sail_representable_length(value);
+    _cc_addr_t sail_crrl = _cc_sail(representable_length)(value);
     _cc_addr_t clib_crrl = _cc_N(get_representable_length)(value);
     if (sail_crrl != clib_crrl) {
-        fprintf(stderr, "CRRL(0x%" PRIx64 ") mismatch: sail=0x%" PRIx64 ", C lib=0x%" PRIx64 "\n",
-                (uint64_t)value, (uint64_t)sail_crrl, (uint64_t)clib_crrl);
+        fprintf(stderr, "CRRL(0x%" PRIx64 ") mismatch: sail=0x%" PRIx64 ", C lib=0x%" PRIx64 "\n", (uint64_t)value,
+                (uint64_t)sail_crrl, (uint64_t)clib_crrl);
         abort();
     }
-    _cc_addr_t sail_cram = _cc_sail_representable_mask(value);
+    _cc_addr_t sail_cram = _cc_sail(representable_mask)(value);
     _cc_addr_t clib_cram = _cc_N(get_alignment_mask)(value);
     if (sail_cram != clib_cram) {
-        fprintf(stderr, "CRAM(0x%" PRIx64 ") mismatch: sail=0x%" PRIx64 ", C lib=0x%" PRIx64 "\n",
-                (uint64_t)value, (uint64_t)sail_cram, (uint64_t)clib_cram);
+        fprintf(stderr, "CRAM(0x%" PRIx64 ") mismatch: sail=0x%" PRIx64 ", C lib=0x%" PRIx64 "\n", (uint64_t)value,
+                (uint64_t)sail_cram, (uint64_t)clib_cram);
         abort();
     }
 }
 
-void fuzz_setbounds(const cc128_cap_t& input_cap, _cc_addr_t req_base, _cc_addr_t req_len) {
+void fuzz_setbounds(const _cc_cap_t& input_cap, _cc_addr_t req_base, _cc_addr_t req_len) {
     _cc_cap_t new_result = input_cap;
     new_result.cr_tag = false;
     _cc_cap_t new_sail_result = new_result;
     _cc_N(setbounds)(&new_result, req_base, (_cc_length_t)req_base + req_len);
-    _cc_sail_setbounds(&new_sail_result, req_base, (_cc_length_t)req_base + req_len);
+    _cc_sail(setbounds)(&new_sail_result, req_base, (_cc_length_t)req_base + req_len);
     if (!compare_caps("SETBOUNDS", new_result, new_sail_result)) {
         fprintf(stderr, "with req_base=%" PRIx64 " and req_len=%" PRIx64 "\n", (uint64_t)req_base, (uint64_t)req_len);
         dump_cap_fields(input_cap);
@@ -116,7 +90,35 @@ void fuzz_setbounds(const cc128_cap_t& input_cap, _cc_addr_t req_base, _cc_addr_
 }
 #endif
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+void fuzz_representable(const _cc_cap_t& input_cap, _cc_addr_t new_addr) {
+    bool cc_fast_rep = TestAPICC::fast_is_representable_new_addr(input_cap, new_addr);
+    bool sail_fast_rep = TestAPICC::sail_fast_is_representable(input_cap, new_addr);
+    if (cc_fast_rep != sail_fast_rep) {
+        fprintf(stderr, "Fast rep check differs for sail (%d) vs cclib (%d) for addr %#016" PRIx64 " \nInput was:\n",
+                sail_fast_rep, cc_fast_rep, (uint64_t)new_addr);
+        dump_cap_fields(input_cap);
+        abort();
+    }
+    bool cc_full_rep = TestAPICC::precise_is_representable_new_addr(input_cap, new_addr);
+    bool sail_full_rep = TestAPICC::sail_precise_is_representable(input_cap, new_addr);
+    if (cc_full_rep != sail_full_rep) {
+        fprintf(stderr, "Precise rep check differs for sail (%d) vs cclib (%d) for addr %#016" PRIx64 " \nInput was:\n",
+                sail_full_rep, cc_full_rep, new_addr);
+        dump_cap_fields(input_cap);
+        abort();
+    }
+}
+
+/// Create a tagged version of the input capability (if there are no reserved bits set)
+/// NB: This may not be possible to create at runtime (unless you have SetTag), but our library should handle them
+/// correctly by detagging.
+_cc_cap_t make_tagged_cap(const _cc_cap_t& c) {
+    _cc_cap_t result = c;
+    result.cr_tag = c.reserved_bits() == 0;
+    return result;
+}
+
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     if (size < 2 * sizeof(_cc_addr_t) || size > 4 * sizeof(_cc_addr_t)) {
         return 0; // Need two to four words of data
     }
@@ -127,14 +129,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     _cc_addr_t random_base = fuzzData.ConsumeIntegral<_cc_addr_t>();
 
     _cc_cap_t result;
-    _cc_cap_t sail_result;
     memset(&result, 0, sizeof(result));
-    memset(&sail_result, 0, sizeof(sail_result));
     _cc_N(decompress_mem)(pesbt, cursor, false, &result);
-    _cc_sail_decode_mem(pesbt, cursor, false, &sail_result);
+    _cc_cap_t sail_result = TestAPICC::sail_decode_mem(pesbt, cursor, false);
     if (!compare_caps("DECODE FROM MEM", result, sail_result)) {
         abort();
     }
+    const _cc_cap_t tagged_result = make_tagged_cap(result);
 
 #ifndef TEST_CC_IS_MORELLO
     check_crrl_and_cram(pesbt);
@@ -142,12 +143,15 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 #endif
 
     memset(&result, 0, sizeof(result));
-    memset(&sail_result, 0, sizeof(sail_result));
     _cc_N(decompress_raw)(pesbt, cursor, false, &result);
-    _cc_sail_decode_raw(pesbt, cursor, false, &sail_result);
+    sail_result = _cc_sail_decode_raw(pesbt, cursor, false);
     if (!compare_caps("DECODE ALREADY XORED", result, sail_result)) {
         abort();
     }
+
+    // Compare the fast and full representability check to sail.
+    fuzz_representable(result, random_base);
+    fuzz_representable(tagged_result, random_base);
 
 // TODO: Implement for Morello
 #ifndef TEST_CC_IS_MORELLO
@@ -156,5 +160,5 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     fuzz_setbounds(result, /*req_base=*/result.address(), /*req_len=*/new_len);
     fuzz_setbounds(result, /*req_base=*/random_base, /*req_len=*/new_len);
 #endif
-    return 0;  // Non-zero return values are reserved for future use.
+    return 0; // Non-zero return values are reserved for future use.
 }

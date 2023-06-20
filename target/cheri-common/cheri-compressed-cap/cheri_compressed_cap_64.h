@@ -61,6 +61,7 @@
 typedef uint64_t cc64_length_t;
 typedef int64_t cc64_offset_t;
 typedef uint32_t cc64_addr_t;
+typedef int32_t cc64_saddr_t;
 #include "cheri_compressed_cap_macros.h"
 
 /* ignore ISO C restricts enumerator values to range of 'int' */
@@ -86,7 +87,7 @@ enum {
     _CC_FIELD(EXP_NONZERO_BOTTOM, 39, 35),
     _CC_FIELD(EXPONENT_LOW_PART, 34, 32),
     _CC_FIELD(RESERVED, 31, 32), /* No reserved bits */
-    _CC_FIELD(UPERMS, 31, 32), /* No uperms */
+    _CC_FIELD(UPERMS, 31, 32),   /* No uperms */
 };
 #pragma GCC diagnostic pop
 _CC_STATIC_ASSERT_SAME(CC64_FIELD_UPERMS_SIZE, 0);
@@ -112,7 +113,7 @@ _CC_STATIC_ASSERT_SAME(CC64_FIELD_RESERVED_SIZE, 0);
 _CC_STATIC_ASSERT(CC64_PERM_SETCID < CC64_FIELD_HWPERMS_MAX_VALUE, "permissions not representable?");
 
 #define CC64_PERMS_ALL (0xfff) /* [0...11] */
-#define CC64_UPERMS_ALL (0)  /* [15...18] */
+#define CC64_UPERMS_ALL (0)    /* [15...18] */
 #define CC64_UPERMS_SHFT (15)
 #define CC64_MAX_UPERM (0)
 

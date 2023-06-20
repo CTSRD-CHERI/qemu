@@ -385,16 +385,8 @@ static inline void set_max_perms_capability(cap_register_t *crp,
 static inline QEMU_ALWAYS_INLINE bool
 is_representable_cap_with_addr(const cap_register_t *cap, target_ulong new_addr)
 {
-    return CAP_cc(is_representable_with_addr)(cap, new_addr);
-}
-static inline QEMU_ALWAYS_INLINE bool
-is_representable_cap_when_sealed_with_addr(const cap_register_t *cap,
-                                           target_ulong new_addr)
-{
-    cheri_debug_assert(cap_is_unsealed(cap));
-    return CAP_cc(is_representable_new_addr)(true, cap_get_base(cap),
-                                             cap_get_length_full(cap),
-                                             cap_get_cursor(cap), new_addr);
+    return CAP_cc(is_representable_with_addr)(
+        cap, new_addr, /*precise_representable_check=*/true);
 }
 
 int gdb_get_capreg(GByteArray *buf, const cap_register_t *cap);

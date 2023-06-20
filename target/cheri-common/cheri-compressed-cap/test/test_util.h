@@ -11,28 +11,29 @@
 #define STRINGIFY(x) DO_STRINGIFY1(x)
 
 static const char* otype_suffix(uint32_t otype) {
+    // clang-format off
     switch (otype) {
 #define OTYPE_CASE(Name, ...)                                                                                          \
     case _CC_N(Name): return " (" STRINGIFY(_CC_N(Name)) ")";
         _CC_N(LS_SPECIAL_OTYPES)(OTYPE_CASE, )
     default: return "";
+#undef OTYPE_CASE
     }
+    // clang-format on
 }
 
 #ifndef TEST_CC_IS_CHERI256
-std::ostream& operator<<(std::ostream& os, const _cc_N(bounds_bits)& value);
-std::ostream& operator<<(std::ostream& os, const _cc_N(bounds_bits)& value) {
+std::ostream& operator<<(std::ostream& os, const _cc_bounds_bits& value);
+std::ostream& operator<<(std::ostream& os, const _cc_bounds_bits& value) {
     os << "{ B: " << (unsigned)value.B << " T: " << (unsigned)value.T << " E: " << (unsigned)value.E
        << " IE: " << (unsigned)value.IE << " }";
     return os;
 }
 
-static inline bool operator==(const _cc_N(bounds_bits)& a, const _cc_N(bounds_bits)& b) {
+static inline bool operator==(const _cc_bounds_bits& a, const _cc_bounds_bits& b) {
     return a.B == b.B && a.E == b.E && a.T == b.T && a.IE == b.IE;
 }
 #endif
-
-#include <catch2/catch_test_macros.hpp>
 
 static bool failed = false;
 
@@ -46,50 +47,57 @@ template <typename T> static inline bool check(T expected, T actual, const std::
 
 template <class T, std::size_t N> constexpr inline size_t array_lengthof(T (&)[N]) { return N; }
 
-template <class Cap> static void dump_cap_fields(const Cap& result) {
-    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", result.permissions()); // TODO: decode perms
-    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", result.software_permissions());
-    fprintf(stderr, "Base:        0x%016" PRIx64 "\n", (uint64_t)result.base());
-    fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", (uint64_t)result.offset());
-    fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", (uint64_t)result.address());
-    unsigned __int128 len_full = result.length();
-    fprintf(stderr, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(len_full >> 64), (uint64_t)len_full,
-            len_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
+template <class Cap> static void dump_cap_fields(FILE* f, const Cap& result) {
+    fprintf(f, "Base:        %#016" PRIx64 "\n", (uint64_t)result.base());
+    fprintf(f, "Cursor:      %#016" PRIx64 "    Offset: %" PRIx64 "\n", (uint64_t)result.address(),
+            (uint64_t)result.offset());
     unsigned __int128 top_full = result.top();
-    fprintf(stderr, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
+    fprintf(f, "Top:         0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    fprintf(stderr, "Flags:       %d\n", (int)result.flags());
-    fprintf(stderr, "Reserved:    %d\n", (int)result.reserved_bits());
-    fprintf(stderr, "Sealed:      %d\n", (int)result.is_sealed());
-    fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", result.type(), otype_suffix(result.type()));
-    fprintf(stderr, "\n");
+    unsigned __int128 len_full = result.length();
+    fprintf(f, "Length:      0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(len_full >> 64), (uint64_t)len_full,
+            len_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
+#ifndef TEST_CC_IS_CHERI256
+    fprintf(f, "PESBT:       %#016" PRIx64 "  Exponent: %d\n", (uint64_t)result.cr_pesbt, result.cr_exp);
+#endif
+    fprintf(f, "Tag:         %d  Permissions: %#" PRIx32 "  User Perms: %#" PRIx32 "\n", result.cr_tag,
+            result.permissions(), result.software_permissions());
+    fprintf(f, "Flags:       %d  Reserved: %d  Sealed: %d  OType: %#" PRIx32 "%s", (int)result.flags(),
+            (int)result.reserved_bits(), (int)result.is_sealed(), result.type(), otype_suffix(result.type()));
 }
 
+std::ostream& operator<<(std::ostream& os, const _cc_cap_t& value);
+std::ostream& operator<<(std::ostream& os, const _cc_cap_t& value) {
+    char buf[1024];
+    FILE* f = fmemopen(buf, sizeof(buf), "w+");
+    dump_cap_fields(f, value);
+    fclose(f);
+    return os << buf;
+}
+
+std::ostream& operator<<(std::ostream& os, const cc128_length_t& value);
+std::ostream& operator<<(std::ostream& os, const cc128_length_t& value) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "0x%" PRIx64 "%016" PRIx64, (uint64_t)(value >> 64), (uint64_t)value);
+    return os << buf;
+}
+
+#ifdef CHECK
 #ifndef TEST_CC_IS_CHERI256
 __attribute__((used)) static _cc_cap_t decompress_representable(_cc_addr_t pesbt_already_xored, _cc_addr_t cursor) {
     _cc_cap_t result;
-    printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", (uint64_t)pesbt_already_xored, (uint64_t)cursor);
+    printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", (uint64_t)pesbt_already_xored,
+           (uint64_t)cursor);
     _cc_N(decompress_raw)(pesbt_already_xored, cursor, false, &result);
-    dump_cap_fields(result);
+    dump_cap_fields(stderr, result);
     // Check that the result is the same again when compressed
     _cc_addr_t new_pesbt_already_xored = _cc_N(compress_raw)(&result);
     CHECK(pesbt_already_xored == new_pesbt_already_xored);
     CHECK(cursor == result.address());
     return result;
 }
-
-inline _cc_cap_t make_max_perms_cap(_cc_addr_t base, _cc_addr_t offset, _cc_length_t length) {
-    return _cc_N(make_max_perms_cap)(base, offset, length);
-}
 #endif
 
 #define CHECK_FIELD_RAW(value, expected) CHECK(value == expected)
 #define CHECK_FIELD(cap, field, expected) CHECK((uint64_t)expected == cap.field())
-
-enum {
-#ifdef CC128_OLD_FORMAT
-    TESTING_OLD_FORMAT = 1
-#else
-    TESTING_OLD_FORMAT = 0
 #endif
-};

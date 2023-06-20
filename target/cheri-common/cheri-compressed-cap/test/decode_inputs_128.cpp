@@ -1,6 +1,6 @@
 #include <cstdint>
 
-struct test_input{
+struct test_input {
     uint64_t pesbt;
     uint64_t cursor;
 };
