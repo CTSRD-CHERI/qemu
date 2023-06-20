@@ -105,7 +105,7 @@ static inline bool is_cap_sealed(const cap_register_t *cp)
 static inline QEMU_ALWAYS_INLINE bool
 try_set_cap_cursor(CPUArchState *env, const cap_register_t *cptr,
                    int regnum_src, int regnum_dst, target_ulong new_addr,
-                   uintptr_t retpc,
+                   bool precise_repr_check, uintptr_t retpc,
                    struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
 {
     DEFINE_RESULT_VALID;
@@ -132,7 +132,8 @@ try_set_cap_cursor(CPUArchState *env, const cap_register_t *cptr,
     }
     /* Result is out-of-bounds, check if it's representable. */
 #endif
-    if (unlikely(!is_representable_cap_with_addr(cptr, new_addr))) {
+    if (unlikely(!CAP_cc(is_representable_with_addr)(cptr, new_addr,
+                                                     precise_repr_check))) {
         if (cptr->cr_tag) {
             became_unrepresentable(env, regnum_dst, oob_info, retpc);
         }
@@ -903,7 +904,12 @@ cincoffset_impl(CPUArchState *env, uint32_t cd, uint32_t cb, target_ulong rt,
      * CIncOffset: Increase Offset
      */
     target_ulong new_addr = cap_get_cursor(cbp) + rt;
-    try_set_cap_cursor(env, cbp, cb, cd, new_addr, retpc, oob_info);
+    /*
+     * CIncOffset and CSetOffset use the approximate fast representability
+     * check rather than a precise one.
+     */
+    try_set_cap_cursor(env, cbp, cb, cd, new_addr,
+                       /*precise_repr_check=*/false, retpc, oob_info);
 }
 
 void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
@@ -943,16 +949,17 @@ void CHERI_HELPER_IMPL(candaddr(CPUArchState *env, uint32_t cd, uint32_t cb,
 {
     target_ulong cursor = get_capreg_cursor(env, cb);
     target_ulong target_addr = cursor & rt;
-    target_ulong diff = target_addr - cursor;
-    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(candaddr));
+    try_set_cap_cursor(env, get_readonly_capreg(env, cb), cb, cd, target_addr,
+                       /*precise_repr_check=*/true, GETPC(),
+                       OOB_INFO(candaddr));
 }
 
 void CHERI_HELPER_IMPL(csetaddr(CPUArchState *env, uint32_t cd, uint32_t cb,
                                 target_ulong target_addr))
 {
-    target_ulong cursor = get_capreg_cursor(env, cb);
-    target_ulong diff = target_addr - cursor;
-    cincoffset_impl(env, cd, cb, diff, GETPC(), OOB_INFO(csetaddr));
+    try_set_cap_cursor(env, get_readonly_capreg(env, cb), cb, cd, target_addr,
+                       /*precise_repr_check=*/true, GETPC(),
+                       OOB_INFO(csetaddr));
 }
 
 void CHERI_HELPER_IMPL(csetoffset(CPUArchState *env, uint32_t cd, uint32_t cb,
@@ -1016,7 +1023,7 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
 
 #ifdef TARGET_AARCH64
     if (CAP_cc(cap_bounds_uses_value)(cbp))
-        new_base = CAP_cc(cap_bounds_address)(cbp);
+        new_base = CAP_cc(cap_bounds_address)(cap_get_cursor(cbp));
 #endif
 
     cap_length_t new_top = (cap_length_t)new_base + length; // 65 bits

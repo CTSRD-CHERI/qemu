@@ -45,12 +45,14 @@
 #endif
 
 static const char* otype_suffix(uint32_t otype) {
+    // clang-format off
     switch (otype) {
 #define OTYPE_CASE(Name, ...)                                                                                          \
     case CC128M_##Name: return " (CC128M_" #Name ")";
     CC128M_LS_SPECIAL_OTYPES(OTYPE_CASE, )
     default: return "";
     }
+    // clang-format on
 }
 
 static void dump_cap_fields(const cc128m_cap_t* result) {
@@ -75,8 +77,8 @@ static void dump_cap_fields(const cc128m_cap_t* result) {
 }
 
 int main(int argc, char** argv) {
-    //fprintf(stderr, "CC128M_NULL_XOR_MASK=0x%llx\n", (long long)CC128M_NULL_XOR_MASK);
-    //fprintf(stderr, "CC128M_NULL_PESBT   =0x%llx\n", (long long)CC128M_NULL_PESBT);
+    // fprintf(stderr, "CC128M_NULL_XOR_MASK=0x%llx\n", (long long)CC128M_NULL_XOR_MASK);
+    // fprintf(stderr, "CC128M_NULL_PESBT   =0x%llx\n", (long long)CC128M_NULL_PESBT);
     if (argc < 3) {
         fprintf(stderr, "Usage: %s PESBT CURSOR\n", argv[0]);
         return EXIT_FAILURE;
@@ -91,12 +93,12 @@ int main(int argc, char** argv) {
     if (errno != 0 || !end || *end != '\0') {
         err(EX_DATAERR, "cursor not a valid hex number: %s", argv[2]);
     }
-    cc128m_cap_t result;
-    memset(&result, 0, sizeof(result));
     printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt, cursor);
 #ifdef DECOMPRESS_WITH_SAIL_GENERATED_CODE
-    sail_decode_128m_mem(pesbt, cursor, false, &result);
+    cc128m_cap_t result = sail_decode_128m_mem(pesbt, cursor, false);
 #else
+    cc128m_cap_t result;
+    memset(&result, 0, sizeof(result));
     cc128m_decompress_mem(pesbt, cursor, false, &result);
 #endif
     dump_cap_fields(&result);

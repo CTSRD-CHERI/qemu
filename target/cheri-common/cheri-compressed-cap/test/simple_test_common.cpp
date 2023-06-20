@@ -20,7 +20,6 @@ TEST_CASE("Compressed NULL cap has canonical bounds", "[nullcap]") {
 #endif
 
 // TODO: Implement non-stub sail_compress_common_mem/raw for Morello
-#ifndef TEST_CC_IS_MORELLO
 TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
     _cc_cap_t null_cap;
     memset(&null_cap, 0, sizeof(null_cap));
@@ -49,14 +48,11 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
     CHECK(decompressed.top() == _CC_N(NULL_TOP));
     CHECK_FIELD(decompressed, type, _CC_N(OTYPE_UNSEALED));
 }
-#endif
 
 TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
-    _cc_cap_t result;
-    memset(&result, 'a', sizeof(result));
-    CompressedCapCC::decompress_mem(0, 0, false, &result);
+    _cc_cap_t result = CompressedCapCC::decompress_mem(0, 0, false);
     fprintf(stderr, "Decompressed NULL cap:\n");
-    dump_cap_fields(result);
+    dump_cap_fields(stderr, result);
     fprintf(stderr, "\n");
     CHECK_FIELD(result, base, 0);
     CHECK_FIELD(result, offset, 0);
@@ -115,7 +111,7 @@ static void check_representable(_cc_addr_t base, _cc_length_t length, _cc_addr_t
 
 static inline bool check_repr(bool sealed, _cc_addr_t base, _cc_addr_t length, _cc_addr_t offset) {
     (void)sealed;
-    auto cap = make_max_perms_cap(base, base + offset, base + length);
+    auto cap = TestAPICC::make_max_perms_cap(base, base + offset, base + length);
     return _cc_N(is_representable_cap_exact)(&cap);
 }
 
@@ -128,10 +124,100 @@ TEST_CASE("Check max size cap representable", "[representable]") {
     check_representable((_cc_addr_t)0xffffffffff000000, 0x00000000000ffffff, 0, false, "length with too many bits");
 }
 
+TEST_CASE("Check omnipotent capability matches sail", "[sail]") {
+    // 0000000d b:0000000000000000 l:ffffffffffffffff |o:0000000000000000 t:ffffff
+    auto sail_reset_cap = TestAPICC::sail_reset_capability();
+    auto cc_lib_reset_cap = TestAPICC::make_max_perms_cap(0, 0, _CC_MAX_TOP);
+    CHECK(sail_reset_cap == cc_lib_reset_cap);
+    CHECK(_cc_N(raw_equal(&sail_reset_cap, &cc_lib_reset_cap)));
+    CHECK(cc_lib_reset_cap.cr_exp == _CC_N(RESET_EXP));
+}
+
+TEST_CASE("Check make_max_perms_cap() sets cr_exp correctly", "[sail]") {
+    // make_max_perms_cap was not updating the cr_exp field and kept it as the NULL exponent.
+    auto cap = TestAPICC::make_max_perms_cap(0, 16, 16);
+    CHECK(cap.cr_exp == 0);
+}
+
 // TODO: Implement sail_null_pesbt_128
 #ifndef TEST_CC_IS_MORELLO
 TEST_CASE("Check NULL mask matches sail", "[sail]") {
-    CHECK(_cc_sail_null_pesbt() == _CC_N(NULL_PESBT));
-    CHECK(_cc_sail_null_pesbt() == _CC_N(NULL_XOR_MASK));
+    CHECK(_cc_sail(null_pesbt)() == _CC_N(NULL_PESBT));
+    CHECK(_cc_sail(null_pesbt)() == _CC_N(NULL_XOR_MASK));
 }
 #endif
+
+static inline TestAPICC::cap_t checkFastRepCheckSucceeds(const _cc_cap_t& cap, _cc_addr_t new_addr,
+                                                         bool set_addr_should_retain_tag = true) {
+    bool sail_fast_rep = TestAPICC::sail_fast_is_representable(cap, new_addr);
+    bool cc_fast_rep = TestAPICC::fast_is_representable_new_addr(cap, new_addr);
+    CHECK(sail_fast_rep == cc_fast_rep);
+    CHECK(cc_fast_rep);
+    // It should also be representable if we do the full check since the bounds interpretation does not change.
+    // NB: Unlike precise_is_representable_new_addr, fast_is_representable_new_addr does not look at cr_bounds_valid.
+    if (cap.cr_bounds_valid) {
+        CHECK(TestAPICC::precise_is_representable_new_addr(cap, new_addr));
+    }
+    // Check that creating a new capability with same pesbt and new address decodes to the same bounds
+    TestAPICC::cap_t new_cap_with_other_cursor = TestAPICC::decompress_raw(cap.cr_pesbt, new_addr, false);
+    CHECK(new_cap_with_other_cursor.base() == cap.base());
+    CHECK(new_cap_with_other_cursor.top() == cap.top());
+    auto updated = cap;
+    updated.cr_tag = true;
+    // Updating the address should retain the tag and bounds should stay the same.
+    // Calls to set_addr checksfor sealed, so unseal to ensure set_addr only checks representability.
+    _cc_N(update_otype)(&updated, _CC_N(OTYPE_UNSEALED));
+    _cc_N(set_addr)(&updated, new_addr);
+    CHECK(updated.cr_tag == set_addr_should_retain_tag);
+    if (set_addr_should_retain_tag) {
+        CHECK(updated.base() == cap.base());
+        CHECK(updated.top() == cap.top());
+    }
+    return cap;
+}
+
+static inline TestAPICC::cap_t checkFastRepCheckSucceeds(_cc_addr_t pesbt, _cc_addr_t addr, _cc_addr_t expected_base,
+                                                         _cc_length_t expected_top, _cc_addr_t new_addr,
+                                                         bool set_addr_should_retain_tag = true) {
+    TestAPICC::cap_t cap = TestAPICC::decompress_raw(pesbt, addr, false);
+    TestAPICC::cap_t sail_cap = TestAPICC::sail_decode_raw(pesbt, addr, false);
+    CHECK(cap == sail_cap);
+    CHECK(cap.base() == expected_base);
+    CHECK(cap.top() == expected_top);
+    checkFastRepCheckSucceeds(cap, new_addr, set_addr_should_retain_tag);
+    return cap;
+}
+
+/// Check that both the fast and the full representability check fails for the given input.
+static inline void checkRepCheckFails(_cc_addr_t pesbt, _cc_addr_t addr, _cc_addr_t expected_base,
+                                      _cc_length_t expected_top, _cc_addr_t new_addr) {
+    TestAPICC::cap_t cap = TestAPICC::decompress_raw(pesbt, addr, false);
+    CHECK(cap.base() == expected_base);
+    CHECK(cap.top() == expected_top);
+    bool sail_fast_rep = TestAPICC::sail_fast_is_representable(cap, new_addr);
+    bool cc_fast_rep = TestAPICC::fast_is_representable_new_addr(cap, new_addr);
+    CHECK(sail_fast_rep == cc_fast_rep);
+    CHECK(!cc_fast_rep);
+    // It should also not be representable if we do the full check since the bounds interpretation changes.
+    CHECK(!TestAPICC::precise_is_representable_new_addr(cap, new_addr));
+    // Check that creating a new capability with same pesbt and new address decodes to different bounds
+    TestAPICC::cap_t new_cap_with_other_cursor = TestAPICC::decompress_raw(pesbt, new_addr, false);
+    CHECK((new_cap_with_other_cursor.base() != expected_base || new_cap_with_other_cursor.top() != expected_top));
+}
+
+TEST_CASE("Omnipotent cap representable", "") {
+    TestAPICC::cap_t max_cap = TestAPICC::make_max_perms_cap(0, 0, _CC_MAX_TOP);
+    // Check that various address are representable with a full-address-space capability.
+    checkFastRepCheckSucceeds(max_cap, 0);
+    checkFastRepCheckSucceeds(max_cap, 1);
+    checkFastRepCheckSucceeds(max_cap, _CC_MAX_ADDR - 1);
+    checkFastRepCheckSucceeds(max_cap, _CC_MAX_ADDR);
+    checkFastRepCheckSucceeds(max_cap, _CC_MAX_ADDR >> 1);
+    // Alternating ones and zeroes
+    checkFastRepCheckSucceeds(max_cap, (_cc_addr_t)UINT64_C(0xaaaaaaaaaaaaaaaa));
+    // And a few arbitrary values
+    checkFastRepCheckSucceeds(max_cap, 0x3fffca);
+    checkFastRepCheckSucceeds(max_cap, 0x12345678);
+    checkFastRepCheckSucceeds(max_cap, 1234);
+    checkFastRepCheckSucceeds(max_cap, _CC_MAX_ADDR - 1234);
+}

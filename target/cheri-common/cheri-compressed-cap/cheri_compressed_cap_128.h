@@ -61,6 +61,7 @@
 __extension__ typedef unsigned __int128 cc128_length_t;
 __extension__ typedef signed __int128 cc128_offset_t;
 typedef uint64_t cc128_addr_t;
+typedef int64_t cc128_saddr_t;
 #include "cheri_compressed_cap_macros.h"
 
 /* ignore ISO C restricts enumerator values to range of 'int' */
@@ -127,11 +128,11 @@ enum _CC_N(OTypes) {
     _CC_SPECIAL_OTYPE(OTYPE_SENTRY, 1),
     _CC_SPECIAL_OTYPE(OTYPE_INDIRECT_PAIR, 2),
     _CC_SPECIAL_OTYPE(OTYPE_INDIRECT_SENTRY, 3),
-    _CC_SPECIAL_OTYPE(OTYPE_RESERVED_LAST, 15),
+    _CC_SPECIAL_OTYPE(OTYPE_RESERVED_LAST, 3),
     /*
      * We allocate otypes subtracting from the maximum value, so the smallest is
      * actually the one with the largest _CC_SPECIAL_OTYPE() argument.
-     * With 16 reserved otypes, this is currently -16, i.e. 0x3fff0.
+     * With 4 reserved otypes, this is currently -4, i.e. 0x3fffc.
      */
     _CC_N(MIN_RESERVED_OTYPE) = _CC_N(OTYPE_RESERVED_LAST),
     _CC_N(MAX_RESERVED_OTYPE) = _CC_N(OTYPE_UNSEALED),

@@ -35,7 +35,7 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     memset(&result, 'a', sizeof(result));
     decompress_256cap(buffer, &result, false);
     fprintf(stderr, "Decompressed 256-bit NULL cap:\n");
-    dump_cap_fields(result);
+    dump_cap_fields(stderr, result);
     fprintf(stderr, "\n");
     CHECK_FIELD(result, base, 0);
     CHECK_FIELD(result, offset, 0);

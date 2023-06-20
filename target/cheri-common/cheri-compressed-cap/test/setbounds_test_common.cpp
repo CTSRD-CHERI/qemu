@@ -42,7 +42,7 @@ static inline void check_csetbounds_invariants(const typename Handler::cap_t& in
         REQUIRE(with_bounds.base() >= initial_cap.base()); // monotonicity broken
         REQUIRE(with_bounds.top() <= initial_cap.top());   // monotonicity broken
     }
-    REQUIRE(Handler::is_representable_cap_exact(&with_bounds)); // result of csetbounds must be representable
+    REQUIRE(Handler::is_representable_cap_exact(with_bounds)); // result of csetbounds must be representable
 }
 
 template <typename Handler>
@@ -63,15 +63,15 @@ static typename Handler::cap_t do_csetbounds(const typename Handler::cap_t& init
     check_csetbounds_invariants<Handler>(initial_cap, with_bounds, exact, requested_base, requested_top);
 
     // Check that the cr_pesbt is updated correctly and matches sail
-    CHECK(with_bounds.cr_pesbt == Handler::compress_raw(&with_bounds));
-    CHECK(with_bounds.cr_pesbt == Handler::sail_compress_raw(&with_bounds));
+    CHECK(with_bounds.cr_pesbt == Handler::compress_raw(with_bounds));
+    CHECK(with_bounds.cr_pesbt == Handler::sail_compress_raw(with_bounds));
     // Re-create the bounded capability and assert that the current pesbt values matches that one.
     if (with_bounds.cr_tag) {
         auto new_cap = Handler::make_max_perms_cap(with_bounds.base(), with_bounds.address(), with_bounds.top());
         CHECK(new_cap == with_bounds);
         CHECK(new_cap.cr_pesbt == with_bounds.cr_pesbt);
-        CHECK(new_cap.cr_pesbt == Handler::compress_raw(&with_bounds));
-        CHECK(new_cap.cr_pesbt == Handler::sail_compress_raw(&with_bounds));
+        CHECK(new_cap.cr_pesbt == Handler::compress_raw(with_bounds));
+        CHECK(new_cap.cr_pesbt == Handler::sail_compress_raw(with_bounds));
     }
 
     if (was_exact)
@@ -135,10 +135,10 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
     for (size_t index = 0; index < array_lengthof(setbounds_inputs); index++) {
         CAPTURE(index);
         const setbounds_input& input = setbounds_inputs[index];
-        auto first_input = make_max_perms_cap(0, input.base1, _CC_N(MAX_LENGTH));
+        auto first_input = TestAPICC::make_max_perms_cap(0, input.base1, _CC_MAX_TOP);
         REQUIRE(first_input.address() == input.base1);
         REQUIRE(first_input.base() == 0);
-        REQUIRE(first_input.top() == _CC_N(MAX_LENGTH));
+        REQUIRE(first_input.top() == _CC_MAX_TOP);
         bool first_exact = false;
         const _cc_cap_t first_bounds = do_csetbounds<Handler>(first_input, input.top1, &first_exact);
         CHECK(first_bounds.base() == input.sail_cc_base1);
@@ -173,8 +173,7 @@ TEST_CASE("setbounds test cases from sail", "[bounds]") {
         }
         // Check that calling setbounds with the same target top yields the same result
         bool second_again_exact = false;
-        const _cc_cap_t second_bounds_again =
-            do_csetbounds<Handler>(second_bounds, input.top2, &second_again_exact);
+        const _cc_cap_t second_bounds_again = do_csetbounds<Handler>(second_bounds, input.top2, &second_again_exact);
         CHECK(second_again_exact == second_exact);
         CHECK(second_bounds.base() == second_bounds_again.base());
         CHECK(second_bounds.top() == second_bounds_again.top());
