@@ -349,8 +349,12 @@ static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
     rcu_read_lock();
     logfile = qatomic_rcu_read(&qemu_logfile);
     if (logfile) {
-        target_disas_buf(logfile->fd, env_cpu(env), iinfo->insn_bytes,
-                         sizeof(iinfo->insn_bytes), iinfo->pc, 1);
+        if (iinfo->insn_size < 1) {
+            fprintf(logfile->fd, "logging exception side effects\n");
+        } else {
+            target_disas_buf(logfile->fd, env_cpu(env), iinfo->insn_bytes,
+                             sizeof(iinfo->insn_bytes), iinfo->pc, 1);
+        }
     }
     rcu_read_unlock();
 
