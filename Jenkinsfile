@@ -83,10 +83,7 @@ def bootCheriBSD(params, String qemuConfig, String stageSuffix, String archSuffi
         def compressedDiskImage = "artifacts-${archSuffix}/cheribsd-${archSuffix}.img.xz"
         dir (stageSuffix) {
             sh "rm -rfv artifacts-${archSuffix}/cheribsd-*.img* artifacts-${archSuffix}/kernel*"
-            // The main branch of CheriBSD has test failures with tag-clearing QEMU, so use dev for now.
-            // FIXME: boot CheriBSD-pipeline/main once there are no breaking changes to CHERI-RISC-V.
-            def cheribsdBranch = archSuffix.contains("riscv") ? "dev" : "main";
-            copyArtifacts projectName: "CheriBSD-pipeline/${cheribsdBranch}", filter: "${compressedDiskImage}, ${compressedKernel}",
+            copyArtifacts projectName: "CheriBSD-pipeline/main", filter: "${compressedDiskImage}, ${compressedKernel}",
                          target: '.', fingerprintArtifacts: false, flatten: false, selector: lastSuccessful()
         }
         def testExtraArgs = [
