@@ -127,6 +127,20 @@ static bool gen_amo(DisasContext *ctx, arg_atomic *a,
                     MemOp mop)
 {
     TCGv_cap_checked_ptr src1 = get_capmode_dependent_rmw_addr(ctx, a->rs1, 0, mop);
+    cheri_debug_assert((mop & MO_ALIGN) && "RMW AMOs must be aligned");
+    /*
+     * We have to check the alignment explicitly before the tcg_gen_atomic_*
+     * as those can end up in do_nonatomic_op_i64() which will lower them to
+     * a load+op+store sequence and if that faults due to alignment we will
+     * get a load fault rather than the spec-mandated store/amo fault.
+     */
+    if (memop_size(mop) > 1) {
+        TCGv_i32 tmop = tcg_const_i32(mop);
+        TCGv_i32 tcode = tcg_const_i32(RISCV_EXCP_STORE_AMO_ADDR_MIS);
+        gen_helper_check_alignment(cpu_env, (TCGv)src1, tmop, tcode);
+        tcg_temp_free_i32(tcode);
+        tcg_temp_free_i32(tmop);
+    }
     TCGv src2 = tcg_temp_new();
     gen_get_gpr(src2, a->rs2);
 
