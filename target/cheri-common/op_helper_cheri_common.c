@@ -74,23 +74,23 @@ static DEFINE_CHERI_STAT(misc);
  * These semantics are used for Morello and CHERI-RISC-V, whereas (legacy)
  * CHERI-MIPS raises exceptions on invalid modifications.
  */
-#if CHERI_TAG_CLEAR_ON_INVALID
-
 #define DEFINE_RESULT_VALID bool _cap_valid = true
-#define RESULT_VALID _cap_valid
-#define raise_cheri_exception_or_invalidate(env, cause, reg) _cap_valid = false
-#define raise_cheri_exception_or_invalidate_impl(...) _cap_valid = false
-#define GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH()
-#else
-
-#define DEFINE_RESULT_VALID
-#define RESULT_VALID true
+#define RESULT_VALID        _cap_valid
 #define raise_cheri_exception_or_invalidate(env, cause, reg)                   \
-    raise_cheri_exception(env, cause, reg)
+    do {                                                                       \
+        if (CHERI_TAG_CLEAR_ON_INVALID(env))                                   \
+            _cap_valid = false;                                                \
+        else                                                                   \
+            raise_cheri_exception(env, cause, reg);                            \
+    } while (false)
 #define raise_cheri_exception_or_invalidate_impl(env, cause, reg, pc)          \
-    raise_cheri_exception_impl(env, cause, reg, 0, true, pc)
+    do {                                                                       \
+        if (CHERI_TAG_CLEAR_ON_INVALID(env))                                   \
+            _cap_valid = false;                                                \
+        else                                                                   \
+            raise_cheri_exception_impl(env, cause, reg, 0, true, pc);          \
+    } while (false)
 #define GET_HOST_RETPC_IF_TRAPPING_CHERI_ARCH() GET_HOST_RETPC()
-#endif
 
 static inline bool is_cap_sealed(const cap_register_t *cp)
 {
@@ -1207,11 +1207,9 @@ target_ulong CHERI_HELPER_IMPL(ctoptr(CPUArchState *env, uint32_t cb,
     /*
      * CToPtr: Capability to Pointer
      */
-#if !CHERI_TAG_CLEAR_ON_INVALID
-    if (!ctp->cr_tag) {
+    if (!CHERI_TAG_CLEAR_ON_INVALID(env) && !ctp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, ct);
     }
-#endif
     if (!cbp->cr_tag) {
         return (target_ulong)0;
     } else {
