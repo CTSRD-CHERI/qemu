@@ -1340,7 +1340,6 @@ static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
     RISCVCPU *cpu = env_archcpu(env);
     target_ulong ccsr = 0;
     ccsr = set_field(ccsr, XCCSR_ENABLE, cpu->cfg.ext_cheri);
-    ccsr = set_field(ccsr, XCCSR_DIRTY, 1); /* Always report dirty */
     /* Read-only feature bits. */
     ccsr = set_field(ccsr, XCCSR_TAG_CLEARING, CHERI_TAG_CLEAR_ON_INVALID(env));
 
