@@ -597,7 +597,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
     uint8_t *__hptr;                                                    \
     abi_long __ret;                                                     \
     if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, CHERI_CAP_SIZE, 0))) { \
-        __ret = __put_user(cc128_compress_raw(x) ^ CC128_NULL_XOR_MASK, \
+        __ret = __put_user(CAP_cc(compress_raw)(x) ^ CAP_CC(NULL_XOR_MASK), \
             (uint64_t *)(__hptr + CHERI_MEM_OFFSET_METADATA));          \
         if (__ret == 0) {                                               \
             __ret = __put_user((x)->_cr_cursor,                         \

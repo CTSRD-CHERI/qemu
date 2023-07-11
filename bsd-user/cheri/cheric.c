@@ -44,7 +44,7 @@ __cheri_round_representable_length(target_ulong len)
     cap_register_t tmpcap;
 
     set_max_perms_capability(&tmpcap, 0);
-    cc128_setbounds(&tmpcap, 0, len);
+    CAP_cc(setbounds)(&tmpcap, 0, len);
     return ((target_ulong)cap_get_length_full(&tmpcap));
 #else
 
@@ -101,10 +101,10 @@ cheri_load(cap_register_t *cap, const abi_uintcap_t *value)
     uint64_t cursor, pesbt;
 
     pesbt = ldq_p((const uint8_t *)value + CHERI_MEM_OFFSET_METADATA) ^
-        CC128_NULL_XOR_MASK;
+        CAP_CC(NULL_XOR_MASK);
     cursor = ldq_p((const uint8_t *)value + CHERI_MEM_OFFSET_CURSOR);
 
-    cc128_decompress_raw(pesbt, cursor, true, cap);
+    CAP_cc(decompress_raw)(pesbt, cursor, true, cap);
     cap_set_state(cap, CREG_FULLY_DECOMPRESSED);
     return (cap);
 }
@@ -113,8 +113,8 @@ void
 cheri_store(void *ptr, const cap_register_t *cap)
 {
 
-    *(uint64_t *)(ptr + CHERI_MEM_OFFSET_METADATA) = cc128_compress_raw(cap) ^
-        CC128_NULL_XOR_MASK;
+    *(uint64_t *)(ptr + CHERI_MEM_OFFSET_METADATA) = CAP_cc(compress_raw)(cap) ^
+        CAP_CC(NULL_XOR_MASK);
     *(uint64_t *)((uint8_t *)ptr + CHERI_MEM_OFFSET_CURSOR) =
         cap_get_cursor(cap);
 }
@@ -174,7 +174,7 @@ cap_register_t *
 cheri_setbounds(cap_register_t *cap, size_t length)
 {
 
-    cc128_setbounds(cap, cap_get_cursor(cap),
+    CAP_cc(setbounds)(cap, cap_get_cursor(cap),
         (unsigned __int128)cap_get_cursor(cap) + length);
     return (cap);
 }

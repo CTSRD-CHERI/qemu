@@ -122,7 +122,7 @@
 #define	CHERI_REPRESENTABLE_LENGTH(len) \
 	__cheri_round_representable_length(len)
 #define	CHERI_REPRESENTABLE_ALIGNMENT_MASK(len) \
-    cc128_get_alignment_mask(len)
+    CAP_cc(get_alignment_mask)(len)
 
 /* Provide macros to make it easier to work with the raw CRAM/CRRL results: */
 #define	CHERI_REPRESENTABLE_ALIGNMENT(len) \
