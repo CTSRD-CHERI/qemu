@@ -53,6 +53,25 @@ static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
     TCGLabel *l1 = gen_new_label();
     TCGLabel *l2 = gen_new_label();
 
+    /*
+     * Alignment must always be checked (even on reservation address mismatch):
+     * "If the address is not naturally aligned, an address-misaligned
+     * exception or an access-fault exception will be generated".
+     * We have to do the alignment check unconditionally (instead of only in the
+     * mismatch case) since the implicit alignment check as part of
+     * tcg_gen_atomic_cmpxchg_tl_with_checked_addr() can result in a load being
+     * emitted before a store in which case we would end up with a load fault
+     * rather than an AMO fault.
+     */
+    cheri_debug_assert((mop & MO_ALIGN) && "store-conditional must be aligned");
+    if (memop_size(mop) > 1) {
+        TCGv_i32 tmop = tcg_const_i32(mop);
+        TCGv_i32 tcode = tcg_const_i32(RISCV_EXCP_STORE_AMO_ADDR_MIS);
+        gen_helper_check_alignment(cpu_env, (TCGv)addr, tmop, tcode);
+        tcg_temp_free_i32(tcode);
+        tcg_temp_free_i32(tmop);
+    }
+
     tcg_gen_brcond_cap_checked(TCG_COND_NE, load_res, addr, l1);
     gen_get_gpr(src2, a->rs2);
     /*

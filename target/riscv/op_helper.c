@@ -234,6 +234,15 @@ target_ulong helper_mret(CPURISCVState *env, target_ulong cpu_pc_deb)
     return retpc;
 }
 
+void HELPER(check_alignment)(CPURISCVState *env, target_ulong addr, MemOp op,
+                             uint32_t exc)
+{
+    if (addr & (memop_size(op) - 1)) {
+        env->badaddr = addr;
+        riscv_raise_exception(env, exc, GETPC());
+    }
+}
+
 void helper_wfi(CPURISCVState *env)
 {
     CPUState *cs = env_cpu(env);
