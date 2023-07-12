@@ -46,6 +46,7 @@
 
 #ifdef TARGET_CHERI
 
+#include "cheri-helper-utils.h"
 #include "cheri-archspecific.h"
 
 #define GET_FLAG(C, F)                                                         \

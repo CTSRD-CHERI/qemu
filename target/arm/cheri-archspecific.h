@@ -87,6 +87,8 @@ static inline ARMFaultType cheri_cause_to_arm_fault(CheriCapExcCause cause)
 void QEMU_NORETURN raise_exception(CPUARMState *env, uint32_t excp,
                                    uint32_t syndrome, uint32_t target_el);
 
+static inline const char *cheri_cause_str(CheriCapExcCause cause);
+
 static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     target_ulong addr, bool instavail, uintptr_t hostpc, bool instruction_fetch,
@@ -113,6 +115,10 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
               : syn_data_abort_no_iss(current_el == target_el, 0, 0, cm, 0,
                                       (is_write || cm) ? 1 : 0, fsc);
 
+    qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+        "Got CHERI trap %s caused by register %d\n",
+        cheri_cause_str(cause), regnum);
+
     if (hostpc) {
         // AARCH's cpu_restore_state will reset syndrome, so don't use
         // raise_exception_ra here.
@@ -124,8 +130,6 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
                     instruction_fetch ? EXCP_PREFETCH_ABORT : EXCP_DATA_ABORT,
                     syn, target_el);
 }
-
-static inline const char *cheri_cause_str(CheriCapExcCause cause);
 
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
