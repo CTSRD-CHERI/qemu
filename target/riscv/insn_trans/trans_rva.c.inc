@@ -19,13 +19,13 @@
  */
 
 static inline bool gen_lr_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
-                               arg_atomic *a, MemOp mop)
+                               arg_atomic *a, int mmu_idx, MemOp mop)
 {
     /* Put addr in load_res, data in load_val.  */
     if (a->rl) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
     }
-    tcg_gen_qemu_ld_tl_with_checked_addr(load_val, addr, ctx->mem_idx, mop);
+    tcg_gen_qemu_ld_tl_with_checked_addr(load_val, addr, mmu_idx, mop);
     if (a->aq) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_LDAQ);
     }
@@ -39,13 +39,13 @@ static inline bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
 {
     TCGv_cap_checked_ptr addr =
         get_capmode_dependent_load_addr(ctx, a->rs1, 0, mop);
-    bool result = gen_lr_impl(ctx, addr, a, mop);
+    bool result = gen_lr_impl(ctx, addr, a, ctx->mem_idx, mop);
     tcg_temp_free_cap_checked(addr);
     return result;
 }
 
 static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
-                               arg_atomic *a, MemOp mop)
+                               arg_atomic *a, int mmu_idx, MemOp mop)
 {
     TCGv src1 = tcg_temp_new();
     TCGv src2 = tcg_temp_new();
@@ -60,7 +60,7 @@ static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
      * so we can ignore AQ/RL along this path.
      */
     tcg_gen_atomic_cmpxchg_tl_with_checked_addr(src1, load_res, load_val, src2,
-                                                ctx->mem_idx, mop);
+                                                mmu_idx, mop);
     tcg_gen_setcond_tl(TCG_COND_NE, dat, src1, load_val);
     gen_set_gpr(a->rd, dat);
     tcg_gen_br(l2);
@@ -91,7 +91,7 @@ static inline bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
 {
     TCGv_cap_checked_ptr addr =
         get_capmode_dependent_load_addr(ctx, a->rs1, 0, mop);
-    bool result = gen_sc_impl(ctx, addr, a, mop);
+    bool result = gen_sc_impl(ctx, addr, a, ctx->mem_idx, mop);
     tcg_temp_free_cap_checked(addr);
     return result;
 }

@@ -51,3 +51,8 @@ sc       ....... .....  ..... 011 ..... 0100011 @s # def SC_64  : RVInstS<0x3, O
 lr_c        00010 . . 00000 ..... 011 ..... 0101111 @atom_ld
 sc_c        00011 . . ..... ..... 011 ..... 0101111 @atom_st
 amoswap_c   00001 . . ..... ..... 011 ..... 0101111 @atom_st
+
+ld_c_u_cap    1111001  01011 ..... 000 ..... 1011011 @r2  # This is ld_d_u_cap (8-byte load) for RV64
+lr_c_u_cap    1111001  11011 ..... 000 ..... 1011011 @atom_ld_cap_or_ddc  # This is lr_d_u_cap for RV64
+st_c_u_cap    1111000  ..... ..... 000 01011 1011011 @r_2source  # This is st_d_u_cap (8-byte store) for RV64
+sc_c_u_cap    1111000  ..... ..... 000 11011 1011011 @atom_st_cap_or_ddc  # This is sc_d_u_cap for RV64

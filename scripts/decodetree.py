@@ -1291,10 +1291,11 @@ def main():
     global variablewidth
     global anyextern
 
+    depfile = None
     decode_scope = 'static '
 
     long_opts = ['decode=', 'translate=', 'output=', 'insnwidth=',
-                 'static-decode=', 'varinsnwidth=']
+                 'static-decode=', 'varinsnwidth=', 'depfile=']
     try:
         (opts, args) = getopt.gnu_getopt(sys.argv[1:], 'o:vw:', long_opts)
     except getopt.GetoptError as err:
@@ -1319,6 +1320,8 @@ def main():
                 insnmask = 0xffff
             elif insnwidth != 32:
                 error(0, 'cannot handle insns of width', insnwidth)
+        elif o == '--depfile':
+            depfile = a
         else:
             assert False, 'unhandled option'
 
@@ -1326,6 +1329,10 @@ def main():
         error(0, 'missing input file')
 
     toppat = ExcMultiPattern(0)
+
+    if output_file is not None and depfile is not None:
+        with open(depfile, 'w+') as df:
+            df.write(output_file + ": " + " ".join(args))
 
     for filename in args:
         input_file = filename

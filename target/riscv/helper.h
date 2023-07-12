@@ -74,9 +74,11 @@ DEF_HELPER_4(amoswap_cap, void, env, i32, i32, i32)
 DEF_HELPER_3(lr_c_modedep, void, env, i32, i32)
 DEF_HELPER_3(lr_c_ddc, void, env, i32, i32)
 DEF_HELPER_3(lr_c_cap, void, env, i32, i32)
+DEF_HELPER_3(lr_c_u_cap, void, env, i32, i32)
 DEF_HELPER_3(sc_c_modedep, tl, env, i32, i32)
 DEF_HELPER_3(sc_c_ddc, tl, env, i32, i32)
 DEF_HELPER_3(sc_c_cap, tl, env, i32, i32)
+DEF_HELPER_3(sc_c_u_cap, tl, env, i32, i32)
 #endif
 
 #ifdef CONFIG_TCG_LOG_INSTR

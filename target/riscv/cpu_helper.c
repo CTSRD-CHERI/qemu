@@ -771,7 +771,15 @@ restart:
                     }
                 }
             }
-            if ((pte & PTE_CW) == 0) {
+
+            /*
+             * Flag this TLB entry as requiring a trap on cap-store if either
+             * CD or CW is clear, paralleling the existing logic around W and D
+             * above.  As with PTE_D, the (CHERI-augmented) TCG TLB logic will
+             * translate again during a cap store before actually trapping,
+             * giving us an opportunity to set CD.
+             */
+            if ((pte & (PTE_CD | PTE_CW)) != (PTE_CD | PTE_CW)) {
                 *prot |= PAGE_SC_TRAP;
             }
 #endif
