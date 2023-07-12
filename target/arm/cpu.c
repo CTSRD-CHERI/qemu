@@ -946,7 +946,7 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     const char *ns_status;
 
 #ifdef TARGET_CHERI
-    aarch64_cpu_dump_cap_register(f, "pcc", cheri_get_current_pcc(env));
+    aarch64_cpu_dump_cap_register(f, "pcc", cheri_get_recent_pcc(env));
     aarch64_cpu_dump_cap_register(f, "ddc", cheri_get_ddc(env));
     for (i = 0; i < 32; i++) {
         aarch64_cpu_dump_cap_register(f, cheri_gp_regnames[i],
