@@ -61,6 +61,11 @@ static inline bool gen_sc_impl(DisasContext *ctx, TCGv_cap_checked_ptr addr,
      */
     tcg_gen_atomic_cmpxchg_tl_with_checked_addr(src1, load_res, load_val, src2,
                                                 ctx->mem_idx, mop);
+    /*
+     * cmpxchg will perform a read and therefore update mem_rmask, but to match
+     * sail we should report that this was just a store.
+     */
+    gen_rvfi_dii_set_field_const_i32(MEM, mem_rmask, 0);
     tcg_gen_setcond_tl(TCG_COND_NE, dat, src1, load_val);
     gen_set_gpr(a->rd, dat);
     tcg_gen_br(l2);
