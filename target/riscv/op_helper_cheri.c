@@ -413,9 +413,17 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     // (this is not a real load).
     target_ulong current_pesbt;
     target_ulong current_cursor;
+#ifdef CONFIG_RVFI_DII
+    /* The read that is part of the cmpxchg should not be visible in traces. */
+    uint32_t old_rmask = env->rvfi_dii_trace.MEM.rvfi_mem_rmask;
+#endif
     bool current_tag =
         load_cap_from_memory_raw(env, &current_pesbt, &current_cursor, addr_reg,
                                  cbp, addr, _host_return_address, NULL);
+#ifdef CONFIG_RVFI_DII
+    /* The read that is part of the cmpxchg should not be visible in traces. */
+    env->rvfi_dii_trace.MEM.rvfi_mem_rmask = old_rmask;
+#endif
     if (current_cursor != env->load_val || current_pesbt != env->load_pesbt ||
         current_tag != env->load_tag) {
         goto sc_failed;
