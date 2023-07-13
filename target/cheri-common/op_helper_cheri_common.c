@@ -300,10 +300,7 @@ target_ulong CHERI_HELPER_IMPL(cgetsealed(CPUArchState *env, uint32_t cb))
      * CGetSealed: Move sealed bit to a General-Purpose Register
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    if (cap_is_sealed_with_type(cbp) || cap_is_sealed_entry(cbp))
-        return (target_ulong)1;
-    assert(cap_is_unsealed(cbp) && "Unknown reserved otype?");
-    return (target_ulong)0;
+    return cap_is_unsealed(cbp) ? 0 : 1;
 }
 
 target_ulong CHERI_HELPER_IMPL(cgettag(CPUArchState *env, uint32_t cb))
