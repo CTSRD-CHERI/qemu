@@ -49,6 +49,8 @@
 #include "target_arch_cpu.h"
 
 #ifdef TARGET_CHERI
+#include "cheri_tagtree.h"
+
 #include "cheri/cherireg.h"
 
 #include "machine/vmparam.h"
@@ -501,6 +503,7 @@ int main(int argc, char **argv)
     init_task_state(ts);
 
 #ifdef TARGET_CHERI
+    cheri_tagtree_init();
     for (ii = 0; ii < 32; ii++) {
         regs->regs[ii] = *cheri_get_ddc(env);
     }
