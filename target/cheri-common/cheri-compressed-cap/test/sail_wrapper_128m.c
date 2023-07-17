@@ -90,8 +90,28 @@ struct cc128m_bounds_bits sail_extract_bounds_bits_128m(uint64_t pesbt) {
 uint64_t sail_compress_128m_raw(const cc128m_cap_t* csp) { return sail_compress_common_raw(csp); }
 uint64_t sail_compress_128m_mem(const cc128m_cap_t* csp) { return sail_compress_common_mem(csp); }
 
-bool sail_setbounds_128m(cc128m_cap_t* cap, cc128m_addr_t req_base, cc128m_length_t req_top) {
-    abort(); // TODO: call sailgen_CapSetBounds();
+bool sail_setbounds_128m(cc128m_cap_t* cap, cc128m_length_t req_len) {
+    lbits sail_len;
+    CREATE(sail_cap_bits)(&sail_len);
+    cc_length_t_to_sail_cap_bits(&sail_len, req_len);
+    lbits sail_result;
+    CREATE(lbits)(&sail_result);
+    lbits capbits = cap_t_to_sail_cap(cap);
+    _CC_CONCAT(MORELLO_SAIL_PREFIX, CapSetBounds)(&sail_result, capbits, sail_len, false);
+    KILL(lbits)(&sail_len);
+    KILL(lbits)(&capbits);
+    _cc_cap_t tmp = from_sail_cap(&sail_result);
+    // Check if the resulting bounds were exact. The sail code does not return the value of lostBot/Top, so we check the
+    // resulting bounds against the expected values. NB: We have to compare the low 56 bits of base and top since the
+    // high bits and change of sign are not included in the exactness check.
+    cc128_length_t req_base = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapBoundsAddress)(cap->_cr_cursor);
+    cc128_length_t req_top =
+        _CC_CONCAT(MORELLO_SAIL_PREFIX, CapBoundsAddress)((cc128_length_t)cap->_cr_cursor + req_len);
+    bool exact = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapBoundsAddress)(tmp._cr_top) == req_top &&
+                 _CC_CONCAT(MORELLO_SAIL_PREFIX, CapBoundsAddress)(tmp.cr_base) == req_base;
+    *cap = tmp;
+    KILL(lbits)(&sail_result);
+    return exact;
 }
 
 bool sail_fast_is_representable_128m(const cc128m_cap_t* cap, cc128m_addr_t new_addr) {

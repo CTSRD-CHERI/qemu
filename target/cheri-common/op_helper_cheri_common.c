@@ -590,7 +590,7 @@ static target_ulong crap_impl(target_ulong len) {
     // capability and returning the resulting length
     cap_register_t tmpcap;
     set_max_perms_capability(&tmpcap, 0);
-    CAP_cc(setbounds)(&tmpcap, 0, len);
+    CAP_cc(setbounds)(&tmpcap, len);
     // Previously QEMU return (1<<64)-1 for a representable length of 1<<64
     // (similar to CGetLen), but all other implementations just strip the
     // high bit instead. Note: This allows a subsequent CSetBoundsExact to
@@ -696,9 +696,8 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
         if (is_cap_sealed(&derived)) {
             derived.cr_tag = 0;
         }
-        cap_set_cursor(&derived, cap_get_cursor(&result));
-        CAP_cc(setbounds)(&derived, cap_get_base(&result),
-                          cap_get_top_full(&result));
+        cap_set_cursor(&derived, cap_get_base(&result));
+        CAP_cc(setbounds)(&derived, cap_get_length_full(&result));
         cap_set_cursor(&derived, cap_get_cursor(&result));
         CAP_cc(update_perms)(&derived, cap_get_perms(cbp) & cap_get_perms(ctp));
         CAP_cc(update_uperms)(&derived,
@@ -1041,61 +1040,41 @@ static void do_setbounds(bool must_be_exact, CPUArchState *env, uint32_t cd,
                          uintptr_t _host_return_address)
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    target_ulong new_base = cap_get_cursor(cbp);
 
-#ifdef TARGET_AARCH64
-    if (CAP_cc(cap_bounds_uses_value)(cbp))
-        new_base = CAP_cc(cap_bounds_address)(cap_get_cursor(cbp));
-#endif
-
-    cap_length_t new_top = (cap_length_t)new_base + length; // 65 bits
     DEFINE_RESULT_VALID;
+    cap_register_t result = *cbp;
     /*
      * CSetBounds: Set Bounds
      */
-    if (!cbp->cr_tag) {
-        raise_cheri_exception_or_invalidate(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
+    bool exact;
+    if (!CHERI_TAG_CLEAR_ON_INVALID(env)) {
+        /*
+         * The setbounds call will invalidate any results with larger bounds
+         * than the input, but for trapping architectures we still need to
+         * perform these checks here.
+         */
+        if (!cbp->cr_tag) {
+            raise_cheri_exception(env, CapEx_TagViolation, cb);
+        } else if (is_cap_sealed(cbp)) {
+            raise_cheri_exception(env, CapEx_SealViolation, cb);
+        } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), length)) {
+            raise_cheri_exception(env, CapEx_LengthViolation, cb);
+        }
+        /* Use checked_setbounds to ensure we didn't missed any checks. */
+        exact = CAP_cc(checked_setbounds)(&result, length);
+    } else {
+        exact = CAP_cc(setbounds)(&result, length);
+        RESULT_VALID = cbp->cr_tag && result.cr_tag;
     }
-#ifndef TARGET_AARCH64
-    /*
-     * On morello this check needs doing later as the resulting bounds may
-     * not be exact, but then break monotonicity.
-     */
-    else if (new_base < cbp->cr_base) {
-        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
-    } else if (new_top > cap_get_top_full(cbp)) {
-        raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, cb);
-    }
-#endif
-    cap_register_t result = *cbp;
     /*
      * With compressed capabilities we may need to increase the range of
-     * memory addresses to be wider than requested so it is
-     * representable.
+     * memory addresses to be wider than requested so it is representable.
      */
-    const bool exact = CAP_cc(setbounds)(&result, new_base, new_top);
     if (!exact)
         env->statcounters_imprecise_setbounds++;
     if (must_be_exact && !exact) {
         raise_cheri_exception_or_invalidate(env, CapEx_InexactBounds, cb);
     }
-
-#ifdef TARGET_AARCH64
-    if ((result.cr_base < cbp->cr_base) ||
-        (cap_get_top_full(&result) > cap_get_top_full(cbp))) {
-        RESULT_VALID = false;
-    }
-    /*
-     * Work around bug introduced in cheri-compressed-cap commit
-     *1a3898fa066e9f7e0560ccc95731d5b7f3a7c882 that resulted in the high
-     * bits of the cursor incorrectly being cleared for Morello.
-     * FIXME: remove once we have updatedd cheri-compressed-cap to include
-     * https://github.com/CTSRD-CHERI/cheri-compressed-cap/pull/14
-     */
-    result._cr_cursor = cbp->_cr_cursor;
-#endif
 
     if (RESULT_VALID) {
         assert(cap_is_representable(&result) &&

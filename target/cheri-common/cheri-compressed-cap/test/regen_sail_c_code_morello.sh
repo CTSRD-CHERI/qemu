@@ -21,6 +21,8 @@ fi
 
 sail128_srcs="prelude.sail builtins.sail decode_start.sail v8_base.sail decode_end.sail stubs.sail no_devices.sail impdefs.sail"
 keep_required_functions=(
+  -c_preserve CapBoundsAddress
+  -c_preserve CapBoundsUsesValue
   -c_preserve CapGetBounds
   -c_preserve CapGetBottom
   -c_preserve CapGetExponent
