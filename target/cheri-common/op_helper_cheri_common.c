@@ -1469,18 +1469,14 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
 }
 
-void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
-                                   target_ulong vaddr, target_ulong retpc,
-                                   int mmu_idx)
+static void store_cap_memory_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
+                                          bool tag,
+                                          target_ulong pesbt_for_mem,
+                                          target_ulong cursor,
+                                          target_ulong vaddr,
+                                          target_ulong retpc,
+                                          int mmu_idx)
 {
-    target_ulong cursor = get_capreg_cursor(env, cs);
-    target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_NULL_XOR_MASK;
-#ifdef CONFIG_DEBUG_TCG
-    if (get_capreg_state(cheri_get_gpcrs(env), cs) == CREG_INTEGER) {
-        tcg_debug_assert(pesbt_for_mem == 0 && "Integer values should have NULL PESBT");
-    }
-#endif
-    bool tag = get_capreg_tag_filtered(env, cs);
     if (cs == NULL_CAPREG_INDEX) {
         tcg_debug_assert(pesbt_for_mem == 0 && "Wrong value for cnull?");
         tcg_debug_assert(cursor == 0 && "Wrong value for cnull?");
@@ -1561,6 +1557,32 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         qemu_log_instr_st_cap(env, vaddr, &stored_cap);
     }
 #endif
+}
+
+void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
+                                   target_ulong vaddr, target_ulong retpc,
+                                   int mmu_idx)
+{
+    target_ulong cursor = get_capreg_cursor(env, cs);
+    target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_NULL_XOR_MASK;
+#ifdef CONFIG_DEBUG_TCG
+    if (get_capreg_state(cheri_get_gpcrs(env), cs) == CREG_INTEGER) {
+        tcg_debug_assert(pesbt_for_mem == 0 && "Integer values should have NULL PESBT");
+    }
+#endif
+    bool tag = get_capreg_tag_filtered(env, cs);
+
+    return store_cap_memory_to_memory_mmu_index(env, cs, tag, pesbt_for_mem,
+                                                cursor, vaddr, retpc, mmu_idx);
+}
+
+void store_cap_memory_to_memory(CPUArchState *env, uint32_t cs, bool tag,
+                                target_ulong pesbt_for_mem, target_ulong cursor,
+                                target_ulong vaddr, target_ulong retpc)
+{
+    return store_cap_memory_to_memory_mmu_index(env, cs, tag, pesbt_for_mem,
+                                                cursor, vaddr, retpc,
+                                                cpu_mmu_index(env, false));
 }
 
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
