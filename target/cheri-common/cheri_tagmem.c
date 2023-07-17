@@ -32,6 +32,7 @@
  * SUCH DAMAGE.
  */
 #include "cheri_tagmem.h"
+#include "cheri_usermem.h"
 #include "exec/exec-all.h"
 #include "exec/log.h"
 #include "exec/ramblock.h"
@@ -48,10 +49,6 @@
 
 #if !defined(TARGET_CHERI)
 #error "Should only be included for TARGET_CHERI"
-#endif
-
-#if defined(CONFIG_USER_ONLY) || defined(CHERI_USER_NO_TAGS)
-#error "Should not be included in the user mode or when tag validation is disabled"
 #endif
 
 // XXX: use secure/target_tlb_bit0/target_tlb_bit1 for cheri TLB permissions?
@@ -119,9 +116,16 @@ _Static_assert(CAP_TAG_GET_MANY_SHFT <= 3, "");
 
 static inline size_t num_tagblocks(RAMBlock* ram)
 {
-    uint64_t memory_size = memory_region_size(ram->mr);
+    uint64_t memory_size;
+#ifdef CONFIG_USER_ONLY
+    memory_size = ram->size;
+#else
+    memory_size = memory_region_size(ram->mr);
+#endif
     size_t result = DIV_ROUND_UP(memory_size, CHERI_CAP_SIZE * CAP_TAGBLK_SIZE);
+#ifndef CONFIG_USER_ONLY
     assert(result == (memory_size / CHERI_CAP_SIZE) >> CAP_TAGBLK_SHFT);
+#endif
     return result;
 }
 
@@ -229,23 +233,33 @@ static inline QEMU_ALWAYS_INLINE void tagblock_clear_tag_tagmem(void *tagmem,
     qatomic_and(p, ~BIT_MASK(index));
 }
 
+#ifndef CONFIG_USER_ONLY
 static inline QEMU_ALWAYS_INLINE void tagblock_clear_tag(CheriTagBlock *block,
                                                          size_t block_index)
 {
     tagblock_clear_tag_tagmem(block->tag_bitmap, block_index);
 }
+#endif
 
+#ifdef CONFIG_USER_ONLY
+void cheri_tag_init(RAMBlock *ram, uint64_t memory_size)
+#else
 void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
+#endif
 {
+#ifndef CONFIG_USER_ONLY
+    RAMBlock *ram;
+
     assert(memory_region_is_ram(mr));
     assert(memory_region_size(mr) == memory_size &&
            "Incorrect tag mem size passed?");
-    assert(mr->ram_block->cheri_tags == NULL && "Already initialized?");
+    ram = mr->ram_block;
+#endif
+    assert(ram->cheri_tags == NULL && "Already initialized?");
 
-    size_t cheri_ntagblks = num_tagblocks(mr->ram_block);
-    mr->ram_block->cheri_tags =
-        g_malloc0(cheri_ntagblks * sizeof(CheriTagBlock *));
-    if (mr->ram_block->cheri_tags == NULL) {
+    size_t cheri_ntagblks = num_tagblocks(ram);
+    ram->cheri_tags = g_malloc0(cheri_ntagblks * sizeof(CheriTagBlock *));
+    if (ram->cheri_tags == NULL) {
         error_report("%s: Can't allocated tag memory", __func__);
         exit(-1);
     }
@@ -269,9 +283,14 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
         }
         if (tag_write) {
             error_report("Attempting change tag bit on memory without tags:");
+#ifdef CONFIG_USER_ONLY
+            error_report("%s: vaddr=0x%jx -> 0x%jx", __func__,
+                         (uintmax_t)vaddr, (uintmax_t)ram_offset);
+#else
             error_report("%s: vaddr=0x%jx -> %s+0x%jx", __func__,
                          (uintmax_t)vaddr, ram ? ram->idstr : NULL,
                          (uintmax_t)ram_offset);
+#endif
         }
         return ALL_ZERO_TAGBLK;
     }
@@ -285,6 +304,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 
     if (tag_write && !tagblk) {
         cheri_tag_new_tagblk(ram, tag);
+#ifndef CONFIG_USER_ONLY
         CPUState *cpu = env_cpu(env);
         /*
          * A vaddr-based shootdown is insufficient as multiple mappings may
@@ -296,6 +316,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
          * this instruction and THEN exit.
          */
         tlb_flush(cpu);
+#endif
         tagblk = cheri_tag_block(tag, ram);
         cheri_debug_assert(tagblk);
     }
@@ -314,6 +335,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
     return ALL_ZERO_TAGBLK;
 }
 
+#ifndef CONFIG_USER_ONLY
 static inline void *get_tagmem_from_iotlb_entry(CPUArchState *env,
                                                 target_ulong vaddr, int mmu_idx,
                                                 bool isWrite,
@@ -339,6 +361,53 @@ static inline void *get_tagmem_from_iotlb_entry(CPUArchState *env,
         *flags_out = IOTLB_GET_TAGMEM_FLAGS(iotlbentry, read);
         return IOTLB_GET_TAGMEM(iotlbentry, read);
     }
+}
+#endif
+
+/*
+ * Returns a pointer to a block of tags that corresponds to a page including
+ * vaddr.
+ */
+static inline void *cheri_tag_get_tagmem(CPUArchState *env,
+                                         target_ulong vaddr, int mmu_idx,
+                                         bool isWrite,
+                                         uintptr_t *flags_out)
+{
+#ifdef CONFIG_USER_ONLY
+    RAMBlock *ram;
+    void *host_address, *tagmem;
+    ram_addr_t ram_address, ram_offset;
+    int prot;
+    target_ulong vaddr_page;
+
+    vaddr_page = (vaddr & TARGET_PAGE_MASK);
+    host_address = g2h(vaddr_page);
+    ram_address = qemu_ram_addr_from_host(host_address);
+    ram = qemu_get_ram_block(ram_address);
+    if (ram != NULL) {
+        ram_offset = qemu_ram_block_host_offset(ram, host_address);
+    } else {
+        ram_offset = ram_address;
+    }
+    prot = 0;
+    tagmem = cheri_tagmem_for_addr(env, vaddr_page, ram, ram_offset,
+        TARGET_PAGE_SIZE, &prot, isWrite);
+    *flags_out = 0;
+    if ((prot & (PAGE_LC_CLEAR | PAGE_SC_CLEAR)) != 0) {
+        *flags_out |= TLBENTRYCAP_FLAG_CLEAR;
+    }
+    if ((prot & (PAGE_LC_TRAP | PAGE_SC_TRAP)) != 0) {
+        *flags_out |= TLBENTRYCAP_FLAG_TRAP;
+    }
+    if ((prot & PAGE_LC_TRAP_ANY) != 0) {
+        *flags_out |= TLBENTRYCAP_FLAG_TRAP_ANY;
+    }
+    return (tagmem);
+#else
+
+    return (get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, isWrite,
+                                        flags_out));
+#endif
 }
 
 typedef struct TagOffset {
@@ -438,8 +507,8 @@ static void *cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
     }
 
     uintptr_t tagmem_flags;
-    void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags);
+    void *tagmem = cheri_tag_get_tagmem(env, vaddr, mmu_idx, true,
+                                        &tagmem_flags);
 
     if (tagmem == ALL_ZERO_TAGBLK) {
         // All tags for this page are zero -> no need to invalidate. We also
@@ -468,6 +537,7 @@ static void *cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
     return host_addr;
 }
 
+#ifndef CONFIG_USER_ONLY
 void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
                                ram_addr_t ram_offset, ram_addr_t len,
                                const target_ulong *vaddr)
@@ -476,8 +546,10 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
     if (!ram->cheri_tags) {
         return;
     }
+#ifndef CONFIG_USER_ONLY
     cheri_debug_assert(!memory_region_is_rom(ram->mr) &&
                        !memory_region_is_romd(ram->mr));
+#endif
 
     ram_addr_t endaddr = (uint64_t)(ram_offset + len);
     ram_addr_t startaddr = QEMU_ALIGN_DOWN(ram_offset, CHERI_CAP_SIZE);
@@ -503,11 +575,15 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
         }
     }
 }
+#endif
 
 /*
  * TODO: Basically nothing uses this physical address. Tag set probably should
  * not have to return it.
  */
+#ifdef CONFIG_USER_ONLY
+#define handle_paddr_return(rw) vaddr
+#else
 #define handle_paddr_return(rw)                                                \
     do {                                                                       \
         if (ret_paddr) {                                                       \
@@ -516,6 +592,7 @@ void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
                           TARGET_PAGE_MASK);                                   \
         }                                                                      \
     } while (0)
+#endif
 
 #ifdef TARGET_MIPS
 #define store_capcause_reg(env, reg) cpu_mips_store_capcause_reg(env, reg)
@@ -545,8 +622,8 @@ void *cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
     }
 
     uintptr_t tagmem_flags;
-    void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
-                                               /*write=*/true, &tagmem_flags);
+    void *tagmem = cheri_tag_get_tagmem(env, vaddr, mmu_idx, /*write=*/true,
+            &tagmem_flags);
 
     /* Clear + ALL_ZERO_TAGBLK means no tags can be stored here. */
     if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
@@ -588,8 +665,8 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
-    void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
-                                               /*write=*/false, &tagmem_flags);
+    void *tagmem = cheri_tag_get_tagmem(env, vaddr, mmu_idx,
+                                        /*write=*/false, &tagmem_flags);
 
     if (prot) {
         *prot = 0;
@@ -629,8 +706,8 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
-    void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
-                                               /*write=*/false, &tagmem_flags);
+    void *tagmem = cheri_tag_get_tagmem(env, vaddr, mmu_idx,
+                                        /*write=*/false, &tagmem_flags);
 
     int result =
         ((tagmem == ALL_ZERO_TAGBLK) || (tagmem_flags & TLBENTRYCAP_FLAG_CLEAR))
@@ -668,8 +745,8 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     handle_paddr_return(write);
 
     uintptr_t tagmem_flags;
-    void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags);
+    void *tagmem = cheri_tag_get_tagmem(env, vaddr, mmu_idx, true,
+                                        &tagmem_flags);
 
     if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
         (tagmem == ALL_ZERO_TAGBLK)) {
@@ -696,8 +773,10 @@ bool cheri_tag_get_debug(RAMBlock *ram, ram_addr_t ram_offset)
     if (!ram->cheri_tags) {
         return false;
     }
+#ifndef CONFIG_USER_ONLY
     cheri_debug_assert(!memory_region_is_rom(ram->mr) &&
                        !memory_region_is_romd(ram->mr));
+#endif
 
     cheri_debug_assert(QEMU_ALIGN_DOWN(ram_offset, CHERI_CAP_SIZE) ==
                        ram_offset);

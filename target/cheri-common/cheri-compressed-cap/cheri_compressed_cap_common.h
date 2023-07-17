@@ -38,15 +38,6 @@
 
 #include <stdbool.h>
 
-#if defined(CONFIG_USER_ONLY) && !defined(CHERI_USER_NO_TAGS)
-/*
- * Tagged Memory Emulation depends on SoftMMU that is unavailable in the user
- * mode. Since we don't have tags for capabilities stored in memory, we cannot
- * validate nor invalidate them at the moment.
- */
-#define CHERI_USER_NO_TAGS
-#endif
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {

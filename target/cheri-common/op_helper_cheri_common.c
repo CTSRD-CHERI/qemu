@@ -51,10 +51,6 @@
 #error "This file should only be compiled for CHERI"
 #endif
 
-#if defined(CONFIG_USER_ONLY) && !defined(CHERI_USER_NO_TAGS)
-#error "Tags must not be validated nor invalidated in the user mode"
-#endif
-
 #ifdef __clang__
 #pragma clang diagnostic error "-Wdeprecated-declarations"
 #else

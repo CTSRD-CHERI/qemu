@@ -17,6 +17,17 @@ void tcg_flush_softmmu_tlb(CPUState *cs);
 void tcg_iommu_init_notifier_list(CPUState *cpu);
 void tcg_iommu_free_notifier_list(CPUState *cpu);
 
+/* address in the RAM (different from a physical address) */
+#if defined(CONFIG_XEN_BACKEND)
+typedef uint64_t ram_addr_t;
+#  define RAM_ADDR_MAX UINT64_MAX
+#  define RAM_ADDR_FMT "%" PRIx64
+#else
+typedef uintptr_t ram_addr_t;
+#  define RAM_ADDR_MAX UINTPTR_MAX
+#  define RAM_ADDR_FMT "%" PRIxPTR
+#endif
+
 #if !defined(CONFIG_USER_ONLY)
 
 enum device_endian {
@@ -29,17 +40,6 @@ enum device_endian {
 #define DEVICE_HOST_ENDIAN DEVICE_BIG_ENDIAN
 #else
 #define DEVICE_HOST_ENDIAN DEVICE_LITTLE_ENDIAN
-#endif
-
-/* address in the RAM (different from a physical address) */
-#if defined(CONFIG_XEN_BACKEND)
-typedef uint64_t ram_addr_t;
-#  define RAM_ADDR_MAX UINT64_MAX
-#  define RAM_ADDR_FMT "%" PRIx64
-#else
-typedef uintptr_t ram_addr_t;
-#  define RAM_ADDR_MAX UINTPTR_MAX
-#  define RAM_ADDR_FMT "%" PRIxPTR
 #endif
 
 extern ram_addr_t ram_size;
@@ -105,6 +105,6 @@ typedef int (RAMBlockIterFunc)(RAMBlock *rb, void *opaque);
 int qemu_ram_foreach_block(RAMBlockIterFunc func, void *opaque);
 int ram_block_discard_range(RAMBlock *rb, uint64_t start, size_t length);
 
-#endif
+#endif /* defined(CONFIG_USER_ONLY) */
 
 #endif /* CPU_COMMON_H */

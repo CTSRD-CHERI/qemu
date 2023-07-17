@@ -37,11 +37,17 @@
 #include "exec/memory.h"
 
 #if defined(TARGET_CHERI)
+
+#ifdef CONFIG_USER_ONLY
+void cheri_tag_init(RAMBlock* ram, uint64_t memory_size);
+#else
 /* Note: for cheri_tag_phys_invalidate, env may be NULL */
 void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,
                                ram_addr_t offset, size_t len,
                                const target_ulong *vaddr);
 void cheri_tag_init(MemoryRegion* mr, uint64_t memory_size);
+#endif
+
 /**
  * Generic tag invalidation function to be called for a *single* data store:
  * Note: this will currently invalidate at most two tags (as can happen
