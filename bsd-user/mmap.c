@@ -24,6 +24,11 @@
 #include "qemu-common.h"
 #include "translate-all.h"
 
+#ifdef TARGET_CHERI
+#include "exec/ramblock.h"
+#include "target/cheri-common/cheri_usermem.h"
+#endif
+
 #include "target_os_errno.h"
 #include "target_os_syscallsubr.h"
 #include "target_os_mman.h"
@@ -701,6 +706,7 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
     off_t offset;
     vm_offset_t addr_mask = ~TARGET_PAGE_MASK;
 #ifdef TARGET_CHERI
+    RAMBlock *block;
     vm_size_t padded_size = 0;
 #endif
     int align;
@@ -1066,6 +1072,30 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
     printf("\n");
 #endif
     tb_invalidate_phys_range(start, start + len);
+#ifdef TARGET_CHERI
+    block = qemu_find_ram_block((vm_offset_t)g2h(start));
+    if (block != NULL) {
+        /*
+         * XXXKW: Currently, the block must strictly contain the allocation
+         * if it includes the allocation's start address.
+         *
+         * A process can request a mapping that partially overlaps with
+         * a previous mapping. The implementation must be extended to cover
+         * this case.
+         */
+        assert((uintptr_t)block->host + block->size >=
+            (uintptr_t)g2h(start) + len);
+    } else {
+        /*
+         * There is no block that contains the start address.
+         *
+         * XXXKW: It is still possible that there are existing overlapping
+         * blocks. The new block should be limited to memory that is not
+         * currently covered.
+         */
+        (void)qemu_ram_alloc_from_ptr(len, g2h((void *)(uintptr_t)start));
+    }
+#endif
     mmap_unlock();
 #ifdef TARGET_CHERI
     if (ts != NULL) {
@@ -1190,6 +1220,11 @@ int target_munmap(abi_ulong start, abi_ulong len)
     if (ret == 0) {
         page_set_flags(start, start + len, 0);
         tb_invalidate_phys_range(start, start + len);
+#ifdef TARGET_CHERI
+        /*
+         * TODO: Remove tags for the allocation.
+         */
+#endif
     }
     mmap_unlock();
     return ret;
