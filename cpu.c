@@ -28,6 +28,10 @@
 #include "migration/vmstate.h"
 #ifdef CONFIG_USER_ONLY
 #include "qemu.h"
+#ifdef TARGET_CHERI
+#include "target/cheri-common/cheri_tagmem.h"
+#include "target/cheri-common/cheri_usermem.h"
+#endif
 #else
 #include "exec/address-spaces.h"
 #endif
@@ -429,6 +433,58 @@ int cpu_memory_rw_debug(CPUState *cpu, target_ulong addr,
     }
     return 0;
 }
+
+#ifdef TARGET_CHERI
+int cpu_memory_readcap_debug(CPUState *cpu, target_ulong addr, void *ptr,
+                             target_ulong len)
+{
+    target_ulong l, page;
+    uint8_t *buf, *ram_ptr;
+    void *p;
+    RAMBlock *ram_block;
+    hwaddr ram_len;
+    ram_addr_t ram_offset;
+
+    buf = ptr;
+    while (len > 0) {
+        page = addr & TARGET_PAGE_MASK;
+        l = (page + TARGET_PAGE_SIZE) - addr;
+        if (l > len) {
+            l = len;
+        }
+
+        if (!(p = lock_user(VERIFY_READ, addr, l, 1)))
+            return -1;
+
+        ram_block = qemu_get_ram_block((vm_offset_t)p);
+        ram_ptr = qemu_ram_ptr_length(ram_block,
+                                      qemu_ram_block_host_offset(ram_block, p),
+                                      &l, false);
+        if (l % CHERI_CAP_SIZE != 0)
+            return -1;
+        ram_len = l;
+        ram_offset = qemu_ram_block_host_offset(ram_block, ram_ptr);
+
+        while (ram_len > 0) {
+            buf[0] = cheri_tag_get_debug(ram_block, ram_offset);
+            memcpy(buf + 1, ram_ptr, CHERI_CAP_SIZE);
+
+            ram_len -= CHERI_CAP_SIZE;
+            ram_offset += CHERI_CAP_SIZE;
+            ram_ptr += CHERI_CAP_SIZE;
+
+            buf += CHERI_CAP_SIZE + 1;
+        }
+
+        unlock_user(p, addr, 0);
+
+        len -= l;
+        addr += l;
+    }
+
+    return 0;
+}
+#endif /* TARGET_CHERI */
 #endif
 
 bool target_words_bigendian(void)

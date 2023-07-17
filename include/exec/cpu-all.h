@@ -434,7 +434,7 @@ void dump_opcount_info(void);
 int cpu_memory_rw_debug(CPUState *cpu, target_ulong addr,
                         void *ptr, target_ulong len, bool is_write);
 
-#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+#if defined(TARGET_CHERI)
 /*
  * len is length in address space, buffer at 'ptr' has one extra byte
  * per aligned capability for each tag

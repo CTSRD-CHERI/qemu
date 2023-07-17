@@ -86,7 +86,7 @@ static inline int target_memory_rw_debug(CPUState *cpu, target_ulong addr,
     return cpu_memory_rw_debug(cpu, addr, buf, len, is_write);
 }
 
-#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+#ifdef TARGET_CHERI
 static inline int target_memory_readcap_debug(CPUState *cpu, target_ulong addr,
                                               uint8_t *buf, int len)
 {
@@ -2185,7 +2185,7 @@ static void handle_query_supported(GdbCmdContext *gdb_ctx, void *user_ctx)
         gdbserver_state.multiprocess = true;
     }
 
-#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+#ifdef TARGET_CHERI
     g_string_append(gdbserver_state.str_buf, ";qXfer:capa:read+");
 #endif
 
@@ -2245,7 +2245,7 @@ static void handle_query_xfer_features(GdbCmdContext *gdb_ctx, void *user_ctx)
                       gdbserver_state.str_buf->len, true);
 }
 
-#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+#ifdef TARGET_CHERI
 static void handle_query_xfer_capa_read(GdbCmdContext *gdb_ctx, void *user_ctx)
 {
     uint8_t capbuf[CHERI_CAP_SIZE + 1];
@@ -2400,7 +2400,7 @@ static GdbCmdParseEntry gdb_gen_query_table[] = {
         .cmd_startswith = 1,
         .schema = "s:l,l0"
     },
-#if defined(TARGET_CHERI) && !defined(CONFIG_USER_ONLY)
+#ifdef TARGET_CHERI
     {
         .handler = handle_query_xfer_capa_read,
         .cmd = "Xfer:capa:read:",
