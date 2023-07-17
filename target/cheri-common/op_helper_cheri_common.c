@@ -748,7 +748,7 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     if (!RESULT_VALID) {
         result.cr_tag = 0;
     }
-    try_set_cap_cursor(env, cbp, cb, cd, cap_get_otype_signext(ctp),
+    try_set_cap_cursor(env, &result, cb, cd, cap_get_otype_signext(ctp),
                        /*precise_repr_check=*/true, GETPC(),
                        OOB_INFO(ccopytype));
 }
