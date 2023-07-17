@@ -21,6 +21,8 @@
 #include "qemu/error-report.h"
 
 #ifdef TARGET_CHERI
+#include "cheri-helper-utils.h"
+
 #include "cheri/cheric.h"
 #endif
 

@@ -60,6 +60,7 @@ extern enum BSDType bsd_type;
 #include "exec/gdbstub.h"
 
 #define THREAD __thread
+#define THREAD_ENV()    ((CPUArchState *)thread_cpu->env_ptr)
 
 /* This struct is used to hold certain information about the image.
  * Basically, it replicates in user space what would be certain
@@ -563,6 +564,22 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
         __ret = -TARGET_EFAULT;                                         \
     __ret;                                                              \
 })
+#ifdef TARGET_CHERI
+#define put_user_capability(tag, pesbt, cursor, gaddr)                  \
+({                                                                      \
+    abi_ulong __gaddr = (gaddr);                                        \
+    uint8_t *__hptr;                                                    \
+    abi_long __ret;                                                     \
+    if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, CHERI_CAP_SIZE, 0))) { \
+        store_cap_memory_to_memory(THREAD_ENV(), REG_NONE, tag, pesbt,  \
+                                   cursor, __gaddr, GETPC());           \
+        __ret = 0;                                                      \
+        unlock_user(__hptr, __gaddr, CHERI_CAP_SIZE);                   \
+    } else                                                              \
+        __ret = -TARGET_EFAULT;                                         \
+    __ret;                                                              \
+})
+#endif
 
 #define get_user(x, gaddr, target_type)                                 \
 ({                                                                      \
@@ -592,22 +609,8 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define put_user_s8(x, gaddr)  put_user((x), (gaddr), int8_t)
 #ifdef TARGET_CHERI
 #define put_user_c(x, gaddr)                                            \
-({                                                                      \
-    abi_ulong __gaddr = (gaddr);                                        \
-    uint8_t *__hptr;                                                    \
-    abi_long __ret;                                                     \
-    if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, CHERI_CAP_SIZE, 0))) { \
-        __ret = __put_user(CAP_cc(compress_raw)(x) ^ CAP_CC(NULL_XOR_MASK), \
-            (uint64_t *)(__hptr + CHERI_MEM_OFFSET_METADATA));          \
-        if (__ret == 0) {                                               \
-            __ret = __put_user((x)->_cr_cursor,                         \
-               (uint64_t *)(__hptr + CHERI_MEM_OFFSET_CURSOR));         \
-        }                                                               \
-        unlock_user(__hptr, __gaddr, CHERI_CAP_SIZE);                   \
-    } else                                                              \
-        __ret = -TARGET_EFAULT;                                         \
-    __ret;                                                              \
-})
+        put_user_capability((x)->cr_tag != 0, CAP_cc(compress_mem)(x),  \
+                            (x)->_cr_cursor, gaddr)
 #define put_user_p(x, gaddr)                                            \
 ({                                                                      \
                                                                         \
@@ -619,22 +622,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #endif
 #ifdef TARGET_CHERI
 #define put_user_uintcap(x, gaddr)                                      \
-({                                                                      \
-    abi_ulong __gaddr = (gaddr);                                        \
-    uint8_t *__hptr;                                                    \
-    abi_long __ret;                                                     \
-    if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, CHERI_CAP_SIZE, 0))) { \
-        __ret = __put_user((x).pesbt, \
-            (uint64_t *)(__hptr + CHERI_MEM_OFFSET_METADATA));          \
-        if (__ret == 0) {                                               \
-            __ret = __put_user((x).cursor,                              \
-               (uint64_t *)(__hptr + CHERI_MEM_OFFSET_CURSOR));         \
-        }                                                               \
-        unlock_user(__hptr, __gaddr, CHERI_CAP_SIZE);                   \
-    } else                                                              \
-        __ret = -TARGET_EFAULT;                                         \
-    __ret;                                                              \
-})
+        put_user_capability(true, (x).pesbt, (x).cursor, gaddr)
 #define put_user_uintptr(x, gaddr) put_user_uintcap(x, gaddr)
 #else
 #define put_user_uintptr(x, gaddr) put_user_ual(x, gaddr)
