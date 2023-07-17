@@ -19,11 +19,20 @@
 #ifndef QEMU_EXEC_RAMBLOCK_H
 #define QEMU_EXEC_RAMBLOCK_H
 
-#ifndef CONFIG_USER_ONLY
 #include "cpu-common.h"
 
 struct CheriTagMem; // opaque struct
 
+#ifdef CONFIG_USER_ONLY
+struct RAMBlock {
+    /* Instead of mr->size */
+    uint64_t size;
+    uint8_t *host;
+
+    /* Bitmap of CHERI tag bits */
+    struct CheriTagMem *cheri_tags;
+};
+#else
 struct RAMBlock {
     struct rcu_head rcu;
     struct MemoryRegion *mr;
