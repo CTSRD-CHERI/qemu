@@ -728,7 +728,7 @@ void CHERI_HELPER_IMPL(ccopytype(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
     }
-    if (cap_is_sealed_with_reserved_otype(ctp)) {
+    if (cap_is_sealed_with_reserved_otype(ctp) || cap_is_unsealed(ctp)) {
         if (CHERI_TAG_CLEAR_ON_INVALID(env)) {
             RESULT_VALID = false;
         } else {
