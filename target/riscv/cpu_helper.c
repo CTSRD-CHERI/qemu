@@ -1112,6 +1112,27 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     int prot = 0;
     hwaddr pa = 0;
     target_ulong tlb_size = 0;
+#ifdef TARGET_CHERI
+    if (!probe && access_type != MMU_INST_FETCH) {
+        /*
+         * Check if access wraps around the address space, and was not prevented
+         * by earlier checks. This can only happen if we have a full address
+         * space DDC, since in all other cases bounds checks will be performed.
+         * Ideally we would emit the TCG checks unconditionally (which would
+         * allow not performing the check here), but omitting TGG bounds checks
+         * for full-AS DDC results in a major speedup when booting a
+         * non-CHERI/hybrid OS kernel.
+         */
+        target_ulong end_addr = 0;
+        if (unlikely(__builtin_add_overflow((target_ulong)address, size,
+                                            &end_addr) && end_addr > 0)) {
+            assert(cap_get_top_full(cheri_get_ddc(env)) == CAP_MAX_TOP &&
+                   cap_get_base(cheri_get_ddc(env)) == 0);
+            check_cap(env, cheri_get_ddc(env), 0, address, CHERI_EXC_REGNUM_DDC,
+                      size, /*instavail=*/true, retaddr);
+        }
+    }
+#endif
     int ret = riscv_cpu_tlb_fill_impl(env, address, size, access_type, mmu_idx,
                                       &pmp_violation, &first_stage_error, &prot,
                                       &pa, retaddr);
