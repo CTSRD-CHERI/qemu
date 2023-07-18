@@ -1,5 +1,6 @@
 if 'arm-softmmu' in target_dirs or \
     'aarch64-softmmu' in target_dirs or \
+    'morello-softmmu' in target_dirs or \
     'i386-softmmu' in target_dirs or \
     'x86_64-softmmu' in target_dirs
   bzip2 = find_program('bzip2', required: true)
