@@ -111,6 +111,7 @@ enum CheriSCR {
 #define CHERI_CONTROLFLOW_CHECK_AT_TARGET 0
 /* TODO: switch tag clearing to true once CheriBSD is ready for it. */
 #define CHERI_TAG_CLEAR_ON_INVALID(env) (env_archcpu(env)->cfg.ext_cheri_v9)
+#define CHERI_TRANSLATE_DDC_RELOCATION(ctx) 1
 #define CINVOKE_DATA_REGNUM 31
 
 static inline const cap_register_t *cheri_get_ddc(CPURISCVState *env) {

@@ -186,22 +186,13 @@ static inline void _generate_special_checked_ptr(
     TCGv_cap_checked_ptr checked_addr, TCGv integer_addr,
     target_ulong num_bytes, bool use_ddc)
 {
-    // PCC interposition currently done mostly by the caller.
-    bool need_interposition =
-        use_ddc && !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_NO_INTERPOSE);
+    /* PCC interposition is currently done mostly by the caller. */
+    bool need_ddc_interposition =
+        use_ddc && CHERI_TRANSLATE_DDC_RELOCATION(ctx);
 
-    // Would be nice to get rid of the ifdefs in this otherwise (mostly) target
-    // indepedent header. Probably a call in to somethging in cheri-archspecific
-    // for each use of an ifdef.
-#ifdef TARGET_AARCH64
-    // Recover cctlr stashed in flags, and check if we need a base offset
-    uint32_t cctlr = (ctx->base.cheri_flags >> TB_FLAG_CHERI_SPARE_INDEX_START)
-                     << CCTLR_DEFINED_START;
-    need_interposition &= (cctlr & CCTLR_DDCBO) != 0;
-#endif
-
-    // We need interposition since the base/cursor is not zero.
-    if (unlikely(need_interposition)) {
+    if (unlikely(need_ddc_interposition) &&
+        !have_cheri_tb_flags(ctx, TB_FLAG_CHERI_DDC_NO_INTERPOSE)) {
+        /* We need interposition since the base/cursor is not zero. */
         tcg_gen_add_tl((TCGv)checked_addr, integer_addr, ddc_interposition);
     } else if ((TCGv)checked_addr != integer_addr) {
         tcg_gen_mov_tl((TCGv)checked_addr, integer_addr);
