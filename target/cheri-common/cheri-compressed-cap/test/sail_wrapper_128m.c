@@ -34,7 +34,6 @@
 
 /* Provide the Morello-specific APIs for sail_wrapper_common.c */
 
-#define MORELLO_SAIL_PREFIX sailgen_
 #define SAIL_COMPRESSION_GENERATED_C_FILE "contrib/sail_compression_128m.c"
 // Two 65-bit bounds and a bool (for exactness)
 #define sail_bounds_tuple ztuple_z8z5bvzCz0z5bvzCz0z5boolz9
@@ -79,10 +78,10 @@ static inline uint64_t extract_sail_cap_bits(sail_cap_bits* bits, uint64_t start
 struct cc128m_bounds_bits sail_extract_bounds_bits_128m(uint64_t pesbt) {
     // We have to XOR the pesbt bits here since the Morello sail model does not invert on load/store.
     lbits sailcap = to_sail_cap(pesbt ^ CC128M_NULL_XOR_MASK, 0, false);
-    struct cc128m_bounds_bits result = {.E = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapGetExponent)(sailcap),
-                                        .B = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapGetBottom)(sailcap),
-                                        .T = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapGetTop)(sailcap),
-                                        .IE = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapIsInternalExponent)(sailcap)};
+    struct cc128m_bounds_bits result = {.E = sailgen_CapGetExponent(sailcap),
+                                        .B = sailgen_CapGetBottom(sailcap),
+                                        .T = sailgen_CapGetTop(sailcap),
+                                        .IE = sailgen_CapIsInternalExponent(sailcap)};
     KILL(lbits)(&sailcap);
     return result;
 }
@@ -97,18 +96,16 @@ bool sail_setbounds_128m(cc128m_cap_t* cap, cc128m_length_t req_len) {
     lbits sail_result;
     CREATE(lbits)(&sail_result);
     lbits capbits = cap_t_to_sail_cap(cap);
-    _CC_CONCAT(MORELLO_SAIL_PREFIX, CapSetBounds)(&sail_result, capbits, sail_len, false);
+    sailgen_doCSetBounds(&sail_result, capbits, sail_len);
     KILL(lbits)(&sail_len);
     KILL(lbits)(&capbits);
     _cc_cap_t tmp = from_sail_cap(&sail_result);
     // Check if the resulting bounds were exact. The sail code does not return the value of lostBot/Top, so we check the
     // resulting bounds against the expected values. NB: We have to compare the low 56 bits of base and top since the
     // high bits and change of sign are not included in the exactness check.
-    cc128_length_t req_base = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapBoundsAddress)(cap->_cr_cursor);
-    cc128_length_t req_top =
-        _CC_CONCAT(MORELLO_SAIL_PREFIX, CapBoundsAddress)((cc128_length_t)cap->_cr_cursor + req_len);
-    bool exact = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapBoundsAddress)(tmp._cr_top) == req_top &&
-                 _CC_CONCAT(MORELLO_SAIL_PREFIX, CapBoundsAddress)(tmp.cr_base) == req_base;
+    cc128_length_t req_base = sailgen_CapBoundsAddress(cap->_cr_cursor);
+    cc128_length_t req_top = sailgen_CapBoundsAddress((cc128_length_t)cap->_cr_cursor + req_len);
+    bool exact = sailgen_CapBoundsAddress(tmp._cr_top) == req_top && sailgen_CapBoundsAddress(tmp.cr_base) == req_base;
     *cap = tmp;
     KILL(lbits)(&sail_result);
     return exact;
@@ -117,14 +114,14 @@ bool sail_setbounds_128m(cc128m_cap_t* cap, cc128m_length_t req_len) {
 bool sail_fast_is_representable_128m(const cc128m_cap_t* cap, cc128m_addr_t new_addr) {
     lbits sailcap = cap_t_to_sail_cap(cap);
     uint64_t increment = new_addr - cap->_cr_cursor;
-    bool result = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapIsRepresentableFast)(sailcap, increment);
+    bool result = sailgen_CapIsRepresentableFast(sailcap, increment);
     KILL(lbits)(&sailcap);
     return result;
 }
 
 bool sail_precise_is_representable_128m(const cc128m_cap_t* cap, cc128m_addr_t new_addr) {
     lbits sailcap = cap_t_to_sail_cap(cap);
-    bool result = _CC_CONCAT(MORELLO_SAIL_PREFIX, CapIsRepresentable)(sailcap, new_addr);
+    bool result = sailgen_CapIsRepresentable(sailcap, new_addr);
     KILL(lbits)(&sailcap);
     return result;
 }

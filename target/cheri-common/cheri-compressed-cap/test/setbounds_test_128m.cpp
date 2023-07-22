@@ -48,3 +48,20 @@ TEST_CASE("Fuzzer incorrect exact result 1", "[fuzz]") {
     CHECK(result.top() == (CC128M_MAX_ADDRESS_PLUS_ONE | 0x2100000000000000));
     CHECK(result.top() - req_len == result.base());
 }
+
+TEST_CASE("Fuzzer rounded top greater existing top", "[fuzz]") {
+    // We should detag if the rounded new top is greater than the existing top (found by fuzzer).
+    // NB: if we add addr+req_len we get 0x3F0037222B0000F6, but due to this changing the "sign" of the capability
+    // address the rounded bounds end up being > 1<<64.
+    // This previously asserted because we were asserting `cap->_cr_top <= old_top` before the sign change detagged.
+    TestAPICC::cap_t cap = TestAPICC::make_max_perms_cap(0, 0x3effffff00000000, _CC_MAX_TOP);
+    uint64_t req_len = UINT64_C(0x37232b0000f6);
+    bool was_exact = false;
+    auto result = do_csetbounds<TestAPICC>(cap, &was_exact, req_len);
+    CHECK(!result.cr_tag);
+    CHECK(result.address() == 0x3effffff00000000);
+    CHECK(result.base() == 0xfffffffc00000000);
+    CHECK(result.top() == (CC128M_MAX_ADDRESS_PLUS_ONE | 0x0000372400000000));
+    CHECK(result.cr_exp == 31);
+    CHECK(!was_exact);
+}

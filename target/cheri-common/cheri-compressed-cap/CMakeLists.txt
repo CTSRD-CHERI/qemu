@@ -150,7 +150,7 @@ enable_testing()
 Include(FetchContent)
 FetchContent_Declare(Catch2
   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG        v3.2.1
+  GIT_TAG        v3.4.0
 )
 FetchContent_MakeAvailable(Catch2)
 list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
@@ -208,6 +208,7 @@ function(add_fuzz_tests _format)
             add_sail_wrapper(${_format} "-fuzzer-asan-ubsan" "-fsanitize=undefined,address,fuzzer;-fno-sanitize-recover=undefined")
             add_executable(fuzz_decompress_${_format}-asan test/fuzz_decompress.cpp)
             add_format_test_definions(fuzz_decompress_${_format}-asan ${_format})
+            target_compile_options(fuzz_decompress_${_format}-asan PRIVATE -UNDEBUG)
             target_compile_options(fuzz_decompress_${_format}-asan PRIVATE -fsanitize=undefined,address,fuzzer -fno-sanitize-recover=undefined)
             target_link_libraries(fuzz_decompress_${_format}-asan PRIVATE -fsanitize=undefined,address,fuzzer -fno-sanitize-recover=undefined)
             target_link_libraries(fuzz_decompress_${_format}-asan PRIVATE sail_wrapper_${_format}-fuzzer-asan-ubsan)

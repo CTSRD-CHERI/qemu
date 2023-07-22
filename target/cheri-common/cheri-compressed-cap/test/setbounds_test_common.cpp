@@ -4,6 +4,9 @@
 #include <cstring>
 
 #include "test_common.cpp"
+#include <catch2/matchers/catch_matchers_exception.hpp>
+
+using Catch::Matchers::Message;
 
 #if 0
 struct setbounds_regressions {
@@ -45,7 +48,8 @@ static inline void check_csetbounds_invariants(const typename Handler::cap_t& in
         REQUIRE(with_bounds.top() == requested_top);
 #endif
     } else {
-        REQUIRE(with_bounds.base() <= requested_base); // base must not be greater than what we asked for
+        // base must not be greater than what we asked for
+        REQUIRE(_cc_N(cap_bounds_address)(with_bounds.base()) <= _cc_N(cap_bounds_address)(requested_base));
         if (requested_top > _CC_N(MAX_LENGTH)) {
             REQUIRE(!with_bounds.cr_tag);
         } else {
@@ -84,6 +88,10 @@ static typename Handler::cap_t do_csetbounds(const typename Handler::cap_t& init
     // Re-create the bounded capability and assert that the current pesbt values matches that one.
     if (with_bounds.cr_tag) {
         auto new_cap = Handler::make_max_perms_cap(with_bounds.base(), with_bounds.address(), with_bounds.top());
+        // Update permissions, type, etc. by masking everything except the bounds bits.
+        auto ebt = new_cap.cr_pesbt & _CC_N(FIELD_EBT_MASK64);
+        new_cap.cr_pesbt = with_bounds.cr_pesbt;
+        _cc_N(update_ebt)(&new_cap, ebt);
         CHECK(new_cap == with_bounds);
         CHECK(new_cap.cr_pesbt == with_bounds.cr_pesbt);
         CHECK(new_cap.cr_pesbt == Handler::compress_raw(with_bounds));
@@ -213,7 +221,8 @@ TEST_CASE("Setbounds API misuse", "[regression]") {
     CHECK(with_bounds_greater_top.base() == cap.base());
     CHECK(with_bounds_greater_top.top() == cap.top() + 8);
 #ifndef NDEBUG
-    CHECK_THROWS_AS(_cc_N(checked_setbounds)(&cap, 8), std::invalid_argument);
+    CHECK_THROWS_MATCHES(_cc_N(checked_setbounds)(&cap, 8), std::invalid_argument,
+                         Message("cannot increase top on tagged capabilities"));
 #endif
 }
 
@@ -229,7 +238,8 @@ TEST_CASE("Setbounds API misuse (creating larger cap)", "[regression]") {
     CHECK(cap.top() == 0x00000000401be000);
     // Capabilities that end up being larger than the input should be detagged by the caller.
 #ifndef NDEBUG
-    CHECK_THROWS_AS(_cc_N(checked_setbounds)(&cap, req_len), std::invalid_argument);
+    CHECK_THROWS_MATCHES(_cc_N(checked_setbounds)(&cap, req_len), std::invalid_argument,
+                         Message("cannot increase top on tagged capabilities"));
 #endif
     TestAPICC::cap_t cap2 = cap;
     CHECK(cap2.cr_tag);
@@ -248,7 +258,8 @@ TEST_CASE("Setbounds detag sealed inputs", "[regression]") {
     uint64_t req_len = 0x20;
 #ifndef NDEBUG
     // Sealed, tagged input capabilities should be rejected.
-    CHECK_THROWS_AS(_cc_N(checked_setbounds)(&cap, req_len), std::invalid_argument);
+    CHECK_THROWS_MATCHES(_cc_N(checked_setbounds)(&cap, req_len), std::invalid_argument,
+                         Message("cannot be used on tagged sealed capabilities"));
 #endif
     TestAPICC::cap_t cap2 = cap;
     CHECK(cap2.cr_tag);
@@ -257,4 +268,84 @@ TEST_CASE("Setbounds detag sealed inputs", "[regression]") {
     CHECK(!cap2.cr_tag);
     CHECK(cap2.base() == 16);
     CHECK(cap2.top() == cap2.base() + req_len);
+}
+
+TEST_CASE("Setbounds length overflow", "[fuzz]") {
+    // Calling setbounds with cursor+length overflowing previously resulted in an assertion
+    TestAPICC::cap_t cap = TestAPICC::make_max_perms_cap(/*base=*/0, /*cursor=*/_CC_MAX_ADDR, /*top=*/_CC_MAX_TOP);
+    TestAPICC::addr_t req_len = _CC_MAX_ADDR;
+#ifndef NDEBUG
+    // Overflowing cursor+base should be rejected.
+    CHECK_THROWS_MATCHES(_cc_N(checked_setbounds)(&cap, req_len), std::invalid_argument,
+                         Message("cannot increase top on tagged capabilities"));
+#endif
+    bool was_exact;
+    // The result should be detagged since we are setting bounds beyond top.
+    TestAPICC::cap_t result = do_csetbounds<TestAPICC>(cap, &was_exact, req_len);
+    CHECK(!was_exact);
+    CHECK(!result.cr_tag);
+    CHECK(result.base() < _CC_MAX_ADDR);
+    CHECK(result.top() == 0);
+}
+
+TEST_CASE("Setbounds base reduction", "[fuzz]") {
+    // Calling setbounds that reduces the base should detag and not assert
+    TestAPICC::cap_t cap = TestAPICC::make_max_perms_cap(/*base=*/8, /*cursor=*/2, /*top=*/11);
+    TestAPICC::addr_t req_len = 1;
+#ifndef NDEBUG
+    // Overflowing cursor+base should be rejected.
+    CHECK_THROWS_MATCHES(_cc_N(checked_setbounds)(&cap, req_len), std::invalid_argument,
+                         Message("cannot decrease base on tagged capabilities"));
+#endif
+    // The result should be detagged since we are setting bounds to start at less than base top.
+    bool was_exact;
+    TestAPICC::cap_t result = do_csetbounds<TestAPICC>(cap, &was_exact, req_len);
+    CHECK(!result.cr_tag);
+    CHECK(was_exact);
+    CHECK(result.base() == 2);
+    CHECK(result.address() == 2);
+    CHECK(result.top() == result.base() + req_len);
+}
+
+TEST_CASE("Setbounds top greater max", "[fuzz]") {
+    // Calling setbounds with a non-derivable capability that happened to have a valid tag should not trigger asserts
+    // even though such a capability should never be encountered during normal operation.
+    TestAPICC::cap_t cap = TestAPICC::make_null_derived_cap(_CC_MAX_ADDR);
+    bool exact_input = false;
+    // Increase top beyond end of addres space
+    cap._cr_top = _CC_MAX_TOP | (_CC_MAX_TOP >> 1);
+    _cc_N(update_ebt)(&cap, _cc_N(compute_ebt)(cap.cr_base, cap._cr_top, nullptr, &exact_input));
+    REQUIRE(exact_input);
+    REQUIRE(_cc_N(is_representable_cap_exact)(&cap));
+    // Set the tag bit to create an underivable capability (e.g. Morello's SetTag instruction)
+    cap.cr_tag = 1;
+    TestAPICC::addr_t req_len = 2;
+#ifndef NDEBUG
+    // Top > MAX_TOP should be rejected.
+    CHECK_THROWS_MATCHES(_cc_N(checked_setbounds)(&cap, req_len), std::invalid_argument,
+                         Message("new top must be smaller than max length"));
+#endif
+    bool was_exact;
+    TestAPICC::cap_t result = do_csetbounds<TestAPICC>(cap, &was_exact, req_len);
+    // Ideally the result should be detagged since we are setting bounds to start beyond MAX_TOP,
+    // but this is not the behaviour of existing hardware.
+    CHECK(result.cr_tag);
+    CHECK(was_exact);
+    CHECK(result.base() == _CC_MAX_ADDR);
+    CHECK(result.address() == _CC_MAX_ADDR);
+    CHECK(result.top() == (_CC_MAX_TOP | 1)); // New top should overflow
+
+#ifndef NDEBUG
+    // Top > MAX_TOP should be rejected.
+    CHECK_THROWS_MATCHES(_cc_N(checked_setbounds)(&cap, 0), std::invalid_argument,
+                         Message("input capability top must be less than max top"));
+#endif
+    result = do_csetbounds<TestAPICC>(cap, &was_exact, 0);
+    // Ideally the result should be detagged since the input was underivable,
+    // but this is not the behaviour of existing hardware.
+    CHECK(result.cr_tag);
+    CHECK(was_exact);
+    CHECK(result.base() == _CC_MAX_ADDR);
+    CHECK(result.address() == _CC_MAX_ADDR);
+    CHECK(result.top() == _CC_MAX_ADDR);
 }
