@@ -200,3 +200,11 @@ TEST_CASE("Omnipotent cap representable", "") {
     checkFastRepCheckSucceeds(max_cap, 1234);
     checkFastRepCheckSucceeds(max_cap, _CC_MAX_ADDR - 1234);
 }
+
+TEST_CASE("pesbt_is_correct ignores cr_extra", "") {
+    TestAPICC::cap_t null_cap = TestAPICC::make_null_derived_cap(0);
+    CHECK(_cc_N(pesbt_is_correct)(&null_cap));
+    // Changing cr_extra previously triggered assertions, check that it is ignored.
+    null_cap.cr_extra = 10;
+    CHECK(_cc_N(pesbt_is_correct)(&null_cap));
+}

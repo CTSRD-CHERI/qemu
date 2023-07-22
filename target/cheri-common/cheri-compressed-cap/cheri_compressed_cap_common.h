@@ -465,6 +465,7 @@ static inline bool _cc_N(pesbt_is_correct)(const _cc_cap_t* csp) {
     _cc_cap_t tmp;
     // NB: We use the unsafe decompression function here to handle non-derivable caps without asserting.
     _cc_N(unsafe_decompress_raw)(csp->cr_pesbt, csp->_cr_cursor, csp->cr_tag, &tmp);
+    tmp.cr_extra = csp->cr_extra; // raw_equal also compares, cr_extra but we don't care about that here.
     if (!_cc_N(raw_equal)(&tmp, csp)) {
         return false;
     }
