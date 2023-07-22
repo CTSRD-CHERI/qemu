@@ -305,9 +305,9 @@ static inline cap_register_t *null_capability(cap_register_t *cp)
     memset(cp, 0, sizeof(*cp)); // Set everything to zero including padding
     cp->_cr_top = CAP_MAX_TOP;
     cp->cr_pesbt = CAP_NULL_PESBT;
-    cheri_debug_assert(cap_is_representable(cp));
     cp->cr_bounds_valid = 1;
     cp->cr_exp = CAP_CC(NULL_EXP);
+    cheri_debug_assert(cap_is_representable(cp));
     cp->cr_extra = CREG_FULLY_DECOMPRESSED;
     return cp;
 }
