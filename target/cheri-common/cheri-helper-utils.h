@@ -140,7 +140,7 @@ static inline target_ulong check_ddc(CPUArchState *env, uint32_t perm,
                                      uintptr_t retpc)
 {
     const cap_register_t *ddc = cheri_get_ddc(env);
-    target_ulong addr = ddc_offset + cap_get_cursor(ddc);
+    target_ulong addr = cheri_ddc_relative_addr(env, ddc_offset);
     check_cap(env, ddc, perm, addr, CHERI_EXC_REGNUM_DDC, len,
         /*instavail=*/true, retpc);
     return addr;
