@@ -372,6 +372,7 @@
 #define XCCSR_DIRTY         0x2 /* Capability register written */
 #define SCCSR_SGCLG         0x4 /* Supervisor Global Cap Load Generation */
 #define SCCSR_UGCLG         0x8 /* User Global Cap Load Generation */
+#define XCCSR_NO_RELOCATION 0x40000000 /* CHERI without DDC/PCC relocation. */
 #define XCCSR_TAG_CLEARING  0x80000000 /* CHERI has tag-clearing semantics. */
 #endif
 

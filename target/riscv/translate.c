@@ -71,6 +71,7 @@ typedef struct DisasContext {
     bool hlsx;
 #ifdef TARGET_CHERI
     bool capmode;
+    bool cheri_v9_semantics;
 #endif
     /* vector extension */
     bool vill;
@@ -920,6 +921,7 @@ static void riscv_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
     ctx->mstatus_fs = tb_flags & TB_FLAGS_MSTATUS_FS;
 #ifdef TARGET_CHERI
     ctx->capmode = tb_in_capmode(ctx->base.tb);
+    ctx->cheri_v9_semantics = cpu->cfg.ext_cheri_v9;
 #endif
     ctx->priv_ver = env->priv_ver;
 #if !defined(CONFIG_USER_ONLY)
