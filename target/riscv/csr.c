@@ -1342,6 +1342,7 @@ static int read_ccsr(CPURISCVState *env, int csrno, target_ulong *val)
     ccsr = set_field(ccsr, XCCSR_ENABLE, cpu->cfg.ext_cheri);
     /* Read-only feature bits. */
     ccsr = set_field(ccsr, XCCSR_TAG_CLEARING, CHERI_TAG_CLEAR_ON_INVALID(env));
+    ccsr = set_field(ccsr, XCCSR_NO_RELOCATION, CHERI_NO_RELOCATION(env));
 
 #if !defined(TARGET_RISCV32)
     if (csrno == CSR_SCCSR)
