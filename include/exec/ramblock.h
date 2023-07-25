@@ -40,11 +40,18 @@ struct CheriTagMem; // opaque struct
 
 struct RAMBlock {
     /* Instead of mr->size */
-    uint64_t size;
-    uint8_t *host;
+    ram_addr_t size;
+    ram_addr_t host;
+
+    ram_addr_t cursor;
+    ram_addr_t length;
 
     /* Bitmap of CHERI tag bits */
     struct CheriTagMem *cheri_tags;
+
+    bool dirty;
+    int refcount;
+    RAMBlock *parent;
 };
 #else
 struct RAMBlock {

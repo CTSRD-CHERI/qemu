@@ -271,6 +271,25 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
     }
 }
 
+#ifdef CONFIG_USER_ONLY
+void cheri_tag_free(RAMBlock *ram)
+{
+    CheriTagBlock **tagmem;
+    size_t ii;
+
+    assert(ram != NULL);
+    assert(ram->cheri_tags != NULL);
+
+    tagmem = (CheriTagBlock **)ram->cheri_tags;
+    for (ii = 0; ii < num_tagblocks(ram); ii++) {
+        if (tagmem[ii] == NULL)
+            continue;
+        g_free(tagmem[ii]);
+    }
+    g_free(ram->cheri_tags);
+}
+#endif
+
 void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                             RAMBlock *ram, ram_addr_t ram_offset, size_t size,
                             int *prot, bool tag_write)

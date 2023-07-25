@@ -40,6 +40,7 @@
 
 #ifdef CONFIG_USER_ONLY
 void cheri_tag_init(RAMBlock* ram, uint64_t memory_size);
+void cheri_tag_free(RAMBlock *ram);
 #else
 /* Note: for cheri_tag_phys_invalidate, env may be NULL */
 void cheri_tag_phys_invalidate(CPUArchState *env, RAMBlock *ram,

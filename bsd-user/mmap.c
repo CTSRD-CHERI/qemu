@@ -706,7 +706,6 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
     off_t offset;
     vm_offset_t addr_mask = ~TARGET_PAGE_MASK;
 #ifdef TARGET_CHERI
-    RAMBlock *block;
     vm_size_t padded_size = 0;
 #endif
     int align;
@@ -1073,28 +1072,8 @@ target_mmap_req(TaskState *ts, abi_syscallret_t retval, struct mmap_req *mrp)
 #endif
     tb_invalidate_phys_range(start, start + len);
 #ifdef TARGET_CHERI
-    block = qemu_find_ram_block((vm_offset_t)g2h(start));
-    if (block != NULL) {
-        /*
-         * XXXKW: Currently, the block must strictly contain the allocation
-         * if it includes the allocation's start address.
-         *
-         * A process can request a mapping that partially overlaps with
-         * a previous mapping. The implementation must be extended to cover
-         * this case.
-         */
-        assert((uintptr_t)block->host + block->size >=
-            (uintptr_t)g2h(start) + len);
-    } else {
-        /*
-         * There is no block that contains the start address.
-         *
-         * XXXKW: It is still possible that there are existing overlapping
-         * blocks. The new block should be limited to memory that is not
-         * currently covered.
-         */
-        (void)qemu_ram_alloc_from_ptr(len, g2h((void *)(uintptr_t)start));
-    }
+    qemu_ram_clear_region(len, g2h(start));
+    (void)qemu_ram_alloc_from_ptr(len, g2h((void *)(uintptr_t)start));
 #endif
     mmap_unlock();
 #ifdef TARGET_CHERI
@@ -1221,9 +1200,7 @@ int target_munmap(abi_ulong start, abi_ulong len)
         page_set_flags(start, start + len, 0);
         tb_invalidate_phys_range(start, start + len);
 #ifdef TARGET_CHERI
-        /*
-         * TODO: Remove tags for the allocation.
-         */
+        qemu_ram_clear_region(len, g2h(start));
 #endif
     }
     mmap_unlock();

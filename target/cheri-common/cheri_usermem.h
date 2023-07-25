@@ -48,21 +48,17 @@
 ram_addr_t qemu_ram_addr_from_host(void *ptr);
 RAMBlock *qemu_find_ram_block(ram_addr_t addr);
 RAMBlock *qemu_get_ram_block(ram_addr_t addr);
+ram_addr_t qemu_ram_get_cursor(const RAMBlock *block);
+ram_addr_t qemu_ram_get_length(const RAMBlock *block);
 RAMBlock *qemu_ram_alloc_from_ptr(ram_addr_t size, void *host);
 
 ram_addr_t qemu_ram_block_host_offset(RAMBlock *rb, void *host);
 void *qemu_ram_ptr_length(RAMBlock *ram_block, ram_addr_t addr,
                                  hwaddr *size, bool lock);
+void qemu_ram_clear_region(ram_addr_t size, void *host);
 
-static inline bool offset_in_ramblock(RAMBlock *b, ram_addr_t offset)
-{
-    return (b && b->host && offset < b->size) ? true : false;
-}
+void *ramblock_ptr(RAMBlock *block, ram_addr_t offset);
+bool offset_in_ramblock(RAMBlock *b, ram_addr_t offset);
 
-static inline void *ramblock_ptr(RAMBlock *block, ram_addr_t offset)
-{
-    assert(offset_in_ramblock(block, offset));
-    return (char *)block->host + offset;
-}
 
 #endif /* !_CHERI_USERMEM_H_ */

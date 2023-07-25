@@ -42,6 +42,7 @@
 #error "Should only be included for CONFIG_USER_ONLY"
 #endif
 
+#include "cheri_usermem.h"
 #include "cheri_tagmem.h"
 #include "cheri_tagtree.h"
 
@@ -64,7 +65,7 @@ static gint cheri_tagtree_cmp_lookup(gconstpointer a, gconstpointer b,
     gpointer user_data)
 {
     const struct RAMBlock *blocka, *blockb;
-    vm_offset_t hostaddra, hostaddrb;
+    vm_offset_t cursora, cursorb;
 
     blocka = (const struct RAMBlock *)a;
     blockb = (const struct RAMBlock *)b;
@@ -72,16 +73,13 @@ static gint cheri_tagtree_cmp_lookup(gconstpointer a, gconstpointer b,
     /*
      * Order blocks by their start addresses.
      */
-    hostaddra = (uintptr_t)blocka->host;
-    hostaddrb = (uintptr_t)blockb->host;
-    if (hostaddra < hostaddrb) {
-        assert(hostaddra + blocka->size <= hostaddrb);
+    cursora = qemu_ram_get_cursor(blocka);
+    cursorb = qemu_ram_get_cursor(blockb);
+    if (cursora < cursorb) {
         return (-1);
-    } else if (hostaddrb < hostaddra) {
-        assert(hostaddrb + blockb->size <= hostaddra);
+    } else if (cursorb < cursora) {
         return (1);
     } else {
-        assert(blocka->size == blockb->size);
         return (0);
     }
 }
@@ -97,14 +95,16 @@ static gint cheri_tagtree_cmp_lookup(gconstpointer a, gconstpointer b,
  */
 static gint cheri_tagtree_cmp_search(gconstpointer a, gconstpointer b)
 {
-    const struct RAMBlock *block;
+    RAMBlock *block;
+    ram_addr_t cursor;
     vm_offset_t addr;
 
-    block = (const struct RAMBlock *)a;
+    block = (struct RAMBlock *)a;
+    cursor = qemu_ram_get_cursor(block);
     addr = (vm_offset_t)b;
 
-    if ((vm_offset_t)block->host <= addr) {
-        if (addr < (vm_offset_t)block->host + block->size) {
+    if (cursor <= addr) {
+        if (addr < cursor + qemu_ram_get_length(block)) {
             /* 
              * The current block starts before the address and does include the
              * address.
