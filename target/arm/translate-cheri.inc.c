@@ -393,8 +393,8 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
                 tcg_temp_free_i32(tcg_idx);
             } else {
                 (is_load ? gen_helper_load_cap_via_cap
-                         : gen_helper_store_cap_via_cap)(cpu_env, tcg_rd,
-                                                         tcg_base_reg, addr);
+                         : gen_helper_store_cap_via_cap)(cpu_env, tcg_rd, addr,
+                                                         tcg_base_reg);
             }
 
         } else {

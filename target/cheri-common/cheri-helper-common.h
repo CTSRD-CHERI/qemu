@@ -128,11 +128,19 @@ DEF_HELPER_FLAGS_3(cseqx, 0, tl, env, i32, i32)
 DEF_HELPER_FLAGS_3(ctoptr, 0, tl, env, i32, i32)
 
 // Loads+Stores
+/*
+ * These perform cap+offset checks which are not compatible with the assumption
+ * of the AArch64 tcg usage that makes use addresses everywhere.
+ * FIXME: these helpers should probably be deprecated in favour of a single one.
+ */
 DEF_HELPER_4(cap_load_check, cap_checked_ptr, env, i32, tl, i32)
 DEF_HELPER_4(cap_store_check, cap_checked_ptr, env, i32, tl, i32)
 DEF_HELPER_4(cap_rmw_check, cap_checked_ptr, env, i32, tl, i32)
-DEF_HELPER_4(load_cap_via_cap, void, env, i32, i32, tl)
-DEF_HELPER_4(store_cap_via_cap, void, env, i32, i32, tl)
+DEF_HELPER_5(cap_check_addr, cap_checked_ptr, env, i32, tl, i32, i32)
+DEF_HELPER_4(load_cap_via_cap, void, env, i32, tl, i32)
+DEF_HELPER_3(load_cap_via_ddc, void, env, i32, tl)
+DEF_HELPER_4(store_cap_via_cap, void, env, i32, tl, i32)
+DEF_HELPER_3(store_cap_via_ddc, void, env, i32, tl)
 
 // Misc
 DEF_HELPER_2(decompress_cap, void, env, i32)

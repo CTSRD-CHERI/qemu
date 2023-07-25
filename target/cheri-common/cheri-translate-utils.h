@@ -2222,16 +2222,12 @@ static inline void gen_cap_memop_checks(DisasContext *ctx, int regnum,
     // exception.
     TCGv_i32 tcg_regnum = tcg_const_i32(regnum);
     TCGv_i32 tcg_size = tcg_const_i32(size);
-    bool load = perms & CAP_PERM_LOAD;
-    bool store = perms & CAP_PERM_STORE;
-    // I dislike how there are different helpers for different permissions.
-    // Should Refactor.
-    ((load && store)
-         ? gen_helper_cap_rmw_check
-         : (load ? gen_helper_cap_load_check : gen_helper_cap_store_check))(
-        (TCGv_cap_checked_ptr)addr, cpu_env, tcg_regnum, addr, tcg_size);
+    TCGv_i32 tcg_perms = tcg_const_i32(perms);
+    gen_helper_cap_check_addr((TCGv_cap_checked_ptr)addr, cpu_env, tcg_regnum,
+                              addr, tcg_size, tcg_perms);
     tcg_temp_free_i32(tcg_regnum);
     tcg_temp_free_i32(tcg_size);
+    tcg_temp_free_i32(tcg_perms);
 #ifdef DO_TCG_BOUNDS_CHECKS
     /* Else */
     gen_set_label(skip);

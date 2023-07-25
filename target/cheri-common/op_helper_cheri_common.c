@@ -1241,8 +1241,13 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common(
     uint32_t required_perms, CPUArchState *env, uint32_t cb,
     target_ulong offset, uint32_t size, uintptr_t _host_return_address)
 {
+#ifdef TARGET_AARCH64
+    /* These helpers cannot be used on Morello since TCG passes addresses. */
+    tcg_abort();
+#endif
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
-    return cap_check_common_reg(required_perms, env, cb, offset, size,
+    return cap_check_common_reg(required_perms, env, cb,
+                                cap_get_cursor(cbp) + offset, size,
                                 _host_return_address, cbp, size,
                                 /*unaligned_handler=*/NULL);
 }
@@ -1276,36 +1281,71 @@ target_ulong CHERI_HELPER_IMPL(cap_rmw_check(CPUArchState *env, uint32_t cb,
                             size, GETPC());
 }
 
-/// Capability loads and stores
-void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t cd,
-                                        uint32_t cb, target_ulong offset))
+target_ulong CHERI_HELPER_IMPL(cap_check_addr(CPUArchState *env,
+                                              uint32_t authreg,
+                                              target_ulong addr, uint32_t size,
+                                              uint32_t required_perms))
 {
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
-
-    const target_ulong addr = cap_check_common_reg(
-        perms_for_load(), env, cb, offset, CHERI_CAP_SIZE, _host_return_address,
-        cbp, CHERI_CAP_SIZE, raise_unaligned_load_exception);
-
-    load_cap_from_memory(env, cd, cb, cbp, addr, _host_return_address,
-                         /*physaddr_out=*/NULL);
+    const cap_register_t *auth = get_load_store_base_cap(env, authreg);
+    return cap_check_common_reg(required_perms, env, authreg, addr, size,
+                                GETPC(), auth, size,
+                                /*unaligned_handler=*/NULL);
 }
 
-void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t cs,
-                                         uint32_t cb, target_ulong offset))
+/// Capability loads and stores
+void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t dstreg,
+                                        target_ulong addr, uint32_t authreg))
 {
     GET_HOST_RETPC();
-    // CSC traps on cbp == NULL so we use reg0 as $ddc to save encoding
-    // space and increase code density since storing relative to $ddc is common
-    // in the hybrid ABI (and also for backwards compat with old binaries).
-    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
 
-    const target_ulong addr =
-        cap_check_common_reg(perms_for_store(env, cs), env, cb, offset,
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_load(), env, authreg, addr,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_load_exception);
+
+    load_cap_from_memory(env, dstreg, authreg, cbp, checked_addr,
+                         _host_return_address, /*physaddr_out=*/NULL);
+}
+
+void CHERI_HELPER_IMPL(load_cap_via_ddc(CPUArchState *env, uint32_t dstreg,
+                                        target_ulong intaddr))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *ddc = cheri_get_ddc(env);
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_load(), env, CHERI_EXC_REGNUM_DDC,
+                             cheri_ddc_relative_addr(env, intaddr),
+                             CHERI_CAP_SIZE, _host_return_address, ddc,
+                             CHERI_CAP_SIZE, raise_unaligned_load_exception);
+    load_cap_from_memory(env, dstreg, CHERI_EXC_REGNUM_DDC, ddc, checked_addr,
+                         _host_return_address, /*physaddr_out=*/NULL);
+}
+
+void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
+                                         target_ulong addr, uint32_t authreg))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
                              CHERI_CAP_SIZE, _host_return_address, cbp,
                              CHERI_CAP_SIZE, raise_unaligned_store_exception);
 
-    store_cap_to_memory(env, cs, addr, _host_return_address);
+    store_cap_to_memory(env, valreg, checked_addr, _host_return_address);
+}
+
+void CHERI_HELPER_IMPL(store_cap_via_ddc(CPUArchState *env, uint32_t valreg,
+                                         target_ulong intaddr))
+{
+    GET_HOST_RETPC();
+    const target_ulong checked_addr = cap_check_common_reg(
+        perms_for_store(env, valreg), env, CHERI_EXC_REGNUM_DDC,
+        cheri_ddc_relative_addr(env, intaddr), CHERI_CAP_SIZE,
+        _host_return_address, cheri_get_ddc(env), CHERI_CAP_SIZE,
+        raise_unaligned_store_exception);
+    store_cap_to_memory(env, valreg, checked_addr, _host_return_address);
 }
 
 static inline bool
@@ -1563,8 +1603,8 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
     const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
     const target_ulong addr = cap_check_common_reg(
-        perms, env, cb, 0, sizealign, _host_return_address, cbp, sizealign,
-        raise_unaligned_load_exception);
+        perms, env, cb, cap_get_cursor(cbp), sizealign, _host_return_address,
+        cbp, sizealign, raise_unaligned_load_exception);
 
     target_ulong result = cheri_tag_get_many(env, addr, cb, NULL, GETPC());
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)

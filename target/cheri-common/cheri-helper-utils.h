@@ -285,20 +285,11 @@ typedef void QEMU_NORETURN (*unaligned_memaccess_handler)(CPUArchState *env,
  * and dead required_perms checks were still being performed every time.
  * Adding QEMU_ALWAYS_INLINE seed up the boot from ~288s to ~278s.
  */
-static inline QEMU_ALWAYS_INLINE target_ulong
-cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
-                     target_ulong offset, uint32_t size,
-                     uintptr_t _host_return_address, const cap_register_t *cbp,
-                     uint32_t alignment_required,
-                     unaligned_memaccess_handler unaligned_handler)
+static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
+    uint32_t required_perms, CPUArchState *env, uint32_t cb, target_ulong addr,
+    uint32_t size, uintptr_t _host_return_address, const cap_register_t *cbp,
+    uint32_t alignment_required, unaligned_memaccess_handler unaligned_handler)
 {
-    const target_ulong cursor = cap_get_cursor(cbp);
-#ifdef TARGET_AARCH64
-    const target_ulong addr = (target_long)offset;
-#else
-    const target_ulong addr = cursor + (target_long)offset;
-#endif
-
 #define MISSING_REQUIRED_PERM(X) ((required_perms & ~cap_get_perms(cbp)) & (X))
     // The check here is a little fiddly if this is a store and a load due to
     // priorities. For either loads or stores, permissions fault > bounds fault.
@@ -311,27 +302,27 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
     bool in_bounds = cap_is_in_bounds(cbp, addr, size);
 
     if (!cbp->cr_tag) {
-        raise_cheri_exception_addr_wnr(env, CapEx_TagViolation, cb, offset,
+        raise_cheri_exception_addr_wnr(env, CapEx_TagViolation, cb, addr,
                                        !is_load);
     } else if (!cap_is_unsealed(cbp)) {
-        raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, offset,
+        raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
                                        !is_load);
     } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD)) {
-        raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadViolation, cb,
-                                       offset, false);
+        raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadViolation, cb, addr,
+                                       false);
     } else if (MISSING_REQUIRED_PERM(CAP_PERM_LOAD_CAP)) {
         raise_cheri_exception_addr_wnr(env, CapEx_PermitLoadCapViolation, cb,
-                                       offset, false);
+                                       addr, false);
     } else if (!is_load || in_bounds) {
         if (MISSING_REQUIRED_PERM(CAP_PERM_STORE)) {
             raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreViolation, cb,
-                                           offset, true);
+                                           addr, true);
         } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_CAP)) {
             raise_cheri_exception_addr_wnr(env, CapEx_PermitStoreCapViolation,
-                                           cb, offset, true);
+                                           cb, addr, true);
         } else if (MISSING_REQUIRED_PERM(CAP_PERM_STORE_LOCAL)) {
             raise_cheri_exception_addr_wnr(
-                env, CapEx_PermitStoreLocalCapViolation, cb, offset, true);
+                env, CapEx_PermitStoreLocalCapViolation, cb, addr, true);
         }
     }
 #undef MISSING_REQUIRED_PERM
@@ -339,10 +330,10 @@ cap_check_common_reg(uint32_t required_perms, CPUArchState *env, uint32_t cb,
     if (!in_bounds) {
         qemu_log_instr_or_mask_msg(
             env, CPU_LOG_INT,
-            "Failed capability bounds check: offset=" TARGET_FMT_lx
-            " cursor=" TARGET_FMT_lx " addr=" TARGET_FMT_lx "\n",
-            offset, cursor, addr);
-        raise_cheri_exception_addr_wnr(env, CapEx_LengthViolation, cb, offset,
+            "Failed capability bounds check: addr=" TARGET_FMT_lx
+            " base=" TARGET_FMT_lx " top=" TARGET_FMT_lx "\n",
+            addr, cap_get_base(cbp), cap_get_top(cbp));
+        raise_cheri_exception_addr_wnr(env, CapEx_LengthViolation, cb, addr,
                                        !is_load);
     } else if (alignment_required &&
                !QEMU_IS_ALIGNED_P2(addr, alignment_required)) {
