@@ -298,35 +298,34 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
                              loaded_cursor);
 }
 
-static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
-                      target_long offset, uintptr_t _host_return_address)
+static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t auth_reg,
+                      target_ulong addr, uintptr_t _host_return_address)
 {
     assert(!qemu_tcg_mttcg_enabled() ||
            (cpu_in_exclusive_context(env_cpu(env)) &&
             "Should have raised EXCP_ATOMIC"));
-    const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
+    const cap_register_t *cbp = get_load_store_base_cap(env, auth_reg);
     if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
+        raise_cheri_exception(env, CapEx_TagViolation, auth_reg);
     } else if (!cap_is_unsealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, addr_reg);
+        raise_cheri_exception(env, CapEx_SealViolation, auth_reg);
     } else if (!cap_has_perms(cbp, CAP_PERM_LOAD)) {
-        raise_cheri_exception(env, CapEx_PermitLoadViolation, addr_reg);
+        raise_cheri_exception(env, CapEx_PermitLoadViolation, auth_reg);
     }
 
-    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check:"
-            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
-            " addr=" TARGET_FMT_lx "\n",
-            offset, cap_get_cursor(cbp), addr);
-        raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
+        qemu_log_instr_or_mask_msg(
+            env, CPU_LOG_INT,
+            "Failed capability bounds check: addr=" TARGET_FMT_ld
+            " base=" TARGET_FMT_lx " top=" TARGET_FMT_lx "\n",
+            addr, cap_get_cursor(cbp), cap_get_top(cbp));
+        raise_cheri_exception(env, CapEx_LengthViolation, auth_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_store_exception(env, addr, _host_return_address);
     }
     target_ulong pesbt;
     target_ulong cursor;
-    bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, addr_reg, cbp,
+    bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, auth_reg, cbp,
                                         addr, _host_return_address, NULL);
     // If this didn't trap, update the lr state:
     env->load_res = addr;
@@ -342,28 +341,30 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
 
 void HELPER(lr_c_modedep)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
 {
-    target_long offset = 0;
+    target_ulong addr = get_capreg_cursor(env, addr_reg);
     if (!cheri_in_capmode(env)) {
-        offset = get_capreg_cursor(env, addr_reg);
+        addr = cheri_ddc_relative_addr(env, addr);
         addr_reg = CHERI_EXC_REGNUM_DDC;
     }
-    lr_c_impl(env, dest_reg, addr_reg, offset, GETPC());
+    lr_c_impl(env, dest_reg, addr_reg, addr, GETPC());
 }
 
 void HELPER(lr_c_ddc)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
 {
-    target_long offset = get_capreg_cursor(env, addr_reg);
-    lr_c_impl(env, dest_reg, CHERI_EXC_REGNUM_DDC, offset, GETPC());
+    target_ulong addr =
+        cheri_ddc_relative_addr(env, get_capreg_cursor(env, addr_reg));
+    lr_c_impl(env, dest_reg, CHERI_EXC_REGNUM_DDC, addr, GETPC());
 }
 
 void HELPER(lr_c_cap)(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg)
 {
-    lr_c_impl(env, dest_reg, addr_reg, /*offset=*/0, GETPC());
+    target_ulong addr = get_capreg_cursor(env, addr_reg);
+    lr_c_impl(env, dest_reg, addr_reg, addr, GETPC());
 }
 
 // SC returns zero on success, one on failure
 static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
-                              uint32_t val_reg, target_ulong offset,
+                              uint32_t val_reg, target_ulong addr,
                               uintptr_t _host_return_address)
 {
     assert(!qemu_tcg_mttcg_enabled() ||
@@ -385,13 +386,12 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, val_reg);
     }
 
-    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check:"
-            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
-            " addr=" TARGET_FMT_lx "\n",
-            offset, cap_get_cursor(cbp), addr);
+        qemu_log_instr_or_mask_msg(
+            env, CPU_LOG_INT,
+            "Failed capability bounds check: addr=" TARGET_FMT_ld
+            " base=" TARGET_FMT_lx " top=" TARGET_FMT_lx "\n",
+            addr, cap_get_cursor(cbp), cap_get_top(cbp));
         raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_store_exception(env, addr, _host_return_address);
@@ -440,23 +440,28 @@ sc_failed:
     return 1; // failure
 }
 
-target_ulong HELPER(sc_c_modedep)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)
+target_ulong HELPER(sc_c_modedep)(CPUArchState *env, uint32_t addr_reg,
+                                  uint32_t val_reg)
 {
-    target_long offset = 0;
+    target_ulong addr = get_capreg_cursor(env, addr_reg);
     if (!cheri_in_capmode(env)) {
-        offset = get_capreg_cursor(env, addr_reg);
+        addr = cheri_ddc_relative_addr(env, addr);
         addr_reg = CHERI_EXC_REGNUM_DDC;
     }
-    return sc_c_impl(env, addr_reg, val_reg, offset, GETPC());
+    return sc_c_impl(env, addr_reg, val_reg, addr, GETPC());
 }
 
-target_ulong HELPER(sc_c_ddc)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)
+target_ulong HELPER(sc_c_ddc)(CPUArchState *env, uint32_t addr_reg,
+                              uint32_t val_reg)
 {
-    target_long offset = get_capreg_cursor(env, addr_reg);
-    return sc_c_impl(env, CHERI_EXC_REGNUM_DDC, val_reg, offset, GETPC());
+    target_ulong addr =
+        cheri_ddc_relative_addr(env, get_capreg_cursor(env, addr_reg));
+    return sc_c_impl(env, CHERI_EXC_REGNUM_DDC, val_reg, addr, GETPC());
 }
 
-target_ulong HELPER(sc_c_cap)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)
+target_ulong HELPER(sc_c_cap)(CPUArchState *env, uint32_t addr_reg,
+                              uint32_t val_reg)
 {
-    return sc_c_impl(env, addr_reg, val_reg, /*offset=*/0, GETPC());
+    target_ulong addr = get_capreg_cursor(env, addr_reg);
+    return sc_c_impl(env, addr_reg, val_reg, addr, GETPC());
 }
