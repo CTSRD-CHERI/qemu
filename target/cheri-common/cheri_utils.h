@@ -353,18 +353,11 @@ static inline cap_register_t *cap_mark_unrepresentable(target_ulong addr,
     // Clear the tag and update the address:
     cr->_cr_cursor = addr;
     cr->cr_tag = false;
-#ifdef TARGET_AARCH64
-    // Morello never modifies pesbt if representability changes, instead bounds
-    // just change
+    /*
+     * Recompute the decompressed bounds relative to the new address. In most
+     * cases they will refer to a different region of memory now.
+     */
     CAP_cc(decompress_raw)(cr->cr_pesbt, addr, false, cr);
-#else
-    // re-compute the compressed representation to ensure we have the same
-    // resulting values for offset/base/top as the hardware:
-    // TODO: this could go away if we used a cap_register_t representation
-    // more like the hardware and sail.
-    target_ulong pesbt = CAP_cc(compress_raw)(cr);
-    CAP_cc(decompress_raw)(pesbt, addr, false, cr);
-#endif
     cr->cr_extra = CREG_FULLY_DECOMPRESSED;
     return cr;
 }
