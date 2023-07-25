@@ -593,6 +593,7 @@ int cpu_signal_handler(int host_signum, void *pinfo, void *puc)
 
 #else
 
+#ifdef __linux__
 #ifndef ESR_MAGIC
 /* Pre-3.16 kernel headers don't have these, so provide fallback definitions */
 #define ESR_MAGIC 0x45535201
@@ -611,13 +612,19 @@ static inline struct _aarch64_ctx *next_ctx(struct _aarch64_ctx *hdr)
 {
     return (struct _aarch64_ctx *)((char *)hdr + hdr->size);
 }
+#endif /* __linux__ */
 
 int cpu_signal_handler(int host_signum, void *pinfo, void *puc)
 {
     siginfo_t *info = pinfo;
     ucontext_t *uc = puc;
+#if defined(__FreeBSD__)
+    uintptr_t pc = uc->uc_mcontext.mc_gpregs.gp_lr;
+#else
     uintptr_t pc = uc->uc_mcontext.pc;
+#endif
     bool is_write;
+#ifdef __linux__
     struct _aarch64_ctx *hdr;
     struct esr_context const *esrctx = NULL;
 
@@ -634,6 +641,7 @@ int cpu_signal_handler(int host_signum, void *pinfo, void *puc)
         uint64_t esr = esrctx->esr;
         is_write = extract32(esr, 27, 5) == 0x12 && extract32(esr, 6, 1) == 1;
     } else {
+#endif /* __linux__ */
         /*
          * Fall back to parsing instructions; will only be needed
          * for really ancient (pre-3.16) kernels.
@@ -652,7 +660,9 @@ int cpu_signal_handler(int host_signum, void *pinfo, void *puc)
                     || (insn & 0x3fe00000) == 0x3c800000   /* ... 128bit */
                     /* Ignore bits 23 & 24, controlling indexing.  */
                     || (insn & 0x3a400000) == 0x28000000); /* C3.3.7,14-16 */
+#ifdef __linux__
     }
+#endif
     return handle_cpu_signal(pc, info, is_write, &uc->uc_sigmask);
 }
 #endif
