@@ -70,16 +70,24 @@ static inline bool gen_cheri_cap_cap(int cd, int cs,
     DO_TRANSLATE(name, gen_cheri_cap_cap, a->rd, a->rs1)
 
 typedef void(cheri_cap_int_helper)(TCGv_env, TCGv_i32, TCGv);
-static inline bool gen_cheri_cap_int(int cd, int rs,
-                                     cheri_cap_int_helper *gen_func)
+static inline QEMU_ALWAYS_INLINE bool
+gen_cheri_cap_int_plus_imm(int cd, int rs, target_long imm,
+                           cheri_cap_int_helper *gen_func)
 {
     TCGv_i32 dest_regnum = tcg_const_i32(cd);
     TCGv gpr_value = tcg_temp_new();
     gen_get_gpr(gpr_value, rs);
+    tcg_gen_addi_tl(gpr_value, gpr_value, imm);
     gen_func(cpu_env, dest_regnum, gpr_value);
     tcg_temp_free(gpr_value);
     tcg_temp_free_i32(dest_regnum);
     return true;
+}
+
+static inline bool gen_cheri_cap_int(int cd, int rs,
+                                     cheri_cap_int_helper *gen_func)
+{
+    return gen_cheri_cap_int_plus_imm(cd, rs, 0, gen_func);
 }
 
 typedef void(cheri_int_int_helper)(TCGv, TCGv_env, TCGv);
@@ -114,9 +122,9 @@ static inline bool gen_cheri_cap_cap_cap(int cd, int cs1, int cs2,
     DO_TRANSLATE(name, gen_cheri_cap_cap_cap, a->rd, a->rs1, a->rs2)
 
 typedef void(cheri_cap_cap_int_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv);
-static inline bool gen_cheri_cap_cap_int_imm(int cd, int cs1, int rs2,
-                                             target_long imm,
-                                             cheri_cap_cap_int_helper *gen_func)
+static inline bool
+gen_cheri_cap_cap_int_plus_imm(int cd, int cs1, int rs2, target_long imm,
+                               cheri_cap_cap_int_helper *gen_func)
 {
     TCGv_i32 dest_regnum = tcg_const_i32(cd);
     TCGv_i32 source_regnum = tcg_const_i32(cs1);
@@ -132,7 +140,26 @@ static inline bool gen_cheri_cap_cap_int_imm(int cd, int cs1, int rs2,
     return true;
 }
 #define TRANSLATE_CAP_CAP_INT(name)                                            \
-    DO_TRANSLATE(name, gen_cheri_cap_cap_int_imm, a->rd, a->rs1, a->rs2, 0)
+    DO_TRANSLATE(name, gen_cheri_cap_cap_int_plus_imm, a->rd, a->rs1, a->rs2, 0)
+
+typedef void(cheri_cap_loadstore_helper)(TCGv_env, TCGv_i32, TCGv, TCGv_i32);
+static inline bool gen_cheri_cap_loadstore(DisasContext *ctx, int srcdst,
+                                           int auth, target_long imm,
+                                           cheri_cap_loadstore_helper *gen_func)
+{
+    TCGv_i32 srcdest_regnum = tcg_const_i32(srcdst);
+    TCGv_i32 auth_regnum = tcg_const_i32(auth);
+    TCGv addr = tcg_temp_new();
+    gen_cap_get_cursor(ctx, auth, addr);
+    if (imm != 0) {
+        tcg_gen_addi_tl(addr, addr, imm);
+    }
+    gen_func(cpu_env, srcdest_regnum, addr, auth_regnum);
+    tcg_temp_free(addr);
+    tcg_temp_free_i32(auth_regnum);
+    tcg_temp_free_i32(srcdest_regnum);
+    return true;
+}
 
 typedef void(cheri_int_cap_cap_helper)(TCGv, TCGv_env, TCGv_i32, TCGv_i32);
 static inline bool gen_cheri_int_cap_cap(DisasContext *ctx, int rd, int cs1,
@@ -379,26 +406,26 @@ TRANSLATE_EXPLICIT_LOAD(ld_wu, MO_UL)
 static inline bool trans_ld_c_ddc(DisasContext *ctx, arg_ld_c_ddc *a)
 {
     // always uses DDC as the base register
-    return gen_cheri_cap_cap_int_imm(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1, 0,
-                                     &gen_helper_load_cap_via_cap);
+    return gen_cheri_cap_int_plus_imm(a->rd, a->rs1, 0,
+                                      &gen_helper_load_cap_via_ddc);
 }
 
 static inline bool trans_ld_c_cap(DisasContext *ctx, arg_ld_c_cap *a)
 {
     // No immediate available for lccap
-    return gen_cheri_cap_cap_imm(a->rd, a->rs1, 0,
-                                 &gen_helper_load_cap_via_cap);
+    return gen_cheri_cap_loadstore(ctx, a->rd, a->rs1, 0,
+                                   &gen_helper_load_cap_via_cap);
 }
 
 static inline bool trans_lc(DisasContext *ctx, arg_lc *a)
 {
     if (!ctx->capmode) {
         // Without capmode we load relative to DDC (lc instructions)
-        return gen_cheri_cap_cap_int_imm(a->rd, CHERI_EXC_REGNUM_DDC, a->rs1,
-                                         a->imm, &gen_helper_load_cap_via_cap);
+        return gen_cheri_cap_int_plus_imm(a->rd, a->rs1, a->imm,
+                                          &gen_helper_load_cap_via_ddc);
     }
-    return gen_cheri_cap_cap_imm(a->rd, a->rs1, /*offset=*/a->imm,
-                                 &gen_helper_load_cap_via_cap);
+    return gen_cheri_cap_loadstore(ctx, a->rd, a->rs1, /*offset=*/a->imm,
+                                   &gen_helper_load_cap_via_cap);
 }
 
 // Stores
@@ -462,15 +489,15 @@ TRANSLATE_EXPLICIT_STORE(st_d, MO_Q)
 static inline bool trans_st_c_ddc(DisasContext *ctx, arg_st_c_ddc *a)
 {
     // always uses DDC as the base register
-    return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1, 0,
-                                     &gen_helper_store_cap_via_cap);
+    return gen_cheri_cap_int_plus_imm(a->rs2, a->rs1, 0,
+                                      &gen_helper_store_cap_via_ddc);
 }
 
 static inline bool trans_st_c_cap(DisasContext *ctx, arg_st_c_cap *a)
 {
-    // No immediate available for sccap
-    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/0,
-                                 &gen_helper_store_cap_via_cap);
+    // No immediate available for sc.cap
+    return gen_cheri_cap_loadstore(ctx, a->rs2, a->rs1, /*offset=*/0,
+                                   &gen_helper_store_cap_via_cap);
 }
 
 static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
@@ -478,11 +505,11 @@ static inline bool trans_sc(DisasContext *ctx, arg_sc *a)
     // RS2 is the value, RS1 is the capability
     if (!ctx->capmode) {
         // Without capmode we store relative to DDC (sc instructions)
-        return gen_cheri_cap_cap_int_imm(a->rs2, CHERI_EXC_REGNUM_DDC, a->rs1,
-                                         a->imm, &gen_helper_store_cap_via_cap);
+        return gen_cheri_cap_int_plus_imm(a->rs2, a->rs1, a->imm,
+                                          &gen_helper_store_cap_via_ddc);
     }
-    return gen_cheri_cap_cap_imm(a->rs2, a->rs1, /*offset=*/a->imm,
-                                 &gen_helper_store_cap_via_cap);
+    return gen_cheri_cap_loadstore(ctx, a->rs2, a->rs1, /*offset=*/a->imm,
+                                   &gen_helper_store_cap_via_cap);
 }
 
 // Atomic ops
