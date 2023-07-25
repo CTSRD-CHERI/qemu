@@ -27,11 +27,11 @@ extern char safe_syscall_end[];
 /* Adjust the signal context to rewind out of safe-syscall if we're in it */
 static inline void rewind_if_in_safe_syscall(void *puc)
 {
-    __u64 *pcreg = DEFINE_PCREG(puc);
+    uintptr_t pcreg = (uintptr_t)DEFINE_PCREG(puc);
 
-    if (*pcreg > (uintptr_t)safe_syscall_start
-        && *pcreg < (uintptr_t)safe_syscall_end) {
-        *pcreg = (uintptr_t)safe_syscall_start;
+    if (pcreg > (uintptr_t)safe_syscall_start
+        && pcreg < (uintptr_t)safe_syscall_end) {
+        pcreg = (uintptr_t)safe_syscall_start;
     }
 }
 

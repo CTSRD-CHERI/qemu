@@ -67,7 +67,7 @@ safe_syscall_end:
 /* Start FreeBSD */
 	b.cc 2f
 	neg x0, x0
-2f:
+2:
 /* End FreeBSD */
     ret
 
