@@ -246,9 +246,9 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
     assert(!qemu_tcg_mttcg_enabled() ||
            (cpu_in_exclusive_context(env_cpu(env)) &&
             "Should have raised EXCP_ATOMIC"));
-    target_long offset = 0;
+    target_long addr = get_capreg_cursor(env, addr_reg);
     if (!cheri_in_capmode(env)) {
-        offset = get_capreg_cursor(env, addr_reg);
+        addr = cheri_ddc_relative_addr(env, addr);
         addr_reg = CHERI_EXC_REGNUM_DDC;
     }
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
@@ -269,13 +269,12 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
         raise_cheri_exception(env, CapEx_PermitStoreLocalCapViolation, val_reg);
     }
 
-    target_ulong addr = (target_ulong)(cap_get_cursor(cbp) + (target_long)offset);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check:"
-            "offset=" TARGET_FMT_ld " cursor=" TARGET_FMT_lx
-            " addr=" TARGET_FMT_lx "\n",
-            offset, cap_get_cursor(cbp), addr);
+        qemu_log_instr_or_mask_msg(
+            env, CPU_LOG_INT,
+            "Failed capability bounds check: addr=" TARGET_FMT_ld
+            " base=" TARGET_FMT_lx " top=" TARGET_FMT_lx "\n",
+            addr, cap_get_cursor(cbp), cap_get_top(cbp));
         raise_cheri_exception(env, CapEx_LengthViolation, addr_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_store_exception(env, addr, _host_return_address);
