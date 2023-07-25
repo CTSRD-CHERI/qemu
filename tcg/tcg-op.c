@@ -2842,12 +2842,9 @@ static inline void plugin_gen_mem_callbacks(TCGv_cap_checked_ptr vaddr, uint16_t
 static inline uint64_t memop_rvfi_mask(MemOp op) {
     return MAKE_64BIT_MASK(0, memop_size(op));
 }
-#elif !defined(TARGET_RISCV)
-#define gen_rvfi_dii_set_field(type, field, arg) ((void)0)
-#define gen_rvfi_dii_set_field_zext_i32(type, field, arg) ((void)0)
-#define gen_rvfi_dii_set_field_zext_addr(type, field, arg) ((void)0)
-#define gen_rvfi_dii_set_field_const_i64(type, field, arg) ((void)0)
-#define gen_rvfi_dii_set_field_const_i32(type, field, arg) ((void)0)
+#else
+#define gen_rvfi_dii_set_mem_data_i32(rw, addr, val, memop) ((void)0)
+#define gen_rvfi_dii_set_mem_data_i64(rw, addr, val, memop) ((void)0)
 #endif
 
 void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop)
@@ -2880,9 +2877,7 @@ void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 val, TCGv_cap_checked_ptr ad
     }
 #endif
     gen_ldst_i32(INDEX_op_qemu_ld_i32, val, addr, memop, idx);
-    gen_rvfi_dii_set_field_zext_addr(MEM, mem_addr, addr);
-    gen_rvfi_dii_set_field_zext_i32(MEM, mem_rdata[0], val);
-    gen_rvfi_dii_set_field_const_i32(MEM, mem_rmask, memop_rvfi_mask(memop));
+    gen_rvfi_dii_set_mem_data_i32(r, addr, val, memop);
 
     plugin_gen_mem_callbacks(addr, info);
 
@@ -2959,9 +2954,7 @@ static void tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(
 
     addr = plugin_prep_mem_callbacks(addr);
     gen_ldst_i32(INDEX_op_qemu_st_i32, val, addr, memop, idx);
-    gen_rvfi_dii_set_field_zext_addr(MEM, mem_addr, addr);
-    gen_rvfi_dii_set_field_zext_i32(MEM, mem_wdata[0], val);
-    gen_rvfi_dii_set_field_const_i32(MEM, mem_wmask, memop_rvfi_mask(memop));
+    gen_rvfi_dii_set_mem_data_i32(w, addr, val, memop);
 
     plugin_gen_mem_callbacks(addr, info);
 #if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
@@ -3038,9 +3031,7 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 val, TCGv_cap_checked_ptr ad
     }
 #endif
     gen_ldst_i64(INDEX_op_qemu_ld_i64, val, addr, memop, idx);
-    gen_rvfi_dii_set_field_zext_addr(MEM, mem_addr, addr);
-    gen_rvfi_dii_set_field(MEM, mem_rdata[0], val);
-    gen_rvfi_dii_set_field_const_i32(MEM, mem_rmask, memop_rvfi_mask(memop));
+    gen_rvfi_dii_set_mem_data_i64(r, addr, val, memop);
 
     plugin_gen_mem_callbacks(addr, info);
 
@@ -3118,9 +3109,7 @@ void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
 
     addr = plugin_prep_mem_callbacks(addr);
     gen_ldst_i64(INDEX_op_qemu_st_i64, val, addr, memop, idx);
-    gen_rvfi_dii_set_field_zext_addr(MEM, mem_addr, addr);
-    gen_rvfi_dii_set_field(MEM, mem_wdata[0], val);
-    gen_rvfi_dii_set_field_const_i32(MEM, mem_wmask, memop_rvfi_mask(memop));
+    gen_rvfi_dii_set_mem_data_i64(w, addr, val, memop);
 
     plugin_gen_mem_callbacks(addr, info);
 #if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)

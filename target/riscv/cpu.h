@@ -567,6 +567,21 @@ void rvfi_dii_communicate(CPUState *cs, CPURISCVState *env, bool was_trap);
         gen_rvfi_dii_set_field(type, field, tmp);                              \
         tcg_temp_free_i64(tmp);                                                \
     } while (0)
+#define gen_rvfi_dii_set_mem_data(rw, addr, val, memop, extend_to_i64)         \
+    do {                                                                       \
+        TCGv_i64 tmp = tcg_temp_new_i64();                                     \
+        extend_to_i64(tmp, val);                                               \
+        tcg_gen_andi_i64(tmp, tmp, MAKE_64BIT_MASK(0, 8 * memop_size(memop))); \
+        gen_rvfi_dii_set_field_zext_addr(MEM, mem_addr, addr);                 \
+        gen_rvfi_dii_set_field(MEM, mem_##rw##data[0], tmp);                   \
+        gen_rvfi_dii_set_field_const_i32(MEM, mem_##rw##mask,                  \
+                                         memop_rvfi_mask(memop));              \
+        tcg_temp_free_i64(tmp);                                                \
+    } while (0)
+#define gen_rvfi_dii_set_mem_data_i32(rw, addr, val_i32, memop)                \
+    gen_rvfi_dii_set_mem_data(rw, addr, val_i32, memop, tcg_gen_extu_i32_i64)
+#define gen_rvfi_dii_set_mem_data_i64(rw, addr, val_i64, memop)                \
+    gen_rvfi_dii_set_mem_data(rw, addr, val_i64, memop, tcg_gen_mov_i64)
 #else
 #define gen_rvfi_dii_set_field(type, field, arg) ((void)0)
 #define gen_rvfi_dii_set_field_zext_i32(type, field, arg) ((void)0)
