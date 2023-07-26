@@ -160,14 +160,9 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
 
     assert(index <= 31 && "Bug in translator?");
     enum SCRAccessMode mode = scr_info[index].access;
-    if (mode == SCR_Invalid) {
+    if (mode == SCR_Invalid || (cs != 0 && !scr_info[index].w)) {
         riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST,
                               _host_return_address);
-    }
-    // XXXAR: Raising Access_System_Registers for write to read-only SCR seems
-    // odd to me
-    if (cs != 0 && !scr_info[index].w) {
-        raise_cheri_exception(env, CapEx_AccessSystemRegsViolation, 32 + index);
     }
     bool can_access_sysregs = cheri_have_access_sysregs(env);
     if (scr_needs_asr(mode) && !can_access_sysregs) {
