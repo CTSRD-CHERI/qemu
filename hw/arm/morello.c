@@ -37,6 +37,7 @@
 #include "hw/boards.h"
 #include "hw/loader.h"
 #include "hw/arm/boot.h"
+#include "hw/char/pl011.h"
 #include "hw/intc/arm_gic.h"
 #include "hw/intc/arm_gicv3_common.h"
 #include "hw/qdev-properties.h"
@@ -65,6 +66,9 @@
 #define PPI_PMU_IRQ          7
 
 enum {
+    MORELLO_APUART0, /* AP Non-secure UART */
+    MORELLO_APUART1, /* AP Non-secure UART to the MCP */
+    MORELLO_APUART2, /* AP Secure UART */
     MORELLO_GIC_DIST,
     MORELLO_GIC_CPU,
     MORELLO_GIC_V2M,
@@ -75,6 +79,11 @@ enum {
 };
 
 static const MemMapEntry base_memmap[] = {
+    /* Non-secure AP UARTs */
+    [MORELLO_APUART0] =    { 0x2A400000, 0x00002000 },
+    [MORELLO_APUART1] =    { 0x2A410000, 0x00002000 },
+    /* Secure AP UART */
+    [MORELLO_APUART2] =    { 0x2A4B0000, 0x00002000 },
     /* GIC distributor and CPU interfaces sit inside the CPU peripheral space */
     [MORELLO_GIC_DIST] =   { 0x30000000, 0x00010000 },
     [MORELLO_GIC_CPU] =    { 0x30010000, 0x00010000 },
@@ -85,6 +94,12 @@ static const MemMapEntry base_memmap[] = {
     [MORELLO_GIC_ITS] =    { 0x30080000, 0x00020000 },
     /* This redistributor space allows up to 2*64kB*4 CPUs */
     [MORELLO_GIC_REDIST] = { 0x300C0000, 0x00800000 },
+};
+
+static const int irqmap[] = {
+    [MORELLO_APUART0] = 63,
+    [MORELLO_APUART1] = 64,
+    [MORELLO_APUART2] = 55,
 };
 
 typedef struct MorelloMachineState {
@@ -258,6 +273,20 @@ static void create_gic(MorelloMachineState *mms)
     create_its(mms);
 }
 
+static void create_uart(const MorelloMachineState *mms, int uart,
+                        MemoryRegion *mem, Chardev *chr)
+{
+    hwaddr base = base_memmap[uart].base;
+    int irq = irqmap[uart];
+    DeviceState *dev = qdev_new(TYPE_PL011);
+    SysBusDevice *s = SYS_BUS_DEVICE(dev);
+
+    qdev_prop_set_chr(dev, "chardev", chr);
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
+    memory_region_add_subregion(mem, base, sysbus_mmio_get_region(s, 0));
+    sysbus_connect_irq(s, 0, qdev_get_gpio_in(mms->gic, irq));
+}
+
 static void morello_machine_init(MachineState *machine)
 {
     MorelloMachineState *morelloMachineState = MORELLO_MACHINE(machine);
@@ -326,6 +355,16 @@ static void morello_machine_init(MachineState *machine)
 
     /* Add GIC */
     create_gic(morelloMachineState);
+
+    /* Add non-secure UARTs */
+    MemoryRegion *sysmem = get_system_memory();
+    create_uart(morelloMachineState, MORELLO_APUART0, sysmem, serial_hd(0));
+    create_uart(morelloMachineState, MORELLO_APUART1, sysmem, serial_hd(1));
+
+    /* Add secure UART */
+    create_uart(morelloMachineState, MORELLO_APUART2,
+                seperate_s_ns ? secure_memory : sysmem,
+                serial_hd(2));
 
     /* Create the trickbox used for testing */
     SysBusDevice *trickbox = arm_trickbox_mm_init_default();
