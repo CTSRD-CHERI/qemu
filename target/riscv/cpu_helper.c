@@ -1234,7 +1234,6 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     target_ulong htval = 0;
     target_ulong mtval2 = 0;
 
-    bool log_inst = true;
     if (!async) {
         /* set tval to badaddr for traps with address information */
         switch (cause) {
@@ -1252,8 +1251,6 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 #endif
         case RISCV_EXCP_INST_ADDR_MIS:
         case RISCV_EXCP_INST_ACCESS_FAULT:
-            log_inst = false;
-            /* fallthrough */
         case RISCV_EXCP_LOAD_ADDR_MIS:
         case RISCV_EXCP_STORE_AMO_ADDR_MIS:
         case RISCV_EXCP_LOAD_ACCESS_FAULT:
@@ -1302,22 +1299,6 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                   "epc:0x"TARGET_FMT_lx", tval:0x"TARGET_FMT_lx", desc=%s\n",
                   __func__, env->mhartid, async, cause, PC_ADDR(env), tval,
                   riscv_cpu_get_trap_name(cause, async));
-
-    if (unlikely(log_inst && qemu_loglevel_mask(CPU_LOG_INT))) {
-        FILE* logf = qemu_log_lock();
-        qemu_log("Trap (%s) was probably caused by: ", riscv_cpu_get_trap_name(cause, async));
-#ifdef CONFIG_RVFI_DII
-        if (env->rvfi_dii_have_injected_insn) {
-            target_disas_buf(stderr, cs, &env->rvfi_dii_injected_insn,
-                             sizeof(env->rvfi_dii_injected_insn), PC_ADDR(env),
-                             1);
-        } else
-#endif
-        {
-            target_disas(logf, cs, PC_ADDR(env), /* Only one instr*/ -1);
-        }
-        qemu_log_unlock(logf);
-    }
 
     if (env->priv <= PRV_S &&
             cause < TARGET_LONG_BITS && ((deleg >> cause) & 1)) {
