@@ -80,6 +80,9 @@ def bootCheriBSDForAllArchitectures(params, String qemuConfig, boolean isDebug) 
                 // For the non-ASAN build of QEMU we also boot the latest release
                 addBootJobs(bootJobs, params, qemuConfig, architecture, "releng%252F22.12", "-latest-release")
             }
+            if (env.BRANCH_NAME == 'dev') {
+                addBootJobs(bootJobs, params, qemuConfig, architecture, "dev", "-dev")
+            }
         }
         parallel bootJobs
     }
