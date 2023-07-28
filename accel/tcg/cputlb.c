@@ -1885,6 +1885,9 @@ load_memop(const void *haddr, MemOp op)
     }
 }
 
+static uint64_t full_ldub_mmu(CPUArchState *env, target_ulong addr,
+                              TCGMemOpIdx oi, uintptr_t retaddr);
+
 static inline uint64_t QEMU_ALWAYS_INLINE
 load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
             uintptr_t retaddr, MemOp op, bool code_read,
@@ -1972,6 +1975,24 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
     do_unaligned_access:
         addr1 = addr & ~((target_ulong)size - 1);
         addr2 = addr1 + size;
+#if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
+        /*
+         * When using RVFI-DII, we inject an ignored byte load to ensure that
+         * the tval value matches sail (which will be the unaligned address
+         * rather than one of the aligned ones that are used to fetch the real
+         * value). I believe QEMU's behaviour is legal according to the spec:
+         * "If mtval is written with a nonzero value when a misaligned load or
+         * store causes an access-fault or page-fault exception, then mtval
+         * will contain the virtual address of the portion of the access that
+         * caused the fault". However, we need to match sail to avoid diverging
+         * traces when running TestRIG.
+         */
+        if (env->rvfi_dii_have_injected_insn) {
+            (void)full_ldub_mmu(env, addr, make_memop_idx(MO_UB, mmu_idx),
+                                retaddr);
+        }
+#endif
+
         r1 = full_load(env, addr1, oi, retaddr);
         r2 = full_load(env, addr2, oi, retaddr);
         shift = (addr & (size - 1)) * 8;
