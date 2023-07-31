@@ -782,6 +782,22 @@ restart:
     return TRANSLATE_FAIL;
 }
 
+static void rvfi_dii_update_mem_addr(CPURISCVState *env,
+                                     MMUAccessType access_type, vaddr addr)
+{
+#if defined(CONFIG_RVFI_DII)
+    /*
+     * For non-ifetch, we log the mem_addr here to match sail which logs it
+     * for all accesses that go down to the physical level (i.e. the ones
+     * that passed CHERI and MMU checks) even if they fail then.
+     */
+    if (access_type != MMU_INST_FETCH) {
+        env->rvfi_dii_trace.MEM.rvfi_mem_addr = addr;
+        env->rvfi_dii_trace.available_fields |= RVFI_MEM_DATA;
+    }
+#endif
+}
+
 static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
                                 MMUAccessType access_type, bool pmp_violation,
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
@@ -842,6 +858,10 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
     default:
         g_assert_not_reached();
     }
+    if (pmp_violation) {
+        /* CHERI and MMU checks passed, so we update mem_addr to match sail. */
+        rvfi_dii_update_mem_addr(env, access_type, address);
+    }
     env->badaddr = address;
 }
 
@@ -886,6 +906,8 @@ void riscv_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr,
     }
 
     env->badaddr = addr;
+    /* CHERI and MMU checks passed, so we update mem_addr to match sail. */
+    rvfi_dii_update_mem_addr(env, mmu_idx, addr);
     riscv_raise_exception(&cpu->env, cs->exception_index, retaddr);
 }
 
