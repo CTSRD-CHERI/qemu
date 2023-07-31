@@ -1885,6 +1885,37 @@ load_memop(const void *haddr, MemOp op)
     }
 }
 
+#ifdef TARGET_CHERI
+#include "cheri-helper-utils.h"
+
+static void check_address_space_wrap(CPUArchState *env, target_ulong addr,
+                                     target_ulong size,
+                                     MMUAccessType access_type,
+                                     uintptr_t retaddr)
+{
+    if (access_type == MMU_INST_FETCH) {
+        return;
+    }
+    /*
+     * Check if access wraps around the address space, and was not prevented
+     * by earlier checks. This can only happen if we have a full address
+     * space DDC, since in all other cases bounds checks will be performed.
+     * Ideally we would emit the TCG checks unconditionally (which would
+     * allow not performing the check here), but omitting TGG bounds checks
+     * for full-AS DDC results in a major speedup when booting a
+     * non-CHERI/hybrid OS kernel.
+     */
+    target_ulong end_addr = 0;
+    if (unlikely(__builtin_add_overflow(addr, size, &end_addr) &&
+                 end_addr > 0)) {
+        assert(cap_get_top_full(cheri_get_ddc(env)) == CAP_MAX_TOP &&
+               cap_get_base(cheri_get_ddc(env)) == 0);
+        check_cap(env, cheri_get_ddc(env), 0, addr, CHERI_EXC_REGNUM_DDC, size,
+                  /*instavail=*/true, retaddr);
+    }
+}
+#endif
+
 static uint64_t full_ldub_mmu(CPUArchState *env, target_ulong addr,
                               TCGMemOpIdx oi, uintptr_t retaddr);
 
@@ -1975,6 +2006,9 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
     do_unaligned_access:
         addr1 = addr & ~((target_ulong)size - 1);
         addr2 = addr1 + size;
+#ifdef TARGET_CHERI
+        check_address_space_wrap(env, addr, size, access_type, retaddr);
+#endif
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
         /*
          * When using RVFI-DII, we inject an ignored byte load to ensure that
@@ -2451,6 +2485,9 @@ store_helper_unaligned(CPUArchState *env, target_ulong addr, uint64_t val,
     index = tlb_index(env, mmu_idx, addr);
     entry = tlb_entry(env, mmu_idx, addr);
     tlb_addr = tlb_addr_write(entry);
+#ifdef TARGET_CHERI
+    check_address_space_wrap(env, addr, size, MMU_DATA_STORE, retaddr);
+#endif
 
     /*
      * Handle watchpoints.  Since this may trap, all checks
