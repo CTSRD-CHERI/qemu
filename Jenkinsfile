@@ -61,13 +61,13 @@ def addBootJobs(bootJobs, params, String qemuConfig, String architecture, String
     if (architecture.endsWith("-purecap")) {
         bootJobs["${architecture}-purecap-kernel on ${qemuConfig}"] =
             { -> bootCheriBSD(params, qemuConfig, "${architecture}-purecap-kernel${suffix}", architecture,
-                              ["--run-${architecture}/kernel-abi purecap"], cheribsdBranch) }
+                              'purecap', cheribsdBranch) }
         bootJobs["${architecture}-hybrid-kernel on ${qemuConfig}"] =
             { -> bootCheriBSD(params, qemuConfig, "${architecture}-hybrid-kernel${suffix}", architecture,
-                              ["--run-${architecture}/kernel-abi hybrid"], cheribsdBranch) }
+                              'hybrid', cheribsdBranch) }
     } else {
         bootJobs["${architecture} on ${qemuConfig}"] =
-            { -> bootCheriBSD(params, qemuConfig, "${architecture}${suffix}", architecture, [], cheribsdBranch) }
+            { -> bootCheriBSD(params, qemuConfig, "${architecture}${suffix}", architecture, null, cheribsdBranch) }
     }
 }
 
@@ -89,9 +89,16 @@ def bootCheriBSDForAllArchitectures(params, String qemuConfig, boolean isDebug) 
     }
 }
 
-def bootCheriBSD(params, String qemuConfig, String stageSuffix, String archSuffix, extraCheribuildArgs, String cheribsdBranch="main") {
+def bootCheriBSD(params, String qemuConfig, String stageSuffix, String archSuffix, String kernelABI, String cheribsdBranch="main") {
     try {
+        def extraCheribuildArgs = []
         def compressedKernel = "artifacts-${archSuffix}/kernel.xz"
+        if (kernelABI != null) {
+            extraCheribuildArgs += ["--run-${archSuffix}/kernel-abi=${kernelABI}"]
+            if (archSuffix.startsWith('riscv64') && kernelABI == 'purecap') {
+                compressedKernel = "artifacts-${archSuffix}/kernel.CHERI-PURECAP-QEMU.xz"
+            }
+        }
         def compressedDiskImage = "artifacts-${archSuffix}/cheribsd-${archSuffix}.img.xz"
         dir (stageSuffix) {
             sh "rm -rfv artifacts-${archSuffix}/cheribsd-*.img* artifacts-${archSuffix}/kernel*"
