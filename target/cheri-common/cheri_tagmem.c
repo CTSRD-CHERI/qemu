@@ -679,7 +679,11 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
                        "Unimplemented");
 
-    cheri_debug_assert(!(tagmem_flags & TLBENTRYCAP_FLAG_TRAP));
+    /*
+     * TLBENTRYCAP_FLAG_TRAP prevents writing non-zero tags, and should have
+     * trapped in probe_cap_write().
+     */
+    assert(tags == 0 || !(tagmem_flags & TLBENTRYCAP_FLAG_TRAP));
 
     cheri_debug_assert(tagmem);
 
