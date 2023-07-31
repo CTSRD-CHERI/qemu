@@ -1560,7 +1560,7 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
     static const uint32_t sizealign = ncaps * CHERI_CAP_SIZE;
 
     GET_HOST_RETPC();
-    const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
 
     const target_ulong addr = cap_check_common_reg(
         perms, env, cb, 0, sizealign, _host_return_address, cbp, sizealign,
