@@ -221,7 +221,11 @@ static void *l1_map[V_L1_MAX_SIZE];
 TCGContext tcg_init_ctx;
 __thread TCGContext *tcg_ctx;
 TBContext tb_ctx;
+#if defined(CONFIG_USER_ONLY) && defined(TARGET_SUPPORTS_MTTCG)
+bool parallel_cpus = true;
+#else
 bool parallel_cpus;
+#endif
 
 static void page_table_config_init(void)
 {

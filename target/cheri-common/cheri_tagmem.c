@@ -91,8 +91,27 @@
  * DMA write and the tag invalidate.
  */
 
+/*
+ * In the system mode, SMP is configured when the CPU is starting and QEMU can
+ * determine if concurrent tags are needed at the time of the first tag block
+ * allocation.
+ *
+ * In the user mode, a number of parallel threads is not known at the time of
+ * the first tag block allocation.
+ *
+ * In both cases, _need_concurrent_tags cannot be adjusted after the first block
+ * allocation because tag blocks allocated before _need_concurrent_tags is
+ * enabled could not be accessed in parallel after it is enabled.
+ * It means that the user mode must always enable concurrent tags in case
+ * an emulated process starts using threads.
+ */
+#if defined(CONFIG_USER_ONLY) && defined(TARGET_SUPPORTS_MTTCG)
+bool _need_concurrent_tags = true;
+bool _need_concurrent_tags_initialized = true;
+#else
 bool _need_concurrent_tags = false;
 bool _need_concurrent_tags_initialized = false;
+#endif
 
 /* Define to do some extra checks around spinlocks */
 //#define DEBUG_SPIN_LOCKS

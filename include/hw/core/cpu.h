@@ -510,8 +510,12 @@ static inline void cpu_tb_jmp_cache_clear(CPUState *cpu)
  * Returns: %true if we are in MTTCG mode %false otherwise.
  */
 #ifdef CONFIG_USER_ONLY
-#define qemu_tcg_mttcg_enabled() (false)
+#ifdef TARGET_SUPPORTS_MTTCG
+#define qemu_tcg_mttcg_enabled() (true)
 #else
+#define qemu_tcg_mttcg_enabled() (false)
+#endif
+#else /* CONFIG_USER_ONLY */
 extern bool mttcg_enabled;
 #define qemu_tcg_mttcg_enabled() (mttcg_enabled)
 #endif

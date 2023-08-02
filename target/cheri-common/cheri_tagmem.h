@@ -121,6 +121,18 @@ static inline QEMU_ALWAYS_INLINE bool need_concurrent_tags(void)
         return true;
 
     cheri_debug_assert(_need_concurrent_tags_initialized);
+#ifdef CONFIG_USER_ONLY
+    /*
+     * Concurrent tags are always required in the user mode in case an emulated
+     * process starts using threads that could access memory allocated before
+     * the threads were created.
+     *
+     * Currently, processing translation blocks in parallel (parallel_cpus) must
+     * be enabled when concurrent tags are enabled because the concurrent tags
+     * implementation assumes that the concurrent tags cannot be allocated and
+     * not used without locking.
+     */
+#else
     /*
      * TODO: can parallel_cpus change at runtime? If not we don't need the
      * separate variable.
@@ -128,6 +140,7 @@ static inline QEMU_ALWAYS_INLINE bool need_concurrent_tags(void)
     cheri_debug_assert(_need_concurrent_tags == parallel_cpus);
     /* return constant true here to always be correct, but slower than needed
      * on single core */
+#endif
 
     return _need_concurrent_tags;
 }
