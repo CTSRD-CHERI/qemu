@@ -260,9 +260,6 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
                          uint32_t addr_reg, uint32_t val_reg)
 {
     uintptr_t _host_return_address = GETPC();
-    assert(!qemu_tcg_mttcg_enabled() ||
-           (cpu_in_exclusive_context(env_cpu(env)) &&
-            "Should have raised EXCP_ATOMIC"));
     target_long offset = 0;
     if (!cheri_in_capmode(env)) {
         offset = get_capreg_cursor(env, addr_reg);
@@ -304,12 +301,22 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
     // load_cap_from_memory call overwrites that register
     target_ulong loaded_pesbt;
     target_ulong loaded_cursor;
+
+    tag_writer_lock_t lock = NULL;
+
+    cheri_lock_for_tag_set(env, addr, addr_reg, NULL, _host_return_address,
+                           cpu_mmu_index(env, false), &lock);
+    cheri_tag_writer_push_free_on_exception(env, lock);
+
     bool loaded_tag =
         load_cap_from_memory_raw(env, &loaded_pesbt, &loaded_cursor, addr_reg,
-                                 cbp, addr, _host_return_address, NULL);
+                                 cbp, addr, _host_return_address, NULL, false);
     // The store may still trap, so we must only update the dest register after
     // the store succeeded.
-    store_cap_to_memory(env, val_reg, addr, _host_return_address);
+    store_cap_to_memory(env, val_reg, addr, _host_return_address, false);
+    cheri_tag_writer_pop_free_on_exception(env);
+    cheri_tag_writer_release(lock);
+
     // Store succeeded -> we can update cd
     update_compressed_capreg(env, dest_reg, loaded_pesbt, loaded_tag,
                              loaded_cursor);
@@ -318,9 +325,6 @@ void HELPER(amoswap_cap)(CPUArchState *env, uint32_t dest_reg,
 static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
                       target_long offset, uintptr_t _host_return_address)
 {
-    assert(!qemu_tcg_mttcg_enabled() ||
-           (cpu_in_exclusive_context(env_cpu(env)) &&
-            "Should have raised EXCP_ATOMIC"));
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, addr_reg);
@@ -343,13 +347,17 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t addr_reg,
     }
     target_ulong pesbt;
     target_ulong cursor;
-    bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, addr_reg, cbp,
-                                        addr, _host_return_address, NULL);
+    // lr state should use an un-squashed tag, as the value is an emulator hack
+    // and should depend on the actual value in memory.
+    bool raw_tag;
+    bool tag = load_cap_from_memory_raw_tag(env, &pesbt, &cursor, addr_reg, cbp,
+                                            addr, _host_return_address, NULL,
+                                            true, &raw_tag);
     // If this didn't trap, update the lr state:
     env->load_res = addr;
     env->load_val = cursor;
     env->load_pesbt = pesbt;
-    env->load_tag = tag;
+    env->load_tag = raw_tag;
     log_changed_special_reg(env, "load_res", env->load_res);
     log_changed_special_reg(env, "load_val", env->load_val);
     log_changed_special_reg(env, "load_pesbt", env->load_pesbt);
@@ -383,9 +391,6 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
                               uint32_t val_reg, target_ulong offset,
                               uintptr_t _host_return_address)
 {
-    assert(!qemu_tcg_mttcg_enabled() ||
-        (cpu_in_exclusive_context(env_cpu(env)) &&
-            "Should have raised EXCP_ATOMIC"));
     const cap_register_t *cbp = get_load_store_base_cap(env, addr_reg);
 
     if (!cbp->cr_tag) {
@@ -421,7 +426,9 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     // We do this regardless of success/failure.
     env->load_res = -1;
     log_changed_special_reg(env, "load_res", env->load_res);
+    bool store_fails;
     if (addr != expected_addr) {
+        store_fails = true;
         goto sc_failed;
     }
     // Now perform the "cmpxchg" operation by checking if the current values
@@ -433,20 +440,31 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     // (this is not a real load).
     target_ulong current_pesbt;
     target_ulong current_cursor;
-    bool current_tag =
-        load_cap_from_memory_raw(env, &current_pesbt, &current_cursor, addr_reg,
-                                 cbp, addr, _host_return_address, NULL);
-    if (current_cursor != env->load_val || current_pesbt != env->load_pesbt ||
-        current_tag != env->load_tag) {
-        goto sc_failed;
+    bool current_tag;
+
+    tag_writer_lock_t lock = NULL;
+    cheri_lock_for_tag_set(env, addr, addr_reg, NULL, _host_return_address,
+                           cpu_mmu_index(env, false), &lock);
+    cheri_tag_writer_push_free_on_exception(env, lock);
+
+    load_cap_from_memory_raw_tag(env, &current_pesbt, &current_cursor, addr_reg,
+                                 cbp, addr, _host_return_address, NULL, false,
+                                 &current_tag);
+
+    store_fails = current_cursor != env->load_val ||
+                  current_pesbt != env->load_pesbt ||
+                  current_tag != env->load_tag;
+
+    if (!store_fails) {
+        // This store may still trap, so we should update env->load_res before
+        store_cap_to_memory(env, val_reg, addr, _host_return_address, false);
     }
-    // This store may still trap, so we should update env->load_res before
-    store_cap_to_memory(env, val_reg, addr, _host_return_address);
-    tcg_debug_assert(env->load_res == -1);
-    return 0; // success
+
+    cheri_tag_writer_pop_free_on_exception(env);
+    cheri_tag_writer_release(lock);
 sc_failed:
     tcg_debug_assert(env->load_res == -1);
-    return 1; // failure
+    return store_fails; // success
 }
 
 target_ulong HELPER(sc_c_modedep)(CPUArchState *env, uint32_t addr_reg, uint32_t val_reg)

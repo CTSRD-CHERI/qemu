@@ -29,6 +29,16 @@
 #include "exec/helper-proto.h"
 #include "exec/helper-gen.h"
 
+/* CHERI associates a lock with every capability sized word in order to
+ * provide tag memory. As this cost is already being paid, extra atomics
+ * are not needed for writes, although reads that do not require a tag may
+ * very well still need them. */
+#ifdef TARGET_CHERI
+#define ALL_WRITES_ATOMIC 1
+#else
+#define ALL_WRITES_ATOMIC 0
+#endif
+
 /* Basic output routines.  Not for general consumption.  */
 
 void tcg_gen_op1(TCGOpcode, TCGArg);
@@ -927,10 +937,19 @@ void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 ret,
 // as to whether a tag clear should take place.
 void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
     TCGv_i64 val, TCGv_cap_checked_ptr addr, TCGArg idx, MemOp memop,
-    bool invalidate);
-// To be used in conjunction with
-// tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate to manually clear a
-// tag
+    bool invalidate, bool take_lock);
+
+/* To be used in conjunction with
+ * tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate to manually clear a
+ * tag. Call start before the operation, and end after. Pass the return of
+ * start as the @oi argument to end.
+ */
+
+TCGv_i32 handle_conditional_invalidate_start(TCGv_cap_checked_ptr checked_addr,
+                                             MemOp memop, TCGArg mmu_idx);
+void handle_conditional_invalidate_end(TCGv_cap_checked_ptr checked_addr,
+                                       TCGv_i32 oi, TCGv_i32 store_happens);
+
 void handle_conditional_invalidate(TCGv_cap_checked_ptr checked_addr,
                                    MemOp memop, TCGArg mmu_idx,
                                    TCGv_i32 store_happens);
