@@ -572,7 +572,7 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
     abi_long __ret;                                                     \
     if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, CHERI_CAP_SIZE, 0))) { \
         store_cap_memory_to_memory(THREAD_ENV(), REG_NONE, tag, pesbt,  \
-                                   cursor, __gaddr, GETPC());           \
+                                   cursor, __gaddr, GETPC(), true);     \
         __ret = 0;                                                      \
         unlock_user(__hptr, __gaddr, CHERI_CAP_SIZE);                   \
     } else                                                              \
