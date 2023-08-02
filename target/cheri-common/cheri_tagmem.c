@@ -636,11 +636,7 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
         assert(_need_concurrent_tags ==
                (qemu_tcg_mttcg_enabled() && max_cpus > 1));
     }
-#if 0
-    info_report("%s: need_concurrent_tags()=%d, mttcg=%d, max_cpus=%d",
-                __func__, need_concurrent_tags(), qemu_tcg_mttcg_enabled(),
-                max_cpus);
-#endif
+
     size_t cheri_ntagblks = num_tagblocks(ram);
     ram->cheri_tags =
         g_malloc0(cheri_ntagblks * sizeof(CheriTagBlock *));
