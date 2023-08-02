@@ -242,7 +242,8 @@ void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
                          target_ulong retpc, bool take_lock);
 void store_cap_memory_to_memory(CPUArchState *env, uint32_t cs, bool tag,
                                 target_ulong pesbt_for_mem, target_ulong cursor,
-                                target_ulong vaddr, target_ulong retpc);
+                                target_ulong vaddr, target_ulong retpc,
+                                bool take_lock);
 void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
                                    target_ulong vaddr, target_ulong retpc,
                                    int mmu_idx, bool take_lock);
