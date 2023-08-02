@@ -698,7 +698,6 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 
     if (tag_write && !tagblk) {
         cheri_tag_new_tagblk(ram, tag);
-#ifndef CONFIG_USER_ONLY
         CPUState *cpu = env_cpu(env);
         /*
          * A vaddr-based shootdown is insufficient as multiple mappings may
@@ -710,7 +709,6 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
          * this instruction and THEN exit.
          */
         tlb_flush(cpu);
-#endif
         tagblk = cheri_tag_block(tag, ram);
         cheri_debug_assert(tagblk);
     }
