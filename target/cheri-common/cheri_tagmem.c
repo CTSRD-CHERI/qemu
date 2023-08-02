@@ -37,7 +37,11 @@
 #include "exec/exec-all.h"
 #include "exec/log.h"
 #include "exec/ramblock.h"
+#ifdef CONFIG_USER_ONLY
+#include "qemu.h"
+#else
 #include "hw/boards.h"
+#endif
 #include "cheri_defs.h"
 #include "cheri-helper-utils.h"
 // XXX: use hbitmap? Or a different data structure?
@@ -608,27 +612,35 @@ void cheri_tag_init(RAMBlock *ram, uint64_t memory_size)
 void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
 #endif
 {
+    int max_cpus;
 #ifndef CONFIG_USER_ONLY
     RAMBlock *ram;
+#endif
 
+#ifdef CONFIG_USER_ONLY
+    max_cpus = thread_cpu->nr_cores;
+#else
     assert(memory_region_is_ram(mr));
     assert(memory_region_size(mr) == memory_size &&
            "Incorrect tag mem size passed?");
     ram = mr->ram_block;
+    max_cpus = current_machine->smp.max_cpus;
 #endif
     assert(ram->cheri_tags == NULL && "Already initialized?");
 
     if (!_need_concurrent_tags_initialized) {
         _need_concurrent_tags =
-            qemu_tcg_mttcg_enabled() && current_machine->smp.max_cpus > 1;
+            qemu_tcg_mttcg_enabled() && max_cpus > 1;
         _need_concurrent_tags_initialized = true;
     } else {
         assert(_need_concurrent_tags ==
-               (qemu_tcg_mttcg_enabled() && current_machine->smp.max_cpus > 1));
+               (qemu_tcg_mttcg_enabled() && max_cpus > 1));
     }
+#if 0
     info_report("%s: need_concurrent_tags()=%d, mttcg=%d, max_cpus=%d",
                 __func__, need_concurrent_tags(), qemu_tcg_mttcg_enabled(),
-                current_machine->smp.max_cpus);
+                max_cpus);
+#endif
     size_t cheri_ntagblks = num_tagblocks(ram);
     ram->cheri_tags =
         g_malloc0(cheri_ntagblks * sizeof(CheriTagBlock *));
