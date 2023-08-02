@@ -487,14 +487,17 @@ void riscv_log_instr_scr_changed(CPURISCVState *env, int scrno);
 // namely the offset. GET_SPECIAL_REG_ADDR returns the address as we feed our
 // PC around as an address not the architectural offset.
 #ifdef TARGET_CHERI
+#define SCR_TO_PROGRAM_COUNTER(env, scr) ((target_ulong)cap_get_offset(scr))
 #define GET_SPECIAL_REG_ARCH(env, name, cheri_name)                            \
-    ((target_ulong)cap_get_offset(&((env)->cheri_name)))
+    SCR_TO_PROGRAM_COUNTER(env, &((env)->cheri_name))
 #define GET_SPECIAL_REG_ADDR(env, name, cheri_name)                            \
     ((target_ulong)cap_get_cursor(&((env)->cheri_name)))
 void update_special_register_offset(CPURISCVState *env, cap_register_t *scr,
                                     const char *name, target_ulong value);
+#define SCR_SET_PROGRAM_COUNTER(env, scr, name, value)                         \
+    update_special_register_offset(env, scr, name, value)
 #define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
-    update_special_register_offset(env, &((env)->cheri_name), #cheri_name, value)
+    SCR_SET_PROGRAM_COUNTER(env, &((env)->cheri_name), #cheri_name, value)
 
 #else /* ! TARGET_CHERI */
 #define GET_SPECIAL_REG_ARCH(env, name, cheri_name) ((env)->name)

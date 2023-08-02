@@ -213,12 +213,34 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
                 scr_info[index].name, PRINT_CAP_ARGS(&new_val));
         }
 #endif
-        if (index == CheriSCR_DDC && !new_val.cr_tag)
-            qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-                "  Note: Installed untagged $ddc at " TARGET_FMT_lx "\n",
-                cpu_get_recent_pc(env));
-        *scr = new_val;
-        cheri_log_instr_changed_capreg(env, scr_info[index].name, scr);
+        switch (index) {
+        case CheriSCR_UTCC:
+        case CheriSCR_STCC:
+        case CheriSCR_MTCC: {
+            target_ulong new_tvec = SCR_TO_PROGRAM_COUNTER(env, &new_val);
+            target_ulong new_mode = new_tvec & 3;
+            /* The low two bits encode the mode, but only 0 and 1 are valid. */
+            if ((new_tvec & 3) > 1) {
+                /* Invalid mode, keep the old one. */
+                new_tvec &= ~(target_ulong)3;
+                new_tvec |= SCR_TO_PROGRAM_COUNTER(env, scr) & 3;
+            }
+            *scr = new_val;
+            SCR_SET_PROGRAM_COUNTER(env, scr, scr_info[index].name, new_tvec);
+            break;
+        }
+        case CheriSCR_DDC:
+            if (!new_val.cr_tag) {
+                qemu_log_instr_or_mask_msg(
+                    env, CPU_LOG_INT,
+                    "Note: Installed untagged DDC at " TARGET_FMT_lx "\n",
+                    cpu_get_recent_pc(env));
+            }
+            /* fallthrough */
+        default:
+            *scr = new_val;
+            cheri_log_instr_changed_capreg(env, scr_info[index].name, scr);
+        }
     }
 }
 
