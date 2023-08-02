@@ -612,30 +612,25 @@ void cheri_tag_init(RAMBlock *ram, uint64_t memory_size)
 void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
 #endif
 {
-    int max_cpus;
 #ifndef CONFIG_USER_ONLY
     RAMBlock *ram;
-#endif
-
-#ifdef CONFIG_USER_ONLY
-    max_cpus = thread_cpu->nr_cores;
-#else
     assert(memory_region_is_ram(mr));
     assert(memory_region_size(mr) == memory_size &&
            "Incorrect tag mem size passed?");
     ram = mr->ram_block;
-    max_cpus = current_machine->smp.max_cpus;
 #endif
     assert(ram->cheri_tags == NULL && "Already initialized?");
 
+#ifndef CONFIG_USER_ONLY
     if (!_need_concurrent_tags_initialized) {
         _need_concurrent_tags =
-            qemu_tcg_mttcg_enabled() && max_cpus > 1;
+            qemu_tcg_mttcg_enabled() && current_machine->smp.max_cpus > 1;
         _need_concurrent_tags_initialized = true;
     } else {
         assert(_need_concurrent_tags ==
-               (qemu_tcg_mttcg_enabled() && max_cpus > 1));
+               (qemu_tcg_mttcg_enabled() && current_machine->smp.max_cpus > 1));
     }
+#endif
 
     size_t cheri_ntagblks = num_tagblocks(ram);
     ram->cheri_tags =
