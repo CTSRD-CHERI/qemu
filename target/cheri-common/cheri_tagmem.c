@@ -983,11 +983,21 @@ static void *cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
     // page offset.
     target_ulong tag_offset = page_vaddr_to_tag_offset(vaddr);
     if (qemu_log_instr_enabled(env)) {
-        bool old_value = tagmem_get_tag(tagmem, tag_offset, NULL);
+        bool old_value;
+        tag_reader_lock_t read_lock = NULL;
+        /*
+         * A read lock must be taken if the tag isn't already locked, i.e. this
+         * function is called with a lock to be set.
+         */
+        old_value = tagmem_get_tag(tagmem, tag_offset,
+            lock ? &read_lock : NULL);
         qemu_log_instr_extra(
             env,
             "    Cap Tag Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] %d -> 0\n",
             vaddr, qemu_ram_addr_from_host(host_addr), old_value);
+        if (read_lock != NULL && read_lock != TAG_LOCK_NONE) {
+            cheri_tag_reader_lock_release_impl(read_lock);
+        }
     }
 
     tagmem_clear_tag(tagmem, tag_offset, lock, lock_only);
@@ -1128,10 +1138,23 @@ void *cheri_tag_set_impl(CPUArchState *env, target_ulong vaddr, int reg,
 
     target_ulong tag_offset = page_vaddr_to_tag_offset(vaddr);
 
-    qemu_maybe_log_instr_extra(
-        env, "    Cap Tag Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] %d -> 1\n",
-        vaddr, qemu_ram_addr_from_host(host_addr),
-        tagmem_get_tag(tagmem, tag_offset, NULL));
+    if (qemu_log_instr_enabled(env)) {
+        bool old_value;
+        tag_reader_lock_t read_lock = NULL;
+        /*
+         * A read lock must be taken if the tag isn't already locked, i.e. this
+         * function is called with a lock to be set.
+         */
+        old_value = tagmem_get_tag(tagmem, tag_offset,
+            lock ? &read_lock : NULL);
+        qemu_maybe_log_instr_extra(
+            env, "    Cap Tag Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] %d -> 1\n",
+            vaddr, qemu_ram_addr_from_host(host_addr),
+            old_value);
+        if (read_lock != NULL && read_lock != TAG_LOCK_NONE) {
+            cheri_tag_reader_lock_release_impl(read_lock);
+        }
+    }
 
     tagmem_set_tag(tagmem, tag_offset, lock, lock_only);
     return host_addr;
