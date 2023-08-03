@@ -1109,17 +1109,6 @@ static int riscv_cpu_tlb_fill_impl(CPURISCVState *env, vaddr address, int size,
         *pmp_violation = true;
     }
 
-#ifdef CONFIG_RVFI_DII
-    /*
-     * For non-ifetch, we log the mem_addr here to match sail which logs it
-     * for all accesses that go down to the physical level (i.e. the ones
-     * that passed CHERI and MMU checks).
-     */
-    if (access_type != MMU_INST_FETCH && ret != TRANSLATE_FAIL) {
-        env->rvfi_dii_trace.MEM.rvfi_mem_addr = address;
-        env->rvfi_dii_trace.available_fields |= RVFI_MEM_DATA;
-    }
-#endif
     return ret;
 }
 #endif
