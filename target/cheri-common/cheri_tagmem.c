@@ -256,6 +256,7 @@ static bool lock_tag_read_tag_and_acquire_lock(lock_tag *lock)
             lock_tag new = old;
             /* (TODO: a static assert that we don't have more than 31 host
              * threads). Overflow precluded by number of threads. */
+            assert(new.as_int <= UINT8_MAX - LOCKTAG_MASK_READER_INC);
             new.as_int += LOCKTAG_MASK_READER_INC;
             lock_tag got = { .as_int = qatomic_cmpxchg(
                                  &lock->as_int, old.as_int, new.as_int) };
