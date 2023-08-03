@@ -25,9 +25,13 @@
 #endif
 
 /* Compare to arm64/arm64/vm_machdep.c cpu_set_upcall_kse() */
-static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
-    abi_ulong arg, abi_ulong stack_base, abi_ulong stack_size)
+static inline void target_thread_set_upcall(CPUARMState *regs,
+    abi_uintptr_t entry, abi_uintptr_t arg, abi_uintptr_t stack_base,
+    abi_ulong stack_size)
 {
+#ifdef TARGET_CHERI
+    cap_register_t cap;
+#endif
     abi_ulong sp;
     uint32_t pstate;
 
@@ -35,7 +39,12 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
      * Make sure the stack is properly aligned.
      * arm64/include/param.h (STACKLIGN() macro)
      */
-    sp = (abi_ulong)((stack_base + stack_size) -
+#ifdef TARGET_CHERI
+    sp = cheri_getaddress(cheri_load(&cap, &stack_base));
+#else
+    sp = stack_base;
+#endif
+    sp = (abi_ulong)((sp + stack_size) -
         sizeof(struct target_trapframe)) & ~(16 - 1);
 
     pstate = PSTATE_MODE_EL0t;
@@ -49,16 +58,26 @@ static inline void target_thread_set_upcall(CPUARMState *regs, abi_ulong entry,
     pstate_write(regs, pstate);
 
     /* sp = stack base */
+#ifdef TARGET_CHERI
+    (void)cheri_setaddress(&cap, sp);
+    update_capreg(regs, 31, &cap);
+#else
     arm_set_xreg(regs, 31, sp);
+#endif
     /* pc = start function entry */
 #ifdef TARGET_CHERI
-    cheri_update_pcc(&regs->pc.cap, entry, false);
+    (void)cheri_load(&regs->pc.cap, &entry);
     cheri_prepare_pcc(&regs->pc.cap, regs);
 #else
     regs->pc = entry &  ~0x3ULL;
 #endif
     /* r0 = arg */
+#ifdef TARGET_CHERI
+    (void)cheri_load(&cap, &arg);
+    update_capreg(regs, 0, &cap);
+#else
     arm_set_xreg(regs, 0, arg);
+#endif
 }
 
 /*

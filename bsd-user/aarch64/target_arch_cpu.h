@@ -288,8 +288,12 @@ static inline void target_cpu_loop(CPUARMState *env)
 }
 
 /* See arm64/arm64/vm_machdep.c cpu_fork() */
-static inline void target_cpu_clone_regs(CPUARMState *env, target_ulong newsp)
+static inline void target_cpu_clone_regs(CPUARMState *env,
+    abi_uintptr_t newsp)
 {
+#ifdef TARGET_CHERI
+    cap_register_t cap;
+#endif
     uint32_t pstate;
 
     pstate = 0;
@@ -297,10 +301,25 @@ static inline void target_cpu_clone_regs(CPUARMState *env, target_ulong newsp)
     pstate |= PSTATE_C64;
 #endif
 
+#ifdef TARGET_CHERI
+    (void)cheri_load(&cap, &newsp);
+    /*
+     * TODO: the check should verify if newsp is the NULL capability.
+     * Currently, it's not possible due as abi_uintptr_t doesn't store
+     * information on a tag.
+     */
+    if (cheri_getaddress(&cap) != 0)
+        update_capreg(env, 31, &cap);
+
+    nullify_capreg(env, 0);
+    nullify_capreg(env, 1);
+#else
     if (newsp)
         arm_set_xreg(env, 31, newsp);
+
     arm_set_xreg(env, 0, 0);
     arm_set_xreg(env, 1, 0);
+#endif
     pstate_write(env, pstate);
 }
 

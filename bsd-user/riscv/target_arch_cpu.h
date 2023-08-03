@@ -256,14 +256,26 @@ static inline void target_cpu_loop(CPURISCVState *env)
     }
 }
 
-static inline void target_cpu_clone_regs(CPURISCVState *env, target_ulong newsp)
+static inline void target_cpu_clone_regs(CPURISCVState *env,
+    abi_uintptr_t newsp)
 {
+#ifdef TARGET_CHERI
+    cap_register_t cap;
+
+    (void)cheri_load(&cap, &newsp);
+    if (!is_null_capability(&cap))
+        update_capreg(env, xSP, &cap);
+
+    nullify_capreg(env, xA0);
+    nullify_capreg(env, xT0);
+#else
     if (newsp) {
         gpr_set_int_value(env, xSP, newsp);
     }
 
     gpr_set_int_value(env, xA0, 0);
     gpr_set_int_value(env, xT0, 0);
+#endif
 }
 
 static inline void target_cpu_reset(CPUArchState *cpu)

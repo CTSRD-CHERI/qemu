@@ -741,17 +741,17 @@ struct target_freebsd_flock {
 #define TARGET_THR_SYSTEM_SCOPE 0x0002
 
 struct target_freebsd_thr_param {
-    abi_ulong   start_func; /* thread entry function. */
-    abi_ulong   arg;        /* argument for entry function. */
-    abi_ulong   stack_base; /* stack base address. */
-    abi_ulong   stack_size; /* stack size. */
-    abi_ulong   tls_base;   /* tls base address. */
-    abi_ulong   tls_size;   /* tls size. */
-    abi_ulong   child_tid;  /* address to store new TID. */
-    abi_ulong   parent_tid; /* parent access the new TID here. */
-    int32_t     flags;      /* thread flags. */
-    abi_ulong   rtp;        /* Real-time scheduling priority. */
-    abi_ulong   spare[3];   /* spares. */
+    abi_uintptr_t   start_func; /* thread entry function. */
+    abi_uintptr_t   arg;        /* argument for entry function. */
+    abi_uintptr_t   stack_base; /* stack base address. */
+    abi_ulong       stack_size; /* stack size. */
+    abi_uintptr_t   tls_base;   /* tls base address. */
+    abi_ulong       tls_size;   /* tls size. */
+    abi_uintptr_t   child_tid;  /* address to store new TID. */
+    abi_uintptr_t   parent_tid; /* parent access the new TID here. */
+    int32_t         flags;      /* thread flags. */
+    abi_uintptr_t   rtp;        /* Real-time scheduling priority. */
+    abi_uintptr_t   spare[3];   /* spares. */
 };
 
 /* sys/rtprio.h */

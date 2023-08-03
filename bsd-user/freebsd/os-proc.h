@@ -261,6 +261,7 @@ static inline abi_long do_freebsd___setugid(abi_long arg1)
 static inline abi_long do_freebsd_fork(void *cpu_env)
 {
     abi_long ret;
+    abi_uintptr_t sp;
     abi_ulong child_flag;
 
     fork_start();
@@ -268,7 +269,12 @@ static inline abi_long do_freebsd_fork(void *cpu_env)
     if (ret == 0) {
         /* child */
         child_flag = 1;
-        target_cpu_clone_regs(cpu_env, 0);
+#ifdef TARGET_CHERI
+        sp = cheri_uintptr(cheri_nullcap());
+#else
+        sp = 0;
+#endif
+        target_cpu_clone_regs(cpu_env, sp);
     } else {
         /* parent */
         child_flag = 0;
@@ -296,6 +302,7 @@ static inline abi_long do_freebsd_vfork(void *cpu_env)
 static inline abi_long do_freebsd_rfork(void *cpu_env, abi_long flags)
 {
     abi_long ret;
+    abi_uintptr_t sp;
     abi_ulong child_flag;
 
     /*
@@ -313,7 +320,12 @@ static inline abi_long do_freebsd_rfork(void *cpu_env, abi_long flags)
     if (ret == 0) {
         /* child */
         child_flag = 1;
-        target_cpu_clone_regs(cpu_env, 0);
+#ifdef TARGET_CHERI
+        sp = cheri_uintptr(cheri_nullcap());
+#else
+        sp = 0;
+#endif
+        target_cpu_clone_regs(cpu_env, sp);
     } else {
         /* parent */
         child_flag = 0;
@@ -336,6 +348,7 @@ static inline abi_long do_freebsd_pdfork(void *cpu_env, abi_ulong target_fdp,
         abi_long flags)
 {
     abi_long ret;
+    abi_uintptr_t sp;
     abi_ulong child_flag;
     int fd;
 
@@ -344,7 +357,12 @@ static inline abi_long do_freebsd_pdfork(void *cpu_env, abi_ulong target_fdp,
     if (ret == 0) {
         /* child */
         child_flag = 1;
-        target_cpu_clone_regs(cpu_env, 0);
+#ifdef TARGET_CHERI
+        sp = cheri_uintptr(cheri_nullcap());
+#else
+        sp = 0;
+#endif
+        target_cpu_clone_regs(cpu_env, sp);
     } else {
         /* parent */
         child_flag = 0;

@@ -22,6 +22,6 @@
 
 #include "qemu.h"
 
-void target_cpu_set_tls(CPURISCVState *env, target_ulong newtls);
+void target_cpu_set_tls(CPURISCVState *env, abi_uintptr_t newtls);
 
 #endif /* !_TARGET_ARCH_H_ */
