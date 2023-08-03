@@ -104,6 +104,9 @@ cheri_load(cap_register_t *cap, const abi_uintcap_t *value)
         CAP_CC(NULL_XOR_MASK);
     cursor = ldq_p((const uint8_t *)value + CHERI_MEM_OFFSET_CURSOR);
 
+    /*
+     * TODO: retrieve a tag from a capability.
+     */
     CAP_cc(decompress_raw)(pesbt, cursor, true, cap);
     cap_set_state(cap, CREG_FULLY_DECOMPRESSED);
     return (cap);

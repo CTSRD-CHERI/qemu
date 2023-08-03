@@ -22,7 +22,14 @@
 #define TP_OFFSET	16
 
 /* Compare with cpu_set_user_tls() in riscv/riscv/vm_machdep.c */
-void target_cpu_set_tls(CPURISCVState *env, target_ulong newtls)
+void target_cpu_set_tls(CPURISCVState *env, abi_uintptr_t newtls)
 {
+#ifdef TARGET_CHERI
+    cap_register_t cap;
+
+    (void)cheri_load(&cap, &newtls);
+    update_capreg(env, xTP, cheri_incoffset(&cap, TP_OFFSET));
+#else
     gpr_set_int_value(env, xTP, newtls + TP_OFFSET);
+#endif
 }

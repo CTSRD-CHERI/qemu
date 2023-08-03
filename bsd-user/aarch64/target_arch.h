@@ -22,7 +22,7 @@
 
 #include "qemu.h"
 
-void target_cpu_set_tls(CPUARMState *env, target_ulong newtls);
-target_ulong target_cpu_get_tls(CPUARMState *env);
+void target_cpu_set_tls(CPUARMState *env, abi_uintptr_t newtls);
+abi_uintptr_t target_cpu_get_tls(CPUARMState *env);
 
 #endif /* !_TARGET_ARCH_H_ */

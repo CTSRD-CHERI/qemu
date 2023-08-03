@@ -21,14 +21,24 @@
 #include "target_arch.h"
 
 /* See cpu_set_user_tls() in arm64/arm64/vm_machdep.c */
-void target_cpu_set_tls(CPUARMState *env, target_ulong newtls)
+void target_cpu_set_tls(CPUARMState *env, abi_uintptr_t newtls)
 {
 
+#ifdef TARGET_CHERI
+    cheri_load(&env->cp15.tpidr_el[0].cap, &newtls);
+#else
     set_aarch_reg_to_x(&env->cp15.tpidr_el[0], newtls);
+#endif
 }
 
-target_ulong target_cpu_get_tls(CPUARMState *env)
+abi_uintptr_t target_cpu_get_tls(CPUARMState *env)
 {
+#ifdef TARGET_CHERI
+    abi_uintptr_t tls;
 
+    cheri_store(&tls, &env->cp15.tpidr_el[0].cap);
+    return tls;
+#else
     return get_aarch_reg_as_x(&env->cp15.tpidr_el[0]);
+#endif
 }

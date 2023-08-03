@@ -41,6 +41,10 @@
 #include "exec/exec-all.h"
 #include "tcg/tcg.h"
 
+#ifdef TARGET_CHERI
+#include "cheri-helper-utils.h"
+#endif
+
 #include "os-thread.h"
 
 // #define DEBUG_UMTX(...)   fprintf(stderr, __VA_ARGS__)
@@ -131,6 +135,9 @@ void *new_freebsd_thread_start(void *arg)
     CPUArchState *env;
     CPUState *cpu;
     long tid;
+#ifdef TARGET_CHERI
+    cap_register_t cap;
+#endif
 
     rcu_register_thread();
     tcg_register_thread();
@@ -140,9 +147,16 @@ void *new_freebsd_thread_start(void *arg)
     (void)thr_self(&tid);
 
     /* copy out the child TID */
+#ifdef TARGET_CHERI
+    cheri_load(&cap, &info->param.child_tid);
+    if (cheri_getaddress(&cap) != 0) {
+        put_user_c(cheri_fromint(tid), (uintptr_t)cheri_getaddress(&cap));
+    }
+#else
     if (info->param.child_tid) {
         put_user_ual(tid, info->param.child_tid);
     }
+#endif
 
     /* Set arch dependent registers to start thread. */
     target_thread_set_upcall(env, info->param.start_func, info->param.arg,
@@ -1345,22 +1359,30 @@ abi_long do_freebsd_thr_new(CPUArchState *env,
     struct sched_param sched_param;
     int sched_policy;
     int ret = 0;
+#ifdef TARGET_CHERI
+    cap_register_t cap;
+#endif
 
     memset(&info, 0, sizeof(info));
 
     if (!lock_user_struct(VERIFY_READ, target_param, target_param_addr, 1)) {
         return -TARGET_EFAULT;
     }
-    info.param.start_func = tswapal(target_param->start_func);
-    info.param.arg = tswapal(target_param->arg);
-    info.param.stack_base = tswapal(target_param->stack_base);
+    info.param.start_func = tswapuintptr(target_param->start_func);
+    info.param.arg = tswapuintptr(target_param->arg);
+    info.param.stack_base = tswapuintptr(target_param->stack_base);
     info.param.stack_size = tswapal(target_param->stack_size);
-    info.param.tls_base = tswapal(target_param->tls_base);
+    info.param.tls_base = tswapuintptr(target_param->tls_base);
     info.param.tls_size = tswapal(target_param->tls_size);
-    info.param.child_tid = tswapal(target_param->child_tid);
-    info.param.parent_tid = tswapal(target_param->parent_tid);
+    info.param.child_tid = tswapuintptr(target_param->child_tid);
+    info.param.parent_tid = tswapuintptr(target_param->parent_tid);
     info.param.flags = tswap32(target_param->flags);
-    target_rtp_addr = info.param.rtp = tswapal(target_param->rtp);
+    info.param.rtp = tswapuintptr(target_param->rtp);
+#ifdef TARGET_CHERI
+    target_rtp_addr = cheri_getaddress(cheri_load(&cap, &info.param.rtp));
+#else
+    target_rtp_addr = (abi_ulong)info.param.rtp;
+#endif
     unlock_user(target_param, target_param_addr, 0);
 
     thr_self(&info.parent_tid);

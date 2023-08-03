@@ -26,17 +26,44 @@
 #endif
 
 /* Compare with cpu_set_upcall() in riscv/riscv/vm_machdep.c */
-static inline void target_thread_set_upcall(CPURISCVState *regs, abi_ulong entry,
-    abi_ulong arg, abi_ulong stack_base, abi_ulong stack_size)
+static inline void target_thread_set_upcall(CPURISCVState *regs,
+    abi_uintptr_t entry, abi_uintptr_t arg, abi_uintptr_t stack_base,
+    abi_ulong stack_size)
 {
+#ifdef TARGET_CHERI
+    cap_register_t cap;
+#endif
     abi_ulong sp;
     
-    sp = (abi_ulong)((stack_base + stack_size) -
+#ifdef TARGET_CHERI
+    sp = cheri_getaddress(cheri_load(&cap, &stack_base));
+#else
+    sp = stack_base;
+#endif
+    sp = (abi_ulong)((sp + stack_size) -
         sizeof(struct target_trapframe)) & ~(16 - 1);
 
+    /* sp = stack base */
+#ifdef TARGET_CHERI
+    (void)cheri_setaddress(&cap, sp);
+    update_capreg(regs, xSP, &cap);
+#else
     gpr_set_int_value(regs, xSP, sp);
+#endif
+    /* pc = start function entry */
+#ifdef TARGET_CHERI
+    (void)cheri_load(&cap, &entry);
+    cheri_prepare_pcc(&cap, regs);
+#else
     riscv_update_pc(regs, entry, true);
+#endif
+    /* a0 = arg */
+#ifdef TARGET_CHERI
+    (void)cheri_load(&cap, &arg);
+    update_capreg(regs, xA0, &cap);
+#else
     gpr_set_int_value(regs, xA0, arg);
+#endif
 }
 
 /* Compare with exec_setregs() in riscv/riscv/machdep.c */
