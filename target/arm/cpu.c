@@ -327,6 +327,15 @@ static void arm_cpu_reset(DeviceState *dev)
         /* Userspace expects access to cp10 and cp11 for FP/Neon */
         env->cp15.cpacr_el1 = deposit64(env->cp15.cpacr_el1, 20, 4, 0xf);
 #endif
+#ifdef TARGET_CHERI
+        /*
+         * Not really possible since Morello does not support A32 but code path
+         * can be triggered from unit tests. Report a fatal error now rather
+         * than continuing and hitting an obscure assertion.
+         */
+        error_report("Morello does not support A32");
+        abort();
+#endif
     }
 
 #if defined(CONFIG_USER_ONLY)
