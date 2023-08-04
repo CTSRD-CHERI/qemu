@@ -1688,6 +1688,9 @@ static void arm_cpu_realizefn(DeviceState *dev, Error **errp)
     if (arm_feature(&cpu->env, ARM_FEATURE_AARCH64)) {
         no_aa32 = !cpu_isar_feature(aa64_aa32, cpu);
     }
+#ifdef TARGET_CHERI
+    no_aa32 = true;
+#endif
 
     if (arm_feature(env, ARM_FEATURE_V7VE)) {
         /* v7 Virtualization Extensions. In real hardware this implies
@@ -2015,6 +2018,8 @@ static ObjectClass *arm_cpu_class_by_name(const char *cpu_model)
 }
 
 /* CPU models. These are not needed for the AArch64 linux-user build. */
+/* A32 CPU models are not needed for Morello since we don't support 32-bit. */
+#if !defined(TARGET_CHERI)
 #if !defined(CONFIG_USER_ONLY) || !defined(TARGET_AARCH64)
 
 static const ARMCPRegInfo cortexa8_cp_reginfo[] = {
@@ -2311,8 +2316,10 @@ static void arm_max_initfn(Object *obj)
 #endif
 
 #endif /* !defined(CONFIG_USER_ONLY) || !defined(TARGET_AARCH64) */
+#endif  /* !TARGET_CHERI */
 
 static const ARMCPUInfo arm_cpus[] = {
+#if !defined(TARGET_CHERI)
 #if !defined(CONFIG_USER_ONLY) || !defined(TARGET_AARCH64)
     { .name = "cortex-a7",   .initfn = cortex_a7_initfn },
     { .name = "cortex-a8",   .initfn = cortex_a8_initfn },
@@ -2325,6 +2332,7 @@ static const ARMCPUInfo arm_cpus[] = {
     { .name = "any",         .initfn = arm_max_initfn },
 #endif
 #endif
+#endif  /* !TARGET_CHERI */
 };
 
 static Property arm_cpu_properties[] = {

@@ -13,6 +13,8 @@
 #include "internals.h"
 
 /* CPU models. These are not needed for the AArch64 linux-user build. */
+/* They are also not needed for Morello since we don't support 32-bit. */
+#if !defined(TARGET_CHERI)
 #if !defined(CONFIG_USER_ONLY) || !defined(TARGET_AARCH64)
 
 static bool arm_v7m_cpu_exec_interrupt(CPUState *cs, int interrupt_request)
@@ -687,3 +689,4 @@ static void arm_tcg_cpu_register_types(void)
 type_init(arm_tcg_cpu_register_types)
 
 #endif /* !CONFIG_USER_ONLY || !TARGET_AARCH64 */
+#endif /* !TARGET_CHERI */
