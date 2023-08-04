@@ -152,6 +152,10 @@ static int aarch64_fpu_gdb_set_reg(CPUARMState *env, uint8_t *buf, int reg)
 static void raw_read_cap(CPUARMState *env, const ARMCPRegInfo *ri,
                          cap_register_t *cap_out)
 {
+    if (ri->type & ARM_CP_CONST) {
+        set_max_perms_capability(cap_out, ri->resetvalue);
+        return;
+    }
     assert(ri->fieldoffset);
     assert(cpreg_field_is_cap(ri));
     *cap_out = CPREG_FIELDCAP(env, ri);
@@ -160,6 +164,7 @@ static void raw_read_cap(CPUARMState *env, const ARMCPRegInfo *ri,
 static void raw_write_cap(CPUARMState *env, const ARMCPRegInfo *ri,
                           uint64_t value, const cap_register_t *cap)
 {
+    assert((ri->type & ARM_CP_CONST) == 0);
     assert(ri->fieldoffset);
     assert(cpreg_field_is_cap(ri));
     CPREG_FIELDCAP(env, ri) = *cap;
