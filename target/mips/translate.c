@@ -7063,7 +7063,7 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
         gen_load_gpr(btarget, rs);
 #ifdef TARGET_CHERI
         /* Add PCC.base to rs (jr/jalr is relative to PCC) */
-        tcg_gen_addi_tl(btarget, btarget, ctx->base.pcc_base);
+        tcg_gen_addi_tl(btarget, btarget, pcc_reloc(ctx));
 #endif /* TARGET_CHERI */
         gen_check_branch_target_dynamic(ctx, btarget);
         SET_BTARGET_CHECKED(true);

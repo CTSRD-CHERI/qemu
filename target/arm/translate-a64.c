@@ -300,8 +300,7 @@ static void gen_a64_set_link_register(DisasContext *s)
             gen_cap_clear_tag(s, 30);
         }
     } else {
-        if (cctlr_set(s, CCTLR_PCCBO))
-            addr -= s->base.pcc_base;
+        addr -= pcc_reloc(s);
     }
     // Need to correct address
     tcg_gen_movi_i64(cpu_reg(s, 30), addr);
