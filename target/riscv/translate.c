@@ -485,8 +485,8 @@ static void gen_jal(DisasContext *ctx, int rd, target_ulong imm)
             return;
         }
     }
-    // For CHERI the result is an offset relative to PCC.base
-    gen_set_gpr_const(rd, ctx->pc_succ_insn - pcc_base(ctx));
+    /* For CHERI ISAv8 the result is an offset relative to PCC.base */
+    gen_set_gpr_const(rd, ctx->pc_succ_insn - pcc_reloc(ctx));
 
     gen_goto_tb(ctx, 0, ctx->base.pc_next + imm, /*bounds_check=*/true); /* must use this for safety */
     ctx->base.is_jmp = DISAS_NORETURN;
@@ -501,8 +501,8 @@ static void gen_jalr(DisasContext *ctx, int rd, int rs1, target_ulong imm)
     TCGv t0 = tcg_temp_local_new();
 
     gen_get_gpr(t0, rs1);
-    // For CHERI the jump destination is an offset relative to PCC.base
-    tcg_gen_addi_tl(t0, t0, imm + pcc_base(ctx));
+    /* For CHERI ISAv8 the destination is an offset relative to PCC.base. */
+    tcg_gen_addi_tl(t0, t0, imm + pcc_reloc(ctx));
     tcg_gen_andi_tl(t0, t0, (target_ulong)-2);
     gen_check_branch_target_dynamic(ctx, t0);
     // Note: Only update cpu_pc after a successful bounds check to avoid
@@ -516,8 +516,8 @@ static void gen_jalr(DisasContext *ctx, int rd, int rs1, target_ulong imm)
         tcg_gen_brcondi_tl(TCG_COND_NE, t0, 0x0, misaligned);
     }
 
-    // For CHERI the result is an offset relative to PCC.base
-    gen_set_gpr_const(rd, ctx->pc_succ_insn - pcc_base(ctx));
+    /* For CHERI ISAv8 the result is an offset relative to PCC.base */
+    gen_set_gpr_const(rd, ctx->pc_succ_insn - pcc_reloc(ctx));
     lookup_and_goto_ptr(ctx);
 
     if (misaligned) {

@@ -5087,8 +5087,8 @@ static inline void gen_pcrel(DisasContext *ctx, int opc, target_ulong pc,
     case OPC_ADDIUPC:
         if (rs != 0) {
             offset = sextract32(ctx->opcode << 2, 0, 21);
-            // For CHERI the result is an offset relative to PC
-            addr = addr_add(ctx, pc - pcc_base(ctx), offset);
+            /* For CHERI the result is an offset relative to PC. */
+            addr = addr_add(ctx, pc - pcc_reloc(ctx), offset);
             tcg_gen_movi_tl(cpu_gpr[rs], addr);
             gen_log_instr_gpr_update(ctx, rs);
         }
@@ -5113,8 +5113,8 @@ static inline void gen_pcrel(DisasContext *ctx, int opc, target_ulong pc,
         case OPC_AUIPC:
             if (rs != 0) {
                 offset = sextract32(ctx->opcode, 0, 16) << 16;
-                // For CHERI the result is an offset relative to PC
-                addr = addr_add(ctx, pc - pcc_base(ctx), offset);
+                /* For CHERI the result is an offset relative to PC. */
+                addr = addr_add(ctx, pc - pcc_reloc(ctx), offset);
                 tcg_gen_movi_tl(cpu_gpr[rs], addr);
                 gen_log_instr_gpr_update(ctx, rs);
             }
@@ -5122,8 +5122,8 @@ static inline void gen_pcrel(DisasContext *ctx, int opc, target_ulong pc,
         case OPC_ALUIPC:
             if (rs != 0) {
                 offset = sextract32(ctx->opcode, 0, 16) << 16;
-                // For CHERI the result is an offset relative to PC
-                addr = ~0xFFFF & addr_add(ctx, pc - pcc_base(ctx), offset);
+                /* For CHERI the result is an offset relative to PC. */
+                addr = ~0xFFFF & addr_add(ctx, pc - pcc_reloc(ctx), offset);
                 tcg_gen_movi_tl(cpu_gpr[rs], addr);
                 gen_log_instr_gpr_update(ctx, rs);
             }
@@ -7042,8 +7042,10 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
     case OPC_JALX:
 #endif
         /* Jump to immediate (taking PCC.base into account) */
-        btgt = (((ctx->base.pc_next + insn_bytes - pcc_base(ctx)) &
-                 (int32_t)0xF0000000) | (uint32_t)offset) + pcc_base(ctx);
+        btgt = (((ctx->base.pc_next + insn_bytes - pcc_reloc(ctx)) &
+                 (int32_t)0xF0000000) |
+                (uint32_t)offset) +
+               pcc_reloc(ctx);
         break;
     case OPC_JR:
     case OPC_JALR:
@@ -7107,7 +7109,8 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
             break;
         case OPC_BLTZALL: /* 0 < 0 likely */
             /* For CHERI, we have to subtract PCC.base from r31 */
-            tcg_gen_movi_tl(cpu_gpr[31], ctx->base.pc_next + 8 - pcc_base(ctx));
+            tcg_gen_movi_tl(cpu_gpr[31],
+                            ctx->base.pc_next + 8 - pcc_reloc(ctx));
             gen_log_instr_gpr_update(ctx, 31);
             /* Skip the instruction in the delay slot */
             ctx->base.pc_next += 4;
@@ -7249,7 +7252,8 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
 
         tcg_gen_movi_tl(cpu_gpr[blink],
                         /* Subtract PCC.base from r[blink] */
-                        ctx->base.pc_next + post_delay + lowbit - pcc_base(ctx));
+                        ctx->base.pc_next + post_delay + lowbit -
+                            pcc_reloc(ctx));
         gen_log_instr_gpr_update(ctx, blink);
     }
 

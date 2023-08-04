@@ -37,6 +37,7 @@
 struct DisasContext;
 static inline bool cctlr_set(struct DisasContext *ctx, uint32_t bits);
 #define CHERI_TRANSLATE_DDC_RELOCATION(ctx) cctlr_set(ctx, CCTLR_DDCBO)
+#define CHERI_TRANSLATE_PCC_RELOCATION(ctx) cctlr_set(ctx, CCTLR_PCCBO)
 
 static inline const cap_register_t *cheri_get_ddc(CPUARMState *env)
 {
