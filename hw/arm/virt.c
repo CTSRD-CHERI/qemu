@@ -2486,7 +2486,11 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
     mc->minimum_page_bits = 12;
     mc->possible_cpu_arch_ids = virt_possible_cpu_arch_ids;
     mc->cpu_index_to_instance_props = virt_cpu_index_to_props;
+#ifdef TARGET_CHERI
+    mc->default_cpu_type = ARM_CPU_TYPE_NAME("morello");
+#else
     mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-a15");
+#endif
     mc->get_default_cpu_node_id = virt_get_default_cpu_node_id;
     mc->kvm_type = virt_kvm_type;
     assert(!mc->get_hotplug_handler);
