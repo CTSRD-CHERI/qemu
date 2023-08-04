@@ -147,6 +147,9 @@ static void cp_reg_reset(gpointer key, gpointer value, gpointer opaque)
 
 #ifdef TARGET_CHERI
     if (cpreg_field_is_cap(ri)) {
+        if (ri->type & ARM_CP_CONST) {
+            return;
+        }
         assert(ri->fieldoffset && "Unexpected capability cpreg without offset");
         /*
          * We ensure that all cap_register_t values are reset to a canonical
