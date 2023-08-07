@@ -163,7 +163,7 @@ selectedConfigs.each { config ->
             def qemuResult = cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
                     nodeLabel: null,
                     extraArgs: "--without-sdk --install-prefix=/usr $extraQemuArgs",
-                    runTests: /* true */ false,
+                    runTests: true,
                     uniqueId: "qemu-build-${config}",
                     skipTarball: true,
                     afterBuild: { params ->
