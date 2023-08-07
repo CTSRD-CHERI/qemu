@@ -51,14 +51,6 @@ static bool riscv_hart_realize(RISCVHartArrayState *s, int idx,
     s->harts[idx].env.mhartid = s->hartid_base + idx;
     qemu_register_reset(riscv_harts_cpu_reset, &s->harts[idx]);
     bool ret = qdev_realize(DEVICE(&s->harts[idx]), NULL, errp);
-#ifdef CONFIG_TCG_LOG_INSTR
-    /*
-     * Note that riscv allocates CPUState on an array without using cpu_create
-     * so we have to manually initialize the log state.
-     */
-    if (ret)
-        qemu_log_instr_init(CPU(&s->harts[idx]));
-#endif
     return ret;
 }
 

@@ -64,9 +64,6 @@ CPUState *cpu_create(const char *typename)
         object_unref(OBJECT(cpu));
         exit(EXIT_FAILURE);
     }
-#ifdef CONFIG_TCG_LOG_INSTR
-    qemu_log_instr_init(cpu);
-#endif
     return cpu;
 }
 
@@ -379,6 +376,14 @@ static void cpu_common_initfn(Object *obj)
     cpu_exec_initfn(cpu);
 }
 
+static void cpu_common_post_initfn(Object *obj)
+{
+    /* Now that cpu->env_ptr has been initialized set up instruction logging. */
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_instr_init(CPU(obj));
+#endif
+}
+
 static void cpu_common_finalize(Object *obj)
 {
     CPUState *cpu = CPU(obj);
@@ -436,6 +441,7 @@ static const TypeInfo cpu_type_info = {
     .parent = TYPE_DEVICE,
     .instance_size = sizeof(CPUState),
     .instance_init = cpu_common_initfn,
+    .instance_post_init = cpu_common_post_initfn,
     .instance_finalize = cpu_common_finalize,
     .abstract = true,
     .class_size = sizeof(CPUClass),

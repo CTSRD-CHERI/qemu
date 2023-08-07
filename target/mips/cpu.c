@@ -595,8 +595,5 @@ MIPSCPU *mips_cpu_create_with_clock(const char *cpu_type, Clock *cpu_refclk)
     cpu = DEVICE(object_new(cpu_type));
     qdev_connect_clock_in(cpu, "clk-in", cpu_refclk);
     qdev_realize(cpu, NULL, &error_abort);
-#ifdef CONFIG_TCG_LOG_INSTR
-    qemu_log_instr_init(CPU(cpu));
-#endif
     return MIPS_CPU(cpu);
 }
