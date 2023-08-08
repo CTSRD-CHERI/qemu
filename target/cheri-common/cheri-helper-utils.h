@@ -155,6 +155,21 @@ static inline void cheri_update_pcc_for_exc_handler(cap_register_t *pcc,
                                                     cap_register_t *src_cap,
                                                     target_ulong new_pc)
 {
+    if (!src_cap->cr_tag && cap_exactly_equal(pcc, src_cap) &&
+        new_pc == cap_get_cursor(pcc)) {
+        error_report("Detected infinite trap loop due to untagged exception "
+                     "handler: " PRINT_CAP_FMTSTR "\r",
+                     PRINT_CAP_ARGS(pcc));
+        /* There is no way to make forward progress anymore. */
+#ifdef CONFIG_RVFI_DII
+        extern int rvfi_client_fd;
+        /* When running in RVFI-DII mode, keep running to match sail. */
+        if (rvfi_client_fd) {
+            return;
+        }
+#endif
+        exit(1);
+    }
     *pcc = *src_cap;
     // FIXME: KCC must not be sealed
     if (!cap_is_unsealed(pcc)) {
@@ -162,6 +177,10 @@ static inline void cheri_update_pcc_for_exc_handler(cap_register_t *pcc,
                      " handler, detagging: " PRINT_CAP_FMTSTR "\r",
                      PRINT_CAP_ARGS(pcc));
         pcc->cr_tag = false;
+    }
+    if (!pcc->cr_tag) {
+        error_report("Invalid PCC in exception handler: " PRINT_CAP_FMTSTR "\r",
+                     PRINT_CAP_ARGS(pcc));
     }
     cheri_update_pcc(pcc, new_pc, /* can_be_unrep=*/true);
 }
