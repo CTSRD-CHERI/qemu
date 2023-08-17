@@ -1385,7 +1385,7 @@ void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
 
 bool load_cap_from_memory_raw_tag_mmu_idx(
     CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
-    const cap_register_t *source, target_ulong vaddr, target_ulong retpc,
+    const cap_register_t *source, target_ulong vaddr, uintptr_t retpc,
     hwaddr *physaddr, bool *raw_tag, int mmu_idx)
 {
     cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
@@ -1464,7 +1464,7 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
 bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
                                   target_ulong *cursor, uint32_t cb,
                                   const cap_register_t *source,
-                                  target_ulong vaddr, target_ulong retpc,
+                                  target_ulong vaddr, uintptr_t retpc,
                                   hwaddr *physaddr, bool *raw_tag)
 {
     return load_cap_from_memory_raw_tag_mmu_idx(env, pesbt, cursor, cb, source,
@@ -1475,7 +1475,7 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
-                              target_ulong retpc, hwaddr *physaddr)
+                              uintptr_t retpc, hwaddr *physaddr)
 {
     return load_cap_from_memory_raw_tag(env, pesbt, cursor, cb, source, vaddr,
                                         retpc, physaddr, NULL);
@@ -1483,7 +1483,7 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
 
 cap_register_t load_and_decompress_cap_from_memory_raw(
     CPUArchState *env, uint32_t cb, const cap_register_t *source,
-    target_ulong vaddr, target_ulong retpc, hwaddr *physaddr)
+    target_ulong vaddr, uintptr_t retpc, hwaddr *physaddr)
 {
     target_ulong pesbt, cursor;
     bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
@@ -1496,7 +1496,7 @@ cap_register_t load_and_decompress_cap_from_memory_raw(
 
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
-                          target_ulong retpc, hwaddr *physaddr)
+                          uintptr_t retpc, hwaddr *physaddr)
 {
     target_ulong pesbt;
     target_ulong cursor;
@@ -1506,7 +1506,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 }
 
 void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
-                                   target_ulong vaddr, target_ulong retpc,
+                                   target_ulong vaddr, uintptr_t retpc,
                                    int mmu_idx)
 {
     target_ulong cursor = get_capreg_cursor(env, cs);
@@ -1587,7 +1587,7 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
 }
 
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
-                         target_ulong retpc)
+                         uintptr_t retpc)
 {
     return store_cap_to_memory_mmu_index(env, cs, vaddr, retpc,
                                          cpu_mmu_index(env, false));
