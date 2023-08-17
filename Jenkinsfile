@@ -59,10 +59,10 @@ def maybeArchiveArtifacts(params, String os) {
 def addBootJobs(bootJobs, params, String qemuConfig, String architecture, String cheribsdBranch, String suffix="") {
     // For purecap architectures we boot both hybrid and purecap kernels.
     if (architecture.endsWith("-purecap")) {
-        bootJobs["${architecture}-purecap-kernel on ${qemuConfig}"] =
+        bootJobs["${architecture}-purecap-kernel${suffix} on ${qemuConfig}"] =
             { -> bootCheriBSD(params, qemuConfig, "${architecture}-purecap-kernel${suffix}", architecture,
                               'purecap', cheribsdBranch) }
-        bootJobs["${architecture}-hybrid-kernel on ${qemuConfig}"] =
+        bootJobs["${architecture}-hybrid-kernel${suffix} on ${qemuConfig}"] =
             { -> bootCheriBSD(params, qemuConfig, "${architecture}-hybrid-kernel${suffix}", architecture,
                               'hybrid', cheribsdBranch) }
     } else {
