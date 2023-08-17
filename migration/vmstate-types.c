@@ -356,7 +356,7 @@ static int get_cap64_register(QEMUFile *f, void *pv, size_t size,
 }
 
 static int put_cap64_register(QEMUFile *f, void *pv, size_t size,
-                            const VMStateField *field, QJSON *vmdesc)
+                            const VMStateField *field, JSONWriter *vmdesc)
 {
     assert(field->size >= sizeof(cc64_cap_t));
     cc64_cap_t *v = pv;
@@ -401,7 +401,7 @@ static int get_cap128_register(QEMUFile *f, void *pv, size_t size,
 }
 
 static int put_cap128_register(QEMUFile *f, void *pv, size_t size,
-                            const VMStateField *field, QJSON *vmdesc)
+                            const VMStateField *field, JSONWriter *vmdesc)
 {
     assert(field->size >= sizeof(cc128_cap_t));
     cc128_cap_t *v = pv;
@@ -446,7 +446,7 @@ static int get_cap128m_register(QEMUFile *f, void *pv, size_t size,
 }
 
 static int put_cap128m_register(QEMUFile *f, void *pv, size_t size,
-                            const VMStateField *field, QJSON *vmdesc)
+                            const VMStateField *field, JSONWriter *vmdesc)
 {
     assert(field->size >= sizeof(cc128m_cap_t));
     cc128m_cap_t *v = pv;
