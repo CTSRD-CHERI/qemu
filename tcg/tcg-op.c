@@ -2965,9 +2965,12 @@ static void tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(
     }
 
     addr = plugin_prep_mem_callbacks(addr);
-    gen_ldst_i32(INDEX_op_qemu_st_i32, val, addr, memop, idx);
+    if (TCG_TARGET_HAS_qemu_st8_i32 && (memop & MO_SIZE) == MO_8) {
+        gen_ldst_i32(INDEX_op_qemu_st8_i32, val, addr, memop, idx);
+    } else {
+        gen_ldst_i32(INDEX_op_qemu_st_i32, val, addr, memop, idx);
+    }
     gen_rvfi_dii_set_mem_data_i32(w, addr, val, memop);
-
     plugin_gen_mem_callbacks(addr, info);
 #if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
     TCGv_i32 tcoi = tcg_const_i32(make_memop_idx(memop, idx));

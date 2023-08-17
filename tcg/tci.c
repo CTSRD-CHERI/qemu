@@ -490,8 +490,8 @@ static bool tci_compare64(uint64_t u0, uint64_t u1, TCGCond condition)
  * One possible operation in the pseudo code is a call to binary code.
  * Therefore, disable CFI checks in the interpreter function
  */
-QEMU_DISABLE_CFI
-uintptr_t tcg_qemu_tb_exec(CPUArchState *env, const void *v_tb_ptr)
+uintptr_t QEMU_DISABLE_CFI tcg_qemu_tb_exec(CPUArchState *env,
+                                            const void *v_tb_ptr)
 {
     const uint8_t *tb_ptr = v_tb_ptr;
     tcg_target_ulong regs[TCG_TARGET_NB_REGS];

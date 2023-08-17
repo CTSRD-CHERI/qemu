@@ -154,8 +154,7 @@ static void init_delay_params(SyncClocks *sc, const CPUState *cpu)
  * TCG is not considered a security-sensitive part of QEMU so this does not
  * affect the impact of CFI in environment with high security requirements
  */
-QEMU_DISABLE_CFI
-static inline TranslationBlock *
+static inline TranslationBlock * QEMU_DISABLE_CFI
 cpu_tb_exec(CPUState *cpu, TranslationBlock *itb, int *tb_exit)
 {
     CPUArchState *env = cpu->env_ptr;
