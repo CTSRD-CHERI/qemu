@@ -169,7 +169,6 @@ version_res = []
 coref = []
 iokit = []
 emulator_link_args = []
-cocoa = not_found
 hvf = not_found
 if targetos == 'windows'
   socket = cc.find_library('ws2_32')
@@ -182,7 +181,6 @@ if targetos == 'windows'
 elif targetos == 'darwin'
   coref = dependency('appleframeworks', modules: 'CoreFoundation')
   iokit = dependency('appleframeworks', modules: 'IOKit')
-  cocoa = dependency('appleframeworks', modules: 'Cocoa', required: get_option('cocoa'))
 elif targetos == 'sunos'
   socket = [cc.find_library('socket'),
             cc.find_library('nsl'),
@@ -255,9 +253,6 @@ if not have_xen_pci_passthrough and get_option('xen_pci_passthrough').enabled()
   else
     error('Xen PCI passthrough requested but Xen not enabled')
   endif
-endif
-if not cocoa.found() and get_option('cocoa').enabled()
-  error('Cocoa not available on this platform')
 endif
 
 ################
@@ -360,6 +355,14 @@ if not get_option('attr').disabled()
       have_old_libattr = libattr.found()
     endif
   endif
+endif
+
+cocoa = dependency('appleframeworks', modules: 'Cocoa', required: get_option('cocoa'))
+if cocoa.found() and get_option('sdl').enabled()
+  error('Cocoa and SDL cannot be enabled at the same time')
+endif
+if cocoa.found() and get_option('gtk').enabled()
+  error('Cocoa and GTK+ cannot be enabled at the same time')
 endif
 
 seccomp = not_found
@@ -647,7 +650,7 @@ if not get_option('brlapi').auto() or have_system
 endif
 
 sdl = not_found
-if have_system
+if not get_option('sdl').auto() or (have_system and not cocoa.found())
   sdl = dependency('sdl2', required: get_option('sdl'), static: enable_static)
   sdl_image = not_found
 endif
@@ -776,20 +779,32 @@ if 'CONFIG_OPENGL' in config_host
   opengl = declare_dependency(compile_args: config_host['OPENGL_CFLAGS'].split(),
                               link_args: config_host['OPENGL_LIBS'].split())
 endif
+
 gtk = not_found
-if 'CONFIG_GTK' in config_host
-  gtk = declare_dependency(compile_args: config_host['GTK_CFLAGS'].split(),
-                              link_args: config_host['GTK_LIBS'].split())
+gtkx11 = not_found
+if not get_option('gtk').auto() or (have_system and not cocoa.found())
+  gtk = dependency('gtk+-3.0', version: '>=3.22.0',
+                   method: 'pkg-config',
+                   required: get_option('gtk'),
+                   static: enable_static)
+  if gtk.found()
+    gtkx11 = dependency('gtk+-x11-3.0', version: '>=3.22.0',
+                        method: 'pkg-config',
+                        required: false,
+                        static: enable_static)
+    gtk = declare_dependency(dependencies: [gtk, gtkx11])
+  endif
 endif
+
 vte = not_found
 if 'CONFIG_VTE' in config_host
   vte = declare_dependency(compile_args: config_host['VTE_CFLAGS'].split(),
                            link_args: config_host['VTE_LIBS'].split())
 endif
 x11 = not_found
-if 'CONFIG_X11' in config_host
-  x11 = declare_dependency(compile_args: config_host['X11_CFLAGS'].split(),
-                           link_args: config_host['X11_LIBS'].split())
+if gtkx11.found() or 'lm32-softmmu' in target_dirs
+  x11 = dependency('x11', method: 'pkg-config', required: gtkx11.found(),
+                   static: enable_static)
 endif
 vnc = not_found
 png = not_found
@@ -1017,11 +1032,18 @@ have_virtfs = (targetos == 'linux' and
     libattr.found() and
     libcap_ng.found())
 
+if targetos == 'darwin' and have_system
+    # macOS systems always have the required libraries
+    have_virtfs = true
+endif
+
+have_virtfs_proxy_helper = have_virtfs and have_tools
+
 if get_option('virtfs').enabled()
   if not have_virtfs
-    if targetos != 'linux'
-      error('virtio-9p (virtfs) requires Linux')
-    elif not libcap_ng.found() or not libattr.found()
+    if targetos not in ['linux', 'darwin']
+      error('virtio-9p (virtfs) requires Linux or Darwin')
+    elif targetos == 'linux' and (not libcap_ng.found() or not libattr.found())
       error('virtio-9p (virtfs) requires libcap-ng-devel and libattr-devel')
     elif not have_system
       error('virtio-9p (virtfs) needs system emulation support')
@@ -1062,6 +1084,7 @@ if glusterfs.found()
   config_host_data.set('CONFIG_GLUSTERFS_FTRUNCATE_HAS_STAT', glusterfs_ftruncate_has_stat)
   config_host_data.set('CONFIG_GLUSTERFS_IOCB_HAS_STAT', glusterfs_iocb_has_stat)
 endif
+config_host_data.set('CONFIG_GTK', gtk.found())
 config_host_data.set('CONFIG_LIBATTR', have_old_libattr)
 config_host_data.set('CONFIG_LIBCAP_NG', libcap_ng.found())
 config_host_data.set('CONFIG_LIBISCSI', libiscsi.found())
@@ -1085,6 +1108,7 @@ config_host_data.set('CONFIG_STATX', has_statx)
 config_host_data.set('CONFIG_ZSTD', zstd.found())
 config_host_data.set('CONFIG_FUSE', fuse.found())
 config_host_data.set('CONFIG_FUSE_LSEEK', fuse_lseek.found())
+config_host_data.set('CONFIG_X11', x11.found())
 config_host_data.set('CONFIG_CFI', get_option('cfi'))
 config_host_data.set('QEMU_VERSION', '"@0@"'.format(meson.project_version()))
 config_host_data.set('QEMU_VERSION_MAJOR', meson.project_version().split('.')[0])
@@ -1171,7 +1195,7 @@ host_kconfig = \
   ('CONFIG_SPICE' in config_host ? ['CONFIG_SPICE=y'] : []) + \
   ('CONFIG_IVSHMEM' in config_host ? ['CONFIG_IVSHMEM=y'] : []) + \
   ('CONFIG_OPENGL' in config_host ? ['CONFIG_OPENGL=y'] : []) + \
-  ('CONFIG_X11' in config_host ? ['CONFIG_X11=y'] : []) + \
+  (x11.found() ? ['CONFIG_X11=y'] : []) + \
   ('CONFIG_VHOST_USER' in config_host ? ['CONFIG_VHOST_USER=y'] : []) + \
   ('CONFIG_VHOST_VDPA' in config_host ? ['CONFIG_VHOST_VDPA=y'] : []) + \
   ('CONFIG_VHOST_KERNEL' in config_host ? ['CONFIG_VHOST_KERNEL=y'] : []) + \
@@ -2294,7 +2318,7 @@ subdir('tools')
 subdir('pc-bios')
 subdir('docs')
 subdir('tests')
-if 'CONFIG_GTK' in config_host
+if gtk.found()
   subdir('po')
 endif
 
@@ -2311,7 +2335,7 @@ if host_machine.system() == 'windows'
   if build_docs
     nsis_cmd += '-DCONFIG_DOCUMENTATION=y'
   endif
-  if 'CONFIG_GTK' in config_host
+  if gtk.found()
     nsis_cmd += '-DCONFIG_GTK=y'
   endif
 
@@ -2396,14 +2420,13 @@ summary_info += {'profiler':          config_host.has_key('CONFIG_PROFILER')}
 summary_info += {'link-time optimization (LTO)': get_option('b_lto')}
 summary_info += {'static build':      config_host.has_key('CONFIG_STATIC')}
 if targetos == 'darwin'
-  summary_info += {'Cocoa support': config_host.has_key('CONFIG_COCOA')}
+  summary_info += {'Cocoa support':   cocoa.found()}
 endif
 # TODO: add back version
 summary_info += {'SDL support':       sdl.found()}
 summary_info += {'SDL image support': sdl_image.found()}
 # TODO: add back version
-summary_info += {'GTK support':       config_host.has_key('CONFIG_GTK')}
-summary_info += {'GTK GL support':    config_host.has_key('CONFIG_GTK_GL')}
+summary_info += {'GTK support':       gtk.found()}
 summary_info += {'pixman':            pixman.found()}
 # TODO: add back version
 summary_info += {'VTE support':       config_host.has_key('CONFIG_VTE')}
