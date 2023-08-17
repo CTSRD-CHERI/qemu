@@ -34,7 +34,7 @@
 #include "sysemu/tcg.h"
 #include "sysemu/kvm.h"
 #include "sysemu/replay.h"
-#include "translate-all.h"
+#include "exec/translate-all.h"
 #include "exec/log.h"
 #include "exec/log_instr.h"
 

@@ -77,7 +77,6 @@
 #include "qapi/qmp-event.h"
 #include "sysemu/cpus.h"
 #include "qemu/cutils.h"
-#include "tcg/tcg.h"
 #include "qemu/log_instr.h"
 
 #if defined(TARGET_S390X)
