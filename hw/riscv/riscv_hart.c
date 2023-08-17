@@ -21,7 +21,6 @@
 #include "qemu/osdep.h"
 #include "qapi/error.h"
 #include "qemu/module.h"
-#include "qemu/log_instr.h"
 #include "sysemu/reset.h"
 #include "hw/sysbus.h"
 #include "target/riscv/cpu.h"
@@ -50,8 +49,7 @@ static bool riscv_hart_realize(RISCVHartArrayState *s, int idx,
     qdev_prop_set_uint64(DEVICE(&s->harts[idx]), "resetvec", s->resetvec);
     s->harts[idx].env.mhartid = s->hartid_base + idx;
     qemu_register_reset(riscv_harts_cpu_reset, &s->harts[idx]);
-    bool ret = qdev_realize(DEVICE(&s->harts[idx]), NULL, errp);
-    return ret;
+    return qdev_realize(DEVICE(&s->harts[idx]), NULL, errp);
 }
 
 static void riscv_harts_realize(DeviceState *dev, Error **errp)

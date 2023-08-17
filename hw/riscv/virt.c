@@ -42,17 +42,6 @@
 #include "sysemu/sysemu.h"
 #include "hw/pci/pci.h"
 #include "hw/pci-host/gpex.h"
-
-#if defined(TARGET_CHERI)
-/*
- * Use a purecap BBL as the BIOS for CHERI
- * TODO: switch to OpenSBI since it's less awful.
- */
-# define BIOS_FILENAME "bbl-" TARGET_NAME "-virt-fw_jump.bin"
-#else
-# define BIOS_FILENAME "opensbi-" TARGET_NAME "-generic-virt-fw_jump.bin"
-#endif
-
 #ifdef TARGET_CHERI
 #include "cheri_tagmem.h"
 #endif
@@ -185,7 +174,7 @@ static void create_pcie_irq_map(void *fdt, char *nodename,
 }
 
 static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
-    uint64_t mem_size, const char *cmdline)
+                       uint64_t mem_size, const char *cmdline, bool is_32_bit)
 {
     void *fdt;
     int i, cpu, socket;
@@ -248,11 +237,11 @@ static void create_fdt(RISCVVirtState *s, const struct MemmapEntry *memmap,
             cpu_name = g_strdup_printf("/cpus/cpu@%d",
                 s->soc[socket].hartid_base + cpu);
             qemu_fdt_add_subnode(fdt, cpu_name);
-#if defined(TARGET_RISCV32)
-            qemu_fdt_setprop_string(fdt, cpu_name, "mmu-type", "riscv,sv32");
-#else
-            qemu_fdt_setprop_string(fdt, cpu_name, "mmu-type", "riscv,sv48");
-#endif
+            if (is_32_bit) {
+                qemu_fdt_setprop_string(fdt, cpu_name, "mmu-type", "riscv,sv32");
+            } else {
+                qemu_fdt_setprop_string(fdt, cpu_name, "mmu-type", "riscv,sv48");
+            }
             name = riscv_isa_string(&s->soc[socket].harts[cpu]);
             qemu_fdt_setprop_string(fdt, cpu_name, "riscv,isa", name);
             g_free(name);
@@ -617,7 +606,8 @@ static void virt_machine_init(MachineState *machine)
 #endif
 
     /* create device tree */
-    create_fdt(s, memmap, machine->ram_size, machine->kernel_cmdline);
+    create_fdt(s, memmap, machine->ram_size, machine->kernel_cmdline,
+               riscv_is_32bit(s->soc[0]));
 
     /* boot rom */
     memory_region_init_rom(mask_rom, NULL, "riscv_virt_board.mrom",
@@ -625,11 +615,30 @@ static void virt_machine_init(MachineState *machine)
     memory_region_add_subregion(system_memory, memmap[VIRT_MROM].base,
                                 mask_rom);
 
-    firmware_end_addr = riscv_find_and_load_firmware(machine, BIOS_FILENAME,
-                                                     start_addr, NULL);
+    if (riscv_is_32bit(s->soc[0])) {
+        firmware_end_addr = riscv_find_and_load_firmware(
+            machine,
+#if defined(TARGET_CHERI)
+            /* Use a purecap BBL as the BIOS for CHERI. */
+            "bbl-riscv32cheri-virt-fw_jump.bin",
+#else
+            "opensbi-riscv32-generic-fw_dynamic.bin",
+#endif
+            start_addr, NULL);
+    } else {
+        firmware_end_addr = riscv_find_and_load_firmware(
+            machine,
+#if defined(TARGET_CHERI)
+            /* Use a purecap BBL as the BIOS for CHERI. */
+            "bbl-riscv64cheri-virt-fw_jump.bin",
+#else
+            "opensbi-riscv64-generic-fw_dynamic.bin",
+#endif
+            start_addr, NULL);
+    }
 
     if (machine->kernel_filename) {
-        kernel_start_addr = riscv_calc_kernel_start_addr(machine,
+        kernel_start_addr = riscv_calc_kernel_start_addr(s->soc[0],
                                                          firmware_end_addr);
 
         kernel_entry = riscv_load_kernel(machine->kernel_filename,
@@ -665,7 +674,8 @@ static void virt_machine_init(MachineState *machine)
     fdt_load_addr = riscv_load_fdt(memmap[VIRT_DRAM].base,
                                    machine->ram_size, s->fdt);
     /* load the reset vector */
-    riscv_setup_rom_reset_vec(start_addr, virt_memmap[VIRT_MROM].base,
+    riscv_setup_rom_reset_vec(machine, s->soc[0], start_addr,
+                              virt_memmap[VIRT_MROM].base,
                               virt_memmap[VIRT_MROM].size, kernel_entry,
                               fdt_load_addr, s->fdt);
 
@@ -715,7 +725,7 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
     mc->desc = "RISC-V VirtIO board";
     mc->init = virt_machine_init;
     mc->max_cpus = VIRT_CPUS_MAX;
-    mc->default_cpu_type = VIRT_CPU;
+    mc->default_cpu_type = TYPE_RISCV_CPU_BASE;
     mc->pci_allow_0_address = true;
     mc->possible_cpu_arch_ids = riscv_numa_possible_cpu_arch_ids;
     mc->cpu_index_to_instance_props = riscv_numa_cpu_index_to_props;
